@@ -16,8 +16,8 @@ inline quat Quat_inverse(quat q) { return Quat_normalize(Quat_conj(q)); }
 
 //Shortcuts
 
-inline bool Quat_eq(quat a, quat b) { return Vec_eq(a, b); }
-inline bool Quat_neq(quat a, quat b) { return Vec_neq(a, b); }
+inline bool Quat_eq(quat a, quat b) { return Vec_eq4(a, b); }
+inline bool Quat_neq(quat a, quat b) { return Vec_neq4(a, b); }
 
 inline f32 Quat_x(quat a) { return Vec_x(a); }
 inline f32 Quat_y(quat a) { return Vec_y(a); }

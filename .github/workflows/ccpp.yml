@@ -1,0 +1,14 @@
+name: C/C++ CI
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    name: Windows build
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v1
+    - name: cmake build
+      run: cmake . -G "Visual Studio 16 2019"
+    - name: build
+      run: cmake --build . -j 8
