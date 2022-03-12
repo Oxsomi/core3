@@ -1,0 +1,14 @@
+name: C/C++ CI
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    name: Windows build
+    runs-on: windows-2022
+    steps:
+    - uses: actions/checkout@v1
+    - name: cmake build
+      run: cmake . -G "Visual Studio 17 2022"
+    - name: build
+      run: cmake --build . -j 8
