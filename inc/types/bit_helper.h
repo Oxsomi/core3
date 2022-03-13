@@ -31,3 +31,13 @@ struct Buffer Bit_full(usz siz, AllocFunc alloc, void *allocator);
 struct Buffer Bit_fill(usz siz, bool value, AllocFunc alloc, void *allocator);
 
 void Bit_free(struct Buffer *buf, FreeFunc freeFunc, void *allocator);
+struct Buffer Bit_emptyBytes(usz siz, AllocFunc alloc, void *allocator);
+
+struct Buffer Bit_bytes(usz siz, AllocFunc alloc, void *allocator);
+
+//Writing data
+
+void Bit_offset(struct Buffer *buf, usz siz);
+void Bit_appendU32(struct Buffer *buf, u32 v);
+void Bit_append(struct Buffer *buf, const void *v, usz siz);
+void Bit_appendBuffer(struct Buffer *buf, struct Buffer append);

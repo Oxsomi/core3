@@ -1,22 +1,22 @@
 #include "bit_helper.h"
 #include "math_helper.h"
-#include <assert.h>
+#include "assert_helper.h"
 
 bool Bit_get(struct Buffer buf, usz offset) {
-	assert("Buffer cannot be null" && buf.ptr && buf.siz);
-	assert("Buffer out of bounds" && (offset >> 3) < buf.siz);
+	ocAssert("Buffer cannot be null", buf.ptr && buf.siz);
+	ocAssert("Buffer out of bounds", (offset >> 3) < buf.siz);
 	return (buf.ptr[offset >> 3] >> (offset & 7)) & 1;
 }
 
 void Bit_set(struct Buffer buf, usz offset) {
-	assert("Buffer cannot be null" && buf.ptr && buf.siz);
-	assert("Buffer out of bounds" && (offset >> 3) < buf.siz);
+	ocAssert("Buffer cannot be null", buf.ptr && buf.siz);
+	ocAssert("Buffer out of bounds", (offset >> 3) < buf.siz);
 	buf.ptr[offset >> 3] |= 1 << (offset & 7);
 }
 
 void Bit_reset(struct Buffer buf, usz offset) {
-	assert("Buffer cannot be null" && buf.ptr && buf.siz);
-	assert("Buffer out of bounds" && (offset >> 3) < buf.siz);
+	ocAssert("Buffer cannot be null", buf.ptr && buf.siz);
+	ocAssert("Buffer out of bounds", (offset >> 3) < buf.siz);
 	buf.ptr[offset >> 3] &= ~(1 << (offset & 7));
 }
 
@@ -30,7 +30,7 @@ void Bit_setTo(struct Buffer buf, usz offset, bool value) {
 
 #define BitOp(x,src,dst)																\
 																						\
-	assert("Buffers cannot be null" && dst.ptr && dst.siz && src.ptr && src.siz);		\
+	ocAssert("Buffers cannot be null", dst.ptr && dst.siz && src.ptr && src.siz);		\
 																						\
 	usz l = Math_minu(dst.siz, src.siz);												\
 																						\
@@ -64,7 +64,7 @@ void Bit_not(struct Buffer dst) {
 
 bool Bit_eq(struct Buffer buf0, struct Buffer buf1) {
 																					
-	assert("Buffers cannot be null" && buf0.ptr && buf0.siz && buf1.ptr && buf1.siz);
+	ocAssert("Buffers cannot be null", buf0.ptr && buf0.siz && buf1.ptr && buf1.siz);
 					
 	if (buf0.siz != buf1.siz)
 		return false;
@@ -88,8 +88,8 @@ bool Bit_neq(struct Buffer buf0, struct Buffer buf1) {
 
 #define BitOpSetRange(x, y)														\
 																				\
-	assert("Buffer or size cannot be null" && dst.ptr && dst.siz && bits);		\
-	assert("Buffer out of bounds" && ((dstOff + bits - 1) >> 3) < dst.siz);		\
+	ocAssert("Buffer or size cannot be null", dst.ptr && dst.siz && bits);		\
+	ocAssert("Buffer out of bounds", ((dstOff + bits - 1) >> 3) < dst.siz);		\
 																				\
 	usz dstOff8 = (dstOff + 7) >> 3;											\
 	usz bitEnd = dstOff + bits;													\
@@ -134,7 +134,7 @@ void Bit_unsetRange(struct Buffer dst, usz dstOff, usz bits) {
 
 #define BitOpSet(x, dst)																\
 																						\
-	assert("Buffer cannot be null" && dst.ptr && dst.siz);								\
+	ocAssert("Buffer cannot be null", dst.ptr && dst.siz);								\
 																						\
 	usz l = dst.siz;																	\
 																						\
@@ -162,7 +162,7 @@ void Bit_setAllTo(struct Buffer buf, bool isOn) {
 
 struct Buffer Bit_empty(usz siz, AllocFunc alloc, void *allocator) {
 
-	assert("Allocator or siz cannot be null" && alloc && siz);
+	ocAssert("Allocator or siz cannot be null", alloc && siz);
 
 	siz = (siz + 7) >> 3;	//Align to bytes
 
@@ -174,7 +174,7 @@ struct Buffer Bit_empty(usz siz, AllocFunc alloc, void *allocator) {
 
 struct Buffer Bit_full(usz siz, AllocFunc alloc, void *allocator) {
 
-	assert("Allocator or siz cannot be null" && alloc && siz);
+	ocAssert("Allocator or siz cannot be null", alloc && siz);
 
 	siz = (siz + 7) >> 3;	//Align to bytes
 
@@ -186,7 +186,7 @@ struct Buffer Bit_full(usz siz, AllocFunc alloc, void *allocator) {
 
 struct Buffer Bit_duplicate(struct Buffer buf, AllocFunc alloc, void *allocator) {
 
-	assert("Allocator or buf cannot be null" && alloc && buf.ptr && buf.siz);
+	ocAssert("Allocator or buf cannot be null", alloc && buf.ptr && buf.siz);
 
 	struct Buffer cpy = (struct Buffer){ .ptr = alloc(allocator, buf.siz), .siz = buf.siz };
 	BitOp(=, cpy, buf);
@@ -203,8 +203,62 @@ struct Buffer Bit_fill(usz siz, bool value, AllocFunc alloc, void *allocator) {
 
 void Bit_free(struct Buffer *buf, FreeFunc freeFunc, void *allocator) {
 
-	assert("Buffer, data or alloc cannot be null" && buf && buf->ptr && buf->siz && freeFunc);
+	ocAssert("Buffer, data or alloc cannot be null", buf && buf->ptr && buf->siz && freeFunc);
 
 	freeFunc(allocator, *buf);
 	*buf = (struct Buffer){ 0 };
+}
+
+struct Buffer Bit_emptyBytes(usz siz, AllocFunc alloc, void *allocator) {
+	return Bit_empty(siz << 3, alloc, allocator);
+}
+
+struct Buffer Bit_bytes(usz siz, AllocFunc alloc, void *allocator) {
+	ocAssert("Allocator or siz cannot be null", alloc && siz);
+	return (struct Buffer){ .ptr = alloc(allocator, siz), .siz = siz };
+}
+
+void Bit_offset(struct Buffer *buf, usz siz) {
+	ocAssert("Buffer, data or alloc cannot be null", buf && buf->ptr && buf->siz >= siz);
+	buf->ptr += siz;
+	buf->siz -= siz;
+}
+
+void Bit_appendU32(struct Buffer *buf, u32 v) {
+	ocAssert("Buffer, data or alloc cannot be null", buf && buf->ptr && buf->siz >= 4);
+	*((u32*)buf->ptr) = v;
+	Bit_offset(buf, 4);
+}
+
+void Bit_copyBytes(u8 *ptr, const void *v, usz siz) {
+
+	for (usz i = 0, j = siz >> 3; i < j; ++i)
+		*((u64*)ptr + i) = *((const u64*)v + i);
+
+	for (usz i = siz & ~7; i < siz; ++i)
+		ptr[i] = *((const u8*)v + i);
+
+}
+
+void Bit_append(struct Buffer *buf, const void *v, usz siz) {
+
+	ocAssert(
+		"Buffer, data or alloc cannot be null",
+		buf && buf->ptr && buf->siz >= siz && v && siz
+	);
+
+	Bit_copyBytes(buf->ptr, v, siz);
+	Bit_offset(buf, siz);
+}
+
+void Bit_appendBuffer(struct Buffer *buf, struct Buffer append) {
+
+	ocAssert(
+		"Buffer, data or alloc cannot be null",
+		buf && buf->ptr && buf->siz >= append.siz && 
+		append.ptr && append.siz
+	);
+
+	Bit_copyBytes(buf->ptr, append.ptr, append.siz);
+	Bit_offset(buf, append.siz);
 }

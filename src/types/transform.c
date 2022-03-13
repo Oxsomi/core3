@@ -16,6 +16,14 @@ struct Transform PackedTransform_Unpack(struct PackedTransform t) {
 	};
 }
 
+struct Transform Transform_init(quat rot, f32x4 pos, f32x4 scale) {
+	return (struct Transform) {
+		.rot = rot,
+		.pos = pos,
+		.scale = scale
+	};
+}
+
 f32x4 Transform_applyToDirection(struct Transform t, f32x4 dir) {
 	return Quat_applyToNormal(t.rot, dir);
 }
