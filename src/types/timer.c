@@ -1,5 +1,5 @@
-#include "timer.h"
-#include "string_helper.h"
+#include "types/timer.h"
+#include "types/string.h"
 #include <time.h>
 #include <assert.h>
 #include <string.h>
@@ -73,7 +73,7 @@ void Timer_format(ns time, TimerFormat timeString) {
 
 const c8 separators[] = "--T::.Z";
 
-enum FormatStatus Timer_parseFormat(ns* time, TimerFormat format) {
+enum EFormatStatus Timer_parseFormat(ns* time, TimerFormat format) {
 
 	if (!time)
 		return FormatStatus_InvalidInput;

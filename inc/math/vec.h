@@ -4,7 +4,7 @@
 #include <xmmintrin.h>
 #include <smmintrin.h>
 
-#include "math_helper.h"
+#include "math/math.h"
 
 //Very lightweight layer around SIMD vectors
 //Int vectors are ignored
@@ -24,6 +24,11 @@ inline f32x4 Vec_add(f32x4 a, f32x4 b);
 inline f32x4 Vec_sub(f32x4 a, f32x4 b);
 inline f32x4 Vec_mul(f32x4 a, f32x4 b);
 inline f32x4 Vec_div(f32x4 a, f32x4 b);
+
+inline f32x4 Vec_srgb8Unpack(u32 v);
+inline u32 Vec_srgb8Pack(f32x4 v);
+inline f32x4 Vec_rgb8Unpack(u32 v);
+inline u32 Vec_rgb8Pack(f32x4 v);
 
 inline f32x4 Vec_complement(f32x4 a) { return Vec_sub(Vec_one(), a); }
 inline f32x4 Vec_negate(f32x4 a) { return Vec_sub(Vec_zero(), a); }
@@ -169,7 +174,7 @@ inline f32x4 Vec_exp2(f32x4 v)  { return _mm_exp2_ps(v); }
 
 //Shuffle and extracting values
 
-#define _shuffle(a, x, y, z, w) _mm_shuffle_ps(a, a, _MM_SHUFFLE(x, y, z, w))
+#define _shuffle(a, x, y, z, w) _mm_shuffle_ps(a, a, _MM_SHUFFLE(w, z, y, x))
 #define _shuffle1(a, x) _shuffle(a, x, x, x, x)
 
 //4D swizzles
@@ -446,8 +451,11 @@ inline f32x4 Vec_wwwy(f32x4 a) { return _shuffle(a, 3, 3, 3, 1); }
 inline f32x4 Vec_wwwz(f32x4 a) { return _shuffle(a, 3, 3, 3, 2); }
 inline f32x4 Vec_wwww(f32x4 a) { return _shuffle1(a, 3); }
 
-inline f32x4 Vec_trunc2(f32x4 a) { return Vec_mul(a, Vec_mask2()); }
-inline f32x4 Vec_trunc3(f32x4 a) { return Vec_mul(a, Vec_mask3()); }
+inline f32x4 Vec_trunc2(f32x4 a) { return _mm_movelh_ps(a, Vec_zero()); }
+inline f32x4 Vec_trunc3(f32x4 a) { 
+    f32x4 z0 = Vec_xzzz(_mm_movelh_ps(Vec_zzzz(a), Vec_zero()));
+    return _mm_movelh_ps(a, z0); 
+}
 
 //2D swizzles
 
@@ -574,6 +582,27 @@ inline f32 Vec_sqLen3(f32x4 v) { v = Vec_xyz(v); return Vec_x(_mm_dp_ps(v, v, 0x
 inline f32 Vec_sqLen4(f32x4 v) { return Vec_x(_mm_dp_ps(v, v, 0xFF)); }
 
 //Arch independent
+
+//Shifts are hard, so we just shift by division and floor
+//
+inline f32x4 Vec_rgb8Unpack(u32 v) {
+    f32x4 rgb8 = Vec_floor(Vec_div(Vec_xxxx4((f32)v), Vec_init3(0x10000, 0x100, 0x1)));
+    return Vec_div(Vec_mod(rgb8, Vec_xxxx4(0x100)), Vec_xxxx4(0xFF));
+}
+
+inline u32 Vec_rgb8Pack(f32x4 v) {
+    f32x4 v8 = Vec_floor(Vec_mul(v, Vec_xxxx4(0xFF)));
+    f32x4 preShift = Vec_trunc3(Vec_mul(v8, Vec_init3(0x10000, 0x100, 0x1)));
+    return (u32) Vec_reduce(preShift);
+}
+
+inline f32x4 Vec_srgba8Unpack(u32 v) {
+    return Vec_pow2(Vec_rgb8Unpack(v << 8 >> 8));
+}
+
+inline u32 Vec_srgba8Pack(f32x4 v) {
+    return Vec_rgb8Pack(Vec_sqrt(v)) | 0xFF000000;
+}
 
 inline f32x4 Vec_one() { return Vec_xxxx4(1); }
 inline f32x4 Vec_two() { return Vec_xxxx4(2); }

@@ -1,6 +1,6 @@
 #pragma once
 #include "vec.h"
-#include "math_helper.h"
+#include "math/math.h"
 
 typedef f32x4 quat;
 
@@ -53,12 +53,12 @@ inline quat Quat_angleAxis(f32x4 axis, f32 angle) {
 	return q;
 }
 
-//Construct quaternion from euler. Rotation around xyz (pitch, yaw, roll) in radians
+//Construct quaternion from euler. Rotation around xyz (pitch, yaw, roll) in degrees
 //https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles#Euler_angles_to_quaternion_conversion
 //
-inline quat Quat_fromEuler(f32x4 pitchYawRollRad) {
+inline quat Quat_fromEuler(f32x4 pitchYawRollDeg) {
 
-	pitchYawRollRad = Vec_mul(pitchYawRollRad, Vec_xxxx4(.5f));
+	f32x4 pitchYawRollRad = Vec_mul(pitchYawRollDeg, Vec_xxxx4(Math_degToRad * .5f));
 
 	f32x4 c = Vec_cos(pitchYawRollRad);
 	f32x4 s = Vec_sin(pitchYawRollRad);
@@ -84,7 +84,7 @@ inline quat Quat_fromEuler(f32x4 pitchYawRollRad) {
 	);
 }
 
-//Convert back to euler, pitchYawRollRad
+//Convert back to euler, pitchYawRollDeg
 //https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles#Quaternion_to_Euler_angles_conversion
 //
 inline f32x4 Quat_toEuler(quat q) {
@@ -127,7 +127,7 @@ inline f32x4 Quat_toEuler(quat q) {
 	f32 cosy_cosp = 1 - 2 * (q2_y + q2_z);
 	f32 y = Math_atan2(siny_cosp, cosy_cosp);
 
-	return Vec_init3(p, y, r);
+	return Vec_mul(Vec_init3(p, y, r), Vec_xxxx4(Math_radToDeg));
 }
 
 //Combine two quaternions

@@ -1,6 +1,6 @@
-#include "bit_helper.h"
-#include "math_helper.h"
-#include "assert_helper.h"
+#include "types/bit.h"
+#include "types/assert.h"
+#include "math/math.h"
 
 bool Bit_get(struct Buffer buf, usz offset) {
 	ocAssert("Buffer cannot be null", buf.ptr && buf.siz);
@@ -261,4 +261,14 @@ void Bit_appendBuffer(struct Buffer *buf, struct Buffer append) {
 
 	Bit_copyBytes(buf->ptr, append.ptr, append.siz);
 	Bit_offset(buf, append.siz);
+}
+
+struct Buffer Bit_subset(struct Buffer buf, usz offset, usz siz) {
+
+	Bit_offset(&buf, offset);
+
+	ocAssert("Buffer siz needs to be geq subset size", buf.siz >= siz);
+
+	buf.siz = siz;
+	return buf;
 }

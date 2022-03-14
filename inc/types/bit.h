@@ -34,6 +34,7 @@ void Bit_free(struct Buffer *buf, FreeFunc freeFunc, void *allocator);
 struct Buffer Bit_emptyBytes(usz siz, AllocFunc alloc, void *allocator);
 
 struct Buffer Bit_bytes(usz siz, AllocFunc alloc, void *allocator);
+struct Buffer Bit_subset(struct Buffer buf, usz offset, usz siz);
 
 //Writing data
 

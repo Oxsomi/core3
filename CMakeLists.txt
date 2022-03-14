@@ -21,25 +21,70 @@ endif()
 
 # Types 
 
-file(GLOB_RECURSE typesHeaders "inc/*.h")
-file(GLOB_RECURSE typesSources "src/*.c")
+file(GLOB_RECURSE typesHeaders "inc/file/*.h" "inc/math/*.h" "inc/types/*.h")
+file(GLOB_RECURSE typesSources "src/file/*.c" "src/math/*.c" "src/types/*.c")
 
 add_library(
-	typesOC3
+	core3_types
 	STATIC
-    ${typesHeaders}
-    ${typesSources}
+	${typesHeaders}
+	${typesSources}
 	CMakeLists.txt
 )
 
-target_include_directories(typesOC3 PRIVATE inc/types)
+target_include_directories(core3_types PRIVATE inc)
+
+# Formats
+
+file(GLOB_RECURSE formatsHeaders "inc/formats/*.h")
+file(GLOB_RECURSE formatsSources "src/formats/*.c")
+
+add_library(
+	core3_formats
+	STATIC
+	${formatsHeaders}
+	${formatsSources}
+	CMakeLists.txt
+)
+
+target_include_directories(core3_formats PRIVATE inc)
+target_link_libraries(core3_formats PRIVATE core3_types)
+
+# Platforms
+
+if(WIN32)
+	set(platform windows)
+	add_definitions(-D_PLATFORM_TYPE=Platform_Windows)
+else()
+	set(platform linux)
+	add_definitions(-D_PLATFORM_TYPE=Platform_Linux)
+endif()
+
+message("-- Targetting platform: ${platform}")
+
+file(GLOB_RECURSE platformsHeaders "inc/platforms/*.h")
+file(GLOB_RECURSE platformsSources "src/platforms/${platform}/*.c" "src/platforms/generic/*.c")
+
+add_library(
+	core3_platforms
+	STATIC
+	${platformsHeaders}
+	${platformsSources}
+	CMakeLists.txt
+)
+
+target_include_directories(core3_platforms PRIVATE inc)
+target_link_libraries(core3_platforms PRIVATE core3_types)
+
+# Tests
 
 file(GLOB_RECURSE tests "tst/*.c")
 
 add_executable(
-	testsOC3
-    ${tests}
+	core3_test
+	${tests}
+	CMakeLists.txt
 )
 
-target_include_directories(testsOC3 PRIVATE inc/types)
-target_link_libraries(testsOC3 PRIVATE typesOC3)
+target_include_directories(core3_test PRIVATE inc)
+target_link_libraries(core3_test PRIVATE core3_types)

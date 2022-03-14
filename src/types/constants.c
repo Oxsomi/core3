@@ -1,4 +1,4 @@
-#include "math_helper.h"
+#include "math/math.h"
 
 const f32 Math_e		= 2.718281828459045f;
 const f32 Math_pi		= 3.141592653589793f;

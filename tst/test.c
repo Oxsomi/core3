@@ -1,5 +1,5 @@
-#include "timer.h"
-#include "bit_helper.h"
+#include "types/timer.h"
+#include "types/bit.h"
 #include <stdlib.h>
 
 void *ourAlloc(void *allocator, usz siz) {
@@ -22,7 +22,7 @@ int main() {
 	Timer_format(now, nowStr);
 
 	ns now2 = 0;
-	enum FormatStatus stat = Timer_parseFormat(&now2, nowStr);
+	enum EFormatStatus stat = Timer_parseFormat(&now2, nowStr);
 
 	if (stat != FormatStatus_Success || now2 != now)
 		return 1;
@@ -42,6 +42,10 @@ int main() {
 
 	if (Bit_neq(emp, full))
 		return 3;
+
+	//TODO: Test vectors
+	//TODO: Test quaternions
+	//TODO: Test transform
 
 	//
 

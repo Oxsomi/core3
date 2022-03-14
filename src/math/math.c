@@ -1,4 +1,4 @@
-#include "math_helper.h"
+#include "math/math.h"
 #include <math.h>
 
 f32 Math_powf(f32 v, f32 exp) { return powf(v, exp); }
