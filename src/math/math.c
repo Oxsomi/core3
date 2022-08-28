@@ -4,6 +4,7 @@
 f32 Math_powf(f32 v, f32 exp) { return powf(v, exp); }
 f32 Math_expf(f32 v) { return powf(Math_e, v); }
 f32 Math_exp2f(f32 v) { return powf(2, v); }
+f32 Math_exp10f(f32 v) { return powf(10, v); }
 
 f32 Math_sqrtf(f32 v) { return sqrtf(v); }
 
