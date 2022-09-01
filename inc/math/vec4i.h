@@ -1,37 +1,7 @@
 #pragma once
-#include "math/math.h"
 
-#ifdef _NEON
-
-    //TODO:
-
-#elif defined(_SSE)
-
-    #include <immintrin.h>
-    #include <xmmintrin.h>
-    #include <smmintrin.h>
-    
-    typedef __m128i i32x4;
-    typedef __m128  f32x4;
-    
-    #define _shufflei(a, x, y, z, w) _mm_shuffle_epi32(a, a, _MM_SHUFFLE(w, z, y, x))
-    #define _shufflef(a, x, y, z, w) _mm_shuffle_ps(a, a, _MM_SHUFFLE(w, z, y, x))
-
-#else
-
-    typedef struct i32x4_t {
-        i32 v[4];
-    } i32x4;
-    
-    
-    typedef struct f32x4_t {
-        f32 v[4];
-    } f32x4;
-    
-    #define _shufflei(a, x, y, z, w) (i32x4){ { a.v[x], a.v[y], a.v[z], a.v[w] } }
-    #define _shufflef(a, x, y, z, w) (f32x4){ { a.v[x], a.v[y], a.v[z], a.v[w] } }
-
-#endif
+inline f32x4 f32x4_bitsI32x4(i32x4 a) { return *(const f32x4*) &a; }          //Convert raw bits to data type
+inline i32x4 i32x4_bitsF32x4(f32x4 a) { return *(const i32x4*) &a; }          //Convert raw bits to data type
 
 //Arithmetic
 
@@ -64,7 +34,6 @@ inline i32 i32x4_reduce(i32x4 a);     //ax+ay+az+aw
 inline i32x4 i32x4_min(i32x4 a, i32x4 b);
 inline i32x4 i32x4_max(i32x4 a, i32x4 b);
 inline i32x4 i32x4_clamp(i32x4 a, i32x4 mi, i32x4 ma) { return i32x4_max(mi, i32x4_min(ma, a)); }
-inline i32x4 i32x4_saturate(i32x4 a) { return i32x4_clamp(a, i32x4_zero(), i32x4_one()); }
 
 //Boolean
 
@@ -109,7 +78,7 @@ inline i32x4 i32x4_init4(i32 x, i32 y, i32 z, i32 w);
 inline i32x4 i32x4_load1(const i32 *arr);
 inline i32x4 i32x4_load2(const i32 *arr);
 inline i32x4 i32x4_load3(const i32 *arr);
-inline i32x4 i32x4_load4(const i32 *arr);
+inline i32x4 i32x4_load4(const i32 *arr) { return *(const i32x4*) arr; }
 
 //4D swizzles
 
@@ -530,13 +499,3 @@ inline i32 i32x4_get(i32x4 a, u8 i) {
         default:    return i32x4_w(a);
     }
 }
-
-//Platform/arch dependent
-
-#ifdef _NEON
-    #include "arch/neon.h"
-#elif defined(_SSE)
-    #include "arch/sse.h"
-#else
-    #include "arch/none.h"
-#endif

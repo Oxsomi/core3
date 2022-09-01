@@ -1,5 +1,4 @@
 #pragma once
-#include "veci.h"
 
 //Arithmetic
 
@@ -17,8 +16,8 @@ inline f32x4 f32x4_sub(f32x4 a, f32x4 b);
 inline f32x4 f32x4_mul(f32x4 a, f32x4 b);
 inline f32x4 f32x4_div(f32x4 a, f32x4 b);
 
-inline f32x4 f32x4_srgb8Unpack(u32 v);
-inline u32 f32x4_srgb8Pack(f32x4 v);
+inline f32x4 f32x4_srgba8Unpack(u32 v);
+inline u32 f32x4_srgba8Pack(f32x4 v);
 inline f32x4 f32x4_rgb8Unpack(u32 v);
 inline u32 f32x4_rgb8Pack(f32x4 v);
 
@@ -33,6 +32,7 @@ inline f32x4 f32x4_abs(f32x4 v);
 inline f32x4 f32x4_ceil(f32x4 v);
 inline f32x4 f32x4_floor(f32x4 v);
 inline f32x4 f32x4_round(f32x4 v);
+inline f32x4 f32x4_pow(f32x4 v, f32x4 e);
 inline f32x4 f32x4_fract(f32x4 v) { return f32x4_sub(v, f32x4_floor(v)); }
 inline f32x4 f32x4_mod(f32x4 v, f32x4 d) { return f32x4_mul(f32x4_fract(f32x4_div(v, d)), d); }
 
@@ -103,10 +103,6 @@ inline f32x4 f32x4_gt(f32x4 a, f32x4 b);
 inline f32x4 f32x4_leq(f32x4 a, f32x4 b);
 inline f32x4 f32x4_lt(f32x4 a, f32x4 b);
 
-inline f32x4 f32x4_or(f32x4 a, f32x4 b);
-inline f32x4 f32x4_and(f32x4 a, f32x4 b);
-inline f32x4 f32x4_xor(f32x4 a, f32x4 b);
-
 inline bool f32x4_eq4(f32x4 a, f32x4 b) { return f32x4_all(f32x4_eq(a, b)); }
 inline bool f32x4_neq4(f32x4 a, f32x4 b) { return !f32x4_eq4(a, b); }
 
@@ -170,7 +166,7 @@ inline f32x4 f32x4_xyyw(f32x4 a) { return _shufflef(a, 0, 1, 1, 3); }
 inline f32x4 f32x4_xyzx(f32x4 a) { return _shufflef(a, 0, 1, 2, 0); }
 inline f32x4 f32x4_xyzy(f32x4 a) { return _shufflef(a, 0, 1, 2, 1); }
 inline f32x4 f32x4_xyzz(f32x4 a) { return _shufflef(a, 0, 1, 2, 2); }
-inline f32x4 f32x4_xyzw(f32x4 a) { return _shufflef(a, 0, 1, 2, 3); }
+inline f32x4 f32x4_xyzw(f32x4 a) { return a; }
 inline f32x4 f32x4_xywx(f32x4 a) { return _shufflef(a, 0, 1, 3, 0); }
 inline f32x4 f32x4_xywy(f32x4 a) { return _shufflef(a, 0, 1, 3, 1); }
 inline f32x4 f32x4_xywz(f32x4 a) { return _shufflef(a, 0, 1, 3, 2); }
@@ -420,7 +416,7 @@ inline f32x4 f32x4_trunc3(f32x4 a);
 //2D swizzles
 
 inline f32x4 f32x4_xx(f32x4 a) { return f32x4_trunc2(f32x4_xxxx(a)); }
-inline f32x4 f32x4_xy(f32x4 a) { return f32x4_trunc2(f32x4_xyxx(a)); }
+inline f32x4 f32x4_xy(f32x4 a) { return f32x4_trunc2(a); }
 inline f32x4 f32x4_xz(f32x4 a) { return f32x4_trunc2(f32x4_xzxx(a)); }
 inline f32x4 f32x4_xw(f32x4 a) { return f32x4_trunc2(f32x4_xwxx(a)); }
 
@@ -446,7 +442,7 @@ inline f32x4 f32x4_xxy(f32x4 a) { return f32x4_trunc3(f32x4_xxyx(a)); }
 inline f32x4 f32x4_xxz(f32x4 a) { return f32x4_trunc3(f32x4_xxzx(a)); }
 inline f32x4 f32x4_xyx(f32x4 a) { return f32x4_trunc3(f32x4_xyxx(a)); }
 inline f32x4 f32x4_xyy(f32x4 a) { return f32x4_trunc3(f32x4_xyyx(a)); }
-inline f32x4 f32x4_xyz(f32x4 a) { return f32x4_trunc3(f32x4_xyzx(a)); }
+inline f32x4 f32x4_xyz(f32x4 a) { return f32x4_trunc3(a); }
 inline f32x4 f32x4_xzx(f32x4 a) { return f32x4_trunc3(f32x4_xzxx(a)); }
 inline f32x4 f32x4_xzy(f32x4 a) { return f32x4_trunc3(f32x4_xzyx(a)); }
 inline f32x4 f32x4_xzz(f32x4 a) { return f32x4_trunc3(f32x4_xzzx(a)); }
@@ -483,14 +479,12 @@ inline f32x4 f32x4_init4(f32 x, f32 y, f32 z, f32 w);
 
 inline f32x4 f32x4_xxxx4(f32 x);
 
-inline f32x4 f32x4_load4(const f32 *arr);
+inline f32x4 f32x4_load4(const f32 *arr) { return *(const f32x4*) arr; }
 
 inline f32x4 f32x4_zero();
 
 inline f32x4 f32x4_fromI32x4(i32x4 a);
 inline i32x4 i32x4_fromF32x4(f32x4 a);
-inline f32x4 f32x4_bitsI32x4(i32x4 a) { return *(f32x4*) &a; }          //Convert raw bits to data type
-inline i32x4 i32x4_bitsF32x4(f32x4 a) { return *(i32x4*) &a; }          //Convert raw bits to data type
 
 //Needed since cmp returns -1 as int, so we convert to -1.f and then negate
 
@@ -500,10 +494,6 @@ inline f32x4 f32x4_geq(f32x4 a, f32x4 b);
 inline f32x4 f32x4_gt(f32x4 a, f32x4 b);
 inline f32x4 f32x4_leq(f32x4 a, f32x4 b);
 inline f32x4 f32x4_lt(f32x4 a, f32x4 b);
-
-inline f32x4 f32x4_or(f32x4 a, f32x4 b);
-inline f32x4 f32x4_and(f32x4 a, f32x4 b);
-inline f32x4 f32x4_xor(f32x4 a, f32x4 b);
 
 inline f32x4 f32x4_min(f32x4 a, f32x4 b);
 inline f32x4 f32x4_max(f32x4 a, f32x4 b);

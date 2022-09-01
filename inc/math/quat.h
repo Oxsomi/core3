@@ -1,5 +1,5 @@
 #pragma once
-#include "vecf.h"
+#include "vec.h"
 #include "math/math.h"
 
 typedef f32x4 quat;

@@ -1,5 +1,5 @@
 #pragma once
-#include "vecf.h"
+#include "vec.h"
 
 //Ported from Wisp:
 //https://github.com/TeamWisp/WispRenderer/blob/master/resources/shaders/rand_util.hlsl
