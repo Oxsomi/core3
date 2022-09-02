@@ -413,25 +413,25 @@ inline f32x4 f32x4_trunc3(f32x4 a);
 
 //2D swizzles
 
-inline f32x4 f32x4_xx(f32x4 a) { return f32x4_trunc2(f32x4_xxxx(a)); }
-inline f32x4 f32x4_xy(f32x4 a) { return f32x4_trunc2(a); }
-inline f32x4 f32x4_xz(f32x4 a) { return f32x4_trunc2(f32x4_xzxx(a)); }
-inline f32x4 f32x4_xw(f32x4 a) { return f32x4_trunc2(f32x4_xwxx(a)); }
+inline f32x4 f32x4_xx4(f32x4 a) { return f32x4_trunc2(f32x4_xxxx(a)); }
+inline f32x4 f32x4_xy4(f32x4 a) { return f32x4_trunc2(a); }
+inline f32x4 f32x4_xz4(f32x4 a) { return f32x4_trunc2(f32x4_xzxx(a)); }
+inline f32x4 f32x4_xw4(f32x4 a) { return f32x4_trunc2(f32x4_xwxx(a)); }
 
-inline f32x4 f32x4_yx(f32x4 a) { return f32x4_trunc2(f32x4_yxxx(a)); }
-inline f32x4 f32x4_yy(f32x4 a) { return f32x4_trunc2(f32x4_yyxx(a)); }
-inline f32x4 f32x4_yz(f32x4 a) { return f32x4_trunc2(f32x4_yzxx(a)); }
-inline f32x4 f32x4_yw(f32x4 a) { return f32x4_trunc2(f32x4_ywxx(a)); }
+inline f32x4 f32x4_yx4(f32x4 a) { return f32x4_trunc2(f32x4_yxxx(a)); }
+inline f32x4 f32x4_yy4(f32x4 a) { return f32x4_trunc2(f32x4_yyxx(a)); }
+inline f32x4 f32x4_yz4(f32x4 a) { return f32x4_trunc2(f32x4_yzxx(a)); }
+inline f32x4 f32x4_yw4(f32x4 a) { return f32x4_trunc2(f32x4_ywxx(a)); }
 
-inline f32x4 f32x4_zx(f32x4 a) { return f32x4_trunc2(f32x4_zxxx(a)); }
-inline f32x4 f32x4_zy(f32x4 a) { return f32x4_trunc2(f32x4_zyxx(a)); }
-inline f32x4 f32x4_zz(f32x4 a) { return f32x4_trunc2(f32x4_zzxx(a)); }
-inline f32x4 f32x4_zw(f32x4 a) { return f32x4_trunc2(f32x4_zwxx(a)); }
+inline f32x4 f32x4_zx4(f32x4 a) { return f32x4_trunc2(f32x4_zxxx(a)); }
+inline f32x4 f32x4_zy4(f32x4 a) { return f32x4_trunc2(f32x4_zyxx(a)); }
+inline f32x4 f32x4_zz4(f32x4 a) { return f32x4_trunc2(f32x4_zzxx(a)); }
+inline f32x4 f32x4_zw4(f32x4 a) { return f32x4_trunc2(f32x4_zwxx(a)); }
 
-inline f32x4 f32x4_wx(f32x4 a) { return f32x4_trunc2(f32x4_wxxx(a)); }
-inline f32x4 f32x4_wy(f32x4 a) { return f32x4_trunc2(f32x4_wyxx(a)); }
-inline f32x4 f32x4_wz(f32x4 a) { return f32x4_trunc2(f32x4_wzxx(a)); }
-inline f32x4 f32x4_ww(f32x4 a) { return f32x4_trunc2(f32x4_wwxx(a)); }
+inline f32x4 f32x4_wx4(f32x4 a) { return f32x4_trunc2(f32x4_wxxx(a)); }
+inline f32x4 f32x4_wy4(f32x4 a) { return f32x4_trunc2(f32x4_wyxx(a)); }
+inline f32x4 f32x4_wz4(f32x4 a) { return f32x4_trunc2(f32x4_wzxx(a)); }
+inline f32x4 f32x4_ww4(f32x4 a) { return f32x4_trunc2(f32x4_wwxx(a)); }
 
 //3D swizzles
 

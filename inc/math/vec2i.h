@@ -118,3 +118,40 @@ inline i32 i32x2_get(i32x2 a, u8 i) {
         default:     return i32x2_y(a);
     }
 }
+
+//Casts from vec4i
+
+inline i32x2 i32x2_fromI32x4(i32x4 a) { return i32x2_load2((const i32*) &a); }
+inline i32x4 i32x4_fromI32x2(i32x2 a) { return i32x4_load2((const i32*) &a); }
+
+inline i32x2 i32x4_xx(i32x4 a) { return i32x2_fromI32x4(i32x4_xxxx(a)); }
+inline i32x2 i32x4_xy(i32x4 a) { return i32x2_fromI32x4(a); }
+inline i32x2 i32x4_xz(i32x4 a) { return i32x2_fromI32x4(i32x4_xzxx(a)); }
+inline i32x2 i32x4_xw(i32x4 a) { return i32x2_fromI32x4(i32x4_xwxx(a)); }
+
+inline i32x2 i32x4_yx(i32x4 a) { return i32x2_fromI32x4(i32x4_yxxx(a)); }
+inline i32x2 i32x4_yy(i32x4 a) { return i32x2_fromI32x4(i32x4_yyxx(a)); }
+inline i32x2 i32x4_yz(i32x4 a) { return i32x2_fromI32x4(i32x4_yzxx(a)); }
+inline i32x2 i32x4_yw(i32x4 a) { return i32x2_fromI32x4(i32x4_ywxx(a)); }
+
+inline i32x2 i32x4_zx(i32x4 a) { return i32x2_fromI32x4(i32x4_zxxx(a)); }
+inline i32x2 i32x4_zy(i32x4 a) { return i32x2_fromI32x4(i32x4_zyxx(a)); }
+inline i32x2 i32x4_zz(i32x4 a) { return i32x2_fromI32x4(i32x4_zzxx(a)); }
+inline i32x2 i32x4_zw(i32x4 a) { return i32x2_fromI32x4(i32x4_zwxx(a)); }
+
+inline i32x2 i32x4_wx(i32x4 a) { return i32x2_fromI32x4(i32x4_wxxx(a)); }
+inline i32x2 i32x4_wy(i32x4 a) { return i32x2_fromI32x4(i32x4_wyxx(a)); }
+inline i32x2 i32x4_wz(i32x4 a) { return i32x2_fromI32x4(i32x4_wzxx(a)); }
+inline i32x2 i32x4_ww(i32x4 a) { return i32x2_fromI32x4(i32x4_wwxx(a)); }
+
+//Cast from vec2f to vec4
+
+inline i32x4 i32x2_init2_2(i32x2 a, i32x2 b) { return i32x4_init4(i32x2_x(a), i32x2_y(a), i32x2_x(b), i32x2_y(b)); }
+
+inline i32x4 i32x2_init2_1_1(i32x2 a, i32 b, i32 c) { return i32x4_init4(i32x2_x(a), i32x2_y(a), b, c); }
+inline i32x4 i32x2_init1_2_1(i32 a, i32x2 b, i32 c) { return i32x4_init4(a, i32x2_x(b), i32x2_y(b), c); }
+inline i32x4 i32x2_init1_1_2(i32 a, i32 b, i32x2 c) { return i32x4_init4(a, b, i32x2_x(c), i32x2_y(c)); }
+
+
+inline i32x4 i32x2_init2_1(i32x2 a, i32 b) { return i32x4_init3(i32x2_x(a), i32x2_y(a), b); }
+inline i32x4 i32x2_init1_2(i32 a, i32x2 b) { return i32x4_init3(a, i32x2_x(b), i32x2_y(b)); }

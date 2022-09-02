@@ -97,7 +97,7 @@ inline f32x4 Quat_toEuler(quat q) {
 
 	//Calculate roll
 
-	f32x4 qXzw	= f32x4_mul(q, f32x4_wz(q));
+	f32x4 qXzw	= f32x4_mul(q, f32x4_wz4(q));
 
 	f32 qXzw_x = f32x4_x(qXzw);
 	f32 qXzw_y = f32x4_y(qXzw);
@@ -118,7 +118,7 @@ inline f32x4 Quat_toEuler(quat q) {
 
 	//Calculate yaw
 
-	f32x4 xzXyw = f32x4_mul(f32x4_xz(q), f32x4_yw(q));
+	f32x4 xzXyw = f32x4_mul(f32x4_xz4(q), f32x4_yw4(q));
 
 	f32 xzXyw_x = f32x4_x(xzXyw);
 	f32 xzXyw_y = f32x4_y(xzXyw);

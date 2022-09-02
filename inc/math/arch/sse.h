@@ -240,7 +240,7 @@ inline f32x2 f32x2_atan2(f32x2 a, f32x2 b) _f32x2_wrap2(f32x4_atan2)
 //Dot products
 
 inline f32 f32x4_dot4(f32x4 a, f32x4 b) { return f32x4_x(_mm_dp_ps(a, b, 0xFF)); }
-inline f32 f32x4_dot2(f32x4 a, f32x4 b) { return f32x4_x(_mm_dp_ps(f32x4_xy(a), f32x4_xy(b), 0xFF)); }
+inline f32 f32x4_dot2(f32x4 a, f32x4 b) { return f32x4_x(_mm_dp_ps(f32x4_xy4(a), f32x4_xy4(b), 0xFF)); }
 inline f32 f32x4_dot3(f32x4 a, f32x4 b) { return f32x4_x(_mm_dp_ps(f32x4_xyz(a), f32x4_xyz(b), 0xFF)); }
 
 inline f32 f32x2_dot(f32x2 a, f32x2 b) { return f32x4_dot2(f32x4_fromF32x2(a), f32x4_fromF32x2(b)); }

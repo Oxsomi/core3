@@ -165,3 +165,39 @@ inline f32x2 f32x2_mul2x2(f32x2 v2, f32x2 v2x2[2]) {
         f32x2_mul(v2x2[1], f32x2_yy(v2))
     );
 }
+
+//Casts from vec4f
+    
+inline f32x2 f32x2_fromF32x4(f32x4 a) { return f32x2_load2((const f32*) &a); }
+inline f32x4 f32x4_fromF32x2(f32x2 a) { return f32x4_load2((const f32*) &a); }
+
+inline f32x2 f32x4_xx(f32x4 a) { return f32x2_fromF32x4(f32x4_xxxx(a)); }
+inline f32x2 f32x4_xy(f32x4 a) { return f32x2_fromF32x4(a); }
+inline f32x2 f32x4_xz(f32x4 a) { return f32x2_fromF32x4(f32x4_xzxx(a)); }
+inline f32x2 f32x4_xw(f32x4 a) { return f32x2_fromF32x4(f32x4_xwxx(a)); }
+
+inline f32x2 f32x4_yx(f32x4 a) { return f32x2_fromF32x4(f32x4_yxxx(a)); }
+inline f32x2 f32x4_yy(f32x4 a) { return f32x2_fromF32x4(f32x4_yyxx(a)); }
+inline f32x2 f32x4_yz(f32x4 a) { return f32x2_fromF32x4(f32x4_yzxx(a)); }
+inline f32x2 f32x4_yw(f32x4 a) { return f32x2_fromF32x4(f32x4_ywxx(a)); }
+
+inline f32x2 f32x4_zx(f32x4 a) { return f32x2_fromF32x4(f32x4_zxxx(a)); }
+inline f32x2 f32x4_zy(f32x4 a) { return f32x2_fromF32x4(f32x4_zyxx(a)); }
+inline f32x2 f32x4_zz(f32x4 a) { return f32x2_fromF32x4(f32x4_zzxx(a)); }
+inline f32x2 f32x4_zw(f32x4 a) { return f32x2_fromF32x4(f32x4_zwxx(a)); }
+
+inline f32x2 f32x4_wx(f32x4 a) { return f32x2_fromF32x4(f32x4_wxxx(a)); }
+inline f32x2 f32x4_wy(f32x4 a) { return f32x2_fromF32x4(f32x4_wyxx(a)); }
+inline f32x2 f32x4_wz(f32x4 a) { return f32x2_fromF32x4(f32x4_wzxx(a)); }
+inline f32x2 f32x4_ww(f32x4 a) { return f32x2_fromF32x4(f32x4_wwxx(a)); }
+
+//Cast from vec2f to vec4
+
+inline f32x4 f32x2_init2_2(f32x2 a, f32x2 b) { return f32x4_init4(f32x2_x(a), f32x2_y(a), f32x2_x(b), f32x2_y(b)); }
+
+inline f32x4 f32x2_init2_1_1(f32x2 a, f32 b, f32 c) { return f32x4_init4(f32x2_x(a), f32x2_y(a), b, c); }
+inline f32x4 f32x2_init1_2_1(f32 a, f32x2 b, f32 c) { return f32x4_init4(a, f32x2_x(b), f32x2_y(b), c); }
+inline f32x4 f32x2_init1_1_2(f32 a, f32 b, f32x2 c) { return f32x4_init4(a, b, f32x2_x(c), f32x2_y(c)); }
+
+inline f32x4 f32x2_init2_1(f32x2 a, f32 b) { return f32x4_init3(f32x2_x(a), f32x2_y(a), b); }
+inline f32x4 f32x2_init1_2(f32 a, f32x2 b) { return f32x4_init3(a, f32x2_x(b), f32x2_y(b)); }

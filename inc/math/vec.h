@@ -88,11 +88,6 @@
 #include "vec2i.h"
 #include "vec2f.h"
     
-inline i32x2 i32x2_fromI32x4(i32x4 a) { return i32x2_load2((const i32*) &a); }
-inline f32x2 f32x2_fromF32x4(f32x4 a) { return f32x2_load2((const f32*) &a); }
-inline i32x4 i32x4_fromI32x2(i32x2 a) { return i32x4_load2((const i32*) &a); }
-inline f32x4 f32x4_fromF32x2(f32x2 a) { return f32x4_load2((const f32*) &a); }
-    
 //Platform/arch dependent
 
 #if _SIMD == SIMD_NEON

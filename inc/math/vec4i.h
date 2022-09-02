@@ -359,25 +359,25 @@ inline i32x4 i32x4_trunc3(i32x4 a);
 
 //2D swizzles
 
-inline i32x4 i32x4_xx(i32x4 a) { return i32x4_trunc2(i32x4_xxxx(a)); }
-inline i32x4 i32x4_xy(i32x4 a) { return i32x4_trunc2(a); }
-inline i32x4 i32x4_xz(i32x4 a) { return i32x4_trunc2(i32x4_xzxx(a)); }
-inline i32x4 i32x4_xw(i32x4 a) { return i32x4_trunc2(i32x4_xwxx(a)); }
+inline i32x4 i32x4_xx4(i32x4 a) { return i32x4_trunc2(i32x4_xxxx(a)); }
+inline i32x4 i32x4_xy4(i32x4 a) { return i32x4_trunc2(a); }
+inline i32x4 i32x4_xz4(i32x4 a) { return i32x4_trunc2(i32x4_xzxx(a)); }
+inline i32x4 i32x4_xw4(i32x4 a) { return i32x4_trunc2(i32x4_xwxx(a)); }
 
-inline i32x4 i32x4_yx(i32x4 a) { return i32x4_trunc2(i32x4_yxxx(a)); }
-inline i32x4 i32x4_yy(i32x4 a) { return i32x4_trunc2(i32x4_yyxx(a)); }
-inline i32x4 i32x4_yz(i32x4 a) { return i32x4_trunc2(i32x4_yzxx(a)); }
-inline i32x4 i32x4_yw(i32x4 a) { return i32x4_trunc2(i32x4_ywxx(a)); }
+inline i32x4 i32x4_yx4(i32x4 a) { return i32x4_trunc2(i32x4_yxxx(a)); }
+inline i32x4 i32x4_yy4(i32x4 a) { return i32x4_trunc2(i32x4_yyxx(a)); }
+inline i32x4 i32x4_yz4(i32x4 a) { return i32x4_trunc2(i32x4_yzxx(a)); }
+inline i32x4 i32x4_yw4(i32x4 a) { return i32x4_trunc2(i32x4_ywxx(a)); }
 
-inline i32x4 i32x4_zx(i32x4 a) { return i32x4_trunc2(i32x4_zxxx(a)); }
-inline i32x4 i32x4_zy(i32x4 a) { return i32x4_trunc2(i32x4_zyxx(a)); }
-inline i32x4 i32x4_zz(i32x4 a) { return i32x4_trunc2(i32x4_zzxx(a)); }
-inline i32x4 i32x4_zw(i32x4 a) { return i32x4_trunc2(i32x4_zwxx(a)); }
+inline i32x4 i32x4_zx4(i32x4 a) { return i32x4_trunc2(i32x4_zxxx(a)); }
+inline i32x4 i32x4_zy4(i32x4 a) { return i32x4_trunc2(i32x4_zyxx(a)); }
+inline i32x4 i32x4_zz4(i32x4 a) { return i32x4_trunc2(i32x4_zzxx(a)); }
+inline i32x4 i32x4_zw4(i32x4 a) { return i32x4_trunc2(i32x4_zwxx(a)); }
 
-inline i32x4 i32x4_wx(i32x4 a) { return i32x4_trunc2(i32x4_wxxx(a)); }
-inline i32x4 i32x4_wy(i32x4 a) { return i32x4_trunc2(i32x4_wyxx(a)); }
-inline i32x4 i32x4_wz(i32x4 a) { return i32x4_trunc2(i32x4_wzxx(a)); }
-inline i32x4 i32x4_ww(i32x4 a) { return i32x4_trunc2(i32x4_wwxx(a)); }
+inline i32x4 i32x4_wx4(i32x4 a) { return i32x4_trunc2(i32x4_wxxx(a)); }
+inline i32x4 i32x4_wy4(i32x4 a) { return i32x4_trunc2(i32x4_wyxx(a)); }
+inline i32x4 i32x4_wz4(i32x4 a) { return i32x4_trunc2(i32x4_wzxx(a)); }
+inline i32x4 i32x4_ww4(i32x4 a) { return i32x4_trunc2(i32x4_wwxx(a)); }
 
 //3D swizzles
 
