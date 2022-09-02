@@ -42,6 +42,14 @@ inline bool u64_getBit(u64 packed, u8 off) {
 	return (packed >> off) & 1;
 }
 
+inline bool u32_getBit(u32 packed, u8 off) {
+
+	if (off >= 32)
+		return false;
+
+	return (packed >> off) & 1;
+}
+
 inline bool u64_setPacked20x3(u64 *packed, u8 off, u32 v) {
 
 	if (v >> 20 || off >= 3 || !packed)
@@ -53,12 +61,38 @@ inline bool u64_setPacked20x3(u64 *packed, u8 off, u32 v) {
 	return true;
 }
 
+inline bool u64_setPacked21x3(u64 *packed, u8 off, u32 v) {
+
+	if (v >> 21 || off >= 3 || !packed)
+		return false;
+
+	off *= 21;
+	*packed &= ~((u64)((1 << 21) - 1) << off);		//Reset bits
+	*packed |= (u64)v << off;						//Set bits
+	return true;
+}
+
 inline bool u64_setBit(u64 *packed, u8 off, bool b) {
 
 	if (off >= 64)
 		return false;
 
 	u64 shift = (u64)1 << off;
+
+	if (b)
+		*packed |= shift;
+
+	else *packed &= ~shift;
+
+	return true;
+}
+
+inline bool u32_setBit(u32 *packed, u8 off, bool b) {
+
+	if (off >= 32)
+		return false;
+
+	u32 shift = 1u << off;
 
 	if (b)
 		*packed |= shift;
