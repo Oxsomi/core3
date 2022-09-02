@@ -10,23 +10,23 @@ inline i32x2 i32x2_fromF32x2(f32x2 a) { return (i32x2) { .v = { (i32) f32x2_x(a)
 //Arithmetic
 
 inline i32x4 i32x4_add(i32x4 a, i32x4 b) _NONE_OP4I(a.v[i] + b.v[i])
-inline i32x2 i32x2_add(i32x2 a, i32x2 b) _NONE_OP2I(a.v[i] + b.v[i])
 inline f32x4 f32x4_add(f32x4 a, f32x4 b) _NONE_OP4F(a.v[i] + b.v[i])
+inline i32x2 i32x2_add(i32x2 a, i32x2 b) _NONE_OP2I(a.v[i] + b.v[i])
 inline f32x2 f32x2_add(f32x2 a, f32x2 b) _NONE_OP2F(a.v[i] + b.v[i])
 
 inline i32x4 i32x4_sub(i32x4 a, i32x4 b) _NONE_OP4I(a.v[i] - b.v[i])
-inline i32x2 i32x2_sub(i32x2 a, i32x2 b) _NONE_OP2I(a.v[i] - b.v[i])
 inline f32x4 f32x4_sub(f32x4 a, f32x4 b) _NONE_OP4F(a.v[i] - b.v[i])
+inline i32x2 i32x2_sub(i32x2 a, i32x2 b) _NONE_OP2I(a.v[i] - b.v[i])
 inline f32x2 f32x2_sub(f32x2 a, f32x2 b) _NONE_OP2F(a.v[i] - b.v[i])
 
 inline i32x4 i32x4_mul(i32x4 a, i32x4 b) _NONE_OP4I(a.v[i] * b.v[i])
-inline i32x2 i32x2_mul(i32x2 a, i32x2 b) _NONE_OP2I(a.v[i] * b.v[i])
 inline f32x4 f32x4_mul(f32x4 a, f32x4 b) _NONE_OP4F(a.v[i] * b.v[i])
+inline i32x2 i32x2_mul(i32x2 a, i32x2 b) _NONE_OP2I(a.v[i] * b.v[i])
 inline f32x2 f32x2_mul(f32x2 a, f32x2 b) _NONE_OP2F(a.v[i] * b.v[i])
 
 inline i32x4 i32x4_div(i32x4 a, i32x4 b) _NONE_OP4I(a.v[i] / b.v[i])
-inline i32x2 i32x2_div(i32x2 a, i32x2 b) _NONE_OP2I(a.v[i] / b.v[i])
 inline f32x4 f32x4_div(f32x4 a, f32x4 b) _NONE_OP4F(a.v[i] / b.v[i])
+inline i32x2 i32x2_div(i32x2 a, i32x2 b) _NONE_OP2I(a.v[i] / b.v[i])
 inline f32x2 f32x2_div(f32x2 a, f32x2 b) _NONE_OP2F(a.v[i] / b.v[i])
 
 //Swizzle
@@ -38,13 +38,13 @@ inline i32x4 i32x4_trunc3(i32x4 a) { return i32x4_init3(i32x4_x(a), i32x4_y(a), 
 inline f32x4 f32x4_trunc3(f32x4 a) { return f32x4_init3(f32x4_x(a), f32x4_y(a), f32x4_z(a)); }
 
 inline i32 i32x4_x(i32x4 a) { return a.v[0]; }
-inline i32 i32x2_x(i32x2 a) { return a.v[0]; }
 inline f32 f32x4_x(f32x4 a) { return a.v[0]; }
+inline i32 i32x2_x(i32x2 a) { return a.v[0]; }
 inline f32 f32x2_x(f32x2 a) { return a.v[0]; }
 
 inline i32 i32x4_y(i32x4 a) { return a.v[1]; }
-inline i32 i32x2_y(i32x2 a) { return a.v[1]; }
 inline f32 f32x4_y(f32x4 a) { return a.v[1]; }
+inline i32 i32x2_y(i32x2 a) { return a.v[1]; }
 inline f32 f32x2_y(f32x2 a) { return a.v[1]; }
 
 inline i32 i32x4_z(i32x4 a) { return a.v[2]; }
@@ -147,8 +147,8 @@ inline f32 f32x2_reduce(f32x2 a) { return f32x2_x(a) + f32x2_y(a); }
 inline i32x2 i32x2_xx(i32x2 a) { return i32x2_xx2(i32x2_x(a)); }
 inline f32x2 f32x2_xx(f32x2 a) { return f32x2_xx2(f32x2_x(a)); }
 
-inline i32x2 i32x2_xy(i32x2 a) { return i32x2_init2(i32x2_y(a), i32x2_x(a)); }
-inline f32x2 f32x2_xy(f32x2 a) { return f32x2_init2(f32x2_y(a), f32x2_x(a)); }
+inline i32x2 i32x2_yx(i32x2 a) { return i32x2_init2(i32x2_y(a), i32x2_x(a)); }
+inline f32x2 f32x2_yx(f32x2 a) { return f32x2_init2(f32x2_y(a), f32x2_x(a)); }
 
 inline f32x2 f32x2_yy(f32x2 a) { return f32x2_xx2(f32x2_y(a)); }
 inline i32x2 i32x2_yy(i32x2 a) { return i32x2_xx2(i32x2_y(a)); }
@@ -156,10 +156,10 @@ inline i32x2 i32x2_yy(i32x2 a) { return i32x2_xx2(i32x2_y(a)); }
 //Float arithmetic
 
 inline f32x4 f32x4_ceil(f32x4 a) _NONE_OP4F(Math_ceil(a.v[i]))
-inline f32x2 f32x2_ceil(f32x2 a)  _NONE_OP2F(Math_ceil(a.v[i]))
+inline f32x2 f32x2_ceil(f32x2 a) _NONE_OP2F(Math_ceil(a.v[i]))
 
 inline f32x4 f32x4_floor(f32x4 a) _NONE_OP4F(Math_floor(a.v[i]))
-inline f32x2 f32x2_floor(f32x2 a)  _NONE_OP2F(Math_floor(a.v[i]))
+inline f32x2 f32x2_floor(f32x2 a) _NONE_OP2F(Math_floor(a.v[i]))
 
 inline f32x4 f32x4_round(f32x4 a) _NONE_OP4F(Math_round(a.v[i]))
 inline f32x2 f32x2_round(f32x2 a) _NONE_OP2F(Math_round(a.v[i]))

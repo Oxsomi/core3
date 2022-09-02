@@ -27,8 +27,6 @@
 
     #error Compiling NEON isn't supported
 
-    //TODO:
-
 #elif _SIMD == SIMD_SSE
 
     #include <immintrin.h>

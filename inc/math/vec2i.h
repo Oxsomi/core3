@@ -71,6 +71,7 @@ inline i32x2 i32x2_load1(const i32 *arr);
 inline i32x2 i32x2_load2(const i32 *arr);
 
 inline i32x2 i32x2_xx(i32x2 a);
+inline i32x2 i32x2_xy(i32x2 a) { return a; }
 inline i32x2 i32x2_yx(i32x2 a);
 inline i32x2 i32x2_yy(i32x2 a);
 

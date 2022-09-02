@@ -10,8 +10,6 @@ inline i32x4 i32x4_one();
 inline i32x4 i32x4_two();
 inline i32x4 i32x4_negTwo();
 inline i32x4 i32x4_negOne();
-inline i32x4 i32x4_mask2();
-inline i32x4 i32x4_mask3();
 inline i32x4 i32x4_xxxx4(i32 x);
 
 inline i32x4 i32x4_add(i32x4 a, i32x4 b);
@@ -112,7 +110,7 @@ inline i32x4 i32x4_xyyw(i32x4 a) { return _shufflei(a, 0, 1, 1, 3); }
 inline i32x4 i32x4_xyzx(i32x4 a) { return _shufflei(a, 0, 1, 2, 0); }
 inline i32x4 i32x4_xyzy(i32x4 a) { return _shufflei(a, 0, 1, 2, 1); }
 inline i32x4 i32x4_xyzz(i32x4 a) { return _shufflei(a, 0, 1, 2, 2); }
-inline i32x4 i32x4_xyzw(i32x4 a) { return _shufflei(a, 0, 1, 2, 3); }
+inline i32x4 i32x4_xyzw(i32x4 a) { return a; }
 inline i32x4 i32x4_xywx(i32x4 a) { return _shufflei(a, 0, 1, 3, 0); }
 inline i32x4 i32x4_xywy(i32x4 a) { return _shufflei(a, 0, 1, 3, 1); }
 inline i32x4 i32x4_xywz(i32x4 a) { return _shufflei(a, 0, 1, 3, 2); }
@@ -362,7 +360,7 @@ inline i32x4 i32x4_trunc3(i32x4 a);
 //2D swizzles
 
 inline i32x4 i32x4_xx(i32x4 a) { return i32x4_trunc2(i32x4_xxxx(a)); }
-inline i32x4 i32x4_xy(i32x4 a) { return i32x4_trunc2(i32x4_xyxx(a)); }
+inline i32x4 i32x4_xy(i32x4 a) { return i32x4_trunc2(a); }
 inline i32x4 i32x4_xz(i32x4 a) { return i32x4_trunc2(i32x4_xzxx(a)); }
 inline i32x4 i32x4_xw(i32x4 a) { return i32x4_trunc2(i32x4_xwxx(a)); }
 
@@ -388,7 +386,7 @@ inline i32x4 i32x4_xxy(i32x4 a) { return i32x4_trunc3(i32x4_xxyx(a)); }
 inline i32x4 i32x4_xxz(i32x4 a) { return i32x4_trunc3(i32x4_xxzx(a)); }
 inline i32x4 i32x4_xyx(i32x4 a) { return i32x4_trunc3(i32x4_xyxx(a)); }
 inline i32x4 i32x4_xyy(i32x4 a) { return i32x4_trunc3(i32x4_xyyx(a)); }
-inline i32x4 i32x4_xyz(i32x4 a) { return i32x4_trunc3(i32x4_xyzx(a)); }
+inline i32x4 i32x4_xyz(i32x4 a) { return i32x4_trunc3(a); }
 inline i32x4 i32x4_xzx(i32x4 a) { return i32x4_trunc3(i32x4_xzxx(a)); }
 inline i32x4 i32x4_xzy(i32x4 a) { return i32x4_trunc3(i32x4_xzyx(a)); }
 inline i32x4 i32x4_xzz(i32x4 a) { return i32x4_trunc3(i32x4_xzzx(a)); }
@@ -413,38 +411,6 @@ inline i32x4 i32x4_zzx(i32x4 a) { return i32x4_trunc3(i32x4_zzxx(a)); }
 inline i32x4 i32x4_zzy(i32x4 a) { return i32x4_trunc3(i32x4_zzyx(a)); }
 inline i32x4 i32x4_zzz(i32x4 a) { return i32x4_trunc3(i32x4_zzzx(a)); }
 
-inline i32 i32x4_x(i32x4 a);
-inline i32 i32x4_y(i32x4 a);
-inline i32 i32x4_z(i32x4 a);
-inline i32 i32x4_w(i32x4 a);
-
-inline i32x4 i32x4_init1(i32 x);
-inline i32x4 i32x4_init2(i32 x, i32 y);
-inline i32x4 i32x4_init3(i32 x, i32 y, i32 z);
-inline i32x4 i32x4_init4(i32 x, i32 y, i32 z, i32 w);
-
-inline i32x4 i32x4_xxxx4(i32 x);
-
-inline i32x4 i32x4_load4(const i32 *arr);
-
-inline i32x4 i32x4_zero();
-
-//Needed since cmp returns -1 as int, so we negate
-
-inline i32x4 i32x4_eq(i32x4 a, i32x4 b);
-inline i32x4 i32x4_neq(i32x4 a, i32x4 b);
-inline i32x4 i32x4_geq(i32x4 a, i32x4 b);
-inline i32x4 i32x4_gt(i32x4 a, i32x4 b);
-inline i32x4 i32x4_leq(i32x4 a, i32x4 b);
-inline i32x4 i32x4_lt(i32x4 a, i32x4 b);
-
-inline i32x4 i32x4_or(i32x4 a, i32x4 b);
-inline i32x4 i32x4_and(i32x4 a, i32x4 b);
-inline i32x4 i32x4_xor(i32x4 a, i32x4 b);
-
-inline i32x4 i32x4_min(i32x4 a, i32x4 b);
-inline i32x4 i32x4_max(i32x4 a, i32x4 b);
-
 //Obtain sign (-1 if <0, otherwise 1)
 //(a < 0) * 2 + 1;
 //-1 * 2 + 1: -2 + 1: -1 for < 0
@@ -459,16 +425,12 @@ inline i32x4 i32x4_sign(i32x4 v) {
 
 inline i32x4 i32x4_abs(i32x4 v){ return i32x4_mul(i32x4_sign(v), v); }
 
-inline i32 i32x4_reduce(i32x4 a);
-
 //Simple definitions
 
 inline i32x4 i32x4_one() { return i32x4_xxxx4(1); }
 inline i32x4 i32x4_two() { return i32x4_xxxx4(2); }
 inline i32x4 i32x4_negOne() { return i32x4_xxxx4(-1); }
 inline i32x4 i32x4_negTwo() { return i32x4_xxxx4(-2); }
-inline i32x4 i32x4_mask2() { return i32x4_init4(1, 1, 0, 0); }
-inline i32x4 i32x4_mask3() { return i32x4_init4(1, 1, 1, 0); }
 
 inline bool i32x4_all(i32x4 b) { return i32x4_reduce(i32x4_neq(b, i32x4_zero())) == 4; }
 inline bool i32x4_any(i32x4 b) { return i32x4_reduce(i32x4_neq(b, i32x4_zero())); }

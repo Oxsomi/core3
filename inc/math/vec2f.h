@@ -41,15 +41,15 @@ inline f32x2 f32x2_ceil(f32x2 v);
 inline f32x2 f32x2_floor(f32x2 v);
 inline f32x2 f32x2_round(f32x2 v);
 inline f32x2 f32x2_fract(f32x2 v) { return f32x2_sub(v, f32x2_floor(v)); }
-inline f32x2 f32x2_mod(f32x2 v, f32x2 d) { return f32x2_sub(v, f32x2_mul(f32x2_div(v, d), d)); }
+inline f32x2 f32x2_mod(f32x2 v, f32x2 d) { return f32x2_sub(v, f32x2_mul(f32x2_fract(f32x2_div(v, d)), d)); }
 
 inline f32x2 f32x2_reflect(f32x2 I, f32x2 N);
 inline f32 f32x2_dot(f32x2 a, f32x2 b);
-inline f32 f32x2_satDot(f32x2 X, f32x2 Y) { return Math_saturate(f32x2_dot(X, Y)); }
+inline f32 f32x2_satDot(f32x2 a, f32x2 b) { return Math_saturate(f32x2_dot(a, b)); }
 
 inline f32 f32x2_sqLen(f32x2 v) { return f32x2_dot(v, v); }
 inline f32 f32x2_len(f32x2 v) { return Math_sqrtf(f32x2_sqLen(v)); }
-inline f32x2 f32x2_normalize(f32x2 v) { return f32x2_mul(v, f32x2_xx2(f32x2_len(v))); }
+inline f32x2 f32x2_normalize(f32x2 v) { return f32x2_mul(v, f32x2_xx2(1 / f32x2_len(v))); }
 
 inline f32x2 f32x2_pow(f32x2 v, f32x2 e);
 
@@ -111,6 +111,7 @@ inline f32x2 f32x2_load1(const f32 *arr);
 inline f32x2 f32x2_load2(const f32 *arr);
 
 inline f32x2 f32x2_xx(f32x2 a);
+inline f32x2 f32x2_xy(f32x2 a) { return a; }
 inline f32x2 f32x2_yx(f32x2 a);
 inline f32x2 f32x2_yy(f32x2 a);
 
@@ -147,7 +148,7 @@ inline void f32x2_setY(f32x2 *a, f32 v) { *a = f32x2_init2(f32x2_x(*a), v); }
 inline void f32x2_set(f32x2 *a, u8 i, f32 v) {
     switch (i & 1) {
         case 0:      f32x2_setX(a, v);     break;
-        default:     f32x2_setY(a, v);     break;
+        default:     f32x2_setY(a, v);
     }
 }
 
