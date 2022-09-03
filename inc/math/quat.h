@@ -6,32 +6,32 @@ typedef f32x4 quat;
 
 //Simple quaternion functions
 
-inline quat Quat_init(f32 x, f32 y, f32 z, f32 w) { return Vec_init4(x, y, z, w); }
+inline quat Quat_init(f32 x, f32 y, f32 z, f32 w) { return f32x4_init4(x, y, z, w); }
 
 inline quat Quat_identity() { return Quat_init(0, 0, 0, 1); }
 
-inline quat Quat_conj(quat q) { return Quat_init(-Vec_x(q), -Vec_y(q), -Vec_z(q), Vec_w(q)); }
-inline quat Quat_normalize(quat q) { return Vec_normalize4(q); }
+inline quat Quat_conj(quat q) { return Quat_init(-f32x4_x(q), -f32x4_y(q), -f32x4_z(q), f32x4_w(q)); }
+inline quat Quat_normalize(quat q) { return f32x4_normalize4(q); }
 inline quat Quat_inverse(quat q) { return Quat_normalize(Quat_conj(q)); }
 
 //Shortcuts
 
-inline bool Quat_eq(quat a, quat b) { return Vec_eq4(a, b); }
-inline bool Quat_neq(quat a, quat b) { return Vec_neq4(a, b); }
+inline bool Quat_eq(quat a, quat b) { return f32x4_eq4(a, b); }
+inline bool Quat_neq(quat a, quat b) { return f32x4_neq4(a, b); }
 
-inline f32 Quat_x(quat a) { return Vec_x(a); }
-inline f32 Quat_y(quat a) { return Vec_y(a); }
-inline f32 Quat_z(quat a) { return Vec_z(a); }
-inline f32 Quat_w(quat a) { return Vec_w(a); }
-inline f32 Quat_get(quat a, u8 i) { return Vec_get(a, i); }
+inline f32 Quat_x(quat a) { return f32x4_x(a); }
+inline f32 Quat_y(quat a) { return f32x4_y(a); }
+inline f32 Quat_z(quat a) { return f32x4_z(a); }
+inline f32 Quat_w(quat a) { return f32x4_w(a); }
+inline f32 Quat_get(quat a, u8 i) { return f32x4_get(a, i); }
 
-inline void Quat_setX(quat *a, f32 v) { Vec_setX(a, v); }
-inline void Quat_setY(quat *a, f32 v) { Vec_setY(a, v); }
-inline void Quat_setZ(quat *a, f32 v) { Vec_setZ(a, v); }
-inline void Quat_setW(quat *a, f32 v) { Vec_setW(a, v); }
-inline void Quat_set(quat *a, u8 i, f32 v) { Vec_set(a, i, v); }
+inline void Quat_setX(quat *a, f32 v) { f32x4_setX(a, v); }
+inline void Quat_setY(quat *a, f32 v) { f32x4_setY(a, v); }
+inline void Quat_setZ(quat *a, f32 v) { f32x4_setZ(a, v); }
+inline void Quat_setW(quat *a, f32 v) { f32x4_setW(a, v); }
+inline void Quat_set(quat *a, u8 i, f32 v) { f32x4_set(a, i, v); }
 
-inline quat Quat_lerp(quat a, quat b, f32 perc) { return Vec_lerp(a, b, perc); }
+inline quat Quat_lerp(quat a, quat b, f32 perc) { return f32x4_lerp(a, b, perc); }
 
 //Helper funcs
 
@@ -45,10 +45,10 @@ inline quat Quat_angleAxis(f32x4 axis, f32 angle) {
 	f32 sinA2 = Math_sin(angle);
 	f32 cosA2 = Math_cos(angle);
 
-	f32x4 cosB = Vec_cos(axis);
-	f32x4 q = Vec_mul(cosB, Vec_xxxx4(sinA2));
+	f32x4 cosB = f32x4_cos(axis);
+	f32x4 q = f32x4_mul(cosB, f32x4_xxxx4(sinA2));
 
-	Vec_setW(&q, cosA2);
+	f32x4_setW(&q, cosA2);
 
 	return q;
 }
@@ -58,18 +58,18 @@ inline quat Quat_angleAxis(f32x4 axis, f32 angle) {
 //
 inline quat Quat_fromEuler(f32x4 pitchYawRollDeg) {
 
-	f32x4 pitchYawRollRad = Vec_mul(pitchYawRollDeg, Vec_xxxx4(Math_degToRad * .5f));
+	f32x4 pitchYawRollRad = f32x4_mul(pitchYawRollDeg, f32x4_xxxx4(Math_degToRad * .5f));
 
-	f32x4 c = Vec_cos(pitchYawRollRad);
-	f32x4 s = Vec_sin(pitchYawRollRad);
+	f32x4 c = f32x4_cos(pitchYawRollRad);
+	f32x4 s = f32x4_sin(pitchYawRollRad);
 
-	f32 cp = Vec_y(c);
-	f32 cy = Vec_y(c);
-	f32 cr = Vec_z(c);
+	f32 cp = f32x4_y(c);
+	f32 cy = f32x4_y(c);
+	f32 cr = f32x4_z(c);
 
-	f32 sp = Vec_y(s);
-	f32 sy = Vec_y(s);
-	f32 sr = Vec_z(s);
+	f32 sp = f32x4_y(s);
+	f32 sy = f32x4_y(s);
+	f32 sr = f32x4_z(s);
 
 	f32 cpsr = sr * cp;
 	f32 cpcr = cr * cp;
@@ -89,18 +89,18 @@ inline quat Quat_fromEuler(f32x4 pitchYawRollDeg) {
 //
 inline f32x4 Quat_toEuler(quat q) {
 
-	f32x4 q2	= Vec_pow2(q);
+	f32x4 q2	= f32x4_pow2(q);
 
-	f32 q2_x	= Vec_x(q2);
-	f32 q2_y	= Vec_y(q2);
-	f32 q2_z	= Vec_z(q2);
+	f32 q2_x	= f32x4_x(q2);
+	f32 q2_y	= f32x4_y(q2);
+	f32 q2_z	= f32x4_z(q2);
 
 	//Calculate roll
 
-	f32x4 qXzw	= Vec_mul(q, Vec_wz(q));
+	f32x4 qXzw	= f32x4_mul(q, f32x4_wz4(q));
 
-	f32 qXzw_x = Vec_x(qXzw);
-	f32 qXzw_y = Vec_y(qXzw);
+	f32 qXzw_x = f32x4_x(qXzw);
+	f32 qXzw_y = f32x4_y(qXzw);
 
 	f32 cpsr = 2 * (qXzw_x + qXzw_y);
 	f32 cpcr = 1 - 2 * (q2_x + q2_y);
@@ -118,16 +118,16 @@ inline f32x4 Quat_toEuler(quat q) {
 
 	//Calculate yaw
 
-	f32x4 xzXyw = Vec_mul(Vec_xz(q), Vec_yw(q));
+	f32x4 xzXyw = f32x4_mul(f32x4_xz4(q), f32x4_yw4(q));
 
-	f32 xzXyw_x = Vec_x(xzXyw);
-	f32 xzXyw_y = Vec_y(xzXyw);
+	f32 xzXyw_x = f32x4_x(xzXyw);
+	f32 xzXyw_y = f32x4_y(xzXyw);
 
 	f32 siny_cosp = 2 * (xzXyw_y + xzXyw_x);
 	f32 cosy_cosp = 1 - 2 * (q2_y + q2_z);
 	f32 y = Math_atan2(siny_cosp, cosy_cosp);
 
-	return Vec_mul(Vec_init3(p, y, r), Vec_xxxx4(Math_radToDeg));
+	return f32x4_mul(f32x4_init3(p, y, r), f32x4_xxxx4(Math_radToDeg));
 }
 
 //Combine two quaternions
@@ -135,15 +135,15 @@ inline f32x4 Quat_toEuler(quat q) {
 //
 inline quat Quat_mul(quat a, quat b) {
 
-	f32x4 axXb = Vec_mul(b, Vec_xxxx(a));
-	f32x4 ayXb = Vec_mul(b, Vec_yyyy(a));
-	f32x4 azXb = Vec_mul(b, Vec_zzzz(a));
-	f32x4 awXb = Vec_mul(b, Vec_wwww(a));
+	f32x4 axXb = f32x4_mul(b, f32x4_xxxx(a));
+	f32x4 ayXb = f32x4_mul(b, f32x4_yyyy(a));
+	f32x4 azXb = f32x4_mul(b, f32x4_zzzz(a));
+	f32x4 awXb = f32x4_mul(b, f32x4_wwww(a));
 
-	f32 axXb_x = Vec_x(axXb),	axXb_y = Vec_y(axXb),	axXb_z = Vec_z(axXb),	axXb_w = Vec_w(axXb);
-	f32 ayXb_x = Vec_x(ayXb),	ayXb_y = Vec_y(ayXb),	ayXb_z = Vec_z(ayXb),	ayXb_w = Vec_w(ayXb);
-	f32 azXb_x = Vec_x(azXb),	azXb_y = Vec_y(azXb),	azXb_z = Vec_z(azXb),	azXb_w = Vec_w(azXb);
-	f32 awXb_x = Vec_x(awXb),	awXb_y = Vec_y(awXb),	awXb_z = Vec_z(awXb),	awXb_w = Vec_w(awXb);
+	f32 axXb_x = f32x4_x(axXb),	axXb_y = f32x4_y(axXb),	axXb_z = f32x4_z(axXb),	axXb_w = f32x4_w(axXb);
+	f32 ayXb_x = f32x4_x(ayXb),	ayXb_y = f32x4_y(ayXb),	ayXb_z = f32x4_z(ayXb),	ayXb_w = f32x4_w(ayXb);
+	f32 azXb_x = f32x4_x(azXb),	azXb_y = f32x4_y(azXb),	azXb_z = f32x4_z(azXb),	azXb_w = f32x4_w(azXb);
+	f32 awXb_x = f32x4_x(awXb),	awXb_y = f32x4_y(awXb),	awXb_z = f32x4_z(awXb),	awXb_w = f32x4_w(awXb);
 	
 	return Quat_init(
 		awXb_x + axXb_w + ayXb_z - azXb_y,
@@ -158,14 +158,14 @@ inline quat Quat_mul(quat a, quat b) {
 //
 inline quat Quat_targetDirection(f32x4 origin, f32x4 target) {
 
-	f32 leno = Vec_len3(origin), lent = Vec_len3(target);
+	f32 leno = f32x4_len3(origin), lent = f32x4_len3(target);
 
-	f32 w = Math_sqrtf(Math_pow2f(leno) * Math_pow2f(lent)) + Vec_dot3(origin, target);
+	f32 w = Math_sqrtf(Math_pow2f(leno) * Math_pow2f(lent)) + f32x4_dot3(origin, target);
 
-	f32x4 cross = Vec_cross3(origin, target);
+	f32x4 cross = f32x4_cross3(origin, target);
 
 	return Quat_normalize(Quat_init(
-		Vec_x(cross), Vec_y(cross), Vec_z(cross),
+		f32x4_x(cross), f32x4_y(cross), f32x4_z(cross),
 		w
 	));
 }
@@ -182,7 +182,7 @@ inline f32x4 Quat_applyToNormal(quat R, f32x4 P) {
 //
 inline quat Quat_slerp(quat a, quat b, f32 perc) {
 
-	f32 cosTheta2 = Vec_dot4(a, b);
+	f32 cosTheta2 = f32x4_dot4(a, b);
 
 	if (Math_absf(cosTheta2) >= 1)
 		return a;
@@ -191,17 +191,17 @@ inline quat Quat_slerp(quat a, quat b, f32 perc) {
 	f32 sinTheta2 = Math_sqrtf(1 - Math_pow2f(cosTheta2));
 
 	if(Math_absf(sinTheta2) < 1e-3f)	//Theta 180deg isn't defined, so define as 50/50
-		return Vec_lerp(a, b, .5f);
+		return f32x4_lerp(a, b, .5f);
 
 	f32 invSinTheta2 = 1 / sinTheta2;
 
 	f32 ratioA = Math_sin(halfTheta * (1 - perc)) * invSinTheta2;
 	f32 ratioB = Math_sin(halfTheta * perc) * invSinTheta2; 
 
-	a = Vec_mul(a, Vec_xxxx4(ratioA));
-	b = Vec_mul(b, Vec_xxxx4(ratioB));
+	a = f32x4_mul(a, f32x4_xxxx4(ratioA));
+	b = f32x4_mul(b, f32x4_xxxx4(ratioB));
 
-	return Vec_add(a, b);
+	return f32x4_add(a, b);
 }
 
 //inline quat Quat_fromLookRotation(f32x4 fwd, f32x4 up);
@@ -214,27 +214,27 @@ struct quat16 {
 
 inline quat Quat_unpack(struct quat16 q) {
 	
-	f32x4 v = Vec_init4(q.arr[0], q.arr[1], q.arr[2], q.arr[3]);
+	f32x4 v = f32x4_init4(q.arr[0], q.arr[1], q.arr[2], q.arr[3]);
 
-	f32x4 ma = Vec_xxxx4(i16_MAX);
+	f32x4 ma = f32x4_xxxx4(i16_MAX);
 
-	return Vec_div(v, ma);
+	return f32x4_div(v, ma);
 }
 
 inline struct quat16 Quat_pack(quat q) {
 
 	q = Quat_normalize(q);
 
-	f32x4 ma = Vec_xxxx4(i16_MAX);
+	f32x4 ma = f32x4_xxxx4(i16_MAX);
 
-	f32x4 asI16 = Vec_mul(q, ma);
+	f32x4 asI16 = f32x4_mul(q, ma);
 
 	return (struct quat16){
 		{
-			(i16) Vec_x(asI16),
-			(i16) Vec_y(asI16),
-			(i16) Vec_z(asI16),
-			(i16) Vec_w(asI16)
+			(i16) f32x4_x(asI16),
+			(i16) f32x4_y(asI16),
+			(i16) f32x4_z(asI16),
+			(i16) f32x4_w(asI16)
 		}
 	};
 }

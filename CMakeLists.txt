@@ -13,15 +13,32 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
+set(EnableSIMD ON CACHE BOOL "Enables SIMD")
+
 if(MSVC)
-    add_compile_options(/W4 /WX /MD /MP /GR /arch:AVX2 /D_CRT_SECURE_NO_WARNINGS)
+    add_compile_options(/W4 /WX /MD /MP /GR /D_CRT_SECURE_NO_WARNINGS /Gy)
 else()
-    add_compile_options(-Wall -Wextra -Werror -mavx2)
+    add_compile_options(-Wall -Wextra -Werror)
 endif()
+
+if(EnableSIMD) 
+
+	if(MSVC) 
+		add_compile_options(/arch:AVX2 )
+	else()
+		add_compile_options(-mavx2)
+	endif()
+
+	set(_SIMD "SIMD_SSE")
+else()
+	set(_SIMD "SIMD_NONE")
+endif()
+
+configure_file(config.h.in ${CMAKE_CURRENT_SOURCE_DIR}/inc/cfg/config.h)
 
 # Types 
 
-file(GLOB_RECURSE typesHeaders "inc/file/*.h" "inc/math/*.h" "inc/types/*.h")
+file(GLOB_RECURSE typesHeaders "inc/file/*.h" "inc/math/*.h" "inc/types/*.h" "inc/cfg/*.h" "*.h.in")
 file(GLOB_RECURSE typesSources "src/file/*.c" "src/math/*.c" "src/types/*.c")
 
 add_library(

@@ -1,6 +1,7 @@
 #include "platforms/thread.h"
 #include "types/assert.h"
 
+#define MICROSOFT_WINDOWS_WINBASE_H_DEFINE_INTERLOCKED_CPLUSPLUS_OVERLOADS 0
 #include <Windows.h>
 
 u32 Thread_getId() { return GetCurrentThreadId(); }

@@ -74,6 +74,9 @@ extern const i64 i64_MAX;
 extern const usz usz_MAX;
 extern const isz isz_MAX;
 
+extern const f32 f32_MIN;
+extern const f32 f32_MAX;
+
 struct Buffer {
 	u8 *ptr;
 	usz siz;

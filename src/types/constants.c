@@ -51,3 +51,6 @@ const i64 i64_MAX		= 0x7FFFFFFFFFFFFFFF;
 
 const usz usz_MAX		= (usz) 0xFFFFFFFFFFFFFFFF;
 const isz isz_MAX		= (isz)(((usz)1 << (sizeof(usz) * 8 - 1)) - 1);
+
+const f32 f32_MAX		= 3.4028235e38f;
+const f32 f32_MIN		= -3.4028235e38f;

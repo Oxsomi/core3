@@ -13,6 +13,8 @@ inline u64 Math_maxu(u64 v0, u64 v1) { return v0 >= v1 ? v0 : v1; }
 inline u64 Math_clampu(u64 v, u64 mi, u64 ma) { return Math_maxu(mi, Math_minu(ma, v)); }
 
 inline u64 Math_pow2u(u64 v) { return v * v; }
+inline u64 Math_pow4u(u64 v) { return Math_pow2u(Math_pow2u(v)); }
+inline u64 Math_pow5u(u64 v) { return Math_pow4u(v) * v; }
 
 //Int
 
@@ -22,6 +24,8 @@ inline i64 Math_clampi(i64 v, i64 mi, i64 ma) { return Math_maxi(mi, Math_mini(m
 
 inline i64 Math_absi(i64 v) { return Math_maxi(v, 0); }
 inline i64 Math_pow2i(i64 v) { return v * v; }
+inline u64 Math_pow4i(i64 v) { return Math_pow2i(Math_pow2i(v)); }
+inline u64 Math_pow5i(i64 v) { return Math_pow4i(v) * v; }
 
 //Float
 
@@ -35,9 +39,12 @@ inline f32 Math_absf(f32 v) { return Math_maxf(v, 0); }
 f32 Math_sqrtf(f32 v);
 
 inline f32 Math_pow2f(f32 v) { return v * v; }
+inline f32 Math_pow4f(f32 v) { return Math_pow2f(Math_pow2f(v)); }
+inline f32 Math_pow5f(f32 v) { return Math_pow4f(v) * v; }
 f32 Math_powf(f32 v, f32 exp);
 f32 Math_expf(f32 v);
 f32 Math_exp2f(f32 v);
+f32 Math_exp10f(f32 v);
 
 f32 Math_log10f(f32 v);
 f32 Math_logef(f32 v);
