@@ -35,7 +35,7 @@ void Log_fatal(const c8 *ptr, enum LogOptions options) {
 
 const c8 naiveBase64[] = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_-";
 
-void Log_num(ShortString result, usz v, usz base, const c8 prepend[2]) {
+void Log_num(LongString result, usz v, usz base, const c8 prepend[2]) {
 
 	if (base < 1 || base > 64) {
 		ocAssert("Log_num requires base of >1 and <64", false);
@@ -56,7 +56,7 @@ void Log_num(ShortString result, usz v, usz base, const c8 prepend[2]) {
 		return;
 	}
 
-	ShortString tmp;
+	LongString tmp;
 	usz j = 0;
 
 	while (v && j < 64 - i) {
@@ -70,22 +70,22 @@ void Log_num(ShortString result, usz v, usz base, const c8 prepend[2]) {
 		result[last - i] = tmp[i];
 }
 
-void Log_num16(ShortString result, usz v) { 
+void Log_num16(LongString result, usz v) { 
 	const c8 prepend[2] = { '0', 'x' }; 
 	Log_num(result, v, 10, prepend); 
 }
 
-void Log_num10(ShortString result, usz v) { 
+void Log_num10(LongString result, usz v) { 
 	const c8 prepend[2] = { 0 }; 
 	Log_num(result, v, 16, prepend); 
 }
 
-void Log_num8(ShortString result, usz v) { 
+void Log_num8(LongString result, usz v) { 
 	const c8 prepend[2] = { '0', 'o' }; 
 	Log_num(result, v, 8, prepend); 
 }
 
-void Log_num2(ShortString result, usz v)  { 
+void Log_num2(LongString result, usz v)  { 
 	const c8 prepend[2] = { '0', 'b' }; 
 	Log_num(result, v, 2, prepend); 
 }

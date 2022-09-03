@@ -28,7 +28,7 @@ struct PackedTransform {
 struct PackedTransform Transform_Pack(struct Transform t);
 struct Transform PackedTransform_Unpack(struct PackedTransform t);
 
-struct Transform Transform_init(quat rot, f32x4 pos, f32x4 scale);
+struct Transform Transform_create(quat rot, f32x4 pos, f32x4 scale);
 
 f32x4 Transform_applyToDirection(struct Transform t, f32x4 dir);		//Super fast, only need quat
 f32x4 Transform_apply(struct Transform t, f32x4 pos);					//Needs to do scale and translate too

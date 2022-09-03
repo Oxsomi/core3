@@ -1,6 +1,7 @@
 #include "platforms/platform.h"
 #include "platforms/log.h"
 
+#include <locale.h>
 #include <signal.h>
 #include <stdlib.h>
 
@@ -30,6 +31,16 @@ void sigFunc(int signal) {
 	exit(signal);
 }
 
+void *allocCallback(void *allocator, usz siz) {
+	allocator;
+	return malloc(siz);
+}
+
+void freeCallback(void *allocator, struct Buffer buf) {
+	allocator;
+	free(buf.ptr);
+}
+
 int main(int argc, const char *argv[]) {
 	
 	#ifndef _NO_SIGNAL_HANDLING
@@ -41,6 +52,10 @@ int main(int argc, const char *argv[]) {
 		signal(SIGTERM, sigFunc);
 	#endif
 
-	Platform_init(argc, argv, NULL);
-	return Program_run();
+	Platform_create(argc, argv, GetModuleHandleA(NULL), allocCallback, freeCallback, NULL);
+
+	int res = Program_run();
+	Program_exit();
+
+	return res;
 }

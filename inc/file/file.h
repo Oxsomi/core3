@@ -1,5 +1,7 @@
 #pragma once
-#include "types/allocator.h"
+#include "types/types.h"
 
-void File_write(struct Buffer buf, const c8 *loc);
-struct Buffer File_read(const c8 *loc, AllocFunc alloc, void *allocator);
+struct Error File_write(struct Buffer buf, const c8 *loc);
+struct Error File_read(const c8 *loc, struct Allocator alloc, struct Buffer *output);
+
+//TODO: make it more like a DirectStorage-like api

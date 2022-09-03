@@ -1,6 +1,7 @@
 #include "formats/bmp.h"
 #include "types/bit.h"
 #include "types/assert.h"
+#include "types/allocator.h"
 
 #pragma pack(push, 1)
 
@@ -33,7 +34,7 @@ const u32 BMP_srgbMagic = 0x73524742;
 
 struct Buffer BMP_writeRGBA(
 	struct Buffer buf, u16 w, u16 h, bool isFlipped, 
-	AllocFunc alloc, void *allocator
+	struct Allocator allocator
 ) {
 
 	ocAssert(
@@ -78,7 +79,6 @@ struct Buffer BMP_writeRGBA(
 
 	struct Buffer file = Bit_bytes(
 		headersSize + buf.siz,
-		alloc,
 		allocator
 	);
 

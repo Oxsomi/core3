@@ -1,5 +1,11 @@
 #pragma once
 #include "types.h"
 
-typedef void *(AllocFunc)(void* allocator, usz);
-typedef void (FreeFunc)(void* allocator, struct Buffer);
+typedef struct Error (*AllocFunc)(void* allocator, usz siz, struct Buffer *output);
+typedef struct Error (*FreeFunc)(void* allocator, struct Buffer buf);
+
+struct Allocator {
+	void *ptr;
+	AllocFunc alloc;
+	FreeFunc free;
+};

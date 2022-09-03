@@ -132,15 +132,19 @@ inline void Vec_set(f32x4 *a, u8 i, f32 v);
 
 //Construction
 
-inline f32x4 Vec_init1(f32 x);
-inline f32x4 Vec_init2(f32 x, f32 y);
-inline f32x4 Vec_init3(f32 x, f32 y, f32 z);
-inline f32x4 Vec_init4(f32 x, f32 y, f32 z, f32 w);
+inline f32x4 Vec_create1(f32 x);
+inline f32x4 Vec_create2(f32 x, f32 y);
+inline f32x4 Vec_create3(f32 x, f32 y, f32 z);
+inline f32x4 Vec_create4(f32 x, f32 y, f32 z, f32 w);
 
 inline f32x4 Vec_load1(const f32 *arr);
 inline f32x4 Vec_load2(const f32 *arr);
 inline f32x4 Vec_load3(const f32 *arr);
 inline f32x4 Vec_load4(const f32 *arr);
+
+inline f32x4 Vec_combine2(f32x4 xy, f32x4 zw) { 
+	return Vec_create4(Vec_x(xy), Vec_y(xy), Vec_x(zw), Vec_y(zw)); 
+}
 
 //Arch dependent source; arithmetic
 
@@ -516,10 +520,10 @@ inline f32 Vec_y(f32x4 a) { return Vec_x(Vec_yyyy(a)); }
 inline f32 Vec_z(f32x4 a) { return Vec_x(Vec_zzzz(a)); }
 inline f32 Vec_w(f32x4 a) { return Vec_x(Vec_wwww(a)); }
 
-inline f32x4 Vec_init1(f32 x) { return _mm_set_ps(0, 0, 0, x); }
-inline f32x4 Vec_init2(f32 x, f32 y) { return _mm_set_ps(0, 0, y, x); }
-inline f32x4 Vec_init3(f32 x, f32 y, f32 z) { return _mm_set_ps(0, z, y, x); }
-inline f32x4 Vec_init4(f32 x, f32 y, f32 z, f32 w) { return _mm_set_ps(w, z, y, x); }
+inline f32x4 Vec_create1(f32 x) { return _mm_set_ps(0, 0, 0, x); }
+inline f32x4 Vec_create2(f32 x, f32 y) { return _mm_set_ps(0, 0, y, x); }
+inline f32x4 Vec_create3(f32 x, f32 y, f32 z) { return _mm_set_ps(0, z, y, x); }
+inline f32x4 Vec_create4(f32 x, f32 y, f32 z, f32 w) { return _mm_set_ps(w, z, y, x); }
 
 inline f32x4 Vec_xxxx4(f32 x) { return _mm_set1_ps(x); }
 
@@ -586,13 +590,13 @@ inline f32 Vec_sqLen4(f32x4 v) { return Vec_x(_mm_dp_ps(v, v, 0xFF)); }
 //Shifts are hard, so we just shift by division and floor
 //
 inline f32x4 Vec_rgb8Unpack(u32 v) {
-    f32x4 rgb8 = Vec_floor(Vec_div(Vec_xxxx4((f32)v), Vec_init3(0x10000, 0x100, 0x1)));
+    f32x4 rgb8 = Vec_floor(Vec_div(Vec_xxxx4((f32)v), Vec_create3(0x10000, 0x100, 0x1)));
     return Vec_div(Vec_mod(rgb8, Vec_xxxx4(0x100)), Vec_xxxx4(0xFF));
 }
 
 inline u32 Vec_rgb8Pack(f32x4 v) {
     f32x4 v8 = Vec_floor(Vec_mul(v, Vec_xxxx4(0xFF)));
-    f32x4 preShift = Vec_trunc3(Vec_mul(v8, Vec_init3(0x10000, 0x100, 0x1)));
+    f32x4 preShift = Vec_trunc3(Vec_mul(v8, Vec_create3(0x10000, 0x100, 0x1)));
     return (u32) Vec_reduce(preShift);
 }
 
@@ -606,8 +610,8 @@ inline u32 Vec_srgba8Pack(f32x4 v) {
 
 inline f32x4 Vec_one() { return Vec_xxxx4(1); }
 inline f32x4 Vec_two() { return Vec_xxxx4(2); }
-inline f32x4 Vec_mask2() { return Vec_init4(1, 1, 0, 0); }
-inline f32x4 Vec_mask3() { return Vec_init4(1, 1, 1, 0); }
+inline f32x4 Vec_mask2() { return Vec_create4(1, 1, 0, 0); }
+inline f32x4 Vec_mask3() { return Vec_create4(1, 1, 1, 0); }
 
 inline bool Vec_all(f32x4 b) { return Vec_reduce(Vec_neq(b, Vec_zero())) == 4; }
 inline bool Vec_any(f32x4 b) { return Vec_reduce(Vec_neq(b, Vec_zero())); }
@@ -616,29 +620,29 @@ inline f32x4 Vec_normalize2(f32x4 v) { v = Vec_xy(v);  return Vec_mul(v, Vec_rsq
 inline f32x4 Vec_normalize3(f32x4 v) { v = Vec_xyz(v); return Vec_mul(v, Vec_rsqrt(_mm_dp_ps(v, v, 0xFF))); }
 inline f32x4 Vec_normalize4(f32x4 v) { return Vec_mul(v, Vec_rsqrt(_mm_dp_ps(v, v, 0xFF))); }
 
-inline f32x4 Vec_load1(const f32 *arr) { return Vec_init1(*arr); }
-inline f32x4 Vec_load2(const f32 *arr) { return Vec_init2(*arr, arr[1]); }
-inline f32x4 Vec_load3(const f32 *arr) { return Vec_init3(*arr, arr[1], arr[2]); }
+inline f32x4 Vec_load1(const f32 *arr) { return Vec_create1(*arr); }
+inline f32x4 Vec_load2(const f32 *arr) { return Vec_create2(*arr, arr[1]); }
+inline f32x4 Vec_load3(const f32 *arr) { return Vec_create3(*arr, arr[1], arr[2]); }
 
-inline void Vec_setX(f32x4 *a, f32 v) { *a = Vec_add(Vec_mul(*a, Vec_init4(0, 1, 1, 1)), Vec_init4(v, 0, 0, 0)); }
-inline void Vec_setY(f32x4 *a, f32 v) { *a = Vec_add(Vec_mul(*a, Vec_init4(1, 0, 1, 1)), Vec_init4(0, v, 0, 0)); }
-inline void Vec_setZ(f32x4 *a, f32 v) { *a = Vec_add(Vec_mul(*a, Vec_init4(1, 1, 0, 1)), Vec_init4(0, 0, v, 0)); }
-inline void Vec_setW(f32x4 *a, f32 v) { *a = Vec_add(Vec_mul(*a, Vec_init4(1, 1, 1, 0)), Vec_init4(0, 0, 0, v)); }
+inline void Vec_setX(f32x4 *a, f32 v) { *a = Vec_add(Vec_mul(*a, Vec_create4(0, 1, 1, 1)), Vec_create4(v, 0, 0, 0)); }
+inline void Vec_setY(f32x4 *a, f32 v) { *a = Vec_add(Vec_mul(*a, Vec_create4(1, 0, 1, 1)), Vec_create4(0, v, 0, 0)); }
+inline void Vec_setZ(f32x4 *a, f32 v) { *a = Vec_add(Vec_mul(*a, Vec_create4(1, 1, 0, 1)), Vec_create4(0, 0, v, 0)); }
+inline void Vec_setW(f32x4 *a, f32 v) { *a = Vec_add(Vec_mul(*a, Vec_create4(1, 1, 1, 0)), Vec_create4(0, 0, 0, v)); }
 
 inline void Vec_set(f32x4 *a, u8 i, f32 v) {
     switch (i & 3) {
-    case 0:     Vec_setX(a, v);     break;
-    case 1:     Vec_setY(a, v);     break;
-    case 2:     Vec_setZ(a, v);     break;
-    default:    Vec_setW(a, v);
+		case 0:     Vec_setX(a, v);     break;
+		case 1:     Vec_setY(a, v);     break;
+		case 2:     Vec_setZ(a, v);     break;
+		default:    Vec_setW(a, v);
     }
 }
 
 inline f32 Vec_get(f32x4 a, u8 i) {
     switch (i & 3) {
-    case 0:     return Vec_x(a);
-    case 1:     return Vec_y(a);
-    case 2:     return Vec_z(a);
-    default:    return Vec_w(a);
+		case 0:     return Vec_x(a);
+		case 1:     return Vec_y(a);
+		case 2:     return Vec_z(a);
+		default:    return Vec_w(a);
     }
 }

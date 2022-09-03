@@ -6,7 +6,7 @@
 
 #ifdef _WIN32
 	#include <intrin.h>
-#define timegm _mkgmtime
+	#define timegm _mkgmtime
 #else
 	#include <x86intrin.h>
 #endif
@@ -40,7 +40,7 @@ dns Timer_elapsed(ns prev) { return Timer_dns(prev, Timer_now()); }
 
 void setNum(TimerFormat format, usz offset, usz siz, usz v) {
 
-	usz off = offset + siz - 1;
+	isz off = (isz)(offset + siz) - 1;
 
 	while (v && off >= offset) {
 		format[off] = '0' + v % 10;

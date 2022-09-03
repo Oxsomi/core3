@@ -2,6 +2,11 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+//A hint to show that something is implementation dependent
+//For ease of implementing a new implementation
+
+#define impl
+
 //Types
 
 typedef int8_t  i8;
@@ -20,8 +25,8 @@ typedef double f64;
 typedef size_t usz;
 typedef ptrdiff_t isz;
 
-typedef u64 ns;		//Time since Unix epoch
-typedef i64 dns;	//Delta ns
+typedef u64 ns;		/// Time since Unix epoch in ns
+typedef i64 dns;	/// Delta ns
 
 typedef char c8;
 
@@ -37,6 +42,7 @@ extern const usz K;
 extern const usz M;
 extern const usz B;
 extern const usz T;
+extern const usz P;
 
 extern const ns mus;
 extern const ns ms;

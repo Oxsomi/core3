@@ -1,8 +1,6 @@
 #pragma once
 #include "types/string.h"
-
-#define STACKTRACE_MAX_SIZE 128
-typedef void *StackTrace[STACKTRACE_MAX_SIZE];
+#include "types/error.h"
 
 struct LogArgs {
 	usz argc;
@@ -25,12 +23,12 @@ enum LogOptions {
 	LogOptions_Default		= LogOptions_Timestamp | LogOptions_NewLine | LogOptions_Thread
 };
 
-void Log_captureStackTrace(StackTrace stackTrace, usz skip);
+impl void Log_captureStackTrace(void **stackTrace, usz stackSize, usz skip);
 
-void Log_printCapturedStackTrace(const StackTrace stackTrace, enum LogLevel lvl);
+impl void Log_printCapturedStackTrace(const StackTrace stackTrace, enum LogLevel lvl);
+impl void Log_log(enum LogLevel lvl, enum LogOptions options, struct LogArgs args);
+
 void Log_printStackTrace(usz skip, enum LogLevel lvl);
-
-void Log_log(enum LogLevel lvl, enum LogOptions options, struct LogArgs args);
 
 void Log_debug(const c8 *ptr, enum LogOptions options);
 void Log_performance(const c8 *ptr, enum LogOptions options);
@@ -38,8 +36,8 @@ void Log_warn(const c8 *ptr, enum LogOptions options);
 void Log_error(const c8 *ptr, enum LogOptions options);
 void Log_fatal(const c8 *ptr, enum LogOptions options);
 
-void Log_num(ShortString result, usz v, usz base, const c8 prepend[2]);
-void Log_num16(ShortString result, usz v);
-void Log_num10(ShortString result, usz v);
-void Log_num8(ShortString result, usz v);
-void Log_num2(ShortString result, usz v);
+void Log_num(LongString result, usz v, usz base, const c8 prepend[2]);
+void Log_num16(LongString result, usz v);
+void Log_num10(LongString result, usz v);
+void Log_num8(LongString result, usz v);
+void Log_num2(LongString result, usz v);

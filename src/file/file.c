@@ -1,5 +1,6 @@
 #include "file/file.h"
-#include "types/assert.h"
+#include "types/allocator.h"
+#include "types/error.h"
 #include "types/bit.h"
 #include <stdio.h>
 
@@ -7,7 +8,10 @@
 	#define _ftelli64 ftell
 #endif
 
-void File_write(struct Buffer buf, const c8 *loc) {
+struct Error File_write(struct Buffer buf, const c8 *loc) {
+
+	if(!loc)
+		return (struct Error){ .genericError = GenericError_InvalidParameter, .paramId = 1 };
 
 	ocAssert("Invalid file name or buffer", loc && buf.siz && buf.ptr);
 
@@ -18,7 +22,7 @@ void File_write(struct Buffer buf, const c8 *loc) {
 	fclose(f);
 }
 
-struct Buffer File_read(const c8 *loc, AllocFunc alloc, void *allocator) {
+struct Buffer File_read(const c8 *loc, struct Allocator allocator) {
 
 	ocAssert("Invalid file name or alloc func", loc && alloc);
 
@@ -27,7 +31,7 @@ struct Buffer File_read(const c8 *loc, AllocFunc alloc, void *allocator) {
 
 	fseek(f, 0, SEEK_END);
 
-	struct Buffer b = Bit_bytes((usz)_ftelli64(f), alloc, allocator);
+	struct Buffer b = Bit_bytes((usz)_ftelli64(f), allocator);
 
 	fseek(f, 0, SEEK_SET);
 	fread(b.ptr, 1, b.siz, f);

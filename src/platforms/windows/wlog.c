@@ -14,10 +14,10 @@
 
 //Carried over from core2
 
-void Log_captureStackTrace(StackTrace stack, usz skip) {
+void Log_captureStackTrace(void **stack, usz stackSize, usz skip) {
 	RtlCaptureStackBackTrace(
 		(DWORD)(1 + skip), 
-		(DWORD) STACKTRACE_MAX_SIZE, 
+		(DWORD) stackSize, 
 		stack, NULL
 	);
 }
@@ -180,7 +180,7 @@ void Log_log(enum LogLevel lvl, enum LogOptions options, struct LogArgs args) {
 
 	if (hasThread) {
 
-		ShortString str;
+		LongString str;
 		Log_num10(str, thread);
 
 		printf("%s", str);

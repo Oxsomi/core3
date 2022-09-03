@@ -1,3 +1,4 @@
+#include "platforms/platform.h"
 #include "platforms/thread.h"
 #include "types/assert.h"
 
@@ -18,16 +19,15 @@ DWORD ThreadFunc(struct Thread *thread) {
 	return 0;
 }
 
-struct Thread *Thread_start(
-	ThreadCallbackFunction callback, void *objectHandle,
-	AllocFunc alloc, FreeFunc free, void* allocator
+struct Thread *Thread_create(
+	ThreadCallbackFunction callback, void *objectHandle
 ) {
-	ocAssert("Invalid thread inputs", callback && alloc && free);
+	ocAssert("Invalid thread inputs", callback);
 	
-	struct Thread* thread = (struct Thread*) alloc(allocator, sizeof(struct Thread));
+	struct Thread* thread = (struct Thread*) Platform_instance.alloc(
+		Platform_instance.allocator, sizeof(struct Thread)
+	);
 
-	thread->allocator = allocator;
-	thread->allocFree = free;
 	thread->callback = callback;
 	thread->objectHandle = objectHandle;
 

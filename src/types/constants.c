@@ -15,6 +15,7 @@ const usz K				= 1'000;
 const usz M				= 1'000'000;
 const usz B				= 1'000'000'000;
 const usz T				= 1'000'000'000'000;
+const usz P				= 1'000'000'000'000'000;
 
 const ns mus			= 1'000;
 const ns ms				= 1'000'000;
@@ -22,7 +23,7 @@ const ns seconds		= 1'000'000'000;
 const ns mins			= 60'000'000'000;
 const ns hours			= 3'600'000'000'000;
 const ns days			= 86'400'000'000'000;
-const ns wweeks			= 604'800'000'000'000;
+const ns weeks			= 604'800'000'000'000;
 
 const u8 u8_MIN			= 0;
 const u16 u16_MIN		= 0;

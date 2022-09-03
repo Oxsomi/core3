@@ -6,11 +6,11 @@ typedef f32x4 quat;
 
 //Simple quaternion functions
 
-inline quat Quat_init(f32 x, f32 y, f32 z, f32 w) { return Vec_init4(x, y, z, w); }
+inline quat Quat_create(f32 x, f32 y, f32 z, f32 w) { return Vec_create4(x, y, z, w); }
 
-inline quat Quat_identity() { return Quat_init(0, 0, 0, 1); }
+inline quat Quat_identity() { return Quat_create(0, 0, 0, 1); }
 
-inline quat Quat_conj(quat q) { return Quat_init(-Vec_x(q), -Vec_y(q), -Vec_z(q), Vec_w(q)); }
+inline quat Quat_conj(quat q) { return Quat_create(-Vec_x(q), -Vec_y(q), -Vec_z(q), Vec_w(q)); }
 inline quat Quat_normalize(quat q) { return Vec_normalize4(q); }
 inline quat Quat_inverse(quat q) { return Quat_normalize(Quat_conj(q)); }
 
@@ -76,7 +76,7 @@ inline quat Quat_fromEuler(f32x4 pitchYawRollDeg) {
 	f32 spsy = sp * sy;
 	f32 spcy = sp * cy;
 
-	return Quat_init(
+	return Quat_create(
 		cpsr * cy - cr * spsy,
 		cr * spcy + cpsr * sy,
 		cpcr * sy - sr * spcy,
@@ -127,7 +127,7 @@ inline f32x4 Quat_toEuler(quat q) {
 	f32 cosy_cosp = 1 - 2 * (q2_y + q2_z);
 	f32 y = Math_atan2(siny_cosp, cosy_cosp);
 
-	return Vec_mul(Vec_init3(p, y, r), Vec_xxxx4(Math_radToDeg));
+	return Vec_mul(Vec_create3(p, y, r), Vec_xxxx4(Math_radToDeg));
 }
 
 //Combine two quaternions
@@ -145,7 +145,7 @@ inline quat Quat_mul(quat a, quat b) {
 	f32 azXb_x = Vec_x(azXb),	azXb_y = Vec_y(azXb),	azXb_z = Vec_z(azXb),	azXb_w = Vec_w(azXb);
 	f32 awXb_x = Vec_x(awXb),	awXb_y = Vec_y(awXb),	awXb_z = Vec_z(awXb),	awXb_w = Vec_w(awXb);
 	
-	return Quat_init(
+	return Quat_create(
 		awXb_x + axXb_w + ayXb_z - azXb_y,
 		awXb_y - axXb_z + ayXb_w + azXb_x,
 		awXb_z + axXb_y - ayXb_x + azXb_w,
@@ -164,7 +164,7 @@ inline quat Quat_targetDirection(f32x4 origin, f32x4 target) {
 
 	f32x4 cross = Vec_cross3(origin, target);
 
-	return Quat_normalize(Quat_init(
+	return Quat_normalize(Quat_create(
 		Vec_x(cross), Vec_y(cross), Vec_z(cross),
 		w
 	));
@@ -214,7 +214,7 @@ struct quat16 {
 
 inline quat Quat_unpack(struct quat16 q) {
 	
-	f32x4 v = Vec_init4(q.arr[0], q.arr[1], q.arr[2], q.arr[3]);
+	f32x4 v = Vec_create4(q.arr[0], q.arr[1], q.arr[2], q.arr[3]);
 
 	f32x4 ma = Vec_xxxx4(i16_MAX);
 
