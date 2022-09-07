@@ -2,39 +2,70 @@
 #include "types/allocator.h"
 #include "types/error.h"
 #include "types/bit.h"
+#include "types/string.h"
 #include <stdio.h>
 
 #ifndef _WIN32
 	#define _ftelli64 ftell
 #endif
 
-struct Error File_write(struct Buffer buf, const c8 *loc) {
+struct Error File_write(struct Buffer buf, struct String loc) {
 
-	if(!loc)
+	if(!buf.siz || !buf.ptr)
+		return (struct Error){ .genericError = GenericError_NullPointer, .paramId = 0 };
+
+	if(String_isEmpty(loc))
 		return (struct Error){ .genericError = GenericError_InvalidParameter, .paramId = 1 };
 
-	ocAssert("Invalid file name or buffer", loc && buf.siz && buf.ptr);
+	FILE *f = fopen(loc.ptr, "wb");
 
-	FILE *f = fopen(loc, "wb");
-	ocAssert("File not found", f);
+	if(!f)
+		return (struct Error){ .genericError = GenericError_NotFound, .paramId = 1 };
 
-	fwrite(buf.ptr, 1, buf.siz, f);
+	if (fwrite(buf.ptr, 1, buf.siz, f) != buf.siz) {
+		fclose(f);
+		return (struct Error){ .genericError = GenericError_InvalidState };
+	}
+
 	fclose(f);
+	return Error_none();
 }
 
-struct Buffer File_read(const c8 *loc, struct Allocator allocator) {
+struct Error File_read(struct String loc, struct Allocator allocator) {
 
-	ocAssert("Invalid file name or alloc func", loc && alloc);
+	if(String_isEmpty(loc))
+		return (struct Error){ .genericError = GenericError_InvalidParameter, .paramId = 0 };
 
-	FILE *f = fopen(loc, "rb");
-	ocAssert("File not found", f);
+	FILE *f = fopen(loc.ptr, "rb");
 
-	fseek(f, 0, SEEK_END);
+	if(!f)
+		return (struct Error){ .genericError = GenericError_NotFound, .paramId = 1 };
 
-	struct Buffer b = Bit_bytes((usz)_ftelli64(f), allocator);
+	if(fseek(f, 0, SEEK_END)) {
+		fclose(f);
+		return (struct Error){ .genericError = GenericError_InvalidState, .errorSubId = 0 };
+	}
 
-	fseek(f, 0, SEEK_SET);
-	fread(b.ptr, 1, b.siz, f);
+	struct Buffer b = (struct Buffer){ 0 };
+	struct Error err = Bit_bytes((usz)_ftelli64(f), allocator, &b);
+	
+	if(err.genericError) {
+		fclose(f);
+		return err;
+	}
+
+	if(fseek(f, 0, SEEK_SET)) {
+		Bit_free(&b, allocator);
+		fclose(f);
+		return (struct Error){ .genericError = GenericError_InvalidState, .errorSubId = 1 };
+	}
+
+	if (fread(b.ptr, 1, b.siz, f) != b.siz) {
+		Bit_free(&b, allocator);
+		fclose(f);
+		return (struct Error){ .genericError = GenericError_InvalidState, .errorSubId = 2 };
+	}
+
 	fclose(f);
-	return b;
+	return Error_none();
 }

@@ -1,6 +1,6 @@
 #include "platforms/platform.h"
 #include "platforms/thread.h"
-#include "types/assert.h"
+#include "types/error.h"
 
 #include <Windows.h>
 
@@ -19,25 +19,53 @@ DWORD ThreadFunc(struct Thread *thread) {
 	return 0;
 }
 
-struct Thread *Thread_create(
-	ThreadCallbackFunction callback, void *objectHandle
+struct Error Thread_create(
+	ThreadCallbackFunction callback, void *objectHandle,
+	struct Thread **thread
 ) {
-	ocAssert("Invalid thread inputs", callback);
-	
-	struct Thread* thread = (struct Thread*) Platform_instance.alloc(
-		Platform_instance.allocator, sizeof(struct Thread)
+
+	if(!thread)
+		return (struct Error) { .genericError = GenericError_NullPointer, .paramId = 2 };
+
+	if(*thread)
+		return (struct Error) { 
+			.genericError = GenericError_InvalidParameter, 
+			.paramId = 2, .paramValue0 = (usz) thread 
+		};
+
+	if(!callback)
+		return (struct Error) { .genericError = GenericError_NullPointer };
+
+	struct Buffer buf = (struct Buffer) { 0 };
+
+	struct Error err = Platform_instance.alloc.alloc(
+		Platform_instance.alloc.ptr, sizeof(struct Thread), &buf
 	);
 
-	thread->callback = callback;
-	thread->objectHandle = objectHandle;
+	if (err.genericError)
+		return err;
 
-	thread->nativeHandle = CreateThread(0, 0, (LPTHREAD_START_ROUTINE)ThreadFunc, thread, 0, NULL);
+	struct Thread *thr = (*thread = (struct Thread*) buf.ptr);
 
-	ocAssert("Create thread returned null", thread->nativeHandle);
+	thr->callback = callback;
+	thr->objectHandle = objectHandle;
 
-	return thread;
+	thr->nativeHandle = CreateThread(0, 0, (LPTHREAD_START_ROUTINE)ThreadFunc, thread, 0, NULL);
+
+	if (!thr->nativeHandle) {
+		Thread_free(thread);
+		return (struct Error) { .genericError = GenericError_InvalidOperation };
+	}
+
+	return Error_none();
 }
 
-void Thread_wait(struct Thread *thread, u32 maxWaitTimeMs) {
-	WaitForSingleObject(thread->nativeHandle, !maxWaitTimeMs ? u32_MAX : maxWaitTimeMs);
+struct Error Thread_wait(struct Thread *thread, u32 maxWaitTimeMs) {
+
+	if(WaitForSingleObject(thread->nativeHandle, !maxWaitTimeMs ? u32_MAX : maxWaitTimeMs) == WAIT_FAILED)
+		return (struct Error) {
+			.genericError = GenericError_InvalidOperation
+		};
+
+	return Error_none();
 }

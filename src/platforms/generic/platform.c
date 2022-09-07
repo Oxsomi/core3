@@ -1,6 +1,7 @@
 #include "platforms/platform.h"
 #include "platforms/log.h"
 #include "types/error.h"
+#include "types/bit.h"
 
 struct Platform Platform_instance = { 0 };
 
@@ -13,10 +14,32 @@ struct Error Platform_create(
 	if(Platform_instance.platformType != Platform_Uninitialized)
 		return Error_base(GenericError_InvalidOperation, 0, 0, 0, Platform_instance.platformType, 0);
 
-	Platform_instance =	(struct Platform){
+	if(!cmdArgc)
+		return Error_base(GenericError_InvalidParameter, 0, 1, 0, 0, 0);
+
+	struct String *cmdArgsSized = NULL;
+
+	if(cmdArgc > 1) {
+
+		struct Buffer buf = (struct Buffer){ 0 };
+		struct Error err = alloc(allocator, sizeof(struct String) * (cmdArgc - 1), &buf);
+
+		if(err.genericError)
+			return err;
+
+		cmdArgsSized = (struct String*) buf.ptr;
+
+		//If we're passed invalid cmdArg this could be a problem
+		//But that'd happen anyways
+
+		for(int i = 1; i < cmdArgc; ++i)
+			cmdArgsSized[i - 1] = String_createRefUnsafe(cmdArgs[i]);
+	}
+
+	Platform_instance =	(struct Platform) {
 		.platformType = _PLATFORM_TYPE,
 		.cmdArgc = cmdArgc,
-		.cmdArgs = cmdArgs,
+		.cmdArgs = cmdArgsSized,
 		.data = data,
 		.alloc = (struct Allocator) {
 			.free = free,
@@ -25,7 +48,23 @@ struct Error Platform_create(
 		}
 	};
 
+	Platform_instance.windowManager = WindowManager_create()
+
 	return Error_none();
+}
+
+void Program_cleanup() {
+
+	if(Platform_instance.platformType == Platform_Uninitialized)
+		return;
+
+	if(Platform_instance.cmdArgc)
+		Platform_instance.alloc.free(
+			Platform_instance.alloc.alloc, 
+			Bit_createRef(Platform_instance.cmdArgs, Platform_instance.cmdArgc * sizeof(struct String))
+		);
+
+	Platform_instance =	(struct Platform) { 0 };
 }
 
 struct Error Error_traced(enum GenericError err, u32 subId, u32 paramId, u32 paramSubId, u64 paramValue0, u64 paramValue1) {

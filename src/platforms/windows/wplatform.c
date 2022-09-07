@@ -56,6 +56,7 @@ int main(int argc, const char *argv[]) {
 
 	int res = Program_run();
 	Program_exit();
+	Program_cleanup();
 
 	return res;
 }

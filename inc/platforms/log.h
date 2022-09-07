@@ -4,7 +4,7 @@
 
 struct LogArgs {
 	usz argc;
-	const c8* const *args;
+	struct String const *args;
 };
 
 enum LogLevel {
@@ -30,14 +30,15 @@ impl void Log_log(enum LogLevel lvl, enum LogOptions options, struct LogArgs arg
 
 void Log_printStackTrace(usz skip, enum LogLevel lvl);
 
-void Log_debug(const c8 *ptr, enum LogOptions options);
-void Log_performance(const c8 *ptr, enum LogOptions options);
-void Log_warn(const c8 *ptr, enum LogOptions options);
-void Log_error(const c8 *ptr, enum LogOptions options);
-void Log_fatal(const c8 *ptr, enum LogOptions options);
+void Log_debug(struct String s, enum LogOptions options);
+void Log_performance(struct String s, enum LogOptions options);
+void Log_warn(struct String s, enum LogOptions options);
+void Log_error(struct String s, enum LogOptions options);
+void Log_fatal(struct String s, enum LogOptions options);
 
 void Log_num(LongString result, usz v, usz base, const c8 prepend[2]);
-void Log_num16(LongString result, usz v);
-void Log_num10(LongString result, usz v);
-void Log_num8(LongString result, usz v);
-void Log_num2(LongString result, usz v);
+void Log_num64(LongString result, usz v);		//0n[0-9a-zA-Z_$]+ aka Nytodecimal. $ is chosen because it's ASCII and allowed in var definition
+void Log_num16(LongString result, usz v);		//0x[0-9a-f]+
+void Log_num10(LongString result, usz v);		//[0-9]+
+void Log_num8(LongString result, usz v);		//[0-7]+
+void Log_num2(LongString result, usz v);		//[0-1]+

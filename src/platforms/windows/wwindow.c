@@ -400,7 +400,7 @@ struct Window *Window_createPhysical(
 
 	DWORD style = WS_VISIBLE;
 
-	if(!(hint & WindowHint_ForceFullScreen)) {
+	if(!(hint & WindowHint_ForceFullscreen)) {
 
 		style |= WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
 
@@ -470,7 +470,7 @@ struct Window *Window_createPhysical(
 
 		.hint = hint,
 		.format = ???,
-		.flags = hint & WindowHint_ForceFullScreen ? WindowFlags_IsFullScreen : WindowFlags_None
+		.flags = hint & WindowHint_ForceFullscreen ? WindowFlags_IsFullscreen : WindowFlags_None
 	};
 
 	*wwind = (struct WWindow) {
@@ -482,6 +482,12 @@ struct Window *Window_createPhysical(
 	SetWindowLongPtrA(hwnd, 0, (LONG_PTR) wind);
 	UpdateWindow(hwnd);
 }
+
+usz Window_maxPhysicalWindows() {
+	return 16;		//We probably won't need more windows for any other reason. Otherwise just use window in a window
+}
+
+impl bool Window_hasPhysicalWindowLeft();
 
 void Window_freePhysical(struct Window **w) {
 

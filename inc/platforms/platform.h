@@ -1,6 +1,7 @@
 #pragma once
 #include "types/types.h"
 #include "types/allocator.h"
+#include "platforms/window.h"
 
 enum EPlatform {
 	Platform_Uninitialized,
@@ -15,9 +16,10 @@ struct Platform {
 	enum EPlatform platformType;
 
 	int cmdArgc;
-	const c8* const *cmdArgs;
+	struct String *cmdArgs;
 
 	struct Allocator alloc;
+	struct WindowManager windowManager;
 
 	void *data;
 };
@@ -29,6 +31,8 @@ struct Error Platform_create(
 	void *data,
 	FreeFunc free, AllocFunc alloc, void *allocator
 );
+
+void Program_cleanup();
 
 extern int Program_run();
 extern void Program_exit();

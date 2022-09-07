@@ -1,19 +1,31 @@
 #include "platforms/platform.h"
 #include "platforms/thread.h"
-#include "types/assert.h"
+#include "types/error.h"
 
-void Thread_free(struct Thread **thread) {
+struct Error Thread_free(struct Thread **thread) {
 
-	ocAssert("Thread is invalid", thread && *thread);
+	if(!thread || !*thread)
+		return (struct Error) { .genericError = GenericError_NullPointer };
 
 	FreeFunc free = Platform_instance.alloc.free;
 	void *allocator = Platform_instance.alloc.ptr;
 
-	free(allocator, (struct Buffer) { (u8*) *thread, sizeof(struct Thread) });
+	struct Error err = free(allocator, (struct Buffer) { (u8*) *thread, sizeof(struct Thread) });
 	*thread = NULL;
+	return err;
 }
 
-void Thread_waitAndCleanup(struct Thread **thread, u32 maxWaitTime) {
-	Thread_wait(*thread, maxWaitTime);
-	Thread_free(thread);
+struct Error Thread_waitAndCleanup(struct Thread **thread, u32 maxWaitTime) {
+
+	if(!thread || !*thread)
+		return (struct Error) { .genericError = GenericError_NullPointer };
+
+	struct Error err = Thread_wait(*thread, maxWaitTime);
+
+	if (err.genericError) {
+		Thread_free(thread);
+		return err;
+	}
+
+	return Thread_free(thread);
 }

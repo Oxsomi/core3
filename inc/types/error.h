@@ -1,8 +1,8 @@
 #pragma once
 #include "types.h"
 
-#define STACKTRACE_MAX_SIZE 128
-typedef void *StackTrace[STACKTRACE_MAX_SIZE];
+#define StackTrace_SIZE 128
+typedef void *StackTrace[StackTrace_SIZE];
 
 enum GenericError {
 	GenericError_None,
@@ -21,7 +21,8 @@ enum GenericError {
 	GenericError_InvalidCast,
 	GenericError_InvalidState,
 	GenericError_RateLimit,
-	GenericError_LoopLimit				/// If the platform decides that loop limit is reached, this will be thrown
+	GenericError_LoopLimit,				/// If the platform decides that loop limit is reached, this will be thrown
+	GenericError_AlreadyDefined
 };
 
 //Only direct caller preserved to save space in release mode
@@ -29,7 +30,7 @@ enum GenericError {
 #ifdef NDEBUG
 	#define ERROR_STACKTRACE 1
 #else
-	#define ERROR_STACKTRACE STACKTRACE_MAX_SIZE
+	#define ERROR_STACKTRACE StackTrace_SIZE
 #endif
 
 //

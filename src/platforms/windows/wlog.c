@@ -47,7 +47,7 @@ void Log_printCapturedStackTrace(const StackTrace stackTrace, enum LogLevel lvl)
 	HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
 	SetConsoleTextAttribute(handle, colors[lvl]);
 
-	struct CapturedStackTrace captured[STACKTRACE_MAX_SIZE] = { 0 };
+	struct CapturedStackTrace captured[StackTrace_SIZE] = { 0 };
 
 	usz stackCount = 0;
 
@@ -60,7 +60,7 @@ void Log_printCapturedStackTrace(const StackTrace stackTrace, enum LogLevel lvl)
 	bool anySymbol = false;
 
 	if(hasSymbols)
-		for (usz i = 0; i < STACKTRACE_MAX_SIZE && stackTrace[i]; ++i, ++stackCount) {
+		for (usz i = 0; i < StackTrace_SIZE && stackTrace[i]; ++i, ++stackCount) {
 
 			usz addr = (usz) stackTrace[i];
 

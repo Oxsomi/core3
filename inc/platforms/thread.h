@@ -12,11 +12,12 @@ struct Thread {
 impl u32 Thread_getId();
 impl u32 Thread_getLogicalCores();
 
-impl struct Thread *Thread_create(
-	ThreadCallbackFunction callback, void* objectHandle
+impl struct Error Thread_create(
+	ThreadCallbackFunction callback, void* objectHandle,
+	struct Thread **thread
 );
 
-impl void Thread_wait(struct Thread *thread, u32 maxWaitTimeMs);
+impl struct Error Thread_wait(struct Thread *thread, u32 maxWaitTimeMs);
 
-void Thread_free(struct Thread **thread);
-void Thread_waitAndCleanup(struct Thread **thread, u32 maxWaitTime);
+struct Error Thread_free(struct Thread **thread);
+struct Error Thread_waitAndCleanup(struct Thread **thread, u32 maxWaitTime);

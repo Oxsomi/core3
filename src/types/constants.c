@@ -1,9 +1,9 @@
 #include "math/math.h"
 
-const f32 Math_e		= 2.718281828459045f;
-const f32 Math_pi		= 3.141592653589793f;
-const f32 Math_radToDeg = 57.2957795131f;
-const f32 Math_degToRad = 0.01745329251f;
+const f32 f32_e		= 2.718281828459045f;
+const f32 f32_pi		= 3.141592653589793f;
+const f32 f32_radToDeg = 57.2957795131f;
+const f32 f32_degToRad = 0.01745329251f;
 
 const usz Ki			= 1 << 10;
 const usz Mi			= 1 << 20;

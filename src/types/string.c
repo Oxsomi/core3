@@ -3,16 +3,46 @@
 #include "math/math.h"
 #include <ctype.h>
 
+c8 String_charToLower(c8 c) {
+	return (c8) tolower(c);
+}
+
+c8 String_charToUpper(c8 c) {
+	return (c8) toupper(c);
+}
+
+c8 String_charTransform(c8 c, enum StringTransform transform) {
+	return transform == StringTransform_None ? c : (
+		transform == StringTransform_Lower ? String_charToLower(c) :
+		String_charToupper(c)
+	);
+}
+
 //Simple checks (consts)
 
-struct String String_offsetRef(struct String s, usz off) {
+struct Error String_offsetAsRef(struct String s, usz off, struct String *result) {
 	
 	ocAssert("String out of bounds", off < s.len);
 
-	return (struct String) {
+	*result = (struct String) {
 		.ptr = s.ptr + off,
 		.len = s.len - off
 	};
+
+	return Error_none();
+}
+
+bool String_isNytoDecimal(struct String s) {
+
+	for(usz i = 0; i < s.len; ++i) {
+
+		c8 c = s.ptr[i];
+
+		if(!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c == '_' || c == '$')))
+			return false;
+	}
+
+	return s.len;
 }
 
 bool String_isAlphaNumeric(struct String s) {
@@ -22,6 +52,19 @@ bool String_isAlphaNumeric(struct String s) {
 		c8 c = s.ptr[i];
 
 		if(!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c == '_')))
+			return false;
+	}
+
+	return s.len;
+}
+
+bool String_isHex(struct String s) {
+
+	for(usz i = 0; i < s.len; ++i) {
+
+		c8 c = s.ptr[i];
+
+		if(!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')))
 			return false;
 	}
 
@@ -347,7 +390,7 @@ void String_replaceFirst(struct String *s, c8 c, c8 v) {
 		}
 }
 
-void String_replaceLast(struct String *s, c8 c, c8 v) {
+bool String_replaceLast(struct String *s, c8 c, c8 v) {
 
 	ocAssert("String function requires string", s);
 
@@ -357,65 +400,100 @@ void String_replaceLast(struct String *s, c8 c, c8 v) {
 		s->ptr[i] = v;
 }
 
-void String_toLower(struct String *str) {
+bool String_toLower(struct String *str) {
 
-	ocAssert("String function requires string", s);
+	if(!str || String_isRef(*str))
+		return false;
 
 	for(usz i = 0; i < str->len; ++i)
-		str->ptr[i] = (c8) tolower(str->ptr[i]);
+		str->ptr[i] = String_charToLower(str->ptr[i]);
+
+	return true;
 }
 
-void String_toUpper(struct String *str) {
+bool String_toUpper(struct String *str) {
+
+	if(!str || String_isRef(*str))
+		return false;
+
 	for(usz i = 0; i < str->len; ++i)
-		str->ptr[i] = (c8) toupper(str->ptr[i]);
+		str->ptr[i] = String_charToUpper(str->ptr[i]);
+
+	return true;
 }
 
-void String_trim(struct String *s);
+struct String String_trim(struct String s);
 
 //StringList
 
-struct StringList StringList_create(usz len, struct Allocator alloc) {
+struct Error StringList_create(usz len, struct Allocator alloc, struct StringList **arr) {
 
 	struct StringList sl = (struct StringList) {
-		.ptr = (struct String*) alloc.alloc(alloc.ptr, len * sizeof(struct String)),
 		.len = len
 	};
 
-	ocAssert("StringList out of memory", sl.ptr);
+	struct Error err = alloc.alloc(alloc.ptr, len * sizeof(struct String), &sl.ptr);
+
+	if(err.genericError)
+		return err;
 
 	for(usz i = 0; i < sl.len; ++i)
 		sl.ptr[i] = (struct String){ 0 };
 
-	return sl;
+	return Error_none();
 }
 
-void StringList_free(struct StringList *arr, struct Allocator alloc) {
+struct Error StringList_free(struct StringList **arrPtr, struct Allocator alloc) {
 
-	if(!arr || !arr->len)
-		return;
+	if(!arrPtr || !*arrPtr || !(*arrPtr)->len)
+		return (struct Error){ .genericError = GenericError_NullPointer };
 
-	for(usz i = 0; i < arr->len; ++i)
-		String_free(arr->ptr + i, alloc);
+	struct StringList *arr = *arrPtr;
 
-	alloc.free(alloc.ptr, (struct Buffer) {
+	struct Error freeErr = Error_none();
+
+	for(usz i = 0; i < arr->len; ++i) {
+
+		struct String *str = arr->ptr + i;
+		struct Error err = String_free(&str, alloc);
+
+		if(err.genericError)
+			freeErr = err;
+	}
+
+	struct Error err = alloc.free(alloc.ptr, (struct Buffer) {
 		.ptr = (u8*) arr->ptr,
-		.siz = sizeof(struct StringList) * arr->len
+		.siz = sizeof(struct String) * arr->len
 	});
 
+	if(err.genericError)
+		freeErr = err;
+
 	*arr = (struct StringList){ 0 };
+	*arrPtr = NULL;
+	return freeErr;
 }
 
-void StringList_unset(struct StringList arr, usz i, struct Allocator alloc) {
+struct Error StringList_unset(struct StringList arr, usz i, struct Allocator alloc) {
 
-	ocAssert("StringList unset out of bounds", i < arr.len);
+	if(i >= arr.len)
+		return (struct Error) { 
+			.genericError = GenericError_OutOfBounds, 
+			.paramValue0 = i, 
+			.paramValue1 = arr.len 
+		};
 
 	struct String *pstr = arr.ptr + i;
-
-	if(pstr->len)
-		String_free(pstr, alloc);
+	return String_free(&pstr, alloc);
 }
 
-void StringList_set(struct StringList arr, usz i, struct String str, struct Allocator alloc) {
-	StringList_unset(arr, i, alloc);
+struct Error StringList_set(struct StringList arr, usz i, struct String str, struct Allocator alloc) {
+
+	struct Error err = StringList_unset(arr, i, alloc);
+
+	if(err.genericError)
+		return err;
+
 	arr.ptr[i] = str;
+	return Error_none();
 }
