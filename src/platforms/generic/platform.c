@@ -17,6 +17,11 @@ struct Error Platform_create(
 	if(!cmdArgc)
 		return Error_base(GenericError_InvalidParameter, 0, 1, 0, 0, 0);
 
+	struct Error err = WindowManager_createSelf(&Platform_instance.windowManager);
+
+	if (err.genericError)
+		return err;
+
 	struct String *cmdArgsSized = NULL;
 
 	if(cmdArgc > 1) {
@@ -24,8 +29,10 @@ struct Error Platform_create(
 		struct Buffer buf = (struct Buffer){ 0 };
 		struct Error err = alloc(allocator, sizeof(struct String) * (cmdArgc - 1), &buf);
 
-		if(err.genericError)
+		if (err.genericError) {
+			WindowManager_freeSelf(&Platform_instance.windowManager);
 			return err;
+		}
 
 		cmdArgsSized = (struct String*) buf.ptr;
 
@@ -33,13 +40,14 @@ struct Error Platform_create(
 		//But that'd happen anyways
 
 		for(int i = 1; i < cmdArgc; ++i)
-			cmdArgsSized[i - 1] = String_createRefUnsafe(cmdArgs[i]);
+			cmdArgsSized[i - 1] = String_createRefUnsafeConst(cmdArgs[i]);
 	}
 
 	Platform_instance =	(struct Platform) {
 		.platformType = _PLATFORM_TYPE,
 		.cmdArgc = cmdArgc,
 		.cmdArgs = cmdArgsSized,
+		.windowManager = Platform_instance.windowManager,		//This one is initialized already
 		.data = data,
 		.alloc = (struct Allocator) {
 			.free = free,
@@ -48,8 +56,6 @@ struct Error Platform_create(
 		}
 	};
 
-	Platform_instance.windowManager = WindowManager_create()
-
 	return Error_none();
 }
 
@@ -57,6 +63,8 @@ void Program_cleanup() {
 
 	if(Platform_instance.platformType == Platform_Uninitialized)
 		return;
+
+	WindowManager_freeSelf(&Platform_instance.windowManager);
 
 	if(Platform_instance.cmdArgc)
 		Platform_instance.alloc.free(

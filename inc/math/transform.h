@@ -25,8 +25,8 @@ struct PackedTransform {
 
 //Helper functions
 
-struct PackedTransform Transform_Pack(struct Transform t);
-struct Transform PackedTransform_Unpack(struct PackedTransform t);
+struct PackedTransform Transform_pack(struct Transform t);
+struct Transform PackedTransform_unpack(struct PackedTransform t);
 
 struct Transform Transform_create(quat rot, f32x4 pos, f32x4 scale);
 

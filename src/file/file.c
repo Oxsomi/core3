@@ -31,23 +31,25 @@ struct Error File_write(struct Buffer buf, struct String loc) {
 	return Error_none();
 }
 
-struct Error File_read(struct String loc, struct Allocator allocator) {
+struct Error File_read(struct String loc, struct Allocator allocator, struct Buffer *output) {
 
 	if(String_isEmpty(loc))
-		return (struct Error){ .genericError = GenericError_InvalidParameter, .paramId = 0 };
+		return (struct Error){ .genericError = GenericError_InvalidParameter };
+
+	if(!output)
+		return (struct Error){ .genericError = GenericError_NullPointer, .paramId = 2 };
 
 	FILE *f = fopen(loc.ptr, "rb");
 
 	if(!f)
-		return (struct Error){ .genericError = GenericError_NotFound, .paramId = 1 };
+		return (struct Error){ .genericError = GenericError_NotFound };
 
 	if(fseek(f, 0, SEEK_END)) {
 		fclose(f);
 		return (struct Error){ .genericError = GenericError_InvalidState, .errorSubId = 0 };
 	}
 
-	struct Buffer b = (struct Buffer){ 0 };
-	struct Error err = Bit_bytes((usz)_ftelli64(f), allocator, &b);
+	struct Error err = Bit_createBytes((usz)_ftelli64(f), allocator, &output);
 	
 	if(err.genericError) {
 		fclose(f);
@@ -55,10 +57,12 @@ struct Error File_read(struct String loc, struct Allocator allocator) {
 	}
 
 	if(fseek(f, 0, SEEK_SET)) {
-		Bit_free(&b, allocator);
+		Bit_free(&output, allocator);
 		fclose(f);
 		return (struct Error){ .genericError = GenericError_InvalidState, .errorSubId = 1 };
 	}
+
+	struct Buffer b = *output;
 
 	if (fread(b.ptr, 1, b.siz, f) != b.siz) {
 		Bit_free(&b, allocator);

@@ -8,8 +8,8 @@
 //There are four types of strings:
 // 
 //Stack strings (or heap if you manually allocate it there):
-//	ShortString; 32 chars max (or 33 if limit is reached; null terminator is assumed)
-//	LongString; 64 char max (or 65 if limit is reached)
+//	ShortString; 31 chars max
+//	LongString; 63 char max
 //
 //String; A string that goes on the heap (or wherever the allocator tells it to go)
 //String(Ref); A reference to an already allocated string (String with capacity 0)
@@ -175,7 +175,7 @@ struct String String_createRefSizedDynamic(c8 *ptr, usz size) {
 
 struct String String_createRefShortStringConst(const ShortString str) {
 	return (struct String) {
-		.len = String_calcStrLen(str, ShortString_LEN),
+		.len = String_calcStrLen(str, ShortString_LEN - 1),
 		.ptr = str,
 		.capacity = usz_MAX		//Flag as const
 	};
@@ -183,7 +183,7 @@ struct String String_createRefShortStringConst(const ShortString str) {
 
 struct String String_createRefLongStringConst(const LongString str) {
 	return (struct String) {
-		.len = String_calcStrLen(str, LongString_LEN),
+		.len = String_calcStrLen(str, LongString_LEN - 1),
 		.ptr = str,
 		.capacity = usz_MAX		//Flag as const
 	};
@@ -191,7 +191,7 @@ struct String String_createRefLongStringConst(const LongString str) {
 
 struct String String_createRefShortStringDynamic(ShortString str) {
 	return (struct String) {
-		.len = String_calcStrLen(str, ShortString_LEN),
+		.len = String_calcStrLen(str, ShortString_LEN - 1),
 		.ptr = str,
 		.capacity = 0			//Flag as dynamic
 	};
@@ -199,7 +199,7 @@ struct String String_createRefShortStringDynamic(ShortString str) {
 
 struct String String_createRefLongStringDynamic(LongString str) {
 	return (struct String) {
-		.len = String_calcStrLen(str, LongString_LEN),
+		.len = String_calcStrLen(str, LongString_LEN - 1),
 		.ptr = str,
 		.capacity = 0			//Flag as dynamic
 	};
@@ -209,24 +209,24 @@ struct String String_createRefLongStringDynamic(LongString str) {
 //These reside on the heap (or wherever allocator allocates them)
 //Which means that they aren't const nor refs
 
-struct String String_create(c8 c, usz size, struct Allocator alloc);
-struct String String_createCopy(struct String str, struct Allocator alloc);
+struct Error String_create(c8 c, usz size, struct Allocator alloc, struct String *result);
+struct Error String_createCopy(struct String str, struct Allocator alloc, struct String *result);
 
 struct Error String_free(struct String **str, struct Allocator alloc);
 
-struct String String_createNyto(u64 v, usz leadingZeros, struct Allocator allocator);		//Nytodecimal
-struct String String_createHex(u64 v, usz leadingZeros, struct Allocator allocator);
-struct String String_createDec(u64 v, usz leadingZeros, struct Allocator allocator);
-struct String String_createOctal(u64 v, usz leadingZeros, struct Allocator allocator);
-struct String String_createBinary(u64 v, usz leadingZeros, struct Allocator allocator);
+struct Error String_createNyto(u64 v, usz leadingZeros, struct Allocator allocator, struct String *result);		//Nytodecimal
+struct Error String_createHex(u64 v, usz leadingZeros, struct Allocator allocator, struct String *result);
+struct Error String_createDec(u64 v, usz leadingZeros, struct Allocator allocator, struct String *result);
+struct Error String_createOctal(u64 v, usz leadingZeros, struct Allocator allocator, struct String *result);
+struct Error String_createBinary(u64 v, usz leadingZeros, struct Allocator allocator, struct String *result);
 
-struct StringList String_split(struct String s, c8 c, struct Allocator allocator);
-struct StringList String_splitString(struct String s, struct String other, struct Allocator allocator);
+struct Error String_split(struct String s, c8 c, struct Allocator allocator, struct StringList **result);
+struct Error String_splitString(struct String s, struct String other, struct Allocator allocator, struct StringList **result);
 
 //This will operate on this string, so it will need a heap allocated string
 
-struct String String_resize(struct String str, usz siz, struct Allocator alloc);
-struct String String_reserve(struct String str, usz siz, struct Allocator alloc);
+struct Error String_resize(struct String str, usz siz, struct Allocator alloc, struct String *result);
+struct Error String_reserve(struct String str, usz siz, struct Allocator alloc, struct String *result);
 
 void String_append(struct String s, c8 c, struct Allocator allocator);
 void String_appendString(struct String s, struct String other, struct Allocator allocator);
@@ -260,8 +260,11 @@ struct String String_replaceLastString(
 
 //Simple checks (consts)
 
-bool String_contains(struct String str, c8 c, enum StringCase caseSensitive);
-bool String_containsString(struct String str, struct String other, enum StringCase caseSensitive);
+bool String_contains(struct String str, c8 c, enum StringCase caseSensitive) { return String_findFirst(str, c, caseSensitive) != usz_MAX; }
+
+bool String_containsString(struct String str, struct String other, enum StringCase caseSensitive)  { 
+	return String_findFirstString(str, other, caseSensitive) != usz_MAX; 
+}
 
 c8 String_charToLower(c8 c);
 c8 String_charToUpper(c8 c);
@@ -307,25 +310,38 @@ struct Buffer String_findAllString(
 //
 
 usz String_findFirst(struct String s, c8 c, enum StringCase caseSensitive);
-usz String_findFirstString(struct String s, struct String other, enum StringCase caseSensitive);
 usz String_findLast(struct String s, c8 c, enum StringCase caseSensitive);
+
+inline usz String_find(struct String s, c8 c, enum StringCase caseSensitive, bool isFirst) {
+	return isFirst ? String_findFirst(s, c, caseSensitive) : String_findLast(s, c, caseSensitive);
+}
+
+usz String_findFirstString(struct String s, struct String other, enum StringCase caseSensitive);
 usz String_findLastString(struct String s, struct String other, enum StringCase caseSensitive);
+
+inline usz String_findString(struct String s, struct String other, enum StringCase caseSensitive, bool isFirst) {
+	return isFirst ? String_findFirstString(s, other, caseSensitive) : String_findLastString(s, other, caseSensitive);
+}
 
 bool String_equalsString(struct String s, struct String other, enum StringCase caseSensitive);
 bool String_equals(struct String s, c8 c, enum StringCase caseSensitive);
 
-u64 String_parseNyto(struct String s);
-u64 String_parseHex(struct String s);
-u64 String_parseDec(struct String s);
-i64 String_parseDecSigned(struct String s);
-f64 String_parseFloat(struct String s);
-u64 String_parseOctal(struct String s);
-u64 String_parseBinary(struct String s);
+bool String_parseNyto(struct String s, u64 *result);
+bool String_parseHex(struct String s, u64 *result);
+bool String_parseDec(struct String s, u64 *result);
+bool String_parseDecSigned(struct String s, i64 *result);
+bool String_parseFloat(struct String s, f64 *result);
+bool String_parseOctal(struct String s, u64 *result);
+bool String_parseBinary(struct String s, u64 *result);
 
 bool String_isNytoDecimal(struct String s);			//[0-9A-Za-z_$]+
 bool String_isAlphaNumeric(struct String s);		//[0-9A-Za-z_]+
-bool String_isHex(struct String s);					//[0-9A-Fa-f_]+
-bool String_isUnsignedNumber(struct String s);		//[0-9]+
+bool String_isHex(struct String s);					//[0-9A-Fa-f]+
+bool String_isOctal(struct String s);				//[0-7]+
+bool String_isBinary(struct String s);				//[0-1]+
+bool String_isDecimal(struct String s);				//[0-9]+
+
+bool String_isUnsignedNumber(struct String s);		//[+]?[0-9]+
 bool String_isSignedNumber(struct String s);		//[-+]?[0-9]+
 bool String_isFloat(struct String s);				//Approximately equal to: [-+]?[0-9]*[.[0-9]*]?[e[-+]?[0-9]+]?
 
@@ -337,40 +353,98 @@ bool String_cutBegin(struct String *s, usz offset);
 bool String_cutEnd(struct String *s, usz siz);
 bool String_cut(struct String *s, usz offset, usz siz);
 
-bool String_cutAfterLast(struct String *s, c8 c, enum StringCase caseSensitive);
-bool String_cutAfterFirst(struct String *s, c8 c, enum StringCase caseSensitive);
-bool String_cutAfterLastString(struct String *s, struct String other, enum StringCase caseSensitive);
-bool String_cutAfterFirstString(struct String *s, struct String other, enum StringCase caseSensitive);
+bool String_cutAfter(struct String *s, c8 c, enum StringCase caseSensitive, bool isFirst);
 
-bool String_cutBeforeLast(struct String *s, c8 c, enum StringCase caseSensitive);
-bool String_cutBeforeFirst(struct String *s, c8 c, enum StringCase caseSensitive);
-bool String_cutBeforeLastString(struct String *s, struct String other, enum StringCase caseSensitive);
-bool String_cutBeforeFirstString(struct String *s, struct String other, enum StringCase caseSensitive);
+inline bool String_cutAfterLast(struct String *s, c8 c, enum StringCase caseSensitive) {
+	return String_cutAfter(s, c, caseSensitive, false);
+}
+
+inline bool String_cutAfterFirst(struct String *s, c8 c, enum StringCase caseSensitive) {
+	return String_cutAfter(s, c, caseSensitive, true);
+}
+
+bool String_cutAfterLastString(struct String *s, struct String other, enum StringCase caseSensitive, bool isFirst);
+
+inline bool String_cutAfterLastString(struct String *s, struct String other, enum StringCase caseSensitive) {
+	return String_cutAfterString(s, other, caseSensitive, false);
+}
+
+inline bool String_cutAfterFirstString(struct String *s, struct String other, enum StringCase caseSensitive) {
+	return String_cutAfterString(s, other, caseSensitive, true);
+}
+
+bool String_cutBefore(struct String *s, c8 c, enum StringCase caseSensitive, bool isFirst);
+
+inline bool String_cutBeforeLast(struct String *s, c8 c, enum StringCase caseSensitive) {
+	return String_cutBefore(s, c, caseSensitive, false);
+}
+
+inline bool String_cutBeforeFirst(struct String *s, c8 c, enum StringCase caseSensitive) {
+	return String_cutBefore(s, c, caseSensitive, true);
+}
+
+bool String_cutBeforeString(struct String *s, struct String other, enum StringCase caseSensitive, bool isFirst);
+
+inline bool String_cutBeforeLastString(struct String *s, struct String other, enum StringCase caseSensitive) {
+	return String_cutBeforeString(s, other, caseSensitive, false);
+}
+
+inline bool String_cutBeforeFirstString(struct String *s, struct String other, enum StringCase caseSensitive) {
+	return String_cutBeforeString(s, other, caseSensitive, true);
+}
 
 bool String_eraseAll(struct String *s, c8 c, enum StringCase caseSensitive);
 bool String_eraseAllString(struct String *s, struct String other, enum StringCase caseSensitive);
 
-bool String_eraseFirst(struct String *s, c8 c, enum StringCase caseSensitive);
-bool String_eraseLast(struct String *s, c8 c, enum StringCase caseSensitive);
-bool String_eraseFirstString(struct String *s, struct String other, enum StringCase caseSensitive);
-bool String_eraseLastString(struct String *s, struct String other, enum StringCase caseSensitive);
+bool String_erase(struct String *s, c8 c, enum StringCase caseSensitive, bool isFirst);
 
-void String_replaceAll(struct String *s, c8 c, c8 v, enum StringCase caseSensitive);
-void String_replaceFirst(struct String *s, c8 c, c8 v, enum StringCase caseSensitive);
-void String_replaceLast(struct String *s, c8 c, c8 v, enum StringCase caseSensitive);
+inline bool String_eraseFirst(struct String *s, c8 c, enum StringCase caseSensitive) {
+	return String_erase(s, c, caseSensitive, true);
+}
 
-bool String_trim(struct String *s);		//Removes padding of string
+inline bool String_eraseLast(struct String *s, c8 c, enum StringCase caseSensitive) {
+	return String_erase(s, c, caseSensitive, false);
+}
 
-bool String_toLower(struct String *s);
-bool String_toUpper(struct String *s);
+bool String_eraseString(struct String *s, struct String other, enum StringCase caseSensitive, bool isFirst);
+
+bool String_eraseFirstString(struct String *s, struct String other, enum StringCase caseSensitive){
+	return String_eraseString(s, other, caseSensitive, false);
+}
+
+bool String_eraseLastString(struct String *s, struct String other, enum StringCase caseSensitive) {
+	return String_eraseString(s, other, caseSensitive, false);
+}
+
+bool String_replaceAll(struct String *s, c8 c, c8 v, enum StringCase caseSensitive);
+bool String_replace(struct String *s, c8 c, c8 v, enum StringCase caseSensitive, bool isFirst);
+
+inline bool String_replaceFirst(struct String *s, c8 c, c8 v, enum StringCase caseSensitive) {
+	return String_replace(s, c, v, caseSensitive, true);
+}
+
+bool String_replaceLast(struct String *s, c8 c, c8 v, enum StringCase caseSensitive) {
+	return String_replace(s, c, v, caseSensitive, false);
+}
+
+struct String String_trim(struct String s);		//Returns a substring ref in a string
+
+bool String_transform(struct String *s, enum StringTransform stringTransform);
+
+inline bool String_toLower(struct String *str) {
+	return String_transform(str, StringTransform_Lower);
+}
+
+inline bool String_toUpper(struct String *str) {
+	return String_transform(str, StringTransform_Upper);
+}
 
 //TODO: Regex
 
 //String list
 //To return from string operations
-//These strings will be on the heap in that case, even if done on a (const) ref.
-//Because otherwise it might be possible that it references a now deleted string.
-//If you manage them yourself, you can use refs or not though.
+//These strings will be a ref into existing string to prevent copies, use StringList_createCopy to move them to the heap.
+//Because they contain mixed strings, the functions still need allocators to free heap strings.
 
 struct StringList {
 	usz len;
@@ -380,8 +454,10 @@ struct StringList {
 struct Error StringList_create(usz len, struct Allocator alloc, struct StringList **result);
 struct Error StringList_free(struct StringList **arr, struct Allocator alloc);
 
-//Store the string directly into StringList (no copy)
-//The allocator is used to free strings if referenced
+struct Error StringList_createCopy(const struct StringList *toCopy, struct StringList **arr, struct Allocator alloc);
 
-struct Error StringList_set(struct StringList arr, usz i, struct String str);
-struct Error StringList_unset(struct StringList arr, usz i, struct Allocator alloc, struct Allocator alloc);
+//Store the string directly into StringList (no copy)
+//The allocator is used to free strings if they are heap allocated
+
+struct Error StringList_set(struct StringList arr, usz i, struct String str, struct Allocator alloc);
+struct Error StringList_unset(struct StringList arr, usz i, struct Allocator alloc);

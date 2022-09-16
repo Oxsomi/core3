@@ -1,7 +1,7 @@
 #pragma once
-#include "types.h"
+#include "string.h"
 
-typedef c8 TimerFormat[32];
+typedef ShortString TimerFormat;
 
 enum EFormatStatus {
 	FormatStatus_Success,

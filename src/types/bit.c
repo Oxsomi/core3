@@ -263,7 +263,7 @@ struct Error Bit_neq(struct Buffer buf0, struct Buffer buf1, bool *result) {
 	if(e.genericError)
 		return e;
 
-	*result = !result;
+	*result = !*result;
 	return Error_none();
 }
 

@@ -1,6 +1,6 @@
 #include "math/transform.h"
 
-struct PackedTransform Transform_Pack(struct Transform t) {
+struct PackedTransform Transform_pack(struct Transform t) {
 	return (struct PackedTransform) {
 		Quat_pack(t.rot),
 		{ Vec_x(t.pos), Vec_y(t.pos), Vec_z(t.pos) },
@@ -8,7 +8,7 @@ struct PackedTransform Transform_Pack(struct Transform t) {
 	};
 }
 
-struct Transform PackedTransform_Unpack(struct PackedTransform t) {
+struct Transform PackedTransform_unpack(struct PackedTransform t) {
 	return (struct Transform) {
 		Quat_unpack(t.rot),
 		Vec_load3(t.pos),

@@ -55,7 +55,7 @@ inline struct Error i64_pow2(i64 v, i64 *res) {
 
 //Float
 //TODO: %/^+-
-//		Should also check if the ++ and -- actually increased the float. If not, throw!
+//		Should also check if the ++ and -- actually increased the float. If not, throw! +- etc can check on lost precision (e.g. 1% of value)
 //TODO: Proper error checking!
 
 inline f32 f32_min(f32 v0, f32 v1) { return v0 <= v1 ? v0 : v1; }
@@ -116,3 +116,6 @@ struct Error f32_mod(f32 v, f32 mod, f32 *result);
 
 inline f32 f32_sign(f32 v) { return v < 0 ? -1.f : (v > 0 ? 1.f : 0.f); }
 inline f32 f32_signInc(f32 v) { return v < 0 ? -1.f : 1.f; }
+
+bool f32_isnan(f32 v);
+bool f32_isinf(f32 v);

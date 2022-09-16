@@ -1,5 +1,5 @@
 #pragma once
-#include "types.h"
+#include "math/math.h"
 #include "error.h"
 
 //Conversions
@@ -12,10 +12,10 @@ inline struct Error f32_fromBits(u64 v, f32 *res) {
 	u32 bits = (u32) v;
 	f32 r = *(const f32*) &v;
 
-	if(Math_isnan(r))
+	if(f32_isnan(r))
 		return Error_base(GenericError_NaN, 0, 0, 0, v, 0);
 
-	if(Math_isinf(r))
+	if(f32_isinf(r))
 		return Error_base(GenericError_Overflow, 0, 0, 0, v, 0);
 
 	if(v == (1 << 31))	//Signed zero
@@ -43,7 +43,7 @@ inline struct Error f32_fromBits(u64 v, f32 *res) {
 		return Error_base(GenericError_Underflow, 0, 0, 0, v, 0);	\
 )
 
-#define CastFromF(type) CastFromI(type, v = Math_floor(v);)
+#define CastFromF(type) CastFromI(type, v = f32_floor(v);)
 
 inline struct Error i8_fromUInt(u64 v, i8 *res)		CastFromU(i8)
 inline struct Error i8_fromInt(i64 v, i8 *res)		CastFromI(i8)
@@ -83,7 +83,7 @@ inline struct Error u64_fromFloat(f32 v, u64 *res)  CastFromF(u64)
 																			\
 	f32 r = (f32) v;														\
 																			\
-	if(Math_isinf(r))														\
+	if(f32_isinf(r))														\
 		return Error_base(													\
 			v >= 0 ? GenericError_Overflow : GenericError_Underflow, 0,		\
 			0, 0, v, 0														\

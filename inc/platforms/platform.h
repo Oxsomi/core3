@@ -1,7 +1,7 @@
 #pragma once
 #include "types/types.h"
 #include "types/allocator.h"
-#include "platforms/window.h"
+#include "platforms/window_manager.h"
 
 enum EPlatform {
 	Platform_Uninitialized,

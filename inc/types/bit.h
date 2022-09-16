@@ -1,5 +1,5 @@
 #pragma once
-#include "types.h"
+#include "math/vec.h"
 
 struct BitRef {
 	u8 *ptr, off;
@@ -103,3 +103,21 @@ struct Error Bit_createSubset(struct Buffer buf, usz offset, usz siz, struct Buf
 struct Error Bit_offset(struct Buffer *buf, usz siz);
 struct Error Bit_append(struct Buffer *buf, const void *v, usz siz);
 struct Error Bit_appendBuffer(struct Buffer *buf, struct Buffer append);
+
+inline struct Error Bit_appendU64(struct Buffer *buf, u64 v) { return Bit_append(buf, &v, sizeof(v)); }
+inline struct Error Bit_appendU32(struct Buffer *buf, u32 v) { return Bit_append(buf, &v, sizeof(v)); }
+inline struct Error Bit_appendU16(struct Buffer *buf, u16 v) { return Bit_append(buf, &v, sizeof(v)); }
+inline struct Error Bit_appendU8(struct Buffer *buf, u8 v) { return Bit_append(buf, &v, sizeof(v)); }
+
+inline struct Error Bit_appendI64(struct Buffer *buf, i64 v) { return Bit_append(buf, &v, sizeof(v)); }
+inline struct Error Bit_appendI32(struct Buffer *buf, i32 v) { return Bit_append(buf, &v, sizeof(v)); }
+inline struct Error Bit_appendI16(struct Buffer *buf, i16 v) { return Bit_append(buf, &v, sizeof(v)); }
+inline struct Error Bit_appendI8(struct Buffer *buf, i8 v) { return Bit_append(buf, &v, sizeof(v)); }
+
+inline struct Error Bit_appendF64(struct Buffer *buf, f64 v) { return Bit_append(buf, &v, sizeof(v)); }
+inline struct Error Bit_appendF32(struct Buffer *buf, f32 v) { return Bit_append(buf, &v, sizeof(v)); }
+
+inline struct Error Bit_appendF32x4(struct Buffer *buf, f32x4 v) { return Bit_append(buf, &v, sizeof(v)); }
+inline struct Error Bit_appendF32x2(struct Buffer *buf, f32x2 v) { return Bit_append(buf, &v, sizeof(v)); }
+inline struct Error Bit_appendI32x4(struct Buffer *buf, i32x4 v) { return Bit_append(buf, &v, sizeof(v)); }
+inline struct Error Bit_appendI32x2(struct Buffer *buf, i32x2 v) { return Bit_append(buf, &v, sizeof(v)); }

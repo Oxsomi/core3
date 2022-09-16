@@ -21,6 +21,7 @@ enum WindowHint {
 	WindowHint_DisableResize			= 1 << 2,
 	WindowHint_ForceFullscreen			= 1 << 3,
 	WindowHint_AllowBackgroundUpdates	= 1 << 4,
+	WindowHint_ProvideCPUBuffer			= 1 << 5,	//A hint used to indicate we write from CPU. Useful for physical windows CPU accessible
 
 	WindowHint_None						= 0,
 	WindowHint_Default					= WindowHint_HandleInput | WindowHint_AllowFullscreen
@@ -59,6 +60,8 @@ struct Window {
 
 	i32x2 offset;
 	i32x2 size;
+
+	struct Buffer cpuVisibleBuffer;
 
 	void *nativeHandle;
 	void *nativeData;
@@ -104,7 +107,7 @@ struct Error Window_resizeVirtual(
 	i32x2 newSize
 );
 
-struct Buffer Window_getVirtualData(const struct Window *w);
+struct Error Window_storeCPUBufferToDisk(const struct Window *w, struct String filePath);
 
 //Simple helper functions
 
@@ -130,4 +133,18 @@ inline struct Error Window_present(
 		return Window_presentVirtual(w, data, encodedFormat, isTiled4);
 
 	return Window_presentPhysical(w, data, encodedFormat, isTiled4);
+}
+
+struct Error Window_presentCPUBuffer(		//Presenting CPU buffer to a file (when virtual) or window when physical
+	struct Window *w,
+	struct String file
+) {
+
+	if (!w)
+		return (struct Error) { .genericError = GenericError_NullPointer };
+
+	if (Window_isVirtual(w))
+		return Window_storeCPUBufferToDisk(w, file);
+
+	return Window_presentCPUBufferPhysical(w);
 }

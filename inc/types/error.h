@@ -22,7 +22,8 @@ enum GenericError {
 	GenericError_InvalidState,
 	GenericError_RateLimit,
 	GenericError_LoopLimit,				/// If the platform decides that loop limit is reached, this will be thrown
-	GenericError_AlreadyDefined
+	GenericError_AlreadyDefined,
+	GenericError_UnsupportedOperation
 };
 
 //Only direct caller preserved to save space in release mode

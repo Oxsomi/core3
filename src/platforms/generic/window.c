@@ -2,7 +2,9 @@
 #include "platforms/platform.h"
 #include "types/error.h"
 #include "types/bit.h"
+#include "types/string.h"
 #include "formats/texture.h"
+#include "formats/bmp.h"
 
 const usz WindowManager_maxVirtualWindowCount = 16;
 
@@ -328,11 +330,22 @@ struct Error Window_resizeVirtual(struct Window *w, bool copyData, i32x2 newSiz)
 	return Error_none();
 }
 
-struct Buffer Window_getVirtualData(const struct Window *w) {
+struct Error Window_storeCPUBufferToDisk(const struct Window *w, struct String filePath) {
 
-	if (!Window_isVirtual(w) || !w->nativeHandle)
-		return (struct Buffer) { 0 };
+	if (!w)
+		return (struct Error) { .genericError = GenericError_NullPointer };
 
-	struct Buffer *buf = (const struct Buffer*) w->nativeHandle;
-	return buf ? *buf : (struct Buffer){ 0 };
+	struct Buffer buf = w->cpuVisibleBuffer;
+
+	if(!buf.siz)
+		return (struct Error) { .genericError = GenericError_InvalidOperation };
+
+	if(w->format != WindowFormat_rgba8)
+		return (struct Error) { .genericError = GenericError_UnsupportedOperation };		//TODO: Add support for other formats
+
+	struct Buffer file = BMP_writeRGBA(buf, i32x2_x(w->size), i32x2_y(w->size), false, Platform_instance.alloc);
+	struct Error err = File_write(file, filePath);
+	Bit_free(&file, Platform_instance.alloc);
+
+	return err;
 }

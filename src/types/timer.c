@@ -40,7 +40,7 @@ dns Timer_elapsed(ns prev) { return Timer_dns(prev, Timer_now()); }
 
 void setNum(TimerFormat format, usz offset, usz siz, usz v) {
 
-	isz off = (isz)(offset + siz) - 1;
+	i64 off = (i64)(offset + siz) - 1;
 
 	while (v && off >= offset) {
 		format[off] = '0' + v % 10;

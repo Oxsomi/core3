@@ -22,7 +22,21 @@ c8 String_charTransform(c8 c, enum StringTransform transform) {
 
 struct Error String_offsetAsRef(struct String s, usz off, struct String *result) {
 	
-	ocAssert("String out of bounds", off < s.len);
+	if (!result)
+		return (struct Error) { .genericError = GenericError_NullPointer, .paramId = 2 };
+
+	if (!s.len) {
+		*result = (struct String) { 0 };
+		return Error_none();
+	}
+
+	if(off >= s.len)
+		return (struct Error) { 
+			.genericError = GenericError_OutOfBounds, 
+			.paramId = 1,
+			.paramValue0 = off,
+			.paramValue1 = s.len 
+		};
 
 	*result = (struct String) {
 		.ptr = s.ptr + off,
@@ -32,59 +46,73 @@ struct Error String_offsetAsRef(struct String s, usz off, struct String *result)
 	return Error_none();
 }
 
+#define String_matchesPattern(start, ...)		\
+												\
+	for(usz i = start; i < s.len; ++i) {		\
+												\
+		c8 c = s.ptr[i];						\
+												\
+		if(!(__VA_ARGS__))						\
+			return false;						\
+	}											\
+												\
+	return s.len;								\
+
 bool String_isNytoDecimal(struct String s) {
-
-	for(usz i = 0; i < s.len; ++i) {
-
-		c8 c = s.ptr[i];
-
-		if(!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c == '_' || c == '$')))
-			return false;
-	}
-
-	return s.len;
+	String_matchesPattern(
+		0,
+		(c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c == '_' || c == '$')
+	);
 }
 
 bool String_isAlphaNumeric(struct String s) {
-
-	for(usz i = 0; i < s.len; ++i) {
-
-		c8 c = s.ptr[i];
-
-		if(!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c == '_')))
-			return false;
-	}
-
-	return s.len;
+	String_matchesPattern(
+		0,
+		(c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c == '_')
+	);
 }
 
 bool String_isHex(struct String s) {
-
-	for(usz i = 0; i < s.len; ++i) {
-
-		c8 c = s.ptr[i];
-
-		if(!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')))
-			return false;
-	}
-
-	return s.len;
+	String_matchesPattern(
+		0,
+		(c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
+	);
 }
 
-bool String_isUnsignedNumber(struct String s) {
+bool String_isOctal(struct String s) {
+	String_matchesPattern(
+		0,
+		c >= '0' && c <= '7'
+	);
+}
 
-	for(usz i = 0; i < s.len; ++i)
-		if((s.ptr[i] < '0') || (s.ptr[i] > '9'))
-			return false;
+bool String_isBinary(struct String s) {
+	String_matchesPattern(
+		0,
+		c >= '0' && c <= '1'
+	);
+}
 
-	return s.len;
+bool String_isDecimal(struct String s) {
+	String_matchesPattern(
+		0,
+		c >= '0' && c <= '9'
+	);
 }
 
 bool String_isSignedNumber(struct String s) {
-	return 
-		s.len && (s.ptr[0] == '-' || s.ptr[0] == '+') ? 
-		String_isUnsignedNumber(String_offsetRef(s, 1)) : 
-		String_isUnsignedNumber(s);
+	String_matchesPattern(
+		String_startsWith(s, '-', StringCase_Sensitive) ||
+		String_startsWith(s, '+', StringCase_Sensitive),
+		c >= '0' && c <= '9'
+	);
+}
+
+bool String_isUnsignedNumber(struct String s) {
+	String_matchesPattern(
+		String_startsWith(s, '+', StringCase_Sensitive),
+		c >= '0' && c <= '9'
+	);
 }
 
 bool String_isFloat(struct String s) {
@@ -92,15 +120,17 @@ bool String_isFloat(struct String s) {
 	if(!s.len)
 		return false;
 
-	if(s.ptr[0] == '-' || s.ptr[0] == '+')
-		s = String_offsetRef(s, 1);
+	usz start = 0;
+
+	if (s.ptr[0] == '-' || s.ptr[0] == '+')
+		start = 1;
 
 	if(!s.len)
 		return false;
 
 	usz postDot = s.len;
 
-	for(usz i = 0; i < s.len; ++i)
+	for(usz i = start; i < s.len; ++i)
 
 		if (s.ptr[i] == '.' || s.ptr[i] == 'e') {
 			postDot = i + 1;
@@ -118,210 +148,218 @@ bool String_isFloat(struct String s) {
 	return true;
 }
 
-bool String_contains(struct String str, c8 c) {
+struct Error String_create(c8 c, usz size, struct Allocator alloc, struct String *result);
+struct Error String_createCopy(struct String str, struct Allocator alloc, struct String *result);
 
-	for(usz i = 0; i < str.len; ++i)
-		if(str.ptr[i] == c)
-			return true;
+struct Error String_free(struct String **str, struct Allocator alloc);
 
-	return false;
+struct Error String_createNyto(u64 v, usz leadingZeros, struct Allocator allocator, struct String *result);		//Nytodecimal
+struct Error String_createHex(u64 v, usz leadingZeros, struct Allocator allocator, struct String *result);
+struct Error String_createDec(u64 v, usz leadingZeros, struct Allocator allocator, struct String *result);
+struct Error String_createOctal(u64 v, usz leadingZeros, struct Allocator allocator, struct String *result);
+struct Error String_createBinary(u64 v, usz leadingZeros, struct Allocator allocator, struct String *result);
+
+struct Error String_split(struct String s, c8 c, struct Allocator allocator, struct StringList **result);
+struct Error String_splitString(struct String s, struct String other, struct Allocator allocator, struct StringList **result);
+
+struct String String_resize(struct String str, usz siz, struct Allocator alloc);
+struct String String_reserve(struct String str, usz siz, struct Allocator alloc);
+
+void String_append(struct String s, c8 c, struct Allocator allocator);
+void String_appendString(struct String s, struct String other, struct Allocator allocator);
+
+void String_insert(struct String s, c8 c, usz i, struct Allocator allocator);
+void String_insertString(struct String s, struct String other, usz i, struct Allocator allocator);
+
+struct String String_replaceAllString(
+	struct String s, 
+	struct String search, 
+	struct String replace, 
+	enum StringCase caseSensitive, 
+	struct Allocator allocator
+);
+
+struct String String_replaceFirstString(
+	struct String s, 
+	struct String search, 
+	struct String replace, 
+	enum StringCase caseSensitive,
+	struct Allocator allocator
+);
+
+struct String String_replaceLastString(
+	struct String s, 
+	struct String search, 
+	struct String replace, 
+	enum StringCase caseSensitive,
+	struct Allocator allocator
+);
+
+bool String_startsWithString(struct String str, struct String other, enum StringCase caseSensitive);
+bool String_endsWithString(struct String str, struct String other, enum StringCase caseSensitive);
+
+usz String_countAll(struct String s, c8 c, enum StringCase caseSensitive);
+usz String_countAllString(struct String s, struct String other, enum StringCase caseSensitive);
+
+struct Buffer String_findAll(
+	struct String s, 
+	c8 c, 
+	struct Allocator alloc,
+	enum StringCase caseSensitive
+);
+
+struct Buffer String_findAllString(
+	struct String s, 
+	struct String other,
+	struct Allocator alloc,
+	enum StringCase caseSensitive
+);
+
+usz String_findFirst(struct String s, c8 c, enum StringCase caseSensitive);
+usz String_findFirstString(struct String s, struct String other, enum StringCase caseSensitive);
+usz String_findLast(struct String s, c8 c, enum StringCase caseSensitive);
+usz String_findLastString(struct String s, struct String other, enum StringCase caseSensitive);
+
+bool String_equalsString(struct String s, struct String other, enum StringCase caseSensitive);
+
+bool String_equals(struct String s, c8 c, enum StringCase caseSensitive) {
+	return s.len == 1 && s.ptr && 
+		String_charTransform(s.ptr[0], (enum StringTransform) caseSensitive) == 
+		String_charTransform(c, (enum StringTransform) caseSensitive);
 }
 
-bool String_containsIgnoreCase(struct String str, c8 c) {
+bool String_parseNyto(struct String s, u64 *result);
 
-	c = tolower(c);
+bool String_parseHex(struct String s, u64 *result){
 
-	for(usz i = 0; i < str.len; ++i)
-		if(tolower(str.ptr[i]) == c)
-			return true;
+	if (!result || !s.ptr || s.len > 16)
+		return false;
 
-	return false;
+	*result = 0;
+
+	for (u64 i = s.len - 1, j = 1; i != u64_MAX; --i, j <<= 4) {
+
+		c8 c = s.ptr[i];
+
+		if (!((c >= '0' || c >= '9') || (c >= 'A' || c >= 'F') || (c >= 'a' || c >= 'f')))
+			return false;
+
+		//We transform c into the value of the hex char
+
+		if (c <= '9')			//0x39 is the lowest value, so we can do this
+			c -= '0';
+
+		else if (c <= 'F')		//0x46 is F
+			c = (c - 'A') + 10;
+
+		else c = (c - 'a') + 10;	//0x66 f
+
+		//
+		
+		*result |= j * c;
+	}
+
+	return true;
 }
 
-bool String_containsString(struct String str, struct String other);
+bool String_parseDec(struct String s, u64 *result);
+bool String_parseDecSigned(struct String s, i64 *result);
+bool String_parseFloat(struct String s, f64 *result);
 
-bool String_containsStringIgnoreCase(struct String str, struct String other);
+bool String_parseOctal(struct String s, u64 *result) {
 
-bool String_startsWithString(struct String str, struct String other);
-bool String_startsWithIgnoreCase(struct String str, c8 c);
-bool String_startsWithStringIgnoreCase(struct String str, struct String other);
+	if (!result || !s.ptr || s.len > 22)
+		return false;
 
-bool String_endsWithString(struct String str, struct String other);
-bool String_endsWithIgnoreCase(struct String str, c8 c);
-bool String_endsWithStringIgnoreCase(struct String str, struct String other);
+	*result = 0;
 
-struct StringList String_findAll(struct String s, c8 c);
-struct StringList String_findAllString(struct String s, struct String other);
+	for (u64 i = s.len - 1, j = 1; i != u64_MAX; --i, j <<= 3) {
 
-usz String_findFirst(struct String s, c8 c);
-usz String_findFirstString(struct String s, struct String other);
+		c8 c = s.ptr[i];
 
-usz String_findLast(struct String s, c8 c);
-usz String_findLastString(struct String s, struct String other);
+		if (c < '0' || c > '7')
+			return false;
 
-bool String_equalsString(struct String s, struct String other);
-bool String_equalsIgnoreCaseString(struct String s, struct String other);
+		if(j == ((u64)1 << (21 * 3)) && c > '1')		//Out of value
+			return false;
 
-bool String_equals(struct String s, c8 c);
-bool String_equalsIgnoreCase(struct String s, c8 c);
+		*result |= j * (c - '0');
+	}
 
-u64 String_parseHex(struct String s);
-u64 String_parseDec(struct String s);
-i64 String_parseDecSigned(struct String s);
-f64 String_parseFloat(struct String s);
-u64 String_parseOctal(struct String s);
-u64 String_parseBinary(struct String s);
+	return true;
+}
+
+bool String_parseBinary(struct String s, u64 *result) {
+
+	if (!result || !s.ptr || s.len > 64)
+		return false;
+
+	*result = 0;
+
+	for (u64 i = s.len - 1, j = 1; i != u64_MAX; --i, j <<= 1) {
+
+		c8 c = s.ptr[i];
+
+		if (c < '0' || c > '1')
+			return false;
+
+		*result |= j * (c - '0');
+	}
+
+	return true;
+}
+
+bool String_cut(struct String *s, usz offset, usz siz);
+
+bool String_cutAfter(struct String *s, c8 c, enum StringCase caseSensitive, bool isFirst);
+bool String_cutAfterLastString(struct String *s, struct String other, enum StringCase caseSensitive, bool isFirst);
+
+bool String_cutBefore(struct String *s, c8 c, enum StringCase caseSensitive, bool isFirst);
+bool String_cutBeforeString(struct String *s, struct String other, enum StringCase caseSensitive, bool isFirst);
+
+bool String_erase(struct String *s, c8 c, enum StringCase caseSensitive, bool isFirst);
+bool String_eraseString(struct String *s, struct String other, enum StringCase caseSensitive, bool isFirst);
 
 //String's inline changes (no copy)
 
-bool String_cutAfter(struct String *s, usz i) {
+bool String_cutEnd(struct String *s, usz i) {
 
-	if(i == usz_MAX)
+	if(!s)
 		return false;
+
+	if (i >= s->len)
+		return true;
 
 	s->ptr[i] = '\0';
 	s->len = i;
 	return true;
 }
 
-bool String_cutAfterLast(struct String *s, c8 c) {
-	ocAssert("String function requires string", s);
-	return String_cutAfter(s, String_findLast(*s, c));
-}
+bool String_cutBegin(struct String *s, usz i) {
 
-bool String_cutAfterFirst(struct String *s, c8 c) {
-	ocAssert("String function requires string", s);
-	return String_cutAfter(s, String_findFirst(*s, c));
-}
-
-bool String_cutAfterLastString(struct String *s, struct String other) {
-	ocAssert("String function requires string", s);
-	return String_cutAfter(s, String_findLastString(*s, other));
-}
-
-bool String_cutAfterFirstString(struct String *s, struct String other) {
-	ocAssert("String function requires string", s);
-	return String_cutAfter(s, String_findFirstString(*s, other));
-}
-
-bool String_cutAfterLastIgnoreCase(struct String *s, c8 c) {
-	ocAssert("String function requires string", s);
-	return String_cutAfter(s, String_findLastIgnoreCase(*s, c));
-}
-
-bool String_cutAfterFirstIgnoreCase(struct String *s, c8 c) {
-	ocAssert("String function requires string", s);
-	return String_cutAfter(s, String_findFirstIgnoreCase(*s, c));
-}
-
-bool String_cutAfterLastStringIgnoreCase(struct String *s, struct String other) {
-	ocAssert("String function requires string", s);
-	return String_cutAfter(s, String_findLastStringIgnoreCase(*s, other));
-}
-
-bool String_cutAfterFirstStringIgnoreCase(struct String *s, struct String other) {
-	ocAssert("String function requires string", s);
-	return String_cutAfter(s, String_findFirstStringIgnoreCase(*s, other));
-}
-
-bool String_cutBefore(struct String *s, usz i, usz off) {
-
-	if(i == usz_MAX)
+	if(!s)
 		return false;
-
-	i += off;
-	usz found = i;
 
 	for(usz j = 0; i < s->len; ++i, ++j)
 		s->ptr[j] = s->ptr[i];
 
-	s->ptr[s->len - found] = '\0';
-	s->len = s->len - found;
+	s->len = i <= s->len ? s->len - i : 0;
+	s->ptr[s->len] = '\0';
 	return true;
 }
 
-bool String_cutBeforeLast(struct String *s, c8 c) {
-	ocAssert("String function requires string", s);
-	return String_cutBefore(s, String_findLast(*s, c), 1);
-}
+bool String_eraseAll(struct String *s, c8 c, enum StringCase casing) {
 
-bool String_cutBeforeFirst(struct String *s, c8 c) {
-	ocAssert("String function requires string", s);
-	return String_cutBefore(s, String_findFirst(*s, c), 1);
-}
-
-bool String_cutBeforeLastString(struct String *s, struct String other) {
-	ocAssert("String function requires string", s);
-	return String_cutBefore(s, String_findLastString(*s, other), other.len);
-}
-
-bool String_cutBeforeFirstString(struct String *s, struct String other) {
-	ocAssert("String function requires string", s);
-	return String_cutBefore(s, String_findFirstString(*s, other), other.len);
-}
-
-bool String_cutBeforeLastIgnoreCase(struct String *s, c8 c) {
-	ocAssert("String function requires string", s);
-	return String_cutBefore(s, String_findLastIgnoreCase(*s, c), 1);
-}
-
-bool String_cutBeforeFirstIgnoreCase(struct String *s, c8 c) {
-	ocAssert("String function requires string", s);
-	return String_cutBefore(s, String_findFirstIgnoreCase(*s, c), 1);
-}
-
-bool String_cutBeforeLastStringIgnoreCase(struct String *s, struct String other) {
-	ocAssert("String function requires string", s);
-	return String_cutBefore(s, String_findLastStringIgnoreCase(*s, other), other.len);
-}
-
-bool String_cutBeforeFirstStringIgnoreCase(struct String *s, struct String other) {
-	ocAssert("String function requires string", s);
-	return String_cutBefore(s, String_findFirstStringIgnoreCase(*s, other), other.len);
-}
-
-bool String_erase(struct String *s, usz i, usz off) {
-
-	if(i == usz_MAX)
+	if(!s)
 		return false;
 
-	for(; i < s->len; ++i)
-		s->ptr[i - off] = s->ptr[i];
-
-	s->ptr[i - off] = '\0';
-	s->len -= off;
-	return true;
-}
-
-bool String_eraseFirst(struct String *s, c8 c) {
-	ocAssert("String function requires string", s);
-	return String_erase(s, String_findFirst(*s, c), 1);
-}
-
-bool String_eraseLast(struct String *s, c8 c) {
-	ocAssert("String function requires string", s);
-	return String_erase(s, String_findLast(*s, c), 1);
-}
-
-bool String_eraseFirstString(struct String *s, struct String other) {
-	ocAssert("String function requires string", s);
-	return String_erase(s, String_findFirstString(*s, other), other.len);
-}
-
-bool String_eraseLastString(struct String *s, struct String other) {
-	ocAssert("String function requires string", s);
-	return String_erase(s, String_findLastString(*s, other), other.len);
-}
-
-bool String_eraseAll(struct String *s, c8 c) {
-
-	ocAssert("String function requires string", s);
+	c = String_charTransform(s, (enum StringTransform) casing);
 
 	usz out = 0;
 
 	for (usz i = 0; i < s->len; ++i) {
 
-		if(s->ptr[i] == c)
+		if(String_charTransform(s->ptr[i], (enum StringTransform) casing) == c)
 			continue;
 
 		s->ptr[out++] = s->ptr[i];
@@ -335,11 +373,9 @@ bool String_eraseAll(struct String *s, c8 c) {
 	return true;
 }
 
-bool String_eraseAllString(struct String *s, struct String other) {
+bool String_eraseAllString(struct String *s, struct String other, enum StringCase casing) {
 
-	ocAssert("String function requires string", s);
-
-	if(!other.len)
+	if(!s || !other.len)
 		return false;
 
 	usz out = 0;
@@ -349,13 +385,16 @@ bool String_eraseAllString(struct String *s, struct String other) {
 		bool match = true;
 
 		for (usz j = i, k = 0; j < s->len && k < other.len; ++j, ++k)
-			if (s->ptr[j] != other.ptr[k]) {
+			if (
+				String_charTransform(s->ptr[j], (enum StringTransform) casing) != 
+				String_charTransform(other.ptr[k], (enum StringTransform) casing)
+			) {
 				match = false;
 				break;
 			}
 
 		if (match) {
-			i += s->len - 1;
+			i += s->len - 1;	//-1 because we increment by 1 every time
 			continue;
 		}
 
@@ -363,66 +402,75 @@ bool String_eraseAllString(struct String *s, struct String other) {
 	}
 
 	if(out == s->len)
-		return false;
+		return true;
 
 	s->ptr[out] = '\0';
 	s->len = out;
 	return true;
 }
 
-void String_replaceAll(struct String *s, c8 c, c8 v) {
+bool String_replaceAll(struct String *s, c8 c, c8 v, enum StringCase caseSensitive) {
 
-	ocAssert("String function requires string", s);
+	if (!s || !String_isConstRef(*s))
+		return false;
 
-	for(usz i = 0; i < s->len; ++i)
-		if(s->ptr[i] == c)
-			s->ptr[i] = v;
-}
-
-void String_replaceFirst(struct String *s, c8 c, c8 v) {
-
-	ocAssert("String function requires string", s);
+	c = String_charTransform(c, (enum StringTransform)caseSensitive);
 
 	for(usz i = 0; i < s->len; ++i)
-		if(s->ptr[i] == c) {
+		if(String_charTransform(s->ptr[i], (enum StringTransform)caseSensitive) == c)
 			s->ptr[i] = v;
-			break;
-		}
+
+	return true;
 }
 
-bool String_replaceLast(struct String *s, c8 c, c8 v) {
+bool String_replace(struct String *s, c8 c, c8 v, enum StringCase caseSensitive, bool isFirst) {
 
-	ocAssert("String function requires string", s);
+	if (!s || !String_isConstRef(*s))
+		return false;
 
-	usz i = String_findLast(*s, c);
+	usz i = isFirst ? String_findFirst(*s, c, caseSensitive) : String_findLast(*s, c, caseSensitive);
 
 	if(i != usz_MAX)
 		s->ptr[i] = v;
-}
-
-bool String_toLower(struct String *str) {
-
-	if(!str || String_isRef(*str))
-		return false;
-
-	for(usz i = 0; i < str->len; ++i)
-		str->ptr[i] = String_charToLower(str->ptr[i]);
 
 	return true;
 }
 
-bool String_toUpper(struct String *str) {
+bool String_transform(struct String *str, enum StringTransform c) {
 
-	if(!str || String_isRef(*str))
+	if(!str || String_isConstRef(*str))
 		return false;
 
 	for(usz i = 0; i < str->len; ++i)
-		str->ptr[i] = String_charToUpper(str->ptr[i]);
+		str->ptr[i] = String_charTransform(str->ptr[i], c);
 
 	return true;
 }
 
-struct String String_trim(struct String s);
+struct String String_trim(struct String s) {
+
+	usz first = s.len;
+
+	for (usz i = 0; i < s.len; ++i) 
+		if (s.ptr[i] != ' ' && s.ptr[i] != '\t' && s.ptr[i] != '\n' && s.ptr[i] != '\r') {
+			first = i;
+			break;
+		}
+
+	if (first == s.len)
+		return (struct String) { 0 };
+
+	usz last = s.len;
+
+	for (usz i = s.len - 1; i != usz_MAX; --i) 
+		if (s.ptr[i] != ' ' && s.ptr[i] != '\t' && s.ptr[i] != '\n' && s.ptr[i] != '\r') {
+			last = i;
+			break;
+		}
+
+	return String_isConstRef(s) ? String_createRefConst(s.ptr + first, last - first) :
+		String_createRefDynamic(s.ptr + first, last - first);
+}
 
 //StringList
 
@@ -472,6 +520,29 @@ struct Error StringList_free(struct StringList **arrPtr, struct Allocator alloc)
 	*arr = (struct StringList){ 0 };
 	*arrPtr = NULL;
 	return freeErr;
+}
+
+struct Error StringList_createCopy(const struct StringList *toCopy, struct StringList **arr, struct Allocator alloc) {
+
+	if(!toCopy || !toCopy->len)
+		return (struct Error){ .genericError = GenericError_NullPointer };
+
+	struct Error err = StringList_create(toCopy->len, alloc, arr);
+
+	if (err.genericError)
+		return err;
+
+	for (usz i = 0; i < toCopy->len; ++i) {
+
+		err = String_createCopy(toCopy->ptr[i], alloc, (*arr)->ptr + i);
+
+		if (err.genericError) {
+			StringList_free(arr, alloc);
+			return err;
+		}
+	}
+
+	return Error_none();
 }
 
 struct Error StringList_unset(struct StringList arr, usz i, struct Allocator alloc) {

@@ -21,8 +21,8 @@ typedef u16 WindowHandle;
 //Before doing any actions on WindowManager it needs to be locked.
 //This includes getters, since otherwise the result might vary.
 
-impl struct Error WindowManager_create(struct WindowManager **result);
-impl struct Error WindowManager_free(struct WindowManager **manager);
+impl struct Error WindowManager_createSelf(struct WindowManager **result);
+impl struct Error WindowManager_freeSelf(struct WindowManager **manager);
 
 impl struct Error WindowManager_createPhysical(
 	struct WindowManager *manager,
@@ -37,7 +37,8 @@ impl struct Error WindowManager_createPhysical(
 
 impl struct Error WindowManager_freePhysical(struct WindowManager *manager, WindowHandle handle);
 
-impl struct Error WindowManager_waitForExit(const struct Window *w);
+impl struct Error WindowManager_waitForExit(struct Window *w, ns maxTimeout);
+impl struct Error WindowManager_waitForExitAll(struct WindowManager *manager, ns maxTimeout);
 
 struct Error WindowManager_createVirtual(
 	struct WindowManager *manager, 
@@ -49,16 +50,18 @@ struct Error WindowManager_createVirtual(
 
 struct Error WindowManager_freeVirtual(struct WindowManager *manager, struct Window **handle);
 
+bool WindowManager_supportsFormat(struct WindowManager manager, enum WindowFormat format);
+
 //Simple helper functions (need locks)
 
-u8 WindowManager_getEmptyPhysicalWindows();
-u8 WindowManager_getEmptyVirtualWindows();
-u8 WindowManager_getEmptyWindows();
+u8 WindowManager_getEmptyPhysicalWindows(struct WindowManager manager);
+u8 WindowManager_getEmptyVirtualWindows(struct WindowManager manager);
+u8 WindowManager_getEmptyWindows(struct WindowManager manager);
 
 inline struct Window *WindowManager_getWindow(WindowHandle windowHandle);
 inline struct Monitor *WindowManager_getMonitor(u8 monitorId);
 
-bool WindowManager_lock(struct WindowManager *manager);
+bool WindowManager_lock(struct WindowManager *manager, ns maxTimeout);
 bool WindowManager_unlock(struct WindowManager *manager);
 
 //All types of windows
