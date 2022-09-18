@@ -30,6 +30,32 @@ inline struct Error u64_pow2(u64 *res, u64 v) {
 	return Error_none();
 }
 
+inline u64 u64_pow10(u64 v) {
+	switch (v) {
+		case 0:		return 1;
+		case 1:		return 10;
+		case 2:		return 100;
+		case 3:		return 1'000;
+		case 4:		return 10'000;
+		case 5:		return 100'000;
+		case 6:		return 1'000'000;
+		case 7:		return 10'000'000;
+		case 8:		return 100'000'000;
+		case 9:		return 1'000'000'000;
+		case 10:	return 10'000'000'000;
+		case 11:	return 100'000'000'000;
+		case 12:	return 1'000'000'000'000;
+		case 13:	return 10'000'000'000'000;
+		case 14:	return 100'000'000'000'000;
+		case 15:	return 1'000'000'000'000'000;
+		case 16:	return 10'000'000'000'000'000;
+		case 17:	return 100'000'000'000'000'000;
+		case 18:	return 1'000'000'000'000'000'000;
+		case 19:	return 10'000'000'000'000'000'000;
+		default:	return u64_MAX;
+	}
+}
+
 //TODO: Int, uint %/^*+-
 
 //Int

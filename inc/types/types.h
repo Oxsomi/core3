@@ -73,3 +73,85 @@ struct Buffer {
 	u8 *ptr;
 	u64 siz;
 };
+
+//Char
+
+inline c8 c8_toLower(c8 c) {
+	return (c8) tolower(c);
+}
+
+inline c8 c8_toUpper(c8 c) {
+	return (c8) toupper(c);
+}
+
+inline c8 c8_transform(c8 c, enum StringTransform transform) {
+	return transform == StringTransform_None ? c : (
+		transform == StringTransform_Lower ? c8_toLower(c) :
+		c8_toUpper(c)
+	);
+}
+
+inline c8 c8_isBin(c8 c) { return c == '0' || c == '1'; }
+inline c8 c8_isOct(c8 c) { return c >= '0' && c <= '7'; }
+inline c8 c8_isDec(c8 c) { return c >= '0' && c <= '9'; }
+
+inline bool c8_isUpperCase(c8 c) { return c >= 'A' && c <= 'Z'; }
+inline bool c8_isLowerCase(c8 c) { return c >= 'a' && c <= 'z'; }
+inline bool c8_isUpperCaseHex(c8 c) { return c >= 'A' && c <= 'F'; }
+inline bool c8_isLowerCaseHex(c8 c) { return c >= 'a' && c <= 'f'; }
+
+inline c8 c8_isHex(c8 c) { return c8_isDec(c) || c8_isUpperCaseHex(c) || c8_isLowerCaseHex(c); }
+inline c8 c8_isNyto(c8 c) { return c8_isDec(c) || c8_isUpperCase(c) || c8_isLowerCase(c) || c == '_' || c == '$'; }
+inline c8 c8_isAlphaNumeric(c8 c) { return c8_isNyto(c) && c != '$'; }
+
+inline u8 c8_bin(c8 c) { return c == '0' ? 0 : (c == '1' ? 1 : u8_MAX); }
+inline u8 c8_oct(c8 c) { return c8_isOct(c) ? c - '0' : u8_MAX; }
+inline u8 c8_dec(c8 c) { return c8_isDec(c) ? c - '0' : u8_MAX; }
+
+inline u8 c8_hex(c8 c) {
+
+	if (c8_isDec(c))
+		return c - '0';
+
+	if (c8_isUpperCaseHex(c))
+		return c - 'A' + 10;
+
+	if (c8_isLowerCaseHex(c))
+		return c - 'a' + 10;
+
+	return u8_MAX;
+}
+
+inline u8 c8_nyto(c8 c) {
+
+	if (c8_isDec(c))
+		return c - '0';
+
+	if (c8_isUpperCase(c))
+		return c - 'A' + 10;
+
+	if (c8_isLowerCase(c))
+		return c - 'a' + 36;
+
+	if (c == '_')
+		return 62;
+
+	return c == '$' ? 63 : u8_MAX;
+}
+
+inline c8 c8_createBin(u8 v) { return (v == 0 ? '0' : (v == 1 ? '1' : '\0')); }
+inline c8 c8_createOct(u8 v) { return v < 8 ? '0' + v : '\0'; }
+inline c8 c8_createDec(u8 v) { return v < 10 ? '0' + v : '\0'; }
+inline c8 c8_createHex(u8 v) { return v < 10 ? '0' + v : (v < 16 ? 'A' + v - 10 : '\0'); }
+
+inline c8 c8_createNyto(u8 v) { 
+	return v < 10 ? '0' + v : (
+		v < 36 ? 'A' + v - 10 : (
+			v < 62 ? 'a' + v - 36 : (
+				v == 62 ? '_' : (
+					v == 63 ? '$' : '\0'
+				)
+			)
+		)
+	); 
+}

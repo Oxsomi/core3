@@ -68,7 +68,7 @@ void Program_cleanup() {
 
 	if(Platform_instance.cmdArgc)
 		Platform_instance.alloc.free(
-			Platform_instance.alloc.alloc, 
+			Platform_instance.alloc.ptr, 
 			Bit_createRef(Platform_instance.cmdArgs, Platform_instance.cmdArgc * sizeof(struct String))
 		);
 

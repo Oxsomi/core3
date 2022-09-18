@@ -39,7 +39,7 @@ struct Buffer BMP_writeRGBA(
 
 	ocAssert(
 		"BMP can only be up to 2GiB and should match dimensions", 
-		buf.siz <= i32_MAX && buf.siz == (usz)w * h * 4
+		buf.siz <= i32_MAX && buf.siz == (u64)w * h * 4
 	);
 
 	u32 headersSize = (u32) (

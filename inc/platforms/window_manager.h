@@ -14,7 +14,8 @@ struct WindowManager {
 	u8 maxPhysicalWindowCount, maxVirtualWindowCount;
 };
 
-extern const usz WindowManager_maxVirtualWindowCount;
+extern const u64 WindowManager_maxTotalVirtualWindowCount;
+impl extern const u64 WindowManager_maxTotalPhysicalWindowCount;
 
 typedef u16 WindowHandle;
 
@@ -73,7 +74,7 @@ inline struct Error WindowManager_create(
 	struct Window **w
 ) {
 
-	if (WindowManager_getEmptyPhysicalWindows())
+	if (manager && WindowManager_getEmptyPhysicalWindows(*manager))
 		return WindowManager_createPhysical(
 			manager, position, size, hint, title, callbacks, format, w
 		);

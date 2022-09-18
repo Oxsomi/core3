@@ -30,7 +30,7 @@ struct Error Thread_create(
 	if(*thread)
 		return (struct Error) { 
 			.genericError = GenericError_InvalidParameter, 
-			.paramId = 2, .paramValue0 = (usz) thread 
+			.paramId = 2, .paramValue0 = (u64) thread 
 		};
 
 	if(!callback)

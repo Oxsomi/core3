@@ -31,7 +31,7 @@ void sigFunc(int signal) {
 	exit(signal);
 }
 
-void *allocCallback(void *allocator, usz siz) {
+void *allocCallback(void *allocator, u64 siz) {
 	allocator;
 	return malloc(siz);
 }

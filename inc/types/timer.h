@@ -22,4 +22,4 @@ u64 Timer_clocks();
 i64 Timer_clocksElapsed(u64 prevClocks);
 
 void Timer_format(ns time, TimerFormat timer);
-enum EFormatStatus Timer_parseFormat(ns* time, TimerFormat format);
+enum EFormatStatus Timer_parseFormat(ns *time, TimerFormat format);

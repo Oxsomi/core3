@@ -31,7 +31,7 @@ inline struct BitRef InputDevice_getButtonValue(struct InputDevice dev, u16 loca
 	if(localHandle >= dev.buttons)
 		return (struct BitRef){ 0 };
 
-	usz bitOff = (localHandle << 1) + isCurrent;
+	u64 bitOff = (localHandle << 1) + isCurrent;
 	u8 *off = dev.states.ptr + dev.axes * 2 * sizeof(f32) + (bitOff >> 3);
 
 	return (struct BitRef){ .ptr = off, .off = (bitOff & 7) };
@@ -49,8 +49,8 @@ struct Error InputDevice_create(u16 buttons, u16 axes, struct InputDevice *resul
 		.axes = axes
 	};
 
-	usz handles = sizeof(struct InputAxis) * axes + sizeof(struct InputButton) * buttons;
-	usz states = sizeof(f32) * 2 * axes + (buttons * 2 + 7) >> 3;
+	u64 handles = sizeof(struct InputAxis) * axes + sizeof(struct InputButton) * buttons;
+	u64 states = sizeof(f32) * 2 * axes + (buttons * 2 + 7) >> 3;
 
 	struct Error err = Bit_createEmpty(handles, Platform_instance.alloc, &result->handles);
 
@@ -171,9 +171,9 @@ struct String InputDevice_getName(struct InputDevice d, InputHandle handle) {
 	u16 localHandle = InputDevice_getLocalHandle(d, handle);
 
 	if(InputDevice_isAxis(d, handle))
-		return String_createRefShortString(InputDevice_getAxisName(d, localHandle)->name);
+		return String_createRefShortStringConst(InputDevice_getAxisName(d, localHandle)->name);
 
-	return String_createRefShortString(InputDevice_getButtonName(d, localHandle)->name);
+	return String_createRefShortStringConst(InputDevice_getButtonName(d, localHandle)->name);
 }
 
 InputHandle InputDevice_getHandle(struct InputDevice d, struct String name) {
@@ -182,15 +182,17 @@ InputHandle InputDevice_getHandle(struct InputDevice d, struct String name) {
 
 	for(u16 i = 0; i < d.buttons; ++i)
 		if(String_equalsString(
-			String_createRefShortString(InputDevice_getButtonName(d, i)->name), 
-			name
+			String_createRefShortStringConst(InputDevice_getButtonName(d, i)->name), 
+			name,
+			StringCase_Insensitive
 		))
 			return InputDevice_createHandle(d, i, InputType_Button);
 
 	for(u16 i = 0; i < d.axes; ++i)
 		if(String_equalsString(
-			String_createRefShortString(InputDevice_getAxisName(d, i)->name), 
-			name
+			String_createRefShortStringConst(InputDevice_getAxisName(d, i)->name), 
+			name,
+			StringCase_Insensitive
 		))
 			return InputDevice_createHandle(d, i, InputType_Axis);
 

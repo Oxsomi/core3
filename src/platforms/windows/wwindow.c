@@ -85,7 +85,7 @@ LRESULT CALLBACK onCallback(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
 						auto &keyboardDat = data->data.keyboard;
 
-						usz id = WKey::idByValue(WKey::_E(keyboardDat.VKey));
+						u64 id = WKey::idByValue(WKey::_E(keyboardDat.VKey));
 
 						//TODO: Keyboard should initialize CAPS, SHIFT, ALT if they get changed or on start/switch
 
@@ -94,7 +94,7 @@ LRESULT CALLBACK onCallback(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 						if (id != WKey::count) {
 
 							String keyName = WKey::nameById(id);
-							usz keyCode = Key::idByName(keyName);
+							u64 keyCode = Key::idByName(keyName);
 							bool isKeyDown = !(keyboardDat.Flags & 1);
 
 							bool pressed = dvc->getCurrentState(ButtonHandle(keyCode));
@@ -118,7 +118,7 @@ LRESULT CALLBACK onCallback(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
 						auto &mouseDat = data->data.mouse;
 
-						for (usz i = 0; i < 5; ++i) {
+						for (u64 i = 0; i < 5; ++i) {
 
 							if (mouseDat.usButtonFlags & (1 << (i << 1))) {
 
@@ -416,7 +416,7 @@ struct Window *Window_createPhysical(
 		(u32) GetSystemMetrics(SM_CYSCREEN) 
 	};
 
-	for (usz i = 0; i < 2; ++i)
+	for (u64 i = 0; i < 2; ++i)
 		if (!info->size[i] || info->size[i] >= maxSize[i])
 			info->size[i] = maxSize[i];
 
@@ -443,13 +443,13 @@ struct Window *Window_createPhysical(
 
 	//TODO:
 
-	usz monitorCount = 0;
+	u64 monitorCount = 0;
 	struct Monitor *monitors = NULL;
 
 	//Create our real window
 
 	AllocFunc alloc = Platform_instance.alloc.alloc;
-	void* allocator = Platform_instance.alloc.ptr;
+	void *allocator = Platform_instance.alloc.ptr;
 
 	struct Window *wind = alloc(allocator, sizeof(struct Window));
 	struct WWindow *wwind = alloc(allocator, sizeof(struct WWindow));
@@ -483,11 +483,8 @@ struct Window *Window_createPhysical(
 	UpdateWindow(hwnd);
 }
 
-usz Window_maxPhysicalWindows() {
-	return 16;		//We probably won't need more windows for any other reason. Otherwise just use window in a window
-}
-
-impl bool Window_hasPhysicalWindowLeft();
+//We probably won't need more windows for any other reason. Otherwise just use window in a window
+const u64 WindowManager_maxTotalPhysicalWindowCount = 16;
 
 void Window_freePhysical(struct Window **w) {
 
@@ -501,7 +498,7 @@ void Window_freePhysical(struct Window **w) {
 		PostMessageA((*w)->nativeHandle, WM_DESTROY, NULL, NULL);
 
 	FreeFunc free = Platform_instance.alloc.free;
-	void* allocator = Platform_instance.alloc.ptr;
+	void *allocator = Platform_instance.alloc.ptr;
 
 	free(allocator, (struct Buffer) { .ptr = (*w)->nativeData, .siz = sizeof(struct WWindow) });
 	free(allocator, (struct Buffer) { .ptr = *w, .siz = sizeof(struct Window) });

@@ -3,7 +3,7 @@
 #include "types/allocator.h"
 #include <stdlib.h>
 
-void *ourAlloc(void *allocator, usz siz) {
+void *ourAlloc(void *allocator, u64 siz) {
 	allocator;
 	return malloc(siz);
 }
@@ -36,8 +36,8 @@ int main() {
 
 	//Test Bit helper
 
-	struct Buffer emp = Bit_empty(256, alloc);
-	struct Buffer full = Bit_full(256, alloc);
+	struct Buffer emp = Bit_createEmpty(256, alloc);
+	struct Buffer full = Bit_createFull(256, alloc);
 
 	if (Bit_eq(emp, full)) {
 		Bit_free(&emp, alloc);
@@ -56,12 +56,15 @@ int main() {
 		return 3;
 	}
 
+	Bit_free(&emp, alloc);
+	Bit_free(&full, alloc);
+
 	//TODO: Test vectors
 	//TODO: Test quaternions
 	//TODO: Test transform
-
-	Bit_free(&emp, alloc);
-	Bit_free(&full, alloc);
+	//TODO: Test string
+	//TODO: Test math
+	//TODO: Test file
 
 	//
 

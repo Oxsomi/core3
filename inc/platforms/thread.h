@@ -13,7 +13,7 @@ impl u32 Thread_getId();
 impl u32 Thread_getLogicalCores();
 
 impl struct Error Thread_create(
-	ThreadCallbackFunction callback, void* objectHandle,
+	ThreadCallbackFunction callback, void *objectHandle,
 	struct Thread **thread
 );
 

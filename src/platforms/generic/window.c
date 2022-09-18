@@ -6,7 +6,7 @@
 #include "formats/texture.h"
 #include "formats/bmp.h"
 
-const usz WindowManager_maxVirtualWindowCount = 16;
+const u64 WindowManager_maxTotalVirtualWindowCount = 16;
 
 struct Error Window_createVirtual(
 	i32x2 size, struct WindowCallbacks callbacks, enum WindowFormat format,
@@ -64,7 +64,7 @@ struct Error Window_createVirtual(
 
 	struct Buffer *buf = (struct Buffer*) buffer.ptr;
 
-	usz size1D = TextureFormat_getSize((enum TextureFormat) format, i32x2_x(size), i32x2_y(size));
+	u64 size1D = TextureFormat_getSize((enum TextureFormat) format, i32x2_x(size), i32x2_y(size));
 	err = alloc(allocator, size1D, &buffer);
 
 	if(err.genericError) {
@@ -88,7 +88,7 @@ struct Error Window_freeVirtual(struct Window **w) {
 		return (struct Error) { .genericError = GenericError_InvalidParameter };
 
 	FreeFunc free = Platform_instance.alloc.free;
-	void *allocator = Platform_instance.alloc.alloc;
+	void *allocator = Platform_instance.alloc.ptr;
 
 	struct Buffer *bufPtr = (struct Buffer*) (*w)->nativeHandle;
 
@@ -146,8 +146,8 @@ struct Error Window_resizeVirtual(struct Window *w, bool copyData, i32x2 newSiz)
 	FreeFunc free = Platform_instance.alloc.free;
 	void *allocator = Platform_instance.alloc.ptr;
 
-	usz linSizOld = TextureFormat_getSize((enum TextureFormat) w->format, i32x2_x(w->size), i32x2_y(w->size));
-	usz linSiz = TextureFormat_getSize((enum TextureFormat) w->format, i32x2_x(newSiz), i32x2_y(newSiz));
+	u64 linSizOld = TextureFormat_getSize((enum TextureFormat) w->format, i32x2_x(w->size), i32x2_y(w->size));
+	u64 linSiz = TextureFormat_getSize((enum TextureFormat) w->format, i32x2_x(newSiz), i32x2_y(newSiz));
 
 	//We need to grow; we're out of bounds
 
@@ -155,7 +155,7 @@ struct Error Window_resizeVirtual(struct Window *w, bool copyData, i32x2 newSiz)
 
 	if (linSiz >= old.siz) {
 
-		usz toAllocate = linSiz * 5 / 4;
+		u64 toAllocate = linSiz * 5 / 4;
 
 		struct Error err = alloc(allocator, toAllocate, &neo);
 
@@ -169,7 +169,7 @@ struct Error Window_resizeVirtual(struct Window *w, bool copyData, i32x2 newSiz)
 
 	else if (old.siz > linSiz * 3 / 2) {
 
-		usz toAllocate = linSiz * 5 / 4;
+		u64 toAllocate = linSiz * 5 / 4;
 
 		struct Error err = alloc(allocator, toAllocate, &neo);
 
@@ -191,7 +191,7 @@ struct Error Window_resizeVirtual(struct Window *w, bool copyData, i32x2 newSiz)
 			//If we resized the buffer, we still have to copy the old data
 
 			if(resize)
-				Bit_copy(neo, Bit_createRef(old.ptr, (usz) u64_min(linSizOld, linSiz)));
+				Bit_copy(neo, Bit_createRef(old.ptr, (u64) u64_min(linSizOld, linSiz)));
 
 			//If we added size, we need to clear those pixels
 
@@ -215,8 +215,8 @@ struct Error Window_resizeVirtual(struct Window *w, bool copyData, i32x2 newSiz)
 
 		else {
 
-			usz rowSiz = linSiz / i32x2_y(newSiz);
-			usz rowSizOld = linSizOld / i32x2_y(w->siz);
+			u64 rowSiz = linSiz / i32x2_y(newSiz);
+			u64 rowSizOld = linSizOld / i32x2_y(w->siz);
 
 			//Grab buffers for simple copies later
 
@@ -257,7 +257,7 @@ struct Error Window_resizeVirtual(struct Window *w, bool copyData, i32x2 newSiz)
 				dst.ptr += linSiz - rowSiz;
 				src.ptr += linSizOld - rowSizOld;
 
-				usz sizDif = linSiz - linSizOld;
+				u64 sizDif = linSiz - linSizOld;
 
 				for (i32 i = 0; i < smallY; ++i) {
 

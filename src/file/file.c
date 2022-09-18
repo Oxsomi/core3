@@ -36,6 +36,9 @@ struct Error File_read(struct String loc, struct Allocator allocator, struct Buf
 	if(String_isEmpty(loc))
 		return (struct Error){ .genericError = GenericError_InvalidParameter };
 
+	if(!allocator.alloc || !allocator.free)
+		return (struct Error){ .genericError = GenericError_NullPointer, .paramId = 1 };
+
 	if(!output)
 		return (struct Error){ .genericError = GenericError_NullPointer, .paramId = 2 };
 
@@ -49,7 +52,7 @@ struct Error File_read(struct String loc, struct Allocator allocator, struct Buf
 		return (struct Error){ .genericError = GenericError_InvalidState, .errorSubId = 0 };
 	}
 
-	struct Error err = Bit_createBytes((usz)_ftelli64(f), allocator, &output);
+	struct Error err = Bit_createBytes((u64)_ftelli64(f), allocator, &output);
 	
 	if(err.genericError) {
 		fclose(f);

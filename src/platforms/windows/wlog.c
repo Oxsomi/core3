@@ -14,7 +14,7 @@
 
 //Carried over from core2
 
-void Log_captureStackTrace(void **stack, usz stackSize, usz skip) {
+void Log_captureStackTrace(void **stack, u64 stackSize, u64 skip) {
 	RtlCaptureStackBackTrace(
 		(DWORD)(1 + skip), 
 		(DWORD) stackSize, 
@@ -49,7 +49,7 @@ void Log_printCapturedStackTrace(const StackTrace stackTrace, enum LogLevel lvl)
 
 	struct CapturedStackTrace captured[StackTrace_SIZE] = { 0 };
 
-	usz stackCount = 0;
+	u64 stackCount = 0;
 
 	//Obtain process
 
@@ -60,13 +60,13 @@ void Log_printCapturedStackTrace(const StackTrace stackTrace, enum LogLevel lvl)
 	bool anySymbol = false;
 
 	if(hasSymbols)
-		for (usz i = 0; i < StackTrace_SIZE && stackTrace[i]; ++i, ++stackCount) {
+		for (u64 i = 0; i < StackTrace_SIZE && stackTrace[i]; ++i, ++stackCount) {
 
-			usz addr = (usz) stackTrace[i];
+			u64 addr = (u64) stackTrace[i];
 
 			//Get module name
 
-			usz moduleBase = SymGetModuleBase(process, addr);
+			u64 moduleBase = SymGetModuleBase(process, addr);
 
 			c8 modulePath[MAX_PATH + 1] = { 0 };
 			if (!moduleBase || !GetModuleFileNameA((HINSTANCE)moduleBase, modulePath, MAX_PATH))
@@ -98,7 +98,7 @@ void Log_printCapturedStackTrace(const StackTrace stackTrace, enum LogLevel lvl)
 			capture->mod = modulePath;
 			capture->sym = symbolName;
 
-			if (moduleBase == (usz)processModule)
+			if (moduleBase == (u64)processModule)
 				capture->mod = String_lastPath(capture->mod);
 
 			if(line.FileName)
@@ -112,7 +112,7 @@ void Log_printCapturedStackTrace(const StackTrace stackTrace, enum LogLevel lvl)
 
 	else printf("Stacktrace: (No symbols)\n");
 
-	for (usz i = 0; i < stackCount; ++i) {
+	for (u64 i = 0; i < stackCount; ++i) {
 
 		struct CapturedStackTrace capture = captured[i];
 
@@ -204,10 +204,10 @@ void Log_log(enum LogLevel lvl, enum LogOptions options, struct LogArgs args) {
 
 	const c8 *newLine = hasNewLine ? "\n" : "";
 
-	for (usz i = 0; i < args.argc; ++i)
+	for (u64 i = 0; i < args.argc; ++i)
 		printf(
 			"%s%s", 
-			args.args[i], 
+			args.args[i].ptr, 
 			newLine
 		);
 
@@ -216,9 +216,9 @@ void Log_log(enum LogLevel lvl, enum LogOptions options, struct LogArgs args) {
 	if (!IsDebuggerPresent())
 		return;
 
-	for (usz i = 0; i < args.argc; ++i) {
+	for (u64 i = 0; i < args.argc; ++i) {
 
-		OutputDebugStringA(args.args[i]);
+		OutputDebugStringA(args.args[i].ptr);
 
 		if (hasNewLine)
 			OutputDebugStringA("\n");
