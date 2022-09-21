@@ -9,142 +9,163 @@
 
 //Types
 
-typedef int8_t  i8;
-typedef int16_t i16;
-typedef int32_t i32;
-typedef int64_t i64;
+typedef int8_t  I8;
+typedef int16_t I16;
+typedef int32_t I32;
+typedef int64_t I64;
 
-typedef uint8_t  u8;
-typedef uint16_t u16;
-typedef uint32_t u32;
-typedef uint64_t u64;
+typedef uint8_t  U8;
+typedef uint16_t U16;
+typedef uint32_t U32;
+typedef uint64_t U64;
 
-typedef float  f32;
-typedef double f64;
+typedef float  F32;
 
-typedef u64 ns;		/// Time since Unix epoch in ns
-typedef i64 dns;	/// Delta ns
+#if _StrictFloat
+	#if FLT_EVAL_METHOD != 0
+		#error Flt eval method should be 0 to indicate consistent behavior
+	#endif
+#endif
 
-typedef char c8;
+typedef U64 Ns;		/// Time since Unix epoch in Ns
+typedef I64 DNs;	/// Delta Ns
+
+typedef char C8;
+
+typedef bool Bool;
 
 //Constants
 
-extern const u64 Ki;
-extern const u64 Mi;
-extern const u64 Gi;
-extern const u64 Ti;
-extern const u64 Pi;
+extern const U64 Ki;
+extern const U64 Mi;
+extern const U64 Gi;
+extern const U64 Ti;
+extern const U64 Pi;
 
-extern const u64 K;
-extern const u64 M;
-extern const u64 B;
-extern const u64 T;
-extern const u64 P;
+extern const U64 K;
+extern const U64 M;
+extern const U64 B;
+extern const U64 T;
+extern const U64 P;
 
-extern const ns mus;
-extern const ns ms;
-extern const ns seconds;
-extern const ns mins;
-extern const ns hours;
-extern const ns days;
-extern const ns weeks;
+extern const Ns mus;
+extern const Ns ms;
+extern const Ns seconds;
+extern const Ns mins;
+extern const Ns hours;
+extern const Ns days;
+extern const Ns weeks;
 
-extern const u8 u8_MIN;
-extern const u16 u16_MIN;
-extern const u32 u32_MIN;
-extern const u64 u64_MIN;
+extern const U8 U8_MIN;
+extern const U16 U16_MIN;
+extern const U32 U32_MIN;
+extern const U64 U64_MIN;
 
-extern const i8  i8_MIN;
-extern const i16 i16_MIN;
-extern const i32 i32_MIN;
-extern const i64 i64_MIN;
+extern const I8  I8_MIN;
+extern const I16 I16_MIN;
+extern const I32 I32_MIN;
+extern const I64 I64_MIN;
 
-extern const u8  u8_MAX;
-extern const u16 u16_MAX;
-extern const u32 u32_MAX;
-extern const u64 u64_MAX;
+extern const U8  U8_MAX;
+extern const U16 U16_MAX;
+extern const U32 U32_MAX;
+extern const U64 U64_MAX;
 
-extern const i8  i8_MAX;
-extern const i16 i16_MAX;
-extern const i32 i32_MAX;
-extern const i64 i64_MAX;
+extern const I8  I8_MAX;
+extern const I16 I16_MAX;
+extern const I32 I32_MAX;
+extern const I64 I64_MAX;
 
 struct Buffer {
-	u8 *ptr;
-	u64 siz;
+	U8 *ptr;
+	U64 siz;
 };
 
 //Char
 
-inline c8 c8_toLower(c8 c) {
-	return (c8) tolower(c);
+inline C8 C8_toLower(C8 c) {
+	return (C8) tolower(c);
 }
 
-inline c8 c8_toUpper(c8 c) {
-	return (c8) toupper(c);
+inline C8 C8_toUpper(C8 c) {
+	return (C8) toupper(c);
 }
 
-inline c8 c8_transform(c8 c, enum StringTransform transform) {
+enum StringCase {
+	StringCase_Sensitive,			//Prefer when possible; avoids transforming the character
+	StringCase_Insensitive
+};
+
+enum StringTransform {
+	StringTransform_None,
+	StringTransform_Lower,
+	StringTransform_Upper
+};
+
+inline C8 C8_transform(C8 c, enum StringTransform transform) {
 	return transform == StringTransform_None ? c : (
-		transform == StringTransform_Lower ? c8_toLower(c) :
-		c8_toUpper(c)
+		transform == StringTransform_Lower ? C8_toLower(c) :
+		C8_toUpper(c)
 	);
 }
 
-inline c8 c8_isBin(c8 c) { return c == '0' || c == '1'; }
-inline c8 c8_isOct(c8 c) { return c >= '0' && c <= '7'; }
-inline c8 c8_isDec(c8 c) { return c >= '0' && c <= '9'; }
+inline C8 C8_isBin(C8 c) { return c == '0' || c == '1'; }
+inline C8 C8_isOct(C8 c) { return c >= '0' && c <= '7'; }
+inline C8 C8_isDec(C8 c) { return c >= '0' && c <= '9'; }
 
-inline bool c8_isUpperCase(c8 c) { return c >= 'A' && c <= 'Z'; }
-inline bool c8_isLowerCase(c8 c) { return c >= 'a' && c <= 'z'; }
-inline bool c8_isUpperCaseHex(c8 c) { return c >= 'A' && c <= 'F'; }
-inline bool c8_isLowerCaseHex(c8 c) { return c >= 'a' && c <= 'f'; }
+inline Bool C8_isUpperCase(C8 c) { return c >= 'A' && c <= 'Z'; }
+inline Bool C8_isLowerCase(C8 c) { return c >= 'a' && c <= 'z'; }
+inline Bool C8_isUpperCaseHex(C8 c) { return c >= 'A' && c <= 'F'; }
+inline Bool C8_isLowerCaseHex(C8 c) { return c >= 'a' && c <= 'f'; }
+inline Bool C8_isWhitespace(C8 c) { return c == ' ' || c == '\t' || c == '\n' || c == '\r'; }
 
-inline c8 c8_isHex(c8 c) { return c8_isDec(c) || c8_isUpperCaseHex(c) || c8_isLowerCaseHex(c); }
-inline c8 c8_isNyto(c8 c) { return c8_isDec(c) || c8_isUpperCase(c) || c8_isLowerCase(c) || c == '_' || c == '$'; }
-inline c8 c8_isAlphaNumeric(c8 c) { return c8_isNyto(c) && c != '$'; }
+inline C8 C8_isHex(C8 c) { return C8_isDec(c) || C8_isUpperCaseHex(c) || C8_isLowerCaseHex(c); }
+inline C8 C8_isNyto(C8 c) { return C8_isDec(c) || C8_isUpperCase(c) || C8_isLowerCase(c) || c == '_' || c == '$'; }
+inline C8 C8_isAlphaNumeric(C8 c) { return C8_isNyto(c) && c != '$'; }
 
-inline u8 c8_bin(c8 c) { return c == '0' ? 0 : (c == '1' ? 1 : u8_MAX); }
-inline u8 c8_oct(c8 c) { return c8_isOct(c) ? c - '0' : u8_MAX; }
-inline u8 c8_dec(c8 c) { return c8_isDec(c) ? c - '0' : u8_MAX; }
+inline U8 C8_bin(C8 c) { return c == '0' ? 0 : (c == '1' ? 1 : U8_MAX); }
+inline U8 C8_oct(C8 c) { return C8_isOct(c) ? c - '0' : U8_MAX; }
+inline U8 C8_dec(C8 c) { return C8_isDec(c) ? c - '0' : U8_MAX; }
 
-inline u8 c8_hex(c8 c) {
+inline U8 C8_hex(C8 c) {
 
-	if (c8_isDec(c))
+	if (C8_isDec(c))
 		return c - '0';
 
-	if (c8_isUpperCaseHex(c))
+	if (C8_isUpperCaseHex(c))
 		return c - 'A' + 10;
 
-	if (c8_isLowerCaseHex(c))
+	if (C8_isLowerCaseHex(c))
 		return c - 'a' + 10;
 
-	return u8_MAX;
+	return U8_MAX;
 }
 
-inline u8 c8_nyto(c8 c) {
+inline U8 C8_nyto(C8 c) {
 
-	if (c8_isDec(c))
+	if (C8_isDec(c))
 		return c - '0';
 
-	if (c8_isUpperCase(c))
+	if (C8_isUpperCase(c))
 		return c - 'A' + 10;
 
-	if (c8_isLowerCase(c))
+	if (C8_isLowerCase(c))
 		return c - 'a' + 36;
 
 	if (c == '_')
 		return 62;
 
-	return c == '$' ? 63 : u8_MAX;
+	return c == '$' ? 63 : U8_MAX;
 }
 
-inline c8 c8_createBin(u8 v) { return (v == 0 ? '0' : (v == 1 ? '1' : '\0')); }
-inline c8 c8_createOct(u8 v) { return v < 8 ? '0' + v : '\0'; }
-inline c8 c8_createDec(u8 v) { return v < 10 ? '0' + v : '\0'; }
-inline c8 c8_createHex(u8 v) { return v < 10 ? '0' + v : (v < 16 ? 'A' + v - 10 : '\0'); }
+inline C8 C8_createBin(U8 v) { return (v == 0 ? '0' : (v == 1 ? '1' : '\0')); }
+inline C8 C8_createOct(U8 v) { return v < 8 ? '0' + v : '\0'; }
+inline C8 C8_createDec(U8 v) { return v < 10 ? '0' + v : '\0'; }
+inline C8 C8_createHex(U8 v) { return v < 10 ? '0' + v : (v < 16 ? 'A' + v - 10 : '\0'); }
 
-inline c8 c8_createNyto(u8 v) { 
+//Nytodecimal: 0-9A-Za-z_$
+
+inline C8 C8_createNyto(U8 v) { 
 	return v < 10 ? '0' + v : (
 		v < 36 ? 'A' + v - 10 : (
 			v < 62 ? 'a' + v - 36 : (

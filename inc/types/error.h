@@ -39,13 +39,13 @@ enum GenericError {
 struct Error {
 
 	enum GenericError genericError;
-	u32 errorSubId;
+	U32 errorSubId;
 
-	u32 paramId;
-	u32 paramSubId;
+	U32 paramId;
+	U32 paramSubId;
 
-	u64 paramValue0;
-	u64 paramValue1;
+	U64 paramValue0;
+	U64 paramValue1;
 
 	//These are optional for functions that don't know about any platform dependent stuff
 	//Code calling that should include their own stack trace if necessary.
@@ -59,9 +59,9 @@ struct Error {
 //But the one in platform does
 
 struct Error Error_base(
-	enum GenericError err, u32 subId, 
-	u32 paramId, u32 paramSubId, 
-	u64 paramValue0, u64 paramValue1
+	enum GenericError err, U32 subId, 
+	U32 paramId, U32 paramSubId, 
+	U64 paramValue0, U64 paramValue1
 );
 
 struct Error Error_none();

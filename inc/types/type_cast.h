@@ -4,18 +4,18 @@
 
 //Conversions
 
-inline struct Error f32_fromBits(u64 v, f32 *res) {
+inline struct Error F32_fromBits(U64 v, F32 *res) {
 
-	if(v > u32_MAX)
+	if(v > U32_MAX)
 		return Error_base(GenericError_OutOfBounds, 0, 0, 0, v, 0);
 
-	u32 bits = (u32) v;
-	f32 r = *(const f32*) &v;
+	U32 bits = (U32) v;
+	F32 r = *(const F32*) &v;
 
-	if(f32_isnan(r))
+	if(F32_isnan(r))
 		return Error_base(GenericError_NaN, 0, 0, 0, v, 0);
 
-	if(f32_isinf(r))
+	if(F32_isinf(r))
 		return Error_base(GenericError_Overflow, 0, 0, 0, v, 0);
 
 	if(v == (1 << 31))	//Signed zero
@@ -43,47 +43,47 @@ inline struct Error f32_fromBits(u64 v, f32 *res) {
 		return Error_base(GenericError_Underflow, 0, 0, 0, v, 0);	\
 )
 
-#define CastFromF(type) CastFromI(type, v = f32_floor(v);)
+#define CastFromF(type) CastFromI(type, v = F32_floor(v);)
 
-inline struct Error i8_fromUInt(u64 v, i8 *res)		CastFromU(i8)
-inline struct Error i8_fromInt(i64 v, i8 *res)		CastFromI(i8)
-inline struct Error i8_fromFloat(f32 v, i8 *res)	CastFromF(i8)
+inline struct Error I8_fromUInt(U64 v, I8 *res)		CastFromU(I8)
+inline struct Error I8_fromInt(I64 v, I8 *res)		CastFromI(I8)
+inline struct Error I8_fromFloat(F32 v, I8 *res)	CastFromF(I8)
 
-inline struct Error i16_fromUInt(u64 v, i16 *res)	CastFromU(i16)
-inline struct Error i16_fromInt(i64 v, i16 *res)	CastFromI(i16)
-inline struct Error i16_fromFloat(f32 v, i16 *res)	CastFromF(i16) 
+inline struct Error I16_fromUInt(U64 v, I16 *res)	CastFromU(I16)
+inline struct Error I16_fromInt(I64 v, I16 *res)	CastFromI(I16)
+inline struct Error I16_fromFloat(F32 v, I16 *res)	CastFromF(I16) 
 
-inline struct Error i32_fromUInt(u64 v, i32 *res)	CastFromU(i32)
-inline struct Error i32_fromInt(i64 v, i32 *res) 	CastFromI(i32)
-inline struct Error i32_fromFloat(f32 v, i32 *res)	CastFromF(i32)
+inline struct Error I32_fromUInt(U64 v, I32 *res)	CastFromU(I32)
+inline struct Error I32_fromInt(I64 v, I32 *res) 	CastFromI(I32)
+inline struct Error I32_fromFloat(F32 v, I32 *res)	CastFromF(I32)
 
-inline struct Error i64_fromUInt(u64 v, i64 *res)	CastFromU(i64)
-inline struct Error i64_fromFloat(f32 v, i64 *res)	CastFromF(i64)
+inline struct Error I64_fromUInt(U64 v, I64 *res)	CastFromU(I64)
+inline struct Error I64_fromFloat(F32 v, I64 *res)	CastFromF(I64)
 
 //Cast to uints
 
-inline struct Error u8_fromUInt(u64 v, u8 *res)		CastFromU(u8)
-inline struct Error u8_fromInt(i64 v, u8 *res)		CastFromI(u8)
-inline struct Error u8_fromFloat(f32 v, u8 *res)	CastFromF(u8)
+inline struct Error U8_fromUInt(U64 v, U8 *res)		CastFromU(U8)
+inline struct Error U8_fromInt(I64 v, U8 *res)		CastFromI(U8)
+inline struct Error U8_fromFloat(F32 v, U8 *res)	CastFromF(U8)
 
-inline struct Error u16_fromUInt(u64 v, u16 *res)	CastFromU(u16)
-inline struct Error u16_fromInt(i64 v, u16 *res) 	CastFromI(u16)
-inline struct Error u16_fromFloat(f32 v, u16 *res)	CastFromF(u16)
+inline struct Error U16_fromUInt(U64 v, U16 *res)	CastFromU(U16)
+inline struct Error U16_fromInt(I64 v, U16 *res) 	CastFromI(U16)
+inline struct Error U16_fromFloat(F32 v, U16 *res)	CastFromF(U16)
 
-inline struct Error u32_fromUInt(u64 v, u32 *res)	CastFromU(u32)
-inline struct Error u32_fromInt(i64 v, u32 *res)	CastFromI(u32)
-inline struct Error u32_fromFloat(f32 v, u32 *res)	CastFromF(u32)
+inline struct Error U32_fromUInt(U64 v, U32 *res)	CastFromU(U32)
+inline struct Error U32_fromInt(I64 v, U32 *res)	CastFromI(U32)
+inline struct Error U32_fromFloat(F32 v, U32 *res)	CastFromF(U32)
 
-inline struct Error u64_fromInt(i64 v, u64 *res) 	CastFromI(u64)
-inline struct Error u64_fromFloat(f32 v, u64 *res)  CastFromF(u64)
+inline struct Error U64_fromInt(I64 v, U64 *res) 	CastFromI(U64)
+inline struct Error U64_fromFloat(F32 v, U64 *res)  CastFromF(U64)
 
 //Cast to floats
 
 #define CastToF32 {															\
 																			\
-	f32 r = (f32) v;														\
+	F32 r = (F32) v;														\
 																			\
-	if(f32_isinf(r))														\
+	if(F32_isinf(r))														\
 		return Error_base(													\
 			v >= 0 ? GenericError_Overflow : GenericError_Underflow, 0,		\
 			0, 0, v, 0														\
@@ -99,5 +99,5 @@ inline struct Error u64_fromFloat(f32 v, u64 *res)  CastFromF(u64)
 	return Error_none();													\
 }
 
-inline struct Error f32_fromInt(i64 v, f32 *res)  CastToF32
-inline struct Error f32_fromUInt(u64 v, f32 *res) CastToF32
+inline struct Error F32_fromInt(I64 v, F32 *res)  CastToF32
+inline struct Error F32_fromUInt(U64 v, F32 *res) CastToF32

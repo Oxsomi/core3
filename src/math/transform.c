@@ -16,7 +16,7 @@ struct Transform PackedTransform_unpack(struct PackedTransform t) {
 	};
 }
 
-struct Transform Transform_create(quat rot, f32x4 pos, f32x4 scale) {
+struct Transform Transform_create(Quat rot, F32x4 pos, F32x4 scale) {
 	return (struct Transform) {
 		.rot = rot,
 		.pos = pos,
@@ -24,18 +24,18 @@ struct Transform Transform_create(quat rot, f32x4 pos, f32x4 scale) {
 	};
 }
 
-f32x4 Transform_applyToDirection(struct Transform t, f32x4 dir) {
+F32x4 Transform_applyToDirection(struct Transform t, F32x4 dir) {
 	return Quat_applyToNormal(t.rot, dir);
 }
 
-f32x4 Transform_apply(struct Transform t, f32x4 pos) {
-	f32x4 mpos = Vec_mul(pos, t.scale);			//Scale
+F32x4 Transform_apply(struct Transform t, F32x4 pos) {
+	F32x4 mpos = Vec_mul(pos, t.scale);			//Scale
 	mpos = Quat_applyToNormal(t.rot, mpos);		//Rotate
 	return Vec_add(mpos, t.pos);				//Translate
 }
 
-f32x4 Transform_reverse(struct Transform t, f32x4 pos) {
-	f32x4 mpos = Vec_sub(pos, t.pos);
+F32x4 Transform_reverse(struct Transform t, F32x4 pos) {
+	F32x4 mpos = Vec_sub(pos, t.pos);
 	mpos = Quat_applyToNormal(Quat_inverse(t.rot), mpos);
 	return Vec_div(mpos, t.scale);
 }

@@ -3,7 +3,7 @@
 #include "types/allocator.h"
 #include <stdlib.h>
 
-void *ourAlloc(void *allocator, u64 siz) {
+void *ourAlloc(void *allocator, U64 siz) {
 	allocator;
 	return malloc(siz);
 }
@@ -15,14 +15,16 @@ void ourFree(void *allocator, struct Buffer buf) {
 
 int main() {
 
+	Math_initPlatform();
+
 	//Test timer
 
-	ns now = Timer_now();
+	Ns now = Timer_now();
 	TimerFormat nowStr;
 
 	Timer_format(now, nowStr);
 
-	ns now2 = 0;
+	Ns now2 = 0;
 	enum EFormatStatus stat = Timer_parseFormat(&now2, nowStr);
 
 	if (stat != FormatStatus_Success || now2 != now)

@@ -12,14 +12,14 @@ enum EFormatStatus {
 	FormatStatus_InvalidTime
 };
 
-ns Timer_now();
-dns Timer_elapsed(ns prev);
+Ns Timer_now();
+DNs Timer_elapsed(Ns prev);
 
-dns Timer_dns(ns timeStamp0, ns timeStamp1);
-f64 Timer_dt(ns timeStamp0, ns timeStamp1);
+DNs Timer_dns(Ns timeStamp0, Ns timeStamp1);
+F32 Timer_dt(Ns timeStamp0, Ns timeStamp1);
 
-u64 Timer_clocks();
-i64 Timer_clocksElapsed(u64 prevClocks);
+U64 Timer_clocks();
+I64 Timer_clocksElapsed(U64 prevClocks);
 
-void Timer_format(ns time, TimerFormat timer);
-enum EFormatStatus Timer_parseFormat(ns *time, TimerFormat format);
+void Timer_format(Ns time, TimerFormat timer);
+enum EFormatStatus Timer_parseFormat(Ns *time, TimerFormat format);

@@ -1,9 +1,9 @@
 #include "types/error.h"
 
 struct Error Error_base(
-	enum GenericError err, u32 subId, 
-	u32 paramId, u32 paramSubId, 
-	u64 paramValue0, u64 paramValue1
+	enum GenericError err, U32 subId, 
+	U32 paramId, U32 paramSubId, 
+	U64 paramValue0, U64 paramValue1
 ) {
 	return (struct Error) {
 		.genericError = err,

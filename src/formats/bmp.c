@@ -6,43 +6,43 @@
 #pragma pack(push, 1)
 
 struct BMPHeader {
-	u16 fileType;
-	u32 fileSize;
-	u16 r0, r1;
-	u32 offsetData;
+	U16 fileType;
+	U32 fileSize;
+	U16 r0, r1;
+	U32 offsetData;
 };
 
 struct BMPInfoHeader {
-	u32 size;
-	i32 width, height;
-	u16 planes, bitCount;
-	u32 compression, compressedSize;
-	i32 xPixPerM, yPixPerM;
-	u32 colorsUsed, colorsImportant;
+	U32 size;
+	I32 width, height;
+	U16 planes, bitCount;
+	U32 compression, compressedSize;
+	I32 xPixPerM, yPixPerM;
+	U32 colorsUsed, colorsImportant;
 };
 
 struct BMPColorHeader {
-	u32 redMask, greenMask, blueMask, alphaMask;
-	u32 colorSpaceType;
-	u32 unused[16];
+	U32 redMask, greenMask, blueMask, alphaMask;
+	U32 colorSpaceType;
+	U32 unused[16];
 };
 
 #pragma pack(pop)
 
-const u16 BMP_magic = 0x4D42;
-const u32 BMP_srgbMagic = 0x73524742;
+const U16 BMP_magic = 0x4D42;
+const U32 BMP_srgbMagic = 0x73524742;
 
 struct Buffer BMP_writeRGBA(
-	struct Buffer buf, u16 w, u16 h, bool isFlipped, 
+	struct Buffer buf, U16 w, U16 h, Bool isFlipped, 
 	struct Allocator allocator
 ) {
 
 	ocAssert(
 		"BMP can only be up to 2GiB and should match dimensions", 
-		buf.siz <= i32_MAX && buf.siz == (u64)w * h * 4
+		buf.siz <= I32_MAX && buf.siz == (U64)w * h * 4
 	);
 
-	u32 headersSize = (u32) (
+	U32 headersSize = (U32) (
 		sizeof(struct BMPHeader) + 
 		sizeof(struct BMPInfoHeader) + 
 		sizeof(struct BMPColorHeader)
@@ -50,7 +50,7 @@ struct Buffer BMP_writeRGBA(
 
 	struct BMPHeader header = (struct BMPHeader) {
 		.fileType = BMP_magic,
-		.fileSize = ((i32) buf.siz) * (isFlipped ? -1 : 1),
+		.fileSize = ((I32) buf.siz) * (isFlipped ? -1 : 1),
 		.r0 = 0, .r1 = 0, 
 		.offsetData = headersSize
 	};
@@ -69,10 +69,10 @@ struct Buffer BMP_writeRGBA(
 
 	struct BMPColorHeader colorHeader = (struct BMPColorHeader) {
 
-		.redMask	= (u32) 0xFF << 16,
-		.greenMask	= (u32) 0xFF << 8,
-		.blueMask	= (u32) 0xFF,
-		.alphaMask	= (u32) 0xFF << 24,
+		.redMask	= (U32) 0xFF << 16,
+		.greenMask	= (U32) 0xFF << 8,
+		.blueMask	= (U32) 0xFF,
+		.alphaMask	= (U32) 0xFF << 24,
 
 		.colorSpaceType = BMP_srgbMagic
 	};

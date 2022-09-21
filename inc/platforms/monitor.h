@@ -17,17 +17,17 @@ enum MonitorOrientation {
 
 struct Monitor {
 
-	i32x2 offsetPixels, sizePixels;
-	f32x2 offsetR, offsetG;
-	f32x2 offsetB, sizeInches;
+	I32x2 offsetPixels, sizePixels;
+	I32x2 offsetR, offsetG;
+	I32x2 offsetB, sizeInches;
 
 	enum MonitorOrientation orientation;
-	f32 gamma, contrast, refreshRate;
+	F32 gamma, contrast, refreshRate;
 };
 
 //Helpers
 
-inline struct Error Monitor_setRect(struct Monitor *m, i32x2 offset, i32x2 size) { 
+inline struct Error Monitor_setRect(struct Monitor *m, I32x2 offset, I32x2 size) { 
 
 	if (!m)
 		return (struct Error) { .genericError = GenericError_NullPointer };
@@ -43,7 +43,7 @@ inline struct Error Monitor_setRect(struct Monitor *m, i32x2 offset, i32x2 size)
 //		For those formats all offsets should be set to zero 
 //		and the renderer should implement a fallback.
 
-inline struct Error Monitor_setSubpixels(struct Monitor *m, f32x4 offsetR, f32x4 offsetG, f32x4 offsetB) {
+inline struct Error Monitor_setSubpixels(struct Monitor *m, F32x4 offsetR, F32x4 offsetG, F32x4 offsetB) {
 
 	if (!m)
 		return (struct Error) { .genericError = GenericError_NullPointer };

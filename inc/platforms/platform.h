@@ -27,7 +27,7 @@ struct Platform {
 extern struct Platform Platform_instance;
 
 struct Error Platform_create(
-	int cmdArgc, const c8 *cmdArgs[], 
+	int cmdArgc, const C8 *cmdArgs[], 
 	void *data,
 	FreeFunc free, AllocFunc alloc, void *allocator
 );
@@ -39,4 +39,4 @@ extern void Program_exit();
 
 //Errors with stacktraces
 
-struct Error Error_traced(enum GenericError err, u32 subId, u32 paramId, u32 paramSubId, u64 paramValue0, u64 paramValue1);
+struct Error Error_traced(enum GenericError err, U32 subId, U32 paramId, U32 paramSubId, U64 paramValue0, U64 paramValue1);

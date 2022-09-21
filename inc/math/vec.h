@@ -9,172 +9,172 @@
 //Very lightweight layer around SIMD vectors
 //Int vectors are ignored
 
-typedef __m128 f32x4;
+typedef __m128 F32x4;
 
 //Arithmetic
 
-inline f32x4 Vec_zero();
-inline f32x4 Vec_one();
-inline f32x4 Vec_two();
-inline f32x4 Vec_mask2();
-inline f32x4 Vec_mask3();
-inline f32x4 Vec_xxxx4(f32 x);
+inline F32x4 Vec_zero();
+inline F32x4 Vec_one();
+inline F32x4 Vec_two();
+inline F32x4 Vec_mask2();
+inline F32x4 Vec_mask3();
+inline F32x4 Vec_xxxx4(F32 x);
 
-inline f32x4 Vec_add(f32x4 a, f32x4 b);
-inline f32x4 Vec_sub(f32x4 a, f32x4 b);
-inline f32x4 Vec_mul(f32x4 a, f32x4 b);
-inline f32x4 Vec_div(f32x4 a, f32x4 b);
+inline F32x4 Vec_add(F32x4 a, F32x4 b);
+inline F32x4 Vec_sub(F32x4 a, F32x4 b);
+inline F32x4 Vec_mul(F32x4 a, F32x4 b);
+inline F32x4 Vec_div(F32x4 a, F32x4 b);
 
-inline f32x4 Vec_srgb8Unpack(u32 v);
-inline u32 Vec_srgb8Pack(f32x4 v);
-inline f32x4 Vec_rgb8Unpack(u32 v);
-inline u32 Vec_rgb8Pack(f32x4 v);
+inline F32x4 Vec_srgb8Unpack(U32 v);
+inline U32 Vec_srgb8Pack(F32x4 v);
+inline F32x4 Vec_rgb8Unpack(U32 v);
+inline U32 Vec_rgb8Pack(F32x4 v);
 
-inline f32x4 Vec_complement(f32x4 a) { return Vec_sub(Vec_one(), a); }
-inline f32x4 Vec_negate(f32x4 a) { return Vec_sub(Vec_zero(), a); }
-inline f32x4 Vec_inverse(f32x4 a) { return Vec_div(Vec_one(), a); }
+inline F32x4 Vec_complement(F32x4 a) { return Vec_sub(Vec_one(), a); }
+inline F32x4 Vec_negate(F32x4 a) { return Vec_sub(Vec_zero(), a); }
+inline F32x4 Vec_inverse(F32x4 a) { return Vec_div(Vec_one(), a); }
 
-inline f32x4 Vec_pow2(f32x4 a) { return Vec_mul(a, a); }
+inline F32x4 Vec_pow2(F32x4 a) { return Vec_mul(a, a); }
 
-inline f32x4 Vec_sign(f32x4 v);     //Zero counts as signed too
-inline f32x4 Vec_abs(f32x4 v);
-inline f32x4 Vec_ceil(f32x4 v);
-inline f32x4 Vec_floor(f32x4 v);
-inline f32x4 Vec_round(f32x4 v);
-inline f32x4 Vec_fract(f32x4 v) { return Vec_sub(v, Vec_floor(v)); }
-inline f32x4 Vec_mod(f32x4 v, f32x4 d) { return Vec_mul(Vec_fract(Vec_div(v, d)), d); }
+inline F32x4 Vec_sign(F32x4 v);     //Zero counts as signed too
+inline F32x4 Vec_abs(F32x4 v);
+inline F32x4 Vec_ceil(F32x4 v);
+inline F32x4 Vec_floor(F32x4 v);
+inline F32x4 Vec_round(F32x4 v);
+inline F32x4 Vec_fract(F32x4 v) { return Vec_sub(v, Vec_floor(v)); }
+inline F32x4 Vec_mod(F32x4 v, F32x4 d) { return Vec_mul(Vec_fract(Vec_div(v, d)), d); }
 
-inline f32 Vec_reduce(f32x4 a);     //ax+ay+az+aw
+inline F32 Vec_reduce(F32x4 a);     //ax+ay+az+aw
 
-inline f32 Vec_dot2(f32x4 a, f32x4 b);
-inline f32 Vec_dot3(f32x4 a, f32x4 b);
-inline f32 Vec_dot4(f32x4 a, f32x4 b);
+inline F32 Vec_dot2(F32x4 a, F32x4 b);
+inline F32 Vec_dot3(F32x4 a, F32x4 b);
+inline F32 Vec_dot4(F32x4 a, F32x4 b);
 
-inline f32 Vec_sqLen2(f32x4 v);
-inline f32 Vec_sqLen3(f32x4 v);
-inline f32 Vec_sqLen4(f32x4 v);
+inline F32 Vec_sqLen2(F32x4 v);
+inline F32 Vec_sqLen3(F32x4 v);
+inline F32 Vec_sqLen4(F32x4 v);
 
-inline f32 Vec_len2(f32x4 v) { return Math_sqrtf(Vec_sqLen2(v)); }
-inline f32 Vec_len3(f32x4 v) { return Math_sqrtf(Vec_sqLen3(v)); }
-inline f32 Vec_len4(f32x4 v) { return Math_sqrtf(Vec_sqLen4(v)); }
+inline F32 Vec_len2(F32x4 v) { return Math_sqrtf(Vec_sqLen2(v)); }
+inline F32 Vec_len3(F32x4 v) { return Math_sqrtf(Vec_sqLen3(v)); }
+inline F32 Vec_len4(F32x4 v) { return Math_sqrtf(Vec_sqLen4(v)); }
 
-inline f32x4 Vec_normalize2(f32x4 v);
-inline f32x4 Vec_normalize3(f32x4 v);
-inline f32x4 Vec_normalize4(f32x4 v);
+inline F32x4 Vec_normalize2(F32x4 v);
+inline F32x4 Vec_normalize3(F32x4 v);
+inline F32x4 Vec_normalize4(F32x4 v);
 
-inline f32x4 Vec_acos(f32x4 v);
-inline f32x4 Vec_cos(f32x4 v);
-inline f32x4 Vec_asin(f32x4 v);
-inline f32x4 Vec_sin(f32x4 v);
-inline f32x4 Vec_atan(f32x4 v);
-inline f32x4 Vec_atan2(f32x4 y, f32x4 x);
-inline f32x4 Vec_tan(f32x4 v);
-inline f32x4 Vec_sqrt(f32x4 a);
-inline f32x4 Vec_rsqrt(f32x4 a);
+inline F32x4 Vec_acos(F32x4 v);
+inline F32x4 Vec_cos(F32x4 v);
+inline F32x4 Vec_asin(F32x4 v);
+inline F32x4 Vec_sin(F32x4 v);
+inline F32x4 Vec_atan(F32x4 v);
+inline F32x4 Vec_atan2(F32x4 y, F32x4 x);
+inline F32x4 Vec_tan(F32x4 v);
+inline F32x4 Vec_sqrt(F32x4 a);
+inline F32x4 Vec_rsqrt(F32x4 a);
 
-inline f32x4 Vec_loge(f32x4 v);
-inline f32x4 Vec_log10(f32x4 v);
-inline f32x4 Vec_log2(f32x4 v);
+inline F32x4 Vec_loge(F32x4 v);
+inline F32x4 Vec_log10(F32x4 v);
+inline F32x4 Vec_log2(F32x4 v);
 
-inline f32x4 Vec_exp(f32x4 v);
-inline f32x4 Vec_exp10(f32x4 v);
-inline f32x4 Vec_exp2(f32x4 v);
+inline F32x4 Vec_exp(F32x4 v);
+inline F32x4 Vec_exp10(F32x4 v);
+inline F32x4 Vec_exp2(F32x4 v);
 
-inline f32x4 Vec_cross3(f32x4 a, f32x4 b);
+inline F32x4 Vec_cross3(F32x4 a, F32x4 b);
 
-inline f32x4 Vec_lerp(f32x4 a, f32x4 b, f32 perc) { 
+inline F32x4 Vec_lerp(F32x4 a, F32x4 b, F32 perc) { 
     b = Vec_sub(b, a);
     return Vec_add(a, Vec_mul(b, Vec_xxxx4(perc)));
 }
 
-inline f32x4 Vec_min(f32x4 a, f32x4 b);
-inline f32x4 Vec_max(f32x4 a, f32x4 b);
-inline f32x4 Vec_clamp(f32x4 a, f32x4 mi, f32x4 ma) { return Vec_max(mi, Vec_min(ma, a)); }
-inline f32x4 Vec_saturate(f32x4 a) { return Vec_clamp(a, Vec_zero(), Vec_one()); }
+inline F32x4 Vec_min(F32x4 a, F32x4 b);
+inline F32x4 Vec_max(F32x4 a, F32x4 b);
+inline F32x4 Vec_clamp(F32x4 a, F32x4 mi, F32x4 ma) { return Vec_max(mi, Vec_min(ma, a)); }
+inline F32x4 Vec_saturate(F32x4 a) { return Vec_clamp(a, Vec_zero(), Vec_one()); }
 
 //Boolean
 
-inline bool Vec_all(f32x4 a);
-inline bool Vec_any(f32x4 b);
+inline Bool Vec_all(F32x4 a);
+inline Bool Vec_any(F32x4 b);
 
-inline f32x4 Vec_eq(f32x4 a, f32x4 b);
-inline f32x4 Vec_neq(f32x4 a, f32x4 b);
-inline f32x4 Vec_geq(f32x4 a, f32x4 b);
-inline f32x4 Vec_gt(f32x4 a, f32x4 b);
-inline f32x4 Vec_leq(f32x4 a, f32x4 b);
-inline f32x4 Vec_lt(f32x4 a, f32x4 b);
+inline F32x4 Vec_eq(F32x4 a, F32x4 b);
+inline F32x4 Vec_neq(F32x4 a, F32x4 b);
+inline F32x4 Vec_geq(F32x4 a, F32x4 b);
+inline F32x4 Vec_gt(F32x4 a, F32x4 b);
+inline F32x4 Vec_leq(F32x4 a, F32x4 b);
+inline F32x4 Vec_lt(F32x4 a, F32x4 b);
 
-inline f32x4 Vec_or(f32x4 a, f32x4 b);
-inline f32x4 Vec_and(f32x4 a, f32x4 b);
-inline f32x4 Vec_xor(f32x4 a, f32x4 b);
+inline F32x4 Vec_or(F32x4 a, F32x4 b);
+inline F32x4 Vec_and(F32x4 a, F32x4 b);
+inline F32x4 Vec_xor(F32x4 a, F32x4 b);
 
-inline bool Vec_eq4(f32x4 a, f32x4 b) { return Vec_all(Vec_eq(a, b)); }
-inline bool Vec_neq4(f32x4 a, f32x4 b) { return !Vec_eq4(a, b); }
+inline Bool Vec_eq4(F32x4 a, F32x4 b) { return Vec_all(Vec_eq(a, b)); }
+inline Bool Vec_neq4(F32x4 a, F32x4 b) { return !Vec_eq4(a, b); }
 
 //Swizzles and shizzle
 
-inline f32 Vec_x(f32x4 a);
-inline f32 Vec_y(f32x4 a);
-inline f32 Vec_z(f32x4 a);
-inline f32 Vec_w(f32x4 a);
-inline f32 Vec_get(f32x4 a, u8 i);
+inline F32 Vec_x(F32x4 a);
+inline F32 Vec_y(F32x4 a);
+inline F32 Vec_z(F32x4 a);
+inline F32 Vec_w(F32x4 a);
+inline F32 Vec_get(F32x4 a, U8 i);
 
-inline f32x4 Vec_xxxx(f32x4 a);
-inline f32x4 Vec_yyyy(f32x4 a); 
-inline f32x4 Vec_zzzz(f32x4 a);
-inline f32x4 Vec_wwww(f32x4 a);
+inline F32x4 Vec_xxxx(F32x4 a);
+inline F32x4 Vec_yyyy(F32x4 a); 
+inline F32x4 Vec_zzzz(F32x4 a);
+inline F32x4 Vec_wwww(F32x4 a);
 
-inline void Vec_setX(f32x4 *a, f32 v);
-inline void Vec_setY(f32x4 *a, f32 v);
-inline void Vec_setZ(f32x4 *a, f32 v);
-inline void Vec_setW(f32x4 *a, f32 v);
-inline void Vec_set(f32x4 *a, u8 i, f32 v);
+inline void Vec_setX(F32x4 *a, F32 v);
+inline void Vec_setY(F32x4 *a, F32 v);
+inline void Vec_setZ(F32x4 *a, F32 v);
+inline void Vec_setW(F32x4 *a, F32 v);
+inline void Vec_set(F32x4 *a, U8 i, F32 v);
 
 //Construction
 
-inline f32x4 Vec_create1(f32 x);
-inline f32x4 Vec_create2(f32 x, f32 y);
-inline f32x4 Vec_create3(f32 x, f32 y, f32 z);
-inline f32x4 Vec_create4(f32 x, f32 y, f32 z, f32 w);
+inline F32x4 Vec_create1(F32 x);
+inline F32x4 Vec_create2(F32 x, F32 y);
+inline F32x4 Vec_create3(F32 x, F32 y, F32 z);
+inline F32x4 Vec_create4(F32 x, F32 y, F32 z, F32 w);
 
-inline f32x4 Vec_load1(const f32 *arr);
-inline f32x4 Vec_load2(const f32 *arr);
-inline f32x4 Vec_load3(const f32 *arr);
-inline f32x4 Vec_load4(const f32 *arr);
+inline F32x4 Vec_load1(const F32 *arr);
+inline F32x4 Vec_load2(const F32 *arr);
+inline F32x4 Vec_load3(const F32 *arr);
+inline F32x4 Vec_load4(const F32 *arr);
 
-inline f32x4 Vec_combine2(f32x4 xy, f32x4 zw) { 
+inline F32x4 Vec_combine2(F32x4 xy, F32x4 zw) { 
 	return Vec_create4(Vec_x(xy), Vec_y(xy), Vec_x(zw), Vec_y(zw)); 
 }
 
 //Arch dependent source; arithmetic
 
-inline f32x4 Vec_add(f32x4 a, f32x4 b) { return _mm_add_ps(a, b); }
-inline f32x4 Vec_sub(f32x4 a, f32x4 b) { return _mm_sub_ps(a, b); }
-inline f32x4 Vec_mul(f32x4 a, f32x4 b) { return _mm_mul_ps(a, b); }
-inline f32x4 Vec_div(f32x4 a, f32x4 b) { return _mm_div_ps(a, b); }
+inline F32x4 Vec_add(F32x4 a, F32x4 b) { return _mm_add_ps(a, b); }
+inline F32x4 Vec_sub(F32x4 a, F32x4 b) { return _mm_sub_ps(a, b); }
+inline F32x4 Vec_mul(F32x4 a, F32x4 b) { return _mm_mul_ps(a, b); }
+inline F32x4 Vec_div(F32x4 a, F32x4 b) { return _mm_div_ps(a, b); }
 
-inline f32x4 Vec_ceil(f32x4 a) { return _mm_ceil_ps(a); }
-inline f32x4 Vec_floor(f32x4 a) { return _mm_floor_ps(a); }
-inline f32x4 Vec_round(f32x4 a) { return _mm_round_ps(a, _MM_FROUND_TO_NEAREST_INT); }
+inline F32x4 Vec_ceil(F32x4 a) { return _mm_ceil_ps(a); }
+inline F32x4 Vec_floor(F32x4 a) { return _mm_floor_ps(a); }
+inline F32x4 Vec_round(F32x4 a) { return _mm_round_ps(a, _MM_FROUND_TO_NEAREST_INT); }
 
-inline f32x4 Vec_sqrt(f32x4 a) { return _mm_sqrt_ps(a); }
-inline f32x4 Vec_rsqrt(f32x4 a) { return _mm_rsqrt_ps(a); }
+inline F32x4 Vec_sqrt(F32x4 a) { return _mm_sqrt_ps(a); }
+inline F32x4 Vec_rsqrt(F32x4 a) { return _mm_rsqrt_ps(a); }
 
-inline f32x4 Vec_acos(f32x4 v) { return _mm_acos_ps(v); }
-inline f32x4 Vec_cos(f32x4 v) { return _mm_cos_ps(v); }
-inline f32x4 Vec_asin(f32x4 v) { return _mm_asin_ps(v); }
-inline f32x4 Vec_sin(f32x4 v) { return _mm_sin_ps(v); }
-inline f32x4 Vec_atan(f32x4 v) { return _mm_atan_ps(v); }
-inline f32x4 Vec_atan2(f32x4 y, f32x4 x) { return _mm_atan2_ps(y, x); }
-inline f32x4 Vec_tan(f32x4 v) { return _mm_tan_ps(v); }
+inline F32x4 Vec_acos(F32x4 v) { return _mm_acos_ps(v); }
+inline F32x4 Vec_cos(F32x4 v) { return _mm_cos_ps(v); }
+inline F32x4 Vec_asin(F32x4 v) { return _mm_asin_ps(v); }
+inline F32x4 Vec_sin(F32x4 v) { return _mm_sin_ps(v); }
+inline F32x4 Vec_atan(F32x4 v) { return _mm_atan_ps(v); }
+inline F32x4 Vec_atan2(F32x4 y, F32x4 x) { return _mm_atan2_ps(y, x); }
+inline F32x4 Vec_tan(F32x4 v) { return _mm_tan_ps(v); }
 
-inline f32x4 Vec_loge(f32x4 v) { return _mm_log_ps(v); }
-inline f32x4 Vec_log10(f32x4 v) { return _mm_log10_ps(v); }
-inline f32x4 Vec_log2(f32x4 v) { return _mm_log2_ps(v); }
+inline F32x4 Vec_loge(F32x4 v) { return _mm_log_ps(v); }
+inline F32x4 Vec_log10(F32x4 v) { return _mm_log10_ps(v); }
+inline F32x4 Vec_log2(F32x4 v) { return _mm_log2_ps(v); }
 
-inline f32x4 Vec_exp(f32x4 v) { return _mm_exp_ps(v); }
-inline f32x4 Vec_exp10(f32x4 v) { return _mm_exp10_ps(v); }
-inline f32x4 Vec_exp2(f32x4 v)  { return _mm_exp2_ps(v); }
+inline F32x4 Vec_exp(F32x4 v) { return _mm_exp_ps(v); }
+inline F32x4 Vec_exp10(F32x4 v) { return _mm_exp10_ps(v); }
+inline F32x4 Vec_exp2(F32x4 v)  { return _mm_exp2_ps(v); }
 
 //Shuffle and extracting values
 
@@ -183,386 +183,386 @@ inline f32x4 Vec_exp2(f32x4 v)  { return _mm_exp2_ps(v); }
 
 //4D swizzles
 
-inline f32x4 Vec_xxxx(f32x4 a) { return _shuffle1(a, 0); }
-inline f32x4 Vec_xxxy(f32x4 a) { return _shuffle(a, 0, 0, 0, 1); }
-inline f32x4 Vec_xxxz(f32x4 a) { return _shuffle(a, 0, 0, 0, 2); }
-inline f32x4 Vec_xxxw(f32x4 a) { return _shuffle(a, 0, 0, 0, 3); }
-inline f32x4 Vec_xxyx(f32x4 a) { return _shuffle(a, 0, 0, 1, 0); }
-inline f32x4 Vec_xxyy(f32x4 a) { return _shuffle(a, 0, 0, 1, 1); }
-inline f32x4 Vec_xxyz(f32x4 a) { return _shuffle(a, 0, 0, 1, 2); }
-inline f32x4 Vec_xxyw(f32x4 a) { return _shuffle(a, 0, 0, 1, 3); }
-inline f32x4 Vec_xxzx(f32x4 a) { return _shuffle(a, 0, 0, 2, 0); }
-inline f32x4 Vec_xxzy(f32x4 a) { return _shuffle(a, 0, 0, 2, 1); }
-inline f32x4 Vec_xxzz(f32x4 a) { return _shuffle(a, 0, 0, 2, 2); }
-inline f32x4 Vec_xxzw(f32x4 a) { return _shuffle(a, 0, 0, 2, 3); }
-inline f32x4 Vec_xxwx(f32x4 a) { return _shuffle(a, 0, 0, 3, 0); }
-inline f32x4 Vec_xxwy(f32x4 a) { return _shuffle(a, 0, 0, 3, 1); }
-inline f32x4 Vec_xxwz(f32x4 a) { return _shuffle(a, 0, 0, 3, 2); }
-inline f32x4 Vec_xxww(f32x4 a) { return _shuffle(a, 0, 0, 3, 3); }
+inline F32x4 Vec_xxxx(F32x4 a) { return _shuffle1(a, 0); }
+inline F32x4 Vec_xxxy(F32x4 a) { return _shuffle(a, 0, 0, 0, 1); }
+inline F32x4 Vec_xxxz(F32x4 a) { return _shuffle(a, 0, 0, 0, 2); }
+inline F32x4 Vec_xxxw(F32x4 a) { return _shuffle(a, 0, 0, 0, 3); }
+inline F32x4 Vec_xxyx(F32x4 a) { return _shuffle(a, 0, 0, 1, 0); }
+inline F32x4 Vec_xxyy(F32x4 a) { return _shuffle(a, 0, 0, 1, 1); }
+inline F32x4 Vec_xxyz(F32x4 a) { return _shuffle(a, 0, 0, 1, 2); }
+inline F32x4 Vec_xxyw(F32x4 a) { return _shuffle(a, 0, 0, 1, 3); }
+inline F32x4 Vec_xxzx(F32x4 a) { return _shuffle(a, 0, 0, 2, 0); }
+inline F32x4 Vec_xxzy(F32x4 a) { return _shuffle(a, 0, 0, 2, 1); }
+inline F32x4 Vec_xxzz(F32x4 a) { return _shuffle(a, 0, 0, 2, 2); }
+inline F32x4 Vec_xxzw(F32x4 a) { return _shuffle(a, 0, 0, 2, 3); }
+inline F32x4 Vec_xxwx(F32x4 a) { return _shuffle(a, 0, 0, 3, 0); }
+inline F32x4 Vec_xxwy(F32x4 a) { return _shuffle(a, 0, 0, 3, 1); }
+inline F32x4 Vec_xxwz(F32x4 a) { return _shuffle(a, 0, 0, 3, 2); }
+inline F32x4 Vec_xxww(F32x4 a) { return _shuffle(a, 0, 0, 3, 3); }
 
-inline f32x4 Vec_xyxx(f32x4 a) { return _shuffle(a, 0, 1, 0, 0); }
-inline f32x4 Vec_xyxy(f32x4 a) { return _shuffle(a, 0, 1, 0, 1); }
-inline f32x4 Vec_xyxz(f32x4 a) { return _shuffle(a, 0, 1, 0, 2); }
-inline f32x4 Vec_xyxw(f32x4 a) { return _shuffle(a, 0, 1, 0, 3); }
-inline f32x4 Vec_xyyx(f32x4 a) { return _shuffle(a, 0, 1, 1, 0); }
-inline f32x4 Vec_xyyy(f32x4 a) { return _shuffle(a, 0, 1, 1, 1); }
-inline f32x4 Vec_xyyz(f32x4 a) { return _shuffle(a, 0, 1, 1, 2); }
-inline f32x4 Vec_xyyw(f32x4 a) { return _shuffle(a, 0, 1, 1, 3); }
-inline f32x4 Vec_xyzx(f32x4 a) { return _shuffle(a, 0, 1, 2, 0); }
-inline f32x4 Vec_xyzy(f32x4 a) { return _shuffle(a, 0, 1, 2, 1); }
-inline f32x4 Vec_xyzz(f32x4 a) { return _shuffle(a, 0, 1, 2, 2); }
-inline f32x4 Vec_xyzw(f32x4 a) { return _shuffle(a, 0, 1, 2, 3); }
-inline f32x4 Vec_xywx(f32x4 a) { return _shuffle(a, 0, 1, 3, 0); }
-inline f32x4 Vec_xywy(f32x4 a) { return _shuffle(a, 0, 1, 3, 1); }
-inline f32x4 Vec_xywz(f32x4 a) { return _shuffle(a, 0, 1, 3, 2); }
-inline f32x4 Vec_xyww(f32x4 a) { return _shuffle(a, 0, 1, 3, 3); }
+inline F32x4 Vec_xyxx(F32x4 a) { return _shuffle(a, 0, 1, 0, 0); }
+inline F32x4 Vec_xyxy(F32x4 a) { return _shuffle(a, 0, 1, 0, 1); }
+inline F32x4 Vec_xyxz(F32x4 a) { return _shuffle(a, 0, 1, 0, 2); }
+inline F32x4 Vec_xyxw(F32x4 a) { return _shuffle(a, 0, 1, 0, 3); }
+inline F32x4 Vec_xyyx(F32x4 a) { return _shuffle(a, 0, 1, 1, 0); }
+inline F32x4 Vec_xyyy(F32x4 a) { return _shuffle(a, 0, 1, 1, 1); }
+inline F32x4 Vec_xyyz(F32x4 a) { return _shuffle(a, 0, 1, 1, 2); }
+inline F32x4 Vec_xyyw(F32x4 a) { return _shuffle(a, 0, 1, 1, 3); }
+inline F32x4 Vec_xyzx(F32x4 a) { return _shuffle(a, 0, 1, 2, 0); }
+inline F32x4 Vec_xyzy(F32x4 a) { return _shuffle(a, 0, 1, 2, 1); }
+inline F32x4 Vec_xyzz(F32x4 a) { return _shuffle(a, 0, 1, 2, 2); }
+inline F32x4 Vec_xyzw(F32x4 a) { return _shuffle(a, 0, 1, 2, 3); }
+inline F32x4 Vec_xywx(F32x4 a) { return _shuffle(a, 0, 1, 3, 0); }
+inline F32x4 Vec_xywy(F32x4 a) { return _shuffle(a, 0, 1, 3, 1); }
+inline F32x4 Vec_xywz(F32x4 a) { return _shuffle(a, 0, 1, 3, 2); }
+inline F32x4 Vec_xyww(F32x4 a) { return _shuffle(a, 0, 1, 3, 3); }
 
-inline f32x4 Vec_xzxx(f32x4 a) { return _shuffle(a, 0, 2, 0, 0); }
-inline f32x4 Vec_xzxy(f32x4 a) { return _shuffle(a, 0, 2, 0, 1); }
-inline f32x4 Vec_xzxz(f32x4 a) { return _shuffle(a, 0, 2, 0, 2); }
-inline f32x4 Vec_xzxw(f32x4 a) { return _shuffle(a, 0, 2, 0, 3); }
-inline f32x4 Vec_xzyx(f32x4 a) { return _shuffle(a, 0, 2, 1, 0); }
-inline f32x4 Vec_xzyy(f32x4 a) { return _shuffle(a, 0, 2, 1, 1); }
-inline f32x4 Vec_xzyz(f32x4 a) { return _shuffle(a, 0, 2, 1, 2); }
-inline f32x4 Vec_xzyw(f32x4 a) { return _shuffle(a, 0, 2, 1, 3); }
-inline f32x4 Vec_xzzx(f32x4 a) { return _shuffle(a, 0, 2, 2, 0); }
-inline f32x4 Vec_xzzy(f32x4 a) { return _shuffle(a, 0, 2, 2, 1); }
-inline f32x4 Vec_xzzz(f32x4 a) { return _shuffle(a, 0, 2, 2, 2); }
-inline f32x4 Vec_xzzw(f32x4 a) { return _shuffle(a, 0, 2, 2, 3); }
-inline f32x4 Vec_xzwx(f32x4 a) { return _shuffle(a, 0, 2, 3, 0); }
-inline f32x4 Vec_xzwy(f32x4 a) { return _shuffle(a, 0, 2, 3, 1); }
-inline f32x4 Vec_xzwz(f32x4 a) { return _shuffle(a, 0, 2, 3, 2); }
-inline f32x4 Vec_xzww(f32x4 a) { return _shuffle(a, 0, 2, 3, 3); }
+inline F32x4 Vec_xzxx(F32x4 a) { return _shuffle(a, 0, 2, 0, 0); }
+inline F32x4 Vec_xzxy(F32x4 a) { return _shuffle(a, 0, 2, 0, 1); }
+inline F32x4 Vec_xzxz(F32x4 a) { return _shuffle(a, 0, 2, 0, 2); }
+inline F32x4 Vec_xzxw(F32x4 a) { return _shuffle(a, 0, 2, 0, 3); }
+inline F32x4 Vec_xzyx(F32x4 a) { return _shuffle(a, 0, 2, 1, 0); }
+inline F32x4 Vec_xzyy(F32x4 a) { return _shuffle(a, 0, 2, 1, 1); }
+inline F32x4 Vec_xzyz(F32x4 a) { return _shuffle(a, 0, 2, 1, 2); }
+inline F32x4 Vec_xzyw(F32x4 a) { return _shuffle(a, 0, 2, 1, 3); }
+inline F32x4 Vec_xzzx(F32x4 a) { return _shuffle(a, 0, 2, 2, 0); }
+inline F32x4 Vec_xzzy(F32x4 a) { return _shuffle(a, 0, 2, 2, 1); }
+inline F32x4 Vec_xzzz(F32x4 a) { return _shuffle(a, 0, 2, 2, 2); }
+inline F32x4 Vec_xzzw(F32x4 a) { return _shuffle(a, 0, 2, 2, 3); }
+inline F32x4 Vec_xzwx(F32x4 a) { return _shuffle(a, 0, 2, 3, 0); }
+inline F32x4 Vec_xzwy(F32x4 a) { return _shuffle(a, 0, 2, 3, 1); }
+inline F32x4 Vec_xzwz(F32x4 a) { return _shuffle(a, 0, 2, 3, 2); }
+inline F32x4 Vec_xzww(F32x4 a) { return _shuffle(a, 0, 2, 3, 3); }
 
-inline f32x4 Vec_xwxx(f32x4 a) { return _shuffle(a, 0, 3, 0, 0); }
-inline f32x4 Vec_xwxy(f32x4 a) { return _shuffle(a, 0, 3, 0, 1); }
-inline f32x4 Vec_xwxz(f32x4 a) { return _shuffle(a, 0, 3, 0, 2); }
-inline f32x4 Vec_xwxw(f32x4 a) { return _shuffle(a, 0, 3, 0, 3); }
-inline f32x4 Vec_xwyx(f32x4 a) { return _shuffle(a, 0, 3, 1, 0); }
-inline f32x4 Vec_xwyy(f32x4 a) { return _shuffle(a, 0, 3, 1, 1); }
-inline f32x4 Vec_xwyz(f32x4 a) { return _shuffle(a, 0, 3, 1, 2); }
-inline f32x4 Vec_xwyw(f32x4 a) { return _shuffle(a, 0, 3, 1, 3); }
-inline f32x4 Vec_xwzx(f32x4 a) { return _shuffle(a, 0, 3, 2, 0); }
-inline f32x4 Vec_xwzy(f32x4 a) { return _shuffle(a, 0, 3, 2, 1); }
-inline f32x4 Vec_xwzz(f32x4 a) { return _shuffle(a, 0, 3, 2, 2); }
-inline f32x4 Vec_xwzw(f32x4 a) { return _shuffle(a, 0, 3, 2, 3); }
-inline f32x4 Vec_xwwx(f32x4 a) { return _shuffle(a, 0, 3, 3, 0); }
-inline f32x4 Vec_xwwy(f32x4 a) { return _shuffle(a, 0, 3, 3, 1); }
-inline f32x4 Vec_xwwz(f32x4 a) { return _shuffle(a, 0, 3, 3, 2); }
-inline f32x4 Vec_xwww(f32x4 a) { return _shuffle(a, 0, 3, 3, 3); }
+inline F32x4 Vec_xwxx(F32x4 a) { return _shuffle(a, 0, 3, 0, 0); }
+inline F32x4 Vec_xwxy(F32x4 a) { return _shuffle(a, 0, 3, 0, 1); }
+inline F32x4 Vec_xwxz(F32x4 a) { return _shuffle(a, 0, 3, 0, 2); }
+inline F32x4 Vec_xwxw(F32x4 a) { return _shuffle(a, 0, 3, 0, 3); }
+inline F32x4 Vec_xwyx(F32x4 a) { return _shuffle(a, 0, 3, 1, 0); }
+inline F32x4 Vec_xwyy(F32x4 a) { return _shuffle(a, 0, 3, 1, 1); }
+inline F32x4 Vec_xwyz(F32x4 a) { return _shuffle(a, 0, 3, 1, 2); }
+inline F32x4 Vec_xwyw(F32x4 a) { return _shuffle(a, 0, 3, 1, 3); }
+inline F32x4 Vec_xwzx(F32x4 a) { return _shuffle(a, 0, 3, 2, 0); }
+inline F32x4 Vec_xwzy(F32x4 a) { return _shuffle(a, 0, 3, 2, 1); }
+inline F32x4 Vec_xwzz(F32x4 a) { return _shuffle(a, 0, 3, 2, 2); }
+inline F32x4 Vec_xwzw(F32x4 a) { return _shuffle(a, 0, 3, 2, 3); }
+inline F32x4 Vec_xwwx(F32x4 a) { return _shuffle(a, 0, 3, 3, 0); }
+inline F32x4 Vec_xwwy(F32x4 a) { return _shuffle(a, 0, 3, 3, 1); }
+inline F32x4 Vec_xwwz(F32x4 a) { return _shuffle(a, 0, 3, 3, 2); }
+inline F32x4 Vec_xwww(F32x4 a) { return _shuffle(a, 0, 3, 3, 3); }
 
-inline f32x4 Vec_yxxx(f32x4 a) { return _shuffle(a, 1, 0, 0, 0); }
-inline f32x4 Vec_yxxy(f32x4 a) { return _shuffle(a, 1, 0, 0, 1); }
-inline f32x4 Vec_yxxz(f32x4 a) { return _shuffle(a, 1, 0, 0, 2); }
-inline f32x4 Vec_yxxw(f32x4 a) { return _shuffle(a, 1, 0, 0, 3); }
-inline f32x4 Vec_yxyx(f32x4 a) { return _shuffle(a, 1, 0, 1, 0); }
-inline f32x4 Vec_yxyy(f32x4 a) { return _shuffle(a, 1, 0, 1, 1); }
-inline f32x4 Vec_yxyz(f32x4 a) { return _shuffle(a, 1, 0, 1, 2); }
-inline f32x4 Vec_yxyw(f32x4 a) { return _shuffle(a, 1, 0, 1, 3); }
-inline f32x4 Vec_yxzx(f32x4 a) { return _shuffle(a, 1, 0, 2, 0); }
-inline f32x4 Vec_yxzy(f32x4 a) { return _shuffle(a, 1, 0, 2, 1); }
-inline f32x4 Vec_yxzz(f32x4 a) { return _shuffle(a, 1, 0, 2, 2); }
-inline f32x4 Vec_yxzw(f32x4 a) { return _shuffle(a, 1, 0, 2, 3); }
-inline f32x4 Vec_yxwx(f32x4 a) { return _shuffle(a, 1, 0, 3, 0); }
-inline f32x4 Vec_yxwy(f32x4 a) { return _shuffle(a, 1, 0, 3, 1); }
-inline f32x4 Vec_yxwz(f32x4 a) { return _shuffle(a, 1, 0, 3, 2); }
-inline f32x4 Vec_yxww(f32x4 a) { return _shuffle(a, 1, 0, 3, 3); }
+inline F32x4 Vec_yxxx(F32x4 a) { return _shuffle(a, 1, 0, 0, 0); }
+inline F32x4 Vec_yxxy(F32x4 a) { return _shuffle(a, 1, 0, 0, 1); }
+inline F32x4 Vec_yxxz(F32x4 a) { return _shuffle(a, 1, 0, 0, 2); }
+inline F32x4 Vec_yxxw(F32x4 a) { return _shuffle(a, 1, 0, 0, 3); }
+inline F32x4 Vec_yxyx(F32x4 a) { return _shuffle(a, 1, 0, 1, 0); }
+inline F32x4 Vec_yxyy(F32x4 a) { return _shuffle(a, 1, 0, 1, 1); }
+inline F32x4 Vec_yxyz(F32x4 a) { return _shuffle(a, 1, 0, 1, 2); }
+inline F32x4 Vec_yxyw(F32x4 a) { return _shuffle(a, 1, 0, 1, 3); }
+inline F32x4 Vec_yxzx(F32x4 a) { return _shuffle(a, 1, 0, 2, 0); }
+inline F32x4 Vec_yxzy(F32x4 a) { return _shuffle(a, 1, 0, 2, 1); }
+inline F32x4 Vec_yxzz(F32x4 a) { return _shuffle(a, 1, 0, 2, 2); }
+inline F32x4 Vec_yxzw(F32x4 a) { return _shuffle(a, 1, 0, 2, 3); }
+inline F32x4 Vec_yxwx(F32x4 a) { return _shuffle(a, 1, 0, 3, 0); }
+inline F32x4 Vec_yxwy(F32x4 a) { return _shuffle(a, 1, 0, 3, 1); }
+inline F32x4 Vec_yxwz(F32x4 a) { return _shuffle(a, 1, 0, 3, 2); }
+inline F32x4 Vec_yxww(F32x4 a) { return _shuffle(a, 1, 0, 3, 3); }
 
-inline f32x4 Vec_yyxx(f32x4 a) { return _shuffle(a, 1, 1, 0, 0); }
-inline f32x4 Vec_yyxy(f32x4 a) { return _shuffle(a, 1, 1, 0, 1); }
-inline f32x4 Vec_yyxz(f32x4 a) { return _shuffle(a, 1, 1, 0, 2); }
-inline f32x4 Vec_yyxw(f32x4 a) { return _shuffle(a, 1, 1, 0, 3); }
-inline f32x4 Vec_yyyx(f32x4 a) { return _shuffle(a, 1, 1, 1, 0); }
-inline f32x4 Vec_yyyy(f32x4 a) { return _shuffle1(a, 1); } 
-inline f32x4 Vec_yyyz(f32x4 a) { return _shuffle(a, 1, 1, 1, 2); }
-inline f32x4 Vec_yyyw(f32x4 a) { return _shuffle(a, 1, 1, 1, 3); }
-inline f32x4 Vec_yyzx(f32x4 a) { return _shuffle(a, 1, 1, 2, 0); }
-inline f32x4 Vec_yyzy(f32x4 a) { return _shuffle(a, 1, 1, 2, 1); }
-inline f32x4 Vec_yyzz(f32x4 a) { return _shuffle(a, 1, 1, 2, 2); }
-inline f32x4 Vec_yyzw(f32x4 a) { return _shuffle(a, 1, 1, 2, 3); }
-inline f32x4 Vec_yywx(f32x4 a) { return _shuffle(a, 1, 1, 3, 0); }
-inline f32x4 Vec_yywy(f32x4 a) { return _shuffle(a, 1, 1, 3, 1); }
-inline f32x4 Vec_yywz(f32x4 a) { return _shuffle(a, 1, 1, 3, 2); }
-inline f32x4 Vec_yyww(f32x4 a) { return _shuffle(a, 1, 1, 3, 3); }
+inline F32x4 Vec_yyxx(F32x4 a) { return _shuffle(a, 1, 1, 0, 0); }
+inline F32x4 Vec_yyxy(F32x4 a) { return _shuffle(a, 1, 1, 0, 1); }
+inline F32x4 Vec_yyxz(F32x4 a) { return _shuffle(a, 1, 1, 0, 2); }
+inline F32x4 Vec_yyxw(F32x4 a) { return _shuffle(a, 1, 1, 0, 3); }
+inline F32x4 Vec_yyyx(F32x4 a) { return _shuffle(a, 1, 1, 1, 0); }
+inline F32x4 Vec_yyyy(F32x4 a) { return _shuffle1(a, 1); } 
+inline F32x4 Vec_yyyz(F32x4 a) { return _shuffle(a, 1, 1, 1, 2); }
+inline F32x4 Vec_yyyw(F32x4 a) { return _shuffle(a, 1, 1, 1, 3); }
+inline F32x4 Vec_yyzx(F32x4 a) { return _shuffle(a, 1, 1, 2, 0); }
+inline F32x4 Vec_yyzy(F32x4 a) { return _shuffle(a, 1, 1, 2, 1); }
+inline F32x4 Vec_yyzz(F32x4 a) { return _shuffle(a, 1, 1, 2, 2); }
+inline F32x4 Vec_yyzw(F32x4 a) { return _shuffle(a, 1, 1, 2, 3); }
+inline F32x4 Vec_yywx(F32x4 a) { return _shuffle(a, 1, 1, 3, 0); }
+inline F32x4 Vec_yywy(F32x4 a) { return _shuffle(a, 1, 1, 3, 1); }
+inline F32x4 Vec_yywz(F32x4 a) { return _shuffle(a, 1, 1, 3, 2); }
+inline F32x4 Vec_yyww(F32x4 a) { return _shuffle(a, 1, 1, 3, 3); }
 
-inline f32x4 Vec_yzxx(f32x4 a) { return _shuffle(a, 1, 2, 0, 0); }
-inline f32x4 Vec_yzxy(f32x4 a) { return _shuffle(a, 1, 2, 0, 1); }
-inline f32x4 Vec_yzxz(f32x4 a) { return _shuffle(a, 1, 2, 0, 2); }
-inline f32x4 Vec_yzxw(f32x4 a) { return _shuffle(a, 1, 2, 0, 3); }
-inline f32x4 Vec_yzyx(f32x4 a) { return _shuffle(a, 1, 2, 1, 0); }
-inline f32x4 Vec_yzyy(f32x4 a) { return _shuffle(a, 1, 2, 1, 1); }
-inline f32x4 Vec_yzyz(f32x4 a) { return _shuffle(a, 1, 2, 1, 2); }
-inline f32x4 Vec_yzyw(f32x4 a) { return _shuffle(a, 1, 2, 1, 3); }
-inline f32x4 Vec_yzzx(f32x4 a) { return _shuffle(a, 1, 2, 2, 0); }
-inline f32x4 Vec_yzzy(f32x4 a) { return _shuffle(a, 1, 2, 2, 1); }
-inline f32x4 Vec_yzzz(f32x4 a) { return _shuffle(a, 1, 2, 2, 2); }
-inline f32x4 Vec_yzzw(f32x4 a) { return _shuffle(a, 1, 2, 2, 3); }
-inline f32x4 Vec_yzwx(f32x4 a) { return _shuffle(a, 1, 2, 3, 0); }
-inline f32x4 Vec_yzwy(f32x4 a) { return _shuffle(a, 1, 2, 3, 1); }
-inline f32x4 Vec_yzwz(f32x4 a) { return _shuffle(a, 1, 2, 3, 2); }
-inline f32x4 Vec_yzww(f32x4 a) { return _shuffle(a, 1, 2, 3, 3); }
+inline F32x4 Vec_yzxx(F32x4 a) { return _shuffle(a, 1, 2, 0, 0); }
+inline F32x4 Vec_yzxy(F32x4 a) { return _shuffle(a, 1, 2, 0, 1); }
+inline F32x4 Vec_yzxz(F32x4 a) { return _shuffle(a, 1, 2, 0, 2); }
+inline F32x4 Vec_yzxw(F32x4 a) { return _shuffle(a, 1, 2, 0, 3); }
+inline F32x4 Vec_yzyx(F32x4 a) { return _shuffle(a, 1, 2, 1, 0); }
+inline F32x4 Vec_yzyy(F32x4 a) { return _shuffle(a, 1, 2, 1, 1); }
+inline F32x4 Vec_yzyz(F32x4 a) { return _shuffle(a, 1, 2, 1, 2); }
+inline F32x4 Vec_yzyw(F32x4 a) { return _shuffle(a, 1, 2, 1, 3); }
+inline F32x4 Vec_yzzx(F32x4 a) { return _shuffle(a, 1, 2, 2, 0); }
+inline F32x4 Vec_yzzy(F32x4 a) { return _shuffle(a, 1, 2, 2, 1); }
+inline F32x4 Vec_yzzz(F32x4 a) { return _shuffle(a, 1, 2, 2, 2); }
+inline F32x4 Vec_yzzw(F32x4 a) { return _shuffle(a, 1, 2, 2, 3); }
+inline F32x4 Vec_yzwx(F32x4 a) { return _shuffle(a, 1, 2, 3, 0); }
+inline F32x4 Vec_yzwy(F32x4 a) { return _shuffle(a, 1, 2, 3, 1); }
+inline F32x4 Vec_yzwz(F32x4 a) { return _shuffle(a, 1, 2, 3, 2); }
+inline F32x4 Vec_yzww(F32x4 a) { return _shuffle(a, 1, 2, 3, 3); }
 
-inline f32x4 Vec_ywxx(f32x4 a) { return _shuffle(a, 1, 3, 0, 0); }
-inline f32x4 Vec_ywxy(f32x4 a) { return _shuffle(a, 1, 3, 0, 1); }
-inline f32x4 Vec_ywxz(f32x4 a) { return _shuffle(a, 1, 3, 0, 2); }
-inline f32x4 Vec_ywxw(f32x4 a) { return _shuffle(a, 1, 3, 0, 3); }
-inline f32x4 Vec_ywyx(f32x4 a) { return _shuffle(a, 1, 3, 1, 0); }
-inline f32x4 Vec_ywyy(f32x4 a) { return _shuffle(a, 1, 3, 1, 1); }
-inline f32x4 Vec_ywyz(f32x4 a) { return _shuffle(a, 1, 3, 1, 2); }
-inline f32x4 Vec_ywyw(f32x4 a) { return _shuffle(a, 1, 3, 1, 3); }
-inline f32x4 Vec_ywzx(f32x4 a) { return _shuffle(a, 1, 3, 2, 0); }
-inline f32x4 Vec_ywzy(f32x4 a) { return _shuffle(a, 1, 3, 2, 1); }
-inline f32x4 Vec_ywzz(f32x4 a) { return _shuffle(a, 1, 3, 2, 2); }
-inline f32x4 Vec_ywzw(f32x4 a) { return _shuffle(a, 1, 3, 2, 3); }
-inline f32x4 Vec_ywwx(f32x4 a) { return _shuffle(a, 1, 3, 3, 0); }
-inline f32x4 Vec_ywwy(f32x4 a) { return _shuffle(a, 1, 3, 3, 1); }
-inline f32x4 Vec_ywwz(f32x4 a) { return _shuffle(a, 1, 3, 3, 2); }
-inline f32x4 Vec_ywww(f32x4 a) { return _shuffle(a, 1, 3, 3, 3); }
+inline F32x4 Vec_ywxx(F32x4 a) { return _shuffle(a, 1, 3, 0, 0); }
+inline F32x4 Vec_ywxy(F32x4 a) { return _shuffle(a, 1, 3, 0, 1); }
+inline F32x4 Vec_ywxz(F32x4 a) { return _shuffle(a, 1, 3, 0, 2); }
+inline F32x4 Vec_ywxw(F32x4 a) { return _shuffle(a, 1, 3, 0, 3); }
+inline F32x4 Vec_ywyx(F32x4 a) { return _shuffle(a, 1, 3, 1, 0); }
+inline F32x4 Vec_ywyy(F32x4 a) { return _shuffle(a, 1, 3, 1, 1); }
+inline F32x4 Vec_ywyz(F32x4 a) { return _shuffle(a, 1, 3, 1, 2); }
+inline F32x4 Vec_ywyw(F32x4 a) { return _shuffle(a, 1, 3, 1, 3); }
+inline F32x4 Vec_ywzx(F32x4 a) { return _shuffle(a, 1, 3, 2, 0); }
+inline F32x4 Vec_ywzy(F32x4 a) { return _shuffle(a, 1, 3, 2, 1); }
+inline F32x4 Vec_ywzz(F32x4 a) { return _shuffle(a, 1, 3, 2, 2); }
+inline F32x4 Vec_ywzw(F32x4 a) { return _shuffle(a, 1, 3, 2, 3); }
+inline F32x4 Vec_ywwx(F32x4 a) { return _shuffle(a, 1, 3, 3, 0); }
+inline F32x4 Vec_ywwy(F32x4 a) { return _shuffle(a, 1, 3, 3, 1); }
+inline F32x4 Vec_ywwz(F32x4 a) { return _shuffle(a, 1, 3, 3, 2); }
+inline F32x4 Vec_ywww(F32x4 a) { return _shuffle(a, 1, 3, 3, 3); }
 
-inline f32x4 Vec_zxxx(f32x4 a) { return _shuffle(a, 2, 0, 0, 0); }
-inline f32x4 Vec_zxxy(f32x4 a) { return _shuffle(a, 2, 0, 0, 1); }
-inline f32x4 Vec_zxxz(f32x4 a) { return _shuffle(a, 2, 0, 0, 2); }
-inline f32x4 Vec_zxxw(f32x4 a) { return _shuffle(a, 2, 0, 0, 3); }
-inline f32x4 Vec_zxyx(f32x4 a) { return _shuffle(a, 2, 0, 1, 0); }
-inline f32x4 Vec_zxyy(f32x4 a) { return _shuffle(a, 2, 0, 1, 1); }
-inline f32x4 Vec_zxyz(f32x4 a) { return _shuffle(a, 2, 0, 1, 2); }
-inline f32x4 Vec_zxyw(f32x4 a) { return _shuffle(a, 2, 0, 1, 3); }
-inline f32x4 Vec_zxzx(f32x4 a) { return _shuffle(a, 2, 0, 2, 0); }
-inline f32x4 Vec_zxzy(f32x4 a) { return _shuffle(a, 2, 0, 2, 1); }
-inline f32x4 Vec_zxzz(f32x4 a) { return _shuffle(a, 2, 0, 2, 2); }
-inline f32x4 Vec_zxzw(f32x4 a) { return _shuffle(a, 2, 0, 2, 3); }
-inline f32x4 Vec_zxwx(f32x4 a) { return _shuffle(a, 2, 0, 3, 0); }
-inline f32x4 Vec_zxwy(f32x4 a) { return _shuffle(a, 2, 0, 3, 1); }
-inline f32x4 Vec_zxwz(f32x4 a) { return _shuffle(a, 2, 0, 3, 2); }
-inline f32x4 Vec_zxww(f32x4 a) { return _shuffle(a, 2, 0, 3, 3); }
+inline F32x4 Vec_zxxx(F32x4 a) { return _shuffle(a, 2, 0, 0, 0); }
+inline F32x4 Vec_zxxy(F32x4 a) { return _shuffle(a, 2, 0, 0, 1); }
+inline F32x4 Vec_zxxz(F32x4 a) { return _shuffle(a, 2, 0, 0, 2); }
+inline F32x4 Vec_zxxw(F32x4 a) { return _shuffle(a, 2, 0, 0, 3); }
+inline F32x4 Vec_zxyx(F32x4 a) { return _shuffle(a, 2, 0, 1, 0); }
+inline F32x4 Vec_zxyy(F32x4 a) { return _shuffle(a, 2, 0, 1, 1); }
+inline F32x4 Vec_zxyz(F32x4 a) { return _shuffle(a, 2, 0, 1, 2); }
+inline F32x4 Vec_zxyw(F32x4 a) { return _shuffle(a, 2, 0, 1, 3); }
+inline F32x4 Vec_zxzx(F32x4 a) { return _shuffle(a, 2, 0, 2, 0); }
+inline F32x4 Vec_zxzy(F32x4 a) { return _shuffle(a, 2, 0, 2, 1); }
+inline F32x4 Vec_zxzz(F32x4 a) { return _shuffle(a, 2, 0, 2, 2); }
+inline F32x4 Vec_zxzw(F32x4 a) { return _shuffle(a, 2, 0, 2, 3); }
+inline F32x4 Vec_zxwx(F32x4 a) { return _shuffle(a, 2, 0, 3, 0); }
+inline F32x4 Vec_zxwy(F32x4 a) { return _shuffle(a, 2, 0, 3, 1); }
+inline F32x4 Vec_zxwz(F32x4 a) { return _shuffle(a, 2, 0, 3, 2); }
+inline F32x4 Vec_zxww(F32x4 a) { return _shuffle(a, 2, 0, 3, 3); }
 
-inline f32x4 Vec_zyxx(f32x4 a) { return _shuffle(a, 2, 1, 0, 0); }
-inline f32x4 Vec_zyxy(f32x4 a) { return _shuffle(a, 2, 1, 0, 1); }
-inline f32x4 Vec_zyxz(f32x4 a) { return _shuffle(a, 2, 1, 0, 2); }
-inline f32x4 Vec_zyxw(f32x4 a) { return _shuffle(a, 2, 1, 0, 3); }
-inline f32x4 Vec_zyyx(f32x4 a) { return _shuffle(a, 2, 1, 1, 0); }
-inline f32x4 Vec_zyyy(f32x4 a) { return _shuffle(a, 2, 1, 1, 1); }
-inline f32x4 Vec_zyyz(f32x4 a) { return _shuffle(a, 2, 1, 1, 2); }
-inline f32x4 Vec_zyyw(f32x4 a) { return _shuffle(a, 2, 1, 1, 3); }
-inline f32x4 Vec_zyzx(f32x4 a) { return _shuffle(a, 2, 1, 2, 0); }
-inline f32x4 Vec_zyzy(f32x4 a) { return _shuffle(a, 2, 1, 2, 1); }
-inline f32x4 Vec_zyzz(f32x4 a) { return _shuffle(a, 2, 1, 2, 2); }
-inline f32x4 Vec_zyzw(f32x4 a) { return _shuffle(a, 2, 1, 2, 3); }
-inline f32x4 Vec_zywx(f32x4 a) { return _shuffle(a, 2, 1, 3, 0); }
-inline f32x4 Vec_zywy(f32x4 a) { return _shuffle(a, 2, 1, 3, 1); }
-inline f32x4 Vec_zywz(f32x4 a) { return _shuffle(a, 2, 1, 3, 2); }
-inline f32x4 Vec_zyww(f32x4 a) { return _shuffle(a, 2, 1, 3, 3); }
+inline F32x4 Vec_zyxx(F32x4 a) { return _shuffle(a, 2, 1, 0, 0); }
+inline F32x4 Vec_zyxy(F32x4 a) { return _shuffle(a, 2, 1, 0, 1); }
+inline F32x4 Vec_zyxz(F32x4 a) { return _shuffle(a, 2, 1, 0, 2); }
+inline F32x4 Vec_zyxw(F32x4 a) { return _shuffle(a, 2, 1, 0, 3); }
+inline F32x4 Vec_zyyx(F32x4 a) { return _shuffle(a, 2, 1, 1, 0); }
+inline F32x4 Vec_zyyy(F32x4 a) { return _shuffle(a, 2, 1, 1, 1); }
+inline F32x4 Vec_zyyz(F32x4 a) { return _shuffle(a, 2, 1, 1, 2); }
+inline F32x4 Vec_zyyw(F32x4 a) { return _shuffle(a, 2, 1, 1, 3); }
+inline F32x4 Vec_zyzx(F32x4 a) { return _shuffle(a, 2, 1, 2, 0); }
+inline F32x4 Vec_zyzy(F32x4 a) { return _shuffle(a, 2, 1, 2, 1); }
+inline F32x4 Vec_zyzz(F32x4 a) { return _shuffle(a, 2, 1, 2, 2); }
+inline F32x4 Vec_zyzw(F32x4 a) { return _shuffle(a, 2, 1, 2, 3); }
+inline F32x4 Vec_zywx(F32x4 a) { return _shuffle(a, 2, 1, 3, 0); }
+inline F32x4 Vec_zywy(F32x4 a) { return _shuffle(a, 2, 1, 3, 1); }
+inline F32x4 Vec_zywz(F32x4 a) { return _shuffle(a, 2, 1, 3, 2); }
+inline F32x4 Vec_zyww(F32x4 a) { return _shuffle(a, 2, 1, 3, 3); }
 
-inline f32x4 Vec_zzxx(f32x4 a) { return _shuffle(a, 2, 2, 0, 0); }
-inline f32x4 Vec_zzxy(f32x4 a) { return _shuffle(a, 2, 2, 0, 1); }
-inline f32x4 Vec_zzxz(f32x4 a) { return _shuffle(a, 2, 2, 0, 2); }
-inline f32x4 Vec_zzxw(f32x4 a) { return _shuffle(a, 2, 2, 0, 3); }
-inline f32x4 Vec_zzyx(f32x4 a) { return _shuffle(a, 2, 2, 1, 0); }
-inline f32x4 Vec_zzyy(f32x4 a) { return _shuffle(a, 2, 2, 1, 1); }
-inline f32x4 Vec_zzyz(f32x4 a) { return _shuffle(a, 2, 2, 1, 2); }
-inline f32x4 Vec_zzyw(f32x4 a) { return _shuffle(a, 2, 2, 1, 3); }
-inline f32x4 Vec_zzzx(f32x4 a) { return _shuffle(a, 2, 2, 2, 0); }
-inline f32x4 Vec_zzzy(f32x4 a) { return _shuffle(a, 2, 2, 2, 1); }
-inline f32x4 Vec_zzzz(f32x4 a) { return _shuffle1(a, 2); }
-inline f32x4 Vec_zzzw(f32x4 a) { return _shuffle(a, 2, 2, 2, 3); }
-inline f32x4 Vec_zzwx(f32x4 a) { return _shuffle(a, 2, 2, 3, 0); }
-inline f32x4 Vec_zzwy(f32x4 a) { return _shuffle(a, 2, 2, 3, 1); }
-inline f32x4 Vec_zzwz(f32x4 a) { return _shuffle(a, 2, 2, 3, 2); }
-inline f32x4 Vec_zzww(f32x4 a) { return _shuffle(a, 2, 2, 3, 3); }
+inline F32x4 Vec_zzxx(F32x4 a) { return _shuffle(a, 2, 2, 0, 0); }
+inline F32x4 Vec_zzxy(F32x4 a) { return _shuffle(a, 2, 2, 0, 1); }
+inline F32x4 Vec_zzxz(F32x4 a) { return _shuffle(a, 2, 2, 0, 2); }
+inline F32x4 Vec_zzxw(F32x4 a) { return _shuffle(a, 2, 2, 0, 3); }
+inline F32x4 Vec_zzyx(F32x4 a) { return _shuffle(a, 2, 2, 1, 0); }
+inline F32x4 Vec_zzyy(F32x4 a) { return _shuffle(a, 2, 2, 1, 1); }
+inline F32x4 Vec_zzyz(F32x4 a) { return _shuffle(a, 2, 2, 1, 2); }
+inline F32x4 Vec_zzyw(F32x4 a) { return _shuffle(a, 2, 2, 1, 3); }
+inline F32x4 Vec_zzzx(F32x4 a) { return _shuffle(a, 2, 2, 2, 0); }
+inline F32x4 Vec_zzzy(F32x4 a) { return _shuffle(a, 2, 2, 2, 1); }
+inline F32x4 Vec_zzzz(F32x4 a) { return _shuffle1(a, 2); }
+inline F32x4 Vec_zzzw(F32x4 a) { return _shuffle(a, 2, 2, 2, 3); }
+inline F32x4 Vec_zzwx(F32x4 a) { return _shuffle(a, 2, 2, 3, 0); }
+inline F32x4 Vec_zzwy(F32x4 a) { return _shuffle(a, 2, 2, 3, 1); }
+inline F32x4 Vec_zzwz(F32x4 a) { return _shuffle(a, 2, 2, 3, 2); }
+inline F32x4 Vec_zzww(F32x4 a) { return _shuffle(a, 2, 2, 3, 3); }
 
-inline f32x4 Vec_zwxx(f32x4 a) { return _shuffle(a, 2, 3, 0, 0); }
-inline f32x4 Vec_zwxy(f32x4 a) { return _shuffle(a, 2, 3, 0, 1); }
-inline f32x4 Vec_zwxz(f32x4 a) { return _shuffle(a, 2, 3, 0, 2); }
-inline f32x4 Vec_zwxw(f32x4 a) { return _shuffle(a, 2, 3, 0, 3); }
-inline f32x4 Vec_zwyx(f32x4 a) { return _shuffle(a, 2, 3, 1, 0); }
-inline f32x4 Vec_zwyy(f32x4 a) { return _shuffle(a, 2, 3, 1, 1); }
-inline f32x4 Vec_zwyz(f32x4 a) { return _shuffle(a, 2, 3, 1, 2); }
-inline f32x4 Vec_zwyw(f32x4 a) { return _shuffle(a, 2, 3, 1, 3); }
-inline f32x4 Vec_zwzx(f32x4 a) { return _shuffle(a, 2, 3, 2, 0); }
-inline f32x4 Vec_zwzy(f32x4 a) { return _shuffle(a, 2, 3, 2, 1); }
-inline f32x4 Vec_zwzz(f32x4 a) { return _shuffle(a, 2, 3, 2, 2); }
-inline f32x4 Vec_zwzw(f32x4 a) { return _shuffle(a, 2, 3, 2, 3); }
-inline f32x4 Vec_zwwx(f32x4 a) { return _shuffle(a, 2, 3, 3, 0); }
-inline f32x4 Vec_zwwy(f32x4 a) { return _shuffle(a, 2, 3, 3, 1); }
-inline f32x4 Vec_zwwz(f32x4 a) { return _shuffle(a, 2, 3, 3, 2); }
-inline f32x4 Vec_zwww(f32x4 a) { return _shuffle(a, 2, 3, 3, 3); }
+inline F32x4 Vec_zwxx(F32x4 a) { return _shuffle(a, 2, 3, 0, 0); }
+inline F32x4 Vec_zwxy(F32x4 a) { return _shuffle(a, 2, 3, 0, 1); }
+inline F32x4 Vec_zwxz(F32x4 a) { return _shuffle(a, 2, 3, 0, 2); }
+inline F32x4 Vec_zwxw(F32x4 a) { return _shuffle(a, 2, 3, 0, 3); }
+inline F32x4 Vec_zwyx(F32x4 a) { return _shuffle(a, 2, 3, 1, 0); }
+inline F32x4 Vec_zwyy(F32x4 a) { return _shuffle(a, 2, 3, 1, 1); }
+inline F32x4 Vec_zwyz(F32x4 a) { return _shuffle(a, 2, 3, 1, 2); }
+inline F32x4 Vec_zwyw(F32x4 a) { return _shuffle(a, 2, 3, 1, 3); }
+inline F32x4 Vec_zwzx(F32x4 a) { return _shuffle(a, 2, 3, 2, 0); }
+inline F32x4 Vec_zwzy(F32x4 a) { return _shuffle(a, 2, 3, 2, 1); }
+inline F32x4 Vec_zwzz(F32x4 a) { return _shuffle(a, 2, 3, 2, 2); }
+inline F32x4 Vec_zwzw(F32x4 a) { return _shuffle(a, 2, 3, 2, 3); }
+inline F32x4 Vec_zwwx(F32x4 a) { return _shuffle(a, 2, 3, 3, 0); }
+inline F32x4 Vec_zwwy(F32x4 a) { return _shuffle(a, 2, 3, 3, 1); }
+inline F32x4 Vec_zwwz(F32x4 a) { return _shuffle(a, 2, 3, 3, 2); }
+inline F32x4 Vec_zwww(F32x4 a) { return _shuffle(a, 2, 3, 3, 3); }
 
-inline f32x4 Vec_wxxx(f32x4 a) { return _shuffle(a, 3, 0, 0, 0); }
-inline f32x4 Vec_wxxy(f32x4 a) { return _shuffle(a, 3, 0, 0, 1); }
-inline f32x4 Vec_wxxz(f32x4 a) { return _shuffle(a, 3, 0, 0, 2); }
-inline f32x4 Vec_wxxw(f32x4 a) { return _shuffle(a, 3, 0, 0, 3); }
-inline f32x4 Vec_wxyx(f32x4 a) { return _shuffle(a, 3, 0, 1, 0); }
-inline f32x4 Vec_wxyy(f32x4 a) { return _shuffle(a, 3, 0, 1, 1); }
-inline f32x4 Vec_wxyz(f32x4 a) { return _shuffle(a, 3, 0, 1, 2); }
-inline f32x4 Vec_wxyw(f32x4 a) { return _shuffle(a, 3, 0, 1, 3); }
-inline f32x4 Vec_wxzx(f32x4 a) { return _shuffle(a, 3, 0, 2, 0); }
-inline f32x4 Vec_wxzy(f32x4 a) { return _shuffle(a, 3, 0, 2, 1); }
-inline f32x4 Vec_wxzz(f32x4 a) { return _shuffle(a, 3, 0, 2, 2); }
-inline f32x4 Vec_wxzw(f32x4 a) { return _shuffle(a, 3, 0, 2, 3); }
-inline f32x4 Vec_wxwx(f32x4 a) { return _shuffle(a, 3, 0, 3, 0); }
-inline f32x4 Vec_wxwy(f32x4 a) { return _shuffle(a, 3, 0, 3, 1); }
-inline f32x4 Vec_wxwz(f32x4 a) { return _shuffle(a, 3, 0, 3, 2); }
-inline f32x4 Vec_wxww(f32x4 a) { return _shuffle(a, 3, 0, 3, 3); }
+inline F32x4 Vec_wxxx(F32x4 a) { return _shuffle(a, 3, 0, 0, 0); }
+inline F32x4 Vec_wxxy(F32x4 a) { return _shuffle(a, 3, 0, 0, 1); }
+inline F32x4 Vec_wxxz(F32x4 a) { return _shuffle(a, 3, 0, 0, 2); }
+inline F32x4 Vec_wxxw(F32x4 a) { return _shuffle(a, 3, 0, 0, 3); }
+inline F32x4 Vec_wxyx(F32x4 a) { return _shuffle(a, 3, 0, 1, 0); }
+inline F32x4 Vec_wxyy(F32x4 a) { return _shuffle(a, 3, 0, 1, 1); }
+inline F32x4 Vec_wxyz(F32x4 a) { return _shuffle(a, 3, 0, 1, 2); }
+inline F32x4 Vec_wxyw(F32x4 a) { return _shuffle(a, 3, 0, 1, 3); }
+inline F32x4 Vec_wxzx(F32x4 a) { return _shuffle(a, 3, 0, 2, 0); }
+inline F32x4 Vec_wxzy(F32x4 a) { return _shuffle(a, 3, 0, 2, 1); }
+inline F32x4 Vec_wxzz(F32x4 a) { return _shuffle(a, 3, 0, 2, 2); }
+inline F32x4 Vec_wxzw(F32x4 a) { return _shuffle(a, 3, 0, 2, 3); }
+inline F32x4 Vec_wxwx(F32x4 a) { return _shuffle(a, 3, 0, 3, 0); }
+inline F32x4 Vec_wxwy(F32x4 a) { return _shuffle(a, 3, 0, 3, 1); }
+inline F32x4 Vec_wxwz(F32x4 a) { return _shuffle(a, 3, 0, 3, 2); }
+inline F32x4 Vec_wxww(F32x4 a) { return _shuffle(a, 3, 0, 3, 3); }
 
-inline f32x4 Vec_wyxx(f32x4 a) { return _shuffle(a, 3, 1, 0, 0); }
-inline f32x4 Vec_wyxy(f32x4 a) { return _shuffle(a, 3, 1, 0, 1); }
-inline f32x4 Vec_wyxz(f32x4 a) { return _shuffle(a, 3, 1, 0, 2); }
-inline f32x4 Vec_wyxw(f32x4 a) { return _shuffle(a, 3, 1, 0, 3); }
-inline f32x4 Vec_wyyx(f32x4 a) { return _shuffle(a, 3, 1, 1, 0); }
-inline f32x4 Vec_wyyy(f32x4 a) { return _shuffle(a, 3, 1, 1, 1); }
-inline f32x4 Vec_wyyz(f32x4 a) { return _shuffle(a, 3, 1, 1, 2); }
-inline f32x4 Vec_wyyw(f32x4 a) { return _shuffle(a, 3, 1, 1, 3); }
-inline f32x4 Vec_wyzx(f32x4 a) { return _shuffle(a, 3, 1, 2, 0); }
-inline f32x4 Vec_wyzy(f32x4 a) { return _shuffle(a, 3, 1, 2, 1); }
-inline f32x4 Vec_wyzz(f32x4 a) { return _shuffle(a, 3, 1, 2, 2); }
-inline f32x4 Vec_wyzw(f32x4 a) { return _shuffle(a, 3, 1, 2, 3); }
-inline f32x4 Vec_wywx(f32x4 a) { return _shuffle(a, 3, 1, 3, 0); }
-inline f32x4 Vec_wywy(f32x4 a) { return _shuffle(a, 3, 1, 3, 1); }
-inline f32x4 Vec_wywz(f32x4 a) { return _shuffle(a, 3, 1, 3, 2); }
-inline f32x4 Vec_wyww(f32x4 a) { return _shuffle(a, 3, 1, 3, 3); }
+inline F32x4 Vec_wyxx(F32x4 a) { return _shuffle(a, 3, 1, 0, 0); }
+inline F32x4 Vec_wyxy(F32x4 a) { return _shuffle(a, 3, 1, 0, 1); }
+inline F32x4 Vec_wyxz(F32x4 a) { return _shuffle(a, 3, 1, 0, 2); }
+inline F32x4 Vec_wyxw(F32x4 a) { return _shuffle(a, 3, 1, 0, 3); }
+inline F32x4 Vec_wyyx(F32x4 a) { return _shuffle(a, 3, 1, 1, 0); }
+inline F32x4 Vec_wyyy(F32x4 a) { return _shuffle(a, 3, 1, 1, 1); }
+inline F32x4 Vec_wyyz(F32x4 a) { return _shuffle(a, 3, 1, 1, 2); }
+inline F32x4 Vec_wyyw(F32x4 a) { return _shuffle(a, 3, 1, 1, 3); }
+inline F32x4 Vec_wyzx(F32x4 a) { return _shuffle(a, 3, 1, 2, 0); }
+inline F32x4 Vec_wyzy(F32x4 a) { return _shuffle(a, 3, 1, 2, 1); }
+inline F32x4 Vec_wyzz(F32x4 a) { return _shuffle(a, 3, 1, 2, 2); }
+inline F32x4 Vec_wyzw(F32x4 a) { return _shuffle(a, 3, 1, 2, 3); }
+inline F32x4 Vec_wywx(F32x4 a) { return _shuffle(a, 3, 1, 3, 0); }
+inline F32x4 Vec_wywy(F32x4 a) { return _shuffle(a, 3, 1, 3, 1); }
+inline F32x4 Vec_wywz(F32x4 a) { return _shuffle(a, 3, 1, 3, 2); }
+inline F32x4 Vec_wyww(F32x4 a) { return _shuffle(a, 3, 1, 3, 3); }
 
-inline f32x4 Vec_wzxx(f32x4 a) { return _shuffle(a, 3, 2, 0, 0); }
-inline f32x4 Vec_wzxy(f32x4 a) { return _shuffle(a, 3, 2, 0, 1); }
-inline f32x4 Vec_wzxz(f32x4 a) { return _shuffle(a, 3, 2, 0, 2); }
-inline f32x4 Vec_wzxw(f32x4 a) { return _shuffle(a, 3, 2, 0, 3); }
-inline f32x4 Vec_wzyx(f32x4 a) { return _shuffle(a, 3, 2, 1, 0); }
-inline f32x4 Vec_wzyy(f32x4 a) { return _shuffle(a, 3, 2, 1, 1); }
-inline f32x4 Vec_wzyz(f32x4 a) { return _shuffle(a, 3, 2, 1, 2); }
-inline f32x4 Vec_wzyw(f32x4 a) { return _shuffle(a, 3, 2, 1, 3); }
-inline f32x4 Vec_wzzx(f32x4 a) { return _shuffle(a, 3, 2, 2, 0); }
-inline f32x4 Vec_wzzy(f32x4 a) { return _shuffle(a, 3, 2, 2, 1); }
-inline f32x4 Vec_wzzz(f32x4 a) { return _shuffle(a, 3, 2, 2, 2); }
-inline f32x4 Vec_wzzw(f32x4 a) { return _shuffle(a, 3, 2, 2, 3); }
-inline f32x4 Vec_wzwx(f32x4 a) { return _shuffle(a, 3, 2, 3, 0); }
-inline f32x4 Vec_wzwy(f32x4 a) { return _shuffle(a, 3, 2, 3, 1); }
-inline f32x4 Vec_wzwz(f32x4 a) { return _shuffle(a, 3, 2, 3, 2); }
-inline f32x4 Vec_wzww(f32x4 a) { return _shuffle(a, 3, 2, 3, 3); }
+inline F32x4 Vec_wzxx(F32x4 a) { return _shuffle(a, 3, 2, 0, 0); }
+inline F32x4 Vec_wzxy(F32x4 a) { return _shuffle(a, 3, 2, 0, 1); }
+inline F32x4 Vec_wzxz(F32x4 a) { return _shuffle(a, 3, 2, 0, 2); }
+inline F32x4 Vec_wzxw(F32x4 a) { return _shuffle(a, 3, 2, 0, 3); }
+inline F32x4 Vec_wzyx(F32x4 a) { return _shuffle(a, 3, 2, 1, 0); }
+inline F32x4 Vec_wzyy(F32x4 a) { return _shuffle(a, 3, 2, 1, 1); }
+inline F32x4 Vec_wzyz(F32x4 a) { return _shuffle(a, 3, 2, 1, 2); }
+inline F32x4 Vec_wzyw(F32x4 a) { return _shuffle(a, 3, 2, 1, 3); }
+inline F32x4 Vec_wzzx(F32x4 a) { return _shuffle(a, 3, 2, 2, 0); }
+inline F32x4 Vec_wzzy(F32x4 a) { return _shuffle(a, 3, 2, 2, 1); }
+inline F32x4 Vec_wzzz(F32x4 a) { return _shuffle(a, 3, 2, 2, 2); }
+inline F32x4 Vec_wzzw(F32x4 a) { return _shuffle(a, 3, 2, 2, 3); }
+inline F32x4 Vec_wzwx(F32x4 a) { return _shuffle(a, 3, 2, 3, 0); }
+inline F32x4 Vec_wzwy(F32x4 a) { return _shuffle(a, 3, 2, 3, 1); }
+inline F32x4 Vec_wzwz(F32x4 a) { return _shuffle(a, 3, 2, 3, 2); }
+inline F32x4 Vec_wzww(F32x4 a) { return _shuffle(a, 3, 2, 3, 3); }
 
-inline f32x4 Vec_wwxx(f32x4 a) { return _shuffle(a, 3, 3, 0, 0); }
-inline f32x4 Vec_wwxy(f32x4 a) { return _shuffle(a, 3, 3, 0, 1); }
-inline f32x4 Vec_wwxz(f32x4 a) { return _shuffle(a, 3, 3, 0, 2); }
-inline f32x4 Vec_wwxw(f32x4 a) { return _shuffle(a, 3, 3, 0, 3); }
-inline f32x4 Vec_wwyx(f32x4 a) { return _shuffle(a, 3, 3, 1, 0); }
-inline f32x4 Vec_wwyy(f32x4 a) { return _shuffle(a, 3, 3, 1, 1); }
-inline f32x4 Vec_wwyz(f32x4 a) { return _shuffle(a, 3, 3, 1, 2); }
-inline f32x4 Vec_wwyw(f32x4 a) { return _shuffle(a, 3, 3, 1, 3); }
-inline f32x4 Vec_wwzx(f32x4 a) { return _shuffle(a, 3, 3, 2, 0); }
-inline f32x4 Vec_wwzy(f32x4 a) { return _shuffle(a, 3, 3, 2, 1); }
-inline f32x4 Vec_wwzz(f32x4 a) { return _shuffle(a, 3, 3, 2, 2); }
-inline f32x4 Vec_wwzw(f32x4 a) { return _shuffle(a, 3, 3, 2, 3); }
-inline f32x4 Vec_wwwx(f32x4 a) { return _shuffle(a, 3, 3, 3, 0); }
-inline f32x4 Vec_wwwy(f32x4 a) { return _shuffle(a, 3, 3, 3, 1); }
-inline f32x4 Vec_wwwz(f32x4 a) { return _shuffle(a, 3, 3, 3, 2); }
-inline f32x4 Vec_wwww(f32x4 a) { return _shuffle1(a, 3); }
+inline F32x4 Vec_wwxx(F32x4 a) { return _shuffle(a, 3, 3, 0, 0); }
+inline F32x4 Vec_wwxy(F32x4 a) { return _shuffle(a, 3, 3, 0, 1); }
+inline F32x4 Vec_wwxz(F32x4 a) { return _shuffle(a, 3, 3, 0, 2); }
+inline F32x4 Vec_wwxw(F32x4 a) { return _shuffle(a, 3, 3, 0, 3); }
+inline F32x4 Vec_wwyx(F32x4 a) { return _shuffle(a, 3, 3, 1, 0); }
+inline F32x4 Vec_wwyy(F32x4 a) { return _shuffle(a, 3, 3, 1, 1); }
+inline F32x4 Vec_wwyz(F32x4 a) { return _shuffle(a, 3, 3, 1, 2); }
+inline F32x4 Vec_wwyw(F32x4 a) { return _shuffle(a, 3, 3, 1, 3); }
+inline F32x4 Vec_wwzx(F32x4 a) { return _shuffle(a, 3, 3, 2, 0); }
+inline F32x4 Vec_wwzy(F32x4 a) { return _shuffle(a, 3, 3, 2, 1); }
+inline F32x4 Vec_wwzz(F32x4 a) { return _shuffle(a, 3, 3, 2, 2); }
+inline F32x4 Vec_wwzw(F32x4 a) { return _shuffle(a, 3, 3, 2, 3); }
+inline F32x4 Vec_wwwx(F32x4 a) { return _shuffle(a, 3, 3, 3, 0); }
+inline F32x4 Vec_wwwy(F32x4 a) { return _shuffle(a, 3, 3, 3, 1); }
+inline F32x4 Vec_wwwz(F32x4 a) { return _shuffle(a, 3, 3, 3, 2); }
+inline F32x4 Vec_wwww(F32x4 a) { return _shuffle1(a, 3); }
 
-inline f32x4 Vec_trunc2(f32x4 a) { return _mm_movelh_ps(a, Vec_zero()); }
-inline f32x4 Vec_trunc3(f32x4 a) { 
-    f32x4 z0 = Vec_xzzz(_mm_movelh_ps(Vec_zzzz(a), Vec_zero()));
+inline F32x4 Vec_trunc2(F32x4 a) { return _mm_movelh_ps(a, Vec_zero()); }
+inline F32x4 Vec_trunc3(F32x4 a) { 
+    F32x4 z0 = Vec_xzzz(_mm_movelh_ps(Vec_zzzz(a), Vec_zero()));
     return _mm_movelh_ps(a, z0); 
 }
 
 //2D swizzles
 
-inline f32x4 Vec_xx(f32x4 a) { return Vec_trunc2(Vec_xxxx(a)); }
-inline f32x4 Vec_xy(f32x4 a) { return Vec_trunc2(Vec_xyxx(a)); }
-inline f32x4 Vec_xz(f32x4 a) { return Vec_trunc2(Vec_xzxx(a)); }
-inline f32x4 Vec_xw(f32x4 a) { return Vec_trunc2(Vec_xwxx(a)); }
+inline F32x4 Vec_xx(F32x4 a) { return Vec_trunc2(Vec_xxxx(a)); }
+inline F32x4 Vec_xy(F32x4 a) { return Vec_trunc2(Vec_xyxx(a)); }
+inline F32x4 Vec_xz(F32x4 a) { return Vec_trunc2(Vec_xzxx(a)); }
+inline F32x4 Vec_xw(F32x4 a) { return Vec_trunc2(Vec_xwxx(a)); }
 
-inline f32x4 Vec_yx(f32x4 a) { return Vec_trunc2(Vec_yxxx(a)); }
-inline f32x4 Vec_yy(f32x4 a) { return Vec_trunc2(Vec_yyxx(a)); }
-inline f32x4 Vec_yz(f32x4 a) { return Vec_trunc2(Vec_yzxx(a)); }
-inline f32x4 Vec_yw(f32x4 a) { return Vec_trunc2(Vec_ywxx(a)); }
+inline F32x4 Vec_yx(F32x4 a) { return Vec_trunc2(Vec_yxxx(a)); }
+inline F32x4 Vec_yy(F32x4 a) { return Vec_trunc2(Vec_yyxx(a)); }
+inline F32x4 Vec_yz(F32x4 a) { return Vec_trunc2(Vec_yzxx(a)); }
+inline F32x4 Vec_yw(F32x4 a) { return Vec_trunc2(Vec_ywxx(a)); }
 
-inline f32x4 Vec_zx(f32x4 a) { return Vec_trunc2(Vec_zxxx(a)); }
-inline f32x4 Vec_zy(f32x4 a) { return Vec_trunc2(Vec_zyxx(a)); }
-inline f32x4 Vec_zz(f32x4 a) { return Vec_trunc2(Vec_zzxx(a)); }
-inline f32x4 Vec_zw(f32x4 a) { return Vec_trunc2(Vec_zwxx(a)); }
+inline F32x4 Vec_zx(F32x4 a) { return Vec_trunc2(Vec_zxxx(a)); }
+inline F32x4 Vec_zy(F32x4 a) { return Vec_trunc2(Vec_zyxx(a)); }
+inline F32x4 Vec_zz(F32x4 a) { return Vec_trunc2(Vec_zzxx(a)); }
+inline F32x4 Vec_zw(F32x4 a) { return Vec_trunc2(Vec_zwxx(a)); }
 
-inline f32x4 Vec_wx(f32x4 a) { return Vec_trunc2(Vec_wxxx(a)); }
-inline f32x4 Vec_wy(f32x4 a) { return Vec_trunc2(Vec_wyxx(a)); }
-inline f32x4 Vec_wz(f32x4 a) { return Vec_trunc2(Vec_wzxx(a)); }
-inline f32x4 Vec_ww(f32x4 a) { return Vec_trunc2(Vec_wwxx(a)); }
+inline F32x4 Vec_wx(F32x4 a) { return Vec_trunc2(Vec_wxxx(a)); }
+inline F32x4 Vec_wy(F32x4 a) { return Vec_trunc2(Vec_wyxx(a)); }
+inline F32x4 Vec_wz(F32x4 a) { return Vec_trunc2(Vec_wzxx(a)); }
+inline F32x4 Vec_ww(F32x4 a) { return Vec_trunc2(Vec_wwxx(a)); }
 
 //3D swizzles
 
-inline f32x4 Vec_xxx(f32x4 a) { return Vec_trunc3(Vec_xxxx(a)); }
-inline f32x4 Vec_xxy(f32x4 a) { return Vec_trunc3(Vec_xxyx(a)); }
-inline f32x4 Vec_xxz(f32x4 a) { return Vec_trunc3(Vec_xxzx(a)); }
-inline f32x4 Vec_xyx(f32x4 a) { return Vec_trunc3(Vec_xyxx(a)); }
-inline f32x4 Vec_xyy(f32x4 a) { return Vec_trunc3(Vec_xyyx(a)); }
-inline f32x4 Vec_xyz(f32x4 a) { return Vec_trunc3(Vec_xyzx(a)); }
-inline f32x4 Vec_xzx(f32x4 a) { return Vec_trunc3(Vec_xzxx(a)); }
-inline f32x4 Vec_xzy(f32x4 a) { return Vec_trunc3(Vec_xzyx(a)); }
-inline f32x4 Vec_xzz(f32x4 a) { return Vec_trunc3(Vec_xzzx(a)); }
+inline F32x4 Vec_xxx(F32x4 a) { return Vec_trunc3(Vec_xxxx(a)); }
+inline F32x4 Vec_xxy(F32x4 a) { return Vec_trunc3(Vec_xxyx(a)); }
+inline F32x4 Vec_xxz(F32x4 a) { return Vec_trunc3(Vec_xxzx(a)); }
+inline F32x4 Vec_xyx(F32x4 a) { return Vec_trunc3(Vec_xyxx(a)); }
+inline F32x4 Vec_xyy(F32x4 a) { return Vec_trunc3(Vec_xyyx(a)); }
+inline F32x4 Vec_xyz(F32x4 a) { return Vec_trunc3(Vec_xyzx(a)); }
+inline F32x4 Vec_xzx(F32x4 a) { return Vec_trunc3(Vec_xzxx(a)); }
+inline F32x4 Vec_xzy(F32x4 a) { return Vec_trunc3(Vec_xzyx(a)); }
+inline F32x4 Vec_xzz(F32x4 a) { return Vec_trunc3(Vec_xzzx(a)); }
 
-inline f32x4 Vec_yxx(f32x4 a) { return Vec_trunc3(Vec_yxxx(a)); }
-inline f32x4 Vec_yxy(f32x4 a) { return Vec_trunc3(Vec_yxyx(a)); }
-inline f32x4 Vec_yxz(f32x4 a) { return Vec_trunc3(Vec_yxzx(a)); }
-inline f32x4 Vec_yyx(f32x4 a) { return Vec_trunc3(Vec_yyxx(a)); }
-inline f32x4 Vec_yyy(f32x4 a) { return Vec_trunc3(Vec_yyyx(a)); }
-inline f32x4 Vec_yyz(f32x4 a) { return Vec_trunc3(Vec_yyzx(a)); }
-inline f32x4 Vec_yzx(f32x4 a) { return Vec_trunc3(Vec_yzxx(a)); }
-inline f32x4 Vec_yzy(f32x4 a) { return Vec_trunc3(Vec_yzyx(a)); }
-inline f32x4 Vec_yzz(f32x4 a) { return Vec_trunc3(Vec_yzzx(a)); }
+inline F32x4 Vec_yxx(F32x4 a) { return Vec_trunc3(Vec_yxxx(a)); }
+inline F32x4 Vec_yxy(F32x4 a) { return Vec_trunc3(Vec_yxyx(a)); }
+inline F32x4 Vec_yxz(F32x4 a) { return Vec_trunc3(Vec_yxzx(a)); }
+inline F32x4 Vec_yyx(F32x4 a) { return Vec_trunc3(Vec_yyxx(a)); }
+inline F32x4 Vec_yyy(F32x4 a) { return Vec_trunc3(Vec_yyyx(a)); }
+inline F32x4 Vec_yyz(F32x4 a) { return Vec_trunc3(Vec_yyzx(a)); }
+inline F32x4 Vec_yzx(F32x4 a) { return Vec_trunc3(Vec_yzxx(a)); }
+inline F32x4 Vec_yzy(F32x4 a) { return Vec_trunc3(Vec_yzyx(a)); }
+inline F32x4 Vec_yzz(F32x4 a) { return Vec_trunc3(Vec_yzzx(a)); }
 
-inline f32x4 Vec_zxx(f32x4 a) { return Vec_trunc3(Vec_zxxx(a)); }
-inline f32x4 Vec_zxy(f32x4 a) { return Vec_trunc3(Vec_zxyx(a)); }
-inline f32x4 Vec_zxz(f32x4 a) { return Vec_trunc3(Vec_zxzx(a)); }
-inline f32x4 Vec_zyx(f32x4 a) { return Vec_trunc3(Vec_zyxx(a)); }
-inline f32x4 Vec_zyy(f32x4 a) { return Vec_trunc3(Vec_zyyx(a)); }
-inline f32x4 Vec_zyz(f32x4 a) { return Vec_trunc3(Vec_zyzx(a)); }
-inline f32x4 Vec_zzx(f32x4 a) { return Vec_trunc3(Vec_zzxx(a)); }
-inline f32x4 Vec_zzy(f32x4 a) { return Vec_trunc3(Vec_zzyx(a)); }
-inline f32x4 Vec_zzz(f32x4 a) { return Vec_trunc3(Vec_zzzx(a)); }
+inline F32x4 Vec_zxx(F32x4 a) { return Vec_trunc3(Vec_zxxx(a)); }
+inline F32x4 Vec_zxy(F32x4 a) { return Vec_trunc3(Vec_zxyx(a)); }
+inline F32x4 Vec_zxz(F32x4 a) { return Vec_trunc3(Vec_zxzx(a)); }
+inline F32x4 Vec_zyx(F32x4 a) { return Vec_trunc3(Vec_zyxx(a)); }
+inline F32x4 Vec_zyy(F32x4 a) { return Vec_trunc3(Vec_zyyx(a)); }
+inline F32x4 Vec_zyz(F32x4 a) { return Vec_trunc3(Vec_zyzx(a)); }
+inline F32x4 Vec_zzx(F32x4 a) { return Vec_trunc3(Vec_zzxx(a)); }
+inline F32x4 Vec_zzy(F32x4 a) { return Vec_trunc3(Vec_zzyx(a)); }
+inline F32x4 Vec_zzz(F32x4 a) { return Vec_trunc3(Vec_zzzx(a)); }
 
-inline f32 Vec_x(f32x4 a) { return _mm_cvtss_f32(a); }
-inline f32 Vec_y(f32x4 a) { return Vec_x(Vec_yyyy(a)); }
-inline f32 Vec_z(f32x4 a) { return Vec_x(Vec_zzzz(a)); }
-inline f32 Vec_w(f32x4 a) { return Vec_x(Vec_wwww(a)); }
+inline F32 Vec_x(F32x4 a) { return _mm_cvtss_f32(a); }
+inline F32 Vec_y(F32x4 a) { return Vec_x(Vec_yyyy(a)); }
+inline F32 Vec_z(F32x4 a) { return Vec_x(Vec_zzzz(a)); }
+inline F32 Vec_w(F32x4 a) { return Vec_x(Vec_wwww(a)); }
 
-inline f32x4 Vec_create1(f32 x) { return _mm_set_ps(0, 0, 0, x); }
-inline f32x4 Vec_create2(f32 x, f32 y) { return _mm_set_ps(0, 0, y, x); }
-inline f32x4 Vec_create3(f32 x, f32 y, f32 z) { return _mm_set_ps(0, z, y, x); }
-inline f32x4 Vec_create4(f32 x, f32 y, f32 z, f32 w) { return _mm_set_ps(w, z, y, x); }
+inline F32x4 Vec_create1(F32 x) { return _mm_set_ps(0, 0, 0, x); }
+inline F32x4 Vec_create2(F32 x, F32 y) { return _mm_set_ps(0, 0, y, x); }
+inline F32x4 Vec_create3(F32 x, F32 y, F32 z) { return _mm_set_ps(0, z, y, x); }
+inline F32x4 Vec_create4(F32 x, F32 y, F32 z, F32 w) { return _mm_set_ps(w, z, y, x); }
 
-inline f32x4 Vec_xxxx4(f32 x) { return _mm_set1_ps(x); }
+inline F32x4 Vec_xxxx4(F32 x) { return _mm_set1_ps(x); }
 
-inline f32x4 Vec_load4(const f32 *arr) { return _mm_load_ps(arr);}
+inline F32x4 Vec_load4(const F32 *arr) { return _mm_load_ps(arr);}
 
-inline f32x4 Vec_zero() { return _mm_setzero_ps(); }
+inline F32x4 Vec_zero() { return _mm_setzero_ps(); }
 
 //Needed since cmp returns -1 as int, so we convert to -1.f and then negate
 
-inline f32x4 _cvtitof(f32x4 a) { return _mm_cvtepi32_ps(*(__m128i*) &a); }
-inline f32x4 _Vec_negatei(f32x4 a) { return Vec_negate(_cvtitof(a)); }
+inline F32x4 _cvtitof(F32x4 a) { return _mm_cvtepI32_ps(*(__m128i*) &a); }
+inline F32x4 _Vec_negatei(F32x4 a) { return Vec_negate(_cvtitof(a)); }
 
-inline f32x4 Vec_eq(f32x4 a, f32x4 b)  { return _Vec_negatei(_mm_cmpeq_ps(a, b)); }
-inline f32x4 Vec_neq(f32x4 a, f32x4 b) { return _Vec_negatei(_mm_cmpneq_ps(a, b)); }
-inline f32x4 Vec_geq(f32x4 a, f32x4 b) { return _Vec_negatei(_mm_cmpge_ps(a, b)); }
-inline f32x4 Vec_gt(f32x4 a, f32x4 b)  { return _Vec_negatei(_mm_cmpgt_ps(a, b)); }
-inline f32x4 Vec_leq(f32x4 a, f32x4 b) { return _Vec_negatei(_mm_cmple_ps(a, b)); }
-inline f32x4 Vec_lt(f32x4 a, f32x4 b)  { return _Vec_negatei(_mm_cmplt_ps(a, b)); }
+inline F32x4 Vec_eq(F32x4 a, F32x4 b)  { return _Vec_negatei(_mm_cmpeq_ps(a, b)); }
+inline F32x4 Vec_neq(F32x4 a, F32x4 b) { return _Vec_negatei(_mm_cmpneq_ps(a, b)); }
+inline F32x4 Vec_geq(F32x4 a, F32x4 b) { return _Vec_negatei(_mm_cmpge_ps(a, b)); }
+inline F32x4 Vec_gt(F32x4 a, F32x4 b)  { return _Vec_negatei(_mm_cmpgt_ps(a, b)); }
+inline F32x4 Vec_leq(F32x4 a, F32x4 b) { return _Vec_negatei(_mm_cmple_ps(a, b)); }
+inline F32x4 Vec_lt(F32x4 a, F32x4 b)  { return _Vec_negatei(_mm_cmplt_ps(a, b)); }
 
-inline f32x4 Vec_or(f32x4 a, f32x4 b)  { return _cvtitof(_mm_or_ps(a, b)); }
-inline f32x4 Vec_and(f32x4 a, f32x4 b) { return _cvtitof(_mm_and_ps(a, b)); }
-inline f32x4 Vec_xor(f32x4 a, f32x4 b) { return _cvtitof(_mm_xor_ps(a, b)); }
+inline F32x4 Vec_or(F32x4 a, F32x4 b)  { return _cvtitof(_mm_or_ps(a, b)); }
+inline F32x4 Vec_and(F32x4 a, F32x4 b) { return _cvtitof(_mm_and_ps(a, b)); }
+inline F32x4 Vec_xor(F32x4 a, F32x4 b) { return _cvtitof(_mm_xor_ps(a, b)); }
 
-inline f32x4 Vec_min(f32x4 a, f32x4 b) { return _mm_min_ps(a, b); }
-inline f32x4 Vec_max(f32x4 a, f32x4 b) { return _mm_max_ps(a, b); }
+inline F32x4 Vec_min(F32x4 a, F32x4 b) { return _mm_min_ps(a, b); }
+inline F32x4 Vec_max(F32x4 a, F32x4 b) { return _mm_max_ps(a, b); }
 
 //Obtain sign (-1 if <0, otherwise 1)
 //(a < 0) * 2 + 1;
 //-1 * 2 + 1: -2 + 1: -1 for < 0
 //0 * 2 + 1; 0 + 1; 1 for >=0
 //
-inline f32x4 Vec_sign(f32x4 v) {
+inline F32x4 Vec_sign(F32x4 v) {
     return Vec_add(
         Vec_mul(_mm_cmplt_ps(v, Vec_zero()), Vec_two()), 
         Vec_one()
     ); 
 }
 
-inline f32x4 Vec_cross3(f32x4 a, f32x4 b) {
+inline F32x4 Vec_cross3(F32x4 a, F32x4 b) {
     return Vec_normalize3(
         Vec_sub(
             Vec_mul(Vec_yzx(a), Vec_zxy(b)),
@@ -571,65 +571,65 @@ inline f32x4 Vec_cross3(f32x4 a, f32x4 b) {
     );
 }
 
-inline f32x4 Vec_abs(f32x4 v){ return Vec_mul(Vec_sign(v), v); }
+inline F32x4 Vec_abs(F32x4 v){ return Vec_mul(Vec_sign(v), v); }
 
-inline f32 Vec_reduce(f32x4 a) {
+inline F32 Vec_reduce(F32x4 a) {
     return Vec_x(_mm_hadd_ps(_mm_hadd_ps(a, Vec_zero()), Vec_zero()));
 }
 
-inline f32 Vec_dot4(f32x4 a, f32x4 b) { return Vec_x(_mm_dp_ps(a, b, 0xFF)); }
-inline f32 Vec_dot2(f32x4 a, f32x4 b) { return Vec_x(_mm_dp_ps(Vec_xy(a), Vec_xy(b), 0xFF)); }
-inline f32 Vec_dot3(f32x4 a, f32x4 b) { return Vec_x(_mm_dp_ps(Vec_xyz(a), Vec_xyz(b), 0xFF)); }
+inline F32 Vec_dot4(F32x4 a, F32x4 b) { return Vec_x(_mm_dp_ps(a, b, 0xFF)); }
+inline F32 Vec_dot2(F32x4 a, F32x4 b) { return Vec_x(_mm_dp_ps(Vec_xy(a), Vec_xy(b), 0xFF)); }
+inline F32 Vec_dot3(F32x4 a, F32x4 b) { return Vec_x(_mm_dp_ps(Vec_xyz(a), Vec_xyz(b), 0xFF)); }
 
-inline f32 Vec_sqLen2(f32x4 v) { v = Vec_xy(v);  return Vec_x(_mm_dp_ps(v, v, 0xFF)); }
-inline f32 Vec_sqLen3(f32x4 v) { v = Vec_xyz(v); return Vec_x(_mm_dp_ps(v, v, 0xFF)); }
-inline f32 Vec_sqLen4(f32x4 v) { return Vec_x(_mm_dp_ps(v, v, 0xFF)); }
+inline F32 Vec_sqLen2(F32x4 v) { v = Vec_xy(v);  return Vec_x(_mm_dp_ps(v, v, 0xFF)); }
+inline F32 Vec_sqLen3(F32x4 v) { v = Vec_xyz(v); return Vec_x(_mm_dp_ps(v, v, 0xFF)); }
+inline F32 Vec_sqLen4(F32x4 v) { return Vec_x(_mm_dp_ps(v, v, 0xFF)); }
 
 //Arch independent
 
 //Shifts are hard, so we just shift by division and floor
 //
-inline f32x4 Vec_rgb8Unpack(u32 v) {
-    f32x4 rgb8 = Vec_floor(Vec_div(Vec_xxxx4((f32)v), Vec_create3(0x10000, 0x100, 0x1)));
+inline F32x4 Vec_rgb8Unpack(U32 v) {
+    F32x4 rgb8 = Vec_floor(Vec_div(Vec_xxxx4((F32)v), Vec_create3(0x10000, 0x100, 0x1)));
     return Vec_div(Vec_mod(rgb8, Vec_xxxx4(0x100)), Vec_xxxx4(0xFF));
 }
 
-inline u32 Vec_rgb8Pack(f32x4 v) {
-    f32x4 v8 = Vec_floor(Vec_mul(v, Vec_xxxx4(0xFF)));
-    f32x4 preShift = Vec_trunc3(Vec_mul(v8, Vec_create3(0x10000, 0x100, 0x1)));
-    return (u32) Vec_reduce(preShift);
+inline U32 Vec_rgb8Pack(F32x4 v) {
+    F32x4 v8 = Vec_floor(Vec_mul(v, Vec_xxxx4(0xFF)));
+    F32x4 preShift = Vec_trunc3(Vec_mul(v8, Vec_create3(0x10000, 0x100, 0x1)));
+    return (U32) Vec_reduce(preShift);
 }
 
-inline f32x4 Vec_srgba8Unpack(u32 v) {
+inline F32x4 Vec_srgba8Unpack(U32 v) {
     return Vec_pow2(Vec_rgb8Unpack(v << 8 >> 8));
 }
 
-inline u32 Vec_srgba8Pack(f32x4 v) {
+inline U32 Vec_srgba8Pack(F32x4 v) {
     return Vec_rgb8Pack(Vec_sqrt(v)) | 0xFF000000;
 }
 
-inline f32x4 Vec_one() { return Vec_xxxx4(1); }
-inline f32x4 Vec_two() { return Vec_xxxx4(2); }
-inline f32x4 Vec_mask2() { return Vec_create4(1, 1, 0, 0); }
-inline f32x4 Vec_mask3() { return Vec_create4(1, 1, 1, 0); }
+inline F32x4 Vec_one() { return Vec_xxxx4(1); }
+inline F32x4 Vec_two() { return Vec_xxxx4(2); }
+inline F32x4 Vec_mask2() { return Vec_create4(1, 1, 0, 0); }
+inline F32x4 Vec_mask3() { return Vec_create4(1, 1, 1, 0); }
 
-inline bool Vec_all(f32x4 b) { return Vec_reduce(Vec_neq(b, Vec_zero())) == 4; }
-inline bool Vec_any(f32x4 b) { return Vec_reduce(Vec_neq(b, Vec_zero())); }
+inline Bool Vec_all(F32x4 b) { return Vec_reduce(Vec_neq(b, Vec_zero())) == 4; }
+inline Bool Vec_any(F32x4 b) { return Vec_reduce(Vec_neq(b, Vec_zero())); }
 
-inline f32x4 Vec_normalize2(f32x4 v) { v = Vec_xy(v);  return Vec_mul(v, Vec_rsqrt(_mm_dp_ps(v, v, 0xFF))); }
-inline f32x4 Vec_normalize3(f32x4 v) { v = Vec_xyz(v); return Vec_mul(v, Vec_rsqrt(_mm_dp_ps(v, v, 0xFF))); }
-inline f32x4 Vec_normalize4(f32x4 v) { return Vec_mul(v, Vec_rsqrt(_mm_dp_ps(v, v, 0xFF))); }
+inline F32x4 Vec_normalize2(F32x4 v) { v = Vec_xy(v);  return Vec_mul(v, Vec_rsqrt(_mm_dp_ps(v, v, 0xFF))); }
+inline F32x4 Vec_normalize3(F32x4 v) { v = Vec_xyz(v); return Vec_mul(v, Vec_rsqrt(_mm_dp_ps(v, v, 0xFF))); }
+inline F32x4 Vec_normalize4(F32x4 v) { return Vec_mul(v, Vec_rsqrt(_mm_dp_ps(v, v, 0xFF))); }
 
-inline f32x4 Vec_load1(const f32 *arr) { return Vec_create1(*arr); }
-inline f32x4 Vec_load2(const f32 *arr) { return Vec_create2(*arr, arr[1]); }
-inline f32x4 Vec_load3(const f32 *arr) { return Vec_create3(*arr, arr[1], arr[2]); }
+inline F32x4 Vec_load1(const F32 *arr) { return Vec_create1(*arr); }
+inline F32x4 Vec_load2(const F32 *arr) { return Vec_create2(*arr, arr[1]); }
+inline F32x4 Vec_load3(const F32 *arr) { return Vec_create3(*arr, arr[1], arr[2]); }
 
-inline void Vec_setX(f32x4 *a, f32 v) { *a = Vec_add(Vec_mul(*a, Vec_create4(0, 1, 1, 1)), Vec_create4(v, 0, 0, 0)); }
-inline void Vec_setY(f32x4 *a, f32 v) { *a = Vec_add(Vec_mul(*a, Vec_create4(1, 0, 1, 1)), Vec_create4(0, v, 0, 0)); }
-inline void Vec_setZ(f32x4 *a, f32 v) { *a = Vec_add(Vec_mul(*a, Vec_create4(1, 1, 0, 1)), Vec_create4(0, 0, v, 0)); }
-inline void Vec_setW(f32x4 *a, f32 v) { *a = Vec_add(Vec_mul(*a, Vec_create4(1, 1, 1, 0)), Vec_create4(0, 0, 0, v)); }
+inline void Vec_setX(F32x4 *a, F32 v) { *a = Vec_add(Vec_mul(*a, Vec_create4(0, 1, 1, 1)), Vec_create4(v, 0, 0, 0)); }
+inline void Vec_setY(F32x4 *a, F32 v) { *a = Vec_add(Vec_mul(*a, Vec_create4(1, 0, 1, 1)), Vec_create4(0, v, 0, 0)); }
+inline void Vec_setZ(F32x4 *a, F32 v) { *a = Vec_add(Vec_mul(*a, Vec_create4(1, 1, 0, 1)), Vec_create4(0, 0, v, 0)); }
+inline void Vec_setW(F32x4 *a, F32 v) { *a = Vec_add(Vec_mul(*a, Vec_create4(1, 1, 1, 0)), Vec_create4(0, 0, 0, v)); }
 
-inline void Vec_set(f32x4 *a, u8 i, f32 v) {
+inline void Vec_set(F32x4 *a, U8 i, F32 v) {
     switch (i & 3) {
 		case 0:     Vec_setX(a, v);     break;
 		case 1:     Vec_setY(a, v);     break;
@@ -638,7 +638,7 @@ inline void Vec_set(f32x4 *a, u8 i, f32 v) {
     }
 }
 
-inline f32 Vec_get(f32x4 a, u8 i) {
+inline F32 Vec_get(F32x4 a, U8 i) {
     switch (i & 3) {
 		case 0:     return Vec_x(a);
 		case 1:     return Vec_y(a);

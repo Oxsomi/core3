@@ -14,7 +14,7 @@
 
 //Carried over from core2
 
-void Log_captureStackTrace(void **stack, u64 stackSize, u64 skip) {
+void Log_captureStackTrace(void **stack, U64 stackSize, U64 skip) {
 	RtlCaptureStackBackTrace(
 		(DWORD)(1 + skip), 
 		(DWORD) stackSize, 
@@ -26,12 +26,12 @@ struct CapturedStackTrace {
 
 	//Module and symbol
 
-	const c8 *mod, *sym;
+	const C8 *mod, *sym;
 
 	//File and line don't have to be specified, for external calls
 
-	const c8 *fil;
-	u32 lin;
+	const C8 *fil;
+	U32 lin;
 };
 
 static const WORD colors[] = {
@@ -49,38 +49,38 @@ void Log_printCapturedStackTrace(const StackTrace stackTrace, enum LogLevel lvl)
 
 	struct CapturedStackTrace captured[StackTrace_SIZE] = { 0 };
 
-	u64 stackCount = 0;
+	U64 stackCount = 0;
 
 	//Obtain process
 
 	HANDLE process = GetCurrentProcess();
 	HMODULE processModule = GetModuleHandleA(NULL);
 
-	bool hasSymbols = SymInitialize(process, NULL, TRUE);
-	bool anySymbol = false;
+	Bool hasSymbols = SymInitialize(process, NULL, TRUE);
+	Bool anySymbol = false;
 
 	if(hasSymbols)
-		for (u64 i = 0; i < StackTrace_SIZE && stackTrace[i]; ++i, ++stackCount) {
+		for (U64 i = 0; i < StackTrace_SIZE && stackTrace[i]; ++i, ++stackCount) {
 
-			u64 addr = (u64) stackTrace[i];
+			U64 addr = (U64) stackTrace[i];
 
 			//Get module name
 
-			u64 moduleBase = SymGetModuleBase(process, addr);
+			U64 moduleBase = SymGetModuleBase(process, addr);
 
-			c8 modulePath[MAX_PATH + 1] = { 0 };
+			C8 modulePath[MAX_PATH + 1] = { 0 };
 			if (!moduleBase || !GetModuleFileNameA((HINSTANCE)moduleBase, modulePath, MAX_PATH))
 				continue;
 
 			anySymbol = true;
 
-			c8 symbolData[sizeof(IMAGEHLP_SYMBOL) + MAX_PATH + 1] = { 0 };
+			C8 symbolData[sizeof(IMAGEHLP_SYMBOL) + MAX_PATH + 1] = { 0 };
 
 			PIMAGEHLP_SYMBOL symbol = (PIMAGEHLP_SYMBOL)symbolData;
 			symbol->SizeOfStruct = sizeof(symbolData);
 			symbol->MaxNameLength = MAX_PATH;
 
-			const c8 *symbolName = symbol->Name;
+			const C8 *symbolName = symbol->Name;
 
 			if (!SymGetSymFromAddr(process, addr, NULL, symbol))
 				continue;
@@ -98,7 +98,7 @@ void Log_printCapturedStackTrace(const StackTrace stackTrace, enum LogLevel lvl)
 			capture->mod = modulePath;
 			capture->sym = symbolName;
 
-			if (moduleBase == (u64)processModule)
+			if (moduleBase == (U64)processModule)
 				capture->mod = String_lastPath(capture->mod);
 
 			if(line.FileName)
@@ -112,7 +112,7 @@ void Log_printCapturedStackTrace(const StackTrace stackTrace, enum LogLevel lvl)
 
 	else printf("Stacktrace: (No symbols)\n");
 
-	for (u64 i = 0; i < stackCount; ++i) {
+	for (U64 i = 0; i < stackCount; ++i) {
 
 		struct CapturedStackTrace capture = captured[i];
 
@@ -136,11 +136,11 @@ void Log_printCapturedStackTrace(const StackTrace stackTrace, enum LogLevel lvl)
 
 void Log_log(enum LogLevel lvl, enum LogOptions options, struct LogArgs args) {
 
-	ns t = Timer_now();
+	Ns t = Timer_now();
 
-	u32 thread = Thread_getId();
+	U32 thread = Thread_getId();
 
-	const c8 *hrErr = "";
+	const C8 *hrErr = "";
 
 	if (lvl > LogLevel_Debug) {
 
@@ -170,10 +170,10 @@ void Log_log(enum LogLevel lvl, enum LogOptions options, struct LogArgs args) {
 
 	//[<thread> <time>]: <hr\n><ourStuff> <\n if enabled>
 
-	bool hasTimestamp = options & LogOptions_Timestamp;
-	bool hasThread = options & LogOptions_Thread;
-	bool hasNewLine = options & LogOptions_NewLine;
-	bool hasPrepend = hasTimestamp || hasThread;
+	Bool hasTimestamp = options & LogOptions_Timestamp;
+	Bool hasThread = options & LogOptions_Thread;
+	Bool hasNewLine = options & LogOptions_NewLine;
+	Bool hasPrepend = hasTimestamp || hasThread;
 
 	if (hasPrepend)
 		printf("[");
@@ -202,9 +202,9 @@ void Log_log(enum LogLevel lvl, enum LogOptions options, struct LogArgs args) {
 
 	//Print to console and debug window
 
-	const c8 *newLine = hasNewLine ? "\n" : "";
+	const C8 *newLine = hasNewLine ? "\n" : "";
 
-	for (u64 i = 0; i < args.argc; ++i)
+	for (U64 i = 0; i < args.argc; ++i)
 		printf(
 			"%s%s", 
 			args.args[i].ptr, 
@@ -216,7 +216,7 @@ void Log_log(enum LogLevel lvl, enum LogOptions options, struct LogArgs args) {
 	if (!IsDebuggerPresent())
 		return;
 
-	for (u64 i = 0; i < args.argc; ++i) {
+	for (U64 i = 0; i < args.argc; ++i) {
 
 		OutputDebugStringA(args.args[i].ptr);
 

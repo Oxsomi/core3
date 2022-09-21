@@ -2,10 +2,10 @@
 #include "types/types.h"
 #include "types/error.h"
 
-extern const f32 f32_e;
-extern const f32 f32_pi;
-extern const f32 f32_radToDeg;
-extern const f32 f32_degToRad;
+extern const F32 F32_e;
+extern const F32 F32_pi;
+extern const F32 F32_radToDeg;
+extern const F32 F32_degToRad;
 
 //Math errors assume inputs aren't nan or inf
 //Ensure it's true with extra validation
@@ -13,11 +13,11 @@ extern const f32 f32_degToRad;
 
 //Uint
 
-inline u64 u64_min(u64 v0, u64 v1) { return v0 <= v1 ? v0 : v1; }
-inline u64 u64_max(u64 v0, u64 v1) { return v0 >= v1 ? v0 : v1; }
-inline u64 u64_clamp(u64 v, u64 mi, u64 ma) { return u64_max(mi, u64_min(ma, v)); }
+inline U64 U64_min(U64 v0, U64 v1) { return v0 <= v1 ? v0 : v1; }
+inline U64 U64_max(U64 v0, U64 v1) { return v0 >= v1 ? v0 : v1; }
+inline U64 U64_clamp(U64 v, U64 mi, U64 ma) { return U64_max(mi, U64_min(ma, v)); }
 
-inline struct Error u64_pow2(u64 *res, u64 v) {
+inline struct Error U64_pow2(U64 *res, U64 v) {
 
 	if(!res)
 		return Error_base(GenericError_NullPointer, 0, 0, 0, 0, 0);
@@ -30,7 +30,7 @@ inline struct Error u64_pow2(u64 *res, u64 v) {
 	return Error_none();
 }
 
-inline u64 u64_pow10(u64 v) {
+inline U64 U64_pow10(U64 v) {
 	switch (v) {
 		case 0:		return 1;
 		case 1:		return 10;
@@ -52,7 +52,7 @@ inline u64 u64_pow10(u64 v) {
 		case 17:	return 100'000'000'000'000'000;
 		case 18:	return 1'000'000'000'000'000'000;
 		case 19:	return 10'000'000'000'000'000'000;
-		default:	return u64_MAX;
+		default:	return U64_MAX;
 	}
 }
 
@@ -60,20 +60,20 @@ inline u64 u64_pow10(u64 v) {
 
 //Int
 
-inline i64 i64_min(i64 v0, i64 v1) { return v0 <= v1 ? v0 : v1; }
-inline i64 i64_max(i64 v0, i64 v1) { return v0 >= v1 ? v0 : v1; }
-inline i64 i64_clamp(i64 v, i64 mi, i64 ma) { return i64_max(mi, i64_min(ma, v)); }
+inline I64 I64_min(I64 v0, I64 v1) { return v0 <= v1 ? v0 : v1; }
+inline I64 I64_max(I64 v0, I64 v1) { return v0 >= v1 ? v0 : v1; }
+inline I64 I64_clamp(I64 v, I64 mi, I64 ma) { return I64_max(mi, I64_min(ma, v)); }
 
-inline i64 i64_abs(i64 v) { return v < 0 ? -v : v; }
+inline I64 I64_abs(I64 v) { return v < 0 ? -v : v; }
 
-inline struct Error i64_pow2(i64 v, i64 *res) { 
+inline struct Error I64_pow2(I64 v, I64 *res) { 
 
 	if(!res)
 		return Error_base(GenericError_NullPointer, 0, 0, 0, 0, 0);
 
 	*res = v * v; 
 
-	if(*res < i64_abs(v))
+	if(*res < I64_abs(v))
 		return Error_base(GenericError_Overflow, 0, 1, 0, v, *res);
 
 	return Error_none();
@@ -84,64 +84,64 @@ inline struct Error i64_pow2(i64 v, i64 *res) {
 //		Should also check if the ++ and -- actually increased the float. If not, throw! +- etc can check on lost precision (e.g. 1% of value)
 //TODO: Proper error checking!
 
-inline f32 f32_min(f32 v0, f32 v1) { return v0 <= v1 ? v0 : v1; }
-inline f32 f32_max(f32 v0, f32 v1) { return v0 >= v1 ? v0 : v1; }
-inline f32 f32_clamp(f32 v, f32 mi, f32 ma) { return f32_max(mi, f32_min(ma, v)); }
-inline f32 f32_saturate(f32 v) { return f32_clamp(v, 0, 1); }
+inline F32 F32_min(F32 v0, F32 v1) { return v0 <= v1 ? v0 : v1; }
+inline F32 F32_max(F32 v0, F32 v1) { return v0 >= v1 ? v0 : v1; }
+inline F32 F32_clamp(F32 v, F32 mi, F32 ma) { return F32_max(mi, F32_min(ma, v)); }
+inline F32 F32_saturate(F32 v) { return F32_clamp(v, 0, 1); }
 
 //TODO: Lerp perc should be 0,1
 
-inline f32 f32_lerp(f32 a, f32 b, f32 perc) { return a + (b - a) * perc; }
-inline f32 f32_abs(f32 v) { return v < 0 ? -v : v; }
-f32 f32_sqrt(f32 v);
+inline F32 F32_lerp(F32 a, F32 b, F32 perc) { return a + (b - a) * perc; }
+inline F32 F32_abs(F32 v) { return v < 0 ? -v : v; }
+F32 F32_sqrt(F32 v);
 
 //Inputs should always return false for the runtime, since floats should be validated before they're made
 //As such, these won't be exposed to any user, only natively
 
-bool f32_isnan(f32 v);
-bool f32_isinf(f32 v);
+Bool F32_isnan(F32 v);
+Bool F32_isinf(F32 v);
 
 //
 
-inline struct Error f32_pow2(f32 v, f32 *res) { 
+inline struct Error F32_pow2(F32 v, F32 *res) { 
 
 	if(!res)
 		return Error_base(GenericError_NullPointer, 0, 0, 0, 0, 0);
 
 	*res = v * v; 
 
-	if(f32_isinf(*res))
+	if(F32_isinf(*res))
 		return Error_base(GenericError_Overflow, 0, 1, 0, v, *res);
 
 	return Error_none();
 }
 
-struct Error f32_pow(f32 v, f32 exp, f32 *res);
-f32 f32_expe(f32 v);
-f32 f32_exp2(f32 v);
-f32 f32_exp10(f32 v);
+struct Error F32_pow(F32 v, F32 exp, F32 *res);
+F32 F32_expe(F32 v);
+F32 F32_exp2(F32 v);
+F32 F32_exp10(F32 v);
 
-f32 f32_log10(f32 v);
-f32 f32_loge(f32 v);
-f32 f32_log2(f32 v);
+F32 F32_log10(F32 v);
+F32 F32_loge(F32 v);
+F32 F32_log2(F32 v);
 
-f32 f32_asin(f32 v);
-f32 f32_sin(f32 v);
-f32 f32_cos(f32 v);
-f32 f32_acos(f32 v);
-f32 f32_tan(f32 v);
-f32 f32_atan(f32 v);
-f32 f32_atan2(f32 y, f32 x);
+F32 F32_asin(F32 v);
+F32 F32_sin(F32 v);
+F32 F32_cos(F32 v);
+F32 F32_acos(F32 v);
+F32 F32_tan(F32 v);
+F32 F32_atan(F32 v);
+F32 F32_atan2(F32 y, F32 x);
 
-f32 f32_round(f32 v);
-f32 f32_ceil(f32 v);
-f32 f32_floor(f32 v);
-inline f32 f32_fract(f32 v) { return v - f32_floor(v); }
+F32 F32_round(F32 v);
+F32 F32_ceil(F32 v);
+F32 F32_floor(F32 v);
+inline F32 F32_fract(F32 v) { return v - F32_floor(v); }
 
-struct Error f32_mod(f32 v, f32 mod, f32 *result);
+struct Error F32_mod(F32 v, F32 mod, F32 *result);
 
-inline f32 f32_sign(f32 v) { return v < 0 ? -1.f : (v > 0 ? 1.f : 0.f); }
-inline f32 f32_signInc(f32 v) { return v < 0 ? -1.f : 1.f; }
+inline F32 F32_sign(F32 v) { return v < 0 ? -1.f : (v > 0 ? 1.f : 0.f); }
+inline F32 F32_signInc(F32 v) { return v < 0 ? -1.f : 1.f; }
 
-bool f32_isnan(f32 v);
-bool f32_isinf(f32 v);
+Bool F32_isnan(F32 v);
+Bool F32_isinf(F32 v);

@@ -17,10 +17,28 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 4)
 	message(FATAL_ERROR "32-bit builds are disabled by core3 because it's legacy and could cause unintended behavior if builded anyways.")
 endif()
 
+set(RelaxFloat OFF CACHE BOOL "Relax float (perf > accuracy)")
+
 if(MSVC)
-    add_compile_options(/W4 /WX /MD /MP /GR /arch:AVX2 /D_CRT_SECURE_NO_WARNINGS)
+
+	add_compile_options(/W4 /WX /MD /MP /GR /arch:AVX2 /D_CRT_SECURE_NO_WARNINGS /Gy)
+
+	if(RelaxFloat)
+		add_compile_options(/fp:fast)
+	else()
+		add_compile_options(/fp:strict)
+	endif()
+
 else()
-    add_compile_options(-Wall -Wextra -Werror -mavx2)
+
+	add_compile_options(-Wall -Wextra -Werror -mavx2)
+
+	if(RelaxFloat)
+		add_compile_options(-ffast-math -mfpmath=sse)
+	else()
+		add_compile_options(-fno-unsafe-math-optimizations -mfpmath=sse)
+	endif()
+
 endif()
 
 # Types 

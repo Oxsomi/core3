@@ -9,15 +9,15 @@ struct Thread {
 	void *objectHandle;
 };
 
-impl u32 Thread_getId();
-impl u32 Thread_getLogicalCores();
+impl U32 Thread_getId();
+impl U32 Thread_getLogicalCores();
 
 impl struct Error Thread_create(
 	ThreadCallbackFunction callback, void *objectHandle,
 	struct Thread **thread
 );
 
-impl struct Error Thread_wait(struct Thread *thread, u32 maxWaitTimeMs);
+impl struct Error Thread_wait(struct Thread *thread, U32 maxWaitTimeMs);
 
 struct Error Thread_free(struct Thread **thread);
-struct Error Thread_waitAndCleanup(struct Thread **thread, u32 maxWaitTime);
+struct Error Thread_waitAndCleanup(struct Thread **thread, U32 maxWaitTime);

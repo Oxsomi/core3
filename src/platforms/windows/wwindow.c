@@ -10,7 +10,7 @@
 #include <Windows.h>
 
 struct WWindow {
-	bool running;
+	Bool running;
 };
 
 void WWindow_updateMonitors(struct Window *w) {
@@ -59,7 +59,7 @@ LRESULT CALLBACK onCallback(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
 		case WM_INPUT: {
 
-			u32 size = 0;
+			U32 size = 0;
 			GetRawInputData((HRAWINPUT)lParam, RID_INPUT, NULL, &size, sizeof(RAWINPUTHEADER));
 
 			struct Buffer buf = Bit_bytes(size, Platform_instance.alloc);
@@ -85,7 +85,7 @@ LRESULT CALLBACK onCallback(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
 						auto &keyboardDat = data->data.keyboard;
 
-						u64 id = WKey::idByValue(WKey::_E(keyboardDat.VKey));
+						U64 id = WKey::idByValue(WKey::_E(keyboardDat.VKey));
 
 						//TODO: Keyboard should initialize CAPS, SHIFT, ALT if they get changed or on start/switch
 
@@ -94,10 +94,10 @@ LRESULT CALLBACK onCallback(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 						if (id != WKey::count) {
 
 							String keyName = WKey::nameById(id);
-							u64 keyCode = Key::idByName(keyName);
-							bool isKeyDown = !(keyboardDat.Flags & 1);
+							U64 keyCode = Key::idByName(keyName);
+							Bool isKeyDown = !(keyboardDat.Flags & 1);
 
-							bool pressed = dvc->getCurrentState(ButtonHandle(keyCode));
+							Bool pressed = dvc->getCurrentState(ButtonHandle(keyCode));
 							dvc->setState(ButtonHandle(keyCode), isKeyDown);
 
 							if(pressed != isKeyDown)
@@ -118,7 +118,7 @@ LRESULT CALLBACK onCallback(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
 						auto &mouseDat = data->data.mouse;
 
-						for (u64 i = 0; i < 5; ++i) {
+						for (U64 i = 0; i < 5; ++i) {
 
 							if (mouseDat.usButtonFlags & (1 << (i << 1))) {
 
@@ -146,7 +146,7 @@ LRESULT CALLBACK onCallback(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
 						if (mouseDat.usButtonFlags & RI_MOUSE_WHEEL) {
 
-							f64 delta = i16(mouseDat.usButtonData) / f64(WHEEL_DELTA);
+							F32 delta = I16(mouseDat.usButtonData) / F32(WHEEL_DELTA);
 							dvc->setAxis(MouseAxis::Axis_wheel_y, delta);
 
 							if (vinterface)
@@ -155,7 +155,7 @@ LRESULT CALLBACK onCallback(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
 						if (mouseDat.usButtonFlags & RI_MOUSE_HWHEEL) {
 
-							f64 delta = i16(mouseDat.usButtonData) / f64(WHEEL_DELTA);
+							F32 delta = I16(mouseDat.usButtonData) / F32(WHEEL_DELTA);
 							dvc->setAxis(MouseAxis::Axis_wheel_x, delta);
 
 							if (vinterface)
@@ -164,7 +164,7 @@ LRESULT CALLBACK onCallback(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
 						if (mouseDat.usFlags & MOUSE_MOVE_ABSOLUTE) {
 
-							f64 x = f64(mouseDat.lLastX) - rect.left, y = f64(mouseDat.lLastY) - rect.top;
+							F32 x = F32(mouseDat.lLastX) - rect.left, y = F64(mouseDat.lLastY) - rect.top;
 
 							dvc->setAxis(MouseAxis::Axis_delta_x, dvc->getCurrentAxis(MouseAxis::Axis_x) - x);
 							dvc->setAxis(MouseAxis::Axis_delta_y, dvc->getCurrentAxis(MouseAxis::Axis_y) - y);
@@ -209,8 +209,8 @@ LRESULT CALLBACK onCallback(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 				int x = GET_X_LPARAM(lParam); 
 				int y = GET_Y_LPARAM(lParam);
 
-				dvc->setAxis(MouseAxis::Axis_x, f64(x));
-				dvc->setAxis(MouseAxis::Axis_y, f64(y));
+				dvc->setAxis(MouseAxis::Axis_x, F32(x));
+				dvc->setAxis(MouseAxis::Axis_y, F32(y));
 
 				if (auto *vinterface = ptr->info->vinterface) {
 					vinterface->onInputUpdate(ptr->info, dvc, InputHandle(MouseAxis::Axis_x) + MouseButton::count, false);
@@ -223,21 +223,21 @@ LRESULT CALLBACK onCallback(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 		case WM_INPUT_DEVICE_CHANGE: {
 
 			RID_DEVICE_INFO deviceInfo;
-			u32 size = sizeof(deviceInfo);
+			U32 size = sizeof(deviceInfo);
 
 			oicAssert(
 				"Couldn't get raw input device", 
 				GetRawInputDeviceInfoA((HANDLE)lParam, RIDI_DEVICEINFO, &deviceInfo, &size)
 			);
 
-			bool isAdded = wParam == GIDC_ARRIVAL;
+			Bool isAdded = wParam == GIDC_ARRIVAL;
 			InputDevice *&dvc = ptr->devices[(HANDLE)lParam];
 
-			oicAssert("Device change was already notified", bool(dvc) != isAdded);
+			oicAssert("Device change was already notified", Bool(dvc) != isAdded);
 
 			if (isAdded) {
 
-				bool isKeyboard = deviceInfo.dwType == RIM_TYPEKEYBOARD;
+				Bool isKeyboard = deviceInfo.dwType == RIM_TYPEKEYBOARD;
 
 				if (isKeyboard)
 					info->devices.push_back(dvc = new Keyboard());
@@ -249,7 +249,7 @@ LRESULT CALLBACK onCallback(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
 				RAWINPUTDEVICE device {
 					0x01,
-					u16(isKeyboard ? 0x06 : 0x02),
+					U16(isKeyboard ? 0x06 : 0x02),
 					0x0,
 					hwnd
 				};
@@ -288,10 +288,10 @@ LRESULT CALLBACK onCallback(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
 			//Update interface
 
-			ns now = Timer_now();
+			Ns now = Timer_now();
 
 			if (w->callbacks.update) {
-				f64 dt = w->lastUpdate ? (now - w->lastUpdate) / (f64)seconds : 0;
+				F32 dt = w->lastUpdate ? (now - w->lastUpdate) / (F32)seconds : 0;
 				w->callbacks.update(w, dt);
 			}
 
@@ -333,7 +333,7 @@ LRESULT CALLBACK onCallback(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
 			RECT r;
 			GetClientRect(hwnd, &r);
-			f32x4 newSize = Vec_create2((f32)(r.right - r.left), (f32)(r.bottom - r.top));
+			F32x4 newSize = Vec_create2((F32)(r.right - r.left), (F32)(r.bottom - r.top));
 
 			if (wParam == SIZE_MINIMIZED) 
 				w->flags |= WindowFlags_IsMinimized;
@@ -358,7 +358,7 @@ LRESULT CALLBACK onCallback(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 			RECT r;
 			GetWindowRect(hwnd, &r);
 		
-			w->offset = Vec_create2((f32)r.left, (f32)r.top);
+			w->offset = Vec_create2((F32)r.left, (F32)r.top);
 
 			WWindow_updateMonitors(w);
 
@@ -373,8 +373,8 @@ LRESULT CALLBACK onCallback(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 }
 
 struct Window *Window_createPhysical(
-	f32x4 position, f32x4 size,
-	enum WindowHint hint, const c8 *title, struct WindowCallbacks callbacks,
+	F32x4 position, F32x4 size,
+	enum WindowHint hint, const C8 *title, struct WindowCallbacks callbacks,
 	enum WindowFormat format
 ) {
 	WNDCLASSEXA wc = (WNDCLASSEXA){ 0 };
@@ -411,12 +411,12 @@ struct Window *Window_createPhysical(
 	if(!(hint & WindowHint_HandleInput))
 		style |= WS_DISABLED;
 
-	u32 maxSize[2] = { 
-		(u32) GetSystemMetrics(SM_CXSCREEN), 
-		(u32) GetSystemMetrics(SM_CYSCREEN) 
+	U32 maxSize[2] = { 
+		(U32) GetSystemMetrics(SM_CXSCREEN), 
+		(U32) GetSystemMetrics(SM_CYSCREEN) 
 	};
 
-	for (u64 i = 0; i < 2; ++i)
+	for (U64 i = 0; i < 2; ++i)
 		if (!info->size[i] || info->size[i] >= maxSize[i])
 			info->size[i] = maxSize[i];
 
@@ -434,16 +434,16 @@ struct Window *Window_createPhysical(
 
 	RECT r = (RECT){ 0 };
 	GetClientRect(hwnd, &r);
-	size = Vec_create2((f32)(r.right - r.left), (f32)(r.bottom - r.top));
+	size = Vec_create2((F32)(r.right - r.left), (F32)(r.bottom - r.top));
 
 	GetWindowRect(hwnd, &r);
-	position = Vec_create2((f32) r.left, (f32) r.top);
+	position = Vec_create2((F32) r.left, (F32) r.top);
 
 	//Find overlapping monitors
 
 	//TODO:
 
-	u64 monitorCount = 0;
+	U64 monitorCount = 0;
 	struct Monitor *monitors = NULL;
 
 	//Create our real window
@@ -484,7 +484,7 @@ struct Window *Window_createPhysical(
 }
 
 //We probably won't need more windows for any other reason. Otherwise just use window in a window
-const u64 WindowManager_maxTotalPhysicalWindowCount = 16;
+const U64 WindowManager_maxTotalPhysicalWindowCount = 16;
 
 void Window_freePhysical(struct Window **w) {
 
@@ -505,7 +505,7 @@ void Window_freePhysical(struct Window **w) {
 	*w = NULL;
 }
 
-void Window_updatePhysicalTitle(const struct Window *w, const c8 *title) {
+void Window_updatePhysicalTitle(const struct Window *w, const C8 *title) {
 
 	if(!w)
 		Log_fatal("Couldn't update physical title; invalid window", LogOptions_Default);

@@ -52,7 +52,7 @@ struct Error File_read(struct String loc, struct Allocator allocator, struct Buf
 		return (struct Error){ .genericError = GenericError_InvalidState, .errorSubId = 0 };
 	}
 
-	struct Error err = Bit_createBytes((u64)_ftelli64(f), allocator, &output);
+	struct Error err = Bit_createBytes((U64)_ftelli64(f), allocator, &output);
 	
 	if(err.genericError) {
 		fclose(f);

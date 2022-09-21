@@ -45,7 +45,7 @@ enum TextureCompressionType {
 //(in octal): 0'<uint2Size>'<primitive>'<alignmentX>'<hasRed>'<alignmentY>'<hasGreen>'<type>'<hasBlue>'0'<hasAlpha>
 //Type is TextureAlignment
 //Spaces is TextureCompressionType
-//booleans of >1 are also invalid
+//Booleans of >1 are also invalid
 //For compression, the nibbleSize is replaced with size in uint2s (8-byte)
 //E.g. 0 = 8 byte, 1 = 16 byte
 //
@@ -179,40 +179,40 @@ inline enum TexturePrimitive TextureFormat_getPrimitive(enum TextureFormat f) {
 	return (enum TexturePrimitive)((f >> 24) & 7); 
 }
 
-inline bool TextureFormat_getIsCompressed(enum TextureFormat f) { 
+inline Bool TextureFormat_getIsCompressed(enum TextureFormat f) { 
 	return TextureFormat_getPrimitive(f) == TexturePrimitive_Compressed; 
 }
 
-inline u64 TextureFormat_getBits(enum TextureFormat f) { 
-	u64 siz = (f >> 27) + 1;
+inline U64 TextureFormat_getBits(enum TextureFormat f) { 
+	U64 siz = (f >> 27) + 1;
 	return siz << (TextureFormat_getIsCompressed(f) ? 6 : 2);
 }
 
-inline u64 TextureFormat_getAlphaBits(enum TextureFormat f) { 
+inline U64 TextureFormat_getAlphaBits(enum TextureFormat f) { 
 	return TextureFormat_getIsCompressed(f) ? f & 7 : (f & 077) << 1; 
 }
 
-inline u64 TextureFormat_getBlueBits(enum TextureFormat f) { 
+inline U64 TextureFormat_getBlueBits(enum TextureFormat f) { 
 	return TextureFormat_getIsCompressed(f) ? (f >> 6) & 7 : ((f >> 3) & 077) << 1; 
 }
 
-inline u64 TextureFormat_getGreenBits(enum TextureFormat f) { 
+inline U64 TextureFormat_getGreenBits(enum TextureFormat f) { 
 	return TextureFormat_getIsCompressed(f) ? (f >> 12) & 7 : ((f >> 6) & 077) << 1; 
 }
 
-inline u64 TextureFormat_getRedBits(enum TextureFormat f) { 
+inline U64 TextureFormat_getRedBits(enum TextureFormat f) { 
 	return TextureFormat_getIsCompressed(f) ? (f >> 18) & 7 : ((f >> 9) & 077) << 1; 
 }
 
-inline bool TextureFormat_hasRed(enum TextureFormat f) { return TextureFormat_getRedBits(f); }
-inline bool TextureFormat_hasGreen(enum TextureFormat f) { return TextureFormat_getGreenBits(f); }
-inline bool TextureFormat_hasBlue(enum TextureFormat f) { return TextureFormat_getBlueBits(f); }
-inline bool TextureFormat_hasAlpha(enum TextureFormat f) { return TextureFormat_getAlphaBits(f); }
+inline Bool TextureFormat_hasRed(enum TextureFormat f) { return TextureFormat_getRedBits(f); }
+inline Bool TextureFormat_hasGreen(enum TextureFormat f) { return TextureFormat_getGreenBits(f); }
+inline Bool TextureFormat_hasBlue(enum TextureFormat f) { return TextureFormat_getBlueBits(f); }
+inline Bool TextureFormat_hasAlpha(enum TextureFormat f) { return TextureFormat_getAlphaBits(f); }
 
-inline u64 TextureFormat_getChannels(enum TextureFormat f) {
+inline U64 TextureFormat_getChannels(enum TextureFormat f) {
 	return 
-		(u64)TextureFormat_hasRed(f)  + (u64)TextureFormat_hasGreen(f) + 
-		(u64)TextureFormat_hasBlue(f) + (u64)TextureFormat_hasAlpha(f);
+		(U64)TextureFormat_hasRed(f)  + (U64)TextureFormat_hasGreen(f) + 
+		(U64)TextureFormat_hasBlue(f) + (U64)TextureFormat_hasAlpha(f);
 }
 
 inline enum TextureCompressionType TextureFormat_getCompressionType(enum TextureFormat f) {
@@ -226,7 +226,7 @@ inline enum TextureCompressionType TextureFormat_getCompressionType(enum Texture
 //Get the alignments (x, y) of a texture format
 //Returns false if it doesn't need alignment (so alignment = 1x1)
 
-inline bool TextureFormat_getAlignment(enum TextureFormat f, u8 *x, u8 *y) {
+inline Bool TextureFormat_getAlignment(enum TextureFormat f, U8 *x, U8 *y) {
 
 	if(!TextureFormat_getIsCompressed(f))
 		return false;
@@ -238,18 +238,18 @@ inline bool TextureFormat_getAlignment(enum TextureFormat f, u8 *x, u8 *y) {
 }
 
 //Get texture's size in bytes
-//Returns u64_MAX if misaligned (compressed formats)
+//Returns U64_MAX if misaligned (compressed formats)
 
-inline u64 TextureFormat_getSize(enum TextureFormat f, u64 w, u64 h) {
+inline U64 TextureFormat_getSize(enum TextureFormat f, U64 w, U64 h) {
 
-	u8 alignW = 1, alignH = 1;
+	U8 alignW = 1, alignH = 1;
 
 	//If compressed; the size of the texture format is specified per blocks
 
 	if (TextureFormat_getAlignment(f, &alignW, &alignH)) {
 
 		if(w % alignW || h % alignH)
-			return u64_MAX;
+			return U64_MAX;
 		
 		w /= alignW;
 		h /= alignH;

@@ -4,9 +4,9 @@
 
 #include <Windows.h>
 
-u32 Thread_getId() { return GetCurrentThreadId(); }
+U32 Thread_getId() { return GetCurrentThreadId(); }
 
-u32 Thread_getLogicalCores() {
+U32 Thread_getLogicalCores() {
 
 	SYSTEM_INFO info;
 	GetSystemInfo(&info);
@@ -30,7 +30,7 @@ struct Error Thread_create(
 	if(*thread)
 		return (struct Error) { 
 			.genericError = GenericError_InvalidParameter, 
-			.paramId = 2, .paramValue0 = (u64) thread 
+			.paramId = 2, .paramValue0 = (U64) thread 
 		};
 
 	if(!callback)
@@ -60,9 +60,9 @@ struct Error Thread_create(
 	return Error_none();
 }
 
-struct Error Thread_wait(struct Thread *thread, u32 maxWaitTimeMs) {
+struct Error Thread_wait(struct Thread *thread, U32 maxWaitTimeMs) {
 
-	if(WaitForSingleObject(thread->nativeHandle, !maxWaitTimeMs ? u32_MAX : maxWaitTimeMs) == WAIT_FAILED)
+	if(WaitForSingleObject(thread->nativeHandle, !maxWaitTimeMs ? U32_MAX : maxWaitTimeMs) == WAIT_FAILED)
 		return (struct Error) {
 			.genericError = GenericError_InvalidOperation
 		};

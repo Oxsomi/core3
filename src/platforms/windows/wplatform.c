@@ -9,7 +9,7 @@
 
 void sigFunc(int signal) {
 
-	const c8 *msg = "Undefined instruction";;
+	const C8 *msg = "Undefined instruction";;
 
 	switch (signal) {
 		case SIGABRT:	msg = "Abort was called";					break;
@@ -31,7 +31,7 @@ void sigFunc(int signal) {
 	exit(signal);
 }
 
-void *allocCallback(void *allocator, u64 siz) {
+void *allocCallback(void *allocator, U64 siz) {
 	allocator;
 	return malloc(siz);
 }
@@ -51,6 +51,8 @@ int main(int argc, const char *argv[]) {
 		signal(SIGSEGV, sigFunc);
 		signal(SIGTERM, sigFunc);
 	#endif
+
+	Math_initPlatform();
 
 	Platform_create(argc, argv, GetModuleHandleA(NULL), allocCallback, freeCallback, NULL);
 

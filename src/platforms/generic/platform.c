@@ -6,7 +6,7 @@
 struct Platform Platform_instance = { 0 };
 
 struct Error Platform_create(
-	int cmdArgc, const c8 *cmdArgs[], 
+	int cmdArgc, const C8 *cmdArgs[], 
 	void *data, 
 	FreeFunc free, AllocFunc alloc, void *allocator
 ) {
@@ -75,7 +75,7 @@ void Program_cleanup() {
 	Platform_instance =	(struct Platform) { 0 };
 }
 
-struct Error Error_traced(enum GenericError err, u32 subId, u32 paramId, u32 paramSubId, u64 paramValue0, u64 paramValue1) {
+struct Error Error_traced(enum GenericError err, U32 subId, U32 paramId, U32 paramSubId, U64 paramValue0, U64 paramValue1) {
 	struct Error res = Error_base(err, subId, paramId, paramSubId, paramValue0, paramValue1);
 	Log_captureStackTrace(res.stackTrace, ERROR_STACKTRACE, 0);
 	return res;

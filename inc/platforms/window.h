@@ -47,19 +47,19 @@ enum WindowFlags {
 };
 
 typedef void (*WindowCallback)(struct Window*);
-typedef void (*WindowUpdateCallback)(struct Window*, f64);
+typedef void (*WindowUpdateCallback)(struct Window*, F32);
 
 struct WindowCallbacks {
 	WindowCallback start, end, draw, resize, move, updateMonitors, updateFocus;
 	WindowUpdateCallback update;
 };
 
-typedef u16 WindowHandle;
+typedef U16 WindowHandle;
 
 struct Window {
 
-	i32x2 offset;
-	i32x2 size;
+	I32x2 offset;
+	I32x2 size;
 
 	struct Buffer cpuVisibleBuffer;
 
@@ -71,7 +71,7 @@ struct Window {
 
 	WindowHandle handle;
 
-	ns lastUpdate;
+	Ns lastUpdate;
 
 	enum WindowHint hint;
 	enum WindowFormat format;
@@ -89,7 +89,7 @@ impl struct Error Window_presentPhysical(
 	const struct Window *w, 
 	struct Buffer data, 
 	enum WindowFormat encodedFormat,
-	bool isTiled4
+	Bool isTiled4
 );
 
 //Virtual windows
@@ -98,32 +98,32 @@ struct Error Window_presentVirtual(
 	const struct Window *w, 
 	struct Buffer data, 
 	enum WindowFormat encodedFormat,
-	bool isTiled4
+	Bool isTiled4
 );
 
 struct Error Window_resizeVirtual(
 	struct Window *w, 
-	bool copyData, 
-	i32x2 newSize
+	Bool copyData, 
+	I32x2 newSize
 );
 
 struct Error Window_storeCPUBufferToDisk(const struct Window *w, struct String filePath);
 
 //Simple helper functions
 
-inline bool Window_isVirtual(const struct Window *w) { return w && w->flags & WindowFlags_IsVirtual; }
-inline bool Window_isMinimized(const struct Window *w) { return w && w->flags & WindowFlags_IsMinimized; }
-inline bool Window_isFocussed(const struct Window *w) { return w && w->flags & WindowFlags_IsFocussed; }
-inline bool Window_isFullScreen(const struct Window *w) { return w && w->flags & WindowFlags_IsFullscreen; }
+inline Bool Window_isVirtual(const struct Window *w) { return w && w->flags & WindowFlags_IsVirtual; }
+inline Bool Window_isMinimized(const struct Window *w) { return w && w->flags & WindowFlags_IsMinimized; }
+inline Bool Window_isFocussed(const struct Window *w) { return w && w->flags & WindowFlags_IsFocussed; }
+inline Bool Window_isFullScreen(const struct Window *w) { return w && w->flags & WindowFlags_IsFullscreen; }
 
-inline bool Window_doesHandleInput(const struct Window *w) { return w && w->hint & WindowHint_HandleInput; }
-inline bool Window_doesAllowFullScreen(const struct Window *w) { return w && w->hint & WindowHint_AllowFullscreen; }
+inline Bool Window_doesHandleInput(const struct Window *w) { return w && w->hint & WindowHint_HandleInput; }
+inline Bool Window_doesAllowFullScreen(const struct Window *w) { return w && w->hint & WindowHint_AllowFullscreen; }
 
 inline struct Error Window_present(
 	const struct Window *w,
 	struct Buffer data,
 	enum WindowFormat encodedFormat,
-	bool isTiled4
+	Bool isTiled4
 ) {
 
 	if (!w)
