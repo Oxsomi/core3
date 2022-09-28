@@ -23,7 +23,8 @@ enum GenericError {
 	GenericError_RateLimit,
 	GenericError_LoopLimit,				/// If the platform decides that loop limit is reached, this will be thrown
 	GenericError_AlreadyDefined,
-	GenericError_UnsupportedOperation
+	GenericError_UnsupportedOperation,
+	GenericError_TimedOut
 };
 
 //Only direct caller preserved to save space in release mode

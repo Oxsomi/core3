@@ -1,6 +1,5 @@
 #include "formats/bmp.h"
 #include "types/bit.h"
-#include "types/assert.h"
 #include "types/allocator.h"
 
 #pragma pack(push, 1)
@@ -32,15 +31,14 @@ struct BMPColorHeader {
 const U16 BMP_magic = 0x4D42;
 const U32 BMP_srgbMagic = 0x73524742;
 
-struct Buffer BMP_writeRGBA(
+struct Error BMP_writeRGBA(
 	struct Buffer buf, U16 w, U16 h, Bool isFlipped, 
-	struct Allocator allocator
+	struct Allocator allocator,
+	struct Buffer *result
 ) {
 
-	ocAssert(
-		"BMP can only be up to 2GiB and should match dimensions", 
-		buf.siz <= I32_MAX && buf.siz == (U64)w * h * 4
-	);
+	if(buf.siz > I32_MAX || buf.siz != (U64) w * h * 4)
+		return (struct Error) { .genericError = GenericError_InvalidParameter };
 
 	U32 headersSize = (U32) (
 		sizeof(struct BMPHeader) + 
@@ -61,10 +59,7 @@ struct Buffer BMP_writeRGBA(
 		.height = h,
 		.planes = 1,
 		.bitCount = 32,
-		.compression = 3,		//rgba8
-		.compressedSize = 0,
-		.xPixPerM = 0, .yPixPerM = 0,
-		.colorsUsed = 0, .colorsImportant = 0
+		.compression = 3		//rgba8
 	};
 
 	struct BMPColorHeader colorHeader = (struct BMPColorHeader) {
@@ -77,17 +72,39 @@ struct Buffer BMP_writeRGBA(
 		.colorSpaceType = BMP_srgbMagic
 	};
 
-	struct Buffer file = Bit_bytes(
+	struct Buffer file = (struct Buffer) { 0 }; 
+
+	struct Error err = Bit_createBytes(
 		headersSize + buf.siz,
-		allocator
+		allocator,
+		&file
 	);
 
+	if(err.genericError)
+		return err;
+
 	struct Buffer fileAppend = file;
+	*result = file;
 
-	Bit_append(&fileAppend, &header, sizeof(header));
-	Bit_append(&fileAppend, &infoHeader, sizeof(infoHeader));
-	Bit_append(&fileAppend, &colorHeader, sizeof(colorHeader));
-	Bit_appendBuffer(&fileAppend, buf);
+	err = Bit_append(&fileAppend, &header, sizeof(header));
 
-	return file;
+	if(err.genericError)
+		return err;
+
+	err = Bit_append(&fileAppend, &infoHeader, sizeof(infoHeader));
+
+	if(err.genericError)
+		return err;
+
+	err = Bit_append(&fileAppend, &colorHeader, sizeof(colorHeader));
+
+	if(err.genericError)
+		return err;
+
+	err = Bit_appendBuffer(&fileAppend, buf);
+
+	if(err.genericError)
+		return err;
+
+	return Error_none();
 }

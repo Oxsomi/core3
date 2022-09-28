@@ -43,10 +43,10 @@ impl struct Error WindowManager_waitForExitAll(struct WindowManager *manager, Ns
 
 struct Error WindowManager_createVirtual(
 	struct WindowManager *manager, 
-	struct Window **result,
 	I32x2 size, 
 	struct WindowCallbacks callbacks, 
-	enum WindowFormat format
+	enum WindowFormat format,
+	struct Window **result
 );
 
 struct Error WindowManager_freeVirtual(struct WindowManager *manager, struct Window **handle);
@@ -79,7 +79,7 @@ inline struct Error WindowManager_create(
 			manager, position, size, hint, title, callbacks, format, w
 		);
 
-	return WindowManager_createVirtual(manager, w, size, callbacks, format);
+	return WindowManager_createVirtual(manager, size, callbacks, format, w);
 }
 
 inline struct Error WindowManager_free(struct WindowManager *manager, struct Window **w) {

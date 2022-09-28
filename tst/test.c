@@ -38,10 +38,24 @@ int main() {
 
 	//Test Bit helper
 
-	struct Buffer emp = Bit_createEmpty(256, alloc);
-	struct Buffer full = Bit_createFull(256, alloc);
+	struct Buffer emp = (struct Buffer) { 0 };
 
-	if (Bit_eq(emp, full)) {
+	struct Error err = Bit_createEmpty(256, alloc, &emp);
+
+	if(err.genericError)
+		return 4;
+
+	struct Buffer full = (struct Buffer) { 0 }; 
+	err = Bit_createFull(256, alloc, &full);
+
+	if(err.genericError) {
+		Bit_free(&emp, alloc);
+		return 5;
+	}
+
+	Bool res = false;
+
+	if (Bit_eq(emp, full, &res).genericError || res) {
 		Bit_free(&emp, alloc);
 		Bit_free(&full, alloc);
 		return 2;
@@ -52,7 +66,7 @@ int main() {
 
 	Bit_not(emp);
 
-	if (Bit_neq(emp, full)) {
+	if (Bit_neq(emp, full, &res).genericError || res) {
 		Bit_free(&emp, alloc);
 		Bit_free(&full, alloc);
 		return 3;

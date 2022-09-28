@@ -15,7 +15,10 @@ U32 Thread_getLogicalCores() {
 }
 
 DWORD ThreadFunc(struct Thread *thread) {
-	thread->callback(thread->objectHandle);
+
+	if(thread && thread->callback)
+		thread->callback(thread->objectHandle);
+
 	return 0;
 }
 
@@ -64,7 +67,7 @@ struct Error Thread_wait(struct Thread *thread, U32 maxWaitTimeMs) {
 
 	if(WaitForSingleObject(thread->nativeHandle, !maxWaitTimeMs ? U32_MAX : maxWaitTimeMs) == WAIT_FAILED)
 		return (struct Error) {
-			.genericError = GenericError_InvalidOperation
+			.genericError = GenericError_TimedOut
 		};
 
 	return Error_none();

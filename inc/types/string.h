@@ -465,8 +465,8 @@ struct StringList {
 	struct String *ptr;
 };
 
-struct Error StringList_create(U64 len, struct Allocator alloc, struct StringList **result);
-struct Error StringList_free(struct StringList **arr, struct Allocator alloc);
+struct Error StringList_create(U64 len, struct Allocator alloc, struct StringList *result);
+struct Error StringList_free(struct StringList *arr, struct Allocator alloc);
 
 struct Error StringList_createCopy(const struct StringList *toCopy, struct StringList **arr, struct Allocator alloc);
 

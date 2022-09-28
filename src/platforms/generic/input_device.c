@@ -10,13 +10,13 @@
 //F32[floatStates*2]
 //u2[booleanStates]
 
-inline struct InputButton *InputDevice_getButtonName(struct InputDevice dev, U16 localHandle) {
+inline struct InputButton *InputDevice_getButton(struct InputDevice dev, U16 localHandle) {
 
 	return localHandle >= dev.buttons ? NULL : 
 		(struct InputButton*)((struct InputAxis*) dev.handles.ptr + dev.axes) + localHandle;
 }
 
-inline struct InputAxis *InputDevice_getAxisName(struct InputDevice dev, U16 localHandle) {
+inline struct InputAxis *InputDevice_getAxis(struct InputDevice dev, U16 localHandle) {
 	return localHandle >= dev.axes ? NULL :
 		(struct InputAxis*) dev.handles.ptr + localHandle;
 }
@@ -71,7 +71,7 @@ struct Error InputDevice_create(U16 buttons, U16 axes, struct InputDevice *resul
 
 #define InputDeviceCreate(InputType) 																\
 																									\
-	struct Input##InputType *inputType = InputDevice_get##InputType##Name(d, localHandle);			\
+	struct Input##InputType *inputType = InputDevice_get##InputType(d, localHandle);				\
 																									\
 	if(!res)																						\
 		return (struct Error) { .genericError = GenericError_OutOfBounds, .paramId = 1 };			\
@@ -85,11 +85,11 @@ struct Error InputDevice_create(U16 buttons, U16 axes, struct InputDevice *resul
 	if(String_isEmpty(keyName))																		\
 		return (struct Error) { .genericError = GenericError_InvalidParameter, .paramId = 2 };		\
 																									\
-	if(keyName.len >= ShortString_LEN)																\
+	if(keyName.len >= LongString_LEN)																\
 		return (struct Error) { .genericError = GenericError_OutOfBounds, .paramId = 2 };			\
 																									\
 	Bit_copy(																						\
-		Bit_createRef(inputType->name, ShortString_LEN), 											\
+		Bit_createRef(inputType->name, LongString_LEN), 											\
 		Bit_createRef(keyName.ptr, keyName.len + 1)													\
 	);																								\
 																									\
@@ -135,10 +135,7 @@ struct Error InputDevice_free(struct InputDevice *dev) {
 	err = free(allocator, dev->states);
 	*dev = (struct InputDevice){ 0 };
 
-	if(err.genericError)
-		return err;
-
-	return Error_none();
+	return err;
 }
 
 enum InputState InputDevice_getState(struct InputDevice d, InputHandle handle) {
@@ -171,9 +168,9 @@ struct String InputDevice_getName(struct InputDevice d, InputHandle handle) {
 	U16 localHandle = InputDevice_getLocalHandle(d, handle);
 
 	if(InputDevice_isAxis(d, handle))
-		return String_createRefShortStringConst(InputDevice_getAxisName(d, localHandle)->name);
+		return String_createRefLongStringConst(InputDevice_getAxis(d, localHandle)->name);
 
-	return String_createRefShortStringConst(InputDevice_getButtonName(d, localHandle)->name);
+	return String_createRefLongStringConst(InputDevice_getButton(d, localHandle)->name);
 }
 
 InputHandle InputDevice_getHandle(struct InputDevice d, struct String name) {
@@ -182,7 +179,7 @@ InputHandle InputDevice_getHandle(struct InputDevice d, struct String name) {
 
 	for(U16 i = 0; i < d.buttons; ++i)
 		if(String_equalsString(
-			String_createRefShortStringConst(InputDevice_getButtonName(d, i)->name), 
+			String_createRefLongStringConst(InputDevice_getButton(d, i)->name), 
 			name,
 			StringCase_Insensitive
 		))
@@ -190,7 +187,7 @@ InputHandle InputDevice_getHandle(struct InputDevice d, struct String name) {
 
 	for(U16 i = 0; i < d.axes; ++i)
 		if(String_equalsString(
-			String_createRefShortStringConst(InputDevice_getAxisName(d, i)->name), 
+			String_createRefLongStringConst(InputDevice_getAxis(d, i)->name), 
 			name,
 			StringCase_Insensitive
 		))
@@ -201,7 +198,7 @@ InputHandle InputDevice_getHandle(struct InputDevice d, struct String name) {
 
 F32 InputDevice_getDeadZone(struct InputDevice d, InputHandle handle) {
 	return !InputDevice_isAxis(d, handle) ? 0 : 
-		InputDevice_getAxisName(d, InputDevice_getLocalHandle(d, handle))->deadZone;
+		InputDevice_getAxis(d, InputDevice_getLocalHandle(d, handle))->deadZone;
 }
 
 //This should only be handled by platform updating the input device

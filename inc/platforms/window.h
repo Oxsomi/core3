@@ -1,6 +1,7 @@
 #pragma once
 #include "types/vec.h"
 #include "formats/texture.h"
+#include "lock.h"
 
 //There are two types of windows;
 //Physical windows and virtual windows.
@@ -10,7 +11,7 @@
 //A server would have 0 windows.
 //
 //A virtual window is basically just a render target and can always be used.
-//It can be created as a fallback if no API is present, but has to be manually written to disk.
+//It can be created as a fallback if no API is present, but has to be manually written to disk (Window_presentCPUBuffer).
 
 //A hint is only used as a *hint* to the impl.
 //
@@ -21,7 +22,7 @@ enum WindowHint {
 	WindowHint_DisableResize			= 1 << 2,
 	WindowHint_ForceFullscreen			= 1 << 3,
 	WindowHint_AllowBackgroundUpdates	= 1 << 4,
-	WindowHint_ProvideCPUBuffer			= 1 << 5,	//A hint used to indicate we write from CPU. Useful for physical windows CPU accessible
+	WindowHint_ProvideCPUBuffer			= 1 << 5,	//We write from CPU. Useful for physical windows CPU accessible
 
 	WindowHint_None						= 0,
 	WindowHint_Default					= WindowHint_HandleInput | WindowHint_AllowFullscreen
@@ -65,7 +66,7 @@ struct Window {
 
 	void *nativeHandle;
 	void *nativeData;
-	void *lock;
+	struct Lock lock;
 
 	struct WindowCallbacks callbacks;
 
@@ -101,7 +102,7 @@ struct Error Window_presentVirtual(
 	Bool isTiled4
 );
 
-struct Error Window_resizeVirtual(
+struct Error Window_resizeCPUBuffer(		//Should be called if virtual or WindowHint_ProvideCPUBuffer
 	struct Window *w, 
 	Bool copyData, 
 	I32x2 newSize
@@ -146,5 +147,5 @@ struct Error Window_presentCPUBuffer(		//Presenting CPU buffer to a file (when v
 	if (Window_isVirtual(w))
 		return Window_storeCPUBufferToDisk(w, file);
 
-	return Window_presentCPUBufferPhysical(w);
+	return Window_presentPhysical(w, w->cpuVisibleBuffer, w->format, false);
 }

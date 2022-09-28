@@ -22,19 +22,23 @@ struct Error Platform_create(
 	if (err.genericError)
 		return err;
 
+	struct Allocator allocatorStruct = (struct Allocator) {
+		.free = free,
+		.alloc = alloc,
+		.ptr = allocator
+	};
+
 	struct String *cmdArgsSized = NULL;
+	struct StringList sl = (struct StringList){ 0 };
 
 	if(cmdArgc > 1) {
 
-		struct Buffer buf = (struct Buffer){ 0 };
-		struct Error err = alloc(allocator, sizeof(struct String) * (cmdArgc - 1), &buf);
+		err = StringList_create(cmdArgc - 1, allocatorStruct, &sl);
 
 		if (err.genericError) {
 			WindowManager_freeSelf(&Platform_instance.windowManager);
 			return err;
 		}
-
-		cmdArgsSized = (struct String*) buf.ptr;
 
 		//If we're passed invalid cmdArg this could be a problem
 		//But that'd happen anyways
@@ -45,15 +49,10 @@ struct Error Platform_create(
 
 	Platform_instance =	(struct Platform) {
 		.platformType = _PLATFORM_TYPE,
-		.cmdArgc = cmdArgc,
-		.cmdArgs = cmdArgsSized,
+		.args = sl,
 		.windowManager = Platform_instance.windowManager,		//This one is initialized already
 		.data = data,
-		.alloc = (struct Allocator) {
-			.free = free,
-			.alloc = alloc,
-			.ptr = allocator
-		}
+		.alloc = allocatorStruct
 	};
 
 	return Error_none();
@@ -65,12 +64,7 @@ void Program_cleanup() {
 		return;
 
 	WindowManager_freeSelf(&Platform_instance.windowManager);
-
-	if(Platform_instance.cmdArgc)
-		Platform_instance.alloc.free(
-			Platform_instance.alloc.ptr, 
-			Bit_createRef(Platform_instance.cmdArgs, Platform_instance.cmdArgc * sizeof(struct String))
-		);
+	StringList_free(&Platform_instance.args, Platform_instance.alloc);
 
 	Platform_instance =	(struct Platform) { 0 };
 }

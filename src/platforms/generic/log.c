@@ -32,7 +32,7 @@ void Log_fatal(struct String s, enum LogOptions options) {
 	exit(1);
 }
 
-const C8 naiveBase64[] = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$";
+const C8 nytoBase64[] = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_$";
 
 void Log_num(LongString result, U64 v, U64 base, const C8 prepend[2]) {
 
@@ -58,7 +58,7 @@ void Log_num(LongString result, U64 v, U64 base, const C8 prepend[2]) {
 	U64 j = 0;
 
 	while (v && j < 64 - i) {
-		tmp[j++] = naiveBase64[v % base];
+		tmp[j++] = nytoBase64[v % base];
 		v /= base;
 	}
 

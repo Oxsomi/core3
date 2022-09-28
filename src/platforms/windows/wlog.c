@@ -26,11 +26,11 @@ struct CapturedStackTrace {
 
 	//Module and symbol
 
-	const C8 *mod, *sym;
+	struct String mod, sym;
 
 	//File and line don't have to be specified, for external calls
 
-	const C8 *fil;
+	struct String fil;
 	U32 lin;
 };
 
@@ -95,14 +95,14 @@ void Log_printCapturedStackTrace(const StackTrace stackTrace, enum LogLevel lvl)
 				continue;
 
 			struct CapturedStackTrace *capture = captured + i;
-			capture->mod = modulePath;
-			capture->sym = symbolName;
+			capture->mod = String_createRefConst(modulePath, MAX_PATH);
+			capture->sym = String_createRefConst(symbolName, MAX_PATH);
 
 			if (moduleBase == (U64)processModule)
 				capture->mod = String_lastPath(capture->mod);
 
 			if(line.FileName)
-				capture->fil = line.FileName;
+				capture->fil = String_createRefConst(line.FileName, MAX_PATH);
 
 			capture->lin = line.LineNumber;
 		}
@@ -116,18 +116,25 @@ void Log_printCapturedStackTrace(const StackTrace stackTrace, enum LogLevel lvl)
 
 		struct CapturedStackTrace capture = captured[i];
 
-		if(!capture.sym)
+		if(!capture.sym.len)
 			printf("%p\n", stackTrace[i]);
 
 		else if(capture.lin)
 			printf(
-				"%p: %s!%s (%s, Line %u)\n", 
+				"%p: %.*s!%.*s (%.*s, Line %u)\n", 
 				stackTrace[i], 
-				capture.mod, capture.sym, 
-				capture.fil, capture.lin
+				capture.mod.len, capture.mod.ptr, 
+				capture.sym.len, capture.sym.ptr,
+				capture.fil.len, capture.fil.ptr, 
+				capture.lin
 			);
 
-		else printf("%p: %s!%s\n", stackTrace[i], capture.mod, capture.sym);
+		else printf(
+			"%p: %.*s!%.*s\n", 
+			stackTrace[i], 
+			capture.mod.len, capture.mod.ptr, 
+			capture.sym.len, capture.sym.ptr
+		);
 	}
 
 	if(hasSymbols)
@@ -206,8 +213,8 @@ void Log_log(enum LogLevel lvl, enum LogOptions options, struct LogArgs args) {
 
 	for (U64 i = 0; i < args.argc; ++i)
 		printf(
-			"%s%s", 
-			args.args[i].ptr, 
+			"%.*s%s", 
+			args.args[i].len, args.args[i].ptr,
 			newLine
 		);
 

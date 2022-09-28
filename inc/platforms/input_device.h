@@ -20,11 +20,11 @@ enum InputType {
 typedef U32 InputHandle;		//Don't serialize this, because input devices can change it. Use the name instead.
 
 struct InputButton {
-	ShortString name;
+	LongString name;
 };
 
 struct InputAxis {
-	ShortString name;
+	LongString name;
 	F32 deadZone;
 };
 
@@ -36,16 +36,15 @@ struct InputDevice {
 
 	//The names of all handles
 	//InputAxis[axes]
-	//const C8 names[32][buttons]
+	//LongString names[buttons]
 
 	struct Buffer handles;
 
 	//Bitset for the states of the buttons/axes
 	//F32[floatStates*2]
-	//u2[BooleanStates]
+	//u2[booleanStates]
 
 	struct Buffer states;
-
 };
 
 //Initializing a device

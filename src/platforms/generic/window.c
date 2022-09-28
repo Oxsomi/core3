@@ -1,5 +1,6 @@
 #include "platforms/window.h"
 #include "platforms/platform.h"
+#include "file/file.h"
 #include "types/error.h"
 #include "types/bit.h"
 #include "types/string.h"
@@ -34,19 +35,13 @@ struct Error Window_createVirtual(
 	if(I32x2_leq(size, I32x2_zero()))
 		return (struct Error) { .genericError = GenericError_InvalidParameter };
 
-	AllocFunc alloc = Platform_instance.alloc.alloc;
-	FreeFunc free = Platform_instance.alloc.free;
-	void *allocator = Platform_instance.alloc.ptr;
-
 	struct Buffer buffer = (struct Buffer){ 0 };
-	struct Error err = alloc(allocator, sizeof(struct Window), &buffer);
+	struct Error err = Bit_createBytes(sizeof(struct Window), Platform_instance.alloc, &buffer);
 
 	if(err.genericError)
 		return err;
 
 	struct Window *win = (*w = (struct Window*) buffer.ptr);
-
-	void *nativeHandle;
 
 	*win = (struct Window) {
 		.size = size,
@@ -55,26 +50,14 @@ struct Error Window_createVirtual(
 		.flags = WindowFlags_IsVirtual | WindowFlags_IsFocussed
 	};
 
-	err = alloc(allocator, sizeof(struct Buffer), &buffer);
-
-	if(err.genericError) {
-		free(allocator, Bit_createRef(w, sizeof(struct Window)));
-		return err;
-	}
-
-	struct Buffer *buf = (struct Buffer*) buffer.ptr;
-
 	U64 size1D = TextureFormat_getSize((enum TextureFormat) format, I32x2_x(size), I32x2_y(size));
-	err = alloc(allocator, size1D, &buffer);
+	err = Bit_createEmpty(size1D, Platform_instance.alloc, &win->cpuVisibleBuffer);
 
 	if(err.genericError) {
-		free(allocator, Bit_createRef(w, sizeof(struct Window)));
-		free(allocator, Bit_createRef(buf, sizeof(struct Buffer)));
+		buffer = Bit_createRef(w, sizeof(struct Window));
+		Bit_free(&buffer, Platform_instance.alloc);
 		return err;
 	}
-
-	*buf = buffer;
-	win->nativeHandle = buf;
 
 	return Error_none();
 }
@@ -87,30 +70,13 @@ struct Error Window_freeVirtual(struct Window **w) {
 	if(!Window_isVirtual(*w))
 		return (struct Error) { .genericError = GenericError_InvalidParameter };
 
-	FreeFunc free = Platform_instance.alloc.free;
-	void *allocator = Platform_instance.alloc.ptr;
-
-	struct Buffer *bufPtr = (struct Buffer*) (*w)->nativeHandle;
-
 	struct Error err = Error_none(), errTemp;
 
-	if(bufPtr) {
+	struct Buffer buf = (*w)->cpuVisibleBuffer;
+	err = Bit_free(&buf, Platform_instance.alloc);
 
-		if(bufPtr) {
-
-			errTemp = free(allocator, *bufPtr);
-
-			if(errTemp.genericError)
-				err = errTemp;
-		}
-
-		errTemp = free(allocator, (struct Buffer){ .ptr = bufPtr, .siz = sizeof(struct Buffer) });
-
-		if(errTemp.genericError)
-			err = errTemp;
-	}
-
-	errTemp = free(allocator, (struct Buffer){ .ptr = *w, .siz = sizeof(struct Window) });
+	buf = Bit_createRef(w, sizeof(struct Window));
+	errTemp = Bit_free(&buf, Platform_instance.alloc);
 
 	if(errTemp.genericError)
 		err = errTemp;
@@ -128,7 +94,7 @@ struct Error Window_resizeVirtual(struct Window *w, Bool copyData, I32x2 newSiz)
 	if (!w)
 		return (struct Error) { .genericError = GenericError_NullPointer };
 
-	if(!Window_isVirtual(w))
+	if(!Window_isVirtual(w) && !(w->flags & WindowHint_ProvideCPUBuffer))
 		return (struct Error) { .genericError = GenericError_InvalidParameter };
 
 	if(I32x4_eq2(w->size, newSiz))
@@ -139,12 +105,8 @@ struct Error Window_resizeVirtual(struct Window *w, Bool copyData, I32x2 newSiz)
 	//And if our buffer should be 50% the size we downsize it to +25% of the real size.
 	//Of course we will still have to resize sometimes
 
-	struct Buffer old = *(struct Buffer*) w->nativeHandle;
+	struct Buffer old = w->cpuVisibleBuffer;
 	struct Buffer neo = old;
-
-	AllocFunc alloc = Platform_instance.alloc.alloc;
-	FreeFunc free = Platform_instance.alloc.free;
-	void *allocator = Platform_instance.alloc.ptr;
 
 	U64 linSizOld = TextureFormat_getSize((enum TextureFormat) w->format, I32x2_x(w->size), I32x2_y(w->size));
 	U64 linSiz = TextureFormat_getSize((enum TextureFormat) w->format, I32x2_x(newSiz), I32x2_y(newSiz));
@@ -157,7 +119,7 @@ struct Error Window_resizeVirtual(struct Window *w, Bool copyData, I32x2 newSiz)
 
 		U64 toAllocate = linSiz * 5 / 4;
 
-		struct Error err = alloc(allocator, toAllocate, &neo);
+		struct Error err = Bit_createBytes(toAllocate, Platform_instance.alloc, &neo);
 
 		if(err.genericError)
 			return err;
@@ -171,7 +133,7 @@ struct Error Window_resizeVirtual(struct Window *w, Bool copyData, I32x2 newSiz)
 
 		U64 toAllocate = linSiz * 5 / 4;
 
-		struct Error err = alloc(allocator, toAllocate, &neo);
+		struct Error err = Bit_createBytes(toAllocate, Platform_instance.alloc, &neo);
 
 		if(err.genericError)
 			return err;
@@ -204,7 +166,7 @@ struct Error Window_resizeVirtual(struct Window *w, Bool copyData, I32x2 newSiz)
 				if(err.genericError) {
 				
 					if(resize)
-						free(allocator, neo);
+						Bit_free(&neo, Platform_instance.alloc);
 
 					return err;
 				}
@@ -226,7 +188,7 @@ struct Error Window_resizeVirtual(struct Window *w, Bool copyData, I32x2 newSiz)
 			if(err.genericError) {
 
 				if(resize)
-					free(allocator, neo);
+					Bit_free(&neo, Platform_instance.alloc);
 
 				return err;
 			}
@@ -237,14 +199,14 @@ struct Error Window_resizeVirtual(struct Window *w, Bool copyData, I32x2 newSiz)
 			if(err.genericError) {
 
 				if(resize)
-					free(allocator, neo);
+					Bit_free(&neo, Platform_instance.alloc);
 
 				return err;
 			}
 
 			//First we ensure everything is copied to the right location
 
-			I32 smallY = I32x2_min(I32x2_y(newSiz), I32x2_y(w->siz));
+			I32 smallY = (I32) U64_min(I32x2_y(newSiz), I32x2_y(w->siz));
 
 			//We're growing, so we want to copy from high to low
 			//This is because it ends up at a higher address than source and 
@@ -269,7 +231,7 @@ struct Error Window_resizeVirtual(struct Window *w, Bool copyData, I32x2 newSiz)
 					if (err.genericError) {
 
 						if(resize)
-							free(allocator, neo);
+							Bit_free(&neo, Platform_instance.alloc);
 
 						return err;
 					}
@@ -299,7 +261,7 @@ struct Error Window_resizeVirtual(struct Window *w, Bool copyData, I32x2 newSiz)
 
 					//We can skip copying the first if it's the same buffer
 
-					if (!i && resize)
+					if (!i && !resize)
 						continue;
 
 					Bit_copy(dst, src);		//Automatically truncates src
@@ -321,11 +283,11 @@ struct Error Window_resizeVirtual(struct Window *w, Bool copyData, I32x2 newSiz)
 
 		//If this gives an error, we don't care because we already have the new buffer
 
-		struct Error err = free(allocator, old);
+		struct Error err = Bit_free(&old, Platform_instance.alloc);
 		err;
 	}
 
-	*(struct Buffer*) w->nativeHandle = neo;
+	w->cpuVisibleBuffer = neo;
 	w->size = newSiz;
 	return Error_none();
 }
@@ -343,7 +305,16 @@ struct Error Window_storeCPUBufferToDisk(const struct Window *w, struct String f
 	if(w->format != WindowFormat_rgba8)
 		return (struct Error) { .genericError = GenericError_UnsupportedOperation };		//TODO: Add support for other formats
 
-	struct Buffer file = BMP_writeRGBA(buf, I32x2_x(w->size), I32x2_y(w->size), false, Platform_instance.alloc);
+	struct Buffer file = (struct Buffer) { 0 };
+
+	struct Error err = BMP_writeRGBA(
+		buf, I32x2_x(w->size), I32x2_y(w->size),
+		false, Platform_instance.alloc, &file
+	);
+
+	if(err.genericError)
+		return err;
+
 	struct Error err = File_write(file, filePath);
 	Bit_free(&file, Platform_instance.alloc);
 

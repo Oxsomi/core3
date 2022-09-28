@@ -7,6 +7,10 @@
 
 #define impl
 
+//A hint to show that the end user should define these
+
+#define user_impl
+
 //Types
 
 typedef int8_t  I8;

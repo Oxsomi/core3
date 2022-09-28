@@ -22,6 +22,9 @@ struct Error Thread_waitAndCleanup(struct Thread **thread, U32 maxWaitTime) {
 
 	struct Error err = Thread_wait(*thread, maxWaitTime);
 
+	if(err.genericError == GenericError_TimedOut)
+		return err;
+
 	if (err.genericError) {
 		Thread_free(thread);
 		return err;

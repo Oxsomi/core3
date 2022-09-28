@@ -3,10 +3,10 @@
 
 enum TexturePrimitive {
 	TexturePrimitive_Undefined,
-	TexturePrimitive_Unorm,
-	TexturePrimitive_Snorm,
-	TexturePrimitive_Uint,
-	TexturePrimitive_Int,
+	TexturePrimitive_UNorm,
+	TexturePrimitive_SNorm,
+	TexturePrimitive_UInt,
+	TexturePrimitive_SInt,
 	TexturePrimitive_Float,
 	TexturePrimitive_Compressed,
 	TexturePrimitive_Extended
@@ -22,20 +22,28 @@ enum TextureAlignment {
 };
 
 enum TextureCompressionType {
-	TextureCompressionType_Unorm,
-	TextureCompressionType_Snorm,
+	TextureCompressionType_UNorm,
+	TextureCompressionType_SNorm,
 	TextureCompressionType_Float,
 	TextureCompressionType_sRGB,
 	TextureCompressionType_Invalid
 };
 
-//Format of a texture
+#define _TextureFormat(primitive, redBits, greenBits, blueBits, alphaBits) \
+((alphaBits >> 1) | ((blueBits >> 1) << 6) | ((greenBits >> 1) << 12) | ((redBits >> 1) << 18) | (primitive << 24) | \
+(((redBits + greenBits + blueBits + alphaBits) >> 2) - 1) << 27)
+
+#define _TextureFormatCompressed(blockSizeBits, alignmentX, alignmentY, compType, hasRed, hasGreen, hasBlue, hasAlpha) \
+((hasAlpha ? 1 : 0) | ((hasBlue ? 1 : 0) << 6) | (compType << 9) | ((hasGreen ? 1 : 0) << 12) | (alignmentY << 16) | \
+ ((hasRed ? 1 : 0) << 18) | (alignmentX << 21) | (TexturePrimitive_Compressed << 24) | (((blockSizeBits >> 6) - 1) << 27))
+
+//Format of a texture; a bitflag of the properties of the format.
 // 
-//Structured as the following;
+//A normal texture format contains the following information:
 //(in octal): 0'<nibbleSize>'<primitive>'<redBits>'<greenBits>'<blueBits>'<alphaBits>
 // 
 //Bit count is a multiple of 2 (so shifted by 1)
-//Nibble size up to 5 bits (2 octanibbles where the upper bit is unused, shifted by 1).
+//Nibble size up to 5 bits (2 octanibbles where the upper bit is unused, dec by 1).
 //  The size of each pixel in nibbles
 // 
 //If compressed or extended, the get<X>Bits don't have to return a valid number.
@@ -53,126 +61,255 @@ enum TextureFormat {
 
 	//8-bit
 
-	TextureFormat_r8				= 0'01'1'04'00'00'00,
-	TextureFormat_rg8				= 0'03'1'04'04'00'00,
-	TextureFormat_rgba8				= 0'07'1'04'04'04'04,
+	TextureFormat_r8				= _TextureFormat(TexturePrimitive_UNorm, 8, 0, 0, 0),
+	TextureFormat_rg8				= _TextureFormat(TexturePrimitive_UNorm, 8, 8, 0, 0),
+	TextureFormat_rgba8				= _TextureFormat(TexturePrimitive_UNorm, 8, 8, 8, 8),
 
-	TextureFormat_r8s				= 0'01'2'04'00'00'00,
-	TextureFormat_rg8s				= 0'03'2'04'04'00'00,
-	TextureFormat_rgba8s			= 0'07'2'04'04'04'04,
+	TextureFormat_r8s				= _TextureFormat(TexturePrimitive_SNorm, 8, 0, 0, 0),
+	TextureFormat_rg8s				= _TextureFormat(TexturePrimitive_SNorm, 8, 8, 0, 0),
+	TextureFormat_rgba8s			= _TextureFormat(TexturePrimitive_SNorm, 8, 8, 8, 8),
 
-	TextureFormat_r8u				= 0'00'3'04'00'00'00,
-	TextureFormat_rg8u				= 0'01'3'04'04'00'00,
-	TextureFormat_rgba8u			= 0'03'3'04'04'04'04,
+	TextureFormat_r8u				= _TextureFormat(TexturePrimitive_UInt, 8, 0, 0, 0),
+	TextureFormat_rg8u				= _TextureFormat(TexturePrimitive_UInt, 8, 8, 0, 0),
+	TextureFormat_rgba8u			= _TextureFormat(TexturePrimitive_UInt, 8, 8, 8, 8),
 
-	TextureFormat_r8i				= 0'00'4'04'00'00'00,
-	TextureFormat_rg8i				= 0'01'4'04'04'00'00,
-	TextureFormat_rgba8i			= 0'03'4'04'04'04'04,
+	TextureFormat_r8i				= _TextureFormat(TexturePrimitive_SInt, 8, 0, 0, 0),
+	TextureFormat_rg8i				= _TextureFormat(TexturePrimitive_SInt, 8, 8, 0, 0),
+	TextureFormat_rgba8i			= _TextureFormat(TexturePrimitive_SInt, 8, 8, 8, 8),
 
 	//16-bit
 
-	TextureFormat_r16				= 0'03'1'10'00'00'00,
-	TextureFormat_rg16				= 0'07'1'10'10'00'00,
-	TextureFormat_rgba16			= 0'17'1'10'10'10'10,
+	TextureFormat_r16				= _TextureFormat(TexturePrimitive_UNorm, 16, 0, 0, 0),
+	TextureFormat_rg16				= _TextureFormat(TexturePrimitive_UNorm, 16, 16, 0, 0),
+	TextureFormat_rgba16			= _TextureFormat(TexturePrimitive_UNorm, 16, 16, 16, 16),
 
-	TextureFormat_r16s				= 0'03'2'10'00'00'00,
-	TextureFormat_rg16s				= 0'07'2'10'10'00'00,
-	TextureFormat_rgba16s			= 0'17'2'10'10'10'10,
+	TextureFormat_r16s				= _TextureFormat(TexturePrimitive_SNorm, 16, 0, 0, 0),
+	TextureFormat_rg16s				= _TextureFormat(TexturePrimitive_SNorm, 16, 16, 0, 0),
+	TextureFormat_rgba16s			= _TextureFormat(TexturePrimitive_SNorm, 16, 16, 16, 16),
 
-	TextureFormat_r16u				= 0'03'3'10'00'00'00,
-	TextureFormat_rg16u				= 0'07'3'10'10'00'00,
-	TextureFormat_rgba16u			= 0'17'3'10'10'10'10,
+	TextureFormat_r16u				= _TextureFormat(TexturePrimitive_UInt, 16, 0, 0, 0),
+	TextureFormat_rg16u				= _TextureFormat(TexturePrimitive_UInt, 16, 16, 0, 0),
+	TextureFormat_rgba16u			= _TextureFormat(TexturePrimitive_UInt, 16, 16, 16, 16),
 
-	TextureFormat_r16i				= 0'03'4'10'00'00'00,
-	TextureFormat_rg16i				= 0'07'4'10'10'00'00,
-	TextureFormat_rgba16i			= 0'17'4'10'10'10'10,
+	TextureFormat_r16i				= _TextureFormat(TexturePrimitive_SInt, 16, 0, 0, 0),
+	TextureFormat_rg16i				= _TextureFormat(TexturePrimitive_SInt, 16, 16, 0, 0),
+	TextureFormat_rgba16i			= _TextureFormat(TexturePrimitive_SInt, 16, 16, 16, 16),
 
-	TextureFormat_r16f				= 0'03'5'10'00'00'00,
-	TextureFormat_rg16f				= 0'07'5'10'10'00'00,
-	TextureFormat_rgba16f			= 0'17'5'10'10'10'10,
+	TextureFormat_r16f				= _TextureFormat(TexturePrimitive_Float, 16, 0, 0, 0),
+	TextureFormat_rg16f				= _TextureFormat(TexturePrimitive_Float, 16, 16, 0, 0),
+	TextureFormat_rgba16f			= _TextureFormat(TexturePrimitive_Float, 16, 16, 16, 16),
 
 	//32-bit
 
-	TextureFormat_r32				= 0'07'1'20'00'00'00,
-	TextureFormat_rg32				= 0'17'1'20'20'00'00,
-	TextureFormat_rgba32			= 0'37'1'20'20'20'20,
+	TextureFormat_r32u				= _TextureFormat(TexturePrimitive_UInt, 32, 0, 0, 0),
+	TextureFormat_rg32u				= _TextureFormat(TexturePrimitive_UInt, 32, 32, 0, 0),
+	TextureFormat_rgba32u			= _TextureFormat(TexturePrimitive_UInt, 32, 32, 32, 32),
 
-	TextureFormat_r32s				= 0'07'2'20'00'00'00,
-	TextureFormat_rg32s				= 0'17'2'20'20'00'00,
-	TextureFormat_rgba32s			= 0'37'2'20'20'20'20,
+	TextureFormat_r32i				= _TextureFormat(TexturePrimitive_SInt, 32, 0, 0, 0),
+	TextureFormat_rg32i				= _TextureFormat(TexturePrimitive_SInt, 32, 32, 0, 0),
+	TextureFormat_rgba32i			= _TextureFormat(TexturePrimitive_SInt, 32, 32, 32, 32),
 
-	TextureFormat_r32u				= 0'07'3'20'00'00'00,
-	TextureFormat_rg32u				= 0'17'3'20'20'00'00,
-	TextureFormat_rgba32u			= 0'37'3'20'20'20'20,
-
-	TextureFormat_r32i				= 0'07'4'20'00'00'00,
-	TextureFormat_rg32i				= 0'17'4'20'20'00'00,
-	TextureFormat_rgba32i			= 0'37'4'20'20'20'20,
-
-	TextureFormat_r32f				= 0'07'5'20'00'00'00,
-	TextureFormat_rg32f				= 0'17'5'20'20'00'00,
-	TextureFormat_rgba32f			= 0'37'5'20'20'20'20,
+	TextureFormat_r32f				= _TextureFormat(TexturePrimitive_Float, 32, 0, 0, 0),
+	TextureFormat_rg32f				= _TextureFormat(TexturePrimitive_Float, 32, 32, 0, 0),
+	TextureFormat_rgba32f			= _TextureFormat(TexturePrimitive_Float, 32, 32, 32, 32),
 
 	//Special purpose formats
 
-	TextureFormat_rgb10a2			= 0'07'1'05'05'05'01,
+	TextureFormat_rgb10a2			= _TextureFormat(TexturePrimitive_UNorm, 10, 10, 10, 2),
 
 	//Compression formats
 
 	//Desktop
 
-	TextureFormat_BC4				= 0'00'6'0'1'0'0'0'0'0'0,
-	TextureFormat_BC5				= 0'01'6'0'1'0'1'0'0'0'0,
-	TextureFormat_BC6H				= 0'01'6'0'1'0'1'2'1'0'0,
-	TextureFormat_BC7				= 0'01'6'0'1'0'1'0'1'0'1,
+	TextureFormat_BC4				= _TextureFormatCompressed(
+		64, TextureAlignment_4, TextureAlignment_4, 
+		TextureCompressionType_UNorm, 1, 0, 0, 0
+	),
 
-	TextureFormat_BC4s				= 0'00'6'0'1'0'0'1'0'0'0,
-	TextureFormat_BC5s				= 0'01'6'0'1'0'1'1'0'0'0,
-	TextureFormat_BC7srgb			= 0'01'6'0'1'0'1'3'1'0'1,
+	TextureFormat_BC5				= _TextureFormatCompressed(
+		128, TextureAlignment_4, TextureAlignment_4, 
+		TextureCompressionType_UNorm, 1, 1, 0, 0
+	),
+
+	TextureFormat_BC6H				= _TextureFormatCompressed(
+		128, TextureAlignment_4, TextureAlignment_4, 
+		TextureCompressionType_Float, 1, 1, 1, 0
+	),
+
+	TextureFormat_BC7				= _TextureFormatCompressed(
+		128, TextureAlignment_4, TextureAlignment_4, 
+		TextureCompressionType_UNorm, 1, 1, 1, 1
+	),
+
+	TextureFormat_BC4s				= _TextureFormatCompressed(
+		64, TextureAlignment_4, TextureAlignment_4, 
+		TextureCompressionType_SNorm, 1, 0, 0, 0
+	),
+
+	TextureFormat_BC5s				= _TextureFormatCompressed(
+		128, TextureAlignment_4, TextureAlignment_4, 
+		TextureCompressionType_SNorm, 1, 1, 0, 0
+	),
+
+	TextureFormat_BC7srgb			= _TextureFormatCompressed(
+		128, TextureAlignment_4, TextureAlignment_4, 
+		TextureCompressionType_sRGB, 1, 1, 1, 1
+	),
 
 	//Mobile / console
 
-	TextureFormat_ASTC_4x4			= 0'01'6'0'1'0'1'0'1'0'0,
-	TextureFormat_ASTC_4x4_sRGB		= 0'01'6'0'1'0'1'3'1'0'0,
+	TextureFormat_ASTC_4x4			= _TextureFormatCompressed(
+		128, TextureAlignment_4, TextureAlignment_4, 
+		TextureCompressionType_UNorm, 1, 1, 1, 1
+	),
 
-	TextureFormat_ASTC_5x4			= 0'01'6'1'1'0'1'0'1'0'0,
-	TextureFormat_ASTC_5x4_sRGB		= 0'01'6'1'1'0'1'3'1'0'1,
+	TextureFormat_ASTC_4x4_sRGB		= _TextureFormatCompressed(
+		128, TextureAlignment_4, TextureAlignment_4, 
+		TextureCompressionType_sRGB, 1, 1, 1, 1
+	),
 
-	TextureFormat_ASTC_5x5			= 0'01'6'1'1'1'1'0'1'0'0,
-	TextureFormat_ASTC_5x5_sRGB		= 0'01'6'1'1'1'1'3'1'0'1,
 
-	TextureFormat_ASTC_6x5			= 0'01'6'2'1'1'1'0'1'0'0,
-	TextureFormat_ASTC_6x5_sRGB		= 0'01'6'2'1'1'1'3'1'0'1,
+	TextureFormat_ASTC_5x4			= _TextureFormatCompressed(
+		128, TextureAlignment_5, TextureAlignment_4, 
+		TextureCompressionType_UNorm, 1, 1, 1, 1
+	),
 
-	TextureFormat_ASTC_6x6			= 0'01'6'2'1'2'1'0'1'0'0,
-	TextureFormat_ASTC_6x6_sRGB		= 0'01'6'2'1'2'1'3'1'0'1,
+	TextureFormat_ASTC_5x4_sRGB		= _TextureFormatCompressed(
+		128, TextureAlignment_5, TextureAlignment_4, 
+		TextureCompressionType_sRGB, 1, 1, 1, 1
+	),
 
-	TextureFormat_ASTC_8x5			= 0'01'6'3'1'1'1'0'1'0'0,
-	TextureFormat_ASTC_8x5_sRGB		= 0'01'6'3'1'1'1'3'1'0'1,
 
-	TextureFormat_ASTC_8x6			= 0'01'6'3'1'2'1'0'1'0'0,
-	TextureFormat_ASTC_8x6_sRGB		= 0'01'6'3'1'2'1'3'1'0'1,
+	TextureFormat_ASTC_5x5			= _TextureFormatCompressed(
+		128, TextureAlignment_5, TextureAlignment_5, 
+		TextureCompressionType_UNorm, 1, 1, 1, 1
+	),
 
-	TextureFormat_ASTC_8x8			= 0'01'6'3'1'3'1'0'1'0'0,
-	TextureFormat_ASTC_8x8_sRGB		= 0'01'6'3'1'3'1'3'1'0'1,
+	TextureFormat_ASTC_5x5_sRGB		= _TextureFormatCompressed(
+		128, TextureAlignment_5, TextureAlignment_5, 
+		TextureCompressionType_sRGB, 1, 1, 1, 1
+	),
 
-	TextureFormat_ASTC_10x5			= 0'01'6'4'1'1'1'0'1'0'0,
-	TextureFormat_ASTC_10x5_sRGB	= 0'01'6'4'1'1'1'3'1'0'1,
 
-	TextureFormat_ASTC_10x6			= 0'01'6'4'1'2'1'0'1'0'0,
-	TextureFormat_ASTC_10x6_sRGB	= 0'01'6'4'1'2'1'3'1'0'1,
+	TextureFormat_ASTC_6x5			= _TextureFormatCompressed(
+		128, TextureAlignment_6, TextureAlignment_5, 
+		TextureCompressionType_UNorm, 1, 1, 1, 1
+	),
 
-	TextureFormat_ASTC_10x8			= 0'01'6'4'1'3'1'0'1'0'0,
-	TextureFormat_ASTC_10x8_sRGB	= 0'01'6'4'1'3'1'3'1'0'1,
+	TextureFormat_ASTC_6x5_sRGB		= _TextureFormatCompressed(
+		128, TextureAlignment_6, TextureAlignment_5, 
+		TextureCompressionType_sRGB, 1, 1, 1, 1
+	),
 
-	TextureFormat_ASTC_10x10		= 0'01'6'4'1'4'1'0'1'0'0,
-	TextureFormat_ASTC_10x10_sRGB	= 0'01'6'4'1'4'1'3'1'0'1,
 
-	TextureFormat_ASTC_12x10		= 0'01'6'5'1'4'1'0'1'0'0,
-	TextureFormat_ASTC_12x10_sRGB	= 0'01'6'5'1'4'1'3'1'0'1,
+	TextureFormat_ASTC_6x6			= _TextureFormatCompressed(
+		128, TextureAlignment_6, TextureAlignment_6, 
+		TextureCompressionType_UNorm, 1, 1, 1, 1
+	),
 
-	TextureFormat_ASTC_12x12		= 0'01'6'5'1'5'1'0'1'0'0,
-	TextureFormat_ASTC_12x12_sRGB	= 0'01'6'5'1'5'1'3'1'0'1
+	TextureFormat_ASTC_6x6_sRGB		= _TextureFormatCompressed(
+		128, TextureAlignment_6, TextureAlignment_6, 
+		TextureCompressionType_sRGB, 1, 1, 1, 1
+	),
+
+
+	TextureFormat_ASTC_8x5			= _TextureFormatCompressed(
+		128, TextureAlignment_8, TextureAlignment_5, 
+		TextureCompressionType_UNorm, 1, 1, 1, 1
+	),
+
+	TextureFormat_ASTC_8x5_sRGB		= _TextureFormatCompressed(
+		128, TextureAlignment_8, TextureAlignment_5, 
+		TextureCompressionType_sRGB, 1, 1, 1, 1
+	),
+
+
+	TextureFormat_ASTC_8x6			= _TextureFormatCompressed(
+		128, TextureAlignment_8, TextureAlignment_6, 
+		TextureCompressionType_UNorm, 1, 1, 1, 1
+	),
+
+	TextureFormat_ASTC_8x6_sRGB		= _TextureFormatCompressed(
+		128, TextureAlignment_8, TextureAlignment_6, 
+		TextureCompressionType_sRGB, 1, 1, 1, 1
+	),
+
+
+	TextureFormat_ASTC_8x8			= _TextureFormatCompressed(
+		128, TextureAlignment_8, TextureAlignment_8, 
+		TextureCompressionType_UNorm, 1, 1, 1, 1
+	),
+
+	TextureFormat_ASTC_8x8_sRGB		= _TextureFormatCompressed(
+		128, TextureAlignment_8, TextureAlignment_8, 
+		TextureCompressionType_sRGB, 1, 1, 1, 1
+	),
+
+
+	TextureFormat_ASTC_10x5			= _TextureFormatCompressed(
+		128, TextureAlignment_10, TextureAlignment_5, 
+		TextureCompressionType_UNorm, 1, 1, 1, 1
+	),
+
+	TextureFormat_ASTC_10x5_sRGB	= _TextureFormatCompressed(
+		128, TextureAlignment_10, TextureAlignment_5, 
+		TextureCompressionType_sRGB, 1, 1, 1, 1
+	),
+
+
+	TextureFormat_ASTC_10x6			= _TextureFormatCompressed(
+		128, TextureAlignment_10, TextureAlignment_6, 
+		TextureCompressionType_UNorm, 1, 1, 1, 1
+	),
+
+	TextureFormat_ASTC_10x6_sRGB	= _TextureFormatCompressed(
+		128, TextureAlignment_10, TextureAlignment_6, 
+		TextureCompressionType_sRGB, 1, 1, 1, 1
+	),
+
+
+	TextureFormat_ASTC_10x8			= _TextureFormatCompressed(
+		128, TextureAlignment_10, TextureAlignment_8, 
+		TextureCompressionType_UNorm, 1, 1, 1, 1
+	),
+
+	TextureFormat_ASTC_10x8_sRGB	= _TextureFormatCompressed(
+		128, TextureAlignment_10, TextureAlignment_8, 
+		TextureCompressionType_sRGB, 1, 1, 1, 1
+	),
+
+
+	TextureFormat_ASTC_10x10		= _TextureFormatCompressed(
+		128, TextureAlignment_10, TextureAlignment_10, 
+		TextureCompressionType_UNorm, 1, 1, 1, 1
+	),
+
+	TextureFormat_ASTC_10x10_sRGB	= _TextureFormatCompressed(
+		128, TextureAlignment_10, TextureAlignment_10, 
+		TextureCompressionType_sRGB, 1, 1, 1, 1
+	),
+
+
+	TextureFormat_ASTC_12x10		= _TextureFormatCompressed(
+		128, TextureAlignment_12, TextureAlignment_10, 
+		TextureCompressionType_UNorm, 1, 1, 1, 1
+	),
+
+	TextureFormat_ASTC_12x10_sRGB	= _TextureFormatCompressed(
+		128, TextureAlignment_12, TextureAlignment_10, 
+		TextureCompressionType_sRGB, 1, 1, 1, 1
+	),
+
+
+	TextureFormat_ASTC_12x12		= _TextureFormatCompressed(
+		128, TextureAlignment_12, TextureAlignment_12, 
+		TextureCompressionType_UNorm, 1, 1, 1, 1
+	),
+
+	TextureFormat_ASTC_12x12_sRGB	= _TextureFormatCompressed(
+		128, TextureAlignment_12, TextureAlignment_12, 
+		TextureCompressionType_sRGB, 1, 1, 1, 1
+	),
 };
 
 inline enum TexturePrimitive TextureFormat_getPrimitive(enum TextureFormat f) { 

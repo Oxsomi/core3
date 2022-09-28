@@ -15,8 +15,7 @@ struct Platform {
 
 	enum EPlatform platformType;
 
-	int cmdArgc;
-	struct String *cmdArgs;
+	struct StringList args;
 
 	struct Allocator alloc;
 	struct WindowManager windowManager;
@@ -34,8 +33,8 @@ struct Error Platform_create(
 
 void Program_cleanup();
 
-extern int Program_run();
-extern void Program_exit();
+user_impl extern int Program_run();
+user_impl extern void Program_exit();
 
 //Errors with stacktraces
 

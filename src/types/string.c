@@ -49,8 +49,8 @@ struct Error String_offsetAsRef(struct String s, U64 off, struct String *result)
 	testFunc,																\
 	String_startsWithString(												\
 		s,																	\
-		String_createRefUnsafeConst(num),									\
-		StringCase_Insensitive												\
+		String_createRefUnsafeConst(num),								\
+		StringCase_Insensitive									\
 	) ? String_createRefUnsafeConst(num).len : 0							\
 )
 
@@ -1562,7 +1562,7 @@ struct String String_trim(struct String s) {
 
 //StringList
 
-struct Error StringList_create(U64 len, struct Allocator alloc, struct StringList **arr) {
+struct Error StringList_create(U64 len, struct Allocator alloc, struct StringList *arr) {
 
 	struct StringList sl = (struct StringList) {
 		.len = len
@@ -1579,15 +1579,14 @@ struct Error StringList_create(U64 len, struct Allocator alloc, struct StringLis
 	for(U64 i = 0; i < sl.len; ++i)
 		sl.ptr[i] = String_createEmpty();
 
+	*arr = sl;
 	return Error_none();
 }
 
-struct Error StringList_free(struct StringList **arrPtr, struct Allocator alloc) {
+struct Error StringList_free(struct StringList *arr, struct Allocator alloc) {
 
-	if(!arrPtr || !*arrPtr || !(*arrPtr)->len)
+	if(!arr || !arr->len)
 		return (struct Error){ .genericError = GenericError_NullPointer };
-
-	struct StringList *arr = *arrPtr;
 
 	struct Error freeErr = Error_none();
 
@@ -1609,7 +1608,6 @@ struct Error StringList_free(struct StringList **arrPtr, struct Allocator alloc)
 		freeErr = err;
 
 	*arr = (struct StringList){ 0 };
-	*arrPtr = NULL;
 	return freeErr;
 }
 
