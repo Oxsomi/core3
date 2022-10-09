@@ -21,6 +21,8 @@ typedef U32 InputHandle;		//Don't serialize this, because input devices can chan
 
 struct InputButton {
 	LongString name;
+	C8 contents;
+	C8 altContents;
 };
 
 struct InputAxis {
@@ -33,10 +35,11 @@ struct InputDevice {
 	//How many buttons and axes this device has
 
 	U16 buttons, axes;
+	U32 flags;
 
 	//The names of all handles
 	//InputAxis[axes]
-	//LongString names[buttons]
+	//InputButton[buttons]
 
 	struct Buffer handles;
 
@@ -50,9 +53,28 @@ struct InputDevice {
 //Initializing a device
 
 struct Error InputDevice_create(U16 buttons, U16 axes, struct InputDevice *result);
-struct Error InputDevice_createButton(struct InputDevice dev, U16 localHandle, struct String keyName, InputHandle *result);
-struct Error InputDevice_createAxis(struct InputDevice dev, U16 localHandle, struct String keyName, F32 deadZone, InputHandle *result);
+
+struct Error InputDevice_createButton(
+	struct InputDevice dev, 
+	U16 localHandle, 
+	struct String keyName,			//The alphaNumeric name (e.g. Key_1)
+	C8 keyContents,					//For example '1' for Keyboard
+	C8 keyAltContents,				//For example '!' for Keyboard
+	InputHandle *result
+);
+
+struct Error InputDevice_createAxis(
+	struct InputDevice dev, 
+	U16 localHandle, 
+	struct String keyName, 
+	F32 deadZone, 
+	InputHandle *result
+);
+
 struct Error InputDevice_free(struct InputDevice *dev);
+
+struct InputButton *InputDevice_getButton(struct InputDevice dev, U16 localHandle);
+struct InputAxis *InputDevice_getAxis(struct InputDevice dev, U16 localHandle);
 
 //Simple helpers
 
@@ -83,11 +105,41 @@ inline U16 InputDevice_getLocalHandle(struct InputDevice d, InputHandle handle) 
 
 enum InputState InputDevice_getState(struct InputDevice d, InputHandle handle);
 
-Bool InputDevice_getCurrentState(struct InputDevice d, InputHandle handle) { 
+inline Bool InputDevice_hasFlag(struct InputDevice d, U8 flag) {
+
+	if(flag >= 32)
+		return false;
+
+	return (d.flags >> flag) & 1;
+}
+
+inline Bool InputDevice_setFlag(struct InputDevice *d, U8 flag) {
+
+	if(flag >= 32 || !d)
+		return false;
+
+	d->flags |= (U32)1 << flag;
+	return true;
+}
+
+inline Bool InputDevice_resetFlag(struct InputDevice *d, U8 flag) {
+
+	if(flag >= 32 || !d)
+		return false;
+
+	d->flags &= ~((U32)1 << flag);
+	return true;
+}
+
+inline Bool InputDevice_setFlagTo(struct InputDevice *d, U8 flag, Bool value) {
+	return value ? InputDevice_setFlag(d, flag) : InputDevice_resetFlag(d, flag);
+}
+
+inline Bool InputDevice_getCurrentState(struct InputDevice d, InputHandle handle) { 
 	return InputDevice_getState(d, handle) & InputState_Curr; 
 }
 
-Bool InputDevice_getPreviousState(struct InputDevice d, InputHandle handle) { 
+inline Bool InputDevice_getPreviousState(struct InputDevice d, InputHandle handle) { 
 	return InputDevice_getState(d, handle) & InputState_Prev; 
 }
 
@@ -117,6 +169,8 @@ InputHandle InputDevice_getHandle(struct InputDevice d, struct String name);
 struct String InputDevice_getName(struct InputDevice d, InputHandle handle);
 
 F32 InputDevice_getDeadZone(struct InputDevice d, InputHandle handle);
+C8 InputDevice_getResolvedChar(struct InputDevice d, InputHandle handle);
+C8 InputDevice_getResolvedAltChar(struct InputDevice d, InputHandle handle);
 
 //This should only be handled by platform updating the input device
 //First the platform should call markUpdate, then it should start setting new values

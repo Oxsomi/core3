@@ -10,13 +10,13 @@
 //F32[floatStates*2]
 //u2[booleanStates]
 
-inline struct InputButton *InputDevice_getButton(struct InputDevice dev, U16 localHandle) {
+struct InputButton *InputDevice_getButton(struct InputDevice dev, U16 localHandle) {
 
 	return localHandle >= dev.buttons ? NULL : 
 		(struct InputButton*)((struct InputAxis*) dev.handles.ptr + dev.axes) + localHandle;
 }
 
-inline struct InputAxis *InputDevice_getAxis(struct InputDevice dev, U16 localHandle) {
+struct InputAxis *InputDevice_getAxis(struct InputDevice dev, U16 localHandle) {
 	return localHandle >= dev.axes ? NULL :
 		(struct InputAxis*) dev.handles.ptr + localHandle;
 }
@@ -91,17 +91,23 @@ struct Error InputDevice_create(U16 buttons, U16 axes, struct InputDevice *resul
 	Bit_copy(																						\
 		Bit_createRef(inputType->name, LongString_LEN), 											\
 		Bit_createRef(keyName.ptr, keyName.len + 1)													\
-	);																								\
-																									\
-	*res = InputDevice_createHandle(d, localHandle, InputType_##InputType)							\
+	);
 
 struct Error InputDevice_createButton(
 	struct InputDevice d, 
 	U16 localHandle, 
 	struct String keyName, 
+	C8 keyContents,	
+	C8 keyAltContents,
 	InputHandle *res
 ) {
+
 	InputDeviceCreate(Button);
+
+	inputType->contents = keyContents;
+	inputType->altContents = keyAltContents;
+
+	*res = InputDevice_createHandle(d, localHandle, InputType_Button);
 	return Error_none();
 }
 
@@ -113,6 +119,7 @@ struct Error InputDevice_createAxis(
 	InputHandle *res
 ) {
 	InputDeviceCreate(Axis);
+	*res = InputDevice_createHandle(d, localHandle, InputType_Axis);
 	inputType->deadZone = deadZone;
 	return Error_none();
 }
@@ -199,6 +206,16 @@ InputHandle InputDevice_getHandle(struct InputDevice d, struct String name) {
 F32 InputDevice_getDeadZone(struct InputDevice d, InputHandle handle) {
 	return !InputDevice_isAxis(d, handle) ? 0 : 
 		InputDevice_getAxis(d, InputDevice_getLocalHandle(d, handle))->deadZone;
+}
+
+C8 InputDevice_getResolvedChar(struct InputDevice d, InputHandle handle) {
+	return InputDevice_isAxis(d, handle) ? 0 : 
+		InputDevice_getButton(d, InputDevice_getLocalHandle(d, handle))->contents;
+}
+
+C8 InputDevice_getResolvedAltChar(struct InputDevice d, InputHandle handle) {
+	return InputDevice_isAxis(d, handle) ? 0 : 
+		InputDevice_getButton(d, InputDevice_getLocalHandle(d, handle))->altContents;
 }
 
 //This should only be handled by platform updating the input device
