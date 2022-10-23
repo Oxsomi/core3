@@ -2,7 +2,7 @@
 #include "types/error.h"
 #include "platforms/input_device.h"
 #include "platforms/platform.h"
-#include "types/bit.h"
+#include "types/buffer.h"
 
 //Private helpers
 
@@ -39,27 +39,28 @@ inline struct BitRef InputDevice_getButtonValue(struct InputDevice dev, U16 loca
 
 //
 
-struct Error InputDevice_create(U16 buttons, U16 axes, struct InputDevice *result) {
+struct Error InputDevice_create(U16 buttons, U16 axes, enum InputDeviceType type, struct InputDevice *result) {
 
 	if(!result)
 		return (struct Error) { .genericError = GenericError_NullPointer };
 
 	*result = (struct InputDevice) {
 		.buttons = buttons,
-		.axes = axes
+		.axes = axes,
+		.type = type
 	};
 
 	U64 handles = sizeof(struct InputAxis) * axes + sizeof(struct InputButton) * buttons;
 	U64 states = sizeof(F32) * 2 * axes + (buttons * 2 + 7) >> 3;
 
-	struct Error err = Bit_createEmpty(handles, Platform_instance.alloc, &result->handles);
+	struct Error err = Buffer_createZeroBits(handles, Platform_instance.alloc, &result->handles);
 
 	if (err.genericError) {
 		InputDevice_free(result);
 		return err;
 	}
 
-	err = Bit_createEmpty(states, Platform_instance.alloc, &result->states);
+	err = Buffer_createZeroBits(states, Platform_instance.alloc, &result->states);
 
 	if (err.genericError) {
 		InputDevice_free(result);
@@ -88,9 +89,9 @@ struct Error InputDevice_create(U16 buttons, U16 axes, struct InputDevice *resul
 	if(keyName.len >= LongString_LEN)																\
 		return (struct Error) { .genericError = GenericError_OutOfBounds, .paramId = 2 };			\
 																									\
-	Bit_copy(																						\
-		Bit_createRef(inputType->name, LongString_LEN), 											\
-		Bit_createRef(keyName.ptr, keyName.len + 1)													\
+	Buffer_copy(																						\
+		Buffer_createRef(inputType->name, LongString_LEN), 											\
+		Buffer_createRef(keyName.ptr, keyName.len + 1)													\
 	);
 
 struct Error InputDevice_createButton(

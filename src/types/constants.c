@@ -1,15 +1,15 @@
 #include "math/math.h"
 
-const F32 F32_e		= 2.718281828459045f;
+const F32 F32_e			= 2.718281828459045f;
 const F32 F32_pi		= 3.141592653589793f;
-const F32 F32_radToDeg = 57.2957795131f;
-const F32 F32_degToRad = 0.01745329251f;
+const F32 F32_radToDeg	= 57.2957795131f;
+const F32 F32_degToRad	= 0.01745329251f;
 
 const U64 Ki			= 1 << 10;
 const U64 Mi			= 1 << 20;
 const U64 Gi			= 1 << 30;
-const U64 Ti			= 1 << 30;
-const U64 Pi			= (U64)1 << 40;
+const U64 Ti			= (U64)1 << 40;
+const U64 Pi			= (U64)1 << 50;
 
 const U64 K				= 1'000;
 const U64 M				= 1'000'000;
@@ -44,3 +44,6 @@ const I8  I8_MAX		= 0x7F;
 const I16 I16_MAX		= 0x7FFF;
 const I32 I32_MAX		= 0x7FFFFFFF;
 const I64 I64_MAX		= 0x7FFFFFFFFFFFFFFF;
+
+const F32 F32_MAX		= 3.4028235e38f;
+const F32 F32_MIN		= -3.4028235e38f;

@@ -1,4 +1,5 @@
 #pragma once
+#include "types/types.h"
 
 //TODO: writeR(G)(B), loadR(G)(B)(A), compression
 

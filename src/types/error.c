@@ -9,6 +9,7 @@ struct Error Error_base(
 		.genericError = err,
 		.errorSubId = subId,
 		.paramId = paramId,
+		.paramSubId = paramSubId,
 		.paramValue0 = paramValue0,
 		.paramValue1 = paramValue1
 	};

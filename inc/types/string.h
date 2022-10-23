@@ -1,5 +1,8 @@
 #pragma once
 #include "hash.h"
+#include "error.h"
+#include "allocator.h"
+#include "buffer.h"
 
 //For simplicity;
 //A string is ALWAYS ASCII (7-bit) and no null terminator.
@@ -36,6 +39,9 @@ struct String {
 inline Bool String_isConstRef(struct String str) { return str.capacity == U64_MAX; }
 inline Bool String_isRef(struct String str) { return !str.capacity || String_isConstRef(str); }
 inline Bool String_isEmpty(struct String str) { return !str.len || !str.ptr; }
+inline Bool String_bytes(struct String str) { return str.len; }
+
+inline struct Buffer String_buffer(struct String str) { return Buffer_createRef(str.ptr, str.len); }
 
 //Iteration
 
@@ -65,50 +71,11 @@ inline void String_clear(struct String *str) {
 		str->len = 0; 
 }
 
-inline U64 String_calcStrLen(const C8 *ptr, U64 maxSize) {
-
-	U64 i = 0;
-
-	for(; i < maxSize && ptr[i]; ++i)
-		;
-
-	return i;
-}
-
-inline U64 String_hash(struct String s) { 
-
-	U64 h = FNVHash_create();
-
-	const U64 *ptr = (const U64*)s.ptr, *end = ptr + (s.len >> 3);
-
-	for(; ptr < end; ++ptr)
-		h = FNVHash_apply(h, *ptr);
-		
-	U64 last = 0, shift = 0;
-
-	if (s.len & 4) {
-		last = *(const U32*) ptr;
-		shift = 4;
-		ptr = (const U64*)((const U32*)ptr + 1);
-	}
-		
-	if (s.len & 2) {
-		last |= (U64)(*(const U16*)ptr) << shift;
-		shift |= 2;
-		ptr = (const U64*)((const U16*)ptr + 1);
-	}
-		
-	if (s.len & 1)
-		last |= (U64)(*(const U8*)ptr) << shift++;
-
-	if(shift)
-		h = FNVHash_apply(h, last);
-
-	return h;
-}
+U64 String_calcStrLen(const C8 *ptr, U64 maxSize);
+U64 String_hash(struct String s);
 
 inline C8 String_getAt(struct String str, U64 i) { 
-	return i < str.len && str.ptr ? str.ptr[i] : 0;
+	return i < str.len && str.ptr ? str.ptr[i] : (C8) U8_MAX;
 }
 
 inline Bool String_setAt(struct String str, U64 i, C8 c) { 
@@ -128,7 +95,7 @@ inline struct String String_createEmpty() { return (struct String) { 0 }; }
 inline struct String String_createRefConst(const C8 *ptr, U64 maxSize) { 
 	return (struct String) { 
 		.len = String_calcStrLen(ptr, maxSize),
-		.ptr = ptr,
+		.ptr = (C8*) ptr,
 		.capacity = U64_MAX		//Flag as const
 	};
 }
@@ -150,7 +117,7 @@ inline struct String String_createRefDynamic(C8 *ptr, U64 maxSize) {
 inline struct String String_createRefSizedConst(const C8 *ptr, U64 size) {
 	return (struct String) { 
 		.len = size,
-		.ptr = ptr,
+		.ptr = (C8*) ptr,
 		.capacity = U64_MAX		//Flag as const
 	};
 }
@@ -166,7 +133,7 @@ inline struct String String_createRefSizedDynamic(C8 *ptr, U64 size) {
 inline struct String String_createRefShortStringConst(const ShortString str) {
 	return (struct String) {
 		.len = String_calcStrLen(str, ShortString_LEN - 1),
-		.ptr = str,
+		.ptr = (C8*) str,
 		.capacity = U64_MAX		//Flag as const
 	};
 }
@@ -174,7 +141,7 @@ inline struct String String_createRefShortStringConst(const ShortString str) {
 inline struct String String_createRefLongStringConst(const LongString str) {
 	return (struct String) {
 		.len = String_calcStrLen(str, LongString_LEN - 1),
-		.ptr = str,
+		.ptr = (C8*) str,
 		.capacity = U64_MAX		//Flag as const
 	};
 }
@@ -196,13 +163,13 @@ inline struct String String_createRefLongStringDynamic(LongString str) {
 }
 
 //Strings that HAVE to be freed (anything that uses an allocator needs freeing)
-//These reside on the heap (or wherever allocator allocates them)
+//These reside on the heap/free space (or wherever allocator allocates them)
 //Which means that they aren't const nor refs
+
+struct Error String_free(struct String *str, struct Allocator alloc);
 
 struct Error String_create(C8 c, U64 size, struct Allocator alloc, struct String *result);
 struct Error String_createCopy(struct String str, struct Allocator alloc, struct String *result);
-
-struct Error String_free(struct String *str, struct Allocator alloc);
 
 struct Error String_createNyto(U64 v, Bool leadingZeros, struct Allocator allocator, struct String *result);
 struct Error String_createHex(U64 v, Bool leadingZeros, struct Allocator allocator, struct String *result);
@@ -215,7 +182,7 @@ struct Error String_split(
 	C8 c, 
 	enum StringCase casing, 
 	struct Allocator allocator,
-	struct StringList **result
+	struct StringList *result
 );
 
 struct Error String_splitString(
@@ -223,7 +190,7 @@ struct Error String_splitString(
 	struct String other,
 	enum StringCase casing,
 	struct Allocator allocator,
-	struct StringList **result
+	struct StringList *result
 );
 
 //This will operate on this string, so it will need a heap allocated string
@@ -307,18 +274,20 @@ U64 String_countAllString(struct String s, struct String other, enum StringCase 
 
 //Returns the locations (U64[])
 
-struct Buffer String_findAll(
+struct Error String_findAll(
 	struct String s, 
 	C8 c, 
 	struct Allocator alloc,
-	enum StringCase caseSensitive
+	enum StringCase caseSensitive,
+	struct List *result
 );
 
-struct Buffer String_findAllString(
+struct Error String_findAllString(
 	struct String s, 
 	struct String other,
 	struct Allocator alloc,
-	enum StringCase caseSensitive
+	enum StringCase caseSensitive,
+	struct List *result
 );
 
 //
@@ -334,7 +303,8 @@ U64 String_findFirstString(struct String s, struct String other, enum StringCase
 U64 String_findLastString(struct String s, struct String other, enum StringCase caseSensitive);
 
 inline U64 String_findString(struct String s, struct String other, enum StringCase caseSensitive, Bool isFirst) {
-	return isFirst ? String_findFirstString(s, other, caseSensitive) : String_findLastString(s, other, caseSensitive);
+	return isFirst ? String_findFirstString(s, other, caseSensitive) : 
+		String_findLastString(s, other, caseSensitive);
 }
 
 Bool String_equalsString(struct String s, struct String other, enum StringCase caseSensitive);
@@ -363,9 +333,9 @@ struct Error String_offsetAsRef(struct String s, U64 off, struct String *result)
 
 //Things that perform on this string to reduce overhead
 
-Bool String_cutBegin(struct String s, U64 startOffset, struct String *result);
+Bool String_cutBegin(struct String s, U64 off, struct String *result);
 Bool String_cutEnd(struct String s, U64 siz, struct String *result);
-Bool String_cut(struct String s, U64 startOffset, U64 siz, struct String *result);
+Bool String_cut(struct String s, U64 off, U64 siz, struct String *result);
 
 Bool String_cutAfter(struct String s, C8 c, enum StringCase caseSensitive, Bool isFirst, struct String *result);
 
@@ -377,13 +347,19 @@ inline Bool String_cutAfterFirst(struct String s, C8 c, enum StringCase caseSens
 	return String_cutAfter(s, c, caseSensitive, true, result);
 }
 
-Bool String_cutAfterString(struct String s, struct String other, enum StringCase caseSensitive, Bool isFirst, struct String *result);
+Bool String_cutAfterString(
+	struct String s, struct String other, enum StringCase caseSensitive, Bool isFirst, struct String *result
+);
 
-inline Bool String_cutAfterLastString(struct String s, struct String other, enum StringCase caseSensitive, struct String *result) {
+inline Bool String_cutAfterLastString(
+	struct String s, struct String other, enum StringCase caseSensitive, struct String *result
+) {
 	return String_cutAfterString(s, other, caseSensitive, false, result);
 }
 
-inline Bool String_cutAfterFirstString(struct String s, struct String other, enum StringCase caseSensitive, struct String *result) {
+inline Bool String_cutAfterFirstString(
+	struct String s, struct String other, enum StringCase caseSensitive, struct String *result
+) {
 	return String_cutAfterString(s, other, caseSensitive, true, result);
 }
 
@@ -397,13 +373,19 @@ inline Bool String_cutBeforeFirst(struct String s, C8 c, enum StringCase caseSen
 	return String_cutBefore(s, c, caseSensitive, true, result);
 }
 
-Bool String_cutBeforeString(struct String s, struct String other, enum StringCase caseSensitive, Bool isFirst, struct String *result);
+Bool String_cutBeforeString(
+	struct String s, struct String other, enum StringCase caseSensitive, Bool isFirst, struct String *result
+);
 
-inline Bool String_cutBeforeLastString(struct String s, struct String other, enum StringCase caseSensitive, struct String *result) {
+inline Bool String_cutBeforeLastString(
+	struct String s, struct String other, enum StringCase caseSensitive, struct String *result
+) {
 	return String_cutBeforeString(s, other, caseSensitive, false, result);
 }
 
-inline Bool String_cutBeforeFirstString(struct String s, struct String other, enum StringCase caseSensitive, struct String *result) {
+inline Bool String_cutBeforeFirstString(
+	struct String s, struct String other, enum StringCase caseSensitive, struct String *result
+) {
 	return String_cutBeforeString(s, other, caseSensitive, true, result);
 }
 
@@ -423,7 +405,7 @@ inline Bool String_eraseLast(struct String *s, C8 c, enum StringCase caseSensiti
 Bool String_eraseString(struct String *s, struct String other, enum StringCase caseSensitive, Bool isFirst);
 
 Bool String_eraseFirstString(struct String *s, struct String other, enum StringCase caseSensitive){
-	return String_eraseString(s, other, caseSensitive, false);
+	return String_eraseString(s, other, caseSensitive, true);
 }
 
 Bool String_eraseLastString(struct String *s, struct String other, enum StringCase caseSensitive) {
@@ -459,6 +441,7 @@ inline Bool String_toUpper(struct String str) {
 //To return from string operations
 //These strings will be a ref into existing string to prevent copies, use StringList_createCopy to move them to the heap.
 //Because they contain mixed strings, the functions still need allocators to free heap strings.
+//This is different than List<String> because that one won't enforce string allocation properly.
 
 struct StringList {
 	U64 len;

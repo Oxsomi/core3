@@ -9,8 +9,10 @@ struct Thread {
 	void *objectHandle;
 };
 
-impl U32 Thread_getId();
+impl U32 Thread_getId();					//Current thread id
 impl U32 Thread_getLogicalCores();
+
+impl void Thread_sleep(Ns ns);				//Can be in a different time unit. Ex. on Windows it's rounded up to ms
 
 impl struct Error Thread_create(
 	ThreadCallbackFunction callback, void *objectHandle,

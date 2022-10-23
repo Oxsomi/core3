@@ -9,7 +9,7 @@ enum GenericError {
 	GenericError_OutOfMemory,
 	GenericError_OutOfBounds,
 	GenericError_NullPointer,
-	GenericError_Unauthorized,
+	GenericError_Unauthorized,			//For example if the local permissions or remote server disallow it
 	GenericError_NotFound,
 	GenericError_DivideByZero,
 	GenericError_Overflow,
@@ -21,10 +21,11 @@ enum GenericError {
 	GenericError_InvalidCast,
 	GenericError_InvalidState,
 	GenericError_RateLimit,
-	GenericError_LoopLimit,				/// If the platform decides that loop limit is reached, this will be thrown
+	GenericError_LoopLimit,				//If the platform decides that loop limit is reached, this will be thrown
 	GenericError_AlreadyDefined,
 	GenericError_UnsupportedOperation,
-	GenericError_TimedOut
+	GenericError_TimedOut,
+	GenericError_ConstData				//If an operation is done on data that is supposed to be const
 };
 
 //Only direct caller preserved to save space in release mode

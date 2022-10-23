@@ -5,7 +5,7 @@ struct Error F32_pow(F32 v, F32 exp, F32 *res) {
 
 	F32 r = powf(v, exp); 
 
-	if(F32_isnan(r) || F32_isinf(r))
+	if(!F32_isValid(r))
 		return Error_base(
 			GenericError_Overflow, 0,
 			0, 0, 
@@ -16,11 +16,12 @@ struct Error F32_pow(F32 v, F32 exp, F32 *res) {
 	return Error_none();
 }
 
-//TODO: Error check this
+struct Error F32_expe(F32 v, F32 *res) { return F32_pow(F32_e, v, res); }
+struct Error F32_exp2(F32 v, F32 *res) { return F32_pow(2, v, res); }
+struct Error F32_exp10(F32 v, F32 *res) { return F32_pow(10, v, res); }
 
-F32 F32_expe(F32 v) { return powf(F32_e, v); }
-F32 F32_exp2(F32 v) { return powf(2, v); }
-F32 F32_exp10(F32 v) { return powf(10, v); }
+//TODO: Error check this
+//TODO: IEEE754 compliance
 
 F32 F32_sqrt(F32 v) { return sqrtf(v); }
 
@@ -51,7 +52,7 @@ struct Error F32_mod(F32 v, F32 mod, F32 *res) {
 
 	F32 r = fmodf(v, mod); 
 
-	if(F32_isinf(r) || F32_isnan(r))
+	if(!F32_isValid(r))
 		return Error_base(
 			GenericError_Overflow,
 			0, 0, 0,
@@ -62,5 +63,6 @@ struct Error F32_mod(F32 v, F32 mod, F32 *res) {
 	return Error_none();
 }
 
-Bool F32_isnan(F32 v) { return isnan(v); }
-Bool F32_isinf(F32 v) { return isinf(v); }
+Bool F32_isNaN(F32 v) { return isnan(v); }
+Bool F32_isInf(F32 v) { return isinf(v); }
+Bool F32_isValid(F32 v) { return isfinite(v); }

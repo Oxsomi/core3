@@ -1,7 +1,8 @@
-#include "types/bit.h"
+#include "types/buffer.h"
 #include "platforms/window.h"
 #include "platforms/platform.h"
 #include "platforms/log.h"
+#include "platforms/input_device.h"
 #include "types/timer.h"
 
 #include <stdlib.h>
@@ -9,13 +10,14 @@
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 
-struct WWindow {
-	Bool running;
-};
+//We probably won't need more windows for any other reason. Otherwise just use window in a window
+//
+const U8 WindowManager_maxTotalPhysicalWindowCount = 16;
 
 void WWindow_updateMonitors(struct Window *w) {
 
-	//TODO:
+	//TODO: Query monitors
+	//EnumDisplayMonitors()
 
 	if(w->callbacks.updateMonitors)
 		w->callbacks.updateMonitors(w);
@@ -24,15 +26,22 @@ void WWindow_updateMonitors(struct Window *w) {
 LRESULT CALLBACK onCallback(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
 
 	struct Window *w = (struct Window*) GetWindowLongPtrA(hwnd, 0);
-	struct WWindow *wext = (struct WWindow*) w->nativeData;
 
-	if(!w || !wext)
+	if(!w)
 		return DefWindowProc(hwnd, message, wParam, lParam);
 
 	switch (message) {
 
+		case WM_DESTROY: {
+
+			//TODO: Properly destroy the window
+
+			w->flags &= ~WindowFlags_IsActive;
+			break;
+		}
+
+		case WM_CLOSE:
 		case WM_CREATE:
-		case WM_DESTROY:
 			break;
 
 		//Setting focus
@@ -50,24 +59,34 @@ LRESULT CALLBACK onCallback(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
 			break;
 
-		//TODO:
-
-		case WM_POWERBROADCAST: break;
-		case WM_DISPLAYCHANGE:	break;
+		case WM_DISPLAYCHANGE:	
+			WWindow_updateMonitors(w);
+			break;
 
 		//Input handling
 
 		case WM_INPUT: {
 
+			//Grab raw input
+
 			U32 size = 0;
-			GetRawInputData((HRAWINPUT)lParam, RID_INPUT, NULL, &size, sizeof(RAWINPUTHEADER));
-
-			struct Buffer buf = Bit_bytes(size, Platform_instance.alloc);
-
-			oicAssert(
-				"Couldn't read input", 
-				GetRawInputData((HRAWINPUT)lParam, RID_INPUT, buf.ptr, &size, sizeof(RAWINPUTHEADER)) == size
+			GetRawInputData(
+				(HRAWINPUT)lParam, RID_INPUT, NULL, 
+				&size, sizeof(RAWINPUTHEADER)
 			);
+
+			struct Buffer buf = Buffer_createNull(); 
+			struct Error err = Buffer_createUninitializedBytes(size, Platform_instance.alloc, &buf);
+
+			if(err.genericError) {
+				Log_fatal(String_createRefUnsafeConst("Couldn't allocate input data bytes"), LogOptions_Default);
+				break;
+			}
+
+			if (GetRawInputData((HRAWINPUT)lParam, RID_INPUT, buf.ptr, &size, sizeof(RAWINPUTHEADER)) != size) {
+				Log_fatal(String_createRefUnsafeConst("Couldn't get raw input"), LogOptions_Default);
+				break;
+			}
 
 			RAWINPUT *data = (RAWINPUT*) buf.ptr;
 
@@ -190,9 +209,12 @@ LRESULT CALLBACK onCallback(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
 				}
 
-			Bit_free(&buf, Platform_instance.alloc);
-			return DefRawInputProc(&data, 1, sizeof(*data));
+			LRESULT lr = DefRawInputProc(&data, 1, sizeof(*data));
+			Buffer_free(&buf, Platform_instance.alloc);
+			return lr;
 		}
+
+		/* TODO: Handle capture cursor
 
 		case WM_MOUSEMOVE:
 
@@ -219,6 +241,7 @@ LRESULT CALLBACK onCallback(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 			}
 
 			break;
+		*/
 
 		case WM_INPUT_DEVICE_CHANGE: {
 
@@ -299,17 +322,8 @@ LRESULT CALLBACK onCallback(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
 			//Update input
 
-			for (auto dvc : info->devices) {
-
-				for (ButtonHandle i = 0, j = ButtonHandle(dvc->getButtonCount()); i < j; ++i)
-					if (dvc->getState(i) == 0x2 /* released */)
-						dvc->setPreviousState(i, false);
-					else if (dvc->getState(i) == 0x1 /* pressed */)
-						dvc->setPreviousState(i, true);
-
-				for (AxisHandle i = 0, j = dvc->getAxisCount(); i < j; ++i)
-					dvc->setPreviousAxis(i, dvc->getCurrentAxis(i));
-			}
+			for(U64 i = 0; i < w->deviceCount; ++i)
+				InputDevice_markUpdate(w->devices[i]);
 
 			//Render (if not minimized)
 
@@ -320,27 +334,27 @@ LRESULT CALLBACK onCallback(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 		}
 
 		case WM_GETMINMAXINFO: {
+
+			//TODO: Minimum window size?
+			//TODO: Maximum window size?
+
 			MINMAXINFO *lpMMI = (MINMAXINFO*) lParam;
 			lpMMI->ptMinTrackSize.x = lpMMI->ptMinTrackSize.y = 256;
 			break;
 		}
 
-		case WM_CLOSE:
-			wext->running = false;
-			break;
-
 		case WM_SIZE: {
 
 			RECT r;
 			GetClientRect(hwnd, &r);
-			F32x4 newSize = Vec_create2((F32)(r.right - r.left), (F32)(r.bottom - r.top));
+			I32x2 newSize = I32x2_create2(r.right - r.left, r.bottom - r.top);
 
 			if (wParam == SIZE_MINIMIZED) 
 				w->flags |= WindowFlags_IsMinimized;
 
 			else w->flags &= ~WindowFlags_IsMinimized;
 
-			if (!Vec_x(newSize) || !Vec_y(newSize) || Vec_all(Vec_eq(w->size, newSize)))
+			if (!I32x2_any(I32x2_leq(newSize, I32x2_zero())) || I32x2_eq2(w->size, newSize))
 				break;
 
 			w->size = newSize;
@@ -358,7 +372,7 @@ LRESULT CALLBACK onCallback(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 			RECT r;
 			GetWindowRect(hwnd, &r);
 		
-			w->offset = Vec_create2((F32)r.left, (F32)r.top);
+			w->offset = I32x2_create2(r.left, r.top);
 
 			WWindow_updateMonitors(w);
 
@@ -372,11 +386,92 @@ LRESULT CALLBACK onCallback(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 	return DefWindowProc(hwnd, message, wParam, lParam);
 }
 
-struct Window *Window_createPhysical(
-	F32x4 position, F32x4 size,
-	enum WindowHint hint, const C8 *title, struct WindowCallbacks callbacks,
-	enum WindowFormat format
+Bool WindowManager_supportsFormat(struct WindowManager manager, enum WindowFormat format) {
+
+	//TODO: HDR support; ColorSpace
+	//	https://learn.microsoft.com/en-us/windows/win32/api/dxgi/nf-dxgi-idxgiswapchain-getcontainingoutput
+	//	https://learn.microsoft.com/en-us/windows/win32/api/dxgi1_6/ns-dxgi1_6-dxgi_output_desc1
+
+	return format == WindowFormat_rgba8;
+}
+
+struct Error WindowManager_createPhysical(
+	struct WindowManager *manager,
+	I32x2 position,
+	I32x2 size, 
+	enum WindowHint hint,
+	struct String title, 
+	struct WindowCallbacks callbacks,
+	enum WindowFormat format,
+	struct Window **w
 ) {
+
+	//Validate state
+
+	if(!manager)
+		return (struct Error) { .genericError = GenericError_NullPointer };
+
+	if(!Lock_isLockedForThread(manager->lock))
+		return (struct Error) { .genericError = GenericError_InvalidOperation };
+
+	if(!w)
+		return (struct Error) { .genericError = GenericError_NullPointer, .paramId = 7 };
+
+	if(*w)
+		return (struct Error) { .genericError = GenericError_InvalidParameter, .paramId = 7 };
+
+	switch (format) {
+
+		case WindowFormat_rgba8:
+		case WindowFormat_hdr10a2:
+		case WindowFormat_rgba16f:
+		case WindowFormat_rgba32f:
+
+			if(!WindowManager_supportsFormat(*manager, format))
+				return (struct Error) { 
+					.genericError = GenericError_UnsupportedOperation, 
+					.paramId = 6,
+					.paramValue0 = format
+				};
+			
+			break;
+
+		default:
+			return (struct Error) { .genericError = GenericError_InvalidParameter, .paramId = 6 };
+	}
+
+	if(I32x2_any(I32x2_lt(size, I32x2_zero())))
+		return (struct Error) { .genericError = GenericError_InvalidParameter };
+
+	if (title.len >= MAX_PATH)
+		return (struct Error) { 
+			.genericError = GenericError_OutOfBounds, 
+			.paramId = 4, 
+			.paramValue0 = title.len,
+			.paramValue1 = MAX_PATH
+		};
+		
+	//Find free spot in physical windows
+
+	struct Window *win = NULL;
+	WindowHandle handle = 0;
+
+	for(U8 i = 0; i < WindowManager_maxTotalPhysicalWindowCount; ++i) {
+
+		struct Window *w = manager->windowArray + i;
+
+		if (!w->nativeHandle) {
+			win = w;
+			handle = i;
+			break;
+		}
+	}
+
+	if(!win)
+		return (struct Error) { .genericError = GenericError_OutOfMemory };
+		
+	//Create native window
+
 	WNDCLASSEXA wc = (WNDCLASSEXA){ 0 };
 	HINSTANCE mainModule = Platform_instance.data;
 
@@ -391,12 +486,12 @@ struct Window *Window_createPhysical(
 
 	wc.hbrBackground = (HBRUSH) GetStockObject(BLACK_BRUSH);
 
-	wc.lpszClassName = title;
+	wc.lpszClassName = "Oxsomi core v3";
 	wc.cbSize = sizeof(wc);
 	wc.cbWndExtra = sizeof(void*);
 
 	if (!RegisterClassExA(&wc))
-		Log_fatal("Couldn't create window class", LogOptions_Default);
+		return (struct Error) { .genericError = GenericError_InvalidOperation, .paramSubId = 1 };
 
 	DWORD style = WS_VISIBLE;
 
@@ -411,107 +506,162 @@ struct Window *Window_createPhysical(
 	if(!(hint & WindowHint_HandleInput))
 		style |= WS_DISABLED;
 
-	U32 maxSize[2] = { 
-		(U32) GetSystemMetrics(SM_CXSCREEN), 
-		(U32) GetSystemMetrics(SM_CYSCREEN) 
-	};
+	I32x2 maxSize = I32x2_create2(
+		GetSystemMetrics(SM_CXSCREEN), 
+		GetSystemMetrics(SM_CYSCREEN) 
+	);
 
 	for (U64 i = 0; i < 2; ++i)
-		if (!info->size[i] || info->size[i] >= maxSize[i])
-			info->size[i] = maxSize[i];
+		if (!I32x2_get(size, i) || I32x2_get(size, i) >= I32x2_get(maxSize, i))
+			I32x2_set(&size, i, I32x2_get(maxSize, i));
 
-	HWND hwnd = CreateWindowExA(
-		WS_EX_APPWINDOW, wc.lpszClassName, wc.lpszClassName, style,
-		(int) Vec_x(position), (int) Vec_y(position),
-		(int) Vec_x(size), (int) Vec_y(size),
+	//Our strings aren't null terminated, so ensure windows doesn't read garbage
+
+	C8 windowName[MAX_PATH + 1];
+	Buffer_copy(Buffer_createRef(windowName, sizeof(windowName)), Buffer_createRef(title.ptr, title.len));
+
+	windowName[title.len] = '\0';
+
+	HWND nativeWindow = CreateWindowExA(
+		WS_EX_APPWINDOW, wc.lpszClassName, windowName, style,
+		I32x2_x(position), I32x2_y(position),
+		I32x2_x(size), I32x2_y(size),
 		NULL, NULL, mainModule, NULL
 	);
 
-	if(!hwnd)
-		Log_fatal("Couldn't create window", LogOptions_Default);
-
+	if(!nativeWindow)
+		return (struct Error) { .genericError = GenericError_InvalidOperation, .paramSubId = 2 };
+		
 	//Get real size and position
 
 	RECT r = (RECT){ 0 };
-	GetClientRect(hwnd, &r);
-	size = Vec_create2((F32)(r.right - r.left), (F32)(r.bottom - r.top));
+	GetClientRect(nativeWindow, &r);
+	size = I32x2_create2(r.right - r.left, r.bottom - r.top);
 
-	GetWindowRect(hwnd, &r);
-	position = Vec_create2((F32) r.left, (F32) r.top);
+	GetWindowRect(nativeWindow, &r);
+	position = I32x2_create2(r.left, r.top);
 
-	//Find overlapping monitors
+	//Bind our window
 
-	//TODO:
+	SetWindowLongPtrA(nativeWindow, 0, (LONG_PTR) win);
 
-	U64 monitorCount = 0;
-	struct Monitor *monitors = NULL;
+	//Alloc cpu visible buffer if needed
 
-	//Create our real window
+	struct Buffer cpuVisibleBuffer = Buffer_createNull();
 
-	AllocFunc alloc = Platform_instance.alloc.alloc;
-	void *allocator = Platform_instance.alloc.ptr;
+	struct Error err = Error_none();
 
-	struct Window *wind = alloc(allocator, sizeof(struct Window));
-	struct WWindow *wwind = alloc(allocator, sizeof(struct WWindow));
+	if(hint & WindowHint_ProvideCPUBuffer) {
 
-	*wind = (struct Window) {
+		err = Buffer_createEmptyBytes(
+			TextureFormat_getSize((enum TextureFormat) format, (U64) I32x2_x(size), (U64) I32x2_y(size)),
+			Platform_instance.alloc,
+			&cpuVisibleBuffer
+		);
+
+		if(err.genericError)
+			return err;
+	}
+
+	//Lock for when we are updating this window
+
+	struct Lock lock = (struct Lock) { 0 };
+
+	if ((err = Lock_create(&lock)).genericError) {
+
+		if(cpuVisibleBuffer.ptr)
+			Buffer_free(&cpuVisibleBuffer, Platform_instance.alloc);
+
+		return err;
+	}
+
+	//Fill window object
+
+	*win = (struct Window) {
 
 		.offset = position,
 		.size = size,
+	
+		.cpuVisibleBuffer = cpuVisibleBuffer,
 
-		.monitorCount = monitorCount,				//Monitors that the window overlaps with
-		.monitors =  monitors,
-
-		.nativeHandle = hwnd,
-		.nativeData = wwind,
+		.nativeHandle = nativeWindow,
+		.lock = lock,
 
 		.callbacks = callbacks,
-		.lastUpdate = 0,
 
+		.handle = handle,
 		.hint = hint,
-		.format = ???,
-		.flags = hint & WindowHint_ForceFullscreen ? WindowFlags_IsFullscreen : WindowFlags_None
+		.format = format,
+		.flags = WindowFlags_IsActive
 	};
 
-	*wwind = (struct WWindow) {
-		.running = false
-	};
+	*w = win;
 
-	//
+	if(callbacks.start)
+		callbacks.start(w);
 
-	SetWindowLongPtrA(hwnd, 0, (LONG_PTR) wind);
-	UpdateWindow(hwnd);
+	//Find overlapping monitors
+
+	WWindow_updateMonitors(win);
+
+	//Our window is now ready
+
+	UpdateWindow(nativeWindow);
+
+	return Error_none();
 }
 
-//We probably won't need more windows for any other reason. Otherwise just use window in a window
-const U64 WindowManager_maxTotalPhysicalWindowCount = 16;
+struct Error WindowManager_freePhysical(struct WindowManager *manager, WindowHandle handle) {
 
-void Window_freePhysical(struct Window **w) {
+	if(!manager)
+		return (struct Error) { .genericError = GenericError_NullPointer };
 
-	if(!w || !free)
-		Log_fatal("Couldn't free physical window, no free func or invalid window ptr", LogOptions_Default);
+	if(!Lock_isLockedForThread(manager->lock))
+		return (struct Error) { .genericError = GenericError_InvalidOperation };
 
-	if(!*w || !(*w)->nativeData)
-		return;
+	if(handle >= WindowManager_maxTotalPhysicalWindowCount)
+		return (struct Error) { .genericError = GenericError_OutOfBounds };
 
-	if(((struct WWindow*)(*w)->nativeData)->running)
-		PostMessageA((*w)->nativeHandle, WM_DESTROY, NULL, NULL);
+	struct Window *w = manager->windowArray + handle;
 
-	FreeFunc free = Platform_instance.alloc.free;
-	void *allocator = Platform_instance.alloc.ptr;
+	if(!(w->flags & WindowFlags_IsActive))
+		return (struct Error) { .genericError = GenericError_InvalidOperation, .paramId = 1 };
 
-	free(allocator, (struct Buffer) { .ptr = (*w)->nativeData, .siz = sizeof(struct WWindow) });
-	free(allocator, (struct Buffer) { .ptr = *w, .siz = sizeof(struct Window) });
-	*w = NULL;
+	//Ensure our window safely exits
+
+	PostMessageA(w->nativeHandle, WM_DESTROY, NULL, NULL);
+	return Error_none();
 }
 
-void Window_updatePhysicalTitle(const struct Window *w, const C8 *title) {
+struct Error Window_updatePhysicalTitle(
+	const struct Window *w,
+	struct String title
+) {
 
-	if(!w)
-		Log_fatal("Couldn't update physical title; invalid window", LogOptions_Default);
+	if(!w || !title.ptr || !title.len)
+		return (struct Error) { .genericError = GenericError_NullPointer, .paramId = !!w };
 
-	if(!SetWindowTextA(w->nativeHandle, title))
-		Log_fatal("Couldn't update physical title. Window might not have one", LogOptions_Default);
+	if (title.len >= MAX_PATH)
+		return (struct Error) { 
+			.genericError = GenericError_OutOfBounds, 
+			.paramId = 1, 
+			.paramValue0 = title.len,
+			.paramValue1 = MAX_PATH
+		};
+
+	C8 windowName[MAX_PATH + 1];
+	Buffer_copy(Buffer_createRef(windowName, sizeof(windowName)), Buffer_createRef(title.ptr, title.len));
+
+	windowName[title.len] = '\0';
+
+	if(!SetWindowTextA(w->nativeHandle, windowName))
+		return (struct Error) { .genericError = GenericError_InvalidOperation };
+
+	return Error_none();
 }
 
-void Window_presentPhysical(const struct Window *w, struct Buffer data, enum WindowFormat encodedFormat);
+struct Error Window_presentPhysical(
+	const struct Window *w, 
+	struct Buffer data, 
+	enum WindowFormat encodedFormat
+);

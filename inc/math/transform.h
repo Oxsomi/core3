@@ -1,5 +1,5 @@
 #pragma once
-#include "quat.h"
+#include "types/pack.h"
 
 //Transform contains how to go from one space to another
 //A transform can also be an inverse transform, which is way faster to apply to go back to the space
@@ -18,9 +18,10 @@ struct Transform {
 //32 bytes; 2 per cache line
 
 struct PackedTransform {
-	struct Quat16 rot;
 	F32 pos[3];
+	U32 quatXy;
 	F32 scale[3];
+	U32 quatZw;
 };
 
 //Helper functions

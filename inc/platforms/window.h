@@ -1,5 +1,5 @@
 #pragma once
-#include "types/vec.h"
+#include "math/vec.h"
 #include "formats/texture.h"
 #include "lock.h"
 
@@ -44,7 +44,8 @@ enum WindowFlags {
 	WindowFlags_IsFocussed		= 1 << 0,
 	WindowFlags_IsMinimized		= 1 << 1,
 	WindowFlags_IsVirtual		= 1 << 2,
-	WindowFlags_IsFullscreen	= 1 << 3
+	WindowFlags_IsFullscreen	= 1 << 3,
+	WindowFlags_IsActive		= 1 << 4
 };
 
 typedef void (*WindowCallback)(struct Window*);
@@ -77,6 +78,12 @@ struct Window {
 	enum WindowHint hint;
 	enum WindowFormat format;
 	enum WindowFlags flags;
+
+	U64 deviceCount;
+	struct InputDevice *devices;
+
+	U64 monitorCount;
+	struct Monitor *monitors;
 };
 
 //Implementation dependent aka physical windows
@@ -89,8 +96,7 @@ impl struct Error Window_updatePhysicalTitle(
 impl struct Error Window_presentPhysical(
 	const struct Window *w, 
 	struct Buffer data, 
-	enum WindowFormat encodedFormat,
-	Bool isTiled4
+	enum WindowFormat encodedFormat
 );
 
 //Virtual windows
@@ -98,8 +104,7 @@ impl struct Error Window_presentPhysical(
 struct Error Window_presentVirtual(
 	const struct Window *w, 
 	struct Buffer data, 
-	enum WindowFormat encodedFormat,
-	Bool isTiled4
+	enum WindowFormat encodedFormat
 );
 
 struct Error Window_resizeCPUBuffer(		//Should be called if virtual or WindowHint_ProvideCPUBuffer

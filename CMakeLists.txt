@@ -14,10 +14,14 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 if(CMAKE_SIZEOF_VOID_P EQUAL 4)
-	message(FATAL_ERROR "32-bit builds are disabled by core3 because it's legacy and could cause unintended behavior if builded anyways.")
+	message(FATAL_ERROR "32-bit builds are disabled by core3 because it's legacy and could cause unintended behavior if built anyways.")
 endif()
 
-set(RelaxFloat OFF CACHE BOOL "Relax float (perf > accuracy)")
+set(EnableSIMD ON CACHE BOOL "Enables SIMD")
+set(RelaxFloat ON CACHE BOOL "Relax float (perf > accuracy)")
+
+# Even though EnableSIMD can be turned off, it won't be truly off
+# This is because we want to maintain proper IEEE754 compliance, which we can't do without SSE
 
 if(MSVC)
 
@@ -31,19 +35,27 @@ if(MSVC)
 
 else()
 
-	add_compile_options(-Wall -Wextra -Werror -mavx2)
+	add_compile_options(-Wall -Wextra -Werror -mavx2 -mfpmath=sse)
 
 	if(RelaxFloat)
-		add_compile_options(-ffast-math -mfpmath=sse)
+		add_compile_options(-ffast-math)
 	else()
-		add_compile_options(-fno-unsafe-math-optimizations -mfpmath=sse)
+		add_compile_options(-fno-unsafe-math-optimizations)
 	endif()
 
 endif()
 
+if(EnableSIMD) 
+	set(_SIMD "SIMD_SSE")
+else()
+	set(_SIMD "SIMD_NONE")
+endif()
+
+configure_file(config.h.in ${CMAKE_CURRENT_SOURCE_DIR}/inc/cfg/config.h)
+
 # Types 
 
-file(GLOB_RECURSE typesHeaders "inc/file/*.h" "inc/math/*.h" "inc/types/*.h")
+file(GLOB_RECURSE typesHeaders "inc/file/*.h" "inc/math/*.h" "inc/types/*.h" "inc/cfg/*.h" "*.h.in")
 file(GLOB_RECURSE typesSources "src/file/*.c" "src/math/*.c" "src/types/*.c")
 
 add_library(

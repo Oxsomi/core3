@@ -2,8 +2,6 @@
 #include "types/string.h"
 #include "math/math.h"
 #include <time.h>
-#include <assert.h>
-#include <string.h>
 
 #ifdef _WIN32
 	#include <intrin.h>
@@ -38,8 +36,8 @@ DNs Timer_dns(Ns timeStamp0, Ns timeStamp1) {
 	return (DNs) diff;
 }
 
-F64 Timer_dt(Ns timeStamp0, Ns timeStamp1) {
-	return (F64)Timer_dns(timeStamp0, timeStamp1) / seconds;
+F32 Timer_dt(Ns timeStamp0, Ns timeStamp1) {
+	return (F32)Timer_dns(timeStamp0, timeStamp1) / seconds;
 }
 
 U64 Timer_clocks() { return __rdtsc(); }	//TODO: Arm?
@@ -71,7 +69,10 @@ void Timer_format(Ns time, TimerFormat timeString) {
 
 	struct tm *t = gmtime(&inSecs);
 
-	memcpy(timeString, formatStr, sizeof(formatStr));
+	Buffer_copy(
+		Buffer_createRef(timeString, ShortString_LEN), 
+		Buffer_createRef(formatStr, sizeof(formatStr))
+	);
 
 	setNum(timeString, offsets[0], sizes[0], (U64)t->tm_year + 1900);
 	setNum(timeString, offsets[1], sizes[1], (U64)t->tm_mon + 1);
@@ -89,7 +90,7 @@ enum EFormatStatus Timer_parseFormat(Ns *time, TimerFormat format) {
 	if (!time)
 		return FormatStatus_InvalidInput;
 
-	U64 len = String_calcStrLen(format, 32);
+	U64 len = String_calcStrLen(format, ShortString_LEN - 1);
 
 	struct tm tm = { 0 };
 	U64 curr = 0, currSep = 0, prevI = U64_MAX;
@@ -100,7 +101,7 @@ enum EFormatStatus Timer_parseFormat(Ns *time, TimerFormat format) {
 
 		C8 c = format[i];
 
-		if (c >= '0' && c <= '9') {
+		if (C8_isDec(c)) {
 
 			if(curr == U64_MAX)
 				return FormatStatus_Overflow;
@@ -108,7 +109,7 @@ enum EFormatStatus Timer_parseFormat(Ns *time, TimerFormat format) {
 			curr *= 10;
 
 			U64 prev = curr;
-			curr += (c - '0');
+			curr += C8_dec(c);
 
 			if(curr < prev)
 				return FormatStatus_Overflow;
@@ -205,6 +206,6 @@ enum EFormatStatus Timer_parseFormat(Ns *time, TimerFormat format) {
 	if (ts == (time_t)-1)
 		return FormatStatus_InvalidTime;
 
-	*time = ts * seconds + nsAdd;
+	*time = (Ns)ts * seconds + nsAdd;
 	return FormatStatus_Success;
 }

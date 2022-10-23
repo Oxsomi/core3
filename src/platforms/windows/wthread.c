@@ -1,10 +1,19 @@
 #include "platforms/platform.h"
 #include "platforms/thread.h"
 #include "types/error.h"
+#include "types/buffer.h"
 
+#define MICROSOFT_WINDOWS_WINBASE_H_DEFINE_INTERLOCKED_CPLUSPLUS_OVERLOADS 0
 #include <Windows.h>
 
 U32 Thread_getId() { return GetCurrentThreadId(); }
+
+void Thread_sleep(Ns ns) {
+
+	//TODO: this rolls over
+
+	Sleep((DWORD) U64_min((ns + ms - 1) / ms, U32_MAX));
+}
 
 U32 Thread_getLogicalCores() {
 
@@ -39,7 +48,7 @@ struct Error Thread_create(
 	if(!callback)
 		return (struct Error) { .genericError = GenericError_NullPointer };
 
-	struct Buffer buf = (struct Buffer) { 0 };
+	struct Buffer buf = Buffer_createNull();
 
 	struct Error err = Platform_instance.alloc.alloc(
 		Platform_instance.alloc.ptr, sizeof(struct Thread), &buf

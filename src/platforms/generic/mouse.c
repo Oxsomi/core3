@@ -24,7 +24,9 @@ struct Error Mouse_free(Mouse *dev) {
 
 struct Error Mouse_create(Mouse *result) {
 
-	struct Error err = InputDevice_create(MouseButton_Count, MouseAxis_Count, result);
+	struct Error err = InputDevice_create(
+		MouseButton_Count, MouseAxis_Count, InputDeviceType_Mouse, result
+	);
 
 	if(err.genericError)
 		return err;

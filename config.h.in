@@ -1,0 +1,7 @@
+#pragma once
+
+#define SIMD_NONE 0
+#define SIMD_SSE 1
+#define SIMD_NEON 2
+
+#define _SIMD ${_SIMD}

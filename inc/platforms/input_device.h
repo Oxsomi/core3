@@ -30,12 +30,19 @@ struct InputAxis {
 	F32 deadZone;
 };
 
+enum InputDeviceType {
+	InputDeviceType_Keyboard,
+	InputDeviceType_Mouse,
+	InputDeviceType_Controller
+};
+
 struct InputDevice {
 
 	//How many buttons and axes this device has
 
 	U16 buttons, axes;
 	U32 flags;
+	enum InputDeviceType type;
 
 	//The names of all handles
 	//InputAxis[axes]
@@ -52,7 +59,7 @@ struct InputDevice {
 
 //Initializing a device
 
-struct Error InputDevice_create(U16 buttons, U16 axes, struct InputDevice *result);
+struct Error InputDevice_create(U16 buttons, U16 axes, enum InputDeviceType type, struct InputDevice *result);
 
 struct Error InputDevice_createButton(
 	struct InputDevice dev, 

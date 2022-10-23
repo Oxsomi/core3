@@ -5,6 +5,7 @@
 //Unfortunately before Windows 10 it doesn't support printing colors into console using printf
 //We also use Windows dependent stack tracing
 
+#define MICROSOFT_WINDOWS_WINBASE_H_DEFINE_INTERLOCKED_CPLUSPLUS_OVERLOADS 0
 #include <Windows.h>
 #include <signal.h>
 #include <DbgHelp.h>

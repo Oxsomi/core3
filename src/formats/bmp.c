@@ -1,5 +1,5 @@
 #include "formats/bmp.h"
-#include "types/bit.h"
+#include "types/buffer.h"
 #include "types/allocator.h"
 
 #pragma pack(push, 1)
@@ -72,9 +72,9 @@ struct Error BMP_writeRGBA(
 		.colorSpaceType = BMP_srgbMagic
 	};
 
-	struct Buffer file = (struct Buffer) { 0 }; 
+	struct Buffer file = Buffer_createNull();
 
-	struct Error err = Bit_createBytes(
+	struct Error err = Buffer_createUninitializedBytes(
 		headersSize + buf.siz,
 		allocator,
 		&file
@@ -86,22 +86,22 @@ struct Error BMP_writeRGBA(
 	struct Buffer fileAppend = file;
 	*result = file;
 
-	err = Bit_append(&fileAppend, &header, sizeof(header));
+	err = Buffer_append(&fileAppend, &header, sizeof(header));
 
 	if(err.genericError)
 		return err;
 
-	err = Bit_append(&fileAppend, &infoHeader, sizeof(infoHeader));
+	err = Buffer_append(&fileAppend, &infoHeader, sizeof(infoHeader));
 
 	if(err.genericError)
 		return err;
 
-	err = Bit_append(&fileAppend, &colorHeader, sizeof(colorHeader));
+	err = Buffer_append(&fileAppend, &colorHeader, sizeof(colorHeader));
 
 	if(err.genericError)
 		return err;
 
-	err = Bit_appendBuffer(&fileAppend, buf);
+	err = Buffer_appendBuffer(&fileAppend, buf);
 
 	if(err.genericError)
 		return err;

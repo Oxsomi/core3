@@ -1,7 +1,7 @@
 #include "file/file.h"
 #include "types/allocator.h"
 #include "types/error.h"
-#include "types/bit.h"
+#include "types/buffer.h"
 #include "types/string.h"
 #include <stdio.h>
 
@@ -12,7 +12,9 @@
 struct Error File_write(struct Buffer buf, struct String loc) {
 
 	if(!buf.siz || !buf.ptr)
-		return (struct Error){ .genericError = GenericError_NullPointer, .paramId = 0 };
+		return (struct Error){ .genericError = GenericError_NullPointer };
+
+	//TODO: Test, does this properly clear a previous file if present?
 
 	if(String_isEmpty(loc))
 		return (struct Error){ .genericError = GenericError_InvalidParameter, .paramId = 1 };
@@ -52,7 +54,7 @@ struct Error File_read(struct String loc, struct Allocator allocator, struct Buf
 		return (struct Error){ .genericError = GenericError_InvalidState, .errorSubId = 0 };
 	}
 
-	struct Error err = Bit_createBytes((U64)_ftelli64(f), allocator, &output);
+	struct Error err = Buffer_createUninitializedBytes((U64)_ftelli64(f), allocator, &output);
 	
 	if(err.genericError) {
 		fclose(f);
@@ -60,7 +62,7 @@ struct Error File_read(struct String loc, struct Allocator allocator, struct Buf
 	}
 
 	if(fseek(f, 0, SEEK_SET)) {
-		Bit_free(&output, allocator);
+		Buffer_free(&output, allocator);
 		fclose(f);
 		return (struct Error){ .genericError = GenericError_InvalidState, .errorSubId = 1 };
 	}
@@ -68,7 +70,7 @@ struct Error File_read(struct String loc, struct Allocator allocator, struct Buf
 	struct Buffer b = *output;
 
 	if (fread(b.ptr, 1, b.siz, f) != b.siz) {
-		Bit_free(&b, allocator);
+		Buffer_free(&b, allocator);
 		fclose(f);
 		return (struct Error){ .genericError = GenericError_InvalidState, .errorSubId = 2 };
 	}

@@ -1,6 +1,7 @@
 #include "platforms/platform.h"
 #include "platforms/thread.h"
 #include "types/error.h"
+#include "types/buffer.h"
 
 struct Error Thread_free(struct Thread **thread) {
 
@@ -10,7 +11,7 @@ struct Error Thread_free(struct Thread **thread) {
 	FreeFunc free = Platform_instance.alloc.free;
 	void *allocator = Platform_instance.alloc.ptr;
 
-	struct Error err = free(allocator, (struct Buffer) { (U8*) *thread, sizeof(struct Thread) });
+	struct Error err = free(allocator, Buffer_createRef(*thread, sizeof(struct Thread)));
 	*thread = NULL;
 	return err;
 }

@@ -12,10 +12,10 @@ inline struct Error F32_fromBits(U64 v, F32 *res) {
 	U32 bits = (U32) v;
 	F32 r = *(const F32*) &v;
 
-	if(F32_isnan(r))
+	if(F32_isNaN(r))
 		return Error_base(GenericError_NaN, 0, 0, 0, v, 0);
 
-	if(F32_isinf(r))
+	if(F32_isInf(r))
 		return Error_base(GenericError_Overflow, 0, 0, 0, v, 0);
 
 	if(v == (1 << 31))	//Signed zero
@@ -83,7 +83,7 @@ inline struct Error U64_fromFloat(F32 v, U64 *res)  CastFromF(U64)
 																			\
 	F32 r = (F32) v;														\
 																			\
-	if(F32_isinf(r))														\
+	if(!F32_isValid(r))														\
 		return Error_base(													\
 			v >= 0 ? GenericError_Overflow : GenericError_Underflow, 0,		\
 			0, 0, v, 0														\

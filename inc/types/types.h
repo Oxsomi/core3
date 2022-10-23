@@ -80,6 +80,11 @@ extern const I16 I16_MAX;
 extern const I32 I32_MAX;
 extern const I64 I64_MAX;
 
+extern const F32 F32_MIN;
+extern const F32 F32_MAX;
+
+//TODO: Buffer constant possibility
+
 struct Buffer {
 	U8 *ptr;
 	U64 siz;
@@ -87,13 +92,8 @@ struct Buffer {
 
 //Char
 
-inline C8 C8_toLower(C8 c) {
-	return (C8) tolower(c);
-}
-
-inline C8 C8_toUpper(C8 c) {
-	return (C8) toupper(c);
-}
+C8 C8_toLower(C8 c);
+C8 C8_toUpper(C8 c);
 
 enum StringCase {
 	StringCase_Sensitive,			//Prefer when possible; avoids transforming the character
@@ -113,9 +113,9 @@ inline C8 C8_transform(C8 c, enum StringTransform transform) {
 	);
 }
 
-inline C8 C8_isBin(C8 c) { return c == '0' || c == '1'; }
-inline C8 C8_isOct(C8 c) { return c >= '0' && c <= '7'; }
-inline C8 C8_isDec(C8 c) { return c >= '0' && c <= '9'; }
+inline Bool C8_isBin(C8 c) { return c == '0' || c == '1'; }
+inline Bool C8_isOct(C8 c) { return c >= '0' && c <= '7'; }
+inline Bool C8_isDec(C8 c) { return c >= '0' && c <= '9'; }
 
 inline Bool C8_isUpperCase(C8 c) { return c >= 'A' && c <= 'Z'; }
 inline Bool C8_isLowerCase(C8 c) { return c >= 'a' && c <= 'z'; }
@@ -123,9 +123,9 @@ inline Bool C8_isUpperCaseHex(C8 c) { return c >= 'A' && c <= 'F'; }
 inline Bool C8_isLowerCaseHex(C8 c) { return c >= 'a' && c <= 'f'; }
 inline Bool C8_isWhitespace(C8 c) { return c == ' ' || c == '\t' || c == '\n' || c == '\r'; }
 
-inline C8 C8_isHex(C8 c) { return C8_isDec(c) || C8_isUpperCaseHex(c) || C8_isLowerCaseHex(c); }
-inline C8 C8_isNyto(C8 c) { return C8_isDec(c) || C8_isUpperCase(c) || C8_isLowerCase(c) || c == '_' || c == '$'; }
-inline C8 C8_isAlphaNumeric(C8 c) { return C8_isNyto(c) && c != '$'; }
+inline Bool C8_isHex(C8 c) { return C8_isDec(c) || C8_isUpperCaseHex(c) || C8_isLowerCaseHex(c); }
+inline Bool C8_isNyto(C8 c) { return C8_isDec(c) || C8_isUpperCase(c) || C8_isLowerCase(c) || c == '_' || c == '$'; }
+inline Bool C8_isAlphaNumeric(C8 c) { return C8_isNyto(c) && c != '$'; }
 
 inline U8 C8_bin(C8 c) { return c == '0' ? 0 : (c == '1' ? 1 : U8_MAX); }
 inline U8 C8_oct(C8 c) { return C8_isOct(c) ? c - '0' : U8_MAX; }
@@ -162,10 +162,10 @@ inline U8 C8_nyto(C8 c) {
 	return c == '$' ? 63 : U8_MAX;
 }
 
-inline C8 C8_createBin(U8 v) { return (v == 0 ? '0' : (v == 1 ? '1' : '\0')); }
-inline C8 C8_createOct(U8 v) { return v < 8 ? '0' + v : '\0'; }
-inline C8 C8_createDec(U8 v) { return v < 10 ? '0' + v : '\0'; }
-inline C8 C8_createHex(U8 v) { return v < 10 ? '0' + v : (v < 16 ? 'A' + v - 10 : '\0'); }
+inline C8 C8_createBin(U8 v) { return (v == 0 ? '0' : (v == 1 ? '1' : (C8)U8_MAX)); }
+inline C8 C8_createOct(U8 v) { return v < 8 ? '0' + v : (C8)U8_MAX; }
+inline C8 C8_createDec(U8 v) { return v < 10 ? '0' + v : (C8)U8_MAX; }
+inline C8 C8_createHex(U8 v) { return v < 10 ? '0' + v : (v < 16 ? 'A' + v - 10 : (C8)U8_MAX); }
 
 //Nytodecimal: 0-9A-Za-z_$
 
@@ -174,7 +174,7 @@ inline C8 C8_createNyto(U8 v) {
 		v < 36 ? 'A' + v - 10 : (
 			v < 62 ? 'a' + v - 36 : (
 				v == 62 ? '_' : (
-					v == 63 ? '$' : '\0'
+					v == 63 ? '$' : (C8)U8_MAX
 				)
 			)
 		)

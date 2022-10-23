@@ -17,17 +17,28 @@ inline U64 U64_min(U64 v0, U64 v1) { return v0 <= v1 ? v0 : v1; }
 inline U64 U64_max(U64 v0, U64 v1) { return v0 >= v1 ? v0 : v1; }
 inline U64 U64_clamp(U64 v, U64 mi, U64 ma) { return U64_max(mi, U64_min(ma, v)); }
 
-inline struct Error U64_pow2(U64 *res, U64 v) {
+inline U64 U64_pow2(U64 v) {
+	if(!v) return 0;
+	U64 res = v * v; 
+	return res / v != v ? U64_MAX : res;
+}
 
-	if(!res)
-		return Error_base(GenericError_NullPointer, 0, 0, 0, 0, 0);
+inline U64 U64_pow3(U64 v) {
+	if(!v) return 0;
+	U64 res = U64_pow2(v), res2 = res * v;
+	return res == U64_MAX || res2 / v != v ? U64_MAX : res2;
+}
 
-	*res = v * v; 
+inline U64 U64_pow4(U64 v) {
+	if(!v) return 0;
+	U64 res = U64_pow2(v), res2 = U64_pow2(res);
+	return res == U64_MAX || res2 == U64_MAX ? U64_MAX : res2;
+}
 
-	if(*res < v)
-		return Error_base(GenericError_Overflow, 0, 1, 0, v, *res);
-
-	return Error_none();
+inline U64 U64_pow5(U64 v) {
+	if(!v) return 0;
+	U64 res = U64_pow4(v), res2 = res * v;
+	return res == U64_MAX || res2 / v != v ? U64_MAX : res2;
 }
 
 inline U64 U64_pow10(U64 v) {
@@ -66,17 +77,26 @@ inline I64 I64_clamp(I64 v, I64 mi, I64 ma) { return I64_max(mi, I64_min(ma, v))
 
 inline I64 I64_abs(I64 v) { return v < 0 ? -v : v; }
 
-inline struct Error I64_pow2(I64 v, I64 *res) { 
+//TODO: proper safety checks, because this doesn't properly check overflow!
 
-	if(!res)
-		return Error_base(GenericError_NullPointer, 0, 0, 0, 0, 0);
+inline I64 I64_pow2(I64 v) { 
+	I64 res = v * v; 
+	return res < I64_abs(v) ? I64_MAX : res;
+}
 
-	*res = v * v; 
+inline I64 I64_pow3(I64 v) { 
+	I64 res = v * v * v; 
+	return res < I64_abs(v) ? I64_MAX : res;
+}
 
-	if(*res < I64_abs(v))
-		return Error_base(GenericError_Overflow, 0, 1, 0, v, *res);
+inline I64 I64_pow4(I64 v) { 
+	I64 res = v * v; res *= res;
+	return res < I64_abs(v) ? I64_MAX : res;
+}
 
-	return Error_none();
+inline I64 I64_pow5(I64 v) { 
+	I64 res = v * v; res *= res * v;
+	return res < I64_abs(v) ? I64_MAX : res;
 }
 
 //Float
@@ -98,8 +118,9 @@ F32 F32_sqrt(F32 v);
 //Inputs should always return false for the runtime, since floats should be validated before they're made
 //As such, these won't be exposed to any user, only natively
 
-Bool F32_isnan(F32 v);
-Bool F32_isinf(F32 v);
+Bool F32_isNaN(F32 v);
+Bool F32_isInf(F32 v);
+Bool F32_isValid(F32 v);
 
 //
 
@@ -109,17 +130,40 @@ inline struct Error F32_pow2(F32 v, F32 *res) {
 		return Error_base(GenericError_NullPointer, 0, 0, 0, 0, 0);
 
 	*res = v * v; 
+	return F32_isInf(*res) ? Error_base(GenericError_Overflow, 0, 1, 0, *(const U32*)&v, *(const U32*)res) : Error_none();
+}
 
-	if(F32_isinf(*res))
-		return Error_base(GenericError_Overflow, 0, 1, 0, v, *res);
+inline struct Error F32_pow3(F32 v, F32 *res) { 
 
-	return Error_none();
+	if(!res)
+		return Error_base(GenericError_NullPointer, 0, 0, 0, 0, 0);
+
+	*res = v * v * v;
+	return F32_isInf(*res) ? Error_base(GenericError_Overflow, 0, 1, 0, *(const U32*)&v, *(const U32*)res) : Error_none();
+}
+
+inline struct Error F32_pow4(F32 v, F32 *res) { 
+
+	if(!res)
+		return Error_base(GenericError_NullPointer, 0, 0, 0, 0, 0);
+
+	*res = v * v; *res *= *res;
+	return F32_isInf(*res) ? Error_base(GenericError_Overflow, 0, 1, 0, *(const U32*)&v, *(const U32*)res) : Error_none();
+}
+
+inline struct Error F32_pow5(F32 v, F32 *res) { 
+
+	if(!res)
+		return Error_base(GenericError_NullPointer, 0, 0, 0, 0, 0);
+
+	*res = v * v; *res *= *res * v;
+	return F32_isInf(*res) ? Error_base(GenericError_Overflow, 0, 1, 0, *(const U32*)&v, *(const U32*)res) : Error_none();
 }
 
 struct Error F32_pow(F32 v, F32 exp, F32 *res);
-F32 F32_expe(F32 v);
-F32 F32_exp2(F32 v);
-F32 F32_exp10(F32 v);
+struct Error F32_expe(F32 v, F32 *res);
+struct Error F32_exp2(F32 v, F32 *res);
+struct Error F32_exp10(F32 v, F32 *res);
 
 F32 F32_log10(F32 v);
 F32 F32_loge(F32 v);
@@ -142,6 +186,3 @@ struct Error F32_mod(F32 v, F32 mod, F32 *result);
 
 inline F32 F32_sign(F32 v) { return v < 0 ? -1.f : (v > 0 ? 1.f : 0.f); }
 inline F32 F32_signInc(F32 v) { return v < 0 ? -1.f : 1.f; }
-
-Bool F32_isnan(F32 v);
-Bool F32_isinf(F32 v);

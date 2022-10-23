@@ -1,6 +1,5 @@
 #pragma once
-#include "types/types.h"
-#include "types/allocator.h"
+#include "types/string.h"
 #include "platforms/window_manager.h"
 
 enum EPlatform {

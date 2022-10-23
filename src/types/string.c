@@ -1,7 +1,8 @@
 #include "types/string.h"
 #include "types/allocator.h"
 #include "math/math.h"
-#include "types/bit.h"
+#include "types/buffer.h"
+#include "types/list.h"
 #include <ctype.h>
 
 //Simple checks (consts)
@@ -11,8 +12,8 @@ struct Error String_offsetAsRef(struct String s, U64 off, struct String *result)
 	if (!result)
 		return (struct Error) { .genericError = GenericError_NullPointer, .paramId = 2 };
 
-	if (!s.len) {
-		*result = (struct String) { 0 };
+	if (String_isEmpty(s)) {
+		*result = String_createEmpty();
 		return Error_none();
 	}
 
@@ -181,7 +182,7 @@ struct Error String_create(C8 c, U64 size, struct Allocator alloc, struct String
 		return Error_none();
 	}
 
-	struct Buffer b = (struct Buffer) { 0 };
+	struct Buffer b = Buffer_createNull();
 	struct Error err = alloc.alloc(alloc.ptr, size, &b);
 
 	if (err.genericError)
@@ -191,28 +192,26 @@ struct Error String_create(C8 c, U64 size, struct Allocator alloc, struct String
 
 	//Quick fill
 
+	U16 cc2 = ((U16)c << 8) | ((U16)c << 0);
+	U32 cc4 = ((U32)cc2 << 16) | cc2;
+	U64 cc8 = ((U64)cc4 << 32) | cc4;
+
 	if (size >= 8) {
 
-		U64 c8 =
-			((U64)c << 56) | ((U64)c << 48) | ((U64)c << 40) | ((U64)c << 32) |
-			((U64)c << 24) | ((U64)c << 16) | ((U64)c <<  8) | ((U64)c <<  0);
-
 		for (U64 i = 0; i < size >> 3; ++i)
-			*((U64*)b.ptr + i) = c8;
+			*((U64*)b.ptr + i) = cc8;
 
 		size &= 7;
 	}
 
 	if (size >= 4) {
-		U32 cc4 = ((U32)c << 24) | ((U32)c << 16) | ((U32)c << 8) | ((U32)c << 0);
-		*((U32*)b.ptr + ((totalSize & ~7) >> 2)) = cc4;
+		*((U32*)b.ptr + (size >> 3 << 1)) = cc4;
 		size &= 3;
 	}
 
 	if (size >= 2) {
-		U16 cc2 = ((U16)c << 8) | ((U16)c << 0);
-		*((U16*)b.ptr + ((totalSize & ~3) >> 1)) = cc2;
-		size &= 3;
+		*((U16*)b.ptr + (size >> 2 << 1)) = cc2;
+		size &= 1;
 	}
 
 	if(size >= 1)
@@ -235,7 +234,7 @@ struct Error String_createCopy(struct String str, struct Allocator alloc, struct
 		return Error_none();
 	}
 
-	struct Buffer b = (struct Buffer) { 0 };
+	struct Buffer b = Buffer_createNull();
 	struct Error err = alloc.alloc(alloc.ptr, str.len, &b);
 
 	if (err.genericError)
@@ -259,7 +258,11 @@ struct Error String_free(struct String *str, struct Allocator alloc) {
 	if (!alloc.free)
 		return (struct Error) { .genericError = GenericError_NullPointer, .paramId = 1 };
 
-	struct Error err = alloc.free(alloc.ptr, (struct Buffer) { .ptr = str->ptr, .siz = str->capacity });
+	struct Error err = Error_none();
+
+	if(!String_isRef(*str))
+		err = alloc.free(alloc.ptr, Buffer_createRef(str->ptr, str->capacity));
+
 	*str = String_createEmpty();
 	return err;
 }
@@ -341,7 +344,7 @@ struct Error String_split(
 	C8 c, 
 	enum StringCase casing, 
 	struct Allocator allocator, 
-	struct StringList **result
+	struct StringList *result
 ) {
 
 	U64 len = String_countAll(s, c, casing);
@@ -353,7 +356,7 @@ struct Error String_split(
 
 	if (result) {
 
-		struct StringList *str = *result;
+		struct StringList str = *result;
 
 		c = C8_transform(c, (enum StringTransform) casing);
 
@@ -361,7 +364,11 @@ struct Error String_split(
 
 		for (U64 i = 0; i < s.len; ++i)
 			if (C8_transform(s.ptr[i], (enum StringTransform) casing) == c) {
-				str->ptr[count++] = String_createRefConst(s.ptr + last, i - last);
+
+				str.ptr[count++] = 
+					String_isConstRef(s) ? String_createRefConst(s.ptr + last, i - last) : 
+					String_createRefDynamic(s.ptr + last, i - last);
+
 				last = i + 1;
 			}
 	}
@@ -374,7 +381,7 @@ struct Error String_splitString(
 	struct String other, 
 	enum StringCase casing, 
 	struct Allocator allocator, 
-	struct StringList **result
+	struct StringList *result
 ) {
 
 	U64 len = String_countAllString(s, other, casing);
@@ -386,7 +393,7 @@ struct Error String_splitString(
 
 	if (result) {
 
-		struct StringList *str = *result;
+		struct StringList str = *result;
 
 		U64 count = 0, last = 0;
 
@@ -404,8 +411,13 @@ struct Error String_splitString(
 				}
 
 			if (match) {
-				str->ptr[count++] = String_createRefConst(s.ptr + last, i - last);
+
+				str.ptr[count++] = 
+					String_isConstRef(s) ? String_createRefConst(s.ptr + last, i - last) : 
+					String_createRefDynamic(s.ptr + last, i - last);
+
 				last = i + other.len;
+				i += other.len - 1;
 			}
 		}
 	}
@@ -427,16 +439,15 @@ struct Error String_reserve(struct String *str, U64 siz, struct Allocator alloc)
 	if (siz <= str->capacity)
 		return Error_none();
 
-	struct Buffer b = (struct Buffer) { 0 };
+	struct Buffer b = Buffer_createNull();
 	struct Error err = alloc.alloc(alloc.ptr, siz, &b);
 
 	if (err.genericError)
 		return err;
 
-	for (U64 i = 0; i < str->len; ++i)		//Preserve old data
-		b.ptr[i] = str->ptr[i];
+	Buffer_copy(b, String_buffer(*str));
 
-	err = alloc.free(alloc.ptr, (struct Buffer){ .ptr = str->ptr, .siz = str->capacity });
+	err = alloc.free(alloc.ptr, Buffer_createRef(str->ptr, str->capacity));
 
 	str->capacity = b.siz;
 	str->len = siz;
@@ -468,6 +479,9 @@ struct Error String_resize(struct String *str, U64 siz, C8 defaultChar, struct A
 	//Resize that triggers buffer resize
 
 	if (siz > str->capacity) {
+
+		if (siz * 3 / 2 * 2 / 3 != siz)
+			return (struct Error) { .genericError = GenericError_Overflow };
 
 		//Reserve 50% more to ensure we don't resize too many times
 
@@ -502,14 +516,13 @@ struct Error String_appendString(struct String *s, struct String other, struct A
 	if (!s)
 		return (struct Error) { .genericError = GenericError_NullPointer };
 
+	U64 oldLen = s->len;
 	struct Error err = String_resize(s, s->len + other.len, other.ptr[0], allocator);
 
 	if (err.genericError)
 		return err;
 
-	for (U64 i = 1; i < other.len; ++i)		//We can skip 0 since all N new chars are set to ptr[0]
-		s->ptr[i] = other.ptr[i];
-
+	Buffer_copy(Buffer_createRef(s->ptr + oldLen, other.len), String_buffer(other));
 	return Error_none();
 }
 
@@ -532,8 +545,10 @@ struct Error String_insert(struct String *s, C8 c, U64 i, struct Allocator alloc
 
 		//Move one to the right
 
-		for (U64 j = s->len; j != i; --j)
-			s->ptr[j] = s->ptr[j - 1];
+		Buffer_revCopy(
+			Buffer_createRef(s->ptr + i + 1, s->len - 1),
+			Buffer_createRef(s->ptr + i, s->len - 1)
+		);
 
 		s->ptr[i] = c;
 	}
@@ -555,11 +570,17 @@ struct Error String_insertString(struct String *s, struct String other, U64 i, s
 	if (err.genericError)
 		return err;
 
-	for (U64 j = s->len; j > i + other.len; --j)
-		s->ptr[j - 1] = s->ptr[j - other.len - 1];
+	//Move one to the right
 
-	for (U64 j = i + other.len, k = other.len - 1; j > i; --j, --k)
-		s->ptr[j - 1] = other.ptr[k];
+	Buffer_revCopy(
+		Buffer_createRef(s->ptr + i + other.len, s->len - other.len),
+		Buffer_createRef(s->ptr + i, s->len - other.len)
+	);
+
+	Buffer_copy(
+		Buffer_createRef(s->ptr + i, other.len),
+		String_buffer(other)
+	);
 
 	return Error_none();
 }
@@ -578,23 +599,22 @@ struct Error String_replaceAllString(
 	if(String_isRef(*s))
 		return (struct Error) { .genericError = GenericError_InvalidOperation };
 
-	struct Buffer res = String_findAllString(*s, search, allocator, caseSensitive);
+	struct List finds = String_findAllString(*s, search, allocator, caseSensitive);
 
-	if (!res.siz)
+	if (!finds.length)
 		return Error_none();
 
 	//Easy replace
 
-	U64 occurrences = res.siz / sizeof(U64);
-	const U64 *ptr = (const U64*) res.ptr;
+	const U64 *ptr = (const U64*) finds.ptr;
 
 	if (search.len == replace.len) {
 
-		for (U64 i = 0; i < occurrences; ++i)
+		for (U64 i = 0; i < finds.length; ++i)
 			for (U64 j = ptr[i], k = j + replace.len, l = 0; j < k; ++j, ++l)
 				s->ptr[j] = replace.ptr[l];
 
-		return Bit_free(&res, allocator);
+		return Buffer_free(&finds, allocator);
 	}
 
 	//Shrink replaces
@@ -605,32 +625,36 @@ struct Error String_replaceAllString(
 
 		U64 iCurrent = ptr[0];
 
-		for (U64 i = 0; i < occurrences; ++i) {
+		for (U64 i = 0; i < finds.length; ++i) {
 
 			//We move our replacement string to iCurrent
 
-			for (U64 j = 0; j < replace.len; ++j)
-				s->ptr[iCurrent++] = replace.ptr[j];
+			Buffer_copy(Buffer_createRef(s->ptr + iCurrent, replace.len), String_buffer(replace));
+			iCurrent += replace.len;
 
 			//We then move the tail of the string 
 
 			const U64 iStart = ptr[i] + search.len;
-			const U64 iEnd = i == occurrences - 1 ? s->len : ptr[i + 1];
+			const U64 iEnd = i == finds.length - 1 ? s->len : ptr[i + 1];
 
-			for (U64 j = iStart; j < iEnd; ++j)
-				s->ptr[iCurrent++] = s->ptr[j];
+			Buffer_copy(
+				Buffer_createRef(s->ptr + iCurrent, iEnd - iStart), 
+				Buffer_createRef(s->ptr + iStart, iEnd - iStart)
+			);
+
+			iCurrent += iEnd - iStart;
 		}
 
 		//Ensure the string is now the right size
 
-		struct Error err = String_resize(s, s->len - diff * occurrences, ' ', allocator);
+		struct Error err = String_resize(s, s->len - diff * finds.length, ' ', allocator);
 		
 		if (err.genericError) {
-			Bit_free(&res, allocator);
+			Buffer_free(&finds, allocator);
 			return err;
 		}
 
-		return Bit_free(&res, allocator);
+		return Buffer_free(&finds, allocator);
 	}
 
 	//Grow replaces
@@ -640,10 +664,10 @@ struct Error String_replaceAllString(
 	U64 diff = replace.len - search.len;
 	U64 sOldLen = s->len;
 
-	struct Error err = String_resize(s, s->len + diff * occurrences, ' ', allocator);
+	struct Error err = String_resize(s, s->len + diff * finds.length, ' ', allocator);
 
 	if (err.genericError) {
-		Bit_free(&res, allocator);
+		Buffer_free(&finds, allocator);
 		return err;
 	}
 
@@ -651,23 +675,30 @@ struct Error String_replaceAllString(
 
 	U64 newLoc = s->len - 1;
 
-	for (U64 i = occurrences - 1; i != U64_MAX; ++i) {
+	for (U64 i = finds.length - 1; i != U64_MAX; ++i) {
 
 		//Find tail
 
 		const U64 iStart = ptr[i] + search.len;
-		const U64 iEnd = i == occurrences - 1 ? sOldLen : ptr[i + 1];
+		const U64 iEnd = i == finds.length - 1 ? sOldLen : ptr[i + 1];
 
 		for (U64 j = iEnd - 1; j != U64_MAX && j >= iStart; --j)
 			s->ptr[newLoc--] = s->ptr[j];
 
+		Buffer_revCopy(
+			Buffer_createRef(s->ptr + newLoc - (iEnd - iStart), iEnd - iStart),
+			Buffer_createRef(s->ptr + iStart, iEnd - iStart)
+		);
+
+		newLoc -= iEnd - iStart;
+
 		//Apply replacement before tail
 
-		for (U64 j = replace.len - 1; j != U64_MAX; --j)
-			s->ptr[newLoc--] = replace.ptr[j];
+		Buffer_revCopy(Buffer_createRef(s->ptr + newLoc - replace.len, replace.len), String_buffer(replace));
+		newLoc -= replace.len;
 	}
 
-	return Bit_free(&res, allocator);
+	return Buffer_free(&finds, allocator);
 }
 
 struct Error String_replaceString(
@@ -685,7 +716,8 @@ struct Error String_replaceString(
 	if(String_isRef(*s))
 		return (struct Error) { .genericError = GenericError_InvalidOperation };
 
-	U64 res = isFirst ? String_findFirstString(*s, search, caseSensitive) : String_findLastString(*s, search, caseSensitive);
+	U64 res = isFirst ? String_findFirstString(*s, search, caseSensitive) : 
+		String_findLastString(*s, search, caseSensitive);
 
 	if (res == s->len)
 		return Error_none();
@@ -693,10 +725,7 @@ struct Error String_replaceString(
 	//Easy, early exit. Strings are same size.
 
 	if (search.len == replace.len) {
-
-		for (U64 i = res, j = 0; j < replace.len; ++i, ++j)
-			s->ptr[i] = replace.ptr[j];
-
+		Buffer_copy(Buffer_createRef(s->ptr + res, replace.len), String_buffer(replace));
 		return Error_none();
 	}
 
@@ -707,8 +736,16 @@ struct Error String_replaceString(
 
 		U64 diff = search.len - replace.len;	//How much we have to shrink
 
-		for (U64 i = res, j = 0; i < s->len - diff; ++i, ++j)
-			s->ptr[i] = j < replace.len ? replace.ptr[j] : s->ptr[i + diff];
+		//Copy our data over first
+
+		Buffer_copy(
+			Buffer_createRef(s->ptr + res + replace.len, s->len - (res + search.len)), 
+			Buffer_createRef(s->ptr + res + search.len, s->len - (res + search.len)) 
+		);
+
+		//Throw our replacement in there
+
+		Buffer_copy(Buffer_createRef(s->ptr + res, replace.len), String_buffer(replace));
 
 		//Shrink the string; this is done after because we need to read the right of the string first
 
@@ -730,10 +767,16 @@ struct Error String_replaceString(
 	if (err.genericError)
 		return err;
 
-	//Now we move from right to left to preserve data
+	//Copy our data over first
 
-	for (U64 i = s->len - 1; i != U64_MAX && i >= res; --i)
-		s->ptr[i] = i < res + replace.len ? replace.ptr[i - res] : s->ptr[i - diff];
+	Buffer_revCopy(
+		Buffer_createRef(s->ptr + res + replace.len, s->len - (res + search.len)), 
+		Buffer_createRef(s->ptr + res + search.len, s->len - (res + search.len)) 
+	);
+
+	//Throw our replacement in there
+
+	Buffer_copy(Buffer_createRef(s->ptr + res, replace.len), String_buffer(replace));
 
 	return Error_none();
 }
@@ -761,7 +804,7 @@ Bool String_endsWithString(struct String str, struct String other, enum StringCa
 	for (U64 i = str.len - other.len; i < str.len; ++i)
 		if (
 			C8_transform(str.ptr[i], (enum StringTransform)caseSensitive) != 
-			C8_transform(other.ptr[i], (enum StringTransform)caseSensitive)
+			C8_transform(other.ptr[i - (str.len - other.len)], (enum StringTransform)caseSensitive)
 		)
 			return false;
 
@@ -810,7 +853,7 @@ U64 String_countAllString(struct String s, struct String other, enum StringCase 
 	return j;
 }
 
-struct Buffer String_findAll(
+struct List String_findAll(
 	struct String s,
 	C8 c,
 	struct Allocator alloc,
@@ -820,15 +863,15 @@ struct Buffer String_findAll(
 	U64 count = String_countAll(s, c, caseSensitive);
 
 	if (!count)
-		return (struct Buffer) { 0 };
+		return Buffer_createNull();
 
 	//TODO: Array
 
-	struct Buffer b = (struct Buffer) { 0 };
-	struct Error err = Bit_createBytes(sizeof(U64) * count, alloc, &b);
+	struct Buffer b = Buffer_createNull();
+	struct Error err = Buffer_createUninitializedBytes(sizeof(U64) * count, alloc, &b);
 
 	if (err.genericError)
-		return (struct Buffer) { 0 };
+		return Buffer_createNull();
 
 	c = C8_transform(c, (enum StringTransform) caseSensitive);
 
@@ -841,7 +884,7 @@ struct Buffer String_findAll(
 	return b;
 }
 
-struct Buffer String_findAllString(
+struct List String_findAllString(
 	struct String s,
 	struct String other,
 	struct Allocator alloc,
@@ -851,13 +894,13 @@ struct Buffer String_findAllString(
 	U64 count = String_countAllString(s, other, casing);
 
 	if (!count)
-		return (struct Buffer) { 0 };
+		return Buffer_createNull();
 
-	struct Buffer b = (struct Buffer) { 0 };
-	struct Error err = Bit_createBytes(sizeof(U64) * count, alloc, &b);
+	struct Buffer b = Buffer_createNull();
+	struct Error err = Buffer_createUninitializedBytes(sizeof(U64) * count, alloc, &b);
 
 	if (err.genericError)
-		return (struct Buffer) { 0 };
+		return Buffer_createNull();
 
 	U64 *v = (U64*) b.ptr, j = 0;
 
@@ -938,8 +981,9 @@ U64 String_findLastString(struct String s, struct String other, enum StringCase 
 		return 0;
 
 	U64 j = 0;
+	U64 i = s.len - 1;
 
-	for (U64 i = s.len - 1; i != U64_MAX; --i) {
+	for (; i != U64_MAX; --i) {
 
 		Bool match = true;
 
@@ -953,10 +997,10 @@ U64 String_findLastString(struct String s, struct String other, enum StringCase 
 			}
 
 		if (match)
-			++j;
+			break;
 	}
 
-	return j;
+	return i;
 }
 
 Bool String_equalsString(struct String s, struct String other, enum StringCase caseSensitive) {
@@ -983,7 +1027,10 @@ Bool String_equals(struct String s, C8 c, enum StringCase caseSensitive) {
 Bool String_parseNyto(struct String s, U64 *result){
 
 	struct String prefix = String_createRefUnsafeConst("0n");
-	struct Error err = String_offsetAsRef(s, String_startsWithString(s, prefix, StringCase_Insensitive) ? prefix.len : 0, &s);
+
+	struct Error err = String_offsetAsRef(
+		s, String_startsWithString(s, prefix, StringCase_Insensitive) ? prefix.len : 0, &s
+	);
 
 	if (err.genericError)
 		return false;
@@ -1012,7 +1059,9 @@ Bool String_parseNyto(struct String s, U64 *result){
 Bool String_parseHex(struct String s, U64 *result){
 
 	struct String prefix = String_createRefUnsafeConst("0x");
-	struct Error err = String_offsetAsRef(s, String_startsWithString(s, prefix, StringCase_Insensitive) ? prefix.len : 0, &s);
+	struct Error err = String_offsetAsRef(
+		s, String_startsWithString(s, prefix, StringCase_Insensitive) ? prefix.len : 0, &s
+	);
 
 	if (err.genericError)
 		return false;
@@ -1071,11 +1120,16 @@ Bool String_parseDecSigned(struct String s, I64 *result) {
 
 	if (b) {
 
-		if (*(U64*)result > I64_MAX)
+		if (neg && *(U64*)result == (U64)I64_MIN) {
+			*result = I64_MIN;
+			return true;
+		}
+
+		if (!neg && *(U64*)result > I64_MAX)
 			return false;
 
 		if(neg)
-			*result = -*result;
+			*result = -*(I64*)result;
 
 		return true;
 	}
@@ -1124,6 +1178,9 @@ Bool String_parseFloat(struct String s, F32 *result) {
 
 		intPart = intPart * 10 + v;
 
+		if(!F32_isValid(intPart))
+			return false;
+
 		if (String_offsetAsRef(s, 1, &s).genericError)
 			return false;
 
@@ -1158,7 +1215,7 @@ Bool String_parseFloat(struct String s, F32 *result) {
 
 		if (!s.len) {
 			*result = sign ? -(intPart + fraction) : intPart + fraction;
-			return true;
+			return F32_isValid(*result);
 		}
 	}
 
@@ -1200,15 +1257,21 @@ Bool String_parseFloat(struct String s, F32 *result) {
 			return false;
 	}
 
-	exponent = f32_exp10(esign ? -exponent : exponent);
+	struct Error err = F32_exp10(esign ? -exponent : exponent, &exponent);
+
+	if(err.genericError)
+		return false;
+
 	*result = (sign ? -(intPart + fraction) : intPart + fraction) * exponent;
-	return true;
+	return F32_isValid(*result);
 }
 
 Bool String_parseOct(struct String s, U64 *result) {
 
 	struct String prefix = String_createRefUnsafeConst("0o");
-	struct Error err = String_offsetAsRef(s, String_startsWithString(s, prefix, StringCase_Insensitive) ? prefix.len : 0, &s);
+	struct Error err = String_offsetAsRef(
+		s, String_startsWithString(s, prefix, StringCase_Insensitive) ? prefix.len : 0, &s
+	);
 
 	if (err.genericError)
 		return false;
@@ -1237,7 +1300,9 @@ Bool String_parseOct(struct String s, U64 *result) {
 Bool String_parseBin(struct String s, U64 *result) {
 
 	struct String prefix = String_createRefUnsafeConst("0b");
-	struct Error err = String_offsetAsRef(s, String_startsWithString(s, prefix, StringCase_Insensitive) ? prefix.len : 0, &s);
+	struct Error err = String_offsetAsRef(
+		s, String_startsWithString(s, prefix, StringCase_Insensitive) ? prefix.len : 0, &s
+	);
 
 	if (err.genericError)
 		return false;
@@ -1254,7 +1319,8 @@ Bool String_parseBin(struct String s, U64 *result) {
 		if (v == U8_MAX)
 			return false;
 
-		*result |= j * v;
+		if(v)
+			*result |= j;
 	}
 
 	return true;
@@ -1262,7 +1328,21 @@ Bool String_parseBin(struct String s, U64 *result) {
 
 Bool String_cut(struct String s, U64 offset, U64 siz, struct String *result) {
 
-	if (!result || offset + siz > s.len)
+	if(!result)
+		return false;
+
+	if (!s.len && !offset && !siz) {
+		*result = String_createEmpty();
+		return true;
+	}
+
+	if(offset >= s.len)
+		return false;
+
+	if(!siz) 
+		siz = s.len - offset;
+
+	if (offset + siz > s.len)
 		return false;
 
 	if (offset == s.len) {
@@ -1290,7 +1370,9 @@ Bool String_cutAfterString(struct String s, struct String other, enum StringCase
 	if (!result)
 		return false;
 
-	U64 found = isFirst ? String_findFirstString(s, other, caseSensitive) : String_findLastString(s, other, caseSensitive);
+	U64 found = isFirst ? String_findFirstString(s, other, caseSensitive) : 
+		String_findLastString(s, other, caseSensitive);
+
 	return String_cut(s, 0, found, result);
 }
 
@@ -1305,7 +1387,7 @@ Bool String_cutBefore(struct String s, C8 c, enum StringCase caseSensitive, Bool
 		return false;
 
 	++found;	//The end of the occurence is the begin of the next string
-	return String_cut(s, found, s.len - found, result);
+	return String_cut(s, found, 0, result);
 }
 
 Bool String_cutBeforeString(struct String s, struct String other, enum StringCase caseSensitive, Bool isFirst, struct String *result) {
@@ -1313,13 +1395,14 @@ Bool String_cutBeforeString(struct String s, struct String other, enum StringCas
 	if (!result || !other.len)
 		return false;
 
-	U64 found = isFirst ? String_findFirstString(s, other, caseSensitive) : String_findLastString(s, other, caseSensitive);
+	U64 found = isFirst ? String_findFirstString(s, other, caseSensitive) : 
+		String_findLastString(s, other, caseSensitive);
 
 	if (found == s.len)
 		return false;
 
 	found += other.len;	//The end of the occurence is the begin of the next string
-	return String_cut(s, found, s.len - found, result);
+	return String_cut(s, found, 0, result);
 }
 
 Bool String_erase(struct String *s, C8 c, enum StringCase caseSensitive, Bool isFirst) {
@@ -1334,36 +1417,15 @@ Bool String_erase(struct String *s, C8 c, enum StringCase caseSensitive, Bool is
 
 	//Skipping first match
 
-	if(isFirst)
-		for (U64 i = 0; i < s->len; ++i) {
+	U64 find = String_find(*s, c, caseSensitive, isFirst);
 
-			if (!hadMatch && C8_transform(s->ptr[i], (enum StringTransform)caseSensitive) == c) {
-				hadMatch = true;
-				continue;
-			}
+	if(find == s->len)
+		return false;
 
-			if (!hadMatch) {
-				++j;
-				continue;
-			}
-
-			s->ptr[j++] = s->ptr[i];
-		}
-
-	//Skipping last match
-
-	else {
-
-		U64 v = String_findLast(*s, c, caseSensitive);
-
-		if (v != s->len) {
-
-			for (U64 i = v; i < s->len; ++i)
-				s->ptr[i - 1] = s->ptr[i];
-
-			hadMatch = true;
-		}
-	}
+	Buffer_copy(
+		Buffer_createRef(s->ptr + find, s->len - find - 1),
+		Buffer_createRef(s->ptr + find + 1, s->len - find - 1)
+	);
 
 	if (hadMatch)
 		--s->len;
@@ -1376,51 +1438,19 @@ Bool String_eraseString(struct String *s, struct String other, enum StringCase c
 	if(!s || !other.len || String_isRef(*s))
 		return false;
 
-	U64 out = 0;
-	Bool hadMatch = false;
+	//Skipping first match
 
-	if(isFirst)
-		for (U64 i = 0; i < s->len; ++i) {
+	U64 find = String_findString(*s, other, casing, isFirst);
 
-			if (!hadMatch) {
+	if(find == s->len)
+		return false;
 
-				Bool match = true;
+	Buffer_copy(
+		Buffer_createRef(s->ptr + find, s->len - find - other.len),
+		Buffer_createRef(s->ptr + find + other.len, s->len - find - other.len)
+	);
 
-				for (U64 j = i, k = 0; j < s->len && k < other.len; ++j, ++k)
-					if (
-						C8_transform(s->ptr[j], (enum StringTransform)casing) !=
-						C8_transform(other.ptr[k], (enum StringTransform)casing)
-					) {
-						match = false;
-						break;
-					}
-
-				if (match) {
-					i += s->len - 1;	//-1 because we increment by 1 every time
-					continue;
-				}
-
-				hadMatch = true;
-			}
-
-			s->ptr[out++] = s->ptr[i];
-		}
-
-	else {
-
-		U64 match = String_findLastString(*s, other, casing);
-
-		if (match == s->len)
-			return true;
-
-		for (U64 j = match + other.len, i = j; i < s->len; ++i)
-			s->ptr[match + (i - j)] = s->ptr[i];
-	}
-
-	if(out == s->len)
-		return true;
-
-	s->len = out;
+	s->len -= other.len;
 	return true;
 }
 
@@ -1435,7 +1465,7 @@ Bool String_cutBegin(struct String s, U64 i, struct String *result) {
 	if (i > s.len)
 		return false;
 
-	return String_cut(s, i, s.len - i, result);
+	return String_cut(s, i, 0, result);
 }
 
 Bool String_eraseAll(struct String *s, C8 c, enum StringCase casing) {
@@ -1546,7 +1576,7 @@ struct String String_trim(struct String s) {
 		}
 
 	if (first == s.len)
-		return (struct String) { 0 };
+		return String_createEmpty();
 
 	U64 last = s.len;
 
@@ -1568,7 +1598,7 @@ struct Error StringList_create(U64 len, struct Allocator alloc, struct StringLis
 		.len = len
 	};
 
-	struct Buffer b = (struct Buffer) { 0 };
+	struct Buffer b = Buffer_createNull();
 	struct Error err = alloc.alloc(alloc.ptr, len * sizeof(struct String), &b);
 
 	sl.ptr = (struct String*) sl.ptr;
@@ -1593,16 +1623,16 @@ struct Error StringList_free(struct StringList *arr, struct Allocator alloc) {
 	for(U64 i = 0; i < arr->len; ++i) {
 
 		struct String *str = arr->ptr + i;
-		struct Error err = String_free(&str, alloc);
+		struct Error err = String_free(str, alloc);
 
 		if(err.genericError)
 			freeErr = err;
 	}
 
-	struct Error err = alloc.free(alloc.ptr, (struct Buffer) {
-		.ptr = (U8*) arr->ptr,
-		.siz = sizeof(struct String) * arr->len
-	});
+	struct Error err = alloc.free(alloc.ptr, Buffer_createRef(
+		arr->ptr,
+		sizeof(struct String) * arr->len
+	));
 
 	if(err.genericError)
 		freeErr = err;
@@ -1644,7 +1674,7 @@ struct Error StringList_unset(struct StringList arr, U64 i, struct Allocator all
 		};
 
 	struct String *pstr = arr.ptr + i;
-	return String_free(&pstr, alloc);
+	return String_free(pstr, alloc);
 }
 
 struct Error StringList_set(struct StringList arr, U64 i, struct String str, struct Allocator alloc) {
@@ -1656,4 +1686,46 @@ struct Error StringList_set(struct StringList arr, U64 i, struct String str, str
 
 	arr.ptr[i] = str;
 	return Error_none();
+}
+
+U64 String_calcStrLen(const C8 *ptr, U64 maxSize) {
+
+	U64 i = 0;
+
+	for(; i < maxSize && ptr[i]; ++i)
+		;
+
+	return i;
+}
+
+U64 String_hash(struct String s) { 
+
+	U64 h = FNVHash_create();
+
+	const U64 *ptr = (const U64*)s.ptr, *end = ptr + (s.len >> 3);
+
+	for(; ptr < end; ++ptr)
+		h = FNVHash_apply(h, *ptr);
+
+	U64 last = 0, shift = 0;
+
+	if (s.len & 4) {
+		last = *(const U32*) ptr;
+		shift = 4;
+		ptr = (const U64*)((const U32*)ptr + 1);
+	}
+
+	if (s.len & 2) {
+		last |= (U64)(*(const U16*)ptr) << shift;
+		shift |= 2;
+		ptr = (const U64*)((const U16*)ptr + 1);
+	}
+
+	if (s.len & 1)
+		last |= (U64)(*(const U8*)ptr) << shift++;
+
+	if(shift)
+		h = FNVHash_apply(h, last);
+
+	return h;
 }

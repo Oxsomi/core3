@@ -1,5 +1,5 @@
 #include "types/timer.h"
-#include "types/bit.h"
+#include "types/buffer.h"
 #include "types/allocator.h"
 #include <stdlib.h>
 
@@ -38,42 +38,41 @@ int main() {
 
 	//Test Bit helper
 
-	struct Buffer emp = (struct Buffer) { 0 };
-
-	struct Error err = Bit_createEmpty(256, alloc, &emp);
+	struct Buffer emp = Buffer_createNull();
+	struct Error err = Buffer_createZeroBits(256, alloc, &emp);
 
 	if(err.genericError)
 		return 4;
 
-	struct Buffer full = (struct Buffer) { 0 }; 
-	err = Bit_createFull(256, alloc, &full);
+	struct Buffer full = Buffer_createNull(); 
+	err = Buffer_createOneBits(256, alloc, &full);
 
 	if(err.genericError) {
-		Bit_free(&emp, alloc);
+		Buffer_free(&emp, alloc);
 		return 5;
 	}
 
 	Bool res = false;
 
-	if (Bit_eq(emp, full, &res).genericError || res) {
-		Bit_free(&emp, alloc);
-		Bit_free(&full, alloc);
+	if (Buffer_eq(emp, full, &res).genericError || res) {
+		Buffer_free(&emp, alloc);
+		Buffer_free(&full, alloc);
 		return 2;
 	}
 
-	Bit_setRange(emp, 9, 240);
-	Bit_unsetRange(full, 9, 240);
+	Buffer_setBitRange(emp, 9, 240);
+	Buffer_unsetBitRange(full, 9, 240);
 
-	Bit_not(emp);
+	Buffer_bitwiseNot(emp);
 
-	if (Bit_neq(emp, full, &res).genericError || res) {
-		Bit_free(&emp, alloc);
-		Bit_free(&full, alloc);
+	if (Buffer_neq(emp, full, &res).genericError || res) {
+		Buffer_free(&emp, alloc);
+		Buffer_free(&full, alloc);
 		return 3;
 	}
 
-	Bit_free(&emp, alloc);
-	Bit_free(&full, alloc);
+	Buffer_free(&emp, alloc);
+	Buffer_free(&full, alloc);
 
 	//TODO: Test vectors
 	//TODO: Test quaternions

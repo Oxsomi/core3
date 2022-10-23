@@ -1,7 +1,7 @@
 #include "platforms/platform.h"
 #include "platforms/log.h"
 #include "types/error.h"
-#include "types/bit.h"
+#include "types/buffer.h"
 
 struct Platform Platform_instance = { 0 };
 
