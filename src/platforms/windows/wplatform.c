@@ -52,8 +52,6 @@ int main(int argc, const char *argv[]) {
 		signal(SIGTERM, sigFunc);
 	#endif
 
-	Math_initPlatform();
-
 	Platform_create(argc, argv, GetModuleHandleA(NULL), allocCallback, freeCallback, NULL);
 
 	int res = Program_run();

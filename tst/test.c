@@ -15,8 +15,6 @@ void ourFree(void *allocator, struct Buffer buf) {
 
 int main() {
 
-	Math_initPlatform();
-
 	//Test timer
 
 	Ns now = Timer_now();
@@ -36,7 +34,7 @@ int main() {
 		.ptr = NULL
 	};
 
-	//Test Bit helper
+	//Test Buffer
 
 	struct Buffer emp = Buffer_createNull();
 	struct Error err = Buffer_createZeroBits(256, alloc, &emp);
@@ -80,6 +78,7 @@ int main() {
 	//TODO: Test string
 	//TODO: Test math
 	//TODO: Test file
+	//TODO: Test list
 
 	//
 

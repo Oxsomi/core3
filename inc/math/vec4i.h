@@ -21,7 +21,6 @@ inline I32x4 I32x4_div(I32x4 a, I32x4 b);
 
 inline I32x4 I32x4_complement(I32x4 a) { return I32x4_sub(I32x4_one(), a); }
 inline I32x4 I32x4_negate(I32x4 a) { return I32x4_sub(I32x4_zero(), a); }
-inline I32x4 I32x4_inverse(I32x4 a) { return I32x4_div(I32x4_one(), a); }
 
 inline I32x4 I32x4_pow2(I32x4 a) { return I32x4_mul(a, a); }
 
@@ -427,7 +426,7 @@ inline I32x4 I32x4_sign(I32x4 v) {
 
 inline I32x4 I32x4_abs(I32x4 v){ return I32x4_mul(I32x4_sign(v), v); }
 
-//Simple defcreateions
+//Simple definitions
 
 inline I32x4 I32x4_one() { return I32x4_xxxx4(1); }
 inline I32x4 I32x4_two() { return I32x4_xxxx4(2); }

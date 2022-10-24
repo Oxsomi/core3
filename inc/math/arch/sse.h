@@ -170,8 +170,8 @@ inline F32 F32x2_reduce(F32x2 a) { return F32x2_x(a) + F32x2_y(a); }
 inline I32x2 I32x2_xx(I32x2 a) { return I32x2_xx2(I32x2_x(a)); }
 inline F32x2 F32x2_xx(F32x2 a) { return F32x2_xx2(F32x2_x(a)); }
 
-inline I32x2 I32x2_yy(I32x2 a) { return I32x2_xx2(I32x2_x(a)); }
-inline F32x2 F32x2_yy(F32x2 a) { return F32x2_xx2(F32x2_x(a)); }
+inline I32x2 I32x2_yy(I32x2 a) { return I32x2_xx2(I32x2_y(a)); }
+inline F32x2 F32x2_yy(F32x2 a) { return F32x2_xx2(F32x2_y(a)); }
 
 inline I32x2 I32x2_yx(I32x2 a) { return I32x2_create2(I32x2_y(a), I32x2_x(a)); }
 inline F32x2 F32x2_yx(F32x2 a) { return F32x2_create2(F32x2_y(a), F32x2_x(a)); }

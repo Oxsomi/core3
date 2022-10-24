@@ -82,14 +82,14 @@ C8 Keyboard_resolve(Keyboard keyboard, enum Key key) {
 	struct InputButton* button = InputDevice_getButton(keyboard, key);
 
 	if(!button || !button->contents)
-		return '\0';
+		return (C8) U8_MAX;
 
 	//Numpad needs numlock to be activated in order to be resolved
 
 	if (key >= Key_Numpad1 && key <= Key_NumpadSub) {
 
 		if(!InputDevice_hasFlag(keyboard, KeyboardFlags_NumLock))
-			return '\0';
+			return (C8) U8_MAX;
 
 		return button->contents;
 	}

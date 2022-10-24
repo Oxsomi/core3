@@ -497,7 +497,7 @@ inline F32x4 F32x4_abs(F32x4 v) { return F32x4_mul(F32x4_sign(v), v); }
 
 inline F32x4 F32x4_rgb8Unpack(U32 v) {
     F32x4 rgb8 = F32x4_floor(F32x4_div(F32x4_xxxx4((F32)v), F32x4_create3(0x10000, 0x100, 0x1)));
-    return F32x4_div(F32x4_mod(rgb8, F32x4_xxxx4(0x100)), F32x4_xxxx4(0xFF));
+    return F32x4_div(F32x4_floor(F32x4_mod(rgb8, F32x4_xxxx4(0x100))), F32x4_xxxx4(0xFF));
 }
 
 inline U32 F32x4_rgb8Pack(F32x4 v) {
@@ -557,6 +557,16 @@ inline F32x4 F32x4_mul3x3(F32x4 v3, F32x4 v3x3[3]) {
         ),
         F32x4_mul(v3x3[2], F32x4_zzz(v3))
     );
+}
+
+inline F32x4 F32x4_mul3x4(F32x4 v3, F32x4 v3x4[4]) {
+    return F32x4_add(F32x4_add(
+        F32x4_add(
+            F32x4_mul(v3x4[0], F32x4_xxx(v3)),
+            F32x4_mul(v3x4[1], F32x4_yyy(v3))
+        ),
+        F32x4_mul(v3x4[2], F32x4_zzz(v3))
+    ), v3x4[3]);
 }
 
 //https://registry.khronos.org/OpenGL-Refpages/gl4/html/reflect.xhtml
