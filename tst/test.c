@@ -46,7 +46,7 @@ int main() {
 		.ptr = NULL
 	};
 
-	//Test Bit helper
+	//Test Buffer
 
 	struct Buffer emp = Buffer_createNull();
 	struct Error err = Buffer_createZeroBits(256, alloc, &emp);
@@ -90,6 +90,7 @@ int main() {
 	//TODO: Test string
 	//TODO: Test math
 	//TODO: Test file
+	//TODO: Test list
 
 	//
 

@@ -21,7 +21,6 @@ inline I32x2 I32x2_div(I32x2 a, I32x2 b);
 
 inline I32x2 I32x2_complement(I32x2 a) { return I32x2_sub(I32x2_one(), a); }
 inline I32x2 I32x2_negate(I32x2 a) { return I32x2_sub(I32x2_zero(), a); }
-inline I32x2 I32x2_inverse(I32x2 a) { return I32x2_div(I32x2_one(), a); }
 
 inline I32x2 I32x2_pow2(I32x2 a) { return I32x2_mul(a, a); }
 
@@ -86,7 +85,7 @@ inline I32x2 I32x2_sign(I32x2 v) {
     return I32x2_add(
         I32x2_mul(I32x2_lt(v, I32x2_zero()), I32x2_two()), 
         I32x2_one()
-    ); 
+    );
 }
 
 inline I32x2 I32x2_abs(I32x2 v){ return I32x2_mul(I32x2_sign(v), v); }
@@ -148,12 +147,12 @@ inline I32x2 I32x4_ww(I32x4 a) { return I32x2_fromI32x4(I32x4_wwxx(a)); }
 
 //Cast from vec2f to vec4
 
-inline I32x4 I32x2_create2_2(I32x2 a, I32x2 b) { return I32x4_create4(I32x2_x(a), I32x2_y(a), I32x2_x(b), I32x2_y(b)); }
+inline I32x4 I32x4_create2_2(I32x2 a, I32x2 b) { return I32x4_create4(I32x2_x(a), I32x2_y(a), I32x2_x(b), I32x2_y(b)); }
 
-inline I32x4 I32x2_create2_1_1(I32x2 a, I32 b, I32 c) { return I32x4_create4(I32x2_x(a), I32x2_y(a), b, c); }
-inline I32x4 I32x2_create1_2_1(I32 a, I32x2 b, I32 c) { return I32x4_create4(a, I32x2_x(b), I32x2_y(b), c); }
-inline I32x4 I32x2_create1_1_2(I32 a, I32 b, I32x2 c) { return I32x4_create4(a, b, I32x2_x(c), I32x2_y(c)); }
+inline I32x4 I32x4_create2_1_1(I32x2 a, I32 b, I32 c) { return I32x4_create4(I32x2_x(a), I32x2_y(a), b, c); }
+inline I32x4 I32x4_create1_2_1(I32 a, I32x2 b, I32 c) { return I32x4_create4(a, I32x2_x(b), I32x2_y(b), c); }
+inline I32x4 I32x4_create1_1_2(I32 a, I32 b, I32x2 c) { return I32x4_create4(a, b, I32x2_x(c), I32x2_y(c)); }
 
 
-inline I32x4 I32x2_create2_1(I32x2 a, I32 b) { return I32x4_create3(I32x2_x(a), I32x2_y(a), b); }
-inline I32x4 I32x2_create1_2(I32 a, I32x2 b) { return I32x4_create3(a, I32x2_x(b), I32x2_y(b)); }
+inline I32x4 I32x4_create2_1(I32x2 a, I32 b) { return I32x4_create3(I32x2_x(a), I32x2_y(a), b); }
+inline I32x4 I32x4_create1_2(I32 a, I32x2 b) { return I32x4_create3(a, I32x2_x(b), I32x2_y(b)); }

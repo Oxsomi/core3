@@ -1,5 +1,7 @@
 #include "math/transform.h"
 
+//3D transform
+
 struct PackedTransform Transform_pack(struct Transform t) {
 
 	struct Quat16 q16 = Quat_pack(t.rot);
@@ -41,7 +43,7 @@ F32x4 Transform_applyToDirection(struct Transform t, F32x4 dir) {
 
 F32x4 Transform_apply(struct Transform t, F32x4 pos) {
 	F32x4 mpos = F32x4_mul(pos, t.scale);		//Scale
-	mpos = Quat_applyToNormal(t.rot, mpos);			//Rotate
+	mpos = Quat_applyToNormal(t.rot, mpos);		//Rotate
 	return F32x4_add(mpos, t.pos);				//Translate
 }
 
@@ -51,10 +53,14 @@ F32x4 Transform_reverse(struct Transform t, F32x4 pos) {
 	return F32x4_div(mpos, t.scale);
 }
 
-struct Transform Transform_mul(struct Transform parent, struct Transform child) {
-	return (struct Transform) {
-		Quat_mul(parent.rot, child.rot),
-		Transform_apply(parent, child.pos),
-		F32x4_mul(parent.scale, child.scale)
-	};
-}
+//2D transform
+
+F32x2 Transform2D_applyToDirection(struct Transform2D t, F32x2 dir);
+F32x2 Transform2D_apply(struct Transform2D t, F32x2 pos);
+F32x2 Transform2D_reverse(struct Transform2D t, F32x2 pos);
+
+//2D tilemap
+
+F32x2 TilemapTransform_applyToDirection(TilemapTransform t, F32x2 dir);
+F32x2 TilemapTransform_apply(TilemapTransform t, F32x2 pos);
+F32x2 TilemapTransform_reverse(TilemapTransform t, F32x2 pos);

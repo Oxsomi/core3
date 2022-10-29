@@ -346,10 +346,10 @@ inline Bool TextureFormat_hasGreen(enum TextureFormat f) { return TextureFormat_
 inline Bool TextureFormat_hasBlue(enum TextureFormat f) { return TextureFormat_getBlueBits(f); }
 inline Bool TextureFormat_hasAlpha(enum TextureFormat f) { return TextureFormat_getAlphaBits(f); }
 
-inline U64 TextureFormat_getChannels(enum TextureFormat f) {
+inline U8 TextureFormat_getChannels(enum TextureFormat f) {
 	return 
-		(U64)TextureFormat_hasRed(f)  + (U64)TextureFormat_hasGreen(f) + 
-		(U64)TextureFormat_hasBlue(f) + (U64)TextureFormat_hasAlpha(f);
+		(U8)TextureFormat_hasRed(f)  + (U8)TextureFormat_hasGreen(f) + 
+		(U8)TextureFormat_hasBlue(f) + (U8)TextureFormat_hasAlpha(f);
 }
 
 inline enum TextureCompressionType TextureFormat_getCompressionType(enum TextureFormat f) {

@@ -168,6 +168,13 @@ inline F32x2 F32x2_mul2x2(F32x2 v2, F32x2 v2x2[2]) {
     );
 }
 
+inline F32x2 F32x2_mul2x3(F32x2 v2, F32x2 v2x3[3]) {
+    return F32x2_add(F32x2_add(
+        F32x2_mul(v2x3[0], F32x2_xx(v2)),
+        F32x2_mul(v2x3[1], F32x2_yy(v2))
+    ), v2x3[2]);
+}
+
 //Casts from vec4f
     
 inline F32x2 F32x2_fromF32x4(F32x4 a) { return F32x2_load2((const F32*) &a); }
@@ -195,11 +202,11 @@ inline F32x2 F32x4_ww(F32x4 a) { return F32x2_fromF32x4(F32x4_wwxx(a)); }
 
 //Cast from vec2f to vec4
 
-inline F32x4 F32x2_create2_2(F32x2 a, F32x2 b) { return F32x4_create4(F32x2_x(a), F32x2_y(a), F32x2_x(b), F32x2_y(b)); }
+inline F32x4 F32x2_create2_4(F32x2 a, F32x2 b) { return F32x4_create4(F32x2_x(a), F32x2_y(a), F32x2_x(b), F32x2_y(b)); }
 
-inline F32x4 F32x2_create2_1_1(F32x2 a, F32 b, F32 c) { return F32x4_create4(F32x2_x(a), F32x2_y(a), b, c); }
-inline F32x4 F32x2_create1_2_1(F32 a, F32x2 b, F32 c) { return F32x4_create4(a, F32x2_x(b), F32x2_y(b), c); }
-inline F32x4 F32x2_create1_1_2(F32 a, F32 b, F32x2 c) { return F32x4_create4(a, b, F32x2_x(c), F32x2_y(c)); }
+inline F32x4 F32x4_create2_1_1(F32x2 a, F32 b, F32 c) { return F32x4_create4(F32x2_x(a), F32x2_y(a), b, c); }
+inline F32x4 F32x4_create1_2_1(F32 a, F32x2 b, F32 c) { return F32x4_create4(a, F32x2_x(b), F32x2_y(b), c); }
+inline F32x4 F32x4_create1_1_2(F32 a, F32 b, F32x2 c) { return F32x4_create4(a, b, F32x2_x(c), F32x2_y(c)); }
 
-inline F32x4 F32x2_create2_1(F32x2 a, F32 b) { return F32x4_create3(F32x2_x(a), F32x2_y(a), b); }
-inline F32x4 F32x2_create1_2(F32 a, F32x2 b) { return F32x4_create3(a, F32x2_x(b), F32x2_y(b)); }
+inline F32x4 F32x4_create2_1(F32x2 a, F32 b) { return F32x4_create3(F32x2_x(a), F32x2_y(a), b); }
+inline F32x4 F32x4_create1_2(F32 a, F32x2 b) { return F32x4_create3(a, F32x2_x(b), F32x2_y(b)); }

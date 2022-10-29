@@ -50,7 +50,7 @@ void Log_num(LongString result, U64 v, U64 base, const C8 prepend[2]) {
 
 	if (!v) {
 		result[i] = '0';
-		result[i + 1] = 0;
+		result[i + 1] = '\0';
 		return;
 	}
 

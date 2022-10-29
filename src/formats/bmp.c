@@ -84,27 +84,27 @@ struct Error BMP_writeRGBA(
 		return err;
 
 	struct Buffer fileAppend = file;
+
+	if ((err = Buffer_append(&fileAppend, &header, sizeof(header))).genericError) {
+		Buffer_free(&file, allocator);
+		return err;
+	}
+
+	if ((err = Buffer_append(&fileAppend, &infoHeader, sizeof(infoHeader))).genericError) {
+		Buffer_free(&file, allocator);
+		return err;
+	}
+
+	if ((err = Buffer_append(&fileAppend, &colorHeader, sizeof(colorHeader))).genericError) {
+		Buffer_free(&file, allocator);
+		return err;
+	}
+
+	if ((err = Buffer_appendBuffer(&fileAppend, buf)).genericError) {
+		Buffer_free(&file, allocator);
+		return err;
+	}
+
 	*result = file;
-
-	err = Buffer_append(&fileAppend, &header, sizeof(header));
-
-	if(err.genericError)
-		return err;
-
-	err = Buffer_append(&fileAppend, &infoHeader, sizeof(infoHeader));
-
-	if(err.genericError)
-		return err;
-
-	err = Buffer_append(&fileAppend, &colorHeader, sizeof(colorHeader));
-
-	if(err.genericError)
-		return err;
-
-	err = Buffer_appendBuffer(&fileAppend, buf);
-
-	if(err.genericError)
-		return err;
-
 	return Error_none();
 }
