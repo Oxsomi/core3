@@ -1,5 +1,5 @@
 #include "math/math.h"
-#include <cfloat>
+#include <float.h>
 
 const F32 F32_e			= 2.718281828459045f;
 const F32 F32_pi		= 3.141592653589793f;
