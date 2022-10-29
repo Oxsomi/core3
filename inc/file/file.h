@@ -1,6 +1,9 @@
 #pragma once
 #include "types/types.h"
 
+struct String;
+struct Allocator;
+
 struct Error File_write(struct Buffer buf, struct String loc);
 struct Error File_read(struct String loc, struct Allocator alloc, struct Buffer *output);
 

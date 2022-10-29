@@ -2,20 +2,13 @@
 #include "platforms/input_device.h"
 #include "types/error.h"
 
-struct Error Keyboard_free(Keyboard *dev) {
-	return InputDevice_free(dev);
-}
-
-#define _key(name, resolve, resolveAlt)																	\
-	if ((err = InputDevice_createButton(																\
-		*result, Key_##name, String_createRefUnsafeConst("Key_" #name), resolve, resolveAlt, &res		\
-	)).genericError) {																					\
-		Keyboard_free(result);																			\
-		return err;																						\
+#define _key(name)																\
+	if ((err = InputDevice_createButton(										\
+		*result, Key_##name, String_createRefUnsafeConst("Key_" #name), &res	\
+	)).genericError) {															\
+		InputDevice_free(result);												\
+		return err;																\
 	}
-
-#define _specKey(name) _key(name, '\0', '\0')
-#define _specKeyResolve(name, resolve) _key(name, resolve, '\0')
 
 struct Error Keyboard_create(Keyboard *result) {
 
@@ -26,85 +19,51 @@ struct Error Keyboard_create(Keyboard *result) {
 
 	InputHandle res = 0;
 
-	_key(1, '1', '!');	_key(2, '2', '@');	_key(3, '3', '#');	_key(4, '4', '$');	_key(5, '5', '%'); 
-	_key(6, '6', '^');	_key(7, '7', '&');	_key(8, '8', '*');	_key(9, '9', '(');	_key(0, '0', ')'); 
+	_key(1);	_key(2);	_key(3);	_key(4);	_key(5); 
+	_key(6);	_key(7);	_key(8);	_key(9);	_key(0); 
 
-	_key(A, 'a', 'A');	_key(B, 'b', 'B');	_key(C, 'c', 'C');	_key(D, 'd', 'D');	_key(E, 'e', 'E');
-	_key(F, 'f', 'F');	_key(G, 'g', 'G');	_key(H, 'h', 'H');	_key(I, 'i', 'I');	_key(J, 'j', 'J');
-	_key(K, 'k', 'K');	_key(L, 'l', 'L');	_key(M, 'm', 'M');	_key(N, 'n', 'N');	_key(O, 'o', 'O');
-	_key(P, 'p', 'P');	_key(Q, 'q', 'Q');	_key(R, 'r', 'R');	_key(S, 's', 'S');	_key(T, 't', 'T');
-	_key(U, 'u', 'U');	_key(V, 'v', 'V');	_key(W, 'w', 'W');	_key(X, 'x', 'X');	_key(Y, 'y', 'Y');
-	_key(Z, 'z', 'Z');
+	_key(A);	_key(B);	_key(C);	_key(D);	_key(E);
+	_key(F);	_key(G);	_key(H);	_key(I);	_key(J);
+	_key(K);	_key(L);	_key(M);	_key(N);	_key(O);
+	_key(P);	_key(Q);	_key(R);	_key(S);	_key(T);
+	_key(U);	_key(V);	_key(W);	_key(X);	_key(Y);
+	_key(Z);
 
-	_key(Equals, '=', '+');			_key(Comma, ',', '<');		_key(Minus, '-', '_');
-	_key(Period, '.', '>');			_key(Slash, '/', '?');		_key(Acute, '`', '~');
-	_key(Semicolon, ';', ':');		_key(LBracket, '[', '{');	_key(RBracket, ']', '}');
-	_key(Backslash, '\\', '|');		_key(Quote, '\'', '"');
+	_key(Equals);			_key(Comma);		_key(Minus);
+	_key(Period);			_key(Slash);		_key(Acute);
+	_key(Semicolon);		_key(LBracket);		_key(RBracket);
+	_key(Backslash);		_key(Quote);
 
-	_specKey(F1);	_specKey(F2);	_specKey(F3);	_specKey(F4);	_specKey(F5);	_specKey(F6);
-	_specKey(F7);	_specKey(F8);	_specKey(F9);	_specKey(F10);	_specKey(F11);	_specKey(F12);
-	_specKey(F13);	_specKey(F14);	_specKey(F15);	_specKey(F16);	_specKey(F17);	_specKey(F18);
-	_specKey(F19);	_specKey(F20);	_specKey(F21);	_specKey(F22);	_specKey(F23);	_specKey(F24);
+	_key(F1);	_key(F2);	_key(F3);	_key(F4);		_key(F5);	_key(F6);
+	_key(F7);	_key(F8);	_key(F9);	_key(F10);		_key(F11);	_key(F12);
+	_key(F13);	_key(F14);	_key(F15);	_key(F16);		_key(F17);	_key(F18);
+	_key(F19);	_key(F20);	_key(F21);	_key(F22);		_key(F23);	_key(F24);
 
-	_specKey(Backspace);	_specKey(Shift);		_specKey(Ctrl);			_specKey(Alt);
-	_specKey(Pause);		_specKey(Caps);			_specKey(Escape);		_specKey(PageUp);
-	_specKey(PageDown);		_specKey(End);			_specKey(Home);			_specKey(Select);
-	_specKey(Print);		_specKey(Execute);		_specKey(PrintScreen);	_specKey(Insert);
-	_specKey(Delete);		_specKey(Help);			_specKey(Menu);			_specKey(NumLock);
-	_specKey(ScrollLock);	_specKey(Apps);			_specKey(Back);			_specKey(Forward);
-	_specKey(Sleep);		_specKey(Refresh);		_specKey(Stop);			_specKey(Search);
-	_specKey(Favorites);	_specKey(Start);		_specKey(Mute);			_specKey(VolumeDown);
-	_specKey(VolumeUp);		_specKey(Skip);			_specKey(Previous);		_specKey(Clear);
-	_specKey(Zoom);
+	_key(Backspace);	_key(Shift);		_key(Ctrl);			_key(Alt);
+	_key(Pause);		_key(Caps);			_key(Escape);		_key(PageUp);
+	_key(PageDown);		_key(End);			_key(Home);			_key(Select);
+	_key(Print);		_key(Execute);		_key(PrintScreen);	_key(Insert);
+	_key(ScrollLock);	_key(Apps);			_key(Back);			_key(Forward);
+	_key(Sleep);		_key(Refresh);		_key(Stop);			_key(Search);
+	_key(Favorites);	_key(Start);		_key(Mute);			_key(VolumeDown);
+	_key(VolumeUp);		_key(Skip);			_key(Previous);		_key(Clear);
+	_key(Zoom);
+	_key(Delete);		_key(Help);			_key(NumLock);
 
-	_specKeyResolve(Space, ' ');
-	_specKeyResolve(Tab, '\t');
-	_specKeyResolve(Enter, '\n');
+	_key(Space);
+	_key(Tab);
+	_key(Enter);
 
-	_specKey(Left);
-	_specKey(Up);
-	_specKey(Right);
-	_specKey(Down);
+	_key(Left);
+	_key(Up);
+	_key(Right);
+	_key(Down);
 
-	_specKeyResolve(Numpad1, '1');		_specKeyResolve(Numpad2, '2');		_specKeyResolve(Numpad3, '3');
-	_specKeyResolve(Numpad4, '4');		_specKeyResolve(Numpad5, '5');		_specKeyResolve(Numpad6, '6');
-	_specKeyResolve(Numpad7, '7');		_specKeyResolve(Numpad8, '8');		_specKeyResolve(Numpad9, '9');
-	_specKeyResolve(Numpad0, '0');		_specKeyResolve(NumpadMul, '*');	_specKeyResolve(NumpadAdd, '+');
-	_specKeyResolve(NumpadDec, '.');	_specKeyResolve(NumpadDiv, '/');	_specKeyResolve(NumpadSub, '-');
+	_key(Numpad1);		_key(Numpad2);		_key(Numpad3);
+	_key(Numpad4);		_key(Numpad5);		_key(Numpad6);
+	_key(Numpad7);		_key(Numpad8);		_key(Numpad9);
+	_key(Numpad0);		_key(NumpadMul);	_key(NumpadAdd);
+	_key(NumpadDec);	_key(NumpadDiv);	_key(NumpadSub);
 
 	return Error_none();
-}
-
-C8 Keyboard_resolve(Keyboard keyboard, enum Key key) {
-
-	//If it's not a key or it can't be resolved then don't resolve it
-
-	struct InputButton* button = InputDevice_getButton(keyboard, key);
-
-	if(!button || !button->contents)
-		return '\0';
-
-	//Numpad needs numlock to be activated in order to be resolved
-
-	if (key >= Key_Numpad1 && key <= Key_NumpadSub) {
-
-		if(!InputDevice_hasFlag(keyboard, KeyboardFlags_NumLock))
-			return '\0';
-
-		return button->contents;
-	}
-
-	//A-Z jumps to upper case if caps is on, but jumps back if shift is also held
-
-	if(key >= Key_A && key <= Key_Z)
-		return 
-			InputDevice_getCurrentState(keyboard, Key_Shift) != InputDevice_hasFlag(keyboard, KeyboardFlags_Caps) ?
-			button->altContents : button->contents;
-
-	//Otherwise, we can just use normal shift behavior if it has an altContent
-
-	if(button->altContents)
-		return InputDevice_getCurrentState(keyboard, Key_Shift) ? button->altContents : button->contents;
-
-	return button->contents;
 }

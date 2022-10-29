@@ -1,4 +1,5 @@
 #include "math/math.h"
+#include <cfloat>
 
 const F32 F32_e			= 2.718281828459045f;
 const F32 F32_pi		= 3.141592653589793f;
@@ -11,11 +12,11 @@ const U64 Gi			= 1 << 30;
 const U64 Ti			= (U64)1 << 40;
 const U64 Pi			= (U64)1 << 50;
 
-const U64 K				= 1'000;
-const U64 M				= 1'000'000;
-const U64 B				= 1'000'000'000;
-const U64 T				= 1'000'000'000'000;
-const U64 P				= 1'000'000'000'000'000;
+const U64 Kilo			= 1'000;
+const U64 Mega			= 1'000'000;
+const U64 Giga			= 1'000'000'000;
+const U64 Tera			= 1'000'000'000'000;
+const U64 Peta			= 1'000'000'000'000'000;
 
 const Ns mus			= 1'000;
 const Ns ms				= 1'000'000;
@@ -45,5 +46,5 @@ const I16 I16_MAX		= 0x7FFF;
 const I32 I32_MAX		= 0x7FFFFFFF;
 const I64 I64_MAX		= 0x7FFFFFFFFFFFFFFF;
 
-const F32 F32_MAX		= 3.4028235e38f;
-const F32 F32_MIN		= -3.4028235e38f;
+const F32 F32_MAX		= FLT_MAX;
+const F32 F32_MIN		= -FLT_MAX;

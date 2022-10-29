@@ -21,8 +21,6 @@ typedef U32 InputHandle;		//Don't serialize this, because input devices can chan
 
 struct InputButton {
 	LongString name;
-	C8 contents;
-	C8 altContents;
 };
 
 struct InputAxis {
@@ -31,6 +29,7 @@ struct InputAxis {
 };
 
 enum InputDeviceType {
+	InputDeviceType_Undefined,
 	InputDeviceType_Keyboard,
 	InputDeviceType_Mouse,
 	InputDeviceType_Controller
@@ -55,6 +54,11 @@ struct InputDevice {
 	//u2[booleanStates]
 
 	struct Buffer states;
+
+	//Platform dependent data, for better identifying this device
+	//This is useful for when multiple keyboards are present for example
+
+	struct Buffer dataExt;
 };
 
 //Initializing a device
@@ -65,8 +69,6 @@ struct Error InputDevice_createButton(
 	struct InputDevice dev, 
 	U16 localHandle, 
 	struct String keyName,			//The alphaNumeric name (e.g. Key_1)
-	C8 keyContents,					//For example '1' for Keyboard
-	C8 keyAltContents,				//For example '!' for Keyboard
 	InputHandle *result
 );
 
@@ -86,7 +88,8 @@ struct InputAxis *InputDevice_getAxis(struct InputDevice dev, U16 localHandle);
 //Simple helpers
 
 inline U32 InputDevice_getHandles(struct InputDevice d) { return (U32)d.axes + d.buttons; }
-inline InputHandle InputDevice_invalidHandle(struct InputDevice d) { return (InputHandle) InputDevice_getHandles(d); }
+
+inline InputHandle InputDevice_invalidHandle() { return (InputHandle) U64_MAX; }
 
 inline Bool InputDevice_isValidHandle(struct InputDevice d, InputHandle handle) { 
 	return handle < InputDevice_getHandles(d); 
@@ -176,8 +179,6 @@ InputHandle InputDevice_getHandle(struct InputDevice d, struct String name);
 struct String InputDevice_getName(struct InputDevice d, InputHandle handle);
 
 F32 InputDevice_getDeadZone(struct InputDevice d, InputHandle handle);
-C8 InputDevice_getResolvedChar(struct InputDevice d, InputHandle handle);
-C8 InputDevice_getResolvedAltChar(struct InputDevice d, InputHandle handle);
 
 //This should only be handled by platform updating the input device
 //First the platform should call markUpdate, then it should start setting new values

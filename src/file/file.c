@@ -41,8 +41,8 @@ struct Error File_read(struct String loc, struct Allocator allocator, struct Buf
 	if(!allocator.alloc || !allocator.free)
 		return (struct Error){ .genericError = GenericError_NullPointer, .paramId = 1 };
 
-	if(!output)
-		return (struct Error){ .genericError = GenericError_NullPointer, .paramId = 2 };
+	if(output)
+		return (struct Error){ .genericError = GenericError_InvalidOperation };
 
 	FILE *f = fopen(loc.ptr, "rb");
 
@@ -54,7 +54,7 @@ struct Error File_read(struct String loc, struct Allocator allocator, struct Buf
 		return (struct Error){ .genericError = GenericError_InvalidState, .errorSubId = 0 };
 	}
 
-	struct Error err = Buffer_createUninitializedBytes((U64)_ftelli64(f), allocator, &output);
+	struct Error err = Buffer_createUninitializedBytes((U64)_ftelli64(f), allocator, output);
 	
 	if(err.genericError) {
 		fclose(f);
@@ -62,7 +62,7 @@ struct Error File_read(struct String loc, struct Allocator allocator, struct Buf
 	}
 
 	if(fseek(f, 0, SEEK_SET)) {
-		Buffer_free(&output, allocator);
+		Buffer_free(output, allocator);
 		fclose(f);
 		return (struct Error){ .genericError = GenericError_InvalidState, .errorSubId = 1 };
 	}
@@ -70,7 +70,7 @@ struct Error File_read(struct String loc, struct Allocator allocator, struct Buf
 	struct Buffer b = *output;
 
 	if (fread(b.ptr, 1, b.siz, f) != b.siz) {
-		Buffer_free(&b, allocator);
+		Buffer_free(output, allocator);
 		fclose(f);
 		return (struct Error){ .genericError = GenericError_InvalidState, .errorSubId = 2 };
 	}

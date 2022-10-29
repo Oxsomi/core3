@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.13.0)
-project(ocore3)
+project(OxC3)
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
@@ -59,14 +59,14 @@ file(GLOB_RECURSE typesHeaders "inc/file/*.h" "inc/math/*.h" "inc/types/*.h" "in
 file(GLOB_RECURSE typesSources "src/file/*.c" "src/math/*.c" "src/types/*.c")
 
 add_library(
-	core3_types
+	OxC3_types
 	STATIC
 	${typesHeaders}
 	${typesSources}
 	CMakeLists.txt
 )
 
-target_include_directories(core3_types PRIVATE inc)
+target_include_directories(OxC3_types PUBLIC inc)
 
 # Formats
 
@@ -74,15 +74,14 @@ file(GLOB_RECURSE formatsHeaders "inc/formats/*.h")
 file(GLOB_RECURSE formatsSources "src/formats/*.c")
 
 add_library(
-	core3_formats
+	OxC3_formats
 	STATIC
 	${formatsHeaders}
 	${formatsSources}
 	CMakeLists.txt
 )
 
-target_include_directories(core3_formats PRIVATE inc)
-target_link_libraries(core3_formats PRIVATE core3_types)
+target_link_libraries(OxC3_formats PUBLIC OxC3_types)
 
 # Platforms
 
@@ -100,25 +99,23 @@ file(GLOB_RECURSE platformsHeaders "inc/platforms/*.h")
 file(GLOB_RECURSE platformsSources "src/platforms/${platform}/*.c" "src/platforms/generic/*.c")
 
 add_library(
-	core3_platforms
+	OxC3_platforms
 	STATIC
 	${platformsHeaders}
 	${platformsSources}
 	CMakeLists.txt
 )
 
-target_include_directories(core3_platforms PRIVATE inc)
-target_link_libraries(core3_platforms PRIVATE core3_types)
+target_link_libraries(OxC3_platforms PUBLIC OxC3_formats)
 
 # Tests
 
 file(GLOB_RECURSE tests "tst/*.c")
 
 add_executable(
-	core3_test
+	OxC3_test
 	${tests}
 	CMakeLists.txt
 )
 
-target_include_directories(core3_test PRIVATE inc)
-target_link_libraries(core3_test PRIVATE core3_types)
+target_link_libraries(OxC3_test PUBLIC OxC3_types)

@@ -46,11 +46,11 @@ extern const U64 Gi;
 extern const U64 Ti;
 extern const U64 Pi;
 
-extern const U64 K;
-extern const U64 M;
-extern const U64 B;
-extern const U64 T;
-extern const U64 P;
+extern const U64 Kilo;
+extern const U64 Mega;
+extern const U64 Giga;
+extern const U64 Tera;
+extern const U64 Peta;
 
 extern const Ns mus;
 extern const Ns ms;

@@ -1,104 +1,97 @@
 #include "platforms/window.h"
 #include "platforms/platform.h"
+#include "platforms/thread.h"
 #include "file/file.h"
 #include "types/error.h"
 #include "types/buffer.h"
 #include "types/string.h"
+#include "types/timer.h"
 #include "formats/texture.h"
 #include "formats/bmp.h"
 
-const U8 WindowManager_maxTotalVirtualWindowCount = 16;
-
-struct Error Window_createVirtual(
-	I32x2 size, struct WindowCallbacks callbacks, enum WindowFormat format,
-	struct Window **w
-) {
+struct Error Window_waitForExit(struct Window *w, Ns maxTimeout) {
 
 	if(!w)
-		return (struct Error) { .genericError = GenericError_NullPointer, .paramId = 3 };
-
-	if(*w)
-		return (struct Error) { .genericError = GenericError_InvalidParameter, .paramId = 3 };
-
-	switch (format) {
-
-		case WindowFormat_rgba8:
-		case WindowFormat_hdr10a2:
-		case WindowFormat_rgba16f:
-		case WindowFormat_rgba32f:
-			break;
-
-		default:
-			return (struct Error) { .genericError = GenericError_InvalidParameter, .paramId = 2 };
-	}
-
-	if(I32x2_any(I32x2_leq(size, I32x2_zero())))
-		return (struct Error) { .genericError = GenericError_InvalidParameter };
-
-	struct Buffer buffer = Buffer_createNull();
-	struct Error err = Buffer_createUninitializedBytes(sizeof(struct Window), Platform_instance.alloc, &buffer);
-
-	if(err.genericError)
-		return err;
-
-	struct Window *win = (*w = (struct Window*) buffer.ptr);
-
-	*win = (struct Window) {
-		.size = size,
-		.callbacks = callbacks,
-		.format = format,
-		.flags = WindowFlags_IsVirtual | WindowFlags_IsFocussed
-	};
-
-	U64 size1D = TextureFormat_getSize((enum TextureFormat) format, I32x2_x(size), I32x2_y(size));
-	err = Buffer_createZeroBits(size1D, Platform_instance.alloc, &win->cpuVisibleBuffer);
-
-	if(err.genericError) {
-		buffer = Buffer_createRef(w, sizeof(struct Window));
-		Buffer_free(&buffer, Platform_instance.alloc);
-		return err;
-	}
-
-	return Error_none();
-}
-
-struct Error Window_freeVirtual(struct Window **w) {
-
-	if (!w || !*w)
 		return (struct Error) { .genericError = GenericError_NullPointer };
 
-	if(!Window_isVirtual(*w))
-		return (struct Error) { .genericError = GenericError_InvalidParameter };
+	Ns start = Timer_now();
 
-	struct Error err = Error_none(), errTemp;
+	//We lock to check window state
+	//If there's no lock, then we've already been released
 
-	struct Buffer buf = (*w)->cpuVisibleBuffer;
-	err = Buffer_free(&buf, Platform_instance.alloc);
+	if(w->lock.data && !Lock_isLockedForThread(w->lock) && !Lock_lock(&w->lock, maxTimeout))
+		return (struct Error) { .genericError = GenericError_InvalidOperation };
 
-	buf = Buffer_createRef(w, sizeof(struct Window));
-	errTemp = Buffer_free(&buf, Platform_instance.alloc);
+	//If our window isn't marked as active, then our window is gone
+	//We've successfully waited
 
-	if(errTemp.genericError)
-		err = errTemp;
+	if (!(w->flags & WindowFlags_IsActive))
+		return Error_none();
 
-	*w = NULL;
-	return err;
+	//Now we have to make sure we still have time left to wait
+
+	maxTimeout = U64_min(maxTimeout, I64_MAX);
+
+	Ns left = (Ns) I64_max(0, maxTimeout - (DNs)(Timer_now() - start));
+
+	//Release the lock, because otherwise our window can't resume itself
+
+	if(!Lock_unlock(&w->lock))
+		return (struct Error) { .genericError = GenericError_InvalidOperation };
+
+	//Keep checking until we run out of time
+
+	while(left > 0) {
+
+		//Wait to ensure we don't waste cycles
+		//Virtual windows are allowed to run as fast as possible to produce the frames
+
+		if(!Window_isVirtual(w))
+			Thread_sleep(10 * ms);
+
+		//Try to reacquire the lock
+
+		if(w->lock.data && !Lock_isLockedForThread(w->lock) && !Lock_lock(&w->lock, left))
+			return (struct Error) { .genericError = GenericError_InvalidOperation };
+
+		//Our window has been released!
+
+		if (!(w->flags & WindowFlags_IsActive))
+			return Error_none();
+
+		//Virtual windows can draw really quickly
+
+		if(Window_isVirtual(w) && w->callbacks.onDraw)
+			w->callbacks.onDraw(w);
+
+		//Release the lock to check for the next time
+
+		if(!Lock_unlock(&w->lock))
+			return (struct Error) { .genericError = GenericError_InvalidOperation };
+
+		//
+
+		left = (Ns) I64_max(0, maxTimeout - (DNs)(Timer_now() - start));
+	}
+
+	return (struct Error) { .genericError = GenericError_TimedOut };
 }
 
 //TODO: Move this to texture class
 
-struct Error Window_presentVirtual(const struct Window *w, struct Buffer data, enum WindowFormat encodedFormat);
-
-struct Error Window_resizeVirtual(struct Window *w, Bool copyData, I32x2 newSiz) {
+struct Error Window_resizeCPUBuffer(struct Window *w, Bool copyData, I32x2 newSiz) {
 
 	if (!w)
 		return (struct Error) { .genericError = GenericError_NullPointer };
 
-	if(!Window_isVirtual(w) && !(w->flags & WindowHint_ProvideCPUBuffer))
+	if(!Window_isVirtual(w) && !(w->hint & WindowHint_ProvideCPUBuffer))
 		return (struct Error) { .genericError = GenericError_InvalidParameter };
 
-	if(I32x4_eq2(w->size, newSiz))
+	if(I32x2_eq2(w->size, newSiz))
 		return Error_none();
+
+	if(I32x2_any(I32x2_leq(newSiz, I32x2_zero())))
+		return (struct Error) { .genericError = GenericError_InvalidParameter, .paramId = 2 };
 
 	//Because we're resizing, we assume we will be resizing more often
 	//To combat constantly reallocating, we will allocate 25% more memory than is needed.
@@ -110,6 +103,9 @@ struct Error Window_resizeVirtual(struct Window *w, Bool copyData, I32x2 newSiz)
 
 	U64 linSizOld = TextureFormat_getSize((enum TextureFormat) w->format, I32x2_x(w->size), I32x2_y(w->size));
 	U64 linSiz = TextureFormat_getSize((enum TextureFormat) w->format, I32x2_x(newSiz), I32x2_y(newSiz));
+	
+	if(linSizOld * 5 < linSizOld)
+		return (struct Error) { .genericError = GenericError_Overflow };
 
 	//We need to grow; we're out of bounds
 
@@ -153,7 +149,7 @@ struct Error Window_resizeVirtual(struct Window *w, Bool copyData, I32x2 newSiz)
 			//If we resized the buffer, we still have to copy the old data
 
 			if(resize)
-				Buffer_copy(neo, Buffer_createRef(old.ptr, (U64) U64_min(linSizOld, linSiz)));
+				Buffer_copy(neo, Buffer_createRef(old.ptr, U64_min(linSizOld, linSiz)));
 
 			//If we added size, we need to clear those pixels
 
@@ -226,7 +222,7 @@ struct Error Window_resizeVirtual(struct Window *w, Bool copyData, I32x2 newSiz)
 					//Clear remainder of row
 
 					struct Buffer toClear = Buffer_createNull();
-					struct Error err = Buffer_createSubset(dst, linSizOld, sizDif, &toClear);
+					err = Buffer_createSubset(dst, linSizOld, sizDif, &toClear);
 
 					if (err.genericError) {
 
@@ -270,7 +266,6 @@ struct Error Window_resizeVirtual(struct Window *w, Bool copyData, I32x2 newSiz)
 				}
 			}
 		}
-
 	}
 
 	//Ensure it's all properly cleared
@@ -305,10 +300,13 @@ struct Error Window_storeCPUBufferToDisk(const struct Window *w, struct String f
 	if(w->format != WindowFormat_rgba8)
 		return (struct Error) { .genericError = GenericError_UnsupportedOperation };		//TODO: Add support for other formats
 
+	if(I32x2_any(I32x2_gt(w->size, I32x2_xx2(U16_MAX))))
+		return (struct Error) { .genericError = GenericError_InvalidOperation, .errorSubId = 1 };
+
 	struct Buffer file = Buffer_createNull();
 
 	struct Error err = BMP_writeRGBA(
-		buf, I32x2_x(w->size), I32x2_y(w->size),
+		buf, (U16) I32x2_x(w->size), (U16) I32x2_y(w->size),
 		false, Platform_instance.alloc, &file
 	);
 
@@ -319,4 +317,16 @@ struct Error Window_storeCPUBufferToDisk(const struct Window *w, struct String f
 	Buffer_free(&file, Platform_instance.alloc);
 
 	return err;
+}
+
+Bool Window_terminateVirtual(struct Window *w) {
+
+	if(!w || !Window_isVirtual(w))
+		return false;
+
+	if(!Lock_isLockedForThread(w->lock) || !Lock_isLockedForThread(Platform_instance.windowManager.lock))
+		return false;
+
+	w->flags &= ~WindowFlags_IsActive;
+	return !WindowManager_freeVirtual(&Platform_instance.windowManager, &w).genericError;
 }

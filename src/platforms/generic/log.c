@@ -2,12 +2,12 @@
 
 #include <stdlib.h>
 
-void Log_printStackTrace(U64 skip, enum LogLevel lvl) {
+void Log_printStackTrace(U64 skip, enum LogLevel lvl, enum LogOptions options) {
 
 	StackTrace stackTrace;
 	Log_captureStackTrace(stackTrace, StackTrace_SIZE, skip);
 
-	Log_printCapturedStackTrace(stackTrace, lvl);
+	Log_printCapturedStackTrace(stackTrace, lvl, options);
 }
 
 void Log_debug(struct String s, enum LogOptions options) {
@@ -27,7 +27,7 @@ void Log_error(struct String s, enum LogOptions options) {
 }
 
 void Log_fatal(struct String s, enum LogOptions options) {
-	Log_printStackTrace(1, LogLevel_Fatal);
+	Log_printStackTrace(1, LogLevel_Fatal, options);
 	Log_log(LogLevel_Fatal, options, (struct LogArgs){ .argc = 1, .args = &s });
 	exit(1);
 }
@@ -50,7 +50,7 @@ void Log_num(LongString result, U64 v, U64 base, const C8 prepend[2]) {
 
 	if (!v) {
 		result[i] = '0';
-		result[i] = 0;
+		result[i + 1] = 0;
 		return;
 	}
 
@@ -66,6 +66,8 @@ void Log_num(LongString result, U64 v, U64 base, const C8 prepend[2]) {
 
 	for (i = 0; i < j; ++i)
 		result[last - i] = tmp[i];
+
+	result[U64_min(j, 63)] = 0;
 }
 
 void Log_num64(LongString result, U64 v) {

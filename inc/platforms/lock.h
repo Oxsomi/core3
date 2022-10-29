@@ -13,9 +13,9 @@ impl struct Error Lock_free(struct Lock *res);
 //As a different unit by the runtime.
 //Ex. Windows uses ms so it'll round up to ms
 
-impl Bool Lock_lock(struct Lock l, Ns maxTime);
+impl Bool Lock_lock(struct Lock *l, Ns maxTime);
 
-impl Bool Lock_unlock(struct Lock l);
+impl Bool Lock_unlock(struct Lock *l);
 
 inline Bool Lock_isLocked(struct Lock l) {
 	return l.lockThread;

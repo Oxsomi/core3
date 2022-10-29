@@ -3,7 +3,7 @@
 //Rotate around an axis with an angle
 //https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles#Definition
 //
-inline Quat Quat_angleAxis(F32x4 axis, F32 angle) {
+Quat Quat_angleAxis(F32x4 axis, F32 angle) {
 
 	angle *= 0.5f;
 
@@ -21,7 +21,7 @@ inline Quat Quat_angleAxis(F32x4 axis, F32 angle) {
 //Construct quaternion from euler. Rotation around xyz (pitch, yaw, roll) in degrees
 //https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles#Euler_angles_to_quaternion_conversion
 //
-inline Quat Quat_fromEuler(F32x4 pitchYawRollDeg) {
+Quat Quat_fromEuler(F32x4 pitchYawRollDeg) {
 
 	F32x4 pitchYawRollRad = F32x4_mul(pitchYawRollDeg, F32x4_xxxx4(F32_degToRad * .5f));
 
@@ -52,7 +52,7 @@ inline Quat Quat_fromEuler(F32x4 pitchYawRollDeg) {
 //Convert back to euler, pitchYawRollDeg
 //https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles#Quaternion_to_Euler_angles_conversion
 //
-inline F32x4 Quat_toEuler(Quat q) {
+F32x4 Quat_toEuler(Quat q) {
 
 	F32x4 q2	= F32x4_pow2(q);
 
@@ -98,7 +98,7 @@ inline F32x4 Quat_toEuler(Quat q) {
 //Combine two quaternions
 //https://stackoverflow.com/questions/19956555/how-to-multiply-two-quaternions
 //
-inline Quat Quat_mul(Quat a, Quat b) {
+Quat Quat_mul(Quat a, Quat b) {
 
 	F32x4 axXb = F32x4_mul(b, F32x4_xxxx(a));
 	F32x4 ayXb = F32x4_mul(b, F32x4_yyyy(a));
@@ -121,7 +121,7 @@ inline Quat Quat_mul(Quat a, Quat b) {
 //Get shortest arc quaternion from origin to target
 //https://stackoverflow.com/questions/1171849/finding-quaternion-representing-the-rotation-from-one-vector-to-another
 //
-inline Quat Quat_targetDirection(F32x4 origin, F32x4 target) {
+Quat Quat_targetDirection(F32x4 origin, F32x4 target) {
 
 	F32 leno = F32x4_len3(origin), lent = F32x4_len3(target);
 
@@ -144,7 +144,7 @@ inline Quat Quat_targetDirection(F32x4 origin, F32x4 target) {
 //Lerp between a and b using percentage (or extrapolate if perc > 1 or < 0)
 //https://www.euclideanspace.com/maths/algebra/realNormedAlgebra/quaternions/slerp/index.htm
 //
-inline Quat Quat_slerp(Quat a, Quat b, F32 perc) {
+Quat Quat_slerp(Quat a, Quat b, F32 perc) {
 
 	F32 cosTheta2 = F32x4_dot4(a, b);
 

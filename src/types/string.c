@@ -217,7 +217,7 @@ struct Error String_create(C8 c, U64 size, struct Allocator alloc, struct String
 	if(size >= 1)
 		b.ptr[totalSize - 1] = c;
 
-	*result = (struct String) { .len = totalSize, .capacity = totalSize, .ptr = b.ptr };
+	*result = (struct String) { .len = totalSize, .capacity = totalSize, .ptr = (C8*) b.ptr };
 	return Error_none();
 }
 
@@ -246,7 +246,7 @@ struct Error String_createCopy(struct String str, struct Allocator alloc, struct
 	for (U64 i = str.len >> 3 << 3; i < str.len; ++i)
 		b.ptr[i] = str.ptr[i];
 
-	*result = (struct String) { .ptr = b.ptr, .len = str.len, .capacity = str.len };
+	*result = (struct String) { .ptr = (C8*) b.ptr, .len = str.len, .capacity = str.len };
 	return Error_none();
 }
 
@@ -271,19 +271,26 @@ struct Error String_free(struct String *str, struct Allocator alloc) {
 																		\
 	struct String prefix = String_createRefUnsafeConst(prefixRaw);		\
 																		\
-	*result = String_createEmpty();										\
+	if (result->len)													\
+		return (struct Error) { 										\
+			.genericError = GenericError_InvalidOperation, 				\
+			.errorSubId = 1 											\
+		};																\
 																		\
+	*result = String_createEmpty();										\
 	struct Error err = String_reserve(									\
 		result, maxVal + prefix.len, allocator							\
 	);																	\
 																		\
-	if (err.genericError)												\
+	if (err.genericError) 												\
 		return err;														\
 																		\
-	err = String_appendString(&result, prefix, allocator);				\
+	err = String_appendString(result, prefix, allocator);				\
 																		\
-	if (err.genericError)												\
+	if (err.genericError) {												\
+		String_free(result, allocator);									\
 		return err;														\
+	}																	\
 																		\
 	Bool foundFirstNonZero = leadingZeros;								\
 																		\
@@ -430,7 +437,7 @@ struct Error String_reserve(struct String *str, U64 siz, struct Allocator alloc)
 	if (!str)
 		return (struct Error) { .genericError = GenericError_NullPointer };
 
-	if (String_isRef(*str))
+	if (String_isRef(*str) && str->len)
 		return (struct Error) { .genericError = GenericError_InvalidOperation };
 
 	if (!alloc.alloc || !alloc.free)
@@ -450,8 +457,7 @@ struct Error String_reserve(struct String *str, U64 siz, struct Allocator alloc)
 	err = alloc.free(alloc.ptr, Buffer_createRef(str->ptr, str->capacity));
 
 	str->capacity = b.siz;
-	str->len = siz;
-	str->ptr = b.ptr;
+	str->ptr = (C8*) b.ptr;
 	return err;
 }
 
@@ -460,7 +466,7 @@ struct Error String_resize(struct String *str, U64 siz, C8 defaultChar, struct A
 	if (!str)
 		return (struct Error) { .genericError = GenericError_NullPointer };
 
-	if (String_isRef(*str))
+	if (String_isRef(*str) && str->len)
 		return (struct Error) { .genericError = GenericError_InvalidOperation };
 
 	if (!alloc.alloc || !alloc.free)
@@ -480,7 +486,7 @@ struct Error String_resize(struct String *str, U64 siz, C8 defaultChar, struct A
 
 	if (siz > str->capacity) {
 
-		if (siz * 3 / 2 * 2 / 3 != siz)
+		if (siz * 3 / 3 != siz)
 			return (struct Error) { .genericError = GenericError_Overflow };
 
 		//Reserve 50% more to ensure we don't resize too many times
@@ -573,8 +579,8 @@ struct Error String_insertString(struct String *s, struct String other, U64 i, s
 	//Move one to the right
 
 	Buffer_revCopy(
-		Buffer_createRef(s->ptr + i + other.len, s->len - other.len),
-		Buffer_createRef(s->ptr + i, s->len - other.len)
+		Buffer_createRef(s->ptr + i + other.len, oldLen - i),
+		Buffer_createRef(s->ptr + i, oldLen - i)
 	);
 
 	Buffer_copy(
@@ -614,7 +620,7 @@ struct Error String_replaceAllString(
 			for (U64 j = ptr[i], k = j + replace.len, l = 0; j < k; ++j, ++l)
 				s->ptr[j] = replace.ptr[l];
 
-		return Buffer_free(&finds, allocator);
+		return List_free(&finds, allocator);
 	}
 
 	//Shrink replaces
@@ -650,11 +656,11 @@ struct Error String_replaceAllString(
 		struct Error err = String_resize(s, s->len - diff * finds.length, ' ', allocator);
 		
 		if (err.genericError) {
-			Buffer_free(&finds, allocator);
+			List_free(&finds, allocator);
 			return err;
 		}
 
-		return Buffer_free(&finds, allocator);
+		return List_free(&finds, allocator);
 	}
 
 	//Grow replaces
@@ -667,7 +673,7 @@ struct Error String_replaceAllString(
 	struct Error err = String_resize(s, s->len + diff * finds.length, ' ', allocator);
 
 	if (err.genericError) {
-		Buffer_free(&finds, allocator);
+		List_free(&finds, allocator);
 		return err;
 	}
 
@@ -698,7 +704,7 @@ struct Error String_replaceAllString(
 		newLoc -= replace.len;
 	}
 
-	return Buffer_free(&finds, allocator);
+	return List_free(&finds, allocator);
 }
 
 struct Error String_replaceString(
@@ -835,9 +841,9 @@ U64 String_countAllString(struct String s, struct String other, enum StringCase 
 
 		Bool match = true;
 
-		for (U64 j = i, k = 0; j < s.len && k < other.len; ++j, ++k)
+		for (U64 l = i, k = 0; l < s.len && k < other.len; ++l, ++k)
 			if (
-				C8_transform(s.ptr[j], (enum StringTransform)casing) !=
+				C8_transform(s.ptr[l], (enum StringTransform)casing) !=
 				C8_transform(other.ptr[k], (enum StringTransform)casing)
 			) {
 				match = false;
@@ -860,28 +866,22 @@ struct List String_findAll(
 	enum StringCase caseSensitive
 ) {
 
-	U64 count = String_countAll(s, c, caseSensitive);
-
-	if (!count)
-		return Buffer_createNull();
-
-	//TODO: Array
-
-	struct Buffer b = Buffer_createNull();
-	struct Error err = Buffer_createUninitializedBytes(sizeof(U64) * count, alloc, &b);
+	struct List l = List_createEmpty(sizeof(U64));
+	struct Error err = List_reserve(&l, s.len / 25 + 16, alloc);
 
 	if (err.genericError)
-		return Buffer_createNull();
+		return List_createEmpty(sizeof(U64));
 
 	c = C8_transform(c, (enum StringTransform) caseSensitive);
 
-	U64 *v = (U64*) b.ptr, j = 0;
-
 	for (U64 i = 0; i < s.len; ++i)
 		if (c == C8_transform(s.ptr[i], (enum StringTransform)caseSensitive))
-			v[j++] = i;
+			if ((err = List_pushBack(&l, Buffer_createRef(&i, sizeof(i)), alloc)).genericError) {
+				List_free(&l, alloc);
+				return List_createEmpty(sizeof(U64));
+			}
 
-	return b;
+	return l;
 }
 
 struct List String_findAllString(
@@ -891,18 +891,14 @@ struct List String_findAllString(
 	enum StringCase casing
 ) {
 
-	U64 count = String_countAllString(s, other, casing);
+	if(!other.len)
+		return List_createEmpty(sizeof(U64));
 
-	if (!count)
-		return Buffer_createNull();
-
-	struct Buffer b = Buffer_createNull();
-	struct Error err = Buffer_createUninitializedBytes(sizeof(U64) * count, alloc, &b);
+	struct List l = List_createEmpty(sizeof(U64));
+	struct Error err = List_reserve(&l, s.len / other.len / 25 + 16, alloc);
 
 	if (err.genericError)
-		return Buffer_createNull();
-
-	U64 *v = (U64*) b.ptr, j = 0;
+		return List_createEmpty(sizeof(U64));
 
 	for (U64 i = 0; i < s.len; ++i) {
 
@@ -918,12 +914,17 @@ struct List String_findAllString(
 			}
 
 		if (match) {
-			v[j++] = i;
+
+			if ((err = List_pushBack(&l, Buffer_createRef(&i, sizeof(i)), alloc)).genericError) {
+				List_free(&l, alloc);
+				return List_createEmpty(sizeof(U64));
+			}
+
 			i += s.len - 1;
 		}
 	}
 
-	return b;
+	return l;
 }
 
 U64 String_findFirst(struct String s, C8 c, enum StringCase caseSensitive) {
@@ -944,6 +945,8 @@ U64 String_findLast(struct String s, C8 c, enum StringCase caseSensitive) {
 	for (U64 i = s.len - 1; i != U64_MAX; --i)
 		if (C8_transform(s.ptr[i], (enum StringTransform)caseSensitive) == c)
 			return i;
+
+	//TODO: Don't return len on end!
 
 	return s.len;
 }
@@ -980,7 +983,6 @@ U64 String_findLastString(struct String s, struct String other, enum StringCase 
 	if(!other.len)
 		return 0;
 
-	U64 j = 0;
 	U64 i = s.len - 1;
 
 	for (; i != U64_MAX; --i) {
@@ -1125,7 +1127,7 @@ Bool String_parseDecSigned(struct String s, I64 *result) {
 			return true;
 		}
 
-		if (!neg && *(U64*)result > I64_MAX)
+		if (!neg && *(U64*)result > (U64) I64_MAX)
 			return false;
 
 		if(neg)
@@ -1412,7 +1414,6 @@ Bool String_erase(struct String *s, C8 c, enum StringCase caseSensitive, Bool is
 
 	c = C8_transform(c, (enum StringTransform) caseSensitive);
 
-	U64 j = 0;
 	Bool hadMatch = false;
 
 	//Skipping first match
@@ -1473,7 +1474,7 @@ Bool String_eraseAll(struct String *s, C8 c, enum StringCase casing) {
 	if(!s || String_isRef(*s))
 		return false;
 
-	c = C8_transform(s, (enum StringTransform) casing);
+	c = C8_transform(c, (enum StringTransform) casing);
 
 	U64 out = 0;
 
@@ -1641,7 +1642,7 @@ struct Error StringList_free(struct StringList *arr, struct Allocator alloc) {
 	return freeErr;
 }
 
-struct Error StringList_createCopy(const struct StringList *toCopy, struct StringList **arr, struct Allocator alloc) {
+struct Error StringList_createCopy(const struct StringList *toCopy, struct StringList *arr, struct Allocator alloc) {
 
 	if(!toCopy || !toCopy->len)
 		return (struct Error){ .genericError = GenericError_NullPointer };
@@ -1653,7 +1654,7 @@ struct Error StringList_createCopy(const struct StringList *toCopy, struct Strin
 
 	for (U64 i = 0; i < toCopy->len; ++i) {
 
-		err = String_createCopy(toCopy->ptr[i], alloc, (*arr)->ptr + i);
+		err = String_createCopy(toCopy->ptr[i], alloc, arr->ptr + i);
 
 		if (err.genericError) {
 			StringList_free(arr, alloc);
@@ -1728,4 +1729,30 @@ U64 String_hash(struct String s) {
 		h = FNVHash_apply(h, last);
 
 	return h;
+}
+
+struct String String_getFilePath(struct String *str) {
+
+	if(!String_formatPath(str))
+		return String_createEmpty();
+
+	struct String res;
+
+	if(String_cutBefore(*str, '/', StringCase_Insensitive, false, &res))
+		return res;
+	
+	return String_createEmpty();
+}
+
+struct String String_getBasePath(struct String *str) {
+
+	if(!String_formatPath(str))
+		return String_createEmpty();
+
+	struct String res;
+
+	if(String_cutAfter(*str, '/', StringCase_Insensitive, false, &res))
+		return res;
+
+	return String_createEmpty();
 }

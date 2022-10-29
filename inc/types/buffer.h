@@ -1,5 +1,6 @@
 #pragma once
 #include "math/vec.h"
+#include "allocator.h"
 
 struct BitRef {
 	U8 *ptr, off;
@@ -63,8 +64,8 @@ struct Error Buffer_neq(struct Buffer buf0, struct Buffer buf1, Bool *result);		
 
 //These should never be Buffer_free-d because Buffer doesn't know if it's allocated
 
-struct Buffer Buffer_createNull() { return (struct Buffer) { 0 }; }
-struct Buffer Buffer_createRef(void *v, U64 len) { return (struct Buffer) { .ptr = (U8*) v, .siz = len }; }
+inline struct Buffer Buffer_createNull() { return (struct Buffer) { 0 }; }
+inline struct Buffer Buffer_createRef(void *v, U64 len) { return (struct Buffer) { .ptr = (U8*) v, .siz = len }; }
 
 //All these functions allocate, so Buffer_free them later
 

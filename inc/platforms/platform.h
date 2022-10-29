@@ -34,7 +34,3 @@ void Program_cleanup();
 
 user_impl extern int Program_run();
 user_impl extern void Program_exit();
-
-//Errors with stacktraces
-
-struct Error Error_traced(enum GenericError err, U32 subId, U32 paramId, U32 paramSubId, U64 paramValue0, U64 paramValue1);

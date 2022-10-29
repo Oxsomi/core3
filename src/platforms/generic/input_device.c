@@ -11,7 +11,6 @@
 //u2[booleanStates]
 
 struct InputButton *InputDevice_getButton(struct InputDevice dev, U16 localHandle) {
-
 	return localHandle >= dev.buttons ? NULL : 
 		(struct InputButton*)((struct InputAxis*) dev.handles.ptr + dev.axes) + localHandle;
 }
@@ -23,7 +22,7 @@ struct InputAxis *InputDevice_getAxis(struct InputDevice dev, U16 localHandle) {
 
 inline F32 *InputDevice_getAxisValue(struct InputDevice dev, U16 localHandle, Bool isCurrent) {
 	return localHandle >= dev.axes ? NULL : 
-		(F32*)dev.states.ptr + (localHandle << 1) + isCurrent;
+		(F32*)dev.states.ptr + ((U64)localHandle << 1) + isCurrent;
 }
 
 inline struct BitRef InputDevice_getButtonValue(struct InputDevice dev, U16 localHandle, Bool isCurrent) {
@@ -51,7 +50,7 @@ struct Error InputDevice_create(U16 buttons, U16 axes, enum InputDeviceType type
 	};
 
 	U64 handles = sizeof(struct InputAxis) * axes + sizeof(struct InputButton) * buttons;
-	U64 states = sizeof(F32) * 2 * axes + (buttons * 2 + 7) >> 3;
+	U64 states = sizeof(F32) * 2 * axes + (((U64)buttons * 2 + 7) >> 3);
 
 	struct Error err = Buffer_createZeroBits(handles, Platform_instance.alloc, &result->handles);
 
@@ -98,16 +97,12 @@ struct Error InputDevice_createButton(
 	struct InputDevice d, 
 	U16 localHandle, 
 	struct String keyName, 
-	C8 keyContents,	
-	C8 keyAltContents,
 	InputHandle *res
 ) {
+	if(d.type == InputDeviceType_Undefined)
+		return (struct Error) { .genericError = GenericError_InvalidOperation };
 
 	InputDeviceCreate(Button);
-
-	inputType->contents = keyContents;
-	inputType->altContents = keyAltContents;
-
 	*res = InputDevice_createHandle(d, localHandle, InputType_Button);
 	return Error_none();
 }
@@ -119,6 +114,9 @@ struct Error InputDevice_createAxis(
 	F32 deadZone, 
 	InputHandle *res
 ) {
+	if(d.type == InputDeviceType_Undefined)
+		return (struct Error) { .genericError = GenericError_InvalidOperation };
+
 	InputDeviceCreate(Axis);
 	*res = InputDevice_createHandle(d, localHandle, InputType_Axis);
 	inputType->deadZone = deadZone;
@@ -127,28 +125,27 @@ struct Error InputDevice_createAxis(
 
 struct Error InputDevice_free(struct InputDevice *dev) {
 
+	if(dev->type == InputDeviceType_Undefined)
+		return Error_none();
+
 	void *allocator = Platform_instance.alloc.ptr;
 	FreeFunc free = Platform_instance.alloc.free;
 
-	struct Error err = free(allocator, dev->handles);
+	struct Error err = free(allocator, dev->handles), errTemp;
 
-	if(err.genericError) {
+	if((errTemp = free(allocator, dev->states)).genericError)
+		err = errTemp;
 
-		free(allocator, dev->states);		//Still try to free the other
-		*dev = (struct InputDevice){ 0 };
+	if((errTemp = free(allocator, dev->dataExt)).genericError)
+		err = errTemp;
 
-		return err;
-	}
-
-	err = free(allocator, dev->states);
 	*dev = (struct InputDevice){ 0 };
-
 	return err;
 }
 
 enum InputState InputDevice_getState(struct InputDevice d, InputHandle handle) {
 
-	if(!InputDevice_isButton(d, handle))
+	if(d.type == InputDeviceType_Undefined || !InputDevice_isButton(d, handle))
 		return InputState_Up;
 
 	U16 i = InputDevice_getLocalHandle(d, handle);
@@ -158,12 +155,12 @@ enum InputState InputDevice_getState(struct InputDevice d, InputHandle handle) {
 }
 
 F32 InputDevice_getCurrentAxis(struct InputDevice d, InputHandle handle) {
-	return !InputDevice_isAxis(d, handle) ? 0 : 
+	return d.type == InputDeviceType_Undefined || !InputDevice_isAxis(d, handle) ? 0 : 
 		*InputDevice_getAxisValue(d, InputDevice_getLocalHandle(d, handle), true);
 }
 
 F32 InputDevice_getPreviousAxis(struct InputDevice d, InputHandle handle) {
-	return !InputDevice_isAxis(d, handle) ? 0 : 
+	return d.type == InputDeviceType_Undefined || !InputDevice_isAxis(d, handle) ? 0 : 
 		*InputDevice_getAxisValue(d, InputDevice_getLocalHandle(d, handle), false);
 }
 
@@ -172,6 +169,9 @@ F32 InputDevice_getDeltaAxis(struct InputDevice d, InputHandle handle) {
 }
 
 struct String InputDevice_getName(struct InputDevice d, InputHandle handle) {
+
+	if(d.type == InputDeviceType_Undefined)
+		return String_createEmpty();
 
 	U16 localHandle = InputDevice_getLocalHandle(d, handle);
 
@@ -182,6 +182,9 @@ struct String InputDevice_getName(struct InputDevice d, InputHandle handle) {
 }
 
 InputHandle InputDevice_getHandle(struct InputDevice d, struct String name) {
+
+	if(d.type == InputDeviceType_Undefined)
+		return InputDevice_invalidHandle();
 
 	//TODO: We probably wanna optimize this at some point like use a hashmap
 
@@ -201,29 +204,19 @@ InputHandle InputDevice_getHandle(struct InputDevice d, struct String name) {
 		))
 			return InputDevice_createHandle(d, i, InputType_Axis);
 
-	return InputDevice_invalidHandle(d);
+	return InputDevice_invalidHandle();
 }
 
 F32 InputDevice_getDeadZone(struct InputDevice d, InputHandle handle) {
-	return !InputDevice_isAxis(d, handle) ? 0 : 
+	return d.type == InputDeviceType_Undefined || !InputDevice_isAxis(d, handle) ? 0 : 
 		InputDevice_getAxis(d, InputDevice_getLocalHandle(d, handle))->deadZone;
-}
-
-C8 InputDevice_getResolvedChar(struct InputDevice d, InputHandle handle) {
-	return InputDevice_isAxis(d, handle) ? 0 : 
-		InputDevice_getButton(d, InputDevice_getLocalHandle(d, handle))->contents;
-}
-
-C8 InputDevice_getResolvedAltChar(struct InputDevice d, InputHandle handle) {
-	return InputDevice_isAxis(d, handle) ? 0 : 
-		InputDevice_getButton(d, InputDevice_getLocalHandle(d, handle))->altContents;
 }
 
 //This should only be handled by platform updating the input device
 
 Bool InputDevice_setCurrentState(struct InputDevice d, InputHandle handle, Bool v) {
 
-	if(!InputDevice_isButton(d, handle))
+	if(d.type == InputDeviceType_Undefined || !InputDevice_isButton(d, handle))
 		return false;
 
 	struct BitRef b = InputDevice_getButtonValue(d, InputDevice_getLocalHandle(d, handle), true);
@@ -234,7 +227,7 @@ Bool InputDevice_setCurrentState(struct InputDevice d, InputHandle handle, Bool 
 
 Bool InputDevice_setCurrentAxis(struct InputDevice d, InputHandle handle, F32 v) {
 
-	if(!InputDevice_isAxis(d, handle))
+	if(d.type == InputDeviceType_Undefined || !InputDevice_isAxis(d, handle))
 		return false;
 
 	*InputDevice_getAxisValue(d, InputDevice_getLocalHandle(d, handle), true) = v;
@@ -242,6 +235,9 @@ Bool InputDevice_setCurrentAxis(struct InputDevice d, InputHandle handle, F32 v)
 }
 
 void InputDevice_markUpdate(struct InputDevice d) {
+
+	if(d.type == InputDeviceType_Undefined)
+		return;
 
 	for(U16 i = 0; i < d.axes; ++i) {
 		F32 *start = InputDevice_getAxisValue(d, i, false);

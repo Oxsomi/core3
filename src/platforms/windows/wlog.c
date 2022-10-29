@@ -1,11 +1,14 @@
 #include "platforms/log.h"
 #include "platforms/thread.h"
+#include "platforms/platform.h"
+#include "platforms/errorx.h"
 #include "types/timer.h"
 
 //Unfortunately before Windows 10 it doesn't support printing colors into console using printf
 //We also use Windows dependent stack tracing
 
 #define MICROSOFT_WINDOWS_WINBASE_H_DEFINE_INTERLOCKED_CPLUSPLUS_OVERLOADS 0
+#define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 #include <signal.h>
 #include <DbgHelp.h>
@@ -43,7 +46,10 @@ static const WORD colors[] = {
 	12	/* bright red */
 };
 
-void Log_printCapturedStackTrace(const StackTrace stackTrace, enum LogLevel lvl) {
+void Log_printCapturedStackTraceCustom(const void **stackTrace, U64 stackSize, enum LogLevel lvl, enum LogOptions opt) {
+
+	if(lvl == LogLevel_Fatal)
+		lvl = LogLevel_Error;
 
 	HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
 	SetConsoleTextAttribute(handle, colors[lvl]);
@@ -61,7 +67,7 @@ void Log_printCapturedStackTrace(const StackTrace stackTrace, enum LogLevel lvl)
 	Bool anySymbol = false;
 
 	if(hasSymbols)
-		for (U64 i = 0; i < StackTrace_SIZE && stackTrace[i]; ++i, ++stackCount) {
+		for (U64 i = 0; i < stackSize && i < StackTrace_SIZE && stackTrace[i]; ++i, ++stackCount) {
 
 			U64 addr = (U64) stackTrace[i];
 
@@ -81,7 +87,7 @@ void Log_printCapturedStackTrace(const StackTrace stackTrace, enum LogLevel lvl)
 			symbol->SizeOfStruct = sizeof(symbolData);
 			symbol->MaxNameLength = MAX_PATH;
 
-			const C8 *symbolName = symbol->Name;
+			C8 *symbolName = symbol->Name;
 
 			if (!SymGetSymFromAddr(process, addr, NULL, symbol))
 				continue;
@@ -96,16 +102,48 @@ void Log_printCapturedStackTrace(const StackTrace stackTrace, enum LogLevel lvl)
 				continue;
 
 			struct CapturedStackTrace *capture = captured + i;
-			capture->mod = String_createRefConst(modulePath, MAX_PATH);
-			capture->sym = String_createRefConst(symbolName, MAX_PATH);
+			capture->mod = String_createRefDynamic(modulePath, MAX_PATH);
+			capture->sym = String_createRefDynamic(symbolName, MAX_PATH);
+
+			String_formatPath(&capture->sym);
 
 			if (moduleBase == (U64)processModule)
-				capture->mod = String_lastPath(capture->mod);
+				capture->mod = String_getFilePath(&capture->mod);
 
 			if(line.FileName)
 				capture->fil = String_createRefConst(line.FileName, MAX_PATH);
 
+			//Copy strings to heap, since they'll go out of scope
+
+			struct Error err;
+
+			if(capture->mod.len)
+				if ((err = String_createCopy(capture->mod, Platform_instance.alloc, &capture->mod)).genericError)
+					goto cleanup;
+
+			if(capture->sym.len)
+				if ((err = String_createCopy(capture->sym, Platform_instance.alloc, &capture->sym)).genericError)
+					goto cleanup;
+
+			if(capture->fil.len)
+				if ((err = String_createCopy(capture->fil, Platform_instance.alloc, &capture->fil)).genericError)
+					goto cleanup;
+
 			capture->lin = line.LineNumber;
+			continue;
+
+			//Cleanup the stack if we can't move anything to heap anymore
+
+		cleanup:
+			
+			for (U64 j = 0; j < i; ++j) {
+				String_free(&captured[j].fil, Platform_instance.alloc);
+				String_free(&captured[j].sym, Platform_instance.alloc);
+				String_free(&captured[j].mod, Platform_instance.alloc);
+			}
+
+			Error_printx(err, lvl, opt);
+			return;
 		}
 
 	if(hasSymbols && anySymbol)
@@ -124,18 +162,24 @@ void Log_printCapturedStackTrace(const StackTrace stackTrace, enum LogLevel lvl)
 			printf(
 				"%p: %.*s!%.*s (%.*s, Line %u)\n", 
 				stackTrace[i], 
-				capture.mod.len, capture.mod.ptr, 
-				capture.sym.len, capture.sym.ptr,
-				capture.fil.len, capture.fil.ptr, 
+				(int) U64_min(I32_MAX, capture.mod.len), capture.mod.ptr, 
+				(int) U64_min(I32_MAX, capture.sym.len), capture.sym.ptr,
+				(int) U64_min(I32_MAX, capture.fil.len), capture.fil.ptr, 
 				capture.lin
 			);
 
 		else printf(
 			"%p: %.*s!%.*s\n", 
 			stackTrace[i], 
-			capture.mod.len, capture.mod.ptr, 
-			capture.sym.len, capture.sym.ptr
+			(int) U64_min(I32_MAX, capture.mod.len), capture.mod.ptr, 
+			(int) U64_min(I32_MAX, capture.sym.len), capture.sym.ptr
 		);
+
+		//We now don't need the strings anymore
+
+		String_free(&capture.fil, Platform_instance.alloc);
+		String_free(&capture.sym, Platform_instance.alloc);
+		String_free(&capture.mod, Platform_instance.alloc);
 	}
 
 	if(hasSymbols)
@@ -143,6 +187,7 @@ void Log_printCapturedStackTrace(const StackTrace stackTrace, enum LogLevel lvl)
 }
 
 void Log_log(enum LogLevel lvl, enum LogOptions options, struct LogArgs args) {
+
 
 	Ns t = Timer_now();
 
@@ -205,7 +250,7 @@ void Log_log(enum LogLevel lvl, enum LogOptions options, struct LogArgs args) {
 	if (hasPrepend)
 		printf("]: ");
 
-	if (hrErr)
+	if (strlen(hrErr))
 		printf("%s\n", hrErr);
 
 	//Print to console and debug window
@@ -215,7 +260,7 @@ void Log_log(enum LogLevel lvl, enum LogOptions options, struct LogArgs args) {
 	for (U64 i = 0; i < args.argc; ++i)
 		printf(
 			"%.*s%s", 
-			args.args[i].len, args.args[i].ptr,
+			(int) U64_min(I32_MAX, args.args[i].len), args.args[i].ptr,
 			newLine
 		);
 

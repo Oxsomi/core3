@@ -3,29 +3,34 @@
 #include "platforms/platform.h"
 #include "platforms/log.h"
 #include "platforms/input_device.h"
+#include "platforms/keyboard.h"
+#include "platforms/mouse.h"
+#include "platforms/errorx.h"
 #include "types/timer.h"
 
 #include <stdlib.h>
 
 #define WIN32_LEAN_AND_MEAN
+#define MICROSOFT_WINDOWS_WINBASE_H_DEFINE_INTERLOCKED_CPLUSPLUS_OVERLOADS 0
 #include <Windows.h>
 
-//We probably won't need more windows for any other reason. Otherwise just use window in a window
-//
-const U8 WindowManager_maxTotalPhysicalWindowCount = 16;
+const U16 Window_maxDevices = 64;
+const U16 Window_maxMonitors = 64;
 
 void WWindow_updateMonitors(struct Window *w) {
 
 	//TODO: Query monitors
 	//EnumDisplayMonitors()
 
-	if(w->callbacks.updateMonitors)
-		w->callbacks.updateMonitors(w);
+	if(w->callbacks.onMonitorChange)
+		w->callbacks.onMonitorChange(w);
 }
 
-LRESULT CALLBACK onCallback(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
+LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
 
 	struct Window *w = (struct Window*) GetWindowLongPtrA(hwnd, 0);
+
+	//TODO: Lock + Unlock window
 
 	if(!w)
 		return DefWindowProc(hwnd, message, wParam, lParam);
@@ -33,6 +38,9 @@ LRESULT CALLBACK onCallback(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 	switch (message) {
 
 		case WM_DESTROY: {
+
+			if(w->callbacks.onDestroy)
+				w->callbacks.onDestroy(w);
 
 			//TODO: Properly destroy the window
 
@@ -52,10 +60,15 @@ LRESULT CALLBACK onCallback(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 			if(message == WM_SETFOCUS)
 				w->flags |= WindowFlags_IsFocussed;
 
-			else w->flags &= ~WindowFlags_IsFocussed;
+			else {
 
-			if(w->callbacks.updateFocus)
-				w->callbacks.updateFocus(w);
+				//TODO: Reset keys because otherwise they might hang
+
+				w->flags &= ~WindowFlags_IsFocussed;
+			}
+
+			if(w->callbacks.onUpdateFocus)
+				w->callbacks.onUpdateFocus(w);
 
 			break;
 
@@ -79,224 +92,413 @@ LRESULT CALLBACK onCallback(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 			struct Error err = Buffer_createUninitializedBytes(size, Platform_instance.alloc, &buf);
 
 			if(err.genericError) {
-				Log_fatal(String_createRefUnsafeConst("Couldn't allocate input data bytes"), LogOptions_Default);
+				Error_printx(err, LogLevel_Error, LogOptions_Default);
 				break;
 			}
 
 			if (GetRawInputData((HRAWINPUT)lParam, RID_INPUT, buf.ptr, &size, sizeof(RAWINPUTHEADER)) != size) {
-				Log_fatal(String_createRefUnsafeConst("Couldn't get raw input"), LogOptions_Default);
+				Log_error(String_createRefUnsafeConst("Couldn't get raw input"), LogOptions_Default);
 				break;
 			}
 
+			//Grab device from the list
+
 			RAWINPUT *data = (RAWINPUT*) buf.ptr;
 
-			RECT rect;
-			GetClientRect(hwnd, &rect);
+			struct InputDevice *beg = (struct InputDevice*) List_begin(w->devices);
+			struct InputDevice *end = (struct InputDevice*) List_end(w->devices);
 
-			if(data->header.hDevice)
-				if (auto *ptr = (WWindow*)GetWindowLongPtrA(hwnd, 0)) {
+			struct InputDevice *dev = beg;
 
-					auto *vinterface = ptr->info->vinterface;
+			for(; dev != end; ++dev)
+				if(*(HANDLE*) dev->dataExt.ptr == (HANDLE) lParam)
+					break;
 
-					InputDevice *&dvc = ptr->devices[data->header.hDevice];
+			if(!data->header.hDevice || dev == end)
+				goto cleanup;
 
-					if (dvc->getType() == InputDevice::Type::KEYBOARD) {
+			if (dev->type == InputDeviceType_Keyboard) {
 
-						auto &keyboardDat = data->data.keyboard;
+				RAWKEYBOARD keyboardDat = data->data.keyboard;
 
-						U64 id = WKey::idByValue(WKey::_E(keyboardDat.VKey));
+				Bool isKeyDown = !(keyboardDat.Flags & 1);
 
-						//TODO: Keyboard should initialize CAPS, SHIFT, ALT if they get changed or on start/switch
+				//Ensure the key state is up to date
+				//It's a shame we have to get the state, but we can't rely on our program to know the exact state
+				//Because locks can be toggled from a different program
 
-						//Only send recognized keys
+				InputDevice_setFlagTo(dev, KeyboardFlags_Caps, GetKeyState(VK_CAPITAL) & 1);
+				InputDevice_setFlagTo(dev, KeyboardFlags_NumLock, GetKeyState(VK_NUMLOCK) & 1);
+				InputDevice_setFlagTo(dev, KeyboardFlags_ScrollLock, GetKeyState(VK_SCROLL) & 1);
 
-						if (id != WKey::count) {
+				//Translate key to our system and set corresponding device flags
 
-							String keyName = WKey::nameById(id);
-							U64 keyCode = Key::idByName(keyName);
-							Bool isKeyDown = !(keyboardDat.Flags & 1);
+				InputHandle handle = InputDevice_invalidHandle();
 
-							Bool pressed = dvc->getCurrentState(ButtonHandle(keyCode));
-							dvc->setState(ButtonHandle(keyCode), isKeyDown);
+				switch (keyboardDat.VKey) {
 
-							if(pressed != isKeyDown)
-								if (vinterface) {
+					case VK_LSHIFT:
+					case VK_RSHIFT:
+					case VK_SHIFT:
+						InputDevice_setFlagTo(dev, KeyboardFlags_Shift, isKeyDown);
+						handle = Key_Shift;
+						break;
 
-									if (isKeyDown)
-										vinterface->onInputActivate(ptr->info, dvc, InputHandle(keyCode));
-									else 
-										vinterface->onInputDeactivate(ptr->info, dvc, InputHandle(keyCode));
+					case VK_LMENU:
+					case VK_RMENU:
+					case VK_MENU:
+						InputDevice_setFlagTo(dev, KeyboardFlags_Alt, isKeyDown);
+						handle = Key_Alt;
+						break;
 
-									vinterface->onInputUpdate(ptr->info, dvc, InputHandle(keyCode), isKeyDown);
-								};
-						}
+					case VK_LCONTROL:
+					case VK_RCONTROL:
+					case VK_CONTROL:
+						InputDevice_setFlagTo(dev, KeyboardFlags_Control, isKeyDown);
+						handle = Key_Ctrl;
+						break;
 
-						return 0;
+					case VK_NUMLOCK:
+						InputDevice_setFlagTo(dev, KeyboardFlags_NumLock, isKeyDown);
+						handle = Key_NumLock;
+						break;
 
-					} else {
+					case VK_SCROLL:
+						InputDevice_setFlagTo(dev, KeyboardFlags_ScrollLock, isKeyDown);
+						handle = Key_ScrollLock;
+						break;
 
-						auto &mouseDat = data->data.mouse;
+					case VK_BACK:				handle = Key_Backspace;		break;
+					case VK_SPACE:				handle = Key_Space;			break;
+					case VK_TAB:				handle = Key_Tab;			break;
+					case VK_PAUSE:				handle = Key_Pause;			break;
+					case VK_CAPITAL:			handle = Key_Caps;			break;
+					case VK_ESCAPE:				handle = Key_Escape;		break;
+					case VK_PRIOR:				handle = Key_PageUp;		break;
+					case VK_NEXT:				handle = Key_PageDown;		break;
+					case VK_END:				handle = Key_End;			break;
+					case VK_HOME:				handle = Key_Home;			break;
+					case VK_SELECT:				handle = Key_Select;		break;
+					case VK_PRINT:				handle = Key_Print;			break;
+					case VK_EXECUTE:			handle = Key_Execute;		break;
+					case VK_SNAPSHOT:			handle = Key_PrintScreen;	break;
+					case VK_INSERT:				handle = Key_Insert;		break;
+					case VK_BROWSER_BACK:		handle = Key_Back;			break;
+					case VK_BROWSER_FORWARD:	handle = Key_Forward;		break;
+					case VK_SLEEP:				handle = Key_Sleep;			break;
+					case VK_BROWSER_REFRESH:	handle = Key_Refresh;		break;
+					case VK_BROWSER_STOP:		handle = Key_Stop;			break;
+					case VK_BROWSER_SEARCH:		handle = Key_Search;		break;
+					case VK_BROWSER_FAVORITES:	handle = Key_Favorites;		break;
+					case VK_BROWSER_HOME:		handle = Key_Start;			break;
+					case VK_VOLUME_MUTE:		handle = Key_Mute;			break;
+					case VK_VOLUME_DOWN:		handle = Key_VolumeDown;	break;
+					case VK_VOLUME_UP:			handle = Key_VolumeUp;		break;
+					case VK_MEDIA_NEXT_TRACK:	handle = Key_Skip;			break;
+					case VK_MEDIA_PREV_TRACK:	handle = Key_Previous;		break;
+					case VK_CLEAR:				handle = Key_Clear;			break;
+					case VK_ZOOM:				handle = Key_Zoom;			break;
+					case VK_RETURN:				handle = Key_Enter;			break;
+					case VK_DELETE:				handle = Key_Delete;		break;
+					case VK_HELP:				handle = Key_Help;			break;
+					case VK_APPS:				handle = Key_Apps;			break;
 
-						for (U64 i = 0; i < 5; ++i) {
+					case VK_LEFT:				handle = Key_Left;			break;
+					case VK_UP:					handle = Key_Up;			break;
+					case VK_RIGHT:				handle = Key_Right;			break;
+					case VK_DOWN:				handle = Key_Down;			break;
 
-							if (mouseDat.usButtonFlags & (1 << (i << 1))) {
+					case VK_MULTIPLY:			handle = Key_NumpadMul;		break;
+					case VK_ADD:				handle = Key_NumpadAdd;		break;
+					case VK_DECIMAL:			handle = Key_NumpadDec;		break;
+					case VK_DIVIDE:				handle = Key_NumpadDiv;		break;
+					case VK_SUBTRACT:			handle = Key_NumpadSub;		break;
 
-								dvc->setPreviousState(ButtonHandle(i), dvc->getPreviousState(ButtonHandle(i)));
-								dvc->setState(ButtonHandle(i), true);
+					case VK_OEM_PLUS:			handle = Key_Equals;		break;
+					case VK_OEM_COMMA:			handle = Key_Comma;			break;
+					case VK_OEM_MINUS:			handle = Key_Minus;			break;
+					case VK_OEM_PERIOD:			handle = Key_Period;		break;
+					case VK_OEM_1:				handle = Key_Semicolon;		break;
+					case VK_OEM_2:				handle = Key_Slash;			break;
+					case VK_OEM_3:				handle = Key_Acute;			break;
+					case VK_OEM_4:				handle = Key_LBracket;		break;
+					case VK_OEM_6:				handle = Key_RBracket;		break;
+					case VK_OEM_5:				handle = Key_Backslash;		break;
+					case VK_OEM_7:				handle = Key_Quote;			break;
 
-								if (vinterface) {
-									vinterface->onInputActivate(ptr->info, dvc, InputDevice::Handle(i));
-									vinterface->onInputUpdate(ptr->info, dvc, InputHandle(i), true);
-								}
-							}
+					//Unknown key or common key
 
-							else if (mouseDat.usButtonFlags & (2 << (i << 1))) {
+					default:
 
-								dvc->setPreviousState(ButtonHandle(i), true);
-								dvc->setState(ButtonHandle(i), false);
+						if(keyboardDat.VKey >= '0' && keyboardDat.VKey <= '9')
+							handle = Key_0 + (keyboardDat.VKey - '0');
 
-								if (vinterface) {
-									vinterface->onInputDeactivate(ptr->info, dvc, InputDevice::Handle(i));
-									vinterface->onInputUpdate(ptr->info, dvc, InputHandle(i), false);
-								}
-							}
+						else if(keyboardDat.VKey >= 'A' && keyboardDat.VKey <= 'Z')
+							handle = Key_A + (keyboardDat.VKey - 'A');
 
-						}
+						else if(keyboardDat.VKey >= VK_F1 && keyboardDat.VKey <= VK_F24)
+							handle = Key_F1 + (keyboardDat.VKey - VK_F1);
 
-						if (mouseDat.usButtonFlags & RI_MOUSE_WHEEL) {
+						else if(keyboardDat.VKey >= VK_NUMPAD0 && keyboardDat.VKey <= VK_NUMPAD9)
+							handle = Key_Numpad0 + (keyboardDat.VKey - VK_NUMPAD0);
 
-							F32 delta = I16(mouseDat.usButtonData) / F32(WHEEL_DELTA);
-							dvc->setAxis(MouseAxis::Axis_wheel_y, delta);
+						else goto cleanup;
 
-							if (vinterface)
-								vinterface->onInputUpdate(ptr->info, dvc, InputHandle(MouseAxis::Axis_wheel_y) + MouseButton::count, delta != 0);
-						}
-
-						if (mouseDat.usButtonFlags & RI_MOUSE_HWHEEL) {
-
-							F32 delta = I16(mouseDat.usButtonData) / F32(WHEEL_DELTA);
-							dvc->setAxis(MouseAxis::Axis_wheel_x, delta);
-
-							if (vinterface)
-								vinterface->onInputUpdate(ptr->info, dvc, InputHandle(MouseAxis::Axis_wheel_x) + MouseButton::count, delta != 0);
-						}
-
-						if (mouseDat.usFlags & MOUSE_MOVE_ABSOLUTE) {
-
-							F32 x = F32(mouseDat.lLastX) - rect.left, y = F64(mouseDat.lLastY) - rect.top;
-
-							dvc->setAxis(MouseAxis::Axis_delta_x, dvc->getCurrentAxis(MouseAxis::Axis_x) - x);
-							dvc->setAxis(MouseAxis::Axis_delta_y, dvc->getCurrentAxis(MouseAxis::Axis_y) - y);
-							dvc->setAxis(MouseAxis::Axis_x, x);
-							dvc->setAxis(MouseAxis::Axis_y, y);
-
-							vinterface->onInputUpdate(ptr->info, dvc, InputHandle(MouseAxis::Axis_delta_x) + MouseButton::count, mouseDat.lLastX != 0);
-							vinterface->onInputUpdate(ptr->info, dvc, InputHandle(MouseAxis::Axis_delta_y) + MouseButton::count, mouseDat.lLastY != 0);
-							vinterface->onInputUpdate(ptr->info, dvc, InputHandle(MouseAxis::Axis_x) + MouseButton::count, false);
-							vinterface->onInputUpdate(ptr->info, dvc, InputHandle(MouseAxis::Axis_y) + MouseButton::count, false);
-
-						} else {
-
-							dvc->setAxis(MouseAxis::Axis_delta_x, mouseDat.lLastX);
-							dvc->setAxis(MouseAxis::Axis_delta_y, mouseDat.lLastY);
-
-							if (vinterface) {
-								vinterface->onInputUpdate(ptr->info, dvc, InputHandle(MouseAxis::Axis_delta_x) + MouseButton::count, mouseDat.lLastX != 0);
-								vinterface->onInputUpdate(ptr->info, dvc, InputHandle(MouseAxis::Axis_delta_y) + MouseButton::count, mouseDat.lLastY != 0);
-							}
-						}
-					}
-
+						break;
 				}
 
+				//Send keys through interface and update input device
+
+				enum InputState prevState = InputDevice_getState(*dev, handle);
+
+				InputDevice_setCurrentState(*dev, handle, isKeyDown);
+				enum InputState newState = InputDevice_getState(*dev, handle);
+
+				if(prevState != newState && w->callbacks.onDeviceButton)
+					w->callbacks.onDeviceButton(w, dev, handle, isKeyDown);
+
+				return 0;
+
+			} else {
+
+				RAWMOUSE mouseDat = data->data.mouse;
+
+				for (U64 i = 0; i < 5; ++i) {
+
+					bool isDown = mouseDat.usButtonFlags & (1 << (i << 1));
+					bool isUp = mouseDat.usButtonFlags & (2 << (i << 1));
+
+					if(!isDown && !isUp)
+						continue;
+
+					InputHandle handle = (InputHandle) (MouseButton_Left + i);
+					InputDevice_setCurrentState(*dev, handle, isDown);
+
+					if (w->callbacks.onDeviceButton)
+						w->callbacks.onDeviceButton(w, dev, handle, isDown);
+				}
+
+				if (mouseDat.usButtonFlags & RI_MOUSE_WHEEL) {
+
+					F32 delta = (F32)mouseDat.usButtonData / WHEEL_DELTA;
+					InputDevice_setCurrentAxis(*dev, MouseAxis_ScrollWheel_X, delta);
+
+					if (w->callbacks.onDeviceAxis)
+						w->callbacks.onDeviceAxis(w, dev, MouseAxis_ScrollWheel_X, delta);
+				}
+
+				if (mouseDat.usButtonFlags & RI_MOUSE_HWHEEL) {
+
+					F32 delta = (F32)mouseDat.usButtonData / WHEEL_DELTA;
+					InputDevice_setCurrentAxis(*dev, MouseAxis_ScrollWheel_Y, delta);
+
+					if (w->callbacks.onDeviceAxis)
+						w->callbacks.onDeviceAxis(w, dev, MouseAxis_ScrollWheel_Y, delta);
+				}
+
+				F32 prevX = InputDevice_getCurrentAxis(*dev, MouseAxis_X);
+				F32 prevY = InputDevice_getCurrentAxis(*dev, MouseAxis_Y);
+
+				F32 nextX, nextY;
+
+				if (mouseDat.usFlags & MOUSE_MOVE_ABSOLUTE) {
+
+					RECT rect;
+					GetClientRect(hwnd, &rect);
+
+					InputDevice_resetFlag(dev, MouseFlag_IsRelative);
+
+					nextX = (F32) (mouseDat.lLastX - rect.left);
+					nextY = (F32) (mouseDat.lLastY - rect.top);
+
+				} else {
+					InputDevice_setFlag(dev, MouseFlag_IsRelative);
+					nextX = prevX + (F32) mouseDat.lLastX;
+					nextY = prevY + (F32) mouseDat.lLastY;
+				}
+
+				if (nextX != prevX) {
+
+					InputDevice_setCurrentAxis(*dev, MouseAxis_X, nextX);
+
+					if (w->callbacks.onDeviceAxis)
+						w->callbacks.onDeviceAxis(w, dev, MouseAxis_X, nextX);
+				}
+
+				if (nextY != prevY) {
+
+					InputDevice_setCurrentAxis(*dev, MouseAxis_Y, nextY);
+
+					if (w->callbacks.onDeviceAxis)
+						w->callbacks.onDeviceAxis(w, dev, MouseAxis_Y, nextY);
+				}
+			}
+
+		cleanup:
 			LRESULT lr = DefRawInputProc(&data, 1, sizeof(*data));
 			Buffer_free(&buf, Platform_instance.alloc);
 			return lr;
 		}
 
-		/* TODO: Handle capture cursor
-
-		case WM_MOUSEMOVE:
-
-			for (auto device : ptr->devices) {
-
-				auto *dvc = device.second;
-
-				if (dvc->getType() != InputDevice::Type::MOUSE)
-					continue;
-
-				if (ptr->info->hasHint(ViewportInfo::CAPTURE_CURSOR))
-					return false;
-
-				int x = GET_X_LPARAM(lParam); 
-				int y = GET_Y_LPARAM(lParam);
-
-				dvc->setAxis(MouseAxis::Axis_x, F32(x));
-				dvc->setAxis(MouseAxis::Axis_y, F32(y));
-
-				if (auto *vinterface = ptr->info->vinterface) {
-					vinterface->onInputUpdate(ptr->info, dvc, InputHandle(MouseAxis::Axis_x) + MouseButton::count, false);
-					vinterface->onInputUpdate(ptr->info, dvc, InputHandle(MouseAxis::Axis_y) + MouseButton::count, false);
-				}
-			}
-
-			break;
-		*/
+		//TODO: Handle capture cursor
 
 		case WM_INPUT_DEVICE_CHANGE: {
 
-			RID_DEVICE_INFO deviceInfo;
+			RID_DEVICE_INFO deviceInfo = (RID_DEVICE_INFO) { 0 };
 			U32 size = sizeof(deviceInfo);
 
-			oicAssert(
-				"Couldn't get raw input device", 
-				GetRawInputDeviceInfoA((HANDLE)lParam, RIDI_DEVICEINFO, &deviceInfo, &size)
-			);
+			if (!GetRawInputDeviceInfoA((HANDLE)lParam, RIDI_DEVICEINFO, &deviceInfo, &size)) {
+				Log_error(String_createRefUnsafeConst("Invalid data in WM_INPUT_DEVICE_CHANGE"), LogOptions_Default);
+				break;
+			}
+
+			if(deviceInfo.dwType == RIM_TYPEHID)		//Irrelevant for us for now
+				break;
+
+			struct Error err;
 
 			Bool isAdded = wParam == GIDC_ARRIVAL;
-			InputDevice *&dvc = ptr->devices[(HANDLE)lParam];
-
-			oicAssert("Device change was already notified", Bool(dvc) != isAdded);
 
 			if (isAdded) {
 
 				Bool isKeyboard = deviceInfo.dwType == RIM_TYPEKEYBOARD;
 
-				if (isKeyboard)
-					info->devices.push_back(dvc = new Keyboard());
-				else
-					info->devices.push_back(dvc = new Mouse());
+				//Warn because a Japanese/Korean keyboard might not work correctly with the app
+				//Because it might be relying on keys that don't exist there
 
-				if (info->vinterface)
-					info->vinterface->onDeviceConnect(info, dvc);
+				if(isKeyboard && deviceInfo.keyboard.dwKeyboardMode != 0x4)
+					Log_warn(String_createRefUnsafeConst("Possibly unsupported type of keyboard!"), LogOptions_Default);
 
-				RAWINPUTDEVICE device {
-					0x01,
-					U16(isKeyboard ? 0x06 : 0x02),
+				//Create input device
+
+				struct InputDevice device;
+
+				if (isKeyboard) {
+
+					if ((err = Keyboard_create((Keyboard*) &device)).genericError) {
+						Error_printx(err, LogLevel_Error, LogOptions_Default);
+						break;
+					}
+				}
+
+				else if ((err = Mouse_create((Mouse*) &device)).genericError) {
+					Error_printx(err, LogLevel_Error, LogOptions_Default);
+					break;
+				}
+
+				if((err = Buffer_createUninitializedBytes(
+					sizeof(HANDLE), Platform_instance.alloc, &device.dataExt
+				)).genericError) {
+					InputDevice_free(&device);
+					Error_printx(err, LogLevel_Error, LogOptions_Default);
+					break;
+				}
+
+				RAWINPUTDEVICE rawDevice = (RAWINPUTDEVICE) {
+					0x01,								//Perhaps 0xD for touchscreen at some point
+					(U16)(isKeyboard ? 0x06 : 0x02),	//0x4-0x05 for game controllers in the future
 					0x0,
 					hwnd
 				};
 
-				if (!isKeyboard) {
-					POINT point;
-					GetCursorPos(&point);
-					dvc->setAxis(MouseAxis::Axis_x, point.x);
-					dvc->setAxis(MouseAxis::Axis_y, point.y);
+				//Find free spot in device array
+				//If this happens, we don't need to resize the array
+
+				struct InputDevice *beg = (struct InputDevice*) List_begin(w->devices);
+				struct InputDevice *end = (struct InputDevice*) List_end(w->devices);
+
+				struct InputDevice *dev = beg;
+
+				for(; dev != end; ++dev)
+					if(dev->type == InputDeviceType_Undefined)
+						break;
+
+				//Our list isn't big enough, we need to resize
+
+				bool pushed = false;
+
+				if(dev == end) {
+
+					//Try to allocate without allowing allocation
+					//If it fails, we can't create a new device
+
+					err = List_pushBack(&w->devices, Buffer_createNull(), (struct Allocator) { 0 });
+					pushed = true;
+
+					if(err.genericError) {
+
+						Buffer_free(&device.dataExt, Platform_instance.alloc);
+						InputDevice_free(&device);
+
+						Log_error(String_createRefUnsafeConst("Couldn't register device; "), LogOptions_Default);
+						break;
+					}
+
+					//After this, our dev and end pointers are valid again
+					//Because our list didn't reallocate, it just changed size
 				}
 
-				oicAssert(
-					"Couldn't create raw input device", 
-					RegisterRawInputDevices(&device, 1, sizeof(RAWINPUTDEVICE))
-				);
+				//Register device
+
+				if (!RegisterRawInputDevices(&rawDevice, 1, sizeof(RAWINPUTDEVICE))) {
+
+					if(pushed)
+						List_popBack(&w->devices, Buffer_createNull());
+
+					Buffer_free(&device.dataExt, Platform_instance.alloc);
+					InputDevice_free(&device);
+
+					Log_error(String_createRefUnsafeConst("Couldn't create raw input device"), LogOptions_Default);
+					break;
+				}
+
+				//Store device and call callback
+
+				*(HANDLE*) device.dataExt.ptr = (HANDLE)lParam;
+				*dev = device;
+
+				if (w->callbacks.onDeviceAdd)
+					w->callbacks.onDeviceAdd(w, dev);
 
 			} else {
 
-				if (info->vinterface)
-					info->vinterface->onDeviceRemoval(info, dvc);
+				//Find our device
 
-				info->devices.erase(std::find(ptr->info->devices.begin(), ptr->info->devices.end(), dvc));
-				ptr->devices.erase((HANDLE)lParam);
-				delete dvc;
+				struct InputDevice *beg = (struct InputDevice*) List_begin(w->devices);
+				struct InputDevice *end = (struct InputDevice*) List_end(w->devices);
+
+				struct InputDevice *ours = beg;
+
+				for(; ours != end; ++ours)
+					if(*(HANDLE*) ours->dataExt.ptr == (HANDLE) lParam)
+						break;
+
+				if(ours == end)		//Unrecognized device
+					break;
+
+				//Notify our removal
+
+				if (w->callbacks.onDeviceRemove)
+					w->callbacks.onDeviceRemove(w, ours);
+
+				//Cleanup our device
+
+				if((err = InputDevice_free(ours)).genericError)
+					Error_printx(err, LogLevel_Error, LogOptions_Default);
+
+				//We need to keep on popping the end of the array until we reach the next element that isn't invalid
+				//This is to keep the list as small as possible because we might be looping over it at some point
+				//We can of course have devices that aren't initialized in between valid ones, 
+				//because our list isn't contiguous
+
+				if(ours == end - 1)
+					while(
+						w->devices.length && 
+						((struct InputDevice*)List_last(w->devices))->type == InputDeviceType_Undefined
+					)
+						if((List_popBack(&w->devices, Buffer_createNull())).genericError)
+							break;
+
 			}
 
 			return 0;
@@ -307,30 +509,36 @@ LRESULT CALLBACK onCallback(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 		case WM_PAINT: {
 
 			if(!(w->hint & WindowHint_AllowBackgroundUpdates) && (w->flags & WindowFlags_IsMinimized))
-				return NULL;
+				return 0;
 
 			//Update interface
 
 			Ns now = Timer_now();
 
-			if (w->callbacks.update) {
+			if (w->callbacks.onUpdate) {
 				F32 dt = w->lastUpdate ? (now - w->lastUpdate) / (F32)seconds : 0;
-				w->callbacks.update(w, dt);
+				w->callbacks.onUpdate(w, dt);
 			}
 
 			w->lastUpdate = now;
 
 			//Update input
 
-			for(U64 i = 0; i < w->deviceCount; ++i)
-				InputDevice_markUpdate(w->devices[i]);
+			struct InputDevice *dit = (struct InputDevice*) List_begin(w->devices);
+			struct InputDevice *dend = (struct InputDevice*) List_end(w->devices);
+
+			for(; dit != dend; ++dit)
+				InputDevice_markUpdate(*dit);
 
 			//Render (if not minimized)
 
-			if(w->callbacks.draw && !(w->flags & WindowFlags_IsMinimized))
-				w->callbacks.draw(w);
+			if(w->callbacks.onDraw && !(w->flags & WindowFlags_IsMinimized)) {
+				w->isDrawing = true;
+				w->callbacks.onDraw(w);
+				w->isDrawing = false;
+			}
 
-			return NULL;
+			return 0;
 		}
 
 		case WM_GETMINMAXINFO: {
@@ -361,8 +569,8 @@ LRESULT CALLBACK onCallback(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 			
 			WWindow_updateMonitors(w);
 
-			if (w->callbacks.resize)
-				w->callbacks.resize(w);
+			if (w->callbacks.onResize)
+				w->callbacks.onResize(w);
 
 			break;
 		}
@@ -376,8 +584,8 @@ LRESULT CALLBACK onCallback(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
 			WWindow_updateMonitors(w);
 
-			if (w->callbacks.move)
-				w->callbacks.move(w);
+			if (w->callbacks.onWindowMove)
+				w->callbacks.onWindowMove(w);
 
 			break;
 		}
@@ -388,6 +596,8 @@ LRESULT CALLBACK onCallback(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
 
 Bool WindowManager_supportsFormat(struct WindowManager manager, enum WindowFormat format) {
 
+	manager;
+
 	//TODO: HDR support; ColorSpace
 	//	https://learn.microsoft.com/en-us/windows/win32/api/dxgi/nf-dxgi-idxgiswapchain-getcontainingoutput
 	//	https://learn.microsoft.com/en-us/windows/win32/api/dxgi1_6/ns-dxgi1_6-dxgi_output_desc1
@@ -395,18 +605,7 @@ Bool WindowManager_supportsFormat(struct WindowManager manager, enum WindowForma
 	return format == WindowFormat_rgba8;
 }
 
-struct Error WindowManager_createPhysical(
-	struct WindowManager *manager,
-	I32x2 position,
-	I32x2 size, 
-	enum WindowHint hint,
-	struct String title, 
-	struct WindowCallbacks callbacks,
-	enum WindowFormat format,
-	struct Window **w
-) {
-
-	//Validate state
+struct Error WindowManager_freePhysical(struct WindowManager *manager, struct Window **w) {
 
 	if(!manager)
 		return (struct Error) { .genericError = GenericError_NullPointer };
@@ -414,222 +613,19 @@ struct Error WindowManager_createPhysical(
 	if(!Lock_isLockedForThread(manager->lock))
 		return (struct Error) { .genericError = GenericError_InvalidOperation };
 
-	if(!w)
-		return (struct Error) { .genericError = GenericError_NullPointer, .paramId = 7 };
+	if(!w || !*w)
+		return (struct Error) { .genericError = GenericError_NullPointer, .errorSubId = 1 };
 
-	if(*w)
-		return (struct Error) { .genericError = GenericError_InvalidParameter, .paramId = 7 };
-
-	switch (format) {
-
-		case WindowFormat_rgba8:
-		case WindowFormat_hdr10a2:
-		case WindowFormat_rgba16f:
-		case WindowFormat_rgba32f:
-
-			if(!WindowManager_supportsFormat(*manager, format))
-				return (struct Error) { 
-					.genericError = GenericError_UnsupportedOperation, 
-					.paramId = 6,
-					.paramValue0 = format
-				};
-			
-			break;
-
-		default:
-			return (struct Error) { .genericError = GenericError_InvalidParameter, .paramId = 6 };
-	}
-
-	if(I32x2_any(I32x2_lt(size, I32x2_zero())))
-		return (struct Error) { .genericError = GenericError_InvalidParameter };
-
-	if (title.len >= MAX_PATH)
-		return (struct Error) { 
-			.genericError = GenericError_OutOfBounds, 
-			.paramId = 4, 
-			.paramValue0 = title.len,
-			.paramValue1 = MAX_PATH
-		};
-		
-	//Find free spot in physical windows
-
-	struct Window *win = NULL;
-	WindowHandle handle = 0;
-
-	for(U8 i = 0; i < WindowManager_maxTotalPhysicalWindowCount; ++i) {
-
-		struct Window *w = manager->windowArray + i;
-
-		if (!w->nativeHandle) {
-			win = w;
-			handle = i;
-			break;
-		}
-	}
-
-	if(!win)
-		return (struct Error) { .genericError = GenericError_OutOfMemory };
-		
-	//Create native window
-
-	WNDCLASSEXA wc = (WNDCLASSEXA){ 0 };
-	HINSTANCE mainModule = Platform_instance.data;
-
-	wc.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
-	wc.lpfnWndProc = onCallback;
-	wc.hInstance = mainModule;
-
-	wc.hIcon = (HICON) LoadImageA(mainModule, "LOGO", IMAGE_ICON, 32, 32, 0);
-	wc.hIconSm = (HICON) LoadImageA(mainModule, "LOGO", IMAGE_ICON, 16, 16, 0);
-
-	wc.hCursor = LoadCursorA(NULL, IDC_ARROW);
-
-	wc.hbrBackground = (HBRUSH) GetStockObject(BLACK_BRUSH);
-
-	wc.lpszClassName = "Oxsomi core v3";
-	wc.cbSize = sizeof(wc);
-	wc.cbWndExtra = sizeof(void*);
-
-	if (!RegisterClassExA(&wc))
-		return (struct Error) { .genericError = GenericError_InvalidOperation, .paramSubId = 1 };
-
-	DWORD style = WS_VISIBLE;
-
-	if(!(hint & WindowHint_ForceFullscreen)) {
-
-		style |= WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
-
-		if(!(hint & WindowHint_DisableResize))
-			style |= WS_SIZEBOX | WS_MAXIMIZEBOX;
-	}
-
-	if(!(hint & WindowHint_HandleInput))
-		style |= WS_DISABLED;
-
-	I32x2 maxSize = I32x2_create2(
-		GetSystemMetrics(SM_CXSCREEN), 
-		GetSystemMetrics(SM_CYSCREEN) 
-	);
-
-	for (U64 i = 0; i < 2; ++i)
-		if (!I32x2_get(size, i) || I32x2_get(size, i) >= I32x2_get(maxSize, i))
-			I32x2_set(&size, i, I32x2_get(maxSize, i));
-
-	//Our strings aren't null terminated, so ensure windows doesn't read garbage
-
-	C8 windowName[MAX_PATH + 1];
-	Buffer_copy(Buffer_createRef(windowName, sizeof(windowName)), Buffer_createRef(title.ptr, title.len));
-
-	windowName[title.len] = '\0';
-
-	HWND nativeWindow = CreateWindowExA(
-		WS_EX_APPWINDOW, wc.lpszClassName, windowName, style,
-		I32x2_x(position), I32x2_y(position),
-		I32x2_x(size), I32x2_y(size),
-		NULL, NULL, mainModule, NULL
-	);
-
-	if(!nativeWindow)
-		return (struct Error) { .genericError = GenericError_InvalidOperation, .paramSubId = 2 };
-		
-	//Get real size and position
-
-	RECT r = (RECT){ 0 };
-	GetClientRect(nativeWindow, &r);
-	size = I32x2_create2(r.right - r.left, r.bottom - r.top);
-
-	GetWindowRect(nativeWindow, &r);
-	position = I32x2_create2(r.left, r.top);
-
-	//Bind our window
-
-	SetWindowLongPtrA(nativeWindow, 0, (LONG_PTR) win);
-
-	//Alloc cpu visible buffer if needed
-
-	struct Buffer cpuVisibleBuffer = Buffer_createNull();
-
-	struct Error err = Error_none();
-
-	if(hint & WindowHint_ProvideCPUBuffer) {
-
-		err = Buffer_createEmptyBytes(
-			TextureFormat_getSize((enum TextureFormat) format, (U64) I32x2_x(size), (U64) I32x2_y(size)),
-			Platform_instance.alloc,
-			&cpuVisibleBuffer
-		);
-
-		if(err.genericError)
-			return err;
-	}
-
-	//Lock for when we are updating this window
-
-	struct Lock lock = (struct Lock) { 0 };
-
-	if ((err = Lock_create(&lock)).genericError) {
-
-		if(cpuVisibleBuffer.ptr)
-			Buffer_free(&cpuVisibleBuffer, Platform_instance.alloc);
-
-		return err;
-	}
-
-	//Fill window object
-
-	*win = (struct Window) {
-
-		.offset = position,
-		.size = size,
-	
-		.cpuVisibleBuffer = cpuVisibleBuffer,
-
-		.nativeHandle = nativeWindow,
-		.lock = lock,
-
-		.callbacks = callbacks,
-
-		.handle = handle,
-		.hint = hint,
-		.format = format,
-		.flags = WindowFlags_IsActive
-	};
-
-	*w = win;
-
-	if(callbacks.start)
-		callbacks.start(w);
-
-	//Find overlapping monitors
-
-	WWindow_updateMonitors(win);
-
-	//Our window is now ready
-
-	UpdateWindow(nativeWindow);
-
-	return Error_none();
-}
-
-struct Error WindowManager_freePhysical(struct WindowManager *manager, WindowHandle handle) {
-
-	if(!manager)
-		return (struct Error) { .genericError = GenericError_NullPointer };
-
-	if(!Lock_isLockedForThread(manager->lock))
-		return (struct Error) { .genericError = GenericError_InvalidOperation };
-
-	if(handle >= WindowManager_maxTotalPhysicalWindowCount)
+	if(*w < (struct Window*) List_begin(manager->windows) || *w >= (struct Window*) List_end(manager->windows))
 		return (struct Error) { .genericError = GenericError_OutOfBounds };
 
-	struct Window *w = manager->windowArray + handle;
-
-	if(!(w->flags & WindowFlags_IsActive))
+	if(!((*w)->flags & (WindowFlags_IsActive | WindowFlags_IsVirtual)))
 		return (struct Error) { .genericError = GenericError_InvalidOperation, .paramId = 1 };
 
 	//Ensure our window safely exits
 
-	PostMessageA(w->nativeHandle, WM_DESTROY, NULL, NULL);
+	PostMessageA((HWND) (*w)->nativeHandle, WM_DESTROY, 0, 0);
+	*w = NULL;
 	return Error_none();
 }
 
@@ -650,7 +646,7 @@ struct Error Window_updatePhysicalTitle(
 		};
 
 	C8 windowName[MAX_PATH + 1];
-	Buffer_copy(Buffer_createRef(windowName, sizeof(windowName)), Buffer_createRef(title.ptr, title.len));
+	Buffer_copy(Buffer_createRef(windowName, sizeof(windowName)), String_buffer(title));
 
 	windowName[title.len] = '\0';
 
@@ -660,8 +656,49 @@ struct Error Window_updatePhysicalTitle(
 	return Error_none();
 }
 
-struct Error Window_presentPhysical(
-	const struct Window *w, 
-	struct Buffer data, 
-	enum WindowFormat encodedFormat
-);
+struct Error Window_presentPhysical(const struct Window *w) {
+
+	if(!w || !(w->flags & WindowFlags_IsActive) || !(w->hint & WindowHint_ProvideCPUBuffer))
+		return (struct Error) { .genericError = w ? GenericError_NullPointer : GenericError_InvalidOperation };
+
+	PAINTSTRUCT ps;
+	HDC hdcBmp = NULL, oldBmp = NULL;
+	U32 errId = 0;
+
+	HDC hdc = BeginPaint(w->nativeHandle, &ps);
+
+	if(!hdc)
+		return (struct Error) { .genericError = GenericError_InvalidOperation, .errorSubId = 1 };
+
+	hdcBmp = CreateCompatibleDC(hdc);
+
+	if(!hdcBmp) {
+		errId = 2;
+		goto cleanup;
+	}
+
+	oldBmp = SelectObject(hdcBmp, w->nativeData);
+
+	if(!oldBmp) {
+		errId = 3;
+		goto cleanup;
+	}
+
+	if(!BitBlt(hdc, 0, 0, I32x2_x(w->size), I32x2_y(w->size), hdcBmp, 0, 0, SRCCOPY)) {
+		errId = 4;
+		goto cleanup;
+	}
+
+	return Error_none();
+
+cleanup:
+
+	if(oldBmp)
+		SelectObject(hdc, oldBmp);
+
+	if(hdcBmp)
+		DeleteDC(hdcBmp);
+
+	EndPaint(w->nativeHandle, &ps);
+	return (struct Error) { .genericError = GenericError_InvalidOperation, .errorSubId = errId };
+}

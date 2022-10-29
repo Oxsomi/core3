@@ -377,7 +377,7 @@ inline Bool TextureFormat_getAlignment(enum TextureFormat f, U8 *x, U8 *y) {
 //Get texture's size in bytes
 //Returns U64_MAX if misaligned (compressed formats)
 
-inline U64 TextureFormat_getSize(enum TextureFormat f, U64 w, U64 h) {
+inline U64 TextureFormat_getSize(enum TextureFormat f, U32 w, U32 h) {
 
 	U8 alignW = 1, alignH = 1;
 
@@ -392,5 +392,5 @@ inline U64 TextureFormat_getSize(enum TextureFormat f, U64 w, U64 h) {
 		h /= alignH;
 	}
 
-	return ((w * h * TextureFormat_getBits(f)) + 7) >> 3;
+	return (((U64)w * h * TextureFormat_getBits(f)) + 7) >> 3;
 }

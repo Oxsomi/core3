@@ -3,20 +3,36 @@
 
 typedef struct InputDevice Mouse;
 
-enum MouseButton {
+enum MouseActions {
 
-	MouseButton_Left, MouseButton_Middle, MouseButton_Right, 
+	//Mouse buttons
+
+	MouseButton_Begin,
+
+	MouseButton_Left = MouseButton_Begin, MouseButton_Middle, MouseButton_Right, 
 	MouseButton_Back, MouseButton_Forward,
 
-	MouseButton_Count
+	MouseButton_End,
+	MouseButton_Count = MouseButton_End - MouseButton_Begin,
+
+	//Mouse axes
+
+	MouseAxis_Begin = MouseButton_End,
+
+	MouseAxis_X = MouseAxis_Begin, MouseAxis_Y, 
+	MouseAxis_ScrollWheel_X, MouseAxis_ScrollWheel_Y,
+
+	MouseAxis_End,
+	MouseAxis_Count = MouseAxis_End - MouseAxis_Begin
 };
 
-enum MouseAxis {
+enum MouseFlag {
 
-	MouseAxis_X, MouseAxis_Y, MouseAxis_ScrollWheel,
+	//When this happens, the mouse position is relative, not absolute
+	//So, the cursor position shouldn't be taken as absolute
+	//This means using the delta functions instead of the absolute functions
 
-	MouseAxis_Count
+	MouseFlag_IsRelative
 };
 
 struct Error Mouse_create(Mouse *result);
-struct Error Mouse_free(Mouse *dev);

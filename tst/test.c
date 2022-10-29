@@ -3,19 +3,29 @@
 #include "types/allocator.h"
 #include <stdlib.h>
 
-void *ourAlloc(void *allocator, U64 siz) {
+struct Error ourAlloc(void *allocator, U64 siz, struct Buffer *output) {
+
 	allocator;
-	return malloc(siz);
+
+	void *ptr = malloc(siz);
+
+	if(!output)
+		return (struct Error) { .genericError = GenericError_NullPointer };
+
+	if(!ptr)
+		return (struct Error) { .genericError = GenericError_OutOfMemory };
+
+	*output = (struct Buffer) { .ptr = ptr, .siz = siz };
+	return Error_none();
 }
 
-void ourFree(void *allocator, struct Buffer buf) {
+struct Error ourFree(void *allocator, struct Buffer buf) {
 	allocator;
 	free(buf.ptr);
+	return Error_none();
 }
 
 int main() {
-
-	Math_initPlatform();
 
 	//Test timer
 

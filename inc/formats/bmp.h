@@ -1,6 +1,8 @@
 #pragma once
 #include "types/types.h"
 
+struct Allocator;
+
 //TODO: writeR(G)(B), loadR(G)(B)(A), compression
 
 struct Error BMP_writeRGBA(

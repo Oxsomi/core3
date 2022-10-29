@@ -4,98 +4,53 @@
 #include "types/timer.h"
 #include "types/buffer.h"
 
-struct Error WindowManager_createSelf(struct WindowManager **result);
+const U8 WindowManager_maxTotalVirtualWindowCount = 16;
 
-U16 WindowManager_maxWindows() {
-	return WindowManager_maxTotalVirtualWindowCount + WindowManager_maxTotalPhysicalWindowCount;
-}
+struct Error WindowManager_create(struct WindowManager *result) {
 
-struct Error WindowManager_freeSelf(struct WindowManager **manager) {
-
-	if(!manager || !*manager)
+	if(!result)
 		return (struct Error) { .genericError = GenericError_NullPointer };
 
-	struct WindowManager *man = *manager;
+	if(result->windows.length || result->lock.data)
+		return (struct Error) { .genericError = GenericError_InvalidOperation };
 
-	if(!Lock_isLockedForThread(man->lock) && !WindowManager_lock(man, 5 * seconds))
+	struct Error err;
+
+	if((err = Lock_create(&result->lock)).genericError)
+		return err;
+
+	if ((err = List_create(
+		WindowManager_maxWindows(), sizeof(struct Window),
+		Platform_instance.alloc,
+		&result->windows
+	)).genericError) {
+		Lock_free(&result->lock);
+		return err;
+	}
+
+	return Error_none();
+}
+
+struct Error WindowManager_free(struct WindowManager *manager) {
+
+	if(!manager)
+		return (struct Error) { .genericError = GenericError_NullPointer };
+
+	if(!Lock_isLockedForThread(manager->lock) && !WindowManager_lock(manager, 5 * seconds))
 		return (struct Error) { .genericError = GenericError_TimedOut };
 
-	struct Buffer buf = Buffer_createNull();
-	struct Error err = Error_none(), errTemp = Error_none();
+	struct Error err = List_free(&manager->windows, Platform_instance.alloc);
+	
+	if(!WindowManager_unlock(manager))
+		return (struct Error) { .genericError = GenericError_InvalidOperation };
 
-	buf = Buffer_createRef(man->monitorArray, U8_MAX * sizeof(struct Monitor));
-
-	if(buf.ptr)
-		err = Buffer_free(&buf, Platform_instance.alloc);
-
-	U64 windows = WindowManager_maxWindows();
-
-	buf = Buffer_createRef(man->windowArray, windows * sizeof(struct Window));
-
-	if(buf.ptr)
-		errTemp = Buffer_free(&buf, Platform_instance.alloc), errTemp;
+	struct Error errTemp = Lock_free(&manager->lock);
 
 	if(errTemp.genericError)
 		err = errTemp;
 
-	buf = Buffer_createRef(man, sizeof(struct WindowManager));
-
-	errTemp = Error_none();
-
-	if(buf.ptr)
-		errTemp = Buffer_free(&buf, Platform_instance.alloc);
-
-	if(errTemp.genericError)
-		err = errTemp;
-
-	*manager = NULL;
+	*manager = (struct WindowManager) { 0 };
 	return err;
-}
-
-U8 WindowManager_getEmptyPhysicalWindows(struct WindowManager manager) {
-
-	if(!Lock_isLockedForThread(manager.lock))
-		return 0;
-
-	U8 v = 0;
-
-	for(U8 i = 0; i < WindowManager_maxTotalPhysicalWindowCount; ++i)
-		if(!manager.windowArray[i].nativeHandle) 
-			++v;
-
-	return v;
-}
-
-U8 WindowManager_getEmptyVirtualWindows(struct WindowManager manager) {
-
-	if(!Lock_isLockedForThread(manager.lock))
-		return 0;
-
-	U8 v = 0;
-
-	for(U8 i = 0; i < WindowManager_maxTotalVirtualWindowCount; ++i)
-		if(!manager.windowArray[(U64)i + WindowManager_maxTotalPhysicalWindowCount].cpuVisibleBuffer.ptr) 
-			++v;
-
-	return v;
-}
-
-U16 WindowManager_getEmptyWindows(struct WindowManager manager) {
-
-	if(!Lock_isLockedForThread(manager.lock))
-		return 0;
-
-	U16 v = 0;
-
-	for(U8 i = 0; i < WindowManager_maxTotalPhysicalWindowCount; ++i)
-		if(!manager.windowArray[i].nativeHandle) 
-			++v;
-
-	for(U8 i = 0; i < WindowManager_maxTotalVirtualWindowCount; ++i)
-		if(!manager.windowArray[(U64)i + WindowManager_maxTotalPhysicalWindowCount].cpuVisibleBuffer.ptr) 
-			++v;
-
-	return v;
 }
 
 struct Error WindowManager_createVirtual(
@@ -106,8 +61,8 @@ struct Error WindowManager_createVirtual(
 	struct Window **result
 ) {
 
-	if(!manager || !result)
-		return (struct Error) { .genericError = GenericError_NullPointer, .paramId = manager ? 1 : 0 };
+	if(!manager || !result || !callbacks.onDraw)
+		return (struct Error) { .genericError = GenericError_NullPointer, .paramId = manager ? 1 : (!result ? 0 : 2) };
 
 	if(!Lock_isLockedForThread(manager->lock))
 		return (struct Error) { .genericError = GenericError_InvalidOperation };
@@ -119,8 +74,8 @@ struct Error WindowManager_createVirtual(
 		return (struct Error) { 
 			.genericError = GenericError_InvalidParameter, 
 			.paramId = 1, 
-			.paramValue0 = I32x2_x(size), 
-			.paramValue1 = I32x2_y(size)
+			.paramValue0 = (U64) I32x2_x(size), 
+			.paramValue1 = (U64) I32x2_y(size)
 		};
 
 	switch (format) {
@@ -141,14 +96,19 @@ struct Error WindowManager_createVirtual(
 
 	for(U8 i = 0; i < WindowManager_maxTotalVirtualWindowCount; ++i) {
 
-		struct Window *w = manager->windowArray + i + WindowManager_maxTotalPhysicalWindowCount;
+		struct Window *w = (struct Window*) List_ptr(
+			manager->windows, i + WindowManager_maxTotalPhysicalWindowCount
+		);
 
-		if (!w->cpuVisibleBuffer.ptr) {
+		if(!w)
+			break;
+
+		if (!(w->flags & WindowFlags_IsActive)) {
 
 			struct Buffer cpuVisibleBuffer = Buffer_createNull();
 
 			struct Error err = Buffer_createEmptyBytes(
-				TextureFormat_getSize((enum TextureFormat) format, (U64) I32x2_x(size), (U64) I32x2_y(size)),
+				TextureFormat_getSize((enum TextureFormat) format, I32x2_x(size), I32x2_y(size)),
 				Platform_instance.alloc,
 				&cpuVisibleBuffer
 			);
@@ -170,8 +130,6 @@ struct Error WindowManager_createVirtual(
 				.lock = lock,
 				.callbacks = callbacks,
 
-				.handle = (WindowHandle) i,
-
 				.hint = WindowHint_ProvideCPUBuffer,
 				.format = format,
 				.flags = WindowFlags_IsFocussed | WindowFlags_IsVirtual | WindowFlags_IsActive
@@ -179,8 +137,10 @@ struct Error WindowManager_createVirtual(
 
 			*result = w;
 
-			if(callbacks.start)
-				callbacks.start(w);
+			if(callbacks.onCreate)
+				callbacks.onCreate(w);
+
+			return Error_none();
 		}
 	}
 
@@ -200,8 +160,14 @@ struct Error WindowManager_freeVirtual(struct WindowManager *manager, struct Win
 
 	struct Window *w = *handle;
 
-	if(w->callbacks.end)
-		w->callbacks.end(w);
+	if(!Lock_isLockedForThread(w->lock))
+		return (struct Error) { .genericError = GenericError_InvalidOperation };
+
+	if (!Lock_unlock(&w->lock)) 
+		return (struct Error) { .genericError = GenericError_InvalidOperation };
+
+	if(w->callbacks.onDestroy)
+		w->callbacks.onDestroy(w);
 
 	struct Error err = Lock_free(&w->lock);
 
@@ -213,71 +179,18 @@ struct Error WindowManager_freeVirtual(struct WindowManager *manager, struct Win
 	return errTemp.genericError ? errTemp : err;
 }
 
+inline U16 WindowManager_getEmptyWindows(struct WindowManager manager) {
 
-struct Error WindowManager_waitForExit(struct Window *w, Ns maxTimeout) {
+	U16 v = 0;
 
-	if(!w)
-		return (struct Error) { .genericError = GenericError_NullPointer };
+	struct Window *wstart = (struct Window*) List_begin(manager.windows);
+	struct Window *wend = (struct Window*) List_end(manager.windows);
 
-	Ns start = Timer_now();
+	for(; wstart != wend; ++wstart)
+		if(!(wstart->flags & WindowFlags_IsActive))
+			++v;
 
-	//We lock to check window state
-	//If there's no lock, then we've already been released
-
-	if(w->lock.data && !Lock_isLockedForThread(w->lock) && !Lock_lock(w->lock, maxTimeout))
-		return (struct Error) { .genericError = GenericError_InvalidOperation };
-
-	//If our window isn't marked as active, then our window is gone
-	//We've successfully waited
-
-	if (!(w->flags & WindowFlags_IsActive))
-		return Error_none();
-
-	//Now we have to make sure we still have time left to wait
-
-	Ns left = (Ns) I64_max(0, (DNs)(Timer_now() - start) - maxTimeout);
-
-	//Release the lock, because otherwise our window can't resume itself
-	
-	if(!Lock_unlock(w->lock))
-		return (struct Error) { .genericError = GenericError_InvalidOperation };
-
-	//Keep checking until we run out of time
-
-	while(left > 0) {
-
-		//Wait to ensure we don't waste cycles
-		//Virtual windows are allowed to run as fast as possible to produce the frames
-
-		if(!Window_isVirtual(w))
-			Thread_sleep(10 * ms);
-
-		//Try to reacquire the lock
-
-		if(w->lock.data && !Lock_isLockedForThread(w->lock) && !Lock_lock(w->lock, left))
-			return (struct Error) { .genericError = GenericError_InvalidOperation };
-
-		//Our window has been released!
-
-		if (!(w->flags & WindowFlags_IsActive))
-			return Error_none();
-
-		//Virtual windows can draw really quickly
-
-		if(Window_isVirtual(w) && w->callbacks.draw)
-			w->callbacks.draw(w);
-
-		//Release the lock to check for the next time
-
-		if(!Lock_unlock(w->lock))
-			return (struct Error) { .genericError = GenericError_InvalidOperation };
-
-		//
-
-		left = (Ns) I64_max(0, (DNs)(Timer_now() - start) - maxTimeout);
-	}
-
-	return (struct Error) { .genericError = GenericError_TimedOut };
+	return v;
 }
 
 struct Error WindowManager_waitForExitAll(struct WindowManager *manager, Ns maxTimeout) {
@@ -301,7 +214,9 @@ struct Error WindowManager_waitForExitAll(struct WindowManager *manager, Ns maxT
 
 	//Now we have to make sure we still have time left to wait
 
-	Ns left = (Ns) I64_max(0, (DNs)(Timer_now() - start) - maxTimeout);
+	maxTimeout = U64_min(maxTimeout, I64_MAX);
+
+	Ns left = (Ns) I64_max(0, maxTimeout - (DNs)(Timer_now() - start));
 
 	//Keep checking until we run out of time
 
@@ -309,13 +224,13 @@ struct Error WindowManager_waitForExitAll(struct WindowManager *manager, Ns maxT
 
 		//Try to reacquire the lock
 
-		if(!Lock_isLockedForThread(manager->lock) && !Lock_lock(manager->lock, left))
+		if(!Lock_isLockedForThread(manager->lock) && !Lock_lock(&manager->lock, left))
 			return (struct Error) { .genericError = GenericError_InvalidOperation };
 
 		//Our windows have been released!
 
 		if(WindowManager_getEmptyWindows(*manager) == WindowManager_maxWindows()) {
-			Lock_unlock(manager->lock);
+			WindowManager_unlock(manager);
 			return Error_none();
 		}
 
@@ -326,14 +241,29 @@ struct Error WindowManager_waitForExitAll(struct WindowManager *manager, Ns maxT
 
 		for(U8 i = 0; i < WindowManager_maxTotalVirtualWindowCount; ++i) {
 
-			struct Window *w = manager->windowArray + i + WindowManager_maxTotalPhysicalWindowCount;
+			struct Window *w = (struct Window*) List_ptr(
+				manager->windows, i + WindowManager_maxTotalPhysicalWindowCount
+			);
+
+			if(!w)
+				break;
 
 			if(w->flags & WindowFlags_IsActive) {
 
-				if(w->callbacks.draw)
-					w->callbacks.draw(w);
+				if(w->callbacks.onDraw) {
 
-				//else //TODO: Terminate window, it doesn't have a draw routine!
+					if(Lock_lock(&w->lock, 5 * seconds)) {
+
+						w->isDrawing = true;
+						w->callbacks.onDraw(w);
+						w->isDrawing = false;
+
+						//Window might be terminated
+
+						if(Lock_isLockedForThread(w->lock))
+							Lock_unlock(&w->lock);
+					}
+				}
 
 				containsVirtualWindow = true;
 			}
@@ -341,7 +271,7 @@ struct Error WindowManager_waitForExitAll(struct WindowManager *manager, Ns maxT
 
 		//Release the lock to check for the next time
 
-		if(!Lock_unlock(manager->lock))
+		if(!WindowManager_unlock(manager))
 			return (struct Error) { .genericError = GenericError_InvalidOperation };
 
 		//Wait to ensure we don't waste cycles
@@ -352,8 +282,45 @@ struct Error WindowManager_waitForExitAll(struct WindowManager *manager, Ns maxT
 
 		//
 
-		left = (Ns) I64_max(0, (DNs)(Timer_now() - start) - maxTimeout);
+		left = (Ns) I64_max(0, maxTimeout - (DNs)(Timer_now() - start));
 	}
 
 	return (struct Error) { .genericError = GenericError_TimedOut };
+}
+
+//All types of windows
+
+struct Error WindowManager_createWindow(
+	struct WindowManager *manager, 
+	I32x2 position, I32x2 size, enum WindowHint hint, struct String title, 
+	struct WindowCallbacks callbacks, enum WindowFormat format,
+	struct Window **w
+) {
+
+	if(!manager)
+		return (struct Error) { .genericError = GenericError_NullPointer };
+
+	if (manager)
+		return WindowManager_createPhysical(
+			manager, position, size, hint, title, callbacks, format, w
+		);
+
+	return WindowManager_createVirtual(manager, size, callbacks, format, w);
+}
+
+struct Error WindowManager_freeWindow(struct WindowManager *manager, struct Window **w) {
+
+	if (!manager)
+		return (struct Error) { .genericError = GenericError_NullPointer };
+
+	if (!w)
+		return (struct Error) { .genericError = GenericError_NullPointer, .paramId = 1 };
+
+	if(!Lock_isLockedForThread(manager->lock))
+		return (struct Error) { .genericError = GenericError_InvalidOperation };
+
+	if (Window_isVirtual(*w))
+		return WindowManager_freeVirtual(manager, w);
+
+	return WindowManager_freePhysical(manager, w);
 }

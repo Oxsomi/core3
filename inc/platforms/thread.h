@@ -22,4 +22,4 @@ impl struct Error Thread_create(
 impl struct Error Thread_wait(struct Thread *thread, U32 maxWaitTimeMs);
 
 struct Error Thread_free(struct Thread **thread);
-struct Error Thread_waitAndCleanup(struct Thread **thread, U32 maxWaitTime);
+struct Error Thread_waitAndCleanup(struct Thread **thread, U32 maxWaitTimeMs);

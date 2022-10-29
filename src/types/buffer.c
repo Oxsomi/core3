@@ -40,11 +40,14 @@ void Buffer_copy(struct Buffer dst, struct Buffer src) {
 	for(; dstPtr < dstEnd && srcPtr < srcEnd; ++dstPtr, ++srcPtr)
 		*dstPtr = *srcPtr;
 
+	dstEnd = (U64*)(dst.ptr + dst.siz);
+	srcEnd = (const U64*)(src.ptr + src.siz);
+
 	if((U64)dstPtr + 4 <= (U64)dstEnd && (U64)srcPtr + 4 <= (U64)srcEnd) {
 
 		*(U32*)dstPtr = *(const U32*)srcPtr;
 
-		dstPtr = (const U64*)((const U32*)dstPtr + 1);
+		dstPtr = (U64*)((U32*)dstPtr + 1);
 		srcPtr = (const U64*)((const U32*)srcPtr + 1);
 	}
 
@@ -52,7 +55,7 @@ void Buffer_copy(struct Buffer dst, struct Buffer src) {
 
 		*(U16*)dstPtr = *(const U16*)srcPtr;
 
-		dstPtr = (const U64*)((const U16*)dstPtr + 1);
+		dstPtr = (U64*)((U16*)dstPtr + 1);
 		srcPtr = (const U64*)((const U16*)srcPtr + 1);
 	}
 
@@ -73,11 +76,14 @@ void Buffer_revCopy(struct Buffer dst, struct Buffer src) {
 	for(; dstPtr > dstBeg && srcPtr > srcBeg; )
 		*(dstPtr--) = *(srcPtr--);
 
+	dstBeg = (U64*) dstPtr;
+	srcBeg = (const U64*) srcPtr;
+
 	if((U64)dstPtr - 4 >= (U64)dst.ptr && (U64)srcPtr - 4 >= (U64)src.ptr ) {
 
 		*(U32*)dstPtr = *(const U32*)srcPtr;
 
-		dstPtr = (const U64*)((const U32*)dstPtr - 1);
+		dstPtr = (U64*)((U32*)dstPtr - 1);
 		srcPtr = (const U64*)((const U32*)srcPtr - 1);
 	}
 
@@ -85,7 +91,7 @@ void Buffer_revCopy(struct Buffer dst, struct Buffer src) {
 
 		*(U16*)dstPtr = *(const U16*)srcPtr;
 
-		dstPtr = (const U64*)((const U16*)dstPtr - 1);
+		dstPtr = (U64*)((U16*)dstPtr - 1);
 		srcPtr = (const U64*)((const U16*)srcPtr - 1);
 	}
 
@@ -204,7 +210,7 @@ struct Error Buffer_eq(struct Buffer buf0, struct Buffer buf1, Bool *result) {
 			return Error_none();
 	}
 																					
-	for (U64 i = l >> 3 << 3, j = m >> 3 << 3; i < l && i < m; ++i)
+	for (U64 i = l >> 3 << 3, j = m >> 3 << 3; i < l && j < m; ++i, ++j)
 		if (buf0.ptr[i] != buf1.ptr[i])
 			return Error_none();
 
@@ -539,12 +545,6 @@ struct Error Buffer_offset(struct Buffer *buf, U64 siz) {
 			.paramSubId = 1
 		};
 
-	if(!siz)
-		return (struct Error) {
-			.genericError = GenericError_InvalidParameter,
-			.paramId = 1
-		};
-
 	if(siz > buf->siz)
 		return (struct Error) {
 			.genericError = GenericError_OutOfBounds
@@ -588,7 +588,7 @@ struct Error Buffer_appendBuffer(struct Buffer *buf, struct Buffer append) {
 }
 
 struct Error Buffer_append(struct Buffer *buf, const void *v, U64 siz) {
-	return Buffer_appendBuffer(buf, Buffer_createRef(v, siz));
+	return Buffer_appendBuffer(buf, Buffer_createRef((void*) v, siz));
 }
 
 struct Error Buffer_createSubset(struct Buffer buf, U64 offset, U64 siz, struct Buffer *output) {

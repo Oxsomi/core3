@@ -47,7 +47,7 @@ DNs Timer_elapsed(Ns prev) { return Timer_dns(prev, Timer_now()); }
 //ISO 8601 e.g. 2022-02-26T21:08:45.000000000Z
 //The standard functions strp don't work properly cross platform
 
-void setNum(TimerFormat format, U64 offset, U64 siz, U64 v) {
+void setNum(TimerFormat format, I64 offset, U64 siz, U64 v) {
 
 	I64 off = (I64)(offset + siz) - 1;
 
@@ -71,7 +71,7 @@ void Timer_format(Ns time, TimerFormat timeString) {
 
 	Buffer_copy(
 		Buffer_createRef(timeString, ShortString_LEN), 
-		Buffer_createRef(formatStr, sizeof(formatStr))
+		Buffer_createRef((void*) formatStr, sizeof(formatStr))
 	);
 
 	setNum(timeString, offsets[0], sizes[0], (U64)t->tm_year + 1900);

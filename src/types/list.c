@@ -109,7 +109,7 @@ struct Error List_createRepeated(
 		return err;
 
 	*result = (struct List) { 
-		.ptr = buf.siz, 
+		.ptr = buf.ptr, 
 		.length = length, 
 		.stride = stride,
 		.capacity = length
@@ -129,7 +129,7 @@ struct Error List_createCopy(struct List list, struct Allocator allocator, struc
 	if(List_empty(list)) {
 
 		if(result) {
-			*result = List_createEmpty();
+			*result = List_createEmpty(list.stride);
 			return Error_none();
 		}
 
@@ -259,10 +259,14 @@ struct Error List_set(struct List list, U64 index, struct Buffer buf) {
 	if(index >= list.length)
 		return (struct Error) { .genericError = GenericError_OutOfBounds, .paramValue0 = index, .paramValue1 = list.length };
 
-	if(buf.siz != list.stride)
+	if(buf.siz && buf.siz != list.stride)
 		return (struct Error) { .genericError = GenericError_InvalidOperation, .errorSubId = 1 };
 
-	Buffer_copy(Buffer_createRef(list.ptr + index * list.stride, list.stride), buf);
+	if(buf.siz)
+		Buffer_copy(Buffer_createRef(list.ptr + index * list.stride, list.stride), buf);
+
+	else Buffer_unsetAllBits(Buffer_createRef(list.ptr + index * list.stride, list.stride));
+
 	return Error_none();
 }
 
@@ -288,8 +292,10 @@ struct Error List_find(
 	if(!buf.ptr || !buf.siz)
 		return (struct Error) { .genericError = GenericError_NullPointer, .paramId = 1 };
 
-	*result = List_createEmpty();
+	if(!result)
+		return (struct Error) { .genericError = GenericError_NullPointer, .paramId = 3 };
 
+	*result = List_createEmpty(sizeof(U64));
 	struct Error err = List_reserve(result, list.length / 100 + 16, allocator);
 
 	if(err.genericError)
@@ -341,7 +347,6 @@ U64 List_findLast(struct List list, struct Buffer buf, U64 index) {
 	if(buf.siz != list.stride)
 		return U64_MAX;
 
-	U64 count = 0;
 	struct Error err;
 
 	for(U64 i = list.length; i != U64_MAX && i >= index; --i) {
@@ -416,7 +421,7 @@ struct Error List_shrinkToFit(struct List *list, struct Allocator allocator) {
 	if(list->capacity == list->length)
 		return Error_none();
 
-	struct List copy = List_createEmpty();
+	struct List copy = List_createEmpty(list->stride);
 	struct Error err = List_createCopy(*list, allocator, &copy);
 
 	if(err.genericError)
@@ -825,7 +830,7 @@ struct Error List_reserve(struct List *list, U64 capacity, struct Allocator allo
 	if(!list)
 		return (struct Error) { .genericError = GenericError_NullPointer };
 
-	if(List_isRef(*list))
+	if(List_isRef(*list) && list->length)
 		return (struct Error) { .genericError = GenericError_InvalidOperation };
 
 	if(capacity * list->stride / capacity != capacity)
@@ -869,13 +874,12 @@ struct Error List_resize(struct List *list, U64 size, struct Allocator allocator
 	if(size * 3 / 2 * 2 / 3 != size)
 		return (struct Error) { .genericError = GenericError_Overflow };
 
-	U64 oldSize = size;
-
 	struct Error err = List_reserve(list, size * 3 / 2, allocator);
 
 	if(err.genericError)
 		return err;
 
+	list->length = size;
 	return Error_none();
 }
 
@@ -927,13 +931,15 @@ struct Error List_popBack(struct List *list, struct Buffer output) {
 	if(!list->length)
 		return (struct Error) { .genericError = GenericError_OutOfBounds };
 
-	if(output.siz != list->stride)
+	if(output.siz && output.siz != list->stride)
 		return (struct Error) { .genericError = GenericError_InvalidOperation, .paramId = 1 };
 
 	if(List_isConstRef(*list))
 		return (struct Error) { .genericError = GenericError_InvalidOperation };
 
-	Buffer_copy(output, Buffer_createRef(list->ptr + (list->length - 1) * list->stride, list->stride));
+	if(output.siz)
+		Buffer_copy(output, Buffer_createRef(list->ptr + (list->length - 1) * list->stride, list->stride));
+
 	--list->length;
 	return Error_none();
 }
@@ -959,6 +965,6 @@ struct Error List_free(struct List *result, struct Allocator allocator) {
 		err = Buffer_free(&buf, allocator);
 	}
 
-	*result = List_createEmpty();
+	*result = List_createEmpty(result->stride);
 	return err;
 }

@@ -28,6 +28,16 @@ enum GenericError {
 	GenericError_ConstData				//If an operation is done on data that is supposed to be const
 };
 
+enum ErrorParamValues {
+	ErrorParamValues_None,
+	ErrorParamValues_V0,
+	ErrorParamValues_V1,
+	ErrorParamValues_V0_1
+};
+
+extern const C8 *GenericError_toString[];
+extern const enum ErrorParamValues GenericError_hasParamValues[];
+
 //Only direct caller preserved to save space in release mode
 
 #ifdef NDEBUG

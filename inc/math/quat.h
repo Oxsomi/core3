@@ -35,11 +35,11 @@ inline Quat Quat_lerp(Quat a, Quat b, F32 perc) { return F32x4_lerp(a, b, perc);
 
 //Helper funcs
 
-inline Quat Quat_angleAxis(F32x4 axis, F32 angle);
-inline Quat Quat_fromEuler(F32x4 pitchYawRollDeg);
-inline F32x4 Quat_toEuler(Quat q);
-inline Quat Quat_mul(Quat a, Quat b);
-inline Quat Quat_targetDirection(F32x4 origin, F32x4 target);
+Quat Quat_angleAxis(F32x4 axis, F32 angle);
+Quat Quat_fromEuler(F32x4 pitchYawRollDeg);
+F32x4 Quat_toEuler(Quat q);
+Quat Quat_mul(Quat a, Quat b);
+Quat Quat_targetDirection(F32x4 origin, F32x4 target);
 
 //Rotate normal by quaternion
 //https://math.stackexchange.com/questions/40164/how-do-you-rotate-a-vector-by-a-unit-quaternion
@@ -48,6 +48,6 @@ inline F32x4 Quat_applyToNormal(Quat R, F32x4 P) {
 	return Quat_mul(Quat_mul(R, P), Quat_conj(R));
 }
 
-inline Quat Quat_slerp(Quat a, Quat b, F32 perc);
+Quat Quat_slerp(Quat a, Quat b, F32 perc);
 
 //inline Quat Quat_fromLookRotation(F32x4 fwd, F32x4 up);

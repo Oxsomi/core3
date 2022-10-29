@@ -3,16 +3,14 @@
 #include "types/error.h"
 #include "types/buffer.h"
 
+#define WIN32_LEAN_AND_MEAN
 #define MICROSOFT_WINDOWS_WINBASE_H_DEFINE_INTERLOCKED_CPLUSPLUS_OVERLOADS 0
 #include <Windows.h>
 
 U32 Thread_getId() { return GetCurrentThreadId(); }
 
 void Thread_sleep(Ns ns) {
-
-	//TODO: this rolls over
-
-	Sleep((DWORD) U64_min((ns + ms - 1) / ms, U32_MAX));
+	Sleep((DWORD)((U64_min(ns, U32_MAX * ms - ms) + ms - 1) / ms));
 }
 
 U32 Thread_getLogicalCores() {
@@ -62,7 +60,7 @@ struct Error Thread_create(
 	thr->callback = callback;
 	thr->objectHandle = objectHandle;
 
-	thr->nativeHandle = CreateThread(0, 0, (LPTHREAD_START_ROUTINE)ThreadFunc, thread, 0, NULL);
+	thr->nativeHandle = CreateThread(0, 0, (LPTHREAD_START_ROUTINE)ThreadFunc, thr, 0, NULL);
 
 	if (!thr->nativeHandle) {
 		Thread_free(thread);
@@ -74,7 +72,7 @@ struct Error Thread_create(
 
 struct Error Thread_wait(struct Thread *thread, U32 maxWaitTimeMs) {
 
-	if(WaitForSingleObject(thread->nativeHandle, !maxWaitTimeMs ? U32_MAX : maxWaitTimeMs) == WAIT_FAILED)
+	if(WaitForSingleObject(thread->nativeHandle, maxWaitTimeMs) == WAIT_FAILED)
 		return (struct Error) {
 			.genericError = GenericError_TimedOut
 		};

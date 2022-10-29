@@ -34,12 +34,17 @@ struct String {
 	C8 *ptr;
 };
 
+struct StringList {
+	U64 len;
+	struct String *ptr;
+};
+
 //Simple helper functions (inlines)
 
 inline Bool String_isConstRef(struct String str) { return str.capacity == U64_MAX; }
 inline Bool String_isRef(struct String str) { return !str.capacity || String_isConstRef(str); }
 inline Bool String_isEmpty(struct String str) { return !str.len || !str.ptr; }
-inline Bool String_bytes(struct String str) { return str.len; }
+inline U64  String_bytes(struct String str) { return str.len; }
 
 inline struct Buffer String_buffer(struct String str) { return Buffer_createRef(str.ptr, str.len); }
 
@@ -243,14 +248,6 @@ inline struct Error String_replaceLastString(
 
 //Simple checks (consts)
 
-inline Bool String_contains(struct String str, C8 c, enum StringCase caseSensitive) { 
-	return String_findFirst(str, c, caseSensitive) != U64_MAX;
-}
-
-inline Bool String_containsString(struct String str, struct String other, enum StringCase caseSensitive)  { 
-	return String_findFirstString(str, other, caseSensitive) != U64_MAX; 
-}
-
 inline Bool String_startsWith(struct String str, C8 c, enum StringCase caseSensitive) { 
 	return 
 		str.len && str.ptr && 
@@ -274,20 +271,18 @@ U64 String_countAllString(struct String s, struct String other, enum StringCase 
 
 //Returns the locations (U64[])
 
-struct Error String_findAll(
+struct List String_findAll(
 	struct String s, 
 	C8 c, 
 	struct Allocator alloc,
-	enum StringCase caseSensitive,
-	struct List *result
+	enum StringCase caseSensitive
 );
 
-struct Error String_findAllString(
+struct List String_findAllString(
 	struct String s, 
 	struct String other,
 	struct Allocator alloc,
-	enum StringCase caseSensitive,
-	struct List *result
+	enum StringCase caseSensitive
 );
 
 //
@@ -305,6 +300,14 @@ U64 String_findLastString(struct String s, struct String other, enum StringCase 
 inline U64 String_findString(struct String s, struct String other, enum StringCase caseSensitive, Bool isFirst) {
 	return isFirst ? String_findFirstString(s, other, caseSensitive) : 
 		String_findLastString(s, other, caseSensitive);
+}
+
+inline Bool String_contains(struct String str, C8 c, enum StringCase caseSensitive) { 
+	return String_findFirst(str, c, caseSensitive) != U64_MAX;
+}
+
+inline Bool String_containsString(struct String str, struct String other, enum StringCase caseSensitive)  { 
+	return String_findFirstString(str, other, caseSensitive) != U64_MAX; 
 }
 
 Bool String_equalsString(struct String s, struct String other, enum StringCase caseSensitive);
@@ -404,11 +407,11 @@ inline Bool String_eraseLast(struct String *s, C8 c, enum StringCase caseSensiti
 
 Bool String_eraseString(struct String *s, struct String other, enum StringCase caseSensitive, Bool isFirst);
 
-Bool String_eraseFirstString(struct String *s, struct String other, enum StringCase caseSensitive){
+inline Bool String_eraseFirstString(struct String *s, struct String other, enum StringCase caseSensitive){
 	return String_eraseString(s, other, caseSensitive, true);
 }
 
-Bool String_eraseLastString(struct String *s, struct String other, enum StringCase caseSensitive) {
+inline Bool String_eraseLastString(struct String *s, struct String other, enum StringCase caseSensitive) {
 	return String_eraseString(s, other, caseSensitive, false);
 }
 
@@ -419,7 +422,7 @@ inline Bool String_replaceFirst(struct String *s, C8 c, C8 v, enum StringCase ca
 	return String_replace(s, c, v, caseSensitive, true);
 }
 
-Bool String_replaceLast(struct String *s, C8 c, C8 v, enum StringCase caseSensitive) {
+inline Bool String_replaceLast(struct String *s, C8 c, C8 v, enum StringCase caseSensitive) {
 	return String_replace(s, c, v, caseSensitive, false);
 }
 
@@ -435,6 +438,15 @@ inline Bool String_toUpper(struct String str) {
 	return String_transform(str, StringTransform_Upper);
 }
 
+//Simple file utils
+
+inline Bool String_formatPath(struct String *str) { 
+	return String_replaceAll(str, '\\', '/', StringCase_Insensitive);
+}
+
+struct String String_getFilePath(struct String *str);	//Formats on string first to ensure it's proper
+struct String String_getBasePath(struct String *str);	//Formats on string first to ensure it's proper
+
 //TODO: Regex
 
 //String list
@@ -443,15 +455,10 @@ inline Bool String_toUpper(struct String str) {
 //Because they contain mixed strings, the functions still need allocators to free heap strings.
 //This is different than List<String> because that one won't enforce string allocation properly.
 
-struct StringList {
-	U64 len;
-	struct String *ptr;
-};
-
 struct Error StringList_create(U64 len, struct Allocator alloc, struct StringList *result);
 struct Error StringList_free(struct StringList *arr, struct Allocator alloc);
 
-struct Error StringList_createCopy(const struct StringList *toCopy, struct StringList **arr, struct Allocator alloc);
+struct Error StringList_createCopy(const struct StringList *toCopy, struct StringList *arr, struct Allocator alloc);
 
 //Store the string directly into StringList (no copy)
 //The allocator is used to free strings if they are heap allocated

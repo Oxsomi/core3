@@ -17,8 +17,8 @@ inline Bool List_isRef(struct List l) { return !l.capacity || List_isConstRef(l)
 
 inline Bool List_empty(struct List l) { return !l.length; }
 inline Bool List_any(struct List l) { return l.length; }
-inline Bool List_bytes(struct List l) { return l.length * l.stride; }
-inline Bool List_allocatedBytes(struct List l) { return List_isRef(l) ? 0 : l.capacity * l.stride; }
+inline U64  List_bytes(struct List l) { return l.length * l.stride; }
+inline U64  List_allocatedBytes(struct List l) { return List_isRef(l) ? 0 : l.capacity * l.stride; }
 
 inline struct Buffer List_buffer(struct List l) { return Buffer_createRef(l.ptr, List_bytes(l)); }
 inline struct Buffer List_allocatedBuffer(struct List l) { return Buffer_createRef(l.ptr, List_allocatedBytes(l)); }
@@ -49,7 +49,7 @@ struct Error List_neq(struct List a, struct List b, Bool *result);
 struct Error List_create(U64 length, U64 stride, struct Allocator allocator, struct List *result);
 struct Error List_createNullBytes(U64 length, U64 stride, struct Allocator allocator, struct List *result);
 struct Error List_createRepeated(U64 length, U64 stride, struct Buffer data, struct Allocator allocator, struct List *result);
-struct List  List_createEmpty() { return (struct List) { 0 }; }
+inline struct List List_createEmpty(U64 stride) { return (struct List) { .stride = stride }; }
 
 struct Error List_createFromBuffer(struct Buffer buf, U64 stride, Bool isConst, struct List *result);
 

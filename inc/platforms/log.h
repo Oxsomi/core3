@@ -12,7 +12,8 @@ enum LogLevel {
 	LogLevel_Performance,
 	LogLevel_Warn,
 	LogLevel_Error,
-	LogLevel_Fatal
+	LogLevel_Fatal,
+	LogLevel_Count
 };
 
 enum LogOptions {
@@ -25,10 +26,14 @@ enum LogOptions {
 
 impl void Log_captureStackTrace(void **stackTrace, U64 stackSize, U64 skip);
 
-impl void Log_printCapturedStackTrace(const StackTrace stackTrace, enum LogLevel lvl);
+impl void Log_printCapturedStackTraceCustom(const void **stackTrace, U64 stackSize, enum LogLevel lvl, enum LogOptions options);
 impl void Log_log(enum LogLevel lvl, enum LogOptions options, struct LogArgs args);
 
-void Log_printStackTrace(U64 skip, enum LogLevel lvl);
+inline void Log_printCapturedStackTrace(const StackTrace stackTrace, enum LogLevel lvl, enum LogOptions options) {
+	Log_printCapturedStackTraceCustom((const void**) stackTrace, StackTrace_SIZE, lvl, options);
+}
+
+void Log_printStackTrace(U64 skip, enum LogLevel lvl, enum LogOptions options);
 
 void Log_debug(struct String s, enum LogOptions options);
 void Log_performance(struct String s, enum LogOptions options);
