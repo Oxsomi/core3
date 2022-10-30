@@ -7,19 +7,19 @@
 inline Error F32_fromBits(U64 v, F32 *res) {
 
 	if(v > U32_MAX)
-		return Error_base(GenericError_OutOfBounds, 0, 0, 0, v, 0);
+		return Error_base(EGenericError_OutOfBounds, 0, 0, 0, v, 0);
 
 	U32 bits = (U32) v;
 	F32 r = *(const F32*) &v;
 
 	if(F32_isNaN(r))
-		return Error_base(GenericError_NaN, 0, 0, 0, v, 0);
+		return Error_base(EGenericError_NaN, 0, 0, 0, v, 0);
 
 	if(F32_isInf(r))
-		return Error_base(GenericError_Overflow, 0, 0, 0, v, 0);
+		return Error_base(EGenericError_Overflow, 0, 0, 0, v, 0);
 
 	if(v == (1 << 31))	//Signed zero
-		return Error_base(GenericError_InvalidParameter, 0, 0, 0, v, 0);
+		return Error_base(EGenericError_InvalidParameter, 0, 0, 0, v, 0);
 
 	*res = r;
 	return Error_none();
@@ -32,7 +32,7 @@ inline Error F32_fromBits(U64 v, F32 *res) {
 	__VA_ARGS__														\
 																	\
 	if(v > type##_MAX)												\
-		return Error_base(GenericError_Overflow, 0, 0, 0, v, 0);	\
+		return Error_base(EGenericError_Overflow, 0, 0, 0, v, 0);	\
 																	\
 	*res = (type) v;												\
 	return Error_none();											\
@@ -40,7 +40,7 @@ inline Error F32_fromBits(U64 v, F32 *res) {
 
 #define CastFromI(type, ...) CastFromU(type, __VA_ARGS__ 			\
 	if(v < type##_MIN)												\
-		return Error_base(GenericError_Underflow, 0, 0, 0, v, 0);	\
+		return Error_base(EGenericError_Underflow, 0, 0, 0, v, 0);	\
 )
 
 #define CastFromF(type) CastFromI(type, v = F32_floor(v);)
@@ -85,13 +85,13 @@ inline Error U64_fromFloat(F32 v, U64 *res)  CastFromF(U64)
 																			\
 	if(!F32_isValid(r))														\
 		return Error_base(													\
-			v >= 0 ? GenericError_Overflow : GenericError_Underflow, 0,		\
+			v >= 0 ? EGenericError_Overflow : EGenericError_Underflow, 0,		\
 			0, 0, v, 0														\
 		);																	\
 																			\
 	if(r != v)																\
 		return Error_base(													\
-			GenericError_NotFound, 0, 										\
+			EGenericError_NotFound, 0, 										\
 			0, 0, v, 0														\
 		);																	\
 																			\

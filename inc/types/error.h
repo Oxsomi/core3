@@ -4,39 +4,39 @@
 #define StackTrace_SIZE 128
 typedef void *StackTrace[StackTrace_SIZE];
 
-typedef enum GenericError {
-	GenericError_None,
-	GenericError_OutOfMemory,
-	GenericError_OutOfBounds,
-	GenericError_NullPointer,
-	GenericError_Unauthorized,			//For example if the local permissions or remote server disallow it
-	GenericError_NotFound,
-	GenericError_DivideByZero,
-	GenericError_Overflow,
-	GenericError_Underflow,
-	GenericError_NaN,
-	GenericError_InvalidEnum,
-	GenericError_InvalidParameter,
-	GenericError_InvalidOperation,
-	GenericError_InvalidCast,
-	GenericError_InvalidState,
-	GenericError_RateLimit,
-	GenericError_LoopLimit,				//If the platform decides that loop limit is reached, this will be thrown
-	GenericError_AlreadyDefined,
-	GenericError_UnsupportedOperation,
-	GenericError_TimedOut,
-	GenericError_ConstData				//If an operation is done on data that is supposed to be const
-} GenericError;
+typedef enum EGenericError {
+	EGenericError_None,
+	EGenericError_OutOfMemory,
+	EGenericError_OutOfBounds,
+	EGenericError_NullPointer,
+	EGenericError_Unauthorized,			//For example if the local permissions or remote server disallow it
+	EGenericError_NotFound,
+	EGenericError_DivideByZero,
+	EGenericError_Overflow,
+	EGenericError_Underflow,
+	EGenericError_NaN,
+	EGenericError_InvalidEnum,
+	EGenericError_InvalidParameter,
+	EGenericError_InvalidOperation,
+	EGenericError_InvalidCast,
+	EGenericError_InvalidState,
+	EGenericError_RateLimit,
+	EGenericError_LoopLimit,				//If the platform decides that loop limit is reached, this will be thrown
+	EGenericError_AlreadyDefined,
+	EGenericError_UnsupportedOperation,
+	EGenericError_TimedOut,
+	EGenericError_ConstData				//If an operation is done on data that is supposed to be const
+} EGenericError;
 
-typedef enum ErrorParamValues {
-	ErrorParamValues_None,
-	ErrorParamValues_V0,
-	ErrorParamValues_V1,
-	ErrorParamValues_V0_1
-} ErrorParamValues;
+typedef enum EErrorParamValues {
+	EErrorParamValues_None,
+	EErrorParamValues_V0,
+	EErrorParamValues_V1,
+	EErrorParamValues_V0_1
+} EErrorParamValues;
 
-extern const C8 *GenericError_toString[];
-extern const ErrorParamValues GenericError_hasParamValues[];
+extern const C8 *EGenericError_toString[];
+extern const EErrorParamValues EGenericError_hasParamValues[];
 
 //Only direct caller preserved to save space in release mode
 
@@ -50,7 +50,7 @@ extern const ErrorParamValues GenericError_hasParamValues[];
 
 typedef struct Error {
 
-	GenericError genericError;
+	EGenericError genericError;
 	U32 errorSubId;
 
 	U32 paramId;
@@ -72,7 +72,7 @@ typedef struct Error {
 //But the one in platform does
 
 Error Error_base(
-	GenericError err, U32 subId, 
+	EGenericError err, U32 subId, 
 	U32 paramId, U32 paramSubId, 
 	U64 paramValue0, U64 paramValue1
 );

@@ -10,14 +10,14 @@
 Error Lock_create(Lock *res) {
 
 	if(!res)
-		return (Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = EGenericError_NullPointer };
 
 	*res = (Lock) { .data = CreateMutexA(
 		NULL, FALSE, NULL
 	)};
 
 	if(!res->data)
-		return (Error) { .genericError = GenericError_InvalidOperation };
+		return (Error) { .genericError = EGenericError_InvalidOperation };
 
 	return Error_none();
 }
@@ -25,10 +25,10 @@ Error Lock_create(Lock *res) {
 Error Lock_free(Lock *res) {
 
 	if(!res || !res->data)
-		return (Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = EGenericError_NullPointer };
 
 	if(Lock_isLocked(*res))
-		return (Error) { .genericError = GenericError_InvalidOperation };
+		return (Error) { .genericError = EGenericError_InvalidOperation };
 
 	CloseHandle(res->data);
 	*res = (Lock){ 0 };

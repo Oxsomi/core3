@@ -8,7 +8,7 @@ Error F32_pow(F32 v, F32 exp, F32 *res) {
 
 	if(!F32_isValid(r))
 		return Error_base(
-			GenericError_Overflow, 0,
+			EGenericError_Overflow, 0,
 			0, 0, 
 			*(const U32*) &v, *(const U32*) &exp
 		);
@@ -46,7 +46,7 @@ Error F32_mod(F32 v, F32 mod, F32 *res) {
 
 	if(!mod)
 		return (Error) {
-			.genericError = GenericError_DivideByZero,
+			.genericError = EGenericError_DivideByZero,
 			.paramValue0 = *(const U32*) &v, 
 			.paramValue1 = *(const U32*) &mod
 		};
@@ -55,7 +55,7 @@ Error F32_mod(F32 v, F32 mod, F32 *res) {
 
 	if(!F32_isValid(r))
 		return (Error) {
-			.genericError = GenericError_Overflow,
+			.genericError = EGenericError_Overflow,
 			.paramValue0 = *(const U32*) &v, 
 			.paramValue1 = *(const U32*) &mod
 		};

@@ -38,7 +38,7 @@ Error BMP_writeRGBA(
 ) {
 
 	if(buf.siz > I32_MAX || buf.siz != (U64) w * h * 4)
-		return (Error) { .genericError = GenericError_InvalidParameter };
+		return (Error) { .genericError = EGenericError_InvalidParameter };
 
 	U32 headersSize = (U32) (
 		sizeof(BMPHeader) + 

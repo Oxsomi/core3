@@ -8,19 +8,19 @@ Error Buffer_getBit(Buffer buf, U64 offset, Bool *output) {
 
 	if(!output)
 		return (Error) {
-			.genericError = GenericError_NullPointer,
+			.genericError = EGenericError_NullPointer,
 			.paramId = 2
 		};
 
 	if(!buf.ptr)
 		return (Error) {
-			.genericError = GenericError_NullPointer,
+			.genericError = EGenericError_NullPointer,
 			.paramId = 0
 		};
 
 	if((offset >> 3) >= buf.siz)
 		return (Error) {
-			.genericError = GenericError_OutOfBounds,
+			.genericError = EGenericError_OutOfBounds,
 			.paramId = 0,
 			.paramValue0 = offset >> 3,
 			.paramValue1 = buf.siz
@@ -105,13 +105,13 @@ Error Buffer_setBit(Buffer buf, U64 offset) {
 
 	if(!buf.ptr)
 		return (Error) {
-			.genericError = GenericError_NullPointer,
+			.genericError = EGenericError_NullPointer,
 			.paramId = 0
 		};
 
 	if((offset >> 3) >= buf.siz)
 		return (Error) {
-			.genericError = GenericError_OutOfBounds,
+			.genericError = EGenericError_OutOfBounds,
 			.paramId = 0,
 			.paramValue0 = offset >> 3,
 			.paramValue1 = buf.siz
@@ -125,13 +125,13 @@ Error Buffer_resetBit(Buffer buf, U64 offset) {
 
 	if(!buf.ptr)
 		return (Error) {
-			.genericError = GenericError_NullPointer,
+			.genericError = EGenericError_NullPointer,
 			.paramId = 0
 		};
 
 	if((offset >> 3) >= buf.siz)
 		return (Error) {
-			.genericError = GenericError_OutOfBounds,
+			.genericError = EGenericError_OutOfBounds,
 			.paramId = 0,
 			.paramValue0 = offset >> 3,
 			.paramValue1 = buf.siz
@@ -145,13 +145,13 @@ Error Buffer_resetBit(Buffer buf, U64 offset) {
 																						\
 	if(!dst.ptr || !src.ptr)															\
 		return (Error) {																\
-			.genericError = GenericError_NullPointer,									\
+			.genericError = EGenericError_NullPointer,									\
 			.paramId = !src.ptr ? 1 : 0													\
 		};																				\
 																						\
 	if(!dst.siz)																		\
 		return (Error) {																\
-			.genericError = GenericError_InvalidParameter,								\
+			.genericError = EGenericError_InvalidParameter,								\
 			.paramId = !src.siz ? 1 : 0,												\
 			.paramSubId = 1																\
 		};																				\
@@ -176,19 +176,19 @@ Error Buffer_eq(Buffer buf0, Buffer buf1, Bool *result) {
 	
 	if(!buf0.ptr || !buf1.ptr)
 		return (Error) {
-			.genericError = GenericError_NullPointer,
+			.genericError = EGenericError_NullPointer,
 			.paramId = !buf1.ptr ? 1 : 0
 		};
 
 	if(!result)
 		return (Error) {
-			.genericError = GenericError_NullPointer,
+			.genericError = EGenericError_NullPointer,
 			.paramId = 2
 		};
 
 	if(!buf0.siz || !buf1.siz)
 		return (Error) {
-			.genericError = GenericError_InvalidParameter,
+			.genericError = EGenericError_InvalidParameter,
 			.paramId = !buf1.siz ? 1 : 0,
 			.paramSubId = 1
 		};
@@ -250,25 +250,25 @@ Error Buffer_setBitRange(Buffer dst, U64 dstOff, U64 bits) {
 
 	if(!dst.ptr)
 		return (Error) {
-			.genericError = GenericError_NullPointer,
+			.genericError = EGenericError_NullPointer,
 			.paramSubId = 0
 		};
 
 	if(!dst.siz)
 		return (Error) {
-			.genericError = GenericError_InvalidParameter,
+			.genericError = EGenericError_InvalidParameter,
 			.paramSubId = 1
 		};
 
 	if(((dstOff + bits - 1) >> 3) >= dst.siz)
 		return (Error) {
-			.genericError = GenericError_OutOfBounds,
+			.genericError = EGenericError_OutOfBounds,
 			.paramId = 1
 		};
 
 	if(!bits)
 		return (Error) {
-			.genericError = GenericError_InvalidParameter,
+			.genericError = EGenericError_InvalidParameter,
 			.paramId = 2
 		};
 
@@ -312,25 +312,25 @@ Error Buffer_unsetBitRange(Buffer dst, U64 dstOff, U64 bits) {
 
 	if(!dst.ptr)
 		return (Error) {
-			.genericError = GenericError_NullPointer,
+			.genericError = EGenericError_NullPointer,
 			.paramSubId = 0
 		};
 
 	if(!dst.siz)
 		return (Error) {
-			.genericError = GenericError_InvalidParameter,
+			.genericError = EGenericError_InvalidParameter,
 			.paramSubId = 1
 		};
 
 	if(((dstOff + bits - 1) >> 3) >= dst.siz)
 		return (Error) {
-			.genericError = GenericError_OutOfBounds,
+			.genericError = EGenericError_OutOfBounds,
 			.paramId = 1
 		};
 
 	if(!bits)
 		return (Error) {
-			.genericError = GenericError_InvalidParameter,
+			.genericError = EGenericError_InvalidParameter,
 			.paramId = 2
 		};
 
@@ -374,12 +374,12 @@ inline Error Buffer_setAllToInternal(Buffer buf, U64 b64, U8 b8) {
 
 	if(!buf.ptr)
 		return (Error) {
-			.genericError = GenericError_NullPointer
+			.genericError = EGenericError_NullPointer
 		};
 
 	if(!buf.siz)
 		return (Error) {
-			.genericError = GenericError_InvalidParameter,
+			.genericError = EGenericError_InvalidParameter,
 			.paramSubId = 1
 		};
 
@@ -406,20 +406,20 @@ Error Buffer_allocBitsInternal(U64 siz, Allocator alloc, Buffer *result) {
 
 	if(!siz)
 		return (Error) {
-			.genericError = GenericError_InvalidParameter,
+			.genericError = EGenericError_InvalidParameter,
 			.paramId = 0
 		};
 
 	if(!alloc.alloc)
 		return (Error) {
-			.genericError = GenericError_NullPointer,
+			.genericError = EGenericError_NullPointer,
 			.paramId = 1,
 			.paramSubId = 1
 		};
 
 	if(!result)
 		return (Error) {
-			.genericError = GenericError_NullPointer,
+			.genericError = EGenericError_NullPointer,
 			.paramId = 2
 		};
 
@@ -432,7 +432,7 @@ Error Buffer_allocBitsInternal(U64 siz, Allocator alloc, Buffer *result) {
 
 	if(!result->ptr)
 		return (Error) {
-			.genericError = GenericError_NullPointer,
+			.genericError = EGenericError_NullPointer,
 			.errorSubId = 1
 		};
 
@@ -487,26 +487,26 @@ Error Buffer_free(Buffer *buf, Allocator alloc) {
 
 	if(!buf)
 		return (Error) {
-			.genericError = GenericError_NullPointer,
+			.genericError = EGenericError_NullPointer,
 			.paramId = 0
 		};
 
 	if(!buf->ptr)
 		return (Error) {
-			.genericError = GenericError_NullPointer,
+			.genericError = EGenericError_NullPointer,
 			.paramId = 0
 		};
 
 	if(!buf->siz)
 		return (Error) {
-			.genericError = GenericError_InvalidParameter,
+			.genericError = EGenericError_InvalidParameter,
 			.paramId = 0,
 			.paramSubId = 1
 		};
 
 	if(!alloc.free)
 		return (Error) {
-			.genericError = GenericError_NullPointer,
+			.genericError = EGenericError_NullPointer,
 			.paramId = 1,
 			.paramSubId = 2
 		};
@@ -527,17 +527,17 @@ Error Buffer_createUninitializedBytes(U64 siz, Allocator alloc, Buffer *result) 
 Error Buffer_offset(Buffer *buf, U64 siz) {
 
 	if(!buf || !buf->ptr)
-		return (Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = EGenericError_NullPointer };
 
 	if(!buf->siz)
 		return (Error) {
-			.genericError = GenericError_InvalidParameter,
+			.genericError = EGenericError_InvalidParameter,
 			.paramId = 0,
 			.paramSubId = 1
 		};
 
 	if(siz > buf->siz)
-		return (Error) { .genericError = GenericError_OutOfBounds };
+		return (Error) { .genericError = EGenericError_OutOfBounds };
 
 	buf->ptr += siz;
 	buf->siz -= siz;
@@ -561,7 +561,7 @@ Error Buffer_appendBuffer(Buffer *buf, Buffer append) {
 
 	if(!append.ptr)
 		return (Error) {
-			.genericError = GenericError_NullPointer,
+			.genericError = EGenericError_NullPointer,
 			.paramId = 1
 		};
 
@@ -588,7 +588,7 @@ Error Buffer_createSubset(Buffer buf, U64 offset, U64 siz, Buffer *output) {
 		return e;
 		
 	if(siz > buf.siz)
-		return (Error) { .genericError = GenericError_OutOfBounds };
+		return (Error) { .genericError = EGenericError_OutOfBounds };
 
 	buf.siz = siz;
 	*output = buf;

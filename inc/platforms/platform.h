@@ -3,11 +3,11 @@
 #include "platforms/window_manager.h"
 
 typedef enum EPlatform {
-	Platform_Uninitialized,
-	Platform_Windows,
-	Platform_Linux,
-	Platform_Android,
-	Platform_Web
+	EPlatform_Uninitialized,
+	EPlatform_Windows,
+	EPlatform_Linux,
+	EPlatform_Android,
+	EPlatform_Web
 } EPlatform;
 
 typedef struct Platform {
@@ -23,9 +23,9 @@ typedef struct Platform {
 
 } Platform;
 
-extern Platform Platform_instance;
+extern Platform EPlatform_instance;
 
-Error Platform_create(
+Error EPlatform_create(
 	int cmdArgc, const C8 *cmdArgs[], 
 	void *data,
 	FreeFunc free, AllocFunc alloc, void *allocator

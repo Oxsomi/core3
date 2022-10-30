@@ -1,22 +1,22 @@
 #pragma once
 #include "types/string.h"
 
-typedef enum InputState {
+typedef enum EInputState {
 
-	InputState_Up,
-	InputState_Pressed,
-	InputState_Released,
-	InputState_Down,
+	EInputState_Up,
+	EInputState_Pressed,
+	EInputState_Released,
+	EInputState_Down,
 
-	InputState_Curr = 1 << 0,
-	InputState_Prev = 1 << 1
+	EInputState_Curr = 1 << 0,
+	EInputState_Prev = 1 << 1
 
-} InputState;
+} EInputState;
 
-typedef enum InputType {
-	InputType_Button,
-	InputType_Axis
-} InputType;
+typedef enum EInputType {
+	EInputType_Button,
+	EInputType_Axis
+} EInputType;
 
 typedef U32 InputHandle;		//Don't serialize this, because input devices can change it. Use the name instead.
 
@@ -29,12 +29,12 @@ typedef struct InputAxis {
 	F32 deadZone;
 } InputAxis;
 
-typedef enum InputDeviceType {
-	InputDeviceType_Undefined,
-	InputDeviceType_Keyboard,
-	InputDeviceType_Mouse,
-	InputDeviceType_Controller
-} InputDeviceType;
+typedef enum EInputDeviceType {
+	EInputDeviceType_Undefined,
+	EInputDeviceType_EKeyboard,
+	EInputDeviceType_Mouse,
+	EInputDeviceType_Controller
+} EInputDeviceType;
 
 typedef struct InputDevice {
 
@@ -42,7 +42,7 @@ typedef struct InputDevice {
 
 	U16 buttons, axes;
 	U32 flags;
-	InputDeviceType type;
+	EInputDeviceType type;
 
 	//The names of all handles
 	//InputAxis[axes]
@@ -65,12 +65,12 @@ typedef struct InputDevice {
 
 //Initializing a device
 
-Error InputDevice_create(U16 buttons, U16 axes, InputDeviceType type, InputDevice *result);
+Error InputDevice_create(U16 buttons, U16 axes, EInputDeviceType type, InputDevice *result);
 
 Error InputDevice_createButton(
 	InputDevice dev, 
 	U16 localHandle, 
-	String keyName,			//The alphaNumeric name (e.g. Key_1)
+	String keyName,			//The alphaNumeric name (e.g. EKey_1)
 	InputHandle *result
 );
 
@@ -105,8 +105,8 @@ inline Bool InputDevice_isButton(InputDevice d, InputHandle handle) {
 	return !InputDevice_isAxis(d, handle);
 }
 
-inline InputHandle InputDevice_createHandle(InputDevice d, U16 localHandle, InputType type) { 
-	return localHandle + (InputHandle)(type == InputType_Axis ? 0 : d.axes); 
+inline InputHandle InputDevice_createHandle(InputDevice d, U16 localHandle, EInputType type) { 
+	return localHandle + (InputHandle)(type == EInputType_Axis ? 0 : d.axes); 
 }
 
 inline U16 InputDevice_getLocalHandle(InputDevice d, InputHandle handle) {
@@ -115,7 +115,7 @@ inline U16 InputDevice_getLocalHandle(InputDevice d, InputHandle handle) {
 
 //Getting previous/current states
 
-InputState InputDevice_getState(InputDevice d, InputHandle handle);
+EInputState InputDevice_getState(InputDevice d, InputHandle handle);
 
 inline Bool InputDevice_hasFlag(InputDevice d, U8 flag) {
 
@@ -148,11 +148,11 @@ inline Bool InputDevice_setFlagTo(InputDevice *d, U8 flag, Bool value) {
 }
 
 inline Bool InputDevice_getCurrentState(InputDevice d, InputHandle handle) { 
-	return InputDevice_getState(d, handle) & InputState_Curr; 
+	return InputDevice_getState(d, handle) & EInputState_Curr; 
 }
 
 inline Bool InputDevice_getPreviousState(InputDevice d, InputHandle handle) { 
-	return InputDevice_getState(d, handle) & InputState_Prev; 
+	return InputDevice_getState(d, handle) & EInputState_Prev; 
 }
 
 F32 InputDevice_getDeltaAxis(InputDevice d, InputHandle handle);
@@ -160,19 +160,19 @@ F32 InputDevice_getCurrentAxis(InputDevice d, InputHandle handle);
 F32 InputDevice_getPreviousAxis(InputDevice d, InputHandle handle);
 
 inline Bool InputDevice_isDown(InputDevice d, InputHandle handle) { 
-	return InputDevice_getState(d, handle) == InputState_Down; 
+	return InputDevice_getState(d, handle) == EInputState_Down; 
 }
 
 inline Bool InputDevice_isUp(InputDevice d, InputHandle handle) { 
-	return InputDevice_getState(d, handle) == InputState_Up; 
+	return InputDevice_getState(d, handle) == EInputState_Up; 
 }
 
 inline Bool InputDevice_isReleased(InputDevice d, InputHandle handle) { 
-	return InputDevice_getState(d, handle) == InputState_Released; 
+	return InputDevice_getState(d, handle) == EInputState_Released; 
 }
 
 inline Bool InputDevice_isPressed(InputDevice d, InputHandle handle) { 
-	return InputDevice_getState(d, handle) == InputState_Pressed;
+	return InputDevice_getState(d, handle) == EInputState_Pressed;
 }
 
 //For serialization and stuff like that

@@ -97,20 +97,20 @@ typedef struct Buffer {
 C8 C8_toLower(C8 c);
 C8 C8_toUpper(C8 c);
 
-typedef enum StringCase {
-	StringCase_Sensitive,			//Prefer when possible; avoids transforming the character
-	StringCase_Insensitive
-} StringCase;
+typedef enum EStringCase {
+	EStringCase_Sensitive,			//Prefer when possible; avoids transforming the character
+	EStringCase_Insensitive
+} EStringCase;
 
-typedef enum StringTransform {
-	StringTransform_None,
-	StringTransform_Lower,
-	StringTransform_Upper
-} StringTransform;
+typedef enum EStringTransform {
+	EStringTransform_None,
+	EStringTransform_Lower,
+	EStringTransform_Upper
+} EStringTransform;
 
-inline C8 C8_transform(C8 c, StringTransform transform) {
-	return transform == StringTransform_None ? c : (
-		transform == StringTransform_Lower ? C8_toLower(c) :
+inline C8 C8_transform(C8 c, EStringTransform transform) {
+	return transform == EStringTransform_None ? c : (
+		transform == EStringTransform_Lower ? C8_toLower(c) :
 		C8_toUpper(c)
 	);
 }

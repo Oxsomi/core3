@@ -87,10 +87,10 @@ target_link_libraries(OxC3_formats PUBLIC OxC3_types)
 
 if(WIN32)
 	set(platform windows)
-	add_definitions(-D_PLATFORM_TYPE=Platform_Windows)
+	add_definitions(-D_PLATFORM_TYPE=EPlatform_Windows)
 else()
 	set(platform linux)
-	add_definitions(-D_PLATFORM_TYPE=Platform_Linux)
+	add_definitions(-D_PLATFORM_TYPE=EPlatform_Linux)
 endif()
 
 message("-- Targetting platform: ${platform}")

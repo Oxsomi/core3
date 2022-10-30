@@ -35,21 +35,21 @@ Error Thread_create(
 ) {
 
 	if(!thread)
-		return (Error) { .genericError = GenericError_NullPointer, .paramId = 2 };
+		return (Error) { .genericError = EGenericError_NullPointer, .paramId = 2 };
 
 	if(*thread)
 		return (Error) { 
-			.genericError = GenericError_InvalidParameter, 
+			.genericError = EGenericError_InvalidParameter, 
 			.paramId = 2, .paramValue0 = (U64) thread 
 		};
 
 	if(!callback)
-		return (Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = EGenericError_NullPointer };
 
 	Buffer buf = Buffer_createNull();
 
-	Error err = Platform_instance.alloc.alloc(
-		Platform_instance.alloc.ptr, sizeof(Thread), &buf
+	Error err = EPlatform_instance.alloc.alloc(
+		EPlatform_instance.alloc.ptr, sizeof(Thread), &buf
 	);
 
 	if (err.genericError)
@@ -64,7 +64,7 @@ Error Thread_create(
 
 	if (!thr->nativeHandle) {
 		Thread_free(thread);
-		return (Error) { .genericError = GenericError_InvalidOperation };
+		return (Error) { .genericError = EGenericError_InvalidOperation };
 	}
 
 	return Error_none();
@@ -74,7 +74,7 @@ Error Thread_wait(Thread *thread, U32 maxWaitTimeMs) {
 
 	if(WaitForSingleObject(thread->nativeHandle, maxWaitTimeMs) == WAIT_FAILED)
 		return (Error) {
-			.genericError = GenericError_TimedOut
+			.genericError = EGenericError_TimedOut
 		};
 
 	return Error_none();

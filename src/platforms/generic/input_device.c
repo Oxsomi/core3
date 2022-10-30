@@ -38,10 +38,10 @@ inline BitRef InputDevice_getButtonValue(InputDevice dev, U16 localHandle, Bool 
 
 //
 
-Error InputDevice_create(U16 buttons, U16 axes, InputDeviceType type, InputDevice *result) {
+Error InputDevice_create(U16 buttons, U16 axes, EInputDeviceType type, InputDevice *result) {
 
 	if(!result)
-		return (Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = EGenericError_NullPointer };
 
 	*result = (InputDevice) {
 		.buttons = buttons,
@@ -52,14 +52,14 @@ Error InputDevice_create(U16 buttons, U16 axes, InputDeviceType type, InputDevic
 	U64 handles = sizeof(InputAxis) * axes + sizeof(InputButton) * buttons;
 	U64 states = sizeof(F32) * 2 * axes + (((U64)buttons * 2 + 7) >> 3);
 
-	Error err = Buffer_createZeroBits(handles, Platform_instance.alloc, &result->handles);
+	Error err = Buffer_createZeroBits(handles, EPlatform_instance.alloc, &result->handles);
 
 	if (err.genericError) {
 		InputDevice_free(result);
 		return err;
 	}
 
-	err = Buffer_createZeroBits(states, Platform_instance.alloc, &result->states);
+	err = Buffer_createZeroBits(states, EPlatform_instance.alloc, &result->states);
 
 	if (err.genericError) {
 		InputDevice_free(result);
@@ -69,24 +69,24 @@ Error InputDevice_create(U16 buttons, U16 axes, InputDeviceType type, InputDevic
 	return Error_none();
 }
 
-#define InputDeviceCreate(InputType) 																\
+#define InputDeviceCreate(EInputType) 																\
 																									\
-	Input##InputType *inputType = InputDevice_get##InputType(d, localHandle);						\
+	Input##EInputType *inputType = InputDevice_get##EInputType(d, localHandle);						\
 																									\
 	if(!res)																						\
-		return (Error) { .genericError = GenericError_OutOfBounds, .paramId = 1 };					\
+		return (Error) { .genericError = EGenericError_OutOfBounds, .paramId = 1 };					\
 																									\
 	if(inputType->name[0])																			\
-		return (Error) { .genericError = GenericError_AlreadyDefined };								\
+		return (Error) { .genericError = EGenericError_AlreadyDefined };								\
 																									\
 	if(!inputType)																					\
-		return (Error) { .genericError = GenericError_NullPointer };								\
+		return (Error) { .genericError = EGenericError_NullPointer };								\
 																									\
 	if(String_isEmpty(keyName))																		\
-		return (Error) { .genericError = GenericError_InvalidParameter, .paramId = 2 };				\
+		return (Error) { .genericError = EGenericError_InvalidParameter, .paramId = 2 };				\
 																									\
 	if(keyName.len >= LongString_LEN)																\
-		return (Error) { .genericError = GenericError_OutOfBounds, .paramId = 2 };					\
+		return (Error) { .genericError = EGenericError_OutOfBounds, .paramId = 2 };					\
 																									\
 	Buffer_copy(																					\
 		Buffer_createRef(inputType->name, LongString_LEN), 											\
@@ -99,11 +99,11 @@ Error InputDevice_createButton(
 	String keyName, 
 	InputHandle *res
 ) {
-	if(d.type == InputDeviceType_Undefined)
-		return (Error) { .genericError = GenericError_InvalidOperation };
+	if(d.type == EInputDeviceType_Undefined)
+		return (Error) { .genericError = EGenericError_InvalidOperation };
 
 	InputDeviceCreate(Button);
-	*res = InputDevice_createHandle(d, localHandle, InputType_Button);
+	*res = InputDevice_createHandle(d, localHandle, EInputType_Button);
 	return Error_none();
 }
 
@@ -114,22 +114,22 @@ Error InputDevice_createAxis(
 	F32 deadZone, 
 	InputHandle *res
 ) {
-	if(d.type == InputDeviceType_Undefined)
-		return (Error) { .genericError = GenericError_InvalidOperation };
+	if(d.type == EInputDeviceType_Undefined)
+		return (Error) { .genericError = EGenericError_InvalidOperation };
 
 	InputDeviceCreate(Axis);
-	*res = InputDevice_createHandle(d, localHandle, InputType_Axis);
+	*res = InputDevice_createHandle(d, localHandle, EInputType_Axis);
 	inputType->deadZone = deadZone;
 	return Error_none();
 }
 
 Error InputDevice_free(InputDevice *dev) {
 
-	if(dev->type == InputDeviceType_Undefined)
+	if(dev->type == EInputDeviceType_Undefined)
 		return Error_none();
 
-	void *allocator = Platform_instance.alloc.ptr;
-	FreeFunc free = Platform_instance.alloc.free;
+	void *allocator = EPlatform_instance.alloc.ptr;
+	FreeFunc free = EPlatform_instance.alloc.free;
 
 	Error err = free(allocator, dev->handles), errTemp;
 
@@ -143,24 +143,24 @@ Error InputDevice_free(InputDevice *dev) {
 	return err;
 }
 
-InputState InputDevice_getState(InputDevice d, InputHandle handle) {
+EInputState InputDevice_getState(InputDevice d, InputHandle handle) {
 
-	if(d.type == InputDeviceType_Undefined || !InputDevice_isButton(d, handle))
-		return InputState_Up;
+	if(d.type == EInputDeviceType_Undefined || !InputDevice_isButton(d, handle))
+		return EInputState_Up;
 
 	U16 i = InputDevice_getLocalHandle(d, handle);
 	BitRef old = InputDevice_getButtonValue(d, i, false);
 
-	return (InputState)((*old.ptr >> old.off) & 3);
+	return (EInputState)((*old.ptr >> old.off) & 3);
 }
 
 F32 InputDevice_getCurrentAxis(InputDevice d, InputHandle handle) {
-	return d.type == InputDeviceType_Undefined || !InputDevice_isAxis(d, handle) ? 0 : 
+	return d.type == EInputDeviceType_Undefined || !InputDevice_isAxis(d, handle) ? 0 : 
 		*InputDevice_getAxisValue(d, InputDevice_getLocalHandle(d, handle), true);
 }
 
 F32 InputDevice_getPreviousAxis(InputDevice d, InputHandle handle) {
-	return d.type == InputDeviceType_Undefined || !InputDevice_isAxis(d, handle) ? 0 : 
+	return d.type == EInputDeviceType_Undefined || !InputDevice_isAxis(d, handle) ? 0 : 
 		*InputDevice_getAxisValue(d, InputDevice_getLocalHandle(d, handle), false);
 }
 
@@ -170,7 +170,7 @@ F32 InputDevice_getDeltaAxis(InputDevice d, InputHandle handle) {
 
 String InputDevice_getName(InputDevice d, InputHandle handle) {
 
-	if(d.type == InputDeviceType_Undefined)
+	if(d.type == EInputDeviceType_Undefined)
 		return String_createEmpty();
 
 	U16 localHandle = InputDevice_getLocalHandle(d, handle);
@@ -183,7 +183,7 @@ String InputDevice_getName(InputDevice d, InputHandle handle) {
 
 InputHandle InputDevice_getHandle(InputDevice d, String name) {
 
-	if(d.type == InputDeviceType_Undefined)
+	if(d.type == EInputDeviceType_Undefined)
 		return InputDevice_invalidHandle();
 
 	//TODO: We probably wanna optimize this at some point like use a hashmap
@@ -192,23 +192,23 @@ InputHandle InputDevice_getHandle(InputDevice d, String name) {
 		if(String_equalsString(
 			String_createRefLongStringConst(InputDevice_getButton(d, i)->name), 
 			name,
-			StringCase_Insensitive
+			EStringCase_Insensitive
 		))
-			return InputDevice_createHandle(d, i, InputType_Button);
+			return InputDevice_createHandle(d, i, EInputType_Button);
 
 	for(U16 i = 0; i < d.axes; ++i)
 		if(String_equalsString(
 			String_createRefLongStringConst(InputDevice_getAxis(d, i)->name), 
 			name,
-			StringCase_Insensitive
+			EStringCase_Insensitive
 		))
-			return InputDevice_createHandle(d, i, InputType_Axis);
+			return InputDevice_createHandle(d, i, EInputType_Axis);
 
 	return InputDevice_invalidHandle();
 }
 
 F32 InputDevice_getDeadZone(InputDevice d, InputHandle handle) {
-	return d.type == InputDeviceType_Undefined || !InputDevice_isAxis(d, handle) ? 0 : 
+	return d.type == EInputDeviceType_Undefined || !InputDevice_isAxis(d, handle) ? 0 : 
 		InputDevice_getAxis(d, InputDevice_getLocalHandle(d, handle))->deadZone;
 }
 
@@ -216,7 +216,7 @@ F32 InputDevice_getDeadZone(InputDevice d, InputHandle handle) {
 
 Bool InputDevice_setCurrentState(InputDevice d, InputHandle handle, Bool v) {
 
-	if(d.type == InputDeviceType_Undefined || !InputDevice_isButton(d, handle))
+	if(d.type == EInputDeviceType_Undefined || !InputDevice_isButton(d, handle))
 		return false;
 
 	BitRef b = InputDevice_getButtonValue(d, InputDevice_getLocalHandle(d, handle), true);
@@ -227,7 +227,7 @@ Bool InputDevice_setCurrentState(InputDevice d, InputHandle handle, Bool v) {
 
 Bool InputDevice_setCurrentAxis(InputDevice d, InputHandle handle, F32 v) {
 
-	if(d.type == InputDeviceType_Undefined || !InputDevice_isAxis(d, handle))
+	if(d.type == EInputDeviceType_Undefined || !InputDevice_isAxis(d, handle))
 		return false;
 
 	*InputDevice_getAxisValue(d, InputDevice_getLocalHandle(d, handle), true) = v;
@@ -236,7 +236,7 @@ Bool InputDevice_setCurrentAxis(InputDevice d, InputHandle handle, F32 v) {
 
 void InputDevice_markUpdate(InputDevice d) {
 
-	if(d.type == InputDeviceType_Undefined)
+	if(d.type == EInputDeviceType_Undefined)
 		return;
 
 	for(U16 i = 0; i < d.axes; ++i) {

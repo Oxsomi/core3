@@ -27,10 +27,10 @@ impl Error WindowManager_createPhysical(
 	WindowManager *manager,
 	I32x2 position,
 	I32x2 size, 
-	WindowHint hint,
+	EWindowHint hint,
 	String title, 
 	WindowCallbacks callbacks,
-	WindowFormat format,
+	EWindowFormat format,
 	Window **result
 );
 
@@ -42,13 +42,13 @@ Error WindowManager_createVirtual(
 	WindowManager *manager, 
 	I32x2 size, 
 	WindowCallbacks callbacks, 
-	WindowFormat format,
+	EWindowFormat format,
 	Window **result
 );
 
 Error WindowManager_freeVirtual(WindowManager *manager, Window **handle);
 
-impl Bool WindowManager_supportsFormat(WindowManager manager, WindowFormat format);
+impl Bool WindowManager_supportsFormat(WindowManager manager, EWindowFormat format);
 
 inline WindowHandle WindowManager_maxWindows() {
 	return (WindowHandle) WindowManager_maxTotalVirtualWindowCount + WindowManager_maxTotalPhysicalWindowCount;
@@ -74,8 +74,8 @@ inline Window *WindowManager_getWindow(WindowManager *manager, WindowHandle wind
 
 Error WindowManager_createWindow(
 	WindowManager *manager, 
-	I32x2 position, I32x2 size, WindowHint hint, String title, 
-	WindowCallbacks callbacks, WindowFormat format,
+	I32x2 position, I32x2 size, EWindowHint hint, String title, 
+	WindowCallbacks callbacks, EWindowFormat format,
 	Window **w
 );
 

@@ -187,7 +187,7 @@ Error String_createBin(U64 v, Bool leadingZeros, Allocator allocator, String *re
 Error String_split(
 	String s,
 	C8 c, 
-	StringCase casing, 
+	EStringCase casing, 
 	Allocator allocator,
 	StringList *result
 );
@@ -195,7 +195,7 @@ Error String_split(
 Error String_splitString(
 	String s,
 	String other,
-	StringCase casing,
+	EStringCase casing,
 	Allocator allocator,
 	StringList *result
 );
@@ -215,7 +215,7 @@ Error String_replaceAllString(
 	String *s, 
 	String search, 
 	String replace, 
-	StringCase caseSensitive, 
+	EStringCase caseSensitive, 
 	Allocator allocator
 );
 
@@ -223,7 +223,7 @@ Error String_replaceString(
 	String *s, 
 	String search, 
 	String replace, 
-	StringCase caseSensitive,
+	EStringCase caseSensitive,
 	Allocator allocator,
 	Bool isFirst
 );
@@ -232,7 +232,7 @@ inline Error String_replaceFirstString(
 	String *s,
 	String search,
 	String replace,
-	StringCase caseSensitive,
+	EStringCase caseSensitive,
 	Allocator allocator
 ) {
 	return String_replaceString(s, search, replace, caseSensitive, allocator, true);
@@ -242,7 +242,7 @@ inline Error String_replaceLastString(
 	String *s, 
 	String search, 
 	String replace, 
-	StringCase caseSensitive,
+	EStringCase caseSensitive,
 	Allocator allocator
 ) {
 	return String_replaceString(s, search, replace, caseSensitive, allocator, false);
@@ -250,26 +250,26 @@ inline Error String_replaceLastString(
 
 //Simple checks (consts)
 
-inline Bool String_startsWith(String str, C8 c, StringCase caseSensitive) { 
+inline Bool String_startsWith(String str, C8 c, EStringCase caseSensitive) { 
 	return 
 		str.len && str.ptr && 
-		C8_transform(*str.ptr, (StringTransform) caseSensitive) == 
-		C8_transform(c, (StringTransform) caseSensitive);
+		C8_transform(*str.ptr, (EStringTransform) caseSensitive) == 
+		C8_transform(c, (EStringTransform) caseSensitive);
 }
 
-Bool String_startsWithString(String str, String other, StringCase caseSensitive);
+Bool String_startsWithString(String str, String other, EStringCase caseSensitive);
 
-inline Bool String_endsWith(String str, C8 c, StringCase caseSensitive) {
+inline Bool String_endsWith(String str, C8 c, EStringCase caseSensitive) {
 	return 
 		str.len && str.ptr && 
-		C8_transform(str.ptr[str.len - 1], (StringTransform) caseSensitive) == 
-		C8_transform(c, (StringTransform) caseSensitive);
+		C8_transform(str.ptr[str.len - 1], (EStringTransform) caseSensitive) == 
+		C8_transform(c, (EStringTransform) caseSensitive);
 }
 
-Bool String_endsWithString(String str, String other, StringCase caseSensitive);
+Bool String_endsWithString(String str, String other, EStringCase caseSensitive);
 
-U64 String_countAll(String s, C8 c, StringCase caseSensitive);
-U64 String_countAllString(String s, String other, StringCase caseSensitive);
+U64 String_countAll(String s, C8 c, EStringCase caseSensitive);
+U64 String_countAllString(String s, String other, EStringCase caseSensitive);
 
 //Returns the locations (U64[])
 
@@ -277,43 +277,43 @@ List String_findAll(
 	String s, 
 	C8 c, 
 	Allocator alloc,
-	StringCase caseSensitive
+	EStringCase caseSensitive
 );
 
 List String_findAllString(
 	String s, 
 	String other,
 	Allocator alloc,
-	StringCase caseSensitive
+	EStringCase caseSensitive
 );
 
 //
 
-U64 String_findFirst(String s, C8 c, StringCase caseSensitive);
-U64 String_findLast(String s, C8 c, StringCase caseSensitive);
+U64 String_findFirst(String s, C8 c, EStringCase caseSensitive);
+U64 String_findLast(String s, C8 c, EStringCase caseSensitive);
 
-inline U64 String_find(String s, C8 c, StringCase caseSensitive, Bool isFirst) {
+inline U64 String_find(String s, C8 c, EStringCase caseSensitive, Bool isFirst) {
 	return isFirst ? String_findFirst(s, c, caseSensitive) : String_findLast(s, c, caseSensitive);
 }
 
-U64 String_findFirstString(String s, String other, StringCase caseSensitive);
-U64 String_findLastString(String s, String other, StringCase caseSensitive);
+U64 String_findFirstString(String s, String other, EStringCase caseSensitive);
+U64 String_findLastString(String s, String other, EStringCase caseSensitive);
 
-inline U64 String_findString(String s, String other, StringCase caseSensitive, Bool isFirst) {
+inline U64 String_findString(String s, String other, EStringCase caseSensitive, Bool isFirst) {
 	return isFirst ? String_findFirstString(s, other, caseSensitive) : 
 		String_findLastString(s, other, caseSensitive);
 }
 
-inline Bool String_contains(String str, C8 c, StringCase caseSensitive) { 
+inline Bool String_contains(String str, C8 c, EStringCase caseSensitive) { 
 	return String_findFirst(str, c, caseSensitive) != U64_MAX;
 }
 
-inline Bool String_containsString(String str, String other, StringCase caseSensitive)  { 
+inline Bool String_containsString(String str, String other, EStringCase caseSensitive)  { 
 	return String_findFirstString(str, other, caseSensitive) != U64_MAX; 
 }
 
-Bool String_equalsString(String s, String other, StringCase caseSensitive);
-Bool String_equals(String s, C8 c, StringCase caseSensitive);
+Bool String_equalsString(String s, String other, EStringCase caseSensitive);
+Bool String_equals(String s, C8 c, EStringCase caseSensitive);
 
 Bool String_parseNyto(String s, U64 *result);
 Bool String_parseHex(String s, U64 *result);
@@ -342,93 +342,93 @@ Bool String_cutBegin(String s, U64 off, String *result);
 Bool String_cutEnd(String s, U64 siz, String *result);
 Bool String_cut(String s, U64 off, U64 siz, String *result);
 
-Bool String_cutAfter(String s, C8 c, StringCase caseSensitive, Bool isFirst, String *result);
+Bool String_cutAfter(String s, C8 c, EStringCase caseSensitive, Bool isFirst, String *result);
 
-inline Bool String_cutAfterLast(String s, C8 c, StringCase caseSensitive, String *result) {
+inline Bool String_cutAfterLast(String s, C8 c, EStringCase caseSensitive, String *result) {
 	return String_cutAfter(s, c, caseSensitive, false, result);
 }
 
-inline Bool String_cutAfterFirst(String s, C8 c, StringCase caseSensitive, String *result) {
+inline Bool String_cutAfterFirst(String s, C8 c, EStringCase caseSensitive, String *result) {
 	return String_cutAfter(s, c, caseSensitive, true, result);
 }
 
 Bool String_cutAfterString(
-	String s, String other, StringCase caseSensitive, Bool isFirst, String *result
+	String s, String other, EStringCase caseSensitive, Bool isFirst, String *result
 );
 
-inline Bool String_cutAfterLastString(String s, String other, StringCase caseSensitive, String *result) {
+inline Bool String_cutAfterLastString(String s, String other, EStringCase caseSensitive, String *result) {
 	return String_cutAfterString(s, other, caseSensitive, false, result);
 }
 
-inline Bool String_cutAfterFirstString(String s, String other, StringCase caseSensitive, String *result) {
+inline Bool String_cutAfterFirstString(String s, String other, EStringCase caseSensitive, String *result) {
 	return String_cutAfterString(s, other, caseSensitive, true, result);
 }
 
-Bool String_cutBefore(String s, C8 c, StringCase caseSensitive, Bool isFirst, String *result);
+Bool String_cutBefore(String s, C8 c, EStringCase caseSensitive, Bool isFirst, String *result);
 
-inline Bool String_cutBeforeLast(String s, C8 c, StringCase caseSensitive, String *result) {
+inline Bool String_cutBeforeLast(String s, C8 c, EStringCase caseSensitive, String *result) {
 	return String_cutBefore(s, c, caseSensitive, false, result);
 }
 
-inline Bool String_cutBeforeFirst(String s, C8 c, StringCase caseSensitive, String *result) {
+inline Bool String_cutBeforeFirst(String s, C8 c, EStringCase caseSensitive, String *result) {
 	return String_cutBefore(s, c, caseSensitive, true, result);
 }
 
-Bool String_cutBeforeString(String s, String other, StringCase caseSensitive, Bool isFirst, String *result);
+Bool String_cutBeforeString(String s, String other, EStringCase caseSensitive, Bool isFirst, String *result);
 
-inline Bool String_cutBeforeLastString(String s, String other, StringCase caseSensitive, String *result) {
+inline Bool String_cutBeforeLastString(String s, String other, EStringCase caseSensitive, String *result) {
 	return String_cutBeforeString(s, other, caseSensitive, false, result);
 }
 
-inline Bool String_cutBeforeFirstString(String s, String other, StringCase caseSensitive, String *result) {
+inline Bool String_cutBeforeFirstString(String s, String other, EStringCase caseSensitive, String *result) {
 	return String_cutBeforeString(s, other, caseSensitive, true, result);
 }
 
-Bool String_eraseAll(String *s, C8 c, StringCase caseSensitive);
-Bool String_eraseAllString(String *s, String other, StringCase caseSensitive);
+Bool String_eraseAll(String *s, C8 c, EStringCase caseSensitive);
+Bool String_eraseAllString(String *s, String other, EStringCase caseSensitive);
 
-Bool String_erase(String *s, C8 c, StringCase caseSensitive, Bool isFirst);
+Bool String_erase(String *s, C8 c, EStringCase caseSensitive, Bool isFirst);
 
-inline Bool String_eraseFirst(String *s, C8 c, StringCase caseSensitive) {
+inline Bool String_eraseFirst(String *s, C8 c, EStringCase caseSensitive) {
 	return String_erase(s, c, caseSensitive, true);
 }
 
-inline Bool String_eraseLast(String *s, C8 c, StringCase caseSensitive) {
+inline Bool String_eraseLast(String *s, C8 c, EStringCase caseSensitive) {
 	return String_erase(s, c, caseSensitive, false);
 }
 
-Bool String_eraseString(String *s, String other, StringCase caseSensitive, Bool isFirst);
+Bool String_eraseString(String *s, String other, EStringCase caseSensitive, Bool isFirst);
 
-inline Bool String_eraseFirstString(String *s, String other, StringCase caseSensitive){
+inline Bool String_eraseFirstString(String *s, String other, EStringCase caseSensitive){
 	return String_eraseString(s, other, caseSensitive, true);
 }
 
-inline Bool String_eraseLastString(String *s, String other, StringCase caseSensitive) {
+inline Bool String_eraseLastString(String *s, String other, EStringCase caseSensitive) {
 	return String_eraseString(s, other, caseSensitive, false);
 }
 
-Bool String_replaceAll(String *s, C8 c, C8 v, StringCase caseSensitive);
-Bool String_replace(String *s, C8 c, C8 v, StringCase caseSensitive, Bool isFirst);
+Bool String_replaceAll(String *s, C8 c, C8 v, EStringCase caseSensitive);
+Bool String_replace(String *s, C8 c, C8 v, EStringCase caseSensitive, Bool isFirst);
 
-inline Bool String_replaceFirst(String *s, C8 c, C8 v, StringCase caseSensitive) {
+inline Bool String_replaceFirst(String *s, C8 c, C8 v, EStringCase caseSensitive) {
 	return String_replace(s, c, v, caseSensitive, true);
 }
 
-inline Bool String_replaceLast(String *s, C8 c, C8 v, StringCase caseSensitive) {
+inline Bool String_replaceLast(String *s, C8 c, C8 v, EStringCase caseSensitive) {
 	return String_replace(s, c, v, caseSensitive, false);
 }
 
 String String_trim(String s);		//Returns a substring ref in a string
 
-Bool String_transform(String s, StringTransform stringTransform);
+Bool String_transform(String s, EStringTransform stringTransform);
 
-inline Bool String_toLower(String str) { return String_transform(str, StringTransform_Lower); }
-inline Bool String_toUpper(String str) { return String_transform(str, StringTransform_Upper); }
+inline Bool String_toLower(String str) { return String_transform(str, EStringTransform_Lower); }
+inline Bool String_toUpper(String str) { return String_transform(str, EStringTransform_Upper); }
 
 //Simple file utils
 
 inline Bool String_formatPath(String *str) { 
-	return String_replaceAll(str, '\\', '/', StringCase_Insensitive);
+	return String_replaceAll(str, '\\', '/', EStringCase_Insensitive);
 }
 
 String String_getFilePath(String *str);	//Formats on string first to ensure it's proper

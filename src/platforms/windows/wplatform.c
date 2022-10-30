@@ -30,8 +30,8 @@ void sigFunc(int signal) {
 	//For debugging purposed however, this is very useful
 	//Turn this off by defining _NO_SIGNAL_HANDLING
 
-	Log_log(LogLevel_Fatal, LogOptions_Default, (LogArgs) { .argc = 1, .args = &msg });
-	Log_printStackTrace(1, LogLevel_Fatal, LogOptions_Default);
+	Log_log(ELogLevel_Fatal, ELogOptions_Default, (LogArgs) { .argc = 1, .args = &msg });
+	Log_printStackTrace(1, ELogLevel_Fatal, ELogOptions_Default);
 	exit(signal);
 }
 
@@ -42,10 +42,10 @@ Error allocCallback(void *allocator, U64 siz, Buffer *output) {
 	void *ptr = malloc(siz);
 
 	if(!output)
-		return (Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = EGenericError_NullPointer };
 
 	if(!ptr)
-		return (Error) { .genericError = GenericError_OutOfMemory };
+		return (Error) { .genericError = EGenericError_OutOfMemory };
 
 	*output = (Buffer) { .ptr = ptr, .siz = siz };
 	return Error_none();
@@ -68,7 +68,7 @@ int main(int argc, const char *argv[]) {
 		signal(SIGTERM, sigFunc);
 	#endif
 
-	Platform_create(argc, argv, GetModuleHandleA(NULL), freeCallback, allocCallback, NULL);
+	EPlatform_create(argc, argv, GetModuleHandleA(NULL), freeCallback, allocCallback, NULL);
 
 	int res = Program_run();
 	Program_exit();

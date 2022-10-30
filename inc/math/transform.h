@@ -60,28 +60,28 @@ F32x2 Transform2D_reverse(Transform2D t, F32x2 pos);
 
 typedef U64 TilemapTransform;
 
-typedef enum Mirrored {
-	Mirrored_None = 0,
-	Mirrored_X	 = 1 << 0,
-	Mirrored_Y	 = 1 << 1
-} Mirrored;
+typedef enum EMirrored {
+	EMirrored_None = 0,
+	EMirrored_X	 = 1 << 0,
+	EMirrored_Y	 = 1 << 1
+} EMirrored;
 
-typedef enum Rotated {
-	Rotated_None,
-	Rotated_90,
-	Rotated_180,
-	Rotated_270
-} Rotated;
+typedef enum ERotated {
+	ERotated_None,
+	ERotated_90,
+	ERotated_180,
+	ERotated_270
+} ERotated;
 
 
-TilemapTransform TilemapTransform_create(U32 x, U32 y, U8 layer, U8 paletteId, Mirrored flipped, Rotated rotated);
+TilemapTransform TilemapTransform_create(U32 x, U32 y, U8 layer, U8 paletteId, EMirrored flipped, ERotated rotated);
 
 inline U32 TilemapTransform_x(TilemapTransform transform) { return (U32)transform & 0xFFFFFF; }
 inline U32 TilemapTransform_y(TilemapTransform transform) { return (U32)(transform >> 24) & 0xFFFFFF; }
 inline U8 TilemapTransform_layerId(TilemapTransform transform) { return (U8)(transform >> 48) & 0x7F; }
 inline U8 TilemapTransform_paletteId(TilemapTransform transform) { return (U8)(transform >> 55) & 0xF; }
-inline Mirrored TilemapTransform_mirrored(TilemapTransform transform) { return (Mirrored)((U8)(transform >> 59) & 0x3); }
-inline Rotated TilemapTransform_rotated(TilemapTransform transform) { return (Rotated)((U8)(transform >> 61) & 0x3); }
+inline EMirrored TilemapTransform_mirrored(TilemapTransform transform) { return (EMirrored)((U8)(transform >> 59) & 0x3); }
+inline ERotated TilemapTransform_rotated(TilemapTransform transform) { return (ERotated)((U8)(transform >> 61) & 0x3); }
 inline Bool TilemapTransform_isValid(TilemapTransform transform) { return transform >> 63;  }
 
 F32x2 TilemapTransform_applyToDirection(TilemapTransform t, F32x2 dir);

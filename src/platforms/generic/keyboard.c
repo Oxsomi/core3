@@ -4,15 +4,15 @@
 
 #define _key(name)																\
 	if ((err = InputDevice_createButton(										\
-		*result, Key_##name, String_createRefUnsafeConst("Key_" #name), &res	\
+		*result, EKey_##name, String_createRefUnsafeConst("EKey_" #name), &res	\
 	)).genericError) {															\
 		InputDevice_free(result);												\
 		return err;																\
 	}
 
-Error Keyboard_create(Keyboard *result) {
+Error EKeyboard_create(EKeyboard *result) {
 
-	Error err = InputDevice_create(Key_Count, 0, InputDeviceType_Keyboard, result);
+	Error err = InputDevice_create(EKey_Count, 0, EInputDeviceType_EKeyboard, result);
 
 	if(err.genericError)
 		return err;

@@ -13,13 +13,13 @@ Error List_neq(List a, List b, Bool *result) {
 Error List_create(U64 length, U64 stride, Allocator allocator, List *result) {
 
 	if(!result)
-		return (Error) { .genericError = GenericError_NullPointer, .paramId = 3 };
+		return (Error) { .genericError = EGenericError_NullPointer, .paramId = 3 };
 
 	if(!length || !stride)
-		return (Error) { .genericError = GenericError_InvalidParameter, .paramId = !length ? 0 : 1 };
+		return (Error) { .genericError = EGenericError_InvalidParameter, .paramId = !length ? 0 : 1 };
 
 	if(length * stride / stride != length)
-		return (Error) { .genericError = GenericError_Overflow, .paramValue0 = length, .paramValue1 = stride };
+		return (Error) { .genericError = EGenericError_Overflow, .paramValue0 = length, .paramValue1 = stride };
 
 	Buffer buf = Buffer_createNull();
 	Error err = Buffer_createUninitializedBytes(length * stride, allocator, &buf);
@@ -40,13 +40,13 @@ Error List_create(U64 length, U64 stride, Allocator allocator, List *result) {
 Error List_createFromBuffer(Buffer buf, U64 stride, Bool isConst, List *result) {
 
 	if(!result)
-		return (Error) { .genericError = GenericError_NullPointer, .paramId = 3 };
+		return (Error) { .genericError = EGenericError_NullPointer, .paramId = 3 };
 
 	if(!buf.ptr || !buf.siz || !stride)
-		return (Error) { .genericError = GenericError_InvalidParameter, .paramId = !stride ? 1 : 0 };
+		return (Error) { .genericError = EGenericError_InvalidParameter, .paramId = !stride ? 1 : 0 };
 
 	if(buf.siz % stride)
-		return (Error) { .genericError = GenericError_InvalidParameter, .errorSubId = 1 };
+		return (Error) { .genericError = EGenericError_InvalidParameter, .errorSubId = 1 };
 
 	*result = (List) { 
 		.ptr = buf.ptr, 
@@ -61,13 +61,13 @@ Error List_createFromBuffer(Buffer buf, U64 stride, Bool isConst, List *result) 
 Error List_createNullBytes(U64 length, U64 stride, Allocator allocator, List *result) {
 
 	if(!result)
-		return (Error) { .genericError = GenericError_NullPointer, .paramId = 3 };
+		return (Error) { .genericError = EGenericError_NullPointer, .paramId = 3 };
 
 	if(!length || !stride)
-		return (Error) { .genericError = GenericError_InvalidParameter, .paramId = !length ? 0 : 1 };
+		return (Error) { .genericError = EGenericError_InvalidParameter, .paramId = !length ? 0 : 1 };
 
 	if(length * stride / stride != length)
-		return (Error) { .genericError = GenericError_Overflow, .paramValue0 = length, .paramValue1 = stride };
+		return (Error) { .genericError = EGenericError_Overflow, .paramValue0 = length, .paramValue1 = stride };
 
 	Buffer buf = Buffer_createNull();
 	Error err = Buffer_createEmptyBytes(length * stride, allocator, &buf);
@@ -94,13 +94,13 @@ Error List_createRepeated(
 ) {
 
 	if(!result)
-		return (Error) { .genericError = GenericError_NullPointer, .paramId = 3 };
+		return (Error) { .genericError = EGenericError_NullPointer, .paramId = 3 };
 
 	if(!length || !stride)
-		return (Error) { .genericError = GenericError_InvalidParameter, .paramId = !length ? 0 : 1 };
+		return (Error) { .genericError = EGenericError_InvalidParameter, .paramId = !length ? 0 : 1 };
 
 	if(length * stride / stride != length)
-		return (Error) { .genericError = GenericError_Overflow, .paramValue0 = length, .paramValue1 = stride };
+		return (Error) { .genericError = EGenericError_Overflow, .paramValue0 = length, .paramValue1 = stride };
 
 	Buffer buf = Buffer_createNull();
 	Error err = Buffer_createUninitializedBytes(length * stride, allocator, &buf);
@@ -133,7 +133,7 @@ Error List_createCopy(List list, Allocator allocator, List *result) {
 			return Error_none();
 		}
 
-		return (Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = EGenericError_NullPointer };
 	}
 
 	Error err = List_create(list.length, list.stride, allocator, result);
@@ -148,14 +148,14 @@ Error List_createCopy(List list, Allocator allocator, List *result) {
 Error List_createSubset(List list, U64 index, U64 length, List *result) {
 
 	if(!result)
-		return (Error) { .genericError = GenericError_NullPointer, .paramId = 3 };
+		return (Error) { .genericError = EGenericError_NullPointer, .paramId = 3 };
 
 	if(index + length < index)
-		return (Error) { .genericError = GenericError_Overflow, .paramValue0 = length, .paramValue1 = index };
+		return (Error) { .genericError = EGenericError_Overflow, .paramValue0 = length, .paramValue1 = index };
 
 	if(index + length > list.length)
 		return (Error) { 
-			.genericError = GenericError_OutOfBounds, 
+			.genericError = EGenericError_OutOfBounds, 
 			.paramValue0 = index + length, 
 			.paramValue1 = list.length 
 		};
@@ -175,14 +175,14 @@ Error List_createSubsetReverse(
 ) {
 	
 	if(!result)
-		return (Error) { .genericError = GenericError_NullPointer, .paramId = 3 };
+		return (Error) { .genericError = EGenericError_NullPointer, .paramId = 3 };
 
 	if(index + length < length)
-		return (Error) { .genericError = GenericError_Overflow, .paramValue0 = length, .paramValue1 = index };
+		return (Error) { .genericError = EGenericError_Overflow, .paramValue0 = length, .paramValue1 = index };
 
 	if(index + length > list.length)
 		return (Error) { 
-			.genericError = GenericError_OutOfBounds, 
+			.genericError = EGenericError_OutOfBounds, 
 			.paramValue0 = index + length, 
 			.paramValue1 = list.length 
 		};
@@ -213,13 +213,13 @@ Error List_createSubsetReverse(
 Error List_createRef(U8 *ptr, U64 length, U64 stride, List *result) {
 
 	if(!ptr || !result)
-		return (Error) { .genericError = GenericError_NullPointer, .paramId = !ptr ? 0 : 3 };
+		return (Error) { .genericError = EGenericError_NullPointer, .paramId = !ptr ? 0 : 3 };
 
 	if(!length || !stride)
-		return (Error) { .genericError = GenericError_InvalidParameter, .paramId = !length ? 1 : 2 };
+		return (Error) { .genericError = EGenericError_InvalidParameter, .paramId = !length ? 1 : 2 };
 
 	if(length * stride / stride != length)
-		return (Error) { .genericError = GenericError_Overflow, .paramValue0 = length, .paramValue1 = stride };
+		return (Error) { .genericError = EGenericError_Overflow, .paramValue0 = length, .paramValue1 = stride };
 
 	*result = (List) { 
 		.ptr = ptr, 
@@ -233,13 +233,13 @@ Error List_createRef(U8 *ptr, U64 length, U64 stride, List *result) {
 Error List_createConstRef(const U8 *ptr, U64 length, U64 stride, List *result) {
 
 	if(!ptr || !result)
-		return (Error) { .genericError = GenericError_NullPointer, .paramId = !ptr ? 0 : 3 };
+		return (Error) { .genericError = EGenericError_NullPointer, .paramId = !ptr ? 0 : 3 };
 
 	if(!length || !stride)
-		return (Error) { .genericError = GenericError_InvalidParameter, .paramId = !length ? 1 : 2 };
+		return (Error) { .genericError = EGenericError_InvalidParameter, .paramId = !length ? 1 : 2 };
 
 	if(length * stride / stride != length)
-		return (Error) { .genericError = GenericError_Overflow, .paramValue0 = length, .paramValue1 = stride };
+		return (Error) { .genericError = EGenericError_Overflow, .paramValue0 = length, .paramValue1 = stride };
 
 	*result = (List) { 
 		.ptr = (U8*) ptr, 
@@ -254,13 +254,13 @@ Error List_createConstRef(const U8 *ptr, U64 length, U64 stride, List *result) {
 Error List_set(List list, U64 index, Buffer buf) {
 
 	if(List_isConstRef(list))
-		return (Error) { .genericError = GenericError_ConstData };
+		return (Error) { .genericError = EGenericError_ConstData };
 
 	if(index >= list.length)
-		return (Error) { .genericError = GenericError_OutOfBounds, .paramValue0 = index, .paramValue1 = list.length };
+		return (Error) { .genericError = EGenericError_OutOfBounds, .paramValue0 = index, .paramValue1 = list.length };
 
 	if(buf.siz && buf.siz != list.stride)
-		return (Error) { .genericError = GenericError_InvalidOperation, .errorSubId = 1 };
+		return (Error) { .genericError = EGenericError_InvalidOperation, .errorSubId = 1 };
 
 	if(buf.siz)
 		Buffer_copy(Buffer_createRef(list.ptr + index * list.stride, list.stride), buf);
@@ -273,10 +273,10 @@ Error List_set(List list, U64 index, Buffer buf) {
 Error List_get(List list, U64 index, Buffer *result) {
 
 	if(!result)
-		return (Error) { .genericError = GenericError_NullPointer, .paramId = 2 };
+		return (Error) { .genericError = EGenericError_NullPointer, .paramId = 2 };
 
 	if(index >= list.length)
-		return (Error) { .genericError = GenericError_OutOfBounds, .paramValue0 = index, .paramValue1 = list.length };
+		return (Error) { .genericError = EGenericError_OutOfBounds, .paramValue0 = index, .paramValue1 = list.length };
 
 	*result = Buffer_createRef(list.ptr + index * list.stride, list.stride);
 	return Error_none();
@@ -285,10 +285,10 @@ Error List_get(List list, U64 index, Buffer *result) {
 Error List_find(List list, Buffer buf, Allocator allocator, List *result) {
 
 	if(!buf.ptr || !buf.siz)
-		return (Error) { .genericError = GenericError_NullPointer, .paramId = 1 };
+		return (Error) { .genericError = EGenericError_NullPointer, .paramId = 1 };
 
 	if(!result)
-		return (Error) { .genericError = GenericError_NullPointer, .paramId = 3 };
+		return (Error) { .genericError = EGenericError_NullPointer, .paramId = 3 };
 
 	*result = List_createEmpty(sizeof(U64));
 	Error err = List_reserve(result, list.length / 100 + 16, allocator);
@@ -390,7 +390,7 @@ Error List_copy(List src, U64 srcOffset, List dst, U64 dstOffset, U64 count) {
 		return err;
 
 	if(List_isConstRef(dst))
-		return (Error) { .genericError = GenericError_ConstData };
+		return (Error) { .genericError = EGenericError_ConstData };
 
 	if((err = List_createSubset(dst, dstOffset, count, &dst)).genericError)
 		return err;
@@ -402,10 +402,10 @@ Error List_copy(List src, U64 srcOffset, List dst, U64 dstOffset, U64 count) {
 Error List_shrinkToFit(List *list, Allocator allocator) {
 
 	if(!list)
-		return (Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = EGenericError_NullPointer };
 
 	if(List_isConstRef(*list))
-		return (Error) { .genericError = GenericError_ConstData };
+		return (Error) { .genericError = EGenericError_ConstData };
 
 	if(list->capacity == list->length)
 		return Error_none();
@@ -425,19 +425,19 @@ Error List_shrinkToFit(List *list, Allocator allocator) {
 Error List_eraseAllIndices(List *list, List indices) {
 
 	if(!list)
-		return (Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = EGenericError_NullPointer };
 
 	if(List_isConstRef(*list))
-		return (Error) { .genericError = GenericError_ConstData };
+		return (Error) { .genericError = EGenericError_ConstData };
 
 	if(!indices.length || !list->length)
 		return Error_none();
 
 	if(indices.stride != sizeof(U64))
-		return (Error) { .genericError = GenericError_InvalidOperation, .errorSubId = 1 };
+		return (Error) { .genericError = EGenericError_InvalidOperation, .errorSubId = 1 };
 
 	if(!List_sortU64(indices))
-		return (Error) { .genericError = GenericError_InvalidParameter, .paramId = 1 };
+		return (Error) { .genericError = EGenericError_InvalidParameter, .paramId = 1 };
 
 	//Ensure none of them reference out of bounds or are duplicate
 
@@ -447,13 +447,13 @@ Error List_eraseAllIndices(List *list, List indices) {
 
 		if(last == *ptr)
 			return (Error) { 
-				.genericError = GenericError_AlreadyDefined,
+				.genericError = EGenericError_AlreadyDefined,
 				.paramValue0 = *ptr
 			};
 
 		if(*ptr >= list->length)
 			return (Error) { 
-				.genericError = GenericError_OutOfBounds,
+				.genericError = EGenericError_OutOfBounds,
 				.paramValue0 = *ptr,
 				.paramValue1 = list->length
 			};
@@ -603,7 +603,7 @@ TList_sorts(TList_sort);
 Error List_eraseFirst(List *list, Buffer buf, U64 offset) {
 
 	if(!list)
-		return (Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = EGenericError_NullPointer };
 
 	U64 ind = List_findLast(*list, buf, offset);
 	return ind == U64_MAX ? Error_none() : List_erase(list, ind);
@@ -612,7 +612,7 @@ Error List_eraseFirst(List *list, Buffer buf, U64 offset) {
 Error List_eraseLast(List *list, Buffer buf, U64 offset) {
 
 	if(!list)
-		return (Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = EGenericError_NullPointer };
 
 	U64 ind = List_findLast(*list, buf, offset);
 	return ind == U64_MAX ? Error_none() : List_erase(list, ind);
@@ -621,7 +621,7 @@ Error List_eraseLast(List *list, Buffer buf, U64 offset) {
 Error List_eraseAll(List *list, Buffer buf, Allocator allocator) {
 
 	if(!list)
-		return (Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = EGenericError_NullPointer };
 	
 	List indices = (List) { 0 };
 	Error err = List_find(*list, buf, allocator, &indices);
@@ -638,11 +638,11 @@ Error List_eraseAll(List *list, Buffer buf, Allocator allocator) {
 Error List_erase(List *list, U64 index) {
 
 	if(!list)
-		return (Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = EGenericError_NullPointer };
 
 	if(index >= list->length)
 		return (Error) { 
-			.genericError = GenericError_OutOfBounds, 
+			.genericError = EGenericError_OutOfBounds, 
 			.paramId = 1,
 			.paramValue0 = index, 
 			.paramValue1 = list->length 
@@ -660,17 +660,17 @@ Error List_erase(List *list, U64 index) {
 Error List_insert(List *list, U64 index, Buffer buf, Allocator allocator) {
 
 	if(!list)
-		return (Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = EGenericError_NullPointer };
 
 	if(list->stride != buf.siz)
-		return (Error) { .genericError = GenericError_InvalidOperation };
+		return (Error) { .genericError = EGenericError_InvalidOperation };
 
 	if(list->length + 1 < list->length)
-		return (Error) { .genericError = GenericError_Overflow };
+		return (Error) { .genericError = EGenericError_Overflow };
 
 	if(index >= list->length)
 		return (Error) { 
-			.genericError = GenericError_OutOfBounds, .paramValue0 = index, .paramValue1 = list->length 
+			.genericError = EGenericError_OutOfBounds, .paramValue0 = index, .paramValue1 = list->length 
 		};
 
 	U64 prevSize = list->length;
@@ -700,10 +700,10 @@ Error List_insert(List *list, U64 index, Buffer buf, Allocator allocator) {
 Error List_pushAll(List *list, List other, Allocator allocator) {
 
 	if(!list)
-		return (Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = EGenericError_NullPointer };
 
 	if(list->stride != other.stride)
-		return (Error) { .genericError = GenericError_InvalidOperation };
+		return (Error) { .genericError = EGenericError_InvalidOperation };
 
 	if(!other.length)
 		return Error_none();
@@ -725,10 +725,10 @@ Error List_pushAll(List *list, List other, Allocator allocator) {
 Error List_swap(List l, U64 i, U64 j) {
 
 	if(i >= l.length || j >= l.length)
-		return (Error) { .genericError = GenericError_OutOfBounds, .paramId = i >= l.length ? 1 : 2 };
+		return (Error) { .genericError = EGenericError_OutOfBounds, .paramId = i >= l.length ? 1 : 2 };
 
 	if(List_isConstRef(l))
-		return (Error) { .genericError = GenericError_ConstData };
+		return (Error) { .genericError = EGenericError_ConstData };
 
 	U8 *iptr = List_ptr(l, i);
 	U8 *jptr = List_ptr(l, j);
@@ -774,20 +774,20 @@ Bool List_reverse(List l) {
 Error List_insertAll(List *list, List other, U64 offset, Allocator allocator) {
 
 	if(!list)
-		return (Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = EGenericError_NullPointer };
 
 	if(!other.length)
 		return Error_none();
 
 	if(list->stride != other.stride)
-		return (Error) { .genericError = GenericError_InvalidOperation };
+		return (Error) { .genericError = EGenericError_InvalidOperation };
 
 	if(list->length + other.length < list->length)
-		return (Error) { .genericError = GenericError_Overflow };
+		return (Error) { .genericError = EGenericError_Overflow };
 
 	if(offset >= list->length)
 		return (Error) { 
-			.genericError = GenericError_OutOfBounds, .paramValue0 = offset, .paramValue1 = list->length 
+			.genericError = EGenericError_OutOfBounds, .paramValue0 = offset, .paramValue1 = list->length 
 		};
 
 	U64 prevSize = list->length;
@@ -817,13 +817,13 @@ Error List_insertAll(List *list, List other, U64 offset, Allocator allocator) {
 Error List_reserve(List *list, U64 capacity, Allocator allocator) {
 
 	if(!list)
-		return (Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = EGenericError_NullPointer };
 
 	if(List_isRef(*list) && list->length)
-		return (Error) { .genericError = GenericError_InvalidOperation };
+		return (Error) { .genericError = EGenericError_InvalidOperation };
 
 	if(capacity * list->stride / capacity != capacity)
-		return (Error) { .genericError = GenericError_Overflow };
+		return (Error) { .genericError = EGenericError_Overflow };
 
 	if(capacity <= list->capacity)
 		return Error_none();
@@ -850,10 +850,10 @@ Error List_reserve(List *list, U64 capacity, Allocator allocator) {
 Error List_resize(List *list, U64 size, Allocator allocator) {
 
 	if(!list)
-		return (Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = EGenericError_NullPointer };
 
 	if(List_isConstRef(*list))
-		return (Error) { .genericError = GenericError_ConstData };
+		return (Error) { .genericError = EGenericError_ConstData };
 
 	if (size <= list->capacity) {
 		list->length = size;
@@ -861,7 +861,7 @@ Error List_resize(List *list, U64 size, Allocator allocator) {
 	}
 
 	if(size * 3 / 2 * 2 / 3 != size)
-		return (Error) { .genericError = GenericError_Overflow };
+		return (Error) { .genericError = EGenericError_Overflow };
 
 	Error err = List_reserve(list, size * 3 / 2, allocator);
 
@@ -875,10 +875,10 @@ Error List_resize(List *list, U64 size, Allocator allocator) {
 Error List_pushBack(List *list, Buffer buf, Allocator allocator) {
 
 	if(!list)
-		return (Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = EGenericError_NullPointer };
 
 	if(List_isConstRef(*list))
-		return (Error) { .genericError = GenericError_ConstData };
+		return (Error) { .genericError = EGenericError_ConstData };
 
 	Error err = List_resize(list, list->length + 1, allocator);
 
@@ -891,13 +891,13 @@ Error List_pushBack(List *list, Buffer buf, Allocator allocator) {
 Error List_popLocation(List *list, U64 index, Buffer buf) {
 
 	if(!list)
-		return (Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = EGenericError_NullPointer };
 
 	if(index >= list->length)
-		return (Error) { .genericError = GenericError_OutOfBounds };
+		return (Error) { .genericError = EGenericError_OutOfBounds };
 
 	if(List_isConstRef(*list))
-		return (Error) { .genericError = GenericError_ConstData };
+		return (Error) { .genericError = EGenericError_ConstData };
 
 	Buffer result = Buffer_createNull();
 	Error err = List_get(*list, index, &result);
@@ -906,7 +906,7 @@ Error List_popLocation(List *list, U64 index, Buffer buf) {
 		return err;
 
 	if(buf.siz != result.siz)
-		return (Error) { .genericError = GenericError_InvalidOperation };
+		return (Error) { .genericError = EGenericError_InvalidOperation };
 
 	Buffer_copy(buf, result);
 	return List_erase(list, index);
@@ -915,16 +915,16 @@ Error List_popLocation(List *list, U64 index, Buffer buf) {
 Error List_popBack(List *list, Buffer output) {
 
 	if(!list)
-		return (Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = EGenericError_NullPointer };
 
 	if(!list->length)
-		return (Error) { .genericError = GenericError_OutOfBounds };
+		return (Error) { .genericError = EGenericError_OutOfBounds };
 
 	if(output.siz && output.siz != list->stride)
-		return (Error) { .genericError = GenericError_InvalidOperation, .paramId = 1 };
+		return (Error) { .genericError = EGenericError_InvalidOperation, .paramId = 1 };
 
 	if(List_isConstRef(*list))
-		return (Error) { .genericError = GenericError_ConstData };
+		return (Error) { .genericError = EGenericError_ConstData };
 
 	if(output.siz)
 		Buffer_copy(output, Buffer_createRef(list->ptr + (list->length - 1) * list->stride, list->stride));
@@ -936,7 +936,7 @@ Error List_popBack(List *list, Buffer output) {
 Error List_clear(List *list) {
 
 	if(!list)
-		return (Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = EGenericError_NullPointer };
 
 	list->length = 0;
 	return Error_none();
@@ -945,7 +945,7 @@ Error List_clear(List *list) {
 Error List_free(List *result, Allocator allocator) {
 
 	if(!result)
-		return (Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = EGenericError_NullPointer };
 
 	Error err = Error_none();
 

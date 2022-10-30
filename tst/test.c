@@ -10,10 +10,10 @@ Error ourAlloc(void *allocator, U64 siz, Buffer *output) {
 	void *ptr = malloc(siz);
 
 	if(!output)
-		return (Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = EGenericError_NullPointer };
 
 	if(!ptr)
-		return (Error) { .genericError = GenericError_OutOfMemory };
+		return (Error) { .genericError = EGenericError_OutOfMemory };
 
 	*output = (Buffer) { .ptr = ptr, .siz = siz };
 	return Error_none();

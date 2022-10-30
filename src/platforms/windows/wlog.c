@@ -46,10 +46,10 @@ static const WORD colors[] = {
 	12	/* bright red */
 };
 
-void Log_printCapturedStackTraceCustom(const void **stackTrace, U64 stackSize, LogLevel lvl, LogOptions opt) {
+void Log_printCapturedStackTraceCustom(const void **stackTrace, U64 stackSize, ELogLevel lvl, ELogOptions opt) {
 
-	if(lvl == LogLevel_Fatal)
-		lvl = LogLevel_Error;
+	if(lvl == ELogLevel_Fatal)
+		lvl = ELogLevel_Error;
 
 	HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
 	SetConsoleTextAttribute(handle, colors[lvl]);
@@ -118,15 +118,15 @@ void Log_printCapturedStackTraceCustom(const void **stackTrace, U64 stackSize, L
 			Error err;
 
 			if(capture->mod.len)
-				if ((err = String_createCopy(capture->mod, Platform_instance.alloc, &capture->mod)).genericError)
+				if ((err = String_createCopy(capture->mod, EPlatform_instance.alloc, &capture->mod)).genericError)
 					goto cleanup;
 
 			if(capture->sym.len)
-				if ((err = String_createCopy(capture->sym, Platform_instance.alloc, &capture->sym)).genericError)
+				if ((err = String_createCopy(capture->sym, EPlatform_instance.alloc, &capture->sym)).genericError)
 					goto cleanup;
 
 			if(capture->fil.len)
-				if ((err = String_createCopy(capture->fil, Platform_instance.alloc, &capture->fil)).genericError)
+				if ((err = String_createCopy(capture->fil, EPlatform_instance.alloc, &capture->fil)).genericError)
 					goto cleanup;
 
 			capture->lin = line.LineNumber;
@@ -137,9 +137,9 @@ void Log_printCapturedStackTraceCustom(const void **stackTrace, U64 stackSize, L
 		cleanup:
 			
 			for (U64 j = 0; j < i; ++j) {
-				String_free(&captured[j].fil, Platform_instance.alloc);
-				String_free(&captured[j].sym, Platform_instance.alloc);
-				String_free(&captured[j].mod, Platform_instance.alloc);
+				String_free(&captured[j].fil, EPlatform_instance.alloc);
+				String_free(&captured[j].sym, EPlatform_instance.alloc);
+				String_free(&captured[j].mod, EPlatform_instance.alloc);
 			}
 
 			Error_printx(err, lvl, opt);
@@ -177,16 +177,16 @@ void Log_printCapturedStackTraceCustom(const void **stackTrace, U64 stackSize, L
 
 		//We now don't need the strings anymore
 
-		String_free(&capture.fil, Platform_instance.alloc);
-		String_free(&capture.sym, Platform_instance.alloc);
-		String_free(&capture.mod, Platform_instance.alloc);
+		String_free(&capture.fil, EPlatform_instance.alloc);
+		String_free(&capture.sym, EPlatform_instance.alloc);
+		String_free(&capture.mod, EPlatform_instance.alloc);
 	}
 
 	if(hasSymbols)
 		SymCleanup(process);
 }
 
-void Log_log(LogLevel lvl, LogOptions options, LogArgs args) {
+void Log_log(ELogLevel lvl, ELogOptions options, LogArgs args) {
 
 
 	Ns t = Timer_now();
@@ -195,7 +195,7 @@ void Log_log(LogLevel lvl, LogOptions options, LogArgs args) {
 
 	const C8 *hrErr = "";
 
-	if (lvl > LogLevel_Debug) {
+	if (lvl > ELogLevel_Debug) {
 
 		HRESULT hr = GetLastError();
 		
@@ -223,9 +223,9 @@ void Log_log(LogLevel lvl, LogOptions options, LogArgs args) {
 
 	//[<thread> <time>]: <hr\n><ourStuff> <\n if enabled>
 
-	Bool hasTimestamp = options & LogOptions_Timestamp;
-	Bool hasThread = options & LogOptions_Thread;
-	Bool hasNewLine = options & LogOptions_NewLine;
+	Bool hasTimestamp = options & ELogOptions_Timestamp;
+	Bool hasThread = options & ELogOptions_Thread;
+	Bool hasNewLine = options & ELogOptions_NewLine;
 	Bool hasPrepend = hasTimestamp || hasThread;
 
 	if (hasPrepend)
@@ -277,6 +277,6 @@ void Log_log(LogLevel lvl, LogOptions options, LogArgs args) {
 			OutputDebugStringA("\n");
 	}
 
-	if (lvl >= LogLevel_Error)
+	if (lvl >= ELogLevel_Error)
 		DebugBreak();
 }

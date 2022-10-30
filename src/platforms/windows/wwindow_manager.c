@@ -17,37 +17,37 @@ Error WindowManager_createPhysical(
 	WindowManager *manager,
 	I32x2 position,
 	I32x2 size, 
-	WindowHint hint,
+	EWindowHint hint,
 	String title, 
 	WindowCallbacks callbacks,
-	WindowFormat format,
+	EWindowFormat format,
 	Window **w
 ) {
 
 	//Validate state
 
 	if(!manager)
-		return (Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = EGenericError_NullPointer };
 
 	if(!Lock_isLockedForThread(manager->lock))
-		return (Error) { .genericError = GenericError_InvalidOperation };
+		return (Error) { .genericError = EGenericError_InvalidOperation };
 
 	if(!w)
-		return (Error) { .genericError = GenericError_NullPointer, .paramId = 7 };
+		return (Error) { .genericError = EGenericError_NullPointer, .paramId = 7 };
 
 	if(*w)
-		return (Error) { .genericError = GenericError_InvalidParameter, .paramId = 7 };
+		return (Error) { .genericError = EGenericError_InvalidParameter, .paramId = 7 };
 
 	switch (format) {
 
-		case WindowFormat_rgba8:
-		case WindowFormat_hdr10a2:
-		case WindowFormat_rgba16f:
-		case WindowFormat_rgba32f:
+		case EWindowFormat_rgba8:
+		case EWindowFormat_hdr10a2:
+		case EWindowFormat_rgba16f:
+		case EWindowFormat_rgba32f:
 
 			if(!WindowManager_supportsFormat(*manager, format))
 				return (Error) { 
-					.genericError = GenericError_UnsupportedOperation, 
+					.genericError = EGenericError_UnsupportedOperation, 
 					.paramId = 6,
 					.paramValue0 = format
 				};
@@ -55,15 +55,15 @@ Error WindowManager_createPhysical(
 			break;
 
 		default:
-			return (Error) { .genericError = GenericError_InvalidParameter, .paramId = 6 };
+			return (Error) { .genericError = EGenericError_InvalidParameter, .paramId = 6 };
 	}
 
 	if(I32x2_any(I32x2_lt(size, I32x2_zero())))
-		return (Error) { .genericError = GenericError_InvalidParameter };
+		return (Error) { .genericError = EGenericError_InvalidParameter };
 
 	if (title.len >= MAX_PATH)
 		return (Error) { 
-			.genericError = GenericError_OutOfBounds, 
+			.genericError = EGenericError_OutOfBounds, 
 			.paramId = 4, 
 			.paramValue0 = title.len,
 			.paramValue1 = MAX_PATH
@@ -81,7 +81,7 @@ Error WindowManager_createPhysical(
 		if(!wi)
 			break;
 
-		if (!(wi->flags & WindowFlags_IsActive)) {
+		if (!(wi->flags & EWindowFlags_IsActive)) {
 			win = wi;
 			handle = i;
 			break;
@@ -89,12 +89,12 @@ Error WindowManager_createPhysical(
 	}
 
 	if(!win)
-		return (Error) { .genericError = GenericError_OutOfMemory };
+		return (Error) { .genericError = EGenericError_OutOfMemory };
 
 	//Create native window
 
 	WNDCLASSEXA wc = (WNDCLASSEXA){ 0 };
-	HINSTANCE mainModule = Platform_instance.data;
+	HINSTANCE mainModule = EPlatform_instance.data;
 
 	wc.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
 	wc.lpfnWndProc = WWindow_onCallback;
@@ -112,19 +112,19 @@ Error WindowManager_createPhysical(
 	wc.cbWndExtra = sizeof(void*);
 
 	if (!RegisterClassExA(&wc))
-		return (Error) { .genericError = GenericError_InvalidOperation, .paramSubId = 1 };
+		return (Error) { .genericError = EGenericError_InvalidOperation, .paramSubId = 1 };
 
 	DWORD style = WS_VISIBLE;
 
-	if(!(hint & WindowHint_ForceFullscreen)) {
+	if(!(hint & EWindowHint_ForceFullscreen)) {
 
 		style |= WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
 
-		if(!(hint & WindowHint_DisableResize))
+		if(!(hint & EWindowHint_DisableResize))
 			style |= WS_SIZEBOX | WS_MAXIMIZEBOX;
 	}
 
-	if(!(hint & WindowHint_HandleInput))
+	if(!(hint & EWindowHint_HandleInput))
 		style |= WS_DISABLED;
 
 	I32x2 maxSize = I32x2_create2(
@@ -152,7 +152,7 @@ Error WindowManager_createPhysical(
 
 	if(!nativeWindow) {
 		UnregisterClassA(wc.lpszClassName, wc.hInstance);
-		return (Error) { .genericError = GenericError_InvalidOperation, .paramSubId = 2 };
+		return (Error) { .genericError = EGenericError_InvalidOperation, .paramSubId = 2 };
 	}
 
 	//Get real size and position
@@ -175,14 +175,14 @@ Error WindowManager_createPhysical(
 
 	Error err = Error_none();
 
-	if(hint & WindowHint_ProvideCPUBuffer) {
+	if(hint & EWindowHint_ProvideCPUBuffer) {
 
 		HDC screen = GetDC(nativeWindow);
 
 		if(!screen) {
 			DestroyWindow(nativeWindow);
 			UnregisterClassA(wc.lpszClassName, wc.hInstance);
-			return (Error) { .genericError = GenericError_InvalidOperation, .paramSubId = 3 };
+			return (Error) { .genericError = EGenericError_InvalidOperation, .paramSubId = 3 };
 		}
 
 		//TODO: Support something other than RGBA8
@@ -207,7 +207,7 @@ Error WindowManager_createPhysical(
 			ReleaseDC(nativeWindow, screen);
 			DestroyWindow(nativeWindow);
 			UnregisterClassA(wc.lpszClassName, wc.hInstance);
-			return (Error) { .genericError = GenericError_InvalidOperation, .paramSubId = 3 };
+			return (Error) { .genericError = EGenericError_InvalidOperation, .paramSubId = 3 };
 		}
 
 		cpuVisibleBuffer.siz = (U64) bmi.bmiHeader.biWidth * bmi.bmiHeader.biHeight * 4;
@@ -230,7 +230,7 @@ Error WindowManager_createPhysical(
 
 	List devices = List_createEmpty(sizeof(InputDevice)), monitors = List_createEmpty(sizeof(Monitor));
 
-	if ((err = List_reserve(&devices, Window_maxDevices, Platform_instance.alloc)).genericError) {
+	if ((err = List_reserve(&devices, Window_maxDevices, EPlatform_instance.alloc)).genericError) {
 
 		Lock_free(&lock);
 
@@ -243,9 +243,9 @@ Error WindowManager_createPhysical(
 		return err;
 	}
 
-	if ((err = List_reserve(&monitors, Window_maxMonitors, Platform_instance.alloc)).genericError) {
+	if ((err = List_reserve(&monitors, Window_maxMonitors, EPlatform_instance.alloc)).genericError) {
 
-		List_free(&devices, Platform_instance.alloc);
+		List_free(&devices, EPlatform_instance.alloc);
 		Lock_free(&lock);
 
 		if(nativeData)
@@ -274,7 +274,7 @@ Error WindowManager_createPhysical(
 
 		.hint = hint,
 		.format = format,
-		.flags = WindowFlags_IsActive,
+		.flags = EWindowFlags_IsActive,
 
 		.devices = devices,
 		.monitors = monitors

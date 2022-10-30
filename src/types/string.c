@@ -11,7 +11,7 @@
 Error String_offsetAsRef(String s, U64 off, String *result) {
 	
 	if (!result)
-		return (Error) { .genericError = GenericError_NullPointer, .paramId = 2 };
+		return (Error) { .genericError = EGenericError_NullPointer, .paramId = 2 };
 
 	if (String_isEmpty(s)) {
 		*result = String_createEmpty();
@@ -20,7 +20,7 @@ Error String_offsetAsRef(String s, U64 off, String *result) {
 
 	if(off >= s.len)
 		return (Error) { 
-			.genericError = GenericError_OutOfBounds, 
+			.genericError = EGenericError_OutOfBounds, 
 			.paramId = 1,
 			.paramValue0 = off,
 			.paramValue1 = s.len 
@@ -52,7 +52,7 @@ Error String_offsetAsRef(String s, U64 off, String *result) {
 	String_startsWithString(												\
 		s,																	\
 		String_createRefUnsafeConst(num),									\
-		StringCase_Insensitive												\
+		EStringCase_Insensitive												\
 	) ? String_createRefUnsafeConst(num).len : 0							\
 )
 
@@ -83,15 +83,15 @@ Bool String_isDec(String s) {
 Bool String_isSignedNumber(String s) {
 	String_matchesPattern(
 		C8_isDec,
-		String_startsWith(s, '-', StringCase_Sensitive) ||
-		String_startsWith(s, '+', StringCase_Sensitive)
+		String_startsWith(s, '-', EStringCase_Sensitive) ||
+		String_startsWith(s, '+', EStringCase_Sensitive)
 	);
 }
 
 Bool String_isUnsignedNumber(String s) {
 	String_matchesPattern(
 		C8_isDec,
-		String_startsWith(s, '+', StringCase_Sensitive)
+		String_startsWith(s, '+', EStringCase_Sensitive)
 	);
 }
 
@@ -170,13 +170,13 @@ Bool String_isFloat(String s) {
 Error String_create(C8 c, U64 size, Allocator alloc, String *result) {
 
 	if (!c)
-		return (Error) { .genericError = GenericError_InvalidParameter };
+		return (Error) { .genericError = EGenericError_InvalidParameter };
 
 	if (!alloc.alloc)
-		return (Error) { .genericError = GenericError_NullPointer, .paramId = 2 };
+		return (Error) { .genericError = EGenericError_NullPointer, .paramId = 2 };
 
 	if (!result)
-		return (Error) { .genericError = GenericError_NullPointer, .paramId = 3 };
+		return (Error) { .genericError = EGenericError_NullPointer, .paramId = 3 };
 
 	if (!size) {
 		*result = String_createEmpty();
@@ -225,10 +225,10 @@ Error String_create(C8 c, U64 size, Allocator alloc, String *result) {
 Error String_createCopy(String str, Allocator alloc, String *result) {
 
 	if (!alloc.alloc)
-		return (Error) { .genericError = GenericError_NullPointer, .paramId = 1 };
+		return (Error) { .genericError = EGenericError_NullPointer, .paramId = 1 };
 
 	if (!result)
-		return (Error) { .genericError = GenericError_NullPointer, .paramId = 2 };
+		return (Error) { .genericError = EGenericError_NullPointer, .paramId = 2 };
 
 	if (!str.len) {
 		*result = String_createEmpty();
@@ -254,10 +254,10 @@ Error String_createCopy(String str, Allocator alloc, String *result) {
 Error String_free(String *str, Allocator alloc) {
 
 	if (!str)
-		return (Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = EGenericError_NullPointer };
 
 	if (!alloc.free)
-		return (Error) { .genericError = GenericError_NullPointer, .paramId = 1 };
+		return (Error) { .genericError = EGenericError_NullPointer, .paramId = 1 };
 
 	Error err = Error_none();
 
@@ -274,7 +274,7 @@ Error String_free(String *str, Allocator alloc) {
 																		\
 	if (result->len)													\
 		return (Error) { 												\
-			.genericError = GenericError_InvalidOperation, 				\
+			.genericError = EGenericError_InvalidOperation, 				\
 			.errorSubId = 1 											\
 		};																\
 																		\
@@ -350,7 +350,7 @@ Error String_createBin(U64 v, Bool leadingZeros, Allocator allocator, String *re
 Error String_split(
 	String s, 
 	C8 c, 
-	StringCase casing, 
+	EStringCase casing, 
 	Allocator allocator, 
 	StringList *result
 ) {
@@ -366,12 +366,12 @@ Error String_split(
 
 		StringList str = *result;
 
-		c = C8_transform(c, (StringTransform) casing);
+		c = C8_transform(c, (EStringTransform) casing);
 
 		U64 count = 0, last = 0;
 
 		for (U64 i = 0; i < s.len; ++i)
-			if (C8_transform(s.ptr[i], (StringTransform) casing) == c) {
+			if (C8_transform(s.ptr[i], (EStringTransform) casing) == c) {
 
 				str.ptr[count++] = 
 					String_isConstRef(s) ? String_createRefConst(s.ptr + last, i - last) : 
@@ -387,7 +387,7 @@ Error String_split(
 Error String_splitString(
 	String s, 
 	String other, 
-	StringCase casing, 
+	EStringCase casing, 
 	Allocator allocator, 
 	StringList *result
 ) {
@@ -411,8 +411,8 @@ Error String_splitString(
 
 			for (U64 j = i, k = 0; j < s.len && k < other.len; ++j, ++k)
 				if (
-					C8_transform(s.ptr[j], (StringTransform)casing) !=
-					C8_transform(other.ptr[k], (StringTransform)casing)
+					C8_transform(s.ptr[j], (EStringTransform)casing) !=
+					C8_transform(other.ptr[k], (EStringTransform)casing)
 				) {
 					match = false;
 					break;
@@ -436,13 +436,13 @@ Error String_splitString(
 Error String_reserve(String *str, U64 siz, Allocator alloc) {
 
 	if (!str)
-		return (Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = EGenericError_NullPointer };
 
 	if (String_isRef(*str) && str->len)
-		return (Error) { .genericError = GenericError_InvalidOperation };
+		return (Error) { .genericError = EGenericError_InvalidOperation };
 
 	if (!alloc.alloc || !alloc.free)
-		return (Error) { .genericError = GenericError_NullPointer, .paramId = 2 };
+		return (Error) { .genericError = EGenericError_NullPointer, .paramId = 2 };
 
 	if (siz <= str->capacity)
 		return Error_none();
@@ -465,13 +465,13 @@ Error String_reserve(String *str, U64 siz, Allocator alloc) {
 Error String_resize(String *str, U64 siz, C8 defaultChar, Allocator alloc) {
 
 	if (!str)
-		return (Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = EGenericError_NullPointer };
 
 	if (String_isRef(*str) && str->len)
-		return (Error) { .genericError = GenericError_InvalidOperation };
+		return (Error) { .genericError = EGenericError_InvalidOperation };
 
 	if (!alloc.alloc || !alloc.free)
-		return (Error) { .genericError = GenericError_NullPointer, .paramId = 2 };
+		return (Error) { .genericError = EGenericError_NullPointer, .paramId = 2 };
 
 	if (siz == str->len)
 		return Error_none();
@@ -488,7 +488,7 @@ Error String_resize(String *str, U64 siz, C8 defaultChar, Allocator alloc) {
 	if (siz > str->capacity) {
 
 		if (siz * 3 / 3 != siz)
-			return (Error) { .genericError = GenericError_Overflow };
+			return (Error) { .genericError = EGenericError_Overflow };
 
 		//Reserve 50% more to ensure we don't resize too many times
 
@@ -510,7 +510,7 @@ Error String_resize(String *str, U64 siz, C8 defaultChar, Allocator alloc) {
 Error String_append(String *s, C8 c, Allocator allocator) {
 
 	if (!s)
-		return (Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = EGenericError_NullPointer };
 
 	return String_resize(s, s->len + 1, c, allocator);
 }
@@ -521,7 +521,7 @@ Error String_appendString(String *s, String other, Allocator allocator) {
 		return Error_none();
 
 	if (!s)
-		return (Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = EGenericError_NullPointer };
 
 	U64 oldLen = s->len;
 	Error err = String_resize(s, s->len + other.len, other.ptr[0], allocator);
@@ -536,10 +536,10 @@ Error String_appendString(String *s, String other, Allocator allocator) {
 Error String_insert(String *s, C8 c, U64 i, Allocator allocator) {
 
 	if (!s)
-		return (Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = EGenericError_NullPointer };
 
 	if(i > s->len)
-		return (Error) { .genericError = GenericError_OutOfBounds, .paramValue0 = i, .paramValue1 = s->len };
+		return (Error) { .genericError = EGenericError_OutOfBounds, .paramValue0 = i, .paramValue1 = s->len };
 
 	Error err = String_resize(s, s->len + 1, c, allocator);
 
@@ -566,7 +566,7 @@ Error String_insert(String *s, C8 c, U64 i, Allocator allocator) {
 Error String_insertString(String *s, String other, U64 i, Allocator allocator) {
 
 	if (!s)
-		return (Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = EGenericError_NullPointer };
 
 	if (!other.len)
 		return Error_none();
@@ -596,15 +596,15 @@ Error String_replaceAllString(
 	String *s,
 	String search,
 	String replace,
-	StringCase caseSensitive,
+	EStringCase caseSensitive,
 	Allocator allocator
 ) {
 
 	if (!s)
-		return (Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = EGenericError_NullPointer };
 
 	if(String_isRef(*s))
-		return (Error) { .genericError = GenericError_InvalidOperation };
+		return (Error) { .genericError = EGenericError_InvalidOperation };
 
 	List finds = String_findAllString(*s, search, allocator, caseSensitive);
 
@@ -712,16 +712,16 @@ Error String_replaceString(
 	String *s,
 	String search,
 	String replace,
-	StringCase caseSensitive,
+	EStringCase caseSensitive,
 	Allocator allocator,
 	Bool isFirst
 ) {
 
 	if (!s)
-		return (Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = EGenericError_NullPointer };
 
 	if(String_isRef(*s))
-		return (Error) { .genericError = GenericError_InvalidOperation };
+		return (Error) { .genericError = EGenericError_InvalidOperation };
 
 	U64 res = isFirst ? String_findFirstString(*s, search, caseSensitive) : 
 		String_findLastString(*s, search, caseSensitive);
@@ -787,50 +787,50 @@ Error String_replaceString(
 	return Error_none();
 }
 
-Bool String_startsWithString(String str, String other, StringCase caseSensitive) {
+Bool String_startsWithString(String str, String other, EStringCase caseSensitive) {
 
 	if (other.len > str.len)
 		return false;
 
 	for (U64 i = 0; i < other.len; ++i)
 		if (
-			C8_transform(str.ptr[i], (StringTransform)caseSensitive) != 
-			C8_transform(other.ptr[i], (StringTransform)caseSensitive)
+			C8_transform(str.ptr[i], (EStringTransform)caseSensitive) != 
+			C8_transform(other.ptr[i], (EStringTransform)caseSensitive)
 		)
 			return false;
 
 	return true;
 }
 
-Bool String_endsWithString(String str, String other, StringCase caseSensitive) {
+Bool String_endsWithString(String str, String other, EStringCase caseSensitive) {
 
 	if (other.len > str.len)
 		return false;
 
 	for (U64 i = str.len - other.len; i < str.len; ++i)
 		if (
-			C8_transform(str.ptr[i], (StringTransform)caseSensitive) != 
-			C8_transform(other.ptr[i - (str.len - other.len)], (StringTransform)caseSensitive)
+			C8_transform(str.ptr[i], (EStringTransform)caseSensitive) != 
+			C8_transform(other.ptr[i - (str.len - other.len)], (EStringTransform)caseSensitive)
 		)
 			return false;
 
 	return true;
 }
 
-U64 String_countAll(String s, C8 c, StringCase caseSensitive) {
+U64 String_countAll(String s, C8 c, EStringCase caseSensitive) {
 
-	c = C8_transform(c, (StringTransform)caseSensitive);
+	c = C8_transform(c, (EStringTransform)caseSensitive);
 
 	U64 count = 0;
 
 	for (U64 i = 0; i < s.len; ++i)
-		if (C8_transform(s.ptr[i], (StringTransform)caseSensitive) == c)
+		if (C8_transform(s.ptr[i], (EStringTransform)caseSensitive) == c)
 			++count;
 
 	return count;
 }
 
-U64 String_countAllString(String s, String other, StringCase casing) {
+U64 String_countAllString(String s, String other, EStringCase casing) {
 
 	if(!other.len)
 		return 0;
@@ -843,8 +843,8 @@ U64 String_countAllString(String s, String other, StringCase casing) {
 
 		for (U64 l = i, k = 0; l < s.len && k < other.len; ++l, ++k)
 			if (
-				C8_transform(s.ptr[l], (StringTransform)casing) !=
-				C8_transform(other.ptr[k], (StringTransform)casing)
+				C8_transform(s.ptr[l], (EStringTransform)casing) !=
+				C8_transform(other.ptr[k], (EStringTransform)casing)
 			) {
 				match = false;
 				break;
@@ -863,7 +863,7 @@ List String_findAll(
 	String s,
 	C8 c,
 	Allocator alloc,
-	StringCase caseSensitive
+	EStringCase caseSensitive
 ) {
 
 	List l = List_createEmpty(sizeof(U64));
@@ -872,10 +872,10 @@ List String_findAll(
 	if (err.genericError)
 		return List_createEmpty(sizeof(U64));
 
-	c = C8_transform(c, (StringTransform) caseSensitive);
+	c = C8_transform(c, (EStringTransform) caseSensitive);
 
 	for (U64 i = 0; i < s.len; ++i)
-		if (c == C8_transform(s.ptr[i], (StringTransform)caseSensitive))
+		if (c == C8_transform(s.ptr[i], (EStringTransform)caseSensitive))
 			if ((err = List_pushBack(&l, Buffer_createRef(&i, sizeof(i)), alloc)).genericError) {
 				List_free(&l, alloc);
 				return List_createEmpty(sizeof(U64));
@@ -888,7 +888,7 @@ List String_findAllString(
 	String s,
 	String other,
 	Allocator alloc,
-	StringCase casing
+	EStringCase casing
 ) {
 
 	if(!other.len)
@@ -906,8 +906,8 @@ List String_findAllString(
 
 		for (U64 j = i, k = 0; j < s.len && k < other.len; ++j, ++k)
 			if (
-				C8_transform(s.ptr[j], (StringTransform)casing) !=
-				C8_transform(other.ptr[k], (StringTransform)casing)
+				C8_transform(s.ptr[j], (EStringTransform)casing) !=
+				C8_transform(other.ptr[k], (EStringTransform)casing)
 			) {
 				match = false;
 				break;
@@ -927,23 +927,23 @@ List String_findAllString(
 	return l;
 }
 
-U64 String_findFirst(String s, C8 c, StringCase caseSensitive) {
+U64 String_findFirst(String s, C8 c, EStringCase caseSensitive) {
 
-	c = C8_transform(c, (StringTransform)caseSensitive);
+	c = C8_transform(c, (EStringTransform)caseSensitive);
 
 	for (U64 i = 0; i < s.len; ++i)
-		if (C8_transform(s.ptr[i], (StringTransform)caseSensitive) == c)
+		if (C8_transform(s.ptr[i], (EStringTransform)caseSensitive) == c)
 			return i;
 
 	return s.len;
 }
 
-U64 String_findLast(String s, C8 c, StringCase caseSensitive) {
+U64 String_findLast(String s, C8 c, EStringCase caseSensitive) {
 
-	c = C8_transform(c, (StringTransform)caseSensitive);
+	c = C8_transform(c, (EStringTransform)caseSensitive);
 
 	for (U64 i = s.len - 1; i != U64_MAX; --i)
-		if (C8_transform(s.ptr[i], (StringTransform)caseSensitive) == c)
+		if (C8_transform(s.ptr[i], (EStringTransform)caseSensitive) == c)
 			return i;
 
 	//TODO: Don't return len on end!
@@ -951,7 +951,7 @@ U64 String_findLast(String s, C8 c, StringCase caseSensitive) {
 	return s.len;
 }
 
-U64 String_findFirstString(String s, String other, StringCase casing) {
+U64 String_findFirstString(String s, String other, EStringCase casing) {
 
 	if(!other.len)
 		return s.len;
@@ -964,8 +964,8 @@ U64 String_findFirstString(String s, String other, StringCase casing) {
 
 		for (U64 j = i, k = 0; j < s.len && k < other.len; ++j, ++k)
 			if (
-				C8_transform(s.ptr[j], (StringTransform)casing) !=
-				C8_transform(other.ptr[k], (StringTransform)casing)
+				C8_transform(s.ptr[j], (EStringTransform)casing) !=
+				C8_transform(other.ptr[k], (EStringTransform)casing)
 			) {
 				match = false;
 				break;
@@ -978,7 +978,7 @@ U64 String_findFirstString(String s, String other, StringCase casing) {
 	return i;
 }
 
-U64 String_findLastString(String s, String other, StringCase casing) {
+U64 String_findLastString(String s, String other, EStringCase casing) {
 	
 	if(!other.len)
 		return 0;
@@ -991,8 +991,8 @@ U64 String_findLastString(String s, String other, StringCase casing) {
 
 		for (U64 j = i, k = other.len - 1; j != U64_MAX && k != U64_MAX; --j, --k)
 			if (
-				C8_transform(s.ptr[j], (StringTransform)casing) !=
-				C8_transform(other.ptr[k], (StringTransform)casing)
+				C8_transform(s.ptr[j], (EStringTransform)casing) !=
+				C8_transform(other.ptr[k], (EStringTransform)casing)
 			) {
 				match = false;
 				break;
@@ -1005,25 +1005,25 @@ U64 String_findLastString(String s, String other, StringCase casing) {
 	return i;
 }
 
-Bool String_equalsString(String s, String other, StringCase caseSensitive) {
+Bool String_equalsString(String s, String other, EStringCase caseSensitive) {
 
 	if (s.len != other.len)
 		return false;
 
 	for (U64 i = 0; i < s.len; ++i)
 		if (
-			C8_transform(s.ptr[i], (StringTransform)caseSensitive) != 
-			C8_transform(other.ptr[i], (StringTransform)caseSensitive)
+			C8_transform(s.ptr[i], (EStringTransform)caseSensitive) != 
+			C8_transform(other.ptr[i], (EStringTransform)caseSensitive)
 		)
 			return false;
 
 	return true;
 }
 
-Bool String_equals(String s, C8 c, StringCase caseSensitive) {
+Bool String_equals(String s, C8 c, EStringCase caseSensitive) {
 	return s.len == 1 && s.ptr && 
-		C8_transform(s.ptr[0], (StringTransform) caseSensitive) == 
-		C8_transform(c, (StringTransform) caseSensitive);
+		C8_transform(s.ptr[0], (EStringTransform) caseSensitive) == 
+		C8_transform(c, (EStringTransform) caseSensitive);
 }
 
 Bool String_parseNyto(String s, U64 *result){
@@ -1031,7 +1031,7 @@ Bool String_parseNyto(String s, U64 *result){
 	String prefix = String_createRefUnsafeConst("0n");
 
 	Error err = String_offsetAsRef(
-		s, String_startsWithString(s, prefix, StringCase_Insensitive) ? prefix.len : 0, &s
+		s, String_startsWithString(s, prefix, EStringCase_Insensitive) ? prefix.len : 0, &s
 	);
 
 	if (err.genericError)
@@ -1062,7 +1062,7 @@ Bool String_parseHex(String s, U64 *result){
 
 	String prefix = String_createRefUnsafeConst("0x");
 	Error err = String_offsetAsRef(
-		s, String_startsWithString(s, prefix, StringCase_Insensitive) ? prefix.len : 0, &s
+		s, String_startsWithString(s, prefix, EStringCase_Insensitive) ? prefix.len : 0, &s
 	);
 
 	if (err.genericError)
@@ -1111,7 +1111,7 @@ Bool String_parseDec(String s, U64 *result) {
 
 Bool String_parseDecSigned(String s, I64 *result) {
 
-	Bool neg = String_startsWith(s, '-', StringCase_Sensitive);
+	Bool neg = String_startsWith(s, '-', EStringCase_Sensitive);
 
 	Error err = String_offsetAsRef(s, neg, &s);
 
@@ -1150,7 +1150,7 @@ Bool String_parseFloat(String s, F32 *result) {
 
 	Bool sign = false;
 
-	if (String_startsWith(s, '-', StringCase_Sensitive)) {
+	if (String_startsWith(s, '-', EStringCase_Sensitive)) {
 
 		sign = true;
 
@@ -1158,7 +1158,7 @@ Bool String_parseFloat(String s, F32 *result) {
 			return false;
 	}
 
-	else if (String_startsWith(s, '+', StringCase_Sensitive)) {
+	else if (String_startsWith(s, '+', EStringCase_Sensitive)) {
 
 		if (String_offsetAsRef(s, 1, &s).genericError)
 			return false;
@@ -1169,8 +1169,8 @@ Bool String_parseFloat(String s, F32 *result) {
 	F32 intPart = 0;
 
 	while(
-		!String_startsWith(s, '.', StringCase_Sensitive) && 
-		!String_startsWith(s, 'e', StringCase_Insensitive)
+		!String_startsWith(s, '.', EStringCase_Sensitive) && 
+		!String_startsWith(s, 'e', EStringCase_Insensitive)
 	) {
 
 		U8 v = C8_dec(s.ptr[0]);
@@ -1195,14 +1195,14 @@ Bool String_parseFloat(String s, F32 *result) {
 	//Parse fraction
 
 	if (
-		String_startsWith(s, '.', StringCase_Sensitive) && 
+		String_startsWith(s, '.', EStringCase_Sensitive) && 
 		String_offsetAsRef(s, 1, &s).genericError
 	)
 		return false;
 
 	F32 fraction = 0, multiplier = 0.1f;
 
-	while(!String_startsWith(s, 'e', StringCase_Insensitive)) {
+	while(!String_startsWith(s, 'e', EStringCase_Insensitive)) {
 
 		U8 v = C8_dec(s.ptr[0]);
 
@@ -1228,7 +1228,7 @@ Bool String_parseFloat(String s, F32 *result) {
 
 	Bool esign = false;
 
-	if (String_startsWith(s, '-', StringCase_Sensitive)) {
+	if (String_startsWith(s, '-', EStringCase_Sensitive)) {
 
 		esign = true;
 
@@ -1236,7 +1236,7 @@ Bool String_parseFloat(String s, F32 *result) {
 			return false;
 	}
 
-	else if (String_startsWith(s, '+', StringCase_Sensitive)) {
+	else if (String_startsWith(s, '+', EStringCase_Sensitive)) {
 
 		if (String_offsetAsRef(s, 1, &s).genericError)
 			return false;
@@ -1272,7 +1272,7 @@ Bool String_parseOct(String s, U64 *result) {
 
 	String prefix = String_createRefUnsafeConst("0o");
 	Error err = String_offsetAsRef(
-		s, String_startsWithString(s, prefix, StringCase_Insensitive) ? prefix.len : 0, &s
+		s, String_startsWithString(s, prefix, EStringCase_Insensitive) ? prefix.len : 0, &s
 	);
 
 	if (err.genericError)
@@ -1303,7 +1303,7 @@ Bool String_parseBin(String s, U64 *result) {
 
 	String prefix = String_createRefUnsafeConst("0b");
 	Error err = String_offsetAsRef(
-		s, String_startsWithString(s, prefix, StringCase_Insensitive) ? prefix.len : 0, &s
+		s, String_startsWithString(s, prefix, EStringCase_Insensitive) ? prefix.len : 0, &s
 	);
 
 	if (err.genericError)
@@ -1358,7 +1358,7 @@ Bool String_cut(String s, U64 offset, U64 siz, String *result) {
 	return true;
 }
 
-Bool String_cutAfter(String s, C8 c, StringCase caseSensitive, Bool isFirst, String *result) {
+Bool String_cutAfter(String s, C8 c, EStringCase caseSensitive, Bool isFirst, String *result) {
 
 	if (!result)
 		return false;
@@ -1367,7 +1367,7 @@ Bool String_cutAfter(String s, C8 c, StringCase caseSensitive, Bool isFirst, Str
 	return String_cut(s, 0, found, result);
 }
 
-Bool String_cutAfterString(String s, String other, StringCase caseSensitive, Bool isFirst, String *result) {
+Bool String_cutAfterString(String s, String other, EStringCase caseSensitive, Bool isFirst, String *result) {
 
 	if (!result)
 		return false;
@@ -1378,7 +1378,7 @@ Bool String_cutAfterString(String s, String other, StringCase caseSensitive, Boo
 	return String_cut(s, 0, found, result);
 }
 
-Bool String_cutBefore(String s, C8 c, StringCase caseSensitive, Bool isFirst, String *result) {
+Bool String_cutBefore(String s, C8 c, EStringCase caseSensitive, Bool isFirst, String *result) {
 
 	if (!result)
 		return false;
@@ -1392,7 +1392,7 @@ Bool String_cutBefore(String s, C8 c, StringCase caseSensitive, Bool isFirst, St
 	return String_cut(s, found, 0, result);
 }
 
-Bool String_cutBeforeString(String s, String other, StringCase caseSensitive, Bool isFirst, String *result) {
+Bool String_cutBeforeString(String s, String other, EStringCase caseSensitive, Bool isFirst, String *result) {
 
 	if (!result || !other.len)
 		return false;
@@ -1407,12 +1407,12 @@ Bool String_cutBeforeString(String s, String other, StringCase caseSensitive, Bo
 	return String_cut(s, found, 0, result);
 }
 
-Bool String_erase(String *s, C8 c, StringCase caseSensitive, Bool isFirst) {
+Bool String_erase(String *s, C8 c, EStringCase caseSensitive, Bool isFirst) {
 
 	if(!s || String_isRef(*s))
 		return false;
 
-	c = C8_transform(c, (StringTransform) caseSensitive);
+	c = C8_transform(c, (EStringTransform) caseSensitive);
 
 	Bool hadMatch = false;
 
@@ -1434,7 +1434,7 @@ Bool String_erase(String *s, C8 c, StringCase caseSensitive, Bool isFirst) {
 	return true;
 }
 
-Bool String_eraseString(String *s, String other, StringCase casing, Bool isFirst) {
+Bool String_eraseString(String *s, String other, EStringCase casing, Bool isFirst) {
 
 	if(!s || !other.len || String_isRef(*s))
 		return false;
@@ -1469,18 +1469,18 @@ Bool String_cutBegin(String s, U64 i, String *result) {
 	return String_cut(s, i, 0, result);
 }
 
-Bool String_eraseAll(String *s, C8 c, StringCase casing) {
+Bool String_eraseAll(String *s, C8 c, EStringCase casing) {
 
 	if(!s || String_isRef(*s))
 		return false;
 
-	c = C8_transform(c, (StringTransform) casing);
+	c = C8_transform(c, (EStringTransform) casing);
 
 	U64 out = 0;
 
 	for (U64 i = 0; i < s->len; ++i) {
 
-		if(C8_transform(s->ptr[i], (StringTransform) casing) == c)
+		if(C8_transform(s->ptr[i], (EStringTransform) casing) == c)
 			continue;
 
 		s->ptr[out++] = s->ptr[i];
@@ -1493,7 +1493,7 @@ Bool String_eraseAll(String *s, C8 c, StringCase casing) {
 	return true;
 }
 
-Bool String_eraseAllString(String *s, String other, StringCase casing) {
+Bool String_eraseAllString(String *s, String other, EStringCase casing) {
 
 	if(!s || !other.len || String_isRef(*s))
 		return false;
@@ -1506,8 +1506,8 @@ Bool String_eraseAllString(String *s, String other, StringCase casing) {
 
 		for (U64 j = i, k = 0; j < s->len && k < other.len; ++j, ++k)
 			if (
-				C8_transform(s->ptr[j], (StringTransform) casing) != 
-				C8_transform(other.ptr[k], (StringTransform) casing)
+				C8_transform(s->ptr[j], (EStringTransform) casing) != 
+				C8_transform(other.ptr[k], (EStringTransform) casing)
 			) {
 				match = false;
 				break;
@@ -1528,21 +1528,21 @@ Bool String_eraseAllString(String *s, String other, StringCase casing) {
 	return true;
 }
 
-Bool String_replaceAll(String *s, C8 c, C8 v, StringCase caseSensitive) {
+Bool String_replaceAll(String *s, C8 c, C8 v, EStringCase caseSensitive) {
 
 	if (!s || String_isConstRef(*s))
 		return false;
 
-	c = C8_transform(c, (StringTransform)caseSensitive);
+	c = C8_transform(c, (EStringTransform)caseSensitive);
 
 	for(U64 i = 0; i < s->len; ++i)
-		if(C8_transform(s->ptr[i], (StringTransform)caseSensitive) == c)
+		if(C8_transform(s->ptr[i], (EStringTransform)caseSensitive) == c)
 			s->ptr[i] = v;
 
 	return true;
 }
 
-Bool String_replace(String *s, C8 c, C8 v, StringCase caseSensitive, Bool isFirst) {
+Bool String_replace(String *s, C8 c, C8 v, EStringCase caseSensitive, Bool isFirst) {
 
 	if (!s || String_isRef(*s))
 		return false;
@@ -1555,7 +1555,7 @@ Bool String_replace(String *s, C8 c, C8 v, StringCase caseSensitive, Bool isFirs
 	return true;
 }
 
-Bool String_transform(String str, StringTransform c) {
+Bool String_transform(String str, EStringTransform c) {
 
 	if(String_isConstRef(str))
 		return false;
@@ -1615,7 +1615,7 @@ Error StringList_create(U64 len, Allocator alloc, StringList *arr) {
 Error StringList_free(StringList *arr, Allocator alloc) {
 
 	if(!arr || !arr->len)
-		return (Error){ .genericError = GenericError_NullPointer };
+		return (Error){ .genericError = EGenericError_NullPointer };
 
 	Error freeErr = Error_none();
 
@@ -1643,7 +1643,7 @@ Error StringList_free(StringList *arr, Allocator alloc) {
 Error StringList_createCopy(const StringList *toCopy, StringList *arr, Allocator alloc) {
 
 	if(!toCopy || !toCopy->len)
-		return (Error){ .genericError = GenericError_NullPointer };
+		return (Error){ .genericError = EGenericError_NullPointer };
 
 	Error err = StringList_create(toCopy->len, alloc, arr);
 
@@ -1667,7 +1667,7 @@ Error StringList_unset(StringList arr, U64 i, Allocator alloc) {
 
 	if(i >= arr.len)
 		return (Error) { 
-			.genericError = GenericError_OutOfBounds, 
+			.genericError = EGenericError_OutOfBounds, 
 			.paramValue0 = i, 
 			.paramValue1 = arr.len 
 		};
@@ -1736,7 +1736,7 @@ String String_getFilePath(String *str) {
 
 	String res;
 
-	if(String_cutBefore(*str, '/', StringCase_Insensitive, false, &res))
+	if(String_cutBefore(*str, '/', EStringCase_Insensitive, false, &res))
 		return res;
 	
 	return String_createEmpty();
@@ -1749,7 +1749,7 @@ String String_getBasePath(String *str) {
 
 	String res;
 
-	if(String_cutAfter(*str, '/', StringCase_Insensitive, false, &res))
+	if(String_cutAfter(*str, '/', EStringCase_Insensitive, false, &res))
 		return res;
 
 	return String_createEmpty();

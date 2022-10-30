@@ -2,7 +2,7 @@
 
 #include <stdlib.h>
 
-void Log_printStackTrace(U64 skip, LogLevel lvl, LogOptions options) {
+void Log_printStackTrace(U64 skip, ELogLevel lvl, ELogOptions options) {
 
 	StackTrace stackTrace;
 	Log_captureStackTrace(stackTrace, StackTrace_SIZE, skip);
@@ -10,25 +10,25 @@ void Log_printStackTrace(U64 skip, LogLevel lvl, LogOptions options) {
 	Log_printCapturedStackTrace(stackTrace, lvl, options);
 }
 
-void Log_debug(String s, LogOptions options) {
-	Log_log(LogLevel_Debug, options, (LogArgs){ .argc = 1, .args = &s });
+void Log_debug(String s, ELogOptions options) {
+	Log_log(ELogLevel_Debug, options, (LogArgs){ .argc = 1, .args = &s });
 }
 
-void Log_performance(String s, LogOptions options) {
-	Log_log(LogLevel_Performance, options, (LogArgs){ .argc = 1, .args = &s });
+void Log_performance(String s, ELogOptions options) {
+	Log_log(ELogLevel_Performance, options, (LogArgs){ .argc = 1, .args = &s });
 }
 
-void Log_warn(String s, LogOptions options) {
-	Log_log(LogLevel_Warn, options, (LogArgs){ .argc = 1, .args = &s });
+void Log_warn(String s, ELogOptions options) {
+	Log_log(ELogLevel_Warn, options, (LogArgs){ .argc = 1, .args = &s });
 }
 
-void Log_error(String s, LogOptions options) {
-	Log_log(LogLevel_Error, options, (LogArgs){ .argc = 1, .args = &s });
+void Log_error(String s, ELogOptions options) {
+	Log_log(ELogLevel_Error, options, (LogArgs){ .argc = 1, .args = &s });
 }
 
-void Log_fatal(String s, LogOptions options) {
-	Log_printStackTrace(1, LogLevel_Fatal, options);
-	Log_log(LogLevel_Fatal, options, (LogArgs){ .argc = 1, .args = &s });
+void Log_fatal(String s, ELogOptions options) {
+	Log_printStackTrace(1, ELogLevel_Fatal, options);
+	Log_log(ELogLevel_Fatal, options, (LogArgs){ .argc = 1, .args = &s });
 	exit(1);
 }
 

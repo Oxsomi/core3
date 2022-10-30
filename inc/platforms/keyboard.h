@@ -1,56 +1,56 @@
 #pragma once
 #include "types/types.h"
 
-typedef struct InputDevice Keyboard;
+typedef struct InputDevice EKeyboard;
 
-typedef enum Key {
+typedef enum EKey {
 
-	Key_0, Key_1, Key_2, Key_3, Key_4, Key_5, Key_6, Key_7, Key_8, Key_9,
+	EKey_0, EKey_1, EKey_2, EKey_3, EKey_4, EKey_5, EKey_6, EKey_7, EKey_8, EKey_9,
 
-	Key_A, Key_B, Key_C, Key_D, Key_E, Key_F, Key_G, Key_H, Key_I, Key_J,
-	Key_K, Key_L, Key_M, Key_N, Key_O, Key_P, Key_Q, Key_R, Key_S, Key_T, 
-	Key_U, Key_V, Key_W, Key_X, Key_Y, Key_Z,
+	EKey_A, EKey_B, EKey_C, EKey_D, EKey_E, EKey_F, EKey_G, EKey_H, EKey_I, EKey_J,
+	EKey_K, EKey_L, EKey_M, EKey_N, EKey_O, EKey_P, EKey_Q, EKey_R, EKey_S, EKey_T, 
+	EKey_U, EKey_V, EKey_W, EKey_X, EKey_Y, EKey_Z,
 
-	Key_Backspace,		Key_Space,			Key_Tab,			Key_Shift,			Key_Ctrl,			Key_Alt, 
-	Key_Pause,			Key_Caps,			Key_Escape,			Key_PageUp,			Key_PageDown,		Key_End,
-	Key_Home,			Key_Select,			Key_Print,			Key_Execute,		Key_PrintScreen,	Key_Insert,		
-	Key_Back,			Key_Forward,		Key_Sleep,			Key_Refresh,		Key_Stop,			Key_Search,
-	Key_Favorites,		Key_Start,			Key_Mute,			Key_VolumeDown,		Key_VolumeUp,		Key_Skip,
-	Key_Previous,		Key_Clear,			Key_Zoom,			Key_Enter,			Key_Delete,			Key_Help,
-	Key_NumLock,		Key_ScrollLock,		Key_Apps,
+	EKey_Backspace,		EKey_Space,			EKey_Tab,			EKey_Shift,			EKey_Ctrl,			EKey_Alt, 
+	EKey_Pause,			EKey_Caps,			EKey_Escape,		EKey_PageUp,		EKey_PageDown,		EKey_End,
+	EKey_Home,			EKey_Select,		EKey_Print,			EKey_Execute,		EKey_PrintScreen,	EKey_Insert,		
+	EKey_Back,			EKey_Forward,		EKey_Sleep,			EKey_Refresh,		EKey_Stop,			EKey_Search,
+	EKey_Favorites,		EKey_Start,			EKey_Mute,			EKey_VolumeDown,	EKey_VolumeUp,		EKey_Skip,
+	EKey_Previous,		EKey_Clear,			EKey_Zoom,			EKey_Enter,			EKey_Delete,		EKey_Help,
+	EKey_NumLock,		EKey_ScrollLock,	EKey_Apps,
 
-	Key_Left,			Key_Up,			Key_Right,		Key_Down,
+	EKey_Left,			EKey_Up,			EKey_Right,			EKey_Down,
 
-	Key_Numpad0,
-	Key_Numpad1,		Key_Numpad2,	Key_Numpad3,
-	Key_Numpad4,		Key_Numpad5,	Key_Numpad6,
-	Key_Numpad7,		Key_Numpad8,	Key_Numpad9,
+	EKey_Numpad0,
+	EKey_Numpad1,		EKey_Numpad2,		EKey_Numpad3,
+	EKey_Numpad4,		EKey_Numpad5,		EKey_Numpad6,
+	EKey_Numpad7,		EKey_Numpad8,		EKey_Numpad9,
 
-	Key_NumpadMul,		Key_NumpadAdd,	Key_NumpadDec,
-	Key_NumpadDiv,		Key_NumpadSub,
+	EKey_NumpadMul,		EKey_NumpadAdd,		EKey_NumpadDec,
+	EKey_NumpadDiv,		EKey_NumpadSub,
 
-	Key_F1,				Key_F2,			Key_F3,			Key_F4,			Key_F5,		
-	Key_F6,				Key_F7,			Key_F8,			Key_F9,			Key_F10,
-	Key_F11,			Key_F12,		Key_F13,		Key_F14,		Key_F15,	
-	Key_F16,			Key_F17,		Key_F18,		Key_F19,		Key_F20,
-	Key_F21,			Key_F22,		Key_F23,		Key_F24,
+	EKey_F1,			EKey_F2,			EKey_F3,			EKey_F4,			EKey_F5,		
+	EKey_F6,			EKey_F7,			EKey_F8,			EKey_F9,			EKey_F10,
+	EKey_F11,			EKey_F12,			EKey_F13,			EKey_F14,			EKey_F15,	
+	EKey_F16,			EKey_F17,			EKey_F18,			EKey_F19,			EKey_F20,
+	EKey_F21,			EKey_F22,			EKey_F23,			EKey_F24,
 
-	Key_Equals,			Key_Comma,		Key_Minus,		Key_Period,
-	Key_Slash,			Key_Acute,		Key_Semicolon,	Key_LBracket,	Key_RBracket,
-	Key_Backslash,		Key_Quote,
+	EKey_Equals,		EKey_Comma,			EKey_Minus,			EKey_Period,
+	EKey_Slash,			EKey_Acute,			EKey_Semicolon,		EKey_LBracket,		EKey_RBracket,
+	EKey_Backslash,		EKey_Quote,
 
-	Key_Count
-} Key;
+	EKey_Count
+} EKey;
 
-typedef enum KeyboardFlags {
-	KeyboardFlags_Caps,
-	KeyboardFlags_NumLock,
-	KeyboardFlags_ScrollLock,
-	KeyboardFlags_Shift,
-	KeyboardFlags_Control,
-	KeyboardFlags_Alt
-} KeyboardFlags;
+typedef enum EKeyboardFlags {
+	EKeyboardFlags_Caps,
+	EKeyboardFlags_NumLock,
+	EKeyboardFlags_ScrollLock,
+	EKeyboardFlags_Shift,
+	EKeyboardFlags_Control,
+	EKeyboardFlags_Alt
+} EKeyboardFlags;
 
 typedef struct Error Error;
 
-Error Keyboard_create(Keyboard *result);
+Error EKeyboard_create(EKeyboard *result);

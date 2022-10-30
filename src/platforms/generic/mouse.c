@@ -4,7 +4,7 @@
 
 #define _button(name)																						\
 	if ((err = InputDevice_createButton(																	\
-		*result, MouseButton_##name, String_createRefUnsafeConst("MouseButton_" #name), &res				\
+		*result, EMouseButton_##name, String_createRefUnsafeConst("EMouseButton_" #name), &res				\
 	)).genericError) {																						\
 		InputDevice_free(result);																			\
 		return err;																							\
@@ -12,7 +12,7 @@
 
 #define _axis(name)																							\
 	if ((err = InputDevice_createAxis(																		\
-		*result, MouseAxis_##name, String_createRefUnsafeConst("MouseAxis_" #name), 0, &res					\
+		*result, EMouseAxis_##name, String_createRefUnsafeConst("EMouseAxis_" #name), 0, &res					\
 	)).genericError) {																						\
 		InputDevice_free(result);																			\
 		return err;																							\
@@ -21,7 +21,7 @@
 Error Mouse_create(Mouse *result) {
 
 	Error err = InputDevice_create(
-		MouseButton_Count, MouseAxis_Count, InputDeviceType_Mouse, result
+		EMouseButton_Count, EMouseAxis_Count, EInputDeviceType_Mouse, result
 	);
 
 	if(err.genericError)

@@ -3,39 +3,39 @@
 
 typedef struct InputDevice Mouse;
 
-typedef enum MouseActions {
+typedef enum EMouseActions {
 
 	//Mouse buttons
 
-	MouseButton_Begin,
+	EMouseButton_Begin,
 
-	MouseButton_Left = MouseButton_Begin, MouseButton_Middle, MouseButton_Right, 
-	MouseButton_Back, MouseButton_Forward,
+	EMouseButton_Left = EMouseButton_Begin, EMouseButton_Middle, EMouseButton_Right, 
+	EMouseButton_Back, EMouseButton_Forward,
 
-	MouseButton_End,
-	MouseButton_Count = MouseButton_End - MouseButton_Begin,
+	EMouseButton_End,
+	EMouseButton_Count = EMouseButton_End - EMouseButton_Begin,
 
 	//Mouse axes
 
-	MouseAxis_Begin = MouseButton_End,
+	EMouseAxis_Begin = EMouseButton_End,
 
-	MouseAxis_X = MouseAxis_Begin, MouseAxis_Y, 
-	MouseAxis_ScrollWheel_X, MouseAxis_ScrollWheel_Y,
+	EMouseAxis_X = EMouseAxis_Begin, EMouseAxis_Y, 
+	EMouseAxis_ScrollWheel_X, EMouseAxis_ScrollWheel_Y,
 
-	MouseAxis_End,
-	MouseAxis_Count = MouseAxis_End - MouseAxis_Begin
+	EMouseAxis_End,
+	EMouseAxis_Count = EMouseAxis_End - EMouseAxis_Begin
 
 } MouseActions;
 
-typedef enum MouseFlag {
+typedef enum EMouseFlag {
 
 	//When this happens, the mouse position is relative, not absolute
 	//So, the cursor position shouldn't be taken as absolute
 	//This means using the delta functions instead of the absolute functions
 
-	MouseFlag_IsRelative
+	EMouseFlag_IsRelative
 
-} MouseFlag;
+} EMouseFlag;
 
 typedef struct Error Error;
 

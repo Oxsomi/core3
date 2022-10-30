@@ -44,7 +44,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 			//TODO: Properly destroy the window
 
-			w->flags &= ~WindowFlags_IsActive;
+			w->flags &= ~EWindowFlags_IsActive;
 			break;
 		}
 
@@ -58,13 +58,13 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 		case WM_KILLFOCUS:
 
 			if(message == WM_SETFOCUS)
-				w->flags |= WindowFlags_IsFocussed;
+				w->flags |= EWindowFlags_IsFocussed;
 
 			else {
 
 				//TODO: Reset keys because otherwise they might hang
 
-				w->flags &= ~WindowFlags_IsFocussed;
+				w->flags &= ~EWindowFlags_IsFocussed;
 			}
 
 			if(w->callbacks.onUpdateFocus)
@@ -89,15 +89,15 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 			);
 
 			Buffer buf = Buffer_createNull(); 
-			Error err = Buffer_createUninitializedBytes(size, Platform_instance.alloc, &buf);
+			Error err = Buffer_createUninitializedBytes(size, EPlatform_instance.alloc, &buf);
 
 			if(err.genericError) {
-				Error_printx(err, LogLevel_Error, LogOptions_Default);
+				Error_printx(err, ELogLevel_Error, ELogOptions_Default);
 				break;
 			}
 
 			if (GetRawInputData((HRAWINPUT)lParam, RID_INPUT, buf.ptr, &size, sizeof(RAWINPUTHEADER)) != size) {
-				Log_error(String_createRefUnsafeConst("Couldn't get raw input"), LogOptions_Default);
+				Log_error(String_createRefUnsafeConst("Couldn't get raw input"), ELogOptions_Default);
 				break;
 			}
 
@@ -117,7 +117,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 			if(!data->header.hDevice || dev == end)
 				goto cleanup;
 
-			if (dev->type == InputDeviceType_Keyboard) {
+			if (dev->type == EInputDeviceType_EKeyboard) {
 
 				RAWKEYBOARD keyboardDat = data->data.keyboard;
 
@@ -127,9 +127,9 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 				//It's a shame we have to get the state, but we can't rely on our program to know the exact state
 				//Because locks can be toggled from a different program
 
-				InputDevice_setFlagTo(dev, KeyboardFlags_Caps, GetKeyState(VK_CAPITAL) & 1);
-				InputDevice_setFlagTo(dev, KeyboardFlags_NumLock, GetKeyState(VK_NUMLOCK) & 1);
-				InputDevice_setFlagTo(dev, KeyboardFlags_ScrollLock, GetKeyState(VK_SCROLL) & 1);
+				InputDevice_setFlagTo(dev, EKeyboardFlags_Caps, GetKeyState(VK_CAPITAL) & 1);
+				InputDevice_setFlagTo(dev, EKeyboardFlags_NumLock, GetKeyState(VK_NUMLOCK) & 1);
+				InputDevice_setFlagTo(dev, EKeyboardFlags_ScrollLock, GetKeyState(VK_SCROLL) & 1);
 
 				//Translate key to our system and set corresponding device flags
 
@@ -140,107 +140,107 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 					case VK_LSHIFT:
 					case VK_RSHIFT:
 					case VK_SHIFT:
-						InputDevice_setFlagTo(dev, KeyboardFlags_Shift, isKeyDown);
-						handle = Key_Shift;
+						InputDevice_setFlagTo(dev, EKeyboardFlags_Shift, isKeyDown);
+						handle = EKey_Shift;
 						break;
 
 					case VK_LMENU:
 					case VK_RMENU:
 					case VK_MENU:
-						InputDevice_setFlagTo(dev, KeyboardFlags_Alt, isKeyDown);
-						handle = Key_Alt;
+						InputDevice_setFlagTo(dev, EKeyboardFlags_Alt, isKeyDown);
+						handle = EKey_Alt;
 						break;
 
 					case VK_LCONTROL:
 					case VK_RCONTROL:
 					case VK_CONTROL:
-						InputDevice_setFlagTo(dev, KeyboardFlags_Control, isKeyDown);
-						handle = Key_Ctrl;
+						InputDevice_setFlagTo(dev, EKeyboardFlags_Control, isKeyDown);
+						handle = EKey_Ctrl;
 						break;
 
 					case VK_NUMLOCK:
-						InputDevice_setFlagTo(dev, KeyboardFlags_NumLock, isKeyDown);
-						handle = Key_NumLock;
+						InputDevice_setFlagTo(dev, EKeyboardFlags_NumLock, isKeyDown);
+						handle = EKey_NumLock;
 						break;
 
 					case VK_SCROLL:
-						InputDevice_setFlagTo(dev, KeyboardFlags_ScrollLock, isKeyDown);
-						handle = Key_ScrollLock;
+						InputDevice_setFlagTo(dev, EKeyboardFlags_ScrollLock, isKeyDown);
+						handle = EKey_ScrollLock;
 						break;
 
-					case VK_BACK:				handle = Key_Backspace;		break;
-					case VK_SPACE:				handle = Key_Space;			break;
-					case VK_TAB:				handle = Key_Tab;			break;
-					case VK_PAUSE:				handle = Key_Pause;			break;
-					case VK_CAPITAL:			handle = Key_Caps;			break;
-					case VK_ESCAPE:				handle = Key_Escape;		break;
-					case VK_PRIOR:				handle = Key_PageUp;		break;
-					case VK_NEXT:				handle = Key_PageDown;		break;
-					case VK_END:				handle = Key_End;			break;
-					case VK_HOME:				handle = Key_Home;			break;
-					case VK_SELECT:				handle = Key_Select;		break;
-					case VK_PRINT:				handle = Key_Print;			break;
-					case VK_EXECUTE:			handle = Key_Execute;		break;
-					case VK_SNAPSHOT:			handle = Key_PrintScreen;	break;
-					case VK_INSERT:				handle = Key_Insert;		break;
-					case VK_BROWSER_BACK:		handle = Key_Back;			break;
-					case VK_BROWSER_FORWARD:	handle = Key_Forward;		break;
-					case VK_SLEEP:				handle = Key_Sleep;			break;
-					case VK_BROWSER_REFRESH:	handle = Key_Refresh;		break;
-					case VK_BROWSER_STOP:		handle = Key_Stop;			break;
-					case VK_BROWSER_SEARCH:		handle = Key_Search;		break;
-					case VK_BROWSER_FAVORITES:	handle = Key_Favorites;		break;
-					case VK_BROWSER_HOME:		handle = Key_Start;			break;
-					case VK_VOLUME_MUTE:		handle = Key_Mute;			break;
-					case VK_VOLUME_DOWN:		handle = Key_VolumeDown;	break;
-					case VK_VOLUME_UP:			handle = Key_VolumeUp;		break;
-					case VK_MEDIA_NEXT_TRACK:	handle = Key_Skip;			break;
-					case VK_MEDIA_PREV_TRACK:	handle = Key_Previous;		break;
-					case VK_CLEAR:				handle = Key_Clear;			break;
-					case VK_ZOOM:				handle = Key_Zoom;			break;
-					case VK_RETURN:				handle = Key_Enter;			break;
-					case VK_DELETE:				handle = Key_Delete;		break;
-					case VK_HELP:				handle = Key_Help;			break;
-					case VK_APPS:				handle = Key_Apps;			break;
+					case VK_BACK:				handle = EKey_Backspace;		break;
+					case VK_SPACE:				handle = EKey_Space;			break;
+					case VK_TAB:				handle = EKey_Tab;			break;
+					case VK_PAUSE:				handle = EKey_Pause;			break;
+					case VK_CAPITAL:			handle = EKey_Caps;			break;
+					case VK_ESCAPE:				handle = EKey_Escape;		break;
+					case VK_PRIOR:				handle = EKey_PageUp;		break;
+					case VK_NEXT:				handle = EKey_PageDown;		break;
+					case VK_END:				handle = EKey_End;			break;
+					case VK_HOME:				handle = EKey_Home;			break;
+					case VK_SELECT:				handle = EKey_Select;		break;
+					case VK_PRINT:				handle = EKey_Print;			break;
+					case VK_EXECUTE:			handle = EKey_Execute;		break;
+					case VK_SNAPSHOT:			handle = EKey_PrintScreen;	break;
+					case VK_INSERT:				handle = EKey_Insert;		break;
+					case VK_BROWSER_BACK:		handle = EKey_Back;			break;
+					case VK_BROWSER_FORWARD:	handle = EKey_Forward;		break;
+					case VK_SLEEP:				handle = EKey_Sleep;			break;
+					case VK_BROWSER_REFRESH:	handle = EKey_Refresh;		break;
+					case VK_BROWSER_STOP:		handle = EKey_Stop;			break;
+					case VK_BROWSER_SEARCH:		handle = EKey_Search;		break;
+					case VK_BROWSER_FAVORITES:	handle = EKey_Favorites;		break;
+					case VK_BROWSER_HOME:		handle = EKey_Start;			break;
+					case VK_VOLUME_MUTE:		handle = EKey_Mute;			break;
+					case VK_VOLUME_DOWN:		handle = EKey_VolumeDown;	break;
+					case VK_VOLUME_UP:			handle = EKey_VolumeUp;		break;
+					case VK_MEDIA_NEXT_TRACK:	handle = EKey_Skip;			break;
+					case VK_MEDIA_PREV_TRACK:	handle = EKey_Previous;		break;
+					case VK_CLEAR:				handle = EKey_Clear;			break;
+					case VK_ZOOM:				handle = EKey_Zoom;			break;
+					case VK_RETURN:				handle = EKey_Enter;			break;
+					case VK_DELETE:				handle = EKey_Delete;		break;
+					case VK_HELP:				handle = EKey_Help;			break;
+					case VK_APPS:				handle = EKey_Apps;			break;
 
-					case VK_LEFT:				handle = Key_Left;			break;
-					case VK_UP:					handle = Key_Up;			break;
-					case VK_RIGHT:				handle = Key_Right;			break;
-					case VK_DOWN:				handle = Key_Down;			break;
+					case VK_LEFT:				handle = EKey_Left;			break;
+					case VK_UP:					handle = EKey_Up;			break;
+					case VK_RIGHT:				handle = EKey_Right;			break;
+					case VK_DOWN:				handle = EKey_Down;			break;
 
-					case VK_MULTIPLY:			handle = Key_NumpadMul;		break;
-					case VK_ADD:				handle = Key_NumpadAdd;		break;
-					case VK_DECIMAL:			handle = Key_NumpadDec;		break;
-					case VK_DIVIDE:				handle = Key_NumpadDiv;		break;
-					case VK_SUBTRACT:			handle = Key_NumpadSub;		break;
+					case VK_MULTIPLY:			handle = EKey_NumpadMul;		break;
+					case VK_ADD:				handle = EKey_NumpadAdd;		break;
+					case VK_DECIMAL:			handle = EKey_NumpadDec;		break;
+					case VK_DIVIDE:				handle = EKey_NumpadDiv;		break;
+					case VK_SUBTRACT:			handle = EKey_NumpadSub;		break;
 
-					case VK_OEM_PLUS:			handle = Key_Equals;		break;
-					case VK_OEM_COMMA:			handle = Key_Comma;			break;
-					case VK_OEM_MINUS:			handle = Key_Minus;			break;
-					case VK_OEM_PERIOD:			handle = Key_Period;		break;
-					case VK_OEM_1:				handle = Key_Semicolon;		break;
-					case VK_OEM_2:				handle = Key_Slash;			break;
-					case VK_OEM_3:				handle = Key_Acute;			break;
-					case VK_OEM_4:				handle = Key_LBracket;		break;
-					case VK_OEM_6:				handle = Key_RBracket;		break;
-					case VK_OEM_5:				handle = Key_Backslash;		break;
-					case VK_OEM_7:				handle = Key_Quote;			break;
+					case VK_OEM_PLUS:			handle = EKey_Equals;		break;
+					case VK_OEM_COMMA:			handle = EKey_Comma;			break;
+					case VK_OEM_MINUS:			handle = EKey_Minus;			break;
+					case VK_OEM_PERIOD:			handle = EKey_Period;		break;
+					case VK_OEM_1:				handle = EKey_Semicolon;		break;
+					case VK_OEM_2:				handle = EKey_Slash;			break;
+					case VK_OEM_3:				handle = EKey_Acute;			break;
+					case VK_OEM_4:				handle = EKey_LBracket;		break;
+					case VK_OEM_6:				handle = EKey_RBracket;		break;
+					case VK_OEM_5:				handle = EKey_Backslash;		break;
+					case VK_OEM_7:				handle = EKey_Quote;			break;
 
 					//Unknown key or common key
 
 					default:
 
 						if(keyboardDat.VKey >= '0' && keyboardDat.VKey <= '9')
-							handle = Key_0 + (keyboardDat.VKey - '0');
+							handle = EKey_0 + (keyboardDat.VKey - '0');
 
 						else if(keyboardDat.VKey >= 'A' && keyboardDat.VKey <= 'Z')
-							handle = Key_A + (keyboardDat.VKey - 'A');
+							handle = EKey_A + (keyboardDat.VKey - 'A');
 
 						else if(keyboardDat.VKey >= VK_F1 && keyboardDat.VKey <= VK_F24)
-							handle = Key_F1 + (keyboardDat.VKey - VK_F1);
+							handle = EKey_F1 + (keyboardDat.VKey - VK_F1);
 
 						else if(keyboardDat.VKey >= VK_NUMPAD0 && keyboardDat.VKey <= VK_NUMPAD9)
-							handle = Key_Numpad0 + (keyboardDat.VKey - VK_NUMPAD0);
+							handle = EKey_Numpad0 + (keyboardDat.VKey - VK_NUMPAD0);
 
 						else goto cleanup;
 
@@ -249,10 +249,10 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 				//Send keys through interface and update input device
 
-				InputState prevState = InputDevice_getState(*dev, handle);
+				EInputState prevState = InputDevice_getState(*dev, handle);
 
 				InputDevice_setCurrentState(*dev, handle, isKeyDown);
-				InputState newState = InputDevice_getState(*dev, handle);
+				EInputState newState = InputDevice_getState(*dev, handle);
 
 				if(prevState != newState && w->callbacks.onDeviceButton)
 					w->callbacks.onDeviceButton(w, dev, handle, isKeyDown);
@@ -271,7 +271,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 					if(!isDown && !isUp)
 						continue;
 
-					InputHandle handle = (InputHandle) (MouseButton_Left + i);
+					InputHandle handle = (InputHandle) (EMouseButton_Left + i);
 					InputDevice_setCurrentState(*dev, handle, isDown);
 
 					if (w->callbacks.onDeviceButton)
@@ -281,23 +281,23 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 				if (mouseDat.usButtonFlags & RI_MOUSE_WHEEL) {
 
 					F32 delta = (F32)mouseDat.usButtonData / WHEEL_DELTA;
-					InputDevice_setCurrentAxis(*dev, MouseAxis_ScrollWheel_X, delta);
+					InputDevice_setCurrentAxis(*dev, EMouseAxis_ScrollWheel_X, delta);
 
 					if (w->callbacks.onDeviceAxis)
-						w->callbacks.onDeviceAxis(w, dev, MouseAxis_ScrollWheel_X, delta);
+						w->callbacks.onDeviceAxis(w, dev, EMouseAxis_ScrollWheel_X, delta);
 				}
 
 				if (mouseDat.usButtonFlags & RI_MOUSE_HWHEEL) {
 
 					F32 delta = (F32)mouseDat.usButtonData / WHEEL_DELTA;
-					InputDevice_setCurrentAxis(*dev, MouseAxis_ScrollWheel_Y, delta);
+					InputDevice_setCurrentAxis(*dev, EMouseAxis_ScrollWheel_Y, delta);
 
 					if (w->callbacks.onDeviceAxis)
-						w->callbacks.onDeviceAxis(w, dev, MouseAxis_ScrollWheel_Y, delta);
+						w->callbacks.onDeviceAxis(w, dev, EMouseAxis_ScrollWheel_Y, delta);
 				}
 
-				F32 prevX = InputDevice_getCurrentAxis(*dev, MouseAxis_X);
-				F32 prevY = InputDevice_getCurrentAxis(*dev, MouseAxis_Y);
+				F32 prevX = InputDevice_getCurrentAxis(*dev, EMouseAxis_X);
+				F32 prevY = InputDevice_getCurrentAxis(*dev, EMouseAxis_Y);
 
 				F32 nextX, nextY;
 
@@ -306,37 +306,37 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 					RECT rect;
 					GetClientRect(hwnd, &rect);
 
-					InputDevice_resetFlag(dev, MouseFlag_IsRelative);
+					InputDevice_resetFlag(dev, EMouseFlag_IsRelative);
 
 					nextX = (F32) (mouseDat.lLastX - rect.left);
 					nextY = (F32) (mouseDat.lLastY - rect.top);
 
 				} else {
-					InputDevice_setFlag(dev, MouseFlag_IsRelative);
+					InputDevice_setFlag(dev, EMouseFlag_IsRelative);
 					nextX = prevX + (F32) mouseDat.lLastX;
 					nextY = prevY + (F32) mouseDat.lLastY;
 				}
 
 				if (nextX != prevX) {
 
-					InputDevice_setCurrentAxis(*dev, MouseAxis_X, nextX);
+					InputDevice_setCurrentAxis(*dev, EMouseAxis_X, nextX);
 
 					if (w->callbacks.onDeviceAxis)
-						w->callbacks.onDeviceAxis(w, dev, MouseAxis_X, nextX);
+						w->callbacks.onDeviceAxis(w, dev, EMouseAxis_X, nextX);
 				}
 
 				if (nextY != prevY) {
 
-					InputDevice_setCurrentAxis(*dev, MouseAxis_Y, nextY);
+					InputDevice_setCurrentAxis(*dev, EMouseAxis_Y, nextY);
 
 					if (w->callbacks.onDeviceAxis)
-						w->callbacks.onDeviceAxis(w, dev, MouseAxis_Y, nextY);
+						w->callbacks.onDeviceAxis(w, dev, EMouseAxis_Y, nextY);
 				}
 			}
 
 		cleanup:
 			LRESULT lr = DefRawInputProc(&data, 1, sizeof(*data));
-			Buffer_free(&buf, Platform_instance.alloc);
+			Buffer_free(&buf, EPlatform_instance.alloc);
 			return lr;
 		}
 
@@ -348,7 +348,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 			U32 size = sizeof(deviceInfo);
 
 			if (!GetRawInputDeviceInfoA((HANDLE)lParam, RIDI_DEVICEINFO, &deviceInfo, &size)) {
-				Log_error(String_createRefUnsafeConst("Invalid data in WM_INPUT_DEVICE_CHANGE"), LogOptions_Default);
+				Log_error(String_createRefUnsafeConst("Invalid data in WM_INPUT_DEVICE_CHANGE"), ELogOptions_Default);
 				break;
 			}
 
@@ -367,7 +367,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 				//Because it might be relying on keys that don't exist there
 
 				if(isKeyboard && deviceInfo.keyboard.dwKeyboardMode != 0x4)
-					Log_warn(String_createRefUnsafeConst("Possibly unsupported type of keyboard!"), LogOptions_Default);
+					Log_warn(String_createRefUnsafeConst("Possibly unsupported type of keyboard!"), ELogOptions_Default);
 
 				//Create input device
 
@@ -375,22 +375,22 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 				if (isKeyboard) {
 
-					if ((err = Keyboard_create((Keyboard*) &device)).genericError) {
-						Error_printx(err, LogLevel_Error, LogOptions_Default);
+					if ((err = EKeyboard_create((EKeyboard*) &device)).genericError) {
+						Error_printx(err, ELogLevel_Error, ELogOptions_Default);
 						break;
 					}
 				}
 
 				else if ((err = Mouse_create((Mouse*) &device)).genericError) {
-					Error_printx(err, LogLevel_Error, LogOptions_Default);
+					Error_printx(err, ELogLevel_Error, ELogOptions_Default);
 					break;
 				}
 
 				if((err = Buffer_createUninitializedBytes(
-					sizeof(HANDLE), Platform_instance.alloc, &device.dataExt
+					sizeof(HANDLE), EPlatform_instance.alloc, &device.dataExt
 				)).genericError) {
 					InputDevice_free(&device);
-					Error_printx(err, LogLevel_Error, LogOptions_Default);
+					Error_printx(err, ELogLevel_Error, ELogOptions_Default);
 					break;
 				}
 
@@ -410,7 +410,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 				InputDevice *dev = beg;
 
 				for(; dev != end; ++dev)
-					if(dev->type == InputDeviceType_Undefined)
+					if(dev->type == EInputDeviceType_Undefined)
 						break;
 
 				//Our list isn't big enough, we need to resize
@@ -427,10 +427,10 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 					if(err.genericError) {
 
-						Buffer_free(&device.dataExt, Platform_instance.alloc);
+						Buffer_free(&device.dataExt, EPlatform_instance.alloc);
 						InputDevice_free(&device);
 
-						Log_error(String_createRefUnsafeConst("Couldn't register device; "), LogOptions_Default);
+						Log_error(String_createRefUnsafeConst("Couldn't register device; "), ELogOptions_Default);
 						break;
 					}
 
@@ -445,10 +445,10 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 					if(pushed)
 						List_popBack(&w->devices, Buffer_createNull());
 
-					Buffer_free(&device.dataExt, Platform_instance.alloc);
+					Buffer_free(&device.dataExt, EPlatform_instance.alloc);
 					InputDevice_free(&device);
 
-					Log_error(String_createRefUnsafeConst("Couldn't create raw input device"), LogOptions_Default);
+					Log_error(String_createRefUnsafeConst("Couldn't create raw input device"), ELogOptions_Default);
 					break;
 				}
 
@@ -484,7 +484,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 				//Cleanup our device
 
 				if((err = InputDevice_free(ours)).genericError)
-					Error_printx(err, LogLevel_Error, LogOptions_Default);
+					Error_printx(err, ELogLevel_Error, ELogOptions_Default);
 
 				//We need to keep on popping the end of the array until we reach the next element that isn't invalid
 				//This is to keep the list as small as possible because we might be looping over it at some point
@@ -494,7 +494,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 				if(ours == end - 1)
 					while(
 						w->devices.length && 
-						((InputDevice*)List_last(w->devices))->type == InputDeviceType_Undefined
+						((InputDevice*)List_last(w->devices))->type == EInputDeviceType_Undefined
 					)
 						if((List_popBack(&w->devices, Buffer_createNull())).genericError)
 							break;
@@ -508,7 +508,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 		case WM_PAINT: {
 
-			if(!(w->hint & WindowHint_AllowBackgroundUpdates) && (w->flags & WindowFlags_IsMinimized))
+			if(!(w->hint & EWindowHint_AllowBackgroundUpdates) && (w->flags & EWindowFlags_IsMinimized))
 				return 0;
 
 			//Update interface
@@ -532,7 +532,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 			//Render (if not minimized)
 
-			if(w->callbacks.onDraw && !(w->flags & WindowFlags_IsMinimized)) {
+			if(w->callbacks.onDraw && !(w->flags & EWindowFlags_IsMinimized)) {
 				w->isDrawing = true;
 				w->callbacks.onDraw(w);
 				w->isDrawing = false;
@@ -558,9 +558,9 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 			I32x2 newSize = I32x2_create2(r.right - r.left, r.bottom - r.top);
 
 			if (wParam == SIZE_MINIMIZED) 
-				w->flags |= WindowFlags_IsMinimized;
+				w->flags |= EWindowFlags_IsMinimized;
 
-			else w->flags &= ~WindowFlags_IsMinimized;
+			else w->flags &= ~EWindowFlags_IsMinimized;
 
 			if (!I32x2_any(I32x2_leq(newSize, I32x2_zero())) || I32x2_eq2(w->size, newSize))
 				break;
@@ -594,7 +594,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 	return DefWindowProc(hwnd, message, wParam, lParam);
 }
 
-Bool WindowManager_supportsFormat(WindowManager manager, WindowFormat format) {
+Bool WindowManager_supportsFormat(WindowManager manager, EWindowFormat format) {
 
 	manager;
 
@@ -602,25 +602,25 @@ Bool WindowManager_supportsFormat(WindowManager manager, WindowFormat format) {
 	//	https://learn.microsoft.com/en-us/windows/win32/api/dxgi/nf-dxgi-idxgiswapchain-getcontainingoutput
 	//	https://learn.microsoft.com/en-us/windows/win32/api/dxgi1_6/ns-dxgi1_6-dxgi_output_desc1
 
-	return format == WindowFormat_rgba8;
+	return format == EWindowFormat_rgba8;
 }
 
 Error WindowManager_freePhysical(WindowManager *manager, Window **w) {
 
 	if(!manager)
-		return (Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = EGenericError_NullPointer };
 
 	if(!Lock_isLockedForThread(manager->lock))
-		return (Error) { .genericError = GenericError_InvalidOperation };
+		return (Error) { .genericError = EGenericError_InvalidOperation };
 
 	if(!w || !*w)
-		return (Error) { .genericError = GenericError_NullPointer, .errorSubId = 1 };
+		return (Error) { .genericError = EGenericError_NullPointer, .errorSubId = 1 };
 
 	if(*w < (Window*) List_begin(manager->windows) || *w >= (Window*) List_end(manager->windows))
-		return (Error) { .genericError = GenericError_OutOfBounds };
+		return (Error) { .genericError = EGenericError_OutOfBounds };
 
-	if(!((*w)->flags & (WindowFlags_IsActive | WindowFlags_IsVirtual)))
-		return (Error) { .genericError = GenericError_InvalidOperation, .paramId = 1 };
+	if(!((*w)->flags & (EWindowFlags_IsActive | EWindowFlags_IsVirtual)))
+		return (Error) { .genericError = EGenericError_InvalidOperation, .paramId = 1 };
 
 	//Ensure our window safely exits
 
@@ -635,11 +635,11 @@ Error Window_updatePhysicalTitle(
 ) {
 
 	if(!w || !title.ptr || !title.len)
-		return (Error) { .genericError = GenericError_NullPointer, .paramId = !!w };
+		return (Error) { .genericError = EGenericError_NullPointer, .paramId = !!w };
 
 	if (title.len >= MAX_PATH)
 		return (Error) { 
-			.genericError = GenericError_OutOfBounds, 
+			.genericError = EGenericError_OutOfBounds, 
 			.paramId = 1, 
 			.paramValue0 = title.len,
 			.paramValue1 = MAX_PATH
@@ -651,15 +651,15 @@ Error Window_updatePhysicalTitle(
 	windowName[title.len] = '\0';
 
 	if(!SetWindowTextA(w->nativeHandle, windowName))
-		return (Error) { .genericError = GenericError_InvalidOperation };
+		return (Error) { .genericError = EGenericError_InvalidOperation };
 
 	return Error_none();
 }
 
 Error Window_presentPhysical(const Window *w) {
 
-	if(!w || !(w->flags & WindowFlags_IsActive) || !(w->hint & WindowHint_ProvideCPUBuffer))
-		return (Error) { .genericError = w ? GenericError_NullPointer : GenericError_InvalidOperation };
+	if(!w || !(w->flags & EWindowFlags_IsActive) || !(w->hint & EWindowHint_ProvideCPUBuffer))
+		return (Error) { .genericError = w ? EGenericError_NullPointer : EGenericError_InvalidOperation };
 
 	PAINTSTRUCT ps;
 	HDC hdcBmp = NULL, oldBmp = NULL;
@@ -668,7 +668,7 @@ Error Window_presentPhysical(const Window *w) {
 	HDC hdc = BeginPaint(w->nativeHandle, &ps);
 
 	if(!hdc)
-		return (Error) { .genericError = GenericError_InvalidOperation, .errorSubId = 1 };
+		return (Error) { .genericError = EGenericError_InvalidOperation, .errorSubId = 1 };
 
 	hdcBmp = CreateCompatibleDC(hdc);
 
@@ -700,5 +700,5 @@ cleanup:
 		DeleteDC(hdcBmp);
 
 	EndPaint(w->nativeHandle, &ps);
-	return (Error) { .genericError = GenericError_InvalidOperation, .errorSubId = errId };
+	return (Error) { .genericError = EGenericError_InvalidOperation, .errorSubId = errId };
 }

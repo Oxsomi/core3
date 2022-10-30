@@ -6,10 +6,10 @@
 Error Thread_free(Thread **thread) {
 
 	if(!thread || !*thread)
-		return (Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = EGenericError_NullPointer };
 
-	FreeFunc free = Platform_instance.alloc.free;
-	void *allocator = Platform_instance.alloc.ptr;
+	FreeFunc free = EPlatform_instance.alloc.free;
+	void *allocator = EPlatform_instance.alloc.ptr;
 
 	Error err = free(allocator, Buffer_createRef(*thread, sizeof(Thread)));
 	*thread = NULL;
@@ -19,11 +19,11 @@ Error Thread_free(Thread **thread) {
 Error Thread_waitAndCleanup(Thread **thread, U32 maxWaitTime) {
 
 	if(!thread || !*thread)
-		return (Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = EGenericError_NullPointer };
 
 	Error err = Thread_wait(*thread, maxWaitTime);
 
-	if(err.genericError == GenericError_TimedOut)
+	if(err.genericError == EGenericError_TimedOut)
 		return err;
 
 	if (err.genericError) {

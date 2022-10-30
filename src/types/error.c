@@ -2,7 +2,7 @@
 #include "types/string.h"
 
 Error Error_base(
-	enum GenericError err, U32 subId, 
+	EGenericError err, U32 subId, 
 	U32 paramId, U32 paramSubId, 
 	U64 paramValue0, U64 paramValue1
 ) {
@@ -20,7 +20,7 @@ Error Error_none() {
 	return (Error) { 0 };
 }
 
-const C8 *GenericError_toString[] = {
+const C8 *EGenericError_toString[] = {
 	"None",
 	"Out of memory",
 	"Out of bounds",
@@ -44,26 +44,26 @@ const C8 *GenericError_toString[] = {
 	"Const data"
 };
 
-const ErrorParamValues GenericError_hasParamValues[] = {
-	ErrorParamValues_None,
-	ErrorParamValues_None,
-	ErrorParamValues_V0_1,
-	ErrorParamValues_None,
-	ErrorParamValues_None,
-	ErrorParamValues_None,
-	ErrorParamValues_None,
-	ErrorParamValues_V0_1,
-	ErrorParamValues_V0_1,
-	ErrorParamValues_None,
-	ErrorParamValues_None,
-	ErrorParamValues_None,
-	ErrorParamValues_None,
-	ErrorParamValues_None,
-	ErrorParamValues_None,
-	ErrorParamValues_V1,
-	ErrorParamValues_V1,
-	ErrorParamValues_None,
-	ErrorParamValues_None,
-	ErrorParamValues_V1,
-	ErrorParamValues_None
+const EErrorParamValues EGenericError_hasParamValues[] = {
+	EErrorParamValues_None,
+	EErrorParamValues_None,
+	EErrorParamValues_V0_1,
+	EErrorParamValues_None,
+	EErrorParamValues_None,
+	EErrorParamValues_None,
+	EErrorParamValues_None,
+	EErrorParamValues_V0_1,
+	EErrorParamValues_V0_1,
+	EErrorParamValues_None,
+	EErrorParamValues_None,
+	EErrorParamValues_None,
+	EErrorParamValues_None,
+	EErrorParamValues_None,
+	EErrorParamValues_None,
+	EErrorParamValues_V1,
+	EErrorParamValues_V1,
+	EErrorParamValues_None,
+	EErrorParamValues_None,
+	EErrorParamValues_V1,
+	EErrorParamValues_None
 };
