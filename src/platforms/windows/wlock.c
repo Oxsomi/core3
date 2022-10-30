@@ -7,35 +7,35 @@
 #define MICROSOFT_WINDOWS_WINBASE_H_DEFINE_INTERLOCKED_CPLUSPLUS_OVERLOADS 0
 #include <Windows.h>
 
-struct Error Lock_create(struct Lock *res) {
+Error Lock_create(Lock *res) {
 
 	if(!res)
-		return (struct Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = GenericError_NullPointer };
 
-	*res = (struct Lock) { .data = CreateMutexA(
+	*res = (Lock) { .data = CreateMutexA(
 		NULL, FALSE, NULL
 	)};
 
 	if(!res->data)
-		return (struct Error) { .genericError = GenericError_InvalidOperation };
+		return (Error) { .genericError = GenericError_InvalidOperation };
 
 	return Error_none();
 }
 
-struct Error Lock_free(struct Lock *res) {
+Error Lock_free(Lock *res) {
 
 	if(!res || !res->data)
-		return (struct Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = GenericError_NullPointer };
 
 	if(Lock_isLocked(*res))
-		return (struct Error) { .genericError = GenericError_InvalidOperation };
+		return (Error) { .genericError = GenericError_InvalidOperation };
 
 	CloseHandle(res->data);
-	*res = (struct Lock){ 0 };
+	*res = (Lock){ 0 };
 	return Error_none();
 }
 
-Bool Lock_lock(struct Lock *l, Ns maxTime) {
+Bool Lock_lock(Lock *l, Ns maxTime) {
 
 	if (l && !Lock_isLocked(*l)) {
 
@@ -54,11 +54,11 @@ Bool Lock_lock(struct Lock *l, Ns maxTime) {
 	return false;
 }
 
-Bool Lock_isLockedForThread(struct Lock l) {
+Bool Lock_isLockedForThread(Lock l) {
 	return l.lockThread == Thread_getId();
 }
 
-Bool Lock_unlock(struct Lock *l) {
+Bool Lock_unlock(Lock *l) {
 
 	if (l && Lock_isLockedForThread(*l) && ReleaseMutex(l->data)) {
 		l->lockThread = 0;

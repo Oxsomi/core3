@@ -1,10 +1,11 @@
 #pragma once
 #include "types/types.h"
 
-struct String;
-struct Allocator;
+typedef struct Error Error;
+typedef struct String String;
+typedef struct Allocator Allocator;
 
-struct Error File_write(struct Buffer buf, struct String loc);
-struct Error File_read(struct String loc, struct Allocator alloc, struct Buffer *output);
+Error File_write(Buffer buf, String loc);
+Error File_read(String loc, Allocator alloc, Buffer *output);
 
 //TODO: make it more like a DirectStorage-like api

@@ -85,7 +85,7 @@ void Timer_format(Ns time, TimerFormat timeString) {
 
 const C8 separators[] = "--T::.Z";
 
-enum EFormatStatus Timer_parseFormat(Ns *time, TimerFormat format) {
+EFormatStatus Timer_parseFormat(Ns *time, TimerFormat format) {
 
 	if (!time)
 		return FormatStatus_InvalidInput;

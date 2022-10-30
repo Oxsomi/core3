@@ -3,25 +3,25 @@
 #include "types/error.h"
 #include "types/buffer.h"
 
-struct Error Thread_free(struct Thread **thread) {
+Error Thread_free(Thread **thread) {
 
 	if(!thread || !*thread)
-		return (struct Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = GenericError_NullPointer };
 
 	FreeFunc free = Platform_instance.alloc.free;
 	void *allocator = Platform_instance.alloc.ptr;
 
-	struct Error err = free(allocator, Buffer_createRef(*thread, sizeof(struct Thread)));
+	Error err = free(allocator, Buffer_createRef(*thread, sizeof(Thread)));
 	*thread = NULL;
 	return err;
 }
 
-struct Error Thread_waitAndCleanup(struct Thread **thread, U32 maxWaitTime) {
+Error Thread_waitAndCleanup(Thread **thread, U32 maxWaitTime) {
 
 	if(!thread || !*thread)
-		return (struct Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = GenericError_NullPointer };
 
-	struct Error err = Thread_wait(*thread, maxWaitTime);
+	Error err = Thread_wait(*thread, maxWaitTime);
 
 	if(err.genericError == GenericError_TimedOut)
 		return err;

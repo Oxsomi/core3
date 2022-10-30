@@ -21,7 +21,7 @@ U32 Thread_getLogicalCores() {
 	return info.dwNumberOfProcessors;
 }
 
-DWORD ThreadFunc(struct Thread *thread) {
+DWORD ThreadFunc(Thread *thread) {
 
 	if(thread && thread->callback)
 		thread->callback(thread->objectHandle);
@@ -29,33 +29,33 @@ DWORD ThreadFunc(struct Thread *thread) {
 	return 0;
 }
 
-struct Error Thread_create(
+Error Thread_create(
 	ThreadCallbackFunction callback, void *objectHandle,
-	struct Thread **thread
+	Thread **thread
 ) {
 
 	if(!thread)
-		return (struct Error) { .genericError = GenericError_NullPointer, .paramId = 2 };
+		return (Error) { .genericError = GenericError_NullPointer, .paramId = 2 };
 
 	if(*thread)
-		return (struct Error) { 
+		return (Error) { 
 			.genericError = GenericError_InvalidParameter, 
 			.paramId = 2, .paramValue0 = (U64) thread 
 		};
 
 	if(!callback)
-		return (struct Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = GenericError_NullPointer };
 
-	struct Buffer buf = Buffer_createNull();
+	Buffer buf = Buffer_createNull();
 
-	struct Error err = Platform_instance.alloc.alloc(
-		Platform_instance.alloc.ptr, sizeof(struct Thread), &buf
+	Error err = Platform_instance.alloc.alloc(
+		Platform_instance.alloc.ptr, sizeof(Thread), &buf
 	);
 
 	if (err.genericError)
 		return err;
 
-	struct Thread *thr = (*thread = (struct Thread*) buf.ptr);
+	Thread *thr = (*thread = (Thread*) buf.ptr);
 
 	thr->callback = callback;
 	thr->objectHandle = objectHandle;
@@ -64,16 +64,16 @@ struct Error Thread_create(
 
 	if (!thr->nativeHandle) {
 		Thread_free(thread);
-		return (struct Error) { .genericError = GenericError_InvalidOperation };
+		return (Error) { .genericError = GenericError_InvalidOperation };
 	}
 
 	return Error_none();
 }
 
-struct Error Thread_wait(struct Thread *thread, U32 maxWaitTimeMs) {
+Error Thread_wait(Thread *thread, U32 maxWaitTimeMs) {
 
 	if(WaitForSingleObject(thread->nativeHandle, maxWaitTimeMs) == WAIT_FAILED)
-		return (struct Error) {
+		return (Error) {
 			.genericError = GenericError_TimedOut
 		};
 

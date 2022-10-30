@@ -4,7 +4,7 @@
 #define StackTrace_SIZE 128
 typedef void *StackTrace[StackTrace_SIZE];
 
-enum GenericError {
+typedef enum GenericError {
 	GenericError_None,
 	GenericError_OutOfMemory,
 	GenericError_OutOfBounds,
@@ -26,17 +26,17 @@ enum GenericError {
 	GenericError_UnsupportedOperation,
 	GenericError_TimedOut,
 	GenericError_ConstData				//If an operation is done on data that is supposed to be const
-};
+} GenericError;
 
-enum ErrorParamValues {
+typedef enum ErrorParamValues {
 	ErrorParamValues_None,
 	ErrorParamValues_V0,
 	ErrorParamValues_V1,
 	ErrorParamValues_V0_1
-};
+} ErrorParamValues;
 
 extern const C8 *GenericError_toString[];
-extern const enum ErrorParamValues GenericError_hasParamValues[];
+extern const ErrorParamValues GenericError_hasParamValues[];
 
 //Only direct caller preserved to save space in release mode
 
@@ -48,9 +48,9 @@ extern const enum ErrorParamValues GenericError_hasParamValues[];
 
 //
 
-struct Error {
+typedef struct Error {
 
-	enum GenericError genericError;
+	GenericError genericError;
 	U32 errorSubId;
 
 	U32 paramId;
@@ -65,15 +65,16 @@ struct Error {
 	//When not present; stackTrace[0] will be null.
 
 	void *stackTrace[ERROR_STACKTRACE];
-};
+
+} Error;
 
 //Base error doesn't fill stacktrace,
 //But the one in platform does
 
-struct Error Error_base(
-	enum GenericError err, U32 subId, 
+Error Error_base(
+	GenericError err, U32 subId, 
 	U32 paramId, U32 paramSubId, 
 	U64 paramValue0, U64 paramValue1
 );
 
-struct Error Error_none();
+Error Error_none();

@@ -1,12 +1,13 @@
 #pragma once
 #include "types/types.h"
 
-struct Allocator;
+typedef struct Allocator Allocator;
+typedef struct Error Error;
 
 //TODO: writeR(G)(B), loadR(G)(B)(A), compression
 
-struct Error BMP_writeRGBA(
-	struct Buffer buf, U16 w, U16 h, Bool isFlipped, 
-	struct Allocator allocator,
-	struct Buffer *result
+Error BMP_writeRGBA(
+	Buffer buf, U16 w, U16 h, Bool isFlipped, 
+	Allocator allocator,
+	Buffer *result
 );

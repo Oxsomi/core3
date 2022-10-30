@@ -3,14 +3,15 @@
 #include "math/math.h"
 #include "types/buffer.h"
 #include "types/list.h"
+
 #include <ctype.h>
 
 //Simple checks (consts)
 
-struct Error String_offsetAsRef(struct String s, U64 off, struct String *result) {
+Error String_offsetAsRef(String s, U64 off, String *result) {
 	
 	if (!result)
-		return (struct Error) { .genericError = GenericError_NullPointer, .paramId = 2 };
+		return (Error) { .genericError = GenericError_NullPointer, .paramId = 2 };
 
 	if (String_isEmpty(s)) {
 		*result = String_createEmpty();
@@ -18,14 +19,14 @@ struct Error String_offsetAsRef(struct String s, U64 off, struct String *result)
 	}
 
 	if(off >= s.len)
-		return (struct Error) { 
+		return (Error) { 
 			.genericError = GenericError_OutOfBounds, 
 			.paramId = 1,
 			.paramValue0 = off,
 			.paramValue1 = s.len 
 		};
 
-	*result = (struct String) {
+	*result = (String) {
 		.ptr = s.ptr + off,
 		.len = s.len - off,
 		.capacity = String_isConstRef(s) ? U64_MAX : 0
@@ -50,36 +51,36 @@ struct Error String_offsetAsRef(struct String s, U64 off, struct String *result)
 	testFunc,																\
 	String_startsWithString(												\
 		s,																	\
-		String_createRefUnsafeConst(num),								\
-		StringCase_Insensitive									\
+		String_createRefUnsafeConst(num),									\
+		StringCase_Insensitive												\
 	) ? String_createRefUnsafeConst(num).len : 0							\
 )
 
-Bool String_isNyto(struct String s) {
+Bool String_isNyto(String s) {
 	String_matchesPatternNum(C8_isNyto, "0n");
 }
 
-Bool String_isAlphaNumeric(struct String s) {
+Bool String_isAlphaNumeric(String s) {
 	String_matchesPattern(C8_isAlphaNumeric, 0);
 }
 
-Bool String_isHex(struct String s) {
+Bool String_isHex(String s) {
 	String_matchesPatternNum(C8_isHex, "0x");
 }
 
-Bool String_isOct(struct String s) {
+Bool String_isOct(String s) {
 	String_matchesPatternNum(C8_isOct, "0o");
 }
 
-Bool String_isBin(struct String s) {
+Bool String_isBin(String s) {
 	String_matchesPatternNum(C8_isBin, "0b");
 }
 
-Bool String_isDec(struct String s) {
+Bool String_isDec(String s) {
 	String_matchesPattern(C8_isDec, 0);
 }
 
-Bool String_isSignedNumber(struct String s) {
+Bool String_isSignedNumber(String s) {
 	String_matchesPattern(
 		C8_isDec,
 		String_startsWith(s, '-', StringCase_Sensitive) ||
@@ -87,14 +88,14 @@ Bool String_isSignedNumber(struct String s) {
 	);
 }
 
-Bool String_isUnsignedNumber(struct String s) {
+Bool String_isUnsignedNumber(String s) {
 	String_matchesPattern(
 		C8_isDec,
 		String_startsWith(s, '+', StringCase_Sensitive)
 	);
 }
 
-Bool String_isFloat(struct String s) {
+Bool String_isFloat(String s) {
 
 	if(!s.len || !s.ptr)
 		return false;
@@ -166,24 +167,24 @@ Bool String_isFloat(struct String s) {
 	return true;
 }
 
-struct Error String_create(C8 c, U64 size, struct Allocator alloc, struct String *result) {
+Error String_create(C8 c, U64 size, Allocator alloc, String *result) {
 
 	if (!c)
-		return (struct Error) { .genericError = GenericError_InvalidParameter };
+		return (Error) { .genericError = GenericError_InvalidParameter };
 
 	if (!alloc.alloc)
-		return (struct Error) { .genericError = GenericError_NullPointer, .paramId = 2 };
+		return (Error) { .genericError = GenericError_NullPointer, .paramId = 2 };
 
 	if (!result)
-		return (struct Error) { .genericError = GenericError_NullPointer, .paramId = 3 };
+		return (Error) { .genericError = GenericError_NullPointer, .paramId = 3 };
 
 	if (!size) {
 		*result = String_createEmpty();
 		return Error_none();
 	}
 
-	struct Buffer b = Buffer_createNull();
-	struct Error err = alloc.alloc(alloc.ptr, size, &b);
+	Buffer b = Buffer_createNull();
+	Error err = alloc.alloc(alloc.ptr, size, &b);
 
 	if (err.genericError)
 		return err;
@@ -217,25 +218,25 @@ struct Error String_create(C8 c, U64 size, struct Allocator alloc, struct String
 	if(size >= 1)
 		b.ptr[totalSize - 1] = c;
 
-	*result = (struct String) { .len = totalSize, .capacity = totalSize, .ptr = (C8*) b.ptr };
+	*result = (String) { .len = totalSize, .capacity = totalSize, .ptr = (C8*) b.ptr };
 	return Error_none();
 }
 
-struct Error String_createCopy(struct String str, struct Allocator alloc, struct String *result) {
+Error String_createCopy(String str, Allocator alloc, String *result) {
 
 	if (!alloc.alloc)
-		return (struct Error) { .genericError = GenericError_NullPointer, .paramId = 1 };
+		return (Error) { .genericError = GenericError_NullPointer, .paramId = 1 };
 
 	if (!result)
-		return (struct Error) { .genericError = GenericError_NullPointer, .paramId = 2 };
+		return (Error) { .genericError = GenericError_NullPointer, .paramId = 2 };
 
 	if (!str.len) {
 		*result = String_createEmpty();
 		return Error_none();
 	}
 
-	struct Buffer b = Buffer_createNull();
-	struct Error err = alloc.alloc(alloc.ptr, str.len, &b);
+	Buffer b = Buffer_createNull();
+	Error err = alloc.alloc(alloc.ptr, str.len, &b);
 
 	if (err.genericError)
 		return err;
@@ -246,19 +247,19 @@ struct Error String_createCopy(struct String str, struct Allocator alloc, struct
 	for (U64 i = str.len >> 3 << 3; i < str.len; ++i)
 		b.ptr[i] = str.ptr[i];
 
-	*result = (struct String) { .ptr = (C8*) b.ptr, .len = str.len, .capacity = str.len };
+	*result = (String) { .ptr = (C8*) b.ptr, .len = str.len, .capacity = str.len };
 	return Error_none();
 }
 
-struct Error String_free(struct String *str, struct Allocator alloc) {
+Error String_free(String *str, Allocator alloc) {
 
 	if (!str)
-		return (struct Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = GenericError_NullPointer };
 
 	if (!alloc.free)
-		return (struct Error) { .genericError = GenericError_NullPointer, .paramId = 1 };
+		return (Error) { .genericError = GenericError_NullPointer, .paramId = 1 };
 
-	struct Error err = Error_none();
+	Error err = Error_none();
 
 	if(!String_isRef(*str))
 		err = alloc.free(alloc.ptr, Buffer_createRef(str->ptr, str->capacity));
@@ -269,16 +270,16 @@ struct Error String_free(struct String *str, struct Allocator alloc) {
 
 #define String_createNum(maxVal, func, prefixRaw, ...)					\
 																		\
-	struct String prefix = String_createRefUnsafeConst(prefixRaw);		\
+	String prefix = String_createRefUnsafeConst(prefixRaw);				\
 																		\
 	if (result->len)													\
-		return (struct Error) { 										\
+		return (Error) { 												\
 			.genericError = GenericError_InvalidOperation, 				\
 			.errorSubId = 1 											\
 		};																\
 																		\
 	*result = String_createEmpty();										\
-	struct Error err = String_reserve(									\
+	Error err = String_reserve(											\
 		result, maxVal + prefix.len, allocator							\
 	);																	\
 																		\
@@ -326,51 +327,51 @@ struct Error String_free(struct String *str, struct Allocator alloc) {
 																		\
 	return Error_none();
 
-struct Error String_createNyto(U64 v, Bool leadingZeros, struct Allocator allocator, struct String *result){
+Error String_createNyto(U64 v, Bool leadingZeros, Allocator allocator, String *result){
 	String_createNum(11, Nyto, "0n", (v >> (6 * i)) & 63);
 }
 
-struct Error String_createHex(U64 v, Bool leadingZeros, struct Allocator allocator, struct String *result) {
+Error String_createHex(U64 v, Bool leadingZeros, Allocator allocator, String *result) {
 	String_createNum(16, Hex, "0x", (v >> (4 * i)) & 15);
 }
 
-struct Error String_createDec(U64 v, Bool leadingZeros, struct Allocator allocator, struct String *result) {
+Error String_createDec(U64 v, Bool leadingZeros, Allocator allocator, String *result) {
 	String_createNum(20, Dec, "", (v / U64_pow10(i)) % 10);
 }
 
-struct Error String_createOct(U64 v, Bool leadingZeros, struct Allocator allocator, struct String *result) {
+Error String_createOct(U64 v, Bool leadingZeros, Allocator allocator, String *result) {
 	String_createNum(22, Oct, "0o", (v >> (3 * i)) & 7);
 }
 
-struct Error String_createBin(U64 v, Bool leadingZeros, struct Allocator allocator, struct String *result) {
+Error String_createBin(U64 v, Bool leadingZeros, Allocator allocator, String *result) {
 	String_createNum(64, Bin, "0b", (v >> i) & 1);
 }
 
-struct Error String_split(
-	struct String s, 
+Error String_split(
+	String s, 
 	C8 c, 
-	enum StringCase casing, 
-	struct Allocator allocator, 
-	struct StringList *result
+	StringCase casing, 
+	Allocator allocator, 
+	StringList *result
 ) {
 
 	U64 len = String_countAll(s, c, casing);
 
-	struct Error err = StringList_create(len, allocator, result);
+	Error err = StringList_create(len, allocator, result);
 
 	if (err.genericError)
 		return err;
 
 	if (result) {
 
-		struct StringList str = *result;
+		StringList str = *result;
 
-		c = C8_transform(c, (enum StringTransform) casing);
+		c = C8_transform(c, (StringTransform) casing);
 
 		U64 count = 0, last = 0;
 
 		for (U64 i = 0; i < s.len; ++i)
-			if (C8_transform(s.ptr[i], (enum StringTransform) casing) == c) {
+			if (C8_transform(s.ptr[i], (StringTransform) casing) == c) {
 
 				str.ptr[count++] = 
 					String_isConstRef(s) ? String_createRefConst(s.ptr + last, i - last) : 
@@ -383,24 +384,24 @@ struct Error String_split(
 	return Error_none();
 }
 
-struct Error String_splitString(
-	struct String s, 
-	struct String other, 
-	enum StringCase casing, 
-	struct Allocator allocator, 
-	struct StringList *result
+Error String_splitString(
+	String s, 
+	String other, 
+	StringCase casing, 
+	Allocator allocator, 
+	StringList *result
 ) {
 
 	U64 len = String_countAllString(s, other, casing);
 
-	struct Error err = StringList_create(len, allocator, result);
+	Error err = StringList_create(len, allocator, result);
 
 	if (err.genericError)
 		return err;
 
 	if (result) {
 
-		struct StringList str = *result;
+		StringList str = *result;
 
 		U64 count = 0, last = 0;
 
@@ -410,8 +411,8 @@ struct Error String_splitString(
 
 			for (U64 j = i, k = 0; j < s.len && k < other.len; ++j, ++k)
 				if (
-					C8_transform(s.ptr[j], (enum StringTransform)casing) !=
-					C8_transform(other.ptr[k], (enum StringTransform)casing)
+					C8_transform(s.ptr[j], (StringTransform)casing) !=
+					C8_transform(other.ptr[k], (StringTransform)casing)
 				) {
 					match = false;
 					break;
@@ -432,22 +433,22 @@ struct Error String_splitString(
 	return Error_none();
 }
 
-struct Error String_reserve(struct String *str, U64 siz, struct Allocator alloc) {
+Error String_reserve(String *str, U64 siz, Allocator alloc) {
 
 	if (!str)
-		return (struct Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = GenericError_NullPointer };
 
 	if (String_isRef(*str) && str->len)
-		return (struct Error) { .genericError = GenericError_InvalidOperation };
+		return (Error) { .genericError = GenericError_InvalidOperation };
 
 	if (!alloc.alloc || !alloc.free)
-		return (struct Error) { .genericError = GenericError_NullPointer, .paramId = 2 };
+		return (Error) { .genericError = GenericError_NullPointer, .paramId = 2 };
 
 	if (siz <= str->capacity)
 		return Error_none();
 
-	struct Buffer b = Buffer_createNull();
-	struct Error err = alloc.alloc(alloc.ptr, siz, &b);
+	Buffer b = Buffer_createNull();
+	Error err = alloc.alloc(alloc.ptr, siz, &b);
 
 	if (err.genericError)
 		return err;
@@ -461,16 +462,16 @@ struct Error String_reserve(struct String *str, U64 siz, struct Allocator alloc)
 	return err;
 }
 
-struct Error String_resize(struct String *str, U64 siz, C8 defaultChar, struct Allocator alloc) {
+Error String_resize(String *str, U64 siz, C8 defaultChar, Allocator alloc) {
 
 	if (!str)
-		return (struct Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = GenericError_NullPointer };
 
 	if (String_isRef(*str) && str->len)
-		return (struct Error) { .genericError = GenericError_InvalidOperation };
+		return (Error) { .genericError = GenericError_InvalidOperation };
 
 	if (!alloc.alloc || !alloc.free)
-		return (struct Error) { .genericError = GenericError_NullPointer, .paramId = 2 };
+		return (Error) { .genericError = GenericError_NullPointer, .paramId = 2 };
 
 	if (siz == str->len)
 		return Error_none();
@@ -487,11 +488,11 @@ struct Error String_resize(struct String *str, U64 siz, C8 defaultChar, struct A
 	if (siz > str->capacity) {
 
 		if (siz * 3 / 3 != siz)
-			return (struct Error) { .genericError = GenericError_Overflow };
+			return (Error) { .genericError = GenericError_Overflow };
 
 		//Reserve 50% more to ensure we don't resize too many times
 
-		struct Error err = String_reserve(str, siz * 3 / 2, alloc);
+		Error err = String_reserve(str, siz * 3 / 2, alloc);
 
 		if (err.genericError)
 			return err;
@@ -506,24 +507,24 @@ struct Error String_resize(struct String *str, U64 siz, C8 defaultChar, struct A
 	return Error_none();
 }
 
-struct Error String_append(struct String *s, C8 c, struct Allocator allocator) {
+Error String_append(String *s, C8 c, Allocator allocator) {
 
 	if (!s)
-		return (struct Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = GenericError_NullPointer };
 
 	return String_resize(s, s->len + 1, c, allocator);
 }
 
-struct Error String_appendString(struct String *s, struct String other, struct Allocator allocator) {
+Error String_appendString(String *s, String other, Allocator allocator) {
 
 	if (!other.len || !other.ptr)
 		return Error_none();
 
 	if (!s)
-		return (struct Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = GenericError_NullPointer };
 
 	U64 oldLen = s->len;
-	struct Error err = String_resize(s, s->len + other.len, other.ptr[0], allocator);
+	Error err = String_resize(s, s->len + other.len, other.ptr[0], allocator);
 
 	if (err.genericError)
 		return err;
@@ -532,15 +533,15 @@ struct Error String_appendString(struct String *s, struct String other, struct A
 	return Error_none();
 }
 
-struct Error String_insert(struct String *s, C8 c, U64 i, struct Allocator allocator) {
+Error String_insert(String *s, C8 c, U64 i, Allocator allocator) {
 
 	if (!s)
-		return (struct Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = GenericError_NullPointer };
 
 	if(i > s->len)
-		return (struct Error) { .genericError = GenericError_OutOfBounds, .paramValue0 = i, .paramValue1 = s->len };
+		return (Error) { .genericError = GenericError_OutOfBounds, .paramValue0 = i, .paramValue1 = s->len };
 
-	struct Error err = String_resize(s, s->len + 1, c, allocator);
+	Error err = String_resize(s, s->len + 1, c, allocator);
 
 	if (err.genericError)
 		return err;
@@ -562,16 +563,16 @@ struct Error String_insert(struct String *s, C8 c, U64 i, struct Allocator alloc
 	return Error_none();
 }
 
-struct Error String_insertString(struct String *s, struct String other, U64 i, struct Allocator allocator) {
+Error String_insertString(String *s, String other, U64 i, Allocator allocator) {
 
 	if (!s)
-		return (struct Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = GenericError_NullPointer };
 
 	if (!other.len)
 		return Error_none();
 
 	U64 oldLen = s->len;
-	struct Error err = String_resize(s, s->len + other.len, ' ', allocator);
+	Error err = String_resize(s, s->len + other.len, ' ', allocator);
 
 	if (err.genericError)
 		return err;
@@ -591,21 +592,21 @@ struct Error String_insertString(struct String *s, struct String other, U64 i, s
 	return Error_none();
 }
 
-struct Error String_replaceAllString(
-	struct String *s,
-	struct String search,
-	struct String replace,
-	enum StringCase caseSensitive,
-	struct Allocator allocator
+Error String_replaceAllString(
+	String *s,
+	String search,
+	String replace,
+	StringCase caseSensitive,
+	Allocator allocator
 ) {
 
 	if (!s)
-		return (struct Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = GenericError_NullPointer };
 
 	if(String_isRef(*s))
-		return (struct Error) { .genericError = GenericError_InvalidOperation };
+		return (Error) { .genericError = GenericError_InvalidOperation };
 
-	struct List finds = String_findAllString(*s, search, allocator, caseSensitive);
+	List finds = String_findAllString(*s, search, allocator, caseSensitive);
 
 	if (!finds.length)
 		return Error_none();
@@ -653,7 +654,7 @@ struct Error String_replaceAllString(
 
 		//Ensure the string is now the right size
 
-		struct Error err = String_resize(s, s->len - diff * finds.length, ' ', allocator);
+		Error err = String_resize(s, s->len - diff * finds.length, ' ', allocator);
 		
 		if (err.genericError) {
 			List_free(&finds, allocator);
@@ -670,7 +671,7 @@ struct Error String_replaceAllString(
 	U64 diff = replace.len - search.len;
 	U64 sOldLen = s->len;
 
-	struct Error err = String_resize(s, s->len + diff * finds.length, ' ', allocator);
+	Error err = String_resize(s, s->len + diff * finds.length, ' ', allocator);
 
 	if (err.genericError) {
 		List_free(&finds, allocator);
@@ -707,20 +708,20 @@ struct Error String_replaceAllString(
 	return List_free(&finds, allocator);
 }
 
-struct Error String_replaceString(
-	struct String *s,
-	struct String search,
-	struct String replace,
-	enum StringCase caseSensitive,
-	struct Allocator allocator,
+Error String_replaceString(
+	String *s,
+	String search,
+	String replace,
+	StringCase caseSensitive,
+	Allocator allocator,
 	Bool isFirst
 ) {
 
 	if (!s)
-		return (struct Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = GenericError_NullPointer };
 
 	if(String_isRef(*s))
-		return (struct Error) { .genericError = GenericError_InvalidOperation };
+		return (Error) { .genericError = GenericError_InvalidOperation };
 
 	U64 res = isFirst ? String_findFirstString(*s, search, caseSensitive) : 
 		String_findLastString(*s, search, caseSensitive);
@@ -755,7 +756,7 @@ struct Error String_replaceString(
 
 		//Shrink the string; this is done after because we need to read the right of the string first
 
-		struct Error err = String_resize(s, s->len - diff, ' ', allocator);
+		Error err = String_resize(s, s->len - diff, ' ', allocator);
 
 		if (err.genericError)
 			return err;
@@ -768,7 +769,7 @@ struct Error String_replaceString(
 
 	U64 diff = replace.len - search.len;
 
-	struct Error err = String_resize(s, s->len + diff, ' ', allocator);
+	Error err = String_resize(s, s->len + diff, ' ', allocator);
 
 	if (err.genericError)
 		return err;
@@ -783,54 +784,53 @@ struct Error String_replaceString(
 	//Throw our replacement in there
 
 	Buffer_copy(Buffer_createRef(s->ptr + res, replace.len), String_buffer(replace));
-
 	return Error_none();
 }
 
-Bool String_startsWithString(struct String str, struct String other, enum StringCase caseSensitive) {
+Bool String_startsWithString(String str, String other, StringCase caseSensitive) {
 
 	if (other.len > str.len)
 		return false;
 
 	for (U64 i = 0; i < other.len; ++i)
 		if (
-			C8_transform(str.ptr[i], (enum StringTransform)caseSensitive) != 
-			C8_transform(other.ptr[i], (enum StringTransform)caseSensitive)
+			C8_transform(str.ptr[i], (StringTransform)caseSensitive) != 
+			C8_transform(other.ptr[i], (StringTransform)caseSensitive)
 		)
 			return false;
 
 	return true;
 }
 
-Bool String_endsWithString(struct String str, struct String other, enum StringCase caseSensitive) {
+Bool String_endsWithString(String str, String other, StringCase caseSensitive) {
 
 	if (other.len > str.len)
 		return false;
 
 	for (U64 i = str.len - other.len; i < str.len; ++i)
 		if (
-			C8_transform(str.ptr[i], (enum StringTransform)caseSensitive) != 
-			C8_transform(other.ptr[i - (str.len - other.len)], (enum StringTransform)caseSensitive)
+			C8_transform(str.ptr[i], (StringTransform)caseSensitive) != 
+			C8_transform(other.ptr[i - (str.len - other.len)], (StringTransform)caseSensitive)
 		)
 			return false;
 
 	return true;
 }
 
-U64 String_countAll(struct String s, C8 c, enum StringCase caseSensitive) {
+U64 String_countAll(String s, C8 c, StringCase caseSensitive) {
 
-	c = C8_transform(c, (enum StringTransform)caseSensitive);
+	c = C8_transform(c, (StringTransform)caseSensitive);
 
 	U64 count = 0;
 
 	for (U64 i = 0; i < s.len; ++i)
-		if (C8_transform(s.ptr[i], (enum StringTransform)caseSensitive) == c)
+		if (C8_transform(s.ptr[i], (StringTransform)caseSensitive) == c)
 			++count;
 
 	return count;
 }
 
-U64 String_countAllString(struct String s, struct String other, enum StringCase casing) {
+U64 String_countAllString(String s, String other, StringCase casing) {
 
 	if(!other.len)
 		return 0;
@@ -843,8 +843,8 @@ U64 String_countAllString(struct String s, struct String other, enum StringCase 
 
 		for (U64 l = i, k = 0; l < s.len && k < other.len; ++l, ++k)
 			if (
-				C8_transform(s.ptr[l], (enum StringTransform)casing) !=
-				C8_transform(other.ptr[k], (enum StringTransform)casing)
+				C8_transform(s.ptr[l], (StringTransform)casing) !=
+				C8_transform(other.ptr[k], (StringTransform)casing)
 			) {
 				match = false;
 				break;
@@ -859,23 +859,23 @@ U64 String_countAllString(struct String s, struct String other, enum StringCase 
 	return j;
 }
 
-struct List String_findAll(
-	struct String s,
+List String_findAll(
+	String s,
 	C8 c,
-	struct Allocator alloc,
-	enum StringCase caseSensitive
+	Allocator alloc,
+	StringCase caseSensitive
 ) {
 
-	struct List l = List_createEmpty(sizeof(U64));
-	struct Error err = List_reserve(&l, s.len / 25 + 16, alloc);
+	List l = List_createEmpty(sizeof(U64));
+	Error err = List_reserve(&l, s.len / 25 + 16, alloc);
 
 	if (err.genericError)
 		return List_createEmpty(sizeof(U64));
 
-	c = C8_transform(c, (enum StringTransform) caseSensitive);
+	c = C8_transform(c, (StringTransform) caseSensitive);
 
 	for (U64 i = 0; i < s.len; ++i)
-		if (c == C8_transform(s.ptr[i], (enum StringTransform)caseSensitive))
+		if (c == C8_transform(s.ptr[i], (StringTransform)caseSensitive))
 			if ((err = List_pushBack(&l, Buffer_createRef(&i, sizeof(i)), alloc)).genericError) {
 				List_free(&l, alloc);
 				return List_createEmpty(sizeof(U64));
@@ -884,18 +884,18 @@ struct List String_findAll(
 	return l;
 }
 
-struct List String_findAllString(
-	struct String s,
-	struct String other,
-	struct Allocator alloc,
-	enum StringCase casing
+List String_findAllString(
+	String s,
+	String other,
+	Allocator alloc,
+	StringCase casing
 ) {
 
 	if(!other.len)
 		return List_createEmpty(sizeof(U64));
 
-	struct List l = List_createEmpty(sizeof(U64));
-	struct Error err = List_reserve(&l, s.len / other.len / 25 + 16, alloc);
+	List l = List_createEmpty(sizeof(U64));
+	Error err = List_reserve(&l, s.len / other.len / 25 + 16, alloc);
 
 	if (err.genericError)
 		return List_createEmpty(sizeof(U64));
@@ -906,8 +906,8 @@ struct List String_findAllString(
 
 		for (U64 j = i, k = 0; j < s.len && k < other.len; ++j, ++k)
 			if (
-				C8_transform(s.ptr[j], (enum StringTransform)casing) !=
-				C8_transform(other.ptr[k], (enum StringTransform)casing)
+				C8_transform(s.ptr[j], (StringTransform)casing) !=
+				C8_transform(other.ptr[k], (StringTransform)casing)
 			) {
 				match = false;
 				break;
@@ -927,23 +927,23 @@ struct List String_findAllString(
 	return l;
 }
 
-U64 String_findFirst(struct String s, C8 c, enum StringCase caseSensitive) {
+U64 String_findFirst(String s, C8 c, StringCase caseSensitive) {
 
-	c = C8_transform(c, (enum StringTransform)caseSensitive);
+	c = C8_transform(c, (StringTransform)caseSensitive);
 
 	for (U64 i = 0; i < s.len; ++i)
-		if (C8_transform(s.ptr[i], (enum StringTransform)caseSensitive) == c)
+		if (C8_transform(s.ptr[i], (StringTransform)caseSensitive) == c)
 			return i;
 
 	return s.len;
 }
 
-U64 String_findLast(struct String s, C8 c, enum StringCase caseSensitive) {
+U64 String_findLast(String s, C8 c, StringCase caseSensitive) {
 
-	c = C8_transform(c, (enum StringTransform)caseSensitive);
+	c = C8_transform(c, (StringTransform)caseSensitive);
 
 	for (U64 i = s.len - 1; i != U64_MAX; --i)
-		if (C8_transform(s.ptr[i], (enum StringTransform)caseSensitive) == c)
+		if (C8_transform(s.ptr[i], (StringTransform)caseSensitive) == c)
 			return i;
 
 	//TODO: Don't return len on end!
@@ -951,7 +951,7 @@ U64 String_findLast(struct String s, C8 c, enum StringCase caseSensitive) {
 	return s.len;
 }
 
-U64 String_findFirstString(struct String s, struct String other, enum StringCase casing) {
+U64 String_findFirstString(String s, String other, StringCase casing) {
 
 	if(!other.len)
 		return s.len;
@@ -964,8 +964,8 @@ U64 String_findFirstString(struct String s, struct String other, enum StringCase
 
 		for (U64 j = i, k = 0; j < s.len && k < other.len; ++j, ++k)
 			if (
-				C8_transform(s.ptr[j], (enum StringTransform)casing) !=
-				C8_transform(other.ptr[k], (enum StringTransform)casing)
+				C8_transform(s.ptr[j], (StringTransform)casing) !=
+				C8_transform(other.ptr[k], (StringTransform)casing)
 			) {
 				match = false;
 				break;
@@ -978,7 +978,7 @@ U64 String_findFirstString(struct String s, struct String other, enum StringCase
 	return i;
 }
 
-U64 String_findLastString(struct String s, struct String other, enum StringCase casing) {
+U64 String_findLastString(String s, String other, StringCase casing) {
 	
 	if(!other.len)
 		return 0;
@@ -991,8 +991,8 @@ U64 String_findLastString(struct String s, struct String other, enum StringCase 
 
 		for (U64 j = i, k = other.len - 1; j != U64_MAX && k != U64_MAX; --j, --k)
 			if (
-				C8_transform(s.ptr[j], (enum StringTransform)casing) !=
-				C8_transform(other.ptr[k], (enum StringTransform)casing)
+				C8_transform(s.ptr[j], (StringTransform)casing) !=
+				C8_transform(other.ptr[k], (StringTransform)casing)
 			) {
 				match = false;
 				break;
@@ -1005,32 +1005,32 @@ U64 String_findLastString(struct String s, struct String other, enum StringCase 
 	return i;
 }
 
-Bool String_equalsString(struct String s, struct String other, enum StringCase caseSensitive) {
+Bool String_equalsString(String s, String other, StringCase caseSensitive) {
 
 	if (s.len != other.len)
 		return false;
 
 	for (U64 i = 0; i < s.len; ++i)
 		if (
-			C8_transform(s.ptr[i], (enum StringTransform)caseSensitive) != 
-			C8_transform(other.ptr[i], (enum StringTransform)caseSensitive)
+			C8_transform(s.ptr[i], (StringTransform)caseSensitive) != 
+			C8_transform(other.ptr[i], (StringTransform)caseSensitive)
 		)
 			return false;
 
 	return true;
 }
 
-Bool String_equals(struct String s, C8 c, enum StringCase caseSensitive) {
+Bool String_equals(String s, C8 c, StringCase caseSensitive) {
 	return s.len == 1 && s.ptr && 
-		C8_transform(s.ptr[0], (enum StringTransform) caseSensitive) == 
-		C8_transform(c, (enum StringTransform) caseSensitive);
+		C8_transform(s.ptr[0], (StringTransform) caseSensitive) == 
+		C8_transform(c, (StringTransform) caseSensitive);
 }
 
-Bool String_parseNyto(struct String s, U64 *result){
+Bool String_parseNyto(String s, U64 *result){
 
-	struct String prefix = String_createRefUnsafeConst("0n");
+	String prefix = String_createRefUnsafeConst("0n");
 
-	struct Error err = String_offsetAsRef(
+	Error err = String_offsetAsRef(
 		s, String_startsWithString(s, prefix, StringCase_Insensitive) ? prefix.len : 0, &s
 	);
 
@@ -1058,10 +1058,10 @@ Bool String_parseNyto(struct String s, U64 *result){
 	return true;
 }
 
-Bool String_parseHex(struct String s, U64 *result){
+Bool String_parseHex(String s, U64 *result){
 
-	struct String prefix = String_createRefUnsafeConst("0x");
-	struct Error err = String_offsetAsRef(
+	String prefix = String_createRefUnsafeConst("0x");
+	Error err = String_offsetAsRef(
 		s, String_startsWithString(s, prefix, StringCase_Insensitive) ? prefix.len : 0, &s
 	);
 
@@ -1086,7 +1086,7 @@ Bool String_parseHex(struct String s, U64 *result){
 	return true;
 }
 
-Bool String_parseDec(struct String s, U64 *result) {
+Bool String_parseDec(String s, U64 *result) {
 
 	if (!result || !s.ptr || s.len > 20)
 		return false;
@@ -1109,11 +1109,11 @@ Bool String_parseDec(struct String s, U64 *result) {
 	return true;
 }
 
-Bool String_parseDecSigned(struct String s, I64 *result) {
+Bool String_parseDecSigned(String s, I64 *result) {
 
 	Bool neg = String_startsWith(s, '-', StringCase_Sensitive);
 
-	struct Error err = String_offsetAsRef(s, neg, &s);
+	Error err = String_offsetAsRef(s, neg, &s);
 
 	if (err.genericError)
 		return false;
@@ -1141,7 +1141,7 @@ Bool String_parseDecSigned(struct String s, I64 *result) {
 
 //Approximately equal to: [-+]?[0-9]*[.[0-9]*]?[[eE][-+]?[0-9]+]?
 
-Bool String_parseFloat(struct String s, F32 *result) {
+Bool String_parseFloat(String s, F32 *result) {
 
 	if (!result)
 		return false;
@@ -1259,7 +1259,7 @@ Bool String_parseFloat(struct String s, F32 *result) {
 			return false;
 	}
 
-	struct Error err = F32_exp10(esign ? -exponent : exponent, &exponent);
+	Error err = F32_exp10(esign ? -exponent : exponent, &exponent);
 
 	if(err.genericError)
 		return false;
@@ -1268,10 +1268,10 @@ Bool String_parseFloat(struct String s, F32 *result) {
 	return F32_isValid(*result);
 }
 
-Bool String_parseOct(struct String s, U64 *result) {
+Bool String_parseOct(String s, U64 *result) {
 
-	struct String prefix = String_createRefUnsafeConst("0o");
-	struct Error err = String_offsetAsRef(
+	String prefix = String_createRefUnsafeConst("0o");
+	Error err = String_offsetAsRef(
 		s, String_startsWithString(s, prefix, StringCase_Insensitive) ? prefix.len : 0, &s
 	);
 
@@ -1299,10 +1299,10 @@ Bool String_parseOct(struct String s, U64 *result) {
 	return true;
 }
 
-Bool String_parseBin(struct String s, U64 *result) {
+Bool String_parseBin(String s, U64 *result) {
 
-	struct String prefix = String_createRefUnsafeConst("0b");
-	struct Error err = String_offsetAsRef(
+	String prefix = String_createRefUnsafeConst("0b");
+	Error err = String_offsetAsRef(
 		s, String_startsWithString(s, prefix, StringCase_Insensitive) ? prefix.len : 0, &s
 	);
 
@@ -1328,7 +1328,7 @@ Bool String_parseBin(struct String s, U64 *result) {
 	return true;
 }
 
-Bool String_cut(struct String s, U64 offset, U64 siz, struct String *result) {
+Bool String_cut(String s, U64 offset, U64 siz, String *result) {
 
 	if(!result)
 		return false;
@@ -1358,7 +1358,7 @@ Bool String_cut(struct String s, U64 offset, U64 siz, struct String *result) {
 	return true;
 }
 
-Bool String_cutAfter(struct String s, C8 c, enum StringCase caseSensitive, Bool isFirst, struct String *result) {
+Bool String_cutAfter(String s, C8 c, StringCase caseSensitive, Bool isFirst, String *result) {
 
 	if (!result)
 		return false;
@@ -1367,7 +1367,7 @@ Bool String_cutAfter(struct String s, C8 c, enum StringCase caseSensitive, Bool 
 	return String_cut(s, 0, found, result);
 }
 
-Bool String_cutAfterString(struct String s, struct String other, enum StringCase caseSensitive, Bool isFirst, struct String *result) {
+Bool String_cutAfterString(String s, String other, StringCase caseSensitive, Bool isFirst, String *result) {
 
 	if (!result)
 		return false;
@@ -1378,7 +1378,7 @@ Bool String_cutAfterString(struct String s, struct String other, enum StringCase
 	return String_cut(s, 0, found, result);
 }
 
-Bool String_cutBefore(struct String s, C8 c, enum StringCase caseSensitive, Bool isFirst, struct String *result) {
+Bool String_cutBefore(String s, C8 c, StringCase caseSensitive, Bool isFirst, String *result) {
 
 	if (!result)
 		return false;
@@ -1392,7 +1392,7 @@ Bool String_cutBefore(struct String s, C8 c, enum StringCase caseSensitive, Bool
 	return String_cut(s, found, 0, result);
 }
 
-Bool String_cutBeforeString(struct String s, struct String other, enum StringCase caseSensitive, Bool isFirst, struct String *result) {
+Bool String_cutBeforeString(String s, String other, StringCase caseSensitive, Bool isFirst, String *result) {
 
 	if (!result || !other.len)
 		return false;
@@ -1407,12 +1407,12 @@ Bool String_cutBeforeString(struct String s, struct String other, enum StringCas
 	return String_cut(s, found, 0, result);
 }
 
-Bool String_erase(struct String *s, C8 c, enum StringCase caseSensitive, Bool isFirst) {
+Bool String_erase(String *s, C8 c, StringCase caseSensitive, Bool isFirst) {
 
 	if(!s || String_isRef(*s))
 		return false;
 
-	c = C8_transform(c, (enum StringTransform) caseSensitive);
+	c = C8_transform(c, (StringTransform) caseSensitive);
 
 	Bool hadMatch = false;
 
@@ -1434,7 +1434,7 @@ Bool String_erase(struct String *s, C8 c, enum StringCase caseSensitive, Bool is
 	return true;
 }
 
-Bool String_eraseString(struct String *s, struct String other, enum StringCase casing, Bool isFirst) {
+Bool String_eraseString(String *s, String other, StringCase casing, Bool isFirst) {
 
 	if(!s || !other.len || String_isRef(*s))
 		return false;
@@ -1457,11 +1457,11 @@ Bool String_eraseString(struct String *s, struct String other, enum StringCase c
 
 //String's inline changes (no copy)
 
-Bool String_cutEnd(struct String s, U64 i, struct String *result) {
+Bool String_cutEnd(String s, U64 i, String *result) {
 	return String_cut(s, 0, i, result);
 }
 
-Bool String_cutBegin(struct String s, U64 i, struct String *result) {
+Bool String_cutBegin(String s, U64 i, String *result) {
 
 	if (i > s.len)
 		return false;
@@ -1469,18 +1469,18 @@ Bool String_cutBegin(struct String s, U64 i, struct String *result) {
 	return String_cut(s, i, 0, result);
 }
 
-Bool String_eraseAll(struct String *s, C8 c, enum StringCase casing) {
+Bool String_eraseAll(String *s, C8 c, StringCase casing) {
 
 	if(!s || String_isRef(*s))
 		return false;
 
-	c = C8_transform(c, (enum StringTransform) casing);
+	c = C8_transform(c, (StringTransform) casing);
 
 	U64 out = 0;
 
 	for (U64 i = 0; i < s->len; ++i) {
 
-		if(C8_transform(s->ptr[i], (enum StringTransform) casing) == c)
+		if(C8_transform(s->ptr[i], (StringTransform) casing) == c)
 			continue;
 
 		s->ptr[out++] = s->ptr[i];
@@ -1493,7 +1493,7 @@ Bool String_eraseAll(struct String *s, C8 c, enum StringCase casing) {
 	return true;
 }
 
-Bool String_eraseAllString(struct String *s, struct String other, enum StringCase casing) {
+Bool String_eraseAllString(String *s, String other, StringCase casing) {
 
 	if(!s || !other.len || String_isRef(*s))
 		return false;
@@ -1506,8 +1506,8 @@ Bool String_eraseAllString(struct String *s, struct String other, enum StringCas
 
 		for (U64 j = i, k = 0; j < s->len && k < other.len; ++j, ++k)
 			if (
-				C8_transform(s->ptr[j], (enum StringTransform) casing) != 
-				C8_transform(other.ptr[k], (enum StringTransform) casing)
+				C8_transform(s->ptr[j], (StringTransform) casing) != 
+				C8_transform(other.ptr[k], (StringTransform) casing)
 			) {
 				match = false;
 				break;
@@ -1528,21 +1528,21 @@ Bool String_eraseAllString(struct String *s, struct String other, enum StringCas
 	return true;
 }
 
-Bool String_replaceAll(struct String *s, C8 c, C8 v, enum StringCase caseSensitive) {
+Bool String_replaceAll(String *s, C8 c, C8 v, StringCase caseSensitive) {
 
 	if (!s || String_isConstRef(*s))
 		return false;
 
-	c = C8_transform(c, (enum StringTransform)caseSensitive);
+	c = C8_transform(c, (StringTransform)caseSensitive);
 
 	for(U64 i = 0; i < s->len; ++i)
-		if(C8_transform(s->ptr[i], (enum StringTransform)caseSensitive) == c)
+		if(C8_transform(s->ptr[i], (StringTransform)caseSensitive) == c)
 			s->ptr[i] = v;
 
 	return true;
 }
 
-Bool String_replace(struct String *s, C8 c, C8 v, enum StringCase caseSensitive, Bool isFirst) {
+Bool String_replace(String *s, C8 c, C8 v, StringCase caseSensitive, Bool isFirst) {
 
 	if (!s || String_isRef(*s))
 		return false;
@@ -1555,7 +1555,7 @@ Bool String_replace(struct String *s, C8 c, C8 v, enum StringCase caseSensitive,
 	return true;
 }
 
-Bool String_transform(struct String str, enum StringTransform c) {
+Bool String_transform(String str, StringTransform c) {
 
 	if(String_isConstRef(str))
 		return false;
@@ -1566,7 +1566,7 @@ Bool String_transform(struct String str, enum StringTransform c) {
 	return true;
 }
 
-struct String String_trim(struct String s) {
+String String_trim(String s) {
 
 	U64 first = s.len;
 
@@ -1593,16 +1593,14 @@ struct String String_trim(struct String s) {
 
 //StringList
 
-struct Error StringList_create(U64 len, struct Allocator alloc, struct StringList *arr) {
+Error StringList_create(U64 len, Allocator alloc, StringList *arr) {
 
-	struct StringList sl = (struct StringList) {
-		.len = len
-	};
+	StringList sl = (StringList) { .len = len };
 
-	struct Buffer b = Buffer_createNull();
-	struct Error err = alloc.alloc(alloc.ptr, len * sizeof(struct String), &b);
+	Buffer b = Buffer_createNull();
+	Error err = alloc.alloc(alloc.ptr, len * sizeof(String), &b);
 
-	sl.ptr = (struct String*) sl.ptr;
+	sl.ptr = (String*) sl.ptr;
 
 	if(err.genericError)
 		return err;
@@ -1614,40 +1612,40 @@ struct Error StringList_create(U64 len, struct Allocator alloc, struct StringLis
 	return Error_none();
 }
 
-struct Error StringList_free(struct StringList *arr, struct Allocator alloc) {
+Error StringList_free(StringList *arr, Allocator alloc) {
 
 	if(!arr || !arr->len)
-		return (struct Error){ .genericError = GenericError_NullPointer };
+		return (Error){ .genericError = GenericError_NullPointer };
 
-	struct Error freeErr = Error_none();
+	Error freeErr = Error_none();
 
 	for(U64 i = 0; i < arr->len; ++i) {
 
-		struct String *str = arr->ptr + i;
-		struct Error err = String_free(str, alloc);
+		String *str = arr->ptr + i;
+		Error err = String_free(str, alloc);
 
 		if(err.genericError)
 			freeErr = err;
 	}
 
-	struct Error err = alloc.free(alloc.ptr, Buffer_createRef(
+	Error err = alloc.free(alloc.ptr, Buffer_createRef(
 		arr->ptr,
-		sizeof(struct String) * arr->len
+		sizeof(String) * arr->len
 	));
 
 	if(err.genericError)
 		freeErr = err;
 
-	*arr = (struct StringList){ 0 };
+	*arr = (StringList){ 0 };
 	return freeErr;
 }
 
-struct Error StringList_createCopy(const struct StringList *toCopy, struct StringList *arr, struct Allocator alloc) {
+Error StringList_createCopy(const StringList *toCopy, StringList *arr, Allocator alloc) {
 
 	if(!toCopy || !toCopy->len)
-		return (struct Error){ .genericError = GenericError_NullPointer };
+		return (Error){ .genericError = GenericError_NullPointer };
 
-	struct Error err = StringList_create(toCopy->len, alloc, arr);
+	Error err = StringList_create(toCopy->len, alloc, arr);
 
 	if (err.genericError)
 		return err;
@@ -1665,22 +1663,22 @@ struct Error StringList_createCopy(const struct StringList *toCopy, struct Strin
 	return Error_none();
 }
 
-struct Error StringList_unset(struct StringList arr, U64 i, struct Allocator alloc) {
+Error StringList_unset(StringList arr, U64 i, Allocator alloc) {
 
 	if(i >= arr.len)
-		return (struct Error) { 
+		return (Error) { 
 			.genericError = GenericError_OutOfBounds, 
 			.paramValue0 = i, 
 			.paramValue1 = arr.len 
 		};
 
-	struct String *pstr = arr.ptr + i;
+	String *pstr = arr.ptr + i;
 	return String_free(pstr, alloc);
 }
 
-struct Error StringList_set(struct StringList arr, U64 i, struct String str, struct Allocator alloc) {
+Error StringList_set(StringList arr, U64 i, String str, Allocator alloc) {
 
-	struct Error err = StringList_unset(arr, i, alloc);
+	Error err = StringList_unset(arr, i, alloc);
 
 	if(err.genericError)
 		return err;
@@ -1699,7 +1697,7 @@ U64 String_calcStrLen(const C8 *ptr, U64 maxSize) {
 	return i;
 }
 
-U64 String_hash(struct String s) { 
+U64 String_hash(String s) { 
 
 	U64 h = FNVHash_create();
 
@@ -1731,12 +1729,12 @@ U64 String_hash(struct String s) {
 	return h;
 }
 
-struct String String_getFilePath(struct String *str) {
+String String_getFilePath(String *str) {
 
 	if(!String_formatPath(str))
 		return String_createEmpty();
 
-	struct String res;
+	String res;
 
 	if(String_cutBefore(*str, '/', StringCase_Insensitive, false, &res))
 		return res;
@@ -1744,12 +1742,12 @@ struct String String_getFilePath(struct String *str) {
 	return String_createEmpty();
 }
 
-struct String String_getBasePath(struct String *str) {
+String String_getBasePath(String *str) {
 
 	if(!String_formatPath(str))
 		return String_createEmpty();
 
-	struct String res;
+	String res;
 
 	if(String_cutAfter(*str, '/', StringCase_Insensitive, false, &res))
 		return res;

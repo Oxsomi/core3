@@ -2,29 +2,30 @@
 #include "types/string.h"
 #include "platforms/window_manager.h"
 
-enum EPlatform {
+typedef enum EPlatform {
 	Platform_Uninitialized,
 	Platform_Windows,
 	Platform_Linux,
 	Platform_Android,
 	Platform_Web
-};
+} EPlatform;
 
-struct Platform {
+typedef struct Platform {
 
-	enum EPlatform platformType;
+	EPlatform platformType;
 
-	struct StringList args;
+	StringList args;
 
-	struct Allocator alloc;
-	struct WindowManager windowManager;
+	Allocator alloc;
+	WindowManager windowManager;
 
 	void *data;
-};
 
-extern struct Platform Platform_instance;
+} Platform;
 
-struct Error Platform_create(
+extern Platform Platform_instance;
+
+Error Platform_create(
 	int cmdArgc, const C8 *cmdArgs[], 
 	void *data,
 	FreeFunc free, AllocFunc alloc, void *allocator

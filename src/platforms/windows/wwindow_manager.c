@@ -13,30 +13,30 @@ const U8 WindowManager_maxTotalPhysicalWindowCount = 16;
 //
 LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
 
-struct Error WindowManager_createPhysical(
-	struct WindowManager *manager,
+Error WindowManager_createPhysical(
+	WindowManager *manager,
 	I32x2 position,
 	I32x2 size, 
-	enum WindowHint hint,
-	struct String title, 
-	struct WindowCallbacks callbacks,
-	enum WindowFormat format,
-	struct Window **w
+	WindowHint hint,
+	String title, 
+	WindowCallbacks callbacks,
+	WindowFormat format,
+	Window **w
 ) {
 
 	//Validate state
 
 	if(!manager)
-		return (struct Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = GenericError_NullPointer };
 
 	if(!Lock_isLockedForThread(manager->lock))
-		return (struct Error) { .genericError = GenericError_InvalidOperation };
+		return (Error) { .genericError = GenericError_InvalidOperation };
 
 	if(!w)
-		return (struct Error) { .genericError = GenericError_NullPointer, .paramId = 7 };
+		return (Error) { .genericError = GenericError_NullPointer, .paramId = 7 };
 
 	if(*w)
-		return (struct Error) { .genericError = GenericError_InvalidParameter, .paramId = 7 };
+		return (Error) { .genericError = GenericError_InvalidParameter, .paramId = 7 };
 
 	switch (format) {
 
@@ -46,7 +46,7 @@ struct Error WindowManager_createPhysical(
 		case WindowFormat_rgba32f:
 
 			if(!WindowManager_supportsFormat(*manager, format))
-				return (struct Error) { 
+				return (Error) { 
 					.genericError = GenericError_UnsupportedOperation, 
 					.paramId = 6,
 					.paramValue0 = format
@@ -55,14 +55,14 @@ struct Error WindowManager_createPhysical(
 			break;
 
 		default:
-			return (struct Error) { .genericError = GenericError_InvalidParameter, .paramId = 6 };
+			return (Error) { .genericError = GenericError_InvalidParameter, .paramId = 6 };
 	}
 
 	if(I32x2_any(I32x2_lt(size, I32x2_zero())))
-		return (struct Error) { .genericError = GenericError_InvalidParameter };
+		return (Error) { .genericError = GenericError_InvalidParameter };
 
 	if (title.len >= MAX_PATH)
-		return (struct Error) { 
+		return (Error) { 
 			.genericError = GenericError_OutOfBounds, 
 			.paramId = 4, 
 			.paramValue0 = title.len,
@@ -71,12 +71,12 @@ struct Error WindowManager_createPhysical(
 
 	//Find free spot in physical windows
 
-	struct Window *win = NULL;
+	Window *win = NULL;
 	WindowHandle handle = 0;
 
 	for(U8 i = 0; i < WindowManager_maxTotalPhysicalWindowCount; ++i) {
 
-		struct Window *wi = (struct Window*) List_ptr(manager->windows, i);
+		Window *wi = (Window*) List_ptr(manager->windows, i);
 
 		if(!wi)
 			break;
@@ -89,7 +89,7 @@ struct Error WindowManager_createPhysical(
 	}
 
 	if(!win)
-		return (struct Error) { .genericError = GenericError_OutOfMemory };
+		return (Error) { .genericError = GenericError_OutOfMemory };
 
 	//Create native window
 
@@ -112,7 +112,7 @@ struct Error WindowManager_createPhysical(
 	wc.cbWndExtra = sizeof(void*);
 
 	if (!RegisterClassExA(&wc))
-		return (struct Error) { .genericError = GenericError_InvalidOperation, .paramSubId = 1 };
+		return (Error) { .genericError = GenericError_InvalidOperation, .paramSubId = 1 };
 
 	DWORD style = WS_VISIBLE;
 
@@ -152,7 +152,7 @@ struct Error WindowManager_createPhysical(
 
 	if(!nativeWindow) {
 		UnregisterClassA(wc.lpszClassName, wc.hInstance);
-		return (struct Error) { .genericError = GenericError_InvalidOperation, .paramSubId = 2 };
+		return (Error) { .genericError = GenericError_InvalidOperation, .paramSubId = 2 };
 	}
 
 	//Get real size and position
@@ -170,10 +170,10 @@ struct Error WindowManager_createPhysical(
 
 	//Alloc cpu visible buffer if needed
 
-	struct Buffer cpuVisibleBuffer = Buffer_createNull();
+	Buffer cpuVisibleBuffer = Buffer_createNull();
 	void *nativeData = NULL;
 
-	struct Error err = Error_none();
+	Error err = Error_none();
 
 	if(hint & WindowHint_ProvideCPUBuffer) {
 
@@ -182,7 +182,7 @@ struct Error WindowManager_createPhysical(
 		if(!screen) {
 			DestroyWindow(nativeWindow);
 			UnregisterClassA(wc.lpszClassName, wc.hInstance);
-			return (struct Error) { .genericError = GenericError_InvalidOperation, .paramSubId = 3 };
+			return (Error) { .genericError = GenericError_InvalidOperation, .paramSubId = 3 };
 		}
 
 		//TODO: Support something other than RGBA8
@@ -207,7 +207,7 @@ struct Error WindowManager_createPhysical(
 			ReleaseDC(nativeWindow, screen);
 			DestroyWindow(nativeWindow);
 			UnregisterClassA(wc.lpszClassName, wc.hInstance);
-			return (struct Error) { .genericError = GenericError_InvalidOperation, .paramSubId = 3 };
+			return (Error) { .genericError = GenericError_InvalidOperation, .paramSubId = 3 };
 		}
 
 		cpuVisibleBuffer.siz = (U64) bmi.bmiHeader.biWidth * bmi.bmiHeader.biHeight * 4;
@@ -216,7 +216,7 @@ struct Error WindowManager_createPhysical(
 
 	//Lock for when we are updating this window
 
-	struct Lock lock = (struct Lock) { 0 };
+	Lock lock = (Lock) { 0 };
 
 	if ((err = Lock_create(&lock)).genericError) {
 
@@ -228,7 +228,7 @@ struct Error WindowManager_createPhysical(
 		return err;
 	}
 
-	struct List devices = List_createEmpty(sizeof(struct InputDevice)), monitors = List_createEmpty(sizeof(struct Monitor));
+	List devices = List_createEmpty(sizeof(InputDevice)), monitors = List_createEmpty(sizeof(Monitor));
 
 	if ((err = List_reserve(&devices, Window_maxDevices, Platform_instance.alloc)).genericError) {
 
@@ -259,7 +259,7 @@ struct Error WindowManager_createPhysical(
 
 	//Fill window object
 
-	*win = (struct Window) {
+	*win = (Window) {
 
 		.offset = position,
 		.size = size,

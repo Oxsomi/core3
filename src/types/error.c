@@ -1,12 +1,12 @@
 #include "types/error.h"
 #include "types/string.h"
 
-struct Error Error_base(
+Error Error_base(
 	enum GenericError err, U32 subId, 
 	U32 paramId, U32 paramSubId, 
 	U64 paramValue0, U64 paramValue1
 ) {
-	return (struct Error) {
+	return (Error) {
 		.genericError = err,
 		.errorSubId = subId,
 		.paramId = paramId,
@@ -16,8 +16,8 @@ struct Error Error_base(
 	};
 }
 
-struct Error Error_none() {
-	return (struct Error) { 0 };
+Error Error_none() {
+	return (Error) { 0 };
 }
 
 const C8 *GenericError_toString[] = {
@@ -44,7 +44,7 @@ const C8 *GenericError_toString[] = {
 	"Const data"
 };
 
-const enum ErrorParamValues GenericError_hasParamValues[] = {
+const ErrorParamValues GenericError_hasParamValues[] = {
 	ErrorParamValues_None,
 	ErrorParamValues_None,
 	ErrorParamValues_V0_1,

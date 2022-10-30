@@ -10,9 +10,9 @@
 		return err;																\
 	}
 
-struct Error Keyboard_create(Keyboard *result) {
+Error Keyboard_create(Keyboard *result) {
 
-	struct Error err = InputDevice_create(Key_Count, 0, InputDeviceType_Keyboard, result);
+	Error err = InputDevice_create(Key_Count, 0, InputDeviceType_Keyboard, result);
 
 	if(err.genericError)
 		return err;

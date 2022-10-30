@@ -17,7 +17,7 @@
 const U16 Window_maxDevices = 64;
 const U16 Window_maxMonitors = 64;
 
-void WWindow_updateMonitors(struct Window *w) {
+void WWindow_updateMonitors(Window *w) {
 
 	//TODO: Query monitors
 	//EnumDisplayMonitors()
@@ -28,7 +28,7 @@ void WWindow_updateMonitors(struct Window *w) {
 
 LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
 
-	struct Window *w = (struct Window*) GetWindowLongPtrA(hwnd, 0);
+	Window *w = (Window*) GetWindowLongPtrA(hwnd, 0);
 
 	//TODO: Lock + Unlock window
 
@@ -88,8 +88,8 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 				&size, sizeof(RAWINPUTHEADER)
 			);
 
-			struct Buffer buf = Buffer_createNull(); 
-			struct Error err = Buffer_createUninitializedBytes(size, Platform_instance.alloc, &buf);
+			Buffer buf = Buffer_createNull(); 
+			Error err = Buffer_createUninitializedBytes(size, Platform_instance.alloc, &buf);
 
 			if(err.genericError) {
 				Error_printx(err, LogLevel_Error, LogOptions_Default);
@@ -105,10 +105,10 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 			RAWINPUT *data = (RAWINPUT*) buf.ptr;
 
-			struct InputDevice *beg = (struct InputDevice*) List_begin(w->devices);
-			struct InputDevice *end = (struct InputDevice*) List_end(w->devices);
+			InputDevice *beg = (InputDevice*) List_begin(w->devices);
+			InputDevice *end = (InputDevice*) List_end(w->devices);
 
-			struct InputDevice *dev = beg;
+			InputDevice *dev = beg;
 
 			for(; dev != end; ++dev)
 				if(*(HANDLE*) dev->dataExt.ptr == (HANDLE) lParam)
@@ -249,10 +249,10 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 				//Send keys through interface and update input device
 
-				enum InputState prevState = InputDevice_getState(*dev, handle);
+				InputState prevState = InputDevice_getState(*dev, handle);
 
 				InputDevice_setCurrentState(*dev, handle, isKeyDown);
-				enum InputState newState = InputDevice_getState(*dev, handle);
+				InputState newState = InputDevice_getState(*dev, handle);
 
 				if(prevState != newState && w->callbacks.onDeviceButton)
 					w->callbacks.onDeviceButton(w, dev, handle, isKeyDown);
@@ -355,7 +355,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 			if(deviceInfo.dwType == RIM_TYPEHID)		//Irrelevant for us for now
 				break;
 
-			struct Error err;
+			Error err;
 
 			Bool isAdded = wParam == GIDC_ARRIVAL;
 
@@ -371,7 +371,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 				//Create input device
 
-				struct InputDevice device;
+				InputDevice device;
 
 				if (isKeyboard) {
 
@@ -404,10 +404,10 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 				//Find free spot in device array
 				//If this happens, we don't need to resize the array
 
-				struct InputDevice *beg = (struct InputDevice*) List_begin(w->devices);
-				struct InputDevice *end = (struct InputDevice*) List_end(w->devices);
+				InputDevice *beg = (InputDevice*) List_begin(w->devices);
+				InputDevice *end = (InputDevice*) List_end(w->devices);
 
-				struct InputDevice *dev = beg;
+				InputDevice *dev = beg;
 
 				for(; dev != end; ++dev)
 					if(dev->type == InputDeviceType_Undefined)
@@ -422,7 +422,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 					//Try to allocate without allowing allocation
 					//If it fails, we can't create a new device
 
-					err = List_pushBack(&w->devices, Buffer_createNull(), (struct Allocator) { 0 });
+					err = List_pushBack(&w->devices, Buffer_createNull(), (Allocator) { 0 });
 					pushed = true;
 
 					if(err.genericError) {
@@ -464,10 +464,10 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 				//Find our device
 
-				struct InputDevice *beg = (struct InputDevice*) List_begin(w->devices);
-				struct InputDevice *end = (struct InputDevice*) List_end(w->devices);
+				InputDevice *beg = (InputDevice*) List_begin(w->devices);
+				InputDevice *end = (InputDevice*) List_end(w->devices);
 
-				struct InputDevice *ours = beg;
+				InputDevice *ours = beg;
 
 				for(; ours != end; ++ours)
 					if(*(HANDLE*) ours->dataExt.ptr == (HANDLE) lParam)
@@ -494,7 +494,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 				if(ours == end - 1)
 					while(
 						w->devices.length && 
-						((struct InputDevice*)List_last(w->devices))->type == InputDeviceType_Undefined
+						((InputDevice*)List_last(w->devices))->type == InputDeviceType_Undefined
 					)
 						if((List_popBack(&w->devices, Buffer_createNull())).genericError)
 							break;
@@ -524,8 +524,8 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 			//Update input
 
-			struct InputDevice *dit = (struct InputDevice*) List_begin(w->devices);
-			struct InputDevice *dend = (struct InputDevice*) List_end(w->devices);
+			InputDevice *dit = (InputDevice*) List_begin(w->devices);
+			InputDevice *dend = (InputDevice*) List_end(w->devices);
 
 			for(; dit != dend; ++dit)
 				InputDevice_markUpdate(*dit);
@@ -594,7 +594,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 	return DefWindowProc(hwnd, message, wParam, lParam);
 }
 
-Bool WindowManager_supportsFormat(struct WindowManager manager, enum WindowFormat format) {
+Bool WindowManager_supportsFormat(WindowManager manager, WindowFormat format) {
 
 	manager;
 
@@ -605,22 +605,22 @@ Bool WindowManager_supportsFormat(struct WindowManager manager, enum WindowForma
 	return format == WindowFormat_rgba8;
 }
 
-struct Error WindowManager_freePhysical(struct WindowManager *manager, struct Window **w) {
+Error WindowManager_freePhysical(WindowManager *manager, Window **w) {
 
 	if(!manager)
-		return (struct Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = GenericError_NullPointer };
 
 	if(!Lock_isLockedForThread(manager->lock))
-		return (struct Error) { .genericError = GenericError_InvalidOperation };
+		return (Error) { .genericError = GenericError_InvalidOperation };
 
 	if(!w || !*w)
-		return (struct Error) { .genericError = GenericError_NullPointer, .errorSubId = 1 };
+		return (Error) { .genericError = GenericError_NullPointer, .errorSubId = 1 };
 
-	if(*w < (struct Window*) List_begin(manager->windows) || *w >= (struct Window*) List_end(manager->windows))
-		return (struct Error) { .genericError = GenericError_OutOfBounds };
+	if(*w < (Window*) List_begin(manager->windows) || *w >= (Window*) List_end(manager->windows))
+		return (Error) { .genericError = GenericError_OutOfBounds };
 
 	if(!((*w)->flags & (WindowFlags_IsActive | WindowFlags_IsVirtual)))
-		return (struct Error) { .genericError = GenericError_InvalidOperation, .paramId = 1 };
+		return (Error) { .genericError = GenericError_InvalidOperation, .paramId = 1 };
 
 	//Ensure our window safely exits
 
@@ -629,16 +629,16 @@ struct Error WindowManager_freePhysical(struct WindowManager *manager, struct Wi
 	return Error_none();
 }
 
-struct Error Window_updatePhysicalTitle(
-	const struct Window *w,
-	struct String title
+Error Window_updatePhysicalTitle(
+	const Window *w,
+	String title
 ) {
 
 	if(!w || !title.ptr || !title.len)
-		return (struct Error) { .genericError = GenericError_NullPointer, .paramId = !!w };
+		return (Error) { .genericError = GenericError_NullPointer, .paramId = !!w };
 
 	if (title.len >= MAX_PATH)
-		return (struct Error) { 
+		return (Error) { 
 			.genericError = GenericError_OutOfBounds, 
 			.paramId = 1, 
 			.paramValue0 = title.len,
@@ -651,15 +651,15 @@ struct Error Window_updatePhysicalTitle(
 	windowName[title.len] = '\0';
 
 	if(!SetWindowTextA(w->nativeHandle, windowName))
-		return (struct Error) { .genericError = GenericError_InvalidOperation };
+		return (Error) { .genericError = GenericError_InvalidOperation };
 
 	return Error_none();
 }
 
-struct Error Window_presentPhysical(const struct Window *w) {
+Error Window_presentPhysical(const Window *w) {
 
 	if(!w || !(w->flags & WindowFlags_IsActive) || !(w->hint & WindowHint_ProvideCPUBuffer))
-		return (struct Error) { .genericError = w ? GenericError_NullPointer : GenericError_InvalidOperation };
+		return (Error) { .genericError = w ? GenericError_NullPointer : GenericError_InvalidOperation };
 
 	PAINTSTRUCT ps;
 	HDC hdcBmp = NULL, oldBmp = NULL;
@@ -668,7 +668,7 @@ struct Error Window_presentPhysical(const struct Window *w) {
 	HDC hdc = BeginPaint(w->nativeHandle, &ps);
 
 	if(!hdc)
-		return (struct Error) { .genericError = GenericError_InvalidOperation, .errorSubId = 1 };
+		return (Error) { .genericError = GenericError_InvalidOperation, .errorSubId = 1 };
 
 	hdcBmp = CreateCompatibleDC(hdc);
 
@@ -700,5 +700,5 @@ cleanup:
 		DeleteDC(hdcBmp);
 
 	EndPaint(w->nativeHandle, &ps);
-	return (struct Error) { .genericError = GenericError_InvalidOperation, .errorSubId = errId };
+	return (Error) { .genericError = GenericError_InvalidOperation, .errorSubId = errId };
 }

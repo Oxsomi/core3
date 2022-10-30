@@ -124,25 +124,29 @@ Bool F32_isValid(F32 v);
 
 //
 
-inline struct Error F32_pow2(F32 v, F32 *res) { 
+inline Error F32_pow2(F32 v, F32 *res) { 
 
 	if(!res)
-		return Error_base(GenericError_NullPointer, 0, 0, 0, 0, 0);
+		return (Error) { .genericError = GenericError_NullPointer };
 
 	*res = v * v; 
-	return F32_isInf(*res) ? Error_base(GenericError_Overflow, 0, 1, 0, *(const U32*)&v, *(const U32*)res) : Error_none();
+	return F32_isInf(*res) ? (Error) { 
+		.genericError = GenericError_Overflow, .paramValue0 = *(const U32*)&v, .paramValue1 = *(const U32*)res 
+	} : Error_none();
 }
 
-inline struct Error F32_pow3(F32 v, F32 *res) { 
+inline Error F32_pow3(F32 v, F32 *res) { 
 
 	if(!res)
 		return Error_base(GenericError_NullPointer, 0, 0, 0, 0, 0);
 
 	*res = v * v * v;
-	return F32_isInf(*res) ? Error_base(GenericError_Overflow, 0, 1, 0, *(const U32*)&v, *(const U32*)res) : Error_none();
+	return F32_isInf(*res) ? (Error) { 
+		.genericError = GenericError_Overflow, .paramValue0 = *(const U32*)&v, .paramValue1 = *(const U32*)res 
+	} : Error_none();
 }
 
-inline struct Error F32_pow4(F32 v, F32 *res) { 
+inline Error F32_pow4(F32 v, F32 *res) { 
 
 	if(!res)
 		return Error_base(GenericError_NullPointer, 0, 0, 0, 0, 0);
@@ -151,19 +155,21 @@ inline struct Error F32_pow4(F32 v, F32 *res) {
 	return F32_isInf(*res) ? Error_base(GenericError_Overflow, 0, 1, 0, *(const U32*)&v, *(const U32*)res) : Error_none();
 }
 
-inline struct Error F32_pow5(F32 v, F32 *res) { 
+inline Error F32_pow5(F32 v, F32 *res) { 
 
 	if(!res)
 		return Error_base(GenericError_NullPointer, 0, 0, 0, 0, 0);
 
 	*res = v * v; *res *= *res * v;
-	return F32_isInf(*res) ? Error_base(GenericError_Overflow, 0, 1, 0, *(const U32*)&v, *(const U32*)res) : Error_none();
+	return F32_isInf(*res) ? (Error) { 
+		.genericError = GenericError_Overflow, .paramValue0 = *(const U32*)&v, .paramValue1 = *(const U32*)res 
+	} : Error_none();
 }
 
-struct Error F32_pow(F32 v, F32 exp, F32 *res);
-struct Error F32_expe(F32 v, F32 *res);
-struct Error F32_exp2(F32 v, F32 *res);
-struct Error F32_exp10(F32 v, F32 *res);
+Error F32_pow(F32 v, F32 exp, F32 *res);
+Error F32_expe(F32 v, F32 *res);
+Error F32_exp2(F32 v, F32 *res);
+Error F32_exp10(F32 v, F32 *res);
 
 F32 F32_log10(F32 v);
 F32 F32_loge(F32 v);
@@ -182,7 +188,7 @@ F32 F32_ceil(F32 v);
 F32 F32_floor(F32 v);
 inline F32 F32_fract(F32 v) { return v - F32_floor(v); }
 
-struct Error F32_mod(F32 v, F32 mod, F32 *result);
+Error F32_mod(F32 v, F32 mod, F32 *result);
 
 inline F32 F32_sign(F32 v) { return v < 0 ? -1.f : (v > 0 ? 1.f : 0.f); }
 inline F32 F32_signInc(F32 v) { return v < 0 ? -1.f : 1.f; }

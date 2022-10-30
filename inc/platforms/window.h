@@ -18,7 +18,7 @@
 //A hint is only used as a *hint* to the impl.
 //The runtime is allowed to ignore this if it's not applicable.
 //
-enum WindowHint {
+typedef enum WindowHint {
 
 	WindowHint_HandleInput				= 1 << 0,
 	WindowHint_AllowFullscreen			= 1 << 1,
@@ -29,34 +29,35 @@ enum WindowHint {
 
 	WindowHint_None						= 0,
 	WindowHint_Default					= WindowHint_HandleInput | WindowHint_AllowFullscreen
-};
+
+} WindowHint;
 
 //Subset of formats that can be used for windows
 //These formats are dependent on the platform too. It's very possible they're not available.
 //
-enum WindowFormat {
+typedef enum WindowFormat {
 	WindowFormat_rgba8		= TextureFormat_rgba8,			//Most common format
 	WindowFormat_hdr10a2	= TextureFormat_rgb10a2,
 	WindowFormat_rgba16f	= TextureFormat_rgba16f,
 	WindowFormat_rgba32f	= TextureFormat_rgba32f
-};
+} WindowFormat;
 
 //Window flags are set by the implementation
 //
-enum WindowFlags {
+typedef enum WindowFlags {
 	WindowFlags_None			= 0,
 	WindowFlags_IsFocussed		= 1 << 0,
 	WindowFlags_IsMinimized		= 1 << 1,
 	WindowFlags_IsVirtual		= 1 << 2,
 	WindowFlags_IsFullscreen	= 1 << 3,
 	WindowFlags_IsActive		= 1 << 4
-};
+} WindowFlags;
 
 #define _RESOLUTION(w, h) (w << 16) | h
 
 //Commonly used resolutions
 //
-enum Resolution {
+typedef enum Resolution {
 	Resolution_Undefined,
 	Resolution_SD			= _RESOLUTION(426, 240),
 	Resolution_360			= _RESOLUTION(640, 360),
@@ -70,11 +71,11 @@ enum Resolution {
 	Resolution_UHD			= _RESOLUTION(3840, 2160),
 	Resolution_8K			= _RESOLUTION(7680, 4320),
 	Resolution_16K			= _RESOLUTION(15360, 8640)
-};
+} Resolution;
 
-inline I32x2 Resolution_get(enum Resolution r) { return I32x2_create2(r >> 16, r & U16_MAX); }
+inline I32x2 Resolution_get(Resolution r) { return I32x2_create2(r >> 16, r & U16_MAX); }
 
-inline enum Resolution Resolution_create(I32x2 v) { 
+inline Resolution Resolution_create(I32x2 v) { 
 
 	if(I32x2_neq2(I32x2_clamp(v, I32x2_zero(), I32x2_xx2(U16_MAX)), v)) 
 		return Resolution_Undefined;
@@ -84,21 +85,21 @@ inline enum Resolution Resolution_create(I32x2 v) {
 
 //Window callbacks
 
-struct Window;
+typedef struct Window Window;
 
-typedef void (*WindowCallback)(struct Window*);
-typedef void (*WindowUpdateCallback)(struct Window*, F32);
-typedef void (*WindowDeviceCallback)(struct Window*, struct InputDevice*);
-typedef void (*WindowDeviceButtonCallback)(struct Window*, struct InputDevice*, InputHandle, Bool);
-typedef void (*WindowDeviceAxisCallback)(struct Window*, struct InputDevice*, InputHandle, F32);
+typedef void (*WindowCallback)(Window*);
+typedef void (*WindowUpdateCallback)(Window*, F32);
+typedef void (*WindowDeviceCallback)(Window*, InputDevice*);
+typedef void (*WindowDeviceButtonCallback)(Window*, InputDevice*, InputHandle, Bool);
+typedef void (*WindowDeviceAxisCallback)(Window*, InputDevice*, InputHandle, F32);
 
-struct WindowCallbacks {
+typedef struct WindowCallbacks {
 	WindowCallback onCreate, onDestroy, onDraw, onResize, onWindowMove, onMonitorChange, onUpdateFocus;
 	WindowUpdateCallback onUpdate;
 	WindowDeviceCallback onDeviceAdd, onDeviceRemove;
 	WindowDeviceButtonCallback onDeviceButton;
 	WindowDeviceAxisCallback onDeviceAxis;
-};
+} WindowCallbacks;
 
 //Hard limits; after this, the runtime won't support new devices/monitors
 
@@ -109,74 +110,75 @@ impl extern const U16 Window_maxMonitors;
 
 typedef U16 WindowHandle;
 
-struct Window {
+typedef struct Window {
 
 	I32x2 offset;
 	I32x2 size;
 
-	struct Buffer cpuVisibleBuffer;
+	Buffer cpuVisibleBuffer;
 
 	void *nativeHandle;
 	void *nativeData;
-	struct Lock lock;
+	Lock lock;
 
-	struct WindowCallbacks callbacks;
+	WindowCallbacks callbacks;
 
 	Ns lastUpdate;
 	Bool isDrawing;
 
-	enum WindowHint hint;
-	enum WindowFormat format;
-	enum WindowFlags flags;
+	WindowHint hint;
+	WindowFormat format;
+	WindowFlags flags;
 
-	struct List devices;				//TODO: Make this a map at some point
-	struct List monitors;
-};
+	List devices;				//TODO: Make this a map at some point
+	List monitors;
+
+} Window;
 
 //Implementation dependent aka physical windows
 
-impl struct Error Window_updatePhysicalTitle(
-	const struct Window *w,
-	struct String title
+impl Error Window_updatePhysicalTitle(
+	const Window *w,
+	String title
 );
 
-impl struct Error Window_presentPhysical(
-	const struct Window *w
+impl Error Window_presentPhysical(
+	const Window *w
 );
 
 //Virtual windows
 
-struct Error Window_resizeCPUBuffer(		//Should be called if virtual or WindowHint_ProvideCPUBuffer
-	struct Window *w, 
+Error Window_resizeCPUBuffer(		//Should be called if virtual or WindowHint_ProvideCPUBuffer
+	Window *w, 
 	Bool copyData, 
 	I32x2 newSize
 );
 
-struct Error Window_storeCPUBufferToDisk(const struct Window *w, struct String filePath);
+Error Window_storeCPUBufferToDisk(const Window *w, String filePath);
 
 //Simple helper functions
 
-inline Bool Window_isVirtual(const struct Window *w) { return w && w->flags & WindowFlags_IsVirtual; }
-inline Bool Window_isMinimized(const struct Window *w) { return w && w->flags & WindowFlags_IsMinimized; }
-inline Bool Window_isFocussed(const struct Window *w) { return w && w->flags & WindowFlags_IsFocussed; }
-inline Bool Window_isFullScreen(const struct Window *w) { return w && w->flags & WindowFlags_IsFullscreen; }
+inline Bool Window_isVirtual(const Window *w) { return w && w->flags & WindowFlags_IsVirtual; }
+inline Bool Window_isMinimized(const Window *w) { return w && w->flags & WindowFlags_IsMinimized; }
+inline Bool Window_isFocussed(const Window *w) { return w && w->flags & WindowFlags_IsFocussed; }
+inline Bool Window_isFullScreen(const Window *w) { return w && w->flags & WindowFlags_IsFullscreen; }
 
-inline Bool Window_doesHandleInput(const struct Window *w) { return w && w->hint & WindowHint_HandleInput; }
-inline Bool Window_doesAllowFullScreen(const struct Window *w) { return w && w->hint & WindowHint_AllowFullscreen; }
+inline Bool Window_doesHandleInput(const Window *w) { return w && w->hint & WindowHint_HandleInput; }
+inline Bool Window_doesAllowFullScreen(const Window *w) { return w && w->hint & WindowHint_AllowFullscreen; }
 
 //Presenting CPU buffer to a file (when virtual) or window when physical
 //This can only be called in a draw function!
 
-inline struct Error Window_presentCPUBuffer(
-	struct Window *w,
-	struct String file
+inline Error Window_presentCPUBuffer(
+	Window *w,
+	String file
 ) {
 
 	if (!w)
-		return (struct Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = GenericError_NullPointer };
 
 	if (!w->isDrawing)
-		return (struct Error) { .genericError = GenericError_InvalidOperation };
+		return (Error) { .genericError = GenericError_InvalidOperation };
 
 	if (Window_isVirtual(w))
 		return Window_storeCPUBufferToDisk(w, file);
@@ -184,5 +186,5 @@ inline struct Error Window_presentCPUBuffer(
 	return Window_presentPhysical(w);
 }
 
-struct Error Window_waitForExit(struct Window *w, Ns maxTimeout);
-Bool Window_terminateVirtual(struct Window *w);
+Error Window_waitForExit(Window *w, Ns maxTimeout);
+Bool Window_terminateVirtual(Window *w);

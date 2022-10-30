@@ -4,22 +4,22 @@
 #include "types/hash.h"
 #include "math/math.h"
 
-struct Error Buffer_getBit(struct Buffer buf, U64 offset, Bool *output) {
+Error Buffer_getBit(Buffer buf, U64 offset, Bool *output) {
 
 	if(!output)
-		return (struct Error) {
+		return (Error) {
 			.genericError = GenericError_NullPointer,
 			.paramId = 2
 		};
 
 	if(!buf.ptr)
-		return (struct Error) {
+		return (Error) {
 			.genericError = GenericError_NullPointer,
 			.paramId = 0
 		};
 
 	if((offset >> 3) >= buf.siz)
-		return (struct Error) {
+		return (Error) {
 			.genericError = GenericError_OutOfBounds,
 			.paramId = 0,
 			.paramValue0 = offset >> 3,
@@ -32,7 +32,7 @@ struct Error Buffer_getBit(struct Buffer buf, U64 offset, Bool *output) {
 
 //Copy forwards
 
-void Buffer_copy(struct Buffer dst, struct Buffer src) {
+void Buffer_copy(Buffer dst, Buffer src) {
 
 	U64 *dstPtr = (U64*)dst.ptr, *dstEnd = dstPtr + (dst.siz >> 3);
 	const U64 *srcPtr = (const U64*)src.ptr, *srcEnd = srcPtr + (src.siz >> 3);
@@ -65,7 +65,7 @@ void Buffer_copy(struct Buffer dst, struct Buffer src) {
 
 //Copy backwards; if ranges are overlapping this might be important
 
-void Buffer_revCopy(struct Buffer dst, struct Buffer src) {
+void Buffer_revCopy(Buffer dst, Buffer src) {
 
 	if(!dst.ptr || !src.ptr || !dst.siz || !src.siz)
 		return;
@@ -101,16 +101,16 @@ void Buffer_revCopy(struct Buffer dst, struct Buffer src) {
 
 //
 
-struct Error Buffer_setBit(struct Buffer buf, U64 offset) {
+Error Buffer_setBit(Buffer buf, U64 offset) {
 
 	if(!buf.ptr)
-		return (struct Error) {
+		return (Error) {
 			.genericError = GenericError_NullPointer,
 			.paramId = 0
 		};
 
 	if((offset >> 3) >= buf.siz)
-		return (struct Error) {
+		return (Error) {
 			.genericError = GenericError_OutOfBounds,
 			.paramId = 0,
 			.paramValue0 = offset >> 3,
@@ -121,16 +121,16 @@ struct Error Buffer_setBit(struct Buffer buf, U64 offset) {
 	return Error_none();
 }
 
-struct Error Buffer_resetBit(struct Buffer buf, U64 offset) {
+Error Buffer_resetBit(Buffer buf, U64 offset) {
 
 	if(!buf.ptr)
-		return (struct Error) {
+		return (Error) {
 			.genericError = GenericError_NullPointer,
 			.paramId = 0
 		};
 
 	if((offset >> 3) >= buf.siz)
-		return (struct Error) {
+		return (Error) {
 			.genericError = GenericError_OutOfBounds,
 			.paramId = 0,
 			.paramValue0 = offset >> 3,
@@ -144,13 +144,13 @@ struct Error Buffer_resetBit(struct Buffer buf, U64 offset) {
 #define BitOp(x, dst, src) {															\
 																						\
 	if(!dst.ptr || !src.ptr)															\
-		return (struct Error) {															\
+		return (Error) {																\
 			.genericError = GenericError_NullPointer,									\
 			.paramId = !src.ptr ? 1 : 0													\
 		};																				\
 																						\
 	if(!dst.siz)																		\
-		return (struct Error) {															\
+		return (Error) {																\
 			.genericError = GenericError_InvalidParameter,								\
 			.paramId = !src.siz ? 1 : 0,												\
 			.paramSubId = 1																\
@@ -167,27 +167,27 @@ struct Error Buffer_resetBit(struct Buffer buf, U64 offset) {
 	return Error_none();																\
 }
 
-struct Error Buffer_bitwiseOr(struct Buffer dst, struct Buffer src)  BitOp(|=, dst, src)
-struct Error Buffer_bitwiseXor(struct Buffer dst, struct Buffer src) BitOp(^=, dst, src)
-struct Error Buffer_bitwiseAnd(struct Buffer dst, struct Buffer src) BitOp(&=, dst, src)
-struct Error Buffer_bitwiseNot(struct Buffer dst) BitOp(=~, dst, dst)
+Error Buffer_bitwiseOr(Buffer dst, Buffer src)  BitOp(|=, dst, src)
+Error Buffer_bitwiseXor(Buffer dst, Buffer src) BitOp(^=, dst, src)
+Error Buffer_bitwiseAnd(Buffer dst, Buffer src) BitOp(&=, dst, src)
+Error Buffer_bitwiseNot(Buffer dst) BitOp(=~, dst, dst)
 
-struct Error Buffer_eq(struct Buffer buf0, struct Buffer buf1, Bool *result) {
+Error Buffer_eq(Buffer buf0, Buffer buf1, Bool *result) {
 	
 	if(!buf0.ptr || !buf1.ptr)
-		return (struct Error) {
+		return (Error) {
 			.genericError = GenericError_NullPointer,
 			.paramId = !buf1.ptr ? 1 : 0
 		};
 
 	if(!result)
-		return (struct Error) {
+		return (Error) {
 			.genericError = GenericError_NullPointer,
 			.paramId = 2
 		};
 
 	if(!buf0.siz || !buf1.siz)
-		return (struct Error) {
+		return (Error) {
 			.genericError = GenericError_InvalidParameter,
 			.paramId = !buf1.siz ? 1 : 0,
 			.paramSubId = 1
@@ -218,9 +218,9 @@ struct Error Buffer_eq(struct Buffer buf0, struct Buffer buf1, Bool *result) {
 	return Error_none();
 }
 
-struct Error Buffer_neq(struct Buffer buf0, struct Buffer buf1, Bool *result) {
+Error Buffer_neq(Buffer buf0, Buffer buf1, Bool *result) {
 
-	struct Error e = Buffer_eq(buf0, buf1, result);
+	Error e = Buffer_eq(buf0, buf1, result);
 
 	if(e.genericError)
 		return e;
@@ -229,7 +229,7 @@ struct Error Buffer_neq(struct Buffer buf0, struct Buffer buf1, Bool *result) {
 	return Error_none();
 }
 
-U64 Buffer_hash(struct Buffer buf) {
+U64 Buffer_hash(Buffer buf) {
 
 	U64 h = FNVHash_create();
 	h = FNVHash_apply(h, buf.siz);
@@ -246,28 +246,28 @@ U64 Buffer_hash(struct Buffer buf) {
 	return h;
 }
 
-struct Error Buffer_setBitRange(struct Buffer dst, U64 dstOff, U64 bits) {
+Error Buffer_setBitRange(Buffer dst, U64 dstOff, U64 bits) {
 
 	if(!dst.ptr)
-		return (struct Error) {
+		return (Error) {
 			.genericError = GenericError_NullPointer,
 			.paramSubId = 0
 		};
 
 	if(!dst.siz)
-		return (struct Error) {
+		return (Error) {
 			.genericError = GenericError_InvalidParameter,
 			.paramSubId = 1
 		};
 
 	if(((dstOff + bits - 1) >> 3) >= dst.siz)
-		return (struct Error) {
+		return (Error) {
 			.genericError = GenericError_OutOfBounds,
 			.paramId = 1
 		};
 
 	if(!bits)
-		return (struct Error) {
+		return (Error) {
 			.genericError = GenericError_InvalidParameter,
 			.paramId = 2
 		};
@@ -308,28 +308,28 @@ struct Error Buffer_setBitRange(struct Buffer dst, U64 dstOff, U64 bits) {
 	return Error_none();
 }
 
-struct Error Buffer_unsetBitRange(struct Buffer dst, U64 dstOff, U64 bits) {
+Error Buffer_unsetBitRange(Buffer dst, U64 dstOff, U64 bits) {
 
 	if(!dst.ptr)
-		return (struct Error) {
+		return (Error) {
 			.genericError = GenericError_NullPointer,
 			.paramSubId = 0
 		};
 
 	if(!dst.siz)
-		return (struct Error) {
+		return (Error) {
 			.genericError = GenericError_InvalidParameter,
 			.paramSubId = 1
 		};
 
 	if(((dstOff + bits - 1) >> 3) >= dst.siz)
-		return (struct Error) {
+		return (Error) {
 			.genericError = GenericError_OutOfBounds,
 			.paramId = 1
 		};
 
 	if(!bits)
-		return (struct Error) {
+		return (Error) {
 			.genericError = GenericError_InvalidParameter,
 			.paramId = 2
 		};
@@ -370,15 +370,15 @@ struct Error Buffer_unsetBitRange(struct Buffer dst, U64 dstOff, U64 bits) {
 	return Error_none();
 }
 
-inline struct Error Buffer_setAllToInternal(struct Buffer buf, U64 b64, U8 b8) {
+inline Error Buffer_setAllToInternal(Buffer buf, U64 b64, U8 b8) {
 
 	if(!buf.ptr)
-		return (struct Error) {
+		return (Error) {
 			.genericError = GenericError_NullPointer
 		};
 
 	if(!buf.siz)
-		return (struct Error) {
+		return (Error) {
 			.genericError = GenericError_InvalidParameter,
 			.paramSubId = 1
 		};
@@ -394,44 +394,44 @@ inline struct Error Buffer_setAllToInternal(struct Buffer buf, U64 b64, U8 b8) {
 	return Error_none();
 }
 
-struct Error Buffer_setAllBits(struct Buffer buf) {
+Error Buffer_setAllBits(Buffer buf) {
 	return Buffer_setAllToInternal(buf, U64_MAX, U8_MAX);
 }
 
-struct Error Buffer_unsetAllBits(struct Buffer buf) {
+Error Buffer_unsetAllBits(Buffer buf) {
 	return Buffer_setAllToInternal(buf, 0, 0);
 }
 
-struct Error Buffer_allocBitsInternal(U64 siz, struct Allocator alloc, struct Buffer *result) {
+Error Buffer_allocBitsInternal(U64 siz, Allocator alloc, Buffer *result) {
 
 	if(!siz)
-		return (struct Error) {
+		return (Error) {
 			.genericError = GenericError_InvalidParameter,
 			.paramId = 0
 		};
 
 	if(!alloc.alloc)
-		return (struct Error) {
+		return (Error) {
 			.genericError = GenericError_NullPointer,
 			.paramId = 1,
 			.paramSubId = 1
 		};
 
 	if(!result)
-		return (struct Error) {
+		return (Error) {
 			.genericError = GenericError_NullPointer,
 			.paramId = 2
 		};
 
 	siz = (siz + 7) >> 3;	//Align to bytes
 
-	struct Error err = alloc.alloc(alloc.ptr, siz, result);
+	Error err = alloc.alloc(alloc.ptr, siz, result);
 
 	if(err.genericError)
 		return err;
 
 	if(!result->ptr)
-		return (struct Error) {
+		return (Error) {
 			.genericError = GenericError_NullPointer,
 			.errorSubId = 1
 		};
@@ -439,9 +439,9 @@ struct Error Buffer_allocBitsInternal(U64 siz, struct Allocator alloc, struct Bu
 	return Error_none();
 }
 
-struct Error Buffer_createZeroBits(U64 siz, struct Allocator alloc, struct Buffer *result) {
+Error Buffer_createZeroBits(U64 siz, Allocator alloc, Buffer *result) {
 
-	struct Error e = Buffer_allocBitsInternal(siz, alloc, result);
+	Error e = Buffer_allocBitsInternal(siz, alloc, result);
 
 	if(e.genericError)
 		return e;
@@ -450,9 +450,9 @@ struct Error Buffer_createZeroBits(U64 siz, struct Allocator alloc, struct Buffe
 	return Error_none();
 }
 
-struct Error Buffer_createOneBits(U64 siz, struct Allocator alloc, struct Buffer *result) {
+Error Buffer_createOneBits(U64 siz, Allocator alloc, Buffer *result) {
 
-	struct Error e = Buffer_allocBitsInternal(siz, alloc, result);
+	Error e = Buffer_allocBitsInternal(siz, alloc, result);
 
 	if(e.genericError)
 		return e;
@@ -461,7 +461,7 @@ struct Error Buffer_createOneBits(U64 siz, struct Allocator alloc, struct Buffer
 	return Error_none();
 }
 
-struct Error Buffer_createCopy(struct Buffer buf, struct Allocator alloc, struct Buffer *result) {
+Error Buffer_createCopy(Buffer buf, Allocator alloc, Buffer *result) {
 
 	if(!buf.ptr || !buf.siz) {
 		*result = Buffer_createNull();
@@ -469,86 +469,75 @@ struct Error Buffer_createCopy(struct Buffer buf, struct Allocator alloc, struct
 	}
 
 	U64 l = buf.siz;
-	struct Error e = Buffer_allocBitsInternal(l << 3, alloc, result);
+	Error e = Buffer_allocBitsInternal(l << 3, alloc, result);
 
 	if(e.genericError)
 		return e;
 
 	for(U64 i = 0, j = l >> 3; i < j; ++i)
-		*((U64*)result->ptr + i) |= *((const U64*)buf.ptr + i);
+		*((U64*)result->ptr + i) = *((const U64*)buf.ptr + i);
 
 	for (U64 i = l >> 3 << 3; i < l; ++i)
-		result->ptr[i] |= buf.ptr[i];
+		result->ptr[i] = buf.ptr[i];
 
 	return Error_none();
 }
 
-struct Error Buffer_free(struct Buffer *buf, struct Allocator alloc) {
+Error Buffer_free(Buffer *buf, Allocator alloc) {
 
 	if(!buf)
-		return (struct Error) {
+		return (Error) {
 			.genericError = GenericError_NullPointer,
 			.paramId = 0
 		};
 
 	if(!buf->ptr)
-		return (struct Error) {
+		return (Error) {
 			.genericError = GenericError_NullPointer,
 			.paramId = 0
 		};
 
 	if(!buf->siz)
-		return (struct Error) {
+		return (Error) {
 			.genericError = GenericError_InvalidParameter,
 			.paramId = 0,
 			.paramSubId = 1
 		};
 
 	if(!alloc.free)
-		return (struct Error) {
+		return (Error) {
 			.genericError = GenericError_NullPointer,
 			.paramId = 1,
 			.paramSubId = 2
 		};
 
-	alloc.free(alloc.ptr, *buf);
+	Error err = alloc.free(alloc.ptr, *buf);
 	*buf = Buffer_createNull();
-	return Error_none();
+	return err;
 }
 
-struct Error Buffer_createEmptyBytes(U64 siz, struct Allocator alloc, struct Buffer *output) {
+Error Buffer_createEmptyBytes(U64 siz, Allocator alloc, Buffer *output) {
 	return Buffer_createZeroBits(siz << 3, alloc, output);
 }
 
-struct Error Buffer_createUninitializedBytes(U64 siz, struct Allocator alloc, struct Buffer *result) {
+Error Buffer_createUninitializedBytes(U64 siz, Allocator alloc, Buffer *result) {
 	return Buffer_allocBitsInternal(siz << 3, alloc, result);
 }
 
-struct Error Buffer_offset(struct Buffer *buf, U64 siz) {
+Error Buffer_offset(Buffer *buf, U64 siz) {
 
-	if(!buf)
-		return (struct Error) {
-			.genericError = GenericError_NullPointer,
-			.paramId = 0
-		};
-
-	if(!buf->ptr)
-		return (struct Error) {
-			.genericError = GenericError_NullPointer,
-			.paramId = 0
-		};
+	if(!buf || !buf->ptr)
+		return (Error) { .genericError = GenericError_NullPointer };
 
 	if(!buf->siz)
-		return (struct Error) {
+		return (Error) {
 			.genericError = GenericError_InvalidParameter,
 			.paramId = 0,
 			.paramSubId = 1
 		};
 
 	if(siz > buf->siz)
-		return (struct Error) {
-			.genericError = GenericError_OutOfBounds
-		};
+		return (Error) { .genericError = GenericError_OutOfBounds };
 
 	buf->ptr += siz;
 	buf->siz -= siz;
@@ -568,17 +557,17 @@ inline void Buffer_copyBytesInternal(U8 *ptr, const void *v, U64 siz) {
 		ptr[i] = *((const U8*)v + i);
 }
 
-struct Error Buffer_appendBuffer(struct Buffer *buf, struct Buffer append) {
+Error Buffer_appendBuffer(Buffer *buf, Buffer append) {
 
 	if(!append.ptr)
-		return (struct Error) {
+		return (Error) {
 			.genericError = GenericError_NullPointer,
 			.paramId = 1
 		};
 
 	void *ptr = buf ? buf->ptr : NULL;
 
-	struct Error e = Buffer_offset(buf, append.siz);
+	Error e = Buffer_offset(buf, append.siz);
 
 	if(e.genericError)
 		return e;
@@ -587,21 +576,19 @@ struct Error Buffer_appendBuffer(struct Buffer *buf, struct Buffer append) {
 	return Error_none();
 }
 
-struct Error Buffer_append(struct Buffer *buf, const void *v, U64 siz) {
+Error Buffer_append(Buffer *buf, const void *v, U64 siz) {
 	return Buffer_appendBuffer(buf, Buffer_createRef((void*) v, siz));
 }
 
-struct Error Buffer_createSubset(struct Buffer buf, U64 offset, U64 siz, struct Buffer *output) {
+Error Buffer_createSubset(Buffer buf, U64 offset, U64 siz, Buffer *output) {
 
-	struct Error e = Buffer_offset(&buf, offset);
+	Error e = Buffer_offset(&buf, offset);
 
 	if(e.genericError)
 		return e;
 		
 	if(siz > buf.siz)
-		return (struct Error) {
-			.genericError = GenericError_OutOfBounds
-		};
+		return (Error) { .genericError = GenericError_OutOfBounds };
 
 	buf.siz = siz;
 	*output = buf;

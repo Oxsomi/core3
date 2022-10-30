@@ -18,7 +18,7 @@ Quat Quat_angleAxis(F32x4 axis, F32 angle) {
 	return q;
 }
 
-//Construct quaternion from euler. Rotation around xyz (pitch, yaw, roll) in degrees
+//Conquaternion from euler. Rotation around xyz (pitch, yaw, roll) in degrees
 //https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles#Euler_angles_to_quaternion_conversion
 //
 Quat Quat_fromEuler(F32x4 pitchYawRollDeg) {
@@ -126,7 +126,7 @@ Quat Quat_targetDirection(F32x4 origin, F32x4 target) {
 	F32 leno = F32x4_len3(origin), lent = F32x4_len3(target);
 
 	F32 leno2 = 0, lent2 = 0;
-	struct Error err;
+	Error err;
 
 	if((err = F32_pow2(leno, &leno2)).genericError || (err = F32_pow2(lent, &lent2)).genericError)
 		return Quat_identity();
@@ -153,7 +153,7 @@ Quat Quat_slerp(Quat a, Quat b, F32 perc) {
 
 	F32 cosTheta2Pow = 0;
 	
-	struct Error err = F32_pow2(cosTheta2, &cosTheta2Pow);
+	Error err = F32_pow2(cosTheta2, &cosTheta2Pow);
 
 	if(err.genericError)
 		return b;

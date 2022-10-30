@@ -26,17 +26,17 @@ void Log_captureStackTrace(void **stack, U64 stackSize, U64 skip) {
 	);
 }
 
-struct CapturedStackTrace {
+typedef struct CapturedStackTrace {
 
 	//Module and symbol
 
-	struct String mod, sym;
+	String mod, sym;
 
 	//File and line don't have to be specified, for external calls
 
-	struct String fil;
+	String fil;
 	U32 lin;
-};
+} CapturedStackTrace;
 
 static const WORD colors[] = {
 	2,	/* green */
@@ -46,7 +46,7 @@ static const WORD colors[] = {
 	12	/* bright red */
 };
 
-void Log_printCapturedStackTraceCustom(const void **stackTrace, U64 stackSize, enum LogLevel lvl, enum LogOptions opt) {
+void Log_printCapturedStackTraceCustom(const void **stackTrace, U64 stackSize, LogLevel lvl, LogOptions opt) {
 
 	if(lvl == LogLevel_Fatal)
 		lvl = LogLevel_Error;
@@ -54,7 +54,7 @@ void Log_printCapturedStackTraceCustom(const void **stackTrace, U64 stackSize, e
 	HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
 	SetConsoleTextAttribute(handle, colors[lvl]);
 
-	struct CapturedStackTrace captured[StackTrace_SIZE] = { 0 };
+	CapturedStackTrace captured[StackTrace_SIZE] = { 0 };
 
 	U64 stackCount = 0;
 
@@ -101,7 +101,7 @@ void Log_printCapturedStackTraceCustom(const void **stackTrace, U64 stackSize, e
 			if (line.FileName && strlen(line.FileName) > MAX_PATH)
 				continue;
 
-			struct CapturedStackTrace *capture = captured + i;
+			CapturedStackTrace *capture = captured + i;
 			capture->mod = String_createRefDynamic(modulePath, MAX_PATH);
 			capture->sym = String_createRefDynamic(symbolName, MAX_PATH);
 
@@ -115,7 +115,7 @@ void Log_printCapturedStackTraceCustom(const void **stackTrace, U64 stackSize, e
 
 			//Copy strings to heap, since they'll go out of scope
 
-			struct Error err;
+			Error err;
 
 			if(capture->mod.len)
 				if ((err = String_createCopy(capture->mod, Platform_instance.alloc, &capture->mod)).genericError)
@@ -153,7 +153,7 @@ void Log_printCapturedStackTraceCustom(const void **stackTrace, U64 stackSize, e
 
 	for (U64 i = 0; i < stackCount; ++i) {
 
-		struct CapturedStackTrace capture = captured[i];
+		CapturedStackTrace capture = captured[i];
 
 		if(!capture.sym.len)
 			printf("%p\n", stackTrace[i]);
@@ -186,7 +186,7 @@ void Log_printCapturedStackTraceCustom(const void **stackTrace, U64 stackSize, e
 		SymCleanup(process);
 }
 
-void Log_log(enum LogLevel lvl, enum LogOptions options, struct LogArgs args) {
+void Log_log(LogLevel lvl, LogOptions options, LogArgs args) {
 
 
 	Ns t = Timer_now();

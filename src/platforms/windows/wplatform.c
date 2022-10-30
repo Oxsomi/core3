@@ -13,7 +13,7 @@
 
 void sigFunc(int signal) {
 
-	struct String msg = String_createRefUnsafeConst("Undefined instruction");
+	String msg = String_createRefUnsafeConst("Undefined instruction");
 
 	switch (signal) {
 		case SIGABRT:	msg = String_createRefUnsafeConst("Abort was called");					break;
@@ -30,28 +30,28 @@ void sigFunc(int signal) {
 	//For debugging purposed however, this is very useful
 	//Turn this off by defining _NO_SIGNAL_HANDLING
 
-	Log_log(LogLevel_Fatal, LogOptions_Default, (struct LogArgs) { .argc = 1, .args = &msg });
+	Log_log(LogLevel_Fatal, LogOptions_Default, (LogArgs) { .argc = 1, .args = &msg });
 	Log_printStackTrace(1, LogLevel_Fatal, LogOptions_Default);
 	exit(signal);
 }
 
-struct Error allocCallback(void *allocator, U64 siz, struct Buffer *output) {
+Error allocCallback(void *allocator, U64 siz, Buffer *output) {
 
 	allocator;
 
 	void *ptr = malloc(siz);
 
 	if(!output)
-		return (struct Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = GenericError_NullPointer };
 
 	if(!ptr)
-		return (struct Error) { .genericError = GenericError_OutOfMemory };
+		return (Error) { .genericError = GenericError_OutOfMemory };
 
-	*output = (struct Buffer) { .ptr = ptr, .siz = siz };
+	*output = (Buffer) { .ptr = ptr, .siz = siz };
 	return Error_none();
 }
 
-struct Error freeCallback(void *allocator, struct Buffer buf) {
+Error freeCallback(void *allocator, Buffer buf) {
 	allocator;
 	free(buf.ptr);
 	return Error_none();

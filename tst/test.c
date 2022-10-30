@@ -3,23 +3,23 @@
 #include "types/allocator.h"
 #include <stdlib.h>
 
-struct Error ourAlloc(void *allocator, U64 siz, struct Buffer *output) {
+Error ourAlloc(void *allocator, U64 siz, Buffer *output) {
 
 	allocator;
 
 	void *ptr = malloc(siz);
 
 	if(!output)
-		return (struct Error) { .genericError = GenericError_NullPointer };
+		return (Error) { .genericError = GenericError_NullPointer };
 
 	if(!ptr)
-		return (struct Error) { .genericError = GenericError_OutOfMemory };
+		return (Error) { .genericError = GenericError_OutOfMemory };
 
-	*output = (struct Buffer) { .ptr = ptr, .siz = siz };
+	*output = (Buffer) { .ptr = ptr, .siz = siz };
 	return Error_none();
 }
 
-struct Error ourFree(void *allocator, struct Buffer buf) {
+Error ourFree(void *allocator, Buffer buf) {
 	allocator;
 	free(buf.ptr);
 	return Error_none();
@@ -35,12 +35,12 @@ int main() {
 	Timer_format(now, nowStr);
 
 	Ns now2 = 0;
-	enum EFormatStatus stat = Timer_parseFormat(&now2, nowStr);
+	EFormatStatus stat = Timer_parseFormat(&now2, nowStr);
 
 	if (stat != FormatStatus_Success || now2 != now)
 		return 1;
 
-	struct Allocator alloc = (struct Allocator) {
+	Allocator alloc = (Allocator) {
 		.alloc = ourAlloc,
 		.free = ourFree,
 		.ptr = NULL
@@ -48,13 +48,13 @@ int main() {
 
 	//Test Buffer
 
-	struct Buffer emp = Buffer_createNull();
-	struct Error err = Buffer_createZeroBits(256, alloc, &emp);
+	Buffer emp = Buffer_createNull();
+	Error err = Buffer_createZeroBits(256, alloc, &emp);
 
 	if(err.genericError)
 		return 4;
 
-	struct Buffer full = Buffer_createNull(); 
+	Buffer full = Buffer_createNull(); 
 	err = Buffer_createOneBits(256, alloc, &full);
 
 	if(err.genericError) {

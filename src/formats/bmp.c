@@ -4,57 +4,57 @@
 
 #pragma pack(push, 1)
 
-struct BMPHeader {
+typedef struct BMPHeader {
 	U16 fileType;
 	U32 fileSize;
 	U16 r0, r1;
 	U32 offsetData;
-};
+} BMPHeader;
 
-struct BMPInfoHeader {
+typedef struct BMPInfoHeader {
 	U32 size;
 	I32 width, height;
 	U16 planes, bitCount;
 	U32 compression, compressedSize;
 	I32 xPixPerM, yPixPerM;
 	U32 colorsUsed, colorsImportant;
-};
+} BMPInfoHeader;
 
-struct BMPColorHeader {
+typedef struct BMPColorHeader {
 	U32 redMask, greenMask, blueMask, alphaMask;
 	U32 colorSpaceType;
 	U32 unused[16];
-};
+} BMPColorHeader;
 
 #pragma pack(pop)
 
 const U16 BMP_magic = 0x4D42;
 const U32 BMP_srgbMagic = 0x73524742;
 
-struct Error BMP_writeRGBA(
-	struct Buffer buf, U16 w, U16 h, Bool isFlipped, 
-	struct Allocator allocator,
-	struct Buffer *result
+Error BMP_writeRGBA(
+	Buffer buf, U16 w, U16 h, Bool isFlipped, 
+	Allocator allocator,
+	Buffer *result
 ) {
 
 	if(buf.siz > I32_MAX || buf.siz != (U64) w * h * 4)
-		return (struct Error) { .genericError = GenericError_InvalidParameter };
+		return (Error) { .genericError = GenericError_InvalidParameter };
 
 	U32 headersSize = (U32) (
-		sizeof(struct BMPHeader) + 
-		sizeof(struct BMPInfoHeader) + 
-		sizeof(struct BMPColorHeader)
+		sizeof(BMPHeader) + 
+		sizeof(BMPInfoHeader) + 
+		sizeof(BMPColorHeader)
 	);
 
-	struct BMPHeader header = (struct BMPHeader) {
+	BMPHeader header = (BMPHeader) {
 		.fileType = BMP_magic,
 		.fileSize = ((I32) buf.siz) * (isFlipped ? -1 : 1),
 		.r0 = 0, .r1 = 0, 
 		.offsetData = headersSize
 	};
 
-	struct BMPInfoHeader infoHeader = (struct BMPInfoHeader) {
-		.size = sizeof(struct BMPInfoHeader),
+	BMPInfoHeader infoHeader = (BMPInfoHeader) {
+		.size = sizeof(BMPInfoHeader),
 		.width = w,
 		.height = h,
 		.planes = 1,
@@ -62,7 +62,7 @@ struct Error BMP_writeRGBA(
 		.compression = 3		//rgba8
 	};
 
-	struct BMPColorHeader colorHeader = (struct BMPColorHeader) {
+	BMPColorHeader colorHeader = (BMPColorHeader) {
 
 		.redMask	= (U32) 0xFF << 16,
 		.greenMask	= (U32) 0xFF << 8,
@@ -72,9 +72,9 @@ struct Error BMP_writeRGBA(
 		.colorSpaceType = BMP_srgbMagic
 	};
 
-	struct Buffer file = Buffer_createNull();
+	Buffer file = Buffer_createNull();
 
-	struct Error err = Buffer_createUninitializedBytes(
+	Error err = Buffer_createUninitializedBytes(
 		headersSize + buf.siz,
 		allocator,
 		&file
@@ -83,7 +83,7 @@ struct Error BMP_writeRGBA(
 	if(err.genericError)
 		return err;
 
-	struct Buffer fileAppend = file;
+	Buffer fileAppend = file;
 
 	if ((err = Buffer_append(&fileAppend, &header, sizeof(header))).genericError) {
 		Buffer_free(&file, allocator);

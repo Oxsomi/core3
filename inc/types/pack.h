@@ -22,9 +22,9 @@ Bool U32_setBit(U32 *packed, U8 off, Bool b);
 
 //Compressing quaternions
 
-struct Quat16 {
+typedef struct Quat16 {
 	I16 arr[4];
-};
+} Quat16;
 
-Quat Quat_unpack(struct Quat16 q);
-struct Quat16 Quat_pack(Quat q);
+Quat Quat_unpack(Quat16 q);
+Quat16 Quat_pack(Quat q);

@@ -1,7 +1,7 @@
 #pragma once
 #include "types/types.h"
 
-enum TexturePrimitive {
+typedef enum TexturePrimitive {
 	TexturePrimitive_Undefined,
 	TexturePrimitive_UNorm,
 	TexturePrimitive_SNorm,
@@ -10,24 +10,24 @@ enum TexturePrimitive {
 	TexturePrimitive_Float,
 	TexturePrimitive_Compressed,
 	TexturePrimitive_Extended
-};
+} TexturePrimitive;
 
-enum TextureAlignment {
+typedef enum TextureAlignment {
 	TextureAlignment_4,
 	TextureAlignment_5,
 	TextureAlignment_6,
 	TextureAlignment_8,
 	TextureAlignment_10,
 	TextureAlignment_12
-};
+} TextureAlignment;
 
-enum TextureCompressionType {
+typedef enum TextureCompressionType {
 	TextureCompressionType_UNorm,
 	TextureCompressionType_SNorm,
 	TextureCompressionType_Float,
 	TextureCompressionType_sRGB,
 	TextureCompressionType_Invalid
-};
+} TextureCompressionType;
 
 #define _TextureFormat(primitive, redBits, greenBits, blueBits, alphaBits) \
 ((alphaBits >> 1) | ((blueBits >> 1) << 6) | ((greenBits >> 1) << 12) | ((redBits >> 1) << 18) | (primitive << 24) | \
@@ -57,7 +57,7 @@ enum TextureCompressionType {
 //For compression, the nibbleSize is replaced with size in uint2s (8-byte)
 //E.g. 0 = 8 byte, 1 = 16 byte
 //
-enum TextureFormat {
+typedef enum TextureFormat {
 
 	//8-bit
 
@@ -309,61 +309,62 @@ enum TextureFormat {
 	TextureFormat_ASTC_12x12_sRGB	= _TextureFormatCompressed(
 		128, TextureAlignment_12, TextureAlignment_12, 
 		TextureCompressionType_sRGB, 1, 1, 1, 1
-	),
-};
+	)
 
-inline enum TexturePrimitive TextureFormat_getPrimitive(enum TextureFormat f) { 
-	return (enum TexturePrimitive)((f >> 24) & 7); 
+} TextureFormat;
+
+inline TexturePrimitive TextureFormat_getPrimitive(TextureFormat f) { 
+	return (TexturePrimitive)((f >> 24) & 7); 
 }
 
-inline Bool TextureFormat_getIsCompressed(enum TextureFormat f) { 
+inline Bool TextureFormat_getIsCompressed(TextureFormat f) { 
 	return TextureFormat_getPrimitive(f) == TexturePrimitive_Compressed; 
 }
 
-inline U64 TextureFormat_getBits(enum TextureFormat f) { 
+inline U64 TextureFormat_getBits(TextureFormat f) { 
 	U64 siz = (f >> 27) + 1;
 	return siz << (TextureFormat_getIsCompressed(f) ? 6 : 2);
 }
 
-inline U64 TextureFormat_getAlphaBits(enum TextureFormat f) { 
+inline U64 TextureFormat_getAlphaBits(TextureFormat f) { 
 	return TextureFormat_getIsCompressed(f) ? f & 7 : (f & 077) << 1; 
 }
 
-inline U64 TextureFormat_getBlueBits(enum TextureFormat f) { 
+inline U64 TextureFormat_getBlueBits(TextureFormat f) { 
 	return TextureFormat_getIsCompressed(f) ? (f >> 6) & 7 : ((f >> 3) & 077) << 1; 
 }
 
-inline U64 TextureFormat_getGreenBits(enum TextureFormat f) { 
+inline U64 TextureFormat_getGreenBits(TextureFormat f) { 
 	return TextureFormat_getIsCompressed(f) ? (f >> 12) & 7 : ((f >> 6) & 077) << 1; 
 }
 
-inline U64 TextureFormat_getRedBits(enum TextureFormat f) { 
+inline U64 TextureFormat_getRedBits(TextureFormat f) { 
 	return TextureFormat_getIsCompressed(f) ? (f >> 18) & 7 : ((f >> 9) & 077) << 1; 
 }
 
-inline Bool TextureFormat_hasRed(enum TextureFormat f) { return TextureFormat_getRedBits(f); }
-inline Bool TextureFormat_hasGreen(enum TextureFormat f) { return TextureFormat_getGreenBits(f); }
-inline Bool TextureFormat_hasBlue(enum TextureFormat f) { return TextureFormat_getBlueBits(f); }
-inline Bool TextureFormat_hasAlpha(enum TextureFormat f) { return TextureFormat_getAlphaBits(f); }
+inline Bool TextureFormat_hasRed(TextureFormat f) { return TextureFormat_getRedBits(f); }
+inline Bool TextureFormat_hasGreen(TextureFormat f) { return TextureFormat_getGreenBits(f); }
+inline Bool TextureFormat_hasBlue(TextureFormat f) { return TextureFormat_getBlueBits(f); }
+inline Bool TextureFormat_hasAlpha(TextureFormat f) { return TextureFormat_getAlphaBits(f); }
 
-inline U8 TextureFormat_getChannels(enum TextureFormat f) {
+inline U8 TextureFormat_getChannels(TextureFormat f) {
 	return 
 		(U8)TextureFormat_hasRed(f)  + (U8)TextureFormat_hasGreen(f) + 
 		(U8)TextureFormat_hasBlue(f) + (U8)TextureFormat_hasAlpha(f);
 }
 
-inline enum TextureCompressionType TextureFormat_getCompressionType(enum TextureFormat f) {
+inline TextureCompressionType TextureFormat_getCompressionType(TextureFormat f) {
 
 	if(!TextureFormat_getIsCompressed(f))
 		return TextureCompressionType_Invalid;
 
-	return (enum TextureCompressionType)((f >> 9) & 7);
+	return (TextureCompressionType)((f >> 9) & 7);
 }
 
 //Get the alignments (x, y) of a texture format
 //Returns false if it doesn't need alignment (so alignment = 1x1)
 
-inline Bool TextureFormat_getAlignment(enum TextureFormat f, U8 *x, U8 *y) {
+inline Bool TextureFormat_getAlignment(TextureFormat f, U8 *x, U8 *y) {
 
 	if(!TextureFormat_getIsCompressed(f))
 		return false;
@@ -377,7 +378,7 @@ inline Bool TextureFormat_getAlignment(enum TextureFormat f, U8 *x, U8 *y) {
 //Get texture's size in bytes
 //Returns U64_MAX if misaligned (compressed formats)
 
-inline U64 TextureFormat_getSize(enum TextureFormat f, U32 w, U32 h) {
+inline U64 TextureFormat_getSize(TextureFormat f, U32 w, U32 h) {
 
 	U8 alignW = 1, alignH = 1;
 

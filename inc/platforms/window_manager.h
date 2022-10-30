@@ -7,74 +7,76 @@
 
 //Our manager can tell us when windows are done being used 
 
-struct WindowManager {
+typedef struct WindowManager {
 	struct Lock lock;
 	struct List windows;
-};
+} WindowManager;
 
 extern const U8 WindowManager_maxTotalVirtualWindowCount;
 impl extern const U8 WindowManager_maxTotalPhysicalWindowCount;
 
+typedef struct Window Window;
+
 //Before doing any actions on WindowManager it needs to be locked.
 //This includes getters, since otherwise the result might vary.
 
-struct Error WindowManager_create(struct WindowManager *result);
-struct Error WindowManager_free(struct WindowManager *manager);
+Error WindowManager_create(WindowManager *result);
+Error WindowManager_free(WindowManager *manager);
 
-impl struct Error WindowManager_createPhysical(
-	struct WindowManager *manager,
+impl Error WindowManager_createPhysical(
+	WindowManager *manager,
 	I32x2 position,
 	I32x2 size, 
-	enum WindowHint hint,
-	struct String title, 
-	struct WindowCallbacks callbacks,
-	enum WindowFormat format,
-	struct Window **result
+	WindowHint hint,
+	String title, 
+	WindowCallbacks callbacks,
+	WindowFormat format,
+	Window **result
 );
 
-impl struct Error WindowManager_freePhysical(struct WindowManager *manager, struct Window **handle);
+impl Error WindowManager_freePhysical(WindowManager *manager, Window **handle);
 
-struct Error WindowManager_waitForExitAll(struct WindowManager *manager, Ns maxTimeout);
+Error WindowManager_waitForExitAll(WindowManager *manager, Ns maxTimeout);
 
-struct Error WindowManager_createVirtual(
-	struct WindowManager *manager, 
+Error WindowManager_createVirtual(
+	WindowManager *manager, 
 	I32x2 size, 
-	struct WindowCallbacks callbacks, 
-	enum WindowFormat format,
-	struct Window **result
+	WindowCallbacks callbacks, 
+	WindowFormat format,
+	Window **result
 );
 
-struct Error WindowManager_freeVirtual(struct WindowManager *manager, struct Window **handle);
+Error WindowManager_freeVirtual(WindowManager *manager, Window **handle);
 
-impl Bool WindowManager_supportsFormat(struct WindowManager manager, enum WindowFormat format);
+impl Bool WindowManager_supportsFormat(WindowManager manager, WindowFormat format);
 
 inline WindowHandle WindowManager_maxWindows() {
 	return (WindowHandle) WindowManager_maxTotalVirtualWindowCount + WindowManager_maxTotalPhysicalWindowCount;
 }
 
-inline Bool WindowManager_lock(struct WindowManager *manager, Ns maxTimeout) {
+inline Bool WindowManager_lock(WindowManager *manager, Ns maxTimeout) {
 	return manager && Lock_lock(&manager->lock, maxTimeout);
 }
 
-inline Bool WindowManager_unlock(struct WindowManager *manager) {
+inline Bool WindowManager_unlock(WindowManager *manager) {
 	return manager && Lock_unlock(&manager->lock);
 }
 
 //Simple helper functions (need locks)
 
-inline struct Window *WindowManager_getWindow(struct WindowManager *manager, WindowHandle windowHandle) {
+inline Window *WindowManager_getWindow(WindowManager *manager, WindowHandle windowHandle) {
 	return 
 		manager && Lock_isLockedForThread(manager->lock) ? 
-			(struct Window*) List_ptr(manager->windows, windowHandle) : NULL;
+			(Window*) List_ptr(manager->windows, windowHandle) : NULL;
 }
 
 //All types of windows
 
-struct Error WindowManager_createWindow(
-	struct WindowManager *manager, 
-	I32x2 position, I32x2 size, enum WindowHint hint, struct String title, 
-	struct WindowCallbacks callbacks, enum WindowFormat format,
-	struct Window **w
+Error WindowManager_createWindow(
+	WindowManager *manager, 
+	I32x2 position, I32x2 size, WindowHint hint, String title, 
+	WindowCallbacks callbacks, WindowFormat format,
+	Window **w
 );
 
-struct Error WindowManager_freeWindow(struct WindowManager *manager, struct Window **w);
+Error WindowManager_freeWindow(WindowManager *manager, Window **w);

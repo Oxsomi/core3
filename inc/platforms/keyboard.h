@@ -3,7 +3,7 @@
 
 typedef struct InputDevice Keyboard;
 
-enum Key {
+typedef enum Key {
 
 	Key_0, Key_1, Key_2, Key_3, Key_4, Key_5, Key_6, Key_7, Key_8, Key_9,
 
@@ -40,15 +40,17 @@ enum Key {
 	Key_Backslash,		Key_Quote,
 
 	Key_Count
-};
+} Key;
 
-enum KeyboardFlags {
+typedef enum KeyboardFlags {
 	KeyboardFlags_Caps,
 	KeyboardFlags_NumLock,
 	KeyboardFlags_ScrollLock,
 	KeyboardFlags_Shift,
 	KeyboardFlags_Control,
 	KeyboardFlags_Alt
-};
+} KeyboardFlags;
 
-struct Error Keyboard_create(Keyboard *result);
+typedef struct Error Error;
+
+Error Keyboard_create(Keyboard *result);

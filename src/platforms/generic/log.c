@@ -2,7 +2,7 @@
 
 #include <stdlib.h>
 
-void Log_printStackTrace(U64 skip, enum LogLevel lvl, enum LogOptions options) {
+void Log_printStackTrace(U64 skip, LogLevel lvl, LogOptions options) {
 
 	StackTrace stackTrace;
 	Log_captureStackTrace(stackTrace, StackTrace_SIZE, skip);
@@ -10,25 +10,25 @@ void Log_printStackTrace(U64 skip, enum LogLevel lvl, enum LogOptions options) {
 	Log_printCapturedStackTrace(stackTrace, lvl, options);
 }
 
-void Log_debug(struct String s, enum LogOptions options) {
-	Log_log(LogLevel_Debug, options, (struct LogArgs){ .argc = 1, .args = &s });
+void Log_debug(String s, LogOptions options) {
+	Log_log(LogLevel_Debug, options, (LogArgs){ .argc = 1, .args = &s });
 }
 
-void Log_performance(struct String s, enum LogOptions options) {
-	Log_log(LogLevel_Performance, options, (struct LogArgs){ .argc = 1, .args = &s });
+void Log_performance(String s, LogOptions options) {
+	Log_log(LogLevel_Performance, options, (LogArgs){ .argc = 1, .args = &s });
 }
 
-void Log_warn(struct String s, enum LogOptions options) {
-	Log_log(LogLevel_Warn, options, (struct LogArgs){ .argc = 1, .args = &s });
+void Log_warn(String s, LogOptions options) {
+	Log_log(LogLevel_Warn, options, (LogArgs){ .argc = 1, .args = &s });
 }
 
-void Log_error(struct String s, enum LogOptions options) {
-	Log_log(LogLevel_Error, options, (struct LogArgs){ .argc = 1, .args = &s });
+void Log_error(String s, LogOptions options) {
+	Log_log(LogLevel_Error, options, (LogArgs){ .argc = 1, .args = &s });
 }
 
-void Log_fatal(struct String s, enum LogOptions options) {
+void Log_fatal(String s, LogOptions options) {
 	Log_printStackTrace(1, LogLevel_Fatal, options);
-	Log_log(LogLevel_Fatal, options, (struct LogArgs){ .argc = 1, .args = &s });
+	Log_log(LogLevel_Fatal, options, (LogArgs){ .argc = 1, .args = &s });
 	exit(1);
 }
 

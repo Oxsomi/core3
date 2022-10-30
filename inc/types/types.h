@@ -61,6 +61,7 @@ extern const Ns days;
 extern const Ns weeks;
 
 extern const U8 U8_MIN;
+extern const C8 C8_MIN;
 extern const U16 U16_MIN;
 extern const U32 U32_MIN;
 extern const U64 U64_MIN;
@@ -71,6 +72,7 @@ extern const I32 I32_MIN;
 extern const I64 I64_MIN;
 
 extern const U8  U8_MAX;
+extern const C8  C8_MAX;
 extern const U16 U16_MAX;
 extern const U32 U32_MAX;
 extern const U64 U64_MAX;
@@ -85,28 +87,28 @@ extern const F32 F32_MAX;
 
 //TODO: Buffer constant possibility
 
-struct Buffer {
+typedef struct Buffer {
 	U8 *ptr;
 	U64 siz;
-};
+} Buffer;
 
 //Char
 
 C8 C8_toLower(C8 c);
 C8 C8_toUpper(C8 c);
 
-enum StringCase {
+typedef enum StringCase {
 	StringCase_Sensitive,			//Prefer when possible; avoids transforming the character
 	StringCase_Insensitive
-};
+} StringCase;
 
-enum StringTransform {
+typedef enum StringTransform {
 	StringTransform_None,
 	StringTransform_Lower,
 	StringTransform_Upper
-};
+} StringTransform;
 
-inline C8 C8_transform(C8 c, enum StringTransform transform) {
+inline C8 C8_transform(C8 c, StringTransform transform) {
 	return transform == StringTransform_None ? c : (
 		transform == StringTransform_Lower ? C8_toLower(c) :
 		C8_toUpper(c)
@@ -162,10 +164,10 @@ inline U8 C8_nyto(C8 c) {
 	return c == '$' ? 63 : U8_MAX;
 }
 
-inline C8 C8_createBin(U8 v) { return (v == 0 ? '0' : (v == 1 ? '1' : (C8)U8_MAX)); }
-inline C8 C8_createOct(U8 v) { return v < 8 ? '0' + v : (C8)U8_MAX; }
-inline C8 C8_createDec(U8 v) { return v < 10 ? '0' + v : (C8)U8_MAX; }
-inline C8 C8_createHex(U8 v) { return v < 10 ? '0' + v : (v < 16 ? 'A' + v - 10 : (C8)U8_MAX); }
+inline C8 C8_createBin(U8 v) { return (v == 0 ? '0' : (v == 1 ? '1' : C8_MAX)); }
+inline C8 C8_createOct(U8 v) { return v < 8 ? '0' + v : C8_MAX; }
+inline C8 C8_createDec(U8 v) { return v < 10 ? '0' + v : C8_MAX; }
+inline C8 C8_createHex(U8 v) { return v < 10 ? '0' + v : (v < 16 ? 'A' + v - 10 : C8_MAX); }
 
 //Nytodecimal: 0-9A-Za-z_$
 
@@ -174,7 +176,7 @@ inline C8 C8_createNyto(U8 v) {
 		v < 36 ? 'A' + v - 10 : (
 			v < 62 ? 'a' + v - 36 : (
 				v == 62 ? '_' : (
-					v == 63 ? '$' : (C8)U8_MAX
+					v == 63 ? '$' : C8_MAX
 				)
 			)
 		)

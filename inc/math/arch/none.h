@@ -2,9 +2,19 @@
 
 //Cast
 
-inline F32x4 F32x4_fromI32x4(I32x4 a) { return (F32x4) { .v = { (F32) I32x4_x(a), (F32) I32x4_y(a), (F32) I32x4_z(a), (F32) I32x4_w(a) } }; }
+inline F32x4 F32x4_fromI32x4(I32x4 a) { 
+	return (F32x4) { .v = { 
+		(F32) I32x4_x(a), (F32) I32x4_y(a), (F32) I32x4_z(a), (F32) I32x4_w(a) 
+	} }; 
+}
+
+inline I32x4 I32x4_fromF32x4(F32x4 a) { 
+	return (I32x4) { .v = { 
+		(I32) F32x4_x(a), (I32) F32x4_y(a), (I32) F32x4_z(a), (I32) F32x4_w(a) 
+	} }; 
+}
+
 inline F32x2 F32x2_fromI32x2(I32x2 a) { return (F32x2) { .v = { (F32) I32x2_x(a), (F32) I32x2_y(a) } }; }
-inline I32x4 I32x4_fromF32x4(F32x4 a) { return (I32x4) { .v = { (I32) F32x4_x(a), (I32) F32x4_y(a), (I32) F32x4_z(a), (I32) F32x4_w(a) } }; }
 inline I32x2 I32x2_fromF32x2(F32x2 a) { return (I32x2) { .v = { (I32) F32x2_x(a), (I32) F32x2_y(a) } }; }
 
 //Arithmetic

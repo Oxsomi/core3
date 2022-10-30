@@ -3,14 +3,14 @@
 
 typedef ShortString TimerFormat;
 
-enum EFormatStatus {
+typedef enum EFormatStatus {
 	FormatStatus_Success,
 	FormatStatus_Overflow,
 	FormatStatus_InvalidValue,
 	FormatStatus_InvalidFormat,
 	FormatStatus_InvalidInput,
 	FormatStatus_InvalidTime
-};
+} EFormatStatus;
 
 Ns Timer_now();
 DNs Timer_elapsed(Ns prev);
@@ -22,4 +22,4 @@ U64 Timer_clocks();
 I64 Timer_clocksElapsed(U64 prevClocks);
 
 void Timer_format(Ns time, TimerFormat timer);
-enum EFormatStatus Timer_parseFormat(Ns *time, TimerFormat format);
+EFormatStatus Timer_parseFormat(Ns *time, TimerFormat format);

@@ -18,9 +18,9 @@
 		return err;																							\
 	}
 
-struct Error Mouse_create(Mouse *result) {
+Error Mouse_create(Mouse *result) {
 
-	struct Error err = InputDevice_create(
+	Error err = InputDevice_create(
 		MouseButton_Count, MouseAxis_Count, InputDeviceType_Mouse, result
 	);
 
