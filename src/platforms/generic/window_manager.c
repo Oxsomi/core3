@@ -21,7 +21,7 @@ Error WindowManager_create(WindowManager *result) {
 
 	if ((err = List_create(
 		WindowManager_maxWindows(), sizeof(Window),
-		EPlatform_instance.alloc,
+		Platform_instance.alloc,
 		&result->windows
 	)).genericError) {
 		Lock_free(&result->lock);
@@ -39,7 +39,7 @@ Error WindowManager_free(WindowManager *manager) {
 	if(!Lock_isLockedForThread(manager->lock) && !WindowManager_lock(manager, 5 * seconds))
 		return (Error) { .genericError = EGenericError_TimedOut };
 
-	Error err = List_free(&manager->windows, EPlatform_instance.alloc);
+	Error err = List_free(&manager->windows, Platform_instance.alloc);
 	
 	if(!WindowManager_unlock(manager))
 		return (Error) { .genericError = EGenericError_InvalidOperation };
@@ -109,7 +109,7 @@ Error WindowManager_createVirtual(
 
 			Error err = Buffer_createEmptyBytes(
 				ETextureFormat_getSize((ETextureFormat) format, I32x2_x(size), I32x2_y(size)),
-				EPlatform_instance.alloc,
+				Platform_instance.alloc,
 				&cpuVisibleBuffer
 			);
 
@@ -119,7 +119,7 @@ Error WindowManager_createVirtual(
 			Lock lock = (Lock) { 0 };
 
 			if ((err = Lock_create(&lock)).genericError) {
-				Buffer_free(&cpuVisibleBuffer, EPlatform_instance.alloc);
+				Buffer_free(&cpuVisibleBuffer, Platform_instance.alloc);
 				return err;
 			}
 
@@ -171,7 +171,7 @@ Error WindowManager_freeVirtual(WindowManager *manager, Window **handle) {
 
 	Error err = Lock_free(&w->lock);
 
-	Error errTemp = Buffer_free(&w->cpuVisibleBuffer, EPlatform_instance.alloc);
+	Error errTemp = Buffer_free(&w->cpuVisibleBuffer, Platform_instance.alloc);
 
 	*w = (Window) { 0 };
 	*handle = NULL;

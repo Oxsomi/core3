@@ -89,7 +89,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 			);
 
 			Buffer buf = Buffer_createNull(); 
-			Error err = Buffer_createUninitializedBytes(size, EPlatform_instance.alloc, &buf);
+			Error err = Buffer_createUninitializedBytes(size, Platform_instance.alloc, &buf);
 
 			if(err.genericError) {
 				Error_printx(err, ELogLevel_Error, ELogOptions_Default);
@@ -336,7 +336,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 		cleanup:
 			LRESULT lr = DefRawInputProc(&data, 1, sizeof(*data));
-			Buffer_free(&buf, EPlatform_instance.alloc);
+			Buffer_free(&buf, Platform_instance.alloc);
 			return lr;
 		}
 
@@ -387,7 +387,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 				}
 
 				if((err = Buffer_createUninitializedBytes(
-					sizeof(HANDLE), EPlatform_instance.alloc, &device.dataExt
+					sizeof(HANDLE), Platform_instance.alloc, &device.dataExt
 				)).genericError) {
 					InputDevice_free(&device);
 					Error_printx(err, ELogLevel_Error, ELogOptions_Default);
@@ -427,7 +427,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 					if(err.genericError) {
 
-						Buffer_free(&device.dataExt, EPlatform_instance.alloc);
+						Buffer_free(&device.dataExt, Platform_instance.alloc);
 						InputDevice_free(&device);
 
 						Log_error(String_createRefUnsafeConst("Couldn't register device; "), ELogOptions_Default);
@@ -445,7 +445,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 					if(pushed)
 						List_popBack(&w->devices, Buffer_createNull());
 
-					Buffer_free(&device.dataExt, EPlatform_instance.alloc);
+					Buffer_free(&device.dataExt, Platform_instance.alloc);
 					InputDevice_free(&device);
 
 					Log_error(String_createRefUnsafeConst("Couldn't create raw input device"), ELogOptions_Default);

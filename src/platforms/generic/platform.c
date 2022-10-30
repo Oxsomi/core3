@@ -3,21 +3,21 @@
 #include "types/error.h"
 #include "types/buffer.h"
 
-Platform EPlatform_instance = { 0 };
+Platform Platform_instance = { 0 };
 
-Error EPlatform_create(
+Error Platform_create(
 	int cmdArgc, const C8 *cmdArgs[], 
 	void *data, 
 	FreeFunc free, AllocFunc alloc, void *allocator
 ) {
 
-	if(EPlatform_instance.platformType != EPlatform_Uninitialized)
-		return Error_base(EGenericError_InvalidOperation, 0, 0, 0, EPlatform_instance.platformType, 0);
+	if(Platform_instance.platformType != EPlatform_Uninitialized)
+		return Error_base(EGenericError_InvalidOperation, 0, 0, 0, Platform_instance.platformType, 0);
 
 	if(!cmdArgc)
 		return Error_base(EGenericError_InvalidParameter, 0, 1, 0, 0, 0);
 
-	EPlatform_instance =	(Platform) {
+	Platform_instance =	(Platform) {
 		.platformType = _PLATFORM_TYPE,
 		.data = data,
 		.alloc = (Allocator) {
@@ -27,10 +27,10 @@ Error EPlatform_create(
 		}
 	};
 
-	Error err = WindowManager_create(&EPlatform_instance.windowManager);
+	Error err = WindowManager_create(&Platform_instance.windowManager);
 
 	if (err.genericError) {
-		EPlatform_instance =	(Platform) { 0 };
+		Platform_instance =	(Platform) { 0 };
 		return err;
 	}
 
@@ -38,11 +38,11 @@ Error EPlatform_create(
 
 	if(cmdArgc > 1) {
 
-		err = StringList_create(cmdArgc - 1, EPlatform_instance.alloc, &sl);
+		err = StringList_create(cmdArgc - 1, Platform_instance.alloc, &sl);
 
 		if (err.genericError) {
-			WindowManager_free(&EPlatform_instance.windowManager);
-			EPlatform_instance =	(Platform) { 0 };
+			WindowManager_free(&Platform_instance.windowManager);
+			Platform_instance =	(Platform) { 0 };
 			return err;
 		}
 
@@ -53,18 +53,18 @@ Error EPlatform_create(
 			sl.ptr[i - 1] = String_createRefUnsafeConst(cmdArgs[i]);
 	}
 
-	EPlatform_instance.args = sl;
+	Platform_instance.args = sl;
 
 	return Error_none();
 }
 
 void Program_cleanup() {
 
-	if(EPlatform_instance.platformType == EPlatform_Uninitialized)
+	if(Platform_instance.platformType == EPlatform_Uninitialized)
 		return;
 
-	WindowManager_free(&EPlatform_instance.windowManager);
-	StringList_free(&EPlatform_instance.args, EPlatform_instance.alloc);
+	WindowManager_free(&Platform_instance.windowManager);
+	StringList_free(&Platform_instance.args, Platform_instance.alloc);
 
-	EPlatform_instance =	(Platform) { 0 };
+	Platform_instance =	(Platform) { 0 };
 }

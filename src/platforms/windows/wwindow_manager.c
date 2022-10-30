@@ -94,7 +94,7 @@ Error WindowManager_createPhysical(
 	//Create native window
 
 	WNDCLASSEXA wc = (WNDCLASSEXA){ 0 };
-	HINSTANCE mainModule = EPlatform_instance.data;
+	HINSTANCE mainModule = Platform_instance.data;
 
 	wc.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
 	wc.lpfnWndProc = WWindow_onCallback;
@@ -230,7 +230,7 @@ Error WindowManager_createPhysical(
 
 	List devices = List_createEmpty(sizeof(InputDevice)), monitors = List_createEmpty(sizeof(Monitor));
 
-	if ((err = List_reserve(&devices, Window_maxDevices, EPlatform_instance.alloc)).genericError) {
+	if ((err = List_reserve(&devices, Window_maxDevices, Platform_instance.alloc)).genericError) {
 
 		Lock_free(&lock);
 
@@ -243,9 +243,9 @@ Error WindowManager_createPhysical(
 		return err;
 	}
 
-	if ((err = List_reserve(&monitors, Window_maxMonitors, EPlatform_instance.alloc)).genericError) {
+	if ((err = List_reserve(&monitors, Window_maxMonitors, Platform_instance.alloc)).genericError) {
 
-		List_free(&devices, EPlatform_instance.alloc);
+		List_free(&devices, Platform_instance.alloc);
 		Lock_free(&lock);
 
 		if(nativeData)

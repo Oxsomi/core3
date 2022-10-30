@@ -16,7 +16,7 @@ void Error_printx(Error err, ELogLevel logLevel, ELogOptions options) {
 		return;
 
 	String str = String_createRefUnsafeConst(EGenericError_toString[err.genericError]);
-	Allocator alloc = EPlatform_instance.alloc;
+	Allocator alloc = Platform_instance.alloc;
 
 	if(err.errorSubId) {
 

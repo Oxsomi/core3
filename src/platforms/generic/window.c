@@ -115,7 +115,7 @@ Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 
 		U64 toAllocate = linSiz * 5 / 4;
 
-		Error err = Buffer_createUninitializedBytes(toAllocate, EPlatform_instance.alloc, &neo);
+		Error err = Buffer_createUninitializedBytes(toAllocate, Platform_instance.alloc, &neo);
 
 		if(err.genericError)
 			return err;
@@ -129,7 +129,7 @@ Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 
 		U64 toAllocate = linSiz * 5 / 4;
 
-		Error err = Buffer_createUninitializedBytes(toAllocate, EPlatform_instance.alloc, &neo);
+		Error err = Buffer_createUninitializedBytes(toAllocate, Platform_instance.alloc, &neo);
 
 		if(err.genericError)
 			return err;
@@ -162,7 +162,7 @@ Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 				if(err.genericError) {
 				
 					if(resize)
-						Buffer_free(&neo, EPlatform_instance.alloc);
+						Buffer_free(&neo, Platform_instance.alloc);
 
 					return err;
 				}
@@ -184,7 +184,7 @@ Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 			if(err.genericError) {
 
 				if(resize)
-					Buffer_free(&neo, EPlatform_instance.alloc);
+					Buffer_free(&neo, Platform_instance.alloc);
 
 				return err;
 			}
@@ -195,7 +195,7 @@ Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 			if(err.genericError) {
 
 				if(resize)
-					Buffer_free(&neo, EPlatform_instance.alloc);
+					Buffer_free(&neo, Platform_instance.alloc);
 
 				return err;
 			}
@@ -227,7 +227,7 @@ Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 					if (err.genericError) {
 
 						if(resize)
-							Buffer_free(&neo, EPlatform_instance.alloc);
+							Buffer_free(&neo, Platform_instance.alloc);
 
 						return err;
 					}
@@ -278,7 +278,7 @@ Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 
 		//If this gives an error, we don't care because we already have the new buffer
 
-		Error err = Buffer_free(&old, EPlatform_instance.alloc);
+		Error err = Buffer_free(&old, Platform_instance.alloc);
 		err;
 	}
 
@@ -307,14 +307,14 @@ Error Window_storeCPUBufferToDisk(const Window *w, String filePath) {
 
 	Error err = BMP_writeRGBA(
 		buf, (U16) I32x2_x(w->size), (U16) I32x2_y(w->size),
-		false, EPlatform_instance.alloc, &file
+		false, Platform_instance.alloc, &file
 	);
 
 	if(err.genericError)
 		return err;
 
 	err = File_write(file, filePath);
-	Buffer_free(&file, EPlatform_instance.alloc);
+	Buffer_free(&file, Platform_instance.alloc);
 
 	return err;
 }
@@ -324,9 +324,9 @@ Bool Window_terminateVirtual(Window *w) {
 	if(!w || !Window_isVirtual(w))
 		return false;
 
-	if(!Lock_isLockedForThread(w->lock) || !Lock_isLockedForThread(EPlatform_instance.windowManager.lock))
+	if(!Lock_isLockedForThread(w->lock) || !Lock_isLockedForThread(Platform_instance.windowManager.lock))
 		return false;
 
 	w->flags &= ~EWindowFlags_IsActive;
-	return !WindowManager_freeVirtual(&EPlatform_instance.windowManager, &w).genericError;
+	return !WindowManager_freeVirtual(&Platform_instance.windowManager, &w).genericError;
 }

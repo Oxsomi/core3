@@ -52,14 +52,14 @@ Error InputDevice_create(U16 buttons, U16 axes, EInputDeviceType type, InputDevi
 	U64 handles = sizeof(InputAxis) * axes + sizeof(InputButton) * buttons;
 	U64 states = sizeof(F32) * 2 * axes + (((U64)buttons * 2 + 7) >> 3);
 
-	Error err = Buffer_createZeroBits(handles, EPlatform_instance.alloc, &result->handles);
+	Error err = Buffer_createZeroBits(handles, Platform_instance.alloc, &result->handles);
 
 	if (err.genericError) {
 		InputDevice_free(result);
 		return err;
 	}
 
-	err = Buffer_createZeroBits(states, EPlatform_instance.alloc, &result->states);
+	err = Buffer_createZeroBits(states, Platform_instance.alloc, &result->states);
 
 	if (err.genericError) {
 		InputDevice_free(result);
@@ -128,8 +128,8 @@ Error InputDevice_free(InputDevice *dev) {
 	if(dev->type == EInputDeviceType_Undefined)
 		return Error_none();
 
-	void *allocator = EPlatform_instance.alloc.ptr;
-	FreeFunc free = EPlatform_instance.alloc.free;
+	void *allocator = Platform_instance.alloc.ptr;
+	FreeFunc free = Platform_instance.alloc.free;
 
 	Error err = free(allocator, dev->handles), errTemp;
 

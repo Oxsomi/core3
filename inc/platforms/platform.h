@@ -23,9 +23,9 @@ typedef struct Platform {
 
 } Platform;
 
-extern Platform EPlatform_instance;
+extern Platform Platform_instance;
 
-Error EPlatform_create(
+Error Platform_create(
 	int cmdArgc, const C8 *cmdArgs[], 
 	void *data,
 	FreeFunc free, AllocFunc alloc, void *allocator

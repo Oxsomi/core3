@@ -68,7 +68,7 @@ int main(int argc, const char *argv[]) {
 		signal(SIGTERM, sigFunc);
 	#endif
 
-	EPlatform_create(argc, argv, GetModuleHandleA(NULL), freeCallback, allocCallback, NULL);
+	Platform_create(argc, argv, GetModuleHandleA(NULL), freeCallback, allocCallback, NULL);
 
 	int res = Program_run();
 	Program_exit();

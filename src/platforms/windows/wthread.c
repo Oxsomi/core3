@@ -48,8 +48,8 @@ Error Thread_create(
 
 	Buffer buf = Buffer_createNull();
 
-	Error err = EPlatform_instance.alloc.alloc(
-		EPlatform_instance.alloc.ptr, sizeof(Thread), &buf
+	Error err = Platform_instance.alloc.alloc(
+		Platform_instance.alloc.ptr, sizeof(Thread), &buf
 	);
 
 	if (err.genericError)

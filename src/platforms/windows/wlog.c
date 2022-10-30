@@ -118,15 +118,15 @@ void Log_printCapturedStackTraceCustom(const void **stackTrace, U64 stackSize, E
 			Error err;
 
 			if(capture->mod.len)
-				if ((err = String_createCopy(capture->mod, EPlatform_instance.alloc, &capture->mod)).genericError)
+				if ((err = String_createCopy(capture->mod, Platform_instance.alloc, &capture->mod)).genericError)
 					goto cleanup;
 
 			if(capture->sym.len)
-				if ((err = String_createCopy(capture->sym, EPlatform_instance.alloc, &capture->sym)).genericError)
+				if ((err = String_createCopy(capture->sym, Platform_instance.alloc, &capture->sym)).genericError)
 					goto cleanup;
 
 			if(capture->fil.len)
-				if ((err = String_createCopy(capture->fil, EPlatform_instance.alloc, &capture->fil)).genericError)
+				if ((err = String_createCopy(capture->fil, Platform_instance.alloc, &capture->fil)).genericError)
 					goto cleanup;
 
 			capture->lin = line.LineNumber;
@@ -137,9 +137,9 @@ void Log_printCapturedStackTraceCustom(const void **stackTrace, U64 stackSize, E
 		cleanup:
 			
 			for (U64 j = 0; j < i; ++j) {
-				String_free(&captured[j].fil, EPlatform_instance.alloc);
-				String_free(&captured[j].sym, EPlatform_instance.alloc);
-				String_free(&captured[j].mod, EPlatform_instance.alloc);
+				String_free(&captured[j].fil, Platform_instance.alloc);
+				String_free(&captured[j].sym, Platform_instance.alloc);
+				String_free(&captured[j].mod, Platform_instance.alloc);
 			}
 
 			Error_printx(err, lvl, opt);
@@ -177,9 +177,9 @@ void Log_printCapturedStackTraceCustom(const void **stackTrace, U64 stackSize, E
 
 		//We now don't need the strings anymore
 
-		String_free(&capture.fil, EPlatform_instance.alloc);
-		String_free(&capture.sym, EPlatform_instance.alloc);
-		String_free(&capture.mod, EPlatform_instance.alloc);
+		String_free(&capture.fil, Platform_instance.alloc);
+		String_free(&capture.sym, Platform_instance.alloc);
+		String_free(&capture.mod, Platform_instance.alloc);
 	}
 
 	if(hasSymbols)

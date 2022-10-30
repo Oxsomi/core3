@@ -8,8 +8,8 @@ Error Thread_free(Thread **thread) {
 	if(!thread || !*thread)
 		return (Error) { .genericError = EGenericError_NullPointer };
 
-	FreeFunc free = EPlatform_instance.alloc.free;
-	void *allocator = EPlatform_instance.alloc.ptr;
+	FreeFunc free = Platform_instance.alloc.free;
+	void *allocator = Platform_instance.alloc.ptr;
 
 	Error err = free(allocator, Buffer_createRef(*thread, sizeof(Thread)));
 	*thread = NULL;
