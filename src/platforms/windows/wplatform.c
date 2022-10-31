@@ -57,6 +57,8 @@ Error freeCallback(void *allocator, Buffer buf) {
 	return Error_none();
 }
 
+WORD oldColor = 0;
+
 int main(int argc, const char *argv[]) {
 	
 	#ifndef _NO_SIGNAL_HANDLING
@@ -67,12 +69,21 @@ int main(int argc, const char *argv[]) {
 		signal(SIGSEGV, sigFunc);
 		signal(SIGTERM, sigFunc);
 	#endif
+	
+	CONSOLE_SCREEN_BUFFER_INFO info;
+	GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &info);
+	oldColor = info.wAttributes;
 
 	Platform_create(argc, argv, GetModuleHandleA(NULL), freeCallback, allocCallback, NULL);
 
 	int res = Program_run();
 	Program_exit();
+	Program_cleanupExt();
 	Program_cleanup();
 
 	return res;
+}
+
+void Program_cleanupExt() {
+	SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), oldColor);
 }

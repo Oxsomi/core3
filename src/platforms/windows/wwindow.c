@@ -5,7 +5,8 @@
 #include "platforms/input_device.h"
 #include "platforms/keyboard.h"
 #include "platforms/mouse.h"
-#include "platforms/errorx.h"
+#include "platforms/ext/errorx.h"
+#include "platforms/ext/bufferx.h"
 #include "types/timer.h"
 
 #include <stdlib.h>
@@ -89,7 +90,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 			);
 
 			Buffer buf = Buffer_createNull(); 
-			Error err = Buffer_createUninitializedBytes(size, Platform_instance.alloc, &buf);
+			Error err = Buffer_createUninitializedBytesx(size, &buf);
 
 			if(err.genericError) {
 				Error_printx(err, ELogLevel_Error, ELogOptions_Default);
@@ -336,7 +337,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 		cleanup:
 			LRESULT lr = DefRawInputProc(&data, 1, sizeof(*data));
-			Buffer_free(&buf, Platform_instance.alloc);
+			Buffer_freex(&buf);
 			return lr;
 		}
 
@@ -386,9 +387,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 					break;
 				}
 
-				if((err = Buffer_createUninitializedBytes(
-					sizeof(HANDLE), Platform_instance.alloc, &device.dataExt
-				)).genericError) {
+				if((err = Buffer_createUninitializedBytesx(sizeof(HANDLE), &device.dataExt)).genericError) {
 					InputDevice_free(&device);
 					Error_printx(err, ELogLevel_Error, ELogOptions_Default);
 					break;
@@ -427,7 +426,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 					if(err.genericError) {
 
-						Buffer_free(&device.dataExt, Platform_instance.alloc);
+						Buffer_freex(&device.dataExt);
 						InputDevice_free(&device);
 
 						Log_error(String_createRefUnsafeConst("Couldn't register device; "), ELogOptions_Default);
@@ -445,7 +444,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 					if(pushed)
 						List_popBack(&w->devices, Buffer_createNull());
 
-					Buffer_free(&device.dataExt, Platform_instance.alloc);
+					Buffer_freex(&device.dataExt);
 					InputDevice_free(&device);
 
 					Log_error(String_createRefUnsafeConst("Couldn't create raw input device"), ELogOptions_Default);

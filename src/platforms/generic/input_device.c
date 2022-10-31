@@ -2,7 +2,7 @@
 #include "types/error.h"
 #include "platforms/input_device.h"
 #include "platforms/platform.h"
-#include "types/buffer.h"
+#include "platforms/ext/bufferx.h"
 
 //Private helpers
 
@@ -52,14 +52,14 @@ Error InputDevice_create(U16 buttons, U16 axes, EInputDeviceType type, InputDevi
 	U64 handles = sizeof(InputAxis) * axes + sizeof(InputButton) * buttons;
 	U64 states = sizeof(F32) * 2 * axes + (((U64)buttons * 2 + 7) >> 3);
 
-	Error err = Buffer_createZeroBits(handles, Platform_instance.alloc, &result->handles);
+	Error err = Buffer_createEmptyBytesx(handles, &result->handles);
 
 	if (err.genericError) {
 		InputDevice_free(result);
 		return err;
 	}
 
-	err = Buffer_createZeroBits(states, Platform_instance.alloc, &result->states);
+	err = Buffer_createEmptyBytesx(states, &result->states);
 
 	if (err.genericError) {
 		InputDevice_free(result);

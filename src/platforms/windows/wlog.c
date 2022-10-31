@@ -1,7 +1,8 @@
 #include "platforms/log.h"
 #include "platforms/thread.h"
 #include "platforms/platform.h"
-#include "platforms/errorx.h"
+#include "platforms/ext/errorx.h"
+#include "platforms/ext/stringx.h"
 #include "types/timer.h"
 
 //Unfortunately before Windows 10 it doesn't support printing colors into console using printf
@@ -118,15 +119,15 @@ void Log_printCapturedStackTraceCustom(const void **stackTrace, U64 stackSize, E
 			Error err;
 
 			if(capture->mod.len)
-				if ((err = String_createCopy(capture->mod, Platform_instance.alloc, &capture->mod)).genericError)
+				if ((err = String_createCopyx(capture->mod, &capture->mod)).genericError)
 					goto cleanup;
 
 			if(capture->sym.len)
-				if ((err = String_createCopy(capture->sym, Platform_instance.alloc, &capture->sym)).genericError)
+				if ((err = String_createCopyx(capture->sym, &capture->sym)).genericError)
 					goto cleanup;
 
 			if(capture->fil.len)
-				if ((err = String_createCopy(capture->fil, Platform_instance.alloc, &capture->fil)).genericError)
+				if ((err = String_createCopyx(capture->fil, &capture->fil)).genericError)
 					goto cleanup;
 
 			capture->lin = line.LineNumber;
@@ -137,9 +138,9 @@ void Log_printCapturedStackTraceCustom(const void **stackTrace, U64 stackSize, E
 		cleanup:
 			
 			for (U64 j = 0; j < i; ++j) {
-				String_free(&captured[j].fil, Platform_instance.alloc);
-				String_free(&captured[j].sym, Platform_instance.alloc);
-				String_free(&captured[j].mod, Platform_instance.alloc);
+				String_freex(&captured[j].fil);
+				String_freex(&captured[j].sym);
+				String_freex(&captured[j].mod);
 			}
 
 			Error_printx(err, lvl, opt);
@@ -177,9 +178,9 @@ void Log_printCapturedStackTraceCustom(const void **stackTrace, U64 stackSize, E
 
 		//We now don't need the strings anymore
 
-		String_free(&capture.fil, Platform_instance.alloc);
-		String_free(&capture.sym, Platform_instance.alloc);
-		String_free(&capture.mod, Platform_instance.alloc);
+		String_freex(&capture.fil);
+		String_freex(&capture.sym);
+		String_freex(&capture.mod);
 	}
 
 	if(hasSymbols)

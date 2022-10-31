@@ -50,15 +50,15 @@ inline Buffer List_at(List list, U64 offset) {
 Error List_eq(List a, List b, Bool *result);
 Error List_neq(List a, List b, Bool *result);
 
+inline List List_createEmpty(U64 stride) { return (List) { .stride = stride }; }
+Error List_createFromBuffer(Buffer buf, U64 stride, Bool isConst, List *result);
+Error List_createSubset(List list, U64 index, U64 length, List *result);
+
 Error List_create(U64 length, U64 stride, Allocator allocator, List *result);
 Error List_createNullBytes(U64 length, U64 stride, Allocator allocator, List *result);
 Error List_createRepeated(U64 length, U64 stride, Buffer data, Allocator allocator, List *result);
-inline List List_createEmpty(U64 stride) { return (List) { .stride = stride }; }
-
-Error List_createFromBuffer(Buffer buf, U64 stride, Bool isConst, List *result);
 
 Error List_createCopy(List list, Allocator allocator, List *result);
-Error List_createSubset(List list, U64 index, U64 length, List *result);
 Error List_createSubsetReverse(
 	List list, 
 	U64 index,

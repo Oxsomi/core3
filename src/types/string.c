@@ -274,7 +274,7 @@ Error String_free(String *str, Allocator alloc) {
 																		\
 	if (result->len)													\
 		return (Error) { 												\
-			.genericError = EGenericError_InvalidOperation, 				\
+			.genericError = EGenericError_InvalidOperation, 			\
 			.errorSubId = 1 											\
 		};																\
 																		\

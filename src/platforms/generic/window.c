@@ -7,7 +7,8 @@
 #include "types/string.h"
 #include "types/timer.h"
 #include "formats/texture.h"
-#include "formats/bmp.h"
+#include "platforms/ext/bmpx.h"
+#include "platforms/ext/bufferx.h"
 
 Error Window_waitForExit(Window *w, Ns maxTimeout) {
 
@@ -115,7 +116,7 @@ Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 
 		U64 toAllocate = linSiz * 5 / 4;
 
-		Error err = Buffer_createUninitializedBytes(toAllocate, Platform_instance.alloc, &neo);
+		Error err = Buffer_createUninitializedBytesx(toAllocate, &neo);
 
 		if(err.genericError)
 			return err;
@@ -129,7 +130,7 @@ Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 
 		U64 toAllocate = linSiz * 5 / 4;
 
-		Error err = Buffer_createUninitializedBytes(toAllocate, Platform_instance.alloc, &neo);
+		Error err = Buffer_createUninitializedBytesx(toAllocate, &neo);
 
 		if(err.genericError)
 			return err;
@@ -162,7 +163,7 @@ Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 				if(err.genericError) {
 				
 					if(resize)
-						Buffer_free(&neo, Platform_instance.alloc);
+						Buffer_freex(&neo);
 
 					return err;
 				}
@@ -184,7 +185,7 @@ Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 			if(err.genericError) {
 
 				if(resize)
-					Buffer_free(&neo, Platform_instance.alloc);
+					Buffer_freex(&neo);
 
 				return err;
 			}
@@ -195,7 +196,7 @@ Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 			if(err.genericError) {
 
 				if(resize)
-					Buffer_free(&neo, Platform_instance.alloc);
+					Buffer_freex(&neo);
 
 				return err;
 			}
@@ -227,7 +228,7 @@ Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 					if (err.genericError) {
 
 						if(resize)
-							Buffer_free(&neo, Platform_instance.alloc);
+							Buffer_freex(&neo);
 
 						return err;
 					}
@@ -278,7 +279,7 @@ Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 
 		//If this gives an error, we don't care because we already have the new buffer
 
-		Error err = Buffer_free(&old, Platform_instance.alloc);
+		Error err = Buffer_freex(&old);
 		err;
 	}
 
@@ -305,16 +306,16 @@ Error Window_storeCPUBufferToDisk(const Window *w, String filePath) {
 
 	Buffer file = Buffer_createNull();
 
-	Error err = BMP_writeRGBA(
+	Error err = BMP_writeRGBAx(
 		buf, (U16) I32x2_x(w->size), (U16) I32x2_y(w->size),
-		false, Platform_instance.alloc, &file
+		false, &file
 	);
 
 	if(err.genericError)
 		return err;
 
 	err = File_write(file, filePath);
-	Buffer_free(&file, Platform_instance.alloc);
+	Buffer_freex(&file);
 
 	return err;
 }

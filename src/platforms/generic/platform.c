@@ -1,7 +1,7 @@
 #include "platforms/platform.h"
 #include "platforms/log.h"
+#include "platforms/ext/stringx.h"
 #include "types/error.h"
-#include "types/buffer.h"
 
 Platform Platform_instance = { 0 };
 
@@ -38,7 +38,7 @@ Error Platform_create(
 
 	if(cmdArgc > 1) {
 
-		err = StringList_create(cmdArgc - 1, Platform_instance.alloc, &sl);
+		err = StringList_createx(cmdArgc - 1, &sl);
 
 		if (err.genericError) {
 			WindowManager_free(&Platform_instance.windowManager);
@@ -64,7 +64,7 @@ void Program_cleanup() {
 		return;
 
 	WindowManager_free(&Platform_instance.windowManager);
-	StringList_free(&Platform_instance.args, Platform_instance.alloc);
+	StringList_freex(&Platform_instance.args);
 
 	Platform_instance =	(Platform) { 0 };
 }

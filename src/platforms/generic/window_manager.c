@@ -1,6 +1,8 @@
 #include "platforms/window_manager.h"
 #include "platforms/platform.h"
 #include "platforms/thread.h"
+#include "platforms/ext/bufferx.h"
+#include "platforms/ext/listx.h"
 #include "types/timer.h"
 #include "types/buffer.h"
 
@@ -19,9 +21,8 @@ Error WindowManager_create(WindowManager *result) {
 	if((err = Lock_create(&result->lock)).genericError)
 		return err;
 
-	if ((err = List_create(
+	if ((err = List_createx(
 		WindowManager_maxWindows(), sizeof(Window),
-		Platform_instance.alloc,
 		&result->windows
 	)).genericError) {
 		Lock_free(&result->lock);
@@ -39,7 +40,7 @@ Error WindowManager_free(WindowManager *manager) {
 	if(!Lock_isLockedForThread(manager->lock) && !WindowManager_lock(manager, 5 * seconds))
 		return (Error) { .genericError = EGenericError_TimedOut };
 
-	Error err = List_free(&manager->windows, Platform_instance.alloc);
+	Error err = List_freex(&manager->windows);
 	
 	if(!WindowManager_unlock(manager))
 		return (Error) { .genericError = EGenericError_InvalidOperation };
@@ -107,9 +108,8 @@ Error WindowManager_createVirtual(
 
 			Buffer cpuVisibleBuffer = Buffer_createNull();
 
-			Error err = Buffer_createEmptyBytes(
+			Error err = Buffer_createEmptyBytesx(
 				ETextureFormat_getSize((ETextureFormat) format, I32x2_x(size), I32x2_y(size)),
-				Platform_instance.alloc,
 				&cpuVisibleBuffer
 			);
 

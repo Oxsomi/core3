@@ -31,6 +31,7 @@ Error Platform_create(
 	FreeFunc free, AllocFunc alloc, void *allocator
 );
 
+impl void Program_cleanupExt();
 void Program_cleanup();
 
 user_impl extern int Program_run();

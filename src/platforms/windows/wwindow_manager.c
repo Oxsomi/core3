@@ -1,6 +1,7 @@
 #include "platforms/window_manager.h"
 #include "platforms/platform.h"
 #include "platforms/input_device.h"
+#include "platforms/ext/listx.h"
 #include "types/string.h"
 
 #define WIN32_LEAN_AND_MEAN
@@ -230,7 +231,7 @@ Error WindowManager_createPhysical(
 
 	List devices = List_createEmpty(sizeof(InputDevice)), monitors = List_createEmpty(sizeof(Monitor));
 
-	if ((err = List_reserve(&devices, Window_maxDevices, Platform_instance.alloc)).genericError) {
+	if ((err = List_reservex(&devices, Window_maxDevices)).genericError) {
 
 		Lock_free(&lock);
 
@@ -243,9 +244,9 @@ Error WindowManager_createPhysical(
 		return err;
 	}
 
-	if ((err = List_reserve(&monitors, Window_maxMonitors, Platform_instance.alloc)).genericError) {
+	if ((err = List_reservex(&monitors, Window_maxMonitors)).genericError) {
 
-		List_free(&devices, Platform_instance.alloc);
+		List_freex(&devices);
 		Lock_free(&lock);
 
 		if(nativeData)

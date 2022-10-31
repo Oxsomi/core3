@@ -1,4 +1,5 @@
-#include "platforms/errorx.h"
+#include "platforms/ext/errorx.h"
+#include "platforms/ext/stringx.h"
 #include "platforms/log.h"
 #include "platforms/platform.h"
 
@@ -16,22 +17,21 @@ void Error_printx(Error err, ELogLevel logLevel, ELogOptions options) {
 		return;
 
 	String str = String_createRefUnsafeConst(EGenericError_toString[err.genericError]);
-	Allocator alloc = Platform_instance.alloc;
 
 	if(err.errorSubId) {
 
 		String prefix = String_createRefUnsafeConst(" sub id: ");
 
-		if(!String_appendString(&str, prefix, alloc).genericError) {
+		if(!String_appendStringx(&str, prefix).genericError) {
 
 			String str0;
 
-			if(!String_createHex(err.errorSubId, false, alloc, &str0).genericError) {
-				String_appendString(&str, str0, alloc);
-				String_free(&str0, alloc);
+			if(!String_createHexx(err.errorSubId, false, &str0).genericError) {
+				String_appendStringx(&str, str0);
+				String_freex(&str0);
 			}
 
-			else String_append(&str, '?', alloc);
+			else String_appendx(&str, '?');
 		}
 	}
 
@@ -39,16 +39,16 @@ void Error_printx(Error err, ELogLevel logLevel, ELogOptions options) {
 
 		String prefix = String_createRefUnsafeConst(" param id: ");
 
-		if (!String_appendString(&str, prefix, alloc).genericError) {
+		if (!String_appendStringx(&str, prefix).genericError) {
 
 			String str0;
 
-			if(!String_createDec(err.paramId, false, alloc, &str0).genericError) {
-				String_appendString(&str, str0, alloc);
-				String_free(&str0, alloc);
+			if(!String_createDecx(err.paramId, false, &str0).genericError) {
+				String_appendStringx(&str, str0);
+				String_freex(&str0);
 			}
 
-			else String_append(&str, '?', alloc);
+			else String_appendx(&str, '?');
 		}
 	}
 
@@ -56,16 +56,16 @@ void Error_printx(Error err, ELogLevel logLevel, ELogOptions options) {
 
 		String prefix = String_createRefUnsafeConst(" param sub id: ");
 
-		if(!String_appendString(&str, prefix, alloc).genericError) {
+		if(!String_appendStringx(&str, prefix).genericError) {
 
 			String str0;
 
-			if(!String_createDec(err.paramSubId, false, alloc, &str0).genericError) {
-				String_appendString(&str, str0, alloc);
-				String_free(&str0, alloc);
+			if(!String_createDecx(err.paramSubId, false, &str0).genericError) {
+				String_appendStringx(&str, str0);
+				String_freex(&str0);
 			}
 
-			else String_append(&str, '?', alloc);
+			else String_appendx(&str, '?');
 		}
 	}
 
@@ -75,16 +75,16 @@ void Error_printx(Error err, ELogLevel logLevel, ELogOptions options) {
 
 		String prefix = String_createRefUnsafeConst(" param0: ");
 
-		if(!String_appendString(&str, prefix, alloc).genericError) {
+		if(!String_appendStringx(&str, prefix).genericError) {
 
 			String str0;
 
-			if(!String_createHex(err.paramValue0, false, alloc, &str0).genericError) {
-				String_appendString(&str, str0, alloc);
-				String_free(&str0, alloc);
+			if(!String_createHexx(err.paramValue0, false, &str0).genericError) {
+				String_appendStringx(&str, str0);
+				String_freex(&str0);
 			}
 
-			else String_append(&str, '?', alloc);
+			else String_appendx(&str, '?');
 		}
 	}
 
@@ -92,23 +92,23 @@ void Error_printx(Error err, ELogLevel logLevel, ELogOptions options) {
 
 		String prefix = String_createRefUnsafeConst(" param1: ");
 
-		if(!String_appendString(&str, prefix, alloc).genericError) {
+		if(!String_appendStringx(&str, prefix).genericError) {
 
 			String str0;
 
-			if(!String_createHex(err.paramValue1, false, alloc, &str0).genericError) {
-				String_appendString(&str, str0, alloc);
-				String_free(&str0, alloc);
+			if(!String_createHexx(err.paramValue1, false, &str0).genericError) {
+				String_appendStringx(&str, str0);
+				String_freex(&str0);
 			}
 
-			else String_append(&str, '?', alloc);
+			else String_appendx(&str, '?');
 		}
 	}
 
 	LogArgs args = (LogArgs) { .argc = 1, .args = &str };
 	Log_log(logLevel == ELogLevel_Fatal ? ELogLevel_Error : logLevel, options, args);
 
-	String_free(&str, alloc);
+	String_freex(&str);
 
 	Log_printCapturedStackTraceCustom(err.stackTrace, ERROR_STACKTRACE, logLevel, options);
 
