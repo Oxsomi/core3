@@ -22,7 +22,8 @@ const C8 *EGenericError_toString[] = {
 	"Already defined",
 	"Unsupported operation",
 	"Timed out",
-	"Const data"
+	"Const data",
+	"Platform error"
 };
 
 const EErrorParamValues EGenericError_hasParamValues[] = {
@@ -46,5 +47,6 @@ const EErrorParamValues EGenericError_hasParamValues[] = {
 	EErrorParamValues_None,
 	EErrorParamValues_None,
 	EErrorParamValues_V1,
+	EErrorParamValues_None,
 	EErrorParamValues_None
 };

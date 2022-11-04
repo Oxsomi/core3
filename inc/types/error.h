@@ -27,7 +27,8 @@ typedef enum EGenericError {
 	EGenericError_AlreadyDefined,
 	EGenericError_UnsupportedOperation,
 	EGenericError_TimedOut,
-	EGenericError_ConstData				//If an operation is done on data that is supposed to be const
+	EGenericError_ConstData,			//If an operation is done on data that is supposed to be const
+	EGenericError_PlatformError
 } EGenericError;
 
 typedef enum EErrorParamValues {
@@ -72,6 +73,10 @@ typedef struct Error {
 impl void Error_fillStackTrace(Error *err);
 
 #define _Error_base(...) Error err = (Error) { __VA_ARGS__ }; Error_fillStackTrace(&err); return err
+
+inline Error Error_platformError(U32 subId, U64 platformError) {
+	_Error_base(.genericError = EGenericError_PlatformError, .errorSubId = subId, .paramValue0 = platformError);
+}
 
 inline Error Error_outOfMemory(U32 subId) {
 	_Error_base(.genericError = EGenericError_OutOfMemory, .errorSubId = subId);

@@ -104,7 +104,7 @@ Error WindowManager_createPhysical(
 	wc.cbWndExtra = sizeof(void*);
 
 	if (!RegisterClassExA(&wc))
-		return Error_invalidState(0);
+		return Error_platformError(0, GetLastError());
 
 	DWORD style = WS_VISIBLE;
 
@@ -143,8 +143,9 @@ Error WindowManager_createPhysical(
 	);
 
 	if(!nativeWindow) {
+		HRESULT hr = GetLastError();
 		UnregisterClassA(wc.lpszClassName, wc.hInstance);
-		return Error_invalidState(1);
+		return Error_platformError(1, hr);
 	}
 
 	//Get real size and position
@@ -172,9 +173,10 @@ Error WindowManager_createPhysical(
 		HDC screen = GetDC(nativeWindow);
 
 		if(!screen) {
+			HRESULT hr = GetLastError();
 			DestroyWindow(nativeWindow);
 			UnregisterClassA(wc.lpszClassName, wc.hInstance);
-			return Error_invalidState(2);
+			return Error_platformError(2, hr);
 		}
 
 		//TODO: Support something other than RGBA8
@@ -196,10 +198,11 @@ Error WindowManager_createPhysical(
 		);
 
 		if(!screen) {
+			HRESULT hr = GetLastError();
 			ReleaseDC(nativeWindow, screen);
 			DestroyWindow(nativeWindow);
 			UnregisterClassA(wc.lpszClassName, wc.hInstance);
-			return Error_invalidState(3);
+			return Error_platformError(3, hr);
 		}
 
 		cpuVisibleBuffer.siz = (U64) bmi.bmiHeader.biWidth * bmi.bmiHeader.biHeight * 4;

@@ -58,7 +58,7 @@ Error Thread_create(ThreadCallbackFunction callback, void *objectHandle, Thread 
 
 	if (!thr->nativeHandle) {
 		Thread_free(thread);
-		return Error_invalidState(0);
+		return Error_platformError(0, GetLastError());
 	}
 
 	return Error_none();

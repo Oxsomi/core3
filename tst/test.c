@@ -25,10 +25,19 @@ Error ourFree(void *allocator, Buffer buf) {
 	return Error_none();
 }
 
-void Error_fillStackTrace(Error *err) {		//Required to compile
+//Required to compile
+
+void Error_fillStackTrace(Error *err) {
 	if(err)
 		err->stackTrace[0] = NULL;
 }
+
+String Error_formatPlatformError(Error err) {
+	err;
+	return String_createEmpty();
+}
+
+//
 
 int main() {
 

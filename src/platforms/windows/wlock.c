@@ -13,7 +13,7 @@ Error Lock_create(Lock *res) {
 		return Error_nullPointer(0, 0);
 
 	*res = (Lock) { .data = CreateMutexA(NULL, FALSE, NULL) };
-	return !res->data ? Error_invalidState(0) : Error_none();
+	return res->data ? Error_none() : Error_platformError(0, GetLastError());
 }
 
 Error Lock_free(Lock *res) {

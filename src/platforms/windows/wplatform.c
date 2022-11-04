@@ -1,5 +1,6 @@
 #include "platforms/platform.h"
 #include "platforms/log.h"
+#include "platforms/ext/stringx.h"
 
 #include <locale.h>
 #include <signal.h>
@@ -8,6 +9,46 @@
 #define WIN32_LEAN_AND_MEAN
 #define MICROSOFT_WINDOWS_WINBASE_H_DEFINE_INTERLOCKED_CPLUSPLUS_OVERLOADS 0
 #include <Windows.h>
+
+String Error_formatPlatformError(Error err) {
+
+	if(!FAILED(err.paramValue0))
+		return String_createEmpty();
+
+	C8 *lpBuffer = NULL;
+
+	DWORD f = FormatMessageA(
+
+		FORMAT_MESSAGE_ALLOCATE_BUFFER |
+		FORMAT_MESSAGE_FROM_SYSTEM,
+
+		NULL,
+		(DWORD) err.paramValue0,
+
+		MAKELANGID(LANG_NEUTRAL, SUBLANG_NEUTRAL),
+
+		(LPTSTR)&lpBuffer,
+		0,
+
+		NULL
+	);
+
+	//Unfortunately we have to copy, because we can't tell String to use LocalFree instead of free
+
+	if(!f)
+		return String_createEmpty();
+
+	String res;
+	if((err = String_createCopyx(String_createRefConst(lpBuffer, f), &res)).genericError) {
+		LocalFree(lpBuffer);
+		return String_createEmpty();
+	}
+
+	//
+
+	LocalFree(lpBuffer);
+	return res;
+}
 
 //Handle crash signals
 

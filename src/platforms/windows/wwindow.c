@@ -98,6 +98,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 			}
 
 			if (GetRawInputData((HRAWINPUT)lParam, RID_INPUT, buf.ptr, &size, sizeof(RAWINPUTHEADER)) != size) {
+				Error_printx(Error_platformError(0, GetLastError()), ELogLevel_Error, ELogOptions_Default);
 				Log_error(String_createRefUnsafeConst("Couldn't get raw input"), ELogOptions_Default);
 				break;
 			}
@@ -349,6 +350,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 			U32 size = sizeof(deviceInfo);
 
 			if (!GetRawInputDeviceInfoA((HANDLE)lParam, RIDI_DEVICEINFO, &deviceInfo, &size)) {
+				Error_printx(Error_platformError(0, GetLastError()), ELogLevel_Error, ELogOptions_Default);
 				Log_error(String_createRefUnsafeConst("Invalid data in WM_INPUT_DEVICE_CHANGE"), ELogOptions_Default);
 				break;
 			}
@@ -440,6 +442,8 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 				//Register device
 
 				if (!RegisterRawInputDevices(&rawDevice, 1, sizeof(RAWINPUTDEVICE))) {
+
+					Error_printx(Error_platformError(0, GetLastError()), ELogLevel_Error, ELogOptions_Default);
 
 					if(pushed)
 						List_popBack(&w->devices, Buffer_createNull());
@@ -642,7 +646,7 @@ Error Window_updatePhysicalTitle(const Window *w, String title) {
 	windowName[title.len] = '\0';
 
 	if(!SetWindowTextA(w->nativeHandle, windowName))
-		return Error_invalidOperation(0);
+		return Error_platformError(0, GetLastError());
 
 	return Error_none();
 }
@@ -662,7 +666,7 @@ Error Window_presentPhysical(const Window *w) {
 	HDC hdc = BeginPaint(w->nativeHandle, &ps);
 
 	if(!hdc)
-		return Error_invalidOperation(1);
+		return Error_platformError(0, GetLastError());
 
 	hdcBmp = CreateCompatibleDC(hdc);
 
@@ -687,6 +691,8 @@ Error Window_presentPhysical(const Window *w) {
 
 cleanup:
 
+	HRESULT res = GetLastError();
+
 	if(oldBmp)
 		SelectObject(hdc, oldBmp);
 
@@ -694,5 +700,5 @@ cleanup:
 		DeleteDC(hdcBmp);
 
 	EndPaint(w->nativeHandle, &ps);
-	return Error_invalidOperation(errId);
+	return Error_platformError(errId, res);
 }

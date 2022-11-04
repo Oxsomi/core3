@@ -20,6 +20,9 @@ void Error_printx(Error err, ELogLevel logLevel, ELogOptions options) {
 
 	String str = String_createRefUnsafeConst(EGenericError_toString[err.genericError]);
 
+	if(String_createCopyx(str, &str).genericError)
+		return;
+
 	if(err.errorSubId) {
 
 		String prefix = String_createRefUnsafeConst(" sub id: ");
@@ -104,6 +107,17 @@ void Error_printx(Error err, ELogLevel logLevel, ELogOptions options) {
 			}
 
 			else String_appendx(&str, '?');
+		}
+	}
+
+	if(err.genericError == EGenericError_PlatformError) {
+
+		String suffix0 = String_createRefUnsafeConst(": ");
+
+		if(!String_appendStringx(&str, suffix0).genericError) {
+			String suffix1 = Error_formatPlatformError(err);
+			String_appendStringx(&str, suffix1);
+			String_free(&suffix1, Platform_instance.alloc);
 		}
 	}
 
