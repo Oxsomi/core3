@@ -22,5 +22,5 @@ inline RefPtr RefPtr_create(void *ptr, Allocator alloc, ObjectFreeFunc free) {
 	};
 }
 
-bool RefPtr_add(RefPtr *ptr);
-bool RefPtr_sub(RefPtr *ptr);
+Bool RefPtr_add(RefPtr *ptr);
+Bool RefPtr_sub(RefPtr *ptr);

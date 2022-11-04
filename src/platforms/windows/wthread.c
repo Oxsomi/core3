@@ -29,22 +29,16 @@ DWORD ThreadFunc(Thread *thread) {
 	return 0;
 }
 
-Error Thread_create(
-	ThreadCallbackFunction callback, void *objectHandle,
-	Thread **thread
-) {
+Error Thread_create(ThreadCallbackFunction callback, void *objectHandle, Thread **thread) {
 
 	if(!thread)
-		return (Error) { .genericError = EGenericError_NullPointer, .paramId = 2 };
+		return Error_nullPointer(2, 0);
 
 	if(*thread)
-		return (Error) { 
-			.genericError = EGenericError_InvalidParameter, 
-			.paramId = 2, .paramValue0 = (U64) thread 
-		};
+		return Error_invalidParameter(2, 0, 0);
 
 	if(!callback)
-		return (Error) { .genericError = EGenericError_NullPointer };
+		return Error_nullPointer(0, 0);
 
 	Buffer buf = Buffer_createNull();
 
@@ -64,7 +58,7 @@ Error Thread_create(
 
 	if (!thr->nativeHandle) {
 		Thread_free(thread);
-		return (Error) { .genericError = EGenericError_InvalidOperation };
+		return Error_invalidState(0);
 	}
 
 	return Error_none();
@@ -72,10 +66,11 @@ Error Thread_create(
 
 Error Thread_wait(Thread *thread, U32 maxWaitTimeMs) {
 
+	if(!thread)
+		return Error_nullPointer(0, 0);
+
 	if(WaitForSingleObject(thread->nativeHandle, maxWaitTimeMs) == WAIT_FAILED)
-		return (Error) {
-			.genericError = EGenericError_TimedOut
-		};
+		return Error_timedOut(0, maxWaitTimeMs);
 
 	return Error_none();
 }

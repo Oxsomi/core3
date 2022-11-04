@@ -42,10 +42,10 @@ Error allocCallback(void *allocator, U64 siz, Buffer *output) {
 	void *ptr = malloc(siz);
 
 	if(!output)
-		return (Error) { .genericError = EGenericError_NullPointer };
+		return Error_nullPointer(2, 0);
 
 	if(!ptr)
-		return (Error) { .genericError = EGenericError_OutOfMemory };
+		return Error_outOfMemory(0);
 
 	*output = (Buffer) { .ptr = ptr, .siz = siz };
 	return Error_none();

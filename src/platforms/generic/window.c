@@ -13,7 +13,7 @@
 Error Window_waitForExit(Window *w, Ns maxTimeout) {
 
 	if(!w)
-		return (Error) { .genericError = EGenericError_NullPointer };
+		return Error_nullPointer(0, 0);
 
 	Ns start = Timer_now();
 
@@ -21,7 +21,7 @@ Error Window_waitForExit(Window *w, Ns maxTimeout) {
 	//If there's no lock, then we've already been released
 
 	if(w->lock.data && !Lock_isLockedForThread(w->lock) && !Lock_lock(&w->lock, maxTimeout))
-		return (Error) { .genericError = EGenericError_InvalidOperation };
+		return Error_invalidOperation(0);
 
 	//If our window isn't marked as active, then our window is gone
 	//We've successfully waited
@@ -38,7 +38,7 @@ Error Window_waitForExit(Window *w, Ns maxTimeout) {
 	//Release the lock, because otherwise our window can't resume itself
 
 	if(!Lock_unlock(&w->lock))
-		return (Error) { .genericError = EGenericError_InvalidOperation };
+		return Error_invalidOperation(1);
 
 	//Keep checking until we run out of time
 
@@ -53,7 +53,7 @@ Error Window_waitForExit(Window *w, Ns maxTimeout) {
 		//Try to reacquire the lock
 
 		if(w->lock.data && !Lock_isLockedForThread(w->lock) && !Lock_lock(&w->lock, left))
-			return (Error) { .genericError = EGenericError_InvalidOperation };
+			return Error_invalidOperation(2);
 
 		//Our window has been released!
 
@@ -68,14 +68,14 @@ Error Window_waitForExit(Window *w, Ns maxTimeout) {
 		//Release the lock to check for the next time
 
 		if(!Lock_unlock(&w->lock))
-			return (Error) { .genericError = EGenericError_InvalidOperation };
+			return Error_invalidOperation(3);
 
 		//
 
 		left = (Ns) I64_max(0, maxTimeout - (DNs)(Timer_now() - start));
 	}
 
-	return (Error) { .genericError = EGenericError_TimedOut };
+	return Error_timedOut(0, maxTimeout);
 }
 
 //TODO: Move this to texture class
@@ -83,16 +83,16 @@ Error Window_waitForExit(Window *w, Ns maxTimeout) {
 Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 
 	if (!w)
-		return (Error) { .genericError = EGenericError_NullPointer };
+		return Error_nullPointer(0, 0);
 
 	if(!Window_isVirtual(w) && !(w->hint & EWindowHint_ProvideCPUBuffer))
-		return (Error) { .genericError = EGenericError_InvalidParameter };
+		return Error_invalidParameter(0, 0, 0);
 
 	if(I32x2_eq2(w->size, newSiz))
 		return Error_none();
 
 	if(I32x2_any(I32x2_leq(newSiz, I32x2_zero())))
-		return (Error) { .genericError = EGenericError_InvalidParameter, .paramId = 2 };
+		return Error_invalidParameter(2, 0, 0);
 
 	//Because we're resizing, we assume we will be resizing more often
 	//To combat constantly reallocating, we will allocate 25% more memory than is needed.
@@ -106,7 +106,7 @@ Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 	U64 linSiz = ETextureFormat_getSize((ETextureFormat) w->format, I32x2_x(newSiz), I32x2_y(newSiz));
 	
 	if(linSizOld * 5 < linSizOld)
-		return (Error) { .genericError = EGenericError_Overflow };
+		return Error_overflow(2, 0, linSizOld * 5, U64_MAX);
 
 	//We need to grow; we're out of bounds
 
@@ -291,18 +291,18 @@ Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 Error Window_storeCPUBufferToDisk(const Window *w, String filePath) {
 
 	if (!w)
-		return (Error) { .genericError = EGenericError_NullPointer };
+		return Error_nullPointer(0, 0);
 
 	Buffer buf = w->cpuVisibleBuffer;
 
 	if(!buf.siz)
-		return (Error) { .genericError = EGenericError_InvalidOperation };
+		return Error_invalidOperation(0);
 
 	if(w->format != EWindowFormat_rgba8)
-		return (Error) { .genericError = EGenericError_UnsupportedOperation };		//TODO: Add support for other formats
+		return Error_unsupportedOperation(0);		//TODO: Add support for other formats
 
 	if(I32x2_any(I32x2_gt(w->size, I32x2_xx2(U16_MAX))))
-		return (Error) { .genericError = EGenericError_InvalidOperation, .errorSubId = 1 };
+		return Error_invalidOperation(1);
 
 	Buffer file = Buffer_createNull();
 

@@ -5,8 +5,11 @@
 
 Error Thread_free(Thread **thread) {
 
-	if(!thread || !*thread)
-		return (Error) { .genericError = EGenericError_NullPointer };
+	if(!thread)
+		return Error_none();
+
+	if(!*thread)
+		return Error_nullPointer(0, 0);
 
 	FreeFunc free = Platform_instance.alloc.free;
 	void *allocator = Platform_instance.alloc.ptr;
@@ -19,7 +22,7 @@ Error Thread_free(Thread **thread) {
 Error Thread_waitAndCleanup(Thread **thread, U32 maxWaitTime) {
 
 	if(!thread || !*thread)
-		return (Error) { .genericError = EGenericError_NullPointer };
+		return Error_nullPointer(0, 0);
 
 	Error err = Thread_wait(*thread, maxWaitTime);
 

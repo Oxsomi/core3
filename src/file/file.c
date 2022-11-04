@@ -13,21 +13,21 @@
 Error File_write(Buffer buf, String loc) {
 
 	if(!buf.siz || !buf.ptr)
-		return (Error) { .genericError = EGenericError_NullPointer };
+		return Error_nullPointer(0, 0);
 
 	//TODO: Test, does this properly clear a previous file if present?
 
 	if(String_isEmpty(loc))
-		return (Error) { .genericError = EGenericError_InvalidParameter, .paramId = 1 };
+		return Error_invalidParameter(1, 0, 0);
 
 	FILE *f = fopen(loc.ptr, "wb");
 
 	if(!f)
-		return (Error) { .genericError = EGenericError_NotFound, .paramId = 1 };
+		return Error_notFound(1, 0, 0);
 
 	if (fwrite(buf.ptr, 1, buf.siz, f) != buf.siz) {
 		fclose(f);
-		return (Error) { .genericError = EGenericError_InvalidState };
+		return Error_invalidState(0);
 	}
 
 	fclose(f);
@@ -37,22 +37,22 @@ Error File_write(Buffer buf, String loc) {
 Error File_read(String loc, Allocator allocator, Buffer *output) {
 
 	if(String_isEmpty(loc))
-		return (Error) { .genericError = EGenericError_InvalidParameter };
+		return Error_invalidParameter(1, 0, 0);
 
 	if(!allocator.alloc || !allocator.free)
-		return (Error) { .genericError = EGenericError_NullPointer, .paramId = 1 };
+		return Error_nullPointer(1, 0);
 
 	if(output)
-		return (Error) { .genericError = EGenericError_InvalidOperation };
+		return Error_invalidOperation(0);
 
 	FILE *f = fopen(loc.ptr, "rb");
 
 	if(!f)
-		return (Error) { .genericError = EGenericError_NotFound };
+		return Error_notFound(0, 0, 0);
 
 	if(fseek(f, 0, SEEK_END)) {
 		fclose(f);
-		return (Error) { .genericError = EGenericError_InvalidState, .errorSubId = 0 };
+		return Error_invalidState(0);
 	}
 
 	Error err = Buffer_createUninitializedBytes((U64)_ftelli64(f), allocator, output);
@@ -65,7 +65,7 @@ Error File_read(String loc, Allocator allocator, Buffer *output) {
 	if(fseek(f, 0, SEEK_SET)) {
 		Buffer_free(output, allocator);
 		fclose(f);
-		return (Error) { .genericError = EGenericError_InvalidState, .errorSubId = 1 };
+		return Error_invalidState(1);
 	}
 
 	Buffer b = *output;
@@ -73,7 +73,7 @@ Error File_read(String loc, Allocator allocator, Buffer *output) {
 	if (fread(b.ptr, 1, b.siz, f) != b.siz) {
 		Buffer_free(output, allocator);
 		fclose(f);
-		return (Error) { .genericError = EGenericError_InvalidState, .errorSubId = 2 };
+		return Error_invalidState(2);
 	}
 
 	fclose(f);

@@ -28,16 +28,16 @@ Error WindowManager_createPhysical(
 	//Validate state
 
 	if(!manager)
-		return (Error) { .genericError = EGenericError_NullPointer };
+		return Error_nullPointer(0, 0);
 
 	if(!Lock_isLockedForThread(manager->lock))
-		return (Error) { .genericError = EGenericError_InvalidOperation };
+		return Error_invalidOperation(0);
 
 	if(!w)
-		return (Error) { .genericError = EGenericError_NullPointer, .paramId = 7 };
+		return Error_nullPointer(7, 0);
 
 	if(*w)
-		return (Error) { .genericError = EGenericError_InvalidParameter, .paramId = 7 };
+		return Error_invalidParameter(7, 0, 0);
 
 	switch (format) {
 
@@ -47,28 +47,19 @@ Error WindowManager_createPhysical(
 		case EWindowFormat_rgba32f:
 
 			if(!WindowManager_supportsFormat(*manager, format))
-				return (Error) { 
-					.genericError = EGenericError_UnsupportedOperation, 
-					.paramId = 6,
-					.paramValue0 = format
-				};
+				return Error_unsupportedOperation(0);
 
 			break;
 
 		default:
-			return (Error) { .genericError = EGenericError_InvalidParameter, .paramId = 6 };
+			return Error_invalidParameter(6, 0, 0);
 	}
 
 	if(I32x2_any(I32x2_lt(size, I32x2_zero())))
-		return (Error) { .genericError = EGenericError_InvalidParameter };
+		return Error_invalidParameter(2, 0, 0);
 
 	if (title.len >= MAX_PATH)
-		return (Error) { 
-			.genericError = EGenericError_OutOfBounds, 
-			.paramId = 4, 
-			.paramValue0 = title.len,
-			.paramValue1 = MAX_PATH
-		};
+		return Error_outOfBounds(4, 0, title.len, MAX_PATH);
 
 	//Find free spot in physical windows
 
@@ -90,7 +81,7 @@ Error WindowManager_createPhysical(
 	}
 
 	if(!win)
-		return (Error) { .genericError = EGenericError_OutOfMemory };
+		return Error_outOfMemory(0);
 
 	//Create native window
 
@@ -113,7 +104,7 @@ Error WindowManager_createPhysical(
 	wc.cbWndExtra = sizeof(void*);
 
 	if (!RegisterClassExA(&wc))
-		return (Error) { .genericError = EGenericError_InvalidOperation, .paramSubId = 1 };
+		return Error_invalidState(0);
 
 	DWORD style = WS_VISIBLE;
 
@@ -153,7 +144,7 @@ Error WindowManager_createPhysical(
 
 	if(!nativeWindow) {
 		UnregisterClassA(wc.lpszClassName, wc.hInstance);
-		return (Error) { .genericError = EGenericError_InvalidOperation, .paramSubId = 2 };
+		return Error_invalidState(1);
 	}
 
 	//Get real size and position
@@ -183,7 +174,7 @@ Error WindowManager_createPhysical(
 		if(!screen) {
 			DestroyWindow(nativeWindow);
 			UnregisterClassA(wc.lpszClassName, wc.hInstance);
-			return (Error) { .genericError = EGenericError_InvalidOperation, .paramSubId = 3 };
+			return Error_invalidState(2);
 		}
 
 		//TODO: Support something other than RGBA8
@@ -208,7 +199,7 @@ Error WindowManager_createPhysical(
 			ReleaseDC(nativeWindow, screen);
 			DestroyWindow(nativeWindow);
 			UnregisterClassA(wc.lpszClassName, wc.hInstance);
-			return (Error) { .genericError = EGenericError_InvalidOperation, .paramSubId = 3 };
+			return Error_invalidState(3);
 		}
 
 		cpuVisibleBuffer.siz = (U64) bmi.bmiHeader.biWidth * bmi.bmiHeader.biHeight * 4;

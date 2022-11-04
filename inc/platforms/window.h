@@ -175,10 +175,10 @@ inline Error Window_presentCPUBuffer(
 ) {
 
 	if (!w)
-		return (Error) { .genericError = EGenericError_NullPointer };
+		return Error_nullPointer(0, 0);
 
 	if (!w->isDrawing)
-		return (Error) { .genericError = EGenericError_InvalidOperation };
+		return Error_invalidOperation(0);
 
 	if (Window_isVirtual(w))
 		return Window_storeCPUBufferToDisk(w, file);

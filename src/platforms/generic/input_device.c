@@ -41,7 +41,7 @@ inline BitRef InputDevice_getButtonValue(InputDevice dev, U16 localHandle, Bool 
 Error InputDevice_create(U16 buttons, U16 axes, EInputDeviceType type, InputDevice *result) {
 
 	if(!result)
-		return (Error) { .genericError = EGenericError_NullPointer };
+		return Error_nullPointer(3, 0);
 
 	*result = (InputDevice) {
 		.buttons = buttons,
@@ -69,29 +69,34 @@ Error InputDevice_create(U16 buttons, U16 axes, EInputDeviceType type, InputDevi
 	return Error_none();
 }
 
-#define InputDeviceCreate(EInputType) 																\
-																									\
-	Input##EInputType *inputType = InputDevice_get##EInputType(d, localHandle);						\
-																									\
-	if(!res)																						\
-		return (Error) { .genericError = EGenericError_OutOfBounds, .paramId = 1 };					\
-																									\
-	if(inputType->name[0])																			\
-		return (Error) { .genericError = EGenericError_AlreadyDefined };								\
-																									\
-	if(!inputType)																					\
-		return (Error) { .genericError = EGenericError_NullPointer };								\
-																									\
-	if(String_isEmpty(keyName))																		\
-		return (Error) { .genericError = EGenericError_InvalidParameter, .paramId = 2 };				\
-																									\
-	if(keyName.len >= LongString_LEN)																\
-		return (Error) { .genericError = EGenericError_OutOfBounds, .paramId = 2 };					\
-																									\
-	Buffer_copy(																					\
-		Buffer_createRef(inputType->name, LongString_LEN), 											\
-		Buffer_createRef(keyName.ptr, keyName.len + 1)												\
-	);
+#define InputDeviceCreate(EInputType) 													\
+																						\
+	if(d.type == EInputDeviceType_Undefined)											\
+		return Error_invalidOperation(0);												\
+																						\
+	Input##EInputType *inputType = InputDevice_get##EInputType(d, localHandle);			\
+																						\
+	if(!res)																			\
+		return Error_nullPointer(4, 0);													\
+																						\
+	if(inputType->name[0])																\
+		return Error_alreadyDefined(0);													\
+																						\
+	if(!inputType)																		\
+		return Error_nullPointer(0, 0);													\
+																						\
+	if(String_isEmpty(keyName))															\
+		return Error_invalidParameter(2, 0, 0);											\
+																						\
+	if(keyName.len >= LongString_LEN)													\
+		return Error_outOfBounds(2, 0, keyName.len, LongString_LEN);					\
+																						\
+	Buffer_copy(																		\
+		Buffer_createRef(inputType->name, LongString_LEN), 								\
+		Buffer_createRef(keyName.ptr, keyName.len)										\
+	);																					\
+																						\
+	inputType->name[U64_min(keyName.len, LongString_LEN - 1)] = '\0';
 
 Error InputDevice_createButton(
 	InputDevice d, 
@@ -99,9 +104,6 @@ Error InputDevice_createButton(
 	String keyName, 
 	InputHandle *res
 ) {
-	if(d.type == EInputDeviceType_Undefined)
-		return (Error) { .genericError = EGenericError_InvalidOperation };
-
 	InputDeviceCreate(Button);
 	*res = InputDevice_createHandle(d, localHandle, EInputType_Button);
 	return Error_none();
@@ -114,9 +116,6 @@ Error InputDevice_createAxis(
 	F32 deadZone, 
 	InputHandle *res
 ) {
-	if(d.type == EInputDeviceType_Undefined)
-		return (Error) { .genericError = EGenericError_InvalidOperation };
-
 	InputDeviceCreate(Axis);
 	*res = InputDevice_createHandle(d, localHandle, EInputType_Axis);
 	inputType->deadZone = deadZone;
@@ -124,6 +123,9 @@ Error InputDevice_createAxis(
 }
 
 Error InputDevice_free(InputDevice *dev) {
+
+	if (!dev)
+		return Error_none();
 
 	if(dev->type == EInputDeviceType_Undefined)
 		return Error_none();

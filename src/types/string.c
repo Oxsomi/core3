@@ -11,7 +11,7 @@
 Error String_offsetAsRef(String s, U64 off, String *result) {
 	
 	if (!result)
-		return (Error) { .genericError = EGenericError_NullPointer, .paramId = 2 };
+		return Error_nullPointer(2, 0);
 
 	if (String_isEmpty(s)) {
 		*result = String_createEmpty();
@@ -19,12 +19,7 @@ Error String_offsetAsRef(String s, U64 off, String *result) {
 	}
 
 	if(off >= s.len)
-		return (Error) { 
-			.genericError = EGenericError_OutOfBounds, 
-			.paramId = 1,
-			.paramValue0 = off,
-			.paramValue1 = s.len 
-		};
+		return Error_outOfBounds(1, 0, off, s.len);
 
 	*result = (String) {
 		.ptr = s.ptr + off,
@@ -170,13 +165,13 @@ Bool String_isFloat(String s) {
 Error String_create(C8 c, U64 size, Allocator alloc, String *result) {
 
 	if (!c)
-		return (Error) { .genericError = EGenericError_InvalidParameter };
+		return Error_invalidParameter(0, 0, 0);
 
 	if (!alloc.alloc)
-		return (Error) { .genericError = EGenericError_NullPointer, .paramId = 2 };
+		return Error_nullPointer(2, 0);
 
 	if (!result)
-		return (Error) { .genericError = EGenericError_NullPointer, .paramId = 3 };
+		return Error_nullPointer(3, 0);
 
 	if (!size) {
 		*result = String_createEmpty();
@@ -224,11 +219,8 @@ Error String_create(C8 c, U64 size, Allocator alloc, String *result) {
 
 Error String_createCopy(String str, Allocator alloc, String *result) {
 
-	if (!alloc.alloc)
-		return (Error) { .genericError = EGenericError_NullPointer, .paramId = 1 };
-
-	if (!result)
-		return (Error) { .genericError = EGenericError_NullPointer, .paramId = 2 };
+	if (!alloc.alloc || !result)
+		return Error_nullPointer(!result ? 2 : 1, 0);
 
 	if (!str.len) {
 		*result = String_createEmpty();
@@ -254,10 +246,10 @@ Error String_createCopy(String str, Allocator alloc, String *result) {
 Error String_free(String *str, Allocator alloc) {
 
 	if (!str)
-		return (Error) { .genericError = EGenericError_NullPointer };
+		return Error_none();
 
 	if (!alloc.free)
-		return (Error) { .genericError = EGenericError_NullPointer, .paramId = 1 };
+		return Error_nullPointer(1, 0);
 
 	Error err = Error_none();
 
@@ -273,10 +265,7 @@ Error String_free(String *str, Allocator alloc) {
 	String prefix = String_createRefUnsafeConst(prefixRaw);				\
 																		\
 	if (result->len)													\
-		return (Error) { 												\
-			.genericError = EGenericError_InvalidOperation, 			\
-			.errorSubId = 1 											\
-		};																\
+		return Error_invalidOperation(0);								\
 																		\
 	*result = String_createEmpty();										\
 	Error err = String_reserve(											\
@@ -436,13 +425,13 @@ Error String_splitString(
 Error String_reserve(String *str, U64 siz, Allocator alloc) {
 
 	if (!str)
-		return (Error) { .genericError = EGenericError_NullPointer };
+		return Error_nullPointer(0, 0);
 
 	if (String_isRef(*str) && str->len)
-		return (Error) { .genericError = EGenericError_InvalidOperation };
+		return Error_invalidOperation(0);
 
 	if (!alloc.alloc || !alloc.free)
-		return (Error) { .genericError = EGenericError_NullPointer, .paramId = 2 };
+		return Error_nullPointer(2, 0);
 
 	if (siz <= str->capacity)
 		return Error_none();
@@ -465,13 +454,13 @@ Error String_reserve(String *str, U64 siz, Allocator alloc) {
 Error String_resize(String *str, U64 siz, C8 defaultChar, Allocator alloc) {
 
 	if (!str)
-		return (Error) { .genericError = EGenericError_NullPointer };
+		return Error_nullPointer(0, 0);
 
 	if (String_isRef(*str) && str->len)
-		return (Error) { .genericError = EGenericError_InvalidOperation };
+		return Error_invalidOperation(0);
 
 	if (!alloc.alloc || !alloc.free)
-		return (Error) { .genericError = EGenericError_NullPointer, .paramId = 2 };
+		return Error_nullPointer(3, 0);
 
 	if (siz == str->len)
 		return Error_none();
@@ -488,7 +477,7 @@ Error String_resize(String *str, U64 siz, C8 defaultChar, Allocator alloc) {
 	if (siz > str->capacity) {
 
 		if (siz * 3 / 3 != siz)
-			return (Error) { .genericError = EGenericError_Overflow };
+			return Error_overflow(1, 0, siz * 3, U64_MAX);
 
 		//Reserve 50% more to ensure we don't resize too many times
 
@@ -510,7 +499,7 @@ Error String_resize(String *str, U64 siz, C8 defaultChar, Allocator alloc) {
 Error String_append(String *s, C8 c, Allocator allocator) {
 
 	if (!s)
-		return (Error) { .genericError = EGenericError_NullPointer };
+		return Error_nullPointer(0, 0);
 
 	return String_resize(s, s->len + 1, c, allocator);
 }
@@ -521,7 +510,7 @@ Error String_appendString(String *s, String other, Allocator allocator) {
 		return Error_none();
 
 	if (!s)
-		return (Error) { .genericError = EGenericError_NullPointer };
+		return Error_nullPointer(0, 0);
 
 	U64 oldLen = s->len;
 	Error err = String_resize(s, s->len + other.len, other.ptr[0], allocator);
@@ -536,10 +525,10 @@ Error String_appendString(String *s, String other, Allocator allocator) {
 Error String_insert(String *s, C8 c, U64 i, Allocator allocator) {
 
 	if (!s)
-		return (Error) { .genericError = EGenericError_NullPointer };
+		return Error_nullPointer(0, 0);
 
 	if(i > s->len)
-		return (Error) { .genericError = EGenericError_OutOfBounds, .paramValue0 = i, .paramValue1 = s->len };
+		return Error_outOfBounds(2, 0, i, s->len);
 
 	Error err = String_resize(s, s->len + 1, c, allocator);
 
@@ -566,7 +555,7 @@ Error String_insert(String *s, C8 c, U64 i, Allocator allocator) {
 Error String_insertString(String *s, String other, U64 i, Allocator allocator) {
 
 	if (!s)
-		return (Error) { .genericError = EGenericError_NullPointer };
+		return Error_nullPointer(0, 0);
 
 	if (!other.len)
 		return Error_none();
@@ -601,10 +590,10 @@ Error String_replaceAllString(
 ) {
 
 	if (!s)
-		return (Error) { .genericError = EGenericError_NullPointer };
+		return Error_nullPointer(0, 0);
 
 	if(String_isRef(*s))
-		return (Error) { .genericError = EGenericError_InvalidOperation };
+		return Error_invalidOperation(0);
 
 	List finds = String_findAllString(*s, search, allocator, caseSensitive);
 
@@ -718,10 +707,10 @@ Error String_replaceString(
 ) {
 
 	if (!s)
-		return (Error) { .genericError = EGenericError_NullPointer };
+		return Error_nullPointer(0, 0);
 
 	if(String_isRef(*s))
-		return (Error) { .genericError = EGenericError_InvalidOperation };
+		return Error_invalidOperation(0);
 
 	U64 res = isFirst ? String_findFirstString(*s, search, caseSensitive) : 
 		String_findLastString(*s, search, caseSensitive);
@@ -1614,8 +1603,11 @@ Error StringList_create(U64 len, Allocator alloc, StringList *arr) {
 
 Error StringList_free(StringList *arr, Allocator alloc) {
 
-	if(!arr || !arr->len)
-		return (Error){ .genericError = EGenericError_NullPointer };
+	if(!arr)
+		return Error_none();
+
+	if(!arr->len)
+		return Error_nullPointer(0, 0);
 
 	Error freeErr = Error_none();
 
@@ -1643,7 +1635,7 @@ Error StringList_free(StringList *arr, Allocator alloc) {
 Error StringList_createCopy(const StringList *toCopy, StringList *arr, Allocator alloc) {
 
 	if(!toCopy || !toCopy->len)
-		return (Error){ .genericError = EGenericError_NullPointer };
+		return Error_nullPointer(0, 0);
 
 	Error err = StringList_create(toCopy->len, alloc, arr);
 
@@ -1666,11 +1658,7 @@ Error StringList_createCopy(const StringList *toCopy, StringList *arr, Allocator
 Error StringList_unset(StringList arr, U64 i, Allocator alloc) {
 
 	if(i >= arr.len)
-		return (Error) { 
-			.genericError = EGenericError_OutOfBounds, 
-			.paramValue0 = i, 
-			.paramValue1 = arr.len 
-		};
+		return Error_outOfBounds(1, 0, i, arr.len);
 
 	String *pstr = arr.ptr + i;
 	return String_free(pstr, alloc);

@@ -1,6 +1,6 @@
 #include "types/ref_ptr.h"
 
-bool RefPtr_add(RefPtr *ptr) {
+Bool RefPtr_add(RefPtr *ptr) {
 
 	if(!ptr || !ptr->refCount)
 		return false;
@@ -9,7 +9,7 @@ bool RefPtr_add(RefPtr *ptr) {
 	return true;
 }
 
-bool RefPtr_sub(RefPtr *ptr) {
+Bool RefPtr_sub(RefPtr *ptr) {
 
 	if(!ptr || !ptr->refCount)
 		return false;

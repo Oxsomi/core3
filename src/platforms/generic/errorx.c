@@ -5,10 +5,12 @@
 
 #include <stdlib.h>
 
-Error Error_traced(EGenericError err, U32 subId, U32 paramId, U32 paramSubId, U64 paramValue0, U64 paramValue1) {
-	Error res = Error_base(err, subId, paramId, paramSubId, paramValue0, paramValue1);
-	Log_captureStackTrace(res.stackTrace, ERROR_STACKTRACE, 0);
-	return res;
+void Error_fillStackTrace(Error *err) {
+
+	//Skip Error_fillStackTrace (skip=1), Error_x (skip=2)
+
+	if(err)
+		Log_captureStackTrace(err->stackTrace, ERROR_STACKTRACE, 2);
 }
 
 void Error_printx(Error err, ELogLevel logLevel, ELogOptions options) {

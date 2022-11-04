@@ -7,24 +7,13 @@
 Error Buffer_getBit(Buffer buf, U64 offset, Bool *output) {
 
 	if(!output)
-		return (Error) {
-			.genericError = EGenericError_NullPointer,
-			.paramId = 2
-		};
+		return Error_nullPointer(2, 0);
 
 	if(!buf.ptr)
-		return (Error) {
-			.genericError = EGenericError_NullPointer,
-			.paramId = 0
-		};
+		return Error_nullPointer(0, 0);
 
 	if((offset >> 3) >= buf.siz)
-		return (Error) {
-			.genericError = EGenericError_OutOfBounds,
-			.paramId = 0,
-			.paramValue0 = offset >> 3,
-			.paramValue1 = buf.siz
-		};
+		return Error_outOfBounds(1, 0, offset >> 3, buf.siz);
 
 	*output = (buf.ptr[offset >> 3] >> (offset & 7)) & 1;
 	return Error_none();
@@ -104,18 +93,10 @@ void Buffer_revCopy(Buffer dst, Buffer src) {
 Error Buffer_setBit(Buffer buf, U64 offset) {
 
 	if(!buf.ptr)
-		return (Error) {
-			.genericError = EGenericError_NullPointer,
-			.paramId = 0
-		};
+		return Error_nullPointer(0, 0);
 
 	if((offset >> 3) >= buf.siz)
-		return (Error) {
-			.genericError = EGenericError_OutOfBounds,
-			.paramId = 0,
-			.paramValue0 = offset >> 3,
-			.paramValue1 = buf.siz
-		};
+		return Error_outOfBounds(1, 0, offset, buf.siz << 3);
 
 	buf.ptr[offset >> 3] |= 1 << (offset & 7);
 	return Error_none();
@@ -124,18 +105,10 @@ Error Buffer_setBit(Buffer buf, U64 offset) {
 Error Buffer_resetBit(Buffer buf, U64 offset) {
 
 	if(!buf.ptr)
-		return (Error) {
-			.genericError = EGenericError_NullPointer,
-			.paramId = 0
-		};
+		return Error_nullPointer(0, 0);
 
 	if((offset >> 3) >= buf.siz)
-		return (Error) {
-			.genericError = EGenericError_OutOfBounds,
-			.paramId = 0,
-			.paramValue0 = offset >> 3,
-			.paramValue1 = buf.siz
-		};
+		return Error_outOfBounds(1, 0, offset, buf.siz << 3);
 
 	buf.ptr[offset >> 3] &= ~(1 << (offset & 7));
 	return Error_none();
@@ -144,17 +117,7 @@ Error Buffer_resetBit(Buffer buf, U64 offset) {
 #define BitOp(x, dst, src) {															\
 																						\
 	if(!dst.ptr || !src.ptr)															\
-		return (Error) {																\
-			.genericError = EGenericError_NullPointer,									\
-			.paramId = !src.ptr ? 1 : 0													\
-		};																				\
-																						\
-	if(!dst.siz)																		\
-		return (Error) {																\
-			.genericError = EGenericError_InvalidParameter,								\
-			.paramId = !src.siz ? 1 : 0,												\
-			.paramSubId = 1																\
-		};																				\
+		return Error_nullPointer(!dst.ptr ? 0 : 1, 0);									\
 																						\
 	U64 l = U64_min(dst.siz, src.siz);													\
 																						\
@@ -175,23 +138,10 @@ Error Buffer_bitwiseNot(Buffer dst) BitOp(=~, dst, dst)
 Error Buffer_eq(Buffer buf0, Buffer buf1, Bool *result) {
 	
 	if(!buf0.ptr || !buf1.ptr)
-		return (Error) {
-			.genericError = EGenericError_NullPointer,
-			.paramId = !buf1.ptr ? 1 : 0
-		};
+		return Error_nullPointer(!buf0.ptr ? 0 : 1, 0);
 
 	if(!result)
-		return (Error) {
-			.genericError = EGenericError_NullPointer,
-			.paramId = 2
-		};
-
-	if(!buf0.siz || !buf1.siz)
-		return (Error) {
-			.genericError = EGenericError_InvalidParameter,
-			.paramId = !buf1.siz ? 1 : 0,
-			.paramSubId = 1
-		};
+		return Error_nullPointer(2, 0);
 
 	*result = false;
 
@@ -249,28 +199,13 @@ U64 Buffer_hash(Buffer buf) {
 Error Buffer_setBitRange(Buffer dst, U64 dstOff, U64 bits) {
 
 	if(!dst.ptr)
-		return (Error) {
-			.genericError = EGenericError_NullPointer,
-			.paramSubId = 0
-		};
-
-	if(!dst.siz)
-		return (Error) {
-			.genericError = EGenericError_InvalidParameter,
-			.paramSubId = 1
-		};
+		return Error_nullPointer(0, 0);
 
 	if(((dstOff + bits - 1) >> 3) >= dst.siz)
-		return (Error) {
-			.genericError = EGenericError_OutOfBounds,
-			.paramId = 1
-		};
+		return Error_outOfBounds(1, 0, dstOff + bits, dst.siz << 3);
 
 	if(!bits)
-		return (Error) {
-			.genericError = EGenericError_InvalidParameter,
-			.paramId = 2
-		};
+		return Error_invalidParameter(2, 0, 0);
 
 	U64 dstOff8 = (dstOff + 7) >> 3;
 	U64 bitEnd = dstOff + bits;
@@ -311,28 +246,13 @@ Error Buffer_setBitRange(Buffer dst, U64 dstOff, U64 bits) {
 Error Buffer_unsetBitRange(Buffer dst, U64 dstOff, U64 bits) {
 
 	if(!dst.ptr)
-		return (Error) {
-			.genericError = EGenericError_NullPointer,
-			.paramSubId = 0
-		};
-
-	if(!dst.siz)
-		return (Error) {
-			.genericError = EGenericError_InvalidParameter,
-			.paramSubId = 1
-		};
+		return Error_nullPointer(0, 0);
 
 	if(((dstOff + bits - 1) >> 3) >= dst.siz)
-		return (Error) {
-			.genericError = EGenericError_OutOfBounds,
-			.paramId = 1
-		};
+		return Error_outOfBounds(1, 0, dstOff + bits, dst.siz << 3);
 
 	if(!bits)
-		return (Error) {
-			.genericError = EGenericError_InvalidParameter,
-			.paramId = 2
-		};
+		return Error_invalidParameter(2, 0, 0);
 
 	U64 dstOff8 = (dstOff + 7) >> 3;
 	U64 bitEnd = dstOff + bits;
@@ -373,15 +293,7 @@ Error Buffer_unsetBitRange(Buffer dst, U64 dstOff, U64 bits) {
 inline Error Buffer_setAllToInternal(Buffer buf, U64 b64, U8 b8) {
 
 	if(!buf.ptr)
-		return (Error) {
-			.genericError = EGenericError_NullPointer
-		};
-
-	if(!buf.siz)
-		return (Error) {
-			.genericError = EGenericError_InvalidParameter,
-			.paramSubId = 1
-		};
+		return Error_nullPointer(0, 0);
 
 	U64 l = buf.siz;
 
@@ -405,38 +317,16 @@ Error Buffer_unsetAllBits(Buffer buf) {
 Error Buffer_allocBitsInternal(U64 siz, Allocator alloc, Buffer *result) {
 
 	if(!siz)
-		return (Error) {
-			.genericError = EGenericError_InvalidParameter,
-			.paramId = 0
-		};
+		return Error_invalidParameter(0, 0, 0);
 
 	if(!alloc.alloc)
-		return (Error) {
-			.genericError = EGenericError_NullPointer,
-			.paramId = 1,
-			.paramSubId = 1
-		};
+		return Error_nullPointer(1, 0);
 
 	if(!result)
-		return (Error) {
-			.genericError = EGenericError_NullPointer,
-			.paramId = 2
-		};
+		return Error_nullPointer(0, 0);
 
 	siz = (siz + 7) >> 3;	//Align to bytes
-
-	Error err = alloc.alloc(alloc.ptr, siz, result);
-
-	if(err.genericError)
-		return err;
-
-	if(!result->ptr)
-		return (Error) {
-			.genericError = EGenericError_NullPointer,
-			.errorSubId = 1
-		};
-
-	return Error_none();
+	return alloc.alloc(alloc.ptr, siz, result);
 }
 
 Error Buffer_createZeroBits(U64 siz, Allocator alloc, Buffer *result) {
@@ -486,30 +376,13 @@ Error Buffer_createCopy(Buffer buf, Allocator alloc, Buffer *result) {
 Error Buffer_free(Buffer *buf, Allocator alloc) {
 
 	if(!buf)
-		return (Error) {
-			.genericError = EGenericError_NullPointer,
-			.paramId = 0
-		};
+		return Error_none();
 
 	if(!buf->ptr)
-		return (Error) {
-			.genericError = EGenericError_NullPointer,
-			.paramId = 0
-		};
-
-	if(!buf->siz)
-		return (Error) {
-			.genericError = EGenericError_InvalidParameter,
-			.paramId = 0,
-			.paramSubId = 1
-		};
+		return Error_nullPointer(0, 0);
 
 	if(!alloc.free)
-		return (Error) {
-			.genericError = EGenericError_NullPointer,
-			.paramId = 1,
-			.paramSubId = 2
-		};
+		return Error_nullPointer(1, 0);
 
 	Error err = alloc.free(alloc.ptr, *buf);
 	*buf = Buffer_createNull();
@@ -527,17 +400,10 @@ Error Buffer_createUninitializedBytes(U64 siz, Allocator alloc, Buffer *result) 
 Error Buffer_offset(Buffer *buf, U64 siz) {
 
 	if(!buf || !buf->ptr)
-		return (Error) { .genericError = EGenericError_NullPointer };
-
-	if(!buf->siz)
-		return (Error) {
-			.genericError = EGenericError_InvalidParameter,
-			.paramId = 0,
-			.paramSubId = 1
-		};
+		return Error_nullPointer(0, 0);
 
 	if(siz > buf->siz)
-		return (Error) { .genericError = EGenericError_OutOfBounds };
+		return Error_outOfBounds(1, 0, siz, buf->siz);
 
 	buf->ptr += siz;
 	buf->siz -= siz;
@@ -560,10 +426,7 @@ inline void Buffer_copyBytesInternal(U8 *ptr, const void *v, U64 siz) {
 Error Buffer_appendBuffer(Buffer *buf, Buffer append) {
 
 	if(!append.ptr)
-		return (Error) {
-			.genericError = EGenericError_NullPointer,
-			.paramId = 1
-		};
+		return Error_nullPointer(1, 0);
 
 	void *ptr = buf ? buf->ptr : NULL;
 
@@ -588,7 +451,7 @@ Error Buffer_createSubset(Buffer buf, U64 offset, U64 siz, Buffer *output) {
 		return e;
 		
 	if(siz > buf.siz)
-		return (Error) { .genericError = EGenericError_OutOfBounds };
+		return Error_outOfBounds(2, 0, siz, buf.siz);
 
 	buf.siz = siz;
 	*output = buf;

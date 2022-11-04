@@ -272,6 +272,8 @@ void Log_log(ELogLevel lvl, ELogOptions options, LogArgs args) {
 
 	for (U64 i = 0; i < args.argc; ++i) {
 
+		//TODO: This requires null terminator!
+
 		OutputDebugStringA(args.args[i].ptr);
 
 		if (hasNewLine)

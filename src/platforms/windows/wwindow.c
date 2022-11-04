@@ -266,8 +266,8 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 				for (U64 i = 0; i < 5; ++i) {
 
-					bool isDown = mouseDat.usButtonFlags & (1 << (i << 1));
-					bool isUp = mouseDat.usButtonFlags & (2 << (i << 1));
+					Bool isDown = mouseDat.usButtonFlags & (1 << (i << 1));
+					Bool isUp = mouseDat.usButtonFlags & (2 << (i << 1));
 
 					if(!isDown && !isUp)
 						continue;
@@ -414,7 +414,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 				//Our list isn't big enough, we need to resize
 
-				bool pushed = false;
+				Bool pushed = false;
 
 				if(dev == end) {
 
@@ -607,19 +607,19 @@ Bool WindowManager_supportsFormat(WindowManager manager, EWindowFormat format) {
 Error WindowManager_freePhysical(WindowManager *manager, Window **w) {
 
 	if(!manager)
-		return (Error) { .genericError = EGenericError_NullPointer };
+		return Error_nullPointer(0, 0);
 
 	if(!Lock_isLockedForThread(manager->lock))
-		return (Error) { .genericError = EGenericError_InvalidOperation };
+		return Error_invalidOperation(0);
 
 	if(!w || !*w)
-		return (Error) { .genericError = EGenericError_NullPointer, .errorSubId = 1 };
+		return Error_nullPointer(1, 0);
 
 	if(*w < (Window*) List_begin(manager->windows) || *w >= (Window*) List_end(manager->windows))
-		return (Error) { .genericError = EGenericError_OutOfBounds };
+		return Error_outOfBounds(0, 0, 0, 0);
 
 	if(!((*w)->flags & (EWindowFlags_IsActive | EWindowFlags_IsVirtual)))
-		return (Error) { .genericError = EGenericError_InvalidOperation, .paramId = 1 };
+		return Error_invalidOperation(1);
 
 	//Ensure our window safely exits
 
@@ -628,21 +628,13 @@ Error WindowManager_freePhysical(WindowManager *manager, Window **w) {
 	return Error_none();
 }
 
-Error Window_updatePhysicalTitle(
-	const Window *w,
-	String title
-) {
+Error Window_updatePhysicalTitle(const Window *w, String title) {
 
 	if(!w || !title.ptr || !title.len)
-		return (Error) { .genericError = EGenericError_NullPointer, .paramId = !!w };
+		return Error_nullPointer(!w ? 0 : 1, 0);
 
 	if (title.len >= MAX_PATH)
-		return (Error) { 
-			.genericError = EGenericError_OutOfBounds, 
-			.paramId = 1, 
-			.paramValue0 = title.len,
-			.paramValue1 = MAX_PATH
-		};
+		return Error_outOfBounds(1, 0, title.len, MAX_PATH);
 
 	C8 windowName[MAX_PATH + 1];
 	Buffer_copy(Buffer_createRef(windowName, sizeof(windowName)), String_buffer(title));
@@ -650,15 +642,18 @@ Error Window_updatePhysicalTitle(
 	windowName[title.len] = '\0';
 
 	if(!SetWindowTextA(w->nativeHandle, windowName))
-		return (Error) { .genericError = EGenericError_InvalidOperation };
+		return Error_invalidOperation(0);
 
 	return Error_none();
 }
 
 Error Window_presentPhysical(const Window *w) {
 
-	if(!w || !(w->flags & EWindowFlags_IsActive) || !(w->hint & EWindowHint_ProvideCPUBuffer))
-		return (Error) { .genericError = w ? EGenericError_NullPointer : EGenericError_InvalidOperation };
+	if(!w)
+		return Error_nullPointer(0, 0);
+
+	if(!(w->flags & EWindowFlags_IsActive) || !(w->hint & EWindowHint_ProvideCPUBuffer))
+		return Error_invalidOperation(0);
 
 	PAINTSTRUCT ps;
 	HDC hdcBmp = NULL, oldBmp = NULL;
@@ -667,7 +662,7 @@ Error Window_presentPhysical(const Window *w) {
 	HDC hdc = BeginPaint(w->nativeHandle, &ps);
 
 	if(!hdc)
-		return (Error) { .genericError = EGenericError_InvalidOperation, .errorSubId = 1 };
+		return Error_invalidOperation(1);
 
 	hdcBmp = CreateCompatibleDC(hdc);
 
@@ -699,5 +694,5 @@ cleanup:
 		DeleteDC(hdcBmp);
 
 	EndPaint(w->nativeHandle, &ps);
-	return (Error) { .genericError = EGenericError_InvalidOperation, .errorSubId = errId };
+	return Error_invalidOperation(errId);
 }

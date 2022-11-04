@@ -11,10 +11,10 @@ const U8 WindowManager_maxTotalVirtualWindowCount = 16;
 Error WindowManager_create(WindowManager *result) {
 
 	if(!result)
-		return (Error) { .genericError = EGenericError_NullPointer };
+		return Error_nullPointer(0, 0);
 
 	if(result->windows.length || result->lock.data)
-		return (Error) { .genericError = EGenericError_InvalidOperation };
+		return Error_invalidOperation(0);
 
 	Error err;
 
@@ -35,15 +35,15 @@ Error WindowManager_create(WindowManager *result) {
 Error WindowManager_free(WindowManager *manager) {
 
 	if(!manager)
-		return (Error) { .genericError = EGenericError_NullPointer };
+		return Error_none();
 
 	if(!Lock_isLockedForThread(manager->lock) && !WindowManager_lock(manager, 5 * seconds))
-		return (Error) { .genericError = EGenericError_TimedOut };
+		return Error_timedOut(0, 5 * seconds);
 
 	Error err = List_freex(&manager->windows);
 	
 	if(!WindowManager_unlock(manager))
-		return (Error) { .genericError = EGenericError_InvalidOperation };
+		return Error_invalidOperation(0);
 
 	Error errTemp = Lock_free(&manager->lock);
 
@@ -63,21 +63,16 @@ Error WindowManager_createVirtual(
 ) {
 
 	if(!manager || !result || !callbacks.onDraw)
-		return (Error) { .genericError = EGenericError_NullPointer, .paramId = manager ? 1 : (!result ? 0 : 2) };
+		return Error_nullPointer(!manager ? 0 : (!result ? 4 : 2), 0);
 
 	if(!Lock_isLockedForThread(manager->lock))
-		return (Error) { .genericError = EGenericError_InvalidOperation };
+		return Error_invalidOperation(0);
 
 	if(*result)
-		return (Error) { .genericError = EGenericError_InvalidOperation, .paramId = 4 };
+		return Error_invalidOperation(1);
 
 	if(I32x2_any(I32x2_leq(size, I32x2_zero())))
-		return (Error) { 
-			.genericError = EGenericError_InvalidParameter, 
-			.paramId = 1, 
-			.paramValue0 = (U64) I32x2_x(size), 
-			.paramValue1 = (U64) I32x2_y(size)
-		};
+		return Error_outOfBounds(1, 0, (U64) (I64) I32x2_x(size), (U64) (I64) I32x2_y(size));
 
 	switch (format) {
 
@@ -88,11 +83,7 @@ Error WindowManager_createVirtual(
 			break;
 
 		default:
-			return (Error) { 
-				.genericError = EGenericError_InvalidParameter, 
-				.paramId = 3, 
-				.paramValue0 = (U64) format
-			};
+			return Error_invalidEnum(3, 0, (U64) format, 0);
 	}
 
 	for(U8 i = 0; i < WindowManager_maxTotalVirtualWindowCount; ++i) {
@@ -144,27 +135,27 @@ Error WindowManager_createVirtual(
 		}
 	}
 
-	return (Error) { .genericError = EGenericError_OutOfMemory };
+	return Error_outOfMemory(0);
 }
 
 Error WindowManager_freeVirtual(WindowManager *manager, Window **handle) {
 
 	if(!manager || !handle || !*handle)
-		return (Error) { .genericError = EGenericError_NullPointer, .paramId = manager ? 1 : 0 };
+		return Error_nullPointer(!manager ? 0 : 1, 0);
 
 	if(!Lock_isLockedForThread(manager->lock))
-		return (Error) { .genericError = EGenericError_InvalidOperation };
+		return Error_invalidOperation(0);
 
 	if(!Window_isVirtual(*handle))
-		return (Error) { .genericError = EGenericError_InvalidOperation, .paramId = 1 };
+		return Error_invalidOperation(1);
 
 	Window *w = *handle;
 
 	if(!Lock_isLockedForThread(w->lock))
-		return (Error) { .genericError = EGenericError_InvalidOperation };
+		return Error_invalidOperation(2);
 
 	if (!Lock_unlock(&w->lock)) 
-		return (Error) { .genericError = EGenericError_InvalidOperation };
+		return Error_invalidOperation(3);
 
 	if(w->callbacks.onDestroy)
 		w->callbacks.onDestroy(w);
@@ -196,7 +187,7 @@ inline U16 WindowManager_getEmptyWindows(WindowManager manager) {
 Error WindowManager_waitForExitAll(WindowManager *manager, Ns maxTimeout) {
 
 	if(!manager)
-		return (Error) { .genericError = EGenericError_NullPointer };
+		return Error_nullPointer(0, 0);
 
 	//Checking for WindowManager is a lot easier, as we can just acquire the lock
 	//And check how many windows are active
@@ -204,13 +195,12 @@ Error WindowManager_waitForExitAll(WindowManager *manager, Ns maxTimeout) {
 	Ns start = Timer_now();
 
 	if(!WindowManager_lock(manager, maxTimeout))
-		return (Error) { .genericError = EGenericError_InvalidOperation };
+		return Error_invalidOperation(0);
 
 	//Check if we should exit
 
 	if(WindowManager_getEmptyWindows(*manager) == WindowManager_maxWindows())
-		return WindowManager_unlock(manager) ? Error_none() : 
-			(Error) { .genericError = EGenericError_InvalidOperation };
+		return WindowManager_unlock(manager) ? Error_none() : Error_invalidOperation(1);
 
 	//Now we have to make sure we still have time left to wait
 
@@ -225,14 +215,12 @@ Error WindowManager_waitForExitAll(WindowManager *manager, Ns maxTimeout) {
 		//Try to reacquire the lock
 
 		if(!Lock_isLockedForThread(manager->lock) && !Lock_lock(&manager->lock, left))
-			return (Error) { .genericError = EGenericError_InvalidOperation };
+			return Error_invalidOperation(2);
 
 		//Our windows have been released!
 
-		if(WindowManager_getEmptyWindows(*manager) == WindowManager_maxWindows()) {
-			WindowManager_unlock(manager);
-			return Error_none();
-		}
+		if(WindowManager_getEmptyWindows(*manager) == WindowManager_maxWindows()) 
+			return WindowManager_unlock(manager) ? Error_none() : Error_invalidOperation(3);
 
 		//Grab our virtual windows, to ensure we complete them
 		//The virtual window should properly exit if it's completed
@@ -272,7 +260,7 @@ Error WindowManager_waitForExitAll(WindowManager *manager, Ns maxTimeout) {
 		//Release the lock to check for the next time
 
 		if(!WindowManager_unlock(manager))
-			return (Error) { .genericError = EGenericError_InvalidOperation };
+			return Error_invalidOperation(4);
 
 		//Wait to ensure we don't waste cycles
 		//Virtual windows are allowed to update as fast as possible though
@@ -285,7 +273,7 @@ Error WindowManager_waitForExitAll(WindowManager *manager, Ns maxTimeout) {
 		left = (Ns) I64_max(0, maxTimeout - (DNs)(Timer_now() - start));
 	}
 
-	return (Error) { .genericError = EGenericError_TimedOut };
+	return Error_timedOut(0, maxTimeout);
 }
 
 //All types of windows
@@ -298,7 +286,7 @@ Error WindowManager_createWindow(
 ) {
 
 	if(!manager)
-		return (Error) { .genericError = EGenericError_NullPointer };
+		return Error_nullPointer(0, 0);
 
 	if (manager)
 		return WindowManager_createPhysical(
@@ -310,14 +298,11 @@ Error WindowManager_createWindow(
 
 Error WindowManager_freeWindow(WindowManager *manager, Window **w) {
 
-	if (!manager)
-		return (Error) { .genericError = EGenericError_NullPointer };
-
-	if (!w)
-		return (Error) { .genericError = EGenericError_NullPointer, .paramId = 1 };
+	if (!manager || !w)
+		return Error_nullPointer(!w ? 1 : 0, 0);
 
 	if(!Lock_isLockedForThread(manager->lock))
-		return (Error) { .genericError = EGenericError_InvalidOperation };
+		return Error_invalidOperation(1);
 
 	if (Window_isVirtual(*w))
 		return WindowManager_freeVirtual(manager, w);

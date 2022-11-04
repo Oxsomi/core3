@@ -12,10 +12,10 @@ Error Platform_create(
 ) {
 
 	if(Platform_instance.platformType != EPlatform_Uninitialized)
-		return Error_base(EGenericError_InvalidOperation, 0, 0, 0, Platform_instance.platformType, 0);
+		return Error_invalidOperation(0);
 
 	if(!cmdArgc)
-		return Error_base(EGenericError_InvalidParameter, 0, 1, 0, 0, 0);
+		return Error_invalidParameter(0, 0, 0);
 
 	Platform_instance =	(Platform) {
 		.platformType = _PLATFORM_TYPE,

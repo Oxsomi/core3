@@ -127,43 +127,41 @@ Bool F32_isValid(F32 v);
 inline Error F32_pow2(F32 v, F32 *res) { 
 
 	if(!res)
-		return (Error) { .genericError = EGenericError_NullPointer };
+		return Error_nullPointer(1, 0);
 
 	*res = v * v; 
-	return F32_isInf(*res) ? (Error) { 
-		.genericError = EGenericError_Overflow, .paramValue0 = *(const U32*)&v, .paramValue1 = *(const U32*)res 
-	} : Error_none();
+	return F32_isInf(*res) ? Error_overflow(0, 0, *(const U32*)&v, *(const U32*)res) : 
+		Error_none();
 }
 
 inline Error F32_pow3(F32 v, F32 *res) { 
 
 	if(!res)
-		return Error_base(EGenericError_NullPointer, 0, 0, 0, 0, 0);
+		return Error_nullPointer(1, 0);
 
 	*res = v * v * v;
-	return F32_isInf(*res) ? (Error) { 
-		.genericError = EGenericError_Overflow, .paramValue0 = *(const U32*)&v, .paramValue1 = *(const U32*)res 
-	} : Error_none();
+	return F32_isInf(*res) ? Error_overflow(0, 0, *(const U32*)&v, *(const U32*)res) : 
+		Error_none();
 }
 
 inline Error F32_pow4(F32 v, F32 *res) { 
 
 	if(!res)
-		return Error_base(EGenericError_NullPointer, 0, 0, 0, 0, 0);
+		return Error_nullPointer(1, 0);
 
 	*res = v * v; *res *= *res;
-	return F32_isInf(*res) ? Error_base(EGenericError_Overflow, 0, 1, 0, *(const U32*)&v, *(const U32*)res) : Error_none();
+	return F32_isInf(*res) ? Error_overflow(0, 0, *(const U32*)&v, *(const U32*)res) : 
+		Error_none();
 }
 
 inline Error F32_pow5(F32 v, F32 *res) { 
 
 	if(!res)
-		return Error_base(EGenericError_NullPointer, 0, 0, 0, 0, 0);
+		return Error_nullPointer(1, 0);
 
 	*res = v * v; *res *= *res * v;
-	return F32_isInf(*res) ? (Error) { 
-		.genericError = EGenericError_Overflow, .paramValue0 = *(const U32*)&v, .paramValue1 = *(const U32*)res 
-	} : Error_none();
+	return F32_isInf(*res) ? Error_overflow(0, 0, *(const U32*)&v, *(const U32*)res) : 
+		Error_none();
 }
 
 Error F32_pow(F32 v, F32 exp, F32 *res);

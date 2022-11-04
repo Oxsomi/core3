@@ -7,11 +7,7 @@ Error F32_pow(F32 v, F32 exp, F32 *res) {
 	F32 r = powf(v, exp); 
 
 	if(!F32_isValid(r))
-		return Error_base(
-			EGenericError_Overflow, 0,
-			0, 0, 
-			*(const U32*) &v, *(const U32*) &exp
-		);
+		return Error_NaN(0);
 
 	*res = r;
 	return Error_none();
@@ -45,20 +41,12 @@ F32 F32_floor(F32 v) { return floorf(v); }
 Error F32_mod(F32 v, F32 mod, F32 *res) { 
 
 	if(!mod)
-		return (Error) {
-			.genericError = EGenericError_DivideByZero,
-			.paramValue0 = *(const U32*) &v, 
-			.paramValue1 = *(const U32*) &mod
-		};
+		return Error_divideByZero(0, *(const U32*) &v, *(const U32*) &mod);
 
 	F32 r = fmodf(v, mod); 
 
 	if(!F32_isValid(r))
-		return (Error) {
-			.genericError = EGenericError_Overflow,
-			.paramValue0 = *(const U32*) &v, 
-			.paramValue1 = *(const U32*) &mod
-		};
+		return Error_NaN(0);
 
 	*res = r;
 	return Error_none();

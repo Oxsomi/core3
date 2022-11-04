@@ -10,25 +10,22 @@
 Error Lock_create(Lock *res) {
 
 	if(!res)
-		return (Error) { .genericError = EGenericError_NullPointer };
+		return Error_nullPointer(0, 0);
 
-	*res = (Lock) { .data = CreateMutexA(
-		NULL, FALSE, NULL
-	)};
-
-	if(!res->data)
-		return (Error) { .genericError = EGenericError_InvalidOperation };
-
-	return Error_none();
+	*res = (Lock) { .data = CreateMutexA(NULL, FALSE, NULL) };
+	return !res->data ? Error_invalidState(0) : Error_none();
 }
 
 Error Lock_free(Lock *res) {
 
-	if(!res || !res->data)
-		return (Error) { .genericError = EGenericError_NullPointer };
+	if(!res)
+		return Error_none();
+
+	if(!res->data)
+		return Error_nullPointer(0, 0);
 
 	if(Lock_isLocked(*res))
-		return (Error) { .genericError = EGenericError_InvalidOperation };
+		return Error_invalidState(0);
 
 	CloseHandle(res->data);
 	*res = (Lock){ 0 };
