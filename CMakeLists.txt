@@ -18,7 +18,8 @@ if(CMAKE_SIZEOF_VOID_P EQUAL 4)
 endif()
 
 set(EnableSIMD ON CACHE BOOL "Enables SIMD")
-set(RelaxFloat ON CACHE BOOL "Relax float (perf > accuracy)")
+set(RelaxFloat OFF CACHE BOOL "Relax float (perf > accuracy)")
+set(WorkingDir OFF CACHE BOOL "Use working directory as local root (OFF = Use file installation directory, ON = working dir)")
 
 # Even though EnableSIMD can be turned off, it won't be truly off
 # This is because we want to maintain proper IEEE754 compliance, which we can't do without SSE
@@ -46,9 +47,27 @@ else()
 endif()
 
 if(EnableSIMD) 
+	message("-- Enabling SIMD (-DEnableSIMD=ON)")
 	set(_SIMD "SIMD_SSE")
 else()
+	message("-- Disabling SIMD (-DEnableSIMD=OFF)")
 	set(_SIMD "SIMD_NONE")
+endif()
+
+if(RelaxFloat) 
+	message("-- Enabling relaxed float (better perf, but less consistency) (-DRelaxFloat=ON)")
+	set(_RELAX_FLOAT "1")
+else()
+	message("-- Disabling relaxed floats (worse perf, but more consistency) (-DRelaxFloat=OFF)")
+	set(_RELAX_FLOAT "0")
+endif()
+
+if(WorkingDir) 
+	message("-- Enabling reads from the working dir instead of installation dir (-DWorkingDir=ON)")
+	set(_WORKING_DIR "1")
+else()
+	message("-- Disabling reads from the working dir instead of installation dir (-DWorkingDir=OFF)")
+	set(_WORKING_DIR "0")
 endif()
 
 configure_file(config.h.in ${CMAKE_CURRENT_SOURCE_DIR}/inc/cfg/config.h)

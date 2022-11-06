@@ -99,7 +99,7 @@ inline Bool String_setAt(String str, U64 i, C8 c) {
 
 inline String String_createEmpty() { return (String) { 0 }; }
 
-inline String String_createRefConst(const C8 *ptr, U64 maxSize) { 
+inline String String_createConstRef(const C8 *ptr, U64 maxSize) { 
 	return (String) { 
 		.len = String_calcStrLen(ptr, maxSize),
 		.ptr = (C8*) ptr,
@@ -109,11 +109,11 @@ inline String String_createRefConst(const C8 *ptr, U64 maxSize) {
 
 //Only use this if string is created safely in code
 
-inline String String_createRefUnsafeConst(const C8 *ptr) {
-	return String_createRefConst(ptr, U64_MAX);
+inline String String_createConstRefUnsafe(const C8 *ptr) {
+	return String_createConstRef(ptr, U64_MAX);
 }
 
-inline String String_createRefDynamic(C8 *ptr, U64 maxSize) { 
+inline String String_createRef(C8 *ptr, U64 maxSize) { 
 	return (String) { 
 		.len = String_calcStrLen(ptr, maxSize),
 		.ptr = ptr,
@@ -121,7 +121,7 @@ inline String String_createRefDynamic(C8 *ptr, U64 maxSize) {
 	};
 }
 
-inline String String_createRefSizedConst(const C8 *ptr, U64 size) {
+inline String String_createConstRefSized(const C8 *ptr, U64 size) {
 	return (String) { 
 		.len = size,
 		.ptr = (C8*) ptr,
@@ -129,7 +129,7 @@ inline String String_createRefSizedConst(const C8 *ptr, U64 size) {
 	};
 }
 
-inline String String_createRefSizedDynamic(C8 *ptr, U64 size) {
+inline String String_createRefSized(C8 *ptr, U64 size) {
 	return (String) { 
 		.len = size,
 		.ptr = ptr,
@@ -137,7 +137,7 @@ inline String String_createRefSizedDynamic(C8 *ptr, U64 size) {
 	};
 }
 
-inline String String_createRefShortStringConst(const ShortString str) {
+inline String String_createConstRefShortString(const ShortString str) {
 	return (String) {
 		.len = String_calcStrLen(str, ShortString_LEN - 1),
 		.ptr = (C8*) str,
@@ -145,7 +145,7 @@ inline String String_createRefShortStringConst(const ShortString str) {
 	};
 }
 
-inline String String_createRefLongStringConst(const LongString str) {
+inline String String_createConstRefLongString(const LongString str) {
 	return (String) {
 		.len = String_calcStrLen(str, LongString_LEN - 1),
 		.ptr = (C8*) str,
@@ -153,7 +153,7 @@ inline String String_createRefLongStringConst(const LongString str) {
 	};
 }
 
-inline String String_createRefShortStringDynamic(ShortString str) {
+inline String String_createRefShortString(ShortString str) {
 	return (String) {
 		.len = String_calcStrLen(str, ShortString_LEN - 1),
 		.ptr = str,
@@ -161,7 +161,7 @@ inline String String_createRefShortStringDynamic(ShortString str) {
 	};
 }
 
-inline String String_createRefLongStringDynamic(LongString str) {
+inline String String_createRefLongString(LongString str) {
 	return (String) {
 		.len = String_calcStrLen(str, LongString_LEN - 1),
 		.ptr = str,
@@ -324,6 +324,7 @@ Bool String_parseOct(String s, U64 *result);
 Bool String_parseBin(String s, U64 *result);
 
 Bool String_isNyto(String s);				//[0-9A-Za-z_$]+
+Bool String_isNytoFile(String s);			//[0-9A-Za-z_.]+	6-bit encoding for file names
 Bool String_isAlphaNumeric(String s);		//[0-9A-Za-z_]+
 Bool String_isHex(String s);				//[0-9A-Fa-f]+
 Bool String_isDec(String s);				//[0-9]+
@@ -445,10 +446,17 @@ String String_getBasePath(String *str);	//Formats on string first to ensure it's
 Error StringList_create(U64 len, Allocator alloc, StringList *result);
 Error StringList_free(StringList *arr, Allocator alloc);
 
-Error StringList_createCopy(const StringList *toCopy, StringList *arr, Allocator alloc);
+Error StringList_createCopy(const StringList *toCopy, Allocator alloc, StringList *arr);
 
 //Store the string directly into StringList (no copy)
 //The allocator is used to free strings if they are heap allocated
 
 Error StringList_set(StringList arr, U64 i, String str, Allocator alloc);
 Error StringList_unset(StringList arr, U64 i, Allocator alloc);
+
+//Combining all strings into one
+
+Error StringList_combine(StringList arr, Allocator alloc, String *result);
+
+Error StringList_concat(StringList arr, C8 between, Allocator alloc, String *result);
+Error StringList_concatString(StringList arr, String between, Allocator alloc, String *result);

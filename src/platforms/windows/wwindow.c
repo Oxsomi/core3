@@ -99,7 +99,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 			if (GetRawInputData((HRAWINPUT)lParam, RID_INPUT, buf.ptr, &size, sizeof(RAWINPUTHEADER)) != size) {
 				Error_printx(Error_platformError(0, GetLastError()), ELogLevel_Error, ELogOptions_Default);
-				Log_error(String_createRefUnsafeConst("Couldn't get raw input"), ELogOptions_Default);
+				Log_error(String_createConstRefUnsafe("Couldn't get raw input"), ELogOptions_Default);
 				break;
 			}
 
@@ -351,7 +351,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 			if (!GetRawInputDeviceInfoA((HANDLE)lParam, RIDI_DEVICEINFO, &deviceInfo, &size)) {
 				Error_printx(Error_platformError(0, GetLastError()), ELogLevel_Error, ELogOptions_Default);
-				Log_error(String_createRefUnsafeConst("Invalid data in WM_INPUT_DEVICE_CHANGE"), ELogOptions_Default);
+				Log_error(String_createConstRefUnsafe("Invalid data in WM_INPUT_DEVICE_CHANGE"), ELogOptions_Default);
 				break;
 			}
 
@@ -370,7 +370,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 				//Because it might be relying on keys that don't exist there
 
 				if(isKeyboard && deviceInfo.keyboard.dwKeyboardMode != 0x4)
-					Log_warn(String_createRefUnsafeConst("Possibly unsupported type of keyboard!"), ELogOptions_Default);
+					Log_warn(String_createConstRefUnsafe("Possibly unsupported type of keyboard!"), ELogOptions_Default);
 
 				//Create input device
 
@@ -431,7 +431,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 						Buffer_freex(&device.dataExt);
 						InputDevice_free(&device);
 
-						Log_error(String_createRefUnsafeConst("Couldn't register device; "), ELogOptions_Default);
+						Log_error(String_createConstRefUnsafe("Couldn't register device; "), ELogOptions_Default);
 						break;
 					}
 
@@ -451,7 +451,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 					Buffer_freex(&device.dataExt);
 					InputDevice_free(&device);
 
-					Log_error(String_createRefUnsafeConst("Couldn't create raw input device"), ELogOptions_Default);
+					Log_error(String_createConstRefUnsafe("Couldn't create raw input device"), ELogOptions_Default);
 					break;
 				}
 

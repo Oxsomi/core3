@@ -39,7 +39,7 @@ String Error_formatPlatformError(Error err) {
 		return String_createEmpty();
 
 	String res;
-	if((err = String_createCopyx(String_createRefConst(lpBuffer, f), &res)).genericError) {
+	if((err = String_createCopyx(String_createConstRef(lpBuffer, f), &res)).genericError) {
 		LocalFree(lpBuffer);
 		return String_createEmpty();
 	}
@@ -54,15 +54,15 @@ String Error_formatPlatformError(Error err) {
 
 void sigFunc(int signal) {
 
-	String msg = String_createRefUnsafeConst("Undefined instruction");
+	String msg = String_createConstRefUnsafe("Undefined instruction");
 
 	switch (signal) {
-		case SIGABRT:	msg = String_createRefUnsafeConst("Abort was called");					break;
-		case SIGFPE:	msg = String_createRefUnsafeConst("Floating point error occurred");		break;
-		case SIGILL:	msg = String_createRefUnsafeConst("Illegal instruction");				break;
-		case SIGINT:	msg = String_createRefUnsafeConst("Interrupt was called");				break;
-		case SIGSEGV:	msg = String_createRefUnsafeConst("Segfault");							break;
-		case SIGTERM:	msg = String_createRefUnsafeConst("Terminate was called");				break;
+		case SIGABRT:	msg = String_createConstRefUnsafe("Abort was called");					break;
+		case SIGFPE:	msg = String_createConstRefUnsafe("Floating point error occurred");		break;
+		case SIGILL:	msg = String_createConstRefUnsafe("Illegal instruction");				break;
+		case SIGINT:	msg = String_createConstRefUnsafe("Interrupt was called");				break;
+		case SIGSEGV:	msg = String_createConstRefUnsafe("Segfault");							break;
+		case SIGTERM:	msg = String_createConstRefUnsafe("Terminate was called");				break;
 	}
 
 	//Outputting to console is not technically allowed by the Windows docs
@@ -115,16 +115,38 @@ int main(int argc, const char *argv[]) {
 	GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &info);
 	oldColor = info.wAttributes;
 
-	Platform_create(argc, argv, GetModuleHandleA(NULL), freeCallback, allocCallback, NULL);
+	Error err = Platform_create(argc, argv, GetModuleHandleA(NULL), freeCallback, allocCallback, NULL);
+
+	if(err.genericError)
+		return -1;
 
 	int res = Program_run();
 	Program_exit();
-	Program_cleanupExt();
-	Program_cleanup();
+	Platform_cleanupExt();
+	Platform_cleanup();
 
 	return res;
 }
 
-void Program_cleanupExt() {
+void Platform_cleanupExt() {
 	SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), oldColor);
+}
+
+Error Platform_initWorkingDirectory(String *result) {
+
+	C8 buff[MAX_PATH + 1];
+	DWORD chars = GetCurrentDirectoryA(MAX_PATH + 1, buff);
+
+	if(!chars)
+		return Error_platformError(0, GetLastError());
+
+	//Move to heap and standardize
+
+	Error err = String_createCopyx(String_createConstRef(buff, chars), result);
+
+	if(err.genericError)
+		return err;
+
+	String_replaceAll(result, '\\', '/', EStringCase_Sensitive);
+	return String_insertx(result, '/', result->len);
 }

@@ -1,7 +1,7 @@
 #include "platforms/window.h"
 #include "platforms/platform.h"
 #include "platforms/thread.h"
-#include "file/file.h"
+#include "platforms/file.h"
 #include "types/error.h"
 #include "types/buffer.h"
 #include "types/string.h"
@@ -314,7 +314,7 @@ Error Window_storeCPUBufferToDisk(const Window *w, String filePath) {
 	if(err.genericError)
 		return err;
 
-	err = File_write(file, filePath);
+	err = File_writeLocal(file, filePath);
 	Buffer_freex(&file);
 
 	return err;

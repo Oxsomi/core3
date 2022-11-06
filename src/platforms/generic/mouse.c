@@ -4,7 +4,7 @@
 
 #define _button(name)																						\
 	if ((err = InputDevice_createButton(																	\
-		*result, EMouseButton_##name, String_createRefUnsafeConst("EMouseButton_" #name), &res				\
+		*result, EMouseButton_##name, String_createConstRefUnsafe("EMouseButton_" #name), &res				\
 	)).genericError) {																						\
 		InputDevice_free(result);																			\
 		return err;																							\
@@ -12,7 +12,7 @@
 
 #define _axis(name)																							\
 	if ((err = InputDevice_createAxis(																		\
-		*result, EMouseAxis_##name, String_createRefUnsafeConst("EMouseAxis_" #name), 0, &res					\
+		*result, EMouseAxis_##name, String_createConstRefUnsafe("EMouseAxis_" #name), 0, &res					\
 	)).genericError) {																						\
 		InputDevice_free(result);																			\
 		return err;																							\

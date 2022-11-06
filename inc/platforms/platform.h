@@ -15,6 +15,7 @@ typedef struct Platform {
 	EPlatform platformType;
 
 	StringList args;
+	String workingDirectory;		//Contains a trailing slash to make file stuff easier
 
 	Allocator alloc;
 	WindowManager windowManager;
@@ -31,8 +32,13 @@ Error Platform_create(
 	FreeFunc free, AllocFunc alloc, void *allocator
 );
 
-impl void Program_cleanupExt();
-void Program_cleanup();
+impl void Platform_cleanupExt();
+
+//Called on setup. Don't use this over Platform_instance.workingDirectory
+//
+impl Error Platform_initWorkingDirectory(String *result);
+
+void Platform_cleanup();
 
 user_impl extern int Program_run();
 user_impl extern void Program_exit();

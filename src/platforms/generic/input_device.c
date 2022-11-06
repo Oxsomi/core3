@@ -178,9 +178,9 @@ String InputDevice_getName(InputDevice d, InputHandle handle) {
 	U16 localHandle = InputDevice_getLocalHandle(d, handle);
 
 	if(InputDevice_isAxis(d, handle))
-		return String_createRefLongStringConst(InputDevice_getAxis(d, localHandle)->name);
+		return String_createConstRefLongString(InputDevice_getAxis(d, localHandle)->name);
 
-	return String_createRefLongStringConst(InputDevice_getButton(d, localHandle)->name);
+	return String_createConstRefLongString(InputDevice_getButton(d, localHandle)->name);
 }
 
 InputHandle InputDevice_getHandle(InputDevice d, String name) {
@@ -192,7 +192,7 @@ InputHandle InputDevice_getHandle(InputDevice d, String name) {
 
 	for(U16 i = 0; i < d.buttons; ++i)
 		if(String_equalsString(
-			String_createRefLongStringConst(InputDevice_getButton(d, i)->name), 
+			String_createConstRefLongString(InputDevice_getButton(d, i)->name), 
 			name,
 			EStringCase_Insensitive
 		))
@@ -200,7 +200,7 @@ InputHandle InputDevice_getHandle(InputDevice d, String name) {
 
 	for(U16 i = 0; i < d.axes; ++i)
 		if(String_equalsString(
-			String_createRefLongStringConst(InputDevice_getAxis(d, i)->name), 
+			String_createConstRefLongString(InputDevice_getAxis(d, i)->name), 
 			name,
 			EStringCase_Insensitive
 		))

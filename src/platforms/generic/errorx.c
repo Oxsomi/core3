@@ -18,14 +18,14 @@ void Error_printx(Error err, ELogLevel logLevel, ELogOptions options) {
 	if(!err.genericError)
 		return;
 
-	String str = String_createRefUnsafeConst(EGenericError_toString[err.genericError]);
+	String str = String_createConstRefUnsafe(EGenericError_toString[err.genericError]);
 
 	if(String_createCopyx(str, &str).genericError)
 		return;
 
 	if(err.errorSubId) {
 
-		String prefix = String_createRefUnsafeConst(" sub id: ");
+		String prefix = String_createConstRefUnsafe(" sub id: ");
 
 		if(!String_appendStringx(&str, prefix).genericError) {
 
@@ -42,7 +42,7 @@ void Error_printx(Error err, ELogLevel logLevel, ELogOptions options) {
 
 	if(err.paramId) {
 
-		String prefix = String_createRefUnsafeConst(" param id: ");
+		String prefix = String_createConstRefUnsafe(" param id: ");
 
 		if (!String_appendStringx(&str, prefix).genericError) {
 
@@ -59,7 +59,7 @@ void Error_printx(Error err, ELogLevel logLevel, ELogOptions options) {
 
 	if(err.paramSubId) {
 
-		String prefix = String_createRefUnsafeConst(" param sub id: ");
+		String prefix = String_createConstRefUnsafe(" param sub id: ");
 
 		if(!String_appendStringx(&str, prefix).genericError) {
 
@@ -78,7 +78,7 @@ void Error_printx(Error err, ELogLevel logLevel, ELogOptions options) {
 
 	if(val & EErrorParamValues_V0) {
 
-		String prefix = String_createRefUnsafeConst(" param0: ");
+		String prefix = String_createConstRefUnsafe(" param0: ");
 
 		if(!String_appendStringx(&str, prefix).genericError) {
 
@@ -95,7 +95,7 @@ void Error_printx(Error err, ELogLevel logLevel, ELogOptions options) {
 
 	if(val & EErrorParamValues_V1) {
 
-		String prefix = String_createRefUnsafeConst(" param1: ");
+		String prefix = String_createConstRefUnsafe(" param1: ");
 
 		if(!String_appendStringx(&str, prefix).genericError) {
 
@@ -112,7 +112,7 @@ void Error_printx(Error err, ELogLevel logLevel, ELogOptions options) {
 
 	if(err.genericError == EGenericError_PlatformError) {
 
-		String suffix0 = String_createRefUnsafeConst(": ");
+		String suffix0 = String_createConstRefUnsafe(": ");
 
 		if(!String_appendStringx(&str, suffix0).genericError) {
 			String suffix1 = Error_formatPlatformError(err);

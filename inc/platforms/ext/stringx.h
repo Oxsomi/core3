@@ -130,7 +130,7 @@ inline Error StringList_freex(StringList *arr) {
 }
 
 inline Error StringList_createCopyx(const StringList *toCopy, StringList *arr) {
-	return StringList_createCopy(toCopy, arr, Platform_instance.alloc);
+	return StringList_createCopy(toCopy, Platform_instance.alloc, arr);
 }
 
 inline Error StringList_setx(StringList arr, U64 i, String str) {
@@ -139,4 +139,16 @@ inline Error StringList_setx(StringList arr, U64 i, String str) {
 
 inline Error StringList_unsetx(StringList arr, U64 i) {
 	return StringList_unset(arr, i, Platform_instance.alloc);
+}
+
+inline Error StringList_combinex(StringList arr, String *result) {
+	return StringList_combine(arr, Platform_instance.alloc, result);
+}
+
+inline Error StringList_concatx(StringList arr, C8 between, String *result) {
+	return StringList_concat(arr, between, Platform_instance.alloc, result);
+}
+
+inline Error StringList_concatStringx(StringList arr, String between, String *result) {
+	return StringList_concatString(arr, between, Platform_instance.alloc, result);
 }

@@ -127,7 +127,9 @@ inline Bool C8_isWhitespace(C8 c) { return c == ' ' || c == '\t' || c == '\n' ||
 
 inline Bool C8_isHex(C8 c) { return C8_isDec(c) || C8_isUpperCaseHex(c) || C8_isLowerCaseHex(c); }
 inline Bool C8_isNyto(C8 c) { return C8_isDec(c) || C8_isUpperCase(c) || C8_isLowerCase(c) || c == '_' || c == '$'; }
+inline Bool C8_isNytoFile(C8 c) { return C8_isDec(c) || C8_isUpperCase(c) || C8_isLowerCase(c) || c == '_' || c == '.'; }
 inline Bool C8_isAlphaNumeric(C8 c) { return C8_isNyto(c) && c != '$'; }
+inline Bool C8_isAlpha(C8 c) { return C8_isUpperCase(c) || C8_isLowerCase(c); }
 
 inline U8 C8_bin(C8 c) { return c == '0' ? 0 : (c == '1' ? 1 : U8_MAX); }
 inline U8 C8_oct(C8 c) { return C8_isOct(c) ? c - '0' : U8_MAX; }

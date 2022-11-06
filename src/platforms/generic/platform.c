@@ -50,19 +50,64 @@ Error Platform_create(
 		//But that'd happen anyways
 
 		for(int i = 1; i < cmdArgc; ++i)
-			sl.ptr[i - 1] = String_createRefUnsafeConst(cmdArgs[i]);
+			sl.ptr[i - 1] = String_createConstRefUnsafe(cmdArgs[i]);
 	}
 
 	Platform_instance.args = sl;
+	
+
+	#if _WORKING_DIR
+
+		//Grab current working directory.
+		//This is only useful if you're building a tool that has to be run from cmd for example.
+
+		if((err = Platform_initWorkingDirectory(&Platform_instance.workingDirectory)).genericError)
+			goto cleanup;
+
+	#else
+
+		//Grab app directory of where the exe is installed
+
+		String appDir;
+		if ((err = String_createCopyx(String_createConstRefUnsafe(cmdArgs[0]), &appDir)).genericError)
+			goto cleanup;
+
+		String_replaceAll(&appDir, '\\', '/', EStringCase_Sensitive);
+
+		U64 loc = String_findLast(appDir, '/', EStringCase_Sensitive);
+		String basePath;
+
+		if (loc == appDir.len)
+			basePath = String_createConstRef(appDir.ptr, appDir.len);
+	
+		else String_cut(appDir, 0, loc + 1, &basePath);
+
+		String workDir;
+
+		if ((err = String_createCopyx(basePath, &workDir)).genericError)
+			goto cleanup;
+
+		String_freex(&appDir);
+		Platform_instance.workingDirectory = workDir;
+
+	#endif
 
 	return Error_none();
+
+cleanup:
+
+	StringList_freex(&Platform_instance.args);
+	WindowManager_free(&Platform_instance.windowManager);
+	Platform_instance =	(Platform) { 0 };
+	return err;
 }
 
-void Program_cleanup() {
+void Platform_cleanup() {
 
 	if(Platform_instance.platformType == EPlatform_Uninitialized)
 		return;
 
+	String_freex(&Platform_instance.workingDirectory);
 	WindowManager_free(&Platform_instance.windowManager);
 	StringList_freex(&Platform_instance.args);
 

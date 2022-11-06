@@ -46,13 +46,17 @@ Error String_offsetAsRef(String s, U64 off, String *result) {
 	testFunc,																\
 	String_startsWithString(												\
 		s,																	\
-		String_createRefUnsafeConst(num),									\
+		String_createConstRefUnsafe(num),									\
 		EStringCase_Insensitive												\
-	) ? String_createRefUnsafeConst(num).len : 0							\
+	) ? String_createConstRefUnsafe(num).len : 0							\
 )
 
 Bool String_isNyto(String s) {
 	String_matchesPatternNum(C8_isNyto, "0n");
+}
+
+Bool String_isNytoFile(String s) {
+	String_matchesPatternNum(C8_isNytoFile, "0f");
 }
 
 Bool String_isAlphaNumeric(String s) {
@@ -262,7 +266,7 @@ Error String_free(String *str, Allocator alloc) {
 
 #define String_createNum(maxVal, func, prefixRaw, ...)					\
 																		\
-	String prefix = String_createRefUnsafeConst(prefixRaw);				\
+	String prefix = String_createConstRefUnsafe(prefixRaw);				\
 																		\
 	if (result->len)													\
 		return Error_invalidOperation(0);								\
@@ -346,29 +350,34 @@ Error String_split(
 
 	U64 len = String_countAll(s, c, casing);
 
-	Error err = StringList_create(len, allocator, result);
+	Error err = StringList_create(len ? len : 1, allocator, result);
 
 	if (err.genericError)
 		return err;
 
-	if (result) {
+	if (!len) {
 
-		StringList str = *result;
+		result->ptr[0] = String_isConstRef(s) ? String_createConstRef(s.ptr, s.len) :
+			String_createRef(s.ptr, s.len);
 
-		c = C8_transform(c, (EStringTransform) casing);
-
-		U64 count = 0, last = 0;
-
-		for (U64 i = 0; i < s.len; ++i)
-			if (C8_transform(s.ptr[i], (EStringTransform) casing) == c) {
-
-				str.ptr[count++] = 
-					String_isConstRef(s) ? String_createRefConst(s.ptr + last, i - last) : 
-					String_createRefDynamic(s.ptr + last, i - last);
-
-				last = i + 1;
-			}
+		return Error_none();
 	}
+
+	StringList str = *result;
+
+	c = C8_transform(c, (EStringTransform) casing);
+
+	U64 count = 0, last = 0;
+
+	for (U64 i = 0; i < s.len; ++i)
+		if (C8_transform(s.ptr[i], (EStringTransform) casing) == c) {
+
+			str.ptr[count++] = 
+				String_isConstRef(s) ? String_createConstRef(s.ptr + last, i - last) : 
+				String_createRef(s.ptr + last, i - last);
+
+			last = i + 1;
+		}
 
 	return Error_none();
 }
@@ -383,39 +392,44 @@ Error String_splitString(
 
 	U64 len = String_countAllString(s, other, casing);
 
-	Error err = StringList_create(len, allocator, result);
+	Error err = StringList_create(len ? len : 1, allocator, result);
 
 	if (err.genericError)
 		return err;
 
-	if (result) {
+	if (!len) {
 
-		StringList str = *result;
+		result->ptr[0] = String_isConstRef(s) ? String_createConstRef(s.ptr, s.len) :
+			String_createRef(s.ptr, s.len);
 
-		U64 count = 0, last = 0;
+		return Error_none();
+	}
 
-		for (U64 i = 0; i < s.len; ++i) {
+	StringList str = *result;
 
-			Bool match = true;
+	U64 count = 0, last = 0;
 
-			for (U64 j = i, k = 0; j < s.len && k < other.len; ++j, ++k)
-				if (
-					C8_transform(s.ptr[j], (EStringTransform)casing) !=
-					C8_transform(other.ptr[k], (EStringTransform)casing)
-				) {
-					match = false;
-					break;
-				}
+	for (U64 i = 0; i < s.len; ++i) {
 
-			if (match) {
+		Bool match = true;
 
-				str.ptr[count++] = 
-					String_isConstRef(s) ? String_createRefConst(s.ptr + last, i - last) : 
-					String_createRefDynamic(s.ptr + last, i - last);
-
-				last = i + other.len;
-				i += other.len - 1;
+		for (U64 j = i, k = 0; j < s.len && k < other.len; ++j, ++k)
+			if (
+				C8_transform(s.ptr[j], (EStringTransform)casing) !=
+				C8_transform(other.ptr[k], (EStringTransform)casing)
+			) {
+				match = false;
+				break;
 			}
+
+		if (match) {
+
+			str.ptr[count++] = 
+				String_isConstRef(s) ? String_createConstRef(s.ptr + last, i - last) : 
+				String_createRef(s.ptr + last, i - last);
+
+			last = i + other.len;
+			i += other.len - 1;
 		}
 	}
 
@@ -1017,7 +1031,7 @@ Bool String_equals(String s, C8 c, EStringCase caseSensitive) {
 
 Bool String_parseNyto(String s, U64 *result){
 
-	String prefix = String_createRefUnsafeConst("0n");
+	String prefix = String_createConstRefUnsafe("0n");
 
 	Error err = String_offsetAsRef(
 		s, String_startsWithString(s, prefix, EStringCase_Insensitive) ? prefix.len : 0, &s
@@ -1049,7 +1063,7 @@ Bool String_parseNyto(String s, U64 *result){
 
 Bool String_parseHex(String s, U64 *result){
 
-	String prefix = String_createRefUnsafeConst("0x");
+	String prefix = String_createConstRefUnsafe("0x");
 	Error err = String_offsetAsRef(
 		s, String_startsWithString(s, prefix, EStringCase_Insensitive) ? prefix.len : 0, &s
 	);
@@ -1259,7 +1273,7 @@ Bool String_parseFloat(String s, F32 *result) {
 
 Bool String_parseOct(String s, U64 *result) {
 
-	String prefix = String_createRefUnsafeConst("0o");
+	String prefix = String_createConstRefUnsafe("0o");
 	Error err = String_offsetAsRef(
 		s, String_startsWithString(s, prefix, EStringCase_Insensitive) ? prefix.len : 0, &s
 	);
@@ -1290,7 +1304,7 @@ Bool String_parseOct(String s, U64 *result) {
 
 Bool String_parseBin(String s, U64 *result) {
 
-	String prefix = String_createRefUnsafeConst("0b");
+	String prefix = String_createConstRefUnsafe("0b");
 	Error err = String_offsetAsRef(
 		s, String_startsWithString(s, prefix, EStringCase_Insensitive) ? prefix.len : 0, &s
 	);
@@ -1341,8 +1355,8 @@ Bool String_cut(String s, U64 offset, U64 siz, String *result) {
 		return false;
 	}
 
-	*result = String_isConstRef(s) ? String_createRefConst(s.ptr + offset, siz) :
-		String_createRefDynamic(s.ptr + offset, siz);
+	*result = String_isConstRef(s) ? String_createConstRef(s.ptr + offset, siz) :
+		String_createRef(s.ptr + offset, siz);
 
 	return true;
 }
@@ -1576,8 +1590,8 @@ String String_trim(String s) {
 			break;
 		}
 
-	return String_isConstRef(s) ? String_createRefConst(s.ptr + first, last - first) :
-		String_createRefDynamic(s.ptr + first, last - first);
+	return String_isConstRef(s) ? String_createConstRef(s.ptr + first, last - first) :
+		String_createRef(s.ptr + first, last - first);
 }
 
 //StringList
@@ -1589,7 +1603,7 @@ Error StringList_create(U64 len, Allocator alloc, StringList *arr) {
 	Buffer b = Buffer_createNull();
 	Error err = alloc.alloc(alloc.ptr, len * sizeof(String), &b);
 
-	sl.ptr = (String*) sl.ptr;
+	sl.ptr = (String*) b.ptr;
 
 	if(err.genericError)
 		return err;
@@ -1632,7 +1646,7 @@ Error StringList_free(StringList *arr, Allocator alloc) {
 	return freeErr;
 }
 
-Error StringList_createCopy(const StringList *toCopy, StringList *arr, Allocator alloc) {
+Error StringList_createCopy(const StringList *toCopy, Allocator alloc, StringList *arr) {
 
 	if(!toCopy || !toCopy->len)
 		return Error_nullPointer(0, 0);
@@ -1741,4 +1755,63 @@ String String_getBasePath(String *str) {
 		return res;
 
 	return String_createEmpty();
+}
+
+Error StringList_concat(StringList arr, C8 between, Allocator alloc, String *result) {
+
+	U64 len = 0;
+
+	for(U64 i = 0; i < arr.len; ++i)
+		len += arr.ptr[i].len;
+
+	if(arr.len > 1)
+		len += arr.len - 1;
+
+	Error err = String_create(' ', len, alloc, result);
+
+	if(err.genericError)
+		return err;
+
+	for(U64 i = 0, j = 0; i < arr.len; ++i) {
+
+		for(U64 k = 0; k < arr.ptr[i].len; ++k, ++j)
+			result->ptr[j] = arr.ptr[i].ptr[k];
+
+		if (i != arr.len - 1)
+			result->ptr[j++] = between;
+	}
+
+	return Error_none();
+}
+
+Error StringList_concatString(StringList arr, String between, Allocator alloc, String *result) {
+
+	U64 len = 0;
+
+	for(U64 i = 0; i < arr.len; ++i)
+		len += arr.ptr[i].len;
+
+	if(arr.len > 1)
+		len += (arr.len - 1) * between.len;
+
+	Error err = String_create(' ', len, alloc, result);
+
+	if(err.genericError)
+		return err;
+
+	for(U64 i = 0, j = 0; i < arr.len; ++i) {
+
+		for(U64 k = 0; k < arr.ptr[i].len; ++k, ++j)
+			result->ptr[j] = arr.ptr[i].ptr[k];
+
+		if (i != arr.len - 1)
+			for(U64 k = 0; k < between.len; ++k, ++j)
+				result->ptr[j] = between.ptr[k];
+	}
+
+	return Error_none();
+}
+
+Error StringList_combine(StringList arr, Allocator alloc, String *result) {
+	return StringList_concatString(arr, String_createEmpty(), alloc, result);
 }

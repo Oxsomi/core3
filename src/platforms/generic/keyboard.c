@@ -4,7 +4,7 @@
 
 #define _key(name)																\
 	if ((err = InputDevice_createButton(										\
-		*result, EKey_##name, String_createRefUnsafeConst("EKey_" #name), &res	\
+		*result, EKey_##name, String_createConstRefUnsafe("EKey_" #name), &res	\
 	)).genericError) {															\
 		InputDevice_free(result);												\
 		return err;																\

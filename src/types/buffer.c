@@ -62,26 +62,28 @@ void Buffer_revCopy(Buffer dst, Buffer src) {
 	U64 *dstPtr = (U64*)(dst.ptr + dst.siz), *dstBeg = (U64*)(dstPtr - (dst.siz >> 3));
 	const U64 *srcPtr = (const U64*)(src.ptr + src.siz), *srcBeg = (U64*)(srcPtr - (src.siz >> 3));
 
-	for(; dstPtr > dstBeg && srcPtr > srcBeg; )
-		*(dstPtr--) = *(srcPtr--);
+	for(; dstPtr > dstBeg && srcPtr > srcBeg; ) {
+		--srcPtr; --dstPtr;
+		*dstPtr = *srcPtr;
+	}
 
 	dstBeg = (U64*) dstPtr;
 	srcBeg = (const U64*) srcPtr;
 
 	if((U64)dstPtr - 4 >= (U64)dst.ptr && (U64)srcPtr - 4 >= (U64)src.ptr ) {
 
-		*(U32*)dstPtr = *(const U32*)srcPtr;
-
 		dstPtr = (U64*)((U32*)dstPtr - 1);
 		srcPtr = (const U64*)((const U32*)srcPtr - 1);
+
+		*(U32*)dstPtr = *(const U32*)srcPtr;
 	}
 
 	if ((U64)dstPtr - 2 >= (U64)dst.ptr && (U64)srcPtr - 2 >= (U64)src.ptr) {
 
-		*(U16*)dstPtr = *(const U16*)srcPtr;
-
 		dstPtr = (U64*)((U16*)dstPtr - 1);
 		srcPtr = (const U64*)((const U16*)srcPtr - 1);
+
+		*(U16*)dstPtr = *(const U16*)srcPtr;
 	}
 
 	if ((U64)dstPtr - 1 >= (U64)dst.ptr && (U64)srcPtr - 1 >= (U64)src.ptr)
