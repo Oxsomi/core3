@@ -28,12 +28,13 @@ typedef enum ECAFlags {
     
     ECAFlags_None 					= 0,
     
+    ECAFlags_HasHash				= 1 << 0,		//Should be true if compression is on
+    ECAFlags_UseSHA256				= 1 << 1		//Whether SHA256 (1) or CRC32 (0) is used as hash
+        
     //See ECAFileObject
     
-    ECAFlags_FilesHaveDate			= 1 << 0,
-    ECAFlags_FilesHaveExtendedDate	= 1 << 1,
-    ECAFlags_FilesHaveHash			= 1 << 2,		//Should be true if compression is on
-    ECAFlags_FilesUseSHA256			= 1 << 3		//Whether SHA256 (1) or CRC32 (0) is used as hash
+    ECAFlags_FilesHaveDate			= 1 << 2,
+    ECAFlags_FilesHaveExtendedDate	= 1 << 3
         
 } ECAFlags;
 
@@ -95,27 +96,24 @@ typedef enum ECAFileTypeBits {
 
 //Pseudo code; please manually parse the members. Struct is NOT aligned.
 
-CAFileObject<FileSizeType, hasDateAndTime, hasHash, useSHA256, isUncompressed, isExtendedTime> {
+CAFileObject<FileSizeType, hasDateAndTime, isUncompressed, isExtendedTime> {
     
-    U16 parent;											//0xFFFF for root directory
+    U16 parent;										//0xFFFF for root directory
     
-    U8 fileInfo;										//ECAFileTypeBits
+    U8 fileInfo;									//ECAFileTypeBits
     
-    hasDateAndTime:
-    	if !isExtendedTime:							//MS-DOS time.
+    header.hasDateAndTime:
+    	if !header.isExtendedTime:					//MS-DOS time.
 		    U16 date;								//Day (5b), Month (4b), Year (Since 1980-2107 (7b))
 		   	U16 time;								//Sec/2 (5b), Min (6b), Hour (5b)
 		else: Ns timestamp;							//U64; (Unix timestamp * 1e9 + ns). 1970-2553
-    
-    hasHash:
-    	U32[useSHA256 ? 8 : 1] hash;				//CRC32 or SHA256
     
     FileSizeType size;								//File size 
 };
 
 //Final file format; please manually parse the members.
 //Verify if directories / files are correctly linked to parent and children.
-//Verify if SHA256 and/or CRC32 are valid (if applicable).
+//Verify if SHA256 and/or CRC32 is valid (if applicable).
 //Verify if date and/or time is valid (if applicable).
 //Verify if uncompressedSize > compressedSize.
 //Verify if CAFile includes any invalid data.
@@ -123,6 +121,9 @@ CAFileObject<FileSizeType, hasDateAndTime, hasHash, useSHA256, isUncompressed, i
 CAFile {
     
     CAHeader header;
+    
+    header.hasHash:
+    	U32[header.useSHA256 ? 8 : 1] hash;				//CRC32 or SHA256
     
     //This includes the names of everything in order.
     //The names should only be [0-9A-Za-z_.\ ]+ as well as non ASCII characters.
