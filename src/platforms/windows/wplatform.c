@@ -148,5 +148,5 @@ Error Platform_initWorkingDirectory(String *result) {
 		return err;
 
 	String_replaceAll(result, '\\', '/', EStringCase_Sensitive);
-	return String_insertx(result, '/', result->len);
+	return String_insertx(result, '/', result->length);
 }

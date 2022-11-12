@@ -58,8 +58,8 @@ Error WindowManager_createPhysical(
 	if(I32x2_any(I32x2_lt(size, I32x2_zero())))
 		return Error_invalidParameter(2, 0, 0);
 
-	if (title.len >= MAX_PATH)
-		return Error_outOfBounds(4, 0, title.len, MAX_PATH);
+	if (title.length >= MAX_PATH)
+		return Error_outOfBounds(4, 0, title.length, MAX_PATH);
 
 	//Find free spot in physical windows
 
@@ -133,7 +133,7 @@ Error WindowManager_createPhysical(
 	C8 windowName[MAX_PATH + 1];
 	Buffer_copy(Buffer_createRef(windowName, sizeof(windowName)), String_buffer(title));
 
-	windowName[title.len] = '\0';
+	windowName[title.length] = '\0';
 
 	HWND nativeWindow = CreateWindowExA(
 		WS_EX_APPWINDOW, wc.lpszClassName, windowName, style,

@@ -32,12 +32,12 @@ typedef struct List List;
 //Heap string
 
 typedef struct String {
-	U64 len, capacity;		//capacity = 0: ref, capacity = -1: const ref
+	U64 length, capacity;		//capacity = 0: ref, capacity = -1: const ref
 	C8 *ptr;
 } String;
 
 typedef struct StringList {
-	U64 len;
+	U64 length;
 	String *ptr;
 } StringList;
 
@@ -45,10 +45,10 @@ typedef struct StringList {
 
 inline Bool String_isConstRef(String str) { return str.capacity == U64_MAX; }
 inline Bool String_isRef(String str) { return !str.capacity || String_isConstRef(str); }
-inline Bool String_isEmpty(String str) { return !str.len || !str.ptr; }
-inline U64  String_bytes(String str) { return str.len; }
+inline Bool String_isEmpty(String str) { return !str.length || !str.ptr; }
+inline U64  String_bytes(String str) { return str.length; }
 
-inline Buffer String_buffer(String str) { return Buffer_createRef(str.ptr, str.len); }
+inline Buffer String_buffer(String str) { return Buffer_createRef(str.ptr, str.length); }
 
 //Iteration
 
@@ -57,37 +57,37 @@ inline C8 *String_begin(String str) {
 }
 
 inline C8 *String_end(String str) {
-	return String_isConstRef(str) ? NULL : str.ptr + str.len;
+	return String_isConstRef(str) ? NULL : str.ptr + str.length;
 }
 
 inline C8 *String_charAt(String str, U64 off) { 
-	return String_isConstRef(str) || off >= str.len ? NULL : str.ptr + off; 
+	return String_isConstRef(str) || off >= str.length ? NULL : str.ptr + off; 
 }
 
 inline const C8 *String_beginConst(String str) { return str.ptr; }
-inline const C8 *String_endConst(String str) { return str.ptr + str.len; }
+inline const C8 *String_endConst(String str) { return str.ptr + str.length; }
 
 inline const C8 *String_charAtConst(String str, U64 off) { 
-	return off >= str.len ? NULL : str.ptr + off; 
+	return off >= str.length ? NULL : str.ptr + off; 
 }
 
 //
 
 inline void String_clear(String *str) { 
 	if(str) 
-		str->len = 0; 
+		str->length = 0; 
 }
 
 U64 String_calcStrLen(const C8 *ptr, U64 maxSize);
 U64 String_hash(String s);
 
 inline C8 String_getAt(String str, U64 i) { 
-	return i < str.len && str.ptr ? str.ptr[i] : C8_MAX;
+	return i < str.length && str.ptr ? str.ptr[i] : C8_MAX;
 }
 
 inline Bool String_setAt(String str, U64 i, C8 c) { 
 
-	if(i >= str.len || String_isConstRef(str))
+	if(i >= str.length || String_isConstRef(str))
 		return false;
 
 	str.ptr[i] = c;
@@ -101,7 +101,7 @@ inline String String_createEmpty() { return (String) { 0 }; }
 
 inline String String_createConstRef(const C8 *ptr, U64 maxSize) { 
 	return (String) { 
-		.len = String_calcStrLen(ptr, maxSize),
+		.length = String_calcStrLen(ptr, maxSize),
 		.ptr = (C8*) ptr,
 		.capacity = U64_MAX		//Flag as const
 	};
@@ -115,7 +115,7 @@ inline String String_createConstRefUnsafe(const C8 *ptr) {
 
 inline String String_createRef(C8 *ptr, U64 maxSize) { 
 	return (String) { 
-		.len = String_calcStrLen(ptr, maxSize),
+		.length = String_calcStrLen(ptr, maxSize),
 		.ptr = ptr,
 		.capacity = 0			//Flag as dynamic ref
 	};
@@ -123,7 +123,7 @@ inline String String_createRef(C8 *ptr, U64 maxSize) {
 
 inline String String_createConstRefSized(const C8 *ptr, U64 size) {
 	return (String) { 
-		.len = size,
+		.length = size,
 		.ptr = (C8*) ptr,
 		.capacity = U64_MAX		//Flag as const
 	};
@@ -131,7 +131,7 @@ inline String String_createConstRefSized(const C8 *ptr, U64 size) {
 
 inline String String_createRefSized(C8 *ptr, U64 size) {
 	return (String) { 
-		.len = size,
+		.length = size,
 		.ptr = ptr,
 		.capacity = 0			//Flag as dynamic ref
 	};
@@ -139,7 +139,7 @@ inline String String_createRefSized(C8 *ptr, U64 size) {
 
 inline String String_createConstRefShortString(const ShortString str) {
 	return (String) {
-		.len = String_calcStrLen(str, ShortString_LEN - 1),
+		.length = String_calcStrLen(str, ShortString_LEN - 1),
 		.ptr = (C8*) str,
 		.capacity = U64_MAX		//Flag as const
 	};
@@ -147,7 +147,7 @@ inline String String_createConstRefShortString(const ShortString str) {
 
 inline String String_createConstRefLongString(const LongString str) {
 	return (String) {
-		.len = String_calcStrLen(str, LongString_LEN - 1),
+		.length = String_calcStrLen(str, LongString_LEN - 1),
 		.ptr = (C8*) str,
 		.capacity = U64_MAX		//Flag as const
 	};
@@ -155,7 +155,7 @@ inline String String_createConstRefLongString(const LongString str) {
 
 inline String String_createRefShortString(ShortString str) {
 	return (String) {
-		.len = String_calcStrLen(str, ShortString_LEN - 1),
+		.length = String_calcStrLen(str, ShortString_LEN - 1),
 		.ptr = str,
 		.capacity = 0			//Flag as dynamic
 	};
@@ -163,7 +163,7 @@ inline String String_createRefShortString(ShortString str) {
 
 inline String String_createRefLongString(LongString str) {
 	return (String) {
-		.len = String_calcStrLen(str, LongString_LEN - 1),
+		.length = String_calcStrLen(str, LongString_LEN - 1),
 		.ptr = str,
 		.capacity = 0			//Flag as dynamic
 	};
@@ -252,7 +252,7 @@ inline Error String_replaceLastString(
 
 inline Bool String_startsWith(String str, C8 c, EStringCase caseSensitive) { 
 	return 
-		str.len && str.ptr && 
+		str.length && str.ptr && 
 		C8_transform(*str.ptr, (EStringTransform) caseSensitive) == 
 		C8_transform(c, (EStringTransform) caseSensitive);
 }
@@ -261,8 +261,8 @@ Bool String_startsWithString(String str, String other, EStringCase caseSensitive
 
 inline Bool String_endsWith(String str, C8 c, EStringCase caseSensitive) {
 	return 
-		str.len && str.ptr && 
-		C8_transform(str.ptr[str.len - 1], (EStringTransform) caseSensitive) == 
+		str.length && str.ptr && 
+		C8_transform(str.ptr[str.length - 1], (EStringTransform) caseSensitive) == 
 		C8_transform(c, (EStringTransform) caseSensitive);
 }
 
@@ -443,7 +443,7 @@ String String_getBasePath(String *str);	//Formats on string first to ensure it's
 //Because they contain mixed strings, the functions still need allocators to free heap strings.
 //This is different than List<String> because that one won't enforce string allocation properly.
 
-Error StringList_create(U64 len, Allocator alloc, StringList *result);
+Error StringList_create(U64 length, Allocator alloc, StringList *result);
 Error StringList_free(StringList *arr, Allocator alloc);
 
 Error StringList_createCopy(const StringList *toCopy, Allocator alloc, StringList *arr);

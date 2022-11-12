@@ -47,6 +47,7 @@
 *.cmd
 .tmp_versions/
 builds/*
+tools/builds/*
 inc/cfg/*
 modules.order
 Module.symvers

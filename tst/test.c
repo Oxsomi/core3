@@ -1,4 +1,4 @@
-#include "types/timer.h"
+#include "types/time.h"
 #include "types/buffer.h"
 #include "types/allocator.h"
 #include <stdlib.h>
@@ -43,15 +43,15 @@ int main() {
 
 	//Test timer
 
-	Ns now = Timer_now();
+	Ns now = Time_now();
 	TimerFormat nowStr;
 
-	Timer_format(now, nowStr);
+	Time_format(now, nowStr);
 
 	Ns now2 = 0;
-	EFormatStatus stat = Timer_parseFormat(&now2, nowStr);
+	EFormatStatus stat = Time_parseFormat(&now2, nowStr);
 
-	if (stat != FormatStatus_Success || now2 != now)
+	if (stat != EFormatStatus_Success || now2 != now)
 		return 1;
 
 	Allocator alloc = (Allocator) {

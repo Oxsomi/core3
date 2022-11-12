@@ -121,8 +121,8 @@ inline List String_findAllStringx(String s, String other, EStringCase caseSensit
 	return String_findAllString(s, other, Platform_instance.alloc, caseSensitive);
 }
 
-inline Error StringList_createx(U64 len, StringList *result) {
-	return StringList_create(len, Platform_instance.alloc, result);
+inline Error StringList_createx(U64 length, StringList *result) {
+	return StringList_create(length, Platform_instance.alloc, result);
 }
 
 inline Error StringList_freex(StringList *arr) {

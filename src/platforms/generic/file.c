@@ -55,7 +55,7 @@ Error File_resolve(String loc, Bool *isVirtual, String *result) {
 
 	#ifdef _WIN32
 
-		if(result->len >= 3 && result->ptr[1] == ':' && result->ptr[2] != '/') {
+		if(result->length >= 3 && result->ptr[1] == ':' && result->ptr[2] != '/') {
 			String_freex(result);
 			return Error_unsupportedOperation(2);
 		}
@@ -84,11 +84,11 @@ Error File_resolve(String loc, Bool *isVirtual, String *result) {
 		return err;
 	}
 
-	U64 realSplitLen = res.len;		//We have to reset this before unallocating the StringList!
+	U64 realSplitLen = res.length;		//We have to reset this before unallocating the StringList!
 
 	String back = String_createConstRefUnsafe("..");
 
-	for (U64 i = 0; i < res.len; ++i) {
+	for (U64 i = 0; i < res.length; ++i) {
 
 		//We pop from StringList since it doesn't change anything
 		//Starting with a / is valid with local files, so don't remove it. (not with virtual files)
@@ -102,11 +102,11 @@ Error File_resolve(String loc, Bool *isVirtual, String *result) {
 
 			//Move to left
 
-			for (U64 k = res.len - 1; k > i; --k) 
+			for (U64 k = res.length - 1; k > i; --k) 
 				res.ptr[k - 1] = res.ptr[k];			//This is OK, we're dealing with refs from split
 
 			--i;			//Ensure we keep track of the removed element
-			--res.len;
+			--res.length;
 			continue;
 		}
 
@@ -115,24 +115,24 @@ Error File_resolve(String loc, Bool *isVirtual, String *result) {
 		if (String_equalsString(res.ptr[i], back, EStringCase_Sensitive)) {
 
 			if(!i) {
-				res.len = realSplitLen;
+				res.length = realSplitLen;
 				StringList_freex(&res);
 				String_freex(result);
 				return Error_invalidParameter(0, 0, 0);
 			}
 
-			for (U64 k = res.len - 1; k > i + 1; --k) 
+			for (U64 k = res.length - 1; k > i + 1; --k) 
 				res.ptr[k - 2] = res.ptr[k];			//This is OK, we're dealing with refs from split
 
 			i -= 2;			//Ensure we keep track of the removed element
-			res.len -= 2;
+			res.length -= 2;
 			continue;
 		}
 
 		//Virtual file names need to be nytodecimal (0-9A-Za-z$_)+ compatible (excluding /, . and ..)
 
 		if (*isVirtual && !String_isNytoFile(res.ptr[i])) {
-			res.len = realSplitLen;
+			res.length = realSplitLen;
 			StringList_freex(&res);
 			String_freex(result);
 			return Error_invalidParameter(0, 0, 1);
@@ -150,8 +150,8 @@ Error File_resolve(String loc, Bool *isVirtual, String *result) {
 
 	//If we have nothing left, we assume current work/app directory
 
-	if(!res.len) {
-		res.len = realSplitLen;
+	if(!res.length) {
+		res.length = realSplitLen;
 		StringList_freex(&res);
 		String_freex(result);		//This resets our string to be empty
 		return Error_none();
@@ -162,12 +162,12 @@ Error File_resolve(String loc, Bool *isVirtual, String *result) {
 	String_freex(result);
 
 	if ((err = StringList_concatx(res, '/', result)).genericError) {
-		res.len = realSplitLen;
+		res.length = realSplitLen;
 		StringList_freex(&res);
 		return err;
 	}
 
-	res.len = realSplitLen;
+	res.length = realSplitLen;
 
 	if ((err = StringList_freex(&res)).genericError) {
 		String_freex(result);
@@ -185,7 +185,7 @@ Error File_resolve(String loc, Bool *isVirtual, String *result) {
 			return Error_unsupportedOperation(4);
 		}
 
-		isAbsolute = result->len >= 2 && C8_isAlpha(*result->ptr) && result->ptr[1] == ':';
+		isAbsolute = result->length >= 2 && C8_isAlpha(*result->ptr) && result->ptr[1] == ':';
 
 	#else			//Starts with / if absolute
 		isAbsolute = String_startsWith(*result, '/', EStringCase_Sensitive);
@@ -208,7 +208,7 @@ Error File_resolve(String loc, Bool *isVirtual, String *result) {
 
 	//Since we're gonna use this in file operations, we wanna have a null terminator
 
-	if ((err = String_insertx(result, '\0', result->len)).genericError) {
+	if ((err = String_insertx(result, '\0', result->length)).genericError) {
 		String_freex(result);
 		return err;
 	}

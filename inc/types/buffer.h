@@ -57,6 +57,8 @@ inline Error Buffer_setAllBitsTo(Buffer buf, Bool isOn) {
 
 U64 Buffer_hash(Buffer buf);
 
+U32 Buffer_crc32(Buffer buf, U32 crcSeed);
+
 //Comparison
 
 Error Buffer_eq(Buffer buf0, Buffer buf1, Bool *result);		//Also compares size
@@ -65,7 +67,7 @@ Error Buffer_neq(Buffer buf0, Buffer buf1, Bool *result);		//Also compares size
 //These should never be Buffer_free-d because Buffer doesn't know if it's allocated
 
 inline Buffer Buffer_createNull() { return (Buffer) { 0 }; }
-inline Buffer Buffer_createRef(void *v, U64 len) { return (Buffer) { .ptr = (U8*) v, .siz = len }; }
+inline Buffer Buffer_createRef(void *v, U64 length) { return (Buffer) { .ptr = (U8*) v, .siz = length }; }
 
 //All these functions allocate, so Buffer_free them later
 

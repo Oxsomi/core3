@@ -3,7 +3,7 @@
 #include "platforms/platform.h"
 #include "platforms/ext/errorx.h"
 #include "platforms/ext/stringx.h"
-#include "types/timer.h"
+#include "types/time.h"
 
 //Unfortunately before Windows 10 it doesn't support printing colors into console using printf
 //We also use Windows dependent stack tracing
@@ -118,15 +118,15 @@ void Log_printCapturedStackTraceCustom(const void **stackTrace, U64 stackSize, E
 
 			Error err;
 
-			if(capture->mod.len)
+			if(capture->mod.length)
 				if ((err = String_createCopyx(capture->mod, &capture->mod)).genericError)
 					goto cleanup;
 
-			if(capture->sym.len)
+			if(capture->sym.length)
 				if ((err = String_createCopyx(capture->sym, &capture->sym)).genericError)
 					goto cleanup;
 
-			if(capture->fil.len)
+			if(capture->fil.length)
 				if ((err = String_createCopyx(capture->fil, &capture->fil)).genericError)
 					goto cleanup;
 
@@ -156,24 +156,24 @@ void Log_printCapturedStackTraceCustom(const void **stackTrace, U64 stackSize, E
 
 		CapturedStackTrace capture = captured[i];
 
-		if(!capture.sym.len)
+		if(!capture.sym.length)
 			printf("%p\n", stackTrace[i]);
 
 		else if(capture.lin)
 			printf(
 				"%p: %.*s!%.*s (%.*s, Line %u)\n", 
 				stackTrace[i], 
-				(int) U64_min(I32_MAX, capture.mod.len), capture.mod.ptr, 
-				(int) U64_min(I32_MAX, capture.sym.len), capture.sym.ptr,
-				(int) U64_min(I32_MAX, capture.fil.len), capture.fil.ptr, 
+				(int) U64_min(I32_MAX, capture.mod.length), capture.mod.ptr, 
+				(int) U64_min(I32_MAX, capture.sym.length), capture.sym.ptr,
+				(int) U64_min(I32_MAX, capture.fil.length), capture.fil.ptr, 
 				capture.lin
 			);
 
 		else printf(
 			"%p: %.*s!%.*s\n", 
 			stackTrace[i], 
-			(int) U64_min(I32_MAX, capture.mod.len), capture.mod.ptr, 
-			(int) U64_min(I32_MAX, capture.sym.len), capture.sym.ptr
+			(int) U64_min(I32_MAX, capture.mod.length), capture.mod.ptr, 
+			(int) U64_min(I32_MAX, capture.sym.length), capture.sym.ptr
 		);
 
 		//We now don't need the strings anymore
@@ -190,7 +190,7 @@ void Log_printCapturedStackTraceCustom(const void **stackTrace, U64 stackSize, E
 void Log_log(ELogLevel lvl, ELogOptions options, LogArgs args) {
 
 
-	Ns t = Timer_now();
+	Ns t = Time_now();
 
 	U32 thread = Thread_getId();
 
@@ -243,7 +243,7 @@ void Log_log(ELogLevel lvl, ELogOptions options, LogArgs args) {
 	if (hasTimestamp) {
 
 		TimerFormat tf;
-		Timer_format(t, tf);
+		Time_format(t, tf);
 
 		printf("%s%s", hasThread ? " " : "", tf);
 	}
@@ -261,7 +261,7 @@ void Log_log(ELogLevel lvl, ELogOptions options, LogArgs args) {
 	for (U64 i = 0; i < args.argc; ++i)
 		printf(
 			"%.*s%s", 
-			(int) U64_min(I32_MAX, args.args[i].len), args.args[i].ptr,
+			(int) U64_min(I32_MAX, args.args[i].length), args.args[i].ptr,
 			newLine
 		);
 

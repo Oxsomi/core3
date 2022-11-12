@@ -3,7 +3,7 @@
 #include "platforms/thread.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/listx.h"
-#include "types/timer.h"
+#include "types/time.h"
 #include "types/buffer.h"
 
 const U8 WindowManager_maxTotalVirtualWindowCount = 16;
@@ -192,7 +192,7 @@ Error WindowManager_waitForExitAll(WindowManager *manager, Ns maxTimeout) {
 	//Checking for WindowManager is a lot easier, as we can just acquire the lock
 	//And check how many windows are active
 
-	Ns start = Timer_now();
+	Ns start = Time_now();
 
 	if(!WindowManager_lock(manager, maxTimeout))
 		return Error_invalidOperation(0);
@@ -206,7 +206,7 @@ Error WindowManager_waitForExitAll(WindowManager *manager, Ns maxTimeout) {
 
 	maxTimeout = U64_min(maxTimeout, I64_MAX);
 
-	Ns left = (Ns) I64_max(0, maxTimeout - (DNs)(Timer_now() - start));
+	Ns left = (Ns) I64_max(0, maxTimeout - (DNs)(Time_now() - start));
 
 	//Keep checking until we run out of time
 
@@ -270,7 +270,7 @@ Error WindowManager_waitForExitAll(WindowManager *manager, Ns maxTimeout) {
 
 		//
 
-		left = (Ns) I64_max(0, maxTimeout - (DNs)(Timer_now() - start));
+		left = (Ns) I64_max(0, maxTimeout - (DNs)(Time_now() - start));
 	}
 
 	return Error_timedOut(0, maxTimeout);

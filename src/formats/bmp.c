@@ -4,27 +4,27 @@
 
 #pragma pack(push, 1)
 
-typedef struct BMPHeader {
-	U16 fileType;
-	U32 fileSize;
-	U16 r0, r1;
-	U32 offsetData;
-} BMPHeader;
+	typedef struct BMPHeader {
+		U16 fileType;
+		U32 fileSize;
+		U16 r0, r1;
+		U32 offsetData;
+	} BMPHeader;
 
-typedef struct BMPInfoHeader {
-	U32 size;
-	I32 width, height;
-	U16 planes, bitCount;
-	U32 compression, compressedSize;
-	I32 xPixPerM, yPixPerM;
-	U32 colorsUsed, colorsImportant;
-} BMPInfoHeader;
+	typedef struct BMPInfoHeader {
+		U32 size;
+		I32 width, height;
+		U16 planes, bitCount;
+		U32 compression, compressedSize;
+		I32 xPixPerM, yPixPerM;
+		U32 colorsUsed, colorsImportant;
+	} BMPInfoHeader;
 
-typedef struct BMPColorHeader {
-	U32 redMask, greenMask, blueMask, alphaMask;
-	U32 colorSpaceType;
-	U32 unused[16];
-} BMPColorHeader;
+	typedef struct BMPColorHeader {
+		U32 redMask, greenMask, blueMask, alphaMask;
+		U32 colorSpaceType;
+		U32 unused[16];
+	} BMPColorHeader;
 
 #pragma pack(pop)
 

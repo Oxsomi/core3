@@ -7,7 +7,7 @@
 #include "platforms/mouse.h"
 #include "platforms/ext/errorx.h"
 #include "platforms/ext/bufferx.h"
-#include "types/timer.h"
+#include "types/time.h"
 
 #include <stdlib.h>
 
@@ -516,7 +516,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 			//Update interface
 
-			Ns now = Timer_now();
+			Ns now = Time_now();
 
 			if (w->callbacks.onUpdate) {
 				F32 dt = w->lastUpdate ? (now - w->lastUpdate) / (F32)seconds : 0;
@@ -634,16 +634,16 @@ Error WindowManager_freePhysical(WindowManager *manager, Window **w) {
 
 Error Window_updatePhysicalTitle(const Window *w, String title) {
 
-	if(!w || !title.ptr || !title.len)
+	if(!w || !title.ptr || !title.length)
 		return Error_nullPointer(!w ? 0 : 1, 0);
 
-	if (title.len >= MAX_PATH)
-		return Error_outOfBounds(1, 0, title.len, MAX_PATH);
+	if (title.length >= MAX_PATH)
+		return Error_outOfBounds(1, 0, title.length, MAX_PATH);
 
 	C8 windowName[MAX_PATH + 1];
 	Buffer_copy(Buffer_createRef(windowName, sizeof(windowName)), String_buffer(title));
 
-	windowName[title.len] = '\0';
+	windowName[title.length] = '\0';
 
 	if(!SetWindowTextA(w->nativeHandle, windowName))
 		return Error_platformError(0, GetLastError());

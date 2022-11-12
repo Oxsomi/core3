@@ -77,8 +77,8 @@ Error Platform_create(
 		U64 loc = String_findLast(appDir, '/', EStringCase_Sensitive);
 		String basePath;
 
-		if (loc == appDir.len)
-			basePath = String_createConstRef(appDir.ptr, appDir.len);
+		if (loc == appDir.length)
+			basePath = String_createConstRef(appDir.ptr, appDir.length);
 	
 		else String_cut(appDir, 0, loc + 1, &basePath);
 

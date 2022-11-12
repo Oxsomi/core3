@@ -5,7 +5,7 @@
 #include "types/error.h"
 #include "types/buffer.h"
 #include "types/string.h"
-#include "types/timer.h"
+#include "types/time.h"
 #include "formats/texture.h"
 #include "platforms/ext/bmpx.h"
 #include "platforms/ext/bufferx.h"
@@ -15,7 +15,7 @@ Error Window_waitForExit(Window *w, Ns maxTimeout) {
 	if(!w)
 		return Error_nullPointer(0, 0);
 
-	Ns start = Timer_now();
+	Ns start = Time_now();
 
 	//We lock to check window state
 	//If there's no lock, then we've already been released
@@ -33,7 +33,7 @@ Error Window_waitForExit(Window *w, Ns maxTimeout) {
 
 	maxTimeout = U64_min(maxTimeout, I64_MAX);
 
-	Ns left = (Ns) I64_max(0, maxTimeout - (DNs)(Timer_now() - start));
+	Ns left = (Ns) I64_max(0, maxTimeout - (DNs)(Time_now() - start));
 
 	//Release the lock, because otherwise our window can't resume itself
 
@@ -72,7 +72,7 @@ Error Window_waitForExit(Window *w, Ns maxTimeout) {
 
 		//
 
-		left = (Ns) I64_max(0, maxTimeout - (DNs)(Timer_now() - start));
+		left = (Ns) I64_max(0, maxTimeout - (DNs)(Time_now() - start));
 	}
 
 	return Error_timedOut(0, maxTimeout);

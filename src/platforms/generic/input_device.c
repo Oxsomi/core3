@@ -88,15 +88,15 @@ Error InputDevice_create(U16 buttons, U16 axes, EInputDeviceType type, InputDevi
 	if(String_isEmpty(keyName))															\
 		return Error_invalidParameter(2, 0, 0);											\
 																						\
-	if(keyName.len >= LongString_LEN)													\
-		return Error_outOfBounds(2, 0, keyName.len, LongString_LEN);					\
+	if(keyName.length >= LongString_LEN)													\
+		return Error_outOfBounds(2, 0, keyName.length, LongString_LEN);					\
 																						\
 	Buffer_copy(																		\
 		Buffer_createRef(inputType->name, LongString_LEN), 								\
-		Buffer_createRef(keyName.ptr, keyName.len)										\
+		Buffer_createRef(keyName.ptr, keyName.length)										\
 	);																					\
 																						\
-	inputType->name[U64_min(keyName.len, LongString_LEN - 1)] = '\0';
+	inputType->name[U64_min(keyName.length, LongString_LEN - 1)] = '\0';
 
 Error InputDevice_createButton(
 	InputDevice d, 
