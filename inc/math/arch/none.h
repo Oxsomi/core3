@@ -210,14 +210,22 @@ inline F32x2 F32x2_log10(F32x2 a)  _NONE_OP2F(F32_log10(a.v[i]))
 inline F32x4 F32x4_log2(F32x4 a)  _NONE_OP4F(F32_log2(a.v[i]))
 inline F32x2 F32x2_log2(F32x2 a)  _NONE_OP2F(F32_log2(a.v[i]))
 
-inline F32x4 F32x4_exp(F32x4 a) _NONE_OP4F(F32_exp(a.v[i]))
-inline F32x2 F32x2_exp(F32x2 a) _NONE_OP2F(F32_exp(a.v[i]))
+//These return 0 if an invalid value was returned. TODO: Make this conform better!
 
-inline F32x4 F32x4_exp10(F32x4 a) _NONE_OP4F(F32_exp10(a.v[i]))
-inline F32x2 F32x2_exp10(F32x2 a) _NONE_OP2F(F32_exp10(a.v[i]))
+inline F32 _F32_expe(F32 v) { F32 v0 = 0; F32_expe(v, &v0); return v0; }
+inline F32 _F32_exp10(F32 v) { F32 v0 = 0; F32_exp10(v, &v0); return v0; }
+inline F32 _F32_exp2(F32 v) { F32 v0 = 0; F32_exp2(v, &v0); return v0; }
 
-inline F32x2 F32x2_exp2(F32x2 a) _NONE_OP2F(F32_exp2(a.v[i]))
-inline F32x4 F32x4_exp2(F32x4 a) _NONE_OP4F(F32_exp2(a.v[i]))
+//
+
+inline F32x4 F32x4_exp(F32x4 a) _NONE_OP4F(_F32_expe(a.v[i]))
+inline F32x2 F32x2_exp(F32x2 a) _NONE_OP2F(_F32_expe(a.v[i]))
+
+inline F32x4 F32x4_exp10(F32x4 a) _NONE_OP4F(_F32_exp10(a.v[i]))
+inline F32x2 F32x2_exp10(F32x2 a) _NONE_OP2F(_F32_exp10(a.v[i]))
+
+inline F32x2 F32x2_exp2(F32x2 a) _NONE_OP2F(_F32_exp2(a.v[i]))
+inline F32x4 F32x4_exp2(F32x4 a) _NONE_OP4F(_F32_exp2(a.v[i]))
 
 //Dot products
 

@@ -27,12 +27,18 @@ impl Error File_writeVirtual(Buffer buf, String loc);
 impl Error File_readVirtual(String loc, Buffer *output);
 
 inline Error File_read(String loc, Buffer *output) {
-	Bool isVirtual = String_startsWithString(loc, String_createConstRefUnsafe("//"), EStringCase_Insensitive);
+
+	Bool isVirtual = 
+		String_startsWithString(loc, String_createConstRefUnsafe("//"), EStringCase_Insensitive);
+
 	return isVirtual ? File_readVirtual(loc, output) : File_readLocal(loc, output);
 }
 
 inline Error File_write(Buffer buf, String loc) {
-	Bool isVirtual = String_startsWithString(loc, String_createConstRefUnsafe("//"), EStringCase_Insensitive);
+
+	Bool isVirtual = 
+		String_startsWithString(loc, String_createConstRefUnsafe("//"), EStringCase_Insensitive);
+
 	return isVirtual ? File_writeVirtual(buf, loc) : File_writeLocal(buf, loc);
 }
 

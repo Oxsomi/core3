@@ -9,6 +9,7 @@
 #define WIN32_LEAN_AND_MEAN
 #define MICROSOFT_WINDOWS_WINBASE_H_DEFINE_INTERLOCKED_CPLUSPLUS_OVERLOADS 0
 #include <Windows.h>
+#include <intrin.h>
 
 String Error_formatPlatformError(Error err) {
 
@@ -76,11 +77,11 @@ void sigFunc(int signal) {
 	exit(signal);
 }
 
-Error allocCallback(void *allocator, U64 siz, Buffer *output) {
+Error allocCallback(void *allocator, U64 length, Buffer *output) {
 
 	allocator;
 
-	void *ptr = malloc(siz);
+	void *ptr = malloc(length);
 
 	if(!output)
 		return Error_nullPointer(2, 0);
@@ -88,7 +89,7 @@ Error allocCallback(void *allocator, U64 siz, Buffer *output) {
 	if(!ptr)
 		return Error_outOfMemory(0);
 
-	*output = (Buffer) { .ptr = ptr, .siz = siz };
+	*output = (Buffer) { .ptr = ptr, .length = length };
 	return Error_none();
 }
 
@@ -119,6 +120,37 @@ int main(int argc, const char *argv[]) {
 
 	if(err.genericError)
 		return -1;
+
+	#if _SIMD == SIMD_SSE
+
+		//We need to double check that our CPU supports 
+		//AVX, SSE4.2, SSE4.1, (S)SSE3, SSE2, SSE, AES
+		//https://gist.github.com/hi2p-perim/7855506
+		//https://en.wikipedia.org/wiki/CPUID
+
+		int mask3 = (1 << 25) | (1 << 26);										//SSE, SSE2
+		int mask2 = (1 << 0) | (1 << 9) | (1 << 19) | (1 << 20) | (1 << 25);	//SSE3, SSSE3, SSE4.1, SSE4.2, AES
+
+		int cpuInfo[4];
+		__cpuid(cpuInfo, 1);
+
+		//Unsupported CPU
+
+		if ((cpuInfo[3] & mask3) != mask3 || (cpuInfo[2] & mask2) != mask2) {
+
+			Log_error(
+				String_createConstRefUnsafe(
+					"Unsupported CPU. The following extensions are required: "
+					"SSE, SSE2, SSE3, SSSE3, SSE4.1, SSE4.2, AES"
+				),
+				ELogOptions_Default
+			);
+
+			Platform_cleanup();
+			return -1;
+		}
+
+	#endif
 
 	int res = Program_run();
 	Program_exit();

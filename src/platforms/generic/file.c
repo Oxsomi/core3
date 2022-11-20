@@ -218,7 +218,7 @@ Error File_resolve(String loc, Bool *isVirtual, String *result) {
 
 Error File_writeLocal(Buffer buf, String loc) {
 
-	if(!buf.siz || !buf.ptr) 
+	if(!buf.length || !buf.ptr) 
 		return Error_nullPointer(0, 0);
 
 	if(String_isEmpty(loc))
@@ -245,7 +245,7 @@ Error File_writeLocal(Buffer buf, String loc) {
 		return Error_notFound(1, 0, 0);
 	}
 
-	if (fwrite(buf.ptr, 1, buf.siz, f) != buf.siz) {
+	if (fwrite(buf.ptr, 1, buf.length, f) != buf.length) {
 		String_freex(&resolved);
 		fclose(f);
 		return Error_invalidState(0);
@@ -304,7 +304,7 @@ Error File_readLocal(String loc, Buffer *output) {
 
 	Buffer b = *output;
 
-	if (fread(b.ptr, 1, b.siz, f) != b.siz) {
+	if (fread(b.ptr, 1, b.length, f) != b.length) {
 		String_freex(&resolved);
 		Buffer_freex(output);
 		fclose(f);

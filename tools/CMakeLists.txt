@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.13.0)
-project(OxC3_virtual_package)
+project(OxC3)
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
@@ -17,14 +17,14 @@ set(WorkingDir FORCE ON CACHE BOOL "Use working directory as local root (OFF = U
 
 add_subdirectory(.. ${CMAKE_BINARY_DIR}/bin/OxC3)
 
-file(GLOB_RECURSE packageHeaders "inc/*.h")
-file(GLOB_RECURSE packageSources "src/*.c")
+file(GLOB_RECURSE headers "inc/*.h")
+file(GLOB_RECURSE sources "src/*.c")
 
 add_executable(
-	OxC3_virtual_package
-	${packageHeaders}
-	${packageSources}
+	OxC3
+	${headers}
+	${sources}
 	CMakeLists.txt
 )
 
-target_link_libraries(OxC3_virtual_package PUBLIC OxC3_platforms)
+target_link_libraries(OxC3 PUBLIC OxC3_platforms)

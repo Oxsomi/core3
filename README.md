@@ -21,6 +21,13 @@ One of the useful things about C is that files are incredibly easy to compile an
 - CMake >=3.13
 - (Optional): Git or any tool that can work with GitHub.
 
+## Running requirements
+
+- Windows.
+- A CPU.
+  - Even though SSE4.2+ is recommended, this can be explicitly turned off. SSE can only be turned off if relax float is turned off; this is because normal floats (without SSE) aren't always IEEE754 compliant. SIMD option requires AES extension too.
+  - Recommended CPUs are AMD Zen, Intel Rocket lake (Gen 11) and up. This is because SHA256 is natively supported on them.
+
 ## Installing OxC3
 
 ```bash

@@ -52,12 +52,12 @@ inline Error String_splitStringx(
 	return String_splitString(s, other, casing, Platform_instance.alloc, result);
 }
 
-inline Error String_resizex(String *str, U64 siz, C8 defaultChar) {
-	return String_resize(str, siz, defaultChar, Platform_instance.alloc);
+inline Error String_resizex(String *str, U64 length, C8 defaultChar) {
+	return String_resize(str, length, defaultChar, Platform_instance.alloc);
 }
 
-inline Error String_reservex(String *str, U64 siz) {
-	return String_reserve(str, siz, Platform_instance.alloc);
+inline Error String_reservex(String *str, U64 length) {
+	return String_reserve(str, length, Platform_instance.alloc);
 }
 
 inline Error String_appendx(String *s, C8 c) {

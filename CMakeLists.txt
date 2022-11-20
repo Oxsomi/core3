@@ -26,7 +26,11 @@ set(WorkingDir OFF CACHE BOOL "Use working directory as local root (OFF = Use fi
 
 if(MSVC)
 
-	add_compile_options(/W4 /WX /MD /MP /GR /arch:AVX2 /D_CRT_SECURE_NO_WARNINGS /Gy)
+	add_compile_options(/W4 /WX /MD /MP /GR /D_CRT_SECURE_NO_WARNINGS /Gy)
+
+	if(EnableSIMD) 
+		add_compile_options(/d2archSSE42)		# Require SSE4.2
+	endif()
 
 	if(RelaxFloat)
 		add_compile_options(/fp:fast)
@@ -36,7 +40,13 @@ if(MSVC)
 
 else()
 
-	add_compile_options(-Wall -Wextra -Werror -mavx2 -mfpmath=sse)
+	add_compile_options(-Wall -Wextra -Werror -maes -msha)
+
+	if(EnableSIMD) 
+		add_compile_options(-mfpmath=sse -msse -msse2 -msse3 -mssse3 -msse4 -msse4.1 -msse4.2)
+	elseif(NOT RelaxFloat)
+		add_compile_options(-mfpmath=sse -msse)
+	endif()
 
 	if(RelaxFloat)
 		add_compile_options(-ffast-math)
@@ -45,6 +55,9 @@ else()
 	endif()
 
 endif()
+
+message("-- Enabling x64 specific optimizations such as CRC32C, AES256 and SHA256 (optional) instructions")
+set(_ARCH "ARCH_X64")
 
 if(EnableSIMD) 
 	message("-- Enabling SIMD (-DEnableSIMD=ON)")

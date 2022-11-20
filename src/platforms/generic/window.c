@@ -112,7 +112,7 @@ Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 
 	Bool resize = false;
 
-	if (linSiz >= old.siz) {
+	if (linSiz >= old.length) {
 
 		U64 toAllocate = linSiz * 5 / 4;
 
@@ -126,7 +126,7 @@ Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 
 	//We need to shrink; we're way over allocated (>50%)
 
-	else if (old.siz > linSiz * 3 / 2) {
+	else if (old.length > linSiz * 3 / 2) {
 
 		U64 toAllocate = linSiz * 5 / 4;
 
@@ -295,7 +295,7 @@ Error Window_storeCPUBufferToDisk(const Window *w, String filePath) {
 
 	Buffer buf = w->cpuVisibleBuffer;
 
-	if(!buf.siz)
+	if(!buf.length)
 		return Error_invalidOperation(0);
 
 	if(w->format != EWindowFormat_rgba8)

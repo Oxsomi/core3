@@ -205,7 +205,7 @@ Error WindowManager_createPhysical(
 			return Error_platformError(3, hr);
 		}
 
-		cpuVisibleBuffer.siz = (U64) bmi.bmiHeader.biWidth * bmi.bmiHeader.biHeight * 4;
+		cpuVisibleBuffer.length = (U64) bmi.bmiHeader.biWidth * bmi.bmiHeader.biHeight * 4;
 		ReleaseDC(nativeWindow, screen);
 	}
 

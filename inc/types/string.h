@@ -1,5 +1,4 @@
 #pragma once
-#include "hash.h"
 #include "error.h"
 #include "allocator.h"
 #include "buffer.h"
@@ -71,6 +70,15 @@ inline const C8 *String_charAtConst(String str, U64 off) {
 	return off >= str.length ? NULL : str.ptr + off; 
 }
 
+inline const Bool String_isValidAscii(String str) {
+
+	for(U64 i = 0; i < str.length; ++i)
+		if(!C8_isValidAscii(str.ptr[i]))
+			return false;
+
+	return true;
+}
+
 //
 
 inline void String_clear(String *str) { 
@@ -79,7 +87,7 @@ inline void String_clear(String *str) {
 }
 
 U64 String_calcStrLen(const C8 *ptr, U64 maxSize);
-U64 String_hash(String s);
+//U64 String_hash(String s);								TODO:
 
 inline C8 String_getAt(String str, U64 i) { 
 	return i < str.length && str.ptr ? str.ptr[i] : C8_MAX;
@@ -202,8 +210,8 @@ Error String_splitString(
 
 //This will operate on this string, so it will need a heap allocated string
 
-Error String_resize(String *str, U64 siz, C8 defaultChar, Allocator alloc);
-Error String_reserve(String *str, U64 siz, Allocator alloc);
+Error String_resize(String *str, U64 length, C8 defaultChar, Allocator alloc);
+Error String_reserve(String *str, U64 length, Allocator alloc);
 
 Error String_append(String *s, C8 c, Allocator allocator);
 Error String_appendString(String *s, String other, Allocator allocator);
@@ -340,8 +348,8 @@ Error String_offsetAsRef(String s, U64 off, String *result);
 //Things that perform on this string to reduce overhead
 
 Bool String_cutBegin(String s, U64 off, String *result);
-Bool String_cutEnd(String s, U64 siz, String *result);
-Bool String_cut(String s, U64 off, U64 siz, String *result);
+Bool String_cutEnd(String s, U64 length, String *result);
+Bool String_cut(String s, U64 off, U64 length, String *result);
 
 Bool String_cutAfter(String s, C8 c, EStringCase caseSensitive, Bool isFirst, String *result);
 

@@ -47,9 +47,9 @@ DNs Time_elapsed(Ns prev) { return Time_dns(prev, Time_now()); }
 //ISO 8601 e.g. 2022-02-26T21:08:45.000000000Z
 //The standard functions strp don't work properly cross platform
 
-void setNum(TimerFormat format, I64 offset, U64 siz, U64 v) {
+void setNum(TimerFormat format, I64 offset, U64 length, U64 v) {
 
-	I64 off = (I64)(offset + siz) - 1;
+	I64 off = (I64)(offset + length) - 1;
 
 	while (v && off >= offset) {
 		format[off] = '0' + v % 10;
@@ -144,9 +144,6 @@ EFormatStatus Time_parseFormat(Ns *time, TimerFormat format) {
 
 			case 6: {	//Nanoseconds
 
-				if (curr >= seconds)
-					return EFormatStatus_InvalidValue;
-
 				int dif = (int)(i - prevI);
 
 				if(dif == 0)
@@ -157,7 +154,10 @@ EFormatStatus Time_parseFormat(Ns *time, TimerFormat format) {
 				if(mul == U64_MAX)
 					return EFormatStatus_InvalidFormat;
 
-				ns = curr * mul;
+				if (curr * mul >= seconds)
+					return EFormatStatus_InvalidValue;
+
+				ns = (U32)(curr * mul);
 				break;
 			}
 
@@ -186,7 +186,7 @@ Ns Time_date(U16 year, U8 month, U8 day, U8 hour, U8 minute, U8 second, U32 ns) 
 		month < 1 || month > 12 || 
 		day > 31 || 
 		hour >= 24 || minute >= 60 || second >= 60 ||
-		ns >= 1'000'000
+		ns >= seconds
 	)
 		return U64_MAX;
 

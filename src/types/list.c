@@ -45,12 +45,12 @@ Error List_createFromBuffer(Buffer buf, U64 stride, Bool isConst, List *result) 
 	if(!buf.ptr || !stride)
 		return Error_invalidParameter(!buf.ptr ? 0 : 1, 0, 0);
 
-	if(buf.siz % stride)
+	if(buf.length % stride)
 		return Error_invalidParameter(0, 0, 1);
 
 	*result = (List) { 
 		.ptr = buf.ptr, 
-		.length = buf.siz / stride, 
+		.length = buf.length / stride, 
 		.stride = stride,
 		.capacity = isConst ? U64_MAX : 0
 	};
@@ -251,10 +251,10 @@ Error List_set(List list, U64 index, Buffer buf) {
 	if(index >= list.length)
 		return Error_outOfBounds(1, 0, index, list.length);
 
-	if(buf.siz && buf.siz != list.stride)
+	if(buf.length && buf.length != list.stride)
 		return Error_invalidOperation(0);
 
-	if(buf.siz)
+	if(buf.length)
 		Buffer_copy(Buffer_createRef(list.ptr + index * list.stride, list.stride), buf);
 
 	else Buffer_unsetAllBits(Buffer_createRef(list.ptr + index * list.stride, list.stride));
@@ -276,7 +276,7 @@ Error List_get(List list, U64 index, Buffer *result) {
 
 Error List_find(List list, Buffer buf, Allocator allocator, List *result) {
 
-	if(!buf.ptr || !buf.siz)
+	if(!buf.ptr || !buf.length)
 		return Error_nullPointer(1, 0);
 
 	if(!result)
@@ -309,7 +309,7 @@ Error List_find(List list, Buffer buf, Allocator allocator, List *result) {
 
 U64 List_findFirst(List list, Buffer buf, U64 index) {
 
-	if(buf.siz != list.stride)
+	if(buf.length != list.stride)
 		return U64_MAX;
 
 	Error err;
@@ -331,7 +331,7 @@ U64 List_findFirst(List list, Buffer buf, U64 index) {
 
 U64 List_findLast(List list, Buffer buf, U64 index) {
 
-	if(buf.siz != list.stride)
+	if(buf.length != list.stride)
 		return U64_MAX;
 
 	Error err;
@@ -353,7 +353,7 @@ U64 List_findLast(List list, Buffer buf, U64 index) {
 
 U64 List_count(List list, Buffer buf) {
 
-	if(buf.siz != list.stride)
+	if(buf.length != list.stride)
 		return U64_MAX;
 
 	U64 count = 0;
@@ -642,7 +642,7 @@ Error List_insert(List *list, U64 index, Buffer buf, Allocator allocator) {
 	if(!list)
 		return Error_nullPointer(0, 0);
 
-	if(list->stride != buf.siz)
+	if(list->stride != buf.length)
 		return Error_invalidOperation(0);
 
 	if(index >= list->length)
@@ -811,7 +811,7 @@ Error List_reserve(List *list, U64 capacity, Allocator allocator) {
 
 	Buffer curr = List_allocatedBuffer(*list);
 
-	if(curr.siz)
+	if(curr.length)
 		err = Buffer_free(&curr, allocator);
 
 	list->ptr = buffer.ptr;
@@ -878,7 +878,7 @@ Error List_popLocation(List *list, U64 index, Buffer buf) {
 	if(err.genericError)
 		return err;
 
-	if(buf.siz != result.siz)
+	if(buf.length != result.length)
 		return Error_invalidOperation(0);
 
 	Buffer_copy(buf, result);
@@ -893,13 +893,13 @@ Error List_popBack(List *list, Buffer output) {
 	if(!list->length)
 		return Error_outOfBounds(0, 0, 0, 0);
 
-	if(output.siz && output.siz != list->stride)
+	if(output.length && output.length != list->stride)
 		return Error_invalidOperation(0);
 
 	if(List_isConstRef(*list))
 		return Error_constData(0, 0);
 
-	if(output.siz)
+	if(output.length)
 		Buffer_copy(output, Buffer_createRef(list->ptr + (list->length - 1) * list->stride, list->stride));
 
 	--list->length;

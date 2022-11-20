@@ -55,9 +55,26 @@ inline Error Buffer_setAllBitsTo(Buffer buf, Bool isOn) {
 	return Buffer_unsetAllBits(buf);
 }
 
-U64 Buffer_hash(Buffer buf);
+//What hash functions are good for:
+// 
+//argon2id (Unsupported): 
+//	Passwords (limit size (not too low) to avoid DDOS and use pepper if applicable)			TODO:
+//	https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html
+//	https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html
+// 
+//crc32c: Hashmaps / performance critical hashing / 
+//	fast data integrity (encryption / compression) when *NOT* dealing with adversaries
+// 
+//sha256: data integrity (encryption / compression) when dealing with adversaries
+//
+//For more info: 
+//	https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html
 
-U32 Buffer_crc32(Buffer buf, U32 crcSeed);
+//CRC32 Castagnoli / iSCSI polynomial (0x82f63b78) not for ethernet/zip (0xedb88320)!
+
+U32 Buffer_crc32c(Buffer buf);
+
+void Buffer_sha256(Buffer buf, U32 output[8]);
 
 //Comparison
 
@@ -67,33 +84,35 @@ Error Buffer_neq(Buffer buf0, Buffer buf1, Bool *result);		//Also compares size
 //These should never be Buffer_free-d because Buffer doesn't know if it's allocated
 
 inline Buffer Buffer_createNull() { return (Buffer) { 0 }; }
-inline Buffer Buffer_createRef(void *v, U64 length) { return (Buffer) { .ptr = (U8*) v, .siz = length }; }
+inline Buffer Buffer_createRef(void *v, U64 length) { return (Buffer) { .ptr = (U8*) v, .length = length }; }
 
 //All these functions allocate, so Buffer_free them later
 
 Error Buffer_createCopy(Buffer buf, Allocator alloc, Buffer *output);
-Error Buffer_createZeroBits(U64 siz, Allocator alloc, Buffer *output);
-Error Buffer_createOneBits(U64 siz, Allocator alloc, Buffer *output);
+Error Buffer_createZeroBits(U64 length, Allocator alloc, Buffer *output);
+Error Buffer_createOneBits(U64 length, Allocator alloc, Buffer *output);
 
-inline Error Buffer_createBits(U64 siz, Bool value, Allocator alloc, Buffer *result) {
+inline Error Buffer_createBits(U64 length, Bool value, Allocator alloc, Buffer *result) {
 
 	if (!value)
-		return Buffer_createZeroBits(siz, alloc, result);
+		return Buffer_createZeroBits(length, alloc, result);
 
-	return Buffer_createOneBits(siz, alloc, result);
+	return Buffer_createOneBits(length, alloc, result);
 }
 
 Error Buffer_free(Buffer *buf, Allocator alloc);
-Error Buffer_createEmptyBytes(U64 siz, Allocator alloc, Buffer *output);
+Error Buffer_createEmptyBytes(U64 length, Allocator alloc, Buffer *output);
 
-Error Buffer_createUninitializedBytes(U64 siz, Allocator alloc, Buffer *output);
-Error Buffer_createSubset(Buffer buf, U64 offset, U64 siz, Buffer *output);
+Error Buffer_createUninitializedBytes(U64 length, Allocator alloc, Buffer *output);
+Error Buffer_createSubset(Buffer buf, U64 offset, U64 length, Buffer *output);
 
 //Writing data
 
-Error Buffer_offset(Buffer *buf, U64 siz);
-Error Buffer_append(Buffer *buf, const void *v, U64 siz);
+Error Buffer_offset(Buffer *buf, U64 length);
+Error Buffer_append(Buffer *buf, const void *v, U64 length);
 Error Buffer_appendBuffer(Buffer *buf, Buffer append);
+
+Error Buffer_combine(Buffer a, Buffer b, Allocator alloc, Buffer *output);
 
 inline Error Buffer_appendU64(Buffer *buf, U64 v) { return Buffer_append(buf, &v, sizeof(v)); }
 inline Error Buffer_appendU32(Buffer *buf, U32 v) { return Buffer_append(buf, &v, sizeof(v)); }

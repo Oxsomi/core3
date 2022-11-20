@@ -322,8 +322,8 @@ inline Bool ETextureFormat_getIsCompressed(ETextureFormat f) {
 }
 
 inline U64 ETextureFormat_getBits(ETextureFormat f) { 
-	U64 siz = (f >> 27) + 1;
-	return siz << (ETextureFormat_getIsCompressed(f) ? 6 : 2);
+	U64 length = (f >> 27) + 1;
+	return length << (ETextureFormat_getIsCompressed(f) ? 6 : 2);
 }
 
 inline U64 ETextureFormat_getAlphaBits(ETextureFormat f) { 

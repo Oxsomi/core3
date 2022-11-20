@@ -1,8 +1,10 @@
 #include "types/allocator.h"
 #include "types/error.h"
 #include "types/buffer.h"
-#include "types/hash.h"
 #include "math/math.h"
+#include "math/vec.h"
+
+#include <intrin.h>
 
 Error Buffer_getBit(Buffer buf, U64 offset, Bool *output) {
 
@@ -12,8 +14,8 @@ Error Buffer_getBit(Buffer buf, U64 offset, Bool *output) {
 	if(!buf.ptr)
 		return Error_nullPointer(0, 0);
 
-	if((offset >> 3) >= buf.siz)
-		return Error_outOfBounds(1, 0, offset >> 3, buf.siz);
+	if((offset >> 3) >= buf.length)
+		return Error_outOfBounds(1, 0, offset >> 3, buf.length);
 
 	*output = (buf.ptr[offset >> 3] >> (offset & 7)) & 1;
 	return Error_none();
@@ -23,14 +25,14 @@ Error Buffer_getBit(Buffer buf, U64 offset, Bool *output) {
 
 void Buffer_copy(Buffer dst, Buffer src) {
 
-	U64 *dstPtr = (U64*)dst.ptr, *dstEnd = dstPtr + (dst.siz >> 3);
-	const U64 *srcPtr = (const U64*)src.ptr, *srcEnd = srcPtr + (src.siz >> 3);
+	U64 *dstPtr = (U64*)dst.ptr, *dstEnd = dstPtr + (dst.length >> 3);
+	const U64 *srcPtr = (const U64*)src.ptr, *srcEnd = srcPtr + (src.length >> 3);
 
 	for(; dstPtr < dstEnd && srcPtr < srcEnd; ++dstPtr, ++srcPtr)
 		*dstPtr = *srcPtr;
 
-	dstEnd = (U64*)(dst.ptr + dst.siz);
-	srcEnd = (const U64*)(src.ptr + src.siz);
+	dstEnd = (U64*)(dst.ptr + dst.length);
+	srcEnd = (const U64*)(src.ptr + src.length);
 
 	if((U64)dstPtr + 4 <= (U64)dstEnd && (U64)srcPtr + 4 <= (U64)srcEnd) {
 
@@ -56,11 +58,11 @@ void Buffer_copy(Buffer dst, Buffer src) {
 
 void Buffer_revCopy(Buffer dst, Buffer src) {
 
-	if(!dst.ptr || !src.ptr || !dst.siz || !src.siz)
+	if(!dst.ptr || !src.ptr || !dst.length || !src.length)
 		return;
 
-	U64 *dstPtr = (U64*)(dst.ptr + dst.siz), *dstBeg = (U64*)(dstPtr - (dst.siz >> 3));
-	const U64 *srcPtr = (const U64*)(src.ptr + src.siz), *srcBeg = (U64*)(srcPtr - (src.siz >> 3));
+	U64 *dstPtr = (U64*)(dst.ptr + dst.length), *dstBeg = (U64*)(dstPtr - (dst.length >> 3));
+	const U64 *srcPtr = (const U64*)(src.ptr + src.length), *srcBeg = (U64*)(srcPtr - (src.length >> 3));
 
 	for(; dstPtr > dstBeg && srcPtr > srcBeg; ) {
 		--srcPtr; --dstPtr;
@@ -97,8 +99,8 @@ Error Buffer_setBit(Buffer buf, U64 offset) {
 	if(!buf.ptr)
 		return Error_nullPointer(0, 0);
 
-	if((offset >> 3) >= buf.siz)
-		return Error_outOfBounds(1, 0, offset, buf.siz << 3);
+	if((offset >> 3) >= buf.length)
+		return Error_outOfBounds(1, 0, offset, buf.length << 3);
 
 	buf.ptr[offset >> 3] |= 1 << (offset & 7);
 	return Error_none();
@@ -109,8 +111,8 @@ Error Buffer_resetBit(Buffer buf, U64 offset) {
 	if(!buf.ptr)
 		return Error_nullPointer(0, 0);
 
-	if((offset >> 3) >= buf.siz)
-		return Error_outOfBounds(1, 0, offset, buf.siz << 3);
+	if((offset >> 3) >= buf.length)
+		return Error_outOfBounds(1, 0, offset, buf.length << 3);
 
 	buf.ptr[offset >> 3] &= ~(1 << (offset & 7));
 	return Error_none();
@@ -121,7 +123,7 @@ Error Buffer_resetBit(Buffer buf, U64 offset) {
 	if(!dst.ptr || !src.ptr)															\
 		return Error_nullPointer(!dst.ptr ? 0 : 1, 0);									\
 																						\
-	U64 l = U64_min(dst.siz, src.siz);													\
+	U64 l = U64_min(dst.length, src.length);													\
 																						\
 	for(U64 i = 0, j = l >> 3; i < j; ++i)												\
 		*((U64*)dst.ptr + i) x *((const U64*)src.ptr + i);								\
@@ -147,11 +149,11 @@ Error Buffer_eq(Buffer buf0, Buffer buf1, Bool *result) {
 
 	*result = false;
 
-	if(buf0.siz != buf1.siz)
+	if(buf0.length != buf1.length)
 		return Error_none();
 
-	U64 l = buf0.siz;
-	U64 m = buf1.siz;
+	U64 l = buf0.length;
+	U64 m = buf1.length;
 																					
 	for (U64 i = 0, j = l >> 3, k = m >> 3; i < j && i < k; ++i) {
 
@@ -181,97 +183,653 @@ Error Buffer_neq(Buffer buf0, Buffer buf1, Bool *result) {
 	return Error_none();
 }
 
-U64 Buffer_hash(Buffer buf) {
+//TODO: Validate CRC32 and SHA in test.c as well as via the tool (should add hash function)
 
-	U64 h = FNVHash_create();
-	h = FNVHash_apply(h, buf.siz);
+//SHA state
 
-	if(buf.ptr) {
-
-		for(U64 i = 0, j = buf.siz >> 3; i < j; ++i)
-			h = FNVHash_apply(h, *((const U64*)buf.ptr + i));
-
-		for(U64 i = buf.siz >> 3; i < buf.siz; ++i)
-			h = FNVHash_apply(h, buf.ptr[i]);
-	}
-
-	return h;
-}
-
-//CRC32 (0xDEBB20E3)
-//Source code: https://web.mit.edu/freebsd/head/sys/libkern/crc32.c
-//Better explanation: https://lxp32.github.io/docs/a-simple-example-crc32-calculation/
-//This table basically performs the inner loop:
-//for(U64 j = 0; j < 8; ++j)
-//	U32 b = (c8 ^ crc) & 1
-//	crc >>= 1
-//	if(b) crc ^= 0xEDB88320;
-//	crc >>= 1
-
-static const U32 crc32Table[] = {
-	0x00000000, 0x77073096, 0xEE0E612C, 0x990951BA, 0x076DC419, 0x706AF48F,
-	0xE963A535, 0x9E6495A3,	0x0EDB8832, 0x79DCB8A4, 0xE0D5E91E, 0x97D2D988,
-	0x09B64C2B, 0x7EB17CBD, 0xE7B82D07, 0x90BF1D91, 0x1DB71064, 0x6AB020F2,
-	0xF3B97148, 0x84BE41DE,	0x1ADAD47D, 0x6DDDE4EB, 0xF4D4B551, 0x83D385C7,
-	0x136C9856, 0x646BA8C0, 0xFD62F97A, 0x8A65C9EC,	0x14015C4F, 0x63066CD9,
-	0xFA0F3D63, 0x8D080DF5,	0x3B6E20C8, 0x4C69105E, 0xD56041E4, 0xA2677172,
-	0x3C03E4D1, 0x4B04D447, 0xD20D85FD, 0xA50AB56B,	0x35B5A8FA, 0x42B2986C,
-	0xDBBBC9D6, 0xACBCF940,	0x32D86CE3, 0x45DF5C75, 0xDCD60DCF, 0xABD13D59,
-	0x26D930AC, 0x51DE003A, 0xC8D75180, 0xBFD06116, 0x21B4F4B5, 0x56B3C423,
-	0xCFBA9599, 0xB8BDA50F, 0x2802B89E, 0x5F058808, 0xC60CD9B2, 0xB10BE924,
-	0x2F6F7C87, 0x58684C11, 0xC1611DAB, 0xB6662D3D,	0x76DC4190, 0x01DB7106,
-	0x98D220BC, 0xEFD5102A, 0x71B18589, 0x06B6B51F, 0x9FBFE4A5, 0xE8B8D433,
-	0x7807C9A2, 0x0F00F934, 0x9609A88E, 0xE10E9818, 0x7F6A0DBB, 0x086D3D2D,
-	0x91646C97, 0xE6635C01, 0x6B6B51F4, 0x1C6C6162, 0x856530D8, 0xF262004E,
-	0x6C0695ED, 0x1B01A57B, 0x8208F4C1, 0xF50FC457, 0x65B0D9C6, 0x12B7E950,
-	0x8BBEB8EA, 0xFCB9887C, 0x62DD1DDF, 0x15DA2D49, 0x8CD37CF3, 0xFBD44C65,
-	0x4DB26158, 0x3AB551CE, 0xA3BC0074, 0xD4BB30E2, 0x4ADFA541, 0x3DD895D7,
-	0xA4D1C46D, 0xD3D6F4FB, 0x4369E96A, 0x346ED9FC, 0xAD678846, 0xDA60B8D0,
-	0x44042D73, 0x33031DE5, 0xAA0A4C5F, 0xDD0D7CC9, 0x5005713C, 0x270241AA,
-	0xBE0B1010, 0xC90C2086, 0x5768B525, 0x206F85B3, 0xB966D409, 0xCE61E49F,
-	0x5EDEF90E, 0x29D9C998, 0xB0D09822, 0xC7D7A8B4, 0x59B33D17, 0x2EB40D81,
-	0xB7BD5C3B, 0xC0BA6CAD, 0xEDB88320, 0x9ABFB3B6, 0x03B6E20C, 0x74B1D29A,
-	0xEAD54739, 0x9DD277AF, 0x04DB2615, 0x73DC1683, 0xE3630B12, 0x94643B84,
-	0x0D6D6A3E, 0x7A6A5AA8, 0xE40ECF0B, 0x9309FF9D, 0x0A00AE27, 0x7D079EB1,
-	0xF00F9344, 0x8708A3D2, 0x1E01F268, 0x6906C2FE, 0xF762575D, 0x806567CB,
-	0x196C3671, 0x6E6B06E7, 0xFED41B76, 0x89D32BE0, 0x10DA7A5A, 0x67DD4ACC,
-	0xF9B9DF6F, 0x8EBEEFF9, 0x17B7BE43, 0x60B08ED5, 0xD6D6A3E8, 0xA1D1937E,
-	0x38D8C2C4, 0x4FDFF252, 0xD1BB67F1, 0xA6BC5767, 0x3FB506DD, 0x48B2364B,
-	0xD80D2BDA, 0xAF0A1B4C, 0x36034AF6, 0x41047A60, 0xDF60EFC3, 0xA867DF55,
-	0x316E8EEF, 0x4669BE79, 0xCB61B38C, 0xBC66831A, 0x256FD2A0, 0x5268E236,
-	0xCC0C7795, 0xBB0B4703, 0x220216B9, 0x5505262F, 0xC5BA3BBE, 0xB2BD0B28,
-	0x2BB45A92, 0x5CB36A04, 0xC2D7FFA7, 0xB5D0CF31, 0x2CD99E8B, 0x5BDEAE1D,
-	0x9B64C2B0, 0xEC63F226, 0x756AA39C, 0x026D930A, 0x9C0906A9, 0xEB0E363F,
-	0x72076785, 0x05005713, 0x95BF4A82, 0xE2B87A14, 0x7BB12BAE, 0x0CB61B38,
-	0x92D28E9B, 0xE5D5BE0D, 0x7CDCEFB7, 0x0BDBDF21, 0x86D3D2D4, 0xF1D4E242,
-	0x68DDB3F8, 0x1FDA836E, 0x81BE16CD, 0xF6B9265B, 0x6FB077E1, 0x18B74777,
-	0x88085AE6, 0xFF0F6A70, 0x66063BCA, 0x11010B5C, 0x8F659EFF, 0xF862AE69,
-	0x616BFFD3, 0x166CCF45, 0xA00AE278, 0xD70DD2EE, 0x4E048354, 0x3903B3C2,
-	0xA7672661, 0xD06016F7, 0x4969474D, 0x3E6E77DB, 0xAED16A4A, 0xD9D65ADC,
-	0x40DF0B66, 0x37D83BF0, 0xA9BCAE53, 0xDEBB9EC5, 0x47B2CF7F, 0x30B5FFE9,
-	0xBDBDF21C, 0xCABAC28A, 0x53B39330, 0x24B4A3A6, 0xBAD03605, 0xCDD70693,
-	0x54DE5729, 0x23D967BF, 0xB3667A2E, 0xC4614AB8, 0x5D681B02, 0x2A6F2B94,
-	0xB40BBE37, 0xC30C8EA1, 0x5A05DF1B, 0x2D02EF8D
+static const U32 SHA256_state[8] = {
+	0x6A09E667, 0xBB67AE85, 0x3C6EF372, 0xA54FF53A,
+	0x510E527F, 0x9B05688C, 0x1F83D9AB, 0x5BE0CD19
 };
 
-U32 Buffer_crc32(Buffer buf, U32 crcSeed) {
+//First 32 bits of cube roots of first 64 primes 2..311 (see amosnier/sha-2)
 
-	const U8 *p = buf.ptr;
-	U32 crc = U32_MAX;
+static const U32 SHA256_k[64] = {
+	0x428A2F98, 0x71374491, 0xB5C0FBCF, 0xE9B5DBA5, 0x3956C25B, 0x59F111F1, 0x923F82A4, 0xAB1C5ED5, 
+	0xD807AA98, 0x12835B01, 0x243185BE, 0x550C7DC3, 0x72BE5D74, 0x80DEB1FE, 0x9BDC06A7, 0xC19BF174, 
+	0xE49B69C1, 0xEFBE4786, 0x0FC19DC6, 0x240CA1CC, 0x2DE92C6F, 0x4A7484AA, 0x5CB0A9DC, 0x76F988DA, 
+	0x983E5152, 0xA831C66D, 0xB00327C8, 0xBF597FC7, 0xC6E00BF3, 0xD5A79147, 0x06CA6351, 0x14292967, 
+	0x27B70A85, 0x2E1B2138, 0x4D2C6DFC, 0x53380D13, 0x650A7354, 0x766A0ABB, 0x81C2C92E, 0x92722C85, 
+	0xA2BFE8A1, 0xA81A664B, 0xC24B8B70, 0xC76C51A3, 0xD192E819, 0xD6990624, 0xF40E3585, 0x106AA070, 
+	0x19A4C116, 0x1E376C08, 0x2748774C, 0x34B0BCB5, 0x391C0CB3, 0x4ED8AA4A, 0x5B9CCA4F, 0x682E6FF3,
+	0x748F82EE, 0x78A5636F, 0x84C87814, 0x8CC70208, 0x90BEFFFA, 0xA4506CEB, 0xBEF9A3F7, 0xC67178F2
+};
 
-	while(buf.siz--)
-		crc = crc32Table[(U8)(crc ^ *p++)] ^ (crc >> 8);
+//Fallback for SHA256 if the native instruction isn't available
+//Thanks to https://codereview.stackexchange.com/questions/182812/self-contained-sha-256-implementation-in-c
+//https://github.com/amosnier/sha-2/blob/master/sha-256.c
+//https://en.wikipedia.org/wiki/SHA-2
 
-	return crc ^ U32_MAX;
+//Arm7's ror instruction aka Java's >>>; shift that maintains right side of the bits into left side
+
+inline U32 ror(U32 v, U32 amount) {
+	amount &= 31;								//Avoid undefined behavior (<< 32 is undefined)
+	return amount ? ((v >> amount) | (v << (32 - amount))) : v;
 }
+
+inline void _Buffer_sha256(Buffer buf, U32 *output) {
+
+	I32x4 state[2] = {
+		I32x4_load4((const I32*)SHA256_state),
+		I32x4_load4((const I32*)SHA256_state + 4)
+	};
+
+	U64 ptr = (U64)(void*) buf.ptr, len = buf.length;
+	U8 block[64];
+
+	Bool padded = false;
+	Bool wasPaddingBlock = false;
+	Bool wasPerfectlyAligned = false;
+
+	if(!len) {
+		wasPaddingBlock = wasPerfectlyAligned = true;
+		len = 64;
+	}
+
+	while (len) {
+
+		//We reached an unfilled block. We gotta make a block on the stack and point to it
+
+		if (len < 64 || wasPaddingBlock) {
+
+			//Point to stack
+
+			U64 realLen = len;
+			U64 realPtr = ptr;
+
+			ptr = (U64)(void*) block;
+			len = 64;
+			padded = true;
+
+			//Last block was padding block
+			//This means we can put the length at the end
+
+			if (wasPaddingBlock) {
+
+				Buffer_unsetAllBits(Buffer_createRef(block, 64 - sizeof(U64)));
+
+				if(wasPerfectlyAligned)
+					block[0] = 0x80;
+
+				U8 *lenPtr = block + 64 - sizeof(U64);
+
+				//Keep 5 bits from the index in the block at lenPtr[7]
+				//Keep the others as big endian in [0-6]
+
+				U64 currLen = buf.length;
+
+				lenPtr[7] = (U8)(currLen << 3);
+				currLen >>= 5;
+
+				for(U64 k = 6; k != U64_MAX; --k) {
+					lenPtr[k] = (U8) currLen;
+					currLen >>= 8;
+				}
+			}
+
+			//We reached the block with 0x80, 0x00....
+			//With possibly length in the end
+
+			else {
+
+				Buffer_copy(Buffer_createRef(block, 64), Buffer_createRef((void*)realPtr, realLen));
+
+				*((U8*)(void*)block + realLen) = 0x80;
+
+				if(realLen <= 62)
+					Buffer_unsetAllBits(Buffer_createRef(block + realLen + 1, 64 - realLen - 1));
+
+				//We need one more block just to contain the length at the end
+
+				if(realLen >= 64 - sizeof(U64)) {
+					wasPaddingBlock = true;
+					len += 64;
+				}
+
+				//We can insert length in this block :)
+
+				else {
+
+					U8 *lenPtr = block + 64 - sizeof(U64);
+
+					U64 currLen = buf.length;
+
+					//Keep 5 bits from the index in the block at lenPtr[7]
+					//Keep the others as big endian in [0-6]
+
+					lenPtr[7] = (U8)(currLen << 3);
+					currLen >>= 5;
+
+					for(U64 k = 6; k != U64_MAX; --k) {
+						lenPtr[k] = (U8) currLen;
+						currLen >>= 8;
+					}
+				}
+			}
+		}
+
+		//Store state
+
+		I32x4 currState0 = state[0], currState1 = state[1];
+
+		//Perform SHA256
+
+		U32 w[16];
+
+		for(U64 i = 0; i < 4; ++i)
+			for (U64 j = 0; j < 16; ++j) {
+
+				//Initialize w
+
+				if(!i) {
+
+					U32 v = 0;
+
+					for(U64 k = 0; k < 4; ++k)
+						v |= ((U32)*(U8*)(void*)(ptr + (j << 2) + k)) << (24 - k * 8);
+
+					w[j] = v;
+				}
+
+				//Scramble w
+
+				else {
+
+					U32 wj1 = w[(j + 1) & 0xF], wj14 = w[(j + 14) & 0xF];
+
+					U32 s0 = ror(wj1, 7) ^ ror(wj1, 18) ^ (wj1 >> 3);
+					U32 s1 = ror(wj14, 17) ^ ror(wj14, 19) ^ (wj14 >> 10);
+
+					w[j] += s0 + w[(j + 9) & 0xF] + s1;
+				}
+
+				//Calculate s1 and ch
+
+				U32 ah4 = (U32) I32x4_x(state[1]);
+				U32 ah5 = (U32) I32x4_y(state[1]);
+				U32 ah6 = (U32) I32x4_z(state[1]);
+
+				U32 s1 = ror(ah4, 6) ^ ror(ah4, 11) ^ ror(ah4, 25);
+				U32 ch = (ah4 & ah5) ^ (~ah4 & ah6);
+
+				//Calculate temp1 and temp2
+
+				U32 ah0 = (U32) I32x4_x(state[0]);
+				U32 ah1 = (U32) I32x4_y(state[0]);
+				U32 ah2 = (U32) I32x4_z(state[0]);
+
+				U32 temp1 = (U32) I32x4_w(state[1]) + s1 + ch + SHA256_k[(i << 4) | j] + w[j];
+				U32 s0 = ror(ah0, 2) ^ ror(ah0, 13) ^ ror(ah0, 22);
+				U32 maj = (ah0 & ah1) ^ (ah0 & ah2) ^ (ah1 & ah2);
+				U32 temp2 = s0 + maj;
+				
+				//Swizzle
+
+				U32 state0w = I32x4_w(state[0]);
+
+				state[0] = I32x4_xxyz(state[0]);
+				state[1] = I32x4_xxyz(state[1]);
+
+				I32x4_setX(&state[0], temp1 + temp2);
+				I32x4_setX(&state[1], state0w + temp1);
+			}
+
+		//Combine two states
+
+		state[0] = I32x4_add(state[0], currState0);
+		state[1] = I32x4_add(state[1], currState1);
+
+		//Update block pos
+
+		ptr += 64;
+		len -= 64;
+
+		//If we haven't padded and length is zero, that means we're perfectly aligned!
+		//This means we're still missing a padding U64 for the encoded length
+
+		if (!len && !padded) {
+			wasPerfectlyAligned = true;
+			wasPaddingBlock = true;
+			len = 64;
+		}
+	}
+
+	//Store output
+
+	Buffer_copy(Buffer_createRef(output, sizeof(U32) * 8), Buffer_createRef(state, sizeof(U32) * 8));
+}
+
+//
+
+#if _SIMD == SIMD_SSE
+
+	#include <nmmintrin.h>
+
+	//Implementation of hardware CRC32C but ported back to C and restructured a bit
+	//https://github.com/rurban/smhasher/blob/master/crc32c.cpp
+
+	extern const U32 CRC32C_longShifts[4][256];
+	extern const U32 CRC32C_shortShifts[4][256];
+
+	inline U32 CRC32C_shiftShort(U32 crc0) {
+		return 
+			CRC32C_shortShifts[0][(U8) crc0] ^ CRC32C_shortShifts[1][(U8)(crc0 >> 8)] ^ 
+			CRC32C_shortShifts[2][(U8)(crc0 >> 16)] ^ CRC32C_shortShifts[3][(U8)(crc0 >> 24)];
+	}
+
+	inline U32 CRC32C_shiftLong(U32 crc0) {
+		return 
+			CRC32C_longShifts[0][(U8) crc0] ^ CRC32C_longShifts[1][(U8)(crc0 >> 8)] ^ 
+			CRC32C_longShifts[2][(U8)(crc0 >> 16)] ^ CRC32C_longShifts[3][(U8)(crc0 >> 24)];
+	}
+
+	U32 Buffer_crc32c(Buffer buf) {
+
+		U32 crc = U32_MAX;
+	
+		if(!buf.length)
+			return crc ^ U32_MAX;
+
+		U64 off = (U64)(void*)buf.ptr;
+		
+		U64 len = buf.length;
+		U64 offNear8 = U64_min((U64)buf.ptr + buf.length, (off + 7) & ~7);
+
+		//Go to nearest 8 byte boundary
+
+		if (off & 7) {
+
+			if (off + sizeof(U32) <= offNear8) {
+				crc = _mm_crc32_u32(crc, *(U32*)(void*)off);
+				off += sizeof(U32);
+				len -= sizeof(U32);
+			}
+
+			if (off + sizeof(U16) <= offNear8) {
+				crc = _mm_crc32_u16(crc, *(U16*)(void*)off);
+				off += sizeof(U16);
+				len -= sizeof(U16);
+			}
+
+			if (off + sizeof(U8) <= offNear8) {
+				crc = _mm_crc32_u8(crc, *(U8*)(void*)off);
+				off += sizeof(U8);
+				len -= sizeof(U8);
+			}
+		}
+
+		//Compute 3 CRCs at once, this is beneficial because the hardware is able to schedule these at once
+		//Giving us better perf (up to 15x faster!)
+		//We always run 64-bit, so we can assume U64 to be properly present
+
+		U64 crc0 = crc;
+
+		static const U64 longShift = 8192, longShiftU64 = 8192 / sizeof(U64);
+
+		while(len >= longShift * 3) {
+
+			U64 crc1 = 0, crc2 = 0;
+
+			for (U64 i = 0; i < longShiftU64; ++i) {
+				crc0 = _mm_crc32_u64(crc0, *(U64*)(void*)off + i);
+				crc1 = _mm_crc32_u64(crc1, *((U64*)(void*)off + longShiftU64 + i));
+				crc2 = _mm_crc32_u64(crc2, *((U64*)(void*)off + longShiftU64 * 2 + i));
+			}
+
+			crc0 = CRC32C_shiftLong((U32) crc0) ^ crc1;
+			crc0 = CRC32C_shiftLong((U32) crc0) ^ crc2;
+
+			off += longShift * 3;
+			len -= longShift * 3;
+		}
+
+		//Do the same thing but for smaller blocks
+
+		static const U64 shortShift = 256, shortShiftU64 = 256 / sizeof(U64);
+
+		while(len >= shortShift * 3) {
+
+			U64 crc1 = 0, crc2 = 0;
+
+			for (U64 i = 0; i < shortShiftU64; ++i) {
+				crc0 = _mm_crc32_u64(crc0, *(U64*)(void*)off + i);
+				crc1 = _mm_crc32_u64(crc1, *((U64*)(void*)off + shortShiftU64 + i));
+				crc2 = _mm_crc32_u64(crc2, *((U64*)(void*)off + shortShiftU64 * 2 + i));
+			}
+
+			crc0 = CRC32C_shiftShort((U32) crc0) ^ crc1;
+			crc0 = CRC32C_shiftShort((U32) crc0) ^ crc2;
+
+			off += shortShift * 3;
+			len -= shortShift * 3;
+		}
+
+		//Process remaining U64s
+
+		while (len >= sizeof(U64)) {
+			crc0 = _mm_crc32_u64(crc0, *(U64*)(void*)off);
+			off += sizeof(U64);
+			len -= sizeof(U64);
+		}
+
+		if (len >= sizeof(U32)) {
+			crc0 = _mm_crc32_u32((U32) crc0, *(U32*)(void*)off);
+			off += sizeof(U32);
+			len -= sizeof(U32);
+		}
+
+		if (len >= sizeof(U16)) {
+			crc0 = _mm_crc32_u16((U32) crc0, *(U16*)(void*)off);
+			off += sizeof(U16);
+			len -= sizeof(U16);
+		}
+
+		if (len >= sizeof(U8))
+			crc0 = _mm_crc32_u8((U32) crc0, *(U8*)(void*)off);
+
+		return (U32) crc0 ^ U32_MAX;
+	}
+
+	//Ported + cleaned up from https://github.com/noloader/SHA-Intrinsics/blob/master/sha256-x86.c
+
+	void Buffer_sha256(Buffer buf, U32 output[8]) {
+
+		//Fallback if the hardware doesn't support SHA extension
+
+		int cpuInfo1[4];
+		__cpuidex(cpuInfo1, 7, 0);
+
+		if(!((cpuInfo1[1] >> 29) & 1)) {
+			_Buffer_sha256(buf, output);
+			return;
+		}
+
+		//Consts
+
+		const I32x4 MASK = _mm_set_epi64x(0x0C'0D'0E'0F'08'09'0A'0B, 0x04'05'06'07'00'01'02'03);
+
+		const I32x4 rounds[16] = {
+			_mm_set_epi64x(0xE9B5DBA5B5C0FBCF, 0x71374491428A2F98),		//0-3
+			_mm_set_epi64x(0xAB1C5ED5923F82A4, 0x59F111F13956C25B),		//4-7
+			_mm_set_epi64x(0x550C7DC3243185BE, 0x12835B01D807AA98),		//8-11
+			_mm_set_epi64x(0xC19BF1749BDC06A7, 0x80DEB1FE72BE5D74),		//12-15
+			_mm_set_epi64x(0x240CA1CC0FC19DC6, 0xEFBE4786E49B69C1),		//16-19
+			_mm_set_epi64x(0x76F988DA5CB0A9DC, 0x4A7484AA2DE92C6F),		//20-23
+			_mm_set_epi64x(0xBF597FC7B00327C8, 0xA831C66D983E5152),		//24-27
+			_mm_set_epi64x(0x1429296706CA6351, 0xD5A79147C6E00BF3),		//28-31
+			_mm_set_epi64x(0x53380D134D2C6DFC, 0x2E1B213827B70A85),		//32-35
+			_mm_set_epi64x(0x92722C8581C2C92E, 0x766A0ABB650A7354),		//36-39
+			_mm_set_epi64x(0xC76C51A3C24B8B70, 0xA81A664BA2BFE8A1),		//40-43
+			_mm_set_epi64x(0x106AA070F40E3585, 0xD6990624D192E819),		//44-47
+			_mm_set_epi64x(0x34B0BCB52748774C, 0x1E376C0819A4C116),		//48-51
+			_mm_set_epi64x(0x682E6FF35B9CCA4F, 0x4ED8AA4A391C0CB3),		//52-55
+			_mm_set_epi64x(0x8CC7020884C87814, 0x78A5636F748F82EE),		//56-59
+			_mm_set_epi64x(0xC67178F2BEF9A3F7, 0xA4506CEB90BEFFFA)		//60-63
+		};
+
+		//Initialize state
+
+		I32x4 tmp = I32x4_yxwz(I32x4_load4((const I32*) SHA256_state));			//_mm_shuffle_epi32(tmp, 0xB1)
+		I32x4 state1 = I32x4_wzyx(I32x4_load4((const I32*) SHA256_state + 4));	//_mm_shuffle_epi32(state1, 0x1B)
+		I32x4 state0 = _mm_alignr_epi8(tmp, state1, 8);
+		state1 = _mm_blend_epi16(state1, tmp, 0xF0);
+
+		//64-byte blocks
+
+		U64 ptr = (U64)(void*) buf.ptr, len = buf.length;
+		U8 block[64];
+
+		Bool padded = false;
+		Bool wasPaddingBlock = false;
+		Bool wasPerfectlyAligned = false;
+
+		if(!len) {
+			wasPaddingBlock = wasPerfectlyAligned = true;
+			len = 64;
+		}
+
+		while(len) {
+
+			//We reached an unfilled block. We gotta make a block on the stack and point to it
+
+			if (len < 64 || wasPaddingBlock) {
+
+				//Point to stack
+
+				U64 realLen = len;
+				U64 realPtr = ptr;
+
+				ptr = (U64)(void*) block;
+				len = 64;
+				padded = true;
+
+				//Last block was padding block
+				//This means we can put the length at the end
+
+				if (wasPaddingBlock) {
+
+					Buffer_unsetAllBits(Buffer_createRef(block, 64 - sizeof(U64)));
+
+					if(wasPerfectlyAligned)
+						block[0] = 0x80;
+
+					U8 *lenPtr = block + 64 - sizeof(U64);
+
+					//Keep 5 bits from the index in the block at lenPtr[7]
+					//Keep the others as big endian in [0-6]
+
+					U64 currLen = buf.length;
+
+					lenPtr[7] = (U8)(currLen << 3);
+					currLen >>= 5;
+
+					for(U64 k = 6; k != U64_MAX; --k) {
+						lenPtr[k] = (U8) currLen;
+						currLen >>= 8;
+					}
+				}
+
+				//We reached the block with 0x80, 0x00....
+				//With possibly length in the end
+
+				else {
+
+					Buffer_copy(Buffer_createRef(block, 64), Buffer_createRef((void*)realPtr, realLen));
+
+					*((U8*)(void*)block + realLen) = 0x80;
+
+					if(realLen <= 62)
+						Buffer_unsetAllBits(Buffer_createRef(block + realLen + 1, 64 - realLen - 1));
+
+					//We need one more block just to contain the length at the end
+
+					if(realLen >= 64 - sizeof(U64)) {
+						wasPaddingBlock = true;
+						len += 64;
+					}
+
+					//We can insert length in this block :)
+
+					else {
+
+						U8 *lenPtr = block + 64 - sizeof(U64);
+
+						U64 currLen = buf.length;
+
+						//Keep 5 bits from the index in the block at lenPtr[7]
+						//Keep the others as big endian in [0-6]
+
+						lenPtr[7] = (U8)(currLen << 3);
+						currLen >>= 5;
+
+						for(U64 k = 6; k != U64_MAX; --k) {
+							lenPtr[k] = (U8) currLen;
+							currLen >>= 8;
+						}
+					}
+				}
+			}
+
+			//Store previous state
+
+			I32x4 currState0 = state0, currState1 = state1;
+			
+			//Init messages
+
+			I32x4 msgs[4];
+
+			for(U64 i = 0; i < 4; ++i)
+				msgs[i] = _mm_shuffle_epi8(I32x4_load4((const I32*)(void*)ptr + i * 4), MASK);
+
+			//3 iterations: Rounds 0-11 (two different iterations; 0-3, 4-7, 8-11)
+
+			for (U64 i = 0; i < 3; ++i) {
+
+				I32x4 msg = I32x4_add(msgs[i], rounds[i]);
+				state1 = _mm_sha256rnds2_epu32(state1, state0, msg);
+				msg = I32x4_zwxx(msg);										//_mm_shuffle_epi32(msg, 0xE);
+				state0 = _mm_sha256rnds2_epu32(state0, state1, msg);
+
+				if(i)
+					msgs[i - 1] = _mm_sha256msg1_epu32(msgs[i - 1], msgs[i]);
+			}
+
+			//12 iterations; Rounds 12-59
+
+			for(U64 i = 0; i < 12; ++i) {
+
+				I32x4 msg = I32x4_add(msgs[(i + 3) & 3], rounds[i + 3]);
+				state1 = _mm_sha256rnds2_epu32(state1, state0, msg);
+
+				tmp = _mm_alignr_epi8(msgs[(i + 3) & 3], msgs[(i + 2) & 3], 4);
+				I32x4 msgTmp = I32x4_add(msgs[i & 3], tmp);
+				msgs[i & 3] = _mm_sha256msg2_epu32(msgTmp, msgs[(i + 3) & 3]);
+				msg = I32x4_zwxx(msg);										//_mm_shuffle_epi32(msg, 0xE);
+				state0 = _mm_sha256rnds2_epu32(state0, state1, msg);
+				msgs[(i + 2) & 3] = _mm_sha256msg1_epu32(msgs[(i + 2) & 3], msgs[(i + 3) & 3]);
+			}
+
+			//1 iteration; Rounds 60-63
+
+			I32x4 msg = I32x4_add(msgs[3], rounds[15]);
+			state1 = _mm_sha256rnds2_epu32(state1, state0, msg);
+			msg = I32x4_zwxx(msg);	
+			state0 = _mm_sha256rnds2_epu32(state0, state1, msg);
+
+			//Combine state
+
+			state0 = I32x4_add(state0, currState0);
+			state1 = I32x4_add(state1, currState1);
+
+			//Next block
+
+			len -= 64;
+			ptr += 64;
+
+			//If we haven't padded and length is zero, that means we're perfectly aligned!
+			//This means we're still missing a padding U64 for the encoded length
+
+			if (!len && !padded) {
+				wasPerfectlyAligned = true;
+				wasPaddingBlock = true;
+				len = 64;
+			}
+		}
+
+		//Post process 
+
+		tmp = I32x4_wzyx(state0);			//_mm_shuffle_epi32(state0, 0x1B)
+		state1 = I32x4_yxwz(state1);		//_mm_shuffle_epi32(state1, 0xB1)
+		state0 = _mm_blend_epi16(tmp, state1, 0xF0);
+		state1 = _mm_alignr_epi8(state1, tmp, 8);
+
+		//Store output
+
+		*(I32x4*) output = state0;
+		*((I32x4*)output + 1) = state1;
+	}
+
+#elif _SIMD == SIMD_NEON
+
+	#error Neon currently unsupported for native CRC32C operation
+
+#else
+
+	//Fallback CRC32 implementation
+
+	//CRC32C ported from:
+	//https://github.com/rurban/smhasher/blob/master/crc32c.cpp
+
+	extern const U32 CRC32C_table[16][256];
+
+	U32 Buffer_crc32c(Buffer buf) {
+
+		U64 crc = U32_MAX;
+
+		if(!buf.length)
+			return (U32) crc ^ U32_MAX;
+
+		U64 len = buf.length;
+		U64 it = (U64)(void*)buf.ptr;
+		U64 align8 = U64_min(it + len, (it + 7) & ~7);
+
+		while (it < align8) {
+			crc = CRC32C_table[0][(U8)(crc ^ *(const U8*)it)] ^ (crc >> 8);
+			++it;
+			--len;
+		}
+
+		while (len >= sizeof(U64) * 2) {
+
+			crc ^= *(const U64*) it;
+			U64 next = *((const U64*) it + 1);
+
+			U64 res = 0;
+
+			for(U64 i = 0; i < sizeof(U64); ++i)		//Compiler will unroll for us
+				res ^= CRC32C_table[15 - i][(U8)(crc >> (i * 8))];
+
+			for(U64 i = 0; i < sizeof(U64); ++i)		//Compiler will unroll for us
+				res ^= CRC32C_table[7 - i][(U8)(next >> (i * 8))];
+
+			crc = res;
+
+			it += sizeof(U64) * 2;
+			len -= sizeof(U64) * 2;
+		}
+
+		while (len > 0) {
+			crc = CRC32C_table[0][(U8)(crc ^ *(const U8*)it)] ^ (crc >> 8);
+			++it;
+			--len;
+		}
+
+		return (U32)crc ^ U32_MAX;
+	}
+
+	void Buffer_sha256(Buffer buf, U32 output[8]) {
+		_Buffer_sha256(buf, output);
+	}
+
+#endif
 
 Error Buffer_setBitRange(Buffer dst, U64 dstOff, U64 bits) {
 
 	if(!dst.ptr)
 		return Error_nullPointer(0, 0);
 
-	if(((dstOff + bits - 1) >> 3) >= dst.siz)
-		return Error_outOfBounds(1, 0, dstOff + bits, dst.siz << 3);
+	if(((dstOff + bits - 1) >> 3) >= dst.length)
+		return Error_outOfBounds(1, 0, dstOff + bits, dst.length << 3);
 
 	if(!bits)
 		return Error_invalidParameter(2, 0, 0);
@@ -317,8 +875,8 @@ Error Buffer_unsetBitRange(Buffer dst, U64 dstOff, U64 bits) {
 	if(!dst.ptr)
 		return Error_nullPointer(0, 0);
 
-	if(((dstOff + bits - 1) >> 3) >= dst.siz)
-		return Error_outOfBounds(1, 0, dstOff + bits, dst.siz << 3);
+	if(((dstOff + bits - 1) >> 3) >= dst.length)
+		return Error_outOfBounds(1, 0, dstOff + bits, dst.length << 3);
 
 	if(!bits)
 		return Error_invalidParameter(2, 0, 0);
@@ -364,7 +922,7 @@ inline Error Buffer_setAllToInternal(Buffer buf, U64 b64, U8 b8) {
 	if(!buf.ptr)
 		return Error_nullPointer(0, 0);
 
-	U64 l = buf.siz;
+	U64 l = buf.length;
 
 	for(U64 i = 0, j = l >> 3; i < j; ++i)
 		*((U64*)buf.ptr + i) = b64;
@@ -383,9 +941,9 @@ Error Buffer_unsetAllBits(Buffer buf) {
 	return Buffer_setAllToInternal(buf, 0, 0);
 }
 
-Error Buffer_allocBitsInternal(U64 siz, Allocator alloc, Buffer *result) {
+Error Buffer_allocBitsInternal(U64 length, Allocator alloc, Buffer *result) {
 
-	if(!siz)
+	if(!length)
 		return Error_invalidParameter(0, 0, 0);
 
 	if(!alloc.alloc)
@@ -394,13 +952,13 @@ Error Buffer_allocBitsInternal(U64 siz, Allocator alloc, Buffer *result) {
 	if(!result)
 		return Error_nullPointer(0, 0);
 
-	siz = (siz + 7) >> 3;	//Align to bytes
-	return alloc.alloc(alloc.ptr, siz, result);
+	length = (length + 7) >> 3;	//Align to bytes
+	return alloc.alloc(alloc.ptr, length, result);
 }
 
-Error Buffer_createZeroBits(U64 siz, Allocator alloc, Buffer *result) {
+Error Buffer_createZeroBits(U64 length, Allocator alloc, Buffer *result) {
 
-	Error e = Buffer_allocBitsInternal(siz, alloc, result);
+	Error e = Buffer_allocBitsInternal(length, alloc, result);
 
 	if(e.genericError)
 		return e;
@@ -409,9 +967,9 @@ Error Buffer_createZeroBits(U64 siz, Allocator alloc, Buffer *result) {
 	return Error_none();
 }
 
-Error Buffer_createOneBits(U64 siz, Allocator alloc, Buffer *result) {
+Error Buffer_createOneBits(U64 length, Allocator alloc, Buffer *result) {
 
-	Error e = Buffer_allocBitsInternal(siz, alloc, result);
+	Error e = Buffer_allocBitsInternal(length, alloc, result);
 
 	if(e.genericError)
 		return e;
@@ -422,12 +980,12 @@ Error Buffer_createOneBits(U64 siz, Allocator alloc, Buffer *result) {
 
 Error Buffer_createCopy(Buffer buf, Allocator alloc, Buffer *result) {
 
-	if(!buf.ptr || !buf.siz) {
+	if(!buf.ptr || !buf.length) {
 		*result = Buffer_createNull();
 		return Error_none();
 	}
 
-	U64 l = buf.siz;
+	U64 l = buf.length;
 	Error e = Buffer_allocBitsInternal(l << 3, alloc, result);
 
 	if(e.genericError)
@@ -444,11 +1002,8 @@ Error Buffer_createCopy(Buffer buf, Allocator alloc, Buffer *result) {
 
 Error Buffer_free(Buffer *buf, Allocator alloc) {
 
-	if(!buf)
+	if(!buf || !buf->ptr)
 		return Error_none();
-
-	if(!buf->ptr)
-		return Error_nullPointer(0, 0);
 
 	if(!alloc.free)
 		return Error_nullPointer(1, 0);
@@ -458,37 +1013,37 @@ Error Buffer_free(Buffer *buf, Allocator alloc) {
 	return err;
 }
 
-Error Buffer_createEmptyBytes(U64 siz, Allocator alloc, Buffer *output) {
-	return Buffer_createZeroBits(siz << 3, alloc, output);
+Error Buffer_createEmptyBytes(U64 length, Allocator alloc, Buffer *output) {
+	return Buffer_createZeroBits(length << 3, alloc, output);
 }
 
-Error Buffer_createUninitializedBytes(U64 siz, Allocator alloc, Buffer *result) {
-	return Buffer_allocBitsInternal(siz << 3, alloc, result);
+Error Buffer_createUninitializedBytes(U64 length, Allocator alloc, Buffer *result) {
+	return Buffer_allocBitsInternal(length << 3, alloc, result);
 }
 
-Error Buffer_offset(Buffer *buf, U64 siz) {
+Error Buffer_offset(Buffer *buf, U64 length) {
 
 	if(!buf || !buf->ptr)
 		return Error_nullPointer(0, 0);
 
-	if(siz > buf->siz)
-		return Error_outOfBounds(1, 0, siz, buf->siz);
+	if(length > buf->length)
+		return Error_outOfBounds(1, 0, length, buf->length);
 
-	buf->ptr += siz;
-	buf->siz -= siz;
+	buf->ptr += length;
+	buf->length -= length;
 
-	if(!buf->siz)
+	if(!buf->length)
 		*buf = Buffer_createNull();
 
 	return Error_none();
 }
 
-inline void Buffer_copyBytesInternal(U8 *ptr, const void *v, U64 siz) {
+inline void Buffer_copyBytesInternal(U8 *ptr, const void *v, U64 length) {
 
-	for (U64 i = 0, j = siz >> 3; i < j; ++i)
+	for (U64 i = 0, j = length >> 3; i < j; ++i)
 		*((U64*)ptr + i) = *((const U64*)v + i);
 
-	for (U64 i = siz >> 3 << 3; i < siz; ++i)
+	for (U64 i = length >> 3 << 3; i < length; ++i)
 		ptr[i] = *((const U8*)v + i);
 }
 
@@ -499,30 +1054,45 @@ Error Buffer_appendBuffer(Buffer *buf, Buffer append) {
 
 	void *ptr = buf ? buf->ptr : NULL;
 
-	Error e = Buffer_offset(buf, append.siz);
+	Error e = Buffer_offset(buf, append.length);
 
 	if(e.genericError)
 		return e;
 
-	Buffer_copyBytesInternal(ptr, append.ptr, append.siz);
+	Buffer_copyBytesInternal(ptr, append.ptr, append.length);
 	return Error_none();
 }
 
-Error Buffer_append(Buffer *buf, const void *v, U64 siz) {
-	return Buffer_appendBuffer(buf, Buffer_createRef((void*) v, siz));
+Error Buffer_append(Buffer *buf, const void *v, U64 length) {
+	return Buffer_appendBuffer(buf, Buffer_createRef((void*) v, length));
 }
 
-Error Buffer_createSubset(Buffer buf, U64 offset, U64 siz, Buffer *output) {
+Error Buffer_createSubset(Buffer buf, U64 offset, U64 length, Buffer *output) {
 
 	Error e = Buffer_offset(&buf, offset);
 
 	if(e.genericError)
 		return e;
 		
-	if(siz > buf.siz)
-		return Error_outOfBounds(2, 0, siz, buf.siz);
+	if(length > buf.length)
+		return Error_outOfBounds(2, 0, length, buf.length);
 
-	buf.siz = siz;
+	buf.length = length;
 	*output = buf;
+	return Error_none();
+}
+
+Error Buffer_combine(Buffer a, Buffer b, Allocator alloc, Buffer *output) {
+
+	if(a.length + b.length < a.length)
+		return Error_overflow(0, 0, a.length + b.length, a.length);
+
+	Error err = Buffer_createUninitializedBytes(a.length + b.length, alloc, output);
+
+	if(err.genericError)
+		return err;
+
+	Buffer_copy(*output, a);
+	Buffer_copy(Buffer_createRef(output->ptr + a.length, b.length), b);
 	return Error_none();
 }

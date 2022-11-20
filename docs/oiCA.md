@@ -5,8 +5,11 @@ oiCA is a simplified version of a zip file and is also partially inspired by the
 It's made with the following things in mind: 
 
 - Ease of read + write.
-- Small file size due to compression types such as LZMA.
-- Possibility of encryption using AES.
+- Better compression size due to Brotli:11 compression.
+  - LZMA isn't used due to higher compression and decompression times for minor compression gains. Instead we opted to use Brotli:11 (https://cran.r-project.org/web/packages/brotli/vignettes/brotli-2015-09-22.pdf).
+  - Brotli is slow to compress but fast to decompress and very efficient. Brotli:1 can be used if compression speed is important.
+  - Deflate is slow and not compact enough.
+- Possibility of encryption using AES256.
 - A more modern version of zip with an easier spec / less bloat.
 - Improved security.
 - 64-bit file support.
@@ -15,26 +18,46 @@ It's made with the following things in mind:
 
 ```c
 typedef enum ECACompressionType {
-    ECACompressionType_None,
-    ECACompressionType_LZMA
+	ECACompressionType_None,
+	ECACompressionType_Brotli11,
+	ECACompressionType_Brotli1,
+	ECACompressionType_Count
 } ECACompressionType;
 
 typedef enum ECAEncryptionType {
     ECAEncryptionType_None,
-    ECAEncryptionType_AES
+    ECAEncryptionType_AES256,
+    ECAEncryptionType_Count
 } ECAEncryptionType;
+
+typedef enum ECAFileSizeType {
+    
+    ECAFileSizeType_U8,
+    ECAFileSizeType_U16,
+    ECAFileSizeType_U32,
+    ECAFileSizeType_U64
+    
+} ECAFileSizeType;
 
 typedef enum ECAFlags {
     
-    ECAFlags_None 					= 0,
+	ECAFlags_None 					= 0,
+
+	ECAFlags_HasHash				= 1 << 0,		//Should be true if compression or encryption is on
+	ECAFlags_UseSHA256				= 1 << 1,		//Whether SHA256 (1) or CRC32C (0) is used as hash
+
+	//See ECAFileObject
+
+	ECAFlags_FilesHaveDate			= 1 << 2,
+	ECAFlags_FilesHaveExtendedDate	= 1 << 3,
     
-    ECAFlags_HasHash				= 1 << 0,		//Should be true if compression is on
-    ECAFlags_UseSHA256				= 1 << 1		//Whether SHA256 (1) or CRC32 (0) is used as hash
-        
-    //See ECAFileObject
+    //Indicates ECAFileSizeType. E.g. (ECAFileSizeType)((b0 << 1) | b1)
+    //This indicates the type the biggest file size uses
     
-    ECAFlags_FilesHaveDate			= 1 << 2,
-    ECAFlags_FilesHaveExtendedDate	= 1 << 3
+	ECAFlags_FileSizeType_Shift		= 4,
+	ECAFlags_FileSizeType_Mask		= 3
+
+	//ECAFlags_Next					= 1 << 6
         
 } ECAFlags;
 
@@ -42,13 +65,13 @@ typedef struct CAHeader {
     
     U32 magicNumber;			//oiCA (0x4143696F)
     
-    U8 flags;					//ECAFlags
-    U8 type;					//(ECACompressionType << 4) | ECAEncryptionType
-    U8 headerExtensionSize;		//To skip extended data size
-    U8 directoryExtensionSize;	//To skip directory extended data
-    				
-    U8 fileExtensionSize;		//To skip file extended data		
     U8 version;					//major.minor (%10 = minor, /10 = major)
+    U8 flags;					//ECAFlags
+    U8 type;					//(ECACompressionType << 4) | ECAEncryptionType. Each enum should be <Count
+    U8 headerExtensionSize;		//To skip extended data size
+    
+    U8 directoryExtensionSize;	//To skip directory extended data
+    U8 fileExtensionSize;		//To skip file extended data		
     U16 directoryCount;			//How many base directories are available. Should be < 0xFFFF
     
     U32 fileCount;				//How many files are available. Should be < 0xFFFF0000
@@ -57,6 +80,7 @@ typedef struct CAHeader {
 
 //A directory points to the parent and to the children
 //This allows us to easily access them without having to search all files
+//Important is to verify if there are childs linking to the same parent or invalid child offsets
 
 typedef struct CADirectory {
     
@@ -70,37 +94,11 @@ typedef struct CADirectory {
     
 } CADirectory;
 
-//A file is a blob of data with some extra info
-
-typedef enum ECAFileSizeType {
-    
-    ECAFileSizeType_U8,
-    ECAFileSizeType_U16,
-    ECAFileSizeType_U32,
-    ECAFileSizeType_U64
-    
-} ECAFileSizeType;
-
-typedef enum ECAFileTypeBits {
-  
-    ECAFileFlags_None		= 0,
-    
-    //First 2 bits are EFileSizeType
-    //This allows us to shave off a few bytes per file
-    //Since a lot of files are only <256, <64KiB or <2GiB
-    
-    ECAFileFlags_FileSizeType_Mask	= 3,
-    ECAFileFlags_FileSizeType_Shift = 0,
-    
-} ECAFileTypeBits;
-
 //Pseudo code; please manually parse the members. Struct is NOT aligned.
 
-CAFileObject<FileSizeType, hasDateAndTime, isUncompressed, isExtendedTime> {
+CAFileObject<FileSizeType, hasDateAndTime, isExtendedTime> {
     
     U16 parent;										//0xFFFF for root directory
-    
-    U8 fileInfo;									//ECAFileTypeBits
     
     header.hasDateAndTime:
     	if !header.isExtendedTime:					//MS-DOS time.
@@ -113,7 +111,7 @@ CAFileObject<FileSizeType, hasDateAndTime, isUncompressed, isExtendedTime> {
 
 //Final file format; please manually parse the members.
 //Verify if directories / files are correctly linked to parent and children.
-//Verify if SHA256 and/or CRC32 is valid (if applicable).
+//Verify if SHA256 and/or CRC32C is valid (if applicable).
 //Verify if date and/or time is valid (if applicable).
 //Verify if uncompressedSize > compressedSize.
 //Verify if CAFile includes any invalid data.
@@ -121,25 +119,35 @@ CAFileObject<FileSizeType, hasDateAndTime, isUncompressed, isExtendedTime> {
 CAFile {
     
     CAHeader header;
+    U8 headerExt[header.headerExtensionSize];
     
-    header.hasHash:
-    	U32[header.useSHA256 ? 8 : 1] hash;				//CRC32 or SHA256
-    
-    //This includes the names of everything in order.
-    //The names should only be [0-9A-Za-z_.\ ]+ as well as non ASCII characters.
-    //This means that special characters are banned for interoperability reasons.
-    //You can't suffix with . (meaning ., .. are also out of question).
-    //SLFile format allows compression and encryption as well. Encryption key should be identical.
-    
-    SLFile names;			//Names in order: [0, dirCount>, [dirCount, dirCount+fileCount>
-    
-    //Directories and files
+    if header.useHash:
+	    U32[header.useSHA256 ? 8 : 1] hash;				//CRC32C or SHA256
     
     compress & encrypt the following if necessary:
     
-	    CADirectory[header.directoryCount] directories;
+    	//This includes the names of everything in order.
+    	//The names should only be [0-9A-Za-z_.\ ]+ as well as non ASCII characters.
+    	//This means that special characters are banned for interoperability reasons.
+    	//You can't suffix with . (meaning ., .. are also out of question).
+    	//DLFile format shouldn't use compression or encryption, since that's done by CAFile.
+    	//DLFile should have the string flag set. If not, the file is invalid.
+    
+    	DLFile names;			//Names in order: [0, dirCount>, [dirCount, dirCount+fileCount>
+    
+    	//Directory and files
+    
+    	//Always needed; 0xFFFF directory id aka root ("."). This isn't present in DLFile names.
+    	//Points to direct children of root directory.
+    	//Parent should be IGNORED but should be defaulted to 0xFFFF
+    	//
+    	CADirectory root;
+    
+	    CADirectory[header.directoryCount] directories
+            with stride (sizeof(CADirectory) + header.directoryExtensionSize);
     	
-	    CAFileObject[header.fileCount] files;
+	    CAFileObject[header.fileCount] files
+            with stride (fileHeaderSize + header.fileExtensionSize);
     
 		foreach file in files:
 			U8[file.size] data;
@@ -148,3 +156,6 @@ CAFile {
 
 The types are Oxsomi types; `U<X>`: x-bit unsigned integer, `I<X>` x-bit signed integer. Ki is Kibi like KiB (1024).
 
+## Changelog
+
+1.0: Basic format specification.

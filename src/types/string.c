@@ -168,9 +168,6 @@ Bool String_isFloat(String s) {
 
 Error String_create(C8 c, U64 size, Allocator alloc, String *result) {
 
-	if (!c)
-		return Error_invalidParameter(0, 0, 0);
-
 	if (!alloc.alloc)
 		return Error_nullPointer(2, 0);
 
@@ -204,17 +201,17 @@ Error String_create(C8 c, U64 size, Allocator alloc, String *result) {
 		size &= 7;
 	}
 
-	if (size >= 4) {
-		*((U32*)b.ptr + (size >> 3 << 1)) = cc4;
+	if (size & 4) {
+		*(U32*)(b.ptr + (totalSize >> 3 << 3)) = cc4;
 		size &= 3;
 	}
 
-	if (size >= 2) {
-		*((U16*)b.ptr + (size >> 2 << 1)) = cc2;
+	if (size & 2) {
+		*(U32*)(b.ptr + (totalSize >> 2 << 2)) = cc2;
 		size &= 1;
 	}
 
-	if(size >= 1)
+	if(size & 1)
 		b.ptr[totalSize - 1] = c;
 
 	*result = (String) { .length = totalSize, .capacity = totalSize, .ptr = (C8*) b.ptr };
@@ -436,7 +433,7 @@ Error String_splitString(
 	return Error_none();
 }
 
-Error String_reserve(String *str, U64 siz, Allocator alloc) {
+Error String_reserve(String *str, U64 length, Allocator alloc) {
 
 	if (!str)
 		return Error_nullPointer(0, 0);
@@ -447,11 +444,11 @@ Error String_reserve(String *str, U64 siz, Allocator alloc) {
 	if (!alloc.alloc || !alloc.free)
 		return Error_nullPointer(2, 0);
 
-	if (siz <= str->capacity)
+	if (length <= str->capacity)
 		return Error_none();
 
 	Buffer b = Buffer_createNull();
-	Error err = alloc.alloc(alloc.ptr, siz, &b);
+	Error err = alloc.alloc(alloc.ptr, length, &b);
 
 	if (err.genericError)
 		return err;
@@ -460,12 +457,12 @@ Error String_reserve(String *str, U64 siz, Allocator alloc) {
 
 	err = alloc.free(alloc.ptr, Buffer_createRef(str->ptr, str->capacity));
 
-	str->capacity = b.siz;
+	str->capacity = b.length;
 	str->ptr = (C8*) b.ptr;
 	return err;
 }
 
-Error String_resize(String *str, U64 siz, C8 defaultChar, Allocator alloc) {
+Error String_resize(String *str, U64 length, C8 defaultChar, Allocator alloc) {
 
 	if (!str)
 		return Error_nullPointer(0, 0);
@@ -476,26 +473,26 @@ Error String_resize(String *str, U64 siz, C8 defaultChar, Allocator alloc) {
 	if (!alloc.alloc || !alloc.free)
 		return Error_nullPointer(3, 0);
 
-	if (siz == str->length)
+	if (length == str->length)
 		return Error_none();
 
 	//Simple resize; we cut off the tail
 
-	if (siz < str->length) {
-		str->length = siz;
+	if (length < str->length) {
+		str->length = length;
 		return Error_none();
 	}
 
 	//Resize that triggers buffer resize
 
-	if (siz > str->capacity) {
+	if (length > str->capacity) {
 
-		if (siz * 3 / 3 != siz)
-			return Error_overflow(1, 0, siz * 3, U64_MAX);
+		if (length * 3 / 3 != length)
+			return Error_overflow(1, 0, length * 3, U64_MAX);
 
 		//Reserve 50% more to ensure we don't resize too many times
 
-		Error err = String_reserve(str, siz * 3 / 2, alloc);
+		Error err = String_reserve(str, length * 3 / 2, alloc);
 
 		if (err.genericError)
 			return err;
@@ -503,10 +500,10 @@ Error String_resize(String *str, U64 siz, C8 defaultChar, Allocator alloc) {
 
 	//Our capacity is big enough to handle it:
 
-	for (U64 i = str->length; i < siz; ++i)
+	for (U64 i = str->length; i < length; ++i)
 		str->ptr[i] = defaultChar;
 
-	str->length = siz;
+	str->length = length;
 	return Error_none();
 }
 
@@ -1331,12 +1328,12 @@ Bool String_parseBin(String s, U64 *result) {
 	return true;
 }
 
-Bool String_cut(String s, U64 offset, U64 siz, String *result) {
+Bool String_cut(String s, U64 offset, U64 length, String *result) {
 
 	if(!result)
 		return false;
 
-	if (!s.length && !offset && !siz) {
+	if (!s.length && !offset && !length) {
 		*result = String_createEmpty();
 		return true;
 	}
@@ -1344,10 +1341,10 @@ Bool String_cut(String s, U64 offset, U64 siz, String *result) {
 	if(offset >= s.length)
 		return false;
 
-	if(!siz) 
-		siz = s.length - offset;
+	if(!length) 
+		length = s.length - offset;
 
-	if (offset + siz > s.length)
+	if (offset + length > s.length)
 		return false;
 
 	if (offset == s.length) {
@@ -1355,8 +1352,8 @@ Bool String_cut(String s, U64 offset, U64 siz, String *result) {
 		return false;
 	}
 
-	*result = String_isConstRef(s) ? String_createConstRef(s.ptr + offset, siz) :
-		String_createRef(s.ptr + offset, siz);
+	*result = String_isConstRef(s) ? String_createConstRef(s.ptr + offset, length) :
+		String_createRef(s.ptr + offset, length);
 
 	return true;
 }
@@ -1699,7 +1696,7 @@ U64 String_calcStrLen(const C8 *ptr, U64 maxSize) {
 	return i;
 }
 
-U64 String_hash(String s) { 
+/*U64 String_hash(String s) {			//TODO: FNV for <10 and xxh64 for >
 
 	U64 h = FNVHash_create();
 
@@ -1729,7 +1726,7 @@ U64 String_hash(String s) {
 		h = FNVHash_apply(h, last);
 
 	return h;
-}
+}*/
 
 String String_getFilePath(String *str) {
 
