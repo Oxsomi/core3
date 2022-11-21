@@ -173,7 +173,7 @@ void showHelp(EOperationCategory category, EOperation op, EFormat f);
 
 Error addFileToDLFile(FileInfo file, List *buffers) {
 
-	if (info.type == FileType_Folder)
+	if (file.type == FileType_Folder)
 		return Error_none();
 
 	Buffer buffer;
@@ -257,7 +257,7 @@ int convertTo(ParsedArgs args) {
 
 	FileInfo info;
 
-	if ((err = File_getFileInfo(inputArg, &info)).genericError) {
+	if ((err = File_getInfo(inputArg, &info)).genericError) {
 		Error_printx(err, ELogLevel_Error, ELogOptions_Default);
 		return -2;
 	}
@@ -339,7 +339,8 @@ int convertTo(ParsedArgs args) {
 
 			if (
 				(err = File_foreach(
-					info.path, (FileCallback) addFileToCAFile, &caFileRecursion, args.flags & EOperationFlags_Recursive
+					info.path, (FileCallback) addFileToCAFile, &caFileRecursion, 
+					args.flags & EOperationFlags_Recursive
 				)).genericError
 			) {
 				CAFile_freex(&file);
@@ -543,7 +544,8 @@ int convertTo(ParsedArgs args) {
 
 				if (
 					(err = File_foreach(
-						inputArg, (FileCallback) addFileToDLFile, &buffers, args.flags & EOperationFlags_Recursive
+						inputArg, (FileCallback) addFileToDLFile, &buffers, 
+						args.flags & EOperationFlags_Recursive
 					)).genericError
 				) {
 

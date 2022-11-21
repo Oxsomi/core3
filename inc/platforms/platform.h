@@ -21,6 +21,7 @@ typedef struct Platform {
 	WindowManager windowManager;
 
 	void *data;
+	void *dataExt;
 
 } Platform;
 
@@ -32,11 +33,11 @@ Error Platform_create(
 	FreeFunc free, AllocFunc alloc, void *allocator
 );
 
-impl void Platform_cleanupExt();
+impl void Platform_cleanupExt(Platform *platform);
 
 //Called on setup. Don't use this over Platform_instance.workingDirectory
 //
-impl Error Platform_initWorkingDirectory(String *result);
+impl Error Platform_initExt(Platform *platform);
 
 void Platform_cleanup();
 

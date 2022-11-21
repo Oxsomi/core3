@@ -1,5 +1,6 @@
 #include "platforms/platform.h"
 #include "platforms/thread.h"
+#include "platforms/windows/wplatform_ext.h"
 #include "types/error.h"
 #include "types/buffer.h"
 
@@ -10,7 +11,9 @@
 U32 Thread_getId() { return GetCurrentThreadId(); }
 
 void Thread_sleep(Ns ns) {
-	Sleep((DWORD)((U64_min(ns, U32_MAX * ms - ms) + ms - 1) / ms));
+	LARGE_INTEGER interval;
+	interval.QuadPart = -(I64)(ns / 100);
+	((PlatformExt*)Platform_instance.dataExt)->ntDelayExecution(false, &interval);
 }
 
 U32 Thread_getLogicalCores() {

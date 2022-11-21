@@ -21,6 +21,14 @@ set(EnableSIMD ON CACHE BOOL "Enables SIMD")
 set(RelaxFloat OFF CACHE BOOL "Relax float (perf > accuracy)")
 set(WorkingDir OFF CACHE BOOL "Use working directory as local root (OFF = Use file installation directory, ON = working dir)")
 
+# Use ${HideConsole} to add_executable to hide the console window
+
+if(MSVC)
+	set(HideConsole "WIN32")
+else()
+	set(HideConsole "")
+endif()
+
 # Even though EnableSIMD can be turned off, it won't be truly off
 # This is because we want to maintain proper IEEE754 compliance, which we can't do without SSE
 
@@ -127,13 +135,18 @@ endif()
 
 message("-- Targetting platform: ${platform}")
 
-file(GLOB_RECURSE platformsHeaders "inc/platforms/*.h")
+file(GLOB platformsHeaders "inc/platforms/*.h")
+file(GLOB_RECURSE platformsHeadersExt "inc/platforms/ext/*.h")
+file(GLOB_RECURSE platformsHeadersDependent "inc/platforms/ext/${platform}/*.h")
+
 file(GLOB_RECURSE platformsSources "src/platforms/${platform}/*.c" "src/platforms/generic/*.c")
 
 add_library(
 	OxC3_platforms
 	STATIC
 	${platformsHeaders}
+	${platformsHeadersExt}
+	${platformsHeadersDependent}
 	${platformsSources}
 	CMakeLists.txt
 )

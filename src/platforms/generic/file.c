@@ -6,6 +6,7 @@
 #include "types/string.h"
 
 #include <stdio.h>
+#include <sys/stat.h>
 
 //This is fine in file.c instead of wfile.c because unix + windows systems all share very similar ideas about filesystems
 //But windows is a bit stricter in some parts (like the characters you can include) and has some weird quirks
@@ -13,7 +14,320 @@
 
 #ifndef _WIN32
 	#define _ftelli64 ftell
+#else
+
+	#define WIN32_LEAN_AND_MEAN
+	#include <Windows.h>
+
+	#define stat _stat64
+	#define S_ISREG(x) (x & _S_IFREG)
+	#define S_ISDIR(x) (x & _S_IFDIR)
 #endif
+
+#ifdef _WIN32
+
+	Error File_foreach(String loc, FileCallback callback, void *userData, bool isRecursive) {
+
+		if(String_isEmpty(loc))
+			return Error_invalidParameter(0, 0, 0);
+
+		if(!callback) 
+			return Error_nullPointer(1, 0);
+
+		String resolved;
+		Bool isVirtual = false;
+		Error err = File_resolve(loc, &isVirtual, &resolved);
+
+		if(err.genericError)
+			return err;
+
+		if(isVirtual) {
+			err = File_foreachVirtual(loc, callback, userData, isRecursive);
+			String_freex(&resolved);
+			return err;
+		}
+
+		if((err = String_appendStringx(&resolved, String_createConstRefSized("/*", 3))).genericError) {
+			String_freex(&resolved);
+			return err;
+		}
+
+		if(resolved.length > MAX_PATH) {
+			String_freex(&resolved);
+			return Error_outOfBounds(0, 0, resolved.length, MAX_PATH);
+		}
+
+		//Skip .
+
+		WIN32_FIND_DATA dat;
+		HANDLE file = FindFirstFileA(resolved.ptr, &dat);
+
+		if(file == INVALID_HANDLE_VALUE) {
+			String_freex(&resolved);
+			return Error_notFound(0, 0, 0);
+		}
+
+		if(!FindNextFileA(file, &dat)) {
+			FindClose(file);
+			String_freex(&resolved);
+			return Error_notFound(0, 0, 0);
+		}
+
+		//Loop through real files (while instead of do while because we wanna skip ..)
+
+		while(FindNextFileA(file, &dat)) {
+
+			//Folders can also have timestamps, so parse timestamp here
+
+			LARGE_INTEGER time;
+			time.LowPart = dat.ftLastWriteTime.dwLowDateTime;
+			time.HighPart = dat.ftLastWriteTime.dwHighDateTime;
+
+			//Before 1970, unsupported. Default to 1970
+
+			Ns timestamp = 0;
+			static const U64 unixStartWin = (Ns)11644473600 * (1'000'000'000 / 100);		//nanoseconds to 100s of nanos
+
+			if ((U64)time.QuadPart >= unixStartWin)
+				timestamp = (time.QuadPart - unixStartWin) * 100;	//Convert to Oxsomi time
+
+			//Folder parsing
+
+			if(dat.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+
+				FileInfo info = (FileInfo) {
+					.path = String_createConstRef(dat.cFileName, MAX_PATH),
+					.timestamp = timestamp,
+					.access = dat.dwFileAttributes & FILE_ATTRIBUTE_READONLY ? FileAccess_Read : FileAccess_ReadWrite,
+					.type = FileType_Folder
+				};
+
+				if ((err = callback(info, userData)).genericError) {
+					FindClose(file);
+					String_freex(&resolved);
+					return err;
+				}
+
+				if(isRecursive)
+					File_foreach(info.path, callback, userData, true);
+
+				continue;
+			}
+
+			LARGE_INTEGER size;
+			size.LowPart = dat.nFileSizeLow;
+			size.HighPart = dat.nFileSizeHigh;
+
+			//File parsing
+
+			FileInfo info = (FileInfo) {
+				.path = String_createConstRef(dat.cFileName, MAX_PATH),
+				.timestamp = timestamp,
+				.access = dat.dwFileAttributes & FILE_ATTRIBUTE_READONLY ? FileAccess_Read : FileAccess_ReadWrite,
+				.type = FileType_File,
+				.fileSize = size.QuadPart
+			};
+
+			if((err = callback(info, userData)).genericError) {
+				FindClose(file);
+				String_freex(&resolved);
+				return err;
+			}
+		}
+
+		DWORD hr = GetLastError();
+
+		FindClose(file);
+
+		if(hr != ERROR_NO_MORE_FILES)
+			return Error_platformError(0, hr);
+
+		return Error_none();
+	}
+
+#else
+
+	#error Unix File_foreach unsupported implement with opendir, closedir and readdir
+
+#endif
+
+typedef struct FileCounter {
+
+	FileType type;
+	Bool useType;
+	U64 counter;
+
+} FileCounter;
+
+Error countFileType(FileInfo info, FileCounter *counter) {
+
+	if (!counter->useType) {
+		++counter->counter;
+		return Error_none();
+	}
+
+	if(info.type == counter->type)
+		++counter->counter;
+
+	return Error_none();
+}
+
+Error File_queryFileObjectCount(String loc, FileType type, bool isRecursive, U64 *res) {
+
+	if(!res)
+		return Error_nullPointer(3, 0);
+
+	//Virtual files can supply a faster way of counting files
+	//Such as caching it and updating it if something is changed
+
+	if(String_isEmpty(loc))
+		return Error_invalidParameter(0, 0, 0);
+
+	String resolved;
+	Bool isVirtual = false;
+	Error err = File_resolve(loc, &isVirtual, &resolved);
+
+	if(err.genericError)
+		return err;
+
+	if(isVirtual) {
+		err = File_queryFileObjectCountVirtual(resolved, type, isRecursive, res);
+		String_freex(&resolved);
+		return err;
+	}
+
+	//Normal counter for local files
+
+	FileCounter counter = (FileCounter) { .type = type, .useType = true };
+
+	if((err = File_foreach(loc, (FileCallback) countFileType, &counter, isRecursive)).genericError)
+		return err;
+
+	*res = counter.counter;
+	return Error_none();
+}
+
+Error File_queryFileObjectCountAll(String loc, bool isRecursive, U64 *res) {
+
+	if(!res)
+		return Error_nullPointer(3, 0);
+
+	//Virtual files can supply a faster way of counting files
+	//Such as caching it and updating it if something is changed
+
+	if(String_isEmpty(loc))
+		return Error_invalidParameter(0, 0, 0);
+
+	String resolved;
+	Bool isVirtual = false;
+	Error err = File_resolve(loc, &isVirtual, &resolved);
+
+	if(err.genericError)
+		return err;
+
+	if(isVirtual) {
+		err = File_queryFileObjectCountAllVirtual(resolved, isRecursive, res);
+		String_freex(&resolved);
+		return err;
+	}
+
+	//Normal counter for local files
+
+	FileCounter counter = (FileCounter) { 0 };
+
+	if((err = File_foreach(loc, (FileCallback) countFileType, &counter, isRecursive)).genericError)
+		return err;
+
+	*res = counter.counter;
+	return Error_none();
+}
+
+Error File_getInfo(String loc, FileInfo *info) {
+
+	if(!info) 
+		return Error_nullPointer(0, 0);
+
+	if(info->path.ptr) 
+		return Error_invalidOperation(0);
+
+	if(String_isEmpty(loc))
+		return Error_invalidParameter(0, 0, 0);
+
+	String resolved;
+	Bool isVirtual = false;
+	Error err = File_resolve(loc, &isVirtual, &resolved);
+
+	if(err.genericError)
+		return err;
+
+	if(isVirtual) {
+		err = File_getInfoVirtual(resolved, info);
+		String_freex(&resolved);
+		return err;
+	}
+
+	struct stat inf;
+
+	if (stat(resolved.ptr, &inf) != 0) {
+		String_freex(&resolved);
+		return Error_notFound(0, 0, 0);
+	}
+
+	if (!S_ISDIR(inf.st_mode) && !S_ISREG(inf.st_mode)) {
+		String_freex(&resolved);
+		return Error_invalidOperation(2);
+	}
+
+	if ((inf.st_mode & (S_IREAD | S_IWRITE)) != (S_IREAD | S_IWRITE)) {
+		String_freex(&resolved);
+		return Error_unauthorized(0);
+	}
+
+	*info = (FileInfo) {
+
+		.timestamp = (Ns)inf.st_mtime * seconds,
+		.path = resolved,
+
+		.type = S_ISDIR(inf.st_mode) ? FileType_Folder : FileType_File,
+		.fileSize = inf.st_size,
+
+		.access = 
+			(inf.st_mode & S_IWRITE ? FileAccess_Write : FileAccess_None) | 
+			(inf.st_mode & S_IREAD  ? FileAccess_Read  : FileAccess_None)
+	};
+
+	return Error_none();
+}
+
+Error File_remove(String loc) {
+
+	if(String_isEmpty(loc))
+		return Error_invalidParameter(0, 0, 0);
+
+	String resolved;
+	Bool isVirtual = false;
+	Error err = File_resolve(loc, &isVirtual, &resolved);
+
+	if(err.genericError)
+		return err;
+
+	if(isVirtual) {
+		err = File_removeVirtual(resolved);
+		String_freex(&resolved);
+		return err;
+	}
+
+	if (remove(resolved.ptr))
+		return Error_unauthorized(0);
+
+	return Error_none();
+}
+
+Error FileInfo_free(FileInfo *info) {
+	Error err = String_freex(&info->path);
+	*info = (FileInfo) { 0 };
+	return err;
+}
 
 Error File_resolve(String loc, Bool *isVirtual, String *result) {
 
@@ -216,7 +530,7 @@ Error File_resolve(String loc, Bool *isVirtual, String *result) {
 	return Error_none();
 }
 
-Error File_writeLocal(Buffer buf, String loc) {
+Error File_write(Buffer buf, String loc) {
 
 	if(!buf.length || !buf.ptr) 
 		return Error_nullPointer(0, 0);
@@ -232,8 +546,9 @@ Error File_writeLocal(Buffer buf, String loc) {
 		return err;
 
 	if(isVirtual) {
+		err = File_writeVirtual(buf, loc);
 		String_freex(&resolved);
-		return Error_invalidOperation(0);
+		return err;
 	}
 
 	//TODO: Test, does this properly clear a previous file if present?
@@ -256,7 +571,7 @@ Error File_writeLocal(Buffer buf, String loc) {
 	return Error_none();
 }
 
-Error File_readLocal(String loc, Buffer *output) {
+Error File_read(String loc, Buffer *output) {
 
 	if(String_isEmpty(loc))
 		return Error_invalidParameter(1, 0, 0);
@@ -272,8 +587,9 @@ Error File_readLocal(String loc, Buffer *output) {
 		return err;
 
 	if(isVirtual) {
+		err = File_readVirtual(loc, output);
 		String_freex(&resolved);
-		return Error_invalidOperation(0);
+		return err;
 	}
 
 	FILE *f = fopen(resolved.ptr, "rb");

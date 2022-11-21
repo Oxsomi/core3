@@ -28,7 +28,8 @@ typedef enum EGenericError {
 	EGenericError_UnsupportedOperation,
 	EGenericError_TimedOut,
 	EGenericError_ConstData,			//If an operation is done on data that is supposed to be const
-	EGenericError_PlatformError
+	EGenericError_PlatformError,
+	EGenericError_Unimplemented
 } EGenericError;
 
 typedef enum EErrorParamValues {
@@ -165,6 +166,10 @@ inline Error Error_loopLimit(U32 subId, U64 limit) {
 
 inline Error Error_alreadyDefined(U32 subId) {
 	_Error_base(.genericError = EGenericError_AlreadyDefined, .errorSubId = subId);
+}
+
+inline Error Error_unimplemented(U32 subId) {
+	_Error_base(.genericError = EGenericError_Unimplemented, .errorSubId = subId);
 }
 
 inline Error Error_unsupportedOperation(U32 subId) {

@@ -4,6 +4,7 @@
 
 //A hint to show that something is implementation dependent
 //For ease of implementing a new implementation
+//These should never be directly called by anyone else than the main library the impl is for.
 
 #define impl
 

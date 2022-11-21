@@ -96,9 +96,8 @@ Error Platform_create(
 
 cleanup:
 
-	StringList_freex(&Platform_instance.args);
-	WindowManager_free(&Platform_instance.windowManager);
-	Platform_instance =	(Platform) { 0 };
+	Platform_cleanupExt(&Platform_instance);
+	Platform_cleanup();
 	return err;
 }
 

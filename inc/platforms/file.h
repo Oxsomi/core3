@@ -18,28 +18,59 @@
 //
 //Backslashes are automatically resolved to forward slash
 
+typedef enum FileType {
+	FileType_Folder,
+	FileType_File
+} FileType;
+
+typedef enum FileAccess {
+	FileAccess_None,			//Invalid, never returned
+	FileAccess_Read,
+	FileAccess_Write,
+	FileAccess_ReadWrite
+} FileAccess;
+
+typedef struct FileInfo {
+
+	FileType type;
+	FileAccess access;
+	Ns timestamp;		//In units that the file system supports. Normally that unit is seconds.
+	String path;
+	U64 fileSize;
+
+} FileInfo;
+
+typedef Error (*FileCallback)(FileInfo, void*);
+
+Error File_getInfo(String loc, FileInfo *info);
+Error FileInfo_free(FileInfo *info);
+
+Error File_foreach(String loc, FileCallback callback, void *userData, bool isRecursive);
+
+Error File_remove(String loc);
+
+Error File_queryFileObjectCount(String loc, FileType type, bool isRecursive, U64 *res);		//Includes files only
+Error File_queryFileObjectCountAll(String loc, bool isRecursive, U64 *res);					//Includes folders + files
+
+inline Error File_queryFileCount(String loc, bool isRecursive, U64 *res) { 
+	return File_queryFileObjectCount(loc, FileType_File, isRecursive, res); 
+}
+
+inline Error File_queryFolderCount(String loc, bool isRecursive, U64 *res) { 
+	return File_queryFileObjectCount(loc, FileType_Folder, isRecursive, res); 
+}
+
 Error File_resolve(String loc, Bool *isVirtual, String *result);
 
-Error File_writeLocal(Buffer buf, String loc);
-Error File_readLocal(String loc, Buffer *output);
+Error File_write(Buffer buf, String loc);
+Error File_read(String loc, Buffer *output);
 
+impl Error File_removeVirtual(String loc);											//Can only operate on //access
 impl Error File_writeVirtual(Buffer buf, String loc);
 impl Error File_readVirtual(String loc, Buffer *output);
-
-inline Error File_read(String loc, Buffer *output) {
-
-	Bool isVirtual = 
-		String_startsWithString(loc, String_createConstRefUnsafe("//"), EStringCase_Insensitive);
-
-	return isVirtual ? File_readVirtual(loc, output) : File_readLocal(loc, output);
-}
-
-inline Error File_write(Buffer buf, String loc) {
-
-	Bool isVirtual = 
-		String_startsWithString(loc, String_createConstRefUnsafe("//"), EStringCase_Insensitive);
-
-	return isVirtual ? File_writeVirtual(buf, loc) : File_writeLocal(buf, loc);
-}
+impl Error File_getInfoVirtual(String loc, FileInfo *info);
+impl Error File_foreachVirtual(String loc, FileCallback callback, void *userData, bool isRecursive);
+impl Error File_queryFileObjectCountVirtual(String loc, FileType type, bool isRecursive, U64 *res);		//Inc files only
+impl Error File_queryFileObjectCountAllVirtual(String loc, bool isRecursive, U64 *res);					//Inc folders + files
 
 //TODO: make it more like a DirectStorage-like api

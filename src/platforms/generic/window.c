@@ -314,7 +314,7 @@ Error Window_storeCPUBufferToDisk(const Window *w, String filePath) {
 	if(err.genericError)
 		return err;
 
-	err = File_writeLocal(file, filePath);
+	err = File_write(file, filePath);
 	Buffer_freex(&file);
 
 	return err;

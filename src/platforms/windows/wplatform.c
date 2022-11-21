@@ -1,14 +1,13 @@
 #include "platforms/platform.h"
 #include "platforms/log.h"
 #include "platforms/ext/stringx.h"
+#include "platforms/ext/bufferx.h"
+#include "platforms/windows/wplatform_ext.h"
 
 #include <locale.h>
 #include <signal.h>
 #include <stdlib.h>
 
-#define WIN32_LEAN_AND_MEAN
-#define MICROSOFT_WINDOWS_WINBASE_H_DEFINE_INTERLOCKED_CPLUSPLUS_OVERLOADS 0
-#include <Windows.h>
 #include <intrin.h>
 
 String Error_formatPlatformError(Error err) {
@@ -154,31 +153,63 @@ int main(int argc, const char *argv[]) {
 
 	int res = Program_run();
 	Program_exit();
-	Platform_cleanupExt();
+	Platform_cleanupExt(&Platform_instance);
 	Platform_cleanup();
 
 	return res;
 }
 
-void Platform_cleanupExt() {
+void Platform_cleanupExt(Platform *p) {
+
+	//Cleanup platform ext
+
+	if(p->dataExt) {
+		Buffer buf = Buffer_createRef(p->dataExt, sizeof(PlatformExt));
+		Buffer_freex(&buf);
+		p->dataExt = NULL;
+	}
+
+	//Reset console text color
+
 	SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), oldColor);
 }
 
-Error Platform_initWorkingDirectory(String *result) {
+Error Platform_initExt(Platform *result) {
+
+	//
+
+	Buffer platformExt;
+	Error err = Buffer_createEmptyBytesx(sizeof(PlatformExt), &platformExt);
+
+	if(err.genericError)
+		return err;
+
+	PlatformExt *pext = (PlatformExt*) platformExt.ptr;
+
+	if (!(pext->ntdll = GetModuleHandleA("ntdll.dll")))
+		return Error_platformError(0, GetLastError());
+
+	if (!(*((void**)&pext->ntDelayExecution) = (void*)GetProcAddress(pext->ntdll, "NtDelayExecution")))
+		return Error_platformError(1, GetLastError());
+
+	//Init working dir
 
 	C8 buff[MAX_PATH + 1];
 	DWORD chars = GetCurrentDirectoryA(MAX_PATH + 1, buff);
 
 	if(!chars)
-		return Error_platformError(0, GetLastError());
+		return Error_platformError(0, GetLastError());		//Needs no cleaning. cleanup(Ext) will handle it
 
 	//Move to heap and standardize
 
-	Error err = String_createCopyx(String_createConstRef(buff, chars), result);
-
-	if(err.genericError)
+	if((err = String_createCopyx(String_createConstRef(buff, chars), &result->workingDirectory)).genericError)
 		return err;
 
-	String_replaceAll(result, '\\', '/', EStringCase_Sensitive);
-	return String_insertx(result, '/', result->length);
+	String_replaceAll(&result->workingDirectory, '\\', '/', EStringCase_Sensitive);
+
+	if ((err = String_appendx(&result->workingDirectory, '/')).genericError) 
+		return err;
+
+	result->dataExt = pext;
+	return Error_none();
 }
