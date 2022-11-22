@@ -13,7 +13,7 @@
 String Error_formatPlatformError(Error err) {
 
 	if(!FAILED(err.paramValue0))
-		return String_createEmpty();
+		return String_createNull();
 
 	C8 *lpBuffer = NULL;
 
@@ -36,12 +36,12 @@ String Error_formatPlatformError(Error err) {
 	//Unfortunately we have to copy, because we can't tell String to use LocalFree instead of free
 
 	if(!f)
-		return String_createEmpty();
+		return String_createNull();
 
 	String res;
 	if((err = String_createCopyx(String_createConstRef(lpBuffer, f), &res)).genericError) {
 		LocalFree(lpBuffer);
-		return String_createEmpty();
+		return String_createNull();
 	}
 
 	//

@@ -36,7 +36,7 @@ void Error_fillStackTrace(Error *err) {
 
 String Error_formatPlatformError(Error err) {
 	err;
-	return String_createEmpty();
+	return String_createNull();
 }
 
 #define STRICT_VALIDATION

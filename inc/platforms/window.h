@@ -154,7 +154,7 @@ Error Window_resizeCPUBuffer(		//Should be called if virtual or EWindowHint_Prov
 	I32x2 newSize
 );
 
-Error Window_storeCPUBufferToDisk(const Window *w, String filePath);
+Error Window_storeCPUBufferToDisk(const Window *w, String filePath, Ns maxTimeout);
 
 //Simple helper functions
 
@@ -171,7 +171,8 @@ inline Bool Window_doesAllowFullScreen(const Window *w) { return w && w->hint & 
 
 inline Error Window_presentCPUBuffer(
 	Window *w,
-	String file
+	String file,
+	Ns maxTimeout
 ) {
 
 	if (!w)
@@ -181,7 +182,7 @@ inline Error Window_presentCPUBuffer(
 		return Error_invalidOperation(0);
 
 	if (Window_isVirtual(w))
-		return Window_storeCPUBufferToDisk(w, file);
+		return Window_storeCPUBufferToDisk(w, file, maxTimeout);
 
 	return Window_presentPhysical(w);
 }

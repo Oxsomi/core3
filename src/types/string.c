@@ -14,7 +14,7 @@ Error String_offsetAsRef(String s, U64 off, String *result) {
 		return Error_nullPointer(2, 0);
 
 	if (String_isEmpty(s)) {
-		*result = String_createEmpty();
+		*result = String_createNull();
 		return Error_none();
 	}
 
@@ -53,10 +53,6 @@ Error String_offsetAsRef(String s, U64 off, String *result) {
 
 Bool String_isNyto(String s) {
 	String_matchesPatternNum(C8_isNyto, "0n");
-}
-
-Bool String_isNytoFile(String s) {
-	String_matchesPatternNum(C8_isNytoFile, "0f");
 }
 
 Bool String_isAlphaNumeric(String s) {
@@ -175,7 +171,7 @@ Error String_create(C8 c, U64 size, Allocator alloc, String *result) {
 		return Error_nullPointer(3, 0);
 
 	if (!size) {
-		*result = String_createEmpty();
+		*result = String_createNull();
 		return Error_none();
 	}
 
@@ -224,7 +220,7 @@ Error String_createCopy(String str, Allocator alloc, String *result) {
 		return Error_nullPointer(!result ? 2 : 1, 0);
 
 	if (!str.length) {
-		*result = String_createEmpty();
+		*result = String_createNull();
 		return Error_none();
 	}
 
@@ -257,7 +253,7 @@ Error String_free(String *str, Allocator alloc) {
 	if(!String_isRef(*str))
 		err = alloc.free(alloc.ptr, Buffer_createRef(str->ptr, str->capacity));
 
-	*str = String_createEmpty();
+	*str = String_createNull();
 	return err;
 }
 
@@ -268,7 +264,7 @@ Error String_free(String *str, Allocator alloc) {
 	if (result->length)													\
 		return Error_invalidOperation(0);								\
 																		\
-	*result = String_createEmpty();										\
+	*result = String_createNull();										\
 	Error err = String_reserve(											\
 		result, maxVal + prefix.length, allocator							\
 	);																	\
@@ -1334,7 +1330,7 @@ Bool String_cut(String s, U64 offset, U64 length, String *result) {
 		return false;
 
 	if (!s.length && !offset && !length) {
-		*result = String_createEmpty();
+		*result = String_createNull();
 		return true;
 	}
 
@@ -1348,7 +1344,7 @@ Bool String_cut(String s, U64 offset, U64 length, String *result) {
 		return false;
 
 	if (offset == s.length) {
-		*result = String_createEmpty();
+		*result = String_createNull();
 		return false;
 	}
 
@@ -1432,6 +1428,26 @@ Bool String_erase(String *s, C8 c, EStringCase caseSensitive, Bool isFirst) {
 		--s->length;
 
 	return true;
+}
+
+Error String_eraseAtCount(String *s, U64 i, U64 count) {
+
+	if(!s || !count)
+		return Error_nullPointer(0, 0);
+
+	if(String_isRef(*s))
+		return Error_constData(0, 0);
+
+	if(i + count > s->length)
+		return Error_outOfBounds(0, 0, i + count, s->length);
+
+	Buffer_copy(
+		Buffer_createRef(s->ptr + i, s->length - i - count),
+		Buffer_createRef(s->ptr + i + count, s->length - i - count)
+	);
+
+	s->length -= count;
+	return Error_none();
 }
 
 Bool String_eraseString(String *s, String other, EStringCase casing, Bool isFirst) {
@@ -1577,7 +1593,7 @@ String String_trim(String s) {
 		}
 
 	if (first == s.length)
-		return String_createEmpty();
+		return String_createNull();
 
 	U64 last = s.length;
 
@@ -1606,7 +1622,7 @@ Error StringList_create(U64 length, Allocator alloc, StringList *arr) {
 		return err;
 
 	for(U64 i = 0; i < sl.length; ++i)
-		sl.ptr[i] = String_createEmpty();
+		sl.ptr[i] = String_createNull();
 
 	*arr = sl;
 	return Error_none();
@@ -1731,27 +1747,27 @@ U64 String_calcStrLen(const C8 *ptr, U64 maxSize) {
 String String_getFilePath(String *str) {
 
 	if(!String_formatPath(str))
-		return String_createEmpty();
+		return String_createNull();
 
 	String res;
 
 	if(String_cutBefore(*str, '/', EStringCase_Insensitive, false, &res))
 		return res;
 	
-	return String_createEmpty();
+	return String_createNull();
 }
 
 String String_getBasePath(String *str) {
 
 	if(!String_formatPath(str))
-		return String_createEmpty();
+		return String_createNull();
 
 	String res;
 
 	if(String_cutAfter(*str, '/', EStringCase_Insensitive, false, &res))
 		return res;
 
-	return String_createEmpty();
+	return String_createNull();
 }
 
 Error StringList_concat(StringList arr, C8 between, Allocator alloc, String *result) {
@@ -1810,5 +1826,5 @@ Error StringList_concatString(StringList arr, String between, Allocator alloc, S
 }
 
 Error StringList_combine(StringList arr, Allocator alloc, String *result) {
-	return StringList_concatString(arr, String_createEmpty(), alloc, result);
+	return StringList_concatString(arr, String_createNull(), alloc, result);
 }

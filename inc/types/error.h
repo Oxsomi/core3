@@ -71,6 +71,8 @@ typedef struct Error {
 
 } Error;
 
+#define gotoIfError(x, ...) { err = __VA_ARGS__; if(err.genericError) goto x; }		//Shortcut to handle cleanup on error
+
 impl void Error_fillStackTrace(Error *err);
 
 #define _Error_base(...) Error err = (Error) { __VA_ARGS__ }; Error_fillStackTrace(&err); return err

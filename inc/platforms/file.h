@@ -45,32 +45,48 @@ typedef Error (*FileCallback)(FileInfo, void*);
 Error File_getInfo(String loc, FileInfo *info);
 Error FileInfo_free(FileInfo *info);
 
-Error File_foreach(String loc, FileCallback callback, void *userData, bool isRecursive);
+inline Bool File_isVirtual(String loc) { return String_getAt(loc, 0) == '/' && String_getAt(loc, 1) == '/'; }
 
-Error File_remove(String loc);
+Error File_foreach(String loc, FileCallback callback, void *userData, Bool isRecursive);
 
-Error File_queryFileObjectCount(String loc, FileType type, bool isRecursive, U64 *res);		//Includes files only
-Error File_queryFileObjectCountAll(String loc, bool isRecursive, U64 *res);					//Includes folders + files
+Error File_remove(String loc, Ns maxTimeout);
+Error File_add(String loc, FileType type, Ns maxTimeout);
 
-inline Error File_queryFileCount(String loc, bool isRecursive, U64 *res) { 
+Error File_rename(String loc, String newFileName, Ns maxTimeout);
+Error File_move(String loc, String directoryName, Ns maxTimeout);
+
+Error File_queryFileObjectCount(String loc, FileType type, Bool isRecursive, U64 *res);		//Includes files only
+Error File_queryFileObjectCountAll(String loc, Bool isRecursive, U64 *res);					//Includes folders + files
+
+inline Error File_queryFileCount(String loc, Bool isRecursive, U64 *res) { 
 	return File_queryFileObjectCount(loc, FileType_File, isRecursive, res); 
 }
 
-inline Error File_queryFolderCount(String loc, bool isRecursive, U64 *res) { 
+inline Error File_queryFolderCount(String loc, Bool isRecursive, U64 *res) { 
 	return File_queryFileObjectCount(loc, FileType_Folder, isRecursive, res); 
 }
 
 Error File_resolve(String loc, Bool *isVirtual, String *result);
+Bool File_exists(String loc);
+Bool File_existsAsType(String loc, FileType type);
 
-Error File_write(Buffer buf, String loc);
-Error File_read(String loc, Buffer *output);
+inline Bool File_fileExists(String loc) { return File_existsAsType(loc, FileType_File); }
+inline Bool File_folderExists(String loc) { return File_existsAsType(loc, FileType_Folder); }
 
-impl Error File_removeVirtual(String loc);											//Can only operate on //access
-impl Error File_writeVirtual(Buffer buf, String loc);
-impl Error File_readVirtual(String loc, Buffer *output);
+Error File_write(Buffer buf, String loc, Ns maxTimeout);		//Read when a file is available (up to maxTimeout)
+Error File_read(String loc, Buffer *output, Ns maxTimeout);		//Write when a file is available (up to maxTimeout)
+
+impl Error File_removeVirtual(String loc, Ns maxTimeout);						//Can only operate on //access
+impl Error File_addVirtual(String loc, FileType type, Ns maxTimeout);			//Can only operate on folders in //access
+impl Error File_renameVirtual(String loc, String newFileName, Ns maxTimeout);
+impl Error File_moveVirtual(String loc, String directoryName, Ns maxTimeout);
+
+impl Error File_writeVirtual(Buffer buf, String loc, Ns maxTimeout);
+impl Error File_readVirtual(String loc, Buffer *output, Ns maxTimeout);
+
 impl Error File_getInfoVirtual(String loc, FileInfo *info);
-impl Error File_foreachVirtual(String loc, FileCallback callback, void *userData, bool isRecursive);
-impl Error File_queryFileObjectCountVirtual(String loc, FileType type, bool isRecursive, U64 *res);		//Inc files only
-impl Error File_queryFileObjectCountAllVirtual(String loc, bool isRecursive, U64 *res);					//Inc folders + files
+impl Error File_foreachVirtual(String loc, FileCallback callback, void *userData, Bool isRecursive);
+impl Error File_queryFileObjectCountVirtual(String loc, FileType type, Bool isRecursive, U64 *res);		//Inc files only
+impl Error File_queryFileObjectCountAllVirtual(String loc, Bool isRecursive, U64 *res);					//Inc folders + files
 
 //TODO: make it more like a DirectStorage-like api

@@ -288,7 +288,7 @@ Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 	return Error_none();
 }
 
-Error Window_storeCPUBufferToDisk(const Window *w, String filePath) {
+Error Window_storeCPUBufferToDisk(const Window *w, String filePath, Ns maxTimeout) {
 
 	if (!w)
 		return Error_nullPointer(0, 0);
@@ -314,7 +314,7 @@ Error Window_storeCPUBufferToDisk(const Window *w, String filePath) {
 	if(err.genericError)
 		return err;
 
-	err = File_write(file, filePath);
+	err = File_write(file, filePath, maxTimeout);
 	Buffer_freex(&file);
 
 	return err;

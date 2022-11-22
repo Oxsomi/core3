@@ -173,7 +173,7 @@ F32 InputDevice_getDeltaAxis(InputDevice d, InputHandle handle) {
 String InputDevice_getName(InputDevice d, InputHandle handle) {
 
 	if(d.type == EInputDeviceType_Undefined)
-		return String_createEmpty();
+		return String_createNull();
 
 	U16 localHandle = InputDevice_getLocalHandle(d, handle);
 

@@ -79,6 +79,30 @@ inline const Bool String_isValidAscii(String str) {
 	return true;
 }
 
+inline const Bool String_isValidFileName(String str, Bool acceptTrailingNull) {
+
+	for(U64 i = 0; i < str.length; ++i)
+		if(!C8_isValidFileName(str.ptr[i]) && !(i == str.length - 1 && str.ptr[i] == '\0' && acceptTrailingNull))
+			return false;
+
+	return str.length;
+}
+
+//Only checks characters. Please use resolvePath to actually validate
+
+inline const Bool String_isValidFilePath(String str) {
+
+	for(U64 i = 0; i < str.length; ++i)
+		if(
+			!C8_isValidFileName(str.ptr[i]) && str.ptr[i] != '/' && str.ptr[i] != '\\' && 
+			!(i == str.length - 1 && !str.ptr[i]) &&						//Allow null terminator
+			!(i == 1 && str.ptr[i] == ':')									//Allow drive names for Windows
+		)
+			return false;
+
+	return str.length;
+}
+
 //
 
 inline void String_clear(String *str) { 
@@ -105,7 +129,7 @@ inline Bool String_setAt(String str, U64 i, C8 c) {
 //Freeing refs won't do anything, but is still recommended for consistency. 
 //Const ref disallow modifying functions to be used.
 
-inline String String_createEmpty() { return (String) { 0 }; }
+inline String String_createNull() { return (String) { 0 }; }
 
 inline String String_createConstRef(const C8 *ptr, U64 maxSize) { 
 	return (String) { 
@@ -332,7 +356,6 @@ Bool String_parseOct(String s, U64 *result);
 Bool String_parseBin(String s, U64 *result);
 
 Bool String_isNyto(String s);				//[0-9A-Za-z_$]+
-Bool String_isNytoFile(String s);			//[0-9A-Za-z_.]+	6-bit encoding for file names
 Bool String_isAlphaNumeric(String s);		//[0-9A-Za-z_]+
 Bool String_isHex(String s);				//[0-9A-Fa-f]+
 Bool String_isDec(String s);				//[0-9]+
@@ -392,6 +415,14 @@ inline Bool String_cutBeforeLastString(String s, String other, EStringCase caseS
 inline Bool String_cutBeforeFirstString(String s, String other, EStringCase caseSensitive, String *result) {
 	return String_cutBeforeString(s, other, caseSensitive, true, result);
 }
+
+Error String_eraseAtCount(String *s, U64 i, U64 count);
+inline Error String_popFrontCount(String *s, U64 count) { return String_eraseAtCount(s, 0, count); }
+inline Error String_popEndCount(String *s, U64 count) { return String_eraseAtCount(s, s ? s->length : 0, count); }
+
+inline Error String_eraseAt(String *s, U64 i) { return String_eraseAtCount(s, i, 1); }
+inline Error String_popFront(String *s) { return String_eraseAt(s, 0); }
+inline Error String_popEnd(String *s) { return String_eraseAt(s, s ? s->length : 0); }
 
 Bool String_eraseAll(String *s, C8 c, EStringCase caseSensitive);
 Bool String_eraseAllString(String *s, String other, EStringCase caseSensitive);
