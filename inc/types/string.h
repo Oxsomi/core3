@@ -82,7 +82,7 @@ inline const Bool String_isValidAscii(String str) {
 inline const Bool String_isValidFileName(String str, Bool acceptTrailingNull) {
 
 	for(U64 i = 0; i < str.length; ++i)
-		if(!C8_isValidFileName(str.ptr[i]) && !(i == str.length - 1 && str.ptr[i] == '\0' && acceptTrailingNull))
+		if(!C8_isValidFileName(str.ptr[i]) && !(i == str.length - 1 && !str.ptr[i] && acceptTrailingNull))
 			return false;
 
 	return str.length;
@@ -91,6 +91,14 @@ inline const Bool String_isValidFileName(String str, Bool acceptTrailingNull) {
 //Only checks characters. Please use resolvePath to actually validate
 
 inline const Bool String_isValidFilePath(String str) {
+
+	//Don't allow ending with .
+
+	if(str.length && (
+		str.ptr[str.length - 1] == '.' || 
+		(str.length >= 2 && str.ptr[str.length - 2] == '.'&& str.ptr[str.length - 1] == '\0')
+	))
+		return false;
 
 	for(U64 i = 0; i < str.length; ++i)
 		if(

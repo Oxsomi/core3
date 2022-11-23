@@ -11,6 +11,11 @@ Error Platform_create(
 	FreeFunc free, AllocFunc alloc, void *allocator
 ) {
 
+	U16 v = 1;
+
+	if(!*(U8*)&v)
+		return Error_unsupportedOperation(0);		//Invalid endianness
+
 	if(Platform_instance.platformType != EPlatform_Uninitialized)
 		return Error_invalidOperation(0);
 

@@ -48,7 +48,7 @@ Error File_resolve(String loc, Bool *isVirtual, String *result) {
 
 	//Virtual files
 
-	if (isVirtual)
+	if (*isVirtual)
 		gotoIfError(clean, String_popFrontCount(result, 2));
 
 	//Network drives are a thing on windows and allow starting a path with \\
@@ -93,6 +93,7 @@ Error File_resolve(String loc, Bool *isVirtual, String *result) {
 	String back = String_createConstRefUnsafe("..");
 
 	for (U64 i = 0; i < res.length; ++i) {
+
 
 		//We pop from StringList since it doesn't change anything
 		//Starting with a / is valid with local files, so don't remove it. (not with virtual files)
@@ -140,7 +141,41 @@ Error File_resolve(String loc, Bool *isVirtual, String *result) {
 
 		//Validation to make sure we're not using weird legacy MS DOS keywords
 		//Because these will not be writable correctly!
-		//TODO:
+
+		if(String_equalsString(
+			res.ptr[i], String_createConstRefUnsafe("CON"), EStringCase_Insensitive
+		))
+			gotoIfError(clean, Error_invalidParameter(0, 0, 2));
+
+		if(String_equalsString(
+			res.ptr[i], String_createConstRefUnsafe("AUX"), EStringCase_Insensitive
+		))
+			gotoIfError(clean, Error_invalidParameter(0, 0, 3));
+
+		if(String_equalsString(
+			res.ptr[i], String_createConstRefUnsafe("NUL"), EStringCase_Insensitive
+		))
+			gotoIfError(clean, Error_invalidParameter(0, 0, 4));
+
+		if(String_equalsString(
+			res.ptr[i], String_createConstRefUnsafe("PRN"), EStringCase_Insensitive
+		))
+			gotoIfError(clean, Error_invalidParameter(0, 0, 5));
+
+		if(
+			String_startsWithString(
+				res.ptr[i], String_createConstRefUnsafe("COM"), EStringCase_Insensitive
+			) &&
+			res.ptr[i].length == 4 && C8_isDec(res.ptr[i].ptr[3])
+		)
+			gotoIfError(clean, Error_invalidParameter(0, 0, 6));
+		if(
+			String_startsWithString(
+				res.ptr[i], String_createConstRefUnsafe("LPT"), EStringCase_Insensitive
+			) &&
+			res.ptr[i].length == 4 && C8_isDec(res.ptr[i].ptr[3])
+		)
+			gotoIfError(clean, Error_invalidParameter(0, 0, 7));
 
 		//Continue processing the path until it's done
 
@@ -201,6 +236,13 @@ Error File_resolve(String loc, Bool *isVirtual, String *result) {
 
 	if(String_getAt(*result, result->length - 1) != '\0')
 		gotoIfError(clean, String_insertx(result, '\0', result->length));
+
+	#ifdef _WIN32
+
+		if(result->length >= 260 /* MAX_PATH */)
+			gotoIfError(clean, Error_outOfBounds(0, 0, result->length, 260));
+
+	#endif
 
 	return Error_none();
 

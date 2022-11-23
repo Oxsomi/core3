@@ -45,6 +45,15 @@ String Error_formatPlatformError(Error err) {
 
 int main() {
 
+	//Fail for big endian systems, because we don't support them.
+
+	U16 v = 1;
+
+	if(!*(U8*)&v) {
+		printf("Failed unit test: Unsupported endianness (only supporting little endian architectures)");
+		return -1;
+	}
+
 	//Test timer
 
 	Ns now = Time_now();
