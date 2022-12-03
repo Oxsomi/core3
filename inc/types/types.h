@@ -1,6 +1,7 @@
 #pragma once
 #include <stdint.h>
 #include <stdbool.h>
+#include "cfg/config.h"
 
 //A hint to show that something is implementation dependent
 //For ease of implementing a new implementation
@@ -26,7 +27,7 @@ typedef uint64_t U64;
 
 typedef float F32;
 
-#if _StrictFloat
+#if !_RELAX_FLOAT
 	#if FLT_EVAL_METHOD != 0
 		#error Flt eval method should be 0 to indicate consistent behavior
 	#endif
@@ -41,25 +42,25 @@ typedef bool Bool;
 
 //Constants
 
-extern const U64 Ki;
-extern const U64 Mi;
-extern const U64 Gi;
-extern const U64 Ti;
-extern const U64 Pi;
+extern const U64 KIBI;
+extern const U64 MIBI;
+extern const U64 GIBI;
+extern const U64 TIBI;
+extern const U64 PEBI;
 
-extern const U64 Kilo;
-extern const U64 Mega;
-extern const U64 Giga;
-extern const U64 Tera;
-extern const U64 Peta;
+extern const U64 KILO;
+extern const U64 MEGA;
+extern const U64 GIGA;
+extern const U64 TERA;
+extern const U64 PETA;
 
-extern const Ns mus;
-extern const Ns ms;
-extern const Ns seconds;
-extern const Ns mins;
-extern const Ns hours;
-extern const Ns days;
-extern const Ns weeks;
+extern const Ns MU;
+extern const Ns MS;
+extern const Ns SECOND;
+extern const Ns MIN;
+extern const Ns HOUR;
+extern const Ns DAY;
+extern const Ns WEEK;
 
 extern const U8 U8_MIN;
 extern const C8 C8_MIN;
@@ -109,81 +110,38 @@ typedef enum EStringTransform {
 	EStringTransform_Upper
 } EStringTransform;
 
-inline C8 C8_transform(C8 c, EStringTransform transform) {
-	return transform == EStringTransform_None ? c : (
-		transform == EStringTransform_Lower ? C8_toLower(c) :
-		C8_toUpper(c)
-	);
-}
+C8 C8_transform(C8 c, EStringTransform transform);
 
-inline Bool C8_isBin(C8 c) { return c == '0' || c == '1'; }
-inline Bool C8_isOct(C8 c) { return c >= '0' && c <= '7'; }
-inline Bool C8_isDec(C8 c) { return c >= '0' && c <= '9'; }
+Bool C8_isBin(C8 c);
+Bool C8_isOct(C8 c);
+Bool C8_isDec(C8 c);
 
-inline Bool C8_isUpperCase(C8 c) { return c >= 'A' && c <= 'Z'; }
-inline Bool C8_isLowerCase(C8 c) { return c >= 'a' && c <= 'z'; }
-inline Bool C8_isUpperCaseHex(C8 c) { return c >= 'A' && c <= 'F'; }
-inline Bool C8_isLowerCaseHex(C8 c) { return c >= 'a' && c <= 'f'; }
-inline Bool C8_isWhitespace(C8 c) { return c == ' ' || c == '\t' || c == '\n' || c == '\r'; }
+Bool C8_isUpperCase(C8 c);
+Bool C8_isLowerCase(C8 c);
+Bool C8_isUpperCaseHex(C8 c);
+Bool C8_isLowerCaseHex(C8 c);
+Bool C8_isWhitespace(C8 c);
 
-inline Bool C8_isHex(C8 c) { return C8_isDec(c) || C8_isUpperCaseHex(c) || C8_isLowerCaseHex(c); }
-inline Bool C8_isNyto(C8 c) { return C8_isDec(c) || C8_isUpperCase(c) || C8_isLowerCase(c) || c == '_' || c == '$'; }
-inline Bool C8_isAlphaNumeric(C8 c) { return C8_isNyto(c) && c != '$'; }
-inline Bool C8_isAlpha(C8 c) { return C8_isUpperCase(c) || C8_isLowerCase(c); }
+Bool C8_isHex(C8 c);
+Bool C8_isNyto(C8 c);
+Bool C8_isAlphaNumeric(C8 c);
+Bool C8_isAlpha(C8 c);
 
-inline Bool C8_isValidAscii(C8 c) { return (c < 0x20 || c >= 0x7F) && c != '\t' && c != '\n' && c != '\r'; }
-inline Bool C8_isValidFileName(C8 c) { return C8_isAlphaNumeric(c) || c == ' ' || c == '-' || c == '.'; }
+Bool C8_isValidAscii(C8 c);
+Bool C8_isValidFileName(C8 c);
 
-inline U8 C8_bin(C8 c) { return c == '0' ? 0 : (c == '1' ? 1 : U8_MAX); }
-inline U8 C8_oct(C8 c) { return C8_isOct(c) ? c - '0' : U8_MAX; }
-inline U8 C8_dec(C8 c) { return C8_isDec(c) ? c - '0' : U8_MAX; }
+U8 C8_bin(C8 c);
+U8 C8_oct(C8 c);
+U8 C8_dec(C8 c);
 
-inline U8 C8_hex(C8 c) {
+U8 C8_hex(C8 c);
+U8 C8_nyto(C8 c);
 
-	if (C8_isDec(c))
-		return c - '0';
-
-	if (C8_isUpperCaseHex(c))
-		return c - 'A' + 10;
-
-	if (C8_isLowerCaseHex(c))
-		return c - 'a' + 10;
-
-	return U8_MAX;
-}
-
-inline U8 C8_nyto(C8 c) {
-
-	if (C8_isDec(c))
-		return c - '0';
-
-	if (C8_isUpperCase(c))
-		return c - 'A' + 10;
-
-	if (C8_isLowerCase(c))
-		return c - 'a' + 36;
-
-	if (c == '_')
-		return 62;
-
-	return c == '$' ? 63 : U8_MAX;
-}
-
-inline C8 C8_createBin(U8 v) { return (v == 0 ? '0' : (v == 1 ? '1' : C8_MAX)); }
-inline C8 C8_createOct(U8 v) { return v < 8 ? '0' + v : C8_MAX; }
-inline C8 C8_createDec(U8 v) { return v < 10 ? '0' + v : C8_MAX; }
-inline C8 C8_createHex(U8 v) { return v < 10 ? '0' + v : (v < 16 ? 'A' + v - 10 : C8_MAX); }
+C8 C8_createBin(U8 v);
+C8 C8_createOct(U8 v);
+C8 C8_createDec(U8 v);
+C8 C8_createHex(U8 v);
 
 //Nytodecimal: 0-9A-Za-z_$
 
-inline C8 C8_createNyto(U8 v) { 
-	return v < 10 ? '0' + v : (
-		v < 36 ? 'A' + v - 10 : (
-			v < 62 ? 'a' + v - 36 : (
-				v == 62 ? '_' : (
-					v == 63 ? '$' : C8_MAX
-				)
-			)
-		)
-	); 
-}
+C8 C8_createNyto(U8 v);

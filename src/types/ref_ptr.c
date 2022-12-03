@@ -14,10 +14,12 @@ Bool RefPtr_sub(RefPtr *ptr) {
 	if(!ptr || !ptr->refCount)
 		return false;
 
+	Bool b = true;
+
 	if(!(--ptr->refCount)) {
-		ptr->free(ptr->ptr, ptr->alloc);
+		b = ptr->free(ptr->ptr, ptr->alloc);
 		*ptr = (RefPtr) { 0 };
 	}
 
-	return true;
+	return b;
 }

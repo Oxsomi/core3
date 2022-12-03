@@ -1,30 +1,30 @@
 #include "math/math.h"
 #include <float.h>
 
-const F32 F32_e			= 2.718281828459045f;
-const F32 F32_pi		= 3.141592653589793f;
-const F32 F32_radToDeg	= 57.2957795131f;
-const F32 F32_degToRad	= 0.01745329251f;
+const F32 F32_E				= 2.718281828459045f;
+const F32 F32_PI			= 3.141592653589793f;
+const F32 F32_RAD_TO_DEG	= 57.2957795131f;
+const F32 F32_DEG_TO_RAD	= 0.01745329251f;
 
-const U64 Ki			= 1 << 10;
-const U64 Mi			= 1 << 20;
-const U64 Gi			= 1 << 30;
-const U64 Ti			= (U64)1 << 40;
-const U64 Pi			= (U64)1 << 50;
+const U64 KIBI			= 1 << 10;
+const U64 MIBI			= 1 << 20;
+const U64 GIBI			= 1 << 30;
+const U64 TIBI			= (U64)1 << 40;
+const U64 PEBI			= (U64)1 << 50;
 
-const U64 Kilo			= 1'000;
-const U64 Mega			= 1'000'000;
-const U64 Giga			= 1'000'000'000;
-const U64 Tera			= 1'000'000'000'000;
-const U64 Peta			= 1'000'000'000'000'000;
+const U64 KILO			= 1'000;
+const U64 MEGA			= 1'000'000;
+const U64 GIGA			= 1'000'000'000;
+const U64 TERA			= 1'000'000'000'000;
+const U64 PETA			= 1'000'000'000'000'000;
 
-const Ns mus			= 1'000;
-const Ns ms				= 1'000'000;
-const Ns seconds		= 1'000'000'000;
-const Ns mins			= 60'000'000'000;
-const Ns hours			= 3'600'000'000'000;
-const Ns days			= 86'400'000'000'000;
-const Ns weeks			= 604'800'000'000'000;
+const Ns MU				= 1'000;
+const Ns MS				= 1'000'000;
+const Ns SECOND			= 1'000'000'000;
+const Ns MIN			= 60'000'000'000;
+const Ns HOUR			= 3'600'000'000'000;
+const Ns DAY			= 86'400'000'000'000;
+const Ns WEEK			= 604'800'000'000'000;
 
 const U8 U8_MIN			= 0;
 const C8 C8_MIN			= 0;

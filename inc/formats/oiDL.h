@@ -56,7 +56,7 @@ typedef struct DLFile {
 } DLFile;
 
 Error DLFile_create(DLSettings settings, Allocator alloc, DLFile *dlFile);
-Error DLFile_free(DLFile *dlFile, Allocator alloc);
+Bool DLFile_free(DLFile *dlFile, Allocator alloc);
 
 //DLEntry will belong to DLFile.
 //This means that freeing it will free the String + Buffer if they're not a ref

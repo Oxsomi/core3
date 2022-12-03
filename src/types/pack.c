@@ -93,7 +93,7 @@ Bool U32_setBit(U32 *packed, U8 off, Bool b) {
 	if (off >= 32)
 		return false;
 
-	U32 shift = 1u << off;
+	U32 shift = 1 << off;
 
 	if (b)
 		*packed |= shift;
@@ -118,9 +118,9 @@ Quat16 Quat_pack(Quat q) {
 	return (Quat16) {
 		{
 			(I16) F32x4_x(asI16),
-				(I16) F32x4_y(asI16),
-				(I16) F32x4_z(asI16),
-				(I16) F32x4_w(asI16)
+			(I16) F32x4_y(asI16),
+			(I16) F32x4_z(asI16),
+			(I16) F32x4_w(asI16)
 		}
 	};
 }

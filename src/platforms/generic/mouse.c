@@ -1,6 +1,7 @@
 #include "platforms/mouse.h"
 #include "platforms/input_device.h"
 #include "types/error.h"
+#include "types/string.h"
 
 #define _button(name)																						\
 	if ((err = InputDevice_createButton(																	\
@@ -12,7 +13,7 @@
 
 #define _axis(name)																							\
 	if ((err = InputDevice_createAxis(																		\
-		*result, EMouseAxis_##name, String_createConstRefUnsafe("EMouseAxis_" #name), 0, &res					\
+		*result, EMouseAxis_##name, String_createConstRefUnsafe("EMouseAxis_" #name), 0, &res				\
 	)).genericError) {																						\
 		InputDevice_free(result);																			\
 		return err;																							\

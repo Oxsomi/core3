@@ -1,3 +1,4 @@
+#include "types/buffer.h"
 #include "platforms/platform.h"
 #include "platforms/log.h"
 #include "platforms/ext/stringx.h"
@@ -92,10 +93,10 @@ Error allocCallback(void *allocator, U64 length, Buffer *output) {
 	return Error_none();
 }
 
-Error freeCallback(void *allocator, Buffer buf) {
+Bool freeCallback(void *allocator, Buffer buf) {
 	allocator;
 	free(buf.ptr);
-	return Error_none();
+	return true;
 }
 
 WORD oldColor = 0;
@@ -186,29 +187,40 @@ Error Platform_initExt(Platform *result) {
 
 	PlatformExt *pext = (PlatformExt*) platformExt.ptr;
 
-	if (!(pext->ntdll = GetModuleHandleA("ntdll.dll")))
+	if (!(pext->ntdll = GetModuleHandleA("ntdll.dll"))) {
+		Buffer_freex(&platformExt);
 		return Error_platformError(0, GetLastError());
+	}
 
-	if (!(*((void**)&pext->ntDelayExecution) = (void*)GetProcAddress(pext->ntdll, "NtDelayExecution")))
+	if (!(*((void**)&pext->ntDelayExecution) = (void*)GetProcAddress(pext->ntdll, "NtDelayExecution"))) {
+		Buffer_freex(&platformExt);
 		return Error_platformError(1, GetLastError());
+	}
 
 	//Init working dir
 
 	C8 buff[MAX_PATH + 1];
 	DWORD chars = GetCurrentDirectoryA(MAX_PATH + 1, buff);
 
-	if(!chars)
+	if(!chars) {
+		Buffer_freex(&platformExt);
 		return Error_platformError(0, GetLastError());		//Needs no cleaning. cleanup(Ext) will handle it
+	}
 
 	//Move to heap and standardize
 
-	if((err = String_createCopyx(String_createConstRef(buff, chars), &result->workingDirectory)).genericError)
+	if((err = String_createCopyx(String_createConstRef(buff, chars), &result->workingDirectory)).genericError) {
+		Buffer_freex(&platformExt);
 		return err;
+	}
 
 	String_replaceAll(&result->workingDirectory, '\\', '/', EStringCase_Sensitive);
 
-	if ((err = String_appendx(&result->workingDirectory, '/')).genericError) 
+	if ((err = String_appendx(&result->workingDirectory, '/')).genericError)  {
+		String_freex(&result->workingDirectory);
+		Buffer_freex(&platformExt);
 		return err;
+	}
 
 	result->dataExt = pext;
 	return Error_none();

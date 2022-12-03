@@ -1,6 +1,7 @@
 #pragma once
 #include "types/types.h"
 
+typedef struct Error Error;
 typedef struct InputDevice EKeyboard;
 
 typedef enum EKey {
@@ -40,6 +41,7 @@ typedef enum EKey {
 	EKey_Backslash,		EKey_Quote,
 
 	EKey_Count
+
 } EKey;
 
 typedef enum EKeyboardFlags {
@@ -50,7 +52,5 @@ typedef enum EKeyboardFlags {
 	EKeyboardFlags_Control,
 	EKeyboardFlags_Alt
 } EKeyboardFlags;
-
-typedef struct Error Error;
 
 Error EKeyboard_create(EKeyboard *result);

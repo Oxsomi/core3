@@ -1,3 +1,4 @@
+#include "types/error.h"
 #include "platforms/file.h"
 #include "platforms/ext/stringx.h"
 
@@ -11,22 +12,31 @@ Error File_foreach(String loc, FileCallback callback, void *userData, Bool isRec
 	HANDLE file = NULL;
 
 	if(!callback) 
-		gotoIfError(clean, Error_nullPointer(1, 0));
+		_gotoIfError(clean, Error_nullPointer(1, 0));
 
 	if(!String_isValidFilePath(loc))
-		gotoIfError(clean, Error_invalidParameter(0, 0, 0));
+		_gotoIfError(clean, Error_invalidParameter(0, 0, 0));
 
 	Bool isVirtual = File_isVirtual(loc);
 
 	if(isVirtual) {
-		gotoIfError(clean, File_foreachVirtual(loc, callback, userData, isRecursive));
+		_gotoIfError(clean, File_foreachVirtual(loc, callback, userData, isRecursive));
 		return Error_none();
 	}
 
-	gotoIfError(clean, String_appendStringx(&resolved, String_createConstRefSized("/*", 3)));
+	_gotoIfError(clean, File_resolve(loc, &isVirtual, &resolved));
+
+	if(isVirtual)
+		_gotoIfError(clean, Error_invalidOperation(0));
+
+	//Append /*\0 (replace last \0)
+
+	resolved.ptr[resolved.length - 1] = '/';
+
+	_gotoIfError(clean, String_appendStringx(&resolved, String_createConstRefSized("*", 2)));
 
 	if(resolved.length > MAX_PATH)
-		gotoIfError(clean, Error_outOfBounds(0, 0, resolved.length, MAX_PATH));
+		_gotoIfError(clean, Error_outOfBounds(0, 0, resolved.length, MAX_PATH));
 
 	//Skip .
 
@@ -34,10 +44,10 @@ Error File_foreach(String loc, FileCallback callback, void *userData, Bool isRec
 	file = FindFirstFileA(resolved.ptr, &dat);
 
 	if(file == INVALID_HANDLE_VALUE)
-		gotoIfError(clean, Error_notFound(0, 0, 0));
+		_gotoIfError(clean, Error_notFound(0, 0, 0));
 
 	if(!FindNextFileA(file, &dat))
-		gotoIfError(clean, Error_notFound(0, 0, 0));
+		_gotoIfError(clean, Error_notFound(0, 0, 0));
 
 	//Loop through real files (while instead of do while because we wanna skip ..)
 
@@ -52,10 +62,10 @@ Error File_foreach(String loc, FileCallback callback, void *userData, Bool isRec
 		//Before 1970, unsupported. Default to 1970
 
 		Ns timestamp = 0;
-		static const U64 unixStartWin = (Ns)11644473600 * (1'000'000'000 / 100);	//ns to 100s of ns
+		static const U64 UNIX_START_WIN = (Ns)11644473600 * (1'000'000'000 / 100);	//ns to 100s of ns
 
-		if ((U64)time.QuadPart >= unixStartWin)
-			timestamp = (time.QuadPart - unixStartWin) * 100;	//Convert to Oxsomi time
+		if ((U64)time.QuadPart >= UNIX_START_WIN)
+			timestamp = (time.QuadPart - UNIX_START_WIN) * 100;	//Convert to Oxsomi time
 
 		//Folder parsing
 
@@ -68,10 +78,10 @@ Error File_foreach(String loc, FileCallback callback, void *userData, Bool isRec
 				.type = FileType_Folder
 			};
 
-			gotoIfError(clean, callback(info, userData));
+			_gotoIfError(clean, callback(info, userData));
 
 			if(isRecursive)
-				gotoIfError(clean, File_foreach(info.path, callback, userData, true));
+				_gotoIfError(clean, File_foreach(info.path, callback, userData, true));
 
 			continue;
 		}
@@ -90,13 +100,13 @@ Error File_foreach(String loc, FileCallback callback, void *userData, Bool isRec
 			.fileSize = size.QuadPart
 		};
 
-		gotoIfError(clean, callback(info, userData));
+		_gotoIfError(clean, callback(info, userData));
 	}
 
 	DWORD hr = GetLastError();
 
 	if(hr != ERROR_NO_MORE_FILES)
-		gotoIfError(clean, Error_platformError(0, hr));
+		_gotoIfError(clean, Error_platformError(0, hr));
 
 clean:
 
@@ -112,11 +122,20 @@ clean:
 Error File_removeVirtual(String loc, Ns maxTimeout) { loc; maxTimeout; return Error_unimplemented(0); }
 Error File_addVirtual(String loc, FileType type, Ns maxTimeout) { loc; type; maxTimeout; return Error_unimplemented(0); }
 
-Error File_renameVirtual(String loc, String newFileName, Ns maxTimeout) { loc; newFileName; maxTimeout; return Error_unimplemented(0); }
-Error File_moveVirtual(String loc, String directoryName, Ns maxTimeout) { loc; directoryName; maxTimeout; return Error_unimplemented(0); }
+Error File_renameVirtual(String loc, String newFileName, Ns maxTimeout) { 
+	loc; newFileName; maxTimeout; return Error_unimplemented(0); 
+}
+
+Error File_moveVirtual(String loc, String directoryName, Ns maxTimeout) { 
+	loc; directoryName; maxTimeout; return Error_unimplemented(0); 
+}
 
 Error File_writeVirtual(Buffer buf, String loc, Ns maxTimeout) { maxTimeout; buf; loc; return Error_unimplemented(0); }
-Error File_readVirtual(String loc, Buffer *output, Ns maxTimeout) { maxTimeout; loc; output; return Error_unimplemented(0); }
+
+Error File_readVirtual(String loc, Buffer *output, Ns maxTimeout) { 
+	maxTimeout; loc; output; return Error_unimplemented(0); 
+}
+
 Error File_getInfoVirtual(String loc, FileInfo *info) { loc; info; return Error_unimplemented(0); }
 
 Error File_foreachVirtual(String loc, FileCallback callback, void *userData, Bool isRecursive) { 

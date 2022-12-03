@@ -35,7 +35,8 @@ typedef enum ETextureCompressionType {
 
 #define _ETextureFormatCompressed(blockSizeBits, alignmentX, alignmentY, compType, hasRed, hasGreen, hasBlue, hasAlpha) \
 ((hasAlpha ? 1 : 0) | ((hasBlue ? 1 : 0) << 6) | (compType << 9) | ((hasGreen ? 1 : 0) << 12) | (alignmentY << 16) | \
- ((hasRed ? 1 : 0) << 18) | (alignmentX << 21) | (ETexturePrimitive_Compressed << 24) | (((blockSizeBits >> 6) - 1) << 27))
+ ((hasRed ? 1 : 0) << 18) | (alignmentX << 21) | \
+ (ETexturePrimitive_Compressed << 24) | (((blockSizeBits >> 6) - 1) << 27))
 
 //Format of a texture; a bitflag of the properties of the format.
 // 
@@ -63,7 +64,7 @@ typedef enum ETextureFormat {
 
 	ETextureFormat_r8				= _ETextureFormat(ETexturePrimitive_UNorm, 8, 0, 0, 0),
 	ETextureFormat_rg8				= _ETextureFormat(ETexturePrimitive_UNorm, 8, 8, 0, 0),
-	ETextureFormat_rgba8				= _ETextureFormat(ETexturePrimitive_UNorm, 8, 8, 8, 8),
+	ETextureFormat_rgba8			= _ETextureFormat(ETexturePrimitive_UNorm, 8, 8, 8, 8),
 
 	ETextureFormat_r8s				= _ETextureFormat(ETexturePrimitive_SNorm, 8, 0, 0, 0),
 	ETextureFormat_rg8s				= _ETextureFormat(ETexturePrimitive_SNorm, 8, 8, 0, 0),
@@ -84,33 +85,33 @@ typedef enum ETextureFormat {
 	ETextureFormat_rgba16			= _ETextureFormat(ETexturePrimitive_UNorm, 16, 16, 16, 16),
 
 	ETextureFormat_r16s				= _ETextureFormat(ETexturePrimitive_SNorm, 16, 0, 0, 0),
-	ETextureFormat_rg16s				= _ETextureFormat(ETexturePrimitive_SNorm, 16, 16, 0, 0),
+	ETextureFormat_rg16s			= _ETextureFormat(ETexturePrimitive_SNorm, 16, 16, 0, 0),
 	ETextureFormat_rgba16s			= _ETextureFormat(ETexturePrimitive_SNorm, 16, 16, 16, 16),
 
 	ETextureFormat_r16u				= _ETextureFormat(ETexturePrimitive_UInt, 16, 0, 0, 0),
-	ETextureFormat_rg16u				= _ETextureFormat(ETexturePrimitive_UInt, 16, 16, 0, 0),
+	ETextureFormat_rg16u			= _ETextureFormat(ETexturePrimitive_UInt, 16, 16, 0, 0),
 	ETextureFormat_rgba16u			= _ETextureFormat(ETexturePrimitive_UInt, 16, 16, 16, 16),
 
 	ETextureFormat_r16i				= _ETextureFormat(ETexturePrimitive_SInt, 16, 0, 0, 0),
-	ETextureFormat_rg16i				= _ETextureFormat(ETexturePrimitive_SInt, 16, 16, 0, 0),
+	ETextureFormat_rg16i			= _ETextureFormat(ETexturePrimitive_SInt, 16, 16, 0, 0),
 	ETextureFormat_rgba16i			= _ETextureFormat(ETexturePrimitive_SInt, 16, 16, 16, 16),
 
 	ETextureFormat_r16f				= _ETextureFormat(ETexturePrimitive_Float, 16, 0, 0, 0),
-	ETextureFormat_rg16f				= _ETextureFormat(ETexturePrimitive_Float, 16, 16, 0, 0),
+	ETextureFormat_rg16f			= _ETextureFormat(ETexturePrimitive_Float, 16, 16, 0, 0),
 	ETextureFormat_rgba16f			= _ETextureFormat(ETexturePrimitive_Float, 16, 16, 16, 16),
 
 	//32-bit
 
 	ETextureFormat_r32u				= _ETextureFormat(ETexturePrimitive_UInt, 32, 0, 0, 0),
-	ETextureFormat_rg32u				= _ETextureFormat(ETexturePrimitive_UInt, 32, 32, 0, 0),
+	ETextureFormat_rg32u			= _ETextureFormat(ETexturePrimitive_UInt, 32, 32, 0, 0),
 	ETextureFormat_rgba32u			= _ETextureFormat(ETexturePrimitive_UInt, 32, 32, 32, 32),
 
 	ETextureFormat_r32i				= _ETextureFormat(ETexturePrimitive_SInt, 32, 0, 0, 0),
-	ETextureFormat_rg32i				= _ETextureFormat(ETexturePrimitive_SInt, 32, 32, 0, 0),
+	ETextureFormat_rg32i			= _ETextureFormat(ETexturePrimitive_SInt, 32, 32, 0, 0),
 	ETextureFormat_rgba32i			= _ETextureFormat(ETexturePrimitive_SInt, 32, 32, 32, 32),
 
 	ETextureFormat_r32f				= _ETextureFormat(ETexturePrimitive_Float, 32, 0, 0, 0),
-	ETextureFormat_rg32f				= _ETextureFormat(ETexturePrimitive_Float, 32, 32, 0, 0),
+	ETextureFormat_rg32f			= _ETextureFormat(ETexturePrimitive_Float, 32, 32, 0, 0),
 	ETextureFormat_rgba32f			= _ETextureFormat(ETexturePrimitive_Float, 32, 32, 32, 32),
 
 	//Special purpose formats
@@ -163,7 +164,7 @@ typedef enum ETextureFormat {
 		ETextureCompressionType_UNorm, 1, 1, 1, 1
 	),
 
-	ETextureFormat_ASTC_4x4_sRGB		= _ETextureFormatCompressed(
+	ETextureFormat_ASTC_4x4_sRGB	= _ETextureFormatCompressed(
 		128, ETextureAlignment_4, ETextureAlignment_4, 
 		ETextureCompressionType_sRGB, 1, 1, 1, 1
 	),
@@ -174,7 +175,7 @@ typedef enum ETextureFormat {
 		ETextureCompressionType_UNorm, 1, 1, 1, 1
 	),
 
-	ETextureFormat_ASTC_5x4_sRGB		= _ETextureFormatCompressed(
+	ETextureFormat_ASTC_5x4_sRGB	= _ETextureFormatCompressed(
 		128, ETextureAlignment_5, ETextureAlignment_4, 
 		ETextureCompressionType_sRGB, 1, 1, 1, 1
 	),
@@ -185,7 +186,7 @@ typedef enum ETextureFormat {
 		ETextureCompressionType_UNorm, 1, 1, 1, 1
 	),
 
-	ETextureFormat_ASTC_5x5_sRGB		= _ETextureFormatCompressed(
+	ETextureFormat_ASTC_5x5_sRGB	= _ETextureFormatCompressed(
 		128, ETextureAlignment_5, ETextureAlignment_5, 
 		ETextureCompressionType_sRGB, 1, 1, 1, 1
 	),
@@ -196,7 +197,7 @@ typedef enum ETextureFormat {
 		ETextureCompressionType_UNorm, 1, 1, 1, 1
 	),
 
-	ETextureFormat_ASTC_6x5_sRGB		= _ETextureFormatCompressed(
+	ETextureFormat_ASTC_6x5_sRGB	= _ETextureFormatCompressed(
 		128, ETextureAlignment_6, ETextureAlignment_5, 
 		ETextureCompressionType_sRGB, 1, 1, 1, 1
 	),
@@ -207,7 +208,7 @@ typedef enum ETextureFormat {
 		ETextureCompressionType_UNorm, 1, 1, 1, 1
 	),
 
-	ETextureFormat_ASTC_6x6_sRGB		= _ETextureFormatCompressed(
+	ETextureFormat_ASTC_6x6_sRGB	= _ETextureFormatCompressed(
 		128, ETextureAlignment_6, ETextureAlignment_6, 
 		ETextureCompressionType_sRGB, 1, 1, 1, 1
 	),
@@ -218,7 +219,7 @@ typedef enum ETextureFormat {
 		ETextureCompressionType_UNorm, 1, 1, 1, 1
 	),
 
-	ETextureFormat_ASTC_8x5_sRGB		= _ETextureFormatCompressed(
+	ETextureFormat_ASTC_8x5_sRGB	= _ETextureFormatCompressed(
 		128, ETextureAlignment_8, ETextureAlignment_5, 
 		ETextureCompressionType_sRGB, 1, 1, 1, 1
 	),
@@ -229,7 +230,7 @@ typedef enum ETextureFormat {
 		ETextureCompressionType_UNorm, 1, 1, 1, 1
 	),
 
-	ETextureFormat_ASTC_8x6_sRGB		= _ETextureFormatCompressed(
+	ETextureFormat_ASTC_8x6_sRGB	= _ETextureFormatCompressed(
 		128, ETextureAlignment_8, ETextureAlignment_6, 
 		ETextureCompressionType_sRGB, 1, 1, 1, 1
 	),
@@ -240,13 +241,13 @@ typedef enum ETextureFormat {
 		ETextureCompressionType_UNorm, 1, 1, 1, 1
 	),
 
-	ETextureFormat_ASTC_8x8_sRGB		= _ETextureFormatCompressed(
+	ETextureFormat_ASTC_8x8_sRGB	= _ETextureFormatCompressed(
 		128, ETextureAlignment_8, ETextureAlignment_8, 
 		ETextureCompressionType_sRGB, 1, 1, 1, 1
 	),
 
 
-	ETextureFormat_ASTC_10x5			= _ETextureFormatCompressed(
+	ETextureFormat_ASTC_10x5		= _ETextureFormatCompressed(
 		128, ETextureAlignment_10, ETextureAlignment_5, 
 		ETextureCompressionType_UNorm, 1, 1, 1, 1
 	),
@@ -257,7 +258,7 @@ typedef enum ETextureFormat {
 	),
 
 
-	ETextureFormat_ASTC_10x6			= _ETextureFormatCompressed(
+	ETextureFormat_ASTC_10x6		= _ETextureFormatCompressed(
 		128, ETextureAlignment_10, ETextureAlignment_6, 
 		ETextureCompressionType_UNorm, 1, 1, 1, 1
 	),
@@ -268,7 +269,7 @@ typedef enum ETextureFormat {
 	),
 
 
-	ETextureFormat_ASTC_10x8			= _ETextureFormatCompressed(
+	ETextureFormat_ASTC_10x8		= _ETextureFormatCompressed(
 		128, ETextureAlignment_10, ETextureAlignment_8, 
 		ETextureCompressionType_UNorm, 1, 1, 1, 1
 	),
@@ -313,85 +314,31 @@ typedef enum ETextureFormat {
 
 } ETextureFormat;
 
-inline ETexturePrimitive ETextureFormat_getPrimitive(ETextureFormat f) { 
-	return (ETexturePrimitive)((f >> 24) & 7); 
-}
+ETexturePrimitive ETextureFormat_getPrimitive(ETextureFormat f);
 
-inline Bool ETextureFormat_getIsCompressed(ETextureFormat f) { 
-	return ETextureFormat_getPrimitive(f) == ETexturePrimitive_Compressed; 
-}
+Bool ETextureFormat_getIsCompressed(ETextureFormat f);
 
-inline U64 ETextureFormat_getBits(ETextureFormat f) { 
-	U64 length = (f >> 27) + 1;
-	return length << (ETextureFormat_getIsCompressed(f) ? 6 : 2);
-}
+U64 ETextureFormat_getBits(ETextureFormat f);
+U64 ETextureFormat_getAlphaBits(ETextureFormat f);
+U64 ETextureFormat_getBlueBits(ETextureFormat f);
+U64 ETextureFormat_getGreenBits(ETextureFormat f);
+U64 ETextureFormat_getRedBits(ETextureFormat f);
 
-inline U64 ETextureFormat_getAlphaBits(ETextureFormat f) { 
-	return ETextureFormat_getIsCompressed(f) ? f & 7 : (f & 077) << 1; 
-}
+Bool ETextureFormat_hasRed(ETextureFormat f);
+Bool ETextureFormat_hasGreen(ETextureFormat f);
+Bool ETextureFormat_hasBlue(ETextureFormat f);
+Bool ETextureFormat_hasAlpha(ETextureFormat f);
 
-inline U64 ETextureFormat_getBlueBits(ETextureFormat f) { 
-	return ETextureFormat_getIsCompressed(f) ? (f >> 6) & 7 : ((f >> 3) & 077) << 1; 
-}
+U8 ETextureFormat_getChannels(ETextureFormat f);
 
-inline U64 ETextureFormat_getGreenBits(ETextureFormat f) { 
-	return ETextureFormat_getIsCompressed(f) ? (f >> 12) & 7 : ((f >> 6) & 077) << 1; 
-}
-
-inline U64 ETextureFormat_getRedBits(ETextureFormat f) { 
-	return ETextureFormat_getIsCompressed(f) ? (f >> 18) & 7 : ((f >> 9) & 077) << 1; 
-}
-
-inline Bool ETextureFormat_hasRed(ETextureFormat f) { return ETextureFormat_getRedBits(f); }
-inline Bool ETextureFormat_hasGreen(ETextureFormat f) { return ETextureFormat_getGreenBits(f); }
-inline Bool ETextureFormat_hasBlue(ETextureFormat f) { return ETextureFormat_getBlueBits(f); }
-inline Bool ETextureFormat_hasAlpha(ETextureFormat f) { return ETextureFormat_getAlphaBits(f); }
-
-inline U8 ETextureFormat_getChannels(ETextureFormat f) {
-	return 
-		(U8)ETextureFormat_hasRed(f)  + (U8)ETextureFormat_hasGreen(f) + 
-		(U8)ETextureFormat_hasBlue(f) + (U8)ETextureFormat_hasAlpha(f);
-}
-
-inline ETextureCompressionType ETextureFormat_getCompressionType(ETextureFormat f) {
-
-	if(!ETextureFormat_getIsCompressed(f))
-		return ETextureCompressionType_Invalid;
-
-	return (ETextureCompressionType)((f >> 9) & 7);
-}
+ETextureCompressionType ETextureFormat_getCompressionType(ETextureFormat f);
 
 //Get the alignments (x, y) of a texture format
 //Returns false if it doesn't need alignment (so alignment = 1x1)
 
-inline Bool ETextureFormat_getAlignment(ETextureFormat f, U8 *x, U8 *y) {
-
-	if(!ETextureFormat_getIsCompressed(f))
-		return false;
-
-	*x = (f >> 15) & 7;
-	*y = (f >> 21) & 7;
-
-	return true;
-}
+Bool ETextureFormat_getAlignment(ETextureFormat f, U8 *x, U8 *y);
 
 //Get texture's size in bytes
 //Returns U64_MAX if misaligned (compressed formats)
 
-inline U64 ETextureFormat_getSize(ETextureFormat f, U32 w, U32 h) {
-
-	U8 alignW = 1, alignH = 1;
-
-	//If compressed; the size of the texture format is specified per blocks
-
-	if (ETextureFormat_getAlignment(f, &alignW, &alignH)) {
-
-		if(w % alignW || h % alignH)
-			return U64_MAX;
-		
-		w /= alignW;
-		h /= alignH;
-	}
-
-	return (((U64)w * h * ETextureFormat_getBits(f)) + 7) >> 3;
-}
+U64 ETextureFormat_getSize(ETextureFormat f, U32 w, U32 h);

@@ -1,5 +1,6 @@
 #include "types/string.h"
 #include "types/error.h"
+#include "types/buffer.h"
 #include "platforms/input_device.h"
 #include "platforms/platform.h"
 #include "platforms/ext/bufferx.h"
@@ -11,18 +12,72 @@
 //u2[booleanStates]
 
 InputButton *InputDevice_getButton(InputDevice dev, U16 localHandle) {
-	return localHandle >= dev.buttons ? NULL : 
-		(InputButton*)((InputAxis*) dev.handles.ptr + dev.axes) + localHandle;
+	return localHandle >= dev.buttons ? NULL : (InputButton*)((InputAxis*) dev.handles.ptr + dev.axes) + localHandle;
 }
 
 InputAxis *InputDevice_getAxis(InputDevice dev, U16 localHandle) {
-	return localHandle >= dev.axes ? NULL :
-		(InputAxis*) dev.handles.ptr + localHandle;
+	return localHandle >= dev.axes ? NULL : (InputAxis*) dev.handles.ptr + localHandle;
+}
+
+U32 InputDevice_getHandles(InputDevice d) { return (U32)d.axes + d.buttons; }
+
+InputHandle InputDevice_invalidHandle() { return (InputHandle) U64_MAX; }
+
+Bool InputDevice_isValidHandle(InputDevice d, InputHandle handle) { return handle < InputDevice_getHandles(d); }
+
+Bool InputDevice_isAxis(InputDevice d, InputHandle handle) { return handle < d.buttons; }
+Bool InputDevice_isButton(InputDevice d, InputHandle handle) { return !InputDevice_isAxis(d, handle); }
+
+InputHandle InputDevice_createHandle(InputDevice d, U16 localHandle, EInputType type) { 
+	return localHandle + (InputHandle)(type == EInputType_Axis ? 0 : d.axes); 
+}
+
+U16 InputDevice_getLocalHandle(InputDevice d, InputHandle handle) {
+	return (U16)(handle - (InputDevice_isAxis(d, handle) ? 0 : d.axes));
+}
+
+//Getting previous/current states
+
+Bool InputDevice_hasFlag(InputDevice d, U8 flag) {
+
+	if(flag >= 32)
+		return false;
+
+	return (d.flags >> flag) & 1;
+}
+
+Bool InputDevice_setFlag(InputDevice *d, U8 flag) {
+
+	if(flag >= 32 || !d)
+		return false;
+
+	d->flags |= (U32)1 << flag;
+	return true;
+}
+
+Bool InputDevice_resetFlag(InputDevice *d, U8 flag) {
+
+	if(flag >= 32 || !d)
+		return false;
+
+	d->flags &= ~((U32)1 << flag);
+	return true;
+}
+
+Bool InputDevice_setFlagTo(InputDevice *d, U8 flag, Bool value) {
+	return value ? InputDevice_setFlag(d, flag) : InputDevice_resetFlag(d, flag);
+}
+
+Bool InputDevice_getCurrentState(InputDevice d, InputHandle handle) { 
+	return InputDevice_getState(d, handle) & EInputState_Curr; 
+}
+
+Bool InputDevice_getPreviousState(InputDevice d, InputHandle handle) { 
+	return InputDevice_getState(d, handle) & EInputState_Prev; 
 }
 
 inline F32 *InputDevice_getAxisValue(InputDevice dev, U16 localHandle, Bool isCurrent) {
-	return localHandle >= dev.axes ? NULL : 
-		(F32*)dev.states.ptr + ((U64)localHandle << 1) + isCurrent;
+	return localHandle >= dev.axes ? NULL : (F32*)dev.states.ptr + ((U64)localHandle << 1) + isCurrent;
 }
 
 inline BitRef InputDevice_getButtonValue(InputDevice dev, U16 localHandle, Bool isCurrent) {
@@ -30,7 +85,7 @@ inline BitRef InputDevice_getButtonValue(InputDevice dev, U16 localHandle, Bool 
 	if(localHandle >= dev.buttons)
 		return (BitRef){ 0 };
 
-	U64 bitOff = (localHandle << 1) + isCurrent;
+	U64 bitOff = ((U32)localHandle << 1) + isCurrent;
 	U8 *off = dev.states.ptr + dev.axes * 2 * sizeof(F32) + (bitOff >> 3);
 
 	return (BitRef){ .ptr = off, .off = (bitOff & 7) };
@@ -88,15 +143,15 @@ Error InputDevice_create(U16 buttons, U16 axes, EInputDeviceType type, InputDevi
 	if(String_isEmpty(keyName))															\
 		return Error_invalidParameter(2, 0, 0);											\
 																						\
-	if(keyName.length >= LongString_LEN)													\
-		return Error_outOfBounds(2, 0, keyName.length, LongString_LEN);					\
+	if(keyName.length >= _LONGSTRING_LEN)												\
+		return Error_outOfBounds(2, 0, keyName.length, _LONGSTRING_LEN);				\
 																						\
 	Buffer_copy(																		\
-		Buffer_createRef(inputType->name, LongString_LEN), 								\
-		Buffer_createRef(keyName.ptr, keyName.length)										\
+		Buffer_createRef(inputType->name, _LONGSTRING_LEN), 							\
+		Buffer_createRef(keyName.ptr, keyName.length)									\
 	);																					\
 																						\
-	inputType->name[U64_min(keyName.length, LongString_LEN - 1)] = '\0';
+	inputType->name[U64_min(keyName.length, _LONGSTRING_LEN - 1)] = '\0';
 
 Error InputDevice_createButton(
 	InputDevice d, 
@@ -122,27 +177,19 @@ Error InputDevice_createAxis(
 	return Error_none();
 }
 
-Error InputDevice_free(InputDevice *dev) {
+Bool InputDevice_free(InputDevice *dev) {
 
-	if (!dev)
-		return Error_none();
+	if (!dev || dev->type == EInputDeviceType_Undefined)
+		return true;
 
-	if(dev->type == EInputDeviceType_Undefined)
-		return Error_none();
+	Bool freed = true;
 
-	void *allocator = Platform_instance.alloc.ptr;
-	FreeFunc free = Platform_instance.alloc.free;
-
-	Error err = free(allocator, dev->handles), errTemp;
-
-	if((errTemp = free(allocator, dev->states)).genericError)
-		err = errTemp;
-
-	if((errTemp = free(allocator, dev->dataExt)).genericError)
-		err = errTemp;
+	freed &= Buffer_freex(&dev->handles);
+	freed &= Buffer_freex(&dev->states);
+	freed &= Buffer_freex(&dev->dataExt);
 
 	*dev = (InputDevice){ 0 };
-	return err;
+	return freed;
 }
 
 EInputState InputDevice_getState(InputDevice d, InputHandle handle) {
@@ -164,6 +211,17 @@ F32 InputDevice_getCurrentAxis(InputDevice d, InputHandle handle) {
 F32 InputDevice_getPreviousAxis(InputDevice d, InputHandle handle) {
 	return d.type == EInputDeviceType_Undefined || !InputDevice_isAxis(d, handle) ? 0 : 
 		*InputDevice_getAxisValue(d, InputDevice_getLocalHandle(d, handle), false);
+}
+
+Bool InputDevice_isDown(InputDevice d, InputHandle handle) { return InputDevice_getState(d, handle) == EInputState_Down; }
+Bool InputDevice_isUp(InputDevice d, InputHandle handle) { return InputDevice_getState(d, handle) == EInputState_Up; }
+
+Bool InputDevice_isReleased(InputDevice d, InputHandle handle) { 
+	return InputDevice_getState(d, handle) == EInputState_Released; 
+}
+
+Bool InputDevice_isPressed(InputDevice d, InputHandle handle) { 
+	return InputDevice_getState(d, handle) == EInputState_Pressed;
 }
 
 F32 InputDevice_getDeltaAxis(InputDevice d, InputHandle handle) {

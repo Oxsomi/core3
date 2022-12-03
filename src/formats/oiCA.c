@@ -2,8 +2,11 @@
 #include "formats/oiDL.h"
 #include "types/list.h"
 #include "types/time.h"
+#include "types/allocator.h"
+#include "types/error.h"
+#include "types/buffer.h"
 
-/*	TODO: Implement compression and encryption
+/* TODO: Implement when encryption and compression is present
 
 //File spec (docs/oiCA.md)
 
@@ -45,7 +48,7 @@ typedef struct CAHeader {
 
 } CAHeader;
 
-static const U32 CAHeader_magic = 0x4143696F;
+static const U32 CAHeader_MAGIC = 0x4143696F;
 
 //A directory points to the parent and to the children
 //This allows us to easily access them without having to search all files
@@ -56,7 +59,7 @@ typedef struct CADirectory {
 	U16 parentDirectory;		//0xFFFF for root directory, else id of parent directory (can't be self)
 	U16 childDirectoryStart;	//Where the child dirs start. 0xFFFF indicates no child directories
 
-	U16 childDirectoryCount;	//Up to 64Ki child directories  
+	U16 childDirectoryCount;	//Up to 64Ki child directories
 	U16 childFileCount;			//Up to 64Ki child files
 
 	U32 childFileStart;			//Where the child files start. 0xFFFFFFFF indicates no child files
@@ -145,10 +148,10 @@ Error CAFile_create(CASettings settings, Allocator alloc, CAFile *caFile) {
 	return Error_none();
 }
 
-Error CAFile_free(CAFile *caFile, Allocator alloc) {
+Bool CAFile_free(CAFile *caFile, Allocator alloc) {
 
 	if(!caFile || !caFile->entries.ptr)
-		return Error_none();
+		return true;
 
 	for (U64 i = 0; i < caFile->entries.length; ++i) {
 
@@ -158,9 +161,9 @@ Error CAFile_free(CAFile *caFile, Allocator alloc) {
 		String_free(&entry.path, alloc);
 	}
 
-	Error err = List_free(&caFile->entries, alloc);
+	List_free(&caFile->entries, alloc);
 	*caFile = (CAFile) { 0 };
-	return err;
+	return true;
 }
 
 Error CAFile_addEntry(CAFile *caFile, CAEntry entry, Allocator alloc);
@@ -168,25 +171,23 @@ Error CAFile_addEntry(CAFile *caFile, CAEntry entry, Allocator alloc);
 //We currently only support writing brotli because it's the best 
 //(space) compression compared to time to decompress/compress
 
-static const U8 sizeByteType[4] = { 1, 2, 4, 8 };
+static const U8 SIZE_BYTE_TYPE[4] = { 1, 2, 4, 8 };
 
 Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 
-	if(!result)
-		return Error_nullPointer(2, 0);
-
+	Error err = Error_none();
 	List directories = List_createEmpty(sizeof(String));
 	List files = List_createEmpty(sizeof(String));
+	DLFile dlFile = (DLFile) { 0 };
+	Buffer dlFileBuffer = Buffer_createNull();
+	Buffer outputBuffer = Buffer_createNull();
+	Buffer compressedOutput = Buffer_createNull();
 
-	Error err;
+	if(!result)
+		_gotoIfError(clean, Error_nullPointer(2, 0));
 
-	if((err = List_reserve(&directories, 128, alloc)).genericError)
-		return err;
-
-	if((err = List_reserve(&files, 128, alloc)).genericError) {
-		List_free(&directories, alloc);
-		return err;
-	}
+	_gotoIfError(clean, List_reserve(&directories, 128, alloc));
+	_gotoIfError(clean, List_reserve(&files, 128, alloc));
 
 	//Validate CAFile and calculate files and folders
 
@@ -209,57 +210,32 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 
 		if (entry.isFolder) {
 
-			if((err = List_pushBack(
+			_gotoIfError(clean, List_pushBack(
 				&directories, Buffer_createRef(&entry.path, sizeof(String)), alloc
-			)).genericError) {
-				List_free(&files, alloc);
-				List_free(&directories, alloc);
-				return err;
-			}
+			));
 
-			if(directories.length >= U16_MAX) {
-				List_free(&files, alloc);
-				List_free(&directories, alloc);
-				return Error_outOfBounds(0, 0, 0xFFFF, U16_MAX - 1);
-			}
+			if(directories.length >= U16_MAX)
+				_gotoIfError(clean, Error_outOfBounds(0, 0, 0xFFFF, U16_MAX - 1));
 
-			if(outputSize + sizeof(CADirectory) < outputSize) {
-				List_free(&files, alloc);
-				List_free(&directories, alloc);
-				return Error_overflow(0, 0, outputSize + sizeof(CADirectory), outputSize);
-			}
+			if(outputSize + sizeof(CADirectory) < outputSize)
+				_gotoIfError(clean, Error_overflow(0, 0, outputSize + sizeof(CADirectory), outputSize));
 
 			outputSize += sizeof(CADirectory);
 			continue;
 		}
 
-		if((err = List_pushBack(
-			&files, Buffer_createRef(&entry.path, sizeof(String)), alloc
-		)).genericError) {
-			List_free(&files, alloc);
-			List_free(&directories, alloc);
-			return err;
-		}
+		_gotoIfError(clean, List_pushBack(&files, Buffer_createRef(&entry.path, sizeof(String)), alloc));
 
-		if(files.length >= U32_MAX - U16_MAX) {
-			List_free(&files, alloc);
-			List_free(&directories, alloc);
-			return Error_outOfBounds(0, 0, U32_MAX - U16_MAX, U32_MAX - U16_MAX - 1);
-		}
+		if(files.length >= U32_MAX - U16_MAX)
+			_gotoIfError(clean, Error_outOfBounds(0, 0, U32_MAX - U16_MAX, U32_MAX - U16_MAX - 1));
 
-		if(outputSize + baseFileHeader < outputSize) {
-			List_free(&files, alloc);
-			List_free(&directories, alloc);
-			return Error_overflow(0, 0, outputSize + baseFileHeader, outputSize);
-		}
+		if(outputSize + baseFileHeader < outputSize)
+			_gotoIfError(clean, Error_overflow(0, 0, outputSize + baseFileHeader, outputSize));
 
 		outputSize += baseFileHeader;
 		
-		if(outputSize + entry.data.length < outputSize) {
-			List_free(&files, alloc);
-			List_free(&directories, alloc);
-			return Error_overflow(0, 0, outputSize + entry.data.length, outputSize);
-		}
+		if(outputSize + entry.data.length < outputSize)
+			_gotoIfError(clean, Error_overflow(0, 0, outputSize + entry.data.length, outputSize));
 
 		outputSize += entry.data.length;
 		biggestFileSize = U64_max(biggestFileSize, entry.data.length);
@@ -274,14 +250,11 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 		)
 	);
 
-	baseFileHeader += sizeByteType[sizeType];
-	U64 sizeTypeBytes = files.length * sizeByteType[sizeType];
+	baseFileHeader += SIZE_BYTE_TYPE[sizeType];
+	U64 sizeTypeBytes = files.length * SIZE_BYTE_TYPE[sizeType];
 
-	if(outputSize + sizeTypeBytes < outputSize) {
-		List_free(&files, alloc);
-		List_free(&directories, alloc);
-		return Error_overflow(0, 0, outputSize + sizeTypeBytes, outputSize);
-	}
+	if(outputSize + sizeTypeBytes < outputSize)
+		_gotoIfError(clean, Error_overflow(0, 0, outputSize + sizeTypeBytes, outputSize));
 
 	outputSize += sizeTypeBytes;
 
@@ -291,25 +264,14 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 	//This sort is different than just sortString. It sorts on length first and then alphabetically.
 	//This allows us to not have to reorder the files down the road since they're already sorted.
 
-	if (
-		(err = List_sortStringAndLength(directories)).genericError || 
-		(err = List_sortStringAndLength(files)).genericError
-	) {
-		List_free(&files, alloc);
-		List_free(&directories, alloc);
-		return err;
-	}
+	_gotoIfError(clean, List_sortStringAndLength(directories));
+	_gotoIfError(clean, List_sortStringAndLength(files));
 
 	//Allocate and generate DLFile
 
-	DLFile dlFile;
 	DLSettings dlSettings = (DLSettings) { .dataType = EDLDataType_Ascii };
 
-	if((err = DLFile_create(dlSettings, alloc, &dlFile)).genericError) {
-		List_free(&files, alloc);
-		List_free(&directories, alloc);
-		return err;
-	}
+	_gotoIfError(clean, DLFile_create(dlSettings, alloc, &dlFile));
 
 	for(U64 i = 0; i < directories.length; ++i) {
 
@@ -317,13 +279,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 		String dirName = dir;
 
 		String_cutBeforeLast(dir, '/', EStringCase_Sensitive, &dirName);
-
-		if ((err = DLFile_addEntryAscii(&dlFile, dirName, alloc)).genericError) {
-			DLFile_free(&dlFile, alloc);
-			List_free(&files, alloc);
-			List_free(&directories, alloc);
-			return err;
-		}
+		_gotoIfError(clean, DLFile_addEntryAscii(&dlFile, dirName, alloc));
 	}
 
 	for(U64 i = 0; i < files.length; ++i) {
@@ -332,24 +288,12 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 		String fileName = file;
 
 		String_cutBeforeLast(file, '/', EStringCase_Sensitive, &fileName);
-
-		if ((err = DLFile_addEntryAscii(&dlFile, file, alloc)).genericError) {
-			DLFile_free(&dlFile, alloc);
-			List_free(&files, alloc);
-			List_free(&directories, alloc);
-			return err;
-		}
+		_gotoIfError(clean, DLFile_addEntryAscii(&dlFile, fileName, alloc));
 	}
 
 	//Complete DLFile as buffer
 
-	Buffer dlFileBuffer;
-	if((err = DLFile_write(dlFile, alloc, &dlFileBuffer)).genericError) {
-		DLFile_free(&dlFile, alloc);
-		List_free(&files, alloc);
-		List_free(&directories, alloc);
-		return err;
-	}
+	_gotoIfError(clean, DLFile_write(dlFile, alloc, &dlFileBuffer));
 
 	DLFile_free(&dlFile, alloc);
 
@@ -359,34 +303,18 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 	//CAFileObject[]
 	//U8[sum(file[i].data)]
 
-	if (dlFileBuffer.length + outputSize < outputSize) {
-		Buffer_free(&dlFileBuffer, alloc);
-		List_free(&files, alloc);
-		List_free(&directories, alloc);
-		return Error_overflow(0, 0, dlFileBuffer.length + outputSize, outputSize);
-	}
+	if (dlFileBuffer.length + outputSize < outputSize)
+		_gotoIfError(clean, Error_overflow(0, 0, dlFileBuffer.length + outputSize, outputSize));
 
-	Buffer outputBuffer;
-	if ((err = Buffer_createUninitializedBytes(dlFileBuffer.length + outputSize, alloc, &outputBuffer)).genericError) {
-		List_free(&dlFileBuffer, alloc);
-		List_free(&files, alloc);
-		List_free(&directories, alloc);
-		return err;
-	}
+	_gotoIfError(clean, Buffer_createUninitializedBytes(dlFileBuffer.length + outputSize, alloc, &outputBuffer));
 
 	//Append DLFile
 
 	Buffer outputBufferIt = outputBuffer;
 
-	if ((err = Buffer_appendBuffer(&outputBufferIt, dlFileBuffer)).genericError) {
-		List_free(&outputBuffer, alloc);
-		List_free(&dlFileBuffer, alloc);
-		List_free(&files, alloc);
-		List_free(&directories, alloc);
-		return err;
-	}
+	_gotoIfError(clean, Buffer_appendBuffer(&outputBufferIt, dlFileBuffer));
 
-	List_free(&dlFileBuffer, alloc);
+	Buffer_free(&dlFileBuffer, alloc);
 
 	//Append CADirectory[]
 
@@ -413,16 +341,14 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 			if (
 				!String_cut(dir, 0, it, &realParentDir) || 
 				!String_cut(dir, 0, it + 1, &baseDir)
-			) {
-				List_free(&outputBuffer, alloc);
-				List_free(&files, alloc);
-				List_free(&directories, alloc);
-				return err;
-			}
+			) 
+				_gotoIfError(clean, Error_invalidOperation(0));
 
 			for(U64 j = i - 1; j != U64_MAX; --j)
 
-				if (!String_startsWithString(((String*)directories.ptr)[i], baseDir, EStringCase_Sensitive)) {
+				if (!String_startsWithString(
+					((String*)directories.ptr)[i], baseDir, EStringCase_Sensitive
+				)) {
 
 					//We found the parent directory
 
@@ -438,12 +364,8 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 					break;
 				}
 
-			if(parent == U16_MAX) {
-				List_free(&outputBuffer, alloc);
-				List_free(&files, alloc);
-				List_free(&directories, alloc);
-				return Error_invalidState(0);
-			}
+			if(parent == U16_MAX)
+				_gotoIfError(clean, Error_invalidState(0));
 
 			//Update parent
 
@@ -497,12 +419,8 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 			if (
 				!String_cut(file, 0, it, &realParentDir) || 
 				!String_cut(file, 0, it + 1, &baseDir)
-			) {
-				List_free(&outputBuffer, alloc);
-				List_free(&files, alloc);
-				List_free(&directories, alloc);
-				return err;
-			}
+			)
+				_gotoIfError(clean, Error_invalidOperation(0));
 			
 			for(U64 j = directories.length - 1; j != U64_MAX; --j)
 
@@ -513,24 +431,16 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 					break;
 				}
 
-			if(parent == U16_MAX) {
-				List_free(&outputBuffer, alloc);
-				List_free(&files, alloc);
-				List_free(&directories, alloc);
-				return Error_invalidState(0);
-			}
+			if(parent == U16_MAX)
+				_gotoIfError(clean, Error_invalidState(1));
 
 			//Update parent
 
 			if (dirPtr[parent].childFileStart == U32_MAX)
 				dirPtr[parent].childFileStart = i;
 
-			if(dirPtr[parent].childFileCount == U16_MAX) {
-				List_free(&outputBuffer, alloc);
-				List_free(&files, alloc);
-				List_free(&directories, alloc);
-				return Error_outOfBounds(0, 1, U16_MAX + 1, U16_MAX);
-			}
+			if(dirPtr[parent].childFileCount == U16_MAX)
+				_gotoIfError(clean, Error_outOfBounds(0, 1, U16_MAX + 1, U16_MAX));
 
 			++dirPtr[parent].childFileCount;
 		}
@@ -542,12 +452,8 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 			if (dirPtrRoot->childFileStart == U32_MAX)
 				dirPtrRoot->childFileStart = i;
 
-			if(dirPtrRoot->childFileCount == U16_MAX) {
-				List_free(&outputBuffer, alloc);
-				List_free(&files, alloc);
-				List_free(&directories, alloc);
-				return Error_outOfBounds(0, 1, U16_MAX + 1, U16_MAX);
-			}
+			if(dirPtrRoot->childFileCount == U16_MAX)
+				_gotoIfError(clean, Error_outOfBounds(0, 1, U16_MAX + 1, U16_MAX));
 
 			++dirPtrRoot->childFileCount;
 		}
@@ -564,12 +470,8 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 				break;
 			}
 
-		if (!entry) {
-			List_free(&outputBuffer, alloc);
-			List_free(&files, alloc);
-			List_free(&directories, alloc);
-			return Error_invalidState(2);
-		}
+		if (!entry)
+			_gotoIfError(clean, Error_invalidState(2));
 
 		//Add file
 
@@ -589,10 +491,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 			}
 
 			else if(!CAFile_storeDate(entry->timestamp, (U16*)filePtr + 1, (U16*)filePtr)) {
-				List_free(&outputBuffer, alloc);
-				List_free(&files, alloc);
-				List_free(&directories, alloc);
-				return Error_invalidState(1);
+				_gotoIfError(clean, Error_invalidState(1));
 			}
 
 			else filePtr += sizeof(U16) * 2;
@@ -644,11 +543,11 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 			BufferCompressionType_Brotli11;
 
 		if ((err = Buffer_compress(outputBuffer, comprType, alloc, &compressedOutput)).genericError) {
-			List_free(&outputBuffer, alloc);
+			Buffer_free(&outputBuffer, alloc);
 			return err;
 		}
 
-		List_free(&outputBuffer, alloc);
+		Buffer_free(&outputBuffer, alloc);
 	}
 
 	else compressedOutput = outputBuffer;
@@ -660,7 +559,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 		if ((err = Buffer_encrypt(
 			compressedOutput, BufferEncryptionType_AES256, caFile.settings.encryptionKey, alloc
 		)).genericError) {
-			List_free(&compressedOutput, alloc);
+			Buffer_free(&compressedOutput, alloc);
 			return err;
 		}
 	}
@@ -671,7 +570,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 
 	*((CAHeader*)header) = (CAHeader) {
 
-		.magicNumber = CAHeader_magic,
+		.magicNumber = CAHeader_MAGIC,
 
 		.version = 10,		//1.0
 
@@ -721,6 +620,15 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 
 	err = Buffer_combine(realHeader, compressedOutput, alloc, result);
 	List_free(&compressedOutput, alloc);
+	return err;
+
+clean:
+	Buffer_free(&compressedOutput, alloc);
+	Buffer_free(&outputBuffer, alloc);
+	Buffer_free(&dlFileBuffer, alloc);
+	DLFile_free(&dlFile, alloc);
+	List_free(&files, alloc);
+	List_free(&directories, alloc);
 	return err;
 }
 

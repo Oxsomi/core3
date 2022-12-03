@@ -1,6 +1,7 @@
 #include "platforms/keyboard.h"
 #include "platforms/input_device.h"
 #include "types/error.h"
+#include "types/string.h"
 
 #define _key(name)																\
 	if ((err = InputDevice_createButton(										\
@@ -12,7 +13,7 @@
 
 Error EKeyboard_create(EKeyboard *result) {
 
-	Error err = InputDevice_create(EKey_Count, 0, EInputDeviceType_EKeyboard, result);
+	Error err = InputDevice_create(EKey_Count, 0, EInputDeviceType_Keyboard, result);
 
 	if(err.genericError)
 		return err;

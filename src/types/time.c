@@ -1,5 +1,6 @@
 #include "types/time.h"
 #include "types/string.h"
+#include "types/buffer.h"
 #include "math/math.h"
 #include <time.h>
 
@@ -13,7 +14,7 @@
 Ns Time_now() {
 	struct timespec ts;
 	timespec_get(&ts, TIME_UTC);
-	return (Ns)ts.tv_sec * seconds + (Ns)ts.tv_nsec;
+	return (Ns)ts.tv_sec * SECOND + (Ns)ts.tv_nsec;
 }
 
 DNs Time_dns(Ns timeStamp0, Ns timeStamp1) {
@@ -37,7 +38,7 @@ DNs Time_dns(Ns timeStamp0, Ns timeStamp1) {
 }
 
 F32 Time_dt(Ns timeStamp0, Ns timeStamp1) {
-	return (F32)Time_dns(timeStamp0, timeStamp1) / seconds;
+	return (F32)Time_dns(timeStamp0, timeStamp1) / SECOND;
 }
 
 U64 Time_clocks() { return __rdtsc(); }	//TODO: Arm?
@@ -58,29 +59,29 @@ void setNum(TimerFormat format, I64 offset, U64 length, U64 v) {
 	}
 }
 
-const C8 formatStr[] = "0000-00-00T00:00:00.000000000Z";
-const U8 offsets[] =	{ 0, 5, 8, 11, 14, 17, 20 };
-const U8 sizes[] =		{ 4, 2, 2,  2,  2,  2, 9 };
+const C8 FORMAT_STR[] = "0000-00-00T00:00:00.000000000Z";
+const U8 OFFSETS[] =	{ 0, 5, 8, 11, 14, 17, 20 };
+const U8 SIZES[] =		{ 4, 2, 2,  2,  2,  2, 9 };
 
 void Time_format(Ns time, TimerFormat timeString) {
 
-	time_t inSecs = (time_t)(time / seconds);
-	Ns inNs = time % seconds;
+	time_t inSecs = (time_t)(time / SECOND);
+	Ns inNs = time % SECOND;
 
 	struct tm *t = gmtime(&inSecs);
 
 	Buffer_copy(
-		Buffer_createRef(timeString, ShortString_LEN), 
-		Buffer_createRef((void*) formatStr, sizeof(formatStr))
+		Buffer_createRef(timeString, _SHORTSTRING_LEN), 
+		Buffer_createRef((void*) FORMAT_STR, sizeof(FORMAT_STR))
 	);
 
-	setNum(timeString, offsets[0], sizes[0], (U64)t->tm_year + 1900);
-	setNum(timeString, offsets[1], sizes[1], (U64)t->tm_mon + 1);
-	setNum(timeString, offsets[2], sizes[2], (U64)t->tm_mday);
-	setNum(timeString, offsets[3], sizes[3], (U64)t->tm_hour);
-	setNum(timeString, offsets[4], sizes[4], (U64)t->tm_min);
-	setNum(timeString, offsets[5], sizes[5], (U64)t->tm_sec);
-	setNum(timeString, offsets[6], sizes[6], inNs);
+	setNum(timeString, OFFSETS[0], SIZES[0], (U64)t->tm_year + 1900);
+	setNum(timeString, OFFSETS[1], SIZES[1], (U64)t->tm_mon + 1);
+	setNum(timeString, OFFSETS[2], SIZES[2], (U64)t->tm_mday);
+	setNum(timeString, OFFSETS[3], SIZES[3], (U64)t->tm_hour);
+	setNum(timeString, OFFSETS[4], SIZES[4], (U64)t->tm_min);
+	setNum(timeString, OFFSETS[5], SIZES[5], (U64)t->tm_sec);
+	setNum(timeString, OFFSETS[6], SIZES[6], inNs);
 }
 
 const C8 separators[] = "--T::.Z";
@@ -90,7 +91,7 @@ EFormatStatus Time_parseFormat(Ns *time, TimerFormat format) {
 	if (!time)
 		return EFormatStatus_InvalidInput;
 
-	U64 length = String_calcStrLen(format, ShortString_LEN - 1);
+	U64 length = String_calcStrLen(format, _SHORTSTRING_LEN - 1);
 
 	U64 curr = 0, currSep = 0, prevI = U64_MAX;
 
@@ -147,14 +148,14 @@ EFormatStatus Time_parseFormat(Ns *time, TimerFormat format) {
 				int dif = (int)(i - prevI);
 
 				if(dif == 0)
-				   return EFormatStatus_InvalidFormat;
+					return EFormatStatus_InvalidFormat;
 
-				U64 mul = U64_pow10(9 - dif);
+				U64 mul = U64_10pow(9 - dif);
 
 				if(mul == U64_MAX)
 					return EFormatStatus_InvalidFormat;
 
-				if (curr * mul >= seconds)
+				if (curr * mul >= SECOND)
 					return EFormatStatus_InvalidValue;
 
 				ns = (U32)(curr * mul);
@@ -186,7 +187,7 @@ Ns Time_date(U16 year, U8 month, U8 day, U8 hour, U8 minute, U8 second, U32 ns) 
 		month < 1 || month > 12 || 
 		day > 31 || 
 		hour >= 24 || minute >= 60 || second >= 60 ||
-		ns >= seconds
+		ns >= SECOND
 	)
 		return U64_MAX;
 
@@ -200,12 +201,12 @@ Ns Time_date(U16 year, U8 month, U8 day, U8 hour, U8 minute, U8 second, U32 ns) 
 	if (ts == (time_t)-1)
 		return U64_MAX;
 
-	return (Ns)ts * seconds + ns;
+	return (Ns)ts * SECOND + ns;
 }
 
 Bool Time_getDate(Ns timestamp, U16 *year, U8 *month, U8 *day, U8 *hour, U8 *minute, U8 *second, U32 *ns) {
 
-	time_t inSecs = (time_t)(timestamp / seconds);
+	time_t inSecs = (time_t)(timestamp / SECOND);
 
 	struct tm *t = gmtime(&inSecs);
 
@@ -215,7 +216,7 @@ Bool Time_getDate(Ns timestamp, U16 *year, U8 *month, U8 *day, U8 *hour, U8 *min
 	if(t->tm_year > 1900 + U16_MAX)
 		return false;
 
-	if(ns)		*ns = (U32)(timestamp % seconds);
+	if(ns)		*ns = (U32)(timestamp % SECOND);
 	if(year)	*year = (U16)(t->tm_year + 1900);
 	if(month)	*month = (U8)(t->tm_mon + 1);
 	if(day)		*day = (U8)t->tm_mday;

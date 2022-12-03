@@ -13,33 +13,34 @@ Error Lock_create(Lock *res) {
 		return Error_nullPointer(0, 0);
 
 	*res = (Lock) { .data = CreateMutexA(NULL, FALSE, NULL) };
-	return res->data ? Error_none() : Error_platformError(0, GetLastError());
+
+	if (!res->data) {
+		*res = (Lock) { 0 };
+		return Error_platformError(0, GetLastError());
+	}
+
+	return Error_none();
 }
 
-Error Lock_free(Lock *res) {
+Bool Lock_free(Lock *res) {
 
-	if(!res)
-		return Error_none();
-
-	if(!res->data)
-		return Error_nullPointer(0, 0);
+	if(!res || !res->data)
+		return true;
 
 	if(Lock_isLocked(*res))
-		return Error_invalidState(0);
+		return false;
 
 	CloseHandle(res->data);
 	*res = (Lock){ 0 };
-	return Error_none();
+	return true;
 }
 
 Bool Lock_lock(Lock *l, Ns maxTime) {
 
 	if (l && !Lock_isLocked(*l)) {
 
-		//TODO: this rolls over
-
 		DWORD wait = WaitForSingleObject(
-			l->data, (DWORD) U64_min((maxTime + ms - 1) / ms, U32_MAX)
+			l->data, (DWORD) U64_min((U64_min(maxTime, U64_MAX - MS) + MS - 1) / MS, U32_MAX)
 		);
 
 		if (wait == WAIT_OBJECT_0) {
@@ -51,9 +52,7 @@ Bool Lock_lock(Lock *l, Ns maxTime) {
 	return false;
 }
 
-Bool Lock_isLockedForThread(Lock l) {
-	return l.lockThread == Thread_getId();
-}
+Bool Lock_isLockedForThread(Lock l) { return l.lockThread == Thread_getId(); }
 
 Bool Lock_unlock(Lock *l) {
 

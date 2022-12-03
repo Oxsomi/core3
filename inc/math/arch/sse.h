@@ -32,22 +32,22 @@ inline F32x2 F32x2_div(F32x2 a, F32x2 b) _NONE_OP2F(a.v[i] / b.v[i])
 //Swizzle
 
 inline I32x4 _movelh_epi32(I32x4 a, I32x4 b) { 
-    return I32x4_bitsF32x4(_mm_movelh_ps(
-        F32x4_bitsI32x4(a), F32x4_bitsI32x4(b)
-    )); 
+	return I32x4_bitsF32x4(_mm_movelh_ps(
+		F32x4_bitsI32x4(a), F32x4_bitsI32x4(b)
+	)); 
 }
 
 inline I32x4 I32x4_trunc2(I32x4 a) { return _movelh_epi32(a, I32x4_zero()); }
 inline F32x4 F32x4_trunc2(F32x4 a) { return _mm_movelh_ps(a, F32x4_zero()); }
 
 inline I32x4 I32x4_trunc3(I32x4 a) { 
-    I32x4 z0 = I32x4_xzzz(_movelh_epi32(I32x4_zzzz(a), I32x4_zero()));
-    return _movelh_epi32(a, z0); 
+	I32x4 z0 = I32x4_xzzz(_movelh_epi32(I32x4_zzzz(a), I32x4_zero()));
+	return _movelh_epi32(a, z0); 
 }
 
 inline F32x4 F32x4_trunc3(F32x4 a) { 
-    F32x4 z0 = F32x4_xzzz(_mm_movelh_ps(F32x4_zzzz(a), F32x4_zero()));
-    return _mm_movelh_ps(a, z0); 
+	F32x4 z0 = F32x4_xzzz(_mm_movelh_ps(F32x4_zzzz(a), F32x4_zero()));
+	return _mm_movelh_ps(a, z0); 
 }
 
 //Swizzle
@@ -96,36 +96,36 @@ inline F32x2 F32x2_zero() { return (F32x2){ 0 }; }
 
 //Comparison
 
-inline F32x4 _F32x4_recastI32x4(F32x4 a) { return F32x4_fromI32x4(*(const I32x4*) &a); }
-inline F32x4 _F32x4_negateRecasti(F32x4 a) { return F32x4_negate(_F32x4_recastI32x4(a)); }
+inline F32x4 F32x4_recastI32x4Internal(F32x4 a) { return F32x4_fromI32x4(*(const I32x4*) &a); }
+inline F32x4 F32x4_negateRecastiInternal(F32x4 a) { return F32x4_negate(F32x4_recastI32x4Internal(a)); }
 
 inline I32x4 I32x4_eq(I32x4 a, I32x4 b)  { return I32x4_negate(_mm_cmpeq_epi32(a, b)); }
-inline F32x4 F32x4_eq(F32x4 a, F32x4 b)  { return _F32x4_negateRecasti(_mm_cmpeq_ps(a, b)); }
+inline F32x4 F32x4_eq(F32x4 a, F32x4 b)  { return F32x4_negateRecastiInternal(_mm_cmpeq_ps(a, b)); }
 inline I32x2 I32x2_eq(I32x2 a, I32x2 b) _NONE_OP2I(a.v[i] == b.v[i])
 inline F32x2 F32x2_eq(F32x2 a, F32x2 b) _NONE_OP2F((F32)(a.v[i] == b.v[i]))
 
 inline I32x4 I32x4_neq(I32x4 a, I32x4 b) { return I32x4_add(I32x4_one(), _mm_cmpeq_epi32(a, b)); }
-inline F32x4 F32x4_neq(F32x4 a, F32x4 b) { return _F32x4_negateRecasti(_mm_cmpneq_ps(a, b)); }
+inline F32x4 F32x4_neq(F32x4 a, F32x4 b) { return F32x4_negateRecastiInternal(_mm_cmpneq_ps(a, b)); }
 inline I32x2 I32x2_neq(I32x2 a, I32x2 b) _NONE_OP2I(a.v[i] != b.v[i])
 inline F32x2 F32x2_neq(F32x2 a, F32x2 b) _NONE_OP2F((F32)(a.v[i] != b.v[i]))
 
 inline I32x4 I32x4_geq(I32x4 a, I32x4 b) { return I32x4_add(I32x4_one(), _mm_cmplt_epi32(a, b)); }
-inline F32x4 F32x4_geq(F32x4 a, F32x4 b) { return _F32x4_negateRecasti(_mm_cmpge_ps(a, b)); }
+inline F32x4 F32x4_geq(F32x4 a, F32x4 b) { return F32x4_negateRecastiInternal(_mm_cmpge_ps(a, b)); }
 inline I32x2 I32x2_geq(I32x2 a, I32x2 b) _NONE_OP2I(a.v[i] >= b.v[i])
 inline F32x2 F32x2_geq(F32x2 a, F32x2 b) _NONE_OP2F((F32)(a.v[i] >= b.v[i]))
 
 inline I32x4 I32x4_gt(I32x4 a, I32x4 b)  { return I32x4_negate(_mm_cmpgt_epi32(a, b)); }
-inline F32x4 F32x4_gt(F32x4 a, F32x4 b)  { return _F32x4_negateRecasti(_mm_cmpgt_ps(a, b)); }
+inline F32x4 F32x4_gt(F32x4 a, F32x4 b)  { return F32x4_negateRecastiInternal(_mm_cmpgt_ps(a, b)); }
 inline I32x2 I32x2_gt(I32x2 a, I32x2 b) _NONE_OP2I(a.v[i] > b.v[i])
 inline F32x2 F32x2_gt(F32x2 a, F32x2 b) _NONE_OP2F((F32)(a.v[i] > b.v[i]))
 
 inline I32x4 I32x4_leq(I32x4 a, I32x4 b) { return I32x4_add(I32x4_one(), _mm_cmpgt_epi32(a, b)); }
-inline F32x4 F32x4_leq(F32x4 a, F32x4 b) { return _F32x4_negateRecasti(_mm_cmple_ps(a, b)); }
+inline F32x4 F32x4_leq(F32x4 a, F32x4 b) { return F32x4_negateRecastiInternal(_mm_cmple_ps(a, b)); }
 inline I32x2 I32x2_leq(I32x2 a, I32x2 b) _NONE_OP2I(a.v[i] <= b.v[i])
 inline F32x2 F32x2_leq(F32x2 a, F32x2 b) _NONE_OP2F((F32)(a.v[i] <= b.v[i]))
 
 inline I32x4 I32x4_lt(I32x4 a, I32x4 b)  { return I32x4_negate(_mm_cmplt_epi32(a, b)); }
-inline F32x4 F32x4_lt(F32x4 a, F32x4 b)  { return _F32x4_negateRecasti(_mm_cmplt_ps(a, b)); }
+inline F32x4 F32x4_lt(F32x4 a, F32x4 b)  { return F32x4_negateRecastiInternal(_mm_cmplt_ps(a, b)); }
 inline I32x2 I32x2_lt(I32x2 a, I32x2 b) _NONE_OP2I(a.v[i] < b.v[i])
 inline F32x2 F32x2_lt(F32x2 a, F32x2 b) _NONE_OP2F((F32)(a.v[i] < b.v[i]))
 
@@ -155,11 +155,11 @@ inline F32x2 F32x2_max(F32x2 a, F32x2 b) { return F32x2_fromF32x4(F32x4_max(F32x
 //Reduce
 
 inline I32 I32x4_reduce(I32x4 a) {
-    return I32x4_x(_mm_hadd_epi32(_mm_hadd_epi32(a, I32x4_zero()), I32x4_zero()));
+	return I32x4_x(_mm_hadd_epi32(_mm_hadd_epi32(a, I32x4_zero()), I32x4_zero()));
 }
 
 inline F32 F32x4_reduce(F32x4 a) {
-    return F32x4_x(_mm_hadd_ps(_mm_hadd_ps(a, F32x4_zero()), F32x4_zero()));
+	return F32x4_x(_mm_hadd_ps(_mm_hadd_ps(a, F32x4_zero()), F32x4_zero()));
 }
 
 inline I32 I32x2_reduce(I32x2 a) { return I32x2_x(a) + I32x2_y(a); }

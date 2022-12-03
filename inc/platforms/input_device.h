@@ -1,4 +1,5 @@
 #pragma once
+#include "types/types.h"
 #include "types/string.h"
 
 typedef enum EInputState {
@@ -31,7 +32,7 @@ typedef struct InputAxis {
 
 typedef enum EInputDeviceType {
 	EInputDeviceType_Undefined,
-	EInputDeviceType_EKeyboard,
+	EInputDeviceType_Keyboard,
 	EInputDeviceType_Mouse,
 	EInputDeviceType_Controller
 } EInputDeviceType;
@@ -82,98 +83,45 @@ Error InputDevice_createAxis(
 	InputHandle *result
 );
 
-Error InputDevice_free(InputDevice *dev);
+Bool InputDevice_free(InputDevice *dev);
 
 InputButton *InputDevice_getButton(InputDevice dev, U16 localHandle);
 InputAxis *InputDevice_getAxis(InputDevice dev, U16 localHandle);
 
 //Simple helpers
 
-inline U32 InputDevice_getHandles(InputDevice d) { return (U32)d.axes + d.buttons; }
+U32 InputDevice_getHandles(InputDevice d);
 
-inline InputHandle InputDevice_invalidHandle() { return (InputHandle) U64_MAX; }
+InputHandle InputDevice_invalidHandle();
 
-inline Bool InputDevice_isValidHandle(InputDevice d, InputHandle handle) { 
-	return handle < InputDevice_getHandles(d); 
-}
+Bool InputDevice_isValidHandle(InputDevice d, InputHandle handle);
+Bool InputDevice_isAxis(InputDevice d, InputHandle handle);
+Bool InputDevice_isButton(InputDevice d, InputHandle handle);
 
-inline Bool InputDevice_isAxis(InputDevice d, InputHandle handle) {
-	return handle < d.buttons;
-}
-
-inline Bool InputDevice_isButton(InputDevice d, InputHandle handle) {
-	return !InputDevice_isAxis(d, handle);
-}
-
-inline InputHandle InputDevice_createHandle(InputDevice d, U16 localHandle, EInputType type) { 
-	return localHandle + (InputHandle)(type == EInputType_Axis ? 0 : d.axes); 
-}
-
-inline U16 InputDevice_getLocalHandle(InputDevice d, InputHandle handle) {
-	return (U16)(handle - (InputDevice_isAxis(d, handle) ? 0 : d.axes));
-}
+InputHandle InputDevice_createHandle(InputDevice d, U16 localHandle, EInputType type);
+U16 InputDevice_getLocalHandle(InputDevice d, InputHandle handle);
 
 //Getting previous/current states
 
 EInputState InputDevice_getState(InputDevice d, InputHandle handle);
 
-inline Bool InputDevice_hasFlag(InputDevice d, U8 flag) {
+Bool InputDevice_hasFlag(InputDevice d, U8 flag);
+Bool InputDevice_setFlag(InputDevice *d, U8 flag);
+Bool InputDevice_resetFlag(InputDevice *d, U8 flag);
 
-	if(flag >= 32)
-		return false;
+Bool InputDevice_setFlagTo(InputDevice *d, U8 flag, Bool value);
 
-	return (d.flags >> flag) & 1;
-}
-
-inline Bool InputDevice_setFlag(InputDevice *d, U8 flag) {
-
-	if(flag >= 32 || !d)
-		return false;
-
-	d->flags |= (U32)1 << flag;
-	return true;
-}
-
-inline Bool InputDevice_resetFlag(InputDevice *d, U8 flag) {
-
-	if(flag >= 32 || !d)
-		return false;
-
-	d->flags &= ~((U32)1 << flag);
-	return true;
-}
-
-inline Bool InputDevice_setFlagTo(InputDevice *d, U8 flag, Bool value) {
-	return value ? InputDevice_setFlag(d, flag) : InputDevice_resetFlag(d, flag);
-}
-
-inline Bool InputDevice_getCurrentState(InputDevice d, InputHandle handle) { 
-	return InputDevice_getState(d, handle) & EInputState_Curr; 
-}
-
-inline Bool InputDevice_getPreviousState(InputDevice d, InputHandle handle) { 
-	return InputDevice_getState(d, handle) & EInputState_Prev; 
-}
+Bool InputDevice_getCurrentState(InputDevice d, InputHandle handle);
+Bool InputDevice_getPreviousState(InputDevice d, InputHandle handle);
 
 F32 InputDevice_getDeltaAxis(InputDevice d, InputHandle handle);
 F32 InputDevice_getCurrentAxis(InputDevice d, InputHandle handle);
 F32 InputDevice_getPreviousAxis(InputDevice d, InputHandle handle);
 
-inline Bool InputDevice_isDown(InputDevice d, InputHandle handle) { 
-	return InputDevice_getState(d, handle) == EInputState_Down; 
-}
-
-inline Bool InputDevice_isUp(InputDevice d, InputHandle handle) { 
-	return InputDevice_getState(d, handle) == EInputState_Up; 
-}
-
-inline Bool InputDevice_isReleased(InputDevice d, InputHandle handle) { 
-	return InputDevice_getState(d, handle) == EInputState_Released; 
-}
-
-inline Bool InputDevice_isPressed(InputDevice d, InputHandle handle) { 
-	return InputDevice_getState(d, handle) == EInputState_Pressed;
-}
+Bool InputDevice_isDown(InputDevice d, InputHandle handle);
+Bool InputDevice_isUp(InputDevice d, InputHandle handle);
+Bool InputDevice_isReleased(InputDevice d, InputHandle handle);
+Bool InputDevice_isPressed(InputDevice d, InputHandle handle);
 
 //For serialization and stuff like that
 

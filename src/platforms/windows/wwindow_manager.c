@@ -1,14 +1,17 @@
 #include "platforms/window_manager.h"
 #include "platforms/platform.h"
+#include "platforms/monitor.h"
 #include "platforms/input_device.h"
 #include "platforms/ext/listx.h"
 #include "types/string.h"
+#include "types/error.h"
+#include "types/buffer.h"
 
 #define WIN32_LEAN_AND_MEAN
 #define MICROSOFT_WINDOWS_WINBASE_H_DEFINE_INTERLOCKED_CPLUSPLUS_OVERLOADS 0
 #include <Windows.h>
 
-const U8 WindowManager_maxTotalPhysicalWindowCount = 16;
+const U8 WindowManager_MAX_PHYSICAL_WINDOWS = 16;
 
 //Defined in wwindow.c
 //
@@ -66,7 +69,7 @@ Error WindowManager_createPhysical(
 	Window *win = NULL;
 	WindowHandle handle = 0;
 
-	for(U8 i = 0; i < WindowManager_maxTotalPhysicalWindowCount; ++i) {
+	for(U8 i = 0; i < WindowManager_MAX_PHYSICAL_WINDOWS; ++i) {
 
 		Window *wi = (Window*) List_ptr(manager->windows, i);
 
@@ -165,19 +168,20 @@ Error WindowManager_createPhysical(
 
 	Buffer cpuVisibleBuffer = Buffer_createNull();
 	void *nativeData = NULL;
+	HDC screen = NULL;
+
+	Lock lock = (Lock) { 0 };
+
+	List devices = List_createEmpty(sizeof(InputDevice)), monitors = List_createEmpty(sizeof(Monitor));
 
 	Error err = Error_none();
 
 	if(hint & EWindowHint_ProvideCPUBuffer) {
 
-		HDC screen = GetDC(nativeWindow);
+		screen = GetDC(nativeWindow);
 
-		if(!screen) {
-			HRESULT hr = GetLastError();
-			DestroyWindow(nativeWindow);
-			UnregisterClassA(wc.lpszClassName, wc.hInstance);
-			return Error_platformError(2, hr);
-		}
+		if(!screen)
+			_gotoIfError(clean, Error_platformError(2, GetLastError()));
 
 		//TODO: Support something other than RGBA8
 
@@ -197,60 +201,21 @@ Error WindowManager_createPhysical(
 			NULL, 0
 		);
 
-		if(!screen) {
-			HRESULT hr = GetLastError();
-			ReleaseDC(nativeWindow, screen);
-			DestroyWindow(nativeWindow);
-			UnregisterClassA(wc.lpszClassName, wc.hInstance);
-			return Error_platformError(3, hr);
-		}
+		if(!screen)
+			_gotoIfError(clean, Error_platformError(3, GetLastError()));
 
-		cpuVisibleBuffer.length = (U64) bmi.bmiHeader.biWidth * bmi.bmiHeader.biHeight * 4;
+		cpuVisibleBuffer.length = (U64)bmi.bmiHeader.biWidth * bmi.bmiHeader.biHeight * 4;
+
 		ReleaseDC(nativeWindow, screen);
+		screen = NULL;
 	}
 
 	//Lock for when we are updating this window
 
-	Lock lock = (Lock) { 0 };
+	_gotoIfError(clean, Lock_create(&lock));
 
-	if ((err = Lock_create(&lock)).genericError) {
-
-		if(nativeData)
-			DeleteObject((HGDIOBJ) nativeData);
-
-		UnregisterClassA(wc.lpszClassName, wc.hInstance);
-		DestroyWindow(nativeWindow);
-		return err;
-	}
-
-	List devices = List_createEmpty(sizeof(InputDevice)), monitors = List_createEmpty(sizeof(Monitor));
-
-	if ((err = List_reservex(&devices, Window_maxDevices)).genericError) {
-
-		Lock_free(&lock);
-
-		if(nativeData)
-			DeleteObject((HGDIOBJ) nativeData);
-
-		UnregisterClassA(wc.lpszClassName, wc.hInstance);
-		DestroyWindow(nativeWindow);
-
-		return err;
-	}
-
-	if ((err = List_reservex(&monitors, Window_maxMonitors)).genericError) {
-
-		List_freex(&devices);
-		Lock_free(&lock);
-
-		if(nativeData)
-			DeleteObject((HGDIOBJ) nativeData);
-
-		UnregisterClassA(wc.lpszClassName, wc.hInstance);
-		DestroyWindow(nativeWindow);
-
-		return err;
-	}
+	_gotoIfError(clean, List_reservex(&devices, Window_MAX_DEVICES));
+	_gotoIfError(clean, List_reservex(&monitors, Window_MAX_MONITORS));
 
 	//Fill window object
 
@@ -286,4 +251,22 @@ Error WindowManager_createPhysical(
 
 	UpdateWindow(nativeWindow);
 	return Error_none();
+
+clean:
+
+	List_freex(&devices);
+	List_freex(&monitors);
+
+	Lock_free(&lock);
+
+	if(screen)
+		ReleaseDC(nativeWindow, screen);
+
+	if(nativeData)
+		DeleteObject((HGDIOBJ) nativeData);
+
+	UnregisterClassA(wc.lpszClassName, wc.hInstance);
+	DestroyWindow(nativeWindow);
+
+	return err;
 }

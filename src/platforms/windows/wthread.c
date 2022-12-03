@@ -12,15 +12,13 @@ U32 Thread_getId() { return GetCurrentThreadId(); }
 
 void Thread_sleep(Ns ns) {
 	LARGE_INTEGER interval;
-	interval.QuadPart = -(I64)(ns / 100);
+	interval.QuadPart = -(I64)((U64_min(ns, I64_MAX) + 99) / 100);
 	((PlatformExt*)Platform_instance.dataExt)->ntDelayExecution(false, &interval);
 }
 
 U32 Thread_getLogicalCores() {
-
 	SYSTEM_INFO info;
 	GetSystemInfo(&info);
-
 	return info.dwNumberOfProcessors;
 }
 
@@ -45,9 +43,7 @@ Error Thread_create(ThreadCallbackFunction callback, void *objectHandle, Thread 
 
 	Buffer buf = Buffer_createNull();
 
-	Error err = Platform_instance.alloc.alloc(
-		Platform_instance.alloc.ptr, sizeof(Thread), &buf
-	);
+	Error err = Platform_instance.alloc.alloc(Platform_instance.alloc.ptr, sizeof(Thread), &buf);
 
 	if (err.genericError)
 		return err;

@@ -1,13 +1,18 @@
 #pragma once
 #include "types/string.h"
+#include "types/allocator.h"
 #include "platforms/window_manager.h"
 
 typedef enum EPlatform {
+
 	EPlatform_Uninitialized,
 	EPlatform_Windows,
 	EPlatform_Linux,
 	EPlatform_Android,
-	EPlatform_Web
+	EPlatform_Web,
+	EPlatform_iOS,
+	EPlatform_OSX
+
 } EPlatform;
 
 typedef struct Platform {
@@ -20,8 +25,7 @@ typedef struct Platform {
 	Allocator alloc;
 	WindowManager windowManager;
 
-	void *data;
-	void *dataExt;
+	void *data, *dataExt;
 
 } Platform;
 
@@ -34,9 +38,6 @@ Error Platform_create(
 );
 
 impl void Platform_cleanupExt(Platform *platform);
-
-//Called on setup. Don't use this over Platform_instance.workingDirectory
-//
 impl Error Platform_initExt(Platform *platform);
 
 void Platform_cleanup();

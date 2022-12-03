@@ -3,20 +3,17 @@
 #include "types/error.h"
 #include "types/buffer.h"
 
-Error Thread_free(Thread **thread) {
+Bool Thread_free(Thread **thread) {
 
-	if(!thread)
-		return Error_none();
-
-	if(!*thread)
-		return Error_nullPointer(0, 0);
+	if(!thread || !*thread)
+		return true;
 
 	FreeFunc free = Platform_instance.alloc.free;
 	void *allocator = Platform_instance.alloc.ptr;
 
-	Error err = free(allocator, Buffer_createRef(*thread, sizeof(Thread)));
+	Bool freed = free(allocator, Buffer_createRef(*thread, sizeof(Thread)));
 	*thread = NULL;
-	return err;
+	return freed;
 }
 
 Error Thread_waitAndCleanup(Thread **thread, U32 maxWaitTime) {
@@ -29,10 +26,6 @@ Error Thread_waitAndCleanup(Thread **thread, U32 maxWaitTime) {
 	if(err.genericError == EGenericError_TimedOut)
 		return err;
 
-	if (err.genericError) {
-		Thread_free(thread);
-		return err;
-	}
-
-	return Thread_free(thread);
+	Thread_free(thread);
+	return err;
 }

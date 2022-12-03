@@ -1,11 +1,13 @@
 #include "platforms/log.h"
+#include "types/string.h"
+#include "math/math.h"
 
 #include <stdlib.h>
 
 void Log_printStackTrace(U64 skip, ELogLevel lvl, ELogOptions options) {
 
 	StackTrace stackTrace;
-	Log_captureStackTrace(stackTrace, StackTrace_SIZE, skip);
+	Log_captureStackTrace(stackTrace, _STACKTRACE_SIZE, skip);
 
 	Log_printCapturedStackTrace(stackTrace, lvl, options);
 }
@@ -90,7 +92,7 @@ void Log_num8(LongString result, U64 v) {
 	Log_num(result, v, 8, prepend); 
 }
 
-void Log_num2(LongString result, U64 v)  { 
+void Log_num2(LongString result, U64 v) { 
 	const C8 prepend[2] = { '0', 'b' }; 
 	Log_num(result, v, 2, prepend); 
 }

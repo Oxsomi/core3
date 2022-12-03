@@ -17,3 +17,12 @@ U32 Random_seed(U16 x, U16 y, U16 w, U32 val1) {
 
 	return v0;
 }
+
+F32 Random_sample(U32 *seed) {
+	*seed = (1664525 * *seed + 1013904223);
+	return (F32)(*seed & 0x00FFFFFF) / (F32)(0x01000000);
+}
+
+F32x4 Random_sample2(U32 *seed) {
+	return F32x4_create2(Random_sample(seed), Random_sample(seed));
+}

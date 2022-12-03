@@ -6,13 +6,22 @@
 
 #include <intrin.h>
 
+Bool BitRef_get(BitRef b) { return b.ptr && (*b.ptr >> b.off) & 1; }
+void BitRef_set(BitRef b) { if(b.ptr) *b.ptr |= 1 << b.off; }
+void BitRef_reset(BitRef b) { if(b.ptr) *b.ptr &= ~(1 << b.off); }
+
+void BitRef_setTo(BitRef b, Bool v) { 
+
+	if(!b.ptr) return;
+
+	if(v) BitRef_set(b);
+	else BitRef_reset(b);
+}
+
 Error Buffer_getBit(Buffer buf, U64 offset, Bool *output) {
 
-	if(!output)
-		return Error_nullPointer(2, 0);
-
-	if(!buf.ptr)
-		return Error_nullPointer(0, 0);
+	if(!output || !buf.ptr)
+		return Error_nullPointer(!buf.ptr ? 0 : 2, 0);
 
 	if((offset >> 3) >= buf.length)
 		return Error_outOfBounds(1, 0, offset >> 3, buf.length);
@@ -21,9 +30,16 @@ Error Buffer_getBit(Buffer buf, U64 offset, Bool *output) {
 	return Error_none();
 }
 
+Error Buffer_setBitTo(Buffer buf, U64 offset, Bool value) {
+	return !value ? Buffer_resetBit(buf, offset) : Buffer_setBit(buf, offset);
+}
+
 //Copy forwards
 
 void Buffer_copy(Buffer dst, Buffer src) {
+
+	if(!dst.ptr || !src.ptr)
+		return;
 
 	U64 *dstPtr = (U64*)dst.ptr, *dstEnd = dstPtr + (dst.length >> 3);
 	const U64 *srcPtr = (const U64*)src.ptr, *srcEnd = srcPtr + (src.length >> 3);
@@ -58,7 +74,7 @@ void Buffer_copy(Buffer dst, Buffer src) {
 
 void Buffer_revCopy(Buffer dst, Buffer src) {
 
-	if(!dst.ptr || !src.ptr || !dst.length || !src.length)
+	if(!dst.ptr || !src.ptr)
 		return;
 
 	U64 *dstPtr = (U64*)(dst.ptr + dst.length), *dstBeg = (U64*)(dstPtr - (dst.length >> 3));
@@ -72,7 +88,7 @@ void Buffer_revCopy(Buffer dst, Buffer src) {
 	dstBeg = (U64*) dstPtr;
 	srcBeg = (const U64*) srcPtr;
 
-	if((U64)dstPtr - 4 >= (U64)dst.ptr && (U64)srcPtr - 4 >= (U64)src.ptr ) {
+	if((I64)dstPtr - 4 >= (I64)dst.ptr && (I64)srcPtr - 4 >= (I64)src.ptr ) {
 
 		dstPtr = (U64*)((U32*)dstPtr - 1);
 		srcPtr = (const U64*)((const U32*)srcPtr - 1);
@@ -80,7 +96,7 @@ void Buffer_revCopy(Buffer dst, Buffer src) {
 		*(U32*)dstPtr = *(const U32*)srcPtr;
 	}
 
-	if ((U64)dstPtr - 2 >= (U64)dst.ptr && (U64)srcPtr - 2 >= (U64)src.ptr) {
+	if ((I64)dstPtr - 2 >= (I64)dst.ptr && (I64)srcPtr - 2 >= (I64)src.ptr) {
 
 		dstPtr = (U64*)((U16*)dstPtr - 1);
 		srcPtr = (const U64*)((const U16*)srcPtr - 1);
@@ -88,7 +104,7 @@ void Buffer_revCopy(Buffer dst, Buffer src) {
 		*(U16*)dstPtr = *(const U16*)srcPtr;
 	}
 
-	if ((U64)dstPtr - 1 >= (U64)dst.ptr && (U64)srcPtr - 1 >= (U64)src.ptr)
+	if ((I64)dstPtr - 1 >= (I64)dst.ptr && (I64)srcPtr - 1 >= (I64)src.ptr)
 		*(U8*)dstPtr = *(const U8*)srcPtr;
 }
 
@@ -123,7 +139,7 @@ Error Buffer_resetBit(Buffer buf, U64 offset) {
 	if(!dst.ptr || !src.ptr)															\
 		return Error_nullPointer(!dst.ptr ? 0 : 1, 0);									\
 																						\
-	U64 l = U64_min(dst.length, src.length);													\
+	U64 l = U64_min(dst.length, src.length);											\
 																						\
 	for(U64 i = 0, j = l >> 3; i < j; ++i)												\
 		*((U64*)dst.ptr + i) x *((const U64*)src.ptr + i);								\
@@ -139,6 +155,20 @@ Error Buffer_bitwiseXor(Buffer dst, Buffer src) BitOp(^=, dst, src)
 Error Buffer_bitwiseAnd(Buffer dst, Buffer src) BitOp(&=, dst, src)
 Error Buffer_bitwiseNot(Buffer dst) BitOp(=~, dst, dst)
 
+Error Buffer_setAllBitsTo(Buffer buf, Bool isOn) {
+	return isOn ? Buffer_setAllBits(buf) : Buffer_unsetAllBits(buf);
+}
+
+Buffer Buffer_createNull() { return (Buffer) { 0 }; }
+
+Buffer Buffer_createRef(void *v, U64 length) { 
+
+	if(length >> 48 || (U64)v >> 48)		//Invalid addresses (unsupported by CPUs)
+		return Buffer_createNull();
+
+	return (Buffer) { .ptr = (U8*) v, .length = length }; 
+}
+
 Error Buffer_eq(Buffer buf0, Buffer buf1, Bool *result) {
 	
 	if(!buf0.ptr || !buf1.ptr)
@@ -152,19 +182,11 @@ Error Buffer_eq(Buffer buf0, Buffer buf1, Bool *result) {
 	if(buf0.length != buf1.length)
 		return Error_none();
 
-	U64 l = buf0.length;
-	U64 m = buf1.length;
-																					
-	for (U64 i = 0, j = l >> 3, k = m >> 3; i < j && i < k; ++i) {
-
-		U64 v0 = *((const U64*)buf0.ptr + i);
-		U64 v1 = *((const U64*)buf1.ptr + i);
-
-		if (v0 != v1)
+	for (U64 i = 0, j = buf0.length >> 3; i < j; ++i)
+		if (*((const U64*)buf0.ptr + i) != *((const U64*)buf1.ptr + i))
 			return Error_none();
-	}
 																					
-	for (U64 i = l >> 3 << 3, j = m >> 3 << 3; i < l && j < m; ++i, ++j)
+	for (U64 i = buf0.length >> 3 << 3; i < buf0.length; ++i)
 		if (buf0.ptr[i] != buf1.ptr[i])
 			return Error_none();
 
@@ -183,18 +205,16 @@ Error Buffer_neq(Buffer buf0, Buffer buf1, Bool *result) {
 	return Error_none();
 }
 
-//TODO: Validate CRC32 and SHA in test.c as well as via the tool (should add hash function)
-
 //SHA state
 
-static const U32 SHA256_state[8] = {
+static const U32 SHA256_STATE[8] = {
 	0x6A09E667, 0xBB67AE85, 0x3C6EF372, 0xA54FF53A,
 	0x510E527F, 0x9B05688C, 0x1F83D9AB, 0x5BE0CD19
 };
 
 //First 32 bits of cube roots of first 64 primes 2..311 (see amosnier/sha-2)
 
-static const U32 SHA256_k[64] = {
+static const U32 SHA256_K[64] = {
 	0x428A2F98, 0x71374491, 0xB5C0FBCF, 0xE9B5DBA5, 0x3956C25B, 0x59F111F1, 0x923F82A4, 0xAB1C5ED5, 
 	0xD807AA98, 0x12835B01, 0x243185BE, 0x550C7DC3, 0x72BE5D74, 0x80DEB1FE, 0x9BDC06A7, 0xC19BF174, 
 	0xE49B69C1, 0xEFBE4786, 0x0FC19DC6, 0x240CA1CC, 0x2DE92C6F, 0x4A7484AA, 0x5CB0A9DC, 0x76F988DA, 
@@ -217,11 +237,11 @@ inline U32 ror(U32 v, U32 amount) {
 	return amount ? ((v >> amount) | (v << (32 - amount))) : v;
 }
 
-inline void _Buffer_sha256(Buffer buf, U32 *output) {
+inline void Buffer_sha256Internal(Buffer buf, U32 *output) {
 
 	I32x4 state[2] = {
-		I32x4_load4((const I32*)SHA256_state),
-		I32x4_load4((const I32*)SHA256_state + 4)
+		I32x4_load4((const I32*)SHA256_STATE),
+		I32x4_load4((const I32*)SHA256_STATE + 4)
 	};
 
 	U64 ptr = (U64)(void*) buf.ptr, len = buf.length;
@@ -368,7 +388,7 @@ inline void _Buffer_sha256(Buffer buf, U32 *output) {
 				U32 ah1 = (U32) I32x4_y(state[0]);
 				U32 ah2 = (U32) I32x4_z(state[0]);
 
-				U32 temp1 = (U32) I32x4_w(state[1]) + s1 + ch + SHA256_k[(i << 4) | j] + w[j];
+				U32 temp1 = (U32) I32x4_w(state[1]) + s1 + ch + SHA256_K[(i << 4) | j] + w[j];
 				U32 s0 = ror(ah0, 2) ^ ror(ah0, 13) ^ ror(ah0, 22);
 				U32 maj = (ah0 & ah1) ^ (ah0 & ah2) ^ (ah1 & ah2);
 				U32 temp2 = s0 + maj;
@@ -418,19 +438,19 @@ inline void _Buffer_sha256(Buffer buf, U32 *output) {
 	//Implementation of hardware CRC32C but ported back to C and restructured a bit
 	//https://github.com/rurban/smhasher/blob/master/crc32c.cpp
 
-	extern const U32 CRC32C_longShifts[4][256];
-	extern const U32 CRC32C_shortShifts[4][256];
+	extern const U32 CRC32C_LONG_SHIFTS[4][256];
+	extern const U32 CRC32C_SHORT_SHIFTS[4][256];
 
 	inline U32 CRC32C_shiftShort(U32 crc0) {
 		return 
-			CRC32C_shortShifts[0][(U8) crc0] ^ CRC32C_shortShifts[1][(U8)(crc0 >> 8)] ^ 
-			CRC32C_shortShifts[2][(U8)(crc0 >> 16)] ^ CRC32C_shortShifts[3][(U8)(crc0 >> 24)];
+			CRC32C_SHORT_SHIFTS[0][(U8) crc0] ^ CRC32C_SHORT_SHIFTS[1][(U8)(crc0 >> 8)] ^ 
+			CRC32C_SHORT_SHIFTS[2][(U8)(crc0 >> 16)] ^ CRC32C_SHORT_SHIFTS[3][(U8)(crc0 >> 24)];
 	}
 
 	inline U32 CRC32C_shiftLong(U32 crc0) {
 		return 
-			CRC32C_longShifts[0][(U8) crc0] ^ CRC32C_longShifts[1][(U8)(crc0 >> 8)] ^ 
-			CRC32C_longShifts[2][(U8)(crc0 >> 16)] ^ CRC32C_longShifts[3][(U8)(crc0 >> 24)];
+			CRC32C_LONG_SHIFTS[0][(U8) crc0] ^ CRC32C_LONG_SHIFTS[1][(U8)(crc0 >> 8)] ^ 
+			CRC32C_LONG_SHIFTS[2][(U8)(crc0 >> 16)] ^ CRC32C_LONG_SHIFTS[3][(U8)(crc0 >> 24)];
 	}
 
 	U32 Buffer_crc32c(Buffer buf) {
@@ -474,44 +494,44 @@ inline void _Buffer_sha256(Buffer buf, U32 *output) {
 
 		U64 crc0 = crc;
 
-		static const U64 longShift = 8192, longShiftU64 = 8192 / sizeof(U64);
+		static const U64 LONG_SHIFT = 8192, LONG_SHIFT_U64 = 8192 / sizeof(U64);
 
-		while(len >= longShift * 3) {
+		while(len >= LONG_SHIFT * 3) {
 
 			U64 crc1 = 0, crc2 = 0;
 
-			for (U64 i = 0; i < longShiftU64; ++i) {
+			for (U64 i = 0; i < LONG_SHIFT_U64; ++i) {
 				crc0 = _mm_crc32_u64(crc0, *(U64*)(void*)off + i);
-				crc1 = _mm_crc32_u64(crc1, *((U64*)(void*)off + longShiftU64 + i));
-				crc2 = _mm_crc32_u64(crc2, *((U64*)(void*)off + longShiftU64 * 2 + i));
+				crc1 = _mm_crc32_u64(crc1, *((U64*)(void*)off + LONG_SHIFT_U64 + i));
+				crc2 = _mm_crc32_u64(crc2, *((U64*)(void*)off + LONG_SHIFT_U64 * 2 + i));
 			}
 
 			crc0 = CRC32C_shiftLong((U32) crc0) ^ crc1;
 			crc0 = CRC32C_shiftLong((U32) crc0) ^ crc2;
 
-			off += longShift * 3;
-			len -= longShift * 3;
+			off += LONG_SHIFT * 3;
+			len -= LONG_SHIFT * 3;
 		}
 
 		//Do the same thing but for smaller blocks
 
-		static const U64 shortShift = 256, shortShiftU64 = 256 / sizeof(U64);
+		static const U64 SHORT_SHIFT = 256, SHORT_SHIFT_U64 = 256 / sizeof(U64);
 
-		while(len >= shortShift * 3) {
+		while(len >= SHORT_SHIFT * 3) {
 
 			U64 crc1 = 0, crc2 = 0;
 
-			for (U64 i = 0; i < shortShiftU64; ++i) {
+			for (U64 i = 0; i < SHORT_SHIFT_U64; ++i) {
 				crc0 = _mm_crc32_u64(crc0, *(U64*)(void*)off + i);
-				crc1 = _mm_crc32_u64(crc1, *((U64*)(void*)off + shortShiftU64 + i));
-				crc2 = _mm_crc32_u64(crc2, *((U64*)(void*)off + shortShiftU64 * 2 + i));
+				crc1 = _mm_crc32_u64(crc1, *((U64*)(void*)off + SHORT_SHIFT_U64 + i));
+				crc2 = _mm_crc32_u64(crc2, *((U64*)(void*)off + SHORT_SHIFT_U64 * 2 + i));
 			}
 
 			crc0 = CRC32C_shiftShort((U32) crc0) ^ crc1;
 			crc0 = CRC32C_shiftShort((U32) crc0) ^ crc2;
 
-			off += shortShift * 3;
-			len -= shortShift * 3;
+			off += SHORT_SHIFT * 3;
+			len -= SHORT_SHIFT * 3;
 		}
 
 		//Process remaining U64s
@@ -544,13 +564,16 @@ inline void _Buffer_sha256(Buffer buf, U32 *output) {
 
 	void Buffer_sha256(Buffer buf, U32 output[8]) {
 
+		if(!output)
+			return;
+
 		//Fallback if the hardware doesn't support SHA extension
 
 		int cpuInfo1[4];
 		__cpuidex(cpuInfo1, 7, 0);
 
 		if(!((cpuInfo1[1] >> 29) & 1)) {
-			_Buffer_sha256(buf, output);
+			Buffer_sha256Internal(buf, output);
 			return;
 		}
 
@@ -558,7 +581,7 @@ inline void _Buffer_sha256(Buffer buf, U32 *output) {
 
 		const I32x4 MASK = _mm_set_epi64x(0x0C'0D'0E'0F'08'09'0A'0B, 0x04'05'06'07'00'01'02'03);
 
-		const I32x4 rounds[16] = {
+		const I32x4 ROUNDS[16] = {
 			_mm_set_epi64x(0xE9B5DBA5B5C0FBCF, 0x71374491428A2F98),		//0-3
 			_mm_set_epi64x(0xAB1C5ED5923F82A4, 0x59F111F13956C25B),		//4-7
 			_mm_set_epi64x(0x550C7DC3243185BE, 0x12835B01D807AA98),		//8-11
@@ -579,8 +602,8 @@ inline void _Buffer_sha256(Buffer buf, U32 *output) {
 
 		//Initialize state
 
-		I32x4 tmp = I32x4_yxwz(I32x4_load4((const I32*) SHA256_state));			//_mm_shuffle_epi32(tmp, 0xB1)
-		I32x4 state1 = I32x4_wzyx(I32x4_load4((const I32*) SHA256_state + 4));	//_mm_shuffle_epi32(state1, 0x1B)
+		I32x4 tmp = I32x4_yxwz(I32x4_load4((const I32*) SHA256_STATE));			//_mm_shuffle_epi32(tmp, 0xB1)
+		I32x4 state1 = I32x4_wzyx(I32x4_load4((const I32*) SHA256_STATE + 4));	//_mm_shuffle_epi32(state1, 0x1B)
 		I32x4 state0 = _mm_alignr_epi8(tmp, state1, 8);
 		state1 = _mm_blend_epi16(state1, tmp, 0xF0);
 
@@ -644,7 +667,9 @@ inline void _Buffer_sha256(Buffer buf, U32 *output) {
 
 				else {
 
-					Buffer_copy(Buffer_createRef(block, 64), Buffer_createRef((void*)realPtr, realLen));
+					Buffer_copy(
+						Buffer_createRef(block, 64), Buffer_createRef((void*)realPtr, realLen)
+					);
 
 					*((U8*)(void*)block + realLen) = 0x80;
 
@@ -695,7 +720,7 @@ inline void _Buffer_sha256(Buffer buf, U32 *output) {
 
 			for (U64 i = 0; i < 3; ++i) {
 
-				I32x4 msg = I32x4_add(msgs[i], rounds[i]);
+				I32x4 msg = I32x4_add(msgs[i], ROUNDS[i]);
 				state1 = _mm_sha256rnds2_epu32(state1, state0, msg);
 				msg = I32x4_zwxx(msg);										//_mm_shuffle_epi32(msg, 0xE);
 				state0 = _mm_sha256rnds2_epu32(state0, state1, msg);
@@ -708,7 +733,7 @@ inline void _Buffer_sha256(Buffer buf, U32 *output) {
 
 			for(U64 i = 0; i < 12; ++i) {
 
-				I32x4 msg = I32x4_add(msgs[(i + 3) & 3], rounds[i + 3]);
+				I32x4 msg = I32x4_add(msgs[(i + 3) & 3], ROUNDS[i + 3]);
 				state1 = _mm_sha256rnds2_epu32(state1, state0, msg);
 
 				tmp = _mm_alignr_epi8(msgs[(i + 3) & 3], msgs[(i + 2) & 3], 4);
@@ -721,7 +746,7 @@ inline void _Buffer_sha256(Buffer buf, U32 *output) {
 
 			//1 iteration; Rounds 60-63
 
-			I32x4 msg = I32x4_add(msgs[3], rounds[15]);
+			I32x4 msg = I32x4_add(msgs[3], ROUNDS[15]);
 			state1 = _mm_sha256rnds2_epu32(state1, state0, msg);
 			msg = I32x4_zwxx(msg);	
 			state0 = _mm_sha256rnds2_epu32(state0, state1, msg);
@@ -770,7 +795,7 @@ inline void _Buffer_sha256(Buffer buf, U32 *output) {
 	//CRC32C ported from:
 	//https://github.com/rurban/smhasher/blob/master/crc32c.cpp
 
-	extern const U32 CRC32C_table[16][256];
+	extern const U32 CRC32C_TABLE[16][256];
 
 	U32 Buffer_crc32c(Buffer buf) {
 
@@ -784,7 +809,7 @@ inline void _Buffer_sha256(Buffer buf, U32 *output) {
 		U64 align8 = U64_min(it + len, (it + 7) & ~7);
 
 		while (it < align8) {
-			crc = CRC32C_table[0][(U8)(crc ^ *(const U8*)it)] ^ (crc >> 8);
+			crc = CRC32C_TABLE[0][(U8)(crc ^ *(const U8*)it)] ^ (crc >> 8);
 			++it;
 			--len;
 		}
@@ -797,10 +822,10 @@ inline void _Buffer_sha256(Buffer buf, U32 *output) {
 			U64 res = 0;
 
 			for(U64 i = 0; i < sizeof(U64); ++i)		//Compiler will unroll for us
-				res ^= CRC32C_table[15 - i][(U8)(crc >> (i * 8))];
+				res ^= CRC32C_TABLE[15 - i][(U8)(crc >> (i * 8))];
 
 			for(U64 i = 0; i < sizeof(U64); ++i)		//Compiler will unroll for us
-				res ^= CRC32C_table[7 - i][(U8)(next >> (i * 8))];
+				res ^= CRC32C_TABLE[7 - i][(U8)(next >> (i * 8))];
 
 			crc = res;
 
@@ -809,7 +834,7 @@ inline void _Buffer_sha256(Buffer buf, U32 *output) {
 		}
 
 		while (len > 0) {
-			crc = CRC32C_table[0][(U8)(crc ^ *(const U8*)it)] ^ (crc >> 8);
+			crc = CRC32C_TABLE[0][(U8)(crc ^ *(const U8*)it)] ^ (crc >> 8);
 			++it;
 			--len;
 		}
@@ -818,7 +843,11 @@ inline void _Buffer_sha256(Buffer buf, U32 *output) {
 	}
 
 	void Buffer_sha256(Buffer buf, U32 output[8]) {
-		_Buffer_sha256(buf, output);
+
+		if(!output)
+			return;
+
+		Buffer_sha256Internal(buf, output);
 	}
 
 #endif
@@ -828,11 +857,11 @@ Error Buffer_setBitRange(Buffer dst, U64 dstOff, U64 bits) {
 	if(!dst.ptr)
 		return Error_nullPointer(0, 0);
 
-	if(((dstOff + bits - 1) >> 3) >= dst.length)
-		return Error_outOfBounds(1, 0, dstOff + bits, dst.length << 3);
-
 	if(!bits)
 		return Error_invalidParameter(2, 0, 0);
+
+	if(((dstOff + bits - 1) >> 3) >= dst.length)
+		return Error_outOfBounds(1, 0, dstOff + bits, dst.length << 3);
 
 	U64 dstOff8 = (dstOff + 7) >> 3;
 	U64 bitEnd = dstOff + bits;
@@ -875,11 +904,11 @@ Error Buffer_unsetBitRange(Buffer dst, U64 dstOff, U64 bits) {
 	if(!dst.ptr)
 		return Error_nullPointer(0, 0);
 
-	if(((dstOff + bits - 1) >> 3) >= dst.length)
-		return Error_outOfBounds(1, 0, dstOff + bits, dst.length << 3);
-
 	if(!bits)
 		return Error_invalidParameter(2, 0, 0);
+
+	if(((dstOff + bits - 1) >> 3) >= dst.length)
+		return Error_outOfBounds(1, 0, dstOff + bits, dst.length << 3);
 
 	U64 dstOff8 = (dstOff + 7) >> 3;
 	U64 bitEnd = dstOff + bits;
@@ -933,6 +962,10 @@ inline Error Buffer_setAllToInternal(Buffer buf, U64 b64, U8 b8) {
 	return Error_none();
 }
 
+Error Buffer_createBits(U64 length, Bool value, Allocator alloc, Buffer *result) {
+	return !value ? Buffer_createZeroBits(length, alloc, result) : Buffer_createOneBits(length, alloc, result);
+}
+
 Error Buffer_setAllBits(Buffer buf) {
 	return Buffer_setAllToInternal(buf, U64_MAX, U8_MAX);
 }
@@ -963,8 +996,12 @@ Error Buffer_createZeroBits(U64 length, Allocator alloc, Buffer *result) {
 	if(e.genericError)
 		return e;
 
-	Buffer_unsetAllBits(*result);
-	return Error_none();
+	e = Buffer_unsetAllBits(*result);
+
+	if(e.genericError)
+		Buffer_free(result, alloc);
+
+	return e;
 }
 
 Error Buffer_createOneBits(U64 length, Allocator alloc, Buffer *result) {
@@ -974,8 +1011,12 @@ Error Buffer_createOneBits(U64 length, Allocator alloc, Buffer *result) {
 	if(e.genericError)
 		return e;
 
-	Buffer_setAllBits(*result);
-	return Error_none();
+	e = Buffer_setAllBits(*result);
+
+	if(e.genericError)
+		Buffer_free(result, alloc);
+
+	return e;
 }
 
 Error Buffer_createCopy(Buffer buf, Allocator alloc, Buffer *result) {
@@ -1000,17 +1041,17 @@ Error Buffer_createCopy(Buffer buf, Allocator alloc, Buffer *result) {
 	return Error_none();
 }
 
-Error Buffer_free(Buffer *buf, Allocator alloc) {
+Bool Buffer_free(Buffer *buf, Allocator alloc) {
 
 	if(!buf || !buf->ptr)
-		return Error_none();
+		return true;
 
 	if(!alloc.free)
-		return Error_nullPointer(1, 0);
+		return false;
 
-	Error err = alloc.free(alloc.ptr, *buf);
+	Bool success = alloc.free(alloc.ptr, *buf);
 	*buf = Buffer_createNull();
-	return err;
+	return success;
 }
 
 Error Buffer_createEmptyBytes(U64 length, Allocator alloc, Buffer *output) {
@@ -1096,3 +1137,21 @@ Error Buffer_combine(Buffer a, Buffer b, Allocator alloc, Buffer *output) {
 	Buffer_copy(Buffer_createRef(output->ptr + a.length, b.length), b);
 	return Error_none();
 }
+
+Error Buffer_appendU64(Buffer *buf, U64 v) { return Buffer_append(buf, &v, sizeof(v)); }
+Error Buffer_appendU32(Buffer *buf, U32 v) { return Buffer_append(buf, &v, sizeof(v)); }
+Error Buffer_appendU16(Buffer *buf, U16 v) { return Buffer_append(buf, &v, sizeof(v)); }
+Error Buffer_appendU8(Buffer *buf,  U8 v)  { return Buffer_append(buf, &v, sizeof(v)); }
+Error Buffer_appendC8(Buffer *buf,  C8 v)  { return Buffer_append(buf, &v, sizeof(v)); }
+
+Error Buffer_appendI64(Buffer *buf, I64 v) { return Buffer_append(buf, &v, sizeof(v)); }
+Error Buffer_appendI32(Buffer *buf, I32 v) { return Buffer_append(buf, &v, sizeof(v)); }
+Error Buffer_appendI16(Buffer *buf, I16 v) { return Buffer_append(buf, &v, sizeof(v)); }
+Error Buffer_appendI8(Buffer *buf,  I8 v)  { return Buffer_append(buf, &v, sizeof(v)); }
+
+Error Buffer_appendF32(Buffer *buf, F32 v) { return Buffer_append(buf, &v, sizeof(v)); }
+
+Error Buffer_appendF32x4(Buffer *buf, F32x4 v) { return Buffer_append(buf, &v, sizeof(v)); }
+Error Buffer_appendF32x2(Buffer *buf, I32x2 v) { return Buffer_append(buf, &v, sizeof(v)); }
+Error Buffer_appendI32x4(Buffer *buf, I32x4 v) { return Buffer_append(buf, &v, sizeof(v)); }
+Error Buffer_appendI32x2(Buffer *buf, I32x2 v) { return Buffer_append(buf, &v, sizeof(v)); }

@@ -1,5 +1,4 @@
 #include "types/types.h"
-#include "cfg/config.h"
 
 //These are all sorts of LUTs
 
@@ -8,7 +7,7 @@
 	//Intel's LUT for merging 3 CRC32Cs taken from different offsets
 	//Reformated https://github.com/rurban/smhasher/blob/master/crc32c.cpp
 
-	const U32 CRC32C_longShifts[4][256] = {
+	const U32 CRC32C_LONG_SHIFTS[4][256] = {
 
 		{ 
 			0x00000000, 0xE040E0AC, 0xC56DB7A9, 0x252D5705, 0x8F3719A3, 0x6F77F90F, 0x4A5AAE0A, 0xAA1A4EA6, 
@@ -151,7 +150,7 @@
 		}
 	};
 
-	const U32 CRC32C_shortShifts[4][256] = {
+	const U32 CRC32C_SHORT_SHIFTS[4][256] = {
 
 		{ 
 			0x00000000, 0xDCB17AA4, 0xBC8E83B9, 0x603FF91D, 0x7CF17183, 0xA0400B27, 0xC07FF23A, 0x1CCE889E,
@@ -296,7 +295,7 @@
 
 #else
 
-	const U32 CRC32C_table[16][256] = {
+	const U32 CRC32C_TABLE[16][256] = {
 
 		{ 
 			0x00000000, 0xF26B8303, 0xE13B70F7, 0x1350F3F4, 0xC79A971F, 0x35F1141C, 0x26A1E7E8, 0xD4CA64EB,

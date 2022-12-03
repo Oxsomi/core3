@@ -437,7 +437,7 @@ int convertTo(ParsedArgs args) {
 			if (info.type == FileType_File) {
 
 				Buffer buf;
-				if ((err = File_read(info.path, &buf)).genericError) {
+				if ((err = File_read(info.path, &buf, 1 * seconds)).genericError) {
 					Error_printx(err, ELogLevel_Error, ELogOptions_Default);
 					return -6;
 				}
@@ -512,7 +512,7 @@ int convertTo(ParsedArgs args) {
 					DLFile_freex(&file);
 					StringList_freex(&split);
 
-					if ((err = File_write(res, outputArg)).genericError) {
+					if ((err = File_write(res, outputArg, 1 * seconds)).genericError) {
 						Buffer_freex(&res);
 						Error_printx(err, ELogLevel_Error, ELogOptions_Default);
 						return -12;

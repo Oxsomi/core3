@@ -1,5 +1,4 @@
 #pragma once
-#include "types/types.h"
 #include "math/quat.h"
 
 //U64 packing

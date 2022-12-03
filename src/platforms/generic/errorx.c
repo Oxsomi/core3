@@ -18,7 +18,7 @@ void Error_printx(Error err, ELogLevel logLevel, ELogOptions options) {
 	if(!err.genericError)
 		return;
 
-	String str = String_createConstRefUnsafe(EGenericError_toString[err.genericError]);
+	String str = String_createConstRefUnsafe(EGenericError_TO_STRING[err.genericError]);
 
 	if(String_createCopyx(str, &str).genericError)
 		return;
@@ -74,7 +74,7 @@ void Error_printx(Error err, ELogLevel logLevel, ELogOptions options) {
 		}
 	}
 
-	EErrorParamValues val = EGenericError_hasParamValues[err.genericError];
+	EErrorParamValues val = EGenericError_HAS_PARAM_VALUES[err.genericError];
 
 	if(val & EErrorParamValues_V0) {
 

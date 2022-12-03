@@ -117,3 +117,11 @@ void Platform_cleanup() {
 
 	Platform_instance =	(Platform) { 0 };
 }
+
+Bool Lock_isLocked(Lock l) {
+	return l.lockThread;
+}
+
+void Log_printCapturedStackTrace(const StackTrace stackTrace, ELogLevel lvl, ELogOptions options) {
+	Log_printCapturedStackTraceCustom((const void**) stackTrace, _STACKTRACE_SIZE, lvl, options);
+}

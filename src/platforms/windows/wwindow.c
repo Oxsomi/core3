@@ -15,8 +15,8 @@
 #define MICROSOFT_WINDOWS_WINBASE_H_DEFINE_INTERLOCKED_CPLUSPLUS_OVERLOADS 0
 #include <Windows.h>
 
-const U16 Window_maxDevices = 64;
-const U16 Window_maxMonitors = 64;
+const U16 Window_MAX_DEVICES = 64;
+const U16 Window_MAX_MONITORS = 64;
 
 void WWindow_updateMonitors(Window *w) {
 
@@ -85,8 +85,11 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 			U32 size = 0;
 			GetRawInputData(
-				(HRAWINPUT)lParam, RID_INPUT, NULL, 
-				&size, sizeof(RAWINPUTHEADER)
+				(HRAWINPUT)lParam, 
+				RID_INPUT, 
+				NULL, 
+				&size, 
+				sizeof(RAWINPUTHEADER)
 			);
 
 			Buffer buf = Buffer_createNull(); 
@@ -99,6 +102,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 			if (GetRawInputData((HRAWINPUT)lParam, RID_INPUT, buf.ptr, &size, sizeof(RAWINPUTHEADER)) != size) {
 				Error_printx(Error_platformError(0, GetLastError()), ELogLevel_Error, ELogOptions_Default);
+				Buffer_freex(&buf);
 				Log_error(String_createConstRefUnsafe("Couldn't get raw input"), ELogOptions_Default);
 				break;
 			}
@@ -119,7 +123,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 			if(!data->header.hDevice || dev == end)
 				goto cleanup;
 
-			if (dev->type == EInputDeviceType_EKeyboard) {
+			if (dev->type == EInputDeviceType_Keyboard) {
 
 				RAWKEYBOARD keyboardDat = data->data.keyboard;
 
@@ -170,10 +174,10 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 						handle = EKey_ScrollLock;
 						break;
 
-					case VK_BACK:				handle = EKey_Backspace;		break;
-					case VK_SPACE:				handle = EKey_Space;			break;
+					case VK_BACK:				handle = EKey_Backspace;	break;
+					case VK_SPACE:				handle = EKey_Space;		break;
 					case VK_TAB:				handle = EKey_Tab;			break;
-					case VK_PAUSE:				handle = EKey_Pause;			break;
+					case VK_PAUSE:				handle = EKey_Pause;		break;
 					case VK_CAPITAL:			handle = EKey_Caps;			break;
 					case VK_ESCAPE:				handle = EKey_Escape;		break;
 					case VK_PRIOR:				handle = EKey_PageUp;		break;
@@ -181,52 +185,52 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 					case VK_END:				handle = EKey_End;			break;
 					case VK_HOME:				handle = EKey_Home;			break;
 					case VK_SELECT:				handle = EKey_Select;		break;
-					case VK_PRINT:				handle = EKey_Print;			break;
+					case VK_PRINT:				handle = EKey_Print;		break;
 					case VK_EXECUTE:			handle = EKey_Execute;		break;
 					case VK_SNAPSHOT:			handle = EKey_PrintScreen;	break;
 					case VK_INSERT:				handle = EKey_Insert;		break;
 					case VK_BROWSER_BACK:		handle = EKey_Back;			break;
 					case VK_BROWSER_FORWARD:	handle = EKey_Forward;		break;
-					case VK_SLEEP:				handle = EKey_Sleep;			break;
+					case VK_SLEEP:				handle = EKey_Sleep;		break;
 					case VK_BROWSER_REFRESH:	handle = EKey_Refresh;		break;
 					case VK_BROWSER_STOP:		handle = EKey_Stop;			break;
 					case VK_BROWSER_SEARCH:		handle = EKey_Search;		break;
-					case VK_BROWSER_FAVORITES:	handle = EKey_Favorites;		break;
-					case VK_BROWSER_HOME:		handle = EKey_Start;			break;
+					case VK_BROWSER_FAVORITES:	handle = EKey_Favorites;	break;
+					case VK_BROWSER_HOME:		handle = EKey_Start;		break;
 					case VK_VOLUME_MUTE:		handle = EKey_Mute;			break;
 					case VK_VOLUME_DOWN:		handle = EKey_VolumeDown;	break;
 					case VK_VOLUME_UP:			handle = EKey_VolumeUp;		break;
 					case VK_MEDIA_NEXT_TRACK:	handle = EKey_Skip;			break;
 					case VK_MEDIA_PREV_TRACK:	handle = EKey_Previous;		break;
-					case VK_CLEAR:				handle = EKey_Clear;			break;
+					case VK_CLEAR:				handle = EKey_Clear;		break;
 					case VK_ZOOM:				handle = EKey_Zoom;			break;
-					case VK_RETURN:				handle = EKey_Enter;			break;
+					case VK_RETURN:				handle = EKey_Enter;		break;
 					case VK_DELETE:				handle = EKey_Delete;		break;
 					case VK_HELP:				handle = EKey_Help;			break;
 					case VK_APPS:				handle = EKey_Apps;			break;
 
 					case VK_LEFT:				handle = EKey_Left;			break;
 					case VK_UP:					handle = EKey_Up;			break;
-					case VK_RIGHT:				handle = EKey_Right;			break;
+					case VK_RIGHT:				handle = EKey_Right;		break;
 					case VK_DOWN:				handle = EKey_Down;			break;
 
-					case VK_MULTIPLY:			handle = EKey_NumpadMul;		break;
-					case VK_ADD:				handle = EKey_NumpadAdd;		break;
-					case VK_DECIMAL:			handle = EKey_NumpadDec;		break;
-					case VK_DIVIDE:				handle = EKey_NumpadDiv;		break;
-					case VK_SUBTRACT:			handle = EKey_NumpadSub;		break;
+					case VK_MULTIPLY:			handle = EKey_NumpadMul;	break;
+					case VK_ADD:				handle = EKey_NumpadAdd;	break;
+					case VK_DECIMAL:			handle = EKey_NumpadDec;	break;
+					case VK_DIVIDE:				handle = EKey_NumpadDiv;	break;
+					case VK_SUBTRACT:			handle = EKey_NumpadSub;	break;
 
 					case VK_OEM_PLUS:			handle = EKey_Equals;		break;
-					case VK_OEM_COMMA:			handle = EKey_Comma;			break;
-					case VK_OEM_MINUS:			handle = EKey_Minus;			break;
+					case VK_OEM_COMMA:			handle = EKey_Comma;		break;
+					case VK_OEM_MINUS:			handle = EKey_Minus;		break;
 					case VK_OEM_PERIOD:			handle = EKey_Period;		break;
-					case VK_OEM_1:				handle = EKey_Semicolon;		break;
-					case VK_OEM_2:				handle = EKey_Slash;			break;
-					case VK_OEM_3:				handle = EKey_Acute;			break;
+					case VK_OEM_1:				handle = EKey_Semicolon;	break;
+					case VK_OEM_2:				handle = EKey_Slash;		break;
+					case VK_OEM_3:				handle = EKey_Acute;		break;
 					case VK_OEM_4:				handle = EKey_LBracket;		break;
 					case VK_OEM_6:				handle = EKey_RBracket;		break;
-					case VK_OEM_5:				handle = EKey_Backslash;		break;
-					case VK_OEM_7:				handle = EKey_Quote;			break;
+					case VK_OEM_5:				handle = EKey_Backslash;	break;
+					case VK_OEM_7:				handle = EKey_Quote;		break;
 
 					//Unknown key or common key
 
@@ -396,8 +400,8 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 				}
 
 				RAWINPUTDEVICE rawDevice = (RAWINPUTDEVICE) {
-					0x01,								//Perhaps 0xD for touchscreen at some point
-					(U16)(isKeyboard ? 0x06 : 0x02),	//0x4-0x05 for game controllers in the future
+					0x01,								//Perhaps 0xD for touchscreen at some point			TODO:
+					(U16)(isKeyboard ? 0x06 : 0x02),	//0x4-0x05 for game controllers in the future		TODO:
 					0x0,
 					hwnd
 				};
@@ -427,15 +431,13 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 					pushed = true;
 
 					if(err.genericError) {
-
 						Buffer_freex(&device.dataExt);
 						InputDevice_free(&device);
-
 						Log_error(String_createConstRefUnsafe("Couldn't register device; "), ELogOptions_Default);
 						break;
 					}
 
-					//After this, our dev and end pointers are valid again
+					//After this, our dev and end pointers are valid still
 					//Because our list didn't reallocate, it just changed size
 				}
 
@@ -486,8 +488,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 				//Cleanup our device
 
-				if((err = InputDevice_free(ours)).genericError)
-					Error_printx(err, ELogLevel_Error, ELogOptions_Default);
+				InputDevice_free(ours);
 
 				//We need to keep on popping the end of the array until we reach the next element that isn't invalid
 				//This is to keep the list as small as possible because we might be looping over it at some point
@@ -519,7 +520,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 			Ns now = Time_now();
 
 			if (w->callbacks.onUpdate) {
-				F32 dt = w->lastUpdate ? (now - w->lastUpdate) / (F32)seconds : 0;
+				F32 dt = w->lastUpdate ? (now - w->lastUpdate) / (F32)SECOND : 0;
 				w->callbacks.onUpdate(w, dt);
 			}
 
@@ -608,28 +609,25 @@ Bool WindowManager_supportsFormat(WindowManager manager, EWindowFormat format) {
 	return format == EWindowFormat_rgba8;
 }
 
-Error WindowManager_freePhysical(WindowManager *manager, Window **w) {
+Bool WindowManager_freePhysical(WindowManager *manager, Window **w) {
 
-	if(!manager)
-		return Error_nullPointer(0, 0);
+	if(!manager || !w || !*w)
+		return true;
 
 	if(!Lock_isLockedForThread(manager->lock))
-		return Error_invalidOperation(0);
-
-	if(!w || !*w)
-		return Error_nullPointer(1, 0);
+		return false;
 
 	if(*w < (Window*) List_begin(manager->windows) || *w >= (Window*) List_end(manager->windows))
-		return Error_outOfBounds(0, 0, 0, 0);
+		return false;
 
 	if(!((*w)->flags & (EWindowFlags_IsActive | EWindowFlags_IsVirtual)))
-		return Error_invalidOperation(1);
+		return false;
 
 	//Ensure our window safely exits
 
 	PostMessageA((HWND) (*w)->nativeHandle, WM_DESTROY, 0, 0);
 	*w = NULL;
-	return Error_none();
+	return true;
 }
 
 Error Window_updatePhysicalTitle(const Window *w, String title) {

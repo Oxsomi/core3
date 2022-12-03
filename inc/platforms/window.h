@@ -73,15 +73,8 @@ typedef enum EResolution {
 	EResolution_16K			= _RESOLUTION(15360, 8640)
 } EResolution;
 
-inline I32x2 EResolution_get(EResolution r) { return I32x2_create2(r >> 16, r & U16_MAX); }
-
-inline EResolution EResolution_create(I32x2 v) { 
-
-	if(I32x2_neq2(I32x2_clamp(v, I32x2_zero(), I32x2_xx2(U16_MAX)), v)) 
-		return EResolution_Undefined;
-
-	return _RESOLUTION(I32x2_x(v), I32x2_y(v));
-}
+I32x2 EResolution_get(EResolution r);
+EResolution EResolution_create(I32x2 v);
 
 //Window callbacks
 
@@ -103,8 +96,8 @@ typedef struct WindowCallbacks {
 
 //Hard limits; after this, the runtime won't support new devices/monitors
 
-impl extern const U16 Window_maxDevices;
-impl extern const U16 Window_maxMonitors;
+impl extern const U16 Window_MAX_DEVICES;
+impl extern const U16 Window_MAX_MONITORS;
 
 //Window itself
 
@@ -112,13 +105,11 @@ typedef U16 WindowHandle;
 
 typedef struct Window {
 
-	I32x2 offset;
-	I32x2 size;
+	I32x2 offset, size;
 
 	Buffer cpuVisibleBuffer;
 
-	void *nativeHandle;
-	void *nativeData;
+	void *nativeHandle, *nativeData;
 	Lock lock;
 
 	WindowCallbacks callbacks;
@@ -130,62 +121,40 @@ typedef struct Window {
 	EWindowFormat format;
 	EWindowFlags flags;
 
-	List devices;				//TODO: Make this a map at some point
-	List monitors;
+	//TODO: Make this a map at some point
+
+	List devices, monitors;
 
 } Window;
 
 //Implementation dependent aka physical windows
 
-impl Error Window_updatePhysicalTitle(
-	const Window *w,
-	String title
-);
+impl Error Window_updatePhysicalTitle(const Window *w, String title);
 
-impl Error Window_presentPhysical(
-	const Window *w
-);
+impl Error Window_presentPhysical(const Window *w);
 
 //Virtual windows
 
-Error Window_resizeCPUBuffer(		//Should be called if virtual or EWindowHint_ProvideCPUBuffer
-	Window *w, 
-	Bool copyData, 
-	I32x2 newSize
-);
+//Should be called if virtual or EWindowHint_ProvideCPUBuffer
+
+Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSize);
 
 Error Window_storeCPUBufferToDisk(const Window *w, String filePath, Ns maxTimeout);
 
 //Simple helper functions
 
-inline Bool Window_isVirtual(const Window *w) { return w && w->flags & EWindowFlags_IsVirtual; }
-inline Bool Window_isMinimized(const Window *w) { return w && w->flags & EWindowFlags_IsMinimized; }
-inline Bool Window_isFocussed(const Window *w) { return w && w->flags & EWindowFlags_IsFocussed; }
-inline Bool Window_isFullScreen(const Window *w) { return w && w->flags & EWindowFlags_IsFullscreen; }
+Bool Window_isVirtual(const Window *w);
+Bool Window_isMinimized(const Window *w);
+Bool Window_isFocussed(const Window *w);
+Bool Window_isFullScreen(const Window *w);
 
-inline Bool Window_doesHandleInput(const Window *w) { return w && w->hint & EWindowHint_HandleInput; }
-inline Bool Window_doesAllowFullScreen(const Window *w) { return w && w->hint & EWindowHint_AllowFullscreen; }
+Bool Window_doesHandleInput(const Window *w);
+Bool Window_doesAllowFullScreen(const Window *w);
 
 //Presenting CPU buffer to a file (when virtual) or window when physical
 //This can only be called in a draw function!
 
-inline Error Window_presentCPUBuffer(
-	Window *w,
-	String file,
-	Ns maxTimeout
-) {
-
-	if (!w)
-		return Error_nullPointer(0, 0);
-
-	if (!w->isDrawing)
-		return Error_invalidOperation(0);
-
-	if (Window_isVirtual(w))
-		return Window_storeCPUBufferToDisk(w, file, maxTimeout);
-
-	return Window_presentPhysical(w);
-}
+Error Window_presentCPUBuffer(Window *w, String file, Ns maxTimeout);
 
 Error Window_waitForExit(Window *w, Ns maxTimeout);
 Bool Window_terminateVirtual(Window *w);

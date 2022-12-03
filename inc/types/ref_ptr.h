@@ -2,15 +2,13 @@
 #include "types.h"
 #include "allocator.h"
 
-typedef Error (*ObjectFreeFunc)(void *ptr, Allocator allocator);
+typedef Bool (*ObjectFreeFunc)(void *ptr, Allocator allocator);
 
 typedef struct RefPtr {
-
 	U64 refCount;
 	void *ptr;
 	Allocator alloc;
 	ObjectFreeFunc free;
-
 } RefPtr;
 
 inline RefPtr RefPtr_create(void *ptr, Allocator alloc, ObjectFreeFunc free) {

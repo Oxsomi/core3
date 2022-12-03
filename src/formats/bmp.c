@@ -1,6 +1,7 @@
 #include "formats/bmp.h"
 #include "types/buffer.h"
 #include "types/allocator.h"
+#include "types/error.h"
 
 #pragma pack(push, 1)
 
@@ -28,8 +29,8 @@
 
 #pragma pack(pop)
 
-const U16 BMP_magic = 0x4D42;
-const U32 BMP_srgbMagic = 0x73524742;
+const U16 BMP_MAGIC = 0x4D42;
+const U32 BMP_SRGB_MAGIC = 0x73524742;
 
 Error BMP_writeRGBA(
 	Buffer buf, U16 w, U16 h, Bool isFlipped, 
@@ -37,7 +38,7 @@ Error BMP_writeRGBA(
 	Buffer *result
 ) {
 
-	if(buf.length > I32_MAX || buf.length != (U64) w * h * 4)
+	if(buf.length > I32_MAX || buf.length != (U64)w * h * 4)
 		return Error_invalidParameter(0, 0, 0);
 
 	U32 headersSize = (U32) (
@@ -47,7 +48,7 @@ Error BMP_writeRGBA(
 	);
 
 	BMPHeader header = (BMPHeader) {
-		.fileType = BMP_magic,
+		.fileType = BMP_MAGIC,
 		.fileSize = ((I32) buf.length) * (isFlipped ? -1 : 1),
 		.r0 = 0, .r1 = 0, 
 		.offsetData = headersSize
@@ -69,7 +70,7 @@ Error BMP_writeRGBA(
 		.blueMask	= (U32) 0xFF,
 		.alphaMask	= (U32) 0xFF << 24,
 
-		.colorSpaceType = BMP_srgbMagic
+		.colorSpaceType = BMP_SRGB_MAGIC
 	};
 
 	Buffer file = Buffer_createNull();
@@ -85,26 +86,15 @@ Error BMP_writeRGBA(
 
 	Buffer fileAppend = file;
 
-	if ((err = Buffer_append(&fileAppend, &header, sizeof(header))).genericError) {
-		Buffer_free(&file, allocator);
-		return err;
-	}
-
-	if ((err = Buffer_append(&fileAppend, &infoHeader, sizeof(infoHeader))).genericError) {
-		Buffer_free(&file, allocator);
-		return err;
-	}
-
-	if ((err = Buffer_append(&fileAppend, &colorHeader, sizeof(colorHeader))).genericError) {
-		Buffer_free(&file, allocator);
-		return err;
-	}
-
-	if ((err = Buffer_appendBuffer(&fileAppend, buf)).genericError) {
-		Buffer_free(&file, allocator);
-		return err;
-	}
+	_gotoIfError(clean, Buffer_append(&fileAppend, &header, sizeof(header)));
+	_gotoIfError(clean, Buffer_append(&fileAppend, &infoHeader, sizeof(infoHeader)));
+	_gotoIfError(clean, Buffer_append(&fileAppend, &colorHeader, sizeof(colorHeader)));
+	_gotoIfError(clean, Buffer_appendBuffer(&fileAppend, buf));
 
 	*result = file;
 	return Error_none();
+
+clean:
+	Buffer_free(&file, allocator);
+	return err;
 }

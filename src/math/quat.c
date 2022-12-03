@@ -1,4 +1,37 @@
 #include "math/quat.h"
+#include "types/error.h"
+
+Quat Quat_create(F32 x, F32 y, F32 z, F32 w) { return F32x4_create4(x, y, z, w); }
+
+Quat Quat_identity() { return Quat_create(0, 0, 0, 1); }
+
+Quat Quat_conj(Quat q) { return Quat_create(-F32x4_x(q), -F32x4_y(q), -F32x4_z(q), F32x4_w(q)); }
+Quat Quat_normalize(Quat q) { return F32x4_normalize4(q); }
+Quat Quat_inverse(Quat q) { return Quat_normalize(Quat_conj(q)); }
+
+Bool Quat_eq(Quat a, Quat b) { return F32x4_eq4(a, b); }
+Bool Quat_neq(Quat a, Quat b) { return F32x4_neq4(a, b); }
+
+F32 Quat_x(Quat a) { return F32x4_x(a); }
+F32 Quat_y(Quat a) { return F32x4_y(a); }
+F32 Quat_z(Quat a) { return F32x4_z(a); }
+F32 Quat_w(Quat a) { return F32x4_w(a); }
+F32 Quat_get(Quat a, U8 i) { return F32x4_get(a, i); }
+
+void Quat_setX(Quat *a, F32 v) { F32x4_setX(a, v); }
+void Quat_setY(Quat *a, F32 v) { F32x4_setY(a, v); }
+void Quat_setZ(Quat *a, F32 v) { F32x4_setZ(a, v); }
+void Quat_setW(Quat *a, F32 v) { F32x4_setW(a, v); }
+void Quat_set(Quat *a, U8 i, F32 v) { F32x4_set(a, i, v); }
+
+Quat Quat_lerp(Quat a, Quat b, F32 perc) { return F32x4_lerp(a, b, perc); }
+
+//Rotate normal by quaternion
+//https://math.stackexchange.com/questions/40164/how-do-you-rotate-a-vector-by-a-unit-quaternion
+//
+F32x4 Quat_applyToNormal(Quat R, F32x4 P) {
+	return Quat_mul(Quat_mul(R, P), Quat_conj(R));
+}
 
 //Rotate around an axis with an angle
 //https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles#Definition
@@ -14,7 +47,6 @@ Quat Quat_angleAxis(F32x4 axis, F32 angle) {
 	F32x4 q = F32x4_mul(cosB, F32x4_xxxx4(sinA2));
 
 	F32x4_setW(&q, cosA2);
-
 	return q;
 }
 
@@ -23,7 +55,7 @@ Quat Quat_angleAxis(F32x4 axis, F32 angle) {
 //
 Quat Quat_fromEuler(F32x4 pitchYawRollDeg) {
 
-	F32x4 pitchYawRollRad = F32x4_mul(pitchYawRollDeg, F32x4_xxxx4(F32_degToRad * .5f));
+	F32x4 pitchYawRollRad = F32x4_mul(pitchYawRollDeg, F32x4_xxxx4(F32_DEG_TO_RAD * .5f));
 
 	F32x4 c = F32x4_cos(pitchYawRollRad);
 	F32x4 s = F32x4_sin(pitchYawRollRad);
@@ -77,7 +109,7 @@ F32x4 Quat_toEuler(Quat q) {
 	F32 p;
 
 	if (F32_abs(sp) >= 1)		//90_deg if out of range
-		p = F32_pi * 0.5f * F32_signInc(sp);
+		p = F32_PI * 0.5f * F32_signInc(sp);
 
 	else p = F32_asin(sp);
 
@@ -92,7 +124,7 @@ F32x4 Quat_toEuler(Quat q) {
 	F32 cosy_cosp = 1 - 2 * (q2_y + q2_z);
 	F32 y = F32_atan2(siny_cosp, cosy_cosp);
 
-	return F32x4_mul(F32x4_create3(p, y, r), F32x4_xxxx4(F32_radToDeg));
+	return F32x4_mul(F32x4_create3(p, y, r), F32x4_xxxx4(F32_RAD_TO_DEG));
 }
 
 //Combine two quaternions

@@ -52,7 +52,7 @@ typedef struct CAFile {
 } CAFile;
 
 Error CAFile_create(CASettings settings, Allocator alloc, CAFile *caFile);
-Error CAFile_free(CAFile *caFile, Allocator alloc);
+Bool CAFile_free(CAFile *caFile, Allocator alloc);
 
 //Also adds subdirs. CAEntry will belong to CAFile.
 //This means that freeing it will free the String + Buffer if they're not a ref

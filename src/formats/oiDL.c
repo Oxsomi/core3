@@ -1,8 +1,11 @@
 #include "formats/oiDL.h"
 #include "types/list.h"
 #include "types/time.h"
+#include "types/error.h"
+#include "types/buffer.h"
+#include "types/allocator.h"
 
-/*	TODO: Implement compression and encryption
+/* TODO: Finish when encryption and compression are done
 
 //File spec (docs/oiDL.md)
 
@@ -34,7 +37,7 @@ typedef struct DLHeader {
 
 } DLHeader;
 
-static const U32 DLHeader_magic = 0x4C44696F;
+static const U32 DLHeader_MAGIC = 0x4C44696F;
 
 typedef enum EDLDataSizeType {
 
@@ -96,10 +99,10 @@ Error DLFile_create(DLSettings settings, Allocator alloc, DLFile *dlFile) {
 	return Error_none();
 }
 
-Error DLFile_free(DLFile *dlFile, Allocator alloc) {
+Bool DLFile_free(DLFile *dlFile, Allocator alloc) {
 
 	if(!dlFile || !dlFile->entries.ptr)
-		return Error_none();
+		return true;
 
 	for (U64 i = 0; i < dlFile->entries.length; ++i) {
 
@@ -111,9 +114,9 @@ Error DLFile_free(DLFile *dlFile, Allocator alloc) {
 		else Buffer_free(&entry.entryBuffer, alloc);
 	}
 
-	Error err = List_free(&dlFile->entries, alloc);
+	List_free(&dlFile->entries, alloc);
 	*dlFile = (DLFile) { 0 };
-	return err;
+	return true;
 }
 
 //Writing a zip
@@ -158,7 +161,7 @@ Error DLFile_addEntryAscii(DLFile *dlFile, String entryStr, Allocator alloc) {
 //We currently only support writing brotli because it's the best 
 //(space) compression compared to time to decompress/compress
 
-static const U8 sizeByteType[4] = { 1, 2, 4, 8 };
+static const U8 SIZE_BYTE_TYPE[4] = { 1, 2, 4, 8 };
 
 inline EDLDataSizeType getRequiredType(U64 v) {
 	return v <= U8_MAX ? EDLDataSizeType_U8 : (
@@ -199,7 +202,7 @@ Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result) {
 		maxSize = U64_max(maxSize, len);
 	}
 
-	U8 dataSizeType = sizeByteType[getRequiredType(maxSize)];
+	U8 dataSizeType = SIZE_BYTE_TYPE[getRequiredType(maxSize)];
 	U64 entrySizes = dataSizeType * dlFile.entries.length;
 
 	if(entrySizes / dataSizeType != dlFile.entries.length)
@@ -210,10 +213,10 @@ Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result) {
 
 	outputSize += entrySizes;
 
-	U8 entrySizeType = sizeByteType[getRequiredType(dlFile.entries.length)];
+	U8 entrySizeType = SIZE_BYTE_TYPE[getRequiredType(dlFile.entries.length)];
 	headerSize += entrySizeType;
 
-	U8 uncompressedSizeType = sizeByteType[getRequiredType(outputSize)];
+	U8 uncompressedSizeType = SIZE_BYTE_TYPE[getRequiredType(outputSize)];
 
 	if(dlFile.settings.compressionType)
 		headerSize += uncompressedSizeType;
@@ -301,7 +304,7 @@ Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result) {
 
 	*((DLHeader*)headerIt) = (DLHeader) {
 
-		.magicNumber = DLHeader_magic,
+		.magicNumber = DLHeader_MAGIC,
 
 		.version = 10,		//1.0
 
@@ -327,7 +330,7 @@ Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result) {
 	headerIt += sizeof(DLHeader);
 
 	switch (entrySizeType) {
-		case 1:		*(U8*)headerIt  = (U8) dlFile.entries.length;		headerIt += sizeof(U8);		break;
+		case 1:		*(U8*)headerIt	= (U8) dlFile.entries.length;		headerIt += sizeof(U8);		break;
 		case 2:		*(U16*)headerIt	= (U16) dlFile.entries.length;		headerIt += sizeof(U16);	break;
 		case 4:		*(U32*)headerIt	= (U32) dlFile.entries.length;		headerIt += sizeof(U32);	break;
 		default:	*(U64*)headerIt	= dlFile.entries.length;			headerIt += sizeof(U64);
@@ -335,7 +338,7 @@ Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result) {
 
 	if(dlFile.settings.compressionType)
 		switch (uncompressedSizeType) {
-			case 1:		*(U8*)headerIt  = (U8) uncompressedSize;		headerIt += sizeof(U8);		break;
+			case 1:		*(U8*)headerIt	= (U8) uncompressedSize;		headerIt += sizeof(U8);		break;
 			case 2:		*(U16*)headerIt	= (U16) uncompressedSize;		headerIt += sizeof(U16);	break;
 			case 4:		*(U32*)headerIt	= (U32) uncompressedSize;		headerIt += sizeof(U32);	break;
 			default:	*(U64*)headerIt	= uncompressedSize;				headerIt += sizeof(U64);

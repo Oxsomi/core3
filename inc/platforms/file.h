@@ -2,6 +2,8 @@
 #include "types/types.h"
 #include "types/string.h"
 
+typedef struct Error Error;
+
 //There are two types of files; virtual and local.
 //Virtual are embedded into the binary, very nice for easy portable installation and harder to modify for avg users.
 //	Writable virtual files can only be in the //access directory.
@@ -14,7 +16,7 @@
 //
 //Virtual files are prefixed with // even though that can be valid
 //E.g. //test.json refers to test.json embedded in the binary
-//	   while test.json, ./test.json or .//test.json refers to test.json in the local file
+//	while test.json, ./test.json or .//test.json refers to test.json in the local file
 //
 //Backslashes are automatically resolved to forward slash
 
@@ -43,9 +45,9 @@ typedef struct FileInfo {
 typedef Error (*FileCallback)(FileInfo, void*);
 
 Error File_getInfo(String loc, FileInfo *info);
-Error FileInfo_free(FileInfo *info);
+Bool FileInfo_free(FileInfo *info);
 
-inline Bool File_isVirtual(String loc) { return String_getAt(loc, 0) == '/' && String_getAt(loc, 1) == '/'; }
+Bool File_isVirtual(String loc);
 
 Error File_foreach(String loc, FileCallback callback, void *userData, Bool isRecursive);
 
@@ -58,23 +60,18 @@ Error File_move(String loc, String directoryName, Ns maxTimeout);
 Error File_queryFileObjectCount(String loc, FileType type, Bool isRecursive, U64 *res);		//Includes files only
 Error File_queryFileObjectCountAll(String loc, Bool isRecursive, U64 *res);					//Includes folders + files
 
-inline Error File_queryFileCount(String loc, Bool isRecursive, U64 *res) { 
-	return File_queryFileObjectCount(loc, FileType_File, isRecursive, res); 
-}
-
-inline Error File_queryFolderCount(String loc, Bool isRecursive, U64 *res) { 
-	return File_queryFileObjectCount(loc, FileType_Folder, isRecursive, res); 
-}
+Error File_queryFileCount(String loc, Bool isRecursive, U64 *res);
+Error File_queryFolderCount(String loc, Bool isRecursive, U64 *res);
 
 Error File_resolve(String loc, Bool *isVirtual, String *result);
 Bool File_exists(String loc);
 Bool File_existsAsType(String loc, FileType type);
 
-inline Bool File_fileExists(String loc) { return File_existsAsType(loc, FileType_File); }
-inline Bool File_folderExists(String loc) { return File_existsAsType(loc, FileType_Folder); }
+Bool File_fileExists(String loc);
+Bool File_folderExists(String loc);
 
 Error File_write(Buffer buf, String loc, Ns maxTimeout);		//Read when a file is available (up to maxTimeout)
-Error File_read(String loc, Buffer *output, Ns maxTimeout);		//Write when a file is available (up to maxTimeout)
+Error File_read(String loc, Ns maxTimeout, Buffer *output);		//Write when a file is available (up to maxTimeout)
 
 impl Error File_removeVirtual(String loc, Ns maxTimeout);						//Can only operate on //access
 impl Error File_addVirtual(String loc, FileType type, Ns maxTimeout);			//Can only operate on folders in //access

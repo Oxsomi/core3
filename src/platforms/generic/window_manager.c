@@ -5,8 +5,9 @@
 #include "platforms/ext/listx.h"
 #include "types/time.h"
 #include "types/buffer.h"
+#include "types/error.h"
 
-const U8 WindowManager_maxTotalVirtualWindowCount = 16;
+const U8 WindowManager_MAX_VIRTUAL_WINDOWS = 16;
 
 Error WindowManager_create(WindowManager *result) {
 
@@ -32,26 +33,22 @@ Error WindowManager_create(WindowManager *result) {
 	return Error_none();
 }
 
-Error WindowManager_free(WindowManager *manager) {
+Bool WindowManager_free(WindowManager *manager) {
 
 	if(!manager)
-		return Error_none();
+		return true;
 
-	if(!Lock_isLockedForThread(manager->lock) && !WindowManager_lock(manager, 5 * seconds))
-		return Error_timedOut(0, 5 * seconds);
+	if(!Lock_isLockedForThread(manager->lock) && !WindowManager_lock(manager, 5 * SECOND))
+		return false;
 
-	Error err = List_freex(&manager->windows);
+	List_freex(&manager->windows);
 	
 	if(!WindowManager_unlock(manager))
-		return Error_invalidOperation(0);
+		return false;
 
-	Error errTemp = Lock_free(&manager->lock);
-
-	if(errTemp.genericError)
-		err = errTemp;
-
+	Bool freed = Lock_free(&manager->lock);
 	*manager = (WindowManager) { 0 };
-	return err;
+	return freed;
 }
 
 Error WindowManager_createVirtual(
@@ -86,10 +83,10 @@ Error WindowManager_createVirtual(
 			return Error_invalidEnum(3, 0, (U64) format, 0);
 	}
 
-	for(U8 i = 0; i < WindowManager_maxTotalVirtualWindowCount; ++i) {
+	for(U8 i = 0; i < WindowManager_MAX_VIRTUAL_WINDOWS; ++i) {
 
 		Window *w = (Window*) List_ptr(
-			manager->windows, i + WindowManager_maxTotalPhysicalWindowCount
+			manager->windows, i + WindowManager_MAX_PHYSICAL_WINDOWS
 		);
 
 		if(!w)
@@ -138,36 +135,27 @@ Error WindowManager_createVirtual(
 	return Error_outOfMemory(0);
 }
 
-Error WindowManager_freeVirtual(WindowManager *manager, Window **handle) {
+Bool WindowManager_freeVirtual(WindowManager *manager, Window **handle) {
 
-	if(!manager || !handle || !*handle)
-		return Error_nullPointer(!manager ? 0 : 1, 0);
-
-	if(!Lock_isLockedForThread(manager->lock))
-		return Error_invalidOperation(0);
-
-	if(!Window_isVirtual(*handle))
-		return Error_invalidOperation(1);
+	if(!manager || !handle || !*handle || !Lock_isLockedForThread(manager->lock) || !Window_isVirtual(*handle))
+		return false;
 
 	Window *w = *handle;
 
-	if(!Lock_isLockedForThread(w->lock))
-		return Error_invalidOperation(2);
-
-	if (!Lock_unlock(&w->lock)) 
-		return Error_invalidOperation(3);
+	if(!Lock_isLockedForThread(w->lock) || !Lock_unlock(&w->lock)) 
+		return false;
 
 	if(w->callbacks.onDestroy)
 		w->callbacks.onDestroy(w);
 
-	Error err = Lock_free(&w->lock);
+	Bool err = Lock_free(&w->lock);
 
-	Error errTemp = Buffer_free(&w->cpuVisibleBuffer, Platform_instance.alloc);
+	Buffer_free(&w->cpuVisibleBuffer, Platform_instance.alloc);
 
 	*w = (Window) { 0 };
 	*handle = NULL;
 
-	return errTemp.genericError ? errTemp : err;
+	return err;
 }
 
 inline U16 WindowManager_getEmptyWindows(WindowManager manager) {
@@ -227,10 +215,10 @@ Error WindowManager_waitForExitAll(WindowManager *manager, Ns maxTimeout) {
 
 		Bool containsVirtualWindow = false;
 
-		for(U8 i = 0; i < WindowManager_maxTotalVirtualWindowCount; ++i) {
+		for(U8 i = 0; i < WindowManager_MAX_VIRTUAL_WINDOWS; ++i) {
 
 			Window *w = (Window*) List_ptr(
-				manager->windows, i + WindowManager_maxTotalPhysicalWindowCount
+				manager->windows, i + WindowManager_MAX_PHYSICAL_WINDOWS
 			);
 
 			if(!w)
@@ -240,7 +228,7 @@ Error WindowManager_waitForExitAll(WindowManager *manager, Ns maxTimeout) {
 
 				if(w->callbacks.onDraw) {
 
-					if(Lock_lock(&w->lock, 5 * seconds)) {
+					if(Lock_lock(&w->lock, 5 * SECOND)) {
 
 						w->isDrawing = true;
 						w->callbacks.onDraw(w);
@@ -266,7 +254,7 @@ Error WindowManager_waitForExitAll(WindowManager *manager, Ns maxTimeout) {
 		//Virtual windows are allowed to update as fast as possible though
 		
 		if(!containsVirtualWindow)
-			Thread_sleep(10 * ms);
+			Thread_sleep(10 * MS);
 
 		//
 
@@ -280,8 +268,12 @@ Error WindowManager_waitForExitAll(WindowManager *manager, Ns maxTimeout) {
 
 Error WindowManager_createWindow(
 	WindowManager *manager, 
-	I32x2 position, I32x2 size, EWindowHint hint, String title, 
-	WindowCallbacks callbacks, EWindowFormat format,
+	I32x2 position,
+	I32x2 size,
+	EWindowHint hint,
+	String title, 
+	WindowCallbacks callbacks,
+	EWindowFormat format,
 	Window **w
 ) {
 
@@ -289,23 +281,38 @@ Error WindowManager_createWindow(
 		return Error_nullPointer(0, 0);
 
 	if (manager)
-		return WindowManager_createPhysical(
-			manager, position, size, hint, title, callbacks, format, w
-		);
+		return WindowManager_createPhysical(manager, position, size, hint, title, callbacks, format, w);
 
 	return WindowManager_createVirtual(manager, size, callbacks, format, w);
 }
 
-Error WindowManager_freeWindow(WindowManager *manager, Window **w) {
+Bool WindowManager_freeWindow(WindowManager *manager, Window **w) {
 
 	if (!manager || !w)
-		return Error_nullPointer(!w ? 1 : 0, 0);
+		return true;
 
 	if(!Lock_isLockedForThread(manager->lock))
-		return Error_invalidOperation(1);
+		return false;
 
-	if (Window_isVirtual(*w))
-		return WindowManager_freeVirtual(manager, w);
+	return Window_isVirtual(*w) ? WindowManager_freeVirtual(manager, w) : WindowManager_freePhysical(manager, w);
+}
 
-	return WindowManager_freePhysical(manager, w);
+WindowHandle WindowManager_maxWindows() {
+	return (WindowHandle) WindowManager_MAX_VIRTUAL_WINDOWS + WindowManager_MAX_PHYSICAL_WINDOWS;
+}
+
+Bool WindowManager_lock(WindowManager *manager, Ns maxTimeout) {
+	return manager && Lock_lock(&manager->lock, maxTimeout);
+}
+
+Bool WindowManager_unlock(WindowManager *manager) {
+	return manager && Lock_unlock(&manager->lock);
+}
+
+//Simple helper functions (need locks)
+
+Window *WindowManager_getWindow(WindowManager *manager, WindowHandle windowHandle) {
+	return 
+		manager && Lock_isLockedForThread(manager->lock) ? 
+		(Window*) List_ptr(manager->windows, windowHandle) : NULL;
 }

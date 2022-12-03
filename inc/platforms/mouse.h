@@ -1,6 +1,7 @@
 #pragma once
 #include "types/types.h"
 
+typedef struct Error Error;
 typedef struct InputDevice Mouse;
 
 typedef enum EMouseActions {
@@ -36,7 +37,5 @@ typedef enum EMouseFlag {
 	EMouseFlag_IsRelative
 
 } EMouseFlag;
-
-typedef struct Error Error;
 
 Error Mouse_create(Mouse *result);

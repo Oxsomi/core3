@@ -1,6 +1,8 @@
 #include "types/time.h"
 #include "types/buffer.h"
 #include "types/allocator.h"
+#include "types/error.h"
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -21,10 +23,10 @@ Error ourAlloc(void *allocator, U64 length, Buffer *output) {
 	return Error_none();
 }
 
-Error ourFree(void *allocator, Buffer buf) {
+Bool ourFree(void *allocator, Buffer buf) {
 	allocator;
 	free(buf.ptr);
-	return Error_none();
+	return true;
 }
 
 //Required to compile
@@ -39,7 +41,7 @@ String Error_formatPlatformError(Error err) {
 	return String_createNull();
 }
 
-#define STRICT_VALIDATION
+//#define _STRICT_VALIDATION
 
 //
 
@@ -145,7 +147,7 @@ int main() {
 		const C8 v[5];
 	} TestCRC32C;
 
-	static const TestCRC32C testCrc32c[] = {
+	static const TestCRC32C TEST_CRC32C[] = {
 		{ "", "\x00\x00\x00\x00" },
 		{ "a", "\x30\x43\xd0\xc1" },
 		{ "abc", "\xb7\x3f\x4b\x36" },
@@ -156,10 +158,10 @@ int main() {
 		{ "123456789", "\x83\x92\x06\xe3" }
 	};
 
-	for (U64 i = 0; i < sizeof(testCrc32c) / sizeof(testCrc32c[0]); ++i) {
+	for (U64 i = 0; i < sizeof(TEST_CRC32C) / sizeof(TEST_CRC32C[0]); ++i) {
 
-		Buffer buf = Buffer_createRef((void*)testCrc32c[i].str, String_calcStrLen(testCrc32c[i].str, U64_MAX));
-		U32 groundTruth = *(const U32*) testCrc32c[i].v;
+		Buffer buf = Buffer_createRef((void*)TEST_CRC32C[i].str, String_calcStrLen(TEST_CRC32C[i].str, U64_MAX));
+		U32 groundTruth = *(const U32*) TEST_CRC32C[i].v;
 		U32 ours = Buffer_crc32c(buf);
 
 		if(groundTruth != ours) {
@@ -173,13 +175,13 @@ int main() {
 	//https://www.dlitz.net/crypto/shad256-test-vectors/
 	//https://github.com/amosnier/sha-2/blob/master/test.c
 
-	#ifdef STRICT_VALIDATION
-		#define EXTRA_CHECKS 4
+	#ifdef _STRICT_VALIDATION
+		#define _EXTRA_CHECKS 4
 	#else
-		#define EXTRA_CHECKS 0
+		#define _EXTRA_CHECKS 0
 	#endif
 
-	static const U32 results[][8] = {
+	static const U32 RESULTS[][8] = {
 		{ 0xE3B0C442, 0x98FC1C14, 0x9AFBF4C8, 0x996FB924, 0x27AE41E4, 0x649B934C, 0xA495991B, 0x7852B855 },	
 		{ 0xBA7816BF, 0x8F01CFEA, 0x414140DE, 0x5DAE2223, 0xB00361A3, 0x96177A9C, 0xB410FF61, 0xF20015AD },
 		{ 0xCDC76E5C, 0x9914FB92, 0x81A1C7E2, 0x84D73E67, 0xF1809A48, 0xA497200E, 0x046D39CC, 0xC7112CD0 },
@@ -205,11 +207,11 @@ int main() {
 		{ 0xC23CE8A7, 0x895F4B21, 0xEC0DAF37, 0x920AC0A2, 0x62A22004, 0x5A03EB2D, 0xFED48EF9, 0xB05AABEA }
 	};
 
-	String inputs[19 + EXTRA_CHECKS] = { 0 };
+	String inputs[19 + _EXTRA_CHECKS] = { 0 };
 
 	inputs[1] = String_createConstRefUnsafe("abc");
 
-	if(String_create('a', Mega, alloc, inputs + 2).genericError) {
+	if(String_create('a', MEGA, alloc, inputs + 2).genericError) {
 		printf("Failed unit test: SHA256 test failed! Couldn't allocate memory for SHA256 test 1!\n");
 		return 7;
 	}
@@ -250,7 +252,7 @@ int main() {
 
 	//More extreme checks. Don't wanna run this every time.
 
-	#ifdef EXTRA_CHECKS
+	#if _EXTRA_CHECKS
 
 		if(String_create('\x5A', 536'870'912, alloc, inputs + 20).genericError) {
 
@@ -285,31 +287,31 @@ int main() {
 
 	//Validate inputs
 
-	for(U64 i = 0; i < sizeof(results) / sizeof(results[0]); ++i) {
+	for(U64 i = 0; i < sizeof(inputs) / sizeof(inputs[0]); ++i) {
 
 		U32 result[8];
 		Buffer_sha256(String_buffer(inputs[i]), result);
 	
 		Bool b = false;
-		Buffer_eq(Buffer_createRef(result, 32), Buffer_createRef((U32*)results[i], 32), &b);
+		Buffer_eq(Buffer_createRef(result, 32), Buffer_createRef((U32*)RESULTS[i], 32), &b);
 	
 		if(!b) {
 
 			printf("Failed unit test: SHA256 test failed! (at offset %llu)\n", i);
 
-			for(U64 j = 0; j < sizeof(results) / sizeof(results[0]); ++j)
+			for(U64 j = 0; j < sizeof(inputs) / sizeof(inputs[0]); ++j)
 				String_free(&inputs[j], alloc);
 
 			return 6;
 		}
 	}
 
-	for(U64 i = 0; i < sizeof(results) / sizeof(results[0]); ++i)
+	for(U64 i = 0; i < sizeof(inputs) / sizeof(inputs[0]); ++i)
 		String_free(&inputs[i], alloc);
 
 	//
 
-	F32 dt = (Time_now() - now) / (F32)seconds;
+	F32 dt = (Time_now() - now) / (F32)SECOND;
 
 	printf("Successful unit test! After %fs\n", dt);
 	return 0;

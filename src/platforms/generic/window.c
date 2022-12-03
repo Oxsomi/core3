@@ -10,6 +10,38 @@
 #include "platforms/ext/bmpx.h"
 #include "platforms/ext/bufferx.h"
 
+I32x2 EResolution_get(EResolution r) { return I32x2_create2(r >> 16, r & U16_MAX); }
+
+EResolution EResolution_create(I32x2 v) { 
+
+	if(I32x2_neq2(I32x2_clamp(v, I32x2_zero(), I32x2_xx2(U16_MAX)), v)) 
+		return EResolution_Undefined;
+
+	return _RESOLUTION(I32x2_x(v), I32x2_y(v));
+}
+
+Bool Window_isVirtual(const Window *w) { return w && w->flags & EWindowFlags_IsVirtual; }
+Bool Window_isMinimized(const Window *w) { return w && w->flags & EWindowFlags_IsMinimized; }
+Bool Window_isFocussed(const Window *w) { return w && w->flags & EWindowFlags_IsFocussed; }
+Bool Window_isFullScreen(const Window *w) { return w && w->flags & EWindowFlags_IsFullscreen; }
+
+Bool Window_doesHandleInput(const Window *w) { return w && w->hint & EWindowHint_HandleInput; }
+Bool Window_doesAllowFullScreen(const Window *w) { return w && w->hint & EWindowHint_AllowFullscreen; }
+
+//Presenting CPU buffer to a file (when virtual) or window when physical
+//This can only be called in a draw function!
+
+Error Window_presentCPUBuffer(Window *w, String file, Ns maxTimeout) {
+
+	if (!w)
+		return Error_nullPointer(0, 0);
+
+	if (!w->isDrawing)
+		return Error_invalidOperation(0);
+
+	return Window_isVirtual(w) ? Window_storeCPUBufferToDisk(w, file, maxTimeout) : Window_presentPhysical(w);
+}
+
 Error Window_waitForExit(Window *w, Ns maxTimeout) {
 
 	if(!w)
@@ -48,7 +80,7 @@ Error Window_waitForExit(Window *w, Ns maxTimeout) {
 		//Virtual windows are allowed to run as fast as possible to produce the frames
 
 		if(!Window_isVirtual(w))
-			Thread_sleep(10 * ms);
+			Thread_sleep(10 * MS);
 
 		//Try to reacquire the lock
 
@@ -275,13 +307,8 @@ Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 
 	//Get rid of our old data
 
-	if (resize) {
-
-		//If this gives an error, we don't care because we already have the new buffer
-
-		Error err = Buffer_freex(&old);
-		err;
-	}
+	if (resize)
+		Buffer_freex(&old);
 
 	w->cpuVisibleBuffer = neo;
 	w->size = newSiz;
@@ -329,5 +356,5 @@ Bool Window_terminateVirtual(Window *w) {
 		return false;
 
 	w->flags &= ~EWindowFlags_IsActive;
-	return !WindowManager_freeVirtual(&Platform_instance.windowManager, &w).genericError;
+	return WindowManager_freeVirtual(&Platform_instance.windowManager, &w);
 }

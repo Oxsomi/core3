@@ -20,11 +20,7 @@
 //Carried over from core2
 
 void Log_captureStackTrace(void **stack, U64 stackSize, U64 skip) {
-	RtlCaptureStackBackTrace(
-		(DWORD)(1 + skip), 
-		(DWORD) stackSize, 
-		stack, NULL
-	);
+	RtlCaptureStackBackTrace((DWORD)(1 + skip), (DWORD) stackSize, stack, NULL);
 }
 
 typedef struct CapturedStackTrace {
@@ -37,9 +33,10 @@ typedef struct CapturedStackTrace {
 
 	String fil;
 	U32 lin;
+
 } CapturedStackTrace;
 
-static const WORD colors[] = {
+static const WORD COLORS[] = {
 	2,	/* green */
 	3,	/* cyan */
 	14,	/* yellow */
@@ -53,9 +50,9 @@ void Log_printCapturedStackTraceCustom(const void **stackTrace, U64 stackSize, E
 		lvl = ELogLevel_Error;
 
 	HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
-	SetConsoleTextAttribute(handle, colors[lvl]);
+	SetConsoleTextAttribute(handle, COLORS[lvl]);
 
-	CapturedStackTrace captured[StackTrace_SIZE] = { 0 };
+	CapturedStackTrace captured[_STACKTRACE_SIZE] = { 0 };
 
 	U64 stackCount = 0;
 
@@ -68,7 +65,7 @@ void Log_printCapturedStackTraceCustom(const void **stackTrace, U64 stackSize, E
 	Bool anySymbol = false;
 
 	if(hasSymbols)
-		for (U64 i = 0; i < stackSize && i < StackTrace_SIZE && stackTrace[i]; ++i, ++stackCount) {
+		for (U64 i = 0; i < stackSize && i < _STACKTRACE_SIZE && stackTrace[i]; ++i, ++stackCount) {
 
 			U64 addr = (U64) stackTrace[i];
 
@@ -183,44 +180,19 @@ void Log_printCapturedStackTraceCustom(const void **stackTrace, U64 stackSize, E
 		String_freex(&capture.mod);
 	}
 
-	if(hasSymbols)
-		SymCleanup(process);
+	SymCleanup(process);
 }
 
 void Log_log(ELogLevel lvl, ELogOptions options, LogArgs args) {
-
 
 	Ns t = Time_now();
 
 	U32 thread = Thread_getId();
 
-	const C8 *hrErr = "";
-
-	if (lvl > ELogLevel_Debug) {
-
-		HRESULT hr = GetLastError();
-		
-		if (!SUCCEEDED(hr))
-			FormatMessageA(
-
-				FORMAT_MESSAGE_FROM_SYSTEM | 
-				FORMAT_MESSAGE_ALLOCATE_BUFFER |
-				FORMAT_MESSAGE_IGNORE_INSERTS,  
-
-				NULL,
-				hr,
-				MAKELANGID(LANG_ENGLISH, SUBLANG_NEUTRAL),
-
-				(LPTSTR) &hrErr,  
-
-				0, NULL
-			);
-	}
-
 	//Prepare for message
 
 	HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
-	SetConsoleTextAttribute(handle, colors[lvl]);
+	SetConsoleTextAttribute(handle, COLORS[lvl]);
 
 	//[<thread> <time>]: <hr\n><ourStuff> <\n if enabled>
 
@@ -250,9 +222,6 @@ void Log_log(ELogLevel lvl, ELogOptions options, LogArgs args) {
 
 	if (hasPrepend)
 		printf("]: ");
-
-	if (strlen(hrErr))
-		printf("%s\n", hrErr);
 
 	//Print to console and debug window
 

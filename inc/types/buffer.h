@@ -1,24 +1,18 @@
 #pragma once
 #include "math/vec.h"
-#include "allocator.h"
+
+typedef struct Buffer Buffer;
+typedef struct Allocator Allocator;
 
 typedef struct BitRef {
 	U8 *ptr, off;
 } BitRef;
 
-inline Bool BitRef_get(BitRef b) { return b.ptr && (*b.ptr >> b.off) & 1; }
-inline void BitRef_set(BitRef b) { if(b.ptr) *b.ptr |= 1 << b.off; }
-inline void BitRef_reset(BitRef b) { if(b.ptr) *b.ptr |= 1 << b.off; }
+Bool BitRef_get(BitRef b);
+void BitRef_set(BitRef b);
+void BitRef_reset(BitRef b);
 
-inline void BitRef_setTo(BitRef b, Bool v) { 
-
-	if(!b.ptr) return;
-
-	if(v) 
-		BitRef_set(b);
-
-	else BitRef_reset(b);
-}
+void BitRef_setTo(BitRef b, Bool v);
 
 Error Buffer_getBit(Buffer buf, U64 offset, Bool *output);
 
@@ -28,13 +22,7 @@ void Buffer_revCopy(Buffer dst, Buffer src);		//Copies bytes from range backward
 Error Buffer_setBit(Buffer buf, U64 offset);
 Error Buffer_resetBit(Buffer buf, U64 offset);
 
-inline Error Buffer_setBitTo(Buffer buf, U64 offset, Bool value) {
-
-	if (!value)
-		return Buffer_resetBit(buf, offset);
-
-	return Buffer_setBit(buf, offset);
-}
+Error Buffer_setBitTo(Buffer buf, U64 offset, Bool value);
 
 Error Buffer_bitwiseOr(Buffer dst, Buffer src);
 Error Buffer_bitwiseAnd(Buffer dst, Buffer src);
@@ -47,13 +35,7 @@ Error Buffer_unsetBitRange(Buffer dst, U64 dstOff, U64 bits);
 Error Buffer_setAllBits(Buffer dst);
 Error Buffer_unsetAllBits(Buffer dst);
 
-inline Error Buffer_setAllBitsTo(Buffer buf, Bool isOn) {
-
-	if (isOn)
-		return Buffer_setAllBits(buf);
-
-	return Buffer_unsetAllBits(buf);
-}
+Error Buffer_setAllBitsTo(Buffer buf, Bool isOn);
 
 //What hash functions are good for:
 // 
@@ -63,9 +45,9 @@ inline Error Buffer_setAllBitsTo(Buffer buf, Bool isOn) {
 //	https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html
 // 
 //crc32c: Hashmaps / performance critical hashing / 
-//	fast data integrity (encryption / compression) when *NOT* dealing with adversaries
+//	fast data integrity (encryption checksum / compression) when *NOT* dealing with adversaries
 // 
-//sha256: data integrity (encryption / compression) when dealing with adversaries
+//sha256: data integrity (encryption checksum / compression) when dealing with adversaries
 //
 //For more info: 
 //	https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html
@@ -83,8 +65,8 @@ Error Buffer_neq(Buffer buf0, Buffer buf1, Bool *result);		//Also compares size
 
 //These should never be Buffer_free-d because Buffer doesn't know if it's allocated
 
-inline Buffer Buffer_createNull() { return (Buffer) { 0 }; }
-inline Buffer Buffer_createRef(void *v, U64 length) { return (Buffer) { .ptr = (U8*) v, .length = length }; }
+Buffer Buffer_createNull();
+Buffer Buffer_createRef(void *v, U64 length);
 
 //All these functions allocate, so Buffer_free them later
 
@@ -92,15 +74,9 @@ Error Buffer_createCopy(Buffer buf, Allocator alloc, Buffer *output);
 Error Buffer_createZeroBits(U64 length, Allocator alloc, Buffer *output);
 Error Buffer_createOneBits(U64 length, Allocator alloc, Buffer *output);
 
-inline Error Buffer_createBits(U64 length, Bool value, Allocator alloc, Buffer *result) {
+Error Buffer_createBits(U64 length, Bool value, Allocator alloc, Buffer *result);
 
-	if (!value)
-		return Buffer_createZeroBits(length, alloc, result);
-
-	return Buffer_createOneBits(length, alloc, result);
-}
-
-Error Buffer_free(Buffer *buf, Allocator alloc);
+Bool Buffer_free(Buffer *buf, Allocator alloc);
 Error Buffer_createEmptyBytes(U64 length, Allocator alloc, Buffer *output);
 
 Error Buffer_createUninitializedBytes(U64 length, Allocator alloc, Buffer *output);
@@ -114,20 +90,20 @@ Error Buffer_appendBuffer(Buffer *buf, Buffer append);
 
 Error Buffer_combine(Buffer a, Buffer b, Allocator alloc, Buffer *output);
 
-inline Error Buffer_appendU64(Buffer *buf, U64 v) { return Buffer_append(buf, &v, sizeof(v)); }
-inline Error Buffer_appendU32(Buffer *buf, U32 v) { return Buffer_append(buf, &v, sizeof(v)); }
-inline Error Buffer_appendU16(Buffer *buf, U16 v) { return Buffer_append(buf, &v, sizeof(v)); }
-inline Error Buffer_appendU8(Buffer *buf,  U8 v)  { return Buffer_append(buf, &v, sizeof(v)); }
-inline Error Buffer_appendC8(Buffer *buf,  C8 v)  { return Buffer_append(buf, &v, sizeof(v)); }
+Error Buffer_appendU64(Buffer *buf, U64 v);
+Error Buffer_appendU32(Buffer *buf, U32 v);
+Error Buffer_appendU16(Buffer *buf, U16 v);
+Error Buffer_appendU8(Buffer *buf,  U8 v);
+Error Buffer_appendC8(Buffer *buf,  C8 v);
 
-inline Error Buffer_appendI64(Buffer *buf, I64 v) { return Buffer_append(buf, &v, sizeof(v)); }
-inline Error Buffer_appendI32(Buffer *buf, I32 v) { return Buffer_append(buf, &v, sizeof(v)); }
-inline Error Buffer_appendI16(Buffer *buf, I16 v) { return Buffer_append(buf, &v, sizeof(v)); }
-inline Error Buffer_appendI8(Buffer *buf,  I8 v)  { return Buffer_append(buf, &v, sizeof(v)); }
+Error Buffer_appendI64(Buffer *buf, I64 v);
+Error Buffer_appendI32(Buffer *buf, I32 v);
+Error Buffer_appendI16(Buffer *buf, I16 v);
+Error Buffer_appendI8(Buffer *buf,  I8 v);
 
-inline Error Buffer_appendF32(Buffer *buf, F32 v) { return Buffer_append(buf, &v, sizeof(v)); }
+Error Buffer_appendF32(Buffer *buf, F32 v);
 
-inline Error Buffer_appendF32x4(Buffer *buf, F32x4 v) { return Buffer_append(buf, &v, sizeof(v)); }
-inline Error Buffer_appendF32x2(Buffer *buf, I32x2 v) { return Buffer_append(buf, &v, sizeof(v)); }
-inline Error Buffer_appendI32x4(Buffer *buf, I32x4 v) { return Buffer_append(buf, &v, sizeof(v)); }
-inline Error Buffer_appendI32x2(Buffer *buf, I32x2 v) { return Buffer_append(buf, &v, sizeof(v)); }
+Error Buffer_appendF32x4(Buffer *buf, F32x4 v);
+Error Buffer_appendF32x2(Buffer *buf, I32x2 v);
+Error Buffer_appendI32x4(Buffer *buf, I32x4 v);
+Error Buffer_appendI32x2(Buffer *buf, I32x2 v);

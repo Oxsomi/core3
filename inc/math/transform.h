@@ -1,5 +1,5 @@
 #pragma once
-#include "types/pack.h"
+#include "math/quat.h"
 
 //Transform contains how to go from one space to another
 //A transform can also be an inverse transform, which is way faster to apply to go back to the space
@@ -33,7 +33,7 @@ Transform Transform_create(Quat rot, F32x4 pos, F32x4 scale);
 
 F32x4 Transform_applyToDirection(Transform t, F32x4 dir);		//Super fast, only need Quat
 F32x4 Transform_apply(Transform t, F32x4 pos);					//Needs to do scale and translate too
-F32x4 Transform_reverse(Transform t, F32x4 pos);					//Undo transformation
+F32x4 Transform_reverse(Transform t, F32x4 pos);				//Undo transformation
 
 //2D transform
 //16 bytes
@@ -43,11 +43,11 @@ typedef struct Transform2D {
 	F32x2 pos;
 } Transform2D;
 
-Transform2D Transform2D_create(F32x2 pos, F32 rotDeg, F32 scale);
+/*Transform2D Transform2D_create(F32x2 pos, F32 rotDeg, F32 scale);
 
 F32x2 Transform2D_applyToDirection(Transform2D t, F32x2 dir);
 F32x2 Transform2D_apply(Transform2D t, F32x2 pos);
-F32x2 Transform2D_reverse(Transform2D t, F32x2 pos);
+F32x2 Transform2D_reverse(Transform2D t, F32x2 pos);*/
 
 //Transform for pixel art games
 //8 bytes
@@ -74,16 +74,16 @@ typedef enum ERotated {
 } ERotated;
 
 
-TilemapTransform TilemapTransform_create(U32 x, U32 y, U8 layer, U8 paletteId, EMirrored flipped, ERotated rotated);
+//TilemapTransform TilemapTransform_create(U32 x, U32 y, U8 layer, U8 paletteId, EMirrored flipped, ERotated rotated);
 
-inline U32 TilemapTransform_x(TilemapTransform transform) { return (U32)transform & 0xFFFFFF; }
-inline U32 TilemapTransform_y(TilemapTransform transform) { return (U32)(transform >> 24) & 0xFFFFFF; }
-inline U8 TilemapTransform_layerId(TilemapTransform transform) { return (U8)(transform >> 48) & 0x7F; }
-inline U8 TilemapTransform_paletteId(TilemapTransform transform) { return (U8)(transform >> 55) & 0xF; }
-inline EMirrored TilemapTransform_mirrored(TilemapTransform transform) { return (EMirrored)((U8)(transform >> 59) & 0x3); }
-inline ERotated TilemapTransform_rotated(TilemapTransform transform) { return (ERotated)((U8)(transform >> 61) & 0x3); }
-inline Bool TilemapTransform_isValid(TilemapTransform transform) { return transform >> 63;  }
+U32 TilemapTransform_x(TilemapTransform transform);
+U32 TilemapTransform_y(TilemapTransform transform);
+U8 TilemapTransform_layerId(TilemapTransform transform);
+U8 TilemapTransform_paletteId(TilemapTransform transform);
+EMirrored TilemapTransform_mirrored(TilemapTransform transform);
+ERotated TilemapTransform_rotated(TilemapTransform transform);
+Bool TilemapTransform_isValid(TilemapTransform transform);
 
-F32x2 TilemapTransform_applyToDirection(TilemapTransform t, F32x2 dir);
+/*F32x2 TilemapTransform_applyToDirection(TilemapTransform t, F32x2 dir);
 F32x2 TilemapTransform_apply(TilemapTransform t, F32x2 pos);
-F32x2 TilemapTransform_reverse(TilemapTransform t, F32x2 pos);
+F32x2 TilemapTransform_reverse(TilemapTransform t, F32x2 pos);*/

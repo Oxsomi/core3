@@ -1,4 +1,5 @@
 #include "math/transform.h"
+#include "types/pack.h"
 
 //3D transform
 
@@ -53,14 +54,10 @@ F32x4 Transform_reverse(Transform t, F32x4 pos) {
 	return F32x4_div(mpos, t.scale);
 }
 
-//2D transform
-
-F32x2 Transform2D_applyToDirection(Transform2D t, F32x2 dir);
-F32x2 Transform2D_apply(Transform2D t, F32x2 pos);
-F32x2 Transform2D_reverse(Transform2D t, F32x2 pos);
-
-//2D tilemap
-
-F32x2 TilemapTransform_applyToDirection(TilemapTransform t, F32x2 dir);
-F32x2 TilemapTransform_apply(TilemapTransform t, F32x2 pos);
-F32x2 TilemapTransform_reverse(TilemapTransform t, F32x2 pos);
+U32 TilemapTransform_x(TilemapTransform transform) { return (U32)transform & 0xFFFFFF; }
+U32 TilemapTransform_y(TilemapTransform transform) { return (U32)(transform >> 24) & 0xFFFFFF; }
+U8 TilemapTransform_layerId(TilemapTransform transform) { return (U8)(transform >> 48) & 0x7F; }
+U8 TilemapTransform_paletteId(TilemapTransform transform) { return (U8)(transform >> 55) & 0xF; }
+EMirrored TilemapTransform_mirrored(TilemapTransform transform) { return (EMirrored)((U8)(transform >> 59) & 0x3); }
+ERotated TilemapTransform_rotated(TilemapTransform transform) { return (ERotated)((U8)(transform >> 61) & 0x3); }
+Bool TilemapTransform_isValid(TilemapTransform transform) { return transform >> 63; }
