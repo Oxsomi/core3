@@ -43,6 +43,12 @@ String Error_formatPlatformError(Error err) {
 
 //#define _STRICT_VALIDATION
 
+#ifdef _STRICT_VALIDATION
+	#define _EXTRA_CHECKS 4
+#else
+	#define _EXTRA_CHECKS 0
+#endif
+
 //
 
 int main() {
@@ -77,42 +83,25 @@ int main() {
 		.ptr = NULL
 	};
 
+	Buffer emp = Buffer_createNull(), full = Buffer_createNull();
+	Error err = Error_none();
+
+	String inputs[19 + _EXTRA_CHECKS] = { 0 };
+
 	//Test Buffer
 
-	Buffer emp = Buffer_createNull();
-	Error err = Buffer_createZeroBits(256, alloc, &emp);
-
-	if(err.genericError) {
-		printf("Failed unit test: create zero bits failed with error\n");
-		return 4;
-	}
-
-	Buffer full = Buffer_createNull(); 
-	err = Buffer_createOneBits(256, alloc, &full);
-
-	if(err.genericError) {
-		printf("Failed unit test: create one bits failed with error\n");
-		Buffer_free(&emp, alloc);
-		return 5;
-	}
+	_gotoIfError(clean, Buffer_createZeroBits(256, alloc, &emp));
+	_gotoIfError(clean, Buffer_createOneBits(256, alloc, &full));
 
 	Bool res = false;
 
-	if (Buffer_eq(emp, full, &res).genericError || res) {
-		printf("Failed unit test: empty and full bitset can't be equal!\n");
-		Buffer_free(&emp, alloc);
-		Buffer_free(&full, alloc);
-		return 2;
-	}
+	if (Buffer_eq(emp, full, &res).genericError || res)
+		_gotoIfError(clean, Error_invalidOperation(0));
 
 	Buffer_bitwiseNot(emp);
 
-	if (Buffer_eq(emp, full, &res).genericError || !res) {
-		printf("Failed unit test: bitwiseNot is invalid!\n");
-		Buffer_free(&emp, alloc);
-		Buffer_free(&full, alloc);
-		return 2;
-	}
+	if (Buffer_eq(emp, full, &res).genericError || !res)
+		_gotoIfError(clean, Error_invalidOperation(1));
 
 	Buffer_bitwiseNot(emp);
 
@@ -121,12 +110,8 @@ int main() {
 
 	Buffer_bitwiseNot(emp);
 
-	if (Buffer_neq(emp, full, &res).genericError || res) {
-		printf("Failed unit test: setBitRange or unsetBitRange is invalid!\n");
-		Buffer_free(&emp, alloc);
-		Buffer_free(&full, alloc);
-		return 3;
-	}
+	if (Buffer_neq(emp, full, &res).genericError || res)
+		_gotoIfError(clean, Error_invalidOperation(2));
 
 	Buffer_free(&emp, alloc);
 	Buffer_free(&full, alloc);
@@ -160,26 +145,21 @@ int main() {
 
 	for (U64 i = 0; i < sizeof(TEST_CRC32C) / sizeof(TEST_CRC32C[0]); ++i) {
 
-		Buffer buf = Buffer_createRef((void*)TEST_CRC32C[i].str, String_calcStrLen(TEST_CRC32C[i].str, U64_MAX));
+		Buffer buf = Buffer_createRef(
+			(void*)TEST_CRC32C[i].str, String_calcStrLen(TEST_CRC32C[i].str, U64_MAX)
+		);
+
 		U32 groundTruth = *(const U32*) TEST_CRC32C[i].v;
 		U32 ours = Buffer_crc32c(buf);
 
-		if(groundTruth != ours) {
-			printf("Failed unit test: CRC32C test failed! (at offset %llu)\n", i);
-			return 5;
-		}
+		if(groundTruth != ours)
+			_gotoIfError(clean, Error_invalidOperation(3));
 	}
 
 	//Test SHA256 function
 	//https://www.di-mgt.com.au/sha_testvectors.html
 	//https://www.dlitz.net/crypto/shad256-test-vectors/
 	//https://github.com/amosnier/sha-2/blob/master/test.c
-
-	#ifdef _STRICT_VALIDATION
-		#define _EXTRA_CHECKS 4
-	#else
-		#define _EXTRA_CHECKS 0
-	#endif
 
 	static const U32 RESULTS[][8] = {
 		{ 0xE3B0C442, 0x98FC1C14, 0x9AFBF4C8, 0x996FB924, 0x27AE41E4, 0x649B934C, 0xA495991B, 0x7852B855 },	
@@ -207,14 +187,9 @@ int main() {
 		{ 0xC23CE8A7, 0x895F4B21, 0xEC0DAF37, 0x920AC0A2, 0x62A22004, 0x5A03EB2D, 0xFED48EF9, 0xB05AABEA }
 	};
 
-	String inputs[19 + _EXTRA_CHECKS] = { 0 };
-
 	inputs[1] = String_createConstRefUnsafe("abc");
 
-	if(String_create('a', MEGA, alloc, inputs + 2).genericError) {
-		printf("Failed unit test: SHA256 test failed! Couldn't allocate memory for SHA256 test 1!\n");
-		return 7;
-	}
+	_gotoIfError(clean, String_create('a', MEGA, alloc, inputs + 2));
 
 	inputs[3] = String_createConstRefSized("\xde\x18\x89\x41\xa3\x37\x5d\x3a\x8a\x06\x1e\x67\x57\x6e\x92\x6d", 16);
 
@@ -254,32 +229,9 @@ int main() {
 
 	#if _EXTRA_CHECKS
 
-		if(String_create('\x5A', 536'870'912, alloc, inputs + 20).genericError) {
-
-			for(U64 i = 0; i < 20; ++i)
-				String_free(&inputs[i], alloc);
-
-			printf("Failed unit test: SHA256 test failed! Couldn't allocate memory for SHA256 test 19!\n");
-			return 7;
-		}
-
-		if(String_create('\0', 1'090'519'040, alloc, inputs + 21).genericError) {
-
-			for(U64 i = 0; i < 21; ++i)
-				String_free(&inputs[i], alloc);
-
-			printf("Failed unit test: SHA256 test failed! Couldn't allocate memory for SHA256 test 20!\n");
-			return 8;
-		}
-
-		if(String_create('\x42', 1'610'612'798, alloc, inputs + 22).genericError) {
-
-			for(U64 i = 0; i < 22; ++i)
-				String_free(&inputs[i], alloc);
-
-			printf("Failed unit test: SHA256 test failed! Couldn't allocate memory for SHA256 test 21!\n");
-			return 9;
-		}
+		_gotoIfError(clean, String_create('\x5A', 536'870'912, alloc, inputs + 20));
+		_gotoIfError(clean, String_create('\0', 1'090'519'040, alloc, inputs + 21));
+		_gotoIfError(clean, String_create('\x42', 1'610'612'798, alloc, inputs + 22));
 
 		inputs[19] = String_createConstRefSized(inputs[21].ptr, 1'000'000);
 
@@ -295,15 +247,8 @@ int main() {
 		Bool b = false;
 		Buffer_eq(Buffer_createRef(result, 32), Buffer_createRef((U32*)RESULTS[i], 32), &b);
 	
-		if(!b) {
-
-			printf("Failed unit test: SHA256 test failed! (at offset %llu)\n", i);
-
-			for(U64 j = 0; j < sizeof(inputs) / sizeof(inputs[0]); ++j)
-				String_free(&inputs[j], alloc);
-
-			return 6;
-		}
+		if(!b)
+			_gotoIfError(clean, Error_invalidOperation(4));
 	}
 
 	for(U64 i = 0; i < sizeof(inputs) / sizeof(inputs[0]); ++i)
@@ -315,4 +260,18 @@ int main() {
 
 	printf("Successful unit test! After %fs\n", dt);
 	return 0;
+
+clean:
+
+	for(U64 j = 0; j < sizeof(inputs) / sizeof(inputs[0]); ++j)
+		String_free(&inputs[j], alloc);
+
+	Buffer_free(&emp, alloc);
+	Buffer_free(&full, alloc);
+
+	F32 dt2 = (Time_now() - now) / (F32)SECOND;
+
+	printf("Failed unit test... After %fs\n", dt2);
+
+	return (int) err.genericError;
 }
