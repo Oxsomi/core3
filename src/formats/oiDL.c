@@ -76,8 +76,8 @@ Error DLFile_create(DLSettings settings, Allocator alloc, DLFile *dlFile) {
 
 		Bool b = false;
 		Error err = Buffer_eq(
-			Buffer_createRef(key, sizeof(key)), 
-			Buffer_createRef(settings.encryptionKey, sizeof(key)), 
+			Buffer_createConstRef(key, sizeof(key)), 
+			Buffer_createConstRef(settings.encryptionKey, sizeof(key)), 
 			&b
 		);
 
@@ -133,7 +133,7 @@ Error DLFile_addEntry(DLFile *dlFile, Buffer entryBuf, Allocator alloc) {
 
 	return List_pushBack(
 		&dlFile->entries,
-		Buffer_createRef(&entry, sizeof(entry)),
+		Buffer_createConstRef(&entry, sizeof(entry)),
 		alloc
 	);
 }
@@ -153,7 +153,7 @@ Error DLFile_addEntryAscii(DLFile *dlFile, String entryStr, Allocator alloc) {
 
 	return List_pushBack(
 		&dlFile->entries,
-		Buffer_createRef(&entry, sizeof(entry)),
+		Buffer_createConstRef(&entry, sizeof(entry)),
 		alloc
 	);
 }
@@ -235,7 +235,7 @@ Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result) {
 	for (U64 i = 0; i < dlFile.entries.length; ++i) {
 
 		DLEntry entry = ((DLEntry*)dlFile.entries.ptr)[i];
-		Buffer buf = dlFile.settings.dataType == EDLDataType_Data ? entry.entryBuffer : String_buffer(entry.entryString);
+		Buffer buf = dlFile.settings.dataType == EDLDataType_Data ? entry.entryBuffer : String_bufferConst(entry.entryString);
 		U64 len = buf.length;
 
 		U8 *sizePtr = sizes + dataSizeType * i;
@@ -355,14 +355,14 @@ Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result) {
 
 			Buffer_copy(
 				Buffer_createRef(headerIt, sizeof(hash)), 
-				Buffer_createRef(hash, sizeof(hash))
+				Buffer_createConstRef(hash, sizeof(hash))
 			);
 
 			headerIt += sizeof(hash);
 		}
 	}
 
-	Buffer headerBuf = Buffer_createRef(header, headerSize);
+	Buffer headerBuf = Buffer_createConstRef(header, headerSize);
 
 	err = Buffer_combine(headerBuf, compressedOutput, alloc, result);
 	Buffer_free(&compressedOutput, alloc);

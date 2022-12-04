@@ -134,7 +134,7 @@ Error WindowManager_createPhysical(
 	//Our strings aren't null terminated, so ensure windows doesn't read garbage
 
 	C8 windowName[MAX_PATH + 1];
-	Buffer_copy(Buffer_createRef(windowName, sizeof(windowName)), String_buffer(title));
+	Buffer_copy(Buffer_createRef(windowName, sizeof(windowName)), String_bufferConst(title));
 
 	windowName[title.length] = '\0';
 
@@ -204,7 +204,10 @@ Error WindowManager_createPhysical(
 		if(!screen)
 			_gotoIfError(clean, Error_platformError(3, GetLastError()));
 
-		cpuVisibleBuffer.length = (U64)bmi.bmiHeader.biWidth * bmi.bmiHeader.biHeight * 4;
+		//Manually set it to be a reference
+		//This makes it so we don't free it, because we don't own the memory
+
+		cpuVisibleBuffer.lengthAndRefBits = ((U64)bmi.bmiHeader.biWidth * bmi.bmiHeader.biHeight * 4) | ((U64)1 << 31);
 
 		ReleaseDC(nativeWindow, screen);
 		screen = NULL;

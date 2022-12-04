@@ -29,12 +29,12 @@ typedef enum ETextureCompressionType {
 	ETextureCompressionType_Invalid
 } ETextureCompressionType;
 
-#define _ETextureFormat(primitive, redBits, greenBits, blueBits, alphaBits) \
-((alphaBits >> 1) | ((blueBits >> 1) << 6) | ((greenBits >> 1) << 12) | ((redBits >> 1) << 18) | (primitive << 24) | \
+#define _ETextureFormat(primitive, redBits, greenBits, blueBits, alphaBits)												\
+((alphaBits >> 1) | ((blueBits >> 1) << 6) | ((greenBits >> 1) << 12) | ((redBits >> 1) << 18) | (primitive << 24) |	\
 (((redBits + greenBits + blueBits + alphaBits) >> 2) - 1) << 27)
 
 #define _ETextureFormatCompressed(blockSizeBits, alignmentX, alignmentY, compType, hasRed, hasGreen, hasBlue, hasAlpha) \
-((hasAlpha ? 1 : 0) | ((hasBlue ? 1 : 0) << 6) | (compType << 9) | ((hasGreen ? 1 : 0) << 12) | (alignmentY << 16) | \
+((hasAlpha ? 1 : 0) | ((hasBlue ? 1 : 0) << 6) | (compType << 9) | ((hasGreen ? 1 : 0) << 12) | (alignmentY << 16) |	\
  ((hasRed ? 1 : 0) << 18) | (alignmentX << 21) | \
  (ETexturePrimitive_Compressed << 24) | (((blockSizeBits >> 6) - 1) << 27))
 

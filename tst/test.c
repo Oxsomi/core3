@@ -19,7 +19,7 @@ Error ourAlloc(void *allocator, U64 length, Buffer *output) {
 	if(!ptr)
 		return Error_outOfMemory(0);
 
-	*output = (Buffer) { .ptr = ptr, .length = length };
+	*output = Buffer_createManagedPtr( ptr, length);
 	return Error_none();
 }
 
@@ -145,8 +145,8 @@ int main() {
 
 	for (U64 i = 0; i < sizeof(TEST_CRC32C) / sizeof(TEST_CRC32C[0]); ++i) {
 
-		Buffer buf = Buffer_createRef(
-			(void*)TEST_CRC32C[i].str, String_calcStrLen(TEST_CRC32C[i].str, U64_MAX)
+		Buffer buf = Buffer_createConstRef(
+			TEST_CRC32C[i].str, String_calcStrLen(TEST_CRC32C[i].str, U64_MAX)
 		);
 
 		U32 groundTruth = *(const U32*) TEST_CRC32C[i].v;
@@ -242,10 +242,14 @@ int main() {
 	for(U64 i = 0; i < sizeof(inputs) / sizeof(inputs[0]); ++i) {
 
 		U32 result[8];
-		Buffer_sha256(String_buffer(inputs[i]), result);
+		Buffer_sha256(String_bufferConst(inputs[i]), result);
 	
 		Bool b = false;
-		Buffer_eq(Buffer_createRef(result, 32), Buffer_createRef((U32*)RESULTS[i], 32), &b);
+		Buffer_eq(
+			Buffer_createConstRef(result, 32), 
+			Buffer_createConstRef(RESULTS[i], 32), 
+			&b
+		);
 	
 		if(!b)
 			_gotoIfError(clean, Error_invalidOperation(4));

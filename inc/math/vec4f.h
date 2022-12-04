@@ -136,16 +136,16 @@ F32x4 F32x4_load4(const F32 *arr);
 
 #define _F32x4_expand4(xv, yv, zv, wv) F32x4 F32x4_##xv##yv##zv##wv(F32x4 a);
 
-#define _F32x4_expand3(...)	\
-_F32x4_expand4(__VA_ARGS__, x); _F32x4_expand4(__VA_ARGS__, y); \
+#define _F32x4_expand3(...)											\
+_F32x4_expand4(__VA_ARGS__, x); _F32x4_expand4(__VA_ARGS__, y);		\
 _F32x4_expand4(__VA_ARGS__, z); _F32x4_expand4(__VA_ARGS__, w);
 
 #define _F32x4_expand2(...)	\
-_F32x4_expand3(__VA_ARGS__, x); _F32x4_expand3(__VA_ARGS__, y); \
+_F32x4_expand3(__VA_ARGS__, x); _F32x4_expand3(__VA_ARGS__, y);		\
 _F32x4_expand3(__VA_ARGS__, z); _F32x4_expand3(__VA_ARGS__, w);
 
 #define _F32x4_expand(...)	\
-_F32x4_expand2(__VA_ARGS__, x); _F32x4_expand2(__VA_ARGS__, y); \
+_F32x4_expand2(__VA_ARGS__, x); _F32x4_expand2(__VA_ARGS__, y);		\
 _F32x4_expand2(__VA_ARGS__, z); _F32x4_expand2(__VA_ARGS__, w);
 
 _F32x4_expand(x);
@@ -160,8 +160,8 @@ impl F32x4 F32x4_trunc3(F32x4 a);
 
 #define _F32x2_expand2(xv, yv) F32x4 F32x4_##xv##yv##4(F32x4 a); F32x2 F32x4_##xv##yv(F32x4 a);
 
-#define _F32x2_expand(...) \
-_F32x2_expand2(__VA_ARGS__, x); _F32x2_expand2(__VA_ARGS__, y); \
+#define _F32x2_expand(...)											\
+_F32x2_expand2(__VA_ARGS__, x); _F32x2_expand2(__VA_ARGS__, y);		\
 _F32x2_expand2(__VA_ARGS__, z); _F32x2_expand2(__VA_ARGS__, w);
 
 _F32x2_expand(x);
@@ -173,12 +173,12 @@ _F32x2_expand(w);
 
 #define _F32x3_expand3(xv, yv, zv) F32x4 F32x4_##xv##yv##zv(F32x4 a);
 
-#define _F32x3_expand2(...)	\
-_F32x3_expand3(__VA_ARGS__, x); _F32x3_expand3(__VA_ARGS__, y); \
+#define _F32x3_expand2(...)											\
+_F32x3_expand3(__VA_ARGS__, x); _F32x3_expand3(__VA_ARGS__, y);		\
 _F32x3_expand3(__VA_ARGS__, z); _F32x3_expand3(__VA_ARGS__, w); 
 
 #define _F32x3_expand(...)	\
-_F32x3_expand2(__VA_ARGS__, x); _F32x3_expand2(__VA_ARGS__, y); \
+_F32x3_expand2(__VA_ARGS__, x); _F32x3_expand2(__VA_ARGS__, y);		\
 _F32x3_expand2(__VA_ARGS__, z); _F32x3_expand2(__VA_ARGS__, w); 
 
 _F32x3_expand(x);

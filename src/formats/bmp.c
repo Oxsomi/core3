@@ -38,7 +38,9 @@ Error BMP_writeRGBA(
 	Buffer *result
 ) {
 
-	if(buf.length > I32_MAX || buf.length != (U64)w * h * 4)
+	U64 bufLen = Buffer_length(buf);
+
+	if(bufLen > I32_MAX || bufLen != (U64)w * h * 4)
 		return Error_invalidParameter(0, 0, 0);
 
 	U32 headersSize = (U32) (
@@ -49,7 +51,7 @@ Error BMP_writeRGBA(
 
 	BMPHeader header = (BMPHeader) {
 		.fileType = BMP_MAGIC,
-		.fileSize = ((I32) buf.length) * (isFlipped ? -1 : 1),
+		.fileSize = ((I32) bufLen) * (isFlipped ? -1 : 1),
 		.r0 = 0, .r1 = 0, 
 		.offsetData = headersSize
 	};
@@ -76,7 +78,7 @@ Error BMP_writeRGBA(
 	Buffer file = Buffer_createNull();
 
 	Error err = Buffer_createUninitializedBytes(
-		headersSize + buf.length,
+		headersSize + bufLen,
 		allocator,
 		&file
 	);
@@ -84,7 +86,7 @@ Error BMP_writeRGBA(
 	if(err.genericError)
 		return err;
 
-	Buffer fileAppend = file;
+	Buffer fileAppend = Buffer_createRefFromBuffer(file, false);
 
 	_gotoIfError(clean, Buffer_append(&fileAppend, &header, sizeof(header)));
 	_gotoIfError(clean, Buffer_append(&fileAppend, &infoHeader, sizeof(infoHeader)));

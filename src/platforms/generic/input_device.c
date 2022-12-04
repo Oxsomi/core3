@@ -148,7 +148,7 @@ Error InputDevice_create(U16 buttons, U16 axes, EInputDeviceType type, InputDevi
 																						\
 	Buffer_copy(																		\
 		Buffer_createRef(inputType->name, _LONGSTRING_LEN), 							\
-		Buffer_createRef(keyName.ptr, keyName.length)									\
+		Buffer_createConstRef(keyName.ptr, keyName.length)								\
 	);																					\
 																						\
 	inputType->name[U64_min(keyName.length, _LONGSTRING_LEN - 1)] = '\0';

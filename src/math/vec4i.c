@@ -73,19 +73,19 @@ I32x4 I32x4_clamp(I32x4 a, I32x4 mi, I32x4 ma) { return I32x4_max(mi, I32x4_min(
 #undef _I32x4_expand2
 #undef _I32x4_expand
 
-#define _I32x4_expand4(xv, x0, yv, y0, zv, z0, wv, w0) \
+#define _I32x4_expand4(xv, x0, yv, y0, zv, z0, wv, w0)							\
 I32x4 I32x4_##xv##yv##zv##wv(I32x4 a) { return _shufflei(a, x0, y0, z0, w0); }
 
-#define _I32x4_expand3(...)	\
-_I32x4_expand4(__VA_ARGS__, x, 0); _I32x4_expand4(__VA_ARGS__, y, 1); \
+#define _I32x4_expand3(...)												\
+_I32x4_expand4(__VA_ARGS__, x, 0); _I32x4_expand4(__VA_ARGS__, y, 1);	\
 _I32x4_expand4(__VA_ARGS__, z, 2); _I32x4_expand4(__VA_ARGS__, w, 3);
 
-#define _I32x4_expand2(...)	\
-_I32x4_expand3(__VA_ARGS__, x, 0); _I32x4_expand3(__VA_ARGS__, y, 1); \
+#define _I32x4_expand2(...)												\
+_I32x4_expand3(__VA_ARGS__, x, 0); _I32x4_expand3(__VA_ARGS__, y, 1);	\
 _I32x4_expand3(__VA_ARGS__, z, 2); _I32x4_expand3(__VA_ARGS__, w, 3);
 
-#define _I32x4_expand(...)	\
-_I32x4_expand2(__VA_ARGS__, x, 0); _I32x4_expand2(__VA_ARGS__, y, 1); \
+#define _I32x4_expand(...)												\
+_I32x4_expand2(__VA_ARGS__, x, 0); _I32x4_expand2(__VA_ARGS__, y, 1);	\
 _I32x4_expand2(__VA_ARGS__, z, 2); _I32x4_expand2(__VA_ARGS__, w, 3);
 
 _I32x4_expand(x, 0);
@@ -101,11 +101,11 @@ _I32x4_expand(w, 3);
 
 #define _I32x3_expand3(xv, yv, zv) I32x4 I32x4_##xv##yv##zv(I32x4 a) { return I32x4_trunc3(I32x4_##xv##yv##zv##x(a)); }
 
-#define _I32x3_expand2(...)	\
+#define _I32x3_expand2(...)										\
 _I32x3_expand3(__VA_ARGS__, x); _I32x3_expand3(__VA_ARGS__, y); \
 _I32x3_expand3(__VA_ARGS__, z); _I32x3_expand3(__VA_ARGS__, w); 
 
-#define _I32x3_expand(...)	\
+#define _I32x3_expand(...)										\
 _I32x3_expand2(__VA_ARGS__, x); _I32x3_expand2(__VA_ARGS__, y); \
 _I32x3_expand2(__VA_ARGS__, z); _I32x3_expand2(__VA_ARGS__, w); 
 
@@ -119,11 +119,11 @@ _I32x3_expand(w);
 #undef _I32x2_expand2
 #undef _I32x2_expand
 
-#define _I32x2_expand2(xv, yv) \
+#define _I32x2_expand2(xv, yv)													 \
 I32x4 I32x4_##xv##yv##4(I32x4 a) { return I32x4_trunc2(I32x4_##xv##yv##xx(a)); } \
 I32x2 I32x4_##xv##yv(I32x4 a) { return I32x2_fromI32x4(I32x4_##xv##yv##xx(a)); }
 
-#define _I32x2_expand(...) \
+#define _I32x2_expand(...)										\
 _I32x2_expand2(__VA_ARGS__, x); _I32x2_expand2(__VA_ARGS__, y); \
 _I32x2_expand2(__VA_ARGS__, z); _I32x2_expand2(__VA_ARGS__, w);
 

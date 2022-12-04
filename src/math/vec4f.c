@@ -35,19 +35,19 @@ F32x4 F32x4_mod(F32x4 v, F32x4 d) { return F32x4_mul(F32x4_fract(F32x4_div(v, d)
 #undef _F32x4_expand2
 #undef _F32x4_expand
 
-#define _F32x4_expand4(xv, x0, yv, y0, zv, z0, wv, w0) \
+#define _F32x4_expand4(xv, x0, yv, y0, zv, z0, wv, w0)							\
 F32x4 F32x4_##xv##yv##zv##wv(F32x4 a) { return _shufflef(a, x0, y0, z0, w0); }
 
-#define _F32x4_expand3(...)	\
-_F32x4_expand4(__VA_ARGS__, x, 0); _F32x4_expand4(__VA_ARGS__, y, 1); \
+#define _F32x4_expand3(...)												\
+_F32x4_expand4(__VA_ARGS__, x, 0); _F32x4_expand4(__VA_ARGS__, y, 1);	\
 _F32x4_expand4(__VA_ARGS__, z, 2); _F32x4_expand4(__VA_ARGS__, w, 3);
 
-#define _F32x4_expand2(...)	\
-_F32x4_expand3(__VA_ARGS__, x, 0); _F32x4_expand3(__VA_ARGS__, y, 1); \
+#define _F32x4_expand2(...)												\
+_F32x4_expand3(__VA_ARGS__, x, 0); _F32x4_expand3(__VA_ARGS__, y, 1);	\
 _F32x4_expand3(__VA_ARGS__, z, 2); _F32x4_expand3(__VA_ARGS__, w, 3);
 
-#define _F32x4_expand(...)	\
-_F32x4_expand2(__VA_ARGS__, x, 0); _F32x4_expand2(__VA_ARGS__, y, 1); \
+#define _F32x4_expand(...)												\
+_F32x4_expand2(__VA_ARGS__, x, 0); _F32x4_expand2(__VA_ARGS__, y, 1);	\
 _F32x4_expand2(__VA_ARGS__, z, 2); _F32x4_expand2(__VA_ARGS__, w, 3);
 
 _F32x4_expand(x, 0);
@@ -63,11 +63,11 @@ _F32x4_expand(w, 3);
 
 #define _F32x3_expand3(xv, yv, zv) F32x4 F32x4_##xv##yv##zv(F32x4 a) { return F32x4_trunc3(F32x4_##xv##yv##zv##x(a)); }
 
-#define _F32x3_expand2(...)	\
+#define _F32x3_expand2(...)										\
 _F32x3_expand3(__VA_ARGS__, x); _F32x3_expand3(__VA_ARGS__, y); \
 _F32x3_expand3(__VA_ARGS__, z); _F32x3_expand3(__VA_ARGS__, w); 
 
-#define _F32x3_expand(...)	\
+#define _F32x3_expand(...)										\
 _F32x3_expand2(__VA_ARGS__, x); _F32x3_expand2(__VA_ARGS__, y); \
 _F32x3_expand2(__VA_ARGS__, z); _F32x3_expand2(__VA_ARGS__, w); 
 
@@ -81,11 +81,11 @@ _F32x3_expand(w);
 #undef _F32x2_expand2
 #undef _F32x2_expand
 
-#define _F32x2_expand2(xv, yv) \
-F32x4 F32x4_##xv##yv##4(F32x4 a) { return F32x4_trunc2(F32x4_##xv##yv##xx(a)); } \
+#define _F32x2_expand2(xv, yv)														\
+F32x4 F32x4_##xv##yv##4(F32x4 a) { return F32x4_trunc2(F32x4_##xv##yv##xx(a)); }	\
 F32x2 F32x4_##xv##yv(F32x4 a) { return F32x2_fromF32x4(F32x4_##xv##yv##xx(a)); }
 
-#define _F32x2_expand(...) \
+#define _F32x2_expand(...)										\
 _F32x2_expand2(__VA_ARGS__, x); _F32x2_expand2(__VA_ARGS__, y); \
 _F32x2_expand2(__VA_ARGS__, z); _F32x2_expand2(__VA_ARGS__, w);
 

@@ -7,13 +7,10 @@
 #include <intrin.h>
 
 Bool BitRef_get(BitRef b) { return b.ptr && (*b.ptr >> b.off) & 1; }
-void BitRef_set(BitRef b) { if(b.ptr) *b.ptr |= 1 << b.off; }
-void BitRef_reset(BitRef b) { if(b.ptr) *b.ptr &= ~(1 << b.off); }
+void BitRef_set(BitRef b) { if(b.ptr && !b.isConst) *b.ptr |= 1 << b.off; }
+void BitRef_reset(BitRef b) { if(b.ptr && !b.isConst) *b.ptr &= ~(1 << b.off); }
 
 void BitRef_setTo(BitRef b, Bool v) { 
-
-	if(!b.ptr) return;
-
 	if(v) BitRef_set(b);
 	else BitRef_reset(b);
 }
@@ -23,8 +20,8 @@ Error Buffer_getBit(Buffer buf, U64 offset, Bool *output) {
 	if(!output || !buf.ptr)
 		return Error_nullPointer(!buf.ptr ? 0 : 2, 0);
 
-	if((offset >> 3) >= buf.length)
-		return Error_outOfBounds(1, 0, offset >> 3, buf.length);
+	if((offset >> 3) >= Buffer_length(buf))
+		return Error_outOfBounds(1, 0, offset >> 3, Buffer_length(buf));
 
 	*output = (buf.ptr[offset >> 3] >> (offset & 7)) & 1;
 	return Error_none();
@@ -36,19 +33,24 @@ Error Buffer_setBitTo(Buffer buf, U64 offset, Bool value) {
 
 //Copy forwards
 
-void Buffer_copy(Buffer dst, Buffer src) {
+Bool Buffer_copy(Buffer dst, Buffer src) {
 
 	if(!dst.ptr || !src.ptr)
-		return;
+		return true;
 
-	U64 *dstPtr = (U64*)dst.ptr, *dstEnd = dstPtr + (dst.length >> 3);
-	const U64 *srcPtr = (const U64*)src.ptr, *srcEnd = srcPtr + (src.length >> 3);
+	if(Buffer_isConstRef(dst))
+		return false;
+
+	U64 dstLen = Buffer_length(dst), srcLen = Buffer_length(src);
+
+	U64 *dstPtr = (U64*)dst.ptr, *dstEnd = dstPtr + (dstLen >> 3);
+	const U64 *srcPtr = (const U64*)src.ptr, *srcEnd = srcPtr + (srcLen >> 3);
 
 	for(; dstPtr < dstEnd && srcPtr < srcEnd; ++dstPtr, ++srcPtr)
 		*dstPtr = *srcPtr;
 
-	dstEnd = (U64*)(dst.ptr + dst.length);
-	srcEnd = (const U64*)(src.ptr + src.length);
+	dstEnd = (U64*)(dst.ptr + dstLen);
+	srcEnd = (const U64*)(src.ptr + srcLen);
 
 	if((U64)dstPtr + 4 <= (U64)dstEnd && (U64)srcPtr + 4 <= (U64)srcEnd) {
 
@@ -68,17 +70,24 @@ void Buffer_copy(Buffer dst, Buffer src) {
 
 	if ((U64)dstPtr + 1 <= (U64)dstEnd && (U64)srcPtr + 1 <= (U64)srcEnd)
 		*(U8*)dstPtr = *(const U8*)srcPtr;
+
+	return true;
 }
 
 //Copy backwards; if ranges are overlapping this might be important
 
-void Buffer_revCopy(Buffer dst, Buffer src) {
+Bool Buffer_revCopy(Buffer dst, Buffer src) {
 
 	if(!dst.ptr || !src.ptr)
-		return;
+		return true;
 
-	U64 *dstPtr = (U64*)(dst.ptr + dst.length), *dstBeg = (U64*)(dstPtr - (dst.length >> 3));
-	const U64 *srcPtr = (const U64*)(src.ptr + src.length), *srcBeg = (U64*)(srcPtr - (src.length >> 3));
+	if(Buffer_isConstRef(dst))
+		return false;
+
+	U64 dstLen = Buffer_length(dst), srcLen = Buffer_length(src);
+
+	U64 *dstPtr = (U64*)(dst.ptr + dstLen), *dstBeg = (U64*)(dstPtr - (dstLen >> 3));
+	const U64 *srcPtr = (const U64*)(src.ptr + srcLen), *srcBeg = (U64*)(srcPtr - (srcLen >> 3));
 
 	for(; dstPtr > dstBeg && srcPtr > srcBeg; ) {
 		--srcPtr; --dstPtr;
@@ -106,6 +115,8 @@ void Buffer_revCopy(Buffer dst, Buffer src) {
 
 	if ((I64)dstPtr - 1 >= (I64)dst.ptr && (I64)srcPtr - 1 >= (I64)src.ptr)
 		*(U8*)dstPtr = *(const U8*)srcPtr;
+
+	return true;
 }
 
 //
@@ -115,8 +126,11 @@ Error Buffer_setBit(Buffer buf, U64 offset) {
 	if(!buf.ptr)
 		return Error_nullPointer(0, 0);
 
-	if((offset >> 3) >= buf.length)
-		return Error_outOfBounds(1, 0, offset, buf.length << 3);
+	if(Buffer_isConstRef(buf))
+		return Error_constData(0, 0);
+
+	if((offset >> 3) >= Buffer_length(buf))
+		return Error_outOfBounds(1, 0, offset, Buffer_length(buf) << 3);
 
 	buf.ptr[offset >> 3] |= 1 << (offset & 7);
 	return Error_none();
@@ -127,8 +141,11 @@ Error Buffer_resetBit(Buffer buf, U64 offset) {
 	if(!buf.ptr)
 		return Error_nullPointer(0, 0);
 
-	if((offset >> 3) >= buf.length)
-		return Error_outOfBounds(1, 0, offset, buf.length << 3);
+	if(Buffer_isConstRef(buf))
+		return Error_constData(0, 0);
+
+	if((offset >> 3) >= Buffer_length(buf))
+		return Error_outOfBounds(1, 0, offset, Buffer_length(buf) << 3);
 
 	buf.ptr[offset >> 3] &= ~(1 << (offset & 7));
 	return Error_none();
@@ -139,7 +156,10 @@ Error Buffer_resetBit(Buffer buf, U64 offset) {
 	if(!dst.ptr || !src.ptr)															\
 		return Error_nullPointer(!dst.ptr ? 0 : 1, 0);									\
 																						\
-	U64 l = U64_min(dst.length, src.length);											\
+	if(Buffer_isConstRef(dst))															\
+		return Error_constData(0, 0);													\
+																						\
+	U64 l = U64_min(Buffer_length(dst), Buffer_length(src));							\
 																						\
 	for(U64 i = 0, j = l >> 3; i < j; ++i)												\
 		*((U64*)dst.ptr + i) x *((const U64*)src.ptr + i);								\
@@ -166,10 +186,23 @@ Buffer Buffer_createRef(void *v, U64 length) {
 	if(length >> 48 || (U64)v >> 48)		//Invalid addresses (unsupported by CPUs)
 		return Buffer_createNull();
 
-	return (Buffer) { .ptr = (U8*) v, .length = length }; 
+	return (Buffer) { .ptr = (U8*) v, .lengthAndRefBits = length | ((U64)1 << 63) };
+}
+
+Buffer Buffer_createConstRef(const void *v, U64 length) { 
+
+	if(length >> 48 || (U64)v >> 48)		//Invalid addresses (unsupported by CPUs)
+		return Buffer_createNull();
+
+	return (Buffer) { .ptr = (U8*) v, .lengthAndRefBits = length | ((U64)3 << 62) };
 }
 
 Error Buffer_eq(Buffer buf0, Buffer buf1, Bool *result) {
+
+	if (!buf0.ptr && !buf1.ptr) {
+		if(result) *result = true;
+		return Error_none();
+	}
 	
 	if(!buf0.ptr || !buf1.ptr)
 		return Error_nullPointer(!buf0.ptr ? 0 : 1, 0);
@@ -179,14 +212,16 @@ Error Buffer_eq(Buffer buf0, Buffer buf1, Bool *result) {
 
 	*result = false;
 
-	if(buf0.length != buf1.length)
+	U64 len0 = Buffer_length(buf0);
+
+	if(len0 != Buffer_length(buf1))
 		return Error_none();
 
-	for (U64 i = 0, j = buf0.length >> 3; i < j; ++i)
+	for (U64 i = 0, j = len0 >> 3; i < j; ++i)
 		if (*((const U64*)buf0.ptr + i) != *((const U64*)buf1.ptr + i))
 			return Error_none();
-																					
-	for (U64 i = buf0.length >> 3 << 3; i < buf0.length; ++i)
+
+	for (U64 i = len0 >> 3 << 3; i < len0; ++i)
 		if (buf0.ptr[i] != buf1.ptr[i])
 			return Error_none();
 
@@ -244,7 +279,7 @@ inline void Buffer_sha256Internal(Buffer buf, U32 *output) {
 		I32x4_load4((const I32*)SHA256_STATE + 4)
 	};
 
-	U64 ptr = (U64)(void*) buf.ptr, len = buf.length;
+	U64 ptr = (U64)(void*) buf.ptr, len = Buffer_length(buf);
 	U8 block[64];
 
 	Bool padded = false;
@@ -286,7 +321,7 @@ inline void Buffer_sha256Internal(Buffer buf, U32 *output) {
 				//Keep 5 bits from the index in the block at lenPtr[7]
 				//Keep the others as big endian in [0-6]
 
-				U64 currLen = buf.length;
+				U64 currLen = Buffer_length(buf);
 
 				lenPtr[7] = (U8)(currLen << 3);
 				currLen >>= 5;
@@ -302,7 +337,7 @@ inline void Buffer_sha256Internal(Buffer buf, U32 *output) {
 
 			else {
 
-				Buffer_copy(Buffer_createRef(block, 64), Buffer_createRef((void*)realPtr, realLen));
+				Buffer_copy(Buffer_createRef(block, 64), Buffer_createConstRef((const void*)realPtr, realLen));
 
 				*((U8*)(void*)block + realLen) = 0x80;
 
@@ -322,7 +357,7 @@ inline void Buffer_sha256Internal(Buffer buf, U32 *output) {
 
 					U8 *lenPtr = block + 64 - sizeof(U64);
 
-					U64 currLen = buf.length;
+					U64 currLen = Buffer_length(buf);
 
 					//Keep 5 bits from the index in the block at lenPtr[7]
 					//Keep the others as big endian in [0-6]
@@ -426,7 +461,7 @@ inline void Buffer_sha256Internal(Buffer buf, U32 *output) {
 
 	//Store output
 
-	Buffer_copy(Buffer_createRef(output, sizeof(U32) * 8), Buffer_createRef(state, sizeof(U32) * 8));
+	Buffer_copy(Buffer_createRef(output, sizeof(U32) * 8), Buffer_createConstRef(state, sizeof(U32) * 8));
 }
 
 //
@@ -457,13 +492,15 @@ inline void Buffer_sha256Internal(Buffer buf, U32 *output) {
 
 		U32 crc = U32_MAX;
 	
-		if(!buf.length)
+		U64 bufLen = Buffer_length(buf);
+
+		if(!bufLen)
 			return crc ^ U32_MAX;
 
 		U64 off = (U64)(void*)buf.ptr;
 		
-		U64 len = buf.length;
-		U64 offNear8 = U64_min((U64)buf.ptr + buf.length, (off + 7) & ~7);
+		U64 len = bufLen;
+		U64 offNear8 = U64_min((U64)buf.ptr + bufLen, (off + 7) & ~7);
 
 		//Go to nearest 8 byte boundary
 
@@ -609,7 +646,7 @@ inline void Buffer_sha256Internal(Buffer buf, U32 *output) {
 
 		//64-byte blocks
 
-		U64 ptr = (U64)(void*) buf.ptr, len = buf.length;
+		U64 ptr = (U64)(void*) buf.ptr, len = Buffer_length(buf);
 		U8 block[64];
 
 		Bool padded = false;
@@ -651,7 +688,7 @@ inline void Buffer_sha256Internal(Buffer buf, U32 *output) {
 					//Keep 5 bits from the index in the block at lenPtr[7]
 					//Keep the others as big endian in [0-6]
 
-					U64 currLen = buf.length;
+					U64 currLen = Buffer_length(buf);
 
 					lenPtr[7] = (U8)(currLen << 3);
 					currLen >>= 5;
@@ -668,7 +705,8 @@ inline void Buffer_sha256Internal(Buffer buf, U32 *output) {
 				else {
 
 					Buffer_copy(
-						Buffer_createRef(block, 64), Buffer_createRef((void*)realPtr, realLen)
+						Buffer_createRef(block, 64), 
+						Buffer_createConstRef((const void*)realPtr, realLen)
 					);
 
 					*((U8*)(void*)block + realLen) = 0x80;
@@ -689,7 +727,7 @@ inline void Buffer_sha256Internal(Buffer buf, U32 *output) {
 
 						U8 *lenPtr = block + 64 - sizeof(U64);
 
-						U64 currLen = buf.length;
+						U64 currLen = Buffer_length(buf);
 
 						//Keep 5 bits from the index in the block at lenPtr[7]
 						//Keep the others as big endian in [0-6]
@@ -801,10 +839,12 @@ inline void Buffer_sha256Internal(Buffer buf, U32 *output) {
 
 		U64 crc = U32_MAX;
 
-		if(!buf.length)
+		U64 bufLen = Buffer_length(buf);
+
+		if(!bufLen)
 			return (U32) crc ^ U32_MAX;
 
-		U64 len = buf.length;
+		U64 len = bufLen;
 		U64 it = (U64)(void*)buf.ptr;
 		U64 align8 = U64_min(it + len, (it + 7) & ~7);
 
@@ -857,11 +897,14 @@ Error Buffer_setBitRange(Buffer dst, U64 dstOff, U64 bits) {
 	if(!dst.ptr)
 		return Error_nullPointer(0, 0);
 
+	if(Buffer_isConstRef(dst))
+		return Error_constData(0, 0);
+
 	if(!bits)
 		return Error_invalidParameter(2, 0, 0);
 
-	if(((dstOff + bits - 1) >> 3) >= dst.length)
-		return Error_outOfBounds(1, 0, dstOff + bits, dst.length << 3);
+	if(dstOff + bits > (Buffer_length(dst) << 3))
+		return Error_outOfBounds(1, 0, dstOff + bits, Buffer_length(dst) << 3);
 
 	U64 dstOff8 = (dstOff + 7) >> 3;
 	U64 bitEnd = dstOff + bits;
@@ -904,11 +947,14 @@ Error Buffer_unsetBitRange(Buffer dst, U64 dstOff, U64 bits) {
 	if(!dst.ptr)
 		return Error_nullPointer(0, 0);
 
+	if(Buffer_isConstRef(dst))
+		return Error_constData(0, 0);
+
 	if(!bits)
 		return Error_invalidParameter(2, 0, 0);
 
-	if(((dstOff + bits - 1) >> 3) >= dst.length)
-		return Error_outOfBounds(1, 0, dstOff + bits, dst.length << 3);
+	if(dstOff + bits > (Buffer_length(dst) << 3))
+		return Error_outOfBounds(1, 0, dstOff + bits, Buffer_length(dst) << 3);
 
 	U64 dstOff8 = (dstOff + 7) >> 3;
 	U64 bitEnd = dstOff + bits;
@@ -951,7 +997,10 @@ inline Error Buffer_setAllToInternal(Buffer buf, U64 b64, U8 b8) {
 	if(!buf.ptr)
 		return Error_nullPointer(0, 0);
 
-	U64 l = buf.length;
+	if(Buffer_isConstRef(buf))
+		return Error_constData(0, 0);
+
+	U64 l = Buffer_length(buf);
 
 	for(U64 i = 0, j = l >> 3; i < j; ++i)
 		*((U64*)buf.ptr + i) = b64;
@@ -984,6 +1033,9 @@ Error Buffer_allocBitsInternal(U64 length, Allocator alloc, Buffer *result) {
 
 	if(!result)
 		return Error_nullPointer(0, 0);
+
+	if(result->ptr)
+		return Error_invalidParameter(2, 0, 0);
 
 	length = (length + 7) >> 3;	//Align to bytes
 	return alloc.alloc(alloc.ptr, length, result);
@@ -1021,12 +1073,15 @@ Error Buffer_createOneBits(U64 length, Allocator alloc, Buffer *result) {
 
 Error Buffer_createCopy(Buffer buf, Allocator alloc, Buffer *result) {
 
-	if(!buf.ptr || !buf.length) {
-		*result = Buffer_createNull();
+	if(!Buffer_length(buf)) {
+
+		if(result)
+			*result = Buffer_createNull();
+
 		return Error_none();
 	}
 
-	U64 l = buf.length;
+	U64 l = Buffer_length(buf);
 	Error e = Buffer_allocBitsInternal(l << 3, alloc, result);
 
 	if(e.genericError)
@@ -1045,6 +1100,16 @@ Bool Buffer_free(Buffer *buf, Allocator alloc) {
 
 	if(!buf || !buf->ptr)
 		return true;
+
+	//References SHOULD NEVER be freed through the allocator.
+	//We aren't the ones managing them
+
+	if (Buffer_isRef(*buf)) {
+		*buf = Buffer_createNull();
+		return true;
+	}
+
+	//Otherwise we should free
 
 	if(!alloc.free)
 		return false;
@@ -1067,13 +1132,21 @@ Error Buffer_offset(Buffer *buf, U64 length) {
 	if(!buf || !buf->ptr)
 		return Error_nullPointer(0, 0);
 
-	if(length > buf->length)
-		return Error_outOfBounds(1, 0, length, buf->length);
+	if(!Buffer_isRef(*buf))								//Ensure we don't accidentally call this and leak memory
+		return Error_invalidOperation(0);
+
+	U64 bufLen = Buffer_length(*buf);
+
+	if(length > bufLen)
+		return Error_outOfBounds(1, 0, length, bufLen);
 
 	buf->ptr += length;
-	buf->length -= length;
 
-	if(!buf->length)
+	//Maintain constness
+
+	buf->lengthAndRefBits = (bufLen - length) | (buf->lengthAndRefBits >> 62 << 62);
+
+	if(!bufLen)
 		*buf = Buffer_createNull();
 
 	return Error_none();
@@ -1093,48 +1166,56 @@ Error Buffer_appendBuffer(Buffer *buf, Buffer append) {
 	if(!append.ptr)
 		return Error_nullPointer(1, 0);
 
+	if(buf && Buffer_isConstRef(*buf))					//We need write access
+		return Error_constData(0, 0);
+
 	void *ptr = buf ? buf->ptr : NULL;
 
-	Error e = Buffer_offset(buf, append.length);
+	Error e = Buffer_offset(buf, Buffer_length(append));
 
 	if(e.genericError)
 		return e;
 
-	Buffer_copyBytesInternal(ptr, append.ptr, append.length);
+	Buffer_copyBytesInternal(ptr, append.ptr, Buffer_length(append));
 	return Error_none();
 }
 
 Error Buffer_append(Buffer *buf, const void *v, U64 length) {
-	return Buffer_appendBuffer(buf, Buffer_createRef((void*) v, length));
+	return Buffer_appendBuffer(buf, Buffer_createConstRef(v, length));
 }
 
-Error Buffer_createSubset(Buffer buf, U64 offset, U64 length, Buffer *output) {
+Error Buffer_createSubset(Buffer buf, U64 offset, U64 length, Bool isConst, Buffer *output) {
 
+	//Since our buffer was passed here, it's safe to make a ref (to ensure Buffer_offset doesn't fail)
+
+	buf = Buffer_createRefFromBuffer(buf, isConst);
 	Error e = Buffer_offset(&buf, offset);
 
 	if(e.genericError)
 		return e;
-		
-	if(length > buf.length)
-		return Error_outOfBounds(2, 0, length, buf.length);
 
-	buf.length = length;
+	if(length > Buffer_length(buf))
+		return Error_outOfBounds(2, 0, length, Buffer_length(buf));
+
+	buf.lengthAndRefBits = length | (buf.lengthAndRefBits >> 62 << 62);
 	*output = buf;
 	return Error_none();
 }
 
 Error Buffer_combine(Buffer a, Buffer b, Allocator alloc, Buffer *output) {
 
-	if(a.length + b.length < a.length)
-		return Error_overflow(0, 0, a.length + b.length, a.length);
+	U64 alen = Buffer_length(a), blen = Buffer_length(b);
 
-	Error err = Buffer_createUninitializedBytes(a.length + b.length, alloc, output);
+	if(alen + blen < alen)
+		return Error_overflow(0, 0, alen + blen, alen);
+
+	Error err = Buffer_createUninitializedBytes(alen + blen, alloc, output);
 
 	if(err.genericError)
 		return err;
 
 	Buffer_copy(*output, a);
-	Buffer_copy(Buffer_createRef(output->ptr + a.length, b.length), b);
+	Buffer_copy(Buffer_createRef(output->ptr + alen, blen), b);
 	return Error_none();
 }
 

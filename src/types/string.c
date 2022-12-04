@@ -12,7 +12,11 @@ Bool String_isRef(String str) { return !str.capacity || String_isConstRef(str); 
 Bool String_isEmpty(String str) { return !str.length || !str.ptr; }
 U64  String_bytes(String str) { return str.length; }
 
-Buffer String_buffer(String str) { return Buffer_createRef(str.ptr, str.length); }
+Buffer String_buffer(String str) { 
+	return String_isConstRef(str) ? Buffer_createNull() : Buffer_createRef(str.ptr, str.length); 
+}
+
+Buffer String_bufferConst(String str) { return Buffer_createConstRef(str.ptr, str.length); }
 
 //Iteration
 
@@ -407,7 +411,7 @@ Bool String_free(String *str, Allocator alloc) {
 	Bool freed = true;
 
 	if(!String_isRef(*str))
-		freed = alloc.free(alloc.ptr, Buffer_createRef(str->ptr, str->capacity));
+		freed = alloc.free(alloc.ptr, Buffer_createManagedPtr(str->ptr, str->capacity));
 
 	*str = String_createNull();
 	return freed;
@@ -605,13 +609,13 @@ Error String_reserve(String *str, U64 length, Allocator alloc) {
 	if (err.genericError)
 		return err;
 
-	Buffer_copy(b, String_buffer(*str));
+	Buffer_copy(b, String_bufferConst(*str));
 
 	err = 
-		alloc.free(alloc.ptr, Buffer_createRef(str->ptr, str->capacity)) ? 
+		alloc.free(alloc.ptr, Buffer_createManagedPtr(str->ptr, str->capacity)) ? 
 		Error_none() : Error_invalidOperation(0);
 
-	str->capacity = b.length;
+	str->capacity = Buffer_length(b);
 	str->ptr = (C8*) b.ptr;
 	return err;
 }
@@ -683,7 +687,7 @@ Error String_appendString(String *s, String other, Allocator allocator) {
 	if (err.genericError)
 		return err;
 
-	Buffer_copy(Buffer_createRef(s->ptr + oldLen, other.length), String_buffer(other));
+	Buffer_copy(Buffer_createRef(s->ptr + oldLen, other.length), String_bufferConst(other));
 	return Error_none();
 }
 
@@ -708,7 +712,7 @@ Error String_insert(String *s, C8 c, U64 i, Allocator allocator) {
 
 		Buffer_revCopy(
 			Buffer_createRef(s->ptr + i + 1, s->length - 1),
-			Buffer_createRef(s->ptr + i, s->length - 1)
+			Buffer_createConstRef(s->ptr + i, s->length - 1)
 		);
 
 		s->ptr[i] = c;
@@ -735,12 +739,12 @@ Error String_insertString(String *s, String other, U64 i, Allocator allocator) {
 
 	Buffer_revCopy(
 		Buffer_createRef(s->ptr + i + other.length, oldLen - i),
-		Buffer_createRef(s->ptr + i, oldLen - i)
+		Buffer_createConstRef(s->ptr + i, oldLen - i)
 	);
 
 	Buffer_copy(
 		Buffer_createRef(s->ptr + i, other.length),
-		String_buffer(other)
+		String_bufferConst(other)
 	);
 
 	return Error_none();
@@ -791,7 +795,7 @@ Error String_replaceAllString(
 
 			//We move our replacement string to iCurrent
 
-			Buffer_copy(Buffer_createRef(s->ptr + iCurrent, replace.length), String_buffer(replace));
+			Buffer_copy(Buffer_createRef(s->ptr + iCurrent, replace.length), String_bufferConst(replace));
 			iCurrent += replace.length;
 
 			//We then move the tail of the string 
@@ -801,7 +805,7 @@ Error String_replaceAllString(
 
 			Buffer_copy(
 				Buffer_createRef(s->ptr + iCurrent, iEnd - iStart), 
-				Buffer_createRef(s->ptr + iStart, iEnd - iStart)
+				Buffer_createConstRef(s->ptr + iStart, iEnd - iStart)
 			);
 
 			iCurrent += iEnd - iStart;
@@ -850,14 +854,18 @@ Error String_replaceAllString(
 
 		Buffer_revCopy(
 			Buffer_createRef(s->ptr + newLoc - (iEnd - iStart), iEnd - iStart),
-			Buffer_createRef(s->ptr + iStart, iEnd - iStart)
+			Buffer_createConstRef(s->ptr + iStart, iEnd - iStart)
 		);
 
 		newLoc -= iEnd - iStart;
 
 		//Apply replacement before tail
 
-		Buffer_revCopy(Buffer_createRef(s->ptr + newLoc - replace.length, replace.length), String_buffer(replace));
+		Buffer_revCopy(
+			Buffer_createRef(s->ptr + newLoc - replace.length, replace.length), 
+			String_bufferConst(replace)
+		);
+
 		newLoc -= replace.length;
 	}
 
@@ -889,7 +897,7 @@ Error String_replaceString(
 	//Easy, early exit. Strings are same size.
 
 	if (search.length == replace.length) {
-		Buffer_copy(Buffer_createRef(s->ptr + res, replace.length), String_buffer(replace));
+		Buffer_copy(Buffer_createRef(s->ptr + res, replace.length), String_bufferConst(replace));
 		return Error_none();
 	}
 
@@ -904,12 +912,12 @@ Error String_replaceString(
 
 		Buffer_copy(
 			Buffer_createRef(s->ptr + res + replace.length, s->length - (res + search.length)), 
-			Buffer_createRef(s->ptr + res + search.length, s->length - (res + search.length)) 
+			Buffer_createConstRef(s->ptr + res + search.length, s->length - (res + search.length)) 
 		);
 
 		//Throw our replacement in there
 
-		Buffer_copy(Buffer_createRef(s->ptr + res, replace.length), String_buffer(replace));
+		Buffer_copy(Buffer_createRef(s->ptr + res, replace.length), String_bufferConst(replace));
 
 		//Shrink the string; this is done after because we need to read the right of the string first
 
@@ -935,12 +943,12 @@ Error String_replaceString(
 
 	Buffer_revCopy(
 		Buffer_createRef(s->ptr + res + replace.length, s->length - (res + search.length)), 
-		Buffer_createRef(s->ptr + res + search.length, s->length - (res + search.length)) 
+		Buffer_createConstRef(s->ptr + res + search.length, s->length - (res + search.length)) 
 	);
 
 	//Throw our replacement in there
 
-	Buffer_copy(Buffer_createRef(s->ptr + res, replace.length), String_buffer(replace));
+	Buffer_copy(Buffer_createRef(s->ptr + res, replace.length), String_bufferConst(replace));
 	return Error_none();
 }
 
@@ -1067,7 +1075,7 @@ List String_findAll(
 
 	for (U64 i = 0; i < s.length; ++i)
 		if (c == C8_transform(s.ptr[i], (EStringTransform)caseSensitive))
-			if ((err = List_pushBack(&l, Buffer_createRef(&i, sizeof(i)), alloc)).genericError) {
+			if ((err = List_pushBack(&l, Buffer_createConstRef(&i, sizeof(i)), alloc)).genericError) {
 				List_free(&l, alloc);
 				return List_createEmpty(sizeof(U64));
 			}
@@ -1106,7 +1114,7 @@ List String_findAllString(
 
 		if (match) {
 
-			if ((err = List_pushBack(&l, Buffer_createRef(&i, sizeof(i)), alloc)).genericError) {
+			if ((err = List_pushBack(&l, Buffer_createConstRef(&i, sizeof(i)), alloc)).genericError) {
 				List_free(&l, alloc);
 				return List_createEmpty(sizeof(U64));
 			}
@@ -1616,7 +1624,7 @@ Bool String_erase(String *s, C8 c, EStringCase caseSensitive, Bool isFirst) {
 
 	Buffer_copy(
 		Buffer_createRef(s->ptr + find, s->length - find - 1),
-		Buffer_createRef(s->ptr + find + 1, s->length - find - 1)
+		Buffer_createConstRef(s->ptr + find + 1, s->length - find - 1)
 	);
 
 	if (hadMatch)
@@ -1638,7 +1646,7 @@ Error String_eraseAtCount(String *s, U64 i, U64 count) {
 
 	Buffer_copy(
 		Buffer_createRef(s->ptr + i, s->length - i - count),
-		Buffer_createRef(s->ptr + i + count, s->length - i - count)
+		Buffer_createConstRef(s->ptr + i + count, s->length - i - count)
 	);
 
 	s->length -= count;
@@ -1659,7 +1667,7 @@ Bool String_eraseString(String *s, String other, EStringCase casing, Bool isFirs
 
 	Buffer_copy(
 		Buffer_createRef(s->ptr + find, s->length - find - other.length),
-		Buffer_createRef(s->ptr + find + other.length, s->length - find - other.length)
+		Buffer_createConstRef(s->ptr + find + other.length, s->length - find - other.length)
 	);
 
 	s->length -= other.length;
@@ -1836,7 +1844,7 @@ Bool StringList_free(StringList *arr, Allocator alloc) {
 		freed &= String_free(str, alloc);
 	}
 
-	freed &= alloc.free(alloc.ptr, Buffer_createRef(
+	freed &= alloc.free(alloc.ptr, Buffer_createManagedPtr(
 		arr->ptr,
 		sizeof(String) * arr->length
 	));

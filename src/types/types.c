@@ -1,6 +1,36 @@
 #include "types/types.h"
 #include <ctype.h>
 
+U64 Buffer_length(Buffer buf) {
+	return buf.lengthAndRefBits << 2 >> 2;
+}
+
+Buffer Buffer_createManagedPtr(void *ptr, U64 length) {
+
+	if((U64)ptr >> 48 || length >> 48 || !ptr || !length)
+		return (Buffer) { 0 };
+
+	return (Buffer) { .ptr = ptr, .lengthAndRefBits = length };
+}
+
+Buffer Buffer_createRefFromBuffer(Buffer buf, Bool isConst) {
+
+	if(!buf.ptr)
+		return (Buffer) { 0 };
+
+	Buffer copy = buf;
+	copy.lengthAndRefBits |= ((U64)1 << 63) | ((U64)isConst << 62);
+	return copy;
+}
+
+Bool Buffer_isRef(Buffer buf) {
+	return buf.lengthAndRefBits >> 62;
+}
+
+Bool Buffer_isConstRef(Buffer buf) {
+	return (buf.lengthAndRefBits >> 62) == 3;
+}
+
 C8 C8_toLower(C8 c) {
 	return (C8) tolower(c);
 }

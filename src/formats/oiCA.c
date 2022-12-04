@@ -125,8 +125,8 @@ Error CAFile_create(CASettings settings, Allocator alloc, CAFile *caFile) {
 
 		Bool b = false;
 		Error err = Buffer_eq(
-			Buffer_createRef(key, sizeof(key)), 
-			Buffer_createRef(settings.encryptionKey, sizeof(key)), 
+			Buffer_createConstRef(key, sizeof(key)), 
+			Buffer_createConstRef(settings.encryptionKey, sizeof(key)), 
 			&b
 		);
 
@@ -211,7 +211,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 		if (entry.isFolder) {
 
 			_gotoIfError(clean, List_pushBack(
-				&directories, Buffer_createRef(&entry.path, sizeof(String)), alloc
+				&directories, Buffer_createConstRef(&entry.path, sizeof(String)), alloc
 			));
 
 			if(directories.length >= U16_MAX)
@@ -224,7 +224,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 			continue;
 		}
 
-		_gotoIfError(clean, List_pushBack(&files, Buffer_createRef(&entry.path, sizeof(String)), alloc));
+		_gotoIfError(clean, List_pushBack(&files, Buffer_createConstRef(&entry.path, sizeof(String)), alloc));
 
 		if(files.length >= U32_MAX - U16_MAX)
 			_gotoIfError(clean, Error_outOfBounds(0, 0, U32_MAX - U16_MAX, U32_MAX - U16_MAX - 1));
@@ -605,11 +605,11 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 	if (caFile.settings.encryptionType || caFile.settings.compressionType)
 		Buffer_copy(
 			Buffer_createRef(headerIt, sizeof(hash)), 
-			Buffer_createRef(hash, sizeof(hash))
+			Buffer_createConstRef(hash, sizeof(hash))
 		);
 
 	Buffer realHeader = 
-		Buffer_createRef(
+		Buffer_createConstRef(
 			header, 
 			sizeof(CAHeader) + (
 				caFile.settings.encryptionType || caFile.settings.compressionType ? (

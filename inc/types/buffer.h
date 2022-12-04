@@ -5,7 +5,7 @@ typedef struct Buffer Buffer;
 typedef struct Allocator Allocator;
 
 typedef struct BitRef {
-	U8 *ptr, off;
+	U8 *ptr, off, isConst;
 } BitRef;
 
 Bool BitRef_get(BitRef b);
@@ -16,8 +16,8 @@ void BitRef_setTo(BitRef b, Bool v);
 
 Error Buffer_getBit(Buffer buf, U64 offset, Bool *output);
 
-void Buffer_copy(Buffer dst, Buffer src);
-void Buffer_revCopy(Buffer dst, Buffer src);		//Copies bytes from range backwards; useful if ranges overlap
+Bool Buffer_copy(Buffer dst, Buffer src);
+Bool Buffer_revCopy(Buffer dst, Buffer src);		//Copies bytes from range backwards; useful if ranges overlap
 
 Error Buffer_setBit(Buffer buf, U64 offset);
 Error Buffer_resetBit(Buffer buf, U64 offset);
@@ -66,7 +66,9 @@ Error Buffer_neq(Buffer buf0, Buffer buf1, Bool *result);		//Also compares size
 //These should never be Buffer_free-d because Buffer doesn't know if it's allocated
 
 Buffer Buffer_createNull();
+
 Buffer Buffer_createRef(void *v, U64 length);
+Buffer Buffer_createConstRef(const void *v, U64 length);
 
 //All these functions allocate, so Buffer_free them later
 
@@ -80,7 +82,7 @@ Bool Buffer_free(Buffer *buf, Allocator alloc);
 Error Buffer_createEmptyBytes(U64 length, Allocator alloc, Buffer *output);
 
 Error Buffer_createUninitializedBytes(U64 length, Allocator alloc, Buffer *output);
-Error Buffer_createSubset(Buffer buf, U64 offset, U64 length, Buffer *output);
+Error Buffer_createSubset(Buffer buf, U64 offset, U64 length, Bool isConst, Buffer *output);
 
 //Writing data
 

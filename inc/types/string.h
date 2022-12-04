@@ -49,6 +49,7 @@ Bool String_isEmpty(String str);
 U64  String_bytes(String str);
 
 Buffer String_buffer(String str);
+Buffer String_bufferConst(String str);
 
 //Iteration
 

@@ -11,7 +11,7 @@ Bool Thread_free(Thread **thread) {
 	FreeFunc free = Platform_instance.alloc.free;
 	void *allocator = Platform_instance.alloc.ptr;
 
-	Bool freed = free(allocator, Buffer_createRef(*thread, sizeof(Thread)));
+	Bool freed = free(allocator, Buffer_createManagedPtr(*thread, sizeof(Thread)));
 	*thread = NULL;
 	return freed;
 }

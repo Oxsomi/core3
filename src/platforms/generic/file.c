@@ -705,7 +705,9 @@ Error File_write(Buffer buf, String loc, Ns maxTimeout) {
 	if(!f)
 		_gotoIfError(clean, Error_notFound(1, 0, 0));
 
-	if(buf.length && fwrite(buf.ptr, 1, buf.length, f) != buf.length)
+	U64 bufLen = Buffer_length(buf);
+
+	if(bufLen && fwrite(buf.ptr, 1, bufLen, f) != bufLen)
 		_gotoIfError(clean, Error_invalidState(0));
 
 clean:
@@ -762,8 +764,9 @@ Error File_read(String loc, Ns maxTimeout, Buffer *output) {
 		_gotoIfError(clean, Error_invalidState(1));
 
 	Buffer b = *output;
+	U64 bufLen = Buffer_length(b);
 
-	if (fread(b.ptr, 1, b.length, f) != b.length)
+	if (fread(b.ptr, 1, bufLen, f) != bufLen)
 		_gotoIfError(clean, Error_invalidState(2));
 
 	goto success;

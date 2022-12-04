@@ -89,7 +89,7 @@ Error allocCallback(void *allocator, U64 length, Buffer *output) {
 	if(!ptr)
 		return Error_outOfMemory(0);
 
-	*output = (Buffer) { .ptr = ptr, .length = length };
+	*output = Buffer_createManagedPtr(ptr, length);
 	return Error_none();
 }
 
@@ -165,7 +165,7 @@ void Platform_cleanupExt(Platform *p) {
 	//Cleanup platform ext
 
 	if(p->dataExt) {
-		Buffer buf = Buffer_createRef(p->dataExt, sizeof(PlatformExt));
+		Buffer buf = Buffer_createManagedPtr(p->dataExt, sizeof(PlatformExt));
 		Buffer_freex(&buf);
 		p->dataExt = NULL;
 	}

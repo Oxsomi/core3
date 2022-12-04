@@ -35,7 +35,7 @@ typedef enum EDataType {
 EDataTypePrimitive EDataType_getPrimitive(EDataType type);
 Bool EDataType_isSigned(EDataType type);
 
-#define _makeTypeId(libId, subId, typeId, elementCount, dataTypeBytes, dataType) \
+#define _makeTypeId(libId, subId, typeId, elementCount, dataTypeBytes, dataType)										\
 ((libId << 24) | (subId << 22) | (typeId << 13) | ((elementCount - 1) << 7) | ((dataTypeBytes - 1) << 4) | dataType)
 
 #define _LIBRARYID_DEFAULT 0xC3

@@ -107,7 +107,7 @@ Error WindowManager_createVirtual(
 			Lock lock = (Lock) { 0 };
 
 			if ((err = Lock_create(&lock)).genericError) {
-				Buffer_free(&cpuVisibleBuffer, Platform_instance.alloc);
+				Buffer_freex(&cpuVisibleBuffer);
 				return err;
 			}
 

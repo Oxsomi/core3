@@ -144,7 +144,9 @@ Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 
 	Bool resize = false;
 
-	if (linSiz >= old.length) {
+	U64 oldLen = Buffer_length(old);
+
+	if (linSiz >= oldLen) {
 
 		U64 toAllocate = linSiz * 5 / 4;
 
@@ -158,7 +160,7 @@ Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 
 	//We need to shrink; we're way over allocated (>50%)
 
-	else if (old.length > linSiz * 3 / 2) {
+	else if (oldLen > linSiz * 3 / 2) {
 
 		U64 toAllocate = linSiz * 5 / 4;
 
@@ -182,7 +184,7 @@ Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 			//If we resized the buffer, we still have to copy the old data
 
 			if(resize)
-				Buffer_copy(neo, Buffer_createRef(old.ptr, U64_min(linSizOld, linSiz)));
+				Buffer_copy(neo, Buffer_createConstRef(old.ptr, U64_min(linSizOld, linSiz)));
 
 			//If we added size, we need to clear those pixels
 
@@ -212,7 +214,7 @@ Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 			//Grab buffers for simple copies later
 
 			Buffer src = Buffer_createNull();
-			Error err = Buffer_createSubset(old, 0, rowSizOld, &src);
+			Error err = Buffer_createSubset(old, 0, rowSizOld, false, &src);
 
 			if(err.genericError) {
 
@@ -223,7 +225,7 @@ Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 			}
 
 			Buffer dst = Buffer_createNull();
-			err = Buffer_createSubset(neo, 0, rowSiz, &src);
+			err = Buffer_createSubset(neo, 0, rowSiz, false, &src);
 
 			if(err.genericError) {
 
@@ -255,7 +257,7 @@ Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 					//Clear remainder of row
 
 					Buffer toClear = Buffer_createNull();
-					err = Buffer_createSubset(dst, linSizOld, sizDif, &toClear);
+					err = Buffer_createSubset(dst, linSizOld, sizDif, false, &toClear);
 
 					if (err.genericError) {
 
@@ -322,7 +324,7 @@ Error Window_storeCPUBufferToDisk(const Window *w, String filePath, Ns maxTimeou
 
 	Buffer buf = w->cpuVisibleBuffer;
 
-	if(!buf.length)
+	if(!Buffer_length(buf))
 		return Error_invalidOperation(0);
 
 	if(w->format != EWindowFormat_rgba8)

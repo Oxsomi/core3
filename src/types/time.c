@@ -72,7 +72,7 @@ void Time_format(Ns time, TimerFormat timeString) {
 
 	Buffer_copy(
 		Buffer_createRef(timeString, _SHORTSTRING_LEN), 
-		Buffer_createRef((void*) FORMAT_STR, sizeof(FORMAT_STR))
+		Buffer_createConstRef(FORMAT_STR, sizeof(FORMAT_STR))
 	);
 
 	setNum(timeString, OFFSETS[0], SIZES[0], (U64)t->tm_year + 1900);

@@ -83,16 +83,16 @@ I32x4 I32x4_load4(const I32 *arr);
 
 #define _I32x4_expand4(xv, yv, zv, wv) I32x4 I32x4_##xv##yv##zv##wv(I32x4 a);
 
-#define _I32x4_expand3(...)	\
-_I32x4_expand4(__VA_ARGS__, x); _I32x4_expand4(__VA_ARGS__, y); \
+#define _I32x4_expand3(...)											\
+_I32x4_expand4(__VA_ARGS__, x); _I32x4_expand4(__VA_ARGS__, y);		\
 _I32x4_expand4(__VA_ARGS__, z); _I32x4_expand4(__VA_ARGS__, w);
 
-#define _I32x4_expand2(...)	\
-_I32x4_expand3(__VA_ARGS__, x); _I32x4_expand3(__VA_ARGS__, y); \
+#define _I32x4_expand2(...)											\
+_I32x4_expand3(__VA_ARGS__, x); _I32x4_expand3(__VA_ARGS__, y);		\
 _I32x4_expand3(__VA_ARGS__, z); _I32x4_expand3(__VA_ARGS__, w);
 
-#define _I32x4_expand(...)	\
-_I32x4_expand2(__VA_ARGS__, x); _I32x4_expand2(__VA_ARGS__, y); \
+#define _I32x4_expand(...)											\
+_I32x4_expand2(__VA_ARGS__, x); _I32x4_expand2(__VA_ARGS__, y);		\
 _I32x4_expand2(__VA_ARGS__, z); _I32x4_expand2(__VA_ARGS__, w);
 
 _I32x4_expand(x);
@@ -107,7 +107,7 @@ impl I32x4 I32x4_trunc3(I32x4 a);
 
 #define _I32x2_expand2(xv, yv) I32x4 I32x4_##xv##yv##4(I32x4 a); I32x2 I32x4_##xv##yv(I32x4 a);
 
-#define _I32x2_expand(...) \
+#define _I32x2_expand(...)										\
 _I32x2_expand2(__VA_ARGS__, x); _I32x2_expand2(__VA_ARGS__, y); \
 _I32x2_expand2(__VA_ARGS__, z); _I32x2_expand2(__VA_ARGS__, w);
 
@@ -120,11 +120,11 @@ _I32x2_expand(w);
 
 #define _I32x3_expand3(xv, yv, zv) I32x4 I32x4_##xv##yv##zv(I32x4 a);
 
-#define _I32x3_expand2(...)	\
+#define _I32x3_expand2(...)										\
 _I32x3_expand3(__VA_ARGS__, x); _I32x3_expand3(__VA_ARGS__, y); \
 _I32x3_expand3(__VA_ARGS__, z); _I32x3_expand3(__VA_ARGS__, w); 
 
-#define _I32x3_expand(...)	\
+#define _I32x3_expand(...)										\
 _I32x3_expand2(__VA_ARGS__, x); _I32x3_expand2(__VA_ARGS__, y); \
 _I32x3_expand2(__VA_ARGS__, z); _I32x3_expand2(__VA_ARGS__, w); 
 

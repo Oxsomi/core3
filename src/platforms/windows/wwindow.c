@@ -639,7 +639,7 @@ Error Window_updatePhysicalTitle(const Window *w, String title) {
 		return Error_outOfBounds(1, 0, title.length, MAX_PATH);
 
 	C8 windowName[MAX_PATH + 1];
-	Buffer_copy(Buffer_createRef(windowName, sizeof(windowName)), String_buffer(title));
+	Buffer_copy(Buffer_createRef(windowName, sizeof(windowName)), String_bufferConst(title));
 
 	windowName[title.length] = '\0';
 

@@ -25,6 +25,9 @@ U64  List_allocatedBytes(List l);
 Buffer List_buffer(List l);
 Buffer List_allocatedBuffer(List l);
 
+Buffer List_bufferConst(List l);
+Buffer List_allocatedBufferConst(List l);
+
 U8 *List_begin(List list);
 U8 *List_end(List list);
 U8 *List_last(List list);
@@ -35,13 +38,15 @@ const U8 *List_lastConst(List list);
 
 const U8 *List_ptrConst(List list, U64 elementOffset);
 U8 *List_ptr(List list, U64 elementOffset);
+
 Buffer List_at(List list, U64 offset);
+Buffer List_atConst(List list, U64 offset);
 
 Error List_eq(List a, List b, Bool *result);
 Error List_neq(List a, List b, Bool *result);
 
 List List_createEmpty(U64 stride);
-Error List_createFromBuffer(Buffer buf, U64 stride, Bool isConst, List *result);
+Error List_createFromBuffer(Buffer buf, U64 stride, List *result);
 Error List_createSubset(List list, U64 index, U64 length, List *result);
 
 Error List_create(U64 length, U64 stride, Allocator allocator, List *result);
@@ -71,6 +76,7 @@ Error List_createConstRef(const U8 *ptr, U64 length, U64 stride, List *result);
 
 Error List_set(List list, U64 index, Buffer buf);
 Error List_get(List list, U64 index, Buffer *result);
+Error List_getConst(List list, U64 index, Buffer *result);
 
 Error List_copy(
 	List src, 

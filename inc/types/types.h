@@ -87,12 +87,26 @@ extern const I64 I64_MAX;
 extern const F32 F32_MIN;
 extern const F32 F32_MAX;
 
-//TODO: Buffer constant possibility
+//Buffer (more functions in types/buffer.h)
 
 typedef struct Buffer {
 	U8 *ptr;
-	U64 length;
+	U64 lengthAndRefBits;		//refBits: [ b31 isRef, b30 isConst ]. Length should be max 48 bits
 } Buffer;
+
+U64 Buffer_length(Buffer buf);
+
+Bool Buffer_isRef(Buffer buf);
+Bool Buffer_isConstRef(Buffer buf);
+
+Buffer Buffer_createManagedPtr(void *ptr, U64 length);
+
+//Use this instead of simply copying the Buffer to a new location
+//A copy like this is only fine if the other doesn't get freed.
+//In all other cases, createRefFromBuffer should be called on the one that shouldn't be freeing.
+//If it needs to be refcounted, RefPtr should be used.
+//
+Buffer Buffer_createRefFromBuffer(Buffer buf, Bool isConst);
 
 //Char
 
