@@ -124,12 +124,14 @@ int main(int argc, const char *argv[]) {
 	#if _SIMD == SIMD_SSE
 
 		//We need to double check that our CPU supports 
-		//AVX, SSE4.2, SSE4.1, (S)SSE3, SSE2, SSE, AES
+		//AVX, SSE4.2, SSE4.1, (S)SSE3, SSE2, SSE, AES, PCLMULQDQ and RDRAND
 		//https://gist.github.com/hi2p-perim/7855506
 		//https://en.wikipedia.org/wiki/CPUID
 
 		int mask3 = (1 << 25) | (1 << 26);										//SSE, SSE2
-		int mask2 = (1 << 0) | (1 << 9) | (1 << 19) | (1 << 20) | (1 << 25);	//SSE3, SSSE3, SSE4.1, SSE4.2, AES
+
+		//SSE3, PCLMULQDQ, SSSE3, SSE4.1, SSE4.2, AES, RDRAND
+		int mask2 = (1 << 0) | (1 << 1) | (1 << 9) | (1 << 19) | (1 << 20) | (1 << 25) | (1 << 30);
 
 		int cpuInfo[4];
 		__cpuid(cpuInfo, 1);

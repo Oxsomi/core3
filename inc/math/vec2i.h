@@ -71,6 +71,8 @@ I32x2 I32x2_create2(I32 x, I32 y);
 I32x2 I32x2_load1(const I32 *arr);
 I32x2 I32x2_load2(const I32 *arr);
 
+I32x2 I32x2_swapEndianness(I32x2 v);
+
 I32x2 I32x2_xx(I32x2 a);
 I32x2 I32x2_xy(I32x2 a);
 I32x2 I32x2_yx(I32x2 a);

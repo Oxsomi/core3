@@ -1,4 +1,5 @@
 #include "math/vec.h"
+#include "types/type_cast.h"
 
 F32x2 F32x2_bitsI32x2(I32x2 a) { return *(const F32x2*) &a; }		//Convert raw bits to data type
 I32x2 I32x2_bitsF32x2(F32x2 a) { return *(const I32x2*) &a; }		//Convert raw bits to data type
@@ -41,6 +42,10 @@ Bool I32x2_any(I32x2 b) { return I32x2_reduce(I32x2_neq(b, I32x2_zero())); }
 
 I32x2 I32x2_load1(const I32 *arr) { return I32x2_create1(*arr); }
 I32x2 I32x2_load2(const I32 *arr) { return I32x2_create2(*arr, arr[1]); }
+
+I32x2 I32x2_swapEndianness(I32x2 v) {
+	return I32x2_create2(I32_swapEndianness(I32x2_x(v)), I32_swapEndianness(I32x2_y(v)));
+}
 
 void I32x2_setX(I32x2 *a, I32 v) { *a = I32x2_create2(v,			I32x2_y(*a)); }
 void I32x2_setY(I32x2 *a, I32 v) { *a = I32x2_create2(I32x2_x(*a),	v); }

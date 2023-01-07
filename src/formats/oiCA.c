@@ -557,7 +557,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 	if (caFile.settings.encryptionType != ECAEncryptionType_None) {
 
 		if ((err = Buffer_encrypt(
-			compressedOutput, BufferEncryptionType_AES256, caFile.settings.encryptionKey, alloc
+			compressedOutput, BufferEncryptionType_AES256GCM, caFile.settings.encryptionKey
 		)).genericError) {
 			Buffer_free(&compressedOutput, alloc);
 			return err;

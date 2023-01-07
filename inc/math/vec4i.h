@@ -79,6 +79,8 @@ I32x4 I32x4_load2(const I32 *arr);
 I32x4 I32x4_load3(const I32 *arr);
 I32x4 I32x4_load4(const I32 *arr);
 
+I32x4 I32x4_swapEndianness(I32x4 v);
+
 //4D swizzles
 
 #define _I32x4_expand4(xv, yv, zv, wv) I32x4 I32x4_##xv##yv##zv##wv(I32x4 a);

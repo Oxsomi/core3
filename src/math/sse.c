@@ -54,21 +54,21 @@
 
 	//Swizzle
 
-	I32 I32x4_x(I32x4 a) { return _mm_cvtss_i32(*(F32x4*) &a); }
+	I32 I32x4_x(I32x4 a) { return _mm_extract_epi32(a, 0); }
 	F32 F32x4_x(F32x4 a) { return _mm_cvtss_f32(a); }
 	I32 I32x2_x(I32x2 a) { return a.v[0]; }
 	F32 F32x2_x(F32x2 a) { return a.v[0]; }
 
-	I32 I32x4_y(I32x4 a) { return I32x4_x(I32x4_yyyy(a)); }
-	F32 F32x4_y(F32x4 a) { return F32x4_x(F32x4_yyyy(a)); }
+	I32 I32x4_y(I32x4 a) { return _mm_extract_epi32(a, 1);  }
+	F32 F32x4_y(F32x4 a) { return _mm_cvtss_f32(F32x4_yyyy(a)); ; }
 	I32 I32x2_y(I32x2 a) { return a.v[1]; }
 	F32 F32x2_y(F32x2 a) { return a.v[1]; }
 
-	I32 I32x4_z(I32x4 a) { return I32x4_x(I32x4_zzzz(a)); }
-	F32 F32x4_z(F32x4 a) { return F32x4_x(F32x4_zzzz(a)); }
+	I32 I32x4_z(I32x4 a) { return _mm_extract_epi32(a, 2);  }
+	F32 F32x4_z(F32x4 a) { return _mm_cvtss_f32(F32x4_zzzz(a)); }
 
-	I32 I32x4_w(I32x4 a) { return I32x4_x(I32x4_wwww(a)); }
-	F32 F32x4_w(F32x4 a) { return F32x4_x(F32x4_wwww(a)); }
+	I32 I32x4_w(I32x4 a) { return _mm_extract_epi32(a, 3); }
+	F32 F32x4_w(F32x4 a) { return _mm_cvtss_f32(F32x4_wwww(a)); }
 
 	I32x4 I32x4_create2(I32 x, I32 y) { return _mm_set_epi32(0, 0, y, x); }
 	F32x4 F32x4_create2(F32 x, F32 y) { return _mm_set_ps(0, 0, y, x); }
@@ -133,13 +133,13 @@
 
 	//Bitwise
 
-	I32x4 I32x4_or(I32x4 a, I32x4 b)  _NONE_OP4I(I32x4_get(a, i) | I32x4_get(b, i))		//_mm_or_epi32 is AVX512 :(
+	I32x4 I32x4_or(I32x4 a, I32x4 b) { return _mm_or_si128(a, b); }
 	I32x2 I32x2_or(I32x2 a, I32x2 b)  _NONE_OP2I(a.v[i] | b.v[i])
 
-	I32x4 I32x4_and(I32x4 a, I32x4 b) _NONE_OP4I(I32x4_get(a, i) & I32x4_get(b, i))		//_mm_and_epi32 is AVX512 :(
+	I32x4 I32x4_and(I32x4 a, I32x4 b) { return _mm_and_si128(a, b); }
 	I32x2 I32x2_and(I32x2 a, I32x2 b) _NONE_OP2I(a.v[i] & b.v[i])
 
-	I32x4 I32x4_xor(I32x4 a, I32x4 b) _NONE_OP4I(I32x4_get(a, i) ^ I32x4_get(b, i))		//_mm_xor_epi32 is AVX512 :(
+	I32x4 I32x4_xor(I32x4 a, I32x4 b) { return _mm_xor_si128(a, b); }
 	I32x2 I32x2_xor(I32x2 a, I32x2 b) _NONE_OP2I(a.v[i] ^ b.v[i])
 
 	//Min/max

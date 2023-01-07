@@ -290,7 +290,7 @@ Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result) {
 	if (dlFile.settings.encryptionType != EDLEncryptionType_None) {
 
 		if ((err = Buffer_encrypt(
-			compressedOutput, BufferEncryptionType_AES256, dlFile.settings.encryptionKey
+			compressedOutput, BufferEncryptionType_AES256GCM, dlFile.settings.encryptionKey
 		)).genericError) {
 			Buffer_free(&compressedOutput, alloc);
 			return err;

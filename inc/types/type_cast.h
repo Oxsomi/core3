@@ -18,6 +18,13 @@ Error I32_fromUInt(U64 v, I32 *res);
 Error I32_fromInt(I64 v, I32 *res);
 Error I32_fromFloat(F32 v, I32 *res);
 
+I16 I16_swapEndianness(I16 v);
+I32 I32_swapEndianness(I32 v);
+I64 I64_swapEndianness(I64 v);
+U16 U16_swapEndianness(U16 v);
+U32 U32_swapEndianness(U32 v);
+U64 U64_swapEndianness(U64 v);
+
 Error I64_fromUInt(U64 v, I64 *res);
 Error I64_fromFloat(F32 v, I64 *res);
 

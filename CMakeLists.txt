@@ -48,10 +48,10 @@ if(MSVC)
 
 else()
 
-	add_compile_options(-Wall -Wextra -Werror -maes -msha)
+	add_compile_options(-Wall -Wextra -Werror)
 
 	if(EnableSIMD) 
-		add_compile_options(-mfpmath=sse -msse -msse2 -msse3 -mssse3 -msse4 -msse4.1 -msse4.2)
+		add_compile_options(-mfpmath=sse -msse -msse2 -msse3 -mssse3 -msse4 -msse4.1 -msse4.2 -mrdrnd -msha -maes)
 	elseif(NOT RelaxFloat)
 		add_compile_options(-mfpmath=sse -msse)
 	endif()

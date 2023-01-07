@@ -1,4 +1,5 @@
 #include "math/vec.h"
+#include "types/type_cast.h"
 
 F32x4 F32x4_bitsI32x4(I32x4 a) { return *(const F32x4*) &a; }	//Convert raw bits to data type
 I32x4 I32x4_bitsF32x4(F32x4 a) { return *(const I32x4*) &a; }	//Convert raw bits to data type
@@ -31,6 +32,18 @@ I32x4 I32x4_load1(const I32 *arr) { return I32x4_create1(*arr); }
 I32x4 I32x4_load2(const I32 *arr) { return I32x4_create2(*arr, arr[1]); }
 I32x4 I32x4_load3(const I32 *arr) { return I32x4_create3(*arr, arr[1], arr[2]); }
 I32x4 I32x4_load4(const I32 *arr) { return *(const I32x4*) arr; }
+
+I32x4 I32x4_swapEndianness(I32x4 v) {
+
+	//TODO: Optimize, but needs shift
+
+	I32x4 res = I32x4_zero();
+
+	for(U8 i = 0; i < 4; ++i)
+		I32x4_set(&res, i, I32_swapEndianness(I32x4_get(v, i)));
+
+	return I32x4_wzyx(res);
+}
 
 void I32x4_setX(I32x4 *a, I32 v) { *a = I32x4_create4(v,			I32x4_y(*a),	I32x4_z(*a),	I32x4_w(*a)); }
 void I32x4_setY(I32x4 *a, I32 v) { *a = I32x4_create4(I32x4_x(*a),	v,				I32x4_z(*a),	I32x4_w(*a)); }

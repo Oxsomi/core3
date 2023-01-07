@@ -114,3 +114,13 @@ Error U64_fromFloat(F32 v, U64 *res)	_CastFromF(U64)
 
 Error F32_fromInt(I64 v, F32 *res)  CastToF32
 Error F32_fromUInt(U64 v, F32 *res) CastToF32
+
+//Endianness, because sometimes it's needed
+
+U16 U16_swapEndianness(U16 v) { return (v >> 8) | (v << 8); }
+U32 U32_swapEndianness(U32 v) { return ((U32)U16_swapEndianness((U16)v) << 16) | U16_swapEndianness((U16)(v >> 16)); }
+U64 U64_swapEndianness(U64 v) { return ((U64)U32_swapEndianness((U32)v) << 32) | U32_swapEndianness((U32)(v >> 32)); }
+
+I16 I16_swapEndianness(I16 v) { return (I16) U16_swapEndianness((U16)v); }
+I32 I32_swapEndianness(I32 v) { return (I32) U32_swapEndianness((U32)v); }
+I64 I64_swapEndianness(I64 v) { return (I64) U64_swapEndianness((U64)v); }

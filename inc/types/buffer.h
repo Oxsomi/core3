@@ -37,17 +37,19 @@ Error Buffer_unsetAllBits(Buffer dst);
 
 Error Buffer_setAllBitsTo(Buffer buf, Bool isOn);
 
-//What hash functions are good for:
+//What hash & encryption functions are good for:
 // 
 //argon2id (Unsupported): 
 //	Passwords (limit size (not too low) to avoid DDOS and use pepper if applicable)			TODO:
 //	https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html
 //	https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html
 // 
-//crc32c: Hashmaps / performance critical hashing / 
+//hash/crc32c: Hashmaps / performance critical hashing / 
 //	fast data integrity (encryption checksum / compression) when *NOT* dealing with adversaries
 // 
-//sha256: data integrity (encryption checksum / compression) when dealing with adversaries
+//hash/sha256: data integrity (encryption checksum / compression) when dealing with adversaries
+// 
+//encryption/aes256: If you wanna recover data that is essential (NOT PASSWORDS) but needs a key
 //
 //For more info: 
 //	https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html
@@ -57,6 +59,27 @@ Error Buffer_setAllBitsTo(Buffer buf, Bool isOn);
 U32 Buffer_crc32c(Buffer buf);
 
 void Buffer_sha256(Buffer buf, U32 output[8]);
+
+//Encryption
+
+typedef enum BufferEncryptionType {
+	BufferEncryptionType_AES256GCM,
+	BufferEncryptionType_Count
+} BufferEncryptionType;
+
+Error Buffer_encrypt(
+	Buffer target,						//"Plaintext" aka data to encrypt. Leave empty to authenticate with AES256GCM.
+	Buffer additionalData,				//Non secret data. Useful to include important data which can't be modified after enc
+	BufferEncryptionType type,			//Only AES256-GCM is currently supported
+	const U32 key[8],					//Secret key; used for encryption and decryption
+	const I32x4 *iv,					//Iv should be random, if it's 0 it will use CSPRNG to generate one
+	Allocator alloc, 
+	Buffer *output
+);
+
+//Cryptographically secure random on a sized buffer
+
+Bool Buffer_csprng(Buffer target);
 
 //Comparison
 
