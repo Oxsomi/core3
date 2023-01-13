@@ -22,7 +22,7 @@ typedef enum EOperationHasParameter {
 	EOperationHasParameter_SplitByShift,
 
 	EOperationHasParameter_Count,	
-	EOperationHasParameter_Start = EOperationHasParameter_FileFormatShift,
+	EOperationHasParameter_Start		= EOperationHasParameter_FileFormatShift,
 	EOperationHasParameter_None			= 0,
 
 	//As mask
@@ -30,7 +30,7 @@ typedef enum EOperationHasParameter {
 	EOperationHasParameter_FileFormat	= 1 << EOperationHasParameter_FileFormatShift,
 	EOperationHasParameter_Input		= 1 << EOperationHasParameter_InputShift,
 	EOperationHasParameter_Output		= 1 << EOperationHasParameter_OutputShift,
-	EOperationHasParameter_AES256			= 1 << EOperationHasParameter_AESShift,
+	EOperationHasParameter_AES256		= 1 << EOperationHasParameter_AESShift,
 
 	EOperationHasParameter_SplitBy		= 1 << EOperationHasParameter_SplitByShift
 
@@ -60,33 +60,31 @@ typedef enum EOperationFlags {
 
 	EOperationFlags_SHA256			= 1 << 0,
 	EOperationFlags_Uncompressed	= 1 << 1,
-	EOperationFlags_FastCompress	= 1 << 2,
 
 	EOperationFlags_Default			= 
-		EOperationFlags_SHA256 | EOperationFlags_Uncompressed | EOperationFlags_FastCompress,
+		EOperationFlags_SHA256 | EOperationFlags_Uncompressed,
 
 	//String flags
 
-	EOperationFlags_Ascii			= 1 << 3,
-	EOperationFlags_UTF8			= 1 << 4,
+	EOperationFlags_Ascii			= 1 << 2,
+	EOperationFlags_UTF8			= 1 << 3,
 
 	//File flags
 
-	EOperationFlags_FullDate		= 1 << 5,
-	EOperationFlags_Date			= 1 << 6,
+	EOperationFlags_FullDate		= 1 << 4,
+	EOperationFlags_Date			= 1 << 5,
 
 	//Folder
 
-	EOperationFlags_Recursive		= 1 << 7,
+	EOperationFlags_Recursive		= 1 << 6,
 
-	EOperationFlags_Count			= 8
+	EOperationFlags_Count			= 7
 
 } EOperationFlags;
 
 static const C8 *EOperationFlags_names[] = {
 	"--sha256",
 	"--uncompressed",
-	"--fast-compress",
 	"--ascii",
 	"--utf8",
 	"--full-date",
@@ -97,7 +95,6 @@ static const C8 *EOperationFlags_names[] = {
 static const C8 *EOperationFlags_descriptions[] = {
 	"Includes 256-bit hashes instead of 32-bit ones into file if applicable.",
 	"Keep the data uncompressed (default is compressed).",
-	"Picks the compression algorithm that takes the least time to compress.",
 	"Indicates the input files should be threated as ascii. If a file; splits by enter, otherwise 1 entry/file.",
 	"Indicates the input files should be threated as UTF8. If a file; splits by enter, otherwise 1 entry/file.",
 	"Includes full file timestamp (Ns)",

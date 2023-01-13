@@ -65,6 +65,8 @@ int main() {
 
 	//Test timer
 
+	printf("Testing Time\n");
+
 	Ns now = Time_now();
 	TimerFormat nowStr;
 
@@ -87,10 +89,13 @@ int main() {
 	Buffer emp = Buffer_createNull(), full = Buffer_createNull();
 	Buffer outputEncrypted = Buffer_createNull(), outputDecrypted = Buffer_createNull();
 	Error err = Error_none();
+	String tmp = String_createNull();
 
 	String inputs[19 + _EXTRA_CHECKS] = { 0 };
 
 	//Test Buffer
+
+	printf("Testing Buffer\n");
 
 	_gotoIfError(clean, Buffer_createZeroBits(256, alloc, &emp));
 	_gotoIfError(clean, Buffer_createOneBits(256, alloc, &full));
@@ -129,6 +134,8 @@ int main() {
 	//Test CRC32C function
 	//https://stackoverflow.com/questions/20963944/test-vectors-for-crc32c
 
+	printf("Testing Buffer CRC32C\n");
+
 	typedef struct TestCRC32C {
 		const C8 *str;
 		const C8 v[5];
@@ -162,6 +169,8 @@ int main() {
 	//https://www.di-mgt.com.au/sha_testvectors.html
 	//https://www.dlitz.net/crypto/shad256-test-vectors/
 	//https://github.com/amosnier/sha-2/blob/master/test.c
+
+	printf("Testing Buffer SHA256\n");
 
 	static const U32 RESULTS[][8] = {
 		{ 0xE3B0C442, 0x98FC1C14, 0x9AFBF4C8, 0x996FB924, 0x27AE41E4, 0x649B934C, 0xA495991B, 0x7852B855 },	
@@ -262,6 +271,8 @@ int main() {
 
 	//Test big endian conversions
 
+	printf("Testing endianness swapping\n");
+
 	U16 be16 = U16_swapEndianness(0x1234);
 	U32 be32 = U32_swapEndianness(0x12345678);
 	U64 be64 = U64_swapEndianness(0x123456789ABCDEF0);
@@ -283,6 +294,8 @@ int main() {
 	// 
 	//Test vectors	https://www.ieee802.org/1/files/public/docs2011/bn-randall-test-vectors-0511-v1.pdf
 	//				2.1.2, 2.2.2, 2.3.2, 2.4.2, 2.5.2, 2.6.2, 2.7.2, 2.8.2
+
+	printf("Testing Buffer encrypt/decrypt\n");
 
 	String testKeys[] = {
 
@@ -601,35 +614,54 @@ int main() {
 
 	for (U64 i = 0; i < sizeof(ivs) / sizeof(ivs[0]); ++i) {
 
+		//Fetch iv
+
 		I32x4 iv = I32x4_zero();
 		Buffer_copy(Buffer_createRef(&iv, 12), Buffer_createConstRef(ivs[i], 12));
 
+		//Copy into tmp variable to be able to modify it instead of using const mem
+
+		_gotoIfError(clean, String_createCopy(testPlainText[i], alloc, &tmp));
+
+		//Encrypt plain text
+
+		I32x4 tag = I32x4_zero();
+
 		_gotoIfError(clean, Buffer_encrypt(
-			String_bufferConst(testPlainText[i]),
+			String_buffer(tmp),
 			String_bufferConst(additionalData[i]),
-			BufferEncryptionType_AES256GCM,
-			(const U32*) testKeys[i].ptr,
+			EBufferEncryptionType_AES256GCM,
+			EBufferEncryptionFlags_None,
+			(U32*) testKeys[i].ptr,
 			&iv,
-			alloc,
-			&outputEncrypted
+			&tag
 		));
 
-		if(Buffer_length(outputEncrypted) != results[i].length + 12)
-			_gotoIfError(clean, Error_invalidState(0));
+		//Check size
 
-		Buffer ivB = Buffer_createConstRef(&iv, 12);
+		if(tmp.length + 16 != results[i].length)
+			_gotoIfError(clean, Error_invalidState(3));
 
-		Bool b;
-		_gotoIfError(clean, Buffer_eq(ivB, Buffer_createConstRef(outputEncrypted.ptr, 12), &b));
+		//Check tag (intermediate copy because otherwise Release will crash because of unaligned memory)
 
-		if(!b)
+		I32x4 tmpTag = I32x4_zero();
+		Buffer_copy(
+			Buffer_createRef(&tmpTag, sizeof(tmpTag)),
+			Buffer_createConstRef(results[i].ptr + tmp.length, sizeof(I32x4))
+		);
+
+		if(I32x4_any(I32x4_neq(tag, tmpTag)))
 			_gotoIfError(clean, Error_invalidState(1));
+
+		//Check result
+
+		Bool b = false;
 
 		_gotoIfError(
 			clean, 
 			Buffer_eq(
-				String_bufferConst(results[i]),
-				Buffer_createConstRef(outputEncrypted.ptr + 12, results[i].length), 
+				Buffer_createConstRef(results[i].ptr, testPlainText[i].length),
+				String_bufferConst(tmp),
 				&b
 			)
 		);
@@ -637,47 +669,35 @@ int main() {
 		if(!b)
 			_gotoIfError(clean, Error_invalidState(2));
 
-		Buffer_free(&outputEncrypted, alloc);
-	}
-
-	/* String encryptionTests[] = {
-		String_createConstRefUnsafe(""),
-		String_createConstRefUnsafe("Hello world"),
-		String_createConstRefUnsafe("Hello world!!!!"),			//Exactly sizeof(I32x4) - 1
-		String_createConstRefUnsafe("Hello world!!!!!"),		//Exactly sizeof(I32x4)
-		String_createConstRefUnsafe("Hello world!!!!!11"),
-		String_createConstRefUnsafe("This is very secret, oi. Very encryption, much wow."),
-	};
-
-	U32 key[8] = { 
-		0x12345678, 0x90123456, 0x78901234, 0x56789012, 
-		0x34567890, 0x24680135, 0x79135790, 0x36925814
-	};
-
-	for(U64 i = 0; i < sizeof(encryptionTests) / sizeof(encryptionTests[0]); ++i) {
-
-		_gotoIfError(clean, Buffer_encrypt(
-			String_bufferConst(encryptionTests[i]), 
-			Buffer_createNull(), 
-			BufferEncryptionType_AES256GCM,
-			key,
-			I32x4_zero(),
-			alloc,
-			&outputEncrypted
-		));
+		//Decrypt the encrypted string and verify if it decrypts to the same thing
 
 		_gotoIfError(clean, Buffer_decrypt(
-			outputEncrypted, 
-			Buffer_createNull(), 
-			BufferEncryptionType_AES256GCM,
-			key,
-			alloc,
-			&outputDecrypted
+			String_buffer(tmp),
+			String_bufferConst(additionalData[i]),
+			EBufferEncryptionType_AES256GCM,
+			(const U32*) testKeys[i].ptr,
+			tag,
+			iv
 		));
 
-		Buffer_free(&outputEncrypted, alloc);
-		Buffer_free(&outputDecrypted, alloc);
-	} */
+		//Check result
+
+		b = false;
+
+		_gotoIfError(
+			clean, 
+			Buffer_eq(
+				String_bufferConst(testPlainText[i]),
+				String_bufferConst(tmp),
+				&b
+			)
+		);
+
+		if(!b)
+			_gotoIfError(clean, Error_invalidState(4));
+
+		String_free(&tmp, alloc);
+	}
 
 	//
 
@@ -688,6 +708,10 @@ int main() {
 
 clean:
 
+	printf("Failed unit test... Freeing\n");
+
+	String_free(&tmp, alloc);
+	
 	for(U64 j = 0; j < sizeof(inputs) / sizeof(inputs[0]); ++j)
 		String_free(&inputs[j], alloc);
 

@@ -1,19 +1,6 @@
 #pragma once
-#include "types/string.h"
+#include "oiXX.h"
 #include "types/list.h"
-
-typedef enum ECACompressionType {
-	ECACompressionType_None,							//--uncompressed
-	ECACompressionType_Brotli11,						//(default)
-	ECACompressionType_Brotli1,							//--fast-compress	(speed of compression over storage)
-	ECACompressionType_Count
-} ECACompressionType;
-
-typedef enum ECAEncryptionType {
-	ECAEncryptionType_None,								//(default)
-	ECAEncryptionType_AES256,							//-aes <32-byte key (in hex or nyto)>
-	ECAEncryptionType_Count
-} ECAEncryptionType;
 
 typedef enum ECASettingsFlags {
 	ECASettingsFlags_None				= 0,
@@ -25,8 +12,8 @@ typedef enum ECASettingsFlags {
 
 typedef struct CASettings {
 
-	ECACompressionType compressionType;
-	ECAEncryptionType encryptionType;
+	EXXCompressionType compressionType;
+	EXXEncryptionType encryptionType;
 	ECASettingsFlags flags;
 
 	U32 encryptionKey[8];

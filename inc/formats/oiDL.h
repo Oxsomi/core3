@@ -1,19 +1,6 @@
 #pragma once
-#include "types/string.h"
+#include "oiXX.h"
 #include "types/list.h"
-
-typedef enum EDLCompressionType {
-	EDLCompressionType_None,							//--uncompressed
-	EDLCompressionType_Brotli11,						//(default)
-	EDLCompressionType_Brotli1,							//--fast-compress	(speed of compression over storage)
-	EDLCompressionType_Count
-} EDLCompressionType;
-
-typedef enum EDLEncryptionType {
-	EDLEncryptionType_None,								//(default)
-	EDLEncryptionType_AES256,							//--aes <32-byte key (in hex or nyto)>
-	EDLEncryptionType_Count
-} EDLEncryptionType;
 
 typedef enum EDLDataType {
 	EDLDataType_Data,									//(default)
@@ -30,8 +17,8 @@ typedef enum EDLSettingsFlags {
 
 typedef struct DLSettings {
 
-	EDLCompressionType compressionType;
-	EDLEncryptionType encryptionType;
+	EXXCompressionType compressionType;
+	EXXEncryptionType encryptionType;
 	EDLDataType dataType;
 	EDLSettingsFlags flags;
 

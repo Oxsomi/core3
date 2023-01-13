@@ -1,5 +1,7 @@
 # oiCA (Oxsomi Compressed Archive)
 
+*The oiCA format is an [oiXX format](oiXX.md), as such it inherits the properties from that such as compression, encryption and endianness.*
+
 oiCA is a simplified version of a zip file and is also partially inspired by the NARC file format. 
 
 It's made with the following things in mind: 
@@ -7,9 +9,8 @@ It's made with the following things in mind:
 - Ease of read + write.
 - Better compression size due to Brotli:11 compression.
   - LZMA isn't used due to higher compression and decompression times for minor compression gains. Instead we opted to use Brotli:11 (https://cran.r-project.org/web/packages/brotli/vignettes/brotli-2015-09-22.pdf).
-  - Brotli is slow to compress but fast to decompress and very efficient. Brotli:1 can be used if compression speed is important.
   - Deflate is slow and not compact enough.
-- Possibility of encryption using AES256.
+- Possibility of encryption using AES256-GCM.
 - A more modern version of zip with an easier spec / less bloat.
 - Improved security.
 - 64-bit file support.
@@ -17,28 +18,6 @@ It's made with the following things in mind:
 ## File format spec
 
 ```c
-typedef enum ECACompressionType {
-	ECACompressionType_None,
-	ECACompressionType_Brotli11,
-	ECACompressionType_Brotli1,
-	ECACompressionType_Count
-} ECACompressionType;
-
-typedef enum ECAEncryptionType {
-    ECAEncryptionType_None,
-    ECAEncryptionType_AES256,
-    ECAEncryptionType_Count
-} ECAEncryptionType;
-
-typedef enum ECAFileSizeType {
-    
-    ECAFileSizeType_U8,
-    ECAFileSizeType_U16,
-    ECAFileSizeType_U32,
-    ECAFileSizeType_U64
-    
-} ECAFileSizeType;
-
 typedef enum ECAFlags {
     
 	ECAFlags_None 					= 0,
@@ -65,9 +44,9 @@ typedef struct CAHeader {
     
     U32 magicNumber;			//oiCA (0x4143696F)
     
-    U8 version;					//major.minor (%10 = minor, /10 = major)
+    U8 version;					//major.minor (%10 = minor, /10 = major (+1 to get real major)
     U8 flags;					//ECAFlags
-    U8 type;					//(ECACompressionType << 4) | ECAEncryptionType. Each enum should be <Count
+    U8 type;					//(EXXCompressionType << 4) | EXXEncryptionType. Each enum should be <Count
     U8 headerExtensionSize;		//To skip extended data size
     
     U8 directoryExtensionSize;	//To skip directory extended data
@@ -84,7 +63,7 @@ typedef struct CAHeader {
 
 typedef struct CADirectory {
     
-    U16 parentDirectory;		//0xFFFF for root directory, else id of parent directory (can't be self)
+    U16 parentDirectory;		//0xFFFF for root directory, else id of parent directory (can't be self, unless root directory then it should be 0xFFFF)
     U16 childDirectoryStart;	//Where the child dirs start. 0xFFFF indicates no child directories
     
     U16 childDirectoryCount;	//Up to 64Ki child directories  
@@ -114,6 +93,7 @@ CAFileObject<FileSizeType, hasDateAndTime, isExtendedTime> {
 //Verify if SHA256 and/or CRC32C is valid (if applicable).
 //Verify if date and/or time is valid (if applicable).
 //Verify if uncompressedSize > compressedSize.
+//Verify if AES256 tag is valid with supplied data (if applicable).
 //Verify if CAFile includes any invalid data.
 
 CAFile {
@@ -130,7 +110,7 @@ CAFile {
     	//The names should only be [0-9A-Za-z_.\ ]+ as well as non ASCII characters.
     	//This means that special characters are banned for interoperability reasons.
     	//You can't suffix with . (meaning ., .. are also out of question).
-    	//DLFile format shouldn't use compression or encryption, since that's done by CAFile.
+    	//DLFile format MAY NOT use compression or encryption, since that's done by CAFile.
     	//DLFile should have the string flag set. If not, the file is invalid.
     
     	DLFile names;			//Names in order: [0, dirCount>, [dirCount, dirCount+fileCount>
@@ -139,7 +119,7 @@ CAFile {
     
     	//Always needed; 0xFFFF directory id aka root ("."). This isn't present in DLFile names.
     	//Points to direct children of root directory.
-    	//Parent should be IGNORED but should be defaulted to 0xFFFF
+    	//Parent HAS to be 0xFFFF.
     	//
     	CADirectory root;
     

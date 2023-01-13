@@ -62,19 +62,55 @@ void Buffer_sha256(Buffer buf, U32 output[8]);
 
 //Encryption
 
-typedef enum BufferEncryptionType {
-	BufferEncryptionType_AES256GCM,
-	BufferEncryptionType_Count
-} BufferEncryptionType;
+typedef enum EBufferEncryptionType {
+	EBufferEncryptionType_AES256GCM,		//Additional data; IV (96 bits), TAG (128 bits)
+	EBufferEncryptionType_Count
+} EBufferEncryptionType;
+
+U64 EBufferEncryptionType_getAdditionalData(EBufferEncryptionType type);		//For example; IV (96 bits), TAG (128 bits)
+
+typedef enum EBufferEncryptionFlags {
+
+	EBufferEncryptionFlags_None			= 0,
+	EBufferEncryptionFlags_GenerateKey	= 1 << 0,
+	EBufferEncryptionFlags_GenerateIv	= 1 << 1,
+
+	EBufferEncryptionFlags_Count		= 2,
+
+	EBufferEncryptionFlags_Invalid		= 0xFFFFFFFF << EBufferEncryptionFlags_Count
+
+} EBufferEncryptionFlags;
+
+//Encrypt function encrypts target into target
+//Be careful about the following if iv and key are manually generated:
+//- Don't reuse iv if supplied
+//- Don't use the key too often (e.g. >2^32 times)
+//- Don't discard iv or key if any of them are generated
+//- Don't discard tag or cut off too many bytes
 
 Error Buffer_encrypt(
-	Buffer target,						//"Plaintext" aka data to encrypt. Leave empty to authenticate with AES256GCM.
-	Buffer additionalData,				//Non secret data. Useful to include important data which can't be modified after enc
-	BufferEncryptionType type,			//Only AES256-GCM is currently supported
-	const U32 key[8],					//Secret key; used for encryption and decryption
-	const I32x4 *iv,					//Iv should be random, if it's 0 it will use CSPRNG to generate one
-	Allocator alloc, 
-	Buffer *output
+	Buffer target,					//"Plaintext" aka data to encrypt. Leave empty to authenticate with AES256GCM
+	Buffer additionalData,			//Non secret data. Data which can't be modified after enc w/o key
+	EBufferEncryptionType type,		//Only AES256GCM is currently supported
+	EBufferEncryptionFlags flags,	//Whether or not to use supplied keys or generate new ones
+	U32 key[8],						//Secret key; used for encryption and decryption
+	I32x4 *iv,						//Iv should be random 12 bytes. Can be generated if flag is set
+	I32x4 *tag						//Tag should be non zero if encryption type supports it. 
+);
+
+//Decrypt functions decrypt ciphertext from target into target
+//Will return an error if the tag can't be verified
+//Will only return decrypted result into target if the function was successful
+//When decrypting, be sure of the following:
+//- Don't use the data if Error_none() wasn't returned!
+
+Error Buffer_decrypt(
+	Buffer target,						//"Cyphertext" aka data to decrypt. Leave empty to verify with AES256GCM
+	Buffer additionalData,				//Data that was supplied to verify integrity of the data
+	EBufferEncryptionType type,			//Only AES256GCM is currently supported
+	const U32 key[8],					//Secret key used to encrypt; used for encryption and decryption
+	I32x4 tag,							//Tag that was generated to verify integrity of encrypted data
+	I32x4 iv							//Iv was the 12-byte random number that was used to encrypt the data
 );
 
 //Cryptographically secure random on a sized buffer
