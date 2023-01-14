@@ -37,7 +37,6 @@
 
 	//Key expansion for AES256
 	//Implemented from the official intel AES-NI paper + Additional paper by S. Gueron appendix A
-	//https://www.intel.com/content/dam/doc/white-paper/advanced-encryption-standard-new-instructions-set-paper.pdf
 	//https://link.springer.com/content/pdf/10.1007/978-3-642-03317-9_4.pdf
 	//https://www.samiam.org/key-schedule.html
 
@@ -173,6 +172,66 @@
 		return true;
 	}
 
+	inline void ghashPrepare(I32x4 H, I32x4 ghashLut[16]) { 
+		ghashLut[0] = I32x4_swapEndianness(H);
+	}
+
+	//Refactored from https://www.intel.com/content/dam/develop/external/us/en/documents/clmul-wp-rev-2-02-2014-04-20.pdf
+
+	inline I32x4 ghash(I32x4 a, const I32x4 ghashLut[16]) {
+
+		a = I32x4_swapEndianness(a);
+		I32x4 b = ghashLut[0];
+
+		I32x4 tmp[8];
+
+		tmp[0] = _mm_clmulepi64_si128(a, b, 0x00);
+
+		tmp[3] = I32x4_xor(
+			_mm_clmulepi64_si128(a, b, 0x10),
+			_mm_clmulepi64_si128(a, b, 0x01)
+		);
+
+		tmp[2] = _mm_clmulepi64_si128(a, b, 0x11);
+
+		tmp[1] = _mm_slli_si128(tmp[3], 8);
+		tmp[3] = _mm_srli_si128(tmp[3], 8);
+
+		for(U8 i = 0; i < 2; ++i) {
+			I32x4 t = I32x4_xor(tmp[i << 1], tmp[(i << 1) + 1]);
+			tmp[i << 1] = _mm_slli_epi32(t, 1);
+			tmp[4 + (i << 1)] = _mm_srli_epi32(t, 31);
+		}
+
+		tmp[7] = _mm_srli_si128(tmp[4], 12);
+
+		for(U8 i = 0; i < 2; ++i)
+			tmp[6 - i] = _mm_slli_si128(tmp[6 - (i << 1)], 4);
+
+		const U8 v0[3] = { 31, 30, 25 };
+
+		for(U8 i = 0; i < 3; ++i) {
+			tmp[i << 1] = I32x4_or(tmp[i ? 2 : 0], tmp[5 + i]);
+			tmp[5 + i] = _mm_slli_epi32(tmp[0], v0[i]);
+		}
+
+		for(U8 i = 0; i < 2; ++i)
+			tmp[5] = I32x4_xor(tmp[5], tmp[6 + i]);
+
+		tmp[3] = _mm_srli_si128(tmp[5], 4);
+		tmp[5] = I32x4_xor(tmp[0], _mm_slli_si128(tmp[5], 12));
+
+		const U8 v1[3] = { 1, 2, 7 };
+		
+		for(U8 i = 0; i < 3; ++i)
+			tmp[i] = _mm_srli_epi32(tmp[5], v1[i]);
+
+		for(U8 i = 1; i < 6; ++i)
+			tmp[0] = I32x4_xor(tmp[0], tmp[i]);
+
+		return I32x4_swapEndianness(tmp[0]);
+	}
+
 #elif _SIMD == SIMD_NEON
 
 	#error Neon currently unsupported for native CRC32C, AES256 or SHA256 operation
@@ -183,80 +242,61 @@
 	inline I32x4 aesBlock(I32x4 block, I32x4 k[15]);
 	inline I32x4 I32x4_rsh4(I32x4 a);
 
-#endif
+	//ghash computes the Galois field multiplication GF(2^128) with the current H (hash of AES256 encrypted zero block)
+	//for AES256 GCM + GMAC
 
-//ghash computes the Galois field multiplication GF(2^128) with the current H (hash of AES256 encrypted zero block)
-//for AES256 GCM + GMAC
+	//LUT creation from https://github.com/mko-x/SharedAES-GCM/blob/master/Sources/gcm.c#L207
 
-//LUT creation from https://github.com/mko-x/SharedAES-GCM/blob/master/Sources/gcm.c#L207
+	inline void ghashPrepare(I32x4 H, I32x4 ghashLut[16]) {
 
-inline void ghashPrepare(I32x4 H, I32x4 ghashLut[16]) {
+		H = I32x4_swapEndianness(H);
 
-	H = I32x4_swapEndianness(H);
+		ghashLut[0] = I32x4_zero();		//0 = 0 in GF(2^128)
+		ghashLut[8] = H;				//8 (0b1000) corresponds to 1 in GF (2^128)
 
-	ghashLut[0] = I32x4_zero();		//0 = 0 in GF(2^128)
-	ghashLut[8] = H;				//8 (0b1000) corresponds to 1 in GF (2^128)
+		for (U8 i = 4; i > 0; i >>= 1) {
 
-	for (U8 i = 4; i > 0; i >>= 1) {
+			I32x4 T = I32x4_create4(0, 0, 0, I32x4_x(H) & 1 ? 0xE1000000 : 0);
+			H = I32x4_rsh1(H);
+			H = I32x4_xor(H, T);
 
-		I32x4 T = I32x4_create4(0, 0, 0, I32x4_x(H) & 1 ? 0xE1000000 : 0);
-		H = I32x4_rsh1(H);
-		H = I32x4_xor(H, T);
+			ghashLut[i] = H;
+		}
 
-		ghashLut[i] = H;
+		for (U8 i = 2; i < 16; i <<= 1) {
+
+			H = ghashLut[i];
+
+			for(U8 j = 1; j < i; ++j)
+				ghashLut[j + i] = I32x4_xor(H, ghashLut[j]);
+		}
 	}
 
-	for (U8 i = 2; i < 16; i <<= 1) {
+	//Implemented and optimized to SSE from https://github.com/mko-x/SharedAES-GCM/blob/master/Sources/gcm.c#L131
 
-		H = ghashLut[i];
+	const U16 GHASH_LAST4[16] = {
+		0x0000, 0x1C20, 0x3840, 0x2460, 0x7080, 0x6CA0, 0x48C0, 0x54E0,
+		0xE100, 0xFD20, 0xD940, 0xC560, 0x9180, 0x8DA0, 0xA9C0, 0xB5E0
+	};
 
-		for(U8 j = 1; j < i; ++j)
-			ghashLut[j + i] = I32x4_xor(H, ghashLut[j]);
-	}
-}
+	inline I32x4 ghash(I32x4 a, const I32x4 ghashLut[16]) {
 
-//Implemented and optimized to SSE from https://github.com/mko-x/SharedAES-GCM/blob/master/Sources/gcm.c#L131
+		I32x4 zlZh = ghashLut[((U8*)&a)[15] & 0xF];
 
-const U16 GHASH_LAST4[16] = {
-	0x0000, 0x1C20, 0x3840, 0x2460, 0x7080, 0x6CA0, 0x48C0, 0x54E0,
-	0xE100, 0xFD20, 0xD940, 0xC560, 0x9180, 0x8DA0, 0xA9C0, 0xB5E0
-};
-
-inline I32x4 ghash(I32x4 a, const I32x4 ghashLut[16]) {
-
-	U8 lo = ((U8*)&a)[15] & 0xF;
-	U8 hi = ((U8*)&a)[15] >> 4;
-
-	I32x4 zlZh = ghashLut[lo];
-
-	for(U8 i = 15; i != U8_MAX; i--) {
-
-		if(i != 15) {
+		for (U8 i = 30; i != U8_MAX; --i) {
 
 			U8 rem = (U8)I32x4_x(zlZh) & 0xF;
+			U8 ind = (((U8*)&a)[i / 2] >> (4 * (1 - (i & 1)))) & 0xF;
 
 			zlZh = I32x4_rsh4(zlZh);
 			zlZh = I32x4_xor(zlZh, I32x4_create4(0, 0, 0, (U32)GHASH_LAST4[rem] << 16));
-
-			zlZh = I32x4_xor(zlZh, ghashLut[lo]);
+			zlZh = I32x4_xor(zlZh, ghashLut[ind]);
 		}
 
-		U8 rem = (U8)I32x4_x(zlZh) & 0xF;
-		zlZh = I32x4_rsh4(zlZh);
-
-		zlZh = I32x4_xor(zlZh, I32x4_create4(0, 0, 0, (U32)GHASH_LAST4[rem] << 16));
-
-		zlZh = I32x4_xor(zlZh, ghashLut[hi]);
-
-		if(!i)
-			break;
-
-		lo = ((U8*)&a)[i - 1] & 0x0f;
-		hi = ((U8*)&a)[i - 1] >> 4;
+		return I32x4_swapEndianness(zlZh);
 	}
 
-	return I32x4_swapEndianness(zlZh);
-}
+#endif
 
 //The context of important AES variables.
 //And encrypting/decrypting blocks and verifying tags.
@@ -267,7 +307,7 @@ typedef struct AESEncryptionContext {
 	I32x4 key[15];
 
 	I32x4 H;
-
+	
 	I32x4 ghashLut[16];
 
 	I32x4 EKY0;
