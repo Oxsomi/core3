@@ -10,6 +10,7 @@
 //
 //The final algorithm is basically the following:
 //
+//- Init key using CSPRNG if not available
 //- Init H: aes256(0, key)
 //- Init GHASH table
 //
@@ -33,152 +34,86 @@
 //For "encrypt" we use AES CTR as explained by the intel paper:
 //https://www.intel.com/content/dam/doc/white-paper/advanced-encryption-standard-new-instructions-set-paper.pdf
 
+//The context of important AES variables.
+//And encrypting/decrypting blocks and verifying tags.
+//These functions don't do any parameter checks since they're internal helper functions
+
+typedef struct AESEncryptionContext {
+
+	I32x4 key[15];
+
+	I32x4 H;
+
+	I32x4 ghashLut[17];
+
+	I32x4 EKY0;
+
+	I32x4 tag;
+
+	I32x4 iv;
+
+} AESEncryptionContext;
+
+//Key expansion for AES256
+//Implemented from the official intel AES-NI paper + Additional paper by S. Gueron appendix A
+//https://link.springer.com/content/pdf/10.1007/978-3-642-03317-9_4.pdf
+//https://www.samiam.org/key-schedule.html
+
+inline I32x4 AESEncryptionContext_expandKeyN(I32x4 im1, I32x4 im2) {
+
+	I32x4 im4 = im1;
+
+	for(U8 i = 0; i < 3; ++i) {
+		im4 = I32x4_lsh32(im4);
+		im1 = I32x4_xor(im1, im4);
+	}
+
+	return I32x4_xor(im1, im2);
+}
+
+inline I32x4 AESEncryptionContext_expandKey1(I32x4 im1, I32x4 im2) {
+	return AESEncryptionContext_expandKeyN(im1, I32x4_wwww(im2));
+}
+
+inline I32x4 AESEncryptionContext_expandKey2(I32x4 im1, I32x4 im3) {
+	return AESEncryptionContext_expandKeyN(im3, I32x4_zzzz(I32x4_aesKeyGenAssist(im1, 0)));
+}
+
+inline void AESEncryptionContext_expandKey(const U32 key[8], I32x4 k[15]) {
+
+	I32x4 im1 = (k[0] = *(const I32x4*) key);
+	I32x4 im3 = (k[1] = ((const I32x4*) key)[1]);
+
+	for (U8 i = 0, j = 2; i < 7; ++i, j += 2) {
+
+		k[j] = (im1 = AESEncryptionContext_expandKey1(im1, I32x4_aesKeyGenAssist(im3, i + 1)));
+
+		if(j + 1 < 15)
+			k[j + 1] = (im3 = AESEncryptionContext_expandKey2(im1, im3));
+	}
+}
+
+//Aes block encryption. Don't use this plainly, it's a part of the larger AES256-CTR algorithm
+
+inline I32x4 AESEncryptionContext_blockHash(I32x4 block, const I32x4 k[15]) {
+
+	block = I32x4_xor(block, k[0]);
+
+	for(U8 i = 1; i < 14; ++i)				//AES256 uses 14 rounds
+		block = I32x4_aesEnc(block, k[i], false);
+
+	return I32x4_aesEnc(block, k[14], true);
+}
+
 #if _SIMD == SIMD_SSE
 
-	//Key expansion for AES256
-	//Implemented from the official intel AES-NI paper + Additional paper by S. Gueron appendix A
-	//https://link.springer.com/content/pdf/10.1007/978-3-642-03317-9_4.pdf
-	//https://www.samiam.org/key-schedule.html
-
-	inline I32x4 aesExpandKey1(I32x4 im1, I32x4 im2) {
-
-		im2 = I32x4_wwww(im2);
-
-		I32x4 im4 = im1;
-
-		for(U8 i = 0; i < 3; ++i) {
-			im4 = _mm_slli_si128(im4, 0x4);
-			im1 = I32x4_xor(im1, im4);
-		}
-
-		return I32x4_xor(im1, im2);
-	}
-
-	inline I32x4 aesExpandKey2(I32x4 im1, I32x4 im3) {
-
-		I32x4 im4 = _mm_aeskeygenassist_si128(im1, 0x0);
-		I32x4 im2 = I32x4_zzzz(im4);
-
-		im4 = im3;
-
-		for(U8 i = 0; i < 3; ++i) {
-			im4 = _mm_slli_si128(im4, 0x4);
-			im3 = I32x4_xor(im3, im4);
-		}
-
-		return I32x4_xor(im3, im2);
-	}
-
-	inline void aesExpandKey(const U32 key[8], I32x4 k[15]) {
-
-		I32x4 im1 = (k[0] = *(const I32x4*) key);
-		I32x4 im2;
-		I32x4 im3 = (k[1] = ((const I32x4*) key)[1]);
-
-		for (U8 i = 0, j = 2; i < 7; ++i, j += 2) {
-
-			//Unfortunately can't do 1 << i. It needs constexpr
-
-			switch (i) {
-				case 0:		im2 = _mm_aeskeygenassist_si128(im3, 0x01);	break;
-				case 1:		im2 = _mm_aeskeygenassist_si128(im3, 0x02);	break;
-				case 2:		im2 = _mm_aeskeygenassist_si128(im3, 0x04);	break;
-				case 3:		im2 = _mm_aeskeygenassist_si128(im3, 0x08);	break;
-				case 4:		im2 = _mm_aeskeygenassist_si128(im3, 0x10);	break;
-				case 5:		im2 = _mm_aeskeygenassist_si128(im3, 0x20);	break;
-				default:	im2 = _mm_aeskeygenassist_si128(im3, 0x40);	break;
-			}
-
-			k[j] = (im1 = aesExpandKey1(im1, im2));
-
-			if(j + 1 < 15)
-				k[j + 1] = (im3 = aesExpandKey2(im1, im3));
-		}
-	}
-
-	//Aes block encryption. Don't use this plainly, it's a part of the larger AES256-CTR algorithm
-
-	inline I32x4 aesBlock(I32x4 block, const I32x4 k[15]) {
-
-		block = I32x4_xor(block, k[0]);
-
-		for(U8 i = 1; i < 14; ++i)				//AES256 uses 14 rounds
-			block = _mm_aesenc_si128(block, k[i]);
-
-		return _mm_aesenclast_si128(block, k[14]);
-	}
-
-	#define _I32x4_rsh(n, a)										\
-																	\
-		I32x4 mask = I32x4_create4(0, 0, (1 << n) - 1, 0);			\
-																	\
-		/* Shift to left, but gets rid of U64[1]'s lower N bits */	\
-																	\
-		I32x4 b = _mm_srli_epi64(a, n);								\
-																	\
-		/* Mask the lost bits */									\
-																	\
-		I32x4 lost = I32x4_and(a, mask);							\
-		lost = _mm_slli_epi64(I32x4_zwxy(lost), 64 - n);			\
-																	\
-		/* Combine lost bits */										\
-																	\
-		return I32x4_or(b, lost)									\
-
-	inline I32x4 I32x4_rsh4(I32x4 a) { _I32x4_rsh(4, a); }
-	inline I32x4 I32x4_rsh1(I32x4 a) { _I32x4_rsh(1, a); }
-
-	//TODO: Use in sha function instead of just naively returning it!
-
-	Bool Buffer_csprng(Buffer target) {
-
-		if(!Buffer_length(target) || Buffer_isConstRef(target))
-			return false;
-
-		U8 *ptr = target.ptr;
-		U64 len = Buffer_length(target);
-
-		while(len) {
-
-			U64 rng = 0;
-			while(!_rdrand64_step(&rng)) { }
-
-			U64 siz = 1;
-
-			if(len >= sizeof(U64)) {
-				*(U64*)ptr = rng;
-				siz = sizeof(U64);
-			}
-
-			else if(len >= sizeof(U32)) {
-				*(U32*)ptr = (U32) rng;
-				siz = sizeof(U32);
-			}
-
-			else if(len >= sizeof(U16)) {
-				*(U16*)ptr = (U16) rng;
-				siz = sizeof(U16);
-			}
-
-			else {
-				*(U8*)ptr = (U8) rng;
-				siz = sizeof(U8);
-			}
-
-			ptr += siz;
-			len -= siz;
-		}
-
-		return true;
-	}
-
-	inline void ghashPrepare(I32x4 H, I32x4 ghashLut[16]) { 
+	inline void AESEncryptionContext_ghashPrepare(I32x4 H, I32x4 ghashLut[17]) { 
 		ghashLut[0] = I32x4_swapEndianness(H);
 	}
 
 	//Refactored from https://www.intel.com/content/dam/develop/external/us/en/documents/clmul-wp-rev-2-02-2014-04-20.pdf
 
-	inline I32x4 ghash(I32x4 a, const I32x4 ghashLut[16]) {
+	inline I32x4 AESEncryptionContext_ghash(I32x4 a, const I32x4 ghashLut[17]) {
 
 		a = I32x4_swapEndianness(a);
 		I32x4 b = ghashLut[0];
@@ -194,7 +129,7 @@
 
 		tmp[2] = _mm_clmulepi64_si128(a, b, 0x11);
 
-		tmp[1] = _mm_slli_si128(tmp[3], 8);
+		tmp[1] = I32x4_lsh64(tmp[3]);
 		tmp[3] = _mm_srli_si128(tmp[3], 8);
 
 		for(U8 i = 0; i < 2; ++i) {
@@ -206,7 +141,7 @@
 		tmp[7] = _mm_srli_si128(tmp[4], 12);
 
 		for(U8 i = 0; i < 2; ++i)
-			tmp[6 - i] = _mm_slli_si128(tmp[6 - (i << 1)], 4);
+			tmp[6 - i] = I32x4_lsh32(tmp[6 - (i << 1)]);
 
 		const U8 v0[3] = { 31, 30, 25 };
 
@@ -219,7 +154,7 @@
 			tmp[5] = I32x4_xor(tmp[5], tmp[6 + i]);
 
 		tmp[3] = _mm_srli_si128(tmp[5], 4);
-		tmp[5] = I32x4_xor(tmp[0], _mm_slli_si128(tmp[5], 12));
+		tmp[5] = I32x4_xor(tmp[0], I32x4_lsh96(tmp[5]));
 
 		const U8 v1[3] = { 1, 2, 7 };
 		
@@ -238,18 +173,30 @@
 
 #else
 
-	inline void aesExpandKey(U32 key[8], I32x4 k[15]);
-	inline I32x4 aesBlock(I32x4 block, I32x4 k[15]);
-	inline I32x4 I32x4_rsh4(I32x4 a);
+	//inline void aesExpandKey(U32 key[8], I32x4 k[15]);
+	//inline I32x4 aesBlock(I32x4 block, I32x4 k[15]);
+
+	inline I32x4 rsh(I32x4 v, U8 shift) {
+
+		U64 *a = (U64*) &v;
+		U64 *b = a + 1;
+
+		*a = (*a >> shift) | (*b << (64 - shift));
+		*b >>= shift;
+
+		return v;
+	}
 
 	//ghash computes the Galois field multiplication GF(2^128) with the current H (hash of AES256 encrypted zero block)
 	//for AES256 GCM + GMAC
 
 	//LUT creation from https://github.com/mko-x/SharedAES-GCM/blob/master/Sources/gcm.c#L207
 
-	inline void ghashPrepare(I32x4 H, I32x4 ghashLut[16]) {
+	inline void AESEncryptionContext_ghashPrepare(I32x4 H, I32x4 ghashLut[17]) {
 
 		H = I32x4_swapEndianness(H);
+
+		ghashLut[16] = H;
 
 		ghashLut[0] = I32x4_zero();		//0 = 0 in GF(2^128)
 		ghashLut[8] = H;				//8 (0b1000) corresponds to 1 in GF (2^128)
@@ -257,7 +204,7 @@
 		for (U8 i = 4; i > 0; i >>= 1) {
 
 			I32x4 T = I32x4_create4(0, 0, 0, I32x4_x(H) & 1 ? 0xE1000000 : 0);
-			H = I32x4_rsh1(H);
+			H = rsh(H, 1);
 			H = I32x4_xor(H, T);
 
 			ghashLut[i] = H;
@@ -279,16 +226,16 @@
 		0xE100, 0xFD20, 0xD940, 0xC560, 0x9180, 0x8DA0, 0xA9C0, 0xB5E0
 	};
 
-	inline I32x4 ghash(I32x4 a, const I32x4 ghashLut[16]) {
+	inline I32x4 AESEncryptionContext_ghash(I32x4 aa, const I32x4 ghashLut[17]) {
 
-		I32x4 zlZh = ghashLut[((U8*)&a)[15] & 0xF];
+		I32x4 zlZh = ghashLut[((U8*)&aa)[15] & 0xF];
 
 		for (U8 i = 30; i != U8_MAX; --i) {
 
 			U8 rem = (U8)I32x4_x(zlZh) & 0xF;
-			U8 ind = (((U8*)&a)[i / 2] >> (4 * (1 - (i & 1)))) & 0xF;
+			U8 ind = (((U8*)&aa)[i / 2] >> (4 * (1 - (i & 1)))) & 0xF;
 
-			zlZh = I32x4_rsh4(zlZh);
+			zlZh = rsh(zlZh, 4);
 			zlZh = I32x4_xor(zlZh, I32x4_create4(0, 0, 0, (U32)GHASH_LAST4[rem] << 16));
 			zlZh = I32x4_xor(zlZh, ghashLut[ind]);
 		}
@@ -297,26 +244,6 @@
 	}
 
 #endif
-
-//The context of important AES variables.
-//And encrypting/decrypting blocks and verifying tags.
-//These functions don't do any parameter checks since they're internal helper functions
-
-typedef struct AESEncryptionContext {
-
-	I32x4 key[15];
-
-	I32x4 H;
-	
-	I32x4 ghashLut[16];
-
-	I32x4 EKY0;
-
-	I32x4 tag;
-
-	I32x4 iv;
-
-} AESEncryptionContext;
 
 //Safe fetch a block (even if <16 bytes are left)
 
@@ -343,14 +270,14 @@ I32x4 AESEncryptionContext_fetchBlock(const I32x4 *dat, U64 leftOver) {
 //This data could allow the dev to discard invalid packets for example
 //And verify that this is the data the original message was signed with
 
-I32x4 AESEncryptionContext_initTag(Buffer additionalData, const I32x4 ghashLut[16]) {
+I32x4 AESEncryptionContext_initTag(Buffer additionalData, const I32x4 ghashLut[17]) {
 
 	I32x4 tag = I32x4_zero();
 	U64 len = Buffer_length(additionalData);
 
 	for (U64 i = 0, j = (len + 15) >> 4; i < j; ++i) {
 		I32x4 ADi = AESEncryptionContext_fetchBlock((const I32x4*)additionalData.ptr + i, len - (i << 4));
-		tag = ghash(I32x4_xor(tag, ADi), ghashLut);
+		tag = AESEncryptionContext_ghash(I32x4_xor(tag, ADi), ghashLut);
 	}
 
 	return tag;
@@ -362,13 +289,13 @@ AESEncryptionContext AESEncryptionContext_create(const U32 realKey[8], I32x4 iv,
 
 	//Get key that's gonna be used for aes blocks
 
-	aesExpandKey(realKey, ctx.key);
+	AESEncryptionContext_expandKey(realKey, ctx.key);
 
 	//Prepare ghash
 
-	ctx.H = aesBlock(I32x4_zero(), ctx.key);
+	ctx.H = AESEncryptionContext_blockHash(I32x4_zero(), ctx.key);
 
-	ghashPrepare(ctx.H, ctx.ghashLut);
+	AESEncryptionContext_ghashPrepare(ctx.H, ctx.ghashLut);
 
 	//Compute final tag xor
 
@@ -376,7 +303,7 @@ AESEncryptionContext AESEncryptionContext_create(const U32 realKey[8], I32x4 iv,
 	I32x4_setW(&Y0, I32_swapEndianness(1));
 
 	ctx.iv = iv;
-	ctx.EKY0 = aesBlock(Y0, ctx.key);
+	ctx.EKY0 = AESEncryptionContext_blockHash(Y0, ctx.key);
 	ctx.tag = AESEncryptionContext_initTag(additionalData, ctx.ghashLut);
 
 	return ctx;
@@ -390,7 +317,7 @@ void AESEncryptionContext_finish(AESEncryptionContext *ctx, Buffer additionalDat
 	*(U64*)&lengths = U64_swapEndianness(Buffer_length(additionalData) << 3);
 	*((U64*)&lengths + 1) = U64_swapEndianness(Buffer_length(target) << 3);
 
-	ctx->tag = ghash(I32x4_xor(ctx->tag, lengths), ctx->ghashLut);
+	ctx->tag = AESEncryptionContext_ghash(I32x4_xor(ctx->tag, lengths), ctx->ghashLut);
 
 	//Finish up by adding the iv into the key (this is already has blockId 1 in it)
 
@@ -398,7 +325,7 @@ void AESEncryptionContext_finish(AESEncryptionContext *ctx, Buffer additionalDat
 }
 
 void AESEncryptionContext_updateTag(AESEncryptionContext *ctx, I32x4 CTi) {
-	ctx->tag = ghash(I32x4_xor(CTi, ctx->tag), ctx->ghashLut);
+	ctx->tag = AESEncryptionContext_ghash(I32x4_xor(CTi, ctx->tag), ctx->ghashLut);
 }
 
 void AESEncryptionContext_storeBlock(I32x4 *io, U64 leftOver, I32x4 *v) {
@@ -436,7 +363,7 @@ void AESEncryptionContext_processBlock(
 	I32x4 ivi = ctx->iv;
 	I32x4_setW(&ivi, I32_swapEndianness((U32)i + 2));
 
-	v = I32x4_xor(v, aesBlock(ivi, ctx->key));
+	v = I32x4_xor(v, AESEncryptionContext_blockHash(ivi, ctx->key));
 
 	AESEncryptionContext_storeBlock(io, leftOver, &v);
 
@@ -447,18 +374,17 @@ void AESEncryptionContext_processBlock(
 }
 
 void AESEncryptionContext_fetchAndUpdateTag(AESEncryptionContext *ctx, const I32x4 *data, U64 leftOver) {
-	I32x4 CTi = AESEncryptionContext_fetchBlock(data, leftOver);
-	AESEncryptionContext_updateTag(ctx, CTi);
+	AESEncryptionContext_updateTag(ctx, AESEncryptionContext_fetchBlock(data, leftOver));
 }
 
 U64 EBufferEncryptionType_getAdditionalData(EBufferEncryptionType type) {
 	switch (type) {
-		case EBufferEncryptionType_AES256GCM:		return 16 + 12;
-		default: return 0;
+		case EBufferEncryptionType_AES256GCM:	return 16 + 12;
+		default:								return 0;
 	}
 }
 
-inline Error aes256Encrypt(
+inline Error AESEncryptionContext_encrypt(
 	Buffer target, 
 	Buffer additionalData,
 	EBufferEncryptionFlags flags,
@@ -535,10 +461,10 @@ Error Buffer_encrypt(
 	if(!key || !iv || !tag)
 		return Error_nullPointer(!key ? 4 : (!iv ? 5 : 6), 0);
 
-	return aes256Encrypt(target, additionalData, flags, key, iv, tag);
+	return AESEncryptionContext_encrypt(target, additionalData, flags, key, iv, tag);
 }
 
-inline Error aes256Decrypt(
+inline Error AESEncryptionContext_decrypt(
 	Buffer target,
 	Buffer additionalData,
 	const U32 realKey[8],
@@ -616,5 +542,5 @@ Error Buffer_decrypt(
 	if(!key)
 		return Error_nullPointer(3, 0);
 
-	return aes256Decrypt(target, additionalData, key, tag, iv);
+	return AESEncryptionContext_decrypt(target, additionalData, key, tag, iv);
 }

@@ -86,6 +86,31 @@
 	F32x4 F32x4_create4(F32 x, F32 y, F32 z, F32 w) { return _mm_set_ps(w, z, y, x); }
 	I32x4 I32x4_create4(I32 x, I32 y, I32 z, I32 w) { return _mm_set_epi32(w, z, y, x); }
 
+	I32x4 I32x4_lsh32(I32x4 a) { return _mm_slli_si128(a, 0x4); }
+	I32x4 I32x4_lsh64(I32x4 a) { return _mm_slli_si128(a, 0x8); }
+	I32x4 I32x4_lsh96(I32x4 a) { return _mm_slli_si128(a, 0xC); }
+
+	I32x4 I32x4_aesKeyGenAssist(I32x4 a, U8 i) {
+
+		if(i >= 8)
+			return I32x4_zero();
+
+		switch (i) {
+			case 0:		return _mm_aeskeygenassist_si128(a, 0x00);
+			case 1:		return _mm_aeskeygenassist_si128(a, 0x01);
+			case 2:		return _mm_aeskeygenassist_si128(a, 0x02);
+			case 3:		return _mm_aeskeygenassist_si128(a, 0x04);
+			case 4:		return _mm_aeskeygenassist_si128(a, 0x08);
+			case 5:		return _mm_aeskeygenassist_si128(a, 0x10);
+			case 6:		return _mm_aeskeygenassist_si128(a, 0x20);
+			default:	return _mm_aeskeygenassist_si128(a, 0x40);
+		}
+	}
+
+	I32x4 I32x4_aesEnc(I32x4 a, I32x4 b, Bool isLast) {
+		return isLast ? _mm_aesenclast_si128(a, b) : _mm_aesenc_si128(a, b);
+	}
+
 	F32x4 F32x4_xxxx4(F32 x) { return _mm_set1_ps(x); }
 	I32x4 I32x4_xxxx4(I32 x) { return _mm_set1_epi32(x); }
 	F32x2 F32x2_xx2(F32 x) { return F32x2_create2(x, x); }

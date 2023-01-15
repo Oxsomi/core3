@@ -108,6 +108,10 @@ add_library(
 
 target_include_directories(OxC3_types PUBLIC inc)
 
+if(WIN32)
+	target_link_libraries(OxC3_types PUBLIC Bcrypt.lib)
+endif()
+
 # Formats
 
 file(GLOB_RECURSE formatsHeaders "inc/formats/*.h")
