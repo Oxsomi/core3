@@ -176,7 +176,7 @@ inline I32x4 AESEncryptionContext_blockHash(I32x4 block, const I32x4 k[15]) {
 	//inline void aesExpandKey(U32 key[8], I32x4 k[15]);
 	//inline I32x4 aesBlock(I32x4 block, I32x4 k[15]);
 
-	inline I32x4 rsh(I32x4 v, U8 shift) {
+	inline I32x4 AESEncryptionContext_rsh(I32x4 v, U8 shift) {
 
 		U64 *a = (U64*) &v;
 		U64 *b = a + 1;
@@ -204,7 +204,7 @@ inline I32x4 AESEncryptionContext_blockHash(I32x4 block, const I32x4 k[15]) {
 		for (U8 i = 4; i > 0; i >>= 1) {
 
 			I32x4 T = I32x4_create4(0, 0, 0, I32x4_x(H) & 1 ? 0xE1000000 : 0);
-			H = rsh(H, 1);
+			H = AESEncryptionContext_rsh(H, 1);
 			H = I32x4_xor(H, T);
 
 			ghashLut[i] = H;
@@ -235,7 +235,7 @@ inline I32x4 AESEncryptionContext_blockHash(I32x4 block, const I32x4 k[15]) {
 			U8 rem = (U8)I32x4_x(zlZh) & 0xF;
 			U8 ind = (((U8*)&aa)[i / 2] >> (4 * (1 - (i & 1)))) & 0xF;
 
-			zlZh = rsh(zlZh, 4);
+			zlZh = AESEncryptionContext_rsh(zlZh, 4);
 			zlZh = I32x4_xor(zlZh, I32x4_create4(0, 0, 0, (U32)GHASH_LAST4[rem] << 16));
 			zlZh = I32x4_xor(zlZh, ghashLut[ind]);
 		}

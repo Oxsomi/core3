@@ -377,33 +377,33 @@ inline void Buffer_sha256Internal(Buffer buf, U32 *output) {
 
 		//Consts
 
-		const I32x4 MASK = _mm_set_epi64x(0x0C'0D'0E'0F'08'09'0A'0B, 0x04'05'06'07'00'01'02'03);
+		const I32x4 MASK = I32x4_createFromU64x2(0x0C'0D'0E'0F'08'09'0A'0B, 0x04'05'06'07'00'01'02'03);
 
 		const I32x4 ROUNDS[16] = {
-			_mm_set_epi64x(0xE9B5DBA5B5C0FBCF, 0x71374491428A2F98),		//0-3
-			_mm_set_epi64x(0xAB1C5ED5923F82A4, 0x59F111F13956C25B),		//4-7
-			_mm_set_epi64x(0x550C7DC3243185BE, 0x12835B01D807AA98),		//8-11
-			_mm_set_epi64x(0xC19BF1749BDC06A7, 0x80DEB1FE72BE5D74),		//12-15
-			_mm_set_epi64x(0x240CA1CC0FC19DC6, 0xEFBE4786E49B69C1),		//16-19
-			_mm_set_epi64x(0x76F988DA5CB0A9DC, 0x4A7484AA2DE92C6F),		//20-23
-			_mm_set_epi64x(0xBF597FC7B00327C8, 0xA831C66D983E5152),		//24-27
-			_mm_set_epi64x(0x1429296706CA6351, 0xD5A79147C6E00BF3),		//28-31
-			_mm_set_epi64x(0x53380D134D2C6DFC, 0x2E1B213827B70A85),		//32-35
-			_mm_set_epi64x(0x92722C8581C2C92E, 0x766A0ABB650A7354),		//36-39
-			_mm_set_epi64x(0xC76C51A3C24B8B70, 0xA81A664BA2BFE8A1),		//40-43
-			_mm_set_epi64x(0x106AA070F40E3585, 0xD6990624D192E819),		//44-47
-			_mm_set_epi64x(0x34B0BCB52748774C, 0x1E376C0819A4C116),		//48-51
-			_mm_set_epi64x(0x682E6FF35B9CCA4F, 0x4ED8AA4A391C0CB3),		//52-55
-			_mm_set_epi64x(0x8CC7020884C87814, 0x78A5636F748F82EE),		//56-59
-			_mm_set_epi64x(0xC67178F2BEF9A3F7, 0xA4506CEB90BEFFFA)		//60-63
+			I32x4_createFromU64x2(0xE9B5DBA5B5C0FBCF, 0x71374491428A2F98),		//0-3
+			I32x4_createFromU64x2(0xAB1C5ED5923F82A4, 0x59F111F13956C25B),		//4-7
+			I32x4_createFromU64x2(0x550C7DC3243185BE, 0x12835B01D807AA98),		//8-11
+			I32x4_createFromU64x2(0xC19BF1749BDC06A7, 0x80DEB1FE72BE5D74),		//12-15
+			I32x4_createFromU64x2(0x240CA1CC0FC19DC6, 0xEFBE4786E49B69C1),		//16-19
+			I32x4_createFromU64x2(0x76F988DA5CB0A9DC, 0x4A7484AA2DE92C6F),		//20-23
+			I32x4_createFromU64x2(0xBF597FC7B00327C8, 0xA831C66D983E5152),		//24-27
+			I32x4_createFromU64x2(0x1429296706CA6351, 0xD5A79147C6E00BF3),		//28-31
+			I32x4_createFromU64x2(0x53380D134D2C6DFC, 0x2E1B213827B70A85),		//32-35
+			I32x4_createFromU64x2(0x92722C8581C2C92E, 0x766A0ABB650A7354),		//36-39
+			I32x4_createFromU64x2(0xC76C51A3C24B8B70, 0xA81A664BA2BFE8A1),		//40-43
+			I32x4_createFromU64x2(0x106AA070F40E3585, 0xD6990624D192E819),		//44-47
+			I32x4_createFromU64x2(0x34B0BCB52748774C, 0x1E376C0819A4C116),		//48-51
+			I32x4_createFromU64x2(0x682E6FF35B9CCA4F, 0x4ED8AA4A391C0CB3),		//52-55
+			I32x4_createFromU64x2(0x8CC7020884C87814, 0x78A5636F748F82EE),		//56-59
+			I32x4_createFromU64x2(0xC67178F2BEF9A3F7, 0xA4506CEB90BEFFFA)		//60-63
 		};
 
 		//Initialize state
 
-		I32x4 tmp = I32x4_yxwz(I32x4_load4((const I32*) SHA256_STATE));			//_mm_shuffle_epi32(tmp, 0xB1)
-		I32x4 state1 = I32x4_wzyx(I32x4_load4((const I32*) SHA256_STATE + 4));	//_mm_shuffle_epi32(state1, 0x1B)
-		I32x4 state0 = _mm_alignr_epi8(tmp, state1, 8);
-		state1 = _mm_blend_epi16(state1, tmp, 0xF0);
+		I32x4 tmp = I32x4_yxwz(I32x4_load4((const I32*) SHA256_STATE));				//_mm_shuffle_epi32(tmp, 0xB1)
+		I32x4 state1 = I32x4_wzyx(I32x4_load4((const I32*) SHA256_STATE + 4));		//_mm_shuffle_epi32(state1, 0x1B)
+		I32x4 state0 =	I32x4_combineRightShift(tmp, state1, 2);					//_mm_alignr_epi8(tmp, state1, 8);
+		state1 = I32x4_blend(state1, tmp, 0b1100);									//_mm_blend_epi16(state1, tmp, 0xF0)
 
 		//64-byte blocks
 
@@ -513,7 +513,7 @@ inline void Buffer_sha256Internal(Buffer buf, U32 *output) {
 			I32x4 msgs[4];
 
 			for(U64 i = 0; i < 4; ++i)
-				msgs[i] = _mm_shuffle_epi8(I32x4_load4((const I32*)(void*)ptr + i * 4), MASK);
+				msgs[i] = I32x4_shuffleBytes(I32x4_load4((const I32*)(void*)ptr + i * 4), MASK);
 
 			//3 iterations: Rounds 0-11 (two different iterations; 0-3, 4-7, 8-11)
 
@@ -535,10 +535,10 @@ inline void Buffer_sha256Internal(Buffer buf, U32 *output) {
 				I32x4 msg = I32x4_add(msgs[(i + 3) & 3], ROUNDS[i + 3]);
 				state1 = _mm_sha256rnds2_epu32(state1, state0, msg);
 
-				tmp = _mm_alignr_epi8(msgs[(i + 3) & 3], msgs[(i + 2) & 3], 4);
+				tmp = I32x4_combineRightShift(msgs[(i + 3) & 3], msgs[(i + 2) & 3], 1);		//_mm_alignr_epi8(a, b, 4)
 				I32x4 msgTmp = I32x4_add(msgs[i & 3], tmp);
 				msgs[i & 3] = _mm_sha256msg2_epu32(msgTmp, msgs[(i + 3) & 3]);
-				msg = I32x4_zwxx(msg);										//_mm_shuffle_epi32(msg, 0xE);
+				msg = I32x4_zwxx(msg);														//_mm_shuffle_epi32(msg, 0xE);
 				state0 = _mm_sha256rnds2_epu32(state0, state1, msg);
 				msgs[(i + 2) & 3] = _mm_sha256msg1_epu32(msgs[(i + 2) & 3], msgs[(i + 3) & 3]);
 			}
@@ -572,10 +572,10 @@ inline void Buffer_sha256Internal(Buffer buf, U32 *output) {
 
 		//Post process 
 
-		tmp = I32x4_wzyx(state0);			//_mm_shuffle_epi32(state0, 0x1B)
-		state1 = I32x4_yxwz(state1);		//_mm_shuffle_epi32(state1, 0xB1)
-		state0 = _mm_blend_epi16(tmp, state1, 0xF0);
-		state1 = _mm_alignr_epi8(state1, tmp, 8);
+		tmp = I32x4_wzyx(state0);							//_mm_shuffle_epi32(state0, 0x1B)
+		state1 = I32x4_yxwz(state1);						//_mm_shuffle_epi32(state1, 0xB1)
+		state0 = I32x4_blend(tmp, state1, 0b1100);			//_mm_blend_epi16(tmp, state1, 0xF0);
+		state1 = I32x4_combineRightShift(state1, tmp, 2);	//_mm_alignr_epi8(a, b, 2)
 
 		//Store output
 

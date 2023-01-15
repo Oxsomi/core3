@@ -85,31 +85,7 @@
 
 	F32x4 F32x4_create4(F32 x, F32 y, F32 z, F32 w) { return _mm_set_ps(w, z, y, x); }
 	I32x4 I32x4_create4(I32 x, I32 y, I32 z, I32 w) { return _mm_set_epi32(w, z, y, x); }
-
-	I32x4 I32x4_lsh32(I32x4 a) { return _mm_slli_si128(a, 0x4); }
-	I32x4 I32x4_lsh64(I32x4 a) { return _mm_slli_si128(a, 0x8); }
-	I32x4 I32x4_lsh96(I32x4 a) { return _mm_slli_si128(a, 0xC); }
-
-	I32x4 I32x4_aesKeyGenAssist(I32x4 a, U8 i) {
-
-		if(i >= 8)
-			return I32x4_zero();
-
-		switch (i) {
-			case 0:		return _mm_aeskeygenassist_si128(a, 0x00);
-			case 1:		return _mm_aeskeygenassist_si128(a, 0x01);
-			case 2:		return _mm_aeskeygenassist_si128(a, 0x02);
-			case 3:		return _mm_aeskeygenassist_si128(a, 0x04);
-			case 4:		return _mm_aeskeygenassist_si128(a, 0x08);
-			case 5:		return _mm_aeskeygenassist_si128(a, 0x10);
-			case 6:		return _mm_aeskeygenassist_si128(a, 0x20);
-			default:	return _mm_aeskeygenassist_si128(a, 0x40);
-		}
-	}
-
-	I32x4 I32x4_aesEnc(I32x4 a, I32x4 b, Bool isLast) {
-		return isLast ? _mm_aesenclast_si128(a, b) : _mm_aesenc_si128(a, b);
-	}
+	I32x4 I32x4_createFromU64x2(U64 i0, U64 i1) { return _mm_set_epi64x(i0, i1); }
 
 	F32x4 F32x4_xxxx4(F32 x) { return _mm_set1_ps(x); }
 	I32x4 I32x4_xxxx4(I32 x) { return _mm_set1_epi32(x); }
@@ -272,5 +248,81 @@
 	F32 F32x4_dot3(F32x4 a, F32x4 b) { return F32x4_x(_mm_dp_ps(a, F32x4_xyz(b), 0xFF)); }
 
 	F32 F32x2_dot(F32x2 a, F32x2 b) { return F32x4_dot2(F32x4_fromF32x2(a), F32x4_fromF32x2(b)); }
+
+	//Used for AES256
+
+	I32x4 I32x4_lsh32(I32x4 a) { return _mm_slli_si128(a, 0x4); }
+	I32x4 I32x4_lsh64(I32x4 a) { return _mm_slli_si128(a, 0x8); }
+	I32x4 I32x4_lsh96(I32x4 a) { return _mm_slli_si128(a, 0xC); }
+
+	I32x4 I32x4_aesKeyGenAssist(I32x4 a, U8 i) {
+
+		if(i >= 8)
+			return I32x4_zero();
+
+		switch (i) {
+			case 0:		return _mm_aeskeygenassist_si128(a, 0x00);
+			case 1:		return _mm_aeskeygenassist_si128(a, 0x01);
+			case 2:		return _mm_aeskeygenassist_si128(a, 0x02);
+			case 3:		return _mm_aeskeygenassist_si128(a, 0x04);
+			case 4:		return _mm_aeskeygenassist_si128(a, 0x08);
+			case 5:		return _mm_aeskeygenassist_si128(a, 0x10);
+			case 6:		return _mm_aeskeygenassist_si128(a, 0x20);
+			default:	return _mm_aeskeygenassist_si128(a, 0x40);
+		}
+	}
+
+	I32x4 I32x4_aesEnc(I32x4 a, I32x4 b, Bool isLast) {
+		return isLast ? _mm_aesenclast_si128(a, b) : _mm_aesenc_si128(a, b);
+	}
+
+	//SHA256 helper functions
+
+	I32x4 I32x4_shuffleBytes(I32x4 a, I32x4 b) { return _mm_shuffle_epi8(a, b); }
+
+	I32x4 I32x4_blend(I32x4 a, I32x4 b, U8 xyzw) {
+
+		switch (xyzw & 0xF) {
+
+			default:		return a;
+			case 0b1111:	return b;
+
+			case 0b0001:	return _mm_blend_epi16(a, b, 0x03);
+			case 0b0010:	return _mm_blend_epi16(a, b, 0x0C);
+			case 0b0011:	return _mm_blend_epi16(a, b, 0x0F);
+
+			case 0b0100:	return _mm_blend_epi16(a, b, 0x30);
+			case 0b0101:	return _mm_blend_epi16(a, b, 0x33);
+			case 0b0110:	return _mm_blend_epi16(a, b, 0x3C);
+			case 0b0111:	return _mm_blend_epi16(a, b, 0x3F);
+
+			case 0b1000:	return _mm_blend_epi16(a, b, 0xC0);
+			case 0b1001:	return _mm_blend_epi16(a, b, 0xC3);
+			case 0b1010:	return _mm_blend_epi16(a, b, 0xCC);
+			case 0b1011:	return _mm_blend_epi16(a, b, 0xCF);
+
+			case 0b1100:	return _mm_blend_epi16(a, b, 0xF0);
+			case 0b1101:	return _mm_blend_epi16(a, b, 0xF3);
+			case 0b1110:	return _mm_blend_epi16(a, b, 0xFC);
+		}
+	}
+
+	I32x4 I32x4_combineRightShift(I32x4 a, I32x4 b, U8 v) {
+
+		switch (v) {
+
+			case 0:		return b;
+			case 1:		return _mm_alignr_epi8(a, b, 4);
+			case 2:		return _mm_alignr_epi8(a, b, 8);
+			case 3:		return _mm_alignr_epi8(a, b, 12);
+
+			case 4:		return a;
+			case 5:		return _mm_alignr_epi8(a, b, 20);
+			case 6:		return _mm_alignr_epi8(a, b, 24);
+			case 7:		return _mm_alignr_epi8(a, b, 28);
+
+			default:	return I32x4_zero();
+		}
+	}
 
 #endif

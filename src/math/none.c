@@ -82,6 +82,13 @@
 	I32x2 I32x2_create1(I32 x) { return I32x2_create2(x, 0); }
 	F32x2 F32x2_create1(F32 x) { return F32x2_create2(x, 0); }
 
+	I32x4 I32x4_createFromU64x2(U64 i0, U64 i1) {
+		I32x4 v;
+		((U64*)&v)[0] = i0;
+		((U64*)&v)[1] = i1;
+		return v;
+	}
+
 	I32x4 I32x4_xxxx4(I32 x) { return I32x4_create4(x, x, x, x); }
 	F32x4 F32x4_xxxx4(F32 x) { return F32x4_create4(x, x, x, x); }
 	I32x2 I32x2_xx2(I32 x) { return I32x2_create2(x, x); }
@@ -269,6 +276,7 @@
 
 	//Implemented from
 	//https://www.intel.com/content/dam/doc/white-paper/advanced-encryption-standard-new-instructions-set-paper.pdf
+	//https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.197.pdf
 
 	static const U8 AES_SBOX[256] = {
 		0x63, 0x7C, 0x77, 0x7B, 0xF2, 0x6B, 0x6F, 0xC5, 0x30, 0x01, 0x67, 0x2B, 0xFE, 0xD7, 0xAB, 0x76,
@@ -289,7 +297,7 @@
 		0x8C, 0xA1, 0x89, 0x0D, 0xBF, 0xE6, 0x42, 0x68, 0x41, 0x99, 0x2D, 0x0F, 0xB0, 0x54, 0xBB, 0x16
 	};
 
-	inline U32 subWord(U32 a) {
+	inline U32 AES_subWord(U32 a) {
 
 		U32 res = 0;
 
@@ -299,7 +307,7 @@
 		return res;
 	}
 
-	inline U32 rotWord(U32 a) { 
+	inline U32 AES_rotWord(U32 a) { 
 		return (a >> 8) | (a << 24);
 	}
 	
@@ -314,14 +322,14 @@
 		U32 x3 = I32x4_w(a);
 		U32 rcon = i ? 1 << (i - 1) : 0;
 
-		x1 = subWord(x1);
-		x3 = subWord(x3);
+		x1 = AES_subWord(x1);
+		x3 = AES_subWord(x3);
 
 		return I32x4_create4(
 			x1,
-			rotWord(x1) ^ rcon,
+			AES_rotWord(x1) ^ rcon,
 			x3,
-			rotWord(x3) ^ rcon
+			AES_rotWord(x3) ^ rcon
 		);
 	}
 
@@ -340,7 +348,7 @@
 		return t;
 	}
 
-	inline I32x4 shiftRows(I32x4 a) {
+	inline I32x4 AES_shiftRows(I32x4 a) {
 
 		U8x4x4 *ap = (U8x4x4*) &a;
 
@@ -353,7 +361,7 @@
 		return *(I32x4*)&res;
 	}
 
-	inline I32x4 subBytes(I32x4 a) {
+	inline I32x4 AES_subBytes(I32x4 a) {
 
 		I32x4 res = a;
 		U8 *ptr = (U8*)&res;
@@ -364,10 +372,10 @@
 		return res;
 	}
 
-	inline U8 g2_8(U8 v, U8 mul) {
+	inline U8 AES_g2_8(U8 v, U8 mul) {
 		switch (mul) {
 			case 2:		return (v << 1) ^ ((v >> 7) * 0x1B);
-			case 3:		return v ^ g2_8(v, 2);
+			case 3:		return v ^ AES_g2_8(v, 2);
 			default:	return v;
 		}
 	}
@@ -379,7 +387,7 @@
 		{ 3, 1, 1, 2 }
 	};
 
-	inline I32x4 mixColumns(I32x4 vvv) { 
+	inline I32x4 AES_mixColumns(I32x4 vvv) { 
 
 		U8x4x4 v = *(U8x4x4*)&vvv;
 
@@ -391,7 +399,7 @@
 			for(U8 j = 0; j < 4; ++j) {
 
 				for(U8 k = 0; k < 4; ++k)
-					r.v[j][i] ^= g2_8(v.v[k][i], AES_MIX_COLUMN[j][k]);
+					r.v[j][i] ^= AES_g2_8(v.v[k][i], AES_MIX_COLUMN[j][k]);
 			}
 
 		r = U8x4x4_transpose(&r);
@@ -401,13 +409,59 @@
 
 	I32x4 I32x4_aesEnc(I32x4 a, I32x4 b, Bool isLast) {
 
-		I32x4 t = shiftRows(a);
-		t = subBytes(t);
+		I32x4 t = AES_shiftRows(a);
+		t = AES_subBytes(t);
 
 		if(!isLast)
-			t = mixColumns(t);
+			t = AES_mixColumns(t);
 
 		return I32x4_xor(t, b);
+	}
+
+	//SHA256 helper functions
+
+	I32x4 I32x4_shuffleBytes(I32x4 a, I32x4 b) {
+	
+		U8 *ua = (U8*)&a;
+		U8 *ub = (U8*)&b;
+		U8 uc[16];
+
+		for (U8 i = 0; i < 16; ++i) {
+
+			if(ub[i] >> 7)
+				uc[i] = 0;
+
+			else uc[i] = ua[ub[i] & 0xF];
+		}
+	
+		return *(const I32x4*)uc;
+	}
+	
+	I32x4 I32x4_blend(I32x4 a, I32x4 b, U8 xyzw) {
+
+		for(U8 i = 0; i < 4; ++i)
+			if((xyzw >> i) & 1)
+				I32x4_set(&a, i, I32x4_get(b, i));
+
+		return a;
+	}
+
+	I32x4 I32x4_combineRightShift(I32x4 a, I32x4 b, U8 v) {
+
+		switch (v) {
+
+			case 0:		return b;
+			case 1:		return I32x4_create4(I32x4_w(a), I32x4_x(b), I32x4_y(b), I32x4_z(b));
+			case 2:		return I32x4_create4(I32x4_z(a), I32x4_w(a), I32x4_x(b), I32x4_y(b));
+			case 3:		return I32x4_create4(I32x4_y(a), I32x4_z(a), I32x4_w(a), I32x4_x(b));
+
+			case 4:		return a;
+			case 5:		return I32x4_create4(0, I32x4_x(a), I32x4_y(a), I32x4_z(a));
+			case 6:		return I32x4_create4(0, 0, I32x4_x(a), I32x4_y(a));
+			case 7:		return I32x4_create4(0, 0, 0, I32x4_x(a));
+
+			default:	return I32x4_zero();
+		}
 	}
 
 #endif
