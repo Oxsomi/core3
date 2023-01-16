@@ -76,14 +76,11 @@ impl I32x4 I32x4_create4(I32 x, I32 y, I32 z, I32 w);
 
 impl I32x4 I32x4_createFromU64x2(U64 a, U64 b);
 impl I32x4 I32x4_blend(I32x4 a, I32x4 b, U8 xyzw);				//xyzw: 4-bit selector. x as b0, w as b3. 1 means b, 0 means 0.
-impl I32x4 I32x4_combineRightShift(I32x4 a, I32x4 b, U8 v);		//Appends a before b and shifts with v elements (I32) and truncates.
+impl I32x4 I32x4_combineRightShift(I32x4 a, I32x4 b, U8 v);		//Appends a before b and shifts with v I32s and truncates.
 
 impl I32x4 I32x4_lsh32(I32x4 a);	//Shifting 32 bits (4 bytes)
 impl I32x4 I32x4_lsh64(I32x4 a);	//Shifting 64 bits (8 bytes)
 impl I32x4 I32x4_lsh96(I32x4 a);	//Shifting 96 bits (12 bytes)
-
-impl I32x4 I32x4_aesKeyGenAssist(I32x4 a, U8 i);		//i: [0,7]. 0x0,0x1,...
-impl I32x4 I32x4_aesEnc(I32x4 a, I32x4 b, Bool isLast);
 
 I32x4 I32x4_load1(const I32 *arr);
 I32x4 I32x4_load2(const I32 *arr);
