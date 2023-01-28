@@ -81,10 +81,10 @@ Error allocCallback(void *allocator, U64 length, Buffer *output) {
 
 	allocator;
 
-	void *ptr = malloc(length);
-
 	if(!output)
 		return Error_nullPointer(2, 0);
+
+	void *ptr = malloc(length);
 
 	if(!ptr)
 		return Error_outOfMemory(0);
@@ -177,11 +177,11 @@ void Platform_cleanupExt(Platform *p) {
 	SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), oldColor);
 }
 
-Error Platform_initExt(Platform *result) {
+Error Platform_initExt(Platform *result, String currAppDir) {
 
 	//
 
-	Buffer platformExt;
+	Buffer platformExt = Buffer_createNull();
 	Error err = Buffer_createEmptyBytesx(sizeof(PlatformExt), &platformExt);
 
 	if(err.genericError)
@@ -189,40 +189,76 @@ Error Platform_initExt(Platform *result) {
 
 	PlatformExt *pext = (PlatformExt*) platformExt.ptr;
 
-	if (!(pext->ntdll = GetModuleHandleA("ntdll.dll"))) {
+	pext->ntdll = GetModuleHandleA("ntdll.dll");
+
+	if (!pext->ntdll) {
 		Buffer_freex(&platformExt);
 		return Error_platformError(0, GetLastError());
 	}
 
-	if (!(*((void**)&pext->ntDelayExecution) = (void*)GetProcAddress(pext->ntdll, "NtDelayExecution"))) {
+	*((void**)&pext->ntDelayExecution) = (void*)GetProcAddress(pext->ntdll, "NtDelayExecution");
+
+	if (!pext->ntDelayExecution) {
 		Buffer_freex(&platformExt);
 		return Error_platformError(1, GetLastError());
 	}
+	
+	#if !_WORKING_DIR
 
-	//Init working dir
+		//Grab app directory of where the exe is installed
 
-	C8 buff[MAX_PATH + 1];
-	DWORD chars = GetCurrentDirectoryA(MAX_PATH + 1, buff);
+		String appDir;
+		if ((err = String_createCopyx(currAppDir, &appDir)).genericError)
+			goto cleanup;
 
-	if(!chars) {
-		Buffer_freex(&platformExt);
-		return Error_platformError(0, GetLastError());		//Needs no cleaning. cleanup(Ext) will handle it
-	}
+		String_replaceAll(&appDir, '\\', '/', EStringCase_Sensitive);
 
-	//Move to heap and standardize
+		U64 loc = String_findLast(appDir, '/', EStringCase_Sensitive);
+		String basePath;
 
-	if((err = String_createCopyx(String_createConstRef(buff, chars), &result->workingDirectory)).genericError) {
-		Buffer_freex(&platformExt);
-		return err;
-	}
+		if (loc == appDir.length)
+			basePath = String_createConstRef(appDir.ptr, appDir.length);
+	
+		else String_cut(appDir, 0, loc + 1, &basePath);
 
-	String_replaceAll(&result->workingDirectory, '\\', '/', EStringCase_Sensitive);
+		String workDir;
 
-	if ((err = String_appendx(&result->workingDirectory, '/')).genericError)  {
-		String_freex(&result->workingDirectory);
-		Buffer_freex(&platformExt);
-		return err;
-	}
+		if ((err = String_createCopyx(basePath, &workDir)).genericError)
+			goto cleanup;
+
+		String_freex(&appDir);
+		result->workingDirectory = workDir;
+
+	#else
+
+		currAppDir;
+
+		//Init working dir
+
+		C8 buff[MAX_PATH + 1];
+		DWORD chars = GetCurrentDirectoryA(MAX_PATH + 1, buff);
+
+		if(!chars) {
+			Buffer_freex(&platformExt);
+			return Error_platformError(0, GetLastError());		//Needs no cleaning. cleanup(Ext) will handle it
+		}
+
+		//Move to heap and standardize
+
+		if((err = String_createCopyx(String_createConstRef(buff, chars), &result->workingDirectory)).genericError) {
+			Buffer_freex(&platformExt);
+			return err;
+		}
+
+		String_replaceAll(&result->workingDirectory, '\\', '/', EStringCase_Sensitive);
+
+		if ((err = String_appendx(&result->workingDirectory, '/')).genericError)  {
+			String_freex(&result->workingDirectory);
+			Buffer_freex(&platformExt);
+			return err;
+		}
+
+	#endif
 
 	result->dataExt = pext;
 	return Error_none();

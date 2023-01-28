@@ -29,8 +29,8 @@
 
 Error File_resolve(String loc, Bool *isVirtual, String *result) {
 
-	if(result)
-		*result = String_createNull();
+	if(result && result->ptr)
+		return Error_invalidOperation(0);
 
 	StringList res = (StringList) { 0 };
 	Error err = Error_none();
@@ -135,6 +135,16 @@ Error File_resolve(String loc, Bool *isVirtual, String *result) {
 		//Validate file name
 
 		if (!String_isValidFileName(res.ptr[i], i == res.length - 1)) {
+
+			#ifdef _WIN32
+
+				//Drive name
+
+				if(!i && res.ptr[i].length == 2 && C8_isAlpha(res.ptr[0].ptr[0]) && res.ptr[0].ptr[1] == ':')
+					continue;
+
+			#endif
+
 			res.length = realSplitLen;
 			_gotoIfError(clean, Error_invalidParameter(0, 0, 1));
 		}
@@ -192,12 +202,15 @@ Error File_resolve(String loc, Bool *isVirtual, String *result) {
 
 	//Re-assemble path now
 
-	String_freex(result);
+	String tmp = String_createNull();
 
-	if ((err = StringList_concatx(res, '/', result)).genericError) {
+	if ((err = StringList_concatx(res, '/', &tmp)).genericError) {
 		res.length = realSplitLen;
 		StringList_freex(&res);
 	}
+
+	String_freex(result);		//This can't be done before concat, because the string is still in use.
+	*result = tmp;
 
 	res.length = realSplitLen;
 	StringList_freex(&res);
@@ -220,13 +233,12 @@ Error File_resolve(String loc, Bool *isVirtual, String *result) {
 	//Our path has to be made relative to our working directory.
 	//This is to avoid access from folders we shouldn't be able to read in.
 
-	if (
-		isAbsolute && 
-		!String_startsWithString(
+	if (isAbsolute) {
+
+		if(!String_startsWithString(
 			*result, Platform_instance.workingDirectory, EStringCase_Insensitive
-		)
-	) {
-		_gotoIfError(clean, Error_unauthorized(0));
+		))
+			_gotoIfError(clean, Error_unauthorized(0));
 	}
 
 	//Prepend our path
@@ -276,7 +288,7 @@ Error File_getInfo(String loc, FileInfo *info) {
 
 	_gotoIfError(clean, File_resolve(loc, &isVirtual, &resolved));
 
-	struct stat inf;
+	struct stat inf = (struct stat) { 0 };
 
 	if (stat(resolved.ptr, &inf))
 		_gotoIfError(clean, Error_notFound(0, 0, 0));
@@ -725,7 +737,10 @@ Error File_read(String loc, Ns maxTimeout, Buffer *output) {
 	if(!String_isValidFilePath(loc))
 		_gotoIfError(clean, Error_invalidParameter(0, 0, 0));
 
-	if(output)
+	if(!output)
+		_gotoIfError(clean, Error_nullPointer(2, 0));
+
+	if(output->ptr)
 		_gotoIfError(clean, Error_invalidOperation(0));
 
 	Bool isVirtual = File_isVirtual(loc);

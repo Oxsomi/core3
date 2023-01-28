@@ -5,19 +5,21 @@
 #include "types/buffer.h"
 #include "types/allocator.h"
 
-/* TODO: Finish when encryption and compression are done
-
 //File spec (docs/oiDL.md)
 
 typedef enum EDLFlags {
 
 	EDLFlags_None 					= 0,
 
-	EDLFlags_HasHash				= 1 << 0,		//Should be true if compression or encryption is on
-	EDLFlags_UseSHA256				= 1 << 1,		//Whether SHA256 (1) or CRC32C (0) is used as hash
+	EDLFlags_UseSHA256				= 1 << 0,		//Whether SHA256 (1) or CRC32C (0) is used as hash
 
-	EDLFlags_IsString				= 1 << 2,		//If true; string must contain valid ASCII characters
-	EDLFlags_UTF8					= 1 << 3		//ASCII (if off), otherwise UTF-8
+	EDLFlags_IsString				= 1 << 1,		//If true; string must contain valid ASCII characters
+	EDLFlags_UTF8					= 1 << 2,		//ASCII (if off), otherwise UTF-8
+        
+    //Chunk size of AES for multi threading. 0 = none, 1 = 10MiB, 2 = 50MiB, 3 = 100MiB
+        
+	EDLFlags_UseAESChunksA			= 1 << 3,
+	EDLFlags_UseAESChunksB			= 1 << 4
 
 } EDLFlags;
 
@@ -52,6 +54,9 @@ Error DLFile_create(DLSettings settings, Allocator alloc, DLFile *dlFile) {
 	if(settings.compressionType >= EXXCompressionType_Count)
 		return Error_invalidParameter(0, 0, 0);
 
+	if(settings.compressionType > EXXCompressionType_None)
+		return Error_invalidOperation(0);							//TODO: Add support for compression
+
 	if(settings.encryptionType >= EXXEncryptionType_Count)
 		return Error_invalidParameter(0, 1, 0);
 
@@ -60,24 +65,6 @@ Error DLFile_create(DLSettings settings, Allocator alloc, DLFile *dlFile) {
 
 	if(settings.flags & EDLSettingsFlags_Invalid)
 		return Error_invalidParameter(0, 3, 0);
-
-	if (settings.compressionType == EXXEncryptionType_AES256GCM) {		//Check if we actually input a key
-
-		U32 key[8] = { 0 };
-
-		Bool b = false;
-		Error err = Buffer_eq(
-			Buffer_createConstRef(key, sizeof(key)), 
-			Buffer_createConstRef(settings.encryptionKey, sizeof(key)), 
-			&b
-		);
-
-		if(err.genericError)
-			return err;
-
-		if(b)
-			return Error_invalidParameter(0, 4, 0);
-	}
 
 	dlFile->entries = List_createEmpty(sizeof(DLEntry));
 
@@ -99,7 +86,7 @@ Bool DLFile_free(DLFile *dlFile, Allocator alloc) {
 
 		DLEntry entry = ((DLEntry*)dlFile->entries.ptr)[i];
 
-		if(dlFile->settings.dataType != EDLDataType_Data)
+		if(dlFile->settings.dataType == EDLDataType_Ascii)
 			String_free(&entry.entryString, alloc);
 
 		else Buffer_free(&entry.entryBuffer, alloc);
@@ -149,8 +136,27 @@ Error DLFile_addEntryAscii(DLFile *dlFile, String entryStr, Allocator alloc) {
 	);
 }
 
-//We currently only support writing brotli because it's the best 
-//(space) compression compared to time to decompress/compress
+Error DLFile_addEntryUTF8(DLFile *dlFile, Buffer entryBuf, Allocator alloc) {
+
+	if(!dlFile)
+		return Error_nullPointer(0, 0);
+
+	if(dlFile->settings.dataType != EDLDataType_UTF8)
+		return Error_invalidOperation(0);
+
+	if(!Buffer_isUTF8(entryBuf, 1))
+		return Error_invalidParameter(1, 0, 0);
+
+	DLEntry entry = { .entryBuffer = entryBuf };
+
+	return List_pushBack(
+		&dlFile->entries,
+		Buffer_createConstRef(&entry, sizeof(entry)),
+		alloc
+	);
+}
+
+//We currently don't support compression yet. But once Buffer_compress/uncompress is available, it should be easy.
 
 inline EXXDataSizeType getRequiredType(U64 v) {
 	return v <= U8_MAX ? EXXDataSizeType_U8 : (
@@ -165,6 +171,9 @@ Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result) {
 
 	if(!result)
 		return Error_nullPointer(2, 0);
+
+	if(result->ptr)
+		return Error_invalidOperation(0);
 
 	//Get header size (excluding compressedSize + entryCount)
 
@@ -182,7 +191,7 @@ Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result) {
 
 		DLEntry entry = ((DLEntry*)dlFile.entries.ptr)[i];
 
-		U64 len = dlFile.settings.dataType == EDLDataType_Data ? Buffer_length(entry.entryBuffer) : entry.entryString.length;
+		U64 len = dlFile.settings.dataType != EDLDataType_Ascii ? Buffer_length(entry.entryBuffer) : entry.entryString.length;
 
 		if(outputSize + len < outputSize)
 			return Error_overflow(0, 0, outputSize + len, outputSize);
@@ -215,7 +224,7 @@ Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result) {
 
 	//Create our final uncompressed buffer
 
-	Buffer uncompressedData;
+	Buffer uncompressedData = Buffer_createNull();
 	Error err = Buffer_createUninitializedBytes(outputSize + headerSize, alloc, &uncompressedData);
 
 	if(err.genericError)
@@ -227,7 +236,7 @@ Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result) {
 	for (U64 i = 0; i < dlFile.entries.length; ++i) {
 
 		DLEntry entry = ((DLEntry*)dlFile.entries.ptr)[i];
-		Buffer buf = dlFile.settings.dataType == EDLDataType_Data ? entry.entryBuffer : String_bufferConst(entry.entryString);
+		Buffer buf = dlFile.settings.dataType != EDLDataType_Ascii ? entry.entryBuffer : String_bufferConst(entry.entryString);
 		U64 len = Buffer_length(buf);
 
 		U8 *sizePtr = sizes + dataSizeType * i;
@@ -247,7 +256,7 @@ Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result) {
 
 	U32 hash[8] = { 0 };
 
-	U8 header[sizeof(DLHeader) + sizeof(hash) + sizeof(U64) * 2];
+	U8 header[sizeof(DLHeader) + sizeof(hash) + sizeof(U64) * 2 + 12 + sizeof(I32x4)];
 	U8 *headerIt = header;
 
 	*((DLHeader*)headerIt) = (DLHeader) {
@@ -259,20 +268,25 @@ Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result) {
 		.flags = (U8) (
 
 			(
-				dlFile.settings.compressionType ? EDLFlags_HasHash | (
+				dlFile.settings.compressionType ? (
 					dlFile.settings.flags & EDLSettingsFlags_UseSHA256 ? EDLFlags_UseSHA256 : 
 					EDLFlags_None
 				) : 
 				EDLFlags_None
 			) |
 
-			(dlFile.settings.dataType == EDLDataType_Ascii ? EDLFlags_IsString : EDLFlags_None)
+			(dlFile.settings.dataType == EDLDataType_Ascii ? EDLFlags_IsString : (
+				dlFile.settings.dataType == EDLDataType_UTF8 ? EDLFlags_IsString | EDLFlags_UTF8 : EDLFlags_None
+			))
 		),
 
 		.compressionType = dlFile.settings.compressionType,
 		.encryptionType = dlFile.settings.encryptionType,
 
-		.sizeTypes = entrySizeType | (uncompressedSizeType << 2) | (dataSizeType << 4)
+		.sizeTypes = 
+			(U8)getRequiredType(dlFile.entries.length) | 
+			((U8)getRequiredType(outputSize) << 2) | 
+			((U8)getRequiredType(maxSize) << 4)
 	};
 
 	headerIt += sizeof(DLHeader);
@@ -284,7 +298,7 @@ Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result) {
 		default:	*(U64*)headerIt	= dlFile.entries.length;			headerIt += sizeof(U64);
 	}
 
-	if(dlFile.settings.compressionType)
+	if (dlFile.settings.compressionType)
 		switch (uncompressedSizeType) {
 			case 1:		*(U8*)headerIt	= (U8) outputSize;		headerIt += sizeof(U8);		break;
 			case 2:		*(U16*)headerIt	= (U16) outputSize;		headerIt += sizeof(U16);	break;
@@ -292,23 +306,24 @@ Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result) {
 			default:	*(U64*)headerIt	= outputSize;			headerIt += sizeof(U64);
 		}
 
-	//Hash
+	//Copy empty hash
 
-	if(dlFile.settings.compressionType) {
-
-		//Copy empty hash
-
+	if(dlFile.settings.compressionType) 
 		Buffer_copy(
 			Buffer_createRef(headerIt, hashSize),
 			Buffer_createConstRef(hash, hashSize)
 		);
 
-		//Copy header to intermediate
+	//Copy header to intermediate
 
-		Buffer_copy(
-			Buffer_createRef(uncompressedData.ptr, (headerIt + hashSize) - uncompressedData.ptr),
-			Buffer_createConstRef(header, headerSize)
-		);
+	Buffer_copy(
+		Buffer_createRef(uncompressedData.ptr, (headerIt + hashSize) - header),
+		Buffer_createConstRef(header, headerSize)
+	);
+
+	//Hash
+
+	if(dlFile.settings.compressionType) {
 
 		//Generate hash
 
@@ -329,11 +344,13 @@ Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result) {
 
 	//Compress
 
-	U64 uncompressedSize = Buffer_length(uncompressedData) - headerSize;
+	//U64 uncompressedSize = Buffer_length(uncompressedData) - headerSize;
 
 	Buffer compressedOutput;
 
-	if (dlFile.settings.compressionType != EXXCompressionType_None) {
+	/*if (dlFile.settings.compressionType != EXXCompressionType_None) {
+
+		//TODO: Impossible to reach for now, but implement this once it exists
 
 		if ((err = Buffer_compress(
 				uncompressedData, BufferCompressionType_Brotli11, alloc, &compressedOutput
@@ -344,27 +361,61 @@ Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result) {
 		}
 
 		Buffer_free(&uncompressedData, alloc);
+
 	}
 
-	else {
-		compressedOutput = uncompressedData;
-		uncompressedData = Buffer_createNull();
-	}
+	else {*/
+		compressedOutput = Buffer_createConstRef(
+			uncompressedData.ptr + headerSize, 
+			Buffer_length(uncompressedData) - headerSize
+		);
+	//}
 
 	//Encrypt
 
 	if (dlFile.settings.encryptionType != EXXEncryptionType_None) {
 
+		//TODO: Support chunks
+		//		Select no chunks if <40MiB
+		//		Select 10MiB if at least 4 threads can be kept busy.
+		//		Select 50MiB if ^ and utilization is about the same (e.g. 24 threads doing 10MiB would need 1.2GiB).
+		//		Select 100MiB if ^ (24 threads would need 2.4GiB).
+	
+		U32 key[8] = { 0 };
+
+		Bool b = false;
+		Error cmpErr = Buffer_eq(
+			Buffer_createConstRef(key, sizeof(key)), 
+			Buffer_createConstRef(dlFile.settings.encryptionKey, sizeof(key)), 
+			&b
+		);
+
 		Buffer encryptedOutput = Buffer_createNull();
 
 		if ((err = Buffer_encrypt(
-			compressedOutput, Buffer_createConstRef(header, headerSize), 
-			BufferEncryptionType_AES256GCM, dlFile.settings.encryptionKey, NULL,
-			alloc, &encryptedOutput
+
+			compressedOutput, 
+			Buffer_createConstRef(header, headerSize), 
+
+			EBufferEncryptionType_AES256GCM, 
+
+			EBufferEncryptionFlags_GenerateIv | (
+				b || cmpErr.genericError ? EBufferEncryptionFlags_GenerateKey :
+				EBufferEncryptionFlags_None
+			),
+
+			b || cmpErr.genericError ? NULL : dlFile.settings.encryptionKey,
+
+			(I32x4*)headerIt,
+			(I32x4*)((U8*)headerIt + 12)
+
 		)).genericError) {
 			Buffer_free(&compressedOutput, alloc);
 			return err;
 		}
+
+		headerIt += 12 + sizeof(I32x4);
+		headerSize += 12 + sizeof(I32x4);
 
 		Buffer_free(&compressedOutput, alloc);
 		compressedOutput = encryptedOutput;
@@ -377,6 +428,4 @@ Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result) {
 	return err;
 }
 
-Error DLFile_read(Buffer file, Allocator alloc, DLFile *dlFile);
-
-*/
+//Error DLFile_read(Buffer file, Allocator alloc, DLFile *dlFile);

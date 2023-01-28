@@ -113,7 +113,7 @@ Bool Buffer_revCopy(Buffer dst, Buffer src) {
 	}
 
 	if ((I64)dstPtr - 1 >= (I64)dst.ptr && (I64)srcPtr - 1 >= (I64)src.ptr)
-		*(U8*)dstPtr = *(const U8*)srcPtr;
+		*((U8*)dstPtr - 1) = *((const U8*)srcPtr - 1);
 
 	return true;
 }
@@ -589,3 +589,152 @@ Error Buffer_appendF32x4(Buffer *buf, F32x4 v) { return Buffer_append(buf, &v, s
 Error Buffer_appendF32x2(Buffer *buf, I32x2 v) { return Buffer_append(buf, &v, sizeof(v)); }
 Error Buffer_appendI32x4(Buffer *buf, I32x4 v) { return Buffer_append(buf, &v, sizeof(v)); }
 Error Buffer_appendI32x2(Buffer *buf, I32x2 v) { return Buffer_append(buf, &v, sizeof(v)); }
+
+//UTF-8
+//https://en.wikipedia.org/wiki/UTF-8
+
+Error Buffer_readAsUTF8(Buffer buf, U64 i, UTF8CodePointInfo *codepoint) {
+
+	if(!codepoint)
+		return Error_nullPointer(3, 0);
+
+	if(i == U64_MAX || i + 1 > Buffer_length(buf))
+		return Error_outOfBounds(0, 0, i, Buffer_length(buf));
+
+	//Ascii
+
+	U8 v0 = buf.ptr[i++];
+
+	if (!(v0 >> 7)) {
+
+		if(!C8_isValidAscii((C8)v0))
+			return Error_invalidParameter(0, 0, 0);
+
+		*codepoint = (UTF8CodePointInfo) { .size = 1, .index = v0 };
+		return Error_none();
+	}
+
+	if(v0 < 0xC0)
+		return Error_invalidParameter(0, 0, 1);
+
+	//2-4 bytes
+
+	if(i + 1 > Buffer_length(buf))
+		return Error_outOfBounds(1, 0, i, Buffer_length(buf));
+
+	U8 v1 = buf.ptr[i++];
+
+	if(v1 < 0x80 || v1 >= 0xC0)
+		return Error_invalidParameter(0, 0, 2);
+
+	//2 bytes
+
+	if (v0 < 0xE0) {
+		*codepoint = (UTF8CodePointInfo) { .size = 2, .index = (((U16)v0 & 0x1F) << 6) | (v1 & 0x3F) };
+		return Error_none();
+	}
+
+	//3 bytes
+
+	if(i + 1 > Buffer_length(buf))
+		return Error_outOfBounds(2, 0, i, Buffer_length(buf));
+
+	U8 v2 = buf.ptr[i++];
+
+	if(v2 < 0x80 || v2 >= 0xC0)
+		return Error_invalidParameter(0, 0, 3);
+
+	if (v0 < 0xF0) {
+		*codepoint = (UTF8CodePointInfo) { .size = 3, .index = (((U32)v0 & 0xF) << 12) | (((U32)v1 & 0x3F) << 6) | (v2 & 0x3F) };
+		return Error_none();
+	}
+
+	//4 bytes
+
+	if(i + 1 > Buffer_length(buf))
+		return Error_outOfBounds(3, 0, i, Buffer_length(buf));
+
+	U8 v3 = buf.ptr[i++];
+
+	if(v3 < 0x80 || v3 >= 0xC0)
+		return Error_invalidParameter(0, 0, 4);
+
+	*codepoint = (UTF8CodePointInfo) { 
+		.size = 4, 
+		.index = (((U32)v0 & 0x7) << 18) | (((U32)v1 & 0x3F) << 12) | (((U32)v2 & 0x3F) << 6) | (v3 & 0x3F) 
+	};
+
+	return Error_none();
+}
+
+Error Buffer_writeAsUTF8(Buffer buf, U64 i, UTF8CodePoint codepoint) {
+
+	if(Buffer_isConstRef(buf))
+		return Error_constData(0, 0);
+
+	if ((codepoint & 0x7F) == codepoint)
+		return Buffer_appendU8(&buf, (U8) codepoint);
+
+	if ((codepoint & 0x7FF) == codepoint) {
+
+		if(i + 2 > Buffer_length(buf))
+			return Error_outOfBounds(0, 0, i + 2, Buffer_length(buf));
+
+		buf.ptr[i]		= 0xC0 | (U8)(codepoint >> 6);
+		buf.ptr[i + 1]	= 0x80 | (U8)(codepoint & 0x3F);
+		return Error_none();
+	}
+
+	if ((codepoint & 0xFFFF) == codepoint) {
+
+		if(i + 3 > Buffer_length(buf))
+			return Error_outOfBounds(0, 0, i + 3, Buffer_length(buf));
+
+		buf.ptr[i]		= 0xE0 | (U8)(codepoint >> 12);
+		buf.ptr[i + 1]	= 0x80 | (U8)((codepoint >> 6) & 0x3F);
+		buf.ptr[i + 2]	= 0x80 | (U8)(codepoint & 0x3F);
+		return Error_none();
+	}
+
+	if (codepoint <= 0x10FFFF) {
+
+		if(i + 4 > Buffer_length(buf))
+			return Error_outOfBounds(0, 0, i + 4, Buffer_length(buf));
+
+		buf.ptr[i]		= 0xF0 | (U8)(codepoint >> 18);
+		buf.ptr[i + 1]	= 0x80 | (U8)((codepoint >> 12) & 0x3F);
+		buf.ptr[i + 2]	= 0x80 | (U8)((codepoint >> 6) & 0x3F);
+		buf.ptr[i + 3]	= 0x80 | (U8)(codepoint & 0x3F);
+		return Error_none();
+	}
+
+	return Error_invalidParameter(2, 0, 0);
+}
+
+Bool Buffer_isUTF8(Buffer buf, F32 threshold) {
+
+	threshold = 1 - threshold;
+
+	U64 i = 0;
+	F32 counter = 0;
+
+	while (i < Buffer_length(buf)) {
+
+		UTF8CodePointInfo info;
+
+		if((Buffer_readAsUTF8(buf, i, &info)).genericError) {
+			
+			counter += 1.f / Buffer_length(buf);
+
+			if(counter >= threshold)
+				return false;
+
+			++i;
+			continue;
+		}
+
+		i += info.size;
+	}
+
+	return i;
+}

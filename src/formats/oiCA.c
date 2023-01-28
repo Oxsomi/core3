@@ -6,8 +6,7 @@
 #include "types/error.h"
 #include "types/buffer.h"
 
-/* TODO: Implement when encryption and compression is present
-
+/*
 //File spec (docs/oiCA.md)
 
 typedef enum ECAFlags {
@@ -104,29 +103,14 @@ Error CAFile_create(CASettings settings, Allocator alloc, CAFile *caFile) {
 	if(settings.compressionType >= EXXCompressionType_Count)
 		return Error_invalidParameter(0, 0, 0);
 
+	if(settings.compressionType > EXXCompressionType_None)
+		return Error_unsupportedOperation(0);					//TODO: Support compression
+
 	if(settings.encryptionType >= EXXEncryptionType_Count)
 		return Error_invalidParameter(0, 1, 0);
 
 	if(settings.flags & ECASettingsFlags_Invalid)
 		return Error_invalidParameter(0, 2, 0);
-
-	if (settings.compressionType == EXXEncryptionType_AES256GCM) {		//Check if we actually input a key
-
-		U32 key[8] = { 0 };
-
-		Bool b = false;
-		Error err = Buffer_eq(
-			Buffer_createConstRef(key, sizeof(key)), 
-			Buffer_createConstRef(settings.encryptionKey, sizeof(key)), 
-			&b
-		);
-
-		if(err.genericError)
-			return err;
-
-		if(b)
-			return Error_invalidParameter(0, 3, 0);
-	}
 
 	caFile->entries = List_createEmpty(sizeof(CAEntry));
 
@@ -159,8 +143,7 @@ Bool CAFile_free(CAFile *caFile, Allocator alloc) {
 
 Error CAFile_addEntry(CAFile *caFile, CAEntry entry, Allocator alloc);
 
-//We currently only support writing brotli because it's the best 
-//(space) compression and time to decompress
+//We don't support any compression yet, but should be trivial to add once Buffer_compress/Buffer_decompress is supported.
 
 Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 
@@ -201,9 +184,6 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 	for (U64 i = 0; i < caFile.entries.length; ++i) {
 
 		CAEntry entry = ((CAEntry*)caFile.entries.ptr)[i];
-
-		if(!entry.path.length)		//Skip empty file paths (just in case there's a root folder)
-			continue;
 
 		if (entry.isFolder) {
 

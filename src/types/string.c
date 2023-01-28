@@ -64,7 +64,7 @@ Bool String_isValidFilePath(String str) {
 	if(str.length && (
 		str.ptr[str.length - 1] == '.' || 
 		(str.length >= 2 && str.ptr[str.length - 2] == '.'&& str.ptr[str.length - 1] == '\0')
-		))
+	))
 		return false;
 
 	for(U64 i = 0; i < str.length; ++i)
@@ -72,7 +72,7 @@ Bool String_isValidFilePath(String str) {
 			!C8_isValidFileName(str.ptr[i]) && str.ptr[i] != '/' && str.ptr[i] != '\\' && 
 			!(i == str.length - 1 && !str.ptr[i]) &&						//Allow null terminator
 			!(i == 1 && str.ptr[i] == ':')									//Allow drive names for Windows
-			)
+		)
 			return false;
 
 	return str.length;
@@ -363,7 +363,7 @@ Error String_create(C8 c, U64 size, Allocator alloc, String *result) {
 	}
 
 	if (size & 2) {
-		*(U32*)(b.ptr + (totalSize >> 2 << 2)) = cc2;
+		*(U16*)(b.ptr + (totalSize >> 2 << 2)) = cc2;
 		size &= 1;
 	}
 
@@ -503,7 +503,7 @@ Error String_split(
 
 	U64 length = String_countAll(s, c, casing);
 
-	Error err = StringList_create(length ? length : 1, allocator, result);
+	Error err = StringList_create(length + 1, allocator, result);
 
 	if (err.genericError)
 		return err;
@@ -531,6 +531,10 @@ Error String_split(
 
 			last = i + 1;
 		}
+
+	str.ptr[count++] = 
+		String_isConstRef(s) ? String_createConstRef(s.ptr + last, s.length - last) : 
+		String_createRef(s.ptr + last, s.length - last);
 
 	return Error_none();
 }
@@ -585,6 +589,79 @@ Error String_splitString(
 			i += other.length - 1;
 		}
 	}
+
+	return Error_none();
+}
+
+Error String_splitLine(String s, Allocator alloc, StringList *result) {
+
+	if(!result)
+		return Error_nullPointer(2, 0);
+
+	if(result->ptr)
+		return Error_invalidParameter(2, 1, 0);
+
+	U64 v = 0, lastLineEnd = U64_MAX;
+
+	for(U64 i = 0; i < s.length; ++i)
+
+		if (s.ptr[i] == '\n') {			//Unix line endings
+			++v;
+			lastLineEnd = i;
+			continue;
+		}
+
+		else if (s.ptr[i] == '\r') {	//Windows/Legacy Mac line endings
+
+			if(i + 1 < s.length && s.ptr[i + 1] == '\n')	//Windows
+				++i;
+
+			++v;
+			lastLineEnd = i;
+			continue;
+		}
+
+	++v;
+
+	Error err = StringList_create(v, alloc, result);
+
+	if (err.genericError)
+		return err;
+
+	v = 0;
+	lastLineEnd = 0;
+
+	for(U64 i = 0; i < s.length; ++i) {
+
+		Bool isLineEnd = false;
+
+		U64 iOld = i;
+
+		if (s.ptr[i] == '\n')			//Unix line endings
+			isLineEnd = true;
+
+		else if (s.ptr[i] == '\r') {	//Windows/Legacy Mac line endings
+
+			if(i + 1 < s.length && s.ptr[i + 1] == '\n')	//Windows
+				++i;
+
+			isLineEnd = true;
+		}
+
+		if(!isLineEnd)
+			continue;
+
+		result->ptr[v++] = String_isConstRef(s) ? 
+			String_createConstRef(s.ptr + lastLineEnd, iOld - lastLineEnd) : 
+			String_createRef(s.ptr + lastLineEnd, iOld - lastLineEnd);
+
+		lastLineEnd = i + 1;
+	}
+
+	if(lastLineEnd != s.length)
+		result->ptr[v++] = String_isConstRef(s) ? 
+			String_createConstRef(s.ptr + lastLineEnd, s.length - lastLineEnd) : 
+			String_createRef(s.ptr + lastLineEnd, s.length - lastLineEnd);
 
 	return Error_none();
 }
@@ -706,7 +783,7 @@ Error String_insert(String *s, C8 c, U64 i, Allocator allocator) {
 
 	//If it's not append (otherwise it's already handled)
 
-	if (i != s->length) {
+	if (i != s->length - 1) {
 
 		//Move one to the right
 

@@ -37,6 +37,72 @@ Error Buffer_unsetAllBits(Buffer dst);
 
 Error Buffer_setAllBitsTo(Buffer buf, Bool isOn);
 
+//Comparison
+
+Error Buffer_eq(Buffer buf0, Buffer buf1, Bool *result);		//Also compares size
+Error Buffer_neq(Buffer buf0, Buffer buf1, Bool *result);		//Also compares size
+
+//These should never be Buffer_free-d because Buffer doesn't know if it's allocated
+
+Buffer Buffer_createNull();
+
+Buffer Buffer_createRef(void *v, U64 length);
+Buffer Buffer_createConstRef(const void *v, U64 length);
+
+//All these functions allocate, so Buffer_free them later
+
+Error Buffer_createCopy(Buffer buf, Allocator alloc, Buffer *output);
+Error Buffer_createZeroBits(U64 length, Allocator alloc, Buffer *output);
+Error Buffer_createOneBits(U64 length, Allocator alloc, Buffer *output);
+
+Error Buffer_createBits(U64 length, Bool value, Allocator alloc, Buffer *result);
+
+Bool Buffer_free(Buffer *buf, Allocator alloc);
+Error Buffer_createEmptyBytes(U64 length, Allocator alloc, Buffer *output);
+
+Error Buffer_createUninitializedBytes(U64 length, Allocator alloc, Buffer *output);
+Error Buffer_createSubset(Buffer buf, U64 offset, U64 length, Bool isConst, Buffer *output);
+
+//Writing data
+
+Error Buffer_offset(Buffer *buf, U64 length);
+Error Buffer_append(Buffer *buf, const void *v, U64 length);
+Error Buffer_appendBuffer(Buffer *buf, Buffer append);
+
+Error Buffer_combine(Buffer a, Buffer b, Allocator alloc, Buffer *output);
+
+Error Buffer_appendU64(Buffer *buf, U64 v);
+Error Buffer_appendU32(Buffer *buf, U32 v);
+Error Buffer_appendU16(Buffer *buf, U16 v);
+Error Buffer_appendU8(Buffer *buf,  U8 v);
+Error Buffer_appendC8(Buffer *buf,  C8 v);
+
+Error Buffer_appendI64(Buffer *buf, I64 v);
+Error Buffer_appendI32(Buffer *buf, I32 v);
+Error Buffer_appendI16(Buffer *buf, I16 v);
+Error Buffer_appendI8(Buffer *buf,  I8 v);
+
+Error Buffer_appendF32(Buffer *buf, F32 v);
+
+Error Buffer_appendF32x4(Buffer *buf, F32x4 v);
+Error Buffer_appendF32x2(Buffer *buf, I32x2 v);
+Error Buffer_appendI32x4(Buffer *buf, I32x4 v);
+Error Buffer_appendI32x2(Buffer *buf, I32x2 v);
+
+//UTF-8 helpers
+
+typedef U32 UTF8CodePoint;
+
+typedef struct UTF8CodePointInfo {
+	U8 size;
+	UTF8CodePoint index;
+} UTF8CodePointInfo;
+
+Error Buffer_readAsUTF8(Buffer buf, U64 i, UTF8CodePointInfo *codepoint);
+Error Buffer_writeAsUTF8(Buffer buf, U64 i, UTF8CodePoint codepoint);
+
+Bool Buffer_isUTF8(Buffer buf, F32 threshold);		//If the threshold (%) is met, it is identified as (mostly) UTF8
+
 //What hash & encryption functions are good for:
 // 
 //argon2id (Unsupported): 
@@ -117,54 +183,31 @@ Error Buffer_decrypt(
 
 Bool Buffer_csprng(Buffer target);
 
-//Comparison
+//Compression
 
-Error Buffer_eq(Buffer buf0, Buffer buf1, Bool *result);		//Also compares size
-Error Buffer_neq(Buffer buf0, Buffer buf1, Bool *result);		//Also compares size
+typedef enum EBufferCompressionType {
+	EBufferCompressionType_Brotli11,
+	EBufferCompressionType_Count
+} EBufferCompressionType;
 
-//These should never be Buffer_free-d because Buffer doesn't know if it's allocated
+typedef enum EBufferCompressionHint {
+	EBufferCompressionHint_None,
+	EBufferCompressionHint_UTF8,
+	EBufferCompressionHint_Font,
+	EBufferCompressionHint_Count
+} EBufferCompressionHint;
 
-Buffer Buffer_createNull();
+Error Buffer_compress(
+	Buffer target,
+	EBufferCompressionType type,
+	EBufferCompressionHint hint,
+	Allocator allocator,
+	Buffer *output
+);
 
-Buffer Buffer_createRef(void *v, U64 length);
-Buffer Buffer_createConstRef(const void *v, U64 length);
-
-//All these functions allocate, so Buffer_free them later
-
-Error Buffer_createCopy(Buffer buf, Allocator alloc, Buffer *output);
-Error Buffer_createZeroBits(U64 length, Allocator alloc, Buffer *output);
-Error Buffer_createOneBits(U64 length, Allocator alloc, Buffer *output);
-
-Error Buffer_createBits(U64 length, Bool value, Allocator alloc, Buffer *result);
-
-Bool Buffer_free(Buffer *buf, Allocator alloc);
-Error Buffer_createEmptyBytes(U64 length, Allocator alloc, Buffer *output);
-
-Error Buffer_createUninitializedBytes(U64 length, Allocator alloc, Buffer *output);
-Error Buffer_createSubset(Buffer buf, U64 offset, U64 length, Bool isConst, Buffer *output);
-
-//Writing data
-
-Error Buffer_offset(Buffer *buf, U64 length);
-Error Buffer_append(Buffer *buf, const void *v, U64 length);
-Error Buffer_appendBuffer(Buffer *buf, Buffer append);
-
-Error Buffer_combine(Buffer a, Buffer b, Allocator alloc, Buffer *output);
-
-Error Buffer_appendU64(Buffer *buf, U64 v);
-Error Buffer_appendU32(Buffer *buf, U32 v);
-Error Buffer_appendU16(Buffer *buf, U16 v);
-Error Buffer_appendU8(Buffer *buf,  U8 v);
-Error Buffer_appendC8(Buffer *buf,  C8 v);
-
-Error Buffer_appendI64(Buffer *buf, I64 v);
-Error Buffer_appendI32(Buffer *buf, I32 v);
-Error Buffer_appendI16(Buffer *buf, I16 v);
-Error Buffer_appendI8(Buffer *buf,  I8 v);
-
-Error Buffer_appendF32(Buffer *buf, F32 v);
-
-Error Buffer_appendF32x4(Buffer *buf, F32x4 v);
-Error Buffer_appendF32x2(Buffer *buf, I32x2 v);
-Error Buffer_appendI32x4(Buffer *buf, I32x4 v);
-Error Buffer_appendI32x2(Buffer *buf, I32x2 v);
+Error Buffer_decompress(
+	Buffer target,
+	EBufferCompressionType type,
+	Allocator allocator,
+	Buffer *output
+);

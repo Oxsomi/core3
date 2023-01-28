@@ -59,51 +59,15 @@ Error Platform_create(
 	}
 
 	Platform_instance.args = sl;
-	
 
-	#if _WORKING_DIR
-
-		//Grab current working directory.
-		//This is only useful if you're building a tool that has to be run from cmd for example.
-
-		if((err = Platform_initWorkingDirectory(&Platform_instance.workingDirectory)).genericError)
-			goto cleanup;
-
-	#else
-
-		//Grab app directory of where the exe is installed
-
-		String appDir;
-		if ((err = String_createCopyx(String_createConstRefUnsafe(cmdArgs[0]), &appDir)).genericError)
-			goto cleanup;
-
-		String_replaceAll(&appDir, '\\', '/', EStringCase_Sensitive);
-
-		U64 loc = String_findLast(appDir, '/', EStringCase_Sensitive);
-		String basePath;
-
-		if (loc == appDir.length)
-			basePath = String_createConstRef(appDir.ptr, appDir.length);
-	
-		else String_cut(appDir, 0, loc + 1, &basePath);
-
-		String workDir;
-
-		if ((err = String_createCopyx(basePath, &workDir)).genericError)
-			goto cleanup;
-
-		String_freex(&appDir);
-		Platform_instance.workingDirectory = workDir;
-
-	#endif
+	if ((err = Platform_initExt(&Platform_instance, String_createConstRefUnsafe(cmdArgs[0]))).genericError) {
+		StringList_freex(&sl);
+		WindowManager_free(&Platform_instance.windowManager);
+		Platform_instance =	(Platform) { 0 };
+		return err;
+	}
 
 	return Error_none();
-
-cleanup:
-
-	Platform_cleanupExt(&Platform_instance);
-	Platform_cleanup();
-	return err;
 }
 
 void Platform_cleanup() {

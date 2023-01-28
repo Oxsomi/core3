@@ -38,7 +38,7 @@ Error Platform_create(
 );
 
 impl void Platform_cleanupExt(Platform *platform);
-impl Error Platform_initExt(Platform *platform);
+impl Error Platform_initExt(Platform *platform, String currentAppDir);
 
 void Platform_cleanup();
 

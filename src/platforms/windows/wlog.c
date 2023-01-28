@@ -65,7 +65,12 @@ void Log_printCapturedStackTraceCustom(const void **stackTrace, U64 stackSize, E
 	Bool anySymbol = false;
 
 	if(hasSymbols)
-		for (U64 i = 0; i < stackSize && i < _STACKTRACE_SIZE && stackTrace[i]; ++i, ++stackCount) {
+		for (
+			U64 i = 0; 
+			i < stackSize && i < _STACKTRACE_SIZE && 
+			stackTrace[i] && stackTrace[i] != (void*)0xCCCCCCCCCCCCCCCC; 
+			++i, ++stackCount
+		) {
 
 			U64 addr = (U64) stackTrace[i];
 
@@ -243,7 +248,8 @@ void Log_log(ELogLevel lvl, ELogOptions options, LogArgs args) {
 
 		//TODO: This requires null terminator!
 
-		OutputDebugStringA(args.args[i].ptr);
+		if(args.args[i].ptr)
+			OutputDebugStringA(args.args[i].ptr);
 
 		if (hasNewLine)
 			OutputDebugStringA("\n");

@@ -732,6 +732,21 @@ Error List_insert(List *list, U64 index, Buffer buf, Allocator allocator) {
 	if(list->stride != Buffer_length(buf))
 		return Error_invalidOperation(0);
 
+	if (index == list->length) {		//Push back
+
+		Error err = List_resize(list, list->length + 1, allocator);
+
+		if(err.genericError)
+			return err;
+
+		Buffer_copy(
+			Buffer_createRef(list->ptr + index * list->stride, list->stride), 
+			buf
+		);
+
+		return Error_none();
+	}
+
 	if(index >= list->length)
 		return Error_outOfBounds(1, 0, index, list->length);
 
@@ -952,6 +967,14 @@ Error List_pushBack(List *list, Buffer buf, Allocator allocator) {
 	return List_set(*list, list->length - 1, buf);
 }
 
+Error List_pushFront(List *list, Buffer buf, Allocator allocator) {
+
+	if(!list || !list->length)
+		return List_pushBack(list, buf, allocator);
+
+	return List_insert(list, 0, buf, allocator);
+}
+
 Error List_popLocation(List *list, U64 index, Buffer buf) {
 
 	if(!list)
@@ -969,10 +992,14 @@ Error List_popLocation(List *list, U64 index, Buffer buf) {
 	if(err.genericError)
 		return err;
 
-	if(Buffer_length(buf) != Buffer_length(result))
-		return Error_invalidOperation(0);
+	if(Buffer_length(buf)) {
 
-	Buffer_copy(buf, result);
+		if(Buffer_length(buf) != Buffer_length(result))
+			return Error_invalidOperation(0);
+
+		Buffer_copy(buf, result);
+	}
+
 	return List_erase(list, index);
 }
 
@@ -995,6 +1022,10 @@ Error List_popBack(List *list, Buffer output) {
 
 	--list->length;
 	return Error_none();
+}
+
+Error List_popFront(List *list, Buffer output) {
+	return List_popLocation(list, 0, output);
 }
 
 Error List_clear(List *list) {

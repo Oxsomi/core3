@@ -75,7 +75,7 @@ Error CAFile_writex(CAFile caFile, Buffer *result) {
 
 //Error CAFile_readx(Buffer file, CAFile *caFile) {								TODO:
 //	return CAFile_read(file, Platform_instance.alloc, caFile);
-//}
+//}*/
 
 //oiDL
 
@@ -91,13 +91,15 @@ Error DLFile_addEntryAsciix(DLFile *dlFile, String entry) {
 	return DLFile_addEntryAscii(dlFile, entry, Platform_instance.alloc);
 }
 
-//Error DLFile_addEntryUTF8x(DLFile *dlFile, String entry, Allocator alloc);		TODO:
+Error DLFile_addEntryUTF8x(DLFile *dlFile, Buffer entry) {
+	return DLFile_addEntryUTF8(dlFile, entry, Platform_instance.alloc);
+}
 
 Error DLFile_writex(DLFile dlFile, Buffer *result) { return DLFile_write(dlFile, Platform_instance.alloc, result); }
 
 //Error DLFile_readx(Buffer file, DLFile *dlFile) {							TODO:
 //	return DLFile_read(file, Platform_instance.alloc, dlFile);
-//}*/
+//}
 
 //List
 
@@ -184,6 +186,10 @@ Error String_splitx(String s, C8 c,  EStringCase casing,  StringList *result) {
 
 Error String_splitStringx(String s, String other, EStringCase casing, StringList *result) {
 	return String_splitString(s, other, casing, Platform_instance.alloc, result);
+}
+
+Error String_splitLinex(String s, StringList *result) {
+	return String_splitLine(s, Platform_instance.alloc, result);
 }
 
 Error String_resizex(String *str, U64 length, C8 defaultChar) {

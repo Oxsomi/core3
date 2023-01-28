@@ -7,9 +7,7 @@ oiCA is a simplified version of a zip file and is also partially inspired by the
 It's made with the following things in mind: 
 
 - Ease of read + write.
-- Better compression size due to Brotli:11 compression.
-  - LZMA isn't used due to higher compression and decompression times for minor compression gains. Instead we opted to use Brotli:11 (https://cran.r-project.org/web/packages/brotli/vignettes/brotli-2015-09-22.pdf).
-  - Deflate is slow and not compact enough.
+- Better compression size due to Brotli:11 compression. Or fast compression using Brotli:1 (trade-off is compression size).
 - Possibility of encryption using AES256-GCM.
 - A more modern version of zip with an easier spec / less bloat.
 - Improved security.
@@ -36,7 +34,10 @@ typedef enum ECAFlags {
 	ECAFlags_FileSizeType_Shift		= 4,
 	ECAFlags_FileSizeType_Mask		= 3
 
-	//ECAFlags_Next					= 1 << 6
+    //Chunk size of AES for multi threading. 0 = none, 1 = 10MiB, 2 = 100MiB, 3 = 500MiB
+        
+    ECAFlags_UseAESChunksA		= 1 << 6,
+    ECAFlags_UseAESChunksB		= 1 << 7
         
 } ECAFlags;
 
@@ -46,10 +47,10 @@ typedef struct CAHeader {
     
     U8 version;					//major.minor (%10 = minor, /10 = major (+1 to get real major)
     U8 flags;					//ECAFlags
-    U8 type;					//(EXXCompressionType << 4) | EXXEncryptionType. Each enum should be <Count
-    U8 headerExtensionSize;		//To skip extended data size
+    U8 type;					//(EXXCompressionType << 4) | EXXEncryptionType. Each enum should be <Count (see oiXX.md).
+    U8 headerExtensionSize;		//To skip extended data size. Highest bit is b0 of uncompressed size type.
     
-    U8 directoryExtensionSize;	//To skip directory extended data
+    U8 directoryExtensionSize;	//To skip directory extended data. Highest bit is b1 of uncompressed size type.
     U8 fileExtensionSize;		//To skip file extended data		
     U16 directoryCount;			//How many base directories are available. Should be < 0xFFFF
     
@@ -101,10 +102,15 @@ CAFile {
     CAHeader header;
     U8 headerExt[header.headerExtensionSize];
     
+    if compression:
+    	EXXDataSizeType<uncompressedSizeType /* see header + directory extended size */> uncompressedSize;
+    
     if header.useHash:
 	    U32[header.useSHA256 ? 8 : 1] hash;				//CRC32C or SHA256
     
-    compress & encrypt the following if necessary:
+    /* Encryption header; see oiXX.md. Such as (blocks ? I32x4[blocks]), U8[12] iv. */
+    
+    compress & encrypt the following if necessary:		//See oiXX.md
     
     	//This includes the names of everything in order.
     	//The names should only be [0-9A-Za-z_.\ ]+ as well as non ASCII characters.
@@ -131,10 +137,14 @@ CAFile {
     
 		foreach file in files:
 			U8[file.size] data;
+    
+    /* Encryption footer; see oiXX.md. Such as I32x4 tag */
 }
 ```
 
 The types are Oxsomi types; `U<X>`: x-bit unsigned integer, `I<X>` x-bit signed integer. Ki is Kibi like KiB (1024).
+
+*Note: oiCA supports the ability to choose between 10MiB, 100MiB and 500MiB blocks for speeding up AES by multi threading.*
 
 ## Changelog
 

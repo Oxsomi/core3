@@ -14,6 +14,7 @@ Error String_createBinx(U64 v, Bool leadingZeros, String *result);
 
 Error String_splitx(String s, C8 c, EStringCase casing, StringList *result);
 Error String_splitStringx(String s, String other, EStringCase casing, StringList *result);
+Error String_splitLinex(String s, StringList *result);
 
 Error String_resizex(String *str, U64 length, C8 defaultChar);
 Error String_reservex(String *str, U64 length);

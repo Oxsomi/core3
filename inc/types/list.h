@@ -129,9 +129,11 @@ Bool List_sortF32(List list);
 //Expects buf to be sized to stride (to allow copying to the stack)
 
 Error List_popBack(List *list, Buffer output);
+Error List_popFront(List *list, Buffer output);
 Error List_popLocation(List *list, U64 index, Buffer buf);
 
 Error List_pushBack(List *list, Buffer buf, Allocator allocator);
+Error List_pushFront(List *list, Buffer buf, Allocator allocator);
 
 Error List_clear(List *list);		//Doesn't remove data, only makes it unavailable
 

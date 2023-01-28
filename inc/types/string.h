@@ -128,6 +128,8 @@ Error String_splitString(
 	StringList *result
 );
 
+Error String_splitLine(String s, Allocator alloc, StringList *result);
+
 //This will operate on this string, so it will need a heap allocated string
 
 Error String_resize(String *str, U64 length, C8 defaultChar, Allocator alloc);

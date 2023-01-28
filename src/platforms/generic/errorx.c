@@ -1,3 +1,4 @@
+#include "types/buffer.h"
 #include "platforms/ext/errorx.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/log.h"
