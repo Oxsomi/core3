@@ -208,13 +208,15 @@ Error Platform_initExt(Platform *result, String currAppDir) {
 		//Grab app directory of where the exe is installed
 
 		String appDir;
-		if ((err = String_createCopyx(currAppDir, &appDir)).genericError)
-			goto cleanup;
+		if ((err = String_createCopyx(currAppDir, &appDir)).genericError) {
+			Buffer_freex(&platformExt);
+			return Error_platformError(1, GetLastError());
+		}
 
 		String_replaceAll(&appDir, '\\', '/', EStringCase_Sensitive);
 
 		U64 loc = String_findLast(appDir, '/', EStringCase_Sensitive);
-		String basePath;
+		String basePath = String_createNull();
 
 		if (loc == appDir.length)
 			basePath = String_createConstRef(appDir.ptr, appDir.length);
@@ -223,8 +225,10 @@ Error Platform_initExt(Platform *result, String currAppDir) {
 
 		String workDir;
 
-		if ((err = String_createCopyx(basePath, &workDir)).genericError)
-			goto cleanup;
+		if ((err = String_createCopyx(basePath, &workDir)).genericError) {
+			Buffer_freex(&platformExt);
+			return Error_platformError(1, GetLastError());
+		}
 
 		String_freex(&appDir);
 		result->workingDirectory = workDir;
