@@ -104,7 +104,7 @@ Error ParsedArgs_getArg(ParsedArgs args, EOperationHasParameter parameterId, Str
 
 	U64 ourLoc = 0;
 
-	for(U64 j = EOperationHasParameter_InputShift; j < EOperationHasParameter_SplitByShift; ++j)
+	for(U64 j = EOperationHasParameter_InputShift; j < parameterId; ++j)
 		if((args.parameters >> j) & 1)
 			++ourLoc;
 

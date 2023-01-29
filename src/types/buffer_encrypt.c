@@ -576,11 +576,17 @@ inline Error AESEncryptionContext_encrypt(
 
 	I32x4_setW(ivPtr, 0);
 
-	if(flags & EBufferEncryptionFlags_GenerateIv)
-		Buffer_csprng(Buffer_createRef(ivPtr, 12));
+	if(flags & EBufferEncryptionFlags_GenerateIv) {
 
-	if(flags & EBufferEncryptionFlags_GenerateKey)
-		Buffer_csprng(Buffer_createRef(realKey, sizeof(U32) * 8));
+		if(!Buffer_csprng(Buffer_createRef(ivPtr, 12)))
+			return Error_invalidState(0);
+	}
+
+	if(flags & EBufferEncryptionFlags_GenerateKey) {
+
+		if(!Buffer_csprng(Buffer_createRef(realKey, sizeof(U32) * 8)))
+			return Error_invalidState(1);
+	}
 
 	AESEncryptionContext ctx = AESEncryptionContext_create(realKey, *ivPtr, additionalData);
 

@@ -8,6 +8,8 @@
 Error File_foreach(String loc, FileCallback callback, void *userData, Bool isRecursive) {
 
 	String resolved = String_createNull();
+	String resolvedNoStar = String_createNull();
+	String tmp = String_createNull();
 	Error err = Error_none();
 	HANDLE file = NULL;
 
@@ -32,6 +34,8 @@ Error File_foreach(String loc, FileCallback callback, void *userData, Bool isRec
 	//Append /*\0 (replace last \0)
 
 	resolved.ptr[resolved.length - 1] = '/';
+
+	_gotoIfError(clean, String_createCopyx(resolved, &resolvedNoStar));
 
 	_gotoIfError(clean, String_appendStringx(&resolved, String_createConstRefSized("*", 2)));
 
@@ -92,8 +96,11 @@ Error File_foreach(String loc, FileCallback callback, void *userData, Bool isRec
 
 		//File parsing
 
+		_gotoIfError(clean, String_createCopyx(resolvedNoStar, &tmp));
+		_gotoIfError(clean, String_appendStringx(&tmp, String_createConstRef(dat.cFileName, MAX_PATH)));
+
 		FileInfo info = (FileInfo) {
-			.path = String_createConstRef(dat.cFileName, MAX_PATH),
+			.path = tmp,
 			.timestamp = timestamp,
 			.access = dat.dwFileAttributes & FILE_ATTRIBUTE_READONLY ? FileAccess_Read : FileAccess_ReadWrite,
 			.type = FileType_File,
@@ -101,6 +108,8 @@ Error File_foreach(String loc, FileCallback callback, void *userData, Bool isRec
 		};
 
 		_gotoIfError(clean, callback(info, userData));
+
+		String_freex(&tmp);
 	}
 
 	DWORD hr = GetLastError();
@@ -113,11 +122,13 @@ clean:
 	if(file)
 		FindClose(file);
 
+	String_freex(&tmp);
+	String_freex(&resolvedNoStar);
 	String_freex(&resolved);
 	return err;
 }
 
-//TODO:!
+//TODO: Virtual file support
 
 Error File_removeVirtual(String loc, Ns maxTimeout) { loc; maxTimeout; return Error_unimplemented(0); }
 Error File_addVirtual(String loc, FileType type, Ns maxTimeout) { loc; type; maxTimeout; return Error_unimplemented(0); }

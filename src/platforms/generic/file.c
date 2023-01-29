@@ -453,6 +453,12 @@ Error File_add(String loc, FileType type, Ns maxTimeout) {
 	if(err.genericError && err.genericError != EGenericError_NotFound)
 		_gotoIfError(clean, err);
 
+	if (!err.genericError) {
+		String_freex(&resolved);
+		FileInfo_free(&info);
+		return Error_none();
+	}
+
 	//Already exists
 
 	if(!err.genericError)
@@ -463,10 +469,13 @@ Error File_add(String loc, FileType type, Ns maxTimeout) {
 	//Check parent directories until none left
 
 	if(String_contains(resolved, '/', EStringCase_Sensitive)) {
-	
+
+		if(!String_eraseFirstString(&resolved, Platform_instance.workingDirectory, EStringCase_Insensitive))
+			_gotoIfError(clean, Error_unauthorized(0));
+
 		_gotoIfError(clean, String_splitx(resolved, '/', EStringCase_Sensitive, &str));
 
-		for (U64 i = 0; i < str.length; ++i) {
+		for (U64 i = 0; i < str.length - 1; ++i) {
 
 			String parent = String_createConstRefSized(resolved.ptr, String_end(str.ptr[i]) - resolved.ptr);
 
@@ -541,7 +550,7 @@ Error File_remove(String loc, Ns maxTimeout) {
 	}
 
 	if (res)
-		_gotoIfError(clean, Error_unauthorized(0));
+		_gotoIfError(clean, Error_notFound(0, 0, 0));
 
 clean:
 	String_freex(&resolved);

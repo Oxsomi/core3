@@ -1379,7 +1379,7 @@ Bool String_parseDec(String s, U64 *result) {
 		if(j == (U64) 1e19 && v > 1)		//Out of value
 			return false;
 
-		*result |= j * v;
+		*result += j * v;
 	}
 
 	return true;

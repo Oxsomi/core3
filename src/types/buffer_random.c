@@ -13,7 +13,7 @@
 			return false;
 
 		NTSTATUS stat = BCryptGenRandom(
-			BCRYPT_RNG_ALG_HANDLE, 
+			0, 
 			target.ptr, 
 			(ULONG) Buffer_length(target),
 			BCRYPT_USE_SYSTEM_PREFERRED_RNG

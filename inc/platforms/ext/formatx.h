@@ -30,5 +30,4 @@ Error DLFile_addEntryAsciix(DLFile *dlFile, String entry);
 Error DLFile_addEntryUTF8x(DLFile *dlFile, Buffer entry);
 
 Error DLFile_writex(DLFile dlFile, Buffer *result);
-
-//Error DLFile_readx(Buffer file, DLFile *dlFile);
+Error DLFile_readx(Buffer file, const U32 encryptionKey[8], DLFile *dlFile);

@@ -71,7 +71,7 @@ DLFile {
     EXXDataSizeType<entrySizeType> entryCount;
     
     if compression:
-    	EXXDataSizeType<uncompressedSizeType> uncompressedSize;
+	    EXXDataSizeType<uncompressedSizeType> uncompressedSize;
 	    U32[header.useSHA256 ? 8 : 1] hash;				//CRC32C or SHA256
     
     //Encryption header; see oiXX.md.
@@ -88,6 +88,8 @@ DLFile {
 ```
 
 The types are Oxsomi types; `U<X>`: x-bit unsigned integer, `I<X>` x-bit signed integer.
+
+uncompressedSizeType is only present if compression is enabled. In all other cases it should be assumed that the remainder of the file is the rest of the data.
 
 *Note: oiDL supports the ability to choose between 10MiB, 50MiB and 100MiB blocks for speeding up AES by multi threading.*
 

@@ -29,7 +29,7 @@ Random number generation is handy for multiple things. There are two number gene
 
 `OxC3 rand key`
 
-Generates a CSPRNG key that can be used for AES256 encryption. You can use `-l <lengthInBytes>` to customize byte count; defaulted to 32. `--nyto` can be used to show the output as "base64" Nytodecimal (0-9a-zA-Z_$) instead of base16 Hex (0-9A-Z). 
+Generates a CSPRNG key that can be used for AES256 encryption. You can use `-l <lengthInBytes>` to customize byte count; defaulted to 32.
 
 `OxC3 rand char`
 
@@ -77,8 +77,8 @@ The following parameters are commonly used in any format:
   - Specifies the input path. This is relative to the current working directory. You can provide an absolute path, but this will have to be located inside the current working directory. Otherwise you'll get an unauthorized error. Depending on the format, this can be either a file or a folder. Which will have to be one of the supported types. This format is detected based on the magic number or file extension (if magic number isn't applicable).
 - `-o <outputPath`>: Output file/folder (relative)
   - See -i.
-- `-aes <key>`: Encryption key (32-byte, hex or Nyto)
-  - A key should be generated using a good key generator. This key could for example be specified as: `0x00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000` in hex (64 characters). Can include spaces or tabs, as long as after that it's a valid hex number. It can also be specified as a Nyto (6-bit) number [0-9a-zA-Z_$]+. In this case it'd be `0n000 00000000 00000000 00000000 00000000 ` (43 characters). 
+- `-aes <key>`: Encryption key (32-byte hex)
+  - A key should be generated using a good key generator. This key could for example be specified as: `0x00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000` in hex (64 characters). Can include spaces or tabs, as long as after that it's a valid hex number.
 
 ### oiDL format
 
@@ -121,17 +121,17 @@ Data allows you to actually inspect the data section of certain parts of the fil
 
 ## TODO: Encrypt
 
-`OxC3 encrypt enc -f <file> -k <key in hex or nyto>` 
+`OxC3 encrypt do -f <file> -k <key in hex>` 
 
-`OxC3 encrypt dec -f <file> -k <key in hex or nyto>`
+`OxC3 encrypt undo -f <file> -k <key in hex>`
 
 Generates an encrypted oiDL file with 1 entry.
 
 ## TODO: Compress
 
-`OxC3 compress pack -f <file> (optional: --fast-compress, --k <key in hex or nyto>)`
+`OxC3 compress pack -f <file> (optional: --fast-compress, --k <key in hex>)`
 
-`OxC3 compress unpack -f <file> (optional: --k <key in hex or nyto>)`
+`OxC3 compress unpack -f <file> (optional: --k <key in hex>)`
 
 Generates a compressed oiDL file with 1 entry. Can be encrypted.
 

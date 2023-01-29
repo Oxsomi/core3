@@ -68,15 +68,47 @@ Bool _CLI_convert(ParsedArgs args, Bool isTo) {
 		return false;
 	}
 
-	//TODO: Parse encryption key
+	//Parse encryption key
 
 	U32 encryptionKey[8] = { 0 };
 
-	//TODO: Support 
+	if (args.parameters & EOperationHasParameter_AES) {
 
-	if(!isTo) {
-		Log_debug(String_createConstRefUnsafe("convertFrom not implemented yet"), ELogOptions_NewLine);
-		return false;
+		String key = String_createNull();
+
+		if (
+			(ParsedArgs_getArg(args, EOperationHasParameter_AESShift, &key)).genericError || 
+			!String_isHex(key)
+		) {
+
+			Log_error(
+				String_createConstRefUnsafe("Invalid parameter sent to -aes. Expecting key in hex (32 bytes)"), 
+				ELogOptions_NewLine
+			);
+
+			return false;
+		}
+
+		U64 off = String_startsWithString(key, String_createConstRefUnsafe("0x"), EStringCase_Insensitive) ? 2 : 0;
+
+		if (key.length - off != 64) {
+
+			Log_error(
+				String_createConstRefUnsafe("Invalid parameter sent to -aes. Expecting 32-byte key in hex"), 
+				ELogOptions_NewLine
+			);
+
+			return false;
+		}
+
+		for (U64 i = off; i + 1 < key.length; ++i) {
+
+			U8 v0 = C8_hex(key.ptr[i]);
+			U8 v1 = C8_hex(key.ptr[++i]);
+
+			v0 = (v0 << 4) | v1;
+			*((U8*)encryptionKey + ((i - off) >> 1)) = v0;
+		}
 	}
 
 	//Now convert it
@@ -84,7 +116,12 @@ Bool _CLI_convert(ParsedArgs args, Bool isTo) {
 	switch (args.format) {
 
 		case EFormat_oiDL: 
-			_CLI_convertToDL(args, inputArg, info, outputArg, encryptionKey);
+
+			if(isTo)
+				_CLI_convertToDL(args, inputArg, info, outputArg, encryptionKey);
+
+			else _CLI_convertFromDL(args, inputArg, info, outputArg, encryptionKey);
+
 			break;
 
 		//TODO: oiCA
@@ -98,7 +135,7 @@ Bool _CLI_convert(ParsedArgs args, Bool isTo) {
 
 	U64 timeInMs = (Time_now() - start + MS - 1) / MS;
 
-	Log_debug(String_createConstRefUnsafe("Converted file to oiXX format in "), ELogOptions_None);
+	Log_debug(String_createConstRefUnsafe("Converted file oiXX format in "), ELogOptions_None);
 
 	String dec = String_createNull();
 

@@ -205,6 +205,13 @@ Bool CLI_execute(StringList arglist) {
 				String_createConstRefUnsafe(EOperationFlags_names[i]),
 				EStringCase_Insensitive
 			)) {
+
+				if ((args.flags >> i) & 1) {
+					Log_debug(String_createConstRefUnsafe("Duplicate flag: "), ELogOptions_None);
+					Log_debug(Platform_instance.args.ptr[j], ELogOptions_NewLine);
+					_gotoIfError(clean, Error_alreadyDefined(0));
+				}
+
 				args.flags |= (EOperationFlags)(1 << i);
 				break;
 			}
@@ -255,6 +262,12 @@ Bool CLI_execute(StringList arglist) {
 
 					//Mark as present
 
+					if (args.parameters & param) {
+						Log_debug(String_createConstRefUnsafe("Duplicate parameter: "), ELogOptions_None);
+						Log_debug(Platform_instance.args.ptr[j], ELogOptions_NewLine);
+						_gotoIfError(clean, Error_alreadyDefined(0));
+					}
+
 					args.parameters |= param;
 
 					//Store param for parsing later
@@ -300,7 +313,7 @@ Bool CLI_execute(StringList arglist) {
 					Log_debug(String_createConstRefUnsafe("Invalid parameter is present: "), ELogOptions_None);
 					Log_debug(Platform_instance.args.ptr[j], ELogOptions_NewLine);
 					CLI_showHelp(category, operation, args.format);
-					_gotoIfError(clean, Error_invalidParameter(j, 0, 0));
+					_gotoIfError(clean, Error_invalidParameter((U32)j, 0, 0));
 				}
 
 				++j;
@@ -323,7 +336,7 @@ Bool CLI_execute(StringList arglist) {
 				Log_debug(String_createConstRefUnsafe("Invalid flag is present: "), ELogOptions_None);
 				Log_debug(Platform_instance.args.ptr[j], ELogOptions_NewLine);
 				CLI_showHelp(category, operation, args.format);
-				_gotoIfError(clean, Error_invalidParameter(j, 0, 0));
+				_gotoIfError(clean, Error_invalidParameter((U32)j, 0, 0));
 			}
 
 			continue;
@@ -332,7 +345,7 @@ Bool CLI_execute(StringList arglist) {
 		Log_debug(String_createConstRefUnsafe("Invalid argument is present: "), ELogOptions_None);
 		Log_debug(Platform_instance.args.ptr[j], ELogOptions_NewLine);
 		CLI_showHelp(category, operation, args.format);
-		_gotoIfError(clean, Error_invalidParameter(j, 0, 0));
+		_gotoIfError(clean, Error_invalidParameter((U32)j, 0, 0));
 	}
 
 	//Check that parameters passed are valid

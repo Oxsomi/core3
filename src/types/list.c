@@ -947,6 +947,10 @@ Error List_resize(List *list, U64 size, Allocator allocator) {
 	if(err.genericError)
 		return err;
 
+	Buffer_unsetAllBits(
+		Buffer_createRef(list->ptr + list->stride * list->length, (size * 3 / 2 - list->length) * list->stride)
+	);
+
 	list->length = size;
 	return Error_none();
 }

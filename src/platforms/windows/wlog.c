@@ -246,13 +246,31 @@ void Log_log(ELogLevel lvl, ELogOptions options, LogArgs args) {
 
 	for (U64 i = 0; i < args.argc; ++i) {
 
-		//TODO: This requires null terminator!
+		String argsi = args.args[i];
+		String copy = String_createNull();
 
-		if(args.args[i].ptr)
-			OutputDebugStringA(args.args[i].ptr);
+		if(argsi.length && argsi.ptr[argsi.length - 1] != '\0') {
 
-		if (hasNewLine)
-			OutputDebugStringA("\n");
+			if (
+				String_createCopyx(argsi, &copy).genericError ||
+				String_appendx(&copy, '\0').genericError
+			) {
+
+				OutputDebugStringA(
+					"PANIC! Log_print argument was output to debugger, but wasn't null terminated\n"
+					"This is normally okay, as long as a new string can be allocated.\n"
+					"In this case, allocation failed, which suggests corruption or out of memory."
+				);
+
+				break;
+			}
+		}
+
+		else copy = String_createConstRefSized(argsi.ptr, argsi.length);
+
+		OutputDebugStringA(copy.ptr);
+
+		String_freex(&copy);
 	}
 
 	if (lvl >= ELogLevel_Error)

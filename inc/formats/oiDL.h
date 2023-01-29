@@ -51,7 +51,7 @@ Bool DLFile_free(DLFile *dlFile, Allocator alloc);
 
 Error DLFile_addEntry(DLFile *dlFile, Buffer entry, Allocator alloc);
 Error DLFile_addEntryAscii(DLFile *dlFile, String entry, Allocator alloc);
-Error DLFile_addEntryUTF8(DLFile *dlFile, Buffer entry, Allocator alloc);			//TODO: Add String UTF8
+Error DLFile_addEntryUTF8(DLFile *dlFile, Buffer entry, Allocator alloc);
 
 Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result);
-Error DLFile_read(Buffer file, Allocator alloc, DLFile *dlFile);
+Error DLFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, DLFile *dlFile);
