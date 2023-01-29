@@ -17,7 +17,7 @@ const C8 *EOperationHasParameter_descriptions[] = {
 	"File format",
 	"Input file/folder (relative)",
 	"Output file/folder (relative)",
-	"Encryption key (32-byte, hex or Nyto)",
+	"Encryption key (32-byte hex)",
 	"Split by character (defaulted to newline)"
 };
 

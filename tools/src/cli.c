@@ -122,7 +122,62 @@ void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f) {
 
 	//Show more about the current operation and format
 
-	//TODO:
+	Log_debug(String_createConstRefUnsafe("Please use syntax: "), ELogOptions_NewLine);
+
+	Log_debug(
+		String_createConstRefUnsafe(EOperationCategory_names[category]), 
+		ELogOptions_None
+	);
+
+	Log_debug(String_createConstRefUnsafe(" "), ELogOptions_None);
+
+	Log_debug(
+		String_createConstRefUnsafe(Operation_values[op].name), 
+		ELogOptions_None
+	);
+
+	Log_debug(String_createConstRefUnsafe(" -f "), ELogOptions_None);
+
+	Format format = Format_values[f];
+
+	Log_debug(
+		String_createConstRefUnsafe(format.name), 
+		ELogOptions_NewLine
+	);
+
+	Log_debug(String_createConstRefUnsafe("With the following parameters:"), ELogOptions_NewLine);
+	Log_debug(String_createNull(), ELogOptions_NewLine);
+
+	for(U64 i = EOperationHasParameter_InputShift; i < EOperationHasParameter_Count; ++i)
+
+		if (((format.requiredParameters | format.optionalParameters) >> i) & 1) {
+
+			Log_debug(String_createConstRefUnsafe(EOperationHasParameter_names[i]), ELogOptions_None);
+
+			Log_debug(String_createConstRefUnsafe(":\t"), ELogOptions_None);
+
+			Log_debug(String_createConstRefUnsafe(EOperationHasParameter_descriptions[i]), ELogOptions_None);
+
+			Bool req = (format.requiredParameters >> i) & 1;
+
+			Log_debug(String_createConstRefUnsafe(req ? "\t(required)" : ""), ELogOptions_NewLine);
+		}
+
+
+	Log_debug(String_createNull(), ELogOptions_NewLine);
+	Log_debug(String_createConstRefUnsafe("With the following flags:"), ELogOptions_NewLine);
+	Log_debug(String_createNull(), ELogOptions_NewLine);
+
+	for(U64 i = EOperationFlags_None; i < EOperationFlags_Count; ++i)
+
+		if ((format.operationFlags >> i) & 1) {
+
+			Log_debug(String_createConstRefUnsafe(EOperationFlags_names[i]), ELogOptions_None);
+
+			Log_debug(String_createConstRefUnsafe(":\t"), ELogOptions_None);
+
+			Log_debug(String_createConstRefUnsafe(EOperationFlags_descriptions[i]), ELogOptions_NewLine);
+		}
 }
 
 Bool CLI_execute(StringList arglist) {
@@ -213,7 +268,7 @@ Bool CLI_execute(StringList arglist) {
 				}
 
 				args.flags |= (EOperationFlags)(1 << i);
-				break;
+				continue;			//Don't break, find duplicate arguments
 			}
 
 	//Grab all params
@@ -279,7 +334,7 @@ Bool CLI_execute(StringList arglist) {
 				}
 
 				++j;			//Skip next argument
-				break;
+				continue;		//Don't break, we wanna detect duplicates!
 			}
 
 	//Invalid usage

@@ -138,6 +138,8 @@ Error String_reserve(String *str, U64 length, Allocator alloc);
 Error String_append(String *s, C8 c, Allocator allocator);
 Error String_appendString(String *s, String other, Allocator allocator);
 
+String String_newLine();
+
 Error String_insert(String *s, C8 c, U64 i, Allocator allocator);
 Error String_insertString(String *s, String other, U64 i, Allocator allocator);
 

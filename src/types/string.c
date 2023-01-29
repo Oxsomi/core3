@@ -750,6 +750,12 @@ Error String_append(String *s, C8 c, Allocator allocator) {
 	return String_resize(s, s->length + 1, c, allocator);
 }
 
+#if _WIN32
+	String String_newLine() { return String_createConstRefUnsafe("\r\n"); }
+#else
+	String String_newLine() { return String_createConstRefUnsafe("\n"); }
+#endif
+
 Error String_appendString(String *s, String other, Allocator allocator) {
 
 	if (!other.length || !other.ptr)

@@ -305,6 +305,7 @@ Bool _CLI_convertFromDL(ParsedArgs args, String input, FileInfo inputInfo, Strin
 	Buffer buf = Buffer_createNull();
 	String outputBase = String_createNull();
 	String filePathi = String_createNull();
+	String concatFile = String_createNull();
 
 	Error err = Error_none();
 	DLFile file = (DLFile) { 0 };
@@ -316,43 +317,91 @@ Bool _CLI_convertFromDL(ParsedArgs args, String input, FileInfo inputInfo, Strin
 
 	//Write file
 
-	//TODO: If output is file; it can recombine with newline or split character.
-	//		Falls back to folder if it still contains the split character.
+	FileType type = FileType_Folder;
+	String txt = String_createConstRefUnsafe(".txt");
 
-	_gotoIfError(clean, File_add(output, FileType_Folder, 1 * SECOND));
+	if(
+		(
+			String_endsWithString(output, txt, EStringCase_Insensitive) ||
+			(args.parameters & EOperationHasParameter_SplitBy)
+		) &&
+		file.settings.dataType == EDLDataType_Ascii
+	)
+		type = FileType_File;
+
+	_gotoIfError(clean, File_add(output, type, 1 * SECOND));
 	didMakeFile = true;
 
-	//Append / as base so it's easier to append per file later
+	//Write it as a folder
 
-	_gotoIfError(clean, String_createCopyx(output, &outputBase));
-	_gotoIfError(clean, String_appendx(&outputBase, '/'));
+	if(type == FileType_Folder) {
 
-	String txt = String_createConstRefUnsafe(".txt");
-	String bin = String_createConstRefUnsafe(".bin");
+		//Append / as base so it's easier to append per file later
 
-	for (U64 i = 0; i < file.entries.length; ++i) {
+		_gotoIfError(clean, String_createCopyx(output, &outputBase));
+		_gotoIfError(clean, String_appendx(&outputBase, '/'));
 
-		DLEntry entry = ((DLEntry*)file.entries.ptr)[i];
+		String bin = String_createConstRefUnsafe(".bin");
 
-		//File name "$base/$(i).+?(isBin ? ".bin" : ".txt")"
+		for (U64 i = 0; i < file.entries.length; ++i) {
 
-		_gotoIfError(clean, String_createDecx(i, false, &filePathi));
-		_gotoIfError(clean, String_insertStringx(&filePathi, outputBase, 0));
+			DLEntry entry = ((DLEntry*)file.entries.ptr)[i];
 
-		if(file.settings.dataType == EDLDataType_Data)
-			_gotoIfError(clean, String_appendStringx(&filePathi, bin))
+			//File name "$base/$(i).+?(isBin ? ".bin" : ".txt")"
 
-		else _gotoIfError(clean, String_appendStringx(&filePathi, txt));
+			_gotoIfError(clean, String_createDecx(i, false, &filePathi));
+			_gotoIfError(clean, String_insertStringx(&filePathi, outputBase, 0));
 
-		Buffer fileDat = 
-			file.settings.dataType == EDLDataType_Ascii ? String_bufferConst(entry.entryString) : 
-			entry.entryBuffer;
+			if(file.settings.dataType == EDLDataType_Data)
+				_gotoIfError(clean, String_appendStringx(&filePathi, bin))
 
-		//
+			else _gotoIfError(clean, String_appendStringx(&filePathi, txt));
 
-		_gotoIfError(clean, File_write(fileDat, filePathi, 1 * SECOND));
+			Buffer fileDat = 
+				file.settings.dataType == EDLDataType_Ascii ? String_bufferConst(entry.entryString) : 
+				entry.entryBuffer;
 
-		String_freex(&filePathi);
+			//
+
+			_gotoIfError(clean, File_write(fileDat, filePathi, 1 * SECOND));
+
+			String_freex(&filePathi);
+		}
+	}
+
+	//Write it as a file;
+	//e.g. concat all files after it
+
+	else {
+
+		_gotoIfError(clean, String_reservex(&concatFile, file.entries.length * 16));
+
+		for (U64 i = 0; i < file.entries.length; ++i) {
+
+			DLEntry entry = ((DLEntry*)file.entries.ptr)[i];
+			_gotoIfError(clean, String_appendStringx(&concatFile, entry.entryString));
+
+			if(i == file.entries.length - 1)
+				break;
+
+			if(args.parameters & EOperationHasParameter_SplitBy) {
+
+				String split = String_createNull();
+				_gotoIfError(clean, ParsedArgs_getArg(args, EOperationHasParameter_SplitByShift, &split));
+
+				_gotoIfError(clean, String_appendStringx(&concatFile, split));
+
+			}
+
+			else _gotoIfError(clean, String_appendStringx(&concatFile, String_newLine()));
+
+		}
+
+		Buffer fileDat = Buffer_createConstRef(concatFile.ptr, concatFile.length);
+
+		_gotoIfError(clean, File_write(fileDat, output, 1 * SECOND));
+
+		String_freex(&concatFile);
 	}
 
 	//
@@ -364,9 +413,10 @@ clean:
 	if(err.genericError)
 		Error_printx(err, ELogLevel_Error, ELogOptions_Default);
 
-	if(didMakeFile)
+	if(didMakeFile && !success)
 		File_remove(output, 1 * SECOND);
 
+	String_freex(&concatFile);
 	String_freex(&filePathi);
 	String_freex(&outputBase);
 	DLFile_freex(&file);

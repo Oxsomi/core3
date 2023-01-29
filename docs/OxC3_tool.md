@@ -88,11 +88,13 @@ Since a DL (Data List) file can include either binary files or strings, you'll h
 - --utf8: Indicates the input files should be threated as UTF8. If a file; splits by enter, otherwise 1 entry/file.
 - `-split <string>`: If the input is a string, allows you to split the file by a different string than an endline character / string.
 
-If these are absent; it'll use binary format by default. When either ascii or utf8 is used, file(s) should be encoded using the proper format that is requested. If only one file is used, multiple strings will be created by splitting by the newline character(s) or the split string if overriden. 
+If these are absent; it'll use binary format by default. When either ascii or utf8 is used, file(s) should be encoded using the proper format that is requested. If only one file is used, multiple strings will be created by splitting by the newline character(s) or the split string if overriden. Recombining an ascii oiDL will resolve to a .txt if split is available or the final destination ends with .txt.
 
 *Example usage:*
 
-`OxC3 convert to -f oiDL -i myDialog.txt -o myFolder.oiDL --ascii`
+`OxC3 convert to -f oiDL -i myDialog0.txt -o myDialog.oiDL --ascii`
+
+`OxC3 convert from -f oiDL -o myDialog1.txt -i myDialog.oiDL --ascii`
 
 ### oiCA format
 
