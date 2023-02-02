@@ -67,7 +67,7 @@ Error CAFile_createx(CASettings settings, CAFile *caFile) {
 
 Bool CAFile_freex(CAFile *caFile) { return CAFile_free(caFile, Platform_instance.alloc); }
 
-Error CAFile_addEntryx(CAFile *caFile, CAEntry entry) { return CAFile_addEntry(caFile, entry, Platform_instance.alloc); }
+Error CAFile_addEntryx(CAFile *caFile, ArchiveEntry entry) { return CAFile_addEntry(caFile, entry, Platform_instance.alloc); }
 
 Error CAFile_writex(CAFile caFile, Buffer *result) {
 	return CAFile_write(caFile, Platform_instance.alloc, result);

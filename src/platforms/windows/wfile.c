@@ -1,5 +1,5 @@
 #include "types/error.h"
-#include "platforms/file.h"
+#include "types/file.h"
 #include "platforms/ext/stringx.h"
 
 #define WIN32_LEAN_AND_MEAN
@@ -26,7 +26,7 @@ Error File_foreach(String loc, FileCallback callback, void *userData, Bool isRec
 		return Error_none();
 	}
 
-	_gotoIfError(clean, File_resolve(loc, &isVirtual, &resolved));
+	_gotoIfError(clean, File_resolvex(loc, &isVirtual, &resolved, 0));
 
 	if(isVirtual)
 		_gotoIfError(clean, Error_invalidOperation(0));
@@ -79,7 +79,7 @@ Error File_foreach(String loc, FileCallback callback, void *userData, Bool isRec
 				.path = String_createConstRef(dat.cFileName, MAX_PATH),
 				.timestamp = timestamp,
 				.access = dat.dwFileAttributes & FILE_ATTRIBUTE_READONLY ? FileAccess_Read : FileAccess_ReadWrite,
-				.type = FileType_Folder
+				.type = EFileType_Folder
 			};
 
 			_gotoIfError(clean, callback(info, userData));
@@ -103,7 +103,7 @@ Error File_foreach(String loc, FileCallback callback, void *userData, Bool isRec
 			.path = tmp,
 			.timestamp = timestamp,
 			.access = dat.dwFileAttributes & FILE_ATTRIBUTE_READONLY ? FileAccess_Read : FileAccess_ReadWrite,
-			.type = FileType_File,
+			.type = EFileType_File,
 			.fileSize = size.QuadPart
 		};
 
@@ -131,7 +131,7 @@ clean:
 //TODO: Virtual file support
 
 Error File_removeVirtual(String loc, Ns maxTimeout) { loc; maxTimeout; return Error_unimplemented(0); }
-Error File_addVirtual(String loc, FileType type, Ns maxTimeout) { loc; type; maxTimeout; return Error_unimplemented(0); }
+Error File_addVirtual(String loc, EFileType type, Ns maxTimeout) { loc; type; maxTimeout; return Error_unimplemented(0); }
 
 Error File_renameVirtual(String loc, String newFileName, Ns maxTimeout) { 
 	loc; newFileName; maxTimeout; return Error_unimplemented(0); 
@@ -154,7 +154,7 @@ Error File_foreachVirtual(String loc, FileCallback callback, void *userData, Boo
 	return Error_unimplemented(0); 
 }
 
-Error File_queryFileObjectCountVirtual(String loc, FileType type, Bool isRecursive, U64 *res) { 
+Error File_queryFileObjectCountVirtual(String loc, EFileType type, Bool isRecursive, U64 *res) { 
 	loc; type; isRecursive; res;
 	return Error_unimplemented(0); 
 }

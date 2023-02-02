@@ -1,5 +1,6 @@
 #include "formats/oiCA.h"
 #include "formats/oiDL.h"
+#include "types/file.h"
 #include "types/list.h"
 #include "types/time.h"
 #include "types/allocator.h"
@@ -24,9 +25,12 @@ typedef enum ECAFlags {
 	//Indicates ECAFileSizeType. E.g. (ECAFileSizeType)((b0 << 1) | b1)
 
 	ECAFlags_FileSizeType_Shift		= 4,
-	ECAFlags_FileSizeType_Mask		= 3
+	ECAFlags_FileSizeType_Mask		= 3,
 
-	//ECAFlags_Next					= 1 << 6
+	//Chunk size of AES for multi threading. 0 = none, 1 = 10MiB, 2 = 100MiB, 3 = 500MiB
+
+	ECAFlags_UseAESChunksA		= 1 << 6,
+	ECAFlags_UseAESChunksB		= 1 << 7
 
 } ECAFlags;
 
@@ -37,9 +41,9 @@ typedef struct CAHeader {
 	U8 version;					//major.minor (%10 = minor, /10 = major (+1 = real major))
 	U8 flags;					//ECAFlags
 	U8 type;					//(EXXCompressionType << 4) | EXXEncryptionType. Each enum should be <Count
-	U8 headerExtensionSize;		//To skip extended data size
+	U8 headerExtensionSize;		//To skip extended data size. Highest bit is b0 of uncompressed size type.
 
-	U8 directoryExtensionSize;	//To skip directory extended data
+	U8 directoryExtensionSize;	//To skip directory extended data. Highest bit is b1 of uncompressed size type.
 	U8 fileExtensionSize;		//To skip file extended data		
 	U16 directoryCount;			//How many base directories are available. Should be < 0xFFFF
 
@@ -92,13 +96,13 @@ inline Bool CAFile_storeDate(Ns ns, U16 *time, U16 *date) {
 
 //
 
-Error CAFile_create(CASettings settings, Allocator alloc, CAFile *caFile) {
+Error CAFile_create(CASettings settings, Archive archive, Allocator alloc, CAFile *caFile) {
 
 	if(!caFile)
 		return Error_nullPointer(0, 0);
 
-	if(caFile->entries.ptr)
-		return Error_invalidOperation(0);
+	if(!archive.entries.ptr)
+		return Error_nullPointer(1, 0);
 
 	if(settings.compressionType >= EXXCompressionType_Count)
 		return Error_invalidParameter(0, 0, 0);
@@ -112,36 +116,20 @@ Error CAFile_create(CASettings settings, Allocator alloc, CAFile *caFile) {
 	if(settings.flags & ECASettingsFlags_Invalid)
 		return Error_invalidParameter(0, 2, 0);
 
-	caFile->entries = List_createEmpty(sizeof(CAEntry));
-
-	Error err = List_reserve(&caFile->entries, 100, alloc);
-
-	if(err.genericError)
-		return err;
-
+	caFile->archive = archive;
 	caFile->settings = settings;
 	return Error_none();
 }
 
 Bool CAFile_free(CAFile *caFile, Allocator alloc) {
 
-	if(!caFile || !caFile->entries.ptr)
+	if(!caFile || !caFile->archive.entries.ptr)
 		return true;
 
-	for (U64 i = 0; i < caFile->entries.length; ++i) {
-
-		CAEntry entry = ((CAEntry*)caFile->entries.ptr)[i];
-
-		Buffer_free(&entry.data, alloc);
-		String_free(&entry.path, alloc);
-	}
-
-	List_free(&caFile->entries, alloc);
+	Bool b = Archive_free(&caFile->archive, alloc);
 	*caFile = (CAFile) { 0 };
-	return true;
+	return b;
 }
-
-Error CAFile_addEntry(CAFile *caFile, CAEntry entry, Allocator alloc);
 
 //We don't support any compression yet, but should be trivial to add once Buffer_compress/Buffer_decompress is supported.
 
@@ -183,9 +171,9 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 
 	for (U64 i = 0; i < caFile.entries.length; ++i) {
 
-		CAEntry entry = ((CAEntry*)caFile.entries.ptr)[i];
+		ArchiveEntry entry = ((ArchiveEntry*)caFile.entries.ptr)[i];
 
-		if (entry.isFolder) {
+		if (entry.type == EFileType_Folder) {
 
 			_gotoIfError(clean, List_pushBack(
 				&directories, Buffer_createConstRef(&entry.path, sizeof(String)), alloc
@@ -447,13 +435,13 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 
 		//Find corresponding file with name
 
-		CAEntry *entry = NULL;
+		ArchiveEntry *entry = NULL;
 
 		for(U64 i = 0; i < caFile.entries.length; ++i)
 			if (String_equalsString(
-				((CAEntry*)caFile.entries.ptr + i)->path, file, EStringCase_Sensitive
+				((ArchiveEntry*)caFile.entries.ptr + i)->path, file, EStringCase_Sensitive
 			)) {
-				entry = (CAEntry*)caFile.entries.ptr + i;
+				entry = (ArchiveEntry*)caFile.entries.ptr + i;
 				break;
 			}
 

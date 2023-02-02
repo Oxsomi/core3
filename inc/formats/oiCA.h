@@ -1,6 +1,8 @@
 #pragma once
 #include "oiXX.h"
-#include "types/list.h"
+#include "types/archive.h"
+
+typedef enum EFileType EFileType;
 
 typedef enum ECASettingsFlags {
 	ECASettingsFlags_None				= 0,
@@ -11,41 +13,23 @@ typedef enum ECASettingsFlags {
 } ECASettingsFlags;
 
 typedef struct CASettings {
-
 	EXXCompressionType compressionType;
 	EXXEncryptionType encryptionType;
 	ECASettingsFlags flags;
-
 	U32 encryptionKey[8];
-
 } CASettings;
-
-typedef struct CAEntry {
-
-	String path;
-	Buffer data;
-	Bool isFolder;		//If true, data should be empty
-	Ns timestamp;		//Shouldn't be set if isFolder. Will disappear
-
-} CAEntry;
 
 //Check docs/oiCA.md for the file spec
 
 typedef struct CAFile {
-
-	List entries;				//<CAEntry>
+	Archive archive;
 	CASettings settings;
-
 } CAFile;
 
-Error CAFile_create(CASettings settings, Allocator alloc, CAFile *caFile);
+Error CAFile_create(CASettings settings, Archive archive, Allocator alloc, CAFile *caFile);
 Bool CAFile_free(CAFile *caFile, Allocator alloc);
 
-//Also adds subdirs. CAEntry will belong to CAFile.
-//This means that freeing it will free the String + Buffer if they're not a ref
-//So be sure to make them a ref if needed.
-//
-Error CAFile_addEntry(CAFile *caFile, CAEntry entry, Allocator alloc);
+//Serialize
 
 Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result);
 Error CAFile_read(Buffer file, Allocator alloc, CAFile *caFile);

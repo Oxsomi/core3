@@ -6,7 +6,7 @@ typedef struct String String;
 
 typedef struct CASettings CASettings;
 typedef struct CAFile CAFile;
-typedef struct CAEntry CAEntry;
+typedef struct ArchiveEntry ArchiveEntry;
 
 typedef struct DLSettings DLSettings;
 typedef struct DLFile DLFile;
@@ -15,7 +15,7 @@ typedef struct DLFile DLFile;
 
 //Error CAFile_createx(CASettings settings, CAFile *caFile);
 //Bool CAFile_freex(CAFile *caFile);
-//Error CAFile_addEntryx(CAFile *caFile, CAEntry entry);
+//Error CAFile_addEntryx(CAFile *caFile, ArchiveEntry entry);
 //Error CAFile_writex(CAFile caFile, Buffer *result);
 
 //Error CAFile_readx(Buffer file, CAFile *caFile);

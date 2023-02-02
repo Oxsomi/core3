@@ -1,6 +1,7 @@
 #pragma once
 #include "types/types.h"
 #include "types/string.h"
+#include "types/file.h"
 
 typedef struct Error Error;
 
@@ -20,61 +21,36 @@ typedef struct Error Error;
 //
 //Backslashes are automatically resolved to forward slash
 
-typedef enum FileType {
-	FileType_Folder,
-	FileType_File
-} FileType;
-
-typedef enum FileAccess {
-	FileAccess_None,			//Invalid, never returned
-	FileAccess_Read,
-	FileAccess_Write,
-	FileAccess_ReadWrite
-} FileAccess;
-
-typedef struct FileInfo {
-
-	FileType type;
-	FileAccess access;
-	Ns timestamp;		//In units that the file system supports. Normally that unit is seconds.
-	String path;
-	U64 fileSize;
-
-} FileInfo;
-
-typedef Error (*FileCallback)(FileInfo, void*);
-
 Error File_getInfo(String loc, FileInfo *info);
-Bool FileInfo_free(FileInfo *info);
+Error File_resolvex(String loc, Bool *isVirtual, U64 maxFilePathLimit, String *result);
 
 Bool File_isVirtual(String loc);
 
 Error File_foreach(String loc, FileCallback callback, void *userData, Bool isRecursive);
 
 Error File_remove(String loc, Ns maxTimeout);
-Error File_add(String loc, FileType type, Ns maxTimeout);
+Error File_add(String loc, EFileType type, Ns maxTimeout);
 
 Error File_rename(String loc, String newFileName, Ns maxTimeout);
 Error File_move(String loc, String directoryName, Ns maxTimeout);
 
-Error File_queryFileObjectCount(String loc, FileType type, Bool isRecursive, U64 *res);		//Includes files only
-Error File_queryFileObjectCountAll(String loc, Bool isRecursive, U64 *res);					//Includes folders + files
+Error File_queryFileObjectCount(String loc, EFileType type, Bool isRecursive, U64 *res);		//Includes files only
+Error File_queryFileObjectCountAll(String loc, Bool isRecursive, U64 *res);						//Includes folders + files
 
 Error File_queryFileCount(String loc, Bool isRecursive, U64 *res);
 Error File_queryFolderCount(String loc, Bool isRecursive, U64 *res);
 
-Error File_resolve(String loc, Bool *isVirtual, String *result);
-Bool File_exists(String loc);
-Bool File_existsAsType(String loc, FileType type);
+Bool File_has(String loc);
+Bool File_hasType(String loc, EFileType type);
 
-Bool File_fileExists(String loc);
-Bool File_folderExists(String loc);
+Bool File_hasFile(String loc);
+Bool File_hasFolder(String loc);
 
 Error File_write(Buffer buf, String loc, Ns maxTimeout);		//Read when a file is available (up to maxTimeout)
 Error File_read(String loc, Ns maxTimeout, Buffer *output);		//Write when a file is available (up to maxTimeout)
 
 impl Error File_removeVirtual(String loc, Ns maxTimeout);						//Can only operate on //access
-impl Error File_addVirtual(String loc, FileType type, Ns maxTimeout);			//Can only operate on folders in //access
+impl Error File_addVirtual(String loc, EFileType type, Ns maxTimeout);			//Can only operate on folders in //access
 impl Error File_renameVirtual(String loc, String newFileName, Ns maxTimeout);
 impl Error File_moveVirtual(String loc, String directoryName, Ns maxTimeout);
 
@@ -83,7 +59,7 @@ impl Error File_readVirtual(String loc, Buffer *output, Ns maxTimeout);
 
 impl Error File_getInfoVirtual(String loc, FileInfo *info);
 impl Error File_foreachVirtual(String loc, FileCallback callback, void *userData, Bool isRecursive);
-impl Error File_queryFileObjectCountVirtual(String loc, FileType type, Bool isRecursive, U64 *res);		//Inc files only
+impl Error File_queryFileObjectCountVirtual(String loc, EFileType type, Bool isRecursive, U64 *res);		//Inc files only
 impl Error File_queryFileObjectCountAllVirtual(String loc, Bool isRecursive, U64 *res);					//Inc folders + files
 
 //TODO: make it more like a DirectStorage-like api

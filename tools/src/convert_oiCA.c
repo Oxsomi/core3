@@ -14,7 +14,7 @@ Error addFileToCAFile(FileInfo file, CAFileRecursion *caFile) {
 	if(!String_cut(file.path, caFile->root.length + 1, 0, &subPath))
 		return Error_invalidState(0);
 
-	CAEntry entry = (CAEntry) {
+	ArchiveEntry entry = (ArchiveEntry) {
 		.path = subPath,
 		.isFolder = file.type == FileType_Folder,
 		.timestamp = file.timestamp

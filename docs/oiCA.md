@@ -113,9 +113,11 @@ CAFile {
     compress & encrypt the following if necessary:		//See oiXX.md
     
     	//This includes the names of everything in order.
-    	//The names should only be [0-9A-Za-z_.\ ]+ as well as non ASCII characters.
+    	//The names should only be [0-9A-Za-z_.-\ ]+ as well as non ASCII characters.
     	//This means that special characters are banned for interoperability reasons.
     	//You can't suffix with . (meaning ., .. are also out of question).
+    	//Files such as CON, AUX, NUL, PRN, COM0-COM9, LPT0-LPT9 are also banned.
+    	//Total file path can't exceed 128 characters.
     	//DLFile format MAY NOT use compression or encryption, since that's done by CAFile.
     	//DLFile should have the string flag set. If not, the file is invalid.
     
@@ -145,6 +147,8 @@ CAFile {
 The types are Oxsomi types; `U<X>`: x-bit unsigned integer, `I<X>` x-bit signed integer. Ki is Kibi like KiB (1024).
 
 *Note: oiCA supports the ability to choose between 10MiB, 100MiB and 500MiB blocks for speeding up AES by multi threading.*
+
+*NOTE: * 
 
 ## Changelog
 

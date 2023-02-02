@@ -1,7 +1,7 @@
-#include "platforms/file.h"
 #include "platforms/thread.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
+#include "platforms/file.h"
 #include "types/error.h"
 #include "types/buffer.h"
 #include "types/string.h"
@@ -27,242 +27,13 @@
 
 #endif
 
-Error File_resolve(String loc, Bool *isVirtual, String *result) {
-
-	if(result && result->ptr)
-		return Error_invalidOperation(0);
-
-	StringList res = (StringList) { 0 };
-	Error err = Error_none();
-
-	if(!isVirtual || !result)
-		_gotoIfError(clean, Error_nullPointer(!isVirtual ? 1 : 2, 0));
-
-	if(!String_isValidFilePath(loc))
-		_gotoIfError(clean, Error_invalidParameter(0, 0, 0));
-
-	//Copy string so we can modifiy it
-
-	_gotoIfError(clean, String_createCopyx(loc, result));
-	*isVirtual = File_isVirtual(loc);
-
-	//Virtual files
-
-	if (*isVirtual)
-		_gotoIfError(clean, String_popFrontCount(result, 2));
-
-	//Network drives are a thing on windows and allow starting a path with \\
-	//We shouldn't be supporting this.
-	//The reason; you can access servers from an app with a file read instead of a https read!
-	//This can obfuscate the application's true intentions.
-	//ex. \\0.0.0.0\ would make a file web request to 0.0.0.0.
-	//Unix can map a folder to a webserver, but that link has to be created beforehand, not our app.
-	//You can also read from hardware in a platform dependent way, which makes it harder to standardize.
-	//TODO: We should however support this in the future as a custom instruction that allows it
-
-	if (String_getAt(*result, 0) == '\\' && String_getAt(*result, 1) == '\\')
-		_gotoIfError(clean, Error_unsupportedOperation(3));
-
-	//Backslash is replaced with forward slash for easy windows compatibility
-
-	if (!String_replaceAll(result, '\\', '/', EStringCase_Sensitive))
-		_gotoIfError(clean, Error_invalidOperation(1));
-
-	//On Windows, it's possible to change drive but keep same relative path. We don't support it.
-	//e.g. C:myFolder/ (relative folder on C) instead of C:/myFolder/ (Absolute folder on C)
-	//We also obviously don't support 0:\ and such or A:/ on unix
-
-	#ifdef _WIN32
-
-		if(result->length >= 3 && result->ptr[1] == ':' && (result->ptr[2] != '/' || !C8_isAlpha(result->ptr[0])))
-			_gotoIfError(clean, Error_unsupportedOperation(2));
-
-	#else
-
-		if(result->length >= 2 && result->ptr[1] == ':')
-			_gotoIfError(clean, Error_invalidOperation(6));
-
-	#endif
-
-	//Now we have to discover the real directory it references to. This means resolving:
-	//Empty filename and . to mean no difference and .. to step back
-
-	_gotoIfError(clean, String_splitx(*result, '/', EStringCase_Sensitive, &res));
-
-	U64 realSplitLen = res.length;		//We have to reset this before unallocating the StringList!
-
-	String back = String_createConstRefUnsafe("..");
-
-	for (U64 i = 0; i < res.length; ++i) {
-
-		//We pop from StringList since it doesn't change anything
-		//Starting with a / is valid with local files, so don't remove it. (not with virtual files)
-		//Having multiple // after each other means empty file this is invalid.
-		//So both empty file and . resolve to nothing
-
-		if(
-			(String_isEmpty(res.ptr[i]) && i && !*isVirtual) ||
-			String_equals(res.ptr[i], '.', EStringCase_Sensitive)
-		) {
-
-			//Move to left
-
-			for (U64 k = res.length - 1; k > i; --k) 
-				res.ptr[k - 1] = res.ptr[k];			//This is OK, we're dealing with refs from split
-
-			--i;			//Ensure we keep track of the removed element
-			--res.length;
-			continue;
-		}
-
-		//In this case, we have to pop StringList[j], so that's only possible if that's still there
-
-		if (String_equalsString(res.ptr[i], back, EStringCase_Sensitive)) {
-
-			if(!i) {
-				res.length = realSplitLen;
-				_gotoIfError(clean, Error_invalidParameter(0, 0, 0));
-			}
-
-			for (U64 k = res.length - 1; k > i + 1; --k) 
-				res.ptr[k - 2] = res.ptr[k];			//This is OK, we're dealing with refs from split
-
-			i -= 2;			//Ensure we keep track of the removed element
-			res.length -= 2;
-			continue;
-		}
-
-		//Validate file name
-
-		if (!String_isValidFileName(res.ptr[i], i == res.length - 1)) {
-
-			#ifdef _WIN32
-
-				//Drive name
-
-				if(!i && res.ptr[i].length == 2 && C8_isAlpha(res.ptr[0].ptr[0]) && res.ptr[0].ptr[1] == ':')
-					continue;
-
-			#endif
-
-			res.length = realSplitLen;
-			_gotoIfError(clean, Error_invalidParameter(0, 0, 1));
-		}
-
-		//Validation to make sure we're not using weird legacy MS DOS keywords
-		//Because these will not be writable correctly!
-
-		if(String_equalsString(
-			res.ptr[i], String_createConstRefUnsafe("CON"), EStringCase_Insensitive
-		))
-			_gotoIfError(clean, Error_invalidParameter(0, 0, 2));
-
-		if(String_equalsString(
-			res.ptr[i], String_createConstRefUnsafe("AUX"), EStringCase_Insensitive
-		))
-			_gotoIfError(clean, Error_invalidParameter(0, 0, 3));
-
-		if(String_equalsString(
-			res.ptr[i], String_createConstRefUnsafe("NUL"), EStringCase_Insensitive
-		))
-			_gotoIfError(clean, Error_invalidParameter(0, 0, 4));
-
-		if(String_equalsString(
-			res.ptr[i], String_createConstRefUnsafe("PRN"), EStringCase_Insensitive
-		))
-			_gotoIfError(clean, Error_invalidParameter(0, 0, 5));
-
-		if(
-			String_startsWithString(
-				res.ptr[i], String_createConstRefUnsafe("COM"), EStringCase_Insensitive
-			) &&
-			res.ptr[i].length == 4 && C8_isDec(res.ptr[i].ptr[3])
-		)
-			_gotoIfError(clean, Error_invalidParameter(0, 0, 6));
-
-		if(
-			String_startsWithString(
-				res.ptr[i], String_createConstRefUnsafe("LPT"), EStringCase_Insensitive
-			) &&
-			res.ptr[i].length == 4 && C8_isDec(res.ptr[i].ptr[3])
-		)
-			_gotoIfError(clean, Error_invalidParameter(0, 0, 7));
-
-		//Continue processing the path until it's done
-
-		continue;
-	}
-
-	//If we have nothing left, we get current work/app directory
-
-	if(!res.length) {
-		res.length = realSplitLen;
-		goto clean;
-	}
-
-	//Re-assemble path now
-
-	String tmp = String_createNull();
-
-	if ((err = StringList_concatx(res, '/', &tmp)).genericError) {
-		res.length = realSplitLen;
-		StringList_freex(&res);
-	}
-
-	String_freex(result);		//This can't be done before concat, because the string is still in use.
-	*result = tmp;
-
-	res.length = realSplitLen;
-	StringList_freex(&res);
-
-	//Check if we're an absolute or relative path
-
-	Bool isAbsolute = false;
-
-	#ifdef _WIN32	//Starts with [A-Z]:/ if absolute. If it starts with / it's unsupported!
-
-		if (String_startsWith(*result, '/', EStringCase_Sensitive))
-			_gotoIfError(clean, Error_unsupportedOperation(4));
-
-		isAbsolute = result->length >= 2 && result->ptr[1] == ':';
-
-	#else			//Starts with / if absolute
-		isAbsolute = String_startsWith(*result, '/', EStringCase_Sensitive);
-	#endif
-
-	//Our path has to be made relative to our working directory.
-	//This is to avoid access from folders we shouldn't be able to read in.
-
-	if (isAbsolute) {
-
-		if(!String_startsWithString(
-			*result, Platform_instance.workingDirectory, EStringCase_Insensitive
-		))
-			_gotoIfError(clean, Error_unauthorized(0));
-	}
-
-	//Prepend our path
-
-	else _gotoIfError(clean, String_insertStringx(result, Platform_instance.workingDirectory, 0));
-
-	//Since we're gonna use this in file operations, we wanna have a null terminator
-
-	if(String_getAt(*result, result->length - 1) != '\0')
-		_gotoIfError(clean, String_insertx(result, '\0', result->length));
-
-	#ifdef _WIN32
-
-		if(result->length >= 260 /* MAX_PATH */)
-			_gotoIfError(clean, Error_outOfBounds(0, 0, result->length, 260));
-
-	#endif
-
-	return Error_none();
-
-clean:
-	StringList_freex(&res);
-	String_freex(result);
-	return err;
+Error File_resolvex(String loc, Bool *isVirtual, U64 maxFilePathLimit, String *result) {
+	return File_resolve(
+		loc, isVirtual, 
+		maxFilePathLimit, 
+		Platform_instance.workingDirectory, Platform_instance.alloc, 
+		result
+	);
 }
 
 Error File_getInfo(String loc, FileInfo *info) {
@@ -286,7 +57,7 @@ Error File_getInfo(String loc, FileInfo *info) {
 		return Error_none();
 	}
 
-	_gotoIfError(clean, File_resolve(loc, &isVirtual, &resolved));
+	_gotoIfError(clean, File_resolvex(loc, &isVirtual, &resolved, 0));
 
 	struct stat inf = (struct stat) { 0 };
 
@@ -304,7 +75,7 @@ Error File_getInfo(String loc, FileInfo *info) {
 		.timestamp = (Ns)inf.st_mtime * SECOND,
 		.path = resolved,
 
-		.type = S_ISDIR(inf.st_mode) ? FileType_Folder : FileType_File,
+		.type = S_ISDIR(inf.st_mode) ? EFileType_Folder : EFileType_File,
 		.fileSize = (U64) inf.st_size,
 
 		.access = 
@@ -321,29 +92,19 @@ clean:
 
 Bool File_isVirtual(String loc) { return String_getAt(loc, 0) == '/' && String_getAt(loc, 1) == '/'; }
 
-Bool File_fileExists(String loc) { return File_existsAsType(loc, FileType_File); }
-Bool File_folderExists(String loc) { return File_existsAsType(loc, FileType_Folder); }
+Bool File_hasFile(String loc) { return File_hasType(loc, EFileType_File); }
+Bool File_hasFolder(String loc) { return File_hasType(loc, EFileType_Folder); }
 
 Error File_queryFileCount(String loc, Bool isRecursive, U64 *res) { 
-	return File_queryFileObjectCount(loc, FileType_File, isRecursive, res); 
+	return File_queryFileObjectCount(loc, EFileType_File, isRecursive, res); 
 }
 
 Error File_queryFolderCount(String loc, Bool isRecursive, U64 *res) { 
-	return File_queryFileObjectCount(loc, FileType_Folder, isRecursive, res); 
-}
-
-Bool FileInfo_free(FileInfo *info) {
-
-	if(!info)
-		return false;
-
-	Bool freed = String_freex(&info->path);
-	*info = (FileInfo) { 0 };
-	return freed;
+	return File_queryFileObjectCount(loc, EFileType_Folder, isRecursive, res); 
 }
 
 typedef struct FileCounter {
-	FileType type;
+	EFileType type;
 	Bool useType;
 	U64 counter;
 } FileCounter;
@@ -361,7 +122,7 @@ Error countFileType(FileInfo info, FileCounter *counter) {
 	return Error_none();
 }
 
-Error File_queryFileObjectCount(String loc, FileType type, Bool isRecursive, U64 *res) {
+Error File_queryFileObjectCount(String loc, EFileType type, Bool isRecursive, U64 *res) {
 
 	Error err = Error_none();
 	String resolved = String_createNull();
@@ -382,7 +143,7 @@ Error File_queryFileObjectCount(String loc, FileType type, Bool isRecursive, U64
 		return Error_none();
 	}
 
-	_gotoIfError(clean, File_resolve(loc, &isVirtual, &resolved));
+	_gotoIfError(clean, File_resolvex(loc, &isVirtual, &resolved, 0));
 
 	//Normal counter for local files
 
@@ -416,7 +177,7 @@ Error File_queryFileObjectCountAll(String loc, Bool isRecursive, U64 *res) {
 		return Error_none();
 	}
 
-	_gotoIfError(clean, File_resolve(loc, &isVirtual, &resolved));
+	_gotoIfError(clean, File_resolvex(loc, &isVirtual, &resolved, 0));
 
 	//Normal counter for local files
 
@@ -429,7 +190,7 @@ clean:
 	return err;
 }
 
-Error File_add(String loc, FileType type, Ns maxTimeout) {
+Error File_add(String loc, EFileType type, Ns maxTimeout) {
 
 	String resolved = String_createNull();
 	StringList str = (StringList) { 0 };
@@ -446,7 +207,7 @@ Error File_add(String loc, FileType type, Ns maxTimeout) {
 		return Error_none();
 	}
 
-	_gotoIfError(clean, File_resolve(loc, &isVirtual, &resolved));
+	_gotoIfError(clean, File_resolvex(loc, &isVirtual, &resolved, 0));
 
 	err = File_getInfo(resolved, &info);
 
@@ -455,7 +216,7 @@ Error File_add(String loc, FileType type, Ns maxTimeout) {
 
 	if (!err.genericError) {
 		String_freex(&resolved);
-		FileInfo_free(&info);
+		FileInfo_freex(&info);
 		return Error_none();
 	}
 
@@ -464,7 +225,7 @@ Error File_add(String loc, FileType type, Ns maxTimeout) {
 	if(!err.genericError)
 		_gotoIfError(clean, info.type != type ? Error_alreadyDefined(0) : Error_none());
 
-	FileInfo_free(&info);
+	FileInfo_freex(&info);
 
 	//Check parent directories until none left
 
@@ -484,10 +245,10 @@ Error File_add(String loc, FileType type, Ns maxTimeout) {
 			if(err.genericError && err.genericError != EGenericError_NotFound)
 				_gotoIfError(clean, err);
 
-			if(info.type != FileType_Folder)
+			if(info.type != EFileType_Folder)
 				_gotoIfError(clean, Error_invalidOperation(2));
 
-			FileInfo_free(&info);
+			FileInfo_freex(&info);
 
 			if(!err.genericError)		//Already defined, continue to child
 				continue;
@@ -501,12 +262,12 @@ Error File_add(String loc, FileType type, Ns maxTimeout) {
 
 	//Create folder
 
-	if (type == FileType_Folder && mkdir(resolved.ptr))
+	if (type == EFileType_Folder && mkdir(resolved.ptr))
 		_gotoIfError(clean, Error_invalidOperation(0));
 
 	//Create file
 
-	if(type == FileType_File)
+	if(type == EFileType_File)
 		_gotoIfError(clean, File_write(Buffer_createNull(), resolved, maxTimeout));
 
 clean:
@@ -531,7 +292,7 @@ Error File_remove(String loc, Ns maxTimeout) {
 		return Error_none();
 	}
 
-	_gotoIfError(clean, File_resolve(loc, &isVirtual, &resolved));
+	_gotoIfError(clean, File_resolvex(loc, &isVirtual, &resolved, 0));
 
 	Ns maxTimeoutTry = U64_min((maxTimeout + 7) >> 2, 1 * SECOND);		//Try ~4x+ up to 1s of wait
 
@@ -557,18 +318,18 @@ clean:
 	return err;
 }
 
-Bool File_exists(String loc) {
+Bool File_has(String loc) {
 	FileInfo info = (FileInfo) { 0 };
 	Error err = File_getInfo(loc, &info);
-	FileInfo_free(&info);
+	FileInfo_freex(&info);
 	return !err.genericError;
 }
 
-Bool File_existsAsType(String loc, FileType type) {
+Bool File_hasType(String loc, EFileType type) {
 	FileInfo info = (FileInfo) { 0 };
 	Error err = File_getInfo(loc, &info);
 	Bool sameType = info.type == type;
-	FileInfo_free(&info);
+	FileInfo_freex(&info);
 	return !err.genericError && sameType;
 }
 
@@ -591,11 +352,11 @@ Error File_rename(String loc, String newFileName, Ns maxTimeout) {
 		return Error_none();
 	}
 
-	_gotoIfError(clean, File_resolve(loc, &isVirtual, &resolved));
+	_gotoIfError(clean, File_resolvex(loc, &isVirtual, &resolved, 0));
 
 	//Check if file exists
 
-	Bool fileExists = File_exists(loc);
+	Bool fileExists = File_has(loc);
 
 	if(!fileExists)
 		_gotoIfError(clean, Error_notFound(0, 0, 0));
@@ -619,7 +380,7 @@ Error File_rename(String loc, String newFileName, Ns maxTimeout) {
 		_gotoIfError(clean, Error_invalidState(0));
 
 clean:
-	FileInfo_free(&info);
+	FileInfo_freex(&info);
 	String_freex(&resolved);
 	return err;
 }
@@ -643,18 +404,18 @@ Error File_move(String loc, String directoryName, Ns maxTimeout) {
 		return Error_none();
 	}
 
-	_gotoIfError(clean, File_resolve(loc, &isVirtual, &resolved));
-	_gotoIfError(clean, File_resolve(directoryName, &isVirtual, &resolvedFile));
+	_gotoIfError(clean, File_resolvex(loc, &isVirtual, &resolved, 0));
+	_gotoIfError(clean, File_resolvex(directoryName, &isVirtual, &resolvedFile, 0));
 
 	if(isVirtual)
 		_gotoIfError(clean, Error_invalidOperation(0));
 
 	//Check if file exists
 
-	if(!File_exists(resolved))
+	if(!File_has(resolved))
 		_gotoIfError(clean, Error_notFound(0, 0, 0));
 
-	if(!File_folderExists(resolvedFile))
+	if(!File_hasFolder(resolvedFile))
 		_gotoIfError(clean, Error_notFound(0, 1, 0));
 
 	Ns maxTimeoutTry = U64_min((maxTimeout + 7) >> 2, 1 * SECOND);		//Try ~4x+ up to 1s of wait
@@ -684,7 +445,7 @@ Error File_move(String loc, String directoryName, Ns maxTimeout) {
 		_gotoIfError(clean, Error_invalidState(0));
 
 clean:
-	FileInfo_free(&info);
+	FileInfo_freex(&info);
 	String_freex(&resolved);
 	String_freex(&resolvedFile);
 	return err;
@@ -706,7 +467,7 @@ Error File_write(Buffer buf, String loc, Ns maxTimeout) {
 		return Error_none();
 	}
 
-	_gotoIfError(clean, File_resolve(loc, &isVirtual, &resolved));
+	_gotoIfError(clean, File_resolvex(loc, &isVirtual, &resolved, 0));
 
 	f = fopen(resolved.ptr, "wb");
 
@@ -759,7 +520,7 @@ Error File_read(String loc, Ns maxTimeout, Buffer *output) {
 		return Error_none();
 	}
 
-	_gotoIfError(clean, File_resolve(loc, &isVirtual, &resolved));
+	_gotoIfError(clean, File_resolvex(loc, &isVirtual, &resolved, 0));
 
 	f = fopen(resolved.ptr, "rb");
 
