@@ -27,6 +27,10 @@
 
 #endif
 
+Bool FileInfo_freex(FileInfo *fileInfo) {
+	return FileInfo_free(fileInfo, Platform_instance.alloc);
+}
+
 Error File_resolvex(String loc, Bool *isVirtual, U64 maxFilePathLimit, String *result) {
 	return File_resolve(
 		loc, isVirtual, 
@@ -57,7 +61,7 @@ Error File_getInfo(String loc, FileInfo *info) {
 		return Error_none();
 	}
 
-	_gotoIfError(clean, File_resolvex(loc, &isVirtual, &resolved, 0));
+	_gotoIfError(clean, File_resolvex(loc, &isVirtual, 0, &resolved));
 
 	struct stat inf = (struct stat) { 0 };
 
@@ -89,8 +93,6 @@ clean:
 	String_freex(&resolved);
 	return err;
 }
-
-Bool File_isVirtual(String loc) { return String_getAt(loc, 0) == '/' && String_getAt(loc, 1) == '/'; }
 
 Bool File_hasFile(String loc) { return File_hasType(loc, EFileType_File); }
 Bool File_hasFolder(String loc) { return File_hasType(loc, EFileType_Folder); }
@@ -143,7 +145,7 @@ Error File_queryFileObjectCount(String loc, EFileType type, Bool isRecursive, U6
 		return Error_none();
 	}
 
-	_gotoIfError(clean, File_resolvex(loc, &isVirtual, &resolved, 0));
+	_gotoIfError(clean, File_resolvex(loc, &isVirtual, 0, &resolved));
 
 	//Normal counter for local files
 
@@ -177,7 +179,7 @@ Error File_queryFileObjectCountAll(String loc, Bool isRecursive, U64 *res) {
 		return Error_none();
 	}
 
-	_gotoIfError(clean, File_resolvex(loc, &isVirtual, &resolved, 0));
+	_gotoIfError(clean, File_resolvex(loc, &isVirtual, 0, &resolved));
 
 	//Normal counter for local files
 
@@ -207,7 +209,7 @@ Error File_add(String loc, EFileType type, Ns maxTimeout) {
 		return Error_none();
 	}
 
-	_gotoIfError(clean, File_resolvex(loc, &isVirtual, &resolved, 0));
+	_gotoIfError(clean, File_resolvex(loc, &isVirtual, 0, &resolved));
 
 	err = File_getInfo(resolved, &info);
 
@@ -271,7 +273,7 @@ Error File_add(String loc, EFileType type, Ns maxTimeout) {
 		_gotoIfError(clean, File_write(Buffer_createNull(), resolved, maxTimeout));
 
 clean:
-	FileInfo_free(&info);
+	FileInfo_freex(&info);
 	String_freex(&resolved);
 	StringList_freex(&str);
 	return err;
@@ -292,7 +294,7 @@ Error File_remove(String loc, Ns maxTimeout) {
 		return Error_none();
 	}
 
-	_gotoIfError(clean, File_resolvex(loc, &isVirtual, &resolved, 0));
+	_gotoIfError(clean, File_resolvex(loc, &isVirtual, 0, &resolved));
 
 	Ns maxTimeoutTry = U64_min((maxTimeout + 7) >> 2, 1 * SECOND);		//Try ~4x+ up to 1s of wait
 
@@ -352,7 +354,7 @@ Error File_rename(String loc, String newFileName, Ns maxTimeout) {
 		return Error_none();
 	}
 
-	_gotoIfError(clean, File_resolvex(loc, &isVirtual, &resolved, 0));
+	_gotoIfError(clean, File_resolvex(loc, &isVirtual, 0, &resolved));
 
 	//Check if file exists
 
@@ -404,8 +406,8 @@ Error File_move(String loc, String directoryName, Ns maxTimeout) {
 		return Error_none();
 	}
 
-	_gotoIfError(clean, File_resolvex(loc, &isVirtual, &resolved, 0));
-	_gotoIfError(clean, File_resolvex(directoryName, &isVirtual, &resolvedFile, 0));
+	_gotoIfError(clean, File_resolvex(loc, &isVirtual, 0, &resolved));
+	_gotoIfError(clean, File_resolvex(directoryName, &isVirtual, 0, &resolvedFile));
 
 	if(isVirtual)
 		_gotoIfError(clean, Error_invalidOperation(0));
@@ -467,7 +469,7 @@ Error File_write(Buffer buf, String loc, Ns maxTimeout) {
 		return Error_none();
 	}
 
-	_gotoIfError(clean, File_resolvex(loc, &isVirtual, &resolved, 0));
+	_gotoIfError(clean, File_resolvex(loc, &isVirtual, 0, &resolved));
 
 	f = fopen(resolved.ptr, "wb");
 
@@ -520,7 +522,7 @@ Error File_read(String loc, Ns maxTimeout, Buffer *output) {
 		return Error_none();
 	}
 
-	_gotoIfError(clean, File_resolvex(loc, &isVirtual, &resolved, 0));
+	_gotoIfError(clean, File_resolvex(loc, &isVirtual, 0, &resolved));
 
 	f = fopen(resolved.ptr, "rb");
 

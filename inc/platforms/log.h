@@ -4,7 +4,7 @@
 
 typedef struct LogArgs {
 	U64 argc;
-	struct String const *args;
+	String const *args;
 } LogArgs;
 
 typedef enum ELogLevel {

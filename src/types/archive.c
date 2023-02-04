@@ -48,7 +48,7 @@ Bool Archive_getPath(
 	Bool isVirtual = false;
 	String resolvedPath = String_createNull();
 	
-	Error err = File_resolve(path, &isVirtual, 128, resolvedPath, alloc, &resolvedPath);
+	Error err = File_resolve(path, &isVirtual, 128, String_createNull(), alloc, &resolvedPath);
 
 	if(err.genericError)
 		return false;
@@ -105,7 +105,26 @@ Bool Archive_hasFolder(Archive *archive, String path, Allocator alloc) {
 	return entry.type == EFileType_Folder;
 }
 
-Bool Archive_createOrFindParent(Archive *archive, String path);
+Error Archive_add(Archive *archive, ArchiveEntry entry, Bool successIfExists, Allocator alloc);
+
+Bool Archive_createOrFindParent(Archive *archive, String path, Allocator alloc) {
+
+	//If it doesn't contain / then we are already at the root
+	//So we don't need to create a parent
+
+	String substr = String_createNull();
+	if (!String_cutBeforeLast(path, '/', EStringCase_Sensitive, &substr))
+		return true;
+
+	//Try to add parent (returns true if already exists)
+
+	ArchiveEntry entry = (ArchiveEntry) {
+		.path = substr,
+		.type = EFileType_Folder
+	};
+
+	return !Archive_add(archive, entry, true, alloc).genericError;
+}
 
 Error Archive_add(Archive *archive, ArchiveEntry entry, Bool successIfExists, Allocator alloc) {
 
@@ -123,14 +142,32 @@ Error Archive_add(Archive *archive, ArchiveEntry entry, Bool successIfExists, Al
 		goto clean;
 	}
 
+	//Resolve
+
+	Bool isVirtual = false;
+	_gotoIfError(clean, File_resolve(entry.path, &isVirtual, 128, String_createNull(), alloc, &resolved));
+
+	if (isVirtual)
+		_gotoIfError(clean, Error_unsupportedOperation(0));
+
+	String oldPath = entry.path;
+	entry.path = resolved;
+
 	//Try to find a parent or make one
 
-	if(!Archive_createOrFindParent(archive, entry.path))
+	if(!Archive_createOrFindParent(archive, entry.path, alloc))
 		_gotoIfError(clean, Error_notFound(0, 0, 0));
 
-	err = List_pushBack(&archive->entries, Buffer_createConstRef(&entry, sizeof(entry)), alloc);
+	_gotoIfError(clean, List_pushBack(&archive->entries, Buffer_createConstRef(&entry, sizeof(entry)), alloc));
+	resolved = String_createNull();
+
+	String_free(&oldPath, alloc);
 
 clean:
+
+	if (oldPath.length)
+		entry.path = oldPath;
+
 	String_free(&resolved, alloc);
 	return err;
 }
@@ -183,7 +220,7 @@ Error Archive_removeInternal(Archive *archive, String path, Allocator alloc, EFi
 
 		//Remove
 
-		for (U64 j = archive->entries.length - 1; j != U64_MAX; ++j) {
+		for (U64 j = archive->entries.length - 1; j != U64_MAX; --j) {
 
 			ArchiveEntry cai = ((ArchiveEntry*)archive->entries.ptr)[i];
 
@@ -209,7 +246,7 @@ Error Archive_removeInternal(Archive *archive, String path, Allocator alloc, EFi
 	Buffer_free(&entry.data, alloc);
 	String_free(&entry.path, alloc);
 
-	err = List_popLocation(&archive->entries, i, Buffer_createNull());
+	_gotoIfError(clean, List_popLocation(&archive->entries, i, Buffer_createNull()));
 	
 clean:
 	String_free(&resolved, alloc);
@@ -228,10 +265,60 @@ Error Archive_remove(Archive *archive, String path, Allocator alloc) {
 	return Archive_removeInternal(archive, path, alloc, EFileType_Invalid);
 }
 
-//TODO:
+Error Archive_rename(
+	Archive *archive, 
+	String loc, 
+	String newFileName,
+	Allocator alloc
+) {
 
-Error Archive_rename(Archive *archive, String loc, String newFileName, Ns maxTimeout);
-Error Archive_move(Archive *archive, String loc, String directoryName, Ns maxTimeout);
+	String resolvedLoc = String_createNull();
+	String resolvedFileName = String_createNull();
+	Error err = Error_none();
+
+	U64 i = 0;
+	if (!Archive_getPath(archive, loc, NULL, &i, &resolvedLoc, alloc))
+		return Error_invalidState(0);
+
+	Bool isVirtual = false;
+	_gotoIfError(clean, File_resolve(newFileName, &isVirtual, 128, String_createNull(), alloc, &resolvedFileName));
+
+	if (isVirtual)
+		_gotoIfError(clean, Error_unsupportedOperation(0));
+
+	//Check for same dir
+
+	String locBeg = String_createNull(), newFileNameBeg = String_createNull();
+
+	if (
+		String_cutBeforeLast(resolvedLoc, '/', EStringCase_Insensitive, &locBeg) !=
+		String_cutBeforeLast(resolvedFileName, '/', EStringCase_Insensitive, &newFileNameBeg)
+	)
+		return Error_invalidOperation(0);
+
+	if (locBeg.length && !String_equalsString(locBeg, newFileNameBeg, EStringCase_Insensitive))
+		return Error_invalidOperation(1);
+
+	//Rename 
+
+	String *prevPath = &((ArchiveEntry*)archive->entries.ptr)[i].path;
+
+	String_free(prevPath, alloc);
+	 *prevPath = resolvedFileName;
+	 resolvedFileName = String_createNull();
+
+clean:
+	String_free(&resolvedLoc, alloc);
+	String_free(&resolvedFileName, alloc);
+	return err;
+}
+
+Error Archive_move(
+	Archive *archive, 
+	String loc, 
+	String directoryName, 
+	Allocator alloc
+);
 
 Error Archive_getInfo(Archive *archive, String path, FileInfo *info, Allocator alloc) {
 
@@ -276,7 +363,7 @@ Error Archive_getFileDataInternal(
 	Bool isConst
 ) {
 
-	if (data)
+	if (!data)
 		return Error_nullPointer(2, 0);
 
 	ArchiveEntry entry = (ArchiveEntry) { 0 };
@@ -365,7 +452,7 @@ Error Archive_foreach(
 		};
 
 		if (cai.type == EFileType_File) {
-			info.access = Buffer_isConstData(cai.data) ? FileAccess_Read : FileAccess_ReadWrite,
+			info.access = Buffer_isConstRef(cai.data) ? FileAccess_Read : FileAccess_ReadWrite,
 			info.fileSize = Buffer_length(cai.data);
 			info.timestamp = cai.timestamp;
 		}
@@ -436,4 +523,3 @@ Error Archive_queryFolderCount(
 ) { 
 	return Archive_queryFileObjectCount(archive, loc, EFileType_Folder, isRecursive, res, alloc); 
 }
-

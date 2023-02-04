@@ -38,8 +38,19 @@ Error Archive_removeFile(Archive *archive, String path, Allocator alloc);
 Error Archive_removeFolder(Archive *archive, String path, Allocator alloc);
 Error Archive_remove(Archive *archive, String path, Allocator alloc);
 
-Error Archive_rename(Archive *archive, String loc, String newFileName, Ns maxTimeout);
-Error Archive_move(Archive *archive, String loc, String directoryName, Ns maxTimeout);
+Error Archive_rename(
+	Archive *archive, 
+	String loc, 
+	String newFileName, 
+	Allocator alloc
+);
+
+Error Archive_move(
+	Archive *archive, 
+	String loc, 
+	String directoryName, 
+	Allocator alloc
+);
 
 Error Archive_getInfo(Archive *archive, String loc, FileInfo *info, Allocator alloc);
 

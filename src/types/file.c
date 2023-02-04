@@ -1,7 +1,8 @@
-#include "types/math.h"
+#include "math/math.h"
 #include "types/string.h"
 #include "types/allocator.h"
-#include "formats/file.h"
+#include "types/file.h"
+#include "types/error.h"
 
 Bool FileInfo_free(FileInfo *info, Allocator alloc) {
 
@@ -13,7 +14,16 @@ Bool FileInfo_free(FileInfo *info, Allocator alloc) {
 	return freed;
 }
 
-Error File_resolve(String loc, Bool *isVirtual, U64 maxFilePathLimit, Allocator alloc, String *result) {
+Bool File_isVirtual(String loc) { return String_getAt(loc, 0) == '/' && String_getAt(loc, 1) == '/'; }
+
+Error File_resolve(
+	String loc, 
+	Bool *isVirtual, 
+	U64 maxFilePathLimit, 
+	String absoluteDir, 
+	Allocator alloc, 
+	String *result
+) {
 
 	if(result && result->ptr)
 		return Error_invalidOperation(0);
@@ -192,7 +202,7 @@ Error File_resolve(String loc, Bool *isVirtual, U64 maxFilePathLimit, Allocator 
 
 	if ((err = StringList_concat(res, '/', alloc, &tmp)).genericError) {
 		res.length = realSplitLen;
-		StringList_freex(&res);
+		StringList_free(&res, alloc);
 	}
 
 	String_free(result, alloc);		//This can't be done before concat, because the string is still in use.
@@ -239,7 +249,7 @@ Error File_resolve(String loc, Bool *isVirtual, U64 maxFilePathLimit, Allocator 
 		maxFilePathLimit = 260;
 
 	#ifdef _WIN32
-		maxFilePathLimit = U64_min(MAX_PATH, maxFilePathLimit);		/* MAX_PATH */
+		maxFilePathLimit = U64_min(260, maxFilePathLimit);		/* MAX_PATH */
 	#endif
 
 	if(result->length >= maxFilePathLimit)

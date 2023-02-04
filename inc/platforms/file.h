@@ -24,7 +24,7 @@ typedef struct Error Error;
 Error File_getInfo(String loc, FileInfo *info);
 Error File_resolvex(String loc, Bool *isVirtual, U64 maxFilePathLimit, String *result);
 
-Bool File_isVirtual(String loc);
+Bool FileInfo_freex(FileInfo *fileInfo);
 
 Error File_foreach(String loc, FileCallback callback, void *userData, Bool isRecursive);
 

@@ -38,4 +38,6 @@ Error File_resolve(
 	String *result
 );
 
+Bool File_isVirtual(String loc);
+
 Bool FileInfo_free(FileInfo *info, Allocator alloc);

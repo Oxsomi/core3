@@ -1,5 +1,5 @@
 #include "types/error.h"
-#include "types/file.h"
+#include "platforms/file.h"
 #include "platforms/ext/stringx.h"
 
 #define WIN32_LEAN_AND_MEAN
@@ -26,7 +26,7 @@ Error File_foreach(String loc, FileCallback callback, void *userData, Bool isRec
 		return Error_none();
 	}
 
-	_gotoIfError(clean, File_resolvex(loc, &isVirtual, &resolved, 0));
+	_gotoIfError(clean, File_resolvex(loc, &isVirtual, 0, &resolved));
 
 	if(isVirtual)
 		_gotoIfError(clean, Error_invalidOperation(0));

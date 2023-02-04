@@ -1,7 +1,7 @@
 #include "platforms/window.h"
 #include "platforms/platform.h"
 #include "platforms/thread.h"
-#include "types/file.h"
+#include "platforms/file.h"
 #include "types/error.h"
 #include "types/buffer.h"
 #include "types/string.h"
