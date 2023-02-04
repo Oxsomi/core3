@@ -273,52 +273,68 @@ Error Archive_rename(
 ) {
 
 	String resolvedLoc = String_createNull();
-	String resolvedFileName = String_createNull();
 	Error err = Error_none();
+
+	if (!String_isValidFileName(newFileName, true))
+		return Error_invalidParameter(1, 0, 0);
 
 	U64 i = 0;
 	if (!Archive_getPath(archive, loc, NULL, &i, &resolvedLoc, alloc))
-		return Error_invalidState(0);
-
-	Bool isVirtual = false;
-	_gotoIfError(clean, File_resolve(newFileName, &isVirtual, 128, String_createNull(), alloc, &resolvedFileName));
-
-	if (isVirtual)
-		_gotoIfError(clean, Error_unsupportedOperation(0));
-
-	//Check for same dir
-
-	String locBeg = String_createNull(), newFileNameBeg = String_createNull();
-
-	if (
-		String_cutBeforeLast(resolvedLoc, '/', EStringCase_Insensitive, &locBeg) !=
-		String_cutBeforeLast(resolvedFileName, '/', EStringCase_Insensitive, &newFileNameBeg)
-	)
-		return Error_invalidOperation(0);
-
-	if (locBeg.length && !String_equalsString(locBeg, newFileNameBeg, EStringCase_Insensitive))
-		return Error_invalidOperation(1);
+		return Error_notFound(0, 1, 0);
 
 	//Rename 
 
 	String *prevPath = &((ArchiveEntry*)archive->entries.ptr)[i].path;
+	String subStr = String_createNull();
 
-	String_free(prevPath, alloc);
-	 *prevPath = resolvedFileName;
-	 resolvedFileName = String_createNull();
+	String_cutAfterLast(*prevPath, '/', EStringCase_Sensitive, &subStr);
+	prevPath->length = subStr.length;
+
+	_gotoIfError(clean, String_appendString(prevPath, newFileName, alloc));
 
 clean:
 	String_free(&resolvedLoc, alloc);
-	String_free(&resolvedFileName, alloc);
 	return err;
 }
 
 Error Archive_move(
-	Archive *archive, 
-	String loc, 
-	String directoryName, 
+	Archive *archive,
+	String loc,
+	String directoryName,
 	Allocator alloc
-);
+) {
+
+	String resolved = String_createNull();
+	U64 i = 0;
+	ArchiveEntry parent = (ArchiveEntry) { 0 };
+
+	if (!Archive_getPath(archive, loc, NULL, &i, NULL, alloc))
+		return Error_notFound(0, 1, 0);
+
+	if (!Archive_getPath(archive, directoryName, &parent, NULL, &resolved, alloc))
+		return Error_notFound(0, 2, 0);
+
+	Error err = Error_none();
+
+	if (parent.type != EFileType_Folder)
+		_gotoIfError(clean, Error_invalidOperation(0));
+
+	String *filePath = &((ArchiveEntry*)archive->entries.ptr)[i].path;
+
+	U64 v = String_findLast(*filePath, '/', EStringCase_Sensitive);
+
+	if (v != U64_MAX)
+		_gotoIfError(clean, String_popFrontCount(filePath, v + 1));
+
+	if (directoryName.length) {
+		_gotoIfError(clean, String_insert(filePath, '/', 0, alloc));
+		_gotoIfError(clean, String_insertString(filePath, directoryName, 0, alloc));
+	}
+
+clean:
+	String_free(&resolved, alloc);
+	return err;
+}
 
 Error Archive_getInfo(Archive *archive, String path, FileInfo *info, Allocator alloc) {
 

@@ -145,45 +145,6 @@ Error File_resolve(
 			_gotoIfError(clean, Error_invalidParameter(0, 0, 1));
 		}
 
-		//Validation to make sure we're not using weird legacy MS DOS keywords
-		//Because these will not be writable correctly!
-
-		if(String_equalsString(
-			res.ptr[i], String_createConstRefUnsafe("CON"), EStringCase_Insensitive
-		))
-			_gotoIfError(clean, Error_invalidParameter(0, 0, 2));
-
-		if(String_equalsString(
-			res.ptr[i], String_createConstRefUnsafe("AUX"), EStringCase_Insensitive
-		))
-			_gotoIfError(clean, Error_invalidParameter(0, 0, 3));
-
-		if(String_equalsString(
-			res.ptr[i], String_createConstRefUnsafe("NUL"), EStringCase_Insensitive
-		))
-			_gotoIfError(clean, Error_invalidParameter(0, 0, 4));
-
-		if(String_equalsString(
-			res.ptr[i], String_createConstRefUnsafe("PRN"), EStringCase_Insensitive
-		))
-			_gotoIfError(clean, Error_invalidParameter(0, 0, 5));
-
-		if(
-			String_startsWithString(
-				res.ptr[i], String_createConstRefUnsafe("COM"), EStringCase_Insensitive
-			) &&
-			res.ptr[i].length == 4 && C8_isDec(res.ptr[i].ptr[3])
-		)
-			_gotoIfError(clean, Error_invalidParameter(0, 0, 6));
-
-		if(
-			String_startsWithString(
-				res.ptr[i], String_createConstRefUnsafe("LPT"), EStringCase_Insensitive
-			) &&
-			res.ptr[i].length == 4 && C8_isDec(res.ptr[i].ptr[3])
-		)
-			_gotoIfError(clean, Error_invalidParameter(0, 0, 7));
-
 		//Continue processing the path until it's done
 
 		continue;

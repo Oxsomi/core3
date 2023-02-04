@@ -53,6 +53,36 @@ Bool String_isValidFileName(String str, Bool acceptTrailingNull) {
 	for(U64 i = 0; i < str.length; ++i)
 		if(!C8_isValidFileName(str.ptr[i]) && !(i == str.length - 1 && !str.ptr[i] && acceptTrailingNull))
 			return false;
+	
+	Bool hasTrailingNull = acceptTrailingNull && str.length && str.ptr[str.length - 1] == '\0';
+
+	//Validation to make sure we're not using weird legacy MS DOS keywords
+	//Because these will not be writable correctly!
+
+	if (str.length == 3 + hasTrailingNull ) {
+
+		if(
+			String_startsWithString(str, String_createConstRefUnsafe("CON"), EStringCase_Insensitive) ||
+			String_startsWithString(str, String_createConstRefUnsafe("AUX"), EStringCase_Insensitive) ||
+			String_startsWithString(str, String_createConstRefUnsafe("NUL"), EStringCase_Insensitive) ||
+			String_startsWithString(str, String_createConstRefUnsafe("PRN"), EStringCase_Insensitive)
+		)
+			return false;
+	}
+
+	else if (str.length == 4 + hasTrailingNull) {
+
+		if(
+			(
+				String_startsWithString(str, String_createConstRefUnsafe("COM"), EStringCase_Insensitive) ||
+				String_startsWithString(str, String_createConstRefUnsafe("LPT"), EStringCase_Insensitive)
+			) &&
+			C8_isDec(str.ptr[3])
+		)
+			return false;
+	}
+
+	//If string is not empty then it's a valid string
 
 	return str.length;
 }
