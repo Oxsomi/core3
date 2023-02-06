@@ -61,7 +61,10 @@ Bool Archive_getPath(
 	//TODO: Optimize this with a hashmap
 
 	for(U64 i = 0; i < archive->entries.length; ++i)
-		if (String_equalsString(((ArchiveEntry*)archive->entries.ptr)[i].path, resolvedPath, EStringCase_Insensitive)) {
+		if (String_equalsString(
+			((ArchiveEntry*)archive->entries.ptr)[i].path, resolvedPath, 
+			EStringCase_Insensitive, true
+		)) {
 
 			if(entryOut && !entryOut->path.length)
 				*entryOut = ((ArchiveEntry*)archive->entries.ptr)[i];
@@ -113,7 +116,7 @@ Bool Archive_createOrFindParent(Archive *archive, String path, Allocator alloc) 
 	//So we don't need to create a parent
 
 	String substr = String_createNull();
-	if (!String_cutBeforeLast(path, '/', EStringCase_Sensitive, &substr))
+	if (!String_cutAfterLast(path, '/', EStringCase_Sensitive, &substr))
 		return true;
 
 	//Try to add parent (returns true if already exists)
@@ -133,6 +136,7 @@ Error Archive_add(Archive *archive, ArchiveEntry entry, Bool successIfExists, Al
 	String resolved = String_createNull();
 	ArchiveEntry out = (ArchiveEntry) { 0 };
 	Error err = Error_none();
+	String oldPath = String_createNull();
 
 	if (Archive_getPath(archive, entry.path, &out, NULL, &resolved, alloc)) {
 
@@ -150,7 +154,7 @@ Error Archive_add(Archive *archive, ArchiveEntry entry, Bool successIfExists, Al
 	if (isVirtual)
 		_gotoIfError(clean, Error_unsupportedOperation(0));
 
-	String oldPath = entry.path;
+	oldPath = entry.path;
 	entry.path = resolved;
 
 	//Try to find a parent or make one

@@ -1,9 +1,9 @@
 #include "types/error.h"
 #include "types/list.h"
 #include "types/buffer.h"
-#include "types/file.h"
 #include "formats/oiDL.h"
 #include "platforms/log.h"
+#include "platforms/file.h"
 #include "platforms/ext/listx.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/ext/formatx.h"
@@ -13,7 +13,7 @@
 
 Error addFileToDLFile(FileInfo file, List *names) {
 
-	if (file.type == FileType_Folder)
+	if (file.type == EFileType_Folder)
 		return Error_none();
 
 	Error err;
@@ -104,7 +104,7 @@ Bool _CLI_convertToDL(ParsedArgs args, String input, FileInfo inputInfo, String 
 	//Validate if string and split string by endline
 	//Merge that into a file
 
-	if (inputInfo.type == FileType_File) {
+	if (inputInfo.type == EFileType_File) {
 
 		_gotoIfError(clean, File_read(input, 1 * SECOND, &buf));
 
@@ -295,7 +295,7 @@ Bool _CLI_convertFromDL(ParsedArgs args, String input, FileInfo inputInfo, Strin
 
 	//TODO: Batch multiple files
 
-	if (inputInfo.type != FileType_File) {
+	if (inputInfo.type != EFileType_File) {
 		Log_debug(String_createConstRefUnsafe("oiDL can only be converted from single file"), ELogOptions_NewLine);
 		return false;
 	}
@@ -317,7 +317,7 @@ Bool _CLI_convertFromDL(ParsedArgs args, String input, FileInfo inputInfo, Strin
 
 	//Write file
 
-	FileType type = FileType_Folder;
+	EFileType type = EFileType_Folder;
 	String txt = String_createConstRefUnsafe(".txt");
 
 	if(
@@ -327,14 +327,14 @@ Bool _CLI_convertFromDL(ParsedArgs args, String input, FileInfo inputInfo, Strin
 		) &&
 		file.settings.dataType == EDLDataType_Ascii
 	)
-		type = FileType_File;
+		type = EFileType_File;
 
 	_gotoIfError(clean, File_add(output, type, 1 * SECOND));
 	didMakeFile = true;
 
 	//Write it as a folder
 
-	if(type == FileType_Folder) {
+	if(type == EFileType_Folder) {
 
 		//Append / as base so it's easier to append per file later
 

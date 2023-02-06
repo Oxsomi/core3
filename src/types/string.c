@@ -1317,7 +1317,13 @@ U64 String_findLastString(String s, String other, EStringCase casing) {
 	return i;
 }
 
-Bool String_equalsString(String s, String other, EStringCase caseSensitive) {
+Bool String_equalsString(String s, String other, EStringCase caseSensitive, Bool ignoreNull) {
+
+	if (ignoreNull && s.length && !s.ptr[s.length - 1])
+		--s.length;
+
+	if (ignoreNull && other.length && !other.ptr[other.length - 1])
+		--other.length;
 
 	if (s.length != other.length)
 		return false;
@@ -1332,7 +1338,11 @@ Bool String_equalsString(String s, String other, EStringCase caseSensitive) {
 	return true;
 }
 
-Bool String_equals(String s, C8 c, EStringCase caseSensitive) {
+Bool String_equals(String s, C8 c, EStringCase caseSensitive, Bool ignoreNull) {
+
+	if (ignoreNull && s.length && !s.ptr[s.length - 1])
+		--s.length;
+
 	return s.length == 1 && s.ptr && 
 		C8_transform(s.ptr[0], (EStringTransform) caseSensitive) == 
 		C8_transform(c, (EStringTransform) caseSensitive);
@@ -1670,22 +1680,41 @@ Bool String_cut(String s, U64 offset, U64 length, String *result) {
 	return true;
 }
 
-Bool String_cutAfter(String s, C8 c, EStringCase caseSensitive, Bool isFirst, String *result) {
+Bool String_cutAfter(
+	String s, 
+	C8 c, 
+	EStringCase caseSensitive, 
+	Bool isFirst, 
+	String *result
+) {
 
 	if (!result)
 		return false;
 
 	U64 found = isFirst ? String_findFirst(s, c, caseSensitive) : String_findLast(s, c, caseSensitive);
+
+	if (found == s.length)
+		return false;
+
 	return String_cut(s, 0, found, result);
 }
 
-Bool String_cutAfterString(String s, String other, EStringCase caseSensitive, Bool isFirst, String *result) {
+Bool String_cutAfterString(
+	String s, 
+	String other, 
+	EStringCase caseSensitive, 
+	Bool isFirst, 
+	String *result
+) {
 
 	if (!result)
 		return false;
 
 	U64 found = isFirst ? String_findFirstString(s, other, caseSensitive) : 
 		String_findLastString(s, other, caseSensitive);
+
+	if (found == s.length)
+		return false;
 
 	return String_cut(s, 0, found, result);
 }

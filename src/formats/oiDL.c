@@ -127,6 +127,13 @@ Error DLFile_addEntryAscii(DLFile *dlFile, String entryStr, Allocator alloc) {
 	if(dlFile->settings.dataType != EDLDataType_Ascii)
 		return Error_invalidOperation(0);
 
+	//Decrease length if null terminator is included.
+
+	if (entryStr.length && !entryStr.ptr[entryStr.length - 1])
+		--entryStr.length;
+
+	//
+
 	if(!String_isValidAscii(entryStr))
 		return Error_invalidParameter(1, 0, 0);
 

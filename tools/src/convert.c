@@ -3,6 +3,7 @@
 #include "platforms/log.h"
 #include "platforms/ext/errorx.h"
 #include "platforms/ext/stringx.h"
+#include "platforms/file.h"
 #include "cli.h"
 
 Bool _CLI_convert(ParsedArgs args, Bool isTo) {
@@ -48,7 +49,7 @@ Bool _CLI_convert(ParsedArgs args, Bool isTo) {
 		return false;
 	}
 
-	if (!(f.flags & EFormatFlags_SupportFiles) && info.type == FileType_File) {
+	if (!(f.flags & EFormatFlags_SupportFiles) && info.type == EFileType_File) {
 
 		Log_error(
 			String_createConstRefUnsafe("Invalid file passed to convertTo. Only accepting folders."), 
@@ -58,7 +59,7 @@ Bool _CLI_convert(ParsedArgs args, Bool isTo) {
 		return false;
 	}
 
-	if (!(f.flags & EFormatFlags_SupportFolders) && info.type == FileType_Folder) {
+	if (!(f.flags & EFormatFlags_SupportFolders) && info.type == EFileType_Folder) {
 
 		Log_error(
 			String_createConstRefUnsafe("Invalid folder passed to convertTo. Only accepting files."), 
@@ -113,22 +114,36 @@ Bool _CLI_convert(ParsedArgs args, Bool isTo) {
 
 	//Now convert it
 
+	Bool success = false;
+
 	switch (args.format) {
 
 		case EFormat_oiDL: 
 
 			if(isTo)
-				_CLI_convertToDL(args, inputArg, info, outputArg, encryptionKey);
+				success = _CLI_convertToDL(args, inputArg, info, outputArg, encryptionKey);
 
-			else _CLI_convertFromDL(args, inputArg, info, outputArg, encryptionKey);
+			else success = _CLI_convertFromDL(args, inputArg, info, outputArg, encryptionKey);
 
 			break;
 
-		//TODO: oiCA
+		case EFormat_oiCA: 
+
+			if(isTo)
+				success = _CLI_convertToCA(args, inputArg, info, outputArg, encryptionKey);
+
+			//else _CLI_convertFromCA(args, inputArg, info, outputArg, encryptionKey);	TODO:
+
+			break;
 		
 		default:
 			Log_debug(String_createConstRefUnsafe("Unimplemented format"), ELogOptions_NewLine);
 			return false;
+	}
+
+	if (!success) {
+		Log_error(String_createConstRefUnsafe("File conversion failed!"), ELogOptions_NewLine);
+		return false;
 	}
 
 	//Tell CLI users

@@ -98,7 +98,7 @@ Error File_resolve(
 
 		if(
 			(String_isEmpty(res.ptr[i]) && i && !*isVirtual) ||
-			String_equals(res.ptr[i], '.', EStringCase_Sensitive)
+			String_equals(res.ptr[i], '.', EStringCase_Sensitive, true)
 		) {
 
 			//Move to left
@@ -113,7 +113,7 @@ Error File_resolve(
 
 		//In this case, we have to pop StringList[j], so that's only possible if that's still there
 
-		if (String_equalsString(res.ptr[i], back, EStringCase_Sensitive)) {
+		if (String_equalsString(res.ptr[i], back, EStringCase_Sensitive, true)) {
 
 			if(!i) {
 				res.length = realSplitLen;

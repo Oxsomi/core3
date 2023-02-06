@@ -563,114 +563,167 @@ Error List_eraseAllIndices(List *list, List indices) {
 //Uses about 8KB of cache on stack to hopefully sort quite quickly.
 //Does mean that this can only be used for lists < 8KB.
 
-#define TList_insertionSort(T) Bool List_##T##_insertionSort(List list) {						\
-																								\
-	U8 sorted[8192];		/* for U8[8192] -> U64[1024]. Fits neatly into cache */				\
-																								\
-	const T *tarr = (const T*) List_ptrConst(list, 0);											\
-	T *tsorted = (T*) sorted;																	\
-																								\
-	*tsorted = *tarr;	/* Init first element */												\
-																								\
-	for(U64 j = 1; j < list.length; ++j) {														\
-																								\
-		T t = tarr[j];																			\
-		U64 k = 0;																				\
-																								\
-		/* Check everything that came before us for order */									\
-																								\
-		for(; k < j; ++k)																		\
-			if (t < tsorted[k]) {																\
-																								\
-				/* Move to the right */															\
-																								\
-				for (U64 l = j; l != k; --l)													\
-					tsorted[l] = tsorted[l - 1];												\
-																								\
-				break;																			\
-			}																					\
-																								\
-		/* Now that everything's moved, we can insert ourselves */								\
-																								\
-		tsorted[k] = t;																			\
-	}																							\
-																								\
-	Buffer_copy(List_buffer(list), Buffer_createConstRef(sorted, sizeof(sorted)));				\
-	return true;																				\
+inline Bool List_insertionSort8K(List list, CompareFunction func) {
+
+	//for U8[8192] -> U64[1024]. Fits neatly into cache.
+	//For bigger objects, qsort should probably be used.
+
+	U8 sorted[8192];
+
+	const U8 *tarr = List_ptrConst(list, 0);
+	U8 *tsorted = sorted;
+
+	//Init first element
+	Buffer_copy(Buffer_createRef(tsorted, list.stride), Buffer_createConstRef(tarr, list.stride));
+
+	for(U64 j = 1; j < list.length; ++j) {
+
+		const U8 *t = tarr + j * list.stride;
+		U64 k = 0;
+
+		//Check everything that came before us for order
+
+		for (; k < j; ++k) {
+
+			if (func(t, tsorted + k * list.stride) != ECompareResult_Lt)		//!isLess
+				continue;
+
+			//Move to the right
+
+			for (U64 l = j; l != k; --l)
+				Buffer_copy(
+					Buffer_createRef(tsorted + l * list.stride, list.stride),
+					Buffer_createConstRef(tsorted + (l - 1) * list.stride, list.stride)
+				);
+
+			break;
+		}
+
+		//Now that everything's moved, we can insert ourselves
+
+		Buffer_copy(
+			Buffer_createRef(tsorted + k * list.stride, list.stride), 
+			Buffer_createConstRef(t, list.stride)
+		);
+	}
+
+	Buffer_copy(List_buffer(list), Buffer_createConstRef(sorted, sizeof(sorted)));
+	return true;
+}
+
+#define TList_tsort(T)																		\
+ECompareResult sort##T(const T *a, const T *b) {											\
+	return *a < *b ? ECompareResult_Lt : (*a > *b ? ECompareResult_Gt : ECompareResult_Eq); \
 }
 
 #define TList_sorts(f) f(U64); f(I64); f(U32); f(I32); f(U16); f(I16); f(U8); f(I8); f(F32);
 
-TList_sorts(TList_insertionSort);
+TList_sorts(TList_tsort);
 
 //https://stackoverflow.com/questions/33884057/quick-sort-stackoverflow-error-for-large-arrays
 //qsort U64 should be taking about ~76ms / 1M elem and ~13ms / 1M (sorted)
 //qsort U8 should be taking about half the time for unsorted because of cache speedups
 //Expect F32 sorting to be at least 2x to 5x slower
 
-#define TList_quickSort(T)																\
-																						\
-inline U64 List_##T##_qpartition(List list, U64 begin, U64 last) {						\
-																						\
-	T t = *((const T*)list.ptr + (begin + last) / 2);									\
-	U64 i = begin - 1, j = last + 1;													\
-																						\
-	while (true) {																		\
-																						\
-		while(++i < last && *((const T*)list.ptr + i) < t);								\
-		while(--j > begin && *((const T*)list.ptr + j) > t);							\
-																						\
-		if(i < j) {																		\
-			T temp = *((const T*)list.ptr + i);											\
-			*((T*)list.ptr + i) = *((const T*)list.ptr + j);							\
-			*((T*)list.ptr + j) = temp;													\
-		}																				\
-																						\
-		else return j;																	\
-	}																					\
-}																						\
-																						\
-inline Bool List_##T##_qsortRecurse(List list, U64 begin, U64 end) {					\
-																						\
-	if(begin >> 63 || end >> 63)														\
-		return false;																	\
-																						\
-	while(begin < end && end != U64_MAX) {												\
-																						\
-		U64 pivot = List_##T##_qpartition(list, begin, end);							\
-																						\
-		if ((I64)pivot - begin <= (I64)end - (pivot + 1)) {								\
-			List_##T##_qsortRecurse(list, begin, pivot);								\
-			begin = pivot + 1;															\
-			continue;																	\
-		}																				\
-																						\
-		List_##T##_qsortRecurse(list, pivot + 1, end);									\
-		end = pivot;																	\
-	}																					\
-																						\
-	return true;																		\
-}																						\
-																						\
-inline Bool List_##T##_qsort(List list) { return List_##T##_qsortRecurse(list, 0, list.length - 1); }
+inline U64 List_qpartition(List list, U64 begin, U64 last, CompareFunction f) {
 
-TList_sorts(TList_quickSort);
+	U8 tmp[1024 * 2];		//We only support 1024 stride lists. We don't want to allocate
 
-#define TList_sort(T) 																	\
-Bool List_sort##T(List list) {															\
-																						\
-	if(list.length <= 1)																\
-		return true;																	\
-																						\
-	if(List_isConstRef(list))															\
-		return false;																	\
-																						\
-	if(List_bytes(list) <= 8192)														\
-		return List_##T##_insertionSort(list);											\
-																						\
-	return List_##T##_qsort(list);														\
+	Buffer_copy(
+		Buffer_createRef(tmp, 1024),
+		Buffer_createConstRef(
+			list.ptr + (begin + last) / 2 * list.stride,
+			list.stride
+		)
+	);
+
+	U64 i = begin - 1, j = last + 1;
+
+	while (true) {
+
+		while(++i < last && f(list.ptr + i * list.stride, tmp) == ECompareResult_Lt);
+		while(--j > begin && f(list.ptr + j * list.stride, tmp) == ECompareResult_Gt);
+
+		if(i < j) {
+
+			Buffer_copy(
+				Buffer_createRef(tmp + 1024, 1024),
+				Buffer_createConstRef(
+					list.ptr + i * list.stride,
+					list.stride
+				)
+			);
+
+			Buffer_copy(
+				Buffer_createRef(
+					list.ptr + i * list.stride,
+					list.stride
+				),
+				Buffer_createConstRef(
+					list.ptr + j * list.stride,
+					list.stride
+				)
+
+			);
+
+			Buffer_copy(
+				Buffer_createRef(
+					list.ptr + j * list.stride,
+					list.stride
+				),
+				Buffer_createConstRef(tmp + 1024, 1024)
+			);
+		}
+
+		else return j;
+	}
 }
 
+inline Bool List_qsortRecurse(List list, U64 begin, U64 end, CompareFunction f) {
+
+	if(begin >> 63 || end >> 63)
+		return false;
+
+	while(begin < end && end != U64_MAX) {
+
+		U64 pivot = List_qpartition(list, begin, end, f);
+
+		if (pivot == U64_MAX)		//Does return a modified array, but it's not fully sorted
+			return false;
+
+		if ((I64)pivot - begin <= (I64)end - (pivot + 1)) {
+			List_qsortRecurse(list, begin, pivot, f);
+			begin = pivot + 1;
+			continue;
+		}
+
+		List_qsortRecurse(list, pivot + 1, end, f);
+		end = pivot;
+	}
+
+	return true;
+}
+
+inline Bool List_qsort(List list, CompareFunction f) { return List_qsortRecurse(list, 0, list.length - 1, f); }
+
+Bool List_sortCustom(List list, CompareFunction f) {
+
+	if(list.length <= 1)
+		return true;
+
+	if(list.stride >= 1024)			//Current limitation, because we don't allocate.
+		return false;
+
+	if(List_isConstRef(list))
+		return false;
+
+	if(List_bytes(list) <= 8192)
+		return List_insertionSort8K(list, f);
+
+	return List_qsort(list, f);
+}
+
+#define TList_sort(T) Bool List_sort##T(List l) { return List_sortCustom(l, sort##T); }
 TList_sorts(TList_sort);
 
 Error List_eraseFirst(List *list, Buffer buf, U64 offset) {

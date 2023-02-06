@@ -1,44 +1,57 @@
 #include "cli.h"
-
-/* TODO: CAFile
+#include "formats/oiCA.h"
+#include "types/error.h"
+#include "types/buffer.h"
+#include "platforms/file.h"
+#include "platforms/ext/stringx.h"
+#include "platforms/ext/archivex.h"
+#include "platforms/ext/formatx.h"
+#include "platforms/ext/bufferx.h"
 
 typedef struct CAFileRecursion {
-	CAFile *file;
+	Archive *archive;
 	String root;
 } CAFileRecursion;
 
 Error addFileToCAFile(FileInfo file, CAFileRecursion *caFile) {
 
-	String subPath;
+	String subPath = String_createNull();
 	
-	if(!String_cut(file.path, caFile->root.length + 1, 0, &subPath))
+	if(!String_cut(file.path, caFile->root.length, 0, &subPath))
 		return Error_invalidState(0);
 
 	ArchiveEntry entry = (ArchiveEntry) {
 		.path = subPath,
-		.isFolder = file.type == FileType_Folder,
+		.type = file.type,
 		.timestamp = file.timestamp
 	};
 
-	Error err;
+	Error err = Error_none();
+	String copy = String_createNull();
 
-	if (!entry.isFolder && (err = File_read(file.path, &entry.data)).genericError)
-		return err;
+	if (entry.type == EFileType_File)
+		_gotoIfError(clean, File_read(file.path, 1 * SECOND, &entry.data));
 
-	if((err = CAFile_addEntryx(caFile->file, entry)).genericError) {
-		Buffer_freex(&entry.data);
-		return err;
-	}
+	_gotoIfError(clean, String_createCopyx(entry.path, &copy));
+
+	if (file.type == EFileType_File)
+		_gotoIfError(clean, Archive_addFilex(caFile->archive, copy, entry.data, entry.timestamp))
+
+	else _gotoIfError(clean, Archive_addDirectoryx(caFile->archive, copy));
 
 	return Error_none();
+
+clean:
+	Buffer_freex(&entry.data);
+	String_freex(&copy);
+	return err;
 }
-*/
 
-/*
+Bool _CLI_convertToCA(ParsedArgs args, String input, FileInfo inputInfo, String output, U32 encryptionKey[8]) {
 
-case EFormat_oiCA: {
+	//TODO: Compression type
 
-	CASettings settings = (CASettings) { .compressionType = EDLCompressionType_Brotli11 };
+	CASettings settings = (CASettings) { .compressionType = EXXCompressionType_None };
 
 	//Dates
 
@@ -53,16 +66,16 @@ case EFormat_oiCA: {
 	if(args.flags & EOperationFlags_SHA256)
 		settings.flags |= ECASettingsFlags_UseSHA256;
 
-	if(args.parameters & EOperationHasParameter_AES)
-		settings.encryptionType = ECAEncryptionType_AES256;
+	//if(args.parameters & EOperationHasParameter_AES)					TODO: Encryption
+		//settings.encryptionType = EXXEncryptionType_AES256GCM;
 
 	//Compression type
 
 	if(args.flags & EOperationFlags_Uncompressed)
-		settings.compressionType = ECACompressionType_None;
+		settings.compressionType = EXXCompressionType_None;
 
-	else if(args.flags & EOperationFlags_FastCompress)
-		settings.compressionType = ECACompressionType_Brotli1;
+	//else if(args.flags & EOperationFlags_FastCompress)				TODO:
+	//	settings.compressionType = ECACompressionType_Brotli1;
 
 	//Copying encryption key
 
@@ -74,41 +87,47 @@ case EFormat_oiCA: {
 
 	//Create our entries
 
-	CAFile file;
+	CAFile file = (CAFile) { 0 };
+	Error err = Error_none();
 
-	if((err = CAFile_createx(settings, &file)).genericError) {
-		Error_printx(err, ELogLevel_Error, ELogOptions_Default);
-		return -19;
-	}
+	//Archive
 
-	CAFileRecursion caFileRecursion = (CAFileRecursion) { .file = &file, .root = info.path };
+	Archive archive = (Archive) { 0 };
+	String resolved = String_createNull();
+	Buffer res = Buffer_createNull();
+	Bool isVirtual = false;
 
-	if (
-		(err = File_foreach(
-			info.path, (FileCallback) addFileToCAFile, &caFileRecursion, 
-			args.flags & EOperationFlags_Recursive
-		)).genericError
-	) {
-		CAFile_freex(&file);
-		Error_printx(err, ELogLevel_Error, ELogOptions_Default);
-		return -18;
-	}
+	_gotoIfError(clean, Archive_createx(&archive));
+	_gotoIfError(clean, File_resolvex(input, &isVirtual, 0, &resolved));
 
-	Buffer res;
-	if ((err = CAFile_writex(file, &res)).genericError) {
-		CAFile_freex(&file);
-		Error_printx(err, ELogLevel_Error, ELogOptions_Default);
-		return -20;
-	}
+	if (isVirtual)
+		_gotoIfError(clean, Error_invalidOperation(0));
 
+	CAFileRecursion caFileRecursion = (CAFileRecursion) { 
+		.archive = &archive, 
+		.root = resolved
+	};
+
+	_gotoIfError(clean, File_foreach(
+		caFileRecursion.root,
+		(FileCallback)addFileToCAFile,
+		&caFileRecursion,
+		!(args.flags & EOperationFlags_NonRecursive)
+	));
+
+	//Convert to CAFile and write to file
+
+	_gotoIfError(clean, CAFile_create(settings, archive, &file));
+	archive = (Archive) { 0 };	//Archive has been moved to CAFile
+
+	_gotoIfError(clean, CAFile_writex(file, &res));
+
+	_gotoIfError(clean, File_write(res, output, 1 * SECOND));
+
+clean:
 	CAFile_freex(&file);
-
-	if ((err = File_write(res, outputArg)).genericError) {
-		Buffer_freex(&res);
-		Error_printx(err, ELogLevel_Error, ELogOptions_Default);
-		return -21;
-	}
-
+	Archive_freex(&archive);
+	String_freex(&resolved);
 	Buffer_freex(&res);
-	goto end;
-}*/
+	return !err.genericError;
+}

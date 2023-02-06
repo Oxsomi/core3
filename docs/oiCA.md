@@ -129,7 +129,7 @@ CAFile {
     	//Points to direct children of root directory.
     	//Parent HAS to be 0xFFFF.
     	//
-    	CADirectory root;
+    	CADirectory root with stride (sizeof(CADirectory) + header.directoryExtensionSize);
     
 	    CADirectory[header.directoryCount] directories
             with stride (sizeof(CADirectory) + header.directoryExtensionSize);

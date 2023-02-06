@@ -14,6 +14,14 @@ typedef struct List {
 	U64 stride, length, capacity;		//If capacity is 0 or U64_MAX, it indicates a ref
 } List;
 
+typedef enum ECompareResult {
+	ECompareResult_Lt,
+	ECompareResult_Eq,
+	ECompareResult_Gt
+} ECompareResult;
+
+typedef ECompareResult (*CompareFunction)(const void *aPtr, const void *bPtr);
+
 Bool List_isConstRef(List l);
 Bool List_isRef(List l);
 
@@ -125,6 +133,8 @@ Bool List_sortI16(List list);
 Bool List_sortI8(List list);
 
 Bool List_sortF32(List list);
+
+Bool List_sortCustom(List list, CompareFunction func);
 
 //Expects buf to be sized to stride (to allow copying to the stack)
 

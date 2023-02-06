@@ -202,7 +202,8 @@ Bool CLI_execute(StringList arglist) {
 		if (String_equalsString(
 			arg0, 
 			String_createConstRefUnsafe(EOperationCategory_names[i]),
-			EStringCase_Insensitive
+			EStringCase_Insensitive, 
+			true
 		)) {
 			category = i;
 			break;
@@ -231,7 +232,8 @@ Bool CLI_execute(StringList arglist) {
 		if (String_equalsString(
 			arg1, 
 			String_createConstRefUnsafe(Operation_values[i].name),
-			EStringCase_Insensitive
+			EStringCase_Insensitive, 
+			true
 		)) {
 			operation = i;
 			break;
@@ -258,7 +260,8 @@ Bool CLI_execute(StringList arglist) {
 			if (String_equalsString(
 				Platform_instance.args.ptr[j],
 				String_createConstRefUnsafe(EOperationFlags_names[i]),
-				EStringCase_Insensitive
+				EStringCase_Insensitive, 
+				true
 			)) {
 
 				if ((args.flags >> i) & 1) {
@@ -280,7 +283,8 @@ Bool CLI_execute(StringList arglist) {
 			if (String_equalsString(
 				Platform_instance.args.ptr[j],
 				String_createConstRefUnsafe(EOperationHasParameter_names[i]),
-				EStringCase_Insensitive
+				EStringCase_Insensitive, 
+				true
 			)) {
 
 				EOperationHasParameter param = (EOperationHasParameter)(1 << i);
@@ -306,7 +310,8 @@ Bool CLI_execute(StringList arglist) {
 							if (String_equalsString(
 								Platform_instance.args.ptr[j + 1],
 								String_createConstRefUnsafe(Format_values[k].name),
-								EStringCase_Insensitive
+								EStringCase_Insensitive, 
+								true
 							)) {
 								args.format = (EFormat) k;
 								break;
@@ -360,7 +365,8 @@ Bool CLI_execute(StringList arglist) {
 					if (String_equalsString(
 						Platform_instance.args.ptr[j],
 						String_createConstRefUnsafe(EOperationHasParameter_names[i]),
-						EStringCase_Insensitive
+						EStringCase_Insensitive, 
+						true
 					))
 						break;
 
@@ -383,7 +389,8 @@ Bool CLI_execute(StringList arglist) {
 				if (String_equalsString(
 					Platform_instance.args.ptr[j],
 					String_createConstRefUnsafe(EOperationFlags_names[i]),
-					EStringCase_Insensitive
+					EStringCase_Insensitive, 
+					true
 				))
 					break;
 
@@ -425,7 +432,7 @@ Bool CLI_execute(StringList arglist) {
 
 	//It has some flag we don't support
 
-	if (args.parameters & ~f.operationFlags) {
+	if (args.flags & ~f.operationFlags) {
 		Log_debug(String_createConstRefUnsafe("Unsupported flag is present."), ELogOptions_NewLine);
 		CLI_showHelp(category, operation, args.format);
 		_gotoIfError(clean, Error_invalidOperation(3));

@@ -71,12 +71,17 @@ Error File_foreach(String loc, FileCallback callback, void *userData, Bool isRec
 		if ((U64)time.QuadPart >= UNIX_START_WIN)
 			timestamp = (time.QuadPart - UNIX_START_WIN) * 100;	//Convert to Oxsomi time
 
+		//Grab local file name
+
+		_gotoIfError(clean, String_createCopyx(resolvedNoStar, &tmp));
+		_gotoIfError(clean, String_appendStringx(&tmp, String_createConstRef(dat.cFileName, MAX_PATH)));
+
 		//Folder parsing
 
 		if(dat.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
 
 			FileInfo info = (FileInfo) {
-				.path = String_createConstRef(dat.cFileName, MAX_PATH),
+				.path = tmp,
 				.timestamp = timestamp,
 				.access = dat.dwFileAttributes & FILE_ATTRIBUTE_READONLY ? FileAccess_Read : FileAccess_ReadWrite,
 				.type = EFileType_Folder
@@ -87,6 +92,7 @@ Error File_foreach(String loc, FileCallback callback, void *userData, Bool isRec
 			if(isRecursive)
 				_gotoIfError(clean, File_foreach(info.path, callback, userData, true));
 
+			String_freex(&tmp);
 			continue;
 		}
 
@@ -95,9 +101,6 @@ Error File_foreach(String loc, FileCallback callback, void *userData, Bool isRec
 		size.HighPart = dat.nFileSizeHigh;
 
 		//File parsing
-
-		_gotoIfError(clean, String_createCopyx(resolvedNoStar, &tmp));
-		_gotoIfError(clean, String_appendStringx(&tmp, String_createConstRef(dat.cFileName, MAX_PATH)));
 
 		FileInfo info = (FileInfo) {
 			.path = tmp,
@@ -108,7 +111,6 @@ Error File_foreach(String loc, FileCallback callback, void *userData, Bool isRec
 		};
 
 		_gotoIfError(clean, callback(info, userData));
-
 		String_freex(&tmp);
 	}
 

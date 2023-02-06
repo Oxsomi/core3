@@ -13,10 +13,9 @@ typedef struct DLFile DLFile;
 
 //oiCA
 
-//Error CAFile_createx(CASettings settings, CAFile *caFile);
-//Bool CAFile_freex(CAFile *caFile);
-//Error CAFile_addEntryx(CAFile *caFile, ArchiveEntry entry);
-//Error CAFile_writex(CAFile caFile, Buffer *result);
+Bool CAFile_freex(CAFile *caFile);
+ 
+Error CAFile_writex(CAFile caFile, Buffer *result);
 
 //Error CAFile_readx(Buffer file, CAFile *caFile);
 

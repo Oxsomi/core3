@@ -7,7 +7,6 @@
 #include "types/error.h"
 #include "types/buffer.h"
 
-/*
 //File spec (docs/oiCA.md)
 
 typedef enum ECAFlags {
@@ -96,7 +95,7 @@ inline Bool CAFile_storeDate(Ns ns, U16 *time, U16 *date) {
 
 //
 
-Error CAFile_create(CASettings settings, Archive archive, Allocator alloc, CAFile *caFile) {
+Error CAFile_create(CASettings settings, Archive archive, CAFile *caFile) {
 
 	if(!caFile)
 		return Error_nullPointer(0, 0);
@@ -131,6 +130,47 @@ Bool CAFile_free(CAFile *caFile, Allocator alloc) {
 	return b;
 }
 
+ECompareResult sortParentCountAndFileNames(String *a, String *b) {
+
+	U64 foldersA = String_countAll(*a, '/', EStringCase_Sensitive);
+	U64 foldersB = String_countAll(*b, '/', EStringCase_Sensitive);
+
+	//We wanna sort on folder count first
+	//This ensures the root dirs are always at [0,N] and their children at [N, N+M], etc.
+
+	if (foldersA < foldersB)
+		return ECompareResult_Lt;
+
+	if (foldersA > foldersB)
+		return ECompareResult_Gt;
+
+	//We want to sort on contents
+	//Provided it's the same level of parenting.
+	//This ensures things with the same parent also stay at the same location
+
+	for (U64 i = 0; i < a->length && i < b->length; ++i) {
+
+		C8 ai = a->ptr[i];
+		C8 bi = b->ptr[i];
+
+		if (ai < bi)
+			return ECompareResult_Lt;
+
+		if (ai > bi)
+			return ECompareResult_Gt;
+	}
+
+	//If they start with the same thing, we want to sort on length
+
+	if (a->length < b->length)
+		return ECompareResult_Lt;
+
+	if (a->length > b->length)
+		return ECompareResult_Gt;
+
+	return ECompareResult_Eq;
+}
+
 //We don't support any compression yet, but should be trivial to add once Buffer_compress/Buffer_decompress is supported.
 
 Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
@@ -159,19 +199,23 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 		caFile.settings.compressionType ? (
 			caFile.settings.flags & ECASettingsFlags_UseSHA256 ? sizeof(hash) : sizeof(hash[0])
 		) : 0
-	);
+	) + (caFile.settings.encryptionType ? sizeof(I32x4) + 12 : 0);
 
-	U64 baseFileHeader = sizeof(U16) + sizeof(U8) + (						//Parent and fileInfo
-		!((caFile.settings.flags & ECASettingsFlags_IncludeFullDate) || 
-		(caFile.settings.flags & ECASettingsFlags_IncludeDate)) ? 0 :
-		(caFile.settings.flags & ECASettingsFlags_IncludeFullDate ? sizeof(Ns) : sizeof(U16) * 2)
+	U64 baseFileHeader = sizeof(U16) + (						//Parent and fileInfo
+		(
+			(caFile.settings.flags & ECASettingsFlags_IncludeFullDate) || 
+			(caFile.settings.flags & ECASettingsFlags_IncludeDate)
+		) ? (caFile.settings.flags & ECASettingsFlags_IncludeFullDate ? sizeof(Ns) : sizeof(U16) * 2) 
+		: 0
 	);
 
 	U64 biggestFileSize = 0;
 
-	for (U64 i = 0; i < caFile.entries.length; ++i) {
+	for (U64 i = 0; i < caFile.archive.entries.length; ++i) {
 
-		ArchiveEntry entry = ((ArchiveEntry*)caFile.entries.ptr)[i];
+		ArchiveEntry entry = ((ArchiveEntry*)caFile.archive.entries.ptr)[i];
+
+		//Push back directory names and calculate output buffer
 
 		if (entry.type == EFileType_Folder) {
 
@@ -188,6 +232,8 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 			outputSize += sizeof(CADirectory);
 			continue;
 		}
+
+		//Push back file names and calculate output buffer
 
 		_gotoIfError(
 			clean, 
@@ -232,8 +278,11 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 	//This sort is different than just sortString. It sorts on length first and then alphabetically.
 	//This allows us to not have to reorder the files down the road since they're already sorted.
 
-	_gotoIfError(clean, List_sortStringAndLength(directories));
-	_gotoIfError(clean, List_sortStringAndLength(files));
+	if(
+		!List_sortCustom(directories, (CompareFunction) sortParentCountAndFileNames) || 
+		!List_sortCustom(files, (CompareFunction) sortParentCountAndFileNames)
+	)
+		_gotoIfError(clean, Error_invalidOperation(0));
 
 	//Allocate and generate DLFile
 
@@ -244,7 +293,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 	for(U64 i = 0; i < directories.length; ++i) {
 
 		String dir = ((String*)directories.ptr)[i];
-		String dirName = dir;
+		String dirName = String_createRefSized(dir.ptr, dir.length);
 
 		String_cutBeforeLast(dir, '/', EStringCase_Sensitive, &dirName);
 		_gotoIfError(clean, DLFile_addEntryAscii(&dlFile, dirName, alloc));
@@ -253,7 +302,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 	for(U64 i = 0; i < files.length; ++i) {
 
 		String file = ((String*)files.ptr)[i];
-		String fileName = file;
+		String fileName = String_createRefSized(file.ptr, file.length);
 
 		String_cutBeforeLast(file, '/', EStringCase_Sensitive, &fileName);
 		_gotoIfError(clean, DLFile_addEntryAscii(&dlFile, fileName, alloc));
@@ -296,7 +345,13 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 	CADirectory *dirPtr = (CADirectory*)outputBufferIt.ptr, *dirPtrRoot = dirPtr;
 	++dirPtr;		//Exclude root
 
-	for (U64 i = 0; i < directories.length; ++i) {
+	*dirPtrRoot = (CADirectory) {
+		.childDirectoryStart = U16_MAX,
+		.childFileStart = U32_MAX,
+		.parentDirectory = U16_MAX
+	};
+
+	for (U16 i = 0; i < (U16) directories.length; ++i) {
 
 		String dir = ((String*)directories.ptr)[i];
 		U64 it = String_findLast(dir, '/', EStringCase_Sensitive);
@@ -312,7 +367,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 			//If we encounter something that doesn't start with our basepath/ then we know we are missing this dir
 			//And this means we somehow messed with the input data
 
-			String baseDir, realParentDir;
+			String baseDir = String_createNull(), realParentDir = String_createNull();
 			if (
 				!String_cut(dir, 0, it, &realParentDir) || 
 				!String_cut(dir, 0, it + 1, &baseDir)
@@ -321,21 +376,11 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 
 			for(U64 j = i - 1; j != U64_MAX; --j)
 
-				if (!String_startsWithString(
-					((String*)directories.ptr)[i], baseDir, EStringCase_Sensitive
+				if (String_equalsString(
+					((String*)directories.ptr)[j], realParentDir, 
+					EStringCase_Insensitive, true
 				)) {
-
-					//We found the parent directory
-
-					if (String_equalsString(
-						((String*)directories.ptr)[i], realParentDir, EStringCase_Sensitive
-					)) {
-						parent = (U16) j;
-						break;
-					}
-
-					//Or we didn't
-
+					parent = (U16) j;
 					break;
 				}
 
@@ -374,7 +419,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 	U8 *fileObjectPtr = (U8*)(dirPtr + directories.length);
 	U8 *fileDataPtrIt = fileObjectPtr + baseFileHeader * files.length;
 
-	for (U64 i = 0; i < files.length; ++i) {
+	for (U32 i = 0; i < (U32) files.length; ++i) {
 
 		String file = ((String*)files.ptr)[i];
 		U64 it = String_findLast(file, '/', EStringCase_Sensitive);
@@ -400,7 +445,8 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 			for(U64 j = directories.length - 1; j != U64_MAX; --j)
 
 				if (String_equalsString(
-					((String*)directories.ptr)[i], realParentDir, EStringCase_Sensitive
+					((String*)directories.ptr)[j], realParentDir, 
+					EStringCase_Sensitive, true
 				)) {
 					parent = (U16) j;
 					break;
@@ -437,11 +483,12 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 
 		ArchiveEntry *entry = NULL;
 
-		for(U64 i = 0; i < caFile.entries.length; ++i)
+		for(U64 j = 0; j < caFile.archive.entries.length; ++j)
 			if (String_equalsString(
-				((ArchiveEntry*)caFile.entries.ptr + i)->path, file, EStringCase_Sensitive
+				((ArchiveEntry*)caFile.archive.entries.ptr + j)->path, file, 
+				EStringCase_Sensitive, true
 			)) {
-				entry = (ArchiveEntry*)caFile.entries.ptr + i;
+				entry = (ArchiveEntry*)caFile.archive.entries.ptr + j;
 				break;
 			}
 
@@ -465,17 +512,20 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 				filePtr += sizeof(Ns);
 			}
 
-			else if(!CAFile_storeDate(entry->timestamp, (U16*)filePtr + 1, (U16*)filePtr)) {
-				_gotoIfError(clean, Error_invalidState(1));
-			}
+			else {
 
-			else filePtr += sizeof(U16) * 2;
+				if (!CAFile_storeDate(entry->timestamp, (U16*)filePtr + 1, (U16*)filePtr)) {
+					_gotoIfError(clean, Error_invalidState(1));
+				}
+
+				filePtr += sizeof(U16) * 2;
+			}
 		}
 
 		U64 fileSize = Buffer_length(entry->data);
 
 		switch (sizeType) {
-			case EXXDataSizeType_U8:	*(U8*)filePtr = (U8) fileSize;		break;
+			case EXXDataSizeType_U8:	*filePtr = (U8) fileSize;			break;
 			case EXXDataSizeType_U16:	*(U16*)filePtr = (U16) fileSize;	break;
 			case EXXDataSizeType_U32:	*(U32*)filePtr = (U32) fileSize;	break;
 			default:					*(U64*)filePtr = fileSize;
@@ -525,7 +575,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 			(sizeType << ECAFlags_FileSizeType_Shift)
 		),
 
-		.type = (dlFile.settings.compressionType << 4) | dlFile.settings.encryptionType,
+		.type = (U8)((dlFile.settings.compressionType << 4) | dlFile.settings.encryptionType),
 
 		.directoryCount = dirCount,
 		.fileCount = fileCount
@@ -560,9 +610,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 
 	//Compress
 
-	Buffer compressedOutput;
-
-	if (caFile.settings.compressionType != EXXCompressionType_None) {
+	/*if (caFile.settings.compressionType != EXXCompressionType_None) {				TODO:
 
 		Buffer toCompress = Buffer_createConstRef(
 			outputBuffer.ptr + realHeaderSize, 
@@ -574,35 +622,32 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 		Buffer_free(&outputBuffer, alloc);
 	}
 
-	else {
-		compressedOutput = outputBuffer;
-		outputBuffer = Buffer_createNull();
-	}
+	else {*/
+		//compressedOutput = outputBuffer;
+		//outputBuffer = Buffer_createNull();
+	//}
 
 	//Encrypt
 
+	/* TODO:
 	if (caFile.settings.encryptionType != EXXEncryptionType_None) {
+
+		//TODO:
 
 		if ((err = Buffer_encrypt(
 			compressedOutput, realHeader, 
-			BufferEncryptionType_AES256GCM, caFile.settings.encryptionKey, NULL,
+			EBufferEncryptionType_AES256GCM, caFile.settings.encryptionKey, NULL,
 			alloc, &outputBuffer
 		)).genericError) {
 			Buffer_free(&compressedOutput, alloc);
 			return err;
 		}
-	}
-
-	else {
-		outputBuffer = compressedOutput;
-		compressedOutput = Buffer_createNull();
-	}
+	}*/
 
 	//Prepend header and hash
 
-	err = Buffer_combine(realHeader, outputBuffer, alloc, result);
-	List_free(&outputBuffer, alloc);
-	return err;
+	*result = outputBuffer;
+	outputBuffer = Buffer_createNull();
 
 clean:
 	Buffer_free(&compressedOutput, alloc);
@@ -615,5 +660,3 @@ clean:
 }
 
 Error CAFile_read(Buffer file, Allocator alloc, CAFile *caFile);
-
-*/

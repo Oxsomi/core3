@@ -26,7 +26,7 @@ typedef struct CAFile {
 	CASettings settings;
 } CAFile;
 
-Error CAFile_create(CASettings settings, Archive archive, Allocator alloc, CAFile *caFile);
+Error CAFile_create(CASettings settings, Archive archive, CAFile *caFile);
 Bool CAFile_free(CAFile *caFile, Allocator alloc);
 
 //Serialize

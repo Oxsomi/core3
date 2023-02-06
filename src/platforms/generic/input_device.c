@@ -252,7 +252,8 @@ InputHandle InputDevice_getHandle(InputDevice d, String name) {
 		if(String_equalsString(
 			String_createConstRefLongString(InputDevice_getButton(d, i)->name), 
 			name,
-			EStringCase_Insensitive
+			EStringCase_Insensitive, 
+			true
 		))
 			return InputDevice_createHandle(d, i, EInputType_Button);
 
@@ -260,7 +261,8 @@ InputHandle InputDevice_getHandle(InputDevice d, String name) {
 		if(String_equalsString(
 			String_createConstRefLongString(InputDevice_getAxis(d, i)->name), 
 			name,
-			EStringCase_Insensitive
+			EStringCase_Insensitive, 
+			true
 		))
 			return InputDevice_createHandle(d, i, EInputType_Axis);
 
