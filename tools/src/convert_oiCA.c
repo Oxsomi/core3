@@ -47,7 +47,7 @@ clean:
 	return err;
 }
 
-Bool _CLI_convertToCA(ParsedArgs args, String input, FileInfo inputInfo, String output, U32 encryptionKey[8]) {
+Error _CLI_convertToCA(ParsedArgs args, String input, FileInfo inputInfo, String output, U32 encryptionKey[8]) {
 
 	//TODO: Compression type
 
@@ -66,8 +66,8 @@ Bool _CLI_convertToCA(ParsedArgs args, String input, FileInfo inputInfo, String 
 	if(args.flags & EOperationFlags_SHA256)
 		settings.flags |= ECASettingsFlags_UseSHA256;
 
-	//if(args.parameters & EOperationHasParameter_AES)					TODO: Encryption
-		//settings.encryptionType = EXXEncryptionType_AES256GCM;
+	if(args.parameters & EOperationHasParameter_AES)
+		settings.encryptionType = EXXEncryptionType_AES256GCM;
 
 	//Compression type
 
@@ -81,8 +81,8 @@ Bool _CLI_convertToCA(ParsedArgs args, String input, FileInfo inputInfo, String 
 
 	if(settings.encryptionType)
 		Buffer_copy(
-			Buffer_createRef(settings.encryptionKey, sizeof(encryptionKey)),
-			Buffer_createRef(encryptionKey, sizeof(encryptionKey))
+			Buffer_createRef(settings.encryptionKey, sizeof(settings.encryptionKey)),
+			Buffer_createRef(encryptionKey, sizeof(settings.encryptionKey))
 		);
 
 	//Create our entries
@@ -129,5 +129,5 @@ clean:
 	Archive_freex(&archive);
 	String_freex(&resolved);
 	Buffer_freex(&res);
-	return !err.genericError;
+	return err;
 }

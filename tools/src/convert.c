@@ -114,25 +114,23 @@ Bool _CLI_convert(ParsedArgs args, Bool isTo) {
 
 	//Now convert it
 
-	Bool success = false;
-
 	switch (args.format) {
 
 		case EFormat_oiDL: 
 
 			if(isTo)
-				success = _CLI_convertToDL(args, inputArg, info, outputArg, encryptionKey);
+				err = _CLI_convertToDL(args, inputArg, info, outputArg, encryptionKey);
 
-			else success = _CLI_convertFromDL(args, inputArg, info, outputArg, encryptionKey);
+			else err = _CLI_convertFromDL(args, inputArg, info, outputArg, encryptionKey);
 
 			break;
 
 		case EFormat_oiCA: 
 
 			if(isTo)
-				success = _CLI_convertToCA(args, inputArg, info, outputArg, encryptionKey);
+				err = _CLI_convertToCA(args, inputArg, info, outputArg, encryptionKey);
 
-			//else _CLI_convertFromCA(args, inputArg, info, outputArg, encryptionKey);	TODO:
+			//else err = _CLI_convertFromCA(args, inputArg, info, outputArg, encryptionKey);	TODO:
 
 			break;
 		
@@ -141,8 +139,9 @@ Bool _CLI_convert(ParsedArgs args, Bool isTo) {
 			return false;
 	}
 
-	if (!success) {
+	if (err.genericError) {
 		Log_error(String_createConstRefUnsafe("File conversion failed!"), ELogOptions_NewLine);
+		Error_printx(err, ELogLevel_Error, ELogOptions_NewLine);
 		return false;
 	}
 

@@ -181,7 +181,6 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 	DLFile dlFile = (DLFile) { 0 };
 	Buffer dlFileBuffer = Buffer_createNull();
 	Buffer outputBuffer = Buffer_createNull();
-	Buffer compressedOutput = Buffer_createNull();
 
 	if(!result)
 		_gotoIfError(clean, Error_nullPointer(2, 0));
@@ -199,7 +198,10 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 		caFile.settings.compressionType ? (
 			caFile.settings.flags & ECASettingsFlags_UseSHA256 ? sizeof(hash) : sizeof(hash[0])
 		) : 0
-	) + (caFile.settings.encryptionType ? sizeof(I32x4) + 12 : 0);
+	);
+
+	U64 realHeaderSizeExEnc = realHeaderSize;
+	realHeaderSize += (caFile.settings.encryptionType ? sizeof(I32x4) + 12 : 0);
 
 	U64 baseFileHeader = sizeof(U16) + (						//Parent and fileInfo
 		(
@@ -547,9 +549,9 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 
 	//Generate header
 
-	U8 header[sizeof(CAHeader) + sizeof(hash)], *headerIt = header;
+	U8 *headerIt = outputBuffer.ptr;
 
-	*((CAHeader*)header) = (CAHeader) {
+	*((CAHeader*)headerIt) = (CAHeader) {
 
 		.magicNumber = CAHeader_MAGIC,
 
@@ -575,7 +577,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 			(sizeType << ECAFlags_FileSizeType_Shift)
 		),
 
-		.type = (U8)((dlFile.settings.compressionType << 4) | dlFile.settings.encryptionType),
+		.type = (U8)((caFile.settings.compressionType << 4) | caFile.settings.encryptionType),
 
 		.directoryCount = dirCount,
 		.fileCount = fileCount
@@ -583,16 +585,9 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 
 	headerIt += sizeof(CAHeader);
 
-	Buffer realHeader = Buffer_createConstRef(header, realHeaderSize);
-
-	//Copy our header into the buffer with original result before hashing
-	//Otherwise our hash will exclude the header data, which is no bueno.
-
-	Buffer_copy(Buffer_createRefFromBuffer(outputBuffer, false), realHeader);
-
 	//Hash
 
-	if(caFile.settings.compressionType) {
+	/*if (caFile.settings.compressionType) {
 
 		if (caFile.settings.flags & ECASettingsFlags_UseSHA256)
 			Buffer_sha256(outputBuffer, hash);
@@ -606,7 +601,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 		Buffer_copy(
 			Buffer_createRef(headerIt, sizeof(hash)), 
 			Buffer_createConstRef(hash, sizeof(hash))
-		);
+		);*/
 
 	//Compress
 
@@ -620,29 +615,48 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 		_gotoIfError(clean, Buffer_compress(toCompress, BufferCompressionType_Brotli11, alloc, &compressedOutput));
 
 		Buffer_free(&outputBuffer, alloc);
-	}
-
-	else {*/
-		//compressedOutput = outputBuffer;
-		//outputBuffer = Buffer_createNull();
-	//}
+	}*/
 
 	//Encrypt
 
-	/* TODO:
 	if (caFile.settings.encryptionType != EXXEncryptionType_None) {
 
-		//TODO:
+		//TODO: Support chunks
+		//		Select no chunks if <40MiB
+		//		Select 10MiB if at least 4 threads can be kept busy.
+		//		Select 50MiB if ^ and utilization is about the same (e.g. 24 threads doing 10MiB would need 1.2GiB).
+		//		Select 100MiB if ^ (24 threads would need 2.4GiB).
 
-		if ((err = Buffer_encrypt(
-			compressedOutput, realHeader, 
-			EBufferEncryptionType_AES256GCM, caFile.settings.encryptionKey, NULL,
-			alloc, &outputBuffer
-		)).genericError) {
-			Buffer_free(&compressedOutput, alloc);
-			return err;
-		}
-	}*/
+		U32 key[8] = { 0 };
+
+		Bool b = false;
+		Error cmpErr = Buffer_eq(
+			Buffer_createConstRef(key, sizeof(key)), 
+			Buffer_createConstRef(caFile.settings.encryptionKey, sizeof(key)), 
+			&b
+		);
+
+		Buffer toEncrypt = Buffer_createRef(outputBuffer.ptr + realHeaderSize, Buffer_length(outputBuffer) - realHeaderSize);
+		Buffer realHeader = Buffer_createRef(outputBuffer.ptr, realHeaderSizeExEnc);
+
+		_gotoIfError(clean, Buffer_encrypt(
+
+			toEncrypt, 
+			realHeader, 
+
+			EBufferEncryptionType_AES256GCM, 
+
+			EBufferEncryptionFlags_GenerateIv | (
+				b || cmpErr.genericError ? EBufferEncryptionFlags_GenerateKey :
+				EBufferEncryptionFlags_None
+			),
+
+			b || cmpErr.genericError ? NULL : caFile.settings.encryptionKey,
+
+			(I32x4*)headerIt,
+			(I32x4*)((U8*)headerIt + 12)
+		));
+	}
 
 	//Prepend header and hash
 
@@ -650,7 +664,6 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 	outputBuffer = Buffer_createNull();
 
 clean:
-	Buffer_free(&compressedOutput, alloc);
 	Buffer_free(&outputBuffer, alloc);
 	Buffer_free(&dlFileBuffer, alloc);
 	DLFile_free(&dlFile, alloc);

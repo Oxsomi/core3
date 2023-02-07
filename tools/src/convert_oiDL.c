@@ -30,7 +30,7 @@ Error addFileToDLFile(FileInfo file, List *names) {
 	return Error_none();
 }
 
-Bool _CLI_convertToDL(ParsedArgs args, String input, FileInfo inputInfo, String output, U32 encryptionKey[8]) {
+Error _CLI_convertToDL(ParsedArgs args, String input, FileInfo inputInfo, String output, U32 encryptionKey[8]) {
 
 	//TODO: EXXCompressionType_Brotli11
 
@@ -48,7 +48,7 @@ Bool _CLI_convertToDL(ParsedArgs args, String input, FileInfo inputInfo, String 
 
 	if ((args.flags & EOperationFlags_UTF8) && (args.flags & EOperationFlags_Ascii)) {
 		Log_debug(String_createConstRefUnsafe("oiDL can only pick UTF8 or Ascii, not both."), ELogOptions_NewLine);
-		return false;
+		return Error_invalidParameter(0, 0, 0);
 	}
 
 	if(args.flags & EOperationFlags_UTF8)
@@ -86,7 +86,7 @@ Bool _CLI_convertToDL(ParsedArgs args, String input, FileInfo inputInfo, String 
 			ELogOptions_NewLine
 		);
 
-		return false;
+		return Error_invalidParameter(0, 0, 1);
 	}
 
 	List buffers = List_createEmpty(sizeof(Buffer));
@@ -99,7 +99,6 @@ Bool _CLI_convertToDL(ParsedArgs args, String input, FileInfo inputInfo, String 
 	Buffer fileBuf = Buffer_createNull();
 	Buffer buf = Buffer_createNull();
 	Buffer res = Buffer_createNull();
-	Bool success = false;
 
 	//Validate if string and split string by endline
 	//Merge that into a file
@@ -262,7 +261,6 @@ Bool _CLI_convertToDL(ParsedArgs args, String input, FileInfo inputInfo, String 
 write:
 
 	_gotoIfError(clean, File_write(res, output, 1 * SECOND));
-	success = true;
 
 clean:
 
@@ -288,16 +286,16 @@ clean:
 	List_freex(&paths);
 	List_freex(&sortedPaths);
 
-	return success;
+	return err;
 }
 
-Bool _CLI_convertFromDL(ParsedArgs args, String input, FileInfo inputInfo, String output, U32 encryptionKey[8]) {
+Error _CLI_convertFromDL(ParsedArgs args, String input, FileInfo inputInfo, String output, U32 encryptionKey[8]) {
 
 	//TODO: Batch multiple files
 
 	if (inputInfo.type != EFileType_File) {
 		Log_debug(String_createConstRefUnsafe("oiDL can only be converted from single file"), ELogOptions_NewLine);
-		return false;
+		return Error_invalidOperation(0);
 	}
 
 	//Read file
@@ -309,7 +307,6 @@ Bool _CLI_convertFromDL(ParsedArgs args, String input, FileInfo inputInfo, Strin
 
 	Error err = Error_none();
 	DLFile file = (DLFile) { 0 };
-	Bool success = false;
 	Bool didMakeFile = false;
 
 	_gotoIfError(clean, File_read(input, 1 * SECOND, &buf));
@@ -404,16 +401,12 @@ Bool _CLI_convertFromDL(ParsedArgs args, String input, FileInfo inputInfo, Strin
 		String_freex(&concatFile);
 	}
 
-	//
-
-	success = true;
-
 clean:
 
 	if(err.genericError)
 		Error_printx(err, ELogLevel_Error, ELogOptions_Default);
 
-	if(didMakeFile && !success)
+	if(didMakeFile && err.genericError)
 		File_remove(output, 1 * SECOND);
 
 	String_freex(&concatFile);
@@ -422,5 +415,5 @@ clean:
 	DLFile_freex(&file);
 	Buffer_freex(&buf);
 
-	return success;
+	return err;
 }
