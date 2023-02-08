@@ -438,7 +438,15 @@ void dec(const U8 **ptr, U64 *len, U64 l) {
 	*len -= l;
 }
 
-Error DLFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, DLFile *dlFile) {
+Error DLFile_read(
+	Buffer file, 
+	const U32 encryptionKey[8], 
+	Bool allowLeftOverData,
+	Allocator alloc, 
+	DLFile *dlFile
+) {
+
+	//TODO: Buffer_consume
 
 	if(!dlFile)
 		return Error_nullPointer(2, 0);
@@ -446,11 +454,8 @@ Error DLFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, DLFi
 	if(dlFile->entries.ptr)
 		return Error_invalidOperation(0);
 
-	if(Buffer_isConstRef(file))
-		return Error_constData(0, 0);
-
-	if(Buffer_length(file) < sizeof(DLFile))
-		return Error_outOfBounds(0, 0, sizeof(DLFile), Buffer_length(file));
+	if(Buffer_length(file) < sizeof(DLHeader))
+		return Error_outOfBounds(0, 0, sizeof(DLHeader), Buffer_length(file));
 
 	//Read from binary
 
@@ -524,6 +529,9 @@ Error DLFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, DLFi
 
 	if (header.encryptionType) {
 
+		if(Buffer_isConstRef(file))
+			return Error_constData(0, 0);
+
 		//Get tag and iv
 
 		if(len < sizeof(I32x4) + 12)
@@ -593,9 +601,7 @@ Error DLFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, DLFi
 		dec(&emulatedPtr, &emulatedLen, entryLen);
 	}
 
-	//Ensure we don't have any leftover data
-
-	if(emulatedLen)
+	if(emulatedLen && !allowLeftOverData)
 		return Error_invalidState(0);
 
 	//Allocate DLFile
@@ -612,11 +618,8 @@ Error DLFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, DLFi
 		.flags = header.flags & EDLFlags_UseSHA256 ? EDLSettingsFlags_UseSHA256 : EDLSettingsFlags_None
 	};
 
-	if(encryptionKey)
-		Buffer_copy(
-			Buffer_createRef(settings.encryptionKey, sizeof(settings.encryptionKey)),
-			Buffer_createConstRef(encryptionKey, sizeof(settings.encryptionKey))
-		);
+	//Not copying encryption key, because you probably don't want to store it.
+	//And you already have it.
 
 	//Create DLFile
 
@@ -655,6 +658,7 @@ Error DLFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, DLFi
 		dec(&ptr, &len, entryLen);
 	}
 
+	dlFile->readLength = ptr - file.ptr;
 	return Error_none();
 
 clean:

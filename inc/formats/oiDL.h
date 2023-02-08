@@ -39,6 +39,7 @@ typedef struct DLFile {
 
 	List entries;				//<DLEntry>
 	DLSettings settings;
+	U64 readLength;				//How many bytes were read for this file
 
 } DLFile;
 
@@ -54,4 +55,11 @@ Error DLFile_addEntryAscii(DLFile *dlFile, String entry, Allocator alloc);
 Error DLFile_addEntryUTF8(DLFile *dlFile, Buffer entry, Allocator alloc);
 
 Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result);
-Error DLFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, DLFile *dlFile);
+
+Error DLFile_read(
+	Buffer file, 
+	const U32 encryptionKey[8],
+	Bool allowLeftOverData, 
+	Allocator alloc, 
+	DLFile *dlFile
+);

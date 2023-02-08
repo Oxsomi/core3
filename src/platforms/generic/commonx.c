@@ -67,9 +67,9 @@ Error CAFile_writex(CAFile caFile, Buffer *result) {
 	return CAFile_write(caFile, Platform_instance.alloc, result);
 }
 
-//Error CAFile_readx(Buffer file, CAFile *caFile) {								TODO:
-//	return CAFile_read(file, Platform_instance.alloc, caFile);
-//}*/
+Error CAFile_readx(Buffer file, const U32 encryptionKey[8], CAFile *caFile) {
+	return CAFile_read(file, encryptionKey, Platform_instance.alloc, caFile);
+}
 
 //oiDL
 
@@ -91,8 +91,8 @@ Error DLFile_addEntryUTF8x(DLFile *dlFile, Buffer entry) {
 
 Error DLFile_writex(DLFile dlFile, Buffer *result) { return DLFile_write(dlFile, Platform_instance.alloc, result); }
 
-Error DLFile_readx(Buffer file, const U32 encryptionKey[8], DLFile *dlFile) {
-	return DLFile_read(file, encryptionKey, Platform_instance.alloc, dlFile);
+Error DLFile_readx(Buffer file, const U32 encryptionKey[8], Bool allowLeftOverData, DLFile *dlFile) {
+	return DLFile_read(file, encryptionKey, allowLeftOverData, Platform_instance.alloc, dlFile);
 }
 
 //List

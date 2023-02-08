@@ -16,8 +16,7 @@ typedef struct DLFile DLFile;
 Bool CAFile_freex(CAFile *caFile);
  
 Error CAFile_writex(CAFile caFile, Buffer *result);
-
-//Error CAFile_readx(Buffer file, CAFile *caFile);
+Error CAFile_readx(Buffer file, const U32 encryptionKey[8], CAFile *caFile);
 
 //oiDL
 
@@ -29,4 +28,4 @@ Error DLFile_addEntryAsciix(DLFile *dlFile, String entry);
 Error DLFile_addEntryUTF8x(DLFile *dlFile, Buffer entry);
 
 Error DLFile_writex(DLFile dlFile, Buffer *result);
-Error DLFile_readx(Buffer file, const U32 encryptionKey[8], DLFile *dlFile);
+Error DLFile_readx(Buffer file, const U32 encryptionKey[8], Bool allowLeftOverData, DLFile *dlFile);

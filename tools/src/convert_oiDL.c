@@ -310,7 +310,7 @@ Error _CLI_convertFromDL(ParsedArgs args, String input, FileInfo inputInfo, Stri
 	Bool didMakeFile = false;
 
 	_gotoIfError(clean, File_read(input, 1 * SECOND, &buf));
-	_gotoIfError(clean, DLFile_readx(buf, encryptionKey, &file));
+	_gotoIfError(clean, DLFile_readx(buf, encryptionKey, false, &file));
 
 	//Write file
 

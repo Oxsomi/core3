@@ -130,7 +130,7 @@ Bool _CLI_convert(ParsedArgs args, Bool isTo) {
 			if(isTo)
 				err = _CLI_convertToCA(args, inputArg, info, outputArg, encryptionKey);
 
-			//else err = _CLI_convertFromCA(args, inputArg, info, outputArg, encryptionKey);	TODO:
+			else err = _CLI_convertFromCA(args, inputArg, info, outputArg, encryptionKey);
 
 			break;
 		

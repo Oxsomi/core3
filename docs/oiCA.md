@@ -20,24 +20,23 @@ typedef enum ECAFlags {
     
 	ECAFlags_None 					= 0,
 
-	ECAFlags_HasHash				= 1 << 0,		//Should be true if compression or encryption is on
-	ECAFlags_UseSHA256				= 1 << 1,		//Whether SHA256 (1) or CRC32C (0) is used as hash
+	ECAFlags_UseSHA256				= 1 << 0,		//Whether SHA256 (1) or CRC32C (0) is used as hash
 
 	//See ECAFileObject
 
-	ECAFlags_FilesHaveDate			= 1 << 2,
-	ECAFlags_FilesHaveExtendedDate	= 1 << 3,
+	ECAFlags_FilesHaveDate			= 1 << 1,
+	ECAFlags_FilesHaveExtendedDate	= 1 << 2,
     
     //Indicates ECAFileSizeType. E.g. (ECAFileSizeType)((b0 << 1) | b1)
     //This indicates the type the biggest file size uses
     
-	ECAFlags_FileSizeType_Shift		= 4,
+	ECAFlags_FileSizeType_Shift		= 3,
 	ECAFlags_FileSizeType_Mask		= 3
 
     //Chunk size of AES for multi threading. 0 = none, 1 = 10MiB, 2 = 100MiB, 3 = 500MiB
         
-    ECAFlags_UseAESChunksA		= 1 << 6,
-    ECAFlags_UseAESChunksB		= 1 << 7
+    ECAFlags_UseAESChunksA		= 1 << 5,
+    ECAFlags_UseAESChunksB		= 1 << 6
         
 } ECAFlags;
 
@@ -54,24 +53,15 @@ typedef struct CAHeader {
     U8 fileExtensionSize;		//To skip file extended data		
     U16 directoryCount;			//How many base directories are available. Should be < 0xFFFF
     
-    U32 fileCount;				//How many files are available. Should be < 0xFFFF0000
+    U32 fileCount;				//How many files are available.
     
 } CAHeader;
 
-//A directory points to the parent and to the children
-//This allows us to easily access them without having to search all files
-//Important is to verify if there are childs linking to the same parent or invalid child offsets
+//A directory only points to the parent.
+//This is optimized for storage, so after extracting an optimized table could be built for fast child access.
 
 typedef struct CADirectory {
-    
-    U16 parentDirectory;		//0xFFFF for root directory, else id of parent directory (can't be self, unless root directory then it should be 0xFFFF)
-    U16 childDirectoryStart;	//Where the child dirs start. 0xFFFF indicates no child directories
-    
-    U16 childDirectoryCount;	//Up to 64Ki child directories  
-    U16 childFileCount;			//Up to 64Ki child files
-    
-    U32 childFileStart;			//Where the child files start. 0xFFFFFFFF indicates no child files
-    
+    U16 parentDirectory;		//0xFFFF for root directory, else id of parent directory (can't >=self)
 } CADirectory;
 
 //Pseudo code; please manually parse the members. Struct is NOT aligned.
@@ -90,7 +80,7 @@ CAFileObject<FileSizeType, hasDateAndTime, isExtendedTime> {
 };
 
 //Final file format; please manually parse the members.
-//Verify if directories / files are correctly linked to parent and children.
+//Verify if directories / files are linked to correct child; has to be a folder available at that time.
 //Verify if SHA256 and/or CRC32C is valid (if applicable).
 //Verify if date and/or time is valid (if applicable).
 //Verify if uncompressedSize > compressedSize.
@@ -105,10 +95,10 @@ CAFile {
     if compression:
     	EXXDataSizeType<uncompressedSizeType /* see header + directory extended size */> uncompressedSize;
     
-    if header.useHash:
+    if compression:
 	    U32[header.useSHA256 ? 8 : 1] hash;				//CRC32C or SHA256
     
-    /* Encryption header; see oiXX.md. Such as (blocks ? I32x4[blocks]), U8[12] iv. */
+    /* Encryption header; see oiXX.md. Such as (blocks ? I32x4[blocks]), U8[12] iv, I32x4 tag. */
     
     compress & encrypt the following if necessary:		//See oiXX.md
     
@@ -120,16 +110,11 @@ CAFile {
     	//Total file path can't exceed 128 characters.
     	//DLFile format MAY NOT use compression or encryption, since that's done by CAFile.
     	//DLFile should have the string flag set. If not, the file is invalid.
+    	//DLFile also needs to include dirCount+fileCount entries.
     
     	DLFile names;			//Names in order: [0, dirCount>, [dirCount, dirCount+fileCount>
     
     	//Directory and files
-    
-    	//Always needed; 0xFFFF directory id aka root ("."). This isn't present in DLFile names.
-    	//Points to direct children of root directory.
-    	//Parent HAS to be 0xFFFF.
-    	//
-    	CADirectory root with stride (sizeof(CADirectory) + header.directoryExtensionSize);
     
 	    CADirectory[header.directoryCount] directories
             with stride (sizeof(CADirectory) + header.directoryExtensionSize);
@@ -139,16 +124,12 @@ CAFile {
     
 		foreach file in files:
 			U8[file.size] data;
-    
-    /* Encryption footer; see oiXX.md. Such as I32x4 tag */
 }
 ```
 
 The types are Oxsomi types; `U<X>`: x-bit unsigned integer, `I<X>` x-bit signed integer. Ki is Kibi like KiB (1024).
 
 *Note: oiCA supports the ability to choose between 10MiB, 100MiB and 500MiB blocks for speeding up AES by multi threading.*
-
-*NOTE: * 
 
 ## Changelog
 

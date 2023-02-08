@@ -3,6 +3,7 @@
 #include "types/error.h"
 #include "types/buffer.h"
 #include "platforms/file.h"
+#include "platforms/log.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/ext/archivex.h"
 #include "platforms/ext/formatx.h"
@@ -129,5 +130,69 @@ clean:
 	Archive_freex(&archive);
 	String_freex(&resolved);
 	Buffer_freex(&res);
+	return err;
+}
+
+Error _CLI_convertFromCA(ParsedArgs args, String input, FileInfo inputInfo, String output, U32 encryptionKey[8]) {
+
+	//TODO: Batch multiple files
+
+	if (inputInfo.type != EFileType_File) {
+		Log_debug(String_createConstRefUnsafe("oiCA can only be converted from single file"), ELogOptions_NewLine);
+		return Error_invalidOperation(0);
+	}
+
+	//Read file
+
+	Buffer buf = Buffer_createNull();
+	String outputPath = String_createNull();
+	String loc = String_createNull();
+
+	Error err = Error_none();
+	CAFile file = (CAFile) { 0 };
+	Bool didMakeFile = false;
+
+	_gotoIfError(clean, File_read(input, 1 * SECOND, &buf));
+	_gotoIfError(clean, CAFile_readx(buf, encryptionKey, &file));
+
+	_gotoIfError(clean, File_add(output, EFileType_Folder, 1 * SECOND));
+	didMakeFile = true;
+
+	//Grab destination dest
+
+	_gotoIfError(clean, String_createCopyx(output, &outputPath));
+
+	if (String_endsWith(outputPath, '\0', EStringCase_Sensitive))
+		outputPath.ptr[outputPath.length - 1] = '/';
+
+	else _gotoIfError(clean, String_appendx(&outputPath, '/'));
+
+	//Write archive to disk
+
+	for (U64 i = 0; i < file.archive.entries.length; ++i) {
+
+		ArchiveEntry ei = ((const ArchiveEntry*)file.archive.entries.ptr)[i];
+
+		_gotoIfError(clean, String_createCopyx(outputPath, &loc));
+		_gotoIfError(clean, String_appendStringx(&loc, ei.path));
+
+		if (ei.type == EFileType_Folder) {
+			_gotoIfError(clean, File_add(loc, EFileType_Folder, 1 * SECOND));
+			continue;
+		}
+
+		_gotoIfError(clean, File_write(ei.data, loc, 1 * SECOND));
+		String_freex(&loc);
+	}
+
+clean:
+
+	if (didMakeFile && err.genericError)
+		File_remove(output, 1 * SECOND);
+
+	CAFile_freex(&file);
+	Buffer_freex(&buf);
+	String_freex(&outputPath);
+	String_freex(&loc);
 	return err;
 }

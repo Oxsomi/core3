@@ -32,4 +32,4 @@ Bool CAFile_free(CAFile *caFile, Allocator alloc);
 //Serialize
 
 Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result);
-Error CAFile_read(Buffer file, Allocator alloc, CAFile *caFile);
+Error CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFile *caFile);

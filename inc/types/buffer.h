@@ -66,8 +66,11 @@ Error Buffer_createSubset(Buffer buf, U64 offset, U64 length, Bool isConst, Buff
 //Writing data
 
 Error Buffer_offset(Buffer *buf, U64 length);
+
 Error Buffer_append(Buffer *buf, const void *v, U64 length);
 Error Buffer_appendBuffer(Buffer *buf, Buffer append);
+
+Error Buffer_consume(Buffer *buf, void *v, U64 length);
 
 Error Buffer_combine(Buffer a, Buffer b, Allocator alloc, Buffer *output);
 
@@ -88,6 +91,24 @@ Error Buffer_appendF32x4(Buffer *buf, F32x4 v);
 Error Buffer_appendF32x2(Buffer *buf, I32x2 v);
 Error Buffer_appendI32x4(Buffer *buf, I32x4 v);
 Error Buffer_appendI32x2(Buffer *buf, I32x2 v);
+
+Error Buffer_consumeU64(Buffer *buf, U64 *v);
+Error Buffer_consumeU32(Buffer *buf, U32 *v);
+Error Buffer_consumeU16(Buffer *buf, U16 *v);
+Error Buffer_consumeU8(Buffer *buf,  U8 *v);
+Error Buffer_consumeC8(Buffer *buf,  C8 *v);
+
+Error Buffer_consumeI64(Buffer *buf, I64 *v);
+Error Buffer_consumeI32(Buffer *buf, I32 *v);
+Error Buffer_consumeI16(Buffer *buf, I16 *v);
+Error Buffer_consumeI8(Buffer *buf,  I8 *v);
+
+Error Buffer_consumeF32(Buffer *buf, F32 *v);
+
+Error Buffer_consumeF32x4(Buffer *buf, F32x4 *v);
+Error Buffer_consumeF32x2(Buffer *buf, I32x2 *v);
+Error Buffer_consumeI32x4(Buffer *buf, I32x4 *v);
+Error Buffer_consumeI32x2(Buffer *buf, I32x2 *v);
 
 //UTF-8 helpers
 

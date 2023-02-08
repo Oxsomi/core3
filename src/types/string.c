@@ -82,6 +82,11 @@ Bool String_isValidFileName(String str, Bool acceptTrailingNull) {
 			return false;
 	}
 
+	//Can't end with trailing . (so . and .. are illegal)
+
+	if (str.length > hasTrailingNull && str.ptr[str.length - 1 - hasTrailingNull] == '.')
+		return false;
+
 	//If string is not empty then it's a valid string
 
 	return str.length;

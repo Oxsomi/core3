@@ -64,7 +64,7 @@ void Operations_init() {
 		.operationFlags = EOperationFlags_Default | EOperationFlags_Date | EOperationFlags_FullDate,
 		.optionalParameters = EOperationHasParameter_AES,
 		.requiredParameters = EOperationHasParameter_Input | EOperationHasParameter_Output,
-		.flags = EFormatFlags_SupportFolders
+		.flags = EFormatFlags_SupportFiles | EFormatFlags_SupportFolders
 	},
 
 	Format_values[EFormat_oiDL] = (Format) { 

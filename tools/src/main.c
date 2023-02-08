@@ -14,8 +14,7 @@ int Program_run() {
 
 	Operations_init();
 
-	ParsedArgs args = (ParsedArgs) { 0 };
-	if(!CLI_execute(Platform_instance.args, &args))
+	if(!CLI_execute(Platform_instance.args))
 		return -1;
 
 	return 0;

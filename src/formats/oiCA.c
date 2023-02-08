@@ -13,23 +13,24 @@ typedef enum ECAFlags {
 
 	ECAFlags_None 					= 0,
 
-	ECAFlags_HasHash				= 1 << 0,		//Should be true if compression is on
-	ECAFlags_UseSHA256				= 1 << 1,		//Whether SHA256 (1) or CRC32C (0) is used as hash
+	ECAFlags_UseSHA256				= 1 << 0,		//Whether SHA256 (1) or CRC32C (0) is used as hash
 
 	//See ECAFileObject
 
-	ECAFlags_FilesHaveDate			= 1 << 2,
-	ECAFlags_FilesHaveExtendedDate	= 1 << 3,
+	ECAFlags_FilesHaveDate			= 1 << 1,
+	ECAFlags_FilesHaveExtendedDate	= 1 << 2,
 
 	//Indicates ECAFileSizeType. E.g. (ECAFileSizeType)((b0 << 1) | b1)
 
-	ECAFlags_FileSizeType_Shift		= 4,
+	ECAFlags_FileSizeType_Shift		= 3,
 	ECAFlags_FileSizeType_Mask		= 3,
 
 	//Chunk size of AES for multi threading. 0 = none, 1 = 10MiB, 2 = 100MiB, 3 = 500MiB
 
-	ECAFlags_UseAESChunksA		= 1 << 6,
-	ECAFlags_UseAESChunksB		= 1 << 7
+	ECAFlags_UseAESChunksA		= 1 << 5,
+	ECAFlags_UseAESChunksB		= 1 << 6,
+
+	ECAFlags_Invalid			= 1 << 7
 
 } ECAFlags;
 
@@ -46,26 +47,19 @@ typedef struct CAHeader {
 	U8 fileExtensionSize;		//To skip file extended data		
 	U16 directoryCount;			//How many base directories are available. Should be < 0xFFFF
 
-	U32 fileCount;				//How many files are available. Should be < 0xFFFF0000
+	U32 fileCount;				//How many files are available.
 
 } CAHeader;
 
 static const U32 CAHeader_MAGIC = 0x4143696F;
+static const U8 CAHeader_V1_0  = 0;
 
 //A directory points to the parent and to the children
 //This allows us to easily access them without having to search all files
 //Important is to verify if there are childs linking to the same parent or invalid child offsets
 
 typedef struct CADirectory {
-
-	U16 parentDirectory;		//0xFFFF for root directory, else id of parent directory (can't be self)
-	U16 childDirectoryStart;	//Where the child dirs start. 0xFFFF indicates no child directories
-
-	U16 childDirectoryCount;	//Up to 64Ki child directories
-	U16 childFileCount;			//Up to 64Ki child files
-
-	U32 childFileStart;			//Where the child files start. 0xFFFFFFFF indicates no child files
-
+	U16 parentDirectory;		//0xFFFF for root directory, else id of parent directory (can't >=self)
 } CADirectory;
 
 //Helper functions
@@ -190,7 +184,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 
 	//Validate CAFile and calculate files and folders
 
-	U64 outputSize = sizeof(CADirectory);		//Excluding header, hash and DLFile
+	U64 outputSize = 0;			//Excluding header, hash and DLFile
 
 	U32 hash[8] = { 0 };
 
@@ -242,8 +236,8 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 			List_pushBack(&files, Buffer_createConstRef(&entry.path, sizeof(String)), alloc)
 		);
 
-		if(files.length >= U32_MAX - U16_MAX)
-			_gotoIfError(clean, Error_outOfBounds(0, 0, U32_MAX - U16_MAX, U32_MAX - U16_MAX - 1));
+		if(files.length >= U32_MAX)
+			_gotoIfError(clean, Error_outOfBounds(0, 0, files.length, U32_MAX));
 
 		if(outputSize + baseFileHeader < outputSize)
 			_gotoIfError(clean, Error_overflow(0, 0, outputSize + baseFileHeader, outputSize));
@@ -344,14 +338,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 
 	//Append CADirectory[]
 
-	CADirectory *dirPtr = (CADirectory*)outputBufferIt.ptr, *dirPtrRoot = dirPtr;
-	++dirPtr;		//Exclude root
-
-	*dirPtrRoot = (CADirectory) {
-		.childDirectoryStart = U16_MAX,
-		.childFileStart = U32_MAX,
-		.parentDirectory = U16_MAX
-	};
+	CADirectory *dirPtr = (CADirectory*)outputBufferIt.ptr;
 
 	for (U16 i = 0; i < (U16) directories.length; ++i) {
 
@@ -370,6 +357,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 			//And this means we somehow messed with the input data
 
 			String baseDir = String_createNull(), realParentDir = String_createNull();
+
 			if (
 				!String_cut(dir, 0, it, &realParentDir) || 
 				!String_cut(dir, 0, it + 1, &baseDir)
@@ -388,30 +376,11 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 
 			if(parent == U16_MAX)
 				_gotoIfError(clean, Error_invalidState(0));
-
-			//Update parent
-
-			if (dirPtr[parent].childDirectoryStart == U16_MAX)
-				dirPtr[parent].childDirectoryStart = i;
-
-			++dirPtr[parent].childDirectoryCount;
-		}
-
-		//Add to root
-
-		else {
-
-			if (dirPtrRoot->childDirectoryStart == U16_MAX)
-				dirPtrRoot->childDirectoryStart = i;
-
-			++dirPtrRoot->childDirectoryCount;
 		}
 
 		//Add directory
 
 		dirPtr[i] = (CADirectory) {
-			.childDirectoryStart = U16_MAX,
-			.childFileStart = U32_MAX,
 			.parentDirectory = parent
 		};
 	}
@@ -456,29 +425,6 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 
 			if(parent == U16_MAX)
 				_gotoIfError(clean, Error_invalidState(1));
-
-			//Update parent
-
-			if (dirPtr[parent].childFileStart == U32_MAX)
-				dirPtr[parent].childFileStart = i;
-
-			if(dirPtr[parent].childFileCount == U16_MAX)
-				_gotoIfError(clean, Error_outOfBounds(0, 1, U16_MAX + 1, U16_MAX));
-
-			++dirPtr[parent].childFileCount;
-		}
-
-		else {
-
-			//Update parent
-
-			if (dirPtrRoot->childFileStart == U32_MAX)
-				dirPtrRoot->childFileStart = i;
-
-			if(dirPtrRoot->childFileCount == U16_MAX)
-				_gotoIfError(clean, Error_outOfBounds(0, 1, U16_MAX + 1, U16_MAX));
-
-			++dirPtrRoot->childFileCount;
 		}
 
 		//Find corresponding file with name
@@ -560,7 +506,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 		.flags = (U8) (
 
 			(
-				caFile.settings.compressionType ? ECAFlags_HasHash | (
+				caFile.settings.compressionType ? (
 					caFile.settings.flags & ECASettingsFlags_UseSHA256 ? ECAFlags_UseSHA256 : 
 					ECAFlags_None
 				) : 
@@ -672,4 +618,240 @@ clean:
 	return err;
 }
 
-Error CAFile_read(Buffer file, Allocator alloc, CAFile *caFile);
+Error CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFile *caFile) {
+
+	if (!caFile)
+		return Error_nullPointer(2, 0);
+
+	if (caFile->archive.entries.ptr)
+		return Error_invalidParameter(2, 0, 0);
+
+	if (Buffer_length(file) < sizeof(CAHeader))
+		return Error_outOfBounds(0, 0, sizeof(CAHeader), Buffer_length(file));
+
+	Buffer filePtr = 
+		Buffer_isConstRef(file) ? Buffer_createConstRef(file.ptr, Buffer_length(file)) :
+		Buffer_createRef(file.ptr, Buffer_length(file));
+
+	Buffer tmpData = Buffer_createNull();
+	Error err = Error_none();
+	DLFile fileNames = (DLFile) { 0 };
+	Archive archive = (Archive) { 0 };
+	String tmpPath = String_createNull();
+
+	_gotoIfError(clean, Archive_create(alloc, &archive));
+
+	CAHeader header;
+	_gotoIfError(clean, Buffer_consume(&filePtr, &header, sizeof(header)));
+
+	if(header.magicNumber != CAHeader_MAGIC)
+		_gotoIfError(clean, Error_invalidParameter(0, 0, 0));
+
+	if(header.version != CAHeader_V1_0)
+		_gotoIfError(clean, Error_invalidParameter(0, 1, 0));
+
+	if(header.flags & (ECAFlags_UseAESChunksA | ECAFlags_UseAESChunksB))		//TODO: AES chunks
+		_gotoIfError(clean, Error_unsupportedOperation(0));
+
+	if(header.type >> 4)							//TODO: Compression
+		_gotoIfError(clean, Error_unsupportedOperation(1));
+
+	if(header.flags & ECAFlags_Invalid)
+		_gotoIfError(clean, Error_unsupportedOperation(2));
+
+	if(header.flags & ECAFlags_UseSHA256)				//TODO: SHA256
+		_gotoIfError(clean, Error_unsupportedOperation(3));
+
+	if((header.type & 0xF) >= EXXEncryptionType_Count)
+		_gotoIfError(clean, Error_invalidParameter(0, 4, 0));
+
+	if(header.directoryCount >= U16_MAX)
+		_gotoIfError(clean, Error_invalidParameter(0, 7, 0));
+
+	_gotoIfError(clean, Buffer_consume(&filePtr, NULL, header.headerExtensionSize));
+
+	I32x4 iv = I32x4_zero(), tag = I32x4_zero();
+
+	if ((header.type & 0xF) == EXXEncryptionType_AES256GCM) {
+
+		U64 headerLen = filePtr.ptr - file.ptr;
+
+		_gotoIfError(clean, Buffer_consume(&filePtr, &iv, 12));
+		_gotoIfError(clean, Buffer_consumeI32x4(&filePtr, &tag));
+
+		_gotoIfError(clean, Buffer_decrypt(
+			filePtr,
+			Buffer_createConstRef(file.ptr, headerLen),
+			EBufferEncryptionType_AES256GCM,
+			encryptionKey,
+			tag,
+			iv
+		));
+	}
+
+	_gotoIfError(clean, DLFile_read(filePtr, NULL, true, alloc, &fileNames));
+	_gotoIfError(clean, Buffer_consume(&filePtr, NULL, fileNames.readLength));
+
+	//Validate DLFile
+	//File name validation is done when the entries are inserted into the Archive
+
+	if (
+		fileNames.settings.dataType != EDLDataType_Ascii || 
+		fileNames.settings.compressionType || 
+		fileNames.settings.encryptionType ||
+		fileNames.settings.flags
+	)
+		_gotoIfError(clean, Error_invalidOperation(0));
+
+	if(fileNames.entries.length != (U64)header.fileCount + header.directoryCount)
+		_gotoIfError(clean, Error_invalidState(0));
+
+	//Ensure we have enough allocated for all files and directories
+
+	EXXDataSizeType sizeType = (header.flags >> ECAFlags_FileSizeType_Shift) & ECAFlags_FileSizeType_Mask;
+
+	U64 folderStride = sizeof(CADirectory) + header.directoryExtensionSize;
+	U64 fileStride = sizeof(U16) + SIZE_BYTE_TYPE[sizeType] + header.fileExtensionSize;
+
+	if (header.flags & ECAFlags_FilesHaveDate)
+		fileStride += header.flags & ECAFlags_FilesHaveExtendedDate ? sizeof(U64) : sizeof(U16) * 2;
+
+	U64 fileSize = (U64)header.fileCount * fileStride;
+	U64 folderSize = (U64)header.directoryCount * folderStride;
+
+	if (Buffer_length(filePtr) < fileSize + folderSize)
+		_gotoIfError(clean, Error_outOfBounds(0, 0, fileSize + folderSize, Buffer_length(filePtr)));
+
+	//Now we can add dir to the archive
+
+	for (U64 i = 0; i < header.directoryCount; ++i) {
+
+		CADirectory diri = *(CADirectory*)(filePtr.ptr + folderStride * i);
+
+		String name = ((DLEntry*)fileNames.entries.ptr)[i].entryString;
+		_gotoIfError(clean, String_createCopy(name, alloc, &tmpPath));
+
+		if (diri.parentDirectory != U16_MAX) {
+
+			if (diri.parentDirectory >= i)
+				_gotoIfError(clean, Error_invalidOperation(2));
+
+			String parentName = ((DLEntry*)fileNames.entries.ptr)[diri.parentDirectory].entryString;
+
+			_gotoIfError(clean, String_insert(&tmpPath, '/', 0, alloc));
+			_gotoIfError(clean, String_insertString(&tmpPath, parentName, 0, alloc));
+		}
+
+		_gotoIfError(clean, Archive_addDirectory(&archive, tmpPath, alloc));
+	}
+
+	//Add file
+
+	const U8 *fileIt = filePtr.ptr + folderSize;
+	_gotoIfError(clean, Buffer_offset(&filePtr, fileSize + folderSize));
+
+	for (U64 i = 0; i < header.fileCount; ++i) {
+
+		const U8 *filei = fileIt + fileStride * i;
+
+		String name = ((DLEntry*)fileNames.entries.ptr)[(U64)i + header.directoryCount].entryString;
+		_gotoIfError(clean, String_createCopy(name, alloc, &tmpPath));
+
+		//Load parent
+
+		U16 parentDir = *(const U16*)filei;
+		filei += sizeof(U16);
+
+		if (parentDir != U16_MAX) {
+
+			if (parentDir >= header.directoryCount)
+				_gotoIfError(clean, Error_invalidOperation(2));
+
+			String parentName = ((DLEntry*)fileNames.entries.ptr)[parentDir].entryString;
+
+			_gotoIfError(clean, String_insert(&tmpPath, '/', 0, alloc));
+			_gotoIfError(clean, String_insertString(&tmpPath, parentName, 0, alloc));
+		}
+
+		//Load timestamp
+
+		Ns timestamp = 0;
+
+		if (header.flags & ECAFlags_FilesHaveDate) {
+
+			if(header.flags & ECAFlags_FilesHaveExtendedDate) {
+				timestamp = *(Ns*)filei;
+				filei += sizeof(Ns);
+			}
+
+			else {
+
+				timestamp = CAFile_loadDate(*(const U16*)(filei + 1), *(const U16*)filei);
+				filei += sizeof(U16) * 2;
+
+				if (timestamp == U64_MAX)
+					timestamp = 0;
+			}
+		}
+
+		//Grab data of file.
+		//This introduces a copy because Archive needs a separate alloc per file
+
+		U64 bufferSize = 0;
+		
+		switch (sizeType) {
+			case EXXDataSizeType_U8:	bufferSize = *filei;					break;
+			case EXXDataSizeType_U16:	bufferSize = *(const U16*) filei;	break;
+			case EXXDataSizeType_U32:	bufferSize = *(const U32*) filei;	break;
+			default:					bufferSize = *(const U64*) filei;
+		}
+
+		_gotoIfError(clean, Buffer_createUninitializedBytes(bufferSize, alloc, &tmpData));
+
+		const U8 *dataPtr = filePtr.ptr;
+		_gotoIfError(clean, Buffer_offset(&filePtr, bufferSize));
+
+		Buffer_copy(tmpData, Buffer_createConstRef(dataPtr, bufferSize));
+
+		//Move path and data to file
+
+		_gotoIfError(clean, Archive_addFile(&archive, tmpPath, tmpData, timestamp, alloc));
+
+		tmpPath = String_createNull();
+		tmpData = Buffer_createNull();
+	}
+
+	caFile->archive = archive;
+	archive = (Archive) { 0 };
+
+	caFile->settings = (CASettings) {
+		.compressionType = (EXXCompressionType)(header.type >> 4),
+		.encryptionType = (EXXEncryptionType)(header.type & 0xF),
+		.flags = (
+			header.flags & ECAFlags_UseSHA256 ? ECASettingsFlags_UseSHA256 :
+			ECASettingsFlags_None
+		) | (
+			header.flags & ECAFlags_FilesHaveExtendedDate ? 
+			ECASettingsFlags_IncludeFullDate | ECASettingsFlags_IncludeDate :
+			ECASettingsFlags_None
+		) | (
+			header.flags & ECAFlags_FilesHaveDate ? 
+			ECASettingsFlags_IncludeDate :
+			ECASettingsFlags_None
+		)
+	};
+
+	//Not copying encryption key, because you probably don't want to store it.
+	//And you already have it.
+
+clean:
+
+	if(err.genericError)
+		CAFile_free(caFile, alloc);
+
+	Buffer_free(&tmpData, alloc);
+	String_free(&tmpPath, alloc);
+	Archive_free(&archive, alloc);
+	DLFile_free(&fileNames, alloc);
+	return err;
+}

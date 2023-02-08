@@ -537,6 +537,24 @@ Error Buffer_append(Buffer *buf, const void *v, U64 length) {
 	return Buffer_appendBuffer(buf, Buffer_createConstRef(v, length));
 }
 
+Error Buffer_consume(Buffer *buf, void *v, U64 length) {
+
+	if(!buf)
+		return Error_nullPointer(!buf ? 0 : 1, 0);
+
+	const void *ptr = buf ? buf->ptr : NULL;
+
+	Error e = Buffer_offset(buf, length);
+
+	if(e.genericError)
+		return e;
+
+	if(v)
+		Buffer_copyBytesInternal(v, ptr, length);
+
+	return Error_none();
+}
+
 Error Buffer_createSubset(Buffer buf, U64 offset, U64 length, Bool isConst, Buffer *output) {
 
 	//Since our buffer was passed here, it's safe to make a ref (to ensure Buffer_offset doesn't fail)
@@ -589,6 +607,24 @@ Error Buffer_appendF32x4(Buffer *buf, F32x4 v) { return Buffer_append(buf, &v, s
 Error Buffer_appendF32x2(Buffer *buf, I32x2 v) { return Buffer_append(buf, &v, sizeof(v)); }
 Error Buffer_appendI32x4(Buffer *buf, I32x4 v) { return Buffer_append(buf, &v, sizeof(v)); }
 Error Buffer_appendI32x2(Buffer *buf, I32x2 v) { return Buffer_append(buf, &v, sizeof(v)); }
+
+Error Buffer_consumeU64(Buffer *buf, U64 *v) { return Buffer_consume(buf, v, sizeof(*v)); }
+Error Buffer_consumeU32(Buffer *buf, U32 *v) { return Buffer_consume(buf, v, sizeof(*v)); }
+Error Buffer_consumeU16(Buffer *buf, U16 *v) { return Buffer_consume(buf, v, sizeof(*v)); }
+Error Buffer_consumeU8(Buffer *buf,  U8 *v)  { return Buffer_consume(buf, v, sizeof(*v)); }
+Error Buffer_consumeC8(Buffer *buf,  C8 *v)  { return Buffer_consume(buf, v, sizeof(*v)); }
+
+Error Buffer_consumeI64(Buffer *buf, I64 *v) { return Buffer_consume(buf, v, sizeof(*v)); }
+Error Buffer_consumeI32(Buffer *buf, I32 *v) { return Buffer_consume(buf, v, sizeof(*v)); }
+Error Buffer_consumeI16(Buffer *buf, I16 *v) { return Buffer_consume(buf, v, sizeof(*v)); }
+Error Buffer_consumeI8(Buffer *buf,  I8 *v)  { return Buffer_consume(buf, v, sizeof(*v)); }
+
+Error Buffer_consumeF32(Buffer *buf, F32 *v) { return Buffer_consume(buf, v, sizeof(*v)); }
+
+Error Buffer_consumeF32x4(Buffer *buf, F32x4 *v) { return Buffer_consume(buf, v, sizeof(*v)); }
+Error Buffer_consumeF32x2(Buffer *buf, I32x2 *v) { return Buffer_consume(buf, v, sizeof(*v)); }
+Error Buffer_consumeI32x4(Buffer *buf, I32x4 *v) { return Buffer_consume(buf, v, sizeof(*v)); }
+Error Buffer_consumeI32x2(Buffer *buf, I32x2 *v) { return Buffer_consume(buf, v, sizeof(*v)); }
 
 //UTF-8
 //https://en.wikipedia.org/wiki/UTF-8
