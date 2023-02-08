@@ -259,9 +259,9 @@ Error StringList_concatStringx(StringList arr, String between, String *result) {
 Error Archive_createx(Archive *archive) { return Archive_create(Platform_instance.alloc, archive); }
 Bool Archive_freex(Archive *archive) { return Archive_free(archive, Platform_instance.alloc); }
 
-Bool Archive_hasFilex(Archive *archive, String path) { return Archive_hasFile(archive, path, Platform_instance.alloc); }
-Bool Archive_hasFolderx(Archive *archive, String path) { return Archive_hasFolder(archive, path, Platform_instance.alloc); }
-Bool Archive_hasx(Archive *archive, String path) { return Archive_has(archive, path, Platform_instance.alloc); }
+Bool Archive_hasFilex(Archive archive, String path) { return Archive_hasFile(archive, path, Platform_instance.alloc); }
+Bool Archive_hasFolderx(Archive archive, String path) { return Archive_hasFolder(archive, path, Platform_instance.alloc); }
+Bool Archive_hasx(Archive archive, String path) { return Archive_has(archive, path, Platform_instance.alloc); }
 
 Error Archive_addDirectoryx(Archive *archive, String path) { 
 	return Archive_addDirectory(archive, path, Platform_instance.alloc); 
@@ -275,11 +275,11 @@ Error Archive_updateFileDatax(Archive *archive, String path, Buffer data) {
 	return Archive_updateFileData(archive, path, data, Platform_instance.alloc);
 }
 
-Error Archive_getFileDatax(Archive *archive, String path, Buffer *data) { 
+Error Archive_getFileDatax(Archive archive, String path, Buffer *data) { 
 	return Archive_getFileData(archive, path, data, Platform_instance.alloc); 
 }
 
-Error Archive_getFileDataConstx(Archive *archive, String path, Buffer *data) {
+Error Archive_getFileDataConstx(Archive archive, String path, Buffer *data) {
 	return Archive_getFileDataConst(archive, path, data, Platform_instance.alloc);
 }
 
@@ -301,12 +301,12 @@ Error Archive_movex(Archive *archive, String loc, String directoryName) {
 	return Archive_move(archive, loc, directoryName, Platform_instance.alloc);
 }
 
-Error Archive_getInfox(Archive *archive, String loc, FileInfo *info) {
+Error Archive_getInfox(Archive archive, String loc, FileInfo *info) {
 	return Archive_getInfo(archive, loc, info, Platform_instance.alloc);
 }
 
 Error Archive_queryFileObjectCountx(
-	Archive *archive,
+	Archive archive,
 	String loc,
 	EFileType type,
 	Bool isRecursive,
@@ -315,20 +315,20 @@ Error Archive_queryFileObjectCountx(
 	return Archive_queryFileObjectCount(archive, loc, type, isRecursive, res, Platform_instance.alloc);
 }
 
-Error Archive_queryFileObjectCountAllx(Archive *archive, String loc, Bool isRecursive, U64 *res) {
+Error Archive_queryFileObjectCountAllx(Archive archive, String loc, Bool isRecursive, U64 *res) {
 	return Archive_queryFileObjectCountAll(archive, loc, isRecursive, res, Platform_instance.alloc);
 }
 
-Error Archive_queryFileCountx(Archive *archive, String loc, Bool isRecursive, U64 *res) {
+Error Archive_queryFileCountx(Archive archive, String loc, Bool isRecursive, U64 *res) {
 	return Archive_queryFileCount(archive, loc, isRecursive, res, Platform_instance.alloc);
 }
 
-Error Archive_queryFolderCountx(Archive *archive, String loc, Bool isRecursive, U64 *res) {
+Error Archive_queryFolderCountx(Archive archive, String loc, Bool isRecursive, U64 *res) {
 	return Archive_queryFolderCount(archive, loc, isRecursive, res, Platform_instance.alloc);
 }
 
 Error Archive_foreachx(
-	Archive *archive,
+	Archive archive,
 	String loc,
 	FileCallback callback,
 	void *userData,

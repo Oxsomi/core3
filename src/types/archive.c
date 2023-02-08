@@ -34,7 +34,7 @@ Bool Archive_free(Archive *archive, Allocator alloc) {
 }
 
 Bool Archive_getPath(
-	Archive *archive, 
+	Archive archive, 
 	String path, 
 	ArchiveEntry *entryOut, 
 	U64 *iPtr, 
@@ -42,7 +42,7 @@ Bool Archive_getPath(
 	Allocator alloc
 ) {
 
-	if(!archive || !archive->entries.ptr || !path.length)
+	if(!archive.entries.ptr || !path.length)
 		return false;
 
 	Bool isVirtual = false;
@@ -60,14 +60,14 @@ Bool Archive_getPath(
 
 	//TODO: Optimize this with a hashmap
 
-	for(U64 i = 0; i < archive->entries.length; ++i)
+	for(U64 i = 0; i < archive.entries.length; ++i)
 		if (String_equalsString(
-			((ArchiveEntry*)archive->entries.ptr)[i].path, resolvedPath, 
+			((ArchiveEntry*)archive.entries.ptr)[i].path, resolvedPath, 
 			EStringCase_Insensitive, true
 		)) {
 
 			if(entryOut && !entryOut->path.length)
-				*entryOut = ((ArchiveEntry*)archive->entries.ptr)[i];
+				*entryOut = ((ArchiveEntry*)archive.entries.ptr)[i];
 
 			if(iPtr)
 				*iPtr = i;
@@ -84,11 +84,11 @@ Bool Archive_getPath(
 	return false;
 }
 
-Bool Archive_has(Archive *archive, String path, Allocator alloc) {
+Bool Archive_has(Archive archive, String path, Allocator alloc) {
 	return Archive_getPath(archive, path, NULL, NULL, NULL, alloc);
 }
 
-Bool Archive_hasFile(Archive *archive, String path, Allocator alloc) {
+Bool Archive_hasFile(Archive archive, String path, Allocator alloc) {
 
 	ArchiveEntry entry = (ArchiveEntry) { 0 };
 
@@ -98,7 +98,7 @@ Bool Archive_hasFile(Archive *archive, String path, Allocator alloc) {
 	return entry.type == EFileType_File;
 }
 
-Bool Archive_hasFolder(Archive *archive, String path, Allocator alloc) {
+Bool Archive_hasFolder(Archive archive, String path, Allocator alloc) {
 
 	ArchiveEntry entry = (ArchiveEntry) { 0 };
 
@@ -131,6 +131,9 @@ Bool Archive_createOrFindParent(Archive *archive, String path, Allocator alloc) 
 
 Error Archive_add(Archive *archive, ArchiveEntry entry, Bool successIfExists, Allocator alloc) {
 
+	if (!archive)
+		return Error_nullPointer(0, 0);
+
 	//If folder already exists, we're done
 
 	String resolved = String_createNull();
@@ -138,7 +141,7 @@ Error Archive_add(Archive *archive, ArchiveEntry entry, Bool successIfExists, Al
 	Error err = Error_none();
 	String oldPath = String_createNull();
 
-	if (Archive_getPath(archive, entry.path, &out, NULL, &resolved, alloc)) {
+	if (Archive_getPath(*archive, entry.path, &out, NULL, &resolved, alloc)) {
 
 		if(out.type != entry.type || !successIfExists)
 			err = Error_alreadyDefined(0);
@@ -200,12 +203,15 @@ Error Archive_addFile(Archive *archive, String path, Buffer data, Ns timestamp, 
 
 Error Archive_removeInternal(Archive *archive, String path, Allocator alloc, EFileType type) {
 
+	if (!archive)
+		return Error_nullPointer(0, 0);
+
 	ArchiveEntry entry = (ArchiveEntry) { 0 };
 	U64 i = 0;
 	String resolved = String_createNull();
 	Error err = Error_none();
 
-	if(!Archive_getPath(archive, path, &entry, &i, &resolved, alloc))
+	if(!Archive_getPath(*archive, path, &entry, &i, &resolved, alloc))
 		return Error_notFound(0, 1, 0);
 
 	if(type != EFileType_Invalid && entry.type != type)
@@ -276,6 +282,9 @@ Error Archive_rename(
 	Allocator alloc
 ) {
 
+	if (!archive)
+		return Error_nullPointer(0, 0);
+
 	String resolvedLoc = String_createNull();
 	Error err = Error_none();
 
@@ -283,7 +292,7 @@ Error Archive_rename(
 		return Error_invalidParameter(1, 0, 0);
 
 	U64 i = 0;
-	if (!Archive_getPath(archive, loc, NULL, &i, &resolvedLoc, alloc))
+	if (!Archive_getPath(*archive, loc, NULL, &i, &resolvedLoc, alloc))
 		return Error_notFound(0, 1, 0);
 
 	//Rename 
@@ -308,14 +317,17 @@ Error Archive_move(
 	Allocator alloc
 ) {
 
+	if (!archive)
+		return Error_nullPointer(0, 0);
+
 	String resolved = String_createNull();
 	U64 i = 0;
 	ArchiveEntry parent = (ArchiveEntry) { 0 };
 
-	if (!Archive_getPath(archive, loc, NULL, &i, NULL, alloc))
+	if (!Archive_getPath(*archive, loc, NULL, &i, NULL, alloc))
 		return Error_notFound(0, 1, 0);
 
-	if (!Archive_getPath(archive, directoryName, &parent, NULL, &resolved, alloc))
+	if (!Archive_getPath(*archive, directoryName, &parent, NULL, &resolved, alloc))
 		return Error_notFound(0, 2, 0);
 
 	Error err = Error_none();
@@ -340,7 +352,7 @@ clean:
 	return err;
 }
 
-Error Archive_getInfo(Archive *archive, String path, FileInfo *info, Allocator alloc) {
+Error Archive_getInfo(Archive archive, String path, FileInfo *info, Allocator alloc) {
 
 	if(!info)
 		return Error_nullPointer(2, 0);
@@ -364,10 +376,13 @@ Error Archive_getInfo(Archive *archive, String path, FileInfo *info, Allocator a
 
 Error Archive_updateFileData(Archive *archive, String path, Buffer data, Allocator alloc) {
 
+	if (!archive)
+		return Error_nullPointer(0, 0);
+
 	ArchiveEntry entry = (ArchiveEntry) { 0 };
 	U64 i = 0;
 
-	if(!Archive_getPath(archive, path, &entry, &i, NULL, alloc))
+	if(!Archive_getPath(*archive, path, &entry, &i, NULL, alloc))
 		return Error_notFound(0, 1, 0);
 
 	Buffer_free(&entry.data, alloc);
@@ -376,7 +391,7 @@ Error Archive_updateFileData(Archive *archive, String path, Buffer data, Allocat
 }
 
 Error Archive_getFileDataInternal(
-	Archive *archive,
+	Archive archive,
 	String path, 
 	Buffer *data, 
 	Allocator alloc, 
@@ -405,16 +420,16 @@ Error Archive_getFileDataInternal(
 	return Error_none();
 }
 
-Error Archive_getFileData(Archive *archive, String path, Buffer *data, Allocator alloc) {
+Error Archive_getFileData(Archive archive, String path, Buffer *data, Allocator alloc) {
 	return Archive_getFileDataInternal(archive, path, data, alloc, false);
 }
 
-Error Archive_getFileDataConst(Archive *archive, String path, Buffer *data, Allocator alloc) {
+Error Archive_getFileDataConst(Archive archive, String path, Buffer *data, Allocator alloc) {
 	return Archive_getFileDataInternal(archive, path, data, alloc, true);
 }
 
 Error Archive_foreach(
-	Archive *archive,
+	Archive archive,
 	String loc,
 	FileCallback callback,
 	void *userData,
@@ -422,9 +437,6 @@ Error Archive_foreach(
 	EFileType type,
 	Allocator alloc
 ) {
-
-	if(!archive)
-		return Error_nullPointer(0, 0);
 
 	if(!callback)
 		return Error_nullPointer(3, 0);
@@ -451,9 +463,9 @@ Error Archive_foreach(
 	//		Because our files are dynamic, so we don't want to reorder those every time.
 	//		Maybe we should have Archive_optimize which is called before writing or if this functionality should be used.
 
-	for (U64 i = 0; i < archive->entries.length; ++i) {
+	for (U64 i = 0; i < archive.entries.length; ++i) {
 
-		ArchiveEntry cai = ((ArchiveEntry*)archive->entries.ptr)[i];
+		ArchiveEntry cai = ((ArchiveEntry*)archive.entries.ptr)[i];
 
 		if(type != EFileType_Invalid && type != cai.type)
 			continue;
@@ -492,7 +504,7 @@ Error countFile(FileInfo info, U64 *res) {
 }
 
 Error Archive_queryFileObjectCount(
-	Archive *archive, 
+	Archive archive, 
 	String loc, 
 	EFileType type, 
 	Bool isRecursive, 
@@ -515,7 +527,7 @@ Error Archive_queryFileObjectCount(
 }
 
 Error Archive_queryFileObjectCountAll(
-	Archive *archive,
+	Archive archive,
 	String loc,
 	Bool isRecursive,
 	U64 *res, 
@@ -525,7 +537,7 @@ Error Archive_queryFileObjectCountAll(
 }
 
 Error Archive_queryFileCount(
-	Archive *archive,
+	Archive archive,
 	String loc,
 	Bool isRecursive,
 	U64 *res, 
@@ -535,7 +547,7 @@ Error Archive_queryFileCount(
 }
 
 Error Archive_queryFolderCount(
-	Archive *archive, 
+	Archive archive, 
 	String loc, 
 	Bool isRecursive, 
 	U64 *res, 

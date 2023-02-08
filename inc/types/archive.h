@@ -22,17 +22,17 @@ typedef struct Archive {
 Error Archive_create(Allocator alloc, Archive *archive);
 Bool Archive_free(Archive *archive, Allocator alloc);
 
-Bool Archive_hasFile(Archive *archive, String path, Allocator alloc);
-Bool Archive_hasFolder(Archive *archive, String path, Allocator alloc);
-Bool Archive_has(Archive *archive, String path, Allocator alloc);
+Bool Archive_hasFile(Archive archive, String path, Allocator alloc);
+Bool Archive_hasFolder(Archive archive, String path, Allocator alloc);
+Bool Archive_has(Archive archive, String path, Allocator alloc);
 
 Error Archive_addDirectory(Archive *archive, String path, Allocator alloc);
 Error Archive_addFile(Archive *archive, String path, Buffer data, Ns timestamp, Allocator alloc);
 
 Error Archive_updateFileData(Archive *archive, String path, Buffer data, Allocator alloc);
 
-Error Archive_getFileData(Archive *archive, String path, Buffer *data, Allocator alloc);
-Error Archive_getFileDataConst(Archive *archive, String path, Buffer *data, Allocator alloc);
+Error Archive_getFileData(Archive archive, String path, Buffer *data, Allocator alloc);
+Error Archive_getFileDataConst(Archive archive, String path, Buffer *data, Allocator alloc);
 
 Error Archive_removeFile(Archive *archive, String path, Allocator alloc);
 Error Archive_removeFolder(Archive *archive, String path, Allocator alloc);
@@ -52,10 +52,10 @@ Error Archive_move(
 	Allocator alloc
 );
 
-Error Archive_getInfo(Archive *archive, String loc, FileInfo *info, Allocator alloc);
+Error Archive_getInfo(Archive archive, String loc, FileInfo *info, Allocator alloc);
 
 Error Archive_queryFileObjectCount(
-	Archive *archive, 
+	Archive archive, 
 	String loc, 
 	EFileType type, 
 	Bool isRecursive, 
@@ -64,7 +64,7 @@ Error Archive_queryFileObjectCount(
 );
 
 Error Archive_queryFileObjectCountAll(
-	Archive *archive,
+	Archive archive,
 	String loc,
 	Bool isRecursive,
 	U64 *res, 
@@ -72,7 +72,7 @@ Error Archive_queryFileObjectCountAll(
 );
 
 Error Archive_queryFileCount(
-	Archive *archive,
+	Archive archive,
 	String loc,
 	Bool isRecursive,
 	U64 *res, 
@@ -80,7 +80,7 @@ Error Archive_queryFileCount(
 );
 
 Error Archive_queryFolderCount(
-	Archive *archive,
+	Archive archive,
 	String loc,
 	Bool isRecursive,
 	U64 *res, 
@@ -88,7 +88,7 @@ Error Archive_queryFolderCount(
 );
 
 Error Archive_foreach(
-	Archive *archive,
+	Archive archive,
 	String loc,
 	FileCallback callback,
 	void *userData,

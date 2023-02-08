@@ -736,7 +736,10 @@ Error CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFi
 			if (diri.parentDirectory >= i)
 				_gotoIfError(clean, Error_invalidOperation(2));
 
-			String parentName = ((DLEntry*)fileNames.entries.ptr)[diri.parentDirectory].entryString;
+			String parentName = ((ArchiveEntry*)archive.entries.ptr + diri.parentDirectory)->path;
+
+			if (parentName.length && !parentName.ptr[parentName.length - 1])
+				--parentName.length;
 
 			_gotoIfError(clean, String_insert(&tmpPath, '/', 0, alloc));
 			_gotoIfError(clean, String_insertString(&tmpPath, parentName, 0, alloc));
@@ -767,7 +770,10 @@ Error CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFi
 			if (parentDir >= header.directoryCount)
 				_gotoIfError(clean, Error_invalidOperation(2));
 
-			String parentName = ((DLEntry*)fileNames.entries.ptr)[parentDir].entryString;
+			String parentName = ((ArchiveEntry*)archive.entries.ptr + parentDir)->path;
+
+			if (parentName.length && !parentName.ptr[parentName.length - 1])
+				--parentName.length;
 
 			_gotoIfError(clean, String_insert(&tmpPath, '/', 0, alloc));
 			_gotoIfError(clean, String_insertString(&tmpPath, parentName, 0, alloc));
