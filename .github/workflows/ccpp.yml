@@ -8,7 +8,11 @@ jobs:
     runs-on: windows-2022
     steps:
     - uses: actions/checkout@v1
-    - name: cmake build
-      run: build.bat Debug On
-    - name: cmake build
-      run: build.bat Debug Off
+    - name: dir
+      run: dir
+    - name: tree
+      run: tree
+    - name: build
+      run: build Debug On
+    - name: build
+      run: build Debug Off
