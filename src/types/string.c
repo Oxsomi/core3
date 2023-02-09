@@ -136,8 +136,8 @@ String String_createNull() { return (String) { 0 }; }
 String String_createConstRef(const C8 *ptr, U64 maxSize) { 
 	return (String) { 
 		.length = String_calcStrLen(ptr, maxSize),
-			.ptr = (C8*) ptr,
-			.capacity = U64_MAX		//Flag as const
+		.ptr = (C8*) ptr,
+		.capacity = U64_MAX		//Flag as const
 	};
 }
 
@@ -148,56 +148,56 @@ String String_createConstRefUnsafe(const C8 *ptr) {
 String String_createRef(C8 *ptr, U64 maxSize) { 
 	return (String) { 
 		.length = String_calcStrLen(ptr, maxSize),
-			.ptr = ptr,
-			.capacity = 0			//Flag as dynamic ref
+		.ptr = ptr,
+		.capacity = 0			//Flag as dynamic ref
 	};
 }
 
 String String_createConstRefSized(const C8 *ptr, U64 size) {
 	return (String) { 
 		.length = size,
-			.ptr = (C8*) ptr,
-			.capacity = U64_MAX		//Flag as const
+		.ptr = (C8*) ptr,
+		.capacity = U64_MAX		//Flag as const
 	};
 }
 
 String String_createRefSized(C8 *ptr, U64 size) {
 	return (String) { 
 		.length = size,
-			.ptr = ptr,
-			.capacity = 0			//Flag as dynamic ref
+		.ptr = ptr,
+		.capacity = 0			//Flag as dynamic ref
 	};
 }
 
 String String_createConstRefShortString(const ShortString str) {
 	return (String) {
 		.length = String_calcStrLen(str, _SHORTSTRING_LEN - 1),
-			.ptr = (C8*) str,
-			.capacity = U64_MAX		//Flag as const
+		.ptr = (C8*) str,
+		.capacity = U64_MAX		//Flag as const
 	};
 }
 
 String String_createConstRefLongString(const LongString str) {
 	return (String) {
 		.length = String_calcStrLen(str, _LONGSTRING_LEN - 1),
-			.ptr = (C8*) str,
-			.capacity = U64_MAX		//Flag as const
+		.ptr = (C8*) str,
+		.capacity = U64_MAX		//Flag as const
 	};
 }
 
 String String_createRefShortString(ShortString str) {
 	return (String) {
 		.length = String_calcStrLen(str, _SHORTSTRING_LEN - 1),
-			.ptr = str,
-			.capacity = 0			//Flag as dynamic
+		.ptr = str,
+		.capacity = 0			//Flag as dynamic
 	};
 }
 
 String String_createRefLongString(LongString str) {
 	return (String) {
 		.length = String_calcStrLen(str, _LONGSTRING_LEN - 1),
-			.ptr = str,
-			.capacity = 0			//Flag as dynamic
+		.ptr = str,
+		.capacity = 0			//Flag as dynamic
 	};
 }
 
@@ -365,6 +365,9 @@ Error String_create(C8 c, U64 size, Allocator alloc, String *result) {
 	if (!result)
 		return Error_nullPointer(3, 0);
 
+	if (result->ptr)
+		return Error_invalidOperation(0);
+
 	if (!size) {
 		*result = String_createNull();
 		return Error_none();
@@ -414,6 +417,9 @@ Error String_createCopy(String str, Allocator alloc, String *result) {
 	if (!alloc.alloc || !result)
 		return Error_nullPointer(!result ? 2 : 1, 0);
 
+	if (result->ptr)
+		return Error_invalidOperation(0);
+
 	if (!str.length) {
 		*result = String_createNull();
 		return Error_none();
@@ -456,7 +462,7 @@ Bool String_free(String *str, Allocator alloc) {
 																		\
 	String prefix = String_createConstRefUnsafe(prefixRaw);				\
 																		\
-	if (result->length)													\
+	if (result->ptr)													\
 		return Error_invalidOperation(0);								\
 																		\
 	*result = String_createNull();										\
@@ -1960,6 +1966,12 @@ String String_trim(String s) {
 //StringList
 
 Error StringList_create(U64 length, Allocator alloc, StringList *arr) {
+
+	if (!arr)
+		return Error_nullPointer(2, 0);
+
+	if (arr->ptr)
+		return Error_invalidOperation(0);
 
 	StringList sl = (StringList) { .length = length };
 

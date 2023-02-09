@@ -426,6 +426,9 @@ Error Buffer_createOneBits(U64 length, Allocator alloc, Buffer *result) {
 
 Error Buffer_createCopy(Buffer buf, Allocator alloc, Buffer *result) {
 
+	if (result && result->ptr)
+		return Error_invalidOperation(0);
+
 	if(!Buffer_length(buf)) {
 
 		if(result)
@@ -555,7 +558,16 @@ Error Buffer_consume(Buffer *buf, void *v, U64 length) {
 	return Error_none();
 }
 
-Error Buffer_createSubset(Buffer buf, U64 offset, U64 length, Bool isConst, Buffer *output) {
+Error Buffer_createSubset(
+	Buffer buf, 
+	U64 offset, 
+	U64 length, 
+	Bool isConst, 
+	Buffer *output
+) {
+
+	if (output && output->ptr)
+		return Error_invalidOperation(0);
 
 	//Since our buffer was passed here, it's safe to make a ref (to ensure Buffer_offset doesn't fail)
 

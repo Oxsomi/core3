@@ -11,14 +11,7 @@ typedef struct RefPtr {
 	ObjectFreeFunc free;
 } RefPtr;
 
-inline RefPtr RefPtr_create(void *ptr, Allocator alloc, ObjectFreeFunc free) {
-	return (RefPtr) {
-		.refCount = 1,
-		.ptr = ptr,
-		.alloc = alloc,
-		.free = free
-	};
-}
+RefPtr RefPtr_create(void *ptr, Allocator alloc, ObjectFreeFunc free);
 
 Bool RefPtr_add(RefPtr *ptr);
 Bool RefPtr_sub(RefPtr *ptr);

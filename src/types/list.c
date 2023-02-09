@@ -78,6 +78,9 @@ Error List_create(U64 length, U64 stride, Allocator allocator, List *result) {
 	if(!result)
 		return Error_nullPointer(3, 0);
 
+	if (result->ptr)
+		return Error_invalidOperation(0);
+
 	if(!length || !stride)
 		return Error_invalidParameter(!length ? 0 : 1, 0, 0);
 
@@ -105,6 +108,9 @@ Error List_createFromBuffer(Buffer buf, U64 stride, List *result) {
 	if(!result)
 		return Error_nullPointer(3, 0);
 
+	if (result->ptr)
+		return Error_invalidOperation(0);
+
 	if(!buf.ptr || !stride)
 		return Error_invalidParameter(!buf.ptr ? 0 : 1, 0, 0);
 
@@ -125,6 +131,9 @@ Error List_createNullBytes(U64 length, U64 stride, Allocator allocator, List *re
 
 	if(!result)
 		return Error_nullPointer(3, 0);
+
+	if (result->ptr)
+		return Error_invalidOperation(0);
 
 	if(!length || !stride)
 		return Error_invalidParameter(!length ? 0 : 1, 0, 0);
@@ -189,6 +198,9 @@ Error List_createRepeated(
 
 Error List_createCopy(List list, Allocator allocator, List *result) {
 
+	if (result && result->ptr)
+		return Error_invalidOperation(0);
+
 	if(List_empty(list)) {
 
 		if(result) {
@@ -212,6 +224,9 @@ Error List_createSubset(List list, U64 index, U64 length, List *result) {
 
 	if(!result)
 		return Error_nullPointer(3, 0);
+
+	if (result->ptr)
+		return Error_invalidOperation(0);
 
 	if(!length)
 		return Error_invalidParameter(2, 0, 0);
@@ -276,6 +291,9 @@ Error List_createRef(U8 *ptr, U64 length, U64 stride, List *result) {
 	if(!ptr || !result)
 		return Error_nullPointer(!ptr ? 0 : 3, 0);
 
+	if (result->ptr)
+		return Error_invalidOperation(0);
+
 	if(!length || !stride)
 		return Error_invalidParameter(!length ? 1 : 2, 0, 0);
 
@@ -295,6 +313,9 @@ Error List_createConstRef(const U8 *ptr, U64 length, U64 stride, List *result) {
 
 	if(!ptr || !result)
 		return Error_nullPointer(!ptr ? 0 : 3, 0);
+
+	if (result->ptr)
+		return Error_invalidOperation(0);
 
 	if(!length || !stride)
 		return Error_invalidParameter(!length ? 1 : 2, 0, 0);

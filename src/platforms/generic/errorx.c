@@ -20,9 +20,12 @@ void Error_printx(Error err, ELogLevel logLevel, ELogOptions options) {
 		return;
 
 	String str = String_createConstRefUnsafe(EGenericError_TO_STRING[err.genericError]);
+	String strCpy = String_createNull();
 
-	if(String_createCopyx(str, &str).genericError)
+	if(String_createCopyx(str, &strCpy).genericError)
 		return;
+
+	str = strCpy;			//Safe because it's not allocated.
 
 	if(err.errorSubId) {
 

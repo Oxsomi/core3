@@ -97,6 +97,9 @@ Error CAFile_create(CASettings settings, Archive archive, CAFile *caFile) {
 	if(!archive.entries.ptr)
 		return Error_nullPointer(1, 0);
 
+	if(caFile->archive.entries.ptr)
+		return Error_invalidParameter(2, 0, 0);
+
 	if(settings.compressionType >= EXXCompressionType_Count)
 		return Error_invalidParameter(0, 0, 0);
 
@@ -746,6 +749,8 @@ Error CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFi
 		}
 
 		_gotoIfError(clean, Archive_addDirectory(&archive, tmpPath, alloc));
+
+		tmpPath = String_createNull();
 	}
 
 	//Add file

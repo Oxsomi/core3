@@ -98,6 +98,12 @@ Error InputDevice_create(U16 buttons, U16 axes, EInputDeviceType type, InputDevi
 	if(!result)
 		return Error_nullPointer(3, 0);
 
+	if(result->handles.ptr || result->states.ptr)
+		return Error_invalidOperation(0);
+
+	if(!buttons || !axes)
+		return Error_invalidOperation(1);
+
 	*result = (InputDevice) {
 		.buttons = buttons,
 		.axes = axes,

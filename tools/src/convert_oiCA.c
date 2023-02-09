@@ -178,6 +178,7 @@ Error _CLI_convertFromCA(ParsedArgs args, String input, FileInfo inputInfo, Stri
 
 		if (ei.type == EFileType_Folder) {
 			_gotoIfError(clean, File_add(loc, EFileType_Folder, 1 * SECOND));
+			String_freex(&loc);
 			continue;
 		}
 

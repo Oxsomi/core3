@@ -12,6 +12,9 @@ Error Lock_create(Lock *res) {
 	if(!res)
 		return Error_nullPointer(0, 0);
 
+	if(res->data)
+		return Error_invalidOperation(0);
+
 	*res = (Lock) { .data = CreateMutexA(NULL, FALSE, NULL) };
 
 	if (!res->data) {

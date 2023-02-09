@@ -207,7 +207,7 @@ Error Platform_initExt(Platform *result, String currAppDir) {
 
 		//Grab app directory of where the exe is installed
 
-		String appDir;
+		String appDir = String_createNull();
 		if ((err = String_createCopyx(currAppDir, &appDir)).genericError) {
 			Buffer_freex(&platformExt);
 			return Error_platformError(1, GetLastError());
@@ -223,7 +223,7 @@ Error Platform_initExt(Platform *result, String currAppDir) {
 	
 		else String_cut(appDir, 0, loc + 1, &basePath);
 
-		String workDir;
+		String workDir = String_createNull();
 
 		if ((err = String_createCopyx(basePath, &workDir)).genericError) {
 			Buffer_freex(&platformExt);
