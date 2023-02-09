@@ -1,7 +1,16 @@
 #pragma once
 #include <stdint.h>
 #include <stdbool.h>
-#include "cfg/config.h"
+
+//Platform and arch stuff
+
+#define SIMD_NONE 0
+#define SIMD_SSE 1
+#define SIMD_NEON 2
+
+#define ARCH_NONE 0
+#define ARCH_X64 1
+#define ARCH_ARM 2
 
 //A hint to show that something is implementation dependent
 //For ease of implementing a new implementation

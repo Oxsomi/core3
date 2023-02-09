@@ -91,7 +91,15 @@ else()
 	set(_WORKING_DIR "0")
 endif()
 
-configure_file(config.h.in ${CMAKE_CURRENT_SOURCE_DIR}/inc/cfg/config.h)
+if(WIN32)
+	message("-- Enabling Windows support...")
+	set(platform windows)
+	set(_PLATFORM_TYPE EPlatform_Windows)
+else()
+	message("-- Enabling Linux support...")
+	set(platform linux)
+	set(_PLATFORM_TYPE EPlatform_Linux)
+endif()
 
 # Types 
 
@@ -105,6 +113,8 @@ add_library(
 	${typesSources}
 	CMakeLists.txt
 )
+
+target_compile_definitions(OxC3_types PUBLIC -D_SIMD=${_SIMD} -D_WORKING_DIR=${_WORKING_DIR} -D_RELAX_FLOAT=${_RELAX_FLOAT} -D_ARCH=${_ARCH} -D_PLATFORM_TYPE=${_PLATFORM_TYPE})
 
 target_include_directories(OxC3_types PUBLIC inc)
 
@@ -128,14 +138,6 @@ add_library(
 target_link_libraries(OxC3_formats PUBLIC OxC3_types)
 
 # Platforms
-
-if(WIN32)
-	set(platform windows)
-	add_definitions(-D_PLATFORM_TYPE=EPlatform_Windows)
-else()
-	set(platform linux)
-	add_definitions(-D_PLATFORM_TYPE=EPlatform_Linux)
-endif()
 
 message("-- Targetting platform: ${platform}")
 
