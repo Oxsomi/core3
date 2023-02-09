@@ -9,6 +9,6 @@ jobs:
     steps:
     - uses: actions/checkout@v1
     - name: cmake build
-      run: build Debug On
+      run: build.bat Debug On
     - name: cmake build
-      run: build Debug Off
+      run: build.bat Debug Off
