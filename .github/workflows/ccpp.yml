@@ -8,11 +8,7 @@ jobs:
     runs-on: windows-2022
     steps:
     - uses: actions/checkout@v1
-    - name: dir
-      run: dir
-    - name: tree
-      run: tree
     - name: build
-      run: build Debug On
+      run: D:\a\core3\core3\build.bat Debug On
     - name: build
-      run: build Debug Off
+      run: D:\a\core3\core3\build.bat Debug Off
