@@ -35,8 +35,12 @@
 #endif
 
 Ns Time_now() {
+
 	struct timespec ts;
-	timespec_get(&ts, TIME_UTC);
+
+	if(!timespec_get(&ts, TIME_UTC))
+		return (Ns) U64_MAX;
+
 	return (Ns)ts.tv_sec * SECOND + (Ns)ts.tv_nsec;
 }
 
@@ -69,7 +73,11 @@ I64 Time_clocksElapsed(U64 prevClocks) { return Time_dns(prevClocks, Time_clocks
 DNs Time_elapsed(Ns prev) { return Time_dns(prev, Time_now()); }
 
 //ISO 8601 e.g. 2022-02-26T21:08:45.000000000Z
-//The standard functions strp don't work properly cross platform
+//The standard functions strp don't work properly cross platform.
+//This is not done via our String functions because format is called at important moments.
+//At these moments there might not be any space left on the heap to allocate or there might be corruption there,
+//as such, using string would be problematic. (This also includes error handling with logging and signals such as segfault).
+//Our stack is less likely to be corrupted, if it is then we can't properly handle it.
 
 void setNum(TimerFormat format, I64 offset, U64 length, U64 v) {
 

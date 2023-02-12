@@ -36,6 +36,7 @@ extern const F32 F32_DEG_TO_RAD;
 //But math operations can't create them
 
 //Uint
+//TODO: Errors
 
 U64 U64_min(U64 v0, U64 v1);
 U64 U64_max(U64 v0, U64 v1);

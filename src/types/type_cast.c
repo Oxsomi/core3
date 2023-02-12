@@ -27,6 +27,9 @@
 
 Error F32_fromBits(U64 v, F32 *res) {
 
+	if(!res)
+		return Error_nullPointer(1, 0);
+
 	if(v > U32_MAX)
 		return Error_overflow(0, 0, v, U32_MAX);
 
@@ -67,15 +70,15 @@ Error F32_fromBits(U64 v, F32 *res) {
 #define _CastFromF(type) _CastFromI(type, type, *(const U32*)&v)
 
 Error I8_fromUInt(U64 v, I8 *res)		_CastFromU(I8, (U64)v)
-Error I8_fromInt(I64 v, I8 *res)		_CastFromI(I8, U8, (U64)(I64)v)
+Error I8_fromInt(I64 v, I8 *res)		_CastFromI(I8, U8, (U64)v)
 Error I8_fromFloat(F32 v, I8 *res)		_CastFromF(I8) 
 
 Error I16_fromUInt(U64 v, I16 *res)		_CastFromU(I16, (U64)v)
-Error I16_fromInt(I64 v, I16 *res)		_CastFromI(I16, U16, (U64)(I64)v)
+Error I16_fromInt(I64 v, I16 *res)		_CastFromI(I16, U16, (U64)v)
 Error I16_fromFloat(F32 v, I16 *res)	_CastFromF(I16) 
 
 Error I32_fromUInt(U64 v, I32 *res)		_CastFromU(I32, (U64)v)
-Error I32_fromInt(I64 v, I32 *res) 		_CastFromI(I32, U32, (U64)(I64)v)
+Error I32_fromInt(I64 v, I32 *res) 		_CastFromI(I32, U32, (U64)v)
 Error I32_fromFloat(F32 v, I32 *res)	_CastFromF(I32)
 
 Error I64_fromUInt(U64 v, I64 *res) {
@@ -122,6 +125,9 @@ Error U64_fromFloat(F32 v, U64 *res)	_CastFromF(U64)
 //Cast to floats
 
 #define CastToF32 {															\
+																			\
+	if(!res)																\
+		return Error_nullPointer(1, 0);										\
 																			\
 	F32 r = (F32) v;														\
 																			\

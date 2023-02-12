@@ -246,19 +246,19 @@ Error String_replaceLastStringx(String *s, String search, String replace, EStrin
 	return String_replaceStringx(s, search, replace, caseSensitive, false);
 }
 
-List String_findAllx(String s, C8 c, EStringCase caseSensitive) {
-	return String_findAll(s, c, Platform_instance.alloc, caseSensitive);
+Error String_findAllx(String s, C8 c, EStringCase caseSensitive, List *result) {
+	return String_findAll(s, c, Platform_instance.alloc, caseSensitive, result);
 }
 
-List String_findAllStringx(String s, String other, EStringCase caseSensitive) {
-	return String_findAllString(s, other, Platform_instance.alloc, caseSensitive);
+Error String_findAllStringx(String s, String other, EStringCase caseSensitive, List *result) {
+	return String_findAllString(s, other, Platform_instance.alloc, caseSensitive, result);
 }
 
 Error StringList_createx(U64 length, StringList *result) {
 	return StringList_create(length, Platform_instance.alloc, result);
 }
 
-Error StringList_createCopyx(const StringList *toCopy, StringList *arr) {
+Error StringList_createCopyx(StringList toCopy, StringList *arr) {
 	return StringList_createCopy(toCopy, Platform_instance.alloc, arr);
 }
 

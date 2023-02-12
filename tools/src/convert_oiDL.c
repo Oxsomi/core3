@@ -134,7 +134,7 @@ Error _CLI_convertToDL(ParsedArgs args, String input, FileInfo inputInfo, String
 
 		if (args.flags & EOperationFlags_Ascii) {
 
-			String str = String_createConstRef(buf.ptr, Buffer_length(buf));
+			String str = String_createConstRefSized(buf.ptr, Buffer_length(buf));
 
 			//Grab split string
 
@@ -193,7 +193,11 @@ Error _CLI_convertToDL(ParsedArgs args, String input, FileInfo inputInfo, String
 
 			String stri = ((const String*)paths.ptr)[i];
 			String_cutBeforeLast(stri, '/', EStringCase_Sensitive, &basePath);
-			String_cutAfterLast(basePath, '.', EStringCase_Sensitive, &basePath);
+
+			String tmp = String_createNull();
+
+			if(String_cutAfterLast(basePath, '.', EStringCase_Sensitive, &tmp))
+				basePath = tmp;
 
 			U64 dec = 0;
 			if (!String_parseDec(basePath, &dec) || dec >> 32) {
@@ -213,7 +217,7 @@ Error _CLI_convertToDL(ParsedArgs args, String input, FileInfo inputInfo, String
 				break;
 			}
 
-			((String*)sortedPaths.ptr)[dec] = String_createConstRef(stri.ptr, stri.length);
+			((String*)sortedPaths.ptr)[dec] = String_createConstRefSized(stri.ptr, stri.length);
 		}
 
 		//Keep the sorting as is, since it's not linear

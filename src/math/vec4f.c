@@ -174,15 +174,15 @@ F32x4 F32x4_negTwo() { return F32x4_xxxx4(-2); }
 Bool F32x4_all(F32x4 b) { return F32x4_reduce(F32x4_neq(b, F32x4_zero())) == 4; }
 Bool F32x4_any(F32x4 b) { return F32x4_reduce(F32x4_neq(b, F32x4_zero())); }
 
-F32x4 F32x4_load1(const F32 *arr) { return F32x4_create1(*arr); }
-F32x4 F32x4_load2(const F32 *arr) { return F32x4_create2(*arr, arr[1]); }
-F32x4 F32x4_load3(const F32 *arr) { return F32x4_create3(*arr, arr[1], arr[2]); }
-F32x4 F32x4_load4(const F32 *arr) { return *(const F32x4*) arr; }
+F32x4 F32x4_load1(const F32 *arr) { return arr ? F32x4_create1(*arr) : F32x4_zero(); }
+F32x4 F32x4_load2(const F32 *arr) { return arr ? F32x4_create2(*arr, arr[1]) : F32x4_zero(); }
+F32x4 F32x4_load3(const F32 *arr) { return arr ? F32x4_create3(*arr, arr[1], arr[2]) : F32x4_zero(); }
+F32x4 F32x4_load4(const F32 *arr) { return arr ? *(const F32x4*) arr : F32x4_zero(); }
 
-void F32x4_setX(F32x4 *a, F32 v) { *a = F32x4_create4(v,				F32x4_y(*a),	F32x4_z(*a),	F32x4_w(*a)); }
-void F32x4_setY(F32x4 *a, F32 v) { *a = F32x4_create4(F32x4_x(*a),		v,				F32x4_z(*a),	F32x4_w(*a)); }
-void F32x4_setZ(F32x4 *a, F32 v) { *a = F32x4_create4(F32x4_x(*a),		F32x4_y(*a),	v,				F32x4_w(*a)); }
-void F32x4_setW(F32x4 *a, F32 v) { *a = F32x4_create4(F32x4_x(*a),		F32x4_y(*a),	F32x4_z(*a),	v); }
+void F32x4_setX(F32x4 *a, F32 v) { if(a) *a = F32x4_create4(v,					F32x4_y(*a),	F32x4_z(*a),	F32x4_w(*a)); }
+void F32x4_setY(F32x4 *a, F32 v) { if(a) *a = F32x4_create4(F32x4_x(*a),		v,				F32x4_z(*a),	F32x4_w(*a)); }
+void F32x4_setZ(F32x4 *a, F32 v) { if(a) *a = F32x4_create4(F32x4_x(*a),		F32x4_y(*a),	v,				F32x4_w(*a)); }
+void F32x4_setW(F32x4 *a, F32 v) { if(a) *a = F32x4_create4(F32x4_x(*a),		F32x4_y(*a),	F32x4_z(*a),	v); }
 
 void F32x4_set(F32x4 *a, U8 i, F32 v) {
 	switch (i & 3) {

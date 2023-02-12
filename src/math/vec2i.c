@@ -63,15 +63,15 @@ I32x2 I32x2_negTwo() { return I32x2_xx2(-2); }
 Bool I32x2_all(I32x2 b) { return I32x2_reduce(I32x2_neq(b, I32x2_zero())) == 4; }
 Bool I32x2_any(I32x2 b) { return I32x2_reduce(I32x2_neq(b, I32x2_zero())); }
 
-I32x2 I32x2_load1(const I32 *arr) { return I32x2_create1(*arr); }
-I32x2 I32x2_load2(const I32 *arr) { return I32x2_create2(*arr, arr[1]); }
+I32x2 I32x2_load1(const I32 *arr) { return arr ? I32x2_create1(*arr) : I32x2_zero(); }
+I32x2 I32x2_load2(const I32 *arr) { return arr ? I32x2_create2(*arr, arr[1]) : I32x2_zero(); }
 
 I32x2 I32x2_swapEndianness(I32x2 v) {
 	return I32x2_create2(I32_swapEndianness(I32x2_x(v)), I32_swapEndianness(I32x2_y(v)));
 }
 
-void I32x2_setX(I32x2 *a, I32 v) { *a = I32x2_create2(v,			I32x2_y(*a)); }
-void I32x2_setY(I32x2 *a, I32 v) { *a = I32x2_create2(I32x2_x(*a),	v); }
+void I32x2_setX(I32x2 *a, I32 v) { if(a) *a = I32x2_create2(v, I32x2_y(*a)); }
+void I32x2_setY(I32x2 *a, I32 v) { if(a) *a = I32x2_create2(I32x2_x(*a), v); }
 
 void I32x2_set(I32x2 *a, U8 i, I32 v) {
 	switch (i & 1) {

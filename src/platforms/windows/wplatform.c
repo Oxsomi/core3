@@ -63,7 +63,7 @@ String Error_formatPlatformError(Error err) {
 		return String_createNull();
 
 	String res;
-	if((err = String_createCopyx(String_createConstRef(lpBuffer, f), &res)).genericError) {
+	if((err = String_createCopyx(String_createConstRefSized(lpBuffer, f), &res)).genericError) {
 		LocalFree(lpBuffer);
 		return String_createNull();
 	}
@@ -242,7 +242,7 @@ Error Platform_initExt(Platform *result, String currAppDir) {
 		String basePath = String_createNull();
 
 		if (loc == appDir.length)
-			basePath = String_createConstRef(appDir.ptr, appDir.length);
+			basePath = String_createConstRefAuto(appDir.ptr, appDir.length);
 	
 		else String_cut(appDir, 0, loc + 1, &basePath);
 
@@ -272,7 +272,7 @@ Error Platform_initExt(Platform *result, String currAppDir) {
 
 		//Move to heap and standardize
 
-		if((err = String_createCopyx(String_createConstRef(buff, chars), &result->workingDirectory)).genericError) {
+		if((err = String_createCopyx(String_createConstRefSized(buff, chars), &result->workingDirectory)).genericError) {
 			Buffer_freex(&platformExt);
 			return err;
 		}

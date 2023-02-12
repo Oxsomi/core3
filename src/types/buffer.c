@@ -227,16 +227,16 @@ Buffer Buffer_createConstRef(const void *v, U64 length) {
 
 Error Buffer_eq(Buffer buf0, Buffer buf1, Bool *result) {
 
+	if(!result)
+		return Error_nullPointer(2, 0);
+
 	if (!buf0.ptr && !buf1.ptr) {
-		if(result) *result = true;
+		*result = true;
 		return Error_none();
 	}
 	
 	if(!buf0.ptr || !buf1.ptr)
 		return Error_nullPointer(!buf0.ptr ? 0 : 1, 0);
-
-	if(!result)
-		return Error_nullPointer(2, 0);
 
 	*result = false;
 
@@ -589,6 +589,9 @@ Error Buffer_createSubset(
 	Buffer *output
 ) {
 
+	if (!output)
+		return Error_nullPointer(4, 0);
+
 	if (output && output->ptr)
 		return Error_invalidOperation(0);
 
@@ -669,7 +672,7 @@ Error Buffer_readAsUTF8(Buffer buf, U64 i, UTF8CodePointInfo *codepoint) {
 	if(!codepoint)
 		return Error_nullPointer(3, 0);
 
-	if(i == U64_MAX || i + 1 > Buffer_length(buf))
+	if(i >= U64_MAX - 4 || i + 1 > Buffer_length(buf))
 		return Error_outOfBounds(0, 0, i, Buffer_length(buf));
 
 	//Ascii
@@ -788,6 +791,7 @@ Bool Buffer_isUTF8(Buffer buf, F32 threshold) {
 
 	U64 i = 0;
 	F32 counter = 0;
+	F32 invLen = 1.f / Buffer_length(buf);
 
 	while (i < Buffer_length(buf)) {
 
@@ -795,7 +799,7 @@ Bool Buffer_isUTF8(Buffer buf, F32 threshold) {
 
 		if((Buffer_readAsUTF8(buf, i, &info)).genericError) {
 			
-			counter += 1.f / Buffer_length(buf);
+			counter += invLen;
 
 			if(counter >= threshold)
 				return false;

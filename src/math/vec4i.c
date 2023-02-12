@@ -51,10 +51,15 @@ I32x4 I32x4_negTwo() { return I32x4_xxxx4(-2); }
 Bool I32x4_all(I32x4 b) { return I32x4_reduce(I32x4_neq(b, I32x4_zero())) == 4; }
 Bool I32x4_any(I32x4 b) { return I32x4_reduce(I32x4_neq(b, I32x4_zero())); }
 
-I32x4 I32x4_load1(const I32 *arr) { return I32x4_create1(*arr); }
-I32x4 I32x4_load2(const I32 *arr) { return I32x4_create2(*arr, arr[1]); }
-I32x4 I32x4_load3(const I32 *arr) { return I32x4_create3(*arr, arr[1], arr[2]); }
-I32x4 I32x4_load4(const I32 *arr) { return *(const I32x4*) arr; }
+I32x4 I32x4_load1(const I32 *arr) { return arr ? I32x4_create1(*arr) : I32x4_zero(); }
+I32x4 I32x4_load2(const I32 *arr) { return arr ? I32x4_create2(*arr, arr[1]) : I32x4_zero(); }
+I32x4 I32x4_load3(const I32 *arr) { return arr ? I32x4_create3(*arr, arr[1], arr[2]) : I32x4_zero(); }
+
+//Not a cast because that doesn't work on misaligned ints
+
+I32x4 I32x4_load4(const I32 *arr) { 
+	return arr ? I32x4_create4(*arr, arr[1], arr[2], arr[3]) : I32x4_zero(); 
+}
 
 I32x4 I32x4_swapEndianness(I32x4 v) {
 
@@ -68,10 +73,10 @@ I32x4 I32x4_swapEndianness(I32x4 v) {
 	return I32x4_wzyx(res);
 }
 
-void I32x4_setX(I32x4 *a, I32 v) { *a = I32x4_create4(v,			I32x4_y(*a),	I32x4_z(*a),	I32x4_w(*a)); }
-void I32x4_setY(I32x4 *a, I32 v) { *a = I32x4_create4(I32x4_x(*a),	v,				I32x4_z(*a),	I32x4_w(*a)); }
-void I32x4_setZ(I32x4 *a, I32 v) { *a = I32x4_create4(I32x4_x(*a),	I32x4_y(*a),	v,				I32x4_w(*a)); }
-void I32x4_setW(I32x4 *a, I32 v) { *a = I32x4_create4(I32x4_x(*a),	I32x4_y(*a),	I32x4_z(*a),	v); }
+void I32x4_setX(I32x4 *a, I32 v) { if(a) *a = I32x4_create4(v,				I32x4_y(*a),	I32x4_z(*a),	I32x4_w(*a)); }
+void I32x4_setY(I32x4 *a, I32 v) { if(a) *a = I32x4_create4(I32x4_x(*a),	v,				I32x4_z(*a),	I32x4_w(*a)); }
+void I32x4_setZ(I32x4 *a, I32 v) { if(a) *a = I32x4_create4(I32x4_x(*a),	I32x4_y(*a),	v,				I32x4_w(*a)); }
+void I32x4_setW(I32x4 *a, I32 v) { if(a) *a = I32x4_create4(I32x4_x(*a),	I32x4_y(*a),	I32x4_z(*a),	v); }
 
 void I32x4_set(I32x4 *a, U8 i, I32 v) {
 	switch (i & 3) {

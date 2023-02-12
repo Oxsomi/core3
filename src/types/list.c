@@ -39,8 +39,8 @@ Buffer List_buffer(List l) {
 }
 
 Buffer List_allocatedBuffer(List l) { 
-	return List_isConstRef(l) ? Buffer_createNull() : 
-		Buffer_createRef(List_isRef(l) ? NULL : l.ptr, List_allocatedBytes(l)); 
+	return List_isRef(l) ? Buffer_createNull() : 
+		Buffer_createRef(l.ptr, List_allocatedBytes(l)); 
 }
 
 Buffer List_bufferConst(List l) { return Buffer_createConstRef(l.ptr, List_bytes(l)); }
@@ -69,13 +69,13 @@ U8 *List_ptr(List list, U64 elementOffset) {
 }
 
 Buffer List_atConst(List list, U64 offset) {
-	return offset < list.length && !List_isConstRef(list) ? 
+	return offset < list.length ? 
 		Buffer_createConstRef(list.ptr + offset * list.stride, list.stride) : Buffer_createNull();
 }
 
 Buffer List_at(List list, U64 offset) {
-	return offset < list.length ? Buffer_createRef(list.ptr + offset * list.stride, list.stride) : 
-		Buffer_createNull();
+	return offset < list.length && !List_isConstRef(list) ? 
+		Buffer_createRef(list.ptr + offset * list.stride, list.stride) : Buffer_createNull();
 }
 
 Error List_eq(List a, List b, Bool *result) {
@@ -191,6 +191,9 @@ Error List_createRepeated(
 	if(!result)
 		return Error_nullPointer(4, 0);
 
+	if (result->ptr)
+		return Error_invalidOperation(0);
+
 	if(!length || !stride)
 		return Error_invalidParameter(!length ? 0 : 1, 0, 0);
 
@@ -213,6 +216,7 @@ Error List_createRepeated(
 	for(U64 i = 0; i < length; ++i)
 		if((err = List_set(*result, i, data)).genericError) {
 			Buffer_free(&buf, allocator);
+			*result = (List) { 0 };
 			return err;
 		}
 
@@ -221,17 +225,15 @@ Error List_createRepeated(
 
 Error List_createCopy(List list, Allocator allocator, List *result) {
 
-	if (result && result->ptr)
+	if(!result)
+		return Error_nullPointer(2, 0);
+
+	if (result->ptr)
 		return Error_invalidOperation(0);
 
 	if(List_empty(list)) {
-
-		if(result) {
-			*result = List_createEmpty(list.stride);
-			return Error_none();
-		}
-
-		return Error_nullPointer(2, 0);
+		*result = List_createEmpty(list.stride);
+		return Error_none();
 	}
 
 	Error err = List_create(list.length, list.stride, allocator, result);
@@ -275,6 +277,9 @@ Error List_createSubsetReverse(
 ) {
 	
 	if(!result)
+		return Error_nullPointer(4, 0);
+	
+	if(result->ptr)
 		return Error_nullPointer(4, 0);
 
 	if(!length)
@@ -412,6 +417,9 @@ Error List_find(List list, Buffer buf, Allocator allocator, List *result) {
 	if(!result)
 		return Error_nullPointer(3, 0);
 
+	if(result->ptr)
+		return Error_invalidParameter(3, 0, 0);
+
 	*result = List_createEmpty(sizeof(U64));
 	Error err = List_reserve(result, list.length / 100 + 16, allocator);
 
@@ -466,7 +474,7 @@ U64 List_findLast(List list, Buffer buf, U64 index) {
 
 	Error err;
 
-	for(U64 i = list.length; i != U64_MAX && i >= index; --i) {
+	for(U64 i = list.length - 1; i != U64_MAX && i >= index; --i) {
 
 		Bool b = false;
 		err = Buffer_eq(List_atConst(list, i), buf, &b);
@@ -523,7 +531,7 @@ Error List_copy(List src, U64 srcOffset, List dst, U64 dstOffset, U64 count) {
 
 Error List_shrinkToFit(List *list, Allocator allocator) {
 
-	if(!list)
+	if(!list || !list->ptr)
 		return Error_nullPointer(0, 0);
 
 	if(List_isConstRef(*list))
@@ -668,6 +676,7 @@ TList_sorts(TList_tsort);
 //qsort U64 should be taking about ~76ms / 1M elem and ~13ms / 1M (sorted)
 //qsort U8 should be taking about half the time for unsorted because of cache speedups
 //Expect F32 sorting to be at least 2x to 5x slower
+//(Profiled on a 3900x)
 
 inline U64 List_qpartition(List list, U64 begin, U64 last, CompareFunction f) {
 
@@ -829,6 +838,9 @@ Error List_insert(List *list, U64 index, Buffer buf, Allocator allocator) {
 	if(list->stride != Buffer_length(buf))
 		return Error_invalidOperation(0);
 
+	if(list->length + 1 == 0)
+		return Error_overflow(0, 0, 0, U64_MAX);
+
 	if (index == list->length) {		//Push back
 
 		Error err = List_resize(list, list->length + 1, allocator);
@@ -881,6 +893,9 @@ Error List_pushAll(List *list, List other, Allocator allocator) {
 
 	if(!other.length)
 		return Error_none();
+
+	if(list->length + other.length < list->length)
+		return Error_overflow(0, 0, list->length + other.length, U64_MAX);
 
 	U64 oldSize = List_bytes(*list);
 	Error err = List_resize(list, list->length + other.length, allocator);

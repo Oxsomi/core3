@@ -131,7 +131,7 @@ Bool Archive_hasFolder(Archive archive, String path, Allocator alloc) {
 	return entry.type == EFileType_Folder;
 }
 
-Error Archive_add(Archive *archive, ArchiveEntry entry, Bool successIfExists, Allocator alloc);
+Error Archive_addInternal(Archive *archive, ArchiveEntry entry, Bool successIfExists, Allocator alloc);
 
 Bool Archive_createOrFindParent(Archive *archive, String path, Allocator alloc) {
 
@@ -149,12 +149,12 @@ Bool Archive_createOrFindParent(Archive *archive, String path, Allocator alloc) 
 		.type = EFileType_Folder
 	};
 
-	return !Archive_add(archive, entry, true, alloc).genericError;
+	return !Archive_addInternal(archive, entry, true, alloc).genericError;
 }
 
-Error Archive_add(Archive *archive, ArchiveEntry entry, Bool successIfExists, Allocator alloc) {
+Error Archive_addInternal(Archive *archive, ArchiveEntry entry, Bool successIfExists, Allocator alloc) {
 
-	if (!archive)
+	if (!archive || !archive->entries.ptr)
 		return Error_nullPointer(0, 0);
 
 	//If folder already exists, we're done
@@ -164,7 +164,7 @@ Error Archive_add(Archive *archive, ArchiveEntry entry, Bool successIfExists, Al
 	Error err = Error_none();
 	String oldPath = String_createNull();
 
-	if (Archive_getPath(*archive, entry.path, &out, NULL, &resolved, alloc)) {
+	if (Archive_getPath(*archive, entry.path, &out, NULL, NULL, alloc)) {
 
 		if(out.type != entry.type || !successIfExists)
 			err = Error_alreadyDefined(0);
@@ -209,7 +209,7 @@ Error Archive_addDirectory(Archive *archive, String path, Allocator alloc) {
 		.type = EFileType_Folder
 	};
 
-	return Archive_add(archive, entry, true, alloc);
+	return Archive_addInternal(archive, entry, true, alloc);
 }
 
 Error Archive_addFile(Archive *archive, String path, Buffer data, Ns timestamp, Allocator alloc) {
@@ -221,12 +221,12 @@ Error Archive_addFile(Archive *archive, String path, Buffer data, Ns timestamp, 
 		.timestamp = timestamp
 	};
 
-	return Archive_add(archive, entry, false, alloc);
+	return Archive_addInternal(archive, entry, false, alloc);
 }
 
 Error Archive_removeInternal(Archive *archive, String path, Allocator alloc, EFileType type) {
 
-	if (!archive)
+	if (!archive || !archive->entries.ptr)
 		return Error_nullPointer(0, 0);
 
 	ArchiveEntry entry = (ArchiveEntry) { 0 };
@@ -305,7 +305,7 @@ Error Archive_rename(
 	Allocator alloc
 ) {
 
-	if (!archive)
+	if (!archive || !archive->entries.ptr)
 		return Error_nullPointer(0, 0);
 
 	String resolvedLoc = String_createNull();
@@ -340,7 +340,7 @@ Error Archive_move(
 	Allocator alloc
 ) {
 
-	if (!archive)
+	if (!archive || !archive->entries.ptr)
 		return Error_nullPointer(0, 0);
 
 	String resolved = String_createNull();
@@ -377,8 +377,8 @@ clean:
 
 Error Archive_getInfo(Archive archive, String path, FileInfo *info, Allocator alloc) {
 
-	if(!info)
-		return Error_nullPointer(2, 0);
+	if(!archive.entries.ptr || !info)
+		return Error_nullPointer(!info ? 2 : 0, 0);
 
 	ArchiveEntry entry = (ArchiveEntry) { 0 };
 	String resolved = String_createNull();
@@ -399,7 +399,7 @@ Error Archive_getInfo(Archive archive, String path, FileInfo *info, Allocator al
 
 Error Archive_updateFileData(Archive *archive, String path, Buffer data, Allocator alloc) {
 
-	if (!archive)
+	if (!archive || !archive->entries.ptr)
 		return Error_nullPointer(0, 0);
 
 	ArchiveEntry entry = (ArchiveEntry) { 0 };
@@ -421,8 +421,8 @@ Error Archive_getFileDataInternal(
 	Bool isConst
 ) {
 
-	if (!data)
-		return Error_nullPointer(2, 0);
+	if (!archive.entries.ptr || !data)
+		return Error_nullPointer(!data ? 2 : 0, 0);
 
 	ArchiveEntry entry = (ArchiveEntry) { 0 };
 
@@ -461,8 +461,8 @@ Error Archive_foreach(
 	Allocator alloc
 ) {
 
-	if(!callback)
-		return Error_nullPointer(3, 0);
+	if(!archive.entries.ptr || !callback)
+		return Error_nullPointer(!callback ? 3 : 0, 0);
 
 	if(type > EFileType_Invalid)			//"Invalid" means either files or folders.
 		return Error_invalidEnum(5, 0, (U64)type, (U64)EFileType_Invalid);

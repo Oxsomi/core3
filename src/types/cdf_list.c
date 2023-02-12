@@ -300,7 +300,7 @@ Error CDFList_popBack(CDFList *list, Buffer elementValue) {
 
 Error CDFList_finalize(CDFList *list) {
 
-	if(!list)
+	if(!list || !list->totalElements)
 		return Error_nullPointer(0, 0);
 
 	if(list->flags & ECDFListFlags_IsFinalized)
@@ -323,7 +323,7 @@ Error CDFList_finalize(CDFList *list) {
 Error CDFList_getRandomElement(CDFList *list, CDFListElement *elementValue) {
 
 	if(!list || !elementValue)
-		return Error_nullPointer(list ? 1 : 0, 0);
+		return Error_nullPointer(elementValue ? 1 : 0, 0);
 
 	U32 v;
 	Buffer b = Buffer_createRef(&v, sizeof(v));

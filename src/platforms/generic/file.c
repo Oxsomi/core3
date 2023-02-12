@@ -445,8 +445,10 @@ Error File_move(String loc, String directoryName, Ns maxTimeout) {
 
 	Ns maxTimeoutTry = U64_min((maxTimeout + 7) >> 2, 1 * SECOND);		//Try ~4x+ up to 1s of wait
 
-	String fileName = resolved;
-	String_cutBeforeLast(fileName, '/', EStringCase_Sensitive, &fileName);
+	String fileName = String_createNull();
+
+	if(!String_cutBeforeLast(fileName, '/', EStringCase_Sensitive, &fileName))
+		fileName = resolved;
 
 	String_setAt(resolvedFile, resolvedFile.length - 1, '/');
 

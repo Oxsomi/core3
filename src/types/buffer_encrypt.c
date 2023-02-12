@@ -28,7 +28,8 @@
 #include "math/vec.h"
 
 //Explanation of algorithm; AES256 GCM + GMAC
-//https://www.alexeyshmalko.com/20200319144641/ / https://www.youtube.com/watch?v=V2TlG3JbGp0
+//https://www.alexeyshmalko.com/20200319144641/
+//https://www.youtube.com/watch?v=V2TlG3JbGp0
 //https://www.youtube.com/watch?v=g_eY7JXOc8U
 //
 //The final algorithm is basically the following:
@@ -41,7 +42,7 @@
 //- Foreach additional data block padded to 16-byte with 0s:
 //	- tag = GHASH(tag XOR additional data block)
 // 
-//- IV (Initial vector) = Generate CSPRNG of 12-bytes
+//- IV (Initial vector) = Generate CSPRNG of 12-bytes (if not provided)
 //- Store iv in result
 // 
 //- Foreach plaindata block at i padded to 16-byte with 0s:
@@ -166,7 +167,7 @@
 			for(U64 i = 1; i < 4; ++i)
 				res.v[j][i] = ap->v[(i + j) & 3][i];
 
-		return *(I32x4*)&res;
+		return *(const I32x4*)&res;
 	}
 
 	inline I32x4 AES_subBytes(I32x4 a) {
@@ -182,9 +183,9 @@
 
 	inline U8 AES_g2_8(U8 v, U8 mul) {
 		switch (mul) {
-		case 2:		return (v << 1) ^ ((v >> 7) * 0x1B);
-		case 3:		return v ^ AES_g2_8(v, 2);
-		default:	return v;
+			case 2:		return (v << 1) ^ ((v >> 7) * 0x1B);
+			case 3:		return v ^ AES_g2_8(v, 2);
+			default:	return v;
 		}
 	}
 
@@ -367,9 +368,6 @@ inline I32x4 AESEncryptionContext_blockHash(I32x4 block, const I32x4 k[15]) {
 
 #else
 
-	//inline void aesExpandKey(U32 key[8], I32x4 k[15]);
-	//inline I32x4 aesBlock(I32x4 block, I32x4 k[15]);
-
 	inline I32x4 AESEncryptionContext_rsh(I32x4 v, U8 shift) {
 
 		U64 *a = (U64*) &v;
@@ -414,6 +412,7 @@ inline I32x4 AESEncryptionContext_blockHash(I32x4 block, const I32x4 k[15]) {
 	}
 
 	//Implemented and optimized to SSE from https://github.com/mko-x/SharedAES-GCM/blob/master/Sources/gcm.c#L131
+	//(Of course we don't necessarily use SSE here, only if relax float is disabled)
 
 	const U16 GHASH_LAST4[16] = {
 		0x0000, 0x1C20, 0x3840, 0x2460, 0x7080, 0x6CA0, 0x48C0, 0x54E0,

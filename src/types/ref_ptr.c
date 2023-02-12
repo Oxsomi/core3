@@ -24,6 +24,10 @@
 #include "types/ref_ptr.h"
 
 RefPtr RefPtr_create(void *ptr, Allocator alloc, ObjectFreeFunc free) {
+
+	if(!ptr)
+		return (RefPtr) { 0 };
+
 	return (RefPtr) {
 		.refCount = 1,
 		.ptr = ptr,

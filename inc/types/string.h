@@ -104,12 +104,10 @@ Bool String_setAt(String str, U64 i, C8 c);
 
 String String_createNull();
 
-String String_createConstRef(const C8 *ptr, U64 maxSize);
+String String_createConstRefAuto(const C8 *ptr, U64 maxSize);		//Auto detect end (up to maxSize chars)
 
-//Only use this if string is created safely in code
-
-String String_createConstRefUnsafe(const C8 *ptr);
-String String_createRef(C8 *ptr, U64 maxSize);
+String String_createConstRefUnsafe(const C8 *ptr);					//Only use this if string is created safely (null terminator) in code
+String String_createRefAuto(C8 *ptr, U64 maxSize);					//Auto detect end (up to maxSize chars)
 
 String String_createConstRefSized(const C8 *ptr, U64 size);
 String String_createRefSized(C8 *ptr, U64 size);
@@ -161,7 +159,7 @@ Error String_reserve(String *str, U64 length, Allocator alloc);
 Error String_append(String *s, C8 c, Allocator allocator);
 Error String_appendString(String *s, String other, Allocator allocator);
 
-String String_newLine();
+String String_newLine();			//Should only be used when writing a file for the current OS. Not when parsing files.
 
 Error String_insert(String *s, C8 c, U64 i, Allocator allocator);
 Error String_insertString(String *s, String other, U64 i, Allocator allocator);
@@ -212,18 +210,20 @@ U64 String_countAllString(String s, String other, EStringCase caseSensitive);
 
 //Returns the locations (U64[])
 
-List String_findAll(
+Error String_findAll(
 	String s, 
 	C8 c, 
 	Allocator alloc,
-	EStringCase caseSensitive
+	EStringCase caseSensitive,
+	List *result
 );
 
-List String_findAllString(
+Error String_findAllString(
 	String s, 
 	String other,
 	Allocator alloc,
-	EStringCase caseSensitive
+	EStringCase caseSensitive,
+	List *result
 );
 
 //
@@ -261,8 +261,6 @@ Bool String_isBin(String s);				//[0-1]+
 Bool String_isUnsignedNumber(String s);		//[+]?[0-9]+
 Bool String_isSignedNumber(String s);		//[-+]?[0-9]+
 Bool String_isFloat(String s);				//Approximately equal to: [-+]?[0-9]*[.[0-9]*]?[[eE][-+]?[0-9]+]?
-
-Error String_offsetAsRef(String s, U64 off, String *result);
 
 //Things that perform on this string to reduce overhead
 
@@ -373,7 +371,7 @@ String String_getBasePath(String *str);	//Formats on string first to ensure it's
 Error StringList_create(U64 length, Allocator alloc, StringList *result);
 Bool StringList_free(StringList *arr, Allocator alloc);
 
-Error StringList_createCopy(const StringList *toCopy, Allocator alloc, StringList *arr);
+Error StringList_createCopy(StringList toCopy, Allocator alloc, StringList *arr);
 
 //Store the string directly into StringList (no copy)
 //The allocator is used to free strings if they are heap allocated

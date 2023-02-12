@@ -74,11 +74,11 @@ F32x2 F32x2_abs(F32x2 v) { return F32x2_mul(F32x2_sign(v), v); }
 Bool F32x2_all(F32x2 b) { return F32x2_reduce(F32x2_neq(b, F32x2_zero())) == 4; }
 Bool F32x2_any(F32x2 b) { return F32x2_reduce(F32x2_neq(b, F32x2_zero())); }
 
-F32x2 F32x2_load1(const F32 *arr) { return F32x2_create1(*arr); }
-F32x2 F32x2_load2(const F32 *arr) { return F32x2_create2(*arr, arr[1]); }
+F32x2 F32x2_load1(const F32 *arr) { return arr ? F32x2_create1(*arr) : F32x2_zero(); }
+F32x2 F32x2_load2(const F32 *arr) { return arr ? F32x2_create2(*arr, arr[1]) : F32x2_zero(); }
 
-void F32x2_setX(F32x2 *a, F32 v) { *a = F32x2_create2(v, F32x2_y(*a)); }
-void F32x2_setY(F32x2 *a, F32 v) { *a = F32x2_create2(F32x2_x(*a), v); }
+void F32x2_setX(F32x2 *a, F32 v) { if(a) *a = F32x2_create2(v, F32x2_y(*a)); }
+void F32x2_setY(F32x2 *a, F32 v) { if(a) *a = F32x2_create2(F32x2_x(*a), v); }
 
 void F32x2_set(F32x2 *a, U8 i, F32 v) {
 	switch (i & 1) {

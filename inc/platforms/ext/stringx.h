@@ -61,13 +61,13 @@ Error String_replaceStringx(
 Error String_replaceFirstStringx(String *s, String search, String replace, EStringCase caseSensitive);
 Error String_replaceLastStringx(String *s, String search, String replace, EStringCase caseSensitive);
 
-List String_findAllx(String s, C8 c, EStringCase caseSensitive);
-List String_findAllStringx(String s, String other, EStringCase caseSensitive);
+Error String_findAllx(String s, C8 c, EStringCase caseSensitive, List *result);
+Error String_findAllStringx(String s, String other, EStringCase caseSensitive, List *result);
 
 Bool StringList_freex(StringList *arr);
 
 Error StringList_createx(U64 length, StringList *result);
-Error StringList_createCopyx(const StringList *toCopy, StringList *arr);
+Error StringList_createCopyx(StringList toCopy, StringList *arr);
 
 Error StringList_setx(StringList arr, U64 i, String str);
 Error StringList_unsetx(StringList arr, U64 i);

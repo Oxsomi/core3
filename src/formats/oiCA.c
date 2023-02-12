@@ -315,18 +315,22 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 	for(U64 i = 0; i < directories.length; ++i) {
 
 		String dir = ((String*)directories.ptr)[i];
-		String dirName = String_createRefSized(dir.ptr, dir.length);
+		String dirName = String_createNull();
 
-		String_cutBeforeLast(dir, '/', EStringCase_Sensitive, &dirName);
+		if(!String_cutBeforeLast(dir, '/', EStringCase_Sensitive, &dirName))
+			dirName = String_createRefSized(dir.ptr, dir.length);
+
 		_gotoIfError(clean, DLFile_addEntryAscii(&dlFile, dirName, alloc));
 	}
 
 	for(U64 i = 0; i < files.length; ++i) {
 
 		String file = ((String*)files.ptr)[i];
-		String fileName = String_createRefSized(file.ptr, file.length);
+		String fileName = String_createNull();
 
-		String_cutBeforeLast(file, '/', EStringCase_Sensitive, &fileName);
+		if(!String_cutBeforeLast(file, '/', EStringCase_Sensitive, &fileName))
+			fileName = String_createRefSized(file.ptr, file.length);
+
 		_gotoIfError(clean, DLFile_addEntryAscii(&dlFile, fileName, alloc));
 	}
 
@@ -432,7 +436,8 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 			//If we encounter something that doesn't start with our basepath then we know we are missing this dir
 			//And this means we somehow messed with the input data
 
-			String baseDir, realParentDir;
+			String baseDir = String_createNull(), realParentDir = String_createNull();
+
 			if (
 				!String_cut(file, 0, it, &realParentDir) || 
 				!String_cut(file, 0, it + 1, &baseDir)

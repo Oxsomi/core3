@@ -97,7 +97,7 @@ Error File_foreach(String loc, FileCallback callback, void *userData, Bool isRec
 		//Grab local file name
 
 		_gotoIfError(clean, String_createCopyx(resolvedNoStar, &tmp));
-		_gotoIfError(clean, String_appendStringx(&tmp, String_createConstRef(dat.cFileName, MAX_PATH)));
+		_gotoIfError(clean, String_appendStringx(&tmp, String_createConstRefAuto(dat.cFileName, MAX_PATH)));
 
 		//Folder parsing
 

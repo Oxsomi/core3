@@ -35,15 +35,15 @@ Error ourAlloc(void *allocator, U64 length, Buffer *output) {
 
 	allocator;
 
-	void *ptr = malloc(length);
-
 	if(!output)
 		return Error_nullPointer(2, 0);
+
+	void *ptr = malloc(length);
 
 	if(!ptr)
 		return Error_outOfMemory(0);
 
-	*output = Buffer_createManagedPtr( ptr, length);
+	*output = Buffer_createManagedPtr(ptr, length);
 	return Error_none();
 }
 

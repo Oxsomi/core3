@@ -128,8 +128,8 @@ void Log_printCapturedStackTraceCustom(const void **stackTrace, U64 stackSize, E
 				continue;
 
 			CapturedStackTrace *capture = captured + i;
-			capture->mod = String_createRef(modulePath, MAX_PATH);
-			capture->sym = String_createRef(symbolName, MAX_PATH);
+			capture->mod = String_createRefAuto(modulePath, MAX_PATH);
+			capture->sym = String_createRefAuto(symbolName, MAX_PATH);
 
 			String_formatPath(&capture->sym);
 
@@ -137,7 +137,7 @@ void Log_printCapturedStackTraceCustom(const void **stackTrace, U64 stackSize, E
 				capture->mod = String_getFilePath(&capture->mod);
 
 			if(line.FileName)
-				capture->fil = String_createConstRef(line.FileName, MAX_PATH);
+				capture->fil = String_createConstRefAuto(line.FileName, MAX_PATH);
 
 			//Copy strings to heap, since they'll go out of scope
 
