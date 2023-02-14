@@ -35,7 +35,8 @@ typedef enum EDLDataType {
 typedef enum EDLSettingsFlags {
 	EDLSettingsFlags_None				= 0,
 	EDLSettingsFlags_UseSHA256			= 1 << 0,		//--sha256
-	EDLSettingsFlags_Invalid			= 0xFFFFFFFF << 1
+	EDLSettingsFlags_HideMagicNumber	= 1 << 1,		//Only valid if the oiDL can be 100% confidently detected otherwise
+	EDLSettingsFlags_Invalid			= 0xFFFFFFFF << 2
 } EDLSettingsFlags;
 
 typedef struct DLSettings {
@@ -82,7 +83,7 @@ Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result);
 Error DLFile_read(
 	Buffer file, 
 	const U32 encryptionKey[8],
-	Bool allowLeftOverData, 
+	Bool isSubfile,					//Sets HideMagicNumber flag and allows leftover data after the oiDL
 	Allocator alloc, 
 	DLFile *dlFile
 );

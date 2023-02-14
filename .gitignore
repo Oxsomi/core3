@@ -48,6 +48,15 @@
 .tmp_versions/
 builds/*
 tools/builds/*
+tools/CMakeFiles/*
+*.vcxproj
+*.filters
+*.sln
+*.stamp
+*.depend
+tools/bin/*
+tools/CMakeCache.txt
+tools/*.cmake
 inc/cfg/*
 modules.order
 Module.symvers

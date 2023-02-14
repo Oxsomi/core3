@@ -13,6 +13,7 @@ Just like any oiXX file it's made with the following things in mind:
 - Ease of read + write.
 - Better compression size than plain text or binary due to Brotli:11 compression. (TODO: Once implemented)
 - Possibility of encryption using AES256-GCM.
+  - Though header and entry sizes are left unencrypted.
 - An easy spec.
 - Good security for parsing + writing.
 - Support for strings or data.
@@ -35,7 +36,11 @@ typedef enum EDLFlags {
     //Chunk size of AES for multi threading. 0 = none, 1 = 10MiB, 2 = 50MiB, 3 = 100MiB
         
     EDLFlags_UseAESChunksA			= 1 << 3,
-    EDLFlags_UseAESChunksB			= 1 << 4
+    EDLFlags_UseAESChunksB			= 1 << 4,
+    
+    //If it includes XXExtraInfo (see oiXX.md)
+    
+    EDLFlags_HasExtendedData		= 1 << 5
     
 } EDLFlags;
 
@@ -45,13 +50,8 @@ typedef struct DLHeader {
 
 	U8 version;					//major.minor (%10 = minor, /10 = major (+1 to get real major))
 	U8 flags;					//EDLFlags
-	U8 compressionType;			//EXXCompressionType. Should be <Count (see oiXX.md).
-	U8 encryptionType;			//EXXEncryptionType
-
-	U8 headerExtendedData;		//If new versions or extensions want to add extra data to the header
-	U8 perEntryExtendedData;	//What to store per entry besides a DataSizeType
-	U8 sizeTypes;				//EXXDataSizeTypes: entryType | (uncompressedSizType << 2) | (dataType << 4)
-	U8 padding;					//For alignment reasons (set to 0)
+	U8 type;					//(EXXCompressionType << 4) | EXXEncryptionType. Each enum should be <Count (see oiXX.md).
+	U8 sizeTypes;				//EXXDataSizeTypes: entryType | (uncompressedSizType << 2) | (dataType << 4) (Upper 2 bits should be empty)
     
 } DLHeader;
 
@@ -66,22 +66,27 @@ typedef struct DLHeader {
 DLFile {
     
     DLHeader header;
-    U8 headerExt[header.headerExtendedData];
     
     EXXDataSizeType<entrySizeType> entryCount;
+    
+    if header.flags has extended data:
+    	XXExtraInfo extraInfoHeader;
+	    U8 headerExt[extendedHeader];
+    
+	EXXDataSizeType<dataSizeType>[entryCount] entries
+		with stride (sizeof(EXXDataSizeType<dataSizeType>) + header.perDataExtendedData);
     
     if compression:
 	    EXXDataSizeType<uncompressedSizeType> uncompressedSize;
 	    U32[header.useSHA256 ? 8 : 1] hash;				//CRC32C or SHA256
     
-    //Encryption header; see oiXX.md.
-    //Such as (blocks ? I32x4[blocks]), U8[12] iv, I32x4 tag.
+    if encryption:
+    	if blockCompression:
+    		I32x4[blocks]; 		//(sum(entries) + blockSize - 1) / blockSize
+		U8[12] iv;
+		I32x4 tag;
     
-    compress & encrypt the following if necessary:		//See oiXX.md
-    
-	    EXXDataSizeType<dataSizeType>[entryCount] entries
-            with stride (sizeof(EXXDataSizeType<dataSizeType>) + header.perDataExtendedData);
-    
+    encrypt & compress the following if necessary:		//See oiXX.md
 		foreach dat in data:
 			U8[dat.size] data;		//Non null terminated. We know the size
 }
@@ -89,11 +94,15 @@ DLFile {
 
 The types are Oxsomi types; `U<X>`: x-bit unsigned integer, `I<X>` x-bit signed integer.
 
-uncompressedSizeType is only present if compression is enabled. In all other cases it should be assumed that the remainder of the file is the rest of the data.
+uncompressedSizeType is only present if compression is enabled. In all other cases it should read the size from the entries by summing them. 
 
-*Note: oiDL supports the ability to choose between 10MiB, 50MiB and 100MiB blocks for speeding up AES by multi threading.*
+Entry counts aren't compressed nor encrypted, as the sum is required to know the final size of the oiDL and not a lot can be gained by compressing it and not a lot of security is lost if you know the size of each entry. If it is important, you could embed an uncompressed/unencrypted oiDL within another oiDL (or oiCA) that does encrypt and/or compress it.
 
-## Invalid ASCII/UTF8 characters
+The magic number in the header can only be absent if embedded in another file. An example is the file name table in an oiCA file. 
+
+*Note: oiDL supports the ability to choose between 10MiB, 50MiB and 100MiB blocks for speeding up AES by multi threading. Though this is currently not supported in OxC3 (TODO:)*
+
+## Valid ASCII/UTF8 characters
 
 If ASCII or UTF8 is used, certain characters are blacklisted to avoid problems after parsing them. The following ranges should be checked per character. If they fall outside of this range, they're invalid.
 

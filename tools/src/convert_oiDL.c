@@ -40,7 +40,7 @@ Error addFileToDLFile(FileInfo file, List *names) {
 		return Error_none();
 
 	Error err;
-	String copy;
+	String copy = String_createNull();
 
 	if((err = String_createCopyx(file.path, &copy)).genericError)
 		return err;

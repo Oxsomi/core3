@@ -56,10 +56,22 @@ const U16 BMP_MAGIC = 0x4D42;
 const U32 BMP_SRGB_MAGIC = 0x73524742;
 
 Error BMP_writeRGBA(
-	Buffer buf, U16 w, U16 h, Bool isFlipped, 
+	Buffer buf,
+	U16 w,
+	U16 h,
+	Bool isFlipped, 
 	Allocator allocator,
 	Buffer *result
 ) {
+
+	if(!result)
+		return Error_nullPointer(5, 0);
+
+	if(result->ptr)
+		return Error_invalidParameter(5, 0, 0);
+
+	if(!w || !h)
+		return Error_invalidParameter(!w ? 1 : 2, 0, 0);
 
 	U64 bufLen = Buffer_length(buf);
 
@@ -75,7 +87,6 @@ Error BMP_writeRGBA(
 	BMPHeader header = (BMPHeader) {
 		.fileType = BMP_MAGIC,
 		.fileSize = ((I32) bufLen) * (isFlipped ? -1 : 1),
-		.r0 = 0, .r1 = 0, 
 		.offsetData = headersSize
 	};
 
