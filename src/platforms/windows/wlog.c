@@ -69,6 +69,12 @@ static const WORD COLORS[] = {
 
 void Log_printCapturedStackTraceCustom(const void **stackTrace, U64 stackSize, ELogLevel lvl, ELogOptions opt) {
 
+	if(!stackTrace)
+		return;
+
+	if(lvl >= ELogLevel_Count)
+		return;
+
 	if(lvl == ELogLevel_Fatal)
 		lvl = ELogLevel_Error;
 
@@ -220,6 +226,9 @@ void Log_printCapturedStackTraceCustom(const void **stackTrace, U64 stackSize, E
 void Log_log(ELogLevel lvl, ELogOptions options, LogArgs args) {
 
 	Ns t = Time_now();
+
+	if(lvl >= ELogLevel_Count)
+		return;
 
 	U32 thread = Thread_getId();
 

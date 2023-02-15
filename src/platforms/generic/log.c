@@ -61,6 +61,9 @@ const C8 nytoBase64[] = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRS
 
 void Log_num(LongString result, U64 v, U64 base, const C8 prepend[2]) {
 
+	if(!prepend)
+		return;
+
 	if (base < 1 || base > 64) {
 		result[0] = 0;
 		return;

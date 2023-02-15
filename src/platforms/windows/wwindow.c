@@ -401,7 +401,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 				//Create input device
 
-				InputDevice device;
+				InputDevice device = (InputDevice) { 0 };
 
 				if (isKeyboard) {
 
@@ -634,7 +634,10 @@ Bool WindowManager_supportsFormat(WindowManager manager, EWindowFormat format) {
 
 Bool WindowManager_freePhysical(WindowManager *manager, Window **w) {
 
-	if(!manager || !w || !*w)
+	if(!manager || !manager->lock.data)
+		return false;
+
+	if(!w || !*w)
 		return true;
 
 	if(!Lock_isLockedForThread(manager->lock))
@@ -655,8 +658,8 @@ Bool WindowManager_freePhysical(WindowManager *manager, Window **w) {
 
 Error Window_updatePhysicalTitle(const Window *w, String title) {
 
-	if(!w || !title.ptr || !title.length)
-		return Error_nullPointer(!w ? 0 : 1, 0);
+	if(!w || !I32x2_any(w->size) || !title.ptr || !title.length)
+		return Error_nullPointer(!w || !I32x2_any(w->size) ? 0 : 1, 0);
 
 	if (title.length >= MAX_PATH)
 		return Error_outOfBounds(1, 0, title.length, MAX_PATH);
@@ -674,7 +677,7 @@ Error Window_updatePhysicalTitle(const Window *w, String title) {
 
 Error Window_presentPhysical(const Window *w) {
 
-	if(!w)
+	if(!w || !I32x2_any(w->size))
 		return Error_nullPointer(0, 0);
 
 	if(!(w->flags & EWindowFlags_IsActive) || !(w->hint & EWindowHint_ProvideCPUBuffer))

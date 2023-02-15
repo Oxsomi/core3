@@ -163,11 +163,11 @@ Error InputDevice_create(U16 buttons, U16 axes, EInputDeviceType type, InputDevi
 	if(!res)																			\
 		return Error_nullPointer(4, 0);													\
 																						\
-	if(inputType->name[0])																\
-		return Error_alreadyDefined(0);													\
-																						\
 	if(!inputType)																		\
 		return Error_nullPointer(0, 0);													\
+																						\
+	if(inputType->name[0])																\
+		return Error_alreadyDefined(0);													\
 																						\
 	if(String_isEmpty(keyName))															\
 		return Error_invalidParameter(2, 0, 0);											\

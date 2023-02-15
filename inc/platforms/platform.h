@@ -55,9 +55,12 @@ typedef struct Platform {
 extern Platform Platform_instance;
 
 Error Platform_create(
-	int cmdArgc, const C8 *cmdArgs[], 
+	int cmdArgc,
+	const C8 *cmdArgs[], 
 	void *data,
-	FreeFunc free, AllocFunc alloc, void *allocator
+	FreeFunc free,
+	AllocFunc alloc,
+	void *allocator
 );
 
 impl void Platform_cleanupExt(Platform *platform);

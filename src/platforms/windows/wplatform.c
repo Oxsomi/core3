@@ -179,7 +179,6 @@ int main(int argc, const char *argv[]) {
 
 	int res = Program_run();
 	Program_exit();
-	Platform_cleanupExt(&Platform_instance);
 	Platform_cleanup();
 
 	return res;

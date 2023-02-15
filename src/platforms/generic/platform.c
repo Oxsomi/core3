@@ -29,9 +29,12 @@
 Platform Platform_instance = { 0 };
 
 Error Platform_create(
-	int cmdArgc, const C8 *cmdArgs[], 
+	int cmdArgc,
+	const C8 *cmdArgs[], 
 	void *data, 
-	FreeFunc free, AllocFunc alloc, void *allocator
+	FreeFunc free,
+	AllocFunc alloc,
+	void *allocator
 ) {
 
 	U16 v = 1;
@@ -42,8 +45,11 @@ Error Platform_create(
 	if(Platform_instance.platformType != EPlatform_Uninitialized)
 		return Error_invalidOperation(0);
 
-	if(!cmdArgc)
-		return Error_invalidParameter(0, 0, 0);
+	if(!cmdArgc || !cmdArgs)
+		return Error_invalidParameter(!cmdArgc ? 0 : 1, 0, 0);
+
+	if(!free || !alloc)
+		return Error_invalidParameter(!free ? 3 : 4, 0, 0);
 
 	Platform_instance =	(Platform) {
 		.platformType = _PLATFORM_TYPE,
@@ -97,6 +103,8 @@ void Platform_cleanup() {
 
 	if(Platform_instance.platformType == EPlatform_Uninitialized)
 		return;
+
+	Platform_cleanupExt(&Platform_instance);
 
 	String_freex(&Platform_instance.workingDirectory);
 	WindowManager_free(&Platform_instance.windowManager);

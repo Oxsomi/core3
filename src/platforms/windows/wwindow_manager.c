@@ -107,7 +107,7 @@ Error WindowManager_createPhysical(
 	}
 
 	if(!win)
-		return Error_outOfMemory(0);
+		return Error_outOfMemory(WindowManager_MAX_PHYSICAL_WINDOWS);
 
 	//Create native window
 
@@ -266,6 +266,9 @@ Error WindowManager_createPhysical(
 		.monitors = monitors
 	};
 
+	if(hint & EWindowHint_ForceFullscreen)
+		win->flags |= EWindowFlags_IsFullscreen;
+
 	*w = win;
 
 	//Signal ready
@@ -293,6 +296,5 @@ clean:
 
 	UnregisterClassA(wc.lpszClassName, wc.hInstance);
 	DestroyWindow(nativeWindow);
-
 	return err;
 }

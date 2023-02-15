@@ -43,20 +43,22 @@ EResolution EResolution_create(I32x2 v) {
 	return _RESOLUTION(I32x2_x(v), I32x2_y(v));
 }
 
-Bool Window_isVirtual(const Window *w) { return w && w->flags & EWindowFlags_IsVirtual; }
-Bool Window_isMinimized(const Window *w) { return w && w->flags & EWindowFlags_IsMinimized; }
-Bool Window_isFocussed(const Window *w) { return w && w->flags & EWindowFlags_IsFocussed; }
-Bool Window_isFullScreen(const Window *w) { return w && w->flags & EWindowFlags_IsFullscreen; }
+Bool Window_initialized(const Window *w) { return w && I32x2_any(w->size); }
 
-Bool Window_doesHandleInput(const Window *w) { return w && w->hint & EWindowHint_HandleInput; }
-Bool Window_doesAllowFullScreen(const Window *w) { return w && w->hint & EWindowHint_AllowFullscreen; }
+Bool Window_isVirtual(const Window *w) { return Window_initialized(w) && w->flags & EWindowFlags_IsVirtual; }
+Bool Window_isMinimized(const Window *w) { return Window_initialized(w) && w->flags & EWindowFlags_IsMinimized; }
+Bool Window_isFocussed(const Window *w) { return Window_initialized(w) && w->flags & EWindowFlags_IsFocussed; }
+Bool Window_isFullScreen(const Window *w) { return Window_initialized(w) && w->flags & EWindowFlags_IsFullscreen; }
+
+Bool Window_doesHandleInput(const Window *w) { return Window_initialized(w) && w->hint & EWindowHint_HandleInput; }
+Bool Window_doesAllowFullScreen(const Window *w) { return Window_initialized(w) && w->hint & EWindowHint_AllowFullscreen; }
 
 //Presenting CPU buffer to a file (when virtual) or window when physical
 //This can only be called in a draw function!
 
 Error Window_presentCPUBuffer(Window *w, String file, Ns maxTimeout) {
 
-	if (!w)
+	if (!Window_initialized(w))
 		return Error_nullPointer(0, 0);
 
 	if (!w->isDrawing)
@@ -67,7 +69,7 @@ Error Window_presentCPUBuffer(Window *w, String file, Ns maxTimeout) {
 
 Error Window_waitForExit(Window *w, Ns maxTimeout) {
 
-	if(!w)
+	if(!Window_initialized(w))
 		return Error_nullPointer(0, 0);
 
 	Ns start = Time_now();
@@ -137,7 +139,7 @@ Error Window_waitForExit(Window *w, Ns maxTimeout) {
 
 Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 
-	if (!w)
+	if (!Window_initialized(w))
 		return Error_nullPointer(0, 0);
 
 	if(!Window_isVirtual(w) && !(w->hint & EWindowHint_ProvideCPUBuffer))
@@ -342,7 +344,7 @@ Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 
 Error Window_storeCPUBufferToDisk(const Window *w, String filePath, Ns maxTimeout) {
 
-	if (!w)
+	if (!Window_initialized(w))
 		return Error_nullPointer(0, 0);
 
 	Buffer buf = w->cpuVisibleBuffer;
@@ -374,7 +376,7 @@ Error Window_storeCPUBufferToDisk(const Window *w, String filePath, Ns maxTimeou
 
 Bool Window_terminateVirtual(Window *w) {
 
-	if(!w || !Window_isVirtual(w))
+	if(!Window_initialized(w) || !Window_isVirtual(w))
 		return false;
 
 	if(!Lock_isLockedForThread(w->lock) || !Lock_isLockedForThread(Platform_instance.windowManager.lock))

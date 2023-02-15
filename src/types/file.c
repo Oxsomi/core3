@@ -48,6 +48,8 @@ Error File_resolve(
 	String *result
 ) {
 
+	//TODO: Ending with slash should be fixed
+
 	if(result && result->ptr)
 		return Error_invalidOperation(0);
 

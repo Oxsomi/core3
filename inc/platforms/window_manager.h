@@ -35,6 +35,7 @@ typedef struct WindowManager {
 } WindowManager;
 
 extern const U8 WindowManager_MAX_VIRTUAL_WINDOWS;
+extern const U64 WindowManager_OUT_OF_WINDOWS;
 impl extern const U8 WindowManager_MAX_PHYSICAL_WINDOWS;
 
 //Before doing any actions on WindowManager it needs to be locked.
