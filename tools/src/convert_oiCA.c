@@ -185,10 +185,13 @@ Error _CLI_convertFromCA(ParsedArgs args, String input, FileInfo inputInfo, Stri
 
 	_gotoIfError(clean, String_createCopyx(output, &outputPath));
 
-	if (String_endsWith(outputPath, '\0', EStringCase_Sensitive))
-		outputPath.ptr[outputPath.length - 1] = '/';
+	if(!String_endsWith(outputPath, '/', EStringCase_Sensitive)) {
 
-	else _gotoIfError(clean, String_appendx(&outputPath, '/'));
+		if (String_endsWith(outputPath, '\0', EStringCase_Sensitive))
+			outputPath.ptr[outputPath.length - 1] = '/';
+
+		else _gotoIfError(clean, String_appendx(&outputPath, '/'));
+	}
 
 	//Write archive to disk
 

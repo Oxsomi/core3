@@ -263,7 +263,7 @@ Error File_add(String loc, EFileType type, Ns maxTimeout) {
 
 		for (U64 i = 0; i < str.length - 1; ++i) {
 
-			String parent = String_createConstRefSized(resolved.ptr, String_end(str.ptr[i]) - resolved.ptr);
+			String parent = String_createRefSized(resolved.ptr, String_end(str.ptr[i]) - resolved.ptr);
 
 			err = File_getInfo(parent, &info);
 
@@ -278,8 +278,27 @@ Error File_add(String loc, EFileType type, Ns maxTimeout) {
 			if(!err.genericError)		//Already defined, continue to child
 				continue;
 
+			//Mkdir requires null terminated string
+			//So we hack force in a null terminator
+
+			C8 prev = '\0';
+
+			if (String_end(parent) != String_end(resolved)) {
+
+				prev = String_getAt(parent, parent.length - 1);
+				if(!String_setAt(parent, parent.length - 1, '\0'))
+					_gotoIfError(clean, Error_invalidOperation(2));
+			}
+
+			//Make parent
+
 			if (mkdir(parent.ptr))
 				_gotoIfError(clean, Error_invalidOperation(1));
+
+			//Reset character that was replaced with \0
+
+			if(prev)
+				String_setAt(parent, parent.length - 1, prev);
 		}
 
 		StringList_freex(&str);

@@ -48,7 +48,13 @@ Error File_resolve(
 	String *result
 ) {
 
-	//TODO: Ending with slash should be fixed
+	loc = String_createConstRefSized(loc.ptr, loc.length);
+
+	if(String_getAt(loc, loc.length - 1) == '\0')			//Null terminator
+		--loc.length;
+
+	if(String_getAt(loc, loc.length - 1) == '/')			//myTest/ <--
+		--loc.length;
 
 	if(result && result->ptr)
 		return Error_invalidOperation(0);

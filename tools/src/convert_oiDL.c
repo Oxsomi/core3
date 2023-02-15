@@ -363,7 +363,14 @@ Error _CLI_convertFromDL(ParsedArgs args, String input, FileInfo inputInfo, Stri
 		//Append / as base so it's easier to append per file later
 
 		_gotoIfError(clean, String_createCopyx(output, &outputBase));
-		_gotoIfError(clean, String_appendx(&outputBase, '/'));
+
+		if(!String_endsWith(outputBase, '/', EStringCase_Sensitive)) {
+
+			if(String_endsWith(outputBase, '\0', EStringCase_Sensitive))
+				outputBase.ptr[outputBase.length - 1] = '/';
+
+			else _gotoIfError(clean, String_appendx(&outputBase, '/'));
+		}
 
 		String bin = String_createConstRefUnsafe(".bin");
 
