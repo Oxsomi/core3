@@ -143,17 +143,23 @@ void Log_printCapturedStackTraceCustom(const void **stackTrace, U64 stackSize, E
 
 			Error err;
 
-			if(capture->mod.length)
-				if ((err = String_createCopyx(capture->mod, &capture->mod)).genericError)
-					goto cleanup;
+			if(capture->mod.length) {
+				String tmp = String_createNull();
+				_gotoIfError(cleanup, String_createCopyx(capture->mod, &tmp));
+				capture->mod = tmp;
+			}
 
-			if(capture->sym.length)
-				if ((err = String_createCopyx(capture->sym, &capture->sym)).genericError)
-					goto cleanup;
+			if(capture->sym.length) {
+				String tmp = String_createNull();
+				_gotoIfError(cleanup, String_createCopyx(capture->sym, &tmp));
+				capture->sym = tmp;
+			}
 
-			if(capture->fil.length)
-				if ((err = String_createCopyx(capture->fil, &capture->fil)).genericError)
-					goto cleanup;
+			if(capture->fil.length) {
+				String tmp = String_createNull();
+				_gotoIfError(cleanup, String_createCopyx(capture->fil, &tmp));
+				capture->fil = tmp;
+			}
 
 			capture->lin = line.LineNumber;
 			continue;

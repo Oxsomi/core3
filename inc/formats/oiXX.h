@@ -44,14 +44,6 @@ typedef enum EXXDataSizeType {		//Can be represented as a 2-bit array for exampl
 	EXXDataSizeType_U64
 } EXXDataSizeType;
 
-typedef struct XXExtraInfo {
-
-	U32 extendedMagicNumber;	//Identifier to ensure the extension is detected.		0x0 - 0x1FFFFFFF are version headers, others are extensions.
-	U16 extendedHeader;			//If extensions want to add extra data to the header
-	U16 perEntryExtendedData;	//What to store per entry besides a DataSizeType
-
-} XXExtraInfo;
-
 static const U8 SIZE_BYTE_TYPE[4] = { 1, 2, 4, 8 };
 
 Error Buffer_consumeSizeType(Buffer *buf, EXXDataSizeType type, U64 *result);

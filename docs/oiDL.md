@@ -38,7 +38,7 @@ typedef enum EDLFlags {
     EDLFlags_UseAESChunksA			= 1 << 3,
     EDLFlags_UseAESChunksB			= 1 << 4,
     
-    //If it includes XXExtraInfo (see oiXX.md)
+    //If it includes DLExtraInfo
     
     EDLFlags_HasExtendedData		= 1 << 5
     
@@ -55,6 +55,17 @@ typedef struct DLHeader {
     
 } DLHeader;
 
+typedef struct DLExtraInfo {
+
+	//Identifier to ensure the extension is detected.
+	//0x0 - 0x1FFFFFFF are version headers, others are extensions.
+	U32 extendedMagicNumber;
+
+	U16 extendedHeader;			//If extensions want to add extra data to the header
+	U16 perEntryExtendedData;	//What to store per entry besides a DataSizeType
+
+} DLExtraInfo;
+
 //Final file format; please manually parse the members.
 //Verify if encoding is valid (if string list is used).
 //Verify if everything's in bounds.
@@ -70,7 +81,7 @@ DLFile {
     EXXDataSizeType<entrySizeType> entryCount;
     
     if header.flags has extended data:
-    	XXExtraInfo extraInfoHeader;
+    	DLExtraInfo extraInfo;
 	    U8 headerExt[extendedHeader];
     
 	EXXDataSizeType<dataSizeType>[entryCount] entries

@@ -44,9 +44,7 @@ typedef enum EDLFlags {
 	EDLFlags_UseAESChunksA			= 1 << 3,
 	EDLFlags_UseAESChunksB			= 1 << 4,
 
-	EDLFlags_HasExtendedData		= 1 << 5,		//Extended data
-
-	EDLFlags_Invalid				= (0xFF << 6) & 0xFF
+	EDLFlags_HasExtendedData		= 1 << 5		//Extended data
 
 } EDLFlags;
 
@@ -58,6 +56,17 @@ typedef struct DLHeader {
 	U8 sizeTypes;				//EXXDataSizeTypes: entryType | (uncompressedSizType << 2) | (dataType << 4) (must be < (1 << 6)).
 
 } DLHeader;
+
+typedef struct DLExtraInfo {
+
+	//Identifier to ensure the extension is detected.
+	//0x0 - 0x1FFFFFFF are version headers, others are extensions.
+	U32 extendedMagicNumber;
+
+	U16 extendedHeader;			//If extensions want to add extra data to the header
+	U16 perEntryExtendedData;	//What to store per entry besides a DataSizeType
+
+} DLExtraInfo;
 
 static const U32 DLHeader_MAGIC = 0x4C44696F;
 static const U8 DLHeader_V1_0  = 0;
@@ -478,9 +487,6 @@ Error DLFile_read(
 	if(header.version != DLHeader_V1_0)
 		_gotoIfError(clean, Error_invalidParameter(0, 1, 0));
 
-	if(header.flags & EDLFlags_Invalid)
-		_gotoIfError(clean, Error_invalidParameter(0, 2, 0));
-
 	if(header.flags & (EDLFlags_UseAESChunksA | EDLFlags_UseAESChunksB))		//TODO: AES chunks
 		_gotoIfError(clean, Error_unsupportedOperation(0));
 
@@ -511,7 +517,7 @@ Error DLFile_read(
 
 	if (header.flags & EDLFlags_HasExtendedData) {
 
-		XXExtraInfo extraInfo;
+		DLExtraInfo extraInfo;
 		_gotoIfError(clean, Buffer_consume(&file, &extraInfo, sizeof(extraInfo)));
 
 		entrySizeExtension = extraInfo.perEntryExtendedData;

@@ -34,26 +34,43 @@
 
 typedef enum ECAFlags {
 
-	ECAFlags_None 					= 0,
+	ECAFlags_None 						= 0,
 
-	ECAFlags_UseSHA256				= 1 << 0,		//Whether SHA256 (1) or CRC32C (0) is used as hash
+   	//Whether SHA256 (1) or CRC32C (0) is used as hash
+    //(Only if compression is on)
+    
+	ECAFlags_UseSHA256					= 1 << 0,		
 
 	//See ECAFileObject
 
-	ECAFlags_FilesHaveDate			= 1 << 1,
-	ECAFlags_FilesHaveExtendedDate	= 1 << 2,
+	ECAFlags_FilesHaveDate				= 1 << 1,
+	ECAFlags_FilesHaveExtendedDate		= 1 << 2,
+    
+    //Indicates EXXDataSizeType. E.g. (EXXDataSizeType)((b0 << 1) | b1)
+    //This indicates the type the biggest file size uses
+    
+	ECAFlags_FileSizeType_Shift			= 3,
+	ECAFlags_FileSizeType_Mask			= 3,
 
-	//Indicates ECAFileSizeType. E.g. (ECAFileSizeType)((b0 << 1) | b1)
+    //Chunk size of AES for multi threading. 0 = none, 1 = 10MiB, 2 = 100MiB, 3 = 500MiB
+        
+    ECAFlags_UseAESChunksA				= 1 << 5,
+    ECAFlags_UseAESChunksB				= 1 << 6,
+    
+    ECAFlags_HasExtendedData			= 1 << 7,		//CAExtraData
+    
+    //Indicates EXXDataSizeType. E.g. (EXXDataSizeType)((b0 << 1) | b1)
+    //This indicates the type the type for compression type if available.
+    
+	ECAFlags_CompressedSizeType_Shift		= 8,
+	ECAFlags_CompressedSizeType_Mask		= 3,
 
-	ECAFlags_FileSizeType_Shift		= 3,
-	ECAFlags_FileSizeType_Mask		= 3,
+	//Determines how many bytes the counter for files takes up.
+	//If DirectoriesCountLong is set, it will allow up to 254 dirs, otherwise 64Ki-1.
+	//If FilesCountLong is set, it will allow up to 64Ki, otherwise 4Gi.
 
-	//Chunk size of AES for multi threading. 0 = none, 1 = 10MiB, 2 = 100MiB, 3 = 500MiB
-
-	ECAFlags_UseAESChunksA		= 1 << 5,
-	ECAFlags_UseAESChunksB		= 1 << 6,
-
-	ECAFlags_Invalid			= 1 << 7
+	ECAFlags_DirectoriesCountLong		= 1 << 10,
+	ECAFlags_FilesCountLong				= 1 << 11
 
 } ECAFlags;
 
@@ -61,29 +78,37 @@ typedef struct CAHeader {
 
 	U32 magicNumber;			//oiCA (0x4143696F)
 
-	U8 version;					//major.minor (%10 = minor, /10 = major (+1 = real major))
-	U8 flags;					//ECAFlags
-	U8 type;					//(EXXCompressionType << 4) | EXXEncryptionType. Each enum should be <Count
-	U8 headerExtensionSize;		//To skip extended data size. Highest bit is b0 of uncompressed size type.
-
-	U8 directoryExtensionSize;	//To skip directory extended data. Highest bit is b1 of uncompressed size type.
-	U8 fileExtensionSize;		//To skip file extended data		
-	U16 directoryCount;			//How many base directories are available. Should be < 0xFFFF
-
-	U32 fileCount;				//How many files are available.
+	U8 version;					//major.minor (%10 = minor, /10 = major (+1 to get real major)
+	U8 type;					//(EXXCompressionType << 4) | EXXEncryptionType. Each enum should be <Count (see oiXX.md).
+	U16 flags;					//ECAFlags
 
 } CAHeader;
+
+typedef struct CAExtraData {
+
+	//Identifier to ensure the extension is detected.
+	//0x0 - 0x1FFFFFFF are version headers, others are extensions.
+
+	U32 extendedMagicNumber;
+
+	U16 headerExtensionSize;		//To skip extended data size.
+
+	U8 directoryExtensionSize;		//To skip directory extended data.
+	U8 fileExtensionSize;			//To skip file extended data	
+
+} CAExtraData;
 
 static const U32 CAHeader_MAGIC = 0x4143696F;
 static const U8 CAHeader_V1_0  = 0;
 
-//A directory points to the parent and to the children
-//This allows us to easily access them without having to search all files
-//Important is to verify if there are childs linking to the same parent or invalid child offsets
+//A directory points to the parent.
+//Important is to verify if there are no wrong indices.
+//Small is used if there are <254 folders, Large is used when there are more.
 
-typedef struct CADirectory {
-	U16 parentDirectory;		//0xFFFF for root directory, else id of parent directory (can't >=self)
-} CADirectory;
+typedef U16 CADirectoryLarge;	//0xFFFF for root directory, else id of parent directory (can't >=self)
+typedef U8 CADirectorySmall;	//0xFF for root directory, else id of parent directory (can't >=self)
+
+//CADirectory is referred to as the type that fits folders (<=254 = Small else Large).
 
 //Helper functions
 
@@ -205,6 +230,9 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 	if(!result)
 		_gotoIfError(clean, Error_nullPointer(2, 0));
 
+	if(result->ptr)
+		_gotoIfError(clean, Error_invalidParameter(2, 0, 0));
+
 	_gotoIfError(clean, List_reserve(&directories, 128, alloc));
 	_gotoIfError(clean, List_reserve(&files, 128, alloc));
 
@@ -223,7 +251,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 	U64 realHeaderSizeExEnc = realHeaderSize;
 	realHeaderSize += (caFile.settings.encryptionType ? sizeof(I32x4) + 12 : 0);
 
-	U64 baseFileHeader = sizeof(U16) + (						//Parent and fileInfo
+	U64 baseFileHeader = (						//FileInfo, parent directory elsewhere
 		(
 			(caFile.settings.flags & ECASettingsFlags_IncludeFullDate) || 
 			(caFile.settings.flags & ECASettingsFlags_IncludeDate)
@@ -237,7 +265,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 
 		ArchiveEntry entry = ((ArchiveEntry*)caFile.archive.entries.ptr)[i];
 
-		//Push back directory names and calculate output buffer
+		//Push back directory names. Size is not known until later.
 
 		if (entry.type == EFileType_Folder) {
 
@@ -248,10 +276,6 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 			if(directories.length >= U16_MAX)
 				_gotoIfError(clean, Error_outOfBounds(0, 0, 0xFFFF, U16_MAX - 1));
 
-			if(outputSize + sizeof(CADirectory) < outputSize)
-				_gotoIfError(clean, Error_overflow(0, 0, outputSize + sizeof(CADirectory), outputSize));
-
-			outputSize += sizeof(CADirectory);
 			continue;
 		}
 
@@ -264,11 +288,6 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 
 		if(files.length >= U32_MAX)
 			_gotoIfError(clean, Error_outOfBounds(0, 0, files.length, U32_MAX));
-
-		if(outputSize + baseFileHeader < outputSize)
-			_gotoIfError(clean, Error_overflow(0, 0, outputSize + baseFileHeader, outputSize));
-
-		outputSize += baseFileHeader;
 		
 		if(outputSize + Buffer_length(entry.data) < outputSize)
 			_gotoIfError(clean, Error_overflow(0, 0, outputSize + Buffer_length(entry.data), outputSize));
@@ -277,27 +296,35 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 		biggestFileSize = U64_max(biggestFileSize, Buffer_length(entry.data));
 	}
 
-	//Add the file size types based on the longest file size
+	U64 dirRefSize  = directories.length <= 254 ? 1 : 2;
+	U64 fileRefSize = files.length <= 65534 ? 2 : 4;
 
 	EXXDataSizeType sizeType = biggestFileSize <= U8_MAX ? EXXDataSizeType_U8 : (
 		biggestFileSize <= U16_MAX ? EXXDataSizeType_U16 : (
 			biggestFileSize <= U32_MAX ? EXXDataSizeType_U32 : 
 			EXXDataSizeType_U64
-		)
-	);
+			)
+		);
 
 	baseFileHeader += SIZE_BYTE_TYPE[sizeType];
-	U64 sizeTypeBytes = files.length * SIZE_BYTE_TYPE[sizeType];
+	baseFileHeader += dirRefSize;
 
-	if(outputSize + sizeTypeBytes < outputSize)
-		_gotoIfError(clean, Error_overflow(0, 0, outputSize + sizeTypeBytes, outputSize));
+	//Add directories, files and directory/file count.
 
-	outputSize += sizeTypeBytes;
+	realHeaderSizeExEnc += dirRefSize + fileRefSize;
+	realHeaderSize += dirRefSize + fileRefSize;
 
-	//Sort directories and files to ensure our file ids are correct
+	U64 fileObjLen = dirRefSize * directories.length + baseFileHeader * files.length;
+
+	if(outputSize + fileObjLen < outputSize)
+		_gotoIfError(clean, Error_overflow(0, 0, outputSize + fileObjLen, outputSize));
+
+	outputSize += fileObjLen;
+
+	//Sort directories and files to ensure our file ids are correct,
 	//This is because we have full directory names, so it automatically resolves 
-	// in a way where we know where our children are (in a linear way)
-	//This sort is different than just sortString. It sorts on length first and then alphabetically.
+	// in a way where we know where our children are (in a linear way).
+	//This sort is different than just sortString. It sorts on parent count first and then alphabetically.
 	//This allows us to not have to reorder the files down the road since they're already sorted.
 
 	if(
@@ -336,6 +363,8 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 
 	//Complete DLFile as buffer
 
+	dlFile.settings.flags |= EDLSettingsFlags_HideMagicNumber;				//Small optimization
+
 	_gotoIfError(clean, DLFile_write(dlFile, alloc, &dlFileBuffer));
 
 	DLFile_free(&dlFile, alloc);
@@ -368,7 +397,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 
 	//Append CADirectory[]
 
-	CADirectory *dirPtr = (CADirectory*)outputBufferIt.ptr;
+	U8 *dirPtr = (U8*)outputBufferIt.ptr;
 
 	for (U16 i = 0; i < (U16) directories.length; ++i) {
 
@@ -410,14 +439,15 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 
 		//Add directory
 
-		dirPtr[i] = (CADirectory) {
-			.parentDirectory = parent
-		};
+		if (dirRefSize == 2)
+			((U16*)dirPtr)[i] = parent;
+
+		else dirPtr[i] = (U8) parent;
 	}
 
 	//Append CAFileObject[]
 
-	U8 *fileObjectPtr = (U8*)(dirPtr + directories.length);
+	U8 *fileObjectPtr = dirPtr + directories.length * dirRefSize;
 	U8 *fileDataPtrIt = fileObjectPtr + baseFileHeader * files.length;
 
 	for (U32 i = 0; i < (U32) files.length; ++i) {
@@ -478,8 +508,12 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 
 		U8 *filePtr = fileObjectPtr + baseFileHeader * i;
 
-		*(U16*)filePtr = parent;
-		filePtr += sizeof(U16);
+		if (dirRefSize == 2)
+			*((U16*)filePtr) = parent;
+
+		else *filePtr = (U8) parent;
+
+		filePtr += dirRefSize;
 
 		if (
 			(caFile.settings.flags & ECASettingsFlags_IncludeFullDate) ||
@@ -493,27 +527,19 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 
 			else {
 
-				if (!CAFile_storeDate(entry->timestamp, (U16*)filePtr + 1, (U16*)filePtr)) {
+				if (!CAFile_storeDate(entry->timestamp, (U16*)filePtr + 1, (U16*)filePtr))
 					_gotoIfError(clean, Error_invalidState(1));
-				}
 
 				filePtr += sizeof(U16) * 2;
 			}
 		}
 
-		U64 fileSize = Buffer_length(entry->data);
-
-		switch (sizeType) {
-			case EXXDataSizeType_U8:	*filePtr = (U8) fileSize;			break;
-			case EXXDataSizeType_U16:	*(U16*)filePtr = (U16) fileSize;	break;
-			case EXXDataSizeType_U32:	*(U32*)filePtr = (U32) fileSize;	break;
-			default:					*(U64*)filePtr = fileSize;
-		}
+		Buffer_forceWriteSizeType(filePtr, sizeType, Buffer_length(entry->data));
 
 		//Append file data
 
 		Buffer_copy(Buffer_createRef(fileDataPtrIt, Buffer_length(entry->data)), entry->data);
-		fileDataPtrIt += fileSize;
+		fileDataPtrIt += Buffer_length(entry->data);
 	}
 
 	//We're done with processing files and folders
@@ -554,13 +580,26 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 			(sizeType << ECAFlags_FileSizeType_Shift)
 		),
 
-		.type = (U8)((caFile.settings.compressionType << 4) | caFile.settings.encryptionType),
-
-		.directoryCount = dirCount,
-		.fileCount = fileCount
+		.type = (U8)((caFile.settings.compressionType << 4) | caFile.settings.encryptionType)
 	};
 
 	headerIt += sizeof(CAHeader);
+
+	//Append file and dir count
+
+	if (fileRefSize == 4)
+		*((U32*)headerIt) = fileCount;
+
+	else *((U16*)headerIt) = (U16) fileCount;
+
+	headerIt += fileRefSize;
+
+	if (dirRefSize == 2)
+		*((U16*)headerIt) = dirCount;
+
+	else *headerIt = (U8) dirCount;
+
+	headerIt += dirRefSize;
 
 	//Hash
 
@@ -660,9 +699,7 @@ Error CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFi
 	if (Buffer_length(file) < sizeof(CAHeader))
 		return Error_outOfBounds(0, 0, sizeof(CAHeader), Buffer_length(file));
 
-	Buffer filePtr = 
-		Buffer_isConstRef(file) ? Buffer_createConstRef(file.ptr, Buffer_length(file)) :
-		Buffer_createRef(file.ptr, Buffer_length(file));
+	Buffer filePtr = Buffer_createRefFromBuffer(file, Buffer_isConstRef(file));
 
 	Buffer tmpData = Buffer_createNull();
 	Error err = Error_none();
@@ -671,6 +708,8 @@ Error CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFi
 	String tmpPath = String_createNull();
 
 	_gotoIfError(clean, Archive_create(alloc, &archive));
+
+	//Validate header
 
 	CAHeader header;
 	_gotoIfError(clean, Buffer_consume(&filePtr, &header, sizeof(header)));
@@ -687,19 +726,36 @@ Error CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFi
 	if(header.type >> 4)							//TODO: Compression
 		_gotoIfError(clean, Error_unsupportedOperation(1));
 
-	if(header.flags & ECAFlags_Invalid)
-		_gotoIfError(clean, Error_unsupportedOperation(2));
-
 	if(header.flags & ECAFlags_UseSHA256)				//TODO: SHA256
 		_gotoIfError(clean, Error_unsupportedOperation(3));
 
 	if((header.type & 0xF) >= EXXEncryptionType_Count)
 		_gotoIfError(clean, Error_invalidParameter(0, 4, 0));
 
-	if(header.directoryCount >= U16_MAX)
+	//Validate file and dir count
+
+	U32 fileCount = 0;
+	_gotoIfError(clean, Buffer_consume(&filePtr, &fileCount, header.flags & ECAFlags_FilesCountLong ? 4 : 2));
+
+	U16 dirCount = 0;
+	_gotoIfError(clean, Buffer_consume(&filePtr, &dirCount, header.flags & ECAFlags_DirectoriesCountLong ? 2 : 1));
+
+	if(dirCount >= (header.flags & ECAFlags_DirectoriesCountLong ? U16_MAX : U8_MAX))
 		_gotoIfError(clean, Error_invalidParameter(0, 7, 0));
 
-	_gotoIfError(clean, Buffer_consume(&filePtr, NULL, header.headerExtensionSize));
+	if(fileCount >= (header.flags & ECAFlags_FilesCountLong ? U32_MAX : U16_MAX))
+		_gotoIfError(clean, Error_invalidParameter(0, 8, 0));
+
+	//Validate extended data
+
+	CAExtraData extra = (CAExtraData) { 0 };
+
+	if(header.flags & ECAFlags_HasExtendedData) {
+		_gotoIfError(clean, Buffer_consume(&filePtr, &extra, sizeof(extra)));
+		_gotoIfError(clean, Buffer_consume(&filePtr, NULL, extra.headerExtensionSize));
+	}
+
+	//Check for encryption
 
 	I32x4 iv = I32x4_zero(), tag = I32x4_zero();
 
@@ -734,40 +790,50 @@ Error CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFi
 	)
 		_gotoIfError(clean, Error_invalidOperation(0));
 
-	if(fileNames.entries.length != (U64)header.fileCount + header.directoryCount)
+	if(fileNames.entries.length != (U64)fileCount + dirCount)
 		_gotoIfError(clean, Error_invalidState(0));
 
 	//Ensure we have enough allocated for all files and directories
 
 	EXXDataSizeType sizeType = (header.flags >> ECAFlags_FileSizeType_Shift) & ECAFlags_FileSizeType_Mask;
 
-	U64 folderStride = sizeof(CADirectory) + header.directoryExtensionSize;
-	U64 fileStride = sizeof(U16) + SIZE_BYTE_TYPE[sizeType] + header.fileExtensionSize;
+	U64 dirStride = header.flags & ECAFlags_DirectoriesCountLong ? 2 : 1;
+
+	U16 rootDir = dirStride == 2 ? U16_MAX : U8_MAX;
+
+	U64 folderStride = (U64) dirStride + extra.directoryExtensionSize;
+	U64 fileStride = (U64) dirStride + SIZE_BYTE_TYPE[sizeType] + extra.fileExtensionSize;
 
 	if (header.flags & ECAFlags_FilesHaveDate)
 		fileStride += header.flags & ECAFlags_FilesHaveExtendedDate ? sizeof(U64) : sizeof(U16) * 2;
 
-	U64 fileSize = (U64)header.fileCount * fileStride;
-	U64 folderSize = (U64)header.directoryCount * folderStride;
+	U64 fileSize = (U64)fileCount * fileStride;
+	U64 folderSize = (U64)dirCount * folderStride;
 
 	if (Buffer_length(filePtr) < fileSize + folderSize)
 		_gotoIfError(clean, Error_outOfBounds(0, 0, fileSize + folderSize, Buffer_length(filePtr)));
 
 	//Now we can add dir to the archive
 
-	for (U64 i = 0; i < header.directoryCount; ++i) {
+	for (U64 i = 0; i < dirCount; ++i) {
 
-		CADirectory diri = *(CADirectory*)(filePtr.ptr + folderStride * i);
+		const U8 *diri = filePtr.ptr + folderStride * i;
 
 		String name = ((DLEntry*)fileNames.entries.ptr)[i].entryString;
+
+		if(!String_isValidFileName(name, false))
+			_gotoIfError(clean, Error_invalidParameter(0, 0, 0));
+		
 		_gotoIfError(clean, String_createCopy(name, alloc, &tmpPath));
 
-		if (diri.parentDirectory != U16_MAX) {
+		U16 parent = dirStride == 2 ? *(const U16*)diri : *diri;
 
-			if (diri.parentDirectory >= i)
+		if (parent != rootDir) {
+
+			if (parent >= i)
 				_gotoIfError(clean, Error_invalidOperation(2));
 
-			String parentName = ((ArchiveEntry*)archive.entries.ptr + diri.parentDirectory)->path;
+			String parentName = ((ArchiveEntry*)archive.entries.ptr + parent)->path;
 
 			if (parentName.length && !parentName.ptr[parentName.length - 1])
 				--parentName.length;
@@ -786,24 +852,28 @@ Error CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFi
 	const U8 *fileIt = filePtr.ptr + folderSize;
 	_gotoIfError(clean, Buffer_offset(&filePtr, fileSize + folderSize));
 
-	for (U64 i = 0; i < header.fileCount; ++i) {
+	for (U64 i = 0; i < fileCount; ++i) {
 
 		const U8 *filei = fileIt + fileStride * i;
 
-		String name = ((DLEntry*)fileNames.entries.ptr)[(U64)i + header.directoryCount].entryString;
+		String name = ((DLEntry*)fileNames.entries.ptr)[(U64)i + dirCount].entryString;
+
+		if(!String_isValidFileName(name, false))
+			_gotoIfError(clean, Error_invalidParameter(0, 0, 1));
+
 		_gotoIfError(clean, String_createCopy(name, alloc, &tmpPath));
 
 		//Load parent
 
-		U16 parentDir = *(const U16*)filei;
-		filei += sizeof(U16);
+		U16 parent = dirStride == 2 ? *(const U16*)filei : *filei;
+		filei += dirStride;
 
-		if (parentDir != U16_MAX) {
+		if (parent != rootDir) {
 
-			if (parentDir >= header.directoryCount)
+			if (parent >= dirCount)
 				_gotoIfError(clean, Error_invalidOperation(2));
 
-			String parentName = ((ArchiveEntry*)archive.entries.ptr + parentDir)->path;
+			String parentName = ((ArchiveEntry*)archive.entries.ptr + parent)->path;
 
 			if (parentName.length && !parentName.ptr[parentName.length - 1])
 				--parentName.length;
@@ -836,15 +906,8 @@ Error CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFi
 		//Grab data of file.
 		//This introduces a copy because Archive needs a separate alloc per file
 
-		U64 bufferSize = 0;
+		U64 bufferSize = Buffer_forceReadSizeType(filei, sizeType);
 		
-		switch (sizeType) {
-			case EXXDataSizeType_U8:	bufferSize = *filei;					break;
-			case EXXDataSizeType_U16:	bufferSize = *(const U16*) filei;	break;
-			case EXXDataSizeType_U32:	bufferSize = *(const U32*) filei;	break;
-			default:					bufferSize = *(const U64*) filei;
-		}
-
 		_gotoIfError(clean, Buffer_createUninitializedBytes(bufferSize, alloc, &tmpData));
 
 		const U8 *dataPtr = filePtr.ptr;
@@ -859,6 +922,9 @@ Error CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFi
 		tmpPath = String_createNull();
 		tmpData = Buffer_createNull();
 	}
+
+	if(Buffer_length(filePtr))
+		return Error_invalidState(0);
 
 	caFile->archive = archive;
 	archive = (Archive) { 0 };

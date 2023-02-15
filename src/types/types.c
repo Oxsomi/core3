@@ -38,7 +38,7 @@ Buffer Buffer_createManagedPtr(void *ptr, U64 length) {
 
 Buffer Buffer_createRefFromBuffer(Buffer buf, Bool isConst) {
 
-	if(!buf.ptr)
+	if(!buf.ptr || (!isConst && Buffer_isConstRef(buf)))
 		return (Buffer) { 0 };
 
 	Buffer copy = buf;
