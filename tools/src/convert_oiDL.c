@@ -88,6 +88,14 @@ Error _CLI_convertToDL(ParsedArgs args, String input, FileInfo inputInfo, String
 	//else if(args.flags & EOperationFlags_FastCompress)				TODO:
 	//	settings.compressionType = EXXCompressionType_Brotli1;
 
+	//Ensure encryption key isn't provided if we're not encrypting
+
+	if(encryptionKey && !settings.encryptionType)
+		return Error_invalidOperation(3);
+
+	if(!encryptionKey && settings.encryptionType)
+		return Error_unauthorized(0);
+
 	//Copying encryption key
 
 	if(settings.encryptionType)

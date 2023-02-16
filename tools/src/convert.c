@@ -94,7 +94,8 @@ Bool _CLI_convert(ParsedArgs args, Bool isTo) {
 
 	//Parse encryption key
 
-	U32 encryptionKey[8] = { 0 };
+	U32 encryptionKeyV[8] = { 0 };
+	U32 *encryptionKey = NULL;			//Only if we have aes should encryption key be set.
 
 	if (args.parameters & EOperationHasParameter_AES) {
 
@@ -131,8 +132,10 @@ Bool _CLI_convert(ParsedArgs args, Bool isTo) {
 			U8 v1 = C8_hex(key.ptr[++i]);
 
 			v0 = (v0 << 4) | v1;
-			*((U8*)encryptionKey + ((i - off) >> 1)) = v0;
+			*((U8*)encryptionKeyV + ((i - off) >> 1)) = v0;
 		}
+
+		encryptionKey = encryptionKeyV;
 	}
 
 	//Now convert it

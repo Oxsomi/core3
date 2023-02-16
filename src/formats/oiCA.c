@@ -732,6 +732,14 @@ Error CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFi
 	if((header.type & 0xF) >= EXXEncryptionType_Count)
 		_gotoIfError(clean, Error_invalidParameter(0, 4, 0));
 
+	//Ensure encryption key isn't provided if we're not encrypting
+
+	if(encryptionKey && !(header.type & 0xF))
+		_gotoIfError(clean, Error_invalidOperation(3));
+
+	if(!encryptionKey && (header.type & 0xF))
+		_gotoIfError(clean, Error_unauthorized(0));
+
 	//Validate file and dir count
 
 	U32 fileCount = 0;
@@ -831,7 +839,7 @@ Error CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFi
 		if (parent != rootDir) {
 
 			if (parent >= i)
-				_gotoIfError(clean, Error_invalidOperation(2));
+				_gotoIfError(clean, Error_invalidOperation(1));
 
 			String parentName = ((ArchiveEntry*)archive.entries.ptr + parent)->path;
 

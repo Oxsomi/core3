@@ -93,6 +93,14 @@ Error _CLI_convertToCA(ParsedArgs args, String input, FileInfo inputInfo, String
 	if(args.parameters & EOperationHasParameter_AES)
 		settings.encryptionType = EXXEncryptionType_AES256GCM;
 
+	//Ensure encryption key isn't provided if we're not encrypting
+
+	if(encryptionKey && !settings.encryptionType)
+		return Error_invalidOperation(3);
+
+	if(!encryptionKey && settings.encryptionType)
+		return Error_unauthorized(0);
+
 	//Compression type
 
 	if(args.flags & EOperationFlags_Uncompressed)

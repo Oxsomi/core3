@@ -502,6 +502,16 @@ Error DLFile_read(
 	if(header.sizeTypes >> 6)
 		_gotoIfError(clean, Error_invalidParameter(0, 7, 0));
 
+	//Ensure encryption key isn't provided if we're not encrypting
+
+	if(encryptionKey && !(header.type & 0xF))
+		_gotoIfError(clean, Error_invalidOperation(3));
+
+	if(!encryptionKey && (header.type & 0xF))
+		_gotoIfError(clean, Error_unauthorized(0));
+
+	//
+
 	EXXDataSizeType entrySizeType			= (EXXDataSizeType)(header.sizeTypes & 3);
 	EXXDataSizeType uncompressedSizeType	= (EXXDataSizeType)((header.sizeTypes >> 2) & 3);
 	EXXDataSizeType dataSizeType			= (EXXDataSizeType)(header.sizeTypes >> 4);
