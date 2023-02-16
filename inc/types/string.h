@@ -86,9 +86,9 @@ const C8 *String_endConst(String str);
 
 const C8 *String_charAtConst(String str, U64 off);
 Bool String_isValidAscii(String str);
-Bool String_isValidFileName(String str, Bool acceptTrailingNull);
+Bool String_isValidFileName(String str);
 
-//Only checks characters. Please use resolvePath to actually validate
+//Only checks characters. Please use resolvePath to actually validate if it's safely accessible.
 
 Bool String_isValidFilePath(String str);
 void String_clear(String *str);

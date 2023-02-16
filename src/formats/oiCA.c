@@ -829,7 +829,7 @@ Error CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFi
 
 		String name = ((DLEntry*)fileNames.entries.ptr)[i].entryString;
 
-		if(!String_isValidFileName(name, false))
+		if(!String_isValidFileName(name))
 			_gotoIfError(clean, Error_invalidParameter(0, 0, 0));
 		
 		_gotoIfError(clean, String_createCopy(name, alloc, &tmpPath));
@@ -866,7 +866,7 @@ Error CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFi
 
 		String name = ((DLEntry*)fileNames.entries.ptr)[(U64)i + dirCount].entryString;
 
-		if(!String_isValidFileName(name, false))
+		if(!String_isValidFileName(name))
 			_gotoIfError(clean, Error_invalidParameter(0, 0, 1));
 
 		_gotoIfError(clean, String_createCopy(name, alloc, &tmpPath));

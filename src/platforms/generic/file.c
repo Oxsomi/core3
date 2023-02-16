@@ -386,7 +386,7 @@ Error File_rename(String loc, String newFileName, Ns maxTimeout) {
 	if(!String_isValidFilePath(newFileName))
 		_gotoIfError(clean, Error_invalidParameter(0, 0, 0));
 
-	if(!String_isValidFileName(newFileName, true))
+	if(!String_isValidFileName(newFileName))
 		_gotoIfError(clean, Error_invalidParameter(1, 0, 0));
 
 	Bool isVirtual = File_isVirtual(loc);

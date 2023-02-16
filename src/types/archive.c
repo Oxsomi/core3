@@ -311,7 +311,7 @@ Error Archive_rename(
 	String resolvedLoc = String_createNull();
 	Error err = Error_none();
 
-	if (!String_isValidFileName(newFileName, true))
+	if (!String_isValidFileName(newFileName))
 		return Error_invalidParameter(1, 0, 0);
 
 	U64 i = 0;

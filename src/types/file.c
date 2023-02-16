@@ -161,7 +161,7 @@ Error File_resolve(
 
 		//Validate file name
 
-		if (!String_isValidFileName(res.ptr[i], i == res.length - 1)) {
+		if (!String_isValidFileName(res.ptr[i])) {
 
 			#ifdef _WIN32
 

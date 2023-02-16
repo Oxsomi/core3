@@ -139,13 +139,17 @@ CAFile {
     compress & encrypt the following if necessary:		//See oiXX.md
     
     	//This includes the names of everything in order.
-    	//The names should only be [0-9A-Za-z_.-\ ]+ as well as non ASCII characters.
-    	//This means that special characters are banned for interoperability reasons.
+    	//The names should only have characters in range [0x20, 0x7F>.
+    	//Currently OxC3 doesn't support UTF8, but any valid unicode character
+    	//	(above this range) could be supported by other implementations.
+    	//Excluded characters are (<>:"|?*).
     	//You can't suffix with . (meaning ., .. are also out of question).
     	//Files such as CON, AUX, NUL, PRN, COM0-COM9, LPT0-LPT9 are also banned.
+    	//	This is also the case if they're followed directly by an extension.
     	//Total file path can't exceed 128 characters.
     	//DLFile format MAY NOT use compression or encryption, since that's done by CAFile.
     	//DLFile should have the string flag set. If not, the file is invalid.
+    	//	Could have the UTF8 flag set.
     	//DLFile also needs to include dirCount + fileCount entries.
     	//DLFile also doesn't include a leading magicNumber, context already implies it.
     	//File paths are insensitive; it can't have duplicates.

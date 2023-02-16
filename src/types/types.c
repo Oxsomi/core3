@@ -85,7 +85,13 @@ Bool C8_isAlphaNumeric(C8 c) { return C8_isDec(c) || C8_isUpperCase(c) || C8_isL
 Bool C8_isAlpha(C8 c) { return C8_isUpperCase(c) || C8_isLowerCase(c); }
 
 Bool C8_isValidAscii(C8 c) { return (c >= 0x20 && c < 0x7F) || c == '\t' || c == '\n' || c == '\r'; }
-Bool C8_isValidFileName(C8 c) { return C8_isAlphaNumeric(c) || c == ' ' || c == '-' || c == '.' || c == '_'; }
+
+Bool C8_isValidFileName(C8 c) { 
+	return
+		(c >= 0x20 && c < 0x7F) && 
+		c != '<' && c != '>' && c != ':' && c != '"' && c != '|' &&
+		c != '?' && c != '*' && c != '/' && c != '\\';
+}
 
 U8 C8_bin(C8 c) { return c == '0' ? 0 : (c == '1' ? 1 : U8_MAX); }
 U8 C8_oct(C8 c) { return C8_isOct(c) ? c - '0' : U8_MAX; }

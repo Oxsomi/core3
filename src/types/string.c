@@ -71,18 +71,27 @@ Bool String_isValidAscii(String str) {
 	return true;
 }
 
-Bool String_isValidFileName(String str, Bool acceptTrailingNull) {
+Bool String_isValidFileName(String str) {
 
+	//Get rid of trailing null
+
+	str = String_createConstRefSized(str.ptr, str.length);
+
+	if(str.length && !str.ptr[str.length - 1])
+		--str.length;
+
+	//
+	
 	for(U64 i = 0; i < str.length; ++i)
-		if(!C8_isValidFileName(str.ptr[i]) && !(i == str.length - 1 && !str.ptr[i] && acceptTrailingNull))
+		if(!C8_isValidFileName(str.ptr[i]) && !(i == str.length - 1 && !str.ptr[i]))
 			return false;
 	
-	Bool hasTrailingNull = acceptTrailingNull && str.length && str.ptr[str.length - 1] == '\0';
-
 	//Validation to make sure we're not using weird legacy MS DOS keywords
 	//Because these will not be writable correctly!
 
-	if (str.length == 3 + hasTrailingNull ) {
+	U64 illegalStart = 0;
+
+	if (str.length >= 3) {
 
 		if(
 			String_startsWithString(str, String_createConstRefUnsafe("CON"), EStringCase_Insensitive) ||
@@ -90,24 +99,30 @@ Bool String_isValidFileName(String str, Bool acceptTrailingNull) {
 			String_startsWithString(str, String_createConstRefUnsafe("NUL"), EStringCase_Insensitive) ||
 			String_startsWithString(str, String_createConstRefUnsafe("PRN"), EStringCase_Insensitive)
 		)
-			return false;
+			illegalStart = 3;
+
+		else if (str.length >= 4) {
+
+			if(
+				(
+					String_startsWithString(str, String_createConstRefUnsafe("COM"), EStringCase_Insensitive) ||
+					String_startsWithString(str, String_createConstRefUnsafe("LPT"), EStringCase_Insensitive)
+				) &&
+				C8_isDec(str.ptr[3])
+			)
+				illegalStart = 4;
+		}
 	}
 
-	else if (str.length == 4 + hasTrailingNull) {
+	//PRNtscreen.pdf is valid, but PRN.pdf isn't.
+	///NULlpointer.txt is valid, NUL.txt isn't.
 
-		if(
-			(
-				String_startsWithString(str, String_createConstRefUnsafe("COM"), EStringCase_Insensitive) ||
-				String_startsWithString(str, String_createConstRefUnsafe("LPT"), EStringCase_Insensitive)
-			) &&
-			C8_isDec(str.ptr[3])
-		)
-			return false;
-	}
+	if(illegalStart && (str.length == illegalStart || String_getAt(str, illegalStart) == '.'))
+		return false;
 
 	//Can't end with trailing . (so . and .. are illegal)
 
-	if (str.length > hasTrailingNull && str.ptr[str.length - 1 - hasTrailingNull] == '.')
+	if (str.length && str.ptr[str.length - 1] == '.')
 		return false;
 
 	//If string is not empty then it's a valid string
@@ -115,23 +130,114 @@ Bool String_isValidFileName(String str, Bool acceptTrailingNull) {
 	return str.length;
 }
 
+//We support valid file names or ., .. in file path parts.
+
+Bool String_isSupportedInFilePath(String str) {
+	return 
+		String_isValidFileName(str) || 
+		(String_getAt(str, 0) == '.' || (str.length == 1 || (String_getAt(str, 1) == '.' && str.length == 2)));
+}
+
+//File_resolve but without validating if it'd be a valid (permissioned) path on disk.
+
 Bool String_isValidFilePath(String str) {
 
-	//Don't allow ending with .
+	//Get rid of trailing null
 
-	if(str.length && (
-		str.ptr[str.length - 1] == '.' || 
-		(str.length >= 2 && str.ptr[str.length - 2] == '.'&& str.ptr[str.length - 1] == '\0')
-	))
+	str = String_createConstRefSized(str.ptr, str.length);
+
+	if(str.length && !str.ptr[str.length - 1])
+		--str.length;
+
+	//myTest/ <-- or myTest\
+
+	if(String_getAt(str, str.length - 1) == '/' || String_getAt(str, str.length - 1) == '\\')
+		--str.length;
+		
+	//On Windows, it's possible to change drive but keep same relative path. We don't support it.
+	//e.g. C:myFolder/ (relative folder on C) instead of C:/myFolder/ (Absolute folder on C)
+	//We also obviously don't support 0:\ and such or A:/ on unix
+
+	Bool hasPrefix = false;
+
+	#ifdef _WIN32
+
+		if(str.length >= 3 && str.ptr[1] == ':' && ((str.ptr[2] != '/' && str.ptr[2] != '\\') || !C8_isAlpha(str.ptr[0])))
+			return false;
+
+		//Absolute
+
+		if(str.ptr[1] == ':') {
+			str.ptr += 3;
+			str.length -= 3;
+			hasPrefix = true;
+		}
+
+	#else
+
+		if(str.length >= 2 && str.ptr[1] == ':')
+			return false;
+
+	#endif
+
+	//Absolute path
+
+	if(String_getAt(str, 0) == '/' || String_getAt(str, 0) == '\\') {
+
+		if(hasPrefix)
+			return false;
+
+		++str.ptr;
+		--str.length;
+		hasPrefix = true;
+	}
+
+	//Virtual files
+
+	if(String_getAt(str, 0) == '/' && String_getAt(str, 1) == '/') {
+
+		if(hasPrefix)
+			return false;
+
+		str.ptr += 2;
+		str.length -= 2;
+	}
+
+	//Windows network paths, this is unsupported currently
+
+	if(String_getAt(str, 0) == '\\' && String_getAt(str, 1) == '\\') 
 		return false;
 
-	for(U64 i = 0; i < str.length; ++i)
-		if(
-			!C8_isValidFileName(str.ptr[i]) && str.ptr[i] != '/' && str.ptr[i] != '\\' && 
-			!(i == str.length - 1 && !str.ptr[i]) &&						//Allow null terminator
-			!(i == 1 && str.ptr[i] == ':')									//Allow drive names for Windows
-		)
-			return false;
+	//Split by / or \.
+
+	U64 prev = 0;
+
+	for (U64 i = 0; i < str.length; ++i) {
+
+		C8 c = str.ptr[i];
+
+		//Push previous
+
+		if (c == '/' || c == '\\') {
+
+			if(!(i - prev))
+				return false;
+
+			String part = String_createConstRefSized(str.ptr + prev, i - prev);
+
+			if(!String_isSupportedInFilePath(part))
+				return false;
+
+			prev = i + 1;
+		}
+	}
+
+	//Validate ending
+
+	String part = String_createConstRefSized(str.ptr + prev, str.length - prev);
+
+	if(!String_isSupportedInFilePath(part))
+		return false;
 
 	return str.length;
 }
