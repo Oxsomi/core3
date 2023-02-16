@@ -56,7 +56,7 @@ void Error_printx(Error err, ELogLevel logLevel, ELogOptions options) {
 
 		if(!String_appendStringx(&str, prefix).genericError) {
 
-			String str0;
+			String str0 = String_createNull();
 
 			if(!String_createHexx(err.errorSubId, false, &str0).genericError) {
 				String_appendStringx(&str, str0);
@@ -73,7 +73,7 @@ void Error_printx(Error err, ELogLevel logLevel, ELogOptions options) {
 
 		if (!String_appendStringx(&str, prefix).genericError) {
 
-			String str0;
+			String str0 = String_createNull();
 
 			if(!String_createDecx(err.paramId, false, &str0).genericError) {
 				String_appendStringx(&str, str0);
@@ -90,7 +90,7 @@ void Error_printx(Error err, ELogLevel logLevel, ELogOptions options) {
 
 		if(!String_appendStringx(&str, prefix).genericError) {
 
-			String str0;
+			String str0 = String_createNull();
 
 			if(!String_createDecx(err.paramSubId, false, &str0).genericError) {
 				String_appendStringx(&str, str0);
@@ -109,7 +109,7 @@ void Error_printx(Error err, ELogLevel logLevel, ELogOptions options) {
 
 		if(!String_appendStringx(&str, prefix).genericError) {
 
-			String str0;
+			String str0 = String_createNull();
 
 			if(!String_createHexx(err.paramValue0, false, &str0).genericError) {
 				String_appendStringx(&str, str0);
@@ -126,7 +126,7 @@ void Error_printx(Error err, ELogLevel logLevel, ELogOptions options) {
 
 		if(!String_appendStringx(&str, prefix).genericError) {
 
-			String str0;
+			String str0 = String_createNull();
 
 			if(!String_createHexx(err.paramValue1, false, &str0).genericError) {
 				String_appendStringx(&str, str0);

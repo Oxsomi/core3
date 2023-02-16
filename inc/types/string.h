@@ -240,8 +240,8 @@ U64 String_findString(String s, String other, EStringCase caseSensitive, Bool is
 Bool String_contains(String str, C8 c, EStringCase caseSensitive);
 Bool String_containsString(String str, String other, EStringCase caseSensitive);
 
-Bool String_equalsString(String s, String other, EStringCase caseSensitive, Bool ignoreNull);
-Bool String_equals(String s, C8 c, EStringCase caseSensitive, Bool ignoreNull);
+Bool String_equalsString(String s, String other, EStringCase caseSensitive, Bool ignoreTrailingNull);
+Bool String_equals(String s, C8 c, EStringCase caseSensitive, Bool ignoreTrailingNull);
 
 Bool String_parseNyto(String s, U64 *result);
 Bool String_parseHex(String s, U64 *result);

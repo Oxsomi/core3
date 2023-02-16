@@ -1363,12 +1363,12 @@ U64 String_findLastString(String s, String other, EStringCase casing) {
 	return i;
 }
 
-Bool String_equalsString(String s, String other, EStringCase caseSensitive, Bool ignoreNull) {
+Bool String_equalsString(String s, String other, EStringCase caseSensitive, Bool ignoreTrailingNull) {
 
-	if (ignoreNull && s.length && !s.ptr[s.length - 1])
+	if (ignoreTrailingNull && s.length && !s.ptr[s.length - 1])
 		--s.length;
 
-	if (ignoreNull && other.length && !other.ptr[other.length - 1])
+	if (ignoreTrailingNull && other.length && !other.ptr[other.length - 1])
 		--other.length;
 
 	if (s.length != other.length)
@@ -1384,9 +1384,9 @@ Bool String_equalsString(String s, String other, EStringCase caseSensitive, Bool
 	return true;
 }
 
-Bool String_equals(String s, C8 c, EStringCase caseSensitive, Bool ignoreNull) {
+Bool String_equals(String s, C8 c, EStringCase caseSensitive, Bool ignoreTrailingNull) {
 
-	if (ignoreNull && s.length && !s.ptr[s.length - 1])
+	if (ignoreTrailingNull && s.length && !s.ptr[s.length - 1])
 		--s.length;
 
 	return s.length == 1 && s.ptr && 

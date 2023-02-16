@@ -154,6 +154,98 @@ int main() {
 	//TODO: Test file
 	//TODO: Test list
 
+	//Test string to number functions
+
+	{
+		printf("Testing number to String conversions\n");
+
+		String resultsStr[] = {
+			String_createConstRefUnsafe("0x1234"),
+			String_createConstRefUnsafe("0b10101"),
+			String_createConstRefUnsafe("0o707"),
+			String_createConstRefUnsafe("0nNiceNumber"),
+			String_createConstRefUnsafe("69420")
+		};
+
+		U64 resultsU64[] = {
+
+			0x1234,
+			0b10101,
+			0707,
+
+			((U64)C8_nyto('N') << 54) | ((U64)C8_nyto('i') << 48) | ((U64)C8_nyto('c') << 42) | ((U64)C8_nyto('e') << 36) | 
+			((U64)C8_nyto('N') << 30) | ((U64)C8_nyto('u') << 24) | ((U64)C8_nyto('m') << 18) | ((U64)C8_nyto('b') << 12) | 
+			((U64)C8_nyto('e') <<  6) | C8_nyto('r'),
+
+			69420
+		};
+
+		//Conversion from number to string
+		//TODO: Perhaps make a generic create that can pick any of them
+
+		String tmpStr = String_createNull();
+		_gotoIfError(clean, String_createHex(resultsU64[0], false, alloc, &tmpStr));
+
+		if (!String_equalsString(resultsStr[0], tmpStr, EStringCase_Sensitive, false)) {
+			String_free(&tmpStr, alloc);
+			_gotoIfError(clean, Error_invalidState(0));
+		}
+
+		String_free(&tmpStr, alloc);
+		_gotoIfError(clean, String_createBin(resultsU64[1], false, alloc, &tmpStr));
+
+		if (!String_equalsString(resultsStr[1], tmpStr, EStringCase_Sensitive, false)) {
+			String_free(&tmpStr, alloc);
+			_gotoIfError(clean, Error_invalidState(1));
+		}
+
+		String_free(&tmpStr, alloc);
+		_gotoIfError(clean, String_createOct(resultsU64[2], false, alloc, &tmpStr));
+
+		if (!String_equalsString(resultsStr[2], tmpStr, EStringCase_Sensitive, false)) {
+			String_free(&tmpStr, alloc);
+			_gotoIfError(clean, Error_invalidState(2));
+		}
+
+		String_free(&tmpStr, alloc);
+		_gotoIfError(clean, String_createNyto(resultsU64[3], false, alloc, &tmpStr));
+
+		if (!String_equalsString(resultsStr[3], tmpStr, EStringCase_Sensitive, false)) {
+			String_free(&tmpStr, alloc);
+			_gotoIfError(clean, Error_invalidState(3));
+		}
+
+		String_free(&tmpStr, alloc);
+		_gotoIfError(clean, String_createDec(resultsU64[4], false, alloc, &tmpStr));
+
+		if (!String_equalsString(resultsStr[4], tmpStr, EStringCase_Sensitive, false)) {
+			String_free(&tmpStr, alloc);
+			_gotoIfError(clean, Error_invalidState(4));
+		}
+
+		//Conversion from string to number
+
+		U64 tmpRes[5] = { 0 };
+
+		Bool success = true;
+
+		success &= String_parseHex(resultsStr[0], tmpRes + 0);
+		success &= String_parseBin(resultsStr[1], tmpRes + 1);
+		success &= String_parseOct(resultsStr[2], tmpRes + 2);
+		success &= String_parseNyto(resultsStr[3], tmpRes + 3);
+		success &= String_parseDec(resultsStr[4], tmpRes + 4);
+
+		if(!success)
+			_gotoIfError(clean, Error_invalidState(5));
+
+		for(U64 i = 0; i < sizeof(resultsStr) / sizeof(resultsStr[0]); ++i)
+			success &= tmpRes[i] == resultsU64[i];
+
+		if(!success)
+			_gotoIfError(clean, Error_invalidState(6));
+
+	}
+
 	//Test CRC32C function
 	//https://stackoverflow.com/questions/20963944/test-vectors-for-crc32c
 
