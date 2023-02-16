@@ -1030,7 +1030,7 @@ Error String_replaceString(
 	U64 res = isFirst ? String_findFirstString(*s, search, caseSensitive) : 
 		String_findLastString(*s, search, caseSensitive);
 
-	if (res == s->length)
+	if (res == U64_MAX)
 		return Error_none();
 
 	//Easy, early exit. Strings are same size.
@@ -1295,7 +1295,7 @@ U64 String_findFirst(String s, C8 c, EStringCase caseSensitive) {
 		if (C8_transform(s.ptr[i], (EStringTransform)caseSensitive) == c)
 			return i;
 
-	return s.length;
+	return U64_MAX;
 }
 
 U64 String_findLast(String s, C8 c, EStringCase caseSensitive) {
@@ -1306,15 +1306,13 @@ U64 String_findLast(String s, C8 c, EStringCase caseSensitive) {
 		if (C8_transform(s.ptr[i], (EStringTransform)caseSensitive) == c)
 			return i;
 
-	//TODO: Don't return length on end!
-
-	return s.length;
+	return U64_MAX;
 }
 
 U64 String_findFirstString(String s, String other, EStringCase casing) {
 
 	if(!other.length || s.length < other.length)
-		return s.length;
+		return U64_MAX;
 
 	U64 i = 0;
 
@@ -1341,7 +1339,7 @@ U64 String_findFirstString(String s, String other, EStringCase casing) {
 U64 String_findLastString(String s, String other, EStringCase casing) {
 	
 	if(!other.length || s.length < other.length)
-		return 0;
+		return U64_MAX;
 
 	U64 i = s.length - 1;
 
@@ -1748,7 +1746,7 @@ Bool String_cutAfter(
 
 	U64 found = isFirst ? String_findFirst(s, c, caseSensitive) : String_findLast(s, c, caseSensitive);
 
-	if (found == s.length)
+	if (found == U64_MAX)
 		return false;
 
 	return String_cut(s, 0, found, result);
@@ -1765,7 +1763,7 @@ Bool String_cutAfterString(
 	U64 found = isFirst ? String_findFirstString(s, other, caseSensitive) : 
 		String_findLastString(s, other, caseSensitive);
 
-	if (found == s.length)
+	if (found == U64_MAX)
 		return false;
 
 	return String_cut(s, 0, found, result);
@@ -1778,7 +1776,7 @@ Bool String_cutBefore(String s, C8 c, EStringCase caseSensitive, Bool isFirst, S
 
 	U64 found = isFirst ? String_findFirst(s, c, caseSensitive) : String_findLast(s, c, caseSensitive);
 
-	if (found == s.length)
+	if (found == U64_MAX)
 		return false;
 
 	++found;	//The end of the occurence is the begin of the next string
@@ -1790,7 +1788,7 @@ Bool String_cutBeforeString(String s, String other, EStringCase caseSensitive, B
 	U64 found = isFirst ? String_findFirstString(s, other, caseSensitive) : 
 		String_findLastString(s, other, caseSensitive);
 
-	if (found == s.length)
+	if (found == U64_MAX)
 		return false;
 
 	found += other.length;	//The end of the occurence is the begin of the next string
@@ -1810,7 +1808,7 @@ Bool String_erase(String *s, C8 c, EStringCase caseSensitive, Bool isFirst) {
 
 	U64 find = String_find(*s, c, caseSensitive, isFirst);
 
-	if(find == s->length)
+	if(find == U64_MAX)
 		return false;
 
 	Buffer_copy(
@@ -1856,7 +1854,7 @@ Bool String_eraseString(String *s, String other, EStringCase casing, Bool isFirs
 
 	U64 find = String_findString(*s, other, casing, isFirst);
 
-	if(find == s->length)
+	if(find == U64_MAX)
 		return false;
 
 	Buffer_copy(

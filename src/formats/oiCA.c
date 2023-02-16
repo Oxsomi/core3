@@ -408,7 +408,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 
 		//Add to parent directory
 
-		if (it != dir.length) {
+		if (it != U64_MAX) {
 
 			//We need to find the real parent.
 			//Since we're sorted alphabetically, we are able to look back from our current directory
@@ -459,7 +459,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 
 		//Add to parent directory
 
-		if (it != file.length) {
+		if (it != U64_MAX) {
 
 			//We need to find the real parent.
 			//Since we're sorted alphabetically, we are able to look back from our current directory
