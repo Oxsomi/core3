@@ -39,4 +39,7 @@ Bool _CLI_convert(ParsedArgs args, Bool isTo);
 Bool CLI_convertTo(ParsedArgs args);
 Bool CLI_convertFrom(ParsedArgs args);
 
+Bool CLI_hashFile(ParsedArgs args);
+Bool CLI_hashString(ParsedArgs args);
+
 Bool CLI_execute(StringList arglist);

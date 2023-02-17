@@ -69,17 +69,21 @@ const C8 *EOperationFlags_descriptions[] = {
 //Operations
 
 const C8 *EOperationCategory_names[] = {
-	"convert"
+	"convert",
+	"hash"
 };
 
 const C8 *EOperationCategory_description[] = {
-	"Converting between OxC3 types and non native types."
+	"Converting between OxC3 types and non native types.",
+	"Converting a file or string to a hash."
 };
 
-Operation Operation_values[2];
-Format Format_values[2];
+Operation Operation_values[4];
+Format Format_values[4];
 
 void Operations_init() {
+
+	//Convert operation
 
 	Format_values[EFormat_oiCA] = (Format) {
 		.name = "oiCA",
@@ -87,8 +91,9 @@ void Operations_init() {
 		.operationFlags = EOperationFlags_Default | EOperationFlags_Date | EOperationFlags_FullDate,
 		.optionalParameters = EOperationHasParameter_AES,
 		.requiredParameters = EOperationHasParameter_Input | EOperationHasParameter_Output,
-		.flags = EFormatFlags_SupportFiles | EFormatFlags_SupportFolders
-	},
+		.flags = EFormatFlags_SupportFiles | EFormatFlags_SupportFolders,
+		.supportedCategories = { EOperationCategory_Convert }
+	};
 
 	Format_values[EFormat_oiDL] = (Format) { 
 		.name = "oiDL",
@@ -96,8 +101,9 @@ void Operations_init() {
 		.operationFlags = EOperationFlags_Default | EOperationFlags_Ascii | EOperationFlags_UTF8,
 		.optionalParameters = EOperationHasParameter_AES | EOperationHasParameter_SplitBy,
 		.requiredParameters = EOperationHasParameter_Input | EOperationHasParameter_Output,
-		.flags = EFormatFlags_SupportFiles | EFormatFlags_SupportFolders
-	},
+		.flags = EFormatFlags_SupportFiles | EFormatFlags_SupportFolders,
+		.supportedCategories = { EOperationCategory_Convert }
+	};
 
 	Operation_values[EOperation_ConvertTo] = (Operation) { 
 		.category = EOperationCategory_Convert, 
@@ -111,6 +117,42 @@ void Operations_init() {
 		.name = "from", 
 		.desc = "Converting to a non native file format from a native file format.", 
 		.func = &CLI_convertFrom
+	};
+
+	//Hash category
+
+	Format_values[EFormat_CRC32C] = (Format) {
+		.name = "CRC32C",
+		.desc = "CRC32 Castagnoli (32-bit hash)",
+		.operationFlags = EOperationFlags_None,
+		.optionalParameters = EOperationHasParameter_None,
+		.requiredParameters = EOperationHasParameter_Input,
+		.flags = EFormatFlags_SupportFiles | EFormatFlags_SupportAsString,
+		.supportedCategories = { EOperationCategory_Hash }
+	};
+
+	Format_values[EFormat_SHA256] = (Format) { 
+		.name = "SHA256",
+		.desc = "SHA256 (256-bit hash)",
+		.operationFlags = EOperationFlags_None,
+		.optionalParameters = EOperationHasParameter_None,
+		.requiredParameters = EOperationHasParameter_Input,
+		.flags = EFormatFlags_SupportFiles | EFormatFlags_SupportAsString,
+		.supportedCategories = { EOperationCategory_Hash }
+	};
+
+	Operation_values[EOperation_HashString] = (Operation) { 
+		.category = EOperationCategory_Hash, 
+		.name = "string", 
+		.desc = "Hashing a string.", 
+		.func = &CLI_hashString
+	};
+
+	Operation_values[EOperation_HashFile] = (Operation) { 
+		.category = EOperationCategory_Hash, 
+		.name = "file", 
+		.desc = "Hashing a file.", 
+		.func = &CLI_hashFile
 	};
 }
 

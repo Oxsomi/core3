@@ -43,17 +43,17 @@ void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f) {
 		Log_debug(String_createConstRefUnsafe("All categories:"), ELogOptions_NewLine);
 		Log_debug(String_createNull(), ELogOptions_NewLine);
 
-		for(U64 i = 0; i < EOperationCategory_Invalid; ++i) {
+		for(U64 i = EOperationCategory_Start; i < EOperationCategory_End; ++i) {
 
 			Log_debug(
-				String_createConstRefUnsafe(EOperationCategory_names[i]), 
+				String_createConstRefUnsafe(EOperationCategory_names[i - 1]), 
 				ELogOptions_None
 			);
 
 			Log_debug(String_createConstRefUnsafe(": "), ELogOptions_None);
 
 			Log_debug(
-				String_createConstRefUnsafe(EOperationCategory_description[i]), 
+				String_createConstRefUnsafe(EOperationCategory_description[i - 1]), 
 				ELogOptions_None
 			);
 
@@ -76,7 +76,7 @@ void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f) {
 				continue;
 
 			Log_debug(
-				String_createConstRefUnsafe(EOperationCategory_names[Operation_values[i].category]), 
+				String_createConstRefUnsafe(EOperationCategory_names[Operation_values[i].category - 1]), 
 				ELogOptions_None
 			);
 
@@ -107,7 +107,7 @@ void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f) {
 		Log_debug(String_createConstRefUnsafe("Please use syntax: "), ELogOptions_NewLine);
 
 		Log_debug(
-			String_createConstRefUnsafe(EOperationCategory_names[category]), 
+			String_createConstRefUnsafe(EOperationCategory_names[category - 1]), 
 			ELogOptions_None
 		);
 
@@ -124,6 +124,17 @@ void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f) {
 		Log_debug(String_createNull(), ELogOptions_NewLine);
 
 		for (U64 i = 0; i < EFormat_Invalid; ++i) {
+
+			Bool containsCat = false;
+
+			for(U64 j = 0; j < 4; ++j)
+				if (Format_values[i].supportedCategories[j] == category) {
+					containsCat = true;
+					break;
+				}
+
+			if(!containsCat)
+				continue;
 
 			Log_debug(
 				String_createConstRefUnsafe(Format_values[i].name), 
@@ -148,7 +159,7 @@ void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f) {
 	Log_debug(String_createConstRefUnsafe("Please use syntax: "), ELogOptions_NewLine);
 
 	Log_debug(
-		String_createConstRefUnsafe(EOperationCategory_names[category]), 
+		String_createConstRefUnsafe(EOperationCategory_names[category - 1]), 
 		ELogOptions_None
 	);
 
@@ -220,11 +231,11 @@ Bool CLI_execute(StringList arglist) {
 
 	EOperationCategory category = EOperationCategory_Invalid;
 
-	for(U64 i = 0; i < EOperationCategory_Invalid; ++i)
+	for(U64 i = EOperationCategory_Start; i < EOperationCategory_End; ++i)
 
 		if (String_equalsString(
 			arg0, 
-			String_createConstRefUnsafe(EOperationCategory_names[i]),
+			String_createConstRefUnsafe(EOperationCategory_names[i - 1]),
 			EStringCase_Insensitive, 
 			true
 		)) {
@@ -365,9 +376,20 @@ Bool CLI_execute(StringList arglist) {
 				continue;		//Don't break, we wanna detect duplicates!
 			}
 
+	//Check if format is supported
+
+	Bool supportsFormat = false;
+
+	if(args.format != EFormat_Invalid)
+		for(U8 i = 0; i < 4; ++i)
+			if (Format_values[args.format].supportedCategories[i] == category) {
+				supportsFormat = true;
+				break;
+			}
+
 	//Invalid usage
 
-	if(args.format == EFormat_Invalid) {
+	if(args.format == EFormat_Invalid || !supportsFormat) {
 		CLI_showHelp(category, operation, EFormat_Invalid);
 		_gotoIfError(clean, Error_invalidOperation(0));
 	}

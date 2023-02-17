@@ -161,7 +161,7 @@ Bool _CLI_convert(ParsedArgs args, Bool isTo) {
 			break;
 		
 		default:
-			Log_debug(String_createConstRefUnsafe("Unimplemented format"), ELogOptions_NewLine);
+			Log_debug(String_createConstRefUnsafe("Unsupported format"), ELogOptions_NewLine);
 			return false;
 	}
 
@@ -179,7 +179,7 @@ Bool _CLI_convert(ParsedArgs args, Bool isTo) {
 
 	String dec = String_createNull();
 
-	if ((err = String_createDecx(timeInMs, false, &dec)).genericError)
+	if ((err = String_createDecx(timeInMs, 0, &dec)).genericError)
 		return true;
 
 	Log_debug(dec, ELogOptions_None);

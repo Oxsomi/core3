@@ -589,7 +589,12 @@ Error File_read(String loc, Ns maxTimeout, Buffer *output) {
 	if(fseek(f, 0, SEEK_END))
 		_gotoIfError(clean, Error_invalidState(0));
 
-	_gotoIfError(clean, Buffer_createUninitializedBytesx((U64)_ftelli64(f), output));
+	U64 size = (U64)_ftelli64(f);
+
+	if(!size)			//Empty files exist too
+		goto success;
+
+	_gotoIfError(clean, Buffer_createUninitializedBytesx(size, output));
 
 	if(fseek(f, 0, SEEK_SET))
 		_gotoIfError(clean, Error_invalidState(1));

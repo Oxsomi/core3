@@ -177,23 +177,23 @@ Bool StringList_freex(StringList *arr) { return StringList_free(arr, Platform_in
 Error String_createx(C8 c, U64 size, String *result) { return String_create(c, size, Platform_instance.alloc, result); }
 Error String_createCopyx(String str, String *result) { return String_createCopy(str, Platform_instance.alloc, result); }
 
-Error String_createNytox(U64 v, Bool leadingZeros, String *result) {
+Error String_createNytox(U64 v, U8 leadingZeros, String *result) {
 	return String_createNyto(v, leadingZeros, Platform_instance.alloc, result);
 }
 
-Error String_createHexx(U64 v, Bool leadingZeros, String *result) {
+Error String_createHexx(U64 v, U8 leadingZeros, String *result) {
 	return String_createHex(v, leadingZeros, Platform_instance.alloc, result);
 }
 
-Error String_createDecx(U64 v, Bool leadingZeros, String *result) {
+Error String_createDecx(U64 v, U8 leadingZeros, String *result) {
 	return String_createDec(v, leadingZeros, Platform_instance.alloc, result);
 }
 
-Error String_createOctx(U64 v, Bool leadingZeros, String *result) {
+Error String_createOctx(U64 v, U8 leadingZeros, String *result) {
 	return String_createOct(v, leadingZeros, Platform_instance.alloc, result);
 }
 
-Error String_createBinx(U64 v, Bool leadingZeros, String *result) {
+Error String_createBinx(U64 v, U8 leadingZeros, String *result) {
 	return String_createBin(v, leadingZeros, Platform_instance.alloc, result);
 }
 

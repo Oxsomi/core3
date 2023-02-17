@@ -127,11 +127,11 @@ Bool String_free(String *str, Allocator alloc);
 Error String_create(C8 c, U64 size, Allocator alloc, String *result);
 Error String_createCopy(String str, Allocator alloc, String *result);
 
-Error String_createNyto(U64 v, Bool leadingZeros, Allocator allocator, String *result);
-Error String_createHex(U64 v, Bool leadingZeros, Allocator allocator, String *result);
-Error String_createDec(U64 v, Bool leadingZeros, Allocator allocator, String *result);
-Error String_createOct(U64 v, Bool leadingZeros, Allocator allocator, String *result);
-Error String_createBin(U64 v, Bool leadingZeros, Allocator allocator, String *result);
+Error String_createNyto(U64 v, U8 leadingZeros, Allocator allocator, String *result);
+Error String_createHex(U64 v, U8 leadingZeros, Allocator allocator, String *result);
+Error String_createDec(U64 v, U8 leadingZeros, Allocator allocator, String *result);
+Error String_createOct(U64 v, U8 leadingZeros, Allocator allocator, String *result);
+Error String_createBin(U64 v, U8 leadingZeros, Allocator allocator, String *result);
 
 Error String_split(
 	String s,

@@ -100,12 +100,17 @@ extern const C8 *EOperationFlags_descriptions[];
 typedef enum EOperation {
 	EOperation_ConvertTo,
 	EOperation_ConvertFrom,
+	EOperation_HashFile,
+	EOperation_HashString,
 	EOperation_Invalid
 } EOperation;
 
 typedef enum EOperationCategory {
+	EOperationCategory_Invalid,
 	EOperationCategory_Convert,
-	EOperationCategory_Invalid
+	EOperationCategory_Hash,
+	EOperationCategory_End,
+	EOperationCategory_Start = EOperationCategory_Convert
 } EOperationCategory;
 
 extern const C8 *EOperationCategory_names[];
@@ -114,6 +119,8 @@ extern const C8 *EOperationCategory_description[];
 typedef enum EFormat {
 	EFormat_oiCA,
 	EFormat_oiDL,
+	EFormat_SHA256,
+	EFormat_CRC32C,
 	EFormat_Invalid
 } EFormat;
 
@@ -135,9 +142,10 @@ typedef struct Operation {
 } Operation;
 
 typedef enum EFormatFlags {
-	EFormatFlags_None			= 0,
-	EFormatFlags_SupportFiles	= 1 << 0,
-	EFormatFlags_SupportFolders	= 1 << 1
+	EFormatFlags_None				= 0,
+	EFormatFlags_SupportFiles		= 1 << 0,
+	EFormatFlags_SupportFolders		= 1 << 1,
+	EFormatFlags_SupportAsString	= 1 << 2
 } EFormatFlags;
 
 typedef struct Format {
@@ -145,9 +153,10 @@ typedef struct Format {
 	EOperationFlags operationFlags;
 	EOperationHasParameter requiredParameters, optionalParameters;
 	EFormatFlags flags;
+	EOperationCategory supportedCategories[4];
 } Format;
 
-extern Operation Operation_values[2];
-extern Format Format_values[2];
+extern Operation Operation_values[4];
+extern Format Format_values[4];
 
 void Operations_init();

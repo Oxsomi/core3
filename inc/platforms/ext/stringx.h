@@ -29,11 +29,11 @@ Bool String_freex(String *str);
 
 Error String_createx(C8 c, U64 size, String *result);
 Error String_createCopyx(String str, String *result);
-Error String_createNytox(U64 v, Bool leadingZeros, String *result);
-Error String_createHexx(U64 v, Bool leadingZeros, String *result);
-Error String_createDecx(U64 v, Bool leadingZeros, String *result);
-Error String_createOctx(U64 v, Bool leadingZeros, String *result);
-Error String_createBinx(U64 v, Bool leadingZeros, String *result);
+Error String_createNytox(U64 v, U8 leadingZeros, String *result);
+Error String_createHexx(U64 v, U8 leadingZeros, String *result);
+Error String_createDecx(U64 v, U8 leadingZeros, String *result);
+Error String_createOctx(U64 v, U8 leadingZeros, String *result);
+Error String_createBinx(U64 v, U8 leadingZeros, String *result);
 
 Error String_splitx(String s, C8 c, EStringCase casing, StringList *result);
 Error String_splitStringx(String s, String other, EStringCase casing, StringList *result);

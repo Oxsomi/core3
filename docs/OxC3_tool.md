@@ -2,16 +2,17 @@
 
 The OxC3 tool is intended to handle all operations required for Oxsomi core3. This includes:
 
-- **TODO**: Calculating hashes.
+- Calculating hashes.
 - **TODO**: Generating random numbers or keys.
 - Conversions between file formats.
 - **TODO:** Packaging a project.
 - **TODO:** Inspecting a file (printing the header and other important information).
-- **TODO**: Encryption and compression.
+- **TODO**: Encryption.
+- **TODO**: Compression.
 
 And might include more functionality in the future.
 
-## TODO: Calculating hashes
+## Calculating hashes
 
 A hash can be calculated as following:
 
@@ -33,7 +34,7 @@ Generates a CSPRNG key that can be used for AES256 encryption. You can use `-l <
 
 `OxC3 rand char`
 
-Generates random chars; 32 by default. `-l <charCount>` can be used to customize length. The included characters by default are viable ASCII characters ([0x20, 0x7F>). In the future --utf8 will be an option, but not for now (TODO:). `-c <chars>` can be used to pick between characters; ex. `-c 0123456789` will create a random number. Some helpful flags: --alpha (A-Za-z), --number (0-9), --alphanumeric (0-9A-Za-z), --lowercase (a-z), --uppercase (A-Z), --symbols (everything excluding alphanumeric that's ASCII). If either of these flags are specified, it'll not use the valid ascii range but rather combine it. E.g. --uppercase --number can be used to generate 0-9A-Z.
+Generates random chars; 32 by default. `-l <charCount>` can be used to customize length. The included characters by default are viable ASCII characters ([0x20, 0x7F>). In the future --utf8 will be an option, but not for now (**TODO**:). `-c <chars>` can be used to pick between characters; ex. `-c 0123456789` will create a random number. Some helpful flags: --alpha (A-Za-z), --number (0-9), --alphanumeric (0-9A-Za-z), --lowercase (a-z), --uppercase (A-Z), --symbols (everything excluding alphanumeric that's ASCII). If either of these flags are specified, it'll not use the valid ascii range but rather combine it. E.g. --uppercase --number can be used to generate 0-9A-Z.
 
 `OxC3 rand num`
 
@@ -127,7 +128,7 @@ Data allows you to actually inspect the data section of certain parts of the fil
 
 `OxC3 encrypt undo -f <file> -k <key in hex>`
 
-Generates an encrypted oiDL file with 1 entry.
+Generates an encrypted oiDL file with 1 entry. Works on files and folders.
 
 ## TODO: Compress
 

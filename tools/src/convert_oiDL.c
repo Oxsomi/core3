@@ -388,7 +388,7 @@ Error _CLI_convertFromDL(ParsedArgs args, String input, FileInfo inputInfo, Stri
 
 			//File name "$base/$(i).+?(isBin ? ".bin" : ".txt")"
 
-			_gotoIfError(clean, String_createDecx(i, false, &filePathi));
+			_gotoIfError(clean, String_createDecx(i, 0, &filePathi));
 			_gotoIfError(clean, String_insertStringx(&filePathi, outputBase, 0));
 
 			if(file.settings.dataType == EDLDataType_Data)

@@ -609,14 +609,14 @@ Bool String_free(String *str, Allocator alloc) {
 		return err;														\
 	}																	\
 																		\
-	Bool foundFirstNonZero = leadingZeros;								\
+	Bool foundFirstNonZero = false;										\
 																		\
 	for (U64 i = maxVal - 1; i != U64_MAX; --i) {						\
 																		\
 		C8 c = C8_create##func(__VA_ARGS__);							\
 																		\
 		if (!foundFirstNonZero)											\
-			foundFirstNonZero = c != '0';								\
+			foundFirstNonZero = c != '0' || i < leadingZeros;			\
 																		\
 		if (foundFirstNonZero) {										\
 																		\
@@ -631,7 +631,7 @@ Bool String_free(String *str, Allocator alloc) {
 																		\
 	/* Ensure we don't return an empty string on 0 */					\
 																		\
-	if (!result->length) {												\
+	if (!v && !foundFirstNonZero) {										\
 																		\
 		err = String_append(result, '0', allocator);					\
 																		\
@@ -643,23 +643,23 @@ Bool String_free(String *str, Allocator alloc) {
 																		\
 	return Error_none();
 
-Error String_createNyto(U64 v, Bool leadingZeros, Allocator allocator, String *result){
+Error String_createNyto(U64 v, U8 leadingZeros, Allocator allocator, String *result){
 	String_createNum(11, Nyto, "0n", (v >> (6 * i)) & 63);
 }
 
-Error String_createHex(U64 v, Bool leadingZeros, Allocator allocator, String *result) {
+Error String_createHex(U64 v, U8 leadingZeros, Allocator allocator, String *result) {
 	String_createNum(16, Hex, "0x", (v >> (4 * i)) & 15);
 }
 
-Error String_createDec(U64 v, Bool leadingZeros, Allocator allocator, String *result) {
+Error String_createDec(U64 v, U8 leadingZeros, Allocator allocator, String *result) {
 	String_createNum(20, Dec, "", (v / U64_10pow(i)) % 10);
 }
 
-Error String_createOct(U64 v, Bool leadingZeros, Allocator allocator, String *result) {
+Error String_createOct(U64 v, U8 leadingZeros, Allocator allocator, String *result) {
 	String_createNum(22, Oct, "0o", (v >> (3 * i)) & 7);
 }
 
-Error String_createBin(U64 v, Bool leadingZeros, Allocator allocator, String *result) {
+Error String_createBin(U64 v, U8 leadingZeros, Allocator allocator, String *result) {
 	String_createNum(64, Bin, "0b", (v >> i) & 1);
 }
 

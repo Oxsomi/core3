@@ -184,7 +184,7 @@ int main() {
 		//TODO: Perhaps make a generic create that can pick any of them
 
 		String tmpStr = String_createNull();
-		_gotoIfError(clean, String_createHex(resultsU64[0], false, alloc, &tmpStr));
+		_gotoIfError(clean, String_createHex(resultsU64[0], 0, alloc, &tmpStr));
 
 		if (!String_equalsString(resultsStr[0], tmpStr, EStringCase_Sensitive, false)) {
 			String_free(&tmpStr, alloc);
@@ -192,7 +192,7 @@ int main() {
 		}
 
 		String_free(&tmpStr, alloc);
-		_gotoIfError(clean, String_createBin(resultsU64[1], false, alloc, &tmpStr));
+		_gotoIfError(clean, String_createBin(resultsU64[1], 0, alloc, &tmpStr));
 
 		if (!String_equalsString(resultsStr[1], tmpStr, EStringCase_Sensitive, false)) {
 			String_free(&tmpStr, alloc);
@@ -200,7 +200,7 @@ int main() {
 		}
 
 		String_free(&tmpStr, alloc);
-		_gotoIfError(clean, String_createOct(resultsU64[2], false, alloc, &tmpStr));
+		_gotoIfError(clean, String_createOct(resultsU64[2], 0, alloc, &tmpStr));
 
 		if (!String_equalsString(resultsStr[2], tmpStr, EStringCase_Sensitive, false)) {
 			String_free(&tmpStr, alloc);
@@ -208,7 +208,7 @@ int main() {
 		}
 
 		String_free(&tmpStr, alloc);
-		_gotoIfError(clean, String_createNyto(resultsU64[3], false, alloc, &tmpStr));
+		_gotoIfError(clean, String_createNyto(resultsU64[3], 0, alloc, &tmpStr));
 
 		if (!String_equalsString(resultsStr[3], tmpStr, EStringCase_Sensitive, false)) {
 			String_free(&tmpStr, alloc);
@@ -216,7 +216,7 @@ int main() {
 		}
 
 		String_free(&tmpStr, alloc);
-		_gotoIfError(clean, String_createDec(resultsU64[4], false, alloc, &tmpStr));
+		_gotoIfError(clean, String_createDec(resultsU64[4], 0, alloc, &tmpStr));
 
 		if (!String_equalsString(resultsStr[4], tmpStr, EStringCase_Sensitive, false)) {
 			String_free(&tmpStr, alloc);
