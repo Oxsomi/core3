@@ -3,7 +3,7 @@
 The OxC3 tool is intended to handle all operations required for Oxsomi core3. This includes:
 
 - Calculating hashes.
-- **TODO**: Generating random numbers or keys.
+- Generating random numbers or keys.
 - Conversions between file formats.
 - **TODO:** Packaging a project.
 - **TODO:** Inspecting a file (printing the header and other important information).
@@ -38,11 +38,11 @@ Generates a CSPRNG key that can be used for AES256 encryption. You can use `-l <
 
 Generates random chars; 32 by default. `-l <charCount>` can be used to customize length. The included characters by default are viable ASCII characters (<0x20, 0x7F>). In the future --utf8 will be an option, but not for now (**TODO**:). `-c <chars>` can be used to pick between characters; ex. `-c 0123456789` will create a random number. This also allows picking the same character multiple times (e.g. -c011 will have 2x more chance to pick 1 instead of 0). Some helpful flags: --alpha (A-Za-z), --numbers (0-9), --alphanumeric (0-9A-Za-z), --lowercase (a-z), --uppercase (A-Z), --symbols (everything excluding alphanumeric that's ASCII). If either of these flags are specified, it'll not use the valid ascii range but rather combine it (so -c ABC --number would be ABC0123456789). E.g. --uppercase --number can be used to generate 0-9A-Z. If for example --alphanumeric --alpha is used, it will cancel out.
 
-**TODO**: `OxC3 rand num`
+`OxC3 rand num`
 
-Is just shorthand for `OxC3 rand char -c <numberKeyset>`. If --hex is used, it'll use 0-9A-Z, if --nyto is used it'll use 0-9a-zA-Z_$, if --oct is used it'll use 0-7, if --bin is used it'll use 0-1. --dec is the default (0-9). `-l <charCount>` can be used to set a limit by character count and `-b <bitCount>` can be used to limit how many bits the number can have. While `-l` can be determined how many digits are possible.
+Is just shorthand for `OxC3 rand char -c <numberKeyset>`. If --hex is used, it'll use 0-9A-Z, if --nyto is used it'll use 0-9a-zA-Z_$, if --oct is used it'll use 0-7, if --bin is used it'll use 0-1. Decimal is the default (0-9). `-l <charCount>` can be used to set a limit by character count and `-b <bitCount>` can be used to limit how many bits the number can have (for decimal output this can only be used with 64-bit numbers and below). 
 
-**TODO**: `OxC3 rand bytes -l 16 -o myFile.bin`
+`OxC3 rand data -l 16 -o myFile.bin`
 
 Allows to output random bytes to the binary. Alias to `OxC3 rand key` but to a binary file. -l can be used to tweak number of bytes. -n will added multiple generations appended in the same file. Without -o it will output a hexdump.
 

@@ -46,6 +46,8 @@ typedef enum EOperationHasParameter {
 	EOperationHasParameter_LengthShift,
 	EOperationHasParameter_CharacterShift,
 
+	EOperationHasParameter_BitShift,
+
 	EOperationHasParameter_Count,	
 
 	EOperationHasParameter_Start		= EOperationHasParameter_FileFormatShift,
@@ -64,6 +66,8 @@ typedef enum EOperationHasParameter {
 	EOperationHasParameter_Length		= 1 << EOperationHasParameter_LengthShift,
 
 	EOperationHasParameter_Character	= 1 << EOperationHasParameter_CharacterShift,
+
+	EOperationHasParameter_Bit			= 1 << EOperationHasParameter_BitShift
 
 } EOperationHasParameter;
 
@@ -107,11 +111,21 @@ typedef enum EOperationFlags {
 	EOperationFlags_Lowercase		= 1 << 11,
 	EOperationFlags_Uppercase		= 1 << 12,
 
-	EOperationFlags_RandomChar		= 
+	EOperationFlags_RandChar		= 
 		EOperationFlags_Alpha | EOperationFlags_Alphanumeric | EOperationFlags_Number |
 		EOperationFlags_Symbols | EOperationFlags_Lowercase | EOperationFlags_Uppercase,
 
-	EOperationFlags_Count			= 13
+	//Random number
+
+	EOperationFlags_Nyto			= 1 << 13,
+	EOperationFlags_Hex				= 1 << 14,
+	EOperationFlags_Bin				= 1 << 15,
+	EOperationFlags_Oct				= 1 << 16,
+
+	EOperationFlags_RandNum =
+		EOperationFlags_Oct | EOperationFlags_Bin | EOperationFlags_Hex | EOperationFlags_Nyto,
+
+	EOperationFlags_Count			= 17
 
 } EOperationFlags;
 
@@ -130,6 +144,8 @@ typedef enum EOperation {
 
 	EOperation_RandKey,
 	EOperation_RandChar,
+	EOperation_RandData,
+	EOperation_RandNum,
 
 	EOperation_Invalid
 
@@ -196,7 +212,7 @@ typedef struct Format {
 	EOperationCategory supportedCategories[4];
 } Format;
 
-extern Operation Operation_values[6];
+extern Operation Operation_values[8];
 extern Format Format_values[4];
 
 void Operations_init();

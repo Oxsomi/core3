@@ -36,7 +36,8 @@ const C8 *EOperationHasParameter_names[] = {
 	"-split",
 	"-n",
 	"-l",
-	"-c"
+	"-c",
+	"-b"
 };
 
 const C8 *EOperationHasParameter_descriptions[] = {
@@ -47,7 +48,8 @@ const C8 *EOperationHasParameter_descriptions[] = {
 	"Split by character (defaulted to newline)",
 	"Number of elements",
 	"Length of each element",
-	"Characters to include"
+	"Characters to include",
+	"Bit count"
 };
 
 //Flags
@@ -65,7 +67,11 @@ const C8 *EOperationFlags_names[] = {
 	"--numbers",
 	"--symbols",
 	"--lowercase",
-	"--uppercase"
+	"--uppercase",
+	"--nyto",
+	"--hex",
+	"--bin",
+	"--oct"
 };
 
 const C8 *EOperationFlags_descriptions[] = {
@@ -81,7 +87,11 @@ const C8 *EOperationFlags_descriptions[] = {
 	"Include number characters (0-9).",
 	"Include symbols (<0x20, 0x7F> excluding alphanumeric).",
 	"Include lower alpha characters (a-z).",
-	"Include upper alpha characters (A-Z)."
+	"Include upper alpha characters (A-Z).",
+	"Encode using nytodecimal (0-9A-Za-z_$).",
+	"Encode using hexadecimal (0-9A-F).",
+	"Encode using binary (0-1).",
+	"Encode using octadecimal (0-7)."
 };
 
 //Operations
@@ -98,7 +108,7 @@ const C8 *EOperationCategory_description[] = {
 	"Generating random data."
 };
 
-Operation Operation_values[6];
+Operation Operation_values[8];
 Format Format_values[4];
 
 void Operations_init() {
@@ -182,7 +192,7 @@ void Operations_init() {
 		.category = EOperationCategory_Rand, 
 
 		.name = "key", 
-		.desc = "Generating a key for AES256 (or other purposes)", 
+		.desc = "Generating a key for AES256 (or other purposes), in hex format.", 
 
 		.func = &CLI_randKey,
 
@@ -206,7 +216,39 @@ void Operations_init() {
 			EOperationHasParameter_Number | EOperationHasParameter_Length | 
 			EOperationHasParameter_Output | EOperationHasParameter_Character,
 		
-		.operationFlags = EOperationFlags_RandomChar
+		.operationFlags = EOperationFlags_RandChar
+	};
+
+	Operation_values[EOperation_RandData] = (Operation) { 
+
+		.category = EOperationCategory_Rand, 
+
+		.name = "data", 
+		.desc = "Generating random bytes. As hexdump if no output is specified.", 
+
+		.func = &CLI_randData,
+
+		.isFormatLess = true,
+
+		.optionalParameters = EOperationHasParameter_Number | EOperationHasParameter_Length | EOperationHasParameter_Output
+	};
+
+	Operation_values[EOperation_RandNum] = (Operation) { 
+
+		.category = EOperationCategory_Rand, 
+
+		.name = "num", 
+		.desc = "Generating random numbers (in text form).", 
+
+		.func = &CLI_randNum,
+
+		.isFormatLess = true,
+
+		.optionalParameters = 
+			EOperationHasParameter_Number | EOperationHasParameter_Length | EOperationHasParameter_Output | 
+			EOperationHasParameter_Bit,
+
+		.operationFlags = EOperationFlags_RandNum
 	};
 }
 

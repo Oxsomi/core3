@@ -42,5 +42,7 @@ Bool CLI_hashString(ParsedArgs args);
 
 Bool CLI_randKey(ParsedArgs args);
 Bool CLI_randChar(ParsedArgs args);
+Bool CLI_randData(ParsedArgs args);
+Bool CLI_randNum(ParsedArgs args);
 
 Bool CLI_execute(StringList arglist);
