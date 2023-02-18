@@ -2206,8 +2206,9 @@ U64 String_calcStrLen(const C8 *ptr, U64 maxSize) {
 
 	U64 i = 0;
 
-	for(; i < maxSize && ptr[i]; ++i)
-		;
+	if(ptr)
+		for(; i < maxSize && ptr[i]; ++i)
+			;
 
 	return i;
 }

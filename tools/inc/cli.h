@@ -34,12 +34,13 @@ Error _CLI_convertFromDL(ParsedArgs args, String input, FileInfo inputInfo, Stri
 Error _CLI_convertToCA(ParsedArgs args, String input, FileInfo inputInfo, String output, U32 encryptionKey[8]);
 Error _CLI_convertFromCA(ParsedArgs args, String input, FileInfo inputInfo, String output, U32 encryptionKey[8]);
 
-Bool _CLI_convert(ParsedArgs args, Bool isTo);
-
 Bool CLI_convertTo(ParsedArgs args);
 Bool CLI_convertFrom(ParsedArgs args);
 
 Bool CLI_hashFile(ParsedArgs args);
 Bool CLI_hashString(ParsedArgs args);
+
+Bool CLI_randKey(ParsedArgs args);
+Bool CLI_randChar(ParsedArgs args);
 
 Bool CLI_execute(StringList arglist);

@@ -42,7 +42,12 @@ typedef enum EOperationHasParameter {
 
 	EOperationHasParameter_SplitByShift,
 
+	EOperationHasParameter_NumberShift,
+	EOperationHasParameter_LengthShift,
+	EOperationHasParameter_CharacterShift,
+
 	EOperationHasParameter_Count,	
+
 	EOperationHasParameter_Start		= EOperationHasParameter_FileFormatShift,
 
 	//As mask
@@ -53,7 +58,12 @@ typedef enum EOperationHasParameter {
 	EOperationHasParameter_Output		= 1 << EOperationHasParameter_OutputShift,
 	EOperationHasParameter_AES			= 1 << EOperationHasParameter_AESShift,
 
-	EOperationHasParameter_SplitBy		= 1 << EOperationHasParameter_SplitByShift
+	EOperationHasParameter_SplitBy		= 1 << EOperationHasParameter_SplitByShift,
+
+	EOperationHasParameter_Number		= 1 << EOperationHasParameter_NumberShift,
+	EOperationHasParameter_Length		= 1 << EOperationHasParameter_LengthShift,
+
+	EOperationHasParameter_Character	= 1 << EOperationHasParameter_CharacterShift,
 
 } EOperationHasParameter;
 
@@ -88,7 +98,20 @@ typedef enum EOperationFlags {
 
 	EOperationFlags_NonRecursive	= 1 << 6,
 
-	EOperationFlags_Count			= 7
+	//Random char
+
+	EOperationFlags_Alpha			= 1 << 7,
+	EOperationFlags_Alphanumeric	= 1 << 8,
+	EOperationFlags_Number			= 1 << 9,
+	EOperationFlags_Symbols			= 1 << 10,
+	EOperationFlags_Lowercase		= 1 << 11,
+	EOperationFlags_Uppercase		= 1 << 12,
+
+	EOperationFlags_RandomChar		= 
+		EOperationFlags_Alpha | EOperationFlags_Alphanumeric | EOperationFlags_Number |
+		EOperationFlags_Symbols | EOperationFlags_Lowercase | EOperationFlags_Uppercase,
+
+	EOperationFlags_Count			= 13
 
 } EOperationFlags;
 
@@ -98,17 +121,25 @@ extern const C8 *EOperationFlags_descriptions[];
 //Operations
 
 typedef enum EOperation {
+
 	EOperation_ConvertTo,
 	EOperation_ConvertFrom,
+
 	EOperation_HashFile,
 	EOperation_HashString,
+
+	EOperation_RandKey,
+	EOperation_RandChar,
+
 	EOperation_Invalid
+
 } EOperation;
 
 typedef enum EOperationCategory {
 	EOperationCategory_Invalid,
 	EOperationCategory_Convert,
 	EOperationCategory_Hash,
+	EOperationCategory_Rand,
 	EOperationCategory_End,
 	EOperationCategory_Start = EOperationCategory_Convert
 } EOperationCategory;
@@ -125,6 +156,7 @@ typedef enum EFormat {
 } EFormat;
 
 typedef struct ParsedArgs {
+	EOperation operation;
 	EFormat format;
 	EOperationFlags flags;
 	EOperationHasParameter parameters;
@@ -135,18 +167,26 @@ typedef Bool (*OperationFunc)(ParsedArgs);
 
 Error ParsedArgs_getArg(ParsedArgs args, EOperationHasParameter parameterId, String *arg);
 
-typedef struct Operation {
-	EOperationCategory category;
-	const C8 *name, *desc;
-	OperationFunc func;
-} Operation;
-
 typedef enum EFormatFlags {
 	EFormatFlags_None				= 0,
 	EFormatFlags_SupportFiles		= 1 << 0,
 	EFormatFlags_SupportFolders		= 1 << 1,
 	EFormatFlags_SupportAsString	= 1 << 2
 } EFormatFlags;
+
+typedef struct Operation {
+
+	EOperationCategory category;
+	const C8 *name, *desc;
+	OperationFunc func;
+
+	//If set, this will be used instead of a per format setting.
+
+	Bool isFormatLess;
+	EOperationFlags operationFlags;
+	EOperationHasParameter requiredParameters, optionalParameters;
+
+} Operation;
 
 typedef struct Format {
 	const C8 *name, *desc;
@@ -156,7 +196,7 @@ typedef struct Format {
 	EOperationCategory supportedCategories[4];
 } Format;
 
-extern Operation Operation_values[4];
+extern Operation Operation_values[6];
 extern Format Format_values[4];
 
 void Operations_init();

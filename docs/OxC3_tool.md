@@ -12,6 +12,8 @@ The OxC3 tool is intended to handle all operations required for Oxsomi core3. Th
 
 And might include more functionality in the future.
 
+To get info about a certain category or operation you can type `-? or ?` or any unrecognized command after it. Example; `OxC3 ?` will show all categories. `OxC3 file ?` will show all file operations. `OxC3 file to ?` will show either all formats (if the operation supports formats) or all supported flags/arguments. If the operation supports formats then `OxC3 file to -f <format> ?` could be used.
+
 ## Calculating hashes
 
 A hash can be calculated as following:
@@ -24,9 +26,9 @@ A hash from a string can be calculated like so:
 
 `OxC3 hash string -f CRC32C -i "This is my input string"`
 
-## TODO: Random
+## Random
 
-Random number generation is handy for multiple things. There are two number generators: PRNG (Psuedo random) and CSPRNG (cryptographically secure PRNG). CSPRNG is chosen by default, so please disable it if you need performance (--fast-insecure). To generate multiple entries; use `-n <count>`. To output to a file use `-o <file>`.
+Random number generation is handy for multiple things. CSPRNG (cryptographically secure PRNG) is chosen by default. To generate multiple entries; use `-n <count>`. To output to a file use `-o <file>`.
 
 `OxC3 rand key`
 
@@ -34,27 +36,31 @@ Generates a CSPRNG key that can be used for AES256 encryption. You can use `-l <
 
 `OxC3 rand char`
 
-Generates random chars; 32 by default. `-l <charCount>` can be used to customize length. The included characters by default are viable ASCII characters ([0x20, 0x7F>). In the future --utf8 will be an option, but not for now (**TODO**:). `-c <chars>` can be used to pick between characters; ex. `-c 0123456789` will create a random number. Some helpful flags: --alpha (A-Za-z), --number (0-9), --alphanumeric (0-9A-Za-z), --lowercase (a-z), --uppercase (A-Z), --symbols (everything excluding alphanumeric that's ASCII). If either of these flags are specified, it'll not use the valid ascii range but rather combine it. E.g. --uppercase --number can be used to generate 0-9A-Z.
+Generates random chars; 32 by default. `-l <charCount>` can be used to customize length. The included characters by default are viable ASCII characters (<0x20, 0x7F>). In the future --utf8 will be an option, but not for now (**TODO**:). `-c <chars>` can be used to pick between characters; ex. `-c 0123456789` will create a random number. This also allows picking the same character multiple times (e.g. -c011 will have 2x more chance to pick 1 instead of 0). Some helpful flags: --alpha (A-Za-z), --numbers (0-9), --alphanumeric (0-9A-Za-z), --lowercase (a-z), --uppercase (A-Z), --symbols (everything excluding alphanumeric that's ASCII). If either of these flags are specified, it'll not use the valid ascii range but rather combine it (so -c ABC --number would be ABC0123456789). E.g. --uppercase --number can be used to generate 0-9A-Z. If for example --alphanumeric --alpha is used, it will cancel out.
 
-`OxC3 rand num`
+**TODO**: `OxC3 rand num`
 
-Is just shorthand for `OxC3 rand char -c <numberKeyset>`. If --hex is used, it'll use 0-9A-Z, if --nyto is used it'll use 0-9a-zA-Z_$, if --oct is used it'll use 0-7, if --bin is used it'll use 0-1. --dec is the default (0-9). `-l <charCount>` can be used to set a limit by character count and `-b <bitCount>` can be used to limit how many bits the number can have.
+Is just shorthand for `OxC3 rand char -c <numberKeyset>`. If --hex is used, it'll use 0-9A-Z, if --nyto is used it'll use 0-9a-zA-Z_$, if --oct is used it'll use 0-7, if --bin is used it'll use 0-1. --dec is the default (0-9). `-l <charCount>` can be used to set a limit by character count and `-b <bitCount>` can be used to limit how many bits the number can have. While `-l` can be determined how many digits are possible.
+
+**TODO**: `OxC3 rand bytes -l 16 -o myFile.bin`
+
+Allows to output random bytes to the binary. Alias to `OxC3 rand key` but to a binary file. -l can be used to tweak number of bytes. -n will added multiple generations appended in the same file. Without -o it will output a hexdump.
 
 ## Convert
 
-`OxC3 convert` is the category that is used to convert between file formats. The keywords `from` and `to` can be used to convert between native and non native files. For example:
+`OxC3 file` is the category that is used to convert between file formats. The keywords `from` and `to` can be used to convert between native and non native files. For example:
 
-`OxC3 convert to -f oiDL -i myDialog.txt -o myDialog.oiDL --ascii`
+`OxC3 file to -f oiDL -i myDialog.txt -o myDialog.oiDL --ascii`
 
 Will convert the enter separated string in myDialog into a DL file (where each entry is a separate string). This can also combine multiple files into one DL file:
 
-`OxC3 convert to -f oiDL -i myFolder -o myFolder.oiDL`
+`OxC3 file to -f oiDL -i myFolder -o myFolder.oiDL`
 
 This will package all files from myFolder into a nameless archive file. These files can be accessed by file id. 
 
 To unpackage this (losing the file names of course):
 
-`OxC3 convert from -f oiDL -i myFolder.oiDL -o myFolder`
+`OxC3 file from -f oiDL -i myFolder.oiDL -o myFolder`
 
 ### Common arguments
 
@@ -93,9 +99,9 @@ If these are absent; it'll use binary format by default. When either ascii or ut
 
 *Example usage:*
 
-`OxC3 convert to -f oiDL -i myDialog0.txt -o myDialog.oiDL --ascii`
+`OxC3 file to -f oiDL -i myDialog0.txt -o myDialog.oiDL --ascii`
 
-`OxC3 convert from -f oiDL -o myDialog1.txt -i myDialog.oiDL --ascii`
+`OxC3 file from -f oiDL -o myDialog1.txt -i myDialog.oiDL --ascii`
 
 ### oiCA format
 
@@ -110,13 +116,13 @@ These are left out by default, because often, file timestamps aren't very import
 
 *Example usage:*
 
-`OxC3 convert to -f oiCA -i myFolder -o myFolder.oiCA --full-date`
+`OxC3 file to -f oiCA -i myFolder -o myFolder.oiCA --full-date`
 
 ## TODO: Packaging a project
 
-## TODO: Inspect
+## TODO: File inspect
 
-`inspect` has two operations: `header` and `data`.
+Two operations constitute as file inspection: `file header` and `file data`.
 
 Header is useful to know what the header says. It also allows to inspect the header of certain subsections of the data.
 
@@ -124,17 +130,16 @@ Data allows you to actually inspect the data section of certain parts of the fil
 
 ## TODO: Encrypt
 
-`OxC3 encrypt do -f <file> -k <key in hex>` 
+`OxC3 file encr -i <file> -k <key in hex> (optional: -o output)`  
 
-`OxC3 encrypt undo -f <file> -k <key in hex>`
+`OxC3 file decr -i <file> -k <key in hex> (optional: -o output)`
 
 Generates an encrypted oiDL file with 1 entry. Works on files and folders.
 
 ## TODO: Compress
 
-`OxC3 compress pack -f <file> (optional: --fast-compress, --k <key in hex>)`
+`OxC3 file pack -f <file> (optional: --fast-compress, --k <key in hex>)`
 
-`OxC3 compress unpack -f <file> (optional: --k <key in hex>)`
+`OxC3 file unpack -f <file> (optional: --k <key in hex>)`
 
-Generates a compressed oiDL file with 1 entry. Can be encrypted.
-
+Generates a compressed oiDL file with 1 entry. Can be encrypted. Works on files and folders.

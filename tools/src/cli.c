@@ -72,25 +72,28 @@ void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f) {
 
 		for(U64 i = 0; i < EOperation_Invalid; ++i) {
 
-			if(Operation_values[i].category != category)
+			Operation opVal = Operation_values[i];
+
+			if(opVal.category != category)
 				continue;
 
 			Log_debug(
-				String_createConstRefUnsafe(EOperationCategory_names[Operation_values[i].category - 1]), 
+				String_createConstRefUnsafe(EOperationCategory_names[opVal.category - 1]), 
 				ELogOptions_None
 			);
 
 			Log_debug(String_createConstRefUnsafe(" "), ELogOptions_None);
 
 			Log_debug(
-				String_createConstRefUnsafe(Operation_values[i].name), 
-				ELogOptions_None
+				String_createConstRefUnsafe(opVal.name), 
+				opVal.isFormatLess ? ELogOptions_NewLine : ELogOptions_None
 			);
 
-			Log_debug(String_createConstRefUnsafe(" -f <format> ...{format dependent syntax}"), ELogOptions_NewLine);
+			if(!opVal.isFormatLess)
+				Log_debug(String_createConstRefUnsafe(" -f <format> ...{format dependent syntax}"), ELogOptions_NewLine);
 
 			Log_debug(
-				String_createConstRefUnsafe(Operation_values[i].desc), 
+				String_createConstRefUnsafe(opVal.desc), 
 				ELogOptions_NewLine
 			);
 
@@ -102,7 +105,9 @@ void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f) {
 
 	//Show all options for that operation
 
-	if (invalidF) {
+	Operation opVal = Operation_values[op];
+
+	if (invalidF && !opVal.isFormatLess) {
 
 		Log_debug(String_createConstRefUnsafe("Please use syntax: "), ELogOptions_NewLine);
 
@@ -114,7 +119,7 @@ void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f) {
 		Log_debug(String_createConstRefUnsafe(" "), ELogOptions_None);
 
 		Log_debug(
-			String_createConstRefUnsafe(Operation_values[op].name), 
+			String_createConstRefUnsafe(opVal.name), 
 			ELogOptions_None
 		);
 
@@ -166,18 +171,29 @@ void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f) {
 	Log_debug(String_createConstRefUnsafe(" "), ELogOptions_None);
 
 	Log_debug(
-		String_createConstRefUnsafe(Operation_values[op].name), 
+		String_createConstRefUnsafe(opVal.name), 
 		ELogOptions_None
 	);
 
-	Log_debug(String_createConstRefUnsafe(" -f "), ELogOptions_None);
+	if(!opVal.isFormatLess)
+		Log_debug(String_createConstRefUnsafe(" -f "), ELogOptions_None);
 
-	Format format = Format_values[f];
+	Format format = (Format) { 0 };
 
-	Log_debug(
-		String_createConstRefUnsafe(format.name), 
-		ELogOptions_NewLine
-	);
+	if(!opVal.isFormatLess)
+		format = Format_values[f];
+
+	else format = (Format) {
+		.optionalParameters = opVal.optionalParameters,
+		.requiredParameters = opVal.requiredParameters,
+		.operationFlags		= opVal.operationFlags
+	};
+
+	if(!opVal.isFormatLess)
+		Log_debug(
+			String_createConstRefUnsafe(format.name), 
+			ELogOptions_NewLine
+		);
 
 	Log_debug(String_createConstRefUnsafe("With the following parameters:"), ELogOptions_NewLine);
 	Log_debug(String_createNull(), ELogOptions_NewLine);
@@ -282,6 +298,7 @@ Bool CLI_execute(StringList arglist) {
 
 	ParsedArgs args = (ParsedArgs) { 0 };
 	args.args = List_createEmpty(sizeof(String));
+	args.operation = operation;
 
 	Error err = List_reservex(&args.args, 100);
 	_gotoIfError(clean, err);
@@ -378,7 +395,8 @@ Bool CLI_execute(StringList arglist) {
 
 	//Check if format is supported
 
-	Bool supportsFormat = false;
+	Bool formatLess = Operation_values[args.operation].isFormatLess;
+	Bool supportsFormat = formatLess;
 
 	if(args.format != EFormat_Invalid)
 		for(U8 i = 0; i < 4; ++i)
@@ -389,7 +407,10 @@ Bool CLI_execute(StringList arglist) {
 
 	//Invalid usage
 
-	if(args.format == EFormat_Invalid || !supportsFormat) {
+	if(
+		(args.format == EFormat_Invalid && !formatLess) || 
+		!supportsFormat
+	) {
 		CLI_showHelp(category, operation, EFormat_Invalid);
 		_gotoIfError(clean, Error_invalidOperation(0));
 	}
@@ -457,11 +478,29 @@ Bool CLI_execute(StringList arglist) {
 
 	//Check that parameters passed are valid
 
-	Format f = Format_values[args.format];
+	Format format = (Format) { 0 };
+
+	if(!formatLess)
+		format = Format_values[args.format];
+
+	else {
+
+		Operation op = Operation_values[args.operation];
+
+		format = (Format) {
+			.optionalParameters = op.optionalParameters,
+			.requiredParameters = op.requiredParameters,
+			.operationFlags		= op.operationFlags
+		};
+	}
+
+	EOperationHasParameter reqParam = format.requiredParameters;
+	EOperationHasParameter optParam = format.optionalParameters;
+	EOperationFlags opFlags			= format.operationFlags;
 
 	//It must have all required params
 
-	if ((args.parameters & f.requiredParameters) != f.requiredParameters) {
+	if ((args.parameters & reqParam) != reqParam) {
 		Log_debug(String_createConstRefUnsafe("Required parameter is missing."), ELogOptions_NewLine);
 		CLI_showHelp(category, operation, args.format);
 		_gotoIfError(clean, Error_invalidOperation(1));
@@ -469,7 +508,7 @@ Bool CLI_execute(StringList arglist) {
 
 	//It has some parameter that we don't support
 
-	if (args.parameters & ~(f.requiredParameters | f.optionalParameters)) {
+	if (args.parameters & ~(reqParam | optParam)) {
 		Log_debug(String_createConstRefUnsafe("Unsupported parameter is present."), ELogOptions_NewLine);
 		CLI_showHelp(category, operation, args.format);
 		_gotoIfError(clean, Error_invalidOperation(2));
@@ -477,7 +516,7 @@ Bool CLI_execute(StringList arglist) {
 
 	//It has some flag we don't support
 
-	if (args.flags & ~f.operationFlags) {
+	if (args.flags & ~opFlags) {
 		Log_debug(String_createConstRefUnsafe("Unsupported flag is present."), ELogOptions_NewLine);
 		CLI_showHelp(category, operation, args.format);
 		_gotoIfError(clean, Error_invalidOperation(3));

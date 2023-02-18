@@ -33,7 +33,10 @@ const C8 *EOperationHasParameter_names[] = {
 	"-i",
 	"-o",
 	"-aes",
-	"-split"
+	"-split",
+	"-n",
+	"-l",
+	"-c"
 };
 
 const C8 *EOperationHasParameter_descriptions[] = {
@@ -41,7 +44,10 @@ const C8 *EOperationHasParameter_descriptions[] = {
 	"Input file/folder (relative)",
 	"Output file/folder (relative)",
 	"Encryption key (32-byte hex)",
-	"Split by character (defaulted to newline)"
+	"Split by character (defaulted to newline)",
+	"Number of elements",
+	"Length of each element",
+	"Characters to include"
 };
 
 //Flags
@@ -53,7 +59,13 @@ const C8 *EOperationFlags_names[] = {
 	"--utf8",
 	"--full-date",
 	"--date",
-	"--not-recursive"
+	"--not-recursive",
+	"--alpha",
+	"--alphanumeric",
+	"--numbers",
+	"--symbols",
+	"--lowercase",
+	"--uppercase"
 };
 
 const C8 *EOperationFlags_descriptions[] = {
@@ -64,21 +76,29 @@ const C8 *EOperationFlags_descriptions[] = {
 	"Includes full file timestamp (Ns)",
 	"Includes MS-DOS timestamp (YYYY-MM-dd HH-mm-ss (each two seconds))",
 	"If folder is selected, blocks recursive file searching. Can be handy if only the direct directory should be included.",
+	"Include alpha characters (A-Za-z).",
+	"Include alphanumeric characters (A-Za-z0-9).",
+	"Include number characters (0-9).",
+	"Include symbols (<0x20, 0x7F> excluding alphanumeric).",
+	"Include lower alpha characters (a-z).",
+	"Include upper alpha characters (A-Z)."
 };
 
 //Operations
 
 const C8 *EOperationCategory_names[] = {
-	"convert",
-	"hash"
+	"file",
+	"hash",
+	"rand"
 };
 
 const C8 *EOperationCategory_description[] = {
 	"Converting between OxC3 types and non native types.",
-	"Converting a file or string to a hash."
+	"Converting a file or string to a hash.",
+	"Generating random data."
 };
 
-Operation Operation_values[4];
+Operation Operation_values[6];
 Format Format_values[4];
 
 void Operations_init() {
@@ -153,6 +173,40 @@ void Operations_init() {
 		.name = "file", 
 		.desc = "Hashing a file.", 
 		.func = &CLI_hashFile
+	};
+
+	//Random operations
+
+	Operation_values[EOperation_RandKey] = (Operation) { 
+
+		.category = EOperationCategory_Rand, 
+
+		.name = "key", 
+		.desc = "Generating a key for AES256 (or other purposes)", 
+
+		.func = &CLI_randKey,
+
+		.isFormatLess = true,
+
+		.optionalParameters = EOperationHasParameter_Number | EOperationHasParameter_Length | EOperationHasParameter_Output
+	};
+
+	Operation_values[EOperation_RandChar] = (Operation) { 
+
+		.category = EOperationCategory_Rand, 
+
+		.name = "char", 
+		.desc = "Generating a random sequence of characters.", 
+
+		.func = &CLI_randChar,
+
+		.isFormatLess = true,
+
+		.optionalParameters = 
+			EOperationHasParameter_Number | EOperationHasParameter_Length | 
+			EOperationHasParameter_Output | EOperationHasParameter_Character,
+		
+		.operationFlags = EOperationFlags_RandomChar
 	};
 }
 
