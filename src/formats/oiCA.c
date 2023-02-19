@@ -111,31 +111,7 @@ ECompareResult sortParentCountAndFileNames(String *a, String *b) {
 	if (foldersA > foldersB)
 		return ECompareResult_Gt;
 
-	//We want to sort on contents
-	//Provided it's the same level of parenting.
-	//This ensures things with the same parent also stay at the same location
-
-	for (U64 i = 0; i < a->length && i < b->length; ++i) {
-
-		C8 ai = a->ptr[i];
-		C8 bi = b->ptr[i];
-
-		if (ai < bi)
-			return ECompareResult_Lt;
-
-		if (ai > bi)
-			return ECompareResult_Gt;
-	}
-
-	//If they start with the same thing, we want to sort on length
-
-	if (a->length < b->length)
-		return ECompareResult_Lt;
-
-	if (a->length > b->length)
-		return ECompareResult_Gt;
-
-	return ECompareResult_Eq;
+	return String_compare(*a, *b, EStringCase_Insensitive);
 }
 
 //We don't support any compression yet, but should be trivial to add once Buffer_compress/Buffer_decompress is supported.

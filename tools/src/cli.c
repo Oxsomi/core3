@@ -172,7 +172,7 @@ void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f) {
 
 	Log_debug(
 		String_createConstRefUnsafe(opVal.name), 
-		ELogOptions_None
+		opVal.isFormatLess ? ELogOptions_NewLine : ELogOptions_None
 	);
 
 	if(!opVal.isFormatLess)
@@ -285,12 +285,15 @@ Bool CLI_execute(StringList arglist) {
 
 	for(U64 i = 0; i < EOperation_Invalid; ++i)
 
-		if (String_equalsString(
-			arg1, 
-			String_createConstRefUnsafe(Operation_values[i].name),
-			EStringCase_Insensitive, 
-			true
-		)) {
+		if (
+			category == Operation_values[i].category &&
+			String_equalsString(
+				arg1, 
+				String_createConstRefUnsafe(Operation_values[i].name),
+				EStringCase_Insensitive, 
+				true
+			)
+		) {
 			operation = i;
 			break;
 		}

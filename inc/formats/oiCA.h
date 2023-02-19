@@ -81,6 +81,8 @@ typedef enum ECAFlags {
 	ECAFlags_FileSizeType_Shift			= 3,
 	ECAFlags_FileSizeType_Mask			= 3,
 
+	ECAFlags_FileSizeType_MaskShifted	= ECAFlags_FileSizeType_Mask << ECAFlags_FileSizeType_Shift,
+
     //Chunk size of AES for multi threading. 0 = none, 1 = 10MiB, 2 = 100MiB, 3 = 500MiB
         
     ECAFlags_UseAESChunksA				= 1 << 5,
@@ -94,6 +96,8 @@ typedef enum ECAFlags {
 	ECAFlags_CompressedSizeType_Shift		= 8,
 	ECAFlags_CompressedSizeType_Mask		= 3,
 
+	ECAFlags_CompressedSizeType_MaskShifted	= ECAFlags_CompressedSizeType_Mask << ECAFlags_CompressedSizeType_Shift,
+
 	//Determines how many bytes the counter for files takes up.
 	//If DirectoriesCountLong is set, it will allow up to 254 dirs, otherwise 64Ki-1.
 	//If FilesCountLong is set, it will allow up to 64Ki, otherwise 4Gi.
@@ -103,8 +107,11 @@ typedef enum ECAFlags {
 
 	//Helpers
 
-	ECSFlags_AESChunkMask				= ECAFlags_UseAESChunksA | ECAFlags_UseAESChunksB,
-	ECSFlags_AESChunkShift				= 5
+	ECAFlags_AESChunkMask				= ECAFlags_UseAESChunksA | ECAFlags_UseAESChunksB,
+	ECAFlags_AESChunkShift				= 5,
+
+	ECAFlags_NonFlagTypes				= 
+		ECAFlags_FileSizeType_MaskShifted | ECAFlags_AESChunkMask | ECAFlags_CompressedSizeType_MaskShifted
 
 } ECAFlags;
 

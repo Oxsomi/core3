@@ -30,6 +30,8 @@
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/ext/errorx.h"
+#include "platforms/ext/archivex.h"
+#include "platforms/ext/listx.h"
 #include "platforms/file.h"
 #include "platforms/log.h"
 #include "cli.h"
@@ -217,7 +219,7 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 
 			//AES chunking
 
-			U32 aesChunking = caHeader.flags & ECSFlags_AESChunkMask;
+			U32 aesChunking = caHeader.flags & ECAFlags_AESChunkMask;
 
 			if (aesChunking) {
 
@@ -227,7 +229,7 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 					"500 MiB"
 				};
 
-				String aesChunkStr = String_createConstRefUnsafe(chunking[(aesChunking >> ECSFlags_AESChunkShift) - 1]);
+				String aesChunkStr = String_createConstRefUnsafe(chunking[(aesChunking >> ECAFlags_AESChunkShift) - 1]);
 
 				Log_debug(String_createConstRefUnsafe("AES Chunking uses "), ELogOptions_None);
 				Log_debug(aesChunkStr, ELogOptions_None);
@@ -291,7 +293,7 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 				"\tUnrecognized flag"
 			};
 
-			if(caHeader.flags) {
+			if(caHeader.flags & ~ECAFlags_NonFlagTypes) {
 
 				Log_debug(String_createConstRefUnsafe("Flags: "), ELogOptions_NewLine);
 
@@ -424,7 +426,7 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 				"\tUnrecognized flag"
 			};
 
-			if(dlHeader.flags) {
+			if(dlHeader.flags & ~EDLFlags_AESChunkMask) {
 
 				Log_debug(String_createConstRefUnsafe("Flags: "), ELogOptions_NewLine);
 
@@ -443,6 +445,8 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 			break;
 		}
 
+		//Invalid
+
 		default:
 			Log_error(String_createConstRefUnsafe("File had unrecognized magic number"), ELogOptions_NewLine);
 			goto clean;
@@ -460,6 +464,245 @@ clean:
 	return success;
 }
 
+//Printing an entry
+
+Error collectArchiveEntries(FileInfo info, List *arg) {
+
+	String tmp = String_createNull();
+	Error err = Error_none();
+
+	_gotoIfError(clean, String_createCopyx(info.path, &tmp));
+	_gotoIfError(clean, List_pushBackx(arg, Buffer_createConstRef(&tmp, sizeof(tmp))));
+
+	tmp = String_createNull();		//Belongs to list now
+
+clean:
+	String_freex(&tmp);
+	return err;
+}
+
+//Handle inspection of individual data.
+//Also handles info about the file in general.
+
 Bool CLI_inspectData(ParsedArgs args) {
-	return false;		//TODO:
+
+	Buffer buf = Buffer_createNull();
+	Error err = Error_none();
+	Bool success = false;
+
+	String path = String_createNull();
+	String tmp = String_createNull();
+
+	//Get file
+
+	if ((err = ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &path)).genericError) {
+		Log_error(String_createConstRefUnsafe("Invalid argument -i <string>."), ELogOptions_NewLine);
+		goto clean;
+	}
+
+	if ((err = File_read(path, 1 * SECOND, &buf)).genericError) {
+		Log_error(String_createConstRefUnsafe("Invalid file path."), ELogOptions_NewLine);
+		goto clean;
+	}
+
+	if (Buffer_length(buf) < 4) {
+		Log_error(String_createConstRefUnsafe("File has to start with magic number."), ELogOptions_NewLine);
+		goto clean;
+	}
+
+	//Parse entry if available
+
+	String entry = String_createNull();
+
+	if (args.parameters & EOperationHasParameter_Entry)
+		if ((err = ParsedArgs_getArg(args, EOperationHasParameter_EntryShift, &entry)).genericError) {
+			Log_error(String_createConstRefUnsafe("Invalid argument -e <string>."), ELogOptions_NewLine);
+			goto clean;
+		}
+
+	//Parse encryption key
+
+	U32 encryptionKeyV[8] = { 0 };
+	U32 *encryptionKey = NULL;			//Only if we have aes should encryption key be set.
+
+	if (args.parameters & EOperationHasParameter_AES) {
+
+		String key = String_createNull();
+
+		if (
+			(ParsedArgs_getArg(args, EOperationHasParameter_AESShift, &key)).genericError || 
+			!String_isHex(key)
+		) {
+
+			Log_error(
+				String_createConstRefUnsafe("Invalid parameter sent to -aes. Expecting key in hex (32 bytes)"), 
+				ELogOptions_NewLine
+			);
+
+			return false;
+		}
+
+		U64 off = String_startsWithString(key, String_createConstRefUnsafe("0x"), EStringCase_Insensitive) ? 2 : 0;
+
+		if (key.length - off != 64) {
+
+			Log_error(
+				String_createConstRefUnsafe("Invalid parameter sent to -aes. Expecting 32-byte key in hex"), 
+				ELogOptions_NewLine
+			);
+
+			return false;
+		}
+
+		for (U64 i = off; i + 1 < key.length; ++i) {
+
+			U8 v0 = C8_hex(key.ptr[i]);
+			U8 v1 = C8_hex(key.ptr[++i]);
+
+			v0 = (v0 << 4) | v1;
+			*((U8*)encryptionKeyV + ((i - off) >> 1)) = v0;
+		}
+
+		encryptionKey = encryptionKeyV;
+	}
+
+	switch (*(const U32*)buf.ptr) {
+
+		//oiCA header
+
+		case CAHeader_MAGIC: {
+		
+			CAFile file = (CAFile) { 0 };
+			List strings = List_createEmpty(sizeof(String));
+			U64 baseCount = 0;
+
+			_gotoIfError(cleanCa, CAFile_readx(buf, encryptionKey, &file));
+
+			//Specific entry was requested
+
+			if (args.parameters & EOperationHasParameter_Entry) {
+
+				//Output it to a folder on disk was requested
+
+				if (args.parameters & EOperationHasParameter_Output) {
+					Log_error(String_createConstRefUnsafe("oiCA file to disk not supported yet."), ELogOptions_NewLine);
+					goto cleanCa;
+				}
+
+				//Want to output to log
+
+				else {
+
+					//Simply print the archive
+
+					if (Archive_hasFolderx(file.archive, entry)) {
+
+						Bool isVirtual = false;
+						_gotoIfError(cleanCa, File_resolve(
+							entry, &isVirtual, 128, String_createNull(), Platform_instance.alloc, &tmp
+						));
+
+						baseCount = String_countAll(tmp, '/', EStringCase_Sensitive) + 1;
+						String_freex(&tmp);
+
+						_gotoIfError(cleanCa, Archive_foreachx(
+							file.archive,
+							entry,
+							(FileCallback) collectArchiveEntries,
+							&strings,
+							true,
+							EFileType_Any
+						));
+					}
+
+					//Print the subsection of the file
+
+					else {
+						//TODO: Hexdump the requested area (default to 256)
+						Log_error(String_createConstRefUnsafe("oiCA file inspection not supported yet."), ELogOptions_NewLine);
+						goto cleanCa;
+					}
+
+				}
+			}
+
+			//General info was requested
+
+			else _gotoIfError(cleanCa, Archive_foreachx(
+				file.archive,
+				String_createConstRefUnsafe("."),
+				(FileCallback) collectArchiveEntries,
+				&strings,
+				true,
+				EFileType_Any
+			));
+
+			//Sort to ensure the subdirectories are correct
+
+			if(!List_sortString(strings, EStringCase_Insensitive))
+				_gotoIfError(cleanCa, Error_invalidOperation(0));
+
+			//Process all and print
+
+			for(U64 i = 0; i < strings.length; ++i) {
+
+				String path = ((const String*)strings.ptr)[i];
+
+				U64 parentCount = String_countAll(path, '/', EStringCase_Sensitive);
+
+				_gotoIfError(cleanCa, String_createx(' ', 2 * (parentCount - baseCount), &tmp));
+
+				String sub = String_createNull();
+				if(!String_cutBeforeLast(path, '/', EStringCase_Sensitive, &sub))
+					sub = String_createConstRefSized(path.ptr, path.length);
+
+				_gotoIfError(cleanCa, String_appendStringx(&tmp, sub));
+
+				Log_debug(tmp, ELogOptions_NewLine);
+				String_freex(&tmp);
+			}
+
+			if(!strings.length)
+				Log_debug(String_createConstRefUnsafe("Folder is empty."), ELogOptions_NewLine);
+
+		cleanCa:
+
+			for(U64 i = 0; i < strings.length; ++i)
+				String_freex((String*)strings.ptr + i);
+
+			CAFile_freex(&file);
+			List_freex(&strings);
+
+			if(err.genericError)
+				goto clean;
+
+			break;
+		}
+
+		//oiDL header
+
+		case DLHeader_MAGIC:
+
+			//TODO: Implement
+
+			Log_error(String_createConstRefUnsafe("oiDL inspection not implemented yet."), ELogOptions_NewLine);
+			goto clean;
+
+		//Invalid
+
+		default:
+			Log_error(String_createConstRefUnsafe("File had unrecognized magic number"), ELogOptions_NewLine);
+			goto clean;
+	}
+
+	success = true;
+
+clean:
+
+	if(err.genericError)
+		Error_printx(err, ELogLevel_Error, ELogOptions_NewLine);
+
+	String_freex(&tmp);
+	Buffer_freex(&buf);
+	return success;
 }

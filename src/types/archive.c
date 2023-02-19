@@ -237,7 +237,7 @@ Error Archive_removeInternal(Archive *archive, String path, Allocator alloc, EFi
 	if(!Archive_getPath(*archive, path, &entry, &i, &resolved, alloc))
 		return Error_notFound(0, 1, 0);
 
-	if(type != EFileType_Invalid && entry.type != type)
+	if(type != EFileType_Any && entry.type != type)
 		_gotoIfError(clean, Error_invalidOperation(0));
 
 	//Remove children
@@ -295,7 +295,7 @@ Error Archive_removeFolder(Archive *archive, String path, Allocator alloc) {
 }
 
 Error Archive_remove(Archive *archive, String path, Allocator alloc) {
-	return Archive_removeInternal(archive, path, alloc, EFileType_Invalid);
+	return Archive_removeInternal(archive, path, alloc, EFileType_Any);
 }
 
 Error Archive_rename(
@@ -464,8 +464,8 @@ Error Archive_foreach(
 	if(!archive.entries.ptr || !callback)
 		return Error_nullPointer(!callback ? 3 : 0, 0);
 
-	if(type > EFileType_Invalid)			//"Invalid" means either files or folders.
-		return Error_invalidEnum(5, 0, (U64)type, (U64)EFileType_Invalid);
+	if(type > EFileType_Any)
+		return Error_invalidEnum(5, 0, (U64)type, (U64)EFileType_Any);
 
 	String resolved = String_createNull();
 	Bool isVirtual = false;
@@ -478,7 +478,9 @@ Error Archive_foreach(
 
 	//Append / (replace last \0)
 
-	resolved.ptr[resolved.length - 1] = '/';
+	if(resolved.length)									//Ignore root
+		resolved.ptr[resolved.length - 1] = '/';
+
 	U64 baseSlash = isRecursive ? 0 : String_countAll(resolved, '/', EStringCase_Sensitive);
 
 	//TODO: Have a map where it's easy to find child files/folders.
@@ -490,7 +492,7 @@ Error Archive_foreach(
 
 		ArchiveEntry cai = ((ArchiveEntry*)archive.entries.ptr)[i];
 
-		if(type != EFileType_Invalid && type != cai.type)
+		if(type != EFileType_Any && type != cai.type)
 			continue;
 
 		if(!String_startsWithString(cai.path, resolved, EStringCase_Insensitive))
@@ -556,7 +558,7 @@ Error Archive_queryFileObjectCountAll(
 	U64 *res, 
 	Allocator alloc
 ) {
-	return Archive_queryFileObjectCount(archive, loc, EFileType_Invalid, isRecursive, res, alloc); 
+	return Archive_queryFileObjectCount(archive, loc, EFileType_Any, isRecursive, res, alloc); 
 }
 
 Error Archive_queryFileCount(

@@ -130,7 +130,7 @@ Data allows you to actually inspect the data section of certain parts of the fil
 
 `file header -i test.oiCA` would print the information about the file header.
 
-`file data -i test.oiCA` would tell about the file table for example. File data also needs to provide `-aes` if the source is encrypted.
+`file data -i test.oiCA` would tell about the file table for example. File data also needs to provide `-aes` if the source is encrypted. If entry is absent, it will provide a general view of the file. With `-e <offset or path>` a specific entry can be viewed. If an entry is specified, the `-o` can be used to extract that one entry into a single file (or folder). If this is not specified, it will show the entry as either a hexdump or plain text (if it's ascii).
 
 ## Encrypt
 

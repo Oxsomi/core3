@@ -22,7 +22,7 @@
 */
 
 #pragma once
-#include "types.h"
+#include "list.h"
 
 //For simplicity;
 //A string is ALWAYS ASCII (7-bit) and no null terminator.
@@ -87,6 +87,8 @@ const C8 *String_endConst(String str);
 const C8 *String_charAtConst(String str, U64 off);
 Bool String_isValidAscii(String str);
 Bool String_isValidFileName(String str);
+
+ECompareResult String_compare(String a, String b, EStringCase caseSensitive);
 
 //Only checks characters. Please use resolvePath to actually validate if it's safely accessible.
 

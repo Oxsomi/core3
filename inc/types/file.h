@@ -27,7 +27,8 @@
 typedef enum EFileType {
 	EFileType_Folder,
 	EFileType_File,
-	EFileType_Invalid
+	EFileType_Invalid,
+	EFileType_Any = EFileType_Invalid
 } EFileType;
 
 typedef enum FileAccess {

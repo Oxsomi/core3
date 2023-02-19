@@ -27,6 +27,7 @@
 typedef struct Buffer Buffer;
 typedef struct Allocator Allocator;
 typedef struct Error Error;
+typedef enum EStringCase EStringCase;
 
 //A POD list
 //(Not applicable for types that resize)
@@ -158,6 +159,8 @@ Bool List_sortI16(List list);
 Bool List_sortI8(List list);
 
 Bool List_sortF32(List list);
+
+Bool List_sortString(List list, EStringCase stringCase);
 
 Bool List_sortCustom(List list, CompareFunction func);
 

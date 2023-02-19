@@ -1233,6 +1233,9 @@ Bool String_endsWith(String str, C8 c, EStringCase caseSensitive) {
 
 Bool String_startsWithString(String str, String other, EStringCase caseSensitive) {
 
+	if(!other.length)
+		return true;
+
 	if (other.length > str.length)
 		return false;
 
@@ -2411,4 +2414,33 @@ Bool String_toUpper(String str) { return String_transform(str, EStringTransform_
 
 Bool String_formatPath(String *str) { 
 	return String_replaceAll(str, '\\', '/', EStringCase_Insensitive);
+}
+
+ECompareResult String_compare(String a, String b, EStringCase caseSensitive) {
+
+	//We want to sort on contents
+	//Provided it's the same level of parenting.
+	//This ensures things with the same parent also stay at the same location
+
+	for (U64 i = 0; i < a.length && i < b.length; ++i) {
+
+		C8 ai = C8_transform(a.ptr[i], (EStringTransform) caseSensitive);
+		C8 bi = C8_transform(b.ptr[i], (EStringTransform) caseSensitive);
+
+		if (ai < bi)
+			return ECompareResult_Lt;
+
+		if (ai > bi)
+			return ECompareResult_Gt;
+	}
+
+	//If they start with the same thing, we want to sort on length
+
+	if (a.length < b.length)
+		return ECompareResult_Lt;
+
+	if (a.length > b.length)
+		return ECompareResult_Gt;
+
+	return ECompareResult_Eq;
 }

@@ -25,6 +25,7 @@
 #include "types/error.h"
 #include "types/buffer.h"
 #include "types/allocator.h"
+#include "types/string.h"
 
 Bool List_isConstRef(List l) { return l.capacity == U64_MAX; }
 Bool List_isRef(List l) { return !l.capacity || List_isConstRef(l); }
@@ -778,6 +779,24 @@ Bool List_sortCustom(List list, CompareFunction f) {
 
 #define TList_sort(T) Bool List_sort##T(List l) { return List_sortCustom(l, sort##T); }
 TList_sorts(TList_sort);
+
+ECompareResult List_compareString(const String *a, const String *b) {
+	return String_compare(*a, *b, EStringCase_Sensitive);
+}
+
+ECompareResult List_compareStringInsensitive(const String *a, const String *b) {
+	return String_compare(*a, *b, EStringCase_Insensitive);
+}
+
+Bool List_sortString(List list, EStringCase stringCase) {
+
+	if(list.stride != sizeof(String))			//Current limitation, because we don't allocate.
+		return false;
+
+	return 
+		stringCase == EStringCase_Insensitive ? List_sortCustom(list, (CompareFunction) List_compareStringInsensitive) :
+		List_sortCustom(list, (CompareFunction) List_compareString);
+}
 
 Error List_eraseFirst(List *list, Buffer buf, U64 offset) {
 
