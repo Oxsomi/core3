@@ -7,7 +7,7 @@ The OxC3 tool is intended to handle all operations required for Oxsomi core3. Th
 - Conversions between file formats.
 - **TODO:** Packaging a project.
 - **TODO:** Inspecting a file (printing the header and other important information).
-- **TODO**: Encryption.
+- Encryption.
 - **TODO**: Compression.
 
 And might include more functionality in the future.
@@ -128,7 +128,7 @@ Header is useful to know what the header says. It also allows to inspect the hea
 
 Data allows you to actually inspect the data section of certain parts of the file.
 
-## TODO: Encrypt
+## Encrypt
 
 `OxC3 file encr -i <file> -k <key in hex> (optional: -o output)`  
 

@@ -195,39 +195,45 @@ void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f) {
 			ELogOptions_NewLine
 		);
 
-	Log_debug(String_createConstRefUnsafe("With the following parameters:"), ELogOptions_NewLine);
+	if(format.requiredParameters | format.optionalParameters) {
+
+		Log_debug(String_createConstRefUnsafe("With the following parameters:"), ELogOptions_NewLine);
+		Log_debug(String_createNull(), ELogOptions_NewLine);
+
+		for(U64 i = EOperationHasParameter_InputShift; i < EOperationHasParameter_Count; ++i)
+
+			if (((format.requiredParameters | format.optionalParameters) >> i) & 1) {
+
+				Log_debug(String_createConstRefUnsafe(EOperationHasParameter_names[i]), ELogOptions_None);
+
+				Log_debug(String_createConstRefUnsafe(":\t"), ELogOptions_None);
+
+				Log_debug(String_createConstRefUnsafe(EOperationHasParameter_descriptions[i]), ELogOptions_None);
+
+				Bool req = (format.requiredParameters >> i) & 1;
+
+				Log_debug(String_createConstRefUnsafe(req ? "\t(required)" : ""), ELogOptions_NewLine);
+			}
+	}
+
 	Log_debug(String_createNull(), ELogOptions_NewLine);
 
-	for(U64 i = EOperationHasParameter_InputShift; i < EOperationHasParameter_Count; ++i)
+	if(format.operationFlags) {
 
-		if (((format.requiredParameters | format.optionalParameters) >> i) & 1) {
+		Log_debug(String_createConstRefUnsafe("With the following flags:"), ELogOptions_NewLine);
+		Log_debug(String_createNull(), ELogOptions_NewLine);
 
-			Log_debug(String_createConstRefUnsafe(EOperationHasParameter_names[i]), ELogOptions_None);
+		for(U64 i = EOperationFlags_None; i < EOperationFlags_Count; ++i)
 
-			Log_debug(String_createConstRefUnsafe(":\t"), ELogOptions_None);
+			if ((format.operationFlags >> i) & 1) {
 
-			Log_debug(String_createConstRefUnsafe(EOperationHasParameter_descriptions[i]), ELogOptions_None);
+				Log_debug(String_createConstRefUnsafe(EOperationFlags_names[i]), ELogOptions_None);
 
-			Bool req = (format.requiredParameters >> i) & 1;
+				Log_debug(String_createConstRefUnsafe(":\t"), ELogOptions_None);
 
-			Log_debug(String_createConstRefUnsafe(req ? "\t(required)" : ""), ELogOptions_NewLine);
-		}
-
-
-	Log_debug(String_createNull(), ELogOptions_NewLine);
-	Log_debug(String_createConstRefUnsafe("With the following flags:"), ELogOptions_NewLine);
-	Log_debug(String_createNull(), ELogOptions_NewLine);
-
-	for(U64 i = EOperationFlags_None; i < EOperationFlags_Count; ++i)
-
-		if ((format.operationFlags >> i) & 1) {
-
-			Log_debug(String_createConstRefUnsafe(EOperationFlags_names[i]), ELogOptions_None);
-
-			Log_debug(String_createConstRefUnsafe(":\t"), ELogOptions_None);
-
-			Log_debug(String_createConstRefUnsafe(EOperationFlags_descriptions[i]), ELogOptions_NewLine);
-		}
+				Log_debug(String_createConstRefUnsafe(EOperationFlags_descriptions[i]), ELogOptions_NewLine);
+			}
+	}
 }
 
 Bool CLI_execute(StringList arglist) {
@@ -316,9 +322,9 @@ Bool CLI_execute(StringList arglist) {
 			)) {
 
 				if ((args.flags >> i) & 1) {
-					Log_debug(String_createConstRefUnsafe("Duplicate flag: "), ELogOptions_None);
-					Log_debug(Platform_instance.args.ptr[j], ELogOptions_NewLine);
-					_gotoIfError(clean, Error_alreadyDefined(0));
+					Log_error(String_createConstRefUnsafe("Duplicate flag: "), ELogOptions_None);
+					Log_error(Platform_instance.args.ptr[j], ELogOptions_NewLine);
+					goto clean;
 				}
 
 				args.flags |= (EOperationFlags)(1 << i);
@@ -346,9 +352,9 @@ Bool CLI_execute(StringList arglist) {
 					j + 1 >= Platform_instance.args.length ||
 					String_getAt(Platform_instance.args.ptr[j + 1], 0) == '-'
 				) {
-					Log_debug(String_createConstRefUnsafe("Parameter is missing argument: "), ELogOptions_None);
-					Log_debug(Platform_instance.args.ptr[j], ELogOptions_NewLine);
-					_gotoIfError(clean, Error_outOfBounds(0, 0, j + 1, Platform_instance.args.length));
+					Log_error(String_createConstRefUnsafe("Parameter is missing argument: "), ELogOptions_None);
+					Log_error(Platform_instance.args.ptr[j], ELogOptions_NewLine);
+					goto clean;
 				}
 
 				else {
@@ -374,9 +380,9 @@ Bool CLI_execute(StringList arglist) {
 					//Mark as present
 
 					if (args.parameters & param) {
-						Log_debug(String_createConstRefUnsafe("Duplicate parameter: "), ELogOptions_None);
-						Log_debug(Platform_instance.args.ptr[j], ELogOptions_NewLine);
-						_gotoIfError(clean, Error_alreadyDefined(0));
+						Log_error(String_createConstRefUnsafe("Duplicate parameter: "), ELogOptions_None);
+						Log_error(Platform_instance.args.ptr[j], ELogOptions_NewLine);
+						goto clean;
 					}
 
 					args.parameters |= param;
@@ -412,7 +418,7 @@ Bool CLI_execute(StringList arglist) {
 		!supportsFormat
 	) {
 		CLI_showHelp(category, operation, EFormat_Invalid);
-		_gotoIfError(clean, Error_invalidOperation(0));
+		goto clean;
 	}
 
 	//Find invalid flags or parameters that couldn't be matched
@@ -437,10 +443,10 @@ Bool CLI_execute(StringList arglist) {
 						break;
 
 				if(i == EOperationHasParameter_Count) {
-					Log_debug(String_createConstRefUnsafe("Invalid parameter is present: "), ELogOptions_None);
-					Log_debug(Platform_instance.args.ptr[j], ELogOptions_NewLine);
+					Log_error(String_createConstRefUnsafe("Invalid parameter is present: "), ELogOptions_None);
+					Log_error(Platform_instance.args.ptr[j], ELogOptions_NewLine);
 					CLI_showHelp(category, operation, args.format);
-					_gotoIfError(clean, Error_invalidParameter((U32)j, 0, 0));
+					goto clean;
 				}
 
 				++j;
@@ -461,19 +467,19 @@ Bool CLI_execute(StringList arglist) {
 					break;
 
 			if(i == EOperationFlags_Count) {
-				Log_debug(String_createConstRefUnsafe("Invalid flag is present: "), ELogOptions_None);
-				Log_debug(Platform_instance.args.ptr[j], ELogOptions_NewLine);
+				Log_error(String_createConstRefUnsafe("Invalid flag is present: "), ELogOptions_None);
+				Log_error(Platform_instance.args.ptr[j], ELogOptions_NewLine);
 				CLI_showHelp(category, operation, args.format);
-				_gotoIfError(clean, Error_invalidParameter((U32)j, 0, 0));
+				goto clean;
 			}
 
 			continue;
 		}
 
-		Log_debug(String_createConstRefUnsafe("Invalid argument is present: "), ELogOptions_None);
-		Log_debug(Platform_instance.args.ptr[j], ELogOptions_NewLine);
+		Log_error(String_createConstRefUnsafe("Invalid argument is present: "), ELogOptions_None);
+		Log_error(Platform_instance.args.ptr[j], ELogOptions_NewLine);
 		CLI_showHelp(category, operation, args.format);
-		_gotoIfError(clean, Error_invalidParameter((U32)j, 0, 0));
+		goto clean;
 	}
 
 	//Check that parameters passed are valid
@@ -501,25 +507,25 @@ Bool CLI_execute(StringList arglist) {
 	//It must have all required params
 
 	if ((args.parameters & reqParam) != reqParam) {
-		Log_debug(String_createConstRefUnsafe("Required parameter is missing."), ELogOptions_NewLine);
+		Log_error(String_createConstRefUnsafe("Required parameter is missing."), ELogOptions_NewLine);
 		CLI_showHelp(category, operation, args.format);
-		_gotoIfError(clean, Error_invalidOperation(1));
+		goto clean;
 	}
 
 	//It has some parameter that we don't support
 
 	if (args.parameters & ~(reqParam | optParam)) {
-		Log_debug(String_createConstRefUnsafe("Unsupported parameter is present."), ELogOptions_NewLine);
+		Log_error(String_createConstRefUnsafe("Unsupported parameter is present."), ELogOptions_NewLine);
 		CLI_showHelp(category, operation, args.format);
-		_gotoIfError(clean, Error_invalidOperation(2));
+		goto clean;
 	}
 
 	//It has some flag we don't support
 
 	if (args.flags & ~opFlags) {
-		Log_debug(String_createConstRefUnsafe("Unsupported flag is present."), ELogOptions_NewLine);
+		Log_error(String_createConstRefUnsafe("Unsupported flag is present."), ELogOptions_NewLine);
 		CLI_showHelp(category, operation, args.format);
-		_gotoIfError(clean, Error_invalidOperation(3));
+		goto clean;
 	}
 
 	//Now we can enter the function
