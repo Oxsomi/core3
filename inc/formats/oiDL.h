@@ -87,3 +87,50 @@ Error DLFile_read(
 	Allocator alloc, 
 	DLFile *dlFile
 );
+
+//File headers
+
+//File spec (docs/oiDL.md)
+
+typedef enum EDLFlags {
+
+	EDLFlags_None 					= 0,
+
+	EDLFlags_UseSHA256				= 1 << 0,		//Whether SHA256 (1) or CRC32C (0) is used as hash
+
+	EDLFlags_IsString				= 1 << 1,		//If true; string must contain valid ASCII characters
+	EDLFlags_UTF8					= 1 << 2,		//ASCII (if off), otherwise UTF-8
+        
+    //Chunk size of AES for multi threading. 0 = none, 1 = 10MiB, 2 = 50MiB, 3 = 100MiB
+        
+	EDLFlags_UseAESChunksA			= 1 << 3,
+	EDLFlags_UseAESChunksB			= 1 << 4,
+
+	EDLFlags_HasExtendedData		= 1 << 5,		//Extended data
+
+	EDLFlags_AESChunkMask			= EDLFlags_UseAESChunksA | EDLFlags_UseAESChunksA,
+	EDLFlags_AESChunkShift			= 3
+
+} EDLFlags;
+
+typedef struct DLHeader {
+
+	U8 version;					//major.minor (%10 = minor, /10 = major (+1 to get real major))
+	U8 flags;					//EDLFlags
+	U8 type;					//(EXXCompressionType << 4) | EXXEncryptionType. Each enum should be <Count (see oiXX.md).
+	U8 sizeTypes;				//EXXDataSizeTypes: entryType | (uncompressedSizType << 2) | (dataType << 4) (must be < (1 << 6)).
+
+} DLHeader;
+
+typedef struct DLExtraInfo {
+
+	//Identifier to ensure the extension is detected.
+	//0x0 - 0x1FFFFFFF are version headers, others are extensions.
+	U32 extendedMagicNumber;
+
+	U16 extendedHeader;			//If extensions want to add extra data to the header
+	U16 perEntryExtendedData;	//What to store per entry besides a DataSizeType
+
+} DLExtraInfo;
+
+#define DLHeader_MAGIC 0x4C44696F

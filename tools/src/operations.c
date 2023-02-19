@@ -108,7 +108,7 @@ const C8 *EOperationCategory_description[] = {
 	"Generating random data."
 };
 
-Operation Operation_values[10];
+Operation Operation_values[12];
 Format Format_values[4];
 
 void Operations_init() {
@@ -174,6 +174,31 @@ void Operations_init() {
 		.isFormatLess = true,
 
 		.requiredParameters = EOperationHasParameter_Input | EOperationHasParameter_AES | EOperationHasParameter_Output
+	};
+
+	//Inspection
+
+	Operation_values[EOperation_FileHeader] = (Operation) { 
+
+		.category = EOperationCategory_File, 
+		.name = "header", 
+		.desc = "Inspect the file header of oiXX files.", 
+		.func = &CLI_inspectHeader,
+
+		.isFormatLess = true,
+		.requiredParameters = EOperationHasParameter_Input
+	};
+
+	Operation_values[EOperation_FileData] = (Operation) { 
+
+		.category = EOperationCategory_File, 
+		.name = "data", 
+		.desc = "Inspect the file data of oiXX files.", 
+		.func = &CLI_inspectData,
+
+		.isFormatLess = true,
+		.requiredParameters = EOperationHasParameter_Input,
+		.optionalParameters = EOperationHasParameter_AES
 	};
 
 	//Hash category

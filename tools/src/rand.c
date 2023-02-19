@@ -56,7 +56,7 @@ Bool CLI_rand(ParsedArgs args, RandType type) {
 			!String_parseDec(str, &n) ||
 			(n >> 32)
 		) {
-			Log_debug(String_createConstRefUnsafe("Invalid argument -n <string>, uint expected."), ELogOptions_NewLine);
+			Log_error(String_createConstRefUnsafe("Invalid argument -n <string>, uint expected."), ELogOptions_NewLine);
 			return false;
 		}
 	}
@@ -72,7 +72,7 @@ Bool CLI_rand(ParsedArgs args, RandType type) {
 			!String_parseDec(str, &l) ||
 			(l >> 32)
 		) {
-			Log_debug(String_createConstRefUnsafe("Invalid argument -l <string>, uint expected."), ELogOptions_NewLine);
+			Log_error(String_createConstRefUnsafe("Invalid argument -l <string>, uint expected."), ELogOptions_NewLine);
 			return false;
 		}
 	}
@@ -88,7 +88,7 @@ Bool CLI_rand(ParsedArgs args, RandType type) {
 			!String_parseDec(str, &b) ||
 			(b >> 16)
 		) {
-			Log_debug(String_createConstRefUnsafe("Invalid argument -b <string>, ushort expected."), ELogOptions_NewLine);
+			Log_error(String_createConstRefUnsafe("Invalid argument -b <string>, ushort expected."), ELogOptions_NewLine);
 			return false;
 		}
 	}
@@ -143,7 +143,7 @@ Bool CLI_rand(ParsedArgs args, RandType type) {
 				outputAsBase = 10;
 
 			if (hasMultiFlag) {
-				Log_debug(String_createConstRefUnsafe("Invalid argument. Can only pick one base."), ELogOptions_NewLine);
+				Log_error(String_createConstRefUnsafe("Invalid argument. Can only pick one base."), ELogOptions_NewLine);
 				return false;
 			}
 			
@@ -156,7 +156,7 @@ Bool CLI_rand(ParsedArgs args, RandType type) {
 			break;
 
 		default:
-			Log_debug(String_createConstRefUnsafe("Invalid operation"), ELogOptions_NewLine);
+			Log_error(String_createConstRefUnsafe("Invalid operation"), ELogOptions_NewLine);
 			return false;
 	}
 
@@ -177,7 +177,7 @@ Bool CLI_rand(ParsedArgs args, RandType type) {
 
 				if (b > 64) {
 
-					Log_debug(
+					Log_error(
 						String_createConstRefUnsafe("Decimal numbers can only support up to 64 bit (if -b is set)."), 
 						ELogOptions_NewLine
 					);
@@ -273,7 +273,7 @@ Bool CLI_rand(ParsedArgs args, RandType type) {
 							String str = String_createNull();
 
 							if (ParsedArgs_getArg(args, EOperationHasParameter_CharacterShift, &str).genericError) {
-								Log_debug(String_createConstRefUnsafe("Invalid argument -c <string>."), ELogOptions_NewLine);
+								Log_error(String_createConstRefUnsafe("Invalid argument -c <string>."), ELogOptions_NewLine);
 								return false;
 							}
 
@@ -385,7 +385,7 @@ Bool CLI_rand(ParsedArgs args, RandType type) {
 		String outputPath = String_createNull();
 		
 		if (ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &outputPath).genericError) {
-			Log_debug(String_createConstRefUnsafe("Invalid argument -o <string>, file path expected."), ELogOptions_NewLine);
+			Log_error(String_createConstRefUnsafe("Invalid argument -o <string>, file path expected."), ELogOptions_NewLine);
 			return false;
 		}
 
@@ -403,7 +403,7 @@ clean:
 	if(err.genericError) {
 
 		if(errorString.length)
-			Log_debug(errorString, ELogOptions_NewLine);
+			Log_error(errorString, ELogOptions_NewLine);
 
 		else Error_printx(err, ELogLevel_Error, ELogOptions_NewLine);
 	}

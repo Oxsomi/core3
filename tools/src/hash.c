@@ -75,7 +75,7 @@ Bool CLI_hash(ParsedArgs args, Bool isFile) {
 		}
 
 		default:
-			Log_debug(String_createConstRefUnsafe("Unsupported format"), ELogOptions_NewLine);
+			Log_error(String_createConstRefUnsafe("Unsupported format"), ELogOptions_NewLine);
 			goto clean;
 	}
 
@@ -88,7 +88,7 @@ Bool CLI_hash(ParsedArgs args, Bool isFile) {
 clean:
 
 	if(err.genericError) {
-		Log_debug(String_createConstRefUnsafe("Failed to convert hash to string!"), ELogOptions_NewLine);
+		Log_error(String_createConstRefUnsafe("Failed to convert hash to string!"), ELogOptions_NewLine);
 		Error_printx(err, ELogLevel_Error, ELogOptions_Default);
 	}
 

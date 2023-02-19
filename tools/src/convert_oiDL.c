@@ -70,7 +70,7 @@ Error _CLI_convertToDL(ParsedArgs args, String input, FileInfo inputInfo, String
 	//Data type
 
 	if ((args.flags & EOperationFlags_UTF8) && (args.flags & EOperationFlags_Ascii)) {
-		Log_debug(String_createConstRefUnsafe("oiDL can only pick UTF8 or Ascii, not both."), ELogOptions_NewLine);
+		Log_error(String_createConstRefUnsafe("oiDL can only pick UTF8 or Ascii, not both."), ELogOptions_NewLine);
 		return Error_invalidParameter(0, 0, 0);
 	}
 
@@ -329,7 +329,7 @@ Error _CLI_convertFromDL(ParsedArgs args, String input, FileInfo inputInfo, Stri
 	//TODO: Batch multiple files
 
 	if (inputInfo.type != EFileType_File) {
-		Log_debug(String_createConstRefUnsafe("oiDL can only be converted from single file"), ELogOptions_NewLine);
+		Log_error(String_createConstRefUnsafe("oiDL can only be converted from single file"), ELogOptions_NewLine);
 		return Error_invalidOperation(0);
 	}
 

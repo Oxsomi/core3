@@ -124,9 +124,13 @@ These are left out by default, because often, file timestamps aren't very import
 
 Two operations constitute as file inspection: `file header` and `file data`.
 
-Header is useful to know what the header says. It also allows to inspect the header of certain subsections of the data.
+Header is useful to know what the header says. It also allows to inspect the header of certain subsections of the data. This only works on Oxsomi formats.
 
 Data allows you to actually inspect the data section of certain parts of the file.
+
+`file header -i test.oiCA` would print the information about the file header.
+
+`file data -i test.oiCA` would tell about the file table for example. File data also needs to provide `-aes` if the source is encrypted.
 
 ## Encrypt
 

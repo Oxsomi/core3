@@ -150,6 +150,9 @@ typedef enum EOperation {
 	EOperation_FileEncr,
 	EOperation_FileDecr,
 
+	EOperation_FileHeader,
+	EOperation_FileData,
+
 	EOperation_Invalid
 
 } EOperation;
@@ -215,7 +218,7 @@ typedef struct Format {
 	EOperationCategory supportedCategories[4];
 } Format;
 
-extern Operation Operation_values[10];
+extern Operation Operation_values[12];
 extern Format Format_values[4];
 
 void Operations_init();
