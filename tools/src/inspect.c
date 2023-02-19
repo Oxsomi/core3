@@ -492,6 +492,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 	String path = String_createNull();
 	String tmp = String_createNull();
+	String tmp1 = String_createNull();
 
 	//Get file
 
@@ -585,6 +586,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 				//Output it to a folder on disk was requested
 
 				if (args.parameters & EOperationHasParameter_Output) {
+					//TODO:
 					Log_error(String_createConstRefUnsafe("oiCA file to disk not supported yet."), ELogOptions_NewLine);
 					goto cleanCa;
 				}
@@ -672,6 +674,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 			CAFile_freex(&file);
 			List_freex(&strings);
+			String_freex(&tmp);
 
 			if(err.genericError)
 				goto clean;
@@ -681,12 +684,62 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 		//oiDL header
 
-		case DLHeader_MAGIC:
+		case DLHeader_MAGIC: {
 
-			//TODO: Implement
+			DLFile file = (DLFile) { 0 };
+			_gotoIfError(cleanDl, DLFile_readx(buf, encryptionKey, false, &file));
 
-			Log_error(String_createConstRefUnsafe("oiDL inspection not implemented yet."), ELogOptions_NewLine);
-			goto clean;
+			Log_debug(String_createConstRefUnsafe("oiDL Entries:"), ELogOptions_NewLine);
+
+			if (args.parameters & EOperationHasParameter_Entry) {
+
+				//Output it to a folder on disk was requested
+
+				if (args.parameters & EOperationHasParameter_Output) {
+					//TODO:
+					Log_error(String_createConstRefUnsafe("oiDL file to disk not supported yet."), ELogOptions_NewLine);
+					goto cleanDl;
+				}
+
+				//More info about a single entry
+
+				else {
+					//TODO: Hexdump the requested area (default to 256)
+					Log_error(String_createConstRefUnsafe("oiDL file inspection not supported yet."), ELogOptions_NewLine);
+					goto cleanDl;
+				}
+			}
+
+			else for (U64 i = 0; i < file.entries.length; ++i) {
+
+				DLEntry entry = ((const DLEntry*)file.entries.ptr)[i];
+
+				U64 entrySize = 
+					file.settings.dataType == EDLDataType_Ascii ? entry.entryString.length : 
+					Buffer_length(entry.entryBuffer);
+
+				_gotoIfError(cleanDl, String_createDecx(i, 0, &tmp));
+				_gotoIfError(cleanDl, String_appendStringx(&tmp, String_createConstRefUnsafe(": length = ")));
+
+				_gotoIfError(cleanDl, String_createDecx(entrySize, 0, &tmp1));
+				_gotoIfError(cleanDl, String_appendStringx(&tmp, tmp1));
+
+				Log_debug(tmp, ELogOptions_NewLine);
+				String_freex(&tmp);
+				String_freex(&tmp1);
+			}
+
+		cleanDl:
+
+			String_freex(&tmp);
+			String_freex(&tmp1);
+			DLFile_freex(&file);
+
+			if(err.genericError)
+				goto clean;
+
+			break;
+		}
 
 		//Invalid
 
