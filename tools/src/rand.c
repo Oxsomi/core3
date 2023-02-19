@@ -242,8 +242,9 @@ Bool CLI_rand(ParsedArgs args, RandType type) {
 						_gotoIfError(clean, String_popFrontCount(&tmpString, prefix));
 						_gotoIfError(clean, String_appendStringx(&outputString, tmpString));
 
-						if(j != (k - 1) && !((j + 1) & 15))
-							_gotoIfError(clean, String_appendx(&outputString, ' '));
+						if(args.operation != EOperation_RandKey || bytesToGenerate != 32)
+							if(j != (k - 1) && !((j + 1) & 15))
+								_gotoIfError(clean, String_appendx(&outputString, ' '));
 
 						if(j != (k - 1) && !((j + 1) & 63))
 							_gotoIfError(clean, String_appendStringx(&outputString, String_newLine()));

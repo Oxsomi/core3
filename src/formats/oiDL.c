@@ -660,7 +660,11 @@ Error DLFile_read(
 	if(!isSubfile && Buffer_length(file))
 		_gotoIfError(clean, Error_invalidState(1));
 
-	dlFile->readLength = file.ptr - entireFile.ptr;
+	if(file.ptr)
+		dlFile->readLength = file.ptr - entireFile.ptr;
+
+	else dlFile->readLength = Buffer_length(entireFile);
+
 	return Error_none();
 
 clean:

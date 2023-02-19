@@ -126,8 +126,12 @@ Error _CLI_convertToCA(ParsedArgs args, String input, FileInfo inputInfo, String
 
 	Archive archive = (Archive) { 0 };
 	String resolved = String_createNull();
+	String tmp = String_createNull();
 	Buffer res = Buffer_createNull();
 	Bool isVirtual = false;
+
+	FileInfo fileInfo = (FileInfo) { 0 };
+	Buffer fileData = Buffer_createNull();
 
 	_gotoIfError(clean, Archive_createx(&archive));
 	_gotoIfError(clean, File_resolvex(input, &isVirtual, 0, &resolved));
@@ -138,9 +142,28 @@ Error _CLI_convertToCA(ParsedArgs args, String input, FileInfo inputInfo, String
 	CAFileRecursion caFileRecursion = (CAFileRecursion) { 
 		.archive = &archive, 
 		.root = resolved
+
 	};
 
-	_gotoIfError(clean, File_foreach(
+	if(File_hasFile(resolved)) {
+
+		String subPath = String_createNull();
+
+		if(!String_cutBeforeLast(resolved, '/', EStringCase_Sensitive, &subPath))
+			_gotoIfError(clean, Error_invalidState(0));
+
+		_gotoIfError(clean, File_getInfo(resolved, &fileInfo));
+		_gotoIfError(clean, File_read(resolved, 1 * SECOND, &fileData));
+		_gotoIfError(clean, String_createCopyx(subPath, &tmp));
+		_gotoIfError(clean, Archive_addFilex(&archive, tmp, fileData, fileInfo.timestamp));
+
+		//Belongs to archive now
+
+		fileData = Buffer_createNull();
+		tmp = String_createNull();
+	}
+
+	else _gotoIfError(clean, File_foreach(
 		caFileRecursion.root,
 		(FileCallback)addFileToCAFile,
 		&caFileRecursion,
@@ -157,10 +180,13 @@ Error _CLI_convertToCA(ParsedArgs args, String input, FileInfo inputInfo, String
 	_gotoIfError(clean, File_write(res, output, 1 * SECOND));
 
 clean:
+	FileInfo_freex(&fileInfo);
 	CAFile_freex(&file);
 	Archive_freex(&archive);
 	String_freex(&resolved);
+	String_freex(&tmp);
 	Buffer_freex(&res);
+	Buffer_freex(&fileData);
 	return err;
 }
 
@@ -186,38 +212,50 @@ Error _CLI_convertFromCA(ParsedArgs args, String input, FileInfo inputInfo, Stri
 	_gotoIfError(clean, File_read(input, 1 * SECOND, &buf));
 	_gotoIfError(clean, CAFile_readx(buf, encryptionKey, &file));
 
-	_gotoIfError(clean, File_add(output, EFileType_Folder, 1 * SECOND));
+	Bool outputAsSingle = file.archive.entries.length == 1;
+	EFileType outputType = outputAsSingle ? ((ArchiveEntry*)file.archive.entries.ptr)->type : EFileType_Folder;
+
+	_gotoIfError(clean, File_add(output, outputType, 1 * SECOND));
 	didMakeFile = true;
 
-	//Grab destination dest
+	if (outputAsSingle) {
 
-	_gotoIfError(clean, String_createCopyx(output, &outputPath));
-
-	if(!String_endsWith(outputPath, '/', EStringCase_Sensitive)) {
-
-		if (String_endsWith(outputPath, '\0', EStringCase_Sensitive))
-			outputPath.ptr[outputPath.length - 1] = '/';
-
-		else _gotoIfError(clean, String_appendx(&outputPath, '/'));
+		if(outputType == EFileType_File)
+			_gotoIfError(clean, File_write(((ArchiveEntry*)file.archive.entries.ptr)->data, output, 1 * SECOND));
 	}
 
-	//Write archive to disk
+	else {
 
-	for (U64 i = 0; i < file.archive.entries.length; ++i) {
+		//Grab destination dest
 
-		ArchiveEntry ei = ((const ArchiveEntry*)file.archive.entries.ptr)[i];
+		_gotoIfError(clean, String_createCopyx(output, &outputPath));
 
-		_gotoIfError(clean, String_createCopyx(outputPath, &loc));
-		_gotoIfError(clean, String_appendStringx(&loc, ei.path));
+		if(!String_endsWith(outputPath, '/', EStringCase_Sensitive)) {
 
-		if (ei.type == EFileType_Folder) {
-			_gotoIfError(clean, File_add(loc, EFileType_Folder, 1 * SECOND));
-			String_freex(&loc);
-			continue;
+			if (String_endsWith(outputPath, '\0', EStringCase_Sensitive))
+				outputPath.ptr[outputPath.length - 1] = '/';
+
+			else _gotoIfError(clean, String_appendx(&outputPath, '/'));
 		}
 
-		_gotoIfError(clean, File_write(ei.data, loc, 1 * SECOND));
-		String_freex(&loc);
+		//Write archive to disk
+
+		for (U64 i = 0; i < file.archive.entries.length; ++i) {
+
+			ArchiveEntry ei = ((const ArchiveEntry*)file.archive.entries.ptr)[i];
+
+			_gotoIfError(clean, String_createCopyx(outputPath, &loc));
+			_gotoIfError(clean, String_appendStringx(&loc, ei.path));
+
+			if (ei.type == EFileType_Folder) {
+				_gotoIfError(clean, File_add(loc, EFileType_Folder, 1 * SECOND));
+				String_freex(&loc);
+				continue;
+			}
+
+			_gotoIfError(clean, File_write(ei.data, loc, 1 * SECOND));
+			String_freex(&loc);
+		}
 	}
 
 clean:

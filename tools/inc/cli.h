@@ -37,6 +37,9 @@ Error _CLI_convertFromCA(ParsedArgs args, String input, FileInfo inputInfo, Stri
 Bool CLI_convertTo(ParsedArgs args);
 Bool CLI_convertFrom(ParsedArgs args);
 
+Bool CLI_encryptDo(ParsedArgs args);
+Bool CLI_encryptUndo(ParsedArgs args);
+
 Bool CLI_hashFile(ParsedArgs args);
 Bool CLI_hashString(ParsedArgs args);
 

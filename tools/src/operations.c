@@ -103,12 +103,12 @@ const C8 *EOperationCategory_names[] = {
 };
 
 const C8 *EOperationCategory_description[] = {
-	"Converting between OxC3 types and non native types.",
+	"File utilities such as file conversions, encryption, compression, etc.",
 	"Converting a file or string to a hash.",
 	"Generating random data."
 };
 
-Operation Operation_values[8];
+Operation Operation_values[10];
 Format Format_values[4];
 
 void Operations_init() {
@@ -122,7 +122,7 @@ void Operations_init() {
 		.optionalParameters = EOperationHasParameter_AES,
 		.requiredParameters = EOperationHasParameter_Input | EOperationHasParameter_Output,
 		.flags = EFormatFlags_SupportFiles | EFormatFlags_SupportFolders,
-		.supportedCategories = { EOperationCategory_Convert }
+		.supportedCategories = { EOperationCategory_File }
 	};
 
 	Format_values[EFormat_oiDL] = (Format) { 
@@ -132,21 +132,48 @@ void Operations_init() {
 		.optionalParameters = EOperationHasParameter_AES | EOperationHasParameter_SplitBy,
 		.requiredParameters = EOperationHasParameter_Input | EOperationHasParameter_Output,
 		.flags = EFormatFlags_SupportFiles | EFormatFlags_SupportFolders,
-		.supportedCategories = { EOperationCategory_Convert }
+		.supportedCategories = { EOperationCategory_File }
 	};
 
-	Operation_values[EOperation_ConvertTo] = (Operation) { 
-		.category = EOperationCategory_Convert, 
+	Operation_values[EOperation_FileTo] = (Operation) { 
+		.category = EOperationCategory_File, 
 		.name = "to", 
 		.desc = "Converting from a non native file format to a native file format.", 
 		.func = &CLI_convertTo
 	};
 
-	Operation_values[EOperation_ConvertFrom] = (Operation) { 
-		.category = EOperationCategory_Convert, 
+	Operation_values[EOperation_FileFrom] = (Operation) { 
+		.category = EOperationCategory_File, 
 		.name = "from", 
 		.desc = "Converting to a non native file format from a native file format.", 
 		.func = &CLI_convertFrom
+	};
+
+	//Encryption
+
+	Operation_values[EOperation_FileEncr] = (Operation) { 
+
+		.category = EOperationCategory_File, 
+		.name = "encr", 
+		.desc = "Encrypt a file or folder.", 
+		.func = &CLI_encryptDo,
+
+		.isFormatLess = true,
+
+		.requiredParameters = EOperationHasParameter_Input | EOperationHasParameter_AES,
+		.optionalParameters = EOperationHasParameter_Output
+	};
+
+	Operation_values[EOperation_FileDecr] = (Operation) { 
+
+		.category = EOperationCategory_File, 
+		.name = "decr", 
+		.desc = "Decrypt a file or folder.", 
+		.func = &CLI_encryptUndo,
+
+		.isFormatLess = true,
+
+		.requiredParameters = EOperationHasParameter_Input | EOperationHasParameter_AES | EOperationHasParameter_Output
 	};
 
 	//Hash category

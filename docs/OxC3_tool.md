@@ -132,9 +132,9 @@ Data allows you to actually inspect the data section of certain parts of the fil
 
 `OxC3 file encr -i <file> -k <key in hex> (optional: -o output)`  
 
-`OxC3 file decr -i <file> -k <key in hex> (optional: -o output)`
+`OxC3 file decr -i <file> -o <file> -k <key in hex> `
 
-Generates an encrypted oiDL file with 1 entry. Works on files and folders.
+Generates an encrypted oiCA file. Works on files and folders.
 
 ## TODO: Compress
 
@@ -142,4 +142,4 @@ Generates an encrypted oiDL file with 1 entry. Works on files and folders.
 
 `OxC3 file unpack -f <file> (optional: --k <key in hex>)`
 
-Generates a compressed oiDL file with 1 entry. Can be encrypted. Works on files and folders.
+Generates a compressed oiCA file. Can be encrypted. Works on files and folders.

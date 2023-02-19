@@ -136,8 +136,8 @@ extern const C8 *EOperationFlags_descriptions[];
 
 typedef enum EOperation {
 
-	EOperation_ConvertTo,
-	EOperation_ConvertFrom,
+	EOperation_FileTo,
+	EOperation_FileFrom,
 
 	EOperation_HashFile,
 	EOperation_HashString,
@@ -147,17 +147,20 @@ typedef enum EOperation {
 	EOperation_RandData,
 	EOperation_RandNum,
 
+	EOperation_FileEncr,
+	EOperation_FileDecr,
+
 	EOperation_Invalid
 
 } EOperation;
 
 typedef enum EOperationCategory {
 	EOperationCategory_Invalid,
-	EOperationCategory_Convert,
+	EOperationCategory_File,
 	EOperationCategory_Hash,
 	EOperationCategory_Rand,
 	EOperationCategory_End,
-	EOperationCategory_Start = EOperationCategory_Convert
+	EOperationCategory_Start = EOperationCategory_File
 } EOperationCategory;
 
 extern const C8 *EOperationCategory_names[];
@@ -212,7 +215,7 @@ typedef struct Format {
 	EOperationCategory supportedCategories[4];
 } Format;
 
-extern Operation Operation_values[8];
+extern Operation Operation_values[10];
 extern Format Format_values[4];
 
 void Operations_init();
