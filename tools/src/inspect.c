@@ -482,6 +482,42 @@ clean:
 	return err;
 }
 
+//Printing an entry
+
+typedef struct OutputFolderToDisk {
+	String base, output;
+	Archive sourceArchive;
+} OutputFolderToDisk;
+
+Error writeToDisk(FileInfo info, OutputFolderToDisk *output) {
+
+	String subDir = String_createNull();
+	Error err = Error_none();
+	String tmp = String_createNull();
+
+	U64 start = output->base.length == 1 && output->base.ptr[0] == '.' ? 0 : output->base.length;
+
+	if(!String_cut(info.path, start, 0, &subDir))
+		_gotoIfError(clean, Error_invalidOperation(0));
+
+	_gotoIfError(clean, String_createCopyx(output->output, &tmp));
+	_gotoIfError(clean, String_appendStringx(&tmp, subDir));
+
+	if (info.type == EFileType_File) {
+		Buffer data = Buffer_createNull();
+		_gotoIfError(clean, Archive_getFileDataConstx(output->sourceArchive, info.path, &data));
+		_gotoIfError(clean, File_write(data, tmp, 1 * SECOND));
+	}
+
+	else _gotoIfError(clean, File_add(tmp, EFileType_Folder, 1 * SECOND));
+
+clean:
+	String_freex(&tmp);
+	return err;
+}
+
+//Showing the entire file or a part to disk or to log
+
 Bool CLI_showFile(ParsedArgs args, Buffer b, U64 start, U64 length, Bool isAscii) {
 
 	//Validate offset
@@ -605,6 +641,69 @@ Bool CLI_showFile(ParsedArgs args, Buffer b, U64 start, U64 length, Bool isAscii
 
 clean:
 	String_freex(&tmp1);
+	String_freex(&tmp);
+	return success;
+}
+
+//Storing file or folder on disk
+
+Bool CLI_storeFileOrFolder(ParsedArgs args, ArchiveEntry e, Archive a, Bool *madeFile, U64 start, U64 len) {
+
+	Error err = Error_none();
+	String tmp = String_createNull();
+	Bool success = false;
+
+	//Save folder
+
+	if (e.type == EFileType_Folder) {
+
+		if(start || (len && len != a.entries.length))
+			Log_warn(String_createConstRefUnsafe("Folder output to disk ignores offset and/or count."), ELogOptions_NewLine);
+
+		String out = String_createNull();
+
+		if ((err = ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &out)).genericError) {
+			Log_error(String_createConstRefUnsafe("Invalid argument -o <string>."), ELogOptions_NewLine);
+			goto clean;
+		}
+
+		_gotoIfError(clean, File_add(out, EFileType_Folder, 1 * SECOND));
+		madeFile = true;
+
+		_gotoIfError(clean, String_createCopyx(out, &tmp));
+		_gotoIfError(clean, String_appendx(&tmp, '/'));
+
+		OutputFolderToDisk output = (OutputFolderToDisk) {
+			.base = e.path,
+			.output = tmp,
+			.sourceArchive = a
+		};
+
+		_gotoIfError(clean, Archive_foreachx(
+			a,
+			e.path,
+			(FileCallback) writeToDisk,
+			&output,
+			true,
+			EFileType_Any
+		));
+
+		String_freex(&tmp);
+		madeFile = false;			//We successfully wrote, so keep it from deleting the folder
+		success = true;
+
+		goto clean;
+	}
+
+	//Save file
+
+	else {
+		CLI_showFile(args, e.data, start, len, false);
+		success = true;
+		goto clean;
+	}
+
+clean:
 	String_freex(&tmp);
 	return success;
 }
@@ -735,6 +834,9 @@ Bool CLI_inspectData(ParsedArgs args) {
 			List strings = List_createEmpty(sizeof(String));
 			U64 baseCount = 0;
 
+			Bool madeFile = false;
+			String out = String_createNull();
+
 			_gotoIfError(cleanCa, CAFile_readx(buf, encryptionKey, &file));
 
 			//Specific entry was requested
@@ -774,24 +876,8 @@ Bool CLI_inspectData(ParsedArgs args) {
 				//Output it to a folder on disk was requested
 
 				if (args.parameters & EOperationHasParameter_Output) {
-
-					//Save folder
-
-					if (e.type == EFileType_Folder) {
-
-						//TODO:
-
-						Log_error(String_createConstRefUnsafe("Folders unsupported."), ELogOptions_NewLine);
-						goto cleanCa;
-					}
-
-					//Save file
-
-					else {
-						CLI_showFile(args, e.data, start, length, false);
-						goto cleanCa;
-					}
-
+					CLI_storeFileOrFolder(args, e, file.archive, &madeFile, start, length);
+					goto cleanCa;
 				}
 
 				//Want to output to log
@@ -828,14 +914,28 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 			//General info was requested
 
-			else _gotoIfError(cleanCa, Archive_foreachx(
-				file.archive,
-				String_createConstRefUnsafe("."),
-				(FileCallback) collectArchiveEntries,
-				&strings,
-				true,
-				EFileType_Any
-			));
+			else {
+
+				if (args.parameters & EOperationHasParameter_Output) {
+
+					ArchiveEntry e = (ArchiveEntry) {
+						.type = EFileType_Folder,
+						.path = String_createConstRefUnsafe(".")
+					};
+
+					CLI_storeFileOrFolder(args, e, file.archive, &madeFile, start, length);
+					goto cleanCa;
+				}
+
+				_gotoIfError(cleanCa, Archive_foreachx(
+					file.archive,
+					String_createConstRefUnsafe("."),
+					(FileCallback) collectArchiveEntries,
+					&strings,
+					true,
+					EFileType_Any
+				));
+			}
 
 			//Sort to ensure the subdirectories are correct
 
@@ -906,6 +1006,9 @@ Bool CLI_inspectData(ParsedArgs args) {
 				Log_debug(String_createConstRefUnsafe("Folder is empty."), ELogOptions_NewLine);
 
 		cleanCa:
+
+			if(madeFile)
+				File_remove(out, 1 * SECOND);
 
 			for(U64 i = 0; i < strings.length; ++i)
 				String_freex((String*)strings.ptr + i);

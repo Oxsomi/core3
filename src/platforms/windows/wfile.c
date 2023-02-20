@@ -60,7 +60,8 @@ Error File_foreach(String loc, FileCallback callback, void *userData, Bool isRec
 
 	_gotoIfError(clean, String_createCopyx(resolved, &resolvedNoStar));
 
-	_gotoIfError(clean, String_appendStringx(&resolved, String_createConstRefSized("*", 2)));
+	_gotoIfError(clean, String_appendx(&resolved, '*'));
+	_gotoIfError(clean, String_appendx(&resolved, '\0'));
 
 	if(resolved.length > MAX_PATH)
 		_gotoIfError(clean, Error_outOfBounds(0, 0, resolved.length, MAX_PATH));

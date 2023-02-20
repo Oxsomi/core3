@@ -917,6 +917,9 @@ Error String_append(String *s, C8 c, Allocator allocator) {
 	if (!s)
 		return Error_nullPointer(0, 0);
 
+	if(s->length && !s->ptr[s->length - 1])
+		return String_insert(s, c, s->length - 1, allocator);
+
 	return String_resize(s, s->length + 1, c, allocator);
 }
 

@@ -38,15 +38,62 @@
 
 #ifndef _WIN32
 	#define _ftelli64 ftell
+	#define removeFileOrFolder remove
 #else
 
+	//Unfortunately we have to include winapi because they didn't implement remove correctly.
+
+	#define WIN32_LEAN_AND_MEAN
+	#include <Windows.h>
 	#include <direct.h>
+	#include <fileapi.h>
 
 	#define stat _stat64
 	#define S_ISREG(x) (x & _S_IFREG)
 	#define S_ISDIR(x) (x & _S_IFDIR)
 
 	#define mkdir _mkdir
+	
+	//For some reason windows implemented the same function with the same name,
+	//But remove is only for a file.... -.-
+
+	int removeFileOrFolder(const C8 *ptr);
+
+	Error recurseDelete(FileInfo info, void *unused) {
+
+		unused;
+
+		if (removeFileOrFolder(info.path.ptr))
+			return Error_invalidOperation(0);
+
+		return Error_none();
+	}
+
+	int removeFileOrFolder(const C8 *ptr) {
+
+		struct stat inf = (struct stat) { 0 };
+		int r = stat(ptr, &inf);
+
+		if(r)
+			return r;
+
+		if (S_ISDIR(inf.st_mode)) {
+
+			//Delete every file, because RemoveDirecotryA requires it to be empty
+			//We'll handle recursion ourselves
+
+			Error err = File_foreach(String_createConstRefUnsafe(ptr), recurseDelete, NULL, false);
+
+			if(err.genericError)
+				return -1;
+
+			//Now that our folder is empty, we can finally delete it
+
+			return RemoveDirectoryA(ptr) ? 0 : -1;
+		}
+
+		return remove(ptr);
+	}
 
 #endif
 
@@ -340,13 +387,13 @@ Error File_remove(String loc, Ns maxTimeout) {
 
 	Ns maxTimeoutTry = U64_min((maxTimeout + 7) >> 2, 1 * SECOND);		//Try ~4x+ up to 1s of wait
 
-	int res = remove(resolved.ptr);
+	int res = removeFileOrFolder(resolved.ptr);
 
 	while (res && maxTimeout) {
 
 		Thread_sleep(maxTimeoutTry);
 
-		res = remove(resolved.ptr);
+		res = removeFileOrFolder(resolved.ptr);
 
 		if(maxTimeout <= maxTimeoutTry)
 			break;
