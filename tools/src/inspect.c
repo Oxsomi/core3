@@ -482,6 +482,133 @@ clean:
 	return err;
 }
 
+Bool CLI_showFile(ParsedArgs args, Buffer b, U64 start, U64 length, Bool isAscii) {
+
+	//Validate offset
+
+	if (start + ((Bool)Buffer_length(b)) > Buffer_length(b)) {
+		Log_debug(String_createConstRefUnsafe("Section out of bounds."), ELogOptions_NewLine);
+		return false;
+	}
+
+	//Output it to a folder on disk was requested
+
+	Error err = Error_none();
+	String tmp = String_createNull();
+	String tmp1 = String_createNull();
+	Bool success = false;
+
+	if (args.parameters & EOperationHasParameter_Output) {
+
+		if(!length)
+			length = Buffer_length(b) - start;
+
+		if (start + length > Buffer_length(b)) {
+			Log_debug(String_createConstRefUnsafe("Section out of bounds."), ELogOptions_NewLine);
+			goto clean;
+		}
+
+		String out = String_createNull();
+
+		if ((err = ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &out)).genericError) {
+			Log_error(String_createConstRefUnsafe("Invalid argument -o <string>."), ELogOptions_NewLine);
+			goto clean;
+		}
+
+		Buffer subBuffer = Buffer_createConstRef(b.ptr + start, length);
+		_gotoIfError(clean, File_write(subBuffer, out, 1 * SECOND));
+	}
+
+	//More info about a single entry
+
+	else {
+
+		if (!Buffer_length(b)) {
+			Log_debug(String_createConstRefUnsafe("Section is empty."), ELogOptions_NewLine);
+			goto clean;
+		}
+
+		//Show file length
+
+		Log_debug(String_createConstRefUnsafe("Section has "), ELogOptions_None);
+
+		_gotoIfError(clean, String_createDecx(Buffer_length(b), 0, &tmp));
+		Log_debug(tmp, ELogOptions_None);
+		String_freex(&tmp);
+
+		Log_debug(String_createConstRefUnsafe(" bytes"), ELogOptions_NewLine);
+
+		//Get length
+
+		U64 max = 32 * 32;
+
+		if(!length)
+			length = U64_min(max, Buffer_length(b) - start);
+
+		else length = U64_min(max * 2, length);
+
+		if (start + length > Buffer_length(b)) {
+			Log_debug(String_createConstRefUnsafe("Section out of bounds."), ELogOptions_NewLine);
+			goto clean;
+		}
+
+		//Show what offset is being displayed
+
+		Log_debug(String_createConstRefUnsafe("Showing offset "), ELogOptions_None);
+
+		_gotoIfError(clean, String_createHexx(start, 0, &tmp));
+		Log_debug(tmp, ELogOptions_None);
+		String_freex(&tmp);
+
+		Log_debug(String_createConstRefUnsafe(" with size "), ELogOptions_None);
+
+		_gotoIfError(clean, String_createDecx(length, 0, &tmp));
+		Log_debug(tmp, ELogOptions_NewLine);
+		String_freex(&tmp);
+
+		Log_debug(
+			String_createConstRefUnsafe(isAscii ? "File contents: (ascii)" : "File contents: (binary)"), 
+			ELogOptions_NewLine
+		);
+
+		//Ascii can be directly output to log
+
+		if (isAscii) {
+			String tmp = String_createConstRefSized(b.ptr + start, length);
+			Log_debug(tmp, ELogOptions_NewLine);
+			tmp = String_createNull();
+		}
+
+		//Binary needs to be formatted first
+
+		else { 
+
+			for (U64 i = start, j = i + length, k = 0; i < j; ++i, ++k) {
+
+				_gotoIfError(clean, String_createHexx(b.ptr[i], 2, &tmp1));
+				_gotoIfError(clean, String_popFrontCount(&tmp1, 2));
+				_gotoIfError(clean, String_appendStringx(&tmp, tmp1));
+				_gotoIfError(clean, String_appendx(&tmp, ' '));
+
+				if(!((k + 1) & 31))
+					_gotoIfError(clean, String_appendStringx(&tmp, String_newLine()));
+
+				String_freex(&tmp1);
+			}
+
+			Log_debug(tmp, ELogOptions_NewLine);
+			String_freex(&tmp);
+		}
+	}
+
+	success = true;
+
+clean:
+	String_freex(&tmp1);
+	String_freex(&tmp);
+	return success;
+}
+
 //Handle inspection of individual data.
 //Also handles info about the file in general.
 
@@ -614,33 +741,72 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 			if (args.parameters & EOperationHasParameter_Entry) {
 
+				//Get index of entry
+
+				U64 index = Archive_getIndexx(file.archive, entry);
+
+				if (index == U64_MAX) {
+
+					if (!String_parseDec(entry, &index)) {
+
+						Log_error(
+							String_createConstRefUnsafe("Invalid argument -e <uint> or <valid path> expected."), 
+							ELogOptions_NewLine
+						);
+
+						goto cleanCa;
+					}
+
+					if (index >= file.archive.entries.length) {
+
+						_gotoIfError(cleanCa, String_createDecx(file.archive.entries.length, 0, &tmp));
+
+						Log_error(String_createConstRefUnsafe("Index out of bounds, max is "), ELogOptions_None);
+						Log_error(tmp, ELogOptions_NewLine);
+						String_freex(&tmp);
+
+						goto cleanCa;
+					}
+				}
+
+				ArchiveEntry e = ((const ArchiveEntry*)file.archive.entries.ptr)[index];
+
 				//Output it to a folder on disk was requested
 
 				if (args.parameters & EOperationHasParameter_Output) {
-					//TODO:
-					Log_error(String_createConstRefUnsafe("oiCA file to disk not supported yet."), ELogOptions_NewLine);
-					goto cleanCa;
+
+					//Save folder
+
+					if (e.type == EFileType_Folder) {
+
+						//TODO:
+
+						Log_error(String_createConstRefUnsafe("Folders unsupported."), ELogOptions_NewLine);
+						goto cleanCa;
+					}
+
+					//Save file
+
+					else {
+						CLI_showFile(args, e.data, start, length, false);
+						goto cleanCa;
+					}
+
 				}
 
 				//Want to output to log
 
 				else {
 
-					//Simply print the archive
+					//Simply print the archive folder
 
-					if (Archive_hasFolderx(file.archive, entry)) {
+					if (e.type == EFileType_Folder) {
 
-						Bool isVirtual = false;
-						_gotoIfError(cleanCa, File_resolve(
-							entry, &isVirtual, 128, String_createNull(), Platform_instance.alloc, &tmp
-						));
-
-						baseCount = String_countAll(tmp, '/', EStringCase_Sensitive) + 1;
-						String_freex(&tmp);
+						baseCount = String_countAll(e.path, '/', EStringCase_Sensitive) + 1;
 
 						_gotoIfError(cleanCa, Archive_foreachx(
 							file.archive,
-							entry,
+							e.path,
 							(FileCallback) collectArchiveEntries,
 							&strings,
 							true,
@@ -651,8 +817,9 @@ Bool CLI_inspectData(ParsedArgs args) {
 					//Print the subsection of the file
 
 					else {
-						//TODO: Hexdump the requested area (default to 256)
-						Log_error(String_createConstRefUnsafe("oiCA file inspection not supported yet."), ELogOptions_NewLine);
+						Bool isAscii = String_isValidAscii(String_createConstRefSized(e.data.ptr, Buffer_length(e.data)));
+						Log_debug(e.path, ELogOptions_NewLine);
+						CLI_showFile(args, e.data, start, length, isAscii);
 						goto cleanCa;
 					}
 
@@ -681,6 +848,26 @@ Bool CLI_inspectData(ParsedArgs args) {
 				length = U64_min(64, strings.length - start);
 
 			U64 end = start + length;
+
+			Log_debug(String_createConstRefUnsafe("Showing offset "), ELogOptions_None);
+
+			_gotoIfError(clean, String_createDecx(start, 0, &tmp));
+			Log_debug(tmp, ELogOptions_None);
+			String_freex(&tmp);
+
+			Log_debug(String_createConstRefUnsafe(" with count "), ELogOptions_None);
+
+			_gotoIfError(clean, String_createDecx(length, 0, &tmp));
+			Log_debug(tmp, ELogOptions_None);
+			String_freex(&tmp);
+
+			Log_debug(String_createConstRefUnsafe(" in selected folder (File contains "), ELogOptions_None);
+
+			_gotoIfError(clean, String_createDecx(file.archive.entries.length, 0, &tmp));
+			Log_debug(tmp, ELogOptions_None);
+			String_freex(&tmp);
+
+			Log_debug(String_createConstRefUnsafe(" entries)"), ELogOptions_NewLine);
 
 			for(U64 i = start; i < end && i < strings.length; ++i) {
 
@@ -779,113 +966,8 @@ Bool CLI_inspectData(ParsedArgs args) {
 					isAscii ? String_bufferConst(e.entryString) : 
 					e.entryBuffer;
 
-				//Validate offset
-
-				if (start + ((Bool)Buffer_length(b)) > Buffer_length(b)) {
-					Log_debug(String_createConstRefUnsafe("Section out of bounds."), ELogOptions_NewLine);
+				if(!CLI_showFile(args, b, start, length, isAscii))
 					goto cleanDl;
-				}
-
-				//Output it to a folder on disk was requested
-
-				if (args.parameters & EOperationHasParameter_Output) {
-
-					if(!length)
-						length = Buffer_length(b) - start;
-
-					if (start + length > Buffer_length(b)) {
-						Log_debug(String_createConstRefUnsafe("Section out of bounds."), ELogOptions_NewLine);
-						goto cleanDl;
-					}
-
-					String out = String_createNull();
-
-					if ((err = ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &out)).genericError) {
-						Log_error(String_createConstRefUnsafe("Invalid argument -o <string>."), ELogOptions_NewLine);
-						goto cleanDl;
-					}
-
-					Buffer subBuffer = Buffer_createConstRef(b.ptr + start, length);
-					_gotoIfError(cleanDl, File_write(subBuffer, out, 1 * SECOND));
-				}
-
-				//More info about a single entry
-
-				else {
-
-					if (!Buffer_length(b)) {
-						Log_debug(String_createConstRefUnsafe("Section is empty."), ELogOptions_NewLine);
-						goto cleanDl;
-					}
-
-					//Show file length
-
-					Log_debug(String_createConstRefUnsafe("Section has "), ELogOptions_None);
-
-					_gotoIfError(cleanDl, String_createDecx(Buffer_length(b), 0, &tmp));
-					Log_debug(tmp, ELogOptions_None);
-					String_freex(&tmp);
-
-					Log_debug(String_createConstRefUnsafe(" bytes"), ELogOptions_NewLine);
-
-					//Get length
-
-					U64 max = 32 * 32;
-
-					if(!length)
-						length = U64_min(max, Buffer_length(b) - start);
-
-					else length = U64_min(max * 2, length);
-
-					if (start + length > Buffer_length(b)) {
-						Log_debug(String_createConstRefUnsafe("Section out of bounds."), ELogOptions_NewLine);
-						goto cleanDl;
-					}
-
-					//Show what offset is being displayed
-
-					Log_debug(String_createConstRefUnsafe("Showing offset "), ELogOptions_None);
-
-					_gotoIfError(cleanDl, String_createHexx(start, 0, &tmp));
-					Log_debug(tmp, ELogOptions_None);
-					String_freex(&tmp);
-
-					Log_debug(String_createConstRefUnsafe(" with size "), ELogOptions_None);
-
-					_gotoIfError(cleanDl, String_createDecx(length, 0, &tmp));
-					Log_debug(tmp, ELogOptions_NewLine);
-					String_freex(&tmp);
-
-					//Ascii can be directly output to log
-
-					if (isAscii) {
-						String tmp = String_createNull();
-						String_cut(e.entryString, start, length, &tmp);
-						Log_debug(tmp, ELogOptions_NewLine);
-						tmp = String_createNull();
-					}
-
-					//Binary needs to be formatted first
-
-					else { 
-
-						for (U64 i = start, j = i + length, k = 0; i < j; ++i, ++k) {
-
-							_gotoIfError(cleanDl, String_createHexx(b.ptr[i], 2, &tmp1));
-							_gotoIfError(cleanDl, String_popFrontCount(&tmp1, 2));
-							_gotoIfError(cleanDl, String_appendStringx(&tmp, tmp1));
-							_gotoIfError(cleanDl, String_appendx(&tmp, ' '));
-
-							if(!((k + 1) & 31))
-								_gotoIfError(cleanDl, String_appendStringx(&tmp, String_newLine()));
-
-							String_freex(&tmp1);
-						}
-
-						Log_debug(tmp, ELogOptions_NewLine);
-						String_freex(&tmp);
-					}
-				}
 			}
 
 			else {
