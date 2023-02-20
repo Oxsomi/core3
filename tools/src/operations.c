@@ -38,7 +38,8 @@ const C8 *EOperationHasParameter_names[] = {
 	"-l",
 	"-c",
 	"-b",
-	"-e"
+	"-e",
+	"-s"
 };
 
 const C8 *EOperationHasParameter_descriptions[] = {
@@ -51,7 +52,8 @@ const C8 *EOperationHasParameter_descriptions[] = {
 	"Length of each element",
 	"Characters to include",
 	"Bit count",
-	"Entry index or path"
+	"Entry index or path",
+	"Start offset"
 };
 
 //Flags
@@ -200,7 +202,9 @@ void Operations_init() {
 
 		.isFormatLess = true,
 		.requiredParameters = EOperationHasParameter_Input,
-		.optionalParameters = EOperationHasParameter_AES | EOperationHasParameter_Output | EOperationHasParameter_Entry
+		.optionalParameters = 
+			EOperationHasParameter_AES | EOperationHasParameter_Output | 
+			EOperationHasParameter_Entry | EOperationHasParameter_StartOffset | EOperationHasParameter_Length
 	};
 
 	//Hash category

@@ -928,6 +928,11 @@ Error String_append(String *s, C8 c, Allocator allocator) {
 
 Error String_appendString(String *s, String other, Allocator allocator) {
 
+	other = String_createConstRefSized(other.ptr, other.length);
+
+	if(other.length && !other.ptr[other.length - 1])
+		--other.length;
+
 	if (!other.length || !other.ptr)
 		return Error_none();
 

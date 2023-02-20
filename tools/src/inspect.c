@@ -24,6 +24,7 @@
 #include "types/buffer.h"
 #include "types/error.h"
 #include "types/string.h"
+#include "types/time.h"
 #include "formats/oiCA.h"
 #include "formats/oiDL.h"
 #include "platforms/ext/formatx.h"
@@ -365,7 +366,7 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 			Log_debug(String_createConstRefUnsafe("Buffer size type uses "), ELogOptions_None);
 			Log_debug(String_createConstRefUnsafe(dataTypes[(dlHeader.sizeTypes >> 4) & 3]), ELogOptions_NewLine);
 
-			reqLen += 1 << (dlHeader.sizeTypes & 3);
+			reqLen += (U64)1 << (dlHeader.sizeTypes & 3);
 
 			if (Buffer_length(buf) < reqLen) {
 				Log_error(String_createConstRefUnsafe("File wasn't the right size."), ELogOptions_NewLine);
@@ -517,7 +518,37 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 	if (args.parameters & EOperationHasParameter_Entry)
 		if ((err = ParsedArgs_getArg(args, EOperationHasParameter_EntryShift, &entry)).genericError) {
-			Log_error(String_createConstRefUnsafe("Invalid argument -e <string>."), ELogOptions_NewLine);
+			Log_error(String_createConstRefUnsafe("Invalid argument -e <string or uint>."), ELogOptions_NewLine);
+			goto clean;
+		}
+
+	//Parse start if available
+
+	String starts = String_createNull();
+	U64 start = 0;
+
+	if (args.parameters & EOperationHasParameter_StartOffset)
+		if (
+			(err = ParsedArgs_getArg(args, EOperationHasParameter_StartOffsetShift, &starts)).genericError ||
+			!String_parseDec(starts, &start) ||
+			(start >> 32)
+		) {
+			Log_error(String_createConstRefUnsafe("Invalid argument -s <uint>."), ELogOptions_NewLine);
+			goto clean;
+		}
+
+	//Parse end if available
+
+	String lengths = String_createNull();
+	U64 length = 0;
+
+	if (args.parameters & EOperationHasParameter_Length)
+		if (
+			(err = ParsedArgs_getArg(args, EOperationHasParameter_LengthShift, &lengths)).genericError ||
+			!String_parseDec(lengths, &length) ||
+			(length >> 32)
+		) {
+			Log_error(String_createConstRefUnsafe("Invalid argument -l <uint>."), ELogOptions_NewLine);
 			goto clean;
 		}
 
@@ -646,19 +677,39 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 			//Process all and print
 
-			for(U64 i = 0; i < strings.length; ++i) {
+			if(!length && start < strings.length)
+				length = U64_min(64, strings.length - start);
+
+			U64 end = start + length;
+
+			for(U64 i = start; i < end && i < strings.length; ++i) {
 
 				String path = ((const String*)strings.ptr)[i];
 
 				U64 parentCount = String_countAll(path, '/', EStringCase_Sensitive);
 
-				_gotoIfError(cleanCa, String_createx(' ', 2 * (parentCount - baseCount), &tmp));
+				U64 v = Archive_getIndexx(file.archive, path);
+
+				//000: self
+				//001:   child (indented by 2)
+
+				if(v == U64_MAX)
+					_gotoIfError(cleanCa, Error_notFound(0, 0, 0));
+
+				_gotoIfError(cleanCa, String_createDecx(v, 3, &tmp));
+				_gotoIfError(cleanCa, String_createx(' ', 2 * (parentCount - baseCount), &tmp1));
+				_gotoIfError(cleanCa, String_appendx(&tmp, ':'));
+				_gotoIfError(cleanCa, String_appendx(&tmp, ' '));
+				_gotoIfError(cleanCa, String_appendStringx(&tmp, tmp1));
+				String_freex(&tmp1);
 
 				String sub = String_createNull();
 				if(!String_cutBeforeLast(path, '/', EStringCase_Sensitive, &sub))
 					sub = String_createConstRefSized(path.ptr, path.length);
 
 				_gotoIfError(cleanCa, String_appendStringx(&tmp, sub));
+
+				//Log and free temp
 
 				Log_debug(tmp, ELogOptions_NewLine);
 				String_freex(&tmp);
@@ -689,44 +740,176 @@ Bool CLI_inspectData(ParsedArgs args) {
 			DLFile file = (DLFile) { 0 };
 			_gotoIfError(cleanDl, DLFile_readx(buf, encryptionKey, false, &file));
 
-			Log_debug(String_createConstRefUnsafe("oiDL Entries:"), ELogOptions_NewLine);
+			U64 end = 0;
+
+			if (!(args.parameters & EOperationHasParameter_Entry)) {
+
+				if(!length && start < file.entries.length)
+					length = U64_min(64, file.entries.length - start);
+
+				end = start + length;
+			}
 
 			if (args.parameters & EOperationHasParameter_Entry) {
+
+				//Grab entry
+
+				U64 entryI = 0;
+
+				if (!String_parseDec(entry, &entryI)) {
+					Log_error(String_createConstRefUnsafe("Invalid argument -e <uint> expected."), ELogOptions_NewLine);
+					goto cleanDl;
+				}
+
+				if (entryI >= file.entries.length) {
+
+					_gotoIfError(cleanDl, String_createDecx(file.entries.length, 0, &tmp));
+
+					Log_error(String_createConstRefUnsafe("Index out of bounds, max is "), ELogOptions_None);
+					Log_error(tmp, ELogOptions_NewLine);
+					String_freex(&tmp);
+
+					goto cleanDl;
+				}
+
+				DLEntry e = ((const DLEntry*)file.entries.ptr)[entryI];
+
+				Bool isAscii = file.settings.dataType == EDLDataType_Ascii;
+				Buffer b = 
+					isAscii ? String_bufferConst(e.entryString) : 
+					e.entryBuffer;
+
+				//Validate offset
+
+				if (start + ((Bool)Buffer_length(b)) > Buffer_length(b)) {
+					Log_debug(String_createConstRefUnsafe("Section out of bounds."), ELogOptions_NewLine);
+					goto cleanDl;
+				}
 
 				//Output it to a folder on disk was requested
 
 				if (args.parameters & EOperationHasParameter_Output) {
-					//TODO:
-					Log_error(String_createConstRefUnsafe("oiDL file to disk not supported yet."), ELogOptions_NewLine);
-					goto cleanDl;
+
+					if(!length)
+						length = Buffer_length(b) - start;
+
+					if (start + length > Buffer_length(b)) {
+						Log_debug(String_createConstRefUnsafe("Section out of bounds."), ELogOptions_NewLine);
+						goto cleanDl;
+					}
+
+					String out = String_createNull();
+
+					if ((err = ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &out)).genericError) {
+						Log_error(String_createConstRefUnsafe("Invalid argument -o <string>."), ELogOptions_NewLine);
+						goto cleanDl;
+					}
+
+					Buffer subBuffer = Buffer_createConstRef(b.ptr + start, length);
+					_gotoIfError(cleanDl, File_write(subBuffer, out, 1 * SECOND));
 				}
 
 				//More info about a single entry
 
 				else {
-					//TODO: Hexdump the requested area (default to 256)
-					Log_error(String_createConstRefUnsafe("oiDL file inspection not supported yet."), ELogOptions_NewLine);
-					goto cleanDl;
+
+					if (!Buffer_length(b)) {
+						Log_debug(String_createConstRefUnsafe("Section is empty."), ELogOptions_NewLine);
+						goto cleanDl;
+					}
+
+					//Show file length
+
+					Log_debug(String_createConstRefUnsafe("Section has "), ELogOptions_None);
+
+					_gotoIfError(cleanDl, String_createDecx(Buffer_length(b), 0, &tmp));
+					Log_debug(tmp, ELogOptions_None);
+					String_freex(&tmp);
+
+					Log_debug(String_createConstRefUnsafe(" bytes"), ELogOptions_NewLine);
+
+					//Get length
+
+					U64 max = 32 * 32;
+
+					if(!length)
+						length = U64_min(max, Buffer_length(b) - start);
+
+					else length = U64_min(max * 2, length);
+
+					if (start + length > Buffer_length(b)) {
+						Log_debug(String_createConstRefUnsafe("Section out of bounds."), ELogOptions_NewLine);
+						goto cleanDl;
+					}
+
+					//Show what offset is being displayed
+
+					Log_debug(String_createConstRefUnsafe("Showing offset "), ELogOptions_None);
+
+					_gotoIfError(cleanDl, String_createHexx(start, 0, &tmp));
+					Log_debug(tmp, ELogOptions_None);
+					String_freex(&tmp);
+
+					Log_debug(String_createConstRefUnsafe(" with size "), ELogOptions_None);
+
+					_gotoIfError(cleanDl, String_createDecx(length, 0, &tmp));
+					Log_debug(tmp, ELogOptions_NewLine);
+					String_freex(&tmp);
+
+					//Ascii can be directly output to log
+
+					if (isAscii) {
+						String tmp = String_createNull();
+						String_cut(e.entryString, start, length, &tmp);
+						Log_debug(tmp, ELogOptions_NewLine);
+						tmp = String_createNull();
+					}
+
+					//Binary needs to be formatted first
+
+					else { 
+
+						for (U64 i = start, j = i + length, k = 0; i < j; ++i, ++k) {
+
+							_gotoIfError(cleanDl, String_createHexx(b.ptr[i], 2, &tmp1));
+							_gotoIfError(cleanDl, String_popFrontCount(&tmp1, 2));
+							_gotoIfError(cleanDl, String_appendStringx(&tmp, tmp1));
+							_gotoIfError(cleanDl, String_appendx(&tmp, ' '));
+
+							if(!((k + 1) & 31))
+								_gotoIfError(cleanDl, String_appendStringx(&tmp, String_newLine()));
+
+							String_freex(&tmp1);
+						}
+
+						Log_debug(tmp, ELogOptions_NewLine);
+						String_freex(&tmp);
+					}
 				}
 			}
 
-			else for (U64 i = 0; i < file.entries.length; ++i) {
+			else {
 
-				DLEntry entry = ((const DLEntry*)file.entries.ptr)[i];
+				Log_debug(String_createConstRefUnsafe("oiDL Entries:"), ELogOptions_NewLine);
 
-				U64 entrySize = 
-					file.settings.dataType == EDLDataType_Ascii ? entry.entryString.length : 
-					Buffer_length(entry.entryBuffer);
+				for (U64 i = start; i < end && i < file.entries.length; ++i) {
 
-				_gotoIfError(cleanDl, String_createDecx(i, 0, &tmp));
-				_gotoIfError(cleanDl, String_appendStringx(&tmp, String_createConstRefUnsafe(": length = ")));
+					DLEntry entry = ((const DLEntry*)file.entries.ptr)[i];
 
-				_gotoIfError(cleanDl, String_createDecx(entrySize, 0, &tmp1));
-				_gotoIfError(cleanDl, String_appendStringx(&tmp, tmp1));
+					U64 entrySize = 
+						file.settings.dataType == EDLDataType_Ascii ? entry.entryString.length : 
+						Buffer_length(entry.entryBuffer);
 
-				Log_debug(tmp, ELogOptions_NewLine);
-				String_freex(&tmp);
-				String_freex(&tmp1);
+					_gotoIfError(cleanDl, String_createDecx(i, 3, &tmp));
+					_gotoIfError(cleanDl, String_appendStringx(&tmp, String_createConstRefUnsafe(": length = ")));
+
+					_gotoIfError(cleanDl, String_createDecx(entrySize, 0, &tmp1));
+					_gotoIfError(cleanDl, String_appendStringx(&tmp, tmp1));
+
+					Log_debug(tmp, ELogOptions_NewLine);
+					String_freex(&tmp);
+					String_freex(&tmp1);
+				}
 			}
 
 		cleanDl:

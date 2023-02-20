@@ -47,6 +47,8 @@ Error Archive_removeFilex(Archive *archive, String path);
 Error Archive_removeFolderx(Archive *archive, String path);
 Error Archive_removex(Archive *archive, String path);
 
+U64 Archive_getIndexx(Archive archive, String loc);
+
 Error Archive_renamex(Archive *archive, String loc, String newFileName);
 Error Archive_movex(Archive *archive, String loc, String directoryName);
 

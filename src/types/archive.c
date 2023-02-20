@@ -397,6 +397,12 @@ Error Archive_getInfo(Archive archive, String path, FileInfo *info, Allocator al
 	return Error_none();
 }
 
+U64 Archive_getIndex(Archive archive, String path, Allocator alloc) {
+	U64 v = U64_MAX;
+	Archive_getPath(archive, path, NULL, &v, NULL, alloc);
+	return v;
+}
+
 Error Archive_updateFileData(Archive *archive, String path, Buffer data, Allocator alloc) {
 
 	if (!archive || !archive->entries.ptr)

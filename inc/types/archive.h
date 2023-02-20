@@ -68,6 +68,8 @@ Error Archive_rename(
 	Allocator alloc
 );
 
+U64 Archive_getIndex(Archive archive, String path, Allocator alloc);		//Get index in archive
+
 Error Archive_move(
 	Archive *archive, 
 	String loc, 

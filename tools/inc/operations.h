@@ -49,6 +49,7 @@ typedef enum EOperationHasParameter {
 	EOperationHasParameter_BitShift,
 
 	EOperationHasParameter_EntryShift,
+	EOperationHasParameter_StartOffsetShift,
 
 	EOperationHasParameter_Count,	
 
@@ -71,7 +72,8 @@ typedef enum EOperationHasParameter {
 
 	EOperationHasParameter_Bit			= 1 << EOperationHasParameter_BitShift,
 
-	EOperationHasParameter_Entry		= 1 << EOperationHasParameter_EntryShift
+	EOperationHasParameter_Entry		= 1 << EOperationHasParameter_EntryShift,
+	EOperationHasParameter_StartOffset	= 1 << EOperationHasParameter_StartOffsetShift
 
 } EOperationHasParameter;
 

@@ -320,6 +320,10 @@ Error Archive_renamex(Archive *archive, String loc, String newFileName) {
 	return Archive_rename(archive, loc, newFileName, Platform_instance.alloc);
 }
 
+U64 Archive_getIndexx(Archive archive, String loc) {
+	return Archive_getIndex(archive, loc, Platform_instance.alloc);
+}
+
 Error Archive_movex(Archive *archive, String loc, String directoryName) {
 	return Archive_move(archive, loc, directoryName, Platform_instance.alloc);
 }
