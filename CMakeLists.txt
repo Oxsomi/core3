@@ -181,6 +181,33 @@ add_library(
 
 target_link_libraries(OxC3_platforms PUBLIC OxC3_formats)
 
+# Setting the icon of the app
+# Call this immediately before configure_virtual_files with the executable
+
+function(configure_icon target icon)
+
+	if(WIN32)
+		get_property(res TARGET ${target} PROPERTY RESOURCE_LIST)
+		set_property(TARGET ${target} PROPERTY RESOURCE_LIST LOGO\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ ICON\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \"${icon}\"\n${res})
+		target_sources(${target} PRIVATE ${icon})
+	endif()
+
+endfunction()
+
+# Configure virtual files (and icon) for a target
+
+function(configure_virtual_files target)
+
+	if(WIN32)
+		get_property(res TARGET ${target} PROPERTY RESOURCE_LIST)
+		if(NOT "${res}" STREQUAL "")
+			file(WRITE "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${target}.rc" ${res})
+			target_sources(${target} PRIVATE "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${target}.rc")
+		endif()
+	endif()
+	
+endfunction()
+
 # Tests
 
 file(GLOB_RECURSE tests "tst/*.c")
