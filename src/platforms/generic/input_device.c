@@ -119,7 +119,7 @@ inline BitRef InputDevice_getButtonValue(InputDevice dev, U16 localHandle, Bool 
 Error InputDevice_create(U16 buttons, U16 axes, EInputDeviceType type, InputDevice *result) {
 
 	if(!result)
-		return Error_nullPointer(3, 0);
+		return Error_nullPointer(3);
 
 	if(result->handles.ptr || result->states.ptr)
 		return Error_invalidOperation(0);
@@ -161,19 +161,19 @@ Error InputDevice_create(U16 buttons, U16 axes, EInputDeviceType type, InputDevi
 	Input##EInputType *inputType = InputDevice_get##EInputType(d, localHandle);			\
 																						\
 	if(!res)																			\
-		return Error_nullPointer(4, 0);													\
+		return Error_nullPointer(4);													\
 																						\
 	if(!inputType)																		\
-		return Error_nullPointer(0, 0);													\
+		return Error_nullPointer(0);													\
 																						\
 	if(inputType->name[0])																\
 		return Error_alreadyDefined(0);													\
 																						\
 	if(String_isEmpty(keyName))															\
-		return Error_invalidParameter(2, 0, 0);											\
+		return Error_invalidParameter(2, 0);											\
 																						\
 	if(keyName.length >= _LONGSTRING_LEN)												\
-		return Error_outOfBounds(2, 0, keyName.length, _LONGSTRING_LEN);				\
+		return Error_outOfBounds(2, keyName.length, _LONGSTRING_LEN);					\
 																						\
 	Buffer_copy(																		\
 		Buffer_createRef(inputType->name, _LONGSTRING_LEN), 							\

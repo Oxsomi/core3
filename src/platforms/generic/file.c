@@ -117,13 +117,13 @@ Error File_getInfo(String loc, FileInfo *info) {
 	Error err = Error_none();
 
 	if(!info) 
-		_gotoIfError(clean, Error_nullPointer(0, 0));
+		_gotoIfError(clean, Error_nullPointer(0));
 
 	if(info->path.ptr) 
 		_gotoIfError(clean, Error_invalidOperation(0));
 
 	if(!String_isValidFilePath(loc))
-		_gotoIfError(clean, Error_invalidParameter(0, 0, 0));
+		_gotoIfError(clean, Error_invalidParameter(0, 0));
 
 	Bool isVirtual = File_isVirtual(loc);
 
@@ -137,7 +137,7 @@ Error File_getInfo(String loc, FileInfo *info) {
 	struct stat inf = (struct stat) { 0 };
 
 	if (stat(resolved.ptr, &inf))
-		_gotoIfError(clean, Error_notFound(0, 0, 0));
+		_gotoIfError(clean, Error_notFound(0, 0));
 
 	if (!S_ISDIR(inf.st_mode) && !S_ISREG(inf.st_mode))
 		_gotoIfError(clean, Error_invalidOperation(2));
@@ -201,13 +201,13 @@ Error File_queryFileObjectCount(String loc, EFileType type, Bool isRecursive, U6
 	String resolved = String_createNull();
 
 	if(!res)
-		_gotoIfError(clean, Error_nullPointer(3, 0));
+		_gotoIfError(clean, Error_nullPointer(3));
 
 	//Virtual files can supply a faster way of counting files
 	//Such as caching it and updating it if something is changed
 
 	if(!String_isValidFilePath(loc)) 
-		_gotoIfError(clean, Error_invalidParameter(0, 0, 0));
+		_gotoIfError(clean, Error_invalidParameter(0, 0));
 
 	Bool isVirtual = File_isVirtual(loc);
 
@@ -235,10 +235,10 @@ Error File_queryFileObjectCountAll(String loc, Bool isRecursive, U64 *res) {
 	Error err = Error_none();
 
 	if(!res)
-		_gotoIfError(clean, Error_nullPointer(2, 0));
+		_gotoIfError(clean, Error_nullPointer(2));
 
 	if(!String_isValidFilePath(loc))
-		_gotoIfError(clean, Error_invalidParameter(0, 0, 0));
+		_gotoIfError(clean, Error_invalidParameter(0, 0));
 
 	//Virtual files can supply a faster way of counting files
 	//Such as caching it and updating it if something is changed
@@ -271,7 +271,7 @@ Error File_add(String loc, EFileType type, Ns maxTimeout) {
 	Error err = Error_none();
 
 	if(!String_isValidFilePath(loc))
-		_gotoIfError(clean, Error_invalidParameter(0, 0, 0));
+		_gotoIfError(clean, Error_invalidParameter(0, 0));
 
 	Bool isVirtual = File_isVirtual(loc);
 
@@ -375,7 +375,7 @@ Error File_remove(String loc, Ns maxTimeout) {
 	Error err = Error_none();
 
 	if(!String_isValidFilePath(loc))
-		_gotoIfError(clean, Error_invalidParameter(0, 0, 0));
+		_gotoIfError(clean, Error_invalidParameter(0, 0));
 
 	Bool isVirtual = File_isVirtual(loc);
 
@@ -403,7 +403,7 @@ Error File_remove(String loc, Ns maxTimeout) {
 	}
 
 	if (res)
-		_gotoIfError(clean, Error_notFound(0, 0, 0));
+		_gotoIfError(clean, Error_notFound(0, 0));
 
 clean:
 	String_freex(&resolved);
@@ -432,10 +432,10 @@ Error File_rename(String loc, String newFileName, Ns maxTimeout) {
 	FileInfo info = (FileInfo) { 0 };
 
 	if(!String_isValidFilePath(newFileName))
-		_gotoIfError(clean, Error_invalidParameter(0, 0, 0));
+		_gotoIfError(clean, Error_invalidParameter(0, 0));
 
 	if(!String_isValidFileName(newFileName))
-		_gotoIfError(clean, Error_invalidParameter(1, 0, 0));
+		_gotoIfError(clean, Error_invalidParameter(1, 0));
 
 	Bool isVirtual = File_isVirtual(loc);
 
@@ -451,7 +451,7 @@ Error File_rename(String loc, String newFileName, Ns maxTimeout) {
 	Bool fileExists = File_has(loc);
 
 	if(!fileExists)
-		_gotoIfError(clean, Error_notFound(0, 0, 0));
+		_gotoIfError(clean, Error_notFound(0, 0));
 
 	Ns maxTimeoutTry = U64_min((maxTimeout + 7) >> 2, 1 * SECOND);		//Try ~4x+ up to 1s of wait
 
@@ -484,10 +484,10 @@ Error File_move(String loc, String directoryName, Ns maxTimeout) {
 	FileInfo info = (FileInfo) { 0 };
 
 	if(!String_isValidFilePath(loc))
-		_gotoIfError(clean, Error_invalidParameter(0, 0, 0));
+		_gotoIfError(clean, Error_invalidParameter(0, 0));
 
 	if(!String_isValidFilePath(directoryName))
-		_gotoIfError(clean, Error_invalidParameter(1, 0, 0));
+		_gotoIfError(clean, Error_invalidParameter(1, 0));
 
 	Bool isVirtual = File_isVirtual(loc);
 
@@ -505,10 +505,10 @@ Error File_move(String loc, String directoryName, Ns maxTimeout) {
 	//Check if file exists
 
 	if(!File_has(resolved))
-		_gotoIfError(clean, Error_notFound(0, 0, 0));
+		_gotoIfError(clean, Error_notFound(0, 0));
 
 	if(!File_hasFolder(resolvedFile))
-		_gotoIfError(clean, Error_notFound(0, 1, 0));
+		_gotoIfError(clean, Error_notFound(0, 1));
 
 	Ns maxTimeoutTry = U64_min((maxTimeout + 7) >> 2, 1 * SECOND);		//Try ~4x+ up to 1s of wait
 
@@ -552,7 +552,7 @@ Error File_write(Buffer buf, String loc, Ns maxTimeout) {
 	FILE *f = NULL;
 
 	if(!String_isValidFilePath(loc))
-		_gotoIfError(clean, Error_invalidParameter(0, 0, 0));
+		_gotoIfError(clean, Error_invalidParameter(0, 0));
 
 	Bool isVirtual = File_isVirtual(loc);
 
@@ -579,7 +579,7 @@ Error File_write(Buffer buf, String loc, Ns maxTimeout) {
 	}
 
 	if(!f)
-		_gotoIfError(clean, Error_notFound(1, 0, 0));
+		_gotoIfError(clean, Error_notFound(1, 0));
 
 	U64 bufLen = Buffer_length(buf);
 
@@ -599,10 +599,10 @@ Error File_read(String loc, Ns maxTimeout, Buffer *output) {
 	FILE *f = NULL;
 
 	if(!String_isValidFilePath(loc))
-		_gotoIfError(clean, Error_invalidParameter(0, 0, 0));
+		_gotoIfError(clean, Error_invalidParameter(0, 0));
 
 	if(!output)
-		_gotoIfError(clean, Error_nullPointer(2, 0));
+		_gotoIfError(clean, Error_nullPointer(2));
 
 	if(output->ptr)
 		_gotoIfError(clean, Error_invalidOperation(0));
@@ -632,7 +632,7 @@ Error File_read(String loc, Ns maxTimeout, Buffer *output) {
 	}
 
 	if(!f)
-		_gotoIfError(clean, Error_notFound(0, 0, 0));
+		_gotoIfError(clean, Error_notFound(0, 0));
 
 	if(fseek(f, 0, SEEK_END))
 		_gotoIfError(clean, Error_invalidState(0));

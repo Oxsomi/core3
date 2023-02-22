@@ -29,7 +29,7 @@
 Error Archive_create(Allocator alloc, Archive *archive) {
 
 	if(!archive)
-		return Error_nullPointer(1, 0);
+		return Error_nullPointer(1);
 
 	if(archive->entries.ptr)
 		return Error_invalidOperation(0);
@@ -155,7 +155,7 @@ Bool Archive_createOrFindParent(Archive *archive, String path, Allocator alloc) 
 Error Archive_addInternal(Archive *archive, ArchiveEntry entry, Bool successIfExists, Allocator alloc) {
 
 	if (!archive || !archive->entries.ptr)
-		return Error_nullPointer(0, 0);
+		return Error_nullPointer(0);
 
 	//If folder already exists, we're done
 
@@ -186,7 +186,7 @@ Error Archive_addInternal(Archive *archive, ArchiveEntry entry, Bool successIfEx
 	//Try to find a parent or make one
 
 	if(!Archive_createOrFindParent(archive, entry.path, alloc))
-		_gotoIfError(clean, Error_notFound(0, 0, 0));
+		_gotoIfError(clean, Error_notFound(0, 0));
 
 	_gotoIfError(clean, List_pushBack(&archive->entries, Buffer_createConstRef(&entry, sizeof(entry)), alloc));
 	resolved = String_createNull();
@@ -227,7 +227,7 @@ Error Archive_addFile(Archive *archive, String path, Buffer data, Ns timestamp, 
 Error Archive_removeInternal(Archive *archive, String path, Allocator alloc, EFileType type) {
 
 	if (!archive || !archive->entries.ptr)
-		return Error_nullPointer(0, 0);
+		return Error_nullPointer(0);
 
 	ArchiveEntry entry = (ArchiveEntry) { 0 };
 	U64 i = 0;
@@ -235,7 +235,7 @@ Error Archive_removeInternal(Archive *archive, String path, Allocator alloc, EFi
 	Error err = Error_none();
 
 	if(!Archive_getPath(*archive, path, &entry, &i, &resolved, alloc))
-		return Error_notFound(0, 1, 0);
+		return Error_notFound(0, 1);
 
 	if(type != EFileType_Any && entry.type != type)
 		_gotoIfError(clean, Error_invalidOperation(0));
@@ -306,17 +306,17 @@ Error Archive_rename(
 ) {
 
 	if (!archive || !archive->entries.ptr)
-		return Error_nullPointer(0, 0);
+		return Error_nullPointer(0);
 
 	String resolvedLoc = String_createNull();
 	Error err = Error_none();
 
 	if (!String_isValidFileName(newFileName))
-		return Error_invalidParameter(1, 0, 0);
+		return Error_invalidParameter(1, 0);
 
 	U64 i = 0;
 	if (!Archive_getPath(*archive, loc, NULL, &i, &resolvedLoc, alloc))
-		return Error_notFound(0, 1, 0);
+		return Error_notFound(0, 1);
 
 	//Rename 
 
@@ -341,17 +341,17 @@ Error Archive_move(
 ) {
 
 	if (!archive || !archive->entries.ptr)
-		return Error_nullPointer(0, 0);
+		return Error_nullPointer(0);
 
 	String resolved = String_createNull();
 	U64 i = 0;
 	ArchiveEntry parent = (ArchiveEntry) { 0 };
 
 	if (!Archive_getPath(*archive, loc, NULL, &i, NULL, alloc))
-		return Error_notFound(0, 1, 0);
+		return Error_notFound(0, 1);
 
 	if (!Archive_getPath(*archive, directoryName, &parent, NULL, &resolved, alloc))
-		return Error_notFound(0, 2, 0);
+		return Error_notFound(0, 2);
 
 	Error err = Error_none();
 
@@ -378,13 +378,13 @@ clean:
 Error Archive_getInfo(Archive archive, String path, FileInfo *info, Allocator alloc) {
 
 	if(!archive.entries.ptr || !info)
-		return Error_nullPointer(!info ? 2 : 0, 0);
+		return Error_nullPointer(!info ? 2 : 0);
 
 	ArchiveEntry entry = (ArchiveEntry) { 0 };
 	String resolved = String_createNull();
 
 	if(!Archive_getPath(archive, path, &entry, NULL, &resolved, alloc))
-		return Error_notFound(0, 1, 0);
+		return Error_notFound(0, 1);
 
 	*info = (FileInfo) {
 		.access = Buffer_isConstRef(entry.data) ? FileAccess_Read : FileAccess_ReadWrite,
@@ -406,13 +406,13 @@ U64 Archive_getIndex(Archive archive, String path, Allocator alloc) {
 Error Archive_updateFileData(Archive *archive, String path, Buffer data, Allocator alloc) {
 
 	if (!archive || !archive->entries.ptr)
-		return Error_nullPointer(0, 0);
+		return Error_nullPointer(0);
 
 	ArchiveEntry entry = (ArchiveEntry) { 0 };
 	U64 i = 0;
 
 	if(!Archive_getPath(*archive, path, &entry, &i, NULL, alloc))
-		return Error_notFound(0, 1, 0);
+		return Error_notFound(0, 1);
 
 	Buffer_free(&entry.data, alloc);
 	((ArchiveEntry*)archive->entries.ptr)[i].data = data;
@@ -428,12 +428,12 @@ Error Archive_getFileDataInternal(
 ) {
 
 	if (!archive.entries.ptr || !data)
-		return Error_nullPointer(!data ? 2 : 0, 0);
+		return Error_nullPointer(!data ? 2 : 0);
 
 	ArchiveEntry entry = (ArchiveEntry) { 0 };
 
 	if(!Archive_getPath(archive, path, &entry, NULL, NULL, alloc))
-		return Error_notFound(0, 1, 0);
+		return Error_notFound(0, 1);
 
 	if (entry.type != EFileType_File)
 		return Error_invalidOperation(0);
@@ -468,10 +468,10 @@ Error Archive_foreach(
 ) {
 
 	if(!archive.entries.ptr || !callback)
-		return Error_nullPointer(!callback ? 3 : 0, 0);
+		return Error_nullPointer(!callback ? 3 : 0);
 
 	if(type > EFileType_Any)
-		return Error_invalidEnum(5, 0, (U64)type, (U64)EFileType_Any);
+		return Error_invalidEnum(5, (U64)type, (U64)EFileType_Any);
 
 	String resolved = String_createNull();
 	Bool isVirtual = false;
@@ -544,7 +544,7 @@ Error Archive_queryFileObjectCount(
 ) {
 
 	if(!res)
-		return Error_nullPointer(4, 0);
+		return Error_nullPointer(4);
 
 	return Archive_foreach(
 		archive,

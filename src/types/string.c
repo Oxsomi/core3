@@ -29,6 +29,7 @@
 #include "types/error.h"
 
 #include <ctype.h>
+#include <stdio.h>
 
 Bool String_isConstRef(String str) { return str.capacity == U64_MAX; }
 Bool String_isRef(String str) { return !str.capacity || String_isConstRef(str); }
@@ -335,7 +336,7 @@ String String_createRefLongString(LongString str) {
 Error String_offsetAsRef(String s, U64 off, String *result) {
 	
 	if (!result)
-		return Error_nullPointer(2, 0);
+		return Error_nullPointer(2);
 
 	if (String_isEmpty(s)) {
 		*result = String_createNull();
@@ -343,7 +344,7 @@ Error String_offsetAsRef(String s, U64 off, String *result) {
 	}
 
 	if(off >= s.length)
-		return Error_outOfBounds(1, 0, off, s.length);
+		return Error_outOfBounds(1, off, s.length);
 
 	*result = (String) {
 		.ptr = s.ptr + off,
@@ -489,10 +490,10 @@ Bool String_isFloat(String s) {
 Error String_create(C8 c, U64 size, Allocator alloc, String *result) {
 
 	if (!alloc.alloc)
-		return Error_nullPointer(2, 0);
+		return Error_nullPointer(2);
 
 	if (!result)
-		return Error_nullPointer(3, 0);
+		return Error_nullPointer(3);
 
 	if (result->ptr)
 		return Error_invalidOperation(0);
@@ -544,7 +545,7 @@ Error String_create(C8 c, U64 size, Allocator alloc, String *result) {
 Error String_createCopy(String str, Allocator alloc, String *result) {
 
 	if (!alloc.alloc || !result)
-		return Error_nullPointer(!result ? 2 : 1, 0);
+		return Error_nullPointer(!result ? 2 : 1);
 
 	if (result->ptr)
 		return Error_invalidOperation(0);
@@ -766,10 +767,10 @@ Error String_splitString(
 Error String_splitLine(String s, Allocator alloc, StringList *result) {
 
 	if(!result)
-		return Error_nullPointer(2, 0);
+		return Error_nullPointer(2);
 
 	if(result->ptr)
-		return Error_invalidParameter(2, 1, 0);
+		return Error_invalidParameter(2, 1);
 
 	U64 v = 0, lastLineEnd = U64_MAX;
 
@@ -839,13 +840,13 @@ Error String_splitLine(String s, Allocator alloc, StringList *result) {
 Error String_reserve(String *str, U64 length, Allocator alloc) {
 
 	if (!str)
-		return Error_nullPointer(0, 0);
+		return Error_nullPointer(0);
 
 	if (String_isRef(*str) && str->length)
 		return Error_invalidOperation(0);
 
 	if (!alloc.alloc || !alloc.free)
-		return Error_nullPointer(2, 0);
+		return Error_nullPointer(2);
 
 	if (length <= str->capacity)
 		return Error_none();
@@ -870,13 +871,13 @@ Error String_reserve(String *str, U64 length, Allocator alloc) {
 Error String_resize(String *str, U64 length, C8 defaultChar, Allocator alloc) {
 
 	if (!str)
-		return Error_nullPointer(0, 0);
+		return Error_nullPointer(0);
 
 	if (String_isRef(*str) && str->length)
 		return Error_invalidOperation(0);
 
 	if (!alloc.alloc || !alloc.free)
-		return Error_nullPointer(3, 0);
+		return Error_nullPointer(3);
 
 	if (length == str->length)
 		return Error_none();
@@ -893,7 +894,7 @@ Error String_resize(String *str, U64 length, C8 defaultChar, Allocator alloc) {
 	if (length > str->capacity) {
 
 		if (length * 3 / 3 != length)
-			return Error_overflow(1, 0, length * 3, U64_MAX);
+			return Error_overflow(1, length * 3, U64_MAX);
 
 		//Reserve 50% more to ensure we don't resize too many times
 
@@ -915,7 +916,7 @@ Error String_resize(String *str, U64 length, C8 defaultChar, Allocator alloc) {
 Error String_append(String *s, C8 c, Allocator allocator) {
 
 	if (!s)
-		return Error_nullPointer(0, 0);
+		return Error_nullPointer(0);
 
 	if(s->length && !s->ptr[s->length - 1])
 		return String_insert(s, c, s->length - 1, allocator);
@@ -940,7 +941,7 @@ Error String_appendString(String *s, String other, Allocator allocator) {
 		return Error_none();
 
 	if (!s)
-		return Error_nullPointer(0, 0);
+		return Error_nullPointer(0);
 
 	U64 oldLen = s->length;
 	Error err = String_resize(s, s->length + other.length, other.ptr[0], allocator);
@@ -955,10 +956,10 @@ Error String_appendString(String *s, String other, Allocator allocator) {
 Error String_insert(String *s, C8 c, U64 i, Allocator allocator) {
 
 	if (!s)
-		return Error_nullPointer(0, 0);
+		return Error_nullPointer(0);
 
 	if(i > s->length)
-		return Error_outOfBounds(2, 0, i, s->length);
+		return Error_outOfBounds(2, i, s->length);
 
 	Error err = String_resize(s, s->length + 1, c, allocator);
 
@@ -985,7 +986,7 @@ Error String_insert(String *s, C8 c, U64 i, Allocator allocator) {
 Error String_insertString(String *s, String other, U64 i, Allocator allocator) {
 
 	if (!s)
-		return Error_nullPointer(0, 0);
+		return Error_nullPointer(0);
 
 	if (!other.length)
 		return Error_none();
@@ -1020,7 +1021,7 @@ Error String_replaceAllString(
 ) {
 
 	if (!s)
-		return Error_nullPointer(0, 0);
+		return Error_nullPointer(0);
 
 	if(String_isRef(*s))
 		return Error_invalidOperation(0);
@@ -1136,7 +1137,7 @@ Error String_replaceString(
 ) {
 
 	if (!s)
-		return Error_nullPointer(0, 0);
+		return Error_nullPointer(0);
 
 	if(String_isRef(*s))
 		return Error_invalidOperation(0);
@@ -1323,10 +1324,10 @@ Error String_findAll(
 ) {
 
 	if(!result)
-		return Error_nullPointer(4, 0);
+		return Error_nullPointer(4);
 
 	if(result->ptr)
-		return Error_invalidParameter(4, 0, 0);
+		return Error_invalidParameter(4, 0);
 
 	List l = List_createEmpty(sizeof(U64));
 	Error err = List_reserve(&l, s.length / 25 + 16, alloc);
@@ -1356,13 +1357,13 @@ Error String_findAllString(
 ) {
 
 	if(!result)
-		return Error_nullPointer(4, 0);
+		return Error_nullPointer(4);
 
 	if(result->ptr)
-		return Error_invalidParameter(4, 0, 0);
+		return Error_invalidParameter(4, 0);
 
 	if(!other.length)
-		return Error_invalidParameter(1, 0, 0);
+		return Error_invalidParameter(1, 0);
 
 	List l = List_createEmpty(sizeof(U64));
 
@@ -1942,16 +1943,16 @@ Bool String_erase(String *s, C8 c, EStringCase caseSensitive, Bool isFirst) {
 Error String_eraseAtCount(String *s, U64 i, U64 count) {
 
 	if(!s)
-		return Error_nullPointer(0, 0);
+		return Error_nullPointer(0);
 
 	if(!count)
-		return Error_invalidParameter(2, 0, 0);
+		return Error_invalidParameter(2, 0);
 
 	if(String_isRef(*s))
 		return Error_constData(0, 0);
 
 	if(i + count > s->length)
-		return Error_outOfBounds(0, 0, i + count, s->length);
+		return Error_outOfBounds(0, i + count, s->length);
 
 	Buffer_copy(
 		Buffer_createRef(s->ptr + i, s->length - i - count),
@@ -2126,7 +2127,7 @@ String String_trim(String s) {
 Error StringList_create(U64 length, Allocator alloc, StringList *arr) {
 
 	if (!arr)
-		return Error_nullPointer(2, 0);
+		return Error_nullPointer(2);
 
 	if (arr->ptr)
 		return Error_invalidOperation(0);
@@ -2172,7 +2173,7 @@ Bool StringList_free(StringList *arr, Allocator alloc) {
 Error StringList_createCopy(StringList toCopy, Allocator alloc, StringList *arr) {
 
 	if(!toCopy.length)
-		return Error_nullPointer(0, 0);
+		return Error_nullPointer(0);
 
 	Error err = StringList_create(toCopy.length, alloc, arr);
 
@@ -2195,7 +2196,7 @@ Error StringList_createCopy(StringList toCopy, Allocator alloc, StringList *arr)
 Error StringList_unset(StringList arr, U64 i, Allocator alloc) {
 
 	if(i >= arr.length)
-		return Error_outOfBounds(1, 0, i, arr.length);
+		return Error_outOfBounds(1, i, arr.length);
 
 	String *pstr = arr.ptr + i;
 	String_free(pstr, alloc);
@@ -2451,4 +2452,45 @@ ECompareResult String_compare(String a, String b, EStringCase caseSensitive) {
 		return ECompareResult_Gt;
 
 	return ECompareResult_Eq;
+}
+
+//Format
+//https://stackoverflow.com/questions/56331128/call-to-snprintf-and-vsnprintf-inside-a-variadic-function
+
+#ifdef _WIN32
+	#define calcFormatLen _vscprintf
+#else
+	#define calcFormatLen vsnprintf
+#endif
+
+Error String_formatVariadic(Allocator alloc, String *result, const C8 *format, va_list args) {
+
+	if(!result || !format)
+		return Error_nullPointer(!result ? 1 : 2);
+
+	va_list arg2;
+	va_copy(arg2, args);
+
+	U64 len = calcFormatLen(format, arg2) + 1;
+
+	Error err = String_create('\0', len, alloc, result);
+
+	if(err.genericError)
+		return err;
+
+	vsnprintf(result->ptr, len, format, args);
+	return Error_none();
+}
+
+Error String_format(Allocator alloc, String *result, const C8 *format, ...) {
+
+	if(!result || !format)
+		return Error_nullPointer(!result ? 1 : 2);
+
+	va_list arg1;
+	va_start(arg1, format);
+	Error err = String_formatVariadic(alloc, result, format, arg1);
+	va_end(arg1);
+
+	return err;
 }

@@ -29,45 +29,45 @@
 Error F32_pow2(F32 v, F32 *res) { 
 
 	if(!res)
-		return Error_nullPointer(1, 0);
+		return Error_nullPointer(1);
 
 	*res = v * v; 
-	return !F32_isValid(*res) ? Error_overflow(0, 0, *(const U32*)&v, *(const U32*)res) : 
+	return !F32_isValid(*res) ? Error_overflow(0, *(const U32*)&v, *(const U32*)res) : 
 		Error_none();
 }
 
 Error F32_pow3(F32 v, F32 *res) { 
 
 	if(!res)
-		return Error_nullPointer(1, 0);
+		return Error_nullPointer(1);
 
 	*res = v * v * v;
-	return !F32_isValid(*res) ? Error_overflow(0, 0, *(const U32*)&v, *(const U32*)res) : 
+	return !F32_isValid(*res) ? Error_overflow(0, *(const U32*)&v, *(const U32*)res) : 
 		Error_none();
 }
 
 Error F32_pow4(F32 v, F32 *res) { 
 
 	if(!res)
-		return Error_nullPointer(1, 0);
+		return Error_nullPointer(1);
 
 	*res = v * v;
 	*res *= *res;
 
-	return !F32_isValid(*res) ? Error_overflow(0, 0, *(const U32*)&v, *(const U32*)res) : 
+	return !F32_isValid(*res) ? Error_overflow(0, *(const U32*)&v, *(const U32*)res) : 
 		Error_none();
 }
 
 Error F32_pow5(F32 v, F32 *res) { 
 
 	if(!res)
-		return Error_nullPointer(1, 0);
+		return Error_nullPointer(1);
 
 	*res = v * v; 
 	*res *= *res; 
 	*res *= v;
 
-	return !F32_isValid(*res) ? Error_overflow(0, 0, *(const U32*)&v, *(const U32*)res) : 
+	return !F32_isValid(*res) ? Error_overflow(0, *(const U32*)&v, *(const U32*)res) : 
 		Error_none();
 }
 
@@ -76,7 +76,7 @@ Error F32_pow(F32 v, F32 exp, F32 *res) {
 	F32 r = powf(v, exp); 
 
 	if(!F32_isValid(r))
-		return Error_overflow(0, 0, *(const U32*)&v, *(const U32*)&r);
+		return Error_overflow(0, *(const U32*)&v, *(const U32*)&r);
 
 	*res = r;
 	return Error_none();
@@ -202,7 +202,7 @@ F32 F32_floor(F32 v) { return floorf(v); }
 Error F32_mod(F32 v, F32 mod, F32 *res) { 
 
 	if(!res)
-		return Error_nullPointer(1, 0);
+		return Error_nullPointer(1);
 
 	if(!mod)
 		return Error_divideByZero(0, *(const U32*) &v, 0);

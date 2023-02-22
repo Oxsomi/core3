@@ -78,15 +78,15 @@ String Error_formatPlatformError(Error err) {
 
 void sigFunc(int signal) {
 
-	String msg = String_createConstRefUnsafe("Undefined instruction");
+	const C8 *msg = "Undefined instruction";
 
 	switch (signal) {
-		case SIGABRT:	msg = String_createConstRefUnsafe("Abort was called");					break;
-		case SIGFPE:	msg = String_createConstRefUnsafe("Floating point error occurred");		break;
-		case SIGILL:	msg = String_createConstRefUnsafe("Illegal instruction");				break;
-		case SIGINT:	msg = String_createConstRefUnsafe("Interrupt was called");				break;
-		case SIGSEGV:	msg = String_createConstRefUnsafe("Segfault");							break;
-		case SIGTERM:	msg = String_createConstRefUnsafe("Terminate was called");				break;
+		case SIGABRT:	msg = "Abort was called";					break;
+		case SIGFPE:	msg = "Floating point error occurred";		break;
+		case SIGILL:	msg = "Illegal instruction";				break;
+		case SIGINT:	msg = "Interrupt was called";				break;
+		case SIGSEGV:	msg = "Segfault";							break;
+		case SIGTERM:	msg = "Terminate was called";				break;
 	}
 
 	//Outputting to console is not technically allowed by the Windows docs
@@ -95,7 +95,7 @@ void sigFunc(int signal) {
 	//For debugging purposed however, this is very useful
 	//Turn this off by defining _NO_SIGNAL_HANDLING
 
-	Log_log(ELogLevel_Fatal, ELogOptions_Default, (LogArgs) { .argc = 1, .args = &msg });
+	Log_log(ELogLevel_Fatal, ELogOptions_Default, String_createConstRefUnsafe(msg));
 	Log_printStackTrace(1, ELogLevel_Fatal, ELogOptions_Default);
 	exit(signal);
 }
@@ -105,7 +105,7 @@ Error allocCallback(void *allocator, U64 length, Buffer *output) {
 	allocator;
 
 	if(!output)
-		return Error_nullPointer(2, 0);
+		return Error_nullPointer(2);
 
 	void *ptr = malloc(length);
 
@@ -164,11 +164,9 @@ int main(int argc, const char *argv[]) {
 		if ((cpuInfo[3] & mask3) != mask3 || (cpuInfo[2] & mask2) != mask2) {
 
 			Log_error(
-				String_createConstRefUnsafe(
-					"Unsupported CPU. The following extensions are required: "
-					"SSE, SSE2, SSE3, SSSE3, SSE4.1, SSE4.2, AES"
-				),
-				ELogOptions_Default
+				ELogOptions_Default,
+				"Unsupported CPU. The following extensions are required: "
+				"SSE, SSE2, SSE3, SSSE3, SSE4.1, SSE4.2, AES"
 			);
 
 			Platform_cleanup();

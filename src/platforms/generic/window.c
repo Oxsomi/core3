@@ -59,7 +59,7 @@ Bool Window_doesAllowFullScreen(const Window *w) { return Window_initialized(w) 
 Error Window_presentCPUBuffer(Window *w, String file, Ns maxTimeout) {
 
 	if (!Window_initialized(w))
-		return Error_nullPointer(0, 0);
+		return Error_nullPointer(0);
 
 	if (!w->isDrawing)
 		return Error_invalidOperation(0);
@@ -70,7 +70,7 @@ Error Window_presentCPUBuffer(Window *w, String file, Ns maxTimeout) {
 Error Window_waitForExit(Window *w, Ns maxTimeout) {
 
 	if(!Window_initialized(w))
-		return Error_nullPointer(0, 0);
+		return Error_nullPointer(0);
 
 	Ns start = Time_now();
 
@@ -140,16 +140,16 @@ Error Window_waitForExit(Window *w, Ns maxTimeout) {
 Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 
 	if (!Window_initialized(w))
-		return Error_nullPointer(0, 0);
+		return Error_nullPointer(0);
 
 	if(!Window_isVirtual(w) && !(w->hint & EWindowHint_ProvideCPUBuffer))
-		return Error_invalidParameter(0, 0, 0);
+		return Error_invalidParameter(0, 0);
 
 	if(I32x2_eq2(w->size, newSiz))
 		return Error_none();
 
 	if(I32x2_any(I32x2_leq(newSiz, I32x2_zero())))
-		return Error_invalidParameter(2, 0, 0);
+		return Error_invalidParameter(2, 0);
 
 	//Because we're resizing, we assume we will be resizing more often
 	//To combat constantly reallocating, we will allocate 25% more memory than is needed.
@@ -163,7 +163,7 @@ Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 	U64 linSiz = ETextureFormat_getSize((ETextureFormat) w->format, I32x2_x(newSiz), I32x2_y(newSiz));
 	
 	if(linSizOld * 5 < linSizOld)
-		return Error_overflow(2, 0, linSizOld * 5, U64_MAX);
+		return Error_overflow(2, linSizOld * 5, U64_MAX);
 
 	//We need to grow; we're out of bounds
 
@@ -345,7 +345,7 @@ Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 Error Window_storeCPUBufferToDisk(const Window *w, String filePath, Ns maxTimeout) {
 
 	if (!Window_initialized(w))
-		return Error_nullPointer(0, 0);
+		return Error_nullPointer(0);
 
 	Buffer buf = w->cpuVisibleBuffer;
 

@@ -76,3 +76,6 @@ Error StringList_combinex(StringList arr, String *result);
 
 Error StringList_concatx(StringList arr, C8 between, String *result);
 Error StringList_concatStringx(StringList arr, String between, String *result);
+
+Error String_formatx(String *result, const C8 *format, ...);
+Error String_formatVariadicx(String *result, const C8 *format, va_list args);

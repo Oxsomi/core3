@@ -24,6 +24,8 @@
 #pragma once
 #include "list.h"
 
+#include <stdarg.h>
+
 //For simplicity;
 //A string is ALWAYS ASCII (7-bit) and no null terminator.
 //The null terminator is ommitted for speed and to allow references into an existing string.
@@ -387,3 +389,8 @@ Error StringList_combine(StringList arr, Allocator alloc, String *result);
 
 Error StringList_concat(StringList arr, C8 between, Allocator alloc, String *result);
 Error StringList_concatString(StringList arr, String between, Allocator alloc, String *result);
+
+//Formatting
+
+Error String_formatVariadic(Allocator alloc, String *result, const C8 *format, va_list args);
+Error String_format(Allocator alloc, String *result, const C8 *format, ...);

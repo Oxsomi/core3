@@ -277,6 +277,25 @@ Error StringList_concatStringx(StringList arr, String between, String *result) {
 	return StringList_concatString(arr, between, Platform_instance.alloc, result);
 }
 
+//Format string
+
+Error String_formatVariadicx(String *result, const C8 *format, va_list args) {
+	return String_formatVariadic(Platform_instance.alloc, result, format, args);
+}
+
+Error String_formatx(String *result, const C8 *format, ...) {
+
+	if(!result || !format)
+		return Error_nullPointer(!result ? 1 : 2);
+
+	va_list arg1;
+	va_start(arg1, format);
+	Error err = String_formatVariadic(Platform_instance.alloc, result, format, arg1);
+	va_end(arg1);
+
+	return err;
+}
+
 //Archive
 
 Error Archive_createx(Archive *archive) { return Archive_create(Platform_instance.alloc, archive); }

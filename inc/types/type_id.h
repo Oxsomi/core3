@@ -116,7 +116,7 @@ typedef enum ETypeId {
 	ETypeId_List				= _makeTypeId(_LIBRARYID_DEFAULT, 0, 33, 1, _TYPESIZE_UNDEF, EDataType_Custom),
 
 	ETypeId_EGenericError		= _makeTypeId(_LIBRARYID_DEFAULT, 0, 34, 1, 4, EDataType_Enum),
-	ETypeId_EErrorParamValues	= _makeTypeId(_LIBRARYID_DEFAULT, 0, 35, 1, 1, EDataType_Enum),
+	ETypeId_EErrorParamFormat	= _makeTypeId(_LIBRARYID_DEFAULT, 0, 35, 1, 1, EDataType_Enum),
 
 	ETypeId_Error				= _makeTypeId(_LIBRARYID_DEFAULT, 0, 36, 1, _TYPESIZE_UNDEF, EDataType_Custom),
 	ETypeId_Stacktrace			= _makeTypeId(_LIBRARYID_DEFAULT, 0, 37, 1, _TYPESIZE_UNDEF, EDataType_Custom),

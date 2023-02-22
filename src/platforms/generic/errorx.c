@@ -42,116 +42,30 @@ void Error_printx(Error err, ELogLevel logLevel, ELogOptions options) {
 	if(!err.genericError)
 		return;
 
-	String str = String_createConstRefUnsafe(EGenericError_TO_STRING[err.genericError]);
-	String strCpy = String_createNull();
+	String result = String_createNull();
+	String platformErr = Error_formatPlatformError(err);
 
-	if(String_createCopyx(str, &strCpy).genericError)
-		return;
+	if(
+		!String_formatx(
 
-	str = strCpy;			//Safe because it's not allocated.
+			&result, 
 
-	if(err.errorSubId) {
+			"%s: sub id: %X, param id: %u, param0: %08X, param1: %08X.\nPlatform error: %.*s", 
 
-		String prefix = String_createConstRefUnsafe(" sub id: ");
+			EGenericError_TO_STRING[err.genericError],
 
-		if(!String_appendStringx(&str, prefix).genericError) {
+			err.errorSubId,
+			err.paramId,
+			err.paramValue0,
+			err.paramValue1,
+			platformErr.length, platformErr.ptr
 
-			String str0 = String_createNull();
+		).genericError
+	)
+		Log_log(logLevel == ELogLevel_Fatal ? ELogLevel_Error : logLevel, options, result);
 
-			if(!String_createHexx(err.errorSubId, 0, &str0).genericError) {
-				String_appendStringx(&str, str0);
-				String_freex(&str0);
-			}
-
-			else String_appendx(&str, '?');
-		}
-	}
-
-	if(err.paramId) {
-
-		String prefix = String_createConstRefUnsafe(" param id: ");
-
-		if (!String_appendStringx(&str, prefix).genericError) {
-
-			String str0 = String_createNull();
-
-			if(!String_createDecx(err.paramId, 0, &str0).genericError) {
-				String_appendStringx(&str, str0);
-				String_freex(&str0);
-			}
-
-			else String_appendx(&str, '?');
-		}
-	}
-
-	if(err.paramSubId) {
-
-		String prefix = String_createConstRefUnsafe(" param sub id: ");
-
-		if(!String_appendStringx(&str, prefix).genericError) {
-
-			String str0 = String_createNull();
-
-			if(!String_createDecx(err.paramSubId, 0, &str0).genericError) {
-				String_appendStringx(&str, str0);
-				String_freex(&str0);
-			}
-
-			else String_appendx(&str, '?');
-		}
-	}
-
-	EErrorParamValues val = EGenericError_HAS_PARAM_VALUES[err.genericError];
-
-	if(val & EErrorParamValues_V0) {
-
-		String prefix = String_createConstRefUnsafe(" param0: ");
-
-		if(!String_appendStringx(&str, prefix).genericError) {
-
-			String str0 = String_createNull();
-
-			if(!String_createHexx(err.paramValue0, false, &str0).genericError) {
-				String_appendStringx(&str, str0);
-				String_freex(&str0);
-			}
-
-			else String_appendx(&str, '?');
-		}
-	}
-
-	if(val & EErrorParamValues_V1) {
-
-		String prefix = String_createConstRefUnsafe(" param1: ");
-
-		if(!String_appendStringx(&str, prefix).genericError) {
-
-			String str0 = String_createNull();
-
-			if(!String_createHexx(err.paramValue1, false, &str0).genericError) {
-				String_appendStringx(&str, str0);
-				String_freex(&str0);
-			}
-
-			else String_appendx(&str, '?');
-		}
-	}
-
-	if(err.genericError == EGenericError_PlatformError) {
-
-		String suffix0 = String_createConstRefUnsafe(": ");
-
-		if(!String_appendStringx(&str, suffix0).genericError) {
-			String suffix1 = Error_formatPlatformError(err);
-			String_appendStringx(&str, suffix1);
-			String_free(&suffix1, Platform_instance.alloc);
-		}
-	}
-
-	LogArgs args = (LogArgs) { .argc = 1, .args = &str };
-	Log_log(logLevel == ELogLevel_Fatal ? ELogLevel_Error : logLevel, options, args);
-
-	String_freex(&str);
+	String_freex(&result);
+	String_freex(&platformErr);
 
 	Log_printCapturedStackTraceCustom(err.stackTrace, ERROR_STACKTRACE, logLevel, options);
 

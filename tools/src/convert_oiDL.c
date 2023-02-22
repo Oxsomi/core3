@@ -70,8 +70,8 @@ Error _CLI_convertToDL(ParsedArgs args, String input, FileInfo inputInfo, String
 	//Data type
 
 	if ((args.flags & EOperationFlags_UTF8) && (args.flags & EOperationFlags_Ascii)) {
-		Log_error(String_createConstRefUnsafe("oiDL can only pick UTF8 or Ascii, not both."), ELogOptions_NewLine);
-		return Error_invalidParameter(0, 0, 0);
+		Log_errorLn("oiDL can only pick UTF8 or Ascii, not both.");
+		return Error_invalidParameter(0, 0);
 	}
 
 	if(args.flags & EOperationFlags_UTF8)
@@ -110,14 +110,8 @@ Error _CLI_convertToDL(ParsedArgs args, String input, FileInfo inputInfo, String
 
 		//TODO: Support split UTF8
 
-		Log_error(
-			String_createConstRefUnsafe(
-				"oiDL doesn't support splitting by a character if it's not a string list."
-			), 
-			ELogOptions_NewLine
-		);
-
-		return Error_invalidParameter(0, 0, 1);
+		Log_errorLn("oiDL doesn't support splitting by a character if it's not a string list.");
+		return Error_invalidParameter(0, 1);
 	}
 
 	List buffers = List_createEmpty(sizeof(Buffer));
@@ -329,7 +323,7 @@ Error _CLI_convertFromDL(ParsedArgs args, String input, FileInfo inputInfo, Stri
 	//TODO: Batch multiple files
 
 	if (inputInfo.type != EFileType_File) {
-		Log_error(String_createConstRefUnsafe("oiDL can only be converted from single file"), ELogOptions_NewLine);
+		Log_errorLn("oiDL can only be converted from single file");
 		return Error_invalidOperation(0);
 	}
 

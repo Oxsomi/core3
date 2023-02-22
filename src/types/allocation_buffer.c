@@ -29,13 +29,13 @@
 Error AllocationBuffer_create(U64 size, Allocator alloc, AllocationBuffer *allocationBuffer) {
 
 	if(!allocationBuffer || !size)
-		return Error_nullPointer(!size ? 0 : 2, 0);
+		return Error_nullPointer(!size ? 0 : 2);
 
 	if(allocationBuffer->buffer.ptr || allocationBuffer->allocations.ptr)
 		return Error_invalidOperation(0);
 
 	if(size >> 48)
-		return Error_invalidParameter(0, 0, 0);
+		return Error_invalidParameter(0, 0);
 
 	Error err = Buffer_createEmptyBytes(size, alloc, &allocationBuffer->buffer);
 
@@ -63,7 +63,7 @@ Error AllocationBuffer_createRefFromRegion(
 ) {
 
 	if(!allocationBuffer || !size)
-		return Error_nullPointer(!size ? 2 : 3, 0);
+		return Error_nullPointer(!size ? 2 : 3);
 
 	if(allocationBuffer->buffer.ptr || allocationBuffer->allocations.ptr)
 		return Error_invalidOperation(0);

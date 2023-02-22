@@ -54,16 +54,16 @@ Error WindowManager_createPhysical(
 	//Validate state
 
 	if(!manager)
-		return Error_nullPointer(0, 0);
+		return Error_nullPointer(0);
 
 	if(!Lock_isLockedForThread(manager->lock))
 		return Error_invalidOperation(0);
 
 	if(!w)
-		return Error_nullPointer(7, 0);
+		return Error_nullPointer(7);
 
 	if(*w)
-		return Error_invalidParameter(7, 0, 0);
+		return Error_invalidParameter(7, 0);
 
 	switch (format) {
 
@@ -78,14 +78,14 @@ Error WindowManager_createPhysical(
 			break;
 
 		default:
-			return Error_invalidParameter(6, 0, 0);
+			return Error_invalidParameter(6, 0);
 	}
 
 	if(I32x2_any(I32x2_lt(size, I32x2_zero())))
-		return Error_invalidParameter(2, 0, 0);
+		return Error_invalidParameter(2, 0);
 
 	if (title.length >= MAX_PATH)
-		return Error_outOfBounds(4, 0, title.length, MAX_PATH);
+		return Error_outOfBounds(4, title.length, MAX_PATH);
 
 	//Find free spot in physical windows
 

@@ -36,7 +36,7 @@ Error ourAlloc(void *allocator, U64 length, Buffer *output) {
 	allocator;
 
 	if(!output)
-		return Error_nullPointer(2, 0);
+		return Error_nullPointer(2);
 
 	void *ptr = malloc(length);
 

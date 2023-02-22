@@ -223,7 +223,7 @@ void Log_printCapturedStackTraceCustom(const void **stackTrace, U64 stackSize, E
 	SymCleanup(process);
 }
 
-void Log_log(ELogLevel lvl, ELogOptions options, LogArgs args) {
+void Log_log(ELogLevel lvl, ELogOptions options, String arg) {
 
 	Ns t = Time_now();
 
@@ -247,13 +247,8 @@ void Log_log(ELogLevel lvl, ELogOptions options, LogArgs args) {
 	if (hasPrepend)
 		printf("[");
 
-	if (hasThread) {
-
-		LongString str;
-		Log_num10(str, thread);
-
-		printf("%s", str);
-	}
+	if (hasThread)
+		printf("%u", thread);
 
 	if (hasTimestamp) {
 
@@ -270,46 +265,43 @@ void Log_log(ELogLevel lvl, ELogOptions options, LogArgs args) {
 
 	const C8 *newLine = hasNewLine ? "\n" : "";
 
-	for (U64 i = 0; i < args.argc; ++i)
-		printf(
-			"%.*s%s", 
-			(int) U64_min(I32_MAX, args.args[i].length), args.args[i].ptr,
-			newLine
-		);
+	printf(
+		"%.*s%s", 
+		(int) U64_min(I32_MAX, arg.length), arg.ptr,
+		newLine
+	);
 
 	//Debug utils such as output to VS
 
 	if (!IsDebuggerPresent())
 		return;
 
-	for (U64 i = 0; i < args.argc; ++i) {
+	String copy = String_createNull();
+	Bool panic = false;
 
-		String argsi = args.args[i];
-		String copy = String_createNull();
+	if(arg.length && arg.ptr[arg.length - 1] != '\0') {
 
-		if(argsi.length && argsi.ptr[argsi.length - 1] != '\0') {
+		if (
+			String_createCopyx(arg, &copy).genericError ||
+			String_appendx(&copy, '\0').genericError
+		) {
 
-			if (
-				String_createCopyx(argsi, &copy).genericError ||
-				String_appendx(&copy, '\0').genericError
-			) {
+			OutputDebugStringA(
+				"PANIC! Log_print argument was output to debugger, but wasn't null terminated\n"
+				"This is normally okay, as long as a new string can be allocated.\n"
+				"In this case, allocation failed, which suggests corruption or out of memory."
+			);
 
-				OutputDebugStringA(
-					"PANIC! Log_print argument was output to debugger, but wasn't null terminated\n"
-					"This is normally okay, as long as a new string can be allocated.\n"
-					"In this case, allocation failed, which suggests corruption or out of memory."
-				);
-
-				break;
-			}
+			panic = true;
 		}
+	}
 
-		else copy = String_createConstRefSized(argsi.ptr, argsi.length);
+	else copy = String_createConstRefSized(arg.ptr, arg.length);
 
+	if(!panic)
 		OutputDebugStringA(copy.ptr);
 
-		String_freex(&copy);
-	}
+	String_freex(&copy);
 
 	if (lvl >= ELogLevel_Error)
 		DebugBreak();

@@ -46,10 +46,10 @@ Error Platform_create(
 		return Error_invalidOperation(0);
 
 	if(!cmdArgc || !cmdArgs)
-		return Error_invalidParameter(!cmdArgc ? 0 : 1, 0, 0);
+		return Error_invalidParameter(!cmdArgc ? 0 : 1, 0);
 
 	if(!free || !alloc)
-		return Error_invalidParameter(!free ? 3 : 4, 0, 0);
+		return Error_invalidParameter(!free ? 3 : 4, 0);
 
 	Platform_instance =	(Platform) {
 		.platformType = _PLATFORM_TYPE,

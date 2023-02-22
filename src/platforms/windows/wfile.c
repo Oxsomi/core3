@@ -37,10 +37,10 @@ Error File_foreach(String loc, FileCallback callback, void *userData, Bool isRec
 	HANDLE file = NULL;
 
 	if(!callback) 
-		_gotoIfError(clean, Error_nullPointer(1, 0));
+		_gotoIfError(clean, Error_nullPointer(1));
 
 	if(!String_isValidFilePath(loc))
-		_gotoIfError(clean, Error_invalidParameter(0, 0, 0));
+		_gotoIfError(clean, Error_invalidParameter(0, 0));
 
 	Bool isVirtual = File_isVirtual(loc);
 
@@ -64,7 +64,7 @@ Error File_foreach(String loc, FileCallback callback, void *userData, Bool isRec
 	_gotoIfError(clean, String_appendx(&resolved, '\0'));
 
 	if(resolved.length > MAX_PATH)
-		_gotoIfError(clean, Error_outOfBounds(0, 0, resolved.length, MAX_PATH));
+		_gotoIfError(clean, Error_outOfBounds(0, resolved.length, MAX_PATH));
 
 	//Skip .
 
@@ -72,10 +72,10 @@ Error File_foreach(String loc, FileCallback callback, void *userData, Bool isRec
 	file = FindFirstFileA(resolved.ptr, &dat);
 
 	if(file == INVALID_HANDLE_VALUE)
-		_gotoIfError(clean, Error_notFound(0, 0, 0));
+		_gotoIfError(clean, Error_notFound(0, 0));
 
 	if(!FindNextFileA(file, &dat))
-		_gotoIfError(clean, Error_notFound(0, 0, 0));
+		_gotoIfError(clean, Error_notFound(0, 0));
 
 	//Loop through real files (while instead of do while because we wanna skip ..)
 

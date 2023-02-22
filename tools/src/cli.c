@@ -40,25 +40,13 @@ void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f) {
 
 	if (invalidCat) {
 
-		Log_debug(String_createConstRefUnsafe("All categories:"), ELogOptions_NewLine);
-		Log_debug(String_createNull(), ELogOptions_NewLine);
+		Log_debug(ELogOptions_None, "All categories:\n\n");
 
-		for(U64 i = EOperationCategory_Start; i < EOperationCategory_End; ++i) {
-
-			Log_debug(
-				String_createConstRefUnsafe(EOperationCategory_names[i - 1]), 
-				ELogOptions_None
+		for(U64 i = EOperationCategory_Start; i < EOperationCategory_End; ++i)
+			Log_debugLn(
+				"%s: %s", 
+				EOperationCategory_names[i - 1], EOperationCategory_description[i - 1]
 			);
-
-			Log_debug(String_createConstRefUnsafe(": "), ELogOptions_None);
-
-			Log_debug(
-				String_createConstRefUnsafe(EOperationCategory_description[i - 1]), 
-				ELogOptions_None
-			);
-
-			Log_debug(String_createNull(), ELogOptions_NewLine);
-		}
 
 		return;
 	}
@@ -67,8 +55,7 @@ void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f) {
 
 	if(invalidOp) {
 
-		Log_debug(String_createConstRefUnsafe("All operations:"), ELogOptions_NewLine);
-		Log_debug(String_createNull(), ELogOptions_NewLine);
+		Log_debug(ELogOptions_None, "All operations:\n\n");
 
 		for(U64 i = 0; i < EOperation_Invalid; ++i) {
 
@@ -77,27 +64,13 @@ void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f) {
 			if(opVal.category != category)
 				continue;
 
-			Log_debug(
-				String_createConstRefUnsafe(EOperationCategory_names[opVal.category - 1]), 
-				ELogOptions_None
+			Log_debugLn(
+				"%s %s %s", 
+				EOperationCategory_names[opVal.category - 1], opVal.name,
+				opVal.isFormatLess ? "" : "-f <format> ...{format dependent syntax}"
 			);
 
-			Log_debug(String_createConstRefUnsafe(" "), ELogOptions_None);
-
-			Log_debug(
-				String_createConstRefUnsafe(opVal.name), 
-				opVal.isFormatLess ? ELogOptions_NewLine : ELogOptions_None
-			);
-
-			if(!opVal.isFormatLess)
-				Log_debug(String_createConstRefUnsafe(" -f <format> ...{format dependent syntax}"), ELogOptions_NewLine);
-
-			Log_debug(
-				String_createConstRefUnsafe(opVal.desc), 
-				ELogOptions_NewLine
-			);
-
-			Log_debug(String_createNull(), ELogOptions_NewLine);
+			Log_debug(ELogOptions_None, "%s\n\n", opVal.desc);
 		}
 
 		return;
@@ -109,24 +82,13 @@ void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f) {
 
 	if (invalidF && !opVal.isFormatLess) {
 
-		Log_debug(String_createConstRefUnsafe("Please use syntax: "), ELogOptions_NewLine);
-
-		Log_debug(
-			String_createConstRefUnsafe(EOperationCategory_names[category - 1]), 
-			ELogOptions_None
+		Log_debugLn(
+			"Please use syntax:\n%s %s -f <format> ...{format dependent syntax}", 
+			EOperationCategory_names[category - 1],
+			opVal.name
 		);
 
-		Log_debug(String_createConstRefUnsafe(" "), ELogOptions_None);
-
-		Log_debug(
-			String_createConstRefUnsafe(opVal.name), 
-			ELogOptions_None
-		);
-
-		Log_debug(String_createConstRefUnsafe(" -f <format> ...{format dependent syntax}"), ELogOptions_NewLine);
-
-		Log_debug(String_createConstRefUnsafe("All formats:"), ELogOptions_NewLine);
-		Log_debug(String_createNull(), ELogOptions_NewLine);
+		Log_debug(ELogOptions_None, "All formats:\n\n");
 
 		for (U64 i = 0; i < EFormat_Invalid; ++i) {
 
@@ -141,19 +103,7 @@ void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f) {
 			if(!containsCat)
 				continue;
 
-			Log_debug(
-				String_createConstRefUnsafe(Format_values[i].name), 
-				ELogOptions_None
-			);
-
-			Log_debug(String_createConstRefUnsafe(": "), ELogOptions_NewLine);
-
-			Log_debug(
-				String_createConstRefUnsafe(Format_values[i].desc), 
-				ELogOptions_NewLine
-			);
-
-			Log_debug(String_createNull(), ELogOptions_NewLine);
+			Log_debugLn("%s: %s", Format_values[i].name, Format_values[i].desc);
 		}
 
 		return;
@@ -161,22 +111,13 @@ void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f) {
 
 	//Show more about the current operation and format
 
-	Log_debug(String_createConstRefUnsafe("Please use syntax: "), ELogOptions_NewLine);
-
-	Log_debug(
-		String_createConstRefUnsafe(EOperationCategory_names[category - 1]), 
-		ELogOptions_None
+	Log_debugLn(
+		"Please use syntax:\n%s %s %s %s", 
+		EOperationCategory_names[category - 1],
+		opVal.name,
+		opVal.isFormatLess ? "" : "-f",
+		opVal.isFormatLess ? "" : Format_values[f].name
 	);
-
-	Log_debug(String_createConstRefUnsafe(" "), ELogOptions_None);
-
-	Log_debug(
-		String_createConstRefUnsafe(opVal.name), 
-		opVal.isFormatLess ? ELogOptions_NewLine : ELogOptions_None
-	);
-
-	if(!opVal.isFormatLess)
-		Log_debug(String_createConstRefUnsafe(" -f "), ELogOptions_None);
 
 	Format format = (Format) { 0 };
 
@@ -189,50 +130,36 @@ void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f) {
 		.operationFlags		= opVal.operationFlags
 	};
 
-	if(!opVal.isFormatLess)
-		Log_debug(
-			String_createConstRefUnsafe(format.name), 
-			ELogOptions_NewLine
-		);
-
 	if(format.requiredParameters | format.optionalParameters) {
 
-		Log_debug(String_createConstRefUnsafe("With the following parameters:"), ELogOptions_NewLine);
-		Log_debug(String_createNull(), ELogOptions_NewLine);
+		Log_debug(ELogOptions_None, "With the following parameters:\n\n");
 
 		for(U64 i = EOperationHasParameter_InputShift; i < EOperationHasParameter_Count; ++i)
 
-			if (((format.requiredParameters | format.optionalParameters) >> i) & 1) {
-
-				Log_debug(String_createConstRefUnsafe(EOperationHasParameter_names[i]), ELogOptions_None);
-
-				Log_debug(String_createConstRefUnsafe(":\t"), ELogOptions_None);
-
-				Log_debug(String_createConstRefUnsafe(EOperationHasParameter_descriptions[i]), ELogOptions_None);
-
-				Bool req = (format.requiredParameters >> i) & 1;
-
-				Log_debug(String_createConstRefUnsafe(req ? "\t(required)" : ""), ELogOptions_NewLine);
-			}
+			if (((format.requiredParameters | format.optionalParameters) >> i) & 1)
+				Log_debugLn(
+					"%s:\t%s\t%s",
+					EOperationHasParameter_names[i],
+					EOperationHasParameter_descriptions[i],
+					(format.requiredParameters >> i) & 1 ? "\t(required)" : ""
+				);
 	}
 
-	Log_debug(String_createNull(), ELogOptions_NewLine);
+	if((format.requiredParameters | format.optionalParameters) && format.operationFlags)
+		Log_debugLn("");
 
 	if(format.operationFlags) {
 
-		Log_debug(String_createConstRefUnsafe("With the following flags:"), ELogOptions_NewLine);
-		Log_debug(String_createNull(), ELogOptions_NewLine);
+		Log_debug(ELogOptions_None, "With the following flags:\n\n");
 
 		for(U64 i = EOperationFlags_None; i < EOperationFlags_Count; ++i)
 
-			if ((format.operationFlags >> i) & 1) {
-
-				Log_debug(String_createConstRefUnsafe(EOperationFlags_names[i]), ELogOptions_None);
-
-				Log_debug(String_createConstRefUnsafe(":\t"), ELogOptions_None);
-
-				Log_debug(String_createConstRefUnsafe(EOperationFlags_descriptions[i]), ELogOptions_NewLine);
-			}
+			if ((format.operationFlags >> i) & 1) 
+				Log_debugLn(
+					"%s:\t%s",
+					EOperationFlags_names[i],
+					EOperationFlags_descriptions[i]
+				);
 	}
 }
 
@@ -325,8 +252,7 @@ Bool CLI_execute(StringList arglist) {
 			)) {
 
 				if ((args.flags >> i) & 1) {
-					Log_error(String_createConstRefUnsafe("Duplicate flag: "), ELogOptions_None);
-					Log_error(Platform_instance.args.ptr[j], ELogOptions_NewLine);
+					Log_errorLn("Duplicate flag: %s", Platform_instance.args.ptr[j].ptr);
 					goto clean;
 				}
 
@@ -355,8 +281,7 @@ Bool CLI_execute(StringList arglist) {
 					j + 1 >= Platform_instance.args.length ||
 					String_getAt(Platform_instance.args.ptr[j + 1], 0) == '-'
 				) {
-					Log_error(String_createConstRefUnsafe("Parameter is missing argument: "), ELogOptions_None);
-					Log_error(Platform_instance.args.ptr[j], ELogOptions_NewLine);
+					Log_errorLn("Parameter is missing argument: %s", Platform_instance.args.ptr[j].ptr);
 					goto clean;
 				}
 
@@ -383,8 +308,7 @@ Bool CLI_execute(StringList arglist) {
 					//Mark as present
 
 					if (args.parameters & param) {
-						Log_error(String_createConstRefUnsafe("Duplicate parameter: "), ELogOptions_None);
-						Log_error(Platform_instance.args.ptr[j], ELogOptions_NewLine);
+						Log_errorLn("Duplicate parameter: %s", Platform_instance.args.ptr[j].ptr);
 						goto clean;
 					}
 
@@ -446,8 +370,7 @@ Bool CLI_execute(StringList arglist) {
 						break;
 
 				if(i == EOperationHasParameter_Count) {
-					Log_error(String_createConstRefUnsafe("Invalid parameter is present: "), ELogOptions_None);
-					Log_error(Platform_instance.args.ptr[j], ELogOptions_NewLine);
+					Log_errorLn("Invalid parameter is present: %s", Platform_instance.args.ptr[j].ptr);
 					CLI_showHelp(category, operation, args.format);
 					goto clean;
 				}
@@ -470,8 +393,7 @@ Bool CLI_execute(StringList arglist) {
 					break;
 
 			if(i == EOperationFlags_Count) {
-				Log_error(String_createConstRefUnsafe("Invalid flag is present: "), ELogOptions_None);
-				Log_error(Platform_instance.args.ptr[j], ELogOptions_NewLine);
+				Log_errorLn("Invalid flag is present: %s", Platform_instance.args.ptr[j].ptr);
 				CLI_showHelp(category, operation, args.format);
 				goto clean;
 			}
@@ -479,8 +401,7 @@ Bool CLI_execute(StringList arglist) {
 			continue;
 		}
 
-		Log_error(String_createConstRefUnsafe("Invalid argument is present: "), ELogOptions_None);
-		Log_error(Platform_instance.args.ptr[j], ELogOptions_NewLine);
+		Log_errorLn("Invalid argument is present: %s", Platform_instance.args.ptr[j].ptr);
 		CLI_showHelp(category, operation, args.format);
 		goto clean;
 	}
@@ -510,7 +431,7 @@ Bool CLI_execute(StringList arglist) {
 	//It must have all required params
 
 	if ((args.parameters & reqParam) != reqParam) {
-		Log_error(String_createConstRefUnsafe("Required parameter is missing."), ELogOptions_NewLine);
+		Log_errorLn("Required parameter is missing.");
 		CLI_showHelp(category, operation, args.format);
 		goto clean;
 	}
@@ -518,7 +439,7 @@ Bool CLI_execute(StringList arglist) {
 	//It has some parameter that we don't support
 
 	if (args.parameters & ~(reqParam | optParam)) {
-		Log_error(String_createConstRefUnsafe("Unsupported parameter is present."), ELogOptions_NewLine);
+		Log_errorLn("Unsupported parameter is present.");
 		CLI_showHelp(category, operation, args.format);
 		goto clean;
 	}
@@ -526,7 +447,7 @@ Bool CLI_execute(StringList arglist) {
 	//It has some flag we don't support
 
 	if (args.flags & ~opFlags) {
-		Log_error(String_createConstRefUnsafe("Unsupported flag is present."), ELogOptions_NewLine);
+		Log_errorLn("Unsupported flag is present.");
 		CLI_showHelp(category, operation, args.format);
 		goto clean;
 	}

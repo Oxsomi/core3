@@ -73,22 +73,12 @@ Bool _CLI_convert(ParsedArgs args, Bool isTo) {
 	}
 
 	if (!(f.flags & EFormatFlags_SupportFiles) && info.type == EFileType_File) {
-
-		Log_error(
-			String_createConstRefUnsafe("Invalid file passed to convertTo. Only accepting folders."), 
-			ELogOptions_NewLine
-		);
-
+		Log_errorLn("Invalid file passed to convertTo. Only accepting folders.");
 		return false;
 	}
 
 	if (!(f.flags & EFormatFlags_SupportFolders) && info.type == EFileType_Folder) {
-
-		Log_error(
-			String_createConstRefUnsafe("Invalid folder passed to convertTo. Only accepting files."), 
-			ELogOptions_NewLine
-		);
-
+		Log_errorLn("Invalid file passed to convertTo. Only accepting files.");
 		return false;
 	}
 
@@ -105,24 +95,14 @@ Bool _CLI_convert(ParsedArgs args, Bool isTo) {
 			(ParsedArgs_getArg(args, EOperationHasParameter_AESShift, &key)).genericError || 
 			!String_isHex(key)
 		) {
-
-			Log_error(
-				String_createConstRefUnsafe("Invalid parameter sent to -aes. Expecting key in hex (32 bytes)"), 
-				ELogOptions_NewLine
-			);
-
+			Log_errorLn("Invalid parameter sent to -aes. Expecting key in hex (32 bytes)");
 			return false;
 		}
 
 		U64 off = String_startsWithString(key, String_createConstRefUnsafe("0x"), EStringCase_Insensitive) ? 2 : 0;
 
 		if (key.length - off != 64) {
-
-			Log_error(
-				String_createConstRefUnsafe("Invalid parameter sent to -aes. Expecting 32-byte key in hex"), 
-				ELogOptions_NewLine
-			);
-
+			Log_errorLn("Invalid parameter sent to -aes. Expecting key in hex (32 bytes)");
 			return false;
 		}
 
@@ -161,32 +141,19 @@ Bool _CLI_convert(ParsedArgs args, Bool isTo) {
 			break;
 		
 		default:
-			Log_debug(String_createConstRefUnsafe("Unsupported format"), ELogOptions_NewLine);
+			Log_debugLn("Unsupported format");
 			return false;
 	}
 
 	if (err.genericError) {
-		Log_error(String_createConstRefUnsafe("File conversion failed!"), ELogOptions_NewLine);
+		Log_errorLn("File conversion failed!");
 		Error_printx(err, ELogLevel_Error, ELogOptions_NewLine);
 		return false;
 	}
 
 	//Tell CLI users
 
-	U64 timeInMs = (Time_now() - start + MS - 1) / MS;
-
-	Log_debug(String_createConstRefUnsafe("Converted file oiXX format in "), ELogOptions_None);
-
-	String dec = String_createNull();
-
-	if ((err = String_createDecx(timeInMs, 0, &dec)).genericError)
-		return true;
-
-	Log_debug(dec, ELogOptions_None);
-	String_freex(&dec);
-
-	Log_debug(String_createConstRefUnsafe(" ms"), ELogOptions_NewLine);
-
+	Log_debugLn("Converted file oiXX format in %ums", (Time_now() - start + MS - 1) / MS);
 	return true;
 }
 

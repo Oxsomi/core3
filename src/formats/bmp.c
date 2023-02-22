@@ -65,18 +65,18 @@ Error BMP_writeRGBA(
 ) {
 
 	if(!result)
-		return Error_nullPointer(5, 0);
+		return Error_nullPointer(5);
 
 	if(result->ptr)
-		return Error_invalidParameter(5, 0, 0);
+		return Error_invalidParameter(5, 0);
 
 	if(!w || !h)
-		return Error_invalidParameter(!w ? 1 : 2, 0, 0);
+		return Error_invalidParameter(!w ? 1 : 2, 0);
 
 	U64 bufLen = Buffer_length(buf);
 
 	if(bufLen > I32_MAX || bufLen != (U64)w * h * 4)
-		return Error_invalidParameter(0, 0, 0);
+		return Error_invalidParameter(0, 0);
 
 	U32 headersSize = (U32) (
 		sizeof(BMPHeader) + 

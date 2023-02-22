@@ -313,13 +313,13 @@ void Operations_init() {
 Error ParsedArgs_getArg(ParsedArgs args, EOperationHasParameter parameterId, String *arg) {
 
 	if(!arg)
-		return Error_nullPointer(2, 0);
+		return Error_nullPointer(2);
 
 	if(!parameterId)
 		return Error_unsupportedOperation(0);
 
 	if(!((args.parameters >> parameterId) & 1))
-		return Error_notFound(0, 1, 0);
+		return Error_notFound(0, 1);
 
 	U64 ourLoc = 0;
 

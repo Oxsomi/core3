@@ -652,13 +652,13 @@ Error Buffer_encrypt(
 		return Error_constData(0, 0);
 
 	if(type >= EBufferEncryptionType_Count)
-		return Error_invalidEnum(2, 0, (U64)type, (U64)EBufferEncryptionType_Count);
+		return Error_invalidEnum(2, (U64)type, (U64)EBufferEncryptionType_Count);
 
 	if(flags & EBufferEncryptionFlags_Invalid)
-		return Error_invalidEnum(3, 0, (U64)flags, ((U64)1 << EBufferEncryptionFlags_Count) - 1);
+		return Error_invalidEnum(3, (U64)flags, ((U64)1 << EBufferEncryptionFlags_Count) - 1);
 
 	if(!key || !iv || !tag)
-		return Error_nullPointer(!key ? 4 : (!iv ? 5 : 6), 0);
+		return Error_nullPointer(!key ? 4 : (!iv ? 5 : 6));
 
 	return AESEncryptionContext_encrypt(target, additionalData, flags, key, iv, tag);
 }
@@ -736,10 +736,10 @@ Error Buffer_decrypt(
 		return Error_constData(0, 0);
 
 	if(type >= EBufferEncryptionType_Count)
-		return Error_invalidEnum(1, 0, (U64) type, EBufferEncryptionType_Count);
+		return Error_invalidEnum(1, (U64) type, EBufferEncryptionType_Count);
 
 	if(!key)
-		return Error_nullPointer(3, 0);
+		return Error_nullPointer(3);
 
 	return AESEncryptionContext_decrypt(target, additionalData, key, tag, iv);
 }

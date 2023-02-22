@@ -33,7 +33,7 @@
 Error Lock_create(Lock *res) {
 
 	if(!res)
-		return Error_nullPointer(0, 0);
+		return Error_nullPointer(0);
 
 	if(res->data)
 		return Error_invalidOperation(0);

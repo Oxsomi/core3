@@ -36,7 +36,7 @@ const U64 WindowManager_OUT_OF_WINDOWS = 0x1111111111;
 Error WindowManager_create(WindowManager *result) {
 
 	if(!result)
-		return Error_nullPointer(0, 0);
+		return Error_nullPointer(0);
 
 	if(result->lock.data)
 		return Error_invalidOperation(0);
@@ -84,7 +84,7 @@ Error WindowManager_createVirtual(
 ) {
 
 	if(!manager || !manager->lock.data || !result || !callbacks.onDraw)
-		return Error_nullPointer(!manager || !manager->lock.data  ? 0 : (!result ? 4 : 2), 0);
+		return Error_nullPointer(!manager || !manager->lock.data  ? 0 : (!result ? 4 : 2));
 
 	if(!Lock_isLockedForThread(manager->lock))
 		return Error_invalidOperation(0);
@@ -93,7 +93,7 @@ Error WindowManager_createVirtual(
 		return Error_invalidOperation(1);
 
 	if(I32x2_any(I32x2_leq(size, I32x2_zero())))
-		return Error_outOfBounds(1, 0, (U64) (I64) I32x2_x(size), (U64) (I64) I32x2_y(size));
+		return Error_outOfBounds(1, (U64) (I64) I32x2_x(size), (U64) (I64) I32x2_y(size));
 
 	switch (format) {
 
@@ -104,7 +104,7 @@ Error WindowManager_createVirtual(
 			break;
 
 		default:
-			return Error_invalidEnum(3, 0, (U64) format, 0);
+			return Error_invalidEnum(3, (U64) format, 0);
 	}
 
 	for(U8 i = 0; i < WindowManager_MAX_VIRTUAL_WINDOWS; ++i) {
@@ -202,7 +202,7 @@ inline U16 WindowManager_getEmptyWindows(WindowManager manager) {
 Error WindowManager_waitForExitAll(WindowManager *manager, Ns maxTimeout) {
 
 	if(!manager || !manager->lock.data)
-		return Error_nullPointer(0, 0);
+		return Error_nullPointer(0);
 
 	//Checking for WindowManager is a lot easier, as we can just acquire the lock
 	//And check how many windows are active
@@ -303,7 +303,7 @@ Error WindowManager_createWindow(
 ) {
 
 	if(!manager || !manager->lock.data)
-		return Error_nullPointer(0, 0);
+		return Error_nullPointer(0);
 
 	Error err = WindowManager_createPhysical(manager, position, size, hint, title, callbacks, format, w);
 

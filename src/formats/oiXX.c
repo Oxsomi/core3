@@ -28,7 +28,7 @@
 Error Buffer_consumeSizeType(Buffer *buf, EXXDataSizeType type, U64 *result) {
 
 	if(!buf || !result)
-		return Error_nullPointer(!buf ? 0 : 2, 0);
+		return Error_nullPointer(!buf ? 0 : 2);
 
 	*result = 0;		//This is ok, as little endian a U8 would be stored in the first bytes not the last
 
@@ -38,7 +38,7 @@ Error Buffer_consumeSizeType(Buffer *buf, EXXDataSizeType type, U64 *result) {
 		case EXXDataSizeType_U32:		return Buffer_consume(buf, result, 4);
 		case EXXDataSizeType_U64:		return Buffer_consume(buf, result, 8);
 		default:
-			return Error_invalidEnum(1, 0, (U64)type, (U64)EXXDataSizeType_U64);
+			return Error_invalidEnum(1, (U64)type, (U64)EXXDataSizeType_U64);
 	}
 }
 

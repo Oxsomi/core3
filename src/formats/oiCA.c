@@ -62,25 +62,25 @@ inline Bool CAFile_storeDate(Ns ns, U16 *time, U16 *date) {
 Error CAFile_create(CASettings settings, Archive archive, CAFile *caFile) {
 
 	if(!caFile)
-		return Error_nullPointer(0, 0);
+		return Error_nullPointer(0);
 
 	if(!archive.entries.ptr)
-		return Error_nullPointer(1, 0);
+		return Error_nullPointer(1);
 
 	if(caFile->archive.entries.ptr)
-		return Error_invalidParameter(2, 0, 0);
+		return Error_invalidParameter(2, 0);
 
 	if(settings.compressionType >= EXXCompressionType_Count)
-		return Error_invalidParameter(0, 0, 0);
+		return Error_invalidParameter(0, 0);
 
 	if(settings.compressionType > EXXCompressionType_None)
 		return Error_unsupportedOperation(0);					//TODO: Support compression
 
 	if(settings.encryptionType >= EXXEncryptionType_Count)
-		return Error_invalidParameter(0, 1, 0);
+		return Error_invalidParameter(0, 1);
 
 	if(settings.flags & ECASettingsFlags_Invalid)
-		return Error_invalidParameter(0, 2, 0);
+		return Error_invalidParameter(0, 2);
 
 	caFile->archive = archive;
 	caFile->settings = settings;
@@ -126,10 +126,10 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 	Buffer outputBuffer = Buffer_createNull();
 
 	if(!result)
-		_gotoIfError(clean, Error_nullPointer(2, 0));
+		_gotoIfError(clean, Error_nullPointer(2));
 
 	if(result->ptr)
-		_gotoIfError(clean, Error_invalidParameter(2, 0, 0));
+		_gotoIfError(clean, Error_invalidParameter(2, 0));
 
 	_gotoIfError(clean, List_reserve(&directories, 128, alloc));
 	_gotoIfError(clean, List_reserve(&files, 128, alloc));
@@ -172,7 +172,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 			));
 
 			if(directories.length >= U16_MAX)
-				_gotoIfError(clean, Error_outOfBounds(0, 0, 0xFFFF, U16_MAX - 1));
+				_gotoIfError(clean, Error_outOfBounds(0, 0xFFFF, U16_MAX - 1));
 
 			continue;
 		}
@@ -185,10 +185,10 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 		);
 
 		if(files.length >= U32_MAX)
-			_gotoIfError(clean, Error_outOfBounds(0, 0, files.length, U32_MAX));
+			_gotoIfError(clean, Error_outOfBounds(0, files.length, U32_MAX));
 		
 		if(outputSize + Buffer_length(entry.data) < outputSize)
-			_gotoIfError(clean, Error_overflow(0, 0, outputSize + Buffer_length(entry.data), outputSize));
+			_gotoIfError(clean, Error_overflow(0, outputSize + Buffer_length(entry.data), outputSize));
 
 		outputSize += Buffer_length(entry.data);
 		biggestFileSize = U64_max(biggestFileSize, Buffer_length(entry.data));
@@ -215,7 +215,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 	U64 fileObjLen = dirRefSize * directories.length + baseFileHeader * files.length;
 
 	if(outputSize + fileObjLen < outputSize)
-		_gotoIfError(clean, Error_overflow(0, 0, outputSize + fileObjLen, outputSize));
+		_gotoIfError(clean, Error_overflow(0, outputSize + fileObjLen, outputSize));
 
 	outputSize += fileObjLen;
 
@@ -274,12 +274,12 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 	//U8[sum(file[i].data)]
 
 	if (outputSize + Buffer_length(dlFileBuffer) < outputSize)
-		_gotoIfError(clean, Error_overflow(0, 0, outputSize + Buffer_length(dlFileBuffer), outputSize));
+		_gotoIfError(clean, Error_overflow(0, outputSize + Buffer_length(dlFileBuffer), outputSize));
 
 	outputSize += Buffer_length(dlFileBuffer);
 
 	if (outputSize + realHeaderSize < outputSize)
-		_gotoIfError(clean, Error_overflow(0, 0, outputSize + realHeaderSize, outputSize));
+		_gotoIfError(clean, Error_overflow(0, outputSize + realHeaderSize, outputSize));
 
 	outputSize += realHeaderSize;		//Reserve space for header (even though this won't be compressed)
 
@@ -589,13 +589,13 @@ clean:
 Error CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFile *caFile) {
 
 	if (!caFile)
-		return Error_nullPointer(2, 0);
+		return Error_nullPointer(2);
 
 	if (caFile->archive.entries.ptr)
-		return Error_invalidParameter(2, 0, 0);
+		return Error_invalidParameter(2, 0);
 
 	if (Buffer_length(file) < sizeof(CAHeader))
-		return Error_outOfBounds(0, 0, sizeof(CAHeader), Buffer_length(file));
+		return Error_outOfBounds(0, sizeof(CAHeader), Buffer_length(file));
 
 	Buffer filePtr = Buffer_createRefFromBuffer(file, Buffer_isConstRef(file));
 
@@ -613,10 +613,10 @@ Error CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFi
 	_gotoIfError(clean, Buffer_consume(&filePtr, &header, sizeof(header)));
 
 	if(header.magicNumber != CAHeader_MAGIC)
-		_gotoIfError(clean, Error_invalidParameter(0, 0, 0));
+		_gotoIfError(clean, Error_invalidParameter(0, 0));
 
 	if(header.version != CAHeader_V1_0)
-		_gotoIfError(clean, Error_invalidParameter(0, 1, 0));
+		_gotoIfError(clean, Error_invalidParameter(0, 1));
 
 	if(header.flags & (ECAFlags_UseAESChunksA | ECAFlags_UseAESChunksB))		//TODO: AES chunks
 		_gotoIfError(clean, Error_unsupportedOperation(0));
@@ -628,7 +628,7 @@ Error CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFi
 		_gotoIfError(clean, Error_unsupportedOperation(3));
 
 	if((header.type & 0xF) >= EXXEncryptionType_Count)
-		_gotoIfError(clean, Error_invalidParameter(0, 4, 0));
+		_gotoIfError(clean, Error_invalidParameter(0, 4));
 
 	//Ensure encryption key isn't provided if we're not encrypting
 
@@ -647,10 +647,10 @@ Error CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFi
 	_gotoIfError(clean, Buffer_consume(&filePtr, &dirCount, header.flags & ECAFlags_DirectoriesCountLong ? 2 : 1));
 
 	if(dirCount >= (header.flags & ECAFlags_DirectoriesCountLong ? U16_MAX : U8_MAX))
-		_gotoIfError(clean, Error_invalidParameter(0, 7, 0));
+		_gotoIfError(clean, Error_invalidParameter(0, 7));
 
 	if(fileCount >= (header.flags & ECAFlags_FilesCountLong ? U32_MAX : U16_MAX))
-		_gotoIfError(clean, Error_invalidParameter(0, 8, 0));
+		_gotoIfError(clean, Error_invalidParameter(0, 8));
 
 	//Validate extended data
 
@@ -717,7 +717,7 @@ Error CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFi
 	U64 folderSize = (U64)dirCount * folderStride;
 
 	if (Buffer_length(filePtr) < fileSize + folderSize)
-		_gotoIfError(clean, Error_outOfBounds(0, 0, fileSize + folderSize, Buffer_length(filePtr)));
+		_gotoIfError(clean, Error_outOfBounds(0, fileSize + folderSize, Buffer_length(filePtr)));
 
 	//Now we can add dir to the archive
 
@@ -728,7 +728,7 @@ Error CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFi
 		String name = ((DLEntry*)fileNames.entries.ptr)[i].entryString;
 
 		if(!String_isValidFileName(name))
-			_gotoIfError(clean, Error_invalidParameter(0, 0, 0));
+			_gotoIfError(clean, Error_invalidParameter(0, 0));
 		
 		_gotoIfError(clean, String_createCopy(name, alloc, &tmpPath));
 
@@ -765,7 +765,7 @@ Error CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFi
 		String name = ((DLEntry*)fileNames.entries.ptr)[(U64)i + dirCount].entryString;
 
 		if(!String_isValidFileName(name))
-			_gotoIfError(clean, Error_invalidParameter(0, 0, 1));
+			_gotoIfError(clean, Error_invalidParameter(0, 1));
 
 		_gotoIfError(clean, String_createCopy(name, alloc, &tmpPath));
 

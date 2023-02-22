@@ -100,16 +100,16 @@ Bool List_contains(List list, Buffer buf, U64 offset) {
 Error List_create(U64 length, U64 stride, Allocator allocator, List *result) {
 
 	if(!result)
-		return Error_nullPointer(3, 0);
+		return Error_nullPointer(3);
 
 	if (result->ptr)
 		return Error_invalidOperation(0);
 
 	if(!length || !stride)
-		return Error_invalidParameter(!length ? 0 : 1, 0, 0);
+		return Error_invalidParameter(!length ? 0 : 1, 0);
 
 	if(length * stride / stride != length)
-		return Error_overflow(0, 0, length * stride, U64_MAX);
+		return Error_overflow(0, length * stride, U64_MAX);
 
 	Buffer buf = Buffer_createNull();
 	Error err = Buffer_createUninitializedBytes(length * stride, allocator, &buf);
@@ -130,16 +130,16 @@ Error List_create(U64 length, U64 stride, Allocator allocator, List *result) {
 Error List_createFromBuffer(Buffer buf, U64 stride, List *result) {
 
 	if(!result)
-		return Error_nullPointer(3, 0);
+		return Error_nullPointer(3);
 
 	if (result->ptr)
 		return Error_invalidOperation(0);
 
 	if(!buf.ptr || !stride)
-		return Error_invalidParameter(!buf.ptr ? 0 : 1, 0, 0);
+		return Error_invalidParameter(!buf.ptr ? 0 : 1, 0);
 
 	if(Buffer_length(buf) % stride)
-		return Error_invalidParameter(0, 0, 1);
+		return Error_invalidParameter(0, 1);
 
 	*result = (List) { 
 		.ptr = buf.ptr, 
@@ -154,16 +154,16 @@ Error List_createFromBuffer(Buffer buf, U64 stride, List *result) {
 Error List_createNullBytes(U64 length, U64 stride, Allocator allocator, List *result) {
 
 	if(!result)
-		return Error_nullPointer(3, 0);
+		return Error_nullPointer(3);
 
 	if (result->ptr)
 		return Error_invalidOperation(0);
 
 	if(!length || !stride)
-		return Error_invalidParameter(!length ? 0 : 1, 0, 0);
+		return Error_invalidParameter(!length ? 0 : 1, 0);
 
 	if(length * stride / stride != length)
-		return Error_overflow(0, 0, length * stride, U64_MAX);
+		return Error_overflow(0, length * stride, U64_MAX);
 
 	Buffer buf = Buffer_createNull();
 	Error err = Buffer_createEmptyBytes(length * stride, allocator, &buf);
@@ -190,16 +190,16 @@ Error List_createRepeated(
 ) {
 
 	if(!result)
-		return Error_nullPointer(4, 0);
+		return Error_nullPointer(4);
 
 	if (result->ptr)
 		return Error_invalidOperation(0);
 
 	if(!length || !stride)
-		return Error_invalidParameter(!length ? 0 : 1, 0, 0);
+		return Error_invalidParameter(!length ? 0 : 1, 0);
 
 	if(length * stride / stride != length)
-		return Error_overflow(0, 0, length * stride, U64_MAX);
+		return Error_overflow(0, length * stride, U64_MAX);
 
 	Buffer buf = Buffer_createNull();
 	Error err = Buffer_createUninitializedBytes(length * stride, allocator, &buf);
@@ -227,7 +227,7 @@ Error List_createRepeated(
 Error List_createCopy(List list, Allocator allocator, List *result) {
 
 	if(!result)
-		return Error_nullPointer(2, 0);
+		return Error_nullPointer(2);
 
 	if (result->ptr)
 		return Error_invalidOperation(0);
@@ -249,19 +249,19 @@ Error List_createCopy(List list, Allocator allocator, List *result) {
 Error List_createSubset(List list, U64 index, U64 length, List *result) {
 
 	if(!result)
-		return Error_nullPointer(3, 0);
+		return Error_nullPointer(3);
 
 	if (result->ptr)
 		return Error_invalidOperation(0);
 
 	if(!length)
-		return Error_invalidParameter(2, 0, 0);
+		return Error_invalidParameter(2, 0);
 
 	if(index + length < index)
-		return Error_overflow(1, 0, index + length, U64_MAX);
+		return Error_overflow(1, index + length, U64_MAX);
 
 	if(index + length > list.length)
-		return Error_outOfBounds(1, 0, index + length, list.length);
+		return Error_outOfBounds(1, index + length, list.length);
 
 	if(List_isConstRef(list))
 		return List_createConstRef(list.ptr + index * list.stride, length, list.stride, result);
@@ -278,19 +278,19 @@ Error List_createSubsetReverse(
 ) {
 	
 	if(!result)
-		return Error_nullPointer(4, 0);
+		return Error_nullPointer(4);
 	
 	if(result->ptr)
-		return Error_nullPointer(4, 0);
+		return Error_nullPointer(4);
 
 	if(!length)
-		return Error_invalidParameter(2, 0, 0);
+		return Error_invalidParameter(2, 0);
 
 	if(index + length < length)
-		return Error_overflow(1, 0, index + length, U64_MAX);
+		return Error_overflow(1, index + length, U64_MAX);
 
 	if(index + length > list.length)
-		return Error_outOfBounds(1, 0, index + length, list.length);
+		return Error_outOfBounds(1, index + length, list.length);
 
 	Error err = List_create(length, list.stride, allocator, result);
 
@@ -318,16 +318,16 @@ Error List_createSubsetReverse(
 Error List_createRef(U8 *ptr, U64 length, U64 stride, List *result) {
 
 	if(!ptr || !result)
-		return Error_nullPointer(!ptr ? 0 : 3, 0);
+		return Error_nullPointer(!ptr ? 0 : 3);
 
 	if (result->ptr)
 		return Error_invalidOperation(0);
 
 	if(!length || !stride)
-		return Error_invalidParameter(!length ? 1 : 2, 0, 0);
+		return Error_invalidParameter(!length ? 1 : 2, 0);
 
 	if(length * stride / stride != length)
-		return Error_overflow(1, 0, length * stride, U64_MAX);
+		return Error_overflow(1, length * stride, U64_MAX);
 
 	*result = (List) { 
 		.ptr = ptr, 
@@ -341,16 +341,16 @@ Error List_createRef(U8 *ptr, U64 length, U64 stride, List *result) {
 Error List_createConstRef(const U8 *ptr, U64 length, U64 stride, List *result) {
 
 	if(!ptr || !result)
-		return Error_nullPointer(!ptr ? 0 : 3, 0);
+		return Error_nullPointer(!ptr ? 0 : 3);
 
 	if (result->ptr)
 		return Error_invalidOperation(0);
 
 	if(!length || !stride)
-		return Error_invalidParameter(!length ? 1 : 2, 0, 0);
+		return Error_invalidParameter(!length ? 1 : 2, 0);
 
 	if(length * stride / stride != length)
-		return Error_overflow(1, 0, length * stride, U64_MAX);
+		return Error_overflow(1, length * stride, U64_MAX);
 
 	*result = (List) { 
 		.ptr = (U8*) ptr, 
@@ -368,7 +368,7 @@ Error List_set(List list, U64 index, Buffer buf) {
 		return Error_constData(0, 0);
 
 	if(index >= list.length)
-		return Error_outOfBounds(1, 0, index, list.length);
+		return Error_outOfBounds(1, index, list.length);
 
 	U64 bufLen = Buffer_length(buf);
 
@@ -386,10 +386,10 @@ Error List_set(List list, U64 index, Buffer buf) {
 Error List_get(List list, U64 index, Buffer *result) {
 
 	if(!result)
-		return Error_nullPointer(2, 0);
+		return Error_nullPointer(2);
 
 	if(index >= list.length)
-		return Error_outOfBounds(1, 0, index, list.length);
+		return Error_outOfBounds(1, index, list.length);
 
 	if(List_isConstRef(list))
 		return Error_constData(0, 0);
@@ -401,10 +401,10 @@ Error List_get(List list, U64 index, Buffer *result) {
 Error List_getConst(List list, U64 index, Buffer *result) {
 
 	if(!result)
-		return Error_nullPointer(2, 0);
+		return Error_nullPointer(2);
 
 	if(index >= list.length)
-		return Error_outOfBounds(1, 0, index, list.length);
+		return Error_outOfBounds(1, index, list.length);
 
 	*result = Buffer_createConstRef(list.ptr + index * list.stride, list.stride);
 	return Error_none();
@@ -413,13 +413,13 @@ Error List_getConst(List list, U64 index, Buffer *result) {
 Error List_find(List list, Buffer buf, Allocator allocator, List *result) {
 
 	if(Buffer_length(buf) != list.stride)
-		return Error_invalidParameter(1, 0, 0);
+		return Error_invalidParameter(1, 0);
 
 	if(!result)
-		return Error_nullPointer(3, 0);
+		return Error_nullPointer(3);
 
 	if(result->ptr)
-		return Error_invalidParameter(3, 0, 0);
+		return Error_invalidParameter(3, 0);
 
 	*result = List_createEmpty(sizeof(U64));
 	Error err = List_reserve(result, list.length / 100 + 16, allocator);
@@ -533,7 +533,7 @@ Error List_copy(List src, U64 srcOffset, List dst, U64 dstOffset, U64 count) {
 Error List_shrinkToFit(List *list, Allocator allocator) {
 
 	if(!list || !list->ptr)
-		return Error_nullPointer(0, 0);
+		return Error_nullPointer(0);
 
 	if(List_isConstRef(*list))
 		return Error_constData(0, 0);
@@ -555,7 +555,7 @@ Error List_shrinkToFit(List *list, Allocator allocator) {
 Error List_eraseAllIndices(List *list, List indices) {
 
 	if(!list)
-		return Error_nullPointer(0, 0);
+		return Error_nullPointer(0);
 
 	if(List_isConstRef(*list))
 		return Error_constData(0, 0);
@@ -567,7 +567,7 @@ Error List_eraseAllIndices(List *list, List indices) {
 		return Error_invalidOperation(0);
 
 	if(!List_sortU64(indices))
-		return Error_invalidParameter(1, 0, 0);
+		return Error_invalidParameter(1, 0);
 
 	//Ensure none of them reference out of bounds or are duplicate
 
@@ -579,7 +579,7 @@ Error List_eraseAllIndices(List *list, List indices) {
 			return Error_alreadyDefined(0);
 
 		if(*ptr >= list->length)
-			return Error_outOfBounds(0, 0, ptr - (U64*)indices.ptr, list->length);
+			return Error_outOfBounds(0, ptr - (U64*)indices.ptr, list->length);
 
 		last = *ptr;
 	}
@@ -801,7 +801,7 @@ Bool List_sortString(List list, EStringCase stringCase) {
 Error List_eraseFirst(List *list, Buffer buf, U64 offset) {
 
 	if(!list)
-		return Error_nullPointer(0, 0);
+		return Error_nullPointer(0);
 
 	U64 ind = List_findLast(*list, buf, offset);
 	return ind == U64_MAX ? Error_none() : List_erase(list, ind);
@@ -810,7 +810,7 @@ Error List_eraseFirst(List *list, Buffer buf, U64 offset) {
 Error List_eraseLast(List *list, Buffer buf, U64 offset) {
 
 	if(!list)
-		return Error_nullPointer(0, 0);
+		return Error_nullPointer(0);
 
 	U64 ind = List_findLast(*list, buf, offset);
 	return ind == U64_MAX ? Error_none() : List_erase(list, ind);
@@ -819,7 +819,7 @@ Error List_eraseLast(List *list, Buffer buf, U64 offset) {
 Error List_eraseAll(List *list, Buffer buf, Allocator allocator) {
 
 	if(!list)
-		return Error_nullPointer(0, 0);
+		return Error_nullPointer(0);
 	
 	List indices = (List) { 0 };
 	Error err = List_find(*list, buf, allocator, &indices);
@@ -835,10 +835,10 @@ Error List_eraseAll(List *list, Buffer buf, Allocator allocator) {
 Error List_erase(List *list, U64 index) {
 
 	if(!list)
-		return Error_nullPointer(0, 0);
+		return Error_nullPointer(0);
 
 	if(index >= list->length)
-		return Error_outOfBounds(1, 0, index, list->length);
+		return Error_outOfBounds(1, index, list->length);
 
 	Buffer_revCopy(
 		Buffer_createRef(list->ptr + index * list->stride, (list->length - 1) * list->stride),
@@ -852,13 +852,13 @@ Error List_erase(List *list, U64 index) {
 Error List_insert(List *list, U64 index, Buffer buf, Allocator allocator) {
 
 	if(!list)
-		return Error_nullPointer(0, 0);
+		return Error_nullPointer(0);
 
 	if(list->stride != Buffer_length(buf))
 		return Error_invalidOperation(0);
 
 	if(list->length + 1 == 0)
-		return Error_overflow(0, 0, 0, U64_MAX);
+		return Error_overflow(0, 0, U64_MAX);
 
 	if (index == list->length) {		//Push back
 
@@ -876,7 +876,7 @@ Error List_insert(List *list, U64 index, Buffer buf, Allocator allocator) {
 	}
 
 	if(index >= list->length)
-		return Error_outOfBounds(1, 0, index, list->length);
+		return Error_outOfBounds(1, index, list->length);
 
 	U64 prevSize = list->length;
 	Error err = List_resize(list, list->length + 1, allocator);
@@ -905,7 +905,7 @@ Error List_insert(List *list, U64 index, Buffer buf, Allocator allocator) {
 Error List_pushAll(List *list, List other, Allocator allocator) {
 
 	if(!list)
-		return Error_nullPointer(0, 0);
+		return Error_nullPointer(0);
 
 	if(list->stride != other.stride)
 		return Error_invalidOperation(0);
@@ -914,7 +914,7 @@ Error List_pushAll(List *list, List other, Allocator allocator) {
 		return Error_none();
 
 	if(list->length + other.length < list->length)
-		return Error_overflow(0, 0, list->length + other.length, U64_MAX);
+		return Error_overflow(0, list->length + other.length, U64_MAX);
 
 	U64 oldSize = List_bytes(*list);
 	Error err = List_resize(list, list->length + other.length, allocator);
@@ -933,7 +933,7 @@ Error List_pushAll(List *list, List other, Allocator allocator) {
 Error List_swap(List l, U64 i, U64 j) {
 
 	if(i >= l.length || j >= l.length)
-		return Error_outOfBounds(i >= l.length ? 1 : 2, 0, i >= l.length ? i : j, l.length);
+		return Error_outOfBounds(i >= l.length ? 1 : 2, i >= l.length ? i : j, l.length);
 
 	if(List_isConstRef(l))
 		return Error_constData(0, 0);
@@ -982,7 +982,7 @@ Bool List_reverse(List l) {
 Error List_insertAll(List *list, List other, U64 offset, Allocator allocator) {
 
 	if(!list)
-		return Error_nullPointer(0, 0);
+		return Error_nullPointer(0);
 
 	if(!other.length)
 		return Error_none();
@@ -991,10 +991,10 @@ Error List_insertAll(List *list, List other, U64 offset, Allocator allocator) {
 		return Error_invalidOperation(0);
 
 	if(list->length + other.length < list->length)
-		return Error_overflow(0, 0, list->length + other.length, U64_MAX);
+		return Error_overflow(0, list->length + other.length, U64_MAX);
 
 	if(offset >= list->length)
-		return Error_outOfBounds(2, 0, offset, list->length);
+		return Error_outOfBounds(2, offset, list->length);
 
 	U64 prevSize = list->length;
 	Error err = List_resize(list, list->length + other.length, allocator);
@@ -1023,13 +1023,13 @@ Error List_insertAll(List *list, List other, U64 offset, Allocator allocator) {
 Error List_reserve(List *list, U64 capacity, Allocator allocator) {
 
 	if(!list)
-		return Error_nullPointer(0, 0);
+		return Error_nullPointer(0);
 
 	if(List_isRef(*list) && list->length)
 		return Error_invalidOperation(0);
 
 	if(capacity * list->stride / list->stride != capacity)
-		return Error_overflow(1, 0, capacity * list->stride, U64_MAX);
+		return Error_overflow(1, capacity * list->stride, U64_MAX);
 
 	if(capacity <= list->capacity)
 		return Error_none();
@@ -1055,7 +1055,7 @@ Error List_reserve(List *list, U64 capacity, Allocator allocator) {
 Error List_resize(List *list, U64 size, Allocator allocator) {
 
 	if(!list)
-		return Error_nullPointer(0, 0);
+		return Error_nullPointer(0);
 
 	if(List_isConstRef(*list))
 		return Error_constData(0, 0);
@@ -1071,7 +1071,7 @@ Error List_resize(List *list, U64 size, Allocator allocator) {
 	}
 
 	if(size * 3 / 3 != size)
-		return Error_overflow(1, 0, size * 3, U64_MAX);
+		return Error_overflow(1, size * 3, U64_MAX);
 
 	Error err = List_reserve(list, size * 3 / 2, allocator);
 
@@ -1089,7 +1089,7 @@ Error List_resize(List *list, U64 size, Allocator allocator) {
 Error List_pushBack(List *list, Buffer buf, Allocator allocator) {
 
 	if(!list)
-		return Error_nullPointer(0, 0);
+		return Error_nullPointer(0);
 
 	if(List_isConstRef(*list))
 		return Error_constData(0, 0);
@@ -1113,10 +1113,10 @@ Error List_pushFront(List *list, Buffer buf, Allocator allocator) {
 Error List_popLocation(List *list, U64 index, Buffer buf) {
 
 	if(!list)
-		return Error_nullPointer(0, 0);
+		return Error_nullPointer(0);
 
 	if(index >= list->length)
-		return Error_outOfBounds(1, 0, index, list->length);
+		return Error_outOfBounds(1, index, list->length);
 
 	if(List_isConstRef(*list))
 		return Error_constData(0, 0);
@@ -1141,10 +1141,10 @@ Error List_popLocation(List *list, U64 index, Buffer buf) {
 Error List_popBack(List *list, Buffer output) {
 
 	if(!list)
-		return Error_nullPointer(0, 0);
+		return Error_nullPointer(0);
 
 	if(!list->length)
-		return Error_outOfBounds(0, 0, 0, 0);
+		return Error_outOfBounds(0, 0, 0);
 
 	if(Buffer_length(output) && Buffer_length(output) != list->stride)
 		return Error_invalidOperation(0);
@@ -1166,7 +1166,7 @@ Error List_popFront(List *list, Buffer output) {
 Error List_clear(List *list) {
 
 	if(!list)
-		return Error_nullPointer(0, 0);
+		return Error_nullPointer(0);
 
 	list->length = 0;
 	return Error_none();

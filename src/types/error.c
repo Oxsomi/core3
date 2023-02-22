@@ -50,32 +50,6 @@ const C8 *EGenericError_TO_STRING[] = {
 	"Unimplemented"
 };
 
-const EErrorParamValues EGenericError_HAS_PARAM_VALUES[] = {
-	EErrorParamValues_None,
-	EErrorParamValues_None,
-	EErrorParamValues_V0N1,
-	EErrorParamValues_None,
-	EErrorParamValues_None,
-	EErrorParamValues_None,
-	EErrorParamValues_V0N1,
-	EErrorParamValues_V0N1,
-	EErrorParamValues_V0N1,
-	EErrorParamValues_None,
-	EErrorParamValues_None,
-	EErrorParamValues_None,
-	EErrorParamValues_None,
-	EErrorParamValues_None,
-	EErrorParamValues_None,
-	EErrorParamValues_V1,
-	EErrorParamValues_V1,
-	EErrorParamValues_None,
-	EErrorParamValues_None,
-	EErrorParamValues_V1,
-	EErrorParamValues_None,
-	EErrorParamValues_None,
-	EErrorParamValues_None
-};
-
 Error Error_platformError(U32 subId, U64 platformError) {
 	_Error_base(.genericError = EGenericError_PlatformError, .errorSubId = subId, .paramValue0 = platformError);
 }
@@ -84,23 +58,23 @@ Error Error_outOfMemory(U32 subId) {
 	_Error_base(.genericError = EGenericError_OutOfMemory, .errorSubId = subId);
 }
 
-Error Error_outOfBounds(U32 paramId, U32 paramSubId, U64 id, U64 limit) {
+Error Error_outOfBounds(U32 paramId, U64 id, U64 limit) {
 	_Error_base(
-		.genericError = EGenericError_OutOfBounds, .paramSubId = paramSubId, .paramId = paramId, 
+		.genericError = EGenericError_OutOfBounds, .paramId = paramId, 
 		.paramValue0 = id, .paramValue1 = limit
 	);
 }
 
-Error Error_nullPointer(U32 paramId, U32 paramSubId) {
-	_Error_base(.genericError = EGenericError_NullPointer, .paramSubId = paramSubId, .paramId = paramId );
+Error Error_nullPointer(U32 paramId) {
+	_Error_base(.genericError = EGenericError_NullPointer, .paramId = paramId);
 }
 
 Error Error_unauthorized(U32 subId) {
 	_Error_base(.genericError = EGenericError_Unauthorized, .errorSubId = subId);
 }
 
-Error Error_notFound(U32 subId, U32 paramId, U32 paramSubId) {
-	_Error_base(.genericError = EGenericError_NotFound, .errorSubId = subId, .paramId = paramId, .paramSubId = paramSubId );
+Error Error_notFound(U32 subId, U32 paramId) {
+	_Error_base(.genericError = EGenericError_NotFound, .errorSubId = subId, .paramId = paramId);
 }
 
 Error Error_divideByZero(U32 subId, U64 a, U64 b) {
@@ -110,16 +84,16 @@ Error Error_divideByZero(U32 subId, U64 a, U64 b) {
 	);
 }
 
-Error Error_overflow(U32 paramId, U32 paramSubId, U64 a, U64 b) {
+Error Error_overflow(U32 paramId, U64 a, U64 b) {
 	_Error_base(
-		.genericError = EGenericError_Overflow, .paramSubId = paramSubId, .paramId = paramId, 
+		.genericError = EGenericError_Overflow, .paramId = paramId, 
 		.paramValue0 = a, .paramValue1 = b
 	);
 }
 
-Error Error_underflow(U32 paramId, U32 paramSubId, U64 a, U64 b) {
+Error Error_underflow(U32 paramId, U64 a, U64 b) {
 	_Error_base(
-		.genericError = EGenericError_Underflow, .paramSubId = paramSubId, .paramId = paramId, 
+		.genericError = EGenericError_Underflow, .paramId = paramId, 
 		.paramValue0 = a, .paramValue1 = b
 	);
 }
@@ -128,16 +102,16 @@ Error Error_NaN(U32 subId) {
 	_Error_base(.genericError = EGenericError_NaN, .errorSubId = subId);
 }
 
-Error Error_invalidEnum(U32 paramId, U32 paramSubId, U64 value, U64 maxValue) {
+Error Error_invalidEnum(U32 paramId, U64 value, U64 maxValue) {
 	_Error_base(
-		.genericError = EGenericError_InvalidEnum, .paramSubId = paramSubId, .paramId = paramId, 
+		.genericError = EGenericError_InvalidEnum, .paramId = paramId, 
 		.paramValue0 = value, .paramValue1 = maxValue
 	);
 }
 
-Error Error_invalidParameter(U32 paramId, U32 paramSubId, U32 subId) {
+Error Error_invalidParameter(U32 paramId, U32 subId) {
 	_Error_base(
-		.genericError = EGenericError_InvalidParameter, .paramSubId = paramSubId, .paramId = paramId, 
+		.genericError = EGenericError_InvalidParameter, .paramId = paramId, 
 		.errorSubId = subId
 	);
 }

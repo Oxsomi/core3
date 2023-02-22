@@ -75,20 +75,17 @@ Bool CLI_hash(ParsedArgs args, Bool isFile) {
 		}
 
 		default:
-			Log_error(String_createConstRefUnsafe("Unsupported format"), ELogOptions_NewLine);
+			Log_errorLn("Unsupported format");
 			goto clean;
 	}
 
-	Log_debug(String_createConstRefUnsafe("Hash: "), ELogOptions_NewLine);
-	Log_debug(String_createConstRefUnsafe("0x"), ELogOptions_None);
-	Log_debug(tmp, ELogOptions_NewLine);
-
+	Log_debugLn("Hash: 0x%.*s", tmp.length, tmp.ptr);
 	success = true;
 
 clean:
 
 	if(err.genericError) {
-		Log_error(String_createConstRefUnsafe("Failed to convert hash to string!"), ELogOptions_NewLine);
+		Log_errorLn("Failed to convert hash to string!");
 		Error_printx(err, ELogLevel_Error, ELogOptions_Default);
 	}
 

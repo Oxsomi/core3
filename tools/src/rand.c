@@ -56,7 +56,7 @@ Bool CLI_rand(ParsedArgs args, RandType type) {
 			!String_parseDec(str, &n) ||
 			(n >> 32)
 		) {
-			Log_error(String_createConstRefUnsafe("Invalid argument -n <string>, uint expected."), ELogOptions_NewLine);
+			Log_errorLn("Invalid argument -n <string>, uint expected.");
 			return false;
 		}
 	}
@@ -72,7 +72,7 @@ Bool CLI_rand(ParsedArgs args, RandType type) {
 			!String_parseDec(str, &l) ||
 			(l >> 32)
 		) {
-			Log_error(String_createConstRefUnsafe("Invalid argument -l <string>, uint expected."), ELogOptions_NewLine);
+			Log_errorLn("Invalid argument -l <string>, uint expected.");
 			return false;
 		}
 	}
@@ -88,7 +88,7 @@ Bool CLI_rand(ParsedArgs args, RandType type) {
 			!String_parseDec(str, &b) ||
 			(b >> 16)
 		) {
-			Log_error(String_createConstRefUnsafe("Invalid argument -b <string>, ushort expected."), ELogOptions_NewLine);
+			Log_errorLn("Invalid argument -b <string>, ushort expected.");
 			return false;
 		}
 	}
@@ -98,7 +98,7 @@ Bool CLI_rand(ParsedArgs args, RandType type) {
 	Buffer outputFile = Buffer_createNull();
 	Buffer tmp = Buffer_createNull();
 	String outputString = String_createNull();
-	String errorString = String_createNull();
+	const C8 *errorString = NULL;
 	String tmpString = String_createNull();
 	Error err = Error_none();
 
@@ -143,7 +143,7 @@ Bool CLI_rand(ParsedArgs args, RandType type) {
 				outputAsBase = 10;
 
 			if (hasMultiFlag) {
-				Log_error(String_createConstRefUnsafe("Invalid argument. Can only pick one base."), ELogOptions_NewLine);
+				Log_errorLn("Invalid argument. Can only pick one base.");
 				return false;
 			}
 			
@@ -156,7 +156,7 @@ Bool CLI_rand(ParsedArgs args, RandType type) {
 			break;
 
 		default:
-			Log_error(String_createConstRefUnsafe("Invalid operation"), ELogOptions_NewLine);
+			Log_errorLn("Invalid operation.");
 			return false;
 	}
 
@@ -176,12 +176,7 @@ Bool CLI_rand(ParsedArgs args, RandType type) {
 			default: {
 
 				if (b > 64) {
-
-					Log_error(
-						String_createConstRefUnsafe("Decimal numbers can only support up to 64 bit (if -b is set)."), 
-						ELogOptions_NewLine
-					);
-
+					Log_errorLn("Decimal numbers can only support up to 64 bit (if -b is set).");
 					return false;
 				}
 
@@ -273,7 +268,7 @@ Bool CLI_rand(ParsedArgs args, RandType type) {
 							String str = String_createNull();
 
 							if (ParsedArgs_getArg(args, EOperationHasParameter_CharacterShift, &str).genericError) {
-								Log_error(String_createConstRefUnsafe("Invalid argument -c <string>."), ELogOptions_NewLine);
+								Log_errorLn("Invalid argument -c <string>.");
 								return false;
 							}
 
@@ -385,25 +380,25 @@ Bool CLI_rand(ParsedArgs args, RandType type) {
 		String outputPath = String_createNull();
 		
 		if (ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &outputPath).genericError) {
-			Log_error(String_createConstRefUnsafe("Invalid argument -o <string>, file path expected."), ELogOptions_NewLine);
+			Log_errorLn("Invalid argument -o <string>, file path expected.");
 			return false;
 		}
 
-		errorString = String_createConstRefUnsafe("Couldn't write to output file");
+		errorString = "Couldn't write to output file";
 		_gotoIfError(clean, File_write(outputFile, outputPath, 1 * SECOND));
 	}
 
 	else {
-		Log_debug(String_createConstRefUnsafe("Random operation returned:"), ELogOptions_NewLine);
-		Log_debug(outputString, ELogOptions_None);
+		Log_debugLn("Random operation returned:");
+		Log_debug(ELogOptions_None, "%.*s", outputString.length, outputString.ptr);
 	}
 
 clean:
 
 	if(err.genericError) {
 
-		if(errorString.length)
-			Log_error(errorString, ELogOptions_NewLine);
+		if(errorString)
+			Log_errorLn(errorString);
 
 		else Error_printx(err, ELogLevel_Error, ELogOptions_NewLine);
 	}

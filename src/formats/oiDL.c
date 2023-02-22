@@ -35,25 +35,25 @@ static const U8 DLHeader_V1_0  = 0;
 Error DLFile_create(DLSettings settings, Allocator alloc, DLFile *dlFile) {
 
 	if(!dlFile)
-		return Error_nullPointer(0, 0);
+		return Error_nullPointer(0);
 
 	if(dlFile->entries.ptr)
 		return Error_invalidOperation(0);
 
 	if(settings.compressionType >= EXXCompressionType_Count)
-		return Error_invalidParameter(0, 0, 0);
+		return Error_invalidParameter(0, 0);
 
 	if(settings.compressionType > EXXCompressionType_None)
 		return Error_invalidOperation(0);							//TODO: Add support for compression
 
 	if(settings.encryptionType >= EXXEncryptionType_Count)
-		return Error_invalidParameter(0, 1, 0);
+		return Error_invalidParameter(0, 1);
 
 	if(settings.dataType >= EDLDataType_Count)
-		return Error_invalidParameter(0, 2, 0);
+		return Error_invalidParameter(0, 2);
 
 	if(settings.flags & EDLSettingsFlags_Invalid)
-		return Error_invalidParameter(0, 3, 0);
+		return Error_invalidParameter(0, 3);
 
 	dlFile->entries = List_createEmpty(sizeof(DLEntry));
 
@@ -91,7 +91,7 @@ Bool DLFile_free(DLFile *dlFile, Allocator alloc) {
 Error DLFile_addEntry(DLFile *dlFile, Buffer entryBuf, Allocator alloc) {
 
 	if(!dlFile || !dlFile->entries.ptr)
-		return Error_nullPointer(0, 0);
+		return Error_nullPointer(0);
 
 	if(dlFile->settings.dataType != EDLDataType_Data)
 		return Error_invalidOperation(0);
@@ -108,7 +108,7 @@ Error DLFile_addEntry(DLFile *dlFile, Buffer entryBuf, Allocator alloc) {
 Error DLFile_addEntryAscii(DLFile *dlFile, String entryStr, Allocator alloc) {
 
 	if(!dlFile || !dlFile->entries.ptr)
-		return Error_nullPointer(0, 0);
+		return Error_nullPointer(0);
 
 	if(dlFile->settings.dataType != EDLDataType_Ascii)
 		return Error_invalidOperation(0);
@@ -121,7 +121,7 @@ Error DLFile_addEntryAscii(DLFile *dlFile, String entryStr, Allocator alloc) {
 	//
 
 	if(!String_isValidAscii(entryStr))
-		return Error_invalidParameter(1, 0, 0);
+		return Error_invalidParameter(1, 0);
 
 	DLEntry entry = { .entryString = entryStr };
 
@@ -135,13 +135,13 @@ Error DLFile_addEntryAscii(DLFile *dlFile, String entryStr, Allocator alloc) {
 Error DLFile_addEntryUTF8(DLFile *dlFile, Buffer entryBuf, Allocator alloc) {
 
 	if(!dlFile || !dlFile->entries.ptr)
-		return Error_nullPointer(0, 0);
+		return Error_nullPointer(0);
 
 	if(dlFile->settings.dataType != EDLDataType_UTF8)
 		return Error_invalidOperation(0);
 
 	if(!Buffer_isUTF8(entryBuf, 1))
-		return Error_invalidParameter(1, 0, 0);
+		return Error_invalidParameter(1, 0);
 
 	DLEntry entry = { .entryBuffer = entryBuf };
 
@@ -157,10 +157,10 @@ Error DLFile_addEntryUTF8(DLFile *dlFile, Buffer entryBuf, Allocator alloc) {
 Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result) {
 
 	if(!dlFile.entries.ptr)
-		return Error_nullPointer(0, 0);
+		return Error_nullPointer(0);
 
 	if(!result)
-		return Error_nullPointer(2, 0);
+		return Error_nullPointer(2);
 
 	if(result->ptr)
 		return Error_invalidOperation(0);
@@ -184,7 +184,7 @@ Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result) {
 		U64 len = dlFile.settings.dataType != EDLDataType_Ascii ? Buffer_length(entry.entryBuffer) : entry.entryString.length;
 
 		if(outputSize + len < outputSize)
-			return Error_overflow(0, 0, outputSize + len, outputSize);
+			return Error_overflow(0, outputSize + len, outputSize);
 
 		outputSize += len;
 		maxSize = U64_max(maxSize, len);
@@ -195,7 +195,7 @@ Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result) {
 	U64 entrySizes = dataSizeTypeSize * dlFile.entries.length;
 
 	if(entrySizes / dataSizeTypeSize != dlFile.entries.length)
-		return Error_overflow(0, 0, entrySizes, entrySizes / dataSizeTypeSize);
+		return Error_overflow(0, entrySizes, entrySizes / dataSizeTypeSize);
 
 	EXXDataSizeType entrySizeType = EXXDataSizeType_getRequiredType(dlFile.entries.length);
 	headerSize += SIZE_BYTE_TYPE[entrySizeType];
@@ -212,7 +212,7 @@ Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result) {
 		headerSize += SIZE_BYTE_TYPE[uncompressedSizeType];
 
 	if(outputSize + headerSize < outputSize)
-		return Error_overflow(0, 0, outputSize + headerSize, outputSize);
+		return Error_overflow(0, outputSize + headerSize, outputSize);
 
 	//Create our final uncompressed buffer
 
@@ -417,7 +417,7 @@ Error DLFile_read(
 ) {
 
 	if(!dlFile)
-		return Error_nullPointer(2, 0);
+		return Error_nullPointer(2);
 
 	if(dlFile->entries.ptr)
 		return Error_invalidOperation(0);
@@ -433,7 +433,7 @@ Error DLFile_read(
 		_gotoIfError(clean, Buffer_consume(&file, &magic, sizeof(magic)));
 		
 		if(magic != DLHeader_MAGIC)
-			_gotoIfError(clean, Error_invalidParameter(0, 0, 0));
+			_gotoIfError(clean, Error_invalidParameter(0, 0));
 	}
 
 	//Read from binary
@@ -444,7 +444,7 @@ Error DLFile_read(
 	//Validate header
 
 	if(header.version != DLHeader_V1_0)
-		_gotoIfError(clean, Error_invalidParameter(0, 1, 0));
+		_gotoIfError(clean, Error_invalidParameter(0, 1));
 
 	if(header.flags & (EDLFlags_UseAESChunksA | EDLFlags_UseAESChunksB))		//TODO: AES chunks
 		_gotoIfError(clean, Error_unsupportedOperation(0));
@@ -456,10 +456,10 @@ Error DLFile_read(
 		_gotoIfError(clean, Error_unsupportedOperation(2));
 
 	if((header.type & 0xF) >= EXXEncryptionType_Count)
-		_gotoIfError(clean, Error_invalidParameter(0, 4, 0));
+		_gotoIfError(clean, Error_invalidParameter(0, 4));
 
 	if(header.sizeTypes >> 6)
-		_gotoIfError(clean, Error_invalidParameter(0, 7, 0));
+		_gotoIfError(clean, Error_invalidParameter(0, 7));
 
 	//Ensure encryption key isn't provided if we're not encrypting
 
@@ -512,7 +512,7 @@ Error DLFile_read(
 		U64 entryLen = Buffer_forceReadSizeType(entryi, dataSizeType);
 
 		if(dataSize + entryLen < dataSize)
-			return Error_overflow(0, 0, dataSize + entryLen, U64_MAX);
+			return Error_overflow(0, dataSize + entryLen, U64_MAX);
 
 		dataSize += entryLen;
 	}
@@ -537,7 +537,7 @@ Error DLFile_read(
 			return Error_constData(0, 0);
 
 		if(!encryptionKey)
-			return Error_nullPointer(3, 0);
+			return Error_nullPointer(3);
 
 		//Get tag and iv
 
@@ -552,7 +552,11 @@ Error DLFile_read(
 		//Validate remainder
 
 		if(Buffer_length(file) < dataSize)
-			_gotoIfError(clean, Error_outOfBounds(0, 0, file.ptr + dataSize - entireFile.ptr, Buffer_length(entireFile)));
+			_gotoIfError(
+				clean, Error_outOfBounds(
+					0, file.ptr + dataSize - entireFile.ptr, Buffer_length(entireFile)
+				)
+			);
 
 		if(!isSubfile && Buffer_length(file) != dataSize)
 			_gotoIfError(clean, Error_invalidState(0));

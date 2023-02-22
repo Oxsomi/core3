@@ -63,10 +63,10 @@ Error File_resolve(
 	Error err = Error_none();
 
 	if(!isVirtual || !result)
-		_gotoIfError(clean, Error_nullPointer(!isVirtual ? 1 : 2, 0));
+		_gotoIfError(clean, Error_nullPointer(!isVirtual ? 1 : 2));
 
 	if(!String_isValidFilePath(loc))
-		_gotoIfError(clean, Error_invalidParameter(0, 0, 0));
+		_gotoIfError(clean, Error_invalidParameter(0, 0));
 
 	//Copy string so we can modifiy it
 
@@ -148,7 +148,7 @@ Error File_resolve(
 
 			if(!i) {
 				res.length = realSplitLen;
-				_gotoIfError(clean, Error_invalidParameter(0, 0, 0));
+				_gotoIfError(clean, Error_invalidParameter(0, 0));
 			}
 
 			for (U64 k = res.length - 1; k > i + 1; --k) 
@@ -173,7 +173,7 @@ Error File_resolve(
 			#endif
 
 			res.length = realSplitLen;
-			_gotoIfError(clean, Error_invalidParameter(0, 0, 1));
+			_gotoIfError(clean, Error_invalidParameter(0, 1));
 		}
 
 		//Continue processing the path until it's done
@@ -245,7 +245,7 @@ Error File_resolve(
 	#endif
 
 	if(result->length >= maxFilePathLimit)
-		_gotoIfError(clean, Error_outOfBounds(0, 0, result->length, maxFilePathLimit));
+		_gotoIfError(clean, Error_outOfBounds(0, result->length, maxFilePathLimit));
 
 	return Error_none();
 

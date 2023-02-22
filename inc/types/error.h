@@ -55,15 +55,16 @@ typedef enum EGenericError {
 	EGenericError_Unimplemented
 } EGenericError;
 
-typedef enum EErrorParamValues {
-	EErrorParamValues_None,
-	EErrorParamValues_V0,
-	EErrorParamValues_V1,
-	EErrorParamValues_V0N1
-} EErrorParamValues;
+typedef enum EErrorParamFormat {
+	EErrorParamFormat_None,
+	EErrorParamFormat_ParamIdOnly,
+	EErrorParamFormat_SubIdOnly,
+	EErrorParamFormat_ParamAndSubId,
+	EErrorParamFormat_All
+} EErrorParamFormat;
 
 extern const C8 *EGenericError_TO_STRING[];
-extern const EErrorParamValues EGenericError_HAS_PARAM_VALUES[];
+extern const EErrorParamFormat EGenericError_HAS_PARAM_VALUES[];
 
 //Only direct caller preserved to save space in release mode
 
@@ -81,7 +82,6 @@ typedef struct Error {
 	U32 errorSubId;
 
 	U32 paramId;
-	U32 paramSubId;
 
 	U64 paramValue0;
 	U64 paramValue1;
@@ -102,16 +102,16 @@ impl void Error_fillStackTrace(Error *err);
 
 Error Error_platformError(U32 subId, U64 platformError);
 Error Error_outOfMemory(U32 subId);
-Error Error_outOfBounds(U32 paramId, U32 paramSubId, U64 id, U64 limit);
-Error Error_nullPointer(U32 paramId, U32 paramSubId);
+Error Error_outOfBounds(U32 paramId, U64 id, U64 limit);
+Error Error_nullPointer(U32 paramId);
 Error Error_unauthorized(U32 subId);
-Error Error_notFound(U32 subId, U32 paramId, U32 paramSubId);
+Error Error_notFound(U32 subId, U32 paramId);
 Error Error_divideByZero(U32 subId, U64 a, U64 b);
-Error Error_overflow(U32 paramId, U32 paramSubId, U64 a, U64 b);
-Error Error_underflow(U32 paramId, U32 paramSubId, U64 a, U64 b);
+Error Error_overflow(U32 paramId, U64 a, U64 b);
+Error Error_underflow(U32 paramId, U64 a, U64 b);
 Error Error_NaN(U32 subId);
-Error Error_invalidEnum(U32 paramId, U32 paramSubId, U64 value, U64 maxValue);
-Error Error_invalidParameter(U32 paramId, U32 paramSubId, U32 subId);
+Error Error_invalidEnum(U32 paramId, U64 value, U64 maxValue);
+Error Error_invalidParameter(U32 paramId, U32 subId);
 Error Error_invalidOperation(U32 subId);
 Error Error_invalidCast(U32 subId, U32 typeId, U32 castTypeId);
 Error Error_invalidState(U32 subId);

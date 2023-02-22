@@ -62,43 +62,25 @@ void XXFile_printType(U8 type) {
 
 	if (type >> 4) {
 
+		const C8 *typeStr = "Unrecognized";
+
 		switch (type >> 4) {
-
-			case EXXCompressionType_Brotli11:
-				Log_debug(String_createConstRefUnsafe("Compression type: Brotli:11."), ELogOptions_NewLine);
-				break;
-
-			case EXXCompressionType_Brotli1:
-				Log_debug(String_createConstRefUnsafe("Compression type: Brotli:1."), ELogOptions_NewLine);
-				break;
-
-			default:
-				Log_debug(String_createConstRefUnsafe("Compression type: Unrecognized."), ELogOptions_NewLine);
+			case EXXCompressionType_Brotli11:	typeStr = "Brotli:11";		break;
+			case EXXCompressionType_Brotli1:	typeStr = "Brotli:1";		break;
 		}
+
+		Log_debugLn("Compression type: %s.", typeStr);
 	}
 
 	if (type & 0xF) {
-
-		switch (type & 0xF) {
-
-			case EXXEncryptionType_AES256GCM:
-				Log_debug(String_createConstRefUnsafe("Encryption type: AES256GCM."), ELogOptions_NewLine);
-				break;
-
-			default:
-				Log_debug(String_createConstRefUnsafe("Encryption type: Unrecognized."), ELogOptions_NewLine);
-		}
+		const C8 *typeStr = (type & 0xF) == EXXEncryptionType_AES256GCM ? "AES256GCM" : "Unrecognized";
+		Log_debugLn("Encryption type: %s.", typeStr);
 	}
 }
 
 void XXFile_printVersion(U8 v) {
-
-	//Version
-
 	VersionString str = VersionString_get(v);
-
-	Log_debug(String_createConstRefUnsafe("Version: "), ELogOptions_None);
-	Log_debug(String_createConstRefAuto(str.v, sizeof(str.v)), ELogOptions_NewLine);
+	Log_debugLn("Version: %s", str.v);
 }
 
 //Inspect header is a lightweight checker for the header.
@@ -115,17 +97,17 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 	String tmp = String_createNull();
 
 	if ((err = ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &path)).genericError) {
-		Log_error(String_createConstRefUnsafe("Invalid argument -i <string>."), ELogOptions_NewLine);
+		Log_errorLn("Invalid argument -i <string>.");
 		goto clean;
 	}
 
 	if ((err = File_read(path, 1 * SECOND, &buf)).genericError) {
-		Log_error(String_createConstRefUnsafe("Invalid file path."), ELogOptions_NewLine);
+		Log_errorLn("Invalid file path.");
 		goto clean;
 	}
 
 	if (Buffer_length(buf) < 4) {
-		Log_error(String_createConstRefUnsafe("File has to start with magic number."), ELogOptions_NewLine);
+		Log_errorLn("File has to start with magic number.");
 		goto clean;
 	}
 
@@ -137,7 +119,7 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 	}
 
 	if (Buffer_length(buf) < reqLen) {
-		Log_error(String_createConstRefUnsafe("File wasn't the right size."), ELogOptions_NewLine);
+		Log_errorLn("File wasn't the right size.");
 		goto clean;
 	}
 
@@ -149,7 +131,7 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 			
 			CAHeader caHeader = *(const CAHeader*)buf.ptr;
 
-			Log_debug(String_createConstRefUnsafe("Detected oiCA file with following info:"), ELogOptions_NewLine);
+			Log_debugLn("Detected oiCA file with following info:");
 
 			XXFile_printVersion(caHeader.version);
 
@@ -162,26 +144,16 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 				"U64 (64-bit number)"
 			};
 
-			Log_debug(String_createConstRefUnsafe("Data size type uses "), ELogOptions_None);
-
-			Log_debug(
-				String_createConstRefUnsafe(
-					dataTypes[(caHeader.flags >> ECAFlags_FileSizeType_Shift) & ECAFlags_FileSizeType_Mask]
-				), 
-				ELogOptions_NewLine
+			Log_debugLn(
+				"Data size type uses %s.", 
+				dataTypes[(caHeader.flags >> ECAFlags_FileSizeType_Shift) & ECAFlags_FileSizeType_Mask]
 			);
 
-			if (caHeader.type >> 4) {
-
-				Log_debug(String_createConstRefUnsafe("Compression size type uses "), ELogOptions_None);
-
-				Log_debug(
-					String_createConstRefUnsafe(
-						dataTypes[(caHeader.flags >> ECAFlags_CompressedSizeType_Shift) & ECAFlags_CompressedSizeType_Mask]
-					), 
-					ELogOptions_NewLine
+			if (caHeader.type >> 4)
+				Log_debugLn(
+					"Compression size type uses %s.", 
+					dataTypes[(caHeader.flags >> ECAFlags_CompressedSizeType_Shift) & ECAFlags_CompressedSizeType_Mask]
 				);
-			}
 
 			//File and directory count
 
@@ -192,7 +164,7 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 			reqLen += caHeader.flags & ECAFlags_DirectoriesCountLong ? sizeof(U16) : sizeof(U8);
 
 			if (Buffer_length(buf) < reqLen) {
-				Log_error(String_createConstRefUnsafe("File wasn't the right size."), ELogOptions_NewLine);
+				Log_errorLn("File wasn't the right size.");
 				goto clean;
 			}
 
@@ -208,15 +180,8 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 				caHeader.flags & ECAFlags_DirectoriesCountLong ? EXXDataSizeType_U16 : EXXDataSizeType_U8
 			);
 
-			_gotoIfError(clean, String_createDecx(dirCount, 0, &tmp));
-			Log_debug(String_createConstRefUnsafe("Directory count: "), ELogOptions_None);
-			Log_debug(tmp, ELogOptions_NewLine);
-			String_freex(&tmp);
-
-			_gotoIfError(clean, String_createDecx(fileCount, 0, &tmp));
-			Log_debug(String_createConstRefUnsafe("File count: "), ELogOptions_None);
-			Log_debug(tmp, ELogOptions_NewLine);
-			String_freex(&tmp);
+			Log_debugLn("Directory count: %u", dirCount);
+			Log_debugLn("File count: %u", fileCount);
 
 			//AES chunking
 
@@ -230,11 +195,10 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 					"500 MiB"
 				};
 
-				String aesChunkStr = String_createConstRefUnsafe(chunking[(aesChunking >> ECAFlags_AESChunkShift) - 1]);
-
-				Log_debug(String_createConstRefUnsafe("AES Chunking uses "), ELogOptions_None);
-				Log_debug(aesChunkStr, ELogOptions_None);
-				Log_debug(String_createConstRefUnsafe("per chunk."), ELogOptions_NewLine);
+				Log_debugLn(
+					"AES Chunking uses %s per chunk.", 
+					chunking[(aesChunking >> ECAFlags_AESChunkShift) - 1]
+				);
 			}
 
 			//Types
@@ -249,31 +213,16 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 				reqLen += sizeof(CAExtraInfo);
 
 				if (Buffer_length(buf) < reqLen) {
-					Log_error(String_createConstRefUnsafe("File wasn't the right size."), ELogOptions_NewLine);
+					Log_errorLn("File wasn't the right size.");
 					goto clean;
 				}
 
 				CAExtraInfo extraInfo = *(const CAExtraInfo*)(buf.ptr + oldPtr);
 
-				_gotoIfError(clean, String_createHexx(extraInfo.extendedMagicNumber, 8, &tmp));
-				Log_debug(String_createConstRefUnsafe("Extended magic number: "), ELogOptions_None);
-				Log_debug(tmp, ELogOptions_NewLine);
-				String_freex(&tmp);
-
-				_gotoIfError(clean, String_createDecx(extraInfo.headerExtensionSize, 0, &tmp));
-				Log_debug(String_createConstRefUnsafe("Extended header size: "), ELogOptions_None);
-				Log_debug(tmp, ELogOptions_NewLine);
-				String_freex(&tmp);
-
-				_gotoIfError(clean, String_createDecx(extraInfo.directoryExtensionSize, 0, &tmp));
-				Log_debug(String_createConstRefUnsafe("Extended per directory size: "), ELogOptions_None);
-				Log_debug(tmp, ELogOptions_NewLine);
-				String_freex(&tmp);
-
-				_gotoIfError(clean, String_createDecx(extraInfo.fileExtensionSize, 0, &tmp));
-				Log_debug(String_createConstRefUnsafe("Extended per file size: "), ELogOptions_None);
-				Log_debug(tmp, ELogOptions_NewLine);
-				String_freex(&tmp);
+				Log_debugLn("Extended magic number: %08X", extraInfo.extendedMagicNumber);
+				Log_debugLn("Extended header size: %u", extraInfo.headerExtensionSize);
+				Log_debugLn("Extended per directory size: %u", extraInfo.directoryExtensionSize);
+				Log_debugLn("Extended per file size: %u", extraInfo.fileExtensionSize);
 			}
 
 			//Flags
@@ -296,17 +245,14 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 
 			if(caHeader.flags & ~ECAFlags_NonFlagTypes) {
 
-				Log_debug(String_createConstRefUnsafe("Flags: "), ELogOptions_NewLine);
+				Log_debugLn("Flags: ");
 
 				for(U64 i = 0; i < sizeof(caHeader.flags) << 3; ++i) {
 
 					const C8 *flag = flags[U64_min(i, sizeof(flags) / sizeof(flags[0]) - 1)];
 
 					if((caHeader.flags >> i) & 1 && flag)
-						Log_debug(
-							String_createConstRefUnsafe(flag), 
-							ELogOptions_NewLine
-						);
+						Log_debugLn(flag);
 				}
 			}
 
@@ -319,7 +265,7 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 		
 			DLHeader dlHeader = *(const DLHeader*)(buf.ptr + sizeof(U32));
 
-			Log_debug(String_createConstRefUnsafe("Detected oiDL file with following info:"), ELogOptions_NewLine);
+			Log_debugLn("Detected oiDL file with following info:");
 
 			XXFile_printVersion(dlHeader.version);
 			
@@ -335,11 +281,10 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 					"100 MiB"
 				};
 
-				String aesChunkStr = String_createConstRefUnsafe(chunking[(aesChunking >> EDLFlags_AESChunkShift) - 1]);
-
-				Log_debug(String_createConstRefUnsafe("AES Chunking uses "), ELogOptions_None);
-				Log_debug(aesChunkStr, ELogOptions_None);
-				Log_debug(String_createConstRefUnsafe("per chunk."), ELogOptions_NewLine);
+				Log_debugLn(
+					"AES Chunking uses %s per chunk.", 
+					chunking[(aesChunking >> EDLFlags_AESChunkShift) - 1]
+				);
 			}
 
 			//Types
@@ -355,21 +300,17 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 				"U64 (64-bit number)"
 			};
 
-			Log_debug(String_createConstRefUnsafe("Entry count size type uses "), ELogOptions_None);
-			Log_debug(String_createConstRefUnsafe(dataTypes[dlHeader.sizeTypes & 3]), ELogOptions_NewLine);
+			Log_debugLn("Entry count size type uses %s", dataTypes[dlHeader.sizeTypes & 3]);
 
-			if (dlHeader.type >> 4) {
-				Log_debug(String_createConstRefUnsafe("Compression size type uses "), ELogOptions_None);
-				Log_debug(String_createConstRefUnsafe(dataTypes[(dlHeader.sizeTypes >> 2) & 3]), ELogOptions_NewLine);
-			}
+			if (dlHeader.type >> 4)
+				Log_debugLn("Compression size type uses %s", dataTypes[(dlHeader.sizeTypes >> 2) & 3]);
 
-			Log_debug(String_createConstRefUnsafe("Buffer size type uses "), ELogOptions_None);
-			Log_debug(String_createConstRefUnsafe(dataTypes[(dlHeader.sizeTypes >> 4) & 3]), ELogOptions_NewLine);
+			Log_debugLn("Buffer size type uses %s", dataTypes[(dlHeader.sizeTypes >> 4) & 3]);
 
 			reqLen += (U64)1 << (dlHeader.sizeTypes & 3);
 
 			if (Buffer_length(buf) < reqLen) {
-				Log_error(String_createConstRefUnsafe("File wasn't the right size."), ELogOptions_NewLine);
+				Log_errorLn("File wasn't the right size.");
 				goto clean;
 			}
 
@@ -380,10 +321,7 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 				(EXXDataSizeType)(dlHeader.sizeTypes & 3)
 			);
 
-			_gotoIfError(clean, String_createDecx(entryCount, 0, &tmp));
-			Log_debug(String_createConstRefUnsafe("Entry count: "), ELogOptions_None);
-			Log_debug(tmp, ELogOptions_NewLine);
-			String_freex(&tmp);
+			Log_debugLn("Entry count: %u", entryCount);
 
 			//Extended data
 
@@ -393,26 +331,15 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 				reqLen += sizeof(DLExtraInfo);
 
 				if (Buffer_length(buf) < reqLen) {
-					Log_error(String_createConstRefUnsafe("File wasn't the right size."), ELogOptions_NewLine);
+					Log_errorLn("File wasn't the right size.");
 					goto clean;
 				}
 
 				DLExtraInfo extraInfo = *(const DLExtraInfo*)(buf.ptr + oldPtr);
 
-				_gotoIfError(clean, String_createHexx(extraInfo.extendedMagicNumber, 8, &tmp));
-				Log_debug(String_createConstRefUnsafe("Extended magic number: "), ELogOptions_None);
-				Log_debug(tmp, ELogOptions_NewLine);
-				String_freex(&tmp);
-
-				_gotoIfError(clean, String_createDecx(extraInfo.extendedHeader, 0, &tmp));
-				Log_debug(String_createConstRefUnsafe("Extended header size: "), ELogOptions_None);
-				Log_debug(tmp, ELogOptions_NewLine);
-				String_freex(&tmp);
-
-				_gotoIfError(clean, String_createDecx(extraInfo.perEntryExtendedData, 0, &tmp));
-				Log_debug(String_createConstRefUnsafe("Extended per entry size: "), ELogOptions_None);
-				Log_debug(tmp, ELogOptions_NewLine);
-				String_freex(&tmp);
+				Log_debugLn("Extended magic number: %08X", extraInfo.extendedMagicNumber);
+				Log_debugLn("Extended header size: %u", extraInfo.extendedHeader);
+				Log_debugLn("Extended per entry size: %u", extraInfo.perEntryExtendedData);
 			}
 
 			//Flags
@@ -429,17 +356,14 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 
 			if(dlHeader.flags & ~EDLFlags_AESChunkMask) {
 
-				Log_debug(String_createConstRefUnsafe("Flags: "), ELogOptions_NewLine);
+				Log_debugLn("Flags: ");
 
 				for (U64 i = 0; i < sizeof(dlHeader.flags) << 3; ++i) {
 
 					const C8 *flag = flags[U64_min(i, sizeof(flags) / sizeof(flags[0]) - 1)];
 
 					if((dlHeader.flags >> i) & 1 && flag)
-						Log_debug(
-							String_createConstRefUnsafe(flag), 
-							ELogOptions_NewLine
-						);
+						Log_debugLn(flag);
 				}
 			}
 
@@ -449,7 +373,7 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 		//Invalid
 
 		default:
-			Log_error(String_createConstRefUnsafe("File had unrecognized magic number"), ELogOptions_NewLine);
+			Log_errorLn("File had unrecognized magic number");
 			goto clean;
 	}
 
@@ -523,7 +447,7 @@ Bool CLI_showFile(ParsedArgs args, Buffer b, U64 start, U64 length, Bool isAscii
 	//Validate offset
 
 	if (start + ((Bool)Buffer_length(b)) > Buffer_length(b)) {
-		Log_debug(String_createConstRefUnsafe("Section out of bounds."), ELogOptions_NewLine);
+		Log_debugLn("Section out of bounds.");
 		return false;
 	}
 
@@ -540,14 +464,14 @@ Bool CLI_showFile(ParsedArgs args, Buffer b, U64 start, U64 length, Bool isAscii
 			length = Buffer_length(b) - start;
 
 		if (start + length > Buffer_length(b)) {
-			Log_debug(String_createConstRefUnsafe("Section out of bounds."), ELogOptions_NewLine);
+			Log_debugLn("Section out of bounds.");
 			goto clean;
 		}
 
 		String out = String_createNull();
 
 		if ((err = ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &out)).genericError) {
-			Log_error(String_createConstRefUnsafe("Invalid argument -o <string>."), ELogOptions_NewLine);
+			Log_errorLn("Invalid argument -o <string>.");
 			goto clean;
 		}
 
@@ -560,19 +484,11 @@ Bool CLI_showFile(ParsedArgs args, Buffer b, U64 start, U64 length, Bool isAscii
 	else {
 
 		if (!Buffer_length(b)) {
-			Log_debug(String_createConstRefUnsafe("Section is empty."), ELogOptions_NewLine);
+			Log_debugLn("Section is empty.");
 			goto clean;
 		}
 
-		//Show file length
-
-		Log_debug(String_createConstRefUnsafe("Section has "), ELogOptions_None);
-
-		_gotoIfError(clean, String_createDecx(Buffer_length(b), 0, &tmp));
-		Log_debug(tmp, ELogOptions_None);
-		String_freex(&tmp);
-
-		Log_debug(String_createConstRefUnsafe(" bytes"), ELogOptions_NewLine);
+		Log_debugLn("Section has %u bytes.", Buffer_length(b));
 
 		//Get length
 
@@ -584,34 +500,20 @@ Bool CLI_showFile(ParsedArgs args, Buffer b, U64 start, U64 length, Bool isAscii
 		else length = U64_min(max * 2, length);
 
 		if (start + length > Buffer_length(b)) {
-			Log_debug(String_createConstRefUnsafe("Section out of bounds."), ELogOptions_NewLine);
+			Log_debugLn("Section out of bounds.");
 			goto clean;
 		}
 
 		//Show what offset is being displayed
 
-		Log_debug(String_createConstRefUnsafe("Showing offset "), ELogOptions_None);
-
-		_gotoIfError(clean, String_createHexx(start, 0, &tmp));
-		Log_debug(tmp, ELogOptions_None);
-		String_freex(&tmp);
-
-		Log_debug(String_createConstRefUnsafe(" with size "), ELogOptions_None);
-
-		_gotoIfError(clean, String_createDecx(length, 0, &tmp));
-		Log_debug(tmp, ELogOptions_NewLine);
-		String_freex(&tmp);
-
-		Log_debug(
-			String_createConstRefUnsafe(isAscii ? "File contents: (ascii)" : "File contents: (binary)"), 
-			ELogOptions_NewLine
-		);
+		Log_debugLn("Showing offset %X with size %u", start, length);
+		Log_debugLn(isAscii ? "File contents: (ascii)" : "File contents: (binary)");
 
 		//Ascii can be directly output to log
 
 		if (isAscii) {
 			String tmp = String_createConstRefSized(b.ptr + start, length);
-			Log_debug(tmp, ELogOptions_NewLine);
+			Log_debugLn("%.*s", tmp.length, tmp.ptr);
 			tmp = String_createNull();
 		}
 
@@ -632,7 +534,7 @@ Bool CLI_showFile(ParsedArgs args, Buffer b, U64 start, U64 length, Bool isAscii
 				String_freex(&tmp1);
 			}
 
-			Log_debug(tmp, ELogOptions_NewLine);
+			Log_debugLn("%.*s", tmp.length, tmp.ptr);
 			String_freex(&tmp);
 		}
 	}
@@ -658,17 +560,17 @@ Bool CLI_storeFileOrFolder(ParsedArgs args, ArchiveEntry e, Archive a, Bool *mad
 	if (e.type == EFileType_Folder) {
 
 		if(start || (len && len != a.entries.length))
-			Log_warn(String_createConstRefUnsafe("Folder output to disk ignores offset and/or count."), ELogOptions_NewLine);
+			Log_warnLn("Folder output to disk ignores offset and/or count.");
 
 		String out = String_createNull();
 
 		if ((err = ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &out)).genericError) {
-			Log_error(String_createConstRefUnsafe("Invalid argument -o <string>."), ELogOptions_NewLine);
+			Log_errorLn("Invalid argument -o <string>.");
 			goto clean;
 		}
 
 		_gotoIfError(clean, File_add(out, EFileType_Folder, 1 * SECOND));
-		madeFile = true;
+		*madeFile = true;
 
 		_gotoIfError(clean, String_createCopyx(out, &tmp));
 		_gotoIfError(clean, String_appendx(&tmp, '/'));
@@ -724,17 +626,17 @@ Bool CLI_inspectData(ParsedArgs args) {
 	//Get file
 
 	if ((err = ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &path)).genericError) {
-		Log_error(String_createConstRefUnsafe("Invalid argument -i <string>."), ELogOptions_NewLine);
+		Log_errorLn("Invalid argument -i <string>.");
 		goto clean;
 	}
 
 	if ((err = File_read(path, 1 * SECOND, &buf)).genericError) {
-		Log_error(String_createConstRefUnsafe("Invalid file path."), ELogOptions_NewLine);
+		Log_errorLn("Invalid file path.");
 		goto clean;
 	}
 
 	if (Buffer_length(buf) < 4) {
-		Log_error(String_createConstRefUnsafe("File has to start with magic number."), ELogOptions_NewLine);
+		Log_errorLn("File has to start with magic number.");
 		goto clean;
 	}
 
@@ -744,7 +646,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 	if (args.parameters & EOperationHasParameter_Entry)
 		if ((err = ParsedArgs_getArg(args, EOperationHasParameter_EntryShift, &entry)).genericError) {
-			Log_error(String_createConstRefUnsafe("Invalid argument -e <string or uint>."), ELogOptions_NewLine);
+			Log_errorLn("Invalid argument -e <string or uint>.");
 			goto clean;
 		}
 
@@ -759,7 +661,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 			!String_parseDec(starts, &start) ||
 			(start >> 32)
 		) {
-			Log_error(String_createConstRefUnsafe("Invalid argument -s <uint>."), ELogOptions_NewLine);
+			Log_errorLn("Invalid argument -s <uint>.");
 			goto clean;
 		}
 
@@ -774,7 +676,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 			!String_parseDec(lengths, &length) ||
 			(length >> 32)
 		) {
-			Log_error(String_createConstRefUnsafe("Invalid argument -l <uint>."), ELogOptions_NewLine);
+			Log_errorLn("Invalid argument -l <uint>.");
 			goto clean;
 		}
 
@@ -791,24 +693,14 @@ Bool CLI_inspectData(ParsedArgs args) {
 			(ParsedArgs_getArg(args, EOperationHasParameter_AESShift, &key)).genericError || 
 			!String_isHex(key)
 		) {
-
-			Log_error(
-				String_createConstRefUnsafe("Invalid parameter sent to -aes. Expecting key in hex (32 bytes)"), 
-				ELogOptions_NewLine
-			);
-
+			Log_errorLn("Invalid parameter sent to -aes. Expecting key in hex (32 bytes)");
 			return false;
 		}
 
 		U64 off = String_startsWithString(key, String_createConstRefUnsafe("0x"), EStringCase_Insensitive) ? 2 : 0;
 
 		if (key.length - off != 64) {
-
-			Log_error(
-				String_createConstRefUnsafe("Invalid parameter sent to -aes. Expecting 32-byte key in hex"), 
-				ELogOptions_NewLine
-			);
-
+			Log_errorLn("Invalid parameter sent to -aes. Expecting key in hex (32 bytes)");
 			return false;
 		}
 
@@ -850,23 +742,12 @@ Bool CLI_inspectData(ParsedArgs args) {
 				if (index == U64_MAX) {
 
 					if (!String_parseDec(entry, &index)) {
-
-						Log_error(
-							String_createConstRefUnsafe("Invalid argument -e <uint> or <valid path> expected."), 
-							ELogOptions_NewLine
-						);
-
+						Log_errorLn("Invalid argument -e <uint> or <valid path> expected.");
 						goto cleanCa;
 					}
 
 					if (index >= file.archive.entries.length) {
-
-						_gotoIfError(cleanCa, String_createDecx(file.archive.entries.length, 0, &tmp));
-
-						Log_error(String_createConstRefUnsafe("Index out of bounds, max is "), ELogOptions_None);
-						Log_error(tmp, ELogOptions_NewLine);
-						String_freex(&tmp);
-
+						Log_errorLn("Index out of bounds, max is %u.", file.archive.entries.length);
 						goto cleanCa;
 					}
 				}
@@ -904,7 +785,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 					else {
 						Bool isAscii = String_isValidAscii(String_createConstRefSized(e.data.ptr, Buffer_length(e.data)));
-						Log_debug(e.path, ELogOptions_NewLine);
+						Log_debugLn("%.*s", e.path.length, e.path.ptr);
 						CLI_showFile(args, e.data, start, length, isAscii);
 						goto cleanCa;
 					}
@@ -949,25 +830,10 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 			U64 end = start + length;
 
-			Log_debug(String_createConstRefUnsafe("Showing offset "), ELogOptions_None);
-
-			_gotoIfError(clean, String_createDecx(start, 0, &tmp));
-			Log_debug(tmp, ELogOptions_None);
-			String_freex(&tmp);
-
-			Log_debug(String_createConstRefUnsafe(" with count "), ELogOptions_None);
-
-			_gotoIfError(clean, String_createDecx(length, 0, &tmp));
-			Log_debug(tmp, ELogOptions_None);
-			String_freex(&tmp);
-
-			Log_debug(String_createConstRefUnsafe(" in selected folder (File contains "), ELogOptions_None);
-
-			_gotoIfError(clean, String_createDecx(file.archive.entries.length, 0, &tmp));
-			Log_debug(tmp, ELogOptions_None);
-			String_freex(&tmp);
-
-			Log_debug(String_createConstRefUnsafe(" entries)"), ELogOptions_NewLine);
+			Log_debugLn(
+				"Showing offset %X with count %u in selected folder (File contains %u entries)",
+				start, length, file.archive.entries.length
+			);
 
 			for(U64 i = start; i < end && i < strings.length; ++i) {
 
@@ -981,7 +847,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 				//001:   child (indented by 2)
 
 				if(v == U64_MAX)
-					_gotoIfError(cleanCa, Error_notFound(0, 0, 0));
+					_gotoIfError(cleanCa, Error_notFound(0, 0));
 
 				_gotoIfError(cleanCa, String_createDecx(v, 3, &tmp));
 				_gotoIfError(cleanCa, String_createx(' ', 2 * (parentCount - baseCount), &tmp1));
@@ -998,12 +864,12 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 				//Log and free temp
 
-				Log_debug(tmp, ELogOptions_NewLine);
+				Log_debugLn("%.*s", tmp.length, tmp.ptr);
 				String_freex(&tmp);
 			}
 
 			if(!strings.length)
-				Log_debug(String_createConstRefUnsafe("Folder is empty."), ELogOptions_NewLine);
+				Log_debugLn("Folder is empty.");
 
 		cleanCa:
 
@@ -1047,18 +913,12 @@ Bool CLI_inspectData(ParsedArgs args) {
 				U64 entryI = 0;
 
 				if (!String_parseDec(entry, &entryI)) {
-					Log_error(String_createConstRefUnsafe("Invalid argument -e <uint> expected."), ELogOptions_NewLine);
+					Log_errorLn("Invalid argument -e <uint> expected.");
 					goto cleanDl;
 				}
 
 				if (entryI >= file.entries.length) {
-
-					_gotoIfError(cleanDl, String_createDecx(file.entries.length, 0, &tmp));
-
-					Log_error(String_createConstRefUnsafe("Index out of bounds, max is "), ELogOptions_None);
-					Log_error(tmp, ELogOptions_NewLine);
-					String_freex(&tmp);
-
+					Log_errorLn("Index out of bounds, max is %u", file.entries.length);
 					goto cleanDl;
 				}
 
@@ -1075,7 +935,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 			else {
 
-				Log_debug(String_createConstRefUnsafe("oiDL Entries:"), ELogOptions_NewLine);
+				Log_debugLn("oiDL Entries:");
 
 				for (U64 i = start; i < end && i < file.entries.length; ++i) {
 
@@ -1091,7 +951,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 					_gotoIfError(cleanDl, String_createDecx(entrySize, 0, &tmp1));
 					_gotoIfError(cleanDl, String_appendStringx(&tmp, tmp1));
 
-					Log_debug(tmp, ELogOptions_NewLine);
+					Log_debugLn("%.*s", tmp);
 					String_freex(&tmp);
 					String_freex(&tmp1);
 				}
@@ -1112,7 +972,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 		//Invalid
 
 		default:
-			Log_error(String_createConstRefUnsafe("File had unrecognized magic number"), ELogOptions_NewLine);
+			Log_errorLn("File had unrecognized magic number.");
 			goto clean;
 	}
 

@@ -25,11 +25,6 @@
 #include "types/error.h"
 #include "types/string.h"
 
-typedef struct LogArgs {
-	U64 argc;
-	String const *args;
-} LogArgs;
-
 typedef enum ELogLevel {
 	ELogLevel_Debug,
 	ELogLevel_Performance,
@@ -54,21 +49,25 @@ typedef enum ELogOptions {
 impl void Log_captureStackTrace(void **stackTrace, U64 stackSize, U64 skip);
 
 impl void Log_printCapturedStackTraceCustom(const void **stackTrace, U64 stackSize, ELogLevel lvl, ELogOptions options);
-impl void Log_log(ELogLevel lvl, ELogOptions options, LogArgs args);
+impl void Log_log(ELogLevel lvl, ELogOptions options, String arg);
 
 void Log_printCapturedStackTrace(const StackTrace stackTrace, ELogLevel lvl, ELogOptions options);
 
 void Log_printStackTrace(U64 skip, ELogLevel lvl, ELogOptions options);
 
-void Log_debug(String s, ELogOptions options);
-void Log_performance(String s, ELogOptions options);
-void Log_warn(String s, ELogOptions options);
-void Log_error(String s, ELogOptions options);
-void Log_fatal(String s, ELogOptions options);
+//IMPORTANT:
+//NEVER! Supply user generated content into format. Instead use "%.*s".
+//When displaying strings, use "%.*s", args.length, arg.ptr instead of args.ptr, because strings aren't null terminated.
+//(Only exception is if the strings are safely generated from code and are determined to be null terminated, then use %s)
 
-void Log_num(LongString result, U64 v, U64 base, const C8 prepend[2]);
-void Log_num64(LongString result, U64 v);		//0n[0-9a-zA-Z_$]+ aka Nytodecimal. $ is ASCII and allowed in var name
-void Log_num16(LongString result, U64 v);		//0x[0-9a-f]+
-void Log_num10(LongString result, U64 v);		//[0-9]+
-void Log_num8(LongString result, U64 v);		//[0-7]+
-void Log_num2(LongString result, U64 v);		//[0-1]+
+void Log_debug(ELogOptions options, const C8 *format, ...);
+void Log_performance(ELogOptions options, const C8 *format, ...);
+void Log_warn(ELogOptions options, const C8 *format, ...);
+void Log_error(ELogOptions options, const C8 *format, ...);
+void Log_fatal(ELogOptions options, const C8 *format, ...);
+
+#define Log_debugLn(...)		Log_debug(ELogOptions_NewLine, __VA_ARGS__)
+#define Log_performanceLn(...)	Log_performance(ELogOptions_NewLine, __VA_ARGS__)
+#define Log_warnLn(...)			Log_warn(ELogOptions_NewLine, __VA_ARGS__)
+#define Log_errorLn(...)		Log_error(ELogOptions_NewLine, __VA_ARGS__)
+#define Log_fatalLn(...)		Log_fatal(ELogOptions_NewLine, __VA_ARGS__)

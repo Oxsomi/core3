@@ -126,7 +126,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 			if (GetRawInputData((HRAWINPUT)lParam, RID_INPUT, buf.ptr, &size, sizeof(RAWINPUTHEADER)) != size) {
 				Error_printx(Error_platformError(0, GetLastError()), ELogLevel_Error, ELogOptions_Default);
 				Buffer_freex(&buf);
-				Log_error(String_createConstRefUnsafe("Couldn't get raw input"), ELogOptions_Default);
+				Log_error(ELogOptions_Default, "Couldn't get raw input");
 				break;
 			}
 
@@ -378,7 +378,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 			if (!GetRawInputDeviceInfoA((HANDLE)lParam, RIDI_DEVICEINFO, &deviceInfo, &size)) {
 				Error_printx(Error_platformError(0, GetLastError()), ELogLevel_Error, ELogOptions_Default);
-				Log_error(String_createConstRefUnsafe("Invalid data in WM_INPUT_DEVICE_CHANGE"), ELogOptions_Default);
+				Log_error(ELogOptions_Default, "Invalid data in WM_INPUT_DEVICE_CHANGE");
 				break;
 			}
 
@@ -397,7 +397,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 				//Because it might be relying on keys that don't exist there
 
 				if(isKeyboard && deviceInfo.keyboard.dwKeyboardMode != 0x4)
-					Log_warn(String_createConstRefUnsafe("Possibly unsupported type of keyboard!"), ELogOptions_Default);
+					Log_warn(ELogOptions_Default, "Possibly unsupported type of keyboard!");
 
 				//Create input device
 
@@ -456,7 +456,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 					if(err.genericError) {
 						Buffer_freex(&device.dataExt);
 						InputDevice_free(&device);
-						Log_error(String_createConstRefUnsafe("Couldn't register device; "), ELogOptions_Default);
+						Log_error(ELogOptions_Default, "Couldn't register device");
 						break;
 					}
 
@@ -476,7 +476,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 					Buffer_freex(&device.dataExt);
 					InputDevice_free(&device);
 
-					Log_error(String_createConstRefUnsafe("Couldn't create raw input device"), ELogOptions_Default);
+					Log_error(ELogOptions_Default, "Couldn't create raw input device");
 					break;
 				}
 
@@ -659,10 +659,10 @@ Bool WindowManager_freePhysical(WindowManager *manager, Window **w) {
 Error Window_updatePhysicalTitle(const Window *w, String title) {
 
 	if(!w || !I32x2_any(w->size) || !title.ptr || !title.length)
-		return Error_nullPointer(!w || !I32x2_any(w->size) ? 0 : 1, 0);
+		return Error_nullPointer(!w || !I32x2_any(w->size) ? 0 : 1);
 
 	if (title.length >= MAX_PATH)
-		return Error_outOfBounds(1, 0, title.length, MAX_PATH);
+		return Error_outOfBounds(1, title.length, MAX_PATH);
 
 	C8 windowName[MAX_PATH + 1];
 	Buffer_copy(Buffer_createRef(windowName, sizeof(windowName)), String_bufferConst(title));
@@ -678,7 +678,7 @@ Error Window_updatePhysicalTitle(const Window *w, String title) {
 Error Window_presentPhysical(const Window *w) {
 
 	if(!w || !I32x2_any(w->size))
-		return Error_nullPointer(0, 0);
+		return Error_nullPointer(0);
 
 	if(!(w->flags & EWindowFlags_IsActive) || !(w->hint & EWindowHint_ProvideCPUBuffer))
 		return Error_invalidOperation(0);

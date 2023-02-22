@@ -56,13 +56,13 @@ DWORD ThreadFunc(Thread *thread) {
 Error Thread_create(ThreadCallbackFunction callback, void *objectHandle, Thread **thread) {
 
 	if(!thread)
-		return Error_nullPointer(2, 0);
+		return Error_nullPointer(2);
 
 	if(*thread)
-		return Error_invalidParameter(2, 0, 0);
+		return Error_invalidParameter(2, 0);
 
 	if(!callback)
-		return Error_nullPointer(0, 0);
+		return Error_nullPointer(0);
 
 	Buffer buf = Buffer_createNull();
 
@@ -89,7 +89,7 @@ Error Thread_create(ThreadCallbackFunction callback, void *objectHandle, Thread 
 Error Thread_wait(Thread *thread, U32 maxWaitTimeMs) {
 
 	if(!thread)
-		return Error_nullPointer(0, 0);
+		return Error_nullPointer(0);
 
 	if(WaitForSingleObject(thread->nativeHandle, maxWaitTimeMs) == WAIT_FAILED)
 		return Error_timedOut(0, maxWaitTimeMs);

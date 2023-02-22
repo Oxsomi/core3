@@ -195,7 +195,7 @@ Error _CLI_convertFromCA(ParsedArgs args, String input, FileInfo inputInfo, Stri
 	//TODO: Batch multiple files
 
 	if (inputInfo.type != EFileType_File) {
-		Log_error(String_createConstRefUnsafe("oiCA can only be converted from single file"), ELogOptions_NewLine);
+		Log_errorLn("oiCA can only be converted from single file");
 		return Error_invalidOperation(0);
 	}
 
