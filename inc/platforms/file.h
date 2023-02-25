@@ -83,6 +83,10 @@ impl Error File_readVirtual(String loc, Buffer *output, Ns maxTimeout);
 impl Error File_getInfoVirtual(String loc, FileInfo *info);
 impl Error File_foreachVirtual(String loc, FileCallback callback, void *userData, Bool isRecursive);
 impl Error File_queryFileObjectCountVirtual(String loc, EFileType type, Bool isRecursive, U64 *res);		//Inc files only
-impl Error File_queryFileObjectCountAllVirtual(String loc, Bool isRecursive, U64 *res);					//Inc folders + files
+impl Error File_queryFileObjectCountAllVirtual(String loc, Bool isRecursive, U64 *res);						//Inc folders + files
+
+impl Error File_loadVirtual(String loc, const U32 encryptionKey[8]);		//Load a virtual section
+impl Bool File_isVirtualLoaded(String loc);		//Check if a virtual section is loaded
+impl Error File_unloadVirtual(String loc);		//Unload a virtual section
 
 //TODO: make it more like a DirectStorage-like api

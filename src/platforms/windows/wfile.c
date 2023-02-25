@@ -22,8 +22,13 @@
 */
 
 #include "types/error.h"
+#include "types/buffer.h"
+#include "formats/oiCA.h"
 #include "platforms/file.h"
 #include "platforms/ext/stringx.h"
+#include "platforms/ext/formatx.h"
+#include "platforms/ext/bufferx.h"
+#include "platforms/ext/archivex.h"
 
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
@@ -153,38 +158,236 @@ clean:
 	return err;
 }
 
-//TODO: Virtual file support
+//Virtual file support
 
-Error File_removeVirtual(String loc, Ns maxTimeout) { loc; maxTimeout; return Error_unimplemented(0); }
-Error File_addVirtual(String loc, EFileType type, Ns maxTimeout) { loc; type; maxTimeout; return Error_unimplemented(0); }
+typedef Error (*VirtualFileFunc)(void *userData, String resolved);
+
+Error File_virtualOp(String loc, Ns maxTimeout, VirtualFileFunc f, void *userData, Bool isWrite) {
+
+	maxTimeout;
+
+	Bool isVirtual = false;
+	String resolved = String_createNull();
+	Error err = Error_none();
+
+	_gotoIfError(clean, File_resolvex(loc, &isVirtual, 128, &resolved));
+
+	if(!isVirtual)
+		_gotoIfError(clean, Error_unsupportedOperation(0));
+
+	String access = String_createConstRefUnsafe("//access/");
+	String function = String_createConstRefUnsafe("//function/");
+
+	if (String_startsWithString(loc, access, EStringCase_Insensitive)) {
+		//TODO: Allow //access folder
+		return Error_unimplemented(0);
+	}
+
+	if (String_startsWithString(loc, function, EStringCase_Insensitive)) {
+		//TODO: Allow //function folder (user callbacks)
+		return Error_unimplemented(1);
+	}
+
+	err = isWrite ? Error_constData(1, 0) : (!f ? Error_unimplemented(2) : f(userData, resolved));
+
+clean:
+	String_freex(&resolved);
+	return err;
+}
+
+//These are write operations, we don't support them yet.
+
+Error File_removeVirtual(String loc, Ns maxTimeout) {
+	return File_virtualOp(loc, maxTimeout, NULL, NULL, true);
+}
+
+Error File_addVirtual(String loc, EFileType type, Ns maxTimeout) { 
+	type;
+	return File_virtualOp(loc, maxTimeout, NULL, NULL, true);
+}
 
 Error File_renameVirtual(String loc, String newFileName, Ns maxTimeout) { 
-	loc; newFileName; maxTimeout; return Error_unimplemented(0); 
+	newFileName;
+	return File_virtualOp(loc, maxTimeout, NULL, NULL, true);
 }
 
 Error File_moveVirtual(String loc, String directoryName, Ns maxTimeout) { 
-	loc; directoryName; maxTimeout; return Error_unimplemented(0); 
+	directoryName;
+	return File_virtualOp(loc, maxTimeout, NULL, NULL, true);
 }
 
-Error File_writeVirtual(Buffer buf, String loc, Ns maxTimeout) { maxTimeout; buf; loc; return Error_unimplemented(0); }
+Error File_writeVirtual(Buffer buf, String loc, Ns maxTimeout) {
+	buf;
+	return File_virtualOp(loc, maxTimeout, NULL, NULL, true);
+}
+
+//Read operations
 
 Error File_readVirtual(String loc, Buffer *output, Ns maxTimeout) { 
-	maxTimeout; loc; output; return Error_unimplemented(0); 
+	maxTimeout; loc; output; 
+	return Error_unimplemented(0); 
 }
 
-Error File_getInfoVirtual(String loc, FileInfo *info) { loc; info; return Error_unimplemented(0); }
+Error File_getInfoVirtual(String loc, FileInfo *info) { 
+	loc; info; 
+	return Error_unimplemented(0); 
+}
 
 Error File_foreachVirtual(String loc, FileCallback callback, void *userData, Bool isRecursive) { 
 	loc; callback; userData; isRecursive;
 	return Error_unimplemented(0); 
 }
 
+typedef struct FileCounter {
+	EFileType type;
+	Bool useType;
+	U64 counter;
+} FileCounter;
+
+Error countFileType(FileInfo info, FileCounter *counter) {
+
+	if (!counter->useType) {
+		++counter->counter;
+		return Error_none();
+	}
+
+	if(info.type == counter->type)
+		++counter->counter;
+
+	return Error_none();
+}
+
 Error File_queryFileObjectCountVirtual(String loc, EFileType type, Bool isRecursive, U64 *res) { 
-	loc; type; isRecursive; res;
-	return Error_unimplemented(0); 
+
+	Error err = Error_none();
+
+	if(!res)
+		_gotoIfError(clean, Error_nullPointer(3));
+
+	FileCounter counter = (FileCounter) { .type = type, .useType = true };
+	_gotoIfError(clean, File_foreachVirtual(loc, (FileCallback) countFileType, &counter, isRecursive));
+	*res = counter.counter;
+
+clean:
+	return err;
 }
 
 Error File_queryFileObjectCountAllVirtual(String loc, Bool isRecursive, U64 *res) { 
-	loc; isRecursive; res;
-	return Error_unimplemented(0); 
+
+	Error err = Error_none();
+
+	if(!res)
+		_gotoIfError(clean, Error_nullPointer(2));
+
+	FileCounter counter = (FileCounter) { 0 };
+	_gotoIfError(clean, File_foreachVirtual(loc, (FileCallback) countFileType, &counter, isRecursive));
+	*res = counter.counter;
+
+clean:
+	return err;
 }
+
+typedef struct FileLoadVirtual {
+	Bool doLoad;
+	const U32 *encryptionKey;
+} FileLoadVirtual;
+
+inline Error File_loadVirtualInternal(FileLoadVirtual *userData, String loc) {
+
+	Error err = Error_none();
+
+	for (U64 i = 0; i < Platform_instance.virtualSections.length; ++i) {
+
+		VirtualSection *section = (VirtualSection*)Platform_instance.virtualSections.ptr + i;
+
+		//TODO: Parenting
+
+		if(!String_equalsString(loc, section->path, EStringCase_Insensitive))
+			continue;
+
+		//Load
+
+		if (userData->doLoad) {
+
+			if (!section->loaded) {
+
+				HRSRC data = FindResourceA(NULL, loc.ptr, RT_RCDATA);
+				HGLOBAL handle = NULL;
+				CAFile file = (CAFile) { 0 };
+				Buffer copy = Buffer_createNull();
+
+				if(!data)
+					_gotoIfError(clean, Error_notFound(0, 1));
+
+				U32 size = (U32) SizeofResource(NULL, data);
+				handle = LoadResource(NULL, data);
+
+				if(!handle)
+					_gotoIfError(clean, Error_notFound(3, 1));
+
+				const U8 *dat = (const U8*) LockResource(handle);
+				_gotoIfError(clean, Buffer_createCopyx(Buffer_createConstRef(dat, size), &copy));
+
+				_gotoIfError(clean, CAFile_readx(copy, userData->encryptionKey, &file));
+
+				section->loadedData = file.archive;
+				file.archive = (Archive) { 0 };
+
+				section->loaded = true;
+
+			clean:
+
+				CAFile_freex(&file);
+				Buffer_freex(&copy);
+
+				if (handle) {
+					UnlockResource(handle);
+					FreeResource(handle);
+				}
+			}
+		}
+
+		//Otherwise we want to use error to determine if it's present or not
+
+		else err = section->loaded ? Error_none() : Error_notFound(1, 1);
+
+		return err;
+	}
+
+	return Error_notFound(2, 1);
+}
+
+Error File_unloadVirtualInternal(void *userData, String loc) {
+
+	userData;
+
+	for (U64 i = 0; i < Platform_instance.virtualSections.length; ++i) {
+
+		//TODO: Parenting
+
+		VirtualSection *section = (VirtualSection*)Platform_instance.virtualSections.ptr + i;
+
+		if(!String_equalsString(loc, section->path, EStringCase_Insensitive))
+			continue;
+
+		if(section->loaded)
+			Archive_freex(&section->loadedData);
+	}
+
+	return Error_none();
+}
+
+Bool File_isVirtualLoaded(String loc) {
+	FileLoadVirtual virt = (FileLoadVirtual) { 0 };
+	return !File_loadVirtualInternal(&virt, loc).genericError;
+}
+
+Error File_loadVirtual(String loc, const U32 encryptionKey[8]) {
+	FileLoadVirtual virt = (FileLoadVirtual) { .doLoad = true, .encryptionKey = encryptionKey };
+	return File_virtualOp(loc, 1 * SECOND, (VirtualFileFunc) File_loadVirtualInternal, &virt, false);
+}
+
+Error File_unloadVirtual(String loc) {
+	return File_virtualOp(loc, 1 * SECOND, File_unloadVirtualInternal, NULL, false);
+}
+

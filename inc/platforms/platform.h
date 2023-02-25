@@ -24,6 +24,7 @@
 #pragma once
 #include "types/string.h"
 #include "types/allocator.h"
+#include "types/archive.h"
 #include "platforms/window_manager.h"
 
 typedef enum EPlatform {
@@ -38,6 +39,15 @@ typedef enum EPlatform {
 
 } EPlatform;
 
+typedef struct VirtualSection {
+
+	String path;
+	void *dataExt;			//Information about how to load the virtual file
+	Archive loadedData;		//If the data is in memory, this will be used
+	Bool loaded;
+
+} VirtualSection;
+
 typedef struct Platform {
 
 	EPlatform platformType;
@@ -47,6 +57,8 @@ typedef struct Platform {
 
 	Allocator alloc;
 	WindowManager windowManager;
+
+	List virtualSections;			//<VirtualSection>
 
 	void *data, *dataExt;
 

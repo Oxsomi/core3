@@ -26,6 +26,8 @@
 #include "platforms/log.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/ext/bufferx.h"
+#include "platforms/ext/listx.h"
+#include "platforms/ext/archivex.h"
 #include "platforms/windows/wplatform_ext.h"
 
 #include <locale.h>
@@ -184,6 +186,16 @@ int main(int argc, const char *argv[]) {
 
 void Platform_cleanupExt(Platform *p) {
 
+	//Properly clean virtual files
+
+	for (U64 i = 0; i < Platform_instance.virtualSections.length; ++i) {
+		VirtualSection *sect = ((VirtualSection*)Platform_instance.virtualSections.ptr) + i;
+		String_freex(&sect->path);
+		Archive_freex(&sect->loadedData);
+	}
+
+	List_freex(&Platform_instance.virtualSections);
+
 	//Cleanup platform ext
 
 	if(p->dataExt) {
@@ -195,6 +207,36 @@ void Platform_cleanupExt(Platform *p) {
 	//Reset console text color
 
 	SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), oldColor);
+}
+
+BOOL enumerateFiles(HMODULE mod, LPCSTR unused, LPSTR name, List *sections) {
+
+	mod; unused;
+
+	String str = String_createConstRefUnsafe(name);
+
+	Error err = Error_none();
+	String copy = String_createNull();
+
+	if(String_countAll(str, '/', EStringCase_Sensitive) != 1)
+		Log_warnLn("Executable contained unrecognized RCDATA. Ignoring it...");
+
+	else {
+
+		_gotoIfError(clean, String_createCopyx(str, &copy));
+
+		VirtualSection section = (VirtualSection) { .path = copy };
+		_gotoIfError(clean, List_pushBackx(sections, Buffer_createConstRef(&section, sizeof(section))));
+	}
+
+clean:
+
+	if(err.genericError) {
+		sections->stride = 0;		//Signal that we failed
+		String_freex(&copy);
+	}
+
+	return !err.genericError;
 }
 
 Error Platform_initExt(Platform *result, String currAppDir) {
@@ -289,6 +331,31 @@ Error Platform_initExt(Platform *result, String currAppDir) {
 			return err;
 		}
 	}
+	
+	//Init virtual files
+
+	result->virtualSections = List_createEmpty(sizeof(VirtualSection));
+	if (!EnumResourceNamesA(
+		NULL, RT_RCDATA,
+		(ENUMRESNAMEPROCA)enumerateFiles,
+		(LONG_PTR)&result->virtualSections
+	)) {
+
+		//Enum resource names also fails if we don't have any resources.
+		//To counter this, enumerateFiles sets stride to 0 if the reason it returned false was because of the function.
+
+		if(!result->virtualSections.stride) {
+
+			result->virtualSections.stride = sizeof(VirtualSection);
+
+			List_freex(&result->virtualSections);
+			String_freex(&result->workingDirectory);
+			Buffer_freex(&platformExt);
+			return Error_invalidState(0);
+		}
+	}
+
+	//
 
 	result->dataExt = pext;
 	return Error_none();

@@ -171,6 +171,17 @@ Bool String_isValidFilePath(String str) {
 
 	#endif
 
+	//Virtual files
+
+	if(String_getAt(str, 0) == '/' && String_getAt(str, 1) == '/') {
+
+		if(hasPrefix)
+			return false;
+
+		str.ptr += 2;
+		str.len -= 2;
+	}
+
 	//Absolute path
 
 	if(String_getAt(str, 0) == '/' || String_getAt(str, 0) == '\\') {
@@ -181,17 +192,6 @@ Bool String_isValidFilePath(String str) {
 		++str.ptr;
 		--str.len;
 		hasPrefix = true;
-	}
-
-	//Virtual files
-
-	if(String_getAt(str, 0) == '/' && String_getAt(str, 1) == '/') {
-
-		if(hasPrefix)
-			return false;
-
-		str.ptr += 2;
-		str.len -= 2;
 	}
 
 	//Windows network paths, this is unsupported currently

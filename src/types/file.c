@@ -226,7 +226,7 @@ Error File_resolve(
 
 	//Prepend our path
 
-	else if(String_length(absoluteDir)) 
+	else if(String_length(absoluteDir) && !*isVirtual) 
 		_gotoIfError(clean, String_insertString(result, absoluteDir, 0, alloc));
 
 	//Since we're gonna use this in file operations, we wanna have a null terminator

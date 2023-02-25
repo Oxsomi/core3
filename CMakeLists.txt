@@ -244,6 +244,12 @@ macro(add_virtual_files)
 		message(FATAL_ERROR "add_virtual_files: 'TARGET' has to conform to alphanumeric (plus _ and $).")
 	endif()
 
+	string(TOUPPER ${_ARGS_TARGET} ANGRY_TARGET)
+	
+	if(ANGRY_TARGET MATCHES "access" OR ANGRY_TARGET MATCHES "function")
+		message(FATAL_ERROR "add_virtual_files: 'TARGET' can't be 'access' or 'function'.")
+	endif()
+
 	# Add processed file as a file
 
 	if(WIN32)
