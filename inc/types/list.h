@@ -34,7 +34,7 @@ typedef enum EStringCase EStringCase;
 //Allows both const and non const
 
 typedef struct List {
-	U8 *ptr;
+	const U8 *ptr;
 	U64 stride;
 	U64 length;
 	U64 capacity;		//If capacity is 0 or U64_MAX, it indicates a ref

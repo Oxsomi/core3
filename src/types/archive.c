@@ -65,7 +65,7 @@ Bool Archive_getPath(
 	Allocator alloc
 ) {
 
-	if(!archive.entries.ptr || !path.length)
+	if(!archive.entries.ptr || !String_length(path))
 		return false;
 
 	Bool isVirtual = false;
@@ -86,10 +86,10 @@ Bool Archive_getPath(
 	for(U64 i = 0; i < archive.entries.length; ++i)
 		if (String_equalsString(
 			((ArchiveEntry*)archive.entries.ptr)[i].path, resolvedPath, 
-			EStringCase_Insensitive, true
+			EStringCase_Insensitive
 		)) {
 
-			if(entryOut && !entryOut->path.length)
+			if(entryOut && !String_length(entryOut->path))
 				*entryOut = ((ArchiveEntry*)archive.entries.ptr)[i];
 
 			if(iPtr)
@@ -195,7 +195,7 @@ Error Archive_addInternal(Archive *archive, ArchiveEntry entry, Bool successIfEx
 
 clean:
 
-	if (oldPath.length)
+	if (String_length(oldPath))
 		entry.path = oldPath;
 
 	String_free(&resolved, alloc);
@@ -246,10 +246,7 @@ Error Archive_removeInternal(Archive *archive, String path, Allocator alloc, EFi
 
 		//Get myFolder/*
 
-		if(resolved.length && !resolved.ptr[resolved.length - 1])
-			resolved.ptr[resolved.length - 1] = '/';
-
-		else _gotoIfError(clean, String_append(&resolved, '/', alloc));
+		_gotoIfError(clean, String_append(&resolved, '/', alloc));
 
 		//Remove
 
@@ -324,7 +321,7 @@ Error Archive_rename(
 	String subStr = String_createNull();
 
 	String_cutAfterLast(*prevPath, '/', EStringCase_Sensitive, &subStr);
-	prevPath->length = subStr.length;
+	prevPath->len = String_length(subStr);
 
 	_gotoIfError(clean, String_appendString(prevPath, newFileName, alloc));
 
@@ -365,7 +362,7 @@ Error Archive_move(
 	if (v != U64_MAX)
 		_gotoIfError(clean, String_popFrontCount(filePath, v + 1));
 
-	if (directoryName.length) {
+	if (String_length(directoryName)) {
 		_gotoIfError(clean, String_insert(filePath, '/', 0, alloc));
 		_gotoIfError(clean, String_insertString(filePath, directoryName, 0, alloc));
 	}
@@ -444,7 +441,7 @@ Error Archive_getFileDataInternal(
 	else if(Buffer_isConstRef(entry.data))
 		return Error_constData(1, 0);
 
-	else *data = Buffer_createRef(entry.data.ptr, Buffer_length(entry.data));
+	else *data = Buffer_createRef((U8*)entry.data.ptr, Buffer_length(entry.data));
 
 	return Error_none();
 }
@@ -484,8 +481,8 @@ Error Archive_foreach(
 
 	//Append / (replace last \0)
 
-	if(resolved.length)									//Ignore root
-		resolved.ptr[resolved.length - 1] = '/';
+	if(String_length(resolved))									//Ignore root
+		_gotoIfError(clean, String_append(&resolved, '/', alloc));
 
 	U64 baseSlash = isRecursive ? 0 : String_countAll(resolved, '/', EStringCase_Sensitive);
 

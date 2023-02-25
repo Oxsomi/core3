@@ -243,7 +243,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 		String dirName = String_createNull();
 
 		if(!String_cutBeforeLast(dir, '/', EStringCase_Sensitive, &dirName))
-			dirName = String_createRefSized(dir.ptr, dir.length);
+			dirName = String_createConstRefSized(dir.ptr, String_length(dir), String_isNullTerminated(dir));
 
 		_gotoIfError(clean, DLFile_addEntryAscii(&dlFile, dirName, alloc));
 	}
@@ -254,7 +254,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 		String fileName = String_createNull();
 
 		if(!String_cutBeforeLast(file, '/', EStringCase_Sensitive, &fileName))
-			fileName = String_createRefSized(file.ptr, file.length);
+			fileName = String_createConstRefSized(file.ptr, String_length(file), String_isNullTerminated(file));
 
 		_gotoIfError(clean, DLFile_addEntryAscii(&dlFile, fileName, alloc));
 	}
@@ -287,7 +287,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 
 	//Append DLFile
 
-	Buffer outputBufferIt = Buffer_createRef(outputBuffer.ptr + realHeaderSize, Buffer_length(outputBuffer) - realHeaderSize);
+	Buffer outputBufferIt = Buffer_createRef((U8*)outputBuffer.ptr + realHeaderSize, Buffer_length(outputBuffer) - realHeaderSize);
 
 	_gotoIfError(clean, Buffer_appendBuffer(&outputBufferIt, dlFileBuffer));
 
@@ -325,7 +325,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 
 				if (String_equalsString(
 					((String*)directories.ptr)[j], realParentDir, 
-					EStringCase_Insensitive, true
+					EStringCase_Insensitive
 				)) {
 					parent = (U16) j;
 					break;
@@ -376,7 +376,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 
 				if (String_equalsString(
 					((String*)directories.ptr)[j], realParentDir, 
-					EStringCase_Sensitive, true
+					EStringCase_Sensitive
 				)) {
 					parent = (U16) j;
 					break;
@@ -393,7 +393,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 		for(U64 j = 0; j < caFile.archive.entries.length; ++j)
 			if (String_equalsString(
 				((ArchiveEntry*)caFile.archive.entries.ptr + j)->path, file, 
-				EStringCase_Sensitive, true
+				EStringCase_Sensitive
 			)) {
 				entry = (ArchiveEntry*)caFile.archive.entries.ptr + j;
 				break;
@@ -450,7 +450,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 
 	//Generate header
 
-	U8 *headerIt = outputBuffer.ptr;
+	U8 *headerIt = (U8*)outputBuffer.ptr;
 
 	*((CAHeader*)headerIt) = (CAHeader) {
 
@@ -550,8 +550,8 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 			&b
 		);
 
-		Buffer toEncrypt = Buffer_createRef(outputBuffer.ptr + realHeaderSize, Buffer_length(outputBuffer) - realHeaderSize);
-		Buffer realHeader = Buffer_createRef(outputBuffer.ptr, realHeaderSizeExEnc);
+		Buffer toEncrypt = Buffer_createRef((U8*)outputBuffer.ptr + realHeaderSize, Buffer_length(outputBuffer) - realHeaderSize);
+		Buffer realHeader = Buffer_createConstRef(outputBuffer.ptr, realHeaderSizeExEnc);
 
 		_gotoIfError(clean, Buffer_encrypt(
 
@@ -741,9 +741,6 @@ Error CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFi
 
 			String parentName = ((ArchiveEntry*)archive.entries.ptr + parent)->path;
 
-			if (parentName.length && !parentName.ptr[parentName.length - 1])
-				--parentName.length;
-
 			_gotoIfError(clean, String_insert(&tmpPath, '/', 0, alloc));
 			_gotoIfError(clean, String_insertString(&tmpPath, parentName, 0, alloc));
 		}
@@ -780,9 +777,6 @@ Error CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFi
 				_gotoIfError(clean, Error_invalidOperation(2));
 
 			String parentName = ((ArchiveEntry*)archive.entries.ptr + parent)->path;
-
-			if (parentName.length && !parentName.ptr[parentName.length - 1])
-				--parentName.length;
 
 			_gotoIfError(clean, String_insert(&tmpPath, '/', 0, alloc));
 			_gotoIfError(clean, String_insertString(&tmpPath, parentName, 0, alloc));

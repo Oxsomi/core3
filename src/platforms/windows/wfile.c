@@ -54,17 +54,16 @@ Error File_foreach(String loc, FileCallback callback, void *userData, Bool isRec
 	if(isVirtual)
 		_gotoIfError(clean, Error_invalidOperation(0));
 
-	//Append /*\0 (replace last \0)
+	//Append /*
 
-	resolved.ptr[resolved.length - 1] = '/';
+	_gotoIfError(clean, String_appendx(&resolved, '/'));
 
 	_gotoIfError(clean, String_createCopyx(resolved, &resolvedNoStar));
 
 	_gotoIfError(clean, String_appendx(&resolved, '*'));
-	_gotoIfError(clean, String_appendx(&resolved, '\0'));
 
-	if(resolved.length > MAX_PATH)
-		_gotoIfError(clean, Error_outOfBounds(0, resolved.length, MAX_PATH));
+	if(String_length(resolved) > MAX_PATH)
+		_gotoIfError(clean, Error_outOfBounds(0, String_length(resolved), MAX_PATH));
 
 	//Skip .
 

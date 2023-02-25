@@ -185,8 +185,7 @@ Bool CLI_execute(StringList arglist) {
 		if (String_equalsString(
 			arg0, 
 			String_createConstRefUnsafe(EOperationCategory_names[i - 1]),
-			EStringCase_Insensitive, 
-			true
+			EStringCase_Insensitive
 		)) {
 			category = i;
 			break;
@@ -217,8 +216,7 @@ Bool CLI_execute(StringList arglist) {
 			String_equalsString(
 				arg1, 
 				String_createConstRefUnsafe(Operation_values[i].name),
-				EStringCase_Insensitive, 
-				true
+				EStringCase_Insensitive
 			)
 		) {
 			operation = i;
@@ -247,8 +245,7 @@ Bool CLI_execute(StringList arglist) {
 			if (String_equalsString(
 				Platform_instance.args.ptr[j],
 				String_createConstRefUnsafe(EOperationFlags_names[i]),
-				EStringCase_Insensitive, 
-				true
+				EStringCase_Insensitive
 			)) {
 
 				if ((args.flags >> i) & 1) {
@@ -269,8 +266,7 @@ Bool CLI_execute(StringList arglist) {
 			if (String_equalsString(
 				Platform_instance.args.ptr[j],
 				String_createConstRefUnsafe(EOperationHasParameter_names[i]),
-				EStringCase_Insensitive, 
-				true
+				EStringCase_Insensitive
 			)) {
 
 				EOperationHasParameter param = (EOperationHasParameter)(1 << i);
@@ -295,8 +291,7 @@ Bool CLI_execute(StringList arglist) {
 							if (String_equalsString(
 								Platform_instance.args.ptr[j + 1],
 								String_createConstRefUnsafe(Format_values[k].name),
-								EStringCase_Insensitive, 
-								true
+								EStringCase_Insensitive
 							)) {
 								args.format = (EFormat) k;
 								break;
@@ -364,8 +359,7 @@ Bool CLI_execute(StringList arglist) {
 					if (String_equalsString(
 						Platform_instance.args.ptr[j],
 						String_createConstRefUnsafe(EOperationHasParameter_names[i]),
-						EStringCase_Insensitive, 
-						true
+						EStringCase_Insensitive
 					))
 						break;
 
@@ -387,8 +381,7 @@ Bool CLI_execute(StringList arglist) {
 				if (String_equalsString(
 					Platform_instance.args.ptr[j],
 					String_createConstRefUnsafe(EOperationFlags_names[i]),
-					EStringCase_Insensitive, 
-					true
+					EStringCase_Insensitive
 				))
 					break;
 

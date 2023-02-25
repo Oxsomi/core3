@@ -41,7 +41,7 @@ Error addFileToCAFile(FileInfo file, CAFileRecursion *caFile) {
 
 	String subPath = String_createNull();
 	
-	if(!String_cut(file.path, caFile->root.length, 0, &subPath))
+	if(!String_cut(file.path, String_length(caFile->root), 0, &subPath))
 		return Error_invalidState(0);
 
 	ArchiveEntry entry = (ArchiveEntry) {
@@ -142,7 +142,6 @@ Error _CLI_convertToCA(ParsedArgs args, String input, FileInfo inputInfo, String
 	CAFileRecursion caFileRecursion = (CAFileRecursion) { 
 		.archive = &archive, 
 		.root = resolved
-
 	};
 
 	if(File_hasFile(resolved)) {
@@ -163,12 +162,18 @@ Error _CLI_convertToCA(ParsedArgs args, String input, FileInfo inputInfo, String
 		tmp = String_createNull();
 	}
 
-	else _gotoIfError(clean, File_foreach(
-		caFileRecursion.root,
-		(FileCallback)addFileToCAFile,
-		&caFileRecursion,
-		!(args.flags & EOperationFlags_NonRecursive)
-	));
+	else {
+
+		_gotoIfError(clean, String_appendx(&resolved, '/'));
+		caFileRecursion.root = resolved;
+
+		_gotoIfError(clean, File_foreach(
+			caFileRecursion.root,
+			(FileCallback)addFileToCAFile,
+			&caFileRecursion,
+			!(args.flags & EOperationFlags_NonRecursive)
+		));
+	}
 
 	//Convert to CAFile and write to file
 
@@ -230,13 +235,8 @@ Error _CLI_convertFromCA(ParsedArgs args, String input, FileInfo inputInfo, Stri
 
 		_gotoIfError(clean, String_createCopyx(output, &outputPath));
 
-		if(!String_endsWith(outputPath, '/', EStringCase_Sensitive)) {
-
-			if (String_endsWith(outputPath, '\0', EStringCase_Sensitive))
-				outputPath.ptr[outputPath.length - 1] = '/';
-
-			else _gotoIfError(clean, String_appendx(&outputPath, '/'));
-		}
+		if(!String_endsWith(outputPath, '/', EStringCase_Sensitive))
+			_gotoIfError(clean, String_appendx(&outputPath, '/'));
 
 		//Write archive to disk
 

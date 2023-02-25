@@ -113,13 +113,6 @@ Error DLFile_addEntryAscii(DLFile *dlFile, String entryStr, Allocator alloc) {
 	if(dlFile->settings.dataType != EDLDataType_Ascii)
 		return Error_invalidOperation(0);
 
-	//Decrease length if null terminator is included.
-
-	if (entryStr.length && !entryStr.ptr[entryStr.length - 1])
-		--entryStr.length;
-
-	//
-
 	if(!String_isValidAscii(entryStr))
 		return Error_invalidParameter(1, 0);
 
@@ -181,7 +174,9 @@ Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result) {
 
 		DLEntry entry = ((DLEntry*)dlFile.entries.ptr)[i];
 
-		U64 len = dlFile.settings.dataType != EDLDataType_Ascii ? Buffer_length(entry.entryBuffer) : entry.entryString.length;
+		U64 len = 
+			dlFile.settings.dataType != EDLDataType_Ascii ? Buffer_length(entry.entryBuffer) : 
+			String_length(entry.entryString);
 
 		if(outputSize + len < outputSize)
 			return Error_overflow(0, outputSize + len, outputSize);
@@ -222,8 +217,8 @@ Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result) {
 	if(err.genericError)
 		return err;
 
-	U8 *sizes = uncompressedData.ptr + entrySizesOffset;
-	U8 *dat = uncompressedData.ptr + headerSize;
+	U8 *sizes = (U8*)uncompressedData.ptr + entrySizesOffset;
+	U8 *dat = (U8*)uncompressedData.ptr + headerSize;
 
 	for (U64 i = 0; i < dlFile.entries.length; ++i) {
 
@@ -242,7 +237,7 @@ Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result) {
 
 	U32 hash[8] = { 0 };
 
-	U8 *headerIt = uncompressedData.ptr;
+	U8 *headerIt = (U8*)uncompressedData.ptr;
 
 	if (!(dlFile.settings.flags & EDLSettingsFlags_HideMagicNumber)) {
 		*(U32*)headerIt = DLHeader_MAGIC;
@@ -339,7 +334,7 @@ Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result) {
 
 	else {*/
 		compressedOutput = Buffer_createRef(
-			uncompressedData.ptr + headerSize, 
+			(U8*)uncompressedData.ptr + headerSize, 
 			Buffer_length(uncompressedData) - headerSize
 		);
 	//}
@@ -564,7 +559,7 @@ Error DLFile_read(
 		//Decrypt
 
 		_gotoIfError(clean, Buffer_decrypt(
-			Buffer_createRef(file.ptr, dataSize),
+			Buffer_createRef((U8*)file.ptr, dataSize),
 			Buffer_createConstRef(entireFile.ptr, headerExEnc.ptr - entireFile.ptr),
 			EBufferEncryptionType_AES256GCM,
 			encryptionKey,
@@ -613,7 +608,7 @@ Error DLFile_read(
 			case EDLDataType_UTF8:	err = DLFile_addEntryUTF8(dlFile, buf, alloc);	break;
 
 			case EDLDataType_Ascii:	
-				err = DLFile_addEntryAscii(dlFile, String_createConstRefSized((const C8*)ptr, entryLen), alloc);
+				err = DLFile_addEntryAscii(dlFile, String_createConstRefSized((const C8*)ptr, entryLen, false), alloc);
 				break;
 		}
 

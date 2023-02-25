@@ -79,7 +79,7 @@ Bool CLI_hash(ParsedArgs args, Bool isFile) {
 			goto clean;
 	}
 
-	Log_debugLn("Hash: 0x%.*s", tmp.length, tmp.ptr);
+	Log_debugLn("Hash: 0x%.*s", String_length(tmp), tmp.ptr);
 	success = true;
 
 clean:

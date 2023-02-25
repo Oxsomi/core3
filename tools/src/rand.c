@@ -274,7 +274,7 @@ Bool CLI_rand(ParsedArgs args, RandType type) {
 
 							_gotoIfError(clean, String_appendStringx(&options, str));
 
-							if(str.length)
+							if(String_length(str))
 								pickAll = false;
 						}
 
@@ -343,7 +343,7 @@ Bool CLI_rand(ParsedArgs args, RandType type) {
 					else for (U64 i = 0, j = Buffer_length(tmp); i < j; i += 8) {
 
 						U64 v = *(const U64*)(tmp.ptr + i);
-						v %= options.length;
+						v %= String_length(options);
 
 						//Ensure we stay within our bit limit
 						
@@ -390,7 +390,7 @@ Bool CLI_rand(ParsedArgs args, RandType type) {
 
 	else {
 		Log_debugLn("Random operation returned:");
-		Log_debug(ELogOptions_None, "%.*s", outputString.length, outputString.ptr);
+		Log_debug(ELogOptions_None, "%.*s", String_length(outputString), outputString.ptr);
 	}
 
 clean:

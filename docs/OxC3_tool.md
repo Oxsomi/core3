@@ -6,7 +6,7 @@ The OxC3 tool is intended to handle all operations required for Oxsomi core3. Th
 - Generating random numbers or keys.
 - Conversions between file formats.
 - **TODO:** Packaging a project.
-- **TODO:** Inspecting a file (printing the header and other important information).
+- Inspecting a file (printing the header and other important information).
 - Encryption.
 - **TODO**: Compression.
 
@@ -120,7 +120,7 @@ These are left out by default, because often, file timestamps aren't very import
 
 ## TODO: Packaging a project
 
-## TODO: File inspect
+## File inspect
 
 Two operations constitute as file inspection: `file header` and `file data`.
 

@@ -63,7 +63,7 @@ String Error_formatPlatformError(Error err) {
 		return String_createNull();
 
 	String res;
-	if((err = String_createCopyx(String_createConstRefSized(lpBuffer, f), &res)).genericError) {
+	if((err = String_createCopyx(String_createConstRefSized(lpBuffer, f, true), &res)).genericError) {
 		LocalFree(lpBuffer);
 		return String_createNull();
 	}
@@ -118,7 +118,7 @@ Error allocCallback(void *allocator, U64 length, Buffer *output) {
 
 Bool freeCallback(void *allocator, Buffer buf) {
 	allocator;
-	free(buf.ptr);
+	free((U8*) buf.ptr);
 	return true;
 }
 
@@ -229,6 +229,7 @@ Error Platform_initExt(Platform *result, String currAppDir) {
 
 		String appDir = String_createNull();
 		if ((err = String_createCopyx(currAppDir, &appDir)).genericError) {
+			String_freex(&appDir);
 			Buffer_freex(&platformExt);
 			return Error_platformError(1, GetLastError());
 		}
@@ -238,16 +239,24 @@ Error Platform_initExt(Platform *result, String currAppDir) {
 		U64 loc = String_findLast(appDir, '/', EStringCase_Sensitive);
 		String basePath = String_createNull();
 
-		if (loc == appDir.length)
-			basePath = String_createConstRefAuto(appDir.ptr, appDir.length);
+		if (loc == String_length(appDir))
+			basePath = String_createConstRefAuto(appDir.ptr, String_length(appDir));
 	
 		else String_cut(appDir, 0, loc + 1, &basePath);
 
 		String workDir = String_createNull();
 
 		if ((err = String_createCopyx(basePath, &workDir)).genericError) {
+			String_freex(&appDir);
 			Buffer_freex(&platformExt);
 			return Error_platformError(1, GetLastError());
+		}
+
+		if ((err = String_appendx(&workDir, '/')).genericError)  {
+			String_freex(&appDir);
+			String_freex(&workDir);
+			Buffer_freex(&platformExt);
+			return err;
 		}
 
 		String_freex(&appDir);
@@ -269,7 +278,7 @@ Error Platform_initExt(Platform *result, String currAppDir) {
 
 		//Move to heap and standardize
 
-		if((err = String_createCopyx(String_createConstRefSized(buff, chars), &result->workingDirectory)).genericError) {
+		if((err = String_createCopyx(String_createConstRefSized(buff, chars, true), &result->workingDirectory)).genericError) {
 			Buffer_freex(&platformExt);
 			return err;
 		}

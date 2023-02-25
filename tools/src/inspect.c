@@ -419,7 +419,7 @@ Error writeToDisk(FileInfo info, OutputFolderToDisk *output) {
 	Error err = Error_none();
 	String tmp = String_createNull();
 
-	U64 start = output->base.length == 1 && output->base.ptr[0] == '.' ? 0 : output->base.length;
+	U64 start = String_length(output->base) == 1 && output->base.ptr[0] == '.' ? 0 : String_length(output->base);
 
 	if(!String_cut(info.path, start, 0, &subDir))
 		_gotoIfError(clean, Error_invalidOperation(0));
@@ -512,8 +512,8 @@ Bool CLI_showFile(ParsedArgs args, Buffer b, U64 start, U64 length, Bool isAscii
 		//Ascii can be directly output to log
 
 		if (isAscii) {
-			String tmp = String_createConstRefSized(b.ptr + start, length);
-			Log_debugLn("%.*s", tmp.length, tmp.ptr);
+			String tmp = String_createConstRefSized(b.ptr + start, length, false);
+			Log_debugLn("%.*s", String_length(tmp), tmp.ptr);
 			tmp = String_createNull();
 		}
 
@@ -534,7 +534,7 @@ Bool CLI_showFile(ParsedArgs args, Buffer b, U64 start, U64 length, Bool isAscii
 				String_freex(&tmp1);
 			}
 
-			Log_debugLn("%.*s", tmp.length, tmp.ptr);
+			Log_debugLn("%.*s", String_length(tmp), tmp.ptr);
 			String_freex(&tmp);
 		}
 	}
@@ -699,12 +699,12 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 		U64 off = String_startsWithString(key, String_createConstRefUnsafe("0x"), EStringCase_Insensitive) ? 2 : 0;
 
-		if (key.length - off != 64) {
+		if (String_length(key) - off != 64) {
 			Log_errorLn("Invalid parameter sent to -aes. Expecting key in hex (32 bytes)");
 			return false;
 		}
 
-		for (U64 i = off; i + 1 < key.length; ++i) {
+		for (U64 i = off; i + 1 < String_length(key); ++i) {
 
 			U8 v0 = C8_hex(key.ptr[i]);
 			U8 v1 = C8_hex(key.ptr[++i]);
@@ -784,8 +784,8 @@ Bool CLI_inspectData(ParsedArgs args) {
 					//Print the subsection of the file
 
 					else {
-						Bool isAscii = String_isValidAscii(String_createConstRefSized(e.data.ptr, Buffer_length(e.data)));
-						Log_debugLn("%.*s", e.path.length, e.path.ptr);
+						Bool isAscii = String_isValidAscii(String_createConstRefSized(e.data.ptr, Buffer_length(e.data), false));
+						Log_debugLn("%.*s", String_length(e.path), e.path.ptr);
 						CLI_showFile(args, e.data, start, length, isAscii);
 						goto cleanCa;
 					}
@@ -850,7 +850,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 					_gotoIfError(cleanCa, Error_notFound(0, 0));
 
 				_gotoIfError(cleanCa, String_createDecx(v, 3, &tmp));
-				_gotoIfError(cleanCa, String_createx(' ', 2 * (parentCount - baseCount), &tmp1));
+ 				_gotoIfError(cleanCa, String_createx(' ', 2 * (parentCount - baseCount), &tmp1));
 				_gotoIfError(cleanCa, String_appendx(&tmp, ':'));
 				_gotoIfError(cleanCa, String_appendx(&tmp, ' '));
 				_gotoIfError(cleanCa, String_appendStringx(&tmp, tmp1));
@@ -858,13 +858,13 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 				String sub = String_createNull();
 				if(!String_cutBeforeLast(path, '/', EStringCase_Sensitive, &sub))
-					sub = String_createConstRefSized(path.ptr, path.length);
+					sub = String_createConstRefSized(path.ptr, String_length(path), false);
 
 				_gotoIfError(cleanCa, String_appendStringx(&tmp, sub));
 
 				//Log and free temp
 
-				Log_debugLn("%.*s", tmp.length, tmp.ptr);
+				Log_debugLn("%.*s", String_length(tmp), tmp.ptr);
 				String_freex(&tmp);
 			}
 
@@ -942,7 +942,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 					DLEntry entry = ((const DLEntry*)file.entries.ptr)[i];
 
 					U64 entrySize = 
-						file.settings.dataType == EDLDataType_Ascii ? entry.entryString.length : 
+						file.settings.dataType == EDLDataType_Ascii ? String_length(entry.entryString) : 
 						Buffer_length(entry.entryBuffer);
 
 					_gotoIfError(cleanDl, String_createDecx(i, 3, &tmp));

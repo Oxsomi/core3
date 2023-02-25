@@ -49,7 +49,7 @@ Error ourAlloc(void *allocator, U64 length, Buffer *output) {
 
 Bool ourFree(void *allocator, Buffer buf) {
 	allocator;
-	free(buf.ptr);
+	free((U8*)buf.ptr);
 	return true;
 }
 
@@ -186,7 +186,7 @@ int main() {
 		String tmpStr = String_createNull();
 		_gotoIfError(clean, String_createHex(resultsU64[0], 0, alloc, &tmpStr));
 
-		if (!String_equalsString(resultsStr[0], tmpStr, EStringCase_Sensitive, false)) {
+		if (!String_equalsString(resultsStr[0], tmpStr, EStringCase_Sensitive)) {
 			String_free(&tmpStr, alloc);
 			_gotoIfError(clean, Error_invalidState(0));
 		}
@@ -194,7 +194,7 @@ int main() {
 		String_free(&tmpStr, alloc);
 		_gotoIfError(clean, String_createBin(resultsU64[1], 0, alloc, &tmpStr));
 
-		if (!String_equalsString(resultsStr[1], tmpStr, EStringCase_Sensitive, false)) {
+		if (!String_equalsString(resultsStr[1], tmpStr, EStringCase_Sensitive)) {
 			String_free(&tmpStr, alloc);
 			_gotoIfError(clean, Error_invalidState(1));
 		}
@@ -202,7 +202,7 @@ int main() {
 		String_free(&tmpStr, alloc);
 		_gotoIfError(clean, String_createOct(resultsU64[2], 0, alloc, &tmpStr));
 
-		if (!String_equalsString(resultsStr[2], tmpStr, EStringCase_Sensitive, false)) {
+		if (!String_equalsString(resultsStr[2], tmpStr, EStringCase_Sensitive)) {
 			String_free(&tmpStr, alloc);
 			_gotoIfError(clean, Error_invalidState(2));
 		}
@@ -210,7 +210,7 @@ int main() {
 		String_free(&tmpStr, alloc);
 		_gotoIfError(clean, String_createNyto(resultsU64[3], 0, alloc, &tmpStr));
 
-		if (!String_equalsString(resultsStr[3], tmpStr, EStringCase_Sensitive, false)) {
+		if (!String_equalsString(resultsStr[3], tmpStr, EStringCase_Sensitive)) {
 			String_free(&tmpStr, alloc);
 			_gotoIfError(clean, Error_invalidState(3));
 		}
@@ -218,7 +218,7 @@ int main() {
 		String_free(&tmpStr, alloc);
 		_gotoIfError(clean, String_createDec(resultsU64[4], 0, alloc, &tmpStr));
 
-		if (!String_equalsString(resultsStr[4], tmpStr, EStringCase_Sensitive, false)) {
+		if (!String_equalsString(resultsStr[4], tmpStr, EStringCase_Sensitive)) {
 			String_free(&tmpStr, alloc);
 			_gotoIfError(clean, Error_invalidState(4));
 		}
@@ -317,13 +317,14 @@ int main() {
 
 	_gotoIfError(clean, String_create('a', MEGA, alloc, inputs + 2));
 
-	inputs[3] = String_createConstRefSized("\xde\x18\x89\x41\xa3\x37\x5d\x3a\x8a\x06\x1e\x67\x57\x6e\x92\x6d", 16);
+	inputs[3] = String_createConstRefSized("\xde\x18\x89\x41\xa3\x37\x5d\x3a\x8a\x06\x1e\x67\x57\x6e\x92\x6d", 16, true);
 
 	inputs[4] = String_createConstRefSized(
 		"\xDE\x18\x89\x41\xA3\x37\x5D\x3A\x8A\x06\x1E\x67\x57\x6E\x92\x6D\xC7\x1A\x7F\xA3\xF0"
 		"\xCC\xEB\x97\x45\x2B\x4D\x32\x27\x96\x5F\x9E\xA8\xCC\x75\x07\x6D\x9F\xB9\xC5\x41\x7A"
 		"\xA5\xCB\x30\xFC\x22\x19\x8B\x34\x98\x2D\xBB\x62\x9E", 
-		55
+		55, 
+		true
 	);
 
 	inputs[5] = String_createConstRefUnsafe("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq");
@@ -336,20 +337,21 @@ int main() {
 	inputs[8] = String_createConstRefUnsafe("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde");
 	inputs[9] = String_createConstRefUnsafe("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0");
 
-	inputs[10] = String_createConstRefSized("\xBD", 1);
-	inputs[11] = String_createConstRefSized("\xC9\x8C\x8E\x55", 4);
+	inputs[10] = String_createConstRefSized("\xBD", 1, true);
+	inputs[11] = String_createConstRefSized("\xC9\x8C\x8E\x55", 4, true);
 
-	U8 data7[1000] = { 0 }, data8[1000], data9[1005];
-	inputs[12] = String_createConstRefSized((const C8*)data7, 55);
-	inputs[13] = String_createConstRefSized((const C8*)data7, 56);
-	inputs[14] = String_createConstRefSized((const C8*)data7, 57);
-	inputs[15] = String_createConstRefSized((const C8*)data7, 64);
-	inputs[16] = String_createConstRefSized((const C8*)data7, 1000);
-	inputs[17] = String_createConstRefSized((const C8*)data8, 1000);
-	inputs[18] = String_createConstRefSized((const C8*)data9, 1005);
+	U8 data7[1001] = { 0 }, data8[1000], data9[1005];
 
 	memset(data8, 0x41, sizeof(data8));
 	memset(data9, 0x55, sizeof(data9));
+
+	inputs[12] = String_createConstRefSized((const C8*)data7, 55, true);
+	inputs[13] = String_createConstRefSized((const C8*)data7, 56, true);
+	inputs[14] = String_createConstRefSized((const C8*)data7, 57, true);
+	inputs[15] = String_createConstRefSized((const C8*)data7, 64, true);
+	inputs[16] = String_createConstRefSized((const C8*)data7, 1000, true);
+	inputs[17] = String_createConstRefSized((const C8*)data8, 1000, false);
+	inputs[18] = String_createConstRefSized((const C8*)data9, 1005, false);
 
 	//More extreme checks. Don't wanna run this every time.
 
@@ -359,7 +361,7 @@ int main() {
 		_gotoIfError(clean, String_create('\0', 1'090'519'040, alloc, inputs + 21));
 		_gotoIfError(clean, String_create('\x42', 1'610'612'798, alloc, inputs + 22));
 
-		inputs[19] = String_createConstRefSized(inputs[21].ptr, 1'000'000);
+		inputs[19] = String_createConstRefSized(inputs[21].ptr, 1'000'000, true);
 
 	#endif
 
@@ -417,73 +419,85 @@ int main() {
 		String_createConstRefSized(
 			"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
 			"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00", 
-			32
+			32,
+			true
 		),
 
 		String_createConstRefSized(
 			"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
 			"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00", 
-			32
+			32,
+			true
 		),
 
 		String_createConstRefSized(
 			"\xFE\xFF\xE9\x92\x86\x65\x73\x1C\x6D\x6A\x8F\x94\x67\x30\x83\x08"
 			"\xFE\xFF\xE9\x92\x86\x65\x73\x1C\x6D\x6A\x8F\x94\x67\x30\x83\x08", 
-			32
+			32,
+			true
 		),
 
 		String_createConstRefSized(
 			"\xFE\xFF\xE9\x92\x86\x65\x73\x1C\x6D\x6A\x8F\x94\x67\x30\x83\x08"
 			"\xFE\xFF\xE9\x92\x86\x65\x73\x1C\x6D\x6A\x8F\x94\x67\x30\x83\x08", 
-			32
+			32,
+			true
 		),
 
 		String_createConstRefSized(
 			"\xE3\xC0\x8A\x8F\x06\xC6\xE3\xAD\x95\xA7\x05\x57\xB2\x3F\x75\x48"
 			"\x3C\xE3\x30\x21\xA9\xC7\x2B\x70\x25\x66\x62\x04\xC6\x9C\x0B\x72", 
-			32
+			32,
+			true
 		),
 
 		String_createConstRefSized(
 			"\xE3\xC0\x8A\x8F\x06\xC6\xE3\xAD\x95\xA7\x05\x57\xB2\x3F\x75\x48"
 			"\x3C\xE3\x30\x21\xA9\xC7\x2B\x70\x25\x66\x62\x04\xC6\x9C\x0B\x72", 
-			32
+			32,
+			true
 		),
 
 		String_createConstRefSized(
 			"\x69\x1D\x3E\xE9\x09\xD7\xF5\x41\x67\xFD\x1C\xA0\xB5\xD7\x69\x08"
 			"\x1F\x2B\xDE\x1A\xEE\x65\x5F\xDB\xAB\x80\xBD\x52\x95\xAE\x6B\xE7", 
-			32
+			32,
+			true
 		),
 
 		String_createConstRefSized(
 			"\x69\x1D\x3E\xE9\x09\xD7\xF5\x41\x67\xFD\x1C\xA0\xB5\xD7\x69\x08"
 			"\x1F\x2B\xDE\x1A\xEE\x65\x5F\xDB\xAB\x80\xBD\x52\x95\xAE\x6B\xE7", 
-			32
+			32,
+			true
 		),
 
 		String_createConstRefSized(
 			"\x83\xC0\x93\xB5\x8D\xE7\xFF\xE1\xC0\xDA\x92\x6A\xC4\x3F\xB3\x60"
 			"\x9A\xC1\xC8\x0F\xEE\x1B\x62\x44\x97\xEF\x94\x2E\x2F\x79\xA8\x23", 
-			32
+			32,
+			true
 		),
 
 		String_createConstRefSized(
 			"\x83\xC0\x93\xB5\x8D\xE7\xFF\xE1\xC0\xDA\x92\x6A\xC4\x3F\xB3\x60"
 			"\x9A\xC1\xC8\x0F\xEE\x1B\x62\x44\x97\xEF\x94\x2E\x2F\x79\xA8\x23", 
-			32
+			32,
+			true
 		),
 
 		String_createConstRefSized(
 			"\x4C\x97\x3D\xBC\x73\x64\x62\x16\x74\xF8\xB5\xB8\x9E\x5C\x15\x51"
 			"\x1F\xCE\xD9\x21\x64\x90\xFB\x1C\x1A\x2C\xAA\x0F\xFE\x04\x07\xE5", 
-			32
+			32,
+			true
 		),
 
 		String_createConstRefSized(
 			"\x4C\x97\x3D\xBC\x73\x64\x62\x16\x74\xF8\xB5\xB8\x9E\x5C\x15\x51"
 			"\x1F\xCE\xD9\x21\x64\x90\xFB\x1C\x1A\x2C\xAA\x0F\xFE\x04\x07\xE5", 
-			32
+			32,
+			true
 		)
 	};
 
@@ -493,7 +507,8 @@ int main() {
 
 		String_createConstRefSized(
 			"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00", 
-			16
+			16,
+			true
 		),
 
 		String_createConstRefSized(
@@ -501,7 +516,8 @@ int main() {
 			"\x86\xA7\xA9\x53\x15\x34\xF7\xDA\x2E\x4C\x30\x3D\x8A\x31\x8A\x72"
 			"\x1C\x3C\x0C\x95\x95\x68\x09\x53\x2F\xCF\x0E\x24\x49\xA6\xB5\x25"
 			"\xB1\x6A\xED\xF5\xAA\x0D\xE6\x57\xBA\x63\x7B\x39\x1A\xAF\xD2\x55", 
-			64
+			64,
+			true
 		),
 
 		String_createConstRefSized(
@@ -509,7 +525,8 @@ int main() {
 			"\x86\xA7\xA9\x53\x15\x34\xF7\xDA\x2E\x4C\x30\x3D\x8A\x31\x8A\x72"
 			"\x1C\x3C\x0C\x95\x95\x68\x09\x53\x2F\xCF\x0E\x24\x49\xA6\xB5\x25"
 			"\xB1\x6A\xED\xF5\xAA\x0D\xE6\x57\xBA\x63\x7B\x39", 
-			60
+			60,
+			true
 		),
 
 		String_createNull(),
@@ -518,7 +535,8 @@ int main() {
 			"\x08\x00\x0F\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1A\x1B\x1C"
 			"\x1D\x1E\x1F\x20\x21\x22\x23\x24\x25\x26\x27\x28\x29\x2A\x2B\x2C"
 			"\x2D\x2E\x2F\x30\x31\x32\x33\x34\x35\x36\x37\x38\x39\x3A\x00\x02", 
-			48
+			48,
+			true
 		),
 
 		String_createNull(),
@@ -527,7 +545,8 @@ int main() {
 			"\x08\x00\x0F\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1A\x1B\x1C"
 			"\x1D\x1E\x1F\x20\x21\x22\x23\x24\x25\x26\x27\x28\x29\x2A\x2B\x2C"
 			"\x2D\x2E\x2F\x30\x31\x32\x33\x34\x00\x04", 
-			42
+			42,
+			true
 		),
 
 		String_createNull(),
@@ -537,7 +556,8 @@ int main() {
 			"\x1D\x1E\x1F\x20\x21\x22\x23\x24\x25\x26\x27\x28\x29\x2A\x2B\x2C"
 			"\x2D\x2E\x2F\x30\x31\x32\x33\x34\x35\x36\x37\x38\x39\x3A\x3B\x00"
 			"\x06", 
-			49
+			49,
+			true
 		),
 
 		String_createNull(),
@@ -547,7 +567,8 @@ int main() {
 			"\x1D\x1E\x1F\x20\x21\x22\x23\x24\x25\x26\x27\x28\x29\x2A\x2B\x2C"
 			"\x2D\x2E\x2F\x30\x31\x32\x33\x34\x35\x36\x37\x38\x39\x3A\x3B\x3C"
 			"\x3D\x3E\x3F\x40\x41\x42\x43\x44\x45\x46\x47\x48\x49\x00\x08", 
-			63
+			63,
+			true
 		)
 	};
 
@@ -560,7 +581,8 @@ int main() {
 		String_createConstRefSized(
 			"\xFE\xED\xFA\xCE\xDE\xAD\xBE\xEF\xFE\xED\xFA\xCE\xDE\xAD\xBE\xEF"
 			"\xAB\xAD\xDA\xD2", 
-			20
+			20,
+			true
 		),
 
 		String_createConstRefSized(
@@ -569,13 +591,15 @@ int main() {
 			"\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1A\x1B\x1C\x1D\x1E\x1F\x20"
 			"\x21\x22\x23\x24\x25\x26\x27\x28\x29\x2A\x2B\x2C\x2D\x2E\x2F\x30"
 			"\x31\x32\x33\x34\x00\x01", 
-			70
+			70,
+			true
 		),
 
 		String_createConstRefSized(
 			"\xD6\x09\xB1\xF0\x56\x63\x7A\x0D\x46\xDF\x99\x8D\x88\xE5\x2E\x00"
 			"\xB2\xC2\x84\x65\x12\x15\x35\x24\xC0\x89\x5E\x81",
-			28
+			28,
+			true
 		),
 
 		String_createConstRefSized(
@@ -584,13 +608,15 @@ int main() {
 			"\x19\x1A\x1B\x1C\x1D\x1E\x1F\x20\x21\x22\x23\x24\x25\x26\x27\x28"
 			"\x29\x2A\x2B\x2C\x2D\x2E\x2F\x30\x31\x32\x33\x34\x35\x36\x37\x38"
 			"\x39\x3A\x00\x03",
-			68
+			68,
+			true
 		),
 
 		String_createConstRefSized(
 			"\xE2\x01\x06\xD7\xCD\x0D\xF0\x76\x1E\x8D\xCD\x3D\x88\xE5\x4C\x2A"
 			"\x76\xD4\x57\xED",
-			20
+			20,
+			true
 		),
 
 		String_createConstRefSized(
@@ -600,13 +626,15 @@ int main() {
 			"\x21\x22\x23\x24\x25\x26\x27\x28\x29\x2A\x2B\x2C\x2D\x2E\x2F\x30"
 			"\x31\x32\x33\x34\x35\x36\x37\x38\x39\x3A\x3B\x3C\x3D\x3E\x3F\x00"
 			"\x05",
-			81
+			81,
+			true
 		),
 
 		String_createConstRefSized(
 			"\x84\xC5\xD5\x13\xD2\xAA\xF6\xE5\xBB\xD2\x72\x77\x88\xE5\x2F\x00"
 			"\x89\x32\xD6\x12\x7C\xFD\xE9\xF9\xE3\x37\x24\xC6",
-			28
+			28,
+			true
 		),
 
 		String_createConstRefSized(
@@ -616,13 +644,15 @@ int main() {
 			"\x29\x2A\x2B\x2C\x2D\x2E\x2F\x30\x31\x32\x33\x34\x35\x36\x37\x38"
 			"\x39\x3A\x3B\x3C\x3D\x3E\x3F\x40\x41\x42\x43\x44\x45\x46\x47\x48"
 			"\x49\x4A\x4B\x4C\x4D\x00\x07",
-			87
+			87,
+			true
 		),
 
 		String_createConstRefSized(
 			"\x68\xF2\xE7\x76\x96\xCE\x7A\xE8\xE2\xCA\x4E\xC5\x88\xE5\x4D\x00"
 			"\x2E\x58\x49\x5C",
-			20
+			20,
+			true
 		)
 	};
 
@@ -645,13 +675,15 @@ int main() {
 
 		String_createConstRefSized(
 			"\x53\x0F\x8A\xFB\xC7\x45\x36\xB9\xA9\x63\xB4\xF1\xC4\xCB\x73\x8B",		//Tag (iv is prepended automatically)
-			16
+			16,
+			true
 		),
 
 		String_createConstRefSized(
 			"\xCE\xA7\x40\x3D\x4D\x60\x6B\x6E\x07\x4E\xC5\xD3\xBA\xF3\x9D\x18"		//Block 0
 			"\xD0\xD1\xC8\xA7\x99\x99\x6B\xF0\x26\x5B\x98\xB5\xD4\x8A\xB9\x19",		//Tag
-			32
+			32,
+			true
 		),
 
 		String_createConstRefSized(
@@ -660,7 +692,8 @@ int main() {
 			"\x8C\xB0\x8E\x48\x59\x0D\xBB\x3D\xA7\xB0\x8B\x10\x56\x82\x88\x38"
 			"\xC5\xF6\x1E\x63\x93\xBA\x7A\x0A\xBC\xC9\xF6\x62\x89\x80\x15\xAD"
 			"\xB0\x94\xDA\xC5\xD9\x34\x71\xBD\xEC\x1A\x50\x22\x70\xE3\xCC\x6C",		//Tag
-			16 + 64
+			16 + 64,
+			true
 		),
 
 		String_createConstRefSized(
@@ -669,12 +702,14 @@ int main() {
 			"\x8C\xB0\x8E\x48\x59\x0D\xBB\x3D\xA7\xB0\x8B\x10\x56\x82\x88\x38"
 			"\xC5\xF6\x1E\x63\x93\xBA\x7A\x0A\xBC\xC9\xF6\x62"
 			"\x76\xFC\x6E\xCE\x0F\x4E\x17\x68\xCD\xDF\x88\x53\xBB\x2D\x55\x1B",		//Tag
-			16 + 60
+			16 + 60,
+			true
 		),
 
 		String_createConstRefSized(
 			"\x2F\x0B\xC5\xAF\x40\x9E\x06\xD6\x09\xEA\x8B\x7D\x0F\xA5\xEA\x50",		//Tag (iv is prepended automatically)
-			16
+			16,
+			true
 		),
 
 		String_createConstRefSized(
@@ -682,12 +717,14 @@ int main() {
 			"\xA5\x92\x66\x6C\x92\x5F\xE2\xEF\x71\x8E\xB4\xE3\x08\xEF\xEA\xA7"
 			"\xC5\x27\x3B\x39\x41\x18\x86\x0A\x5B\xE2\xA9\x7F\x56\xAB\x78\x36"
 			"\x5C\xA5\x97\xCD\xBB\x3E\xDB\x8D\x1A\x11\x51\xEA\x0A\xF7\xB4\x36",		//Tag
-			16 + 48
+			16 + 48,
+			true
 		),
 
 		String_createConstRefSized(
 			"\x35\x21\x7C\x77\x4B\xBC\x31\xB6\x31\x66\xBC\xF9\xD4\xAB\xED\x07",		//Tag (iv is prepended automatically)
-			16
+			16,
+			true
 		),
 
 		String_createConstRefSized(
@@ -695,12 +732,14 @@ int main() {
 			"\x61\x25\x35\x2B\x43\xAD\xAC\xBD\x61\xC5\xEF\x3A\xC9\x0B\x5B\xEE"
 			"\x92\x9C\xE4\x63\x0E\xA7\x9F\x6C\xE5\x19"
 			"\x12\xAF\x39\xC2\xD1\xFD\xC2\x05\x1F\x8B\x7B\x3C\x9D\x39\x7E\xF2",		//Tag (iv is prepended automatically)
-			16 + 42
+			16 + 42,
+			true
 		),
 
 		String_createConstRefSized(
 			"\x6E\xE1\x60\xE8\xFA\xEC\xA4\xB3\x6C\x86\xB2\x34\x92\x0C\xA9\x75",		//Tag (iv is prepended automatically)
-			16
+			16,
+			true
 		),
 
 		String_createConstRefSized(
@@ -709,12 +748,14 @@ int main() {
 			"\x02\xEB\x12\x77\xDB\xEC\x2E\x68\xE4\x73\x15\x5A\x15\xA7\xDA\xEE"
 			"\xD4"
 			"\xA1\x0F\x4E\x05\x13\x9C\x23\xDF\x00\xB3\xAA\xDC\x71\xF0\x59\x6A",		//Tag (iv is prepended automatically)
-			16 + 49
+			16 + 49,
+			true
 		),
 
 		String_createConstRefSized(
 			"\x00\xBD\xA1\xB7\xE8\x76\x08\xBC\xBF\x47\x0F\x12\x15\x7F\x4C\x07",		//Tag (iv is prepended automatically)
-			16
+			16,
+			true
 		),
 
 		String_createConstRefSized(
@@ -723,7 +764,8 @@ int main() {
 			"\x68\x03\xAF\xCF\x5B\x27\xE6\x33\x3F\xA6\x7C\x99\xDA\x47\xC2\xF0"
 			"\xCE\xD6\x8D\x53\x1B\xD7\x41\xA9\x43\xCF\xF7\xA6\x71\x3B\xD0"
 			"\x26\x11\xCD\x7D\xAA\x01\xD6\x1C\x5C\x88\x6D\xC1\xA8\x17\x01\x07",		//Tag (iv is prepended automatically)
-			16 + 63
+			16 + 63,
+			true
 		)
 	};
 
@@ -754,7 +796,7 @@ int main() {
 
 		//Check size
 
-		if(tmp.length + 16 != results[i].length)
+		if(String_length(tmp) + 16 != String_length(results[i]))
 			_gotoIfError(clean, Error_invalidState(3));
 
 		//Check tag (intermediate copy because otherwise Release will crash because of unaligned memory)
@@ -762,7 +804,7 @@ int main() {
 		I32x4 tmpTag = I32x4_zero();
 		Buffer_copy(
 			Buffer_createRef(&tmpTag, sizeof(tmpTag)),
-			Buffer_createConstRef(results[i].ptr + tmp.length, sizeof(I32x4))
+			Buffer_createConstRef(results[i].ptr + String_length(tmp), sizeof(I32x4))
 		);
 
 		if(I32x4_any(I32x4_neq(tag, tmpTag)))
@@ -775,7 +817,7 @@ int main() {
 		_gotoIfError(
 			clean, 
 			Buffer_eq(
-				Buffer_createConstRef(results[i].ptr, testPlainText[i].length),
+				Buffer_createConstRef(results[i].ptr, String_length(testPlainText[i])),
 				String_bufferConst(tmp),
 				&b
 			)

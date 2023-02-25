@@ -57,8 +57,9 @@ typedef struct Error Error;
 //Heap string
 
 typedef struct String {
-	U64 length, capacity;		//capacity = 0: ref, capacity = -1: const ref
-	C8 *ptr;
+	U64 len;			//First bit contains if it's null terminated or not. Length excludes null terminator.
+	U64 capacity;		//capacity = 0: ref, capacity = -1: const ref
+	const C8 *ptr;		//This is non const if not a const ref, but for safety this is const (cast away if not).
 } String;
 
 typedef struct StringList {
@@ -71,7 +72,9 @@ typedef struct StringList {
 Bool String_isConstRef(String str);
 Bool String_isRef(String str);
 Bool String_isEmpty(String str);
+Bool String_isNullTerminated(String str);
 U64  String_bytes(String str);
+U64  String_length(String str);
 
 Buffer String_buffer(String str);
 Buffer String_bufferConst(String str);
@@ -95,7 +98,7 @@ ECompareResult String_compare(String a, String b, EStringCase caseSensitive);
 //Only checks characters. Please use resolvePath to actually validate if it's safely accessible.
 
 Bool String_isValidFilePath(String str);
-void String_clear(String *str);
+Bool String_clear(String *str);
 
 U64 String_calcStrLen(const C8 *ptr, U64 maxSize);
 //U64 String_hash(String s);								TODO:
@@ -113,8 +116,14 @@ String String_createConstRefAuto(const C8 *ptr, U64 maxSize);		//Auto detect end
 String String_createConstRefUnsafe(const C8 *ptr);					//Only use this if string is created safely (null terminator) in code
 String String_createRefAuto(C8 *ptr, U64 maxSize);					//Auto detect end (up to maxSize chars)
 
-String String_createConstRefSized(const C8 *ptr, U64 size);
-String String_createRefSized(C8 *ptr, U64 size);
+//hasNullAfterSize is true if the size given excludes the null terminator (e.g. ptr[size] == '\0').
+//In this case ptr[size] has to be the null terminator.
+//If this is false, it will automatically check if ptr contains a null terminator
+
+String String_createConstRefSized(const C8 *ptr, U64 size, Bool hasNullAfterSize);
+String String_createRefSized(C8 *ptr, U64 size, Bool hasNullAfterSize);
+
+//
 
 String String_createConstRefShortString(const ShortString str);
 String String_createConstRefLongString(const LongString str);
@@ -244,8 +253,8 @@ U64 String_findString(String s, String other, EStringCase caseSensitive, Bool is
 Bool String_contains(String str, C8 c, EStringCase caseSensitive);
 Bool String_containsString(String str, String other, EStringCase caseSensitive);
 
-Bool String_equalsString(String s, String other, EStringCase caseSensitive, Bool ignoreTrailingNull);
-Bool String_equals(String s, C8 c, EStringCase caseSensitive, Bool ignoreTrailingNull);
+Bool String_equalsString(String s, String other, EStringCase caseSensitive);
+Bool String_equals(String s, C8 c, EStringCase caseSensitive);
 
 Bool String_parseNyto(String s, U64 *result);
 Bool String_parseHex(String s, U64 *result);

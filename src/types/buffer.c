@@ -154,7 +154,7 @@ Error Buffer_setBit(Buffer buf, U64 offset) {
 	if((offset >> 3) >= Buffer_length(buf))
 		return Error_outOfBounds(1, offset, Buffer_length(buf) << 3);
 
-	buf.ptr[offset >> 3] |= 1 << (offset & 7);
+	((U8*)buf.ptr)[offset >> 3] |= 1 << (offset & 7);
 	return Error_none();
 }
 
@@ -169,7 +169,7 @@ Error Buffer_resetBit(Buffer buf, U64 offset) {
 	if((offset >> 3) >= Buffer_length(buf))
 		return Error_outOfBounds(1, offset, Buffer_length(buf) << 3);
 
-	buf.ptr[offset >> 3] &= ~(1 << (offset & 7));
+	((U8*)buf.ptr)[offset >> 3] &= ~(1 << (offset & 7));
 	return Error_none();
 }
 
@@ -187,7 +187,7 @@ Error Buffer_resetBit(Buffer buf, U64 offset) {
 		*((U64*)dst.ptr + i) x *((const U64*)src.ptr + i);								\
 																						\
 	for (U64 i = l >> 3 << 3; i < l; ++i)												\
-		dst.ptr[i] x src.ptr[i];														\
+		((U8*)dst.ptr)[i] x src.ptr[i];													\
 																						\
 	return Error_none();																\
 }
@@ -288,7 +288,7 @@ Error Buffer_setBitRange(Buffer dst, U64 dstOff, U64 bits) {
 	//Bits, begin
 
 	for (U64 i = dstOff; i < bitEnd && i < dstOff8 << 3; ++i)
-		dst.ptr[i >> 3] |= (1 << (i & 7));
+		((U8*)dst.ptr)[i >> 3] |= (1 << (i & 7));
 
 	//Bytes, until U64 aligned
 
@@ -296,7 +296,7 @@ Error Buffer_setBitRange(Buffer dst, U64 dstOff, U64 bits) {
 	U64 bitEnd8 = bitEnd >> 3;
 
 	for (U64 i = dstOff8; i < bitEnd8 && i < dstOff64 << 3; ++i)
-		dst.ptr[i] = U8_MAX;
+		((U8*)dst.ptr)[i] = U8_MAX;
 
 	//U64 aligned
 
@@ -308,12 +308,12 @@ Error Buffer_setBitRange(Buffer dst, U64 dstOff, U64 bits) {
 	//Bytes unaligned at end
 
 	for(U64 i = bitEnd64 << 3; i < bitEnd8; ++i)
-		dst.ptr[i] = U8_MAX;
+		((U8*)dst.ptr)[i] = U8_MAX;
 
 	//Bits unaligned at end
 
 	for (U64 i = bitEnd8 << 3; i < bitEnd; ++i)
-		dst.ptr[i >> 3] |= (1 << (i & 7));
+		((U8*)dst.ptr)[i >> 3] |= (1 << (i & 7));
 
 	return Error_none();
 }
@@ -338,7 +338,7 @@ Error Buffer_unsetBitRange(Buffer dst, U64 dstOff, U64 bits) {
 	//Bits, begin
 
 	for (U64 i = dstOff; i < bitEnd && i < dstOff8 << 3; ++i)
-		dst.ptr[i >> 3] &=~ (1 << (i & 7));
+		((U8*)dst.ptr)[i >> 3] &=~ (1 << (i & 7));
 
 	//Bytes, until U64 aligned
 
@@ -346,7 +346,7 @@ Error Buffer_unsetBitRange(Buffer dst, U64 dstOff, U64 bits) {
 	U64 bitEnd8 = bitEnd >> 3;
 
 	for (U64 i = dstOff8; i < bitEnd8 && i < dstOff64 << 3; ++i)
-		dst.ptr[i] = 0;
+		((U8*)dst.ptr)[i] = 0;
 
 	//U64 aligned
 
@@ -358,12 +358,12 @@ Error Buffer_unsetBitRange(Buffer dst, U64 dstOff, U64 bits) {
 	//Bytes unaligned at end
 
 	for(U64 i = bitEnd64 << 3; i < bitEnd8; ++i)
-		dst.ptr[i] = 0;
+		((U8*)dst.ptr)[i] = 0;
 
 	//Bits unaligned at end
 
 	for (U64 i = bitEnd8 << 3; i < bitEnd; ++i)
-		dst.ptr[i >> 3] &=~ (1 << (i & 7));
+		((U8*)dst.ptr)[i >> 3] &=~ (1 << (i & 7));
 
 	return Error_none();
 }
@@ -382,7 +382,7 @@ inline Error Buffer_setAllToInternal(Buffer buf, U64 b64, U8 b8) {
 		*((U64*)buf.ptr + i) = b64;
 
 	for (U64 i = l >> 3 << 3; i < l; ++i)
-		buf.ptr[i] = b8;
+		((U8*)buf.ptr)[i] = b8;
 
 	return Error_none();
 }
@@ -470,7 +470,7 @@ Error Buffer_createCopy(Buffer buf, Allocator alloc, Buffer *result) {
 		*((U64*)result->ptr + i) = *((const U64*)buf.ptr + i);
 
 	for (U64 i = l >> 3 << 3; i < l; ++i)
-		result->ptr[i] = buf.ptr[i];
+		((U8*)result->ptr)[i] = buf.ptr[i];
 
 	return Error_none();
 }
@@ -548,7 +548,7 @@ Error Buffer_appendBuffer(Buffer *buf, Buffer append) {
 	if(buf && Buffer_isConstRef(*buf))					//We need write access
 		return Error_constData(0, 0);
 
-	void *ptr = buf ? buf->ptr : NULL;
+	void *ptr = buf ? (U8*)buf->ptr : NULL;
 
 	Error e = Buffer_offset(buf, Buffer_length(append));
 
@@ -624,7 +624,7 @@ Error Buffer_combine(Buffer a, Buffer b, Allocator alloc, Buffer *output) {
 		return err;
 
 	Buffer_copy(*output, a);
-	Buffer_copy(Buffer_createRef(output->ptr + alen, blen), b);
+	Buffer_copy(Buffer_createRef((U8*)output->ptr + alen, blen), b);
 	return Error_none();
 }
 
@@ -754,8 +754,8 @@ Error Buffer_writeAsUTF8(Buffer buf, U64 i, UTF8CodePoint codepoint) {
 		if(i + 2 > Buffer_length(buf))
 			return Error_outOfBounds(0, i + 2, Buffer_length(buf));
 
-		buf.ptr[i]		= 0xC0 | (U8)(codepoint >> 6);
-		buf.ptr[i + 1]	= 0x80 | (U8)(codepoint & 0x3F);
+		((U8*)buf.ptr)[i]		= 0xC0 | (U8)(codepoint >> 6);
+		((U8*)buf.ptr)[i + 1]	= 0x80 | (U8)(codepoint & 0x3F);
 		return Error_none();
 	}
 
@@ -764,9 +764,9 @@ Error Buffer_writeAsUTF8(Buffer buf, U64 i, UTF8CodePoint codepoint) {
 		if(i + 3 > Buffer_length(buf))
 			return Error_outOfBounds(0, i + 3, Buffer_length(buf));
 
-		buf.ptr[i]		= 0xE0 | (U8)(codepoint >> 12);
-		buf.ptr[i + 1]	= 0x80 | (U8)((codepoint >> 6) & 0x3F);
-		buf.ptr[i + 2]	= 0x80 | (U8)(codepoint & 0x3F);
+		((U8*)buf.ptr)[i]		= 0xE0 | (U8)(codepoint >> 12);
+		((U8*)buf.ptr)[i + 1]	= 0x80 | (U8)((codepoint >> 6) & 0x3F);
+		((U8*)buf.ptr)[i + 2]	= 0x80 | (U8)(codepoint & 0x3F);
 		return Error_none();
 	}
 
@@ -775,10 +775,10 @@ Error Buffer_writeAsUTF8(Buffer buf, U64 i, UTF8CodePoint codepoint) {
 		if(i + 4 > Buffer_length(buf))
 			return Error_outOfBounds(0, i + 4, Buffer_length(buf));
 
-		buf.ptr[i]		= 0xF0 | (U8)(codepoint >> 18);
-		buf.ptr[i + 1]	= 0x80 | (U8)((codepoint >> 12) & 0x3F);
-		buf.ptr[i + 2]	= 0x80 | (U8)((codepoint >> 6) & 0x3F);
-		buf.ptr[i + 3]	= 0x80 | (U8)(codepoint & 0x3F);
+		((U8*)buf.ptr)[i]		= 0xF0 | (U8)(codepoint >> 18);
+		((U8*)buf.ptr)[i + 1]	= 0x80 | (U8)((codepoint >> 12) & 0x3F);
+		((U8*)buf.ptr)[i + 2]	= 0x80 | (U8)((codepoint >> 6) & 0x3F);
+		((U8*)buf.ptr)[i + 3]	= 0x80 | (U8)(codepoint & 0x3F);
 		return Error_none();
 	}
 

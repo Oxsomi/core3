@@ -215,7 +215,7 @@ Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 
 			if(I32x2_y(newSiz) > I32x2_y(w->size)) {
 
-				Error err = Buffer_unsetAllBits(Buffer_createRef(neo.ptr + linSizOld, linSiz - linSizOld));
+				Error err = Buffer_unsetAllBits(Buffer_createRef((U8*)neo.ptr + linSizOld, linSiz - linSizOld));
 
 				//Revert to old size
 
@@ -330,7 +330,7 @@ Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 
 	//Ensure it's all properly cleared
 
-	else Buffer_unsetAllBits(Buffer_createRef(neo.ptr, linSiz));
+	else Buffer_unsetAllBits(Buffer_createRef((U8*)neo.ptr, linSiz));
 
 	//Get rid of our old data
 

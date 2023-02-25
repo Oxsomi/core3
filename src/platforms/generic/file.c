@@ -311,7 +311,7 @@ Error File_add(String loc, EFileType type, Ns maxTimeout) {
 
 		for (U64 i = 0; i < str.length - 1; ++i) {
 
-			String parent = String_createRefSized(resolved.ptr, String_end(str.ptr[i]) - resolved.ptr);
+			String parent = String_createRefSized((C8*)resolved.ptr, String_end(str.ptr[i]) - resolved.ptr, false);
 
 			err = File_getInfo(parent, &info);
 
@@ -333,8 +333,8 @@ Error File_add(String loc, EFileType type, Ns maxTimeout) {
 
 			if (String_end(parent) != String_end(resolved)) {
 
-				prev = String_getAt(parent, parent.length - 1);
-				if(!String_setAt(parent, parent.length - 1, '\0'))
+				prev = String_getAt(parent, String_length(parent) - 1);
+				if(!String_setAt(parent, String_length(parent) - 1, '\0'))
 					_gotoIfError(clean, Error_invalidOperation(2));
 			}
 
@@ -346,7 +346,7 @@ Error File_add(String loc, EFileType type, Ns maxTimeout) {
 			//Reset character that was replaced with \0
 
 			if(prev)
-				String_setAt(parent, parent.length - 1, prev);
+				String_setAt(parent, String_length(parent) - 1, prev);
 		}
 
 		StringList_freex(&str);
@@ -517,7 +517,7 @@ Error File_move(String loc, String directoryName, Ns maxTimeout) {
 	if(!String_cutBeforeLast(fileName, '/', EStringCase_Sensitive, &fileName))
 		fileName = resolved;
 
-	String_setAt(resolvedFile, resolvedFile.length - 1, '/');
+	String_setAt(resolvedFile, String_length(resolvedFile) - 1, '/');
 
 	_gotoIfError(clean, String_appendStringx(&resolvedFile, fileName));
 	_gotoIfError(clean, String_appendx(&resolvedFile, '\0'));
@@ -650,7 +650,7 @@ Error File_read(String loc, Ns maxTimeout, Buffer *output) {
 	Buffer b = *output;
 	U64 bufLen = Buffer_length(b);
 
-	if (fread(b.ptr, 1, bufLen, f) != bufLen)
+	if (fread((U8*)b.ptr, 1, bufLen, f) != bufLen)
 		_gotoIfError(clean, Error_invalidState(2));
 
 	goto success;

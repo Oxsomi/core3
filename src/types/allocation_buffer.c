@@ -127,7 +127,7 @@ inline U64 AllocationBufferBlock_getAligned(AllocationBufferBlock block) {
 	return AllocationBufferBlock_alignTo(AllocationBufferBlock_getStart(block), block.alignment);
 }
 
-inline Bool AllocationBufferBlock_isSame(AllocationBufferBlock block, U8 *start, U8 *ptr) {
+inline Bool AllocationBufferBlock_isSame(AllocationBufferBlock block, const U8 *start, const U8 *ptr) {
 	U64 blockStart = AllocationBufferBlock_getStart(block);
 	U64 aligned = AllocationBufferBlock_getAligned(block);
 	return ptr == start + blockStart || ptr == start + aligned;
@@ -166,7 +166,7 @@ U8 *AllocationBuffer_allocateBlock(AllocationBuffer *allocationBuffer, U64 size,
 		if(List_pushBack(&allocationBuffer->allocations, vb, alloc).genericError)
 			return NULL;
 
-		return allocationBuffer->buffer.ptr + v.start;
+		return (U8*)allocationBuffer->buffer.ptr + v.start;
 	}
 
 	//Grab area behind last allocation to see if there's still space
@@ -181,7 +181,7 @@ U8 *AllocationBuffer_allocateBlock(AllocationBuffer *allocationBuffer, U64 size,
 		if(List_pushBack(&allocationBuffer->allocations, vb, alloc).genericError)
 			return NULL;
 
-		return allocationBuffer->buffer.ptr + lastAlign;
+		return (U8*)allocationBuffer->buffer.ptr + lastAlign;
 	}
 
 	//Grab area before first allocation to see if there's still space
@@ -199,7 +199,7 @@ U8 *AllocationBuffer_allocateBlock(AllocationBuffer *allocationBuffer, U64 size,
 		if(List_pushFront(&allocationBuffer->allocations, vb, alloc).genericError)
 			return NULL;
 
-		return allocationBuffer->buffer.ptr + v.start;
+		return (U8*)allocationBuffer->buffer.ptr + v.start;
 	}
 
 	//Try to find an empty spot in between.
@@ -234,7 +234,7 @@ U8 *AllocationBuffer_allocateBlock(AllocationBuffer *allocationBuffer, U64 size,
 			if (size * 3 / 2 >= AllocationBufferBlock_size(v)) {
 				b->start &= ~((U64)1 << 63);
 				b->alignment = alignment;
-				return allocationBuffer->buffer.ptr + aligned;
+				return (U8*)allocationBuffer->buffer.ptr + aligned;
 			}
 
 			//Splitting the buffer, ideally if we're near the back of the buffer 
@@ -262,7 +262,7 @@ U8 *AllocationBuffer_allocateBlock(AllocationBuffer *allocationBuffer, U64 size,
 
 				((AllocationBufferBlock*)allocationBuffer->allocations.ptr)[i] = v;
 
-				return allocationBuffer->buffer.ptr + aligned;
+				return (U8*)allocationBuffer->buffer.ptr + aligned;
 			}
 
 			aligned = AllocationBufferBlock_alignToBackwards(v.end - size, alignment);
@@ -292,7 +292,7 @@ U8 *AllocationBuffer_allocateBlock(AllocationBuffer *allocationBuffer, U64 size,
 
 			((AllocationBufferBlock*)allocationBuffer->allocations.ptr)[i + spaceLeft] = v;
 
-			return allocationBuffer->buffer.ptr + aligned;
+			return (U8*)allocationBuffer->buffer.ptr + aligned;
 		}
 	}
 

@@ -48,13 +48,10 @@ Error File_resolve(
 	String *result
 ) {
 
-	loc = String_createConstRefSized(loc.ptr, loc.length);
+	loc = String_createConstRefSized(loc.ptr, String_length(loc), String_isNullTerminated(loc));
 
-	if(String_getAt(loc, loc.length - 1) == '\0')			//Null terminator
-		--loc.length;
-
-	if(String_getAt(loc, loc.length - 1) == '/')			//myTest/ <--
-		--loc.length;
+	if(String_getAt(loc, String_length(loc) - 1) == '/')			//myTest/ <--
+		loc.len = String_length(loc) - 1;							//unset null terminated
 
 	if(result && result->ptr)
 		return Error_invalidOperation(0);
@@ -101,7 +98,7 @@ Error File_resolve(
 
 	#ifdef _WIN32
 
-		if(result->length >= 3 && result->ptr[1] == ':' && (result->ptr[2] != '/' || !C8_isAlpha(result->ptr[0])))
+		if(String_length(*result) >= 3 && result->ptr[1] == ':' && (result->ptr[2] != '/' || !C8_isAlpha(result->ptr[0])))
 			_gotoIfError(clean, Error_unsupportedOperation(2));
 
 	#else
@@ -129,7 +126,7 @@ Error File_resolve(
 
 		if(
 			(String_isEmpty(res.ptr[i]) && i && !*isVirtual) ||
-			String_equals(res.ptr[i], '.', EStringCase_Sensitive, true)
+			String_equals(res.ptr[i], '.', EStringCase_Sensitive)
 		) {
 
 			//Move to left
@@ -144,7 +141,7 @@ Error File_resolve(
 
 		//In this case, we have to pop StringList[j], so that's only possible if that's still there
 
-		if (String_equalsString(res.ptr[i], back, EStringCase_Sensitive, true)) {
+		if (String_equalsString(res.ptr[i], back, EStringCase_Sensitive)) {
 
 			if(!i) {
 				res.length = realSplitLen;
@@ -167,7 +164,7 @@ Error File_resolve(
 
 				//Drive name
 
-				if(!i && res.ptr[i].length == 2 && C8_isAlpha(res.ptr[0].ptr[0]) && res.ptr[0].ptr[1] == ':')
+				if(!i && String_length(res.ptr[i]) == 2 && C8_isAlpha(res.ptr[0].ptr[0]) && res.ptr[0].ptr[1] == ':')
 					continue;
 
 			#endif
@@ -212,7 +209,7 @@ Error File_resolve(
 		if (String_startsWith(*result, '/', EStringCase_Sensitive))
 			_gotoIfError(clean, Error_unsupportedOperation(4));
 
-		isAbsolute = result->length >= 2 && result->ptr[1] == ':';
+		isAbsolute = String_length(*result) >= 2 && result->ptr[1] == ':';
 
 	#else			//Starts with / if absolute
 		isAbsolute = String_startsWith(*result, '/', EStringCase_Sensitive);
@@ -223,19 +220,16 @@ Error File_resolve(
 
 	if (isAbsolute) {
 
-		if(!absoluteDir.length || !String_startsWithString(*result, absoluteDir, EStringCase_Insensitive))
+		if(!String_length(absoluteDir) || !String_startsWithString(*result, absoluteDir, EStringCase_Insensitive))
 			_gotoIfError(clean, Error_unauthorized(0));
 	}
 
 	//Prepend our path
 
-	else if(absoluteDir.length) 
+	else if(String_length(absoluteDir)) 
 		_gotoIfError(clean, String_insertString(result, absoluteDir, 0, alloc));
 
 	//Since we're gonna use this in file operations, we wanna have a null terminator
-
-	if(String_getAt(*result, result->length - 1) != '\0')
-		_gotoIfError(clean, String_insert(result, '\0', result->length, alloc));
 
 	if(!maxFilePathLimit)
 		maxFilePathLimit = 260;
@@ -244,8 +238,8 @@ Error File_resolve(
 		maxFilePathLimit = U64_min(260, maxFilePathLimit);		/* MAX_PATH */
 	#endif
 
-	if(result->length >= maxFilePathLimit)
-		_gotoIfError(clean, Error_outOfBounds(0, result->length, maxFilePathLimit));
+	if(String_length(*result) >= maxFilePathLimit) 
+		_gotoIfError(clean, Error_outOfBounds(0, String_length(*result), maxFilePathLimit));
 
 	return Error_none();
 

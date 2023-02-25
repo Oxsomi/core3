@@ -101,12 +101,12 @@ Bool _CLI_convert(ParsedArgs args, Bool isTo) {
 
 		U64 off = String_startsWithString(key, String_createConstRefUnsafe("0x"), EStringCase_Insensitive) ? 2 : 0;
 
-		if (key.length - off != 64) {
+		if (String_length(key) - off != 64) {
 			Log_errorLn("Invalid parameter sent to -aes. Expecting key in hex (32 bytes)");
 			return false;
 		}
 
-		for (U64 i = off; i + 1 < key.length; ++i) {
+		for (U64 i = off; i + 1 < String_length(key); ++i) {
 
 			U8 v0 = C8_hex(key.ptr[i]);
 			U8 v1 = C8_hex(key.ptr[++i]);

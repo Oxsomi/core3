@@ -58,7 +58,7 @@ void Error_printx(Error err, ELogLevel logLevel, ELogOptions options) {
 			err.paramId,
 			err.paramValue0,
 			err.paramValue1,
-			platformErr.length, platformErr.ptr
+			String_length(platformErr), platformErr.ptr
 
 		).genericError
 	)

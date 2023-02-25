@@ -122,7 +122,7 @@ extern const F32 F32_MAX;
 //Buffer (more functions in types/buffer.h)
 
 typedef struct Buffer {
-	U8 *ptr;
+	const U8 *ptr;
 	U64 lengthAndRefBits;		//refBits: [ b31 isRef, b30 isConst ]. Length should be max 48 bits
 } Buffer;
 

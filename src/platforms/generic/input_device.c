@@ -109,7 +109,7 @@ inline BitRef InputDevice_getButtonValue(InputDevice dev, U16 localHandle, Bool 
 		return (BitRef){ 0 };
 
 	U64 bitOff = ((U32)localHandle << 1) + isCurrent;
-	U8 *off = dev.states.ptr + dev.axes * 2 * sizeof(F32) + (bitOff >> 3);
+	U8 *off = (U8*)dev.states.ptr + dev.axes * 2 * sizeof(F32) + (bitOff >> 3);
 
 	return (BitRef){ .ptr = off, .off = (bitOff & 7) };
 }
@@ -172,15 +172,15 @@ Error InputDevice_create(U16 buttons, U16 axes, EInputDeviceType type, InputDevi
 	if(String_isEmpty(keyName))															\
 		return Error_invalidParameter(2, 0);											\
 																						\
-	if(keyName.length >= _LONGSTRING_LEN)												\
-		return Error_outOfBounds(2, keyName.length, _LONGSTRING_LEN);					\
+	if(String_length(keyName) >= _LONGSTRING_LEN)										\
+		return Error_outOfBounds(2, String_length(keyName), _LONGSTRING_LEN);			\
 																						\
 	Buffer_copy(																		\
 		Buffer_createRef(inputType->name, _LONGSTRING_LEN), 							\
-		Buffer_createConstRef(keyName.ptr, keyName.length)								\
+		Buffer_createConstRef(keyName.ptr, String_length(keyName))						\
 	);																					\
 																						\
-	inputType->name[U64_min(keyName.length, _LONGSTRING_LEN - 1)] = '\0';
+	inputType->name[U64_min(String_length(keyName), _LONGSTRING_LEN - 1)] = '\0';
 
 Error InputDevice_createButton(
 	InputDevice d, 
@@ -281,8 +281,7 @@ InputHandle InputDevice_getHandle(InputDevice d, String name) {
 		if(String_equalsString(
 			String_createConstRefLongString(InputDevice_getButton(d, i)->name), 
 			name,
-			EStringCase_Insensitive, 
-			true
+			EStringCase_Insensitive
 		))
 			return InputDevice_createHandle(d, i, EInputType_Button);
 
@@ -290,8 +289,7 @@ InputHandle InputDevice_getHandle(InputDevice d, String name) {
 		if(String_equalsString(
 			String_createConstRefLongString(InputDevice_getAxis(d, i)->name), 
 			name,
-			EStringCase_Insensitive, 
-			true
+			EStringCase_Insensitive
 		))
 			return InputDevice_createHandle(d, i, EInputType_Axis);
 

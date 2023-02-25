@@ -36,12 +36,12 @@ U64  List_bytes(List l) { return l.length * l.stride; }
 U64  List_allocatedBytes(List l) { return List_isRef(l) ? 0 : l.capacity * l.stride; }
 
 Buffer List_buffer(List l) { 
-	return List_isConstRef(l) ? Buffer_createNull() : Buffer_createRef(l.ptr, List_bytes(l)); 
+	return List_isConstRef(l) ? Buffer_createNull() : Buffer_createRef((U8*)l.ptr, List_bytes(l)); 
 }
 
 Buffer List_allocatedBuffer(List l) { 
 	return List_isRef(l) ? Buffer_createNull() : 
-		Buffer_createRef(l.ptr, List_allocatedBytes(l)); 
+		Buffer_createRef((U8*)l.ptr, List_allocatedBytes(l)); 
 }
 
 Buffer List_bufferConst(List l) { return Buffer_createConstRef(l.ptr, List_bytes(l)); }
@@ -50,11 +50,11 @@ Buffer List_allocatedBufferConst(List l) {
 	return Buffer_createConstRef(List_isRef(l) ? NULL : l.ptr, List_allocatedBytes(l)); 
 }
 
-U8 *List_begin(List list) { return List_isConstRef(list) ? NULL : list.ptr; }
-U8 *List_end(List list) { return List_isConstRef(list) ? NULL : list.ptr + List_bytes(list); }
+U8 *List_begin(List list) { return List_isConstRef(list) ? NULL : (U8*)list.ptr; }
+U8 *List_end(List list) { return List_isConstRef(list) ? NULL : (U8*)list.ptr + List_bytes(list); }
 
 U8 *List_last(List list) { 
-	return List_isConstRef(list) || !list.length ? NULL : list.ptr + List_bytes(list) - list.stride; 
+	return List_isConstRef(list) || !list.length ? NULL : (U8*)list.ptr + List_bytes(list) - list.stride; 
 }
 
 const U8 *List_beginConst(List list) { return list.ptr; }
@@ -66,7 +66,7 @@ const U8 *List_ptrConst(List list, U64 elementOffset) {
 }
 
 U8 *List_ptr(List list, U64 elementOffset) {
-	return !List_isConstRef(list) && elementOffset < list.length ? list.ptr + elementOffset * list.stride : NULL;
+	return !List_isConstRef(list) && elementOffset < list.length ? (U8*)list.ptr + elementOffset * list.stride : NULL;
 }
 
 Buffer List_atConst(List list, U64 offset) {
@@ -76,7 +76,7 @@ Buffer List_atConst(List list, U64 offset) {
 
 Buffer List_at(List list, U64 offset) {
 	return offset < list.length && !List_isConstRef(list) ? 
-		Buffer_createRef(list.ptr + offset * list.stride, list.stride) : Buffer_createNull();
+		Buffer_createRef((U8*)list.ptr + offset * list.stride, list.stride) : Buffer_createNull();
 }
 
 Error List_eq(List a, List b, Bool *result) {
@@ -266,7 +266,7 @@ Error List_createSubset(List list, U64 index, U64 length, List *result) {
 	if(List_isConstRef(list))
 		return List_createConstRef(list.ptr + index * list.stride, length, list.stride, result);
 
-	return List_createRef(list.ptr + index * list.stride, length, list.stride, result);
+	return List_createRef((U8*)list.ptr + index * list.stride, length, list.stride, result);
 }
 
 Error List_createSubsetReverse(
@@ -376,9 +376,9 @@ Error List_set(List list, U64 index, Buffer buf) {
 		return Error_invalidOperation(0);
 
 	if(bufLen)
-		Buffer_copy(Buffer_createRef(list.ptr + index * list.stride, list.stride), buf);
+		Buffer_copy(Buffer_createRef((U8*)list.ptr + index * list.stride, list.stride), buf);
 
-	else Buffer_unsetAllBits(Buffer_createRef(list.ptr + index * list.stride, list.stride));
+	else Buffer_unsetAllBits(Buffer_createRef((U8*)list.ptr + index * list.stride, list.stride));
 
 	return Error_none();
 }
@@ -394,7 +394,7 @@ Error List_get(List list, U64 index, Buffer *result) {
 	if(List_isConstRef(list))
 		return Error_constData(0, 0);
 
-	*result = Buffer_createRef(list.ptr + index * list.stride, list.stride);
+	*result = Buffer_createRef((U8*)list.ptr + index * list.stride, list.stride);
 	return Error_none();
 }
 
@@ -601,7 +601,7 @@ Error List_eraseAllIndices(List *list, List indices) {
 			continue;
 
 		Buffer_revCopy(
-			Buffer_createRef(list->ptr + curr * list->stride, (neighbor - me) * list->stride),
+			Buffer_createRef((U8*)list->ptr + curr * list->stride, (neighbor - me) * list->stride),
 			Buffer_createConstRef(list->ptr + me * list->stride, (neighbor - me) * list->stride)
 		);
 
@@ -710,7 +710,7 @@ inline U64 List_qpartition(List list, U64 begin, U64 last, CompareFunction f) {
 
 			Buffer_copy(
 				Buffer_createRef(
-					list.ptr + i * list.stride,
+					(U8*)list.ptr + i * list.stride,
 					list.stride
 				),
 				Buffer_createConstRef(
@@ -722,7 +722,7 @@ inline U64 List_qpartition(List list, U64 begin, U64 last, CompareFunction f) {
 
 			Buffer_copy(
 				Buffer_createRef(
-					list.ptr + j * list.stride,
+					(U8*)list.ptr + j * list.stride,
 					list.stride
 				),
 				Buffer_createConstRef(tmp + 1024, 1024)
@@ -837,11 +837,14 @@ Error List_erase(List *list, U64 index) {
 	if(!list)
 		return Error_nullPointer(0);
 
+	if(List_isRef(*list))
+		return Error_invalidParameter(0, 0);
+
 	if(index >= list->length)
 		return Error_outOfBounds(1, index, list->length);
 
 	Buffer_revCopy(
-		Buffer_createRef(list->ptr + index * list->stride, (list->length - 1) * list->stride),
+		Buffer_createRef((U8*)list->ptr + index * list->stride, (list->length - 1) * list->stride),
 		Buffer_createConstRef(list->ptr + (index + 1) * list->stride, (list->length - 1) * list->stride)
 	);
 
@@ -853,6 +856,9 @@ Error List_insert(List *list, U64 index, Buffer buf, Allocator allocator) {
 
 	if(!list)
 		return Error_nullPointer(0);
+
+	if(List_isRef(*list))
+		return Error_invalidParameter(0, 0);
 
 	if(list->stride != Buffer_length(buf))
 		return Error_invalidOperation(0);
@@ -868,7 +874,7 @@ Error List_insert(List *list, U64 index, Buffer buf, Allocator allocator) {
 			return err;
 
 		Buffer_copy(
-			Buffer_createRef(list->ptr + index * list->stride, list->stride), 
+			Buffer_createRef((U8*)list->ptr + index * list->stride, list->stride), 
 			buf
 		);
 
@@ -888,14 +894,14 @@ Error List_insert(List *list, U64 index, Buffer buf, Allocator allocator) {
 
 	if(prevSize)
 		Buffer_revCopy(
-			Buffer_createRef(list->ptr + (index + 1) * list->stride, (prevSize - index) * list->stride), 
-			Buffer_createConstRef(list->ptr + index * list->stride, (prevSize - index) * list->stride)
+			Buffer_createRef((U8*)list->ptr + (index + 1) * list->stride, (prevSize - index) * list->stride), 
+			Buffer_createConstRef((U8*)list->ptr + index * list->stride, (prevSize - index) * list->stride)
 		);
 
 	//Copy the other data
 
 	Buffer_copy(
-		Buffer_createRef(list->ptr + index * list->stride, list->stride), 
+		Buffer_createRef((U8*)list->ptr + index * list->stride, list->stride), 
 		buf
 	);
 
@@ -906,6 +912,9 @@ Error List_pushAll(List *list, List other, Allocator allocator) {
 
 	if(!list)
 		return Error_nullPointer(0);
+
+	if(List_isRef(*list) && list->length)
+		return Error_invalidParameter(0, 0);
 
 	if(list->stride != other.stride)
 		return Error_invalidOperation(0);
@@ -923,7 +932,7 @@ Error List_pushAll(List *list, List other, Allocator allocator) {
 		return err;
 
 	Buffer_copy(
-		Buffer_createRef(list->ptr + oldSize, List_bytes(other)),
+		Buffer_createRef((U8*)list->ptr + oldSize, List_bytes(other)),
 		Buffer_createConstRef(other.ptr, List_bytes(other))
 	);
 
@@ -984,6 +993,9 @@ Error List_insertAll(List *list, List other, U64 offset, Allocator allocator) {
 	if(!list)
 		return Error_nullPointer(0);
 
+	if(List_isRef(*list))
+		return Error_invalidParameter(0, 0);
+
 	if(!other.length)
 		return Error_none();
 
@@ -1006,14 +1018,14 @@ Error List_insertAll(List *list, List other, U64 offset, Allocator allocator) {
 
 	if(prevSize)
 		Buffer_revCopy(
-			Buffer_createRef(list->ptr + (offset + other.length) * list->stride, (prevSize - offset) * list->stride), 
+			Buffer_createRef((U8*)list->ptr + (offset + other.length) * list->stride, (prevSize - offset) * list->stride), 
 			Buffer_createConstRef(list->ptr + offset * list->stride, (prevSize - offset) * list->stride)
 		);
 
 	//Copy the other data
 
 	Buffer_copy(
-		Buffer_createRef(list->ptr + offset * list->stride, other.length * list->stride), 
+		Buffer_createRef((U8*)list->ptr + offset * list->stride, other.length * list->stride), 
 		List_bufferConst(other)
 	);
 
@@ -1042,7 +1054,7 @@ Error List_reserve(List *list, U64 capacity, Allocator allocator) {
 
 	Buffer_copy(buffer, List_bufferConst(*list));
 
-	Buffer curr = Buffer_createManagedPtr(list->ptr, List_allocatedBytes(*list));
+	Buffer curr = Buffer_createManagedPtr((U8*)list->ptr, List_allocatedBytes(*list));
 
 	if(Buffer_length(curr))
 		Buffer_free(&curr, allocator);
@@ -1057,13 +1069,13 @@ Error List_resize(List *list, U64 size, Allocator allocator) {
 	if(!list)
 		return Error_nullPointer(0);
 
-	if(List_isConstRef(*list))
+	if(List_isRef(*list) && list->length)
 		return Error_constData(0, 0);
 
 	if (size <= list->capacity) {
 
 		Buffer_unsetAllBits(
-			Buffer_createRef(list->ptr + list->stride * list->length, (size - list->length) * list->stride)
+			Buffer_createRef((U8*)list->ptr + list->stride * list->length, (size - list->length) * list->stride)
 		);
 
 		list->length = size;
@@ -1079,7 +1091,7 @@ Error List_resize(List *list, U64 size, Allocator allocator) {
 		return err;
 
 	Buffer_unsetAllBits(
-		Buffer_createRef(list->ptr + list->stride * list->length, (size * 3 / 2 - list->length) * list->stride)
+		Buffer_createRef((U8*)list->ptr + list->stride * list->length, (size * 3 / 2 - list->length) * list->stride)
 	);
 
 	list->length = size;
@@ -1180,7 +1192,7 @@ Bool List_free(List *result, Allocator allocator) {
 	Bool err = true;
 
 	if (!List_isRef(*result)) {
-		Buffer buf = Buffer_createManagedPtr(result->ptr, List_allocatedBytes(*result));
+		Buffer buf = Buffer_createManagedPtr((U8*)result->ptr, List_allocatedBytes(*result));
 		err = Buffer_free(&buf, allocator);
 	}
 

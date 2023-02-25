@@ -123,7 +123,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 				break;
 			}
 
-			if (GetRawInputData((HRAWINPUT)lParam, RID_INPUT, buf.ptr, &size, sizeof(RAWINPUTHEADER)) != size) {
+			if (GetRawInputData((HRAWINPUT)lParam, RID_INPUT, (U8*) buf.ptr, &size, sizeof(RAWINPUTHEADER)) != size) {
 				Error_printx(Error_platformError(0, GetLastError()), ELogLevel_Error, ELogOptions_Default);
 				Buffer_freex(&buf);
 				Log_error(ELogOptions_Default, "Couldn't get raw input");
@@ -658,16 +658,18 @@ Bool WindowManager_freePhysical(WindowManager *manager, Window **w) {
 
 Error Window_updatePhysicalTitle(const Window *w, String title) {
 
-	if(!w || !I32x2_any(w->size) || !title.ptr || !title.length)
+	U64 titlel = String_length(title);
+
+	if(!w || !I32x2_any(w->size) || !title.ptr || !titlel)
 		return Error_nullPointer(!w || !I32x2_any(w->size) ? 0 : 1);
 
-	if (title.length >= MAX_PATH)
-		return Error_outOfBounds(1, title.length, MAX_PATH);
+	if (titlel >= MAX_PATH)
+		return Error_outOfBounds(1, titlel, MAX_PATH);
 
 	C8 windowName[MAX_PATH + 1];
 	Buffer_copy(Buffer_createRef(windowName, sizeof(windowName)), String_bufferConst(title));
 
-	windowName[title.length] = '\0';
+	windowName[titlel] = '\0';
 
 	if(!SetWindowTextA(w->nativeHandle, windowName))
 		return Error_platformError(0, GetLastError());

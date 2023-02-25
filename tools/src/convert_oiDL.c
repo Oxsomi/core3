@@ -136,7 +136,7 @@ Error _CLI_convertToDL(ParsedArgs args, String input, FileInfo inputInfo, String
 
 		if (args.flags & EOperationFlags_Ascii) {
 
-			String str = String_createConstRefSized(buf.ptr, Buffer_length(buf));
+			String str = String_createConstRefSized(buf.ptr, Buffer_length(buf), false);
 
 			//Grab split string
 
@@ -214,12 +214,12 @@ Error _CLI_convertToDL(ParsedArgs args, String input, FileInfo inputInfo, String
 
 			String sortedI = ((const String*)sortedPaths.ptr)[dec];
 
-			if (sortedI.length) {
+			if (String_length(sortedI)) {
 				allLinear = false;
 				break;
 			}
 
-			((String*)sortedPaths.ptr)[dec] = String_createConstRefSized(stri.ptr, stri.length);
+			((String*)sortedPaths.ptr)[dec] = String_createConstRefSized(stri.ptr, String_length(stri), false);
 		}
 
 		//Keep the sorting as is, since it's not linear
@@ -271,7 +271,7 @@ Error _CLI_convertToDL(ParsedArgs args, String input, FileInfo inputInfo, String
 		else if(settings.dataType == EDLDataType_Ascii) {
 
 			Buffer buf = *((Buffer*)buffers.ptr + i);
-			String str = String_createConstRefSized(buf.ptr, Buffer_length(buf));
+			String str = String_createConstRefSized(buf.ptr, Buffer_length(buf), false);
 			
 			_gotoIfError(clean, DLFile_addEntryAsciix(&file, str));
 		}
@@ -366,13 +366,8 @@ Error _CLI_convertFromDL(ParsedArgs args, String input, FileInfo inputInfo, Stri
 
 		_gotoIfError(clean, String_createCopyx(output, &outputBase));
 
-		if(!String_endsWith(outputBase, '/', EStringCase_Sensitive)) {
-
-			if(String_endsWith(outputBase, '\0', EStringCase_Sensitive))
-				outputBase.ptr[outputBase.length - 1] = '/';
-
-			else _gotoIfError(clean, String_appendx(&outputBase, '/'));
-		}
+		if(!String_endsWith(outputBase, '/', EStringCase_Sensitive))
+			_gotoIfError(clean, String_appendx(&outputBase, '/'));
 
 		String bin = String_createConstRefUnsafe(".bin");
 
@@ -430,7 +425,7 @@ Error _CLI_convertFromDL(ParsedArgs args, String input, FileInfo inputInfo, Stri
 
 		}
 
-		Buffer fileDat = Buffer_createConstRef(concatFile.ptr, concatFile.length);
+		Buffer fileDat = Buffer_createConstRef(concatFile.ptr, String_length(concatFile));
 
 		_gotoIfError(clean, File_write(fileDat, output, 1 * SECOND));
 

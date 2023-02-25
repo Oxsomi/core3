@@ -149,19 +149,19 @@ void Log_printCapturedStackTraceCustom(const void **stackTrace, U64 stackSize, E
 
 			Error err;
 
-			if(capture->mod.length) {
+			if(String_length(capture->mod)) {
 				String tmp = String_createNull();
 				_gotoIfError(cleanup, String_createCopyx(capture->mod, &tmp));
 				capture->mod = tmp;
 			}
 
-			if(capture->sym.length) {
+			if(String_length(capture->sym)) {
 				String tmp = String_createNull();
 				_gotoIfError(cleanup, String_createCopyx(capture->sym, &tmp));
 				capture->sym = tmp;
 			}
 
-			if(capture->fil.length) {
+			if(String_length(capture->fil)) {
 				String tmp = String_createNull();
 				_gotoIfError(cleanup, String_createCopyx(capture->fil, &tmp));
 				capture->fil = tmp;
@@ -193,24 +193,24 @@ void Log_printCapturedStackTraceCustom(const void **stackTrace, U64 stackSize, E
 
 		CapturedStackTrace capture = captured[i];
 
-		if(!capture.sym.length)
+		if(!String_length(capture.sym))
 			printf("%p\n", stackTrace[i]);
 
 		else if(capture.lin)
 			printf(
 				"%p: %.*s!%.*s (%.*s, Line %u)\n", 
 				stackTrace[i], 
-				(int) U64_min(I32_MAX, capture.mod.length), capture.mod.ptr, 
-				(int) U64_min(I32_MAX, capture.sym.length), capture.sym.ptr,
-				(int) U64_min(I32_MAX, capture.fil.length), capture.fil.ptr, 
+				(int) String_length(capture.mod), capture.mod.ptr, 
+				(int) String_length(capture.sym), capture.sym.ptr,
+				(int) String_length(capture.fil), capture.fil.ptr, 
 				capture.lin
 			);
 
 		else printf(
 			"%p: %.*s!%.*s\n", 
 			stackTrace[i], 
-			(int) U64_min(I32_MAX, capture.mod.length), capture.mod.ptr, 
-			(int) U64_min(I32_MAX, capture.sym.length), capture.sym.ptr
+			(int) String_length(capture.mod), capture.mod.ptr, 
+			(int) String_length(capture.sym), capture.sym.ptr
 		);
 
 		//We now don't need the strings anymore
@@ -267,7 +267,7 @@ void Log_log(ELogLevel lvl, ELogOptions options, String arg) {
 
 	printf(
 		"%.*s%s", 
-		(int) U64_min(I32_MAX, arg.length), arg.ptr,
+		(int)String_length(arg), arg.ptr,
 		newLine
 	);
 
@@ -279,7 +279,7 @@ void Log_log(ELogLevel lvl, ELogOptions options, String arg) {
 	String copy = String_createNull();
 	Bool panic = false;
 
-	if(arg.length && arg.ptr[arg.length - 1] != '\0') {
+	if(!String_isNullTerminated(arg)) {
 
 		if (
 			String_createCopyx(arg, &copy).genericError ||
@@ -296,7 +296,7 @@ void Log_log(ELogLevel lvl, ELogOptions options, String arg) {
 		}
 	}
 
-	else copy = String_createConstRefSized(arg.ptr, arg.length);
+	else copy = String_createConstRefSized(arg.ptr, String_length(arg), String_isNullTerminated(arg));
 
 	if(!panic)
 		OutputDebugStringA(copy.ptr);
