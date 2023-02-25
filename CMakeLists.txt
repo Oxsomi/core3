@@ -41,7 +41,6 @@ endif()
 
 set(EnableSIMD ON CACHE BOOL "Enables SIMD")
 set(RelaxFloat OFF CACHE BOOL "Relax float (perf > accuracy)")
-set(WorkingDir OFF CACHE BOOL "Use working directory as local root (OFF = Use file installation directory, ON = working dir)")
 
 # Use ${HideConsole} to add_executable to hide the console window
 
@@ -105,14 +104,6 @@ else()
 	set(_RELAX_FLOAT "0")
 endif()
 
-if(WorkingDir) 
-	message("-- Enabling reads from the working dir instead of installation dir (-DWorkingDir=ON)")
-	set(_WORKING_DIR "1")
-else()
-	message("-- Disabling reads from the working dir instead of installation dir (-DWorkingDir=OFF)")
-	set(_WORKING_DIR "0")
-endif()
-
 if(WIN32)
 	message("-- Enabling Windows support...")
 	set(platform windows)
@@ -136,7 +127,9 @@ add_library(
 	CMakeLists.txt
 )
 
-target_compile_definitions(OxC3_types PUBLIC -D_SIMD=${_SIMD} -D_WORKING_DIR=${_WORKING_DIR} -D_RELAX_FLOAT=${_RELAX_FLOAT} -D_ARCH=${_ARCH} -D_PLATFORM_TYPE=${_PLATFORM_TYPE})
+set_target_properties(OxC3_types PROPERTIES FOLDER Oxsomi)
+
+target_compile_definitions(OxC3_types PUBLIC -D_SIMD=${_SIMD} -D_RELAX_FLOAT=${_RELAX_FLOAT} -D_ARCH=${_ARCH} -D_PLATFORM_TYPE=${_PLATFORM_TYPE})
 
 target_include_directories(OxC3_types PUBLIC inc)
 
@@ -156,6 +149,8 @@ add_library(
 	${formatsSources}
 	CMakeLists.txt
 )
+
+set_target_properties(OxC3_formats PROPERTIES FOLDER Oxsomi)
 
 target_link_libraries(OxC3_formats PUBLIC OxC3_types)
 
@@ -179,12 +174,18 @@ add_library(
 	CMakeLists.txt
 )
 
+set_target_properties(OxC3_platforms PROPERTIES FOLDER Oxsomi)
+
 target_link_libraries(OxC3_platforms PUBLIC OxC3_formats)
 
 # Setting the icon of the app
 # Call this immediately before configure_virtual_files with the executable
 
 function(configure_icon target icon)
+
+	if(NOT TARGET ${target})
+		message(FATAL_ERROR "configure_icon: target ${target} not present.")
+	endif()
 
 	if(WIN32)
 		get_property(res TARGET ${target} PROPERTY RESOURCE_LIST)
@@ -194,9 +195,130 @@ function(configure_icon target icon)
 
 endfunction()
 
+# Add virtual directory as a loadable section.
+# Example:
+# add_virtual_directory(
+#	TARGET
+#		myTarget
+#	NAME
+#		shaders
+#	ROOT
+#		${CMAKE_CURRENT_SOURCE_DIR}/res/test_shaders
+# )
+# This would add myTarget/shaders as a virtual directory.
+# myTarget/shaders has to be loaded manually by the app to process it.
+# This is then passed onto to OxC3 package to ensure all files are converted to the right types.
+# This effectively means it'd be packaged as a separate .oiCA file that has to be loaded via File_loadVirtual.
+
+macro(add_virtual_files)
+
+	set(_OPTIONS)
+	set(_ONE_VALUE TARGET ROOT NAME)
+	set(_MULTI_VALUE)
+
+	cmake_parse_arguments(_ARGS "${_OPTIONS}" "${_ONE_VALUE}" "${_MULTI_VALUE}" ${ARGN})
+
+	# Validate
+
+	if(NOT TARGET ${_ARGS_TARGET})
+		message(FATAL_ERROR "add_virtual_files: target ${_ARGS_TARGET} not present.")
+	endif()
+	
+	if(NOT _ARGS_ROOT)
+		message(FATAL_ERROR "add_virtual_files: 'ROOT' argument required.")
+	endif()
+	
+	if(NOT IS_DIRECTORY ${_ARGS_ROOT})
+		message(FATAL_ERROR "add_virtual_files: 'ROOT' folder not present.")
+	endif()
+	
+	if(NOT _ARGS_NAME)
+		message(FATAL_ERROR "add_virtual_files: 'NAME' argument required.")
+	endif()
+	
+	if(NOT _ARGS_NAME MATCHES "^[0-9A-Za-z_\$]+$")
+		message(FATAL_ERROR "add_virtual_files: 'NAME' has to conform to alphanumeric (plus _ and $).")
+	endif()
+	
+	if(NOT _ARGS_TARGET MATCHES "^[0-9A-Za-z_\$]+$")
+		message(FATAL_ERROR "add_virtual_files: 'TARGET' has to conform to alphanumeric (plus _ and $).")
+	endif()
+
+	# Add processed file as a file
+
+	if(WIN32)
+
+		add_custom_target(
+			${_ARGS_TARGET}_package
+			COMMAND OxC3 file package -i "${_ARGS_ROOT}" -o "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA"
+			WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+		)
+
+		set_target_properties(${_ARGS_TARGET}_package PROPERTIES FOLDER Oxsomi/package)
+
+		add_dependencies(${_ARGS_TARGET} ${_ARGS_TARGET}_package OxC3)
+
+		get_property(res TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST)
+		set_property(TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST ${_ARGS_TARGET}/${_ARGS_NAME}\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ RCDATA\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA\"\n${res})
+		
+	endif()
+
+endmacro()
+
+# Add a dependency to ensure the dependency files for a project are present.
+# This is useful if a dependency would need to include things like fonts, or other kinds of resources.
+# This would for example allow you to load myTarget/shaders in myNewTarget (from the other example).
+# These dependencies are always public, so if myTarget would have a dependency, this one does too.
+# Example:
+# add_virtual_dependencies(TARGET myNewTarget DEPENDENCIES myTarget)
+
+macro(add_virtual_dependencies)
+
+	set(_OPTIONS)
+	set(_ONE_VALUE TARGET)
+	set(_MULTI_VALUE DEPENDENCIES)
+
+	cmake_parse_arguments(_ARGS "${_OPTIONS}" "${_ONE_VALUE}" "${_MULTI_VALUE}" ${ARGN})
+
+	# Validate
+
+	if(NOT TARGET ${_ARGS_TARGET})
+		message(FATAL_ERROR "add_virtual_dependencies: target \"${_ARGS_TARGET}\" not present.")
+	endif()
+	
+	if(NOT _ARGS_TARGET MATCHES "^[0-9A-Za-z_\$]+$")
+		message(FATAL_ERROR "add_virtual_dependencies: 'TARGET' has to conform to alphanumeric (plus _ and $).")
+	endif()
+
+	# Add dependencies
+	
+	if(_ARGS_DEPENDENCIES)
+		foreach(file ${_ARGS_DEPENDENCIES})
+
+			if(NOT TARGET ${file})
+				message(FATAL_ERROR "add_virtual_dependencies: target \"${file}\" not present.")
+			endif()
+
+			get_property(res0 TARGET ${file} PROPERTY RESOURCE_LIST)
+			get_property(res1 TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST)
+
+			add_dependencies(${_ARGS_TARGET} ${file})
+			set_property(TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST ${res0}\n${res1})
+
+		endforeach()
+	else()
+		message(FATAL_ERROR "add_virtual_dependencies: DEPENDENCIES argument is required!")
+	endif()
+
+endmacro()
+
 # Configure virtual files (and icon) for a target
 
 function(configure_virtual_files target)
+
+	if(NOT TARGET ${target})
+		message(FATAL_ERROR "configure_virtual_files: target ${target} not present.")
+	endif()
 
 	if(WIN32)
 		get_property(res TARGET ${target} PROPERTY RESOURCE_LIST)
@@ -219,3 +341,25 @@ add_executable(
 )
 
 target_link_libraries(OxC3_test PUBLIC OxC3_types)
+
+set_target_properties(OxC3_test PROPERTIES FOLDER Oxsomi/test)
+
+# OxC3 tool
+
+file(GLOB_RECURSE headers "tools/inc/*.h")
+file(GLOB_RECURSE sources "tools/src/*.c")
+
+add_executable(
+	OxC3
+	${headers}
+	${sources}
+	CMakeLists.txt
+)
+
+set_target_properties(OxC3 PROPERTIES FOLDER Oxsomi)
+
+target_link_libraries(OxC3 PUBLIC OxC3_platforms)
+target_include_directories(OxC3 PUBLIC tools/inc)
+
+configure_icon(OxC3 "${CMAKE_CURRENT_SOURCE_DIR}/res/logo.ico")
+configure_virtual_files(OxC3)

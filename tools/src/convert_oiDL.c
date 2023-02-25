@@ -136,7 +136,7 @@ Error _CLI_convertToDL(ParsedArgs args, String input, FileInfo inputInfo, String
 
 		if (args.flags & EOperationFlags_Ascii) {
 
-			String str = String_createConstRefSized(buf.ptr, Buffer_length(buf), false);
+			String str = String_createConstRefSized((const C8*)buf.ptr, Buffer_length(buf), false);
 
 			//Grab split string
 
@@ -270,8 +270,8 @@ Error _CLI_convertToDL(ParsedArgs args, String input, FileInfo inputInfo, String
 
 		else if(settings.dataType == EDLDataType_Ascii) {
 
-			Buffer buf = *((Buffer*)buffers.ptr + i);
-			String str = String_createConstRefSized(buf.ptr, Buffer_length(buf), false);
+			Buffer bufi = *((Buffer*)buffers.ptr + i);
+			String str = String_createConstRefSized((const C8*)bufi.ptr, Buffer_length(bufi), false);
 			
 			_gotoIfError(clean, DLFile_addEntryAsciix(&file, str));
 		}
@@ -302,8 +302,8 @@ clean:
 	}
 
 	for(U64 i = 0; i < buffers.length; ++i) {
-		Buffer buf = *((Buffer*)buffers.ptr + i);
-		Buffer_freex(&buf);
+		Buffer bufi = *((Buffer*)buffers.ptr + i);
+		Buffer_freex(&bufi);
 	}
 
 	DLFile_freex(&file);

@@ -51,4 +51,6 @@ Bool CLI_randNum(ParsedArgs args);
 Bool CLI_inspectHeader(ParsedArgs args);
 Bool CLI_inspectData(ParsedArgs args);
 
+Bool CLI_package(ParsedArgs args);
+
 Bool CLI_execute(StringList arglist);

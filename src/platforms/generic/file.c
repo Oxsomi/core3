@@ -332,10 +332,8 @@ Error File_add(String loc, EFileType type, Ns maxTimeout) {
 			C8 prev = '\0';
 
 			if (String_end(parent) != String_end(resolved)) {
-
-				prev = String_getAt(parent, String_length(parent) - 1);
-				if(!String_setAt(parent, String_length(parent) - 1, '\0'))
-					_gotoIfError(clean, Error_invalidOperation(2));
+				prev = String_getAt(resolved, String_length(parent) + 1);
+				*(C8*)(resolved.ptr + String_length(parent) + 1) = '\0';
 			}
 
 			//Make parent
@@ -346,7 +344,7 @@ Error File_add(String loc, EFileType type, Ns maxTimeout) {
 			//Reset character that was replaced with \0
 
 			if(prev)
-				String_setAt(parent, String_length(parent) - 1, prev);
+				String_setAt(resolved, String_length(parent) + 1, prev);
 		}
 
 		StringList_freex(&str);

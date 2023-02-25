@@ -223,7 +223,7 @@ Error Platform_initExt(Platform *result, String currAppDir) {
 		return Error_platformError(1, GetLastError());
 	}
 	
-	#if !_WORKING_DIR
+	if(!Platform_useWorkingDirectory) {
 
 		//Grab app directory of where the exe is installed
 
@@ -262,9 +262,7 @@ Error Platform_initExt(Platform *result, String currAppDir) {
 		String_freex(&appDir);
 		result->workingDirectory = workDir;
 
-	#else
-
-		currAppDir;
+	} else {
 
 		//Init working dir
 
@@ -290,8 +288,7 @@ Error Platform_initExt(Platform *result, String currAppDir) {
 			Buffer_freex(&platformExt);
 			return err;
 		}
-
-	#endif
+	}
 
 	result->dataExt = pext;
 	return Error_none();

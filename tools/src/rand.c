@@ -32,16 +32,7 @@
 #include "platforms/ext/errorx.h"
 #include "cli.h"
 
-typedef enum RandType {
-
-	RandType_Key,
-	RandType_Char,
-	RandType_Num,
-	RandType_Data
-
-} RandType;
-
-Bool CLI_rand(ParsedArgs args, RandType type) {
+Bool CLI_rand(ParsedArgs args) {
 
 	//Parse arguments
 
@@ -316,8 +307,8 @@ Bool CLI_rand(ParsedArgs args, RandType type) {
 
 					//Random number
 
-					else for(U8 i = 0; i < (U8) outputAsBase; ++i)
-						_gotoIfError(clean, String_appendx(&options, C8_createNyto(i)));
+					else for(U8 j = 0; j < (U8) outputAsBase; ++j)
+						_gotoIfError(clean, String_appendx(&options, C8_createNyto(j)));
 
 					//Base10 is limited to 1 U64.
 					//We can immediately return this (as long as we clamp it)
@@ -340,14 +331,14 @@ Bool CLI_rand(ParsedArgs args, RandType type) {
 					//To keep this to a minimum, we use a U64, because in the same scenario, the error rate is super small.
 					//We do this to avoid having to reroll the randomness.
 
-					else for (U64 i = 0, j = Buffer_length(tmp); i < j; i += 8) {
+					else for (U64 k = 0, j = Buffer_length(tmp); k < j; k += 8) {
 
-						U64 v = *(const U64*)(tmp.ptr + i);
+						U64 v = *(const U64*)(tmp.ptr + k);
 						v %= String_length(options);
 
 						//Ensure we stay within our bit limit
 						
-						if(!i && b)
+						if(!k && b)
 							switch (outputAsBase) {
 								case 8:		if(b % 3) v &= (1 << (b % 3)) - 1;		break;
 								case 16:	if(b % 4) v &= (1 << (b % 4)) - 1;		break;
@@ -411,17 +402,17 @@ clean:
 }
 
 Bool CLI_randKey(ParsedArgs args) {
-	return CLI_rand(args, RandType_Key);
+	return CLI_rand(args);
 }
 
 Bool CLI_randChar(ParsedArgs args) {
-	return CLI_rand(args, RandType_Char);
+	return CLI_rand(args);
 }
 
 Bool CLI_randData(ParsedArgs args) {
-	return CLI_rand(args, RandType_Data);
+	return CLI_rand(args);
 }
 
 Bool CLI_randNum(ParsedArgs args) {
-	return CLI_rand(args, RandType_Num);
+	return CLI_rand(args);
 }

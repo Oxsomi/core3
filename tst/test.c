@@ -65,6 +65,8 @@ String Error_formatPlatformError(Error err) {
 	return String_createNull();
 }
 
+const Bool Platform_useWorkingDirectory = false;
+
 //#define _STRICT_VALIDATION
 
 #ifdef _STRICT_VALIDATION

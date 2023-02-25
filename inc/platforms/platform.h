@@ -53,6 +53,7 @@ typedef struct Platform {
 } Platform;
 
 extern Platform Platform_instance;
+user_impl extern const Bool Platform_useWorkingDirectory;			//If false, the app directory will be used instead.
 
 Error Platform_create(
 	int cmdArgc,

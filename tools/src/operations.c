@@ -112,7 +112,7 @@ const C8 *EOperationCategory_description[] = {
 	"Generating random data."
 };
 
-Operation Operation_values[12];
+Operation Operation_values[13];
 Format Format_values[4];
 
 void Operations_init() {
@@ -307,6 +307,23 @@ void Operations_init() {
 			EOperationHasParameter_Bit,
 
 		.operationFlags = EOperationFlags_RandNum
+	};
+
+	//Package file for virtual file system
+
+	Operation_values[EOperation_Package] = (Operation) { 
+
+		.category = EOperationCategory_File, 
+
+		.name = "package", 
+		.desc = "Package files such as shaders, textures and models into an oiCA as Oxsomi file formats.", 
+
+		.func = &CLI_package,
+
+		.isFormatLess = true,
+
+		.requiredParameters = EOperationHasParameter_Input | EOperationHasParameter_Output,
+		.optionalParameters = EOperationHasParameter_AES
 	};
 }
 

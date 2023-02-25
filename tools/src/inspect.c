@@ -512,7 +512,7 @@ Bool CLI_showFile(ParsedArgs args, Buffer b, U64 start, U64 length, Bool isAscii
 		//Ascii can be directly output to log
 
 		if (isAscii) {
-			String tmp = String_createConstRefSized(b.ptr + start, length, false);
+			tmp = String_createConstRefSized((const C8*)b.ptr + start, length, false);
 			Log_debugLn("%.*s", String_length(tmp), tmp.ptr);
 			tmp = String_createNull();
 		}
@@ -784,7 +784,11 @@ Bool CLI_inspectData(ParsedArgs args) {
 					//Print the subsection of the file
 
 					else {
-						Bool isAscii = String_isValidAscii(String_createConstRefSized(e.data.ptr, Buffer_length(e.data), false));
+
+						Bool isAscii = String_isValidAscii(
+							String_createConstRefSized((const C8*) e.data.ptr, Buffer_length(e.data), false)
+						);
+
 						Log_debugLn("%.*s", String_length(e.path), e.path.ptr);
 						CLI_showFile(args, e.data, start, length, isAscii);
 						goto cleanCa;
@@ -837,11 +841,11 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 			for(U64 i = start; i < end && i < strings.length; ++i) {
 
-				String path = ((const String*)strings.ptr)[i];
+				String pathi = ((const String*)strings.ptr)[i];
 
-				U64 parentCount = String_countAll(path, '/', EStringCase_Sensitive);
+				U64 parentCount = String_countAll(pathi, '/', EStringCase_Sensitive);
 
-				U64 v = Archive_getIndexx(file.archive, path);
+				U64 v = Archive_getIndexx(file.archive, pathi);
 
 				//000: self
 				//001:   child (indented by 2)
@@ -857,8 +861,8 @@ Bool CLI_inspectData(ParsedArgs args) {
 				String_freex(&tmp1);
 
 				String sub = String_createNull();
-				if(!String_cutBeforeLast(path, '/', EStringCase_Sensitive, &sub))
-					sub = String_createConstRefSized(path.ptr, String_length(path), false);
+				if(!String_cutBeforeLast(pathi, '/', EStringCase_Sensitive, &sub))
+					sub = String_createConstRefSized(pathi.ptr, String_length(pathi), false);
 
 				_gotoIfError(cleanCa, String_appendStringx(&tmp, sub));
 
@@ -939,11 +943,11 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 				for (U64 i = start; i < end && i < file.entries.length; ++i) {
 
-					DLEntry entry = ((const DLEntry*)file.entries.ptr)[i];
+					DLEntry entryi = ((const DLEntry*)file.entries.ptr)[i];
 
 					U64 entrySize = 
-						file.settings.dataType == EDLDataType_Ascii ? String_length(entry.entryString) : 
-						Buffer_length(entry.entryBuffer);
+						file.settings.dataType == EDLDataType_Ascii ? String_length(entryi.entryString) : 
+						Buffer_length(entryi.entryBuffer);
 
 					_gotoIfError(cleanDl, String_createDecx(i, 3, &tmp));
 					_gotoIfError(cleanDl, String_appendStringx(&tmp, String_createConstRefUnsafe(": length = ")));

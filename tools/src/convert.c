@@ -46,7 +46,7 @@ Bool _CLI_convert(ParsedArgs args, Bool isTo) {
 		return false;
 	}
 
-	String inputArg = *(String*)inputArgBuf.ptr;
+	String inputArg = *(const String*)inputArgBuf.ptr;
 
 	//Check if output is valid
 
@@ -57,7 +57,7 @@ Bool _CLI_convert(ParsedArgs args, Bool isTo) {
 		return false;
 	}
 
-	String outputArg = *(String*)outputArgBuf.ptr;
+	String outputArg = *(const String*)outputArgBuf.ptr;
 
 	//TODO: Support multiple files
 

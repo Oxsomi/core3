@@ -24,22 +24,6 @@ goto :success
 	
 :success
 
-rem Build tools
-
-echo -- Building build tools...
-
-cd tools
-
-mkdir builds 2>nul
-cd builds
-cmake -DCMAKE_BUILD_TYPE=%1 .. -G "Visual Studio 17 2022" -DEnableSIMD=%2
-cmake --build . -j 8 --config %1
-cd ../
-
-cd ../
-
-rem TODO: Package files
-
 rem Build normal exes
 
 echo -- Building tests...

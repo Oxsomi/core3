@@ -73,6 +73,8 @@ clean:
 
 Error _CLI_convertToCA(ParsedArgs args, String input, FileInfo inputInfo, String output, U32 encryptionKey[8]) {
 
+	inputInfo;
+
 	//TODO: Compression type
 
 	CASettings settings = (CASettings) { .compressionType = EXXCompressionType_None };
@@ -196,6 +198,8 @@ clean:
 }
 
 Error _CLI_convertFromCA(ParsedArgs args, String input, FileInfo inputInfo, String output, U32 encryptionKey[8]) {
+
+	args;
 
 	//TODO: Batch multiple files
 

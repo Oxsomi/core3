@@ -165,18 +165,16 @@ void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f) {
 
 Bool CLI_execute(StringList arglist) {
 
-	Bool success = true;
-
 	//Show help
 
-	if (Platform_instance.args.length < 1) {
+	if (arglist.length < 1) {
 		CLI_showHelp(EOperationCategory_Invalid, EOperation_Invalid, EFormat_Invalid);
 		return false;
 	}
 
 	//Grab category
 
-	String arg0 = Platform_instance.args.ptr[0];
+	String arg0 = arglist.ptr[0];
 
 	EOperationCategory category = EOperationCategory_Invalid;
 
@@ -198,14 +196,14 @@ Bool CLI_execute(StringList arglist) {
 
 	//Show help
 
-	if (Platform_instance.args.length < 2) {
+	if (arglist.length < 2) {
 		CLI_showHelp(category, EOperation_Invalid, EFormat_Invalid);
 		return false;
 	}
 
 	//Grab operation
 
-	String arg1 = Platform_instance.args.ptr[1];
+	String arg1 = arglist.ptr[1];
 
 	EOperation operation = EOperation_Invalid;
 
@@ -240,16 +238,16 @@ Bool CLI_execute(StringList arglist) {
 	//Grab all flags
 
 	for(U64 i = 0; i < EOperationFlags_Count; ++i)
-		for(U64 j = 2; j < Platform_instance.args.length; ++j)
+		for(U64 j = 2; j < arglist.length; ++j)
 
 			if (String_equalsString(
-				Platform_instance.args.ptr[j],
+				arglist.ptr[j],
 				String_createConstRefUnsafe(EOperationFlags_names[i]),
 				EStringCase_Insensitive
 			)) {
 
 				if ((args.flags >> i) & 1) {
-					Log_errorLn("Duplicate flag: %s", Platform_instance.args.ptr[j].ptr);
+					Log_errorLn("Duplicate flag: %.*s.", String_length(arglist.ptr[j]), arglist.ptr[j].ptr);
 					goto clean;
 				}
 
@@ -262,9 +260,9 @@ Bool CLI_execute(StringList arglist) {
 	args.format = EFormat_Invalid;
 
 	for(U64 i = 0; i < EOperationHasParameter_Count; ++i)
-		for(U64 j = 2; j < Platform_instance.args.length; ++j)
+		for(U64 j = 2; j < arglist.length; ++j)
 			if (String_equalsString(
-				Platform_instance.args.ptr[j],
+				arglist.ptr[j],
 				String_createConstRefUnsafe(EOperationHasParameter_names[i]),
 				EStringCase_Insensitive
 			)) {
@@ -274,10 +272,10 @@ Bool CLI_execute(StringList arglist) {
 				//Check neighbor and save as list entry
 
 				if (
-					j + 1 >= Platform_instance.args.length ||
-					String_getAt(Platform_instance.args.ptr[j + 1], 0) == '-'
+					j + 1 >= arglist.length ||
+					String_getAt(arglist.ptr[j + 1], 0) == '-'
 				) {
-					Log_errorLn("Parameter is missing argument: %s", Platform_instance.args.ptr[j].ptr);
+					Log_errorLn("Parameter is missing argument: %.*s.", String_length(arglist.ptr[j]), arglist.ptr[j].ptr);
 					goto clean;
 				}
 
@@ -289,7 +287,7 @@ Bool CLI_execute(StringList arglist) {
 
 						for (U64 k = 0; k < EFormat_Invalid; ++k)
 							if (String_equalsString(
-								Platform_instance.args.ptr[j + 1],
+								arglist.ptr[j + 1],
 								String_createConstRefUnsafe(Format_values[k].name),
 								EStringCase_Insensitive
 							)) {
@@ -303,7 +301,7 @@ Bool CLI_execute(StringList arglist) {
 					//Mark as present
 
 					if (args.parameters & param) {
-						Log_errorLn("Duplicate parameter: %s", Platform_instance.args.ptr[j].ptr);
+						Log_errorLn("Duplicate parameter: %.*s.", String_length(arglist.ptr[j]), arglist.ptr[j].ptr);
 						goto clean;
 					}
 
@@ -313,7 +311,7 @@ Bool CLI_execute(StringList arglist) {
 
 					_gotoIfError(clean, List_pushBackx(
 						&args.args, 
-						Buffer_createConstRef(&Platform_instance.args.ptr[j + 1], sizeof(String))
+						Buffer_createConstRef(&arglist.ptr[j + 1], sizeof(String))
 					));
 				}
 
@@ -345,26 +343,26 @@ Bool CLI_execute(StringList arglist) {
 
 	//Find invalid flags or parameters that couldn't be matched
 
-	for (U64 j = 2; j < Platform_instance.args.length; ++j) {
+	for (U64 j = 2; j < arglist.length; ++j) {
 
-		if (String_getAt(Platform_instance.args.ptr[j], 0) == '-') {
+		if (String_getAt(arglist.ptr[j], 0) == '-') {
 
 			//Check for parameters
 
-			if (String_getAt(Platform_instance.args.ptr[j], 1) != '-') {
+			if (String_getAt(arglist.ptr[j], 1) != '-') {
 
 				U64 i = 0;
 
 				for (; i < EOperationHasParameter_Count; ++i)
 					if (String_equalsString(
-						Platform_instance.args.ptr[j],
+						arglist.ptr[j],
 						String_createConstRefUnsafe(EOperationHasParameter_names[i]),
 						EStringCase_Insensitive
 					))
 						break;
 
 				if(i == EOperationHasParameter_Count) {
-					Log_errorLn("Invalid parameter is present: %s", Platform_instance.args.ptr[j].ptr);
+					Log_errorLn("Invalid parameter is present: %.*s.", String_length(arglist.ptr[j]), arglist.ptr[j].ptr);
 					CLI_showHelp(category, operation, args.format);
 					goto clean;
 				}
@@ -379,14 +377,14 @@ Bool CLI_execute(StringList arglist) {
 
 			for (; i < EOperationFlags_Count; ++i)
 				if (String_equalsString(
-					Platform_instance.args.ptr[j],
+					arglist.ptr[j],
 					String_createConstRefUnsafe(EOperationFlags_names[i]),
 					EStringCase_Insensitive
 				))
 					break;
 
 			if(i == EOperationFlags_Count) {
-				Log_errorLn("Invalid flag is present: %s", Platform_instance.args.ptr[j].ptr);
+				Log_errorLn("Invalid flag is present: %.*s.", String_length(arglist.ptr[j]), arglist.ptr[j].ptr);
 				CLI_showHelp(category, operation, args.format);
 				goto clean;
 			}
@@ -394,7 +392,7 @@ Bool CLI_execute(StringList arglist) {
 			continue;
 		}
 
-		Log_errorLn("Invalid argument is present: %s", Platform_instance.args.ptr[j].ptr);
+		Log_errorLn("Invalid argument is present: %.*s", String_length(arglist.ptr[j]), arglist.ptr[j].ptr);
 		CLI_showHelp(category, operation, args.format);
 		goto clean;
 	}

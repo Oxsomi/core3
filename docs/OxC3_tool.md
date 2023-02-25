@@ -5,7 +5,7 @@ The OxC3 tool is intended to handle all operations required for Oxsomi core3. Th
 - Calculating hashes.
 - Generating random numbers or keys.
 - Conversions between file formats.
-- **TODO:** Packaging a project.
+- Packaging a project.
 - Inspecting a file (printing the header and other important information).
 - Encryption.
 - **TODO**: Compression.
@@ -118,7 +118,11 @@ These are left out by default, because often, file timestamps aren't very import
 
 `OxC3 file to -f oiCA -i myFolder -o myFolder.oiCA --full-date`
 
-## TODO: Packaging a project
+## Packaging a project
+
+`OxC3 package -i myFolder -o myFolder.oiCA` is used to package a folder into Oxsomi formats. This means that it will standardize all files it detects and converts them to our standard file. For example a .fbx file could be automatically converted to a scene and/or model file, a texture could be converted to a standardized image file, etc. This is basically a baking process to ensure all shaders, textures, models and other resources are the correct format for target architectures. -aes argument is allowed to encrypt the modules.
+
+These are generally attached to the exe, apk or other executable file to ensure these resources can be found and aren't as easily accidentally modified on disk, as well as making them more portable. See the README.
 
 ## File inspect
 

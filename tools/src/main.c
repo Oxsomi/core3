@@ -33,6 +33,8 @@
 #include "formats/oiDL.h"
 #include "cli.h"
 
+const Bool Platform_useWorkingDirectory = true;
+
 int Program_run() {
 
 	Operations_init();

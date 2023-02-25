@@ -27,6 +27,8 @@ add_executable(
 	CMakeLists.txt
 )
 
+set_target_properties(OxC3 PROPERTIES FOLDER Oxsomi)
+
 target_link_libraries(OxC3 PUBLIC OxC3_platforms)
 target_include_directories(OxC3 PUBLIC inc)
 
