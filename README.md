@@ -106,3 +106,15 @@ This should be done before the configure_virtual_files and ensures the files for
 
 *Note: Dependencies can't be overlapping. So if B and C both include A then including B and C in D won't work.*
 
+## Contributions
+
+To contribute to this repository, you agree to the [contribution guidelines](FOR CONTRIBUTORS.md). Before merging a PR as an external party, you have to sign a contributor license agreement.
+
+## License
+
+This repository is available under two licenses:
+
+- LGPL3 open source license.
+- Commercial license.
+
+Any company not adhering to the LGPL3 license can contact us as contact@osomi.net. 

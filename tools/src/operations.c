@@ -1,30 +1,56 @@
-/* MIT License
-*   
-*  Copyright (c) 2022 Oxsomi, Nielsbishere (Niels Brunekreef)
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+*  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *  
-*  Permission is hereby granted, free of charge, to any person obtaining a copy
-*  of this software and associated documentation files (the "Software"), to deal
-*  in the Software without restriction, including without limitation the rights
-*  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-*  copies of the Software, and to permit persons to whom the Software is
-*  furnished to do so, subject to the following conditions:
+*  This program is free software: you can redistribute it and/or modify
+*  it under the terms of the GNU General Public License as published by
+*  the Free Software Foundation, either version 3 of the License, or
+*  (at your option) any later version.
 *  
-*  The above copyright notice and this permission notice shall be included in all
-*  copies or substantial portions of the Software.
+*  This program is distributed in the hope that it will be useful,
+*  but WITHOUT ANY WARRANTY; without even the implied warranty of
+*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+*  GNU General Public License for more details.
 *  
-*  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-*  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-*  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-*  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-*  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-*  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-*  SOFTWARE. 
+*  You should have received a copy of the GNU General Public License
+*  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
+*  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
+*  To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
+*  This is called dual licensing.
 */
 
 #include "types/error.h"
 #include "types/buffer.h"
 #include "types/string.h"
+#include "platforms/log.h"
 #include "cli.h"
+
+Bool CLI_license(ParsedArgs args) {
+
+	args;
+
+	Log_debugLn(
+		"OxC3 (Oxsomi core 3), a general framework and toolset for cross platform applications.\n"
+		"Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)\n"
+		"\n"
+		"This program is free software: you can redistribute it and/or modify\n"
+		"it under the terms of the GNU General Public License as published by\n"
+		"the Free Software Foundation, either version 3 of the License, or\n"
+		"(at your option) any later version.\n"
+		"\n"
+		"This program is distributed in the hope that it will be useful,\n"
+		"but WITHOUT ANY WARRANTY; without even the implied warranty of\n"
+		"MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the\n"
+		"GNU General Public License for more details.\n"
+		"\n"
+		"You should have received a copy of the GNU General Public License\n"
+		"along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.\n"
+		"Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.\n"
+		"To prevent this a separate license will have to be requested at contact@osomi.net for a premium;\n"
+		"This is called dual licensing."
+	);
+
+	return true;
+}
 
 //Parameters
 
@@ -103,16 +129,18 @@ const C8 *EOperationFlags_descriptions[] = {
 const C8 *EOperationCategory_names[] = {
 	"file",
 	"hash",
-	"rand"
+	"rand",
+	"license"
 };
 
 const C8 *EOperationCategory_description[] = {
 	"File utilities such as file conversions, encryption, compression, etc.",
 	"Converting a file or string to a hash.",
-	"Generating random data."
+	"Generating random data.",
+	"Information about the tool license."
 };
 
-Operation Operation_values[13];
+Operation Operation_values[14];
 Format Format_values[4];
 
 void Operations_init() {
@@ -324,6 +352,20 @@ void Operations_init() {
 
 		.requiredParameters = EOperationHasParameter_Input | EOperationHasParameter_Output,
 		.optionalParameters = EOperationHasParameter_AES
+	};
+
+	//License for the tool
+
+	Operation_values[EOperation_LicenseShow] = (Operation) { 
+
+		.category = EOperationCategory_License, 
+
+		.name = "show", 
+		.desc = "Shows the license.", 
+
+		.func = &CLI_license,
+
+		.isFormatLess = true
 	};
 }
 
