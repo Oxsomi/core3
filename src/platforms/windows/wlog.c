@@ -279,24 +279,19 @@ void Log_log(ELogLevel lvl, ELogOptions options, String arg) {
 	String copy = String_createNull();
 	Bool panic = false;
 
-	if(!String_isNullTerminated(arg)) {
+	if (
+		String_createCopyx(arg, &copy).genericError ||
+		(hasNewLine && String_appendx(&copy, '\n').genericError)
+	) {
 
-		if (
-			String_createCopyx(arg, &copy).genericError ||
-			String_appendx(&copy, '\0').genericError
-		) {
+		OutputDebugStringA(
+			"PANIC! Log_print argument was output to debugger, but wasn't null terminated\n"
+			"This is normally okay, as long as a new string can be allocated.\n"
+			"In this case, allocation failed, which suggests corruption or out of memory."
+		);
 
-			OutputDebugStringA(
-				"PANIC! Log_print argument was output to debugger, but wasn't null terminated\n"
-				"This is normally okay, as long as a new string can be allocated.\n"
-				"In this case, allocation failed, which suggests corruption or out of memory."
-			);
-
-			panic = true;
-		}
+		panic = true;
 	}
-
-	else copy = String_createConstRefSized(arg.ptr, String_length(arg), String_isNullTerminated(arg));
 
 	if(!panic)
 		OutputDebugStringA(copy.ptr);

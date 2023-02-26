@@ -182,7 +182,7 @@ typedef struct FileCounter {
 	U64 counter;
 } FileCounter;
 
-Error countFileType(FileInfo info, FileCounter *counter) {
+Error countFileTypeVirtual(FileInfo info, FileCounter *counter) {
 
 	if (!counter->useType) {
 		++counter->counter;
@@ -221,7 +221,7 @@ Error File_queryFileObjectCount(String loc, EFileType type, Bool isRecursive, U6
 	//Normal counter for local files
 
 	FileCounter counter = (FileCounter) { .type = type, .useType = true };
-	_gotoIfError(clean, File_foreach(loc, (FileCallback) countFileType, &counter, isRecursive));
+	_gotoIfError(clean, File_foreach(loc, (FileCallback) countFileTypeVirtual, &counter, isRecursive));
 	*res = counter.counter;
 
 clean:
@@ -255,7 +255,7 @@ Error File_queryFileObjectCountAll(String loc, Bool isRecursive, U64 *res) {
 	//Normal counter for local files
 
 	FileCounter counter = (FileCounter) { 0 };
-	_gotoIfError(clean, File_foreach(loc, (FileCallback) countFileType, &counter, isRecursive));
+	_gotoIfError(clean, File_foreach(loc, (FileCallback) countFileTypeVirtual, &counter, isRecursive));
 	*res = counter.counter;
 
 clean:

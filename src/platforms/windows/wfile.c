@@ -29,6 +29,7 @@
 #include "platforms/ext/formatx.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/archivex.h"
+#include "platforms/ext/listx.h"
 
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
@@ -233,9 +234,167 @@ Error File_getInfoVirtual(String loc, FileInfo *info) {
 	return Error_unimplemented(0); 
 }
 
-Error File_foreachVirtual(String loc, FileCallback callback, void *userData, Bool isRecursive) { 
-	loc; callback; userData; isRecursive;
+typedef struct ForeachFile {
+	FileCallback callback;
+	void *userData;
+	Bool isRecursive;
+	String currentPath;
+} ForeachFile;
+
+Error File_virtualCallback(FileInfo info, ForeachFile *userData) {
+
+	String fullPath = String_createNull();
+	Error err = Error_none();
+
+	_gotoIfError(clean, String_createCopyx(userData->currentPath, &fullPath));
+	_gotoIfError(clean, String_appendStringx(&fullPath, info.path));
+
+	info.path = fullPath;
+
+	_gotoIfError(clean, userData->callback(info, userData->userData));
+
+clean:
+	String_freex(&fullPath);
+	return err;
+}
+
+Error File_foreachVirtualInternal(ForeachFile *userData, String resolved) {
+
+	Error err = Error_none();
+	String copy = String_createNull();
+	String copy1 = String_createNull();
+	String copy2 = String_createNull();
+	String root = String_createConstRefUnsafe(".");
+	List visited = List_createEmpty(sizeof(String));
+
+	String_toLower(resolved);
+	_gotoIfError(clean, String_createCopyx(resolved, &copy));
+
+	if(String_length(copy))
+		_gotoIfError(clean, String_appendx(&copy, '/'));		//Don't append to root
+
+	U64 baseCount = String_countAll(copy, '/', EStringCase_Sensitive);
+
+	for (U64 i = 0; i < Platform_instance.virtualSections.length; ++i) {
+
+		VirtualSection *section = (VirtualSection*)Platform_instance.virtualSections.ptr + i;
+
+		String_freex(&copy1);
+		String_freex(&copy2);
+
+		_gotoIfError(clean, String_createCopyx(section->path, &copy1));
+		String_toLower(copy1);
+
+		_gotoIfError(clean, String_createCopyx(copy1, &copy2));
+		_gotoIfError(clean, String_appendx(&copy2, '/'));
+
+		if(
+			!String_startsWithString(copy1, copy, EStringCase_Sensitive) &&
+			!String_equalsString(copy1, resolved, EStringCase_Sensitive) &&
+			!String_startsWithString(copy, copy2, EStringCase_Sensitive)
+		)
+			continue;
+
+		//Root directories don't exist, so we have to pretend they do
+
+		if (!String_length(resolved)) {
+
+			String parent = String_createNull();
+			if(!String_cutAfterFirst(copy1, '/', EStringCase_Sensitive, &parent))
+				_gotoIfError(clean, Error_invalidState(0));
+
+			Bool contains = false;
+
+			for(U64 j = 0; j < visited.length; ++j)
+				if (String_equalsString(parent, ((String*)(visited.ptr))[j], EStringCase_Sensitive)) {
+					contains = true;
+					break;
+				}
+
+			if (!contains) {
+
+				//Avoid duplicates
+
+				_gotoIfError(clean, List_pushBackx(&visited, Buffer_createConstRef(&parent, sizeof(parent))));
+
+				FileInfo info = (FileInfo) {
+					.path = parent,
+					.type = EFileType_Folder,
+					.access = FileAccess_Read
+				};
+
+				_gotoIfError(clean, userData->callback(info, userData->userData));
+			}
+		}
+
+		//All folders 
+		
+		if (
+			(!userData->isRecursive && baseCount == String_countAll(section->path, '/', EStringCase_Sensitive)) ||
+			(userData->isRecursive && baseCount <= String_countAll(section->path, '/', EStringCase_Sensitive))
+		) {
+
+			FileInfo info = (FileInfo) {
+				.path = copy1,
+				.type = EFileType_Folder,
+				.access = FileAccess_Read
+			};
+
+			_gotoIfError(clean, userData->callback(info, userData->userData));
+		}
+
+		//We can only loop through the folders if they're loaded. Otherwise we consider them as empty.
+
+		if(section->loaded) {
+
+			userData->currentPath = copy2;
+
+			if(userData->isRecursive || baseCount >= 2) {
+
+				String child = String_createNull();
+
+				if(baseCount > 2 && !String_cut(resolved, String_length(copy2), 0, &child))
+					_gotoIfError(clean, Error_invalidState(1))
+
+				if(!String_length(child))
+					child = root;
+
+				_gotoIfError(clean, Archive_foreachx(
+					section->loadedData, 
+					child, 
+					(FileCallback) File_virtualCallback, userData, 
+					userData->isRecursive,
+					EFileType_Any
+				));
+			}
+		}
+	}
+
+clean:
+	List_freex(&visited);
+	String_freex(&copy);
+	String_freex(&copy1);
+	String_freex(&copy2);
 	return Error_unimplemented(0); 
+}
+
+Error File_foreachVirtual(String loc, FileCallback callback, void *userData, Bool isRecursive) { 
+
+	if(!callback)
+		return Error_nullPointer(1);
+
+	ForeachFile foreachFile = (ForeachFile) { 
+		.callback = callback, 
+		.userData = userData, 
+		.isRecursive = isRecursive
+	};
+
+	return File_virtualOp(
+		loc, 1 * SECOND, 
+		(VirtualFileFunc) File_foreachVirtualInternal, 
+		&foreachFile, 
+		false
+	);
 }
 
 typedef struct FileCounter {
@@ -294,15 +453,22 @@ typedef struct FileLoadVirtual {
 
 inline Error File_loadVirtualInternal(FileLoadVirtual *userData, String loc) {
 
+	String isChild = String_createNull();
 	Error err = Error_none();
+
+	_gotoIfError(clean, String_createCopyx(loc, &isChild));
+
+	if(String_length(isChild))
+		_gotoIfError(clean, String_appendx(&isChild, '/'));		//Don't append to root
 
 	for (U64 i = 0; i < Platform_instance.virtualSections.length; ++i) {
 
 		VirtualSection *section = (VirtualSection*)Platform_instance.virtualSections.ptr + i;
 
-		//TODO: Parenting
-
-		if(!String_equalsString(loc, section->path, EStringCase_Insensitive))
+		if(
+			!String_equalsString(loc, section->path, EStringCase_Insensitive) &&
+			!String_startsWithString(section->path, isChild, EStringCase_Insensitive)
+		)
 			continue;
 
 		//Load
@@ -311,31 +477,31 @@ inline Error File_loadVirtualInternal(FileLoadVirtual *userData, String loc) {
 
 			if (!section->loaded) {
 
-				HRSRC data = FindResourceA(NULL, loc.ptr, RT_RCDATA);
+				HRSRC data = FindResourceA(NULL, section->path.ptr, RT_RCDATA);
 				HGLOBAL handle = NULL;
 				CAFile file = (CAFile) { 0 };
 				Buffer copy = Buffer_createNull();
 
 				if(!data)
-					_gotoIfError(clean, Error_notFound(0, 1));
+					_gotoIfError(clean0, Error_notFound(0, 1));
 
 				U32 size = (U32) SizeofResource(NULL, data);
 				handle = LoadResource(NULL, data);
 
 				if(!handle)
-					_gotoIfError(clean, Error_notFound(3, 1));
+					_gotoIfError(clean0, Error_notFound(3, 1));
 
 				const U8 *dat = (const U8*) LockResource(handle);
-				_gotoIfError(clean, Buffer_createCopyx(Buffer_createConstRef(dat, size), &copy));
+				_gotoIfError(clean0, Buffer_createCopyx(Buffer_createConstRef(dat, size), &copy));
 
-				_gotoIfError(clean, CAFile_readx(copy, userData->encryptionKey, &file));
+				_gotoIfError(clean0, CAFile_readx(copy, userData->encryptionKey, &file));
 
 				section->loadedData = file.archive;
 				file.archive = (Archive) { 0 };
 
 				section->loaded = true;
 
-			clean:
+			clean0:
 
 				CAFile_freex(&file);
 				Buffer_freex(&copy);
@@ -351,10 +517,14 @@ inline Error File_loadVirtualInternal(FileLoadVirtual *userData, String loc) {
 
 		else err = section->loaded ? Error_none() : Error_notFound(1, 1);
 
-		return err;
+		goto clean;
 	}
 
-	return Error_notFound(2, 1);
+	err = Error_notFound(2, 1);
+
+clean:
+	String_freex(&isChild);
+	return err;
 }
 
 Error File_unloadVirtualInternal(void *userData, String loc) {

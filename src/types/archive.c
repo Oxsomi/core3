@@ -503,7 +503,7 @@ Error Archive_foreach(
 
 		//It contains at least one sub dir
 
-		if(!isRecursive && baseSlash != String_countAll(resolved, '/', EStringCase_Sensitive))
+		if(!isRecursive && baseSlash != String_countAll(cai.path, '/', EStringCase_Sensitive))
 			continue;
 
 		FileInfo info = (FileInfo) {
