@@ -48,7 +48,7 @@ void Error_printx(Error err, ELogLevel logLevel, ELogOptions options) {
 	String platformErr = Error_formatPlatformError(err);
 
 	if(err.genericError == EGenericError_Stderr)
-		platformErr = String_createConstRefUnsafe(strerror((U64)err.paramValue0));
+		platformErr = String_createConstRefUnsafe(strerror((int)err.paramValue0));
 
 	if(
 		!String_formatx(

@@ -24,6 +24,8 @@
 #include "types/error.h"
 #include "types/string.h"
 
+#include <errno.h>
+
 const C8 *EGenericError_TO_STRING[] = {
 	"None",
 	"Out of memory",
@@ -159,8 +161,6 @@ Error Error_timedOut(U32 subId, U64 limit) {
 Error Error_constData(U32 paramId, U32 subId) {
 	_Error_base(.genericError = EGenericError_ConstData, .errorSubId = subId, .paramId = paramId );
 }
-
-extern int errno;
 
 Error Error_stderr(U32 subId) {
 	_Error_base(.genericError = EGenericError_Stderr, .errorSubId = subId, .paramValue0 = (U64)(U32)errno);
