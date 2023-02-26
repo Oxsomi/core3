@@ -689,20 +689,33 @@ Error File_unloadVirtualInternal(void *userData, String loc) {
 
 	userData;
 
+	String isChild = String_createNull();
+	Error err = Error_none();
+
+	_gotoIfError(clean, String_createCopyx(loc, &isChild));
+
+	if(String_length(isChild))
+		_gotoIfError(clean, String_appendx(&isChild, '/'));		//Don't append to root
+
 	for (U64 i = 0; i < Platform_instance.virtualSections.length; ++i) {
 
 		//TODO: Parenting
 
 		VirtualSection *section = (VirtualSection*)Platform_instance.virtualSections.ptr + i;
 
-		if(!String_equalsString(loc, section->path, EStringCase_Insensitive))
+		if(
+			!String_equalsString(loc, section->path, EStringCase_Insensitive) &&
+			!String_startsWithString(section->path, isChild, EStringCase_Insensitive)
+		)
 			continue;
 
 		if(section->loaded)
 			Archive_freex(&section->loadedData);
 	}
 
-	return Error_none();
+clean:
+	String_freex(&isChild);
+	return err;
 }
 
 Bool File_isVirtualLoaded(String loc) {
