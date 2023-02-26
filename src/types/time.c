@@ -106,6 +106,9 @@ void Time_format(Ns time, TimerFormat timeString) {
 		Buffer_createConstRef(FORMAT_STR, sizeof(FORMAT_STR))
 	);
 
+	if(!t)
+		return;
+
 	setNum(timeString, OFFSETS[0], SIZES[0], (U64)t->tm_year + 1900);
 	setNum(timeString, OFFSETS[1], SIZES[1], (U64)t->tm_mon + 1);
 	setNum(timeString, OFFSETS[2], SIZES[2], (U64)t->tm_mday);

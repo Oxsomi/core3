@@ -2608,14 +2608,19 @@ Error String_formatVariadic(Allocator alloc, String *result, const C8 *format, v
 	va_list arg2;
 	va_copy(arg2, args);
 
-	U64 len = calcFormatLen(format, arg2);
+	int len = calcFormatLen(format, arg2);
 
-	Error err = String_create('\0', len, alloc, result);
+	if(len < 0)
+		return Error_stderr(0);
+
+	Error err = String_create('\0', (U64) len, alloc, result);
 
 	if(err.genericError)
 		return err;
 
-	vsnprintf((C8*)result->ptr, len + 1, format, args);
+	if(vsnprintf((C8*)result->ptr, len + 1, format, args) < 0)
+		return Error_stderr(0);
+
 	return Error_none();
 }
 

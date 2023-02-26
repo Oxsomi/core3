@@ -52,19 +52,11 @@ typedef enum EGenericError {
 	EGenericError_TimedOut,
 	EGenericError_ConstData,			//If an operation is done on data that is supposed to be const
 	EGenericError_PlatformError,
-	EGenericError_Unimplemented
+	EGenericError_Unimplemented,
+	EGenericError_Stderr
 } EGenericError;
 
-typedef enum EErrorParamFormat {
-	EErrorParamFormat_None,
-	EErrorParamFormat_ParamIdOnly,
-	EErrorParamFormat_SubIdOnly,
-	EErrorParamFormat_ParamAndSubId,
-	EErrorParamFormat_All
-} EErrorParamFormat;
-
 extern const C8 *EGenericError_TO_STRING[];
-extern const EErrorParamFormat EGenericError_HAS_PARAM_VALUES[];
 
 //Only direct caller preserved to save space in release mode
 
@@ -122,4 +114,5 @@ Error Error_unimplemented(U32 subId);
 Error Error_unsupportedOperation(U32 subId);
 Error Error_timedOut(U32 subId, U64 limit);
 Error Error_constData(U32 paramId, U32 subId);
+Error Error_stderr(U32 subId);
 Error Error_none();

@@ -38,6 +38,9 @@
 
 String Error_formatPlatformError(Error err) {
 
+	if(err.genericError != EGenericError_PlatformError)
+		return String_createNull();
+
 	if(!FAILED(err.paramValue0))
 		return String_createNull();
 

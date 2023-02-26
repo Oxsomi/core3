@@ -137,7 +137,7 @@ Error File_getInfo(String loc, FileInfo *info) {
 	struct stat inf = (struct stat) { 0 };
 
 	if (stat(resolved.ptr, &inf))
-		_gotoIfError(clean, Error_notFound(0, 0));
+		_gotoIfError(clean, Error_stderr(0));
 
 	if (!S_ISDIR(inf.st_mode) && !S_ISREG(inf.st_mode))
 		_gotoIfError(clean, Error_invalidOperation(2));
@@ -339,7 +339,7 @@ Error File_add(String loc, EFileType type, Ns maxTimeout) {
 			//Make parent
 
 			if (mkdir(parent.ptr))
-				_gotoIfError(clean, Error_invalidOperation(1));
+				_gotoIfError(clean, Error_stderr(0));
 
 			//Reset character that was replaced with \0
 
@@ -353,7 +353,7 @@ Error File_add(String loc, EFileType type, Ns maxTimeout) {
 	//Create folder
 
 	if (type == EFileType_Folder && mkdir(resolved.ptr))
-		_gotoIfError(clean, Error_invalidOperation(0));
+		_gotoIfError(clean, Error_stderr(1));
 
 	//Create file
 
@@ -401,7 +401,7 @@ Error File_remove(String loc, Ns maxTimeout) {
 	}
 
 	if (res)
-		_gotoIfError(clean, Error_notFound(0, 0));
+		_gotoIfError(clean, Error_stderr(0));
 
 clean:
 	String_freex(&resolved);
@@ -467,7 +467,7 @@ Error File_rename(String loc, String newFileName, Ns maxTimeout) {
 	}
 
 	if(ren)
-		_gotoIfError(clean, Error_invalidState(0));
+		_gotoIfError(clean, Error_stderr(0));
 
 clean:
 	FileInfo_freex(&info);
@@ -534,7 +534,7 @@ Error File_move(String loc, String directoryName, Ns maxTimeout) {
 	}
 
 	if(ren)
-		_gotoIfError(clean, Error_invalidState(0));
+		_gotoIfError(clean, Error_stderr(0));
 
 clean:
 	FileInfo_freex(&info);
@@ -577,12 +577,12 @@ Error File_write(Buffer buf, String loc, Ns maxTimeout) {
 	}
 
 	if(!f)
-		_gotoIfError(clean, Error_notFound(1, 0));
+		_gotoIfError(clean, Error_stderr(0));
 
 	U64 bufLen = Buffer_length(buf);
 
 	if(bufLen && fwrite(buf.ptr, 1, bufLen, f) != bufLen)
-		_gotoIfError(clean, Error_invalidState(0));
+		_gotoIfError(clean, Error_stderr(1));
 
 clean:
 	if(f) fclose(f);
@@ -630,10 +630,10 @@ Error File_read(String loc, Ns maxTimeout, Buffer *output) {
 	}
 
 	if(!f)
-		_gotoIfError(clean, Error_notFound(0, 0));
+		_gotoIfError(clean, Error_stderr(0));
 
 	if(fseek(f, 0, SEEK_END))
-		_gotoIfError(clean, Error_invalidState(0));
+		_gotoIfError(clean, Error_stderr(1));
 
 	U64 size = (U64)_ftelli64(f);
 
@@ -643,13 +643,13 @@ Error File_read(String loc, Ns maxTimeout, Buffer *output) {
 	_gotoIfError(clean, Buffer_createUninitializedBytesx(size, output));
 
 	if(fseek(f, 0, SEEK_SET))
-		_gotoIfError(clean, Error_invalidState(1));
+		_gotoIfError(clean, Error_stderr(2));
 
 	Buffer b = *output;
 	U64 bufLen = Buffer_length(b);
 
 	if (fread((U8*)b.ptr, 1, bufLen, f) != bufLen)
-		_gotoIfError(clean, Error_invalidState(2));
+		_gotoIfError(clean, Error_stderr(3));
 
 	goto success;
 

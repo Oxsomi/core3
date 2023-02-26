@@ -28,6 +28,8 @@
 #include "platforms/platform.h"
 
 #include <stdlib.h>
+#include <errno.h>
+#include <string.h>
 
 void Error_fillStackTrace(Error *err) {
 
@@ -45,12 +47,15 @@ void Error_printx(Error err, ELogLevel logLevel, ELogOptions options) {
 	String result = String_createNull();
 	String platformErr = Error_formatPlatformError(err);
 
+	if(err.genericError == EGenericError_Stderr)
+		platformErr = String_createConstRefUnsafe(strerror((U64)err.paramValue0));
+
 	if(
 		!String_formatx(
 
 			&result, 
 
-			"%s: sub id: %X, param id: %u, param0: %08X, param1: %08X.\nPlatform error: %.*s", 
+			"%s: sub id: %X, param id: %u, param0: %08X, param1: %08X.\nPlatform/std error: %.*s.", 
 
 			EGenericError_TO_STRING[err.genericError],
 
