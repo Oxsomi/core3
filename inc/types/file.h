@@ -31,17 +31,17 @@ typedef enum EFileType {
 	EFileType_Any = EFileType_Invalid
 } EFileType;
 
-typedef enum FileAccess {
-	FileAccess_None,			//Invalid, never returned
-	FileAccess_Read,
-	FileAccess_Write,
-	FileAccess_ReadWrite
-} FileAccess;
+typedef enum EFileAccess {
+	EFileAccess_None,			//Invalid, never returned
+	EFileAccess_Read,
+	EFileAccess_Write,
+	EFileAccess_ReadWrite
+} EFileAccess;
 
 typedef struct FileInfo {
 
 	EFileType type;
-	FileAccess access;
+	EFileAccess access;
 	Ns timestamp;		//In units that the file system supports. Normally that unit is seconds.
 	String path;
 	U64 fileSize;

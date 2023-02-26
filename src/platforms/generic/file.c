@@ -154,8 +154,8 @@ Error File_getInfo(String loc, FileInfo *info) {
 		.fileSize = (U64) inf.st_size,
 
 		.access = 
-			(inf.st_mode & S_IWRITE ? FileAccess_Write : FileAccess_None) | 
-			(inf.st_mode & S_IREAD  ? FileAccess_Read  : FileAccess_None)
+			(inf.st_mode & S_IWRITE ? EFileAccess_Write : EFileAccess_None) | 
+			(inf.st_mode & S_IREAD  ? EFileAccess_Read  : EFileAccess_None)
 	};
 
 	return Error_none();

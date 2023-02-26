@@ -384,7 +384,7 @@ Error Archive_getInfo(Archive archive, String path, FileInfo *info, Allocator al
 		return Error_notFound(0, 1);
 
 	*info = (FileInfo) {
-		.access = Buffer_isConstRef(entry.data) ? FileAccess_Read : FileAccess_ReadWrite,
+		.access = Buffer_isConstRef(entry.data) ? EFileAccess_Read : EFileAccess_ReadWrite,
 		.fileSize = Buffer_length(entry.data),
 		.timestamp = entry.timestamp,
 		.type = entry.type,
@@ -512,7 +512,7 @@ Error Archive_foreach(
 		};
 
 		if (cai.type == EFileType_File) {
-			info.access = Buffer_isConstRef(cai.data) ? FileAccess_Read : FileAccess_ReadWrite,
+			info.access = Buffer_isConstRef(cai.data) ? EFileAccess_Read : EFileAccess_ReadWrite,
 			info.fileSize = Buffer_length(cai.data);
 			info.timestamp = cai.timestamp;
 		}

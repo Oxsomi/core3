@@ -112,7 +112,7 @@ Error File_foreach(String loc, FileCallback callback, void *userData, Bool isRec
 			FileInfo info = (FileInfo) {
 				.path = tmp,
 				.timestamp = timestamp,
-				.access = dat.dwFileAttributes & FILE_ATTRIBUTE_READONLY ? FileAccess_Read : FileAccess_ReadWrite,
+				.access = dat.dwFileAttributes & FILE_ATTRIBUTE_READONLY ? EFileAccess_Read : EFileAccess_ReadWrite,
 				.type = EFileType_Folder
 			};
 
@@ -134,7 +134,7 @@ Error File_foreach(String loc, FileCallback callback, void *userData, Bool isRec
 		FileInfo info = (FileInfo) {
 			.path = tmp,
 			.timestamp = timestamp,
-			.access = dat.dwFileAttributes & FILE_ATTRIBUTE_READONLY ? FileAccess_Read : FileAccess_ReadWrite,
+			.access = dat.dwFileAttributes & FILE_ATTRIBUTE_READONLY ? EFileAccess_Read : EFileAccess_ReadWrite,
 			.type = EFileType_File,
 			.fileSize = size.QuadPart
 		};
@@ -224,14 +224,161 @@ Error File_writeVirtual(Buffer buf, String loc, Ns maxTimeout) {
 
 //Read operations
 
+Error File_resolveVirtual(String loc, String *subPath, VirtualSection **section) {
+
+	String copy = String_createNull();
+	String copy1 = String_createNull();
+	String copy2 = String_createNull();
+	Error err = Error_none();
+
+	String_toLower(loc);
+	_gotoIfError(clean, String_createCopyx(loc, &copy));
+	_gotoIfError(clean, String_createCopyx(loc, &copy2));
+
+	if(String_length(copy2))
+		_gotoIfError(clean, String_appendx(&copy2, '/'))		//Don't append to root
+
+	//Root is always present
+
+	else goto clean;
+
+	//Check sections
+
+	for (U64 i = 0; i < Platform_instance.virtualSections.length; ++i) {
+
+		VirtualSection *sectioni = (VirtualSection*)Platform_instance.virtualSections.ptr + i;
+
+		//If folder is the same, we found a section.
+		//This section won't return any subPath or section,
+		//This will force it to be identified as a folder.
+
+		if (String_equalsString(loc, sectioni->path, EStringCase_Insensitive))
+			goto clean;
+
+		//Parent folder.
+
+		if(String_startsWithString(sectioni->path, copy2, EStringCase_Insensitive))
+			goto clean;
+
+		//Check if the section includes the referenced file/folder
+
+		String_freex(&copy1);
+		_gotoIfError(clean, String_createCopyx(sectioni->path, &copy1));
+		_gotoIfError(clean, String_appendx(&copy1, '/'));
+
+		if(String_startsWithString(copy, copy1, EStringCase_Insensitive)) {
+			String_cut(copy, String_length(copy1), 0, subPath);
+			*section = sectioni;
+			goto clean;
+		}
+	}
+
+	_gotoIfError(clean, Error_notFound(0, 0));
+
+clean:
+
+	String_freex(&copy);
+
+	if (String_length(*subPath) && !err.genericError) {
+		String_createCopyx(*subPath, &copy);
+		*subPath = copy;
+		copy = String_createNull();
+	}
+
+	String_freex(&copy1);
+	String_freex(&copy2);
+	return err;
+}
+
+Error File_readVirtualInternal(Buffer *output, String loc) {
+
+	String subPath = String_createNull();
+	VirtualSection *section = NULL;
+	Error err = Error_none();
+
+	_gotoIfError(clean, File_resolveVirtual(loc, &subPath, &section));
+
+	if(!section)
+		_gotoIfError(clean, Error_invalidOperation(0));
+
+	_gotoIfError(clean, Archive_getFileDataConstx(section->loadedData, subPath, output));
+
+clean:
+	String_freex(&subPath);
+	return err;
+}
+
 Error File_readVirtual(String loc, Buffer *output, Ns maxTimeout) { 
-	maxTimeout; loc; output; 
-	return Error_unimplemented(0); 
+
+	if(!output)
+		return Error_nullPointer(1);
+
+	return File_virtualOp(
+		loc, maxTimeout, 
+		(VirtualFileFunc) File_readVirtualInternal, 
+		output, 
+		false
+	);
+}
+
+Error File_getInfoVirtualInternal(FileInfo *info, String loc) {
+
+	String subPath = String_createNull();
+	VirtualSection *section = NULL;
+	Error err = Error_none();
+
+	_gotoIfError(clean, File_resolveVirtual(loc, &subPath, &section));
+
+	if(!section) {	//Parent dir
+
+		if(!String_length(loc))
+			loc = String_createConstRefUnsafe(".");
+
+		String copy = String_createNull();
+		_gotoIfError(clean, String_createCopyx(loc, &copy));
+
+		*info = (FileInfo) {
+			.path = copy,
+			.type = EFileType_Folder,
+			.access = EFileAccess_Read
+		};
+	}
+
+	else {
+
+		_gotoIfError(clean, Archive_getInfox(section->loadedData, subPath, info));
+
+		String tmp = String_createNull();
+		String_cut(loc, 0, String_length(loc) - String_length(subPath), &tmp);
+
+		_gotoIfError(clean, String_insertStringx(&info->path, tmp, 0));
+	}
+
+	_gotoIfError(clean, String_insertStringx(&info->path, String_createConstRefUnsafe("//"), 0));
+
+clean:
+
+	if(err.genericError)
+		FileInfo_freex(info);
+
+	String_freex(&subPath);
+	return err;
 }
 
 Error File_getInfoVirtual(String loc, FileInfo *info) { 
-	loc; info; 
-	return Error_unimplemented(0); 
+
+	if(!info)
+		return Error_nullPointer(1);
+
+	if(info->access)
+		return Error_invalidOperation(0);
+
+	return File_virtualOp(
+		loc, 1 * SECOND, 
+		(VirtualFileFunc) File_getInfoVirtualInternal, 
+		info, 
+		false
+	);
 }
 
 typedef struct ForeachFile {
@@ -248,6 +395,7 @@ Error File_virtualCallback(FileInfo info, ForeachFile *userData) {
 
 	_gotoIfError(clean, String_createCopyx(userData->currentPath, &fullPath));
 	_gotoIfError(clean, String_appendStringx(&fullPath, info.path));
+	_gotoIfError(clean, String_insertStringx(&fullPath, String_createConstRefUnsafe("//"), 0));
 
 	info.path = fullPath;
 
@@ -264,6 +412,7 @@ Error File_foreachVirtualInternal(ForeachFile *userData, String resolved) {
 	String copy = String_createNull();
 	String copy1 = String_createNull();
 	String copy2 = String_createNull();
+	String copy3 = String_createNull();
 	String root = String_createConstRefUnsafe(".");
 	List visited = List_createEmpty(sizeof(String));
 
@@ -317,10 +466,14 @@ Error File_foreachVirtualInternal(ForeachFile *userData, String resolved) {
 
 				_gotoIfError(clean, List_pushBackx(&visited, Buffer_createConstRef(&parent, sizeof(parent))));
 
+				String_freex(&copy3);
+				_gotoIfError(clean, String_createCopyx(parent, &copy3));
+				_gotoIfError(clean, String_insertStringx(&copy3, String_createConstRefUnsafe("//"), 0));
+
 				FileInfo info = (FileInfo) {
-					.path = parent,
+					.path = copy3,
 					.type = EFileType_Folder,
-					.access = FileAccess_Read
+					.access = EFileAccess_Read
 				};
 
 				_gotoIfError(clean, userData->callback(info, userData->userData));
@@ -334,10 +487,14 @@ Error File_foreachVirtualInternal(ForeachFile *userData, String resolved) {
 			(userData->isRecursive && baseCount <= String_countAll(section->path, '/', EStringCase_Sensitive))
 		) {
 
+			String_freex(&copy3);
+			_gotoIfError(clean, String_createCopyx(copy1, &copy3));
+			_gotoIfError(clean, String_insertStringx(&copy3, String_createConstRefUnsafe("//"), 0));
+
 			FileInfo info = (FileInfo) {
-				.path = copy1,
+				.path = copy3,
 				.type = EFileType_Folder,
-				.access = FileAccess_Read
+				.access = EFileAccess_Read
 			};
 
 			_gotoIfError(clean, userData->callback(info, userData->userData));
@@ -375,6 +532,7 @@ clean:
 	String_freex(&copy);
 	String_freex(&copy1);
 	String_freex(&copy2);
+	String_freex(&copy3);
 	return Error_unimplemented(0); 
 }
 
