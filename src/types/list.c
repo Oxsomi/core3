@@ -109,7 +109,7 @@ Error List_create(U64 length, U64 stride, Allocator allocator, List *result) {
 		return Error_overflow(0, length * stride, U64_MAX);
 
 	Buffer buf = Buffer_createNull();
-	Error err = Buffer_createUninitializedBytes(length * stride, allocator, &buf);
+	Error err = Buffer_createEmptyBytes(length * stride, allocator, &buf);
 
 	if(err.genericError)
 		return err;
@@ -143,36 +143,6 @@ Error List_createFromBuffer(Buffer buf, U64 stride, List *result) {
 		.length = Buffer_length(buf) / stride, 
 		.stride = stride,
 		.capacity = Buffer_isConstRef(buf) ? U64_MAX : 0
-	};
-
-	return Error_none();
-}
-
-Error List_createNullBytes(U64 length, U64 stride, Allocator allocator, List *result) {
-
-	if(!result)
-		return Error_nullPointer(3);
-
-	if (result->ptr)
-		return Error_invalidOperation(0);
-
-	if(!length || !stride)
-		return Error_invalidParameter(!length ? 0 : 1, 0);
-
-	if(length * stride / stride != length)
-		return Error_overflow(0, length * stride, U64_MAX);
-
-	Buffer buf = Buffer_createNull();
-	Error err = Buffer_createEmptyBytes(length * stride, allocator, &buf);
-
-	if(err.genericError)
-		return err;
-
-	*result = (List) { 
-		.ptr = buf.ptr, 
-		.length = length, 
-		.stride = stride,
-		.capacity = length
 	};
 
 	return Error_none();

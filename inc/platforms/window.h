@@ -21,9 +21,11 @@
 #pragma once
 #include "math/vec.h"
 #include "types/list.h"
+#include "types/error.h"
 #include "formats/texture.h"
 #include "lock.h"
 #include "input_device.h"
+#include "thread.h"
 
 //There are two types of windows;
 //Physical windows and virtual windows.
@@ -40,15 +42,14 @@
 //
 typedef enum EWindowHint {
 
-	EWindowHint_HandleInput				= 1 << 0,
-	EWindowHint_AllowFullscreen			= 1 << 1,
-	EWindowHint_DisableResize			= 1 << 2,
-	EWindowHint_ForceFullscreen			= 1 << 3,
-	EWindowHint_AllowBackgroundUpdates	= 1 << 4,
-	EWindowHint_ProvideCPUBuffer		= 1 << 5,	//We write from CPU. Useful for physical windows CPU accessible
+	EWindowHint_AllowFullscreen			= 1 << 0,
+	EWindowHint_DisableResize			= 1 << 1,
+	EWindowHint_ForceFullscreen			= 1 << 2,
+	EWindowHint_AllowBackgroundUpdates	= 1 << 3,
+	EWindowHint_ProvideCPUBuffer		= 1 << 4,	//We write from CPU. Useful for physical windows CPU accessible
 
 	EWindowHint_None					= 0,
-	EWindowHint_Default					= EWindowHint_HandleInput | EWindowHint_AllowFullscreen
+	EWindowHint_Default					= EWindowHint_AllowFullscreen
 
 } EWindowHint;
 
@@ -65,12 +66,13 @@ typedef enum EWindowFormat {
 //Window flags are set by the implementation
 //
 typedef enum EWindowFlags {
-	EWindowFlags_None			= 0,
-	EWindowFlags_IsFocussed		= 1 << 0,
-	EWindowFlags_IsMinimized	= 1 << 1,
-	EWindowFlags_IsVirtual		= 1 << 2,
-	EWindowFlags_IsFullscreen	= 1 << 3,
-	EWindowFlags_IsActive		= 1 << 4
+	EWindowFlags_None						= 0,
+	EWindowFlags_IsFocussed					= 1 << 0,
+	EWindowFlags_IsMinimized				= 1 << 1,
+	EWindowFlags_IsVirtual					= 1 << 2,
+	EWindowFlags_IsFullscreen				= 1 << 3,
+	EWindowFlags_IsActive					= 1 << 4,
+	EWindowFlags_ShouldThreadTerminate		= 1 << 5
 } EWindowFlags;
 
 #define _RESOLUTION(w, h) (w << 16) | h
@@ -132,6 +134,8 @@ typedef struct Window {
 	void *nativeHandle, *nativeData;
 	Lock lock;
 
+	Thread *mainThread;
+
 	WindowCallbacks callbacks;
 
 	Ns lastUpdate;
@@ -140,6 +144,10 @@ typedef struct Window {
 	EWindowHint hint;
 	EWindowFormat format;
 	EWindowFlags flags;
+
+	String title;			//Only for physical windows
+
+	Error creationError;	//Only if creation failed for physical windows
 
 	//TODO: Make this a map at some point
 
@@ -168,7 +176,6 @@ Bool Window_isMinimized(const Window *w);
 Bool Window_isFocussed(const Window *w);
 Bool Window_isFullScreen(const Window *w);
 
-Bool Window_doesHandleInput(const Window *w);
 Bool Window_doesAllowFullScreen(const Window *w);
 
 //Presenting CPU buffer to a file (when virtual) or window when physical
@@ -177,4 +184,4 @@ Bool Window_doesAllowFullScreen(const Window *w);
 Error Window_presentCPUBuffer(Window *w, String file, Ns maxTimeout);
 
 Error Window_waitForExit(Window *w, Ns maxTimeout);
-Bool Window_terminateVirtual(Window *w);
+Bool Window_terminate(Window *w);

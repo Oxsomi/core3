@@ -696,8 +696,6 @@ Error File_unloadVirtualInternal(void *userData, String loc) {
 
 	for (U64 i = 0; i < Platform_instance.virtualSections.length; ++i) {
 
-		//TODO: Parenting
-
 		VirtualSection *section = (VirtualSection*)Platform_instance.virtualSections.ptr + i;
 
 		if(

@@ -47,7 +47,6 @@ Bool Window_isMinimized(const Window *w) { return Window_initialized(w) && w->fl
 Bool Window_isFocussed(const Window *w) { return Window_initialized(w) && w->flags & EWindowFlags_IsFocussed; }
 Bool Window_isFullScreen(const Window *w) { return Window_initialized(w) && w->flags & EWindowFlags_IsFullscreen; }
 
-Bool Window_doesHandleInput(const Window *w) { return Window_initialized(w) && w->hint & EWindowHint_HandleInput; }
 Bool Window_doesAllowFullScreen(const Window *w) { return Window_initialized(w) && w->hint & EWindowHint_AllowFullscreen; }
 
 //Presenting CPU buffer to a file (when virtual) or window when physical
@@ -371,14 +370,14 @@ Error Window_storeCPUBufferToDisk(const Window *w, String filePath, Ns maxTimeou
 	return err;
 }
 
-Bool Window_terminateVirtual(Window *w) {
+Bool Window_terminate(Window *w) {
 
-	if(!Window_initialized(w) || !Window_isVirtual(w))
+	if(!Window_initialized(w))
 		return false;
 
-	if(!Lock_isLockedForThread(w->lock) || !Lock_isLockedForThread(Platform_instance.windowManager.lock))
+	if(!Lock_isLockedForThread(w->lock))
 		return false;
 
-	w->flags &= ~EWindowFlags_IsActive;
-	return WindowManager_freeVirtual(&Platform_instance.windowManager, &w);
+	w->flags |= EWindowFlags_ShouldThreadTerminate;		//Mark thread for destroy
+	return true;
 }

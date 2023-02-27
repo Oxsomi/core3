@@ -81,7 +81,6 @@ Error List_createFromBuffer(Buffer buf, U64 stride, List *result);
 Error List_createSubset(List list, U64 index, U64 length, List *result);
 
 Error List_create(U64 length, U64 stride, Allocator allocator, List *result);
-Error List_createNullBytes(U64 length, U64 stride, Allocator allocator, List *result);
 Error List_createCopy(List list, Allocator allocator, List *result);
 
 Error List_createRepeated(

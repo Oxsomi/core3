@@ -25,7 +25,6 @@ typedef struct Error Error;
 typedef struct List List;
 
 Error List_createx(U64 length, U64 stride, List *result);
-Error List_createNullBytesx(U64 length, U64 stride, List *result);
 Error List_createRepeatedx(U64 length, U64 stride, Buffer data, List *result);
 Error List_createCopyx(List list, List *result);
 

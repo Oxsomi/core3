@@ -21,8 +21,10 @@
 #include "platforms/window_manager.h"
 #include "platforms/platform.h"
 #include "platforms/thread.h"
+#include "platforms/log.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/listx.h"
+#include "platforms/ext/errorx.h"
 #include "types/time.h"
 #include "types/buffer.h"
 #include "types/error.h"
@@ -70,6 +72,34 @@ Bool WindowManager_free(WindowManager *manager) {
 	Bool freed = Lock_free(&manager->lock);
 	*manager = (WindowManager) { 0 };
 	return freed;
+}
+
+void WindowManager_virtualWindowLoop(Window *w) {
+
+	if(w->callbacks.onDraw) {
+
+		while(!(w->flags & EWindowFlags_ShouldThreadTerminate)) {
+
+			if(Lock_lock(&w->lock, 5 * SECOND)) {
+
+				w->isDrawing = true;
+				w->callbacks.onDraw(w);
+				w->isDrawing = false;
+
+				Lock_unlock(&w->lock);
+			}
+		}
+	}
+
+	//Ensure we're allowed to free
+
+	while (!Lock_lock(&Platform_instance.windowManager.lock, 1 * SECOND)) { }
+
+	Lock_lock(&w->lock, 1 * SECOND);
+
+	WindowManager_freeVirtual(&Platform_instance.windowManager, &w);
+	Lock_unlock(&Platform_instance.windowManager.lock);
+
 }
 
 Error WindowManager_createVirtual(
@@ -142,10 +172,19 @@ Error WindowManager_createVirtual(
 				.flags = EWindowFlags_IsFocussed | EWindowFlags_IsVirtual | EWindowFlags_IsActive
 			};
 
-			*result = w;
-
 			if(callbacks.onCreate)
 				callbacks.onCreate(w);
+
+			if ((err = Thread_create(
+				(ThreadCallbackFunction) WindowManager_virtualWindowLoop, w, &w->mainThread)
+			).genericError) {
+				*w = (Window) { 0 };
+				Lock_free(&lock);
+				Buffer_freex(&cpuVisibleBuffer);
+				return err;
+			}
+
+			*result = w;
 
 			return Error_none();
 		}
@@ -226,8 +265,8 @@ Error WindowManager_waitForExitAll(WindowManager *manager, Ns maxTimeout) {
 
 		//Try to reacquire the lock
 
-		if(!Lock_isLockedForThread(manager->lock) && !Lock_lock(&manager->lock, left))
-			return Error_invalidOperation(2);
+		while(!Lock_isLockedForThread(manager->lock) && !Lock_lock(&manager->lock, left))
+			Thread_sleep(1 * MS);
 
 		//Our windows have been released!
 
@@ -246,25 +285,8 @@ Error WindowManager_waitForExitAll(WindowManager *manager, Ns maxTimeout) {
 			if(!w)
 				break;
 
-			if(w->flags & EWindowFlags_IsActive) {
-
-				if(w->callbacks.onDraw) {
-
-					if(Lock_lock(&w->lock, 5 * SECOND)) {
-
-						w->isDrawing = true;
-						w->callbacks.onDraw(w);
-						w->isDrawing = false;
-
-						//Window might be terminated
-
-						if(Lock_isLockedForThread(w->lock))
-							Lock_unlock(&w->lock);
-					}
-				}
-
+			if(w->flags & EWindowFlags_IsActive)
 				containsVirtualWindow = true;
-			}
 		}
 
 		//Release the lock to check for the next time

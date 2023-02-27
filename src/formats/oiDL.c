@@ -483,7 +483,7 @@ Error DLFile_read(
 
 		entrySizeExtension = extraInfo.perEntryExtendedData;
 
-		//TODO: We could do something here for new version parsing or extensions.
+		//We could do something here for new version parsing or extensions.
 
 		_gotoIfError(clean, Buffer_consume(&file, NULL, extraInfo.extendedHeader));
 	}

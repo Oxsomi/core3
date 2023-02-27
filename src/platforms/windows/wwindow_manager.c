@@ -23,6 +23,7 @@
 #include "platforms/monitor.h"
 #include "platforms/input_device.h"
 #include "platforms/ext/listx.h"
+#include "platforms/ext/stringx.h"
 #include "types/string.h"
 #include "types/error.h"
 #include "types/buffer.h"
@@ -36,6 +37,194 @@ const U8 WindowManager_MAX_PHYSICAL_WINDOWS = 16;
 //Defined in wwindow.c
 //
 LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
+
+//Window belongs to calling thread.
+//So we create the window in a separate thread.
+
+void Window_physicalLoop(Window *w) {
+
+	HDC screen = NULL;
+	Error err = Error_none();
+	
+	//Create native window
+
+	WNDCLASSEXA wc = (WNDCLASSEXA){ 0 };
+	HINSTANCE mainModule = Platform_instance.data;
+
+	wc.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
+	wc.lpfnWndProc = WWindow_onCallback;
+	wc.hInstance = mainModule;
+
+	wc.hIcon = (HICON) LoadImageA(mainModule, "LOGO", IMAGE_ICON, 32, 32, 0);
+	wc.hIconSm = (HICON) LoadImageA(mainModule, "LOGO", IMAGE_ICON, 16, 16, 0);
+
+	wc.hCursor = LoadCursorA(NULL, IDC_ARROW);
+
+	wc.hbrBackground = (HBRUSH) GetStockObject(BLACK_BRUSH);
+
+	wc.lpszClassName = "OxC3: Oxsomi core 3";
+	wc.cbSize = sizeof(wc);
+	wc.cbWndExtra = sizeof(void*);
+
+	if (!RegisterClassExA(&wc))
+		_gotoIfError(clean, Error_platformError(0, GetLastError()));
+
+	DWORD style = WS_VISIBLE;
+
+	if(!(w->hint & EWindowHint_ForceFullscreen)) {
+
+		style |= WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
+
+		if(!(w->hint & EWindowHint_DisableResize))
+			style |= WS_SIZEBOX | WS_MAXIMIZEBOX;
+	}
+
+	I32x2 maxSize = I32x2_create2(
+		GetSystemMetrics(SM_CXSCREEN), 
+		GetSystemMetrics(SM_CYSCREEN) 
+	);
+
+	I32x2 size = w->size;
+	I32x2 position = w->offset;
+
+	for (U8 i = 0; i < 2; ++i)
+		if (!I32x2_get(size, i) || I32x2_get(size, i) >= I32x2_get(maxSize, i))
+			I32x2_set(&size, i, I32x2_get(maxSize, i));
+
+	//Our strings aren't null terminated, so ensure windows doesn't read garbage
+
+	C8 windowName[MAX_PATH + 1];
+	Buffer_copy(Buffer_createRef(windowName, sizeof(windowName)), String_bufferConst(w->title));
+
+	windowName[String_length(w->title)] = '\0';
+
+	HWND nativeWindow = CreateWindowExA(
+		WS_EX_APPWINDOW, wc.lpszClassName, windowName, style,
+		I32x2_x(position), I32x2_y(position),
+		I32x2_x(size), I32x2_y(size),
+		NULL, NULL, mainModule, NULL
+	);
+
+	if(!nativeWindow) {
+		HRESULT hr = GetLastError();
+		UnregisterClassA(wc.lpszClassName, wc.hInstance);
+		_gotoIfError(clean, Error_platformError(1, hr));
+	}
+
+	//Get real size and position
+
+	RECT r = (RECT) { 0 };
+	GetWindowRect(nativeWindow, &r);
+	w->size = I32x2_create2(r.right - r.left, r.bottom - r.top);
+
+	GetWindowRect(nativeWindow, &r);
+	w->offset = I32x2_create2(r.left, r.top);
+
+	//Alloc cpu visible buffer if needed
+
+	w->devices = List_createEmpty(sizeof(InputDevice));
+	w->monitors = List_createEmpty(sizeof(Monitor));
+
+	if(w->hint & EWindowHint_ProvideCPUBuffer) {
+
+		screen = GetDC(nativeWindow);
+
+		if(!screen)
+			_gotoIfError(clean, Error_platformError(2, GetLastError()));
+
+		//TODO: Support something other than RGBA8
+
+		BITMAPINFO bmi = (BITMAPINFO) {
+			.bmiHeader = {
+				.biSize = sizeof(BITMAPINFOHEADER),
+				.biWidth = (DWORD) I32x2_x(size),
+				.biHeight = (DWORD) I32x2_y(size),
+				.biPlanes = 1,
+				.biBitCount = 32,
+				.biCompression = BI_RGB
+			}
+		};
+
+		w->nativeData = CreateDIBSection(
+			screen, &bmi, DIB_RGB_COLORS, (void**) &w->cpuVisibleBuffer.ptr, 
+			NULL, 0
+		);
+
+		if(!screen)
+			_gotoIfError(clean, Error_platformError(3, GetLastError()));
+
+		//Manually set it to be a reference
+		//This makes it so we don't free it, because we don't own the memory
+
+		w->cpuVisibleBuffer.lengthAndRefBits = ((U64)bmi.bmiHeader.biWidth * bmi.bmiHeader.biHeight * 4) | ((U64)1 << 63);
+
+		ReleaseDC(nativeWindow, screen);
+		screen = NULL;
+	}
+
+	//Lock for when we are updating this window
+
+	_gotoIfError(clean, List_reservex(&w->devices, Window_MAX_DEVICES));
+	_gotoIfError(clean, List_reservex(&w->monitors, Window_MAX_MONITORS));
+
+	w->nativeHandle = nativeWindow;
+
+	//Bind our window
+
+	SetWindowLongPtrA(nativeWindow, 0, (LONG_PTR) w);
+
+	if(w->hint & EWindowHint_ForceFullscreen)
+		w->flags |= EWindowFlags_IsFullscreen;
+
+	//Signal ready
+
+	if(w->callbacks.onCreate)
+		w->callbacks.onCreate(w);
+
+	w->flags |= EWindowFlags_IsActive;
+
+	//Our window is now ready, start window loop
+
+	UpdateWindow(nativeWindow);
+
+	//Window loop
+
+	if(w->callbacks.onDraw) {
+
+		MSG msg = (MSG) { 0 };
+
+		while(!(w->flags & EWindowFlags_ShouldThreadTerminate)) {
+
+			if(Lock_lock(&w->lock, 5 * SECOND)) {
+
+				if (PeekMessageA(&msg, w->nativeHandle, 0, 0, PM_REMOVE)) {
+					TranslateMessage(&msg);
+					DispatchMessageA(&msg);
+				}
+
+				if(msg.message == WM_QUIT)
+					w->flags |= EWindowFlags_ShouldThreadTerminate;
+
+				Lock_unlock(&w->lock);
+			}
+		}
+	}
+
+	//Ensure we're allowed to free
+clean:
+
+	while (!Lock_lock(&Platform_instance.windowManager.lock, 1 * SECOND)) { }
+
+	Lock_lock(&w->lock, 1 * SECOND);
+
+	Window *w0 = w;
+
+	WindowManager_freePhysical(&Platform_instance.windowManager, &w);
+	*w0 = (Window) { 0 };
+	w0->creationError = err;	//Signal error
+
+	Lock_unlock(&Platform_instance.windowManager.lock);
+}
 
 Error WindowManager_createPhysical(
 	WindowManager *manager,
@@ -106,192 +295,58 @@ Error WindowManager_createPhysical(
 	if(!win)
 		return Error_outOfMemory(WindowManager_MAX_PHYSICAL_WINDOWS);
 
-	//Create native window
-
-	WNDCLASSEXA wc = (WNDCLASSEXA){ 0 };
-	HINSTANCE mainModule = Platform_instance.data;
-
-	wc.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
-	wc.lpfnWndProc = WWindow_onCallback;
-	wc.hInstance = mainModule;
-
-	wc.hIcon = (HICON) LoadImageA(mainModule, "LOGO", IMAGE_ICON, 32, 32, 0);
-	wc.hIconSm = (HICON) LoadImageA(mainModule, "LOGO", IMAGE_ICON, 16, 16, 0);
-
-	wc.hCursor = LoadCursorA(NULL, IDC_ARROW);
-
-	wc.hbrBackground = (HBRUSH) GetStockObject(BLACK_BRUSH);
-
-	wc.lpszClassName = "OxC3: Oxsomi core 3";
-	wc.cbSize = sizeof(wc);
-	wc.cbWndExtra = sizeof(void*);
-
-	if (!RegisterClassExA(&wc))
-		return Error_platformError(0, GetLastError());
-
-	DWORD style = WS_VISIBLE;
-
-	if(!(hint & EWindowHint_ForceFullscreen)) {
-
-		style |= WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
-
-		if(!(hint & EWindowHint_DisableResize))
-			style |= WS_SIZEBOX | WS_MAXIMIZEBOX;
-	}
-
-	if(!(hint & EWindowHint_HandleInput))
-		style |= WS_DISABLED;
-
-	I32x2 maxSize = I32x2_create2(
-		GetSystemMetrics(SM_CXSCREEN), 
-		GetSystemMetrics(SM_CYSCREEN) 
-	);
-
-	for (U8 i = 0; i < 2; ++i)
-		if (!I32x2_get(size, i) || I32x2_get(size, i) >= I32x2_get(maxSize, i))
-			I32x2_set(&size, i, I32x2_get(maxSize, i));
-
-	//Our strings aren't null terminated, so ensure windows doesn't read garbage
-
-	C8 windowName[MAX_PATH + 1];
-	Buffer_copy(Buffer_createRef(windowName, sizeof(windowName)), String_bufferConst(title));
-
-	windowName[String_length(title)] = '\0';
-
-	HWND nativeWindow = CreateWindowExA(
-		WS_EX_APPWINDOW, wc.lpszClassName, windowName, style,
-		I32x2_x(position), I32x2_y(position),
-		I32x2_x(size), I32x2_y(size),
-		NULL, NULL, mainModule, NULL
-	);
-
-	if(!nativeWindow) {
-		HRESULT hr = GetLastError();
-		UnregisterClassA(wc.lpszClassName, wc.hInstance);
-		return Error_platformError(1, hr);
-	}
-
-	//Get real size and position
-
-	RECT r = (RECT){ 0 };
-	GetClientRect(nativeWindow, &r);
-	size = I32x2_create2(r.right - r.left, r.bottom - r.top);
-
-	GetWindowRect(nativeWindow, &r);
-	position = I32x2_create2(r.left, r.top);
-
-	//Bind our window
-
-	SetWindowLongPtrA(nativeWindow, 0, (LONG_PTR) win);
-
-	//Alloc cpu visible buffer if needed
-
-	Buffer cpuVisibleBuffer = Buffer_createNull();
-	void *nativeData = NULL;
-	HDC screen = NULL;
-
-	Lock lock = (Lock) { 0 };
-
-	List devices = List_createEmpty(sizeof(InputDevice)), monitors = List_createEmpty(sizeof(Monitor));
-
-	Error err = Error_none();
-
-	if(hint & EWindowHint_ProvideCPUBuffer) {
-
-		screen = GetDC(nativeWindow);
-
-		if(!screen)
-			_gotoIfError(clean, Error_platformError(2, GetLastError()));
-
-		//TODO: Support something other than RGBA8
-
-		BITMAPINFO bmi = (BITMAPINFO) {
-			.bmiHeader = {
-				.biSize = sizeof(BITMAPINFOHEADER),
-				.biWidth = (DWORD) I32x2_x(size),
-				.biHeight = (DWORD) I32x2_y(size),
-				.biPlanes = 1,
-				.biBitCount = 32,
-				.biCompression = BI_RGB
-			}
-		};
-
-		nativeData = CreateDIBSection(
-			screen, &bmi, DIB_RGB_COLORS, (void**) &cpuVisibleBuffer.ptr, 
-			NULL, 0
-		);
-
-		if(!screen)
-			_gotoIfError(clean, Error_platformError(3, GetLastError()));
-
-		//Manually set it to be a reference
-		//This makes it so we don't free it, because we don't own the memory
-
-		cpuVisibleBuffer.lengthAndRefBits = ((U64)bmi.bmiHeader.biWidth * bmi.bmiHeader.biHeight * 4) | ((U64)1 << 31);
-
-		ReleaseDC(nativeWindow, screen);
-		screen = NULL;
-	}
-
-	//Lock for when we are updating this window
-
-	_gotoIfError(clean, Lock_create(&lock));
-
-	_gotoIfError(clean, List_reservex(&devices, Window_MAX_DEVICES));
-	_gotoIfError(clean, List_reservex(&monitors, Window_MAX_MONITORS));
-
-	//Fill window object
+	//Fill window object so our thread can read from it
 
 	*win = (Window) {
 
 		.offset = position,
 		.size = size,
 
-		.cpuVisibleBuffer = cpuVisibleBuffer,
-
-		.nativeHandle = nativeWindow,
-		.nativeData = nativeData,
-		.lock = lock,
-
 		.callbacks = callbacks,
 
 		.hint = hint,
-		.format = format,
-		.flags = EWindowFlags_IsActive,
-
-		.devices = devices,
-		.monitors = monitors
+		.format = format
 	};
 
-	if(hint & EWindowHint_ForceFullscreen)
-		win->flags |= EWindowFlags_IsFullscreen;
+	Error err = Error_none();
+	_gotoIfError(clean, String_createCopyx(title, &win->title));
+
+	_gotoIfError(clean, Lock_create(&win->lock));
+
+	//Start event loop thread
+
+	_gotoIfError(clean, Thread_create((ThreadCallbackFunction) Window_physicalLoop, win, &win->mainThread));
+
+	Thread_sleep(1 * MS);
+
+	//Wait for window creation...
+	//It either sets isActive or the error
+	while (win->lock.data) {
+
+		if (Lock_lock(&win->lock, 1 * SECOND)) {
+
+			Bool b = (win->flags & EWindowFlags_IsActive) || win->creationError.genericError;
+			Lock_unlock(&win->lock);
+
+			if(b)
+				break;
+		}
+
+		Thread_sleep(1 * MS);
+	}
+
+	_gotoIfError(clean, win->creationError);
+
+	//
 
 	*w = win;
 
-	//Signal ready
-
-	if(callbacks.onCreate)
-		callbacks.onCreate(win);
-
-	//Our window is now ready, start window loop
-
-	UpdateWindow(nativeWindow);
-	return Error_none();
-
 clean:
 
-	List_freex(&devices);
-	List_freex(&monitors);
+	if(err.genericError) {
+		Lock_free(&win->lock);
+		*win = (Window) { 0 };
+	}
 
-	Lock_free(&lock);
-
-	if(screen)
-		ReleaseDC(nativeWindow, screen);
-
-	if(nativeData)
-		DeleteObject((HGDIOBJ) nativeData);
-
-	UnregisterClassA(wc.lpszClassName, wc.hInstance);
-	DestroyWindow(nativeWindow);
 	return err;
 }

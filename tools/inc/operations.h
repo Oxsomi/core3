@@ -23,9 +23,6 @@
 
 typedef struct String String;
 
-//TODO: Package folder
-//TODO: Inspect
-
 //Parameters
 
 typedef enum EOperationHasParameter {

@@ -27,6 +27,8 @@
 #include "platforms/mouse.h"
 #include "platforms/ext/errorx.h"
 #include "platforms/ext/bufferx.h"
+#include "platforms/ext/listx.h"
+#include "platforms/ext/stringx.h"
 #include "types/time.h"
 
 #include <stdlib.h>
@@ -51,8 +53,6 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 	Window *w = (Window*) GetWindowLongPtrA(hwnd, 0);
 
-	//TODO: Lock + Unlock window
-
 	if(!w)
 		return DefWindowProc(hwnd, message, wParam, lParam);
 
@@ -63,9 +63,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 			if(w->callbacks.onDestroy)
 				w->callbacks.onDestroy(w);
 
-			//TODO: Properly destroy the window
-
-			w->flags &= ~EWindowFlags_IsActive;
+			w->flags |= EWindowFlags_ShouldThreadTerminate;
 			break;
 		}
 
@@ -648,7 +646,20 @@ Bool WindowManager_freePhysical(WindowManager *manager, Window **w) {
 
 	//Ensure our window safely exits
 
-	PostMessageA((HWND) (*w)->nativeHandle, WM_DESTROY, 0, 0);
+	String_freex(&(*w)->title);
+	List_freex(&(*w)->devices);
+	List_freex(&(*w)->monitors);
+
+	Lock_free(&(*w)->lock);
+
+	if((*w)->nativeData)
+		DeleteObject((HGDIOBJ) (*w)->nativeData);
+
+	HINSTANCE mainModule = Platform_instance.data;
+
+	UnregisterClassA("OxC3: Oxsomi core 3", mainModule);
+	DestroyWindow((*w)->nativeHandle);
+
 	*w = NULL;
 	return true;
 }
