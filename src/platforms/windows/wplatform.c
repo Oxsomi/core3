@@ -351,7 +351,7 @@ Error Platform_initExt(Platform *result, String currAppDir) {
 			List_freex(&result->virtualSections);
 			String_freex(&result->workingDirectory);
 			Buffer_freex(&platformExt);
-			return Error_invalidState(0);
+			return Error_invalidState(1);
 		}
 	}
 

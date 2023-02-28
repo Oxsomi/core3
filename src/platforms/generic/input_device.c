@@ -121,7 +121,7 @@ Error InputDevice_create(U16 buttons, U16 axes, EInputDeviceType type, InputDevi
 	if(result->handles.ptr || result->states.ptr)
 		return Error_invalidOperation(0);
 
-	if(!buttons || !axes)
+	if(!buttons && !axes)
 		return Error_invalidOperation(1);
 
 	*result = (InputDevice) {

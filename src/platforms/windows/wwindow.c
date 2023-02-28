@@ -49,6 +49,61 @@ void WWindow_updateMonitors(Window *w) {
 		w->callbacks.onMonitorChange(w);
 }
 
+Error WWindow_initSize(Window *w, I32x2 size) {
+
+	if(w->nativeData) {
+		DeleteObject((HGDIOBJ) w->nativeData);
+		w->nativeData = NULL;
+	}
+
+	HDC screen = NULL;
+	Error err = Error_none();
+
+	if(w->hint & EWindowHint_ProvideCPUBuffer) {
+
+		screen = GetDC(w->nativeHandle);
+
+		if(!screen)
+			_gotoIfError(clean, Error_platformError(2, GetLastError()));
+
+		//TODO: Support something other than RGBA8
+
+		BITMAPINFO bmi = (BITMAPINFO) {
+			.bmiHeader = {
+				.biSize = sizeof(BITMAPINFOHEADER),
+				.biWidth = (DWORD) I32x2_x(size),
+				.biHeight = (DWORD) I32x2_y(size),
+				.biPlanes = 1,
+				.biBitCount = 32,
+				.biCompression = BI_RGB
+		}
+		};
+
+		w->nativeData = CreateDIBSection(
+			screen, &bmi, DIB_RGB_COLORS, (void**) &w->cpuVisibleBuffer.ptr, 
+			NULL, 0
+		);
+
+		if(!screen)
+			_gotoIfError(clean, Error_platformError(3, GetLastError()));
+
+		//Manually set it to be a reference
+		//This makes it so we don't free it, because we don't own the memory
+
+		w->cpuVisibleBuffer.lengthAndRefBits = ((U64)bmi.bmiHeader.biWidth * bmi.bmiHeader.biHeight * 4) | ((U64)1 << 63);
+
+		ReleaseDC(w->nativeHandle, screen);
+		screen = NULL;
+	}
+
+clean:
+
+	if(screen)
+		ReleaseDC(w->nativeHandle, screen);
+
+	return err;
+}
+
 LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
 
 	Window *w = (Window*) GetWindowLongPtrA(hwnd, 0);
@@ -135,7 +190,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 			InputDevice *dev = beg;
 
 			for(; dev != end; ++dev)
-				if(*(HANDLE*) dev->dataExt.ptr == (HANDLE) lParam)
+				if(*(HANDLE*) dev->dataExt.ptr == data->header.hDevice)
 					break;
 
 			if(!data->header.hDevice || dev == end)
@@ -388,12 +443,6 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 				Bool isKeyboard = deviceInfo.dwType == RIM_TYPEKEYBOARD;
 
-				//Warn because a Japanese/Korean keyboard might not work correctly with the app
-				//Because it might be relying on keys that don't exist there
-
-				if(isKeyboard && deviceInfo.keyboard.dwKeyboardMode != 0x4)
-					Log_warn(ELogOptions_Default, "Possibly unsupported type of keyboard!");
-
 				//Create input device
 
 				InputDevice device = (InputDevice) { 0 };
@@ -579,15 +628,23 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 			GetClientRect(hwnd, &r);
 			I32x2 newSize = I32x2_create2(r.right - r.left, r.bottom - r.top);
 
+			Bool prevState = w->flags & EWindowFlags_IsMinimized;
+
 			if (wParam == SIZE_MINIMIZED) 
 				w->flags |= EWindowFlags_IsMinimized;
 
 			else w->flags &= ~EWindowFlags_IsMinimized;
 
-			if (!I32x2_any(I32x2_leq(newSize, I32x2_zero())) || I32x2_eq2(w->size, newSize))
+			Bool newState = w->flags & EWindowFlags_IsMinimized;
+
+			if ((I32x2_any(I32x2_leq(newSize, I32x2_zero())) || I32x2_eq2(w->size, newSize)) && prevState == newState)
 				break;
 
 			w->size = newSize;
+			Error err = WWindow_initSize(w, w->size);
+
+			if(err.genericError)
+				Error_printx(err, ELogLevel_Error, ELogOptions_Default);
 			
 			WWindow_updateMonitors(w);
 
@@ -721,8 +778,6 @@ Error Window_presentPhysical(const Window *w) {
 		goto cleanup;
 	}
 
-	return Error_none();
-
 cleanup:
 
 	HRESULT res = GetLastError();
@@ -734,5 +789,5 @@ cleanup:
 		DeleteDC(hdcBmp);
 
 	EndPaint(w->nativeHandle, &ps);
-	return Error_platformError(errId, res);
+	return errId ? Error_platformError(errId, res) : Error_none();
 }

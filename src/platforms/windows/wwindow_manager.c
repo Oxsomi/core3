@@ -38,12 +38,13 @@ const U8 WindowManager_MAX_PHYSICAL_WINDOWS = 16;
 //
 LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
 
+Error WWindow_initSize(Window *w, I32x2 size);
+
 //Window belongs to calling thread.
 //So we create the window in a separate thread.
 
 void Window_physicalLoop(Window *w) {
 
-	HDC screen = NULL;
 	Error err = Error_none();
 	
 	//Create native window
@@ -125,42 +126,7 @@ void Window_physicalLoop(Window *w) {
 	w->devices = List_createEmpty(sizeof(InputDevice));
 	w->monitors = List_createEmpty(sizeof(Monitor));
 
-	if(w->hint & EWindowHint_ProvideCPUBuffer) {
-
-		screen = GetDC(nativeWindow);
-
-		if(!screen)
-			_gotoIfError(clean, Error_platformError(2, GetLastError()));
-
-		//TODO: Support something other than RGBA8
-
-		BITMAPINFO bmi = (BITMAPINFO) {
-			.bmiHeader = {
-				.biSize = sizeof(BITMAPINFOHEADER),
-				.biWidth = (DWORD) I32x2_x(size),
-				.biHeight = (DWORD) I32x2_y(size),
-				.biPlanes = 1,
-				.biBitCount = 32,
-				.biCompression = BI_RGB
-			}
-		};
-
-		w->nativeData = CreateDIBSection(
-			screen, &bmi, DIB_RGB_COLORS, (void**) &w->cpuVisibleBuffer.ptr, 
-			NULL, 0
-		);
-
-		if(!screen)
-			_gotoIfError(clean, Error_platformError(3, GetLastError()));
-
-		//Manually set it to be a reference
-		//This makes it so we don't free it, because we don't own the memory
-
-		w->cpuVisibleBuffer.lengthAndRefBits = ((U64)bmi.bmiHeader.biWidth * bmi.bmiHeader.biHeight * 4) | ((U64)1 << 63);
-
-		ReleaseDC(nativeWindow, screen);
-		screen = NULL;
-	}
+	_gotoIfError(clean, WWindow_initSize(w, w->size));
 
 	//Lock for when we are updating this window
 
@@ -183,9 +149,27 @@ void Window_physicalLoop(Window *w) {
 
 	w->flags |= EWindowFlags_IsActive;
 
-	//Our window is now ready, start window loop
+	//Ensure we get all input devices
+	//Register for raw input of these types
+	//https://learn.microsoft.com/en-us/windows-hardware/drivers/hid/hid-usages#usage-page
 
-	UpdateWindow(nativeWindow);
+	RAWINPUTDEVICE registerDevices[2] = {
+		{									//Keyboard
+			.dwFlags = RIDEV_DEVNOTIFY,
+			.usUsagePage = 1,
+			.usUsage = 6,
+			.hwndTarget = nativeWindow
+		},
+		{									//Mouse
+			.dwFlags = RIDEV_DEVNOTIFY,
+			.usUsagePage = 1,
+			.usUsage = 2,
+			.hwndTarget = nativeWindow
+		}
+	};
+
+	if (!RegisterRawInputDevices(registerDevices, 2, sizeof(registerDevices[0])))
+		_gotoIfError(clean, Error_invalidState(0));
 
 	//Window loop
 
@@ -201,6 +185,8 @@ void Window_physicalLoop(Window *w) {
 					TranslateMessage(&msg);
 					DispatchMessageA(&msg);
 				}
+
+				else InvalidateRect(w->nativeHandle, NULL, false);
 
 				if(msg.message == WM_QUIT)
 					w->flags |= EWindowFlags_ShouldThreadTerminate;
