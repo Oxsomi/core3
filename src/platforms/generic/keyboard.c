@@ -31,7 +31,7 @@
 		return err;																\
 	}
 
-Error EKeyboard_create(EKeyboard *result) {
+Error Keyboard_create(Keyboard *result) {
 
 	Error err = InputDevice_create(EKey_Count, 0, EInputDeviceType_Keyboard, result);
 

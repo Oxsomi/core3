@@ -22,7 +22,7 @@
 #include "types/types.h"
 
 typedef struct Error Error;
-typedef struct InputDevice EKeyboard;
+typedef struct InputDevice Keyboard;
 
 typedef enum EKey {
 
@@ -73,4 +73,4 @@ typedef enum EKeyboardFlags {
 	EKeyboardFlags_Alt
 } EKeyboardFlags;
 
-Error EKeyboard_create(EKeyboard *result);
+Error Keyboard_create(Keyboard *result);

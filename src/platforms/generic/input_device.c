@@ -45,7 +45,7 @@ InputHandle InputDevice_invalidHandle() { return (InputHandle) U64_MAX; }
 
 Bool InputDevice_isValidHandle(InputDevice d, InputHandle handle) { return handle < InputDevice_getHandles(d); }
 
-Bool InputDevice_isAxis(InputDevice d, InputHandle handle) { return handle < d.buttons; }
+Bool InputDevice_isAxis(InputDevice d, InputHandle handle) { return handle < d.axes; }
 Bool InputDevice_isButton(InputDevice d, InputHandle handle) { return !InputDevice_isAxis(d, handle); }
 
 InputHandle InputDevice_createHandle(InputDevice d, U16 localHandle, EInputType type) { 
@@ -195,11 +195,13 @@ Error InputDevice_createAxis(
 	U16 localHandle, 
 	String keyName, 
 	F32 deadZone, 
+	Bool resetOnInputLoss,
 	InputHandle *res
 ) {
 	InputDeviceCreate(Axis);
 	*res = InputDevice_createHandle(d, localHandle, EInputType_Axis);
 	inputType->deadZone = deadZone;
+	inputType->resetOnInputLoss = resetOnInputLoss;
 	return Error_none();
 }
 

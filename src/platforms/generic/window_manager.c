@@ -105,6 +105,8 @@ void WindowManager_virtualWindowLoop(Window *w) {
 Error WindowManager_createVirtual(
 	WindowManager *manager,
 	I32x2 size,
+	I32x2 minSize,
+	I32x2 maxSize,
 	WindowCallbacks callbacks,
 	EWindowFormat format,
 	Window **result
@@ -134,6 +136,13 @@ Error WindowManager_createVirtual(
 			return Error_invalidEnum(3, (U64) format, 0);
 	}
 
+	//Ensure the sizes are valid
+
+	Error err = WindowManager_adaptSizes(&size, &minSize, &maxSize);
+
+	if(err.genericError)
+		return err;
+
 	for(U8 i = 0; i < WindowManager_MAX_VIRTUAL_WINDOWS; ++i) {
 
 		Window *w = (Window*) List_ptr(manager->windows, i + WindowManager_MAX_PHYSICAL_WINDOWS);
@@ -145,12 +154,10 @@ Error WindowManager_createVirtual(
 
 			Buffer cpuVisibleBuffer = Buffer_createNull();
 
-			Error err = Buffer_createEmptyBytesx(
+			if((err = Buffer_createEmptyBytesx(
 				ETextureFormat_getSize((ETextureFormat) format, I32x2_x(size), I32x2_y(size)),
 				&cpuVisibleBuffer
-			);
-
-			if(err.genericError)
+			)).genericError)
 				return err;
 
 			Lock lock = (Lock) { 0 };
@@ -163,9 +170,14 @@ Error WindowManager_createVirtual(
 			*w = (Window) {
 
 				.size = size,
+				.prevSize = size,
+
 				.cpuVisibleBuffer = cpuVisibleBuffer,
 				.lock = lock,
 				.callbacks = callbacks,
+
+				.minSize = minSize,
+				.maxSize = maxSize,
 
 				.hint = EWindowHint_ProvideCPUBuffer,
 				.format = format,
@@ -308,12 +320,54 @@ Error WindowManager_waitForExitAll(WindowManager *manager, Ns maxTimeout) {
 	return Error_timedOut(0, maxTimeout);
 }
 
+Error WindowManager_adaptSizes(I32x2 *sizep, I32x2 *minSizep, I32x2 *maxSizep) {
+
+	I32x2 size = *sizep;
+	I32x2 minSize = *minSizep;
+	I32x2 maxSize = *maxSizep;
+
+	//Verify size
+
+	if(I32x2_any(I32x2_leq(size, I32x2_zero())))
+		return Error_invalidParameter(2, 0);
+
+	//Verify min size. By default should be 360p+.
+	//Can't go below EResolution_SD.
+
+	if(I32x2_any(I32x2_lt(minSize, I32x2_zero())))
+		return Error_invalidParameter(3, 0);
+
+	if(I32x2_any(I32x2_eq(minSize, I32x2_zero())))
+		minSize = EResolution_get(EResolution_360);
+
+	if(I32x2_any(I32x2_lt(minSize, EResolution_get(EResolution_SD))))
+		return Error_invalidParameter(3, 0);
+
+	//Graphics APIs generally limit the resolution to 16k, so let's ensure the window can't get bigger than that
+
+	if(I32x2_any(I32x2_lt(maxSize, I32x2_zero())))
+		return Error_invalidParameter(4, 0);
+
+	if(I32x2_any(I32x2_eq(maxSize, I32x2_zero())))
+		maxSize = EResolution_get(EResolution_16K);
+
+	if(I32x2_any(I32x2_gt(maxSize, EResolution_get(EResolution_16K))))
+		return Error_invalidParameter(4, 0);
+		
+	*minSizep = minSize;
+	*maxSizep = maxSize;
+	*sizep = I32x2_clamp(size, minSize, maxSize);
+
+	return Error_none();
+}
+
 //All types of windows
 
 Error WindowManager_createWindow(
 	WindowManager *manager, 
 	I32x2 position,
 	I32x2 size,
+	I32x2 minSize, I32x2 maxSize,
 	EWindowHint hint,
 	String title, 
 	WindowCallbacks callbacks,
@@ -324,13 +378,13 @@ Error WindowManager_createWindow(
 	if(!manager || !manager->lock.data)
 		return Error_nullPointer(0);
 
-	Error err = WindowManager_createPhysical(manager, position, size, hint, title, callbacks, format, w);
+	Error err = WindowManager_createPhysical(manager, position, size, minSize, maxSize, hint, title, callbacks, format, w);
 
 	//Window manager doesn't support physical windows
 	//So it will make a virtual one
 
 	if(err.genericError == EGenericError_OutOfMemory && err.errorSubId == WindowManager_MAX_PHYSICAL_WINDOWS)
-		return WindowManager_createVirtual(manager, size, callbacks, format, w);
+		return WindowManager_createVirtual(manager, size, minSize, maxSize, callbacks, format, w);
 
 	return err;
 }

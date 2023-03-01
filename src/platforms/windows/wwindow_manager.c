@@ -72,13 +72,17 @@ void Window_physicalLoop(Window *w) {
 
 	DWORD style = WS_VISIBLE;
 
-	if(!(w->hint & EWindowHint_ForceFullscreen)) {
+	Bool isFullScreen = w->hint & EWindowHint_ForceFullscreen;
+
+	if(!isFullScreen) {
 
 		style |= WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
 
 		if(!(w->hint & EWindowHint_DisableResize))
 			style |= WS_SIZEBOX | WS_MAXIMIZEBOX;
 	}
+
+	else style |= WS_POPUP;
 
 	I32x2 maxSize = I32x2_create2(
 		GetSystemMetrics(SM_CXSCREEN), 
@@ -89,7 +93,7 @@ void Window_physicalLoop(Window *w) {
 	I32x2 position = w->offset;
 
 	for (U8 i = 0; i < 2; ++i)
-		if (!I32x2_get(size, i) || I32x2_get(size, i) >= I32x2_get(maxSize, i))
+		if (isFullScreen || (!I32x2_get(size, i) || I32x2_get(size, i) >= I32x2_get(maxSize, i)))
 			I32x2_set(&size, i, I32x2_get(maxSize, i));
 
 	//Our strings aren't null terminated, so ensure windows doesn't read garbage
@@ -216,6 +220,8 @@ Error WindowManager_createPhysical(
 	WindowManager *manager,
 	I32x2 position,
 	I32x2 size, 
+	I32x2 minSize,
+	I32x2 maxSize,
 	EWindowHint hint,
 	String title, 
 	WindowCallbacks callbacks,
@@ -232,10 +238,10 @@ Error WindowManager_createPhysical(
 		return Error_invalidOperation(0);
 
 	if(!w)
-		return Error_nullPointer(7);
+		return Error_nullPointer(9);
 
 	if(*w)
-		return Error_invalidParameter(7, 0);
+		return Error_invalidParameter(9, 0);
 
 	switch (format) {
 
@@ -250,14 +256,20 @@ Error WindowManager_createPhysical(
 			break;
 
 		default:
-			return Error_invalidParameter(6, 0);
+			return Error_invalidParameter(8, 0);
 	}
 
-	if(I32x2_any(I32x2_lt(size, I32x2_zero())))
-		return Error_invalidParameter(2, 0);
+	//Ensure the sizes are valid
+
+	Error err = WindowManager_adaptSizes(&size, &minSize, &maxSize);
+
+	if(err.genericError)
+		return err;
+
+	//Validate path
 
 	if (String_length(title) >= MAX_PATH)
-		return Error_outOfBounds(4, String_length(title), MAX_PATH);
+		return Error_outOfBounds(6, String_length(title), MAX_PATH);
 
 	//Find free spot in physical windows
 
@@ -287,14 +299,17 @@ Error WindowManager_createPhysical(
 
 		.offset = position,
 		.size = size,
+		.prevSize = size,
 
 		.callbacks = callbacks,
 
 		.hint = hint,
-		.format = format
+		.format = format,
+
+		.minSize = minSize,
+		.maxSize = maxSize
 	};
 
-	Error err = Error_none();
 	_gotoIfError(clean, String_createCopyx(title, &win->title));
 
 	_gotoIfError(clean, Lock_create(&win->lock));

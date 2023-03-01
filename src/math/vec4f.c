@@ -151,7 +151,7 @@ F32x4 F32x4_rgb8Unpack(U32 v) {
 
 U32 F32x4_rgb8Pack(F32x4 v) {
 	F32x4 v8 = F32x4_floor(F32x4_mul(v, F32x4_xxxx4(0xFF)));
-	F32x4 preShift = F32x4_trunc3(F32x4_mul(v8, F32x4_create3(0x10000, 0x100, 0x1)));
+	F32x4 preShift = F32x4_mul(v8, F32x4_create3(0x10000, 0x100, 0x1));
 	return (U32) F32x4_reduce(preShift);
 }
 

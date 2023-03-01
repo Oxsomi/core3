@@ -26,25 +26,25 @@ typedef struct InputDevice Mouse;
 
 typedef enum EMouseActions {
 
+	//Mouse axes
+
+	EMouseAxis_Begin,
+
+	EMouseAxis_X = EMouseAxis_Begin, EMouseAxis_Y, 
+	EMouseAxis_ScrollWheel_X, EMouseAxis_ScrollWheel_Y,
+
+	EMouseAxis_End,
+	EMouseAxis_Count = EMouseAxis_End - EMouseAxis_Begin,
+
 	//Mouse buttons
 
-	EMouseButton_Begin,
+	EMouseButton_Begin = EMouseAxis_End,
 
 	EMouseButton_Left = EMouseButton_Begin, EMouseButton_Middle, EMouseButton_Right, 
 	EMouseButton_Back, EMouseButton_Forward,
 
 	EMouseButton_End,
 	EMouseButton_Count = EMouseButton_End - EMouseButton_Begin,
-
-	//Mouse axes
-
-	EMouseAxis_Begin = EMouseButton_End,
-
-	EMouseAxis_X = EMouseAxis_Begin, EMouseAxis_Y, 
-	EMouseAxis_ScrollWheel_X, EMouseAxis_ScrollWheel_Y,
-
-	EMouseAxis_End,
-	EMouseAxis_Count = EMouseAxis_End - EMouseAxis_Begin
 
 } MouseActions;
 

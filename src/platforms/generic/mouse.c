@@ -23,20 +23,22 @@
 #include "types/error.h"
 #include "types/string.h"
 
-#define _button(name)																								\
-	if ((err = InputDevice_createButton(																			\
-		*result, EMouseButton_##name, String_createConstRefUnsafe("EMouseButton_" #name), &res						\
-	)).genericError) {																								\
-		InputDevice_free(result);																					\
-		return err;																									\
+#define _button(name)																				\
+	if ((err = InputDevice_createButton(															\
+		*result, EMouseButton_##name  - EMouseButton_Begin, 										\
+		String_createConstRefUnsafe("EMouseButton_" #name), &res									\
+	)).genericError) {																				\
+		InputDevice_free(result);																	\
+		return err;																					\
 	}
 
-#define _axis(name)																									\
-	if ((err = InputDevice_createAxis(																				\
-		*result, EMouseAxis_##name - EMouseAxis_Begin, String_createConstRefUnsafe("EMouseAxis_" #name), 0, &res	\
-	)).genericError) {																								\
-		InputDevice_free(result);																					\
-		return err;																									\
+#define _axis(name, resetOnUnfocus)																	\
+	if ((err = InputDevice_createAxis(																\
+		*result, EMouseAxis_##name - EMouseAxis_Begin, 												\
+		String_createConstRefUnsafe("EMouseAxis_" #name), 0, resetOnUnfocus, &res					\
+	)).genericError) {																				\
+		InputDevice_free(result);																	\
+		return err;																					\
 	}
 
 Error Mouse_create(Mouse *result) {
@@ -53,8 +55,8 @@ Error Mouse_create(Mouse *result) {
 	_button(Left); _button(Middle); _button(Right);
 	_button(Back); _button(Forward);
 
-	_axis(X); _axis(Y); 
-	_axis(ScrollWheel_X); _axis(ScrollWheel_Y);
+	_axis(X, false); _axis(Y, false); 
+	_axis(ScrollWheel_X, true); _axis(ScrollWheel_Y, true);
 
 	return Error_none();
 }

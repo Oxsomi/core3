@@ -128,6 +128,9 @@ typedef U16 WindowHandle;
 typedef struct Window {
 
 	I32x2 offset, size;
+	I32x2 minSize, maxSize;
+
+	I32x2 prevSize;					//For full screen toggle
 
 	Buffer cpuVisibleBuffer;
 
@@ -158,6 +161,8 @@ typedef struct Window {
 //Implementation dependent aka physical windows
 
 impl Error Window_updatePhysicalTitle(const Window *w, String title);
+
+impl Error Window_toggleFullScreen(Window *w);
 
 impl Error Window_presentPhysical(const Window *w);
 

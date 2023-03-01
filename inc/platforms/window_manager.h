@@ -41,10 +41,14 @@ impl extern const U8 WindowManager_MAX_PHYSICAL_WINDOWS;
 Error WindowManager_create(WindowManager *result);
 Bool WindowManager_free(WindowManager *manager);
 
+Error WindowManager_adaptSizes(I32x2 *size, I32x2 *minSize, I32x2 *maxSize);
+
 impl Error WindowManager_createPhysical(
 	WindowManager *manager,
 	I32x2 position,
 	I32x2 size, 
+	I32x2 minSize,
+	I32x2 maxSize,
 	EWindowHint hint,
 	String title, 
 	WindowCallbacks callbacks,
@@ -59,6 +63,8 @@ Error WindowManager_waitForExitAll(WindowManager *manager, Ns maxTimeout);
 Error WindowManager_createVirtual(
 	WindowManager *manager, 
 	I32x2 size, 
+	I32x2 minSize,
+	I32x2 maxSize,
 	WindowCallbacks callbacks, 
 	EWindowFormat format,
 	Window **result
@@ -81,7 +87,9 @@ Window *WindowManager_getWindow(WindowManager *manager, WindowHandle windowHandl
 
 Error WindowManager_createWindow(
 	WindowManager *manager, 
-	I32x2 position, I32x2 size, EWindowHint hint, String title, 
+	I32x2 position, I32x2 size, 
+	I32x2 minSize, I32x2 maxSize,
+	EWindowHint hint, String title, 
 	WindowCallbacks callbacks, EWindowFormat format,
 	Window **w
 );

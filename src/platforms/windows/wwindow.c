@@ -136,7 +136,56 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 			else {
 
-				//TODO: Reset keys because otherwise they might hang
+				//Reset keys to avoid them hanging.
+
+				for (U64 i = 0; i < w->devices.length; ++i) {
+
+					InputDevice *dev = (InputDevice*)w->devices.ptr + i;
+
+					//Reset buttons
+
+					for (U16 j = 0; j < dev->buttons; ++j) {
+
+						InputHandle handle = InputDevice_createHandle(*dev, j, EInputType_Button);
+
+						EInputState prevState = InputDevice_getState(*dev, handle);
+
+						if(prevState & EInputState_Curr) {
+
+							InputDevice_setCurrentState(*dev, handle, false);
+							EInputState newState = InputDevice_getState(*dev, handle);
+
+							if(prevState != newState && w->callbacks.onDeviceButton)
+								w->callbacks.onDeviceButton(w, dev, handle, false);
+						}
+					}
+
+					//Reset axes
+
+					for (U16 j = 0; j < dev->axes; ++j) {
+
+						InputAxis axis = *InputDevice_getAxis(*dev, j);
+
+						if(!axis.resetOnInputLoss)
+							continue;
+
+						InputHandle handle = InputDevice_createHandle(*dev, j, EInputType_Axis);
+
+						F32 prevStatef = InputDevice_getCurrentAxis(*dev, handle);
+
+						if (prevStatef) {
+
+							InputDevice_setCurrentAxis(*dev, handle, 0);
+
+							if(w->callbacks.onDeviceAxis)
+								w->callbacks.onDeviceAxis(w, dev, handle, 0);
+						}
+					}
+
+					//Reset flags that might've been set
+
+					dev->flags = 0;
+				}
 
 				w->flags &= ~EWindowFlags_IsFocussed;
 			}
@@ -449,7 +498,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 				if (isKeyboard) {
 
-					if ((err = EKeyboard_create((EKeyboard*) &device)).genericError) {
+					if ((err = Keyboard_create((Keyboard*) &device)).genericError) {
 						Error_printx(err, ELogLevel_Error, ELogOptions_Default);
 						break;
 					}
@@ -614,11 +663,13 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 		case WM_GETMINMAXINFO: {
 
-			//TODO: Minimum window size?
-			//TODO: Maximum window size?
-
 			MINMAXINFO *lpMMI = (MINMAXINFO*) lParam;
-			lpMMI->ptMinTrackSize.x = lpMMI->ptMinTrackSize.y = 256;
+			lpMMI->ptMinTrackSize.x = I32x2_x(w->minSize);
+			lpMMI->ptMinTrackSize.y = I32x2_y(w->minSize);
+
+			lpMMI->ptMaxTrackSize.x = I32x2_x(w->maxSize);
+			lpMMI->ptMaxTrackSize.y = I32x2_y(w->maxSize);
+
 			break;
 		}
 
@@ -738,6 +789,59 @@ Error Window_updatePhysicalTitle(const Window *w, String title) {
 
 	if(!SetWindowTextA(w->nativeHandle, windowName))
 		return Error_platformError(0, GetLastError());
+
+	return Error_none();
+}
+
+Error Window_toggleFullScreen(Window *w) {
+
+	if(!w || !I32x2_any(w->size))
+		return Error_nullPointer(!w || !I32x2_any(w->size) ? 0 : 1);
+
+	if(!(w->hint & EWindowHint_AllowFullscreen))
+		return Error_unsupportedOperation(0);
+
+	DWORD style = WS_VISIBLE;
+
+	Bool wasFullScreen = w->flags & EWindowFlags_IsFullscreen;
+
+	w->flags &= ~EWindowFlags_IsFullscreen;
+
+	if(!wasFullScreen) {
+		w->flags |= EWindowFlags_IsFullscreen;
+		w->prevSize = w->size;
+	}
+
+	Bool isFullScreen = w->flags & EWindowFlags_IsFullscreen;
+
+	if(!isFullScreen) {
+
+		style |= WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
+
+		if(!(w->hint & EWindowHint_DisableResize))
+			style |= WS_SIZEBOX | WS_MAXIMIZEBOX;
+	}
+
+	else style |= WS_POPUP;
+
+	I32x2 newSize = I32x2_create2(
+		GetSystemMetrics(SM_CXSCREEN), 
+		GetSystemMetrics(SM_CYSCREEN) 
+	);
+
+	SetWindowLongPtrA(w->nativeHandle, GWL_STYLE, style);
+
+	if(!isFullScreen)
+		newSize = w->prevSize;
+
+	//Resize
+
+	if (!I32x2_all(I32x2_eq(newSize, w->size)))
+		SetWindowPos(
+			w->nativeHandle, NULL, 
+			0, 0, I32x2_x(newSize), I32x2_y(newSize), 
+			SWP_SHOWWINDOW
+		);
 
 	return Error_none();
 }

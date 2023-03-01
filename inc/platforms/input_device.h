@@ -48,6 +48,7 @@ typedef struct InputButton {
 typedef struct InputAxis {
 	LongString name;
 	F32 deadZone;
+	Bool resetOnInputLoss;
 } InputAxis;
 
 typedef enum EInputDeviceType {
@@ -73,7 +74,7 @@ typedef struct InputDevice {
 
 	//Bitset for the states of the buttons/axes
 	//F32[floatStates*2]
-	//u2[booleanStates]
+	//U2[booleanStates]
 
 	Buffer states;
 
@@ -100,6 +101,7 @@ Error InputDevice_createAxis(
 	U16 localHandle, 
 	String keyName, 
 	F32 deadZone, 
+	Bool resetOnInputLoss,
 	InputHandle *result
 );
 
