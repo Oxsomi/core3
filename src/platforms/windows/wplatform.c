@@ -33,13 +33,13 @@
 
 #include <intrin.h>
 
-String Error_formatPlatformError(Error err) {
+CharString Error_formatPlatformError(Error err) {
 
 	if(err.genericError != EGenericError_PlatformError)
-		return String_createNull();
+		return CharString_createNull();
 
 	if(!FAILED(err.paramValue0))
-		return String_createNull();
+		return CharString_createNull();
 
 	C8 *lpBuffer = NULL;
 
@@ -59,15 +59,15 @@ String Error_formatPlatformError(Error err) {
 		NULL
 	);
 
-	//Unfortunately we have to copy, because we can't tell String to use LocalFree instead of free
+	//Unfortunately we have to copy, because we can't tell CharString to use LocalFree instead of free
 
 	if(!f)
-		return String_createNull();
+		return CharString_createNull();
 
-	String res;
-	if((err = String_createCopyx(String_createConstRefSized(lpBuffer, f, true), &res)).genericError) {
+	CharString res;
+	if((err = CharString_createCopyx(CharString_createConstRefSized(lpBuffer, f, true), &res)).genericError) {
 		LocalFree(lpBuffer);
-		return String_createNull();
+		return CharString_createNull();
 	}
 
 	//
@@ -97,7 +97,7 @@ void sigFunc(int signal) {
 	//For debugging purposed however, this is very useful
 	//Turn this off by defining _NO_SIGNAL_HANDLING
 
-	Log_log(ELogLevel_Fatal, ELogOptions_Default, String_createConstRefUnsafe(msg));
+	Log_log(ELogLevel_Fatal, ELogOptions_Default, CharString_createConstRefUnsafe(msg));
 	Log_printStackTrace(1, ELogLevel_Fatal, ELogOptions_Default);
 	exit(signal);
 }
@@ -190,7 +190,7 @@ void Platform_cleanupExt(Platform *p) {
 
 	for (U64 i = 0; i < Platform_instance.virtualSections.length; ++i) {
 		VirtualSection *sect = ((VirtualSection*)Platform_instance.virtualSections.ptr) + i;
-		String_freex(&sect->path);
+		CharString_freex(&sect->path);
 		Archive_freex(&sect->loadedData);
 	}
 
@@ -213,17 +213,17 @@ BOOL enumerateFiles(HMODULE mod, LPCSTR unused, LPSTR name, List *sections) {
 
 	mod; unused;
 
-	String str = String_createConstRefUnsafe(name);
+	CharString str = CharString_createConstRefUnsafe(name);
 
 	Error err = Error_none();
-	String copy = String_createNull();
+	CharString copy = CharString_createNull();
 
-	if(String_countAll(str, '/', EStringCase_Sensitive) != 1)
+	if(CharString_countAll(str, '/', EStringCase_Sensitive) != 1)
 		Log_warnLn("Executable contained unrecognized RCDATA. Ignoring it...");
 
 	else {
 
-		_gotoIfError(clean, String_createCopyx(str, &copy));
+		_gotoIfError(clean, CharString_createCopyx(str, &copy));
 
 		VirtualSection section = (VirtualSection) { .path = copy };
 		_gotoIfError(clean, List_pushBackx(sections, Buffer_createConstRef(&section, sizeof(section))));
@@ -233,13 +233,13 @@ clean:
 
 	if(err.genericError) {
 		sections->stride = 0;		//Signal that we failed
-		String_freex(&copy);
+		CharString_freex(&copy);
 	}
 
 	return !err.genericError;
 }
 
-Error Platform_initExt(Platform *result, String currAppDir) {
+Error Platform_initExt(Platform *result, CharString currAppDir) {
 
 	//
 
@@ -269,39 +269,39 @@ Error Platform_initExt(Platform *result, String currAppDir) {
 
 		//Grab app directory of where the exe is installed
 
-		String appDir = String_createNull();
-		if ((err = String_createCopyx(currAppDir, &appDir)).genericError) {
-			String_freex(&appDir);
+		CharString appDir = CharString_createNull();
+		if ((err = CharString_createCopyx(currAppDir, &appDir)).genericError) {
+			CharString_freex(&appDir);
 			Buffer_freex(&platformExt);
 			return Error_platformError(1, GetLastError());
 		}
 
-		String_replaceAll(&appDir, '\\', '/', EStringCase_Sensitive);
+		CharString_replaceAll(&appDir, '\\', '/', EStringCase_Sensitive);
 
-		U64 loc = String_findLast(appDir, '/', EStringCase_Sensitive);
-		String basePath = String_createNull();
+		U64 loc = CharString_findLast(appDir, '/', EStringCase_Sensitive);
+		CharString basePath = CharString_createNull();
 
-		if (loc == String_length(appDir))
-			basePath = String_createConstRefAuto(appDir.ptr, String_length(appDir));
+		if (loc == CharString_length(appDir))
+			basePath = CharString_createConstRefAuto(appDir.ptr, CharString_length(appDir));
 	
-		else String_cut(appDir, 0, loc + 1, &basePath);
+		else CharString_cut(appDir, 0, loc + 1, &basePath);
 
-		String workDir = String_createNull();
+		CharString workDir = CharString_createNull();
 
-		if ((err = String_createCopyx(basePath, &workDir)).genericError) {
-			String_freex(&appDir);
+		if ((err = CharString_createCopyx(basePath, &workDir)).genericError) {
+			CharString_freex(&appDir);
 			Buffer_freex(&platformExt);
 			return Error_platformError(1, GetLastError());
 		}
 
-		if ((err = String_appendx(&workDir, '/')).genericError)  {
-			String_freex(&appDir);
-			String_freex(&workDir);
+		if ((err = CharString_appendx(&workDir, '/')).genericError)  {
+			CharString_freex(&appDir);
+			CharString_freex(&workDir);
 			Buffer_freex(&platformExt);
 			return err;
 		}
 
-		String_freex(&appDir);
+		CharString_freex(&appDir);
 		result->workingDirectory = workDir;
 
 	} else {
@@ -318,15 +318,15 @@ Error Platform_initExt(Platform *result, String currAppDir) {
 
 		//Move to heap and standardize
 
-		if((err = String_createCopyx(String_createConstRefSized(buff, chars, true), &result->workingDirectory)).genericError) {
+		if((err = CharString_createCopyx(CharString_createConstRefSized(buff, chars, true), &result->workingDirectory)).genericError) {
 			Buffer_freex(&platformExt);
 			return err;
 		}
 
-		String_replaceAll(&result->workingDirectory, '\\', '/', EStringCase_Sensitive);
+		CharString_replaceAll(&result->workingDirectory, '\\', '/', EStringCase_Sensitive);
 
-		if ((err = String_appendx(&result->workingDirectory, '/')).genericError)  {
-			String_freex(&result->workingDirectory);
+		if ((err = CharString_appendx(&result->workingDirectory, '/')).genericError)  {
+			CharString_freex(&result->workingDirectory);
 			Buffer_freex(&platformExt);
 			return err;
 		}
@@ -349,7 +349,7 @@ Error Platform_initExt(Platform *result, String currAppDir) {
 			result->virtualSections.stride = sizeof(VirtualSection);
 
 			List_freex(&result->virtualSections);
-			String_freex(&result->workingDirectory);
+			CharString_freex(&result->workingDirectory);
 			Buffer_freex(&platformExt);
 			return Error_invalidState(1);
 		}

@@ -160,7 +160,7 @@ void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f) {
 	}
 }
 
-Bool CLI_execute(StringList arglist) {
+Bool CLI_execute(CharStringList arglist) {
 
 	//Show help
 
@@ -171,15 +171,15 @@ Bool CLI_execute(StringList arglist) {
 
 	//Grab category
 
-	String arg0 = arglist.ptr[0];
+	CharString arg0 = arglist.ptr[0];
 
 	EOperationCategory category = EOperationCategory_Invalid;
 
 	for(U64 i = EOperationCategory_Start; i < EOperationCategory_End; ++i)
 
-		if (String_equalsString(
+		if (CharString_equalsString(
 			arg0, 
-			String_createConstRefUnsafe(EOperationCategory_names[i - 1]),
+			CharString_createConstRefUnsafe(EOperationCategory_names[i - 1]),
 			EStringCase_Insensitive
 		)) {
 			category = i;
@@ -200,7 +200,7 @@ Bool CLI_execute(StringList arglist) {
 
 	//Grab operation
 
-	String arg1 = arglist.ptr[1];
+	CharString arg1 = arglist.ptr[1];
 
 	EOperation operation = EOperation_Invalid;
 
@@ -208,9 +208,9 @@ Bool CLI_execute(StringList arglist) {
 
 		if (
 			category == Operation_values[i].category &&
-			String_equalsString(
+			CharString_equalsString(
 				arg1, 
-				String_createConstRefUnsafe(Operation_values[i].name),
+				CharString_createConstRefUnsafe(Operation_values[i].name),
 				EStringCase_Insensitive
 			)
 		) {
@@ -226,7 +226,7 @@ Bool CLI_execute(StringList arglist) {
 	//Parse command line options
 
 	ParsedArgs args = (ParsedArgs) { 0 };
-	args.args = List_createEmpty(sizeof(String));
+	args.args = List_createEmpty(sizeof(CharString));
 	args.operation = operation;
 
 	Error err = List_reservex(&args.args, 100);
@@ -237,14 +237,14 @@ Bool CLI_execute(StringList arglist) {
 	for(U64 i = 0; i < EOperationFlags_Count; ++i)
 		for(U64 j = 2; j < arglist.length; ++j)
 
-			if (String_equalsString(
+			if (CharString_equalsString(
 				arglist.ptr[j],
-				String_createConstRefUnsafe(EOperationFlags_names[i]),
+				CharString_createConstRefUnsafe(EOperationFlags_names[i]),
 				EStringCase_Insensitive
 			)) {
 
 				if ((args.flags >> i) & 1) {
-					Log_errorLn("Duplicate flag: %.*s.", String_length(arglist.ptr[j]), arglist.ptr[j].ptr);
+					Log_errorLn("Duplicate flag: %.*s.", CharString_length(arglist.ptr[j]), arglist.ptr[j].ptr);
 					goto clean;
 				}
 
@@ -258,9 +258,9 @@ Bool CLI_execute(StringList arglist) {
 
 	for(U64 i = 0; i < EOperationHasParameter_Count; ++i)
 		for(U64 j = 2; j < arglist.length; ++j)
-			if (String_equalsString(
+			if (CharString_equalsString(
 				arglist.ptr[j],
-				String_createConstRefUnsafe(EOperationHasParameter_names[i]),
+				CharString_createConstRefUnsafe(EOperationHasParameter_names[i]),
 				EStringCase_Insensitive
 			)) {
 
@@ -270,9 +270,9 @@ Bool CLI_execute(StringList arglist) {
 
 				if (
 					j + 1 >= arglist.length ||
-					String_getAt(arglist.ptr[j + 1], 0) == '-'
+					CharString_getAt(arglist.ptr[j + 1], 0) == '-'
 				) {
-					Log_errorLn("Parameter is missing argument: %.*s.", String_length(arglist.ptr[j]), arglist.ptr[j].ptr);
+					Log_errorLn("Parameter is missing argument: %.*s.", CharString_length(arglist.ptr[j]), arglist.ptr[j].ptr);
 					goto clean;
 				}
 
@@ -283,9 +283,9 @@ Bool CLI_execute(StringList arglist) {
 					if (param == EOperationHasParameter_FileFormat) {
 
 						for (U64 k = 0; k < EFormat_Invalid; ++k)
-							if (String_equalsString(
+							if (CharString_equalsString(
 								arglist.ptr[j + 1],
-								String_createConstRefUnsafe(Format_values[k].name),
+								CharString_createConstRefUnsafe(Format_values[k].name),
 								EStringCase_Insensitive
 							)) {
 								args.format = (EFormat) k;
@@ -298,7 +298,7 @@ Bool CLI_execute(StringList arglist) {
 					//Mark as present
 
 					if (args.parameters & param) {
-						Log_errorLn("Duplicate parameter: %.*s.", String_length(arglist.ptr[j]), arglist.ptr[j].ptr);
+						Log_errorLn("Duplicate parameter: %.*s.", CharString_length(arglist.ptr[j]), arglist.ptr[j].ptr);
 						goto clean;
 					}
 
@@ -308,7 +308,7 @@ Bool CLI_execute(StringList arglist) {
 
 					_gotoIfError(clean, List_pushBackx(
 						&args.args, 
-						Buffer_createConstRef(&arglist.ptr[j + 1], sizeof(String))
+						Buffer_createConstRef(&arglist.ptr[j + 1], sizeof(CharString))
 					));
 				}
 
@@ -342,24 +342,24 @@ Bool CLI_execute(StringList arglist) {
 
 	for (U64 j = 2; j < arglist.length; ++j) {
 
-		if (String_getAt(arglist.ptr[j], 0) == '-') {
+		if (CharString_getAt(arglist.ptr[j], 0) == '-') {
 
 			//Check for parameters
 
-			if (String_getAt(arglist.ptr[j], 1) != '-') {
+			if (CharString_getAt(arglist.ptr[j], 1) != '-') {
 
 				U64 i = 0;
 
 				for (; i < EOperationHasParameter_Count; ++i)
-					if (String_equalsString(
+					if (CharString_equalsString(
 						arglist.ptr[j],
-						String_createConstRefUnsafe(EOperationHasParameter_names[i]),
+						CharString_createConstRefUnsafe(EOperationHasParameter_names[i]),
 						EStringCase_Insensitive
 					))
 						break;
 
 				if(i == EOperationHasParameter_Count) {
-					Log_errorLn("Invalid parameter is present: %.*s.", String_length(arglist.ptr[j]), arglist.ptr[j].ptr);
+					Log_errorLn("Invalid parameter is present: %.*s.", CharString_length(arglist.ptr[j]), arglist.ptr[j].ptr);
 					CLI_showHelp(category, operation, args.format);
 					goto clean;
 				}
@@ -373,15 +373,15 @@ Bool CLI_execute(StringList arglist) {
 			U64 i = 0;
 
 			for (; i < EOperationFlags_Count; ++i)
-				if (String_equalsString(
+				if (CharString_equalsString(
 					arglist.ptr[j],
-					String_createConstRefUnsafe(EOperationFlags_names[i]),
+					CharString_createConstRefUnsafe(EOperationFlags_names[i]),
 					EStringCase_Insensitive
 				))
 					break;
 
 			if(i == EOperationFlags_Count) {
-				Log_errorLn("Invalid flag is present: %.*s.", String_length(arglist.ptr[j]), arglist.ptr[j].ptr);
+				Log_errorLn("Invalid flag is present: %.*s.", CharString_length(arglist.ptr[j]), arglist.ptr[j].ptr);
 				CLI_showHelp(category, operation, args.format);
 				goto clean;
 			}
@@ -389,7 +389,7 @@ Bool CLI_execute(StringList arglist) {
 			continue;
 		}
 
-		Log_errorLn("Invalid argument is present: %.*s", String_length(arglist.ptr[j]), arglist.ptr[j].ptr);
+		Log_errorLn("Invalid argument is present: %.*s", CharString_length(arglist.ptr[j]), arglist.ptr[j].ptr);
 		CLI_showHelp(category, operation, args.format);
 		goto clean;
 	}

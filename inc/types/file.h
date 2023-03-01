@@ -40,7 +40,7 @@ typedef struct FileInfo {
 	EFileType type;
 	EFileAccess access;
 	Ns timestamp;		//In units that the file system supports. Normally that unit is seconds.
-	String path;
+	CharString path;
 	U64 fileSize;
 
 } FileInfo;
@@ -48,17 +48,17 @@ typedef struct FileInfo {
 typedef Error (*FileCallback)(FileInfo, void*);
 
 typedef struct Allocator Allocator;
-typedef struct String String;
+typedef struct CharString CharString;
 
 Error File_resolve(
-	String loc,
+	CharString loc,
 	Bool *isVirtual,
 	U64 maxFilePathLimit,
-	String absoluteDir,
+	CharString absoluteDir,
 	Allocator alloc,
-	String *result
+	CharString *result
 );
 
-Bool File_isVirtual(String loc);
+Bool File_isVirtual(CharString loc);
 
 Bool FileInfo_free(FileInfo *info, Allocator alloc);

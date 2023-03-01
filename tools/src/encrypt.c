@@ -29,7 +29,7 @@ Bool CLI_encryptDo(ParsedArgs args) {
 
 	Bool generateOutput = !(args.parameters & EOperationHasParameter_Output);
 	U64 generatedOutputIndex = 1;
-	String tmpString = String_createNull();
+	CharString tmpString = CharString_createNull();
 	Bool b = false;
 	Error err = Error_none();
 
@@ -37,8 +37,8 @@ Bool CLI_encryptDo(ParsedArgs args) {
 
 	if (generateOutput) {
 
-		_gotoIfError(clean, String_createCopyx(*((const String*)args.args.ptr), &tmpString));
-		_gotoIfError(clean, String_appendStringx(&tmpString, String_createConstRefUnsafe(".oiCA")));
+		_gotoIfError(clean, CharString_createCopyx(*((const CharString*)args.args.ptr), &tmpString));
+		_gotoIfError(clean, CharString_appendStringx(&tmpString, CharString_createConstRefUnsafe(".oiCA")));
 
 		_gotoIfError(
 			clean, 
@@ -66,7 +66,7 @@ clean:
 	if(generateOutput)
 		List_popLocation(&args.args, generatedOutputIndex, Buffer_createNull());
 
-	String_freex(&tmpString);
+	CharString_freex(&tmpString);
 
 	return b;
 }

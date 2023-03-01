@@ -47,11 +47,11 @@ typedef struct CapturedStackTrace {
 
 	//Module and symbol
 
-	String mod, sym;
+	CharString mod, sym;
 
 	//File and line don't have to be specified, for external calls
 
-	String fil;
+	CharString fil;
 	U32 lin;
 
 } CapturedStackTrace;
@@ -131,36 +131,36 @@ void Log_printCapturedStackTraceCustom(const void **stackTrace, U64 stackSize, E
 				continue;
 
 			CapturedStackTrace *capture = captured + i;
-			capture->mod = String_createRefAuto(modulePath, MAX_PATH);
-			capture->sym = String_createRefAuto(symbolName, MAX_PATH);
+			capture->mod = CharString_createRefAuto(modulePath, MAX_PATH);
+			capture->sym = CharString_createRefAuto(symbolName, MAX_PATH);
 
-			String_formatPath(&capture->sym);
+			CharString_formatPath(&capture->sym);
 
 			if (moduleBase == (U64)processModule)
-				capture->mod = String_getFilePath(&capture->mod);
+				capture->mod = CharString_getFilePath(&capture->mod);
 
 			if(line.FileName)
-				capture->fil = String_createConstRefAuto(line.FileName, MAX_PATH);
+				capture->fil = CharString_createConstRefAuto(line.FileName, MAX_PATH);
 
 			//Copy strings to heap, since they'll go out of scope
 
 			Error err;
 
-			if(String_length(capture->mod)) {
-				String tmp = String_createNull();
-				_gotoIfError(cleanup, String_createCopyx(capture->mod, &tmp));
+			if(CharString_length(capture->mod)) {
+				CharString tmp = CharString_createNull();
+				_gotoIfError(cleanup, CharString_createCopyx(capture->mod, &tmp));
 				capture->mod = tmp;
 			}
 
-			if(String_length(capture->sym)) {
-				String tmp = String_createNull();
-				_gotoIfError(cleanup, String_createCopyx(capture->sym, &tmp));
+			if(CharString_length(capture->sym)) {
+				CharString tmp = CharString_createNull();
+				_gotoIfError(cleanup, CharString_createCopyx(capture->sym, &tmp));
 				capture->sym = tmp;
 			}
 
-			if(String_length(capture->fil)) {
-				String tmp = String_createNull();
-				_gotoIfError(cleanup, String_createCopyx(capture->fil, &tmp));
+			if(CharString_length(capture->fil)) {
+				CharString tmp = CharString_createNull();
+				_gotoIfError(cleanup, CharString_createCopyx(capture->fil, &tmp));
 				capture->fil = tmp;
 			}
 
@@ -172,9 +172,9 @@ void Log_printCapturedStackTraceCustom(const void **stackTrace, U64 stackSize, E
 		cleanup:
 			
 			for (U64 j = 0; j < i; ++j) {
-				String_freex(&captured[j].fil);
-				String_freex(&captured[j].sym);
-				String_freex(&captured[j].mod);
+				CharString_freex(&captured[j].fil);
+				CharString_freex(&captured[j].sym);
+				CharString_freex(&captured[j].mod);
 			}
 
 			Error_printx(err, lvl, opt);
@@ -190,37 +190,37 @@ void Log_printCapturedStackTraceCustom(const void **stackTrace, U64 stackSize, E
 
 		CapturedStackTrace capture = captured[i];
 
-		if(!String_length(capture.sym))
+		if(!CharString_length(capture.sym))
 			printf("%p\n", stackTrace[i]);
 
 		else if(capture.lin)
 			printf(
 				"%p: %.*s!%.*s (%.*s, Line %u)\n", 
 				stackTrace[i], 
-				(int) String_length(capture.mod), capture.mod.ptr, 
-				(int) String_length(capture.sym), capture.sym.ptr,
-				(int) String_length(capture.fil), capture.fil.ptr, 
+				(int) CharString_length(capture.mod), capture.mod.ptr, 
+				(int) CharString_length(capture.sym), capture.sym.ptr,
+				(int) CharString_length(capture.fil), capture.fil.ptr, 
 				capture.lin
 			);
 
 		else printf(
 			"%p: %.*s!%.*s\n", 
 			stackTrace[i], 
-			(int) String_length(capture.mod), capture.mod.ptr, 
-			(int) String_length(capture.sym), capture.sym.ptr
+			(int) CharString_length(capture.mod), capture.mod.ptr, 
+			(int) CharString_length(capture.sym), capture.sym.ptr
 		);
 
 		//We now don't need the strings anymore
 
-		String_freex(&capture.fil);
-		String_freex(&capture.sym);
-		String_freex(&capture.mod);
+		CharString_freex(&capture.fil);
+		CharString_freex(&capture.sym);
+		CharString_freex(&capture.mod);
 	}
 
 	SymCleanup(process);
 }
 
-void Log_log(ELogLevel lvl, ELogOptions options, String arg) {
+void Log_log(ELogLevel lvl, ELogOptions options, CharString arg) {
 
 	Ns t = Time_now();
 
@@ -264,7 +264,7 @@ void Log_log(ELogLevel lvl, ELogOptions options, String arg) {
 
 	printf(
 		"%.*s%s", 
-		(int)String_length(arg), arg.ptr,
+		(int)CharString_length(arg), arg.ptr,
 		newLine
 	);
 
@@ -273,12 +273,12 @@ void Log_log(ELogLevel lvl, ELogOptions options, String arg) {
 	if (!IsDebuggerPresent())
 		return;
 
-	String copy = String_createNull();
+	CharString copy = CharString_createNull();
 	Bool panic = false;
 
 	if (
-		String_createCopyx(arg, &copy).genericError ||
-		(hasNewLine && String_appendx(&copy, '\n').genericError)
+		CharString_createCopyx(arg, &copy).genericError ||
+		(hasNewLine && CharString_appendx(&copy, '\n').genericError)
 	) {
 
 		OutputDebugStringA(
@@ -293,7 +293,7 @@ void Log_log(ELogLevel lvl, ELogOptions options, String arg) {
 	if(!panic)
 		OutputDebugStringA(copy.ptr);
 
-	String_freex(&copy);
+	CharString_freex(&copy);
 
 	if (lvl >= ELogLevel_Error)
 		DebugBreak();

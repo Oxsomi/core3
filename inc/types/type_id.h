@@ -105,7 +105,7 @@ typedef enum ETypeId {
 	ETypeId_LongString			= _makeTypeId(_LIBRARYID_DEFAULT, 0, 28, 64, 1, EDataType_Char),
 
 	ETypeId_String				= _makeTypeId(_LIBRARYID_DEFAULT, 0, 29, 1, _TYPESIZE_UNDEF, EDataType_String),
-	ETypeId_StringList			= _makeTypeId(_LIBRARYID_DEFAULT, 0, 30, 1, _TYPESIZE_UNDEF, EDataType_Custom),
+	ETypeId_CharStringList		= _makeTypeId(_LIBRARYID_DEFAULT, 0, 30, 1, _TYPESIZE_UNDEF, EDataType_Custom),
 
 	ETypeId_Quat				= _makeTypeId(_LIBRARYID_DEFAULT, 0, 31, 4, 4, EDataType_Float),
 	ETypeId_Quat16				= _makeTypeId(_LIBRARYID_DEFAULT, 0, 32, 4, 2, EDataType_UInt),

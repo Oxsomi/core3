@@ -73,7 +73,7 @@ Bool DLFile_free(DLFile *dlFile, Allocator alloc) {
 		DLEntry entry = ((DLEntry*)dlFile->entries.ptr)[i];
 
 		if(dlFile->settings.dataType == EDLDataType_Ascii)
-			String_free(&entry.entryString, alloc);
+			CharString_free(&entry.entryString, alloc);
 
 		else Buffer_free(&entry.entryBuffer, alloc);
 	}
@@ -102,7 +102,7 @@ Error DLFile_addEntry(DLFile *dlFile, Buffer entryBuf, Allocator alloc) {
 	);
 }
 
-Error DLFile_addEntryAscii(DLFile *dlFile, String entryStr, Allocator alloc) {
+Error DLFile_addEntryAscii(DLFile *dlFile, CharString entryStr, Allocator alloc) {
 
 	if(!dlFile || !dlFile->entries.ptr)
 		return Error_nullPointer(0);
@@ -110,7 +110,7 @@ Error DLFile_addEntryAscii(DLFile *dlFile, String entryStr, Allocator alloc) {
 	if(dlFile->settings.dataType != EDLDataType_Ascii)
 		return Error_invalidOperation(0);
 
-	if(!String_isValidAscii(entryStr))
+	if(!CharString_isValidAscii(entryStr))
 		return Error_invalidParameter(1, 0);
 
 	DLEntry entry = { .entryString = entryStr };
@@ -173,7 +173,7 @@ Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result) {
 
 		U64 len = 
 			dlFile.settings.dataType != EDLDataType_Ascii ? Buffer_length(entry.entryBuffer) : 
-			String_length(entry.entryString);
+			CharString_length(entry.entryString);
 
 		if(outputSize + len < outputSize)
 			return Error_overflow(0, outputSize + len, outputSize);
@@ -220,7 +220,7 @@ Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result) {
 	for (U64 i = 0; i < dlFile.entries.length; ++i) {
 
 		DLEntry entry = ((DLEntry*)dlFile.entries.ptr)[i];
-		Buffer buf = dlFile.settings.dataType != EDLDataType_Ascii ? entry.entryBuffer : String_bufferConst(entry.entryString);
+		Buffer buf = dlFile.settings.dataType != EDLDataType_Ascii ? entry.entryBuffer : CharString_bufferConst(entry.entryString);
 		U64 len = Buffer_length(buf);
 
 		volatile U64 t = Buffer_forceWriteSizeType(sizes + dataSizeTypeSize * i, dataSizeType, len);
@@ -605,7 +605,7 @@ Error DLFile_read(
 			case EDLDataType_UTF8:	err = DLFile_addEntryUTF8(dlFile, buf, alloc);	break;
 
 			case EDLDataType_Ascii:	
-				err = DLFile_addEntryAscii(dlFile, String_createConstRefSized((const C8*)ptr, entryLen, false), alloc);
+				err = DLFile_addEntryAscii(dlFile, CharString_createConstRefSized((const C8*)ptr, entryLen, false), alloc);
 				break;
 		}
 

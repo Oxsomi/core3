@@ -38,7 +38,7 @@ typedef enum EPlatform {
 
 typedef struct VirtualSection {
 
-	String path;
+	CharString path;
 	void *dataExt;			//Information about how to load the virtual file
 	Archive loadedData;		//If the data is in memory, this will be used
 	Bool loaded;
@@ -49,8 +49,8 @@ typedef struct Platform {
 
 	EPlatform platformType;
 
-	StringList args;
-	String workingDirectory;		//Contains a trailing slash to make file stuff easier
+	CharStringList args;
+	CharString workingDirectory;		//Contains a trailing slash to make file stuff easier
 
 	Allocator alloc;
 	WindowManager windowManager;
@@ -74,7 +74,7 @@ Error Platform_create(
 );
 
 impl void Platform_cleanupExt(Platform *platform);
-impl Error Platform_initExt(Platform *platform, String currentAppDir);
+impl Error Platform_initExt(Platform *platform, CharString currentAppDir);
 
 void Platform_cleanup();
 

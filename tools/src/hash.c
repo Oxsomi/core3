@@ -29,10 +29,10 @@
 
 Bool CLI_hash(ParsedArgs args, Bool isFile) {
 
-	String str = String_createNull();
+	CharString str = CharString_createNull();
 	Buffer buf = Buffer_createNull();
-	String tmp = String_createNull();
-	String tmpi = String_createNull();
+	CharString tmp = CharString_createNull();
+	CharString tmpi = CharString_createNull();
 	Bool success = false;
 
 	Error err = ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &str);
@@ -41,7 +41,7 @@ Bool CLI_hash(ParsedArgs args, Bool isFile) {
 		goto clean;
 
 	if(!isFile)
-		buf = String_bufferConst(str);
+		buf = CharString_bufferConst(str);
 
 	else _gotoIfError(clean, File_read(str, 1 * SECOND, &buf));
 
@@ -55,10 +55,10 @@ Bool CLI_hash(ParsedArgs args, Bool isFile) {
 			//Stringify
 
 			for (U8 i = 0; i < 8; ++i) {
-				_gotoIfError(clean, String_createHexx(output[i], 8, &tmpi));
-				_gotoIfError(clean, String_popFrontCount(&tmpi, 2));
-				_gotoIfError(clean, String_appendStringx(&tmp, tmpi));
-				String_freex(&tmpi);
+				_gotoIfError(clean, CharString_createHexx(output[i], 8, &tmpi));
+				_gotoIfError(clean, CharString_popFrontCount(&tmpi, 2));
+				_gotoIfError(clean, CharString_appendStringx(&tmp, tmpi));
+				CharString_freex(&tmpi);
 			}
 
 			break;
@@ -66,8 +66,8 @@ Bool CLI_hash(ParsedArgs args, Bool isFile) {
 
 		case EFormat_CRC32C: {
 			U32 output = Buffer_crc32c(buf);
-			_gotoIfError(clean, String_createHexx(output, 8, &tmp));
-			_gotoIfError(clean, String_popFrontCount(&tmp, 2));
+			_gotoIfError(clean, CharString_createHexx(output, 8, &tmp));
+			_gotoIfError(clean, CharString_popFrontCount(&tmp, 2));
 			break;
 		}
 
@@ -76,7 +76,7 @@ Bool CLI_hash(ParsedArgs args, Bool isFile) {
 			goto clean;
 	}
 
-	Log_debugLn("Hash: 0x%.*s", String_length(tmp), tmp.ptr);
+	Log_debugLn("Hash: 0x%.*s", CharString_length(tmp), tmp.ptr);
 	success = true;
 
 clean:
@@ -87,8 +87,8 @@ clean:
 	}
 
 	Buffer_freex(&buf);
-	String_freex(&tmp);
-	String_freex(&tmpi);
+	CharString_freex(&tmp);
+	CharString_freex(&tmpi);
 	return success;
 }
 

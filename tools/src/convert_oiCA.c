@@ -31,14 +31,14 @@
 
 typedef struct CAFileRecursion {
 	Archive *archive;
-	String root;
+	CharString root;
 } CAFileRecursion;
 
 Error addFileToCAFile(FileInfo file, CAFileRecursion *caFile) {
 
-	String subPath = String_createNull();
+	CharString subPath = CharString_createNull();
 	
-	if(!String_cut(file.path, String_length(caFile->root), 0, &subPath))
+	if(!CharString_cut(file.path, CharString_length(caFile->root), 0, &subPath))
 		return Error_invalidState(0);
 
 	ArchiveEntry entry = (ArchiveEntry) {
@@ -48,12 +48,12 @@ Error addFileToCAFile(FileInfo file, CAFileRecursion *caFile) {
 	};
 
 	Error err = Error_none();
-	String copy = String_createNull();
+	CharString copy = CharString_createNull();
 
 	if (entry.type == EFileType_File)
 		_gotoIfError(clean, File_read(file.path, 1 * SECOND, &entry.data));
 
-	_gotoIfError(clean, String_createCopyx(entry.path, &copy));
+	_gotoIfError(clean, CharString_createCopyx(entry.path, &copy));
 
 	if (file.type == EFileType_File)
 		_gotoIfError(clean, Archive_addFilex(caFile->archive, copy, entry.data, entry.timestamp))
@@ -64,11 +64,11 @@ Error addFileToCAFile(FileInfo file, CAFileRecursion *caFile) {
 
 clean:
 	Buffer_freex(&entry.data);
-	String_freex(&copy);
+	CharString_freex(&copy);
 	return err;
 }
 
-Error _CLI_convertToCA(ParsedArgs args, String input, FileInfo inputInfo, String output, U32 encryptionKey[8]) {
+Error _CLI_convertToCA(ParsedArgs args, CharString input, FileInfo inputInfo, CharString output, U32 encryptionKey[8]) {
 
 	inputInfo;
 
@@ -124,8 +124,8 @@ Error _CLI_convertToCA(ParsedArgs args, String input, FileInfo inputInfo, String
 	//Archive
 
 	Archive archive = (Archive) { 0 };
-	String resolved = String_createNull();
-	String tmp = String_createNull();
+	CharString resolved = CharString_createNull();
+	CharString tmp = CharString_createNull();
 	Buffer res = Buffer_createNull();
 	Bool isVirtual = false;
 
@@ -145,25 +145,25 @@ Error _CLI_convertToCA(ParsedArgs args, String input, FileInfo inputInfo, String
 
 	if(File_hasFile(resolved)) {
 
-		String subPath = String_createNull();
+		CharString subPath = CharString_createNull();
 
-		if(!String_cutBeforeLast(resolved, '/', EStringCase_Sensitive, &subPath))
+		if(!CharString_cutBeforeLast(resolved, '/', EStringCase_Sensitive, &subPath))
 			_gotoIfError(clean, Error_invalidState(0));
 
 		_gotoIfError(clean, File_getInfo(resolved, &fileInfo));
 		_gotoIfError(clean, File_read(resolved, 1 * SECOND, &fileData));
-		_gotoIfError(clean, String_createCopyx(subPath, &tmp));
+		_gotoIfError(clean, CharString_createCopyx(subPath, &tmp));
 		_gotoIfError(clean, Archive_addFilex(&archive, tmp, fileData, fileInfo.timestamp));
 
 		//Belongs to archive now
 
 		fileData = Buffer_createNull();
-		tmp = String_createNull();
+		tmp = CharString_createNull();
 	}
 
 	else {
 
-		_gotoIfError(clean, String_appendx(&resolved, '/'));
+		_gotoIfError(clean, CharString_appendx(&resolved, '/'));
 		caFileRecursion.root = resolved;
 
 		_gotoIfError(clean, File_foreach(
@@ -187,14 +187,14 @@ clean:
 	FileInfo_freex(&fileInfo);
 	CAFile_freex(&file);
 	Archive_freex(&archive);
-	String_freex(&resolved);
-	String_freex(&tmp);
+	CharString_freex(&resolved);
+	CharString_freex(&tmp);
 	Buffer_freex(&res);
 	Buffer_freex(&fileData);
 	return err;
 }
 
-Error _CLI_convertFromCA(ParsedArgs args, String input, FileInfo inputInfo, String output, U32 encryptionKey[8]) {
+Error _CLI_convertFromCA(ParsedArgs args, CharString input, FileInfo inputInfo, CharString output, U32 encryptionKey[8]) {
 
 	args;
 
@@ -208,8 +208,8 @@ Error _CLI_convertFromCA(ParsedArgs args, String input, FileInfo inputInfo, Stri
 	//Read file
 
 	Buffer buf = Buffer_createNull();
-	String outputPath = String_createNull();
-	String loc = String_createNull();
+	CharString outputPath = CharString_createNull();
+	CharString loc = CharString_createNull();
 
 	Error err = Error_none();
 	CAFile file = (CAFile) { 0 };
@@ -234,10 +234,10 @@ Error _CLI_convertFromCA(ParsedArgs args, String input, FileInfo inputInfo, Stri
 
 		//Grab destination dest
 
-		_gotoIfError(clean, String_createCopyx(output, &outputPath));
+		_gotoIfError(clean, CharString_createCopyx(output, &outputPath));
 
-		if(!String_endsWith(outputPath, '/', EStringCase_Sensitive))
-			_gotoIfError(clean, String_appendx(&outputPath, '/'));
+		if(!CharString_endsWith(outputPath, '/', EStringCase_Sensitive))
+			_gotoIfError(clean, CharString_appendx(&outputPath, '/'));
 
 		//Write archive to disk
 
@@ -245,17 +245,17 @@ Error _CLI_convertFromCA(ParsedArgs args, String input, FileInfo inputInfo, Stri
 
 			ArchiveEntry ei = ((const ArchiveEntry*)file.archive.entries.ptr)[i];
 
-			_gotoIfError(clean, String_createCopyx(outputPath, &loc));
-			_gotoIfError(clean, String_appendStringx(&loc, ei.path));
+			_gotoIfError(clean, CharString_createCopyx(outputPath, &loc));
+			_gotoIfError(clean, CharString_appendStringx(&loc, ei.path));
 
 			if (ei.type == EFileType_Folder) {
 				_gotoIfError(clean, File_add(loc, EFileType_Folder, 1 * SECOND));
-				String_freex(&loc);
+				CharString_freex(&loc);
 				continue;
 			}
 
 			_gotoIfError(clean, File_write(ei.data, loc, 1 * SECOND));
-			String_freex(&loc);
+			CharString_freex(&loc);
 		}
 	}
 
@@ -266,7 +266,7 @@ clean:
 
 	CAFile_freex(&file);
 	Buffer_freex(&buf);
-	String_freex(&outputPath);
-	String_freex(&loc);
+	CharString_freex(&outputPath);
+	CharString_freex(&loc);
 	return err;
 }

@@ -369,7 +369,7 @@ Error WindowManager_createWindow(
 	I32x2 size,
 	I32x2 minSize, I32x2 maxSize,
 	EWindowHint hint,
-	String title, 
+	CharString title, 
 	WindowCallbacks callbacks,
 	EWindowFormat format,
 	Window **w

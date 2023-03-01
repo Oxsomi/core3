@@ -94,10 +94,10 @@ Bool CAFile_free(CAFile *caFile, Allocator alloc) {
 	return b;
 }
 
-ECompareResult sortParentCountAndFileNames(String *a, String *b) {
+ECompareResult sortParentCountAndFileNames(CharString *a, CharString *b) {
 
-	U64 foldersA = String_countAll(*a, '/', EStringCase_Sensitive);
-	U64 foldersB = String_countAll(*b, '/', EStringCase_Sensitive);
+	U64 foldersA = CharString_countAll(*a, '/', EStringCase_Sensitive);
+	U64 foldersB = CharString_countAll(*b, '/', EStringCase_Sensitive);
 
 	//We wanna sort on folder count first
 	//This ensures the root dirs are always at [0,N] and their children at [N, N+M], etc.
@@ -108,7 +108,7 @@ ECompareResult sortParentCountAndFileNames(String *a, String *b) {
 	if (foldersA > foldersB)
 		return ECompareResult_Gt;
 
-	return String_compare(*a, *b, EStringCase_Insensitive);
+	return CharString_compare(*a, *b, EStringCase_Insensitive);
 }
 
 //We don't support any compression yet, but should be trivial to add once Buffer_compress/Buffer_decompress is supported.
@@ -116,8 +116,8 @@ ECompareResult sortParentCountAndFileNames(String *a, String *b) {
 Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 
 	Error err = Error_none();
-	List directories = List_createEmpty(sizeof(String));
-	List files = List_createEmpty(sizeof(String));
+	List directories = List_createEmpty(sizeof(CharString));
+	List files = List_createEmpty(sizeof(CharString));
 	DLFile dlFile = (DLFile) { 0 };
 	Buffer dlFileBuffer = Buffer_createNull();
 	Buffer outputBuffer = Buffer_createNull();
@@ -165,7 +165,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 		if (entry.type == EFileType_Folder) {
 
 			_gotoIfError(clean, List_pushBack(
-				&directories, Buffer_createConstRef(&entry.path, sizeof(String)), alloc
+				&directories, Buffer_createConstRef(&entry.path, sizeof(CharString)), alloc
 			));
 
 			if(directories.length >= U16_MAX)
@@ -178,7 +178,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 
 		_gotoIfError(
 			clean, 
-			List_pushBack(&files, Buffer_createConstRef(&entry.path, sizeof(String)), alloc)
+			List_pushBack(&files, Buffer_createConstRef(&entry.path, sizeof(CharString)), alloc)
 		);
 
 		if(files.length >= U32_MAX)
@@ -236,22 +236,22 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 
 	for(U64 i = 0; i < directories.length; ++i) {
 
-		String dir = ((String*)directories.ptr)[i];
-		String dirName = String_createNull();
+		CharString dir = ((CharString*)directories.ptr)[i];
+		CharString dirName = CharString_createNull();
 
-		if(!String_cutBeforeLast(dir, '/', EStringCase_Sensitive, &dirName))
-			dirName = String_createConstRefSized(dir.ptr, String_length(dir), String_isNullTerminated(dir));
+		if(!CharString_cutBeforeLast(dir, '/', EStringCase_Sensitive, &dirName))
+			dirName = CharString_createConstRefSized(dir.ptr, CharString_length(dir), CharString_isNullTerminated(dir));
 
 		_gotoIfError(clean, DLFile_addEntryAscii(&dlFile, dirName, alloc));
 	}
 
 	for(U64 i = 0; i < files.length; ++i) {
 
-		String file = ((String*)files.ptr)[i];
-		String fileName = String_createNull();
+		CharString file = ((CharString*)files.ptr)[i];
+		CharString fileName = CharString_createNull();
 
-		if(!String_cutBeforeLast(file, '/', EStringCase_Sensitive, &fileName))
-			fileName = String_createConstRefSized(file.ptr, String_length(file), String_isNullTerminated(file));
+		if(!CharString_cutBeforeLast(file, '/', EStringCase_Sensitive, &fileName))
+			fileName = CharString_createConstRefSized(file.ptr, CharString_length(file), CharString_isNullTerminated(file));
 
 		_gotoIfError(clean, DLFile_addEntryAscii(&dlFile, fileName, alloc));
 	}
@@ -296,8 +296,8 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 
 	for (U16 i = 0; i < (U16) directories.length; ++i) {
 
-		String dir = ((String*)directories.ptr)[i];
-		U64 it = String_findLast(dir, '/', EStringCase_Sensitive);
+		CharString dir = ((CharString*)directories.ptr)[i];
+		U64 it = CharString_findLast(dir, '/', EStringCase_Sensitive);
 
 		U16 parent = U16_MAX;
 
@@ -310,18 +310,18 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 			//If we encounter something that doesn't start with our basepath/ then we know we are missing this dir
 			//And this means we somehow messed with the input data
 
-			String baseDir = String_createNull(), realParentDir = String_createNull();
+			CharString baseDir = CharString_createNull(), realParentDir = CharString_createNull();
 
 			if (
-				!String_cut(dir, 0, it, &realParentDir) || 
-				!String_cut(dir, 0, it + 1, &baseDir)
+				!CharString_cut(dir, 0, it, &realParentDir) || 
+				!CharString_cut(dir, 0, it + 1, &baseDir)
 			) 
 				_gotoIfError(clean, Error_invalidOperation(0));
 
 			for(U64 j = i - 1; j != U64_MAX; --j)
 
-				if (String_equalsString(
-					((String*)directories.ptr)[j], realParentDir, 
+				if (CharString_equalsString(
+					((CharString*)directories.ptr)[j], realParentDir, 
 					EStringCase_Insensitive
 				)) {
 					parent = (U16) j;
@@ -347,8 +347,8 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 
 	for (U32 i = 0; i < (U32) files.length; ++i) {
 
-		String file = ((String*)files.ptr)[i];
-		U64 it = String_findLast(file, '/', EStringCase_Sensitive);
+		CharString file = ((CharString*)files.ptr)[i];
+		U64 it = CharString_findLast(file, '/', EStringCase_Sensitive);
 
 		U16 parent = U16_MAX;
 
@@ -361,18 +361,18 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 			//If we encounter something that doesn't start with our basepath then we know we are missing this dir
 			//And this means we somehow messed with the input data
 
-			String baseDir = String_createNull(), realParentDir = String_createNull();
+			CharString baseDir = CharString_createNull(), realParentDir = CharString_createNull();
 
 			if (
-				!String_cut(file, 0, it, &realParentDir) || 
-				!String_cut(file, 0, it + 1, &baseDir)
+				!CharString_cut(file, 0, it, &realParentDir) || 
+				!CharString_cut(file, 0, it + 1, &baseDir)
 			)
 				_gotoIfError(clean, Error_invalidOperation(0));
 			
 			for(U64 j = directories.length - 1; j != U64_MAX; --j)
 
-				if (String_equalsString(
-					((String*)directories.ptr)[j], realParentDir, 
+				if (CharString_equalsString(
+					((CharString*)directories.ptr)[j], realParentDir, 
 					EStringCase_Sensitive
 				)) {
 					parent = (U16) j;
@@ -388,7 +388,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 		ArchiveEntry *entry = NULL;
 
 		for(U64 j = 0; j < caFile.archive.entries.length; ++j)
-			if (String_equalsString(
+			if (CharString_equalsString(
 				((ArchiveEntry*)caFile.archive.entries.ptr + j)->path, file, 
 				EStringCase_Sensitive
 			)) {
@@ -600,7 +600,7 @@ Error CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFi
 	Error err = Error_none();
 	DLFile fileNames = (DLFile) { 0 };
 	Archive archive = (Archive) { 0 };
-	String tmpPath = String_createNull();
+	CharString tmpPath = CharString_createNull();
 
 	_gotoIfError(clean, Archive_create(alloc, &archive));
 
@@ -722,12 +722,12 @@ Error CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFi
 
 		const U8 *diri = filePtr.ptr + folderStride * i;
 
-		String name = ((DLEntry*)fileNames.entries.ptr)[i].entryString;
+		CharString name = ((DLEntry*)fileNames.entries.ptr)[i].entryString;
 
-		if(!String_isValidFileName(name))
+		if(!CharString_isValidFileName(name))
 			_gotoIfError(clean, Error_invalidParameter(0, 0));
 		
-		_gotoIfError(clean, String_createCopy(name, alloc, &tmpPath));
+		_gotoIfError(clean, CharString_createCopy(name, alloc, &tmpPath));
 
 		U16 parent = dirStride == 2 ? *(const U16*)diri : *diri;
 
@@ -736,15 +736,15 @@ Error CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFi
 			if (parent >= i)
 				_gotoIfError(clean, Error_invalidOperation(1));
 
-			String parentName = ((ArchiveEntry*)archive.entries.ptr + parent)->path;
+			CharString parentName = ((ArchiveEntry*)archive.entries.ptr + parent)->path;
 
-			_gotoIfError(clean, String_insert(&tmpPath, '/', 0, alloc));
-			_gotoIfError(clean, String_insertString(&tmpPath, parentName, 0, alloc));
+			_gotoIfError(clean, CharString_insert(&tmpPath, '/', 0, alloc));
+			_gotoIfError(clean, CharString_insertString(&tmpPath, parentName, 0, alloc));
 		}
 
 		_gotoIfError(clean, Archive_addDirectory(&archive, tmpPath, alloc));
 
-		tmpPath = String_createNull();
+		tmpPath = CharString_createNull();
 	}
 
 	//Add file
@@ -756,12 +756,12 @@ Error CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFi
 
 		const U8 *filei = fileIt + fileStride * i;
 
-		String name = ((DLEntry*)fileNames.entries.ptr)[(U64)i + dirCount].entryString;
+		CharString name = ((DLEntry*)fileNames.entries.ptr)[(U64)i + dirCount].entryString;
 
-		if(!String_isValidFileName(name))
+		if(!CharString_isValidFileName(name))
 			_gotoIfError(clean, Error_invalidParameter(0, 1));
 
-		_gotoIfError(clean, String_createCopy(name, alloc, &tmpPath));
+		_gotoIfError(clean, CharString_createCopy(name, alloc, &tmpPath));
 
 		//Load parent
 
@@ -773,10 +773,10 @@ Error CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFi
 			if (parent >= dirCount)
 				_gotoIfError(clean, Error_invalidOperation(2));
 
-			String parentName = ((ArchiveEntry*)archive.entries.ptr + parent)->path;
+			CharString parentName = ((ArchiveEntry*)archive.entries.ptr + parent)->path;
 
-			_gotoIfError(clean, String_insert(&tmpPath, '/', 0, alloc));
-			_gotoIfError(clean, String_insertString(&tmpPath, parentName, 0, alloc));
+			_gotoIfError(clean, CharString_insert(&tmpPath, '/', 0, alloc));
+			_gotoIfError(clean, CharString_insertString(&tmpPath, parentName, 0, alloc));
 		}
 
 		//Load timestamp
@@ -816,7 +816,7 @@ Error CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFi
 
 		_gotoIfError(clean, Archive_addFile(&archive, tmpPath, tmpData, timestamp, alloc));
 
-		tmpPath = String_createNull();
+		tmpPath = CharString_createNull();
 		tmpData = Buffer_createNull();
 	}
 
@@ -852,7 +852,7 @@ clean:
 		CAFile_free(caFile, alloc);
 
 	Buffer_free(&tmpData, alloc);
-	String_free(&tmpPath, alloc);
+	CharString_free(&tmpPath, alloc);
 	Archive_free(&archive, alloc);
 	DLFile_free(&fileNames, alloc);
 	return err;

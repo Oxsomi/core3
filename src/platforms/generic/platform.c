@@ -65,11 +65,11 @@ Error Platform_create(
 		return err;
 	}
 
-	StringList sl = (StringList){ 0 };
+	CharStringList sl = (CharStringList){ 0 };
 
 	if(cmdArgc > 1) {
 
-		err = StringList_createx(cmdArgc - 1, &sl);
+		err = CharStringList_createx(cmdArgc - 1, &sl);
 
 		if (err.genericError) {
 			WindowManager_free(&Platform_instance.windowManager);
@@ -81,13 +81,13 @@ Error Platform_create(
 		//But that'd happen anyways
 
 		for(int i = 1; i < cmdArgc; ++i)
-			sl.ptr[i - 1] = String_createConstRefUnsafe(cmdArgs[i]);
+			sl.ptr[i - 1] = CharString_createConstRefUnsafe(cmdArgs[i]);
 	}
 
 	Platform_instance.args = sl;
 
-	if ((err = Platform_initExt(&Platform_instance, String_createConstRefUnsafe(cmdArgs[0]))).genericError) {
-		StringList_freex(&sl);
+	if ((err = Platform_initExt(&Platform_instance, CharString_createConstRefUnsafe(cmdArgs[0]))).genericError) {
+		CharStringList_freex(&sl);
 		WindowManager_free(&Platform_instance.windowManager);
 		Platform_instance =	(Platform) { 0 };
 		return err;
@@ -103,9 +103,9 @@ void Platform_cleanup() {
 
 	Platform_cleanupExt(&Platform_instance);
 
-	String_freex(&Platform_instance.workingDirectory);
+	CharString_freex(&Platform_instance.workingDirectory);
 	WindowManager_free(&Platform_instance.windowManager);
-	StringList_freex(&Platform_instance.args);
+	CharStringList_freex(&Platform_instance.args);
 
 	Platform_instance =	(Platform) { 0 };
 }

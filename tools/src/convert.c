@@ -43,7 +43,7 @@ Bool _CLI_convert(ParsedArgs args, Bool isTo) {
 		return false;
 	}
 
-	String inputArg = *(const String*)inputArgBuf.ptr;
+	CharString inputArg = *(const CharString*)inputArgBuf.ptr;
 
 	//Check if output is valid
 
@@ -54,7 +54,7 @@ Bool _CLI_convert(ParsedArgs args, Bool isTo) {
 		return false;
 	}
 
-	String outputArg = *(const String*)outputArgBuf.ptr;
+	CharString outputArg = *(const CharString*)outputArgBuf.ptr;
 
 	//TODO: Support multiple files
 
@@ -86,24 +86,24 @@ Bool _CLI_convert(ParsedArgs args, Bool isTo) {
 
 	if (args.parameters & EOperationHasParameter_AES) {
 
-		String key = String_createNull();
+		CharString key = CharString_createNull();
 
 		if (
 			(ParsedArgs_getArg(args, EOperationHasParameter_AESShift, &key)).genericError || 
-			!String_isHex(key)
+			!CharString_isHex(key)
 		) {
 			Log_errorLn("Invalid parameter sent to -aes. Expecting key in hex (32 bytes)");
 			return false;
 		}
 
-		U64 off = String_startsWithString(key, String_createConstRefUnsafe("0x"), EStringCase_Insensitive) ? 2 : 0;
+		U64 off = CharString_startsWithString(key, CharString_createConstRefUnsafe("0x"), EStringCase_Insensitive) ? 2 : 0;
 
-		if (String_length(key) - off != 64) {
+		if (CharString_length(key) - off != 64) {
 			Log_errorLn("Invalid parameter sent to -aes. Expecting key in hex (32 bytes)");
 			return false;
 		}
 
-		for (U64 i = off; i + 1 < String_length(key); ++i) {
+		for (U64 i = off; i + 1 < CharString_length(key); ++i) {
 
 			U8 v0 = C8_hex(key.ptr[i]);
 			U8 v1 = C8_hex(key.ptr[++i]);

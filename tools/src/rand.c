@@ -37,11 +37,11 @@ Bool CLI_rand(ParsedArgs args) {
 
 	if (args.parameters & EOperationHasParameter_Number) {
 
-		String str = String_createNull();
+		CharString str = CharString_createNull();
 
 		if (
 			ParsedArgs_getArg(args, EOperationHasParameter_NumberShift, &str).genericError ||
-			!String_parseDec(str, &n) ||
+			!CharString_parseDec(str, &n) ||
 			(n >> 32)
 		) {
 			Log_errorLn("Invalid argument -n <string>, uint expected.");
@@ -53,11 +53,11 @@ Bool CLI_rand(ParsedArgs args) {
 
 	if (args.parameters & EOperationHasParameter_Length) {
 
-		String str = String_createNull();
+		CharString str = CharString_createNull();
 
 		if (
 			ParsedArgs_getArg(args, EOperationHasParameter_LengthShift, &str).genericError ||
-			!String_parseDec(str, &l) ||
+			!CharString_parseDec(str, &l) ||
 			(l >> 32)
 		) {
 			Log_errorLn("Invalid argument -l <string>, uint expected.");
@@ -69,11 +69,11 @@ Bool CLI_rand(ParsedArgs args) {
 
 	if (args.parameters & EOperationHasParameter_Bit) {
 
-		String str = String_createNull();
+		CharString str = CharString_createNull();
 
 		if (
 			ParsedArgs_getArg(args, EOperationHasParameter_BitShift, &str).genericError ||
-			!String_parseDec(str, &b) ||
+			!CharString_parseDec(str, &b) ||
 			(b >> 16)
 		) {
 			Log_errorLn("Invalid argument -b <string>, ushort expected.");
@@ -85,9 +85,9 @@ Bool CLI_rand(ParsedArgs args) {
 
 	Buffer outputFile = Buffer_createNull();
 	Buffer tmp = Buffer_createNull();
-	String outputString = String_createNull();
+	CharString outputString = CharString_createNull();
 	const C8 *errorString = NULL;
-	String tmpString = String_createNull();
+	CharString tmpString = CharString_createNull();
 	Error err = Error_none();
 
 	//Generate data
@@ -218,21 +218,21 @@ Bool CLI_rand(ParsedArgs args) {
 						switch (outputAsBase) {
 
 							case 16:
-								_gotoIfError(clean, String_createHexx(v, 2, &tmpString));
+								_gotoIfError(clean, CharString_createHexx(v, 2, &tmpString));
 								break;
 						}
 
-						_gotoIfError(clean, String_popFrontCount(&tmpString, prefix));
-						_gotoIfError(clean, String_appendStringx(&outputString, tmpString));
+						_gotoIfError(clean, CharString_popFrontCount(&tmpString, prefix));
+						_gotoIfError(clean, CharString_appendStringx(&outputString, tmpString));
 
 						if(args.operation != EOperation_RandKey || bytesToGenerate != 32)
 							if(j != (k - 1) && !((j + 1) & 15))
-								_gotoIfError(clean, String_appendx(&outputString, ' '));
+								_gotoIfError(clean, CharString_appendx(&outputString, ' '));
 
 						if(j != (k - 1) && !((j + 1) & 63))
-							_gotoIfError(clean, String_appendStringx(&outputString, String_newLine()));
+							_gotoIfError(clean, CharString_appendStringx(&outputString, CharString_newLine()));
 
-						String_freex(&tmpString);
+						CharString_freex(&tmpString);
 					}
 
 					break;
@@ -242,7 +242,7 @@ Bool CLI_rand(ParsedArgs args) {
 
 					//Build up all options
 
-					String options = String_createNull();
+					CharString options = CharString_createNull();
 
 					//Random char
 
@@ -253,16 +253,16 @@ Bool CLI_rand(ParsedArgs args) {
 
 						if (args.parameters & EOperationHasParameter_Character) {
 					
-							String str = String_createNull();
+							CharString str = CharString_createNull();
 
 							if (ParsedArgs_getArg(args, EOperationHasParameter_CharacterShift, &str).genericError) {
 								Log_errorLn("Invalid argument -c <string>.");
 								return false;
 							}
 
-							_gotoIfError(clean, String_appendStringx(&options, str));
+							_gotoIfError(clean, CharString_appendStringx(&options, str));
 
-							if(String_length(str))
+							if(CharString_length(str))
 								pickAll = false;
 						}
 
@@ -298,14 +298,14 @@ Bool CLI_rand(ParsedArgs args) {
 
 								//Append
 
-								_gotoIfError(clean, String_appendx(&options, c));
+								_gotoIfError(clean, CharString_appendx(&options, c));
 							}
 					}
 
 					//Random number
 
 					else for(U8 j = 0; j < (U8) outputAsBase; ++j)
-						_gotoIfError(clean, String_appendx(&options, C8_createNyto(j)));
+						_gotoIfError(clean, CharString_appendx(&options, C8_createNyto(j)));
 
 					//Base10 is limited to 1 U64.
 					//We can immediately return this (as long as we clamp it)
@@ -317,9 +317,9 @@ Bool CLI_rand(ParsedArgs args) {
 						if(b != 64)
 							v &= ((U64)1 << b) - 1;
 
-						_gotoIfError(clean, String_createDecx(v, false, &tmpString));
-						_gotoIfError(clean, String_appendStringx(&outputString, tmpString));
-						String_freex(&tmpString);
+						_gotoIfError(clean, CharString_createDecx(v, false, &tmpString));
+						_gotoIfError(clean, CharString_appendStringx(&outputString, tmpString));
+						CharString_freex(&tmpString);
 					}
 
 					//We use a U64 per character, because if for example we generate 256 values (1 U8).
@@ -331,7 +331,7 @@ Bool CLI_rand(ParsedArgs args) {
 					else for (U64 k = 0, j = Buffer_length(tmp); k < j; k += 8) {
 
 						U64 v = *(const U64*)(tmp.ptr + k);
-						v %= String_length(options);
+						v %= CharString_length(options);
 
 						//Ensure we stay within our bit limit
 						
@@ -344,7 +344,7 @@ Bool CLI_rand(ParsedArgs args) {
 
 						//
 
-						_gotoIfError(clean, String_appendx(&outputString, options.ptr[v]));
+						_gotoIfError(clean, CharString_appendx(&outputString, options.ptr[v]));
 					}
 
 					break;
@@ -352,7 +352,7 @@ Bool CLI_rand(ParsedArgs args) {
 			}
 
 			if(i != (n - 1) || !(args.parameters & EOperationHasParameter_Output))
-				_gotoIfError(clean, String_appendStringx(&outputString, String_newLine()));
+				_gotoIfError(clean, CharString_appendStringx(&outputString, CharString_newLine()));
 		}
 
 		Buffer_freex(&tmp);
@@ -361,11 +361,11 @@ Bool CLI_rand(ParsedArgs args) {
 	//Write to output
 
 	if(outputString.ptr)
-		outputFile = String_bufferConst(outputString);
+		outputFile = CharString_bufferConst(outputString);
 
 	if (args.parameters & EOperationHasParameter_Output) {
 
-		String outputPath = String_createNull();
+		CharString outputPath = CharString_createNull();
 		
 		if (ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &outputPath).genericError) {
 			Log_errorLn("Invalid argument -o <string>, file path expected.");
@@ -378,7 +378,7 @@ Bool CLI_rand(ParsedArgs args) {
 
 	else {
 		Log_debugLn("Random operation returned:");
-		Log_debug(ELogOptions_None, "%.*s", String_length(outputString), outputString.ptr);
+		Log_debug(ELogOptions_None, "%.*s", CharString_length(outputString), outputString.ptr);
 	}
 
 clean:
@@ -393,8 +393,8 @@ clean:
 
 	Buffer_freex(&tmp);
 	Buffer_freex(&outputFile);
-	String_freex(&outputString);
-	String_freex(&tmpString);
+	CharString_freex(&outputString);
+	CharString_freex(&tmpString);
 	return !err.genericError;
 }
 

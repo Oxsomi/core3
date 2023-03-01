@@ -38,7 +38,7 @@ typedef struct VersionString {
 	C8 v[5];		//XX.Y
 } VersionString;
 
-VersionString VersionString_get(U8 version) {
+VersionString VersionCharString_get(U8 version) {
 
 	VersionString res = (VersionString) { 0 };
 
@@ -76,7 +76,7 @@ void XXFile_printType(U8 type) {
 }
 
 void XXFile_printVersion(U8 v) {
-	VersionString str = VersionString_get(v);
+	VersionString str = VersionCharString_get(v);
 	Log_debugLn("Version: %s", str.v);
 }
 
@@ -90,8 +90,8 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 	Error err = Error_none();
 	Bool success = false;
 
-	String path = String_createNull();
-	String tmp = String_createNull();
+	CharString path = CharString_createNull();
+	CharString tmp = CharString_createNull();
 
 	if ((err = ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &path)).genericError) {
 		Log_errorLn("Invalid argument -i <string>.");
@@ -381,7 +381,7 @@ clean:
 	if(err.genericError)
 		Error_printx(err, ELogLevel_Error, ELogOptions_NewLine);
 
-	String_freex(&tmp);
+	CharString_freex(&tmp);
 	Buffer_freex(&buf);
 	return success;
 }
@@ -390,39 +390,39 @@ clean:
 
 Error collectArchiveEntries(FileInfo info, List *arg) {
 
-	String tmp = String_createNull();
+	CharString tmp = CharString_createNull();
 	Error err = Error_none();
 
-	_gotoIfError(clean, String_createCopyx(info.path, &tmp));
+	_gotoIfError(clean, CharString_createCopyx(info.path, &tmp));
 	_gotoIfError(clean, List_pushBackx(arg, Buffer_createConstRef(&tmp, sizeof(tmp))));
 
-	tmp = String_createNull();		//Belongs to list now
+	tmp = CharString_createNull();		//Belongs to list now
 
 clean:
-	String_freex(&tmp);
+	CharString_freex(&tmp);
 	return err;
 }
 
 //Printing an entry
 
 typedef struct OutputFolderToDisk {
-	String base, output;
+	CharString base, output;
 	Archive sourceArchive;
 } OutputFolderToDisk;
 
 Error writeToDisk(FileInfo info, OutputFolderToDisk *output) {
 
-	String subDir = String_createNull();
+	CharString subDir = CharString_createNull();
 	Error err = Error_none();
-	String tmp = String_createNull();
+	CharString tmp = CharString_createNull();
 
-	U64 start = String_length(output->base) == 1 && output->base.ptr[0] == '.' ? 0 : String_length(output->base);
+	U64 start = CharString_length(output->base) == 1 && output->base.ptr[0] == '.' ? 0 : CharString_length(output->base);
 
-	if(!String_cut(info.path, start, 0, &subDir))
+	if(!CharString_cut(info.path, start, 0, &subDir))
 		_gotoIfError(clean, Error_invalidOperation(0));
 
-	_gotoIfError(clean, String_createCopyx(output->output, &tmp));
-	_gotoIfError(clean, String_appendStringx(&tmp, subDir));
+	_gotoIfError(clean, CharString_createCopyx(output->output, &tmp));
+	_gotoIfError(clean, CharString_appendStringx(&tmp, subDir));
 
 	if (info.type == EFileType_File) {
 		Buffer data = Buffer_createNull();
@@ -433,7 +433,7 @@ Error writeToDisk(FileInfo info, OutputFolderToDisk *output) {
 	else _gotoIfError(clean, File_add(tmp, EFileType_Folder, 1 * SECOND));
 
 clean:
-	String_freex(&tmp);
+	CharString_freex(&tmp);
 	return err;
 }
 
@@ -451,8 +451,8 @@ Bool CLI_showFile(ParsedArgs args, Buffer b, U64 start, U64 length, Bool isAscii
 	//Output it to a folder on disk was requested
 
 	Error err = Error_none();
-	String tmp = String_createNull();
-	String tmp1 = String_createNull();
+	CharString tmp = CharString_createNull();
+	CharString tmp1 = CharString_createNull();
 	Bool success = false;
 
 	if (args.parameters & EOperationHasParameter_Output) {
@@ -465,7 +465,7 @@ Bool CLI_showFile(ParsedArgs args, Buffer b, U64 start, U64 length, Bool isAscii
 			goto clean;
 		}
 
-		String out = String_createNull();
+		CharString out = CharString_createNull();
 
 		if ((err = ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &out)).genericError) {
 			Log_errorLn("Invalid argument -o <string>.");
@@ -509,9 +509,9 @@ Bool CLI_showFile(ParsedArgs args, Buffer b, U64 start, U64 length, Bool isAscii
 		//Ascii can be directly output to log
 
 		if (isAscii) {
-			tmp = String_createConstRefSized((const C8*)b.ptr + start, length, false);
-			Log_debugLn("%.*s", String_length(tmp), tmp.ptr);
-			tmp = String_createNull();
+			tmp = CharString_createConstRefSized((const C8*)b.ptr + start, length, false);
+			Log_debugLn("%.*s", CharString_length(tmp), tmp.ptr);
+			tmp = CharString_createNull();
 		}
 
 		//Binary needs to be formatted first
@@ -520,27 +520,27 @@ Bool CLI_showFile(ParsedArgs args, Buffer b, U64 start, U64 length, Bool isAscii
 
 			for (U64 i = start, j = i + length, k = 0; i < j; ++i, ++k) {
 
-				_gotoIfError(clean, String_createHexx(b.ptr[i], 2, &tmp1));
-				_gotoIfError(clean, String_popFrontCount(&tmp1, 2));
-				_gotoIfError(clean, String_appendStringx(&tmp, tmp1));
-				_gotoIfError(clean, String_appendx(&tmp, ' '));
+				_gotoIfError(clean, CharString_createHexx(b.ptr[i], 2, &tmp1));
+				_gotoIfError(clean, CharString_popFrontCount(&tmp1, 2));
+				_gotoIfError(clean, CharString_appendStringx(&tmp, tmp1));
+				_gotoIfError(clean, CharString_appendx(&tmp, ' '));
 
 				if(!((k + 1) & 31))
-					_gotoIfError(clean, String_appendStringx(&tmp, String_newLine()));
+					_gotoIfError(clean, CharString_appendStringx(&tmp, CharString_newLine()));
 
-				String_freex(&tmp1);
+				CharString_freex(&tmp1);
 			}
 
-			Log_debugLn("%.*s", String_length(tmp), tmp.ptr);
-			String_freex(&tmp);
+			Log_debugLn("%.*s", CharString_length(tmp), tmp.ptr);
+			CharString_freex(&tmp);
 		}
 	}
 
 	success = true;
 
 clean:
-	String_freex(&tmp1);
-	String_freex(&tmp);
+	CharString_freex(&tmp1);
+	CharString_freex(&tmp);
 	return success;
 }
 
@@ -549,7 +549,7 @@ clean:
 Bool CLI_storeFileOrFolder(ParsedArgs args, ArchiveEntry e, Archive a, Bool *madeFile, U64 start, U64 len) {
 
 	Error err = Error_none();
-	String tmp = String_createNull();
+	CharString tmp = CharString_createNull();
 	Bool success = false;
 
 	//Save folder
@@ -559,7 +559,7 @@ Bool CLI_storeFileOrFolder(ParsedArgs args, ArchiveEntry e, Archive a, Bool *mad
 		if(start || (len && len != a.entries.length))
 			Log_warnLn("Folder output to disk ignores offset and/or count.");
 
-		String out = String_createNull();
+		CharString out = CharString_createNull();
 
 		if ((err = ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &out)).genericError) {
 			Log_errorLn("Invalid argument -o <string>.");
@@ -569,8 +569,8 @@ Bool CLI_storeFileOrFolder(ParsedArgs args, ArchiveEntry e, Archive a, Bool *mad
 		_gotoIfError(clean, File_add(out, EFileType_Folder, 1 * SECOND));
 		*madeFile = true;
 
-		_gotoIfError(clean, String_createCopyx(out, &tmp));
-		_gotoIfError(clean, String_appendx(&tmp, '/'));
+		_gotoIfError(clean, CharString_createCopyx(out, &tmp));
+		_gotoIfError(clean, CharString_appendx(&tmp, '/'));
 
 		OutputFolderToDisk output = (OutputFolderToDisk) {
 			.base = e.path,
@@ -587,7 +587,7 @@ Bool CLI_storeFileOrFolder(ParsedArgs args, ArchiveEntry e, Archive a, Bool *mad
 			EFileType_Any
 		));
 
-		String_freex(&tmp);
+		CharString_freex(&tmp);
 		madeFile = false;			//We successfully wrote, so keep it from deleting the folder
 		success = true;
 
@@ -603,7 +603,7 @@ Bool CLI_storeFileOrFolder(ParsedArgs args, ArchiveEntry e, Archive a, Bool *mad
 	}
 
 clean:
-	String_freex(&tmp);
+	CharString_freex(&tmp);
 	return success;
 }
 
@@ -616,9 +616,9 @@ Bool CLI_inspectData(ParsedArgs args) {
 	Error err = Error_none();
 	Bool success = false;
 
-	String path = String_createNull();
-	String tmp = String_createNull();
-	String tmp1 = String_createNull();
+	CharString path = CharString_createNull();
+	CharString tmp = CharString_createNull();
+	CharString tmp1 = CharString_createNull();
 
 	//Get file
 
@@ -639,7 +639,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 	//Parse entry if available
 
-	String entry = String_createNull();
+	CharString entry = CharString_createNull();
 
 	if (args.parameters & EOperationHasParameter_Entry)
 		if ((err = ParsedArgs_getArg(args, EOperationHasParameter_EntryShift, &entry)).genericError) {
@@ -649,13 +649,13 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 	//Parse start if available
 
-	String starts = String_createNull();
+	CharString starts = CharString_createNull();
 	U64 start = 0;
 
 	if (args.parameters & EOperationHasParameter_StartOffset)
 		if (
 			(err = ParsedArgs_getArg(args, EOperationHasParameter_StartOffsetShift, &starts)).genericError ||
-			!String_parseDec(starts, &start) ||
+			!CharString_parseDec(starts, &start) ||
 			(start >> 32)
 		) {
 			Log_errorLn("Invalid argument -s <uint>.");
@@ -664,13 +664,13 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 	//Parse end if available
 
-	String lengths = String_createNull();
+	CharString lengths = CharString_createNull();
 	U64 length = 0;
 
 	if (args.parameters & EOperationHasParameter_Length)
 		if (
 			(err = ParsedArgs_getArg(args, EOperationHasParameter_LengthShift, &lengths)).genericError ||
-			!String_parseDec(lengths, &length) ||
+			!CharString_parseDec(lengths, &length) ||
 			(length >> 32)
 		) {
 			Log_errorLn("Invalid argument -l <uint>.");
@@ -684,24 +684,24 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 	if (args.parameters & EOperationHasParameter_AES) {
 
-		String key = String_createNull();
+		CharString key = CharString_createNull();
 
 		if (
 			(ParsedArgs_getArg(args, EOperationHasParameter_AESShift, &key)).genericError || 
-			!String_isHex(key)
+			!CharString_isHex(key)
 		) {
 			Log_errorLn("Invalid parameter sent to -aes. Expecting key in hex (32 bytes)");
 			return false;
 		}
 
-		U64 off = String_startsWithString(key, String_createConstRefUnsafe("0x"), EStringCase_Insensitive) ? 2 : 0;
+		U64 off = CharString_startsWithString(key, CharString_createConstRefUnsafe("0x"), EStringCase_Insensitive) ? 2 : 0;
 
-		if (String_length(key) - off != 64) {
+		if (CharString_length(key) - off != 64) {
 			Log_errorLn("Invalid parameter sent to -aes. Expecting key in hex (32 bytes)");
 			return false;
 		}
 
-		for (U64 i = off; i + 1 < String_length(key); ++i) {
+		for (U64 i = off; i + 1 < CharString_length(key); ++i) {
 
 			U8 v0 = C8_hex(key.ptr[i]);
 			U8 v1 = C8_hex(key.ptr[++i]);
@@ -720,11 +720,11 @@ Bool CLI_inspectData(ParsedArgs args) {
 		case CAHeader_MAGIC: {
 		
 			CAFile file = (CAFile) { 0 };
-			List strings = List_createEmpty(sizeof(String));
+			List strings = List_createEmpty(sizeof(CharString));
 			U64 baseCount = 0;
 
 			Bool madeFile = false;
-			String out = String_createNull();
+			CharString out = CharString_createNull();
 
 			_gotoIfError(cleanCa, CAFile_readx(buf, encryptionKey, &file));
 
@@ -738,7 +738,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 				if (index == U64_MAX) {
 
-					if (!String_parseDec(entry, &index)) {
+					if (!CharString_parseDec(entry, &index)) {
 						Log_errorLn("Invalid argument -e <uint> or <valid path> expected.");
 						goto cleanCa;
 					}
@@ -766,7 +766,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 					if (e.type == EFileType_Folder) {
 
-						baseCount = String_countAll(e.path, '/', EStringCase_Sensitive) + 1;
+						baseCount = CharString_countAll(e.path, '/', EStringCase_Sensitive) + 1;
 
 						_gotoIfError(cleanCa, Archive_foreachx(
 							file.archive,
@@ -782,11 +782,11 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 					else {
 
-						Bool isAscii = String_isValidAscii(
-							String_createConstRefSized((const C8*) e.data.ptr, Buffer_length(e.data), false)
+						Bool isAscii = CharString_isValidAscii(
+							CharString_createConstRefSized((const C8*) e.data.ptr, Buffer_length(e.data), false)
 						);
 
-						Log_debugLn("%.*s", String_length(e.path), e.path.ptr);
+						Log_debugLn("%.*s", CharString_length(e.path), e.path.ptr);
 						CLI_showFile(args, e.data, start, length, isAscii);
 						goto cleanCa;
 					}
@@ -802,7 +802,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 					ArchiveEntry e = (ArchiveEntry) {
 						.type = EFileType_Folder,
-						.path = String_createConstRefUnsafe(".")
+						.path = CharString_createConstRefUnsafe(".")
 					};
 
 					CLI_storeFileOrFolder(args, e, file.archive, &madeFile, start, length);
@@ -811,7 +811,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 				_gotoIfError(cleanCa, Archive_foreachx(
 					file.archive,
-					String_createConstRefUnsafe("."),
+					CharString_createConstRefUnsafe("."),
 					(FileCallback) collectArchiveEntries,
 					&strings,
 					true,
@@ -838,9 +838,9 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 			for(U64 i = start; i < end && i < strings.length; ++i) {
 
-				String pathi = ((const String*)strings.ptr)[i];
+				CharString pathi = ((const CharString*)strings.ptr)[i];
 
-				U64 parentCount = String_countAll(pathi, '/', EStringCase_Sensitive);
+				U64 parentCount = CharString_countAll(pathi, '/', EStringCase_Sensitive);
 
 				U64 v = Archive_getIndexx(file.archive, pathi);
 
@@ -850,23 +850,23 @@ Bool CLI_inspectData(ParsedArgs args) {
 				if(v == U64_MAX)
 					_gotoIfError(cleanCa, Error_notFound(0, 0));
 
-				_gotoIfError(cleanCa, String_createDecx(v, 3, &tmp));
- 				_gotoIfError(cleanCa, String_createx(' ', 2 * (parentCount - baseCount), &tmp1));
-				_gotoIfError(cleanCa, String_appendx(&tmp, ':'));
-				_gotoIfError(cleanCa, String_appendx(&tmp, ' '));
-				_gotoIfError(cleanCa, String_appendStringx(&tmp, tmp1));
-				String_freex(&tmp1);
+				_gotoIfError(cleanCa, CharString_createDecx(v, 3, &tmp));
+ 				_gotoIfError(cleanCa, CharString_createx(' ', 2 * (parentCount - baseCount), &tmp1));
+				_gotoIfError(cleanCa, CharString_appendx(&tmp, ':'));
+				_gotoIfError(cleanCa, CharString_appendx(&tmp, ' '));
+				_gotoIfError(cleanCa, CharString_appendStringx(&tmp, tmp1));
+				CharString_freex(&tmp1);
 
-				String sub = String_createNull();
-				if(!String_cutBeforeLast(pathi, '/', EStringCase_Sensitive, &sub))
-					sub = String_createConstRefSized(pathi.ptr, String_length(pathi), false);
+				CharString sub = CharString_createNull();
+				if(!CharString_cutBeforeLast(pathi, '/', EStringCase_Sensitive, &sub))
+					sub = CharString_createConstRefSized(pathi.ptr, CharString_length(pathi), false);
 
-				_gotoIfError(cleanCa, String_appendStringx(&tmp, sub));
+				_gotoIfError(cleanCa, CharString_appendStringx(&tmp, sub));
 
 				//Log and free temp
 
-				Log_debugLn("%.*s", String_length(tmp), tmp.ptr);
-				String_freex(&tmp);
+				Log_debugLn("%.*s", CharString_length(tmp), tmp.ptr);
+				CharString_freex(&tmp);
 			}
 
 			if(!strings.length)
@@ -878,11 +878,11 @@ Bool CLI_inspectData(ParsedArgs args) {
 				File_remove(out, 1 * SECOND);
 
 			for(U64 i = 0; i < strings.length; ++i)
-				String_freex((String*)strings.ptr + i);
+				CharString_freex((CharString*)strings.ptr + i);
 
 			CAFile_freex(&file);
 			List_freex(&strings);
-			String_freex(&tmp);
+			CharString_freex(&tmp);
 
 			if(err.genericError)
 				goto clean;
@@ -913,7 +913,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 				U64 entryI = 0;
 
-				if (!String_parseDec(entry, &entryI)) {
+				if (!CharString_parseDec(entry, &entryI)) {
 					Log_errorLn("Invalid argument -e <uint> expected.");
 					goto cleanDl;
 				}
@@ -927,7 +927,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 				Bool isAscii = file.settings.dataType == EDLDataType_Ascii;
 				Buffer b = 
-					isAscii ? String_bufferConst(e.entryString) : 
+					isAscii ? CharString_bufferConst(e.entryString) : 
 					e.entryBuffer;
 
 				if(!CLI_showFile(args, b, start, length, isAscii))
@@ -943,25 +943,25 @@ Bool CLI_inspectData(ParsedArgs args) {
 					DLEntry entryi = ((const DLEntry*)file.entries.ptr)[i];
 
 					U64 entrySize = 
-						file.settings.dataType == EDLDataType_Ascii ? String_length(entryi.entryString) : 
+						file.settings.dataType == EDLDataType_Ascii ? CharString_length(entryi.entryString) : 
 						Buffer_length(entryi.entryBuffer);
 
-					_gotoIfError(cleanDl, String_createDecx(i, 3, &tmp));
-					_gotoIfError(cleanDl, String_appendStringx(&tmp, String_createConstRefUnsafe(": length = ")));
+					_gotoIfError(cleanDl, CharString_createDecx(i, 3, &tmp));
+					_gotoIfError(cleanDl, CharString_appendStringx(&tmp, CharString_createConstRefUnsafe(": length = ")));
 
-					_gotoIfError(cleanDl, String_createDecx(entrySize, 0, &tmp1));
-					_gotoIfError(cleanDl, String_appendStringx(&tmp, tmp1));
+					_gotoIfError(cleanDl, CharString_createDecx(entrySize, 0, &tmp1));
+					_gotoIfError(cleanDl, CharString_appendStringx(&tmp, tmp1));
 
 					Log_debugLn("%.*s", tmp);
-					String_freex(&tmp);
-					String_freex(&tmp1);
+					CharString_freex(&tmp);
+					CharString_freex(&tmp1);
 				}
 			}
 
 		cleanDl:
 
-			String_freex(&tmp);
-			String_freex(&tmp1);
+			CharString_freex(&tmp);
+			CharString_freex(&tmp1);
 			DLFile_freex(&file);
 
 			if(err.genericError)
@@ -984,7 +984,7 @@ clean:
 	if(err.genericError)
 		Error_printx(err, ELogLevel_Error, ELogOptions_NewLine);
 
-	String_freex(&tmp);
+	CharString_freex(&tmp);
 	Buffer_freex(&buf);
 	return success;
 }

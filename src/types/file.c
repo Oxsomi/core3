@@ -29,48 +29,48 @@ Bool FileInfo_free(FileInfo *info, Allocator alloc) {
 	if(!info)
 		return false;
 
-	Bool freed = String_free(&info->path, alloc);
+	Bool freed = CharString_free(&info->path, alloc);
 	*info = (FileInfo) { 0 };
 	return freed;
 }
 
-Bool File_isVirtual(String loc) { return String_getAt(loc, 0) == '/' && String_getAt(loc, 1) == '/'; }
+Bool File_isVirtual(CharString loc) { return CharString_getAt(loc, 0) == '/' && CharString_getAt(loc, 1) == '/'; }
 
 Error File_resolve(
-	String loc, 
+	CharString loc, 
 	Bool *isVirtual, 
 	U64 maxFilePathLimit, 
-	String absoluteDir, 
+	CharString absoluteDir, 
 	Allocator alloc, 
-	String *result
+	CharString *result
 ) {
 
-	loc = String_createConstRefSized(loc.ptr, String_length(loc), String_isNullTerminated(loc));
+	loc = CharString_createConstRefSized(loc.ptr, CharString_length(loc), CharString_isNullTerminated(loc));
 
-	if(String_getAt(loc, String_length(loc) - 1) == '/')			//myTest/ <--
-		loc.len = String_length(loc) - 1;							//unset null terminated
+	if(CharString_getAt(loc, CharString_length(loc) - 1) == '/')			//myTest/ <--
+		loc.len = CharString_length(loc) - 1;							//unset null terminated
 
 	if(result && result->ptr)
 		return Error_invalidOperation(0);
 
-	StringList res = (StringList) { 0 };
+	CharStringList res = (CharStringList) { 0 };
 	Error err = Error_none();
 
 	if(!isVirtual || !result)
 		_gotoIfError(clean, Error_nullPointer(!isVirtual ? 1 : 2));
 
-	if(!String_isValidFilePath(loc))
+	if(!CharString_isValidFilePath(loc))
 		_gotoIfError(clean, Error_invalidParameter(0, 0));
 
 	//Copy string so we can modifiy it
 
-	_gotoIfError(clean, String_createCopy(loc, alloc, result));
+	_gotoIfError(clean, CharString_createCopy(loc, alloc, result));
 	*isVirtual = File_isVirtual(loc);
 
 	//Virtual files
 
 	if (*isVirtual)
-		_gotoIfError(clean, String_popFrontCount(result, 2));
+		_gotoIfError(clean, CharString_popFrontCount(result, 2));
 
 	//Network drives are a thing on windows and allow starting a path with \\
 	//We shouldn't be supporting this.
@@ -81,12 +81,12 @@ Error File_resolve(
 	//You can also read from hardware in a platform dependent way, which makes it harder to standardize.
 	//TODO: We should however support this in the future as a custom instruction that allows it
 
-	if (String_getAt(*result, 0) == '\\' && String_getAt(*result, 1) == '\\')
+	if (CharString_getAt(*result, 0) == '\\' && CharString_getAt(*result, 1) == '\\')
 		_gotoIfError(clean, Error_unsupportedOperation(3));
 
 	//Backslash is replaced with forward slash for easy windows compatibility
 
-	if (!String_replaceAll(result, '\\', '/', EStringCase_Sensitive))
+	if (!CharString_replaceAll(result, '\\', '/', EStringCase_Sensitive))
 		_gotoIfError(clean, Error_invalidOperation(1));
 
 	//On Windows, it's possible to change drive but keep same relative path. We don't support it.
@@ -95,7 +95,7 @@ Error File_resolve(
 
 	#ifdef _WIN32
 
-		if(String_length(*result) >= 3 && result->ptr[1] == ':' && (result->ptr[2] != '/' || !C8_isAlpha(result->ptr[0])))
+		if(CharString_length(*result) >= 3 && result->ptr[1] == ':' && (result->ptr[2] != '/' || !C8_isAlpha(result->ptr[0])))
 			_gotoIfError(clean, Error_unsupportedOperation(2));
 
 	#else
@@ -108,22 +108,22 @@ Error File_resolve(
 	//Now we have to discover the real directory it references to. This means resolving:
 	//Empty filename and . to mean no difference and .. to step back
 
-	_gotoIfError(clean, String_split(*result, '/', EStringCase_Sensitive, alloc, &res));
+	_gotoIfError(clean, CharString_split(*result, '/', EStringCase_Sensitive, alloc, &res));
 
-	U64 realSplitLen = res.length;		//We have to reset this before unallocating the StringList!
+	U64 realSplitLen = res.length;		//We have to reset this before unallocating the CharStringList!
 
-	String back = String_createConstRefUnsafe("..");
+	CharString back = CharString_createConstRefUnsafe("..");
 
 	for (U64 i = 0; i < res.length; ++i) {
 
-		//We pop from StringList since it doesn't change anything
+		//We pop from CharStringList since it doesn't change anything
 		//Starting with a / is valid with local files, so don't remove it. (not with virtual files)
 		//Having multiple // after each other means empty file this is invalid.
 		//So both empty file and . resolve to nothing
 
 		if(
-			(String_isEmpty(res.ptr[i]) && i && !*isVirtual) ||
-			String_equals(res.ptr[i], '.', EStringCase_Sensitive)
+			(CharString_isEmpty(res.ptr[i]) && i && !*isVirtual) ||
+			CharString_equals(res.ptr[i], '.', EStringCase_Sensitive)
 		) {
 
 			//Move to left
@@ -136,9 +136,9 @@ Error File_resolve(
 			continue;
 		}
 
-		//In this case, we have to pop StringList[j], so that's only possible if that's still there
+		//In this case, we have to pop CharStringList[j], so that's only possible if that's still there
 
-		if (String_equalsString(res.ptr[i], back, EStringCase_Sensitive)) {
+		if (CharString_equalsString(res.ptr[i], back, EStringCase_Sensitive)) {
 
 			if(!i) {
 				res.length = realSplitLen;
@@ -155,13 +155,13 @@ Error File_resolve(
 
 		//Validate file name
 
-		if (!String_isValidFileName(res.ptr[i])) {
+		if (!CharString_isValidFileName(res.ptr[i])) {
 
 			#ifdef _WIN32
 
 				//Drive name
 
-				if(!i && String_length(res.ptr[i]) == 2 && C8_isAlpha(res.ptr[0].ptr[0]) && res.ptr[0].ptr[1] == ':')
+				if(!i && CharString_length(res.ptr[i]) == 2 && C8_isAlpha(res.ptr[0].ptr[0]) && res.ptr[0].ptr[1] == ':')
 					continue;
 
 			#endif
@@ -184,18 +184,18 @@ Error File_resolve(
 
 	//Re-assemble path now
 
-	String tmp = String_createNull();
+	CharString tmp = CharString_createNull();
 
-	if ((err = StringList_concat(res, '/', alloc, &tmp)).genericError) {
+	if ((err = CharStringList_concat(res, '/', alloc, &tmp)).genericError) {
 		res.length = realSplitLen;
-		StringList_free(&res, alloc);
+		CharStringList_free(&res, alloc);
 	}
 
-	String_free(result, alloc);		//This can't be done before concat, because the string is still in use.
+	CharString_free(result, alloc);		//This can't be done before concat, because the string is still in use.
 	*result = tmp;
 
 	res.length = realSplitLen;
-	StringList_free(&res, alloc);
+	CharStringList_free(&res, alloc);
 
 	//Check if we're an absolute or relative path
 
@@ -203,13 +203,13 @@ Error File_resolve(
 
 	#ifdef _WIN32	//Starts with [A-Z]:/ if absolute. If it starts with / it's unsupported!
 
-		if (String_startsWith(*result, '/', EStringCase_Sensitive))
+		if (CharString_startsWith(*result, '/', EStringCase_Sensitive))
 			_gotoIfError(clean, Error_unsupportedOperation(4));
 
-		isAbsolute = String_length(*result) >= 2 && result->ptr[1] == ':';
+		isAbsolute = CharString_length(*result) >= 2 && result->ptr[1] == ':';
 
 	#else			//Starts with / if absolute
-		isAbsolute = String_startsWith(*result, '/', EStringCase_Sensitive);
+		isAbsolute = CharString_startsWith(*result, '/', EStringCase_Sensitive);
 	#endif
 
 	//Our path has to be made relative to our working directory.
@@ -217,14 +217,14 @@ Error File_resolve(
 
 	if (isAbsolute) {
 
-		if(!String_length(absoluteDir) || !String_startsWithString(*result, absoluteDir, EStringCase_Insensitive))
+		if(!CharString_length(absoluteDir) || !CharString_startsWithString(*result, absoluteDir, EStringCase_Insensitive))
 			_gotoIfError(clean, Error_unauthorized(0));
 	}
 
 	//Prepend our path
 
-	else if(String_length(absoluteDir) && !*isVirtual) 
-		_gotoIfError(clean, String_insertString(result, absoluteDir, 0, alloc));
+	else if(CharString_length(absoluteDir) && !*isVirtual) 
+		_gotoIfError(clean, CharString_insertString(result, absoluteDir, 0, alloc));
 
 	//Since we're gonna use this in file operations, we wanna have a null terminator
 
@@ -235,13 +235,13 @@ Error File_resolve(
 		maxFilePathLimit = U64_min(260, maxFilePathLimit);		/* MAX_PATH */
 	#endif
 
-	if(String_length(*result) >= maxFilePathLimit) 
-		_gotoIfError(clean, Error_outOfBounds(0, String_length(*result), maxFilePathLimit));
+	if(CharString_length(*result) >= maxFilePathLimit) 
+		_gotoIfError(clean, Error_outOfBounds(0, CharString_length(*result), maxFilePathLimit));
 
 	return Error_none();
 
 clean:
-	StringList_free(&res, alloc);
-	String_free(result, alloc);
+	CharStringList_free(&res, alloc);
+	CharString_free(result, alloc);
 	return err;
 }

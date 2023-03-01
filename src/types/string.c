@@ -28,64 +28,64 @@
 #include <ctype.h>
 #include <stdio.h>
 
-Bool String_isConstRef(String str) { return str.capacity == U64_MAX; }
-Bool String_isRef(String str) { return !str.capacity || String_isConstRef(str); }
-U64  String_bytes(String str) { return str.len << 1 >> 1; }
-U64  String_length(String str) { return String_bytes(str); }
-Bool String_isEmpty(String str) { return !String_bytes(str); }
-Bool String_isNullTerminated(String str) { return str.len >> 63; }
+Bool CharString_isConstRef(CharString str) { return str.capacity == U64_MAX; }
+Bool CharString_isRef(CharString str) { return !str.capacity || CharString_isConstRef(str); }
+U64  CharString_bytes(CharString str) { return str.len << 1 >> 1; }
+U64  CharString_length(CharString str) { return CharString_bytes(str); }
+Bool CharString_isEmpty(CharString str) { return !CharString_bytes(str); }
+Bool CharString_isNullTerminated(CharString str) { return str.len >> 63; }
 
-Buffer String_buffer(String str) { 
-	return String_isConstRef(str) ? Buffer_createNull() : Buffer_createRef((U8*)str.ptr, String_bytes(str)); 
+Buffer CharString_buffer(CharString str) { 
+	return CharString_isConstRef(str) ? Buffer_createNull() : Buffer_createRef((U8*)str.ptr, CharString_bytes(str)); 
 }
 
-Buffer String_bufferConst(String str) { 
-	return Buffer_createConstRef(str.ptr, String_bytes(str));
+Buffer CharString_bufferConst(CharString str) { 
+	return Buffer_createConstRef(str.ptr, CharString_bytes(str));
 }
 
 //Iteration
 
-C8 *String_begin(String str) { return String_isConstRef(str) ? NULL : (C8*)str.ptr; }
-const C8 *String_beginConst(String str) { return str.ptr; }
+C8 *CharString_begin(CharString str) { return CharString_isConstRef(str) ? NULL : (C8*)str.ptr; }
+const C8 *CharString_beginConst(CharString str) { return str.ptr; }
 
-C8 *String_end(String str) { return String_isConstRef(str) ? NULL : (C8*)str.ptr + String_length(str); }
-const C8 *String_endConst(String str) { return str.ptr + String_length(str); }
+C8 *CharString_end(CharString str) { return CharString_isConstRef(str) ? NULL : (C8*)str.ptr + CharString_length(str); }
+const C8 *CharString_endConst(CharString str) { return str.ptr + CharString_length(str); }
 
-C8 *String_charAt(String str, U64 off) { 
-	return String_isConstRef(str) || off >= String_length(str) ? NULL : (C8*)str.ptr + off;
+C8 *CharString_charAt(CharString str, U64 off) { 
+	return CharString_isConstRef(str) || off >= CharString_length(str) ? NULL : (C8*)str.ptr + off;
 }
 
-const C8 *String_charAtConst(String str, U64 off) { 
-	return off >= String_length(str) ? NULL : str.ptr + off; 
+const C8 *CharString_charAtConst(CharString str, U64 off) { 
+	return off >= CharString_length(str) ? NULL : str.ptr + off; 
 }
 
-Bool String_isValidAscii(String a) {
+Bool CharString_isValidAscii(CharString a) {
 
-	for(U64 i = 0; i < String_length(a); ++i)
+	for(U64 i = 0; i < CharString_length(a); ++i)
 		if(!C8_isValidAscii(a.ptr[i]))
 			return false;
 
 	return true;
 }
 
-Bool String_isValidFileName(String str) {
+Bool CharString_isValidFileName(CharString str) {
 	
-	for(U64 i = 0; i < String_length(str); ++i)
+	for(U64 i = 0; i < CharString_length(str); ++i)
 		if(!C8_isValidFileName(str.ptr[i]))
 			return false;
 	
 	//Validation to make sure we're not using weird legacy MS DOS keywords
 	//Because these will not be writable correctly!
 
-	U64 illegalStart = 0, strl = String_length(str);
+	U64 illegalStart = 0, strl = CharString_length(str);
 
 	if (strl >= 3) {
 
 		if(
-			String_startsWithString(str, String_createConstRefUnsafe("CON"), EStringCase_Insensitive) ||
-			String_startsWithString(str, String_createConstRefUnsafe("AUX"), EStringCase_Insensitive) ||
-			String_startsWithString(str, String_createConstRefUnsafe("NUL"), EStringCase_Insensitive) ||
-			String_startsWithString(str, String_createConstRefUnsafe("PRN"), EStringCase_Insensitive)
+			CharString_startsWithString(str, CharString_createConstRefUnsafe("CON"), EStringCase_Insensitive) ||
+			CharString_startsWithString(str, CharString_createConstRefUnsafe("AUX"), EStringCase_Insensitive) ||
+			CharString_startsWithString(str, CharString_createConstRefUnsafe("NUL"), EStringCase_Insensitive) ||
+			CharString_startsWithString(str, CharString_createConstRefUnsafe("PRN"), EStringCase_Insensitive)
 		)
 			illegalStart = 3;
 
@@ -93,8 +93,8 @@ Bool String_isValidFileName(String str) {
 
 			if(
 				(
-					String_startsWithString(str, String_createConstRefUnsafe("COM"), EStringCase_Insensitive) ||
-					String_startsWithString(str, String_createConstRefUnsafe("LPT"), EStringCase_Insensitive)
+					CharString_startsWithString(str, CharString_createConstRefUnsafe("COM"), EStringCase_Insensitive) ||
+					CharString_startsWithString(str, CharString_createConstRefUnsafe("LPT"), EStringCase_Insensitive)
 				) &&
 				C8_isDec(str.ptr[3])
 			)
@@ -105,7 +105,7 @@ Bool String_isValidFileName(String str) {
 	//PRNtscreen.pdf is valid, but PRN.pdf isn't.
 	///NULlpointer.txt is valid, NUL.txt isn't.
 
-	if(illegalStart && (strl == illegalStart || String_getAt(str, illegalStart) == '.'))
+	if(illegalStart && (strl == illegalStart || CharString_getAt(str, illegalStart) == '.'))
 		return false;
 
 	//Can't end with trailing . (so . and .. are illegal)
@@ -120,24 +120,24 @@ Bool String_isValidFileName(String str) {
 
 //We support valid file names or ., .. in file path parts.
 
-Bool String_isSupportedInFilePath(String str) {
+Bool CharString_isSupportedInFilePath(CharString str) {
 	return 
-		String_isValidFileName(str) || 
-		(String_getAt(str, 0) == '.' && (
-			String_length(str) == 1 || (String_getAt(str, 1) == '.' && String_length(str) == 2)
+		CharString_isValidFileName(str) || 
+		(CharString_getAt(str, 0) == '.' && (
+			CharString_length(str) == 1 || (CharString_getAt(str, 1) == '.' && CharString_length(str) == 2)
 		));
 }
 
 //File_resolve but without validating if it'd be a valid (permissioned) path on disk.
 
-Bool String_isValidFilePath(String str) {
+Bool CharString_isValidFilePath(CharString str) {
 
 	//myTest/ <-- or myTest\ to myTest
 		
-	str = String_createConstRefSized(str.ptr, String_length(str), String_isNullTerminated(str));
+	str = CharString_createConstRefSized(str.ptr, CharString_length(str), CharString_isNullTerminated(str));
 
-	if(String_getAt(str, String_length(str) - 1) == '/' || String_getAt(str, String_length(str) - 1) == '\\')
-		str.len = String_length(str) - 1;
+	if(CharString_getAt(str, CharString_length(str) - 1) == '/' || CharString_getAt(str, CharString_length(str) - 1) == '\\')
+		str.len = CharString_length(str) - 1;
 		
 	//On Windows, it's possible to change drive but keep same relative path. We don't support it.
 	//e.g. C:myFolder/ (relative folder on C) instead of C:/myFolder/ (Absolute folder on C)
@@ -148,7 +148,7 @@ Bool String_isValidFilePath(String str) {
 	#ifdef _WIN32
 
 		if(
-			String_length(str) >= 3 && 
+			CharString_length(str) >= 3 && 
 			str.ptr[1] == ':' && ((str.ptr[2] != '/' && str.ptr[2] != '\\') || !C8_isAlpha(str.ptr[0]))
 		)
 			return false;
@@ -163,14 +163,14 @@ Bool String_isValidFilePath(String str) {
 
 	#else
 
-		if(String_length(str) >= 2 && str.ptr[1] == ':')
+		if(CharString_length(str) >= 2 && str.ptr[1] == ':')
 			return false;
 
 	#endif
 
 	//Virtual files
 
-	if(String_getAt(str, 0) == '/' && String_getAt(str, 1) == '/') {
+	if(CharString_getAt(str, 0) == '/' && CharString_getAt(str, 1) == '/') {
 
 		if(hasPrefix)
 			return false;
@@ -181,7 +181,7 @@ Bool String_isValidFilePath(String str) {
 
 	//Absolute path
 
-	if(String_getAt(str, 0) == '/' || String_getAt(str, 0) == '\\') {
+	if(CharString_getAt(str, 0) == '/' || CharString_getAt(str, 0) == '\\') {
 
 		if(hasPrefix)
 			return false;
@@ -193,13 +193,13 @@ Bool String_isValidFilePath(String str) {
 
 	//Windows network paths, this is unsupported currently
 
-	if(String_getAt(str, 0) == '\\' && String_getAt(str, 1) == '\\') 
+	if(CharString_getAt(str, 0) == '\\' && CharString_getAt(str, 1) == '\\') 
 		return false;
 
 	//Split by / or \.
 
 	U64 prev = 0;
-	U64 strl = String_length(str);
+	U64 strl = CharString_length(str);
 
 	for (U64 i = 0; i < strl; ++i) {
 
@@ -212,9 +212,9 @@ Bool String_isValidFilePath(String str) {
 			if(!(i - prev))
 				return false;
 
-			String part = String_createConstRefSized(str.ptr + prev, i - prev, false);
+			CharString part = CharString_createConstRefSized(str.ptr + prev, i - prev, false);
 
-			if(!String_isSupportedInFilePath(part))
+			if(!CharString_isSupportedInFilePath(part))
 				return false;
 
 			prev = i + 1;
@@ -223,17 +223,17 @@ Bool String_isValidFilePath(String str) {
 
 	//Validate ending
 
-	String part = String_createConstRefSized(str.ptr + prev, strl - prev, String_isNullTerminated(str));
+	CharString part = CharString_createConstRefSized(str.ptr + prev, strl - prev, CharString_isNullTerminated(str));
 
-	if(!String_isSupportedInFilePath(part))
+	if(!CharString_isSupportedInFilePath(part))
 		return false;
 
 	return strl;
 }
 
-Bool String_clear(String *str) { 
+Bool CharString_clear(CharString *str) { 
 
-	if(!str || !String_isRef(*str) || !str->capacity) 
+	if(!str || !CharString_isRef(*str) || !str->capacity) 
 		return false;
 
 	if(str->len >> 63)					//If null terminated, we want to keep it null terminated
@@ -243,52 +243,52 @@ Bool String_clear(String *str) {
 	return true;
 }
 
-C8 String_getAt(String str, U64 i) { 
-	return i < String_length(str) ? str.ptr[i] : C8_MAX;
+C8 CharString_getAt(CharString str, U64 i) { 
+	return i < CharString_length(str) ? str.ptr[i] : C8_MAX;
 }
 
-Bool String_setAt(String str, U64 i, C8 c) { 
+Bool CharString_setAt(CharString str, U64 i, C8 c) { 
 
-	if(i >= String_length(str) || String_isConstRef(str) || !c)
+	if(i >= CharString_length(str) || CharString_isConstRef(str) || !c)
 		return false;
 
 	((C8*)str.ptr)[i] = c;
 	return true;
 }
 
-String String_createNull() { return (String) { 0 }; }
+CharString CharString_createNull() { return (CharString) { 0 }; }
 
-String String_createConstRefAuto(const C8 *ptr, U64 maxSize) { 
+CharString CharString_createConstRefAuto(const C8 *ptr, U64 maxSize) { 
 
 	if(!ptr)
-		return String_createNull();
+		return CharString_createNull();
 
-	U64 strl = String_calcStrLen(ptr, maxSize);
+	U64 strl = CharString_calcStrLen(ptr, maxSize);
 
-	return (String) { 
+	return (CharString) { 
 		.len = strl | ((U64)(strl != maxSize) << 63),
 		.ptr = (C8*) ptr,
 		.capacity = U64_MAX		//Flag as const
 	};
 }
 
-String String_createConstRefUnsafe(const C8 *ptr) {
-	return String_createConstRefAuto(ptr, U64_MAX);
+CharString CharString_createConstRefUnsafe(const C8 *ptr) {
+	return CharString_createConstRefAuto(ptr, U64_MAX);
 }
 
-String String_createRefAuto(C8 *ptr, U64 maxSize) { 
-	String str = String_createConstRefAuto(ptr, maxSize);
+CharString CharString_createRefAuto(C8 *ptr, U64 maxSize) { 
+	CharString str = CharString_createConstRefAuto(ptr, maxSize);
 	str.capacity = 0;	//Flag as dynamic
 	return str;
 }
 
-String String_createConstRefSized(const C8 *ptr, U64 size, Bool isNullTerminated) {
+CharString CharString_createConstRefSized(const C8 *ptr, U64 size, Bool isNullTerminated) {
 
 	if(!ptr || (size >> 48))
-		return String_createNull();
+		return CharString_createNull();
 
 	if(isNullTerminated && ptr[size])	//Invalid!
-		return String_createNull();
+		return CharString_createNull();
 
 	if(!isNullTerminated && size) {
 
@@ -298,66 +298,66 @@ String String_createConstRefSized(const C8 *ptr, U64 size, Bool isNullTerminated
 			--size;
 	}
 
-	return (String) { 
+	return (CharString) { 
 		.len = size | ((U64)isNullTerminated << 63),
 		.ptr = (C8*) ptr,
 		.capacity = U64_MAX		//Flag as const
 	};
 }
 
-String String_createRefSized(C8 *ptr, U64 size, Bool isNullTerminated) {
-	String str = String_createConstRefSized(ptr, size, isNullTerminated);
+CharString CharString_createRefSized(C8 *ptr, U64 size, Bool isNullTerminated) {
+	CharString str = CharString_createConstRefSized(ptr, size, isNullTerminated);
 	str.capacity = 0;	//Flag as dynamic
 	return str;
 }
 
-String String_createConstRefShortString(const ShortString str) {
-	return String_createConstRefAuto(str, _SHORTSTRING_LEN);
+CharString CharString_createConstRefShortString(const ShortString str) {
+	return CharString_createConstRefAuto(str, _SHORTSTRING_LEN);
 }
 
-String String_createConstRefLongString(const LongString str) {
-	return String_createConstRefAuto(str, _LONGSTRING_LEN);
+CharString CharString_createConstRefLongString(const LongString str) {
+	return CharString_createConstRefAuto(str, _LONGSTRING_LEN);
 }
 
-String String_createRefShortString(ShortString str) {
-	return String_createRefAuto(str, _SHORTSTRING_LEN);
+CharString CharString_createRefShortString(ShortString str) {
+	return CharString_createRefAuto(str, _SHORTSTRING_LEN);
 }
 
-String String_createRefLongString(LongString str) {
-	return String_createRefAuto(str, _LONGSTRING_LEN);
+CharString CharString_createRefLongString(LongString str) {
+	return CharString_createRefAuto(str, _LONGSTRING_LEN);
 }
 
 //Simple checks (consts)
 
-Error String_offsetAsRef(String s, U64 off, String *result) {
+Error CharString_offsetAsRef(CharString s, U64 off, CharString *result) {
 	
 	if (!result)
 		return Error_nullPointer(2);
 
-	if (String_isEmpty(s)) {
-		*result = String_createNull();
+	if (CharString_isEmpty(s)) {
+		*result = CharString_createNull();
 		return Error_none();
 	}
 
-	U64 strl = String_length(s);
+	U64 strl = CharString_length(s);
 
 	if(off >= strl)
 		return Error_outOfBounds(1, off, strl);
 
-	*result = (String) {
+	*result = (CharString) {
 		.ptr = s.ptr + off,
-		.len = (strl - off) | ((U64)String_isNullTerminated(s) << 63),
-		.capacity = String_isConstRef(s) ? U64_MAX : 0
+		.len = (strl - off) | ((U64)CharString_isNullTerminated(s) << 63),
+		.capacity = CharString_isConstRef(s) ? U64_MAX : 0
 	};
 
 	return Error_none();
 }
 
-#define String_matchesPattern(testFunc, ...)					\
+#define CharString_matchesPattern(testFunc, ...)					\
 																\
-	U64 strl = String_length(s);								\
+	U64 strl = CharString_length(s);								\
 																\
-	for(U64 i = (__VA_ARGS__); i < String_length(s); ++i) {		\
+	for(U64 i = (__VA_ARGS__); i < CharString_length(s); ++i) {		\
 																\
 		C8 c = s.ptr[i];										\
 																\
@@ -367,57 +367,57 @@ Error String_offsetAsRef(String s, U64 off, String *result) {
 																\
 	return strl;
 
-#define String_matchesPatternNum(testFunc, num) String_matchesPattern(		\
+#define CharString_matchesPatternNum(testFunc, num) CharString_matchesPattern(		\
 	testFunc,																\
-	String_startsWithString(												\
+	CharString_startsWithString(												\
 		s,																	\
-		String_createConstRefUnsafe(num),									\
+		CharString_createConstRefUnsafe(num),									\
 		EStringCase_Insensitive												\
-	) ? String_calcStrLen(num, U64_MAX) : 0									\
+	) ? CharString_calcStrLen(num, U64_MAX) : 0									\
 )
 
-Bool String_isNyto(String s) {
-	String_matchesPatternNum(C8_isNyto, "0n");
+Bool CharString_isNyto(CharString s) {
+	CharString_matchesPatternNum(C8_isNyto, "0n");
 }
 
-Bool String_isAlphaNumeric(String s) {
-	String_matchesPattern(C8_isAlphaNumeric, 0);
+Bool CharString_isAlphaNumeric(CharString s) {
+	CharString_matchesPattern(C8_isAlphaNumeric, 0);
 }
 
-Bool String_isHex(String s) {
-	String_matchesPatternNum(C8_isHex, "0x");
+Bool CharString_isHex(CharString s) {
+	CharString_matchesPatternNum(C8_isHex, "0x");
 }
 
-Bool String_isOct(String s) {
-	String_matchesPatternNum(C8_isOct, "0o");
+Bool CharString_isOct(CharString s) {
+	CharString_matchesPatternNum(C8_isOct, "0o");
 }
 
-Bool String_isBin(String s) {
-	String_matchesPatternNum(C8_isBin, "0b");
+Bool CharString_isBin(CharString s) {
+	CharString_matchesPatternNum(C8_isBin, "0b");
 }
 
-Bool String_isDec(String s) {
-	String_matchesPattern(C8_isDec, 0);
+Bool CharString_isDec(CharString s) {
+	CharString_matchesPattern(C8_isDec, 0);
 }
 
-Bool String_isSignedNumber(String s) {
-	String_matchesPattern(
+Bool CharString_isSignedNumber(CharString s) {
+	CharString_matchesPattern(
 		C8_isDec,
-		String_startsWith(s, '-', EStringCase_Sensitive) ||
-		String_startsWith(s, '+', EStringCase_Sensitive)
+		CharString_startsWith(s, '-', EStringCase_Sensitive) ||
+		CharString_startsWith(s, '+', EStringCase_Sensitive)
 	);
 }
 
-Bool String_isUnsignedNumber(String s) {
-	String_matchesPattern(
+Bool CharString_isUnsignedNumber(CharString s) {
+	CharString_matchesPattern(
 		C8_isDec,
-		String_startsWith(s, '+', EStringCase_Sensitive)
+		CharString_startsWith(s, '+', EStringCase_Sensitive)
 	);
 }
 
-Bool String_isFloat(String s) {
+Bool CharString_isFloat(CharString s) {
 
-	U64 strl = String_length(s);
+	U64 strl = CharString_length(s);
 
 	if(!strl || !s.ptr)
 		return false;
@@ -489,7 +489,7 @@ Bool String_isFloat(String s) {
 	return true;
 }
 
-Error String_create(C8 c, U64 size, Allocator alloc, String *result) {
+Error CharString_create(C8 c, U64 size, Allocator alloc, CharString *result) {
 
 	if (!alloc.alloc)
 		return Error_nullPointer(2);
@@ -504,7 +504,7 @@ Error String_create(C8 c, U64 size, Allocator alloc, String *result) {
 		return Error_invalidOperation(1);
 
 	if (!size) {
-		*result = String_createNull();
+		*result = CharString_createNull();
 		return Error_none();
 	}
 
@@ -545,11 +545,11 @@ Error String_create(C8 c, U64 size, Allocator alloc, String *result) {
 	if(size & 1)
 		((C8*)b.ptr)[realSize - 1] = c;
 
-	*result = (String) { .len = (realSize | ((U64)1 << 63)), .capacity = realSize + 1, .ptr = (C8*)b.ptr };
+	*result = (CharString) { .len = (realSize | ((U64)1 << 63)), .capacity = realSize + 1, .ptr = (C8*)b.ptr };
 	return Error_none();
 }
 
-Error String_createCopy(String str, Allocator alloc, String *result) {
+Error CharString_createCopy(CharString str, Allocator alloc, CharString *result) {
 
 	if (!alloc.alloc || !result)
 		return Error_nullPointer(!result ? 2 : 1);
@@ -557,10 +557,10 @@ Error String_createCopy(String str, Allocator alloc, String *result) {
 	if (result->ptr)
 		return Error_invalidOperation(0);
 
-	U64 strl = String_length(str);
+	U64 strl = CharString_length(str);
 
 	if (!strl) {
-		*result = String_createNull();
+		*result = CharString_createNull();
 		return Error_none();
 	}
 
@@ -578,11 +578,11 @@ Error String_createCopy(String str, Allocator alloc, String *result) {
 
 	((C8*)b.ptr)[strl] = '\0';
 
-	*result = (String) { .ptr = (C8*)b.ptr, .len = (strl | ((U64)1 << 63)), .capacity = strl + 1 };
+	*result = (CharString) { .ptr = (C8*)b.ptr, .len = (strl | ((U64)1 << 63)), .capacity = strl + 1 };
 	return Error_none();
 }
 
-Bool String_free(String *str, Allocator alloc) {
+Bool CharString_free(CharString *str, Allocator alloc) {
 
 	if (!str)
 		return true;
@@ -592,35 +592,35 @@ Bool String_free(String *str, Allocator alloc) {
 
 	Bool freed = true;
 
-	if(!String_isRef(*str))
+	if(!CharString_isRef(*str))
 		freed = alloc.free(alloc.ptr, Buffer_createManagedPtr((U8*)str->ptr, str->capacity));
 
-	*str = String_createNull();
+	*str = CharString_createNull();
 	return freed;
 }
 
-#define String_createNum(maxVal, func, prefixRaw, ...)					\
+#define CharString_createNum(maxVal, func, prefixRaw, ...)					\
 																		\
 	if (!result)														\
 		return Error_nullPointer(3);									\
 																		\
-	String prefix = String_createConstRefUnsafe(prefixRaw);				\
+	CharString prefix = CharString_createConstRefUnsafe(prefixRaw);				\
 																		\
 	if (result->ptr)													\
 		return Error_invalidOperation(0);								\
 																		\
-	*result = String_createNull();										\
-	Error err = String_reserve(											\
-		result, maxVal + String_length(prefix) + 1, allocator			\
+	*result = CharString_createNull();										\
+	Error err = CharString_reserve(											\
+		result, maxVal + CharString_length(prefix) + 1, allocator			\
 	);																	\
 																		\
 	if (err.genericError) 												\
 		return err;														\
 																		\
-	err = String_appendString(result, prefix, allocator);				\
+	err = CharString_appendString(result, prefix, allocator);				\
 																		\
 	if (err.genericError) {												\
-		String_free(result, allocator);									\
+		CharString_free(result, allocator);									\
 		return err;														\
 	}																	\
 																		\
@@ -635,10 +635,10 @@ Bool String_free(String *str, Allocator alloc) {
 																		\
 		if (foundFirstNonZero) {										\
 																		\
-			err = String_append(result, c, allocator);					\
+			err = CharString_append(result, c, allocator);					\
 																		\
 			if (err.genericError) {										\
-				String_free(result, allocator);							\
+				CharString_free(result, allocator);							\
 				return err;												\
 			}															\
 		}																\
@@ -648,65 +648,65 @@ Bool String_free(String *str, Allocator alloc) {
 																		\
 	if (!v && !foundFirstNonZero) {										\
 																		\
-		err = String_append(result, '0', allocator);					\
+		err = CharString_append(result, '0', allocator);					\
 																		\
 		if (err.genericError) {											\
-			String_free(result, allocator);								\
+			CharString_free(result, allocator);								\
 			return err;													\
 		}																\
 	}																	\
 																		\
-	((C8*)result->ptr)[String_length(*result)] = '\0';					\
+	((C8*)result->ptr)[CharString_length(*result)] = '\0';					\
 	return Error_none();
 
-Error String_createNyto(U64 v, U8 leadingZeros, Allocator allocator, String *result){
-	String_createNum(11, Nyto, "0n", (v >> (6 * i)) & 63);
+Error CharString_createNyto(U64 v, U8 leadingZeros, Allocator allocator, CharString *result){
+	CharString_createNum(11, Nyto, "0n", (v >> (6 * i)) & 63);
 }
 
-Error String_createHex(U64 v, U8 leadingZeros, Allocator allocator, String *result) {
-	String_createNum(16, Hex, "0x", (v >> (4 * i)) & 15);
+Error CharString_createHex(U64 v, U8 leadingZeros, Allocator allocator, CharString *result) {
+	CharString_createNum(16, Hex, "0x", (v >> (4 * i)) & 15);
 }
 
-Error String_createDec(U64 v, U8 leadingZeros, Allocator allocator, String *result) {
-	String_createNum(20, Dec, "", (v / U64_10pow(i)) % 10);
+Error CharString_createDec(U64 v, U8 leadingZeros, Allocator allocator, CharString *result) {
+	CharString_createNum(20, Dec, "", (v / U64_10pow(i)) % 10);
 }
 
-Error String_createOct(U64 v, U8 leadingZeros, Allocator allocator, String *result) {
-	String_createNum(22, Oct, "0o", (v >> (3 * i)) & 7);
+Error CharString_createOct(U64 v, U8 leadingZeros, Allocator allocator, CharString *result) {
+	CharString_createNum(22, Oct, "0o", (v >> (3 * i)) & 7);
 }
 
-Error String_createBin(U64 v, U8 leadingZeros, Allocator allocator, String *result) {
-	String_createNum(64, Bin, "0b", (v >> i) & 1);
+Error CharString_createBin(U64 v, U8 leadingZeros, Allocator allocator, CharString *result) {
+	CharString_createNum(64, Bin, "0b", (v >> i) & 1);
 }
 
-Error String_split(
-	String s, 
+Error CharString_split(
+	CharString s, 
 	C8 c, 
 	EStringCase casing, 
 	Allocator allocator, 
-	StringList *result
+	CharStringList *result
 ) {
 
-	U64 length = String_countAll(s, c, casing);
+	U64 length = CharString_countAll(s, c, casing);
 
-	Error err = StringList_create(length + 1, allocator, result);
+	Error err = CharStringList_create(length + 1, allocator, result);
 
 	if (err.genericError)
 		return err;
 
-	U64 strl = String_length(s);
+	U64 strl = CharString_length(s);
 
 	if (!length) {
 
-		Bool b = String_isNullTerminated(s);
+		Bool b = CharString_isNullTerminated(s);
 
-		result->ptr[0] = String_isConstRef(s) ? String_createConstRefSized(s.ptr, strl, b) :
-			String_createRefSized((C8*)s.ptr, strl, b);
+		result->ptr[0] = CharString_isConstRef(s) ? CharString_createConstRefSized(s.ptr, strl, b) :
+			CharString_createRefSized((C8*)s.ptr, strl, b);
 
 		return Error_none();
 	}
 
-	StringList str = *result;
+	CharStringList str = *result;
 
 	c = C8_transform(c, (EStringTransform) casing);
 
@@ -716,48 +716,48 @@ Error String_split(
 		if (C8_transform(s.ptr[i], (EStringTransform) casing) == c) {
 
 			str.ptr[count++] = 
-				String_isConstRef(s) ? String_createConstRefSized(s.ptr + last, i - last, false) : 
-				String_createRefSized((C8*)s.ptr + last, i - last, false);
+				CharString_isConstRef(s) ? CharString_createConstRefSized(s.ptr + last, i - last, false) : 
+				CharString_createRefSized((C8*)s.ptr + last, i - last, false);
 
 			last = i + 1;
 		}
 
-	Bool b = String_isNullTerminated(s);
+	Bool b = CharString_isNullTerminated(s);
 
 	str.ptr[count++] = 
-		String_isConstRef(s) ? String_createConstRefSized(s.ptr + last, strl - last, b) : 
-		String_createRefSized((C8*)s.ptr + last, strl - last, b);
+		CharString_isConstRef(s) ? CharString_createConstRefSized(s.ptr + last, strl - last, b) : 
+		CharString_createRefSized((C8*)s.ptr + last, strl - last, b);
 
 	return Error_none();
 }
 
-Error String_splitString(
-	String s, 
-	String other, 
+Error CharString_splitString(
+	CharString s, 
+	CharString other, 
 	EStringCase casing, 
 	Allocator allocator, 
-	StringList *result
+	CharStringList *result
 ) {
 
-	U64 length = String_countAllString(s, other, casing);
+	U64 length = CharString_countAllString(s, other, casing);
 
-	Error err = StringList_create(length + 1, allocator, result);
+	Error err = CharStringList_create(length + 1, allocator, result);
 
 	if (err.genericError)
 		return err;
 
-	Bool b = String_isNullTerminated(s);
-	U64 strl = String_length(s);
+	Bool b = CharString_isNullTerminated(s);
+	U64 strl = CharString_length(s);
 
 	if (!length) {
 
-		*result->ptr = String_isConstRef(s) ? String_createConstRefSized(s.ptr, strl, b) :
-			String_createRefSized((C8*)s.ptr, strl, b);
+		*result->ptr = CharString_isConstRef(s) ? CharString_createConstRefSized(s.ptr, strl, b) :
+			CharString_createRefSized((C8*)s.ptr, strl, b);
 
 		return Error_none();
 	}
 
-	StringList str = *result;
+	CharStringList str = *result;
 
 	U64 count = 0, last = 0;
 
@@ -777,8 +777,8 @@ Error String_splitString(
 		if (match) {
 
 			str.ptr[count++] = 
-				String_isConstRef(s) ? String_createConstRefSized(s.ptr + last, i - last, false) : 
-				String_createRefSized((C8*)s.ptr + last, i - last, false);
+				CharString_isConstRef(s) ? CharString_createConstRefSized(s.ptr + last, i - last, false) : 
+				CharString_createRefSized((C8*)s.ptr + last, i - last, false);
 
 			last = i + strl;
 			i += strl - 1;
@@ -786,13 +786,13 @@ Error String_splitString(
 	}
 
 	str.ptr[count++] = 
-		String_isConstRef(s) ? String_createConstRefSized(s.ptr + last, strl - last, b) : 
-		String_createRefSized((C8*)s.ptr + last, strl - last, b);
+		CharString_isConstRef(s) ? CharString_createConstRefSized(s.ptr + last, strl - last, b) : 
+		CharString_createRefSized((C8*)s.ptr + last, strl - last, b);
 
 	return Error_none();
 }
 
-Error String_splitLine(String s, Allocator alloc, StringList *result) {
+Error CharString_splitLine(CharString s, Allocator alloc, CharStringList *result) {
 
 	if(!result)
 		return Error_nullPointer(2);
@@ -801,7 +801,7 @@ Error String_splitLine(String s, Allocator alloc, StringList *result) {
 		return Error_invalidParameter(2, 1);
 
 	U64 v = 0, lastLineEnd = U64_MAX;
-	U64 strl = String_length(s);
+	U64 strl = CharString_length(s);
 
 	for(U64 i = 0; i < strl; ++i)
 
@@ -824,7 +824,7 @@ Error String_splitLine(String s, Allocator alloc, StringList *result) {
 	if(lastLineEnd != strl)
 		++v;
 
-	Error err = StringList_create(v, alloc, result);
+	Error err = CharStringList_create(v, alloc, result);
 
 	if (err.genericError)
 		return err;
@@ -852,27 +852,27 @@ Error String_splitLine(String s, Allocator alloc, StringList *result) {
 		if(!isLineEnd)
 			continue;
 
-		result->ptr[v++] = String_isConstRef(s) ? 
-			String_createConstRefSized(s.ptr + lastLineEnd, iOld - lastLineEnd, false) : 
-			String_createRefSized((C8*)s.ptr + lastLineEnd, iOld - lastLineEnd, false);
+		result->ptr[v++] = CharString_isConstRef(s) ? 
+			CharString_createConstRefSized(s.ptr + lastLineEnd, iOld - lastLineEnd, false) : 
+			CharString_createRefSized((C8*)s.ptr + lastLineEnd, iOld - lastLineEnd, false);
 
 		lastLineEnd = i + 1;
 	}
 
 	if(lastLineEnd != strl)
-		result->ptr[v++] = String_isConstRef(s) ? 
-			String_createConstRefSized(s.ptr + lastLineEnd, strl - lastLineEnd, String_isNullTerminated(s)) : 
-			String_createRefSized((C8*)s.ptr + lastLineEnd, strl - lastLineEnd, String_isNullTerminated(s));
+		result->ptr[v++] = CharString_isConstRef(s) ? 
+			CharString_createConstRefSized(s.ptr + lastLineEnd, strl - lastLineEnd, CharString_isNullTerminated(s)) : 
+			CharString_createRefSized((C8*)s.ptr + lastLineEnd, strl - lastLineEnd, CharString_isNullTerminated(s));
 
 	return Error_none();
 }
 
-Error String_reserve(String *str, U64 length, Allocator alloc) {
+Error CharString_reserve(CharString *str, U64 length, Allocator alloc) {
 
 	if (!str)
 		return Error_nullPointer(0);
 
-	if (String_isRef(*str) && String_length(*str))
+	if (CharString_isRef(*str) && CharString_length(*str))
 		return Error_invalidOperation(0);
 
 	if (length >> 48)
@@ -890,7 +890,7 @@ Error String_reserve(String *str, U64 length, Allocator alloc) {
 	if (err.genericError)
 		return err;
 
-	Buffer_copy(b, String_bufferConst(*str));
+	Buffer_copy(b, CharString_bufferConst(*str));
 
 	((C8*)b.ptr)[length] = '\0';
 	str->len |= (U64)1 << 63;
@@ -904,14 +904,14 @@ Error String_reserve(String *str, U64 length, Allocator alloc) {
 	return err;
 }
 
-Error String_resize(String *str, U64 length, C8 defaultChar, Allocator alloc) {
+Error CharString_resize(CharString *str, U64 length, C8 defaultChar, Allocator alloc) {
 
 	if (!str)
 		return Error_nullPointer(0);
 
-	U64 strl = String_length(*str);
+	U64 strl = CharString_length(*str);
 
-	if (String_isRef(*str) && strl)
+	if (CharString_isRef(*str) && strl)
 		return Error_invalidOperation(0);
 
 	if (length >> 48)
@@ -920,14 +920,14 @@ Error String_resize(String *str, U64 length, C8 defaultChar, Allocator alloc) {
 	if (!alloc.alloc || !alloc.free)
 		return Error_nullPointer(3);
 
-	if (length == strl && String_isNullTerminated(*str))
+	if (length == strl && CharString_isNullTerminated(*str))
 		return Error_none();
 
 	//Simple resize; we cut off the tail
 
 	if (length < strl) {
 
-		Bool b = String_isNullTerminated(*str);
+		Bool b = CharString_isNullTerminated(*str);
 
 		str->len = ((U64)b << 63) | length;
 
@@ -943,7 +943,7 @@ Error String_resize(String *str, U64 length, C8 defaultChar, Allocator alloc) {
 
 		//Reserve 50% more to ensure we don't resize too many times
 
-		Error err = String_reserve(str, U64_max(64, length * 3 / 2) + 1, alloc);
+		Error err = CharString_reserve(str, U64_max(64, length * 3 / 2) + 1, alloc);
 
 		if (err.genericError)
 			return err;
@@ -959,69 +959,69 @@ Error String_resize(String *str, U64 length, C8 defaultChar, Allocator alloc) {
 	return Error_none();
 }
 
-Error String_append(String *s, C8 c, Allocator allocator) {
+Error CharString_append(CharString *s, C8 c, Allocator allocator) {
 
 	if (!s)
 		return Error_nullPointer(0);
 
-	if(!c && String_isNullTerminated(*s))
+	if(!c && CharString_isNullTerminated(*s))
 		return Error_none();
 
-	return String_resize(s, String_length(*s) + (Bool)c, c, allocator);
+	return CharString_resize(s, CharString_length(*s) + (Bool)c, c, allocator);
 }
 
 #if _WIN32
-	String String_newLine() { return String_createConstRefUnsafe("\r\n"); }
+	CharString CharString_newLine() { return CharString_createConstRefUnsafe("\r\n"); }
 #else
-	String String_newLine() { return String_createConstRefUnsafe("\n"); }
+	CharString CharString_newLine() { return CharString_createConstRefUnsafe("\n"); }
 #endif
 
-Error String_appendString(String *s, String other, Allocator allocator) {
+Error CharString_appendString(CharString *s, CharString other, Allocator allocator) {
 
-	U64 otherl = String_length(other);
+	U64 otherl = CharString_length(other);
 
 	if (!otherl)
 		return Error_none();
 
-	other = String_createConstRefSized(other.ptr, otherl, String_isNullTerminated(other));
+	other = CharString_createConstRefSized(other.ptr, otherl, CharString_isNullTerminated(other));
 
 	if (!s)
 		return Error_nullPointer(0);
 
-	U64 oldLen = String_length(*s);
+	U64 oldLen = CharString_length(*s);
 
-	if (String_isRef(*s) && oldLen)
+	if (CharString_isRef(*s) && oldLen)
 		return Error_invalidParameter(0, 0);
 
-	Error err = String_resize(s, oldLen + otherl, other.ptr[0], allocator);
+	Error err = CharString_resize(s, oldLen + otherl, other.ptr[0], allocator);
 
 	if (err.genericError)
 		return err;
 
-	Buffer_copy(Buffer_createRef((U8*)s->ptr + oldLen, otherl), String_bufferConst(other));
+	Buffer_copy(Buffer_createRef((U8*)s->ptr + oldLen, otherl), CharString_bufferConst(other));
 	return Error_none();
 }
 
-Error String_insert(String *s, C8 c, U64 i, Allocator allocator) {
+Error CharString_insert(CharString *s, C8 c, U64 i, Allocator allocator) {
 
 	if (!s)
 		return Error_nullPointer(0);
 
-	U64 strl = String_length(*s);
+	U64 strl = CharString_length(*s);
 
-	if (String_isRef(*s) && strl)
+	if (CharString_isRef(*s) && strl)
 		return Error_invalidParameter(0, 0);
 
 	if(i > strl)
 		return Error_outOfBounds(2, i, strl);
 
-	if(i == strl && !c && String_isNullTerminated(*s))
+	if(i == strl && !c && CharString_isNullTerminated(*s))
 		return Error_none();
 
 	if(!c && i != strl)
 		return Error_invalidOperation(0);
 
-	Error err = String_resize(s, strl + 1, c, allocator);
+	Error err = CharString_resize(s, strl + 1, c, allocator);
 
 	if (err.genericError)
 		return err;
@@ -1043,22 +1043,22 @@ Error String_insert(String *s, C8 c, U64 i, Allocator allocator) {
 	return Error_none();
 }
 
-Error String_insertString(String *s, String other, U64 i, Allocator allocator) {
+Error CharString_insertString(CharString *s, CharString other, U64 i, Allocator allocator) {
 
 	if (!s)
 		return Error_nullPointer(0);
 
-	U64 oldLen = String_length(*s);
+	U64 oldLen = CharString_length(*s);
 
-	if (String_isRef(*s) && oldLen)
+	if (CharString_isRef(*s) && oldLen)
 		return Error_invalidParameter(0, 0);
 
-	U64 otherl = String_length(other);
+	U64 otherl = CharString_length(other);
 
 	if (!otherl)
 		return Error_none();
 
-	Error err = String_resize(s, oldLen + otherl, ' ', allocator);
+	Error err = CharString_resize(s, oldLen + otherl, ' ', allocator);
 
 	if (err.genericError)
 		return err;
@@ -1072,16 +1072,16 @@ Error String_insertString(String *s, String other, U64 i, Allocator allocator) {
 
 	Buffer_copy(
 		Buffer_createRef((U8*)s->ptr + i, otherl),
-		String_bufferConst(other)
+		CharString_bufferConst(other)
 	);
 
 	return Error_none();
 }
 
-Error String_replaceAllString(
-	String *s,
-	String search,
-	String replace,
+Error CharString_replaceAllString(
+	CharString *s,
+	CharString search,
+	CharString replace,
 	EStringCase caseSensitive,
 	Allocator allocator
 ) {
@@ -1089,11 +1089,11 @@ Error String_replaceAllString(
 	if (!s)
 		return Error_nullPointer(0);
 
-	if(String_isConstRef(*s))
+	if(CharString_isConstRef(*s))
 		return Error_constData(0, 0);
 
 	List finds = List_createEmpty(sizeof(U64));
-	Error err = String_findAllString(*s, search, allocator, caseSensitive, &finds);
+	Error err = CharString_findAllString(*s, search, allocator, caseSensitive, &finds);
 
 	if(err.genericError)
 		return err;
@@ -1105,9 +1105,9 @@ Error String_replaceAllString(
 
 	const U64 *ptr = (const U64*) finds.ptr;
 
-	U64 searchl = String_length(search);
-	U64 replacel = String_length(replace);
-	U64 strl = String_length(*s);
+	U64 searchl = CharString_length(search);
+	U64 replacel = CharString_length(replace);
+	U64 strl = CharString_length(*s);
 
 	if (searchl == replacel) {
 
@@ -1118,7 +1118,7 @@ Error String_replaceAllString(
 		goto clean;
 	}
 
-	if(String_isRef(*s))
+	if(CharString_isRef(*s))
 		return Error_invalidOperation(0);
 
 	//Shrink replaces
@@ -1135,7 +1135,7 @@ Error String_replaceAllString(
 
 			Buffer_copy(
 				Buffer_createRef((U8*)s->ptr + iCurrent, replacel), 
-				String_bufferConst(replace)
+				CharString_bufferConst(replace)
 			);
 
 			iCurrent += replacel;
@@ -1155,7 +1155,7 @@ Error String_replaceAllString(
 
 		//Ensure the string is now the right size
 
-		err = String_resize(s, strl - diff * finds.length, ' ', allocator);
+		err = CharString_resize(s, strl - diff * finds.length, ' ', allocator);
 		goto clean;
 	}
 
@@ -1165,7 +1165,7 @@ Error String_replaceAllString(
 
 	U64 diff = replacel - searchl;
 
-	_gotoIfError(clean, String_resize(s, strl + diff * finds.length, ' ', allocator));
+	_gotoIfError(clean, CharString_resize(s, strl + diff * finds.length, ' ', allocator));
 
 	//Move from right to left
 
@@ -1192,7 +1192,7 @@ Error String_replaceAllString(
 
 		Buffer_revCopy(
 			Buffer_createRef((U8*)s->ptr + newLoc - replacel, replacel), 
-			String_bufferConst(replace)
+			CharString_bufferConst(replace)
 		);
 
 		newLoc -= replacel;
@@ -1203,10 +1203,10 @@ clean:
 	return err;
 }
 
-Error String_replaceString(
-	String *s,
-	String search,
-	String replace,
+Error CharString_replaceString(
+	CharString *s,
+	CharString search,
+	CharString replace,
 	EStringCase caseSensitive,
 	Allocator allocator,
 	Bool isFirst
@@ -1215,27 +1215,27 @@ Error String_replaceString(
 	if (!s)
 		return Error_nullPointer(0);
 
-	if(String_isConstRef(*s))
+	if(CharString_isConstRef(*s))
 		return Error_constData(0, 0);
 
-	U64 res = isFirst ? String_findFirstString(*s, search, caseSensitive) : 
-		String_findLastString(*s, search, caseSensitive);
+	U64 res = isFirst ? CharString_findFirstString(*s, search, caseSensitive) : 
+		CharString_findLastString(*s, search, caseSensitive);
 
 	if (res == U64_MAX)
 		return Error_none();
 
-	U64 searchl = String_length(search);
-	U64 replacel = String_length(replace);
-	U64 strl = String_length(*s);
+	U64 searchl = CharString_length(search);
+	U64 replacel = CharString_length(replace);
+	U64 strl = CharString_length(*s);
 
 	//Easy, early exit. Strings are same size.
 
 	if (searchl == replacel) {
-		Buffer_copy(Buffer_createRef((U8*)s->ptr + res, replacel), String_bufferConst(replace));
+		Buffer_copy(Buffer_createRef((U8*)s->ptr + res, replacel), CharString_bufferConst(replace));
 		return Error_none();
 	}
 
-	if(String_isRef(*s))
+	if(CharString_isRef(*s))
 		return Error_invalidOperation(0);
 
 	//Replacement is smaller than our search
@@ -1254,11 +1254,11 @@ Error String_replaceString(
 
 		//Throw our replacement in there
 
-		Buffer_copy(Buffer_createRef((U8*)s->ptr + res, replacel), String_bufferConst(replace));
+		Buffer_copy(Buffer_createRef((U8*)s->ptr + res, replacel), CharString_bufferConst(replace));
 
 		//Shrink the string; this is done after because we need to read the right of the string first
 
-		Error err = String_resize(s, strl - diff, ' ', allocator);
+		Error err = CharString_resize(s, strl - diff, ' ', allocator);
 
 		if (err.genericError)
 			return err;
@@ -1271,7 +1271,7 @@ Error String_replaceString(
 
 	U64 diff = replacel - searchl;
 
-	Error err = String_resize(s, strl + diff, ' ', allocator);
+	Error err = CharString_resize(s, strl + diff, ' ', allocator);
 
 	if (err.genericError)
 		return err;
@@ -1285,48 +1285,48 @@ Error String_replaceString(
 
 	//Throw our replacement in there
 
-	Buffer_copy(Buffer_createRef((U8*)s->ptr + res, replacel), String_bufferConst(replace));
+	Buffer_copy(Buffer_createRef((U8*)s->ptr + res, replacel), CharString_bufferConst(replace));
 	return Error_none();
 }
 
-Error String_replaceFirstString(
-	String *s,
-	String search,
-	String replace,
+Error CharString_replaceFirstString(
+	CharString *s,
+	CharString search,
+	CharString replace,
 	EStringCase caseSensitive,
 	Allocator allocator
 ) {
-	return String_replaceString(s, search, replace, caseSensitive, allocator, true);
+	return CharString_replaceString(s, search, replace, caseSensitive, allocator, true);
 }
 
-Error String_replaceLastString(
-	String *s, 
-	String search, 
-	String replace, 
+Error CharString_replaceLastString(
+	CharString *s, 
+	CharString search, 
+	CharString replace, 
 	EStringCase caseSensitive,
 	Allocator allocator
 ) {
-	return String_replaceString(s, search, replace, caseSensitive, allocator, false);
+	return CharString_replaceString(s, search, replace, caseSensitive, allocator, false);
 }
 
-Bool String_startsWith(String str, C8 c, EStringCase caseSensitive) { 
+Bool CharString_startsWith(CharString str, C8 c, EStringCase caseSensitive) { 
 	return 
-		String_length(str) && str.ptr && 
+		CharString_length(str) && str.ptr && 
 		C8_transform(*str.ptr, (EStringTransform) caseSensitive) == 
 		C8_transform(c, (EStringTransform) caseSensitive);
 }
 
-Bool String_endsWith(String str, C8 c, EStringCase caseSensitive) {
+Bool CharString_endsWith(CharString str, C8 c, EStringCase caseSensitive) {
 	return 
-		String_length(str) && str.ptr && 
-		C8_transform(str.ptr[String_length(str) - 1], (EStringTransform) caseSensitive) == 
+		CharString_length(str) && str.ptr && 
+		C8_transform(str.ptr[CharString_length(str) - 1], (EStringTransform) caseSensitive) == 
 		C8_transform(c, (EStringTransform) caseSensitive);
 }
 
-Bool String_startsWithString(String str, String other, EStringCase caseSensitive) {
+Bool CharString_startsWithString(CharString str, CharString other, EStringCase caseSensitive) {
 
-	U64 otherl = String_length(other);
-	U64 strl = String_length(str);
+	U64 otherl = CharString_length(other);
+	U64 strl = CharString_length(str);
 
 	if(!otherl)
 		return true;
@@ -1344,10 +1344,10 @@ Bool String_startsWithString(String str, String other, EStringCase caseSensitive
 	return true;
 }
 
-Bool String_endsWithString(String str, String other, EStringCase caseSensitive) {
+Bool CharString_endsWithString(CharString str, CharString other, EStringCase caseSensitive) {
 
-	U64 otherl = String_length(other);
-	U64 strl = String_length(str);
+	U64 otherl = CharString_length(other);
+	U64 strl = CharString_length(str);
 
 	if(!otherl)
 		return true;
@@ -1365,23 +1365,23 @@ Bool String_endsWithString(String str, String other, EStringCase caseSensitive) 
 	return true;
 }
 
-U64 String_countAll(String s, C8 c, EStringCase caseSensitive) {
+U64 CharString_countAll(CharString s, C8 c, EStringCase caseSensitive) {
 
 	c = C8_transform(c, (EStringTransform)caseSensitive);
 
 	U64 count = 0;
 
-	for (U64 i = 0; i < String_length(s); ++i)
+	for (U64 i = 0; i < CharString_length(s); ++i)
 		if (C8_transform(s.ptr[i], (EStringTransform)caseSensitive) == c)
 			++count;
 
 	return count;
 }
 
-U64 String_countAllString(String s, String other, EStringCase casing) {
+U64 CharString_countAllString(CharString s, CharString other, EStringCase casing) {
 
-	U64 otherl = String_length(other);
-	U64 strl = String_length(s);
+	U64 otherl = CharString_length(other);
+	U64 strl = CharString_length(s);
 
 	if(!otherl || strl < otherl)
 		return 0;
@@ -1410,8 +1410,8 @@ U64 String_countAllString(String s, String other, EStringCase casing) {
 	return j;
 }
 
-Error String_findAll(
-	String s,
+Error CharString_findAll(
+	CharString s,
 	C8 c,
 	Allocator alloc,
 	EStringCase caseSensitive,
@@ -1424,7 +1424,7 @@ Error String_findAll(
 	if(result->ptr)
 		return Error_invalidParameter(4, 0);
 
-	U64 strl = String_length(s);
+	U64 strl = CharString_length(s);
 
 	List l = List_createEmpty(sizeof(U64));
 	Error err = List_reserve(&l, strl / 25 + 16, alloc);
@@ -1445,9 +1445,9 @@ Error String_findAll(
 	return Error_none();
 }
 
-Error String_findAllString(
-	String s,
-	String other,
+Error CharString_findAllString(
+	CharString s,
+	CharString other,
 	Allocator alloc,
 	EStringCase casing,
 	List *result
@@ -1459,8 +1459,8 @@ Error String_findAllString(
 	if(result->ptr)
 		return Error_invalidParameter(4, 0);
 
-	U64 otherl = String_length(other);
-	U64 strl = String_length(s);
+	U64 otherl = CharString_length(other);
+	U64 strl = CharString_length(s);
 
 	if(!otherl)
 		return Error_invalidParameter(1, 0);
@@ -1505,32 +1505,32 @@ Error String_findAllString(
 	return Error_none();
 }
 
-U64 String_findFirst(String s, C8 c, EStringCase caseSensitive) {
+U64 CharString_findFirst(CharString s, C8 c, EStringCase caseSensitive) {
 
 	c = C8_transform(c, (EStringTransform)caseSensitive);
 
-	for (U64 i = 0; i < String_length(s); ++i)
+	for (U64 i = 0; i < CharString_length(s); ++i)
 		if (C8_transform(s.ptr[i], (EStringTransform)caseSensitive) == c)
 			return i;
 
 	return U64_MAX;
 }
 
-U64 String_findLast(String s, C8 c, EStringCase caseSensitive) {
+U64 CharString_findLast(CharString s, C8 c, EStringCase caseSensitive) {
 
 	c = C8_transform(c, (EStringTransform)caseSensitive);
 
-	for (U64 i = String_length(s) - 1; i != U64_MAX; --i)
+	for (U64 i = CharString_length(s) - 1; i != U64_MAX; --i)
 		if (C8_transform(s.ptr[i], (EStringTransform)caseSensitive) == c)
 			return i;
 
 	return U64_MAX;
 }
 
-U64 String_findFirstString(String s, String other, EStringCase casing) {
+U64 CharString_findFirstString(CharString s, CharString other, EStringCase casing) {
 
-	U64 otherl = String_length(other);
-	U64 strl = String_length(s);
+	U64 otherl = CharString_length(other);
+	U64 strl = CharString_length(s);
 
 	if(!otherl || strl < otherl)
 		return U64_MAX;
@@ -1557,10 +1557,10 @@ U64 String_findFirstString(String s, String other, EStringCase casing) {
 	return i;
 }
 
-U64 String_findLastString(String s, String other, EStringCase casing) {
+U64 CharString_findLastString(CharString s, CharString other, EStringCase casing) {
 	
-	U64 strl = String_length(s);
-	U64 otherl = String_length(other);
+	U64 strl = CharString_length(s);
+	U64 otherl = CharString_length(other);
 
 	if(!otherl || strl < otherl)
 		return U64_MAX;
@@ -1587,10 +1587,10 @@ U64 String_findLastString(String s, String other, EStringCase casing) {
 	return i;
 }
 
-Bool String_equalsString(String s, String other, EStringCase caseSensitive) {
+Bool CharString_equalsString(CharString s, CharString other, EStringCase caseSensitive) {
 
-	U64 strl = String_length(s);
-	U64 otherl = String_length(other);
+	U64 strl = CharString_length(s);
+	U64 otherl = CharString_length(other);
 
 	if (strl != otherl)
 		return false;
@@ -1605,22 +1605,22 @@ Bool String_equalsString(String s, String other, EStringCase caseSensitive) {
 	return true;
 }
 
-Bool String_equals(String s, C8 c, EStringCase caseSensitive) {
+Bool CharString_equals(CharString s, C8 c, EStringCase caseSensitive) {
 
-	return String_length(s) == 1 && s.ptr && 
+	return CharString_length(s) == 1 && s.ptr && 
 		C8_transform(s.ptr[0], (EStringTransform) caseSensitive) == 
 		C8_transform(c, (EStringTransform) caseSensitive);
 }
 
-Bool String_parseNyto(String s, U64 *result){
+Bool CharString_parseNyto(CharString s, U64 *result){
 
-	String prefix = String_createConstRefUnsafe("0n");
+	CharString prefix = CharString_createConstRefUnsafe("0n");
 
-	Error err = String_offsetAsRef(
-		s, String_startsWithString(s, prefix, EStringCase_Insensitive) ? String_length(prefix) : 0, &s
+	Error err = CharString_offsetAsRef(
+		s, CharString_startsWithString(s, prefix, EStringCase_Insensitive) ? CharString_length(prefix) : 0, &s
 	);
 
-	U64 strl = String_length(s);
+	U64 strl = CharString_length(s);
 
 	if (err.genericError)
 		return false;
@@ -1646,17 +1646,17 @@ Bool String_parseNyto(String s, U64 *result){
 	return true;
 }
 
-Bool String_parseHex(String s, U64 *result){
+Bool CharString_parseHex(CharString s, U64 *result){
 
-	String prefix = String_createConstRefUnsafe("0x");
-	Error err = String_offsetAsRef(
-		s, String_startsWithString(s, prefix, EStringCase_Insensitive) ? String_length(prefix) : 0, &s
+	CharString prefix = CharString_createConstRefUnsafe("0x");
+	Error err = CharString_offsetAsRef(
+		s, CharString_startsWithString(s, prefix, EStringCase_Insensitive) ? CharString_length(prefix) : 0, &s
 	);
 
 	if (err.genericError)
 		return false;
 
-	U64 strl = String_length(s);
+	U64 strl = CharString_length(s);
 
 	if (!result || !s.ptr || strl > 16)
 		return false;
@@ -1676,9 +1676,9 @@ Bool String_parseHex(String s, U64 *result){
 	return true;
 }
 
-Bool String_parseDec(String s, U64 *result) {
+Bool CharString_parseDec(CharString s, U64 *result) {
 
-	U64 strl = String_length(s);
+	U64 strl = CharString_length(s);
 
 	if (!result || !s.ptr || strl > 20)
 		return false;
@@ -1701,16 +1701,16 @@ Bool String_parseDec(String s, U64 *result) {
 	return true;
 }
 
-Bool String_parseDecSigned(String s, I64 *result) {
+Bool CharString_parseDecSigned(CharString s, I64 *result) {
 
-	Bool neg = String_startsWith(s, '-', EStringCase_Sensitive);
+	Bool neg = CharString_startsWith(s, '-', EStringCase_Sensitive);
 
-	Error err = String_offsetAsRef(s, neg, &s);
+	Error err = CharString_offsetAsRef(s, neg, &s);
 
 	if (err.genericError)
 		return false;
 
-	Bool b = String_parseDec(s, (U64*) result);
+	Bool b = CharString_parseDec(s, (U64*) result);
 
 	if(!b)
 		return false;
@@ -1731,7 +1731,7 @@ Bool String_parseDecSigned(String s, I64 *result) {
 
 //Approximately equal to: [-+]?[0-9]*[.[0-9]*]?[[eE][-+]?[0-9]+]?
 
-Bool String_parseFloat(String s, F32 *result) {
+Bool CharString_parseFloat(CharString s, F32 *result) {
 
 	if (!result)
 		return false;
@@ -1740,17 +1740,17 @@ Bool String_parseFloat(String s, F32 *result) {
 
 	Bool sign = false;
 
-	if (String_startsWith(s, '-', EStringCase_Sensitive)) {
+	if (CharString_startsWith(s, '-', EStringCase_Sensitive)) {
 
 		sign = true;
 
-		if (String_offsetAsRef(s, 1, &s).genericError)
+		if (CharString_offsetAsRef(s, 1, &s).genericError)
 			return false;
 	}
 
-	else if (String_startsWith(s, '+', EStringCase_Sensitive)) {
+	else if (CharString_startsWith(s, '+', EStringCase_Sensitive)) {
 
-		if (String_offsetAsRef(s, 1, &s).genericError)
+		if (CharString_offsetAsRef(s, 1, &s).genericError)
 			return false;
 	}
 
@@ -1759,8 +1759,8 @@ Bool String_parseFloat(String s, F32 *result) {
 	F32 intPart = 0;
 
 	while(
-		!String_startsWith(s, '.', EStringCase_Sensitive) && 
-		!String_startsWith(s, 'e', EStringCase_Insensitive)
+		!CharString_startsWith(s, '.', EStringCase_Sensitive) && 
+		!CharString_startsWith(s, 'e', EStringCase_Insensitive)
 	) {
 
 		U8 v = C8_dec(s.ptr[0]);
@@ -1773,10 +1773,10 @@ Bool String_parseFloat(String s, F32 *result) {
 		if(!F32_isValid(intPart))
 			return false;
 
-		if (String_offsetAsRef(s, 1, &s).genericError)
+		if (CharString_offsetAsRef(s, 1, &s).genericError)
 			return false;
 
-		if (!String_length(s)) {
+		if (!CharString_length(s)) {
 			*result = sign ? -intPart : intPart;
 			return true;
 		}
@@ -1785,14 +1785,14 @@ Bool String_parseFloat(String s, F32 *result) {
 	//Parse fraction
 
 	if (
-		String_startsWith(s, '.', EStringCase_Sensitive) && 
-		String_offsetAsRef(s, 1, &s).genericError
+		CharString_startsWith(s, '.', EStringCase_Sensitive) && 
+		CharString_offsetAsRef(s, 1, &s).genericError
 	)
 		return false;
 
 	F32 fraction = 0, multiplier = 0.1f;
 
-	while(!String_startsWith(s, 'e', EStringCase_Insensitive)) {
+	while(!CharString_startsWith(s, 'e', EStringCase_Insensitive)) {
 
 		U8 v = C8_dec(s.ptr[0]);
 
@@ -1806,10 +1806,10 @@ Bool String_parseFloat(String s, F32 *result) {
 
 		multiplier *= 0.1f;
 
-		if (String_offsetAsRef(s, 1, &s).genericError)
+		if (CharString_offsetAsRef(s, 1, &s).genericError)
 			return false;
 
-		if (!String_length(s)) {
+		if (!CharString_length(s)) {
 			*result = sign ? -(intPart + fraction) : intPart + fraction;
 			return F32_isValid(*result);
 		}
@@ -1817,22 +1817,22 @@ Bool String_parseFloat(String s, F32 *result) {
 
 	//Parse exponent sign
 
-	if (String_offsetAsRef(s, 1, &s).genericError)
+	if (CharString_offsetAsRef(s, 1, &s).genericError)
 		return false;
 
 	Bool esign = false;
 
-	if (String_startsWith(s, '-', EStringCase_Sensitive)) {
+	if (CharString_startsWith(s, '-', EStringCase_Sensitive)) {
 
 		esign = true;
 
-		if (String_offsetAsRef(s, 1, &s).genericError)
+		if (CharString_offsetAsRef(s, 1, &s).genericError)
 			return false;
 	}
 
-	else if (String_startsWith(s, '+', EStringCase_Sensitive)) {
+	else if (CharString_startsWith(s, '+', EStringCase_Sensitive)) {
 
-		if (String_offsetAsRef(s, 1, &s).genericError)
+		if (CharString_offsetAsRef(s, 1, &s).genericError)
 			return false;
 	}
 
@@ -1840,7 +1840,7 @@ Bool String_parseFloat(String s, F32 *result) {
 
 	F32 exponent = 0;
 
-	while(String_length(s)) {
+	while(CharString_length(s)) {
 
 		U8 v = C8_dec(s.ptr[0]);
 
@@ -1852,7 +1852,7 @@ Bool String_parseFloat(String s, F32 *result) {
 		if(!F32_isValid(fraction))
 			return false;
 
-		if (String_offsetAsRef(s, 1, &s).genericError)
+		if (CharString_offsetAsRef(s, 1, &s).genericError)
 			return false;
 	}
 
@@ -1870,22 +1870,22 @@ Bool String_parseFloat(String s, F32 *result) {
 	return true;
 }
 
-Bool String_parseOct(String s, U64 *result) {
+Bool CharString_parseOct(CharString s, U64 *result) {
 
-	String prefix = String_createConstRefUnsafe("0o");
-	Error err = String_offsetAsRef(
-		s, String_startsWithString(s, prefix, EStringCase_Insensitive) ? String_length(prefix) : 0, &s
+	CharString prefix = CharString_createConstRefUnsafe("0o");
+	Error err = CharString_offsetAsRef(
+		s, CharString_startsWithString(s, prefix, EStringCase_Insensitive) ? CharString_length(prefix) : 0, &s
 	);
 
 	if (err.genericError)
 		return false;
 
-	if (!result || !s.ptr || String_length(s) > 22)
+	if (!result || !s.ptr || CharString_length(s) > 22)
 		return false;
 
 	*result = 0;
 
-	for (U64 i = String_length(s) - 1, j = 0; i != U64_MAX; --i, j += 3) {
+	for (U64 i = CharString_length(s) - 1, j = 0; i != U64_MAX; --i, j += 3) {
 
 		U8 v = C8_oct(s.ptr[i]);
 
@@ -1901,22 +1901,22 @@ Bool String_parseOct(String s, U64 *result) {
 	return true;
 }
 
-Bool String_parseBin(String s, U64 *result) {
+Bool CharString_parseBin(CharString s, U64 *result) {
 
-	String prefix = String_createConstRefUnsafe("0b");
-	Error err = String_offsetAsRef(
-		s, String_startsWithString(s, prefix, EStringCase_Insensitive) ? String_length(prefix) : 0, &s
+	CharString prefix = CharString_createConstRefUnsafe("0b");
+	Error err = CharString_offsetAsRef(
+		s, CharString_startsWithString(s, prefix, EStringCase_Insensitive) ? CharString_length(prefix) : 0, &s
 	);
 
 	if (err.genericError)
 		return false;
 
-	if (!result || !s.ptr || String_length(s) > 64)
+	if (!result || !s.ptr || CharString_length(s) > 64)
 		return false;
 
 	*result = 0;
 
-	for (U64 i = String_length(s) - 1, j = 1; i != U64_MAX; --i, j <<= 1) {
+	for (U64 i = CharString_length(s) - 1, j = 1; i != U64_MAX; --i, j <<= 1) {
 
 		U8 v = C8_bin(s.ptr[i]);
 
@@ -1930,15 +1930,15 @@ Bool String_parseBin(String s, U64 *result) {
 	return true;
 }
 
-Bool String_cut(String s, U64 offset, U64 length, String *result) {
+Bool CharString_cut(CharString s, U64 offset, U64 length, CharString *result) {
 
 	if(!result || result->ptr)
 		return false;
 
-	U64 strl = String_length(s);
+	U64 strl = CharString_length(s);
 
 	if (!strl && !offset && !length) {
-		*result = String_createNull();
+		*result = CharString_createNull();
 		return true;
 	}
 
@@ -1952,92 +1952,92 @@ Bool String_cut(String s, U64 offset, U64 length, String *result) {
 		return false;
 
 	if (offset == strl) {
-		*result = String_createNull();
+		*result = CharString_createNull();
 		return false;
 	}
 
-	Bool isNullTerm = String_isNullTerminated(s) && offset + length == strl;
+	Bool isNullTerm = CharString_isNullTerminated(s) && offset + length == strl;
 
-	*result = String_isConstRef(s) ? String_createConstRefSized(s.ptr + offset, length, isNullTerm) :
-		String_createRefSized((C8*)s.ptr + offset, length, isNullTerm);
+	*result = CharString_isConstRef(s) ? CharString_createConstRefSized(s.ptr + offset, length, isNullTerm) :
+		CharString_createRefSized((C8*)s.ptr + offset, length, isNullTerm);
 
 	return true;
 }
 
-Bool String_cutAfter(
-	String s, 
+Bool CharString_cutAfter(
+	CharString s, 
 	C8 c, 
 	EStringCase caseSensitive, 
 	Bool isFirst, 
-	String *result
+	CharString *result
 ) {
 
-	U64 found = isFirst ? String_findFirst(s, c, caseSensitive) : String_findLast(s, c, caseSensitive);
+	U64 found = isFirst ? CharString_findFirst(s, c, caseSensitive) : CharString_findLast(s, c, caseSensitive);
 
 	if (found == U64_MAX)
 		return false;
 
-	return String_cut(s, 0, found, result);
+	return CharString_cut(s, 0, found, result);
 }
 
-Bool String_cutAfterString(
-	String s, 
-	String other, 
+Bool CharString_cutAfterString(
+	CharString s, 
+	CharString other, 
 	EStringCase caseSensitive, 
 	Bool isFirst, 
-	String *result
+	CharString *result
 ) {
 
-	U64 found = isFirst ? String_findFirstString(s, other, caseSensitive) : 
-		String_findLastString(s, other, caseSensitive);
+	U64 found = isFirst ? CharString_findFirstString(s, other, caseSensitive) : 
+		CharString_findLastString(s, other, caseSensitive);
 
 	if (found == U64_MAX)
 		return false;
 
-	return String_cut(s, 0, found, result);
+	return CharString_cut(s, 0, found, result);
 }
 
-Bool String_cutBefore(String s, C8 c, EStringCase caseSensitive, Bool isFirst, String *result) {
+Bool CharString_cutBefore(CharString s, C8 c, EStringCase caseSensitive, Bool isFirst, CharString *result) {
 
 	if (!result)
 		return false;
 
-	U64 found = isFirst ? String_findFirst(s, c, caseSensitive) : String_findLast(s, c, caseSensitive);
+	U64 found = isFirst ? CharString_findFirst(s, c, caseSensitive) : CharString_findLast(s, c, caseSensitive);
 
 	if (found == U64_MAX)
 		return false;
 
 	++found;	//The end of the occurence is the begin of the next string
-	return String_cut(s, found, 0, result);
+	return CharString_cut(s, found, 0, result);
 }
 
-Bool String_cutBeforeString(String s, String other, EStringCase caseSensitive, Bool isFirst, String *result) {
+Bool CharString_cutBeforeString(CharString s, CharString other, EStringCase caseSensitive, Bool isFirst, CharString *result) {
 
-	U64 found = isFirst ? String_findFirstString(s, other, caseSensitive) : 
-		String_findLastString(s, other, caseSensitive);
+	U64 found = isFirst ? CharString_findFirstString(s, other, caseSensitive) : 
+		CharString_findLastString(s, other, caseSensitive);
 
 	if (found == U64_MAX)
 		return false;
 
-	found += String_length(other);	//The end of the occurence is the begin of the next string
-	return String_cut(s, found, 0, result);
+	found += CharString_length(other);	//The end of the occurence is the begin of the next string
+	return CharString_cut(s, found, 0, result);
 }
 
-Bool String_erase(String *s, C8 c, EStringCase caseSensitive, Bool isFirst) {
+Bool CharString_erase(CharString *s, C8 c, EStringCase caseSensitive, Bool isFirst) {
 
-	if(!s || String_isRef(*s))
+	if(!s || CharString_isRef(*s))
 		return false;
 
 	c = C8_transform(c, (EStringTransform) caseSensitive);
 
 	//Skipping first match
 
-	U64 find = String_find(*s, c, caseSensitive, isFirst);
+	U64 find = CharString_find(*s, c, caseSensitive, isFirst);
 
 	if(find == U64_MAX)
 		return false;
 
-	U64 strl = String_length(*s);
+	U64 strl = CharString_length(*s);
 
 	Buffer_copy(
 		Buffer_createRef((U8*)s->ptr + find, strl - find - 1),
@@ -2050,7 +2050,7 @@ Bool String_erase(String *s, C8 c, EStringCase caseSensitive, Bool isFirst) {
 	return true;
 }
 
-Error String_eraseAtCount(String *s, U64 i, U64 count) {
+Error CharString_eraseAtCount(CharString *s, U64 i, U64 count) {
 
 	if(!s)
 		return Error_nullPointer(0);
@@ -2058,10 +2058,10 @@ Error String_eraseAtCount(String *s, U64 i, U64 count) {
 	if(!count)
 		return Error_invalidParameter(2, 0);
 
-	if(String_isRef(*s))
+	if(CharString_isRef(*s))
 		return Error_constData(0, 0);
 
-	U64 strl = String_length(*s);
+	U64 strl = CharString_length(*s);
 
 	if(i + count > strl)
 		return Error_outOfBounds(0, i + count, strl);
@@ -2077,18 +2077,18 @@ Error String_eraseAtCount(String *s, U64 i, U64 count) {
 	return Error_none();
 }
 
-Bool String_eraseString(String *s, String other, EStringCase casing, Bool isFirst) {
+Bool CharString_eraseString(CharString *s, CharString other, EStringCase casing, Bool isFirst) {
 
-	U64 otherl = String_length(other);
+	U64 otherl = CharString_length(other);
 
-	if(!s || !otherl || String_isRef(*s))
+	if(!s || !otherl || CharString_isRef(*s))
 		return false;
 
-	U64 strl = String_length(*s);
+	U64 strl = CharString_length(*s);
 
 	//Skipping first match
 
-	U64 find = String_findString(*s, other, casing, isFirst);
+	U64 find = CharString_findString(*s, other, casing, isFirst);
 
 	if(find == U64_MAX)
 		return false;
@@ -2104,26 +2104,26 @@ Bool String_eraseString(String *s, String other, EStringCase casing, Bool isFirs
 	return true;
 }
 
-//String's inline changes (no copy)
+//CharString's inline changes (no copy)
 
-Bool String_cutEnd(String s, U64 i, String *result) {
-	return String_cut(s, 0, i, result);
+Bool CharString_cutEnd(CharString s, U64 i, CharString *result) {
+	return CharString_cut(s, 0, i, result);
 }
 
-Bool String_cutBegin(String s, U64 i, String *result) {
+Bool CharString_cutBegin(CharString s, U64 i, CharString *result) {
 
-	if (i > String_length(s))
+	if (i > CharString_length(s))
 		return false;
 
-	return String_cut(s, i, 0, result);
+	return CharString_cut(s, i, 0, result);
 }
 
-Bool String_eraseAll(String *s, C8 c, EStringCase casing) {
+Bool CharString_eraseAll(CharString *s, C8 c, EStringCase casing) {
 
-	if(!s || String_isRef(*s))
+	if(!s || CharString_isRef(*s))
 		return false;
 
-	U64 strl = String_length(*s);
+	U64 strl = CharString_length(*s);
 
 	c = C8_transform(c, (EStringTransform) casing);
 
@@ -2145,14 +2145,14 @@ Bool String_eraseAll(String *s, C8 c, EStringCase casing) {
 	return true;
 }
 
-Bool String_eraseAllString(String *s, String other, EStringCase casing) {
+Bool CharString_eraseAllString(CharString *s, CharString other, EStringCase casing) {
 
-	U64 otherl = String_length(other);
+	U64 otherl = CharString_length(other);
 
-	if(!s || !otherl || String_isRef(*s))
+	if(!s || !otherl || CharString_isRef(*s))
 		return false;
 
-	U64 strl = String_length(*s);
+	U64 strl = CharString_length(*s);
 
 	U64 out = 0;
 
@@ -2185,26 +2185,26 @@ Bool String_eraseAllString(String *s, String other, EStringCase casing) {
 	return true;
 }
 
-Bool String_replaceAll(String *s, C8 c, C8 v, EStringCase caseSensitive) {
+Bool CharString_replaceAll(CharString *s, C8 c, C8 v, EStringCase caseSensitive) {
 
-	if (!s || String_isConstRef(*s))
+	if (!s || CharString_isConstRef(*s))
 		return false;
 
 	c = C8_transform(c, (EStringTransform)caseSensitive);
 
-	for(U64 i = 0; i < String_length(*s); ++i)
+	for(U64 i = 0; i < CharString_length(*s); ++i)
 		if(C8_transform(s->ptr[i], (EStringTransform)caseSensitive) == c)
 			((C8*)s->ptr)[i] = v;
 
 	return true;
 }
 
-Bool String_replace(String *s, C8 c, C8 v, EStringCase caseSensitive, Bool isFirst) {
+Bool CharString_replace(CharString *s, C8 c, C8 v, EStringCase caseSensitive, Bool isFirst) {
 
-	if (!s || String_isRef(*s))
+	if (!s || CharString_isRef(*s))
 		return false;
 
-	U64 i = isFirst ? String_findFirst(*s, c, caseSensitive) : String_findLast(*s, c, caseSensitive);
+	U64 i = isFirst ? CharString_findFirst(*s, c, caseSensitive) : CharString_findLast(*s, c, caseSensitive);
 
 	if(i != U64_MAX)
 		((C8*)s->ptr)[i] = v;
@@ -2212,20 +2212,20 @@ Bool String_replace(String *s, C8 c, C8 v, EStringCase caseSensitive, Bool isFir
 	return true;
 }
 
-Bool String_transform(String str, EStringTransform c) {
+Bool CharString_transform(CharString str, EStringTransform c) {
 
-	if(String_isConstRef(str))
+	if(CharString_isConstRef(str))
 		return false;
 
-	for(U64 i = 0; i < String_length(str); ++i)
+	for(U64 i = 0; i < CharString_length(str); ++i)
 		((C8*)str.ptr)[i] = C8_transform(str.ptr[i], c);
 
 	return true;
 }
 
-String String_trim(String s) {
+CharString CharString_trim(CharString s) {
 
-	U64 strl = String_length(s);
+	U64 strl = CharString_length(s);
 	U64 first = strl;
 
 	for (U64 i = 0; i < strl; ++i) 
@@ -2235,7 +2235,7 @@ String String_trim(String s) {
 		}
 
 	if (first == strl)
-		return String_createNull();
+		return CharString_createNull();
 
 	U64 last = strl;
 
@@ -2247,15 +2247,15 @@ String String_trim(String s) {
 
 	++last;		//We wanna include the last character that's non whitespace too
 
-	Bool isNullTerm = String_isNullTerminated(s) && last == strl;
+	Bool isNullTerm = CharString_isNullTerminated(s) && last == strl;
 	
-	return String_isConstRef(s) ? String_createConstRefSized(s.ptr + first, last - first, isNullTerm) :
-		String_createRefSized((C8*)s.ptr + first, last - first, isNullTerm);
+	return CharString_isConstRef(s) ? CharString_createConstRefSized(s.ptr + first, last - first, isNullTerm) :
+		CharString_createRefSized((C8*)s.ptr + first, last - first, isNullTerm);
 }
 
-//StringList
+//CharStringList
 
-Error StringList_create(U64 length, Allocator alloc, StringList *arr) {
+Error CharStringList_create(U64 length, Allocator alloc, CharStringList *arr) {
 
 	if (!arr)
 		return Error_nullPointer(2);
@@ -2263,24 +2263,24 @@ Error StringList_create(U64 length, Allocator alloc, StringList *arr) {
 	if (arr->ptr)
 		return Error_invalidOperation(0);
 
-	StringList sl = (StringList) { .length = length };
+	CharStringList sl = (CharStringList) { .length = length };
 
 	Buffer b = Buffer_createNull();
-	Error err = alloc.alloc(alloc.ptr, length * sizeof(String), &b);
+	Error err = alloc.alloc(alloc.ptr, length * sizeof(CharString), &b);
 
-	sl.ptr = (String*) b.ptr;
+	sl.ptr = (CharString*) b.ptr;
 
 	if(err.genericError)
 		return err;
 
 	for(U64 i = 0; i < sl.length; ++i)
-		sl.ptr[i] = String_createNull();
+		sl.ptr[i] = CharString_createNull();
 
 	*arr = sl;
 	return Error_none();
 }
 
-Bool StringList_free(StringList *arr, Allocator alloc) {
+Bool CharStringList_free(CharStringList *arr, Allocator alloc) {
 
 	if(!arr || !arr->length)
 		return true;
@@ -2288,35 +2288,35 @@ Bool StringList_free(StringList *arr, Allocator alloc) {
 	Bool freed = true;
 
 	for(U64 i = 0; i < arr->length; ++i) {
-		String *str = arr->ptr + i;
-		freed &= String_free(str, alloc);
+		CharString *str = arr->ptr + i;
+		freed &= CharString_free(str, alloc);
 	}
 
 	freed &= alloc.free(alloc.ptr, Buffer_createManagedPtr(
 		arr->ptr,
-		sizeof(String) * arr->length
+		sizeof(CharString) * arr->length
 	));
 
-	*arr = (StringList) { 0 };
+	*arr = (CharStringList) { 0 };
 	return freed;
 }
 
-Error StringList_createCopy(StringList toCopy, Allocator alloc, StringList *arr) {
+Error CharStringList_createCopy(CharStringList toCopy, Allocator alloc, CharStringList *arr) {
 
 	if(!toCopy.length)
 		return Error_nullPointer(0);
 
-	Error err = StringList_create(toCopy.length, alloc, arr);
+	Error err = CharStringList_create(toCopy.length, alloc, arr);
 
 	if (err.genericError)
 		return err;
 
 	for (U64 i = 0; i < toCopy.length; ++i) {
 
-		err = String_createCopy(toCopy.ptr[i], alloc, arr->ptr + i);
+		err = CharString_createCopy(toCopy.ptr[i], alloc, arr->ptr + i);
 
 		if (err.genericError) {
-			StringList_free(arr, alloc);
+			CharStringList_free(arr, alloc);
 			return err;
 		}
 	}
@@ -2324,19 +2324,19 @@ Error StringList_createCopy(StringList toCopy, Allocator alloc, StringList *arr)
 	return Error_none();
 }
 
-Error StringList_unset(StringList arr, U64 i, Allocator alloc) {
+Error CharStringList_unset(CharStringList arr, U64 i, Allocator alloc) {
 
 	if(i >= arr.length)
 		return Error_outOfBounds(1, i, arr.length);
 
-	String *pstr = arr.ptr + i;
-	String_free(pstr, alloc);
+	CharString *pstr = arr.ptr + i;
+	CharString_free(pstr, alloc);
 	return Error_none();
 }
 
-Error StringList_set(StringList arr, U64 i, String str, Allocator alloc) {
+Error CharStringList_set(CharStringList arr, U64 i, CharString str, Allocator alloc) {
 
-	Error err = StringList_unset(arr, i, alloc);
+	Error err = CharStringList_unset(arr, i, alloc);
 
 	if(err.genericError)
 		return err;
@@ -2345,7 +2345,7 @@ Error StringList_set(StringList arr, U64 i, String str, Allocator alloc) {
 	return Error_none();
 }
 
-U64 String_calcStrLen(const C8 *ptr, U64 maxSize) {
+U64 CharString_calcStrLen(const C8 *ptr, U64 maxSize) {
 
 	U64 i = 0;
 
@@ -2356,7 +2356,7 @@ U64 String_calcStrLen(const C8 *ptr, U64 maxSize) {
 	return i;
 }
 
-/*U64 String_hash(String s) {			//TODO: FNV for <10 and xxh64 for >
+/*U64 CharString_hash(CharString s) {			//TODO: FNV for <10 and xxh64 for >
 
 	U64 h = FNVHash_create();
 
@@ -2388,44 +2388,44 @@ U64 String_calcStrLen(const C8 *ptr, U64 maxSize) {
 	return h;
 }*/
 
-String String_getFilePath(String *str) {
+CharString CharString_getFilePath(CharString *str) {
 
-	if(!String_formatPath(str))
-		return String_createNull();
+	if(!CharString_formatPath(str))
+		return CharString_createNull();
 
-	String res = String_createNull();
-	String_cutBefore(*str, '/', EStringCase_Sensitive, false, &res);
+	CharString res = CharString_createNull();
+	CharString_cutBefore(*str, '/', EStringCase_Sensitive, false, &res);
 	return res;
 }
 
-String String_getBasePath(String *str) {
+CharString CharString_getBasePath(CharString *str) {
 
-	if(!String_formatPath(str))
-		return String_createNull();
+	if(!CharString_formatPath(str))
+		return CharString_createNull();
 
-	String res = String_createNull();
-	String_cutAfter(*str, '/', EStringCase_Sensitive, false, &res);
+	CharString res = CharString_createNull();
+	CharString_cutAfter(*str, '/', EStringCase_Sensitive, false, &res);
 	return res;
 }
 
-Error StringList_concat(StringList arr, C8 between, Allocator alloc, String *result) {
+Error CharStringList_concat(CharStringList arr, C8 between, Allocator alloc, CharString *result) {
 
 	U64 length = 0;
 
 	for(U64 i = 0; i < arr.length; ++i)
-		length += String_length(arr.ptr[i]);
+		length += CharString_length(arr.ptr[i]);
 
 	if(arr.length > 1)
 		length += arr.length - 1;
 
-	Error err = String_create(' ', length, alloc, result);
+	Error err = CharString_create(' ', length, alloc, result);
 
 	if(err.genericError)
 		return err;
 
 	for(U64 i = 0, j = 0; i < arr.length; ++i) {
 
-		for(U64 k = 0, l = String_length(arr.ptr[i]); k < l; ++k, ++j)
+		for(U64 k = 0, l = CharString_length(arr.ptr[i]); k < l; ++k, ++j)
 			((C8*)result->ptr)[j] = arr.ptr[i].ptr[k];
 
 		if (i != arr.length - 1)
@@ -2435,131 +2435,131 @@ Error StringList_concat(StringList arr, C8 between, Allocator alloc, String *res
 	return Error_none();
 }
 
-Error StringList_concatString(StringList arr, String between, Allocator alloc, String *result) {
+Error CharStringList_concatString(CharStringList arr, CharString between, Allocator alloc, CharString *result) {
 
 	U64 length = 0;
 
 	for(U64 i = 0; i < arr.length; ++i)
-		length += String_length(arr.ptr[i]);
+		length += CharString_length(arr.ptr[i]);
 
 	if(arr.length > 1)
-		length += (arr.length - 1) * String_length(between);
+		length += (arr.length - 1) * CharString_length(between);
 
-	Error err = String_create(' ', length, alloc, result);
+	Error err = CharString_create(' ', length, alloc, result);
 
 	if(err.genericError)
 		return err;
 
 	for(U64 i = 0, j = 0; i < arr.length; ++i) {
 
-		for(U64 k = 0, l = String_length(arr.ptr[i]); k < l; ++k, ++j)
+		for(U64 k = 0, l = CharString_length(arr.ptr[i]); k < l; ++k, ++j)
 			((C8*)result->ptr)[j] = arr.ptr[i].ptr[k];
 
 		if (i != arr.length - 1)
-			for(U64 k = 0; k < String_length(between); ++k, ++j)
+			for(U64 k = 0; k < CharString_length(between); ++k, ++j)
 				((C8*)result->ptr)[j] = between.ptr[k];
 	}
 
 	return Error_none();
 }
 
-Error StringList_combine(StringList arr, Allocator alloc, String *result) {
-	return StringList_concatString(arr, String_createNull(), alloc, result);
+Error CharStringList_combine(CharStringList arr, Allocator alloc, CharString *result) {
+	return CharStringList_concatString(arr, CharString_createNull(), alloc, result);
 }
 
-U64 String_find(String s, C8 c, EStringCase caseSensitive, Bool isFirst) {
-	return isFirst ? String_findFirst(s, c, caseSensitive) : String_findLast(s, c, caseSensitive);
+U64 CharString_find(CharString s, C8 c, EStringCase caseSensitive, Bool isFirst) {
+	return isFirst ? CharString_findFirst(s, c, caseSensitive) : CharString_findLast(s, c, caseSensitive);
 }
 
-U64 String_findString(String s, String other, EStringCase caseSensitive, Bool isFirst) {
-	return isFirst ? String_findFirstString(s, other, caseSensitive) : 
-		String_findLastString(s, other, caseSensitive);
+U64 CharString_findString(CharString s, CharString other, EStringCase caseSensitive, Bool isFirst) {
+	return isFirst ? CharString_findFirstString(s, other, caseSensitive) : 
+		CharString_findLastString(s, other, caseSensitive);
 }
 
-Bool String_contains(String str, C8 c, EStringCase caseSensitive) { 
-	return String_findFirst(str, c, caseSensitive) != U64_MAX;
+Bool CharString_contains(CharString str, C8 c, EStringCase caseSensitive) { 
+	return CharString_findFirst(str, c, caseSensitive) != U64_MAX;
 }
 
-Bool String_containsString(String str, String other, EStringCase caseSensitive) { 
-	return String_findFirstString(str, other, caseSensitive) != U64_MAX; 
+Bool CharString_containsString(CharString str, CharString other, EStringCase caseSensitive) { 
+	return CharString_findFirstString(str, other, caseSensitive) != U64_MAX; 
 }
 
-Bool String_cutAfterLast(String s, C8 c, EStringCase caseSensitive, String *result) {
-	return String_cutAfter(s, c, caseSensitive, false, result);
+Bool CharString_cutAfterLast(CharString s, C8 c, EStringCase caseSensitive, CharString *result) {
+	return CharString_cutAfter(s, c, caseSensitive, false, result);
 }
 
-Bool String_cutAfterFirst(String s, C8 c, EStringCase caseSensitive, String *result) {
-	return String_cutAfter(s, c, caseSensitive, true, result);
+Bool CharString_cutAfterFirst(CharString s, C8 c, EStringCase caseSensitive, CharString *result) {
+	return CharString_cutAfter(s, c, caseSensitive, true, result);
 }
 
-Bool String_cutAfterLastString(String s, String other, EStringCase caseSensitive, String *result) {
-	return String_cutAfterString(s, other, caseSensitive, false, result);
+Bool CharString_cutAfterLastString(CharString s, CharString other, EStringCase caseSensitive, CharString *result) {
+	return CharString_cutAfterString(s, other, caseSensitive, false, result);
 }
 
-Bool String_cutAfterFirstString(String s, String other, EStringCase caseSensitive, String *result) {
-	return String_cutAfterString(s, other, caseSensitive, true, result);
+Bool CharString_cutAfterFirstString(CharString s, CharString other, EStringCase caseSensitive, CharString *result) {
+	return CharString_cutAfterString(s, other, caseSensitive, true, result);
 }
 
-Bool String_cutBeforeLast(String s, C8 c, EStringCase caseSensitive, String *result) {
-	return String_cutBefore(s, c, caseSensitive, false, result);
+Bool CharString_cutBeforeLast(CharString s, C8 c, EStringCase caseSensitive, CharString *result) {
+	return CharString_cutBefore(s, c, caseSensitive, false, result);
 }
 
-Bool String_cutBeforeFirst(String s, C8 c, EStringCase caseSensitive, String *result) {
-	return String_cutBefore(s, c, caseSensitive, true, result);
+Bool CharString_cutBeforeFirst(CharString s, C8 c, EStringCase caseSensitive, CharString *result) {
+	return CharString_cutBefore(s, c, caseSensitive, true, result);
 }
 
-Bool String_cutBeforeLastString(String s, String other, EStringCase caseSensitive, String *result) {
-	return String_cutBeforeString(s, other, caseSensitive, false, result);
+Bool CharString_cutBeforeLastString(CharString s, CharString other, EStringCase caseSensitive, CharString *result) {
+	return CharString_cutBeforeString(s, other, caseSensitive, false, result);
 }
 
-Bool String_cutBeforeFirstString(String s, String other, EStringCase caseSensitive, String *result) {
-	return String_cutBeforeString(s, other, caseSensitive, true, result);
+Bool CharString_cutBeforeFirstString(CharString s, CharString other, EStringCase caseSensitive, CharString *result) {
+	return CharString_cutBeforeString(s, other, caseSensitive, true, result);
 }
 
-Error String_popFrontCount(String *s, U64 count) { return String_eraseAtCount(s, 0, count); }
-Error String_popEndCount(String *s, U64 count) { return String_eraseAtCount(s, s ? String_length(*s) : 0, count); }
+Error CharString_popFrontCount(CharString *s, U64 count) { return CharString_eraseAtCount(s, 0, count); }
+Error CharString_popEndCount(CharString *s, U64 count) { return CharString_eraseAtCount(s, s ? CharString_length(*s) : 0, count); }
 
-Error String_eraseAt(String *s, U64 i) { return String_eraseAtCount(s, i, 1); }
-Error String_popFront(String *s) { return String_eraseAt(s, 0); }
-Error String_popEnd(String *s) { return String_eraseAt(s, s ? String_length(*s) : 0); }
+Error CharString_eraseAt(CharString *s, U64 i) { return CharString_eraseAtCount(s, i, 1); }
+Error CharString_popFront(CharString *s) { return CharString_eraseAt(s, 0); }
+Error CharString_popEnd(CharString *s) { return CharString_eraseAt(s, s ? CharString_length(*s) : 0); }
 
-Bool String_eraseFirst(String *s, C8 c, EStringCase caseSensitive) {
-	return String_erase(s, c, caseSensitive, true);
+Bool CharString_eraseFirst(CharString *s, C8 c, EStringCase caseSensitive) {
+	return CharString_erase(s, c, caseSensitive, true);
 }
 
-Bool String_eraseLast(String *s, C8 c, EStringCase caseSensitive) {
-	return String_erase(s, c, caseSensitive, false);
+Bool CharString_eraseLast(CharString *s, C8 c, EStringCase caseSensitive) {
+	return CharString_erase(s, c, caseSensitive, false);
 }
 
-Bool String_eraseFirstString(String *s, String other, EStringCase caseSensitive){
-	return String_eraseString(s, other, caseSensitive, true);
+Bool CharString_eraseFirstString(CharString *s, CharString other, EStringCase caseSensitive){
+	return CharString_eraseString(s, other, caseSensitive, true);
 }
 
-Bool String_eraseLastString(String *s, String other, EStringCase caseSensitive) {
-	return String_eraseString(s, other, caseSensitive, false);
+Bool CharString_eraseLastString(CharString *s, CharString other, EStringCase caseSensitive) {
+	return CharString_eraseString(s, other, caseSensitive, false);
 }
 
-Bool String_replaceFirst(String *s, C8 c, C8 v, EStringCase caseSensitive) {
-	return String_replace(s, c, v, caseSensitive, true);
+Bool CharString_replaceFirst(CharString *s, C8 c, C8 v, EStringCase caseSensitive) {
+	return CharString_replace(s, c, v, caseSensitive, true);
 }
 
-Bool String_replaceLast(String *s, C8 c, C8 v, EStringCase caseSensitive) {
-	return String_replace(s, c, v, caseSensitive, false);
+Bool CharString_replaceLast(CharString *s, C8 c, C8 v, EStringCase caseSensitive) {
+	return CharString_replace(s, c, v, caseSensitive, false);
 }
 
-Bool String_toLower(String str) { return String_transform(str, EStringTransform_Lower); }
-Bool String_toUpper(String str) { return String_transform(str, EStringTransform_Upper); }
+Bool CharString_toLower(CharString str) { return CharString_transform(str, EStringTransform_Lower); }
+Bool CharString_toUpper(CharString str) { return CharString_transform(str, EStringTransform_Upper); }
 
 //Simple file utils
 
-Bool String_formatPath(String *str) { 
-	return String_replaceAll(str, '\\', '/', EStringCase_Insensitive);
+Bool CharString_formatPath(CharString *str) { 
+	return CharString_replaceAll(str, '\\', '/', EStringCase_Insensitive);
 }
 
-ECompareResult String_compare(String a, String b, EStringCase caseSensitive) {
+ECompareResult CharString_compare(CharString a, CharString b, EStringCase caseSensitive) {
 
-	U64 al = String_length(a);
-	U64 bl = String_length(b);
+	U64 al = CharString_length(a);
+	U64 bl = CharString_length(b);
 
 	//We want to sort on contents
 	//Provided it's the same level of parenting.
@@ -2597,7 +2597,7 @@ ECompareResult String_compare(String a, String b, EStringCase caseSensitive) {
 	#define calcFormatLen vsnprintf
 #endif
 
-Error String_formatVariadic(Allocator alloc, String *result, const C8 *format, va_list args) {
+Error CharString_formatVariadic(Allocator alloc, CharString *result, const C8 *format, va_list args) {
 
 	if(!result || !format)
 		return Error_nullPointer(!result ? 1 : 2);
@@ -2610,7 +2610,7 @@ Error String_formatVariadic(Allocator alloc, String *result, const C8 *format, v
 	if(len < 0)
 		return Error_stderr(0);
 
-	Error err = String_create('\0', (U64) len, alloc, result);
+	Error err = CharString_create('\0', (U64) len, alloc, result);
 
 	if(err.genericError)
 		return err;
@@ -2621,14 +2621,14 @@ Error String_formatVariadic(Allocator alloc, String *result, const C8 *format, v
 	return Error_none();
 }
 
-Error String_format(Allocator alloc, String *result, const C8 *format, ...) {
+Error CharString_format(Allocator alloc, CharString *result, const C8 *format, ...) {
 
 	if(!result || !format)
 		return Error_nullPointer(!result ? 1 : 2);
 
 	va_list arg1;
 	va_start(arg1, format);
-	Error err = String_formatVariadic(alloc, result, format, arg1);
+	Error err = CharString_formatVariadic(alloc, result, format, arg1);
 	va_end(arg1);
 
 	return err;

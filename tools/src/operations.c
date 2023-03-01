@@ -369,7 +369,7 @@ void Operations_init() {
 	};
 }
 
-Error ParsedArgs_getArg(ParsedArgs args, EOperationHasParameter parameterId, String *arg) {
+Error ParsedArgs_getArg(ParsedArgs args, EOperationHasParameter parameterId, CharString *arg) {
 
 	if(!arg)
 		return Error_nullPointer(2);
@@ -392,6 +392,6 @@ Error ParsedArgs_getArg(ParsedArgs args, EOperationHasParameter parameterId, Str
 	if(err.genericError)
 		return err;
 
-	*arg = *(String*)res.ptr;
+	*arg = *(CharString*)res.ptr;
 	return Error_none();
 }

@@ -38,17 +38,17 @@ void Log_printStackTrace(U64 skip, ELogLevel lvl, ELogOptions options) {
 	if(!format)															\
 		return;															\
 																		\
-	String res = String_createNull();									\
+	CharString res = CharString_createNull();									\
 																		\
 	va_list arg1;														\
 	va_start(arg1, format);												\
-	Error err = String_formatVariadicx(&res, format, arg1);				\
+	Error err = CharString_formatVariadicx(&res, format, arg1);				\
 	va_end(arg1);														\
 																		\
 	if(!err.genericError)												\
 		Log_log(lvl, opt, res);											\
 																		\
-	String_freex(&res);
+	CharString_freex(&res);
 
 void Log_debug(ELogOptions opt, const C8 *format, ...) {
 	Log_level(ELogLevel_Debug);
@@ -73,18 +73,18 @@ void Log_fatal(ELogOptions opt, const C8 *format, ...) {
 
 	Log_printStackTrace(1, ELogLevel_Fatal, opt);
 
-	String res = String_createNull();
+	CharString res = CharString_createNull();
 
 	va_list arg1;
 	va_start(arg1, format);
-	Error err = String_formatVariadicx(&res, format, arg1);
+	Error err = CharString_formatVariadicx(&res, format, arg1);
 	va_end(arg1);
 
 	if(err.genericError)
 		return;
 
 	Log_log(ELogLevel_Fatal, opt, res);
-	String_freex(&res);
+	CharString_freex(&res);
 
 	exit(1);
 }

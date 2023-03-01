@@ -34,9 +34,9 @@
 //	ShortString; 31 chars max
 //	LongString; 63 char max
 //
-//String; A string that goes on the heap (or wherever the allocator tells it to go)
-//String(Ref); A reference to an already allocated string (String with capacity 0)
-//String(Ref) const; A const reference that should not allow operations on it (String with capacity -1)
+//CharString; A string that goes on the heap (or wherever the allocator tells it to go)
+//CharString(Ref); A reference to an already allocated string (CharString with capacity 0)
+//CharString(Ref) const; A const reference that should not allow operations on it (CharString with capacity -1)
 
 //Stack strings that are faster and easier to allocate
 
@@ -53,184 +53,184 @@ typedef struct Error Error;
 
 //Heap string
 
-typedef struct String {
+typedef struct CharString {
 	U64 len;			//First bit contains if it's null terminated or not. Length excludes null terminator.
 	U64 capacity;		//capacity = 0: ref, capacity = -1: const ref
 	const C8 *ptr;		//This is non const if not a const ref, but for safety this is const (cast away if not).
-} String;
+} CharString;
 
-typedef struct StringList {
+typedef struct CharStringList {
 	U64 length;
-	String *ptr;
-} StringList;
+	CharString *ptr;
+} CharStringList;
 
 //Simple helper functions (inlines)
 
-Bool String_isConstRef(String str);
-Bool String_isRef(String str);
-Bool String_isEmpty(String str);
-Bool String_isNullTerminated(String str);
-U64  String_bytes(String str);
-U64  String_length(String str);
+Bool CharString_isConstRef(CharString str);
+Bool CharString_isRef(CharString str);
+Bool CharString_isEmpty(CharString str);
+Bool CharString_isNullTerminated(CharString str);
+U64  CharString_bytes(CharString str);
+U64  CharString_length(CharString str);
 
-Buffer String_buffer(String str);
-Buffer String_bufferConst(String str);
+Buffer CharString_buffer(CharString str);
+Buffer CharString_bufferConst(CharString str);
 
 //Iteration
 
-C8 *String_begin(String str);
-C8 *String_end(String str);
+C8 *CharString_begin(CharString str);
+C8 *CharString_end(CharString str);
 
-C8 *String_charAt(String str, U64 off);
+C8 *CharString_charAt(CharString str, U64 off);
 
-const C8 *String_beginConst(String str);
-const C8 *String_endConst(String str);
+const C8 *CharString_beginConst(CharString str);
+const C8 *CharString_endConst(CharString str);
 
-const C8 *String_charAtConst(String str, U64 off);
-Bool String_isValidAscii(String str);
-Bool String_isValidFileName(String str);
+const C8 *CharString_charAtConst(CharString str, U64 off);
+Bool CharString_isValidAscii(CharString str);
+Bool CharString_isValidFileName(CharString str);
 
-ECompareResult String_compare(String a, String b, EStringCase caseSensitive);
+ECompareResult CharString_compare(CharString a, CharString b, EStringCase caseSensitive);
 
 //Only checks characters. Please use resolvePath to actually validate if it's safely accessible.
 
-Bool String_isValidFilePath(String str);
-Bool String_clear(String *str);
+Bool CharString_isValidFilePath(CharString str);
+Bool CharString_clear(CharString *str);
 
-U64 String_calcStrLen(const C8 *ptr, U64 maxSize);
-//U64 String_hash(String s);								TODO:
+U64 CharString_calcStrLen(const C8 *ptr, U64 maxSize);
+//U64 CharString_hash(CharString s);								TODO:
 
-C8 String_getAt(String str, U64 i);
-Bool String_setAt(String str, U64 i, C8 c);
+C8 CharString_getAt(CharString str, U64 i);
+Bool CharString_setAt(CharString str, U64 i, C8 c);
 
 //Freeing refs won't do anything, but is still recommended for consistency. 
 //Const ref disallow modifying functions to be used.
 
-String String_createNull();
+CharString CharString_createNull();
 
-String String_createConstRefAuto(const C8 *ptr, U64 maxSize);		//Auto detect end (up to maxSize chars)
+CharString CharString_createConstRefAuto(const C8 *ptr, U64 maxSize);		//Auto detect end (up to maxSize chars)
 
-String String_createConstRefUnsafe(const C8 *ptr);					//Only use this if string is created safely (null terminator) in code
-String String_createRefAuto(C8 *ptr, U64 maxSize);					//Auto detect end (up to maxSize chars)
+CharString CharString_createConstRefUnsafe(const C8 *ptr);					//Only use this if string is created safely (null terminator) in code
+CharString CharString_createRefAuto(C8 *ptr, U64 maxSize);					//Auto detect end (up to maxSize chars)
 
 //hasNullAfterSize is true if the size given excludes the null terminator (e.g. ptr[size] == '\0').
 //In this case ptr[size] has to be the null terminator.
 //If this is false, it will automatically check if ptr contains a null terminator
 
-String String_createConstRefSized(const C8 *ptr, U64 size, Bool hasNullAfterSize);
-String String_createRefSized(C8 *ptr, U64 size, Bool hasNullAfterSize);
+CharString CharString_createConstRefSized(const C8 *ptr, U64 size, Bool hasNullAfterSize);
+CharString CharString_createRefSized(C8 *ptr, U64 size, Bool hasNullAfterSize);
 
 //
 
-String String_createConstRefShortString(const ShortString str);
-String String_createConstRefLongString(const LongString str);
+CharString CharString_createConstRefShortString(const ShortString str);
+CharString CharString_createConstRefLongString(const LongString str);
 
-String String_createRefShortString(ShortString str);
-String String_createRefLongString(LongString str);
+CharString CharString_createRefShortString(ShortString str);
+CharString CharString_createRefLongString(LongString str);
 
 //Strings that HAVE to be freed (anything that uses an allocator needs freeing)
 //These reside on the heap/free space (or wherever allocator allocates them)
 //Which means that they aren't const nor refs
 
-Bool String_free(String *str, Allocator alloc);
+Bool CharString_free(CharString *str, Allocator alloc);
 
-Error String_create(C8 c, U64 size, Allocator alloc, String *result);
-Error String_createCopy(String str, Allocator alloc, String *result);
+Error CharString_create(C8 c, U64 size, Allocator alloc, CharString *result);
+Error CharString_createCopy(CharString str, Allocator alloc, CharString *result);
 
-Error String_createNyto(U64 v, U8 leadingZeros, Allocator allocator, String *result);
-Error String_createHex(U64 v, U8 leadingZeros, Allocator allocator, String *result);
-Error String_createDec(U64 v, U8 leadingZeros, Allocator allocator, String *result);
-Error String_createOct(U64 v, U8 leadingZeros, Allocator allocator, String *result);
-Error String_createBin(U64 v, U8 leadingZeros, Allocator allocator, String *result);
+Error CharString_createNyto(U64 v, U8 leadingZeros, Allocator allocator, CharString *result);
+Error CharString_createHex(U64 v, U8 leadingZeros, Allocator allocator, CharString *result);
+Error CharString_createDec(U64 v, U8 leadingZeros, Allocator allocator, CharString *result);
+Error CharString_createOct(U64 v, U8 leadingZeros, Allocator allocator, CharString *result);
+Error CharString_createBin(U64 v, U8 leadingZeros, Allocator allocator, CharString *result);
 
-Error String_split(
-	String s,
+Error CharString_split(
+	CharString s,
 	C8 c, 
 	EStringCase casing, 
 	Allocator allocator,
-	StringList *result
+	CharStringList *result
 );
 
-Error String_splitString(
-	String s,
-	String other,
+Error CharString_splitString(
+	CharString s,
+	CharString other,
 	EStringCase casing,
 	Allocator allocator,
-	StringList *result
+	CharStringList *result
 );
 
-Error String_splitLine(String s, Allocator alloc, StringList *result);
+Error CharString_splitLine(CharString s, Allocator alloc, CharStringList *result);
 
 //This will operate on this string, so it will need a heap allocated string
 
-Error String_resize(String *str, U64 length, C8 defaultChar, Allocator alloc);
-Error String_reserve(String *str, U64 length, Allocator alloc);
+Error CharString_resize(CharString *str, U64 length, C8 defaultChar, Allocator alloc);
+Error CharString_reserve(CharString *str, U64 length, Allocator alloc);
 
-Error String_append(String *s, C8 c, Allocator allocator);
-Error String_appendString(String *s, String other, Allocator allocator);
+Error CharString_append(CharString *s, C8 c, Allocator allocator);
+Error CharString_appendString(CharString *s, CharString other, Allocator allocator);
 
-String String_newLine();			//Should only be used when writing a file for the current OS. Not when parsing files.
+CharString CharString_newLine();			//Should only be used when writing a file for the current OS. Not when parsing files.
 
-Error String_insert(String *s, C8 c, U64 i, Allocator allocator);
-Error String_insertString(String *s, String other, U64 i, Allocator allocator);
+Error CharString_insert(CharString *s, C8 c, U64 i, Allocator allocator);
+Error CharString_insertString(CharString *s, CharString other, U64 i, Allocator allocator);
 
-Error String_replaceAllString(
-	String *s, 
-	String search, 
-	String replace, 
+Error CharString_replaceAllString(
+	CharString *s, 
+	CharString search, 
+	CharString replace, 
 	EStringCase caseSensitive, 
 	Allocator allocator
 );
 
-Error String_replaceString(
-	String *s, 
-	String search, 
-	String replace, 
+Error CharString_replaceString(
+	CharString *s, 
+	CharString search, 
+	CharString replace, 
 	EStringCase caseSensitive,
 	Allocator allocator,
 	Bool isFirst
 );
 
-Error String_replaceFirstString(
-	String *s,
-	String search,
-	String replace,
+Error CharString_replaceFirstString(
+	CharString *s,
+	CharString search,
+	CharString replace,
 	EStringCase caseSensitive,
 	Allocator allocator
 );
 
-Error String_replaceLastString(
-	String *s, 
-	String search, 
-	String replace, 
+Error CharString_replaceLastString(
+	CharString *s, 
+	CharString search, 
+	CharString replace, 
 	EStringCase caseSensitive,
 	Allocator allocator
 );
 
 //Simple checks (consts)
 
-Bool String_startsWith(String str, C8 c, EStringCase caseSensitive);
-Bool String_startsWithString(String str, String other, EStringCase caseSensitive);
+Bool CharString_startsWith(CharString str, C8 c, EStringCase caseSensitive);
+Bool CharString_startsWithString(CharString str, CharString other, EStringCase caseSensitive);
 
-Bool String_endsWith(String str, C8 c, EStringCase caseSensitive);
-Bool String_endsWithString(String str, String other, EStringCase caseSensitive);
+Bool CharString_endsWith(CharString str, C8 c, EStringCase caseSensitive);
+Bool CharString_endsWithString(CharString str, CharString other, EStringCase caseSensitive);
 
-U64 String_countAll(String s, C8 c, EStringCase caseSensitive);
-U64 String_countAllString(String s, String other, EStringCase caseSensitive);
+U64 CharString_countAll(CharString s, C8 c, EStringCase caseSensitive);
+U64 CharString_countAllString(CharString s, CharString other, EStringCase caseSensitive);
 
 //Returns the locations (U64[])
 
-Error String_findAll(
-	String s, 
+Error CharString_findAll(
+	CharString s, 
 	C8 c, 
 	Allocator alloc,
 	EStringCase caseSensitive,
 	List *result
 );
 
-Error String_findAllString(
-	String s, 
-	String other,
+Error CharString_findAllString(
+	CharString s, 
+	CharString other,
 	Allocator alloc,
 	EStringCase caseSensitive,
 	List *result
@@ -238,165 +238,165 @@ Error String_findAllString(
 
 //
 
-U64 String_findFirst(String s, C8 c, EStringCase caseSensitive);
-U64 String_findLast(String s, C8 c, EStringCase caseSensitive);
+U64 CharString_findFirst(CharString s, C8 c, EStringCase caseSensitive);
+U64 CharString_findLast(CharString s, C8 c, EStringCase caseSensitive);
 
-U64 String_find(String s, C8 c, EStringCase caseSensitive, Bool isFirst);
+U64 CharString_find(CharString s, C8 c, EStringCase caseSensitive, Bool isFirst);
 
-U64 String_findFirstString(String s, String other, EStringCase caseSensitive);
-U64 String_findLastString(String s, String other, EStringCase caseSensitive);
-U64 String_findString(String s, String other, EStringCase caseSensitive, Bool isFirst);
+U64 CharString_findFirstString(CharString s, CharString other, EStringCase caseSensitive);
+U64 CharString_findLastString(CharString s, CharString other, EStringCase caseSensitive);
+U64 CharString_findString(CharString s, CharString other, EStringCase caseSensitive, Bool isFirst);
 
-Bool String_contains(String str, C8 c, EStringCase caseSensitive);
-Bool String_containsString(String str, String other, EStringCase caseSensitive);
+Bool CharString_contains(CharString str, C8 c, EStringCase caseSensitive);
+Bool CharString_containsString(CharString str, CharString other, EStringCase caseSensitive);
 
-Bool String_equalsString(String s, String other, EStringCase caseSensitive);
-Bool String_equals(String s, C8 c, EStringCase caseSensitive);
+Bool CharString_equalsString(CharString s, CharString other, EStringCase caseSensitive);
+Bool CharString_equals(CharString s, C8 c, EStringCase caseSensitive);
 
-Bool String_parseNyto(String s, U64 *result);
-Bool String_parseHex(String s, U64 *result);
-Bool String_parseDec(String s, U64 *result);
-Bool String_parseDecSigned(String s, I64 *result);
-Bool String_parseFloat(String s, F32 *result);
-Bool String_parseOct(String s, U64 *result);
-Bool String_parseBin(String s, U64 *result);
+Bool CharString_parseNyto(CharString s, U64 *result);
+Bool CharString_parseHex(CharString s, U64 *result);
+Bool CharString_parseDec(CharString s, U64 *result);
+Bool CharString_parseDecSigned(CharString s, I64 *result);
+Bool CharString_parseFloat(CharString s, F32 *result);
+Bool CharString_parseOct(CharString s, U64 *result);
+Bool CharString_parseBin(CharString s, U64 *result);
 
-Bool String_isNyto(String s);				//[0-9A-Za-z_$]+
-Bool String_isAlphaNumeric(String s);		//[0-9A-Za-z]+
-Bool String_isHex(String s);				//[0-9A-Fa-f]+
-Bool String_isDec(String s);				//[0-9]+
-Bool String_isOct(String s);				//[0-7]+
-Bool String_isBin(String s);				//[0-1]+
+Bool CharString_isNyto(CharString s);				//[0-9A-Za-z_$]+
+Bool CharString_isAlphaNumeric(CharString s);		//[0-9A-Za-z]+
+Bool CharString_isHex(CharString s);				//[0-9A-Fa-f]+
+Bool CharString_isDec(CharString s);				//[0-9]+
+Bool CharString_isOct(CharString s);				//[0-7]+
+Bool CharString_isBin(CharString s);				//[0-1]+
 
-Bool String_isUnsignedNumber(String s);		//[+]?[0-9]+
-Bool String_isSignedNumber(String s);		//[-+]?[0-9]+
-Bool String_isFloat(String s);				//Approximately equal to: [-+]?[0-9]*[.[0-9]*]?[[eE][-+]?[0-9]+]?
+Bool CharString_isUnsignedNumber(CharString s);		//[+]?[0-9]+
+Bool CharString_isSignedNumber(CharString s);		//[-+]?[0-9]+
+Bool CharString_isFloat(CharString s);				//Approximately equal to: [-+]?[0-9]*[.[0-9]*]?[[eE][-+]?[0-9]+]?
 
 //Things that perform on this string to reduce overhead
 
-Bool String_cutBegin(String s, U64 off, String *result);
-Bool String_cutEnd(String s, U64 length, String *result);
-Bool String_cut(String s, U64 off, U64 length, String *result);
+Bool CharString_cutBegin(CharString s, U64 off, CharString *result);
+Bool CharString_cutEnd(CharString s, U64 length, CharString *result);
+Bool CharString_cut(CharString s, U64 off, U64 length, CharString *result);
 
-Bool String_cutAfter(
-	String s, 
+Bool CharString_cutAfter(
+	CharString s, 
 	C8 c, 
 	EStringCase caseSensitive, 
 	Bool isFirst, 
-	String *result
+	CharString *result
 );
 
-Bool String_cutAfterLast(String s, C8 c, EStringCase caseSensitive, String *result);
-Bool String_cutAfterFirst(String s, C8 c, EStringCase caseSensitive, String *result);
+Bool CharString_cutAfterLast(CharString s, C8 c, EStringCase caseSensitive, CharString *result);
+Bool CharString_cutAfterFirst(CharString s, C8 c, EStringCase caseSensitive, CharString *result);
 
-Bool String_cutAfterString(
-	String s,
-	String other,
+Bool CharString_cutAfterString(
+	CharString s,
+	CharString other,
 	EStringCase caseSensitive,
 	Bool isFirst,
-	String *result
+	CharString *result
 );
 
-Bool String_cutAfterLastString(String s, String other, EStringCase caseSensitive, String *result);
-Bool String_cutAfterFirstString(String s, String other, EStringCase caseSensitive, String *result);
+Bool CharString_cutAfterLastString(CharString s, CharString other, EStringCase caseSensitive, CharString *result);
+Bool CharString_cutAfterFirstString(CharString s, CharString other, EStringCase caseSensitive, CharString *result);
 
-Bool String_cutBefore(
-	String s, 
+Bool CharString_cutBefore(
+	CharString s, 
 	C8 c, 
 	EStringCase caseSensitive, 
 	Bool isFirst, 
-	String *result
+	CharString *result
 );
 
-Bool String_cutBeforeLast(String s, C8 c, EStringCase caseSensitive, String *result);
-Bool String_cutBeforeFirst(String s, C8 c, EStringCase caseSensitive, String *result);
+Bool CharString_cutBeforeLast(CharString s, C8 c, EStringCase caseSensitive, CharString *result);
+Bool CharString_cutBeforeFirst(CharString s, C8 c, EStringCase caseSensitive, CharString *result);
 
-Bool String_cutBeforeString(
-	String s, 
-	String other, 
+Bool CharString_cutBeforeString(
+	CharString s, 
+	CharString other, 
 	EStringCase caseSensitive, 
 	Bool isFirst, 
-	String *result
+	CharString *result
 );
 
-Bool String_cutBeforeLastString(String s, String other, EStringCase caseSensitive, String *result);
-Bool String_cutBeforeFirstString(String s, String other, EStringCase caseSensitive, String *result);
+Bool CharString_cutBeforeLastString(CharString s, CharString other, EStringCase caseSensitive, CharString *result);
+Bool CharString_cutBeforeFirstString(CharString s, CharString other, EStringCase caseSensitive, CharString *result);
 
-Error String_eraseAtCount(String *s, U64 i, U64 count);
-Error String_popFrontCount(String *s, U64 count);
-Error String_popEndCount(String *s, U64 count);
+Error CharString_eraseAtCount(CharString *s, U64 i, U64 count);
+Error CharString_popFrontCount(CharString *s, U64 count);
+Error CharString_popEndCount(CharString *s, U64 count);
 
-Error String_eraseAt(String *s, U64 i);
-Error String_popFront(String *s);
-Error String_popEnd(String *s);
+Error CharString_eraseAt(CharString *s, U64 i);
+Error CharString_popFront(CharString *s);
+Error CharString_popEnd(CharString *s);
 
-Bool String_eraseAll(String *s, C8 c, EStringCase caseSensitive);
-Bool String_eraseAllString(String *s, String other, EStringCase caseSensitive);
+Bool CharString_eraseAll(CharString *s, C8 c, EStringCase caseSensitive);
+Bool CharString_eraseAllString(CharString *s, CharString other, EStringCase caseSensitive);
 
-Bool String_erase(String *s, C8 c, EStringCase caseSensitive, Bool isFirst);
+Bool CharString_erase(CharString *s, C8 c, EStringCase caseSensitive, Bool isFirst);
 
-Bool String_eraseFirst(String *s, C8 c, EStringCase caseSensitive);
-Bool String_eraseLast(String *s, C8 c, EStringCase caseSensitive);
+Bool CharString_eraseFirst(CharString *s, C8 c, EStringCase caseSensitive);
+Bool CharString_eraseLast(CharString *s, C8 c, EStringCase caseSensitive);
 
-Bool String_eraseString(String *s, String other, EStringCase caseSensitive, Bool isFirst);
+Bool CharString_eraseString(CharString *s, CharString other, EStringCase caseSensitive, Bool isFirst);
 
-Bool String_eraseFirstString(String *s, String other, EStringCase caseSensitive);
-Bool String_eraseLastString(String *s, String other, EStringCase caseSensitive);
+Bool CharString_eraseFirstString(CharString *s, CharString other, EStringCase caseSensitive);
+Bool CharString_eraseLastString(CharString *s, CharString other, EStringCase caseSensitive);
 
-Bool String_replaceAll(String *s, C8 c, C8 v, EStringCase caseSensitive);
+Bool CharString_replaceAll(CharString *s, C8 c, C8 v, EStringCase caseSensitive);
 
-Bool String_replace(
-	String *s, 
+Bool CharString_replace(
+	CharString *s, 
 	C8 c, 
 	C8 v, 
 	EStringCase caseSensitive, 
 	Bool isFirst
 );
 
-Bool String_replaceFirst(String *s, C8 c, C8 v, EStringCase caseSensitive);
-Bool String_replaceLast(String *s, C8 c, C8 v, EStringCase caseSensitive);
+Bool CharString_replaceFirst(CharString *s, C8 c, C8 v, EStringCase caseSensitive);
+Bool CharString_replaceLast(CharString *s, C8 c, C8 v, EStringCase caseSensitive);
 
-String String_trim(String s);		//Returns a substring ref in a string
+CharString CharString_trim(CharString s);		//Returns a substring ref in a string
 
-Bool String_transform(String s, EStringTransform stringTransform);
+Bool CharString_transform(CharString s, EStringTransform stringTransform);
 
-Bool String_toLower(String str);
-Bool String_toUpper(String str);
+Bool CharString_toLower(CharString str);
+Bool CharString_toUpper(CharString str);
 
 //Simple file utils
 
-Bool String_formatPath(String *str);
+Bool CharString_formatPath(CharString *str);
 
-String String_getFilePath(String *str);	//Formats on string first to ensure it's proper
-String String_getBasePath(String *str);	//Formats on string first to ensure it's proper
+CharString CharString_getFilePath(CharString *str);	//Formats on string first to ensure it's proper
+CharString CharString_getBasePath(CharString *str);	//Formats on string first to ensure it's proper
 
 //TODO: Regex
 
-//String list
+//CharString list
 //To return from string operations
-//These strings will be a ref into existing string to prevent copies, use StringList_createCopy to move them to the heap.
+//These strings will be a ref into existing string to prevent copies, use CharStringList_createCopy to move them to the heap.
 //Because they contain mixed strings, the functions still need allocators to free heap strings.
-//This is different than List<String> because that one won't enforce string allocation properly.
+//This is different than List<CharString> because that one won't enforce string allocation properly.
 
-Error StringList_create(U64 length, Allocator alloc, StringList *result);
-Bool StringList_free(StringList *arr, Allocator alloc);
+Error CharStringList_create(U64 length, Allocator alloc, CharStringList *result);
+Bool CharStringList_free(CharStringList *arr, Allocator alloc);
 
-Error StringList_createCopy(StringList toCopy, Allocator alloc, StringList *arr);
+Error CharStringList_createCopy(CharStringList toCopy, Allocator alloc, CharStringList *arr);
 
-//Store the string directly into StringList (no copy)
+//Store the string directly into CharStringList (no copy)
 //The allocator is used to free strings if they are heap allocated
 
-Error StringList_set(StringList arr, U64 i, String str, Allocator alloc);
-Error StringList_unset(StringList arr, U64 i, Allocator alloc);
+Error CharStringList_set(CharStringList arr, U64 i, CharString str, Allocator alloc);
+Error CharStringList_unset(CharStringList arr, U64 i, Allocator alloc);
 
 //Combining all strings into one
 
-Error StringList_combine(StringList arr, Allocator alloc, String *result);
+Error CharStringList_combine(CharStringList arr, Allocator alloc, CharString *result);
 
-Error StringList_concat(StringList arr, C8 between, Allocator alloc, String *result);
-Error StringList_concatString(StringList arr, String between, Allocator alloc, String *result);
+Error CharStringList_concat(CharStringList arr, C8 between, Allocator alloc, CharString *result);
+Error CharStringList_concatString(CharStringList arr, CharString between, Allocator alloc, CharString *result);
 
 //Formatting
 
-Error String_formatVariadic(Allocator alloc, String *result, const C8 *format, va_list args);
-Error String_format(Allocator alloc, String *result, const C8 *format, ...);
+Error CharString_formatVariadic(Allocator alloc, CharString *result, const C8 *format, va_list args);
+Error CharString_format(Allocator alloc, CharString *result, const C8 *format, ...);

@@ -99,9 +99,9 @@ void Window_physicalLoop(Window *w) {
 	//Our strings aren't null terminated, so ensure windows doesn't read garbage
 
 	C8 windowName[MAX_PATH + 1];
-	Buffer_copy(Buffer_createRef(windowName, sizeof(windowName)), String_bufferConst(w->title));
+	Buffer_copy(Buffer_createRef(windowName, sizeof(windowName)), CharString_bufferConst(w->title));
 
-	windowName[String_length(w->title)] = '\0';
+	windowName[CharString_length(w->title)] = '\0';
 
 	HWND nativeWindow = CreateWindowExA(
 		WS_EX_APPWINDOW, wc.lpszClassName, windowName, style,
@@ -229,7 +229,7 @@ Error WindowManager_createPhysical(
 	I32x2 minSize,
 	I32x2 maxSize,
 	EWindowHint hint,
-	String title, 
+	CharString title, 
 	WindowCallbacks callbacks,
 	EWindowFormat format,
 	Window **w
@@ -274,8 +274,8 @@ Error WindowManager_createPhysical(
 
 	//Validate path
 
-	if (String_length(title) >= MAX_PATH)
-		return Error_outOfBounds(6, String_length(title), MAX_PATH);
+	if (CharString_length(title) >= MAX_PATH)
+		return Error_outOfBounds(6, CharString_length(title), MAX_PATH);
 
 	//Find free spot in physical windows
 
@@ -316,7 +316,7 @@ Error WindowManager_createPhysical(
 		.maxSize = maxSize
 	};
 
-	_gotoIfError(clean, String_createCopyx(title, &win->title));
+	_gotoIfError(clean, CharString_createCopyx(title, &win->title));
 
 	_gotoIfError(clean, Lock_create(&win->lock));
 

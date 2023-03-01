@@ -22,7 +22,7 @@
 #include "types/types.h"
 
 typedef struct Error Error;
-typedef struct String String;
+typedef struct CharString CharString;
 
 typedef struct CASettings CASettings;
 typedef struct CAFile CAFile;
@@ -44,7 +44,7 @@ Error DLFile_createx(DLSettings settings, DLFile *dlFile);
 Bool DLFile_freex(DLFile *dlFile);
 
 Error DLFile_addEntryx(DLFile *dlFile, Buffer entry);
-Error DLFile_addEntryAsciix(DLFile *dlFile, String entry);
+Error DLFile_addEntryAsciix(DLFile *dlFile, CharString entry);
 Error DLFile_addEntryUTF8x(DLFile *dlFile, Buffer entry);
 
 Error DLFile_writex(DLFile dlFile, Buffer *result);

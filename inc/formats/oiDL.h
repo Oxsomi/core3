@@ -50,7 +50,7 @@ typedef struct DLSettings {
 typedef union DLEntry {
 
 	Buffer entryBuffer;
-	String entryString;
+	CharString entryString;
 
 } DLEntry;
 
@@ -68,11 +68,11 @@ Error DLFile_create(DLSettings settings, Allocator alloc, DLFile *dlFile);
 Bool DLFile_free(DLFile *dlFile, Allocator alloc);
 
 //DLEntry will belong to DLFile.
-//This means that freeing it will free the String + Buffer if they're not a ref
+//This means that freeing it will free the CharString + Buffer if they're not a ref
 //So be sure to make them a ref if needed.
 
 Error DLFile_addEntry(DLFile *dlFile, Buffer entry, Allocator alloc);
-Error DLFile_addEntryAscii(DLFile *dlFile, String entry, Allocator alloc);
+Error DLFile_addEntryAscii(DLFile *dlFile, CharString entry, Allocator alloc);
 Error DLFile_addEntryUTF8(DLFile *dlFile, Buffer entry, Allocator alloc);
 
 Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result);
@@ -95,7 +95,7 @@ typedef enum EDLFlags {
 
 	EDLFlags_UseSHA256				= 1 << 0,		//Whether SHA256 (1) or CRC32C (0) is used as hash
 
-	EDLFlags_IsString				= 1 << 1,		//If true; string must contain valid ASCII characters
+	EDLFlags_IsString				= 1 << 1,		//If true; must be a valid string (!UTF8 ? Ascii : UTF8)
 	EDLFlags_UTF8					= 1 << 2,		//ASCII (if off), otherwise UTF-8
         
     //Chunk size of AES for multi threading. 0 = none, 1 = 10MiB, 2 = 50MiB, 3 = 100MiB

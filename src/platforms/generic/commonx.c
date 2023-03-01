@@ -101,7 +101,7 @@ Bool DLFile_freex(DLFile *dlFile) { return DLFile_free(dlFile, Platform_instance
 
 Error DLFile_addEntryx(DLFile *dlFile, Buffer entry) { return DLFile_addEntry(dlFile, entry, Platform_instance.alloc); }
 
-Error DLFile_addEntryAsciix(DLFile *dlFile, String entry) {
+Error DLFile_addEntryAsciix(DLFile *dlFile, CharString entry) {
 	return DLFile_addEntryAscii(dlFile, entry, Platform_instance.alloc);
 }
 
@@ -162,128 +162,142 @@ Error List_shrinkToFitx(List *list) { return List_shrinkToFit(list, Platform_ins
 Error List_pushBackx(List *list, Buffer buf) { return List_pushBack(list, buf, Platform_instance.alloc); }
 Bool List_freex(List *result) { return List_free(result, Platform_instance.alloc); }
 
-//String
+//CharString
 
-Bool String_freex(String *str) { return String_free(str, Platform_instance.alloc); }
-Bool StringList_freex(StringList *arr) { return StringList_free(arr, Platform_instance.alloc); }
+Bool CharString_freex(CharString *str) { return CharString_free(str, Platform_instance.alloc); }
+Bool CharStringList_freex(CharStringList *arr) { return CharStringList_free(arr, Platform_instance.alloc); }
 
-Error String_createx(C8 c, U64 size, String *result) { return String_create(c, size, Platform_instance.alloc, result); }
-Error String_createCopyx(String str, String *result) { return String_createCopy(str, Platform_instance.alloc, result); }
+Error CharString_createx(C8 c, U64 size, CharString *result) { return CharString_create(c, size, Platform_instance.alloc, result); }
+Error CharString_createCopyx(CharString str, CharString *result) { return CharString_createCopy(str, Platform_instance.alloc, result); }
 
-Error String_createNytox(U64 v, U8 leadingZeros, String *result) {
-	return String_createNyto(v, leadingZeros, Platform_instance.alloc, result);
+Error CharString_createNytox(U64 v, U8 leadingZeros, CharString *result) {
+	return CharString_createNyto(v, leadingZeros, Platform_instance.alloc, result);
 }
 
-Error String_createHexx(U64 v, U8 leadingZeros, String *result) {
-	return String_createHex(v, leadingZeros, Platform_instance.alloc, result);
+Error CharString_createHexx(U64 v, U8 leadingZeros, CharString *result) {
+	return CharString_createHex(v, leadingZeros, Platform_instance.alloc, result);
 }
 
-Error String_createDecx(U64 v, U8 leadingZeros, String *result) {
-	return String_createDec(v, leadingZeros, Platform_instance.alloc, result);
+Error CharString_createDecx(U64 v, U8 leadingZeros, CharString *result) {
+	return CharString_createDec(v, leadingZeros, Platform_instance.alloc, result);
 }
 
-Error String_createOctx(U64 v, U8 leadingZeros, String *result) {
-	return String_createOct(v, leadingZeros, Platform_instance.alloc, result);
+Error CharString_createOctx(U64 v, U8 leadingZeros, CharString *result) {
+	return CharString_createOct(v, leadingZeros, Platform_instance.alloc, result);
 }
 
-Error String_createBinx(U64 v, U8 leadingZeros, String *result) {
-	return String_createBin(v, leadingZeros, Platform_instance.alloc, result);
+Error CharString_createBinx(U64 v, U8 leadingZeros, CharString *result) {
+	return CharString_createBin(v, leadingZeros, Platform_instance.alloc, result);
 }
 
-Error String_splitx(String s, C8 c,  EStringCase casing,  StringList *result) {
-	return String_split(s, c, casing, Platform_instance.alloc, result);
+Error CharString_splitx(CharString s, C8 c,  EStringCase casing,  CharStringList *result) {
+	return CharString_split(s, c, casing, Platform_instance.alloc, result);
 }
 
-Error String_splitStringx(String s, String other, EStringCase casing, StringList *result) {
-	return String_splitString(s, other, casing, Platform_instance.alloc, result);
+Error CharString_splitStringx(CharString s, CharString other, EStringCase casing, CharStringList *result) {
+	return CharString_splitString(s, other, casing, Platform_instance.alloc, result);
 }
 
-Error String_splitLinex(String s, StringList *result) {
-	return String_splitLine(s, Platform_instance.alloc, result);
+Error CharString_splitLinex(CharString s, CharStringList *result) {
+	return CharString_splitLine(s, Platform_instance.alloc, result);
 }
 
-Error String_resizex(String *str, U64 length, C8 defaultChar) {
-	return String_resize(str, length, defaultChar, Platform_instance.alloc);
+Error CharString_resizex(CharString *str, U64 length, C8 defaultChar) {
+	return CharString_resize(str, length, defaultChar, Platform_instance.alloc);
 }
 
-Error String_reservex(String *str, U64 length) { return String_reserve(str, length, Platform_instance.alloc); }
-
-Error String_appendx(String *s, C8 c) { return String_append(s, c, Platform_instance.alloc); }
-Error String_appendStringx(String *s, String other) { return String_appendString(s, other, Platform_instance.alloc); }
-
-Error String_insertx(String *s, C8 c, U64 i) { return String_insert(s, c, i, Platform_instance.alloc); }
-
-Error String_insertStringx(String *s, String other, U64 i) {
-	return String_insertString(s, other, i, Platform_instance.alloc);
+Error CharString_reservex(CharString *str, U64 length) { 
+	return CharString_reserve(str, length, Platform_instance.alloc); 
 }
 
-Error String_replaceAllStringx(String *s, String search, String replace, EStringCase caseSensitive) {
-	return String_replaceAllString(s, search, replace, caseSensitive, Platform_instance.alloc);
+Error CharString_appendx(CharString *s, C8 c) { 
+	return CharString_append(s, c, Platform_instance.alloc); 
 }
 
-Error String_replaceStringx(
-	String *s, 
-	String search, 
-	String replace, 
+Error CharString_appendStringx(CharString *s, CharString other) { 
+	return CharString_appendString(s, other, Platform_instance.alloc);
+}
+
+Error CharString_insertx(CharString *s, C8 c, U64 i) { 
+	return CharString_insert(s, c, i, Platform_instance.alloc);
+}
+
+Error CharString_insertStringx(CharString *s, CharString other, U64 i) {
+	return CharString_insertString(s, other, i, Platform_instance.alloc);
+}
+
+Error CharString_replaceAllStringx(CharString *s, CharString search, CharString replace, EStringCase caseSensitive) {
+	return CharString_replaceAllString(s, search, replace, caseSensitive, Platform_instance.alloc);
+}
+
+Error CharString_replaceStringx(
+	CharString *s, 
+	CharString search, 
+	CharString replace, 
 	EStringCase caseSensitive,
 	Bool isFirst
 ) {
-	return String_replaceString(s, search, replace, caseSensitive, Platform_instance.alloc, isFirst);
+	return CharString_replaceString(s, search, replace, caseSensitive, Platform_instance.alloc, isFirst);
 }
 
-Error String_replaceFirstStringx(String *s, String search, String replace, EStringCase caseSensitive) {
-	return String_replaceStringx(s, search, replace, caseSensitive, true);
+Error CharString_replaceFirstStringx(CharString *s, CharString search, CharString replace, EStringCase caseSensitive) {
+	return CharString_replaceStringx(s, search, replace, caseSensitive, true);
 }
 
-Error String_replaceLastStringx(String *s, String search, String replace, EStringCase caseSensitive) {
-	return String_replaceStringx(s, search, replace, caseSensitive, false);
+Error CharString_replaceLastStringx(CharString *s, CharString search, CharString replace, EStringCase caseSensitive) {
+	return CharString_replaceStringx(s, search, replace, caseSensitive, false);
 }
 
-Error String_findAllx(String s, C8 c, EStringCase caseSensitive, List *result) {
-	return String_findAll(s, c, Platform_instance.alloc, caseSensitive, result);
+Error CharString_findAllx(CharString s, C8 c, EStringCase caseSensitive, List *result) {
+	return CharString_findAll(s, c, Platform_instance.alloc, caseSensitive, result);
 }
 
-Error String_findAllStringx(String s, String other, EStringCase caseSensitive, List *result) {
-	return String_findAllString(s, other, Platform_instance.alloc, caseSensitive, result);
+Error CharString_findAllStringx(CharString s, CharString other, EStringCase caseSensitive, List *result) {
+	return CharString_findAllString(s, other, Platform_instance.alloc, caseSensitive, result);
 }
 
-Error StringList_createx(U64 length, StringList *result) {
-	return StringList_create(length, Platform_instance.alloc, result);
+Error CharStringList_createx(U64 length, CharStringList *result) {
+	return CharStringList_create(length, Platform_instance.alloc, result);
 }
 
-Error StringList_createCopyx(StringList toCopy, StringList *arr) {
-	return StringList_createCopy(toCopy, Platform_instance.alloc, arr);
+Error CharStringList_createCopyx(CharStringList toCopy, CharStringList *arr) {
+	return CharStringList_createCopy(toCopy, Platform_instance.alloc, arr);
 }
 
-Error StringList_setx(StringList arr, U64 i, String str) { return StringList_set(arr, i, str, Platform_instance.alloc); }
-Error StringList_unsetx(StringList arr, U64 i) { return StringList_unset(arr, i, Platform_instance.alloc); }
-
-Error StringList_combinex(StringList arr, String *result) {
-	return StringList_combine(arr, Platform_instance.alloc, result);
+Error CharStringList_setx(CharStringList arr, U64 i, CharString str) { 
+	return CharStringList_set(arr, i, str, Platform_instance.alloc);
 }
 
-Error StringList_concatx(StringList arr, C8 between, String *result) {
-	return StringList_concat(arr, between, Platform_instance.alloc, result);
+Error CharStringList_unsetx(CharStringList arr, U64 i) {
+	return CharStringList_unset(arr, i, Platform_instance.alloc);
 }
 
-Error StringList_concatStringx(StringList arr, String between, String *result) {
-	return StringList_concatString(arr, between, Platform_instance.alloc, result);
+Error CharStringList_combinex(CharStringList arr, CharString *result) {
+	return CharStringList_combine(arr, Platform_instance.alloc, result);
+}
+
+Error CharStringList_concatx(CharStringList arr, C8 between, CharString *result) {
+	return CharStringList_concat(arr, between, Platform_instance.alloc, result);
+}
+
+Error CharStringList_concatStringx(CharStringList arr, CharString between, CharString *result) {
+	return CharStringList_concatString(arr, between, Platform_instance.alloc, result);
 }
 
 //Format string
 
-Error String_formatVariadicx(String *result, const C8 *format, va_list args) {
-	return String_formatVariadic(Platform_instance.alloc, result, format, args);
+Error CharString_formatVariadicx(CharString *result, const C8 *format, va_list args) {
+	return CharString_formatVariadic(Platform_instance.alloc, result, format, args);
 }
 
-Error String_formatx(String *result, const C8 *format, ...) {
+Error CharString_formatx(CharString *result, const C8 *format, ...) {
 
 	if(!result || !format)
 		return Error_nullPointer(!result ? 1 : 2);
 
 	va_list arg1;
 	va_start(arg1, format);
-	Error err = String_formatVariadic(Platform_instance.alloc, result, format, arg1);
+	Error err = CharString_formatVariadic(Platform_instance.alloc, result, format, arg1);
 	va_end(arg1);
 
 	return err;
@@ -294,59 +308,59 @@ Error String_formatx(String *result, const C8 *format, ...) {
 Error Archive_createx(Archive *archive) { return Archive_create(Platform_instance.alloc, archive); }
 Bool Archive_freex(Archive *archive) { return Archive_free(archive, Platform_instance.alloc); }
 
-Bool Archive_hasFilex(Archive archive, String path) { return Archive_hasFile(archive, path, Platform_instance.alloc); }
-Bool Archive_hasFolderx(Archive archive, String path) { return Archive_hasFolder(archive, path, Platform_instance.alloc); }
-Bool Archive_hasx(Archive archive, String path) { return Archive_has(archive, path, Platform_instance.alloc); }
+Bool Archive_hasFilex(Archive archive, CharString path) { return Archive_hasFile(archive, path, Platform_instance.alloc); }
+Bool Archive_hasFolderx(Archive archive, CharString path) { return Archive_hasFolder(archive, path, Platform_instance.alloc); }
+Bool Archive_hasx(Archive archive, CharString path) { return Archive_has(archive, path, Platform_instance.alloc); }
 
-Error Archive_addDirectoryx(Archive *archive, String path) { 
+Error Archive_addDirectoryx(Archive *archive, CharString path) { 
 	return Archive_addDirectory(archive, path, Platform_instance.alloc); 
 }
 
-Error Archive_addFilex(Archive *archive, String path, Buffer data, Ns timestamp) { 
+Error Archive_addFilex(Archive *archive, CharString path, Buffer data, Ns timestamp) { 
 	return Archive_addFile(archive, path, data, timestamp, Platform_instance.alloc);
 }
 
-Error Archive_updateFileDatax(Archive *archive, String path, Buffer data) { 
+Error Archive_updateFileDatax(Archive *archive, CharString path, Buffer data) { 
 	return Archive_updateFileData(archive, path, data, Platform_instance.alloc);
 }
 
-Error Archive_getFileDatax(Archive archive, String path, Buffer *data) { 
+Error Archive_getFileDatax(Archive archive, CharString path, Buffer *data) { 
 	return Archive_getFileData(archive, path, data, Platform_instance.alloc); 
 }
 
-Error Archive_getFileDataConstx(Archive archive, String path, Buffer *data) {
+Error Archive_getFileDataConstx(Archive archive, CharString path, Buffer *data) {
 	return Archive_getFileDataConst(archive, path, data, Platform_instance.alloc);
 }
 
-Error Archive_removeFilex(Archive *archive, String path) {
+Error Archive_removeFilex(Archive *archive, CharString path) {
 	return Archive_removeFile(archive, path, Platform_instance.alloc); 
 }
 
-Error Archive_removeFolderx(Archive *archive, String path) { 
+Error Archive_removeFolderx(Archive *archive, CharString path) { 
 	return Archive_removeFolder(archive, path, Platform_instance.alloc); 
 }
 
-Error Archive_removex(Archive *archive, String path) { return Archive_remove(archive, path, Platform_instance.alloc); }
+Error Archive_removex(Archive *archive, CharString path) { return Archive_remove(archive, path, Platform_instance.alloc); }
 
-Error Archive_renamex(Archive *archive, String loc, String newFileName) {
+Error Archive_renamex(Archive *archive, CharString loc, CharString newFileName) {
 	return Archive_rename(archive, loc, newFileName, Platform_instance.alloc);
 }
 
-U64 Archive_getIndexx(Archive archive, String loc) {
+U64 Archive_getIndexx(Archive archive, CharString loc) {
 	return Archive_getIndex(archive, loc, Platform_instance.alloc);
 }
 
-Error Archive_movex(Archive *archive, String loc, String directoryName) {
+Error Archive_movex(Archive *archive, CharString loc, CharString directoryName) {
 	return Archive_move(archive, loc, directoryName, Platform_instance.alloc);
 }
 
-Error Archive_getInfox(Archive archive, String loc, FileInfo *info) {
+Error Archive_getInfox(Archive archive, CharString loc, FileInfo *info) {
 	return Archive_getInfo(archive, loc, info, Platform_instance.alloc);
 }
 
 Error Archive_queryFileObjectCountx(
 	Archive archive,
-	String loc,
+	CharString loc,
 	EFileType type,
 	Bool isRecursive,
 	U64 *res
@@ -354,21 +368,21 @@ Error Archive_queryFileObjectCountx(
 	return Archive_queryFileObjectCount(archive, loc, type, isRecursive, res, Platform_instance.alloc);
 }
 
-Error Archive_queryFileObjectCountAllx(Archive archive, String loc, Bool isRecursive, U64 *res) {
+Error Archive_queryFileObjectCountAllx(Archive archive, CharString loc, Bool isRecursive, U64 *res) {
 	return Archive_queryFileObjectCountAll(archive, loc, isRecursive, res, Platform_instance.alloc);
 }
 
-Error Archive_queryFileCountx(Archive archive, String loc, Bool isRecursive, U64 *res) {
+Error Archive_queryFileCountx(Archive archive, CharString loc, Bool isRecursive, U64 *res) {
 	return Archive_queryFileCount(archive, loc, isRecursive, res, Platform_instance.alloc);
 }
 
-Error Archive_queryFolderCountx(Archive archive, String loc, Bool isRecursive, U64 *res) {
+Error Archive_queryFolderCountx(Archive archive, CharString loc, Bool isRecursive, U64 *res) {
 	return Archive_queryFolderCount(archive, loc, isRecursive, res, Platform_instance.alloc);
 }
 
 Error Archive_foreachx(
 	Archive archive,
-	String loc,
+	CharString loc,
 	FileCallback callback,
 	void *userData,
 	Bool isRecursive,

@@ -71,7 +71,7 @@ DNs Time_elapsed(Ns prev) { return Time_dns(prev, Time_now()); }
 
 //ISO 8601 e.g. 2022-02-26T21:08:45.000000000Z
 //The standard functions strp don't work properly cross platform.
-//This is not done via our String functions because format is called at important moments.
+//This is not done via our CharString functions because format is called at important moments.
 //At these moments there might not be any space left on the heap to allocate or there might be corruption there,
 //as such, using string would be problematic. (This also includes error handling with logging and signals such as segfault).
 //Our stack is less likely to be corrupted, if it is then we can't properly handle it.
@@ -122,7 +122,7 @@ EFormatStatus Time_parseFormat(Ns *time, TimerFormat format) {
 	if (!time)
 		return EFormatStatus_InvalidInput;
 
-	U64 length = String_calcStrLen(format, _SHORTSTRING_LEN - 1);
+	U64 length = CharString_calcStrLen(format, _SHORTSTRING_LEN - 1);
 
 	U64 curr = 0, currSep = 0, prevI = U64_MAX;
 

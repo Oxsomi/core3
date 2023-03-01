@@ -166,23 +166,23 @@ Error InputDevice_create(U16 buttons, U16 axes, EInputDeviceType type, InputDevi
 	if(inputType->name[0])																\
 		return Error_alreadyDefined(0);													\
 																						\
-	if(String_isEmpty(keyName))															\
+	if(CharString_isEmpty(keyName))															\
 		return Error_invalidParameter(2, 0);											\
 																						\
-	if(String_length(keyName) >= _LONGSTRING_LEN)										\
-		return Error_outOfBounds(2, String_length(keyName), _LONGSTRING_LEN);			\
+	if(CharString_length(keyName) >= _LONGSTRING_LEN)										\
+		return Error_outOfBounds(2, CharString_length(keyName), _LONGSTRING_LEN);			\
 																						\
 	Buffer_copy(																		\
 		Buffer_createRef(inputType->name, _LONGSTRING_LEN), 							\
-		Buffer_createConstRef(keyName.ptr, String_length(keyName))						\
+		Buffer_createConstRef(keyName.ptr, CharString_length(keyName))						\
 	);																					\
 																						\
-	inputType->name[U64_min(String_length(keyName), _LONGSTRING_LEN - 1)] = '\0';
+	inputType->name[U64_min(CharString_length(keyName), _LONGSTRING_LEN - 1)] = '\0';
 
 Error InputDevice_createButton(
 	InputDevice d, 
 	U16 localHandle, 
-	String keyName, 
+	CharString keyName, 
 	InputHandle *res
 ) {
 	InputDeviceCreate(Button);
@@ -193,7 +193,7 @@ Error InputDevice_createButton(
 Error InputDevice_createAxis(
 	InputDevice d, 
 	U16 localHandle, 
-	String keyName, 
+	CharString keyName, 
 	F32 deadZone, 
 	Bool resetOnInputLoss,
 	InputHandle *res
@@ -256,20 +256,20 @@ F32 InputDevice_getDeltaAxis(InputDevice d, InputHandle handle) {
 	return InputDevice_getCurrentAxis(d, handle) - InputDevice_getPreviousAxis(d, handle);
 }
 
-String InputDevice_getName(InputDevice d, InputHandle handle) {
+CharString InputDevice_getName(InputDevice d, InputHandle handle) {
 
 	if(d.type == EInputDeviceType_Undefined)
-		return String_createNull();
+		return CharString_createNull();
 
 	U16 localHandle = InputDevice_getLocalHandle(d, handle);
 
 	if(InputDevice_isAxis(d, handle))
-		return String_createConstRefLongString(InputDevice_getAxis(d, localHandle)->name);
+		return CharString_createConstRefLongString(InputDevice_getAxis(d, localHandle)->name);
 
-	return String_createConstRefLongString(InputDevice_getButton(d, localHandle)->name);
+	return CharString_createConstRefLongString(InputDevice_getButton(d, localHandle)->name);
 }
 
-InputHandle InputDevice_getHandle(InputDevice d, String name) {
+InputHandle InputDevice_getHandle(InputDevice d, CharString name) {
 
 	if(d.type == EInputDeviceType_Undefined)
 		return InputDevice_invalidHandle();
@@ -277,16 +277,16 @@ InputHandle InputDevice_getHandle(InputDevice d, String name) {
 	//TODO: We probably wanna optimize this at some point like use a hashmap
 
 	for(U16 i = 0; i < d.buttons; ++i)
-		if(String_equalsString(
-			String_createConstRefLongString(InputDevice_getButton(d, i)->name), 
+		if(CharString_equalsString(
+			CharString_createConstRefLongString(InputDevice_getButton(d, i)->name), 
 			name,
 			EStringCase_Insensitive
 		))
 			return InputDevice_createHandle(d, i, EInputType_Button);
 
 	for(U16 i = 0; i < d.axes; ++i)
-		if(String_equalsString(
-			String_createConstRefLongString(InputDevice_getAxis(d, i)->name), 
+		if(CharString_equalsString(
+			CharString_createConstRefLongString(InputDevice_getAxis(d, i)->name), 
 			name,
 			EStringCase_Insensitive
 		))

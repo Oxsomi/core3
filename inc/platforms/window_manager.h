@@ -50,7 +50,7 @@ impl Error WindowManager_createPhysical(
 	I32x2 minSize,
 	I32x2 maxSize,
 	EWindowHint hint,
-	String title, 
+	CharString title, 
 	WindowCallbacks callbacks,
 	EWindowFormat format,
 	Window **result
@@ -89,7 +89,7 @@ Error WindowManager_createWindow(
 	WindowManager *manager, 
 	I32x2 position, I32x2 size, 
 	I32x2 minSize, I32x2 maxSize,
-	EWindowHint hint, String title, 
+	EWindowHint hint, CharString title, 
 	WindowCallbacks callbacks, EWindowFormat format,
 	Window **w
 );

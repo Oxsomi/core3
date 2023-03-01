@@ -21,7 +21,7 @@
 #pragma once
 #include "types/list.h"
 
-typedef struct String String;
+typedef struct CharString CharString;
 
 //Parameters
 
@@ -88,7 +88,7 @@ typedef enum EOperationFlags {
 	EOperationFlags_Default			= 
 	EOperationFlags_SHA256 | EOperationFlags_Uncompressed,
 
-	//String flags
+	//CharString flags
 
 	EOperationFlags_Ascii			= 1 << 2,
 	EOperationFlags_UTF8			= 1 << 3,
@@ -187,12 +187,12 @@ typedef struct ParsedArgs {
 	EFormat format;
 	EOperationFlags flags;
 	EOperationHasParameter parameters;
-	List args;					//[String]; use parameter flags to extract from low to high
+	List args;					//[CharString]; use parameter flags to extract from low to high
 } ParsedArgs;
 
 typedef Bool (*OperationFunc)(ParsedArgs);
 
-Error ParsedArgs_getArg(ParsedArgs args, EOperationHasParameter parameterId, String *arg);
+Error ParsedArgs_getArg(ParsedArgs args, EOperationHasParameter parameterId, CharString *arg);
 
 typedef enum EFormatFlags {
 	EFormatFlags_None				= 0,

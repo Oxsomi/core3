@@ -41,14 +41,14 @@ void Error_printx(Error err, ELogLevel logLevel, ELogOptions options) {
 	if(!err.genericError)
 		return;
 
-	String result = String_createNull();
-	String platformErr = Error_formatPlatformError(err);
+	CharString result = CharString_createNull();
+	CharString platformErr = Error_formatPlatformError(err);
 
 	if(err.genericError == EGenericError_Stderr)
-		platformErr = String_createConstRefUnsafe(strerror((int)err.paramValue0));
+		platformErr = CharString_createConstRefUnsafe(strerror((int)err.paramValue0));
 
 	if(
-		!String_formatx(
+		!CharString_formatx(
 
 			&result, 
 
@@ -60,14 +60,14 @@ void Error_printx(Error err, ELogLevel logLevel, ELogOptions options) {
 			err.paramId,
 			err.paramValue0,
 			err.paramValue1,
-			String_length(platformErr), platformErr.ptr
+			CharString_length(platformErr), platformErr.ptr
 
 		).genericError
 	)
 		Log_log(logLevel == ELogLevel_Fatal ? ELogLevel_Error : logLevel, options, result);
 
-	String_freex(&result);
-	String_freex(&platformErr);
+	CharString_freex(&result);
+	CharString_freex(&platformErr);
 
 	Log_printCapturedStackTraceCustom(err.stackTrace, ERROR_STACKTRACE, logLevel, options);
 

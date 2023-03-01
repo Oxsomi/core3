@@ -22,57 +22,57 @@
 #include "platforms/platform.h"
 #include "types/string.h"
 
-Bool String_freex(String *str);
+Bool CharString_freex(CharString *str);
 
-Error String_createx(C8 c, U64 size, String *result);
-Error String_createCopyx(String str, String *result);
-Error String_createNytox(U64 v, U8 leadingZeros, String *result);
-Error String_createHexx(U64 v, U8 leadingZeros, String *result);
-Error String_createDecx(U64 v, U8 leadingZeros, String *result);
-Error String_createOctx(U64 v, U8 leadingZeros, String *result);
-Error String_createBinx(U64 v, U8 leadingZeros, String *result);
+Error CharString_createx(C8 c, U64 size, CharString *result);
+Error CharString_createCopyx(CharString str, CharString *result);
+Error CharString_createNytox(U64 v, U8 leadingZeros, CharString *result);
+Error CharString_createHexx(U64 v, U8 leadingZeros, CharString *result);
+Error CharString_createDecx(U64 v, U8 leadingZeros, CharString *result);
+Error CharString_createOctx(U64 v, U8 leadingZeros, CharString *result);
+Error CharString_createBinx(U64 v, U8 leadingZeros, CharString *result);
 
-Error String_splitx(String s, C8 c, EStringCase casing, StringList *result);
-Error String_splitStringx(String s, String other, EStringCase casing, StringList *result);
-Error String_splitLinex(String s, StringList *result);
+Error CharString_splitx(CharString s, C8 c, EStringCase casing, CharStringList *result);
+Error CharString_splitStringx(CharString s, CharString other, EStringCase casing, CharStringList *result);
+Error CharString_splitLinex(CharString s, CharStringList *result);
 
-Error String_resizex(String *str, U64 length, C8 defaultChar);
-Error String_reservex(String *str, U64 length);
+Error CharString_resizex(CharString *str, U64 length, C8 defaultChar);
+Error CharString_reservex(CharString *str, U64 length);
 
-Error String_appendx(String *s, C8 c);
-Error String_appendStringx(String *s, String other);
+Error CharString_appendx(CharString *s, C8 c);
+Error CharString_appendStringx(CharString *s, CharString other);
 
-Error String_insertx(String *s, C8 c, U64 i);
-Error String_insertStringx(String *s, String other, U64 i);
+Error CharString_insertx(CharString *s, C8 c, U64 i);
+Error CharString_insertStringx(CharString *s, CharString other, U64 i);
 
-Error String_replaceAllStringx(String *s, String search, String replace, EStringCase caseSensitive);
+Error CharString_replaceAllStringx(CharString *s, CharString search, CharString replace, EStringCase caseSensitive);
 
-Error String_replaceStringx(
-	String *s, 
-	String search, 
-	String replace, 
+Error CharString_replaceStringx(
+	CharString *s, 
+	CharString search, 
+	CharString replace, 
 	EStringCase caseSensitive,
 	Bool isFirst
 );
 
-Error String_replaceFirstStringx(String *s, String search, String replace, EStringCase caseSensitive);
-Error String_replaceLastStringx(String *s, String search, String replace, EStringCase caseSensitive);
+Error CharString_replaceFirstStringx(CharString *s, CharString search, CharString replace, EStringCase caseSensitive);
+Error CharString_replaceLastStringx(CharString *s, CharString search, CharString replace, EStringCase caseSensitive);
 
-Error String_findAllx(String s, C8 c, EStringCase caseSensitive, List *result);
-Error String_findAllStringx(String s, String other, EStringCase caseSensitive, List *result);
+Error CharString_findAllx(CharString s, C8 c, EStringCase caseSensitive, List *result);
+Error CharString_findAllStringx(CharString s, CharString other, EStringCase caseSensitive, List *result);
 
-Bool StringList_freex(StringList *arr);
+Bool CharStringList_freex(CharStringList *arr);
 
-Error StringList_createx(U64 length, StringList *result);
-Error StringList_createCopyx(StringList toCopy, StringList *arr);
+Error CharStringList_createx(U64 length, CharStringList *result);
+Error CharStringList_createCopyx(CharStringList toCopy, CharStringList *arr);
 
-Error StringList_setx(StringList arr, U64 i, String str);
-Error StringList_unsetx(StringList arr, U64 i);
+Error CharStringList_setx(CharStringList arr, U64 i, CharString str);
+Error CharStringList_unsetx(CharStringList arr, U64 i);
 
-Error StringList_combinex(StringList arr, String *result);
+Error CharStringList_combinex(CharStringList arr, CharString *result);
 
-Error StringList_concatx(StringList arr, C8 between, String *result);
-Error StringList_concatStringx(StringList arr, String between, String *result);
+Error CharStringList_concatx(CharStringList arr, C8 between, CharString *result);
+Error CharStringList_concatStringx(CharStringList arr, CharString between, CharString *result);
 
-Error String_formatx(String *result, const C8 *format, ...);
-Error String_formatVariadicx(String *result, const C8 *format, va_list args);
+Error CharString_formatx(CharString *result, const C8 *format, ...);
+Error CharString_formatVariadicx(CharString *result, const C8 *format, va_list args);

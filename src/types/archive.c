@@ -45,7 +45,7 @@ Bool Archive_free(Archive *archive, Allocator alloc) {
 		ArchiveEntry entry = ((ArchiveEntry*)archive->entries.ptr)[i];
 
 		Buffer_free(&entry.data, alloc);
-		String_free(&entry.path, alloc);
+		CharString_free(&entry.path, alloc);
 	}
 
 	List_free(&archive->entries, alloc);
@@ -55,38 +55,38 @@ Bool Archive_free(Archive *archive, Allocator alloc) {
 
 Bool Archive_getPath(
 	Archive archive, 
-	String path, 
+	CharString path, 
 	ArchiveEntry *entryOut, 
 	U64 *iPtr, 
-	String *resolvedPathPtr, 
+	CharString *resolvedPathPtr, 
 	Allocator alloc
 ) {
 
-	if(!archive.entries.ptr || !String_length(path))
+	if(!archive.entries.ptr || !CharString_length(path))
 		return false;
 
 	Bool isVirtual = false;
-	String resolvedPath = String_createNull();
+	CharString resolvedPath = CharString_createNull();
 	
-	Error err = File_resolve(path, &isVirtual, 128, String_createNull(), alloc, &resolvedPath);
+	Error err = File_resolve(path, &isVirtual, 128, CharString_createNull(), alloc, &resolvedPath);
 
 	if(err.genericError)
 		return false;
 
 	if (isVirtual) {
-		String_free(&resolvedPath, alloc);
+		CharString_free(&resolvedPath, alloc);
 		return false;
 	}
 
 	//TODO: Optimize this with a hashmap
 
 	for(U64 i = 0; i < archive.entries.length; ++i)
-		if (String_equalsString(
+		if (CharString_equalsString(
 			((ArchiveEntry*)archive.entries.ptr)[i].path, resolvedPath, 
 			EStringCase_Insensitive
 		)) {
 
-			if(entryOut && !String_length(entryOut->path))
+			if(entryOut && !CharString_length(entryOut->path))
 				*entryOut = ((ArchiveEntry*)archive.entries.ptr)[i];
 
 			if(iPtr)
@@ -95,20 +95,20 @@ Bool Archive_getPath(
 			if(resolvedPathPtr && !resolvedPathPtr->ptr)
 				*resolvedPathPtr = resolvedPath; 
 
-			else String_free(&resolvedPath, alloc);
+			else CharString_free(&resolvedPath, alloc);
 
 			return true;
 		}
 
-	String_free(&resolvedPath, alloc);
+	CharString_free(&resolvedPath, alloc);
 	return false;
 }
 
-Bool Archive_has(Archive archive, String path, Allocator alloc) {
+Bool Archive_has(Archive archive, CharString path, Allocator alloc) {
 	return Archive_getPath(archive, path, NULL, NULL, NULL, alloc);
 }
 
-Bool Archive_hasFile(Archive archive, String path, Allocator alloc) {
+Bool Archive_hasFile(Archive archive, CharString path, Allocator alloc) {
 
 	ArchiveEntry entry = (ArchiveEntry) { 0 };
 
@@ -118,7 +118,7 @@ Bool Archive_hasFile(Archive archive, String path, Allocator alloc) {
 	return entry.type == EFileType_File;
 }
 
-Bool Archive_hasFolder(Archive archive, String path, Allocator alloc) {
+Bool Archive_hasFolder(Archive archive, CharString path, Allocator alloc) {
 
 	ArchiveEntry entry = (ArchiveEntry) { 0 };
 
@@ -130,13 +130,13 @@ Bool Archive_hasFolder(Archive archive, String path, Allocator alloc) {
 
 Error Archive_addInternal(Archive *archive, ArchiveEntry entry, Bool successIfExists, Allocator alloc);
 
-Bool Archive_createOrFindParent(Archive *archive, String path, Allocator alloc) {
+Bool Archive_createOrFindParent(Archive *archive, CharString path, Allocator alloc) {
 
 	//If it doesn't contain / then we are already at the root
 	//So we don't need to create a parent
 
-	String substr = String_createNull();
-	if (!String_cutAfterLast(path, '/', EStringCase_Sensitive, &substr))
+	CharString substr = CharString_createNull();
+	if (!CharString_cutAfterLast(path, '/', EStringCase_Sensitive, &substr))
 		return true;
 
 	//Try to add parent (returns true if already exists)
@@ -156,10 +156,10 @@ Error Archive_addInternal(Archive *archive, ArchiveEntry entry, Bool successIfEx
 
 	//If folder already exists, we're done
 
-	String resolved = String_createNull();
+	CharString resolved = CharString_createNull();
 	ArchiveEntry out = (ArchiveEntry) { 0 };
 	Error err = Error_none();
-	String oldPath = String_createNull();
+	CharString oldPath = CharString_createNull();
 
 	if (Archive_getPath(*archive, entry.path, &out, NULL, NULL, alloc)) {
 
@@ -172,7 +172,7 @@ Error Archive_addInternal(Archive *archive, ArchiveEntry entry, Bool successIfEx
 	//Resolve
 
 	Bool isVirtual = false;
-	_gotoIfError(clean, File_resolve(entry.path, &isVirtual, 128, String_createNull(), alloc, &resolved));
+	_gotoIfError(clean, File_resolve(entry.path, &isVirtual, 128, CharString_createNull(), alloc, &resolved));
 
 	if (isVirtual)
 		_gotoIfError(clean, Error_unsupportedOperation(0));
@@ -186,20 +186,20 @@ Error Archive_addInternal(Archive *archive, ArchiveEntry entry, Bool successIfEx
 		_gotoIfError(clean, Error_notFound(0, 0));
 
 	_gotoIfError(clean, List_pushBack(&archive->entries, Buffer_createConstRef(&entry, sizeof(entry)), alloc));
-	resolved = String_createNull();
+	resolved = CharString_createNull();
 
-	String_free(&oldPath, alloc);
+	CharString_free(&oldPath, alloc);
 
 clean:
 
-	if (String_length(oldPath))
+	if (CharString_length(oldPath))
 		entry.path = oldPath;
 
-	String_free(&resolved, alloc);
+	CharString_free(&resolved, alloc);
 	return err;
 }
 
-Error Archive_addDirectory(Archive *archive, String path, Allocator alloc) {
+Error Archive_addDirectory(Archive *archive, CharString path, Allocator alloc) {
 
 	ArchiveEntry entry = (ArchiveEntry) {
 		.path = path,
@@ -209,7 +209,7 @@ Error Archive_addDirectory(Archive *archive, String path, Allocator alloc) {
 	return Archive_addInternal(archive, entry, true, alloc);
 }
 
-Error Archive_addFile(Archive *archive, String path, Buffer data, Ns timestamp, Allocator alloc) {
+Error Archive_addFile(Archive *archive, CharString path, Buffer data, Ns timestamp, Allocator alloc) {
 
 	ArchiveEntry entry = (ArchiveEntry) {
 		.path = path,
@@ -221,14 +221,14 @@ Error Archive_addFile(Archive *archive, String path, Buffer data, Ns timestamp, 
 	return Archive_addInternal(archive, entry, false, alloc);
 }
 
-Error Archive_removeInternal(Archive *archive, String path, Allocator alloc, EFileType type) {
+Error Archive_removeInternal(Archive *archive, CharString path, Allocator alloc, EFileType type) {
 
 	if (!archive || !archive->entries.ptr)
 		return Error_nullPointer(0);
 
 	ArchiveEntry entry = (ArchiveEntry) { 0 };
 	U64 i = 0;
-	String resolved = String_createNull();
+	CharString resolved = CharString_createNull();
 	Error err = Error_none();
 
 	if(!Archive_getPath(*archive, path, &entry, &i, &resolved, alloc))
@@ -243,7 +243,7 @@ Error Archive_removeInternal(Archive *archive, String path, Allocator alloc, EFi
 
 		//Get myFolder/*
 
-		_gotoIfError(clean, String_append(&resolved, '/', alloc));
+		_gotoIfError(clean, CharString_append(&resolved, '/', alloc));
 
 		//Remove
 
@@ -251,13 +251,13 @@ Error Archive_removeInternal(Archive *archive, String path, Allocator alloc, EFi
 
 			ArchiveEntry cai = ((ArchiveEntry*)archive->entries.ptr)[i];
 
-			if(!String_startsWithString(cai.path, resolved, EStringCase_Insensitive))
+			if(!CharString_startsWithString(cai.path, resolved, EStringCase_Insensitive))
 				continue;
 
 			//Free and remove from array
 
 			Buffer_free(&entry.data, alloc);
-			String_free(&entry.path, alloc);
+			CharString_free(&entry.path, alloc);
 
 			_gotoIfError(clean, List_popLocation(&archive->entries, j, Buffer_createNull()));
 
@@ -271,41 +271,41 @@ Error Archive_removeInternal(Archive *archive, String path, Allocator alloc, EFi
 	//Remove
 
 	Buffer_free(&entry.data, alloc);
-	String_free(&entry.path, alloc);
+	CharString_free(&entry.path, alloc);
 
 	_gotoIfError(clean, List_popLocation(&archive->entries, i, Buffer_createNull()));
 	
 clean:
-	String_free(&resolved, alloc);
+	CharString_free(&resolved, alloc);
 	return err;
 }
 
-Error Archive_removeFile(Archive *archive, String path, Allocator alloc) {
+Error Archive_removeFile(Archive *archive, CharString path, Allocator alloc) {
 	return Archive_removeInternal(archive, path, alloc, EFileType_File);
 }
 
-Error Archive_removeFolder(Archive *archive, String path, Allocator alloc) {
+Error Archive_removeFolder(Archive *archive, CharString path, Allocator alloc) {
 	return Archive_removeInternal(archive, path, alloc, EFileType_Folder);
 }
 
-Error Archive_remove(Archive *archive, String path, Allocator alloc) {
+Error Archive_remove(Archive *archive, CharString path, Allocator alloc) {
 	return Archive_removeInternal(archive, path, alloc, EFileType_Any);
 }
 
 Error Archive_rename(
 	Archive *archive, 
-	String loc, 
-	String newFileName,
+	CharString loc, 
+	CharString newFileName,
 	Allocator alloc
 ) {
 
 	if (!archive || !archive->entries.ptr)
 		return Error_nullPointer(0);
 
-	String resolvedLoc = String_createNull();
+	CharString resolvedLoc = CharString_createNull();
 	Error err = Error_none();
 
-	if (!String_isValidFileName(newFileName))
+	if (!CharString_isValidFileName(newFileName))
 		return Error_invalidParameter(1, 0);
 
 	U64 i = 0;
@@ -314,30 +314,30 @@ Error Archive_rename(
 
 	//Rename 
 
-	String *prevPath = &((ArchiveEntry*)archive->entries.ptr)[i].path;
-	String subStr = String_createNull();
+	CharString *prevPath = &((ArchiveEntry*)archive->entries.ptr)[i].path;
+	CharString subStr = CharString_createNull();
 
-	String_cutAfterLast(*prevPath, '/', EStringCase_Sensitive, &subStr);
-	prevPath->len = String_length(subStr);
+	CharString_cutAfterLast(*prevPath, '/', EStringCase_Sensitive, &subStr);
+	prevPath->len = CharString_length(subStr);
 
-	_gotoIfError(clean, String_appendString(prevPath, newFileName, alloc));
+	_gotoIfError(clean, CharString_appendString(prevPath, newFileName, alloc));
 
 clean:
-	String_free(&resolvedLoc, alloc);
+	CharString_free(&resolvedLoc, alloc);
 	return err;
 }
 
 Error Archive_move(
 	Archive *archive,
-	String loc,
-	String directoryName,
+	CharString loc,
+	CharString directoryName,
 	Allocator alloc
 ) {
 
 	if (!archive || !archive->entries.ptr)
 		return Error_nullPointer(0);
 
-	String resolved = String_createNull();
+	CharString resolved = CharString_createNull();
 	U64 i = 0;
 	ArchiveEntry parent = (ArchiveEntry) { 0 };
 
@@ -352,30 +352,30 @@ Error Archive_move(
 	if (parent.type != EFileType_Folder)
 		_gotoIfError(clean, Error_invalidOperation(0));
 
-	String *filePath = &((ArchiveEntry*)archive->entries.ptr)[i].path;
+	CharString *filePath = &((ArchiveEntry*)archive->entries.ptr)[i].path;
 
-	U64 v = String_findLast(*filePath, '/', EStringCase_Sensitive);
+	U64 v = CharString_findLast(*filePath, '/', EStringCase_Sensitive);
 
 	if (v != U64_MAX)
-		_gotoIfError(clean, String_popFrontCount(filePath, v + 1));
+		_gotoIfError(clean, CharString_popFrontCount(filePath, v + 1));
 
-	if (String_length(directoryName)) {
-		_gotoIfError(clean, String_insert(filePath, '/', 0, alloc));
-		_gotoIfError(clean, String_insertString(filePath, directoryName, 0, alloc));
+	if (CharString_length(directoryName)) {
+		_gotoIfError(clean, CharString_insert(filePath, '/', 0, alloc));
+		_gotoIfError(clean, CharString_insertString(filePath, directoryName, 0, alloc));
 	}
 
 clean:
-	String_free(&resolved, alloc);
+	CharString_free(&resolved, alloc);
 	return err;
 }
 
-Error Archive_getInfo(Archive archive, String path, FileInfo *info, Allocator alloc) {
+Error Archive_getInfo(Archive archive, CharString path, FileInfo *info, Allocator alloc) {
 
 	if(!archive.entries.ptr || !info)
 		return Error_nullPointer(!info ? 2 : 0);
 
 	ArchiveEntry entry = (ArchiveEntry) { 0 };
-	String resolved = String_createNull();
+	CharString resolved = CharString_createNull();
 
 	if(!Archive_getPath(archive, path, &entry, NULL, &resolved, alloc))
 		return Error_notFound(0, 1);
@@ -391,13 +391,13 @@ Error Archive_getInfo(Archive archive, String path, FileInfo *info, Allocator al
 	return Error_none();
 }
 
-U64 Archive_getIndex(Archive archive, String path, Allocator alloc) {
+U64 Archive_getIndex(Archive archive, CharString path, Allocator alloc) {
 	U64 v = U64_MAX;
 	Archive_getPath(archive, path, NULL, &v, NULL, alloc);
 	return v;
 }
 
-Error Archive_updateFileData(Archive *archive, String path, Buffer data, Allocator alloc) {
+Error Archive_updateFileData(Archive *archive, CharString path, Buffer data, Allocator alloc) {
 
 	if (!archive || !archive->entries.ptr)
 		return Error_nullPointer(0);
@@ -415,7 +415,7 @@ Error Archive_updateFileData(Archive *archive, String path, Buffer data, Allocat
 
 Error Archive_getFileDataInternal(
 	Archive archive,
-	String path, 
+	CharString path, 
 	Buffer *data, 
 	Allocator alloc, 
 	Bool isConst
@@ -443,17 +443,17 @@ Error Archive_getFileDataInternal(
 	return Error_none();
 }
 
-Error Archive_getFileData(Archive archive, String path, Buffer *data, Allocator alloc) {
+Error Archive_getFileData(Archive archive, CharString path, Buffer *data, Allocator alloc) {
 	return Archive_getFileDataInternal(archive, path, data, alloc, false);
 }
 
-Error Archive_getFileDataConst(Archive archive, String path, Buffer *data, Allocator alloc) {
+Error Archive_getFileDataConst(Archive archive, CharString path, Buffer *data, Allocator alloc) {
 	return Archive_getFileDataInternal(archive, path, data, alloc, true);
 }
 
 Error Archive_foreach(
 	Archive archive,
-	String loc,
+	CharString loc,
 	FileCallback callback,
 	void *userData,
 	Bool isRecursive,
@@ -467,10 +467,10 @@ Error Archive_foreach(
 	if(type > EFileType_Any)
 		return Error_invalidEnum(5, (U64)type, (U64)EFileType_Any);
 
-	String resolved = String_createNull();
+	CharString resolved = CharString_createNull();
 	Bool isVirtual = false;
 
-	Error err = File_resolve(loc, &isVirtual, 128, String_createNull(), alloc, &resolved);
+	Error err = File_resolve(loc, &isVirtual, 128, CharString_createNull(), alloc, &resolved);
 	_gotoIfError(clean, err);
 
 	if(isVirtual)
@@ -478,10 +478,10 @@ Error Archive_foreach(
 
 	//Append / (replace last \0)
 
-	if(String_length(resolved))									//Ignore root
-		_gotoIfError(clean, String_append(&resolved, '/', alloc));
+	if(CharString_length(resolved))									//Ignore root
+		_gotoIfError(clean, CharString_append(&resolved, '/', alloc));
 
-	U64 baseSlash = isRecursive ? 0 : String_countAll(resolved, '/', EStringCase_Sensitive);
+	U64 baseSlash = isRecursive ? 0 : CharString_countAll(resolved, '/', EStringCase_Sensitive);
 
 	//TODO: Have a map where it's easy to find child files/folders.
 	//		For now we'll have to loop over every file.
@@ -495,12 +495,12 @@ Error Archive_foreach(
 		if(type != EFileType_Any && type != cai.type)
 			continue;
 
-		if(!String_startsWithString(cai.path, resolved, EStringCase_Insensitive))
+		if(!CharString_startsWithString(cai.path, resolved, EStringCase_Insensitive))
 			continue;
 
 		//It contains at least one sub dir
 
-		if(!isRecursive && baseSlash != String_countAll(cai.path, '/', EStringCase_Sensitive))
+		if(!isRecursive && baseSlash != CharString_countAll(cai.path, '/', EStringCase_Sensitive))
 			continue;
 
 		FileInfo info = (FileInfo) {
@@ -518,7 +518,7 @@ Error Archive_foreach(
 	}
 
 clean:
-	String_free(&resolved, alloc);
+	CharString_free(&resolved, alloc);
 	return err;
 }
 
@@ -530,7 +530,7 @@ Error countFile(FileInfo info, U64 *res) {
 
 Error Archive_queryFileObjectCount(
 	Archive archive, 
-	String loc, 
+	CharString loc, 
 	EFileType type, 
 	Bool isRecursive, 
 	U64 *res,
@@ -553,7 +553,7 @@ Error Archive_queryFileObjectCount(
 
 Error Archive_queryFileObjectCountAll(
 	Archive archive,
-	String loc,
+	CharString loc,
 	Bool isRecursive,
 	U64 *res, 
 	Allocator alloc
@@ -563,7 +563,7 @@ Error Archive_queryFileObjectCountAll(
 
 Error Archive_queryFileCount(
 	Archive archive,
-	String loc,
+	CharString loc,
 	Bool isRecursive,
 	U64 *res, 
 	Allocator alloc
@@ -573,7 +573,7 @@ Error Archive_queryFileCount(
 
 Error Archive_queryFolderCount(
 	Archive archive, 
-	String loc, 
+	CharString loc, 
 	Bool isRecursive, 
 	U64 *res, 
 	Allocator alloc

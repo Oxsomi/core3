@@ -754,7 +754,7 @@ Bool WindowManager_freePhysical(WindowManager *manager, Window **w) {
 
 	//Ensure our window safely exits
 
-	String_freex(&(*w)->title);
+	CharString_freex(&(*w)->title);
 	List_freex(&(*w)->devices);
 	List_freex(&(*w)->monitors);
 
@@ -772,9 +772,9 @@ Bool WindowManager_freePhysical(WindowManager *manager, Window **w) {
 	return true;
 }
 
-Error Window_updatePhysicalTitle(const Window *w, String title) {
+Error Window_updatePhysicalTitle(const Window *w, CharString title) {
 
-	U64 titlel = String_length(title);
+	U64 titlel = CharString_length(title);
 
 	if(!w || !I32x2_any(w->size) || !title.ptr || !titlel)
 		return Error_nullPointer(!w || !I32x2_any(w->size) ? 0 : 1);
@@ -783,7 +783,7 @@ Error Window_updatePhysicalTitle(const Window *w, String title) {
 		return Error_outOfBounds(1, titlel, MAX_PATH);
 
 	C8 windowName[MAX_PATH + 1];
-	Buffer_copy(Buffer_createRef(windowName, sizeof(windowName)), String_bufferConst(title));
+	Buffer_copy(Buffer_createRef(windowName, sizeof(windowName)), CharString_bufferConst(title));
 
 	windowName[titlel] = '\0';
 

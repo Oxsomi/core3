@@ -41,49 +41,49 @@ typedef struct Error Error;
 //
 //Backslashes are automatically resolved to forward slash
 
-Error File_getInfo(String loc, FileInfo *info);
-Error File_resolvex(String loc, Bool *isVirtual, U64 maxFilePathLimit, String *result);
+Error File_getInfo(CharString loc, FileInfo *info);
+Error File_resolvex(CharString loc, Bool *isVirtual, U64 maxFilePathLimit, CharString *result);
 
 Bool FileInfo_freex(FileInfo *fileInfo);
 
-Error File_foreach(String loc, FileCallback callback, void *userData, Bool isRecursive);
+Error File_foreach(CharString loc, FileCallback callback, void *userData, Bool isRecursive);
 
-Error File_remove(String loc, Ns maxTimeout);
-Error File_add(String loc, EFileType type, Ns maxTimeout);
+Error File_remove(CharString loc, Ns maxTimeout);
+Error File_add(CharString loc, EFileType type, Ns maxTimeout);
 
-Error File_rename(String loc, String newFileName, Ns maxTimeout);
-Error File_move(String loc, String directoryName, Ns maxTimeout);
+Error File_rename(CharString loc, CharString newFileName, Ns maxTimeout);
+Error File_move(CharString loc, CharString directoryName, Ns maxTimeout);
 
-Error File_queryFileObjectCount(String loc, EFileType type, Bool isRecursive, U64 *res);		//Includes files only
-Error File_queryFileObjectCountAll(String loc, Bool isRecursive, U64 *res);						//Includes folders + files
+Error File_queryFileObjectCount(CharString loc, EFileType type, Bool isRecursive, U64 *res);		//Includes files only
+Error File_queryFileObjectCountAll(CharString loc, Bool isRecursive, U64 *res);						//Includes folders + files
 
-Error File_queryFileCount(String loc, Bool isRecursive, U64 *res);
-Error File_queryFolderCount(String loc, Bool isRecursive, U64 *res);
+Error File_queryFileCount(CharString loc, Bool isRecursive, U64 *res);
+Error File_queryFolderCount(CharString loc, Bool isRecursive, U64 *res);
 
-Bool File_has(String loc);
-Bool File_hasType(String loc, EFileType type);
+Bool File_has(CharString loc);
+Bool File_hasType(CharString loc, EFileType type);
 
-Bool File_hasFile(String loc);
-Bool File_hasFolder(String loc);
+Bool File_hasFile(CharString loc);
+Bool File_hasFolder(CharString loc);
 
-Error File_write(Buffer buf, String loc, Ns maxTimeout);		//Read when a file is available (up to maxTimeout)
-Error File_read(String loc, Ns maxTimeout, Buffer *output);		//Write when a file is available (up to maxTimeout)
+Error File_write(Buffer buf, CharString loc, Ns maxTimeout);		//Read when a file is available (up to maxTimeout)
+Error File_read(CharString loc, Ns maxTimeout, Buffer *output);		//Write when a file is available (up to maxTimeout)
 
-impl Error File_removeVirtual(String loc, Ns maxTimeout);						//Can only operate on //access
-impl Error File_addVirtual(String loc, EFileType type, Ns maxTimeout);			//Can only operate on folders in //access
-impl Error File_renameVirtual(String loc, String newFileName, Ns maxTimeout);
-impl Error File_moveVirtual(String loc, String directoryName, Ns maxTimeout);
+impl Error File_removeVirtual(CharString loc, Ns maxTimeout);						//Can only operate on //access
+impl Error File_addVirtual(CharString loc, EFileType type, Ns maxTimeout);			//Can only operate on folders in //access
+impl Error File_renameVirtual(CharString loc, CharString newFileName, Ns maxTimeout);
+impl Error File_moveVirtual(CharString loc, CharString directoryName, Ns maxTimeout);
 
-impl Error File_writeVirtual(Buffer buf, String loc, Ns maxTimeout);
-impl Error File_readVirtual(String loc, Buffer *output, Ns maxTimeout);
+impl Error File_writeVirtual(Buffer buf, CharString loc, Ns maxTimeout);
+impl Error File_readVirtual(CharString loc, Buffer *output, Ns maxTimeout);
 
-impl Error File_getInfoVirtual(String loc, FileInfo *info);
-impl Error File_foreachVirtual(String loc, FileCallback callback, void *userData, Bool isRecursive);
-impl Error File_queryFileObjectCountVirtual(String loc, EFileType type, Bool isRecursive, U64 *res);		//Inc files only
-impl Error File_queryFileObjectCountAllVirtual(String loc, Bool isRecursive, U64 *res);						//Inc folders + files
+impl Error File_getInfoVirtual(CharString loc, FileInfo *info);
+impl Error File_foreachVirtual(CharString loc, FileCallback callback, void *userData, Bool isRecursive);
+impl Error File_queryFileObjectCountVirtual(CharString loc, EFileType type, Bool isRecursive, U64 *res);		//Inc files only
+impl Error File_queryFileObjectCountAllVirtual(CharString loc, Bool isRecursive, U64 *res);						//Inc folders + files
 
-impl Error File_loadVirtual(String loc, const U32 encryptionKey[8]);		//Load a virtual section
-impl Bool File_isVirtualLoaded(String loc);		//Check if a virtual section is loaded
-impl Error File_unloadVirtual(String loc);		//Unload a virtual section
+impl Error File_loadVirtual(CharString loc, const U32 encryptionKey[8]);		//Load a virtual section
+impl Bool File_isVirtualLoaded(CharString loc);		//Check if a virtual section is loaded
+impl Error File_unloadVirtual(CharString loc);		//Unload a virtual section
 
 //TODO: make it more like a DirectStorage-like api

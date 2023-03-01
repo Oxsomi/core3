@@ -31,14 +31,14 @@
 
 typedef struct CAFileRecursion {
 	Archive *archive;
-	String root;
+	CharString root;
 } CAFileRecursion;
 
 Error packageFile(FileInfo file, CAFileRecursion *caFile) {
 
-	String subPath = String_createNull();
+	CharString subPath = CharString_createNull();
 	
-	if(!String_cut(file.path, String_length(caFile->root), 0, &subPath))
+	if(!CharString_cut(file.path, CharString_length(caFile->root), 0, &subPath))
 		return Error_invalidState(0);
 
 	ArchiveEntry entry = (ArchiveEntry) {
@@ -47,12 +47,12 @@ Error packageFile(FileInfo file, CAFileRecursion *caFile) {
 	};
 
 	Error err = Error_none();
-	String copy = String_createNull();
+	CharString copy = CharString_createNull();
 
 	if (entry.type == EFileType_File)
 		_gotoIfError(clean, File_read(file.path, 1 * SECOND, &entry.data));
 
-	_gotoIfError(clean, String_createCopyx(entry.path, &copy));
+	_gotoIfError(clean, CharString_createCopyx(entry.path, &copy));
 
 	if (file.type == EFileType_File) {
 
@@ -71,7 +71,7 @@ Error packageFile(FileInfo file, CAFileRecursion *caFile) {
 
 clean:
 	Buffer_freex(&entry.data);
-	String_freex(&copy);
+	CharString_freex(&copy);
 	return err;
 }
 
@@ -84,24 +84,24 @@ Bool CLI_package(ParsedArgs args) {
 
 	if (args.parameters & EOperationHasParameter_AES) {
 
-		String key = String_createNull();
+		CharString key = CharString_createNull();
 
 		if (
 			(ParsedArgs_getArg(args, EOperationHasParameter_AESShift, &key)).genericError || 
-			!String_isHex(key)
+			!CharString_isHex(key)
 		) {
 			Log_errorLn("Invalid parameter sent to -aes. Expecting key in hex (32 bytes)");
 			return false;
 		}
 
-		U64 off = String_startsWithString(key, String_createConstRefUnsafe("0x"), EStringCase_Insensitive) ? 2 : 0;
+		U64 off = CharString_startsWithString(key, CharString_createConstRefUnsafe("0x"), EStringCase_Insensitive) ? 2 : 0;
 
-		if (String_length(key) - off != 64) {
+		if (CharString_length(key) - off != 64) {
 			Log_errorLn("Invalid parameter sent to -aes. Expecting key in hex (32 bytes)");
 			return false;
 		}
 
-		for (U64 i = off; i + 1 < String_length(key); ++i) {
+		for (U64 i = off; i + 1 < CharString_length(key); ++i) {
 
 			U8 v0 = C8_hex(key.ptr[i]);
 			U8 v1 = C8_hex(key.ptr[++i]);
@@ -137,7 +137,7 @@ Bool CLI_package(ParsedArgs args) {
 		return false;
 	}
 
-	String input = *(const String*)inputArgBuf.ptr;
+	CharString input = *(const CharString*)inputArgBuf.ptr;
 
 	//Check if output is valid
 
@@ -148,12 +148,12 @@ Bool CLI_package(ParsedArgs args) {
 		return false;
 	}
 
-	String output = *(const String*)outputArgBuf.ptr;
+	CharString output = *(const CharString*)outputArgBuf.ptr;
 
 	//Make archive
 
 	Archive archive = (Archive) { 0 };
-	String resolved = String_createNull();
+	CharString resolved = CharString_createNull();
 	CAFile file = (CAFile) { 0 };
 	Buffer res = Buffer_createNull();
 	Bool isVirtual = false;
@@ -164,7 +164,7 @@ Bool CLI_package(ParsedArgs args) {
 	if (isVirtual)
 		_gotoIfError(clean, Error_invalidOperation(0));
 
-	_gotoIfError(clean, String_appendx(&resolved, '/'));
+	_gotoIfError(clean, CharString_appendx(&resolved, '/'));
 
 	CAFileRecursion caFileRecursion = (CAFileRecursion) { 
 		.archive = &archive, 
@@ -198,6 +198,6 @@ clean:
 	Buffer_freex(&res);
 	CAFile_freex(&file);
 	Archive_freex(&archive);
-	String_freex(&resolved);
+	CharString_freex(&resolved);
 	return !err.genericError;
 }

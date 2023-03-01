@@ -52,7 +52,7 @@ Bool Window_doesAllowFullScreen(const Window *w) { return Window_initialized(w) 
 //Presenting CPU buffer to a file (when virtual) or window when physical
 //This can only be called in a draw function!
 
-Error Window_presentCPUBuffer(Window *w, String file, Ns maxTimeout) {
+Error Window_presentCPUBuffer(Window *w, CharString file, Ns maxTimeout) {
 
 	if (!Window_initialized(w))
 		return Error_nullPointer(0);
@@ -338,7 +338,7 @@ Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 	return Error_none();
 }
 
-Error Window_storeCPUBufferToDisk(const Window *w, String filePath, Ns maxTimeout) {
+Error Window_storeCPUBufferToDisk(const Window *w, CharString filePath, Ns maxTimeout) {
 
 	if (!Window_initialized(w))
 		return Error_nullPointer(0);

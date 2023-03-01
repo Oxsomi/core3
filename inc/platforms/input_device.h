@@ -92,14 +92,14 @@ Error InputDevice_create(U16 buttons, U16 axes, EInputDeviceType type, InputDevi
 Error InputDevice_createButton(
 	InputDevice dev, 
 	U16 localHandle, 
-	String keyName,			//The alphaNumeric name (e.g. EKey_1)
+	CharString keyName,			//The alphaNumeric name (e.g. EKey_1)
 	InputHandle *result
 );
 
 Error InputDevice_createAxis(
 	InputDevice dev, 
 	U16 localHandle, 
-	String keyName, 
+	CharString keyName, 
 	F32 deadZone, 
 	Bool resetOnInputLoss,
 	InputHandle *result
@@ -147,8 +147,8 @@ Bool InputDevice_isPressed(InputDevice d, InputHandle handle);
 
 //For serialization and stuff like that
 
-InputHandle InputDevice_getHandle(InputDevice d, String name);
-String InputDevice_getName(InputDevice d, InputHandle handle);
+InputHandle InputDevice_getHandle(InputDevice d, CharString name);
+CharString InputDevice_getName(InputDevice d, InputHandle handle);
 
 F32 InputDevice_getDeadZone(InputDevice d, InputHandle handle);
 

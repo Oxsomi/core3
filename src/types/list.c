@@ -747,17 +747,17 @@ Bool List_sortCustom(List list, CompareFunction f) {
 #define TList_sort(T) Bool List_sort##T(List l) { return List_sortCustom(l, sort##T); }
 TList_sorts(TList_sort);
 
-ECompareResult List_compareString(const String *a, const String *b) {
-	return String_compare(*a, *b, EStringCase_Sensitive);
+ECompareResult List_compareString(const CharString *a, const CharString *b) {
+	return CharString_compare(*a, *b, EStringCase_Sensitive);
 }
 
-ECompareResult List_compareStringInsensitive(const String *a, const String *b) {
-	return String_compare(*a, *b, EStringCase_Insensitive);
+ECompareResult List_compareStringInsensitive(const CharString *a, const CharString *b) {
+	return CharString_compare(*a, *b, EStringCase_Insensitive);
 }
 
 Bool List_sortString(List list, EStringCase stringCase) {
 
-	if(list.stride != sizeof(String))			//Current limitation, because we don't allocate.
+	if(list.stride != sizeof(CharString))			//Current limitation, because we don't allocate.
 		return false;
 
 	return 

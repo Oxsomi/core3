@@ -46,7 +46,7 @@ typedef enum ELogOptions {
 impl void Log_captureStackTrace(void **stackTrace, U64 stackSize, U64 skip);
 
 impl void Log_printCapturedStackTraceCustom(const void **stackTrace, U64 stackSize, ELogLevel lvl, ELogOptions options);
-impl void Log_log(ELogLevel lvl, ELogOptions options, String arg);
+impl void Log_log(ELogLevel lvl, ELogOptions options, CharString arg);
 
 void Log_printCapturedStackTrace(const StackTrace stackTrace, ELogLevel lvl, ELogOptions options);
 

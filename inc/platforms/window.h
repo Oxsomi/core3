@@ -148,7 +148,7 @@ typedef struct Window {
 	EWindowFormat format;
 	EWindowFlags flags;
 
-	String title;			//Only for physical windows
+	CharString title;			//Only for physical windows
 
 	Error creationError;	//Only if creation failed for physical windows
 
@@ -160,7 +160,7 @@ typedef struct Window {
 
 //Implementation dependent aka physical windows
 
-impl Error Window_updatePhysicalTitle(const Window *w, String title);
+impl Error Window_updatePhysicalTitle(const Window *w, CharString title);
 
 impl Error Window_toggleFullScreen(Window *w);
 
@@ -172,7 +172,7 @@ impl Error Window_presentPhysical(const Window *w);
 
 Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSize);
 
-Error Window_storeCPUBufferToDisk(const Window *w, String filePath, Ns maxTimeout);
+Error Window_storeCPUBufferToDisk(const Window *w, CharString filePath, Ns maxTimeout);
 
 //Simple helper functions
 
@@ -186,7 +186,7 @@ Bool Window_doesAllowFullScreen(const Window *w);
 //Presenting CPU buffer to a file (when virtual) or window when physical
 //This can only be called in a draw function!
 
-Error Window_presentCPUBuffer(Window *w, String file, Ns maxTimeout);
+Error Window_presentCPUBuffer(Window *w, CharString file, Ns maxTimeout);
 
 Error Window_waitForExit(Window *w, Ns maxTimeout);
 Bool Window_terminate(Window *w);
