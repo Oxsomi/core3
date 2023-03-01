@@ -200,20 +200,26 @@ void Window_physicalLoop(Window *w) {
 		}
 	}
 
-	//Ensure we're allowed to free
-clean:
+	//Free the window if we're done with the window loop
 
 	while (!Lock_lock(&Platform_instance.windowManager.lock, 1 * SECOND)) { }
 
 	Lock_lock(&w->lock, 1 * SECOND);
-
+	
 	Window *w0 = w;
-
+	
 	WindowManager_freePhysical(&Platform_instance.windowManager, &w);
 	*w0 = (Window) { 0 };
-	w0->creationError = err;	//Signal error
-
+	
 	Lock_unlock(&Platform_instance.windowManager.lock);
+	return;
+
+	//When an error happens, we're not the one freeing it, rather the calling thread would be.
+
+clean:
+	Lock_lock(&w->lock, 1 * SECOND);
+	w->creationError = err;						//Signal error
+	Lock_unlock(&w->lock);
 }
 
 Error WindowManager_createPhysical(
@@ -345,6 +351,9 @@ Error WindowManager_createPhysical(
 clean:
 
 	if(err.genericError) {
+
+		WindowManager_freePhysical(&Platform_instance.windowManager, &win);
+
 		Lock_free(&win->lock);
 		*win = (Window) { 0 };
 	}
