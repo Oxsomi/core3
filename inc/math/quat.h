@@ -22,46 +22,51 @@
 #include "vec.h"
 #include "math.h"
 
-typedef F32x4 Quat;
+#define _QUAT_FUNC(T)											\
+																\
+typedef T##x4 Quat##T;											\
+																\
+/* Simple quaternion functions */								\
+																\
+Quat##T Quat##T##_create(T x, T y, T z, T w);					\
+																\
+Quat##T Quat##T##_identity();									\
+																\
+Quat##T Quat##T##_conj(Quat##T q);								\
+Quat##T Quat##T##_normalize(Quat##T q);							\
+Quat##T Quat##T##_inverse(Quat##T q);							\
+																\
+/* Shortcuts */													\
+																\
+Bool Quat##T##_eq(Quat##T a, Quat##T b);						\
+Bool Quat##T##_neq(Quat##T a, Quat##T b);						\
+																\
+T Quat##T##_x(Quat##T a);										\
+T Quat##T##_y(Quat##T a);										\
+T Quat##T##_z(Quat##T a);										\
+T Quat##T##_w(Quat##T a);										\
+T Quat##T##_get(Quat##T a, U8 i);								\
+																\
+void Quat##T##_setX(Quat##T *a, T v);							\
+void Quat##T##_setY(Quat##T *a, T v);							\
+void Quat##T##_setZ(Quat##T *a, T v);							\
+void Quat##T##_setW(Quat##T *a, T v);							\
+void Quat##T##_set(Quat##T *a, U8 i, T v);						\
+																\
+Quat##T Quat##T##_lerp(Quat##T a, Quat##T b, T perc);			\
+																\
+/* Helper funcs */												\
+																\
+Quat##T Quat##T##_angleAxis(T##x4 axis, T angle);				\
+Quat##T Quat##T##_fromEuler(T##x4 pitchYawRollDeg);				\
+T##x4 Quat##T##_toEuler(Quat##T q);								\
+Quat##T Quat##T##_mul(Quat##T a, Quat##T b);					\
+Quat##T Quat##T##_targetDirection(T##x4 origin, T##x4 target);	\
+T##x4 Quat##T##_applyToNormal(Quat##T R, T##x4 P);				\
+																\
+Quat##T Quat##T##_slerp(Quat##T a, Quat##T b, T perc);			\
+																\
+/* Quat##T Quat##T##_fromLookRotation(T##x4 fwd, T##x4 up); */
 
-//Simple quaternion functions
-
-Quat Quat_create(F32 x, F32 y, F32 z, F32 w);
-
-Quat Quat_identity();
-
-Quat Quat_conj(Quat q);
-Quat Quat_normalize(Quat q);
-Quat Quat_inverse(Quat q);
-
-//Shortcuts
-
-Bool Quat_eq(Quat a, Quat b);
-Bool Quat_neq(Quat a, Quat b);
-
-F32 Quat_x(Quat a);
-F32 Quat_y(Quat a);
-F32 Quat_z(Quat a);
-F32 Quat_w(Quat a);
-F32 Quat_get(Quat a, U8 i);
-
-void Quat_setX(Quat *a, F32 v);
-void Quat_setY(Quat *a, F32 v);
-void Quat_setZ(Quat *a, F32 v);
-void Quat_setW(Quat *a, F32 v);
-void Quat_set(Quat *a, U8 i, F32 v);
-
-Quat Quat_lerp(Quat a, Quat b, F32 perc);
-
-//Helper funcs
-
-Quat Quat_angleAxis(F32x4 axis, F32 angle);
-Quat Quat_fromEuler(F32x4 pitchYawRollDeg);
-F32x4 Quat_toEuler(Quat q);
-Quat Quat_mul(Quat a, Quat b);
-Quat Quat_targetDirection(F32x4 origin, F32x4 target);
-F32x4 Quat_applyToNormal(Quat R, F32x4 P);
-
-Quat Quat_slerp(Quat a, Quat b, F32 perc);
-
-//inline Quat Quat_fromLookRotation(F32x4 fwd, F32x4 up);
+_QUAT_FUNC(F32);
+//_QUAT_FUNC(F64);		TODO:

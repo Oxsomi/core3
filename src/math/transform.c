@@ -25,7 +25,7 @@
 
 PackedTransform Transform_pack(Transform t) {
 
-	Quat16 q16 = Quat_pack(t.rot);
+	QuatS16 q16 = QuatF32_pack(t.rot);
 
 	return (PackedTransform) {
 
@@ -39,18 +39,18 @@ PackedTransform Transform_pack(Transform t) {
 
 Transform PackedTransform_unpack(PackedTransform t) {
 
-	Quat16 q16;
+	QuatS16 q16;
 	*(U32*) &q16.arr[0] = t.quatXy;
 	*(U32*) &q16.arr[2] = t.quatZw;
 
 	return (Transform) {
-		Quat_unpack(q16),
+		QuatF32_unpack(q16),
 		F32x4_load3(t.pos),
 		F32x4_load3(t.scale)
 	};
 }
 
-Transform Transform_create(Quat rot, F32x4 pos, F32x4 scale) {
+Transform Transform_create(QuatF32 rot, F32x4 pos, F32x4 scale) {
 	return (Transform) {
 		.rot = rot,
 		.pos = pos,
@@ -59,18 +59,18 @@ Transform Transform_create(Quat rot, F32x4 pos, F32x4 scale) {
 }
 
 F32x4 Transform_applyToDirection(Transform t, F32x4 dir) {
-	return Quat_applyToNormal(t.rot, dir);
+	return QuatF32_applyToNormal(t.rot, dir);
 }
 
 F32x4 Transform_apply(Transform t, F32x4 pos) {
 	F32x4 mpos = F32x4_mul(pos, t.scale);		//Scale
-	mpos = Quat_applyToNormal(t.rot, mpos);		//Rotate
+	mpos = QuatF32_applyToNormal(t.rot, mpos);	//Rotate
 	return F32x4_add(mpos, t.pos);				//Translate
 }
 
 F32x4 Transform_reverse(Transform t, F32x4 pos) {
 	F32x4 mpos = F32x4_sub(pos, t.pos);
-	mpos = Quat_applyToNormal(Quat_inverse(t.rot), mpos);
+	mpos = QuatF32_applyToNormal(QuatF32_inverse(t.rot), mpos);
 	return F32x4_div(mpos, t.scale);
 }
 

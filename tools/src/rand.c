@@ -168,12 +168,12 @@ Bool CLI_rand(ParsedArgs args) {
 					return false;
 				}
 
-				F32 f = (F32)((U64)1 << U64_min(63, b));
+				F64 f = (F64)((U64)1 << U64_min(63, b));
 
 				if(b == 64)		//Shift by 64 is illegal ofc
 					f *= 2;
 
-				maxLen = (U64) F32_ceil(F32_log10(f));
+				maxLen = (U64) F64_ceil(F64_log10(f));
 				break;
 			}
 		}

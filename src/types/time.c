@@ -61,8 +61,8 @@ DNs Time_dns(Ns timeStamp0, Ns timeStamp1) {
 	return (DNs) diff;
 }
 
-F32 Time_dt(Ns timeStamp0, Ns timeStamp1) {
-	return (F32)Time_dns(timeStamp0, timeStamp1) / SECOND;
+F64 Time_dt(Ns timeStamp0, Ns timeStamp1) {
+	return (F64)Time_dns(timeStamp0, timeStamp1) / SECOND;
 }
 
 U64 Time_clocks() { return __rdtsc(); }	//TODO: Arm?
@@ -181,7 +181,7 @@ EFormatStatus Time_parseFormat(Ns *time, TimerFormat format) {
 				if(dif == 0)
 					return EFormatStatus_InvalidFormat;
 
-				U64 mul = U64_10pow(9 - dif);
+				U64 mul = U64_exp10(9 - dif);
 
 				if(mul == U64_MAX)
 					return EFormatStatus_InvalidFormat;

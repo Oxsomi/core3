@@ -103,7 +103,7 @@ EResolution EResolution_create(I32x2 v);
 typedef struct Window Window;
 
 typedef void (*WindowCallback)(Window*);
-typedef void (*WindowUpdateCallback)(Window*, F32);
+typedef void (*WindowUpdateCallback)(Window*, F64);
 typedef void (*WindowDeviceCallback)(Window*, InputDevice*);
 typedef void (*WindowDeviceButtonCallback)(Window*, InputDevice*, InputHandle, Bool);
 typedef void (*WindowDeviceAxisCallback)(Window*, InputDevice*, InputHandle, F32);

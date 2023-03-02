@@ -668,7 +668,7 @@ Error CharString_createHex(U64 v, U8 leadingZeros, Allocator allocator, CharStri
 }
 
 Error CharString_createDec(U64 v, U8 leadingZeros, Allocator allocator, CharString *result) {
-	CharString_createNum(20, Dec, "", (v / U64_10pow(i)) % 10);
+	CharString_createNum(20, Dec, "", (v / U64_exp10(i)) % 10);
 }
 
 Error CharString_createOct(U64 v, U8 leadingZeros, Allocator allocator, CharString *result) {
@@ -1731,7 +1731,7 @@ Bool CharString_parseDecSigned(CharString s, I64 *result) {
 
 //Approximately equal to: [-+]?[0-9]*[.[0-9]*]?[[eE][-+]?[0-9]+]?
 
-Bool CharString_parseFloat(CharString s, F32 *result) {
+Bool CharString_parseDouble(CharString s, F64 *result) {
 
 	if (!result)
 		return false;
@@ -1756,7 +1756,7 @@ Bool CharString_parseFloat(CharString s, F32 *result) {
 
 	//Parse integer part
 
-	F32 intPart = 0;
+	F64 intPart = 0;
 
 	while(
 		!CharString_startsWith(s, '.', EStringCase_Sensitive) && 
@@ -1770,7 +1770,7 @@ Bool CharString_parseFloat(CharString s, F32 *result) {
 
 		intPart = intPart * 10 + v;
 
-		if(!F32_isValid(intPart))
+		if(!F64_isValid(intPart))
 			return false;
 
 		if (CharString_offsetAsRef(s, 1, &s).genericError)
@@ -1790,7 +1790,7 @@ Bool CharString_parseFloat(CharString s, F32 *result) {
 	)
 		return false;
 
-	F32 fraction = 0, multiplier = 0.1f;
+	F64 fraction = 0, multiplier = 0.1;
 
 	while(!CharString_startsWith(s, 'e', EStringCase_Insensitive)) {
 
@@ -1801,17 +1801,17 @@ Bool CharString_parseFloat(CharString s, F32 *result) {
 
 		fraction += v * multiplier;
 
-		if(!F32_isValid(fraction))
+		if(!F64_isValid(fraction))
 			return false;
 
-		multiplier *= 0.1f;
+		multiplier *= 0.1;
 
 		if (CharString_offsetAsRef(s, 1, &s).genericError)
 			return false;
 
 		if (!CharString_length(s)) {
 			*result = sign ? -(intPart + fraction) : intPart + fraction;
-			return F32_isValid(*result);
+			return F64_isValid(*result);
 		}
 	}
 
@@ -1838,7 +1838,7 @@ Bool CharString_parseFloat(CharString s, F32 *result) {
 
 	//Parse exponent (must be int)
 
-	F32 exponent = 0;
+	F64 exponent = 0;
 
 	while(CharString_length(s)) {
 
@@ -1849,24 +1849,37 @@ Bool CharString_parseFloat(CharString s, F32 *result) {
 
 		exponent = exponent * 10 + v;
 
-		if(!F32_isValid(fraction))
+		if(!F64_isValid(fraction))
 			return false;
 
 		if (CharString_offsetAsRef(s, 1, &s).genericError)
 			return false;
 	}
 
-	Error err = F32_exp10(esign ? -exponent : exponent, &exponent);
+	Error err = F64_exp10(esign ? -exponent : exponent, &exponent);
 
 	if(err.genericError)
 		return false;
 
-	F32 res = (sign ? -(intPart + fraction) : intPart + fraction) * exponent;
+	F64 res = (sign ? -(intPart + fraction) : intPart + fraction) * exponent;
 
-	if(!F32_isValid(res))
+	if(!F64_isValid(res))
 		return false;
 
 	*result = res;
+	return true;
+}
+
+Bool CharString_parseFloat(CharString s, F32 *result) {
+
+	F64 dub = 0;
+	if(!CharString_parseDouble(s, &dub))
+		return false;
+
+	if(!F32_isValid((F32)dub))
+		return false;
+
+	*result = (F32)dub;
 	return true;
 }
 

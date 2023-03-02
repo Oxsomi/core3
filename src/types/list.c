@@ -636,14 +636,14 @@ ECompareResult sort##T(const T *a, const T *b) {											\
 	return *a < *b ? ECompareResult_Lt : (*a > *b ? ECompareResult_Gt : ECompareResult_Eq); \
 }
 
-#define TList_sorts(f) f(U64); f(I64); f(U32); f(I32); f(U16); f(I16); f(U8); f(I8); f(F32);
+#define TList_sorts(f) f(U64); f(I64); f(U32); f(I32); f(U16); f(I16); f(U8); f(I8); f(F32); f(F64);
 
 TList_sorts(TList_tsort);
 
 //https://stackoverflow.com/questions/33884057/quick-sort-stackoverflow-error-for-large-arrays
-//qsort U64 should be taking about ~76ms / 1M elem and ~13ms / 1M (sorted)
-//qsort U8 should be taking about half the time for unsorted because of cache speedups
-//Expect F32 sorting to be at least 2x to 5x slower
+//qsort U64 should be taking about ~76ms / 1M elem and ~13ms / 1M (sorted).
+//qsort U8 should be taking about half the time for unsorted because of cache speedups.
+//Expect F32 sorting to be at least 2x to 5x slower (and F64 even slower).
 //(Profiled on a 3900x)
 
 inline U64 List_qpartition(List list, U64 begin, U64 last, CompareFunction f) {

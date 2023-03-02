@@ -857,7 +857,7 @@ int main() {
 
 	//
 
-	F32 dt = (Time_now() - now) / (F32)SECOND;
+	F64 dt = (Time_now() - now) / (F64)SECOND;
 
 	printf("Successful unit test! After %fs\n", dt);
 	return 0;
@@ -876,7 +876,7 @@ clean:
 	Buffer_free(&emp, alloc);
 	Buffer_free(&full, alloc);
 
-	F32 dt2 = (Time_now() - now) / (F32)SECOND;
+	F64 dt2 = (Time_now() - now) / (F64)SECOND;
 
 	printf("Failed unit test... After %fs\n", dt2);
 

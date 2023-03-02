@@ -23,10 +23,14 @@
 
 typedef struct Error Error;
 
-extern const F32 F32_E;
-extern const F32 F32_PI;
-extern const F32 F32_RAD_TO_DEG;
-extern const F32 F32_DEG_TO_RAD;
+#define _FLP_CONSTS(T)							\
+extern const T T##_E;							\
+extern const T T##_PI;							\
+extern const T T##_RAD_TO_DEG;					\
+extern const T T##_DEG_TO_RAD;
+
+_FLP_CONSTS(F32);
+_FLP_CONSTS(F64);
 
 //Math errors assume inputs aren't nan or inf
 //Ensure it's true with extra validation
@@ -35,86 +39,89 @@ extern const F32 F32_DEG_TO_RAD;
 //Uint
 //TODO: Errors
 
-U64 U64_min(U64 v0, U64 v1);
-U64 U64_max(U64 v0, U64 v1);
-U64 U64_clamp(U64 v, U64 mi, U64 ma);
+#define _ARIT_OP(T)								\
+T T##_min(T v0, T v1);							\
+T T##_max(T v0, T v1);							\
+T T##_clamp(T v, T mi, T ma);
 
-U64 U64_pow2(U64 v);
-U64 U64_pow3(U64 v);
-U64 U64_pow4(U64 v);
-U64 U64_pow5(U64 v);
-U64 U64_10pow(U64 v);
+#define _XINT_OP(T)								\
+_ARIT_OP(T)										\
+T T##_pow2(T v);								\
+T T##_pow3(T v);								\
+T T##_pow4(T v);								\
+T T##_pow5(T v);								\
+T T##_exp10(T v);								\
+T T##_exp2(T v);
 
 //TODO: Int, uint %/^*+-
 
+_XINT_OP(U64);
+_XINT_OP(U32);
+_XINT_OP(U16);
+_XINT_OP(U8);
+
 //Int
 
-I64 I64_min(I64 v0, I64 v1);
-I64 I64_max(I64 v0, I64 v1);
-I64 I64_clamp(I64 v, I64 mi, I64 ma);
+#define _INT_IOP(T)								\
+_XINT_OP(T)										\
+T T##_abs(T v);
 
-I64 I64_abs(I64 v);
-
-//TODO: proper safety checks, because this doesn't properly check overflow!
-
-I64 I64_pow2(I64 v);
-I64 I64_pow3(I64 v);
-I64 I64_pow4(I64 v);
-I64 I64_pow5(I64 v);
+_INT_IOP(I64);
+_INT_IOP(I32);
+_INT_IOP(I16);
+_INT_IOP(I8);
 
 //Float
 //TODO: %/^+-
-//		Should also check if the ++ and -- actually increased the float. If not, throw! +- etc can check on lost precision (e.g. 1% of value)
+//		Should also check if the ++ and -- actually increased the float. 
+//		If not, throw! +- etc can check on lost precision (e.g. 1% of value)
 //TODO: Proper error checking!
 
-F32 F32_min(F32 v0, F32 v1);
-F32 F32_max(F32 v0, F32 v1);
-F32 F32_clamp(F32 v, F32 mi, F32 ma);
-F32 F32_saturate(F32 v);
+#define _FLP_OP(T)								\
+												\
+_ARIT_OP(T);									\
+												\
+Error T##_pow2(T v, T *res);					\
+Error T##_pow3(T v, T *res);					\
+Error T##_pow4(T v, T *res);					\
+Error T##_pow5(T v, T *res);					\
+Error T##_exp10(T v, T *res);					\
+Error T##_exp2(T v, T *res);					\
+												\
+T T##_saturate(T v);							\
+												\
+T T##_lerp(T a, T b, T perc);					\
+T T##_abs(T v);									\
+T T##_sqrt(T v);								\
+												\
+Bool T##_isNaN(T v);							\
+Bool T##_isInf(T v);							\
+Bool T##_isValid(T v);							\
+												\
+Error T##_pow(T v, T exp, T *res);				\
+Error T##_expe(T v, T *res);					\
+												\
+T T##_log10(T v);								\
+T T##_loge(T v);								\
+T T##_log2(T v);								\
+												\
+T T##_asin(T v);								\
+T T##_sin(T v);									\
+T T##_cos(T v);									\
+T T##_acos(T v);								\
+T T##_tan(T v);									\
+T T##_atan(T v);								\
+T T##_atan2(T y, T x);							\
+												\
+T T##_round(T v);								\
+T T##_ceil(T v);								\
+T T##_floor(T v);								\
+T T##_fract(T v);								\
+												\
+Error T##_mod(T v, T mod, T *result);			\
+												\
+T T##_sign(T v);								\
+T T##_signInc(T v);
 
-//TODO: Lerp perc should be 0,1
-
-F32 F32_lerp(F32 a, F32 b, F32 perc);
-F32 F32_abs(F32 v);
-F32 F32_sqrt(F32 v);
-
-//Inputs should always return false for the runtime, since floats should be validated before they're made
-//As such, these won't be exposed to any user, only natively
-
-Bool F32_isNaN(F32 v);
-Bool F32_isInf(F32 v);
-Bool F32_isValid(F32 v);
-
-//
-
-Error F32_pow2(F32 v, F32 *res);
-Error F32_pow3(F32 v, F32 *res);
-Error F32_pow4(F32 v, F32 *res);
-Error F32_pow5(F32 v, F32 *res);
-
-Error F32_pow(F32 v, F32 exp, F32 *res);
-Error F32_expe(F32 v, F32 *res);
-Error F32_exp2(F32 v, F32 *res);
-Error F32_exp10(F32 v, F32 *res);
-
-F32 F32_log10(F32 v);
-F32 F32_loge(F32 v);
-F32 F32_log2(F32 v);
-
-F32 F32_asin(F32 v);
-F32 F32_sin(F32 v);
-F32 F32_cos(F32 v);
-F32 F32_acos(F32 v);
-F32 F32_tan(F32 v);
-F32 F32_atan(F32 v);
-F32 F32_atan2(F32 y, F32 x);
-
-F32 F32_round(F32 v);
-F32 F32_ceil(F32 v);
-F32 F32_floor(F32 v);
-F32 F32_fract(F32 v);
-
-Error F32_mod(F32 v, F32 mod, F32 *result);
-
-F32 F32_sign(F32 v);
-F32 F32_signInc(F32 v);
+_FLP_OP(F32);
+_FLP_OP(F64);

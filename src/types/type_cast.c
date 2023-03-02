@@ -22,26 +22,30 @@
 
 //Conversions
 
-Error F32_fromBits(U64 v, F32 *res) {
-
-	if(!res)
-		return Error_nullPointer(1);
-
-	if(v > U32_MAX)
-		return Error_overflow(0, v, U32_MAX);
-
-	U32 bits = (U32) v;
-	F32 r = *(const F32*) &bits;
-
-	if(!F32_isValid(r))
-		return Error_NaN(0);
-
-	if(v == (1 << 31))	//Signed zero
-		return Error_invalidParameter(0, 0);
-
-	*res = r;
-	return Error_none();
+#define _FLP_FROMBITS(T, TInt)											\
+Error T##_fromBits(U64 v, T *res) {										\
+																		\
+	if(!res)															\
+		return Error_nullPointer(1);									\
+																		\
+	if(v > TInt##_MAX)													\
+		return Error_overflow(0, v, TInt##_MAX);						\
+																		\
+	TInt bits = (TInt) v;												\
+	T r = *(const T*) &bits;											\
+																		\
+	if(!T##_isValid(r))													\
+		return Error_NaN(0);											\
+																		\
+	if(v == ((TInt)1 << (sizeof(T) * 8 - 1)))	/* Signed zero */		\
+		r = 0;															\
+																		\
+	*res = r;															\
+	return Error_none();												\
 }
+
+_FLP_FROMBITS(F32, U32);
+_FLP_FROMBITS(F64, U64);
 
 //Cast to ints
 
@@ -65,18 +69,17 @@ Error F32_fromBits(U64 v, F32 *res) {
 )
 
 #define _CastFromF(type) _CastFromI(type, type, *(const U32*)&v)
+#define _CastFromD(type) _CastFromI(type, type, *(const U64*)&v)
 
-Error I8_fromUInt(U64 v, I8 *res)		_CastFromU(I8, (U64)v)
-Error I8_fromInt(I64 v, I8 *res)		_CastFromI(I8, U8, (U64)v)
-Error I8_fromFloat(F32 v, I8 *res)		_CastFromF(I8) 
+#define _ITOF(T, TUint)																		\
+Error T##_fromUInt(U64 v, T *res)		_CastFromU(T, (U64)v)								\
+Error T##_fromInt(I64 v, T *res)		_CastFromI(T, TUint, (U64)v)						\
+Error T##_fromFloat(F32 v, T *res)		_CastFromF(T) 										\
+Error T##_fromDouble(F64 v, T *res)		_CastFromD(T) 
 
-Error I16_fromUInt(U64 v, I16 *res)		_CastFromU(I16, (U64)v)
-Error I16_fromInt(I64 v, I16 *res)		_CastFromI(I16, U16, (U64)v)
-Error I16_fromFloat(F32 v, I16 *res)	_CastFromF(I16) 
-
-Error I32_fromUInt(U64 v, I32 *res)		_CastFromU(I32, (U64)v)
-Error I32_fromInt(I64 v, I32 *res) 		_CastFromI(I32, U32, (U64)v)
-Error I32_fromFloat(F32 v, I32 *res)	_CastFromF(I32)
+_ITOF(I8, U8);
+_ITOF(I16, U16);
+_ITOF(I32, U32);
 
 Error I64_fromUInt(U64 v, I64 *res) {
 
@@ -90,20 +93,19 @@ Error I64_fromUInt(U64 v, I64 *res) {
 }
 
 Error I64_fromFloat(F32 v, I64 *res)	_CastFromF(I64)
+Error I64_fromDouble(F64 v, I64 *res)	_CastFromD(I64)
 
 //Cast to uints
 
-Error U8_fromUInt(U64 v, U8 *res)		_CastFromU(U8, (U64)v)
-Error U8_fromInt(I64 v, U8 *res)		_CastFromI(U8, U8, (U64)(I64)v)
-Error U8_fromFloat(F32 v, U8 *res)		_CastFromF(U8)
+#define _UTOF(T)																			\
+Error T##_fromUInt(U64 v, T *res)		_CastFromU(T, (U64)v)								\
+Error T##_fromInt(I64 v, T *res)		_CastFromI(T, T, (U64)v)							\
+Error T##_fromFloat(F32 v, T *res)		_CastFromF(T) 										\
+Error T##_fromDouble(F64 v, T *res)		_CastFromD(T) 
 
-Error U16_fromUInt(U64 v, U16 *res)		_CastFromU(U16, (U64)v)
-Error U16_fromInt(I64 v, U16 *res) 		_CastFromI(U16, U16, (U64)(I64)v)
-Error U16_fromFloat(F32 v, U16 *res)	_CastFromF(U16)
-
-Error U32_fromUInt(U64 v, U32 *res)		_CastFromU(U32, (U64)v)
-Error U32_fromInt(I64 v, U32 *res)		_CastFromI(U32, U32, (U64)(I64)v)
-Error U32_fromFloat(F32 v, U32 *res)	_CastFromF(U32)
+_UTOF(U8);
+_UTOF(U16);
+_UTOF(U32);
 
 Error U64_fromInt(I64 v, U64 *res) {
 
@@ -118,17 +120,18 @@ Error U64_fromInt(I64 v, U64 *res) {
 
 
 Error U64_fromFloat(F32 v, U64 *res)	_CastFromF(U64)
+Error U64_fromDouble(F64 v, U64 *res)	_CastFromD(U64)
 
 //Cast to floats
 
-#define CastToF32 {															\
+#define CastTo(T) {															\
 																			\
 	if(!res)																\
 		return Error_nullPointer(1);										\
 																			\
-	F32 r = (F32) v;														\
+	T r = (T) v;															\
 																			\
-	if(!F32_isValid(r))														\
+	if(!T##_isValid(r))														\
 		return Error_NaN(0);												\
 																			\
 	if(r != v)																\
@@ -138,8 +141,10 @@ Error U64_fromFloat(F32 v, U64 *res)	_CastFromF(U64)
 	return Error_none();													\
 }
 
-Error F32_fromInt(I64 v, F32 *res)  CastToF32
-Error F32_fromUInt(U64 v, F32 *res) CastToF32
+Error F32_fromInt(I64 v, F32 *res)  CastTo(F32)
+Error F32_fromUInt(U64 v, F32 *res) CastTo(F32)
+Error F64_fromInt(I64 v, F64 *res)  CastTo(F64)
+Error F64_fromUInt(U64 v, F64 *res) CastTo(F64)
 
 //Endianness, because sometimes it's needed
 

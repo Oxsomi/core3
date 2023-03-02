@@ -125,17 +125,17 @@ Bool U32_setBit(U32 *packed, U8 off, Bool b) {
 
 //Compressing quaternions
 
-Quat Quat_unpack(Quat16 q) {
+QuatF32 QuatF32_unpack(QuatS16 q) {
 	F32x4 v = F32x4_create4(q.arr[0], q.arr[1], q.arr[2], q.arr[3]);
 	return F32x4_div(v, F32x4_xxxx4(I16_MAX));
 }
 
-Quat16 Quat_pack(Quat q) {
+QuatS16 QuatF32_pack(QuatF32 q) {
 
-	q = Quat_normalize(q);
+	q = QuatF32_normalize(q);
 	F32x4 asI16 = F32x4_mul(q, F32x4_xxxx4(I16_MAX));
 
-	return (Quat16) {
+	return (QuatS16) {
 		{
 			(I16) F32x4_x(asI16),
 			(I16) F32x4_y(asI16),

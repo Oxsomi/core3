@@ -94,41 +94,30 @@ Error Buffer_consume(Buffer *buf, void *v, U64 length);
 
 Error Buffer_combine(Buffer a, Buffer b, Allocator alloc, Buffer *output);
 
-Error Buffer_appendU64(Buffer *buf, U64 v);
-Error Buffer_appendU32(Buffer *buf, U32 v);
-Error Buffer_appendU16(Buffer *buf, U16 v);
-Error Buffer_appendU8(Buffer *buf,  U8 v);
-Error Buffer_appendC8(Buffer *buf,  C8 v);
+#define _BUFFER_OP(T)						\
+Error Buffer_append##T(Buffer *buf, T v);	\
+Error Buffer_consume##T(Buffer *buf, T *v);
 
-Error Buffer_appendI64(Buffer *buf, I64 v);
-Error Buffer_appendI32(Buffer *buf, I32 v);
-Error Buffer_appendI16(Buffer *buf, I16 v);
-Error Buffer_appendI8(Buffer *buf,  I8 v);
+_BUFFER_OP(U64);
+_BUFFER_OP(U32);
+_BUFFER_OP(U16);
+_BUFFER_OP(U8);
 
-Error Buffer_appendF32(Buffer *buf, F32 v);
+_BUFFER_OP(I64);
+_BUFFER_OP(I32);
+_BUFFER_OP(I16);
+_BUFFER_OP(I8);
 
-Error Buffer_appendF32x4(Buffer *buf, F32x4 v);
-Error Buffer_appendF32x2(Buffer *buf, I32x2 v);
-Error Buffer_appendI32x4(Buffer *buf, I32x4 v);
-Error Buffer_appendI32x2(Buffer *buf, I32x2 v);
+_BUFFER_OP(F64);
+_BUFFER_OP(F32);
 
-Error Buffer_consumeU64(Buffer *buf, U64 *v);
-Error Buffer_consumeU32(Buffer *buf, U32 *v);
-Error Buffer_consumeU16(Buffer *buf, U16 *v);
-Error Buffer_consumeU8(Buffer *buf,  U8 *v);
-Error Buffer_consumeC8(Buffer *buf,  C8 *v);
+_BUFFER_OP(I32x2);
+_BUFFER_OP(F32x2);
+//_BUFFER_OP(F64x2);		TODO:
 
-Error Buffer_consumeI64(Buffer *buf, I64 *v);
-Error Buffer_consumeI32(Buffer *buf, I32 *v);
-Error Buffer_consumeI16(Buffer *buf, I16 *v);
-Error Buffer_consumeI8(Buffer *buf,  I8 *v);
-
-Error Buffer_consumeF32(Buffer *buf, F32 *v);
-
-Error Buffer_consumeF32x4(Buffer *buf, F32x4 *v);
-Error Buffer_consumeF32x2(Buffer *buf, I32x2 *v);
-Error Buffer_consumeI32x4(Buffer *buf, I32x4 *v);
-Error Buffer_consumeI32x2(Buffer *buf, I32x2 *v);
+_BUFFER_OP(I32x4);
+_BUFFER_OP(F32x4);
+//_BUFFER_OP(F64x4);		TODO:
 
 //UTF-8 helpers
 

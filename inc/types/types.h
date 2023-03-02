@@ -55,6 +55,7 @@ typedef uint32_t U32;
 typedef uint64_t U64;
 
 typedef float F32;
+typedef double F64;
 
 #if !_RELAX_FLOAT
 	#if FLT_EVAL_METHOD != 0
@@ -115,6 +116,9 @@ extern const I64 I64_MAX;
 
 extern const F32 F32_MIN;
 extern const F32 F32_MAX;
+
+extern const F64 F64_MIN;
+extern const F64 F64_MAX;
 
 //Buffer (more functions in types/buffer.h)
 

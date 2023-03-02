@@ -636,7 +636,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 			Ns now = Time_now();
 
 			if (w->callbacks.onUpdate) {
-				F32 dt = w->lastUpdate ? (now - w->lastUpdate) / (F32)SECOND : 0;
+				F64 dt = w->lastUpdate ? (now - w->lastUpdate) / (F64)SECOND : 0;
 				w->callbacks.onUpdate(w, dt);
 			}
 

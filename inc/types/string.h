@@ -257,6 +257,7 @@ Bool CharString_parseNyto(CharString s, U64 *result);
 Bool CharString_parseHex(CharString s, U64 *result);
 Bool CharString_parseDec(CharString s, U64 *result);
 Bool CharString_parseDecSigned(CharString s, I64 *result);
+Bool CharString_parseDouble(CharString s, F64 *result);
 Bool CharString_parseFloat(CharString s, F32 *result);
 Bool CharString_parseOct(CharString s, U64 *result);
 Bool CharString_parseBin(CharString s, U64 *result);

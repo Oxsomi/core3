@@ -104,10 +104,10 @@ typedef enum ETypeId {
 	ETypeId_ShortString			= _makeTypeId(_LIBRARYID_DEFAULT, 0, 27, 32, 1, EDataType_Char),
 	ETypeId_LongString			= _makeTypeId(_LIBRARYID_DEFAULT, 0, 28, 64, 1, EDataType_Char),
 
-	ETypeId_String				= _makeTypeId(_LIBRARYID_DEFAULT, 0, 29, 1, _TYPESIZE_UNDEF, EDataType_String),
+	ETypeId_CharString			= _makeTypeId(_LIBRARYID_DEFAULT, 0, 29, 1, _TYPESIZE_UNDEF, EDataType_String),
 	ETypeId_CharStringList		= _makeTypeId(_LIBRARYID_DEFAULT, 0, 30, 1, _TYPESIZE_UNDEF, EDataType_Custom),
 
-	ETypeId_Quat				= _makeTypeId(_LIBRARYID_DEFAULT, 0, 31, 4, 4, EDataType_Float),
+	ETypeId_QuatF32				= _makeTypeId(_LIBRARYID_DEFAULT, 0, 31, 4, 4, EDataType_Float),
 	ETypeId_Quat16				= _makeTypeId(_LIBRARYID_DEFAULT, 0, 32, 4, 2, EDataType_UInt),
 
 	ETypeId_List				= _makeTypeId(_LIBRARYID_DEFAULT, 0, 33, 1, _TYPESIZE_UNDEF, EDataType_Custom),
@@ -122,7 +122,13 @@ typedef enum ETypeId {
 
 	ETypeId_EDataTypePrimitive	= _makeTypeId(_LIBRARYID_DEFAULT, 0, 40, 1, 1, EDataType_Enum),
 	ETypeId_EDataType			= _makeTypeId(_LIBRARYID_DEFAULT, 0, 41, 1, 1, EDataType_Enum),
-	ETypeId_TypeId				= _makeTypeId(_LIBRARYID_DEFAULT, 0, 42, 1, 4, EDataType_Enum)
+	ETypeId_TypeId				= _makeTypeId(_LIBRARYID_DEFAULT, 0, 42, 1, 4, EDataType_Enum),
+
+	ETypeId_QuatF64				= _makeTypeId(_LIBRARYID_DEFAULT, 0, 43, 4, 8, EDataType_Float),
+	ETypeId_F64					= _makeTypeId(_LIBRARYID_DEFAULT, 0, 44, 1, 8, EDataType_Float),
+
+	ETypeId_F64x2				= _makeTypeId(_LIBRARYID_DEFAULT, 0, 45, 2, 8, EDataType_Float),
+	ETypeId_F64x4				= _makeTypeId(_LIBRARYID_DEFAULT, 0, 46, 4, 8, EDataType_Float)
 
 } ETypeId;
 

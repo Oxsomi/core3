@@ -41,7 +41,7 @@ Ns Time_date(U16 year, U8 month, U8 day, U8 hour, U8 minute, U8 second, U32 ns);
 Bool Time_getDate(Ns timestamp, U16 *year, U8 *month, U8 *day, U8 *hour, U8 *minute, U8 *second, U32 *ns);
 
 DNs Time_dns(Ns timeStamp0, Ns timeStamp1);
-F32 Time_dt(Ns timeStamp0, Ns timeStamp1);
+F64 Time_dt(Ns timeStamp0, Ns timeStamp1);
 
 U64 Time_clocks();
 I64 Time_clocksElapsed(U64 prevClocks);

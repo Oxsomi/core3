@@ -24,12 +24,14 @@
 //Transform contains how to go from one space to another
 //A transform can also be an inverse transform, which is way faster to apply to go back to the space
 
+//TODO: Perhaps a F64 transform
+
 //We don't do matrices,
 //This is faster and more memory efficient, also easier to implement
 //48 bytes
 
 typedef struct Transform {
-	Quat rot;
+	QuatF32 rot;
 	F32x4 pos;
 	F32x4 scale;
 } Transform;
@@ -49,7 +51,7 @@ typedef struct PackedTransform {
 PackedTransform Transform_pack(Transform t);
 Transform PackedTransform_unpack(PackedTransform t);
 
-Transform Transform_create(Quat rot, F32x4 pos, F32x4 scale);
+Transform Transform_create(QuatF32 rot, F32x4 pos, F32x4 scale);
 
 F32x4 Transform_applyToDirection(Transform t, F32x4 dir);		//Super fast, only need Quat
 F32x4 Transform_apply(Transform t, F32x4 pos);					//Needs to do scale and translate too

@@ -23,95 +23,12 @@
 
 #include <math.h>
 
-Error F32_pow2(F32 v, F32 *res) { 
+#define _XINT_OP_IMPL(T)												\
+T T##_min(T v0, T v1) { return v0 <= v1 ? v0 : v1; }					\
+T T##_max(T v0, T v1) { return v0 >= v1 ? v0 : v1; }					\
+T T##_clamp(T v, T mi, T ma) { return T##_max(mi, T##_min(ma, v)); }
 
-	if(!res)
-		return Error_nullPointer(1);
-
-	*res = v * v; 
-	return !F32_isValid(*res) ? Error_overflow(0, *(const U32*)&v, *(const U32*)res) : 
-		Error_none();
-}
-
-Error F32_pow3(F32 v, F32 *res) { 
-
-	if(!res)
-		return Error_nullPointer(1);
-
-	*res = v * v * v;
-	return !F32_isValid(*res) ? Error_overflow(0, *(const U32*)&v, *(const U32*)res) : 
-		Error_none();
-}
-
-Error F32_pow4(F32 v, F32 *res) { 
-
-	if(!res)
-		return Error_nullPointer(1);
-
-	*res = v * v;
-	*res *= *res;
-
-	return !F32_isValid(*res) ? Error_overflow(0, *(const U32*)&v, *(const U32*)res) : 
-		Error_none();
-}
-
-Error F32_pow5(F32 v, F32 *res) { 
-
-	if(!res)
-		return Error_nullPointer(1);
-
-	*res = v * v; 
-	*res *= *res; 
-	*res *= v;
-
-	return !F32_isValid(*res) ? Error_overflow(0, *(const U32*)&v, *(const U32*)res) : 
-		Error_none();
-}
-
-Error F32_pow(F32 v, F32 exp, F32 *res) { 
-
-	F32 r = powf(v, exp); 
-
-	if(!F32_isValid(r))
-		return Error_overflow(0, *(const U32*)&v, *(const U32*)&r);
-
-	*res = r;
-	return Error_none();
-}
-
-Error F32_expe(F32 v, F32 *res) { return F32_pow(F32_E, v, res); }
-Error F32_exp2(F32 v, F32 *res) { return F32_pow(2, v, res); }
-Error F32_exp10(F32 v, F32 *res) { return F32_pow(10, v, res); }
-
-U64 U64_min(U64 v0, U64 v1) { return v0 <= v1 ? v0 : v1; }
-U64 U64_max(U64 v0, U64 v1) { return v0 >= v1 ? v0 : v1; }
-U64 U64_clamp(U64 v, U64 mi, U64 ma) { return U64_max(mi, U64_min(ma, v)); }
-
-U64 U64_pow2(U64 v) {
-	if(!v) return 0;
-	U64 res = v * v; 
-	return res / v != v ? U64_MAX : res;
-}
-
-U64 U64_pow3(U64 v) {
-	if(!v) return 0;
-	U64 res = U64_pow2(v), res2 = res * v;
-	return res == U64_MAX || res2 / v != res ? U64_MAX : res2;
-}
-
-U64 U64_pow4(U64 v) {
-	if(!v) return 0;
-	U64 res = U64_pow2(v), res2 = U64_pow2(res);
-	return res == U64_MAX || res2 == U64_MAX ? U64_MAX : res2;
-}
-
-U64 U64_pow5(U64 v) {
-	if(!v) return 0;
-	U64 res = U64_pow4(v), res2 = res * v;
-	return res == U64_MAX || res2 / v != res ? U64_MAX : res2;
-}
-
-const U64 U64_POW10[] = {
+const U64 U64_EXP10[] = {
 	1,
 	10,
 	100,
@@ -134,90 +51,218 @@ const U64 U64_POW10[] = {
 	10'000'000'000'000'000'000
 };
 
-U64 U64_10pow(U64 v) {
+//UInts
 
-	if(v >= sizeof(U64_POW10) / sizeof(U64_POW10[0]))
-		return U64_MAX;
-
-	return U64_POW10[v];
+#define _UINT_OP_IMPL(T)												\
+_XINT_OP_IMPL(T);														\
+																		\
+T T##_pow2(T v) {														\
+	if(!v) return 0;													\
+	T res = v * v; 														\
+	return res / v != v ? T##_MAX : res;								\
+}																		\
+																		\
+T T##_pow3(T v) {														\
+	if(!v) return 0;													\
+	T res = T##_pow2(v), res2 = res * v;								\
+	return res == T##_MAX || res2 / v != res ? T##_MAX : res2;			\
+}																		\
+																		\
+T T##_pow4(T v) {														\
+	if(!v) return 0;													\
+	T res = T##_pow2(v), res2 = T##_pow2(res);							\
+	return res == T##_MAX || res2 == T##_MAX ? T##_MAX : res2;			\
+}																		\
+																		\
+T T##_pow5(T v) {														\
+	if(!v) return 0;													\
+	T res = T##_pow4(v), res2 = res * v;								\
+	return res == T##_MAX || res2 / v != res ? T##_MAX : res2;			\
+}																		\
+																		\
+T T##_exp10(T v) {														\
+																		\
+	if(v >= sizeof(U64_EXP10) / sizeof(U64_EXP10[0]))					\
+		return T##_MAX;													\
+																		\
+	U64 r = U64_EXP10[v];												\
+	return r >= (U64)T##_MAX ? T##_MAX : (T)r;							\
+}																		\
+																		\
+T T##_exp2(T v) {														\
+																		\
+	if(v < 0 || v >= sizeof(T) * 8 - 1)									\
+		return T##_MAX;													\
+																		\
+	return (T)1 << v;													\
 }
 
-I64 I64_min(I64 v0, I64 v1) { return v0 <= v1 ? v0 : v1; }
-I64 I64_max(I64 v0, I64 v1) { return v0 >= v1 ? v0 : v1; }
-I64 I64_clamp(I64 v, I64 mi, I64 ma) { return I64_max(mi, I64_min(ma, v)); }
+_UINT_OP_IMPL(U64);
+_UINT_OP_IMPL(U32);
+_UINT_OP_IMPL(U16);
+_UINT_OP_IMPL(U8);
 
-I64 I64_abs(I64 v) { return v < 0 ? -v : v; }
+//TODO: Properly check Ixx_pow
 
-//TODO: Properly check this?
-
-I64 I64_pow2(I64 v) { 
-	I64 res = v * v; 
-	return res < I64_abs(v) ? I64_MAX : res;
+#define _INT_OP_IMPL(T)												\
+_XINT_OP_IMPL(T);													\
+																	\
+T T##_abs(T v) { return v < 0 ? -v : v; }							\
+																	\
+T T##_pow2(T v) { 													\
+	T res = v * v; 													\
+	return res < T##_abs(v) ? T##_MAX : res;						\
+}																	\
+																	\
+T T##_pow3(T v) { 													\
+	T res = v * v * v; 												\
+	return res < T##_abs(v) ? T##_MAX : res;						\
+}																	\
+																	\
+T T##_pow4(T v) { 													\
+	T res = v * v; res *= res;										\
+	return res < T##_abs(v) ? T##_MAX : res;						\
+}																	\
+																	\
+T T##_pow5(T v) { 													\
+	T res = v * v; res *= res * v;									\
+	return res < T##_abs(v) ? T##_MAX : res;						\
+}																	\
+																	\
+T T##_exp10(T v) {													\
+																	\
+	if(v < 0 || v >= sizeof(U64_EXP10) / sizeof(U64_EXP10[0]) - 1)	\
+		return T##_MAX;												\
+																	\
+	I64 r = (I64) U64_EXP10[v];										\
+	return r < 0 || r >= (I64) T##_MAX ? T##_MAX : (T)r;			\
+}																	\
+																	\
+T T##_exp2(T v) {													\
+																	\
+	if(v >= sizeof(T) * 8)											\
+		return T##_MAX;												\
+																	\
+	return (T)1 << v;												\
 }
 
-I64 I64_pow3(I64 v) { 
-	I64 res = v * v * v; 
-	return res < I64_abs(v) ? I64_MAX : res;
-}
+_INT_OP_IMPL(I64);
+_INT_OP_IMPL(I32);
+_INT_OP_IMPL(I16);
+_INT_OP_IMPL(I8);
 
-I64 I64_pow4(I64 v) { 
-	I64 res = v * v; res *= res;
-	return res < I64_abs(v) ? I64_MAX : res;
-}
+#define _FLP_OP_IMPL(T, TInt, suffix)														\
+T T##_min(T v0, T v1) { return v0 <= v1 ? v0 : v1; }										\
+T T##_max(T v0, T v1) { return v0 >= v1 ? v0 : v1; }										\
+T T##_clamp(T v, T mi, T ma) { return T##_max(mi, T##_min(ma, v)); }						\
+T T##_saturate(T v) { return T##_clamp(v, 0, 1); }											\
+																							\
+T T##_lerp(T a, T b, T perc) { return a + (b - a) * perc; }									\
+T T##_abs(T v) { return v < 0 ? -v : v; }													\
+																							\
+Error T##_mod(T v, T mod, T *res) { 														\
+																							\
+	if(!res)																				\
+		return Error_nullPointer(1);														\
+																							\
+	if(!mod)																				\
+		return Error_divideByZero(0, *(const TInt*) &v, 0);									\
+																							\
+	T r = fmod##suffix(v, mod); 															\
+																							\
+	if(!T##_isValid(r))																		\
+		return Error_NaN(0);																\
+																							\
+	*res = r;																				\
+	return Error_none();																	\
+}																							\
+																							\
+Bool T##_isNaN(T v) { return isnan(v); }													\
+Bool T##_isInf(T v) { return isinf(v); }													\
+Bool T##_isValid(T v) { return isfinite(v); }												\
+																							\
+T T##_fract(T v) { return v - T##_floor(v); }												\
+																							\
+T T##_sign(T v) { return v < 0 ? -1.##suffix : (v > 0 ? 1.##suffix : 0.##suffix); }			\
+T T##_signInc(T v) { return v < 0 ? -1.##suffix : 1.##suffix; }								\
+																							\
+T T##_sqrt(T v) { return sqrt##suffix(v); }													\
+																							\
+T T##_log10(T v) { return log10##suffix(v); }												\
+T T##_loge(T v) { return log##suffix(v); }													\
+T T##_log2(T v) { return log2##suffix(v); }													\
+																							\
+T T##_asin(T v) { return asin##suffix(v); }													\
+T T##_sin(T v) { return sin##suffix(v); }													\
+T T##_cos(T v) { return cos##suffix(v); }													\
+T T##_acos(T v) { return acos##suffix(v); }													\
+T T##_tan(T v) { return tan##suffix(v); }													\
+T T##_atan(T v) { return atan##suffix(v); }													\
+T T##_atan2(T y, T x) { return atan2##suffix(y, x); }										\
+																							\
+T T##_round(T v) { return round##suffix(v); }												\
+T T##_ceil(T v) { return ceil##suffix(v); }													\
+T T##_floor(T v) { return floor##suffix(v); }												\
+																							\
+Error T##_pow2(T v, T *res) { 																\
+																							\
+	if(!res)																				\
+		return Error_nullPointer(1);														\
+																							\
+	*res = v * v; 																			\
+	return !T##_isValid(*res) ? Error_overflow(0, *(const TInt*)&v, *(const TInt*)res) : 	\
+		Error_none();																		\
+}																							\
+																							\
+Error T##_pow3(T v, T *res) { 																\
+																							\
+	if(!res)																				\
+		return Error_nullPointer(1);														\
+																							\
+	*res = v * v * v;																		\
+	return !T##_isValid(*res) ? Error_overflow(0, *(const TInt*)&v, *(const TInt*)res) : 	\
+		Error_none();																		\
+}																							\
+																							\
+Error T##_pow4(T v, T *res) { 																\
+																							\
+	if(!res)																				\
+		return Error_nullPointer(1);														\
+																							\
+	*res = v * v;																			\
+	*res *= *res;																			\
+																							\
+	return !T##_isValid(*res) ? Error_overflow(0, *(const TInt*)&v, *(const TInt*)res) : 	\
+		Error_none();																		\
+}																							\
+																							\
+Error T##_pow5(T v, T *res) { 																\
+																							\
+	if(!res)																				\
+		return Error_nullPointer(1);														\
+																							\
+	*res = v * v; 																			\
+	*res *= *res; 																			\
+	*res *= v;																				\
+																							\
+	return !T##_isValid(*res) ? Error_overflow(0, *(const TInt*)&v, *(const TInt*)res) : 	\
+		Error_none();																		\
+}																							\
+																							\
+Error T##_pow(T v, T exp, T *res) { 														\
+																							\
+	T r = pow##suffix(v, exp); 																\
+																							\
+	if(!T##_isValid(r))																		\
+		return Error_overflow(0, *(const TInt*)&v, *(const TInt*)&r);						\
+																							\
+	*res = r;																				\
+	return Error_none();																	\
+}																							\
+																							\
+Error T##_expe(T v, T *res) { return T##_pow(T##_E, v, res); }								\
+Error T##_exp2(T v, T *res) { return T##_pow(2, v, res); }									\
+Error T##_exp10(T v, T *res) { return T##_pow(10, v, res); }
 
-I64 I64_pow5(I64 v) { 
-	I64 res = v * v; res *= res * v;
-	return res < I64_abs(v) ? I64_MAX : res;
-}
-
-F32 F32_min(F32 v0, F32 v1) { return v0 <= v1 ? v0 : v1; }
-F32 F32_max(F32 v0, F32 v1) { return v0 >= v1 ? v0 : v1; }
-F32 F32_clamp(F32 v, F32 mi, F32 ma) { return F32_max(mi, F32_min(ma, v)); }
-F32 F32_saturate(F32 v) { return F32_clamp(v, 0, 1); }
-
-F32 F32_lerp(F32 a, F32 b, F32 perc) { return a + (b - a) * perc; }
-F32 F32_abs(F32 v) { return v < 0 ? -v : v; }
-
-F32 F32_sqrt(F32 v) { return sqrtf(v); }
-
-F32 F32_log10(F32 v) { return log10f(v); }
-F32 F32_loge(F32 v) { return logf(v); }
-F32 F32_log2(F32 v) { return log2f(v); }
-
-F32 F32_asin(F32 v) { return asinf(v); }
-F32 F32_sin(F32 v) { return sinf(v); }
-F32 F32_cos(F32 v) { return cosf(v); }
-F32 F32_acos(F32 v) { return acosf(v); }
-F32 F32_tan(F32 v) { return tanf(v); }
-F32 F32_atan(F32 v) { return atanf(v); }
-F32 F32_atan2(F32 y, F32 x) { return atan2f(y, x); }
-
-F32 F32_round(F32 v) { return roundf(v); }
-F32 F32_ceil(F32 v) { return ceilf(v); }
-F32 F32_floor(F32 v) { return floorf(v); }
-
-Error F32_mod(F32 v, F32 mod, F32 *res) { 
-
-	if(!res)
-		return Error_nullPointer(1);
-
-	if(!mod)
-		return Error_divideByZero(0, *(const U32*) &v, 0);
-
-	F32 r = fmodf(v, mod); 
-
-	if(!F32_isValid(r))
-		return Error_NaN(0);
-
-	*res = r;
-	return Error_none();
-}
-
-Bool F32_isNaN(F32 v) { return isnan(v); }
-Bool F32_isInf(F32 v) { return isinf(v); }
-Bool F32_isValid(F32 v) { return isfinite(v); }
-
-F32 F32_fract(F32 v) { return v - F32_floor(v); }
-
-F32 F32_sign(F32 v) { return v < 0 ? -1.f : (v > 0 ? 1.f : 0.f); }
-F32 F32_signInc(F32 v) { return v < 0 ? -1.f : 1.f; }
+_FLP_OP_IMPL(F32, U32, f);
+_FLP_OP_IMPL(F64, U64, );

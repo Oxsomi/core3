@@ -625,41 +625,30 @@ Error Buffer_combine(Buffer a, Buffer b, Allocator alloc, Buffer *output) {
 	return Error_none();
 }
 
-Error Buffer_appendU64(Buffer *buf, U64 v) { return Buffer_append(buf, &v, sizeof(v)); }
-Error Buffer_appendU32(Buffer *buf, U32 v) { return Buffer_append(buf, &v, sizeof(v)); }
-Error Buffer_appendU16(Buffer *buf, U16 v) { return Buffer_append(buf, &v, sizeof(v)); }
-Error Buffer_appendU8(Buffer *buf,  U8 v)  { return Buffer_append(buf, &v, sizeof(v)); }
-Error Buffer_appendC8(Buffer *buf,  C8 v)  { return Buffer_append(buf, &v, sizeof(v)); }
+#define _BUFFER_IMPL(T)																		\
+Error Buffer_append##T(Buffer *buf, T v)	{ return Buffer_append(buf, &v, sizeof(v)); }	\
+Error Buffer_consume##T(Buffer *buf, T *v)  { return Buffer_consume(buf, v, sizeof(*v)); }
 
-Error Buffer_appendI64(Buffer *buf, I64 v) { return Buffer_append(buf, &v, sizeof(v)); }
-Error Buffer_appendI32(Buffer *buf, I32 v) { return Buffer_append(buf, &v, sizeof(v)); }
-Error Buffer_appendI16(Buffer *buf, I16 v) { return Buffer_append(buf, &v, sizeof(v)); }
-Error Buffer_appendI8(Buffer *buf,  I8 v)  { return Buffer_append(buf, &v, sizeof(v)); }
+_BUFFER_IMPL(U64);
+_BUFFER_IMPL(U32);
+_BUFFER_IMPL(U16);
+_BUFFER_IMPL(U8);
 
-Error Buffer_appendF32(Buffer *buf, F32 v) { return Buffer_append(buf, &v, sizeof(v)); }
+_BUFFER_IMPL(I64);
+_BUFFER_IMPL(I32);
+_BUFFER_IMPL(I16);
+_BUFFER_IMPL(I8);
 
-Error Buffer_appendF32x4(Buffer *buf, F32x4 v) { return Buffer_append(buf, &v, sizeof(v)); }
-Error Buffer_appendF32x2(Buffer *buf, I32x2 v) { return Buffer_append(buf, &v, sizeof(v)); }
-Error Buffer_appendI32x4(Buffer *buf, I32x4 v) { return Buffer_append(buf, &v, sizeof(v)); }
-Error Buffer_appendI32x2(Buffer *buf, I32x2 v) { return Buffer_append(buf, &v, sizeof(v)); }
+_BUFFER_IMPL(F64);
+_BUFFER_IMPL(F32);
 
-Error Buffer_consumeU64(Buffer *buf, U64 *v) { return Buffer_consume(buf, v, sizeof(*v)); }
-Error Buffer_consumeU32(Buffer *buf, U32 *v) { return Buffer_consume(buf, v, sizeof(*v)); }
-Error Buffer_consumeU16(Buffer *buf, U16 *v) { return Buffer_consume(buf, v, sizeof(*v)); }
-Error Buffer_consumeU8(Buffer *buf,  U8 *v)  { return Buffer_consume(buf, v, sizeof(*v)); }
-Error Buffer_consumeC8(Buffer *buf,  C8 *v)  { return Buffer_consume(buf, v, sizeof(*v)); }
+_BUFFER_IMPL(I32x2);
+_BUFFER_IMPL(F32x2);
+//_BUFFER_IMPL(F64x2);		TODO:
 
-Error Buffer_consumeI64(Buffer *buf, I64 *v) { return Buffer_consume(buf, v, sizeof(*v)); }
-Error Buffer_consumeI32(Buffer *buf, I32 *v) { return Buffer_consume(buf, v, sizeof(*v)); }
-Error Buffer_consumeI16(Buffer *buf, I16 *v) { return Buffer_consume(buf, v, sizeof(*v)); }
-Error Buffer_consumeI8(Buffer *buf,  I8 *v)  { return Buffer_consume(buf, v, sizeof(*v)); }
-
-Error Buffer_consumeF32(Buffer *buf, F32 *v) { return Buffer_consume(buf, v, sizeof(*v)); }
-
-Error Buffer_consumeF32x4(Buffer *buf, F32x4 *v) { return Buffer_consume(buf, v, sizeof(*v)); }
-Error Buffer_consumeF32x2(Buffer *buf, I32x2 *v) { return Buffer_consume(buf, v, sizeof(*v)); }
-Error Buffer_consumeI32x4(Buffer *buf, I32x4 *v) { return Buffer_consume(buf, v, sizeof(*v)); }
-Error Buffer_consumeI32x2(Buffer *buf, I32x2 *v) { return Buffer_consume(buf, v, sizeof(*v)); }
+_BUFFER_IMPL(I32x4);
+_BUFFER_IMPL(F32x4);
+//_BUFFER_IMPL(F64x4);		TODO:
 
 //UTF-8
 //https://en.wikipedia.org/wiki/UTF-8
