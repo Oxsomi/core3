@@ -141,10 +141,13 @@ Error U64_fromDouble(F64 v, U64 *res)	_CastFromD(U64)
 	return Error_none();													\
 }
 
-Error F32_fromInt(I64 v, F32 *res)  CastTo(F32)
-Error F32_fromUInt(U64 v, F32 *res) CastTo(F32)
-Error F64_fromInt(I64 v, F64 *res)  CastTo(F64)
-Error F64_fromUInt(U64 v, F64 *res) CastTo(F64)
+Error F32_fromInt(I64 v, F32 *res)    CastTo(F32)
+Error F32_fromUInt(U64 v, F32 *res)   CastTo(F32)
+Error F32_fromDouble(F64 v, F32 *res) CastTo(F32)
+
+Error F64_fromInt(I64 v, F64 *res)    CastTo(F64)
+Error F64_fromUInt(U64 v, F64 *res)   CastTo(F64)
+Error F32_fromFloat(F32 v, F64 *res)  CastTo(F64)
 
 //Endianness, because sometimes it's needed
 
