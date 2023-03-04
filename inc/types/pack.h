@@ -31,13 +31,14 @@ Bool U64_pack20x3u4(U64 *dst, U32 x, U32 y, U32 z, U8 u4);
 U32 U64_unpack20x3(U64 packed, U8 off);
 Bool U64_setPacked20x3(U64 *packed, U8 off, U32 v);
 
-Bool U64_getBit(U64 packed, U8 off);
-Bool U64_setBit(U64 *packed, U8 off, Bool b);
+#define _GET_BIT_OP(T)								\
+Bool T##_getBit(T packed, U8 off);					\
+Bool T##_setBit(T *packed, U8 off, Bool b);
 
-//U32 packing
-
-Bool U32_getBit(U32 packed, U8 off);
-Bool U32_setBit(U32 *packed, U8 off, Bool b);
+_GET_BIT_OP(U64);
+_GET_BIT_OP(U32);
+_GET_BIT_OP(U16);
+_GET_BIT_OP(U8);
 
 //Compressing quaternions
 

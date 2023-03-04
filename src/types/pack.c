@@ -53,14 +53,6 @@ U32 U64_unpack20x3(U64 packed, U8 off) {
 	return (U32)((packed >> (20 * off)) & ((1 << 20) - 1));
 }
 
-Bool U64_getBit(U64 packed, U8 off) {
-
-	if (off >= 64)
-		return false;
-
-	return (packed >> off) & 1;
-}
-
 Bool U64_setPacked20x3(U64 *packed, U8 off, U32 v) {
 
 	if (v >> 20 || off >= 3 || !packed)
@@ -83,45 +75,37 @@ Bool U64_setPacked21x3(U64 *packed, U8 off, U32 v) {
 	return true;
 }
 
-Bool U64_setBit(U64 *packed, U8 off, Bool b) {
-
-	if (off >= 64)
-		return false;
-
-	U64 shift = (U64)1 << off;
-
-	if (b)
-		*packed |= shift;
-
-	else *packed &= ~shift;
-
-	return true;
-}
-
 //U32 packing
 
-Bool U32_getBit(U32 packed, U8 off) {
-
-	if (off >= 32)
-		return false;
-
-	return (packed >> off) & 1;
+#define _GET_BIT_IMPL(T)							\
+													\
+Bool T##_getBit(T packed, U8 off) {					\
+													\
+	if (off >= sizeof(T) * 8)						\
+		return false;								\
+													\
+	return (packed >> off) & 1;						\
+}													\
+													\
+Bool T##_setBit(T *packed, U8 off, Bool b) {		\
+													\
+	if (off >= sizeof(T) * 8)						\
+		return false;								\
+													\
+	T shift = (T)1 << off;							\
+													\
+	if (b)											\
+		*packed |= shift;							\
+													\
+	else *packed &= ~shift;							\
+													\
+	return true;									\
 }
 
-Bool U32_setBit(U32 *packed, U8 off, Bool b) {
-
-	if (off >= 32)
-		return false;
-
-	U32 shift = 1 << off;
-
-	if (b)
-		*packed |= shift;
-
-	else *packed &= ~shift;
-
-	return true;
-}
+_GET_BIT_IMPL(U64);
+_GET_BIT_IMPL(U32);
+_GET_BIT_IMPL(U16);
+_GET_BIT_IMPL(U8);
 
 //Compressing quaternions
 
