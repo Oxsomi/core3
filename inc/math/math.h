@@ -1,72 +1,127 @@
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+*  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  
+*  This program is free software: you can redistribute it and/or modify
+*  it under the terms of the GNU General Public License as published by
+*  the Free Software Foundation, either version 3 of the License, or
+*  (at your option) any later version.
+*  
+*  This program is distributed in the hope that it will be useful,
+*  but WITHOUT ANY WARRANTY; without even the implied warranty of
+*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+*  GNU General Public License for more details.
+*  
+*  You should have received a copy of the GNU General Public License
+*  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
+*  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
+*  To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
+*  This is called dual licensing.
+*/
+
 #pragma once
 #include "types/types.h"
 
-extern const f32 Math_e;
-extern const f32 Math_pi;
-extern const f32 Math_radToDeg;
-extern const f32 Math_degToRad;
+typedef struct Error Error;
+
+#define _FLP_CONSTS(T)							\
+extern const T T##_E;							\
+extern const T T##_PI;							\
+extern const T T##_RAD_TO_DEG;					\
+extern const T T##_DEG_TO_RAD;
+
+_FLP_CONSTS(F32);
+_FLP_CONSTS(F64);
+
+//Math errors assume inputs aren't nan or inf
+//Ensure it's true with extra validation
+//But math operations can't create them
 
 //Uint
+//TODO: Errors
 
-inline u64 Math_minu(u64 v0, u64 v1) { return v0 <= v1 ? v0 : v1; }
-inline u64 Math_maxu(u64 v0, u64 v1) { return v0 >= v1 ? v0 : v1; }
-inline u64 Math_clampu(u64 v, u64 mi, u64 ma) { return Math_maxu(mi, Math_minu(ma, v)); }
+#define _ARIT_OP(T)								\
+T T##_min(T v0, T v1);							\
+T T##_max(T v0, T v1);							\
+T T##_clamp(T v, T mi, T ma);
 
-inline u64 Math_pow2u(u64 v) { return v * v; }
-inline u64 Math_pow4u(u64 v) { return Math_pow2u(Math_pow2u(v)); }
-inline u64 Math_pow5u(u64 v) { return Math_pow4u(v) * v; }
+#define _XINT_OP(T)								\
+_ARIT_OP(T)										\
+T T##_pow2(T v);								\
+T T##_pow3(T v);								\
+T T##_pow4(T v);								\
+T T##_pow5(T v);								\
+T T##_exp10(T v);								\
+T T##_exp2(T v);
+
+//TODO: Int, uint %/^*+-
+
+_XINT_OP(U64);
+_XINT_OP(U32);
+_XINT_OP(U16);
+_XINT_OP(U8);
 
 //Int
 
-inline i64 Math_mini(i64 v0, i64 v1) { return v0 <= v1 ? v0 : v1; }
-inline i64 Math_maxi(i64 v0, i64 v1) { return v0 >= v1 ? v0 : v1; }
-inline i64 Math_clampi(i64 v, i64 mi, i64 ma) { return Math_maxi(mi, Math_mini(ma, v)); }
+#define _INT_IOP(T)								\
+_XINT_OP(T)										\
+T T##_abs(T v);
 
-inline i64 Math_absi(i64 v) { return Math_maxi(v, 0); }
-inline i64 Math_pow2i(i64 v) { return v * v; }
-inline u64 Math_pow4i(i64 v) { return Math_pow2i(Math_pow2i(v)); }
-inline u64 Math_pow5i(i64 v) { return Math_pow4i(v) * v; }
+_INT_IOP(I64);
+_INT_IOP(I32);
+_INT_IOP(I16);
+_INT_IOP(I8);
 
 //Float
+//TODO: %/^+-
+//		Should also check if the ++ and -- actually increased the float. 
+//		If not, throw! +- etc can check on lost precision (e.g. 1% of value)
+//TODO: Proper error checking!
 
-inline f32 Math_minf(f32 v0, f32 v1) { return v0 <= v1 ? v0 : v1; }
-inline f32 Math_maxf(f32 v0, f32 v1) { return v0 >= v1 ? v0 : v1; }
-inline f32 Math_clampf(f32 v, f32 mi, f32 ma) { return Math_maxf(mi, Math_minf(ma, v)); }
-inline f32 Math_saturate(f32 v) { return Math_clampf(v, 0, 1); }
+#define _FLP_OP(T)								\
+												\
+_ARIT_OP(T);									\
+												\
+Error T##_pow2(T v, T *res);					\
+Error T##_pow3(T v, T *res);					\
+Error T##_pow4(T v, T *res);					\
+Error T##_pow5(T v, T *res);					\
+Error T##_exp10(T v, T *res);					\
+Error T##_exp2(T v, T *res);					\
+												\
+T T##_saturate(T v);							\
+												\
+T T##_lerp(T a, T b, T perc);					\
+T T##_abs(T v);									\
+T T##_sqrt(T v);								\
+												\
+Bool T##_isNaN(T v);							\
+Bool T##_isInf(T v);							\
+Bool T##_isValid(T v);							\
+												\
+Error T##_pow(T v, T exp, T *res);				\
+Error T##_expe(T v, T *res);					\
+												\
+T T##_log10(T v);								\
+T T##_loge(T v);								\
+T T##_log2(T v);								\
+												\
+T T##_asin(T v);								\
+T T##_sin(T v);									\
+T T##_cos(T v);									\
+T T##_acos(T v);								\
+T T##_tan(T v);									\
+T T##_atan(T v);								\
+T T##_atan2(T y, T x);							\
+												\
+T T##_round(T v);								\
+T T##_ceil(T v);								\
+T T##_floor(T v);								\
+T T##_fract(T v);								\
+												\
+Error T##_mod(T v, T mod, T *result);			\
+												\
+T T##_sign(T v);								\
+T T##_signInc(T v);
 
-inline f32 Math_lerp(f32 a, f32 b, f32 perc) { return a + (b - a) * perc; }
-inline f32 Math_absf(f32 v) { return Math_maxf(v, 0); }
-f32 Math_sqrtf(f32 v);
-
-inline f32 Math_pow2f(f32 v) { return v * v; }
-inline f32 Math_pow4f(f32 v) { return Math_pow2f(Math_pow2f(v)); }
-inline f32 Math_pow5f(f32 v) { return Math_pow4f(v) * v; }
-f32 Math_powf(f32 v, f32 exp);
-f32 Math_expf(f32 v);
-f32 Math_exp2f(f32 v);
-f32 Math_exp10f(f32 v);
-
-f32 Math_log10f(f32 v);
-f32 Math_logef(f32 v);
-f32 Math_log2f(f32 v);
-
-f32 Math_asin(f32 v);
-f32 Math_sin(f32 v);
-f32 Math_cos(f32 v);
-f32 Math_acos(f32 v);
-f32 Math_tan(f32 v);
-f32 Math_atan(f32 v);
-f32 Math_atan2(f32 y, f32 x);
-
-f32 Math_round(f32 v);
-f32 Math_ceil(f32 v);
-f32 Math_floor(f32 v);
-inline f32 Math_fract(f32 v) { return v - Math_floor(v); }
-
-f32 Math_mod(f32 v, f32 mod);
-
-inline f32 Math_sign(f32 v) { return v < 0 ? -1.f : (v > 0 ? 1.f : 0.f); }
-inline f32 Math_signInc(f32 v) { return v < 0 ? -1.f : 1.f; }
-
-bool Math_isnan(f32 v);
-bool Math_isinf(f32 v);
+_FLP_OP(F32);
+_FLP_OP(F64);

@@ -1,11 +1,35 @@
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+*  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  
+*  This program is free software: you can redistribute it and/or modify
+*  it under the terms of the GNU General Public License as published by
+*  the Free Software Foundation, either version 3 of the License, or
+*  (at your option) any later version.
+*  
+*  This program is distributed in the hope that it will be useful,
+*  but WITHOUT ANY WARRANTY; without even the implied warranty of
+*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+*  GNU General Public License for more details.
+*  
+*  You should have received a copy of the GNU General Public License
+*  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
+*  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
+*  To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
+*  This is called dual licensing.
+*/
+
 #include "platforms/log.h"
 #include "platforms/thread.h"
-#include "types/timer.h"
+#include "platforms/platform.h"
+#include "platforms/ext/errorx.h"
+#include "platforms/ext/stringx.h"
+#include "types/time.h"
 
 //Unfortunately before Windows 10 it doesn't support printing colors into console using printf
 //We also use Windows dependent stack tracing
 
 #define MICROSOFT_WINDOWS_WINBASE_H_DEFINE_INTERLOCKED_CPLUSPLUS_OVERLOADS 0
+#define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 #include <signal.h>
 #include <DbgHelp.h>
@@ -15,27 +39,24 @@
 
 //Carried over from core2
 
-void Log_captureStackTrace(StackTrace stack, usz skip) {
-	RtlCaptureStackBackTrace(
-		(DWORD)(1 + skip), 
-		(DWORD) STACKTRACE_MAX_SIZE, 
-		stack, NULL
-	);
+void Log_captureStackTrace(void **stack, U64 stackSize, U64 skip) {
+	RtlCaptureStackBackTrace((DWORD)(1 + skip), (DWORD) stackSize, stack, NULL);
 }
 
-struct CapturedStackTrace {
+typedef struct CapturedStackTrace {
 
 	//Module and symbol
 
-	const c8 *mod, *sym;
+	CharString mod, sym;
 
 	//File and line don't have to be specified, for external calls
 
-	const c8 *fil;
-	u32 lin;
-};
+	CharString fil;
+	U32 lin;
 
-static const WORD colors[] = {
+} CapturedStackTrace;
+
+static const WORD COLORS[] = {
 	2,	/* green */
 	3,	/* cyan */
 	14,	/* yellow */
@@ -43,45 +64,59 @@ static const WORD colors[] = {
 	12	/* bright red */
 };
 
-void Log_printCapturedStackTrace(const StackTrace stackTrace, enum LogLevel lvl) {
+void Log_printCapturedStackTraceCustom(const void **stackTrace, U64 stackSize, ELogLevel lvl, ELogOptions opt) {
+
+	if(!stackTrace)
+		return;
+
+	if(lvl >= ELogLevel_Count)
+		return;
+
+	if(lvl == ELogLevel_Fatal)
+		lvl = ELogLevel_Error;
 
 	HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
-	SetConsoleTextAttribute(handle, colors[lvl]);
+	SetConsoleTextAttribute(handle, COLORS[lvl]);
 
-	struct CapturedStackTrace captured[STACKTRACE_MAX_SIZE] = { 0 };
+	CapturedStackTrace captured[_STACKTRACE_SIZE] = { 0 };
 
-	usz stackCount = 0;
+	U64 stackCount = 0;
 
 	//Obtain process
 
 	HANDLE process = GetCurrentProcess();
 	HMODULE processModule = GetModuleHandleA(NULL);
 
-	bool hasSymbols = SymInitialize(process, NULL, TRUE);
-	bool anySymbol = false;
+	Bool hasSymbols = SymInitialize(process, NULL, TRUE);
+	Bool anySymbol = false;
 
 	if(hasSymbols)
-		for (usz i = 0; i < STACKTRACE_MAX_SIZE && stackTrace[i]; ++i, ++stackCount) {
+		for (
+			U64 i = 0; 
+			i < stackSize && i < _STACKTRACE_SIZE && 
+			stackTrace[i] && stackTrace[i] != (void*)0xCCCCCCCCCCCCCCCC; 
+			++i, ++stackCount
+		) {
 
-			usz addr = (usz) stackTrace[i];
+			U64 addr = (U64) stackTrace[i];
 
 			//Get module name
 
-			usz moduleBase = SymGetModuleBase(process, addr);
+			U64 moduleBase = SymGetModuleBase(process, addr);
 
-			c8 modulePath[MAX_PATH + 1] = { 0 };
+			C8 modulePath[MAX_PATH + 1] = { 0 };
 			if (!moduleBase || !GetModuleFileNameA((HINSTANCE)moduleBase, modulePath, MAX_PATH))
 				continue;
 
 			anySymbol = true;
 
-			c8 symbolData[sizeof(IMAGEHLP_SYMBOL) + MAX_PATH + 1] = { 0 };
+			C8 symbolData[sizeof(IMAGEHLP_SYMBOL) + MAX_PATH + 1] = { 0 };
 
 			PIMAGEHLP_SYMBOL symbol = (PIMAGEHLP_SYMBOL)symbolData;
 			symbol->SizeOfStruct = sizeof(symbolData);
 			symbol->MaxNameLength = MAX_PATH;
 
-			const c8 *symbolName = symbol->Name;
+			C8 *symbolName = symbol->Name;
 
 			if (!SymGetSymFromAddr(process, addr, NULL, symbol))
 				continue;
@@ -95,17 +130,55 @@ void Log_printCapturedStackTrace(const StackTrace stackTrace, enum LogLevel lvl)
 			if (line.FileName && strlen(line.FileName) > MAX_PATH)
 				continue;
 
-			struct CapturedStackTrace *capture = captured + i;
-			capture->mod = modulePath;
-			capture->sym = symbolName;
+			CapturedStackTrace *capture = captured + i;
+			capture->mod = CharString_createRefAuto(modulePath, MAX_PATH);
+			capture->sym = CharString_createRefAuto(symbolName, MAX_PATH);
 
-			if (moduleBase == (usz)processModule)
-				capture->mod = String_lastPath(capture->mod);
+			CharString_formatPath(&capture->sym);
+
+			if (moduleBase == (U64)processModule)
+				capture->mod = CharString_getFilePath(&capture->mod);
 
 			if(line.FileName)
-				capture->fil = line.FileName;
+				capture->fil = CharString_createConstRefAuto(line.FileName, MAX_PATH);
+
+			//Copy strings to heap, since they'll go out of scope
+
+			Error err;
+
+			if(CharString_length(capture->mod)) {
+				CharString tmp = CharString_createNull();
+				_gotoIfError(cleanup, CharString_createCopyx(capture->mod, &tmp));
+				capture->mod = tmp;
+			}
+
+			if(CharString_length(capture->sym)) {
+				CharString tmp = CharString_createNull();
+				_gotoIfError(cleanup, CharString_createCopyx(capture->sym, &tmp));
+				capture->sym = tmp;
+			}
+
+			if(CharString_length(capture->fil)) {
+				CharString tmp = CharString_createNull();
+				_gotoIfError(cleanup, CharString_createCopyx(capture->fil, &tmp));
+				capture->fil = tmp;
+			}
 
 			capture->lin = line.LineNumber;
+			continue;
+
+			//Cleanup the stack if we can't move anything to heap anymore
+
+		cleanup:
+			
+			for (U64 j = 0; j < i; ++j) {
+				CharString_freex(&captured[j].fil);
+				CharString_freex(&captured[j].sym);
+				CharString_freex(&captured[j].mod);
+			}
+
+			Error_printx(err, lvl, opt);
+			return;
 		}
 
 	if(hasSymbols && anySymbol)
@@ -113,84 +186,71 @@ void Log_printCapturedStackTrace(const StackTrace stackTrace, enum LogLevel lvl)
 
 	else printf("Stacktrace: (No symbols)\n");
 
-	for (usz i = 0; i < stackCount; ++i) {
+	for (U64 i = 0; i < stackCount; ++i) {
 
-		struct CapturedStackTrace capture = captured[i];
+		CapturedStackTrace capture = captured[i];
 
-		if(!capture.sym)
+		if(!CharString_length(capture.sym))
 			printf("%p\n", stackTrace[i]);
 
 		else if(capture.lin)
 			printf(
-				"%p: %s!%s (%s, Line %u)\n", 
+				"%p: %.*s!%.*s (%.*s, Line %u)\n", 
 				stackTrace[i], 
-				capture.mod, capture.sym, 
-				capture.fil, capture.lin
+				(int) CharString_length(capture.mod), capture.mod.ptr, 
+				(int) CharString_length(capture.sym), capture.sym.ptr,
+				(int) CharString_length(capture.fil), capture.fil.ptr, 
+				capture.lin
 			);
 
-		else printf("%p: %s!%s\n", stackTrace[i], capture.mod, capture.sym);
+		else printf(
+			"%p: %.*s!%.*s\n", 
+			stackTrace[i], 
+			(int) CharString_length(capture.mod), capture.mod.ptr, 
+			(int) CharString_length(capture.sym), capture.sym.ptr
+		);
+
+		//We now don't need the strings anymore
+
+		CharString_freex(&capture.fil);
+		CharString_freex(&capture.sym);
+		CharString_freex(&capture.mod);
 	}
 
-	if(hasSymbols)
-		SymCleanup(process);
+	SymCleanup(process);
 }
 
-void Log_log(enum LogLevel lvl, enum LogOptions options, struct LogArgs args) {
+void Log_log(ELogLevel lvl, ELogOptions options, CharString arg) {
 
-	ns t = Timer_now();
+	Ns t = Time_now();
 
-	u32 thread = Thread_getId();
+	if(lvl >= ELogLevel_Count)
+		return;
 
-	const c8 *hrErr = "";
-
-	if (lvl > LogLevel_Debug) {
-
-		HRESULT hr = GetLastError();
-		
-		if (!SUCCEEDED(hr))
-			FormatMessageA(
-
-				FORMAT_MESSAGE_FROM_SYSTEM | 
-				FORMAT_MESSAGE_ALLOCATE_BUFFER |
-				FORMAT_MESSAGE_IGNORE_INSERTS,  
-
-				NULL,
-				hr,
-				MAKELANGID(LANG_ENGLISH, SUBLANG_NEUTRAL),
-
-				(LPTSTR) &hrErr,  
-
-				0, NULL
-			);
-	}
+	U32 thread = Thread_getId();
 
 	//Prepare for message
 
 	HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
-	SetConsoleTextAttribute(handle, colors[lvl]);
+	SetConsoleTextAttribute(handle, COLORS[lvl]);
 
 	//[<thread> <time>]: <hr\n><ourStuff> <\n if enabled>
 
-	bool hasTimestamp = options & LogOptions_Timestamp;
-	bool hasThread = options & LogOptions_Thread;
-	bool hasNewLine = options & LogOptions_NewLine;
-	bool hasPrepend = hasTimestamp || hasThread;
+	Bool hasTimestamp = options & ELogOptions_Timestamp;
+	Bool hasThread = options & ELogOptions_Thread;
+	Bool hasNewLine = options & ELogOptions_NewLine;
+	Bool hasPrepend = hasTimestamp || hasThread;
 
 	if (hasPrepend)
 		printf("[");
 
-	if (hasThread) {
-
-		ShortString str;
-		Log_num10(str, thread);
-
-		printf("%s", str);
-	}
+	if (hasThread)
+		printf("%u", thread);
 
 	if (hasTimestamp) {
 
 		TimerFormat tf;
-		Timer_format(t, tf);
+		Time_format(t, tf);
 
 		printf("%s%s", hasThread ? " " : "", tf);
 	}
@@ -198,33 +258,43 @@ void Log_log(enum LogLevel lvl, enum LogOptions options, struct LogArgs args) {
 	if (hasPrepend)
 		printf("]: ");
 
-	if (hrErr)
-		printf("%s\n", hrErr);
-
 	//Print to console and debug window
 
-	const c8 *newLine = hasNewLine ? "\n" : "";
+	const C8 *newLine = hasNewLine ? "\n" : "";
 
-	for (usz i = 0; i < args.argc; ++i)
-		printf(
-			"%s%s", 
-			args.args[i], 
-			newLine
-		);
+	printf(
+		"%.*s%s", 
+		(int)CharString_length(arg), arg.ptr,
+		newLine
+	);
 
 	//Debug utils such as output to VS
 
 	if (!IsDebuggerPresent())
 		return;
 
-	for (usz i = 0; i < args.argc; ++i) {
+	CharString copy = CharString_createNull();
+	Bool panic = false;
 
-		OutputDebugStringA(args.args[i]);
+	if (
+		CharString_createCopyx(arg, &copy).genericError ||
+		(hasNewLine && CharString_appendx(&copy, '\n').genericError)
+	) {
 
-		if (hasNewLine)
-			OutputDebugStringA("\n");
+		OutputDebugStringA(
+			"PANIC! Log_print argument was output to debugger, but wasn't null terminated\n"
+			"This is normally okay, as long as a new string can be allocated.\n"
+			"In this case, allocation failed, which suggests corruption or out of memory."
+		);
+
+		panic = true;
 	}
 
-	if (lvl >= LogLevel_Error)
+	if(!panic)
+		OutputDebugStringA(copy.ptr);
+
+	CharString_freex(&copy);
+
+	if (lvl >= ELogLevel_Error)
 		DebugBreak();
 }

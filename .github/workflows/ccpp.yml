@@ -8,7 +8,7 @@ jobs:
     runs-on: windows-2022
     steps:
     - uses: actions/checkout@v1
-    - name: cmake build
-      run: cmake . -G "Visual Studio 17 2022"
     - name: build
-      run: cmake --build . -j 8
+      run: D:\a\core3\core3\build.bat Debug On
+    - name: build
+      run: D:\a\core3\core3\build.bat Debug Off

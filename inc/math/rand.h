@@ -1,30 +1,32 @@
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+*  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  
+*  This program is free software: you can redistribute it and/or modify
+*  it under the terms of the GNU General Public License as published by
+*  the Free Software Foundation, either version 3 of the License, or
+*  (at your option) any later version.
+*  
+*  This program is distributed in the hope that it will be useful,
+*  but WITHOUT ANY WARRANTY; without even the implied warranty of
+*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+*  GNU General Public License for more details.
+*  
+*  You should have received a copy of the GNU General Public License
+*  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
+*  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
+*  To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
+*  This is called dual licensing.
+*/
+
 #pragma once
 #include "vec.h"
 
-//Ported from Wisp:
-//https://github.com/TeamWisp/WispRenderer/blob/master/resources/shaders/rand_util.hlsl
+//These are Psuedo RNG (PRNG), don't use these for critical uses!
+//More info:
+//	https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html#secure-random-number-generation
 
-inline u32 Random_seed(u16 x, u16 y, u16 w, u32 val1) {
-
-	u32 val0 = (u32)x + (u32)y * w;
-
-	u32 v0 = val0, v1 = val1, s0 = 0;
-
-	for (u32 n = 0; n < 16; n++) {
-		s0 += 0x9e3779b9;
-		v0 += ((v1 << 4) + 0xa341316c) ^ (v1 + s0) ^ ((v1 >> 5) + 0xc8013ea4);
-		v1 += ((v0 << 4) + 0xad90777d) ^ (v0 + s0) ^ ((v0 >> 5) + 0x7e95761e);
-	}
-
-	return v0;
-}
+U32 Random_seed(U16 x, U16 y, U16 w, U32 val1);
 
 //Generate 'random' value [0, 1>
-inline f32 Random_sample(u32 *seed) {
-	*seed = (1664525u * *seed + 1013904223u);
-	return (f32)(*seed & 0x00FFFFFF) / (f32)(0x01000000);
-}
-
-inline f32x4 Random_sample2(u32 *seed) {
-	return f32x4_init2(Random_sample(seed), Random_sample(seed));
-}
+F32 Random_sample(U32 *seed);
+F32x4 Random_sample2(U32 *seed);
