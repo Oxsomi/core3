@@ -108,7 +108,7 @@ This should be done before the configure_virtual_files and ensures the files for
 
 ## Contributions
 
-To contribute to this repository, you agree to the [contribution guidelines](FOR CONTRIBUTORS.md). Before merging a PR as an external party, you have to sign a contributor license agreement.
+To contribute to this repository, you agree to the [contribution guidelines](FOR_CONTRIBUTORS.md). Before merging a PR as an external party, you have to sign a contributor license agreement.
 
 ## License
 
