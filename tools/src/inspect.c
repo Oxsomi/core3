@@ -655,7 +655,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 	if (args.parameters & EOperationHasParameter_StartOffset)
 		if (
 			(err = ParsedArgs_getArg(args, EOperationHasParameter_StartOffsetShift, &starts)).genericError ||
-			!CharString_parseDec(starts, &start) ||
+			!CharString_parseU64(starts, &start) ||
 			(start >> 32)
 		) {
 			Log_errorLn("Invalid argument -s <uint>.");
@@ -670,7 +670,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 	if (args.parameters & EOperationHasParameter_Length)
 		if (
 			(err = ParsedArgs_getArg(args, EOperationHasParameter_LengthShift, &lengths)).genericError ||
-			!CharString_parseDec(lengths, &length) ||
+			!CharString_parseU64(lengths, &length) ||
 			(length >> 32)
 		) {
 			Log_errorLn("Invalid argument -l <uint>.");
@@ -738,7 +738,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 				if (index == U64_MAX) {
 
-					if (!CharString_parseDec(entry, &index)) {
+					if (!CharString_parseU64(entry, &index)) {
 						Log_errorLn("Invalid argument -e <uint> or <valid path> expected.");
 						goto cleanCa;
 					}
@@ -913,7 +913,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 				U64 entryI = 0;
 
-				if (!CharString_parseDec(entry, &entryI)) {
+				if (!CharString_parseU64(entry, &entryI)) {
 					Log_errorLn("Invalid argument -e <uint> expected.");
 					goto cleanDl;
 				}

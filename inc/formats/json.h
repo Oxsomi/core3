@@ -18,16 +18,13 @@
 *  This is called dual licensing.
 */
 
-#include "types/type_id.h"
+#pragma once
+#include "types/types.h"
 
-Bool EDataType_isSigned(EDataType type) { return type & EDataType_IsSigned; }
+//To access a JSON value you can have to use paths.
+//myTest.myMember[0].x in JavaScript would be noted as myTest/myMember/0/x.
+//This allows for easier parsing.
 
-EDataType ETypeId_getDataType(ETypeId id) { return (EDataType)(id & 7); }
-U8 ETypeId_getDataTypeBytes(ETypeId id) { return 1 << ((id >> 3) & 3); }
-U8 ETypeId_getHeight(ETypeId id) { return (id >> 5) & 3; }
-U8 ETypeId_getWidth(ETypeId id) { return (id >> 7) & 3; }
-U8 ETypeId_getElements(ETypeId id) { return ETypeId_getWidth(id) * ETypeId_getHeight(id); }
-U64 ETypeId_getBytes(ETypeId id) { return (U64)ETypeId_getDataTypeBytes(id) * ETypeId_getElements(id); }
-
-U8 ETypeId_getLibraryId(ETypeId id) { return (U8)(id >> 24); }
-U8 ETypeId_getLibraryTypeId(ETypeId id) { return (U8)(id >> 16); }
+//typedef struct JSON {
+//
+//} JSON;

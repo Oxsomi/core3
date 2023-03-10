@@ -28,12 +28,12 @@
 #include <ctype.h>
 #include <stdio.h>
 
-Bool CharString_isConstRef(CharString str) { return str.capacity == U64_MAX; }
-Bool CharString_isRef(CharString str) { return !str.capacity || CharString_isConstRef(str); }
-U64  CharString_bytes(CharString str) { return str.len << 1 >> 1; }
+Bool CharString_isConstRef(CharString str) { return str.capacityAndRefInfo == U64_MAX; }
+Bool CharString_isRef(CharString str) { return !str.capacityAndRefInfo || CharString_isConstRef(str); }
+U64  CharString_bytes(CharString str) { return str.lenAndNullTerminated << 1 >> 1; }
 U64  CharString_length(CharString str) { return CharString_bytes(str); }
 Bool CharString_isEmpty(CharString str) { return !CharString_bytes(str); }
-Bool CharString_isNullTerminated(CharString str) { return str.len >> 63; }
+Bool CharString_isNullTerminated(CharString str) { return str.lenAndNullTerminated >> 63; }
 
 Buffer CharString_buffer(CharString str) { 
 	return CharString_isConstRef(str) ? Buffer_createNull() : Buffer_createRef((U8*)str.ptr, CharString_bytes(str)); 
@@ -137,7 +137,7 @@ Bool CharString_isValidFilePath(CharString str) {
 	str = CharString_createConstRefSized(str.ptr, CharString_length(str), CharString_isNullTerminated(str));
 
 	if(CharString_getAt(str, CharString_length(str) - 1) == '/' || CharString_getAt(str, CharString_length(str) - 1) == '\\')
-		str.len = CharString_length(str) - 1;
+		str.lenAndNullTerminated = CharString_length(str) - 1;
 		
 	//On Windows, it's possible to change drive but keep same relative path. We don't support it.
 	//e.g. C:myFolder/ (relative folder on C) instead of C:/myFolder/ (Absolute folder on C)
@@ -157,7 +157,7 @@ Bool CharString_isValidFilePath(CharString str) {
 
 		if(str.ptr[1] == ':') {
 			str.ptr += 3;
-			str.len -= 3;
+			str.lenAndNullTerminated -= 3;
 			hasPrefix = true;
 		}
 
@@ -176,7 +176,7 @@ Bool CharString_isValidFilePath(CharString str) {
 			return false;
 
 		str.ptr += 2;
-		str.len -= 2;
+		str.lenAndNullTerminated -= 2;
 	}
 
 	//Absolute path
@@ -187,7 +187,7 @@ Bool CharString_isValidFilePath(CharString str) {
 			return false;
 
 		++str.ptr;
-		--str.len;
+		--str.lenAndNullTerminated;
 		hasPrefix = true;
 	}
 
@@ -233,13 +233,13 @@ Bool CharString_isValidFilePath(CharString str) {
 
 Bool CharString_clear(CharString *str) { 
 
-	if(!str || !CharString_isRef(*str) || !str->capacity) 
+	if(!str || CharString_isRef(*str) || !str->capacityAndRefInfo) 
 		return false;
 
-	if(str->len >> 63)					//If null terminated, we want to keep it null terminated
+	if(str->lenAndNullTerminated >> 63)					//If null terminated, we want to keep it null terminated
 		((C8*)str->ptr)[0] = '\0';
 
-	str->len &= ~(((U64)1 << 63) - 1);		//Clear size
+	str->lenAndNullTerminated &= ~(((U64)1 << 63) - 1);		//Clear size
 	return true;
 }
 
@@ -266,9 +266,9 @@ CharString CharString_createConstRefAuto(const C8 *ptr, U64 maxSize) {
 	U64 strl = CharString_calcStrLen(ptr, maxSize);
 
 	return (CharString) { 
-		.len = strl | ((U64)(strl != maxSize) << 63),
+		.lenAndNullTerminated = strl | ((U64)(strl != maxSize) << 63),
 		.ptr = (C8*) ptr,
-		.capacity = U64_MAX		//Flag as const
+		.capacityAndRefInfo = U64_MAX		//Flag as const
 	};
 }
 
@@ -278,7 +278,7 @@ CharString CharString_createConstRefUnsafe(const C8 *ptr) {
 
 CharString CharString_createRefAuto(C8 *ptr, U64 maxSize) { 
 	CharString str = CharString_createConstRefAuto(ptr, maxSize);
-	str.capacity = 0;	//Flag as dynamic
+	str.capacityAndRefInfo = 0;	//Flag as dynamic
 	return str;
 }
 
@@ -299,15 +299,15 @@ CharString CharString_createConstRefSized(const C8 *ptr, U64 size, Bool isNullTe
 	}
 
 	return (CharString) { 
-		.len = size | ((U64)isNullTerminated << 63),
+		.lenAndNullTerminated = size | ((U64)isNullTerminated << 63),
 		.ptr = (C8*) ptr,
-		.capacity = U64_MAX		//Flag as const
+		.capacityAndRefInfo = U64_MAX		//Flag as const
 	};
 }
 
 CharString CharString_createRefSized(C8 *ptr, U64 size, Bool isNullTerminated) {
 	CharString str = CharString_createConstRefSized(ptr, size, isNullTerminated);
-	str.capacity = 0;	//Flag as dynamic
+	str.capacityAndRefInfo = 0;	//Flag as dynamic
 	return str;
 }
 
@@ -346,8 +346,8 @@ Error CharString_offsetAsRef(CharString s, U64 off, CharString *result) {
 
 	*result = (CharString) {
 		.ptr = s.ptr + off,
-		.len = (strl - off) | ((U64)CharString_isNullTerminated(s) << 63),
-		.capacity = CharString_isConstRef(s) ? U64_MAX : 0
+		.lenAndNullTerminated = (strl - off) | ((U64)CharString_isNullTerminated(s) << 63),
+		.capacityAndRefInfo = CharString_isConstRef(s) ? U64_MAX : 0
 	};
 
 	return Error_none();
@@ -545,7 +545,12 @@ Error CharString_create(C8 c, U64 size, Allocator alloc, CharString *result) {
 	if(size & 1)
 		((C8*)b.ptr)[realSize - 1] = c;
 
-	*result = (CharString) { .len = (realSize | ((U64)1 << 63)), .capacity = realSize + 1, .ptr = (C8*)b.ptr };
+	*result = (CharString) { 
+		.lenAndNullTerminated = (realSize | ((U64)1 << 63)), 
+		.capacityAndRefInfo = realSize + 1, 
+		.ptr = (C8*)b.ptr 
+	};
+
 	return Error_none();
 }
 
@@ -578,7 +583,12 @@ Error CharString_createCopy(CharString str, Allocator alloc, CharString *result)
 
 	((C8*)b.ptr)[strl] = '\0';
 
-	*result = (CharString) { .ptr = (C8*)b.ptr, .len = (strl | ((U64)1 << 63)), .capacity = strl + 1 };
+	*result = (CharString) { 
+		.ptr = (C8*)b.ptr, 
+		.lenAndNullTerminated = (strl | ((U64)1 << 63)), 
+		.capacityAndRefInfo = strl + 1 
+	};
+
 	return Error_none();
 }
 
@@ -593,7 +603,7 @@ Bool CharString_free(CharString *str, Allocator alloc) {
 	Bool freed = true;
 
 	if(!CharString_isRef(*str))
-		freed = alloc.free(alloc.ptr, Buffer_createManagedPtr((U8*)str->ptr, str->capacity));
+		freed = alloc.free(alloc.ptr, Buffer_createManagedPtr((U8*)str->ptr, str->capacityAndRefInfo));
 
 	*str = CharString_createNull();
 	return freed;
@@ -881,7 +891,7 @@ Error CharString_reserve(CharString *str, U64 length, Allocator alloc) {
 	if (!alloc.alloc || !alloc.free)
 		return Error_nullPointer(2);
 
-	if (length + 1 <= str->capacity)
+	if (length + 1 <= str->capacityAndRefInfo)
 		return Error_none();
 
 	Buffer b = Buffer_createNull();
@@ -893,13 +903,13 @@ Error CharString_reserve(CharString *str, U64 length, Allocator alloc) {
 	Buffer_copy(b, CharString_bufferConst(*str));
 
 	((C8*)b.ptr)[length] = '\0';
-	str->len |= (U64)1 << 63;
+	str->lenAndNullTerminated |= (U64)1 << 63;
 
 	err = 
-		alloc.free(alloc.ptr, Buffer_createManagedPtr((U8*)str->ptr, str->capacity)) ? 
+		alloc.free(alloc.ptr, Buffer_createManagedPtr((U8*)str->ptr, str->capacityAndRefInfo)) ? 
 		Error_none() : Error_invalidOperation(0);
 
-	str->capacity = Buffer_length(b);
+	str->capacityAndRefInfo = Buffer_length(b);
 	str->ptr = (const C8*) b.ptr;
 	return err;
 }
@@ -929,7 +939,7 @@ Error CharString_resize(CharString *str, U64 length, C8 defaultChar, Allocator a
 
 		Bool b = CharString_isNullTerminated(*str);
 
-		str->len = ((U64)b << 63) | length;
+		str->lenAndNullTerminated = ((U64)b << 63) | length;
 
 		if(b)
 			((C8*)str->ptr)[length] = '\0';
@@ -939,7 +949,7 @@ Error CharString_resize(CharString *str, U64 length, C8 defaultChar, Allocator a
 
 	//Resize that triggers buffer resize
 
-	if (length + 1 > str->capacity) {
+	if (length + 1 > str->capacityAndRefInfo) {
 
 		//Reserve 50% more to ensure we don't resize too many times
 
@@ -955,7 +965,7 @@ Error CharString_resize(CharString *str, U64 length, C8 defaultChar, Allocator a
 		((C8*)str->ptr)[i] = defaultChar;
 
 	((C8*)str->ptr)[length] = '\0';
-	str->len = length | ((U64)1 << 63);
+	str->lenAndNullTerminated = length | ((U64)1 << 63);
 	return Error_none();
 }
 
@@ -1918,7 +1928,10 @@ Bool CharString_parseBin(CharString s, U64 *result) {
 
 	CharString prefix = CharString_createConstRefUnsafe("0b");
 	Error err = CharString_offsetAsRef(
-		s, CharString_startsWithString(s, prefix, EStringCase_Insensitive) ? CharString_length(prefix) : 0, &s
+		s, 
+		CharString_startsWithString(s, prefix, EStringCase_Insensitive) ? 
+		CharString_length(prefix) : 0, 
+		&s
 	);
 
 	if (err.genericError)
@@ -1941,6 +1954,28 @@ Bool CharString_parseBin(CharString s, U64 *result) {
 	}
 
 	return true;
+}
+
+Bool CharString_parseU64(CharString s, U64 *result) {
+
+	CharString bin = CharString_createConstRefUnsafe("0b");
+	CharString hex = CharString_createConstRefUnsafe("0x");
+	CharString oct = CharString_createConstRefUnsafe("0o");
+	CharString nyto = CharString_createConstRefUnsafe("0n");
+
+	if(CharString_startsWithString(s, hex, EStringCase_Insensitive))
+		return CharString_parseHex(s, result);
+
+	if(CharString_startsWithString(s, bin, EStringCase_Insensitive))
+		return CharString_parseBin(s, result);
+
+	if(CharString_startsWithString(s, oct, EStringCase_Insensitive))
+		return CharString_parseOct(s, result);
+
+	if(CharString_startsWithString(s, nyto, EStringCase_Insensitive))
+		return CharString_parseNyto(s, result);
+
+	return CharString_parseDec(s, result);
 }
 
 Bool CharString_cut(CharString s, U64 offset, U64 length, CharString *result) {
@@ -2058,7 +2093,7 @@ Bool CharString_erase(CharString *s, C8 c, EStringCase caseSensitive, Bool isFir
 	);
 
 	((C8*)s->ptr)[strl - 1] = '\0';
-	s->len = (strl - 1) | ((U64)1 << 63);
+	s->lenAndNullTerminated = (strl - 1) | ((U64)1 << 63);
 
 	return true;
 }
@@ -2086,7 +2121,7 @@ Error CharString_eraseAtCount(CharString *s, U64 i, U64 count) {
 
 	U64 end = strl - count;
 	((C8*)s->ptr)[end] = '\0';
-	s->len = end | ((U64)1 << 63);
+	s->lenAndNullTerminated = end | ((U64)1 << 63);
 	return Error_none();
 }
 
@@ -2113,7 +2148,7 @@ Bool CharString_eraseString(CharString *s, CharString other, EStringCase casing,
 
 	U64 end = strl - otherl;
 	((C8*)s->ptr)[end] = '\0';
-	s->len = end | ((U64)1 << 63);
+	s->lenAndNullTerminated = end | ((U64)1 << 63);
 	return true;
 }
 
@@ -2154,7 +2189,7 @@ Bool CharString_eraseAll(CharString *s, C8 c, EStringCase casing) {
 		return false;
 
 	((C8*)s->ptr)[out] = '\0';
-	s->len = out | ((U64)1 << 63);
+	s->lenAndNullTerminated = out | ((U64)1 << 63);
 	return true;
 }
 
@@ -2194,7 +2229,7 @@ Bool CharString_eraseAllString(CharString *s, CharString other, EStringCase casi
 		return true;
 
 	((C8*)s->ptr)[out] = '\0';
-	s->len = out | ((U64)1 << 63);
+	s->lenAndNullTerminated = out | ((U64)1 << 63);
 	return true;
 }
 

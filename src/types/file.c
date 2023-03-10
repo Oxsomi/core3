@@ -48,7 +48,7 @@ Error File_resolve(
 	loc = CharString_createConstRefSized(loc.ptr, CharString_length(loc), CharString_isNullTerminated(loc));
 
 	if(CharString_getAt(loc, CharString_length(loc) - 1) == '/')			//myTest/ <--
-		loc.len = CharString_length(loc) - 1;							//unset null terminated
+		loc.lenAndNullTerminated = CharString_length(loc) - 1;							//unset null terminated
 
 	if(result && result->ptr)
 		return Error_invalidOperation(0);

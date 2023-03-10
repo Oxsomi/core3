@@ -41,7 +41,7 @@ Bool CLI_rand(ParsedArgs args) {
 
 		if (
 			ParsedArgs_getArg(args, EOperationHasParameter_NumberShift, &str).genericError ||
-			!CharString_parseDec(str, &n) ||
+			!CharString_parseU64(str, &n) ||
 			(n >> 32)
 		) {
 			Log_errorLn("Invalid argument -n <string>, uint expected.");
@@ -57,7 +57,7 @@ Bool CLI_rand(ParsedArgs args) {
 
 		if (
 			ParsedArgs_getArg(args, EOperationHasParameter_LengthShift, &str).genericError ||
-			!CharString_parseDec(str, &l) ||
+			!CharString_parseU64(str, &l) ||
 			(l >> 32)
 		) {
 			Log_errorLn("Invalid argument -l <string>, uint expected.");
@@ -73,7 +73,7 @@ Bool CLI_rand(ParsedArgs args) {
 
 		if (
 			ParsedArgs_getArg(args, EOperationHasParameter_BitShift, &str).genericError ||
-			!CharString_parseDec(str, &b) ||
+			!CharString_parseU64(str, &b) ||
 			(b >> 16)
 		) {
 			Log_errorLn("Invalid argument -b <string>, ushort expected.");

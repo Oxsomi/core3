@@ -199,7 +199,7 @@ Error _CLI_convertToDL(ParsedArgs args, CharString input, FileInfo inputInfo, Ch
 				basePath = tmp;
 
 			U64 dec = 0;
-			if (!CharString_parseDec(basePath, &dec) || dec >> 32) {
+			if (!CharString_parseU64(basePath, &dec) || dec >> 32) {
 				allLinear = false;
 				break;
 			}

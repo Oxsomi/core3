@@ -24,13 +24,13 @@
 #include "types/allocator.h"
 #include "types/string.h"
 
-Bool List_isConstRef(List l) { return l.capacity == U64_MAX; }
-Bool List_isRef(List l) { return !l.capacity || List_isConstRef(l); }
+Bool List_isConstRef(List l) { return l.capacityAndRefInfo == U64_MAX; }
+Bool List_isRef(List l) { return !l.capacityAndRefInfo || List_isConstRef(l); }
 
 Bool List_empty(List l) { return !l.length; }
 Bool List_any(List l) { return l.length; }
 U64  List_bytes(List l) { return l.length * l.stride; }
-U64  List_allocatedBytes(List l) { return List_isRef(l) ? 0 : l.capacity * l.stride; }
+U64  List_allocatedBytes(List l) { return List_isRef(l) ? 0 : l.capacityAndRefInfo * l.stride; }
 
 Buffer List_buffer(List l) { 
 	return List_isConstRef(l) ? Buffer_createNull() : Buffer_createRef((U8*)l.ptr, List_bytes(l)); 
@@ -118,7 +118,7 @@ Error List_create(U64 length, U64 stride, Allocator allocator, List *result) {
 		.ptr = buf.ptr, 
 		.length = length, 
 		.stride = stride,
-		.capacity = length
+		.capacityAndRefInfo = length
 	};
 
 	return Error_none();
@@ -142,7 +142,7 @@ Error List_createFromBuffer(Buffer buf, U64 stride, List *result) {
 		.ptr = buf.ptr, 
 		.length = Buffer_length(buf) / stride, 
 		.stride = stride,
-		.capacity = Buffer_isConstRef(buf) ? U64_MAX : 0
+		.capacityAndRefInfo = Buffer_isConstRef(buf) ? U64_MAX : 0
 	};
 
 	return Error_none();
@@ -178,7 +178,7 @@ Error List_createRepeated(
 		.ptr = buf.ptr, 
 		.length = length, 
 		.stride = stride,
-		.capacity = length
+		.capacityAndRefInfo = length
 	};
 
 	for(U64 i = 0; i < length; ++i)
@@ -323,7 +323,7 @@ Error List_createConstRef(const U8 *ptr, U64 length, U64 stride, List *result) {
 		.ptr = (U8*) ptr, 
 		.length = length, 
 		.stride = stride, 
-		.capacity = U64_MAX 
+		.capacityAndRefInfo = U64_MAX 
 	};
 
 	return Error_none();
@@ -505,7 +505,7 @@ Error List_shrinkToFit(List *list, Allocator allocator) {
 	if(List_isConstRef(*list))
 		return Error_constData(0, 0);
 
-	if(list->capacity == list->length)
+	if(list->capacityAndRefInfo == list->length)
 		return Error_none();
 
 	List copy = List_createEmpty(list->stride);
@@ -1010,7 +1010,7 @@ Error List_reserve(List *list, U64 capacity, Allocator allocator) {
 	if(capacity * list->stride / list->stride != capacity)
 		return Error_overflow(1, capacity * list->stride, U64_MAX);
 
-	if(capacity <= list->capacity)
+	if(capacity <= list->capacityAndRefInfo)
 		return Error_none();
 
 	Buffer buffer = Buffer_createNull();
@@ -1027,7 +1027,7 @@ Error List_reserve(List *list, U64 capacity, Allocator allocator) {
 		Buffer_free(&curr, allocator);
 
 	list->ptr = buffer.ptr;
-	list->capacity = capacity;
+	list->capacityAndRefInfo = capacity;
 	return err;
 }
 
@@ -1039,7 +1039,7 @@ Error List_resize(List *list, U64 size, Allocator allocator) {
 	if(List_isRef(*list) && list->length)
 		return Error_constData(0, 0);
 
-	if (size <= list->capacity) {
+	if (size <= list->capacityAndRefInfo) {
 
 		Buffer_unsetAllBits(
 			Buffer_createRef((U8*)list->ptr + list->stride * list->length, (size - list->length) * list->stride)

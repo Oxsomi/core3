@@ -318,7 +318,7 @@ Error Archive_rename(
 	CharString subStr = CharString_createNull();
 
 	CharString_cutAfterLast(*prevPath, '/', EStringCase_Sensitive, &subStr);
-	prevPath->len = CharString_length(subStr);
+	prevPath->lenAndNullTerminated = CharString_length(subStr);
 
 	_gotoIfError(clean, CharString_appendString(prevPath, newFileName, alloc));
 

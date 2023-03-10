@@ -54,9 +54,9 @@ typedef struct Error Error;
 //Heap string
 
 typedef struct CharString {
-	U64 len;			//First bit contains if it's null terminated or not. Length excludes null terminator.
-	U64 capacity;		//capacity = 0: ref, capacity = -1: const ref
-	const C8 *ptr;		//This is non const if not a const ref, but for safety this is const (cast away if not).
+	U64 lenAndNullTerminated;		//First bit contains if it's null terminated or not. Length excludes null terminator.
+	U64 capacityAndRefInfo;			//capacityAndRefInfo = 0: ref, capacityAndRefInfo = -1: const ref
+	const C8 *ptr;					//This is non const if not a const ref, but for safety this is const (cast away if not).
 } CharString;
 
 typedef struct CharStringList {
@@ -261,6 +261,7 @@ Bool CharString_parseDouble(CharString s, F64 *result);
 Bool CharString_parseFloat(CharString s, F32 *result);
 Bool CharString_parseOct(CharString s, U64 *result);
 Bool CharString_parseBin(CharString s, U64 *result);
+Bool CharString_parseU64(CharString s, U64 *result);
 
 Bool CharString_isNyto(CharString s);				//[0-9A-Za-z_$]+
 Bool CharString_isAlphaNumeric(CharString s);		//[0-9A-Za-z]+

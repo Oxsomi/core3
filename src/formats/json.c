@@ -18,16 +18,4 @@
 *  This is called dual licensing.
 */
 
-#include "types/type_id.h"
-
-Bool EDataType_isSigned(EDataType type) { return type & EDataType_IsSigned; }
-
-EDataType ETypeId_getDataType(ETypeId id) { return (EDataType)(id & 7); }
-U8 ETypeId_getDataTypeBytes(ETypeId id) { return 1 << ((id >> 3) & 3); }
-U8 ETypeId_getHeight(ETypeId id) { return (id >> 5) & 3; }
-U8 ETypeId_getWidth(ETypeId id) { return (id >> 7) & 3; }
-U8 ETypeId_getElements(ETypeId id) { return ETypeId_getWidth(id) * ETypeId_getHeight(id); }
-U64 ETypeId_getBytes(ETypeId id) { return (U64)ETypeId_getDataTypeBytes(id) * ETypeId_getElements(id); }
-
-U8 ETypeId_getLibraryId(ETypeId id) { return (U8)(id >> 24); }
-U8 ETypeId_getLibraryTypeId(ETypeId id) { return (U8)(id >> 16); }
+#include "formats/json.h"

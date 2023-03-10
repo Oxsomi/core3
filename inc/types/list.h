@@ -34,7 +34,7 @@ typedef struct List {
 	const U8 *ptr;
 	U64 stride;
 	U64 length;
-	U64 capacity;		//If capacity is 0 or U64_MAX, it indicates a ref
+	U64 capacityAndRefInfo;		//If capacityAndRefInfo is 0 or U64_MAX, it indicates a ref
 } List;
 
 typedef enum ECompareResult {
