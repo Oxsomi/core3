@@ -21,6 +21,10 @@
 #pragma once
 #include "types.h"
 
+typedef struct Allocator Allocator;
+typedef struct Error Error;
+typedef struct CharString CharString;
+
 typedef enum EDataType {
 
 	EDataType_UInt			= 0b000,
@@ -170,3 +174,28 @@ U8 ETypeId_getElements(ETypeId id);
 U64 ETypeId_getBytes(ETypeId id);
 U8 ETypeId_getLibraryId(ETypeId id);
 U8 ETypeId_getLibraryTypeId(ETypeId id);
+
+//Before using registry and string conversions it has to be created.
+//In OxC3_platforms dependencies this is done automatically, 
+// but not in projects that use OxC3_types only.
+//Any registerType or string conversion will return Error_invalidOperation if these are not created.
+
+Error ETypeId_create(Allocator alloc);
+Bool ETypeId_free(Allocator alloc);
+
+Error ETypeId_registerTypeId(ETypeId id, CharString name, Allocator alloc);
+
+Error ETypeId_registerType(
+	U8 libraryId, 
+	U8 typeId, 
+	U8 width, 
+	U8 height, 
+	EDataTypeStride dataTypeStride, 
+	EDataType dataType, 
+	CharString name,
+	ETypeId *result,
+	Allocator alloc
+);
+
+Error ETypeId_asString(ETypeId id, CharString *result);
+Error ETypeId_fromString(CharString str, ETypeId *id);

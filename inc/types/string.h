@@ -22,6 +22,7 @@
 #include "list.h"
 
 #include <stdarg.h>
+#include <inttypes.h>
 
 //For simplicity;
 //A string is ALWAYS ASCII (7-bit) and no null terminator.

@@ -160,10 +160,11 @@ Error BufferLayout_createInstance(BufferLayout layout, U64 count, Allocator allo
 
 typedef struct LayoutPathInfo {
 
+	CharString memberName;		//Can be empty for root struct
 	U64 offset, length;
 	ETypeId typeId;
 	U32 structId;
-	List leftoverArray;		//How long the remainder of array is
+	List leftoverArray;			//How long the remainder of array is
 
 } LayoutPathInfo;
 
@@ -221,7 +222,7 @@ _BUFFER_LAYOUT_SGET(prefix##16##suffix);															\
 _BUFFER_LAYOUT_SGET(prefix##32##suffix);															\
 _BUFFER_LAYOUT_SGET(prefix##64##suffix);
 
-#define _BUFFER_LAYOUT_VEC_SGET(prefix)																	\
+#define _BUFFER_LAYOUT_VEC_SGET(prefix)																\
 _BUFFER_LAYOUT_SGET(prefix##32##x2);																\
 _BUFFER_LAYOUT_SGET(prefix##32##x4)
 
@@ -238,3 +239,16 @@ _BUFFER_LAYOUT_SGET(F64);
 
 _BUFFER_LAYOUT_VEC_SGET(I);
 _BUFFER_LAYOUT_VEC_SGET(F);
+
+//Looping through parent and child members
+
+typedef Error (*BufferLayoutForeachFunc)(BufferLayout, LayoutPathInfo, CharString, void*);
+
+Error BufferLayout_foreach(
+	BufferLayout layout, 
+	CharString path, 
+	BufferLayoutForeachFunc func, 
+	void *userData,
+	Bool isRecursive,
+	Allocator alloc
+);

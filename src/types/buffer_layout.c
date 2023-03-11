@@ -445,8 +445,34 @@ Error BufferLayout_resolveLayout(BufferLayout layout, CharString path, LayoutPat
 	if(CharString_equalsString(path, CharString_createConstRefUnsafe("//"), EStringCase_Sensitive))
 		return Error_invalidParameter(1, 0);
 
+	if(CharString_length(path) > U16_MAX)
+		return Error_invalidParameter(1, 1);
+
 	U64 start = CharString_startsWith(path, '/', EStringCase_Sensitive);
-	U64 end = CharString_length(path) - CharString_endsWith(path, '/', EStringCase_Sensitive);
+	Bool suffix = CharString_endsWith(path, '/', EStringCase_Sensitive);
+
+	if (suffix) {
+
+		//Exception to the rule; the character might be escaped by a backslash.
+		//We have to count all backslashes before it. If it's uneven then the slash was escaped.
+		//Otherwise either there's no leading backslash or the leading backslash was itself escaped.
+
+		U64 leadingBackslashes = 0;
+		U64 endStart = CharString_length(path) - 2;
+
+		while (CharString_getAt(path, endStart) == '\\') {		//If it runs out of bounds getAt will return C8_MAX
+			++leadingBackslashes;
+			--endStart;
+		}
+
+		if(leadingBackslashes & 1)
+			suffix = false;
+	}
+
+	if(CharString_length(path) == 1 && start)
+		suffix = false;
+
+	U64 end = CharString_length(path) - suffix;
 
 	U32 currentStructId = layout.rootStructIndex;
 	BufferLayoutStruct currentStruct = ((const BufferLayoutStruct*)layout.structs.ptr)[currentStructId];
@@ -610,11 +636,26 @@ Error BufferLayout_resolveLayout(BufferLayout layout, CharString path, LayoutPat
 		arrayStride *= ((const U32*) currentMember.arraySizes.ptr)[i];
 
 	*info = (LayoutPathInfo) {
+
+		.memberName = CharString_createConstRefSized(
+			currentMember.name.ptr, 
+			CharString_length(currentMember.name),
+			CharString_isNullTerminated(currentMember.name)
+		),
+
 		.offset = currentOffset,
 		.length = arrayStride,
 		.typeId = currentMember.typeId,
 		.structId = currentMember.structId
 	};
+
+	if(currentArrayDim < currentMember.arraySizes.length)
+		_gotoIfError(clean, List_createConstRef(
+			currentMember.arraySizes.ptr + sizeof(U32) * currentArrayDim, 
+			currentMember.arraySizes.length - currentArrayDim, 
+			sizeof(U32),
+			&info->leftoverArray
+		));
 
 clean:
 	CharString_free(&copy, alloc);
@@ -786,3 +827,165 @@ _BUFFER_LAYOUT_SGET_IMPL(F64);
 
 __BUFFER_LAYOUT_VEC_IMPL(I);
 __BUFFER_LAYOUT_VEC_IMPL(F);
+
+//Looping through members and parent
+
+Error BufferLayout_foreach(
+	BufferLayout layout,
+	CharString path,
+	BufferLayoutForeachFunc func,
+	void *userData,
+	Bool isRecursive,
+	Allocator alloc
+) {
+
+	if(!func)
+		return Error_nullPointer(2);
+
+	LayoutPathInfo info = (LayoutPathInfo) { 0 };
+	Error err = Error_none();
+	CharString tmp = CharString_createNull();
+
+	_gotoIfError(clean, BufferLayout_resolveLayout(layout, path, &info, alloc));
+
+	Bool prefix = CharString_startsWith(path, '/', EStringCase_Sensitive);
+	Bool suffix = CharString_endsWith(path, '/', EStringCase_Sensitive);
+
+	if (suffix) {
+
+		//Exception to the rule; the character might be escaped by a backslash.
+		//We have to count all backslashes before it. If it's uneven then the slash was escaped.
+		//Otherwise either there's no leading backslash or the leading backslash was itself escaped.
+
+		U64 leadingBackslashes = 0;
+		U64 start = CharString_length(path) - 2;
+
+		while (CharString_getAt(path, start) == '\\') {		//If it runs out of bounds getAt will return C8_MAX
+			++leadingBackslashes;
+			--start;
+		}
+
+		if(leadingBackslashes & 1)
+			suffix = false;
+	}
+
+	if(CharString_length(path) == 1 && prefix)
+		suffix = false;
+
+	//Go through members of array
+
+	if (info.leftoverArray.length) {
+
+		for(U32 i = 0, j = ((const U32*)info.leftoverArray.ptr)[0]; i < j; ++i) {
+
+			U64 length = info.length / j;
+
+			LayoutPathInfo layoutPathInfo = (LayoutPathInfo) {
+				.memberName = info.memberName,
+				.offset = info.offset + length * i,
+				.length = length,
+				.typeId = info.typeId,
+				.structId = info.structId
+			};
+
+			if(info.leftoverArray.length > 1)
+				_gotoIfError(clean, List_createConstRef(
+					info.leftoverArray.ptr + sizeof(U32), info.leftoverArray.length - 1, 
+					info.leftoverArray.stride,
+					&layoutPathInfo.leftoverArray
+				));
+
+			_gotoIfError(clean, CharString_format(
+				alloc,
+				&tmp,
+				"%.*s/%"PRIu32,
+				(int) (CharString_length(path) - prefix - suffix),
+				path.ptr + prefix,
+				i
+			));
+
+			_gotoIfError(clean, func(layout, layoutPathInfo, tmp, userData));
+
+			if (isRecursive && (info.leftoverArray.length > 1 || info.structId != U32_MAX))
+				_gotoIfError(clean, BufferLayout_foreach(
+					layout,
+					tmp,
+					func,
+					userData,
+					true,
+					alloc
+				));
+
+			CharString_free(&tmp, alloc);
+		}
+	}
+
+	//Go through members of struct
+
+	else if(info.typeId == ETypeId_Undefined) {
+
+		BufferLayoutStruct s = ((const BufferLayoutStruct*)layout.structs.ptr)[info.structId];
+
+		for (U16 i = 0; i < s.memberCount; ++i) {
+
+			BufferLayoutMemberInfo infoi = BufferLayoutStruct_getMemberInfo(s, i);
+
+			U64 length = infoi.stride;
+
+			for(U64 j = 0; j < infoi.arraySizes.length; ++j)
+				length *= ((const U32*)infoi.arraySizes.ptr)[j];
+
+			LayoutPathInfo layoutPathInfo = (LayoutPathInfo) {
+
+				.memberName = CharString_createConstRefSized(
+					infoi.name.ptr,
+					CharString_length(infoi.name),
+					CharString_isNullTerminated(infoi.name)
+				),
+
+				.offset = info.offset + infoi.offset,
+				.length = length,
+				.typeId = infoi.typeId,
+				.structId = infoi.structId
+			};
+
+			if(infoi.arraySizes.length)
+				_gotoIfError(clean, List_createConstRef(
+					infoi.arraySizes.ptr, infoi.arraySizes.length, infoi.arraySizes.stride, 
+					&layoutPathInfo.leftoverArray
+				));
+
+			_gotoIfError(clean, CharString_format(
+				alloc,
+				&tmp,
+				"%.*s/%.*s",
+				(int) (CharString_length(path) - prefix - suffix),
+				path.ptr + prefix,
+				(int) CharString_length(infoi.name),
+				infoi.name.ptr
+			));
+
+			_gotoIfError(clean, func(layout, layoutPathInfo, tmp, userData));
+
+			if(isRecursive && infoi.structId != U32_MAX)
+				_gotoIfError(clean, BufferLayout_foreach(
+					layout,
+					tmp,
+					func,
+					userData,
+					true,
+					alloc
+				));
+
+			CharString_free(&tmp, alloc);
+		}
+	}
+
+	//We can't be subdivided further, because we're already a plain type.
+
+	else _gotoIfError(clean, Error_invalidOperation(0));
+
+clean:
+	CharString_free(&tmp, alloc);
+	return err;
+}

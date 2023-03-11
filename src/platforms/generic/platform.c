@@ -22,6 +22,7 @@
 #include "platforms/log.h"
 #include "platforms/ext/stringx.h"
 #include "types/error.h"
+#include "types/type_id.h"
 
 Platform Platform_instance = { 0 };
 
@@ -58,9 +59,17 @@ Error Platform_create(
 		}
 	};
 
-	Error err = WindowManager_create(&Platform_instance.windowManager);
+	Error err = ETypeId_create(Platform_instance.alloc);
 
 	if (err.genericError) {
+		Platform_instance =	(Platform) { 0 };
+		return err;
+	}
+
+	err = WindowManager_create(&Platform_instance.windowManager);
+
+	if (err.genericError) {
+		ETypeId_free(Platform_instance.alloc);
 		Platform_instance =	(Platform) { 0 };
 		return err;
 	}
@@ -73,6 +82,7 @@ Error Platform_create(
 
 		if (err.genericError) {
 			WindowManager_free(&Platform_instance.windowManager);
+			ETypeId_free(Platform_instance.alloc);
 			Platform_instance =	(Platform) { 0 };
 			return err;
 		}
@@ -89,6 +99,7 @@ Error Platform_create(
 	if ((err = Platform_initExt(&Platform_instance, CharString_createConstRefUnsafe(cmdArgs[0]))).genericError) {
 		CharStringList_freex(&sl);
 		WindowManager_free(&Platform_instance.windowManager);
+		ETypeId_free(Platform_instance.alloc);
 		Platform_instance =	(Platform) { 0 };
 		return err;
 	}
@@ -106,6 +117,8 @@ void Platform_cleanup() {
 	CharString_freex(&Platform_instance.workingDirectory);
 	WindowManager_free(&Platform_instance.windowManager);
 	CharStringList_freex(&Platform_instance.args);
+
+	ETypeId_free(Platform_instance.alloc);
 
 	Platform_instance =	(Platform) { 0 };
 }

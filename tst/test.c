@@ -74,6 +74,61 @@ const Bool Platform_useWorkingDirectory = false;
 	#define _EXTRA_CHECKS 0
 #endif
 
+//Converting to C-Struct
+
+Error convertToCStruct(BufferLayout layout, LayoutPathInfo pathInfo, CharString path, void *userData) {
+
+	userData;
+
+	Error err = Error_none();
+	CharString tmp = CharString_createNull();
+	CharString typeName = CharString_createNull();
+	CharString arraySize = CharString_createNull();
+
+	Allocator alloc = (Allocator) {
+		.alloc = ourAlloc,
+		.free = ourFree,
+		.ptr = NULL
+	};
+
+	//Struct or type name
+
+	if (pathInfo.structId != U32_MAX)
+		typeName = BufferLayoutStruct_getName(((const BufferLayoutStruct*)layout.structs.ptr)[pathInfo.structId]);
+
+	else _gotoIfError(clean, ETypeId_asString(pathInfo.typeId, &typeName));
+
+	//Array
+
+	for (U64 i = 0; i < pathInfo.leftoverArray.length; ++i) {
+
+		_gotoIfError(
+			clean, 
+			CharString_format(alloc, &tmp, "[%"PRIu32"]", ((const U32*)pathInfo.leftoverArray.ptr)[i])
+		);
+
+		_gotoIfError(clean, CharString_appendString(&arraySize, tmp, alloc));
+		CharString_free(&tmp, alloc);
+	}
+
+	//Display offset and stride as annotations
+
+	printf(
+		"%.*s\tLAYOUT(off = %"PRIu64", len = %"PRIu64") %.*s %.*s%.*s\n", 
+		(int) CharString_length(path), path.ptr,
+		pathInfo.offset, pathInfo.length,
+		(int) CharString_length(typeName), typeName.ptr,
+		(int) CharString_length(pathInfo.memberName), pathInfo.memberName.ptr,
+		(int) CharString_length(arraySize), arraySize.ptr
+	);
+
+clean:
+	CharString_free(&tmp, alloc);
+	CharString_free(&typeName, alloc);
+	CharString_free(&arraySize, alloc);
+	return err;
+}
+
 //
 
 int main() {
@@ -109,6 +164,11 @@ int main() {
 		.free = ourFree,
 		.ptr = NULL
 	};
+
+	if (ETypeId_create(alloc).genericError) {
+		printf("Failed unit test: ETypeId_create failed\n");
+		return 2;
+	}
 
 	Buffer emp = Buffer_createNull(), full = Buffer_createNull();
 	Buffer outputEncrypted = Buffer_createNull(), outputDecrypted = Buffer_createNull();
@@ -606,6 +666,15 @@ int main() {
 	if(((const Camera*)emp.ptr)[1].fovRad != fovRadTest)
 		_gotoIfError(clean, Error_invalidState(4));
 
+	_gotoIfError(clean, BufferLayout_foreach(
+		bufferLayout,
+		CharString_createConstRefUnsafe("/arr/1"),
+		convertToCStruct,
+		NULL,
+		true,
+		alloc
+	));
+
 	//Test big endian conversions
 
 	printf("Testing endianness swapping\n");
@@ -1098,6 +1167,8 @@ clean:
 	Buffer_free(&outputDecrypted, alloc);
 	Buffer_free(&emp, alloc);
 	Buffer_free(&full, alloc);
+
+	ETypeId_free(alloc);
 
 	F64 dt2 = (Time_now() - now) / (F64)SECOND;
 
