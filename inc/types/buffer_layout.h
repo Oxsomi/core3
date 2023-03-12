@@ -252,3 +252,15 @@ Error BufferLayout_foreach(
 	Bool isRecursive,
 	Allocator alloc
 );
+
+typedef Error (*BufferLayoutForeachDataFunc)(BufferLayout, LayoutPathInfo, CharString, Buffer, void*);
+
+Error BufferLayout_foreachData(
+	Buffer buffer,
+	BufferLayout layout, 
+	CharString path, 
+	BufferLayoutForeachDataFunc func, 
+	void *userData,
+	Bool isRecursive,
+	Allocator alloc
+);

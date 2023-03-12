@@ -989,3 +989,67 @@ clean:
 	CharString_free(&tmp, alloc);
 	return err;
 }
+
+typedef struct WrappedBufferLayoutForeach {
+
+	const U8 *begin;
+	void *userData;
+	bool isConst;
+	BufferLayoutForeachDataFunc dataFunc;
+
+} WrappedBufferLayoutForeach;
+
+Error BufferLayout_foreachDataInternal(
+	BufferLayout layout, 
+	LayoutPathInfo info, 
+	CharString path, 
+	WrappedBufferLayoutForeach *data
+) {
+
+	Buffer buf = 
+		data->isConst ? Buffer_createConstRef(data->begin + info.offset, info.length) :
+		Buffer_createRef((U8*)data->begin + info.offset, info.length);
+
+	return data->dataFunc(layout, info, path, buf, data->userData);
+}
+
+Error BufferLayout_foreachData(
+	Buffer buffer,
+	BufferLayout layout,
+	CharString path,
+	BufferLayoutForeachDataFunc func,
+	void *userData,
+	Bool isRecursive,
+	Allocator alloc
+) {
+
+	if(!func)
+		return Error_nullPointer(3);
+
+	LayoutPathInfo info = (LayoutPathInfo) { 0 };
+	Error err = Error_none();
+
+	_gotoIfError(clean, BufferLayout_resolveLayout(layout, CharString_createConstRefUnsafe("/"), &info, alloc));
+	
+	if (Buffer_length(buffer) != info.length)
+		return Error_invalidOperation(0);
+
+	WrappedBufferLayoutForeach wrapped = (WrappedBufferLayoutForeach) {
+		.begin = buffer.ptr,
+		.isConst = Buffer_isConstRef(buffer),
+		.userData = userData,
+		.dataFunc = func
+	};
+
+	_gotoIfError(clean, BufferLayout_foreach(
+		layout,
+		path,
+		(BufferLayoutForeachFunc) BufferLayout_foreachDataInternal,
+		&wrapped,
+		isRecursive,
+		alloc
+	));
+
+clean:
+	return err;
+}

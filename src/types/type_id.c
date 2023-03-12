@@ -28,8 +28,8 @@ Bool EDataType_isSigned(EDataType type) { return type & EDataType_IsSigned; }
 
 EDataType ETypeId_getDataType(ETypeId id) { return (EDataType)(id & 7); }
 U8 ETypeId_getDataTypeBytes(ETypeId id) { return 1 << ((id >> 3) & 3); }
-U8 ETypeId_getHeight(ETypeId id) { return (id >> 5) & 3; }
-U8 ETypeId_getWidth(ETypeId id) { return (id >> 7) & 3; }
+U8 ETypeId_getHeight(ETypeId id) { return ((id >> 5) & 3) + 1; }
+U8 ETypeId_getWidth(ETypeId id) { return ((id >> 7) & 3) + 1; }
 U8 ETypeId_getElements(ETypeId id) { return ETypeId_getWidth(id) * ETypeId_getHeight(id); }
 U64 ETypeId_getBytes(ETypeId id) { return (U64)ETypeId_getDataTypeBytes(id) * ETypeId_getElements(id); }
 
@@ -44,51 +44,52 @@ Bool ETypeId_initialized = false;
 typedef struct ETypeIdLookup {
 	CharString name;
 	ETypeId id;
+	ETypeIdStringifyFunc func;
 } ETypeIdLookup;
 
-#define _Expand(T) {													\
-																		\
-	ETypeIdLookup type = (ETypeIdLookup) {								\
-		.name = CharString_createConstRefUnsafe(#T),					\
-		.id = T															\
-	};																	\
-																		\
-	_gotoIfError(clean, List_pushBack(									\
-		&ETypeId_lookup, 												\
-		Buffer_createConstRef((const U8*)&type, sizeof(type)), 			\
-		alloc															\
-	));																	\
+#define _Expand(T) {																\
+																					\
+	ETypeIdLookup type = (ETypeIdLookup) {											\
+		.name = CharString_createConstRefUnsafe(#T + sizeof("ETypeId_")  - 1),		\
+		.id = T																		\
+	};																				\
+																					\
+	_gotoIfError(clean, List_pushBack(												\
+		&ETypeId_lookup, 															\
+		Buffer_createConstRef((const U8*)&type, sizeof(type)), 						\
+		alloc																		\
+	));																				\
 }
 
-#define _ExpandXInt(prefix, suffix) 									\
-_Expand(ETypeId_##prefix##8##suffix);									\
-_Expand(ETypeId_##prefix##16##suffix);									\
-_Expand(ETypeId_##prefix##32##suffix);									\
+#define _ExpandXInt(prefix, suffix) 												\
+_Expand(ETypeId_##prefix##8##suffix);												\
+_Expand(ETypeId_##prefix##16##suffix);												\
+_Expand(ETypeId_##prefix##32##suffix);												\
 _Expand(ETypeId_##prefix##64##suffix);
 
-#define _ExpandXIntN(prefix, suffix) 									\
-_ExpandXInt(prefix, x2##suffix);										\
-_ExpandXInt(prefix, x3##suffix);										\
+#define _ExpandXIntN(prefix, suffix) 												\
+_ExpandXInt(prefix, x2##suffix);													\
+_ExpandXInt(prefix, x3##suffix);													\
 _ExpandXInt(prefix, x4##suffix);
 
-#define _ExpandXIntNxN(prefix) 											\
-_ExpandXIntN(prefix, x2);												\
-_ExpandXIntN(prefix, x3);												\
+#define _ExpandXIntNxN(prefix) 														\
+_ExpandXIntN(prefix, x2);															\
+_ExpandXIntN(prefix, x3);															\
 _ExpandXIntN(prefix, x4);
 
-#define _ExpandFloat(suffix) 											\
-_Expand(ETypeId_F##16##suffix);											\
-_Expand(ETypeId_F##32##suffix);											\
+#define _ExpandFloat(suffix) 														\
+_Expand(ETypeId_F##16##suffix);														\
+_Expand(ETypeId_F##32##suffix);														\
 _Expand(ETypeId_F##64##suffix);
 
-#define _ExpandFloatN(suffix) 											\
-_ExpandFloat(x2##suffix);												\
-_ExpandFloat(x3##suffix);												\
+#define _ExpandFloatN(suffix) 														\
+_ExpandFloat(x2##suffix);															\
+_ExpandFloat(x3##suffix);															\
 _ExpandFloat(x4##suffix);
 
-#define _ExpandFloatNxN() 												\
-_ExpandFloatN(x2);														\
-_ExpandFloatN(x3);														\
+#define _ExpandFloatNxN() 															\
+_ExpandFloatN(x2);																	\
+_ExpandFloatN(x3);																	\
 _ExpandFloatN(x4);
 
 Error ETypeId_create(Allocator alloc) {
@@ -142,7 +143,10 @@ Bool ETypeId_free(Allocator alloc) {
 	return true;
 }
 
-Error ETypeId_registerTypeId(ETypeId id, CharString name, Allocator alloc) {
+Error ETypeId_registerTypeId(ETypeId id, CharString name, ETypeIdStringifyFunc stringifyFunc, Allocator alloc) {
+
+	if(!stringifyFunc)
+		return Error_nullPointer(2);
 
 	//Validate library id and if not undefined
 
@@ -156,6 +160,8 @@ Error ETypeId_registerTypeId(ETypeId id, CharString name, Allocator alloc) {
 
 	//Check if type exists first
 
+	//Name
+
 	ETypeId t = ETypeId_Undefined;
 	Error err = ETypeId_fromString(name, &t);
 
@@ -164,6 +170,22 @@ Error ETypeId_registerTypeId(ETypeId id, CharString name, Allocator alloc) {
 
 	if(!err.genericError)
 		return Error_alreadyDefined(0);
+
+	//Then check description to be unique
+
+	t = ETypeId_Undefined;
+	err = ETypeId_getTypeFromDesc((U16)id, ETypeId_getLibraryId(id), &t);
+
+	if(!err.genericError)
+		return Error_alreadyDefined(1);
+
+	//Then check short type to be unique to be unique
+
+	t = ETypeId_Undefined;
+	err = ETypeId_getTypeFromShortType(ETypeId_getLibraryId(id), ETypeId_getLibraryTypeId(id), &t);
+
+	if(!err.genericError)
+		return Error_alreadyDefined(1);
 	
 	//Even though it could be safe to keep the name by reference,
 	//it could also not be.
@@ -176,7 +198,8 @@ Error ETypeId_registerTypeId(ETypeId id, CharString name, Allocator alloc) {
 
 	ETypeIdLookup type = (ETypeIdLookup) {
 		.name = name,
-		.id = id
+		.id = id,
+		.func = stringifyFunc
 	};
 
 	_gotoIfError(clean, List_pushBack(
@@ -201,6 +224,7 @@ Error ETypeId_registerType(
 	EDataTypeStride dataTypeStride,
 	EDataType dataType,
 	CharString name,
+	ETypeIdStringifyFunc stringifyFunc,
 	ETypeId *result,
 	Allocator alloc
 ) {
@@ -242,6 +266,7 @@ Error ETypeId_registerType(
 	return ETypeId_registerTypeId(
 		*result = _makeTypeId(libraryId, typeId, width, height, dataTypeStride, dataType),
 		name,
+		stringifyFunc,
 		alloc
 	);
 }
@@ -303,4 +328,339 @@ Error ETypeId_fromString(CharString str, ETypeId *id) {
 	}
 
 	return Error_notFound(0, 1);
+}
+
+Error ETypeId_getTypeFromDesc(U16 desc, U8 libraryId, ETypeId *res) {
+
+	if(!res)
+		return Error_nullPointer(1);
+
+	for (U64 i = 0; i < ETypeId_lookup.length; ++i) {
+
+		ETypeIdLookup lookup = ((ETypeIdLookup*)ETypeId_lookup.ptr)[i];
+
+		if (ETypeId_getLibraryId(lookup.id) == libraryId && (U16)lookup.id == desc) {
+			*res = lookup.id;
+			return Error_none();
+		}
+	}
+
+	return Error_notFound(0, 0);
+}
+
+Error ETypeId_getTypeFromShortType(U8 libraryId, U8 libraryTypeId, ETypeId *res) {
+
+	if(!res)
+		return Error_nullPointer(1);
+
+	for (U64 i = 0; i < ETypeId_lookup.length; ++i) {
+
+		ETypeIdLookup lookup = ((ETypeIdLookup*)ETypeId_lookup.ptr)[i];
+
+		if (ETypeId_getLibraryId(lookup.id) == libraryId && ETypeId_getLibraryTypeId(lookup.id) == libraryTypeId) {
+			*res = lookup.id;
+			return Error_none();
+		}
+
+	}
+
+	return Error_notFound(0, 0);
+}
+
+Error ETypeId_getBaseType(ETypeId id, ETypeId *res) {
+
+	if(!res)
+		return Error_nullPointer(1);
+
+	//Masking out width or height.
+
+	if(ETypeId_getHeight(id) > 1)
+		return ETypeId_getTypeFromDesc(id & (((1 << 5) - 1) | (3 << 7)), ETypeId_getLibraryId(id), res);
+
+	return ETypeId_getTypeFromDesc(id & ((1 << 5) - 1), ETypeId_getLibraryId(id), res);
+}
+
+Error ETypeId_getPureType(ETypeId id, ETypeId *res) {
+
+	if(!res)
+		return Error_nullPointer(1);
+
+	//Masking out width and height.
+
+	return ETypeId_getTypeFromDesc(id & ((1 << 5) - 1), ETypeId_getLibraryId(id), res);
+}
+
+Error ETypeId_stringifySingle(ETypeId typeId, const U8 *data, Allocator alloc, CharString *stringified) {
+
+	Error err = Error_none();
+
+	CharString typeStr = CharString_createNull();
+	_gotoIfError(clean, ETypeId_asString(typeId, &typeStr));
+
+	switch (ETypeId_getDataType(typeId)) {
+
+		case EDataType_Float:
+
+			if (ETypeId_getDataTypeBytes(typeId) == 2)
+				_gotoIfError(clean, CharString_format(
+					alloc, stringified, "0x%04X_%s",
+					*(const U16*)data, typeStr.ptr
+				))
+
+			else _gotoIfError(clean, CharString_format(
+				alloc, stringified, "%.2f_%s",
+				ETypeId_getDataTypeBytes(typeId) == 4 ? *(const F32*)data : *(const F64*)data, 
+				typeStr.ptr
+			));
+
+			break;
+
+		case EDataType_UInt: {
+
+			U8 stride = ETypeId_getDataTypeBytes(typeId);
+
+			switch(stride) {
+
+				case 1: case 2: case 4: case 8:
+
+					_gotoIfError(clean, CharString_format(
+
+						alloc, stringified, "%"PRIu64"_%s", 
+
+						stride == 8 ? *(const U64*)data : (
+							stride == 4 ? *(const U32*)data : (
+								stride == 2 ? *(const U16*)data : *data
+							)
+						),
+
+						typeStr.ptr
+					));
+
+					break;
+
+				default:
+					_gotoIfError(clean, Error_unimplemented(0));
+			}
+
+			break;
+		}
+
+		case EDataType_Int: {
+
+			U8 stride = ETypeId_getDataTypeBytes(typeId);
+
+			switch(stride) {
+
+				case 1: case 2: case 4: case 8:
+
+					_gotoIfError(clean, CharString_format(
+
+						alloc, stringified, "%"PRIi64"_%s", 
+
+						stride == 8 ? *(const I64*)data : (
+							stride == 4 ? *(const I32*)data : (
+								stride == 2 ? *(const I16*)data : 
+								*(const I8*)data
+							)
+						),
+
+						typeStr.ptr
+					));
+
+					break;
+
+				default:
+					_gotoIfError(clean, Error_unimplemented(0));
+			}
+
+			break;
+		}
+
+		case EDataType_Char:
+		
+			_gotoIfError(clean, CharString_format(
+				alloc, stringified, "%c_%s",
+				*(const C8*)data,
+				typeStr.ptr
+			));
+
+			break;
+
+		case EDataType_Bool:
+		
+			_gotoIfError(clean, CharString_format(
+				alloc, stringified, "%s_%s",
+				*data ? "true" : "false",
+				typeStr.ptr
+			));
+
+			break;
+
+		default:
+			_gotoIfError(clean, Error_unimplemented(1));
+	}
+
+clean:
+	return err;
+}
+
+Error ETypeId_stringifyVector(ETypeId typeId, const U8 *data, Allocator alloc, CharString *stringified) {
+
+	Error err = Error_none();
+	CharString tmp[4] =  { 0 };
+
+	CharString typeStr = CharString_createNull();
+	_gotoIfError(clean, ETypeId_asString(typeId, &typeStr));
+
+	ETypeId baseType = ETypeId_Undefined;
+	_gotoIfError(clean, ETypeId_getBaseType(typeId, &baseType));
+
+	U64 stride = ETypeId_getBytes(baseType);
+
+	for(U64 i = 0; i < ETypeId_getWidth(typeId); ++i)
+		_gotoIfError(clean, ETypeId_stringifySingle(baseType, data + i * stride, alloc, tmp + i));
+
+	switch (ETypeId_getWidth(typeId)) {
+
+		case 2:
+
+			_gotoIfError(clean, CharString_format(
+				alloc, stringified, "%s{ %s, %s }",
+				typeStr.ptr, tmp[0].ptr, tmp[1].ptr
+			));
+
+			break;
+
+		case 3:
+
+			_gotoIfError(clean, CharString_format(
+				alloc, stringified, "%s{ %s, %s, %s }",
+				typeStr.ptr, tmp[0].ptr, tmp[1].ptr, tmp[2].ptr
+			));
+
+			break;
+
+		case 4:
+
+			_gotoIfError(clean, CharString_format(
+				alloc, stringified, "%s{ %s, %s, %s, %s }",
+				typeStr.ptr, tmp[0].ptr, tmp[1].ptr, tmp[2].ptr, tmp[3].ptr
+			));
+
+			break;
+
+		default:
+			_gotoIfError(clean, Error_invalidParameter(0, 0));
+	}
+
+clean:
+
+	for(U64 i = 0; i < sizeof(tmp) / sizeof(tmp[0]); ++i)
+		CharString_free(tmp + i, alloc);
+
+	return err;
+}
+
+Error ETypeId_stringifyMatrix(ETypeId typeId, const U8 *data, Allocator alloc, CharString *stringified) {
+
+	Error err = Error_none();
+	CharString tmp[4] =  { 0 };
+
+	CharString typeStr = CharString_createNull();
+	_gotoIfError(clean, ETypeId_asString(typeId, &typeStr));
+
+	ETypeId baseType = ETypeId_Undefined;
+	_gotoIfError(clean, ETypeId_getBaseType(typeId, &baseType));
+
+	U64 stride = ETypeId_getBytes(baseType);
+
+	for(U64 i = 0; i < ETypeId_getHeight(typeId); ++i)
+		_gotoIfError(clean, ETypeId_stringifyVector(baseType, data + i * stride, alloc, tmp + i));
+
+	switch (ETypeId_getHeight(typeId)) {
+
+		case 2:
+
+			_gotoIfError(clean, CharString_format(
+				alloc, stringified, "%s{ %s, %s }",
+				typeStr.ptr, tmp[0].ptr, tmp[1].ptr
+			));
+
+			break;
+
+		case 3:
+
+			_gotoIfError(clean, CharString_format(
+				alloc, stringified, "%s{ %s, %s, %s }",
+				typeStr.ptr, tmp[0].ptr, tmp[1].ptr, tmp[2].ptr
+			));
+
+			break;
+
+		case 4:
+
+			_gotoIfError(clean, CharString_format(
+				alloc, stringified, "%s{ %s, %s, %s, %s }",
+				typeStr.ptr, tmp[0].ptr, tmp[1].ptr, tmp[2].ptr, tmp[3].ptr
+			));
+
+			break;
+
+		default:
+			_gotoIfError(clean, Error_invalidParameter(0, 0));
+	}
+
+clean:
+
+	for(U64 i = 0; i < sizeof(tmp) / sizeof(tmp[0]); ++i)
+		CharString_free(tmp + i, alloc);
+
+	return err;
+}
+
+Error ETypeId_stringify(ETypeId typeId, Buffer data, Allocator alloc, CharString *stringified) {
+
+	if(!stringified)
+		return Error_nullPointer(3);
+
+	if(stringified->ptr)
+		return Error_invalidParameter(3, 0);
+
+	if (typeId == ETypeId_Undefined)
+		return Error_invalidParameter(0, 0);
+
+	for (U64 i = 0; i < ETypeId_lookup.length; ++i) {
+
+		ETypeIdLookup lookup = ((ETypeIdLookup*)ETypeId_lookup.ptr)[i];
+
+		if (lookup.id == typeId) {
+
+			U64 len = ETypeId_getBytes(typeId);
+
+			if(Buffer_length(data) != len)
+				return Error_invalidParameter(1, 0);
+
+			//Builtin conversions
+
+			if (ETypeId_getLibraryId(typeId) == _LIBRARYID_DEFAULT && ETypeId_getLibraryTypeId(typeId) < ETypeId_Max) {
+
+				if(ETypeId_getWidth(typeId) == 1 && ETypeId_getHeight(typeId) == 1)
+					return ETypeId_stringifySingle(typeId, data.ptr, alloc, stringified);
+
+				if (ETypeId_getHeight(typeId) == 1)
+					return ETypeId_stringifyVector(typeId, data.ptr, alloc, stringified);
+
+				return ETypeId_stringifyMatrix(typeId, data.ptr, alloc, stringified);
+			}
+
+			//Function pointer call; quite slow
+
+			if(!lookup.func)
+				return Error_invalidState(0);
+
+			return lookup.func(typeId, data, alloc, stringified);
+		}
+	}
+
+	return Error_notFound(0, 0);
 }

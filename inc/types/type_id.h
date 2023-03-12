@@ -183,7 +183,11 @@ U8 ETypeId_getLibraryTypeId(ETypeId id);
 Error ETypeId_create(Allocator alloc);
 Bool ETypeId_free(Allocator alloc);
 
-Error ETypeId_registerTypeId(ETypeId id, CharString name, Allocator alloc);
+typedef Error (*ETypeIdStringifyFunc)(ETypeId typeId, Buffer data, Allocator alloc, CharString *tmp);
+
+Error ETypeId_stringify(ETypeId typeId, Buffer data, Allocator alloc, CharString *stringified);
+
+Error ETypeId_registerTypeId(ETypeId id, CharString name, ETypeIdStringifyFunc stringifyFunc, Allocator alloc);
 
 Error ETypeId_registerType(
 	U8 libraryId, 
@@ -193,9 +197,17 @@ Error ETypeId_registerType(
 	EDataTypeStride dataTypeStride, 
 	EDataType dataType, 
 	CharString name,
+	ETypeIdStringifyFunc stringifyFunc,
 	ETypeId *result,
 	Allocator alloc
 );
 
 Error ETypeId_asString(ETypeId id, CharString *result);
 Error ETypeId_fromString(CharString str, ETypeId *id);
+
+Error ETypeId_getTypeFromDesc(U16 desc, U8 libraryId, ETypeId *res);
+Error ETypeId_getTypeFromShortType(U8 libraryId, U8 libraryTypeId, ETypeId *res);
+
+Error ETypeId_getBaseType(ETypeId id, ETypeId *res);		//The base type of F32x4 would be F32, F32x4x4 would be F32x4
+Error ETypeId_getPureType(ETypeId id, ETypeId *res);		//The full basic type. For example F32x4x4 goes to F32
+

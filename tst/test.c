@@ -76,7 +76,7 @@ const Bool Platform_useWorkingDirectory = false;
 
 //Converting to C-Struct
 
-Error convertToCStruct(BufferLayout layout, LayoutPathInfo pathInfo, CharString path, void *userData) {
+Error convertToCStruct(BufferLayout layout, LayoutPathInfo pathInfo, CharString path, Buffer data, void *userData) {
 
 	userData;
 
@@ -111,15 +111,20 @@ Error convertToCStruct(BufferLayout layout, LayoutPathInfo pathInfo, CharString 
 		CharString_free(&tmp, alloc);
 	}
 
+	if(!pathInfo.leftoverArray.length && pathInfo.typeId != ETypeId_Undefined)
+		_gotoIfError(clean, ETypeId_stringify(pathInfo.typeId, data, alloc, &tmp));
+
 	//Display offset and stride as annotations
 
 	printf(
-		"%.*s\tLAYOUT(off = %"PRIu64", len = %"PRIu64") %.*s %.*s%.*s\n", 
-		(int) CharString_length(path), path.ptr,
+		"%32s: LAYOUT(off = %4"PRIu64", len = %4"PRIu64") %.*s %.*s%.*s %s %.*s\n", 
+		path.ptr,
 		pathInfo.offset, pathInfo.length,
 		(int) CharString_length(typeName), typeName.ptr,
 		(int) CharString_length(pathInfo.memberName), pathInfo.memberName.ptr,
-		(int) CharString_length(arraySize), arraySize.ptr
+		(int) CharString_length(arraySize), arraySize.ptr,
+		CharString_length(tmp) ? "=" : "",
+		(int) CharString_length(tmp), tmp.ptr
 	);
 
 clean:
@@ -666,9 +671,10 @@ int main() {
 	if(((const Camera*)emp.ptr)[1].fovRad != fovRadTest)
 		_gotoIfError(clean, Error_invalidState(4));
 
-	_gotoIfError(clean, BufferLayout_foreach(
+	_gotoIfError(clean, BufferLayout_foreachData(
+		emp,
 		bufferLayout,
-		CharString_createConstRefUnsafe("/arr/1"),
+		CharString_createConstRefUnsafe("arr/0"),
 		convertToCStruct,
 		NULL,
 		true,
