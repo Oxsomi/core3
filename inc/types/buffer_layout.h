@@ -168,7 +168,13 @@ typedef struct LayoutPathInfo {
 
 } LayoutPathInfo;
 
-Error BufferLayout_resolveLayout(BufferLayout layout, CharString path, LayoutPathInfo *info, Allocator alloc);
+Error BufferLayout_resolveLayout(
+	BufferLayout layout,
+	CharString path,
+	LayoutPathInfo *info,
+	CharString *parent,					//If not null, will return a StringRef into CharString (empty if root)
+	Allocator alloc
+);
 
 Error BufferLayout_resolve(
 	Buffer buffer, 

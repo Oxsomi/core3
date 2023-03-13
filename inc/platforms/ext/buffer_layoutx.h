@@ -28,7 +28,7 @@ Error BufferLayout_createStructx(BufferLayout *layout, BufferLayoutStructInfo in
 
 Error BufferLayout_createInstancex(BufferLayout layout, U64 count, Buffer *result);
 
-Error BufferLayout_resolveLayoutx(BufferLayout layout, CharString path, LayoutPathInfo *info);
+Error BufferLayout_resolveLayoutx(BufferLayout layout, CharString path, CharString *parent, LayoutPathInfo *info);
 Error BufferLayout_resolvex(Buffer buffer, BufferLayout layout, CharString path, Buffer *location);
 
 //Setting data in the buffer

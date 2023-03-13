@@ -37,8 +37,8 @@ Error BufferLayout_createInstancex(BufferLayout layout, U64 count, Buffer *resul
 	return BufferLayout_createInstance(layout, count, Platform_instance.alloc, result);
 }
 
-Error BufferLayout_resolveLayoutx(BufferLayout layout, CharString path, LayoutPathInfo *info) {
-	return BufferLayout_resolveLayout(layout, path, info, Platform_instance.alloc);
+Error BufferLayout_resolveLayoutx(BufferLayout layout, CharString path, CharString *parent, LayoutPathInfo *info) {
+	return BufferLayout_resolveLayout(layout, path, info, parent, Platform_instance.alloc);
 }
 
 Error BufferLayout_resolvex(Buffer buffer, BufferLayout layout, CharString path, Buffer *location) {

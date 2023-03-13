@@ -418,7 +418,7 @@ Error BufferLayout_createInstance(BufferLayout layout, U64 count, Allocator allo
 		return Error_invalidParameter(3, 0);
 
 	LayoutPathInfo info = (LayoutPathInfo) { 0 };
-	Error err = BufferLayout_resolveLayout(layout, CharString_createConstRefUnsafe("/"), &info, alloc);
+	Error err = BufferLayout_resolveLayout(layout, CharString_createConstRefUnsafe("/"), &info, NULL, alloc);
 
 	if(err.genericError)
 		return err;
@@ -431,13 +431,22 @@ Error BufferLayout_createInstance(BufferLayout layout, U64 count, Allocator allo
 	return Buffer_createEmptyBytes(bufLen, alloc, result);
 }
 
-Error BufferLayout_resolveLayout(BufferLayout layout, CharString path, LayoutPathInfo *info, Allocator alloc) {
+Error BufferLayout_resolveLayout(
+	BufferLayout layout,
+	CharString path,
+	LayoutPathInfo *info,
+	CharString *parent,
+	Allocator alloc
+) {
 
 	if(!layout.structs.ptr)
 		return Error_nullPointer(0);
 
 	if(!info)
 		return Error_nullPointer(2);
+
+	if(parent && parent->ptr)
+		return Error_invalidParameter(3, 0);
 
 	if(layout.rootStructIndex >= layout.structs.length)
 		return Error_unsupportedOperation(0);
@@ -514,6 +523,7 @@ Error BufferLayout_resolveLayout(BufferLayout layout, CharString path, LayoutPat
 	U16 currentArrayDim = 0;
 
 	U64 currentOffset = 0;
+	U64 prev = 0;
 
 	for (U64 i = start; i < end; ++i) {
 
@@ -602,6 +612,14 @@ Error BufferLayout_resolveLayout(BufferLayout layout, CharString path, LayoutPat
 				}
 			}
 
+			//Exclude last child to get parent
+
+			if(isEnd && parent)
+				*parent = CharString_createConstRefSized(path.ptr, prev, false);
+
+			//Remember last parent and clear member name buff
+
+			prev = i;
 			CharString_clear(&copy);
 			continue;
 		}
@@ -680,7 +698,7 @@ Error BufferLayout_resolve(
 		return Error_invalidParameter(3, 0);
 
 	LayoutPathInfo info = (LayoutPathInfo) { 0 };
-	Error err = BufferLayout_resolveLayout(layout, path, &info, alloc);
+	Error err = BufferLayout_resolveLayout(layout, path, &info, NULL, alloc);
 
 	if(err.genericError)
 		return err;
@@ -846,7 +864,7 @@ Error BufferLayout_foreach(
 	Error err = Error_none();
 	CharString tmp = CharString_createNull();
 
-	_gotoIfError(clean, BufferLayout_resolveLayout(layout, path, &info, alloc));
+	_gotoIfError(clean, BufferLayout_resolveLayout(layout, path, &info, NULL, alloc));
 
 	Bool prefix = CharString_startsWith(path, '/', EStringCase_Sensitive);
 	Bool suffix = CharString_endsWith(path, '/', EStringCase_Sensitive);
@@ -955,7 +973,19 @@ Error BufferLayout_foreach(
 					&layoutPathInfo.leftoverArray
 				));
 
-			_gotoIfError(clean, CharString_format(
+			//TODO: Fix: Path can contain \. This would turn members into wrong path
+			//		Escape infoi.name
+
+			if(!CharString_length(path) || CharString_equals(path, '/', EStringCase_Sensitive))
+				_gotoIfError(clean, CharString_format(
+					alloc,
+					&tmp,
+					"%.*s",
+					(int) CharString_length(infoi.name),
+					infoi.name.ptr
+				))
+
+			else _gotoIfError(clean, CharString_format(
 				alloc,
 				&tmp,
 				"%.*s/%.*s",
@@ -1029,7 +1059,7 @@ Error BufferLayout_foreachData(
 	LayoutPathInfo info = (LayoutPathInfo) { 0 };
 	Error err = Error_none();
 
-	_gotoIfError(clean, BufferLayout_resolveLayout(layout, CharString_createConstRefUnsafe("/"), &info, alloc));
+	_gotoIfError(clean, BufferLayout_resolveLayout(layout, path, &info, NULL, alloc));
 	
 	if (Buffer_length(buffer) != info.length)
 		return Error_invalidOperation(0);
