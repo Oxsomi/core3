@@ -1181,7 +1181,7 @@ Error CharString_replaceAllString(
 
 	U64 newLoc = strl - 1;
 
-	for (U64 i = finds.length - 1; i != U64_MAX; ++i) {
+	for (U64 i = finds.length - 1; i != U64_MAX; --i) {
 
 		//Find tail
 

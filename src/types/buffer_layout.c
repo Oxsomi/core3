@@ -535,8 +535,34 @@ Error BufferLayout_resolveLayout(
 		//For the final character we append first so we can process the final access here.
 
 		Bool isEnd = i == end - 1;
+		
+		//Handle special ending; \\ or \/
 
-		if(isEnd)
+		if (i == end - 2 && v == '\\') {
+
+			//Escaped slash
+
+			if (CharString_getAt(path, end - 1) == '/') {
+				isEnd = true;
+				++i;
+				_gotoIfError(clean, CharString_append(&copy, '/', alloc));
+			}
+
+			//Escaped backslash
+
+			else if (CharString_getAt(path, end - 1) == '\\') {
+				isEnd = true;
+				++i;
+				_gotoIfError(clean, CharString_append(&copy, '\\', alloc));
+			}
+
+			//It's a normal backslash and it not the end of the string yet.
+			//It'll add it at the end of the loop
+		}
+
+		//Handle end
+
+		else if(isEnd)
 			_gotoIfError(clean, CharString_append(&copy, v, alloc));
 
 		//Access member or array index
@@ -863,6 +889,7 @@ Error BufferLayout_foreach(
 	LayoutPathInfo info = (LayoutPathInfo) { 0 };
 	Error err = Error_none();
 	CharString tmp = CharString_createNull();
+	CharString tmp1 = CharString_createNull();
 
 	_gotoIfError(clean, BufferLayout_resolveLayout(layout, path, &info, NULL, alloc));
 
@@ -985,15 +1012,41 @@ Error BufferLayout_foreach(
 					infoi.name.ptr
 				))
 
-			else _gotoIfError(clean, CharString_format(
-				alloc,
-				&tmp,
-				"%.*s/%.*s",
-				(int) (CharString_length(path) - prefix - suffix),
-				path.ptr + prefix,
-				(int) CharString_length(infoi.name),
-				infoi.name.ptr
-			));
+			else { 
+
+				_gotoIfError(clean, CharString_createCopy(infoi.name, alloc, &tmp1));
+
+				//Replace \ with \\ to ensure it's escaped
+				//And after that we replace / with \/.
+
+				_gotoIfError(clean, CharString_replaceAllString(
+					&tmp1, 
+					CharString_createConstRefUnsafe("\\"),
+					CharString_createConstRefUnsafe("\\\\"),
+					EStringCase_Sensitive,
+					alloc
+				));
+
+				_gotoIfError(clean, CharString_replaceAllString(
+					&tmp1, 
+					CharString_createConstRefUnsafe("/"),
+					CharString_createConstRefUnsafe("\\/"),
+					EStringCase_Sensitive,
+					alloc
+				));
+
+				_gotoIfError(clean, CharString_format(
+					alloc,
+					&tmp,
+					"%.*s/%.*s",
+					(int) (CharString_length(path) - prefix - suffix),
+					path.ptr + prefix,
+					(int) CharString_length(infoi.name),
+					infoi.name.ptr
+				));
+
+				CharString_free(&tmp1, alloc);
+			}
 
 			_gotoIfError(clean, func(layout, layoutPathInfo, tmp, userData));
 
@@ -1016,6 +1069,7 @@ Error BufferLayout_foreach(
 	else _gotoIfError(clean, Error_invalidOperation(0));
 
 clean:
+	CharString_free(&tmp1, alloc);
 	CharString_free(&tmp, alloc);
 	return err;
 }
@@ -1059,7 +1113,7 @@ Error BufferLayout_foreachData(
 	LayoutPathInfo info = (LayoutPathInfo) { 0 };
 	Error err = Error_none();
 
-	_gotoIfError(clean, BufferLayout_resolveLayout(layout, path, &info, NULL, alloc));
+	_gotoIfError(clean, BufferLayout_resolveLayout(layout, CharString_createConstRefUnsafe("/"), &info, NULL, alloc));
 	
 	if (Buffer_length(buffer) != info.length)
 		return Error_invalidOperation(0);
