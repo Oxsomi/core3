@@ -26,6 +26,8 @@
 #include "types/buffer_layout.h"
 #include "math/transform.h"
 
+#include "formats/json.h"
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -586,6 +588,14 @@ int main() {
 			.structId = cameraStruct,
 			.stride = sizeof(F32x4) * 6 + sizeof(F32) * 4 /* 1 float for padding */,
 			.typeId = ETypeId_Undefined
+		},
+
+		(BufferLayoutMemberInfo) {
+			.name = CharString_createConstRefUnsafe("name"),
+			.structId = U32_MAX,
+			.offset = sizeof(F32x4) * 6 + sizeof(F32) * 4 /* 1 float for padding */,
+			.stride = sizeof(C8),
+			.typeId = ETypeId_C8
 		}
 	};
 
@@ -594,6 +604,13 @@ int main() {
 	_gotoIfError(clean, List_createConstRef(
 		(const U8*) &cameraArrayLen, 1, sizeof(cameraArrayLen),
 		&cameraStructArrayMembers[0].arraySizes
+	));
+
+	U32 nameLen = 15;
+
+	_gotoIfError(clean, List_createConstRef(
+		(const U8*) &nameLen, 1, sizeof(nameLen),
+		&cameraStructArrayMembers[1].arraySizes
 	));
 
 	_gotoIfError(clean, List_createConstRef(
@@ -626,6 +643,19 @@ int main() {
 		_gotoIfError(clean, Error_invalidState(0));
 
 	//Test simple behavior
+
+	C8 testString[15] = { 
+		'\x0', '\x10', '\x80', '\x08', '\xFF',
+		'a', 'b', 'c', ' ',
+		'\r', '\n', '\t', '\\', '/', '"' 
+	};
+
+	_gotoIfError(clean, BufferLayout_setData(
+		emp, bufferLayout, 
+		CharString_createConstRefUnsafe("name"),
+		Buffer_createConstRef(testString, sizeof(testString)),
+		alloc
+	));
 
 	F32x4 p0 = F32x4_create4(1, 2, 3, 4);
 
@@ -680,6 +710,86 @@ int main() {
 		true,
 		alloc
 	));
+
+	//JSON testing
+
+	//Object
+
+	_gotoIfError(clean, JSON_serialize(
+		emp, bufferLayout, 
+		CharString_createConstRefUnsafe("arr/0"),
+		true, false, 
+		1, 
+		alloc, &tmp
+	));
+
+	printf("%s\n", tmp.ptr);
+	CharString_free(&tmp, alloc);
+
+	//Plain vector
+
+	_gotoIfError(clean, JSON_serialize(
+		emp, bufferLayout, 
+		CharString_createConstRefUnsafe("arr/0/p0"),
+		true, false, 
+		1, 
+		alloc, &tmp
+	));
+
+	printf("%s\n", tmp.ptr);
+	CharString_free(&tmp, alloc);
+
+	//Plain float
+
+	_gotoIfError(clean, JSON_serialize(
+		emp, bufferLayout, 
+		CharString_createConstRefUnsafe("arr/0/fovRad"),
+		true, false, 
+		1, 
+		alloc, &tmp
+	));
+
+	printf("%s\n", tmp.ptr);
+	CharString_free(&tmp, alloc);
+
+	//Everything
+
+	_gotoIfError(clean, JSON_serialize(
+		emp, bufferLayout, 
+		CharString_createConstRefUnsafe("arr"),
+		true, false, 
+		1, 
+		alloc, &tmp
+	));
+
+	printf("%s\n", tmp.ptr);
+	CharString_free(&tmp, alloc);
+
+	//Including root ("arr")
+
+	_gotoIfError(clean, JSON_serialize(
+		emp, bufferLayout, 
+		CharString_createConstRefUnsafe(""),
+		true, false, 
+		1, 
+		alloc, &tmp
+	));
+
+	printf("%s\n", tmp.ptr);
+	CharString_free(&tmp, alloc);
+
+	//Non prettified
+
+	_gotoIfError(clean, JSON_serialize(
+		emp, bufferLayout, 
+		CharString_createConstRefUnsafe(""),
+		false, false, 
+		1, 
+		alloc, &tmp
+	));
+
+	printf("%s\n", tmp.ptr);
+	CharString_free(&tmp, alloc);
 
 	//Test big endian conversions
 

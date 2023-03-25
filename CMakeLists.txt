@@ -343,7 +343,7 @@ add_executable(
 	CMakeLists.txt
 )
 
-target_link_libraries(OxC3_test PUBLIC OxC3_types)
+target_link_libraries(OxC3_test PUBLIC OxC3_formats)
 
 set_target_properties(OxC3_test PROPERTIES FOLDER Oxsomi/test)
 
