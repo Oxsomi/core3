@@ -387,11 +387,13 @@ Error JSON_serializeForeach(
 			C8 c = *(const C8*) data.ptr;
 
 			if(!C8_isValidAscii(c))
-				return Error_invalidParameter(3, 0);
+				_gotoIfError(clean, CharString_format(
+					output->alloc, &tmp1, "\"\\u00%02x\"", (int)c
+				))
 
 			//Escape characters
 
-			if (JSON_isEscaped(c)) {
+			else if (JSON_isEscaped(c)) {
 
 				switch (c) {
 					case '\t':	c = 't';	break;
