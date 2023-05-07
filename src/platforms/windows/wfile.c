@@ -173,8 +173,8 @@ Error File_virtualOp(CharString loc, Ns maxTimeout, VirtualFileFunc f, void *use
 	if(!isVirtual)
 		_gotoIfError(clean, Error_unsupportedOperation(0));
 
-	CharString access = CharString_createConstRefUnsafe("//access/");
-	CharString function = CharString_createConstRefUnsafe("//function/");
+	CharString access = CharString_createConstRefCStr("//access/");
+	CharString function = CharString_createConstRefCStr("//function/");
 
 	if (CharString_startsWithString(loc, access, EStringCase_Insensitive)) {
 		//TODO: Allow //access folder
@@ -329,7 +329,7 @@ Error File_getInfoVirtualInternal(FileInfo *info, CharString loc) {
 	if(!section) {	//Parent dir
 
 		if(!CharString_length(loc))
-			loc = CharString_createConstRefUnsafe(".");
+			loc = CharString_createConstRefCStr(".");
 
 		CharString copy = CharString_createNull();
 		_gotoIfError(clean, CharString_createCopyx(loc, &copy));
@@ -351,7 +351,7 @@ Error File_getInfoVirtualInternal(FileInfo *info, CharString loc) {
 		_gotoIfError(clean, CharString_insertStringx(&info->path, tmp, 0));
 	}
 
-	_gotoIfError(clean, CharString_insertStringx(&info->path, CharString_createConstRefUnsafe("//"), 0));
+	_gotoIfError(clean, CharString_insertStringx(&info->path, CharString_createConstRefCStr("//"), 0));
 
 clean:
 
@@ -392,7 +392,7 @@ Error File_virtualCallback(FileInfo info, ForeachFile *userData) {
 
 	_gotoIfError(clean, CharString_createCopyx(userData->currentPath, &fullPath));
 	_gotoIfError(clean, CharString_appendStringx(&fullPath, info.path));
-	_gotoIfError(clean, CharString_insertStringx(&fullPath, CharString_createConstRefUnsafe("//"), 0));
+	_gotoIfError(clean, CharString_insertStringx(&fullPath, CharString_createConstRefCStr("//"), 0));
 
 	info.path = fullPath;
 
@@ -410,7 +410,7 @@ Error File_foreachVirtualInternal(ForeachFile *userData, CharString resolved) {
 	CharString copy1 = CharString_createNull();
 	CharString copy2 = CharString_createNull();
 	CharString copy3 = CharString_createNull();
-	CharString root = CharString_createConstRefUnsafe(".");
+	CharString root = CharString_createConstRefCStr(".");
 	List visited = List_createEmpty(sizeof(CharString));
 
 	CharString_toLower(resolved);
@@ -465,7 +465,7 @@ Error File_foreachVirtualInternal(ForeachFile *userData, CharString resolved) {
 
 				CharString_freex(&copy3);
 				_gotoIfError(clean, CharString_createCopyx(parent, &copy3));
-				_gotoIfError(clean, CharString_insertStringx(&copy3, CharString_createConstRefUnsafe("//"), 0));
+				_gotoIfError(clean, CharString_insertStringx(&copy3, CharString_createConstRefCStr("//"), 0));
 
 				FileInfo info = (FileInfo) {
 					.path = copy3,
@@ -486,7 +486,7 @@ Error File_foreachVirtualInternal(ForeachFile *userData, CharString resolved) {
 
 			CharString_freex(&copy3);
 			_gotoIfError(clean, CharString_createCopyx(copy1, &copy3));
-			_gotoIfError(clean, CharString_insertStringx(&copy3, CharString_createConstRefUnsafe("//"), 0));
+			_gotoIfError(clean, CharString_insertStringx(&copy3, CharString_createConstRefCStr("//"), 0));
 
 			FileInfo info = (FileInfo) {
 				.path = copy3,

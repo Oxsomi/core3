@@ -97,7 +97,7 @@ void sigFunc(int signal) {
 	//For debugging purposed however, this is very useful
 	//Turn this off by defining _NO_SIGNAL_HANDLING
 
-	Log_log(ELogLevel_Fatal, ELogOptions_Default, CharString_createConstRefUnsafe(msg));
+	Log_log(ELogLevel_Fatal, ELogOptions_Default, CharString_createConstRefCStr(msg));
 	Log_printStackTrace(1, ELogLevel_Fatal, ELogOptions_Default);
 	exit(signal);
 }
@@ -213,7 +213,7 @@ BOOL enumerateFiles(HMODULE mod, LPCSTR unused, LPSTR name, List *sections) {
 
 	mod; unused;
 
-	CharString str = CharString_createConstRefUnsafe(name);
+	CharString str = CharString_createConstRefCStr(name);
 
 	Error err = Error_none();
 	CharString copy = CharString_createNull();
@@ -294,7 +294,10 @@ Error Platform_initExt(Platform *result, CharString currAppDir) {
 			return Error_platformError(1, GetLastError());
 		}
 
-		if ((err = CharString_appendx(&workDir, '/')).genericError)  {
+		if(
+			!CharString_endsWith(basePath, '/', EStringCase_Sensitive) && 
+			(err = CharString_appendx(&workDir, '/')).genericError
+		)  {
 			CharString_freex(&appDir);
 			CharString_freex(&workDir);
 			Buffer_freex(&platformExt);

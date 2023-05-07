@@ -81,12 +81,12 @@ Error Platform_create(
 		//But that'd happen anyways
 
 		for(int i = 1; i < cmdArgc; ++i)
-			sl.ptr[i - 1] = CharString_createConstRefUnsafe(cmdArgs[i]);
+			sl.ptr[i - 1] = CharString_createConstRefCStr(cmdArgs[i]);
 	}
 
 	Platform_instance.args = sl;
 
-	if ((err = Platform_initExt(&Platform_instance, CharString_createConstRefUnsafe(cmdArgs[0]))).genericError) {
+	if ((err = Platform_initExt(&Platform_instance, CharString_createConstRefCStr(cmdArgs[0]))).genericError) {
 		CharStringList_freex(&sl);
 		WindowManager_free(&Platform_instance.windowManager);
 		Platform_instance =	(Platform) { 0 };

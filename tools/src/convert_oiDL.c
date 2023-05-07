@@ -341,7 +341,7 @@ Error _CLI_convertFromDL(ParsedArgs args, CharString input, FileInfo inputInfo, 
 	//Write file
 
 	EFileType type = EFileType_Folder;
-	CharString txt = CharString_createConstRefUnsafe(".txt");
+	CharString txt = CharString_createConstRefCStr(".txt");
 
 	if(
 		(
@@ -366,7 +366,7 @@ Error _CLI_convertFromDL(ParsedArgs args, CharString input, FileInfo inputInfo, 
 		if(!CharString_endsWith(outputBase, '/', EStringCase_Sensitive))
 			_gotoIfError(clean, CharString_appendx(&outputBase, '/'));
 
-		CharString bin = CharString_createConstRefUnsafe(".bin");
+		CharString bin = CharString_createConstRefCStr(".bin");
 
 		for (U64 i = 0; i < file.entries.length; ++i) {
 

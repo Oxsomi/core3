@@ -162,11 +162,11 @@ int main() {
 		printf("Testing number to CharString conversions\n");
 
 		CharString resultsStr[] = {
-			CharString_createConstRefUnsafe("0x1234"),
-			CharString_createConstRefUnsafe("0b10101"),
-			CharString_createConstRefUnsafe("0o707"),
-			CharString_createConstRefUnsafe("0nNiceNumber"),
-			CharString_createConstRefUnsafe("69420")
+			CharString_createConstRefCStr("0x1234"),
+			CharString_createConstRefCStr("0b10101"),
+			CharString_createConstRefCStr("0o707"),
+			CharString_createConstRefCStr("0nNiceNumber"),
+			CharString_createConstRefCStr("69420")
 		};
 
 		U64 resultsU64[] = {
@@ -315,7 +315,7 @@ int main() {
 		{ 0xC23CE8A7, 0x895F4B21, 0xEC0DAF37, 0x920AC0A2, 0x62A22004, 0x5A03EB2D, 0xFED48EF9, 0xB05AABEA }
 	};
 
-	inputs[1] = CharString_createConstRefUnsafe("abc");
+	inputs[1] = CharString_createConstRefCStr("abc");
 
 	_gotoIfError(clean, CharString_create('a', MEGA, alloc, inputs + 2));
 
@@ -329,15 +329,15 @@ int main() {
 		true
 	);
 
-	inputs[5] = CharString_createConstRefUnsafe("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq");
+	inputs[5] = CharString_createConstRefCStr("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq");
 
-	inputs[6] = CharString_createConstRefUnsafe(
+	inputs[6] = CharString_createConstRefCStr(
 		"abcdefghbcdefghicdefghijdefghijkefghijklfghijklmghijklmnhijklmnoijklmnopjklmnopqklmnopqrlmnopqrsmnopqrstnopqrstu"
 	);
 
-	inputs[7] = CharString_createConstRefUnsafe("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
-	inputs[8] = CharString_createConstRefUnsafe("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde");
-	inputs[9] = CharString_createConstRefUnsafe("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0");
+	inputs[7] = CharString_createConstRefCStr("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
+	inputs[8] = CharString_createConstRefCStr("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde");
+	inputs[9] = CharString_createConstRefCStr("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0");
 
 	inputs[10] = CharString_createConstRefSized("\xBD", 1, true);
 	inputs[11] = CharString_createConstRefSized("\xC9\x8C\x8E\x55", 4, true);
@@ -397,20 +397,20 @@ int main() {
 	//Transform
 
 	BufferLayoutStructInfo transformStructInfo = (BufferLayoutStructInfo) {
-		.name = CharString_createConstRefUnsafe("Transform")
+		.name = CharString_createConstRefCStr("Transform")
 	};
 
 	BufferLayoutMemberInfo transformMembers[] = {
 
 		(BufferLayoutMemberInfo) {
-			.name = CharString_createConstRefUnsafe("rot"),
+			.name = CharString_createConstRefCStr("rot"),
 			.typeId = ETypeId_F32x4,
 			.stride = sizeof(F32x4),
 			.structId = U32_MAX
 		},
 
 		(BufferLayoutMemberInfo) {
-			.name = CharString_createConstRefUnsafe("pos"),
+			.name = CharString_createConstRefCStr("pos"),
 			.typeId = ETypeId_F32x4,
 			.stride = sizeof(F32x4),
 			.offset = sizeof(F32x4),
@@ -418,7 +418,7 @@ int main() {
 		},
 
 		(BufferLayoutMemberInfo) {
-			.name = CharString_createConstRefUnsafe("scale"),
+			.name = CharString_createConstRefCStr("scale"),
 			.typeId = ETypeId_F32x4,
 			.stride = sizeof(F32x4),
 			.offset = sizeof(F32x4) * 2,
@@ -439,20 +439,20 @@ int main() {
 	//
 
 	BufferLayoutStructInfo cameraStructInfo = (BufferLayoutStructInfo) {
-		.name = CharString_createConstRefUnsafe("Camera")
+		.name = CharString_createConstRefCStr("Camera")
 	};
 
 	BufferLayoutMemberInfo cameraMembers[] = {
 
 		(BufferLayoutMemberInfo) {
-			.name = CharString_createConstRefUnsafe("transform"),
+			.name = CharString_createConstRefCStr("transform"),
 			.structId = transformStruct,
 			.stride = sizeof(F32x4) * 3,
 			.typeId = ETypeId_Undefined
 		},
 
 		(BufferLayoutMemberInfo) {
-			.name = CharString_createConstRefUnsafe("p0"),
+			.name = CharString_createConstRefCStr("p0"),
 			.typeId = ETypeId_F32x4,
 			.stride = sizeof(F32x4),
 			.offset = sizeof(F32x4) * 3,
@@ -460,7 +460,7 @@ int main() {
 		},
 
 		(BufferLayoutMemberInfo) {
-			.name = CharString_createConstRefUnsafe("right"),
+			.name = CharString_createConstRefCStr("right"),
 			.typeId = ETypeId_F32x4,
 			.stride = sizeof(F32x4),
 			.offset = sizeof(F32x4) * 4,
@@ -468,7 +468,7 @@ int main() {
 		},
 
 		(BufferLayoutMemberInfo) {
-			.name = CharString_createConstRefUnsafe("up"),
+			.name = CharString_createConstRefCStr("up"),
 			.typeId = ETypeId_F32x4,
 			.stride = sizeof(F32x4),
 			.offset = sizeof(F32x4) * 5,
@@ -476,7 +476,7 @@ int main() {
 		},
 
 		(BufferLayoutMemberInfo) {
-			.name = CharString_createConstRefUnsafe("near"),
+			.name = CharString_createConstRefCStr("near"),
 			.typeId = ETypeId_F32,
 			.stride = sizeof(F32),
 			.offset = sizeof(F32x4) * 6,
@@ -484,7 +484,7 @@ int main() {
 		},
 
 		(BufferLayoutMemberInfo) {
-			.name = CharString_createConstRefUnsafe("far"),
+			.name = CharString_createConstRefCStr("far"),
 			.typeId = ETypeId_F32,
 			.stride = sizeof(F32),
 			.offset = sizeof(F32x4) * 6 + sizeof(F32),
@@ -492,7 +492,7 @@ int main() {
 		},
 
 		(BufferLayoutMemberInfo) {
-			.name = CharString_createConstRefUnsafe("fovRad"),
+			.name = CharString_createConstRefCStr("fovRad"),
 			.typeId = ETypeId_F32,
 			.stride = sizeof(F32),
 			.offset = sizeof(F32x4) * 6 + sizeof(F32) * 2,
@@ -517,7 +517,7 @@ int main() {
 	BufferLayoutMemberInfo cameraStructArrayMembers[] = {
 
 		(BufferLayoutMemberInfo) {
-			.name = CharString_createConstRefUnsafe("arr"),
+			.name = CharString_createConstRefCStr("arr"),
 			.structId = cameraStruct,
 			.stride = sizeof(F32x4) * 6 + sizeof(F32) * 4 /* 1 float for padding */,
 			.typeId = ETypeId_Undefined
@@ -566,7 +566,7 @@ int main() {
 
 	_gotoIfError(clean, BufferLayout_setF32x4(
 		emp, bufferLayout, 
-		CharString_createConstRefUnsafe("arr/0/p0"),
+		CharString_createConstRefCStr("arr/0/p0"),
 		p0,
 		alloc
 	));
@@ -576,7 +576,7 @@ int main() {
 
 	_gotoIfError(clean, BufferLayout_setF32x4(
 		emp, bufferLayout, 
-		CharString_createConstRefUnsafe("arr/1/p0"),
+		CharString_createConstRefCStr("arr/1/p0"),
 		p0,
 		alloc
 	));
@@ -586,7 +586,7 @@ int main() {
 
 	_gotoIfError(clean, BufferLayout_setF32x4(
 		emp, bufferLayout, 
-		CharString_createConstRefUnsafe("arr/1/transform/scale"),
+		CharString_createConstRefCStr("arr/1/transform/scale"),
 		p0,
 		alloc
 	));
@@ -598,7 +598,7 @@ int main() {
 
 	_gotoIfError(clean, BufferLayout_setF32(
 		emp, bufferLayout, 
-		CharString_createConstRefUnsafe("arr/1/fovRad"),
+		CharString_createConstRefCStr("arr/1/fovRad"),
 		fovRadTest,
 		alloc
 	));

@@ -179,7 +179,7 @@ Bool CLI_execute(CharStringList arglist) {
 
 		if (CharString_equalsString(
 			arg0, 
-			CharString_createConstRefUnsafe(EOperationCategory_names[i - 1]),
+			CharString_createConstRefCStr(EOperationCategory_names[i - 1]),
 			EStringCase_Insensitive
 		)) {
 			category = i;
@@ -210,7 +210,7 @@ Bool CLI_execute(CharStringList arglist) {
 			category == Operation_values[i].category &&
 			CharString_equalsString(
 				arg1, 
-				CharString_createConstRefUnsafe(Operation_values[i].name),
+				CharString_createConstRefCStr(Operation_values[i].name),
 				EStringCase_Insensitive
 			)
 		) {
@@ -239,7 +239,7 @@ Bool CLI_execute(CharStringList arglist) {
 
 			if (CharString_equalsString(
 				arglist.ptr[j],
-				CharString_createConstRefUnsafe(EOperationFlags_names[i]),
+				CharString_createConstRefCStr(EOperationFlags_names[i]),
 				EStringCase_Insensitive
 			)) {
 
@@ -260,7 +260,7 @@ Bool CLI_execute(CharStringList arglist) {
 		for(U64 j = 2; j < arglist.length; ++j)
 			if (CharString_equalsString(
 				arglist.ptr[j],
-				CharString_createConstRefUnsafe(EOperationHasParameter_names[i]),
+				CharString_createConstRefCStr(EOperationHasParameter_names[i]),
 				EStringCase_Insensitive
 			)) {
 
@@ -285,7 +285,7 @@ Bool CLI_execute(CharStringList arglist) {
 						for (U64 k = 0; k < EFormat_Invalid; ++k)
 							if (CharString_equalsString(
 								arglist.ptr[j + 1],
-								CharString_createConstRefUnsafe(Format_values[k].name),
+								CharString_createConstRefCStr(Format_values[k].name),
 								EStringCase_Insensitive
 							)) {
 								args.format = (EFormat) k;
@@ -353,7 +353,7 @@ Bool CLI_execute(CharStringList arglist) {
 				for (; i < EOperationHasParameter_Count; ++i)
 					if (CharString_equalsString(
 						arglist.ptr[j],
-						CharString_createConstRefUnsafe(EOperationHasParameter_names[i]),
+						CharString_createConstRefCStr(EOperationHasParameter_names[i]),
 						EStringCase_Insensitive
 					))
 						break;
@@ -375,7 +375,7 @@ Bool CLI_execute(CharStringList arglist) {
 			for (; i < EOperationFlags_Count; ++i)
 				if (CharString_equalsString(
 					arglist.ptr[j],
-					CharString_createConstRefUnsafe(EOperationFlags_names[i]),
+					CharString_createConstRefCStr(EOperationFlags_names[i]),
 					EStringCase_Insensitive
 				))
 					break;

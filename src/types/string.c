@@ -82,10 +82,10 @@ Bool CharString_isValidFileName(CharString str) {
 	if (strl >= 3) {
 
 		if(
-			CharString_startsWithString(str, CharString_createConstRefUnsafe("CON"), EStringCase_Insensitive) ||
-			CharString_startsWithString(str, CharString_createConstRefUnsafe("AUX"), EStringCase_Insensitive) ||
-			CharString_startsWithString(str, CharString_createConstRefUnsafe("NUL"), EStringCase_Insensitive) ||
-			CharString_startsWithString(str, CharString_createConstRefUnsafe("PRN"), EStringCase_Insensitive)
+			CharString_startsWithString(str, CharString_createConstRefCStr("CON"), EStringCase_Insensitive) ||
+			CharString_startsWithString(str, CharString_createConstRefCStr("AUX"), EStringCase_Insensitive) ||
+			CharString_startsWithString(str, CharString_createConstRefCStr("NUL"), EStringCase_Insensitive) ||
+			CharString_startsWithString(str, CharString_createConstRefCStr("PRN"), EStringCase_Insensitive)
 		)
 			illegalStart = 3;
 
@@ -93,8 +93,8 @@ Bool CharString_isValidFileName(CharString str) {
 
 			if(
 				(
-					CharString_startsWithString(str, CharString_createConstRefUnsafe("COM"), EStringCase_Insensitive) ||
-					CharString_startsWithString(str, CharString_createConstRefUnsafe("LPT"), EStringCase_Insensitive)
+					CharString_startsWithString(str, CharString_createConstRefCStr("COM"), EStringCase_Insensitive) ||
+					CharString_startsWithString(str, CharString_createConstRefCStr("LPT"), EStringCase_Insensitive)
 				) &&
 				C8_isDec(str.ptr[3])
 			)
@@ -272,7 +272,7 @@ CharString CharString_createConstRefAuto(const C8 *ptr, U64 maxSize) {
 	};
 }
 
-CharString CharString_createConstRefUnsafe(const C8 *ptr) {
+CharString CharString_createConstRefCStr(const C8 *ptr) {
 	return CharString_createConstRefAuto(ptr, U64_MAX);
 }
 
@@ -371,7 +371,7 @@ Error CharString_offsetAsRef(CharString s, U64 off, CharString *result) {
 	testFunc,																\
 	CharString_startsWithString(												\
 		s,																	\
-		CharString_createConstRefUnsafe(num),									\
+		CharString_createConstRefCStr(num),									\
 		EStringCase_Insensitive												\
 	) ? CharString_calcStrLen(num, U64_MAX) : 0									\
 )
@@ -614,7 +614,7 @@ Bool CharString_free(CharString *str, Allocator alloc) {
 	if (!result)														\
 		return Error_nullPointer(3);									\
 																		\
-	CharString prefix = CharString_createConstRefUnsafe(prefixRaw);				\
+	CharString prefix = CharString_createConstRefCStr(prefixRaw);				\
 																		\
 	if (result->ptr)													\
 		return Error_invalidOperation(0);								\
@@ -981,9 +981,9 @@ Error CharString_append(CharString *s, C8 c, Allocator allocator) {
 }
 
 #if _WIN32
-	CharString CharString_newLine() { return CharString_createConstRefUnsafe("\r\n"); }
+	CharString CharString_newLine() { return CharString_createConstRefCStr("\r\n"); }
 #else
-	CharString CharString_newLine() { return CharString_createConstRefUnsafe("\n"); }
+	CharString CharString_newLine() { return CharString_createConstRefCStr("\n"); }
 #endif
 
 Error CharString_appendString(CharString *s, CharString other, Allocator allocator) {
@@ -1624,7 +1624,7 @@ Bool CharString_equals(CharString s, C8 c, EStringCase caseSensitive) {
 
 Bool CharString_parseNyto(CharString s, U64 *result){
 
-	CharString prefix = CharString_createConstRefUnsafe("0n");
+	CharString prefix = CharString_createConstRefCStr("0n");
 
 	Error err = CharString_offsetAsRef(
 		s, CharString_startsWithString(s, prefix, EStringCase_Insensitive) ? CharString_length(prefix) : 0, &s
@@ -1658,7 +1658,7 @@ Bool CharString_parseNyto(CharString s, U64 *result){
 
 Bool CharString_parseHex(CharString s, U64 *result){
 
-	CharString prefix = CharString_createConstRefUnsafe("0x");
+	CharString prefix = CharString_createConstRefCStr("0x");
 	Error err = CharString_offsetAsRef(
 		s, CharString_startsWithString(s, prefix, EStringCase_Insensitive) ? CharString_length(prefix) : 0, &s
 	);
@@ -1895,7 +1895,7 @@ Bool CharString_parseFloat(CharString s, F32 *result) {
 
 Bool CharString_parseOct(CharString s, U64 *result) {
 
-	CharString prefix = CharString_createConstRefUnsafe("0o");
+	CharString prefix = CharString_createConstRefCStr("0o");
 	Error err = CharString_offsetAsRef(
 		s, CharString_startsWithString(s, prefix, EStringCase_Insensitive) ? CharString_length(prefix) : 0, &s
 	);
@@ -1926,7 +1926,7 @@ Bool CharString_parseOct(CharString s, U64 *result) {
 
 Bool CharString_parseBin(CharString s, U64 *result) {
 
-	CharString prefix = CharString_createConstRefUnsafe("0b");
+	CharString prefix = CharString_createConstRefCStr("0b");
 	Error err = CharString_offsetAsRef(
 		s, 
 		CharString_startsWithString(s, prefix, EStringCase_Insensitive) ? 
@@ -1958,10 +1958,10 @@ Bool CharString_parseBin(CharString s, U64 *result) {
 
 Bool CharString_parseU64(CharString s, U64 *result) {
 
-	CharString bin = CharString_createConstRefUnsafe("0b");
-	CharString hex = CharString_createConstRefUnsafe("0x");
-	CharString oct = CharString_createConstRefUnsafe("0o");
-	CharString nyto = CharString_createConstRefUnsafe("0n");
+	CharString bin = CharString_createConstRefCStr("0b");
+	CharString hex = CharString_createConstRefCStr("0x");
+	CharString oct = CharString_createConstRefCStr("0o");
+	CharString nyto = CharString_createConstRefCStr("0n");
 
 	if(CharString_startsWithString(s, hex, EStringCase_Insensitive))
 		return CharString_parseHex(s, result);

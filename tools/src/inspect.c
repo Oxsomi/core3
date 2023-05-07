@@ -694,7 +694,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 			return false;
 		}
 
-		U64 off = CharString_startsWithString(key, CharString_createConstRefUnsafe("0x"), EStringCase_Insensitive) ? 2 : 0;
+		U64 off = CharString_startsWithString(key, CharString_createConstRefCStr("0x"), EStringCase_Insensitive) ? 2 : 0;
 
 		if (CharString_length(key) - off != 64) {
 			Log_errorLn("Invalid parameter sent to -aes. Expecting key in hex (32 bytes)");
@@ -802,7 +802,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 					ArchiveEntry e = (ArchiveEntry) {
 						.type = EFileType_Folder,
-						.path = CharString_createConstRefUnsafe(".")
+						.path = CharString_createConstRefCStr(".")
 					};
 
 					CLI_storeFileOrFolder(args, e, file.archive, &madeFile, start, length);
@@ -811,7 +811,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 				_gotoIfError(cleanCa, Archive_foreachx(
 					file.archive,
-					CharString_createConstRefUnsafe("."),
+					CharString_createConstRefCStr("."),
 					(FileCallback) collectArchiveEntries,
 					&strings,
 					true,
@@ -947,7 +947,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 						Buffer_length(entryi.entryBuffer);
 
 					_gotoIfError(cleanDl, CharString_createDecx(i, 3, &tmp));
-					_gotoIfError(cleanDl, CharString_appendStringx(&tmp, CharString_createConstRefUnsafe(": length = ")));
+					_gotoIfError(cleanDl, CharString_appendStringx(&tmp, CharString_createConstRefCStr(": length = ")));
 
 					_gotoIfError(cleanDl, CharString_createDecx(entrySize, 0, &tmp1));
 					_gotoIfError(cleanDl, CharString_appendStringx(&tmp, tmp1));

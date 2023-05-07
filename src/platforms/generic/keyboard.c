@@ -23,12 +23,12 @@
 #include "types/error.h"
 #include "types/string.h"
 
-#define _key(name)																\
-	if ((err = InputDevice_createButton(										\
-		*result, EKey_##name, CharString_createConstRefUnsafe("EKey_" #name), &res	\
-	)).genericError) {															\
-		InputDevice_free(result);												\
-		return err;																\
+#define _key(name)																	\
+	if ((err = InputDevice_createButton(											\
+		*result, EKey_##name, CharString_createConstRefCStr("EKey_" #name), &res	\
+	)).genericError) {																\
+		InputDevice_free(result);													\
+		return err;																	\
 	}
 
 Error Keyboard_create(Keyboard *result) {

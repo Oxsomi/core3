@@ -112,7 +112,7 @@ Error File_resolve(
 
 	U64 realSplitLen = res.length;		//We have to reset this before unallocating the CharStringList!
 
-	CharString back = CharString_createConstRefUnsafe("..");
+	CharString back = CharString_createConstRefCStr("..");
 
 	for (U64 i = 0; i < res.length; ++i) {
 

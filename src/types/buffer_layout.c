@@ -418,7 +418,7 @@ Error BufferLayout_createInstance(BufferLayout layout, U64 count, Allocator allo
 		return Error_invalidParameter(3, 0);
 
 	LayoutPathInfo info = (LayoutPathInfo) { 0 };
-	Error err = BufferLayout_resolveLayout(layout, CharString_createConstRefUnsafe("/"), &info, alloc);
+	Error err = BufferLayout_resolveLayout(layout, CharString_createConstRefCStr("/"), &info, alloc);
 
 	if(err.genericError)
 		return err;
@@ -442,7 +442,7 @@ Error BufferLayout_resolveLayout(BufferLayout layout, CharString path, LayoutPat
 	if(layout.rootStructIndex >= layout.structs.length)
 		return Error_unsupportedOperation(0);
 
-	if(CharString_equalsString(path, CharString_createConstRefUnsafe("//"), EStringCase_Sensitive))
+	if(CharString_equalsString(path, CharString_createConstRefCStr("//"), EStringCase_Sensitive))
 		return Error_invalidParameter(1, 0);
 
 	U64 start = CharString_startsWith(path, '/', EStringCase_Sensitive);

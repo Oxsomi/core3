@@ -110,7 +110,7 @@ CharString CharString_createNull();
 
 CharString CharString_createConstRefAuto(const C8 *ptr, U64 maxSize);		//Auto detect end (up to maxSize chars)
 
-CharString CharString_createConstRefUnsafe(const C8 *ptr);					//Only use this if string is created safely (null terminator) in code
+CharString CharString_createConstRefCStr(const C8 *ptr);						//Only use this if string is created safely (null terminator)
 CharString CharString_createRefAuto(C8 *ptr, U64 maxSize);					//Auto detect end (up to maxSize chars)
 
 //hasNullAfterSize is true if the size given excludes the null terminator (e.g. ptr[size] == '\0').
