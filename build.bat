@@ -30,7 +30,7 @@ echo -- Building tests...
 
 mkdir builds 2>nul
 cd builds
-cmake -DCMAKE_BUILD_TYPE=%1 .. -G "Visual Studio 17 2022" -DEnableSIMD=%2
+cmake -DCMAKE_BUILD_TYPE=%1 .. -G "Visual Studio 17 2022" -DEnableSIMD=%2 -DForceFloatFallback=On
 cmake --build . -j 8 --config %1
 cd ../
 
