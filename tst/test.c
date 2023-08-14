@@ -1107,7 +1107,7 @@ int main() {
 			0x3F800000,		//1
 			0xBF800000,		//-1
 			0x3F000000,		//0.5
-			0xBF000000,		//0.5
+			0xBF000000,		//-0.5
 			0x40000000,		//2
 			0xC0000000,		//-2
 			0x42F60000,		//123
@@ -1132,49 +1132,170 @@ int main() {
 				_gotoIfError(clean, Error_invalidState((U32)i));
 		}
 
-		//Generate random DeNs and NaNs
+		//Generate random numbers
+
+		U64 N = 12 * 1024 * 1024;
 
 		Buffer_free(&emp, alloc);
-		_gotoIfError(clean, Buffer_createEmptyBytes(128 * 3 * sizeof(U64), alloc, &emp));
+		_gotoIfError(clean, Buffer_createEmptyBytes(N * sizeof(U32), alloc, &emp));
+
+		if (!Buffer_csprng(emp))
+			_gotoIfError(clean, Error_invalidState(0));
+
+		const U32 *rptr = (const U32*) emp.ptr;
+
+		for (U64 i = 0; i < N / 3; ++i) {
+
+			//Loop normal, NaN, Inf/DeN
+
+			for (U8 j = 0; j < 3; ++j) {
+
+				U32 rv = rptr[i * 3 + j];
+
+				if (j) {		//NaN, Inf and DeN
+
+					rv &= 0x807FFFFF;
+
+					if (j > 1)				//NaN or Inf
+						rv |= 0x7F800000;
+				}
+
+				F32 fi = *(const F32*)&rv;
+
+				F64 doubTarg = fi;
+				U64 doubTarg64 = *(const U64 *)&doubTarg;
+
+				F64 doubEmu = F32_castF64(fi);
+				U64 doubEmu64 = *(const U64 *)&doubEmu;
+
+				if (doubEmu64 != doubTarg64)
+					_gotoIfError(clean, Error_invalidState((U32)i));
+			}
+		}
+
+		Buffer_free(&emp, alloc);
+	}
+
+	printf("Passed expansion casts, testing truncation casts...\n");
+
+	{
+		static const U64 expansionTests[] = {
+
+			0x7FFFFFFFFFFFFFFF,		//NaN
+			0xFFFFFFFFFFFFFFFF,		//-NaN
+			0x0000000000000000,		//0
+			0x8000000000000000,		//-0
+			0x7FF0000000000000,		//Inf
+			0xFFF0000000000000,		//-Inf
+
+			0x7FF0000000000001,		//NaN that mostly collapses to 0 mantissa (but top bit 1)
+			0xFFF0000000000001,		//-^
+			0x7FF8000000000000,		//NaN with top bit set
+			0xFFF8000000000000,		//-^
+			0x7FF8000000000001,		//NaN with top and bottom bit
+			0xFFF8000000000001,		//-^
+			0x7FFC000000000003,		//NaN with two top and bottom bits
+			0xFFFC000000000003,		//-^
+
+			0x0000000000000003,		//DeN
+			0x8000000000000003,		//-DeN
+			0x0000000400000003,		//DeN that tests bit comparison in expansion function
+			0x8000000400000003,		//-^
+			0x0000000000000001,		//Smallest DeN
+			0x0000000000000003,		//-^
+			0x000FFFFFFFFFFFFF,		//Biggest DeN
+			0x800FFFFFFFFFFFFF,		//-^
+			0x0010000000000000,		//Smallest non DeN
+			0x8010000000000000,		//-^
+			0x37FFFFFFFFFFF765,		//Resulting in a DeN (float)
+			0xB7FFFFFFFFFFF765,		//-^
+
+			0x7FEFFFFFFFFFFFFF,		//Double max
+			0xFFEFFFFFFFFFFFFF,		//Double min
+
+			//Testing rounding with DeN
+
+			0x0000000020000000,
+			0x0000000010000000,
+			0x0000000008000000,
+
+			0x8000000020000000,
+			0x8000000010000000,
+			0x8000000008000000,
+
+			//Normal numbers
+
+			0x3FF0000000000000,		//1
+			0xBFF0000000000000,		//-1
+			0x3FE0000000000000,		//0.5
+			0xBFE0000000000000,		//-0.5
+			0x4000000000000000,		//2
+			0xC000000000000000,		//-2
+			0x405EC00000000000,		//123
+			0xC05EC00000000000,		//-123
+			0x3FF3AE147AE147AE,		//1.23
+			0xBFF3AE147AE147AE,		//-1.23
+			0x3FEFFFFFFFFFFFFF,		//Almost 1
+			0xBFEFFFFFFFFFFFFF		//-^
+		};
+
+		for (U64 i = 0; i < sizeof(expansionTests) / sizeof(expansionTests[0]); ++i) {
+
+			F64 fd = ((const F64*)expansionTests)[i];
+
+			F32 floatTarg = (F32) fd;
+			U32 floatTarg32 = *(const U32*)&floatTarg;
+
+			F32 floatEmu = F64_castF32(fd);
+			U32 floatEmu32 = *(const U32*)&floatEmu;
+
+			if (floatEmu32 != floatTarg32)
+				_gotoIfError(clean, Error_invalidState((U32)i));
+		}
+
+		//Generate random numbers
+
+		U64 N = 12 * 1024 * 1024;
+
+		Buffer_free(&emp, alloc);
+		_gotoIfError(clean, Buffer_createEmptyBytes(N * sizeof(U64), alloc, &emp));
 
 		if (!Buffer_csprng(emp))
 			_gotoIfError(clean, Error_invalidState(0));
 
 		const U64 *rptr = (const U64*) emp.ptr;
 
-		for (U64 i = 0; i < 1024; ++i) {
+		for (U64 i = 0; i < N / 3; ++i) {
 
-			//Random DeN (-+) or NaN
-			
-			U64 rv64 = rptr[i];
-			U32 rv = (U32)(rv64 & 0x807FFFFF);
+			//Loop normal, NaN, Inf/DeN
 
-			if (!(rv << 1 >> 1))	//Skip 0 and Inf
-				continue;
+			for (U8 j = 0; j < 3; ++j) {
 
-			if ((rv64 >> 32) & 1)	//NaN bit, if yes, make NaN
-				rv |= 0x7F800000;
+				U64 rv = rptr[i * 3 + j];
 
-			F32 fi = *(const F32*) &rv;
+				if (j) {		//NaN, Inf and DeN
 
-			F64 doubTarg = fi;
-			U64 doubTarg64 = *(const U64*)&doubTarg;
+					rv &= 0x800FFFFFFFFFFFFF;
 
-			F64 doubEmu = F32_castF64(fi);
-			U64 doubEmu64  = *(const U64*)&doubEmu;
+					if (j > 1)				//NaN or Inf
+						rv |= 0x7FF0000000000000;
+				}
 
-			if (doubEmu64 != doubTarg64)
-				_gotoIfError(clean, Error_invalidState((U32)i));
+				F64 fd = *(const F64*)&rv;
+
+				F32 floatTarg = (F32) fd;
+				U32 floatTarg32 = *(const U32*)&floatTarg;
+
+				F32 floatEmu = F64_castF32(fd);
+				U32 floatEmu32 = *(const U32*)&floatEmu;
+
+				if (floatEmu32 != floatTarg32)
+					_gotoIfError(clean, Error_invalidState((U32)i));
+			}
 		}
 
-		//Generate random regular numbers
-
-		//TODO:
+		Buffer_free(&emp, alloc);
 	}
-
-	printf("Passed expansion casts, testing truncation casts...\n");
-
-	//TODO:
 
 	printf("Passed truncation casts!\n");
 

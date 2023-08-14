@@ -220,11 +220,37 @@ U64 EFloatType_convertExponent(
 
 	//Truncate
 
+	//NaN, Inf
+
+	if (!EFloatType_isFinite(type1, v)) {
+
+		//NaN sets first mantissa bit to avoid accidental Inf
+
+		if (EFloatType_isNaN(type1, v))
+			*convertedMantissa |= (U64)1 << (EFloatType_mantissaBits(type2) - 1);
+
+		//Inf or NaN always have all exp bits set to 1
+
+		return EFloatType_exponentMask(type2);
+	}
+
+	//DeN needs to be renormalized to become a regular float again.
+
+	if (EFloatType_isDeN(type1, v)) {
+
+		//TODO:
+
+		return 0;
+	}
+
+	//Normal values can collapse to Inf or DeN,
+	//Needs to be handled too.
+
 	//TODO:
 
-	convertedMantissa;
-
-	return exponent;
+	I64 cvt = (I64)exponent - (EFloatType_exponentMask(type1) >> 1);
+	cvt += EFloatType_exponentMask(type2) >> 1;
+	return (U64)cvt;
 }
 
 U64 EFloatType_convert(EFloatType type, U64 v, EFloatType conversionType) {
