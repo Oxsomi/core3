@@ -1115,7 +1115,9 @@ int main() {
 			0x3F9D70A4,		//1.23
 			0xBF9D70A4,		//-1.23
 			0x3F7FFFFF,		//Almost 1
-			0xBF7FFFFF		//-^
+			0xBF7FFFFF,		//-^
+			0x00000015,		//DeN that was failing in the tests
+			0x80000015		//-^
 		};
 
 		for (U64 i = 0; i < sizeof(expansionTests) / sizeof(expansionTests[0]); ++i) {

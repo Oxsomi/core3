@@ -160,7 +160,7 @@ U64 EFloatType_convertExponent(
 
 					U8 bits = right - left;
 					U8 center = left + (bits >> 1);
-					U64 mask = (((U64)1 << (bits - center)) - 1) << center;
+					U64 mask = (((U64)1 << (bits - (bits >> 1))) - 1) << center;
 
 					//Left side
 
