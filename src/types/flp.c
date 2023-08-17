@@ -105,7 +105,7 @@ U64 EFloatType_getInf(EFloatType type) {
 	return EFloatType_exponentMask(type) << EFloatType_exponentShift(type);
 }
 
-U64 EFloatType_convertMantissa(EFloatType type1, U64 v, EFloatType type2) {
+U64 EFloatType_convertMantissa(EFloatType type1, U64 v, EFloatType type2, Bool *carry) {
 
 	U8 mbit1 = EFloatType_mantissaBits(type1);
 	U8 mbit2 = EFloatType_mantissaBits(type2);
@@ -118,109 +118,38 @@ U64 EFloatType_convertMantissa(EFloatType type1, U64 v, EFloatType type2) {
 		return mantissa << (mbit2 - mbit1);
 
 	U8 round = (mantissa >> (mbit1 - mbit2 - 1)) & 1;
-	return (mantissa >> (mbit1 - mbit2)) + round;
+
+	if (!EFloatType_isFinite(type1, v))		//Rounding is only for real numbers
+		round = 0;
+
+	U64 res = (mantissa >> (mbit1 - mbit2)) + round;
+
+	if (!res && round)
+		*carry = true;		//Increments exponent
+
+	return res;
 }
 
 U64 EFloatType_convertExponent(
 	EFloatType type1,
 	U64 v,
 	EFloatType type2,
-	U64 *convertedMantissa
+	U64 *convertedMantissa,
+	Bool carry
 ) {
 
 	U8 ebit1 = EFloatType_exponentBits(type1);
 	U8 ebit2 = EFloatType_exponentBits(type2);
+
+	U8 mbit1 = EFloatType_mantissaBits(type1);
+	U8 mbit2 = EFloatType_mantissaBits(type2);
+
 	U64 exponent = EFloatType_exponent(type1, v);
 
 	if (ebit1 == ebit2)
 		return exponent;
 
-	//Expand
-
-	if (ebit2 > ebit1) {
-
-		//Simple conversion
-
-		if (EFloatType_isFinite(type1, v)) {
-
-			//In expansion, the first on bit in the mantissa will be the new exponent.
-			//The remainder of the mantissa is then shifted back to match the exponent.
-			//I call this "renormalization"
-
-			if (EFloatType_isDeN(type1, v)) {
-
-				//To find the first on bit, we do a binary bit search.
-				//This allows us to traverse up to 64 bits in 6 steps.
-
-				U8 left = 0, right = EFloatType_mantissaBits(type1);
-
-				U64 m = EFloatType_mantissa(type1, v);
-
-				for (U8 i = 0; i < 6; ++i) {
-
-					U8 bits = right - left;
-					U8 center = left + (bits >> 1);
-					U64 mask = (((U64)1 << (bits - (bits >> 1))) - 1) << center;
-
-					//Left side
-
-					if (m & mask)
-						left = center;
-
-					//Right side
-
-					else right = center;
-
-					if (bits == 2)
-						break;
-				}
-
-				//Now we can shift mantissa by the first place to shift the first 1 out.
-				//But keep the rest of the mantissa in.
-				//The exponent then needs to be compensated.
-
-				U8 mbit1 = EFloatType_mantissaBits(type1);
-				U8 mbit2 = EFloatType_mantissaBits(type2);
-
-				m = m << (mbit1 - left);
-				m &= EFloatType_mantissaMask(type1);
-
-				//Correct mantissa
-
-				if (mbit2 >= mbit1)
-					*convertedMantissa = m << (mbit2 - mbit1);
-
-				else *convertedMantissa = m >> (mbit1 - mbit2);
-
-				//Make exponent. Difference between the two exponents but adding the shift.
-
-				U64 exp = (EFloatType_exponentMask(type2) >> 1) - (EFloatType_exponentMask(type1) >> 1);
-				exp -= mbit1 - left - 1;
-				return exp;
-			}
-
-			//Normal conversion of exponent
-
-			I64 cvt = (I64)exponent - (EFloatType_exponentMask(type1) >> 1);
-			cvt += EFloatType_exponentMask(type2) >> 1;
-			return (U64)cvt;
-		}
-
-		//Handle NaN, Inf
-
-		//NaN sets first mantissa bit to avoid accidental Inf
-
-		if (EFloatType_isNaN(type1, v))
-			*convertedMantissa |= (U64)1 << (EFloatType_mantissaBits(type2) - 1);
-
-		//Inf or NaN always have all exp bits set to 1
-
-		return EFloatType_exponentMask(type2);
-	}
-
-	//Truncate
-
-	//NaN, Inf
+	//Handle NaN/Inf
 
 	if (!EFloatType_isFinite(type1, v)) {
 
@@ -234,22 +163,126 @@ U64 EFloatType_convertExponent(
 		return EFloatType_exponentMask(type2);
 	}
 
-	//DeN needs to be renormalized to become a regular float again.
+	//Expand
 
-	if (EFloatType_isDeN(type1, v)) {
+	if (ebit2 > ebit1) {
 
-		//TODO:
+		//In expansion, the first on bit in the mantissa will be the new exponent.
+		//The remainder of the mantissa is then shifted back to match the exponent.
+		//I call this "renormalization"
 
-		return 0;
+		if (EFloatType_isDeN(type1, v)) {
+
+			//To find the first on bit, we do a binary bit search.
+			//This allows us to traverse up to 64 bits in 6 steps.
+
+			U8 left = 0, right = EFloatType_mantissaBits(type1);
+
+			U64 m = EFloatType_mantissa(type1, v);
+
+			for (U8 i = 0; i < 6; ++i) {
+
+				U8 bits = right - left;
+				U8 center = left + (bits >> 1);
+				U64 mask = (((U64)1 << (bits - (bits >> 1))) - 1) << center;
+
+				//Left side
+
+				if (m & mask)
+					left = center;
+
+				//Right side
+
+				else right = center;
+
+				if (bits == 2)
+					break;
+			}
+
+			//Now we can shift mantissa by the first place to shift the first 1 out.
+			//But keep the rest of the mantissa in.
+			//The exponent then needs to be compensated.
+
+			m = m << (mbit1 - left);
+			m &= EFloatType_mantissaMask(type1);
+
+			//Correct mantissa
+
+			if (mbit2 >= mbit1)
+				*convertedMantissa = m << (mbit2 - mbit1);
+
+			else *convertedMantissa = m >> (mbit1 - mbit2);
+
+			//Make exponent. Difference between the two exponents but adding the shift.
+
+			U64 exp = (EFloatType_exponentMask(type2) >> 1) - (EFloatType_exponentMask(type1) >> 1);
+			exp -= mbit1 - left - 1;
+			return exp;
+		}
+
+		//Normal conversion of exponent
+
+		I64 cvt = (I64)exponent - (EFloatType_exponentMask(type1) >> 1);
+		cvt += EFloatType_exponentMask(type2) >> 1;
+		return (U64)cvt;
 	}
+
+	//Truncate
 
 	//Normal values can collapse to Inf or DeN,
 	//Needs to be handled too.
 
-	//TODO:
-
 	I64 cvt = (I64)exponent - (EFloatType_exponentMask(type1) >> 1);
 	cvt += EFloatType_exponentMask(type2) >> 1;
+	cvt += carry;
+
+	//Convert to DeN
+
+	if (cvt < 0) {
+
+		//We can only get the lowest possible number by taking exponent 0 (2^-(b/2)).
+		//However, this requires us to reconfigure the mantissa to approximate the original value.
+		//This can mean sometimes a small number is collapsed to 0 (not enough mantissa bits).
+		//We do this by simply moving around the prev exponent by our new exponent bits.
+		//The remaining bits is simply how much our mantissa has to be shifted to get the same value.
+
+		U64 missingBits = (U64)-cvt;
+
+		if (missingBits > mbit2) {		//Collapse to zero
+			*convertedMantissa = 0;
+			return 0;
+		}
+
+		U64 m = *convertedMantissa;
+		U64 round = (m >> (missingBits)) & 1;
+
+		m >>= missingBits + 1;						//Correct to correct exponent
+
+		if(missingBits != mbit2)					//Because DeN, we need to add the leading 1 here
+			m |= (U64)1 << (mbit2 - missingBits - 1);	
+
+		m += round;									//Ensure correct rounding
+
+		//Special case; round causes exponent to increment
+
+		if (m == EFloatType_mantissaMask(type2)) {
+			*convertedMantissa = 0;
+			return 1;
+		}
+
+		*convertedMantissa = m;
+		return 0;
+	}
+
+	//Generates Inf (exponent is too high)
+
+	else if((U64)cvt >= EFloatType_exponentMask(type2)) {
+		*convertedMantissa = 0;
+		cvt = EFloatType_exponentMask(type2);
+	}
+
+	//Otherwise our exponent is in the correct bounds.
+
 	return (U64)cvt;
 }
 
@@ -283,8 +316,9 @@ U64 EFloatType_convert(EFloatType type, U64 v, EFloatType conversionType) {
 	if (EFloatType_isZero(type, v))
 		return sign;
 
-	U64 mantissa = EFloatType_convertMantissa(type, v, conversionType);
-	U64 exponent = EFloatType_convertExponent(type, v, conversionType, &mantissa);
+	Bool carry = false;
+	U64 mantissa = EFloatType_convertMantissa(type, v, conversionType, &carry);
+	U64 exponent = EFloatType_convertExponent(type, v, conversionType, &mantissa, carry);
 
 	return 
 		sign | 

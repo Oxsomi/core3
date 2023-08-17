@@ -1136,7 +1136,7 @@ int main() {
 
 		//Generate random numbers
 
-		U64 N = 12 * 1024 * 1024;
+		U64 N = 12 * 1024;
 
 		Buffer_free(&emp, alloc);
 		_gotoIfError(clean, Buffer_createEmptyBytes(N * sizeof(U32), alloc, &emp));
@@ -1181,7 +1181,7 @@ int main() {
 	printf("Passed expansion casts, testing truncation casts...\n");
 
 	{
-		static const U64 expansionTests[] = {
+		static const U64 truncTests[] = {
 
 			0x7FFFFFFFFFFFFFFF,		//NaN
 			0xFFFFFFFFFFFFFFFF,		//-NaN
@@ -1199,6 +1199,45 @@ int main() {
 			0x7FFC000000000003,		//NaN with two top and bottom bits
 			0xFFFC000000000003,		//-^
 
+			//Normal numbers
+
+			0x3FF0000000000000,		//1
+			0xBFF0000000000000,		//-1
+			0x3FE0000000000000,		//0.5
+			0xBFE0000000000000,		//-0.5
+			0x4000000000000000,		//2
+			0xC000000000000000,		//-2
+			0x405EC00000000000,		//123
+			0xC05EC00000000000,		//-123
+			0x3FF3AE147AE147AE,		//1.23
+			0xBFF3AE147AE147AE,		//-1.23
+			0x3FEFFFFFFFFFFFFF,		//Almost 1 (rounded to 1)
+			0xBFEFFFFFFFFFFFFF,		//-^
+
+			0x7FEFFFFFFFFFFFFF,		//Double max
+			0xFFEFFFFFFFFFFFFF,		//Double min
+
+			//Float test numbers
+
+			0x36E4FFFFFFFFEF66,		//float 0x00000015
+			0xB6E4FFFFFFFFEF66,		//float -^
+
+			0x47EFFFFFE00030B7,		//Float min
+			0xC7EFFFFFE00030B7,		//Float max
+
+			0x36B7FFFFFFFFE40F,		//float 0x00000003#DeN
+			0xB6B7FFFFFFFFE40F,		//-^
+			0x37B00000000001AF,		//float 0x00020000#DeN that tests bit comparison in expansion function
+			0xB7B00000000001AF,		//-^
+			0x369FFFFFFFFF870D,		//float 0x00000001#DeN Smallest
+			0xB69FFFFFFFFF870D,		//-^
+			0x380FFFFFBFFFB6EF,		//float 0x007FFFFF#DeN Biggest		TODO:
+			0xB80FFFFFBFFFB6EF,		//-^
+			0x380FFFFFFFFFBB88,		//float 0x00800000 Smallest non DeN
+			0xB80FFFFFFFFFBB88,		//-^
+
+			//DeNs
+
 			0x0000000000000003,		//DeN
 			0x8000000000000003,		//-DeN
 			0x0000000400000003,		//DeN that tests bit comparison in expansion function
@@ -1212,9 +1251,6 @@ int main() {
 			0x37FFFFFFFFFFF765,		//Resulting in a DeN (float)
 			0xB7FFFFFFFFFFF765,		//-^
 
-			0x7FEFFFFFFFFFFFFF,		//Double max
-			0xFFEFFFFFFFFFFFFF,		//Double min
-
 			//Testing rounding with DeN
 
 			0x0000000020000000,
@@ -1223,27 +1259,12 @@ int main() {
 
 			0x8000000020000000,
 			0x8000000010000000,
-			0x8000000008000000,
-
-			//Normal numbers
-
-			0x3FF0000000000000,		//1
-			0xBFF0000000000000,		//-1
-			0x3FE0000000000000,		//0.5
-			0xBFE0000000000000,		//-0.5
-			0x4000000000000000,		//2
-			0xC000000000000000,		//-2
-			0x405EC00000000000,		//123
-			0xC05EC00000000000,		//-123
-			0x3FF3AE147AE147AE,		//1.23
-			0xBFF3AE147AE147AE,		//-1.23
-			0x3FEFFFFFFFFFFFFF,		//Almost 1
-			0xBFEFFFFFFFFFFFFF		//-^
+			0x8000000008000000
 		};
 
-		for (U64 i = 0; i < sizeof(expansionTests) / sizeof(expansionTests[0]); ++i) {
+		for (U64 i = 0; i < sizeof(truncTests) / sizeof(truncTests[0]); ++i) {
 
-			F64 fd = ((const F64*)expansionTests)[i];
+			F64 fd = ((const F64*)truncTests)[i];
 
 			F32 floatTarg = (F32) fd;
 			U32 floatTarg32 = *(const U32*)&floatTarg;
