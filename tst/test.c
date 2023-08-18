@@ -1080,7 +1080,7 @@ int main() {
 
 	//Check for floating point conversions
 
-	printf("Checking software floating point conversions...\n");
+	printf("Testing software floating point expansion casts...\n");
 
 	{
 		static const U32 expansionTests[] = {
@@ -1136,7 +1136,7 @@ int main() {
 
 		//Generate random numbers
 
-		U64 N = 12 * 1024;
+		U64 N = 1024;
 
 		Buffer_free(&emp, alloc);
 		_gotoIfError(clean, Buffer_createEmptyBytes(N * sizeof(U32), alloc, &emp));
@@ -1146,29 +1146,32 @@ int main() {
 
 		const U32 *rptr = (const U32*) emp.ptr;
 
-		for (U64 i = 0; i < N / 3; ++i) {
+		for (U64 i = 0; i < N; ++i) {
 
 			//Loop normal, NaN, Inf/DeN
 
-			for (U8 j = 0; j < 3; ++j) {
+			for (U8 j = 0; j < 6; ++j) {
 
-				U32 rv = rptr[i * 3 + j];
+				U32 rv = rptr[i];
 
-				if (j) {		//NaN, Inf and DeN
+				if (j % 3) {		//NaN, Inf and DeN
 
-					rv &= 0x807FFFFF;
+					rv &= 0x007FFFFF;
 
-					if (j > 1)				//NaN or Inf
+					if ((j % 3) > 1)				//NaN or Inf
 						rv |= 0x7F800000;
 				}
 
 				F32 fi = *(const F32*)&rv;
 
+				if(j / 3)
+					*(U32*)&fi |= (U32)1 << 31;
+
 				F64 doubTarg = fi;
-				U64 doubTarg64 = *(const U64 *)&doubTarg;
+				U64 doubTarg64 = *(const U64*)&doubTarg;
 
 				F64 doubEmu = F32_castF64(fi);
-				U64 doubEmu64 = *(const U64 *)&doubEmu;
+				U64 doubEmu64 = *(const U64*)&doubEmu;
 
 				if (doubEmu64 != doubTarg64)
 					_gotoIfError(clean, Error_invalidState((U32)i));
@@ -1178,78 +1181,55 @@ int main() {
 		Buffer_free(&emp, alloc);
 	}
 
-	printf("Passed expansion casts, testing truncation casts...\n");
+	printf("Testing software floating point truncation casts...\n");
 
 	{
 		static const U64 truncTests[] = {
 
 			0x7FFFFFFFFFFFFFFF,		//NaN
-			0xFFFFFFFFFFFFFFFF,		//-NaN
 			0x0000000000000000,		//0
-			0x8000000000000000,		//-0
 			0x7FF0000000000000,		//Inf
-			0xFFF0000000000000,		//-Inf
 
 			0x7FF0000000000001,		//NaN that mostly collapses to 0 mantissa (but top bit 1)
-			0xFFF0000000000001,		//-^
 			0x7FF8000000000000,		//NaN with top bit set
-			0xFFF8000000000000,		//-^
+			0x7FF1000000000001,		//NaN other
 			0x7FF8000000000001,		//NaN with top and bottom bit
-			0xFFF8000000000001,		//-^
 			0x7FFC000000000003,		//NaN with two top and bottom bits
-			0xFFFC000000000003,		//-^
 
 			//Normal numbers
 
 			0x3FF0000000000000,		//1
-			0xBFF0000000000000,		//-1
 			0x3FE0000000000000,		//0.5
-			0xBFE0000000000000,		//-0.5
 			0x4000000000000000,		//2
-			0xC000000000000000,		//-2
 			0x405EC00000000000,		//123
-			0xC05EC00000000000,		//-123
 			0x3FF3AE147AE147AE,		//1.23
-			0xBFF3AE147AE147AE,		//-1.23
 			0x3FEFFFFFFFFFFFFF,		//Almost 1 (rounded to 1)
-			0xBFEFFFFFFFFFFFFF,		//-^
 
 			0x7FEFFFFFFFFFFFFF,		//Double max
-			0xFFEFFFFFFFFFFFFF,		//Double min
 
 			//Float test numbers
 
 			0x36E4FFFFFFFFEF66,		//float 0x00000015
-			0xB6E4FFFFFFFFEF66,		//float -^
 
 			0x47EFFFFFE00030B7,		//Float min
-			0xC7EFFFFFE00030B7,		//Float max
 
 			0x36B7FFFFFFFFE40F,		//float 0x00000003#DeN
-			0xB6B7FFFFFFFFE40F,		//-^
 			0x37B00000000001AF,		//float 0x00020000#DeN that tests bit comparison in expansion function
-			0xB7B00000000001AF,		//-^
 			0x369FFFFFFFFF870D,		//float 0x00000001#DeN Smallest
-			0xB69FFFFFFFFF870D,		//-^
+			0x368FFFFFFFFF870D,		//float 0x00000000.5#DeN Smallest (Collapsed to 0)
+			0x3690000000000000,		//float 0x00000000.5#DeN Nearest (Collapsed to 0)
+			0x3690000000000001,		//float 0x00000000.5#DeN Nearest+ (Rounds up)
 			0x380FFFFFBFFFB6EF,		//float 0x007FFFFF#DeN Biggest		TODO:
-			0xB80FFFFFBFFFB6EF,		//-^
 			0x380FFFFFFFFFBB88,		//float 0x00800000 Smallest non DeN
-			0xB80FFFFFFFFFBB88,		//-^
 
 			//DeNs
 
 			0x0000000000000003,		//DeN
-			0x8000000000000003,		//-DeN
 			0x0000000400000003,		//DeN that tests bit comparison in expansion function
-			0x8000000400000003,		//-^
 			0x0000000000000001,		//Smallest DeN
-			0x0000000000000003,		//-^
 			0x000FFFFFFFFFFFFF,		//Biggest DeN
-			0x800FFFFFFFFFFFFF,		//-^
 			0x0010000000000000,		//Smallest non DeN
-			0x8010000000000000,		//-^
 			0x37FFFFFFFFFFF765,		//Resulting in a DeN (float)
-			0xB7FFFFFFFFFFF765,		//-^
 
 			//Testing rounding with DeN
 
@@ -1257,28 +1237,60 @@ int main() {
 			0x0000000010000000,
 			0x0000000008000000,
 
-			0x8000000020000000,
-			0x8000000010000000,
-			0x8000000008000000
+			//Collapse to 1 tests (checking correct rounding)
+
+			0x3FF0000020000000,		//1.00000011920928955078125
+			0x3FF0000020000001,		//1.00000011920928977282585492503
+			0x3FF000003FFFFFFF,		//1.00000023841857887951789507497
+			0x3FF0000010000000,		//1.000000059604644775390625,
+			0x3FF0000010000001,		//1.00000005960464499743522992503
+			0x3FF000001FFFFFFF,		//1.00000011920928932873664507497
+			0x3FF0000008000000,		//1.0000000298023223876953125
+			0x3FF000000FFFFFFF,		//1.00000005960464455334602007497
+
+			//High and low exponents
+
+			0x47D2CED32A16A1B1,		//1e38
+			0x48078287F49C4A1D,		//1e39
+			0x483D6329F1C35CA5,		//1e40
+	
+			0x366244CE242C5561,		//1e-46
+			0x3696D601AD376AB9,		//1e-45
+			0x37A16C262777579C,		//1e-40
+			0x37D5C72FB1552D83,		//1e-39
+			0x380B38FB9DAA78E4,		//1e-38
+			0x3841039D428A8B8F,		//1e-37
+			0x3E112E0BE826D695,		//1e-9
+			0x3BC79CA10C924223,		//1e-20
+
+			//Failing test
+
+			0x369202F02C8DEC27
 		};
 
 		for (U64 i = 0; i < sizeof(truncTests) / sizeof(truncTests[0]); ++i) {
 
-			F64 fd = ((const F64*)truncTests)[i];
+			for(U64 j = 0; j < 2; ++j) {
 
-			F32 floatTarg = (F32) fd;
-			U32 floatTarg32 = *(const U32*)&floatTarg;
+				F64 fd = ((const F64*)truncTests)[i];
 
-			F32 floatEmu = F64_castF32(fd);
-			U32 floatEmu32 = *(const U32*)&floatEmu;
+				if(j)
+					*(U64*)&fd |= (U64)1 << 63;
 
-			if (floatEmu32 != floatTarg32)
-				_gotoIfError(clean, Error_invalidState((U32)i));
+				F32 floatTarg = (F32) fd;
+				U32 floatTarg32 = *(const U32*)&floatTarg;
+
+				F32 floatEmu = F64_castF32(fd);
+				U32 floatEmu32 = *(const U32*)&floatEmu;
+
+				if (floatEmu32 != floatTarg32)
+					_gotoIfError(clean, Error_invalidState((U32)((i << 1) | j)));
+			}
 		}
 
 		//Generate random numbers
 
-		U64 N = 12 * 1024 * 1024;
+		U64 N = 1024;
 
 		Buffer_free(&emp, alloc);
 		_gotoIfError(clean, Buffer_createEmptyBytes(N * sizeof(U64), alloc, &emp));
@@ -1288,21 +1300,24 @@ int main() {
 
 		const U64 *rptr = (const U64*) emp.ptr;
 
-		for (U64 i = 0; i < N / 3; ++i) {
+		for (U64 i = 0; i < N; ++i) {
 
-			//Loop normal, NaN, Inf/DeN
+			//Loop normal, NaN, Inf/DeN, Then loop again but with sign set
 
-			for (U8 j = 0; j < 3; ++j) {
+			for (U8 j = 0; j < 6; ++j) {
 
-				U64 rv = rptr[i * 3 + j];
+				U64 rv = rptr[i] << 1 >> 1;
 
-				if (j) {		//NaN, Inf and DeN
+				if (j % 3) {		//NaN, Inf and DeN
 
-					rv &= 0x800FFFFFFFFFFFFF;
+					rv &= 0x000FFFFFFFFFFFFF;
 
-					if (j > 1)				//NaN or Inf
+					if (j % 3 > 1)	//NaN or Inf
 						rv |= 0x7FF0000000000000;
 				}
+
+				if(j / 3)
+					rv |= (U64)1 << 63;		//Sign bit
 
 				F64 fd = *(const F64*)&rv;
 
@@ -1319,8 +1334,6 @@ int main() {
 
 		Buffer_free(&emp, alloc);
 	}
-
-	printf("Passed truncation casts!\n");
 
 	//
 

@@ -9,6 +9,6 @@ jobs:
     steps:
     - uses: actions/checkout@v1
     - name: build
-      run: D:\a\core3\core3\build.bat Debug On
+      run: D:\a\core3\core3\build.bat Release On On
     - name: build
-      run: D:\a\core3\core3\build.bat Debug Off
+      run: D:\a\core3\core3\build.bat Release Off On
