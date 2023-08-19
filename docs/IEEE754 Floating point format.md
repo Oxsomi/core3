@@ -157,53 +157,68 @@ Another problem with truncation is that the output can generate a denormal; the 
 
 Of course it's possible to make a type that doesn't truncate both the mantissa and exponent between two casts (for example F16 to PXR24). These types aren't properly tested, but should work. As the truncation and expansion part of the mantissa and exponent are separated (it's not treated as a full float truncation or expansion, only as a mantissa/exponent truncation/expansion). Some parts for these custom types might however not properly follow the IEEE754 spec since they're untested, so please feel free to add an issue, unit test and/or pull request if this is the case for these types.
 
-### TODO: Casting performance
+### Casting performance
+
+The following tests just add the result of a cast with a random number reinterpret as a half, float or double to the other type. This random number is transformed a bit to ensure it fits the purpose. Check `OxC3 profile cast` for  a profile on your own system. The test was ran on a Ryzen 9 3900x. It ran 4194304 random numbers.
+
+Because of the numbers, it was decided that hardware halfs was turned off on Windows. Software will handle it instead. Probably the conversion into/out of a SIMD vector is what is costing the performance together with latency.
 
 #### Non denormalized numbers
 
-| Cast type             | Baseline (CPU hardware) | Emulated (CPU software) |
-| --------------------- | ----------------------- | ----------------------- |
-| Truncation F64 -> F32 |                         |                         |
-| Expansion F32 -> F64  |                         |                         |
-| Truncation F64 -> F16 |                         |                         |
-| Truncation F32 -> F16 |                         |                         |
-| Expansion F16 -> F64  |                         |                         |
-| Expansion F64 -> F16  |                         |                         |
+| Cast type             | Baseline (CPU hardware) | Emulated (CPU software)      |
+| --------------------- | ----------------------- | ---------------------------- |
+| Truncation F64 -> F32 | 5.4ns/op                | 18.3ns/op (3.4x *slower*)    |
+| Truncation F64 -> F16 | 536.9ns/op              | 18.2ns/op (29.5x **faster**) |
+| Expansion F32 -> F64  | 5.5ns/op                | 13.6ns/op (2.5x *slower*)    |
+| Truncation F32 -> F16 | 540.2ns/op              | 19.0ns/op (28.4x **faster**) |
+| Expansion F16 -> F64  | 536.1ns/op              | 13.6ns/op (39.4x **faster**) |
+| Expansion F16 -> F32  | 532.9ns/op              | 13.2ns/op (40.4x **faster**) |
 
 #### (Un)Signed zero
 
-| Cast type             | Baseline (CPU hardware) | Emulated (CPU software) |
-| --------------------- | ----------------------- | ----------------------- |
-| Truncation F64 -> F32 |                         |                         |
-| Expansion F32 -> F64  |                         |                         |
-| Truncation F64 -> F16 |                         |                         |
-| Truncation F32 -> F16 |                         |                         |
-| Expansion F16 -> F64  |                         |                         |
-| Expansion F64 -> F16  |                         |                         |
+| Cast type             | Baseline (CPU hardware) | Emulated (CPU software)      |
+| --------------------- | ----------------------- | ---------------------------- |
+| Truncation F64 -> F32 | 5.4ns/op                | 15.0ns/op (2.8x *slower*)    |
+| Truncation F64 -> F16 | 535.3ns/op              | 14.3ns/op (37.4x **faster**) |
+| Expansion F32 -> F64  | 4.9ns/op                | 8.9ns/op (1.8x *slower*)     |
+| Truncation F32 -> F16 | 532.2ns/op              | 15.2ns/op (35.0x **faster**) |
+| Expansion F16 -> F64  | 530.1ns/op              | 9.4ns/op (56.0x **faster**)  |
+| Expansion F16 -> F32  | 530.4ns/op              | 9.4ns/op (56.4x **faster**)  |
 
-#### NaN/Inf
+#### NaN
 
-| Cast type             | Baseline (CPU hardware) | Emulated (CPU software) |
-| --------------------- | ----------------------- | ----------------------- |
-| Truncation F64 -> F32 |                         |                         |
-| Expansion F32 -> F64  |                         |                         |
-| Truncation F64 -> F16 |                         |                         |
-| Truncation F32 -> F16 |                         |                         |
-| Expansion F16 -> F64  |                         |                         |
-| Expansion F64 -> F16  |                         |                         |
+| Cast type             | Baseline (CPU hardware) | Emulated (CPU software)      |
+| --------------------- | ----------------------- | ---------------------------- |
+| Truncation F64 -> F32 | 5.3ns/op                | 14.5ns/op (2.7x *slower*)    |
+| Truncation F64 -> F16 | 536.4ns/op              | 14.5ns/op (37.0x **faster**) |
+| Expansion F32 -> F64  | 4.9ns/op                | 12.9ns/op (2.6x *slower*)    |
+| Truncation F32 -> F16 | 534.7ns/op              | 14.4ns/op (37.1x **faster**) |
+| Expansion F16 -> F64  | 535.1ns/op              | 13.0ns/op (41.1x **faster**) |
+| Expansion F16 -> F32  | 533.7ns/op              | 12.9ns/op (41.4x **faster**) |
+
+#### Inf
+
+| Cast type             | Baseline (CPU hardware) | Emulated (CPU software)      |
+| --------------------- | ----------------------- | ---------------------------- |
+| Truncation F64 -> F32 | 5.5ns/op                | 10.9ns/op (2.0x *slower*)    |
+| Truncation F64 -> F16 | 540.0ns/op              | 10.9ns/op (49.5x **faster**) |
+| Expansion F32 -> F64  | 5.2ns/op                | 9.3ns/op (1.8x *slower*)     |
+| Truncation F32 -> F16 | 534.8ns/op              | 10.9ns/op (49.1x **faster**) |
+| Expansion F16 -> F64  | 533.4ns/op              | 9.1ns/op (58.6x **faster**)  |
+| Expansion F16 -> F32  | 533.2ns/op              | 9.2ns/op (58.0x **faster**)  |
 
 #### Denormalized numbers
 
-| Cast type             | Baseline (CPU hardware) | Emulated (CPU software) |
-| --------------------- | ----------------------- | ----------------------- |
-| Truncation F64 -> F32 |                         |                         |
-| Expansion F32 -> F64  |                         |                         |
-| Truncation F64 -> F16 |                         |                         |
-| Truncation F32 -> F16 |                         |                         |
-| Expansion F16 -> F64  |                         |                         |
-| Expansion F64 -> F16  |                         |                         |
+| Cast type             | Baseline (CPU hardware) | Emulated (CPU software)      |
+| --------------------- | ----------------------- | ---------------------------- |
+| Truncation F64 -> F32 | 4.8ns/op                | 14.4ns/op (3.0x *slower*)    |
+| Truncation F64 -> F16 | 533.4ns/op              | 14.4ns/op (37.1x **faster**) |
+| Expansion F32 -> F64  | 4.8ns/op                | 25.5ns/op (5.3x *slower*)    |
+| Truncation F32 -> F16 | 531.6ns/op              | 14.3ns/op (37.2x **faster**) |
+| Expansion F16 -> F64  | 527.7ns/op              | 23.0ns/op (22.9x **faster**) |
+| Expansion F16 -> F32  | 528.6ns/op              | 22.8ns/op (23.2x **faster**) |
 
-## Sources
+#### Sources
 
 More details and useful tools can be found at:
 
