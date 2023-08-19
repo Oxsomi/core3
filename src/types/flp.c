@@ -19,6 +19,12 @@
 */
 
 #include "types/flp.h"
+#include "math/vec.h"
+#include "types/platform_types.h"
+
+#if _PLATFORM_TYPE == EPlatform_Windows
+	#include <intrin.h>
+#endif
 
 U8 EFloatType_bytes(EFloatType type) {
 	return (U8)(type >> 16);
@@ -319,7 +325,7 @@ U64 EFloatType_convertExponent(
 
 U64 EFloatType_convert(EFloatType type, U64 v, EFloatType conversionType) {
 
-	#ifndef _FORCE_FLOAT_FALLBACK
+	#if !_FORCE_FLOAT_FALLBACK
 
 		//Hardware support
 
@@ -327,7 +333,7 @@ U64 EFloatType_convert(EFloatType type, U64 v, EFloatType conversionType) {
 
 			U32 v32 = (U32)v;
 			F32 f32 = *(const F32*)&v32;
-			F64 f64 = f32;
+			F64 f64 = (F64) f32;
 
 			return *(const U64*)&f64;
 		}
@@ -335,10 +341,58 @@ U64 EFloatType_convert(EFloatType type, U64 v, EFloatType conversionType) {
 		if (type == EFloatType_F64 && conversionType == EFloatType_F32) {
 
 			F64 f64 = *(const F64*)&v;
-			F32 f32 = f64;
+			F32 f32 = (F32) f64;
 
 			return *(const U32*)&f32;
 		}
+
+		#if _PLATFORM_TYPE == EPlatform_Windows
+
+			//Hardware extension for float conversions
+
+			if (type == EFloatType_F16 || conversionType == EFloatType_F16) {
+
+				EFloatType targ = type == EFloatType_F16 ? conversionType : type;
+
+				Bool anyFloat = targ == EFloatType_F32;
+				Bool anyDouble = targ == EFloatType_F64;
+
+				if(anyFloat || anyDouble) {
+
+					//Check if hardware supported
+
+					int cpuInfo[4];
+					__cpuid(cpuInfo, 1);
+
+					if((cpuInfo[2] >> 29) & 1) {
+
+						//Expanding from F16
+
+						if (type == EFloatType_F16) {
+
+							I32x4 expandedi = I32x4_create1((I32)v);
+							F32 expanded = F32x4_x(_mm_cvtph_ps(expandedi));
+
+							if(anyDouble) {
+								F64 converted = (F64) expanded;
+								return *(const U64*)&converted;
+							}
+
+							return *(const U32*)&expanded;
+						}
+
+						//Truncation to F16
+
+						else {
+							F32 truncated = anyDouble ? (F32)*(const F64*)&v : *(const F32*)&v;
+							I32x4 converted = _mm_cvtps_ph(F32x4_create1(truncated), _MM_FROUND_CUR_DIRECTION);
+							return (F16) I32x4_x(converted);
+						}
+					}
+				}
+			}
+
+		#endif
 
 	#endif
 

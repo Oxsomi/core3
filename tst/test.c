@@ -1085,53 +1085,42 @@ int main() {
 	{
 		static const U32 expansionTests[] = {
 			0x7FFFFFFF,		//NaN
-			0xFFFFFFFF,		//-NaN
 			0x00000000,		//0
-			0x80000000,		//-0
 			0x7F800000,		//Inf
-			0xFF800000,		//-Inf
 			0x7F800001,		//Another NaN
-			0xFF800001,		//-^
 			0x00000003,		//DeN
-			0x80000003,		//-DeN
 			0x00020000,		//DeN that tests bit comparison in expansion function
-			0x80020000,		//-^
 			0x00000001,		//Smallest DeN
-			0x80000001,		//-^
 			0x007FFFFF,		//Biggest DeN
-			0x807FFFFF,		//-^
 			0x00800000,		//Smallest non DeN
-			0x80800000,		//-^
 			0x7F7FFFFF,		//Float max
-			0xFF7FFFFF,		//Float min
 			0x3F800000,		//1
-			0xBF800000,		//-1
 			0x3F000000,		//0.5
-			0xBF000000,		//-0.5
 			0x40000000,		//2
-			0xC0000000,		//-2
 			0x42F60000,		//123
-			0xC2F60000,		//-123
 			0x3F9D70A4,		//1.23
-			0xBF9D70A4,		//-1.23
 			0x3F7FFFFF,		//Almost 1
-			0xBF7FFFFF,		//-^
-			0x00000015,		//DeN that was failing in the tests
-			0x80000015		//-^
+			0x00000015		//DeN that was failing in the tests
 		};
 
 		for (U64 i = 0; i < sizeof(expansionTests) / sizeof(expansionTests[0]); ++i) {
 
-			F32 fi = ((const F32*)expansionTests)[i];
+			for(U64 j = 0; j < 2; ++j) {
 
-			F64 doubTarg = fi;
-			U64 doubTarg64 = *(const U64*)&doubTarg;
+				F32 fi = ((const F32*)expansionTests)[i];
 
-			F64 doubEmu = F32_castF64(fi);
-			U64 doubEmu64  = *(const U64*)&doubEmu;
+				if(j)
+					*(U32*)&fi |= 1 << 31;
 
-			if (doubEmu64 != doubTarg64)
-				_gotoIfError(clean, Error_invalidState((U32)i));
+				F64 doubTarg = fi;
+				U64 doubTarg64 = *(const U64*)&doubTarg;
+
+				F64 doubEmu = F32_castF64(fi);
+				U64 doubEmu64  = *(const U64*)&doubEmu;
+
+				if (doubEmu64 != doubTarg64)
+					_gotoIfError(clean, Error_invalidState((U32)((i << 1) | j)));
+			}
 		}
 
 		//Generate random numbers
@@ -1179,6 +1168,104 @@ int main() {
 		}
 
 		Buffer_free(&emp, alloc);
+	}
+
+	//Halfs
+
+	{
+		F16 halfs[] = {
+			0x7C00,		//Inf
+			0x0000,		//0
+			0x7C01,		//NaN #1
+			0x7E00,		//NaN (about half)
+			0x7E01,		//NaN (about half + 1)
+			0x7FFF,		//NaN full
+			0x0003,		//DeN
+			0x0040,		//DeN that tests bit comparison in expansion function
+			0x0001,		//Smallest DeN
+			0x03FF,		//Biggest DeN
+			0x0400,		//Smallest non DeN
+			0x7BFF,		//Float max
+			0x3C00,		//1
+			0x3800,		//0.5
+			0x4000,		//2
+			0x57B0,		//123
+			0x3CEB,		//1.23
+			0x3BFF		//Almost 1
+		};
+
+		U32 expectedResultsF32[] = {
+			0x7F800000,		//Inf
+			0x00000000,		//0
+			0x7FC02000,		//NaN #1
+			0x7FC00000,		//NaN (about half)
+			0x7FC02000,		//NaN (about half + 1)
+			0x7FFFE000,		//NaN full
+			0x34400000,		//1.7881393e-7
+			0x36800000,		//0.0000038146972
+			0x33800000,		//5.9604644e-8
+			0x387FC000,		//0.00006097555
+			0x38800000,		//0.000061035156
+			0x477FE000,		//65504
+			0x3F800000,		//1
+			0x3F000000,		//0.5
+			0x40000000,		//2
+			0x42F60000,		//123
+			0x3F9D6000,		//1.2294922
+			0x3F7FE000		//0.9995117
+		};
+
+		U64 expectedResultsF64[] = {
+			0x7FF0000000000000,		//Inf
+			0x0000000000000000,		//0
+			0x7FF8040000000000,		//NaN #1
+			0x7FF8000000000000,		//NaN (about half)
+			0x7FF8040000000000,		//NaN (about half + 1)
+			0x7FFFFC0000000000,		//NaN full
+			0x3E88000000000000,		//1.7881393432617188e-7
+			0x3ED0000000000000,		//0.000003814697265625
+			0x3E70000000000000,		//5.960464477539063e-8
+			0x3f0ff80000000000,		//0.00006097555160522461
+			0x3F10000000000000,		//0.00006103515625
+			0x40EFFC0000000000,		//65504
+			0x3FF0000000000000,		//1
+			0x3FE0000000000000,		//0.5
+			0x4000000000000000,		//2
+			0x405EC00000000000,		//123
+			0x3FF3AC0000000000,		//1.2294921875
+			0x3FEFFC0000000000		//0.99951171875
+		};
+		
+		for (U64 i = 0; i < sizeof(halfs) / sizeof(halfs[0]); ++i) {
+
+			for(U64 j = 0; j < 2; ++j) {
+
+				F16 fh = halfs[i];
+
+				if(j)
+					*(U16*)&fh |= 1 << 15;
+
+				F32 floatEmu = F16_castF32(fh);
+				U32 floatEmu32  = *(const U32*)&floatEmu;
+				U32 floatTarg32 = expectedResultsF32[i];
+
+				if(j)
+					*(U32*)&floatTarg32 |= 1 << 31;
+
+				if (floatEmu32 != floatTarg32)
+					_gotoIfError(clean, Error_invalidState((U32)(((i << 1) | j) << 1)));
+
+				F64 doubEmu = F16_castF64(fh);
+				U64 doubEmu64  = *(const U64*)&doubEmu;
+				U64 doubTarg64 = expectedResultsF64[i];
+
+				if(j)
+					*(U64*)&doubTarg64 |= (U64)1 << 63;
+
+				if (doubEmu64 != doubTarg64)
+					_gotoIfError(clean, Error_invalidState((U32)(((i << 1) | j) << 1) | 1));
+			}
+		}
 	}
 
 	printf("Testing software floating point truncation casts...\n");
