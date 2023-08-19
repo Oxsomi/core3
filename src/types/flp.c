@@ -150,9 +150,6 @@ U64 EFloatType_convertExponent(
 
 	U64 exponent = EFloatType_exponent(type1, v);
 
-	if (ebit1 == ebit2)
-		return exponent;
-
 	//Handle NaN/Inf
 
 	if (!EFloatType_isFinite(type1, v)) {
@@ -165,6 +162,27 @@ U64 EFloatType_convertExponent(
 		//Inf or NaN always have all exp bits set to 1
 
 		return EFloatType_exponentMask(type2);
+	}
+
+	//Simple conversion if mantissa is different but exponent isn't
+
+	if (ebit1 == ebit2) {
+
+		if(carry) {
+
+			//Collapse to inf
+
+			if (exponent >= EFloatType_exponentMask(type1) - 1) {
+				*convertedMantissa = 0;
+				return EFloatType_exponentMask(type1);
+			}
+
+			//Otherwise we have to increment exponent
+
+			++exponent;
+		}
+
+		return exponent;
 	}
 
 	//Expand
