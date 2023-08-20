@@ -93,8 +93,8 @@ The example above shows the sections that are supported for our example executab
 
 ```c
 _gotoIfError(clean, File_loadVirtual("//myLibrary/fonts", NULL));	//Load section.
-_gotoIfError(clean, File_loadVirtual("//myLibrary", NULL));			//Load myLibrary.
-_gotoIfError(clean, File_loadVirtual("//.", NULL));					//Load everything.
+_gotoIfError(clean, File_loadVirtual("//myLibrary", NULL));		//Load myLibrary.
+_gotoIfError(clean, File_loadVirtual("//.", NULL));			//Load everything.
 ```
 
 These files are decompressed and unencrypted (if they were) and kept in memory, so they can be quickly accessed. They can then be unloaded if they're deemed unimportant. 
