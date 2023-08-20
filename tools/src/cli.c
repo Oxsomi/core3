@@ -25,6 +25,7 @@
 #include "platforms/log.h"
 #include "platforms/ext/errorx.h"
 #include "platforms/ext/listx.h"
+#include "platforms/ext/stringx.h"
 #include "cli.h"
 
 void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f) {
@@ -158,6 +159,84 @@ void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f) {
 					EOperationFlags_descriptions[i]
 				);
 	}
+}
+
+Bool CLI_helpOperation(ParsedArgs args) {
+
+	Error err = Error_none();
+	CharStringList split = (CharStringList) { 0 };
+
+	if(args.parameters & EOperationHasParameter_Input)
+		_gotoIfError(clean, CharString_splitx(*(const CharString*)args.args.ptr, ':', EStringCase_Sensitive, &split));
+
+	if(split.length > 0)
+		for (EOperationCategory cat = EOperationCategory_Start; cat < EOperationCategory_End; ++cat) {
+
+			CharString catStr = CharString_createConstRefCStr(EOperationCategory_names[cat - 1]);
+
+			if(CharString_equalsString(split.ptr[0], catStr, EStringCase_Insensitive)) {
+
+				EOperation operation = EOperation_Invalid;
+
+				//Find operation
+
+				if(split.length > 1)
+					for(U64 i = 0; i < EOperation_Invalid; ++i)
+
+						if (
+							cat == Operation_values[i].category &&
+							CharString_equalsString(
+								split.ptr[1], 
+								CharString_createConstRefCStr(Operation_values[i].name),
+								EStringCase_Insensitive
+							)
+						) {
+							operation = i;
+							break;
+						}
+
+				//Find format
+
+				EFormat format = EFormat_Invalid;
+
+				if (split.length > 2 && operation != EOperation_Invalid) {
+
+					for(U64 i = 0; i < EFormat_Invalid; ++i)
+
+						if (
+							CharString_equalsString(
+								split.ptr[2], 
+								CharString_createConstRefCStr(Format_values[i].name),
+								EStringCase_Insensitive
+							)
+						) {
+							format = i;
+							break;
+						}
+
+					Bool supportsFormat = false;
+
+					if(format != EFormat_Invalid)
+						for(U8 i = 0; i < 4; ++i)
+							if (Format_values[format].supportedCategories[i] == cat) {
+								supportsFormat = true;
+								break;
+							}
+
+					if(!supportsFormat)
+						format = EFormat_Invalid;
+				}
+
+				CLI_showHelp(cat, operation, format);
+				goto clean;
+			}
+		}
+
+	CLI_showHelp(EOperationCategory_Invalid, EOperation_Invalid, EFormat_Invalid);
+
+clean:
+	CharStringList_freex(&split);
+	return !err.genericError;
 }
 
 Bool CLI_execute(CharStringList arglist) {
