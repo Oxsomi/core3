@@ -3,16 +3,40 @@
 
 OxC3 (0xC3 or Oxsomi core 3) is the successor to O(x)somi core v2 and v1. Specifically it combines the ostlc (standard template library), owc (window core) and ogc (graphics core) in the future. Focused more on being minimal abstraction compared to the predecessors by using C17 instead of C++20. Written so it can be wrapped with other languages (bindings) or even a VM in the future. Could also provide a C++20 layer for easier usage, such as operator overloads.
 
-For the time being it is quite minimal, with only types, platform abstraction, and some networking. This will probably include a graphics library and might contain some networking code as well. These are split into separate dependencies, which can be removed if deemed appropriate.
-
 - OxC3_types
   - The basic types that you might need and useful utilities.
+  - Archive for managing zip-file like entries.
+  - 16-bit float casts and arbitrary floating point formats.
+  - AllocationBuffer for managing block allocations.
+  - Buffer manipulation such as compares, copies, bit manipulation, 
+    - Encryption (aes256gcm), hashing (sha256, crc32c), cryptographically secure PRNG (CSPRNG).
+    - Buffer layouts for manipulating buffers using struct metadata and a path.
+  - List, CharString, CharStringList and CDFList.
+  - Error type including stacktrace option.
+  - Time utility.
+  - Vectors (mathmetical) such as F32x2, F32x4, I32x2, I32x4.
 - OxC3_formats: deps(OxC3_types)
-  - A library for reading/writing files. Currently only for BMP.
+  - A library for reading/writing files. Currently only for BMP and oiCA/oiDL (proprietary zip-style formats).
 - OxC3_platforms: deps(OxC3_types, OxC3_formats)
-  - For everything that's platform dependent. From window management to threading. 
+  - For everything that's platform dependent (excluding some exceptions for OxC3_types).
+  - Helpers for default allocator to simplify OxC3_types functions that require allocators.
+  - File manipulation (in working or app dir only) such as read, write, move, rename, delete, create, info, foreach, checking.
+  - Virtual file system; for accessing files included into the exe, apk, etc.
+  - Input devices: multiple mice and keyboards (all accessible individually).
+  - Lock and Thread for multi threading purposes.
+  - Log for colored and proper cross platform logging.
+  - Window for physical (OS-backed) and virtual (in memory) windows.
 - Coming soon :tm: :OxC3_graphics: deps(OxC3_platforms)
   - Abstraction layer possible to port to newer graphics APIs such as D3D12, Vulkan, Metal and WebGPU. Vulkan would be the first important thing supported.
+- OxC3: deps(OxC3_platforms)
+  - Useful command line tool that exposes useful functions from OxC3. 
+  - File manipulation:
+    - Conversions between oiCA/oiDL and raw files (zip-like).
+    - Encryption/decryption.
+    - File inspection for oiCA/oiDL files.
+- Hash tool for files and strings (supporting sha256, crc32c).
+- Random key, char, data and number generator.
+- Profile tool for testing speed of float casts, csprng, crc32c, sha256 and aes256 (encryption and decryption).
 
 One of the useful things about C is that files are incredibly easy to compile and parse compared to C++; resulting in reduced build times and allowing easy parsing for reflection or even auto generated documentation for things like types, function signatures and errors a function might return.
 
@@ -41,10 +65,10 @@ Or just download the repo from GitHub.
 ### Windows
 
 ```batch
-mkdir builds && cd builds && cmake .. -G "Visual Studio 17 2022" && cmake --build . -j 8
+build Release On Off
 ```
 
-If you have a higher or lower core count, you have to modify -j to fit your logical core count. This assumes you have VS2022 installed, if not, you can specify a different CMake generator.
+This assumes you have VS2022 installed, if not, you can specify a different CMake generator by editing build.bat.
 
 ### Other platforms
 
@@ -117,4 +141,4 @@ This repository is available under two licenses:
 - LGPL3 open source license.
 - Commercial license.
 
-Any company not adhering to the LGPL3 license can contact us as contact@osomi.net. 
+Any company not wanting to adhere to the LGPL3 license can contact us as contact@osomi.net. 
