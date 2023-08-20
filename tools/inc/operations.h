@@ -157,6 +157,12 @@ typedef enum EOperation {
 
 	EOperation_LicenseShow,
 
+	EOperation_ProfileCast,
+	EOperation_ProfileRNG,
+	EOperation_ProfileCRC32C,
+	EOperation_ProfileSHA256,
+	EOperation_ProfileAES256,
+
 	EOperation_Invalid
 
 } EOperation;
@@ -167,6 +173,7 @@ typedef enum EOperationCategory {
 	EOperationCategory_Hash,
 	EOperationCategory_Rand,
 	EOperationCategory_License,
+	EOperationCategory_Profile,
 	EOperationCategory_End,
 	EOperationCategory_Start = EOperationCategory_File
 } EOperationCategory;
@@ -223,7 +230,7 @@ typedef struct Format {
 	EOperationCategory supportedCategories[4];
 } Format;
 
-extern Operation Operation_values[14];
-extern Format Format_values[4];
+extern Operation Operation_values[EOperation_Invalid];
+extern Format Format_values[EFormat_Invalid];
 
 void Operations_init();

@@ -24,6 +24,8 @@
 #include "types/error.h"
 #include "types/type_cast.h"
 #include "types/buffer_layout.h"
+#include "types/flp.h"
+#include "math/rand.h"
 #include "math/transform.h"
 
 #include <stdlib.h>
@@ -1074,6 +1076,475 @@ int main() {
 			_gotoIfError(clean, Error_invalidState(4));
 
 		CharString_free(&tmp, alloc);
+	}
+
+	//Check for floating point conversions
+
+	printf("Testing software floating point expansion casts...\n");
+
+	{
+		static const U32 expansionTests[] = {
+			0x7FFFFFFF,		//NaN
+			0x00000000,		//0
+			0x7F800000,		//Inf
+			0x7F800001,		//Another NaN
+			0x00000003,		//DeN
+			0x00020000,		//DeN that tests bit comparison in expansion function
+			0x00000001,		//Smallest DeN
+			0x007FFFFF,		//Biggest DeN
+			0x00800000,		//Smallest non DeN
+			0x7F7FFFFF,		//Float max
+			0x3F800000,		//1
+			0x3F000000,		//0.5
+			0x40000000,		//2
+			0x42F60000,		//123
+			0x3F9D70A4,		//1.23
+			0x3F7FFFFF,		//Almost 1
+			0x00000015		//DeN that was failing in the tests
+		};
+
+		for (U64 i = 0; i < sizeof(expansionTests) / sizeof(expansionTests[0]); ++i) {
+
+			for(U64 j = 0; j < 2; ++j) {
+
+				F32 fi = ((const F32*)expansionTests)[i];
+
+				if(j)
+					*(U32*)&fi |= 1 << 31;
+
+				F64 doubTarg = fi;
+				U64 doubTarg64 = *(const U64*)&doubTarg;
+
+				F64 doubEmu = F32_castF64(fi);
+				U64 doubEmu64  = *(const U64*)&doubEmu;
+
+				if (doubEmu64 != doubTarg64)
+					_gotoIfError(clean, Error_invalidState((U32)((i << 1) | j)));
+			}
+		}
+
+		//Generate random numbers
+
+		U64 N = 1024;
+
+		Buffer_free(&emp, alloc);
+		_gotoIfError(clean, Buffer_createEmptyBytes(N * sizeof(U32), alloc, &emp));
+
+		if (!Buffer_csprng(emp))
+			_gotoIfError(clean, Error_invalidState(0));
+
+		const U32 *rptr = (const U32*) emp.ptr;
+
+		for (U64 i = 0; i < N; ++i) {
+
+			//Loop normal, NaN, Inf/DeN
+
+			for (U8 j = 0; j < 6; ++j) {
+
+				U32 rv = rptr[i];
+
+				if (j % 3) {		//NaN, Inf and DeN
+
+					rv &= 0x007FFFFF;
+
+					if ((j % 3) > 1)				//NaN or Inf
+						rv |= 0x7F800000;
+				}
+
+				F32 fi = *(const F32*)&rv;
+
+				if(j / 3)
+					*(U32*)&fi |= (U32)1 << 31;
+
+				F64 doubTarg = fi;
+				U64 doubTarg64 = *(const U64*)&doubTarg;
+
+				F64 doubEmu = F32_castF64(fi);
+				U64 doubEmu64 = *(const U64*)&doubEmu;
+
+				if (doubEmu64 != doubTarg64)
+					_gotoIfError(clean, Error_invalidState((U32)i));
+			}
+		}
+
+		Buffer_free(&emp, alloc);
+	}
+
+	//Halfs
+
+	{
+		F16 halfs[] = {
+			0x7C00,		//Inf
+			0x0000,		//0
+			0x7C01,		//NaN #1
+			0x7E00,		//NaN (about half)
+			0x7E01,		//NaN (about half + 1)
+			0x7FFF,		//NaN full
+			0x0003,		//DeN
+			0x0040,		//DeN that tests bit comparison in expansion function
+			0x0001,		//Smallest DeN
+			0x03FF,		//Biggest DeN
+			0x0400,		//Smallest non DeN
+			0x7BFF,		//Float max
+			0x3C00,		//1
+			0x3800,		//0.5
+			0x4000,		//2
+			0x57B0,		//123
+			0x3CEB,		//1.23
+			0x3BFF		//Almost 1
+		};
+
+		U32 expectedResultsF32[] = {
+			0x7F800000,		//Inf
+			0x00000000,		//0
+			0x7FC02000,		//NaN #1
+			0x7FC00000,		//NaN (about half)
+			0x7FC02000,		//NaN (about half + 1)
+			0x7FFFE000,		//NaN full
+			0x34400000,		//1.7881393e-7
+			0x36800000,		//0.0000038146972
+			0x33800000,		//5.9604644e-8
+			0x387FC000,		//0.00006097555
+			0x38800000,		//0.000061035156
+			0x477FE000,		//65504
+			0x3F800000,		//1
+			0x3F000000,		//0.5
+			0x40000000,		//2
+			0x42F60000,		//123
+			0x3F9D6000,		//1.2294922
+			0x3F7FE000		//0.9995117
+		};
+
+		U64 expectedResultsF64[] = {
+			0x7FF0000000000000,		//Inf
+			0x0000000000000000,		//0
+			0x7FF8040000000000,		//NaN #1
+			0x7FF8000000000000,		//NaN (about half)
+			0x7FF8040000000000,		//NaN (about half + 1)
+			0x7FFFFC0000000000,		//NaN full
+			0x3E88000000000000,		//1.7881393432617188e-7
+			0x3ED0000000000000,		//0.000003814697265625
+			0x3E70000000000000,		//5.960464477539063e-8
+			0x3f0ff80000000000,		//0.00006097555160522461
+			0x3F10000000000000,		//0.00006103515625
+			0x40EFFC0000000000,		//65504
+			0x3FF0000000000000,		//1
+			0x3FE0000000000000,		//0.5
+			0x4000000000000000,		//2
+			0x405EC00000000000,		//123
+			0x3FF3AC0000000000,		//1.2294921875
+			0x3FEFFC0000000000		//0.99951171875
+		};
+		
+		for (U64 i = 0; i < sizeof(halfs) / sizeof(halfs[0]); ++i) {
+
+			for(U64 j = 0; j < 2; ++j) {
+
+				F16 fh = halfs[i];
+
+				if(j)
+					*(U16*)&fh |= 1 << 15;
+
+				F32 floatEmu = F16_castF32(fh);
+				U32 floatEmu32  = *(const U32*)&floatEmu;
+				U32 floatTarg32 = expectedResultsF32[i];
+
+				if(j)
+					*(U32*)&floatTarg32 |= 1 << 31;
+
+				if (floatEmu32 != floatTarg32)
+					_gotoIfError(clean, Error_invalidState((U32)(((i << 1) | j) << 1)));
+
+				F64 doubEmu = F16_castF64(fh);
+				U64 doubEmu64  = *(const U64*)&doubEmu;
+				U64 doubTarg64 = expectedResultsF64[i];
+
+				if(j)
+					*(U64*)&doubTarg64 |= (U64)1 << 63;
+
+				if (doubEmu64 != doubTarg64)
+					_gotoIfError(clean, Error_invalidState((U32)(((i << 1) | j) << 1) | 1));
+			}
+		}
+	}
+
+	printf("Testing software floating point truncation casts...\n");
+
+	{
+		static const U64 truncTests[] = {
+
+			0x7FFFFFFFFFFFFFFF,		//NaN
+			0x0000000000000000,		//0
+			0x7FF0000000000000,		//Inf
+
+			0x7FF0000000000001,		//NaN that mostly collapses to 0 mantissa (but top bit 1)
+			0x7FF8000000000000,		//NaN with top bit set
+			0x7FF1000000000001,		//NaN other
+			0x7FF8000000000001,		//NaN with top and bottom bit
+			0x7FFC000000000003,		//NaN with two top and bottom bits
+
+			//Normal numbers
+
+			0x3FF0000000000000,		//1
+			0x3FE0000000000000,		//0.5
+			0x4000000000000000,		//2
+			0x405EC00000000000,		//123
+			0x3FF3AE147AE147AE,		//1.23
+			0x3FEFFFFFFFFFFFFF,		//Almost 1 (rounded to 1)
+
+			0x7FEFFFFFFFFFFFFF,		//Double max
+
+			//Float test numbers
+
+			0x36E4FFFFFFFFEF66,		//float 0x00000015
+
+			0x47EFFFFFE00030B7,		//Float min
+
+			0x36B7FFFFFFFFE40F,		//float 0x00000003#DeN
+			0x37B00000000001AF,		//float 0x00020000#DeN that tests bit comparison in expansion function
+			0x369FFFFFFFFF870D,		//float 0x00000001#DeN Smallest
+			0x368FFFFFFFFF870D,		//float 0x00000000.5#DeN Smallest (Collapsed to 0)
+			0x3690000000000000,		//float 0x00000000.5#DeN Nearest (Collapsed to 0)
+			0x3690000000000001,		//float 0x00000000.5#DeN Nearest+ (Rounds up)
+			0x380FFFFFBFFFB6EF,		//float 0x007FFFFF#DeN Biggest		TODO:
+			0x380FFFFFFFFFBB88,		//float 0x00800000 Smallest non DeN
+
+			//DeNs
+
+			0x0000000000000003,		//DeN
+			0x0000000400000003,		//DeN that tests bit comparison in expansion function
+			0x0000000000000001,		//Smallest DeN
+			0x000FFFFFFFFFFFFF,		//Biggest DeN
+			0x0010000000000000,		//Smallest non DeN
+			0x37FFFFFFFFFFF765,		//Resulting in a DeN (float)
+
+			//Testing rounding with DeN
+
+			0x0000000020000000,
+			0x0000000010000000,
+			0x0000000008000000,
+
+			//Collapse to 1 tests (checking correct rounding)
+
+			0x3FF0000020000000,		//1.00000011920928955078125
+			0x3FF0000020000001,		//1.00000011920928977282585492503
+			0x3FF000003FFFFFFF,		//1.00000023841857887951789507497
+			0x3FF0000010000000,		//1.000000059604644775390625,
+			0x3FF0000010000001,		//1.00000005960464499743522992503
+			0x3FF000001FFFFFFF,		//1.00000011920928932873664507497
+			0x3FF0000008000000,		//1.0000000298023223876953125
+			0x3FF000000FFFFFFF,		//1.00000005960464455334602007497
+
+			//High and low exponents
+
+			0x47D2CED32A16A1B1,		//1e38
+			0x48078287F49C4A1D,		//1e39
+			0x483D6329F1C35CA5,		//1e40
+	
+			0x366244CE242C5561,		//1e-46
+			0x3696D601AD376AB9,		//1e-45
+			0x37A16C262777579C,		//1e-40
+			0x37D5C72FB1552D83,		//1e-39
+			0x380B38FB9DAA78E4,		//1e-38
+			0x3841039D428A8B8F,		//1e-37
+			0x3E112E0BE826D695,		//1e-9
+			0x3BC79CA10C924223,		//1e-20
+
+			//Failing test
+
+			0x369202F02C8DEC27
+		};
+
+		for (U64 i = 0; i < sizeof(truncTests) / sizeof(truncTests[0]); ++i) {
+
+			for(U64 j = 0; j < 2; ++j) {
+
+				F64 fd = ((const F64*)truncTests)[i];
+
+				if(j)
+					*(U64*)&fd |= (U64)1 << 63;
+
+				F32 floatTarg = (F32) fd;
+				U32 floatTarg32 = *(const U32*)&floatTarg;
+
+				F32 floatEmu = F64_castF32(fd);
+				U32 floatEmu32 = *(const U32*)&floatEmu;
+
+				if (floatEmu32 != floatTarg32)
+					_gotoIfError(clean, Error_invalidState((U32)((i << 1) | j)));
+			}
+		}
+
+		//Generate random numbers
+
+		U64 N = 1024;
+
+		Buffer_free(&emp, alloc);
+		_gotoIfError(clean, Buffer_createEmptyBytes(N * sizeof(U64), alloc, &emp));
+
+		if (!Buffer_csprng(emp))
+			_gotoIfError(clean, Error_invalidState(0));
+
+		const U64 *rptr = (const U64*) emp.ptr;
+
+		for (U64 i = 0; i < N; ++i) {
+
+			//Loop normal, NaN, Inf/DeN, Then loop again but with sign set
+
+			for (U8 j = 0; j < 6; ++j) {
+
+				U64 rv = rptr[i] << 1 >> 1;
+
+				if (j % 3) {		//NaN, Inf and DeN
+
+					rv &= 0x000FFFFFFFFFFFFF;
+
+					if (j % 3 > 1)	//NaN or Inf
+						rv |= 0x7FF0000000000000;
+				}
+
+				if(j / 3)
+					rv |= (U64)1 << 63;		//Sign bit
+
+				F64 fd = *(const F64*)&rv;
+
+				F32 floatTarg = (F32) fd;
+				U32 floatTarg32 = *(const U32*)&floatTarg;
+
+				F32 floatEmu = F64_castF32(fd);
+				U32 floatEmu32 = *(const U32*)&floatEmu;
+
+				if (floatEmu32 != floatTarg32)
+					_gotoIfError(clean, Error_invalidState((U32)i));
+			}
+		}
+
+		Buffer_free(&emp, alloc);
+	}
+
+	//Halfs
+
+	{
+		U32 inputFloats[] = {
+			0x7F800000,		//Inf
+			0x4781E480,		//66505 (collapses to inf)
+			0x7E967699,		//1e38 (near float max, collapses to inf)
+			0x00000000,		//0
+			0x34400000,		//1.7881393e-7
+			0x36800000,		//0.0000038146972
+			0x33800000,		//5.9604644e-8
+			0x387FC000,		//0.00006097555
+			0x38800000,		//0.000061035156
+			0x477FE000,		//65504
+			0x3F800000,		//1
+			0x3F000000,		//0.5
+			0x40000000,		//2
+			0x42F60000,		//123
+			0x3F9D6000,		//1.2294922
+			0x3F7FE000,		//0.9995117
+			0x7FC02000,		//NaN #1
+			0x7FC00000,		//NaN (about half)
+			0x7FC02000,		//NaN (about half + 1)
+			0x7FFFE000,		//NaN full
+			0x3F801000,		//Collapse to 1
+			0x3F802000,		//Almost collapse to 1
+			0x006CE3EE,		//1e-38 collapse to 0
+			0x33802000,		//Doesn't collapse to 0
+			0x33801FFF,		//Doesn't collapse to 0
+			0x33800001,		//Doesn't collapse to 0
+			0x33000000		//Collapses to 0
+		};
+
+		U64 inputDoubles[] = {
+			0x7FF0000000000000,		//Inf
+			0x40F03C9000000000,		//65505 (collapses to inf)
+			0x7FE1CCF385EBC8A0,		//1e308 (near double max, collapses to inf)
+			0x0000000000000000,		//0
+			0x3E88000000000000,		//1.7881393432617188e-7
+			0x3ED0000000000000,		//0.000003814697265625
+			0x3E70000000000000,		//5.960464477539063e-8
+			0x3f0ff80000000000,		//0.00006097555160522461
+			0x3F10000000000000,		//0.00006103515625
+			0x40EFFC0000000000,		//65504
+			0x3FF0000000000000,		//1
+			0x3FE0000000000000,		//0.5
+			0x4000000000000000,		//2
+			0x405EC00000000000,		//123
+			0x3FF3AC0000000000,		//1.2294921875
+			0x3FEFFC0000000000,		//0.99951171875
+			0x7FF8040000000000,		//NaN #1
+			0x7FF8000000000000,		//NaN (about half)
+			0x7FF8040000000000,		//NaN (about half + 1)
+			0x7FFFFC0000000000,		//NaN full
+			0x3FF0020000000000,		//Collapse to 1
+			0x3FF0040000000000,		//Almost collapse to 1
+			0x000730D67819E8D2,		//Collapse to 0 (1e-308)
+			0x3E70040000000000,		//Doesn't collapse to 0
+			0x3E7003FFFFFFFFFF,		//Doesn't collapse to 0
+			0x3E70000000000001,		//Doesn't collapse to 0
+			0x3E60000000000000		//Collapses to 0
+		};
+
+		F16 halfResults[] = {
+			0x7C00,		//Inf
+			0x7C00,		//Inf
+			0x7C00,		//Inf
+			0x0000,		//0
+			0x0003,		//DeN
+			0x0040,		//DeN that tests bit comparison in expansion function
+			0x0001,		//Smallest DeN
+			0x03FF,		//Biggest DeN
+			0x0400,		//Smallest non DeN
+			0x7BFF,		//Float max
+			0x3C00,		//1
+			0x3800,		//0.5
+			0x4000,		//2
+			0x57B0,		//123
+			0x3CEB,		//1.23
+			0x3BFF,		//Almost 1
+			0x7E01,		//NaN #1
+			0x7E00,		//NaN (about half)
+			0x7E01,		//NaN (about half + 1)
+			0x7FFF,		//NaN full
+			0x3C00,		//Collapse to 1
+			0x3C01,		//Almost collapse to 1
+			0x0000,		//Collapse to 0
+			0x0001,		//Doesn't collapse to 0
+			0x0001,		//Doesn't collapse to 0
+			0x0001,		//Doesn't collapse to 0
+			0x0000		//Collapses to 0
+		};
+
+		for (U64 i = 0; i < sizeof(halfResults) / sizeof(halfResults[0]); ++i) {
+
+			for(U64 j = 0; j < 2; ++j) {
+
+				F16 fh = halfResults[i];
+
+				if(j)
+					*(U16*)&fh |= 1 << 15;
+
+				F32 floatTarg = ((const F32*)inputFloats)[i];
+
+				if(j)
+					*(U32*)&floatTarg |= 1 << 31;
+
+				F16 halfEmu = F32_castF16(floatTarg);
+
+				if (halfEmu != fh)
+					_gotoIfError(clean, Error_invalidState((U32)(((i << 1) | j) << 1)));
+
+				F64 doubTarg = ((const F64*)inputDoubles)[i];
+
+				if(j)
+					*(U64*)&doubTarg |= (U64)1 << 63;
+
+				halfEmu = F64_castF16(doubTarg);
+
+				if (halfEmu != fh)
+					_gotoIfError(clean, Error_invalidState((U32)(((i << 1) | j) << 1) | 1));
+			}
+		}
 	}
 
 	//

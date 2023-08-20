@@ -101,6 +101,14 @@ else()
 	set(_RELAX_FLOAT "0")
 endif()
 
+if(ForceFloatFallback) 
+	message("-- Enabling float fallback (supported float ops are now handled in software) (-DForceFloatFallback=ON)")
+	set(_FORCE_FLOAT_FALLBACK "1")
+else()
+	message("-- Disabling float fallback (supported float ops are now handled in hardware) (-DForceFloatFallback=OFF)")
+	set(_FORCE_FLOAT_FALLBACK "0")
+endif()
+
 if(WIN32)
 	message("-- Enabling Windows support...")
 	set(platform windows)
@@ -126,7 +134,7 @@ add_library(
 
 set_target_properties(OxC3_types PROPERTIES FOLDER Oxsomi)
 
-target_compile_definitions(OxC3_types PUBLIC -D_SIMD=${_SIMD} -D_RELAX_FLOAT=${_RELAX_FLOAT} -D_ARCH=${_ARCH} -D_PLATFORM_TYPE=${_PLATFORM_TYPE})
+target_compile_definitions(OxC3_types PUBLIC -D_SIMD=${_SIMD} -D_RELAX_FLOAT=${_RELAX_FLOAT} -D_ARCH=${_ARCH} -D_PLATFORM_TYPE=${_PLATFORM_TYPE} -D_FORCE_FLOAT_FALLBACK=${_FORCE_FLOAT_FALLBACK})
 
 target_include_directories(OxC3_types PUBLIC inc)
 

@@ -273,8 +273,19 @@ inline I32x4 AESEncryptionContext_expandKey2(I32x4 im1, I32x4 im3) {
 
 inline void AESEncryptionContext_expandKey(const U32 key[8], I32x4 k[15]) {
 
-	I32x4 im1 = (k[0] = *(const I32x4*) key);
-	I32x4 im3 = (k[1] = ((const I32x4*) key)[1]);
+	//Can't assume key is aligned :(
+	//Otherwise this might crash!
+
+	if((U64)key & 15)
+		Buffer_copy(Buffer_createRef(k, sizeof(U32[8])), Buffer_createConstRef(key, sizeof(U32[8])));
+
+	else {
+		k[0] = *(const I32x4*)key;
+		k[1] = ((const I32x4*)key)[1];
+	}
+
+	I32x4 im1 = k[0];
+	I32x4 im3 = k[1];
 
 	for (U8 i = 0, j = 2; i < 7; ++i, j += 2) {
 
@@ -450,6 +461,14 @@ I32x4 AESEncryptionContext_fetchBlock(const I32x4 *dat, U64 leftOver) {
 		);
 
 		return v;
+	}
+
+	//Don't assume alignment
+
+	if((U64)dat & 15) {
+		I32x4 res;
+		Buffer_copy(Buffer_createRef(&res, sizeof(res)), Buffer_createConstRef(dat, sizeof(res)));
+		return res;
 	}
 
 	return *dat;

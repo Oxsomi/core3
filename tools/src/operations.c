@@ -130,18 +130,20 @@ const C8 *EOperationCategory_names[] = {
 	"file",
 	"hash",
 	"rand",
-	"license"
+	"license",
+	"profile"
 };
 
 const C8 *EOperationCategory_description[] = {
 	"File utilities such as file conversions, encryption, compression, etc.",
 	"Converting a file or string to a hash.",
 	"Generating random data.",
-	"Information about the tool license."
+	"Information about the tool license.",
+	"Profiles operations on the current system."
 };
 
-Operation Operation_values[14];
-Format Format_values[4];
+Operation Operation_values[EOperation_Invalid];
+Format Format_values[EFormat_Invalid];
 
 void Operations_init() {
 
@@ -364,6 +366,68 @@ void Operations_init() {
 		.desc = "Shows the license.", 
 
 		.func = &CLI_license,
+
+		.isFormatLess = true
+	};
+
+	//Profile
+
+	Operation_values[EOperation_ProfileCast] = (Operation) { 
+
+		.category = EOperationCategory_Profile, 
+
+		.name = "cast", 
+		.desc = "Profiles casting operations from random halfs/floats/doubles to other float types.", 
+
+		.func = &CLI_profileCast,
+
+		.isFormatLess = true
+	};
+
+	Operation_values[EOperation_ProfileRNG] = (Operation) { 
+
+		.category = EOperationCategory_Profile, 
+
+		.name = "rng", 
+		.desc = "Profiles generating random numbers using CSPRNG (Cryptographically Secure pseudo RNG).", 
+
+		.func = &CLI_profileRNG,
+
+		.isFormatLess = true
+	};
+
+	Operation_values[EOperation_ProfileCRC32C] = (Operation) { 
+
+		.category = EOperationCategory_Profile, 
+
+		.name = "crc32c", 
+		.desc = "Profiles hashing random data using crc32c.", 
+
+		.func = &CLI_profileCRC32C,
+
+		.isFormatLess = true
+	};
+
+	Operation_values[EOperation_ProfileSHA256] = (Operation) { 
+
+		.category = EOperationCategory_Profile, 
+
+		.name = "sha256", 
+		.desc = "Profiles hashing random data using sha256.", 
+
+		.func = &CLI_profileSHA256,
+
+		.isFormatLess = true
+	};
+
+	Operation_values[EOperation_ProfileAES256] = (Operation) { 
+
+		.category = EOperationCategory_Profile, 
+
+		.name = "aes256", 
+		.desc = "Profiles encrypting and decrypting random data using aes256-gcm.", 
+
+		.func = &CLI_profileAES256,
 
 		.isFormatLess = true
 	};

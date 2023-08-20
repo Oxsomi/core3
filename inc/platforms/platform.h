@@ -22,19 +22,8 @@
 #include "types/string.h"
 #include "types/allocator.h"
 #include "types/archive.h"
+#include "types/platform_types.h"
 #include "platforms/window_manager.h"
-
-typedef enum EPlatform {
-
-	EPlatform_Uninitialized,
-	EPlatform_Windows,
-	EPlatform_Linux,
-	EPlatform_Android,
-	EPlatform_Web,
-	EPlatform_iOS,
-	EPlatform_OSX
-
-} EPlatform;
 
 typedef struct VirtualSection {
 
