@@ -51,6 +51,8 @@ Bool CLI_profileCRC32C(ParsedArgs args);
 Bool CLI_profileSHA256(ParsedArgs args);
 Bool CLI_profileAES256(ParsedArgs args);
 
+Bool CLI_helpOperation(ParsedArgs args);
+
 Bool CLI_inspectHeader(ParsedArgs args);
 Bool CLI_inspectData(ParsedArgs args);
 

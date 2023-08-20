@@ -155,13 +155,19 @@ typedef enum EOperation {
 
 	EOperation_Package,
 
-	EOperation_LicenseShow,
+	EOperation_InfoLicense,
+	EOperation_InfoAbout,
 
 	EOperation_ProfileCast,
 	EOperation_ProfileRNG,
 	EOperation_ProfileCRC32C,
 	EOperation_ProfileSHA256,
 	EOperation_ProfileAES256,
+
+	EOperation_HelpCategories,
+	EOperation_HelpOperations,
+	EOperation_HelpOperation,
+	EOperation_HelpFormat,
 
 	EOperation_Invalid
 
@@ -172,8 +178,9 @@ typedef enum EOperationCategory {
 	EOperationCategory_File,
 	EOperationCategory_Hash,
 	EOperationCategory_Rand,
-	EOperationCategory_License,
+	EOperationCategory_Info,
 	EOperationCategory_Profile,
+	EOperationCategory_Help,
 	EOperationCategory_End,
 	EOperationCategory_Start = EOperationCategory_File
 } EOperationCategory;

@@ -73,6 +73,14 @@ Bool CharString_isValidFileName(CharString str) {
 	for(U64 i = 0; i < CharString_length(str); ++i)
 		if(!C8_isValidFileName(str.ptr[i]))
 			return false;
+
+	//Trailing or leading space is illegal
+
+	if(CharString_endsWith(str, ' ', EStringCase_Sensitive))
+		return false;
+
+	if(CharString_startsWith(str, ' ', EStringCase_Sensitive))
+		return false;
 	
 	//Validation to make sure we're not using weird legacy MS DOS keywords
 	//Because these will not be writable correctly!
@@ -2657,6 +2665,14 @@ Error CharString_formatVariadic(Allocator alloc, CharString *result, const C8 *f
 
 	if(len < 0)
 		return Error_stderr(0);
+
+	if (result->ptr)
+		return Error_invalidOperation(0);
+
+	if (len == 0) {
+		*result = CharString_createNull();
+		return Error_none();
+	}
 
 	Error err = CharString_create('\0', (U64) len, alloc, result);
 

@@ -24,14 +24,18 @@
 #include "platforms/log.h"
 #include "cli.h"
 
-Bool CLI_license(ParsedArgs args) {
+Bool CLI_info(ParsedArgs args) {
 
 	args;
 
 	Log_debugLn(
+
 		"OxC3 (Oxsomi core 3), a general framework and toolset for cross platform applications.\n"
-		"Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)\n"
-		"\n"
+		"Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)"
+		"%s",
+
+		args.operation != EOperation_InfoLicense ? "" :
+		"\n\n"
 		"This program is free software: you can redistribute it and/or modify\n"
 		"it under the terms of the GNU General Public License as published by\n"
 		"the Free Software Foundation, either version 3 of the License, or\n"
@@ -70,8 +74,8 @@ const C8 *EOperationHasParameter_names[] = {
 
 const C8 *EOperationHasParameter_descriptions[] = {
 	"File format",
-	"Input file/folder (relative)",
-	"Output file/folder (relative)",
+	"Input string or path (relative)",
+	"Output path (relative)",
 	"Encryption key (32-byte hex)",
 	"Split by character (defaulted to newline)",
 	"Number of elements",
@@ -130,16 +134,18 @@ const C8 *EOperationCategory_names[] = {
 	"file",
 	"hash",
 	"rand",
-	"license",
-	"profile"
+	"info",
+	"profile",
+	"help"
 };
 
 const C8 *EOperationCategory_description[] = {
 	"File utilities such as file conversions, encryption, compression, etc.",
 	"Converting a file or string to a hash.",
 	"Generating random data.",
-	"Information about the tool license.",
-	"Profiles operations on the current system."
+	"Information about the tool.",
+	"Profiles operations on the current system.",
+	"Help about the instructions in the tool."
 };
 
 Operation Operation_values[EOperation_Invalid];
@@ -358,14 +364,26 @@ void Operations_init() {
 
 	//License for the tool
 
-	Operation_values[EOperation_LicenseShow] = (Operation) { 
+	Operation_values[EOperation_InfoLicense] = (Operation) { 
 
-		.category = EOperationCategory_License, 
+		.category = EOperationCategory_Info, 
 
-		.name = "show", 
+		.name = "license", 
 		.desc = "Shows the license.", 
 
-		.func = &CLI_license,
+		.func = &CLI_info,
+
+		.isFormatLess = true
+	};
+
+	Operation_values[EOperation_InfoAbout] = (Operation) { 
+
+		.category = EOperationCategory_Info, 
+
+		.name = "about", 
+		.desc = "Shows information about the tool.", 
+
+		.func = &CLI_info,
 
 		.isFormatLess = true
 	};
@@ -430,6 +448,62 @@ void Operations_init() {
 		.func = &CLI_profileAES256,
 
 		.isFormatLess = true
+	};
+
+	//Help operations
+
+	Operation_values[EOperation_HelpCategories] = (Operation) { 
+
+		.category = EOperationCategory_Help, 
+
+		.name = "categories", 
+		.desc = "Help to see all categories.", 
+
+		.func = &CLI_helpOperation,
+
+		.isFormatLess = true
+	};
+
+	Operation_values[EOperation_HelpOperations] = (Operation) { 
+
+		.category = EOperationCategory_Help, 
+
+		.name = "operations", 
+		.desc = "Help to see all operations in the category mentioned by -i.", 
+
+		.func = &CLI_helpOperation,
+
+		.isFormatLess = true,
+
+		.requiredParameters = EOperationHasParameter_Input
+	};
+
+	Operation_values[EOperation_HelpOperation] = (Operation) { 
+
+		.category = EOperationCategory_Help, 
+
+		.name = "operation", 
+		.desc = "Help to see all information about the operation mentioned by -i (category:operation or category).", 
+
+		.func = &CLI_helpOperation,
+
+		.isFormatLess = true,
+
+		.requiredParameters = EOperationHasParameter_Input
+	};
+
+	Operation_values[EOperation_HelpFormat] = (Operation) { 
+
+		.category = EOperationCategory_Help, 
+
+		.name = "format", 
+		.desc = "Help to see all information about the format mentioned by -i (category:operation:format).", 
+
+		.func = &CLI_helpOperation,
+
+		.isFormatLess = true,
+
+		.requiredParameters = EOperationHasParameter_Input
 	};
 }
 
