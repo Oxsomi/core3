@@ -147,6 +147,8 @@ Error _CLI_profileCast(ParsedArgs args, Buffer buf) {
 
 	const U64 itCount = sizeof(iterationNames) / sizeof(iterationNames[0]);
 	const U64 floatTypes = sizeof(floatTypeNames) / sizeof(floatTypeNames[0]);
+	
+	Ns thenOuter = Time_now();
 
 	for(U64 l = 0; l < itCount; ++l) {
 
@@ -181,6 +183,16 @@ Error _CLI_profileCast(ParsedArgs args, Buffer buf) {
 		dbg;
 	}
 
+	Ns nowOuter = Time_now();
+	U64 totalIt = itCount * floatTypes * (floatTypes - 1) * number;
+
+	Log_debugLn(
+		"Performed %llu casts within %fs. Avg time per cast %fns.", 
+		totalIt,
+		(F64)(nowOuter - thenOuter) / SECOND,
+		(F64)(nowOuter - thenOuter) / totalIt
+	);
+
 clean:
 	return err;
 }
@@ -189,8 +201,30 @@ Bool CLI_profileCast(ParsedArgs args) {
 	return CLI_profileData(args, _CLI_profileCast);
 }
 
+Error _CLI_profileRNG(ParsedArgs args, Buffer buf) {
+
+	args;
+
+	Ns then = Time_now();
+
+	if(!Buffer_csprng(buf))
+		return Error_invalidState(0);
+
+	Ns now = Time_now();
+
+	Log_debugLn(
+		"Profile RNG: %llu bytes within %fs (%fns/byte, %fbytes/sec).", 
+		Buffer_length(buf),
+		(F64)(now - then) / SECOND,
+		(F64)(now - then) / Buffer_length(buf),
+		(F64)Buffer_length(buf) / (now - then) * SECOND
+	);
+	
+	return Error_none();
+}
+
 Bool CLI_profileRNG(ParsedArgs args) {
-	return CLI_profileData(args, _CLI_profileCast); //_CLI_profileRNG); TODO:
+	return CLI_profileData(args, _CLI_profileRNG);
 }
 
 Bool CLI_profileCRC32C(ParsedArgs args) {
