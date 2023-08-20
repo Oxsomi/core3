@@ -227,14 +227,116 @@ Bool CLI_profileRNG(ParsedArgs args) {
 	return CLI_profileData(args, _CLI_profileRNG);
 }
 
+Error _CLI_profileCRC32C(ParsedArgs args, Buffer buf) {
+
+	args;
+
+	Ns then = Time_now();
+
+	U32 hash = Buffer_crc32c(buf);
+
+	Ns now = Time_now();
+
+	Log_debugLn(
+		"Profile CRC32C: %llu bytes within %fs (%fns/byte, %fbytes/sec). Random hash %u.", 
+		Buffer_length(buf),
+		(F64)(now - then) / SECOND,
+		(F64)(now - then) / Buffer_length(buf),
+		(F64)Buffer_length(buf) / (now - then) * SECOND,
+		hash
+	);
+
+	return Error_none();
+}
+
 Bool CLI_profileCRC32C(ParsedArgs args) {
-	return CLI_profileData(args, _CLI_profileCast); //_CLI_profileCRC32C); TODO:
+	return CLI_profileData(args, _CLI_profileCRC32C);
+}
+
+Error _CLI_profileSHA256(ParsedArgs args, Buffer buf) {
+
+	args;
+
+	Ns then = Time_now();
+
+	U32 hash[8];
+	Buffer_sha256(buf, hash);
+
+	Ns now = Time_now();
+
+	Log_debugLn(
+		"Profile SHA256: %llu bytes within %fs (%fns/byte, %fbytes/sec). Random hash %08x%08x%08x%08x%08x%08x%08x%08x.", 
+		Buffer_length(buf),
+		(F64)(now - then) / SECOND,
+		(F64)(now - then) / Buffer_length(buf),
+		(F64)Buffer_length(buf) / (now - then) * SECOND,
+		hash[0], hash[1], hash[2], hash[3],
+		hash[4], hash[5], hash[6], hash[7]
+	);
+
+	return Error_none();
 }
 
 Bool CLI_profileSHA256(ParsedArgs args) {
-	return CLI_profileData(args, _CLI_profileCast); //_CLI_profileSHA256); TODO:
+	return CLI_profileData(args, _CLI_profileSHA256);
+}
+
+Error _CLI_profileAES256(ParsedArgs args, Buffer buf) {
+
+	args;
+
+	Ns then = Time_now();
+
+	U32 key[8];
+	I32x4 iv, tag;
+
+	Error err = Buffer_encrypt(
+		buf, 
+		Buffer_createNull(), 
+		EBufferEncryptionType_AES256GCM, 
+		EBufferEncryptionFlags_GenerateIv | EBufferEncryptionFlags_GenerateKey,
+		key,
+		&iv,
+		&tag
+	);
+
+	_gotoIfError(clean, err);
+
+	Ns now = Time_now();
+
+	Log_debugLn(
+		"Encrypt AES256GCM: %llu bytes within %fs (%fns/byte, %fbytes/sec).", 
+		Buffer_length(buf),
+		(F64)(now - then) / SECOND,
+		(F64)(now - then) / Buffer_length(buf),
+		(F64)Buffer_length(buf) / (now - then) * SECOND
+	);
+
+	then = now;
+
+	_gotoIfError(clean, Buffer_decrypt(
+		buf,
+		Buffer_createNull(), 
+		EBufferEncryptionType_AES256GCM, 
+		key,
+		tag,
+		iv
+	));
+
+	now = Time_now();
+
+	Log_debugLn(
+		"Decrypt AES256GCM: %llu bytes within %fs (%fns/byte, %fbytes/sec).", 
+		Buffer_length(buf),
+		(F64)(now - then) / SECOND,
+		(F64)(now - then) / Buffer_length(buf),
+		(F64)Buffer_length(buf) / (now - then) * SECOND
+	);
+
+clean:
+	return err;
 }
 
 Bool CLI_profileAES256(ParsedArgs args) {
-	return CLI_profileData(args, _CLI_profileCast); //_CLI_profileAES256); TODO:
+	return CLI_profileData(args, _CLI_profileAES256);
 }
