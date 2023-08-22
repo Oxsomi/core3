@@ -26,7 +26,6 @@
 #include "formats/oiDL.h"
 #include "types/buffer.h"
 #include "types/error.h"
-#include "types/ref_ptr.h"
 #include "types/archive.h"
 #include "platforms/platform.h"
 
@@ -42,12 +41,6 @@ Error BMP_writeRGBAx(
 	Buffer *result
 ) {
 	return BMP_writeRGBA(buf, w, h, isFlipped, Platform_instance.alloc, result);
-}
-
-//RefPtr
-
-RefPtr RefPtr_createx(void *ptr, ObjectFreeFunc free) {
-	return RefPtr_create(ptr, Platform_instance.alloc, free);
 }
 
 //Buffer

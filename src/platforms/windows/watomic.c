@@ -18,20 +18,25 @@
 *  This is called dual licensing.
 */
 
-#pragma once
-#include "types.h"
-#include "allocator.h"
+#include "platforms/windows/wplatform_ext.h"
+#include "platforms/atomic.h"
 
-typedef Bool (*ObjectFreeFunc)(void *ptr, Allocator allocator);
+I64 AtomicI64_add(AtomicI64 *ptr, I64 value) {
+	return InterlockedExchangeAdd64(&ptr->atomic, value);
+}
 
-typedef struct RefPtr {
-	U64 refCount;
-	void *ptr;
-	Allocator alloc;
-	ObjectFreeFunc free;
-} RefPtr;
+I64 AtomicI64_sub(AtomicI64 *ptr, I64 value) {
 
-RefPtr RefPtr_create(void *ptr, Allocator alloc, ObjectFreeFunc free);
+	if(value == I64_MIN)
+		value = 0;
 
-Bool RefPtr_add(RefPtr *ptr);
-Bool RefPtr_sub(RefPtr *ptr);
+	return AtomicI64_add(ptr, -value);
+}
+
+I64 AtomicI64_inc(AtomicI64 *ptr) {
+	return InterlockedIncrement64(&ptr->atomic);
+}
+
+I64 AtomicI64_dec(AtomicI64 *ptr) {
+	return InterlockedDecrement64(&ptr->atomic);
+}

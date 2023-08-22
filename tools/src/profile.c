@@ -29,7 +29,7 @@
 
 typedef Error (*ProfileOperation)(ParsedArgs, Buffer);
 
-bool CLI_profileData(ParsedArgs args, ProfileOperation op) {
+Bool CLI_profileData(ParsedArgs args, ProfileOperation op) {
 
 	U64 bufferSize = GIBI;
 

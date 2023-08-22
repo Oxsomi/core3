@@ -18,7 +18,8 @@
 *  This is called dual licensing.
 */
 
-#include "types/ref_ptr.h"
+#include "platforms/ref_ptr.h"
+#include "platforms/platform.h"
 
 RefPtr RefPtr_create(void *ptr, Allocator alloc, ObjectFreeFunc free) {
 
@@ -33,26 +34,33 @@ RefPtr RefPtr_create(void *ptr, Allocator alloc, ObjectFreeFunc free) {
 	};
 }
 
-Bool RefPtr_add(RefPtr *ptr) {
+RefPtr RefPtr_createx(void *ptr, ObjectFreeFunc free) {
+	return RefPtr_create(ptr, Platform_instance.alloc, free);
+}
 
-	if(!ptr || !ptr->refCount)
+Bool RefPtr_inc(RefPtr *ptr) {
+
+	if(!ptr || !ptr->free)
 		return false;
 
-	++ptr->refCount;
+	AtomicI64_inc(&ptr->refCount);
 	return true;
 }
 
-Bool RefPtr_sub(RefPtr *ptr) {
+Bool RefPtr_dec(RefPtr **pptr) {
 
-	if(!ptr || !ptr->refCount)
+	if(!pptr || !*pptr)
 		return false;
+
+	RefPtr *ptr = *pptr;
 
 	Bool b = true;
 
-	if(!(--ptr->refCount)) {
+	if(!AtomicI64_dec(&ptr->refCount)) {
 		b = ptr->free(ptr->ptr, ptr->alloc);
 		*ptr = (RefPtr) { 0 };
 	}
 
+	*pptr = NULL;
 	return b;
 }

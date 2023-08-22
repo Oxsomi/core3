@@ -48,11 +48,11 @@ U64 EFloatType_signShift(EFloatType type);
 U64 EFloatType_exponentShift(EFloatType type);
 U64 EFloatType_mantissaShift(EFloatType type);
 
-U64 EFloatType_signMask(EFloatType type);			//Not shifted
-U64 EFloatType_exponentMask(EFloatType type);		//Already shifted
-U64 EFloatType_mantissaMask(EFloatType type);		//Already shifted
+U64 EFloatType_signMask(EFloatType type);			//Shifted left
+U64 EFloatType_exponentMask(EFloatType type);		//Not shifted
+U64 EFloatType_mantissaMask(EFloatType type);		//Not shifted
 
-bool EFloatType_sign(EFloatType type, U64 v);
+Bool EFloatType_sign(EFloatType type, U64 v);
 U64 EFloatType_abs(EFloatType type, U64 v);
 U64 EFloatType_negate(EFloatType type, U64 v);
 U64 EFloatType_exponent(EFloatType type, U64 v);

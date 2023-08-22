@@ -63,7 +63,7 @@ U64 EFloatType_mantissaMask(EFloatType type) {
 	return ((U64)1 << EFloatType_mantissaBits(type)) - 1;
 }
 
-bool EFloatType_sign(EFloatType type, U64 v) {
+Bool EFloatType_sign(EFloatType type, U64 v) {
 	return v & EFloatType_signMask(type);
 }
 

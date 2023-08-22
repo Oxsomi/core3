@@ -221,7 +221,7 @@ _BUFFER_LAYOUT_SGET(prefix##16##suffix);															\
 _BUFFER_LAYOUT_SGET(prefix##32##suffix);															\
 _BUFFER_LAYOUT_SGET(prefix##64##suffix);
 
-#define _BUFFER_LAYOUT_VEC_SGET(prefix)																	\
+#define _BUFFER_LAYOUT_VEC_SGET(prefix)																\
 _BUFFER_LAYOUT_SGET(prefix##32##x2);																\
 _BUFFER_LAYOUT_SGET(prefix##32##x4)
 
