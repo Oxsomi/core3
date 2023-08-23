@@ -20,22 +20,36 @@
 
 #include "platforms/ref_ptr.h"
 #include "platforms/platform.h"
+#include "types/buffer.h"
+#include "types/type_id.h"
 
-RefPtr RefPtr_create(void *ptr, Allocator alloc, ObjectFreeFunc free) {
+Error RefPtr_create(Buffer data, Allocator alloc, ObjectFreeFunc free, ETypeId type, RefPtr **result) {
 
-	if(!ptr)
-		return (RefPtr) { 0 };
+	if(!Buffer_length(data) || !free|| !result)
+		return Error_nullPointer(!result ? 3 : (!free ? 2 : 0));
 
-	return (RefPtr) {
-		.refCount = 1,
-		.ptr = ptr,
+	if(*result)
+		return Error_invalidParameter(3, 0);
+
+	Buffer buf = Buffer_createNull();
+	Error err = Buffer_createEmptyBytes(sizeof(RefPtr), alloc, &buf);
+
+	if(err.genericError)
+		return err;
+
+	*(*result = (RefPtr*)buf.ptr) = (RefPtr) {
+		.refCount = (AtomicI64) { 1 },
+		.typeId = type,
+		.data = data,
 		.alloc = alloc,
 		.free = free
 	};
+
+	return Error_none();
 }
 
-RefPtr RefPtr_createx(void *ptr, ObjectFreeFunc free) {
-	return RefPtr_create(ptr, Platform_instance.alloc, free);
+Error RefPtr_createx(Buffer data, ObjectFreeFunc free, ETypeId type, RefPtr **result) {
+	return RefPtr_create(data, Platform_instance.alloc, free, type, result);
 }
 
 Bool RefPtr_inc(RefPtr *ptr) {
@@ -57,8 +71,11 @@ Bool RefPtr_dec(RefPtr **pptr) {
 	Bool b = true;
 
 	if(!AtomicI64_dec(&ptr->refCount)) {
-		b = ptr->free(ptr->ptr, ptr->alloc);
-		*ptr = (RefPtr) { 0 };
+
+		b = ptr->free((void*)ptr->data.ptr, ptr->alloc);
+
+		Buffer orig = Buffer_createManagedPtr(ptr, sizeof(*ptr));
+		b &= Buffer_free(&orig, ptr->alloc);
 	}
 
 	*pptr = NULL;

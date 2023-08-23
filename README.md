@@ -1,4 +1,4 @@
-# OxC3 (Oxsomi core 3)
+# OxC3 (Oxsomi core 3 0.2)
 ![](https://github.com/Oxsomi/core3/workflows/C%2FC++%20CI/badge.svg)
 
 OxC3 (0xC3 or Oxsomi core 3) is the successor to O(x)somi core v2 and v1. Specifically it combines the ostlc (standard template library), owc (window core) and ogc (graphics core) in the future. Focused more on being minimal abstraction compared to the predecessors by using C17 instead of C++20. Written so it can be wrapped with other languages (bindings) or even a VM in the future. Could also provide a C++20 layer for easier usage, such as operator overloads.
@@ -129,6 +129,135 @@ add_virtual_dependencies(TARGET myProject DEPENDENCIES myDep)
 This should be done before the configure_virtual_files and ensures the files for the dependency are present in this project. A dependency itself can't include an icon or use configure_virtual_files; as this is reserved for executables only.
 
 *Note: Dependencies can't be overlapping. So if B and C both include A then including B and C in D won't work.*
+
+## Graphics
+
+The graphics API is built around modern APIs. So it won't be supporting OpenGL, DirectX11-, old Metal/Vulkan versions or WebGL. To keep Vulkan, DirectX12 and Metal usable, it will keep on bumping the minimum specs every so often in a release. 
+
+### Minimum spec
+
+OxC3 is not made for devices older than 3 years. Oxsomi core's spec for newer versions would require more recent devices to ensure developers don't keep on having to deal with the backwards compatibility for devices that aren't relevant anymore. For example; phones get replaced every 3 years. So it's safe to take 2 years back if you assume a development time/rollout of a year (at the time of OxC3 0.2). 
+
+We're targeting the minimum specs of following systems in OxC3 0.2:
+
+- Phones:
+  - Samsung S20 (Samsung SM-G980F).
+  - Google Pixel 5a.
+  - Xiaomi Redmi Note 8.
+  - Apple iPhone 12 (A14).
+- Laptop:
+  - Nvidia RTX 3060 Laptop GPU.
+  - AMD RX 6600M.
+  - Apple Macbook Pro 14 (M1 Pro).
+- PCs:
+  - Nvidia RTX 3060.
+  - AMD 6600 XT.
+  - Intel A750.
+
+Just because these are the target minimum specs doesn't mean older hardware is unsupported. The hard requirements should be looked at instead to determine if the device is supported. ***These are just minimum feature targets, they aren't all tested.***
+
+#### List of Vulkan requirements
+
+Because of this, a device needs the following requirements to be OxC3 compatible:
+
+- Vulkan 1.1 or higher.
+- Tesselation shaders and geometry shaders are optional.
+- subgroupSize of 16 - 128.
+- subgroup operations of basic, vote, ballot. Available only in compute by default. arithmetic is optional.
+- shaderSampledImageArrayDynamicIndexing, shaderStorageBufferArrayDynamicIndexing, shaderUniformBufferArrayDynamicIndexing turned on.
+- samplerAnisotropy, drawIndirectFirstInstance, independentBlend, imageCubeArray, fullDrawIndexUint32, depthClamp, depthBiasClamp, tessellationShader turned on.
+- Either BCn (textureCompressionBC) or ASTC (textureCompressionASTC_LDR) compression *must* be supported (can be both supported).
+- shaderInt16 support.
+- maxMemoryAllocationCount of 4096 or higher.
+- maxBoundDescriptorSets of 4 or higher.
+- maxPerStageDescriptorSamplers of 16 or higher.
+- maxPerStageDescriptorUniformBuffers of 31 or higher.
+- maxPerStageDescriptorStorageBuffers of 31 or higher.
+- maxPerStageDescriptorSampledImages of 96 or higher.
+- maxPerStageDescriptorStorageImages of 8 or higher.
+- maxPerStageResources of 127 or higher.
+- maxDescriptorSetSamplers of 80 or higher.
+- maxDescriptorSetUniformBuffers of 155 or higher (maxDescriptorSetUniformBuffersDynamic of >=32).
+- maxDescriptorSetStorageBuffers of 155 or higher (maxDescriptorSetStorageBuffersDynamic of  >=16).
+- maxDescriptorSetSampledImages of 480 or higher.
+- maxDescriptorSetStorageImages of 40 or higher.
+- maxColorAttachments and maxFragmentOutputAttachments of 8 or higher.
+- maxDescriptorSetInputAttachments, maxPerStageDescriptorInputAttachments of 7 or higher.
+- MSAA support of 1 and 4 or higher (framebufferColorSampleCounts, framebufferDepthSampleCounts, framebufferNoAttachmentsSampleCounts, framebufferStencilSampleCounts, sampledImageColorSampleCounts, sampledImageDepthSampleCounts, sampledImageIntegerSampleCounts, sampledImageStencilSampleCounts). Support for MSAA 2 is non default.
+- maxComputeSharedMemorySize of 16KiB or higher.
+- maxComputeWorkGroupCount[N] of 64Ki or higher.
+- maxComputeWorkGroupInvocations of 512 or higher.
+- maxComputeWorkGroupSize of 1024 or higher.
+- If present: maxDrawIndirectCount of 1Gi or higher.
+- maxFragmentCombinedOutputResources of 16 or higher.
+- maxFragmentInputComponents of 112 or higher.
+- maxFramebufferWidth, maxFramebufferHeight, maxImageDimension1D,  maxImageDimension2D, maxImageDimensionCube, maxViewportDimensions[i] of 16Ki or higher.
+- maxFramebufferLayers, maxImageDimension3D, maxImageArrayLayers of 256 or higher.
+- maxPushConstantsSize of 128 or higher.
+- maxSamplerAllocationCount of 4000 or higher.
+- maxSamplerAnisotropy of 16 or higher.
+- maxStorageBufferRange of .25GiB or higher.
+- if tesselation is supported:
+  - maxTessellationControlPerVertexInputComponents, maxTessellationControlPerVertexOutputComponents, maxTessellationEvaluationInputComponents, maxTessellationEvaluationOutputComponents of 124 or higher.
+  - maxTessellationControlTotalOutputComponents of 4088 or higher.
+  - maxTessellationControlPerPatchOutputComponents of 120 or higher.
+  - maxTessellationGenerationLevel of 64 or higher.
+  - maxTessellationPatchSize of 32 or higher.
+
+- maxSamplerLodBias of 4 or higher.
+- maxUniformBufferRange of 64KiB or higher.
+- maxVertexInputAttributeOffset of 2047 or higher.
+- maxVertexInputAttributes, maxVertexInputBindings of 16 or higher.
+- maxVertexInputBindingStride of 2048 or higher.
+- maxVertexOutputComponents of 124 or higher.
+- maxComputeWorkGroupSize[0,1] of 1024 or higher. and maxComputeWorkGroupSize[2] of 64 or higher.
+- if geometry shader is supported:
+  - maxGeometryInputComponents of >=64.
+  - maxGeometryOutputComponents of >=128.
+  - maxGeometryOutputVertices of >=256.
+  - maxGeometryShaderInvocations of >=32.
+  - maxGeometryTotalOutputComponents of >=1024.
+
+#### List of DirectX12 requirements
+
+- DirectX12 Feature level 12_1. 
+- WDDM 2.7 and above.
+- GPU:
+  - Nvidia Maxwell 2nd gen and above.
+  - AMD GCN 5 and above.
+  - Intel Arc Alchemist and above.
+  - Intel Gen 9 and above.
+
+##### Default features in DirectX
+
+Since Vulkan is more fragmented, the features are more split up. However in DirectX, the features supported by default are the following:
+
+- EDeviceFeature_ExtendedDescriptorSize. Descriptor heaps are automatically big enough to fit a lot of resources.
+- EDeviceFeature_SubgroupArithmetic, EDeviceFeature_SubgroupShuffle. Wave intrinsics are also supported by default.
+- EDeviceFeature_GeometryShader, EDeviceFeature_TesellationShader and EDeviceFeature_MultiDrawIndirectCount are enabled by default.
+- EDeviceFeature_Raytracing, EDeviceFeature_RayQuery, EDeviceFeature_MeshShaders and EDeviceFeature_VariableRateShading are a part of DirectX12 Ultimate (Turing, RDNA2, Arc and up).
+- EDeviceDataType_BCn is always set.
+- EDeviceDataType_...
+
+#### List of Metal requirements
+
+- Metal 3 (Apple7 tier).
+- Phone:
+  - Apple iPhone 12 (A14, Apple7).
+- Laptop:
+  - Apple Macbook Pro 14 (M1 Pro, Apple7).
+
+##### Default features in Metal
+
+- EDeviceFeature_TiledRendering is always set.
+- EDeviceFeature_TesellationShader is always set.
+- EDeviceDataType_ASTC is always set.
+- EDeviceDataType_BCn can be set as well.
+- EDeviceDataTypes_AtomicF32, EDeviceDataTypes_AtomicI64, EDeviceDataTypes_F16, EDeviceDataTypes_I64 are always set.
+
+#### TODO: List of WebGPU requirements
+
+Since WebGPU is still expiremental, no limitations will be made to OxC3 yet.
 
 ## Contributions
 

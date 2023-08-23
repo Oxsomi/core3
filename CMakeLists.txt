@@ -119,6 +119,12 @@ else()
 	set(_PLATFORM_TYPE EPlatform_Linux)
 endif()
 
+if(TRUE)
+	message("-- Enabling Vulkan support...")
+	set(graphicsApi vulkan)
+	set(_GRAPHICS_API EGraphicsApi_Vulkan)
+endif()
+
 # Types 
 
 file(GLOB_RECURSE typesHeaders "inc/file/*.h" "inc/math/*.h" "inc/types/*.h" "inc/cfg/*.h" "*.h.in")
@@ -161,7 +167,7 @@ target_link_libraries(OxC3_formats PUBLIC OxC3_types)
 
 # Platforms
 
-message("-- Targetting platform: ${platform}")
+message("-- Targeting platform: ${platform}")
 
 file(GLOB platformsHeaders "inc/platforms/*.h")
 file(GLOB_RECURSE platformsHeadersExt "inc/platforms/ext/*.h")
@@ -182,6 +188,36 @@ add_library(
 set_target_properties(OxC3_platforms PROPERTIES FOLDER Oxsomi)
 
 target_link_libraries(OxC3_platforms PUBLIC OxC3_formats)
+
+# Graphics layer
+
+message("-- Targeting graphics api: ${graphicsApi} on platform ${platform}")
+
+file(GLOB_RECURSE graphicsHeaders "inc/graphics/generic/*.h")
+file(GLOB_RECURSE graphicsApiHeaders "inc/graphics/${graphicsApi}/*.h")
+
+file(
+	GLOB_RECURSE 
+	graphicsAllSources 
+	"src/graphics/${graphicsApi}/generic/*.c" 
+	"src/graphics/${graphicsApi}/${platform}/*.c" 
+	"src/graphics/generic/*.c"
+)
+
+add_library(
+	OxC3_graphics
+	STATIC
+	${graphicsHeaders}
+	${graphicsApiHeaders}
+	${graphicsAllSources}
+	CMakeLists.txt
+)
+
+target_compile_definitions(OxC3_graphics PUBLIC -D_GRAPHICS_API=${_GRAPHICS_API})
+
+set_target_properties(OxC3_graphics PROPERTIES FOLDER Oxsomi)
+
+target_link_libraries(OxC3_graphics PUBLIC OxC3_platforms)
 
 # Setting the icon of the app
 # Call this immediately before configure_virtual_files with the executable

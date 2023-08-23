@@ -18,32 +18,5 @@
 *  This is called dual licensing.
 */
 
-#pragma once
-#include "types/types.h"
-#include "types/allocator.h"
-#include "atomic.h"
+#include "graphics/vulkan/vk_device.h"
 
-typedef Bool (*ObjectFreeFunc)(void *ptr, Allocator allocator);
-
-typedef enum ETypeId ETypeId;
-
-typedef struct RefPtr {
-
-	AtomicI64 refCount;
-
-	ETypeId typeId;
-	U32 pad;
-
-	Buffer data;
-
-	Allocator alloc;
-
-	ObjectFreeFunc free;
-
-} RefPtr;
-
-Error RefPtr_create(Buffer data, Allocator alloc, ObjectFreeFunc free, ETypeId type, RefPtr **result);
-Error RefPtr_createx(Buffer data, ObjectFreeFunc free, ETypeId type, RefPtr **result);
-
-Bool RefPtr_inc(RefPtr *ptr);
-Bool RefPtr_dec(RefPtr **ptr);	//Clears pointer if it's gone

@@ -19,31 +19,12 @@
 */
 
 #pragma once
-#include "types/types.h"
-#include "types/allocator.h"
-#include "atomic.h"
 
-typedef Bool (*ObjectFreeFunc)(void *ptr, Allocator allocator);
-
-typedef enum ETypeId ETypeId;
-
-typedef struct RefPtr {
-
-	AtomicI64 refCount;
-
-	ETypeId typeId;
-	U32 pad;
-
-	Buffer data;
-
-	Allocator alloc;
-
-	ObjectFreeFunc free;
-
-} RefPtr;
-
-Error RefPtr_create(Buffer data, Allocator alloc, ObjectFreeFunc free, ETypeId type, RefPtr **result);
-Error RefPtr_createx(Buffer data, ObjectFreeFunc free, ETypeId type, RefPtr **result);
-
-Bool RefPtr_inc(RefPtr *ptr);
-Bool RefPtr_dec(RefPtr **ptr);	//Clears pointer if it's gone
+enum EVkDeviceVendor {
+	EVkDeviceVendor_NV		= 0x10DE,
+	EVkDeviceVendor_AMD		= 0x1002,
+	EVkDeviceVendor_ARM		= 0x13B5,
+	EVkDeviceVendor_QCOM	= 0x5143,
+	EVkDeviceVendor_INTC	= 0x8086,
+	EVkDeviceVendor_IMGT	= 0x1010
+};
