@@ -29,7 +29,8 @@ typedef enum EDataType {
 	EDataType_Bool			= 0b100,
 	EDataType_Char			= 0b110,
 
-	EDataType_IsSigned		= 0b001
+	EDataType_IsSigned		= 0b001,
+	EDataType_Object		= 0b101
 
 } EDataType;
 
@@ -54,7 +55,10 @@ Bool EDataType_isSigned(EDataType type);
 //U3 dataType (EDataType)
 
 #define _makeTypeId(libId, typeId, width, height, dataTypeStride, dataType)										\
-((libId << 24) | ((typeId) << 16) | ((width - 1) << 7) | ((height - 1) << 5) | (dataTypeStride << 3) | dataType)
+((libId << 24) | (typeId << 16) | ((width - 1) << 7) | ((height - 1) << 5) | (dataTypeStride << 3) | dataType)
+
+#define _makeObjectId(libId, typeId, properties) \
+((libId << 24) | (typeId << 16) | (properties << 3) | EDataType_Object)
 
 #define _LIBRARYID_DEFAULT 0xC3		//OxC0-OxCF are reserved for default library.
 
@@ -163,6 +167,8 @@ typedef U16 ETypeIdShort;	//Cuts off the info part to more efficiently store typ
 typedef U8 ETypeIdOxC3;		//Type id for OxC3; only if standard types are used only (no extensions).
 
 EDataType ETypeId_getDataType(ETypeId id);
+Bool ETypeId_isObject(ETypeId id);
+
 U8 ETypeId_getDataTypeBytes(ETypeId id);
 U8 ETypeId_getWidth(ETypeId id);
 U8 ETypeId_getHeight(ETypeId id);

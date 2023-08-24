@@ -141,10 +141,13 @@ OxC3 is not made for devices older than 3 years. Oxsomi core's spec for newer ve
 We're targeting the minimum specs of following systems in OxC3 0.2:
 
 - Phones:
-  - Samsung S20 (Samsung SM-G980F).
-  - Google Pixel 5a.
-  - Xiaomi Redmi Note 8.
-  - Apple iPhone 12 (A14).
+  - Binding tier low:
+    - Samsung S20 (Samsung SM-G980F).
+    - Apple iPhone 12 (A14).
+  - Binding tier high:
+    - Samsung S21 (Samsung SM-G9910).
+    - Google Pixel 5a.
+    - Xiaomi Redmi Note 8.
 - Laptop:
   - Nvidia RTX 3060 Laptop GPU.
   - AMD RX 6600M.
@@ -154,6 +157,8 @@ We're targeting the minimum specs of following systems in OxC3 0.2:
   - AMD 6600 XT.
   - Intel A750.
 
+Binding tier is high for all laptops and PCs excluding Apple devices. All Apple devices are binding tier low until they release proper devices.
+
 Just because these are the target minimum specs doesn't mean older hardware is unsupported. The hard requirements should be looked at instead to determine if the device is supported. ***These are just minimum feature targets, they aren't all tested.***
 
 #### List of Vulkan requirements
@@ -161,26 +166,13 @@ Just because these are the target minimum specs doesn't mean older hardware is u
 Because of this, a device needs the following requirements to be OxC3 compatible:
 
 - Vulkan 1.1 or higher.
-- Tesselation shaders and geometry shaders are optional.
+- Tessellation shaders and geometry shaders are optional.
 - subgroupSize of 16 - 128.
 - subgroup operations of basic, vote, ballot. Available only in compute by default. arithmetic is optional.
 - shaderSampledImageArrayDynamicIndexing, shaderStorageBufferArrayDynamicIndexing, shaderUniformBufferArrayDynamicIndexing turned on.
 - samplerAnisotropy, drawIndirectFirstInstance, independentBlend, imageCubeArray, fullDrawIndexUint32, depthClamp, depthBiasClamp, tessellationShader turned on.
 - Either BCn (textureCompressionBC) or ASTC (textureCompressionASTC_LDR) compression *must* be supported (can be both supported).
 - shaderInt16 support.
-- maxMemoryAllocationCount of 4096 or higher.
-- maxBoundDescriptorSets of 4 or higher.
-- maxPerStageDescriptorSamplers of 16 or higher.
-- maxPerStageDescriptorUniformBuffers of 31 or higher.
-- maxPerStageDescriptorStorageBuffers of 31 or higher.
-- maxPerStageDescriptorSampledImages of 96 or higher.
-- maxPerStageDescriptorStorageImages of 8 or higher.
-- maxPerStageResources of 127 or higher.
-- maxDescriptorSetSamplers of 80 or higher.
-- maxDescriptorSetUniformBuffers of 155 or higher (maxDescriptorSetUniformBuffersDynamic of >=32).
-- maxDescriptorSetStorageBuffers of 155 or higher (maxDescriptorSetStorageBuffersDynamic of  >=16).
-- maxDescriptorSetSampledImages of 480 or higher.
-- maxDescriptorSetStorageImages of 40 or higher.
 - maxColorAttachments and maxFragmentOutputAttachments of 8 or higher.
 - maxDescriptorSetInputAttachments, maxPerStageDescriptorInputAttachments of 7 or higher.
 - MSAA support of 1 and 4 or higher (framebufferColorSampleCounts, framebufferDepthSampleCounts, framebufferNoAttachmentsSampleCounts, framebufferStencilSampleCounts, sampledImageColorSampleCounts, sampledImageDepthSampleCounts, sampledImageIntegerSampleCounts, sampledImageStencilSampleCounts). Support for MSAA 2 is non default.
@@ -217,11 +209,37 @@ Because of this, a device needs the following requirements to be OxC3 compatible
   - maxGeometryOutputVertices of >=256.
   - maxGeometryShaderInvocations of >=32.
   - maxGeometryTotalOutputComponents of >=1024.
+- maxMemoryAllocationCount of 4096 or higher.
+- maxBoundDescriptorSets of 4 or higher.
+- maxDescriptorSetStorageBuffersDynamic of  >=16.
+- maxDescriptorSetUniformBuffersDynamic of >=32.
+
+##### Resource binding tiers
+
+###### EResourceBindingTier_Low
+
+- maxPerStageDescriptorSamplers of 16 or higher.
+- maxPerStageDescriptorUniformBuffers of 31 or higher.
+- maxPerStageDescriptorStorageBuffers of 31 or higher.
+- maxPerStageDescriptorSampledImages of 96 or higher.
+- maxPerStageDescriptorStorageImages of 8 or higher.
+- maxPerStageResources of 127 or higher.
+- maxDescriptorSetSamplers of 80 or higher.
+- maxDescriptorSetUniformBuffers of 155 or higher.
+- maxDescriptorSetStorageBuffers of 155 or higher.
+- maxDescriptorSetSampledImages of 480 or higher.
+- maxDescriptorSetStorageImages of 40 or higher.
+
+###### EResourceBindingTier_High
+
+- Everything mentioned in resource tier low but with a limit of 200k or higher.
+- maxPerStageResources of 1M or higher.
 
 #### List of DirectX12 requirements
 
 - DirectX12 Feature level 12_1. 
 - WDDM 2.7 and above.
+- Default of EResourceBindingTier_High.
 - GPU:
   - Nvidia Maxwell 2nd gen and above.
   - AMD GCN 5 and above.
@@ -232,12 +250,11 @@ Because of this, a device needs the following requirements to be OxC3 compatible
 
 Since Vulkan is more fragmented, the features are more split up. However in DirectX, the features supported by default are the following:
 
-- EDeviceFeature_ExtendedDescriptorSize. Descriptor heaps are automatically big enough to fit a lot of resources.
-- EDeviceFeature_SubgroupArithmetic, EDeviceFeature_SubgroupShuffle. Wave intrinsics are also supported by default.
-- EDeviceFeature_GeometryShader, EDeviceFeature_TesellationShader and EDeviceFeature_MultiDrawIndirectCount are enabled by default.
-- EDeviceFeature_Raytracing, EDeviceFeature_RayQuery, EDeviceFeature_MeshShaders and EDeviceFeature_VariableRateShading are a part of DirectX12 Ultimate (Turing, RDNA2, Arc and up).
-- EDeviceDataType_BCn is always set.
-- EDeviceDataType_...
+- EGraphicsBindingTier_High is always enabled. Enforces at least 200k resource binds available of each type.
+- EGraphicsFeatures_SubgroupArithmetic, EGraphicsFeatures_SubgroupShuffle. Wave intrinsics are also supported by default.
+- EGraphicsFeatures_GeometryShader, EGraphicsFeatures_TessellationShader and EGraphicsFeatures_MultiDrawIndirectCount are enabled by default.
+- EGraphicsFeatures_Raytracing, EGraphicsFeatures_RayQuery, EGraphicsFeatures_MeshShaders, EGraphicsFeatures_VariableRateShading are a part of DirectX12 Ultimate (Turing, RDNA2, Arc and up).
+- EDeviceDataTypes_BCn, EGraphicsDataTypes_I64, EGraphicsDataTypes_F64 are always set.
 
 #### List of Metal requirements
 
@@ -249,15 +266,16 @@ Since Vulkan is more fragmented, the features are more split up. However in Dire
 
 ##### Default features in Metal
 
-- EDeviceFeature_TiledRendering is always set.
-- EDeviceFeature_TesellationShader is always set.
-- EDeviceDataType_ASTC is always set.
-- EDeviceDataType_BCn can be set as well.
-- EDeviceDataTypes_AtomicF32, EDeviceDataTypes_AtomicI64, EDeviceDataTypes_F16, EDeviceDataTypes_I64 are always set.
+- EGraphicsFeatures_TiledRendering is always set.
+- EGraphicsFeatures_TessellationShader is always set.
+- EGraphicsDataTypes_ASTC is always set.
+- EGraphicsDataTypes_BCn can be set as well.
+- EGraphicsDataTypes_AtomicF32, EGraphicsDataTypes_AtomicI64, EGraphicsDataTypes_F16, EGraphicsDataTypes_I64 are always set.
+- EGraphicsBindingTier_Low by default due to strict binding requirements. See "List of Vulkan requirements" -> "Resource binding tiers".
 
 #### TODO: List of WebGPU requirements
 
-Since WebGPU is still expiremental, no limitations will be made to OxC3 yet.
+Since WebGPU is still expiremental, no limitations will be made to OxC3 to support it yet.
 
 ## Contributions
 

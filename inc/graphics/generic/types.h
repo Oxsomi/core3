@@ -20,10 +20,3 @@
 
 #pragma once
 #include "types/types.h"
-
-typedef enum EGraphicsApi {
-	EGraphicsApi_Vulkan,
-	EGraphicsApi_DirectX12,
-	EGraphicsApi_Metal,
-	EGraphicsApi_WebGPU
-};

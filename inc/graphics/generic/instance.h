@@ -18,24 +18,42 @@
 *  This is called dual licensing.
 */
 
-#include "types/type_id.h"
+#pragma once
+#include "types/string.h"
 
-Bool EDataType_isSigned(EDataType type) { return type & EDataType_IsSigned; }
+typedef struct GraphicsApplicationInfo {
 
-EDataType ETypeId_getDataType(ETypeId id) { return (EDataType)(id & 7); }
-Bool ETypeId_isObject(ETypeId id) { return ETypeId_getDataType(id) == EDataType_Object; }
+	CharString name;
 
-U8 ETypeId_getDataTypeBytes(ETypeId id) { return ETypeId_isObject(id) ? 0 : 1 << ((id >> 3) & 3); }
-U8 ETypeId_getHeight(ETypeId id) { return ETypeId_isObject(id) ? 0 : (id >> 5) & 3; }
-U8 ETypeId_getWidth(ETypeId id) { return ETypeId_isObject(id) ? 0 : (id >> 7) & 3; }
+	U32 version, padding;
 
-U8 ETypeId_getElements(ETypeId id) { 
-	return ETypeId_isObject(id) ? 0 : ETypeId_getWidth(id) * ETypeId_getHeight(id);
-}
+} GraphicsApplicationInfo;
 
-U64 ETypeId_getBytes(ETypeId id) { 
-	return ETypeId_isObject(id) ? 0 : (U64)ETypeId_getDataTypeBytes(id) * ETypeId_getElements(id); 
-}
+typedef enum EGraphicsApi {
+	EGraphicsApi_Vulkan,
+	EGraphicsApi_DirectX12,
+	EGraphicsApi_Metal,
+	EGraphicsApi_WebGPU
+} EGraphicsApi;
 
-U8 ETypeId_getLibraryId(ETypeId id) { return (U8)(id >> 24); }
-U8 ETypeId_getLibraryTypeId(ETypeId id) { return (U8)(id >> 16); }
+typedef struct GraphicsInstance {
+
+	GraphicsApplicationInfo application;
+
+	EGraphicsApi api;
+	U32 apiVersion;
+
+	void *ext;
+
+} GraphicsInstance;
+
+typedef struct GraphicsDeviceInfo GraphicsDeviceInfo;
+
+Error GraphicsInstance_create(GraphicsApplicationInfo info, GraphicsInstance *inst);
+Bool GraphicsInstance_free(GraphicsInstance *inst);
+
+U64 GraphicsInstance_getDeviceInfoCount(const GraphicsInstance *inst);
+GraphicsDeviceInfo GraphicsInstance_getDeviceInfo(const GraphicsInstance *inst, U64 index);
+
+U64 GraphicsInstance_getPreferredGpu(const GraphicsInstance *inst);
+

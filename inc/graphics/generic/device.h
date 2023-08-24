@@ -19,102 +19,69 @@
 */
 
 #pragma once
-#include "types/types.h"
+#include "graphics/generic/device_info.h"
+#include "types/type_id.h"
 
-typedef enum EDeviceType {
+typedef struct Error Error;
+typedef struct RefPtr RefPtr;
+typedef struct List List;
 
-	EDeviceType_Dedicated,
-	EDeviceType_Integrated,
-	EDeviceType_CPU,
-	EDeviceType_Other
+//ETypeId but for graphics factories. 
+//Properties contain if it allows lookup by an info struct.
 
-} EDeviceType;
+typedef enum EGraphicsTypeId {
 
-typedef enum EDeviceVendor {
+	EGraphicsTypeId_Texture					= _makeObjectId(0xC4, 0, 1),
+	EGraphicsTypeId_RenderTexture			= _makeObjectId(0xC4, 1, 0),
+	EGraphicsTypeId_Buffer					= _makeObjectId(0xC4, 2, 1),
+	EGraphicsTypeId_Pipeline				= _makeObjectId(0xC4, 3, 1),
+	EGraphicsTypeId_DescriptorSet			= _makeObjectId(0xC4, 4, 1),
+	EGraphicsTypeId_RenderPass				= _makeObjectId(0xC4, 5, 0),
+	EGraphicsTypeId_Sampler					= _makeObjectId(0xC4, 6, 1),
+	EGraphicsTypeId_CommandList				= _makeObjectId(0xC4, 7, 0),
+	EGraphicsTypeId_AccelerationStructure	= _makeObjectId(0xC4, 8, 1),
+	EGraphicsTypeId_Swapchain				= _makeObjectId(0xC4, 9, 0)
 
-	EDeviceVendor_NV,
-	EDeviceVendor_AMD,
-	EDeviceVendor_ARM,
-	EDeviceVendor_QCOM,
-	EDeviceVendor_INTC,
-	EDeviceVendor_IMGT,
-	EDeviceVendor_Unknown
+} EGraphicsTypeId;
 
-} EDeviceVendor;
+typedef struct GraphicsDevice {
 
-typedef enum EDeviceFeatures {
+	GraphicsDeviceInfo info;
 
-	//When this is turned on, the GPU benefits from tiled rendering.
-	//This is true for mobile devices only or some chips such as QCOM on windows.
+	//List factories;		//<GraphicsObjectFactory>
 
-	EDeviceFeature_TiledRendering			= 1 << 0,
+	void *ext;
 
-	//Raytracing extensions
+} GraphicsDevice;
 
-	EDeviceFeature_Raytracing				= 1 << 1,
-	EDeviceFeature_RayQuery					= 1 << 2,
-	EDeviceFeature_RayMicromapOpacity		= 1 << 3,
-	EDeviceFeature_RayMicromapDisplacement	= 1 << 4,
-	EDeviceFeature_RayMotionBlur			= 1 << 5,
-	EDeviceFeature_RayReorder				= 1 << 6,
+Error GraphicsDevice_create(U64 deviceId, GraphicsDevice *device);
+Bool GraphicsDevice_free(GraphicsDevice *device);
 
-	//Other important extensions
+//Submit and wait until all submitted graphics tasks are done.
 
-	EDeviceFeature_MeshShaders				= 1 << 7,
-	EDeviceFeature_VariableRateShading		= 1 << 8,
+Error GraphicsDevice_submitCommands(GraphicsDevice *device, List commandLists);		//<RefPtr of CommandList>
+Error GraphicsDevice_wait(GraphicsDevice *device, U64 timeout);
 
-	EDeviceFeature_MultiDrawIndirectCount	= 1 << 9,
+//Batch create objects.
+//All objects created need to be freed by the runtime.
 
-	EDeviceFeature_GeometryShader			= 1 << 10,
-	EDeviceFeature_TesellationShader		= 1 << 11,
+Error GraphicsDevice_createObjects(GraphicsDevice *device, EGraphicsTypeId type, List infos, List *result);
+Bool GraphicsDevice_freeObjects(GraphicsDevice *device, List *objects);
 
-	EDeviceFeature_SubgroupArithmetic		= 1 << 12,
-	EDeviceFeature_SubgroupShuffle			= 1 << 13,
+//Create single objects.
+//Prefer to use the batched versions if possible for less locks.
 
-	//Up to 200k of each type (except dynamic) are supported.
-	//This is only turned off for Apple devices and older phones.
-	//Minimum OxC3 spec Android phones, NV/AMD/Intel laptops/desktops all support this.
-	//Only apple doesn't...
+Error GraphicsDevice_createObject(GraphicsDevice *device, EGraphicsTypeId type, const void *info, RefPtr **result);
+Bool GraphicsDevice_freeObject(GraphicsDevice *device, RefPtr **object);
 
-	EDeviceFeature_ExtendedDescriptorSize	= 1 << 14
+//Optional. Not all factories allow finding or creating objects.
+//So query type type if it supports it first.
 
-} EDeviceFeatures;
+Bool GraphicsDevice_supportsFind(EGraphicsTypeId type);
 
-typedef enum EDeviceDataTypes {
+Error GraphicsDevice_findObjects(const GraphicsDevice *device, EGraphicsTypeId type, List infos, List *result);
+Error GraphicsDevice_findOrCreateObjects(GraphicsDevice *device, EGraphicsTypeId type, List infos, List *result);
 
-	//What operations are available on native data types
+Error GraphicsDevice_findObject(const GraphicsDevice *device, EGraphicsTypeId type, const void *info, RefPtr **result);
+Error GraphicsDevice_findOrCreateObject(GraphicsDevice *device, EGraphicsTypeId type, const void *info, RefPtr **result);
 
-	EDeviceDataTypes_I64					= 1 << 0,
-	EDeviceDataTypes_F16					= 1 << 1,
-	EDeviceDataTypes_F64					= 1 << 2,
-
-	EDeviceDataTypes_AtomicI64				= 1 << 3,
-	EDeviceDataTypes_AtomicF32				= 1 << 4,
-
-	//What texture formats are available
-	//These can be both supported.
-
-	EDeviceDataTypes_ASTC					= 1 << 5,			//If false, BCn has to be supported
-	EDeviceDataTypes_BCn					= 1 << 6,			//If false, ASTC has to be supported
-
-	//What formats are available for the swapchain
-
-	EDeviceDataTypes_HDR10A2				= 1 << 7,
-	EDeviceDataTypes_RGBA16f				= 1 << 8
-
-} EDeviceDataTypes;
-
-typedef struct DeviceInfo {
-
-	C8 name[256];
-	
-	EDeviceType type;
-	EDeviceVendor vendor;
-
-	U32 id;
-	EDeviceFeatures features;
-
-	EDeviceDataTypes dataTypes;
-	U32 pad;
-
-} DeviceInfo;
