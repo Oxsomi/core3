@@ -119,9 +119,9 @@ Error convertToCStruct(BufferLayout layout, LayoutPathInfo pathInfo, CharString 
 	//Display offset and stride as annotations
 
 	printf(
-		"%32s: LAYOUT(off = %4"PRIu64", len = %4"PRIu64") %.*s %.*s%.*s %s %.*s\n", 
+		"%32s: LAYOUT(off = %4"PRIu64", len = %4"PRIu64", stride = %4"PRIu64") %.*s %.*s%.*s %s %.*s\n", 
 		path.ptr,
-		pathInfo.offset, pathInfo.length,
+		pathInfo.offset, pathInfo.length, pathInfo.stride,
 		(int) CharString_length(typeName), typeName.ptr,
 		(int) CharString_length(pathInfo.memberName), pathInfo.memberName.ptr,
 		(int) CharString_length(arraySize), arraySize.ptr,
@@ -791,6 +791,92 @@ int main() {
 	printf("%s\n", tmp.ptr);
 	CharString_free(&tmp, alloc);
 
+	/*Buffer layout serialization		TODO:
+
+	const C8 *serialized = 
+	"{\n"
+	"\t\"root\": \"\",\n"
+	"\t\"structs\": {\n"
+	"\t\t\"Transform\": {\n"
+	"\t\t\t\"rot\": {\n"
+	"\t\t\t\t\"type\": \"F32x4\",\n"
+	"\t\t\t\t\"offset\": 0,\n"
+	"\t\t\t\t\"stride\": 16\n"
+	"\t\t\t},\n"
+	"\t\t\t\"pos\": {\n"
+	"\t\t\t\t\"type\": \"F32x4\",\n"
+	"\t\t\t\t\"offset\": 16,\n"
+	"\t\t\t\t\"stride\": 16\n"
+	"\t\t\t},\n"
+	"\t\t\t\"scale\": {\n"
+	"\t\t\t\t\"type\": \"F32x4\",\n"
+	"\t\t\t\t\"offset\": 32,\n"
+	"\t\t\t\t\"stride\": 16\n"
+	"\t\t\t}\n"
+	"\t\t},\n"
+	"\t\t\"Camera\": {\n"
+	"\t\t\t\"transform\": {\n"
+	"\t\t\t\t\"type\": \"Transform\",\n"
+	"\t\t\t\t\"offset\": 0,\n"
+	"\t\t\t\t\"stride\": 48\n"
+	"\t\t\t},\n"
+	"\t\t\t\"p0\": {\n"
+	"\t\t\t\t\"type\": \"F32x4\",\n"
+	"\t\t\t\t\"offset\": 48,\n"
+	"\t\t\t\t\"stride\": 16\n"
+	"\t\t\t},\n"
+	"\t\t\t\"right\": {\n"
+	"\t\t\t\t\"type\": \"F32x4\",\n"
+	"\t\t\t\t\"offset\": 64,\n"
+	"\t\t\t\t\"stride\": 16\n"
+	"\t\t\t},\n"
+	"\t\t\t\"up\": {\n"
+	"\t\t\t\t\"type\": \"F32x4\",\n"
+	"\t\t\t\t\"offset\": 80,\n"
+	"\t\t\t\t\"stride\": 16\n"
+	"\t\t\t},\n"
+	"\t\t\t\"near\": {\n"
+	"\t\t\t\t\"type\": \"F32\",\n"
+	"\t\t\t\t\"offset\": 96,\n"
+	"\t\t\t\t\"stride\": 4\n"
+	"\t\t\t},\n"
+	"\t\t\t\"far\": {\n"
+	"\t\t\t\t\"type\": \"F32\",\n"
+	"\t\t\t\t\"offset\": 100,\n"
+	"\t\t\t\t\"stride\": 4\n"
+	"\t\t\t},\n"
+	"\t\t\t\"fovRad\": {\n"
+	"\t\t\t\t\"type\": \"F32\",\n"
+	"\t\t\t\t\"offset\": 104,\n"
+	"\t\t\t\t\"stride\": 4\n"
+	"\t\t\t}\n"
+	"\t\t},\n"
+	"\t\t\"\": {\n"
+	"\t\t\t\"arr\": {\n"
+	"\t\t\t\t\"type\": \"Camera[10]\",\n"
+	"\t\t\t\t\"offset\": 0,\n"
+	"\t\t\t\t\"stride\": 112\n"
+	"\t\t\t},\n"
+	"\t\t\t\"name\": {\n"
+	"\t\t\t\t\"type\": \"C8[5]\",\n"
+	"\t\t\t\t\"offset\": 1120,\n"
+	"\t\t\t\t\"stride\": 1\n"
+	"\t\t\t}\n"
+	"\t\t}\n"
+	"\t}\n"
+	"}";
+
+	/*_gotoIfError(clean, BufferLayout_serialize(
+		bufferLayout, 
+		false, false, 1, 
+		alloc, &tmp
+	));
+
+	if(!CharString_equalsString(tmp, CharString_createConstRefUnsafe(serialized), EStringCase_Sensitive))
+		_gotoIfError(clean, Error_invalidState(0));
+
+	CharString_free(&tmp, alloc); */
+
 	//Test big endian conversions
 
 	printf("Testing endianness swapping\n");
@@ -1272,7 +1358,7 @@ clean:
 
 	printf("Failed unit test... Freeing\n");
 
-	BufferLayout_free(alloc, &bufferLayout);
+	BufferLayout_free(&bufferLayout, alloc);
 
 	CharString_free(&tmp, alloc);
 	

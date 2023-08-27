@@ -614,3 +614,164 @@ clean:
 	CharString_free(&tmp0, alloc);
 	return err;
 }
+
+/* BufferLayout to json TODO:
+
+//Serializing a BufferLayout to as a BufferLayout itself.
+//Like this (shown as json, but could be stored binary too):
+//{
+//	"root": "<rootName>",	//Normally pointing to "".
+//	"structs": {
+//		"structName: {
+//			"member": {
+//	 
+//				//Can also include array: F32[5]
+//				//The array can be unsized to indicate it's a variable size array.
+//				//E.g. F32[][5] would allow each element to decide how many F32[5] are present.
+//				//This is even possible for F32[5][].
+//				//A string is often just defined as a C8[]
+//	 
+//				"type": "typeName or structName",
+// 
+//				"offset": 0,			//Byte offset since the begin of this member (like alignment or previous members).
+//				"stride": 69			//Depends on language rules. For example a F32[4] could be 16 stride in cbuffers.
+//			}
+//		}
+//	}
+//}
+
+Error BufferLayout_serializeAsBufferLayout(BufferLayout layout, Allocator alloc, BufferLayout *serializedLayout) {
+	
+	Error err = Error_none();
+	
+	BufferLayoutStructInfo cameraStructArrayInfo = (BufferLayoutStructInfo) { 0 };
+
+	BufferLayoutMemberInfo cameraStructArrayMembers[] = {
+
+		(BufferLayoutMemberInfo) {
+			.name = CharString_createConstRefUnsafe("arr"),
+			.structId = cameraStruct,
+			.stride = sizeof(F32x4) * 6 + sizeof(F32) * 4,	//1 float for padding
+			.typeId = ETypeId_Undefined
+		},
+
+		(BufferLayoutMemberInfo) {
+			.name = CharString_createConstRefUnsafe("name"),
+			.structId = U32_MAX,
+			.offset = sizeof(F32x4) * 6 + sizeof(F32) * 4,	//1 float for padding
+			.stride = sizeof(C8),
+			.typeId = ETypeId_C8
+		}
+	};
+
+	_gotoIfError(clean, List_createConstRef(
+		(const U8*) cameraStructArrayMembers, 
+		sizeof(cameraStructArrayMembers) / sizeof(cameraStructArrayMembers[0]), 
+		sizeof(cameraStructArrayMembers[0]),
+		&cameraStructArrayInfo.members
+	));
+
+	U32 root;
+	_gotoIfError(clean, BufferLayout_createStruct(serializedLayout, cameraStructArrayInfo, alloc, &root));
+
+	_gotoIfError(clean, BufferLayout_assignRootStruct(serializedLayout, root));
+
+clean:
+	BufferLayout_free(serializedLayout, alloc);
+	return err;
+}
+
+//TODO: Properly implement path
+
+Error BufferLayout_serialize(
+	BufferLayout layout,
+	Bool prettify,
+	Bool useSpaces,
+	U8 indentPerStage,
+	Allocator alloc,
+	CharString *serialized
+) {
+
+	BufferLayout serializedLayout = (BufferLayout) { 0 };
+	Buffer tmp = Buffer_createNull();
+	CharString tmpStr = CharString_createNull();
+	Error err = Error_none();
+
+	//Create list of structs and members
+
+	_gotoIfError(clean, BufferLayout_serializeAsBufferLayout(
+			layout,
+			alloc,
+			&serializedLayout
+		)
+	);
+
+	_gotoIfError(clean, BufferLayout_createInstance(serializedLayout, 1, alloc, &tmp));
+
+	//Fill data
+		
+	U64 biggest = U64_max(U64_max(sizeof("type"), sizeof("offset")), sizeof("stride"));
+
+	for (U64 i = 0; i < layout.structs.length; ++i) {
+
+		BufferLayoutStruct str = ((const BufferLayoutStruct*) layout.structs.ptr)[i];
+
+		CharString structName = CharString_createConstRefSized(str.data.ptr, str.nameLength, false);
+
+		for(U16 j = 0; j < str.memberCount; ++j) {
+
+			BufferLayoutMemberInfo info = BufferLayoutStruct_getMemberInfo(str, j);
+
+			_gotoIfError(clean, CharString_format(
+				alloc, &tmpStr, 
+				"structs/%.*s/%.*s/", 
+				(int)CharString_length(structName), structName.ptr,
+				(int)CharString_length(info.name), info.name.ptr
+			));
+
+			U64 parent = CharString_length(tmpStr);
+
+			_gotoIfError(clean, CharString_reserve(&tmpStr, parent + biggest, alloc));
+
+			CharString typeName = CharString_createNull();
+
+			if (info.typeId != ETypeId_Undefined)
+				_gotoIfError(clean, ETypeId_asString(info.typeId, &typeName))
+
+			else _gotoIfError(clean, BufferLayout_getStructName(layout, info.structId, &typeName));
+
+			_gotoIfError(clean, CharString_appendString(&tmpStr, CharString_createConstRefUnsafe("type"), (Allocator){ 0 }));
+			_gotoIfError(clean, BufferLayout_setString(tmp, serializedLayout, tmpStr, typeName, alloc));
+
+			_gotoIfError(clean, CharString_resize(&tmpStr, parent, ' ', (Allocator){ 0 }));
+			_gotoIfError(clean, CharString_appendString(&tmpStr, CharString_createConstRefUnsafe("offset"), (Allocator){ 0 }));
+			_gotoIfError(clean, BufferLayout_setU32(tmp, serializedLayout, tmpStr, info.stride, alloc));
+
+			_gotoIfError(clean, CharString_resize(&tmpStr, parent, ' ', (Allocator){ 0 }));
+			_gotoIfError(clean, CharString_appendString(&tmpStr, CharString_createConstRefUnsafe("stride"), (Allocator){ 0 }));
+			_gotoIfError(clean, BufferLayout_setU64(tmp, serializedLayout, tmpStr, info.offset, alloc));
+
+			CharString_free(&tmpStr, alloc);
+		}
+	}
+
+	//Convert to JSON
+
+	_gotoIfError(clean, JSON_serialize(
+		tmp, 
+		serializedLayout, 
+		CharString_createNull(), 
+		prettify, 
+		useSpaces, 
+		indentPerStage, 
+		alloc, 
+		serialized
+	));
+
+clean:
+	BufferLayout_free(&serializedLayout, alloc);
+	Buffer_free(&tmp, alloc);
+	CharString_free(&tmpStr, alloc);
+	return err;
+}
+*/

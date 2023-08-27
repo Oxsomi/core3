@@ -70,24 +70,41 @@ typedef struct BufferLayoutMemberInfo {
 
 } BufferLayoutMemberInfo;
 
-BufferLayoutMemberInfo BufferLayoutMemberInfo_create(ETypeId typeId, CharString name, U64 offset, U32 stride);
-BufferLayoutMemberInfo BufferLayoutMemberInfo_createStruct(U32 structId, CharString name, U64 offset, U32 stride);
+Error BufferLayoutMemberInfo_create(
+	ETypeId typeId, 
+	CharString name, 
+	U64 offset, 
+	U32 stride, 
+	BufferLayoutMemberInfo *result
+);
 
-BufferLayoutMemberInfo BufferLayoutMemberInfo_createArray(
+Error BufferLayoutMemberInfo_createStruct(
+	U32 structId, 
+	CharString name, 
+	U64 offset, 
+	U32 stride, 
+	BufferLayoutMemberInfo *result
+);
+
+Error BufferLayoutMemberInfo_createArray(
 	ETypeId typeId, 
 	CharString name, 
 	List arraySizes, 
 	U64 offset, 
-	U32 stride
+	U32 stride, 
+	BufferLayoutMemberInfo *result
 );
 
-BufferLayoutMemberInfo BufferLayoutMemberInfo_createStructArray(
+Error BufferLayoutMemberInfo_createStructArray(
 	U32 structId, 
 	CharString name, 
 	List arraySizes, 
 	U64 offset, 
-	U32 stride
+	U32 stride, 
+	BufferLayoutMemberInfo *result
 );
+
+Bool BufferLayoutMemberInfo_isDynamic(BufferLayoutMemberInfo info);
 
 //Buffer layout struct
 
@@ -97,7 +114,7 @@ typedef struct BufferLayoutStruct {
 
 	U16 memberCount;
 	U8 nameLength;
-	U8 padding0;
+	Bool isContiguous;		//If any of the members (or their members) aren't contigious then this won't be.
 
 	//structName: C8[nameLength];
 	//members: BufferLayoutMember[memberCount];
@@ -130,7 +147,7 @@ typedef struct BufferLayout {
 } BufferLayout;
 
 Error BufferLayout_create(Allocator alloc, BufferLayout *layout);
-Bool BufferLayout_free(Allocator alloc, BufferLayout *layout);
+Bool BufferLayout_free(BufferLayout *layout, Allocator alloc);
 
 //Struct management
 
@@ -140,7 +157,51 @@ Error BufferLayout_assignRootStruct(BufferLayout *layout, U32 id);
 
 //Instantiating a buffer
 
-Error BufferLayout_createInstance(BufferLayout layout, U64 count, Allocator alloc, Buffer *result);
+typedef struct BufferLayoutDynamicData {
+
+	U32 arraySize;
+
+	U32 nameLength;
+
+	Buffer data;			//C8[nameLength], dynamic data (/ arraySize = stride)
+
+} BufferLayoutDynamicData;
+
+typedef struct BufferLayoutInstance {
+
+	//These allocations are for dynamically sized arrays.
+	//For example:
+	// 
+	//"arr": "F32[][]"
+	//"arr" => (123, void* (null))
+	//"arr/0" => (23, F32[23])
+	//"arr/1" => (24, F32[24])
+	// 
+	//"arr1": "F32[3][]"
+	//"arr1/0" => (123, F32[123])
+	//
+	//"arr2": "F32[][3]"
+	//"arr2" => (123, (F32[3])[123])
+	// 
+	//2D array is not being allocated as 123x23 because for example C8[][] is a CharString[].
+	//And each element there is of course a different size.
+
+	List allocations;			//<BufferLayoutDynamicData>
+
+	Buffer data;				//Root data
+
+	BufferLayout layout;		//Reference to the buffer layout
+
+} BufferLayoutInstance;
+
+Error BufferLayoutInstance_create(BufferLayout layout, Allocator alloc, BufferLayoutInstance *result);
+Bool BufferLayoutInstance_free(BufferLayoutInstance *instance, Allocator alloc);
+
+//Returns U32_MAX if not found
+U32 BufferLayoutInstance_getSize(BufferLayoutInstance *instance, CharString path);
+
+Error BufferLayoutInstance_setSize(BufferLayoutInstance *instance, CharString path, U32 size, Allocator alloc);
+Error BufferLayoutInstance_setString(BufferLayoutInstance *instance, CharString path, CharString value, Allocator alloc);
 
 //Resolving a path to a layout id
 //A BufferLayout path uses the following rules:
@@ -152,7 +213,7 @@ Error BufferLayout_createInstance(BufferLayout layout, U64 count, Allocator allo
 //If the object is an array, it will treat it the same as a member:
 //a/0 or b/0 could be either a pointing to the 0th index and b pointing to a member called 0.
 //a/0/0/0 could be pointing to a[0][0][0] or a.0.0.0 depending on context.
-//A layout path can start with a slash, so /a/ and a/ would resolve to the same.
+//A layout path can start with a slash, so /a/ and a/ would resolve to the same (a).
 //Leading slashes are ignored.
 //Empty members are invalid, so that makes // and /a// invalid.
 //Array indices can be given by either hex (0x[0-9A-Fa-f]+), octal (0o[0-7]+), 
@@ -161,12 +222,24 @@ Error BufferLayout_createInstance(BufferLayout layout, U64 count, Allocator allo
 typedef struct LayoutPathInfo {
 
 	CharString memberName;		//Can be empty for root struct
-	U64 offset, length;
+	U64 offset, length, stride;
 	ETypeId typeId;
 	U32 structId;
 	List leftoverArray;			//How long the remainder of array is
 
 } LayoutPathInfo;
+
+Bool LayoutPathInfo_free(LayoutPathInfo *info, Allocator alloc);
+
+Error BufferLayoutInstance_resolveLayout(
+	BufferLayoutInstance layoutInstance,
+	CharString path,
+	LayoutPathInfo *info,
+	CharString *parent,					//If not null, will return a StringRef into CharString (empty if root).
+	Bool resolveDynamicSizes,			//If true, LayoutPathInfo has to be freed!
+	Bool checkDynamicSizes,				//If true, will require valid instance (not only layout) to check sizes.
+	Allocator alloc
+);
 
 Error BufferLayout_resolveLayout(
 	BufferLayout layout,
@@ -176,47 +249,51 @@ Error BufferLayout_resolveLayout(
 	Allocator alloc
 );
 
-Error BufferLayout_resolve(
-	Buffer buffer, 
-	BufferLayout layout, 
+Error BufferLayoutInstance_resolve(
+	BufferLayoutInstance layoutInstance, 
 	CharString path, 
 	Buffer *location, 
 	Allocator alloc
 );
 
 //Setting data in the buffer
+//Only works on a contiguous block of memory.
+//E.g. setting C8[][] doesn't work. But setting C8[] does work.
+//Any normal array of a static block of memory works too 
+//(e.g. MyStruct[10] or MyStruct[] if MyStruct is pod).
+//Dynamic variables are seen as size 0, 
+//So technically if MyStruct contains C8[] and F32 then it'll become a F32[].
+//But this isn't accessible by the API directly. 
 
-Error BufferLayout_setData(
-	Buffer buffer, 
-	BufferLayout layout, 
+Error BufferLayoutInstance_setData(
+	BufferLayoutInstance layoutInstance, 
 	CharString path, 
 	Buffer newData, 
 	Allocator alloc
 );
 
-Error BufferLayout_getData(
-	Buffer buffer, 
-	BufferLayout layout, 
+Error BufferLayoutInstance_getData(
+	BufferLayoutInstance layoutInstance, 
 	CharString path, 
 	Buffer *currentData, 
 	Allocator alloc
 );
+
+BufferLayoutInstance BufferLayoutInstance_createConstRef(BufferLayoutInstance nonConst);
 
 //Auto generated getters and setters
 
 #define _BUFFER_LAYOUT_SGET(T)																		\
 																									\
 Error BufferLayout_set##T(																			\
-	Buffer buffer, 																					\
-	BufferLayout layout, 																			\
+	BufferLayoutInstance layoutInstance, 															\
 	CharString path, 																				\
 	T t, 																							\
 	Allocator alloc																					\
 );																									\
 																									\
 Error BufferLayout_get##T(																			\
-	Buffer buffer, 																					\
-	BufferLayout layout, 																			\
+	BufferLayoutInstance layoutInstance, 															\
 	CharString path, 																				\
 	T *t, 																							\
 	Allocator alloc																					\
@@ -248,25 +325,17 @@ _BUFFER_LAYOUT_VEC_SGET(F);
 
 //Looping through parent and child members
 
-typedef Error (*BufferLayoutForeachFunc)(BufferLayout, LayoutPathInfo, CharString, void*);
-
-Error BufferLayout_foreach(
-	BufferLayout layout, 
-	CharString path, 
-	BufferLayoutForeachFunc func, 
-	void *userData,
-	Bool isRecursive,
-	Allocator alloc
-);
-
 typedef Error (*BufferLayoutForeachDataFunc)(BufferLayout, LayoutPathInfo, CharString, Buffer, void*);
 
-Error BufferLayout_foreachData(
-	Buffer buffer,
-	BufferLayout layout, 
+Error BufferLayoutInstance_foreachData(
+	BufferLayoutInstance layoutInstance, 
 	CharString path, 
 	BufferLayoutForeachDataFunc func, 
 	void *userData,
 	Bool isRecursive,
 	Allocator alloc
 );
+
+Error BufferLayout_getStructName(BufferLayout layout, U32 structId, CharString *typeName);
+
+//TODO: Helper functions such as isStruct, isArray, isValue, isType

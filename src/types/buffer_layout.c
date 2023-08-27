@@ -43,34 +43,91 @@ U32 BufferLayoutMember_getStructId(BufferLayoutMember member) {
 
 //BufferLayoutMemberInfo
 
-BufferLayoutMemberInfo BufferLayoutMemberInfo_create(ETypeId typeId, CharString name, U64 offset, U32 stride) {
-	return (BufferLayoutMemberInfo) {
+Error BufferLayoutMemberInfo_validate(CharString name, U64 offset, List arraySizes, BufferLayoutMemberInfo *result) {
+
+	if(!result)
+		return Error_nullPointer(3);
+
+	if(result->name.ptr)
+		return Error_invalidParameter(3, 0);
+
+	if(!CharString_length(name) || CharString_length(name) > U8_MAX || !CharString_isValidAscii(name))
+		return Error_invalidParameter(0, 0);
+
+	if(arraySizes.length && arraySizes.stride != sizeof(U32))
+		return Error_invalidParameter(2, 0);
+
+	if(arraySizes.length > U8_MAX)
+		return Error_invalidParameter(2, 1);
+
+	if(offset >> 47)
+		return Error_invalidParameter(1, 0);
+
+	return Error_none();
+}
+
+Error BufferLayoutMemberInfo_create(
+	ETypeId typeId, 
+	CharString name, 
+	U64 offset, 
+	U32 stride, 
+	BufferLayoutMemberInfo *result
+) {
+
+	Error err = BufferLayoutMemberInfo_validate(name, offset, (List) { 0 }, result);
+
+	if(err.genericError)
+		return err;
+
+	*result = (BufferLayoutMemberInfo) {
 		.typeId = typeId,
 		.structId = U32_MAX,
 		.name = name,
 		.offset = offset,
 		.stride = stride
 	};
+
+	return Error_none();
 }
 
-BufferLayoutMemberInfo BufferLayoutMemberInfo_createStruct(U32 structId, CharString name, U64 offset, U32 stride) {
-	return (BufferLayoutMemberInfo) {
+Error BufferLayoutMemberInfo_createStruct(
+	U32 structId, 
+	CharString name, 
+	U64 offset, 
+	U32 stride,
+	BufferLayoutMemberInfo *result
+) {
+
+	Error err = BufferLayoutMemberInfo_validate(name, offset, (List) { 0 }, result);
+
+	if(err.genericError)
+		return err;
+
+	*result = (BufferLayoutMemberInfo) {
 		.typeId = ETypeId_Undefined,
 		.structId = structId,
 		.name = name,
 		.offset = offset,
-			.stride = stride
+		.stride = stride
 	};
+
+	return Error_none();
 }
 
-BufferLayoutMemberInfo BufferLayoutMemberInfo_createArray(
+Error BufferLayoutMemberInfo_createArray(
 	ETypeId typeId, 
 	CharString name, 
 	List arraySizes, 
 	U64 offset, 
-	U32 stride
+	U32 stride,
+	BufferLayoutMemberInfo *result
 ) {
-	return (BufferLayoutMemberInfo) {
+	Error err = BufferLayoutMemberInfo_validate(name, offset, arraySizes, result);
+
+	if(err.genericError)
+		return err;
+
+	*result = (BufferLayoutMemberInfo) {
 		.typeId = typeId,
 		.structId = U32_MAX,
 		.name = name,
@@ -78,16 +135,24 @@ BufferLayoutMemberInfo BufferLayoutMemberInfo_createArray(
 		.offset = offset,
 		.stride = stride
 	};
+
+	return Error_none();
 }
 
-BufferLayoutMemberInfo BufferLayoutMemberInfo_createStructArray(
+Error BufferLayoutMemberInfo_createStructArray(
 	U32 structId, 
 	CharString name, 
 	List arraySizes, 
 	U64 offset,
-	U32 stride
+	U32 stride,
+	BufferLayoutMemberInfo *result
 ) {
-	return (BufferLayoutMemberInfo) {
+	Error err = BufferLayoutMemberInfo_validate(name, offset, arraySizes, result);
+
+	if(err.genericError)
+		return err;
+
+	*result = (BufferLayoutMemberInfo) {
 		.typeId = ETypeId_Undefined,
 		.structId = structId,
 		.name = name,
@@ -95,6 +160,17 @@ BufferLayoutMemberInfo BufferLayoutMemberInfo_createStructArray(
 		.offset = offset,
 		.stride = stride
 	};
+
+	return Error_none();
+}
+
+Bool BufferLayoutMemberInfo_isDynamic(BufferLayoutMemberInfo info) {
+
+	for(U64 i = 0; i < info.arraySizes.length; ++i)
+		if(!((const U32*)info.arraySizes.ptr)[i])
+			return true;
+
+	return false;
 }
 
 //Manipulating data
@@ -107,72 +183,85 @@ U64 BufferLayoutStruct_allocatedData(BufferLayoutStructInfo info, U64 memberData
 		memberDataLen;
 }
 
-Error BufferLayoutStruct_create(BufferLayoutStructInfo info, U32 id, Allocator alloc, BufferLayoutStruct *layoutStruct) {
+Error BufferLayoutStruct_create(
+	List/*<BufferLayoutStruct>*/ allStructs,
+	BufferLayoutStructInfo info, 
+	U32 id, 
+	Allocator alloc, 
+	BufferLayoutStruct *layoutStruct
+) {
+
+	if(!allStructs.length)
+		return Error_nullPointer(0);
+
+	if(allStructs.stride != sizeof(BufferLayoutStruct))
+		return Error_invalidParameter(0, 0);
 
 	if(!layoutStruct)
-		return Error_nullPointer(1);
+		return Error_nullPointer(4);
 
 	if(layoutStruct->data.ptr)
-		return Error_invalidParameter(1, 0);
+		return Error_invalidParameter(4, 0);
 
 	if(id == U32_MAX)
 		return Error_invalidParameter(2, 0);
 
-	if(CharString_length(info.name) > U8_MAX)
-		return Error_invalidParameter(0, 0);
+	if(CharString_length(info.name) >= U8_MAX)
+		return Error_invalidParameter(1, 0);
 
 	if(info.members.length >= U16_MAX)
-		return Error_invalidParameter(0, 1);
+		return Error_invalidParameter(1, 1);
 
 	U64 memberDataLen = 0;
+	Bool isContiguous = true;
 		
 	for(U16 i = 0; i < (U16) info.members.length; ++i) {
 
 		BufferLayoutMemberInfo m = ((const BufferLayoutMemberInfo*)info.members.ptr)[i];
 
-		if(!CharString_length(m.name) || CharString_length(m.name) > U8_MAX || !CharString_isValidAscii(m.name))
-			return Error_invalidParameter(0, 0 + (((U32)i + 1) << 16));
-
-		if(m.arraySizes.length && m.arraySizes.stride != sizeof(U32))
-			return Error_invalidParameter(0, 1 + (((U32)i + 1) << 16));
-
-		if(m.arraySizes.length > U8_MAX)
-			return Error_invalidParameter(0, 1 + (((U32)i + 1) << 16));
-
-		if(((U32)m.typeId == U32_MAX) && (m.structId == U32_MAX))
-			return Error_invalidParameter(0, 2 + (((U32)i + 1) << 16));
-
-		if(((U32)m.typeId != U32_MAX) && (m.structId != U32_MAX))
-			return Error_invalidParameter(0, 2 + (((U32)i + 1) << 16));
-
 		if(m.structId != U32_MAX && m.structId >= id)
 			return Error_invalidParameter(0, 3 + (((U32)i + 1) << 16));
 
-		if(m.offset >> 47)
-			return Error_invalidParameter(0, 4 + (((U32)i + 1) << 16));
+		if(m.structId != U32_MAX)
+			isContiguous &= ((const BufferLayoutStruct*)allStructs.ptr)[m.structId].isContiguous;
 
-		U64 totalLen = 1;
+		U64 totalLen = m.stride;
+
+		//It's possible that any of the arraySizes is defined as 0.
+		//In this case, the root buffer won't store it (hence it being length 0).
+		//It will instead have a property that defines the undefined array size.
+		//prop: F32[1][][3] would need each property to define the size:
+		//	e.g. BufferLayout_setSize("prop/0", mySize);
+		//	This will then allocate the underlying BufferLayout and properties.
+		//	So in this case it'll allocate F32[3] per property.
+		//	If it's not defined it'll be assumed as an empty array in json.
+		//So names: C8[][] is a CharString[]. First you define the size (psuedocode):
+		//	BufferLayout_setSize("names", 2);
+		//Then you set the properties:
+		//	BufferLayout_setSize("names/0", 5);
+		//	BufferLayout_setData("names/0", "hello");
+		//	BufferLayout_setSize("names/1", 3);
+		//	BufferLayout_setData("names/1", "hey");
+		//This can be shortened by using setString since that does both setSize and setData.
 
 		for(U64 j = 0; j < m.arraySizes.length; ++j) {
 
 			U32 leni = ((const U32*)m.arraySizes.ptr)[j];
 
-			//An array length of 0 is only allowed if there's one element
-
-			if(!leni && !(!j && m.arraySizes.length == 1))
-				return Error_invalidParameter(0, 1 + (((U32)j + 1) << 16));
+			if(leni == U32_MAX)
+				return Error_outOfBounds(0, U32_MAX, U32_MAX);
 
 			U64 prevLen = totalLen;
 			totalLen *= leni;
 
-			if(totalLen < prevLen)
+			if(!leni)
+				isContiguous = false;
+
+			else if(totalLen < prevLen)
 				return Error_overflow((((U32)j + 1) << 16), totalLen, prevLen);
 		}
 
-		U64 prevLen = totalLen;
-		totalLen *= m.stride;
-
-		if(totalLen < prevLen || totalLen >> 48)
+		if(totalLen >> 47)
 			return Error_overflow((((U32)i + 1) << 16), totalLen, ((U64) 1 << 48) - 1);
 
 		memberDataLen += CharString_length(m.name) + List_bytes(m.arraySizes);
@@ -194,6 +283,7 @@ Error BufferLayoutStruct_create(BufferLayoutStructInfo info, U32 id, Allocator a
 
 		.memberCount = (U16) info.members.length,
 		.nameLength = (U8) CharString_length(info.name),
+		.isContiguous = isContiguous,
 
 		.data = allocated
 	};
@@ -313,7 +403,7 @@ BufferLayoutMemberInfo BufferLayoutStruct_getMemberInfo(BufferLayoutStruct layou
 
 U16 BufferLayoutStruct_findMember(BufferLayoutStruct info, CharString copy) {
 
-	for (U16 i = 0; i < (U16)info.memberCount; ++i)
+	for (U16 i = 0; i < info.memberCount; ++i)
 		if (CharString_equalsString(
 			copy, 
 			BufferLayoutStruct_getMemberInfo(info, i).name, 
@@ -335,7 +425,7 @@ Error BufferLayout_create(Allocator alloc, BufferLayout *layout) {
 		return Error_invalidParameter(1, 0);
 
 	layout->structs = List_createEmpty(sizeof(BufferLayoutStruct));
-	Error err = List_reserve(&layout->structs, 128, alloc);
+	Error err = List_reserve(&layout->structs, 48, alloc);
 
 	if (err.genericError) {
 		layout->structs = (List) { 0 };
@@ -345,11 +435,10 @@ Error BufferLayout_create(Allocator alloc, BufferLayout *layout) {
 	//Root struct hasn't been selected yet, so set it to unset.
 
 	layout->rootStructIndex = U32_MAX;
-
 	return Error_none();
 }
 
-Bool BufferLayout_free(Allocator alloc, BufferLayout *layout) {
+Bool BufferLayout_free(BufferLayout *layout, Allocator alloc) {
 
 	if(!layout || !layout->structs.ptr)
 		return true;
@@ -369,6 +458,12 @@ Error BufferLayout_createStruct(BufferLayout *layout, BufferLayoutStructInfo inf
 	if(!id)
 		return Error_nullPointer(3);
 
+	if(info.members.length >= U16_MAX)
+		return Error_outOfBounds(1, info.members.length, U16_MAX);
+
+	if(info.members.stride == sizeof(BufferLayoutMemberInfo) || !info.members.length)
+		return Error_invalidParameter(1, 0);
+
 	for (U16 i = 0; i < (U16) info.members.length; ++i) {
 
 		BufferLayoutMemberInfo member = ((const BufferLayoutMemberInfo*) info.members.ptr)[i];
@@ -384,7 +479,7 @@ Error BufferLayout_createStruct(BufferLayout *layout, BufferLayoutStructInfo inf
 
 	Error err = Error_none();
 
-	_gotoIfError(clean, BufferLayoutStruct_create(info, (U32)layout->structs.length, alloc, &layoutStruct));
+	_gotoIfError(clean, BufferLayoutStruct_create(layout->structs, info, (U32)layout->structs.length, alloc, &layoutStruct));
 	_gotoIfError(clean, List_pushBack(&layout->structs, Buffer_createConstRef(&layoutStruct, sizeof(layoutStruct)), alloc));
 
 	*id = (U32)layout->structs.length - 1;
@@ -409,12 +504,12 @@ Error BufferLayout_assignRootStruct(BufferLayout *layout, U32 id) {
 	return Error_none();
 }
 
-Error BufferLayout_createInstance(BufferLayout layout, U64 count, Allocator alloc, Buffer *result) {
+Error BufferLayoutInstance_create(BufferLayout layout, Allocator alloc, BufferLayoutInstance *result) {
 
 	if(!result)
 		return Error_nullPointer(3);
 
-	if(result->ptr)
+	if(result->layout.structs.ptr)
 		return Error_invalidParameter(3, 0);
 
 	LayoutPathInfo info = (LayoutPathInfo) { 0 };
@@ -423,39 +518,382 @@ Error BufferLayout_createInstance(BufferLayout layout, U64 count, Allocator allo
 	if(err.genericError)
 		return err;
 
-	U64 bufLen = info.length * count;
+	U64 bufLen = info.length;
 
-	if(bufLen < info.length)
-		return Error_overflow(0, bufLen, info.length);
+	if(bufLen)
+		_gotoIfError(clean, Buffer_createEmptyBytes(bufLen, alloc, &result->data));
 
-	return Buffer_createEmptyBytes(bufLen, alloc, result);
+	result->allocations = List_createEmpty(sizeof(BufferLayoutDynamicData));
+	_gotoIfError(clean, List_reserve(&result->allocations, 48, alloc));
+
+	result->layout = layout;
+
+	List constVer = (List) { 0 };
+
+	_gotoIfError(clean, List_createConstRef(
+		result->layout.structs.ptr, sizeof(BufferLayoutDynamicData), 
+		result->layout.structs.length,
+		&constVer
+	));
+
+	result->layout.structs = constVer;
+		
+clean:
+
+	if (err.genericError) {
+		Buffer_free(&result->data, alloc);
+		List_free(&result->allocations, alloc);
+	}
+	
+	return err;
+}
+
+Bool LayoutPathInfo_free(LayoutPathInfo *info, Allocator alloc) {
+
+	if(!info || !info->memberName.ptr)
+		return true;
+
+	Bool b = CharString_free(&info->memberName, alloc);
+	b &= List_free(&info->leftoverArray, alloc);
+	*info = (LayoutPathInfo) { 0 };
+
+	return b;
+}
+
+Bool BufferLayoutInstance_free(BufferLayoutInstance *instance, Allocator alloc) {
+
+	if(!instance || !instance->layout.structs.ptr)
+		return true;
+
+	Bool b = true;
+
+	for(U64 i = 0; i < instance->allocations.length; ++i)
+		b &= Buffer_free(&((const BufferLayoutDynamicData*)instance->allocations.ptr)[i].data, alloc);
+
+	b &= Buffer_free(&instance->data, alloc);
+	b &= List_free(&instance->allocations, alloc);
+	*instance = (BufferLayoutInstance) { 0 };
+	return b;
+}
+
+void fixPath(CharString *path) {
+
+	*path = CharString_createConstRefSized(path->ptr, CharString_length(*path), CharString_isNullTerminated(*path));
+
+	Bool prefix = CharString_startsWith(*path, '/', EStringCase_Sensitive);
+	Bool suffix = CharString_endsWith(*path, '/', EStringCase_Sensitive);
+
+	if (suffix) {
+
+		//Exception to the rule; the character might be escaped by a backslash.
+		//We have to count all backslashes before it. If it's uneven then the slash was escaped.
+		//Otherwise either there's no leading backslash or the leading backslash was itself escaped.
+
+		U64 leadingBackslashes = 0;
+		U64 start = CharString_length(*path) - 2;
+
+		while (CharString_getAt(*path, start) == '\\') {		//If it runs out of bounds getAt will return C8_MAX
+			++leadingBackslashes;
+			--start;
+		}
+
+		if(leadingBackslashes & 1)
+			suffix = false;
+	}
+
+	if(CharString_length(*path) == 1 && prefix)
+		suffix = false;
+
+	if(prefix) {
+		++path->ptr;
+		--path->lenAndNullTerminated;
+	}
+
+	if(suffix)
+		--path->lenAndNullTerminated;
+}
+
+U64 BufferLayoutInstance_getIndex(BufferLayoutInstance *instance, CharString path, Bool fixPathb) {
+
+	if(!instance || !instance->layout.structs.ptr)
+		return U64_MAX;
+
+	if(fixPathb)
+		fixPath(&path);
+
+	if(CharString_isEmpty(path))
+		return U64_MAX;
+
+	//TODO: HashMap!
+
+	for (U64 i = 0; i < instance->allocations.length; ++i) {
+
+		BufferLayoutDynamicData di = ((const BufferLayoutDynamicData*)instance->allocations.ptr)[i];
+		CharString temp = CharString_createConstRefSized(di.data.ptr, di.nameLength, false);
+
+		if(!CharString_equalsString(temp, path, EStringCase_Sensitive))
+			continue;
+
+		return i;
+	}
+
+	return U64_MAX;
+}
+
+U32 BufferLayoutInstance_getSize(BufferLayoutInstance *instance, CharString path) {
+
+	U64 id = BufferLayoutInstance_getIndex(instance, path, true);
+
+	if(id == U64_MAX)
+		return U32_MAX;
+
+	return ((const BufferLayoutDynamicData*)instance->allocations.ptr)[id].arraySize;
+}
+
+Error BufferLayoutInstance_setSizeInternal(
+	BufferLayoutInstance *instance,
+	CharString path,
+	U32 size,
+	U32 stride,
+	Allocator alloc
+) {
+
+	//Cut /myTest/ (outer /)
+
+	fixPath(&path);
+
+	if(CharString_isEmpty(path))
+		return Error_invalidParameter(1, 0);
+
+	if(CharString_length(path) >= U32_MAX)
+		return Error_outOfBounds(1, CharString_length(path), U32_MAX);
+
+	//
+
+	U64 id = BufferLayoutInstance_getIndex(instance, path, false);
+
+	//Missing from array; Create new
+
+	Bool wasNew = id == U64_MAX;
+
+	if(wasNew) {
+
+		Error err = List_pushBack(&instance->allocations, Buffer_createNull(), alloc);
+
+		if(err.genericError)
+			return err;
+
+		id = instance->allocations.length - 1;
+	}
+
+	BufferLayoutDynamicData *data = (BufferLayoutDynamicData*)instance->allocations.ptr + id;
+	Buffer *prev = NULL;
+
+	if(!wasNew) {
+
+		if(data->arraySize == size)		//Same size
+			return Error_none();
+
+		prev = &data->data;
+
+		if(CharString_length(path) != data->nameLength)
+			return Error_invalidOperation(0);
+	}
+
+	//Move data to new buffer of the same size.
+
+	Buffer neo = Buffer_createNull();
+	Error err = Buffer_createEmptyBytes(CharString_length(path) + (U64)size * stride, alloc, &neo);
+
+	if(err.genericError)
+		return err;
+
+	//Copy name and contents to new buffer and preserve old content (truncated)
+
+	if(prev) {
+		Buffer_copy(neo, *prev);
+		Buffer_free(prev, alloc);
+	}
+
+	//Save name only; the rest is empty
+
+	else Buffer_copy(neo, CharString_bufferConst(path));
+
+	//Save
+
+	data->data = neo;
+	data->arraySize = size;
+	data->nameLength = CharString_length(path);
+
+	return Error_none();
+}
+
+Error BufferLayoutInstance_setSize(
+	BufferLayoutInstance *instance,
+	CharString path,
+	U32 size,
+	Allocator alloc
+) {
+
+	if(!instance || !instance->layout.structs.ptr)
+		return Error_nullPointer(0);
+
+	LayoutPathInfo info = (LayoutPathInfo) { 0 };
+	Error err = BufferLayoutInstance_resolveLayout(
+		*instance,
+		path,
+		&info,
+		NULL,
+		false, true,
+		alloc
+	);
+
+	if(err.genericError)
+		return err;
+
+	//If it's not an array or it's not dynamic, it's an invalid operation.
+
+	if (info.leftoverArray.length == 0 || *(const U32*)info.leftoverArray.ptr)
+		return Error_invalidOperation(0);
+
+	//Get type stride.
+	//Since info.length is 0.
+
+	U64 stride = info.stride * size;
+
+	//Dynamic arrays (as sub array) mean nothing gets allocated for this.
+	//Example: C8[][8][] if you setSize on the root it won't allocate anything besides name.
+	//Then setSize on arr/0/0 will actually allocate.
+	//C8[][4] setSize will allocate 4 C8s per element.
+
+	for(U64 i = 1; i < info.leftoverArray.length; ++i) {
+
+		U64 arri = ((const U32*)info.leftoverArray.ptr)[i];
+
+		if(arri && stride * arri < stride)
+			return Error_overflow(2, stride * arri, U64_MAX);
+
+		stride *= arri;
+	}
+
+	return BufferLayoutInstance_setSizeInternal(
+		instance, 
+		path,
+		size,
+		stride,
+		alloc
+	);
+}
+
+Error BufferLayoutInstance_setString(
+	BufferLayoutInstance *instance, 
+	CharString path, 
+	CharString value, 
+	Allocator alloc
+) {
+
+	if(!instance || !instance->layout.structs.ptr)
+		return Error_nullPointer(0);
+
+	LayoutPathInfo info = (LayoutPathInfo) { 0 };
+	Error err = BufferLayoutInstance_resolveLayout(
+		*instance,
+		path,
+		&info,
+		NULL,
+		false, true,
+		alloc
+	);
+
+	if(err.genericError)
+		return err;
+
+	//Only allow C8[] to set it
+
+	if (info.leftoverArray.length == 1 && info.typeId == ETypeId_C8) {
+
+		U32 len = *(const U32*)info.leftoverArray.ptr;
+		U64 newLen = CharString_length(value);
+
+		//Limit of 4GiB strings in serialization.
+		//If you really want to, use paging (e.g. C8[][])
+		//and then allocate it per 4GiB chunks.
+
+		if(newLen >= U32_MAX)
+			return Error_outOfBounds(2, newLen, U32_MAX);
+
+		//If it's a static array, we'll only allow setString if the string is the same size.
+
+		if(len && (U32)newLen != len)
+			return Error_invalidOperation(1);
+
+		//Dynamic array, so it has to be resized.
+
+		if(
+			!len && 
+			(err = BufferLayoutInstance_setSizeInternal(instance, path, (U32) newLen, sizeof(C8), alloc)).genericError
+		)
+			return err;
+
+		//Set the data
+
+		return BufferLayoutInstance_setData(*instance, path, CharString_bufferConst(value), alloc);
+	}
+
+	return Error_invalidOperation(0);
 }
 
 Error BufferLayout_resolveLayout(
 	BufferLayout layout,
 	CharString path,
 	LayoutPathInfo *info,
+	CharString *parent,					//If not null, will return a StringRef into CharString (empty if root)
+	Allocator alloc
+) {
+	return BufferLayoutInstance_resolveLayout(
+		(BufferLayoutInstance) { .layout = layout },
+		path,
+		info,
+		parent,
+		false,
+		false,
+		alloc
+	);
+}
+
+Error BufferLayoutInstance_resolveLayout(
+	BufferLayoutInstance layoutInstance,
+	CharString path,
+	LayoutPathInfo *info,
 	CharString *parent,
+	Bool resolveDynamicSizes,
+	Bool checkDynamicSizes,	
 	Allocator alloc
 ) {
 
-	if(!layout.structs.ptr)
+	if(!layoutInstance.layout.structs.ptr)
 		return Error_nullPointer(0);
 
 	if(!info)
 		return Error_nullPointer(2);
 
+	if(info->memberName.ptr)
+		return Error_invalidParameter(2, 0);
+
 	if(parent && parent->ptr)
 		return Error_invalidParameter(3, 0);
 
-	if(layout.rootStructIndex >= layout.structs.length)
+	if(layoutInstance.layout.rootStructIndex >= layoutInstance.layout.structs.length)
 		return Error_unsupportedOperation(0);
 
-	if(CharString_equalsString(path, CharString_createConstRefUnsafe("//"), EStringCase_Sensitive))
-		return Error_invalidParameter(1, 0);
-
-	if(CharString_length(path) > U16_MAX)
+	if(CharString_length(path) >= U16_MAX)
 		return Error_invalidParameter(1, 1);
+
+	if(
+		CharString_equalsString(path, CharString_createConstRefUnsafe("//"), EStringCase_Sensitive) ||
+		CharString_equalsString(path, CharString_createConstRefUnsafe("/\\/"), EStringCase_Sensitive)
+	)
+		return Error_invalidParameter(1, 0);
 
 	U64 start = CharString_startsWith(path, '/', EStringCase_Sensitive);
 	Bool suffix = CharString_endsWith(path, '/', EStringCase_Sensitive);
@@ -483,7 +921,7 @@ Error BufferLayout_resolveLayout(
 
 	U64 end = CharString_length(path) - suffix;
 
-	U32 currentStructId = layout.rootStructIndex;
+	U32 currentStructId = layoutInstance.layout.rootStructIndex;
 	BufferLayoutStruct currentStruct = ((const BufferLayoutStruct*)layout.structs.ptr)[currentStructId];
 
 	if (end <= start) {
@@ -504,6 +942,7 @@ Error BufferLayout_resolveLayout(
 
 		*info = (LayoutPathInfo) {
 			.length = totalLength,
+			.stride = totalLength,
 			.structId = layout.rootStructIndex,
 			.typeId = ETypeId_Undefined
 		};
@@ -690,7 +1129,8 @@ Error BufferLayout_resolveLayout(
 		.offset = currentOffset,
 		.length = arrayStride,
 		.typeId = currentMember.typeId,
-		.structId = currentMember.structId
+		.structId = currentMember.structId,
+		.stride = currentMember.stride
 	};
 
 	if(currentArrayDim < currentMember.arraySizes.length)
@@ -706,9 +1146,8 @@ clean:
 	return err;
 }
 
-Error BufferLayout_resolve(
-	Buffer buffer, 
-	BufferLayout layout, 
+Error BufferLayoutInstance_resolve(
+	BufferLayoutInstance layoutInstance, 
 	CharString path, 
 	Buffer *location, 
 	Allocator alloc
@@ -739,9 +1178,8 @@ Error BufferLayout_resolve(
 	return Error_none();
 }
 
-Error BufferLayout_setData(
-	Buffer buffer,
-	BufferLayout layout,
+Error BufferLayoutInstance_setData(
+	BufferLayoutInstance layoutInstance, 
 	CharString path,
 	Buffer newData,
 	Allocator alloc
@@ -770,9 +1208,26 @@ Error BufferLayout_setData(
 	return Error_none();
 }
 
-Error BufferLayout_getData(
-	Buffer buffer, 
-	BufferLayout layout, 
+BufferLayoutInstance BufferLayoutInstance_createConstRef(BufferLayoutInstance nonConst) {
+
+	List tmp = (List) { 0 };
+
+	if(
+		tmp.length &&
+		List_createConstRef(
+			nonConst.allocations.ptr, sizeof(BufferLayoutDynamicData), nonConst.allocations.length,
+			&tmp
+		).genericError
+	)
+		return (BufferLayoutInstance) { 0 };
+
+	nonConst.allocations = tmp;
+	nonConst.data = Buffer_createConstRef(nonConst.data.ptr, Buffer_length(nonConst.data));
+	return nonConst;
+}
+
+Error BufferLayoutInstance_getData(
+	BufferLayoutInstance layoutInstance, 
 	CharString path, 
 	Buffer *currentData, 
 	Allocator alloc
@@ -803,39 +1258,35 @@ Error BufferLayout_getData(
 
 #define _BUFFER_LAYOUT_SGET_IMPL(T)																	\
 																									\
-Error BufferLayout_set##T(																			\
-	Buffer buffer, 																					\
-	BufferLayout layout, 																			\
+Error BufferLayoutInstance_set##T(																	\
+	BufferLayoutInstance layoutInstance, 															\
 	CharString path, 																				\
 	T t, 																							\
 	Allocator alloc																					\
 ) {																									\
-	return BufferLayout_setData(																	\
-		buffer,																						\
-		layout,																						\
+	return BufferLayoutInstance_setData(															\
+		layoutInstance,																				\
 		path,																						\
 		Buffer_createConstRef(&t, sizeof(T)),														\
 		alloc																						\
 	);																								\
 }																									\
 																									\
-Error BufferLayout_get##T(																			\
-	Buffer buffer, 																					\
-	BufferLayout layout, 																			\
+Error BufferLayoutInstance_get##T(																	\
+	BufferLayoutInstance layoutInstance, 															\
 	CharString path, 																				\
 	T *t, 																							\
 	Allocator alloc																					\
 ) {																									\
 																									\
 	if(!t)																							\
-		return Error_nullPointer(3);																\
+		return Error_nullPointer(2);																\
 																									\
 	Buffer buf = Buffer_createRef(t, sizeof(T));													\
 	Buffer currentData = Buffer_createNull();														\
 																									\
-	Error err = BufferLayout_getData(																\
-		buffer, 																					\
-		layout, 																					\
+	Error err = BufferLayoutInstance_getData(														\
+		layoutInstance, 																			\
 		path, 																						\
 		&currentData, 																				\
 		alloc																						\
@@ -874,10 +1325,10 @@ __BUFFER_LAYOUT_VEC_IMPL(F);
 
 //Looping through members and parent
 
-Error BufferLayout_foreach(
-	BufferLayout layout,
+Error BufferLayoutInstance_foreach(
+	BufferLayoutInstance layoutInstance,
 	CharString path,
-	BufferLayoutForeachFunc func,
+	BufferLayoutForeachDataFunc func,
 	void *userData,
 	Bool isRecursive,
 	Allocator alloc
@@ -891,7 +1342,7 @@ Error BufferLayout_foreach(
 	CharString tmp = CharString_createNull();
 	CharString tmp1 = CharString_createNull();
 
-	_gotoIfError(clean, BufferLayout_resolveLayout(layout, path, &info, NULL, alloc));
+	_gotoIfError(clean, BufferLayoutInstance_resolveLayout(layoutInstance, path, &info, NULL, true, true, alloc));
 
 	Bool prefix = CharString_startsWith(path, '/', EStringCase_Sensitive);
 	Bool suffix = CharString_endsWith(path, '/', EStringCase_Sensitive);
@@ -930,7 +1381,8 @@ Error BufferLayout_foreach(
 				.offset = info.offset + length * i,
 				.length = length,
 				.typeId = info.typeId,
-				.structId = info.structId
+				.structId = info.structId,
+				.stride = info.stride
 			};
 
 			if(info.leftoverArray.length > 1)
@@ -991,7 +1443,8 @@ Error BufferLayout_foreach(
 				.offset = info.offset + infoi.offset,
 				.length = length,
 				.typeId = infoi.typeId,
-				.structId = infoi.structId
+				.structId = infoi.structId,
+				.stride = infoi.stride
 			};
 
 			if(infoi.arraySizes.length)
@@ -1069,6 +1522,7 @@ Error BufferLayout_foreach(
 	else _gotoIfError(clean, Error_invalidOperation(0));
 
 clean:
+	LayoutPathInfo_free(&info, alloc);
 	CharString_free(&tmp1, alloc);
 	CharString_free(&tmp, alloc);
 	return err;
@@ -1136,4 +1590,21 @@ Error BufferLayout_foreachData(
 
 clean:
 	return err;
+}
+
+Error BufferLayout_getStructName(BufferLayout layout, U32 structId, CharString *typeName) {
+
+	if(!typeName)
+		return Error_nullPointer(2);
+
+	if(typeName->ptr)
+		return Error_invalidParameter(2, 0);
+
+	if(structId >= layout.structs.length)
+		return Error_outOfBounds(1, structId, layout.structs.length);
+
+	BufferLayoutStruct str = ((const BufferLayoutStruct*)layout.structs.ptr)[structId];
+
+	*typeName = CharString_createConstRefSized((const C8*) str.data.ptr, str.nameLength, false);
+	return Error_none();
 }

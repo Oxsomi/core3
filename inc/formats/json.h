@@ -68,3 +68,15 @@ Error JSON_serialize(
 	Allocator alloc, 
 	CharString *serialized
 );
+
+//Serializing a BufferLayout to JSON.
+//Useful for inspection.
+
+Error BufferLayout_serialize(
+	BufferLayout layout,
+	Bool prettify,
+	Bool useSpaces,
+	U8 indentPerStage,
+	Allocator alloc,
+	CharString *serialized
+);

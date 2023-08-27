@@ -26,7 +26,7 @@ Error BufferLayout_createx(BufferLayout *layout) {
 }
 
 Bool BufferLayout_freex(BufferLayout *layout) {
-	return BufferLayout_free(Platform_instance.alloc, layout);
+	return BufferLayout_free(layout, Platform_instance.alloc);
 }
 
 Error BufferLayout_createStructx(BufferLayout *layout, BufferLayoutStructInfo info, U32 *id) {
