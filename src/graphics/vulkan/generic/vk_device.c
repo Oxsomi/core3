@@ -19,4 +19,7 @@
 */
 
 #include "graphics/vulkan/vk_device.h"
+#include "graphics/generic/device.h"
 
+impl Error GraphicsDevice_initExt(const GraphicsInstance *instance, const GraphicsDeviceInfo *device, void **ext);
+impl Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void **ext);

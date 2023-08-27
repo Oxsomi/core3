@@ -21,10 +21,11 @@
 #pragma once
 #include "graphics/generic/device_info.h"
 #include "types/type_id.h"
+#include "types/list.h"
 
 typedef struct Error Error;
 typedef struct RefPtr RefPtr;
-typedef struct List List;
+typedef struct GraphicsInstance GraphicsInstance;
 
 //ETypeId but for graphics factories. 
 //Properties contain if it allows lookup by an info struct.
@@ -40,22 +41,28 @@ typedef enum EGraphicsTypeId {
 	EGraphicsTypeId_Sampler					= _makeObjectId(0xC4, 6, 1),
 	EGraphicsTypeId_CommandList				= _makeObjectId(0xC4, 7, 0),
 	EGraphicsTypeId_AccelerationStructure	= _makeObjectId(0xC4, 8, 1),
-	EGraphicsTypeId_Swapchain				= _makeObjectId(0xC4, 9, 0)
+	EGraphicsTypeId_Swapchain				= _makeObjectId(0xC4, 9, 0),
+
+	EGraphicsTypeId_Count					= 10
 
 } EGraphicsTypeId;
+
+static EGraphicsTypeId EGraphicsTypeId_all[EGraphicsTypeId_Count];
+static U64 EGraphicsTypeId_descBytes[EGraphicsTypeId_Count];
+static U64 EGraphicsTypeId_objectBytes[EGraphicsTypeId_Count];
 
 typedef struct GraphicsDevice {
 
 	GraphicsDeviceInfo info;
 
-	//List factories;		//<GraphicsObjectFactory>
+	List factories;		//<GraphicsObjectFactory>
 
 	void *ext;
 
 } GraphicsDevice;
 
-Error GraphicsDevice_create(U64 deviceId, GraphicsDevice *device);
-Bool GraphicsDevice_free(GraphicsDevice *device);
+Error GraphicsDevice_create(const GraphicsInstance *instance, const U64 uuid[2], GraphicsDevice *device);
+Bool GraphicsDevice_free(const GraphicsInstance *instance, GraphicsDevice *device);
 
 //Submit and wait until all submitted graphics tasks are done.
 

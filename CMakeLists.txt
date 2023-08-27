@@ -196,28 +196,70 @@ message("-- Targeting graphics api: ${graphicsApi} on platform ${platform}")
 file(GLOB_RECURSE graphicsHeaders "inc/graphics/generic/*.h")
 file(GLOB_RECURSE graphicsApiHeaders "inc/graphics/${graphicsApi}/*.h")
 
-file(
-	GLOB_RECURSE 
-	graphicsAllSources 
-	"src/graphics/${graphicsApi}/generic/*.c" 
-	"src/graphics/${graphicsApi}/${platform}/*.c" 
-	"src/graphics/generic/*.c"
-)
+file(GLOB_RECURSE graphicsApiSources "src/graphics/${graphicsApi}/generic/*.c")
+file(GLOB_RECURSE graphicsApiPlatformSources "src/graphics/${graphicsApi}/${platform}/*.c")
+
+file(GLOB_RECURSE graphicsSources "src/graphics/generic/*.c")
 
 add_library(
 	OxC3_graphics
 	STATIC
 	${graphicsHeaders}
 	${graphicsApiHeaders}
-	${graphicsAllSources}
+	${graphicsApiSources}
+	${graphicsApiPlatformSources}
+	${graphicsSources}
 	CMakeLists.txt
 )
+
+source_group("Header Files (${graphicsApi})" FILES ${graphicsApiHeaders})
+source_group("Source Files (${graphicsApi})" FILES ${graphicsApiSources})
+source_group("Source Files (${graphicsApi}/${platform})" FILES ${graphicsApiPlatformSources})
 
 target_compile_definitions(OxC3_graphics PUBLIC -D_GRAPHICS_API=${_GRAPHICS_API})
 
 set_target_properties(OxC3_graphics PROPERTIES FOLDER Oxsomi)
 
 target_link_libraries(OxC3_graphics PUBLIC OxC3_platforms)
+
+if("${graphicsApi}" STREQUAL "vulkan")
+	
+	if(WIN32)
+		if(DEFINED ENV{VULKAN_SDK})
+
+			set(VULKAN_LIB vulkan-1)
+			
+			include_directories(OxC3_graphics PUBLIC $ENV{VULKAN_SDK}/Include)
+			target_link_directories(OxC3_graphics PUBLIC $ENV{VULKAN_SDK}/Lib)
+
+		else()
+			message(FATAL_ERROR "-- Vulkan incompatible: Please download the latest Vulkan SDK so you can compile")
+		endif()
+	else()
+		set(VULKAN_LIB vulkan)
+	endif()
+	
+	if("${platform}" STREQUAL "windows")
+		add_definitions(-D_VK_SURFACE_EXT="VK_KHR_win32_surface")
+		add_definitions(-DVK_USE_PLATFORM_WIN32_KHR)
+	elseif("${platform}" STREQUAL "android")
+		add_definitions(-D_VK_SURFACE_EXT="VK_KHR_android_surface")
+		add_definitions(-DVK_USE_PLATFORM_ANDROID_KHR)
+	else()
+		message(FATAL_ERROR "Platform not supported for Vulkan yet: ${platform}")
+	endif()
+
+	target_link_libraries(OxC3_graphics PUBLIC ${VULKAN_LIB})
+
+elseif("${graphicsApi}" STREQUAL "directx12")
+	message(FATAL_ERROR "Graphics api not supported yet: DirectX12")
+elseif("${graphicsApi}" STREQUAL "metal")
+	message(FATAL_ERROR "Graphics api not supported yet: Metal")
+elseif("${graphicsApi}" STREQUAL "webgpu")
+	message(FATAL_ERROR "Graphics api not supported yet: WebGPU")
+else()
+	message(FATAL_ERROR "Graphics api not supported: ${graphicsApi}")
+endif()
 
 # Setting the icon of the app
 # Call this immediately before configure_virtual_files with the executable

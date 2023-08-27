@@ -55,10 +55,10 @@ Bool EDataType_isSigned(EDataType type);
 //U3 dataType (EDataType)
 
 #define _makeTypeId(libId, typeId, width, height, dataTypeStride, dataType)										\
-((libId << 24) | (typeId << 16) | ((width - 1) << 7) | ((height - 1) << 5) | (dataTypeStride << 3) | dataType)
+(((libId) << 24) | ((typeId) << 16) | (((width) - 1) << 7) | (((height) - 1) << 5) | ((dataTypeStride) << 3) | (dataType))
 
 #define _makeObjectId(libId, typeId, properties) \
-((libId << 24) | (typeId << 16) | (properties << 3) | EDataType_Object)
+(((libId) << 24) | ((typeId) << 16) | ((properties) << 3) | EDataType_Object)
 
 #define _LIBRARYID_DEFAULT 0xC3		//OxC0-OxCF are reserved for default library.
 

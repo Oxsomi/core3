@@ -25,6 +25,7 @@ typedef enum EGraphicsDeviceType {
 
 	EGraphicsDeviceType_Dedicated,
 	EGraphicsDeviceType_Integrated,
+	EGraphicsDeviceType_Simulated,
 	EGraphicsDeviceType_CPU,
 	EGraphicsDeviceType_Other
 
@@ -49,27 +50,33 @@ typedef enum EGraphicsFeatures {
 
 	EGraphicsFeatures_TiledRendering			= 1 << 0,
 
-	EGraphicsFeatures_VariableRateShading		= 1 << 1,
+	//EGraphicsFeatures_VariableRateShading		= 1 << 1,		TODO:
 
 	EGraphicsFeatures_MultiDrawIndirectCount	= 1 << 2,
 
-	EGraphicsFeatures_MeshShader				= 1 << 3,
+	EGraphicsFeatures_MeshShader				= 1 << 3,		//Mesh and task shaders
 	EGraphicsFeatures_GeometryShader			= 1 << 4,
 	EGraphicsFeatures_TessellationShader		= 1 << 5,
 
 	EGraphicsFeatures_SubgroupArithmetic		= 1 << 6,
 	EGraphicsFeatures_SubgroupShuffle			= 1 << 7,
 
-	EGraphicsFeatures_SupportsSwapchain			= 1 << 8,
+	EGraphicsFeatures_Swapchain			= 1 << 8,
 
 	//Raytracing extensions
 
-	EGraphicsFeatures_Raytracing				= 1 << 9,
-	EGraphicsFeatures_RayQuery					= 1 << 10,
-	EGraphicsFeatures_RayMicromapOpacity		= 1 << 11,
-	EGraphicsFeatures_RayMicromapDisplacement	= 1 << 12,
-	EGraphicsFeatures_RayMotionBlur				= 1 << 13,
-	EGraphicsFeatures_RayReorder				= 1 << 14
+	EGraphicsFeatures_Raytracing				= 1 << 9,		//Requires RayPipeline or RayQuery
+	EGraphicsFeatures_RayPipeline				= 1 << 10,
+	EGraphicsFeatures_RayIndirect				= 1 << 11,
+	EGraphicsFeatures_RayQuery					= 1 << 12,
+	EGraphicsFeatures_RayMicromapOpacity		= 1 << 13,
+	EGraphicsFeatures_RayMicromapDisplacement	= 1 << 14,
+	EGraphicsFeatures_RayMotionBlur				= 1 << 15,
+	EGraphicsFeatures_RayReorder				= 1 << 16,
+
+	//LUID for sharing devices
+
+	EGraphicsFeatures_SupportsLUID				= 1 << 17
 
 } EGraphicsFeatures;
 
@@ -82,18 +89,23 @@ typedef enum EGraphicsDataTypes {
 	EGraphicsDataTypes_F64					= 1 << 2,
 
 	EGraphicsDataTypes_AtomicI64			= 1 << 3,
-	EGraphicsDataTypes_AtomicF32			= 1 << 4,
 
 	//What texture formats are available
 	//These can be both supported.
 
-	EGraphicsDataTypes_ASTC					= 1 << 5,			//If false, BCn has to be supported
-	EGraphicsDataTypes_BCn					= 1 << 6,			//If false, ASTC has to be supported
+	EGraphicsDataTypes_ASTC					= 1 << 4,			//If false, BCn has to be supported
+	EGraphicsDataTypes_BCn					= 1 << 5,			//If false, ASTC has to be supported
 
 	//What formats are available for the swapchain
 
-	EGraphicsDataTypes_HDR10A2				= 1 << 7,
-	EGraphicsDataTypes_RGBA16f				= 1 << 8
+	EGraphicsDataTypes_HDR10A2				= 1 << 6,
+	EGraphicsDataTypes_RGBA16f				= 1 << 7,
+
+	//If render targets can have MSAA8x, 2x or 16x.
+
+	EGraphicsDataTypes_MSAA2x				= 1 << 8,
+	EGraphicsDataTypes_MSAA8x				= 1 << 9,
+	EGraphicsDataTypes_MSAA16x				= 1 << 10
 
 } EGraphicsDataTypes;
 
@@ -109,19 +121,37 @@ typedef enum EGraphicsBindingTier {
 
 } EGraphicsBindingTier;
 
+//This struct represents the abilities a graphics device has.
+
+typedef struct GraphicsDeviceCapabilities {
+
+	EGraphicsFeatures features;
+
+	EGraphicsDataTypes dataTypes;
+	EGraphicsBindingTier bindingTier;
+
+	U32 featuresExt;				//Extended device features, API dependent
+
+} GraphicsDeviceCapabilities;
+
 //The device info struct represents a physical device.
 
 typedef struct GraphicsDeviceInfo {
 
 	C8 name[256];
+	C8 driverName[256];
+	C8 driverInfo[256];
 	
 	EGraphicsDeviceType type;
 	EGraphicsVendor vendor;
 
 	U32 id;
-	EGraphicsFeatures features;
+	GraphicsDeviceCapabilities capabilities;
 
-	EGraphicsDataTypes dataTypes;
-	EGraphicsBindingTier bindingTier;
+	U64 luid;			//Check SupportsLUID
+
+	U64 uuid[2];
+
+	void *ext;
 
 } GraphicsDeviceInfo;

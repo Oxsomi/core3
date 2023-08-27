@@ -19,49 +19,11 @@
 */
 
 #pragma once
-#include "types/string.h"
+#include "types/types.h"
+#include <vulkan/vulkan.h>
 
-typedef struct GraphicsApplicationInfo {
+typedef struct CharString CharString;
+typedef struct GraphicsDevice GraphicsDevice;
+typedef struct Error Error;
 
-	CharString name;
-
-	U32 version, padding;
-
-} GraphicsApplicationInfo;
-
-typedef enum EGraphicsApi {
-	EGraphicsApi_Vulkan,
-	EGraphicsApi_DirectX12,
-	EGraphicsApi_Metal,
-	EGraphicsApi_WebGPU
-} EGraphicsApi;
-
-typedef struct GraphicsInstance {
-
-	GraphicsApplicationInfo application;
-
-	EGraphicsApi api;
-	U32 apiVersion;
-
-	void *ext;
-
-} GraphicsInstance;
-
-typedef struct GraphicsDeviceInfo GraphicsDeviceInfo;
-typedef struct GraphicsDeviceCapabilities GraphicsDeviceCapabilities;
-
-impl Error GraphicsInstance_create(GraphicsApplicationInfo info, GraphicsInstance *inst);
-impl Bool GraphicsInstance_free(GraphicsInstance *inst);
-
-impl Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, List *infos);		//<GraphicsDeviceInfo>
-
-static U64 GraphicsInstance_vendorMaskAll;
-static U64 GraphicsInstance_deviceTypeAll;
-
-Error GraphicsInstance_getPreferredGpu(
-	const GraphicsInstance *inst, 
-	GraphicsDeviceCapabilities requiredCapabilities, 
-	U64 vendorMask,
-	U64 deviceTypeMask,
-	void **deviceExt
-);
+Error vkCheck(VkResult result);
