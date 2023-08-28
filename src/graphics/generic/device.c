@@ -21,12 +21,147 @@
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
 #include "platforms/ext/listx.h"
+#include "platforms/log.h"
 #include "types/error.h"
+#include "types/type_cast.h"
+
+void GraphicsDeviceInfo_print(const GraphicsDeviceInfo *deviceInfo, Bool printCapabilities) {
+
+	if(!deviceInfo || !deviceInfo->ext)
+		return;
+
+	Log_debugLn(
+		"%s (%s %s):\n\t%s %u\n\tLUID %016llx\n\tUUID %016llx%016llx", 
+		deviceInfo->name, 
+		deviceInfo->driverName, 
+		deviceInfo->driverInfo,
+		(deviceInfo->type == EGraphicsDeviceType_CPU ? "CPU" : (
+			deviceInfo->type == EGraphicsDeviceType_Dedicated ? "dGPU" : (
+				deviceInfo->type == EGraphicsDeviceType_Integrated ? "iGPU" : "Simulated GPU"
+			)
+		)),
+		deviceInfo->id,
+		deviceInfo->capabilities.features & EGraphicsFeatures_SupportsLUID ? U64_swapEndianness(deviceInfo->luid) : 0,
+		U64_swapEndianness(deviceInfo->uuid[0]),
+		U64_swapEndianness(deviceInfo->uuid[1])
+	);
+
+	if (printCapabilities) {
+
+		GraphicsDeviceCapabilities cap = deviceInfo->capabilities;
+
+		//Features
+
+		U32 feat = cap.features;
+
+		Log_debugLn("\tFeatures:");
+
+		if(feat & EGraphicsFeatures_TiledRendering)
+			Log_debugLn("\t\tTile based rendering");
+
+		//if(feat & EGraphicsFeatures_VariableRateShading)
+		//	Log_debugLn("\t\tVariable rate shading");
+
+		if(feat & EGraphicsFeatures_MultiDrawIndirectCount)
+			Log_debugLn("\t\tMulti draw indirect count");
+
+		if(feat & EGraphicsFeatures_MeshShader)
+			Log_debugLn("\t\tMesh shaders");
+
+		if(feat & EGraphicsFeatures_GeometryShader)
+			Log_debugLn("\t\tGeometry shaders");
+
+		if(feat & EGraphicsFeatures_TessellationShader)
+			Log_debugLn("\t\tTessellation shaders");
+
+		if(feat & EGraphicsFeatures_SubgroupArithmetic)
+			Log_debugLn("\t\tSubgroup arithmetic");
+
+		if(feat & EGraphicsFeatures_SubgroupShuffle)
+			Log_debugLn("\t\tSubgroup shuffle");
+
+		if(feat & EGraphicsFeatures_Swapchain)
+			Log_debugLn("\t\tSwapchain");
+
+		//if(feat & EGraphicsFeatures_Multiview)
+		//	Log_debugLn("\t\tMultiview");
+
+		if(feat & EGraphicsFeatures_Raytracing)
+			Log_debugLn("\t\tRaytracing");
+
+		if(feat & EGraphicsFeatures_RayPipeline)
+			Log_debugLn("\t\tRaytracing pipeline");
+
+		if(feat & EGraphicsFeatures_RayQuery)
+			Log_debugLn("\t\tRay query");
+
+		if(feat & EGraphicsFeatures_RayIndirect)
+			Log_debugLn("\t\tTraceRay indirect");
+
+		if(feat & EGraphicsFeatures_RayMicromapOpacity)
+			Log_debugLn("\t\tRaytracing opacity micromap");
+
+		if(feat & EGraphicsFeatures_RayMicromapDisplacement)
+			Log_debugLn("\t\tRaytracing displacement micromap");
+
+		if(feat & EGraphicsFeatures_RayMotionBlur)
+			Log_debugLn("\t\tRaytracing motion blur");
+
+		if(feat & EGraphicsFeatures_RayReorder)
+			Log_debugLn("\t\tRay reorder");
+
+		//Data types
+
+		U32 dat = cap.dataTypes;
+
+		Log_debugLn("\tData types:");
+		
+		if(dat & EGraphicsDataTypes_I64)
+			Log_debugLn("\t\t64-bit integers");
+		
+		if(dat & EGraphicsDataTypes_F16)
+			Log_debugLn("\t\t16-bit floats");
+		
+		if(dat & EGraphicsDataTypes_F64)
+			Log_debugLn("\t\t64-bit floats");
+		
+		if(dat & EGraphicsDataTypes_AtomicI64)
+			Log_debugLn("\t\t64-bit integer atomics (buffer)");
+		
+		if(dat & EGraphicsDataTypes_AtomicF32)
+			Log_debugLn("\t\t32-bit float atomics (buffer)");
+		
+		if(dat & EGraphicsDataTypes_AtomicF64)
+			Log_debugLn("\t\t64-bit float atomics (buffer)");
+		
+		if(dat & EGraphicsDataTypes_ASTC)
+			Log_debugLn("\t\tASTC compression");
+		
+		if(dat & EGraphicsDataTypes_BCn)
+			Log_debugLn("\t\tBCn compression");
+		
+		if(dat & EGraphicsDataTypes_HDR10A2)
+			Log_debugLn("\t\t30-bit HDR support (rgb10a2)");
+		
+		if(dat & EGraphicsDataTypes_RGBA16f)
+			Log_debugLn("\t\t48-bit HDR support (rgba16f)");
+		
+		if(dat & EGraphicsDataTypes_MSAA2x)
+			Log_debugLn("\t\tMSAA 2x");
+		
+		if(dat & EGraphicsDataTypes_MSAA8x)
+			Log_debugLn("\t\tMSAA 8x");
+
+		if(dat & EGraphicsDataTypes_MSAA16x)
+			Log_debugLn("\t\tMSAA 16x");
+	}
+}
 
 //Ext
 
-impl Error GraphicsDevice_initExt(const GraphicsInstance *instance, const GraphicsDeviceInfo *device, void **ext);
-impl Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void **ext);
+//TODO:
+//impl Error GraphicsDevice_initExt(const GraphicsInstance *instance, const GraphicsDeviceInfo *device, void **ext);
+//impl Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void **ext);
 
 //
 
@@ -134,7 +269,7 @@ Bool GraphicsDevice_free(const GraphicsInstance *instance, GraphicsDevice *devic
 	//	success &= GraphicsObjectFactory_free(device, (GraphicsObjectFactory*)device->factories.ptr + j);
 
 	success &= List_freex(&device->factories);
-	success &= GraphicsDevice_freeExt(instance, &device->ext);
+	//success &= GraphicsDevice_freeExt(instance, &device->ext);		TODO:
 	return success;
 }
 

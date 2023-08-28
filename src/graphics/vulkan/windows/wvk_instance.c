@@ -18,13 +18,27 @@
 *  This is called dual licensing.
 */
 
-#pragma once
-#include "types/types.h"
-#define VK_ENABLE_BETA_EXTENSIONS
-#include <vulkan/vulkan.h>
+#include "graphics/vulkan/vk_instance.h"
+#include "platforms/ext/listx.h"
+#include "types/error.h"
+#include "types/list.h"
+#include "types/buffer.h"
 
-typedef struct CharString CharString;
-typedef struct GraphicsDevice GraphicsDevice;
-typedef struct Error Error;
+const C8 *vkValidation = "VK_LAYER_KHRONOS_validation";
 
-Error vkCheck(VkResult result);
+Error VkGraphicsInstance_getLayers(List *layers) {
+
+	if(!layers)
+		return Error_nullPointer(0);
+
+	if(layers->stride != sizeof(const C8*))
+		return Error_invalidParameter(0, 0);
+
+	#ifndef NDEBUG
+		Buffer tmp = Buffer_createConstRef(&vkValidation, sizeof(vkValidation));
+		return List_pushBackx(layers, tmp);
+	#else
+		return Error_none();
+	#endif
+}
+

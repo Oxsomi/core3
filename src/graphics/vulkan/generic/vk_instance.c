@@ -75,13 +75,21 @@ VkBool32 onDebugReport(
 	return VK_FALSE;
 }
 
-#define vkExtension(label, function, result) {													\
-	PFN_vkVoidFunction v = result = vkGetInstanceProcAddr(vkInstance->instance, #function); 	\
-	if(!v)																						\
-		_gotoIfError(clean, Error_nullPointer(0));												\
+#define vkExtensionNoCheck(function, result) {												\
+	*(void**)&result = (void*) vkGetInstanceProcAddr(vkInstance->instance, #function);		\
 }
 
-Error GraphicsInstance_create(GraphicsApplicationInfo info, GraphicsInstance *inst) {
+#define vkExtension(label, function, result) {													\
+																								\
+	PFN_vkVoidFunction v = vkGetInstanceProcAddr(vkInstance->instance, #function); 				\
+																								\
+	if(!v)																						\
+		_gotoIfError(clean, Error_nullPointer(0));												\
+																								\
+	*(void**)&result = (void*) v;																\
+}
+
+Error GraphicsInstance_create(GraphicsApplicationInfo info, Bool isVerbose, GraphicsInstance *inst) {
 
 	U32 layerCount = 0, extensionCount = 0;
 	Error err = Error_none();
@@ -110,14 +118,15 @@ Error GraphicsInstance_create(GraphicsApplicationInfo info, GraphicsInstance *in
 		NULL, &extensionCount, (VkExtensionProperties*) extensions.ptr
 	)));
 
+	Bool supportsDebug[2] = { 0 };
 
 	#ifndef NDEBUG
 
-		Bool supportsDebug[2];
 		CharString debugReport = CharString_createConstRefCStr("VK_EXT_debug_report");
 		CharString debugUtils = CharString_createConstRefCStr("VK_EXT_debug_utils");
 
-		Log_debugLn("Supported extensions:");
+		if(isVerbose)
+			Log_debugLn("Supported extensions:");
 
 	#endif
 
@@ -151,17 +160,21 @@ Error GraphicsInstance_create(GraphicsApplicationInfo info, GraphicsInstance *in
 			else if(CharString_equalsString(nameStr, debugUtils, EStringCase_Sensitive))
 				supportsDebug[1] = true;
 
-			Log_debugLn("\t%s", name);
-
 		#endif
+
+		if(isVerbose)
+			Log_debugLn("\t%s", name);
 	}
 
-	#ifndef NDEBUG
+	if(isVerbose) {
 
 		Log_debugLn("Supported layers:");
 
 		for(U64 i = 0; i < layerCount; ++i)
 			Log_debugLn("\t%s", ((VkLayerProperties*)layers.ptr)[i].layerName);
+	}
+
+	#ifndef NDEBUG
 
 		if(supportsDebug[0]) {
 			Buffer ptrBuffer = Buffer_createConstRef(&debugReport.ptr, sizeof(const C8*));
@@ -221,7 +234,7 @@ Error GraphicsInstance_create(GraphicsApplicationInfo info, GraphicsInstance *in
 		.ppEnabledExtensionNames = (const char* const*) enabledExtensions.ptr
 	};
 
-	#ifndef NDEBUG
+	if(isVerbose) {
 
 		Log_debugLn("Enabling layers:");
 
@@ -230,10 +243,10 @@ Error GraphicsInstance_create(GraphicsApplicationInfo info, GraphicsInstance *in
 
 		Log_debugLn("Enabling extensions:");
 
-		for(U64 i = 0; i < extensionCount; ++i)
+		for(U64 i = 0; i < enabledExtensions.length; ++i)
 			Log_debugLn("\t%s", ((const char* const*)enabledExtensions.ptr)[i]);
 
-	#endif
+	}
 
 	//Create instance
 
@@ -243,42 +256,43 @@ Error GraphicsInstance_create(GraphicsApplicationInfo info, GraphicsInstance *in
 	
 	//Load functions
 
-	//TODO:
-	/*
 	vkExtension(clean, vkGetImageMemoryRequirements2KHR, vkInstance->getImageMemoryRequirements2);
 	vkExtension(clean, vkGetBufferMemoryRequirements2KHR, vkInstance->getBufferMemoryRequirements2);
+
+	vkExtension(clean, vkGetPhysicalDeviceFeatures2KHR, vkInstance->getPhysicalDeviceFeatures2);
+	vkExtension(clean, vkGetPhysicalDeviceProperties2KHR, vkInstance->getPhysicalDeviceProperties2);
 
 	if(supportsDebug[1]) {
 		vkExtension(clean, vkSetDebugUtilsObjectNameEXT, vkInstance->debugSetName);
 		vkExtension(clean, vkCmdDebugMarkerBeginEXT, vkInstance->debugMarkerBegin);
-		vkExtension(clean, vkCmdDebugMarkerEndEXT, vkInstance->debugMarkerBegin);
+		vkExtension(clean, vkCmdDebugMarkerEndEXT, vkInstance->debugMarkerEnd);
 		vkExtension(clean, vkCmdDebugMarkerInsertEXT, vkInstance->debugMarkerInsert);
 	}
 
 	if(supportsDebug[0]) {
 		vkExtension(clean, vkCreateDebugReportCallbackEXT, vkInstance->debugCreateReportCallback);
 		vkExtension(clean, vkDestroyDebugReportCallbackEXT, vkInstance->debugDestroyReportCallback);
-		vkExtension(clean, vkDebugReportCallbackEXT, vkInstance->debugReportCallback);
 	}
 
-	vkExtension(clean, vkAcquireNextImageKHR, vkInstance->acquireNextImage);
-	vkExtension(clean, vkCreateSwapchainKHR, vkInstance->createSwapchain);
-	vkExtension(clean, vkDestroySurfaceKHR, vkInstance->destroySurface);
-	vkExtension(clean, vkDestroySwapchainKHR, vkInstance->destroySwapchain);
+	if(supportsSurface) {
+		vkExtension(clean, vkAcquireNextImageKHR, vkInstance->acquireNextImage);
+		vkExtension(clean, vkCreateSwapchainKHR, vkInstance->createSwapchain);
+		vkExtension(clean, vkDestroySurfaceKHR, vkInstance->destroySurface);
+		vkExtension(clean, vkDestroySwapchainKHR, vkInstance->destroySwapchain);
+	}
 
-	vkExtension(clean, vkCmdDrawIndexedIndirectCountKHR, vkInstance->drawIndexedIndirectCount);
-	vkExtension(clean, vkCmdDrawIndirectCountKHR, vkInstance->drawIndirectCount);
+	vkExtensionNoCheck(vkCmdDrawIndexedIndirectCountKHR, vkInstance->drawIndexedIndirectCount);
+	vkExtensionNoCheck(vkCmdDrawIndirectCountKHR, vkInstance->drawIndirectCount);
 
-	vkExtension(clean, vkBuildAccelerationStructuresKHR, vkInstance->buildAccelerationStructures);
-	vkExtension(clean, vkCmdCopyAccelerationStructureKHR, vkInstance->copyAccelerationStructure);
-	vkExtension(clean, vkDestroyAccelerationStructureKHR, vkInstance->destroyAccelerationStructure);
-	vkExtension(clean, vkGetAccelerationStructureBuildSizesKHR, vkInstance->getAccelerationStructureBuildSizes);
-	vkExtension(clean, vkGetDeviceAccelerationStructureCompatibilityKHR, vkInstance->getAccelerationStructureCompatibility);
+	vkExtensionNoCheck(vkBuildAccelerationStructuresKHR, vkInstance->buildAccelerationStructures);
+	vkExtensionNoCheck(vkCmdCopyAccelerationStructureKHR, vkInstance->copyAccelerationStructure);
+	vkExtensionNoCheck(vkDestroyAccelerationStructureKHR, vkInstance->destroyAccelerationStructure);
+	vkExtensionNoCheck(vkGetAccelerationStructureBuildSizesKHR, vkInstance->getAccelerationStructureBuildSizes);
+	vkExtensionNoCheck(vkGetDeviceAccelerationStructureCompatibilityKHR, vkInstance->getAccelerationStructureCompatibility);
 
-	vkExtension(clean, vkCmdTraceRaysKHR, vkInstance->traceRays);
-	vkExtension(clean, vkCmdTraceRaysIndirectKHR, vkInstance->traceRaysIndirect);
-	vkExtension(clean, vkCreateRayTracingPipelinesKHR, vkInstance->createRaytracingPipelines);
-	*/
+	vkExtensionNoCheck(vkCmdTraceRaysKHR, vkInstance->traceRays);
+	vkExtensionNoCheck(vkCmdTraceRaysIndirectKHR, vkInstance->traceRaysIndirect);
+	vkExtensionNoCheck(vkCreateRayTracingPipelinesKHR, vkInstance->createRaytracingPipelines);
 
 	//Add debug callback
 
@@ -309,6 +323,8 @@ Error GraphicsInstance_create(GraphicsApplicationInfo info, GraphicsInstance *in
 		.ext = vkInstance
 	};
 
+	graphicsExt = (Buffer) { 0 };		//It's transferred to inst
+
 clean:
 
 	CharString_freex(&title);
@@ -330,15 +346,20 @@ Bool GraphicsInstance_free(GraphicsInstance *inst) {
 
 	VkGraphicsInstance *vkInstance = (VkGraphicsInstance*) inst->ext;
 
-	vkInstance->debugDestroyReportCallback(vkInstance->instance, vkInstance->debugReportCallback, NULL);
+	if(vkInstance->debugDestroyReportCallback)
+		vkInstance->debugDestroyReportCallback(vkInstance->instance, vkInstance->debugReportCallback, NULL);
+
 	vkDestroyInstance(vkInstance->instance, NULL);
+
+	Buffer graphicsExt = Buffer_createManagedPtr(vkInstance, sizeof(*vkInstance));
+	Buffer_freex(&graphicsExt);
 
 	*inst = (GraphicsInstance) { 0 };
 
 	return true;
 }
 
-Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, List *result) {
+Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbose, List *result) {
 
 	if(!inst || !inst->ext || !result)
 		return Error_nullPointer(!inst ? 0 : 2);
@@ -348,7 +369,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, List *result
 
 	VkGraphicsInstance *graphicsExt = (VkGraphicsInstance*) inst->ext;
 
-	U32 deviceCount;
+	U32 deviceCount = 0;
 	vkEnumeratePhysicalDevices(graphicsExt->instance, &deviceCount, NULL);
 
 	List temp = (List) { 0 };
@@ -391,7 +412,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, List *result
 
 		//Log device for debugging
 
-		#ifndef NDEBUG
+		if(isVerbose) {
 
 			Log_debugLn("Supported device layers:");
 
@@ -400,14 +421,12 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, List *result
 
 			Log_debugLn("Supported device extensions:");
 
-		#endif
+		}
 
 		//Check if all required extensions are present
 
 		const C8 *reqExtensionsName[] = {
-			"VK_KHR_get_physical_device_properties2",
 			"VK_KHR_shader_draw_parameters",
-			"VK_KHR_external_memory_capabilities",
 			"VK_KHR_push_descriptor",
 			"VK_KHR_dedicated_allocation",
 			"VK_KHR_bind_memory2",
@@ -438,7 +457,8 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, List *result
 			EOptExtensions_DynamicRendering,
 			EOptExtensions_RayMicromapOpacity,
 			EOptExtensions_RayMicromapDisplacement,
-			EOptExtensions_VariableRateShading
+			EOptExtensions_VariableRateShading,
+			EOptExtensions_AtomicF32
 
 		} EOptExtensions;
 
@@ -464,18 +484,18 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, List *result
 			"VK_KHR_dynamic_rendering",
 			"VK_EXT_opacity_micromap",
 			"VK_NV_displacement_micromap",
-			"VK_KHR_fragment_shading_rate"
+			"VK_KHR_fragment_shading_rate",
+			"VK_EXT_shader_atomic_float"
 		};
 
 		Bool optExtensions[sizeof(optExtensionsName) / sizeof(optExtensionsName[0])] = { 0 };
 
 		for(U64 k = 0; k < extensionCount; ++k) {
 
-			const C8 *name = ((VkExtensionProperties*)temp3.ptr)[k].extensionName;
+			const C8 *name = ((VkExtensionProperties*)temp4.ptr)[k].extensionName;
 
-			#ifndef NDEBUG
+			if(isVerbose)
 				Log_debugLn("\t%s", name);
-			#endif
 
 			//Check if required extension
 
@@ -507,21 +527,26 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, List *result
 		}
 
 		Bool supported = true;
+		U64 firstUnavailable = 0;
 
 		for(U64 k = 0; k < sizeof(reqExtensions); ++k)
-			if(!reqExtensions[k]) {
+			if(!reqExtensions[k] && strlen(reqExtensionsName[k])) {
 				supported = false;
+				firstUnavailable = k;
 				break;
 			}
 
 		if (!supported) {
-			Log_debugLn("Vulkan: Unsupported GPU %u, one of the required extensions wasn't present", i);
+
+			Log_debugLn(
+				"Vulkan: Unsupported GPU %u, one of the required extensions wasn't present (%s)", 
+				i, reqExtensionsName[firstUnavailable]
+			);
+
 			continue;
 		}
 
 		//Grab limits and features
-
-		GraphicsDeviceInfo *info = (GraphicsDeviceInfo*) temp2.ptr + j;
 
 		VkPhysicalDeviceProperties2 properties2 = (VkPhysicalDeviceProperties2) { 
 			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2
@@ -531,8 +556,8 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, List *result
 			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2
 		};
 
-		vkGetPhysicalDeviceProperties2KHR(dev, &properties2);
-		vkGetPhysicalDeviceFeatures2KHR(dev, &features2);
+		graphicsExt->getPhysicalDeviceProperties2(dev, &properties2);
+		graphicsExt->getPhysicalDeviceFeatures2(dev, &features2);
 
 		VkPhysicalDeviceProperties properties = properties2.properties;
 		VkPhysicalDeviceFeatures features = features2.features;
@@ -578,12 +603,12 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, List *result
 			limits.maxPerStageDescriptorInputAttachments < 7 ||
 			(allMSAA & requiredMSAA) != requiredMSAA ||
 			limits.maxComputeSharedMemorySize < 16 * KIBI ||
-			limits.maxComputeWorkGroupCount[0] < 64 * KIBI ||
-			limits.maxComputeWorkGroupCount[1] < 64 * KIBI ||
-			limits.maxComputeWorkGroupCount[2] < 64 * KIBI ||
+			limits.maxComputeWorkGroupCount[0] < U16_MAX ||
+			limits.maxComputeWorkGroupCount[1] < U16_MAX ||
+			limits.maxComputeWorkGroupCount[2] < U16_MAX ||
 			limits.maxComputeWorkGroupSize[0] < 1024 ||
 			limits.maxComputeWorkGroupSize[1] < 1024 ||
-			limits.maxComputeWorkGroupSize[2] < 1024 ||
+			limits.maxComputeWorkGroupSize[2] < 64 ||
 			limits.maxFragmentCombinedOutputResources < 16 ||
 			limits.maxFragmentInputComponents < 112 ||
 			limits.maxFramebufferWidth < 16 * KIBI ||
@@ -607,13 +632,10 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, List *result
 			limits.maxVertexInputBindings < 16 ||
 			limits.maxVertexInputBindingStride < 2048 ||
 			limits.maxVertexOutputComponents < 124 ||
-			limits.maxComputeWorkGroupSize[0] < 1024 ||
-			limits.maxComputeWorkGroupSize[1] < 1024 ||
-			limits.maxComputeWorkGroupSize[2] < 64 ||
 			limits.maxMemoryAllocationCount < 4096 ||
 			limits.maxBoundDescriptorSets < 4 ||
 			limits.maxDescriptorSetStorageBuffersDynamic < 16 ||
-			limits.maxDescriptorSetUniformBuffersDynamic < 32
+			limits.maxDescriptorSetUniformBuffersDynamic < 15
 		) {
 			Log_debugLn("Vulkan: Unsupported GPU %u, one of the required limit wasn't sufficient", i);
 			continue;
@@ -690,8 +712,8 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, List *result
 
 		if (
 			(vendor != EGraphicsVendor_AMD && vendor != EGraphicsVendor_NV) ||
-			(_PLATFORM_TYPE != EPlatform_Windows || _PLATFORM_TYPE != EPlatform_Linux) ||
-			!(optExtensions[EOptExtensions_DynamicRendering])
+			(_PLATFORM_TYPE != EPlatform_Windows && _PLATFORM_TYPE != EPlatform_Linux) ||
+			!optExtensions[EOptExtensions_DynamicRendering]
 		)
 			capabilities.features |= EGraphicsFeatures_TiledRendering;
 
@@ -725,7 +747,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, List *result
 				.pNext = &subgroup
 			};
 
-			vkGetPhysicalDeviceProperties2KHR(dev, &tempProp2);
+			graphicsExt->getPhysicalDeviceProperties2(dev, &tempProp2);
 		}
 
 		VkSubgroupFeatureFlags requiredSubOp = 
@@ -763,7 +785,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, List *result
 					.pNext = &meshShader
 				};
 
-				vkGetPhysicalDeviceFeatures2KHR(dev, &tempFeat2);
+				graphicsExt->getPhysicalDeviceFeatures2(dev, &tempFeat2);
 			}
 
 			if(
@@ -785,7 +807,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, List *result
 						.pNext = &meshShaderProp
 					};
 
-					vkGetPhysicalDeviceProperties2KHR(dev, &tempProp2);
+					graphicsExt->getPhysicalDeviceProperties2(dev, &tempProp2);
 				}
 
 				if(
@@ -798,9 +820,9 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, List *result
 					meshShaderProp.maxMeshPayloadAndOutputMemorySize < 47 * KIBI ||
 					meshShaderProp.maxMeshPayloadAndSharedMemorySize < 28 * KIBI ||
 					meshShaderProp.maxMeshSharedMemorySize < 28 * KIBI ||
-					meshShaderProp.maxMeshWorkGroupCount[0] < 64 * KIBI ||
-					meshShaderProp.maxMeshWorkGroupCount[1] < 64 * KIBI ||
-					meshShaderProp.maxMeshWorkGroupCount[2] < 64 * KIBI ||
+					meshShaderProp.maxMeshWorkGroupCount[0] < U16_MAX ||
+					meshShaderProp.maxMeshWorkGroupCount[1] < U16_MAX ||
+					meshShaderProp.maxMeshWorkGroupCount[2] < U16_MAX ||
 					meshShaderProp.maxMeshWorkGroupInvocations < 128 ||
 					meshShaderProp.maxTaskWorkGroupInvocations < 128 ||
 					meshShaderProp.maxMeshWorkGroupSize[0] < 128 ||
@@ -841,7 +863,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, List *result
 					.pNext = &rtasFeat
 				};
 
-				vkGetPhysicalDeviceFeatures2KHR(dev, &tempFeat2);
+				graphicsExt->getPhysicalDeviceFeatures2(dev, &tempFeat2);
 			}
 
 			//Disable raytracing if minimum limits aren't reached
@@ -858,7 +880,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, List *result
 						.pNext = &rtasProp
 					};
 
-					vkGetPhysicalDeviceProperties2KHR(dev, &tempProp2);
+					graphicsExt->getPhysicalDeviceProperties2(dev, &tempProp2);
 				}
 
 				if(
@@ -895,7 +917,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, List *result
 						.pNext = &rtpFeat
 					};
 
-					vkGetPhysicalDeviceFeatures2KHR(dev, &tempFeat2);
+					graphicsExt->getPhysicalDeviceFeatures2(dev, &tempFeat2);
 				}
 
 				//Query ray query
@@ -911,7 +933,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, List *result
 						.pNext = &rayQueryFeat
 					};
 
-					vkGetPhysicalDeviceFeatures2KHR(dev, &tempFeat2);
+					graphicsExt->getPhysicalDeviceFeatures2(dev, &tempFeat2);
 				}
 
 				//Disable if invalid state
@@ -928,7 +950,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, List *result
 							.pNext = &rtpProp
 						};
 
-						vkGetPhysicalDeviceProperties2KHR(dev, &tempProp2);
+						graphicsExt->getPhysicalDeviceProperties2(dev, &tempProp2);
 					}
 
 					if(
@@ -960,17 +982,105 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, List *result
 
 					capabilities.features |= EGraphicsFeatures_Raytracing;
 
-					if(optExtensions[EOptExtensions_RayMotionBlur])
-						capabilities.features |= EGraphicsFeatures_RayMotionBlur;
+					if(optExtensions[EOptExtensions_RayMotionBlur]) {
 
-					if(optExtensions[EOptExtensions_RayReorder])
-						capabilities.features |= EGraphicsFeatures_RayReorder;
+						VkPhysicalDeviceRayTracingMotionBlurFeaturesNV rayMotionBlurFeat = { 
+							.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_MOTION_BLUR_FEATURES_NV 
+						};
 
-					if(optExtensions[EOptExtensions_RayMicromapOpacity])
-						capabilities.features |= EGraphicsFeatures_RayMicromapOpacity;
+						{
+							VkPhysicalDeviceFeatures2 tempFeat3 = (VkPhysicalDeviceFeatures2) { 
+								.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+								.pNext = &rayMotionBlurFeat
+							};
 
-					if(optExtensions[EOptExtensions_RayMicromapDisplacement])
-						capabilities.features |= EGraphicsFeatures_RayMicromapDisplacement;
+							graphicsExt->getPhysicalDeviceFeatures2(dev, &tempFeat3);
+						}
+
+						if(rayMotionBlurFeat.rayTracingMotionBlur)
+							capabilities.features |= EGraphicsFeatures_RayMotionBlur;
+
+						//Indirect must allow motion blur too
+
+						if(
+							!rayMotionBlurFeat.rayTracingMotionBlurPipelineTraceRaysIndirect &&
+							capabilities.features & EGraphicsFeatures_RayIndirect
+						)
+							capabilities.features &= ~EGraphicsFeatures_RayIndirect;
+					}
+
+					if(optExtensions[EOptExtensions_RayReorder]) {
+
+						VkPhysicalDeviceRayTracingInvocationReorderFeaturesNV rayReorderFeat = { 
+							.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_INVOCATION_REORDER_FEATURES_NV 
+						};
+
+						{
+							VkPhysicalDeviceFeatures2 tempFeat3 = (VkPhysicalDeviceFeatures2) { 
+								.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+								.pNext = &rayReorderFeat
+							};
+
+							graphicsExt->getPhysicalDeviceFeatures2(dev, &tempFeat3);
+						}
+
+						VkPhysicalDeviceRayTracingInvocationReorderPropertiesNV rayReorderProp = { 
+							.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_INVOCATION_REORDER_PROPERTIES_NV 
+						};
+
+						{
+							VkPhysicalDeviceProperties2 tempProp3 = (VkPhysicalDeviceProperties2) { 
+								.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
+								.pNext = &rayReorderProp
+							};
+
+							graphicsExt->getPhysicalDeviceProperties2(dev, &tempProp3);
+						}
+
+						if(
+							rayReorderFeat.rayTracingInvocationReorder && 
+							rayReorderProp.rayTracingInvocationReorderReorderingHint
+						)
+							capabilities.features |= EGraphicsFeatures_RayReorder;
+					}
+
+					if(optExtensions[EOptExtensions_RayMicromapOpacity]) {
+
+						VkPhysicalDeviceOpacityMicromapFeaturesEXT  rayOpacityMicroFeat = { 
+							.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_OPACITY_MICROMAP_FEATURES_EXT 
+						};
+
+						{
+							VkPhysicalDeviceFeatures2 tempFeat3 = (VkPhysicalDeviceFeatures2) { 
+								.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+								.pNext = &rayOpacityMicroFeat
+							};
+
+							graphicsExt->getPhysicalDeviceFeatures2(dev, &tempFeat3);
+						}
+
+						if(rayOpacityMicroFeat.micromap)
+							capabilities.features |= EGraphicsFeatures_RayMicromapOpacity;
+					}
+
+					if(optExtensions[EOptExtensions_RayMicromapDisplacement]) {
+
+						VkPhysicalDeviceDisplacementMicromapFeaturesNV rayDispMicroFeat = { 
+							.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DISPLACEMENT_MICROMAP_FEATURES_NV 
+						};
+
+						{
+							VkPhysicalDeviceFeatures2 tempFeat3 = (VkPhysicalDeviceFeatures2) { 
+								.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+								.pNext = &rayDispMicroFeat
+							};
+
+							graphicsExt->getPhysicalDeviceFeatures2(dev, &tempFeat3);
+						}
+
+						if(rayDispMicroFeat.displacementMicromap)
+							capabilities.features |= EGraphicsFeatures_RayMicromapDisplacement;
+					}
 				}
 			}
 		}
@@ -996,7 +1106,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, List *result
 				.pNext = &float16
 			};
 
-			vkGetPhysicalDeviceFeatures2KHR(dev, &tempFeat2);
+			graphicsExt->getPhysicalDeviceFeatures2(dev, &tempFeat2);
 		}
 
 		if(float16.shaderFloat16)
@@ -1021,11 +1131,31 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, List *result
 				.pNext = &atomics64
 			};
 
-			vkGetPhysicalDeviceFeatures2KHR(dev, &tempFeat2);
+			graphicsExt->getPhysicalDeviceFeatures2(dev, &tempFeat2);
 		}
 
 		if(atomics64.shaderBufferInt64Atomics)
 			capabilities.dataTypes |= EGraphicsDataTypes_AtomicI64;
+
+		VkPhysicalDeviceShaderAtomicFloatFeaturesEXT atomicsF32 = (VkPhysicalDeviceShaderAtomicFloatFeaturesEXT) { 
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_FLOAT_FEATURES_EXT 
+		};
+
+		if(optExtensions[EOptExtensions_AtomicF32]) {
+
+			VkPhysicalDeviceFeatures2 tempFeat2 = (VkPhysicalDeviceFeatures2) { 
+				.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+				.pNext = &atomicsF32
+			};
+
+			graphicsExt->getPhysicalDeviceFeatures2(dev, &tempFeat2);
+		}
+
+		if(atomicsF32.shaderBufferFloat32AtomicAdd && atomicsF32.shaderBufferFloat32Atomics)
+			capabilities.dataTypes |= EGraphicsDataTypes_AtomicF32;
+
+		if(atomicsF32.shaderBufferFloat64AtomicAdd && atomicsF32.shaderBufferFloat64Atomics)
+			capabilities.dataTypes |= EGraphicsDataTypes_AtomicF64;
 
 		//Compression
 
@@ -1053,36 +1183,21 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, List *result
 		//Get graphics binding tier
 
 		if(
-			limits.maxPerStageDescriptorSamplers < 16 ||
-			limits.maxPerStageDescriptorUniformBuffers < 31 ||
-			limits.maxPerStageDescriptorStorageBuffers < 31 ||
-			limits.maxPerStageDescriptorSampledImages < 96 ||
-			limits.maxPerStageDescriptorStorageImages < 8 ||
-			limits.maxPerStageResources < 127 ||
-			limits.maxDescriptorSetSamplers < 80 ||
-			limits.maxDescriptorSetUniformBuffers < 155 ||
-			limits.maxDescriptorSetStorageBuffers < 155 ||
-			limits.maxDescriptorSetSampledImages < 480 ||
-			limits.maxDescriptorSetStorageImages < 40
+			limits.maxPerStageDescriptorSamplers < 2 * KIBI ||
+			limits.maxPerStageDescriptorUniformBuffers < 250 * KILO ||
+			limits.maxPerStageDescriptorStorageBuffers < 250 * KILO ||
+			limits.maxPerStageDescriptorSampledImages < 250 * KILO ||
+			limits.maxPerStageDescriptorStorageImages < 250 * KILO ||
+			limits.maxPerStageResources < MEGA ||
+			limits.maxDescriptorSetSamplers < 2 * KIBI ||
+			limits.maxDescriptorSetUniformBuffers < 250 * KILO ||
+			limits.maxDescriptorSetStorageBuffers < 250 * KILO ||
+			limits.maxDescriptorSetSampledImages < 250 * KILO ||
+			limits.maxDescriptorSetStorageImages < 250 * KILO
 		) {
 			Log_debugLn("Vulkan: Unsupported GPU %u, graphics binding tier not supported!", i);
 			continue;
 		}
-
-		Bool isHighBindingTier = 
-			limits.maxPerStageDescriptorSamplers >= 200 * KILO &&
-			limits.maxPerStageDescriptorUniformBuffers >= 200 * KILO &&
-			limits.maxPerStageDescriptorStorageBuffers >= 200 * KILO &&
-			limits.maxPerStageDescriptorSampledImages >= 200 * KILO &&
-			limits.maxPerStageDescriptorStorageImages >= 200 * KILO &&
-			limits.maxPerStageResources >= MEGA &&
-			limits.maxDescriptorSetSamplers >= 200 * KILO &&
-			limits.maxDescriptorSetUniformBuffers >= 200 * KILO &&
-			limits.maxDescriptorSetStorageBuffers >= 200 * KILO &&
-			limits.maxDescriptorSetSampledImages >= 200 * KILO &&
-			limits.maxDescriptorSetStorageImages >= 200 * KILO;
-
-		capabilities.bindingTier = isHighBindingTier ? EGraphicsBindingTier_High : EGraphicsBindingTier_Low;
 
 		//Grab LUID/UUID
 
@@ -1096,7 +1211,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, List *result
 				.pNext = &id
 			};
 
-			vkGetPhysicalDeviceProperties2KHR(dev, &tempProp2);
+			graphicsExt->getPhysicalDeviceProperties2(dev, &tempProp2);
 		}
 
 		if(id.deviceLUIDValid)
@@ -1113,7 +1228,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, List *result
 				.pNext = &driver
 			};
 
-			vkGetPhysicalDeviceProperties2KHR(dev, &tempProp2);
+			graphicsExt->getPhysicalDeviceProperties2(dev, &tempProp2);
 		}
 
 		//API dependent stuff for the runtime
@@ -1125,6 +1240,10 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, List *result
 			capabilities.featuresExt |= EVkGraphicsFeatures_PerfQuery;
 
 		//Fully converted type
+
+		_gotoIfError(clean, List_resize(&temp2, temp2.length + 1, (Allocator){ 0 }));
+
+		GraphicsDeviceInfo *info = (GraphicsDeviceInfo*) temp2.ptr + j;
 
 		*info = (GraphicsDeviceInfo) {
 			.type = type,

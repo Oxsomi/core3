@@ -47,21 +47,22 @@ typedef struct GraphicsInstance {
 
 } GraphicsInstance;
 
-typedef struct GraphicsDeviceInfo GraphicsDeviceInfo;
 typedef struct GraphicsDeviceCapabilities GraphicsDeviceCapabilities;
+typedef struct GraphicsDeviceInfo GraphicsDeviceInfo;
 
-impl Error GraphicsInstance_create(GraphicsApplicationInfo info, GraphicsInstance *inst);
+impl Error GraphicsInstance_create(GraphicsApplicationInfo info, Bool isVerbose, GraphicsInstance *inst);
 impl Bool GraphicsInstance_free(GraphicsInstance *inst);
 
-impl Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, List *infos);		//<GraphicsDeviceInfo>
+impl Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbose, List *infos);	//<GraphicsDeviceInfo>
 
-static U64 GraphicsInstance_vendorMaskAll;
-static U64 GraphicsInstance_deviceTypeAll;
+extern U64 GraphicsInstance_vendorMaskAll;
+extern U64 GraphicsInstance_deviceTypeAll;
 
 Error GraphicsInstance_getPreferredGpu(
 	const GraphicsInstance *inst, 
 	GraphicsDeviceCapabilities requiredCapabilities, 
 	U64 vendorMask,
 	U64 deviceTypeMask,
-	void **deviceExt
+	Bool verbose,
+	GraphicsDeviceInfo *deviceInfo
 );

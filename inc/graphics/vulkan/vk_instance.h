@@ -31,6 +31,9 @@ typedef struct VkGraphicsInstance {
 	PFN_vkGetImageMemoryRequirements2KHR getImageMemoryRequirements2;
 	PFN_vkGetBufferMemoryRequirements2KHR getBufferMemoryRequirements2;
 
+	PFN_vkGetPhysicalDeviceFeatures2KHR getPhysicalDeviceFeatures2;
+	PFN_vkGetPhysicalDeviceProperties2KHR getPhysicalDeviceProperties2;
+
 	PFN_vkSetDebugUtilsObjectNameEXT debugSetName;
 
 	PFN_vkCmdDebugMarkerBeginEXT debugMarkerBegin;
@@ -40,8 +43,6 @@ typedef struct VkGraphicsInstance {
 	PFN_vkCreateDebugReportCallbackEXT debugCreateReportCallback;
 
 	PFN_vkDestroyDebugReportCallbackEXT debugDestroyReportCallback;
-
-	PFN_vkDebugReportCallbackEXT debugReportCallbackFunc;
 
 	PFN_vkAcquireNextImageKHR acquireNextImage;
 	PFN_vkCreateSwapchainKHR createSwapchain;

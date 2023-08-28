@@ -19,8 +19,9 @@
 */
 
 #include "graphics/generic/instance.h"
-#include "graphics/generic/device_info.h"
+#include "graphics/generic/device.h"
 #include "platforms/ext/listx.h"
+#include "platforms/ext/bufferx.h"
 #include "types/error.h"
 
 U64 GraphicsInstance_vendorMaskAll = 0xFFFFFFFFFFFFFFFF;
@@ -31,20 +32,24 @@ Error GraphicsInstance_getPreferredGpu(
 	GraphicsDeviceCapabilities requiredCapabilities,
 	U64 vendorMask,
 	U64 deviceTypeMask,
-	void **deviceExt
+	Bool verbose,
+	GraphicsDeviceInfo *deviceInfo
 ) {
 
-	if(!deviceExt)
+	if(!deviceInfo)
 		return Error_nullPointer(4);
 
+	if(deviceInfo->ext)
+		return Error_invalidParameter(4, 0);
+
 	List tmp = (List) { 0 };
-	Error err = GraphicsInstance_getDeviceInfos(inst, &tmp);
+	Error err = GraphicsInstance_getDeviceInfos(inst, verbose, &tmp);
 
 	if(err.genericError)
 		return err;
 
-	void *preferredDedicated = NULL;
-	void *preferredNonDedicated = NULL;
+	U64 preferredDedicated = 0;
+	U64 preferredNonDedicated = 0;
 	Bool hasDedicated = false;
 	Bool hasAny = false;
 
@@ -59,9 +64,6 @@ Error GraphicsInstance_getPreferredGpu(
 
 		//Check capabilities
 
-		if(info.capabilities.bindingTier < requiredCapabilities.bindingTier)
-			continue;
-
 		if((info.capabilities.dataTypes & requiredCapabilities.dataTypes) != requiredCapabilities.dataTypes)
 			continue;
 
@@ -71,11 +73,11 @@ Error GraphicsInstance_getPreferredGpu(
 		//Remember
 
 		if(info.type == EGraphicsDeviceType_Dedicated) {
-			preferredDedicated = info.ext;
+			preferredDedicated = i;
 			hasDedicated = true;
 		}
 
-		else preferredNonDedicated = info.ext;
+		else preferredNonDedicated = i;
 
 		hasAny = true;
 	}
@@ -83,10 +85,9 @@ Error GraphicsInstance_getPreferredGpu(
 	if(!hasAny)
 		_gotoIfError(clean, Error_notFound(0, 0));
 
-	if (hasDedicated)
-		*deviceExt = preferredDedicated;
+	U64 picked = hasDedicated ? preferredDedicated : preferredNonDedicated;
 
-	else *deviceExt = preferredNonDedicated;
+	*deviceInfo = ((const GraphicsDeviceInfo*)tmp.ptr)[picked];
 
 clean:
 	List_freex(&tmp);

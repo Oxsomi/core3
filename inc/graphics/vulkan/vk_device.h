@@ -20,6 +20,7 @@
 
 #pragma once
 #include "graphics/vulkan/vulkan.h"
+#include "graphics/generic/device_info.h"
 
 enum EVkDeviceVendor {
 	EVkDeviceVendor_NV					= 0x10DE,

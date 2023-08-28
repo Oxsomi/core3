@@ -47,9 +47,9 @@ typedef enum EGraphicsTypeId {
 
 } EGraphicsTypeId;
 
-static EGraphicsTypeId EGraphicsTypeId_all[EGraphicsTypeId_Count];
-static U64 EGraphicsTypeId_descBytes[EGraphicsTypeId_Count];
-static U64 EGraphicsTypeId_objectBytes[EGraphicsTypeId_Count];
+extern EGraphicsTypeId EGraphicsTypeId_all[EGraphicsTypeId_Count];
+extern U64 EGraphicsTypeId_descBytes[EGraphicsTypeId_Count];
+extern U64 EGraphicsTypeId_objectBytes[EGraphicsTypeId_Count];
 
 typedef struct GraphicsDevice {
 
@@ -57,7 +57,7 @@ typedef struct GraphicsDevice {
 
 	List factories;		//<GraphicsObjectFactory>
 
-	void *ext;
+	void *ext;			//Underlying api implementation
 
 } GraphicsDevice;
 
