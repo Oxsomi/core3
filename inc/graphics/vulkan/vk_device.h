@@ -39,3 +39,24 @@ typedef enum EVkGraphicsFeatures {
 	EVkGraphicsFeatures_PerfQuery		= 1 << 1
 
 } EVkGraphicsFeatures;
+
+typedef enum EVkGraphicsQueue {
+
+	EVkGraphicsQueue_Copy,
+	EVkGraphicsQueue_Compute,
+	EVkGraphicsQueue_Graphics,
+	EVkGraphicsQueue_Raytracing,
+
+	//EVkGraphicsQueue_VideoDecode,			//TODO:
+	//EVkGraphicsQueue_VideoEncode
+
+	EVkGraphicsQueue_Count
+
+} EVkGraphicsQueue;
+
+typedef struct VkGraphicsDevice {
+
+	VkDevice device;
+	VkQueue queues[EVkGraphicsQueue_Count];		//Don't have to be unique queues!
+
+} VkGraphicsDevice;

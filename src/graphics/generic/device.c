@@ -140,12 +140,6 @@ void GraphicsDeviceInfo_print(const GraphicsDeviceInfo *deviceInfo, Bool printCa
 		if(dat & EGraphicsDataTypes_BCn)
 			Log_debugLn("\t\tBCn compression");
 		
-		if(dat & EGraphicsDataTypes_HDR10A2)
-			Log_debugLn("\t\t30-bit HDR support (rgb10a2)");
-		
-		if(dat & EGraphicsDataTypes_RGBA16f)
-			Log_debugLn("\t\t48-bit HDR support (rgba16f)");
-		
 		if(dat & EGraphicsDataTypes_MSAA2x)
 			Log_debugLn("\t\tMSAA 2x");
 		
@@ -159,9 +153,8 @@ void GraphicsDeviceInfo_print(const GraphicsDeviceInfo *deviceInfo, Bool printCa
 
 //Ext
 
-//TODO:
-//impl Error GraphicsDevice_initExt(const GraphicsInstance *instance, const GraphicsDeviceInfo *device, void **ext);
-//impl Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void **ext);
+impl Error GraphicsDevice_initExt(const GraphicsInstance *instance, const GraphicsDeviceInfo *deviceInfo, void **ext);
+impl Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void **ext);
 
 //
 
@@ -204,25 +197,22 @@ U64 EGraphicsTypeId_objectBytes[EGraphicsTypeId_Count] = {
 	0		//sizeof(SwapchainObject)
 };
 
-//TODO:
-/*
-Error GraphicsDevice_create(const GraphicsInstance *instance, const U64 uuid[2], GraphicsDevice *device) {
+Error GraphicsDevice_create(const GraphicsInstance *instance, const GraphicsDeviceInfo *info, GraphicsDevice *device) {
 
-	if(!instance || !uuid || !device)
-		return Error_nullPointer(!instance ? 0 : (!uuid ? 2 : 3));
+	if(!instance || !info || !device)
+		return Error_nullPointer(!instance ? 0 : (!info ? 1 : 2));
 
 	if(device->ext)
-		return Error_invalidParameter(2, 0);
+		return Error_invalidParameter(1, 0);
 
-	Error err = GraphicsInstance_getDeviceInfo(instance, deviceId, &device->info);
+	//Create extended device
+
+	Error err = GraphicsDevice_initExt(instance, &device->info, &device->ext);
 
 	if(err.genericError)
 		return err;
 
-	//Create extended device
-
-	if((err = GraphicsDevice_initExt(instance, &device->info, &device->ext)).genericError)
-		return err;
+	/*
 
 	if((err = List_createx(EGraphicsTypeId_Count, sizeof(GraphicsObjectFactory), &device->factories)).genericError) {
 		GraphicsDevice_freeExt(instance, &device->ext);
@@ -250,12 +240,12 @@ Error GraphicsDevice_create(const GraphicsInstance *instance, const U64 uuid[2],
 
 			return err;
 		}
-	}
+	}*/
 
 	//Graphics device success
 
 	return Error_none();
-}*/
+}
 
 Bool GraphicsDevice_free(const GraphicsInstance *instance, GraphicsDevice *device) {
 
@@ -269,7 +259,7 @@ Bool GraphicsDevice_free(const GraphicsInstance *instance, GraphicsDevice *devic
 	//	success &= GraphicsObjectFactory_free(device, (GraphicsObjectFactory*)device->factories.ptr + j);
 
 	success &= List_freex(&device->factories);
-	//success &= GraphicsDevice_freeExt(instance, &device->ext);		TODO:
+	success &= GraphicsDevice_freeExt(instance, &device->ext);
 	return success;
 }
 

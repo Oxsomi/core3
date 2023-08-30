@@ -21,6 +21,10 @@
 #pragma once
 #include "types/string.h"
 
+//In line with vulkan standard.
+#define GraphicsApplicationInfo_Version(major, minor, patch)	\
+((major) << 22) | ((minor) << 12) | (patch)
+
 typedef struct GraphicsApplicationInfo {
 
 	CharString name;

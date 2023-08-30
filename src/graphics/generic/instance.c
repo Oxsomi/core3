@@ -74,7 +74,8 @@ Error GraphicsInstance_getPreferredGpu(
 
 		if(info.type == EGraphicsDeviceType_Dedicated) {
 			preferredDedicated = i;
-			hasDedicated = true;
+			hasDedicated = hasAny = true;
+			break;
 		}
 
 		else preferredNonDedicated = i;

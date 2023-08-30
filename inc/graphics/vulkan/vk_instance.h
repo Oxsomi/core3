@@ -23,6 +23,34 @@
 
 typedef struct List List;
 
+extern const C8 *reqExtensionsName[];
+extern U64 reqExtensionsNameCount;
+
+typedef enum EOptExtensions {
+
+	EOptExtensions_DebugMarker,
+	EOptExtensions_F16,
+	EOptExtensions_MultiDrawIndirectCount,
+	EOptExtensions_AtomicI64,
+	EOptExtensions_PerfQuery,
+	EOptExtensions_RayPipeline,
+	EOptExtensions_RayQuery,
+	EOptExtensions_RayAcceleration,
+	EOptExtensions_Swapchain,
+	EOptExtensions_RayMotionBlur,
+	EOptExtensions_RayReorder,
+	EOptExtensions_MeshShader,
+	EOptExtensions_DynamicRendering,
+	EOptExtensions_RayMicromapOpacity,
+	EOptExtensions_RayMicromapDisplacement,
+	EOptExtensions_VariableRateShading,
+	EOptExtensions_AtomicF32
+
+} EOptExtensions;
+
+extern const C8 *optExtensionsName[];
+extern U64 optExtensionsNameCount;
+
 typedef struct VkGraphicsInstance {
 	
 	VkInstance instance;
@@ -33,6 +61,8 @@ typedef struct VkGraphicsInstance {
 
 	PFN_vkGetPhysicalDeviceFeatures2KHR getPhysicalDeviceFeatures2;
 	PFN_vkGetPhysicalDeviceProperties2KHR getPhysicalDeviceProperties2;
+
+	PFN_vkGetPhysicalDeviceSurfaceFormatsKHR getPhysicalDeviceSurfaceFormats;
 
 	PFN_vkSetDebugUtilsObjectNameEXT debugSetName;
 

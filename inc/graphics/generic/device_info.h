@@ -108,16 +108,11 @@ typedef enum EGraphicsDataTypes {
 	EGraphicsDataTypes_ASTC					= 1 << 6,			//If false, BCn has to be supported
 	EGraphicsDataTypes_BCn					= 1 << 7,			//If false, ASTC has to be supported
 
-	//What formats are available for the swapchain
-
-	EGraphicsDataTypes_HDR10A2				= 1 << 8,
-	EGraphicsDataTypes_RGBA16f				= 1 << 9,
-
 	//If render targets can have MSAA8x, 2x or 16x.
 
-	EGraphicsDataTypes_MSAA2x				= 1 << 10,
-	EGraphicsDataTypes_MSAA8x				= 1 << 11,
-	EGraphicsDataTypes_MSAA16x				= 1 << 12
+	EGraphicsDataTypes_MSAA2x				= 1 << 8,
+	EGraphicsDataTypes_MSAA8x				= 1 << 9,
+	EGraphicsDataTypes_MSAA16x				= 1 << 10
 
 } EGraphicsDataTypes;
 

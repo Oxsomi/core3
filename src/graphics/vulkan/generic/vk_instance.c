@@ -48,29 +48,16 @@ VkBool32 onDebugReport(
 	userData;
 	layerPrefix;
 
-	const C8 *prefix;
-	ELogLevel level = ELogLevel_Debug;
+	if (flags & VK_DEBUG_REPORT_ERROR_BIT_EXT)
+		Log_errorLn("Error: %s", message);
 
-	if (flags & VK_DEBUG_REPORT_INFORMATION_BIT_EXT)
-		prefix = "Info: ";
+	else if (flags & VK_DEBUG_REPORT_WARNING_BIT_EXT)
+		Log_warnLn("Warning: %s", message);
 
-	else if (flags & VK_DEBUG_REPORT_WARNING_BIT_EXT) {
-		prefix = "Warning: ";
-		level = ELogLevel_Warn;
-	}
-	else if (flags & VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT) {
-		prefix = "Performance warning: ";
-		level = ELogLevel_Performance;
-	}
-	else if (flags & VK_DEBUG_REPORT_ERROR_BIT_EXT) {
-		prefix = "Error: ";
-		level = ELogLevel_Error;
-	}
+	else if (flags & VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT)
+		Log_performanceLn("Performance warning: %s", message);
 
-	else prefix = "Debug: ";
-
-	Log_log(level, ELogOptions_Timestamp, CharString_createConstRefCStr(prefix));
-	Log_log(level, ELogOptions_NewLine, CharString_createConstRefCStr(message));
+	else Log_debugLn("Debug: %s", message);
 
 	return VK_FALSE;
 }
@@ -262,6 +249,8 @@ Error GraphicsInstance_create(GraphicsApplicationInfo info, Bool isVerbose, Grap
 	vkExtension(clean, vkGetPhysicalDeviceFeatures2KHR, vkInstance->getPhysicalDeviceFeatures2);
 	vkExtension(clean, vkGetPhysicalDeviceProperties2KHR, vkInstance->getPhysicalDeviceProperties2);
 
+	vkExtensionNoCheck(vkGetPhysicalDeviceSurfaceFormatsKHR, vkInstance->getPhysicalDeviceSurfaceFormats);
+
 	if(supportsDebug[1]) {
 		vkExtension(clean, vkSetDebugUtilsObjectNameEXT, vkInstance->debugSetName);
 		vkExtension(clean, vkCmdDebugMarkerBeginEXT, vkInstance->debugMarkerBegin);
@@ -359,6 +348,49 @@ Bool GraphicsInstance_free(GraphicsInstance *inst) {
 	return true;
 }
 
+const C8 *reqExtensionsName[] = {
+	"VK_KHR_shader_draw_parameters",
+	"VK_KHR_push_descriptor",
+	"VK_KHR_dedicated_allocation",
+	"VK_KHR_bind_memory2",
+	"VK_KHR_get_memory_requirements2",
+	"VK_EXT_shader_subgroup_ballot",
+	"VK_EXT_shader_subgroup_vote",
+	"VK_EXT_descriptor_indexing",
+	"VK_EXT_multi_draw",
+	"VK_KHR_driver_properties"
+};
+
+U64 reqExtensionsNameCount = sizeof(reqExtensionsName) / sizeof(reqExtensionsName[0]);
+
+const C8 *optExtensionsName[] = {
+
+	#ifndef NDEBUG
+		"VK_EXT_debug_marker",
+	#else
+		"",
+	#endif
+
+	"VK_KHR_shader_float16_int8",
+	"VK_KHR_draw_indirect_count",
+	"VK_KHR_shader_atomic_int64",
+	"VK_KHR_performance_query",
+	"VK_KHR_ray_tracing_pipeline",
+	"VK_KHR_ray_query",
+	"VK_KHR_acceleration_structure",
+	"VK_KHR_swapchain",
+	"VK_NV_ray_tracing_motion_blur",
+	"VK_NV_ray_tracing_invocation_reorder",
+	"VK_EXT_mesh_shader",
+	"VK_KHR_dynamic_rendering",
+	"VK_EXT_opacity_micromap",
+	"VK_NV_displacement_micromap",
+	"VK_KHR_fragment_shading_rate",
+	"VK_EXT_shader_atomic_float"
+};
+
+U64 optExtensionsNameCount = sizeof(optExtensionsName) / sizeof(optExtensionsName[0]);
+
 Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbose, List *result) {
 
 	if(!inst || !inst->ext || !result)
@@ -420,73 +452,11 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 				Log_debugLn("\t%s", ((VkLayerProperties*)temp3.ptr)[k].layerName);
 
 			Log_debugLn("Supported device extensions:");
-
 		}
 
 		//Check if all required extensions are present
 
-		const C8 *reqExtensionsName[] = {
-			"VK_KHR_shader_draw_parameters",
-			"VK_KHR_push_descriptor",
-			"VK_KHR_dedicated_allocation",
-			"VK_KHR_bind_memory2",
-			"VK_KHR_get_memory_requirements2",
-			"VK_EXT_shader_subgroup_ballot",
-			"VK_EXT_shader_subgroup_vote",
-			"VK_EXT_descriptor_indexing",
-			"VK_EXT_multi_draw",
-			"VK_KHR_driver_properties"
-		};
-
 		Bool reqExtensions[sizeof(reqExtensionsName) / sizeof(reqExtensionsName[0])] = { 0 };
-
-		typedef enum EOptExtensions {
-
-			EOptExtensions_DebugMarker,
-			EOptExtensions_F16,
-			EOptExtensions_MultiDrawIndirectCount,
-			EOptExtensions_AtomicI64,
-			EOptExtensions_PerfQuery,
-			EOptExtensions_RayPipeline,
-			EOptExtensions_RayQuery,
-			EOptExtensions_RayAcceleration,
-			EOptExtensions_Swapchain,
-			EOptExtensions_RayMotionBlur,
-			EOptExtensions_RayReorder,
-			EOptExtensions_MeshShader,
-			EOptExtensions_DynamicRendering,
-			EOptExtensions_RayMicromapOpacity,
-			EOptExtensions_RayMicromapDisplacement,
-			EOptExtensions_VariableRateShading,
-			EOptExtensions_AtomicF32
-
-		} EOptExtensions;
-
-		const C8 *optExtensionsName[] = {
-
-			#ifndef NDEBUG
-				"VK_EXT_debug_marker",
-			#else
-				"",
-			#endif
-
-			"VK_KHR_shader_float16_int8",
-			"VK_KHR_draw_indirect_count",
-			"VK_KHR_shader_atomic_int64",
-			"VK_KHR_performance_query",
-			"VK_KHR_ray_tracing_pipeline",
-			"VK_KHR_ray_query",
-			"VK_KHR_acceleration_structure",
-			"VK_KHR_swapchain",
-			"VK_NV_ray_tracing_motion_blur",
-			"VK_NV_ray_tracing_invocation_reorder",
-			"VK_EXT_mesh_shader",
-			"VK_KHR_dynamic_rendering",
-			"VK_EXT_opacity_micromap",
-			"VK_NV_displacement_micromap",
-			"VK_KHR_fragment_shading_rate",
-			"VK_EXT_shader_atomic_float"
-		};
 
 		Bool optExtensions[sizeof(optExtensionsName) / sizeof(optExtensionsName[0])] = { 0 };
 
@@ -708,6 +678,65 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 
 		//Query features
 
+		//Check if indexing is properly supported
+
+		{
+			VkPhysicalDeviceDescriptorIndexingFeatures current = (VkPhysicalDeviceDescriptorIndexingFeatures) { 
+				.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES
+			};
+
+			VkPhysicalDeviceFeatures2 tempFeat2 = (VkPhysicalDeviceFeatures2) { 
+				.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+				.pNext = &current
+			};
+
+			graphicsExt->getPhysicalDeviceFeatures2(dev, &tempFeat2);
+
+			VkPhysicalDeviceDescriptorIndexingFeatures target = (VkPhysicalDeviceDescriptorIndexingFeatures) {
+				.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES,
+				.shaderUniformTexelBufferArrayDynamicIndexing = true,
+				.shaderStorageTexelBufferArrayDynamicIndexing = true,
+				.shaderUniformBufferArrayNonUniformIndexing = true,
+				.shaderSampledImageArrayNonUniformIndexing = true,
+				.shaderStorageBufferArrayNonUniformIndexing = true,
+				.shaderStorageImageArrayNonUniformIndexing = true,
+				.shaderUniformTexelBufferArrayNonUniformIndexing = true,
+				.shaderStorageTexelBufferArrayNonUniformIndexing = true,
+				.descriptorBindingUniformBufferUpdateAfterBind = true,
+				.descriptorBindingSampledImageUpdateAfterBind = true,
+				.descriptorBindingStorageImageUpdateAfterBind = true,
+				.descriptorBindingStorageBufferUpdateAfterBind = true,
+				.descriptorBindingUniformTexelBufferUpdateAfterBind = true,
+				.descriptorBindingStorageTexelBufferUpdateAfterBind = true,
+				.descriptorBindingUpdateUnusedWhilePending = true,
+				.descriptorBindingPartiallyBound = true,
+				.descriptorBindingVariableDescriptorCount = true,
+				.runtimeDescriptorArray = true
+			};
+
+			Bool eq = false;
+
+			for(U32 q = 0; q < 4; ++q) {
+
+				target.shaderInputAttachmentArrayDynamicIndexing = q & 1;
+				target.shaderInputAttachmentArrayNonUniformIndexing = q >> 1;
+
+				Buffer_eq(
+					Buffer_createConstRef(&target, sizeof(target)), 
+					Buffer_createConstRef(&current, sizeof(current)),
+					&eq
+				);
+
+				if(eq)
+					break;
+			}
+
+			if(!eq) {
+				Log_debugLn("Vulkan: Unsupported GPU %u, descriptor indexing isn't properly supported.", i);
+				continue;
+			}
+		}
+
 		//TBDR
 
 		if (
@@ -716,6 +745,23 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 			!optExtensions[EOptExtensions_DynamicRendering]
 		)
 			capabilities.features |= EGraphicsFeatures_TiledRendering;
+
+		else {
+
+			VkPhysicalDeviceDynamicRenderingFeatures dynamicRendering = (VkPhysicalDeviceDynamicRenderingFeatures) { 
+				.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES
+			};
+
+			VkPhysicalDeviceFeatures2 tempFeat2 = (VkPhysicalDeviceFeatures2) { 
+				.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+				.pNext = &dynamicRendering
+			};
+
+			graphicsExt->getPhysicalDeviceFeatures2(dev, &tempFeat2);
+
+			if(!dynamicRendering.dynamicRendering)
+				capabilities.features |= EGraphicsFeatures_TiledRendering;
+		}
 
 		//Swapchain
 		
@@ -770,6 +816,24 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 
 		if(subgroup.supportedOperations & VK_SUBGROUP_FEATURE_SHUFFLE_BIT)
 			capabilities.features |= EGraphicsFeatures_SubgroupShuffle;
+
+		{
+			VkPhysicalDeviceMultiDrawFeaturesEXT multiDraw = (VkPhysicalDeviceMultiDrawFeaturesEXT) { 
+				.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTI_DRAW_FEATURES_EXT
+			};
+
+			VkPhysicalDeviceFeatures2 tempFeat2 = (VkPhysicalDeviceFeatures2) { 
+				.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+				.pNext = &multiDraw
+			};
+
+			graphicsExt->getPhysicalDeviceFeatures2(dev, &tempFeat2);
+
+			if (!multiDraw.multiDraw) {
+				Log_debugLn("Vulkan: Unsupported GPU %u, Multi draw not enabled!", i);
+				continue;
+			}
+		}
 
 		//Mesh shaders
 
@@ -1165,10 +1229,6 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 		if(features.textureCompressionBC)
 			capabilities.dataTypes |= EGraphicsDataTypes_BCn;
 
-		//TODO:
-		//EGraphicsDataTypes_HDR10A2
-		//EGraphicsDataTypes_RGBA16f
-
 		//MSAA
 
 		if(allMSAA & VK_SAMPLE_COUNT_2_BIT)
@@ -1236,8 +1296,22 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 		if(optExtensions[EOptExtensions_DebugMarker])
 			capabilities.featuresExt |= EVkGraphicsFeatures_DebugMarker;
 
-		if(optExtensions[EOptExtensions_PerfQuery])
-			capabilities.featuresExt |= EVkGraphicsFeatures_PerfQuery;
+		if(optExtensions[EOptExtensions_PerfQuery]) {
+
+			VkPhysicalDevicePerformanceQueryFeaturesKHR perfQuery = (VkPhysicalDevicePerformanceQueryFeaturesKHR) { 
+				.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PERFORMANCE_QUERY_FEATURES_KHR
+			};
+
+			VkPhysicalDeviceFeatures2 tempFeat2 = (VkPhysicalDeviceFeatures2) { 
+				.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+				.pNext = &perfQuery
+			};
+
+			graphicsExt->getPhysicalDeviceFeatures2(dev, &tempFeat2);
+
+			if(perfQuery.performanceCounterQueryPools)
+				capabilities.featuresExt |= EVkGraphicsFeatures_PerfQuery;
+		}
 
 		//Fully converted type
 
