@@ -22,6 +22,7 @@
 #include "graphics/vulkan/vk_instance.h"
 #include "graphics/generic/device.h"
 #include "platforms/ext/listx.h"
+#include "platforms/ext/bufferx.h"
 #include "platforms/log.h"
 #include "types/error.h"
 #include "types/buffer.h"
@@ -248,6 +249,7 @@ Error GraphicsDevice_initExt(
 	List extensions = List_createEmpty(sizeof(const C8*));
 	List queues = List_createEmpty(sizeof(VkDeviceQueueCreateInfo));
 	List queueFamilies = List_createEmpty(sizeof(VkQueueFamilyProperties));
+	Buffer tempBuffer = Buffer_createNull();
 
 	_gotoIfError(clean, List_reservex(&extensions, 32));
 	_gotoIfError(clean, List_reservex(&queues, EVkGraphicsQueue_Count));
@@ -407,7 +409,11 @@ Error GraphicsDevice_initExt(
 			Log_debugLn("\t%s", ((const char* const*) extensions.ptr)[i]);
 	}
 
-	VkGraphicsDevice *deviceExt = (VkGraphicsDevice*) ext;
+	_gotoIfError(clean, Buffer_createEmptyBytesx(sizeof(VkGraphicsDevice), &tempBuffer));
+	*ext = (void*) tempBuffer.ptr;
+
+	VkGraphicsDevice *deviceExt = (VkGraphicsDevice*) tempBuffer.ptr;
+	*deviceExt = (VkGraphicsDevice) { 0 };
 
 	_gotoIfError(clean, vkCheck(vkCreateDevice(physicalDeviceExt, &deviceInfo, NULL, &deviceExt->device)));
 
@@ -419,7 +425,7 @@ Error GraphicsDevice_initExt(
 		deviceExt->device,
 		graphicsQueueId,
 		0,
-		deviceExt->queues + EVkGraphicsQueue_Graphics
+		&deviceExt->queues[EVkGraphicsQueue_Graphics]
 	);
 
 	//Compute
@@ -431,7 +437,7 @@ Error GraphicsDevice_initExt(
 		deviceExt->device,
 		computeQueueId,
 		0,
-		deviceExt->queues + EVkGraphicsQueue_Compute
+		&deviceExt->queues[EVkGraphicsQueue_Compute]
 	);
 
 	deviceExt->queues[EVkGraphicsQueue_Raytracing] = deviceExt->queues[EVkGraphicsQueue_Compute];
@@ -448,10 +454,14 @@ Error GraphicsDevice_initExt(
 		deviceExt->device,
 		copyQueueId,
 		0,
-		deviceExt->queues + EVkGraphicsQueue_Copy
+		&deviceExt->queues[EVkGraphicsQueue_Copy]
 	);
 
+	goto success;
+
 clean:
+	Buffer_freex(&tempBuffer);
+success:
 	List_freex(&extensions);
 	List_freex(&queues);
 	List_freex(&queueFamilies);
@@ -463,7 +473,11 @@ Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void **ext) {
 	if(!instance || !ext || !*ext)
 		return instance;
 
-	vkDestroyDevice(((VkGraphicsDevice*)ext)->device, NULL);
+	vkDestroyDevice((*(VkGraphicsDevice**)ext)->device, NULL);
+
+	Buffer buf = Buffer_createManagedPtr(*ext, sizeof(VkGraphicsDevice));
+	Buffer_freex(&buf);
+
 	*ext = NULL;
 	return true;
 }
