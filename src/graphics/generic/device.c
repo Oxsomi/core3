@@ -153,7 +153,13 @@ void GraphicsDeviceInfo_print(const GraphicsDeviceInfo *deviceInfo, Bool printCa
 
 //Ext
 
-impl Error GraphicsDevice_initExt(const GraphicsInstance *instance, const GraphicsDeviceInfo *deviceInfo, void **ext);
+impl Error GraphicsDevice_initExt(
+	const GraphicsInstance *instance, 
+	const GraphicsDeviceInfo *deviceInfo, 
+	Bool verbose,
+	void **ext
+);
+
 impl Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void **ext);
 
 //
@@ -197,7 +203,12 @@ U64 EGraphicsTypeId_objectBytes[EGraphicsTypeId_Count] = {
 	0		//sizeof(SwapchainObject)
 };
 
-Error GraphicsDevice_create(const GraphicsInstance *instance, const GraphicsDeviceInfo *info, GraphicsDevice *device) {
+Error GraphicsDevice_create(
+	const GraphicsInstance *instance, 
+	const GraphicsDeviceInfo *info, 
+	Bool verbose, 
+	GraphicsDevice *device
+) {
 
 	if(!instance || !info || !device)
 		return Error_nullPointer(!instance ? 0 : (!info ? 1 : 2));
@@ -207,7 +218,7 @@ Error GraphicsDevice_create(const GraphicsInstance *instance, const GraphicsDevi
 
 	//Create extended device
 
-	Error err = GraphicsDevice_initExt(instance, &device->info, &device->ext);
+	Error err = GraphicsDevice_initExt(instance, &device->info, verbose, &device->ext);
 
 	if(err.genericError)
 		return err;
@@ -260,6 +271,8 @@ Bool GraphicsDevice_free(const GraphicsInstance *instance, GraphicsDevice *devic
 
 	success &= List_freex(&device->factories);
 	success &= GraphicsDevice_freeExt(instance, &device->ext);
+
+	*device = (GraphicsDevice) { 0 };
 	return success;
 }
 

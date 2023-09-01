@@ -243,7 +243,7 @@ Error Buffer_eq(Buffer buf0, Buffer buf1, Bool *result) {
 		return Error_none();
 
 	for (U64 i = 0, j = len0 >> 3; i < j; ++i)
-		if (*((const U64*)buf0.ptr + i) != *((const U64*)buf1.ptr + i))
+		if (((const U64*)buf0.ptr)[i] != ((const U64*)buf1.ptr)[i])
 			return Error_none();
 
 	for (U64 i = len0 >> 3 << 3; i < len0; ++i)

@@ -42,7 +42,7 @@ typedef enum EVkGraphicsFeatures {
 
 typedef enum EVkGraphicsQueue {
 
-	EVkGraphicsQueue_Copy,
+	EVkGraphicsQueue_Copy,					//Queue for dedicated host -> device copies
 	EVkGraphicsQueue_Compute,
 	EVkGraphicsQueue_Graphics,
 	EVkGraphicsQueue_Raytracing,

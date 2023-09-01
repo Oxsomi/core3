@@ -22,6 +22,7 @@
 #include "graphics/vulkan/vk_instance.h"
 #include "graphics/generic/device.h"
 #include "platforms/ext/listx.h"
+#include "platforms/log.h"
 #include "types/error.h"
 #include "types/buffer.h"
 
@@ -33,7 +34,12 @@
 		currPNext = &tmp##T.pNext;		\
 	}
 
-Error GraphicsDevice_initExt(const GraphicsInstance *instance, const GraphicsDeviceInfo *physicalDevice, void **ext) {
+Error GraphicsDevice_initExt(
+	const GraphicsInstance *instance, 
+	const GraphicsDeviceInfo *physicalDevice, 
+	Bool verbose,
+	void **ext
+) {
 
 	instance;
 
@@ -241,6 +247,7 @@ Error GraphicsDevice_initExt(const GraphicsInstance *instance, const GraphicsDev
 	Error err = Error_none();
 	List extensions = List_createEmpty(sizeof(const C8*));
 	List queues = List_createEmpty(sizeof(VkDeviceQueueCreateInfo));
+	List queueFamilies = List_createEmpty(sizeof(VkQueueFamilyProperties));
 
 	_gotoIfError(clean, List_reservex(&extensions, 32));
 	_gotoIfError(clean, List_reservex(&queues, EVkGraphicsQueue_Count));
@@ -271,6 +278,8 @@ Error GraphicsDevice_initExt(const GraphicsInstance *instance, const GraphicsDev
 			case EOptExtensions_RayMicromapOpacity:			on = feat & EGraphicsFeatures_RayMicromapOpacity;		break;
 			case EOptExtensions_RayMicromapDisplacement:	on = feat & EGraphicsFeatures_RayMicromapDisplacement;	break;
 			case EOptExtensions_AtomicF32:					on = types & EGraphicsDataTypes_AtomicF32;				break;
+			case EOptExtensions_DeferredHostOperations:		on = feat & EGraphicsFeatures_Raytracing;				break;
+			case EOptExtensions_Sync2:						on = feat & EGraphicsFeatures_RayMicromapOpacity;		break;
 
 			default:
 				continue;
@@ -283,9 +292,101 @@ Error GraphicsDevice_initExt(const GraphicsInstance *instance, const GraphicsDev
 			_gotoIfError(clean, List_pushBackx(&extensions, Buffer_createConstRef(ptr, sizeof(const C8*))));
 	}
 
-	//TODO: Get queues
+	VkPhysicalDevice physicalDeviceExt = (VkPhysicalDevice) physicalDevice->ext;
 
-	//TODO: Assign queues to deviceExt (don't have to be unique)
+	//Get queues
+
+	U32 familyCount = 0;
+	vkGetPhysicalDeviceQueueFamilyProperties(physicalDeviceExt, &familyCount, NULL);
+
+	if(!familyCount)
+		_gotoIfError(clean, Error_invalidOperation(0));
+
+	_gotoIfError(clean, List_resizex(&queueFamilies, familyCount));
+	vkGetPhysicalDeviceQueueFamilyProperties(physicalDeviceExt, &familyCount, (VkQueueFamilyProperties*) queueFamilies.ptr);
+
+	//Assign queues to deviceExt (don't have to be unique)
+
+	//Find queues
+
+	U32 copyQueueId = U32_MAX;
+	U32 computeQueueId = U32_MAX;
+	U32 graphicsQueueId = U32_MAX;
+
+	U32 fallbackCopyQueueId = U32_MAX;
+	U32 fallbackComputeQueueId = U32_MAX;
+
+	VkQueueFlags importantFlags = VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT;
+
+	for (U32 i = 0; i < familyCount; ++i) {
+
+		VkQueueFamilyProperties q = ((VkQueueFamilyProperties*)queueFamilies.ptr)[i];
+
+		if(!q.queueCount)
+			continue;
+
+		if(copyQueueId == U32_MAX) {
+
+			if((q.queueFlags & importantFlags) == VK_QUEUE_TRANSFER_BIT)
+				copyQueueId = i;
+
+			if(q.queueFlags & VK_QUEUE_TRANSFER_BIT)
+				fallbackCopyQueueId = i;
+		}
+
+		if(computeQueueId == U32_MAX) {
+
+			if(((q.queueFlags & importantFlags) &~ VK_QUEUE_TRANSFER_BIT) == VK_QUEUE_COMPUTE_BIT)
+				computeQueueId = i;
+
+			if(q.queueFlags & VK_QUEUE_COMPUTE_BIT)
+				fallbackComputeQueueId = i;
+		}
+
+		if(graphicsQueueId == U32_MAX && q.queueFlags & VK_QUEUE_GRAPHICS_BIT)
+			graphicsQueueId = i;
+
+		if(graphicsQueueId != U32_MAX && computeQueueId != U32_MAX && copyQueueId != U32_MAX)
+			break;
+	}
+
+	//If there's no dedicated queue, we should use the one that supports it.
+
+	if(computeQueueId == U32_MAX)
+		computeQueueId = fallbackComputeQueueId;
+
+	if(copyQueueId == U32_MAX)
+		copyQueueId = fallbackCopyQueueId;
+
+	//Ensure we have all queues. Should be impossible, but still.
+
+	if(copyQueueId == U32_MAX || computeQueueId == U32_MAX || graphicsQueueId == U32_MAX)
+		_gotoIfError(clean, Error_invalidOperation(1));
+
+	//Assign queues to queues (deviceInfo)
+
+	F32 prio = 1;
+
+	VkDeviceQueueCreateInfo graphicsQueue = (VkDeviceQueueCreateInfo){
+		.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+		.queueFamilyIndex = graphicsQueueId,
+		.queueCount = 1,
+		.pQueuePriorities = &prio
+	};
+
+	_gotoIfError(clean, List_pushBackx(&queues, Buffer_createConstRef(&graphicsQueue, sizeof(graphicsQueue))));
+
+	VkDeviceQueueCreateInfo copyQueue = graphicsQueue;
+	copyQueue.queueFamilyIndex = copyQueueId;
+
+	if(copyQueueId != graphicsQueueId)
+		_gotoIfError(clean, List_pushBackx(&queues, Buffer_createConstRef(&copyQueue, sizeof(copyQueue))));
+
+	VkDeviceQueueCreateInfo computeQueue = graphicsQueue;
+	computeQueue.queueFamilyIndex = computeQueueId;
+
+	if(computeQueueId != graphicsQueueId && computeQueueId != copyQueueId)
+		_gotoIfError(clean, List_pushBackx(&queues, Buffer_createConstRef(&computeQueue, sizeof(computeQueue))));
 
 	//Create device
 
@@ -298,13 +399,62 @@ Error GraphicsDevice_initExt(const GraphicsInstance *instance, const GraphicsDev
 		.pQueueCreateInfos = (const VkDeviceQueueCreateInfo*) queues.ptr
 	};
 
+	if (verbose) {
+
+		Log_debugLn("Enabling extensions:");
+
+		for(U32 i = 0; i < (U32) extensions.length; ++i)
+			Log_debugLn("\t%s", ((const char* const*) extensions.ptr)[i]);
+	}
+
 	VkGraphicsDevice *deviceExt = (VkGraphicsDevice*) ext;
 
-	err = vkCheck(vkCreateDevice((VkPhysicalDevice) physicalDevice->ext, &deviceInfo, NULL, &deviceExt->device));
+	_gotoIfError(clean, vkCheck(vkCreateDevice(physicalDeviceExt, &deviceInfo, NULL, &deviceExt->device)));
+
+	//Get queues
+
+	//Graphics
+
+	vkGetDeviceQueue(
+		deviceExt->device,
+		graphicsQueueId,
+		0,
+		deviceExt->queues + EVkGraphicsQueue_Graphics
+	);
+
+	//Compute
+
+	if(computeQueueId == graphicsQueueId)
+		deviceExt->queues[EVkGraphicsQueue_Compute] = deviceExt->queues[EVkGraphicsQueue_Graphics];
+
+	else vkGetDeviceQueue(
+		deviceExt->device,
+		computeQueueId,
+		0,
+		deviceExt->queues + EVkGraphicsQueue_Compute
+	);
+
+	deviceExt->queues[EVkGraphicsQueue_Raytracing] = deviceExt->queues[EVkGraphicsQueue_Compute];
+
+	//Copy
+
+	if(copyQueueId == graphicsQueueId)
+		deviceExt->queues[EVkGraphicsQueue_Copy] = deviceExt->queues[EVkGraphicsQueue_Graphics];
+
+	else if(copyQueueId == computeQueueId)
+		deviceExt->queues[EVkGraphicsQueue_Copy] = deviceExt->queues[EVkGraphicsQueue_Compute];
+
+	else vkGetDeviceQueue(
+		deviceExt->device,
+		copyQueueId,
+		0,
+		deviceExt->queues + EVkGraphicsQueue_Copy
+	);
 
 clean:
 	List_freex(&extensions);
 	List_freex(&queues);
+	List_freex(&queueFamilies);
 	return err;
 }
 
@@ -313,7 +463,7 @@ Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void **ext) {
 	if(!instance || !ext || !*ext)
 		return instance;
 
-	vkDestroyDevice(*(VkDevice*)ext, NULL);
+	vkDestroyDevice(((VkGraphicsDevice*)ext)->device, NULL);
 	*ext = NULL;
 	return true;
 }

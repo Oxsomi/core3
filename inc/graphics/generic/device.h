@@ -61,7 +61,13 @@ typedef struct GraphicsDevice {
 
 } GraphicsDevice;
 
-Error GraphicsDevice_create(const GraphicsInstance *instance, const GraphicsDeviceInfo *info, GraphicsDevice *device);
+Error GraphicsDevice_create(
+	const GraphicsInstance *instance, 
+	const GraphicsDeviceInfo *info, 
+	Bool verbose,
+	GraphicsDevice *device
+);
+
 Bool GraphicsDevice_free(const GraphicsInstance *instance, GraphicsDevice *device);
 
 //Submit and wait until all submitted graphics tasks are done.
