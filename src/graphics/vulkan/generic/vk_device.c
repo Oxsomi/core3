@@ -21,8 +21,10 @@
 #include "graphics/vulkan/vk_device.h"
 #include "graphics/vulkan/vk_instance.h"
 #include "graphics/generic/device.h"
+#include "graphics/generic/instance.h"
 #include "platforms/ext/listx.h"
 #include "platforms/ext/bufferx.h"
+#include "platforms/ext/stringx.h"
 #include "platforms/log.h"
 #include "platforms/thread.h"
 #include "types/error.h"
@@ -43,7 +45,8 @@ Error GraphicsDevice_initExt(
 	void **ext
 ) {
 
-	instance;
+	VkGraphicsInstance *instanceExt = (VkGraphicsInstance*) instance->ext;
+	instanceExt;
 
 	EGraphicsFeatures feat = physicalDevice->capabilities.features;
 	EGraphicsFeatures featEx = physicalDevice->capabilities.featuresExt;
@@ -251,7 +254,8 @@ Error GraphicsDevice_initExt(
 	List queues = List_createEmpty(sizeof(VkDeviceQueueCreateInfo));
 	List queueFamilies = List_createEmpty(sizeof(VkQueueFamilyProperties));
 	List commandPools = List_createEmpty(sizeof(VkCommandPool));
-	Buffer tempBuffer = Buffer_createNull();
+	Buffer graphicsExtBuffer = Buffer_createNull();
+	CharString tempStr = CharString_createNull();
 	VkCommandPool tempPool = NULL;
 	VkGraphicsDevice *deviceExt = NULL;
 
@@ -413,10 +417,10 @@ Error GraphicsDevice_initExt(
 			Log_debugLn("\t%s", ((const char* const*) extensions.ptr)[i]);
 	}
 
-	_gotoIfError(clean, Buffer_createEmptyBytesx(sizeof(VkGraphicsDevice), &tempBuffer));
-	*ext = (void*) tempBuffer.ptr;
+	_gotoIfError(clean, Buffer_createEmptyBytesx(sizeof(VkGraphicsDevice), &graphicsExtBuffer));
+	*ext = (void*) graphicsExtBuffer.ptr;
 
-	deviceExt = (VkGraphicsDevice*) tempBuffer.ptr;
+	deviceExt = (VkGraphicsDevice*) graphicsExtBuffer.ptr;
 	*deviceExt = (VkGraphicsDevice) { 0 };
 
 	_gotoIfError(clean, vkCheck(vkCreateDevice(physicalDeviceExt, &deviceInfo, NULL, &deviceExt->device)));
@@ -439,6 +443,21 @@ Error GraphicsDevice_initExt(
 
 	graphicsQueueExt->resolvedQueueId = resolvedId++;
 
+	#ifndef NDEBUG
+
+		VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
+			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+			.objectType = VK_OBJECT_TYPE_QUEUE
+		};
+
+		if(instanceExt->debugSetName) {
+			debugName.pObjectName = "Graphics queue";
+			debugName.objectHandle = (U64) graphicsQueueExt->queue;
+			_gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName)));
+		}
+
+	#endif
+
 	//Compute
 
 	VkGraphicsQueue *computeQueueExt = &deviceExt->queues[EVkGraphicsQueue_Compute];
@@ -454,6 +473,14 @@ Error GraphicsDevice_initExt(
 			0,
 			&computeQueueExt->queue
 		);
+
+		#ifndef NDEBUG
+			if(instanceExt->debugSetName) {
+				debugName.pObjectName = "Compute queue";
+				debugName.objectHandle = (U64) computeQueueExt->queue;
+				_gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName)));
+			}
+		#endif
 
 		uniqueQueues[resolvedId] = computeQueueId;
 		computeQueueExt->resolvedQueueId = resolvedId++;
@@ -480,6 +507,14 @@ Error GraphicsDevice_initExt(
 			&copyQueueExt->queue
 		);
 
+		#ifndef NDEBUG
+			if(instanceExt->debugSetName) {
+				debugName.pObjectName = "Copy queue";
+				debugName.objectHandle = (U64) copyQueueExt->queue;
+				_gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName)));
+			}
+		#endif
+
 		uniqueQueues[resolvedId] = copyQueueId;
 		copyQueueExt->resolvedQueueId = resolvedId++;
 	}
@@ -494,6 +529,10 @@ Error GraphicsDevice_initExt(
 		.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT
 	};
 
+	#ifndef NDEBUG
+		debugName.objectType = VK_OBJECT_TYPE_COMMAND_POOL;
+	#endif
+
 	for (U64 k = 0; k < 3; ++k)
 		for(U64 j = 0; j < threads; ++j)
 			for(U64 i = 0; i < resolvedId; ++i) {
@@ -501,6 +540,30 @@ Error GraphicsDevice_initExt(
 				poolInfo.queueFamilyIndex = uniqueQueues[i];
 
 				_gotoIfError(clean, vkCheck(vkCreateCommandPool(deviceExt->device, &poolInfo, NULL, &tempPool)));
+
+				#ifndef NDEBUG
+
+					if(instanceExt->debugSetName) {
+
+						_gotoIfError(clean, CharString_formatx(
+							&tempStr, 
+							"%s command pool (thread: %u, frame id: %u)",
+							i == graphicsQueueExt->resolvedQueueId ? "Graphics" : (
+								computeQueueExt->resolvedQueueId == i ? "Compute" : "Copy"
+							),
+							(U32) j,
+							(U32) k
+						));
+
+						debugName.pObjectName = tempStr.ptr;
+						debugName.objectHandle = (U64) tempPool;
+						_gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName)));
+
+						CharString_freex(&tempStr);
+					}
+
+				#endif
+
 				_gotoIfError(clean, List_pushBackx(&commandPools, Buffer_createConstRef(&tempPool, sizeof(tempPool))));
 
 				tempPool = NULL;
@@ -527,9 +590,10 @@ clean:
 
 	//Free graphicsExt
 
-	Buffer_freex(&tempBuffer);
+	Buffer_freex(&graphicsExtBuffer);
 
 success:
+	CharString_freex(&tempStr);
 	List_freex(&extensions);
 	List_freex(&queues);
 	List_freex(&queueFamilies);
