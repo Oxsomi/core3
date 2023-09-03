@@ -359,7 +359,8 @@ const C8 *reqExtensionsName[] = {
 	"VK_EXT_descriptor_indexing",
 	"VK_EXT_multi_draw",
 	"VK_KHR_driver_properties",
-	"VK_KHR_synchronization2"
+	"VK_KHR_synchronization2",
+	"VK_KHR_timeline_semaphore"
 };
 
 U64 reqExtensionsNameCount = sizeof(reqExtensionsName) / sizeof(reqExtensionsName[0]);
@@ -841,6 +842,34 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 
 			if (!multiDraw.multiDraw) {
 				Log_debugLn("Vulkan: Unsupported GPU %u, Multi draw not enabled!", i);
+				continue;
+			}
+		}
+		
+		//Force enable synchronization and timeline semaphores
+
+		{
+			getDeviceFeatures(
+				VkPhysicalDeviceTimelineSemaphoreFeatures,
+				semaphore,
+				VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES
+			);
+
+			if (!semaphore.timelineSemaphore) {
+				Log_debugLn("Vulkan: Unsupported GPU %u, Timeline semaphores unsupported!", i);
+				continue;
+			}
+		}
+
+		{
+			getDeviceFeatures(
+				VkPhysicalDeviceSynchronization2Features,
+				sync2,
+				VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES
+			);
+
+			if (!sync2.synchronization2) {
+				Log_debugLn("Vulkan: Unsupported GPU %u, Synchronization 2 unsupported!", i);
 				continue;
 			}
 		}

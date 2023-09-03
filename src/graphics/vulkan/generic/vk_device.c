@@ -133,6 +133,24 @@ Error GraphicsDevice_initExt(
 	);
 
 	vkBindNext(
+		VkPhysicalDeviceSynchronization2Features, 
+		true, 
+		(VkPhysicalDeviceSynchronization2Features) {
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES,
+			.synchronization2 = true
+		}
+	);
+
+	vkBindNext(
+		VkPhysicalDeviceTimelineSemaphoreFeatures, 
+		true, 
+		(VkPhysicalDeviceTimelineSemaphoreFeatures) {
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES,
+			.timelineSemaphore = true
+		}
+	);
+
+	vkBindNext(
 		VkPhysicalDeviceDynamicRenderingFeatures, 
 		!(feat & EGraphicsFeatures_TiledRendering), 
 		{
