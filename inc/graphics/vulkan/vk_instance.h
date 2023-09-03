@@ -45,8 +45,7 @@ typedef enum EOptExtensions {
 	EOptExtensions_RayMicromapDisplacement,
 	EOptExtensions_VariableRateShading,
 	EOptExtensions_AtomicF32,
-	EOptExtensions_DeferredHostOperations,
-	EOptExtensions_Sync2
+	EOptExtensions_DeferredHostOperations
 
 } EOptExtensions;
 

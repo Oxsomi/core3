@@ -289,7 +289,6 @@ Error GraphicsDevice_initExt(
 			case EOptExtensions_RayMicromapDisplacement:	on = feat & EGraphicsFeatures_RayMicromapDisplacement;	break;
 			case EOptExtensions_AtomicF32:					on = types & EGraphicsDataTypes_AtomicF32;				break;
 			case EOptExtensions_DeferredHostOperations:		on = feat & EGraphicsFeatures_Raytracing;				break;
-			case EOptExtensions_Sync2:						on = feat & EGraphicsFeatures_RayMicromapOpacity;		break;
 
 			default:
 				continue;

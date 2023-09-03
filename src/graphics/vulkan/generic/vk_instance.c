@@ -358,7 +358,8 @@ const C8 *reqExtensionsName[] = {
 	"VK_EXT_shader_subgroup_vote",
 	"VK_EXT_descriptor_indexing",
 	"VK_EXT_multi_draw",
-	"VK_KHR_driver_properties"
+	"VK_KHR_driver_properties",
+	"VK_KHR_synchronization2"
 };
 
 U64 reqExtensionsNameCount = sizeof(reqExtensionsName) / sizeof(reqExtensionsName[0]);
@@ -387,8 +388,7 @@ const C8 *optExtensionsName[] = {
 	"VK_NV_displacement_micromap",
 	"VK_KHR_fragment_shading_rate",
 	"VK_EXT_shader_atomic_float",
-	"VK_KHR_deferred_host_operations",
-	"VK_KHR_synchronization2"
+	"VK_KHR_deferred_host_operations"
 };
 
 U64 optExtensionsNameCount = sizeof(optExtensionsName) / sizeof(optExtensionsName[0]);
@@ -1058,9 +1058,6 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 						)
 							capabilities.features |= EGraphicsFeatures_RayReorder;
 					}
-
-					if(!optExtensions[EOptExtensions_Sync2])
-						optExtensions[EOptExtensions_RayMicromapOpacity] = true;
 
 					if(optExtensions[EOptExtensions_RayMicromapOpacity]) {
 
