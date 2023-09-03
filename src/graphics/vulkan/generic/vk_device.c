@@ -24,6 +24,7 @@
 #include "platforms/ext/listx.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/log.h"
+#include "platforms/thread.h"
 #include "types/error.h"
 #include "types/buffer.h"
 
@@ -249,7 +250,10 @@ Error GraphicsDevice_initExt(
 	List extensions = List_createEmpty(sizeof(const C8*));
 	List queues = List_createEmpty(sizeof(VkDeviceQueueCreateInfo));
 	List queueFamilies = List_createEmpty(sizeof(VkQueueFamilyProperties));
+	List commandPools = List_createEmpty(sizeof(VkCommandPool));
 	Buffer tempBuffer = Buffer_createNull();
+	VkCommandPool tempPool = NULL;
+	VkGraphicsDevice *deviceExt = NULL;
 
 	_gotoIfError(clean, List_reservex(&extensions, 32));
 	_gotoIfError(clean, List_reservex(&queues, EVkGraphicsQueue_Count));
@@ -412,7 +416,7 @@ Error GraphicsDevice_initExt(
 	_gotoIfError(clean, Buffer_createEmptyBytesx(sizeof(VkGraphicsDevice), &tempBuffer));
 	*ext = (void*) tempBuffer.ptr;
 
-	VkGraphicsDevice *deviceExt = (VkGraphicsDevice*) tempBuffer.ptr;
+	deviceExt = (VkGraphicsDevice*) tempBuffer.ptr;
 	*deviceExt = (VkGraphicsDevice) { 0 };
 
 	_gotoIfError(clean, vkCheck(vkCreateDevice(physicalDeviceExt, &deviceInfo, NULL, &deviceExt->device)));
@@ -421,46 +425,110 @@ Error GraphicsDevice_initExt(
 
 	//Graphics
 
+	VkGraphicsQueue *graphicsQueueExt = &deviceExt->queues[EVkGraphicsQueue_Graphics];
+
+	U32 resolvedId = 0;
+	U32 uniqueQueues[3] = { graphicsQueueId };
+
 	vkGetDeviceQueue(
 		deviceExt->device,
-		graphicsQueueId,
+		graphicsQueueExt->queueId = graphicsQueueId,
 		0,
-		&deviceExt->queues[EVkGraphicsQueue_Graphics]
+		&graphicsQueueExt->queue
 	);
+
+	graphicsQueueExt->resolvedQueueId = resolvedId++;
 
 	//Compute
 
+	VkGraphicsQueue *computeQueueExt = &deviceExt->queues[EVkGraphicsQueue_Compute];
+
 	if(computeQueueId == graphicsQueueId)
-		deviceExt->queues[EVkGraphicsQueue_Compute] = deviceExt->queues[EVkGraphicsQueue_Graphics];
+		*computeQueueExt = *graphicsQueueExt;
 
-	else vkGetDeviceQueue(
-		deviceExt->device,
-		computeQueueId,
-		0,
-		&deviceExt->queues[EVkGraphicsQueue_Compute]
-	);
+	else {
 
-	deviceExt->queues[EVkGraphicsQueue_Raytracing] = deviceExt->queues[EVkGraphicsQueue_Compute];
+		vkGetDeviceQueue(
+			deviceExt->device,
+			computeQueueExt->queueId = computeQueueId,
+			0,
+			&computeQueueExt->queue
+		);
+
+		uniqueQueues[resolvedId] = computeQueueId;
+		computeQueueExt->resolvedQueueId = resolvedId++;
+	}
+
+	deviceExt->queues[EVkGraphicsQueue_Raytracing] = *computeQueueExt;
 
 	//Copy
 
+	VkGraphicsQueue *copyQueueExt = &deviceExt->queues[EVkGraphicsQueue_Copy];
+
 	if(copyQueueId == graphicsQueueId)
-		deviceExt->queues[EVkGraphicsQueue_Copy] = deviceExt->queues[EVkGraphicsQueue_Graphics];
+		*copyQueueExt = *graphicsQueueExt;
 
 	else if(copyQueueId == computeQueueId)
-		deviceExt->queues[EVkGraphicsQueue_Copy] = deviceExt->queues[EVkGraphicsQueue_Compute];
+		*copyQueueExt = *computeQueueExt;
 
-	else vkGetDeviceQueue(
-		deviceExt->device,
-		copyQueueId,
-		0,
-		&deviceExt->queues[EVkGraphicsQueue_Copy]
-	);
+	else {
 
+		vkGetDeviceQueue(
+			deviceExt->device,
+			copyQueueExt->queueId = copyQueueId,
+			0,
+			&copyQueueExt->queue
+		);
+
+		uniqueQueues[resolvedId] = copyQueueId;
+		copyQueueExt->resolvedQueueId = resolvedId++;
+	}
+
+	//Create command recorder per queue per thread per backbuffer.
+	//We only allow double and triple buffering, so allocate for triple buffers.
+
+	U32 threads = Thread_getLogicalCores();
+
+	VkCommandPoolCreateInfo poolInfo = (VkCommandPoolCreateInfo) {
+		.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+		.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT
+	};
+
+	for (U64 k = 0; k < 3; ++k)
+		for(U64 j = 0; j < threads; ++j)
+			for(U64 i = 0; i < resolvedId; ++i) {
+
+				poolInfo.queueFamilyIndex = uniqueQueues[i];
+
+				_gotoIfError(clean, vkCheck(vkCreateCommandPool(deviceExt->device, &poolInfo, NULL, &tempPool)));
+				_gotoIfError(clean, List_pushBackx(&commandPools, Buffer_createConstRef(&tempPool, sizeof(tempPool))));
+
+				tempPool = NULL;
+			}
+
+	deviceExt->commandPools = commandPools;
+	deviceExt->resolvedQueues = resolvedId;
 	goto success;
 
 clean:
+
+	//Free command pools
+
+	if(deviceExt) {
+
+		if(tempPool)
+			vkDestroyCommandPool(deviceExt->device, tempPool, NULL);
+
+		for(U64 i = 0; i < commandPools.length; ++i)
+			vkDestroyCommandPool(deviceExt->device, ((VkCommandPool*)commandPools.ptr)[i], NULL);
+	}
+
+	List_freex(&commandPools);
+
+	//Free graphicsExt
+
 	Buffer_freex(&tempBuffer);
+
 success:
 	List_freex(&extensions);
 	List_freex(&queues);
@@ -473,7 +541,13 @@ Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void **ext) {
 	if(!instance || !ext || !*ext)
 		return instance;
 
-	vkDestroyDevice((*(VkGraphicsDevice**)ext)->device, NULL);
+	VkGraphicsDevice *deviceExt = (*(VkGraphicsDevice**)ext);
+
+	for(U64 i = 0;i < deviceExt->commandPools.length; ++i)
+		vkDestroyCommandPool(deviceExt->device, ((VkCommandPool*)deviceExt->commandPools.ptr)[i], NULL);
+
+	List_freex(&deviceExt->commandPools);
+	vkDestroyDevice(deviceExt->device, NULL);
 
 	Buffer buf = Buffer_createManagedPtr(*ext, sizeof(VkGraphicsDevice));
 	Buffer_freex(&buf);

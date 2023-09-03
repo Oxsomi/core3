@@ -21,6 +21,7 @@
 #pragma once
 #include "graphics/vulkan/vulkan.h"
 #include "graphics/generic/device_info.h"
+#include "types/list.h"
 
 enum EVkDeviceVendor {
 	EVkDeviceVendor_NV					= 0x10DE,
@@ -54,9 +55,23 @@ typedef enum EVkGraphicsQueue {
 
 } EVkGraphicsQueue;
 
+typedef struct VkGraphicsQueue {
+
+	VkQueue queue;
+	U32 queueId;					//Queue family
+	U32 resolvedQueueId;			//Index into command pool array for that queue
+
+} VkGraphicsQueue;
+
 typedef struct VkGraphicsDevice {
 
 	VkDevice device;
-	VkQueue queues[EVkGraphicsQueue_Count];		//Don't have to be unique queues!
+	VkGraphicsQueue queues[EVkGraphicsQueue_Count];		//Don't have to be unique queues!
+
+	U32 resolvedQueues;
+	U32 pad;
+
+	//3D as 1D flat array: resolvedQueueId + (backBufferId * threadCount + threadId) * resolvedQueues
+	List commandPools;	
 
 } VkGraphicsDevice;
