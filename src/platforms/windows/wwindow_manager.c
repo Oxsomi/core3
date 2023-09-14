@@ -119,7 +119,7 @@ void Window_physicalLoop(Window *w) {
 	//Get real size and position
 
 	RECT r = (RECT) { 0 };
-	GetWindowRect(nativeWindow, &r);
+	GetClientRect(nativeWindow, &r);
 	w->size = I32x2_create2(r.right - r.left, r.bottom - r.top);
 
 	GetWindowRect(nativeWindow, &r);
@@ -150,6 +150,9 @@ void Window_physicalLoop(Window *w) {
 
 	if(w->callbacks.onCreate)
 		w->callbacks.onCreate(w);
+
+	if(w->callbacks.onResize)
+		w->callbacks.onResize(w);
 
 	w->flags |= EWindowFlags_IsActive;
 
@@ -252,7 +255,7 @@ Error WindowManager_createPhysical(
 	switch (format) {
 
 		case EWindowFormat_rgba8:
-		case EWindowFormat_hdr10a2:
+		case EWindowFormat_rgb10a2:
 		case EWindowFormat_rgba16f:
 		case EWindowFormat_rgba32f:
 

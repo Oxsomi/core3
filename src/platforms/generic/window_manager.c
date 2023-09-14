@@ -127,7 +127,7 @@ Error WindowManager_createVirtual(
 	switch (format) {
 
 		case EWindowFormat_rgba8:
-		case EWindowFormat_hdr10a2:
+		case EWindowFormat_rgb10a2:
 		case EWindowFormat_rgba16f:
 		case EWindowFormat_rgba32f:
 			break;
@@ -195,6 +195,9 @@ Error WindowManager_createVirtual(
 				Buffer_freex(&cpuVisibleBuffer);
 				return err;
 			}
+
+			if(w->callbacks.onResize)
+				w->callbacks.onResize(w);
 
 			*result = w;
 

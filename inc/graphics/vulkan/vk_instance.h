@@ -64,6 +64,11 @@ typedef struct VkGraphicsInstance {
 	PFN_vkGetPhysicalDeviceProperties2KHR getPhysicalDeviceProperties2;
 
 	PFN_vkGetPhysicalDeviceSurfaceFormatsKHR getPhysicalDeviceSurfaceFormats;
+	PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR getPhysicalDeviceSurfaceCapabilities;
+	PFN_vkGetPhysicalDeviceSurfacePresentModesKHR getPhysicalDeviceSurfacePresentModes;
+	PFN_vkGetSwapchainImagesKHR getSwapchainImagesKHR;
+
+	PFN_vkCreateWin32SurfaceKHR createWin32SurfaceKHR;
 
 	PFN_vkSetDebugUtilsObjectNameEXT debugSetName;
 

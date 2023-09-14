@@ -41,9 +41,8 @@ typedef enum EGraphicsTypeId {
 	EGraphicsTypeId_Sampler					= _makeObjectId(0xC4, 6, 1),
 	EGraphicsTypeId_CommandList				= _makeObjectId(0xC4, 7, 0),
 	EGraphicsTypeId_AccelerationStructure	= _makeObjectId(0xC4, 8, 1),
-	EGraphicsTypeId_Swapchain				= _makeObjectId(0xC4, 9, 0),
 
-	EGraphicsTypeId_Count					= 10
+	EGraphicsTypeId_Count					= 9
 
 } EGraphicsTypeId;
 
@@ -53,22 +52,24 @@ extern U64 EGraphicsTypeId_objectBytes[EGraphicsTypeId_Count];
 
 typedef struct GraphicsDevice {
 
+	GraphicsInstance *instance;
+
 	GraphicsDeviceInfo info;
 
-	List factories;		//<GraphicsObjectFactory>
+	//List factories;		//<GraphicsObjectFactory>
 
-	void *ext;			//Underlying api implementation
+	void *ext;				//Underlying api implementation
 
 } GraphicsDevice;
 
 Error GraphicsDevice_create(
-	const GraphicsInstance *instance, 
+	GraphicsInstance *instance, 
 	const GraphicsDeviceInfo *info, 
 	Bool verbose,
 	GraphicsDevice *device
 );
 
-Bool GraphicsDevice_free(const GraphicsInstance *instance, GraphicsDevice *device);
+Bool GraphicsDevice_free(GraphicsDevice *device);
 
 //Submit and wait until all submitted graphics tasks are done.
 

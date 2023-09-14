@@ -250,6 +250,11 @@ Error GraphicsInstance_create(GraphicsApplicationInfo info, Bool isVerbose, Grap
 	vkExtension(clean, vkGetPhysicalDeviceProperties2KHR, vkInstance->getPhysicalDeviceProperties2);
 
 	vkExtensionNoCheck(vkGetPhysicalDeviceSurfaceFormatsKHR, vkInstance->getPhysicalDeviceSurfaceFormats);
+	vkExtensionNoCheck(vkGetPhysicalDeviceSurfaceCapabilitiesKHR, vkInstance->getPhysicalDeviceSurfaceCapabilities);
+	vkExtensionNoCheck(vkGetPhysicalDeviceSurfacePresentModesKHR, vkInstance->getPhysicalDeviceSurfacePresentModes);
+	vkExtensionNoCheck(vkGetSwapchainImagesKHR, vkInstance->getSwapchainImagesKHR);
+
+	vkExtensionNoCheck(vkCreateWin32SurfaceKHR, vkInstance->createWin32SurfaceKHR);
 
 	if(supportsDebug[1]) {
 		vkExtension(clean, vkSetDebugUtilsObjectNameEXT, vkInstance->debugSetName);

@@ -173,8 +173,7 @@ EGraphicsTypeId EGraphicsTypeId_all[EGraphicsTypeId_Count] = {
 	EGraphicsTypeId_RenderPass,
 	EGraphicsTypeId_Sampler,
 	EGraphicsTypeId_CommandList,
-	EGraphicsTypeId_AccelerationStructure,
-	EGraphicsTypeId_Swapchain
+	EGraphicsTypeId_AccelerationStructure
 };
 
 U64 EGraphicsTypeId_descBytes[EGraphicsTypeId_Count] = {
@@ -186,8 +185,7 @@ U64 EGraphicsTypeId_descBytes[EGraphicsTypeId_Count] = {
 	0,		//sizeof(RenderPassDesc)
 	0,		//sizeof(SamplerDesc)
 	0,		//sizeof(CommandListDesc)
-	0,		//sizeof(AccelerationStructureDesc)
-	0		//sizeof(SwapchainDesc)
+	0		//sizeof(AccelerationStructureDesc)
 };
 
 U64 EGraphicsTypeId_objectBytes[EGraphicsTypeId_Count] = {
@@ -199,12 +197,11 @@ U64 EGraphicsTypeId_objectBytes[EGraphicsTypeId_Count] = {
 	0,		//sizeof(RenderPassObject)
 	0,		//sizeof(SamplerObject)
 	0,		//sizeof(CommandListObject)
-	0,		//sizeof(AccelerationStructureObject)
-	0		//sizeof(SwapchainObject)
+	0		//sizeof(AccelerationStructureObject)
 };
 
 Error GraphicsDevice_create(
-	const GraphicsInstance *instance, 
+	GraphicsInstance *instance, 
 	const GraphicsDeviceInfo *info, 
 	Bool verbose, 
 	GraphicsDevice *device
@@ -222,6 +219,8 @@ Error GraphicsDevice_create(
 
 	if(err.genericError)
 		return err;
+
+	device->instance = instance;
 
 	/*
 
@@ -258,10 +257,10 @@ Error GraphicsDevice_create(
 	return Error_none();
 }
 
-Bool GraphicsDevice_free(const GraphicsInstance *instance, GraphicsDevice *device) {
+Bool GraphicsDevice_free(GraphicsDevice *device) {
 
-	if(!instance || !device || !device->ext)
-		return instance;
+	if(!device || !device->ext)
+		return true;
 
 	Bool success = true;
 
@@ -269,8 +268,8 @@ Bool GraphicsDevice_free(const GraphicsInstance *instance, GraphicsDevice *devic
 	//for(U64 j = 0; j < device->factories.length; ++j)
 	//	success &= GraphicsObjectFactory_free(device, (GraphicsObjectFactory*)device->factories.ptr + j);
 
-	success &= List_freex(&device->factories);
-	success &= GraphicsDevice_freeExt(instance, &device->ext);
+	//success &= List_freex(&device->factories);
+	success &= GraphicsDevice_freeExt(device->instance, &device->ext);
 
 	*device = (GraphicsDevice) { 0 };
 	return success;

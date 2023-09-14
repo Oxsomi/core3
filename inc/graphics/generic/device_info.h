@@ -39,6 +39,7 @@ typedef enum EGraphicsVendor {
 	EGraphicsVendor_QCOM,
 	EGraphicsVendor_INTC,
 	EGraphicsVendor_IMGT,
+	EGraphicsVendor_APPL,
 	EGraphicsVendor_Unknown
 
 } EGraphicsVendor;

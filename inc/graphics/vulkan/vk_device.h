@@ -66,7 +66,9 @@ typedef struct VkGraphicsQueue {
 typedef struct VkGraphicsDevice {
 
 	VkDevice device;
-	VkGraphicsQueue queues[EVkGraphicsQueue_Count];		//Don't have to be unique queues!
+	VkGraphicsQueue queues[EVkGraphicsQueue_Count];		//Don't have to be unique queues! Indexed by EVkGraphicsQueue
+
+	U32 uniqueQueues[EVkGraphicsQueue_Count];			//Queue families ([resolvedQueues], indexed through resolvedId)
 
 	U32 resolvedQueues;
 	U32 pad;

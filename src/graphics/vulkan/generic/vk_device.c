@@ -449,7 +449,6 @@ Error GraphicsDevice_initExt(
 	VkGraphicsQueue *graphicsQueueExt = &deviceExt->queues[EVkGraphicsQueue_Graphics];
 
 	U32 resolvedId = 0;
-	U32 uniqueQueues[3] = { graphicsQueueId };
 
 	vkGetDeviceQueue(
 		deviceExt->device,
@@ -458,6 +457,7 @@ Error GraphicsDevice_initExt(
 		&graphicsQueueExt->queue
 	);
 
+	deviceExt->uniqueQueues[resolvedId] = graphicsQueueId;
 	graphicsQueueExt->resolvedQueueId = resolvedId++;
 
 	#ifndef NDEBUG
@@ -499,7 +499,7 @@ Error GraphicsDevice_initExt(
 			}
 		#endif
 
-		uniqueQueues[resolvedId] = computeQueueId;
+		deviceExt->uniqueQueues[resolvedId] = computeQueueId;
 		computeQueueExt->resolvedQueueId = resolvedId++;
 	}
 
@@ -532,7 +532,7 @@ Error GraphicsDevice_initExt(
 			}
 		#endif
 
-		uniqueQueues[resolvedId] = copyQueueId;
+		deviceExt->uniqueQueues[resolvedId] = copyQueueId;
 		copyQueueExt->resolvedQueueId = resolvedId++;
 	}
 
@@ -554,7 +554,7 @@ Error GraphicsDevice_initExt(
 		for(U64 j = 0; j < threads; ++j)
 			for(U64 i = 0; i < resolvedId; ++i) {
 
-				poolInfo.queueFamilyIndex = uniqueQueues[i];
+				poolInfo.queueFamilyIndex = deviceExt->uniqueQueues[i];
 
 				_gotoIfError(clean, vkCheck(vkCreateCommandPool(deviceExt->device, &poolInfo, NULL, &tempPool)));
 
