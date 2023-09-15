@@ -23,16 +23,16 @@
 #include "types/buffer.h"
 #include "types/type_id.h"
 
-Error RefPtr_create(Buffer data, Allocator alloc, ObjectFreeFunc free, ETypeId type, RefPtr **result) {
+Error RefPtr_create(U32 objectLength, Allocator alloc, ObjectFreeFunc free, ETypeId type, RefPtr **result) {
 
-	if(!Buffer_length(data) || !free|| !result)
+	if(!objectLength || !free|| !result)
 		return Error_nullPointer(!result ? 3 : (!free ? 2 : 0));
 
 	if(*result)
 		return Error_invalidParameter(3, 0);
 
 	Buffer buf = Buffer_createNull();
-	Error err = Buffer_createEmptyBytes(sizeof(RefPtr), alloc, &buf);
+	Error err = Buffer_createEmptyBytes(sizeof(RefPtr) + objectLength, alloc, &buf);
 
 	if(err.genericError)
 		return err;
@@ -40,7 +40,7 @@ Error RefPtr_create(Buffer data, Allocator alloc, ObjectFreeFunc free, ETypeId t
 	*(*result = (RefPtr*)buf.ptr) = (RefPtr) {
 		.refCount = (AtomicI64) { 1 },
 		.typeId = type,
-		.data = data,
+		.length = objectLength,
 		.alloc = alloc,
 		.free = free
 	};
@@ -48,8 +48,8 @@ Error RefPtr_create(Buffer data, Allocator alloc, ObjectFreeFunc free, ETypeId t
 	return Error_none();
 }
 
-Error RefPtr_createx(Buffer data, ObjectFreeFunc free, ETypeId type, RefPtr **result) {
-	return RefPtr_create(data, Platform_instance.alloc, free, type, result);
+Error RefPtr_createx(U32 objectLength, ObjectFreeFunc free, ETypeId type, RefPtr **result) {
+	return RefPtr_create(objectLength, Platform_instance.alloc, free, type, result);
 }
 
 Bool RefPtr_inc(RefPtr *ptr) {
@@ -64,7 +64,7 @@ Bool RefPtr_inc(RefPtr *ptr) {
 Bool RefPtr_dec(RefPtr **pptr) {
 
 	if(!pptr || !*pptr)
-		return false;
+		return true;
 
 	RefPtr *ptr = *pptr;
 
@@ -72,9 +72,9 @@ Bool RefPtr_dec(RefPtr **pptr) {
 
 	if(!AtomicI64_dec(&ptr->refCount)) {
 
-		b = ptr->free((void*)ptr->data.ptr, ptr->alloc);
+		b = ptr->free(RefPtr_data(ptr, void), ptr->alloc);
 
-		Buffer orig = Buffer_createManagedPtr(ptr, sizeof(*ptr));
+		Buffer orig = Buffer_createManagedPtr(ptr, sizeof(*ptr) + ptr->length);
 		b &= Buffer_free(&orig, ptr->alloc);
 	}
 

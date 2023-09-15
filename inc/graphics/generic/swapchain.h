@@ -20,6 +20,7 @@
 
 #pragma once
 #include "types/types.h"
+#include "platforms/ref_ptr.h"
 
 typedef struct GraphicsDevice GraphicsDevice;
 typedef struct Error Error;
@@ -53,9 +54,15 @@ typedef struct Swapchain {
 
 	SwapchainInfo info;
 
-	void *ext;				//Underlying api implementation
+	GraphicsDevice *device;
 
 } Swapchain;
 
-impl Error GraphicsDevice_createSwapchain(GraphicsDevice *device, SwapchainInfo info, Swapchain *swapchain);
-impl Bool GraphicsDevice_freeSwapchain(GraphicsDevice *device, Swapchain *swapchain);
+typedef RefPtr SwapchainRef;
+
+#define Swapchain_ext(ptr, T) (T##Swapchain*)(ptr + 1)		//impl
+
+impl Error GraphicsDevice_createSwapchain(GraphicsDevice *device, SwapchainInfo info, SwapchainRef **swapchain);
+impl Error SwapchainRef_dec(SwapchainRef **swapchain);
+
+impl Error SwapchainRef_add(SwapchainRef **swapchain);

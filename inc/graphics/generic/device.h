@@ -28,7 +28,7 @@ typedef struct RefPtr RefPtr;
 typedef struct GraphicsInstance GraphicsInstance;
 
 //ETypeId but for graphics factories. 
-//Properties contain if it allows lookup by an info struct.
+//Properties contain if it uses a factory or not.
 
 typedef enum EGraphicsTypeId {
 
@@ -41,8 +41,9 @@ typedef enum EGraphicsTypeId {
 	EGraphicsTypeId_Sampler					= _makeObjectId(0xC4, 6, 1),
 	EGraphicsTypeId_CommandList				= _makeObjectId(0xC4, 7, 0),
 	EGraphicsTypeId_AccelerationStructure	= _makeObjectId(0xC4, 8, 1),
+	EGraphicsTypeId_Swapchain				= _makeObjectId(0xC4, 9, 0),
 
-	EGraphicsTypeId_Count					= 9
+	EGraphicsTypeId_Count					= 10
 
 } EGraphicsTypeId;
 

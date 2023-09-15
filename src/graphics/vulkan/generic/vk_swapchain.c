@@ -27,34 +27,48 @@
 #include "platforms/window.h"
 #include "platforms/monitor.h"
 #include "platforms/platform.h"
+#include "platforms/ref_ptr.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/listx.h"
 #include "platforms/ext/stringx.h"
 #include "types/buffer.h"
 #include "types/error.h"
 
-Error GraphicsDevice_createSwapchain(GraphicsDevice *device, SwapchainInfo info, Swapchain *swapchain) {
+Error SwapchainRef_dec(SwapchainRef **swapchain) {
+	return !RefPtr_dec(swapchain) ? Error_invalidOperation(0) : Error_none();
+}
+
+Error SwapchainRef_add(SwapchainRef **swapchain) {
+	return swapchain ? (!RefPtr_inc(*swapchain) ? Error_invalidOperation(0) : Error_none()) : Error_nullPointer(0);
+}
+
+Bool GraphicsDevice_freeSwapchain(void *data, Allocator alloc);
+
+Error GraphicsDevice_createSwapchain(GraphicsDevice *device, SwapchainInfo info, SwapchainRef **swapchainRef) {
 
 	const Window *window = info.window;
 
-	if(!window || !window->nativeHandle || !swapchain)
-		return Error_nullPointer(!swapchain ? 1 : 0);
-
-	if(swapchain->info.window)
-		return Error_invalidParameter(1, 0);
+	if(!device || !window || !window->nativeHandle)
+		return Error_nullPointer(!device ? 1 : 0);
 
 	if(!(device->info.capabilities.features & EGraphicsFeatures_Swapchain))
 		return Error_unsupportedOperation(0);
 
-	Buffer buf = Buffer_createNull();
 	CharString temp = CharString_createNull();
 	List list = List_createEmpty(sizeof(VkSurfaceFormatKHR));
-	Error err = Buffer_createEmptyBytesx(sizeof(VkSwapchain), &buf);
+
+	Error err = RefPtr_createx(
+		(U32)(sizeof(Swapchain) + sizeof(VkSwapchain)), 
+		GraphicsDevice_freeSwapchain, 
+		EGraphicsTypeId_Swapchain, 
+		swapchainRef
+	);
 
 	if(err.genericError)
 		return err;
 
-	VkSwapchain *swapchainExt = (VkSwapchain*) buf.ptr;
+	Swapchain *swapchain = RefPtr_data(*swapchainRef, Swapchain);
+	VkSwapchain *swapchainExt = Swapchain_ext(swapchain, Vk);
 	VkGraphicsDevice *deviceExt = (VkGraphicsDevice*) device->ext;
 	VkGraphicsInstance *instance = (VkGraphicsInstance*) device->instance->ext;
 
@@ -306,23 +320,13 @@ Error GraphicsDevice_createSwapchain(GraphicsDevice *device, SwapchainInfo info,
 
 	*swapchain = (Swapchain) {
 		.info = info,
-		.ext = (void*) buf.ptr
+		.device = device
 	};
 
 	goto success;
 
 clean:
-
-	List_freex(&swapchainExt->semaphores);
-	List_freex(&swapchainExt->images);
-
-	if(swapchainExt->swapchain)
-		vkDestroySwapchainKHR(deviceExt->device, swapchainExt->swapchain, NULL);
-
-	if(swapchainExt->surface)
-		vkDestroySurfaceKHR(instance->instance, swapchainExt->surface, NULL);
-
-	Buffer_freex(&buf);
+	RefPtr_dec(swapchainRef);
 
 success:
 	CharString_freex(&temp);
@@ -330,21 +334,28 @@ success:
 	return err;
 }
 
-Bool GraphicsDevice_freeSwapchain(GraphicsDevice *device, Swapchain *swapchain) {
+Bool GraphicsDevice_freeSwapchain(void *data, Allocator alloc) {
 
-	if(!device)
+	alloc;
+
+	Swapchain *swapchain = (Swapchain*) data;
+
+	if(!swapchain || !swapchain->device)
 		return false;
 
-	if(!swapchain || !swapchain->ext)
-		return false;
-
-	VkSwapchain *swapchainExt = (VkSwapchain*) swapchain->ext;
+	GraphicsDevice *device = swapchain->device;
+	VkSwapchain *swapchainExt = Swapchain_ext(swapchain, Vk);
 
 	VkGraphicsDevice *deviceExt = (VkGraphicsDevice*) device->ext;
 	VkGraphicsInstance *instance = (VkGraphicsInstance*) device->instance->ext;
 
-	for(U64 i = 0; i < swapchainExt->semaphores.length; ++i)
-		vkDestroySemaphore(deviceExt->device, ((VkSemaphore*)swapchainExt->semaphores.ptr)[i], NULL);
+	for(U64 i = 0; i < swapchainExt->semaphores.length; ++i) {
+	
+		VkSemaphore semaphore = ((VkSemaphore*)swapchainExt->semaphores.ptr)[i];
+
+		if(semaphore)
+			vkDestroySemaphore(deviceExt->device, semaphore, NULL);
+	}
 
 	List_freex(&swapchainExt->semaphores);
 	List_freex(&swapchainExt->images);
@@ -355,9 +366,5 @@ Bool GraphicsDevice_freeSwapchain(GraphicsDevice *device, Swapchain *swapchain) 
 	if(swapchainExt->surface)
 		vkDestroySurfaceKHR(instance->instance, swapchainExt->surface, NULL);
 
-	Buffer buf = Buffer_createManagedPtr(swapchainExt, sizeof(VkSwapchain));
-	Buffer_freex(&buf);
-
-	*swapchain = (Swapchain) { 0 };
 	return true;
 }
