@@ -29,6 +29,7 @@ typedef struct VkSwapchain {
 	VkSwapchainKHR swapchain;
 	VkSurfaceFormatKHR format;
 	List images;					//<VkImage>
+	List semaphores;				//<VkSemaphore>
 
 } VkSwapchain;
 

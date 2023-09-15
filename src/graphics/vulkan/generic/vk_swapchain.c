@@ -29,6 +29,7 @@
 #include "platforms/platform.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/listx.h"
+#include "platforms/ext/stringx.h"
 #include "types/buffer.h"
 #include "types/error.h"
 
@@ -46,6 +47,7 @@ Error GraphicsDevice_createSwapchain(GraphicsDevice *device, SwapchainInfo info,
 		return Error_unsupportedOperation(0);
 
 	Buffer buf = Buffer_createNull();
+	CharString temp = CharString_createNull();
 	List list = List_createEmpty(sizeof(VkSurfaceFormatKHR));
 	Error err = Buffer_createEmptyBytesx(sizeof(VkSwapchain), &buf);
 
@@ -266,12 +268,39 @@ Error GraphicsDevice_createSwapchain(GraphicsDevice *device, SwapchainInfo info,
 		_gotoIfError(clean, Error_invalidState(1));
 
 	swapchainExt->images = List_createEmpty(sizeof(VkImage));
+	swapchainExt->semaphores = List_createEmpty(sizeof(VkSemaphore));
 
 	_gotoIfError(clean, List_resizex(&swapchainExt->images, imageCount));
+	_gotoIfError(clean, List_resizex(&swapchainExt->semaphores, imageCount));
 
 	_gotoIfError(clean, vkCheck(instance->getSwapchainImagesKHR(
 		deviceExt->device, swapchainExt->swapchain, &imageCount, (VkImage*) swapchainExt->images.ptr
 	)));
+
+	//Grab semaphores
+
+	for (U32 i = 0; i < images; ++i) {
+
+		VkSemaphoreCreateInfo semaphoreInfo = (VkSemaphoreCreateInfo) { .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
+		VkSemaphore *semaphore = (VkSemaphore*)swapchainExt->semaphores.ptr + i;
+
+		_gotoIfError(clean, vkCheck(vkCreateSemaphore(deviceExt->device, &semaphoreInfo, NULL, semaphore)));
+
+		if(instance->debugSetName) {
+
+			CharString_freex(&temp);
+			_gotoIfError(clean, CharString_formatx(&temp, "Swapchain semaphore %i", i));
+
+			VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
+				.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+				.objectType = VK_OBJECT_TYPE_SEMAPHORE,
+				.objectHandle = (U64) *semaphore,
+				.pObjectName = temp.ptr
+			};
+
+			_gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)));
+		}
+	}
 
 	//Return our handle
 
@@ -284,6 +313,9 @@ Error GraphicsDevice_createSwapchain(GraphicsDevice *device, SwapchainInfo info,
 
 clean:
 
+	List_freex(&swapchainExt->semaphores);
+	List_freex(&swapchainExt->images);
+
 	if(swapchainExt->swapchain)
 		vkDestroySwapchainKHR(deviceExt->device, swapchainExt->swapchain, NULL);
 
@@ -293,6 +325,7 @@ clean:
 	Buffer_freex(&buf);
 
 success:
+	CharString_freex(&temp);
 	List_freex(&list);
 	return err;
 }
@@ -307,10 +340,14 @@ Bool GraphicsDevice_freeSwapchain(GraphicsDevice *device, Swapchain *swapchain) 
 
 	VkSwapchain *swapchainExt = (VkSwapchain*) swapchain->ext;
 
-	List_freex(&swapchainExt->images);
-
 	VkGraphicsDevice *deviceExt = (VkGraphicsDevice*) device->ext;
 	VkGraphicsInstance *instance = (VkGraphicsInstance*) device->instance->ext;
+
+	for(U64 i = 0; i < swapchainExt->semaphores.length; ++i)
+		vkDestroySemaphore(deviceExt->device, ((VkSemaphore*)swapchainExt->semaphores.ptr)[i], NULL);
+
+	List_freex(&swapchainExt->semaphores);
+	List_freex(&swapchainExt->images);
 
 	if(swapchainExt->swapchain)
 		vkDestroySwapchainKHR(deviceExt->device, swapchainExt->swapchain, NULL);
