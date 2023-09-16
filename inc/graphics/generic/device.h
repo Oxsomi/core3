@@ -20,57 +20,38 @@
 
 #pragma once
 #include "graphics/generic/device_info.h"
-#include "types/type_id.h"
+#include "platforms/ref_ptr.h"
 #include "types/list.h"
 
 typedef struct Error Error;
-typedef struct RefPtr RefPtr;
-typedef struct GraphicsInstance GraphicsInstance;
-
-//ETypeId but for graphics factories. 
-//Properties contain if it uses a factory or not.
-
-typedef enum EGraphicsTypeId {
-
-	EGraphicsTypeId_Texture					= _makeObjectId(0xC4, 0, 1),
-	EGraphicsTypeId_RenderTexture			= _makeObjectId(0xC4, 1, 0),
-	EGraphicsTypeId_Buffer					= _makeObjectId(0xC4, 2, 1),
-	EGraphicsTypeId_Pipeline				= _makeObjectId(0xC4, 3, 1),
-	EGraphicsTypeId_DescriptorSet			= _makeObjectId(0xC4, 4, 1),
-	EGraphicsTypeId_RenderPass				= _makeObjectId(0xC4, 5, 0),
-	EGraphicsTypeId_Sampler					= _makeObjectId(0xC4, 6, 1),
-	EGraphicsTypeId_CommandList				= _makeObjectId(0xC4, 7, 0),
-	EGraphicsTypeId_AccelerationStructure	= _makeObjectId(0xC4, 8, 1),
-	EGraphicsTypeId_Swapchain				= _makeObjectId(0xC4, 9, 0),
-
-	EGraphicsTypeId_Count					= 10
-
-} EGraphicsTypeId;
-
-extern EGraphicsTypeId EGraphicsTypeId_all[EGraphicsTypeId_Count];
-extern U64 EGraphicsTypeId_descBytes[EGraphicsTypeId_Count];
-extern U64 EGraphicsTypeId_objectBytes[EGraphicsTypeId_Count];
+typedef RefPtr GraphicsInstanceRef;
 
 typedef struct GraphicsDevice {
 
-	GraphicsInstance *instance;
+	GraphicsInstanceRef *instance;
 
 	GraphicsDeviceInfo info;
 
 	//List factories;		//<GraphicsObjectFactory>
 
-	void *ext;				//Underlying api implementation
-
 } GraphicsDevice;
 
+typedef RefPtr GraphicsDeviceRef;
+
+#define GraphicsDevice_ext(ptr, T) (T##GraphicsDevice*)(ptr + 1)		//impl
+#define GraphicsDeviceRef_ptr(ptr) RefPtr_data(ptr, GraphicsDevice)
+
+Error GraphicsDeviceRef_dec(GraphicsDeviceRef **device);
+Error GraphicsDeviceRef_add(GraphicsDeviceRef *device);
+
 Error GraphicsDevice_create(
-	GraphicsInstance *instance, 
+	GraphicsInstanceRef *instanceRef, 
 	const GraphicsDeviceInfo *info, 
 	Bool verbose,
-	GraphicsDevice *device
+	GraphicsDeviceRef **device
 );
 
-Bool GraphicsDevice_free(GraphicsDevice *device);
+Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc);
 
 //Submit and wait until all submitted graphics tasks are done.
 

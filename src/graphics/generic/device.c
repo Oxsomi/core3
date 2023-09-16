@@ -151,76 +151,44 @@ void GraphicsDeviceInfo_print(const GraphicsDeviceInfo *deviceInfo, Bool printCa
 	}
 }
 
+Error GraphicsDeviceRef_dec(GraphicsDeviceRef **device) {
+	return !RefPtr_dec(device) ? Error_invalidOperation(0) : Error_none();
+}
+
+Error GraphicsDeviceRef_add(GraphicsDeviceRef *device) {
+	return device ? (!RefPtr_inc(device) ? Error_invalidOperation(0) : Error_none()) : Error_nullPointer(0);
+}
+
 //Ext
 
 impl Error GraphicsDevice_initExt(
 	const GraphicsInstance *instance, 
 	const GraphicsDeviceInfo *deviceInfo, 
 	Bool verbose,
-	void **ext
+	GraphicsDeviceRef **deviceRef
 );
 
-impl Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void **ext);
-
-//
-
-EGraphicsTypeId EGraphicsTypeId_all[EGraphicsTypeId_Count] = {
-	EGraphicsTypeId_Texture,
-	EGraphicsTypeId_RenderTexture,
-	EGraphicsTypeId_Buffer,
-	EGraphicsTypeId_Pipeline,
-	EGraphicsTypeId_DescriptorSet,
-	EGraphicsTypeId_RenderPass,
-	EGraphicsTypeId_Sampler,
-	EGraphicsTypeId_CommandList,
-	EGraphicsTypeId_AccelerationStructure
-};
-
-U64 EGraphicsTypeId_descBytes[EGraphicsTypeId_Count] = {
-	0,		//sizeof(TextureDesc)
-	0,		//sizeof(RenderTextureDesc)
-	0,		//sizeof(BufferDesc)
-	0,		//sizeof(PipelineDesc)
-	0,		//sizeof(DescriptorSetDesc)
-	0,		//sizeof(RenderPassDesc)
-	0,		//sizeof(SamplerDesc)
-	0,		//sizeof(CommandListDesc)
-	0		//sizeof(AccelerationStructureDesc)
-};
-
-U64 EGraphicsTypeId_objectBytes[EGraphicsTypeId_Count] = {
-	0,		//sizeof(TextureObject)
-	0,		//sizeof(RenderTextureObject)
-	0,		//sizeof(BufferObject)
-	0,		//sizeof(PipelineObject)
-	0,		//sizeof(DescriptorSetObject)
-	0,		//sizeof(RenderPassObject)
-	0,		//sizeof(SamplerObject)
-	0,		//sizeof(CommandListObject)
-	0		//sizeof(AccelerationStructureObject)
-};
+impl Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext);
 
 Error GraphicsDevice_create(
-	GraphicsInstance *instance, 
+	GraphicsInstanceRef *instanceRef, 
 	const GraphicsDeviceInfo *info, 
 	Bool verbose, 
-	GraphicsDevice *device
+	GraphicsDeviceRef **deviceRef
 ) {
 
-	if(!instance || !info || !device)
-		return Error_nullPointer(!instance ? 0 : (!info ? 1 : 2));
+	if(!instanceRef || !info || !deviceRef)
+		return Error_nullPointer(!instanceRef ? 0 : (!info ? 1 : 2));
 
-	if(device->ext)
+	if(*deviceRef)
 		return Error_invalidParameter(1, 0);
 
 	//Create extended device
 
-	Error err = GraphicsDevice_initExt(instance, &device->info, verbose, &device->ext);
+	Error err = GraphicsDevice_initExt(GraphicsInstanceRef_ptr(instanceRef), info, verbose, deviceRef);
 
 	if(err.genericError)
 		return err;
-
-	device->instance = instance;
 
 	/*
 
@@ -236,7 +204,7 @@ Error GraphicsDevice_create(
 		if (
 			(err = GraphicsObjectFactory_create(
 				EGraphicsTypeId_all[i], 
-				EGraphicsTypeId_descBytes[i],
+				EGraphicsTypeId_infoBytes[i],
 				EGraphicsTypeId_objectBytes[i],
 				(GraphicsObjectFactory*)device->factories.ptr + i
 			)).genericError
@@ -254,25 +222,32 @@ Error GraphicsDevice_create(
 
 	//Graphics device success
 
+	GraphicsInstanceRef_add(instanceRef);
+
+	 GraphicsDevice *device = GraphicsDeviceRef_ptr(*deviceRef);
+	 device->info = *info;
+	 device->instance = instanceRef;
+
 	return Error_none();
 }
 
-Bool GraphicsDevice_free(GraphicsDevice *device) {
+Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 
-	if(!device || !device->ext)
+	alloc;
+
+	if(!device)
 		return true;
-
-	Bool success = true;
 
 	//TODO:
 	//for(U64 j = 0; j < device->factories.length; ++j)
 	//	success &= GraphicsObjectFactory_free(device, (GraphicsObjectFactory*)device->factories.ptr + j);
 
 	//success &= List_freex(&device->factories);
-	success &= GraphicsDevice_freeExt(device->instance, &device->ext);
 
-	*device = (GraphicsDevice) { 0 };
-	return success;
+	GraphicsDevice_freeExt(GraphicsInstanceRef_ptr(device->instance), (void*) GraphicsInstance_ext(device, ));
+	GraphicsInstanceRef_dec(&device->instance);
+
+	return true;
 }
 
 //Submit and wait until all submitted graphics tasks are done.

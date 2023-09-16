@@ -18,28 +18,23 @@
 *  This is called dual licensing.
 */
 
-#include "graphics/generic/device.h"
-#include "graphics/generic/instance.h"
-#include "graphics/vulkan/vk_swapchain.h"
-#include "graphics/vulkan/vk_device.h"
-#include "graphics/vulkan/vk_instance.h"
-#include "platforms/window.h"
-#include "platforms/platform.h"
-#include "types/error.h"
+#include "graphics/generic/types.h"
 
-Error VkSurface_create(GraphicsDevice *device, const Window *window, VkSurfaceKHR *surface) {
+EGraphicsTypeId EGraphicsTypeId_all[EGraphicsTypeId_Count] = {
 
-	if(!device || !window || !surface)
-		return Error_nullPointer(!device ? 0 : (!window ? 0 : 1));
+	EGraphicsTypeId_GraphicsInstance,
+	EGraphicsTypeId_GraphicsDevice,
 
-	GraphicsInstance *instance = GraphicsInstanceRef_ptr(device->instance);
-	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
+	EGraphicsTypeId_Swapchain,
+	EGraphicsTypeId_CommandList,
 
-	VkWin32SurfaceCreateInfoKHR surfaceInfo = (VkWin32SurfaceCreateInfoKHR) {
-		.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
-		.hwnd = window->nativeHandle,
-		.hinstance = Platform_instance.data
-	};
+	EGraphicsTypeId_RenderTexture,
+	EGraphicsTypeId_RenderPass,
 
-	return vkCheck(instanceExt->createWin32SurfaceKHR(instanceExt->instance, &surfaceInfo, NULL, surface));
-}
+	EGraphicsTypeId_GPUTexture,
+	EGraphicsTypeId_GPUBuffer,
+	EGraphicsTypeId_Pipeline,
+	EGraphicsTypeId_DescriptorSet,
+	EGraphicsTypeId_Sampler,
+	EGraphicsTypeId_AccelerationStructure
+};

@@ -19,7 +19,7 @@
 */
 
 #pragma once
-#include "types/types.h"
+#include "graphics/generic/types.h"
 
 typedef enum EGraphicsDeviceType {
 
@@ -66,7 +66,7 @@ typedef enum EGraphicsFeatures {
 
 	EGraphicsFeatures_Swapchain					= 1 << 8,
 
-	//EGraphicsFeatures_Multiview				= 1 << 9,
+	//EGraphicsFeatures_Multiview				= 1 << 9,		TODO:
 
 	//Raytracing extensions
 

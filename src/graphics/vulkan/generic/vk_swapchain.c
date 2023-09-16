@@ -34,22 +34,16 @@
 #include "types/buffer.h"
 #include "types/error.h"
 
-Error SwapchainRef_dec(SwapchainRef **swapchain) {
-	return !RefPtr_dec(swapchain) ? Error_invalidOperation(0) : Error_none();
-}
+Bool GraphicsDevice_freeSwapchain(Swapchain *data, Allocator alloc);
 
-Error SwapchainRef_add(SwapchainRef **swapchain) {
-	return swapchain ? (!RefPtr_inc(*swapchain) ? Error_invalidOperation(0) : Error_none()) : Error_nullPointer(0);
-}
-
-Bool GraphicsDevice_freeSwapchain(void *data, Allocator alloc);
-
-Error GraphicsDevice_createSwapchain(GraphicsDevice *device, SwapchainInfo info, SwapchainRef **swapchainRef) {
+Error GraphicsDeviceRef_createSwapchain(GraphicsDeviceRef *deviceRef, SwapchainInfo info, SwapchainRef **swapchainRef) {
 
 	const Window *window = info.window;
 
-	if(!device || !window || !window->nativeHandle)
-		return Error_nullPointer(!device ? 1 : 0);
+	if(!deviceRef || !window || !window->nativeHandle)
+		return Error_nullPointer(!deviceRef ? 1 : 0);
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 
 	if(!(device->info.capabilities.features & EGraphicsFeatures_Swapchain))
 		return Error_unsupportedOperation(0);
@@ -59,7 +53,7 @@ Error GraphicsDevice_createSwapchain(GraphicsDevice *device, SwapchainInfo info,
 
 	Error err = RefPtr_createx(
 		(U32)(sizeof(Swapchain) + sizeof(VkSwapchain)), 
-		GraphicsDevice_freeSwapchain, 
+		(ObjectFreeFunc) GraphicsDevice_freeSwapchain, 
 		EGraphicsTypeId_Swapchain, 
 		swapchainRef
 	);
@@ -67,10 +61,10 @@ Error GraphicsDevice_createSwapchain(GraphicsDevice *device, SwapchainInfo info,
 	if(err.genericError)
 		return err;
 
-	Swapchain *swapchain = RefPtr_data(*swapchainRef, Swapchain);
+	Swapchain *swapchain = SwapchainRef_ptr(*swapchainRef);
 	VkSwapchain *swapchainExt = Swapchain_ext(swapchain, Vk);
-	VkGraphicsDevice *deviceExt = (VkGraphicsDevice*) device->ext;
-	VkGraphicsInstance *instance = (VkGraphicsInstance*) device->instance->ext;
+	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
+	VkGraphicsInstance *instance = GraphicsInstance_ext(GraphicsInstanceRef_ptr(device->instance), Vk);
 
 	_gotoIfError(clean, VkSurface_create(device, window, &swapchainExt->surface));
 
@@ -318,9 +312,11 @@ Error GraphicsDevice_createSwapchain(GraphicsDevice *device, SwapchainInfo info,
 
 	//Return our handle
 
+	GraphicsDeviceRef_add(deviceRef);
+
 	*swapchain = (Swapchain) {
 		.info = info,
-		.device = device
+		.device = deviceRef
 	};
 
 	goto success;
@@ -334,20 +330,18 @@ success:
 	return err;
 }
 
-Bool GraphicsDevice_freeSwapchain(void *data, Allocator alloc) {
+Bool GraphicsDevice_freeSwapchain(Swapchain *swapchain, Allocator alloc) {
 
 	alloc;
-
-	Swapchain *swapchain = (Swapchain*) data;
 
 	if(!swapchain || !swapchain->device)
 		return false;
 
-	GraphicsDevice *device = swapchain->device;
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(swapchain->device);
 	VkSwapchain *swapchainExt = Swapchain_ext(swapchain, Vk);
 
-	VkGraphicsDevice *deviceExt = (VkGraphicsDevice*) device->ext;
-	VkGraphicsInstance *instance = (VkGraphicsInstance*) device->instance->ext;
+	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
+	VkGraphicsInstance *instance = GraphicsInstance_ext(GraphicsInstanceRef_ptr(device->instance), Vk);
 
 	for(U64 i = 0; i < swapchainExt->semaphores.length; ++i) {
 	
@@ -365,6 +359,8 @@ Bool GraphicsDevice_freeSwapchain(void *data, Allocator alloc) {
 
 	if(swapchainExt->surface)
 		vkDestroySurfaceKHR(instance->instance, swapchainExt->surface, NULL);
+
+	GraphicsDeviceRef_dec(&swapchain->device);
 
 	return true;
 }

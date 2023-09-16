@@ -46,4 +46,4 @@ Error RefPtr_createx(U32 objectLength, ObjectFreeFunc free, ETypeId type, RefPtr
 Bool RefPtr_inc(RefPtr *ptr);
 Bool RefPtr_dec(RefPtr **ptr);	//Clears pointer if it's gone
 
-#define RefPtr_data(dat, T) (T*)(dat + 1)
+#define RefPtr_data(dat, T) ((T*)(dat + 1))

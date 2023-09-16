@@ -27,6 +27,14 @@
 U64 GraphicsInstance_vendorMaskAll = 0xFFFFFFFFFFFFFFFF;
 U64 GraphicsInstance_deviceTypeAll = 0xFFFFFFFFFFFFFFFF;
 
+Error GraphicsInstanceRef_dec(GraphicsInstanceRef **inst) {
+	return !RefPtr_dec(inst) ? Error_invalidOperation(0) : Error_none();
+}
+
+Error GraphicsInstanceRef_add(GraphicsInstanceRef *inst) {
+	return inst ? (!RefPtr_inc(inst) ? Error_invalidOperation(0) : Error_none()) : Error_nullPointer(0);
+}
+
 Error GraphicsInstance_getPreferredGpu(
 	const GraphicsInstance *inst,
 	GraphicsDeviceCapabilities requiredCapabilities,

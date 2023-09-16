@@ -62,13 +62,13 @@ VkBool32 onDebugReport(
 	return VK_FALSE;
 }
 
-#define vkExtensionNoCheck(function, result) {												\
-	*(void**)&result = (void*) vkGetInstanceProcAddr(vkInstance->instance, #function);		\
+#define vkExtensionNoCheck(function, result) {													\
+	*(void**)&result = (void*) vkGetInstanceProcAddr(instanceExt->instance, #function);			\
 }
 
 #define vkExtension(label, function, result) {													\
 																								\
-	PFN_vkVoidFunction v = vkGetInstanceProcAddr(vkInstance->instance, #function); 				\
+	PFN_vkVoidFunction v = vkGetInstanceProcAddr(instanceExt->instance, #function); 				\
 																								\
 	if(!v)																						\
 		_gotoIfError(clean, Error_nullPointer(0));												\
@@ -76,16 +76,29 @@ VkBool32 onDebugReport(
 	*(void**)&result = (void*) v;																\
 }
 
-Error GraphicsInstance_create(GraphicsApplicationInfo info, Bool isVerbose, GraphicsInstance *inst) {
+Bool GraphicsInstance_free(GraphicsInstance *data, Allocator alloc);
+
+Error GraphicsInstance_create(GraphicsApplicationInfo info, Bool isVerbose, GraphicsInstanceRef **instanceRef) {
 
 	U32 layerCount = 0, extensionCount = 0;
-	Error err = Error_none();
 	List extensions = (List) { 0 }, layers = (List) { 0 };
-	Buffer graphicsExt = (Buffer) { 0 };
 	CharString title = (CharString) { 0 };
 
 	List enabledExtensions = List_createEmpty(sizeof(const C8*));
 	List enabledLayers = List_createEmpty(sizeof(const C8*));
+
+	Error err = RefPtr_createx(
+		(U32)(sizeof(GraphicsInstance) + sizeof(VkGraphicsInstance)), 
+		(ObjectFreeFunc) GraphicsInstance_free, 
+		EGraphicsTypeId_GraphicsInstance, 
+		instanceRef
+	);
+
+	if(err.genericError)
+		return err;
+
+	GraphicsInstance *instance = GraphicsInstanceRef_ptr(*instanceRef);
+	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
 
 	_gotoIfError(clean, vkCheck(vkEnumerateInstanceLayerProperties(&layerCount, NULL)));
 	_gotoIfError(clean, vkCheck(vkEnumerateInstanceExtensionProperties(NULL, &extensionCount, NULL)));
@@ -96,8 +109,6 @@ Error GraphicsInstance_create(GraphicsApplicationInfo info, Bool isVerbose, Grap
 
 	_gotoIfError(clean, List_reservex(&enabledLayers, layerCount));
 	_gotoIfError(clean, List_reservex(&enabledExtensions, extensionCount));
-
-	_gotoIfError(clean, Buffer_createEmptyBytesx(sizeof(VkGraphicsInstance), &graphicsExt));
 
 	_gotoIfError(clean, vkCheck(vkEnumerateInstanceLayerProperties(&layerCount, (VkLayerProperties*) layers.ptr)));
 
@@ -237,56 +248,54 @@ Error GraphicsInstance_create(GraphicsApplicationInfo info, Bool isVerbose, Grap
 
 	//Create instance
 
-	VkGraphicsInstance *vkInstance = (VkGraphicsInstance*) graphicsExt.ptr;
-
-	_gotoIfError(clean, vkCheck(vkCreateInstance(&instanceInfo, NULL, &vkInstance->instance)));
+	_gotoIfError(clean, vkCheck(vkCreateInstance(&instanceInfo, NULL, &instanceExt->instance)));
 	
 	//Load functions
 
-	vkExtension(clean, vkGetImageMemoryRequirements2KHR, vkInstance->getImageMemoryRequirements2);
-	vkExtension(clean, vkGetBufferMemoryRequirements2KHR, vkInstance->getBufferMemoryRequirements2);
+	vkExtension(clean, vkGetImageMemoryRequirements2KHR, instanceExt->getImageMemoryRequirements2);
+	vkExtension(clean, vkGetBufferMemoryRequirements2KHR, instanceExt->getBufferMemoryRequirements2);
 
-	vkExtension(clean, vkGetPhysicalDeviceFeatures2KHR, vkInstance->getPhysicalDeviceFeatures2);
-	vkExtension(clean, vkGetPhysicalDeviceProperties2KHR, vkInstance->getPhysicalDeviceProperties2);
+	vkExtension(clean, vkGetPhysicalDeviceFeatures2KHR, instanceExt->getPhysicalDeviceFeatures2);
+	vkExtension(clean, vkGetPhysicalDeviceProperties2KHR, instanceExt->getPhysicalDeviceProperties2);
 
-	vkExtensionNoCheck(vkGetPhysicalDeviceSurfaceFormatsKHR, vkInstance->getPhysicalDeviceSurfaceFormats);
-	vkExtensionNoCheck(vkGetPhysicalDeviceSurfaceCapabilitiesKHR, vkInstance->getPhysicalDeviceSurfaceCapabilities);
-	vkExtensionNoCheck(vkGetPhysicalDeviceSurfacePresentModesKHR, vkInstance->getPhysicalDeviceSurfacePresentModes);
-	vkExtensionNoCheck(vkGetSwapchainImagesKHR, vkInstance->getSwapchainImagesKHR);
+	vkExtensionNoCheck(vkGetPhysicalDeviceSurfaceFormatsKHR, instanceExt->getPhysicalDeviceSurfaceFormats);
+	vkExtensionNoCheck(vkGetPhysicalDeviceSurfaceCapabilitiesKHR, instanceExt->getPhysicalDeviceSurfaceCapabilities);
+	vkExtensionNoCheck(vkGetPhysicalDeviceSurfacePresentModesKHR, instanceExt->getPhysicalDeviceSurfacePresentModes);
+	vkExtensionNoCheck(vkGetSwapchainImagesKHR, instanceExt->getSwapchainImagesKHR);
 
-	vkExtensionNoCheck(vkCreateWin32SurfaceKHR, vkInstance->createWin32SurfaceKHR);
+	vkExtensionNoCheck(vkCreateWin32SurfaceKHR, instanceExt->createWin32SurfaceKHR);
 
 	if(supportsDebug[1]) {
-		vkExtension(clean, vkSetDebugUtilsObjectNameEXT, vkInstance->debugSetName);
-		vkExtension(clean, vkCmdDebugMarkerBeginEXT, vkInstance->debugMarkerBegin);
-		vkExtension(clean, vkCmdDebugMarkerEndEXT, vkInstance->debugMarkerEnd);
-		vkExtension(clean, vkCmdDebugMarkerInsertEXT, vkInstance->debugMarkerInsert);
+		vkExtension(clean, vkSetDebugUtilsObjectNameEXT, instanceExt->debugSetName);
+		vkExtension(clean, vkCmdDebugMarkerBeginEXT, instanceExt->debugMarkerBegin);
+		vkExtension(clean, vkCmdDebugMarkerEndEXT, instanceExt->debugMarkerEnd);
+		vkExtension(clean, vkCmdDebugMarkerInsertEXT, instanceExt->debugMarkerInsert);
 	}
 
 	if(supportsDebug[0]) {
-		vkExtension(clean, vkCreateDebugReportCallbackEXT, vkInstance->debugCreateReportCallback);
-		vkExtension(clean, vkDestroyDebugReportCallbackEXT, vkInstance->debugDestroyReportCallback);
+		vkExtension(clean, vkCreateDebugReportCallbackEXT, instanceExt->debugCreateReportCallback);
+		vkExtension(clean, vkDestroyDebugReportCallbackEXT, instanceExt->debugDestroyReportCallback);
 	}
 
 	if(supportsSurface) {
-		vkExtension(clean, vkAcquireNextImageKHR, vkInstance->acquireNextImage);
-		vkExtension(clean, vkCreateSwapchainKHR, vkInstance->createSwapchain);
-		vkExtension(clean, vkDestroySurfaceKHR, vkInstance->destroySurface);
-		vkExtension(clean, vkDestroySwapchainKHR, vkInstance->destroySwapchain);
+		vkExtension(clean, vkAcquireNextImageKHR, instanceExt->acquireNextImage);
+		vkExtension(clean, vkCreateSwapchainKHR, instanceExt->createSwapchain);
+		vkExtension(clean, vkDestroySurfaceKHR, instanceExt->destroySurface);
+		vkExtension(clean, vkDestroySwapchainKHR, instanceExt->destroySwapchain);
 	}
 
-	vkExtensionNoCheck(vkCmdDrawIndexedIndirectCountKHR, vkInstance->drawIndexedIndirectCount);
-	vkExtensionNoCheck(vkCmdDrawIndirectCountKHR, vkInstance->drawIndirectCount);
+	vkExtensionNoCheck(vkCmdDrawIndexedIndirectCountKHR, instanceExt->drawIndexedIndirectCount);
+	vkExtensionNoCheck(vkCmdDrawIndirectCountKHR, instanceExt->drawIndirectCount);
 
-	vkExtensionNoCheck(vkBuildAccelerationStructuresKHR, vkInstance->buildAccelerationStructures);
-	vkExtensionNoCheck(vkCmdCopyAccelerationStructureKHR, vkInstance->copyAccelerationStructure);
-	vkExtensionNoCheck(vkDestroyAccelerationStructureKHR, vkInstance->destroyAccelerationStructure);
-	vkExtensionNoCheck(vkGetAccelerationStructureBuildSizesKHR, vkInstance->getAccelerationStructureBuildSizes);
-	vkExtensionNoCheck(vkGetDeviceAccelerationStructureCompatibilityKHR, vkInstance->getAccelerationStructureCompatibility);
+	vkExtensionNoCheck(vkBuildAccelerationStructuresKHR, instanceExt->buildAccelerationStructures);
+	vkExtensionNoCheck(vkCmdCopyAccelerationStructureKHR, instanceExt->copyAccelerationStructure);
+	vkExtensionNoCheck(vkDestroyAccelerationStructureKHR, instanceExt->destroyAccelerationStructure);
+	vkExtensionNoCheck(vkGetAccelerationStructureBuildSizesKHR, instanceExt->getAccelerationStructureBuildSizes);
+	vkExtensionNoCheck(vkGetDeviceAccelerationStructureCompatibilityKHR, instanceExt->getAccelerationStructureCompatibility);
 
-	vkExtensionNoCheck(vkCmdTraceRaysKHR, vkInstance->traceRays);
-	vkExtensionNoCheck(vkCmdTraceRaysIndirectKHR, vkInstance->traceRaysIndirect);
-	vkExtensionNoCheck(vkCreateRayTracingPipelinesKHR, vkInstance->createRaytracingPipelines);
+	vkExtensionNoCheck(vkCmdTraceRaysKHR, instanceExt->traceRays);
+	vkExtensionNoCheck(vkCmdTraceRaysIndirectKHR, instanceExt->traceRaysIndirect);
+	vkExtensionNoCheck(vkCreateRayTracingPipelinesKHR, instanceExt->createRaytracingPipelines);
 
 	//Add debug callback
 
@@ -304,25 +313,26 @@ Error GraphicsInstance_create(GraphicsApplicationInfo info, Bool isVerbose, Grap
 			.pfnCallback = (PFN_vkDebugReportCallbackEXT) onDebugReport
 		};
 
-		_gotoIfError(clean, vkCheck(vkInstance->debugCreateReportCallback(
-			vkInstance->instance, &callbackInfo, NULL, &vkInstance->debugReportCallback
+		_gotoIfError(clean, vkCheck(instanceExt->debugCreateReportCallback(
+			instanceExt->instance, &callbackInfo, NULL, &instanceExt->debugReportCallback
 		)));
 
 	#endif
 
-	*inst = (GraphicsInstance) {
+	*instance = (GraphicsInstance) {
 		.application = info,
 		.api = EGraphicsApi_Vulkan,
-		.apiVersion = application.apiVersion,
-		.ext = vkInstance
+		.apiVersion = application.apiVersion
 	};
 
-	graphicsExt = (Buffer) { 0 };		//It's transferred to inst
+	goto success;
 
 clean:
+	GraphicsInstanceRef_dec(instanceRef);
+
+success:
 
 	CharString_freex(&title);
-	Buffer_freex(&graphicsExt);
 
 	List_freex(&enabledLayers);
 	List_freex(&enabledExtensions);
@@ -333,22 +343,19 @@ clean:
 	return err;
 }
 
-Bool GraphicsInstance_free(GraphicsInstance *inst) {
+Bool GraphicsInstance_free(GraphicsInstance *inst, Allocator alloc) {
 
-	if(!inst || !inst->ext)
+	alloc;
+
+	if(!inst)
 		return false;
 
-	VkGraphicsInstance *vkInstance = (VkGraphicsInstance*) inst->ext;
+	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(inst, Vk);
 
-	if(vkInstance->debugDestroyReportCallback)
-		vkInstance->debugDestroyReportCallback(vkInstance->instance, vkInstance->debugReportCallback, NULL);
+	if(instanceExt->debugDestroyReportCallback)
+		instanceExt->debugDestroyReportCallback(instanceExt->instance, instanceExt->debugReportCallback, NULL);
 
-	vkDestroyInstance(vkInstance->instance, NULL);
-
-	Buffer graphicsExt = Buffer_createManagedPtr(vkInstance, sizeof(*vkInstance));
-	Buffer_freex(&graphicsExt);
-
-	*inst = (GraphicsInstance) { 0 };
+	vkDestroyInstance(instanceExt->instance, NULL);
 
 	return true;
 }
@@ -426,13 +433,13 @@ StructName Name = (StructName) { .sType = StructType };						\
 
 Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbose, List *result) {
 
-	if(!inst || !inst->ext || !result)
+	if(!inst || !result)
 		return Error_nullPointer(!inst ? 0 : 2);
 
 	if(result->ptr)
 		return Error_invalidParameter(1, 0);
 
-	VkGraphicsInstance *graphicsExt = (VkGraphicsInstance*) inst->ext;
+	VkGraphicsInstance *graphicsExt = GraphicsInstance_ext(inst, Vk);
 
 	U32 deviceCount = 0;
 	vkEnumeratePhysicalDevices(graphicsExt->instance, &deviceCount, NULL);

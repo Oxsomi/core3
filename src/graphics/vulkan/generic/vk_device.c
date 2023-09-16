@@ -42,10 +42,10 @@ Error GraphicsDevice_initExt(
 	const GraphicsInstance *instance, 
 	const GraphicsDeviceInfo *physicalDevice, 
 	Bool verbose,
-	void **ext
+	GraphicsDeviceRef **deviceRef
 ) {
 
-	VkGraphicsInstance *instanceExt = (VkGraphicsInstance*) instance->ext;
+	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
 	instanceExt;
 
 	EGraphicsFeatures feat = physicalDevice->capabilities.features;
@@ -267,15 +267,25 @@ Error GraphicsDevice_initExt(
 		}
 	);
 
-	Error err = Error_none();
+	Error err = RefPtr_createx(
+		(U32)(sizeof(GraphicsDevice) + sizeof(VkGraphicsDevice)), 
+		(ObjectFreeFunc) GraphicsDevice_free, 
+		EGraphicsTypeId_GraphicsDevice, 
+		deviceRef
+	);
+
+	if(err.genericError)
+		return err;
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(*deviceRef);
+	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
+
 	List extensions = List_createEmpty(sizeof(const C8*));
 	List queues = List_createEmpty(sizeof(VkDeviceQueueCreateInfo));
 	List queueFamilies = List_createEmpty(sizeof(VkQueueFamilyProperties));
 	List commandPools = List_createEmpty(sizeof(VkCommandPool));
-	Buffer graphicsExtBuffer = Buffer_createNull();
 	CharString tempStr = CharString_createNull();
 	VkCommandPool tempPool = NULL;
-	VkGraphicsDevice *deviceExt = NULL;
 
 	_gotoIfError(clean, List_reservex(&extensions, 32));
 	_gotoIfError(clean, List_reservex(&queues, EVkGraphicsQueue_Count));
@@ -434,12 +444,6 @@ Error GraphicsDevice_initExt(
 			Log_debugLn("\t%s", ((const char* const*) extensions.ptr)[i]);
 	}
 
-	_gotoIfError(clean, Buffer_createEmptyBytesx(sizeof(VkGraphicsDevice), &graphicsExtBuffer));
-	*ext = (void*) graphicsExtBuffer.ptr;
-
-	deviceExt = (VkGraphicsDevice*) graphicsExtBuffer.ptr;
-	*deviceExt = (VkGraphicsDevice) { 0 };
-
 	_gotoIfError(clean, vkCheck(vkCreateDevice(physicalDeviceExt, &deviceInfo, NULL, &deviceExt->device)));
 
 	//Get queues
@@ -592,24 +596,13 @@ Error GraphicsDevice_initExt(
 
 clean:
 
-	//Free command pools
+	if(tempPool)
+		vkDestroyCommandPool(deviceExt->device, tempPool, NULL);
 
-	if(deviceExt) {
-
-		if(tempPool)
-			vkDestroyCommandPool(deviceExt->device, tempPool, NULL);
-
-		for(U64 i = 0; i < commandPools.length; ++i)
-			vkDestroyCommandPool(deviceExt->device, ((VkCommandPool*)commandPools.ptr)[i], NULL);
-	}
-
-	List_freex(&commandPools);
-
-	//Free graphicsExt
-
-	Buffer_freex(&graphicsExtBuffer);
+	GraphicsDeviceRef_dec(deviceRef);
 
 success:
+
 	CharString_freex(&tempStr);
 	List_freex(&extensions);
 	List_freex(&queues);
@@ -617,22 +610,27 @@ success:
 	return err;
 }
 
-Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void **ext) {
+Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext) {
 
-	if(!instance || !ext || !*ext)
+	if(!instance || !ext)
 		return instance;
 
-	VkGraphicsDevice *deviceExt = (*(VkGraphicsDevice**)ext);
+	VkGraphicsDevice *deviceExt = (VkGraphicsDevice*)ext;
 
-	for(U64 i = 0;i < deviceExt->commandPools.length; ++i)
-		vkDestroyCommandPool(deviceExt->device, ((VkCommandPool*)deviceExt->commandPools.ptr)[i], NULL);
+	if(deviceExt->device) {
+
+		for(U64 i = 0;i < deviceExt->commandPools.length; ++i) {
+
+			VkCommandPool pool = ((VkCommandPool*)deviceExt->commandPools.ptr)[i];
+
+			if(pool)
+				vkDestroyCommandPool(deviceExt->device, pool, NULL);
+		}
+
+		vkDestroyDevice(deviceExt->device, NULL);
+	}
 
 	List_freex(&deviceExt->commandPools);
-	vkDestroyDevice(deviceExt->device, NULL);
 
-	Buffer buf = Buffer_createManagedPtr(*ext, sizeof(VkGraphicsDevice));
-	Buffer_freex(&buf);
-
-	*ext = NULL;
 	return true;
 }

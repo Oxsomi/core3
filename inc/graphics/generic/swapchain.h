@@ -22,7 +22,7 @@
 #include "types/types.h"
 #include "platforms/ref_ptr.h"
 
-typedef struct GraphicsDevice GraphicsDevice;
+typedef RefPtr GraphicsDeviceRef;
 typedef struct Error Error;
 typedef struct List List;
 typedef struct Window Window;
@@ -54,15 +54,16 @@ typedef struct Swapchain {
 
 	SwapchainInfo info;
 
-	GraphicsDevice *device;
+	GraphicsDeviceRef *device;
 
 } Swapchain;
 
 typedef RefPtr SwapchainRef;
 
 #define Swapchain_ext(ptr, T) (T##Swapchain*)(ptr + 1)		//impl
+#define SwapchainRef_ptr(ptr) RefPtr_data(ptr, Swapchain)
 
-impl Error GraphicsDevice_createSwapchain(GraphicsDevice *device, SwapchainInfo info, SwapchainRef **swapchain);
-impl Error SwapchainRef_dec(SwapchainRef **swapchain);
+Error SwapchainRef_dec(SwapchainRef **swapchain);
+Error SwapchainRef_add(SwapchainRef *swapchain);
 
-impl Error SwapchainRef_add(SwapchainRef **swapchain);
+impl Error GraphicsDeviceRef_createSwapchain(GraphicsDeviceRef *deviceRef, SwapchainInfo info, SwapchainRef **swapchain);

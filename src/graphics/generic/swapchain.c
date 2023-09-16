@@ -18,28 +18,13 @@
 *  This is called dual licensing.
 */
 
-#include "graphics/generic/device.h"
-#include "graphics/generic/instance.h"
-#include "graphics/vulkan/vk_swapchain.h"
-#include "graphics/vulkan/vk_device.h"
-#include "graphics/vulkan/vk_instance.h"
-#include "platforms/window.h"
-#include "platforms/platform.h"
+#include "graphics/generic/swapchain.h"
 #include "types/error.h"
 
-Error VkSurface_create(GraphicsDevice *device, const Window *window, VkSurfaceKHR *surface) {
+Error SwapchainRef_dec(SwapchainRef **swapchain) {
+	return !RefPtr_dec(swapchain) ? Error_invalidOperation(0) : Error_none();
+}
 
-	if(!device || !window || !surface)
-		return Error_nullPointer(!device ? 0 : (!window ? 0 : 1));
-
-	GraphicsInstance *instance = GraphicsInstanceRef_ptr(device->instance);
-	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
-
-	VkWin32SurfaceCreateInfoKHR surfaceInfo = (VkWin32SurfaceCreateInfoKHR) {
-		.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
-		.hwnd = window->nativeHandle,
-		.hinstance = Platform_instance.data
-	};
-
-	return vkCheck(instanceExt->createWin32SurfaceKHR(instanceExt->instance, &surfaceInfo, NULL, surface));
+Error SwapchainRef_add(SwapchainRef *swapchain) {
+	return swapchain ? (!RefPtr_inc(swapchain) ? Error_invalidOperation(0) : Error_none()) : Error_nullPointer(0);
 }
