@@ -36,39 +36,30 @@
 
 Bool GraphicsDevice_freeSwapchain(Swapchain *data, Allocator alloc);
 
-Error GraphicsDeviceRef_createSwapchain(GraphicsDeviceRef *deviceRef, SwapchainInfo info, SwapchainRef **swapchainRef) {
+Error GraphicsDeviceRef_createSwapchainInternal(GraphicsDeviceRef *deviceRef, SwapchainInfo info, Swapchain *swapchain) {
 
-	const Window *window = info.window;
+	//Prepare temporary free-ables and extended data.
 
-	if(!deviceRef || !window || !window->nativeHandle)
-		return Error_nullPointer(!deviceRef ? 1 : 0);
-
-	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
-
-	if(!(device->info.capabilities.features & EGraphicsFeatures_Swapchain))
-		return Error_unsupportedOperation(0);
-
+	Error err = Error_none();
 	CharString temp = CharString_createNull();
 	List list = List_createEmpty(sizeof(VkSurfaceFormatKHR));
 
-	Error err = RefPtr_createx(
-		(U32)(sizeof(Swapchain) + sizeof(VkSwapchain)), 
-		(ObjectFreeFunc) GraphicsDevice_freeSwapchain, 
-		EGraphicsTypeId_Swapchain, 
-		swapchainRef
-	);
-
-	if(err.genericError)
-		return err;
-
-	Swapchain *swapchain = SwapchainRef_ptr(*swapchainRef);
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	VkSwapchain *swapchainExt = Swapchain_ext(swapchain, Vk);
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 	VkGraphicsInstance *instance = GraphicsInstance_ext(GraphicsInstanceRef_ptr(device->instance), Vk);
 
-	_gotoIfError(clean, VkSurface_create(device, window, &swapchainExt->surface));
-
 	VkPhysicalDevice physicalDevice = (VkPhysicalDevice) device->info.ext;
+
+	const Window *window = info.window;
+
+	//Since this function is called for both resize and init, it's possible our surface already exists.
+
+	if(!swapchainExt->surface)
+		_gotoIfError(clean, VkSurface_create(device, window, &swapchainExt->surface));
+
+	//It's possible that format has changed when calling Swapchain_resize.
+	//So we can't skip this.
 
 	U32 formatCount = 0;
 
@@ -196,6 +187,8 @@ Error GraphicsDeviceRef_createSwapchain(GraphicsDeviceRef *deviceRef, SwapchainI
 			_gotoIfError(clean, Error_invalidOperation(6));
 	}
 
+	//Get present mode
+
 	U32 modes = 0;
 
 	_gotoIfError(clean, vkCheck(instance->getPhysicalDeviceSurfacePresentModes(
@@ -236,6 +229,8 @@ Error GraphicsDeviceRef_createSwapchain(GraphicsDeviceRef *deviceRef, SwapchainI
 
 	Bool hasMultiQueue = deviceExt->resolvedQueues > 1;
 
+	VkSwapchainKHR prevSwapchain = swapchainExt->swapchain;
+
 	VkSwapchainCreateInfoKHR swapchainInfo = (VkSwapchainCreateInfoKHR) {
 
 		.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
@@ -259,10 +254,13 @@ Error GraphicsDeviceRef_createSwapchain(GraphicsDeviceRef *deviceRef, SwapchainI
 
 		.presentMode = supportsMailbox ? VK_PRESENT_MODE_MAILBOX_KHR : VK_PRESENT_MODE_FIFO_KHR,
 		.clipped = true,
-		.oldSwapchain = NULL
+		.oldSwapchain = prevSwapchain
 	};
 
 	_gotoIfError(clean, vkCheck(instance->createSwapchain(deviceExt->device, &swapchainInfo, NULL, &swapchainExt->swapchain)));
+
+	if(prevSwapchain)
+		instance->destroySwapchain(deviceExt->device, prevSwapchain, NULL);
 
 	//Acquire images
 
@@ -275,11 +273,24 @@ Error GraphicsDeviceRef_createSwapchain(GraphicsDeviceRef *deviceRef, SwapchainI
 	if(imageCount != images)
 		_gotoIfError(clean, Error_invalidState(1));
 
-	swapchainExt->images = List_createEmpty(sizeof(VkImage));
-	swapchainExt->semaphores = List_createEmpty(sizeof(VkSemaphore));
+	//Only recreate semaphores if needed.
 
-	_gotoIfError(clean, List_resizex(&swapchainExt->images, imageCount));
-	_gotoIfError(clean, List_resizex(&swapchainExt->semaphores, imageCount));
+	Bool createSemaphores = false;
+
+	if(swapchainExt->semaphores.length != imageCount) {
+		List_freex(&swapchainExt->semaphores);
+		swapchainExt->semaphores = List_createEmpty(sizeof(VkSemaphore));
+		_gotoIfError(clean, List_resizex(&swapchainExt->semaphores, imageCount));
+		createSemaphores = true;
+	}
+
+	//Get images
+
+	if(swapchainExt->images.length != imageCount) {
+		List_freex(&swapchainExt->images);
+		swapchainExt->images = List_createEmpty(sizeof(VkImage));
+		_gotoIfError(clean, List_resizex(&swapchainExt->images, imageCount));
+	}
 
 	_gotoIfError(clean, vkCheck(instance->getSwapchainImagesKHR(
 		deviceExt->device, swapchainExt->swapchain, &imageCount, (VkImage*) swapchainExt->images.ptr
@@ -287,47 +298,94 @@ Error GraphicsDeviceRef_createSwapchain(GraphicsDeviceRef *deviceRef, SwapchainI
 
 	//Grab semaphores
 
-	for (U32 i = 0; i < images; ++i) {
+	if(createSemaphores)
+		for (U32 i = 0; i < images; ++i) {
 
-		VkSemaphoreCreateInfo semaphoreInfo = (VkSemaphoreCreateInfo) { .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
-		VkSemaphore *semaphore = (VkSemaphore*)swapchainExt->semaphores.ptr + i;
+			VkSemaphoreCreateInfo semaphoreInfo = (VkSemaphoreCreateInfo) { .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
+			VkSemaphore *semaphore = (VkSemaphore*)swapchainExt->semaphores.ptr + i;
 
-		_gotoIfError(clean, vkCheck(vkCreateSemaphore(deviceExt->device, &semaphoreInfo, NULL, semaphore)));
+			_gotoIfError(clean, vkCheck(vkCreateSemaphore(deviceExt->device, &semaphoreInfo, NULL, semaphore)));
 
-		if(instance->debugSetName) {
+			if(instance->debugSetName) {
 
-			CharString_freex(&temp);
-			_gotoIfError(clean, CharString_formatx(&temp, "Swapchain semaphore %i", i));
+				CharString_freex(&temp);
+				_gotoIfError(clean, CharString_formatx(&temp, "Swapchain semaphore %i", i));
 
-			VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
-				.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-				.objectType = VK_OBJECT_TYPE_SEMAPHORE,
-				.objectHandle = (U64) *semaphore,
-				.pObjectName = temp.ptr
-			};
+				VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
+					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+					.objectType = VK_OBJECT_TYPE_SEMAPHORE,
+					.objectHandle = (U64) *semaphore,
+					.pObjectName = temp.ptr
+				};
 
-			_gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)));
+				_gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)));
+			}
 		}
-	}
 
 	//Return our handle
 
-	GraphicsDeviceRef_add(deviceRef);
+	if(!prevSwapchain) {
 
-	*swapchain = (Swapchain) {
-		.info = info,
-		.device = deviceRef
-	};
+		GraphicsDeviceRef_add(deviceRef);
 
-	goto success;
+		*swapchain = (Swapchain) {
+			.info = info,
+			.device = deviceRef
+		};
+	}
+
+	swapchain->format = window->format;
+	swapchain->size = size;
 
 clean:
-	RefPtr_dec(swapchainRef);
-
-success:
 	CharString_freex(&temp);
 	List_freex(&list);
 	return err;
+}
+
+Error Swapchain_resize(Swapchain *swapchain) {
+
+	if(!swapchain)
+		return Error_nullPointer(0);
+
+	//Resize with same format and same size is a NOP
+
+	if(I32x2_eq2(swapchain->info.window->size, swapchain->size) && swapchain->info.window->format == swapchain->format)
+		return Error_none();
+
+	//Otherwise, we properly resize
+
+	return GraphicsDeviceRef_createSwapchainInternal(swapchain->device, swapchain->info, swapchain);
+}
+
+Error GraphicsDeviceRef_createSwapchain(GraphicsDeviceRef *deviceRef, SwapchainInfo info, SwapchainRef **swapchainRef) {
+
+	if(!deviceRef || !info.window || !info.window->nativeHandle)
+		return Error_nullPointer(!deviceRef ? 1 : 0);
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+
+	if(!(device->info.capabilities.features & EGraphicsFeatures_Swapchain))
+		return Error_unsupportedOperation(0);
+
+	Error err = RefPtr_createx(
+		(U32)(sizeof(Swapchain) + sizeof(VkSwapchain)), 
+		(ObjectFreeFunc) GraphicsDevice_freeSwapchain, 
+		EGraphicsTypeId_Swapchain, 
+		swapchainRef
+	);
+
+	if(err.genericError)
+		return err;
+
+	err = GraphicsDeviceRef_createSwapchainInternal(deviceRef, info, SwapchainRef_ptr(*swapchainRef));
+
+	if(err.genericError) {
+		RefPtr_dec(swapchainRef);
+		return err;
+	}
+
+	return Error_none();
 }
 
 Bool GraphicsDevice_freeSwapchain(Swapchain *swapchain, Allocator alloc) {

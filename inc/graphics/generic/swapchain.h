@@ -19,14 +19,14 @@
 */
 
 #pragma once
-#include "types/types.h"
+#include "math/vec.h"
 #include "platforms/ref_ptr.h"
 
 typedef RefPtr GraphicsDeviceRef;
 typedef struct Error Error;
 typedef struct List List;
 typedef struct Window Window;
-typedef enum ETextureFormat ETextureFormat;
+typedef enum EWindowFormat EWindowFormat;
 
 typedef struct SwapchainInfo {
 
@@ -56,6 +56,10 @@ typedef struct Swapchain {
 
 	GraphicsDeviceRef *device;
 
+	I32x2 size;
+	EWindowFormat format;
+	U32 pad;
+
 } Swapchain;
 
 typedef RefPtr SwapchainRef;
@@ -67,3 +71,5 @@ Error SwapchainRef_dec(SwapchainRef **swapchain);
 Error SwapchainRef_add(SwapchainRef *swapchain);
 
 impl Error GraphicsDeviceRef_createSwapchain(GraphicsDeviceRef *deviceRef, SwapchainInfo info, SwapchainRef **swapchain);
+
+impl Error Swapchain_resize(Swapchain *swapchain);
