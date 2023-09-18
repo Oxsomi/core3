@@ -20,8 +20,11 @@
 
 #include "graphics/vulkan/vk_device.h"
 #include "graphics/vulkan/vk_instance.h"
+#include "graphics/vulkan/vk_swapchain.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
+#include "graphics/generic/swapchain.h"
+#include "graphics/generic/command_list.h"
 #include "platforms/ext/listx.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
@@ -283,9 +286,7 @@ Error GraphicsDevice_initExt(
 	List extensions = List_createEmpty(sizeof(const C8*));
 	List queues = List_createEmpty(sizeof(VkDeviceQueueCreateInfo));
 	List queueFamilies = List_createEmpty(sizeof(VkQueueFamilyProperties));
-	List commandPools = List_createEmpty(sizeof(VkCommandPool));
 	CharString tempStr = CharString_createNull();
-	VkCommandPool tempPool = NULL;
 
 	_gotoIfError(clean, List_reservex(&extensions, 32));
 	_gotoIfError(clean, List_reservex(&queues, EVkGraphicsQueue_Count));
@@ -300,7 +301,7 @@ Error GraphicsDevice_initExt(
 
 		switch (i) {
 
-			case EOptExtensions_DebugMarker:				on = featEx & EVkGraphicsFeatures_DebugMarker;			break;
+			case EOptExtensions_DebugMarker:				on = feat & EGraphicsFeatures_DebugMarkers;		break;
 			case EOptExtensions_F16:						on = types & EGraphicsDataTypes_F16;					break;
 			case EOptExtensions_MultiDrawIndirectCount:		on = feat & EGraphicsFeatures_MultiDrawIndirectCount;	break;
 			case EOptExtensions_AtomicI64:					on = types & EGraphicsDataTypes_AtomicI64;				break;
@@ -554,13 +555,22 @@ Error GraphicsDevice_initExt(
 		debugName.objectType = VK_OBJECT_TYPE_COMMAND_POOL;
 	#endif
 
-	for (U64 k = 0; k < 3; ++k)
+	deviceExt->commandPools = List_createEmpty(sizeof(VkCommandPool));
+	_gotoIfError(clean, List_resizex(&deviceExt->commandPools, 3 * threads * resolvedId));
+
+	deviceExt->submitSemaphores = List_createEmpty(sizeof(VkSemaphore));
+	_gotoIfError(clean, List_resizex(&deviceExt->submitSemaphores, 3));
+
+	for (U64 k = 0, l = 0; k < 3; ++k) {
+
 		for(U64 j = 0; j < threads; ++j)
-			for(U64 i = 0; i < resolvedId; ++i) {
+			for(U64 i = 0; i < resolvedId; ++i, ++l) {
 
 				poolInfo.queueFamilyIndex = deviceExt->uniqueQueues[i];
 
-				_gotoIfError(clean, vkCheck(vkCreateCommandPool(deviceExt->device, &poolInfo, NULL, &tempPool)));
+				VkCommandPool *pool = (VkCommandPool*) deviceExt->commandPools.ptr + l;
+
+				_gotoIfError(clean, vkCheck(vkCreateCommandPool(deviceExt->device, &poolInfo, NULL, pool)));
 
 				#ifndef NDEBUG
 
@@ -577,27 +587,61 @@ Error GraphicsDevice_initExt(
 						));
 
 						debugName.pObjectName = tempStr.ptr;
-						debugName.objectHandle = (U64) tempPool;
+						debugName.objectHandle = (U64) *pool;
 						_gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName)));
 
 						CharString_freex(&tempStr);
 					}
 
 				#endif
-
-				_gotoIfError(clean, List_pushBackx(&commandPools, Buffer_createConstRef(&tempPool, sizeof(tempPool))));
-
-				tempPool = NULL;
 			}
 
-	deviceExt->commandPools = commandPools;
+		//Semaphores
+
+		VkSemaphoreCreateInfo semaphoreInfo = (VkSemaphoreCreateInfo) { .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
+		VkSemaphore *semaphore = ((VkSemaphore*)deviceExt->submitSemaphores.ptr) + k;
+
+		_gotoIfError(clean, vkCheck(vkCreateSemaphore(deviceExt->device, &semaphoreInfo, NULL, semaphore)));
+
+		#ifndef NDEBUG
+
+			if(instanceExt->debugSetName) {
+
+				_gotoIfError(clean, CharString_formatx(&tempStr, "Queue submit semaphore %i", k));
+
+				VkDebugUtilsObjectNameInfoEXT debugName2 = (VkDebugUtilsObjectNameInfoEXT) {
+					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+					.objectType = VK_OBJECT_TYPE_SEMAPHORE,
+					.objectHandle = (U64) *semaphore,
+					.pObjectName = tempStr.ptr,
+				};
+
+				_gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName2)));
+
+				CharString_freex(&tempStr);
+			}
+
+		#endif
+	}
+
+	//Create timeline semaphore
+
+	VkSemaphoreTypeCreateInfo timelineInfo = (VkSemaphoreTypeCreateInfo) {
+		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
+		.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE
+	};
+
+	VkSemaphoreCreateInfo semaphoreInfo = (VkSemaphoreCreateInfo) {
+		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
+		.pNext = &timelineInfo
+	};
+
+	_gotoIfError(clean, vkCheck(vkCreateSemaphore(deviceExt->device, &semaphoreInfo, NULL, &deviceExt->commitSemaphore)));
+
 	deviceExt->resolvedQueues = resolvedId;
 	goto success;
 
 clean:
-
-	if(tempPool)
-		vkDestroyCommandPool(deviceExt->device, tempPool, NULL);
 
 	GraphicsDeviceRef_dec(deviceRef);
 
@@ -619,7 +663,7 @@ Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext) {
 
 	if(deviceExt->device) {
 
-		for(U64 i = 0;i < deviceExt->commandPools.length; ++i) {
+		for(U64 i = 0; i < deviceExt->commandPools.length; ++i) {
 
 			VkCommandPool pool = ((VkCommandPool*)deviceExt->commandPools.ptr)[i];
 
@@ -627,10 +671,205 @@ Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext) {
 				vkDestroyCommandPool(deviceExt->device, pool, NULL);
 		}
 
+		for(U64 i = 0; i < deviceExt->submitSemaphores.length; ++i) {
+
+			VkSemaphore semaphore = ((VkSemaphore*)deviceExt->submitSemaphores.ptr)[i];
+
+			if(semaphore)
+				vkDestroySemaphore(deviceExt->device, semaphore, NULL);
+		}
+
+		if(deviceExt->commitSemaphore) {
+			vkDestroySemaphore(deviceExt->device, deviceExt->commitSemaphore, NULL);
+			deviceExt->commitSemaphore = NULL;
+		}
+
 		vkDestroyDevice(deviceExt->device, NULL);
 	}
 
 	List_freex(&deviceExt->commandPools);
+	List_freex(&deviceExt->submitSemaphores);
+
+	//Free temp storage
+
+	List_freex(&deviceExt->waitStages);
+	List_freex(&deviceExt->waitSemaphores);
+	List_freex(&deviceExt->results);
+	List_freex(&deviceExt->swapchainIndices);
+	List_freex(&deviceExt->swapchainHandles);
 
 	return true;
+}
+
+//Executing commands
+
+Error GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef) {
+
+	if(!deviceRef)
+		return Error_nullPointer(0);
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
+
+	return vkCheck(vkDeviceWaitIdle(deviceExt->device));
+}
+
+Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List commandLists, List swapchains) {
+
+	//Validation and ext structs
+
+	if(!deviceRef || (!swapchains.length && !commandLists.length))
+		return Error_nullPointer(!deviceRef ? 0 : 1);
+
+	if(swapchains.length && swapchains.stride != sizeof(SwapchainRef*))
+		return Error_invalidParameter(2, 0);
+
+	if(commandLists.length && commandLists.stride != sizeof(CommandListRef*))
+		return Error_invalidParameter(2, 0);
+
+	Error err = Error_none();
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
+
+	GraphicsInstance *instance = GraphicsInstanceRef_ptr(device->instance);
+	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
+	
+	//Reserve temp storage
+
+	if(!deviceExt->swapchainHandles.capacityAndRefInfo)
+		deviceExt->swapchainHandles = List_createEmpty(sizeof(VkSwapchainKHR));
+
+	_gotoIfError(clean, List_clear(&deviceExt->swapchainHandles));
+	_gotoIfError(clean, List_reservex(&deviceExt->swapchainHandles, swapchains.length));
+
+	if(!deviceExt->swapchainIndices.capacityAndRefInfo)
+		deviceExt->swapchainIndices = List_createEmpty(sizeof(U32));
+
+	_gotoIfError(clean, List_clear(&deviceExt->swapchainIndices));
+	_gotoIfError(clean, List_reservex(&deviceExt->swapchainIndices, swapchains.length));
+
+	if(!deviceExt->results.capacityAndRefInfo)
+		deviceExt->results = List_createEmpty(sizeof(VkResult));
+
+	_gotoIfError(clean, List_clear(&deviceExt->results));
+	_gotoIfError(clean, List_reservex(&deviceExt->results, swapchains.length));
+
+	if(!deviceExt->waitSemaphores.capacityAndRefInfo)
+		deviceExt->waitSemaphores = List_createEmpty(sizeof(VkSemaphore));
+
+	_gotoIfError(clean, List_clear(&deviceExt->waitSemaphores));
+	_gotoIfError(clean, List_reservex(&deviceExt->waitSemaphores, swapchains.length + 1));
+
+	if(!deviceExt->waitStages.capacityAndRefInfo)
+		deviceExt->waitStages = List_createEmpty(sizeof(VkPipelineStageFlags));
+
+	_gotoIfError(clean, List_clear(&deviceExt->waitStages));
+	_gotoIfError(clean, List_reservex(&deviceExt->waitStages, swapchains.length + 1));
+
+	//Acquire swapchain images
+
+	VkPipelineStageFlagBits pipelineStage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+	Buffer pipelineStageBuffer = Buffer_createConstRef(&pipelineStage, sizeof(pipelineStage));
+
+	if(device->submitId >= 3) {
+		Buffer commitSemaphore = Buffer_createConstRef(&deviceExt->commitSemaphore, sizeof(deviceExt->commitSemaphore));
+		_gotoIfError(clean, List_pushBackx(&deviceExt->waitSemaphores, commitSemaphore));
+		_gotoIfError(clean, List_pushBackx(&deviceExt->waitStages, pipelineStageBuffer));
+	}
+
+	for(U64 i = 0; i < swapchains.length; ++i) {
+
+		Swapchain *swapchain = SwapchainRef_ptr(((SwapchainRef**) swapchains.ptr)[i]);
+		VkSwapchain *swapchainExt = Swapchain_ext(swapchain, Vk);
+
+		VkSemaphore semaphore = 
+			((VkSemaphore*)swapchainExt->semaphores.ptr)[device->submitId % swapchainExt->semaphores.length];
+
+		_gotoIfError(clean, vkCheck(instanceExt->acquireNextImage(
+			deviceExt->device,
+			swapchainExt->swapchain,
+			U64_MAX,
+			semaphore,
+			VK_NULL_HANDLE,
+			&swapchainExt->currentIndex
+		)));
+
+		((VkSwapchainKHR*) deviceExt->swapchainHandles.ptr)[i] = swapchainExt->swapchain;
+		((U32*) deviceExt->swapchainIndices.ptr)[i] = swapchainExt->currentIndex;
+
+		Buffer acquireSemaphore = Buffer_createConstRef(&semaphore, sizeof(semaphore));
+		_gotoIfError(clean, List_pushBackx(&deviceExt->waitSemaphores, acquireSemaphore));
+		_gotoIfError(clean, List_pushBackx(&deviceExt->waitStages, pipelineStageBuffer));
+	}
+
+	//Record command list
+
+	VkCommandBuffer commandBuffer = NULL;
+	
+	if (commandLists.length) {
+
+		//TODO:
+
+	}
+
+	//Submit queue
+	//TODO: Multiple queues
+
+	U64 waitValue = device->submitId - 3 + 1;
+
+	VkSemaphore signalSemaphores[2] = {
+		deviceExt->commitSemaphore,
+		((const VkSemaphore*)deviceExt->submitSemaphores.ptr)[device->submitId % 3]
+	};
+
+	U64 signalValues[2] = { device->submitId + 1, 1 };
+
+	VkTimelineSemaphoreSubmitInfo timelineInfo = (VkTimelineSemaphoreSubmitInfo) {
+		.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO,
+		.waitSemaphoreValueCount = device->submitId >= 3,
+		.pWaitSemaphoreValues = device->submitId >= 3 ? &waitValue : NULL,
+		.signalSemaphoreValueCount = 2,
+		.pSignalSemaphoreValues = signalValues
+	};
+
+	VkSubmitInfo submitInfo = (VkSubmitInfo) {
+		.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+		.pNext = &timelineInfo,
+		.waitSemaphoreCount = (U32) deviceExt->waitSemaphores.length,
+		.pWaitSemaphores = (VkSemaphore*) deviceExt->waitSemaphores.ptr,
+		.signalSemaphoreCount = 2,
+		.pSignalSemaphores = signalSemaphores,
+		.pCommandBuffers = &commandBuffer,
+		.commandBufferCount = commandBuffer ? 1 : 0,
+		.pWaitDstStageMask = (const VkPipelineStageFlags*) deviceExt->waitStages.ptr
+	};
+
+	VkQueue queue = deviceExt->queues[EVkGraphicsQueue_Graphics].queue;
+
+	_gotoIfError(clean, vkCheck(vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE)));
+
+	//Presents
+
+	VkPresentInfoKHR presentInfo = (VkPresentInfoKHR) {
+		.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+		.waitSemaphoreCount = 1,
+		.pWaitSemaphores = ((const VkSemaphore*) deviceExt->submitSemaphores.ptr) + device->submitId % 3,
+		.swapchainCount = (U32) swapchains.length,
+		.pSwapchains = (const VkSwapchainKHR*) deviceExt->swapchainHandles.ptr,
+		.pImageIndices = (const U32*) deviceExt->swapchainIndices.ptr,
+		.pResults = (VkResult*) deviceExt->results.ptr
+	};
+
+	_gotoIfError(clean, vkCheck(vkQueuePresentKHR(queue, &presentInfo)));
+
+	for(U64 i = 0; i < deviceExt->results.length; ++i)
+		_gotoIfError(clean, vkCheck(((const VkResult*) deviceExt->results.ptr)[i]));
+
+	//Ensure our next fence value is used
+
+	++device->submitId;
+
+clean: 
+	return err;
 }

@@ -36,8 +36,7 @@ enum EVkDeviceVendor {
 
 typedef enum EVkGraphicsFeatures {
 
-	EVkGraphicsFeatures_DebugMarker		= 1 << 0,
-	EVkGraphicsFeatures_PerfQuery		= 1 << 1
+	EVkGraphicsFeatures_PerfQuery		= 1 << 0
 
 } EVkGraphicsFeatures;
 
@@ -74,6 +73,14 @@ typedef struct VkGraphicsDevice {
 	U32 pad;
 
 	//3D as 1D flat array: resolvedQueueId + (backBufferId * threadCount + threadId) * resolvedQueues
-	List commandPools;	
+	List commandPools;
+
+	List submitSemaphores;
+
+	VkSemaphore commitSemaphore;
+
+	//Temporary storage for submit time stuff
+
+	List waitSemaphores, results, swapchainIndices, swapchainHandles, waitStages;
 
 } VkGraphicsDevice;

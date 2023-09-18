@@ -336,6 +336,7 @@ Error GraphicsDeviceRef_createSwapchainInternal(GraphicsDeviceRef *deviceRef, Sw
 
 	swapchain->format = window->format;
 	swapchain->size = size;
+	++swapchain->versionId;
 
 clean:
 	CharString_freex(&temp);

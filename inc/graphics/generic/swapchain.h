@@ -57,8 +57,11 @@ typedef struct Swapchain {
 	GraphicsDeviceRef *device;
 
 	I32x2 size;
+
 	EWindowFormat format;
 	U32 pad;
+
+	U64 versionId;				//Everytime this swapchain changes format or is resized this will increase.
 
 } Swapchain;
 

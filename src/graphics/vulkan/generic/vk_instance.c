@@ -645,7 +645,9 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 			limits.maxMemoryAllocationCount < 4096 ||
 			limits.maxBoundDescriptorSets < 4 ||
 			limits.maxDescriptorSetStorageBuffersDynamic < 16 ||
-			limits.maxDescriptorSetUniformBuffersDynamic < 15
+			limits.maxDescriptorSetUniformBuffersDynamic < 15 ||
+			limits.viewportBoundsRange[0] > -32768 ||
+			limits.viewportBoundsRange[1] < 32767
 		) {
 			Log_debugLn("Vulkan: Unsupported GPU %u, one of the required limit wasn't sufficient", i);
 			continue;
@@ -1231,7 +1233,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 		);
 
 		if(id.deviceLUIDValid)
-			capabilities.features |= EGraphicsFeatures_SupportsLUID;
+			capabilities.features |= EGraphicsFeatures_LUID;
 
 		getDeviceProperties(
 			VkPhysicalDeviceDriverProperties,
@@ -1242,7 +1244,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 		//API dependent stuff for the runtime
 
 		if(optExtensions[EOptExtensions_DebugMarker])
-			capabilities.featuresExt |= EVkGraphicsFeatures_DebugMarker;
+			capabilities.features |= EGraphicsFeatures_DebugMarkers;
 
 		if(optExtensions[EOptExtensions_PerfQuery]) {
 

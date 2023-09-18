@@ -53,6 +53,8 @@ Bool List_any(List l);
 U64  List_bytes(List l);
 U64  List_allocatedBytes(List l);
 
+U64 List_capacity(List l);
+
 Buffer List_buffer(List l);
 Buffer List_allocatedBuffer(List l);
 

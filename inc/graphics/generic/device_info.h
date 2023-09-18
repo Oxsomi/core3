@@ -81,7 +81,11 @@ typedef enum EGraphicsFeatures {
 
 	//LUID for sharing devices
 
-	EGraphicsFeatures_SupportsLUID				= 1 << 18
+	EGraphicsFeatures_LUID						= 1 << 18,
+
+	//Debug features
+
+	EGraphicsFeatures_DebugMarkers				= 1 << 19
 
 } EGraphicsFeatures;
 

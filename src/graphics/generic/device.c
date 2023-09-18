@@ -41,7 +41,7 @@ void GraphicsDeviceInfo_print(const GraphicsDeviceInfo *deviceInfo, Bool printCa
 			)
 		)),
 		deviceInfo->id,
-		deviceInfo->capabilities.features & EGraphicsFeatures_SupportsLUID ? U64_swapEndianness(deviceInfo->luid) : 0,
+		deviceInfo->capabilities.features & EGraphicsFeatures_LUID ? U64_swapEndianness(deviceInfo->luid) : 0,
 		U64_swapEndianness(deviceInfo->uuid[0]),
 		U64_swapEndianness(deviceInfo->uuid[1])
 	);
@@ -170,7 +170,7 @@ impl Error GraphicsDevice_initExt(
 
 impl Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext);
 
-Error GraphicsDevice_create(
+Error GraphicsDeviceRef_create(
 	GraphicsInstanceRef *instanceRef, 
 	const GraphicsDeviceInfo *info, 
 	Bool verbose, 
@@ -249,11 +249,6 @@ Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 
 	return true;
 }
-
-//Submit and wait until all submitted graphics tasks are done.
-
-Error GraphicsDevice_submitCommands(GraphicsDevice *device, List commandLists);		//<RefPtr of CommandList>
-Error GraphicsDevice_wait(GraphicsDevice *device, U64 timeout);
 
 //Batch create objects.
 //All objects created need to be freed by the runtime.

@@ -27,9 +27,13 @@ typedef struct VkSwapchain {
 
 	VkSurfaceKHR surface;			//Platform's surface implementation
 	VkSwapchainKHR swapchain;
-	VkSurfaceFormatKHR format;
+
 	List images;					//<VkImage>
 	List semaphores;				//<VkSemaphore>
+
+	VkSurfaceFormatKHR format;
+
+	U32 currentIndex;				//Swapchain index
 
 } VkSwapchain;
 

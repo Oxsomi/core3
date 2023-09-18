@@ -32,6 +32,8 @@ typedef struct GraphicsDevice {
 
 	GraphicsDeviceInfo info;
 
+	U64 submitId;
+
 	//List factories;		//<GraphicsObjectFactory>
 
 } GraphicsDevice;
@@ -44,7 +46,7 @@ typedef RefPtr GraphicsDeviceRef;
 Error GraphicsDeviceRef_dec(GraphicsDeviceRef **device);
 Error GraphicsDeviceRef_add(GraphicsDeviceRef *device);
 
-Error GraphicsDevice_create(
+Error GraphicsDeviceRef_create(
 	GraphicsInstanceRef *instanceRef, 
 	const GraphicsDeviceInfo *info, 
 	Bool verbose,
@@ -53,10 +55,13 @@ Error GraphicsDevice_create(
 
 Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc);
 
-//Submit and wait until all submitted graphics tasks are done.
+//Submit commands to device
+//List<CommandListRef*> commandLists
+//List<SwapchainRef*> swapchains
+impl Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List commandLists, List swapchains);
 
-Error GraphicsDevice_submitCommands(GraphicsDevice *device, List commandLists);		//<RefPtr of CommandList>
-Error GraphicsDevice_wait(GraphicsDevice *device, U64 timeout);
+//Wait on previously submitted commands
+impl Error GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef);
 
 //Batch create objects.
 //All objects created need to be freed by the runtime.
