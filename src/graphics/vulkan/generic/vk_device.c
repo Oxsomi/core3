@@ -778,12 +778,6 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 	VkPipelineStageFlagBits pipelineStage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
 	Buffer pipelineStageBuffer = Buffer_createConstRef(&pipelineStage, sizeof(pipelineStage));
 
-	if(device->submitId >= 3) {
-		Buffer commitSemaphore = Buffer_createConstRef(&deviceExt->commitSemaphore, sizeof(deviceExt->commitSemaphore));
-		_gotoIfError(clean, List_pushBackx(&deviceExt->waitSemaphores, commitSemaphore));
-		_gotoIfError(clean, List_pushBackx(&deviceExt->waitStages, pipelineStageBuffer));
-	}
-
 	for(U64 i = 0; i < swapchains.length; ++i) {
 
 		Swapchain *swapchain = SwapchainRef_ptr(((SwapchainRef**) swapchains.ptr)[i]);
@@ -807,6 +801,22 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 		Buffer acquireSemaphore = Buffer_createConstRef(&semaphore, sizeof(semaphore));
 		_gotoIfError(clean, List_pushBackx(&deviceExt->waitSemaphores, acquireSemaphore));
 		_gotoIfError(clean, List_pushBackx(&deviceExt->waitStages, pipelineStageBuffer));
+	}
+
+	//Wait for previous frame semaphore
+
+	if (device->submitId >= 3) {
+
+		U64 value = device->submitId - 3 + 1;
+
+		VkSemaphoreWaitInfo waitInfo = (VkSemaphoreWaitInfo) {
+			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
+			.pSemaphores = &deviceExt->commitSemaphore,
+			.semaphoreCount = 1,
+			.pValues = &value
+		};
+
+		_gotoIfError(clean, vkCheck(vkWaitSemaphores(deviceExt->device, &waitInfo, U64_MAX)));
 	}
 
 	//Record command list
@@ -872,8 +882,6 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 			#endif
 		}
 
-		//Reset command pool
-
 		else _gotoIfError(clean, vkCheck(vkResetCommandPool(
 			deviceExt->device, allocator->pool, VK_COMMAND_POOL_RESET_RELEASE_RESOURCES_BIT
 		)));
@@ -922,6 +930,8 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 
 		//Record commands
 
+		commandBuffer = allocator->cmd;
+
 		VkCommandBufferState state = (VkCommandBufferState) {
 			.buffer = commandBuffer
 		};
@@ -965,7 +975,7 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 		.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO,
 		.waitSemaphoreValueCount = device->submitId >= 3,
 		.pWaitSemaphoreValues = device->submitId >= 3 ? &waitValue : NULL,
-		.signalSemaphoreValueCount = 2,
+		.signalSemaphoreValueCount = swapchains.length ? 2 : 1,
 		.pSignalSemaphoreValues = signalValues
 	};
 
@@ -974,7 +984,7 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 		.pNext = &timelineInfo,
 		.waitSemaphoreCount = (U32) deviceExt->waitSemaphores.length,
 		.pWaitSemaphores = (VkSemaphore*) deviceExt->waitSemaphores.ptr,
-		.signalSemaphoreCount = 2,
+		.signalSemaphoreCount = swapchains.length ? 2 : 1,
 		.pSignalSemaphores = signalSemaphores,
 		.pCommandBuffers = &commandBuffer,
 		.commandBufferCount = commandBuffer ? 1 : 0,
@@ -985,20 +995,23 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 
 	//Presents
 
-	VkPresentInfoKHR presentInfo = (VkPresentInfoKHR) {
-		.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
-		.waitSemaphoreCount = 1,
-		.pWaitSemaphores = ((const VkSemaphore*) deviceExt->submitSemaphores.ptr) + device->submitId % 3,
-		.swapchainCount = (U32) swapchains.length,
-		.pSwapchains = (const VkSwapchainKHR*) deviceExt->swapchainHandles.ptr,
-		.pImageIndices = (const U32*) deviceExt->swapchainIndices.ptr,
-		.pResults = (VkResult*) deviceExt->results.ptr
-	};
+	if(swapchains.length) {
 
-	_gotoIfError(clean, vkCheck(vkQueuePresentKHR(queue.queue, &presentInfo)));
+		VkPresentInfoKHR presentInfo = (VkPresentInfoKHR) {
+			.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+			.waitSemaphoreCount = 1,
+			.pWaitSemaphores = ((const VkSemaphore*) deviceExt->submitSemaphores.ptr) + device->submitId % 3,
+			.swapchainCount = (U32) swapchains.length,
+			.pSwapchains = (const VkSwapchainKHR*) deviceExt->swapchainHandles.ptr,
+			.pImageIndices = (const U32*) deviceExt->swapchainIndices.ptr,
+			.pResults = (VkResult*) deviceExt->results.ptr
+		};
 
-	for(U64 i = 0; i < deviceExt->results.length; ++i)
-		_gotoIfError(clean, vkCheck(((const VkResult*) deviceExt->results.ptr)[i]));
+		_gotoIfError(clean, vkCheck(vkQueuePresentKHR(queue.queue, &presentInfo)));
+
+		for(U64 i = 0; i < deviceExt->results.length; ++i)
+			_gotoIfError(clean, vkCheck(((const VkResult*) deviceExt->results.ptr)[i]));
+	}
 
 	//Ensure our next fence value is used
 

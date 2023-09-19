@@ -27,7 +27,7 @@
 const C8 *vkValidation = "VK_LAYER_KHRONOS_validation";
 const C8 *vkApiDump = "VK_LAYER_LUNARG_api_dump";
 
-#define _GRAPHICS_VERBOSE_DEBUGGING
+//#define _GRAPHICS_VERBOSE_DEBUGGING
 
 Error VkGraphicsInstance_getLayers(List *layers) {
 

@@ -48,6 +48,9 @@ typedef struct Platform {
 
 	void *data, *dataExt;
 
+	U32 threads;
+	U32 padding;
+
 } Platform;
 
 extern Platform Platform_instance;

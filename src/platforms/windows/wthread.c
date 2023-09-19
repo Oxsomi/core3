@@ -37,9 +37,13 @@ void Thread_sleep(Ns ns) {
 }
 
 U32 Thread_getLogicalCores() {
+
+	if (Platform_instance.threads)
+		return Platform_instance.threads;
+
 	SYSTEM_INFO info;
 	GetSystemInfo(&info);
-	return info.dwNumberOfProcessors;
+	return (Platform_instance.threads = info.dwNumberOfProcessors);
 }
 
 DWORD ThreadFunc(Thread *thread) {
