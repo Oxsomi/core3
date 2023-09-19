@@ -40,7 +40,7 @@ typedef struct GraphicsDevice {
 
 typedef RefPtr GraphicsDeviceRef;
 
-#define GraphicsDevice_ext(ptr, T) (T##GraphicsDevice*)(ptr + 1)		//impl
+#define GraphicsDevice_ext(ptr, T) (!ptr ? NULL : (T##GraphicsDevice*)(ptr + 1))		//impl
 #define GraphicsDeviceRef_ptr(ptr) RefPtr_data(ptr, GraphicsDevice)
 
 Error GraphicsDeviceRef_dec(GraphicsDeviceRef **device);

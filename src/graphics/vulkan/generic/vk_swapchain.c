@@ -296,10 +296,22 @@ Error GraphicsDeviceRef_createSwapchainInternal(GraphicsDeviceRef *deviceRef, Sw
 		deviceExt->device, swapchainExt->swapchain, &imageCount, (VkImage*) swapchainExt->images.ptr
 	)));
 
+	//Prepare image views
+
+	for(U64 i = 0; i < swapchainExt->imageViews.length; ++i)
+		vkDestroyImageView(deviceExt->device, ((const VkImageView*) swapchainExt->imageViews.ptr)[i], NULL);
+
+	if(swapchainExt->imageViews.length != imageCount) {
+		List_freex(&swapchainExt->imageViews);
+		swapchainExt->imageViews = List_createEmpty(sizeof(VkImageView));
+		_gotoIfError(clean, List_resizex(&swapchainExt->imageViews, imageCount));
+	}
+
 	//Grab semaphores
 
-	if(createSemaphores)
-		for (U32 i = 0; i < images; ++i) {
+	for (U32 i = 0; i < images; ++i) {
+
+		if(createSemaphores) {
 
 			VkSemaphoreCreateInfo semaphoreInfo = (VkSemaphoreCreateInfo) { .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
 			VkSemaphore *semaphore = (VkSemaphore*)swapchainExt->semaphores.ptr + i;
@@ -321,6 +333,25 @@ Error GraphicsDeviceRef_createSwapchainInternal(GraphicsDeviceRef *deviceRef, Sw
 				_gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)));
 			}
 		}
+
+		//Image views
+
+		VkImageView *view = (VkImageView*) swapchainExt->imageViews.ptr + i;
+
+		VkImageViewCreateInfo viewCreate = (VkImageViewCreateInfo) {
+			.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+			.image = ((VkImage*) swapchainExt->images.ptr)[i],
+			.viewType = VK_IMAGE_VIEW_TYPE_2D,
+			.format = swapchainExt->format.format,
+			.subresourceRange = (VkImageSubresourceRange) {
+				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				.layerCount = 1,
+				.levelCount = 1
+			}
+		};
+
+		_gotoIfError(clean, vkCheck(vkCreateImageView(deviceExt->device, &viewCreate, NULL, view)));
+	}
 
 	//Return our handle
 
@@ -410,8 +441,17 @@ Bool GraphicsDevice_freeSwapchain(Swapchain *swapchain, Allocator alloc) {
 			vkDestroySemaphore(deviceExt->device, semaphore, NULL);
 	}
 
+	for (U64 i = 0; i < swapchainExt->imageViews.length; ++i) {
+
+		VkImageView view = ((VkImageView*)swapchainExt->imageViews.ptr)[i];
+
+		if(view)
+			vkDestroyImageView(deviceExt->device, view, NULL);
+	}
+
 	List_freex(&swapchainExt->semaphores);
 	List_freex(&swapchainExt->images);
+	List_freex(&swapchainExt->imageViews);
 
 	if(swapchainExt->swapchain)
 		vkDestroySwapchainKHR(deviceExt->device, swapchainExt->swapchain, NULL);

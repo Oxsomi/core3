@@ -22,6 +22,7 @@
 #include "graphics/vulkan/vulkan.h"
 #include "graphics/generic/device_info.h"
 #include "types/list.h"
+#include "math/vec.h"
 
 enum EVkDeviceVendor {
 	EVkDeviceVendor_NV					= 0x10DE,
@@ -40,39 +41,42 @@ typedef enum EVkGraphicsFeatures {
 
 } EVkGraphicsFeatures;
 
-typedef enum EVkGraphicsQueue {
+typedef enum EVkCommandQueue {
 
-	EVkGraphicsQueue_Copy,					//Queue for dedicated host -> device copies
-	EVkGraphicsQueue_Compute,
-	EVkGraphicsQueue_Graphics,
-	EVkGraphicsQueue_Raytracing,
+	EVkCommandQueue_Copy,					//Queue for dedicated host -> device copies
+	EVkCommandQueue_Compute,
+	EVkCommandQueue_Graphics,
 
-	//EVkGraphicsQueue_VideoDecode,			//TODO:
-	//EVkGraphicsQueue_VideoEncode
+	//EVkCommandQueue_VideoDecode,			//TODO:
+	//EVkCommandQueue_VideoEncode
 
-	EVkGraphicsQueue_Count
+	EVkCommandQueue_Count
 
-} EVkGraphicsQueue;
+} EVkCommandQueue;
 
-typedef struct VkGraphicsQueue {
+typedef struct VkCommandQueue {
 
 	VkQueue queue;
+
 	U32 queueId;					//Queue family
 	U32 resolvedQueueId;			//Index into command pool array for that queue
 
-} VkGraphicsQueue;
+	EVkCommandQueue type;
+	U32 pad;
+
+} VkCommandQueue;
 
 typedef struct VkGraphicsDevice {
 
 	VkDevice device;
-	VkGraphicsQueue queues[EVkGraphicsQueue_Count];		//Don't have to be unique queues! Indexed by EVkGraphicsQueue
+	VkCommandQueue queues[EVkCommandQueue_Count];		//Don't have to be unique queues! Indexed by EVkCommandQueue
 
-	U32 uniqueQueues[EVkGraphicsQueue_Count];			//Queue families ([resolvedQueues], indexed through resolvedId)
+	U32 uniqueQueues[EVkCommandQueue_Count];			//Queue families ([resolvedQueues], indexed through resolvedId)
 
 	U32 resolvedQueues;
 	U32 pad;
 
-	//3D as 1D flat array: resolvedQueueId + (backBufferId * threadCount + threadId) * resolvedQueues
+	//3D as 1D flat List<VkCommandAllocator>: resolvedQueueId + (backBufferId * threadCount + threadId) * resolvedQueues
 	List commandPools;
 
 	List submitSemaphores;
@@ -84,3 +88,33 @@ typedef struct VkGraphicsDevice {
 	List waitSemaphores, results, swapchainIndices, swapchainHandles, waitStages;
 
 } VkGraphicsDevice;
+
+typedef struct VkCommandAllocator {
+
+	VkCommandPool pool;
+	VkCommandBuffer cmd;
+
+} VkCommandAllocator;
+
+typedef enum EVkCommandBufferFlags {
+
+	EVkCommandBufferFlags_hasDepth	= 1 << 0,
+	EVkCommandBufferFlags_hasStencil	= 1 << 1
+
+} EVkCommandBufferFlags;
+
+typedef struct VkCommandBufferState {		//Caching state variables
+
+	I32x2 currentSize;						//Size of currently bound render target(s)
+
+	VkCommandBuffer buffer;
+
+	VkImage depthStencil, color;
+	
+	EVkCommandBufferFlags flags;
+
+} VkCommandBufferState;
+
+VkCommandAllocator *VkGraphicsDevice_getCommandAllocator(
+	VkGraphicsDevice *device, U32 resolvedQueueId, U32 threadId, U8 backBufferId
+);

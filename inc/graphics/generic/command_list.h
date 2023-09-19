@@ -25,8 +25,13 @@
 
 typedef RefPtr GraphicsDeviceRef;
 typedef struct CharString CharString;
+typedef struct GraphicsDevice GraphicsDevice;
 
 typedef enum ECommandOp {
+
+	ECommandOp_nop,
+
+	//Setting dynamic graphic pipeline
 
 	ECommandOp_setViewport,
 	ECommandOp_setScissor,
@@ -34,8 +39,14 @@ typedef enum ECommandOp {
 
 	ECommandOp_setStencil,
 
-	ECommandOp_clearColor,
+	//Clearing targets / depth stencils
+
+	ECommandOp_clearColorf,
+	ECommandOp_clearColoru,
+	ECommandOp_clearColori,
 	ECommandOp_clearDepthStencil,
+
+	//Debugging
 
 	ECommandOp_addMarkerDebugExt,
 	ECommandOp_startRegionDebugExt,
@@ -58,6 +69,24 @@ typedef struct CommandOpInfo {
 
 } CommandOpInfo;
 
+typedef enum ECommandListFlag {
+	
+	ECommandListFlag_hasBoundColor		= 1 << 0,
+	ECommandListFlag_hasBoundDepth		= 1 << 1,
+	
+	ECommandListFlag_isIntTarget		= 1 << 2,
+	ECommandListFlag_isUnsignedTarget	= 1 << 3,
+
+	ECommandListFlag_F32Target			= ECommandListFlag_hasBoundColor,
+	ECommandListFlag_I32Target			= ECommandListFlag_hasBoundColor | ECommandListFlag_isIntTarget,
+	ECommandListFlag_U64Target			= ECommandListFlag_I32Target | ECommandListFlag_isUnsignedTarget,
+
+	ECommandListFlag_maskTargetType		= ECommandListFlag_U64Target,
+
+	ECommandListFlag_all				= ~0
+
+} ECommandListFlag;
+
 typedef struct CommandList {
 
 	GraphicsDeviceRef *device;
@@ -66,7 +95,7 @@ typedef struct CommandList {
 	List commandOps;		//List<CommandOpInfo>
 	List resources;			//List<RefPtr*> resources used by this command list (TODO: HashSet<RefPtr*>)
 
-	U32 pad;
+	ECommandListFlag flags;
 	ECommandListState state;
 
 	U64 next;
@@ -75,7 +104,7 @@ typedef struct CommandList {
 
 typedef RefPtr CommandListRef;
 
-#define CommandList_ext(ptr, T) ((T##CommandList*)(ptr + 1))		//impl
+#define CommandList_ext(ptr, T) (!ptr ? NULL : (T##CommandList*)(ptr + 1))		//impl
 #define CommandListRef_ptr(ptr) RefPtr_data(ptr, CommandList)
 
 Error CommandListRef_dec(CommandListRef **cmd);
@@ -101,9 +130,16 @@ Error CommandListRef_setStencil(CommandListRef *commandList, U8 stencilValue);
 
 //Setting clear parameters and clearing render texture
 
-Error CommandListRef_clearColor(CommandListRef *commandList, F32x4 color);
+Error CommandListRef_clearColorf(CommandListRef *commandList, F32x4 color);
+Error CommandListRef_clearColori(CommandListRef *commandList, I32x4 color);
+Error CommandListRef_clearColoru(CommandListRef *commandList, const U32 color[4]);
 Error CommandListRef_clearDepthStencil(CommandListRef *commandList, F32 depth, U8 stencil);
 
 Error CommandListRef_addMarkerDebugExt(CommandListRef *commandList, F32x4 color, CharString name);
 Error CommandListRef_startRegionDebugExt(CommandListRef *commandList, F32x4 color, CharString name);
 Error CommandListRef_endRegionDebugExt(CommandListRef *commandList);
+
+//Convert command into API dependent instructions
+//Don't call manually.
+
+impl Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data, void *commandListExt);

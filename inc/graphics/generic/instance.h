@@ -55,7 +55,7 @@ typedef struct GraphicsDeviceInfo GraphicsDeviceInfo;
 
 typedef RefPtr GraphicsInstanceRef;
 
-#define GraphicsInstance_ext(ptr, T) ((T##GraphicsInstance*)(ptr + 1))		//impl
+#define GraphicsInstance_ext(ptr, T) (!ptr ? NULL : (T##GraphicsInstance*)(ptr + 1))		//impl
 #define GraphicsInstanceRef_ptr(ptr) RefPtr_data(ptr, GraphicsInstance)
 
 Error GraphicsInstanceRef_dec(GraphicsInstanceRef **inst);

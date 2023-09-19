@@ -25,6 +25,9 @@
 #include "types/buffer.h"
 
 const C8 *vkValidation = "VK_LAYER_KHRONOS_validation";
+const C8 *vkApiDump = "VK_LAYER_LUNARG_api_dump";
+
+#define _GRAPHICS_VERBOSE_DEBUGGING
 
 Error VkGraphicsInstance_getLayers(List *layers) {
 
@@ -35,8 +38,20 @@ Error VkGraphicsInstance_getLayers(List *layers) {
 		return Error_invalidParameter(0, 0);
 
 	#ifndef NDEBUG
+
 		Buffer tmp = Buffer_createConstRef(&vkValidation, sizeof(vkValidation));
-		return List_pushBackx(layers, tmp);
+		Error err = List_pushBackx(layers, tmp);
+
+		if(err.genericError)
+			return err;
+
+		#ifdef _GRAPHICS_VERBOSE_DEBUGGING
+			tmp = Buffer_createConstRef(&vkApiDump, sizeof(vkApiDump));
+			return List_pushBackx(layers, tmp);
+		#else
+			return Error_none();
+		#endif
+
 	#else
 		return Error_none();
 	#endif

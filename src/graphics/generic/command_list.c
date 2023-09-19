@@ -91,7 +91,12 @@ Error CommandListRef_append(CommandListRef *commandListRef, ECommandOp op, Buffe
 	if(objects.length && objects.stride != sizeof(RefPtr*))
 		return Error_invalidParameter(3, 0);
 
-	Error err = List_pushBackx(&commandList->commandOps, Buffer_createConstRef(&op, sizeof(op)));
+	CommandOpInfo info = (CommandOpInfo) {
+		.op = op,
+		.opSize = (U32) len
+	};
+
+	Error err = List_pushBackx(&commandList->commandOps, Buffer_createConstRef(&info, sizeof(info)));
 
 	if(err.genericError)
 		return err;
@@ -121,24 +126,48 @@ success:
 	return err;
 }
 
-#define CommandListRef_appendOpOnly(op)					\
+#define CommandListRef_appendOpOnly(op)									\
 CommandListRef_append(commandListRef, op, Buffer_createNull(), (List) { 0 })
 
-#define CommandListRef_appendData(op, t)				\
+#define CommandListRef_appendData(op, t)								\
 CommandListRef_append(commandListRef, op, Buffer_createConstRef(&t, sizeof(t)), (List) { 0 })
 
-#define CommandListRef_setViewportCmd(op)				\
-														\
-	if(I32x2_any(I32x2_leq(size, I32x2_zero())))		\
-		return Error_invalidParameter(2, 0);			\
-														\
-	if(I32x2_any(I32x2_lt(size, I32x2_xx2(-32'768))))	\
-		return Error_invalidParameter(1, 0);			\
-														\
-	if(I32x2_any(I32x2_gt(size, I32x2_xx2(32'767))))	\
-		return Error_invalidParameter(1, 1);			\
-														\
-	I32x4 values = I32x4_create2_2(offset, size);		\
+#define CommandListRef_reqFlag(flag, mask) {							\
+																		\
+	CommandList *commandList = CommandListRef_ptr(commandListRef);		\
+																		\
+	if(commandList && (commandList->flags & mask) != flag)				\
+		return Error_invalidOperation(0);								\
+}																		\
+
+#define CommandListRef_reqColorTarget() \
+CommandListRef_reqFlag(ECommandListFlag_hasBoundColor, ECommandListFlag_all)
+
+#define CommandListRef_reqColorTargetf() \
+CommandListRef_reqFlag(ECommandListFlag_F32Target, ECommandListFlag_maskTargetType)
+
+#define CommandListRef_reqColorTargetu() \
+CommandListRef_reqFlag(ECommandListFlag_U64Target, ECommandListFlag_maskTargetType)
+
+#define CommandListRef_reqColorTargeti() \
+CommandListRef_reqFlag(ECommandListFlag_I32Target, ECommandListFlag_maskTargetType)
+
+#define CommandListRef_reqDepthTarget() CommandListRef_reqFlag(ECommandListFlag_hasBoundDepth, ECommandListFlag_all)
+
+#define CommandListRef_setViewportCmd(op)								\
+																		\
+	CommandListRef_reqColorTarget();									\
+																		\
+	if(I32x2_any(I32x2_leq(size, I32x2_zero())))						\
+		return Error_invalidParameter(2, 0);							\
+																		\
+	if(I32x2_any(I32x2_lt(size, I32x2_xx2(-32'768))))					\
+		return Error_invalidParameter(1, 0);							\
+																		\
+	if(I32x2_any(I32x2_gt(size, I32x2_xx2(32'767))))					\
+		return Error_invalidParameter(1, 1);							\
+																		\
+	I32x4 values = I32x4_create2_2(offset, size);						\
 	return CommandListRef_appendData(op, values)
 
 Error CommandListRef_setViewport(CommandListRef *commandListRef, I32x2 offset, I32x2 size) {
@@ -157,11 +186,24 @@ Error CommandListRef_setStencil(CommandListRef *commandListRef, U8 stencilValue)
 	return CommandListRef_appendData(ECommandOp_setStencil, stencilValue);
 }
 
-Error CommandListRef_clearColor(CommandListRef *commandListRef, F32x4 color) {
-	return CommandListRef_appendData(ECommandOp_clearColor, color);
+Error CommandListRef_clearColorf(CommandListRef *commandListRef, F32x4 color) {
+	CommandListRef_reqColorTargetf();
+	return CommandListRef_appendData(ECommandOp_clearColorf, color);
+}
+
+Error CommandListRef_clearColori(CommandListRef *commandListRef, I32x4 color) {
+	CommandListRef_reqColorTargeti();
+	return CommandListRef_appendData(ECommandOp_clearColori, color);
+}
+
+Error CommandListRef_clearColoru(CommandListRef *commandListRef, const U32 color[4]) {
+	CommandListRef_reqColorTargetu();
+	return CommandListRef_appendData(ECommandOp_clearColoru, color);
 }
 
 Error CommandListRef_clearDepthStencil(CommandListRef *commandListRef, F32 depth, U8 stencil) {
+
+	CommandListRef_reqDepthTarget();
 
 	typedef struct DepthStencil {
 
@@ -256,7 +298,7 @@ Error GraphicsDeviceRef_createCommandList(
 
 	CommandList *commandList = CommandListRef_ptr(*commandListRef);
 
-	commandList->commandOps = List_createEmpty(sizeof(ECommandOp));
+	commandList->commandOps = List_createEmpty(sizeof(CommandOpInfo));
 	commandList->resources = List_createEmpty(sizeof(RefPtr*));
 
 	_gotoIfError(clean, Buffer_createEmptyBytesx(commandListLen, &commandList->data));

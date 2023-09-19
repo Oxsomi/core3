@@ -67,7 +67,7 @@ typedef struct Swapchain {
 
 typedef RefPtr SwapchainRef;
 
-#define Swapchain_ext(ptr, T) (T##Swapchain*)(ptr + 1)		//impl
+#define Swapchain_ext(ptr, T) (!ptr ? NULL : (T##Swapchain*)(ptr + 1))		//impl
 #define SwapchainRef_ptr(ptr) RefPtr_data(ptr, Swapchain)
 
 Error SwapchainRef_dec(SwapchainRef **swapchain);

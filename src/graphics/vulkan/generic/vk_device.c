@@ -289,7 +289,7 @@ Error GraphicsDevice_initExt(
 	CharString tempStr = CharString_createNull();
 
 	_gotoIfError(clean, List_reservex(&extensions, 32));
-	_gotoIfError(clean, List_reservex(&queues, EVkGraphicsQueue_Count));
+	_gotoIfError(clean, List_reservex(&queues, EVkCommandQueue_Count));
 
 	for(U64 i = 0; i < reqExtensionsNameCount; ++i)
 		_gotoIfError(clean, List_pushBackx(&extensions, Buffer_createConstRef(reqExtensionsName + i, sizeof(const C8*))));
@@ -451,7 +451,7 @@ Error GraphicsDevice_initExt(
 
 	//Graphics
 
-	VkGraphicsQueue *graphicsQueueExt = &deviceExt->queues[EVkGraphicsQueue_Graphics];
+	VkCommandQueue *graphicsQueueExt = &deviceExt->queues[EVkCommandQueue_Graphics];
 
 	U32 resolvedId = 0;
 
@@ -464,6 +464,7 @@ Error GraphicsDevice_initExt(
 
 	deviceExt->uniqueQueues[resolvedId] = graphicsQueueId;
 	graphicsQueueExt->resolvedQueueId = resolvedId++;
+	graphicsQueueExt->type = EVkCommandQueue_Graphics;
 
 	#ifndef NDEBUG
 
@@ -482,7 +483,7 @@ Error GraphicsDevice_initExt(
 
 	//Compute
 
-	VkGraphicsQueue *computeQueueExt = &deviceExt->queues[EVkGraphicsQueue_Compute];
+	VkCommandQueue *computeQueueExt = &deviceExt->queues[EVkCommandQueue_Compute];
 
 	if(computeQueueId == graphicsQueueId)
 		*computeQueueExt = *graphicsQueueExt;
@@ -506,13 +507,12 @@ Error GraphicsDevice_initExt(
 
 		deviceExt->uniqueQueues[resolvedId] = computeQueueId;
 		computeQueueExt->resolvedQueueId = resolvedId++;
+		computeQueueExt->type = EVkCommandQueue_Compute;
 	}
-
-	deviceExt->queues[EVkGraphicsQueue_Raytracing] = *computeQueueExt;
 
 	//Copy
 
-	VkGraphicsQueue *copyQueueExt = &deviceExt->queues[EVkGraphicsQueue_Copy];
+	VkCommandQueue *copyQueueExt = &deviceExt->queues[EVkCommandQueue_Copy];
 
 	if(copyQueueId == graphicsQueueId)
 		*copyQueueExt = *graphicsQueueExt;
@@ -539,64 +539,24 @@ Error GraphicsDevice_initExt(
 
 		deviceExt->uniqueQueues[resolvedId] = copyQueueId;
 		copyQueueExt->resolvedQueueId = resolvedId++;
+		copyQueueExt->type = EVkCommandQueue_Copy;
 	}
 
 	//Create command recorder per queue per thread per backbuffer.
 	//We only allow double and triple buffering, so allocate for triple buffers.
+	//These will be initialized JIT because we don't know what thread will be accessing them.
 
 	U32 threads = Thread_getLogicalCores();
 
-	VkCommandPoolCreateInfo poolInfo = (VkCommandPoolCreateInfo) {
-		.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-		.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT
-	};
-
-	#ifndef NDEBUG
-		debugName.objectType = VK_OBJECT_TYPE_COMMAND_POOL;
-	#endif
-
-	deviceExt->commandPools = List_createEmpty(sizeof(VkCommandPool));
+	deviceExt->commandPools = List_createEmpty(sizeof(VkCommandAllocator));
 	_gotoIfError(clean, List_resizex(&deviceExt->commandPools, 3 * threads * resolvedId));
+
+	//Semaphores
 
 	deviceExt->submitSemaphores = List_createEmpty(sizeof(VkSemaphore));
 	_gotoIfError(clean, List_resizex(&deviceExt->submitSemaphores, 3));
 
-	for (U64 k = 0, l = 0; k < 3; ++k) {
-
-		for(U64 j = 0; j < threads; ++j)
-			for(U64 i = 0; i < resolvedId; ++i, ++l) {
-
-				poolInfo.queueFamilyIndex = deviceExt->uniqueQueues[i];
-
-				VkCommandPool *pool = (VkCommandPool*) deviceExt->commandPools.ptr + l;
-
-				_gotoIfError(clean, vkCheck(vkCreateCommandPool(deviceExt->device, &poolInfo, NULL, pool)));
-
-				#ifndef NDEBUG
-
-					if(instanceExt->debugSetName) {
-
-						_gotoIfError(clean, CharString_formatx(
-							&tempStr, 
-							"%s command pool (thread: %u, frame id: %u)",
-							i == graphicsQueueExt->resolvedQueueId ? "Graphics" : (
-								computeQueueExt->resolvedQueueId == i ? "Compute" : "Copy"
-							),
-							(U32) j,
-							(U32) k
-						));
-
-						debugName.pObjectName = tempStr.ptr;
-						debugName.objectHandle = (U64) *pool;
-						_gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName)));
-
-						CharString_freex(&tempStr);
-					}
-
-				#endif
-			}
-
-		//Semaphores
+	for (U64 k = 0; k < 3; ++k) {
 
 		VkSemaphoreCreateInfo semaphoreInfo = (VkSemaphoreCreateInfo) { .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
 		VkSemaphore *semaphore = ((VkSemaphore*)deviceExt->submitSemaphores.ptr) + k;
@@ -665,10 +625,13 @@ Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext) {
 
 		for(U64 i = 0; i < deviceExt->commandPools.length; ++i) {
 
-			VkCommandPool pool = ((VkCommandPool*)deviceExt->commandPools.ptr)[i];
+			VkCommandAllocator alloc = ((VkCommandAllocator*)deviceExt->commandPools.ptr)[i];
 
-			if(pool)
-				vkDestroyCommandPool(deviceExt->device, pool, NULL);
+			if(alloc.cmd)
+				vkFreeCommandBuffers(deviceExt->device, alloc.pool, 1, &alloc.cmd);
+
+			if(alloc.pool)
+				vkDestroyCommandPool(deviceExt->device, alloc.pool, NULL);
 		}
 
 		for(U64 i = 0; i < deviceExt->submitSemaphores.length; ++i) {
@@ -714,6 +677,20 @@ Error GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef) {
 	return vkCheck(vkDeviceWaitIdle(deviceExt->device));
 }
 
+VkCommandAllocator *VkGraphicsDevice_getCommandAllocator(
+	VkGraphicsDevice *device, U32 resolvedQueueId, U32 threadId, U8 backBufferId
+) {
+
+	U32 threadCount = Thread_getLogicalCores();
+
+	if(!device || resolvedQueueId >= device->resolvedQueues || threadId >= threadCount || backBufferId >= 3)
+		return NULL;
+
+	U32 id = resolvedQueueId + (backBufferId * threadCount + threadId) * device->resolvedQueues;
+
+	return (VkCommandAllocator*) device->commandPools.ptr + id;
+}
+
 Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List commandLists, List swapchains) {
 
 	//Validation and ext structs
@@ -727,7 +704,36 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 	if(commandLists.length && commandLists.stride != sizeof(CommandListRef*))
 		return Error_invalidParameter(2, 0);
 
+	//Validate command lists
+
+	for(U64 i = 0; i < commandLists.length; ++i)
+		if(!CommandListRef_ptr(((CommandListRef**) commandLists.ptr)[i]))
+			return Error_nullPointer(1);
+
+	//Swapchains all need to have the same vsync option.
+
+	Swapchain *firstSwapchain = swapchains.length ? SwapchainRef_ptr(((SwapchainRef**) swapchains.ptr)[0]) : 0;
+
+	if(swapchains.length && !firstSwapchain)
+		return Error_nullPointer(2);
+
+	Bool vsync = swapchains.length ? firstSwapchain->info.vsync : false;
+
+	for (U64 i = 1; i < swapchains.length; ++i) {
+
+		Swapchain *swapchaini = SwapchainRef_ptr(((SwapchainRef**) swapchains.ptr)[i]);
+
+		if(!swapchaini)
+			return Error_nullPointer(2);
+
+		if(swapchaini->info.vsync != vsync)
+			return Error_unsupportedOperation(0);
+	}
+
+	//Unpack pointers
+
 	Error err = Error_none();
+	CharString temp = CharString_createNull();
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
@@ -806,11 +812,141 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 	//Record command list
 
 	VkCommandBuffer commandBuffer = NULL;
+
+	VkCommandQueue queue = deviceExt->queues[EVkCommandQueue_Graphics];
 	
 	if (commandLists.length) {
 
-		//TODO:
+		U32 threadId = 0;
 
+		VkCommandAllocator *allocator = VkGraphicsDevice_getCommandAllocator(
+			deviceExt, queue.resolvedQueueId, threadId, (U8)(device->submitId % 3)
+		);
+
+		if(!allocator)
+			_gotoIfError(clean, Error_nullPointer(0));
+
+		//We create command pools only the first 3 frames, after that they're cached.
+		//This is because we have space for [queues][threads][3] command pools.
+		//Allocating them all even though currently only 1x3 are used is quite suboptimal.
+		//We only have the space to allow for using more in the future.
+
+		if(!allocator->pool) {
+
+			//TODO: Multi thread command recording
+		
+			VkCommandPoolCreateInfo poolInfo = (VkCommandPoolCreateInfo) {
+				.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+				.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
+				.queueFamilyIndex = queue.queueId
+			};
+
+			_gotoIfError(clean, vkCheck(vkCreateCommandPool(deviceExt->device, &poolInfo, NULL, &allocator->pool)));
+
+			#ifndef NDEBUG
+
+				if(instanceExt->debugSetName) {
+
+					_gotoIfError(clean, CharString_formatx(
+						&temp, 
+						"%s command pool (thread: %u, frame id: %u)",
+						queue.type == EVkCommandQueue_Graphics ? "Graphics" : (
+							queue.type == EVkCommandQueue_Compute ? "Compute" : "Copy"
+						),
+						threadId,
+						device->submitId % 3
+					));
+
+					VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
+						.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+						.objectType = VK_OBJECT_TYPE_COMMAND_POOL,
+						.pObjectName = temp.ptr,
+						.objectHandle = (U64) allocator->pool
+					};
+
+					_gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName)));
+
+					CharString_freex(&temp);
+				}
+
+			#endif
+		}
+
+		//Reset command pool
+
+		else _gotoIfError(clean, vkCheck(vkResetCommandPool(
+			deviceExt->device, allocator->pool, VK_COMMAND_POOL_RESET_RELEASE_RESOURCES_BIT
+		)));
+
+		//Allocate command buffer if not present yet
+
+		if (!allocator->cmd) {
+
+			VkCommandBufferAllocateInfo bufferInfo = (VkCommandBufferAllocateInfo) {
+				.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+				.commandPool = allocator->pool,
+				.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+				.commandBufferCount = 1
+			};
+
+			_gotoIfError(clean, vkCheck(vkAllocateCommandBuffers(deviceExt->device, &bufferInfo, &allocator->cmd)));
+
+			#ifndef NDEBUG
+
+				if(instanceExt->debugSetName) {
+
+					_gotoIfError(clean, CharString_formatx(
+						&temp, 
+						"%s command buffer (thread: %u, frame id: %u)",
+						queue.type == EVkCommandQueue_Graphics ? "Graphics" : (
+							queue.type == EVkCommandQueue_Compute ? "Compute" : "Copy"
+						),
+						threadId,
+						device->submitId % 3
+					));
+
+					VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
+						.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+						.objectType = VK_OBJECT_TYPE_COMMAND_BUFFER,
+						.pObjectName = temp.ptr,
+						.objectHandle = (U64) allocator->cmd
+					};
+
+					_gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName)));
+
+					CharString_freex(&temp);
+				}
+
+			#endif
+		}
+
+		//Record commands
+
+		VkCommandBufferState state = (VkCommandBufferState) {
+			.buffer = commandBuffer
+		};
+
+		VkCommandBufferBeginInfo beginInfo = (VkCommandBufferBeginInfo) {
+			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO
+		};
+
+		_gotoIfError(clean, vkCheck(vkBeginCommandBuffer(commandBuffer, &beginInfo)));
+
+		for (U64 i = 0; i < commandLists.length; ++i) {
+
+			CommandList *commandList = CommandListRef_ptr(((CommandListRef**) commandLists.ptr)[i]);
+			const U8 *ptr = commandList->data.ptr;
+
+			for (U64 j = 0; j < commandList->commandOps.length; ++j) {
+
+				CommandOpInfo info = ((CommandOpInfo*) commandList->commandOps.ptr)[i];
+				
+				_gotoIfError(clean, CommandList_process(device, info.op, ptr, &state));
+				ptr += info.opSize;
+			}
+		}
+
+		_gotoIfError(clean, vkCheck(vkEndCommandBuffer(commandBuffer)));
 	}
 
 	//Submit queue
@@ -845,9 +981,7 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 		.pWaitDstStageMask = (const VkPipelineStageFlags*) deviceExt->waitStages.ptr
 	};
 
-	VkQueue queue = deviceExt->queues[EVkGraphicsQueue_Graphics].queue;
-
-	_gotoIfError(clean, vkCheck(vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE)));
+	_gotoIfError(clean, vkCheck(vkQueueSubmit(queue.queue, 1, &submitInfo, VK_NULL_HANDLE)));
 
 	//Presents
 
@@ -861,7 +995,7 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 		.pResults = (VkResult*) deviceExt->results.ptr
 	};
 
-	_gotoIfError(clean, vkCheck(vkQueuePresentKHR(queue, &presentInfo)));
+	_gotoIfError(clean, vkCheck(vkQueuePresentKHR(queue.queue, &presentInfo)));
 
 	for(U64 i = 0; i < deviceExt->results.length; ++i)
 		_gotoIfError(clean, vkCheck(((const VkResult*) deviceExt->results.ptr)[i]));
@@ -871,5 +1005,6 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 	++device->submitId;
 
 clean: 
+	CharString_freex(&temp);
 	return err;
 }
