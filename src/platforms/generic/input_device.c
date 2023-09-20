@@ -166,15 +166,15 @@ Error InputDevice_create(U16 buttons, U16 axes, EInputDeviceType type, InputDevi
 	if(inputType->name[0])																\
 		return Error_alreadyDefined(0);													\
 																						\
-	if(CharString_isEmpty(keyName))															\
+	if(CharString_isEmpty(keyName))														\
 		return Error_invalidParameter(2, 0);											\
 																						\
-	if(CharString_length(keyName) >= _LONGSTRING_LEN)										\
-		return Error_outOfBounds(2, CharString_length(keyName), _LONGSTRING_LEN);			\
+	if(CharString_length(keyName) >= _LONGSTRING_LEN)									\
+		return Error_outOfBounds(2, CharString_length(keyName), _LONGSTRING_LEN);		\
 																						\
 	Buffer_copy(																		\
 		Buffer_createRef(inputType->name, _LONGSTRING_LEN), 							\
-		Buffer_createConstRef(keyName.ptr, CharString_length(keyName))						\
+		Buffer_createConstRef(keyName.ptr, CharString_length(keyName))					\
 	);																					\
 																						\
 	inputType->name[U64_min(CharString_length(keyName), _LONGSTRING_LEN - 1)] = '\0';

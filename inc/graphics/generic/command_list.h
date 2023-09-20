@@ -39,12 +39,12 @@ typedef enum ECommandOp {
 
 	ECommandOp_setStencil,
 
-	//Clearing targets / depth stencils
+	//Clearing depth + color views
 
-	ECommandOp_clearColorf,
-	ECommandOp_clearColoru,
-	ECommandOp_clearColori,
-	ECommandOp_clearDepthStencil,
+	ECommandOp_clearImagef,
+	ECommandOp_clearImageu,
+	ECommandOp_clearImagei,
+	//ECommandOp_clearDepth,
 
 	//Debugging
 
@@ -130,10 +130,37 @@ Error CommandListRef_setStencil(CommandListRef *commandList, U8 stencilValue);
 
 //Setting clear parameters and clearing render texture
 
-Error CommandListRef_clearColorf(CommandListRef *commandList, F32x4 color);
-Error CommandListRef_clearColori(CommandListRef *commandList, I32x4 color);
-Error CommandListRef_clearColoru(CommandListRef *commandList, const U32 color[4]);
-Error CommandListRef_clearDepthStencil(CommandListRef *commandList, F32 depth, U8 stencil);
+typedef struct ImageRange {
+
+	RefPtr *image;		//Color: SwapchainRef or RenderTargetRef, Depth: RenderTargetRef
+
+	U32 levelId;		//Set to U32_MAX to indicate all levels, otherwise indicates specific index.
+	U32 layerId;		//Set to U32_MAX to indicate all layers, otherwise indicates specific index.
+
+} ImageRange;
+
+typedef struct ClearImage {
+
+	U32 color[4];			//Can also be F32, I32
+
+	ImageRange image;
+
+} ClearImage;
+
+/* typedef struct ClearDepthStencil {
+
+	F32 depth;
+
+	U8 stencil, padding[3];
+
+	ImageRange image;
+
+} ClearDepthStencil; */
+
+Error CommandListRef_clearImagef(CommandListRef *commandList, F32x4 color, ImageRange image);
+Error CommandListRef_clearImagei(CommandListRef *commandList, I32x4 color, ImageRange image);
+Error CommandListRef_clearImageu(CommandListRef *commandList, const U32 color[4], ImageRange image);
+//Error CommandListRef_clearDepthStencil(CommandListRef *commandList, F32 depth, U8 stencil, ImageRange image);
 
 Error CommandListRef_addMarkerDebugExt(CommandListRef *commandList, F32x4 color, CharString name);
 Error CommandListRef_startRegionDebugExt(CommandListRef *commandList, F32x4 color, CharString name);

@@ -109,8 +109,6 @@ typedef struct VkCommandBufferState {		//Caching state variables
 
 	VkCommandBuffer buffer;
 
-	VkImage depthStencil, color;
-	
 	EVkCommandBufferFlags flags;
 
 } VkCommandBufferState;

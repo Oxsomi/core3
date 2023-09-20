@@ -98,6 +98,8 @@ typedef struct VkGraphicsInstance {
 	PFN_vkCmdTraceRaysIndirectKHR traceRaysIndirect;
 	PFN_vkCreateRayTracingPipelinesKHR createRaytracingPipelines;
 
+	PFN_vkCmdPipelineBarrier2KHR cmdPipelineBarrier2;
+
 } VkGraphicsInstance;
 
 impl Error VkGraphicsInstance_getLayers(List *layers);

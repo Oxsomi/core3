@@ -361,26 +361,26 @@ Error CharString_offsetAsRef(CharString s, U64 off, CharString *result) {
 	return Error_none();
 }
 
-#define CharString_matchesPattern(testFunc, ...)					\
-																\
-	U64 strl = CharString_length(s);								\
-																\
-	for(U64 i = (__VA_ARGS__); i < CharString_length(s); ++i) {		\
-																\
-		C8 c = s.ptr[i];										\
-																\
-		if(!testFunc(c))										\
-			return false;										\
-	}															\
-																\
+#define CharString_matchesPattern(testFunc, ...)								\
+																				\
+	U64 strl = CharString_length(s);											\
+																				\
+	for(U64 i = (__VA_ARGS__); i < CharString_length(s); ++i) {					\
+																				\
+		C8 c = s.ptr[i];														\
+																				\
+		if(!testFunc(c))														\
+			return false;														\
+	}																			\
+																				\
 	return strl;
 
-#define CharString_matchesPatternNum(testFunc, num) CharString_matchesPattern(		\
-	testFunc,																\
+#define CharString_matchesPatternNum(testFunc, num) CharString_matchesPattern(	\
+	testFunc,																	\
 	CharString_startsWithString(												\
-		s,																	\
-		CharString_createConstRefCStr(num),									\
-		EStringCase_Insensitive												\
+		s,																		\
+		CharString_createConstRefCStr(num),										\
+		EStringCase_Insensitive													\
 	) ? CharString_calcStrLen(num, U64_MAX) : 0									\
 )
 
@@ -617,28 +617,28 @@ Bool CharString_free(CharString *str, Allocator alloc) {
 	return freed;
 }
 
-#define CharString_createNum(maxVal, func, prefixRaw, ...)					\
+#define CharString_createNum(maxVal, func, prefixRaw, ...)				\
 																		\
 	if (!result)														\
 		return Error_nullPointer(3);									\
 																		\
-	CharString prefix = CharString_createConstRefCStr(prefixRaw);				\
+	CharString prefix = CharString_createConstRefCStr(prefixRaw);		\
 																		\
 	if (result->ptr)													\
 		return Error_invalidOperation(0);								\
 																		\
-	*result = CharString_createNull();										\
-	Error err = CharString_reserve(											\
-		result, maxVal + CharString_length(prefix) + 1, allocator			\
+	*result = CharString_createNull();									\
+	Error err = CharString_reserve(										\
+		result, maxVal + CharString_length(prefix) + 1, allocator		\
 	);																	\
 																		\
 	if (err.genericError) 												\
 		return err;														\
 																		\
-	err = CharString_appendString(result, prefix, allocator);				\
+	err = CharString_appendString(result, prefix, allocator);			\
 																		\
 	if (err.genericError) {												\
-		CharString_free(result, allocator);									\
+		CharString_free(result, allocator);								\
 		return err;														\
 	}																	\
 																		\
@@ -653,10 +653,10 @@ Bool CharString_free(CharString *str, Allocator alloc) {
 																		\
 		if (foundFirstNonZero) {										\
 																		\
-			err = CharString_append(result, c, allocator);					\
+			err = CharString_append(result, c, allocator);				\
 																		\
 			if (err.genericError) {										\
-				CharString_free(result, allocator);							\
+				CharString_free(result, allocator);						\
 				return err;												\
 			}															\
 		}																\
@@ -666,15 +666,15 @@ Bool CharString_free(CharString *str, Allocator alloc) {
 																		\
 	if (!v && !foundFirstNonZero) {										\
 																		\
-		err = CharString_append(result, '0', allocator);					\
+		err = CharString_append(result, '0', allocator);				\
 																		\
 		if (err.genericError) {											\
-			CharString_free(result, allocator);								\
+			CharString_free(result, allocator);							\
 			return err;													\
 		}																\
 	}																	\
 																		\
-	((C8*)result->ptr)[CharString_length(*result)] = '\0';					\
+	((C8*)result->ptr)[CharString_length(*result)] = '\0';				\
 	return Error_none();
 
 Error CharString_createNyto(U64 v, U8 leadingZeros, Allocator allocator, CharString *result){

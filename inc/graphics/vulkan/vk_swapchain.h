@@ -22,15 +22,15 @@
 #include "graphics/vulkan/vulkan.h"
 
 typedef struct Window Window;
+typedef struct VkGraphicsInstance VkGraphicsInstance;
 
 typedef struct VkSwapchain {
 
 	VkSurfaceKHR surface;			//Platform's surface implementation
 	VkSwapchainKHR swapchain;
 
-	List images;					//<VkImage>
-	List imageViews;				//<VkImageView>
 	List semaphores;				//<VkSemaphore>
+	List images;					//<VkManagedImage>
 
 	VkSurfaceFormatKHR format;
 
@@ -39,3 +39,16 @@ typedef struct VkSwapchain {
 } VkSwapchain;
 
 impl Error VkSurface_create(GraphicsDevice *device, const Window *window, VkSurfaceKHR *surface);
+
+//Transitions entire resource rather than subresources
+
+void VkSwapchain_transition(
+	VkGraphicsInstance *instance,
+	VkCommandBuffer buffer,
+	VkManagedImage *image, 
+	VkPipelineStageFlags2 stage, 
+	VkAccessFlagBits2 access,
+	VkImageLayout layout,
+	U32 graphicsQueueId,
+	const VkImageSubresourceRange *range
+);

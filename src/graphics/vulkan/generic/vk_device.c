@@ -928,7 +928,7 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 			#endif
 		}
 
-		//Record commands
+		//Start buffer
 
 		commandBuffer = allocator->cmd;
 
@@ -941,6 +941,8 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 		};
 
 		_gotoIfError(clean, vkCheck(vkBeginCommandBuffer(commandBuffer, &beginInfo)));
+
+		//Record commands
 
 		for (U64 i = 0; i < commandLists.length; ++i) {
 
@@ -955,6 +957,37 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 				ptr += info.opSize;
 			}
 		}
+
+		//Transition back swapchains to present
+
+		for (U64 i = 0; i < swapchains.length; ++i) {
+
+			Swapchain *swapchain = SwapchainRef_ptr(((SwapchainRef**) swapchains.ptr)[i]);
+			VkSwapchain *swapchainExt = Swapchain_ext(swapchain, Vk);
+
+			VkManagedImage *imageExt = &((VkManagedImage*)swapchainExt->images.ptr)[swapchainExt->currentIndex];
+
+			VkImageSubresourceRange range = (VkImageSubresourceRange) {
+				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				.levelCount = 1,
+				.layerCount = 1
+			};
+
+			U32 graphicsQueueId = deviceExt->queues[EVkCommandQueue_Graphics].queueId;
+
+			VkSwapchain_transition(
+				instanceExt,
+				commandBuffer,
+				imageExt,
+				VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, 
+				0, 
+				VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+				graphicsQueueId,
+				&range
+			);
+		}
+
+		//End buffer
 
 		_gotoIfError(clean, vkCheck(vkEndCommandBuffer(commandBuffer)));
 	}

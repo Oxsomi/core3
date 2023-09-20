@@ -284,28 +284,27 @@ Error GraphicsDeviceRef_createSwapchainInternal(GraphicsDeviceRef *deviceRef, Sw
 		createSemaphores = true;
 	}
 
+	//Destroy image views
+
+	for(U64 i = 0; i < swapchainExt->images.length; ++i)
+		vkDestroyImageView(deviceExt->device, ((const VkManagedImage*) swapchainExt->images.ptr)[i].view, NULL);
+
 	//Get images
 
 	if(swapchainExt->images.length != imageCount) {
 		List_freex(&swapchainExt->images);
-		swapchainExt->images = List_createEmpty(sizeof(VkImage));
+		swapchainExt->images = List_createEmpty(sizeof(VkManagedImage));
 		_gotoIfError(clean, List_resizex(&swapchainExt->images, imageCount));
 	}
 
+	VkImage vkImages[3];		//Temp alloc, we only allow up to 3 images.
+
 	_gotoIfError(clean, vkCheck(instance->getSwapchainImagesKHR(
-		deviceExt->device, swapchainExt->swapchain, &imageCount, (VkImage*) swapchainExt->images.ptr
+		deviceExt->device, swapchainExt->swapchain, &imageCount, vkImages
 	)));
 
-	//Prepare image views
-
-	for(U64 i = 0; i < swapchainExt->imageViews.length; ++i)
-		vkDestroyImageView(deviceExt->device, ((const VkImageView*) swapchainExt->imageViews.ptr)[i], NULL);
-
-	if(swapchainExt->imageViews.length != imageCount) {
-		List_freex(&swapchainExt->imageViews);
-		swapchainExt->imageViews = List_createEmpty(sizeof(VkImageView));
-		_gotoIfError(clean, List_resizex(&swapchainExt->imageViews, imageCount));
-	}
+	for(U64 i = 0; i < swapchainExt->images.length; ++i)
+		((VkManagedImage*) swapchainExt->images.ptr)[i].image = vkImages[i];
 
 	//Grab semaphores
 
@@ -336,11 +335,11 @@ Error GraphicsDeviceRef_createSwapchainInternal(GraphicsDeviceRef *deviceRef, Sw
 
 		//Image views
 
-		VkImageView *view = (VkImageView*) swapchainExt->imageViews.ptr + i;
+		VkImageView *view = &((VkManagedImage*) swapchainExt->images.ptr + i)->view;
 
 		VkImageViewCreateInfo viewCreate = (VkImageViewCreateInfo) {
 			.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-			.image = ((VkImage*) swapchainExt->images.ptr)[i],
+			.image = ((VkManagedImage*) swapchainExt->images.ptr)[i].image,
 			.viewType = VK_IMAGE_VIEW_TYPE_2D,
 			.format = swapchainExt->format.format,
 			.subresourceRange = (VkImageSubresourceRange) {
@@ -441,9 +440,9 @@ Bool GraphicsDevice_freeSwapchain(Swapchain *swapchain, Allocator alloc) {
 			vkDestroySemaphore(deviceExt->device, semaphore, NULL);
 	}
 
-	for (U64 i = 0; i < swapchainExt->imageViews.length; ++i) {
+	for (U64 i = 0; i < swapchainExt->images.length; ++i) {
 
-		VkImageView view = ((VkImageView*)swapchainExt->imageViews.ptr)[i];
+		VkImageView view = ((VkManagedImage*)swapchainExt->images.ptr)[i].view;
 
 		if(view)
 			vkDestroyImageView(deviceExt->device, view, NULL);
@@ -451,7 +450,6 @@ Bool GraphicsDevice_freeSwapchain(Swapchain *swapchain, Allocator alloc) {
 
 	List_freex(&swapchainExt->semaphores);
 	List_freex(&swapchainExt->images);
-	List_freex(&swapchainExt->imageViews);
 
 	if(swapchainExt->swapchain)
 		vkDestroySwapchainKHR(deviceExt->device, swapchainExt->swapchain, NULL);
@@ -462,4 +460,49 @@ Bool GraphicsDevice_freeSwapchain(Swapchain *swapchain, Allocator alloc) {
 	GraphicsDeviceRef_dec(&swapchain->device);
 
 	return true;
+}
+
+void VkSwapchain_transition(
+	VkGraphicsInstance *instanceExt,
+	VkCommandBuffer buffer,
+	VkManagedImage *imageExt, 
+	VkPipelineStageFlags2 stage, 
+	VkAccessFlagBits2 access,
+	VkImageLayout layout,
+	U32 graphicsQueueId,
+	const VkImageSubresourceRange *range
+) {
+
+	VkImageMemoryBarrier2 imageBarrier = (VkImageMemoryBarrier2) {
+
+		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+
+		.srcStageMask = imageExt->lastStage,
+		.srcAccessMask = imageExt->lastAccess,
+
+		.dstStageMask = stage,
+		.dstAccessMask = access,
+
+		.oldLayout = imageExt->lastLayout,
+		.newLayout = layout,
+
+		.srcQueueFamilyIndex = graphicsQueueId,
+		.dstQueueFamilyIndex = graphicsQueueId,
+
+		.image = imageExt->image,
+		.subresourceRange = *range
+	};
+
+	imageExt->lastLayout = imageBarrier.newLayout;
+	imageExt->lastStage = imageBarrier.dstStageMask;
+	imageExt->lastAccess = imageBarrier.dstAccessMask;
+
+	VkDependencyInfo dependency = (VkDependencyInfo) {
+		.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+		.dependencyFlags = 0,
+		.imageMemoryBarrierCount = 1,
+		.pImageMemoryBarriers = &imageBarrier
+	};
+
+	instanceExt->cmdPipelineBarrier2(buffer, &dependency);
 }

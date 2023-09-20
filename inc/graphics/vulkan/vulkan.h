@@ -23,6 +23,17 @@
 #define VK_ENABLE_BETA_EXTENSIONS
 #include <vulkan/vulkan.h>
 
+typedef struct VkManagedImage {
+
+	VkImage image;
+	VkImageView view;
+
+	VkPipelineStageFlagBits2 lastStage;
+	VkAccessFlagBits2 lastAccess;
+	VkImageLayout lastLayout;
+
+} VkManagedImage;
+
 typedef struct CharString CharString;
 typedef struct GraphicsDevice GraphicsDevice;
 typedef struct Error Error;

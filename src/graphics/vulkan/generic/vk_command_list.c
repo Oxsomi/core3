@@ -21,9 +21,11 @@
 #include "graphics/generic/command_list.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
+#include "graphics/generic/swapchain.h"
 #include "graphics/vulkan/vulkan.h"
 #include "graphics/vulkan/vk_device.h"
 #include "graphics/vulkan/vk_instance.h"
+#include "graphics/vulkan/vk_swapchain.h"
 #include "types/buffer.h"
 #include "types/error.h"
 
@@ -94,14 +96,35 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 
 		//Clear commands
 
-		case ECommandOp_clearColoru:
-		case ECommandOp_clearColori:
-		case ECommandOp_clearColorf: {
+		case ECommandOp_clearImageu:
+		case ECommandOp_clearImagei:
+		case ECommandOp_clearImagef: {
+
+			ClearImage *clear = (ClearImage*) data;
+			ImageRange image = clear->image;
 
 			VkClearColorValue color;
-			Buffer_copy(Buffer_createRef(&color, sizeof(color)), Buffer_createConstRef(data, sizeof(color)));
+			Buffer_copy(Buffer_createRef(&color, sizeof(F32x4)), Buffer_createConstRef(clear->color, sizeof(F32x4)));
 
-			//TODO: Transition to dst optimal
+			//Validate range
+
+			Swapchain *swapchain = SwapchainRef_ptr(image.image);
+			VkSwapchain *swapchainExt = Swapchain_ext(swapchain, Vk);
+
+			//Validate subresource range
+
+			if(swapchain) {
+
+				if (image.layerId != U32_MAX && image.layerId >= 1)
+					return Error_invalidParameter(4, 1);
+
+				if (image.levelId != U32_MAX && image.levelId >= 1)
+					return Error_invalidParameter(4, 2);
+			}
+
+			//Transition to dst optimal
+
+			VkManagedImage *imageExt = &((VkManagedImage*)swapchainExt->images.ptr)[swapchainExt->currentIndex];
 
 			VkImageSubresourceRange range = (VkImageSubresourceRange) {
 				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -109,10 +132,25 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 				.layerCount = 1
 			};
 
+			U32 graphicsQueueId = deviceExt->queues[EVkCommandQueue_Graphics].queueId;
+
+			VkSwapchain_transition(
+				instanceExt,
+				buffer,
+				imageExt,
+				VK_PIPELINE_STAGE_2_CLEAR_BIT, 
+				VK_ACCESS_2_TRANSFER_WRITE_BIT, 
+				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				graphicsQueueId,
+				&range
+			);
+
+			//Clear
+
 			vkCmdClearColorImage(
 				buffer, 
-				temp->color, 
-				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+				imageExt->image, 
+				imageExt->lastLayout,
 				&color,
 				1,
 				&range
@@ -121,12 +159,33 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 			break;
 		}
 
-		case ECommandOp_clearDepthStencil: {
+		/*
+		case ECommandOp_clearDepth: {
+
+			ClearDepthStencil *clear = (ClearDepthStencil*) data;
+			ImageRange image = clear->image;
 
 			VkClearDepthStencilValue clearValue = (VkClearDepthStencilValue) {
-				.depth = *(const F32*) data,
-				.stencil = *(const U8*) (data + sizeof(F32))
+				.depth = clear->depth,
+				.stencil = clear->stencil
 			};
+
+			//Validate range
+
+			Swapchain *swapchain = SwapchainRef_ptr(image.image);
+
+			U32 layerCount = 1, levelCount = 1;
+
+			//Validate subresource range
+
+			if(swapchain) {
+
+				if (image.layerId != U32_MAX && image.layerId >= 1)
+					return Error_invalidParameter(4, 1);
+
+				if (image.levelId != U32_MAX && image.levelId >= 1)
+					return Error_invalidParameter(4, 2);
+			}
 
 			//TODO: Transition to dst optimal
 
@@ -136,8 +195,10 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 					(temp->flags & EVkCommandBufferFlags_hasDepth ? VK_IMAGE_ASPECT_DEPTH_BIT : 0) |
 					(temp->flags & EVkCommandBufferFlags_hasStencil ? VK_IMAGE_ASPECT_STENCIL_BIT : 0),
 
-				.levelCount = 1,
-				.layerCount = 1
+				.levelCount = image.levelId == U32_MAX ? levelCount : 1,
+				.layerCount = image.layerId == U32_MAX ? layerCount : 1,
+				.baseArrayLayer = image.layerId == U32_MAX ? image.layerId : 0,
+				.baseMipLevel = image.levelId == U32_MAX ? image.levelId : 0
 			};
 
 			vkCmdClearDepthStencilImage(
@@ -150,7 +211,7 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 			);
 
 			break;
-		}
+		}*/
 
 		//Debug
 
