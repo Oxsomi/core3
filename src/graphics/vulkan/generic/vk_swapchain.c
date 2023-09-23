@@ -286,8 +286,16 @@ Error GraphicsDeviceRef_createSwapchainInternal(GraphicsDeviceRef *deviceRef, Sw
 
 	//Destroy image views
 
-	for(U64 i = 0; i < swapchainExt->images.length; ++i)
-		vkDestroyImageView(deviceExt->device, ((const VkManagedImage*) swapchainExt->images.ptr)[i].view, NULL);
+	for(U64 i = 0; i < swapchainExt->images.length; ++i) {
+
+		VkManagedImage *managedImage = &((VkManagedImage*) swapchainExt->images.ptr)[i];
+
+		managedImage->lastAccess = 0;
+		managedImage->lastStage = 0;
+		managedImage->lastLayout = 0;
+
+		vkDestroyImageView(deviceExt->device, managedImage->view, NULL);
+	}
 
 	//Get images
 
