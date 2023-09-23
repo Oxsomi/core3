@@ -181,11 +181,6 @@ Error CommandListRef_checkBounds(I32x2 offset, I32x2 size, I32 lowerBound1, I32 
 
 Error CommandListRef_setViewportCmd(CommandListRef *commandListRef, I32x2 offset, I32x2 size, ECommandOp op) {
 
-	CommandList *commandList = CommandListRef_ptr(commandListRef);
-
-	if(commandList && !(commandList->flags & ECommandListFlag_hasBoundColor))
-		return Error_invalidOperation(0);
-
 	Error boundsCheck = CommandListRef_checkBounds(offset, size, -32'768, 32'767);
 
 	if(boundsCheck.genericError)

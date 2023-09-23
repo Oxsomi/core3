@@ -67,24 +67,6 @@ typedef struct CommandOpInfo {
 
 } CommandOpInfo;
 
-typedef enum ECommandListFlag {
-	
-	ECommandListFlag_hasBoundColor		= 1 << 0,
-	ECommandListFlag_hasBoundDepth		= 1 << 1,
-	
-	ECommandListFlag_isIntTarget		= 1 << 2,
-	ECommandListFlag_isUnsignedTarget	= 1 << 3,
-
-	ECommandListFlag_F32Target			= ECommandListFlag_hasBoundColor,
-	ECommandListFlag_I32Target			= ECommandListFlag_hasBoundColor | ECommandListFlag_isIntTarget,
-	ECommandListFlag_U64Target			= ECommandListFlag_I32Target | ECommandListFlag_isUnsignedTarget,
-
-	ECommandListFlag_maskTargetType		= ECommandListFlag_U64Target,
-
-	ECommandListFlag_all				= ~0
-
-} ECommandListFlag;
-
 typedef struct CommandList {
 
 	GraphicsDeviceRef *device;
@@ -95,7 +77,7 @@ typedef struct CommandList {
 
 	List callstacks;		//Used to handle error handling (Only has call stack depth 32 to save some space)
 
-	ECommandListFlag flags;
+	U32 padding;
 	ECommandListState state;
 
 	U64 next;

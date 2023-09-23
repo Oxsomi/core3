@@ -68,7 +68,7 @@ impl Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool is
 extern U64 GraphicsInstance_vendorMaskAll;
 extern U64 GraphicsInstance_deviceTypeAll;
 
-Error GraphicsInstance_getPreferredGpu(
+Error GraphicsInstance_getPreferredDevice(
 	const GraphicsInstance *inst, 
 	GraphicsDeviceCapabilities requiredCapabilities, 
 	U64 vendorMask,

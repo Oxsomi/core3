@@ -35,7 +35,7 @@ Error GraphicsInstanceRef_add(GraphicsInstanceRef *inst) {
 	return inst ? (!RefPtr_inc(inst) ? Error_invalidOperation(0) : Error_none()) : Error_nullPointer(0);
 }
 
-Error GraphicsInstance_getPreferredGpu(
+Error GraphicsInstance_getPreferredDevice(
 	const GraphicsInstance *inst,
 	GraphicsDeviceCapabilities requiredCapabilities,
 	U64 vendorMask,

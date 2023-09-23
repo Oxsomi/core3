@@ -53,7 +53,7 @@ Error GraphicsDeviceRef_create(
 	GraphicsDeviceRef **device
 );
 
-Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc);
+Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc);		//Don't call directly.
 
 //Submit commands to device
 //List<CommandListRef*> commandLists
