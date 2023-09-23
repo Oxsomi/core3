@@ -42,13 +42,13 @@ impl Error VkSurface_create(GraphicsDevice *device, const Window *window, VkSurf
 
 //Transitions entire resource rather than subresources
 
-void VkSwapchain_transition(
-	VkGraphicsInstance *instance,
-	VkCommandBuffer buffer,
+Error VkSwapchain_transition(
 	VkManagedImage *image, 
 	VkPipelineStageFlags2 stage, 
 	VkAccessFlagBits2 access,
 	VkImageLayout layout,
 	U32 graphicsQueueId,
-	const VkImageSubresourceRange *range
+	const VkImageSubresourceRange *range,
+	List *imageBarriers,
+	VkDependencyInfo *dependency
 );

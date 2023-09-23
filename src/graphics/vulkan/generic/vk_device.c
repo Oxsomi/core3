@@ -734,6 +734,7 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 
 	Error err = Error_none();
 	CharString temp = CharString_createNull();
+	List imageBarriers = List_createEmpty(sizeof(VkImageMemoryBarrier2));
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
@@ -953,12 +954,44 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 
 				CommandOpInfo info = ((CommandOpInfo*) commandList->commandOps.ptr)[i];
 				
-				_gotoIfError(clean, CommandList_process(device, info.op, ptr, &state));
+				//Extra debugging if an error happens while processing the command
+
+				err = CommandList_process(device, info.op, ptr, &state);
+
+				if (err.genericError) {
+
+					#ifndef NDEBUG
+
+						const U8 *callstack = commandList->callstacks.ptr + commandList->callstacks.stride * j;
+
+						Log_warnLn("Command process failed. Command inserted at callstack:");
+
+						Log_printCapturedStackTraceCustom(
+							(const void**) callstack, 
+							commandList->callstacks.stride / sizeof(void*),
+							ELogLevel_Error, 
+							ELogOptions_Default
+						);
+
+					#endif
+
+					goto clean;
+				}
+
 				ptr += info.opSize;
 			}
 		}
 
 		//Transition back swapchains to present
+
+		//Combine transitions into one call.
+
+		VkDependencyInfo dependency = (VkDependencyInfo) {
+			.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+			.dependencyFlags = 0
+		};
+
+		_gotoIfError(clean, List_reservex(&imageBarriers, swapchains.length));
 
 		for (U64 i = 0; i < swapchains.length; ++i) {
 
@@ -975,17 +1008,20 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 
 			U32 graphicsQueueId = deviceExt->queues[EVkCommandQueue_Graphics].queueId;
 
-			VkSwapchain_transition(
-				instanceExt,
-				commandBuffer,
+			_gotoIfError(clean, VkSwapchain_transition(
 				imageExt,
 				VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, 
 				0, 
 				VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
 				graphicsQueueId,
-				&range
-			);
+				&range,
+				&imageBarriers,
+				&dependency
+			));
 		}
+
+		if(dependency.imageMemoryBarrierCount)
+			instanceExt->cmdPipelineBarrier2(commandBuffer, &dependency);
 
 		//End buffer
 

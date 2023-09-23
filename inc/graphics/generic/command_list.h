@@ -41,10 +41,8 @@ typedef enum ECommandOp {
 
 	//Clearing depth + color views
 
-	ECommandOp_clearImagef,
-	ECommandOp_clearImageu,
-	ECommandOp_clearImagei,
-	//ECommandOp_clearDepth,
+	ECommandOp_clearImages,
+	//ECommandOp_clearDepths,
 
 	//Debugging
 
@@ -95,6 +93,8 @@ typedef struct CommandList {
 	List commandOps;		//List<CommandOpInfo>
 	List resources;			//List<RefPtr*> resources used by this command list (TODO: HashSet<RefPtr*>)
 
+	List callstacks;		//Used to handle error handling (Only has call stack depth 32 to save some space)
+
 	ECommandListFlag flags;
 	ECommandListState state;
 
@@ -132,8 +132,6 @@ Error CommandListRef_setStencil(CommandListRef *commandList, U8 stencilValue);
 
 typedef struct ImageRange {
 
-	RefPtr *image;		//Color: SwapchainRef or RenderTargetRef, Depth: RenderTargetRef
-
 	U32 levelId;		//Set to U32_MAX to indicate all levels, otherwise indicates specific index.
 	U32 layerId;		//Set to U32_MAX to indicate all layers, otherwise indicates specific index.
 
@@ -143,7 +141,9 @@ typedef struct ClearImage {
 
 	U32 color[4];			//Can also be F32, I32
 
-	ImageRange image;
+	ImageRange range;
+
+	RefPtr *image;
 
 } ClearImage;
 
@@ -157,9 +157,15 @@ typedef struct ClearImage {
 
 } ClearDepthStencil; */
 
-Error CommandListRef_clearImagef(CommandListRef *commandList, F32x4 color, ImageRange image);
-Error CommandListRef_clearImagei(CommandListRef *commandList, I32x4 color, ImageRange image);
-Error CommandListRef_clearImageu(CommandListRef *commandList, const U32 color[4], ImageRange image);
+//Clear entire resource or subresource .
+//Color: SwapchainRef or RenderTargetRef, Depth: RenderTargetRef
+
+Error CommandListRef_clearImagef(CommandListRef *commandList, F32x4 color, ImageRange range, RefPtr *image);
+Error CommandListRef_clearImagei(CommandListRef *commandList, I32x4 color, ImageRange range, RefPtr *image);
+Error CommandListRef_clearImageu(CommandListRef *commandList, const U32 color[4], ImageRange range, RefPtr *image);
+
+Error CommandListRef_clearImages(CommandListRef *commandList, List clearImages);		//<ClearImage>
+
 //Error CommandListRef_clearDepthStencil(CommandListRef *commandList, F32 depth, U8 stencil, ImageRange image);
 
 Error CommandListRef_addMarkerDebugExt(CommandListRef *commandList, F32x4 color, CharString name);

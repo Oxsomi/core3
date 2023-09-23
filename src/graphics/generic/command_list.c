@@ -23,6 +23,7 @@
 #include "graphics/generic/swapchain.h"
 #include "platforms/ext/listx.h"
 #include "platforms/ext/bufferx.h"
+#include "platforms/log.h"
 #include "types/buffer.h"
 #include "types/string.h"
 #include "types/error.h"
@@ -57,6 +58,7 @@ Error CommandListRef_clear(CommandListRef *commandListRef) {
 			RefPtr_dec(ptr);
 	}
 
+	List_clear(&commandList->callstacks);
 	List_clear(&commandList->commandOps);
 	List_clear(&commandList->resources);
 
@@ -85,7 +87,7 @@ Error CommandListRef_end(CommandListRef *commandListRef) {
 	return Error_none();
 }
 
-Error CommandListRef_append(CommandListRef *commandListRef, ECommandOp op, Buffer buf, List objects) {
+Error CommandListRef_append(CommandListRef *commandListRef, ECommandOp op, Buffer buf, List objects, U32 extraSkipStacktrace) {
 
 	CommandListRef_validate(commandListRef);
 
@@ -128,6 +130,17 @@ Error CommandListRef_append(CommandListRef *commandListRef, ECommandOp op, Buffe
 		Buffer_copy(Buffer_createRef((U8*)commandList->data.ptr + commandList->next, len), buf);
 		commandList->next += len;
 	}
+
+	#ifndef NDEBUG
+
+		void *stackTrace[32];
+		Log_captureStackTrace(stackTrace, 32, 1 + extraSkipStacktrace);
+
+		_gotoIfError(clean, List_pushBackx(
+			&commandList->callstacks, Buffer_createConstRef(stackTrace, sizeof(stackTrace))
+		));
+
+	#endif
 
 	goto success;
 
@@ -179,7 +192,7 @@ Error CommandListRef_setViewportCmd(CommandListRef *commandListRef, I32x2 offset
 		return boundsCheck;
 
 	I32x4 values = I32x4_create2_2(offset, size);
-	return CommandListRef_append(commandListRef, op, Buffer_createConstRef(&values, sizeof(values)), (List) { 0 });
+	return CommandListRef_append(commandListRef, op, Buffer_createConstRef(&values, sizeof(values)), (List) { 0 }, 1);
 }
 
 Error CommandListRef_setViewport(CommandListRef *commandListRef, I32x2 offset, I32x2 size) {
@@ -196,44 +209,105 @@ Error CommandListRef_setViewportAndScissor(CommandListRef *commandListRef, I32x2
 
 Error CommandListRef_setStencil(CommandListRef *commandListRef, U8 stencilValue) {
 	return CommandListRef_append(
-		commandListRef, ECommandOp_setStencil, Buffer_createConstRef(&stencilValue, 1), (List) { 0 }
+		commandListRef, ECommandOp_setStencil, Buffer_createConstRef(&stencilValue, 1), (List) { 0 }, 0
 	);
 }
 
-Error CommandListRef_clearImage(CommandListRef *commandListRef, ECommandOp op, const void *color, ImageRange image) {
+Error CommandListRef_clearImages(CommandListRef *commandList, List clearImages) {
 
-	if(!image.image)
-		return Error_nullPointer(0);
+	if(!clearImages.length)
+		return Error_nullPointer(1);
 
-	if(image.image->typeId != EGraphicsTypeId_Swapchain)
-		return Error_invalidParameter(4, 0);
+	if(clearImages.stride != sizeof(ClearImage))
+		return Error_invalidParameter(1, 0);
 
-	List refs = (List) { 0 };
-	Error listErr = List_createConstRef((const U8*) &image.image, 1, sizeof(RefPtr*), &refs);
+	if(clearImages.length > U32_MAX)
+		return Error_outOfBounds(1, clearImages.length, U32_MAX);
 
-	if(listErr.genericError)
-		return listErr;
+	Buffer buf = Buffer_createNull();
 
-	ClearImage clearImage = (ClearImage) { .image = image };
+	List refs = List_createEmpty(sizeof(RefPtr*));
+	Error err = List_resizex(&refs, clearImages.length);
 
-	Buffer_copy(
-		Buffer_createRef(clearImage.color, sizeof(F32x4)),
-		Buffer_createConstRef(color, sizeof(F32x4))
-	);
+	if(err.genericError)
+		return err;
 
-	return CommandListRef_append(commandListRef, op, Buffer_createConstRef(&clearImage, sizeof(clearImage)), refs);
+	RefPtr **ptr = (RefPtr**)refs.ptr;
+
+	for(U64 i = 0; i < clearImages.length; ++i) {
+
+		ClearImage clearImage = ((ClearImage*)clearImages.ptr)[i];
+		RefPtr *image = clearImage.image;
+
+		if(!image)
+			_gotoIfError(clean, Error_nullPointer(1));
+
+		if(image->typeId != EGraphicsTypeId_Swapchain)
+			_gotoIfError(clean, Error_invalidParameter(1, 0));
+
+		//Check if range conflicts 
+
+		for (U64 j = 0; j < i; ++j) {
+
+			ClearImage clearImagej = ((ClearImage*)clearImages.ptr)[j];
+			RefPtr *imagej = clearImagej.image;
+
+			if(imagej != image)
+				continue;
+
+			//TODO: Multiple types of images.
+			//		We have to loop through all subresources that are covered 
+			//		and check if they conflict.
+			//		For now, only swapchain is supported w/o layers and levels.
+			//		So in that case just mentioning the image twice is enough to conflict.
+
+			_gotoIfError(clean, Error_alreadyDefined(0));
+		}
+
+		ptr[i] = image;
+	}
+
+	//Convert to refs and buffer
+	
+	_gotoIfError(clean, Buffer_createEmptyBytesx(List_bytes(clearImages) + sizeof(U32), &buf));
+
+	*(U32*)buf.ptr = (U32) clearImages.length;
+	Buffer_copy(Buffer_createRef((U8*) buf.ptr + sizeof(U32), List_bytes(clearImages)), List_bufferConst(clearImages));
+
+	_gotoIfError(clean, CommandListRef_append(commandList, ECommandOp_clearImages, buf, refs, 0));
+
+clean:
+
+	Buffer_freex(&buf);
+	List_freex(&refs);
+
+	return err;
 }
 
-Error CommandListRef_clearImagef(CommandListRef *commandListRef, F32x4 color, ImageRange image) {
-	return CommandListRef_clearImage(commandListRef, ECommandOp_clearImagef, &color, image);
+Error CommandListRef_clearImageu(CommandListRef *commandListRef, const U32 coloru[4], ImageRange range, RefPtr *image) {
+
+	ClearImage clearImage = (ClearImage) {
+		.image = image,
+		.range = range
+	};
+
+	Buffer_copy(Buffer_createRef(clearImage.color, sizeof(F32x4)), Buffer_createConstRef(coloru, sizeof(F32x4)));
+
+	List clearImages = (List) { 0 };
+	Error err = List_createConstRef((const U8*) &clearImage, 1, sizeof(ClearImage), &clearImages);
+
+	if(err.genericError)
+		return err;
+
+	return CommandListRef_clearImages(commandListRef, clearImages);
 }
 
-Error CommandListRef_clearImagei(CommandListRef *commandListRef, I32x4 color, ImageRange image) {
-	return CommandListRef_clearImage(commandListRef, ECommandOp_clearImagei, &color, image);
+Error CommandListRef_clearImagei(CommandListRef *commandListRef, I32x4 color, ImageRange range, RefPtr *image) {
+	return CommandListRef_clearImageu(commandListRef, (const U32*) &color, range, image);
 }
 
-Error CommandListRef_clearImageu(CommandListRef *commandListRef, const U32 coloru[4], ImageRange image) {
-	return CommandListRef_clearImage(commandListRef, ECommandOp_clearImageu, coloru, image);
+Error CommandListRef_clearImagef(CommandListRef *commandListRef, F32x4 color, ImageRange range, RefPtr *image) {
+	return CommandListRef_clearImageu(commandListRef, (const U32*) &color, range, image);
 }
 
 /*
@@ -273,7 +347,7 @@ Error CommandList_markerDebugExt(CommandListRef *commandListRef, F32x4 color, Ch
 	Buffer_copy(buf, Buffer_createConstRef(&color, sizeof(color)));
 	Buffer_copy(Buffer_createRef((U8*)buf.ptr + sizeof(color), CharString_length(name)), CharString_bufferConst(name));
 
-	_gotoIfError(clean, CommandListRef_append(commandListRef, op, buf, (List) { 0 }));
+	_gotoIfError(clean, CommandListRef_append(commandListRef, op, buf, (List) { 0 }, 1));
 
 clean:
 	Buffer_freex(&buf);
@@ -299,7 +373,7 @@ Error CommandListRef_endRegionDebugExt(CommandListRef *commandListRef) {
 	if(!(device->info.capabilities.features & EGraphicsFeatures_DebugMarkers))		//NO-OP
 		return Error_none();
 
-	return CommandListRef_append(commandListRef, ECommandOp_endRegionDebugExt, Buffer_createNull(), (List) { 0 });
+	return CommandListRef_append(commandListRef, ECommandOp_endRegionDebugExt, Buffer_createNull(), (List) { 0 }, 0);
 }
 
 Bool CommandList_free(CommandList *cmd, Allocator alloc) {
@@ -314,6 +388,7 @@ Bool CommandList_free(CommandList *cmd, Allocator alloc) {
 			RefPtr_dec(ptr);
 	}
 
+	List_freex(&cmd->callstacks);
 	List_freex(&cmd->commandOps);
 	List_freex(&cmd->resources);
 	Buffer_freex(&cmd->data);
@@ -345,11 +420,16 @@ Error GraphicsDeviceRef_createCommandList(
 
 	commandList->commandOps = List_createEmpty(sizeof(CommandOpInfo));
 	commandList->resources = List_createEmpty(sizeof(RefPtr*));
+	commandList->callstacks = List_createEmpty(sizeof(void*) * 32);
 
 	_gotoIfError(clean, Buffer_createEmptyBytesx(commandListLen, &commandList->data));
 
 	_gotoIfError(clean, List_reservex(&commandList->commandOps, estimatedCommandCount));
 	_gotoIfError(clean, List_reservex(&commandList->resources, estimatedResources));
+
+	#ifndef NDEBUG
+		_gotoIfError(clean, List_reservex(&commandList->callstacks, estimatedCommandCount));
+	#endif
 
 	GraphicsDeviceRef_add(deviceRef);
 	commandList->device = deviceRef;

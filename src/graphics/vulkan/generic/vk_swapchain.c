@@ -462,16 +462,23 @@ Bool GraphicsDevice_freeSwapchain(Swapchain *swapchain, Allocator alloc) {
 	return true;
 }
 
-void VkSwapchain_transition(
-	VkGraphicsInstance *instanceExt,
-	VkCommandBuffer buffer,
+Error VkSwapchain_transition(
 	VkManagedImage *imageExt, 
 	VkPipelineStageFlags2 stage, 
 	VkAccessFlagBits2 access,
 	VkImageLayout layout,
 	U32 graphicsQueueId,
-	const VkImageSubresourceRange *range
+	const VkImageSubresourceRange *range,
+	List *imageBarriers,
+	VkDependencyInfo *dependency
 ) {
+
+	//No-op
+
+	if(imageExt->lastStage == stage && imageExt->lastAccess == access && imageExt->lastLayout == layout)
+		return Error_none();
+
+	//Handle image barrier
 
 	VkImageMemoryBarrier2 imageBarrier = (VkImageMemoryBarrier2) {
 
@@ -493,16 +500,17 @@ void VkSwapchain_transition(
 		.subresourceRange = *range
 	};
 
+	Error err = List_pushBackx(imageBarriers, Buffer_createConstRef(&imageBarrier, sizeof(imageBarrier)));
+
+	if(err.genericError)
+		return err;
+
 	imageExt->lastLayout = imageBarrier.newLayout;
 	imageExt->lastStage = imageBarrier.dstStageMask;
 	imageExt->lastAccess = imageBarrier.dstAccessMask;
 
-	VkDependencyInfo dependency = (VkDependencyInfo) {
-		.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-		.dependencyFlags = 0,
-		.imageMemoryBarrierCount = 1,
-		.pImageMemoryBarriers = &imageBarrier
-	};
+	dependency->pImageMemoryBarriers = (VkImageMemoryBarrier2*) imageBarriers->ptr;
+	dependency->imageMemoryBarrierCount = (U32) imageBarriers->length;
 
-	instanceExt->cmdPipelineBarrier2(buffer, &dependency);
+	return Error_none();
 }
