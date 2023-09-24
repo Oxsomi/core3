@@ -118,15 +118,6 @@ Error GraphicsDevice_initExt(
 	);
 
 	vkBindNext(
-		VkPhysicalDeviceMultiDrawFeaturesEXT, 
-		true, 
-		{
-			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTI_DRAW_FEATURES_EXT,
-			.multiDraw = true
-		}
-	);
-
-	vkBindNext(
 		VkPhysicalDevicePerformanceQueryFeaturesKHR, 
 		physicalDevice->capabilities.featuresExt & EVkGraphicsFeatures_PerfQuery, 
 		(VkPhysicalDevicePerformanceQueryFeaturesKHR) {
@@ -952,7 +943,7 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 
 			for (U64 j = 0; j < commandList->commandOps.length; ++j) {
 
-				CommandOpInfo info = ((CommandOpInfo*) commandList->commandOps.ptr)[i];
+				CommandOpInfo info = ((CommandOpInfo*) commandList->commandOps.ptr)[j];
 				
 				//Extra debugging if an error happens while processing the command
 

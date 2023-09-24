@@ -292,13 +292,58 @@ Command lists store the commands referenced in the next section. These are virtu
 
 To make sure a command list is ready for recording and submission it needs begin and end respectively. Begin has the ability to clear the command list (which is generally desired). However, it's also possible that the command list was closed by one library and then given back to another. In this case, it can safely be re-opened without the clear flag. After ending it, it can be passed to submitCommands. These "commands" are special, as they're not inserted into the command list itself, they just affect the state of the command list. Only one submit is allowed per frame, as it handles synchronization implicitly.
 
-### TODO: setViewport/(And)Scissor
+### setViewport/(And)Scissor
 
-### TODO: setStencil
+setViewport and setScissor are used to set viewport and scissor rects respectively. However, since in a lot of cases they are set at the same time, there's also a command that does both at once "setViewportAndScissor". 
 
-### TODO: clearImage(f/u/i)/clearImages
+```c
+_gotoIfError(clean, CommandListRef_setViewportAndScissor(
+	commandList,
+    I32x2_create2(0, 0),
+    I32x2_create2(1920, 1080)
+));
+```
 
-### TODO: DebugMarkers extension
+### setStencil
+
+The stencil reference can be set using the setStencil command.
+
+```c
+_gotoIfError(clean, CommandListRef_setStencil(commandList, 0xFF));
+```
+
+### clearImage(f/u/i)/clearImages
+
+clearImagef/clearImageu/clearImagei and clearImages are actually the same command. They allow clearing one or multiple images. clearImages should be used whenever possible because it can batch clear commands in a better way. However, it is possible that only one image needs to be cleared and in that case clearImage(f/u/i) are perfectly fine. The f, u and i suffix are to allow clearing uint, int and float targets. In clearImages these are handled manually. The format should match the format of the underlying images. The images passed here are automatically transitioned to the correct state. 
+
+```c
+_gotoIfError(clean, CommandListRef_clearImagef(
+    commandList, 				//See "Command list"
+    F32x4_create4(1, 0, 0, 1), 	//Clear red
+    (ImageRange){ 0 }, 			//Clear layer and level 0
+    swapchain					//See "Swapchain"
+));
+```
+
+To clear multiple at once, call clearImages with a `List<ClearImage>`. ClearImage takes a color as a `U32[4]` (It's safe to copy a F32x4 or I32x4 to this as long as you bitcast it), a range and the image ref ptr. It's the same as a single clear image but it allows multiple.
+
+### DebugMarkers feature
+
+DebugMarkers adds three commands: addMarkerDebugExt, startRegionDebugExt and endRegionDebugExt. If the DebugMarkers feature isn't present, these are safely ignored and won't be inserted into the virtual command list. This can be used to provide extra debugging info to tools such as RenderDoc, NSight, Pix, etc. to show where important events such as render calls happened and what they represented. A debug region or debug marker has a color and a name. A debug region is like a stack; you can only end the current region and push another region. Every region you start has to be ended over the command lists that are submitted (you can start & end the same region in two separate command lists, as long as they're always both submitted).
+
+```c
+_gotoIfError(clean, CommandListRef_startRegionDebugExt(
+    commandList, 							//See "Command list"
+    F32x4_create4(1, 0, 0, 1), 				//Marker color
+    CharString_createConstRefCStr("Test")	//Marker name
+));
+
+//Insert operation that needs to be in the debug region
+
+_gotoIfError(clean, CommandListRef_endRegionDebugExt(commandList));
+```
+
+The same syntax as startRegionDebugExt can be used for addMarkerDebugExt. Except a marker doesn't need any end, it's just 1 event on the timeline.
 
 ### TODO: Transitions
 
@@ -310,4 +355,4 @@ Even though Metal doesn't need transitions, they're still required to allow Dire
 
 #### Validation
 
-Unfortunately, validation is only possible in DirectX and Vulkan using their respective validation layers. It is impossible to tell which resource was accessed in a certain frame. This makes it impossible to know if it was in the correct state. Make sure to validate on Vulkan since it's the strictest with transitions. However, if you're using Metal and doing transitions incorrectly, it could show up as some resources being deleted too early (if they're still in flight).
+Unfortunately, validation is only possible in DirectX and Vulkan using their respective validation layers. It is impossible to tell which resource was accessed in a certain frame (without running our own GPU-based validation layer). This makes it impossible to know if it was in the correct state. Make sure to validate on Vulkan since it's the strictest with transitions. However, if you're using Metal and doing transitions incorrectly, it could show up as some resources being deleted too early (if they're still in flight).

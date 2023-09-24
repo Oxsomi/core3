@@ -371,7 +371,6 @@ const C8 *reqExtensionsName[] = {
 	"VK_EXT_shader_subgroup_ballot",
 	"VK_EXT_shader_subgroup_vote",
 	"VK_EXT_descriptor_indexing",
-	"VK_EXT_multi_draw",
 	"VK_KHR_driver_properties",
 	"VK_KHR_synchronization2",
 	"VK_KHR_timeline_semaphore"
@@ -848,19 +847,6 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 
 		if(subgroup.supportedOperations & VK_SUBGROUP_FEATURE_SHUFFLE_BIT)
 			capabilities.features |= EGraphicsFeatures_SubgroupShuffle;
-
-		{
-			getDeviceFeatures(
-				VkPhysicalDeviceMultiDrawFeaturesEXT,
-				multiDraw,
-				VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTI_DRAW_FEATURES_EXT
-			);
-
-			if (!multiDraw.multiDraw) {
-				Log_debugLn("Vulkan: Unsupported GPU %u, Multi draw not enabled!", i);
-				continue;
-			}
-		}
 		
 		//Force enable synchronization and timeline semaphores
 
