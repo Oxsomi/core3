@@ -146,7 +146,7 @@ Error GraphicsDevice_initExt(
 
 	vkBindNext(
 		VkPhysicalDeviceDynamicRenderingFeatures, 
-		!(feat & EGraphicsFeatures_TiledRendering), 
+		feat & EGraphicsFeatures_DirectRendering, 
 		{
 			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES,
 			.dynamicRendering = true
@@ -292,7 +292,7 @@ Error GraphicsDevice_initExt(
 
 		switch (i) {
 
-			case EOptExtensions_DebugMarker:				on = feat & EGraphicsFeatures_DebugMarkers;		break;
+			case EOptExtensions_DebugMarker:				on = feat & EGraphicsFeatures_DebugMarkers;				break;
 			case EOptExtensions_F16:						on = types & EGraphicsDataTypes_F16;					break;
 			case EOptExtensions_MultiDrawIndirectCount:		on = feat & EGraphicsFeatures_MultiDrawIndirectCount;	break;
 			case EOptExtensions_AtomicI64:					on = types & EGraphicsDataTypes_AtomicI64;				break;
@@ -304,7 +304,7 @@ Error GraphicsDevice_initExt(
 			case EOptExtensions_RayMotionBlur:				on = feat & EGraphicsFeatures_RayMotionBlur;			break;
 			case EOptExtensions_RayReorder:					on = feat & EGraphicsFeatures_RayReorder;				break;
 			case EOptExtensions_MeshShader:					on = feat & EGraphicsFeatures_MeshShader;				break;
-			case EOptExtensions_DynamicRendering:			on = !(feat & EGraphicsFeatures_TiledRendering);		break;
+			case EOptExtensions_DynamicRendering:			on = feat & EGraphicsFeatures_DirectRendering;			break;
 			case EOptExtensions_RayMicromapOpacity:			on = feat & EGraphicsFeatures_RayMicromapOpacity;		break;
 			case EOptExtensions_RayMicromapDisplacement:	on = feat & EGraphicsFeatures_RayMicromapDisplacement;	break;
 			case EOptExtensions_AtomicF32:					on = types & EGraphicsDataTypes_AtomicF32;				break;

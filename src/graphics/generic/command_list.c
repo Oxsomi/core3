@@ -36,6 +36,8 @@ Error CommandListRef_add(CommandListRef *cmd) {
 	return cmd ? (!RefPtr_inc(cmd) ? Error_invalidOperation(0) : Error_none()) : Error_nullPointer(0);
 }
 
+//Clear, append, begin and end
+
 #define CommandListRef_validate(v)						\
 														\
 	if(!(v))											\
@@ -150,6 +152,8 @@ clean:
 success:
 	return err;
 }
+
+//Standard commands
 
 Error CommandListRef_checkBounds(I32x2 offset, I32x2 size, I32 lowerBound1, I32 upperBound1) {
 	
@@ -286,7 +290,7 @@ Error CommandListRef_clearImageu(CommandListRef *commandListRef, const U32 color
 		.range = range
 	};
 
-	Buffer_copy(Buffer_createRef(clearImage.color, sizeof(F32x4)), Buffer_createConstRef(coloru, sizeof(F32x4)));
+	Buffer_copy(Buffer_createRef(&clearImage.color, sizeof(F32x4)), Buffer_createConstRef(coloru, sizeof(F32x4)));
 
 	List clearImages = (List) { 0 };
 	Error err = List_createConstRef((const U8*) &clearImage, 1, sizeof(ClearImage), &clearImages);
@@ -324,6 +328,121 @@ Error CommandListRef_clearDepthStencil(CommandListRef *commandListRef, F32 depth
 		commandListRef, ECommandOp_clearDepth, Buffer_createConstRef(&depthStencil, sizeof(depthStencil)), refs
 	);
 }*/
+
+//Dynamic rendering
+
+Error CommandListRef_startRenderExt(
+	CommandListRef *commandListRef, 
+	I32x2 offset, 
+	I32x2 size, 
+	List colors, 
+	List depthStencil
+) {
+
+	if(!commandListRef)
+		return Error_nullPointer(0);
+
+	CommandList *commandList = CommandListRef_ptr(commandListRef);
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(commandList->device);
+
+	if(!(device->info.capabilities.features & EGraphicsFeatures_DirectRendering))
+		return Error_unsupportedOperation(0);
+
+	if(!colors.length && !depthStencil.length)
+		return Error_invalidOperation(0);
+
+	if(colors.length > 8)
+		return Error_outOfBounds(3, colors.length, 8);
+
+	I32x2 sizeTemp = I32x2_all(I32x2_eq(size, I32x2_zero())) ? I32x2_one() : size;		//Hack to allow 0 size.
+	Error err = CommandListRef_checkBounds(offset, sizeTemp, 0, 32'767);
+
+	if(err.genericError)
+		return err;
+
+	if(colors.length && colors.stride != sizeof(AttachmentInfo))
+		return Error_invalidParameter(3, 0);
+
+	if(depthStencil.length)
+		return Error_unsupportedOperation(1);			//TODO: Check depthStencil for depth, stencil and/or DS
+
+	if(depthStencil.length && depthStencil.stride != sizeof(AttachmentInfo))
+		return Error_invalidParameter(4, 0);
+
+	Buffer command = Buffer_createNull();
+	err = Buffer_createEmptyBytesx(sizeof(StartRenderExt) + sizeof(AttachmentInfo) * 10, &command);
+
+	if(err.genericError)
+		return err;
+
+	StartRenderExt *startRender = (StartRenderExt*)command.ptr;
+
+	List refs = List_createEmpty(sizeof(RefPtr*));
+	_gotoIfError(clean, List_reservex(&refs, 10));
+
+	*startRender = (StartRenderExt) {
+		.offset = offset,
+		.size = size,
+		.colorCount = (U8) colors.length
+	};
+
+	AttachmentInfo *attachments = (AttachmentInfo*)(startRender + 1);
+
+	U8 counter = 0;
+
+	for (U64 i = 0; i < colors.length; ++i) {
+
+		AttachmentInfo info = ((AttachmentInfo*) colors.ptr)[i];
+
+		//TODO: Properly validate this
+
+		if(info.range.levelId >= 1 || info.range.layerId >= 1)
+			_gotoIfError(clean, Error_outOfBounds(3, info.range.levelId >= 1 ? info.range.levelId : info.range.layerId, 1));
+
+		if(info.image && info.image->typeId != EGraphicsTypeId_Swapchain)		//TODO: Support other types
+			_gotoIfError(clean, Error_unsupportedOperation(2));
+
+		if (info.image) {
+
+			startRender->activeMask |= (U8)1 << i;
+			attachments[counter++] = info;
+
+			_gotoIfError(clean, List_pushBackx(&refs, Buffer_createConstRef(&info.image, sizeof(info.image))));
+		}
+	}
+
+	if(!counter)
+		_gotoIfError(clean, Error_invalidParameter(3, 1));
+
+	_gotoIfError(clean, CommandListRef_append(
+		commandListRef, 
+		ECommandOp_startRenderingExt, 
+		Buffer_createConstRef(startRender, sizeof(StartRenderExt) + sizeof(AttachmentInfo) * counter), 
+		refs, 
+		0
+	));
+
+clean:
+	List_freex(&refs);
+	Buffer_freex(&command);
+	return err;
+}
+
+Error CommandListRef_endRenderExt(CommandListRef *commandListRef) {
+
+	if(!commandListRef)
+		return Error_nullPointer(0);
+
+	CommandList *commandList = CommandListRef_ptr(commandListRef);
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(commandList->device);
+
+	if(!(device->info.capabilities.features & EGraphicsFeatures_DirectRendering))
+		return Error_unsupportedOperation(0);
+
+	return CommandListRef_append(commandListRef, ECommandOp_endRenderingExt, Buffer_createNull(), (List) { 0 }, 0);
+}
+
+//Debug markers
 
 Error CommandList_markerDebugExt(CommandListRef *commandListRef, F32x4 color, CharString name, ECommandOp op) {
 
@@ -370,6 +489,8 @@ Error CommandListRef_endRegionDebugExt(CommandListRef *commandListRef) {
 
 	return CommandListRef_append(commandListRef, ECommandOp_endRegionDebugExt, Buffer_createNull(), (List) { 0 }, 0);
 }
+
+//Free and create
 
 Bool CommandList_free(CommandList *cmd, Allocator alloc) {
 

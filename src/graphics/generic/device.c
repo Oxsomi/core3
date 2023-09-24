@@ -56,8 +56,8 @@ void GraphicsDeviceInfo_print(const GraphicsDeviceInfo *deviceInfo, Bool printCa
 
 		Log_debugLn("\tFeatures:");
 
-		if(feat & EGraphicsFeatures_TiledRendering)
-			Log_debugLn("\t\tTile based rendering");
+		if(feat & EGraphicsFeatures_DirectRendering)
+			Log_debugLn("\t\tDirect rendering");
 
 		//if(feat & EGraphicsFeatures_VariableRateShading)
 		//	Log_debugLn("\t\tVariable rate shading");

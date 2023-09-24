@@ -72,9 +72,12 @@ typedef struct VkGraphicsInstance {
 
 	PFN_vkSetDebugUtilsObjectNameEXT debugSetName;
 
-	PFN_vkCmdDebugMarkerBeginEXT debugMarkerBegin;
-	PFN_vkCmdDebugMarkerEndEXT debugMarkerEnd;
-	PFN_vkCmdDebugMarkerInsertEXT debugMarkerInsert;
+	PFN_vkCmdDebugMarkerBeginEXT cmdDebugMarkerBegin;
+	PFN_vkCmdDebugMarkerEndEXT cmdDebugMarkerEnd;
+	PFN_vkCmdDebugMarkerInsertEXT cmdDebugMarkerInsert;
+
+	PFN_vkCmdBeginRenderingKHR cmdBeginRenderingKHR;
+	PFN_vkCmdEndRenderingKHR cmdEndRenderingKHR;
 
 	PFN_vkCreateDebugReportCallbackEXT debugCreateReportCallback;
 

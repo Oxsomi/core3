@@ -39,6 +39,11 @@ typedef enum ECommandOp {
 
 	ECommandOp_setStencil,
 
+	//Direct rendering
+
+	ECommandOp_startRenderingExt,
+	ECommandOp_endRenderingExt,
+
 	//Clearing depth + color views
 
 	ECommandOp_clearImages,
@@ -119,9 +124,17 @@ typedef struct ImageRange {
 
 } ImageRange;
 
+typedef union ClearColor {
+
+	U32 coloru[4];
+	I32 colori[4];
+	F32 colorf[4];
+
+} ClearColor;
+
 typedef struct ClearImage {
 
-	U32 color[4];			//Can also be F32, I32
+	ClearColor color;
 
 	ImageRange range;
 
@@ -149,6 +162,57 @@ Error CommandListRef_clearImageu(CommandListRef *commandList, const U32 color[4]
 Error CommandListRef_clearImages(CommandListRef *commandList, List clearImages);		//<ClearImage>
 
 //Error CommandListRef_clearDepthStencil(CommandListRef *commandList, F32 depth, U8 stencil, ImageRange image);
+
+//DynamicRendering feature
+
+typedef enum ELoadAttachmentType {
+	
+	ELoadAttachmentType_Preserve,		//Don't modify the contents. Can have overhead because it has to load it.
+	ELoadAttachmentType_Clear,			//Clears the contents at start.
+	ELoadAttachmentType_Any				//Can preserve or clear depending on implementation. Result will be overwritten.
+
+} ELoadAttachmentType;
+
+typedef struct AttachmentInfo {
+
+	ImageRange range;			//Subresource. Multiple resources isn't allowed (layerId, levelId != U32_MAX)
+	RefPtr *image;				//Swapchain or RenderTexture. Null is allowed to disable it.
+
+	ELoadAttachmentType load;
+
+	U8 padding[3];
+	Bool readOnly;				//If true, this attachment will only be an input, output is ignored
+
+	ClearColor color;
+
+} AttachmentInfo;
+
+typedef struct StartRenderExt {
+
+	I32x2 offset, size;
+
+	U8 colorCount;			//Count of render targets (even inactive ones).
+	U8 activeMask;			//Which render targets are active.
+	U8 depthStencil;		//& 1 = depth, & 2 = stencil
+	U8 pad0;
+
+	U32 pad1;
+
+	//AttachmentInfo attachments[];	//[ active attachments go here ]
+
+} StartRenderExt;
+
+Error CommandListRef_startRenderExt(
+	CommandListRef *commandList, 
+	I32x2 offset, 
+	I32x2 size, 
+	List colors,				//<AttachmentInfo>
+	List depthStencil			//<AttachmentInfo>
+);
+
+Error CommandListRef_endRenderExt(CommandListRef *commandList);
+
+//DebugMarkers feature
 
 Error CommandListRef_addMarkerDebugExt(CommandListRef *commandList, F32x4 color, CharString name);
 Error CommandListRef_startRegionDebugExt(CommandListRef *commandList, F32x4 color, CharString name);

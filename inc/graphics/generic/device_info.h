@@ -48,10 +48,12 @@ typedef enum EGraphicsFeatures {
 
 	EGraphicsFeatures_None						= 0,
 
-	//When this is turned on, the GPU benefits from tiled rendering.
-	//This is true for mobile devices only or some chips such as QCOM on windows.
+	//When this is turned on, the GPU doesn't benefits from tiled rendering.
+	//This is false for mobile devices only or some chips such as QCOM on windows.
+	//On desktop and various dedicated GPUs this is always true.
+	//If this is false, you have to use render passes.
 
-	EGraphicsFeatures_TiledRendering			= 1 << 0,
+	EGraphicsFeatures_DirectRendering			= 1 << 0,
 
 	//EGraphicsFeatures_VariableRateShading		= 1 << 1,		TODO:
 

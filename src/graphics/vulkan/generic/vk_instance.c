@@ -269,9 +269,9 @@ Error GraphicsInstance_create(GraphicsApplicationInfo info, Bool isVerbose, Grap
 
 	if(supportsDebug[1]) {
 		vkExtension(clean, vkSetDebugUtilsObjectNameEXT, instanceExt->debugSetName);
-		vkExtension(clean, vkCmdDebugMarkerBeginEXT, instanceExt->debugMarkerBegin);
-		vkExtension(clean, vkCmdDebugMarkerEndEXT, instanceExt->debugMarkerEnd);
-		vkExtension(clean, vkCmdDebugMarkerInsertEXT, instanceExt->debugMarkerInsert);
+		vkExtension(clean, vkCmdDebugMarkerBeginEXT, instanceExt->cmdDebugMarkerBegin);
+		vkExtension(clean, vkCmdDebugMarkerEndEXT, instanceExt->cmdDebugMarkerEnd);
+		vkExtension(clean, vkCmdDebugMarkerInsertEXT, instanceExt->cmdDebugMarkerInsert);
 	}
 
 	if(supportsDebug[0]) {
@@ -298,6 +298,9 @@ Error GraphicsInstance_create(GraphicsApplicationInfo info, Bool isVerbose, Grap
 	vkExtensionNoCheck(vkCmdTraceRaysKHR, instanceExt->traceRays);
 	vkExtensionNoCheck(vkCmdTraceRaysIndirectKHR, instanceExt->traceRaysIndirect);
 	vkExtensionNoCheck(vkCreateRayTracingPipelinesKHR, instanceExt->createRaytracingPipelines);
+
+	vkExtensionNoCheck(vkCmdBeginRenderingKHR, instanceExt->cmdBeginRenderingKHR);
+	vkExtensionNoCheck(vkCmdEndRenderingKHR, instanceExt->cmdEndRenderingKHR);
 
 	//Add debug callback
 
@@ -780,16 +783,12 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 			}
 		}
 
-		//TBDR
+		//Direct rendering
 
 		if (
-			(vendor != EGraphicsVendor_AMD && vendor != EGraphicsVendor_NV) ||
-			(_PLATFORM_TYPE != EPlatform_Windows && _PLATFORM_TYPE != EPlatform_Linux) ||
-			!optExtensions[EOptExtensions_DynamicRendering]
-		)
-			capabilities.features |= EGraphicsFeatures_TiledRendering;
-
-		else {
+			(vendor == EGraphicsVendor_NV || vendor == EGraphicsVendor_AMD || vendor == EGraphicsVendor_INTC) &&
+			optExtensions[EOptExtensions_DynamicRendering]
+		) {
 
 			getDeviceFeatures(
 				VkPhysicalDeviceDynamicRenderingFeatures, 
@@ -797,8 +796,8 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 				VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES
 			);
 
-			if(!dynamicRendering.dynamicRendering)
-				capabilities.features |= EGraphicsFeatures_TiledRendering;
+			if(dynamicRendering.dynamicRendering)
+				capabilities.features |= EGraphicsFeatures_DirectRendering;
 		}
 
 		//Swapchain

@@ -105,7 +105,7 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 			List imageBarriers = List_createEmpty(sizeof(VkImageMemoryBarrier2));
 			Error err = Error_none();
 
-			_gotoIfError(clean, List_reservex(&imageBarriers, imageClearCount));
+			_gotoIfError(cleanClearImages, List_reservex(&imageBarriers, imageClearCount));
 
 			//Combine transitions into one call.
 
@@ -132,10 +132,10 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 				if(swapchain) {
 
 					if (image.range.layerId != U32_MAX && image.range.layerId >= 1)
-						_gotoIfError(clean, Error_outOfBounds(1, image.range.layerId, 1));
+						_gotoIfError(cleanClearImages, Error_outOfBounds(1, image.range.layerId, 1));
 
 					if (image.range.levelId != U32_MAX && image.range.levelId >= 1)
-						_gotoIfError(clean, Error_outOfBounds(2, image.range.levelId, 1));
+						_gotoIfError(cleanClearImages, Error_outOfBounds(2, image.range.levelId, 1));
 				}
 
 				//Handle transition
@@ -146,7 +146,7 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 					.layerCount = 1
 				};
 
-				_gotoIfError(clean, VkSwapchain_transition(
+				_gotoIfError(cleanClearImages, VkSwapchain_transition(
 					imageExt,
 					VK_PIPELINE_STAGE_2_CLEAR_BIT, 
 					VK_ACCESS_2_TRANSFER_WRITE_BIT, 
@@ -189,13 +189,13 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 					buffer, 
 					imageExt->image, 
 					imageExt->lastLayout,
-					(const VkClearColorValue*) image.color,
+					(const VkClearColorValue*) &image.color,
 					1,
 					&range
 				);
 			}
 
-		clean:
+		cleanClearImages:
 			List_freex(&imageBarriers);
 			return err;
 		}
@@ -254,13 +254,152 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 			break;
 		}*/
 
-		//Debug
+		//Dynamic rendering / direct rendering
+
+		case ECommandOp_startRenderingExt: {
+
+			const StartRenderExt *startRender = (const StartRenderExt*) data;
+			const AttachmentInfo *attachments = (const AttachmentInfo*) (startRender + 1);
+
+			//Prepare transitions
+
+			VkDependencyInfo dependency = (VkDependencyInfo) {
+				.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+				.dependencyFlags = 0
+			};
+
+			Error err = Error_none();
+
+			List imageBarriers = List_createEmpty(sizeof(VkImageMemoryBarrier2));
+			_gotoIfError(cleanStartRendering, List_reservex(&imageBarriers, startRender->colorCount));
+
+			U32 graphicsQueueId = deviceExt->queues[EVkCommandQueue_Graphics].queueId;
+
+			VkRenderingAttachmentInfoKHR attachmentsExt[8] = { 0 };
+			U8 j = U8_MAX;
+
+			I32x2 lastSize = I32x2_zero();
+
+			for (U8 i = 0; i < startRender->colorCount; ++i) {
+
+				if(!((startRender->activeMask >> i) & 1)) {
+
+					attachmentsExt[i] = (VkRenderingAttachmentInfoKHR) {
+						.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR,
+						.imageView = NULL,
+						.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+						.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE
+					};
+
+					continue;
+				}
+
+				++j;
+
+				//Grab attachment
+
+				const AttachmentInfo *attachmentsj = &attachments[j];
+
+				Swapchain *swapchain = SwapchainRef_ptr(attachmentsj->image);
+				VkSwapchain *swapchainExt = Swapchain_ext(swapchain, Vk);
+
+				if(!i)
+					lastSize = swapchain->size;
+
+				else if(!I32x2_eq2(lastSize, swapchain->size))
+					_gotoIfError(cleanStartRendering, Error_invalidOperation(0));
+
+				VkManagedImage *imageExt = &((VkManagedImage*)swapchainExt->images.ptr)[swapchainExt->currentIndex];
+
+				VkImageSubresourceRange range = (VkImageSubresourceRange) {
+					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+					.levelCount = 1,
+					.layerCount = 1
+				};
+
+				//Transition resource
+
+				_gotoIfError(cleanStartRendering, VkSwapchain_transition(
+
+					imageExt, 
+
+					attachmentsj->readOnly ? VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT : 
+					VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT ,
+
+					VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | 
+					(attachmentsj->readOnly ? 0 : VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT),
+
+					VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
+					graphicsQueueId,
+					&range,
+
+					&imageBarriers,
+					&dependency
+				));
+
+				VkAttachmentLoadOp loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+
+				switch(attachmentsj->load) {
+					case ELoadAttachmentType_Clear:		loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;		break;
+					case ELoadAttachmentType_Any:		loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;	break;
+				}
+
+				attachmentsExt[i] = (VkRenderingAttachmentInfoKHR) {
+					.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+					.imageView = imageExt->view,
+					.imageLayout = imageExt->lastLayout,
+					.loadOp = loadOp,
+					.storeOp = attachmentsj->readOnly ? VK_ATTACHMENT_STORE_OP_DONT_CARE : VK_ATTACHMENT_STORE_OP_STORE,
+					.clearValue = *(const VkClearValue*) &attachmentsj->color
+				};
+			}
+
+			instanceExt->cmdPipelineBarrier2(buffer, &dependency);
+
+			//Send begin render command
+
+			I32x2 offset = startRender->offset;
+
+			if(I32x2_any(I32x2_geq(offset, lastSize)))
+				_gotoIfError(cleanStartRendering, Error_invalidOperation(1));
+
+			I32x2 size = startRender->size;
+
+			if(I32x2_eq2(size, I32x2_zero()))
+				size = I32x2_sub(lastSize, offset);
+
+			VkRenderingInfoKHR renderInfo = (VkRenderingInfoKHR) {
+				.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR,
+				.renderArea = (VkRect2D) {
+					.offset = (VkOffset2D) {
+						.x = I32x2_x(offset),
+						.y = I32x2_y(offset)
+					},
+					.extent = (VkExtent2D) {
+						.width = I32x2_x(size),
+						.height = I32x2_y(size)
+					}
+				},
+				.layerCount = 1,
+				.colorAttachmentCount = startRender->colorCount,
+				.pColorAttachments = attachmentsExt
+			};
+
+			instanceExt->cmdBeginRenderingKHR(buffer, &renderInfo);
+
+		cleanStartRendering:
+			List_freex(&imageBarriers);
+			return err;
+		}
+
+		case ECommandOp_endRenderingExt:
+			instanceExt->cmdEndRenderingKHR(buffer);
+			break;
+
+		//Debug markers
 
 		case ECommandOp_endRegionDebugExt:
-
-			if(instanceExt->debugMarkerEnd)
-				instanceExt->debugMarkerEnd(buffer);
-
+			instanceExt->cmdDebugMarkerEnd(buffer);
 			break;
 
 		case ECommandOp_addMarkerDebugExt:
@@ -273,11 +412,11 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 
 			Buffer_copy(Buffer_createRef(&markerInfo.color, sizeof(F32x4)), Buffer_createConstRef(data, sizeof(F32x4)));
 			
-			if(op == ECommandOp_addMarkerDebugExt && instanceExt->debugMarkerInsert)
-				instanceExt->debugMarkerInsert(buffer, &markerInfo);
+			if(op == ECommandOp_addMarkerDebugExt)
+				instanceExt->cmdDebugMarkerInsert(buffer, &markerInfo);
 			
-			if(op == ECommandOp_startRegionDebugExt && instanceExt->debugMarkerBegin)
-				instanceExt->debugMarkerBegin(buffer, &markerInfo);
+			else if(op == ECommandOp_startRegionDebugExt)
+				instanceExt->cmdDebugMarkerBegin(buffer, &markerInfo);
 
 			break;
 		}
