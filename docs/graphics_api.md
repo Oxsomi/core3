@@ -164,6 +164,7 @@ _gotoIfError(clean, GraphicsDeviceRef_create(
   	U64 commandListLen, 
   	U64 estimatedCommandCount,
   	U64 estimatedResources,
+      Bool allowResize,
   	CommandListRef **commandList
   );
   ```
@@ -185,6 +186,7 @@ _gotoIfError(clean, GraphicsDeviceRef_createCommandList(
     4 * KIBI, 	//Max command buffer size
     128, 		//Estimated command count (can auto resize)
     KIBI, 		//Estimated resource count (can auto resize)
+    true,		//Allow resize
     &commandList
 ));
 ```

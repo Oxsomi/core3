@@ -98,8 +98,24 @@ Error CommandListRef_append(CommandListRef *commandListRef, ECommandOp op, Buffe
 	if(len > U32_MAX)
 		return Error_outOfBounds(2, len, U32_MAX);
 
-	if(commandList->next + len > Buffer_length(commandList->data))
-		return Error_outOfMemory(0);
+	if(commandList->next + len > Buffer_length(commandList->data)) {
+
+		if(!commandList->allowResize)
+			return Error_outOfMemory(0);
+
+		//Resize buffer to allow allocation
+
+		Buffer resized = Buffer_createNull();
+		Error err = Buffer_createEmptyBytesx(Buffer_length(commandList->data) * 2 + KIBI + len, &resized);
+
+		if(err.genericError)
+			return err;
+
+		Buffer_copy(resized, commandList->data);
+		Buffer_freex(&commandList->data);
+
+		commandList->data = resized;
+	}
 
 	if(objects.length && objects.stride != sizeof(RefPtr*))
 		return Error_invalidParameter(3, 0);
@@ -519,6 +535,7 @@ Error GraphicsDeviceRef_createCommandList(
 	U64 commandListLen, 
 	U64 estimatedCommandCount,
 	U64 estimatedResources,
+	Bool allowResize,
 	CommandListRef **commandListRef
 ) {
 
@@ -549,6 +566,7 @@ Error GraphicsDeviceRef_createCommandList(
 
 	GraphicsDeviceRef_add(deviceRef);
 	commandList->device = deviceRef;
+	commandList->allowResize = allowResize;
 
 	goto success;
 

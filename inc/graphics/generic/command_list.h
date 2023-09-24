@@ -82,7 +82,8 @@ typedef struct CommandList {
 
 	List callstacks;		//Used to handle error handling (Only has call stack depth 32 to save some space)
 
-	U32 padding;
+	U8 padding[3];
+	Bool allowResize;
 	ECommandListState state;
 
 	U64 next;
@@ -102,6 +103,7 @@ Error GraphicsDeviceRef_createCommandList(
 	U64 commandListLen, 
 	U64 estimatedCommandCount,
 	U64 estimatedResources,
+	Bool allowResize,
 	CommandListRef **commandList
 );
 
