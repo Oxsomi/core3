@@ -345,6 +345,43 @@ _gotoIfError(clean, CommandListRef_endRegionDebugExt(commandList));
 
 The same syntax as startRegionDebugExt can be used for addMarkerDebugExt. Except a marker doesn't need any end, it's just 1 event on the timeline.
 
+### DirectRendering feature
+
+DirectRendering allows rendering without render passes (default behavior in DirectX). This makes development for desktop a lot easier since AMD, Intel and NVIDIA aren't using tiled based deferred rendering (TBDR). However, all other vendors (such as Qualcomm, ARM, Apple, Imgtec) do use TBDR (mostly mobile architectures). The user is allowed to decide that this is a limitation they accept and can use this feature to greatly simplify the difficulty of the graphics layer (especially porting from existing apps). The user can also set up two different render engines; one that can deal with direct rendering and one that can't. The latter is targeted at mobile (lower hardware tier) and the former is for desktop/console. The two commands that are related to this feature are: startRenderExt and endRenderExt. They require the feature to be present and will return an error (and won't be inserted into the command list) otherwise.
+
+Just like *most* commands, this will automatically transition the resources into the correct states for you. Color attachments can always be read, but the user is in charge of specifying if the contents should be cleared or kept. Color attachments can also be readonly if needed.
+
+```c
+//In command list recording
+
+AttachmentInfo attachmentInfo = (AttachmentInfo) {
+    .range = (ImageRange) { 0 },						//Layer 0, level 0
+    .image = swapchain,									//See "Swapchain"
+    .load = ELoadAttachmentType_Clear,					//Clear image
+    .readOnly = false,									//Allow draw calls to write
+    .color = (ClearColor) { .colorf = {  1, 0, 0, 1 } }
+};
+
+List colors = (List) { 0 };
+_gotoIfError(clean, List_createConstRef(
+    (const U8*) &attachmentInfo, 1, sizeof(AttachmentInfo), &colors
+));
+
+_gotoIfError(clean, CommandListRef_startRenderExt(
+    commandList, 		//See "Command list"
+    I32x2_zero(), 		//No offset
+    I32x2_zero(), 		//Use attachment's size
+    colors, 
+    (List) { 0 }		//No depth stencil buffers
+));
+
+//Draw calls here
+
+_gotoIfError(clean, CommandListRef_endRenderExt(commandList));
+```
+
+Keep in mind that during a render call, you can't transition the resources passed into the attachments of the active render call. They're not allowed to be used as a read (SRV) or write textures (UAV); they're only allowed to be output attachments (RTV). Special care should be taken on the developer's side to avoid this from happening.
+
 ### TODO: Transitions
 
 Because the API requires bindless to function, it has certain limits. One of these limits/benefits is that a shader is now able to access all write buffers/textures and read buffers/textures. This would mean that everything is accessible by all shaders; making automatic transitions impossible. To fix this; the user will only have to manually do transitions for draw/dispatch calls. Here you specify the (sub)resource and in which shader stage it is first used and if it's a write (or if any subsequent shaders could write to it). Then the runtime will automatically transition only when it's needed. 
