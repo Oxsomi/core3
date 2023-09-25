@@ -973,6 +973,14 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 			}
 		}
 
+		//Check for invalid state.
+
+		if(state.debugRegionStack)
+			_gotoIfError(clean, Error_invalidOperation(0));
+
+		if(!I32x2_eq2(state.currentSize, I32x2_zero()))
+			_gotoIfError(clean, Error_invalidOperation(1));
+
 		//Transition back swapchains to present
 
 		//Combine transitions into one call.

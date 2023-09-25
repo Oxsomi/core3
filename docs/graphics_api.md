@@ -301,10 +301,12 @@ setViewport and setScissor are used to set viewport and scissor rects respective
 ```c
 _gotoIfError(clean, CommandListRef_setViewportAndScissor(
 	commandList,
-    I32x2_create2(0, 0),
-    I32x2_create2(1920, 1080)
+    I32x2_create2(0, 0),	//Offset
+    I32x2_create2(0, 0)		//Size
 ));
 ```
+
+This has to be called during a render call. Size can also be 0 to indicate full size of render target.
 
 ### setStencil
 
@@ -329,6 +331,28 @@ _gotoIfError(clean, CommandListRef_clearImagef(
 
 To clear multiple at once, call clearImages with a `List<ClearImage>`. ClearImage takes a color as a `U32[4]` (It's safe to copy a F32x4 or I32x4 to this as long as you bitcast it), a range and the image ref ptr. It's the same as a single clear image but it allows multiple.
 
+Clear image is only allowed on images which aren't currently bound as a render target.
+
+### draw
+
+The draw command will simply draw the currently bound primitive buffer (optional) with the currently bound pipeline (required). If the primitive buffer is not present, the pipeline is expected to generate the vertices dynamically. It requires a render call to be started (see DirectRendering). It handles both indexed and non indexed draw calls:
+
+```c
+//Non indexed draw call
+//Can also specify instanceOffset and vertexOffset
+
+_gotoIfError(clean, CommandListRef_draw(
+    commandList, (Draw) { .count = 3, .instanceCount = 1 }
+));
+
+//Indexed draw call
+//Can also specify instanceOffset, indexOffset and vertexOffset
+
+_gotoIfError(clean, CommandListRef_draw(
+    commandList, (Draw) { .count = 3, .instanceCount = 1, .isIndexed = true }
+));
+```
+
 ### DebugMarkers feature
 
 DebugMarkers adds three commands: addMarkerDebugExt, startRegionDebugExt and endRegionDebugExt. If the DebugMarkers feature isn't present, these are safely ignored and won't be inserted into the virtual command list. This can be used to provide extra debugging info to tools such as RenderDoc, NSight, Pix, etc. to show where important events such as render calls happened and what they represented. A debug region or debug marker has a color and a name. A debug region is like a stack; you can only end the current region and push another region. Every region you start has to be ended over the command lists that are submitted (you can start & end the same region in two separate command lists, as long as they're always both submitted).
@@ -345,7 +369,7 @@ _gotoIfError(clean, CommandListRef_startRegionDebugExt(
 _gotoIfError(clean, CommandListRef_endRegionDebugExt(commandList));
 ```
 
-The same syntax as startRegionDebugExt can be used for addMarkerDebugExt. Except a marker doesn't need any end, it's just 1 event on the timeline.
+The same syntax as startRegionDebugExt can be used for addMarkerDebugExt. Except a marker doesn't need any end, it's just 1 event on the timeline. Every end region needs to correspond with a start region and vice versa.
 
 ### DirectRendering feature
 
@@ -383,6 +407,8 @@ _gotoIfError(clean, CommandListRef_endRenderExt(commandList));
 ```
 
 Keep in mind that during a render call, you can't transition the resources passed into the attachments of the active render call. They're not allowed to be used as a read (SRV) or write textures (UAV); they're only allowed to be output attachments (RTV). Special care should be taken on the developer's side to avoid this from happening.
+
+Every startRender needs to match an endRender. During the render it's not allowed to access the render textures as a write or read texture. Operations such as clears are also not allowed.
 
 ### TODO: Transitions
 

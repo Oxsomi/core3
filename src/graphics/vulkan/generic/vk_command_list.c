@@ -31,6 +31,25 @@
 #include "types/buffer.h"
 #include "types/error.h"
 
+Bool VkCommandBufferState_rangeConflicts(RefPtr *image1, ImageRange range1, RefPtr *image2, ImageRange range2) {
+
+	range2; range1;		//TODO:
+
+	return image1 == image2;
+}
+
+Bool VkCommandBufferState_isImageBound(VkCommandBufferState *state, RefPtr *image, ImageRange range) {
+
+	if(!state)
+		return false;
+
+	for(U64 i = 0; i < state->boundImageCount; ++i)
+		if(VkCommandBufferState_rangeConflicts(image, range, state->boundImages[i].ref, state->boundImages[i].range))
+			return true;
+
+	return false;
+}
+
 Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data, void *commandListExt) {
 
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
@@ -48,11 +67,20 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 		case ECommandOp_setScissor:
 		case ECommandOp_setViewportAndScissor: {
 
+			if(I32x2_eq2(temp->currentSize, I32x2_zero()))
+				return Error_invalidOperation(0);
+
 			I32x4 results;
 			Buffer_copy(Buffer_createRef(&results, sizeof(results)), Buffer_createConstRef(data, sizeof(results)));
 
 			I32x2 offset = I32x4_xy(results);
 			I32x2 size = I32x4_zw(results);
+
+			if(I32x2_any(I32x2_geq(offset, temp->currentSize)))
+				return Error_invalidOperation(1);
+
+			if(I32x2_eq2(size, I32x2_zero()))
+				size = I32x2_sub(temp->currentSize, offset);
 
 			Bool setViewport = op & 1;
 			Bool setScissor = op & 2;
@@ -124,6 +152,9 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 
 				Swapchain *swapchain = SwapchainRef_ptr(image.image);
 				VkSwapchain *swapchainExt = Swapchain_ext(swapchain, Vk);
+
+				if(VkCommandBufferState_isImageBound(temp, image.image, image.range))
+					return Error_invalidOperation(0);
 
 				VkManagedImage *imageExt = &((VkManagedImage*)swapchainExt->images.ptr)[swapchainExt->currentIndex];
 
@@ -258,6 +289,9 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 
 		case ECommandOp_startRenderingExt: {
 
+			if(!I32x2_eq2(temp->currentSize, I32x2_zero()))
+				return Error_invalidOperation(0);
+
 			const StartRenderExt *startRender = (const StartRenderExt*) data;
 			const AttachmentInfo *attachments = (const AttachmentInfo*) (startRender + 1);
 
@@ -280,6 +314,8 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 
 			I32x2 lastSize = I32x2_zero();
 
+			VkImageRange ranges[8] = { 0 };
+
 			for (U8 i = 0; i < startRender->colorCount; ++i) {
 
 				if(!((startRender->activeMask >> i) & 1)) {
@@ -299,6 +335,9 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 				//Grab attachment
 
 				const AttachmentInfo *attachmentsj = &attachments[j];
+
+				ranges->range = attachmentsj->range;
+				ranges->ref = attachmentsj->image;
 
 				Swapchain *swapchain = SwapchainRef_ptr(attachmentsj->image);
 				VkSwapchain *swapchainExt = Swapchain_ext(swapchain, Vk);
@@ -368,6 +407,8 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 			if(I32x2_eq2(size, I32x2_zero()))
 				size = I32x2_sub(lastSize, offset);
 
+			temp->currentSize = size;
+
 			VkRenderingInfoKHR renderInfo = (VkRenderingInfoKHR) {
 				.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR,
 				.renderArea = (VkRect2D) {
@@ -387,19 +428,63 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 
 			instanceExt->cmdBeginRenderingKHR(buffer, &renderInfo);
 
+			temp->boundImageCount = startRender->colorCount;
+
+			U64 siz = sizeof(VkImageRange) * startRender->colorCount;
+			Buffer_copy(Buffer_createRef(temp->boundImages, siz), Buffer_createRef(ranges, siz));
+
 		cleanStartRendering:
 			List_freex(&imageBarriers);
 			return err;
 		}
 
 		case ECommandOp_endRenderingExt:
+
+			if(I32x2_eq2(temp->currentSize, I32x2_zero()))
+				return Error_invalidOperation(0);
+
 			instanceExt->cmdEndRenderingKHR(buffer);
+			temp->currentSize = I32x2_zero();
 			break;
+
+		//Draws
+
+		case ECommandOp_draw: {
+
+			if(I32x2_eq2(temp->currentSize, I32x2_zero()))
+				return Error_invalidOperation(0);
+
+			/*if(!pipeline)		TODO:
+				;*/
+
+			Draw draw = *(Draw*)data;
+
+			if(draw.isIndexed)
+				vkCmdDrawIndexed(
+					buffer, 
+					draw.count, draw.instanceCount, 
+					draw.indexOffset, draw.vertexOffset, 
+					draw.instanceOffset
+				);
+
+			else vkCmdDraw(
+				buffer,
+				draw.count, draw.instanceCount, 
+				draw.indexOffset, draw.vertexOffset
+			);
+
+			break;
+		}
 
 		//Debug markers
 
 		case ECommandOp_endRegionDebugExt:
+
+			if(!temp->debugRegionStack)
+				return Error_invalidOperation(0);
+
 			instanceExt->cmdDebugMarkerEnd(buffer);
+			--temp->debugRegionStack;
 			break;
 
 		case ECommandOp_addMarkerDebugExt:
@@ -415,8 +500,14 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 			if(op == ECommandOp_addMarkerDebugExt)
 				instanceExt->cmdDebugMarkerInsert(buffer, &markerInfo);
 			
-			else if(op == ECommandOp_startRegionDebugExt)
+			else if(op == ECommandOp_startRegionDebugExt) {
+
+				if(temp->debugRegionStack == U32_MAX)
+					return Error_invalidOperation(0);
+
 				instanceExt->cmdDebugMarkerBegin(buffer, &markerInfo);
+				++temp->debugRegionStack;
+			}
 
 			break;
 		}

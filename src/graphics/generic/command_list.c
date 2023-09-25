@@ -173,7 +173,7 @@ success:
 
 Error CommandListRef_checkBounds(I32x2 offset, I32x2 size, I32 lowerBound1, I32 upperBound1) {
 	
-	if(I32x2_any(I32x2_leq(size, I32x2_zero())))
+	if(I32x2_any(I32x2_lt(size, I32x2_zero())))
 		return Error_invalidParameter(1, 0);
 	
 	I32x2 upperBound = I32x2_xx2(upperBound1);
@@ -345,6 +345,12 @@ Error CommandListRef_clearDepthStencil(CommandListRef *commandListRef, F32 depth
 	);
 }*/
 
+//Render calls
+
+Error CommandListRef_draw(CommandListRef *commandList, Draw draw) {
+	return CommandListRef_append(commandList, ECommandOp_draw, Buffer_createConstRef(&draw, sizeof(draw)), (List) { 0 }, 0);
+}
+
 //Dynamic rendering
 
 Error CommandListRef_startRenderExt(
@@ -370,8 +376,7 @@ Error CommandListRef_startRenderExt(
 	if(colors.length > 8)
 		return Error_outOfBounds(3, colors.length, 8);
 
-	I32x2 sizeTemp = I32x2_all(I32x2_eq(size, I32x2_zero())) ? I32x2_one() : size;		//Hack to allow 0 size.
-	Error err = CommandListRef_checkBounds(offset, sizeTemp, 0, 32'767);
+	Error err = CommandListRef_checkBounds(offset, size, 0, 32'767);
 
 	if(err.genericError)
 		return err;

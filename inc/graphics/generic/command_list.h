@@ -44,6 +44,10 @@ typedef enum ECommandOp {
 	ECommandOp_startRenderingExt,
 	ECommandOp_endRenderingExt,
 
+	//Draw calls
+
+	ECommandOp_draw,
+
 	//Clearing depth + color views
 
 	ECommandOp_clearImages,
@@ -164,6 +168,22 @@ Error CommandListRef_clearImageu(CommandListRef *commandList, const U32 color[4]
 Error CommandListRef_clearImages(CommandListRef *commandList, List clearImages);		//<ClearImage>
 
 //Error CommandListRef_clearDepthStencil(CommandListRef *commandList, F32 depth, U8 stencil, ImageRange image);
+
+//Draw calls
+
+typedef struct Draw {
+
+	U32 count, instanceCount;
+	U32 vertexOffset, instanceOffset;
+
+	U32 indexOffset;
+
+	Bool isIndexed;
+	U8 padding[3];
+
+} Draw;
+
+Error CommandListRef_draw(CommandListRef *commandList, Draw draw);
 
 //DynamicRendering feature
 

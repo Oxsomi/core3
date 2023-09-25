@@ -21,6 +21,7 @@
 #pragma once
 #include "graphics/vulkan/vulkan.h"
 #include "graphics/generic/device_info.h"
+#include "graphics/generic/command_list.h"
 #include "types/list.h"
 #include "math/vec.h"
 
@@ -98,18 +99,34 @@ typedef struct VkCommandAllocator {
 
 typedef enum EVkCommandBufferFlags {
 
-	EVkCommandBufferFlags_hasDepth	= 1 << 0,
+	EVkCommandBufferFlags_hasDepth		= 1 << 0,
 	EVkCommandBufferFlags_hasStencil	= 1 << 1
 
 } EVkCommandBufferFlags;
 
+typedef struct VkImageRange {
+
+	RefPtr *ref;
+
+	ImageRange range;
+
+} VkImageRange;
+
 typedef struct VkCommandBufferState {		//Caching state variables
 
-	I32x2 currentSize;						//Size of currently bound render target(s)
+	I32x2 currentSize;						//Size of currently bound render target(s), 0 if none
+
+	EVkCommandBufferFlags flags;
+	U32 debugRegionStack;
 
 	VkCommandBuffer buffer;
 
-	EVkCommandBufferFlags flags;
+	U32 pad0;
+
+	U8 pad1[3];
+	U8 boundImageCount;
+
+	VkImageRange boundImages[8];
 
 } VkCommandBufferState;
 
