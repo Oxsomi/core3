@@ -454,7 +454,7 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 			if(I32x2_eq2(temp->currentSize, I32x2_zero()))
 				return Error_invalidOperation(0);
 
-			/*if(!pipeline)		TODO:
+			/*if(!graphicsPipeline)		TODO:
 				;*/
 
 			Draw draw = *(Draw*)data;
@@ -473,6 +473,17 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 				draw.indexOffset, draw.vertexOffset
 			);
 
+			break;
+		}
+
+		case ECommandOp_dispatch: {
+
+			/*if(!computePipeline)		TODO:
+				;*/
+
+			Dispatch dispatch = *(Dispatch*)data;
+
+			vkCmdDispatch(buffer, dispatch.groups[0], dispatch.groups[1], dispatch.groups[2]);
 			break;
 		}
 

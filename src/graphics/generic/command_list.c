@@ -351,6 +351,66 @@ Error CommandListRef_draw(CommandListRef *commandList, Draw draw) {
 	return CommandListRef_append(commandList, ECommandOp_draw, Buffer_createConstRef(&draw, sizeof(draw)), (List) { 0 }, 0);
 }
 
+Error CommandListRef_drawIndexed(CommandListRef *commandList, U32 indexCount, U32 instanceCount) {
+	Draw draw = (Draw) { .count = indexCount, .instanceCount = instanceCount, .isIndexed = true };
+	return CommandListRef_draw(commandList, draw);
+}
+
+Error CommandListRef_drawIndexedAdv(
+	CommandListRef *commandList, 
+	U32 indexCount, U32 instanceCount, 
+	U32 indexOffset, U32 instanceOffset,
+	U32 vertexOffset
+) {
+	Draw draw = (Draw) { 
+		.count = indexCount, .instanceCount = instanceCount, 
+		.indexOffset = indexOffset, .instanceOffset = instanceOffset,
+		.vertexOffset = vertexOffset,
+		.isIndexed = true 
+	};
+
+	return CommandListRef_draw(commandList, draw);
+}
+
+Error CommandListRef_drawUnindexed(CommandListRef *commandList, U32 vertexCount, U32 instanceCount) {
+	Draw draw = (Draw) { .count = vertexCount, .instanceCount = instanceCount };
+	return CommandListRef_draw(commandList, draw);
+}
+
+Error CommandListRef_drawUnindexedAdv(
+	CommandListRef *commandList, 
+	U32 vertexCount, U32 instanceCount, 
+	U32 vertexOffset, U32 instanceOffset
+) {
+	Draw draw = (Draw) { 
+		.count = vertexCount, .instanceCount = instanceCount, 
+		.vertexOffset = vertexOffset, .instanceOffset = instanceOffset
+	};
+
+	return CommandListRef_draw(commandList, draw);
+}
+
+Error CommandListRef_dispatch(CommandListRef *commandList, Dispatch dispatch) {
+	return CommandListRef_append(
+		commandList, ECommandOp_dispatch, Buffer_createConstRef(&dispatch, sizeof(dispatch)), (List) { 0 }, 0
+	);
+}
+
+Error CommandListRef_dispatch1D(CommandListRef *commandList, U32 groupsX) {
+	Dispatch dispatch = (Dispatch) { .groups = { groupsX, 1, 1 } };
+	return CommandListRef_dispatch(commandList, dispatch);
+}
+
+Error CommandListRef_dispatch2D(CommandListRef *commandList, U32 groupsX, U32 groupsY) {
+	Dispatch dispatch = (Dispatch) { .groups = { groupsX, groupsY, 1 } };
+	return CommandListRef_dispatch(commandList, dispatch);
+}
+
+Error CommandListRef_dispatch3D(CommandListRef *commandList, U32 groupsX, U32 groupsY, U32 groupsZ) {
+	Dispatch dispatch = (Dispatch) { .groups = { groupsX, groupsY, groupsZ } };
+	return CommandListRef_dispatch(commandList, dispatch);
+}
+
 //Dynamic rendering
 
 Error CommandListRef_startRenderExt(

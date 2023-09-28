@@ -590,6 +590,44 @@ Error GraphicsDevice_initExt(
 	_gotoIfError(clean, vkCheck(vkCreateSemaphore(deviceExt->device, &semaphoreInfo, NULL, &deviceExt->commitSemaphore)));
 
 	deviceExt->resolvedQueues = resolvedId;
+
+	//Create shared layout since we use bindless
+
+	VkDescriptorSetLayoutBinding bindings[5] = { 0 };
+
+	VkDescriptorSetLayoutCreateInfo setInfo = (VkDescriptorSetLayoutCreateInfo) {
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+		.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT,
+		.bindingCount = (U32)(sizeof(bindings) / sizeof(VkDescriptorSetLayoutBinding)),
+		.pBindings = bindings
+	};
+
+	for (U32 i = 0; i < setInfo.bindingCount; ++i) {
+
+		bindings[i] = (VkDescriptorSetLayoutBinding) {
+			.descriptorCount = i == 0 ? 2 * KIBI : 200'000,
+			.stageFlags = VK_SHADER_STAGE_ALL
+		};
+
+		switch (i) {
+			case 0:		bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;			break;
+			case 1:		bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;		break;
+			case 2:		bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;		break;
+			case 3:		bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;		break;
+			case 4:		bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;		break;
+		}
+	}
+
+	_gotoIfError(clean, vkCheck(vkCreateDescriptorSetLayout(deviceExt->device, &setInfo, NULL, &deviceExt->setLayout)));
+
+	VkPipelineLayoutCreateInfo layoutInfo = (VkPipelineLayoutCreateInfo) {
+		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+		.setLayoutCount = 1,
+		.pSetLayouts = &deviceExt->setLayout
+	};
+
+	_gotoIfError(clean, vkCheck(vkCreatePipelineLayout(deviceExt->device, &layoutInfo, NULL, &deviceExt->defaultLayout)));
+
 	goto success;
 
 clean:
@@ -637,6 +675,12 @@ Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext) {
 			vkDestroySemaphore(deviceExt->device, deviceExt->commitSemaphore, NULL);
 			deviceExt->commitSemaphore = NULL;
 		}
+
+		if(deviceExt->setLayout)
+			vkDestroyDescriptorSetLayout(deviceExt->device, deviceExt->setLayout, NULL);
+
+		if(deviceExt->defaultLayout)
+			vkDestroyPipelineLayout(deviceExt->device, deviceExt->defaultLayout, NULL);
 
 		vkDestroyDevice(deviceExt->device, NULL);
 	}

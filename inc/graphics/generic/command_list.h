@@ -44,9 +44,10 @@ typedef enum ECommandOp {
 	ECommandOp_startRenderingExt,
 	ECommandOp_endRenderingExt,
 
-	//Draw calls
+	//Draw calls and dispatches
 
 	ECommandOp_draw,
+	ECommandOp_dispatch,
 
 	//Clearing depth + color views
 
@@ -169,7 +170,7 @@ Error CommandListRef_clearImages(CommandListRef *commandList, List clearImages);
 
 //Error CommandListRef_clearDepthStencil(CommandListRef *commandList, F32 depth, U8 stencil, ImageRange image);
 
-//Draw calls
+//Draw calls and dispatches
 
 typedef struct Draw {
 
@@ -184,6 +185,28 @@ typedef struct Draw {
 } Draw;
 
 Error CommandListRef_draw(CommandListRef *commandList, Draw draw);
+
+Error CommandListRef_drawIndexed(CommandListRef *commandList, U32 indexCount, U32 instanceCount);
+Error CommandListRef_drawIndexedAdv(
+	CommandListRef *commandList, 
+	U32 indexCount, U32 instanceCount, 
+	U32 indexOffset, U32 instanceOffset,
+	U32 vertexOffset
+);
+
+Error CommandListRef_drawUnindexed(CommandListRef *commandList, U32 vertexCount, U32 instanceCount);
+Error CommandListRef_drawUnindexedAdv(
+	CommandListRef *commandList, 
+	U32 vertexCount, U32 instanceCount, 
+	U32 vertexOffset, U32 instanceOffset
+);
+
+typedef struct Dispatch { U32 groups[3]; } Dispatch;
+
+Error CommandListRef_dispatch(CommandListRef *commandList, Dispatch dispatch);
+Error CommandListRef_dispatch1D(CommandListRef *commandList, U32 groupsX);
+Error CommandListRef_dispatch2D(CommandListRef *commandList, U32 groupsX, U32 groupsY);
+Error CommandListRef_dispatch3D(CommandListRef *commandList, U32 groupsX, U32 groupsY, U32 groupsZ);
 
 //DynamicRendering feature
 
