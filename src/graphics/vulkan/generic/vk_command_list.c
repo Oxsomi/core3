@@ -22,12 +22,15 @@
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
 #include "graphics/generic/swapchain.h"
+#include "graphics/generic/pipeline.h"
 #include "graphics/vulkan/vulkan.h"
 #include "graphics/vulkan/vk_device.h"
 #include "graphics/vulkan/vk_instance.h"
 #include "graphics/vulkan/vk_swapchain.h"
+//#include "graphics/vulkan/pipeline.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/listx.h"
+#include "formats/texture.h"
 #include "types/buffer.h"
 #include "types/error.h"
 
@@ -50,6 +53,51 @@ Bool VkCommandBufferState_isImageBound(VkCommandBufferState *state, RefPtr *imag
 	return false;
 }
 
+Error CommandList_validateGraphicsPipeline(
+	Pipeline *pipeline, 
+	VkImageRange images[8], 
+	U8 imageCount, 
+	EDepthStencilFormat depthFormat
+) {
+
+	PipelineGraphicsInfo *info = (PipelineGraphicsInfo*)pipeline->extraInfo;
+
+	//Depth stencil state can be set to None to ignore writing to depth stencil
+
+	if (info->depthFormat != EDepthStencilFormat_none && depthFormat != info->depthFormat)
+		return Error_invalidState(1);
+
+	//Validate attachments
+
+	if (info->attachmentCount != imageCount)
+		return Error_invalidState(0);
+
+	for (U8 i = 0; i < imageCount && i < 8; ++i) {
+
+		//Undefined is used to ignore the currently bound slot and to avoid writing to it
+
+		if (info->attachmentFormats[i] == ETextureFormat_undefined)
+			continue;
+
+		//Validate if formats are the same
+
+		RefPtr *ref = images[i].ref;
+
+		if (!ref)
+			return Error_nullPointer(1);
+
+		if (ref->typeId != EGraphicsTypeId_Swapchain)
+			return Error_invalidParameter(1, i);
+
+		Swapchain *swapchain = SwapchainRef_ptr(ref);
+
+		if (swapchain->format != info->attachmentFormats[i])
+			return Error_invalidState(i + 2);
+	}
+
+	return Error_none();
+}
+
 Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data, void *commandListExt) {
 
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
@@ -66,6 +114,10 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 		case ECommandOp_setViewport:
 		case ECommandOp_setScissor:
 		case ECommandOp_setViewportAndScissor: {
+
+			//TODO: We probably wanna cache this if there's no currently bound target and apply it later
+			//		We probably also wanna store what size the viewport is so when re-binding a target we can
+			//		re-bind it without any problem.
 
 			if(I32x2_eq2(temp->currentSize, I32x2_zero()))
 				return Error_invalidOperation(0);
@@ -393,7 +445,8 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 				};
 			}
 
-			instanceExt->cmdPipelineBarrier2(buffer, &dependency);
+			if(dependency.imageMemoryBarrierCount)
+				instanceExt->cmdPipelineBarrier2(buffer, &dependency);
 
 			//Send begin render command
 
@@ -449,13 +502,45 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 
 		//Draws
 
+		case ECommandOp_setPipeline: {
+
+			PipelineRef *setPipeline = *(PipelineRef**) data;
+
+			Pipeline *pipeline = PipelineRef_ptr(setPipeline);
+			VkPipeline *pipelineExt = Pipeline_ext(pipeline, Vk);
+
+			vkCmdBindPipeline(
+				temp->buffer,
+				pipeline->type == EPipelineType_Compute ? VK_PIPELINE_BIND_POINT_COMPUTE : VK_PIPELINE_BIND_POINT_GRAPHICS,
+				*pipelineExt
+			);
+
+			break;
+		}
+
 		case ECommandOp_draw: {
 
 			if(I32x2_eq2(temp->currentSize, I32x2_zero()))
 				return Error_invalidOperation(0);
 
-			/*if(!graphicsPipeline)		TODO:
-				;*/
+			if (!temp->boundPipelines[0])
+				return Error_invalidOperation(1);
+
+			//TODO: Validate viewport
+
+			//Formats are actually required to align by D3D12.
+			//But to keep both APIs running similarly, we have to enforce this for Vulkan too.
+
+			Pipeline *pipeline = PipelineRef_ptr(temp->boundPipelines[0]);
+
+			Error err = CommandList_validateGraphicsPipeline(
+				pipeline, temp->boundImages, temp->boundImageCount, EDepthStencilFormat_none
+			);
+
+			if(err.genericError)
+				return err;
+
+			//Otherwise we have a valid draw
 
 			Draw draw = *(Draw*)data;
 
@@ -478,13 +563,97 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 
 		case ECommandOp_dispatch: {
 
-			/*if(!computePipeline)		TODO:
-				;*/
+			if (!temp->boundPipelines[1])
+				return Error_invalidOperation(0);
 
 			Dispatch dispatch = *(Dispatch*)data;
 
 			vkCmdDispatch(buffer, dispatch.groups[0], dispatch.groups[1], dispatch.groups[2]);
 			break;
+		}
+
+		case ECommandOp_transition: {
+
+			U32 transitionCount = *(const U32*) data;
+			const Transition *transitions = (const Transition*)(data + sizeof(U32));
+
+			VkDependencyInfo dependency = (VkDependencyInfo) {
+				.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+				.dependencyFlags = 0
+			};
+
+			Error err = Error_none();
+
+			List imageBarriers = List_createEmpty(sizeof(VkImageMemoryBarrier2));
+			_gotoIfError(cleanTransition, List_reservex(&imageBarriers, transitionCount));
+
+			for (U64 i = 0; i < transitionCount; ++i) {
+
+				Transition transition = transitions[i];
+
+				Swapchain *swapchain = SwapchainRef_ptr(transition.resource);
+				VkSwapchain *swapchainExt = Swapchain_ext(swapchain, Vk);
+
+				VkManagedImage *imageExt = &((VkManagedImage*)swapchainExt->images.ptr)[swapchainExt->currentIndex];
+
+				if(VkCommandBufferState_isImageBound(temp, transition.resource, transition.range))
+					return Error_invalidOperation(0);
+
+				VkImageSubresourceRange range = (VkImageSubresourceRange) {
+					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+					.levelCount = 1,
+					.layerCount = 1
+				};
+
+				//Transition resource
+
+				VkPipelineStageFlags2 pipelineStage = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+
+				switch (transition.stage) {
+
+					case EPipelineStage_Compute:		break;
+					case EPipelineStage_Vertex:			pipelineStage = VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT;		break;
+					case EPipelineStage_Pixel:			pipelineStage = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;	break;
+					case EPipelineStage_GeometryExt:	pipelineStage = VK_PIPELINE_STAGE_2_GEOMETRY_SHADER_BIT;	break;
+
+					case EPipelineStage_HullExt:		
+						pipelineStage = VK_PIPELINE_STAGE_2_TESSELLATION_CONTROL_SHADER_BIT;
+						break;
+
+					case EPipelineStage_DomainExt:
+						pipelineStage = VK_PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER_BIT;
+						break;
+
+					default:
+						_gotoIfError(cleanTransition, Error_unsupportedOperation(0));
+				}
+
+				VkAccessFlags2 accessFlags =
+					transition.isWrite ? VK_ACCESS_2_SHADER_SAMPLED_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_READ_BIT :
+					VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
+
+				U32 graphicsQueueId = deviceExt->queues[EVkCommandQueue_Graphics].queueId;
+
+				_gotoIfError(cleanTransition, VkSwapchain_transition(
+
+					imageExt, 
+					pipelineStage,
+					accessFlags,
+					transition.isWrite ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_GENERAL,
+					graphicsQueueId,
+					&range,
+
+					&imageBarriers,
+					&dependency
+				));
+			}
+
+			if(dependency.imageMemoryBarrierCount)
+				instanceExt->cmdPipelineBarrier2(buffer, &dependency);
+
+		cleanTransition:
+			List_freex(&imageBarriers);
+			return err;
 		}
 
 		//Debug markers

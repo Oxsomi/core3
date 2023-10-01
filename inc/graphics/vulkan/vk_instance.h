@@ -88,8 +88,8 @@ typedef struct VkGraphicsInstance {
 	PFN_vkDestroySurfaceKHR destroySurface;
 	PFN_vkDestroySwapchainKHR destroySwapchain;
 
-	PFN_vkCmdDrawIndexedIndirectCountKHR drawIndexedIndirectCount;
-	PFN_vkCmdDrawIndirectCountKHR drawIndirectCount;
+	PFN_vkCmdDrawIndexedIndirectCountKHR cmdDrawIndexedIndirectCount;
+	PFN_vkCmdDrawIndirectCountKHR cmdDrawIndirectCount;
 
 	PFN_vkBuildAccelerationStructuresKHR buildAccelerationStructures;
 	PFN_vkCmdCopyAccelerationStructureKHR copyAccelerationStructure;

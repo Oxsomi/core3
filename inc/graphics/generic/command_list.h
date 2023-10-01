@@ -24,6 +24,7 @@
 #include "platforms/ref_ptr.h"
 
 typedef RefPtr GraphicsDeviceRef;
+typedef RefPtr PipelineRef;
 typedef struct CharString CharString;
 typedef struct GraphicsDevice GraphicsDevice;
 
@@ -45,6 +46,9 @@ typedef enum ECommandOp {
 	ECommandOp_endRenderingExt,
 
 	//Draw calls and dispatches
+
+	ECommandOp_setPipeline,
+	ECommandOp_transition,
 
 	ECommandOp_draw,
 	ECommandOp_dispatch,
@@ -172,6 +176,23 @@ Error CommandListRef_clearImages(CommandListRef *commandList, List clearImages);
 
 //Draw calls and dispatches
 
+typedef enum EPipelineStage EPipelineStage;
+
+typedef struct Transition {
+
+	RefPtr *resource;			//Currently only supports swapchain
+	ImageRange range;
+
+	EPipelineStage stage;		//First shader stage that will access this resource
+	U8 padding[3];
+	Bool isWrite;
+
+} Transition;
+
+Error CommandListRef_transition(CommandListRef *commandList, List transitions);			//<Transition>
+
+Error CommandListRef_setPipeline(CommandListRef *commandList, PipelineRef *pipeline);
+
 typedef struct Draw {
 
 	U32 count, instanceCount;
@@ -200,6 +221,8 @@ Error CommandListRef_drawUnindexedAdv(
 	U32 vertexCount, U32 instanceCount, 
 	U32 vertexOffset, U32 instanceOffset
 );
+
+//TODO: Allow specifying resource and group count the dispatch should align to
 
 typedef struct Dispatch { U32 groups[3]; } Dispatch;
 

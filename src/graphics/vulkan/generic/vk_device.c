@@ -605,7 +605,7 @@ Error GraphicsDevice_initExt(
 	for (U32 i = 0; i < setInfo.bindingCount; ++i) {
 
 		bindings[i] = (VkDescriptorSetLayoutBinding) {
-			.descriptorCount = i == 0 ? 2 * KIBI : 200'000,
+			.descriptorCount = i == 0 ? 2 * (U32)KIBI : 200'000,
 			.stageFlags = VK_SHADER_STAGE_ALL
 		};
 

@@ -286,8 +286,8 @@ Error GraphicsInstance_create(GraphicsApplicationInfo info, Bool isVerbose, Grap
 		vkExtension(clean, vkDestroySwapchainKHR, instanceExt->destroySwapchain);
 	}
 
-	vkExtensionNoCheck(vkCmdDrawIndexedIndirectCountKHR, instanceExt->drawIndexedIndirectCount);
-	vkExtensionNoCheck(vkCmdDrawIndirectCountKHR, instanceExt->drawIndirectCount);
+	vkExtensionNoCheck(vkCmdDrawIndexedIndirectCountKHR, instanceExt->cmdDrawIndexedIndirectCount);
+	vkExtensionNoCheck(vkCmdDrawIndirectCountKHR, instanceExt->cmdDrawIndirectCount);
 
 	vkExtensionNoCheck(vkBuildAccelerationStructuresKHR, instanceExt->buildAccelerationStructures);
 	vkExtensionNoCheck(vkCmdCopyAccelerationStructureKHR, instanceExt->copyAccelerationStructure);

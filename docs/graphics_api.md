@@ -2,9 +2,11 @@
 
 The core pillars of the abstraction of this graphics library are the following:
 
-- Support feature sets as close as possible to Vulkan, DirectX and Metal.
+- Support feature sets as close as possible to Vulkan, DirectX12 and Metal3.
+  - Limits from legacy graphics such as DirectX11 (and below), OpenGL, below Metal3, below Vulkan 1.2 and others like WebGL won't be considered for this spec. They'd add additional complexity for no gain.
 - Simplify usage for these APIs, as they're too verbose.
   - But don't oversimplify them to the point of being useless.
+  - This does mean features not deemed important enough might not be included in the main specification. Though a branch could maintain support if needed.
 - Force modern minimum specs to avoid having to build too many diverging renderers to deal with limitations of older devices.
 - Allow modern usage of these APIs such as raytracing and bindless.
 - Support various systems such as Android, Apple, Windows and Linux (console should be kept in mind, though not officially supported).
@@ -21,7 +23,7 @@ RefPtr doesn't contain the object itself, but it does contain information about 
 
 ### Summary
 
-The graphics instance is the way you can query physical devices from DirectX, Vulkan or Metal. First one has to be created as follows:
+The graphics instance is the way you can query physical devices from D3D12, Vulkan or Metal3. First one has to be created as follows:
 
 ```c
 GraphicsInstanceRef *instance = NULL;
@@ -41,10 +43,10 @@ Once this instance is acquired, it can be used to query devices and to detect wh
 ### Properties
 
 - application: The name and version of the application.
-- api: Which api is ran by the runtime: Vulkan, DirectX12, Metal or WebGPU.
-- apiVersion: What version of the graphics api is being ran (e.g. Vulkan 1.2, DirectX 12_2, etc.).
+- api: Which api is ran by the runtime: Vulkan, DirectX12, Metal3 or WebGPU.
+- apiVersion: What version of the graphics api is being ran (e.g. Vulkan 1.2, DirectX 12_2, Metal 3, etc.).
 
-### Functions
+### (Member) Functions
 
 - ```c
   Error getDeviceInfos(Bool isVerbose, List<GraphicsDeviceInfo> *infos);
@@ -85,7 +87,7 @@ _gotoIfError(clean, GraphicsInstance_getPreferredDevice(
     (GraphicsDeviceCapabilities) { 0 },		//No required features or data types
     GraphicsInstance_vendorMaskAll,			//All vendors supported
     GraphicsInstance_deviceTypeAll,			//All device types supports
-    false /* isVerbose; extra logging about the device properties */,
+    false, /* isVerbose; extra logging about the device properties */
     &deviceInfo
 ));
 ```
@@ -97,13 +99,13 @@ _gotoIfError(clean, GraphicsInstance_getPreferredDevice(
 - vendor; what company designed the device (Nvidia (NV), AMD, ARM, Qualcomm (QCOM), Intel (INTC), Imagination Technologies (IMGT), Apple (APPL) or unknown).
 - id; number in the list of supported devices.
 - luid; ID to identify this device primarily on Windows devices. This would allow sharing a resource between other APIs for interop (not supported yet). This is optional to support; check capabilities.features & LUID.
-- uuid; unique id to identify the device. In APIs that don't support this natively, the other identifier will be used here instead. For example DirectX would use the luid here and clear the other U64.
+- uuid; unique id to identify the device. In APIs that don't support this natively, the other identifier will be used here instead. For example DirectX12 would use the luid here and clear the other U64.
 - ext; extended physical device representation for the current API.
 - capabilities; what data types, features and api dependent features are enabled. See capabilities section.
 
 #### Capabilities
 
-- features: TiledRendering, VariableRateShading, MultiDrawIndirectCount, MeshShader, GeometryShader, TessellationShader, SubgroupArithmetic, SubgroupShuffle, Swapchain, Multiview, Raytracing, RayPipeline, RayIndirect, RayQuery, RayMicromapOpacity, RayMicromapDisplacement, RayMotionBlur, RayReorder, LUID, DebugMarkers.
+- features: DirectRendering, VariableRateShading, MultiDrawIndirectCount, MeshShader, GeometryShader, TessellationShader, SubgroupArithmetic, SubgroupShuffle, Swapchain, Multiview, Raytracing, RayPipeline, RayIndirect, RayQuery, RayMicromapOpacity, RayMicromapDisplacement, RayMotionBlur, RayReorder, LUID, DebugMarkers.
 - features2: reserved for future features.
 - dataTypes: I64, F16, F64, AtomicI64, AtomicF32, AtomicF64, ASTC, BCn, MSAA2x, MSAA8x, MSAA16x.
   - MSAA4x and MSAA1x are supported by default.
@@ -134,7 +136,7 @@ GraphicsDeviceRef *device = NULL;
 _gotoIfError(clean, GraphicsDeviceRef_create(
     instance, 		//See "Graphics instance"
     &deviceInfo, 	//See "Graphics device info"
-    false /* isVerbose; extra logging about the device properties */, 
+    false, /* isVerbose; extra logging about the device properties */
     &device
 ));
 ```
@@ -151,9 +153,13 @@ _gotoIfError(clean, GraphicsDeviceRef_create(
   Error submitCommands(List<CommandListRef*> commandLists, List<SwapchainRef*> swapchains);
   ```
 
+  - Submits commands to the device and readies the swapchains to present if available. If the device doesn't have any swapchains, it can be used to just submit commands. This is useful for multi GPU rendering as well.
+
 - ```c
   wait();
   ```
+
+  - Waits for all currently queued commands on the device.
 
 - ```c
   Error createSwapchain(SwapchainInfo info, SwapchainRef **swapchain);
@@ -169,6 +175,21 @@ _gotoIfError(clean, GraphicsDeviceRef_create(
   );
   ```
 
+- ```c
+  Error createPipelinesCompute(
+      List<Buffer> computeBinaries, 
+      PipelineRef **computeShaders
+  );
+  ```
+
+- ```c
+  Error createPipelinesGraphics(
+  	List<PipelineStage> stages, 
+      List<PipelineGraphicsInfo> infos, 
+      List<PipelineRef*> *pipelines
+  );
+  ```
+
 ### Obtained
 
 - Through GraphicsDeviceRef_create; see overview.
@@ -177,7 +198,7 @@ _gotoIfError(clean, GraphicsDeviceRef_create(
 
 ### Summary
 
-A command list in OxC3 is similar to a virtual command list. The commands get recorded in a standardized format, but they don't get translated until they're submitted to the graphics device. The graphics device is then responsible for synchronization and ensuring the commands are recorded in the optimal way. Command lists themselves don't have any API specific implementation to avoid unexpected caching behavior. When submitting multiple command lists, they'll act as if they're one long command list. This would allow maintaining state from the old command list as well.
+A command list in OxC3 is a virtual command list. The commands get recorded in a standardized format, but they don't get translated until they're submitted to the graphics device. The graphics device is then responsible for synchronization and ensuring the commands are recorded in the optimal way. Command lists themselves don't have any API specific implementation to avoid unexpected caching behavior. When submitting multiple command lists, they'll act as if they're one long command list. This would allow maintaining state from the old command list as well.
 
 ```c
 CommandListRef *commandList = NULL;
@@ -236,6 +257,7 @@ See the "Commands" section.
 
 - Obtained through GraphicsDeviceRef's createCommandList, see overview.
 - Used in GraphicsDeviceRef's submitCommands.
+- Also used in command recording (See "Commands" section).
 
 ## Swapchain
 
@@ -284,11 +306,71 @@ void onResize(Window *w) {
 - Obtained through GraphicsDeviceRef's createSwapchain, see overview.
 - Used in GraphicsDeviceRef's submitCommands as well as read & write image commands and dispatches.
 
+## TODO: Pipeline
+
+### Summary
+
+A pipeline is a combination of the states and shader binaries that are required to run the shader. This represents a VkPipeline in Vulkan, an ID3D12PipelineState or ID3D12StateObject in DirectX12 and a `MTL<Render/Compute>PipelineState` in Metal.
+
+### Properties
+
+- device: ref to the graphics device that owns it.
+- type: compute, graphics or raytracing pipeline type.
+- stages: `List<PipelineStage>` the binaries that are used for the shader.
+  - stageType: which stage the binary is for. This is not necessarily unique, but should be unique for graphics shaders and compute. For raytracing shaders there can be multiple for the same stage.
+  - shaderBinary: the format as explained in "Shader binary types" that is required by the current graphics API.
+- extraInfo: a pointer to behind the API dependent pipeline extension struct that allows extra info that's only applicable to a certain pipeline type. 
+  - For compute: this is NULL.
+  - For graphics: this is PipelineGraphicsInfo.
+  - For raytracing: this is PipelineRaytracingInfoExt.
+
+### Used functions and obtained
+
+- Obtained through GraphicsDeviceRef's createPipelinesGraphics and createPipelinesCompute.
+- Used in CommandListRef's bindPipeline.
+
+### TODO: PipelineGraphicsInfo
+
+### Compute example
+
+```c
+tempShader = ...;		//Buffer: Load from virtual or local file, or hardcode
+List computeBinaries = (List) { 0 };
+_gotoIfError(clean, List_createConstRef(&tempShader, 1, sizeof(Buffer), &computeBinaries));
+_gotoIfError(clean, GraphicsDeviceRef_createPipelinesCompute(device, &computeBinaries, &computeShaders));
+
+tempShader = Buffer_createNull();
+```
+
+Create pipelines will take ownership of the computeBinaries List (it will set 'computeBinaries' to null) and it will also take ownership of the buffers in it. If the buffers are managed memory (e.g. created with Buffer_create functions that use the allocator) then the Pipeline object will safely delete it. This is why the tempShader is set to null after (the list is a ref, so doesn't need to be). In clean, this temp buffer gets deleted, just in case the createPipelines fails.
+
+It is recommended to generate all pipelines that are needed in this one call at startup, to avoid stuttering at runtime.
+
+### TODO: Graphics example
+
+## Shader binary types
+
+In OxC3 graphics, either the application or the OxC3 baker is responsible for compiling and providing binaries in the right formats. According to OxC3 graphics, the shaders are just a buffer, so they can contain anything (text or binary). Down here is a list of the expected inputs for each graphics API if the developer wishes to sidestep the baking process:
+
+- DirectX12: DXIL (binary).
+- Vulkan: SPIR-V (binary).
+
+- Metal: MSL (text).
+- WebGPU: WGSL (text).
+
+The OxC3 baker will (if used) convert HLSL to SPIR-V, DXIL, MSL or WGSL depending on which API is currently used. It can provide this as a pre-baked binary too (.oiCS Oxsomi Compiled Shader). The pre-baked binary contains all 4 formats to ensure it can be loaded on any platform. But the baker will only include the one relevant to the current API to prevent bloating.
+
+When using the baker, the binaries can simply be loaded using the oiCS helper functions and passed to the pipeline creation, as they will only contain one binary. 
+
+**NOTE: The baker currently doesn't include this functionality just yet.** 
+
 ## Commands
 
 ### Summary
 
 Command lists store the commands referenced in the next section. These are virtual commands; they approximately map to the underlying API. If the underlying API doesn't support a commands, it might have to simulate the behavior with a custom shader (such as creating a mip chain of an image). It is also possible that a command might need certain extensions, without them the command will give an error to prevent it from being inserted into the command list (some unimportant ones such as debugging are safely ignored if not supported instead). These commands are then processed at runtime when they need to. If the command list remains the same, it's the same swapchain (if applicable) and the resources aren't recreated then it can safely be re-used. 
+
+Invalid API usage will be attempted to be found out when inserting the command, but this is not always possible. Because the state is only accessible when presenting to the device, since multiple command lists can safely be combined without invalidating state in between. 
 
 ### begin/end
 
@@ -307,6 +389,8 @@ _gotoIfError(clean, CommandListRef_setViewportAndScissor(
 ```
 
 This has to be called during a render call. Size can also be 0 to indicate full size of render target.
+
+Since this is relative to a render target, it has to be called after binding one. If the next render target bound doesn't change in resolution then this is still valid. The offset + size needs to be inside of the framebuffer's resolution (if size is 0 then it will be stretched to fill the rest of the render target).
 
 ### setStencil
 
@@ -329,33 +413,72 @@ _gotoIfError(clean, CommandListRef_clearImagef(
 ));
 ```
 
-To clear multiple at once, call clearImages with a `List<ClearImage>`. ClearImage takes a color as a `U32[4]` (It's safe to copy a F32x4 or I32x4 to this as long as you bitcast it), a range and the image ref ptr. It's the same as a single clear image but it allows multiple.
+To clear multiple at once, call clearImages with a `List<ClearImage>`. ClearImage takes a color, a range and the image ref ptr. It's the same as a single clear image but it allows multiple.
 
-Clear image is only allowed on images which aren't currently bound as a render target.
+Clear image is only allowed on images which aren't currently bound as a render target. The image is leading in determining the format which will be read out. If you use clearImagef but it's a uint texture then it will bitcast the float color to a uint for you.
+
+Clear image can currently only be called on a Swapchain object.
+
+### setPipeline
+
+The set pipeline command does one of two things; bind a graphics pipeline or bind a compute pipeline. These two pipelines are the only bind points and they're maintained separately. So a bind pipeline of a graphics shader and one of a compute shader don't interfere. This is used before a draw, dispatch or traceRaysExt to ensure the shader is used. A raytracing pipeline shares the binding point with a compute pipeline.
+
+```c
+_gotoIfError(clean, CommandListRef_setPipeline(commandList, pipeline));
+```
 
 ### draw
 
-The draw command will simply draw the currently bound primitive buffer (optional) with the currently bound pipeline (required). If the primitive buffer is not present, the pipeline is expected to generate the vertices dynamically. It requires a render call to be started (see DirectRendering). It handles both indexed and non indexed draw calls:
+The draw command will simply draw the currently bound primitive buffer (optional) with the currently bound graphics pipeline (required). If the primitive buffer is not present, the pipeline is expected to generate the vertices dynamically. It requires a render call to be started (see DirectRendering). It handles both indexed and non indexed draw calls:
 
 ```c
 //Non indexed draw call
-//Can also specify instanceOffset and vertexOffset
+//Can also specify instanceOffset and vertexOffset if drawUnindexedAdv is used
 
-_gotoIfError(clean, CommandListRef_draw(
-    commandList, (Draw) { .count = 3, .instanceCount = 1 }
-));
+_gotoIfError(clean, CommandListRef_drawUnindexed(commandList, 3, 1));
 
 //Indexed draw call
 //Can also specify instanceOffset, indexOffset and vertexOffset
+//if drawIndexedAdv is used
 
-_gotoIfError(clean, CommandListRef_draw(
-    commandList, (Draw) { .count = 3, .instanceCount = 1, .isIndexed = true }
-));
+_gotoIfError(clean, CommandListRef_drawIndexed(commandList, 3, 1));
 ```
+
+When issuing the draw, the state needs to be valid: a render has to be started (render pass or direct rendering), a primitive buffer needs to be bound if relevant, graphics pipeline has to be bound, viewport & scissor has to be set and all relevant transitions need to be done.
+
+- Graphics pipeline needs to be compatible with currently bound render targets; this means the formats specified in graphics pipeline creation need to match the same formats of the render targets.
+- States of currently used resources need to be correct. If you write to a resource it needs to be transitioned to write using the transition command and it needs to specify the first shader which *might* read from/write to it. Same is also true when reading from it. The state of these resources stays as it was when transitioned unless the same resource was used in a different explicit or implicit transition. Implicit transitions can be: binding it as a render target, clearing it, copying it or any other command that is specified in this document as transitioning the resource. So this command should only be used if the state of the resource has already changed. So when the same resources are already transitioned to read then they stay that until they're modified by something else. *For writes however, it is **essential** to transition them even if they're in write already. This is to ensure the command that modified the resource is finished before writing again.* 
+
+#### Example of a good (legacy) draw call system (Pseudocode)
+
+```c
+//Transition all drawn materials to read
+//Bind render target(s)
+//Bind viewport/scissor
+//Foreach shader:
+//  Bind pipeline 
+//	All draw calls of relevant objects
+```
+
+The example above should be fine as long as the draw calls don't need extra synchronization because they write and read from a shared resource. In that case, it would need a transition before drawing the next. However, this transition should only be done for the resources that can be modified from the draw call(s), as long as they're not the currently bound textures. These currently bound textures can't be used in a transition or the shader as a read/write input as well.
+
+To find a more modern way of rendering, check out the multi draw indirect section.
+
+This command is generalized with the `draw` command which takes the `Draw` struct which can issue both indexed an unindexed draw calls (with or without advanced usage).
+
+### dispatch
+
+Dispatch has some of the same requirements as draw calls as it needs a correct state of the resources and needs a compute pipeline bound as well. However, it doesn't need to be in an active render (render pass or direct rendering) and it also doesn't use the viewport/scissor. This makes compute one of the easiest to handle, though transitions are just as important as with graphics shaders.
+
+```c
+_gotoIfError(clean, CommandListRef_dispatch2D(commandList, tilesX, tilesY));
+```
+
+dispatch2D, dispatch1D and dispatch3D are the easiest implementations. You dispatch in groups, so it has to be aligned to the thread count of the compute shader. This command is also generalized with the dispatch command which takes in a `Dispatch` struct.
 
 ### DebugMarkers feature
 
-DebugMarkers adds three commands: addMarkerDebugExt, startRegionDebugExt and endRegionDebugExt. If the DebugMarkers feature isn't present, these are safely ignored and won't be inserted into the virtual command list. This can be used to provide extra debugging info to tools such as RenderDoc, NSight, Pix, etc. to show where important events such as render calls happened and what they represented. A debug region or debug marker has a color and a name. A debug region is like a stack; you can only end the current region and push another region. Every region you start has to be ended over the command lists that are submitted (you can start & end the same region in two separate command lists, as long as they're always both submitted).
+The DebugMarkers feature adds three commands: addMarkerDebugExt, startRegionDebugExt and endRegionDebugExt. If the DebugMarkers feature isn't present, these are safely ignored and won't be inserted into the virtual command list. This can be used to provide extra debugging info to tools such as RenderDoc, NSight, Pix, etc. to show where important events such as render calls happened and what they represented. A debug region or debug marker has a color and a name. A debug region is like a stack; you can only end the current region and push another region. Every region you start has to be ended over the command lists that are submitted (you can start & end the same region in two separate command lists, as long as they're always both submitted).
 
 ```c
 _gotoIfError(clean, CommandListRef_startRegionDebugExt(
@@ -375,7 +498,7 @@ The same syntax as startRegionDebugExt can be used for addMarkerDebugExt. Except
 
 DirectRendering allows rendering without render passes (default behavior in DirectX). This makes development for desktop a lot easier since AMD, Intel and NVIDIA aren't using tiled based deferred rendering (TBDR). However, all other vendors (such as Qualcomm, ARM, Apple, Imgtec) do use TBDR (mostly mobile architectures). The user is allowed to decide that this is a limitation they accept and can use this feature to greatly simplify the difficulty of the graphics layer (especially porting from existing apps). The user can also set up two different render engines; one that can deal with direct rendering and one that can't. The latter is targeted at mobile (lower hardware tier) and the former is for desktop/console. The two commands that are related to this feature are: startRenderExt and endRenderExt. They require the feature to be present and will return an error (and won't be inserted into the command list) otherwise.
 
-Just like *most* commands, this will automatically transition the resources into the correct states for you. Color attachments can always be read, but the user is in charge of specifying if the contents should be cleared or kept. Color attachments can also be readonly if needed.
+Just like *most* commands, this will automatically transition the resources (render targets only) into the correct states for you. Color attachments can always be read, but the user is in charge of specifying if the contents should be cleared or kept. Color attachments can also be readonly if needed.
 
 ```c
 //In command list recording
@@ -408,15 +531,38 @@ _gotoIfError(clean, CommandListRef_endRenderExt(commandList));
 
 Keep in mind that during a render call, you can't transition the resources passed into the attachments of the active render call. They're not allowed to be used as a read (SRV) or write textures (UAV); they're only allowed to be output attachments (RTV). Special care should be taken on the developer's side to avoid this from happening.
 
-Every startRender needs to match an endRender. During the render it's not allowed to access the render textures as a write or read texture. Operations such as clears are also not allowed.
+Every startRender needs to match an endRender. During the render it's not allowed to access the render textures as a write or read texture. Other operations that change state (implicit transitions) such as clears and copies are also not allowed. If this is required, the developer can end the render and restart it after this operation.
 
-### TODO: Transitions
+### transition
 
 Because the API requires bindless to function, it has certain limits. One of these limits/benefits is that a shader is now able to access all write buffers/textures and read buffers/textures. This would mean that everything is accessible by all shaders; making automatic transitions impossible. To fix this; the user will only have to manually do transitions for draw/dispatch calls. Here you specify the (sub)resource and in which shader stage it is first used and if it's a write (or if any subsequent shaders could write to it). Then the runtime will automatically transition only when it's needed. 
 
 Even though Metal doesn't need transitions, they're still required to allow DirectX and Vulkan support. More importantly; transitions allow OxC3 to know which resources are required for the command list to be executed. It uses this to keep the resources alive until the command list was executed on the device. 
 
 *It is important to limit how many transitions are called, since this requires extra data and processing. Batching them and making sure you need them as less as possible is good practice.*
+
+```c
+//Example to transition swapchain for use in a compute shader as the output.
+
+Transition transitions[] = {
+	(Transition) {
+		.resource = swapchain,
+		.range = (ImageRange) { 0 },
+		.stage = EPipelineStage_Compute,
+		.isWrite = true
+	}
+};
+
+List transitionArr = (List) { 0 };
+_gotoIfError(
+    clean, 
+    List_createConstRef((const U8*) &transitionArr, 1, sizeof(Transition), transitions)
+);
+
+_gotoIfError(clean, CommandListRef_transition(commandList, transitionArr));
+```
+
+Transitions can currently only be called on a Swapchain object.
 
 #### Validation
 

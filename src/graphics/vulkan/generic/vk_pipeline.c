@@ -45,7 +45,9 @@ Error createShaderModule(Buffer buf, VkShaderModule *mod, VkGraphicsDevice *devi
 
 Bool Pipeline_free(Pipeline *pipeline, Allocator allocator) {
 
-	GraphicsDevice *device = pipeline->device;
+	allocator;
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(pipeline->device);
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 
 	for (U64 i = 0; i < pipeline->stages.length; ++i)
@@ -87,6 +89,8 @@ Error GraphicsDeviceRef_createPipelinesCompute(GraphicsDeviceRef *deviceRef, Lis
 	_gotoIfError(clean, List_resizex(&pipelineHandles, shaderBinaries->length));
 	_gotoIfError(clean, List_resizex(pipelines, shaderBinaries->length));
 
+	//TODO: Push constants
+
 	for(U64 i = 0; i < shaderBinaries->length; ++i) {
 
 		((VkComputePipelineCreateInfo*)pipelineInfos.ptr)[i] = (VkComputePipelineCreateInfo) {
@@ -97,7 +101,7 @@ Error GraphicsDeviceRef_createPipelinesCompute(GraphicsDeviceRef *deviceRef, Lis
 				.flags = VK_SHADER_STAGE_COMPUTE_BIT,
 				.pName = "main"
 			},
-			.layout = deviceExt->layout
+			.layout = deviceExt->defaultLayout
 		};
 
 		_gotoIfError(clean, createShaderModule(

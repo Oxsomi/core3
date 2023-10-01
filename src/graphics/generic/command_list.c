@@ -347,6 +347,94 @@ Error CommandListRef_clearDepthStencil(CommandListRef *commandListRef, F32 depth
 
 //Render calls
 
+Error CommandListRef_transition(CommandListRef *commandList, List transitions) {
+
+	if(!transitions.length)
+		return Error_nullPointer(1);
+
+	if(transitions.stride != sizeof(Transition))
+		return Error_invalidParameter(1, 0);
+
+	if(transitions.length > U32_MAX)
+		return Error_outOfBounds(1, transitions.length, U32_MAX);
+
+	Buffer buf = Buffer_createNull();
+
+	List refs = List_createEmpty(sizeof(RefPtr*));
+	Error err = List_resizex(&refs, transitions.length);
+
+	if(err.genericError)
+		return err;
+
+	RefPtr **ptr = (RefPtr**)refs.ptr;
+
+	for(U64 i = 0; i < transitions.length; ++i) {
+
+		Transition transition = ((Transition*)transitions.ptr)[i];
+		RefPtr *res = transition.resource;
+
+		if(!res)
+			_gotoIfError(clean, Error_nullPointer(1));
+
+		if(res->typeId != EGraphicsTypeId_Swapchain)
+			_gotoIfError(clean, Error_invalidParameter(1, 0));
+
+		//Check if range conflicts 
+
+		for (U64 j = 0; j < i; ++j) {
+
+			Transition transitionj = ((Transition*)transitions.ptr)[j];
+			RefPtr *resj = transitionj.resource;
+
+			if(resj != res)
+				continue;
+
+			//TODO: Multiple types of images.
+			//		We have to loop through all subresources that are covered 
+			//		and check if they conflict.
+			//		For now, only swapchain is supported w/o layers and levels.
+			//		So in that case just mentioning the image twice is enough to conflict.
+
+			_gotoIfError(clean, Error_alreadyDefined(0));
+		}
+
+		ptr[i] = res;
+	}
+
+	//Convert to refs and buffer
+
+	_gotoIfError(clean, Buffer_createEmptyBytesx(List_bytes(transitions) + sizeof(U32), &buf));
+
+	*(U32*)buf.ptr = (U32) transitions.length;
+	Buffer_copy(Buffer_createRef((U8*) buf.ptr + sizeof(U32), List_bytes(transitions)), List_bufferConst(transitions));
+
+	_gotoIfError(clean, CommandListRef_append(commandList, ECommandOp_transition, buf, refs, 0));
+
+clean:
+	Buffer_freex(&buf);
+	List_freex(&refs);
+	return err;
+}
+
+Error CommandListRef_setPipeline(CommandListRef *commandList, PipelineRef *pipeline) {
+
+	if (!pipeline)
+		return Error_nullPointer(1);
+
+	if (pipeline->typeId != EGraphicsTypeId_Pipeline)
+		return Error_invalidParameter(1, 0);
+
+	List refs = (List) { 0 };
+	Error err = List_createConstRef((const U8*) &pipeline, 1, sizeof(pipeline), &refs);
+
+	if (err.genericError)
+		return err;
+
+	return CommandListRef_append(
+		commandList, ECommandOp_setPipeline, Buffer_createConstRef((const U8*) &pipeline, sizeof(pipeline)), refs, 0
+	);
+}
+
 Error CommandListRef_draw(CommandListRef *commandList, Draw draw) {
 	return CommandListRef_append(commandList, ECommandOp_draw, Buffer_createConstRef(&draw, sizeof(draw)), (List) { 0 }, 0);
 }

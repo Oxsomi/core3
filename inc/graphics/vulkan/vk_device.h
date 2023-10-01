@@ -25,6 +25,8 @@
 #include "types/list.h"
 #include "math/vec.h"
 
+typedef RefPtr PipelineRef;
+
 enum EVkDeviceVendor {
 	EVkDeviceVendor_NV					= 0x10DE,
 	EVkDeviceVendor_AMD					= 0x1002,
@@ -130,6 +132,8 @@ typedef struct VkCommandBufferState {		//Caching state variables
 	U8 boundImageCount;
 
 	VkImageRange boundImages[8];
+
+	PipelineRef *boundPipelines[2];			//Graphics, Compute
 
 } VkCommandBufferState;
 

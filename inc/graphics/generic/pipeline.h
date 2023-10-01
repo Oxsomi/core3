@@ -273,6 +273,7 @@ typedef struct GraphicsBufferLayout {
 
 typedef enum EDepthStencilFormat {
 
+	EDepthStencilFormat_none,
 	EDepthStencilFormat_D16,
 	EDepthStencilFormat_D32,
 	EDepthStencilFormat_D24S8,
@@ -293,14 +294,14 @@ typedef struct PipelineGraphicsInfo {
 	ETopologyMode topologyMode;
 
 	U32 patchControlPointsExt;		//Only if TessellationShader feature is enabled.
-	U32 padding0;
+	U32 stageCount;					//Non zero used to determine where stages start/end.
 
 	//If DirectRendering is on (used in between start render).
 
 	ETextureFormat attachmentFormats[8];
 
 	EDepthStencilFormat depthFormat;
-	U32 padding1;
+	U32 attachmentCount;
 
 	//If DirectRendering is off (used in between start render pass).
 
