@@ -200,6 +200,7 @@ file(GLOB_RECURSE graphicsApiSources "src/graphics/${graphicsApi}/generic/*.c")
 file(GLOB_RECURSE graphicsApiPlatformSources "src/graphics/${graphicsApi}/${platform}/*.c")
 
 file(GLOB_RECURSE graphicsSources "src/graphics/generic/*.c")
+file(GLOB_RECURSE shaders "src/shaders/*.hlsl")
 
 add_library(
 	OxC3_graphics
@@ -209,12 +210,14 @@ add_library(
 	${graphicsApiSources}
 	${graphicsApiPlatformSources}
 	${graphicsSources}
+	${shaders}
 	CMakeLists.txt
 )
 
 source_group("Header Files (${graphicsApi})" FILES ${graphicsApiHeaders})
 source_group("Source Files (${graphicsApi})" FILES ${graphicsApiSources})
 source_group("Source Files (${graphicsApi})/${platform}" FILES ${graphicsApiPlatformSources})
+source_group("Shaders" FILES ${shaders})
 
 target_compile_definitions(OxC3_graphics PUBLIC -D_GRAPHICS_API=${_GRAPHICS_API})
 
