@@ -32,6 +32,8 @@ Bool List_any(List l) { return l.length; }
 U64  List_bytes(List l) { return l.length * l.stride; }
 U64  List_allocatedBytes(List l) { return List_isRef(l) ? 0 : l.capacityAndRefInfo * l.stride; }
 
+U64 List_capacity(List l) { return List_isRef(l) ? 0 : l.capacityAndRefInfo; }
+
 Buffer List_buffer(List l) { 
 	return List_isConstRef(l) ? Buffer_createNull() : Buffer_createRef((U8*)l.ptr, List_bytes(l)); 
 }
@@ -1158,7 +1160,7 @@ Bool List_free(List *result, Allocator allocator) {
 
 	Bool err = true;
 
-	if (!List_isRef(*result)) {
+	if (!List_isRef(*result) && result->length) {
 		Buffer buf = Buffer_createManagedPtr((U8*)result->ptr, List_allocatedBytes(*result));
 		err = Buffer_free(&buf, allocator);
 	}

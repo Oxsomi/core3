@@ -38,11 +38,11 @@ void Log_printStackTrace(U64 skip, ELogLevel lvl, ELogOptions options) {
 	if(!format)															\
 		return;															\
 																		\
-	CharString res = CharString_createNull();									\
+	CharString res = CharString_createNull();							\
 																		\
 	va_list arg1;														\
 	va_start(arg1, format);												\
-	Error err = CharString_formatVariadicx(&res, format, arg1);				\
+	Error err = CharString_formatVariadicx(&res, format, arg1);			\
 	va_end(arg1);														\
 																		\
 	if(!err.genericError)												\

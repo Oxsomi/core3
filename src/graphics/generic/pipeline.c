@@ -18,24 +18,15 @@
 *  This is called dual licensing.
 */
 
-#pragma once
-#include "types/types.h"
-#define VK_ENABLE_BETA_EXTENSIONS
-#include <vulkan/vulkan.h>
+#include "graphics/generic/pipeline.h"
+#include "types/error.h"
 
-typedef struct VkManagedImage {
+Error PipelineRef_dec(PipelineRef **pipeline) {
+	return !RefPtr_dec(pipeline) ? Error_invalidOperation(0) : Error_none();
+}
 
-	VkImage image;
-	VkImageView view;
+Error PipelineRef_add(PipelineRef *pipeline) {
+	return pipeline ? (!RefPtr_inc(pipeline) ? Error_invalidOperation(0) : Error_none()) : Error_nullPointer(0);
+}
 
-	VkPipelineStageFlagBits2 lastStage;
-	VkAccessFlagBits2 lastAccess;
-	VkImageLayout lastLayout;
-
-} VkManagedImage;
-
-typedef struct CharString CharString;
-typedef struct GraphicsDevice GraphicsDevice;
-typedef struct Error Error;
-
-Error vkCheck(VkResult result);
+Error PipelineRef_decAll(List *list);

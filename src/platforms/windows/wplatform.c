@@ -97,8 +97,8 @@ void sigFunc(int signal) {
 	//For debugging purposed however, this is very useful
 	//Turn this off by defining _NO_SIGNAL_HANDLING
 
+	Log_printStackTrace(1, ELogLevel_Error, ELogOptions_Default);
 	Log_log(ELogLevel_Fatal, ELogOptions_Default, CharString_createConstRefCStr(msg));
-	Log_printStackTrace(1, ELogLevel_Fatal, ELogOptions_Default);
 	exit(signal);
 }
 

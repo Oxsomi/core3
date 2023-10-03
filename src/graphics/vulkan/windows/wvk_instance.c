@@ -18,24 +18,42 @@
 *  This is called dual licensing.
 */
 
-#pragma once
-#include "types/types.h"
-#define VK_ENABLE_BETA_EXTENSIONS
-#include <vulkan/vulkan.h>
+#include "graphics/vulkan/vk_instance.h"
+#include "platforms/ext/listx.h"
+#include "types/error.h"
+#include "types/list.h"
+#include "types/buffer.h"
 
-typedef struct VkManagedImage {
+const C8 *vkValidation = "VK_LAYER_KHRONOS_validation";
+const C8 *vkApiDump = "VK_LAYER_LUNARG_api_dump";
 
-	VkImage image;
-	VkImageView view;
+//#define _GRAPHICS_VERBOSE_DEBUGGING
 
-	VkPipelineStageFlagBits2 lastStage;
-	VkAccessFlagBits2 lastAccess;
-	VkImageLayout lastLayout;
+Error VkGraphicsInstance_getLayers(List *layers) {
 
-} VkManagedImage;
+	if(!layers)
+		return Error_nullPointer(0);
 
-typedef struct CharString CharString;
-typedef struct GraphicsDevice GraphicsDevice;
-typedef struct Error Error;
+	if(layers->stride != sizeof(const C8*))
+		return Error_invalidParameter(0, 0);
 
-Error vkCheck(VkResult result);
+	#ifndef NDEBUG
+
+		Buffer tmp = Buffer_createConstRef(&vkValidation, sizeof(vkValidation));
+		Error err = List_pushBackx(layers, tmp);
+
+		if(err.genericError)
+			return err;
+
+		#ifdef _GRAPHICS_VERBOSE_DEBUGGING
+			tmp = Buffer_createConstRef(&vkApiDump, sizeof(vkApiDump));
+			return List_pushBackx(layers, tmp);
+		#else
+			return Error_none();
+		#endif
+
+	#else
+		return Error_none();
+	#endif
+}
+

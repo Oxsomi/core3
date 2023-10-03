@@ -20,54 +20,48 @@
 
 #pragma once
 #include "graphics/generic/device_info.h"
-#include "types/type_id.h"
+#include "platforms/ref_ptr.h"
 #include "types/list.h"
 
 typedef struct Error Error;
-typedef struct RefPtr RefPtr;
-typedef struct GraphicsInstance GraphicsInstance;
-
-//ETypeId but for graphics factories. 
-//Properties contain if it allows lookup by an info struct.
-
-typedef enum EGraphicsTypeId {
-
-	EGraphicsTypeId_Texture					= _makeObjectId(0xC4, 0, 1),
-	EGraphicsTypeId_RenderTexture			= _makeObjectId(0xC4, 1, 0),
-	EGraphicsTypeId_Buffer					= _makeObjectId(0xC4, 2, 1),
-	EGraphicsTypeId_Pipeline				= _makeObjectId(0xC4, 3, 1),
-	EGraphicsTypeId_DescriptorSet			= _makeObjectId(0xC4, 4, 1),
-	EGraphicsTypeId_RenderPass				= _makeObjectId(0xC4, 5, 0),
-	EGraphicsTypeId_Sampler					= _makeObjectId(0xC4, 6, 1),
-	EGraphicsTypeId_CommandList				= _makeObjectId(0xC4, 7, 0),
-	EGraphicsTypeId_AccelerationStructure	= _makeObjectId(0xC4, 8, 1),
-	EGraphicsTypeId_Swapchain				= _makeObjectId(0xC4, 9, 0),
-
-	EGraphicsTypeId_Count					= 10
-
-} EGraphicsTypeId;
-
-static EGraphicsTypeId EGraphicsTypeId_all[EGraphicsTypeId_Count];
-static U64 EGraphicsTypeId_descBytes[EGraphicsTypeId_Count];
-static U64 EGraphicsTypeId_objectBytes[EGraphicsTypeId_Count];
+typedef RefPtr GraphicsInstanceRef;
 
 typedef struct GraphicsDevice {
 
+	GraphicsInstanceRef *instance;
+
 	GraphicsDeviceInfo info;
 
-	List factories;		//<GraphicsObjectFactory>
+	U64 submitId;
 
-	void *ext;
+	//List factories;		//<GraphicsObjectFactory>
 
 } GraphicsDevice;
 
-Error GraphicsDevice_create(const GraphicsInstance *instance, const U64 uuid[2], GraphicsDevice *device);
-Bool GraphicsDevice_free(const GraphicsInstance *instance, GraphicsDevice *device);
+typedef RefPtr GraphicsDeviceRef;
 
-//Submit and wait until all submitted graphics tasks are done.
+#define GraphicsDevice_ext(ptr, T) (!ptr ? NULL : (T##GraphicsDevice*)(ptr + 1))		//impl
+#define GraphicsDeviceRef_ptr(ptr) RefPtr_data(ptr, GraphicsDevice)
 
-Error GraphicsDevice_submitCommands(GraphicsDevice *device, List commandLists);		//<RefPtr of CommandList>
-Error GraphicsDevice_wait(GraphicsDevice *device, U64 timeout);
+Error GraphicsDeviceRef_dec(GraphicsDeviceRef **device);
+Error GraphicsDeviceRef_add(GraphicsDeviceRef *device);
+
+Error GraphicsDeviceRef_create(
+	GraphicsInstanceRef *instanceRef, 
+	const GraphicsDeviceInfo *info, 
+	Bool verbose,
+	GraphicsDeviceRef **device
+);
+
+Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc);		//Don't call directly.
+
+//Submit commands to device
+//List<CommandListRef*> commandLists
+//List<SwapchainRef*> swapchains
+impl Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List commandLists, List swapchains);
+
+//Wait on previously submitted commands
+impl Error GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef);
 
 //Batch create objects.
 //All objects created need to be freed by the runtime.

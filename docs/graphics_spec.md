@@ -79,8 +79,8 @@ Because of this, a device needs the following requirements to be OxC3 compatible
   - VK_EXT_mesh_shader as MeshShader
   - VK_EXT_opacity_micromap as RayMicromapOpacity
   - VK_NV_displacement_micromap as RayMicromapDisplacement
-  - VK_KHR_dynamic_rendering to disable/enable TiledBasedRendering.
-  - VK_KHR_deferred_host_operations is required for raytracing. Otherwise they'll all be forced off.
+  - VK_KHR_dynamic_rendering as DirectRendering
+  - VK_KHR_deferred_host_operations is required for raytracing. Otherwise all raytracing extensions will be forced off.
 - subgroupSize of 16 - 128.
 - subgroup operations of basic, vote, ballot are required. Available only in compute by default. arithmetic and shuffle are optional.
 - shaderSampledImageArrayDynamicIndexing, shaderStorageBufferArrayDynamicIndexing, shaderUniformBufferArrayDynamicIndexing, shaderStorageBufferArrayDynamicIndexing, descriptorIndexing turned on.

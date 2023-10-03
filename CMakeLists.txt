@@ -214,7 +214,7 @@ add_library(
 
 source_group("Header Files (${graphicsApi})" FILES ${graphicsApiHeaders})
 source_group("Source Files (${graphicsApi})" FILES ${graphicsApiSources})
-source_group("Source Files (${graphicsApi}/${platform})" FILES ${graphicsApiPlatformSources})
+source_group("Source Files (${graphicsApi})/${platform}" FILES ${graphicsApiPlatformSources})
 
 target_compile_definitions(OxC3_graphics PUBLIC -D_GRAPHICS_API=${_GRAPHICS_API})
 

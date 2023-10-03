@@ -19,32 +19,45 @@
 */
 
 #include "graphics/generic/instance.h"
-#include "graphics/generic/device_info.h"
+#include "graphics/generic/device.h"
 #include "platforms/ext/listx.h"
+#include "platforms/ext/bufferx.h"
 #include "types/error.h"
 
 U64 GraphicsInstance_vendorMaskAll = 0xFFFFFFFFFFFFFFFF;
 U64 GraphicsInstance_deviceTypeAll = 0xFFFFFFFFFFFFFFFF;
 
-Error GraphicsInstance_getPreferredGpu(
+Error GraphicsInstanceRef_dec(GraphicsInstanceRef **inst) {
+	return !RefPtr_dec(inst) ? Error_invalidOperation(0) : Error_none();
+}
+
+Error GraphicsInstanceRef_add(GraphicsInstanceRef *inst) {
+	return inst ? (!RefPtr_inc(inst) ? Error_invalidOperation(0) : Error_none()) : Error_nullPointer(0);
+}
+
+Error GraphicsInstance_getPreferredDevice(
 	const GraphicsInstance *inst,
 	GraphicsDeviceCapabilities requiredCapabilities,
 	U64 vendorMask,
 	U64 deviceTypeMask,
-	void **deviceExt
+	Bool verbose,
+	GraphicsDeviceInfo *deviceInfo
 ) {
 
-	if(!deviceExt)
+	if(!deviceInfo)
 		return Error_nullPointer(4);
 
+	if(deviceInfo->ext)
+		return Error_invalidParameter(4, 0);
+
 	List tmp = (List) { 0 };
-	Error err = GraphicsInstance_getDeviceInfos(inst, &tmp);
+	Error err = GraphicsInstance_getDeviceInfos(inst, verbose, &tmp);
 
 	if(err.genericError)
 		return err;
 
-	void *preferredDedicated = NULL;
-	void *preferredNonDedicated = NULL;
+	U64 preferredDedicated = 0;
+	U64 preferredNonDedicated = 0;
 	Bool hasDedicated = false;
 	Bool hasAny = false;
 
@@ -59,9 +72,6 @@ Error GraphicsInstance_getPreferredGpu(
 
 		//Check capabilities
 
-		if(info.capabilities.bindingTier < requiredCapabilities.bindingTier)
-			continue;
-
 		if((info.capabilities.dataTypes & requiredCapabilities.dataTypes) != requiredCapabilities.dataTypes)
 			continue;
 
@@ -71,11 +81,12 @@ Error GraphicsInstance_getPreferredGpu(
 		//Remember
 
 		if(info.type == EGraphicsDeviceType_Dedicated) {
-			preferredDedicated = info.ext;
-			hasDedicated = true;
+			preferredDedicated = i;
+			hasDedicated = hasAny = true;
+			break;
 		}
 
-		else preferredNonDedicated = info.ext;
+		else preferredNonDedicated = i;
 
 		hasAny = true;
 	}
@@ -83,10 +94,9 @@ Error GraphicsInstance_getPreferredGpu(
 	if(!hasAny)
 		_gotoIfError(clean, Error_notFound(0, 0));
 
-	if (hasDedicated)
-		*deviceExt = preferredDedicated;
+	U64 picked = hasDedicated ? preferredDedicated : preferredNonDedicated;
 
-	else *deviceExt = preferredNonDedicated;
+	*deviceInfo = ((const GraphicsDeviceInfo*)tmp.ptr)[picked];
 
 clean:
 	List_freex(&tmp);

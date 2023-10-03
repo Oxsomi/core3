@@ -20,6 +20,12 @@
 
 #pragma once
 #include "graphics/vulkan/vulkan.h"
+#include "graphics/generic/device_info.h"
+#include "graphics/generic/command_list.h"
+#include "types/list.h"
+#include "math/vec.h"
+
+typedef RefPtr PipelineRef;
 
 enum EVkDeviceVendor {
 	EVkDeviceVendor_NV					= 0x10DE,
@@ -34,7 +40,103 @@ enum EVkDeviceVendor {
 
 typedef enum EVkGraphicsFeatures {
 
-	EVkGraphicsFeatures_DebugMarker		= 1 << 0,
-	EVkGraphicsFeatures_PerfQuery		= 1 << 1
+	EVkGraphicsFeatures_PerfQuery		= 1 << 0
 
 } EVkGraphicsFeatures;
+
+typedef enum EVkCommandQueue {
+
+	EVkCommandQueue_Copy,					//Queue for dedicated host -> device copies
+	EVkCommandQueue_Compute,
+	EVkCommandQueue_Graphics,
+
+	//EVkCommandQueue_VideoDecode,			//TODO:
+	//EVkCommandQueue_VideoEncode
+
+	EVkCommandQueue_Count
+
+} EVkCommandQueue;
+
+typedef struct VkCommandQueue {
+
+	VkQueue queue;
+
+	U32 queueId;					//Queue family
+	U32 resolvedQueueId;			//Index into command pool array for that queue
+
+	EVkCommandQueue type;
+	U32 pad;
+
+} VkCommandQueue;
+
+typedef struct VkGraphicsDevice {
+
+	VkDevice device;
+	VkCommandQueue queues[EVkCommandQueue_Count];		//Don't have to be unique queues! Indexed by EVkCommandQueue
+
+	U32 uniqueQueues[EVkCommandQueue_Count];			//Queue families ([resolvedQueues], indexed through resolvedId)
+
+	U32 resolvedQueues;
+	U32 pad;
+
+	//3D as 1D flat List<VkCommandAllocator>: resolvedQueueId + (backBufferId * threadCount + threadId) * resolvedQueues
+	List commandPools;
+
+	List submitSemaphores;
+
+	VkSemaphore commitSemaphore;
+
+	VkDescriptorSetLayout setLayout;		//We only have one layout, because we use bindless
+	VkPipelineLayout defaultLayout;			//Default layout if push constants aren't present
+
+	//Temporary storage for submit time stuff
+
+	List waitSemaphores, results, swapchainIndices, swapchainHandles, waitStages;
+
+} VkGraphicsDevice;
+
+typedef struct VkCommandAllocator {
+
+	VkCommandPool pool;
+	VkCommandBuffer cmd;
+
+} VkCommandAllocator;
+
+typedef enum EVkCommandBufferFlags {
+
+	EVkCommandBufferFlags_hasDepth		= 1 << 0,
+	EVkCommandBufferFlags_hasStencil	= 1 << 1
+
+} EVkCommandBufferFlags;
+
+typedef struct VkImageRange {
+
+	RefPtr *ref;
+
+	ImageRange range;
+
+} VkImageRange;
+
+typedef struct VkCommandBufferState {		//Caching state variables
+
+	I32x2 currentSize;						//Size of currently bound render target(s), 0 if none
+
+	EVkCommandBufferFlags flags;
+	U32 debugRegionStack;
+
+	VkCommandBuffer buffer;
+
+	U32 pad0;
+
+	U8 pad1[3];
+	U8 boundImageCount;
+
+	VkImageRange boundImages[8];
+
+	PipelineRef *boundPipelines[2];			//Graphics, Compute
+
+} VkCommandBufferState;
+
+VkCommandAllocator *VkGraphicsDevice_getCommandAllocator(
+	VkGraphicsDevice *device, U32 resolvedQueueId, U32 threadId, U8 backBufferId
+);

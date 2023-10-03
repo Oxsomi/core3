@@ -18,24 +18,28 @@
 *  This is called dual licensing.
 */
 
-#pragma once
-#include "types/types.h"
-#define VK_ENABLE_BETA_EXTENSIONS
-#include <vulkan/vulkan.h>
+#include "graphics/generic/device.h"
+#include "graphics/generic/instance.h"
+#include "graphics/vulkan/vk_swapchain.h"
+#include "graphics/vulkan/vk_device.h"
+#include "graphics/vulkan/vk_instance.h"
+#include "platforms/window.h"
+#include "platforms/platform.h"
+#include "types/error.h"
 
-typedef struct VkManagedImage {
+Error VkSurface_create(GraphicsDevice *device, const Window *window, VkSurfaceKHR *surface) {
 
-	VkImage image;
-	VkImageView view;
+	if(!device || !window || !surface)
+		return Error_nullPointer(!device ? 0 : (!window ? 0 : 1));
 
-	VkPipelineStageFlagBits2 lastStage;
-	VkAccessFlagBits2 lastAccess;
-	VkImageLayout lastLayout;
+	GraphicsInstance *instance = GraphicsInstanceRef_ptr(device->instance);
+	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
 
-} VkManagedImage;
+	VkWin32SurfaceCreateInfoKHR surfaceInfo = (VkWin32SurfaceCreateInfoKHR) {
+		.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
+		.hwnd = window->nativeHandle,
+		.hinstance = Platform_instance.data
+	};
 
-typedef struct CharString CharString;
-typedef struct GraphicsDevice GraphicsDevice;
-typedef struct Error Error;
-
-Error vkCheck(VkResult result);
+	return vkCheck(instanceExt->createWin32SurfaceKHR(instanceExt->instance, &surfaceInfo, NULL, surface));
+}

@@ -18,24 +18,13 @@
 *  This is called dual licensing.
 */
 
-#pragma once
-#include "types/types.h"
-#define VK_ENABLE_BETA_EXTENSIONS
-#include <vulkan/vulkan.h>
+#include "graphics/generic/swapchain.h"
+#include "types/error.h"
 
-typedef struct VkManagedImage {
+Error SwapchainRef_dec(SwapchainRef **swapchain) {
+	return !RefPtr_dec(swapchain) ? Error_invalidOperation(0) : Error_none();
+}
 
-	VkImage image;
-	VkImageView view;
-
-	VkPipelineStageFlagBits2 lastStage;
-	VkAccessFlagBits2 lastAccess;
-	VkImageLayout lastLayout;
-
-} VkManagedImage;
-
-typedef struct CharString CharString;
-typedef struct GraphicsDevice GraphicsDevice;
-typedef struct Error Error;
-
-Error vkCheck(VkResult result);
+Error SwapchainRef_add(SwapchainRef *swapchain) {
+	return swapchain ? (!RefPtr_inc(swapchain) ? Error_invalidOperation(0) : Error_none()) : Error_nullPointer(0);
+}

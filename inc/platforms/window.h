@@ -58,9 +58,9 @@ typedef enum EWindowHint {
 //
 typedef enum EWindowFormat {
 	EWindowFormat_rgba8		= ETextureFormat_rgba8,			//Most common format
-	EWindowFormat_hdr10a2	= ETextureFormat_rgb10a2,
+	EWindowFormat_rgb10a2	= ETextureFormat_rgb10a2,
 	EWindowFormat_rgba16f	= ETextureFormat_rgba16f,
-	EWindowFormat_rgba32f	= ETextureFormat_rgba32f
+	EWindowFormat_rgba32f	= ETextureFormat_rgba32f		//Rarely supported (only CPU)
 } EWindowFormat;
 
 //Window flags are set by the implementation
@@ -130,7 +130,7 @@ typedef struct Window {
 	I32x2 offset, size;
 	I32x2 minSize, maxSize;
 
-	I32x2 prevSize;					//For full screen toggle
+	I32x2 prevSize;				//For full screen toggle
 
 	Buffer cpuVisibleBuffer;
 
@@ -150,7 +150,7 @@ typedef struct Window {
 
 	CharString title;			//Only for physical windows
 
-	Error creationError;	//Only if creation failed for physical windows
+	Error creationError;		//Only if creation failed for physical windows
 
 	//TODO: Make this a map at some point
 

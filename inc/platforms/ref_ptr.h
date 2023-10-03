@@ -32,9 +32,7 @@ typedef struct RefPtr {
 	AtomicI64 refCount;
 
 	ETypeId typeId;
-	U32 pad;
-
-	Buffer data;
+	U32 length;
 
 	Allocator alloc;
 
@@ -42,8 +40,10 @@ typedef struct RefPtr {
 
 } RefPtr;
 
-Error RefPtr_create(Buffer data, Allocator alloc, ObjectFreeFunc free, ETypeId type, RefPtr **result);
-Error RefPtr_createx(Buffer data, ObjectFreeFunc free, ETypeId type, RefPtr **result);
+Error RefPtr_create(U32 objectLength, Allocator alloc, ObjectFreeFunc free, ETypeId type, RefPtr **result);
+Error RefPtr_createx(U32 objectLength, ObjectFreeFunc free, ETypeId type, RefPtr **result);
 
 Bool RefPtr_inc(RefPtr *ptr);
 Bool RefPtr_dec(RefPtr **ptr);	//Clears pointer if it's gone
+
+#define RefPtr_data(dat, T) (!dat ? NULL : (T*)(dat + 1))

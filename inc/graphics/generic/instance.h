@@ -20,6 +20,11 @@
 
 #pragma once
 #include "types/string.h"
+#include "platforms/ref_ptr.h"
+
+//In line with vulkan standard.
+#define GraphicsApplicationInfo_Version(major, minor, patch)	\
+((major) << 22) | ((minor) << 12) | (patch)
 
 typedef struct GraphicsApplicationInfo {
 
@@ -43,25 +48,31 @@ typedef struct GraphicsInstance {
 	EGraphicsApi api;
 	U32 apiVersion;
 
-	void *ext;
-
 } GraphicsInstance;
 
-typedef struct GraphicsDeviceInfo GraphicsDeviceInfo;
 typedef struct GraphicsDeviceCapabilities GraphicsDeviceCapabilities;
+typedef struct GraphicsDeviceInfo GraphicsDeviceInfo;
 
-impl Error GraphicsInstance_create(GraphicsApplicationInfo info, GraphicsInstance *inst);
-impl Bool GraphicsInstance_free(GraphicsInstance *inst);
+typedef RefPtr GraphicsInstanceRef;
 
-impl Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, List *infos);		//<GraphicsDeviceInfo>
+#define GraphicsInstance_ext(ptr, T) (!ptr ? NULL : (T##GraphicsInstance*)(ptr + 1))		//impl
+#define GraphicsInstanceRef_ptr(ptr) RefPtr_data(ptr, GraphicsInstance)
 
-static U64 GraphicsInstance_vendorMaskAll;
-static U64 GraphicsInstance_deviceTypeAll;
+Error GraphicsInstanceRef_dec(GraphicsInstanceRef **inst);
+Error GraphicsInstanceRef_add(GraphicsInstanceRef *inst);
 
-Error GraphicsInstance_getPreferredGpu(
+impl Error GraphicsInstance_create(GraphicsApplicationInfo info, Bool isVerbose, GraphicsInstanceRef **inst);
+
+impl Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbose, List *infos);	//<GraphicsDeviceInfo>
+
+extern U64 GraphicsInstance_vendorMaskAll;
+extern U64 GraphicsInstance_deviceTypeAll;
+
+Error GraphicsInstance_getPreferredDevice(
 	const GraphicsInstance *inst, 
 	GraphicsDeviceCapabilities requiredCapabilities, 
 	U64 vendorMask,
 	U64 deviceTypeMask,
-	void **deviceExt
+	Bool verbose,
+	GraphicsDeviceInfo *deviceInfo
 );

@@ -23,6 +23,35 @@
 
 typedef struct List List;
 
+extern const C8 *reqExtensionsName[];
+extern U64 reqExtensionsNameCount;
+
+typedef enum EOptExtensions {
+
+	EOptExtensions_DebugMarker,
+	EOptExtensions_F16,
+	EOptExtensions_MultiDrawIndirectCount,
+	EOptExtensions_AtomicI64,
+	EOptExtensions_PerfQuery,
+	EOptExtensions_RayPipeline,
+	EOptExtensions_RayQuery,
+	EOptExtensions_RayAcceleration,
+	EOptExtensions_Swapchain,
+	EOptExtensions_RayMotionBlur,
+	EOptExtensions_RayReorder,
+	EOptExtensions_MeshShader,
+	EOptExtensions_DynamicRendering,
+	EOptExtensions_RayMicromapOpacity,
+	EOptExtensions_RayMicromapDisplacement,
+	EOptExtensions_VariableRateShading,
+	EOptExtensions_AtomicF32,
+	EOptExtensions_DeferredHostOperations
+
+} EOptExtensions;
+
+extern const C8 *optExtensionsName[];
+extern U64 optExtensionsNameCount;
+
 typedef struct VkGraphicsInstance {
 	
 	VkInstance instance;
@@ -31,25 +60,36 @@ typedef struct VkGraphicsInstance {
 	PFN_vkGetImageMemoryRequirements2KHR getImageMemoryRequirements2;
 	PFN_vkGetBufferMemoryRequirements2KHR getBufferMemoryRequirements2;
 
+	PFN_vkGetPhysicalDeviceFeatures2KHR getPhysicalDeviceFeatures2;
+	PFN_vkGetPhysicalDeviceProperties2KHR getPhysicalDeviceProperties2;
+
+	PFN_vkGetPhysicalDeviceSurfaceFormatsKHR getPhysicalDeviceSurfaceFormats;
+	PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR getPhysicalDeviceSurfaceCapabilities;
+	PFN_vkGetPhysicalDeviceSurfacePresentModesKHR getPhysicalDeviceSurfacePresentModes;
+	PFN_vkGetSwapchainImagesKHR getSwapchainImagesKHR;
+
+	PFN_vkCreateWin32SurfaceKHR createWin32SurfaceKHR;
+
 	PFN_vkSetDebugUtilsObjectNameEXT debugSetName;
 
-	PFN_vkCmdDebugMarkerBeginEXT debugMarkerBegin;
-	PFN_vkCmdDebugMarkerEndEXT debugMarkerEnd;
-	PFN_vkCmdDebugMarkerInsertEXT debugMarkerInsert;
+	PFN_vkCmdDebugMarkerBeginEXT cmdDebugMarkerBegin;
+	PFN_vkCmdDebugMarkerEndEXT cmdDebugMarkerEnd;
+	PFN_vkCmdDebugMarkerInsertEXT cmdDebugMarkerInsert;
+
+	PFN_vkCmdBeginRenderingKHR cmdBeginRenderingKHR;
+	PFN_vkCmdEndRenderingKHR cmdEndRenderingKHR;
 
 	PFN_vkCreateDebugReportCallbackEXT debugCreateReportCallback;
 
 	PFN_vkDestroyDebugReportCallbackEXT debugDestroyReportCallback;
-
-	PFN_vkDebugReportCallbackEXT debugReportCallbackFunc;
 
 	PFN_vkAcquireNextImageKHR acquireNextImage;
 	PFN_vkCreateSwapchainKHR createSwapchain;
 	PFN_vkDestroySurfaceKHR destroySurface;
 	PFN_vkDestroySwapchainKHR destroySwapchain;
 
-	PFN_vkCmdDrawIndexedIndirectCountKHR drawIndexedIndirectCount;
-	PFN_vkCmdDrawIndirectCountKHR drawIndirectCount;
+	PFN_vkCmdDrawIndexedIndirectCountKHR cmdDrawIndexedIndirectCount;
+	PFN_vkCmdDrawIndirectCountKHR cmdDrawIndirectCount;
 
 	PFN_vkBuildAccelerationStructuresKHR buildAccelerationStructures;
 	PFN_vkCmdCopyAccelerationStructureKHR copyAccelerationStructure;
@@ -60,6 +100,8 @@ typedef struct VkGraphicsInstance {
 	PFN_vkCmdTraceRaysKHR traceRays;
 	PFN_vkCmdTraceRaysIndirectKHR traceRaysIndirect;
 	PFN_vkCreateRayTracingPipelinesKHR createRaytracingPipelines;
+
+	PFN_vkCmdPipelineBarrier2KHR cmdPipelineBarrier2;
 
 } VkGraphicsInstance;
 

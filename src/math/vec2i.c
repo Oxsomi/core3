@@ -57,7 +57,7 @@ I32x2 I32x2_two() { return I32x2_xx2(2); }
 I32x2 I32x2_negOne() { return I32x2_xx2(-1); }
 I32x2 I32x2_negTwo() { return I32x2_xx2(-2); }
 
-Bool I32x2_all(I32x2 b) { return I32x2_reduce(I32x2_neq(b, I32x2_zero())) == 4; }
+Bool I32x2_all(I32x2 b) { return I32x2_reduce(I32x2_neq(b, I32x2_zero())) == 2; }
 Bool I32x2_any(I32x2 b) { return I32x2_reduce(I32x2_neq(b, I32x2_zero())); }
 
 I32x2 I32x2_load1(const I32 *arr) { return arr ? I32x2_create1(*arr) : I32x2_zero(); }

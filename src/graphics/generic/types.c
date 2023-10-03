@@ -18,24 +18,23 @@
 *  This is called dual licensing.
 */
 
-#pragma once
-#include "types/types.h"
-#define VK_ENABLE_BETA_EXTENSIONS
-#include <vulkan/vulkan.h>
+#include "graphics/generic/types.h"
 
-typedef struct VkManagedImage {
+EGraphicsTypeId EGraphicsTypeId_all[EGraphicsTypeId_Count] = {
 
-	VkImage image;
-	VkImageView view;
+	EGraphicsTypeId_GraphicsInstance,
+	EGraphicsTypeId_GraphicsDevice,
 
-	VkPipelineStageFlagBits2 lastStage;
-	VkAccessFlagBits2 lastAccess;
-	VkImageLayout lastLayout;
+	EGraphicsTypeId_Swapchain,
+	EGraphicsTypeId_CommandList,
 
-} VkManagedImage;
+	EGraphicsTypeId_RenderTexture,
+	EGraphicsTypeId_RenderPass,
 
-typedef struct CharString CharString;
-typedef struct GraphicsDevice GraphicsDevice;
-typedef struct Error Error;
-
-Error vkCheck(VkResult result);
+	EGraphicsTypeId_GPUTexture,
+	EGraphicsTypeId_GPUBuffer,
+	EGraphicsTypeId_Pipeline,
+	EGraphicsTypeId_DescriptorSet,
+	EGraphicsTypeId_Sampler,
+	EGraphicsTypeId_AccelerationStructure
+};

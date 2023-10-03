@@ -19,7 +19,7 @@
 */
 
 #pragma once
-#include "types/types.h"
+#include "graphics/generic/types.h"
 
 typedef enum EGraphicsDeviceType {
 
@@ -39,16 +39,21 @@ typedef enum EGraphicsVendor {
 	EGraphicsVendor_QCOM,
 	EGraphicsVendor_INTC,
 	EGraphicsVendor_IMGT,
+	EGraphicsVendor_APPL,
 	EGraphicsVendor_Unknown
 
 } EGraphicsVendor;
 
 typedef enum EGraphicsFeatures {
 
-	//When this is turned on, the GPU benefits from tiled rendering.
-	//This is true for mobile devices only or some chips such as QCOM on windows.
+	EGraphicsFeatures_None						= 0,
 
-	EGraphicsFeatures_TiledRendering			= 1 << 0,
+	//When this is turned on, the GPU doesn't benefits from tiled rendering.
+	//This is false for mobile devices only or some chips such as QCOM on windows.
+	//On desktop and various dedicated GPUs this is always true.
+	//If this is false, you have to use render passes.
+
+	EGraphicsFeatures_DirectRendering			= 1 << 0,
 
 	//EGraphicsFeatures_VariableRateShading		= 1 << 1,		TODO:
 
@@ -61,24 +66,36 @@ typedef enum EGraphicsFeatures {
 	EGraphicsFeatures_SubgroupArithmetic		= 1 << 6,
 	EGraphicsFeatures_SubgroupShuffle			= 1 << 7,
 
-	EGraphicsFeatures_Swapchain			= 1 << 8,
+	EGraphicsFeatures_Swapchain					= 1 << 8,
+
+	//EGraphicsFeatures_Multiview				= 1 << 9,		TODO:
 
 	//Raytracing extensions
 
-	EGraphicsFeatures_Raytracing				= 1 << 9,		//Requires RayPipeline or RayQuery
-	EGraphicsFeatures_RayPipeline				= 1 << 10,
-	EGraphicsFeatures_RayIndirect				= 1 << 11,
-	EGraphicsFeatures_RayQuery					= 1 << 12,
-	EGraphicsFeatures_RayMicromapOpacity		= 1 << 13,
-	EGraphicsFeatures_RayMicromapDisplacement	= 1 << 14,
-	EGraphicsFeatures_RayMotionBlur				= 1 << 15,
-	EGraphicsFeatures_RayReorder				= 1 << 16,
+	EGraphicsFeatures_Raytracing				= 1 << 10,		//Requires RayPipeline or RayQuery
+	EGraphicsFeatures_RayPipeline				= 1 << 11,
+	EGraphicsFeatures_RayIndirect				= 1 << 12,
+	EGraphicsFeatures_RayQuery					= 1 << 13,
+	EGraphicsFeatures_RayMicromapOpacity		= 1 << 14,
+	EGraphicsFeatures_RayMicromapDisplacement	= 1 << 15,
+	EGraphicsFeatures_RayMotionBlur				= 1 << 16,
+	EGraphicsFeatures_RayReorder				= 1 << 17,
 
 	//LUID for sharing devices
 
-	EGraphicsFeatures_SupportsLUID				= 1 << 17
+	EGraphicsFeatures_LUID						= 1 << 18,
+
+	//Debug features
+
+	EGraphicsFeatures_DebugMarkers				= 1 << 19
 
 } EGraphicsFeatures;
+
+typedef enum EGraphicsFeatures2 {
+
+	EGraphicsFeatures2_None
+
+} EGraphicsFeatures2;
 
 typedef enum EGraphicsDataTypes {
 
@@ -89,17 +106,14 @@ typedef enum EGraphicsDataTypes {
 	EGraphicsDataTypes_F64					= 1 << 2,
 
 	EGraphicsDataTypes_AtomicI64			= 1 << 3,
+	EGraphicsDataTypes_AtomicF32			= 1 << 4,
+	EGraphicsDataTypes_AtomicF64			= 1 << 5,
 
 	//What texture formats are available
 	//These can be both supported.
 
-	EGraphicsDataTypes_ASTC					= 1 << 4,			//If false, BCn has to be supported
-	EGraphicsDataTypes_BCn					= 1 << 5,			//If false, ASTC has to be supported
-
-	//What formats are available for the swapchain
-
-	EGraphicsDataTypes_HDR10A2				= 1 << 6,
-	EGraphicsDataTypes_RGBA16f				= 1 << 7,
+	EGraphicsDataTypes_ASTC					= 1 << 6,			//If false, BCn has to be supported
+	EGraphicsDataTypes_BCn					= 1 << 7,			//If false, ASTC has to be supported
 
 	//If render targets can have MSAA8x, 2x or 16x.
 
@@ -109,26 +123,14 @@ typedef enum EGraphicsDataTypes {
 
 } EGraphicsDataTypes;
 
-//Up to 200k of each type (except dynamic) are supported.
-//This is only turned off for Apple devices and older phones.
-//Minimum OxC3 spec Android phones, NV/AMD/Intel laptops/desktops all support this.
-//Only apple doesn't...
-
-typedef enum EGraphicsBindingTier {
-
-	EGraphicsBindingTier_Low,
-	EGraphicsBindingTier_High
-
-} EGraphicsBindingTier;
-
 //This struct represents the abilities a graphics device has.
 
 typedef struct GraphicsDeviceCapabilities {
 
 	EGraphicsFeatures features;
+	EGraphicsFeatures2 features2;
 
 	EGraphicsDataTypes dataTypes;
-	EGraphicsBindingTier bindingTier;
 
 	U32 featuresExt;				//Extended device features, API dependent
 
@@ -146,6 +148,8 @@ typedef struct GraphicsDeviceInfo {
 	EGraphicsVendor vendor;
 
 	U32 id;
+	U32 pad;
+
 	GraphicsDeviceCapabilities capabilities;
 
 	U64 luid;			//Check SupportsLUID
@@ -155,3 +159,5 @@ typedef struct GraphicsDeviceInfo {
 	void *ext;
 
 } GraphicsDeviceInfo;
+
+void GraphicsDeviceInfo_print(const GraphicsDeviceInfo *deviceInfo, Bool printCapabilities);

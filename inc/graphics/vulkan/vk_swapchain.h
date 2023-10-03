@@ -19,23 +19,36 @@
 */
 
 #pragma once
-#include "types/types.h"
-#define VK_ENABLE_BETA_EXTENSIONS
-#include <vulkan/vulkan.h>
+#include "graphics/vulkan/vulkan.h"
 
-typedef struct VkManagedImage {
+typedef struct Window Window;
+typedef struct VkGraphicsInstance VkGraphicsInstance;
 
-	VkImage image;
-	VkImageView view;
+typedef struct VkSwapchain {
 
-	VkPipelineStageFlagBits2 lastStage;
-	VkAccessFlagBits2 lastAccess;
-	VkImageLayout lastLayout;
+	VkSurfaceKHR surface;			//Platform's surface implementation
+	VkSwapchainKHR swapchain;
 
-} VkManagedImage;
+	List semaphores;				//<VkSemaphore>
+	List images;					//<VkManagedImage>
 
-typedef struct CharString CharString;
-typedef struct GraphicsDevice GraphicsDevice;
-typedef struct Error Error;
+	VkSurfaceFormatKHR format;
 
-Error vkCheck(VkResult result);
+	U32 currentIndex;				//Swapchain index
+
+} VkSwapchain;
+
+impl Error VkSurface_create(GraphicsDevice *device, const Window *window, VkSurfaceKHR *surface);
+
+//Transitions entire resource rather than subresources
+
+Error VkSwapchain_transition(
+	VkManagedImage *image, 
+	VkPipelineStageFlags2 stage, 
+	VkAccessFlagBits2 access,
+	VkImageLayout layout,
+	U32 graphicsQueueId,
+	const VkImageSubresourceRange *range,
+	List *imageBarriers,
+	VkDependencyInfo *dependency
+);

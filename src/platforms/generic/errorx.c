@@ -47,6 +47,8 @@ void Error_printx(Error err, ELogLevel logLevel, ELogOptions options) {
 	if(err.genericError == EGenericError_Stderr)
 		platformErr = CharString_createConstRefCStr(strerror((int)err.paramValue0));
 
+	Log_printCapturedStackTraceCustom(err.stackTrace, ERROR_STACKTRACE, ELogLevel_Error, options);
+
 	if(
 		!CharString_formatx(
 
@@ -68,8 +70,6 @@ void Error_printx(Error err, ELogLevel logLevel, ELogOptions options) {
 
 	CharString_freex(&result);
 	CharString_freex(&platformErr);
-
-	Log_printCapturedStackTraceCustom(err.stackTrace, ERROR_STACKTRACE, logLevel, options);
 
 	if(logLevel == ELogLevel_Fatal)
 		exit(1);

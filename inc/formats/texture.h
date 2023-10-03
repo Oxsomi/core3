@@ -80,6 +80,8 @@ typedef enum ETextureCompressionType {
 //
 typedef enum ETextureFormat {
 
+	ETextureFormat_undefined		= _ETextureFormat(ETextureCompressionType_Invalid, 4, 0, 0, 0),
+
 	//8-bit
 
 	ETextureFormat_r8				= _ETextureFormat(ETexturePrimitive_UNorm, 8, 0, 0, 0),

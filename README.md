@@ -27,16 +27,17 @@ OxC3 (0xC3 or Oxsomi core 3) is the successor to O(x)somi core v2 and v1. Specif
   - Log for colored and proper cross platform logging.
   - Window for physical (OS-backed) and virtual (in memory) windows.
 - OxC3_graphics: deps(OxC3_platforms)
-  - Abstraction layer possible to port to newer graphics APIs such as D3D12, Vulkan, Metal and WebGPU. Vulkan and DirectX12 would be the first important things supported.
+  - Abstraction layer possible to port to newer graphics APIs such as D3D12, Vulkan, Metal and WebGPU. Vulkan and Metal would be the first important things supported.
+  - For more info check the [documentation](docs/graphics_api.md).
 - OxC3: deps(OxC3_platforms)
   - Useful command line tool that exposes useful functions from OxC3. 
   - File manipulation:
     - Conversions between oiCA/oiDL and raw files (zip-like).
     - Encryption/decryption.
     - File inspection for oiCA/oiDL files.
-- Hash tool for files and strings (supporting sha256, crc32c).
-- Random key, char, data and number generator.
-- Profile tool for testing speed of float casts, csprng, crc32c, sha256 and aes256 (encryption and decryption).
+  - Hash tool for files and strings (supporting sha256, crc32c).
+  - Random key, char, data and number generator.
+  - Profile tool for testing speed of float casts, csprng, crc32c, sha256 and aes256 (encryption and decryption).
 
 One of the useful things about C is that files are incredibly easy to compile and parse compared to C++; resulting in reduced build times and allowing easy parsing for reflection or even auto generated documentation for things like types, function signatures and errors a function might return.
 
