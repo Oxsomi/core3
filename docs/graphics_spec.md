@@ -7,19 +7,18 @@ OxC3 is not made for devices older than 3 years. OxC3's spec for newer versions 
 We're targeting the minimum specs of following systems in OxC3 0.2:
 
 - Phones:
-  - Binding tier low:
-    - Samsung S20 (Samsung SM-G980x).
-    - Apple iPhone 12 (A14).
-  - Binding tier high:
-    - Samsung S21 (Samsung SM-G991x).
-    - Google Pixel 5a.
-    - Xiaomi Redmi Note 8.
-  - Binding tier high & raytracing capable:
+  - Apple iPhone 12 (A14); only via Metal3 support.
+
+  - Samsung S21 (Samsung SM-G991x).
+  - Google Pixel 5a.
+  - Xiaomi Redmi Note 8.
+  - Raytracing capable:
     - Samsung S22 (SM-S901x).
+
 - Laptop:
   - Nvidia RTX 3060 Laptop GPU.
   - AMD RX 6600M.
-  - Apple Macbook Pro 14 (M1 Pro).
+  - Apple Macbook Pro 14 (M1 Pro); only via Metal3 support.
 - PCs:
   - Nvidia RTX 3060.
   - AMD 6600 XT.
@@ -54,9 +53,10 @@ Because of this, a device needs the following requirements to be OxC3 compatible
   - VK_KHR_get_memory_requirements2
   - VK_EXT_shader_subgroup_ballot
   - VK_EXT_shader_subgroup_vote
-  - VK_EXT_descriptor_indexing
-  - VK_EXT_multi_draw
+  - VK_EXT_descriptor_indexing with all features true except shaderInputAttachmentArrayDynamicIndexing and shaderInputAttachmentArrayNonUniformIndexing.
   - VK_KHR_driver_properties
+  - VK_KHR_synchronization2
+  - VK_KHR_timeline_semaphore
 - Supported device extensions:
   - Debug build only:
     - VK_EXT_debug_marker as internal flag
@@ -68,16 +68,23 @@ Because of this, a device needs the following requirements to be OxC3 compatible
   - VK_KHR_ray_query as RayQuery
   - VK_KHR_acceleration_structure && (RaytracingPipeline || RaytracingQuery) as Raytracing
   - VK_KHR_swapchain as Swapchain
+    - Requires at least 1 image layer.
+    - Requires ability to make 2 (vsync) or 3 (!vsync) images.
+    - Requires usage flags of transfer (src, dst), sampled, storage, color attachment bits.
+    - Requires FIFO or mailbox. 
+    - Requires inherit alpha or opaque support.
+    - Application is responsible for presenting image in the right rotation if SwapchainInfo::requiresManualComposite.
   - VK_NV_ray_tracing_motion_blur as RayMotionBlur
   - VK_NV_ray_tracing_invocation_reorder as RayReorder
   - VK_EXT_mesh_shader as MeshShader
   - VK_EXT_opacity_micromap as RayMicromapOpacity
   - VK_NV_displacement_micromap as RayMicromapDisplacement
   - VK_KHR_dynamic_rendering to disable/enable TiledBasedRendering.
+  - VK_KHR_deferred_host_operations is required for raytracing. Otherwise they'll all be forced off.
 - subgroupSize of 16 - 128.
 - subgroup operations of basic, vote, ballot are required. Available only in compute by default. arithmetic and shuffle are optional.
-- shaderSampledImageArrayDynamicIndexing, shaderStorageBufferArrayDynamicIndexing, shaderUniformBufferArrayDynamicIndexing, descriptorIndexing turned on.
-- samplerAnisotropy, drawIndirectFirstInstance, independentBlend, imageCubeArray, fullDrawIndexUint32, depthClamp, depthBiasClamp turned on.
+- shaderSampledImageArrayDynamicIndexing, shaderStorageBufferArrayDynamicIndexing, shaderUniformBufferArrayDynamicIndexing, shaderStorageBufferArrayDynamicIndexing, descriptorIndexing turned on.
+- samplerAnisotropy, drawIndirectFirstInstance, independentBlend, imageCubeArray, fullDrawIndexUint32, depthClamp, depthBiasClamp, multiDrawIndirect turned on.
 - Either BCn (textureCompressionBC) or ASTC (textureCompressionASTC_LDR) compression *must* be supported (can be both supported).
 - shaderInt16 support.
 - maxColorAttachments and maxFragmentOutputAttachments of 8 or higher.
@@ -85,9 +92,8 @@ Because of this, a device needs the following requirements to be OxC3 compatible
 - MSAA support of 1 and 4 or higher (framebufferColorSampleCounts, framebufferDepthSampleCounts, framebufferNoAttachmentsSampleCounts, framebufferStencilSampleCounts, sampledImageColorSampleCounts, sampledImageDepthSampleCounts, sampledImageIntegerSampleCounts, sampledImageStencilSampleCounts). Support for MSAA 2 is non default.
   - MSAA2x, MSAA8x and MSAA16x graphics features are enabled if all of these support it.
 - maxComputeSharedMemorySize of 16KiB or higher.
-- maxComputeWorkGroupCount[N] of 64Ki or higher.
+- maxComputeWorkGroupCount[N] of U16_MAX or higher.
 - maxComputeWorkGroupInvocations of 512 or higher.
-- maxComputeWorkGroupSize of 1024 or higher.
 - maxFragmentCombinedOutputResources of 16 or higher.
 - maxFragmentInputComponents of 112 or higher.
 - maxFramebufferWidth, maxFramebufferHeight, maxImageDimension1D,  maxImageDimension2D, maxImageDimensionCube, maxViewportDimensions[i] of 16Ki or higher.
@@ -106,28 +112,20 @@ Because of this, a device needs the following requirements to be OxC3 compatible
 - maxMemoryAllocationCount of 4096 or higher.
 - maxBoundDescriptorSets of 4 or higher.
 - maxDescriptorSetStorageBuffersDynamic of  >=16.
-- maxDescriptorSetUniformBuffersDynamic of >=32.
-
-### Resource binding tiers
-
-#### EResourceBindingTier_Low
-
-- maxPerStageDescriptorSamplers of 16 or higher.
-- maxPerStageDescriptorUniformBuffers of 31 or higher.
-- maxPerStageDescriptorStorageBuffers of 31 or higher.
-- maxPerStageDescriptorSampledImages of 96 or higher.
-- maxPerStageDescriptorStorageImages of 8 or higher.
-- maxPerStageResources of 127 or higher.
-- maxDescriptorSetSamplers of 80 or higher.
-- maxDescriptorSetUniformBuffers of 155 or higher.
-- maxDescriptorSetStorageBuffers of 155 or higher.
-- maxDescriptorSetSampledImages of 480 or higher.
-- maxDescriptorSetStorageImages of 40 or higher.
-
-#### EResourceBindingTier_High
-
-- Everything mentioned in resource tier low but with a limit of 200k or higher.
+- maxDescriptorSetUniformBuffersDynamic of >=15.
+- maxPerStageDescriptorSamplers of 2Ki or higher.
+- maxPerStageDescriptorUniformBuffers of 200k or higher.
+- maxPerStageDescriptorStorageBuffers of 200k or higher.
+- maxPerStageDescriptorSampledImages of 200k or higher.
+- maxPerStageDescriptorStorageImages of 200k or higher.
 - maxPerStageResources of 1M or higher.
+- maxDescriptorSetSamplers of 2Ki or higher.
+- maxDescriptorSetUniformBuffers of 250k or higher.
+- maxDescriptorSetStorageBuffers of 250k or higher.
+- maxDescriptorSetSampledImages of 250k or higher.
+- maxDescriptorSetStorageImages of 250k or higher.
+- viewportBoundsRange[0] <= -32768.
+- viewportBoundsRange[1] >= 32767.
 
 ### Extensions
 
@@ -171,6 +169,9 @@ Raytracing requires VK_KHR_acceleration_structure, but also requires either VK_K
   - maxShaderGroupStride >= 4096.
   - rayTraversalPrimitiveCulling should be enabled.
 
+- Motion blur:
+  - Both indirect and normal rays are allowed to be traced if RayIndirect is on. Otherwise RayIndirect has to be turned off.
+
 #### Mesh shaders
 
 Requires task shaders to be present and multiviewMeshShader, primitiveFragmentShadingRateMeshShader to be available too.
@@ -183,7 +184,7 @@ Requires task shaders to be present and multiviewMeshShader, primitiveFragmentSh
   - maxMeshOutputPrimitives and maxMeshOutputVertices of >= 256.
   - maxMeshPayloadAndOutputMemorySize of >= 48128.
   - maxMeshPayloadAndSharedMemorySize, maxMeshSharedMemorySize of >= 28672.
-  - maxMeshWorkGroupCount[i], maxTaskWorkGroupCount[i] of >= 64 Ki.
+  - maxMeshWorkGroupCount[i], maxTaskWorkGroupCount[i] of >= U16_MAX.
   - maxMeshWorkGroupInvocations, maxMeshWorkGroupSize[i], maxTaskWorkGroupInvocations, maxTaskWorkGroupSize[i] of >=128.
   - maxMeshWorkGroupTotalCount of >=4Mi.
   - maxPreferredMeshWorkGroupInvocations of >=32.
@@ -194,6 +195,12 @@ Requires task shaders to be present and multiviewMeshShader, primitiveFragmentSh
   - maxTaskWorkGroupTotalCount of >= 4 Mi.
   - meshOutputPerPrimitiveGranularity, meshOutputPerVertexGranularity of >= 32.
   - prefersCompactPrimitiveOutput of true.
+
+#### Atomics
+
+- AtomicI64 means atomic operations of a 64-bit int on a buffer. Images are optional.
+- AtomicF32 means atomic exchange/read and atomic float add operations on a buffer. Images are optional.
+- AtomicF64 ^ except 64-bit.
 
 ## List of DirectX12 requirements
 
@@ -209,16 +216,15 @@ Requires task shaders to be present and multiviewMeshShader, primitiveFragmentSh
 
 Since Vulkan is more fragmented, the features are more split up. However in DirectX, the features supported by default are the following:
 
-- EGraphicsBindingTier_High is always enabled. Enforces at least 200k resource binds available of each type.
 - EGraphicsFeatures_SubgroupArithmetic, EGraphicsFeatures_SubgroupShuffle. Wave intrinsics are all supported by default.
-- EGraphicsFeatures_GeometryShader, EGraphicsFeatures_TessellationShader and EGraphicsFeatures_MultiDrawIndirect(Count), EGraphicsFeatures_SupportsSwapchain, EGraphicsFeatures_SupportsLUID are enabled by default.
+- EGraphicsFeatures_GeometryShader, EGraphicsFeatures_TessellationShader and EGraphicsFeatures_MultiDrawIndirectCount, EGraphicsFeatures_SupportsSwapchain, EGraphicsFeatures_SupportsLUID are enabled by default.
 - EGraphicsFeatures_Raytracing, EGraphicsFeatures_RayPipeline, EGraphicsFeatures_RayQuery, EGraphicsFeatures_MeshShaders, EGraphicsFeatures_VariableRateShading are a part of DirectX12 Ultimate (Turing, RDNA2, Arc and up).
-- If EGraphicsFeatures_Raytracing is enabled, so is EGraphicsFeatures_RayPipeline. The rest is optional.
+- If EGraphicsFeatures_Raytracing is enabled, so is EGraphicsFeatures_RayPipeline. The other RT extensions are optional.
 - EDeviceDataTypes_BCn, EGraphicsDataTypes_I64, EGraphicsDataTypes_F64 are always set.
 
 ### List of Metal requirements
 
-- Metal 3 (Apple7 tier).
+- Metal 3 (Apple7 tier). Argument buffers tier 2.
 - Phone:
   - Apple iPhone 12 (A14, Apple7).
 - Laptop:
@@ -226,12 +232,11 @@ Since Vulkan is more fragmented, the features are more split up. However in Dire
 
 #### Default features in Metal
 
-- EGraphicsFeatures_TiledRendering is always set.
+- EGraphicsFeatures_DirectRendering is never set.
 - EGraphicsFeatures_TessellationShader is always set.
 - EGraphicsDataTypes_ASTC is always set.
-- EGraphicsDataTypes_BCn can be set as well.
+- EGraphicsDataTypes_BCn can be set as well on Mac/MacBook.
 - EGraphicsDataTypes_AtomicF32, EGraphicsDataTypes_AtomicI64, EGraphicsDataTypes_F16, EGraphicsDataTypes_I64 are always set.
-- EGraphicsBindingTier_Low by default due to strict binding requirements. See "List of Vulkan requirements" -> "Resource binding tiers".
 
 ## TODO: List of WebGPU requirements
 
