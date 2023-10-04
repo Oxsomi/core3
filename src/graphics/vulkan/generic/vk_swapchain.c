@@ -43,6 +43,7 @@ Error GraphicsDeviceRef_createSwapchainInternal(GraphicsDeviceRef *deviceRef, Sw
 	Error err = Error_none();
 	CharString temp = CharString_createNull();
 	List list = List_createEmpty(sizeof(VkSurfaceFormatKHR));
+	Bool lock = false;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	VkSwapchain *swapchainExt = Swapchain_ext(swapchain, Vk);
@@ -259,8 +260,10 @@ Error GraphicsDeviceRef_createSwapchainInternal(GraphicsDeviceRef *deviceRef, Sw
 
 	_gotoIfError(clean, vkCheck(instance->createSwapchain(deviceExt->device, &swapchainInfo, NULL, &swapchainExt->swapchain)));
 
-	if(prevSwapchain)
+	if(prevSwapchain) {
 		instance->destroySwapchain(deviceExt->device, prevSwapchain, NULL);
+		VkGraphicsDevice_freeAllocations(deviceExt, &swapchainExt->descriptorAllocations);
+	}
 
 	//Acquire images
 
@@ -376,7 +379,95 @@ Error GraphicsDeviceRef_createSwapchainInternal(GraphicsDeviceRef *deviceRef, Sw
 	swapchain->size = size;
 	++swapchain->versionId;
 
+	//Allocate in descriptors
+
+	swapchainExt->descriptorAllocations = List_createEmpty(sizeof(U32));
+	_gotoIfError(clean, List_resizex(&swapchainExt->descriptorAllocations, 2 * imageCount));
+
+	list = List_createEmpty(sizeof(VkWriteDescriptorSet));
+	_gotoIfError(clean, List_resizex(&list, swapchainExt->descriptorAllocations.length));
+
+	if(!Lock_lock(&deviceExt->descriptorLock, U64_MAX))
+		_gotoIfError(clean, Error_invalidState(0));
+
+	lock = true;
+
+	for(U64 i = 0; i < imageCount; ++i) {
+
+		//Create readonly image
+
+		U32 locationRead = VkGraphicsDevice_allocateDescriptor(deviceExt, EDescriptorType_Texture2D);
+
+		if(locationRead == U32_MAX)
+			_gotoIfError(clean, Error_outOfMemory(0));
+
+		_gotoIfError(clean, List_pushBackx(
+			&swapchainExt->descriptorAllocations, 
+			Buffer_createConstRef(&locationRead, sizeof(U32)
+		)));
+
+		VkDescriptorImageInfo imageInfo = (VkDescriptorImageInfo) {
+			.imageView = ((VkManagedImage*)swapchainExt->images.ptr)[swapchainExt->currentIndex].view,
+			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+		};
+
+		((VkWriteDescriptorSet*)list.ptr)[i * 2 + 0] = (VkWriteDescriptorSet) {
+			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			.dstSet = deviceExt->sets[EDescriptorType_Texture2D],
+			.dstBinding = 0,
+			.dstArrayElement = locationRead & ((1 << 20) - 1),
+			.descriptorCount = 1,
+			.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+			.pImageInfo = &imageInfo
+		};
+
+		//Create read write image
+		//Default is RWTexture2D (unorm) otherwise float.
+
+		EDescriptorType textureWriteType = EDescriptorType_RWTexture2D;
+
+		switch (swapchain->format) {
+
+			case EWindowFormat_rgba32f:
+			case EWindowFormat_rgba16f:
+				textureWriteType = EDescriptorType_RWTexture2Df;
+				break;
+		}
+
+		U32 locationWrite = VkGraphicsDevice_allocateDescriptor(deviceExt, textureWriteType);
+
+		if(locationWrite == U32_MAX)
+			_gotoIfError(clean, Error_outOfMemory(1));
+
+		_gotoIfError(clean, List_pushBackx(
+			&swapchainExt->descriptorAllocations, 
+			Buffer_createConstRef(&locationWrite, sizeof(U32)
+		)));
+
+		imageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+		((VkWriteDescriptorSet*)list.ptr)[i * 2 + 1] = (VkWriteDescriptorSet) {
+			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			.dstSet = deviceExt->sets[textureWriteType],
+			.dstBinding = 0,
+			.dstArrayElement = locationWrite & ((1 << 20) - 1),
+			.descriptorCount = 1,
+			.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+			.pImageInfo = &imageInfo
+		};
+	}
+
+	vkUpdateDescriptorSets(deviceExt->device, (U32) list.length, (const VkWriteDescriptorSet*) list.ptr, 0, NULL);
+	List_freex(&list);
+
+	Lock_unlock(&deviceExt->descriptorLock);
+	lock = false;
+
 clean:
+
+	if(lock)
+		Lock_unlock(&deviceExt->descriptorLock);
+	
 	CharString_freex(&temp);
 	List_freex(&list);
 	return err;
@@ -458,6 +549,9 @@ Bool GraphicsDevice_freeSwapchain(Swapchain *swapchain, Allocator alloc) {
 
 	List_freex(&swapchainExt->semaphores);
 	List_freex(&swapchainExt->images);
+
+	VkGraphicsDevice_freeAllocations(deviceExt, &swapchainExt->descriptorAllocations);
+	List_freex(&swapchainExt->descriptorAllocations);
 
 	if(swapchainExt->swapchain)
 		vkDestroySwapchainKHR(deviceExt->device, swapchainExt->swapchain, NULL);

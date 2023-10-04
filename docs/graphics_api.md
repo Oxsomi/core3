@@ -421,7 +421,7 @@ Clear image can currently only be called on a Swapchain object.
 
 ### setPipeline
 
-The set pipeline command does one of two things; bind a graphics pipeline or bind a compute pipeline. These two pipelines are the only bind points and they're maintained separately. So a bind pipeline of a graphics shader and one of a compute shader don't interfere. This is used before a draw, dispatch or traceRaysExt to ensure the shader is used. A raytracing pipeline shares the binding point with a compute pipeline.
+The set pipeline command does one of two things; bind a graphics pipeline or bind a compute pipeline. These two pipelines are the only bind points and they're maintained separately. So a bind pipeline of a graphics shader and one of a compute shader don't interfere. This is used before a draw, dispatch or traceRaysExt to ensure the shader is used. A raytracing pipeline has its own bind point as well.
 
 ```c
 _gotoIfError(clean, CommandListRef_setPipeline(commandList, pipeline));

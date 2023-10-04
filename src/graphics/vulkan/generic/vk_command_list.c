@@ -631,8 +631,8 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 				}
 
 				VkAccessFlags2 accessFlags =
-					transition.isWrite ? VK_ACCESS_2_SHADER_SAMPLED_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_READ_BIT :
-					VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
+					!transition.isWrite ? VK_ACCESS_2_SHADER_SAMPLED_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_READ_BIT :
+					VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
 
 				U32 graphicsQueueId = deviceExt->queues[EVkCommandQueue_Graphics].queueId;
 
@@ -641,7 +641,7 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 					imageExt, 
 					pipelineStage,
 					accessFlags,
-					transition.isWrite ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_GENERAL,
+					!transition.isWrite ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_GENERAL,
 					graphicsQueueId,
 					&range,
 

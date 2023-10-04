@@ -36,6 +36,8 @@ typedef struct VkSwapchain {
 
 	U32 currentIndex;				//Swapchain index
 
+	List descriptorAllocations;
+
 } VkSwapchain;
 
 impl Error VkSurface_create(GraphicsDevice *device, const Window *window, VkSurfaceKHR *surface);

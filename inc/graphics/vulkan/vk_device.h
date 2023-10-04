@@ -22,6 +22,7 @@
 #include "graphics/vulkan/vulkan.h"
 #include "graphics/generic/device_info.h"
 #include "graphics/generic/command_list.h"
+#include "platforms/lock.h"
 #include "types/list.h"
 #include "math/vec.h"
 
@@ -69,6 +70,50 @@ typedef struct VkCommandQueue {
 
 } VkCommandQueue;
 
+typedef enum EDescriptorType {
+
+	EDescriptorType_Sampler,
+
+	EDescriptorType_Texture2D,
+	EDescriptorType_TextureCube,
+	EDescriptorType_Texture3D,
+	EDescriptorType_Buffer,
+
+	EDescriptorType_RWBuffer,
+	EDescriptorType_RWTexture3D,
+	EDescriptorType_RWTexture3Ds,
+	EDescriptorType_RWTexture3Df,
+	EDescriptorType_RWTexture3Di,
+	EDescriptorType_RWTexture3Du,
+	EDescriptorType_RWTexture2D,
+	EDescriptorType_RWTexture2Ds,
+	EDescriptorType_RWTexture2Df,
+	EDescriptorType_RWTexture2Di,
+	EDescriptorType_RWTexture2Du,
+
+	EDescriptorType_Count
+
+} EDescriptorType;
+
+static const U32 descriptorTypeCount[] = {
+	2048,		//All samplers
+	868928,		//~87% of textures
+	65536,		//~6.5% of textures
+	65536,		//~6.5% of textures
+	1000000,	//All buffers
+	1000000,	//All buffers
+	13107,		//10% of 128Ki (3D + Cube)
+	9610,		//~7.3% of 128Ki (Remainder) (3D + Cube)
+	87381,		//66% of 128Ki (3D + Cube)
+	10487,		//8% of 128Ki (3D + Cube)
+	10487,		//8% of 128Ki (3D + Cube)
+	434464,		//50% of 1M - 128Ki (2D)
+	43446,		//5% of 1M - 128Ki (2D)
+	289642,		//33% of 1M - 128Ki (2D)
+	50688,		//6% of 1M - 128Ki (2D)
+	50688		//6% of 1M - 128Ki (2D)
+};
+
 typedef struct VkGraphicsDevice {
 
 	VkDevice device;
@@ -86,8 +131,16 @@ typedef struct VkGraphicsDevice {
 
 	VkSemaphore commitSemaphore;
 
-	VkDescriptorSetLayout setLayouts[16];	//We have 16 different sets, but they're not that interesting.
-	VkPipelineLayout defaultLayout;			//Default layout if push constants aren't present
+	VkDescriptorSetLayout setLayouts[EDescriptorType_Count];
+	VkDescriptorSet sets[EDescriptorType_Count];
+	VkPipelineLayout defaultLayout;								//Default layout if push constants aren't present
+
+	VkDescriptorPool descriptorPool;
+
+	//Used for allocating descriptors
+
+	Lock descriptorLock;
+	Buffer freeList[EDescriptorType_Count];
 
 	//Temporary storage for submit time stuff
 
@@ -140,3 +193,8 @@ typedef struct VkCommandBufferState {		//Caching state variables
 VkCommandAllocator *VkGraphicsDevice_getCommandAllocator(
 	VkGraphicsDevice *device, U32 resolvedQueueId, U32 threadId, U8 backBufferId
 );
+
+//Lower 20 bit: id
+//4 bit higher: descriptor type
+U32 VkGraphicsDevice_allocateDescriptor(VkGraphicsDevice *deviceExt, EDescriptorType type);
+Bool VkGraphicsDevice_freeAllocations(VkGraphicsDevice *deviceExt, List *allocations);			//List<U32>

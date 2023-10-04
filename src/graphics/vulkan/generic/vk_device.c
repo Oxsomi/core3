@@ -593,33 +593,11 @@ Error GraphicsDevice_initExt(
 
 	//Create shared layout since we use bindless
 
-	static const U32 count[] = {
-		2048,		//All samplers
-		868928,		//~87% of textures
-		65536,		//~6.5% of textures
-		65536,		//~6.5% of textures
-		1000000,	//All buffers
-		1000000,	//All buffers
-		13107,		//10% of 128Ki (3D + Cube)
-		9610,		//~7.3% of 128Ki (Remainder) (3D + Cube)
-		87381,		//66% of 128Ki (3D + Cube)
-		10487,		//8% of 128Ki (3D + Cube)
-		10487,		//8% of 128Ki (3D + Cube)
-		434464,		//50% of 1M - 128Ki (2D)
-		43446,		//5% of 1M - 128Ki (2D)
-		289642,		//33% of 1M - 128Ki (2D)
-		50688,		//6% of 1M - 128Ki (2D)
-		50688		//6% of 1M - 128Ki (2D)
-	};
-
-	static const U64 sets = sizeof(count) / sizeof(count[0]);
-
-	for (U32 i = 0; i < sets; ++i) {
+	for (U32 i = 0; i < EDescriptorType_Count; ++i) {
 
 		VkDescriptorSetLayoutBinding binding = (VkDescriptorSetLayoutBinding) {
-			.descriptorCount = i == 0 ? 2 * (U32)KIBI : 1'000'000,
 			.stageFlags = VK_SHADER_STAGE_ALL,
-			.descriptorCount = count[i]
+			.descriptorCount = descriptorTypeCount[i]
 		};
 
 		switch (i) {
@@ -647,23 +625,134 @@ Error GraphicsDevice_initExt(
 
 		//One binding per set.
 
+		VkDescriptorBindingFlags flag = 
+			VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT |
+			VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT |
+			VK_DESCRIPTOR_BINDING_UPDATE_UNUSED_WHILE_PENDING_BIT |
+			VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT;
+
+		VkDescriptorSetLayoutBindingFlagsCreateInfo partiallyBound = (VkDescriptorSetLayoutBindingFlagsCreateInfo) {
+			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
+			.bindingCount = 1,
+			.pBindingFlags = &flag
+		};
+
 		VkDescriptorSetLayoutCreateInfo setInfo = (VkDescriptorSetLayoutCreateInfo) {
 			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+			.pNext = &partiallyBound,
 			.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT,
 			.bindingCount = 1,
 			.pBindings = &binding
 		};
 
 		_gotoIfError(clean, vkCheck(vkCreateDescriptorSetLayout(deviceExt->device, &setInfo, NULL, &deviceExt->setLayouts[i])));
+
+		_gotoIfError(clean, Buffer_createEmptyBytesx((binding.descriptorCount + 7) >> 3, &deviceExt->freeList[i]));
 	}
 
 	VkPipelineLayoutCreateInfo layoutInfo = (VkPipelineLayoutCreateInfo) {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-		.setLayoutCount = (U32) sets,
+		.setLayoutCount = EDescriptorType_Count,
 		.pSetLayouts = deviceExt->setLayouts
 	};
 
 	_gotoIfError(clean, vkCheck(vkCreatePipelineLayout(deviceExt->device, &layoutInfo, NULL, &deviceExt->defaultLayout)));
+
+	//We only need one pool and 1 descriptor set per EDescriptorType since we use bindless.
+	//Every resource is automatically allocated into their respective descriptor set.
+
+	U32 sampledImages = 
+		descriptorTypeCount[EDescriptorType_Texture2D] + 
+		descriptorTypeCount[EDescriptorType_Texture3D] +
+		descriptorTypeCount[EDescriptorType_TextureCube];
+
+	U32 storageImages = 
+		descriptorTypeCount[EDescriptorType_RWTexture2D] + 
+		descriptorTypeCount[EDescriptorType_RWTexture2Ds] + 
+		descriptorTypeCount[EDescriptorType_RWTexture2Df] + 
+		descriptorTypeCount[EDescriptorType_RWTexture2Di] + 
+		descriptorTypeCount[EDescriptorType_RWTexture2Du] + 
+		descriptorTypeCount[EDescriptorType_RWTexture3D] +
+		descriptorTypeCount[EDescriptorType_RWTexture3Ds] +
+		descriptorTypeCount[EDescriptorType_RWTexture3Df] +
+		descriptorTypeCount[EDescriptorType_RWTexture3Di] +
+		descriptorTypeCount[EDescriptorType_RWTexture3Du];
+
+	VkDescriptorPoolSize poolSizes[] = {
+		(VkDescriptorPoolSize) { .type = VK_DESCRIPTOR_TYPE_SAMPLER, descriptorTypeCount[EDescriptorType_Sampler] },
+		(VkDescriptorPoolSize) { .type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, storageImages },
+		(VkDescriptorPoolSize) { .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, sampledImages },
+		(VkDescriptorPoolSize) { .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, descriptorTypeCount[EDescriptorType_RWBuffer] },
+		(VkDescriptorPoolSize) { .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, descriptorTypeCount[EDescriptorType_Buffer] }
+	};
+
+	VkDescriptorPoolCreateInfo poolInfo = (VkDescriptorPoolCreateInfo) {
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+		.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
+		.maxSets = EDescriptorType_Count,
+		.poolSizeCount = sizeof(poolSizes) / sizeof(poolSizes[0]),
+		.pPoolSizes = poolSizes
+	};
+
+	_gotoIfError(clean, vkCheck(vkCreateDescriptorPool(deviceExt->device, &poolInfo, NULL, &deviceExt->descriptorPool)));
+
+	VkDescriptorSetVariableDescriptorCountAllocateInfo allocationCount = (VkDescriptorSetVariableDescriptorCountAllocateInfo) {
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO,
+		.descriptorSetCount = EDescriptorType_Count,
+		.pDescriptorCounts = descriptorTypeCount
+	};
+
+	VkDescriptorSetAllocateInfo setInfo = (VkDescriptorSetAllocateInfo) {
+		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+		.pNext = &allocationCount,
+		.descriptorPool = deviceExt->descriptorPool,
+		.descriptorSetCount = EDescriptorType_Count,
+		.pSetLayouts = deviceExt->setLayouts
+	};
+
+	_gotoIfError(clean, vkCheck(vkAllocateDescriptorSets(deviceExt->device, &setInfo, deviceExt->sets)));
+
+	#ifndef NDEBUG
+
+		static const C8 *debugNames[] = {
+			"Sampler",
+			"Texture2D",
+			"TextureCube",
+			"Texture3D",
+			"Buffer",
+			"RWBuffer",
+			"RWTexture3D",
+			"RWTexture3Ds",
+			"RWTexture3Df",
+			"RWTexture3Di",
+			"RWTexture3Du",
+			"RWTexture2D",
+			"RWTexture2Ds",
+			"RWTexture2Df",
+			"RWTexture2Di",
+			"RWTexture2Du"
+		};
+
+		if(instanceExt->debugSetName)
+			for (U32 i = 0; i < EDescriptorType_Count; ++i) {
+
+				_gotoIfError(clean, CharString_formatx(&tempStr, "Descriptor set layout (%i: %s)", i, debugNames[i]));
+
+				VkDebugUtilsObjectNameInfoEXT debugName2 = (VkDebugUtilsObjectNameInfoEXT) {
+					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+					.objectType = VK_OBJECT_TYPE_DESCRIPTOR_SET,
+					.objectHandle = (U64) deviceExt->sets[i],
+					.pObjectName = tempStr.ptr,
+				};
+
+				_gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName2)));
+
+				CharString_freex(&tempStr);
+			}
+
+	#endif
+
+	_gotoIfError(clean, Lock_create(&deviceExt->descriptorLock));
 
 	goto success;
 
@@ -713,13 +802,26 @@ Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext) {
 			deviceExt->commitSemaphore = NULL;
 		}
 
-		for(U64 i = 0; i < sizeof(deviceExt->setLayouts) / sizeof(deviceExt->setLayouts[0]); ++i) {
+		U32 setCount = 0;
+
+		for(U32 i = 0; i < EDescriptorType_Count; ++i) {
 
 			VkDescriptorSetLayout layout = deviceExt->setLayouts[i];
 
 			if(layout)
 				vkDestroyDescriptorSetLayout(deviceExt->device, layout, NULL);
+
+			VkDescriptorSet set = deviceExt->sets[i];
+
+			if(set)
+				++setCount;
 		}
+
+		if(setCount)
+			vkFreeDescriptorSets(deviceExt->device, deviceExt->descriptorPool, setCount, deviceExt->sets);
+		
+		if(deviceExt->descriptorPool)
+			vkDestroyDescriptorPool(deviceExt->device, deviceExt->descriptorPool, NULL);
 
 		if(deviceExt->defaultLayout)
 			vkDestroyPipelineLayout(deviceExt->device, deviceExt->defaultLayout, NULL);
@@ -729,6 +831,11 @@ Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext) {
 
 	List_freex(&deviceExt->commandPools);
 	List_freex(&deviceExt->submitSemaphores);
+
+	for(U32 i = 0; i < EDescriptorType_Count; ++i)
+		Buffer_freex(&deviceExt->freeList[i]);
+
+	Lock_free(&deviceExt->descriptorLock);
 
 	//Free temp storage
 
@@ -752,6 +859,44 @@ Error GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef) {
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 
 	return vkCheck(vkDeviceWaitIdle(deviceExt->device));
+}
+
+U32 VkGraphicsDevice_allocateDescriptor(VkGraphicsDevice *deviceExt, EDescriptorType type) {
+
+	if(!Lock_isLockedForThread(deviceExt->descriptorLock))
+		return U32_MAX;
+
+	Buffer buf = deviceExt->freeList[type];
+
+	for(U32 i = 0; i < (U32)(Buffer_length(buf) << 3); ++i) {
+
+		Bool bit = false;
+
+		if(Buffer_getBit(buf, i, &bit).genericError)
+			return U32_MAX;
+
+		if(!bit) {
+			Buffer_setBit(buf, i);
+			return i | (type << 20);
+		}
+	}
+
+	return U32_MAX;
+}
+
+Bool VkGraphicsDevice_freeAllocations(VkGraphicsDevice *deviceExt, List *allocations) {
+
+	if(!Lock_isLockedForThread(deviceExt->descriptorLock))
+		return false;
+
+	Bool success = true;
+
+	for (U64 i = 0; i < allocations->length; ++i) {
+		U32 id = ((const U32*)allocations->ptr)[i];
+		success &= !Buffer_resetBit(deviceExt->freeList[id >> 20], id & ((1 << 20) - 1)).genericError;
+	}
+
+	return success;
 }
 
 VkCommandAllocator *VkGraphicsDevice_getCommandAllocator(
@@ -1019,6 +1164,18 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 		};
 
 		_gotoIfError(clean, vkCheck(vkBeginCommandBuffer(commandBuffer, &beginInfo)));
+
+		//Bind pipeline layout and descriptors since they stay the same for the entire frame.
+		//For every bind point
+
+		for(U64 i = 0; i < 2; ++i)
+			vkCmdBindDescriptorSets(
+				commandBuffer, 
+				i == 0 ? VK_PIPELINE_BIND_POINT_COMPUTE : VK_PIPELINE_BIND_POINT_GRAPHICS, 
+				deviceExt->defaultLayout, 
+				0, EDescriptorType_Count, deviceExt->sets, 
+				0, NULL
+			);
 
 		//Record commands
 
