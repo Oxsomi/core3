@@ -261,8 +261,16 @@ Error GraphicsDeviceRef_createSwapchainInternal(GraphicsDeviceRef *deviceRef, Sw
 	_gotoIfError(clean, vkCheck(instance->createSwapchain(deviceExt->device, &swapchainInfo, NULL, &swapchainExt->swapchain)));
 
 	if(prevSwapchain) {
+
 		instance->destroySwapchain(deviceExt->device, prevSwapchain, NULL);
-		VkGraphicsDevice_freeAllocations(deviceExt, &swapchainExt->descriptorAllocations);
+
+		if(!Lock_lock(&deviceExt->descriptorLock, U64_MAX))
+			_gotoIfError(clean, Error_invalidOperation(0));
+
+		lock = true;
+
+		if(!VkGraphicsDevice_freeAllocations(deviceExt, &swapchainExt->descriptorAllocations))
+			_gotoIfError(clean, Error_invalidOperation(1));
 	}
 
 	//Acquire images
@@ -387,7 +395,7 @@ Error GraphicsDeviceRef_createSwapchainInternal(GraphicsDeviceRef *deviceRef, Sw
 	list = List_createEmpty(sizeof(VkWriteDescriptorSet));
 	_gotoIfError(clean, List_resizex(&list, swapchainExt->descriptorAllocations.length));
 
-	if(!Lock_lock(&deviceExt->descriptorLock, U64_MAX))
+	if(!lock && !Lock_lock(&deviceExt->descriptorLock, U64_MAX))
 		_gotoIfError(clean, Error_invalidState(0));
 
 	lock = true;

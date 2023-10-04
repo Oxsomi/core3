@@ -91,6 +91,8 @@ Error CommandListRef_end(CommandListRef *commandListRef) {
 
 Error CommandListRef_append(CommandListRef *commandListRef, ECommandOp op, Buffer buf, List objects, U32 extraSkipStacktrace) {
 
+	extraSkipStacktrace;
+
 	CommandListRef_validate(commandListRef);
 
 	U64 len = Buffer_length(buf);

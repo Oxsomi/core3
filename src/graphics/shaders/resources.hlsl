@@ -79,3 +79,15 @@ template<typename T>
 void setAt(U32 resourceId, U32 id, T t) {
 	rwBuffer(resourceId).Store<T>(id, t);
 }
+
+//Globals used during the entire frame for useful information such as frame id.
+
+/*[[vk::binding(0, 16)]] cbuffer globals {
+
+	U64 _frameId;
+	F32 _time;
+	U32 _swapchainCount;
+
+	U32x4 _swapchainIds[7];			//Up to 28 swapchains. This points to to where they're at in the global registers
+
+};*/ 

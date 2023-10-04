@@ -97,21 +97,21 @@ typedef enum EDescriptorType {
 
 static const U32 descriptorTypeCount[] = {
 	2048,		//All samplers
-	868928,		//~87% of textures
-	65536,		//~6.5% of textures
-	65536,		//~6.5% of textures
-	1000000,	//All buffers
-	1000000,	//All buffers
-	13107,		//10% of 128Ki (3D + Cube)
-	9610,		//~7.3% of 128Ki (Remainder) (3D + Cube)
-	87381,		//66% of 128Ki (3D + Cube)
-	10487,		//8% of 128Ki (3D + Cube)
-	10487,		//8% of 128Ki (3D + Cube)
-	434464,		//50% of 1M - 128Ki (2D)
-	43446,		//5% of 1M - 128Ki (2D)
-	289642,		//33% of 1M - 128Ki (2D)
-	50688,		//6% of 1M - 128Ki (2D)
-	50688		//6% of 1M - 128Ki (2D)
+	184464,		//~74% of RW textures (2D)
+	32768,		//~13% of RW textures (Cube)
+	32768,		//~13% of RW textures (3D)
+	250000,		//All buffers (readonly)
+	250000,		//All buffers (RW)
+	6553,		//10% of 64Ki (3D + Cube) for RW 3D unorm
+	4809,		//~7.3% of 64Ki (Remainder) (3D + Cube) for RW 3D snorm
+	43690,		//66% of 64Ki (3D + Cube) for RW 3D float
+	5242,		//8% of 64Ki (3D + Cube) for RW 3D int
+	5242,		//8% of 64Ki (3D + Cube) for RW 3D uint
+	92232,		//50% of 250K - 64Ki (2D) for 2D unorm
+	9224,		//5% of 250K - 64Ki (2D) for 2D snorm
+	61488,		//33% of 250K - 64Ki (2D) for 2D float
+	10760,		//5.8% of 250K - 64Ki (2D) for 2D int
+	10760		//5.8% of 250K - 64Ki (2D) for 2D uint
 };
 
 typedef struct VkGraphicsDevice {

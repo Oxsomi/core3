@@ -802,24 +802,14 @@ Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext) {
 			deviceExt->commitSemaphore = NULL;
 		}
 
-		U32 setCount = 0;
-
 		for(U32 i = 0; i < EDescriptorType_Count; ++i) {
 
 			VkDescriptorSetLayout layout = deviceExt->setLayouts[i];
 
 			if(layout)
 				vkDestroyDescriptorSetLayout(deviceExt->device, layout, NULL);
-
-			VkDescriptorSet set = deviceExt->sets[i];
-
-			if(set)
-				++setCount;
 		}
 
-		if(setCount)
-			vkFreeDescriptorSets(deviceExt->device, deviceExt->descriptorPool, setCount, deviceExt->sets);
-		
 		if(deviceExt->descriptorPool)
 			vkDestroyDescriptorPool(deviceExt->device, deviceExt->descriptorPool, NULL);
 
@@ -896,6 +886,7 @@ Bool VkGraphicsDevice_freeAllocations(VkGraphicsDevice *deviceExt, List *allocat
 		success &= !Buffer_resetBit(deviceExt->freeList[id >> 20], id & ((1 << 20) - 1)).genericError;
 	}
 
+	List_clear(allocations);
 	return success;
 }
 

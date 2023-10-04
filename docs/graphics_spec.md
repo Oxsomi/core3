@@ -114,16 +114,16 @@ Because of this, a device needs the following requirements to be OxC3 compatible
 - maxDescriptorSetStorageBuffersDynamic of  >=16.
 - maxDescriptorSetUniformBuffersDynamic of >=15.
 - maxPerStageDescriptorSamplers of 2Ki or higher.
-- maxPerStageDescriptorUniformBuffers of 1M or higher.
-- maxPerStageDescriptorStorageBuffers of 1M or higher.
-- maxPerStageDescriptorSampledImages of 1M or higher.
-- maxPerStageDescriptorStorageImages of 1M or higher.
-- maxPerStageResources of 4M or higher.
+- maxPerStageDescriptorUniformBuffers of 250k or higher.
+- maxPerStageDescriptorStorageBuffers of 250k or higher.
+- maxPerStageDescriptorSampledImages of 250k or higher.
+- maxPerStageDescriptorStorageImages of 250k or higher.
+- maxPerStageResources of 1M or higher.
 - maxDescriptorSetSamplers of 2Ki or higher.
-- maxDescriptorSetUniformBuffers of 1M or higher.
-- maxDescriptorSetStorageBuffers of 1M or higher.
-- maxDescriptorSetSampledImages of 1M or higher.
-- maxDescriptorSetStorageImages of 1M or higher.
+- maxDescriptorSetUniformBuffers of 250k or higher.
+- maxDescriptorSetStorageBuffers of 250k or higher.
+- maxDescriptorSetSampledImages of 250k or higher.
+- maxDescriptorSetStorageImages of 250k or higher.
 - viewportBoundsRange[0] <= -32768.
 - viewportBoundsRange[1] >= 32767.
 
