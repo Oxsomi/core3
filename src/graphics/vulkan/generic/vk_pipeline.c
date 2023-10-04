@@ -74,7 +74,8 @@ Error GraphicsDeviceRef_createPipelinesCompute(GraphicsDeviceRef *deviceRef, Lis
 	if(pipelines->ptr)
 		return Error_invalidParameter(2, 0);
 
-	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(deviceRef, Vk);
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 
 	List pipelineInfos = List_createEmpty(sizeof(VkComputePipelineCreateInfo));
 	List pipelineHandles = List_createEmpty(sizeof(VkPipeline));
@@ -96,9 +97,8 @@ Error GraphicsDeviceRef_createPipelinesCompute(GraphicsDeviceRef *deviceRef, Lis
 		((VkComputePipelineCreateInfo*)pipelineInfos.ptr)[i] = (VkComputePipelineCreateInfo) {
 			.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
 			.stage = (VkPipelineShaderStageCreateInfo) {
-			
 				.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-				.flags = VK_SHADER_STAGE_COMPUTE_BIT,
+				.stage = VK_SHADER_STAGE_COMPUTE_BIT,
 				.pName = "main"
 			},
 			.layout = deviceExt->defaultLayout

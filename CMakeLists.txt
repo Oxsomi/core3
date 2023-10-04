@@ -123,6 +123,7 @@ if(TRUE)
 	message("-- Enabling Vulkan support...")
 	set(graphicsApi vulkan)
 	set(_GRAPHICS_API EGraphicsApi_Vulkan)
+	set_property(GLOBAL PROPERTY graphicsApi "${graphicsApi}")
 endif()
 
 # Types 
@@ -200,7 +201,7 @@ file(GLOB_RECURSE graphicsApiSources "src/graphics/${graphicsApi}/generic/*.c")
 file(GLOB_RECURSE graphicsApiPlatformSources "src/graphics/${graphicsApi}/${platform}/*.c")
 
 file(GLOB_RECURSE graphicsSources "src/graphics/generic/*.c")
-file(GLOB_RECURSE shaders "src/shaders/*.hlsl")
+# file(GLOB_RECURSE shaders "src/*.hlsl")
 
 add_library(
 	OxC3_graphics
@@ -210,14 +211,14 @@ add_library(
 	${graphicsApiSources}
 	${graphicsApiPlatformSources}
 	${graphicsSources}
-	${shaders}
+	# ${shaders}
 	CMakeLists.txt
 )
 
 source_group("Header Files (${graphicsApi})" FILES ${graphicsApiHeaders})
 source_group("Source Files (${graphicsApi})" FILES ${graphicsApiSources})
 source_group("Source Files (${graphicsApi})/${platform}" FILES ${graphicsApiPlatformSources})
-source_group("Shaders" FILES ${shaders})
+# source_group("Shaders" FILES ${shaders})
 
 target_compile_definitions(OxC3_graphics PUBLIC -D_GRAPHICS_API=${_GRAPHICS_API})
 
@@ -283,13 +284,15 @@ endfunction()
 
 # Add virtual directory as a loadable section.
 # Example:
-# add_virtual_directory(
+# add_virtual_files(
 #	TARGET
 #		myTarget
 #	NAME
 #		shaders
 #	ROOT
 #		${CMAKE_CURRENT_SOURCE_DIR}/res/test_shaders
+#	SELF
+#		${CMAKE_CURRENT_SOURCE_DIR}
 # )
 # This would add myTarget/shaders as a virtual directory.
 # myTarget/shaders has to be loaded manually by the app to process it.
@@ -299,7 +302,7 @@ endfunction()
 macro(add_virtual_files)
 
 	set(_OPTIONS)
-	set(_ONE_VALUE TARGET ROOT NAME)
+	set(_ONE_VALUE TARGET ROOT NAME SELF)
 	set(_MULTI_VALUE)
 
 	cmake_parse_arguments(_ARGS "${_OPTIONS}" "${_ONE_VALUE}" "${_MULTI_VALUE}" ${ARGN})
@@ -320,6 +323,10 @@ macro(add_virtual_files)
 	
 	if(NOT _ARGS_NAME)
 		message(FATAL_ERROR "add_virtual_files: 'NAME' argument required.")
+	endif()
+	
+	if(NOT _ARGS_SELF)
+		message(FATAL_ERROR "add_virtual_files: 'SELF' argument required.")
 	endif()
 	
 	if(NOT _ARGS_NAME MATCHES "^[0-9A-Za-z_\$]+$")
@@ -343,7 +350,7 @@ macro(add_virtual_files)
 		add_custom_target(
 			${_ARGS_TARGET}_package
 			COMMAND OxC3 file package -i "${_ARGS_ROOT}" -o "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA"
-			WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+			WORKING_DIRECTORY ${_ARGS_SELF}
 		)
 
 		set_target_properties(${_ARGS_TARGET}_package PROPERTIES FOLDER Oxsomi/package)

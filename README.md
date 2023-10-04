@@ -115,7 +115,7 @@ to add the files to your project, you can use the following:
 
 ```cmake
 
-add_virtual_files(TARGET myProject NAME mySection ROOT ${CMAKE_CURRENT_SOURCE_DIR}/res/mySectionFolder)
+add_virtual_files(TARGET myProject NAME mySection ROOT ${CMAKE_CURRENT_SOURCE_DIR}/res/mySectionFolder SELF ${CMAKE_CURRENT_SOURCE_DIR})
 configure_icon(myProject "${CMAKE_CURRENT_SOURCE_DIR}/res/logo.ico")
 configure_virtual_files(myProject)
 ```

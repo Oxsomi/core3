@@ -86,7 +86,7 @@ typedef struct VkGraphicsDevice {
 
 	VkSemaphore commitSemaphore;
 
-	VkDescriptorSetLayout setLayout;		//We only have one layout, because we use bindless
+	VkDescriptorSetLayout setLayouts[16];	//We have 16 different sets, but they're not that interesting.
 	VkPipelineLayout defaultLayout;			//Default layout if push constants aren't present
 
 	//Temporary storage for submit time stuff

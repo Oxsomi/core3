@@ -134,7 +134,7 @@ Error File_getInfo(CharString loc, FileInfo *info) {
 	struct stat inf = (struct stat) { 0 };
 
 	if (stat(resolved.ptr, &inf))
-		_gotoIfError(clean, Error_stderr(0));
+		_gotoIfError(clean, Error_notFound(0, 0));
 
 	if (!S_ISDIR(inf.st_mode) && !S_ISREG(inf.st_mode))
 		_gotoIfError(clean, Error_invalidOperation(2));

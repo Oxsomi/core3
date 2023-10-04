@@ -1196,16 +1196,16 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 
 		if(
 			limits.maxPerStageDescriptorSamplers < 2 * KIBI ||
-			limits.maxPerStageDescriptorUniformBuffers < 250 * KILO ||
-			limits.maxPerStageDescriptorStorageBuffers < 250 * KILO ||
-			limits.maxPerStageDescriptorSampledImages < 250 * KILO ||
-			limits.maxPerStageDescriptorStorageImages < 250 * KILO ||
-			limits.maxPerStageResources < MEGA ||
+			limits.maxPerStageDescriptorUniformBuffers < MEGA ||
+			limits.maxPerStageDescriptorStorageBuffers < MEGA  ||
+			limits.maxPerStageDescriptorSampledImages < MEGA ||
+			limits.maxPerStageDescriptorStorageImages < MEGA ||
+			limits.maxPerStageResources < 4 * MEGA ||
 			limits.maxDescriptorSetSamplers < 2 * KIBI ||
-			limits.maxDescriptorSetUniformBuffers < 250 * KILO ||
-			limits.maxDescriptorSetStorageBuffers < 250 * KILO ||
-			limits.maxDescriptorSetSampledImages < 250 * KILO ||
-			limits.maxDescriptorSetStorageImages < 250 * KILO
+			limits.maxDescriptorSetUniformBuffers < MEGA ||
+			limits.maxDescriptorSetStorageBuffers < MEGA ||
+			limits.maxDescriptorSetSampledImages < MEGA ||
+			limits.maxDescriptorSetStorageImages < MEGA
 		) {
 			Log_debugLn("Vulkan: Unsupported GPU %u, graphics binding tier not supported!", i);
 			continue;

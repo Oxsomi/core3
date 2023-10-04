@@ -19,6 +19,7 @@
 */
 
 #include "graphics/generic/pipeline.h"
+#include "platforms/ext/listx.h"
 #include "types/error.h"
 
 Error PipelineRef_dec(PipelineRef **pipeline) {
@@ -29,4 +30,19 @@ Error PipelineRef_add(PipelineRef *pipeline) {
 	return pipeline ? (!RefPtr_inc(pipeline) ? Error_invalidOperation(0) : Error_none()) : Error_nullPointer(0);
 }
 
-Error PipelineRef_decAll(List *list);
+Bool PipelineRef_decAll(List *list) {
+
+	if(!list)
+		return true;
+
+	if(list->stride != sizeof(PipelineRef*))
+		return false;
+
+	Bool success = true;
+
+	for(U64 i = 0; i < list->length; ++i)
+		success &= !PipelineRef_dec(&((PipelineRef**) list->ptr)[i]).genericError;
+
+	List_freex(list);
+	return success;
+}

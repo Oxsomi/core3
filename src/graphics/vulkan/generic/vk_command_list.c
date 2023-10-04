@@ -515,6 +515,8 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 				*pipelineExt
 			);
 
+			temp->boundPipelines[pipeline->type == EPipelineType_Compute] = setPipeline;
+
 			break;
 		}
 

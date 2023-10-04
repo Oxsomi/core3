@@ -333,12 +333,12 @@ typedef RefPtr PipelineRef;
 Error PipelineRef_dec(PipelineRef **pipeline);
 Error PipelineRef_add(PipelineRef *pipeline);
 
-Error PipelineRef_decAll(List *list);					//Decrements all refs and frees list
+Bool PipelineRef_decAll(List *list);					//Decrements all refs and frees list
 
 PipelineRef *PipelineRef_at(List list, U64 index);
 
 //List<Buffer> *shaderBinaries, List<PipelineRef*> *pipelines
-//shaderBinaries will be moved (shaderBinaries will be cleared if moved)
+//shaderBinaries's Buffer will be moved (shaderBinaries will be cleared if moved)
 impl Error GraphicsDeviceRef_createPipelinesCompute(GraphicsDeviceRef *deviceRef, List *shaderBinaries, List *pipelines);
 
 //List<PipelineStage> stages, List<PipelineGraphicsInfo> infos, List<PipelineRef*> *pipelines

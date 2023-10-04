@@ -593,37 +593,74 @@ Error GraphicsDevice_initExt(
 
 	//Create shared layout since we use bindless
 
-	VkDescriptorSetLayoutBinding bindings[5] = { 0 };
-
-	VkDescriptorSetLayoutCreateInfo setInfo = (VkDescriptorSetLayoutCreateInfo) {
-		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-		.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT,
-		.bindingCount = (U32)(sizeof(bindings) / sizeof(VkDescriptorSetLayoutBinding)),
-		.pBindings = bindings
+	static const U32 count[] = {
+		2048,		//All samplers
+		868928,		//~87% of textures
+		65536,		//~6.5% of textures
+		65536,		//~6.5% of textures
+		1000000,	//All buffers
+		1000000,	//All buffers
+		13107,		//10% of 128Ki (3D + Cube)
+		9610,		//~7.3% of 128Ki (Remainder) (3D + Cube)
+		87381,		//66% of 128Ki (3D + Cube)
+		10487,		//8% of 128Ki (3D + Cube)
+		10487,		//8% of 128Ki (3D + Cube)
+		434464,		//50% of 1M - 128Ki (2D)
+		43446,		//5% of 1M - 128Ki (2D)
+		289642,		//33% of 1M - 128Ki (2D)
+		50688,		//6% of 1M - 128Ki (2D)
+		50688		//6% of 1M - 128Ki (2D)
 	};
 
-	for (U32 i = 0; i < setInfo.bindingCount; ++i) {
+	static const U64 sets = sizeof(count) / sizeof(count[0]);
 
-		bindings[i] = (VkDescriptorSetLayoutBinding) {
-			.descriptorCount = i == 0 ? 2 * (U32)KIBI : 200'000,
-			.stageFlags = VK_SHADER_STAGE_ALL
+	for (U32 i = 0; i < sets; ++i) {
+
+		VkDescriptorSetLayoutBinding binding = (VkDescriptorSetLayoutBinding) {
+			.descriptorCount = i == 0 ? 2 * (U32)KIBI : 1'000'000,
+			.stageFlags = VK_SHADER_STAGE_ALL,
+			.descriptorCount = count[i]
 		};
 
 		switch (i) {
-			case 0:		bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;			break;
-			case 1:		bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;		break;
-			case 2:		bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;		break;
-			case 3:		bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;		break;
-			case 4:		bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;		break;
-		}
-	}
 
-	_gotoIfError(clean, vkCheck(vkCreateDescriptorSetLayout(deviceExt->device, &setInfo, NULL, &deviceExt->setLayout)));
+			case 0:
+				binding.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
+				break;
+
+			case 1: case 2: case 3:
+				binding.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+				break;
+
+			case 4:
+				binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+				break;
+
+			case 5:
+				binding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+				break;
+
+			default:
+				binding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+				break;
+		}
+
+		//One binding per set.
+
+		VkDescriptorSetLayoutCreateInfo setInfo = (VkDescriptorSetLayoutCreateInfo) {
+			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+			.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT,
+			.bindingCount = 1,
+			.pBindings = &binding
+		};
+
+		_gotoIfError(clean, vkCheck(vkCreateDescriptorSetLayout(deviceExt->device, &setInfo, NULL, &deviceExt->setLayouts[i])));
+	}
 
 	VkPipelineLayoutCreateInfo layoutInfo = (VkPipelineLayoutCreateInfo) {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-		.setLayoutCount = 1,
-		.pSetLayouts = &deviceExt->setLayout
+		.setLayoutCount = (U32) sets,
+		.pSetLayouts = deviceExt->setLayouts
 	};
 
 	_gotoIfError(clean, vkCheck(vkCreatePipelineLayout(deviceExt->device, &layoutInfo, NULL, &deviceExt->defaultLayout)));
@@ -676,8 +713,13 @@ Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext) {
 			deviceExt->commitSemaphore = NULL;
 		}
 
-		if(deviceExt->setLayout)
-			vkDestroyDescriptorSetLayout(deviceExt->device, deviceExt->setLayout, NULL);
+		for(U64 i = 0; i < sizeof(deviceExt->setLayouts) / sizeof(deviceExt->setLayouts[0]); ++i) {
+
+			VkDescriptorSetLayout layout = deviceExt->setLayouts[i];
+
+			if(layout)
+				vkDestroyDescriptorSetLayout(deviceExt->device, layout, NULL);
+		}
 
 		if(deviceExt->defaultLayout)
 			vkDestroyPipelineLayout(deviceExt->device, deviceExt->defaultLayout, NULL);
