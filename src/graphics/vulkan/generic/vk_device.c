@@ -32,6 +32,7 @@
 #include "platforms/thread.h"
 #include "types/error.h"
 #include "types/buffer.h"
+#include "types/time.h"
 
 #define vkBindNext(T, condition, ...)	\
 	T tmp##T = __VA_ARGS__;				\
@@ -610,7 +611,7 @@ Error GraphicsDevice_initExt(
 				binding.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
 				break;
 
-			case 4:
+			case 4: case 16:
 				binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 				break;
 
@@ -645,9 +646,12 @@ Error GraphicsDevice_initExt(
 			.pBindings = &binding
 		};
 
-		_gotoIfError(clean, vkCheck(vkCreateDescriptorSetLayout(deviceExt->device, &setInfo, NULL, &deviceExt->setLayouts[i])));
+		_gotoIfError(clean, vkCheck(vkCreateDescriptorSetLayout(
+			deviceExt->device, &setInfo, NULL, &deviceExt->setLayouts[i]
+		)));
 
-		_gotoIfError(clean, Buffer_createEmptyBytesx((binding.descriptorCount + 7) >> 3, &deviceExt->freeList[i]));
+		if(i < EDescriptorType_ResourceCount)
+			_gotoIfError(clean, Buffer_createEmptyBytesx((binding.descriptorCount + 7) >> 3, &deviceExt->freeList[i]));
 	}
 
 	VkPipelineLayoutCreateInfo layoutInfo = (VkPipelineLayoutCreateInfo) {
@@ -660,6 +664,7 @@ Error GraphicsDevice_initExt(
 
 	//We only need one pool and 1 descriptor set per EDescriptorType since we use bindless.
 	//Every resource is automatically allocated into their respective descriptor set.
+	//Last descriptor set (cbuffer) is triple buffered to allow swapping part of the UBO
 
 	U32 sampledImages = 
 		descriptorTypeCount[EDescriptorType_Texture2D] + 
@@ -683,13 +688,13 @@ Error GraphicsDevice_initExt(
 		(VkDescriptorPoolSize) { .type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, storageImages },
 		(VkDescriptorPoolSize) { .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, sampledImages },
 		(VkDescriptorPoolSize) { .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, descriptorTypeCount[EDescriptorType_RWBuffer] },
-		(VkDescriptorPoolSize) { .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, descriptorTypeCount[EDescriptorType_Buffer] }
+		(VkDescriptorPoolSize) { .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, descriptorTypeCount[EDescriptorType_Buffer] + 1 }
 	};
 
 	VkDescriptorPoolCreateInfo poolInfo = (VkDescriptorPoolCreateInfo) {
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
 		.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
-		.maxSets = EDescriptorType_Count,
+		.maxSets = EDescriptorType_Count + 2,
 		.poolSizeCount = sizeof(poolSizes) / sizeof(poolSizes[0]),
 		.pPoolSizes = poolSizes
 	};
@@ -698,16 +703,23 @@ Error GraphicsDevice_initExt(
 
 	VkDescriptorSetVariableDescriptorCountAllocateInfo allocationCount = (VkDescriptorSetVariableDescriptorCountAllocateInfo) {
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO,
-		.descriptorSetCount = EDescriptorType_Count,
+		.descriptorSetCount = EDescriptorType_Count + 2,
 		.pDescriptorCounts = descriptorTypeCount
 	};
+
+	//Last layout repeat 3x (that's the CBuffer which needs 3 different versions)
+
+	VkDescriptorSetLayout setLayouts[EDescriptorType_Count + 2];
+
+	for(U64 i = 0; i < EDescriptorType_Count + 2; ++i)
+		setLayouts[i] = deviceExt->setLayouts[U64_min(i, EDescriptorType_Count - 1)];
 
 	VkDescriptorSetAllocateInfo setInfo = (VkDescriptorSetAllocateInfo) {
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
 		.pNext = &allocationCount,
 		.descriptorPool = deviceExt->descriptorPool,
-		.descriptorSetCount = EDescriptorType_Count,
-		.pSetLayouts = deviceExt->setLayouts
+		.descriptorSetCount = EDescriptorType_Count + 2,
+		.pSetLayouts = setLayouts
 	};
 
 	_gotoIfError(clean, vkCheck(vkAllocateDescriptorSets(deviceExt->device, &setInfo, deviceExt->sets)));
@@ -730,11 +742,14 @@ Error GraphicsDevice_initExt(
 			"RWTexture2Ds",
 			"RWTexture2Df",
 			"RWTexture2Di",
-			"RWTexture2Du"
+			"RWTexture2Du",
+			"Global frame cbuffer (0)",
+			"Global frame cbuffer (1)",
+			"Global frame cbuffer (2)"
 		};
 
 		if(instanceExt->debugSetName)
-			for (U32 i = 0; i < EDescriptorType_Count; ++i) {
+			for (U32 i = 0; i < EDescriptorType_Count + 2; ++i) {
 
 				_gotoIfError(clean, CharString_formatx(&tempStr, "Descriptor set layout (%i: %s)", i, debugNames[i]));
 
@@ -753,6 +768,101 @@ Error GraphicsDevice_initExt(
 	#endif
 
 	_gotoIfError(clean, Lock_create(&deviceExt->descriptorLock));
+
+	//Allocate UBO
+
+	VkBufferCreateInfo uboInfo = (VkBufferCreateInfo) {
+		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+		.size = sizeof(CBufferData) * 3,
+		.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+		.sharingMode = VK_SHARING_MODE_CONCURRENT,
+		.queueFamilyIndexCount = deviceExt->resolvedQueues,
+		.pQueueFamilyIndices = deviceExt->uniqueQueues
+	};
+
+	_gotoIfError(clean, vkCheck(vkCreateBuffer(deviceExt->device, &uboInfo, NULL, &deviceExt->ubo)));
+
+	//Get memory properties
+
+	vkGetPhysicalDeviceMemoryProperties((VkPhysicalDevice) physicalDevice->ext, &deviceExt->memoryProperties);
+
+	//Allocate buffer memory
+
+	VkMemoryRequirements requirements = (VkMemoryRequirements) { 0 };
+	vkGetBufferMemoryRequirements(deviceExt->device, deviceExt->ubo, &requirements);
+
+	if(requirements.alignment > 256)					//Force 256-byte alignment or less.
+		_gotoIfError(clean, Error_invalidOperation(0));
+
+	U32 memoryIndex = U32_MAX;
+	VkMemoryPropertyFlags required = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+
+	for (U32 i = 0; i < deviceExt->memoryProperties.memoryTypeCount; ++i)
+		if (
+			(requirements.memoryTypeBits & (1 << i)) && 
+			(deviceExt->memoryProperties.memoryTypes[i].propertyFlags & required) == required
+		) {
+			memoryIndex = i;
+			break;
+		}
+
+	if (memoryIndex == U32_MAX)
+		_gotoIfError(clean, Error_invalidState(0));
+
+	VkMemoryAllocateInfo uboAlloc = (VkMemoryAllocateInfo) {
+		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+		.allocationSize = requirements.size,
+		.memoryTypeIndex = memoryIndex
+	};
+
+	_gotoIfError(clean, vkCheck(vkAllocateMemory(deviceExt->device, &uboAlloc, NULL, &deviceExt->uboMem)));
+
+	_gotoIfError(clean, vkCheck(vkBindBufferMemory(deviceExt->device, deviceExt->ubo, deviceExt->uboMem, 0)));
+
+	//Map UBO as persistent data
+
+	_gotoIfError(clean, vkCheck(vkMapMemory(
+		deviceExt->device, deviceExt->uboMem, 0, sizeof(CBufferData) * 3, 0, &deviceExt->mappedUbo.ptr
+	)));
+
+	deviceExt->mappedUbo.lengthAndRefBits = ((U64)1 << 63) | (sizeof(CBufferData) * 3);
+
+	//Fill last 3 descriptor sets with UBO[i] to ensure we only modify things in flight.
+
+	VkDescriptorBufferInfo uboBufferInfo[3] = {
+		(VkDescriptorBufferInfo) {
+			.buffer = deviceExt->ubo,
+			.range = sizeof(CBufferData)
+		}
+	};
+
+	uboBufferInfo[1] = uboBufferInfo[0];
+	uboBufferInfo[2] = uboBufferInfo[0];
+
+	uboBufferInfo[1].offset = uboBufferInfo[0].range * 1;
+	uboBufferInfo[2].offset = uboBufferInfo[0].range * 2;
+
+	VkWriteDescriptorSet uboDescriptor[3] = {
+		(VkWriteDescriptorSet) {
+			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+			.dstSet = deviceExt->sets[EDescriptorType_CBuffer + 0],
+			.dstBinding = 0,
+			.dstArrayElement = 0,
+			.descriptorCount = 1,
+			.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+			.pBufferInfo = &uboBufferInfo[0]
+		}
+	};
+
+	uboDescriptor[1] = uboDescriptor[0];
+	uboDescriptor[2] = uboDescriptor[0];
+
+	uboDescriptor[1].pBufferInfo = &uboBufferInfo[1];
+	uboDescriptor[1].dstSet = deviceExt->sets[EDescriptorType_CBuffer + 1];
+	uboDescriptor[2].pBufferInfo = &uboBufferInfo[2];
+	uboDescriptor[2].dstSet = deviceExt->sets[EDescriptorType_CBuffer + 2];
+
+	vkUpdateDescriptorSets(deviceExt->device, 3, uboDescriptor, 0, NULL);
 
 	goto success;
 
@@ -815,6 +925,12 @@ Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext) {
 
 		if(deviceExt->defaultLayout)
 			vkDestroyPipelineLayout(deviceExt->device, deviceExt->defaultLayout, NULL);
+
+		if(deviceExt->ubo)
+			vkDestroyBuffer(deviceExt->device, deviceExt->ubo, NULL);
+
+		if(deviceExt->uboMem)
+			vkFreeMemory(deviceExt->device, deviceExt->uboMem, NULL);
 
 		vkDestroyDevice(deviceExt->device, NULL);
 	}
@@ -904,7 +1020,7 @@ VkCommandAllocator *VkGraphicsDevice_getCommandAllocator(
 	return (VkCommandAllocator*) device->commandPools.ptr + id;
 }
 
-Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List commandLists, List swapchains) {
+Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List commandLists, List swapchains, Buffer appData) {
 
 	//Validation and ext structs
 
@@ -914,8 +1030,14 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 	if(swapchains.length && swapchains.stride != sizeof(SwapchainRef*))
 		return Error_invalidParameter(2, 0);
 
+	if(swapchains.length >= 60)						//Hard limit of 60 swapchains
+		return Error_invalidParameter(2, 1);
+
 	if(commandLists.length && commandLists.stride != sizeof(CommandListRef*))
 		return Error_invalidParameter(2, 0);
+
+	if(Buffer_length(appData) >= 256 - 16 - 4 * swapchains.length)
+		return Error_invalidParameter(3, 0);
 
 	//Validate command lists
 
@@ -1156,15 +1278,51 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 
 		_gotoIfError(clean, vkCheck(vkBeginCommandBuffer(commandBuffer, &beginInfo)));
 
+		//Prepare per frame cbuffer
+
+		CBufferData data = (CBufferData) {
+			.frameId = (U32) device->submitId,
+			.time = device->firstSubmit ? (F32)((F64)(Time_now() - device->firstSubmit) / SECOND) : 0,
+			.deltaTime = device->firstSubmit ? (F32)((F64)(Time_now() - device->lastSubmit) / SECOND) : 0,
+			.swapchainCount = (U32) swapchains.length
+		};
+
+		for(U32 i = 0; i < data.swapchainCount; ++i) {
+
+			Swapchain *swapchain = SwapchainRef_ptr(((SwapchainRef**) swapchains.ptr)[i]);
+			VkSwapchain *swapchainExt = Swapchain_ext(swapchain, Vk);
+
+			data.appData[i] = ((const U32*)swapchainExt->descriptorAllocations.ptr)[swapchainExt->currentIndex * 2 + 0];
+		}
+
+		Buffer_copy(
+			Buffer_createRef((U8*)&data + 16 + 4 * swapchains.length, sizeof(data)), 
+			appData		//appData is already range checked (no out of bounds write)
+		);
+
+		Buffer currentRegion = Buffer_createNull();
+		_gotoIfError(clean, Buffer_createSubset(
+			deviceExt->mappedUbo, sizeof(data) * (device->submitId % 3), sizeof(data), false, &currentRegion
+		));
+
+		Buffer_copy(currentRegion, Buffer_createConstRef(&data, sizeof(data)));
+
 		//Bind pipeline layout and descriptors since they stay the same for the entire frame.
 		//For every bind point
+
+		VkDescriptorSet sets[EDescriptorType_Count];
+
+		for(U32 i = 0; i < EDescriptorType_Count; ++i)
+			sets[i] = 
+				i != EDescriptorType_CBuffer ? deviceExt->sets[i] :
+				deviceExt->sets[EDescriptorType_CBuffer + (device->submitId % 3)];
 
 		for(U64 i = 0; i < 2; ++i)
 			vkCmdBindDescriptorSets(
 				commandBuffer, 
 				i == 0 ? VK_PIPELINE_BIND_POINT_COMPUTE : VK_PIPELINE_BIND_POINT_GRAPHICS, 
 				deviceExt->defaultLayout, 
-				0, EDescriptorType_Count, deviceExt->sets, 
+				0, EDescriptorType_Count, sets, 
 				0, NULL
 			);
 
@@ -1318,6 +1476,10 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 	//Ensure our next fence value is used
 
 	++device->submitId;
+	device->lastSubmit = Time_now();
+
+	if(!device->firstSubmit)
+		device->firstSubmit = device->lastSubmit;
 
 clean: 
 	CharString_freex(&temp);

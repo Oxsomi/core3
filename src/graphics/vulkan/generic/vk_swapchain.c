@@ -392,6 +392,8 @@ Error GraphicsDeviceRef_createSwapchainInternal(GraphicsDeviceRef *deviceRef, Sw
 	swapchainExt->descriptorAllocations = List_createEmpty(sizeof(U32));
 	_gotoIfError(clean, List_resizex(&swapchainExt->descriptorAllocations, 2 * imageCount));
 
+	U32 *allocPtr = (U32*) swapchainExt->descriptorAllocations.ptr;
+
 	list = List_createEmpty(sizeof(VkWriteDescriptorSet));
 	_gotoIfError(clean, List_resizex(&list, swapchainExt->descriptorAllocations.length));
 
@@ -399,6 +401,8 @@ Error GraphicsDeviceRef_createSwapchainInternal(GraphicsDeviceRef *deviceRef, Sw
 		_gotoIfError(clean, Error_invalidState(0));
 
 	lock = true;
+
+	VkDescriptorImageInfo imageInfo[6];
 
 	for(U64 i = 0; i < imageCount; ++i) {
 
@@ -409,13 +413,10 @@ Error GraphicsDeviceRef_createSwapchainInternal(GraphicsDeviceRef *deviceRef, Sw
 		if(locationRead == U32_MAX)
 			_gotoIfError(clean, Error_outOfMemory(0));
 
-		_gotoIfError(clean, List_pushBackx(
-			&swapchainExt->descriptorAllocations, 
-			Buffer_createConstRef(&locationRead, sizeof(U32)
-		)));
+		allocPtr[i * 2] = locationRead;
 
-		VkDescriptorImageInfo imageInfo = (VkDescriptorImageInfo) {
-			.imageView = ((VkManagedImage*)swapchainExt->images.ptr)[swapchainExt->currentIndex].view,
+		imageInfo[i * 2] = (VkDescriptorImageInfo) {
+			.imageView = ((VkManagedImage*)swapchainExt->images.ptr)[i].view,
 			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
 		};
 
@@ -426,7 +427,7 @@ Error GraphicsDeviceRef_createSwapchainInternal(GraphicsDeviceRef *deviceRef, Sw
 			.dstArrayElement = locationRead & ((1 << 20) - 1),
 			.descriptorCount = 1,
 			.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-			.pImageInfo = &imageInfo
+			.pImageInfo = &imageInfo[i * 2]
 		};
 
 		//Create read write image
@@ -447,12 +448,10 @@ Error GraphicsDeviceRef_createSwapchainInternal(GraphicsDeviceRef *deviceRef, Sw
 		if(locationWrite == U32_MAX)
 			_gotoIfError(clean, Error_outOfMemory(1));
 
-		_gotoIfError(clean, List_pushBackx(
-			&swapchainExt->descriptorAllocations, 
-			Buffer_createConstRef(&locationWrite, sizeof(U32)
-		)));
+		allocPtr[i * 2 + 1] = locationWrite;
 
-		imageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+		imageInfo[i * 2 + 1] = imageInfo[i * 2];
+		imageInfo[i * 2 + 1].imageLayout = VK_IMAGE_LAYOUT_GENERAL;
 
 		((VkWriteDescriptorSet*)list.ptr)[i * 2 + 1] = (VkWriteDescriptorSet) {
 			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -461,7 +460,7 @@ Error GraphicsDeviceRef_createSwapchainInternal(GraphicsDeviceRef *deviceRef, Sw
 			.dstArrayElement = locationWrite & ((1 << 20) - 1),
 			.descriptorCount = 1,
 			.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-			.pImageInfo = &imageInfo
+			.pImageInfo = &imageInfo[i * 2 + 1]
 		};
 	}
 

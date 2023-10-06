@@ -91,16 +91,23 @@ typedef enum EDescriptorType {
 	EDescriptorType_RWTexture2Di,
 	EDescriptorType_RWTexture2Du,
 
+	EDescriptorType_ResourceCount,		//Count of totally accessible resources (without cbuffer)
+
+	//Global CBuffer for communicating frameId, deltaTime, etc.
+
+	EDescriptorType_CBuffer = EDescriptorType_ResourceCount,
+
 	EDescriptorType_Count
 
 } EDescriptorType;
 
 static const U32 descriptorTypeCount[] = {
+
 	2048,		//All samplers
 	184464,		//~74% of RW textures (2D)
 	32768,		//~13% of RW textures (Cube)
 	32768,		//~13% of RW textures (3D)
-	250000,		//All buffers (readonly)
+	249999,		//All buffers (readonly)
 	250000,		//All buffers (RW)
 	6553,		//10% of 64Ki (3D + Cube) for RW 3D unorm
 	4809,		//~7.3% of 64Ki (Remainder) (3D + Cube) for RW 3D snorm
@@ -111,7 +118,13 @@ static const U32 descriptorTypeCount[] = {
 	9224,		//5% of 250K - 64Ki (2D) for 2D snorm
 	61488,		//33% of 250K - 64Ki (2D) for 2D float
 	10760,		//5.8% of 250K - 64Ki (2D) for 2D int
-	10760		//5.8% of 250K - 64Ki (2D) for 2D uint
+	10760,		//5.8% of 250K - 64Ki (2D) for 2D uint
+
+	//Swappable CBuffer per frame (only 1 of them is bound each time)
+
+	1,
+	1,
+	1
 };
 
 typedef struct VkGraphicsDevice {
@@ -132,15 +145,23 @@ typedef struct VkGraphicsDevice {
 	VkSemaphore commitSemaphore;
 
 	VkDescriptorSetLayout setLayouts[EDescriptorType_Count];
-	VkDescriptorSet sets[EDescriptorType_Count];
+	VkDescriptorSet sets[EDescriptorType_Count + 2];			//1 per type and 2 extra for ubo to allow versioning
 	VkPipelineLayout defaultLayout;								//Default layout if push constants aren't present
 
 	VkDescriptorPool descriptorPool;
 
+	VkPhysicalDeviceMemoryProperties memoryProperties;
+
 	//Used for allocating descriptors
 
 	Lock descriptorLock;
-	Buffer freeList[EDescriptorType_Count];
+	Buffer freeList[EDescriptorType_ResourceCount];
+
+	//256 x 3 UBO for per frame data.
+
+	Buffer mappedUbo;
+	VkBuffer ubo;
+	VkDeviceMemory uboMem;
 
 	//Temporary storage for submit time stuff
 

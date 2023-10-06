@@ -2,6 +2,8 @@
 #pragma dxc diagnostic ignored "-Wignored-attributes"
 #include "types.hlsl"
 
+static const uint ResourceId_mask = (1 << 20) - 1;
+
 //Overlapping registers ala Darius (https://blog.traverseresearch.nl/bindless-rendering-setup-afeb678d77fc)
 
 [[vk::binding(0,  0)]] SamplerState _samplers[];
@@ -82,12 +84,65 @@ void setAt(U32 resourceId, U32 id, T t) {
 
 //Globals used during the entire frame for useful information such as frame id.
 
-/*[[vk::binding(0, 16)]] cbuffer globals {
+[[vk::binding(0, 16)]] cbuffer globals {
 
-	U64 _frameId;
-	F32 _time;
-	U32 _swapchainCount;
+	U32 _frameId;					//Can loop back to 0 after U32_MAX!
+	F32 _time;						//Time since launch of app
+	F32 _deltaTime;					//deltaTime since last frame.
+	U32 _swapchainCount;			//How many swapchains are present (will insert ids into appData)
 
-	U32x4 _swapchainIds[7];			//Up to 28 swapchains. This points to to where they're at in the global registers
+	//Up to 240 bytes of user data, useful for supplying constant per frame data.
+	//However, offset [0, _swapchainCount> are reserved for swapchain handles.
+	//Make sure to offset to make sure.
 
-};*/ 
+	U32x4 _appData[15];
+};
+
+//Fetch per frame data from the application.
+//If possible, please make sure the offset is const so it's as fast as possible.
+//Offset is in uints (4-byte), not in bytes!
+//Aligned fetches only return non 0 if all of the vector can be fetched!
+
+//Fetch 1 element from user data
+
+U32 getAppData1u(uint offset) { return offset >= 60 ? 0 : _appData[offset >> 2][offset & 3]; }
+I32 getAppData1i(uint offset) { return (int) getAppData1u(offset); }
+F32 getAppData1f(uint offset) { return asfloat(getAppData1u(offset)); }
+
+//Fetch 2 element vector from user data
+//Use unaligned only if necessary, otherwise please align offset to 8-byte!
+
+U32x2 getAppData2u(uint offset) { 
+	return offset >= 59 ? 0.xx : (
+		(offset & 2) == 0 ? _appData[offset >> 2].xy : _appData[offset >> 2].zw
+	);
+}
+
+I32x2 getAppData2i(uint offset) { return (I32x2) getAppData2u(offset); }
+F32x2 getAppData2f(uint offset) { return asfloat(getAppData2u(offset)); }
+
+U32x2 getAppData2uUnaligned(uint offset) { return U32x2(getAppData1u(offset), getAppData1u(offset + 1)); }
+I32x2 getAppData2iUnaligned(uint offset) { return (I32x2) getAppData2uUnaligned(offset); }
+F32x2 getAppData2fUnaligned(uint offset) { return asfloat(getAppData2uUnaligned(offset)); }
+
+//Fetch 4 element vector from user data
+//Use unaligned only if necessary, otherwise please align offset to 8-byte!
+
+U32x4 getAppData4u(uint offset) { return offset >= 56 ? 0 : _appData[offset >> 2]; }
+I32x4 getAppData4i(uint offset) { return (I32x4) getAppData4u(offset); }
+F32x4 getAppData4f(uint offset) { return asfloat(getAppData4u(offset)); }
+
+U32x4 getAppData4uUnaligned(uint offset) { return U32x4(getAppData2u(offset), getAppData2u(offset + 1)); }
+I32x4 getAppData4iUnaligned(uint offset) { return (I32x4) getAppData4uUnaligned(offset); }
+F32x4 getAppData4fUnaligned(uint offset) { return asfloat(getAppData4uUnaligned(offset)); }
+
+//Fetch 3 element vector from user data
+//Use unaligned only if necessary, otherwise please align offset to 16-byte!
+
+U32x3 getAppData3u(uint offset) { return getAppData4u(offset).xyz; }
+I32x3 getAppData3i(uint offset) { return (I32x3) getAppData3u(offset); }
+F32x3 getAppData3f(uint offset) { return asfloat(getAppData3u(offset)); }
+
+U32x3 getAppData3uUnaligned(uint offset) { return getAppData4uUnaligned(offset).xyz; }
+I32x3 getAppData3iUnaligned(uint offset) { return (I32x3) getAppData3uUnaligned(offset); }
+F32x3 getAppData3fUnaligned(uint offset) { return asfloat(getAppData3uUnaligned(offset)); }

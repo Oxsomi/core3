@@ -26,6 +26,17 @@
 typedef struct Error Error;
 typedef RefPtr GraphicsInstanceRef;
 
+typedef struct CBufferData {
+
+	U32 frameId;					//Can loop back to 0 after U32_MAX!
+	F32 time;						//Time since launch of app
+	F32 deltaTime;					//deltaTime since last frame.
+	U32 swapchainCount;				//How many swapchains are present (will insert ids into appData)
+
+	U32 appData[(256 - 16) / 4];
+
+} CBufferData;
+
 typedef struct GraphicsDevice {
 
 	GraphicsInstanceRef *instance;
@@ -33,6 +44,10 @@ typedef struct GraphicsDevice {
 	GraphicsDeviceInfo info;
 
 	U64 submitId;
+
+	Ns lastSubmit;
+
+	Ns firstSubmit;			//Start of time
 
 	//List factories;		//<GraphicsObjectFactory>
 
@@ -58,7 +73,10 @@ Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc);		//Don't call
 //Submit commands to device
 //List<CommandListRef*> commandLists
 //List<SwapchainRef*> swapchains
-impl Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List commandLists, List swapchains);
+//appData is up to a 240 byte per frame array used for transmitting render critical info.
+//	This includes swapchain handles too! appData will get 4 bytes shorter every time another swapchain is added here.
+//	Make sure to align to it if maximum performance is needed.
+impl Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List commandLists, List swapchains, Buffer appData);
 
 //Wait on previously submitted commands
 impl Error GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef);
