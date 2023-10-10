@@ -732,7 +732,7 @@ Bool WindowManager_supportsFormat(WindowManager manager, EWindowFormat format) {
 	//	https://learn.microsoft.com/en-us/windows/win32/api/dxgi/nf-dxgi-idxgiswapchain-getcontainingoutput
 	//	https://learn.microsoft.com/en-us/windows/win32/api/dxgi1_6/ns-dxgi1_6-dxgi_output_desc1
 
-	return format == EWindowFormat_rgba8;
+	return format == EWindowFormat_bgra8;
 }
 
 Bool WindowManager_freePhysical(WindowManager *manager, Window **w) {

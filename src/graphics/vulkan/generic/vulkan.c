@@ -91,6 +91,7 @@ Error mapVkFormat(
 		case ETextureFormat_r8:					*output = VK_FORMAT_R8_UNORM;					break;
 		case ETextureFormat_rg8:				*output = VK_FORMAT_R8G8_UNORM;					break;
 		case ETextureFormat_rgba8:				*output = VK_FORMAT_R8G8B8A8_UNORM;				break;
+		case ETextureFormat_bgra8:				*output = VK_FORMAT_B8G8R8A8_UNORM;				break;
 
 		case ETextureFormat_r8s:				*output = VK_FORMAT_R8_SNORM;					break;
 		case ETextureFormat_rg8s:				*output = VK_FORMAT_R8G8_SNORM;					break;
@@ -145,7 +146,8 @@ Error mapVkFormat(
 
 		//Special formats
 
-		case ETextureFormat_rgb10a2:			*output = VK_FORMAT_A2B10G10R10_UNORM_PACK32;	break;
+		case ETextureFormat_rgb10a2:			*output = VK_FORMAT_A2R10G10B10_UNORM_PACK32;	break;
+		case ETextureFormat_bgr10a2:			*output = VK_FORMAT_A2B10G10R10_UNORM_PACK32;	break;
 
 		//BCn formats
 

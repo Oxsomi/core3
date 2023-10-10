@@ -41,8 +41,8 @@ typedef enum EPipelineStage {
 
 typedef enum ECullMode {
 
-	ECullMode_none,
 	ECullMode_back,
+	ECullMode_none,
 	ECullMode_front
 
 } ECullMode;

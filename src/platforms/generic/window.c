@@ -348,7 +348,7 @@ Error Window_storeCPUBufferToDisk(const Window *w, CharString filePath, Ns maxTi
 	if(!Buffer_length(buf))
 		return Error_invalidOperation(0);
 
-	if(w->format != EWindowFormat_rgba8)
+	if(w->format != EWindowFormat_bgra8)
 		return Error_unsupportedOperation(0);		//TODO: Add support for other formats
 
 	if(I32x2_any(I32x2_gt(w->size, I32x2_xx2(U16_MAX))))

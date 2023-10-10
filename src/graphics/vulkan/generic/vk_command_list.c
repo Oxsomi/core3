@@ -141,14 +141,16 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 
 				VkViewport viewport = (VkViewport) {
 					.x = (F32) I32x2_x(offset),
-					.y = (F32) I32x2_y(temp->currentSize) - I32x2_y(offset),
+					.y = (F32) I32x2_y(offset),
 					.width = (F32) I32x2_x(size),
-					.height = (F32) -I32x2_y(size),
+					.height = (F32) I32x2_y(size),
 					.minDepth = 1,
 					.maxDepth = 0
 				};
 
 				vkCmdSetViewport(buffer, 0, 1, &viewport);
+
+				temp->anyViewport = true;
 			}
 
 			if (setScissor) {
@@ -157,16 +159,18 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 
 					.offset = (VkOffset2D) {
 						.x = I32x2_x(offset),
-						.y = I32x2_y(temp->currentSize) - I32x2_y(offset),
+						.y = I32x2_y(offset),
 					},
 
 					.extent = (VkExtent2D) {
 						.width = I32x2_x(size),
-						.height = -I32x2_y(size),
+						.height = I32x2_y(size),
 					}
 				};
 
 				vkCmdSetScissor(buffer, 0, 1, &scissor);
+
+				temp->anyScissor = true;
 			}
 
 			break;
@@ -415,7 +419,7 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 					imageExt, 
 
 					attachmentsj->readOnly ? VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT : 
-					VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT ,
+					VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
 
 					VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | 
 					(attachmentsj->readOnly ? 0 : VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT),
@@ -498,6 +502,11 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 
 			instanceExt->cmdEndRenderingKHR(buffer);
 			temp->currentSize = I32x2_zero();
+			temp->anyScissor = temp->anyViewport = false;
+
+			for(U64 i = 0; i < 8; ++i)
+				temp->boundImages[i].ref = NULL;
+
 			break;
 
 		//Draws
@@ -528,7 +537,8 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 			if (!temp->boundPipelines[0])
 				return Error_invalidOperation(1);
 
-			//TODO: Validate viewport
+			if(!temp->anyScissor || !temp->anyViewport)
+				return Error_invalidOperation(2);
 
 			//Formats are actually required to align by D3D12.
 			//But to keep both APIs running similarly, we have to enforce this for Vulkan too.

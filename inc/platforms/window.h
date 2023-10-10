@@ -57,8 +57,8 @@ typedef enum EWindowHint {
 //These formats are dependent on the platform too. It's very possible they're not available.
 //
 typedef enum EWindowFormat {
-	EWindowFormat_rgba8		= ETextureFormat_rgba8,			//Most common format
-	EWindowFormat_rgb10a2	= ETextureFormat_rgb10a2,
+	EWindowFormat_bgra8		= ETextureFormat_bgra8,			//Most common format
+	EWindowFormat_bgr10a2	= ETextureFormat_bgr10a2,
 	EWindowFormat_rgba16f	= ETextureFormat_rgba16f,
 	EWindowFormat_rgba32f	= ETextureFormat_rgba32f		//Rarely supported (only CPU)
 } EWindowFormat;

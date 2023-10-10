@@ -29,7 +29,7 @@ typedef enum ETexturePrimitive {
 	ETexturePrimitive_SInt,
 	ETexturePrimitive_Float,
 	ETexturePrimitive_Compressed,
-	ETexturePrimitive_Extended
+	ETexturePrimitive_UnormBGR				//Special kind of formats
 } ETexturePrimitive;
 
 typedef enum ETextureAlignment {
@@ -95,6 +95,7 @@ typedef enum ETextureFormat {
 	ETextureFormat_r8				= _ETextureFormat(ETexturePrimitive_UNorm, 8, 0, 0, 0),
 	ETextureFormat_rg8				= _ETextureFormat(ETexturePrimitive_UNorm, 8, 8, 0, 0),
 	ETextureFormat_rgba8			= _ETextureFormat(ETexturePrimitive_UNorm, 8, 8, 8, 8),
+	ETextureFormat_bgra8			= _ETextureFormat(ETexturePrimitive_UnormBGR, 8, 8, 8, 8),		//Swapchain format
 
 	ETextureFormat_r8s				= _ETextureFormat(ETexturePrimitive_SNorm, 8, 0, 0, 0),
 	ETextureFormat_rg8s				= _ETextureFormat(ETexturePrimitive_SNorm, 8, 8, 0, 0),
@@ -150,6 +151,7 @@ typedef enum ETextureFormat {
 	//Special purpose formats
 
 	ETextureFormat_rgb10a2			= _ETextureFormat(ETexturePrimitive_UNorm, 10, 10, 10, 2),
+	ETextureFormat_bgr10a2			= _ETextureFormat(ETexturePrimitive_UnormBGR, 10, 10, 10, 2),
 
 	//Compression formats
 
@@ -386,7 +388,7 @@ typedef enum ETextureFormatId {
 
 	//Standard formats
 
-	ETextureFormatId_r8,	ETextureFormatId_rg8,	ETextureFormatId_rgba8,
+	ETextureFormatId_r8,	ETextureFormatId_rg8,	ETextureFormatId_rgba8,	ETextureFormatId_bgra8,
 	ETextureFormatId_r8s,	ETextureFormatId_rg8s,	ETextureFormatId_rgba8s,
 	ETextureFormatId_r8u,	ETextureFormatId_rg8u,	ETextureFormatId_rgba8u,
 	ETextureFormatId_r8i,	ETextureFormatId_rg8i,	ETextureFormatId_rgba8i,
@@ -404,6 +406,7 @@ typedef enum ETextureFormatId {
 	//Special format
 
 	ETextureFormatId_rgb10a2,
+	ETextureFormatId_bgr10a2,
 
 	//BCn
 
@@ -442,29 +445,29 @@ static const ETextureFormat ETextureFormatId_unpack[] = {
 
 	//Standard formats
 
-	ETextureFormat_r8,		ETextureFormat_rg8,		ETextureFormat_rgba8,
-	ETextureFormat_r8s,		ETextureFormat_rg8s,	ETextureFormat_rgba8s,
-	ETextureFormat_r8u,		ETextureFormat_rg8u,	ETextureFormat_rgba8u,
-	ETextureFormat_r8i,		ETextureFormat_rg8i,	ETextureFormat_rgba8i,
+	ETextureFormat_r8,			ETextureFormat_rg8,			ETextureFormat_rgba8,		ETextureFormat_bgra8,
+	ETextureFormat_r8s,			ETextureFormat_rg8s,		ETextureFormat_rgba8s,
+	ETextureFormat_r8u,			ETextureFormat_rg8u,		ETextureFormat_rgba8u,
+	ETextureFormat_r8i,			ETextureFormat_rg8i,		ETextureFormat_rgba8i,
 
-	ETextureFormat_r16,		ETextureFormat_rg16,	ETextureFormat_rgba16,
-	ETextureFormat_r16s,	ETextureFormat_rg16s,	ETextureFormat_rgba16s,
-	ETextureFormat_r16u,	ETextureFormat_rg16u,	ETextureFormat_rgba16u,
-	ETextureFormat_r16i,	ETextureFormat_rg16i,	ETextureFormat_rgba16i,
-	ETextureFormat_r16f,	ETextureFormat_rg16f,	ETextureFormat_rgba16f,
+	ETextureFormat_r16,			ETextureFormat_rg16,		ETextureFormat_rgba16,
+	ETextureFormat_r16s,		ETextureFormat_rg16s,		ETextureFormat_rgba16s,
+	ETextureFormat_r16u,		ETextureFormat_rg16u,		ETextureFormat_rgba16u,
+	ETextureFormat_r16i,		ETextureFormat_rg16i,		ETextureFormat_rgba16i,
+	ETextureFormat_r16f,		ETextureFormat_rg16f,		ETextureFormat_rgba16f,
 
-	ETextureFormat_r32u,	ETextureFormat_rg32u,	ETextureFormat_rgba32u,
-	ETextureFormat_r32i,	ETextureFormat_rg32i,	ETextureFormat_rgba32i,
-	ETextureFormat_r32f,	ETextureFormat_rg32f,	ETextureFormat_rgba32f,
+	ETextureFormat_r32u,		ETextureFormat_rg32u,		ETextureFormat_rgba32u,
+	ETextureFormat_r32i,		ETextureFormat_rg32i,		ETextureFormat_rgba32i,
+	ETextureFormat_r32f,		ETextureFormat_rg32f,		ETextureFormat_rgba32f,
 
 	//Special format
 
-	ETextureFormat_rgb10a2,
+	ETextureFormat_rgb10a2,		ETextureFormat_bgr10a2,
 
 	//BCn
 
-	ETextureFormat_BC4,		ETextureFormat_BC5,		ETextureFormat_BC6H,	ETextureFormat_BC7,
-	ETextureFormat_BC4s,	ETextureFormat_BC5s,							ETextureFormat_BC7srgb,
+	ETextureFormat_BC4,			ETextureFormat_BC5,			ETextureFormat_BC6H,		ETextureFormat_BC7,
+	ETextureFormat_BC4s,		ETextureFormat_BC5s,									ETextureFormat_BC7srgb,
 
 	//ASTC
 

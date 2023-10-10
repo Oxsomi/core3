@@ -202,7 +202,8 @@ typedef struct VkCommandBufferState {		//Caching state variables
 
 	U32 pad0;
 
-	U8 pad1[3];
+	U8 pad1;
+	Bool anyScissor, anyViewport;
 	U8 boundImageCount;
 
 	VkImageRange boundImages[8];

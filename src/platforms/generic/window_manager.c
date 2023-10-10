@@ -126,8 +126,8 @@ Error WindowManager_createVirtual(
 
 	switch (format) {
 
-		case EWindowFormat_rgba8:
-		case EWindowFormat_rgb10a2:
+		case EWindowFormat_bgra8:
+		case EWindowFormat_bgr10a2:
 		case EWindowFormat_rgba16f:
 		case EWindowFormat_rgba32f:
 			break;

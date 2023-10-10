@@ -81,7 +81,7 @@ Error GraphicsDeviceRef_createSwapchainInternal(GraphicsDeviceRef *deviceRef, Sw
 
 	switch(window->format) {
 
-		case EWindowFormat_rgba8:
+		case EWindowFormat_bgra8:
 			
 			searchFormat = (VkSurfaceFormatKHR) { 
 				.format = VK_FORMAT_B8G8R8A8_UNORM, 
@@ -92,7 +92,7 @@ Error GraphicsDeviceRef_createSwapchainInternal(GraphicsDeviceRef *deviceRef, Sw
 
 		//TODO: HDR10_ST2084_EXT?
 
-		case EWindowFormat_rgb10a2:
+		case EWindowFormat_bgr10a2:
 			
 			searchFormat = (VkSurfaceFormatKHR) { 
 				.format = VK_FORMAT_A2B10G10R10_UNORM_PACK32, 

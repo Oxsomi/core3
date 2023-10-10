@@ -213,15 +213,15 @@ Error CommandListRef_setViewportCmd(CommandListRef *commandListRef, I32x2 offset
 }
 
 Error CommandListRef_setViewport(CommandListRef *commandListRef, I32x2 offset, I32x2 size) {
-	CommandListRef_setViewportCmd(commandListRef, offset, size, ECommandOp_setViewport);
+	return CommandListRef_setViewportCmd(commandListRef, offset, size, ECommandOp_setViewport);
 }
 
 Error CommandListRef_setScissor(CommandListRef *commandListRef, I32x2 offset, I32x2 size) {
-	CommandListRef_setViewportCmd(commandListRef, offset, size, ECommandOp_setScissor);
+	return CommandListRef_setViewportCmd(commandListRef, offset, size, ECommandOp_setScissor);
 }
 
 Error CommandListRef_setViewportAndScissor(CommandListRef *commandListRef, I32x2 offset, I32x2 size) {
-	CommandListRef_setViewportCmd(commandListRef, offset, size, ECommandOp_setViewportAndScissor);
+	return CommandListRef_setViewportCmd(commandListRef, offset, size, ECommandOp_setViewportAndScissor);
 }
 
 Error CommandListRef_setStencil(CommandListRef *commandListRef, U8 stencilValue) {
