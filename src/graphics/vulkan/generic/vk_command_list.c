@@ -64,19 +64,19 @@ Error CommandList_validateGraphicsPipeline(
 
 	//Depth stencil state can be set to None to ignore writing to depth stencil
 
-	if (info->depthFormat != EDepthStencilFormat_none && depthFormat != info->depthFormat)
+	if (info->depthFormatExt != EDepthStencilFormat_none && depthFormat != info->depthFormatExt)
 		return Error_invalidState(1);
 
 	//Validate attachments
 
-	if (info->attachmentCount != imageCount)
+	if (info->attachmentCountExt != imageCount)
 		return Error_invalidState(0);
 
 	for (U8 i = 0; i < imageCount && i < 8; ++i) {
 
 		//Undefined is used to ignore the currently bound slot and to avoid writing to it
 
-		if (info->attachmentFormats[i] == ETextureFormat_undefined)
+		if (info->attachmentFormatsExt[i] == ETextureFormat_undefined)
 			continue;
 
 		//Validate if formats are the same
@@ -91,7 +91,7 @@ Error CommandList_validateGraphicsPipeline(
 
 		Swapchain *swapchain = SwapchainRef_ptr(ref);
 
-		if (swapchain->format != info->attachmentFormats[i])
+		if (swapchain->format != info->attachmentFormatsExt[i])
 			return Error_invalidState(i + 2);
 	}
 

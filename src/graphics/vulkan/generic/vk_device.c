@@ -82,7 +82,11 @@ Error GraphicsDevice_initExt(
 
 		.shaderFloat64 = (Bool)(types & EGraphicsDataTypes_F64),
 		.shaderInt64 = (Bool)(types & EGraphicsDataTypes_I64),
-		.shaderInt16 = true
+		.shaderInt16 = true,
+
+		.fillModeNonSolid = (Bool)(feat & EGraphicsFeatures_Wireframe),
+		.logicOp = (Bool)(feat & EGraphicsFeatures_LogicOp),
+		.dualSrcBlend = (Bool)(feat & EGraphicsFeatures_DualSrcBlend)
 	};
 
 	VkPhysicalDeviceFeatures2 features2 = (VkPhysicalDeviceFeatures2) {

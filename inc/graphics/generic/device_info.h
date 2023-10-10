@@ -87,7 +87,13 @@ typedef enum EGraphicsFeatures {
 
 	//Debug features
 
-	EGraphicsFeatures_DebugMarkers				= 1 << 19
+	EGraphicsFeatures_DebugMarkers				= 1 << 19,
+
+	//Other features
+
+	EGraphicsFeatures_Wireframe					= 1 << 20,
+	EGraphicsFeatures_LogicOp					= 1 << 21,
+	EGraphicsFeatures_DualSrcBlend				= 1 << 22
 
 } EGraphicsFeatures;
 

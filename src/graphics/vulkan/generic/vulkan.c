@@ -19,6 +19,8 @@
 */
 
 #include "graphics/vulkan/vulkan.h"
+#include "graphics/generic/device_info.h"
+#include "formats/texture.h"
 #include "types/error.h"
 
 Error vkCheck(VkResult result) {
@@ -61,4 +63,167 @@ Error vkCheck(VkResult result) {
 		default:
 			return Error_unsupportedOperation(3);
 	}
+}
+
+Error mapVkFormat(
+	EGraphicsDataTypes *types, 
+	ETextureFormat format, 
+	VkFormat *output, 
+	Bool isForRenderTarget,
+	Bool supportsUndefined
+) {
+
+	if(!output)
+		return Error_nullPointer(2);
+
+	switch (format) {
+
+		case ETextureFormat_undefined:
+
+			if(!supportsUndefined)
+				return Error_unsupportedOperation(4);
+
+			*output = VK_FORMAT_UNDEFINED;
+			break;
+
+		//8-bit formats
+
+		case ETextureFormat_r8:					*output = VK_FORMAT_R8_UNORM;					break;
+		case ETextureFormat_rg8:				*output = VK_FORMAT_R8G8_UNORM;					break;
+		case ETextureFormat_rgba8:				*output = VK_FORMAT_R8G8B8A8_UNORM;				break;
+
+		case ETextureFormat_r8s:				*output = VK_FORMAT_R8_SNORM;					break;
+		case ETextureFormat_rg8s:				*output = VK_FORMAT_R8G8_SNORM;					break;
+		case ETextureFormat_rgba8s:				*output = VK_FORMAT_R8G8B8A8_SNORM;				break;
+
+		case ETextureFormat_r8u:				*output = VK_FORMAT_R8_UINT;					break;
+		case ETextureFormat_rg8u:				*output = VK_FORMAT_R8G8_UINT;					break;
+		case ETextureFormat_rgba8u:				*output = VK_FORMAT_R8G8B8A8_UINT;				break;
+
+		case ETextureFormat_r8i:				*output = VK_FORMAT_R8_SINT;					break;
+		case ETextureFormat_rg8i:				*output = VK_FORMAT_R8G8_SINT;					break;
+		case ETextureFormat_rgba8i:				*output = VK_FORMAT_R8G8B8A8_SINT;				break;
+
+		//16-bit formats
+
+		case ETextureFormat_r16:				*output = VK_FORMAT_R16_UNORM;					break;
+		case ETextureFormat_rg16:				*output = VK_FORMAT_R16G16_UNORM;				break;
+		case ETextureFormat_rgba16:				*output = VK_FORMAT_R16G16B16A16_UNORM;			break;
+
+		case ETextureFormat_r16s:				*output = VK_FORMAT_R16_SNORM;					break;
+		case ETextureFormat_rg16s:				*output = VK_FORMAT_R16G16_SNORM;				break;
+		case ETextureFormat_rgba16s:			*output = VK_FORMAT_R16G16B16A16_SNORM;			break;
+
+		case ETextureFormat_r16u:				*output = VK_FORMAT_R16_UINT;					break;
+		case ETextureFormat_rg16u:				*output = VK_FORMAT_R16G16_UINT;				break;
+		case ETextureFormat_rgba16u:			*output = VK_FORMAT_R16G16B16A16_UINT;			break;
+
+		case ETextureFormat_r16i:				*output = VK_FORMAT_R16_SINT;					break;
+		case ETextureFormat_rg16i:				*output = VK_FORMAT_R16G16_SINT;				break;
+		case ETextureFormat_rgba16i:			*output = VK_FORMAT_R16G16B16A16_SINT;			break;
+
+		case ETextureFormat_r16f:				*output = VK_FORMAT_R16_SFLOAT;					break;
+		case ETextureFormat_rg16f:				*output = VK_FORMAT_R16G16_SFLOAT;				break;
+		case ETextureFormat_rgba16f:			*output = VK_FORMAT_R16G16B16A16_SFLOAT;		break;
+
+		//32-bit formats
+
+		case ETextureFormat_r32u:				*output = VK_FORMAT_R32_UINT;					break;
+		case ETextureFormat_rg32u:				*output = VK_FORMAT_R32G32_UINT;				break;
+		case ETextureFormat_rgb32u:				*output = VK_FORMAT_R32G32B32_UINT;				break;
+		case ETextureFormat_rgba32u:			*output = VK_FORMAT_R32G32B32A32_UINT;			break;
+
+		case ETextureFormat_r32i:				*output = VK_FORMAT_R32_SINT;					break;
+		case ETextureFormat_rg32i:				*output = VK_FORMAT_R32G32_SINT;				break;
+		case ETextureFormat_rgb32i:				*output = VK_FORMAT_R32G32B32_SINT;				break;
+		case ETextureFormat_rgba32i:			*output = VK_FORMAT_R32G32B32A32_SINT;			break;
+
+		case ETextureFormat_r32f:				*output = VK_FORMAT_R32_SFLOAT;					break;
+		case ETextureFormat_rg32f:				*output = VK_FORMAT_R32G32_SFLOAT;				break;
+		case ETextureFormat_rgb32f:				*output = VK_FORMAT_R32G32B32_SFLOAT;			break;
+		case ETextureFormat_rgba32f:			*output = VK_FORMAT_R32G32B32A32_SFLOAT;		break;
+
+		//Special formats
+
+		case ETextureFormat_rgb10a2:			*output = VK_FORMAT_A2B10G10R10_UNORM_PACK32;	break;
+
+		//BCn formats
+
+		case ETextureFormat_BC4:				*output = VK_FORMAT_BC4_UNORM_BLOCK;			break;
+		case ETextureFormat_BC4s:				*output = VK_FORMAT_BC4_SNORM_BLOCK;			break;
+
+		case ETextureFormat_BC5:				*output = VK_FORMAT_BC5_UNORM_BLOCK;			break;
+		case ETextureFormat_BC5s:				*output = VK_FORMAT_BC5_SNORM_BLOCK;			break;
+
+		case ETextureFormat_BC7:				*output = VK_FORMAT_BC7_UNORM_BLOCK;			break;
+		case ETextureFormat_BC7srgb:			*output = VK_FORMAT_BC7_SRGB_BLOCK;				break;
+
+		case ETextureFormat_BC6H:				*output = VK_FORMAT_BC6H_SFLOAT_BLOCK;			break;
+
+		//ASTC formats
+
+		case ETextureFormat_ASTC_4x4:			*output = VK_FORMAT_ASTC_4x4_UNORM_BLOCK;		break;
+		case ETextureFormat_ASTC_4x4_sRGB:		*output = VK_FORMAT_ASTC_4x4_SRGB_BLOCK;		break;
+
+		case ETextureFormat_ASTC_5x4:			*output = VK_FORMAT_ASTC_5x4_UNORM_BLOCK;		break;
+		case ETextureFormat_ASTC_5x4_sRGB:		*output = VK_FORMAT_ASTC_5x4_SRGB_BLOCK;		break;
+
+		case ETextureFormat_ASTC_5x5:			*output = VK_FORMAT_ASTC_5x5_UNORM_BLOCK;		break;
+		case ETextureFormat_ASTC_5x5_sRGB:		*output = VK_FORMAT_ASTC_5x5_SRGB_BLOCK;		break;
+
+		case ETextureFormat_ASTC_6x5:			*output = VK_FORMAT_ASTC_6x5_UNORM_BLOCK;		break;
+		case ETextureFormat_ASTC_6x5_sRGB:		*output = VK_FORMAT_ASTC_6x5_SRGB_BLOCK;		break;
+
+		case ETextureFormat_ASTC_6x6:			*output = VK_FORMAT_ASTC_6x6_UNORM_BLOCK;		break;
+		case ETextureFormat_ASTC_6x6_sRGB:		*output = VK_FORMAT_ASTC_6x6_SRGB_BLOCK;		break;
+
+		case ETextureFormat_ASTC_8x5:			*output = VK_FORMAT_ASTC_8x5_UNORM_BLOCK;		break;
+		case ETextureFormat_ASTC_8x5_sRGB:		*output = VK_FORMAT_ASTC_8x5_SRGB_BLOCK;		break;
+
+		case ETextureFormat_ASTC_8x6:			*output = VK_FORMAT_ASTC_8x6_UNORM_BLOCK;		break;
+		case ETextureFormat_ASTC_8x6_sRGB:		*output = VK_FORMAT_ASTC_8x6_SRGB_BLOCK;		break;
+
+		case ETextureFormat_ASTC_8x8:			*output = VK_FORMAT_ASTC_8x8_UNORM_BLOCK;		break;
+		case ETextureFormat_ASTC_8x8_sRGB:		*output = VK_FORMAT_ASTC_8x8_SRGB_BLOCK;		break;
+
+		case ETextureFormat_ASTC_10x5:			*output = VK_FORMAT_ASTC_10x5_UNORM_BLOCK;		break;
+		case ETextureFormat_ASTC_10x5_sRGB:		*output = VK_FORMAT_ASTC_10x5_SRGB_BLOCK;		break;
+
+		case ETextureFormat_ASTC_10x6:			*output = VK_FORMAT_ASTC_10x6_UNORM_BLOCK;		break;
+		case ETextureFormat_ASTC_10x6_sRGB:		*output = VK_FORMAT_ASTC_10x6_SRGB_BLOCK;		break;
+
+		case ETextureFormat_ASTC_10x8:			*output = VK_FORMAT_ASTC_10x8_UNORM_BLOCK;		break;
+		case ETextureFormat_ASTC_10x8_sRGB:		*output = VK_FORMAT_ASTC_10x8_SRGB_BLOCK;		break;
+
+		case ETextureFormat_ASTC_10x10:			*output = VK_FORMAT_ASTC_10x10_UNORM_BLOCK;		break;
+		case ETextureFormat_ASTC_10x10_sRGB:	*output = VK_FORMAT_ASTC_10x10_SRGB_BLOCK;		break;
+
+		case ETextureFormat_ASTC_12x10:			*output = VK_FORMAT_ASTC_12x10_UNORM_BLOCK;		break;
+		case ETextureFormat_ASTC_12x10_sRGB:	*output = VK_FORMAT_ASTC_12x10_SRGB_BLOCK;		break;
+
+		case ETextureFormat_ASTC_12x12:			*output = VK_FORMAT_ASTC_12x12_UNORM_BLOCK;		break;
+		case ETextureFormat_ASTC_12x12_sRGB:	*output = VK_FORMAT_ASTC_12x12_SRGB_BLOCK;		break;
+
+		//Invalid
+
+		default:
+			return Error_unsupportedOperation(0);
+	}
+
+	//Only support converting to type if it's supported
+
+	Bool isBCn = *output >= VK_FORMAT_BC1_RGB_UNORM_BLOCK && *output <= VK_FORMAT_BC7_SRGB_BLOCK;
+
+	if(types && !(*types & EGraphicsDataTypes_BCn) && isBCn)
+		return Error_unsupportedOperation(1);
+
+	Bool isASTC = *output >= VK_FORMAT_ASTC_4x4_UNORM_BLOCK && *output <= VK_FORMAT_ASTC_12x12_SRGB_BLOCK;
+
+	if(types && !(*types & EGraphicsDataTypes_ASTC) && isASTC)
+		return Error_unsupportedOperation(2);
+
+	if(isForRenderTarget && (isASTC || isBCn))
+		return Error_unsupportedOperation(3);
+
+	return Error_none();
 }

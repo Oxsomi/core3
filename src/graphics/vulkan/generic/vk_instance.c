@@ -724,6 +724,15 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 
 		//Query features
 
+		if(features.logicOp)
+			capabilities.features |= EGraphicsFeatures_LogicOp;
+
+		if(features.dualSrcBlend)
+			capabilities.features |= EGraphicsFeatures_DualSrcBlend;
+
+		if(features.fillModeNonSolid)
+			capabilities.features |= EGraphicsFeatures_Wireframe;
+
 		//Check if indexing is properly supported
 
 		{

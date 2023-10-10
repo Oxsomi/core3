@@ -52,8 +52,7 @@ typedef enum ERasterizerFlags {
 	ERasterizerFlags_isClockWise			= 1 << 0,		//Winding order
 	ERasterizerFlags_isWireframeExt			= 1 << 1,		//Fill mode (only available with wireframe extension)
 	ERasterizerFlags_enableDepthClamp		= 1 << 2,
-	ERasterizerFlags_enableDepthBias		= 1 << 3,
-	ERasterizerFlags_enableDepthBiasClamp	= 1 << 4
+	ERasterizerFlags_enableDepthBias		= 1 << 3
 
 } ERasterizerFlags;
 
@@ -93,15 +92,9 @@ typedef enum EDepthStencilFlags {
 
 } EDepthStencilFlags;
 
-typedef enum EBlendStateFlags {
-
-	EBlendStateFlags_allowIndependentBlend	= 1 << 0,
-	EBlendStateFlags_logicOpEnableExt		= 1 << 1		//Requires logicOp graphics feature
-
-} EBlendStateFlags;
-
 typedef enum ELogicOpExt {
 
+	ELogicOpExt_off,
 	ELogicOpExt_clear,
 	ELogicOpExt_set,
 	ELogicOpExt_copy,
@@ -186,31 +179,36 @@ typedef enum EMSAASamples {
 
 typedef enum ETopologyMode {
 
-	ETopologyMode_PointList,
-
-	ETopologyMode_LineList,
-	ETopologyMode_LineStrip,
 	ETopologyMode_TriangleList,
 	ETopologyMode_TriangleStrip,
 
-	ETopologyMode_LineListAdj,
-	ETopologyMode_LineStripAdj,
+	ETopologyMode_LineList,
+	ETopologyMode_LineStrip,
+
+	ETopologyMode_PointList,
+
 	ETopologyMode_TriangleListAdj,
-	ETopologyMode_TriangleStripAdj
+	ETopologyMode_TriangleStripAdj,
+
+	ETopologyMode_LineListAdj,
+	ETopologyMode_LineStripAdj
 
 } ETopologyMode;
 
 typedef struct PipelineStage {
 
 	EPipelineStage stageType;
+	U32 padding;
+
 	Buffer shaderBinary;
 
 } PipelineStage;
 
 typedef struct Rasterizer {
 
-	ECullMode cullMode;
-	ERasterizerFlags flags;
+	U16 cullMode;				//ECullMode
+	U16 flags;					//ERasterizerFlags
+	F32 depthBiasClamp;
 	F32 depthBiasConstantFactor;
 	F32 depthBiasSlopeFactor;
 
@@ -242,7 +240,7 @@ typedef struct BlendStateAttachment {
 
 typedef struct BlendState {
 
-	EBlendStateFlags flags;
+	Bool allowIndependentBlend;
 	ELogicOpExt logicOpExt;
 	U8 renderTargetsCount, renderTargetMask, padding[2];
 
@@ -252,17 +250,16 @@ typedef struct BlendState {
 
 typedef struct GraphicsBufferAttribute {
 
-	C8 semanticName[12];
+	C8 semanticName[13];						//Not necessarily null terminated!
 
-	U16 offset12_bufferId4;				//12-bit offset, 4-bit bufferId
-	U8 bindingId4_isInstanceData1;		//4-bit binding id, Bool isInstanceData
-	U8 format;							//ETextureFormatId
+	U8 format;									//ETextureFormatId (must be no compression!)
+	U16 offset11_bufferId4;						//11-bit offset, 4-bit bufferId
 
 } GraphicsBufferAttribute;
 
 typedef struct GraphicsBufferLayout {
 
-	U16 bufferStrides[16];
+	U16 bufferStrides12_isInstance1[16];	//<=2048
 	GraphicsBufferAttribute attributes[16];
 
 } GraphicsBufferLayout;
@@ -271,8 +268,8 @@ typedef enum EDepthStencilFormat {
 
 	EDepthStencilFormat_none,
 	EDepthStencilFormat_D16,
-	EDepthStencilFormat_D32,
-	EDepthStencilFormat_D24S8,
+	EDepthStencilFormat_D32,		//Prefer this if stencil isn't needed.
+	EDepthStencilFormat_D24S8,		//TODO: Validate if NV, AMD, Intel and ARM actually allocate this as D32S8, else remove.
 	EDepthStencilFormat_D32S8
 
 } EDepthStencilFormat;

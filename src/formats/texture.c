@@ -29,8 +29,9 @@ Bool ETextureFormat_getIsCompressed(ETextureFormat f) {
 }
 
 U64 ETextureFormat_getBits(ETextureFormat f) { 
-	U64 length = (f >> 27) + 1;
-	return length << (ETextureFormat_getIsCompressed(f) ? 6 : 2);
+	Bool isCompressed = ETextureFormat_getIsCompressed(f);
+	U64 length = ((f >> 27) & (isCompressed ? 7 : 0x1F)) + 1;
+	return length << (isCompressed ? 6 : 2);
 }
 
 U64 ETextureFormat_getAlphaBits(ETextureFormat f) { 
@@ -66,6 +67,14 @@ ETextureCompressionType ETextureFormat_getCompressionType(ETextureFormat f) {
 		return ETextureCompressionType_Invalid;
 
 	return (ETextureCompressionType)((f >> 9) & 7);
+}
+
+ETextureCompressionAlgo ETextureFormat_getCompressionAlgo(ETextureFormat f) {
+
+	if(!ETextureFormat_getIsCompressed(f))
+		return ETextureCompressionAlgo_None;
+
+	return (ETextureCompressionAlgo)((f >> 30) & 7);
 }
 
 Bool ETextureFormat_getAlignment(ETextureFormat f, U8 *x, U8 *y) {

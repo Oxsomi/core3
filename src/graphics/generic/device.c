@@ -110,6 +110,18 @@ void GraphicsDeviceInfo_print(const GraphicsDeviceInfo *deviceInfo, Bool printCa
 		if(feat & EGraphicsFeatures_RayReorder)
 			Log_debugLn("\t\tRay reorder");
 
+		if(feat & EGraphicsFeatures_DebugMarkers)
+			Log_debugLn("\t\tDebug markers");
+
+		if(feat & EGraphicsFeatures_Wireframe)
+			Log_debugLn("\t\tWireframe (rasterizer fill mode: line)");
+
+		if(feat & EGraphicsFeatures_LogicOp)
+			Log_debugLn("\t\tLogic op (blend state)");
+
+		if(feat & EGraphicsFeatures_DualSrcBlend)
+			Log_debugLn("\t\tDual src blend (blend state)");
+
 		//Data types
 
 		U32 dat = cap.dataTypes;

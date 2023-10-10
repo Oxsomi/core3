@@ -41,12 +41,15 @@ typedef struct PipelineGraphicsInfo {
 	U32 patchControlPointsExt;		//Only if TessellationShader feature is enabled.
 	U32 stageCount;					//Non zero used to determine where stages start/end.
 
+	//One of these can be used but not together.
+
 	//If DirectRendering is on (used in between start render).
+	//Otherwise this is ignored.
 
-	ETextureFormat attachmentFormats[8];
+	ETextureFormat attachmentFormatsExt[8];
 
-	EDepthStencilFormat depthFormat;
-	U32 attachmentCount;
+	U32 attachmentCountExt;
+	EDepthStencilFormat depthFormatExt;
 
 	//If DirectRendering is off (used in between start render pass).
 
@@ -86,5 +89,6 @@ PipelineRef *PipelineRef_at(List list, U64 index);
 //shaderBinaries's Buffer will be moved (shaderBinaries will be cleared if moved)
 impl Error GraphicsDeviceRef_createPipelinesCompute(GraphicsDeviceRef *deviceRef, List *shaderBinaries, List *pipelines);
 
-//List<PipelineStage> stages, List<PipelineGraphicsInfo> infos, List<PipelineRef*> *pipelines
-impl Error GraphicsDeviceRef_createPipelinesGraphics(GraphicsDeviceRef *deviceRef, List stages, List info, List *pipelines);
+//List<PipelineStage> *stages, List<PipelineGraphicsInfo> *infos, List<PipelineRef*> *pipelines
+//stages and info will be freed and binaries of stages will be moved.
+impl Error GraphicsDeviceRef_createPipelinesGraphics(GraphicsDeviceRef *deviceRef, List *stages, List *info, List *pipelines);
