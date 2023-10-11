@@ -30,12 +30,12 @@ typedef enum EPipelineType {
 
 typedef enum EPipelineStage {
 
-	EPipelineStage_Vertex,
-	EPipelineStage_Pixel,
-	EPipelineStage_Compute,
-	EPipelineStage_GeometryExt,			//Query graphics feature GeometryShader
-	EPipelineStage_HullExt,				//Query graphics feature TessellationShader
-	EPipelineStage_DomainExt			//^
+	EPipelineStage_vertex,
+	EPipelineStage_pixel,
+	EPipelineStage_compute,
+	EPipelineStage_geometryExt,			//Query graphics feature GeometryShader
+	EPipelineStage_hullExt,				//Query graphics feature TessellationShader
+	EPipelineStage_domainExt			//^
 
 } EPipelineStage;
 
@@ -233,16 +233,18 @@ typedef struct BlendStateAttachment {
 	U8 srcBlend, dstBlend, srcBlendAlpha, dstBlendAlpha;		//EBlend
 
 	U8 blendOp, blendOpAlpha;									//EBlendOp
-	U8 writeMask;												//EWriteMask
-	U8 padding;
 
 } BlendStateAttachment;
 
 typedef struct BlendState {
 
+	Bool enable;
 	Bool allowIndependentBlend;
+	U8 renderTargetMask, padding;
+
 	ELogicOpExt logicOpExt;
-	U8 renderTargetsCount, renderTargetMask, padding[2];
+
+	U8 writeMask[8];						//EWriteMask
 
 	BlendStateAttachment attachments[8];
 
@@ -250,10 +252,9 @@ typedef struct BlendState {
 
 typedef struct GraphicsBufferAttribute {
 
-	C8 semanticName[13];						//Not necessarily null terminated!
-
-	U8 format;									//ETextureFormatId (must be no compression!)
-	U16 offset11_bufferId4;						//11-bit offset, 4-bit bufferId
+	U8 bufferId4;						//4-bit buffer id
+	U8 format;							//ETextureFormatId (must be no compression!)
+	U16 offset11;						//11-bit offset
 
 } GraphicsBufferAttribute;
 

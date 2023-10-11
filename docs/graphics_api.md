@@ -306,7 +306,7 @@ void onResize(Window *w) {
 - Obtained through GraphicsDeviceRef's createSwapchain, see overview.
 - Used in GraphicsDeviceRef's submitCommands as well as read & write image commands and dispatches.
 
-## TODO: Pipeline
+## Pipeline
 
 ### Summary
 
@@ -329,12 +329,82 @@ A pipeline is a combination of the states and shader binaries that are required 
 - Obtained through GraphicsDeviceRef's createPipelinesGraphics and createPipelinesCompute.
 - Used in CommandListRef's bindPipeline.
 
-### TODO: PipelineGraphicsInfo
+### PipelineGraphicsInfo
+
+Pipeline graphics info is the abstraction about the entire graphics state and roughly maps to VkGraphicsPipelineCreateInfo, D3D12_GRAPHICS_PIPELINE_STATE_DESC and Metal's descriptors. It provides a simplified usage while supporting most important features from the APIs.
+
+The graphics pipeline has the following properties:
+
+- vertexLayout: how to interpret vertex and instance data bound to the vertex bind points at draw call.
+  - Optional if the shader generates all data itself (default to 0).
+  - bufferStrides12_isInstance1[16]: buffer description and if it's an instance.
+    - bufferStride is limited to 0-2048 for GPU limit reasons. So the other values (2048-4095) are invalid.
+    - isInstance is when the buffer changes; if it's false it changes per vertex, otherwise it changes per instance.
+    - The buffer id is the same as the index into the array. So [0] describes vertex buffer bound at id 0.
+    - These are tightly packed to avoid having to dynamically allocate the PipelineGraphicsInfo and keeping it POD while still using limited resources. (bufferStride & 4095) | (isInstance << 12).
+  - attributes[16]: the vertex attributes that use the buffers defined before.
+    - inferred semanticName: for HLSL/DirectX12, semantic name is quite important. However, it supports semantic name and value, so we just use semantic name TEXCOORD and the binding id. So TEXCOORD1 would be attribute[1]. This is done to save a lot of space in the PipelineGraphicsInfo.
+    - format: ETextureFormatId (8-bit) such as 'rgb32f'.
+    - buffer4 (0-15): buffer id the attribute point to. Points to vertexLayout.bufferStrides12_isInstance1.
+    - offset11: offset into the buffer.
+      - offset is 0-2047 for GPU limit reasons. Since the offset is into the buffer, offset + size can't exceed the stride of the buffer. 
+    - attribute id is inferred from the index into the array. If attribute bindings are used [0] would refer to binding 0.
+- rasterizer: how to rasterize the triangles into pixels.
+  - Optional if no special rasterizer info is needed. Default to 0 will to create CCW backface-culled filled geometry with no depth clamp or bias.
+  - cullMode: back (default), none, front
+  - flags: isCW (1), isWireframeExt (2), enableDepthClamp (4), enableDepthBias (8).
+    - isWireframeExt requires the Wireframe feature.
+  - depthBiasClamp, depthBiasConstantFactor, depthBiasSlopeFactor all define depthBias properties that only do something if enableDepthBias is on. depthBiasClamp needs enableDepthClamp as well.
+- depthStencil: how to handle depth and stencil operations.
+  - Optional if no special depth stencil is needed. Default to no depth or stencil operations.
+  - flags: depthTest (1), depthWriteBit (2), stencilTest (4).
+    - For depthWrite (3), both depthTest and depthWriteBit are required.
+  - depthCompare, stencilCompare: compare operations for depth and stencil.
+    - gt (default), geq, eq, neq, leq, lt, always, never.
+  - stencilFail, stencilPass, stencilDepthFail: operations for when a stencil event occurs (fail, pass, depthFail).
+    - keep, zero, replace, incClamp, decClamp, invert, incWrap, decWrap.
+  - stencilReadMask, stencilWriteMask: what value the stencil is compared to when reading or writing.
+- blendState: how to handle blend operations.
+  - Optional if no special blend state is needed. Default to writeMask on (see enable).
+  - enable: whether or not to enable the blend state. If this is disabled then all attachments that are used for the pipeline will have the entire write mask enabled and blending disabled.
+  - allowIndependentBlend: if disabled only reads from attachments[0], writeMask[0] and renderTargetMask & 1.
+  - renderTargetMask: Bool[8] (U8) of which attachments have blend enabled.
+  - logicOpExt (default = off): if the logicOp feature is enabled represents the logic op the blend will perform.
+    - off, clear, set, copy, copyInvert, none, invert, and, nand, or, nor, xor, equiv, andReverse, andInvert, orReverse, orInvert.
+  - writeMask[16]: EWriteMask mask of which channel writes are enabled for write (r: 1, g: 2, b: 4, a: 8).
+  - attachments[16]: blend information about each state.
+    - srcBlend, dstBlend, srcBlendAlpha, dstBlendAlpha: what value to blend.
+      - zero, one, srcColor, invSrcColor, dstColor, invDstColor, srcAlpha, invSrcAlpha, dstAlpha, invDstAlpha, blendFactor, invBlendFactor, alphaFactor, invAlphaFactor, srcAlphaSat.
+      - If dualSrcBlend feature is enabled: src1ColorExt, src1AlphaExt, invSrc1ColorExt, invSrc1AlphaExt.
+    - blendOp, blendOpAlpha: what operation to blend with.
+      - add, subtract, reverseSubtract, min, max.
+- msaa: multi sample count. 
+  - Optional if no special msaa settings are needed. Defaults to 1.
+  - 1 and 4 are always supported (though 4 is slower and needs special care). 
+  - 2, 8 and 16 aren't always supported, so make sure to query it and/or fallback to 1 or 4 if not present. EGraphicsDataTypes of the device capabilities lists this.
+- topologyMode: type of mesh topology.
+  - Defaults to triangleList if not specified.
+  - triangleList, triangleStrip, lineList, lineStrip, pointList, triangleListAdj, triangleStripAdj, lineListAdj, lineStripAdj.
+- patchControlPointsExt: optional feature TessellationShader. Defines the number of tessellation points.
+- stageCount: how many shader stages are available.
+- Using DirectRendering:
+  - If DirectRendering is enabled, a simpler way of creating can be used to aid porting and simplify development for desktop.
+  - attachmentCountExt: how many render targets should be used.
+  - attachmentFormatsExt[i < attachmentCountExt]: the ETextureFormatId of the format. Needs to match the render target's exactly (Swapchain bgra8 doesn't match a rgba8 pipeline!).
+  - depthFormatExt: depth format of the depth buffer: none, D16, D32, D24S8, D32S8.
+- **TODO**: Not using DirectRendering:
+  - If DirectRendering is not supported or the developer doesn't want to use it a unified mobile + desktop architecture can be used. However; generally desktop techniques don't lend themselves well for mobile techniques and vice versa. So it's still recommended to implement two separate rendering backends on mobile.
+  - **TODO**: renderPass:
+  - **TODO**: subPass: 
+
+#### PipelineStages
+
+A pipeline stage is simply a Buffer and an EPipelineStage. The Buffer is in the format declared in "Shader binary types" and EPipelineStage can be vertex, pixel, compute, geometryExt, hullExt or domainExt. Hull and domain are enabled by the Tessellation feature and geometryExt by the Geometry feature.
 
 ### Compute example
 
 ```c
-tempShader = ...;		//Buffer: Load from virtual or local file, or hardcode
+tempShader = ...;		//Buffer: Load from virtual file or hardcode in code.
 List computeBinaries = (List) { 0 };
 _gotoIfError(clean, List_createConstRef(&tempShader, 1, sizeof(Buffer), &computeBinaries));
 _gotoIfError(clean, GraphicsDeviceRef_createPipelinesCompute(device, &computeBinaries, &computeShaders));
@@ -342,19 +412,69 @@ _gotoIfError(clean, GraphicsDeviceRef_createPipelinesCompute(device, &computeBin
 tempShader = Buffer_createNull();
 ```
 
-Create pipelines will take ownership of the computeBinaries List (it will set 'computeBinaries' to null) and it will also take ownership of the buffers in it. If the buffers are managed memory (e.g. created with Buffer_create functions that use the allocator) then the Pipeline object will safely delete it. This is why the tempShader is set to null after (the list is a ref, so doesn't need to be). In clean, this temp buffer gets deleted, just in case the createPipelines fails.
+Create pipelines will take ownership of the buffers referenced in computeBinaries and it will therefore free the list (if unmanaged). If the buffers are managed memory (e.g. created with Buffer_create functions that use the allocator) then the Pipeline object will safely delete it. This is why the tempShader is set to null after (the list is a ref, so doesn't need to be). In clean, this temp buffer gets deleted, just in case the createPipelines fails. Using virtual files for this is recommend, as they'll already be present in memory and our ref will be available for the lifetime of our app. If it's a ref that doesn't always stay active, be sure to manually copy the buffers to avoid referencing deleted memory. 
 
 It is recommended to generate all pipelines that are needed in this one call at startup, to avoid stuttering at runtime.
 
-### TODO: Graphics example
+### Graphics example
+
+```c
+//... Load shaders from virtual file system into tempShaders[0], [1]
+//Define the entrypoints
+
+PipelineStage stage[2] = {
+    (PipelineStage) {
+        .stageType = EPipelineStage_vertex,
+        .shaderBinary = tempShaders[0]
+    },
+    (PipelineStage) {
+        .stageType = EPipelineStage_pixel,
+        .shaderBinary = tempShaders[1]
+    }
+};
+
+List stageInfos = (List) { 0 };
+_gotoIfError(clean, List_createConstRef(
+    (const U8*) stage, sizeof(stage) / sizeof(stage[0]), sizeof(stage[0]), &stageInfos
+));
+
+//Define all pipelines.
+//These pipelines require the graphics feature DirectRendering and will error otherwise!
+//Otherwise .attachmentCountExt, .attachmentFormatsExt and/or .depthStencilFormat
+//  need to be replaced with .renderPass and/or .subPass.
+
+PipelineGraphicsInfo info[1] = {
+    (PipelineGraphicsInfo) {
+        .stageCount = 2,
+        .attachmentCountExt = 1,
+        .attachmentFormatsExt = { ETextureFormat_bgra8 }
+    }
+};
+
+//Create pipelines, this will take ownership of the binaries (if they're managed).
+//Make sure to release them after to avoid freeing twice!
+
+List infos = (List) { 0 };
+_gotoIfError(clean, List_createConstRef((const U8*) info, sizeof(info) / sizeof(info[0]), sizeof(info[0]), &infos));
+_gotoIfError(clean, GraphicsDeviceRef_createPipelinesGraphics(
+    device, &stageInfos, &infos, &graphicsShaders
+));
+
+tempShaders[0] = tempShaders[1] = Buffer_createNull();
+```
+
+Create pipelines will take ownership of the buffers referenced in stages and it will therefore free the list (if unmanaged). If the buffers are managed memory (e.g. created with Buffer_create functions that use the allocator) then the Pipeline object will safely delete it. This is why the tempShader is set to null after (the list is a ref, so doesn't need to be). In clean, this temp buffer gets deleted, just in case the createPipelines fails. Using virtual files for this is recommend, as they'll already be present in memory and our ref will be available for the lifetime of our app. If it's a ref that doesn't always stay active, be sure to manually copy the buffers to avoid referencing deleted memory. 
+
+It is recommended to generate all pipelines that are needed in this one call at startup, to avoid stuttering at runtime.
 
 ## Shader binary types
 
 In OxC3 graphics, either the application or the OxC3 baker is responsible for compiling and providing binaries in the right formats. According to OxC3 graphics, the shaders are just a buffer, so they can contain anything (text or binary). Down here is a list of the expected inputs for each graphics API if the developer wishes to sidestep the baking process:
 
 - DirectX12: DXIL (binary).
+  - HLSL Semantics can only be TEXCOORDi where i < 16. This maps directly to the binding.
 - Vulkan: SPIR-V (binary).
-
+- HLSL Entrypoint needs to be remapped to main.
 - Metal: MSL (text).
 - WebGPU: WGSL (text).
 
@@ -362,7 +482,7 @@ The OxC3 baker will (if used) convert HLSL to SPIR-V, DXIL, MSL or WGSL dependin
 
 When using the baker, the binaries can simply be loaded using the oiCS helper functions and passed to the pipeline creation, as they will only contain one binary. 
 
-**NOTE: The baker currently doesn't include this functionality just yet.** 
+**TODO: The baker currently doesn't include this functionality just yet.** 
 
 ## Commands
 
@@ -421,7 +541,7 @@ Clear image can currently only be called on a Swapchain object.
 
 ### setPipeline
 
-The set pipeline command does one of two things; bind a graphics pipeline or bind a compute pipeline. These two pipelines are the only bind points and they're maintained separately. So a bind pipeline of a graphics shader and one of a compute shader don't interfere. This is used before a draw, dispatch or traceRaysExt to ensure the shader is used. A raytracing pipeline has its own bind point as well.
+The set pipeline command does one of the following; bind a graphics pipeline, raytracing pipeline or a compute pipeline. These pipelines are the only bind points and they're maintained separately. So a bind pipeline of a graphics shader and one of a compute shader don't interfere. This is used before a draw, dispatch or traceRaysExt to ensure the shader is used.
 
 ```c
 _gotoIfError(clean, CommandListRef_setPipeline(commandList, pipeline));
@@ -448,6 +568,8 @@ When issuing the draw, the state needs to be valid: a render has to be started (
 
 - Graphics pipeline needs to be compatible with currently bound render targets; this means the formats specified in graphics pipeline creation need to match the same formats of the render targets.
 - States of currently used resources need to be correct. If you write to a resource it needs to be transitioned to write using the transition command and it needs to specify the first shader which *might* read from/write to it. Same is also true when reading from it. The state of these resources stays as it was when transitioned unless the same resource was used in a different explicit or implicit transition. Implicit transitions can be: binding it as a render target, clearing it, copying it or any other command that is specified in this document as transitioning the resource. So this command should only be used if the state of the resource has already changed. So when the same resources are already transitioned to read then they stay that until they're modified by something else. *For writes however, it is **essential** to transition them even if they're in write already. This is to ensure the command that modified the resource is finished before writing again.* 
+- If the state uses a stencil then it needs to set a stencil ref using CommandListRef_setStencil.
+- If the state uses a blend type that uses the blend constants then it has to set the blend constants using CommandListRef_setBlendConstants.
 
 #### Example of a good (legacy) draw call system (Pseudocode)
 
@@ -498,6 +620,8 @@ The same syntax as startRegionDebugExt can be used for addMarkerDebugExt. Except
 
 DirectRendering allows rendering without render passes (default behavior in DirectX). This makes development for desktop a lot easier since AMD, Intel and NVIDIA aren't using tiled based deferred rendering (TBDR). However, all other vendors (such as Qualcomm, ARM, Apple, Imgtec) do use TBDR (mostly mobile architectures). The user is allowed to decide that this is a limitation they accept and can use this feature to greatly simplify the difficulty of the graphics layer (especially porting from existing apps). The user can also set up two different render engines; one that can deal with direct rendering and one that can't. The latter is targeted at mobile (lower hardware tier) and the former is for desktop/console. The two commands that are related to this feature are: startRenderExt and endRenderExt. They require the feature to be present and will return an error (and won't be inserted into the command list) otherwise.
 
+Even if mobile chips do support this feature, it is automatically disabled to prevent the developer from accidentally enabling it causing performance issues.
+
 Just like *most* commands, this will automatically transition the resources (render targets only) into the correct states for you. Color attachments can always be read, but the user is in charge of specifying if the contents should be cleared or kept. Color attachments can also be readonly if needed.
 
 ```c
@@ -532,6 +656,8 @@ _gotoIfError(clean, CommandListRef_endRenderExt(commandList));
 Keep in mind that during a render call, you can't transition the resources passed into the attachments of the active render call. They're not allowed to be used as a read (SRV) or write textures (UAV); they're only allowed to be output attachments (RTV). Special care should be taken on the developer's side to avoid this from happening.
 
 Every startRender needs to match an endRender. During the render it's not allowed to access the render textures as a write or read texture. Other operations that change state (implicit transitions) such as clears and copies are also not allowed. If this is required, the developer can end the render and restart it after this operation.
+
+A graphics pipeline for use with DirectRendering needs to set the attachment count (and format(s)) or the depth stencil format. One that doesn't use direct rendering can't be used.
 
 ### transition
 

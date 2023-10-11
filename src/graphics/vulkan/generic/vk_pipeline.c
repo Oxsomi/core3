@@ -145,7 +145,7 @@ Error GraphicsDeviceRef_createPipelinesCompute(GraphicsDeviceRef *deviceRef, Lis
 		_gotoIfError(clean, List_resizex(&pipeline->stages, 1));
 
 		*(PipelineStage*) pipeline->stages.ptr = (PipelineStage) {
-			.stageType = EPipelineStage_Compute,
+			.stageType = EPipelineStage_compute,
 			.shaderBinary = ((Buffer*)shaderBinaries->ptr)[i]
 		};
 
@@ -455,7 +455,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(GraphicsDeviceRef *deviceRef, Li
 			if((stageFlags >> stage.stageType) & 1)
 				return Error_alreadyDefined(0);
 
-			if(stageFlags && stage.stageType == EPipelineStage_Compute)
+			if(stageFlags && stage.stageType == EPipelineStage_compute)
 				return Error_invalidState(0);
 
 			stageFlags |= (U64)1 << stage.stageType;
@@ -464,13 +464,13 @@ Error GraphicsDeviceRef_createPipelinesGraphics(GraphicsDeviceRef *deviceRef, Li
 		//Validate if stages are allowed due to TesselationShader, GeometryShader
 
 		if(
-			stageFlags & (((U64)1 << EPipelineStage_HullExt) | ((U64)1 << EPipelineStage_DomainExt)) && 
+			stageFlags & (((U64)1 << EPipelineStage_hullExt) | ((U64)1 << EPipelineStage_domainExt)) && 
 			!(device->info.capabilities.features & EGraphicsFeatures_TessellationShader)
 		)
 			return Error_unsupportedOperation(10);
 
 		if(
-			((stageFlags >> EPipelineStage_GeometryExt) & 1) && 
+			((stageFlags >> EPipelineStage_geometryExt) & 1) && 
 			!(device->info.capabilities.features & EGraphicsFeatures_GeometryShader)
 		)
 			return Error_unsupportedOperation(11);
@@ -629,7 +629,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(GraphicsDeviceRef *deviceRef, Li
 			//Validate bounds for attribute
 
 			U64 size = ETextureFormat_getSize(format, 1, 1);
-			U64 offset = attrib.offset11_bufferId4 & 2047;
+			U64 offset = attrib.offset11 & 2047;
 
 			if(offset + size > stride)
 				_gotoIfError(clean, Error_outOfBounds(0, offset + size, stride));
@@ -685,9 +685,9 @@ Error GraphicsDeviceRef_createPipelinesGraphics(GraphicsDeviceRef *deviceRef, Li
 
 				attributes[attribCount++] = (VkVertexInputAttributeDescription) {
 					.location = j,
-					.binding = (attrib.offset11_bufferId4 >> 11) & 0xF,
+					.binding = attrib.bufferId4 & 0xF,
 					.format = formatExt,
-					.offset = attrib.offset11_bufferId4 & 2047
+					.offset = attrib.offset11 & 2047
 				};
 			}
 
@@ -876,38 +876,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(GraphicsDeviceRef *deviceRef, Li
 			if(info->blendState.logicOpExt && !(device->info.capabilities.features & EGraphicsFeatures_LogicOp))
 				_gotoIfError(clean, Error_unsupportedOperation(8));
 
-			if(info->attachmentCountExt && info->attachmentCountExt != info->blendState.renderTargetsCount)
-				_gotoIfError(clean, Error_invalidOperation(3));
-
 			//TODO: Validate render target count with renderPass
-
-			//Validate if attachments are the same if independent blending isn't enabled.
-
-			if(!info->blendState.allowIndependentBlend) {
-
-				Bool hadFirst = false;
-				BlendStateAttachment first = { 0 };
-
-				//Blend is either all the way off or all the way on.
-
-				if(
-					info->blendState.renderTargetMask && 
-					info->blendState.renderTargetMask != (U8)(((U16)1 << info->blendState.renderTargetsCount) - 1)
-				)
-					_gotoIfError(clean, Error_invalidOperation(5));
-
-				for(U64 k = 0; k < 8; ++k)
-					if ((info->blendState.renderTargetMask >> k) & 1) {
-
-						if(!hadFirst)
-							first = info->blendState.attachments[k];
-
-						//Ensure blend state is the same.
-
-						else if(*(const U64*)&first != *(const U64*)&info->blendState.attachments[k])
-							_gotoIfError(clean, Error_invalidOperation(6));
-					}
-			}
 
 			//Find attachments
 
@@ -918,13 +887,25 @@ Error GraphicsDeviceRef_createPipelinesGraphics(GraphicsDeviceRef *deviceRef, Li
 
 			Bool dualSrc = device->info.capabilities.features & EGraphicsFeatures_DualSrcBlend;
 
-			for(U64 j = 0; j < info->blendState.renderTargetsCount; ++j) {
+			for(U64 j = 0; j < info->attachmentCountExt; ++j) {
 
 				BlendStateAttachment attachment = info->blendState.attachments[j];
 
+				if (!info->blendState.enable) {
+
+					attachments[j] = (VkPipelineColorBlendAttachmentState) {
+						.blendEnable = false,
+						.colorWriteMask = (VkColorComponentFlags) EWriteMask_all
+					};
+
+					continue;
+				}
+
+				U64 index = info->blendState.allowIndependentBlend ? j : 0;
+
 				attachments[j] = (VkPipelineColorBlendAttachmentState) {
-					.blendEnable = (info->blendState.renderTargetMask >> j) & 1,
-					.colorWriteMask = (VkColorComponentFlags) attachment.writeMask
+					.blendEnable = (info->blendState.renderTargetMask >> index) & 1,
+					.colorWriteMask = (VkColorComponentFlags) info->blendState.writeMask[index]
 				};
 
 				_gotoIfError(clean, mapVkBlendOp(attachment.blendOp, &attachments[j].colorBlendOp));
@@ -970,7 +951,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(GraphicsDeviceRef *deviceRef, Li
 				.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
 				.logicOpEnable = info->blendState.logicOpExt != ELogicOpExt_off,
 				.logicOp = logicOp,
-				.attachmentCount = info->blendState.renderTargetsCount,
+				.attachmentCount = info->attachmentCountExt,
 				.pAttachments = attachments
 			};
 
@@ -1036,7 +1017,9 @@ Error GraphicsDeviceRef_createPipelinesGraphics(GraphicsDeviceRef *deviceRef, Li
 				];
 
 			for(U64 j = 0; j < info->attachmentCountExt; ++j)
-				_gotoIfError(clean, mapVkFormat(NULL, info->attachmentFormatsExt[j], &formats[j], true, true));
+				_gotoIfError(clean, mapVkFormat(
+					NULL, ETextureFormatId_unpack[info->attachmentFormatsExt[j]], &formats[j], true, true
+				));
 
 			VkPipelineRenderingCreateInfo *infoi = 
 				&((VkPipelineRenderingCreateInfo*)states[EPipelineStateType_DirectRendering].ptr)[i];
@@ -1065,12 +1048,12 @@ Error GraphicsDeviceRef_createPipelinesGraphics(GraphicsDeviceRef *deviceRef, Li
 			PipelineStage stage = ((PipelineStage*) stages->ptr)[j + counts[EPipelineStateType_Stage]];
 
 			switch (stage.stageType) {
-				case EPipelineStage_Vertex:			stageBit = VK_SHADER_STAGE_VERTEX_BIT;						break;
-				case EPipelineStage_Pixel:			stageBit = VK_SHADER_STAGE_FRAGMENT_BIT;					break;
-				case EPipelineStage_Compute:		stageBit = VK_SHADER_STAGE_COMPUTE_BIT;						break;
-				case EPipelineStage_GeometryExt:	stageBit = VK_SHADER_STAGE_GEOMETRY_BIT;					break;
-				case EPipelineStage_HullExt:		stageBit = VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT;		break;
-				case EPipelineStage_DomainExt:		stageBit = VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;		break;
+				case EPipelineStage_vertex:			stageBit = VK_SHADER_STAGE_VERTEX_BIT;						break;
+				case EPipelineStage_pixel:			stageBit = VK_SHADER_STAGE_FRAGMENT_BIT;					break;
+				case EPipelineStage_compute:		stageBit = VK_SHADER_STAGE_COMPUTE_BIT;						break;
+				case EPipelineStage_geometryExt:	stageBit = VK_SHADER_STAGE_GEOMETRY_BIT;					break;
+				case EPipelineStage_hullExt:		stageBit = VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT;		break;
+				case EPipelineStage_domainExt:		stageBit = VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;		break;
 			}
 
 			VkShaderModule module = NULL;

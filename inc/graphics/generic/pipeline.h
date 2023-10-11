@@ -46,7 +46,7 @@ typedef struct PipelineGraphicsInfo {
 	//If DirectRendering is on (used in between start render).
 	//Otherwise this is ignored.
 
-	ETextureFormat attachmentFormatsExt[8];
+	U8 attachmentFormatsExt[8];		//ETextureFormatId
 
 	U32 attachmentCountExt;
 	EDepthStencilFormat depthFormatExt;

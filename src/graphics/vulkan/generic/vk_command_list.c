@@ -76,7 +76,7 @@ Error CommandList_validateGraphicsPipeline(
 
 		//Undefined is used to ignore the currently bound slot and to avoid writing to it
 
-		if (info->attachmentFormatsExt[i] == ETextureFormat_undefined)
+		if (!info->attachmentFormatsExt[i])
 			continue;
 
 		//Validate if formats are the same
@@ -91,7 +91,7 @@ Error CommandList_validateGraphicsPipeline(
 
 		Swapchain *swapchain = SwapchainRef_ptr(ref);
 
-		if (swapchain->format != info->attachmentFormatsExt[i])
+		if (swapchain->format != ETextureFormatId_unpack[info->attachmentFormatsExt[i]])
 			return Error_invalidState(i + 2);
 	}
 
@@ -178,6 +178,10 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 
 		case ECommandOp_setStencil:
 			vkCmdSetStencilReference(buffer, VK_STENCIL_FACE_FRONT_AND_BACK, *(const U8*) data);
+			break;
+
+		case ECommandOp_setBlendConstants:
+			vkCmdSetBlendConstants(buffer, (const float*) data);
 			break;
 
 		//Clear commands
@@ -623,16 +627,16 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 
 				switch (transition.stage) {
 
-					case EPipelineStage_Compute:		break;
-					case EPipelineStage_Vertex:			pipelineStage = VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT;		break;
-					case EPipelineStage_Pixel:			pipelineStage = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;	break;
-					case EPipelineStage_GeometryExt:	pipelineStage = VK_PIPELINE_STAGE_2_GEOMETRY_SHADER_BIT;	break;
+					case EPipelineStage_compute:		break;
+					case EPipelineStage_vertex:			pipelineStage = VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT;		break;
+					case EPipelineStage_pixel:			pipelineStage = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;	break;
+					case EPipelineStage_geometryExt:	pipelineStage = VK_PIPELINE_STAGE_2_GEOMETRY_SHADER_BIT;	break;
 
-					case EPipelineStage_HullExt:		
+					case EPipelineStage_hullExt:		
 						pipelineStage = VK_PIPELINE_STAGE_2_TESSELLATION_CONTROL_SHADER_BIT;
 						break;
 
-					case EPipelineStage_DomainExt:
+					case EPipelineStage_domainExt:
 						pipelineStage = VK_PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER_BIT;
 						break;
 

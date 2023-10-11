@@ -230,6 +230,12 @@ Error CommandListRef_setStencil(CommandListRef *commandListRef, U8 stencilValue)
 	);
 }
 
+Error CommandListRef_setBlendConstants(CommandListRef *commandList, F32x4 blendConstants) {
+	return CommandListRef_append(
+		commandList, ECommandOp_setBlendConstants, Buffer_createConstRef(&blendConstants, sizeof(F32x4)), (List) { 0 }, 0
+	);
+}
+
 Error CommandListRef_clearImages(CommandListRef *commandList, List clearImages) {
 
 	if(!clearImages.length)

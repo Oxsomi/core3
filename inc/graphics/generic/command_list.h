@@ -39,6 +39,7 @@ typedef enum ECommandOp {
 	ECommandOp_setViewportAndScissor,
 
 	ECommandOp_setStencil,
+	ECommandOp_setBlendConstants,
 
 	//Direct rendering
 
@@ -125,6 +126,7 @@ Error CommandListRef_setScissor(CommandListRef *commandList, I32x2 offset, I32x2
 Error CommandListRef_setViewportAndScissor(CommandListRef *commandList, I32x2 offset, I32x2 size);
 
 Error CommandListRef_setStencil(CommandListRef *commandList, U8 stencilValue);
+Error CommandListRef_setBlendConstants(CommandListRef *commandList, F32x4 blendConstants);
 
 //Setting clear parameters and clearing render texture
 
