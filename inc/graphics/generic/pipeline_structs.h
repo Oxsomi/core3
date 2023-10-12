@@ -30,140 +30,141 @@ typedef enum EPipelineType {
 
 typedef enum EPipelineStage {
 
-	EPipelineStage_vertex,
-	EPipelineStage_pixel,
-	EPipelineStage_compute,
-	EPipelineStage_geometryExt,			//Query graphics feature GeometryShader
-	EPipelineStage_hullExt,				//Query graphics feature TessellationShader
-	EPipelineStage_domainExt			//^
+	EPipelineStage_Vertex,
+	EPipelineStage_Pixel,
+	EPipelineStage_Compute,
+	EPipelineStage_GeometryExt,			//Query graphics feature GeometryShader
+	EPipelineStage_HullExt,				//Query graphics feature TessellationShader
+	EPipelineStage_DomainExt			//^
 
 } EPipelineStage;
 
 typedef enum ECullMode {
 
-	ECullMode_back,
-	ECullMode_none,
-	ECullMode_front
+	ECullMode_Back,
+	ECullMode_None,
+	ECullMode_Front
 
 } ECullMode;
 
 typedef enum ERasterizerFlags {
 
-	ERasterizerFlags_isClockWise			= 1 << 0,		//Winding order
-	ERasterizerFlags_isWireframeExt			= 1 << 1,		//Fill mode (only available with wireframe extension)
-	ERasterizerFlags_enableDepthClamp		= 1 << 2,
-	ERasterizerFlags_enableDepthBias		= 1 << 3
+	ERasterizerFlags_IsClockWise			= 1 << 0,		//Winding order
+	ERasterizerFlags_IsWireframeExt			= 1 << 1,		//Fill mode (only available with wireframe extension)
+	ERasterizerFlags_EnableDepthClamp		= 1 << 2,
+	ERasterizerFlags_EnableDepthBias		= 1 << 3
 
 } ERasterizerFlags;
 
 typedef enum ECompareOp {
 
-	ECompareOp_gt,
-	ECompareOp_geq,
-	ECompareOp_eq,
-	ECompareOp_neq,
-	ECompareOp_leq,
-	ECompareOp_lt,
-	ECompareOp_always,
-	ECompareOp_never
+	ECompareOp_Gt,
+	ECompareOp_Geq,
+	ECompareOp_Eq,
+	ECompareOp_Neq,
+	ECompareOp_Leq,
+	ECompareOp_Lt,
+	ECompareOp_Always,
+	ECompareOp_Never
 
 } ECompareOp;
 
 typedef enum EStencilOp {
 
-	EStencilOp_keep,
-	EStencilOp_zero,
-	EStencilOp_replace,
-	EStencilOp_incClamp,
-	EStencilOp_decClamp,
-	EStencilOp_invert,
-	EStencilOp_incWrap,
-	EStencilOp_decWrap
+	EStencilOp_Keep,
+	EStencilOp_Zero,
+	EStencilOp_Replace,
+	EStencilOp_IncClamp,
+	EStencilOp_DecClamp,
+	EStencilOp_Invert,
+	EStencilOp_IncWrap,
+	EStencilOp_DecWrap
 
 } EStencilOp;
 
 typedef enum EDepthStencilFlags {
 
-	EDepthStencilFlags_depthTest		= 1 << 0,
-	EDepthStencilFlags_depthWriteBit	= 1 << 1,		//Use depthWrite instead.
-	EDepthStencilFlags_stencilTest		= 1 << 2,
+	EDepthStencilFlags_DepthTest		= 1 << 0,
+	EDepthStencilFlags_DepthWriteBit	= 1 << 1,		//Use DepthWrite instead.
+	EDepthStencilFlags_StencilTest		= 1 << 2,
 
-	EDepthStencilFlags_depthWrite		= EDepthStencilFlags_depthTest | EDepthStencilFlags_depthWriteBit
+	EDepthStencilFlags_DepthWrite		= EDepthStencilFlags_DepthTest | EDepthStencilFlags_DepthWriteBit
 
 } EDepthStencilFlags;
 
 typedef enum ELogicOpExt {
 
-	ELogicOpExt_off,
-	ELogicOpExt_clear,
-	ELogicOpExt_set,
-	ELogicOpExt_copy,
-	ELogicOpExt_copyInvert,
-	ELogicOpExt_none,
-	ELogicOpExt_invert,
-	ELogicOpExt_and,
-	ELogicOpExt_nand,
-	ELogicOpExt_or,
-	ELogicOpExt_nor,
-	ELogicOpExt_xor,
-	ELogicOpExt_equiv,
-	ELogicOpExt_andReverse,
-	ELogicOpExt_andInvert,
-	ELogicOpExt_orReverse,
-	ELogicOpExt_orInvert
+	ELogicOpExt_Off,
+	ELogicOpExt_Clear,
+	ELogicOpExt_Set,
+	ELogicOpExt_Copy,
+	ELogicOpExt_CopyInvert,
+	ELogicOpExt_None,
+	ELogicOpExt_Invert,
+	ELogicOpExt_And,
+	ELogicOpExt_Nand,
+	ELogicOpExt_Or,
+	ELogicOpExt_Nor,
+	ELogicOpExt_Xor,
+	ELogicOpExt_Equiv,
+	ELogicOpExt_AndReverse,
+	ELogicOpExt_AndInvert,
+	ELogicOpExt_OrReverse,
+	ELogicOpExt_OrInvert
 
 } ELogicOpExt;
 
 typedef enum EBlend {
 
-	EBlend_zero,
-	EBlend_one,
+	EBlend_Zero,
+	EBlend_One,
 
-	EBlend_srcColor,
-	EBlend_invSrcColor,
-	EBlend_dstColor,
-	EBlend_invDstColor,
+	EBlend_SrcColor,
+	EBlend_InvSrcColor,
+	EBlend_DstColor,
+	EBlend_InvDstColor,
 
-	EBlend_srcAlpha,
-	EBlend_invSrcAlpha,
-	EBlend_dstAlpha,
-	EBlend_invDstAlpha,
+	EBlend_SrcAlpha,
+	EBlend_InvSrcAlpha,
+	EBlend_DstAlpha,
+	EBlend_InvDstAlpha,
 
-	EBlend_blendFactor,
-	EBlend_invBlendFactor,
-	EBlend_alphaFactor,
-	EBlend_invAlphaFactor,
-	EBlend_srcAlphaSat,
+	EBlend_BlendFactor,
+	EBlend_InvBlendFactor,
+	EBlend_AlphaFactor,
+	EBlend_InvAlphaFactor,
+	EBlend_SrcAlphaSat,
 
 	//Check dualSrcBlend feature
 
-	EBlend_src1ColorExt,
-	EBlend_src1AlphaExt,
-	EBlend_invSrc1ColorExt,
-	EBlend_invSrc1AlphaExt
+	EBlend_Src1ColorExt,
+	EBlend_Src1AlphaExt,
+	EBlend_InvSrc1ColorExt,
+	EBlend_InvSrc1AlphaExt
 
 } EBlend;
 
 typedef enum EBlendOp {
 
-	EBlendOp_add,
-	EBlendOp_subtract,
-	EBlendOp_reverseSubtract,
-	EBlendOp_min,
-	EBlendOp_max
+	EBlendOp_Add,
+	EBlendOp_Subtract,
+	EBlendOp_ReverseSubtract,
+	EBlendOp_Min,
+	EBlendOp_Max
 
 } EBlendOp;
 
 typedef enum EWriteMask {
 
-	EWriteMask_r	= 1 << 0,
-	EWriteMask_g	= 1 << 1,
-	EWriteMask_b	= 1 << 2,
-	EWriteMask_a	= 1 << 3,
+	EWriteMask_R	= 1 << 0,
+	EWriteMask_G	= 1 << 1,
+	EWriteMask_B	= 1 << 2,
+	EWriteMask_A	= 1 << 3,
 
-	EWriteMask_all	= 0xF,
-	EWriteMask_rgba	= 0xF,
-	EWriteMask_rgb	= 0x7
+	EWriteMask_All	= 0xF,
+	EWriteMask_RGBA	= 0xF,
+	EWriteMask_RGB	= 0x7,
+	EWriteMask_RG	= 0x3
 
 } EWriteMask;
 
@@ -267,7 +268,7 @@ typedef struct GraphicsBufferLayout {
 
 typedef enum EDepthStencilFormat {
 
-	EDepthStencilFormat_none,
+	EDepthStencilFormat_None,
 	EDepthStencilFormat_D16,
 	EDepthStencilFormat_D32,		//Prefer this if stencil isn't needed.
 	EDepthStencilFormat_D24S8,		//TODO: Validate if NV, AMD, Intel and ARM actually allocate this as D32S8, else remove.

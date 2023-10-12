@@ -30,40 +30,40 @@ typedef struct GraphicsDevice GraphicsDevice;
 
 typedef enum ECommandOp {
 
-	ECommandOp_nop,
+	ECommandOp_Nop,
 
 	//Setting dynamic graphic pipeline
 
-	ECommandOp_setViewport,
-	ECommandOp_setScissor,
-	ECommandOp_setViewportAndScissor,
+	ECommandOp_SetViewport,
+	ECommandOp_SetScissor,
+	ECommandOp_SetViewportAndScissor,
 
-	ECommandOp_setStencil,
-	ECommandOp_setBlendConstants,
+	ECommandOp_SetStencil,
+	ECommandOp_SetBlendConstants,
 
 	//Direct rendering
 
-	ECommandOp_startRenderingExt,
-	ECommandOp_endRenderingExt,
+	ECommandOp_StartRenderingExt,
+	ECommandOp_EndRenderingExt,
 
 	//Draw calls and dispatches
 
-	ECommandOp_setPipeline,
-	ECommandOp_transition,
+	ECommandOp_SetPipeline,
+	ECommandOp_Transition,
 
-	ECommandOp_draw,
-	ECommandOp_dispatch,
+	ECommandOp_Draw,
+	ECommandOp_Dispatch,
 
 	//Clearing depth + color views
 
-	ECommandOp_clearImages,
-	//ECommandOp_clearDepths,
+	ECommandOp_ClearImages,
+	//ECommandOp_ClearDepths,
 
 	//Debugging
 
-	ECommandOp_addMarkerDebugExt,
-	ECommandOp_startRegionDebugExt,
-	ECommandOp_endRegionDebugExt
+	ECommandOp_AddMarkerDebugExt,
+	ECommandOp_StartRegionDebugExt,
+	ECommandOp_EndRegionDebugExt
 
 } ECommandOp;
 

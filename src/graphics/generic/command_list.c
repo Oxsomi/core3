@@ -213,26 +213,26 @@ Error CommandListRef_setViewportCmd(CommandListRef *commandListRef, I32x2 offset
 }
 
 Error CommandListRef_setViewport(CommandListRef *commandListRef, I32x2 offset, I32x2 size) {
-	return CommandListRef_setViewportCmd(commandListRef, offset, size, ECommandOp_setViewport);
+	return CommandListRef_setViewportCmd(commandListRef, offset, size, ECommandOp_SetViewport);
 }
 
 Error CommandListRef_setScissor(CommandListRef *commandListRef, I32x2 offset, I32x2 size) {
-	return CommandListRef_setViewportCmd(commandListRef, offset, size, ECommandOp_setScissor);
+	return CommandListRef_setViewportCmd(commandListRef, offset, size, ECommandOp_SetScissor);
 }
 
 Error CommandListRef_setViewportAndScissor(CommandListRef *commandListRef, I32x2 offset, I32x2 size) {
-	return CommandListRef_setViewportCmd(commandListRef, offset, size, ECommandOp_setViewportAndScissor);
+	return CommandListRef_setViewportCmd(commandListRef, offset, size, ECommandOp_SetViewportAndScissor);
 }
 
 Error CommandListRef_setStencil(CommandListRef *commandListRef, U8 stencilValue) {
 	return CommandListRef_append(
-		commandListRef, ECommandOp_setStencil, Buffer_createConstRef(&stencilValue, 1), (List) { 0 }, 0
+		commandListRef, ECommandOp_SetStencil, Buffer_createConstRef(&stencilValue, 1), (List) { 0 }, 0
 	);
 }
 
 Error CommandListRef_setBlendConstants(CommandListRef *commandList, F32x4 blendConstants) {
 	return CommandListRef_append(
-		commandList, ECommandOp_setBlendConstants, Buffer_createConstRef(&blendConstants, sizeof(F32x4)), (List) { 0 }, 0
+		commandList, ECommandOp_SetBlendConstants, Buffer_createConstRef(&blendConstants, sizeof(F32x4)), (List) { 0 }, 0
 	);
 }
 
@@ -297,7 +297,7 @@ Error CommandListRef_clearImages(CommandListRef *commandList, List clearImages) 
 	*(U32*)buf.ptr = (U32) clearImages.length;
 	Buffer_copy(Buffer_createRef((U8*) buf.ptr + sizeof(U32), List_bytes(clearImages)), List_bufferConst(clearImages));
 
-	_gotoIfError(clean, CommandListRef_append(commandList, ECommandOp_clearImages, buf, refs, 0));
+	_gotoIfError(clean, CommandListRef_append(commandList, ECommandOp_ClearImages, buf, refs, 0));
 
 clean:
 
@@ -416,7 +416,7 @@ Error CommandListRef_transition(CommandListRef *commandList, List transitions) {
 	*(U32*)buf.ptr = (U32) transitions.length;
 	Buffer_copy(Buffer_createRef((U8*) buf.ptr + sizeof(U32), List_bytes(transitions)), List_bufferConst(transitions));
 
-	_gotoIfError(clean, CommandListRef_append(commandList, ECommandOp_transition, buf, refs, 0));
+	_gotoIfError(clean, CommandListRef_append(commandList, ECommandOp_Transition, buf, refs, 0));
 
 clean:
 	Buffer_freex(&buf);
@@ -439,12 +439,12 @@ Error CommandListRef_setPipeline(CommandListRef *commandList, PipelineRef *pipel
 		return err;
 
 	return CommandListRef_append(
-		commandList, ECommandOp_setPipeline, Buffer_createConstRef((const U8*) &pipeline, sizeof(pipeline)), refs, 0
+		commandList, ECommandOp_SetPipeline, Buffer_createConstRef((const U8*) &pipeline, sizeof(pipeline)), refs, 0
 	);
 }
 
 Error CommandListRef_draw(CommandListRef *commandList, Draw draw) {
-	return CommandListRef_append(commandList, ECommandOp_draw, Buffer_createConstRef(&draw, sizeof(draw)), (List) { 0 }, 0);
+	return CommandListRef_append(commandList, ECommandOp_Draw, Buffer_createConstRef(&draw, sizeof(draw)), (List) { 0 }, 0);
 }
 
 Error CommandListRef_drawIndexed(CommandListRef *commandList, U32 indexCount, U32 instanceCount) {
@@ -488,7 +488,7 @@ Error CommandListRef_drawUnindexedAdv(
 
 Error CommandListRef_dispatch(CommandListRef *commandList, Dispatch dispatch) {
 	return CommandListRef_append(
-		commandList, ECommandOp_dispatch, Buffer_createConstRef(&dispatch, sizeof(dispatch)), (List) { 0 }, 0
+		commandList, ECommandOp_Dispatch, Buffer_createConstRef(&dispatch, sizeof(dispatch)), (List) { 0 }, 0
 	);
 }
 
@@ -593,7 +593,7 @@ Error CommandListRef_startRenderExt(
 
 	_gotoIfError(clean, CommandListRef_append(
 		commandListRef, 
-		ECommandOp_startRenderingExt, 
+		ECommandOp_StartRenderingExt, 
 		Buffer_createConstRef(startRender, sizeof(StartRenderExt) + sizeof(AttachmentInfo) * counter), 
 		refs, 
 		0
@@ -616,7 +616,7 @@ Error CommandListRef_endRenderExt(CommandListRef *commandListRef) {
 	if(!(device->info.capabilities.features & EGraphicsFeatures_DirectRendering))
 		return Error_unsupportedOperation(0);
 
-	return CommandListRef_append(commandListRef, ECommandOp_endRenderingExt, Buffer_createNull(), (List) { 0 }, 0);
+	return CommandListRef_append(commandListRef, ECommandOp_EndRenderingExt, Buffer_createNull(), (List) { 0 }, 0);
 }
 
 //Debug markers
@@ -646,11 +646,11 @@ clean:
 }
 
 Error CommandListRef_addMarkerDebugExt(CommandListRef *commandListRef, F32x4 color, CharString name) {
-	return CommandList_markerDebugExt(commandListRef, color, name, ECommandOp_addMarkerDebugExt);
+	return CommandList_markerDebugExt(commandListRef, color, name, ECommandOp_AddMarkerDebugExt);
 }
 
 Error CommandListRef_startRegionDebugExt(CommandListRef *commandListRef, F32x4 color, CharString name) {
-	return CommandList_markerDebugExt(commandListRef, color, name, ECommandOp_startRegionDebugExt);
+	return CommandList_markerDebugExt(commandListRef, color, name, ECommandOp_StartRegionDebugExt);
 }
 
 Error CommandListRef_endRegionDebugExt(CommandListRef *commandListRef) {
@@ -664,7 +664,7 @@ Error CommandListRef_endRegionDebugExt(CommandListRef *commandListRef) {
 	if(!(device->info.capabilities.features & EGraphicsFeatures_DebugMarkers))		//NO-OP
 		return Error_none();
 
-	return CommandListRef_append(commandListRef, ECommandOp_endRegionDebugExt, Buffer_createNull(), (List) { 0 }, 0);
+	return CommandListRef_append(commandListRef, ECommandOp_EndRegionDebugExt, Buffer_createNull(), (List) { 0 }, 0);
 }
 
 //Free and create

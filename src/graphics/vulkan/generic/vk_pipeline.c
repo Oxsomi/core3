@@ -145,7 +145,7 @@ Error GraphicsDeviceRef_createPipelinesCompute(GraphicsDeviceRef *deviceRef, Lis
 		_gotoIfError(clean, List_resizex(&pipeline->stages, 1));
 
 		*(PipelineStage*) pipeline->stages.ptr = (PipelineStage) {
-			.stageType = EPipelineStage_compute,
+			.stageType = EPipelineStage_Compute,
 			.shaderBinary = ((Buffer*)shaderBinaries->ptr)[i]
 		};
 
@@ -184,14 +184,14 @@ Error mapVkCompareOp(ECompareOp op, VkCompareOp *result) {
 
 	switch (op) {
 			
-		case ECompareOp_gt:			*result = VK_COMPARE_OP_GREATER;			break;
-		case ECompareOp_geq:		*result = VK_COMPARE_OP_GREATER_OR_EQUAL;	break;
-		case ECompareOp_eq:			*result = VK_COMPARE_OP_EQUAL;				break;
-		case ECompareOp_neq:		*result = VK_COMPARE_OP_NOT_EQUAL;			break;
-		case ECompareOp_leq:		*result = VK_COMPARE_OP_LESS_OR_EQUAL;		break;
-		case ECompareOp_lt:			*result = VK_COMPARE_OP_LESS;				break;
-		case ECompareOp_always:		*result = VK_COMPARE_OP_ALWAYS;				break;
-		case ECompareOp_never:		*result = VK_COMPARE_OP_NEVER;				break;
+		case ECompareOp_Gt:			*result = VK_COMPARE_OP_GREATER;			break;
+		case ECompareOp_Geq:		*result = VK_COMPARE_OP_GREATER_OR_EQUAL;	break;
+		case ECompareOp_Eq:			*result = VK_COMPARE_OP_EQUAL;				break;
+		case ECompareOp_Neq:		*result = VK_COMPARE_OP_NOT_EQUAL;			break;
+		case ECompareOp_Leq:		*result = VK_COMPARE_OP_LESS_OR_EQUAL;		break;
+		case ECompareOp_Lt:			*result = VK_COMPARE_OP_LESS;				break;
+		case ECompareOp_Always:		*result = VK_COMPARE_OP_ALWAYS;				break;
+		case ECompareOp_Never:		*result = VK_COMPARE_OP_NEVER;				break;
 
 		default:
 			return Error_invalidOperation(0);
@@ -204,14 +204,14 @@ Error mapVkStencilOp(EStencilOp op, VkStencilOp *result) {
 
 	switch (op) {
 			
-		case EStencilOp_keep:		*result = VK_STENCIL_OP_KEEP;					break;
-		case EStencilOp_zero:		*result = VK_STENCIL_OP_ZERO;					break;
-		case EStencilOp_replace:	*result = VK_STENCIL_OP_REPLACE;				break;
-		case EStencilOp_incClamp:	*result = VK_STENCIL_OP_INCREMENT_AND_CLAMP;	break;
-		case EStencilOp_decClamp:	*result = VK_STENCIL_OP_DECREMENT_AND_CLAMP;	break;
-		case EStencilOp_invert:		*result = VK_STENCIL_OP_INVERT;					break;
-		case EStencilOp_incWrap:	*result = VK_STENCIL_OP_INCREMENT_AND_WRAP;		break;
-		case EStencilOp_decWrap:	*result = VK_STENCIL_OP_DECREMENT_AND_WRAP;		break;
+		case EStencilOp_Keep:		*result = VK_STENCIL_OP_KEEP;					break;
+		case EStencilOp_Zero:		*result = VK_STENCIL_OP_ZERO;					break;
+		case EStencilOp_Replace:	*result = VK_STENCIL_OP_REPLACE;				break;
+		case EStencilOp_IncClamp:	*result = VK_STENCIL_OP_INCREMENT_AND_CLAMP;	break;
+		case EStencilOp_DecClamp:	*result = VK_STENCIL_OP_DECREMENT_AND_CLAMP;	break;
+		case EStencilOp_Invert:		*result = VK_STENCIL_OP_INVERT;					break;
+		case EStencilOp_IncWrap:	*result = VK_STENCIL_OP_INCREMENT_AND_WRAP;		break;
+		case EStencilOp_DecWrap:	*result = VK_STENCIL_OP_DECREMENT_AND_WRAP;		break;
 
 		default:
 			return Error_invalidOperation(0);
@@ -224,11 +224,11 @@ Error mapVkBlendOp(EBlendOp op, VkBlendOp *result) {
 
 	switch (op) {
 
-		case EBlendOp_add:					*result = VK_BLEND_OP_ADD;				break;
-		case EBlendOp_subtract:				*result = VK_BLEND_OP_SUBTRACT;			break;
-		case EBlendOp_reverseSubtract:		*result = VK_BLEND_OP_REVERSE_SUBTRACT;	break;
-		case EBlendOp_min:					*result = VK_BLEND_OP_MIN;				break;
-		case EBlendOp_max:					*result = VK_BLEND_OP_MAX;				break;
+		case EBlendOp_Add:					*result = VK_BLEND_OP_ADD;				break;
+		case EBlendOp_Subtract:				*result = VK_BLEND_OP_SUBTRACT;			break;
+		case EBlendOp_ReverseSubtract:		*result = VK_BLEND_OP_REVERSE_SUBTRACT;	break;
+		case EBlendOp_Min:					*result = VK_BLEND_OP_MIN;				break;
+		case EBlendOp_Max:					*result = VK_BLEND_OP_MAX;				break;
 
 		default:
 			return Error_invalidOperation(0);
@@ -243,26 +243,26 @@ Error mapVkBlend(Bool dualSrc, EBlend op, VkBlendFactor *result) {
 
 	switch (op) {
 																								break;
-		case EBlend_zero:				*result = VK_BLEND_FACTOR_ZERO;							break;
-		case EBlend_one:				*result = VK_BLEND_FACTOR_ONE;							break;
-		case EBlend_srcColor:			*result = VK_BLEND_FACTOR_SRC_COLOR;					break;
-		case EBlend_invSrcColor:		*result = VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR;			break;
-		case EBlend_dstColor:			*result = VK_BLEND_FACTOR_DST_COLOR;					break;
-		case EBlend_invDstColor:		*result = VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR;			break;
-		case EBlend_srcAlpha:			*result = VK_BLEND_FACTOR_SRC_ALPHA;					break;
-		case EBlend_invSrcAlpha:		*result = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;			break;
-		case EBlend_dstAlpha:			*result = VK_BLEND_FACTOR_DST_ALPHA;					break;
-		case EBlend_invDstAlpha:		*result = VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;			break;
-		case EBlend_blendFactor:		*result = VK_BLEND_FACTOR_CONSTANT_COLOR;				break;
-		case EBlend_invBlendFactor:		*result = VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_COLOR;		break;
-		case EBlend_alphaFactor:		*result = VK_BLEND_FACTOR_CONSTANT_ALPHA;				break;
-		case EBlend_invAlphaFactor:		*result = VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_ALPHA;		break;
-		case EBlend_srcAlphaSat:		*result = VK_BLEND_FACTOR_SRC_ALPHA_SATURATE;			break;
+		case EBlend_Zero:				*result = VK_BLEND_FACTOR_ZERO;							break;
+		case EBlend_One:				*result = VK_BLEND_FACTOR_ONE;							break;
+		case EBlend_SrcColor:			*result = VK_BLEND_FACTOR_SRC_COLOR;					break;
+		case EBlend_InvSrcColor:		*result = VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR;			break;
+		case EBlend_DstColor:			*result = VK_BLEND_FACTOR_DST_COLOR;					break;
+		case EBlend_InvDstColor:		*result = VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR;			break;
+		case EBlend_SrcAlpha:			*result = VK_BLEND_FACTOR_SRC_ALPHA;					break;
+		case EBlend_InvSrcAlpha:		*result = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;			break;
+		case EBlend_DstAlpha:			*result = VK_BLEND_FACTOR_DST_ALPHA;					break;
+		case EBlend_InvDstAlpha:		*result = VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;			break;
+		case EBlend_BlendFactor:		*result = VK_BLEND_FACTOR_CONSTANT_COLOR;				break;
+		case EBlend_InvBlendFactor:		*result = VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_COLOR;		break;
+		case EBlend_AlphaFactor:		*result = VK_BLEND_FACTOR_CONSTANT_ALPHA;				break;
+		case EBlend_InvAlphaFactor:		*result = VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_ALPHA;		break;
+		case EBlend_SrcAlphaSat:		*result = VK_BLEND_FACTOR_SRC_ALPHA_SATURATE;			break;
 
-		case EBlend_src1ColorExt:		wasDualSrc = true; *result = VK_BLEND_FACTOR_ZERO;		break;
-		case EBlend_src1AlphaExt:		wasDualSrc = true; *result = VK_BLEND_FACTOR_ZERO;		break;
-		case EBlend_invSrc1ColorExt:	wasDualSrc = true; *result = VK_BLEND_FACTOR_ZERO;		break;
-		case EBlend_invSrc1AlphaExt:	wasDualSrc = true; *result = VK_BLEND_FACTOR_ZERO;		break;
+		case EBlend_Src1ColorExt:		wasDualSrc = true; *result = VK_BLEND_FACTOR_ZERO;		break;
+		case EBlend_Src1AlphaExt:		wasDualSrc = true; *result = VK_BLEND_FACTOR_ZERO;		break;
+		case EBlend_InvSrc1ColorExt:	wasDualSrc = true; *result = VK_BLEND_FACTOR_ZERO;		break;
+		case EBlend_InvSrc1AlphaExt:	wasDualSrc = true; *result = VK_BLEND_FACTOR_ZERO;		break;
 
 		default:
 			return Error_invalidOperation(0);
@@ -455,7 +455,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(GraphicsDeviceRef *deviceRef, Li
 			if((stageFlags >> stage.stageType) & 1)
 				return Error_alreadyDefined(0);
 
-			if(stageFlags && stage.stageType == EPipelineStage_compute)
+			if(stageFlags && stage.stageType == EPipelineStage_Compute)
 				return Error_invalidState(0);
 
 			stageFlags |= (U64)1 << stage.stageType;
@@ -464,13 +464,13 @@ Error GraphicsDeviceRef_createPipelinesGraphics(GraphicsDeviceRef *deviceRef, Li
 		//Validate if stages are allowed due to TesselationShader, GeometryShader
 
 		if(
-			stageFlags & (((U64)1 << EPipelineStage_hullExt) | ((U64)1 << EPipelineStage_domainExt)) && 
+			stageFlags & (((U64)1 << EPipelineStage_HullExt) | ((U64)1 << EPipelineStage_DomainExt)) && 
 			!(device->info.capabilities.features & EGraphicsFeatures_TessellationShader)
 		)
 			return Error_unsupportedOperation(10);
 
 		if(
-			((stageFlags >> EPipelineStage_geometryExt) & 1) && 
+			((stageFlags >> EPipelineStage_GeometryExt) & 1) && 
 			!(device->info.capabilities.features & EGraphicsFeatures_GeometryShader)
 		)
 			return Error_unsupportedOperation(11);
@@ -757,7 +757,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(GraphicsDeviceRef *deviceRef, Li
 		//Rasterizer
 
 		if(
-			!(info->rasterizer.flags & ERasterizerFlags_enableDepthBias) && (
+			!(info->rasterizer.flags & ERasterizerFlags_EnableDepthBias) && (
 				info->rasterizer.depthBiasConstantFactor ||
 				info->rasterizer.depthBiasClamp ||
 				info->rasterizer.depthBiasSlopeFactor
@@ -767,7 +767,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(GraphicsDeviceRef *deviceRef, Li
 
 		if(info->rasterizer.flags || info->rasterizer.cullMode) {
 
-			Bool wireframe = info->rasterizer.flags & ERasterizerFlags_isWireframeExt;
+			Bool wireframe = info->rasterizer.flags & ERasterizerFlags_IsWireframeExt;
 
 			if(
 				wireframe && 
@@ -779,16 +779,16 @@ Error GraphicsDeviceRef_createPipelinesGraphics(GraphicsDeviceRef *deviceRef, Li
 
 			switch (info->rasterizer.cullMode) {
 
-				case ECullMode_back:	cullMode = VK_CULL_MODE_BACK_BIT;	break;
-				case ECullMode_front:	cullMode = VK_CULL_MODE_FRONT_BIT;	break;
-				case ECullMode_none:	cullMode = VK_CULL_MODE_NONE;		break;
+				case ECullMode_Back:	cullMode = VK_CULL_MODE_BACK_BIT;	break;
+				case ECullMode_Front:	cullMode = VK_CULL_MODE_FRONT_BIT;	break;
+				case ECullMode_None:	cullMode = VK_CULL_MODE_NONE;		break;
 
 				default:
 					_gotoIfError(clean, Error_invalidOperation(0));
 			}
 
 			VkFrontFace windingOrder = 
-				info->rasterizer.flags & ERasterizerFlags_isClockWise ? VK_FRONT_FACE_CLOCKWISE : 
+				info->rasterizer.flags & ERasterizerFlags_IsClockWise ? VK_FRONT_FACE_CLOCKWISE : 
 				VK_FRONT_FACE_COUNTER_CLOCKWISE;
 			
 			VkPipelineRasterizationStateCreateInfo *infoi = 
@@ -798,9 +798,9 @@ Error GraphicsDeviceRef_createPipelinesGraphics(GraphicsDeviceRef *deviceRef, Li
 				.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
 				.cullMode = cullMode,
 				.frontFace = windingOrder,
-				.depthClampEnable = info->rasterizer.flags & ERasterizerFlags_enableDepthClamp,
+				.depthClampEnable = info->rasterizer.flags & ERasterizerFlags_EnableDepthClamp,
 				.polygonMode = wireframe ? VK_POLYGON_MODE_LINE : VK_POLYGON_MODE_FILL,
-				.depthBiasEnable = info->rasterizer.flags & ERasterizerFlags_enableDepthBias,
+				.depthBiasEnable = info->rasterizer.flags & ERasterizerFlags_EnableDepthBias,
 				.depthBiasConstantFactor = info->rasterizer.depthBiasConstantFactor,
 				.depthBiasClamp = info->rasterizer.depthBiasClamp,
 				.depthBiasSlopeFactor = info->rasterizer.depthBiasSlopeFactor,
@@ -814,7 +814,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(GraphicsDeviceRef *deviceRef, Li
 
 		VkStencilOpState stencil = (VkStencilOpState) { 0 };
 
-		if (info->depthStencil.flags & EDepthStencilFlags_stencilTest) {
+		if (info->depthStencil.flags & EDepthStencilFlags_StencilTest) {
 
 			VkCompareOp stencilCompareOp = 0;
 			_gotoIfError(clean, mapVkCompareOp(info->depthStencil.stencilCompare, &stencilCompareOp));
@@ -844,7 +844,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(GraphicsDeviceRef *deviceRef, Li
 		)
 			_gotoIfError(clean, Error_unsupportedOperation(6));
 
-		if(info->depthStencil.depthCompare && !(info->depthStencil.flags & EDepthStencilFlags_depthTest))
+		if(info->depthStencil.depthCompare && !(info->depthStencil.flags & EDepthStencilFlags_DepthTest))
 			_gotoIfError(clean, Error_unsupportedOperation(7));
 
 		if(info->depthStencil.flags) {
@@ -857,10 +857,10 @@ Error GraphicsDeviceRef_createPipelinesGraphics(GraphicsDeviceRef *deviceRef, Li
 
 			*infoi = (VkPipelineDepthStencilStateCreateInfo) {
 				.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-				.depthTestEnable = info->depthStencil.flags & EDepthStencilFlags_depthTest,
-				.depthWriteEnable = info->depthStencil.flags & EDepthStencilFlags_depthWriteBit,
+				.depthTestEnable = info->depthStencil.flags & EDepthStencilFlags_DepthTest,
+				.depthWriteEnable = info->depthStencil.flags & EDepthStencilFlags_DepthWriteBit,
 				.depthCompareOp = depthCompareOp,
-				.stencilTestEnable = info->depthStencil.flags & EDepthStencilFlags_stencilTest,
+				.stencilTestEnable = info->depthStencil.flags & EDepthStencilFlags_StencilTest,
 				.front = stencil,
 				.back = stencil,
 				.minDepthBounds = 1,
@@ -895,7 +895,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(GraphicsDeviceRef *deviceRef, Li
 
 					attachments[j] = (VkPipelineColorBlendAttachmentState) {
 						.blendEnable = false,
-						.colorWriteMask = (VkColorComponentFlags) EWriteMask_all
+						.colorWriteMask = (VkColorComponentFlags) EWriteMask_All
 					};
 
 					continue;
@@ -923,23 +923,23 @@ Error GraphicsDeviceRef_createPipelinesGraphics(GraphicsDeviceRef *deviceRef, Li
 			VkLogicOp logicOp = 0;
 
 			switch (info->blendState.logicOpExt) {
-				case ELogicOpExt_off:			break;
-				case ELogicOpExt_clear:			logicOp = VK_LOGIC_OP_CLEAR;			break;
-				case ELogicOpExt_set:			logicOp = VK_LOGIC_OP_SET;			break;
-				case ELogicOpExt_copy:			logicOp = VK_LOGIC_OP_COPY;			break;
-				case ELogicOpExt_copyInvert:	logicOp = VK_LOGIC_OP_COPY_INVERTED;	break;
-				case ELogicOpExt_none:			logicOp = VK_LOGIC_OP_NO_OP;			break;
-				case ELogicOpExt_invert:		logicOp = VK_LOGIC_OP_INVERT;			break;
-				case ELogicOpExt_and:			logicOp = VK_LOGIC_OP_AND;			break;
-				case ELogicOpExt_nand:			logicOp = VK_LOGIC_OP_NAND;			break;
-				case ELogicOpExt_or:			logicOp = VK_LOGIC_OP_OR;				break;
-				case ELogicOpExt_nor:			logicOp = VK_LOGIC_OP_NOR;			break;
-				case ELogicOpExt_xor:			logicOp = VK_LOGIC_OP_XOR;			break;
-				case ELogicOpExt_equiv:			logicOp = VK_LOGIC_OP_EQUIVALENT;		break;
-				case ELogicOpExt_andReverse:	logicOp = VK_LOGIC_OP_AND_REVERSE;	break;
-				case ELogicOpExt_andInvert:		logicOp = VK_LOGIC_OP_AND_INVERTED;	break;
-				case ELogicOpExt_orReverse:		logicOp = VK_LOGIC_OP_OR_REVERSE;		break;
-				case ELogicOpExt_orInvert:		logicOp = VK_LOGIC_OP_OR_INVERTED;	break;
+				case ELogicOpExt_Off:			break;
+				case ELogicOpExt_Clear:			logicOp = VK_LOGIC_OP_CLEAR;			break;
+				case ELogicOpExt_Set:			logicOp = VK_LOGIC_OP_SET;			break;
+				case ELogicOpExt_Copy:			logicOp = VK_LOGIC_OP_COPY;			break;
+				case ELogicOpExt_CopyInvert:	logicOp = VK_LOGIC_OP_COPY_INVERTED;	break;
+				case ELogicOpExt_None:			logicOp = VK_LOGIC_OP_NO_OP;			break;
+				case ELogicOpExt_Invert:		logicOp = VK_LOGIC_OP_INVERT;			break;
+				case ELogicOpExt_And:			logicOp = VK_LOGIC_OP_AND;			break;
+				case ELogicOpExt_Nand:			logicOp = VK_LOGIC_OP_NAND;			break;
+				case ELogicOpExt_Or:			logicOp = VK_LOGIC_OP_OR;				break;
+				case ELogicOpExt_Nor:			logicOp = VK_LOGIC_OP_NOR;			break;
+				case ELogicOpExt_Xor:			logicOp = VK_LOGIC_OP_XOR;			break;
+				case ELogicOpExt_Equiv:			logicOp = VK_LOGIC_OP_EQUIVALENT;		break;
+				case ELogicOpExt_AndReverse:	logicOp = VK_LOGIC_OP_AND_REVERSE;	break;
+				case ELogicOpExt_AndInvert:		logicOp = VK_LOGIC_OP_AND_INVERTED;	break;
+				case ELogicOpExt_OrReverse:		logicOp = VK_LOGIC_OP_OR_REVERSE;		break;
+				case ELogicOpExt_OrInvert:		logicOp = VK_LOGIC_OP_OR_INVERTED;	break;
 				default:
 					_gotoIfError(clean, Error_invalidOperation(1));
 			}
@@ -949,7 +949,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(GraphicsDeviceRef *deviceRef, Li
 
 			*infoi = (VkPipelineColorBlendStateCreateInfo) {
 				.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-				.logicOpEnable = info->blendState.logicOpExt != ELogicOpExt_off,
+				.logicOpEnable = info->blendState.logicOpExt != ELogicOpExt_Off,
 				.logicOp = logicOp,
 				.attachmentCount = info->attachmentCountExt,
 				.pAttachments = attachments
@@ -996,7 +996,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(GraphicsDeviceRef *deviceRef, Li
 
 			switch (info->depthFormatExt) {
 
-				case EDepthStencilFormat_none:	break;
+				case EDepthStencilFormat_None:	break;
 				case EDepthStencilFormat_D16:	depthFormat = VK_FORMAT_D16_UNORM;		break;
 				case EDepthStencilFormat_D32:	depthFormat = VK_FORMAT_D32_SFLOAT;		break;
 
@@ -1048,12 +1048,12 @@ Error GraphicsDeviceRef_createPipelinesGraphics(GraphicsDeviceRef *deviceRef, Li
 			PipelineStage stage = ((PipelineStage*) stages->ptr)[j + counts[EPipelineStateType_Stage]];
 
 			switch (stage.stageType) {
-				case EPipelineStage_vertex:			stageBit = VK_SHADER_STAGE_VERTEX_BIT;						break;
-				case EPipelineStage_pixel:			stageBit = VK_SHADER_STAGE_FRAGMENT_BIT;					break;
-				case EPipelineStage_compute:		stageBit = VK_SHADER_STAGE_COMPUTE_BIT;						break;
-				case EPipelineStage_geometryExt:	stageBit = VK_SHADER_STAGE_GEOMETRY_BIT;					break;
-				case EPipelineStage_hullExt:		stageBit = VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT;		break;
-				case EPipelineStage_domainExt:		stageBit = VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;		break;
+				case EPipelineStage_Vertex:			stageBit = VK_SHADER_STAGE_VERTEX_BIT;						break;
+				case EPipelineStage_Pixel:			stageBit = VK_SHADER_STAGE_FRAGMENT_BIT;					break;
+				case EPipelineStage_Compute:		stageBit = VK_SHADER_STAGE_COMPUTE_BIT;						break;
+				case EPipelineStage_GeometryExt:	stageBit = VK_SHADER_STAGE_GEOMETRY_BIT;					break;
+				case EPipelineStage_HullExt:		stageBit = VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT;		break;
+				case EPipelineStage_DomainExt:		stageBit = VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;		break;
 			}
 
 			VkShaderModule module = NULL;

@@ -64,7 +64,7 @@ Error CommandList_validateGraphicsPipeline(
 
 	//Depth stencil state can be set to None to ignore writing to depth stencil
 
-	if (info->depthFormatExt != EDepthStencilFormat_none && depthFormat != info->depthFormatExt)
+	if (info->depthFormatExt != EDepthStencilFormat_None && depthFormat != info->depthFormatExt)
 		return Error_invalidState(1);
 
 	//Validate attachments
@@ -111,9 +111,9 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 
 	switch (op) {
 	
-		case ECommandOp_setViewport:
-		case ECommandOp_setScissor:
-		case ECommandOp_setViewportAndScissor: {
+		case ECommandOp_SetViewport:
+		case ECommandOp_SetScissor:
+		case ECommandOp_SetViewportAndScissor: {
 
 			//TODO: We probably wanna cache this if there's no currently bound target and apply it later
 			//		We probably also wanna store what size the viewport is so when re-binding a target we can
@@ -176,17 +176,17 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 			break;
 		}
 
-		case ECommandOp_setStencil:
+		case ECommandOp_SetStencil:
 			vkCmdSetStencilReference(buffer, VK_STENCIL_FACE_FRONT_AND_BACK, *(const U8*) data);
 			break;
 
-		case ECommandOp_setBlendConstants:
+		case ECommandOp_SetBlendConstants:
 			vkCmdSetBlendConstants(buffer, (const float*) data);
 			break;
 
 		//Clear commands
 
-		case ECommandOp_clearImages: {
+		case ECommandOp_ClearImages: {
 
 			U64 imageClearCount = *(const U32*) data;
 
@@ -324,8 +324,8 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 			VkImageSubresourceRange range = (VkImageSubresourceRange) {
 			
 				.aspectMask = 
-					(temp->flags & EVkCommandBufferFlags_hasDepth ? VK_IMAGE_ASPECT_DEPTH_BIT : 0) |
-					(temp->flags & EVkCommandBufferFlags_hasStencil ? VK_IMAGE_ASPECT_STENCIL_BIT : 0),
+					(temp->flags & EVkCommandBufferFlags_HasDepth ? VK_IMAGE_ASPECT_DEPTH_BIT : 0) |
+					(temp->flags & EVkCommandBufferFlags_HasStencil ? VK_IMAGE_ASPECT_STENCIL_BIT : 0),
 
 				.levelCount = image.levelId == U32_MAX ? levelCount : 1,
 				.layerCount = image.layerId == U32_MAX ? layerCount : 1,
@@ -347,7 +347,7 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 
 		//Dynamic rendering / direct rendering
 
-		case ECommandOp_startRenderingExt: {
+		case ECommandOp_StartRenderingExt: {
 
 			if(!I32x2_eq2(temp->currentSize, I32x2_zero()))
 				return Error_invalidOperation(0);
@@ -499,7 +499,7 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 			return err;
 		}
 
-		case ECommandOp_endRenderingExt:
+		case ECommandOp_EndRenderingExt:
 
 			if(I32x2_eq2(temp->currentSize, I32x2_zero()))
 				return Error_invalidOperation(0);
@@ -515,7 +515,7 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 
 		//Draws
 
-		case ECommandOp_setPipeline: {
+		case ECommandOp_SetPipeline: {
 
 			PipelineRef *setPipeline = *(PipelineRef**) data;
 
@@ -533,7 +533,7 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 			break;
 		}
 
-		case ECommandOp_draw: {
+		case ECommandOp_Draw: {
 
 			if(I32x2_eq2(temp->currentSize, I32x2_zero()))
 				return Error_invalidOperation(0);
@@ -550,7 +550,7 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 			Pipeline *pipeline = PipelineRef_ptr(temp->boundPipelines[0]);
 
 			Error err = CommandList_validateGraphicsPipeline(
-				pipeline, temp->boundImages, temp->boundImageCount, EDepthStencilFormat_none
+				pipeline, temp->boundImages, temp->boundImageCount, EDepthStencilFormat_None
 			);
 
 			if(err.genericError)
@@ -577,7 +577,7 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 			break;
 		}
 
-		case ECommandOp_dispatch: {
+		case ECommandOp_Dispatch: {
 
 			if (!temp->boundPipelines[1])
 				return Error_invalidOperation(0);
@@ -588,7 +588,7 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 			break;
 		}
 
-		case ECommandOp_transition: {
+		case ECommandOp_Transition: {
 
 			U32 transitionCount = *(const U32*) data;
 			const Transition *transitions = (const Transition*)(data + sizeof(U32));
@@ -627,16 +627,16 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 
 				switch (transition.stage) {
 
-					case EPipelineStage_compute:		break;
-					case EPipelineStage_vertex:			pipelineStage = VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT;		break;
-					case EPipelineStage_pixel:			pipelineStage = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;	break;
-					case EPipelineStage_geometryExt:	pipelineStage = VK_PIPELINE_STAGE_2_GEOMETRY_SHADER_BIT;	break;
+					case EPipelineStage_Compute:		break;
+					case EPipelineStage_Vertex:			pipelineStage = VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT;		break;
+					case EPipelineStage_Pixel:			pipelineStage = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;	break;
+					case EPipelineStage_GeometryExt:	pipelineStage = VK_PIPELINE_STAGE_2_GEOMETRY_SHADER_BIT;	break;
 
-					case EPipelineStage_hullExt:		
+					case EPipelineStage_HullExt:		
 						pipelineStage = VK_PIPELINE_STAGE_2_TESSELLATION_CONTROL_SHADER_BIT;
 						break;
 
-					case EPipelineStage_domainExt:
+					case EPipelineStage_DomainExt:
 						pipelineStage = VK_PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER_BIT;
 						break;
 
@@ -674,7 +674,7 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 
 		//Debug markers
 
-		case ECommandOp_endRegionDebugExt:
+		case ECommandOp_EndRegionDebugExt:
 
 			if(!temp->debugRegionStack)
 				return Error_invalidOperation(0);
@@ -683,8 +683,8 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 			--temp->debugRegionStack;
 			break;
 
-		case ECommandOp_addMarkerDebugExt:
-		case ECommandOp_startRegionDebugExt: {
+		case ECommandOp_AddMarkerDebugExt:
+		case ECommandOp_StartRegionDebugExt: {
 
 			VkDebugMarkerMarkerInfoEXT markerInfo = (VkDebugMarkerMarkerInfoEXT) {
 				.sType = VK_STRUCTURE_TYPE_DEBUG_MARKER_MARKER_INFO_EXT,
@@ -693,10 +693,10 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 
 			Buffer_copy(Buffer_createRef(&markerInfo.color, sizeof(F32x4)), Buffer_createConstRef(data, sizeof(F32x4)));
 			
-			if(op == ECommandOp_addMarkerDebugExt)
+			if(op == ECommandOp_AddMarkerDebugExt)
 				instanceExt->cmdDebugMarkerInsert(buffer, &markerInfo);
 			
-			else if(op == ECommandOp_startRegionDebugExt) {
+			else if(op == ECommandOp_StartRegionDebugExt) {
 
 				if(temp->debugRegionStack == U32_MAX)
 					return Error_invalidOperation(0);
@@ -710,7 +710,7 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 
 		//NOP or unsupported
 
-		case ECommandOp_nop:
+		case ECommandOp_Nop:
 			break;
 
 		default:

@@ -126,10 +126,10 @@ Error WindowManager_createVirtual(
 
 	switch (format) {
 
-		case EWindowFormat_bgra8:
-		case EWindowFormat_bgr10a2:
-		case EWindowFormat_rgba16f:
-		case EWindowFormat_rgba32f:
+		case EWindowFormat_BGRA8:
+		case EWindowFormat_BGR10A2:
+		case EWindowFormat_RGBA16f:
+		case EWindowFormat_RGBA32f:
 			break;
 
 		default:

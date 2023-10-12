@@ -81,7 +81,7 @@ Error GraphicsDeviceRef_createSwapchainInternal(GraphicsDeviceRef *deviceRef, Sw
 
 	switch(window->format) {
 
-		case EWindowFormat_bgra8:
+		case EWindowFormat_BGRA8:
 			
 			searchFormat = (VkSurfaceFormatKHR) { 
 				.format = VK_FORMAT_B8G8R8A8_UNORM, 
@@ -92,7 +92,7 @@ Error GraphicsDeviceRef_createSwapchainInternal(GraphicsDeviceRef *deviceRef, Sw
 
 		//TODO: HDR10_ST2084_EXT?
 
-		case EWindowFormat_bgr10a2:
+		case EWindowFormat_BGR10A2:
 			
 			searchFormat = (VkSurfaceFormatKHR) { 
 				.format = VK_FORMAT_A2B10G10R10_UNORM_PACK32, 
@@ -101,7 +101,7 @@ Error GraphicsDeviceRef_createSwapchainInternal(GraphicsDeviceRef *deviceRef, Sw
 
 			break;
 
-		case EWindowFormat_rgba16f:
+		case EWindowFormat_RGBA16f:
 
 			searchFormat = (VkSurfaceFormatKHR) { 
 				.format = VK_FORMAT_R16G16B16A16_SFLOAT, 
@@ -437,8 +437,8 @@ Error GraphicsDeviceRef_createSwapchainInternal(GraphicsDeviceRef *deviceRef, Sw
 
 		switch (swapchain->format) {
 
-			case EWindowFormat_rgba32f:
-			case EWindowFormat_rgba16f:
+			case EWindowFormat_RGBA32f:
+			case EWindowFormat_RGBA16f:
 				textureWriteType = EDescriptorType_RWTexture2Df;
 				break;
 		}

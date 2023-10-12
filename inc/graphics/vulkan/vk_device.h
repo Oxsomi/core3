@@ -178,8 +178,8 @@ typedef struct VkCommandAllocator {
 
 typedef enum EVkCommandBufferFlags {
 
-	EVkCommandBufferFlags_hasDepth		= 1 << 0,
-	EVkCommandBufferFlags_hasStencil	= 1 << 1
+	EVkCommandBufferFlags_HasDepth		= 1 << 0,
+	EVkCommandBufferFlags_HasStencil	= 1 << 1
 
 } EVkCommandBufferFlags;
 

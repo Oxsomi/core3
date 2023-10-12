@@ -254,10 +254,10 @@ Error WindowManager_createPhysical(
 
 	switch (format) {
 
-		case EWindowFormat_bgra8:
-		case EWindowFormat_bgr10a2:
-		case EWindowFormat_rgba16f:
-		case EWindowFormat_rgba32f:
+		case EWindowFormat_BGRA8:
+		case EWindowFormat_BGR10A2:
+		case EWindowFormat_RGBA16f:
+		case EWindowFormat_RGBA32f:
 
 			if(!WindowManager_supportsFormat(*manager, format))
 				return Error_unsupportedOperation(0);
