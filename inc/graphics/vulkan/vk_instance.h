@@ -66,9 +66,9 @@ typedef struct VkGraphicsInstance {
 	PFN_vkGetPhysicalDeviceSurfaceFormatsKHR getPhysicalDeviceSurfaceFormats;
 	PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR getPhysicalDeviceSurfaceCapabilities;
 	PFN_vkGetPhysicalDeviceSurfacePresentModesKHR getPhysicalDeviceSurfacePresentModes;
-	PFN_vkGetSwapchainImagesKHR getSwapchainImagesKHR;
-
-	PFN_vkCreateWin32SurfaceKHR createWin32SurfaceKHR;
+	PFN_vkGetSwapchainImagesKHR getSwapchainImages;
+	PFN_vkGetPhysicalDeviceSurfaceSupportKHR getPhysicalDeviceSurfaceSupport;
+	PFN_vkCreateWin32SurfaceKHR createWin32Surface;
 
 	PFN_vkSetDebugUtilsObjectNameEXT debugSetName;
 
@@ -76,8 +76,8 @@ typedef struct VkGraphicsInstance {
 	PFN_vkCmdDebugMarkerEndEXT cmdDebugMarkerEnd;
 	PFN_vkCmdDebugMarkerInsertEXT cmdDebugMarkerInsert;
 
-	PFN_vkCmdBeginRenderingKHR cmdBeginRenderingKHR;
-	PFN_vkCmdEndRenderingKHR cmdEndRenderingKHR;
+	PFN_vkCmdBeginRenderingKHR cmdBeginRendering;
+	PFN_vkCmdEndRenderingKHR cmdEndRendering;
 
 	PFN_vkCreateDebugReportCallbackEXT debugCreateReportCallback;
 

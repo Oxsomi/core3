@@ -263,9 +263,10 @@ Error GraphicsInstance_create(GraphicsApplicationInfo info, Bool isVerbose, Grap
 	vkExtensionNoCheck(vkGetPhysicalDeviceSurfaceFormatsKHR, instanceExt->getPhysicalDeviceSurfaceFormats);
 	vkExtensionNoCheck(vkGetPhysicalDeviceSurfaceCapabilitiesKHR, instanceExt->getPhysicalDeviceSurfaceCapabilities);
 	vkExtensionNoCheck(vkGetPhysicalDeviceSurfacePresentModesKHR, instanceExt->getPhysicalDeviceSurfacePresentModes);
-	vkExtensionNoCheck(vkGetSwapchainImagesKHR, instanceExt->getSwapchainImagesKHR);
+	vkExtensionNoCheck(vkGetSwapchainImagesKHR, instanceExt->getSwapchainImages);
+	vkExtensionNoCheck(vkGetPhysicalDeviceSurfaceSupportKHR, instanceExt->getPhysicalDeviceSurfaceSupport);
 
-	vkExtensionNoCheck(vkCreateWin32SurfaceKHR, instanceExt->createWin32SurfaceKHR);
+	vkExtensionNoCheck(vkCreateWin32SurfaceKHR, instanceExt->createWin32Surface);
 
 	if(supportsDebug[1]) {
 		vkExtension(clean, vkSetDebugUtilsObjectNameEXT, instanceExt->debugSetName);
@@ -299,8 +300,8 @@ Error GraphicsInstance_create(GraphicsApplicationInfo info, Bool isVerbose, Grap
 	vkExtensionNoCheck(vkCmdTraceRaysIndirectKHR, instanceExt->traceRaysIndirect);
 	vkExtensionNoCheck(vkCreateRayTracingPipelinesKHR, instanceExt->createRaytracingPipelines);
 
-	vkExtensionNoCheck(vkCmdBeginRenderingKHR, instanceExt->cmdBeginRenderingKHR);
-	vkExtensionNoCheck(vkCmdEndRenderingKHR, instanceExt->cmdEndRenderingKHR);
+	vkExtensionNoCheck(vkCmdBeginRenderingKHR, instanceExt->cmdBeginRendering);
+	vkExtensionNoCheck(vkCmdEndRenderingKHR, instanceExt->cmdEndRendering);
 
 	//Add debug callback
 

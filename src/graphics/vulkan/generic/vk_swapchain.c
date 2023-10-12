@@ -59,6 +59,16 @@ Error GraphicsDeviceRef_createSwapchainInternal(GraphicsDeviceRef *deviceRef, Sw
 	if(!swapchainExt->surface)
 		_gotoIfError(clean, VkSurface_create(device, window, &swapchainExt->surface));
 
+	VkBool32 support = false;
+
+	_gotoIfError(clean, vkCheck(instance->getPhysicalDeviceSurfaceSupport(
+		(VkPhysicalDevice) device->info.ext,
+		deviceExt->queues[EVkCommandQueue_Graphics].queueId, swapchainExt->surface, &support
+	)));
+
+	if(!support)
+		_gotoIfError(clean, Error_unsupportedOperation(0));
+
 	//It's possible that format has changed when calling Swapchain_resize.
 	//So we can't skip this.
 
@@ -277,7 +287,7 @@ Error GraphicsDeviceRef_createSwapchainInternal(GraphicsDeviceRef *deviceRef, Sw
 
 	U32 imageCount = 0;
 
-	_gotoIfError(clean, vkCheck(instance->getSwapchainImagesKHR(
+	_gotoIfError(clean, vkCheck(instance->getSwapchainImages(
 		deviceExt->device, swapchainExt->swapchain, &imageCount, NULL
 	)));
 
@@ -318,7 +328,7 @@ Error GraphicsDeviceRef_createSwapchainInternal(GraphicsDeviceRef *deviceRef, Sw
 
 	VkImage vkImages[3];		//Temp alloc, we only allow up to 3 images.
 
-	_gotoIfError(clean, vkCheck(instance->getSwapchainImagesKHR(
+	_gotoIfError(clean, vkCheck(instance->getSwapchainImages(
 		deviceExt->device, swapchainExt->swapchain, &imageCount, vkImages
 	)));
 

@@ -41,5 +41,5 @@ Error VkSurface_create(GraphicsDevice *device, const Window *window, VkSurfaceKH
 		.hinstance = Platform_instance.data
 	};
 
-	return vkCheck(instanceExt->createWin32SurfaceKHR(instanceExt->instance, &surfaceInfo, NULL, surface));
+	return vkCheck(instanceExt->createWin32Surface(instanceExt->instance, &surfaceInfo, NULL, surface));
 }

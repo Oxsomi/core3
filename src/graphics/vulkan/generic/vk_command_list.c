@@ -487,7 +487,7 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 				.pColorAttachments = attachmentsExt
 			};
 
-			instanceExt->cmdBeginRenderingKHR(buffer, &renderInfo);
+			instanceExt->cmdBeginRendering(buffer, &renderInfo);
 
 			temp->boundImageCount = startRender->colorCount;
 
@@ -504,7 +504,7 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 			if(I32x2_eq2(temp->currentSize, I32x2_zero()))
 				return Error_invalidOperation(0);
 
-			instanceExt->cmdEndRenderingKHR(buffer);
+			instanceExt->cmdEndRendering(buffer);
 			temp->currentSize = I32x2_zero();
 			temp->anyScissor = temp->anyViewport = false;
 

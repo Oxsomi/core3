@@ -344,25 +344,25 @@ The graphics pipeline has the following properties:
     - These are tightly packed to avoid having to dynamically allocate the PipelineGraphicsInfo and keeping it POD while still using limited resources. (bufferStride & 4095) | (isInstance << 12).
   - attributes[16]: the vertex attributes that use the buffers defined before.
     - inferred semanticName: for HLSL/DirectX12, semantic name is quite important. However, it supports semantic name and value, so we just use semantic name TEXCOORD and the binding id. So TEXCOORD1 would be attribute[1]. This is done to save a lot of space in the PipelineGraphicsInfo.
-    - format: ETextureFormatId (8-bit) such as 'rgb32f'.
+    - format: ETextureFormatId (8-bit) such as 'RGB32f'.
     - buffer4 (0-15): buffer id the attribute point to. Points to vertexLayout.bufferStrides12_isInstance1.
     - offset11: offset into the buffer.
       - offset is 0-2047 for GPU limit reasons. Since the offset is into the buffer, offset + size can't exceed the stride of the buffer. 
     - attribute id is inferred from the index into the array. If attribute bindings are used [0] would refer to binding 0.
 - rasterizer: how to rasterize the triangles into pixels.
   - Optional if no special rasterizer info is needed. Default to 0 will to create CCW backface-culled filled geometry with no depth clamp or bias.
-  - cullMode: back (default), none, front
-  - flags: isCW (1), isWireframeExt (2), enableDepthClamp (4), enableDepthBias (8).
-    - isWireframeExt requires the Wireframe feature.
+  - cullMode: Back (default), None, Front
+  - flags: IsCW (1), IsWireframeExt (2), EnableDepthClamp (4), EnableDepthBias (8).
+    - IsWireframeExt requires the Wireframe feature.
   - depthBiasClamp, depthBiasConstantFactor, depthBiasSlopeFactor all define depthBias properties that only do something if enableDepthBias is on. depthBiasClamp needs enableDepthClamp as well.
 - depthStencil: how to handle depth and stencil operations.
   - Optional if no special depth stencil is needed. Default to no depth or stencil operations.
-  - flags: depthTest (1), depthWriteBit (2), stencilTest (4).
-    - For depthWrite (3), both depthTest and depthWriteBit are required.
+  - flags: DepthTest (1), DepthWriteBit (2), StencilTest (4).
+    - For DepthWrite (3), both DepthTest and DepthWriteBit are required.
   - depthCompare, stencilCompare: compare operations for depth and stencil.
-    - gt (default), geq, eq, neq, leq, lt, always, never.
+    - Gt (default), Geq, Eq, Neq, Leq, Lt, Always, Never.
   - stencilFail, stencilPass, stencilDepthFail: operations for when a stencil event occurs (fail, pass, depthFail).
-    - keep, zero, replace, incClamp, decClamp, invert, incWrap, decWrap.
+    - Keep, Zero, Replace, IncClamp, DecClamp, Invert, IncWrap, DecWrap.
   - stencilReadMask, stencilWriteMask: what value the stencil is compared to when reading or writing.
 - blendState: how to handle blend operations.
   - Optional if no special blend state is needed. Default to writeMask on (see enable).
@@ -370,28 +370,28 @@ The graphics pipeline has the following properties:
   - allowIndependentBlend: if disabled only reads from attachments[0], writeMask[0] and renderTargetMask & 1.
   - renderTargetMask: Bool[8] (U8) of which attachments have blend enabled.
   - logicOpExt (default = off): if the logicOp feature is enabled represents the logic op the blend will perform.
-    - off, clear, set, copy, copyInvert, none, invert, and, nand, or, nor, xor, equiv, andReverse, andInvert, orReverse, orInvert.
-  - writeMask[16]: EWriteMask mask of which channel writes are enabled for write (r: 1, g: 2, b: 4, a: 8).
+    - Off, Clear, Set, Copy, CopyInvert, None, Invert, And, Nand, Or, Nor, Xor, Equiv, AndReverse, AndInvert, OrReverse, OrInvert.
+  - writeMask[16]: EWriteMask mask of which channel writes are enabled for write (R: 1, G: 2, B: 4, A: 8). Can also be RGBA, RGB, RG.
   - attachments[16]: blend information about each state.
     - srcBlend, dstBlend, srcBlendAlpha, dstBlendAlpha: what value to blend.
-      - zero, one, srcColor, invSrcColor, dstColor, invDstColor, srcAlpha, invSrcAlpha, dstAlpha, invDstAlpha, blendFactor, invBlendFactor, alphaFactor, invAlphaFactor, srcAlphaSat.
-      - If dualSrcBlend feature is enabled: src1ColorExt, src1AlphaExt, invSrc1ColorExt, invSrc1AlphaExt.
+      - Zero, One, SrcColor, InvSrcColor, DstColor, InvDstColor, SrcAlpha, InvSrcAlpha, DstAlpha, InvDstAlpha, BlendFactor, InvBlendFactor, AlphaFactor, InvAlphaFactor, SrcAlphaSat.
+      - If dualSrcBlend feature is enabled: Src1ColorExt, Src1AlphaExt, InvSrc1ColorExt, InvSrc1AlphaExt.
     - blendOp, blendOpAlpha: what operation to blend with.
-      - add, subtract, reverseSubtract, min, max.
+      - Add, Subtract, ReverseSubtract, Min, Max.
 - msaa: multi sample count. 
   - Optional if no special msaa settings are needed. Defaults to 1.
   - 1 and 4 are always supported (though 4 is slower and needs special care). 
   - 2, 8 and 16 aren't always supported, so make sure to query it and/or fallback to 1 or 4 if not present. EGraphicsDataTypes of the device capabilities lists this.
 - topologyMode: type of mesh topology.
-  - Defaults to triangleList if not specified.
-  - triangleList, triangleStrip, lineList, lineStrip, pointList, triangleListAdj, triangleStripAdj, lineListAdj, lineStripAdj.
+  - Defaults to TriangleList if not specified.
+  - TriangleList, TriangleStrip, LineList, LineStrip, PointList, TriangleListAdj, TriangleStripAdj, LineListAdj, LineStripAdj.
 - patchControlPointsExt: optional feature TessellationShader. Defines the number of tessellation points.
 - stageCount: how many shader stages are available.
 - Using DirectRendering:
   - If DirectRendering is enabled, a simpler way of creating can be used to aid porting and simplify development for desktop.
   - attachmentCountExt: how many render targets should be used.
-  - attachmentFormatsExt[i < attachmentCountExt]: the ETextureFormatId of the format. Needs to match the render target's exactly (Swapchain bgra8 doesn't match a rgba8 pipeline!).
-  - depthFormatExt: depth format of the depth buffer: none, D16, D32, D24S8, D32S8.
+  - attachmentFormatsExt[i < attachmentCountExt]: the ETextureFormatId of the format. Needs to match the render target's exactly (Swapchain BGRA8 doesn't match a RGBA8 pipeline!).
+  - depthFormatExt: depth format of the depth buffer: None, D16, D32, D24S8, D32S8.
 - **TODO**: Not using DirectRendering:
   - If DirectRendering is not supported or the developer doesn't want to use it a unified mobile + desktop architecture can be used. However; generally desktop techniques don't lend themselves well for mobile techniques and vice versa. So it's still recommended to implement two separate rendering backends on mobile.
   - **TODO**: renderPass:
@@ -399,7 +399,7 @@ The graphics pipeline has the following properties:
 
 #### PipelineStages
 
-A pipeline stage is simply a Buffer and an EPipelineStage. The Buffer is in the format declared in "Shader binary types" and EPipelineStage can be vertex, pixel, compute, geometryExt, hullExt or domainExt. Hull and domain are enabled by the Tessellation feature and geometryExt by the Geometry feature.
+A pipeline stage is simply a Buffer and an EPipelineStage. The Buffer is in the format declared in "Shader binary types" and EPipelineStage can be Vertex, Pixel, Compute, GeometryExt, HullExt or DomainExt. Hull and domain are enabled by the Tessellation feature and GeometryExt by the Geometry feature.
 
 ### Compute example
 
@@ -424,11 +424,11 @@ It is recommended to generate all pipelines that are needed in this one call at 
 
 PipelineStage stage[2] = {
     (PipelineStage) {
-        .stageType = EPipelineStage_vertex,
+        .stageType = EPipelineStage_Vertex,
         .shaderBinary = tempShaders[0]
     },
     (PipelineStage) {
-        .stageType = EPipelineStage_pixel,
+        .stageType = EPipelineStage_Pixel,
         .shaderBinary = tempShaders[1]
     }
 };
@@ -447,7 +447,7 @@ PipelineGraphicsInfo info[1] = {
     (PipelineGraphicsInfo) {
         .stageCount = 2,
         .attachmentCountExt = 1,
-        .attachmentFormatsExt = { ETextureFormat_bgra8 }
+        .attachmentFormatsExt = { ETextureFormat_BGRA8 }
     }
 };
 
@@ -512,12 +512,20 @@ This has to be called during a render call. Size can also be 0 to indicate full 
 
 Since this is relative to a render target, it has to be called after binding one. If the next render target bound doesn't change in resolution then this is still valid. The offset + size needs to be inside of the framebuffer's resolution (if size is 0 then it will be stretched to fill the rest of the render target).
 
-### setStencil
+### Immediate state: setStencil, setBlendConstants
 
 The stencil reference can be set using the setStencil command.
 
 ```c
 _gotoIfError(clean, CommandListRef_setStencil(commandList, 0xFF));
+```
+
+And the blend constants can be set like so:
+
+```c
+_gotoIfError(clean, CommandListRef_setBlendConstants(
+    commandList, F32x4_create4(1, 0, 0, 1)
+));
 ```
 
 ### clearImage(f/u/i)/clearImages
