@@ -701,3 +701,35 @@ Transitions can currently only be called on a Swapchain object.
 #### Validation
 
 Unfortunately, validation is only possible in DirectX and Vulkan using their respective validation layers. It is impossible to tell which resource was accessed in a certain frame (without running our own GPU-based validation layer). This makes it impossible to know if it was in the correct state. Make sure to validate on Vulkan since it's the strictest with transitions. However, if you're using Metal and doing transitions incorrectly, it could show up as some resources being deleted too early (if they're still in flight).
+
+### Scope
+
+Each command has a scope in which it will affect anything. If that scope ends the effect of the command will end. A good example is the startRenderExt call, whereafter the graphics pipeline and such will be unset automatically to prevent unclear usage:
+
+```C
+addMarkerDebugExt
+startRegionDebugExt (starts debugging region, push)
+    endRegionDebugExt (end debugging region, pop)
+
+transition
+clearImages
+    
+startRenderExt (start of scope)
+    setPipeline (graphics)
+    setPrimitiveBuffers
+    setViewport/Scissor
+    setBlendConstants
+    setStencil
+	draw
+    	requires: 
+			setPipeline
+            setViewport/Scissor
+			probably setPrimitiveBuffers
+            probably transition
+            optional setBlendConstants & setStencil
+	endRenderExt (end of scope)
+    
+setPipeline (compute)
+	dispatch
+```
+

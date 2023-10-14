@@ -20,6 +20,7 @@
 
 #pragma once
 #include "graphics/generic/device_info.h"
+#include "graphics/generic/allocator.h"
 #include "platforms/ref_ptr.h"
 #include "types/list.h"
 
@@ -37,6 +38,23 @@ typedef struct CBufferData {
 
 } CBufferData;
 
+typedef struct BufferRange {
+	U64 startRange;
+	U64 endRange;
+} BufferRange;
+
+typedef struct TextureRange {
+	U8 startRange[4];
+	U8 endRange[4];
+} TextureRange;
+
+typedef union GPUPendingRange {
+
+	BufferRange buffer;
+	TextureRange texture;
+
+} GPUPendingRange;
+
 typedef struct GraphicsDevice {
 
 	GraphicsInstanceRef *instance;
@@ -47,9 +65,11 @@ typedef struct GraphicsDevice {
 
 	Ns lastSubmit;
 
-	Ns firstSubmit;			//Start of time
+	Ns firstSubmit;				//Start of time
 
-	//List factories;		//<GraphicsObjectFactory>
+	List pendingResources;		//<WeakRefPtr> Resources pending copy from CPU to GPU next submit
+
+	GPUAllocator allocator;
 
 } GraphicsDevice;
 
@@ -70,6 +90,9 @@ Error GraphicsDeviceRef_create(
 
 Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc);		//Don't call directly.
 
+//Ensure there are no pending changes from non existent resources.
+Bool GraphicsDeviceRef_removePending(GraphicsDeviceRef *deviceRef, RefPtr *resource);
+
 //Submit commands to device
 //List<CommandListRef*> commandLists
 //List<SwapchainRef*> swapchains
@@ -80,27 +103,3 @@ impl Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List c
 
 //Wait on previously submitted commands
 impl Error GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef);
-
-//Batch create objects.
-//All objects created need to be freed by the runtime.
-
-Error GraphicsDevice_createObjects(GraphicsDevice *device, EGraphicsTypeId type, List infos, List *result);
-Bool GraphicsDevice_freeObjects(GraphicsDevice *device, List *objects);
-
-//Create single objects.
-//Prefer to use the batched versions if possible for less locks.
-
-Error GraphicsDevice_createObject(GraphicsDevice *device, EGraphicsTypeId type, const void *info, RefPtr **result);
-Bool GraphicsDevice_freeObject(GraphicsDevice *device, RefPtr **object);
-
-//Optional. Not all factories allow finding or creating objects.
-//So query type type if it supports it first.
-
-Bool GraphicsDevice_supportsFind(EGraphicsTypeId type);
-
-Error GraphicsDevice_findObjects(const GraphicsDevice *device, EGraphicsTypeId type, List infos, List *result);
-Error GraphicsDevice_findOrCreateObjects(GraphicsDevice *device, EGraphicsTypeId type, List infos, List *result);
-
-Error GraphicsDevice_findObject(const GraphicsDevice *device, EGraphicsTypeId type, const void *info, RefPtr **result);
-Error GraphicsDevice_findOrCreateObject(GraphicsDevice *device, EGraphicsTypeId type, const void *info, RefPtr **result);
-

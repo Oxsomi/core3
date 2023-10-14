@@ -251,20 +251,20 @@ typedef struct BlendState {
 
 } BlendState;
 
-typedef struct GraphicsBufferAttribute {
+typedef struct VertexAttribute {
 
+	U16 offset11;						//11-bit offset
 	U8 bufferId4;						//4-bit buffer id
 	U8 format;							//ETextureFormatId (must be no compression!)
-	U16 offset11;						//11-bit offset
 
-} GraphicsBufferAttribute;
+} VertexAttribute;
 
-typedef struct GraphicsBufferLayout {
+typedef struct VertexBindingLayout {
 
 	U16 bufferStrides12_isInstance1[16];	//<=2048
-	GraphicsBufferAttribute attributes[16];
+	VertexAttribute attributes[16];
 
-} GraphicsBufferLayout;
+} VertexBindingLayout;
 
 typedef enum EDepthStencilFormat {
 

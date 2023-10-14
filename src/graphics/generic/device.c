@@ -23,6 +23,7 @@
 #include "platforms/ext/listx.h"
 #include "platforms/log.h"
 #include "types/error.h"
+#include "types/buffer.h"
 #include "types/type_cast.h"
 
 void GraphicsDeviceInfo_print(const GraphicsDeviceInfo *deviceInfo, Bool printCapabilities) {
@@ -195,50 +196,45 @@ Error GraphicsDeviceRef_create(
 	if(*deviceRef)
 		return Error_invalidParameter(1, 0);
 
-	//Create extended device
-
-	Error err = GraphicsDevice_initExt(GraphicsInstanceRef_ptr(instanceRef), info, verbose, deviceRef);
+	List pendingResources = List_createEmpty(sizeof(RefPtr*));
+	Error err = List_reservex(&pendingResources, 128);
 
 	if(err.genericError)
 		return err;
 
-	/*
+	//Create extended device
 
-	if((err = List_createx(EGraphicsTypeId_Count, sizeof(GraphicsObjectFactory), &device->factories)).genericError) {
-		GraphicsDevice_freeExt(instance, &device->ext);
+	err = GraphicsDevice_initExt(GraphicsInstanceRef_ptr(instanceRef), info, verbose, deviceRef);
+
+	if(err.genericError) {
+		List_freex(&pendingResources);
 		return err;
 	}
-
-	//Create factories
-
-	for(U64 i = 0; i < EGraphicsTypeId_Count; ++i) {
-
-		if (
-			(err = GraphicsObjectFactory_create(
-				EGraphicsTypeId_all[i], 
-				EGraphicsTypeId_infoBytes[i],
-				EGraphicsTypeId_objectBytes[i],
-				(GraphicsObjectFactory*)device->factories.ptr + i
-			)).genericError
-		) {
-
-			for(U64 j = 0; j < i; ++j)
-				GraphicsObjectFactory_free(device, (GraphicsObjectFactory*)device->factories.ptr + j);
-
-			List_freex(&device->factories);
-			GraphicsDevice_freeExt(instance, &device->ext);
-
-			return err;
-		}
-	}*/
 
 	//Graphics device success
 
 	GraphicsInstanceRef_add(instanceRef);
 
 	 GraphicsDevice *device = GraphicsDeviceRef_ptr(*deviceRef);
+
 	 device->info = *info;
 	 device->instance = instanceRef;
+	 device->pendingResources = pendingResources;
+
+	//Init allocator
+
+	device->allocator = (GPUAllocator) {
+		 .device = device,
+		 .blocks = List_createEmpty(sizeof(GPUBlock))
+	};
+
+	err = List_reservex(&device->allocator.blocks, 16);
+
+	if (err.genericError) {
+		GraphicsDevice_freeExt(GraphicsInstanceRef_ptr(device->instance), (void*) GraphicsInstance_ext(device, ));
+		List_freex(&device->pendingResources);
+		return err;
+	}
 
 	return Error_none();
 }
@@ -250,11 +246,7 @@ Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 	if(!device)
 		return true;
 
-	//TODO:
-	//for(U64 j = 0; j < device->factories.length; ++j)
-	//	success &= GraphicsObjectFactory_free(device, (GraphicsObjectFactory*)device->factories.ptr + j);
-
-	//success &= List_freex(&device->factories);
+	List_freex(&device->pendingResources);
 
 	GraphicsDevice_freeExt(GraphicsInstanceRef_ptr(device->instance), (void*) GraphicsInstance_ext(device, ));
 	GraphicsInstanceRef_dec(&device->instance);
@@ -262,25 +254,17 @@ Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 	return true;
 }
 
-//Batch create objects.
-//All objects created need to be freed by the runtime.
+Bool GraphicsDeviceRef_removePending(GraphicsDeviceRef *deviceRef, RefPtr *resource) {
 
-Error GraphicsDevice_createObjects(GraphicsDevice *device, EGraphicsTypeId type, List infos, List *result);
-Bool GraphicsDevice_freeObjects(GraphicsDevice *device, List *objects);
+	if(!deviceRef)
+		return false;
 
-//Create single objects.
-//Prefer to use the batched versions if possible for less locks.
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 
-Error GraphicsDevice_createObject(GraphicsDevice *device, EGraphicsTypeId type, const void *info, RefPtr **result);
-Bool GraphicsDevice_freeObject(GraphicsDevice *device, RefPtr **object);
+	U64 found = List_findFirst(device->pendingResources, Buffer_createConstRef(&resource, sizeof(resource)), 0);
 
-//Optional. Not all factories allow finding or creating objects.
-//So query type type if it supports it first.
+	if(found == U64_MAX)
+		return true;
 
-Bool GraphicsDevice_supportsFind(EGraphicsTypeId type);
-
-Error GraphicsDevice_findObjects(const GraphicsDevice *device, EGraphicsTypeId type, List infos, List *result);
-Error GraphicsDevice_findOrCreateObjects(GraphicsDevice *device, EGraphicsTypeId type, List infos, List *result);
-
-Error GraphicsDevice_findObject(const GraphicsDevice *device, EGraphicsTypeId type, const void *info, RefPtr **result);
-Error GraphicsDevice_findOrCreateObject(GraphicsDevice *device, EGraphicsTypeId type, const void *info, RefPtr **result);
+	return !List_erase(&device->pendingResources, found).genericError;
+}

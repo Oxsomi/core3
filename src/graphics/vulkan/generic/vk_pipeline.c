@@ -611,7 +611,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(GraphicsDeviceRef *deviceRef, Li
 
 			//Validate format for attribute
 
-			GraphicsBufferAttribute attrib = info->vertexLayout.attributes[j];
+			VertexAttribute attrib = info->vertexLayout.attributes[j];
 
 			if(attrib.format >= ETextureFormatId_Count)
 				_gotoIfError(clean, Error_invalidOperation(8));
@@ -673,7 +673,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(GraphicsDeviceRef *deviceRef, Li
 
 			for (U32 j = 0; j < 16; ++j) {
 
-				GraphicsBufferAttribute attrib = info->vertexLayout.attributes[j];
+				VertexAttribute attrib = info->vertexLayout.attributes[j];
 
 				if(!attrib.format)
 					continue;

@@ -202,13 +202,15 @@ typedef struct VkCommandBufferState {		//Caching state variables
 
 	U32 pad0;
 
-	U8 pad1;
+	U8 boundDepthFormat;					//EDepthStencilFormat
 	Bool anyScissor, anyViewport;
 	U8 boundImageCount;
 
 	VkImageRange boundImages[8];
 
 	PipelineRef *boundPipelines[2];			//Graphics, Compute
+
+	GPUBufferRef *boundBuffers[17];			//Vertex + index buffers
 
 } VkCommandBufferState;
 

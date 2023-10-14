@@ -1002,8 +1002,11 @@ Bool VkGraphicsDevice_freeAllocations(VkGraphicsDevice *deviceExt, List *allocat
 	Bool success = true;
 
 	for (U64 i = 0; i < allocations->length; ++i) {
+
 		U32 id = ((const U32*)allocations->ptr)[i];
-		success &= !Buffer_resetBit(deviceExt->freeList[id >> 20], id & ((1 << 20) - 1)).genericError;
+
+		if(id != U32_MAX)
+			success &= !Buffer_resetBit(deviceExt->freeList[id >> 20], id & ((1 << 20) - 1)).genericError;
 	}
 
 	List_clear(allocations);

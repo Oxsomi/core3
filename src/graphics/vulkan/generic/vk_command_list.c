@@ -23,11 +23,11 @@
 #include "graphics/generic/instance.h"
 #include "graphics/generic/swapchain.h"
 #include "graphics/generic/pipeline.h"
+#include "graphics/generic/buffer.h"
 #include "graphics/vulkan/vulkan.h"
 #include "graphics/vulkan/vk_device.h"
 #include "graphics/vulkan/vk_instance.h"
 #include "graphics/vulkan/vk_swapchain.h"
-//#include "graphics/vulkan/pipeline.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/listx.h"
 #include "formats/texture.h"
@@ -508,8 +508,11 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 			temp->currentSize = I32x2_zero();
 			temp->anyScissor = temp->anyViewport = false;
 
-			for(U64 i = 0; i < 8; ++i)
+			for(U8 i = 0; i < 8; ++i)
 				temp->boundImages[i].ref = NULL;
+
+			for(U8 i = 0; i < 17; ++i)
+				temp->boundBuffers[i] = NULL;
 
 			break;
 
@@ -528,8 +531,67 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 				*pipelineExt
 			);
 
-			temp->boundPipelines[pipeline->type == EPipelineType_Compute] = setPipeline;
+			temp->boundPipelines[pipeline->type] = setPipeline;
 
+			break;
+		}
+
+		case ECommandOp_SetPrimitiveBuffers: {
+
+			if(I32x2_eq2(temp->currentSize, I32x2_zero()))
+				return Error_invalidOperation(0);
+
+			PrimitiveBuffers prim = *(const PrimitiveBuffers*) data;
+
+			VkBuffer vertexBuffers[16] = { 0 };
+			VkDeviceSize vertexBufferOffsets[16] = { 0 };
+
+			U32 start = 16, end = 0;
+
+			//Fill vertexBuffers and find start/end range.
+			//And ensure bound buffers can't be accidentally transitioned while render hasn't ended yet.
+
+			for(U32 i = 0; i < 16; ++i) {
+
+				if (prim.vertexBuffers[i]) {
+
+					if(start == 16)
+						start = i;
+
+					end = i + 1;
+
+					vertexBuffers[i] = GPUBuffer_ext(GPUBufferRef_ptr(prim.vertexBuffers[i]), Vk)->buffer;
+				}
+
+				temp->boundBuffers[i] = prim.vertexBuffers[i];
+			}
+
+			//TODO: Transition here
+
+			//Bind vertex and index buffer
+
+			if(end > start)
+				vkCmdBindVertexBuffers(
+					temp->buffer,
+					start,
+					end - start, 
+					&(vertexBuffers)[start], 
+					&(vertexBufferOffsets)[start]
+				);
+
+			if(prim.indexBuffer) {
+
+				vkCmdBindIndexBuffer(
+					temp->buffer,
+					GPUBuffer_ext(GPUBufferRef_ptr(prim.indexBuffer), Vk)->buffer, 
+					0,
+					prim.isIndex32Bit ? VK_INDEX_TYPE_UINT32 : VK_INDEX_TYPE_UINT16
+				);
+
+			}
+
+			temp->boundBuffers[16] = prim.indexBuffer;
+		
 			break;
 		}
 
@@ -544,13 +606,10 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 			if(!temp->anyScissor || !temp->anyViewport)
 				return Error_invalidOperation(2);
 
-			//Formats are actually required to align by D3D12.
-			//But to keep both APIs running similarly, we have to enforce this for Vulkan too.
-
 			Pipeline *pipeline = PipelineRef_ptr(temp->boundPipelines[0]);
 
 			Error err = CommandList_validateGraphicsPipeline(
-				pipeline, temp->boundImages, temp->boundImageCount, EDepthStencilFormat_None
+				pipeline, temp->boundImages, temp->boundImageCount, (EDepthStencilFormat) temp->boundDepthFormat
 			);
 
 			if(err.genericError)
@@ -606,6 +665,8 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 			for (U64 i = 0; i < transitionCount; ++i) {
 
 				Transition transition = transitions[i];
+
+				//TODO: boundBuffers and GPUBuffer support
 
 				Swapchain *swapchain = SwapchainRef_ptr(transition.resource);
 				VkSwapchain *swapchainExt = Swapchain_ext(swapchain, Vk);

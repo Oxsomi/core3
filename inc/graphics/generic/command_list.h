@@ -25,6 +25,7 @@
 
 typedef RefPtr GraphicsDeviceRef;
 typedef RefPtr PipelineRef;
+typedef RefPtr GPUBufferRef;
 typedef struct CharString CharString;
 typedef struct GraphicsDevice GraphicsDevice;
 
@@ -50,6 +51,8 @@ typedef enum ECommandOp {
 
 	ECommandOp_SetPipeline,
 	ECommandOp_Transition,
+
+	ECommandOp_SetPrimitiveBuffers,
 
 	ECommandOp_Draw,
 	ECommandOp_Dispatch,
@@ -194,6 +197,18 @@ typedef struct Transition {
 Error CommandListRef_transition(CommandListRef *commandList, List transitions);			//<Transition>
 
 Error CommandListRef_setPipeline(CommandListRef *commandList, PipelineRef *pipeline);
+
+typedef struct PrimitiveBuffers {
+
+	GPUBufferRef *vertexBuffers[16];
+	GPUBufferRef *indexBuffer;
+
+	Bool isIndex32Bit;
+	U8 padding[3];
+
+} PrimitiveBuffers;
+
+Error CommandListRef_setPrimitiveBuffers(CommandListRef *commandList, PrimitiveBuffers buffers);
 
 typedef struct Draw {
 

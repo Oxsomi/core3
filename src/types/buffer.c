@@ -592,6 +592,9 @@ Error Buffer_createSubset(
 	if (output && output->ptr)
 		return Error_invalidOperation(0);
 
+	if(Buffer_isConstRef(buf) && !isConst)
+		return Error_constData(0, 0);
+
 	//Since our buffer was passed here, it's safe to make a ref (to ensure Buffer_offset doesn't fail)
 
 	buf = Buffer_createRefFromBuffer(buf, isConst);

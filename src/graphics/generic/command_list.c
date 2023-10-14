@@ -21,6 +21,7 @@
 #include "graphics/generic/command_list.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/swapchain.h"
+#include "graphics/generic/buffer.h"
 #include "platforms/ext/listx.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/log.h"
@@ -441,6 +442,55 @@ Error CommandListRef_setPipeline(CommandListRef *commandList, PipelineRef *pipel
 	return CommandListRef_append(
 		commandList, ECommandOp_SetPipeline, Buffer_createConstRef((const U8*) &pipeline, sizeof(pipeline)), refs, 0
 	);
+}
+
+Error validateBufferDesc(GPUBufferRef *buffer, U64 *counter) {
+
+	if(!buffer)
+		return Error_none();
+
+	if(buffer->typeId != EGraphicsTypeId_GPUBuffer)
+		return Error_unsupportedOperation(0);
+
+	++*counter;
+	return Error_none();
+}
+
+Error CommandListRef_setPrimitiveBuffers(CommandListRef *commandList, PrimitiveBuffers buffers) {
+
+	//Validate index and vertex buffers
+
+	U64 counter = 0;
+	Error err = validateBufferDesc(buffers.indexBuffer, &counter);
+
+	if(err.genericError)
+		return err;
+
+	for(U8 i = 0; i < 8; ++i)
+		if((err = validateBufferDesc(buffers.vertexBuffers[i], &counter)).genericError)
+			return err;
+
+	List refs = List_createEmpty(sizeof(RefPtr*));
+	_gotoIfError(clean, List_resizex(&refs, counter));
+
+	RefPtr **refPtrs = (RefPtr**) refs.ptr;
+
+	counter = 0;
+
+	if(buffers.indexBuffer)
+		refPtrs[counter++] = buffers.indexBuffer;
+
+	for(U8 i = 0; i < 8; ++i)
+		if(buffers.vertexBuffers[i])
+			refPtrs[counter++] = buffers.vertexBuffers[i];
+
+	_gotoIfError(clean, CommandListRef_append(
+		commandList, ECommandOp_SetPrimitiveBuffers, Buffer_createConstRef((const U8*) &buffers, sizeof(buffers)), refs, 0
+	));
+
+clean:
+	List_freex(&refs);
+	return err;
 }
 
 Error CommandListRef_draw(CommandListRef *commandList, Draw draw) {

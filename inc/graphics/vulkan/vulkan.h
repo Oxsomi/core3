@@ -30,9 +30,29 @@ typedef struct VkManagedImage {
 
 	VkPipelineStageFlagBits2 lastStage;
 	VkAccessFlagBits2 lastAccess;
+
 	VkImageLayout lastLayout;
+	U32 padding;
 
 } VkManagedImage;
+
+typedef struct VkGPUBuffer {
+
+	VkBuffer buffer;
+
+	U64 blockOffset;
+
+	void *mappedMemory;						//Only accessible if not in flight
+
+	VkPipelineStageFlagBits2 lastStage;
+	VkAccessFlagBits2 lastAccess;
+
+	VkImageLayout lastLayout;
+	U32 blockId;
+
+	U32 readDescriptor, writeDescriptor;
+
+} VkGPUBuffer;
 
 typedef struct CharString CharString;
 typedef struct GraphicsDevice GraphicsDevice;

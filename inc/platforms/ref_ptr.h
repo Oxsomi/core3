@@ -47,3 +47,7 @@ Bool RefPtr_inc(RefPtr *ptr);
 Bool RefPtr_dec(RefPtr **ptr);	//Clears pointer if it's gone
 
 #define RefPtr_data(dat, T) (!dat ? NULL : (T*)(dat + 1))
+
+//Signifies that the RefPtr will not need inc/dec, because the owner will manually ensure 
+//that the ref is removed before it's important.
+typedef RefPtr WeakRefPtr;

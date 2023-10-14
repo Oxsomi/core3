@@ -274,16 +274,16 @@ Error File_resolveVirtual(CharString loc, CharString *subPath, VirtualSection **
 
 clean:
 
-	CharString_freex(&copy);
-
-	if (CharString_length(*subPath) && !err.genericError) {
-		CharString_createCopyx(*subPath, &copy);
-		*subPath = copy;
-		copy = CharString_createNull();
-	}
-
 	CharString_freex(&copy1);
 	CharString_freex(&copy2);
+
+	if (CharString_length(*subPath) && !err.genericError) {
+		CharString_createCopyx(*subPath, &copy1);
+		*subPath = copy1;
+		copy1 = CharString_createNull();
+	}
+
+	CharString_freex(&copy);
 	return err;
 }
 

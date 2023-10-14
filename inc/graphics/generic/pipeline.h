@@ -28,7 +28,7 @@ typedef enum ETextureFormat ETextureFormat;
 
 typedef struct PipelineGraphicsInfo {
 
-	GraphicsBufferLayout vertexLayout;			//Can be empty if pipeline generates all vertices itself
+	VertexBindingLayout vertexLayout;			//Can be empty if pipeline generates all vertices itself
 
 	Rasterizer rasterizer;
 

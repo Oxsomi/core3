@@ -18,23 +18,30 @@
 *  This is called dual licensing.
 */
 
-#pragma once
-#include "types/types.h"
+#include "graphics/generic/allocator.h"
+#include "platforms/ext/bufferx.h"
+#include "types/buffer.h"
+#include "types/error.h"
 
-typedef struct Error Error;
-typedef struct AllocationBuffer AllocationBuffer;
+impl Bool GPUAllocator_freeAllocationExt(GraphicsDevice *device, void *ext);
 
-Error Buffer_createCopyx(Buffer buf, Buffer *output);
-Error Buffer_createZeroBitsx(U64 length, Buffer *output);
-Error Buffer_createOneBitsx(U64 length, Buffer *output);
-Error Buffer_createBitsx(U64 length, Bool value, Buffer *result);
-Bool Buffer_freex(Buffer *buf);
-Error Buffer_createEmptyBytesx(U64 length, Buffer *output);
-Error Buffer_createUninitializedBytesx(U64 length, Buffer *output);
+Bool GPUAllocator_freeAllocation(GPUAllocator *allocator, U32 blockId, U64 blockOffset) {
 
-Error AllocationBuffer_createx(U64 size, Bool isVirtual, AllocationBuffer *allocationBuffer);
-Bool AllocationBuffer_freex(AllocationBuffer *allocationBuffer);
+	if(!allocator || blockId >= allocator->blocks.length)
+		return false;
 
-Error AllocationBuffer_createRefFromRegionx(Buffer origin, U64 offset, U64 size, AllocationBuffer *allocationBuffer);
-Error AllocationBuffer_allocateBlockx(AllocationBuffer *allocationBuffer, U64 size, U64 alignment, const U8 **result);
-Error AllocationBuffer_allocateAndFillBlockx(AllocationBuffer *allocationBuffer, Buffer data, U64 alignment, U8 **result);
+	GPUBlock *block = (GPUBlock*) List_ptr(allocator->blocks, blockId);
+
+	Bool success = AllocationBuffer_freeBlock(&block->allocations, (const U8*) blockOffset);
+
+	if (!block->allocations.allocations.length) {
+		AllocationBuffer_freex(&block->allocations);
+		GPUAllocator_freeAllocationExt(allocator->device, block->ext);
+	}
+
+	if(blockId + 1 == allocator->blocks.length)
+		while(allocator->blocks.length && !((GPUBlock*) List_last(allocator->blocks))->ext)
+			success &= !List_popBack(&allocator->blocks, Buffer_createNull()).genericError;
+
+	return success;
+}

@@ -25,6 +25,7 @@
 #include "formats/oiCA.h"
 #include "formats/oiDL.h"
 #include "types/buffer.h"
+#include "types/allocation_buffer.h"
 #include "types/error.h"
 #include "types/archive.h"
 #include "platforms/platform.h"
@@ -69,7 +70,26 @@ Error Buffer_createEmptyBytesx(U64 length, Buffer *output) {
 
 Error Buffer_createUninitializedBytesx(U64 length, Buffer *output) {
 	return Buffer_createUninitializedBytes(length, Platform_instance.alloc, output);
+}
 
+Error AllocationBuffer_createx(U64 size, Bool isVirtual, AllocationBuffer *allocationBuffer) {
+	return AllocationBuffer_create(size, isVirtual, Platform_instance.alloc, allocationBuffer);
+}
+
+Bool AllocationBuffer_freex(AllocationBuffer *allocationBuffer) {
+	return AllocationBuffer_free(allocationBuffer, Platform_instance.alloc);
+}
+
+Error AllocationBuffer_createRefFromRegionx(Buffer origin, U64 offset, U64 size, AllocationBuffer *allocationBuffer) {
+	return AllocationBuffer_createRefFromRegion(origin, offset, size, Platform_instance.alloc, allocationBuffer);
+}
+
+Error AllocationBuffer_allocateBlockx(AllocationBuffer *allocationBuffer, U64 size, U64 alignment, const U8 **result) {
+	return AllocationBuffer_allocateBlock(allocationBuffer, size, alignment, Platform_instance.alloc, result);
+}
+
+Error AllocationBuffer_allocateAndFillBlockx(AllocationBuffer *allocationBuffer, Buffer data, U64 alignment, U8 **result) {
+	return AllocationBuffer_allocateAndFillBlock(allocationBuffer, data, alignment, Platform_instance.alloc, result);
 }
 
 //oiCA

@@ -19,22 +19,33 @@
 */
 
 #pragma once
-#include "types/types.h"
+#include "types/list.h"
+#include "types/allocation_buffer.h"
 
-typedef struct Error Error;
-typedef struct AllocationBuffer AllocationBuffer;
+typedef struct GraphicsDevice GraphicsDevice;
 
-Error Buffer_createCopyx(Buffer buf, Buffer *output);
-Error Buffer_createZeroBitsx(U64 length, Buffer *output);
-Error Buffer_createOneBitsx(U64 length, Buffer *output);
-Error Buffer_createBitsx(U64 length, Bool value, Buffer *result);
-Bool Buffer_freex(Buffer *buf);
-Error Buffer_createEmptyBytesx(U64 length, Buffer *output);
-Error Buffer_createUninitializedBytesx(U64 length, Buffer *output);
+typedef struct GPUBlock {
 
-Error AllocationBuffer_createx(U64 size, Bool isVirtual, AllocationBuffer *allocationBuffer);
-Bool AllocationBuffer_freex(AllocationBuffer *allocationBuffer);
+	AllocationBuffer allocations;
 
-Error AllocationBuffer_createRefFromRegionx(Buffer origin, U64 offset, U64 size, AllocationBuffer *allocationBuffer);
-Error AllocationBuffer_allocateBlockx(AllocationBuffer *allocationBuffer, U64 size, U64 alignment, const U8 **result);
-Error AllocationBuffer_allocateAndFillBlockx(AllocationBuffer *allocationBuffer, Buffer data, U64 alignment, U8 **result);
+	U32 typeExt;
+
+	Bool isDedicated;
+	U8 padding[3];
+
+	void *mappedMemory;
+
+	void *ext;						//Extended data
+
+} GPUBlock;
+
+typedef struct GPUAllocator {
+
+	GraphicsDevice *device;
+
+	List blocks;
+
+} GPUAllocator;
+
+impl Error GPUAllocator_allocate(GPUAllocator *allocator, void *requirementsExt, U32 *blockId, U64 *blockOffset);
+Bool GPUAllocator_freeAllocation(GPUAllocator *allocator, U32 blockId, U64 blockOffset);

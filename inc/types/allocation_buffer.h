@@ -32,19 +32,34 @@ typedef struct AllocationBuffer {
 
 } AllocationBuffer;
 
-Error AllocationBuffer_create(U64 size, Allocator alloc, AllocationBuffer *allocationBuffer);
+Error AllocationBuffer_create(U64 size, Bool isVirtual, Allocator alloc, AllocationBuffer *allocationBuffer);
 
 Error AllocationBuffer_createRefFromRegion(
 	Buffer origin,
-	U64 offset, U64 size,
+	U64 offset,
+	U64 size,
 	Allocator alloc,
 	AllocationBuffer *allocationBuffer
 );
 
 Bool AllocationBuffer_free(AllocationBuffer *allocationBuffer, Allocator alloc);
 
-U8 *AllocationBuffer_allocateBlock(AllocationBuffer *allocationBuffer, U64 size, U64 alignment, Allocator alloc);
-U8 *AllocationBuffer_allocateAndFillBlock(AllocationBuffer *allocationBuffer, Buffer data, U64 alignment, Allocator alloc);
+Bool AllocationBuffer_freeBlock(AllocationBuffer *allocationBuffer, const U8 *ptr);
 
-Bool AllocationBuffer_freeBlock(AllocationBuffer *allocationBuffer, U8 *ptr);
+//If !allocationBuffer->buffer.ptr the pointer shouldn't be dereferenced, it's just for offset tracking.
 
+Error AllocationBuffer_allocateBlock(
+	AllocationBuffer *allocationBuffer,
+	U64 size,
+	U64 alignment,
+	Allocator alloc,
+	const U8 **result
+);
+
+Error AllocationBuffer_allocateAndFillBlock(
+	AllocationBuffer *allocationBuffer,
+	Buffer data,
+	U64 alignment,
+	Allocator alloc,
+	U8 **result
+);
