@@ -26,7 +26,13 @@
 #include "types/error.h"
 #include "types/buffer.h"
 
-Error GPUAllocator_allocate(GPUAllocator *allocator, void *requirementsExt, U32 *blockId, U64 *blockOffset) {
+Error GPUAllocator_allocate(
+	GPUAllocator *allocator, 
+	void *requirementsExt, 
+	Bool cpuSided, 
+	U32 *blockId, 
+	U64 *blockOffset
+) {
 	
 	U64 blockSize = 64 * MIBI;
 
@@ -57,7 +63,8 @@ Error GPUAllocator_allocate(GPUAllocator *allocator, void *requirementsExt, U32 
 			if(
 				!block->ext ||
 				block->isDedicated || 
-				(block->typeExt & memReq.memoryTypeBits) != memReq.memoryTypeBits
+				(block->typeExt & memReq.memoryTypeBits) != memReq.memoryTypeBits ||
+				(Bool)(block->allocationTypeExt & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) != cpuSided
 			)
 				continue;
 
@@ -78,15 +85,24 @@ Error GPUAllocator_allocate(GPUAllocator *allocator, void *requirementsExt, U32 
 	VkMemoryPropertyFlags host = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
 	VkMemoryPropertyFlags coherent = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 	VkMemoryPropertyFlags local = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+	VkMemoryPropertyFlags all = local | host | coherent;
 
-	VkMemoryPropertyFlags properties[3] = {
-		local | host | coherent,
-		local | host,
-		local
+	VkMemoryPropertyFlags properties[3] = {			//Contains local if force cpu sided is turned off
+		host | coherent,
+		host,
+		0
 	};
 
 	U32 memoryId = U32_MAX;
-	U32 propertyId = 3;
+	U32 propertyId = 2;
+
+	if (!cpuSided) {
+
+		for(U32 i = 0; i < 3; ++i)
+			properties[i] |= local;
+
+		++propertyId;
+	}
 
 	for (U32 i = 0; i < deviceExt->memoryProperties.memoryTypeCount; ++i) {
 
@@ -97,7 +113,7 @@ Error GPUAllocator_allocate(GPUAllocator *allocator, void *requirementsExt, U32 
 
 		for(U32 j = 0; j < propertyId; ++j) {
 
-			if ((propFlag & properties[j]) == properties[j]) {
+			if ((propFlag & all) == properties[j]) {
 				propertyId = j;
 				memoryId = i;
 				break;

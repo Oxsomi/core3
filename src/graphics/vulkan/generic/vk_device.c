@@ -1239,9 +1239,9 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 			default:
 				_gotoIfError(clean, Error_unsupportedOperation(0));
 		}
-
-		_gotoIfError(clean, List_clear(&device->pendingResources));
 	}
+
+	_gotoIfError(clean, List_clear(&device->pendingResources));
 
 	//Record command list
 

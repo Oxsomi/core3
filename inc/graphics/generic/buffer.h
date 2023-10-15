@@ -26,12 +26,15 @@ typedef RefPtr GraphicsDeviceRef;
 
 typedef enum EGPUBufferUsage {
 
-	EGPUBufferUsage_ShaderRead			= 1 << 0,
-	EGPUBufferUsage_ShaderWrite			= 1 << 1,
-	EGPUBufferUsage_Vertex				= 1 << 2,
-	EGPUBufferUsage_Index				= 1 << 3,
-	EGPUBufferUsage_Indirect			= 1 << 4,
-	EGPUBufferUsage_CPUBacked			= 1 << 5		//Keep a CPU side buffer for read/write operations
+	EGPUBufferUsage_ShaderRead			= 1 << 0,		//Allow for use as ByteAddressBuffer
+	EGPUBufferUsage_ShaderWrite			= 1 << 1,		//Allow for use as RWByteAddressBuffer
+	EGPUBufferUsage_Vertex				= 1 << 2,		//Allow for use as vertex buffer
+	EGPUBufferUsage_Index				= 1 << 3,		//Allow for use as index buffer
+	EGPUBufferUsage_Indirect			= 1 << 4,		//Allow for use in indirect draw/dispatch calls
+	EGPUBufferUsage_CPUBacked			= 1 << 5,		//Keep a CPU side copy buffer for read/write operations
+	EGPUBufferUsage_CPUAllocatedBit		= 1 << 6,		//Keep buffer entirely on CPU for transfer or allowing more allocations
+
+	EGPUBufferUsage_CPUAllocated		= EGPUBufferUsage_CPUBacked | EGPUBufferUsage_CPUAllocatedBit
 
 } EGPUBufferUsage;
 

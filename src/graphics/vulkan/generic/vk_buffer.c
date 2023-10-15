@@ -113,7 +113,9 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, GPUBuffer *buf) 
 
 	instanceExt->getBufferMemoryRequirements2(deviceExt->device, &bufferReq, &requirements);
 
-	_gotoIfError(clean, GPUAllocator_allocate(&device->allocator, &requirements, &blockId, &blockOffset));
+	_gotoIfError(clean, GPUAllocator_allocate(
+		&device->allocator, &requirements, buf->usage & EGPUBufferUsage_CPUAllocatedBit, &blockId, &blockOffset
+	));
 
 	GPUBlock *block = (GPUBlock*)List_ptr(device->allocator.blocks, blockId);
 

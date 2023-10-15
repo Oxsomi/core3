@@ -484,6 +484,8 @@ When using the baker, the binaries can simply be loaded using the oiCS helper fu
 
 **TODO: The baker currently doesn't include this functionality just yet.** 
 
+## TODO: GPUBuffer
+
 ## Commands
 
 ### Summary
@@ -587,6 +589,7 @@ When issuing the draw, the state needs to be valid: a render has to be started (
 //Bind viewport/scissor
 //Foreach shader:
 //  Bind pipeline 
+//	Bind primitive buffers
 //	All draw calls of relevant objects
 ```
 
@@ -595,6 +598,10 @@ The example above should be fine as long as the draw calls don't need extra sync
 To find a more modern way of rendering, check out the multi draw indirect section.
 
 This command is generalized with the `draw` command which takes the `Draw` struct which can issue both indexed an unindexed draw calls (with or without advanced usage).
+
+Primitive buffers should only deviate when necessary. Please try to combine multiple meshes into a single mesh as a suballocation. Example could be counting the vertices and indices, making sure the index type and vertex formats/bindings/attributes are the same and allocating only once. Then when issuing draw calls, the index and vertex offset can be used in the draw command.
+
+### TODO: setPrimitiveBuffers
 
 ### dispatch
 

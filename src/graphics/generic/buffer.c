@@ -166,7 +166,12 @@ Bool GPUBuffer_free(GPUBuffer *buffer, Allocator allocator) {
 
 	Bool success = GPUBuffer_freeExt(buffer);
 	success &= GraphicsDeviceRef_removePending(buffer->device, refPtr);
-	return success &= !GraphicsDeviceRef_dec(&buffer->device).genericError;
+	success &= !GraphicsDeviceRef_dec(&buffer->device).genericError;
+
+	if(buffer->usage & EGPUBufferUsage_CPUBacked)
+		success &= Buffer_freex(&buffer->cpuData);
+
+	return success;
 }
 
 Error GraphicsDeviceRef_createBuffer(GraphicsDeviceRef *dev, EGPUBufferUsage usage, U64 len, GPUBufferRef **buf) {

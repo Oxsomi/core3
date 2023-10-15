@@ -48,5 +48,12 @@ typedef struct GPUAllocator {
 
 } GPUAllocator;
 
-impl Error GPUAllocator_allocate(GPUAllocator *allocator, void *requirementsExt, U32 *blockId, U64 *blockOffset);
+impl Error GPUAllocator_allocate(
+	GPUAllocator *allocator, 
+	void *requirementsExt, 
+	Bool cpuSIded, 
+	U32 *blockId, 
+	U64 *blockOffset
+);
+
 Bool GPUAllocator_freeAllocation(GPUAllocator *allocator, U32 blockId, U64 blockOffset);
