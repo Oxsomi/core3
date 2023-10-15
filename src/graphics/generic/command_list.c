@@ -444,13 +444,18 @@ Error CommandListRef_setPipeline(CommandListRef *commandList, PipelineRef *pipel
 	);
 }
 
-Error validateBufferDesc(GPUBufferRef *buffer, U64 *counter) {
+Error validateBufferDesc(GPUBufferRef *buffer, U64 *counter, EGPUBufferUsage usage) {
 
 	if(!buffer)
 		return Error_none();
 
 	if(buffer->typeId != EGraphicsTypeId_GPUBuffer)
 		return Error_unsupportedOperation(0);
+
+	GPUBuffer *buf = GPUBufferRef_ptr(buffer);
+
+	if((buf->usage & usage) != usage)
+		return Error_unsupportedOperation(1);
 
 	++*counter;
 	return Error_none();
@@ -461,13 +466,13 @@ Error CommandListRef_setPrimitiveBuffers(CommandListRef *commandList, PrimitiveB
 	//Validate index and vertex buffers
 
 	U64 counter = 0;
-	Error err = validateBufferDesc(buffers.indexBuffer, &counter);
+	Error err = validateBufferDesc(buffers.indexBuffer, &counter, EGPUBufferUsage_Index);
 
 	if(err.genericError)
 		return err;
 
 	for(U8 i = 0; i < 8; ++i)
-		if((err = validateBufferDesc(buffers.vertexBuffers[i], &counter)).genericError)
+		if((err = validateBufferDesc(buffers.vertexBuffers[i], &counter, EGPUBufferUsage_Vertex)).genericError)
 			return err;
 
 	List refs = List_createEmpty(sizeof(RefPtr*));

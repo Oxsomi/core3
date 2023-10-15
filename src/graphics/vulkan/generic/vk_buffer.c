@@ -53,7 +53,9 @@ Bool GPUBuffer_freeExt(GPUBuffer *buffer) {
 	return true;
 }
 
-Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, GPUBuffer *buf) {
+Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, GPUBuffer *buf, CharString name) {
+
+	name;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(dev);
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
@@ -114,12 +116,15 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, GPUBuffer *buf) 
 	instanceExt->getBufferMemoryRequirements2(deviceExt->device, &bufferReq, &requirements);
 
 	_gotoIfError(clean, GPUAllocator_allocate(
-		&device->allocator, &requirements, buf->usage & EGPUBufferUsage_CPUAllocatedBit, &blockId, &blockOffset
+		&device->allocator, 
+		&requirements, 
+		buf->usage & EGPUBufferUsage_CPUAllocatedBit, 
+		&blockId, 
+		&blockOffset,
+		name
 	));
 
 	GPUBlock *block = (GPUBlock*)List_ptr(device->allocator.blocks, blockId);
-
-	_gotoIfError(clean, vkCheck(vkBindBufferMemory(deviceExt->device, tempBuffer, (VkDeviceMemory) block->ext, 0)));
 	
 	//Fill relevant descriptor sets if shader accessible
 
@@ -179,6 +184,27 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, GPUBuffer *buf) 
 
 	if (memoryLocation)
 		memoryLocation += blockOffset;
+
+	if (name.ptr) {
+	
+		#ifndef NDEBUG
+
+			if(instanceExt->debugSetName) {
+
+				VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
+					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+					.objectType = VK_OBJECT_TYPE_BUFFER,
+					.pObjectName = name.ptr,
+					.objectHandle = (U64) tempBuffer
+				};
+
+				_gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName)));
+			}
+
+		#endif
+	}
+
+	_gotoIfError(clean, vkCheck(vkBindBufferMemory(deviceExt->device, tempBuffer, (VkDeviceMemory) block->ext, blockOffset)));
 
 	*GPUBuffer_ext(buf, Vk) = (VkGPUBuffer) {
 		.buffer = tempBuffer,

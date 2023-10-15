@@ -23,6 +23,7 @@
 #include "types/list.h"
 
 typedef RefPtr GraphicsDeviceRef;
+typedef struct CharString CharString;
 
 typedef enum EGPUBufferUsage {
 
@@ -68,8 +69,21 @@ Error GPUBufferRef_add(GPUBufferRef *buffer);
 //Initializing to non zero isn't free due to copies.
 //	Initializing to non zero will move the buffer to created GPUBuffer. If it's a ref, it has to be kept active.
 
-Error GraphicsDeviceRef_createBuffer(GraphicsDeviceRef *dev, EGPUBufferUsage usage, U64 len, GPUBufferRef **buf);
-Error GraphicsDeviceRef_createBufferData(GraphicsDeviceRef *dev, EGPUBufferUsage usage, Buffer *dat, GPUBufferRef **buf);
+Error GraphicsDeviceRef_createBuffer(
+	GraphicsDeviceRef *dev, 
+	EGPUBufferUsage usage, 
+	CharString name, 
+	U64 len, 
+	GPUBufferRef **buf
+);
+
+Error GraphicsDeviceRef_createBufferData(
+	GraphicsDeviceRef *dev, 
+	EGPUBufferUsage usage, 
+	CharString name, 
+	Buffer *dat, 
+	GPUBufferRef **buf
+);
 
 //Mark the underlying data for the GPUBuffer as dirty. 
 //Count 0 indicates rest of the buffer starting at offset.

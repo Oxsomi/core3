@@ -24,6 +24,7 @@
 #include "platforms/ext/bufferx.h"
 #include "types/buffer.h"
 #include "types/error.h"
+#include "types/string.h"
 
 Error GPUBufferRef_dec(GPUBufferRef **buffer) {
 	return !RefPtr_dec(buffer) ? Error_invalidOperation(0) : Error_none();
@@ -156,7 +157,7 @@ Error GPUBufferRef_markDirty(GPUBufferRef *buf, U64 offset, U64 count) {
 
 impl extern const U64 GPUBufferExt_size;
 impl Bool GPUBuffer_freeExt(GPUBuffer *buffer);
-impl Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, GPUBuffer *buf);
+impl Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, GPUBuffer *buf, CharString name);
 
 Bool GPUBuffer_free(GPUBuffer *buffer, Allocator allocator) {
 
@@ -174,7 +175,13 @@ Bool GPUBuffer_free(GPUBuffer *buffer, Allocator allocator) {
 	return success;
 }
 
-Error GraphicsDeviceRef_createBuffer(GraphicsDeviceRef *dev, EGPUBufferUsage usage, U64 len, GPUBufferRef **buf) {
+Error GraphicsDeviceRef_createBuffer(
+	GraphicsDeviceRef *dev, 
+	EGPUBufferUsage usage, 
+	CharString name, 
+	U64 len, 
+	GPUBufferRef **buf
+) {
 
 	if(!dev)
 		return Error_nullPointer(0);
@@ -208,7 +215,7 @@ Error GraphicsDeviceRef_createBuffer(GraphicsDeviceRef *dev, EGPUBufferUsage usa
 	if(usage & EGPUBufferUsage_CPUBacked)
 		_gotoIfError(clean, Buffer_createEmptyBytesx(buffer->length, &buffer->cpuData));
 
-	_gotoIfError(clean, GraphicsDeviceRef_createBufferExt(dev, buffer));
+	_gotoIfError(clean, GraphicsDeviceRef_createBufferExt(dev, buffer, name));
 
 clean:
 
@@ -218,12 +225,18 @@ clean:
 	return err;
 }
 
-Error GraphicsDeviceRef_createBufferData(GraphicsDeviceRef *dev, EGPUBufferUsage usage, Buffer *dat, GPUBufferRef **buf) {
+Error GraphicsDeviceRef_createBufferData(
+	GraphicsDeviceRef *dev, 
+	EGPUBufferUsage usage, 
+	CharString name, 
+	Buffer *dat, 
+	GPUBufferRef **buf
+) {
 
 	if(!dat)
 		return Error_nullPointer(2);
 
-	Error err = GraphicsDeviceRef_createBuffer(dev, usage, Buffer_length(*dat), buf);
+	Error err = GraphicsDeviceRef_createBuffer(dev, usage, name, Buffer_length(*dat), buf);
 
 	if(err.genericError)
 		return err;

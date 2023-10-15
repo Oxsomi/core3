@@ -20,19 +20,26 @@
 
 #include "graphics/generic/allocator.h"
 #include "graphics/vulkan/vk_device.h"
+#include "graphics/vulkan/vk_instance.h"
 #include "graphics/generic/device.h"
+#include "graphics/generic/instance.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/listx.h"
+#include "platforms/ext/stringx.h"
 #include "types/error.h"
 #include "types/buffer.h"
+#include "types/string.h"
 
 Error GPUAllocator_allocate(
 	GPUAllocator *allocator, 
 	void *requirementsExt, 
 	Bool cpuSided, 
 	U32 *blockId, 
-	U64 *blockOffset
+	U64 *blockOffset,
+	CharString objectName
 ) {
+
+	objectName;
 	
 	U64 blockSize = 64 * MIBI;
 
@@ -40,6 +47,7 @@ Error GPUAllocator_allocate(
 		return Error_nullPointer(!allocator ? 0 : (!requirementsExt ? 1 : (!blockId ? 2 : 3)));
 
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(allocator->device, Vk);
+	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(GraphicsInstanceRef_ptr(allocator->device->instance), Vk);
 
 	VkMemoryRequirements2 req = *(VkMemoryRequirements2*) requirementsExt;
 	VkMemoryRequirements memReq = req.memoryRequirements;
@@ -64,7 +72,7 @@ Error GPUAllocator_allocate(
 				!block->ext ||
 				block->isDedicated || 
 				(block->typeExt & memReq.memoryTypeBits) != memReq.memoryTypeBits ||
-				(Bool)(block->allocationTypeExt & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) != cpuSided
+				(Bool)(block->allocationTypeExt & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) != !cpuSided
 			)
 				continue;
 
@@ -139,21 +147,23 @@ Error GPUAllocator_allocate(
 
 	VkDeviceMemory mem = NULL;
 	GPUBlock block = (GPUBlock) { 0 };
+	CharString temp = CharString_createNull();
 	Error err = vkCheck(vkAllocateMemory(deviceExt->device, &alloc, NULL, &mem));
 
 	if(err.genericError)
 		return err;
 
 	void *mappedMem = NULL;
+	VkMemoryPropertyFlags prop = properties[propertyId];
 
-	if(properties[propertyId] & host)
+	if(prop & host)
 		_gotoIfError(clean, vkCheck(vkMapMemory(deviceExt->device, mem, 0, alloc.allocationSize, 0, &mappedMem)));
 
 	//Initialize block
 
 	block = (GPUBlock) {
 		.typeExt = memReq.memoryTypeBits,
-		.allocationTypeExt = (U16) properties[propertyId],
+		.allocationTypeExt = (U16) prop,
 		.isDedicated = isDedicated,
 		.mappedMemory = mappedMem,
 		.ext = mem
@@ -185,7 +195,37 @@ Error GPUAllocator_allocate(
 	*blockId = (U32) i;
 	*blockOffset = (U64) allocLoc;
 
+	#ifndef NDEBUG
+
+		if(instanceExt->debugSetName) {
+
+			_gotoIfError(clean, CharString_formatx(
+				&temp, 
+				isDedicated ? "Memory block %u (host: %s, coherent: %s, device: %s): %s" : 
+				"Memory block %u (host: %s, coherent: %s, device: %s)",
+				(U32) i,
+				prop & host ? "true" : "false",
+				prop & coherent ? "true" : "false",
+				prop & local ? "true" : "false",
+				objectName.ptr
+			));
+
+			VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
+				.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+				.objectType = VK_OBJECT_TYPE_DEVICE_MEMORY,
+				.pObjectName = temp.ptr,
+				.objectHandle = (U64) mem
+			};
+
+			_gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName)));
+			CharString_freex(&temp);
+		}
+
+	#endif
+
 clean:
+
+	CharString_freex(&temp);
 
 	if(err.genericError) {
 		AllocationBuffer_freex(&block.allocations);

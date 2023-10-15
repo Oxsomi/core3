@@ -23,6 +23,7 @@
 #include "types/allocation_buffer.h"
 
 typedef struct GraphicsDevice GraphicsDevice;
+typedef struct CharString CharString;
 
 typedef struct GPUBlock {
 
@@ -53,7 +54,8 @@ impl Error GPUAllocator_allocate(
 	void *requirementsExt, 
 	Bool cpuSIded, 
 	U32 *blockId, 
-	U64 *blockOffset
+	U64 *blockOffset,
+	CharString objectName				//Name of the object that allocates (for dedicated allocations)
 );
 
 Bool GPUAllocator_freeAllocation(GPUAllocator *allocator, U32 blockId, U64 blockOffset);
