@@ -137,6 +137,7 @@ Error GPUAllocator_allocate(GPUAllocator *allocator, void *requirementsExt, U32 
 
 	block = (GPUBlock) {
 		.typeExt = memReq.memoryTypeBits,
+		.allocationTypeExt = (U16) properties[propertyId],
 		.isDedicated = isDedicated,
 		.mappedMemory = mappedMem,
 		.ext = mem

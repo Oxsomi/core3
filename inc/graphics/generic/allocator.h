@@ -28,10 +28,11 @@ typedef struct GPUBlock {
 
 	AllocationBuffer allocations;
 
-	U32 typeExt;
+	U32 typeExt;				//Resource flags
 
 	Bool isDedicated;
-	U8 padding[3];
+	U8 padding;
+	U16 allocationTypeExt;		//Allocation type flags (e.g. host visible)
 
 	void *mappedMemory;
 

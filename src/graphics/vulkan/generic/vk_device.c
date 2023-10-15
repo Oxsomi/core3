@@ -25,6 +25,7 @@
 #include "graphics/generic/instance.h"
 #include "graphics/generic/swapchain.h"
 #include "graphics/generic/command_list.h"
+#include "graphics/generic/buffer.h"
 #include "platforms/ext/listx.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
@@ -1077,6 +1078,7 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 	Error err = Error_none();
 	CharString temp = CharString_createNull();
 	List imageBarriers = List_createEmpty(sizeof(VkImageMemoryBarrier2));
+	List tempList = List_createEmpty(sizeof(VkMappedMemoryRange));
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
@@ -1160,6 +1162,85 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 		};
 
 		_gotoIfError(clean, vkCheck(vkWaitSemaphores(deviceExt->device, &waitInfo, U64_MAX)));
+	}
+
+	//Update buffer data
+
+	for(U64 i = 0; i < device->pendingResources.length; ++i) {
+
+		RefPtr *pending = *(RefPtr**) List_ptr(device->pendingResources, i);
+
+		EGraphicsTypeId type = (EGraphicsTypeId) pending->typeId;
+
+		switch(type) {
+
+			case EGraphicsTypeId_GPUBuffer: {
+
+				GPUBuffer *buffer = GPUBufferRef_ptr(pending);
+				VkGPUBuffer *bufferExt = GPUBuffer_ext(buffer, Vk);
+
+				if(buffer->isFirstFrame) {
+					
+					if (bufferExt->mappedMemory) {
+
+						GPUBlock block = *(GPUBlock*) List_ptr(device->allocator.blocks, bufferExt->blockId);
+						Bool incoherent = !(block.allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+						if(incoherent && buffer->pendingChanges.length >> 32)
+							_gotoIfError(clean, Error_outOfBounds(0, buffer->pendingChanges.length, U32_MAX));
+
+						if(incoherent)
+							_gotoIfError(clean, List_resizex(&tempList, buffer->pendingChanges.length));
+
+						for(U64 j = 0; j < buffer->pendingChanges.length; ++j) {
+
+							GPUPendingRange range = *(GPUPendingRange*) List_ptr(buffer->pendingChanges, j);
+
+							U64 start = range.buffer.startRange;
+							U64 len = range.buffer.endRange - range.buffer.startRange;
+
+							Buffer dst = Buffer_createRef((U8*)bufferExt->mappedMemory + start, len);
+							Buffer src = Buffer_createConstRef(buffer->cpuData.ptr + start, len);
+
+							Buffer_copy(dst, src);
+
+							if(incoherent)
+								*(VkMappedMemoryRange*)List_ptr(tempList, j) = (VkMappedMemoryRange) {
+									.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+									.memory = (VkDeviceMemory) block.ext,
+									.offset = start + bufferExt->blockOffset,
+									.size = len
+								};
+						}
+
+						if(incoherent)
+							_gotoIfError(clean, vkCheck(vkFlushMappedMemoryRanges(
+								deviceExt->device, (U32) tempList.length, (const VkMappedMemoryRange*) tempList.ptr
+							)));
+					}
+
+					else _gotoIfError(clean, Error_unsupportedOperation(1));		//TODO: Staging buffer!
+
+					if(!(buffer->usage & EGPUBufferUsage_CPUBacked))
+						Buffer_freex(&buffer->cpuData);
+
+					buffer->isFirstFrame = buffer->isPending = buffer->isPendingFullCopy = false;
+					_gotoIfError(clean, List_clear(&buffer->pendingChanges));
+				}
+
+				else {
+					//TODO: Check if in flight, if not then use staging buffer
+					_gotoIfError(clean, Error_unsupportedOperation(2));		//TODO: Staging buffer!
+				}
+
+				break;
+			}
+
+			default:
+				_gotoIfError(clean, Error_unsupportedOperation(0));
+		}
+
+		_gotoIfError(clean, List_clear(&device->pendingResources));
 	}
 
 	//Record command list
@@ -1489,6 +1570,7 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 		device->firstSubmit = device->lastSubmit;
 
 clean: 
+	List_freex(&tempList);
 	CharString_freex(&temp);
 	return err;
 }
