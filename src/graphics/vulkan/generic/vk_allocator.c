@@ -49,6 +49,8 @@ Error GPUAllocator_allocate(
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(allocator->device, Vk);
 	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(GraphicsInstanceRef_ptr(allocator->device->instance), Vk);
 
+	instanceExt;
+
 	VkMemoryRequirements2 req = *(VkMemoryRequirements2*) requirementsExt;
 	VkMemoryRequirements memReq = req.memoryRequirements;
 	VkMemoryDedicatedRequirements dedicated = *(VkMemoryDedicatedRequirements*) req.pNext;

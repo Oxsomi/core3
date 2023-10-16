@@ -22,11 +22,66 @@
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
 #include "graphics/vulkan/vulkan.h"
+#include "graphics/vulkan/vk_buffer.h"
 #include "graphics/vulkan/vk_device.h"
 #include "graphics/vulkan/vk_instance.h"
+#include "platforms/ext/listx.h"
+#include "types/buffer.h"
+#include "types/list.h"
 #include "types/error.h"
 
 U64 GPUBufferExt_size = sizeof(VkGPUBuffer);
+
+Error VkGPUBuffer_transition(
+	VkGPUBuffer *buffer,
+	VkPipelineStageFlags2 stage,
+	VkAccessFlagBits2 access,
+	U32 graphicsQueueId,
+	U64 offset,
+	U64 size,
+	List *bufferBarriers,
+	VkDependencyInfo *dependency
+) {
+
+	//No-op
+
+	if(buffer->lastStage == stage && buffer->lastAccess == access)
+		return Error_none();
+
+	//Handle buffer barrier
+
+	VkBufferMemoryBarrier2 bufferBarrier = (VkBufferMemoryBarrier2) {
+
+		.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
+
+		.srcStageMask = buffer->lastStage,
+		.srcAccessMask = buffer->lastAccess,
+
+		.dstStageMask = stage,
+		.dstAccessMask = access,
+
+		.srcQueueFamilyIndex = graphicsQueueId,
+		.dstQueueFamilyIndex = graphicsQueueId,
+
+		.buffer = buffer->buffer,
+		.offset = offset,
+		.size = size
+	};
+
+	Error err = List_pushBackx(bufferBarriers, Buffer_createConstRef(&bufferBarrier, sizeof(bufferBarrier)));
+
+	if(err.genericError)
+		return err;
+
+	buffer->lastStage = bufferBarrier.dstStageMask;
+	buffer->lastAccess = bufferBarrier.dstAccessMask;
+
+	dependency->pBufferMemoryBarriers = (const VkBufferMemoryBarrier2*) bufferBarriers->ptr;
+	dependency->bufferMemoryBarrierCount = (U32) bufferBarriers->length;
+
+	return Error_none();
+}
+
 
 Bool GPUBuffer_freeExt(GPUBuffer *buffer) {
 

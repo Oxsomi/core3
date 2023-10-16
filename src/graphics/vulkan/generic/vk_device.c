@@ -21,6 +21,7 @@
 #include "graphics/vulkan/vk_device.h"
 #include "graphics/vulkan/vk_instance.h"
 #include "graphics/vulkan/vk_swapchain.h"
+#include "graphics/vulkan/vk_buffer.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
 #include "graphics/generic/swapchain.h"

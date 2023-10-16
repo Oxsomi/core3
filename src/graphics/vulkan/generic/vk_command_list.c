@@ -28,6 +28,7 @@
 #include "graphics/vulkan/vk_device.h"
 #include "graphics/vulkan/vk_instance.h"
 #include "graphics/vulkan/vk_swapchain.h"
+#include "graphics/vulkan/vk_buffer.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/listx.h"
 #include "formats/texture.h"
@@ -541,6 +542,10 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 			if(I32x2_eq2(temp->currentSize, I32x2_zero()))
 				return Error_invalidOperation(0);
 
+			Error err = Error_none();
+			List bufferBarriers = List_createEmpty(sizeof(VkBufferMemoryBarrier2));
+			_gotoIfError(cleanSetPrimitiveBuffers, List_reservex(&bufferBarriers, 17));
+
 			PrimitiveBuffers prim = *(const PrimitiveBuffers*) data;
 
 			VkBuffer vertexBuffers[16] = { 0 };
@@ -548,25 +553,76 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 
 			U32 start = 16, end = 0;
 
+			Bool transitionedIndex = false;
+			U32 graphicsQueueId = deviceExt->queues[EVkCommandQueue_Graphics].queueId;
+
+			VkDependencyInfo dependency = (VkDependencyInfo) {
+				.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+				.dependencyFlags = 0
+			};
+
 			//Fill vertexBuffers and find start/end range.
 			//And ensure bound buffers can't be accidentally transitioned while render hasn't ended yet.
 
 			for(U32 i = 0; i < 16; ++i) {
 
-				if (prim.vertexBuffers[i]) {
+				GPUBufferRef *bufferRef = prim.vertexBuffers[i];
+
+				if (bufferRef) {
+
+					GPUBuffer *buf = GPUBufferRef_ptr(bufferRef);
+					VkGPUBuffer *bufExt = GPUBuffer_ext(buf, Vk);
 
 					if(start == 16)
 						start = i;
 
 					end = i + 1;
 
-					vertexBuffers[i] = GPUBuffer_ext(GPUBufferRef_ptr(prim.vertexBuffers[i]), Vk)->buffer;
+					VkPipelineStageFlagBits2 flags = VK_PIPELINE_STAGE_2_VERTEX_ATTRIBUTE_INPUT_BIT;
+					VkAccessFlagBits2 access = VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT;
+
+					if (bufferRef == prim.indexBuffer) {
+						flags |= VK_PIPELINE_STAGE_2_INDEX_INPUT_BIT;
+						access |= VK_ACCESS_2_INDEX_READ_BIT;
+						transitionedIndex = true;
+					}
+
+					_gotoIfError(cleanSetPrimitiveBuffers, VkGPUBuffer_transition(
+						bufExt,
+						flags,
+						access,
+						graphicsQueueId,
+						0,
+						buf->length,
+						&bufferBarriers,
+						&dependency
+					));
+
+					vertexBuffers[i] = bufExt->buffer;
 				}
 
 				temp->boundBuffers[i] = prim.vertexBuffers[i];
 			}
 
-			//TODO: Transition here
+			if(!transitionedIndex && prim.indexBuffer) {
+			
+				GPUBuffer *buf = GPUBufferRef_ptr(prim.indexBuffer);
+				VkGPUBuffer *bufExt = GPUBuffer_ext(buf, Vk);
+
+				_gotoIfError(cleanSetPrimitiveBuffers, VkGPUBuffer_transition(
+					bufExt,
+					VK_PIPELINE_STAGE_2_INDEX_INPUT_BIT,
+					VK_ACCESS_2_INDEX_READ_BIT,
+					graphicsQueueId,
+					0,
+					buf->length,
+					&bufferBarriers,
+					&dependency
+				));
+			}
+
+			if(dependency.imageMemoryBarrierCount)
+				instanceExt->cmdPipelineBarrier2(buffer, &dependency);
 
 			//Bind vertex and index buffer
 
@@ -592,7 +648,9 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 
 			temp->boundBuffers[16] = prim.indexBuffer;
 		
-			break;
+		cleanSetPrimitiveBuffers:
+			List_freex(&bufferBarriers);
+			return err;
 		}
 
 		case ECommandOp_Draw: {

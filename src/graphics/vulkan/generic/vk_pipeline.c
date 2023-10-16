@@ -49,6 +49,10 @@ Error createShaderModule(
 	EPipelineStage stage
 ) {
 
+	instance;
+	name;
+	stage;
+
 	if(Buffer_length(buf) >> 32)
 		return Error_outOfBounds(0, Buffer_length(buf), U32_MAX);
 
@@ -87,6 +91,8 @@ Error createShaderModule(
 		}
 
 	#endif
+
+	goto clean;
 	
 clean:
 

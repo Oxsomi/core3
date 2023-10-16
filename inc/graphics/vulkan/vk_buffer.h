@@ -19,37 +19,34 @@
 */
 
 #pragma once
-#include "types/types.h"
-#define VK_ENABLE_BETA_EXTENSIONS
-#include <vulkan/vulkan.h>
+#include "graphics/vulkan/vulkan.h"
 
-typedef struct VkManagedImage {
+typedef struct List List;
 
-	VkImage image;
-	VkImageView view;
+typedef struct VkGPUBuffer {
+
+	VkBuffer buffer;
+
+	U64 blockOffset;
+
+	void *mappedMemory;						//Only accessible if not in flight
 
 	VkPipelineStageFlagBits2 lastStage;
 	VkAccessFlagBits2 lastAccess;
 
-	VkImageLayout lastLayout;
-	U32 padding;
+	U32 blockId, padding;
 
-} VkManagedImage;
+	U32 readDescriptor, writeDescriptor;
 
-typedef struct CharString CharString;
-typedef struct GraphicsDevice GraphicsDevice;
-typedef struct Error Error;
-typedef enum ETextureFormat ETextureFormat;
-typedef enum EGraphicsDataTypes EGraphicsDataTypes;
+} VkGPUBuffer;
 
-Error vkCheck(VkResult result);
-
-//Pass types as non NULL to allow validating if the texture format is supported.
-//Sometimes you don't want this, for example when serializing.
-Error mapVkFormat(
-	EGraphicsDataTypes *types, 
-	ETextureFormat format, 
-	VkFormat *output, 
-	Bool isForRenderTarget,
-	Bool supportsUndefined			//Is format undefined supported?
+Error VkGPUBuffer_transition(
+	VkGPUBuffer *buffer, 
+	VkPipelineStageFlags2 stage, 
+	VkAccessFlagBits2 access,
+	U32 graphicsQueueId,
+	U64 offset,
+	U64 size,
+	List *bufferBarriers,
+	VkDependencyInfo *dependency
 );
