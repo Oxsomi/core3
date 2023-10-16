@@ -756,7 +756,9 @@ Error GraphicsDevice_initExt(
 		if(instanceExt->debugSetName)
 			for (U32 i = 0; i < EDescriptorType_Count + 2; ++i) {
 
-				_gotoIfError(clean, CharString_formatx(&tempStr, "Descriptor set layout (%i: %s)", i, debugNames[i]));
+				CharString_freex(&tempStr);
+
+				_gotoIfError(clean, CharString_formatx(&tempStr, "Descriptor set (%i: %s)", i, debugNames[i]));
 
 				VkDebugUtilsObjectNameInfoEXT debugName2 = (VkDebugUtilsObjectNameInfoEXT) {
 					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
@@ -768,6 +770,20 @@ Error GraphicsDevice_initExt(
 				_gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName2)));
 
 				CharString_freex(&tempStr);
+
+				_gotoIfError(clean, CharString_formatx(&tempStr, "Descriptor set layout (%i: %s)", i, debugNames[i]));
+
+				if(i < EDescriptorType_Count) {
+
+					debugName2 = (VkDebugUtilsObjectNameInfoEXT) {
+						.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+						.objectType = VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT,
+						.objectHandle = (U64) deviceExt->setLayouts[i],
+						.pObjectName = tempStr.ptr,
+					};
+
+					_gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName2)));
+				}
 			}
 
 	#endif

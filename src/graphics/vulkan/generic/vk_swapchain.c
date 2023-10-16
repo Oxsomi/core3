@@ -479,6 +479,63 @@ Error GraphicsDeviceRef_createSwapchainInternal(GraphicsDeviceRef *deviceRef, Sw
 
 	Lock_unlock(&deviceExt->descriptorLock);
 	lock = false;
+	
+	#ifndef NDEBUG
+
+		if(instance->debugSetName) {
+
+			CharString_freex(&temp);
+
+			_gotoIfError(clean, CharString_formatx(
+				&temp, "Swapchain (%.*s)", CharString_length(info.window->title), info.window->title.ptr
+			));
+
+			VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
+				.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+				.objectType = VK_OBJECT_TYPE_SWAPCHAIN_KHR,
+				.pObjectName = temp.ptr,
+				.objectHandle = (U64) swapchainExt->swapchain
+			};
+
+			_gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)));
+
+			for (U64 i = 0; i < imageCount; ++i) {
+
+				CharString_freex(&temp);
+
+				_gotoIfError(clean, CharString_formatx(
+					&temp, "Swapchain image view #%u (%.*s)", 
+					(U32) i, CharString_length(info.window->title), info.window->title.ptr
+				));
+
+				debugName = (VkDebugUtilsObjectNameInfoEXT) {
+					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+					.objectType = VK_OBJECT_TYPE_IMAGE_VIEW,
+					.pObjectName = temp.ptr,
+					.objectHandle =  (U64) ((VkManagedImage*) swapchainExt->images.ptr)[i].view
+				};
+
+				_gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)));
+
+				CharString_freex(&temp);
+
+				_gotoIfError(clean, CharString_formatx(
+					&temp, "Swapchain image #%u (%.*s)", 
+					(U32) i, CharString_length(info.window->title), info.window->title.ptr
+				));
+
+				debugName = (VkDebugUtilsObjectNameInfoEXT) {
+					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+					.objectType = VK_OBJECT_TYPE_IMAGE,
+					.pObjectName = temp.ptr,
+					.objectHandle =  (U64) ((VkManagedImage*) swapchainExt->images.ptr)[i].image
+				};
+
+				_gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)));
+			}
+		}
+
+	#endif
 
 clean:
 

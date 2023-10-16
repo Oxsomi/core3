@@ -20,14 +20,34 @@
 
 #include "graphics/generic/pipeline.h"
 #include "graphics/generic/device.h"
+#include "graphics/generic/instance.h"
 #include "graphics/vulkan/vk_device.h"
+#include "graphics/vulkan/vk_instance.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/listx.h"
+#include "platforms/ext/stringx.h"
 #include "formats/texture.h"
 #include "types/buffer.h"
+#include "types/string.h"
 #include "types/error.h"
 
-Error createShaderModule(Buffer buf, VkShaderModule *mod, VkGraphicsDevice *device) {
+const C8 *EPipelineStage_names[] = {
+	"vertex",
+	"pixel",
+	"compute",
+	"geometry",
+	"hull",
+	"domain"
+};
+
+Error createShaderModule(
+	Buffer buf, 
+	VkShaderModule *mod, 
+	VkGraphicsDevice *device, 
+	VkGraphicsInstance *instance, 
+	CharString name, 
+	EPipelineStage stage
+) {
 
 	if(Buffer_length(buf) >> 32)
 		return Error_outOfBounds(0, Buffer_length(buf), U32_MAX);
@@ -41,7 +61,41 @@ Error createShaderModule(Buffer buf, VkShaderModule *mod, VkGraphicsDevice *devi
 		.pCode = (const U32*) buf.ptr
 	};
 
-	return vkCheck(vkCreateShaderModule(device->device, &info, NULL, mod));
+	Error err = vkCheck(vkCreateShaderModule(device->device, &info, NULL, mod));
+	CharString temp = CharString_createNull();
+
+	if(err.genericError)
+		return err;
+
+	#ifndef NDEBUG
+
+		if(instance->debugSetName && CharString_length(name)) {
+
+			_gotoIfError(clean, CharString_formatx(
+				&temp, "Shader module (\"%.*s\": %s)", 
+				CharString_length(name), name.ptr, EPipelineStage_names[stage]
+			));
+
+			VkDebugUtilsObjectNameInfoEXT debugName2 = (VkDebugUtilsObjectNameInfoEXT) {
+				.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+				.objectType = VK_OBJECT_TYPE_SHADER_MODULE,
+				.objectHandle = (U64) *mod,
+				.pObjectName = temp.ptr
+			};
+
+			_gotoIfError(clean, vkCheck(instance->debugSetName(device->device, &debugName2)));
+		}
+
+	#endif
+	
+clean:
+
+	CharString_freex(&temp);
+
+	if (err.genericError)
+		vkDestroyShaderModule(device->device, *mod, NULL);
+	
+	return err;
 }
 
 Bool Pipeline_free(Pipeline *pipeline, Allocator allocator) {
@@ -61,7 +115,12 @@ Bool Pipeline_free(Pipeline *pipeline, Allocator allocator) {
 	return true;
 }
 
-Error GraphicsDeviceRef_createPipelinesCompute(GraphicsDeviceRef *deviceRef, List *shaderBinaries, List *pipelines) {
+Error GraphicsDeviceRef_createPipelinesCompute(
+	GraphicsDeviceRef *deviceRef, 
+	List *shaderBinaries, 
+	List names,
+	List *pipelines
+) {
 
 	if(!deviceRef || !shaderBinaries || !pipelines)
 		return Error_nullPointer(!deviceRef ? 0 : (!shaderBinaries ? 1 : 2));
@@ -69,14 +128,19 @@ Error GraphicsDeviceRef_createPipelinesCompute(GraphicsDeviceRef *deviceRef, Lis
 	if(!shaderBinaries->length || shaderBinaries->stride != sizeof(Buffer))
 		return Error_invalidParameter(1, 0);
 
+	if(names.length && (names.length != shaderBinaries->length || names.stride != sizeof(CharString)))
+		return Error_invalidParameter(2, 0);
+
 	if(shaderBinaries->length >> 32)
 		return Error_outOfBounds(1, shaderBinaries->length, U32_MAX);
 
 	if(pipelines->ptr)
-		return Error_invalidParameter(2, 0);
+		return Error_invalidParameter(3, 0);
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
+
+	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(GraphicsInstanceRef_ptr(device->instance), Vk);
 
 	List pipelineInfos = List_createEmpty(sizeof(VkComputePipelineCreateInfo));
 	List pipelineHandles = List_createEmpty(sizeof(VkPipeline));
@@ -108,7 +172,10 @@ Error GraphicsDeviceRef_createPipelinesCompute(GraphicsDeviceRef *deviceRef, Lis
 		_gotoIfError(clean, createShaderModule(
 			((Buffer*)shaderBinaries->ptr)[i], 
 			&((VkComputePipelineCreateInfo*) pipelineInfos.ptr)[i].stage.module, 
-			deviceExt
+			deviceExt,
+			instanceExt,
+			!names.length ? CharString_createNull() : ((const CharString*)names.ptr)[i],
+			EPipelineStage_Compute
 		));
 	}
 
@@ -131,6 +198,22 @@ Error GraphicsDeviceRef_createPipelinesCompute(GraphicsDeviceRef *deviceRef, Lis
 			EGraphicsTypeId_Pipeline, 
 			refPtr
 		));
+
+		#ifndef NDEBUG
+
+			if(instanceExt->debugSetName && names.length) {
+
+				VkDebugUtilsObjectNameInfoEXT debugName2 = (VkDebugUtilsObjectNameInfoEXT) {
+					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+					.objectType = VK_OBJECT_TYPE_PIPELINE,
+					.objectHandle = (U64) ((VkPipeline*) pipelineHandles.ptr)[i],
+					.pObjectName = ((const CharString*)names.ptr)[i].ptr
+				};
+
+				_gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName2)));
+			}
+
+		#endif
 
 		Pipeline *pipeline = PipelineRef_ptr(*refPtr);
 
@@ -274,7 +357,13 @@ Error mapVkBlend(Bool dualSrc, EBlend op, VkBlendFactor *result) {
 	return Error_none();
 }
 
-Error GraphicsDeviceRef_createPipelinesGraphics(GraphicsDeviceRef *deviceRef, List *stages, List *infos, List *pipelines) {
+Error GraphicsDeviceRef_createPipelinesGraphics(
+	GraphicsDeviceRef *deviceRef, 
+	List *stages, 
+	List *infos, 
+	List names,
+	List *pipelines
+) {
 
 	if(!deviceRef || !stages || !infos || !pipelines)
 		return Error_nullPointer(!deviceRef ? 0 : (!stages ? 1 : (!infos ? 2 : 3)));
@@ -287,11 +376,16 @@ Error GraphicsDeviceRef_createPipelinesGraphics(GraphicsDeviceRef *deviceRef, Li
 	if(!infos->length || infos->stride != sizeof(PipelineGraphicsInfo) || infos->length >> 32)
 		return Error_invalidParameter(2, 0);
 
+	if(names.length && (names.length != infos->length || names.stride != sizeof(CharString)))
+		return Error_invalidParameter(2, 0);
+
 	if(pipelines->ptr)
-		return Error_invalidParameter(3, 0);
+		return Error_invalidParameter(4, 0);
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
+
+	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(GraphicsInstanceRef_ptr(device->instance), Vk);
 
 	typedef enum EPipelineStateType {
 
@@ -1058,7 +1152,14 @@ Error GraphicsDeviceRef_createPipelinesGraphics(GraphicsDeviceRef *deviceRef, Li
 
 			VkShaderModule module = NULL;
 
-			_gotoIfError(clean, createShaderModule(stage.shaderBinary, &module, deviceExt));
+			_gotoIfError(clean, createShaderModule(
+				stage.shaderBinary, 
+				&module, 
+				deviceExt,
+				instanceExt,
+				!names.length ? CharString_createNull() : ((const CharString*)names.ptr)[i],
+				stage.stageType
+			));
 
 			vkStages[j] = (VkPipelineShaderStageCreateInfo) {
 				.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
@@ -1101,6 +1202,22 @@ Error GraphicsDeviceRef_createPipelinesGraphics(GraphicsDeviceRef *deviceRef, Li
 			EGraphicsTypeId_Pipeline, 
 			refPtr
 		));
+
+		#ifndef NDEBUG
+
+			if(instanceExt->debugSetName && names.length) {
+
+				VkDebugUtilsObjectNameInfoEXT debugName2 = (VkDebugUtilsObjectNameInfoEXT) {
+					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+					.objectType = VK_OBJECT_TYPE_PIPELINE,
+					.objectHandle = (U64) ((VkPipeline*) states[EPipelineStateType_VkPipeline].ptr)[i],
+					.pObjectName = ((const CharString*)names.ptr)[i].ptr
+				};
+
+				_gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName2)));
+			}
+
+		#endif
 
 		Pipeline *pipeline = PipelineRef_ptr(*refPtr);
 
