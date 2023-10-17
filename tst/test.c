@@ -27,6 +27,7 @@
 #include "types/flp.h"
 #include "math/rand.h"
 #include "math/transform.h"
+#include "math/big_int.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -1546,6 +1547,16 @@ int main() {
 			}
 		}
 	}
+
+	//U64 x U64 unit test
+
+	const U64 mulData[16] = { 0x2236D88FE5618CF0, 0x121FA00AD77D742 };
+
+	U128 mulRes = U128_create((const U8*) mulData);
+	U128 mulReal = U128_mul64(0x0123456789ABCDEF, 0xFEDCBA9876543210);
+	
+	if (U128_neq(mulRes, mulReal))
+		_gotoIfError(clean, Error_invalidOperation(0));
 
 	//
 

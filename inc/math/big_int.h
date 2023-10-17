@@ -19,16 +19,43 @@
 */
 
 #pragma once
-#include "types/types.h"
+#include "math/vec.h"
+#include "types/platform_types.h"
 
-//Defines instead of enums to allow #if
+#if _PLATFORM_TYPE == EPlatform_Linux
+	typedef __int128 U128;
+#else
+	typedef I32x4 U128;
+#endif
 
-#define EPlatform_Uninitialized (0)
-#define EPlatform_Windows (1)
-#define EPlatform_Linux (2)
-#define EPlatform_Android (3)
-#define EPlatform_Web (4)
-#define EPlatform_iOS (5)
-#define EPlatform_OSX (6)
+U128 U128_create(const U8 data[16]);
+U128 U128_mul64(U64 a, U64 b);			//Multiply two 64-bit numbers to generate a 128-bit number
+U128 U128_add64(U64 a, U64 b);			//Add two 64-bit numbers but keep the overflow bit
 
-typedef U32 EPlatform;
+U128 U128_zero();
+U128 U128_one();
+
+U128 U128_xor(U128 a, U128 b);
+U128 U128_or(U128 a, U128 b);
+U128 U128_and(U128 a, U128 b);
+
+//U128 U128_not(U128 a);
+
+Bool U128_eq(U128 a, U128 b);
+Bool U128_neq(U128 a, U128 b);
+Bool U128_lt(U128 a, U128 b);
+Bool U128_leq(U128 a, U128 b);
+Bool U128_gt(U128 a, U128 b);
+Bool U128_geq(U128 a, U128 b);
+
+//U128 U128_div(U128 a, U128 b);
+//U128 U128_mod(U128 a, U128 b);
+U128 U128_mul(U128 a, U128 b);
+U128 U128_add(U128 a, U128 b);
+U128 U128_sub(U128 a, U128 b);
+U128 U128_negate(U128 a);
+U128 U128_complement(U128 a);
+
+U128 U128_min(U128 a, U128 b);
+U128 U128_max(U128 a, U128 b);
+U128 U128_clamp(U128 a, U128 mi, U128 ma);
