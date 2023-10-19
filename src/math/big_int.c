@@ -19,12 +19,269 @@
 */
 
 #include "math/big_int.h"
+#include "types/error.h"
+#include "types/buffer.h"
+#include "types/allocator.h"
+
+//BigInt
+
+BigInt BigInt_createNull() { return (BigInt) { .isRef = true, .isConst = true }; }
+
+Error BigInt_create(U16 bitCount, Allocator alloc, BigInt *big) {
+
+	U64 u64s = (bitCount + 63) >> 6;
+
+	if(u64s >> 8)
+		return Error_outOfBounds(0, bitCount, (U64)U8_MAX << 6);
+
+	Buffer buffer = Buffer_createNull();
+	Error err = Buffer_createEmptyBytes(u64s * sizeof(U64), alloc, &buffer);
+
+	if(err.genericError)
+		return err;
+
+	*big = (BigInt) { .data = (const U64*) buffer.ptr, .length = (U8) u64s };
+	return err;
+}
+
+Error BigInt_createRef(U64 *ptr, U64 ptrCount, BigInt *big) {
+
+	if(!big)
+		return Error_nullPointer(2);
+
+	if(big->data)
+		return Error_invalidParameter(2, 0);
+
+	if(ptrCount >> 8)
+		return Error_outOfBounds(1, ptrCount, U8_MAX);
+
+	*big = (BigInt) { .data = ptr, .isConst = false, .isRef = true, .length = (U8) ptrCount };
+	return Error_none();
+}
+
+Error BigInt_createConstRef(const U64 *ptr, U64 ptrCount, BigInt *big) {
+
+	if(!big)
+		return Error_nullPointer(2);
+
+	if(big->data)
+		return Error_invalidParameter(2, 0);
+
+	if(ptrCount >> 8)
+		return Error_outOfBounds(1, 0, U8_MAX);
+
+	*big = (BigInt) { .data = ptr, .isConst = true, .isRef = true, .length = (U8) ptrCount };
+	return Error_none();
+}
+
+Error BigInt_createFromHex(CharString text, U16 bitCount, Allocator allocator, BigInt *big);
+Error BigInt_createFromDec(CharString text, U16 bitCount, Allocator allocator, BigInt *big);
+Error BigInt_createFromOct(CharString text, U16 bitCount, Allocator allocator, BigInt *big);
+Error BigInt_createFromBin(CharString text, U16 bitCount, Allocator allocator, BigInt *big);
+Error BigInt_createFromNyto(CharString text, U16 bitCount, Allocator allocator, BigInt *big);
+Error BigInt_createFromText(CharString text, U16 bitCount, Allocator allocator, BigInt *big);
+
+Bool BigInt_free(BigInt *b, Allocator allocator) {
+
+	if(!b)
+		return false;
+
+	if(!b->isRef && b->length) {
+		Buffer buf = Buffer_createManagedPtr((U8*)b->data, b->length * sizeof(U64));
+		Buffer_free(&buf, allocator);
+	}
+
+	*b = (BigInt) { 0 };
+	return true;
+}
+
+Bool BigInt_mul(BigInt *a, BigInt b, Allocator allocator) {
+
+	if(!a || a->isConst || !a->length)
+		return false;
+
+	if(!b.length)
+		return BigInt_and(a, b);
+
+	BigInt temp = (BigInt) { 0 };
+	Error err = BigInt_create(BigInt_bitCount(*a), allocator, &temp);
+
+	if(err.genericError)
+		return false;
+
+	U32 digitsA = (U32)a->length * 2;
+	U32 digitsB = (U32)b.length * 2;
+
+	U32 *dst = (U32*) temp.data;
+	const U32 *aptr = (const U32*) a->data;
+	const U32 *bptr = (const U32*) b.data;
+
+	for (U32 i = 0; i < digitsA; ++i) {
+
+		U64 mul = dst[i];
+
+		//Shoot ray (diagonally) through a Brune matrix.
+		//The concept is as follows:
+		// 
+		//   a0 a1 a2 a3
+		//b0 0  1  2  3
+		//b1 1  2  3  4
+		//b2 2  3  4  5
+		//b3 3  4  5  6
+		//
+		//With any number system, (a0 * b0) % base will result into the smallest digit.
+		//While (a0 * b0) / base will result into the overflow.
+		//This overflow is then added to the next which will calculate the next row.
+		//In this case diagonal 1 would be (a1 * b0 + b1 * a0 + overflow).
+		//The digit would be obtained through % base and then overflow is computed again.
+		//This process is continued until it hits the desired number of digits.
+		//
+		//If we use base as 2^32 we can essentially process per U32 and then use a U64 to catch the overflow.
+		//Truncating it is a simple U32 cast and/or shift.
+		//When 128 bit numbers are available (hardware accelerated) this could be extended the same way to speed it up.
+
+		U32 startX = (U32) U64_min(i, digitsA - 1);
+		U32 startRayT = i - startX;
+		U32 endRayT = (U32) U64_min(i, digitsB - 1) - startRayT;
+
+		for (U32 t = startRayT; t <= endRayT; ++t) {
+
+			U64 x = i - t;
+			U64 y = t;
+
+			U64 prevMul = mul;
+			mul += (U64) aptr[x] * bptr[y];
+
+			if(mul < prevMul && i + 2 < digitsA) {			//Overflow in our overflow.
+
+				U64 j = i + 2, v = 0;
+
+				do {										//Keep on adding overflow
+					v = ++dst[j++];
+				} while(!v && j < digitsA);
+			}
+		}
+
+		dst[i] = (U32) mul;
+
+		if(i + 1 < digitsA) {
+
+			U64 prev = dst[i + 1];
+			dst[i + 1] += (U32) (mul >> 32);
+
+			if (dst[i + 1] < prev && i + 2 < digitsA) {		//Overflow in our overflow.
+
+				U64 j = i + 2, v = 0;
+
+				do {										//Keep on adding overflow
+					v = ++dst[j++];
+				} while(!v && j < digitsA);
+			}
+		}
+	}
+
+	Bool res = BigInt_and(a, BigInt_createNull()) && BigInt_or(a, temp);
+	BigInt_free(&temp, allocator);
+	return res;
+}
+
+Bool BigInt_add(BigInt *a, BigInt b, Allocator alloc);		//Add on self and keep bit count
+Bool BigInt_sub(BigInt *a, BigInt b, Allocator alloc);		//Subtract on self and keep bit count
+
+Bool BigInt_xor(BigInt *a, BigInt b) {
+
+	if(!a || a->isConst)
+		return false;
+
+	for(U64 i = 0; i < a->length && i < b.length; ++i)
+		((U64*)a->data)[i] ^= b.data[i];
+
+	return true;
+}
+
+Bool BigInt_or(BigInt *a, BigInt b) {
+
+	if(!a || a->isConst)
+		return false;
+
+	for(U64 i = 0; i < a->length && i < b.length; ++i)
+		((U64*)a->data)[i] |= b.data[i];
+
+	return true;
+}
+
+Bool BigInt_and(BigInt *a, BigInt b) {
+
+	if(!a || a->isConst)
+		return false;
+
+	U64 j = U64_min(a->length, b.length);
+
+	for(U64 i = 0; i < j; ++i)
+		((U64*)a->data)[i] &= b.data[i];
+
+	for(U64 i = b.length; i < a->length; ++i)
+		((U64*)a->data)[i] = 0;
+
+	return true;
+}
+
+I8 BigInt_cmp(BigInt a, BigInt b) {
+
+	U64 biggestLen = U64_max(a.length, b.length);
+
+	for (U64 i = biggestLen - 1; i != U64_MAX; --i) {
+
+		U64 ai = i >= a.length ? 0 : a.data[i];
+		U64 bi = i >= b.length ? 0 : b.data[i];
+
+		if(ai > bi)
+			return 1;		//Greater
+
+		else if(ai < bi)
+			return -1;		//Less
+	}
+
+	return 0;				//Equal
+}
+
+Bool BigInt_eq(BigInt a, BigInt b) { return !BigInt_cmp(a, b); }
+Bool BigInt_neq(BigInt a, BigInt b) { return BigInt_cmp(a, b); }
+Bool BigInt_lt(BigInt a, BigInt b) { return BigInt_cmp(a, b) < 0; }
+Bool BigInt_leq(BigInt a, BigInt b) { return BigInt_cmp(a, b) <= 0; }
+Bool BigInt_gt(BigInt a, BigInt b) { return BigInt_cmp(a, b) > 0; }
+Bool BigInt_geq(BigInt a, BigInt b) { return BigInt_cmp(a, b) >= 0; }
+
+//TODO: div and mod
+
+Bool BigInt_trunc(BigInt *big, Allocator allocator);							//Gets rid of all hi bits that are unset
+
+Buffer BigInt_bufferConst(BigInt b) { 
+	return b.isConst ? Buffer_createNull() : Buffer_createRef((U64*)b.data, BigInt_byteCount(b));
+}
+
+Buffer BigInt_buffer(BigInt b) { return Buffer_createConstRef(b.data, BigInt_byteCount(b)); }
+
+U16 BigInt_byteCount(BigInt b) { return (U16)(b.length * sizeof(U64)); }
+U16 BigInt_bitCount(BigInt b) { return (U16)(BigInt_byteCount(b) * 8); }
+
+Error BigInt_hex(BigInt b, Allocator allocator, CharString *result);
+Error BigInt_oct(BigInt b, Allocator allocator, CharString *result);
+Error BigInt_dec(BigInt b, Allocator allocator, CharString *result);
+Error BigInt_bin(BigInt b, Allocator allocator, CharString *result);
+Error BigInt_nyto(BigInt b, Allocator allocator, CharString *result);
+
+//U128
 
 U128 U128_create(const U8 data[16]) {
 	return I32x4_createFromU64x2(((const U64*)data)[0], ((const U64*)data)[1]);
 }
 
-U128 U128_mul64(U64 au, U64 bu) {
+U128 U128_createU64x2(U64 a, U64 b) {
+	return I32x4_createFromU64x2(a, b);
+}
+
+U128 U128_mul64(U64 au, U64 bu, Allocator alloc) {
 
 	//We interpret au and bu as a U32[2] interleaved with an empty U32 each.
 	// 
@@ -79,50 +336,57 @@ U128 U128_mul64(U64 au, U64 bu) {
 		return (__int128) au * (__int128) bu;
 
 	#elif _SIMD == SIMD_NONE
+		
+		U64 a[2] = { au, 0 };
+		U64 b[2] = { bu, 0 };
 
-		const U32 *a = (const U32*) &au;
-		const U32 *b = (const U32*) &bu;
+		BigInt aBig = (BigInt) { 0 }, bBig = (BigInt) { 0 };
 
-		U64 mul0[2] = { (U64)a[0] * b[0], (U64)a[0] * b[1] };				//digit 0, digit 1
-		U64 mul1[2] = { (U64)a[1] * b[0], (U64)a[1] * b[1] };				//digit 1, digit 2
-
-		//Digit 0 is always unmodified because if one of the bases grows it shifts it 1 digit
-
-		U32 digit0 = (U32) mul0[0];
-
-		//Add overflow from digit 0 and digit 1 from both
-
-		U64 add0 = (U64)(mul0[0] >> 32) + (U32)mul0[1] + (U32)mul1[0];
-		U32 digit1 = (U32) add0;
-
-		//Add overflow from the last operation and the last mul
-
-		U64 add1 = (U64)(mul0[1] >> 32) + (U64)(mul1[0] >> 32) + (U32)mul1[1] + (add0 >> 32);
-		U32 digit2 = (U32) add1;
-
-		//Do the same thing but once more
-
-		U64 add2 = (U64)(mul1[1] >> 32) + (add1 >> 32);		//We can use the overflow if we want to, but ignore for now.
-		U32 digit3 = (U32) add2;
-
-		return I32x4_create4(digit0, digit1, digit2, digit3);
+		if(
+			(BigInt_createRef(a, 2, &aBig)).genericError || 
+			(BigInt_createRef(b, 2, &bBig)).genericError || 
+			!BigInt_mul(&aBig, bBig, alloc)
+		)
+			return U128_zero();
+			
+		return U128_createU64x2(a[0], a[1]);
 
 	#else
 
-		//"Digits"
+		I32x4 mask4 = I32x4_xxxx4(U16_MAX);
 
-		I32x4 b = I32x4_create4((U16)(bu >>  0), (U16)(bu >> 16), (U16)(bu >> 32), (U16)(bu >> 48));
+		//Split up a and b as the following:
+		//a0 a1 00 00 a4 a5 00 00 b0 b1 00 00 b4 b5 00 00
+		//a2 a3 00 00 a6 a7 00 00 b2 b3 00 00 b6 b7 00 00
 
-		I32x4 c0 = I32x4_mul(b, I32x4_create1((U16)(au >>  0)));
-		I32x4 c1 = I32x4_mul(b, I32x4_create1((U16)(au >> 16)));
-		I32x4 c2 = I32x4_mul(b, I32x4_create1((U16)(au >> 32)));
-		I32x4 c3 = I32x4_mul(b, I32x4_create1((U16)(au >> 48)));
+		I32x4 low = I32x4_createFromU64x2(au, bu);
 
-		//Reduce 
+		I32x4 hi = I32x4_and(I32x4_rshByte(low, 2), mask4);
+		low = I32x4_and(low, mask4);
 
-		//Generate final result
+		//Merge the two together so it becomes
+		//a0 a1 00 00 a2 a3 00 00 a4 a5 00 00 a6 a7 00 00
+		//b0 b1 00 00 b2 b3 00 00 b4 b5 00 00 b6 b7 00 00
 
-		return I32x4_create4(I32x4_x(c0), 0, 0, 0);
+		I32x4 hiSwiz = I32x4_zwxy(hi);
+		I32x4 a = I32x4_xzyw(I32x4_blend(low, hiSwiz, 0b1100));
+		I32x4 b = I32x4_zxwy(I32x4_blend(low, hiSwiz, 0b0011));
+
+		//Then multiply the U32x4 with the other U32x4.
+
+		I32x4 mul = I32x4_mul(a, b);
+
+		//Split up the result to get the overflow and real parts
+
+		I32x4 lows = I32x4_and(mul, mask4);
+		I32x4 highs = I32x4_and(I32x4_rshByte(mul, 2), mask4);
+
+		//TODO: Merge overflow and other bits
+
+		lows;
+		highs;
+
+		return mul;
 
 	#endif
 }

@@ -256,7 +256,7 @@ inline I32x4 AESEncryptionContext_expandKeyN(I32x4 im1, I32x4 im2) {
 	I32x4 im4 = im1;
 
 	for(U8 i = 0; i < 3; ++i) {
-		im4 = I32x4_lsh32(im4);
+		im4 = I32x4_lshByte(im4, 4);
 		im1 = I32x4_xor(im1, im4);
 	}
 
@@ -332,7 +332,7 @@ inline I32x4 AESEncryptionContext_blockHash(I32x4 block, const I32x4 k[15]) {
 
 		tmp[2] = _mm_clmulepi64_si128(a, b, 0x11);
 
-		tmp[1] = I32x4_lsh64(tmp[3]);
+		tmp[1] = I32x4_lshByte(tmp[3], 8);
 		tmp[3] = _mm_srli_si128(tmp[3], 8);
 
 		for(U8 i = 0; i < 2; ++i) {
@@ -344,7 +344,7 @@ inline I32x4 AESEncryptionContext_blockHash(I32x4 block, const I32x4 k[15]) {
 		tmp[7] = _mm_srli_si128(tmp[4], 12);
 
 		for(U8 i = 0; i < 2; ++i)
-			tmp[6 - i] = I32x4_lsh32(tmp[6 - (i << 1)]);
+			tmp[6 - i] = I32x4_lshByte(tmp[6 - (i << 1)], 4);
 
 		const U8 v0[3] = { 31, 30, 25 };
 
@@ -357,7 +357,7 @@ inline I32x4 AESEncryptionContext_blockHash(I32x4 block, const I32x4 k[15]) {
 			tmp[5] = I32x4_xor(tmp[5], tmp[6 + i]);
 
 		tmp[3] = _mm_srli_si128(tmp[5], 4);
-		tmp[5] = I32x4_xor(tmp[0], I32x4_lsh96(tmp[5]));
+		tmp[5] = I32x4_xor(tmp[0], I32x4_lshByte(tmp[5], 12));
 
 		const U8 v1[3] = { 1, 2, 7 };
 		

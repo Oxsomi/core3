@@ -20,6 +20,7 @@
 
 #include "math/vec.h"
 #include "types/type_cast.h"
+#include "types/buffer.h"
 
 #if _SIMD == SIMD_NONE
 
@@ -265,9 +266,37 @@
 
 	F32 F32x2_dot(F32x2 a, F32x2 b) { return F32x4_dot2(F32x4_fromF32x2(a), F32x4_fromF32x2(b)); }
 
-	//Encryption
+	//Loading other byte
 
-	I32x4 I32x4_lsh32(I32x4 a) {
+	I32x4 I32x4_lshByte(I32x4 a, U8 bytes) {
+
+		if(!bytes)
+			return a;
+
+		if(bytes >= 16)
+			return I32x4_zero();
+
+		I32x4 result = I32x4_zero();
+		Buffer_copy(Buffer_createRef((U8*)&result + bytes, sizeof(result) - bytes), Buffer_createConstRef(&a, sizeof(a)));
+
+		return result;
+	}
+
+	I32x4 I32x4_rshByte(I32x4 a, U8 bytes) {
+
+		if(!bytes)
+			return a;
+
+		if(bytes >= 16)
+			return I32x4_zero();
+
+		I32x4 result = I32x4_zero();
+		Buffer_copy(Buffer_createRef(&result, sizeof(result)), Buffer_createConstRef((U8*)&a + bytes, sizeof(a) - bytes));
+
+		return result;
+	}
+
+	I32x4 I32x4_lshByte32(I32x4 a) {
 		return I32x4_create4(
 			0,
 			I32x4_x(a),
@@ -276,7 +305,7 @@
 		);
 	}
 
-	I32x4 I32x4_lsh64(I32x4 a) {
+	I32x4 I32x4_lshByte64(I32x4 a) {
 		return I32x4_create4(
 			0,
 			0,
@@ -285,7 +314,7 @@
 		);
 	}
 
-	I32x4 I32x4_lsh96(I32x4 a) {
+	I32x4 I32x4_lshByte96(I32x4 a) {
 		return I32x4_create4(
 			0,
 			0,

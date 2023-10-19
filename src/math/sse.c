@@ -41,7 +41,7 @@
 	I32x2 I32x2_sub(I32x2 a, I32x2 b) _NONE_OP2I(a.v[i] - b.v[i])
 	F32x2 F32x2_sub(F32x2 a, F32x2 b) _NONE_OP2F(a.v[i] - b.v[i])
 
-	I32x4 I32x4_mul(I32x4 a, I32x4 b) { return _mm_mul_epi32(a, b); }
+	I32x4 I32x4_mul(I32x4 a, I32x4 b) { return _mm_mullo_epi32(a, b); }
 	F32x4 F32x4_mul(F32x4 a, F32x4 b) { return _mm_mul_ps(a, b); }
 	I32x2 I32x2_mul(I32x2 a, I32x2 b) _NONE_OP2I(a.v[i] * b.v[i])
 	F32x2 F32x2_mul(F32x2 a, F32x2 b) _NONE_OP2F(a.v[i] * b.v[i])
@@ -105,7 +105,7 @@
 
 	F32x4 F32x4_create4(F32 x, F32 y, F32 z, F32 w) { return _mm_set_ps(w, z, y, x); }
 	I32x4 I32x4_create4(I32 x, I32 y, I32 z, I32 w) { return _mm_set_epi32(w, z, y, x); }
-	I32x4 I32x4_createFromU64x2(U64 i0, U64 i1) { return _mm_set_epi64x(i0, i1); }
+	I32x4 I32x4_createFromU64x2(U64 i0, U64 i1) { return _mm_set_epi64x(i1, i0); }
 
 	F32x4 F32x4_xxxx4(F32 x) { return _mm_set1_ps(x); }
 	I32x4 I32x4_xxxx4(I32 x) { return _mm_set1_epi32(x); }
@@ -269,11 +269,51 @@
 
 	F32 F32x2_dot(F32x2 a, F32x2 b) { return F32x4_dot2(F32x4_fromF32x2(a), F32x4_fromF32x2(b)); }
 
-	//Used for AES256
+	//Used for AES256 and shifting operations in math
 
-	I32x4 I32x4_lsh32(I32x4 a) { return _mm_slli_si128(a, 0x4); }
-	I32x4 I32x4_lsh64(I32x4 a) { return _mm_slli_si128(a, 0x8); }
-	I32x4 I32x4_lsh96(I32x4 a) { return _mm_slli_si128(a, 0xC); }
+	I32x4 I32x4_lshByte(I32x4 a, U8 bytes) {
+		switch (bytes) {
+			case 0:		return a;
+			case  1:	return _mm_slli_si128(a,  1);
+			case  2:	return _mm_slli_si128(a,  2);
+			case  3:	return _mm_slli_si128(a,  3);
+			case  4:	return _mm_slli_si128(a,  4);
+			case  5:	return _mm_slli_si128(a,  5);
+			case  6:	return _mm_slli_si128(a,  6);
+			case  7:	return _mm_slli_si128(a,  7);
+			case  8:	return _mm_slli_si128(a,  8);
+			case  9:	return _mm_slli_si128(a,  9);
+			case 10:	return _mm_slli_si128(a, 10);
+			case 11:	return _mm_slli_si128(a, 11);
+			case 12:	return _mm_slli_si128(a, 12);
+			case 13:	return _mm_slli_si128(a, 13);
+			case 14:	return _mm_slli_si128(a, 14);
+			case 15:	return _mm_slli_si128(a, 15);
+			default:	return I32x4_zero();
+		}
+	}
+
+	I32x4 I32x4_rshByte(I32x4 a, U8 bytes) {
+		switch (bytes) {
+			case 0:		return a;
+			case  1:	return _mm_srli_si128(a,  1);
+			case  2:	return _mm_srli_si128(a,  2);
+			case  3:	return _mm_srli_si128(a,  3);
+			case  4:	return _mm_srli_si128(a,  4);
+			case  5:	return _mm_srli_si128(a,  5);
+			case  6:	return _mm_srli_si128(a,  6);
+			case  7:	return _mm_srli_si128(a,  7);
+			case  8:	return _mm_srli_si128(a,  8);
+			case  9:	return _mm_srli_si128(a,  9);
+			case 10:	return _mm_srli_si128(a, 10);
+			case 11:	return _mm_srli_si128(a, 11);
+			case 12:	return _mm_srli_si128(a, 12);
+			case 13:	return _mm_srli_si128(a, 13);
+			case 14:	return _mm_srli_si128(a, 14);
+			case 15:	return _mm_srli_si128(a, 15);
+			default:	return I32x4_zero();
+		}
+	}
 
 	//SHA256 helper functions
 

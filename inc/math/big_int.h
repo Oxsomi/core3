@@ -22,6 +22,70 @@
 #include "math/vec.h"
 #include "types/platform_types.h"
 
+typedef struct Allocator Allocator;
+typedef struct CharString CharString;
+
+//BigInt allow up to 16320 bit ints but isn't well optimized.
+//For optimized versions please use U128 and U256 since they don't dynamically allocate,
+//and because big int can be varying length so no SIMD optimizations are present.
+
+typedef struct BigInt {
+
+	const U64 *data;
+
+	Bool isConst;
+	Bool isRef;
+	U8 length;		//In U64s
+	U8 pad;
+
+} BigInt;
+
+BigInt BigInt_createNull();
+Error BigInt_create(U16 bitCount, Allocator allocator, BigInt *big);			//Aligns bitCount to 64.
+Error BigInt_createRef(U64 *ptr, U64 ptrCount, BigInt *big);					//ref U64 ptr[ptrCount]
+Error BigInt_createConstRef(const U64 *ptr, U64 ptrCount, BigInt *big);			//const ref U64 ptr[ptrCount]
+Error BigInt_createFromHex(CharString text, U16 bitCount, Allocator allocator, BigInt *big);
+Error BigInt_createFromDec(CharString text, U16 bitCount, Allocator allocator, BigInt *big);
+Error BigInt_createFromOct(CharString text, U16 bitCount, Allocator allocator, BigInt *big);
+Error BigInt_createFromBin(CharString text, U16 bitCount, Allocator allocator, BigInt *big);
+Error BigInt_createFromNyto(CharString text, U16 bitCount, Allocator allocator, BigInt *big);
+Error BigInt_createFromText(CharString text, U16 bitCount, Allocator allocator, BigInt *big);
+Bool BigInt_free(BigInt *b, Allocator allocator);
+
+Bool BigInt_mul(BigInt *a, BigInt b, Allocator allocator);		//Multiply on self and keep bit count
+Bool BigInt_add(BigInt *a, BigInt b, Allocator allocator);		//Add on self and keep bit count
+Bool BigInt_sub(BigInt *a, BigInt b, Allocator allocator);		//Subtract on self and keep bit count
+
+Bool BigInt_xor(BigInt *a, BigInt b);
+Bool BigInt_or(BigInt *a, BigInt b);
+Bool BigInt_and(BigInt *a, BigInt b);
+
+I8 BigInt_cmp(BigInt a, BigInt b);
+Bool BigInt_eq(BigInt a, BigInt b);
+Bool BigInt_neq(BigInt a, BigInt b);
+Bool BigInt_lt(BigInt a, BigInt b);
+Bool BigInt_leq(BigInt a, BigInt b);
+Bool BigInt_gt(BigInt a, BigInt b);
+Bool BigInt_geq(BigInt a, BigInt b);
+
+//TODO: div and mod
+
+Bool BigInt_trunc(BigInt *big, Allocator allocator);							//Gets rid of all hi bits that are unset
+
+Buffer BigInt_bufferConst(BigInt b);
+Buffer BigInt_buffer(BigInt b);
+
+U16 BigInt_byteCount(BigInt b);
+U16 BigInt_bitCount(BigInt b);
+
+Error BigInt_hex(BigInt b, Allocator allocator, CharString *result);
+Error BigInt_oct(BigInt b, Allocator allocator, CharString *result);
+Error BigInt_dec(BigInt b, Allocator allocator, CharString *result);
+Error BigInt_bin(BigInt b, Allocator allocator, CharString *result);
+Error BigInt_nyto(BigInt b, Allocator allocator, CharString *result);
+
+//U128
+
 #if _PLATFORM_TYPE == EPlatform_Linux
 	typedef __int128 U128;
 #else
@@ -29,8 +93,9 @@
 #endif
 
 U128 U128_create(const U8 data[16]);
-U128 U128_mul64(U64 a, U64 b);			//Multiply two 64-bit numbers to generate a 128-bit number
-U128 U128_add64(U64 a, U64 b);			//Add two 64-bit numbers but keep the overflow bit
+U128 U128_createU64x2(U64 a, U64 b);
+U128 U128_mul64(U64 a, U64 b, Allocator alloc);		//Multiply two 64-bit numbers to generate a 128-bit number
+U128 U128_add64(U64 a, U64 b);						//Add two 64-bit numbers but keep the overflow bit
 
 U128 U128_zero();
 U128 U128_one();
