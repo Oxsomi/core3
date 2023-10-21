@@ -163,6 +163,9 @@
 	I32x4 I32x4_xor(I32x4 a, I32x4 b) { return _mm_xor_si128(a, b); }
 	I32x2 I32x2_xor(I32x2 a, I32x2 b) _NONE_OP2I(a.v[i] ^ b.v[i])
 
+	I32x4 I32x4_not(I32x4 a) { return _mm_xor_si128(a, I32x4_xxxx4((I32)U32_MAX)); }
+	I32x2 I32x2_not(I32x2 a) _NONE_OP2I(~a.v[i])
+
 	//Min/max
 
 	I32x4 I32x4_min(I32x4 a, I32x4 b) { return _mm_min_epi32(a, b); }

@@ -1548,19 +1548,59 @@ int main() {
 		}
 	}
 
+	//U128 compare
+
+	{
+
+		printf("Comparing U128 to U128 as BigInt and U128\n");
+
+		U128 compares[] = {
+			U128_createU64x2(0x0000000000000000, 0x0000000000000000),
+			U128_createU64x2(0x0000000000000001, 0x0000000000000000),
+			U128_createU64x2(0x000000007FFFFFFF, 0x0000000000000000),
+			U128_createU64x2(0x0000000080000000, 0x0000000000000000),
+			U128_createU64x2(0x0000000080000001, 0x0000000000000000),
+			U128_createU64x2(0x00000000FFFFFFFF, 0x0000000000000000),
+			U128_createU64x2(0x00000001FFFFFFFF, 0x0000000000000000),
+			U128_createU64x2(0x00000001FFFFFFFF, 0x0000000000000001),
+			U128_createU64x2(0x00000001FFFFFFFF, 0x00000000FFFFFFFF),
+			U128_createU64x2(0x00000001FFFFFFFF, 0x00000001FFFFFFFF),
+			U128_createU64x2(0x00000001FFFFFFFF, 0xFFFFFFFFFFFFFFFF)
+		};
+
+		for(U64 i = 1; i < sizeof(compares) / sizeof(compares[0]); ++i) {
+
+			if(
+				U128_cmp(compares[i - 1], compares[i]) != -1 || 
+				U128_cmp(compares[i], compares[i - 1]) != 1
+			)
+				_gotoIfError(clean, Error_invalidState((U32)i));
+
+			BigInt aBig = (BigInt) { 0 }, bBig = (BigInt) { 0 };
+			_gotoIfError(clean, BigInt_createConstRef((const U64*)&compares[i - 1], 2, &aBig));
+			_gotoIfError(clean, BigInt_createConstRef((const U64*)&compares[i], 2, &bBig));
+
+			if(
+				BigInt_cmp(aBig, bBig) != -1 ||
+				BigInt_cmp(bBig, aBig) != 1
+			)
+				_gotoIfError(clean, Error_invalidState((U32)i));
+		}
+	}
+
 	//BigInt unit test
 
 	const U64 mulParams[][2] = { 
-		{ 0x0123456789ABCDEF, 0xFEDCBA9876543210 },
 		{ U64_MAX, U64_MAX },
+		{ 0x0123456789ABCDEF, 0xFEDCBA9876543210 },
 		{ 0x2ABA5DA1FDF6DB0F, 0xE1147CF49D662B78 },
 		{ 0x04D7A36BB020207F, 0xAC03EB4D2257AED9 },
 		{ 0xC9DB73597154808E, 0xCE841590CDB048A4 }
 	};
 
 	const U64 mulResult[][2] = { 
-		{ 0x2236D88FE5618CF0, 0x0121FA00AD77D742 },
 		{ 0x0000000000000001, 0xFFFFFFFFFFFFFFFE },
+		{ 0x2236D88FE5618CF0, 0x0121FA00AD77D742 },
 		{ 0xE9F1BC96FD7C3408, 0x259137B5CA1EDC29 },
 		{ 0xAFD5326D0A7ADDA7, 0x340F4C6AD1EF492 },
 		{ 0x3191981675EA4AF8, 0xA2D6BCFAA1676325 }

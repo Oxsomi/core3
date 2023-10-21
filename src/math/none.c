@@ -163,6 +163,9 @@
 	I32x4 I32x4_xor(I32x4 a, I32x4 b) _NONE_OP4I(a.v[i] ^ b.v[i])
 	I32x2 I32x2_xor(I32x2 a, I32x2 b) _NONE_OP2I(a.v[i] ^ b.v[i])
 
+	I32x2 I32x2_not(I32x2 a) _NONE_OP2I(~a.v[i])
+	I32x4 I32x4_not(I32x4 a) _NONE_OP4I(~a.v[i])
+
 	//Min/max
 
 	I32x4 I32x4_min(I32x4 a, I32x4 b) _NONE_OP4I((I32) I64_min(a.v[i], b.v[i]))

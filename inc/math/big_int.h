@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -60,6 +60,8 @@ Bool BigInt_xor(BigInt *a, BigInt b);
 Bool BigInt_or(BigInt *a, BigInt b);
 Bool BigInt_and(BigInt *a, BigInt b);
 
+Bool BigInt_not(BigInt *a);
+
 I8 BigInt_cmp(BigInt a, BigInt b);
 Bool BigInt_eq(BigInt a, BigInt b);
 Bool BigInt_neq(BigInt a, BigInt b);
@@ -104,8 +106,9 @@ U128 U128_xor(U128 a, U128 b);
 U128 U128_or(U128 a, U128 b);
 U128 U128_and(U128 a, U128 b);
 
-//U128 U128_not(U128 a);
+U128 U128_not(U128 a);
 
+I8 U128_cmp(U128 a, U128 b);
 Bool U128_eq(U128 a, U128 b);
 Bool U128_neq(U128 a, U128 b);
 Bool U128_lt(U128 a, U128 b);
@@ -118,8 +121,6 @@ Bool U128_geq(U128 a, U128 b);
 U128 U128_mul(U128 a, U128 b);
 U128 U128_add(U128 a, U128 b);
 U128 U128_sub(U128 a, U128 b);
-U128 U128_negate(U128 a);
-U128 U128_complement(U128 a);
 
 U128 U128_min(U128 a, U128 b);
 U128 U128_max(U128 a, U128 b);

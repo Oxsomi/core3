@@ -22,6 +22,7 @@
 #include "types/error.h"
 #include "types/buffer.h"
 #include "types/allocator.h"
+#include "types/time.h"
 
 //BigInt
 
@@ -226,6 +227,17 @@ Bool BigInt_and(BigInt *a, BigInt b) {
 	return true;
 }
 
+Bool BigInt_not(BigInt *a) {
+
+	if(!a || a->isConst)
+		return false;
+
+	for(U64 i = 0; i < a->length; ++i)
+		((U64*)a->data)[i] = ~a->data[i];
+
+	return true;
+}
+
 I8 BigInt_cmp(BigInt a, BigInt b) {
 
 	U64 biggestLen = U64_max(a.length, b.length);
@@ -281,61 +293,19 @@ U128 U128_createU64x2(U64 a, U64 b) {
 	return I32x4_createFromU64x2(a, b);
 }
 
+#include <stdio.h>
+
 U128 U128_mul64(U64 au, U64 bu, Allocator alloc) {
 
-	//We interpret au and bu as a U32[2] interleaved with an empty U32 each.
-	// 
-	//a0 a1 a2 a3 00 00 00 00 a4 a5 a6 a7 00 00 00 00
-	//b0 b1 b2 b3 00 00 00 00 b4 b5 b6 b7 00 00 00 00
-	//=
-	//xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx
-	// 
-	//This basically means we can use it as a multiply two U32s and not overflow.
-	//However, this is not all that a multiplication has to do.
-	//It has to do this operation for every single element and merge them together,
-	//Respecting baseN offset.
-	// 
-	//For example:
-	//1 2
-	//3 4 x
-	//=
-	//--->1
-	//0 2 
-	//3 4 x
-	//=
-	//6 8
-	//--->2
-	//0 1
-	//3 4 x
-	//=
-	//3 4 (shift e+1)
-	//= 3 4 0
-	//---> 4
-	//340 + 68 = 408.
-	//
-	//a0 = 12 % 10 = 2
-	//a1 = 12 / 10 = 1
-	//
-	//b0 = 34 % 10 = 4
-	//b1 = 34 / 10 = 3
-	//
-	//From this we can understand that:
-	//(a0 * b0) % 10 = (2 * 4) % 10 = 8 % 10 = 8 = digit0
-	// c = ((a0 * b0) / 10 + (a0 * b1) + (a1 * b0))
-	//   = (8 / 10 (int) + 6 + 4) % 10 = (0 + 6 + 4) = 10
-	//c % 10 = 10 % 10 = 0 = digit1
-	//((a1 * b1) + c / 10) % 10 = (3 + 10 / 10) = 4 = digit2
-	//((a1 * b1) + c / 10) / 10 = 3 / 10 = 0 = digit3
-	//0 4 0 8 = 1 2 * 3 4
-	//
-	// % 10 in baseU32 context is just a simple trunc from U64 to U32
-	// / 10 in baseU32 context is just a simple shift by 32 from the U64
+	alloc;
 
 	#if _PLATFORM_TYPE == EPlatform_Linux
 
 		return (__int128) au * (__int128) bu;
 
 	#elif _SIMD == SIMD_NONE
+
+		U64 clocks = Time_clocks();
 		
 		U64 a[2] = { au, 0 };
 		U64 b[2] = { bu, 0 };
@@ -349,11 +319,22 @@ U128 U128_mul64(U64 au, U64 bu, Allocator alloc) {
 		)
 			return U128_zero();
 			
-		return U128_createU64x2(a[0], a[1]);
+		U128 result = U128_createU64x2(a[0], a[1]);
+		U64 deltaClocks = Time_clocksElapsed(clocks);
+		printf("%llu\n", deltaClocks);
+		return result;
 
 	#else
 
+		U64 clocks = Time_clocks();
 		I32x4 mask4 = I32x4_xxxx4(U16_MAX);
+
+		//TODO: Write this in a more simplified way, currently this doesn't use mul_epu32, 
+		//		but that'd allow to use 64-bit int mul, greatly simplifying the process.
+		//		Currently the compiler understands this anyways on optimized mode.
+		//https://stackoverflow.com/questions/28807341/simd-signed-with-unsigned-multiplication-for-64-bit-64-bit-to-128-bit
+
+		U16 D[8];
 
 		//Split up a and b as the following:
 		//a0 a1 00 00 a4 a5 00 00 b0 b1 00 00 b4 b5 00 00
@@ -370,23 +351,134 @@ U128 U128_mul64(U64 au, U64 bu, Allocator alloc) {
 
 		I32x4 hiSwiz = I32x4_zwxy(hi);
 		I32x4 a = I32x4_xzyw(I32x4_blend(low, hiSwiz, 0b1100));
-		I32x4 b = I32x4_zxwy(I32x4_blend(low, hiSwiz, 0b0011));
+		I32x4 b = I32x4_blend(low, hiSwiz, 0b0011);					//zxwy = xyzw. Not done here to avoid swizzle
 
 		//Then multiply the U32x4 with the other U32x4.
 
-		I32x4 mul = I32x4_mul(a, b);
+		I32x4 aXbx = I32x4_mul(a, I32x4_zzzz(b));
+		I32x4 aXby = I32x4_mul(a, I32x4_xxxx(b));
+		I32x4 aXbz = I32x4_mul(a, I32x4_wwww(b));
+		I32x4 aXbw = I32x4_mul(a, I32x4_yyyy(b));
 
-		//Split up the result to get the overflow and real parts
+		U32 tempD6 = I32x4_w(aXbw);
+		D[0] = (U16)I32x4_x(aXbx);
 
-		I32x4 lows = I32x4_and(mul, mask4);
-		I32x4 highs = I32x4_and(I32x4_rshByte(mul, 2), mask4);
+		//Swizzle Brune matrix to allow adding in parallel
+		// 
+		//aXbx: 0 1 2 3
+		//aXby: 1 2 3 4
+		//aXbz: 2 3 4 5
+		//aXbw: 3 4 5 6
+		// 
+		//Gets swizzled to:
+		//aXbx: 0 1 2 3 (no change)
+		//aXby: 4 1 2 3
+		//aXbz: 4 5 2 3
+		//aXbw: 4 5 6 3
 
-		//TODO: Merge overflow and other bits
+		aXby = I32x4_wxyz(aXby);
+		aXbz = I32x4_zwxy(aXbz);
+		aXbw = I32x4_yzwx(aXbw);
 
-		lows;
-		highs;
+		//Grab hi and low of mul of each type
 
-		return mul;
+		I32x4 aXbxHi = I32x4_and(I32x4_rshByte(aXbx, 2), mask4);
+		aXbx = I32x4_and(aXbx, mask4);
+
+		I32x4 aXbyHi = I32x4_and(I32x4_rshByte(aXby, 2), mask4);
+		aXby = I32x4_and(aXby, mask4);
+
+		I32x4 aXbzHi = I32x4_and(I32x4_rshByte(aXbz, 2), mask4);
+		aXbz = I32x4_and(aXbz, mask4);
+
+		I32x4 aXbwHi = I32x4_and(I32x4_rshByte(aXbw, 2), mask4);
+		aXbw = I32x4_and(aXbw, mask4);
+
+		//We store hi and lo separately because 32 bit isn't enough to prevent overflow.
+		//We actually use 48 bit (32-bit lo overflows after 16-bit into 32-bit hi)
+		//Do two 1, 2 and 3 additions.
+		//aXbx: 0 1 2 3
+		//aXby: X 1 2 3 +	(X = unused)
+
+		I32x4 tmp = I32x4_wxww(I32x4_trunc2(aXbxHi));
+		I32x4 hiAddr = I32x4_add(aXbxHi, aXbyHi);												//High addition
+		I32x4 loAddr = I32x4_add(I32x4_add(aXbx, aXby), tmp);		//Low addition (add overflow)
+
+		hiAddr = I32x4_add(hiAddr, I32x4_and(I32x4_rshByte(loAddr, 2), mask4));				//Handle low overflow
+		loAddr = I32x4_and(loAddr, mask4);
+
+		D[1] = (U16) I32x4_y(loAddr);
+
+		//Do two 4, 2 and 3 additions.
+		//adder: 4 X 2 3
+		//aXbz:  4 X 2 3 +	(X = unused)
+
+		tmp = I32x4_wwyw(I32x4_trunc2(hiAddr));
+		hiAddr = I32x4_blend(hiAddr, aXbyHi, 0b0001);		//Blend in D4
+		loAddr = I32x4_blend(loAddr, aXby,   0b0001);
+
+		hiAddr = I32x4_add(hiAddr, aXbzHi);
+		loAddr = I32x4_add(loAddr, I32x4_add(aXbz, tmp));
+
+		hiAddr = I32x4_add(hiAddr, I32x4_and(I32x4_rshByte(loAddr, 2), mask4));				//Handle low overflow
+		loAddr = I32x4_and(loAddr, mask4);
+
+		D[2] = (U16) I32x4_z(loAddr);
+
+		//Do two 4, 5 and 3 additions.
+		//adder: 4 5 X 3
+		//aXbz:  4 5 X 3 +	(X = unused)
+
+		tmp = I32x4_wwwz(I32x4_trunc3(hiAddr));
+		hiAddr = I32x4_blend(hiAddr, aXbzHi, 0b0010);		//Blend in D5
+		loAddr = I32x4_blend(loAddr, aXbz,   0b0010);
+
+		hiAddr = I32x4_add(hiAddr, aXbwHi);
+		loAddr = I32x4_add(loAddr, I32x4_add(aXbw, tmp));
+
+		hiAddr = I32x4_add(hiAddr, I32x4_and(I32x4_rshByte(loAddr, 2), mask4));				//Handle low overflow
+		loAddr = I32x4_and(loAddr, mask4);
+
+		D[3] = (U16) I32x4_w(loAddr);
+
+		//Add tail (D4 + OD3)
+		//adder: 4 5 X X
+
+		tmp = I32x4_create4(0, 0, 0, (I32) U32_MAX);
+		tmp = I32x4_wxxx(I32x4_and(hiAddr, tmp));
+		loAddr = I32x4_add(loAddr, tmp);
+
+		hiAddr = I32x4_add(hiAddr, I32x4_and(I32x4_rshByte(loAddr, 2), mask4));				//Handle low overflow
+		loAddr = I32x4_and(loAddr, mask4);
+
+		D[4] = (U16) I32x4_x(loAddr);
+
+		//Add tail (D5 + OD4)
+		//adder: X 5 X X
+
+		U64 tail = ((U64)I32x4_y(hiAddr) << 16) + I32x4_y(loAddr) + I32x4_x(hiAddr);
+		D[5] = (U16) tail;
+		tail >>= 16;
+
+		//Add tail (D5 + OD4)
+		//adder: X 5 X X
+
+		tail += tempD6;
+		D[6] = (U16) tail;
+		tail >>= 16;
+
+		D[7] = (U16) tail;
+
+		//Grab resulting digits
+
+		U64 deltaClocks = Time_clocksElapsed(clocks);
+		printf(
+			"%llu clocks %04X%04X%04X%04X%04X%04X%04X%04X\n", 
+			deltaClocks,
+			D[0], D[1], D[2], D[3], D[4], D[5], D[6], D[7]
+		);
+
+		return I32x4_createFromU64x2(*(const U64*)&D[0], *(const U64*)&D[4]);
 
 	#endif
 }
@@ -403,14 +495,46 @@ U128 U128_xor(U128 a, U128 b) { return I32x4_xor(a, b); }
 U128 U128_or(U128 a, U128 b) { return I32x4_or(a, b); }
 U128 U128_and(U128 a, U128 b) { return I32x4_and(a, b); }
 
-//U128 U128_not(U128 a) { return I32x4_not(a); }
+U128 U128_not(U128 a) { return I32x4_not(a); }
+
+I8 U128_cmp(U128 a, U128 b) {
+
+	//Early exit
+
+	if(U128_eq(a, b))
+		return 0;
+
+	//The I32x4 data contains 0x00... -> 0x7F... as >0
+	//And then 0x80... -> 0xFF... as <0.
+	//So compare won't work correctly since it contains unsigned data.
+	//To hack around this, we have to mask out everything except sign bits.
+	//Then we can use the sign bits to generate a final verdict
+
+	I32x4 aSign = I32x4_lt(a, I32x4_zero());
+	I32x4 bSign = I32x4_lt(b, I32x4_zero());
+	I32x4 signEq = I32x4_eq(aSign, bSign);
+	I32x4 signGt = I32x4_gt(aSign, bSign);
+
+	I32x4 mask = I32x4_xxxx4(I32_MAX);
+	a = I32x4_and(a, mask);
+	b = I32x4_and(b, mask);
+
+	I32x4 signSameAndGt = I32x4_and(signEq, I32x4_gt(a, b));
+	I32x4 result = I32x4_or(signGt, signSameAndGt);
+
+	for(U8 i = 0; i < 4; ++i)
+		if(I32x4_get(result, i))
+			return 1;
+
+	return -1;
+}
 
 Bool U128_eq(U128 a, U128 b) { return I32x4_eq4(a, b); }
 Bool U128_neq(U128 a, U128 b) { return !U128_eq(a, b); }
-Bool U128_lt(U128 a, U128 b);
-Bool U128_leq(U128 a, U128 b);
-Bool U128_gt(U128 a, U128 b);
-Bool U128_geq(U128 a, U128 b);
+Bool U128_lt(U128 a, U128 b) { return U128_cmp(a, b) < 0; }
+Bool U128_leq(U128 a, U128 b) { return U128_cmp(a, b) <= 0; }
+Bool U128_gt(U128 a, U128 b) { return U128_cmp(a, b) > 0; }
+Bool U128_geq(U128 a, U128 b) { return U128_cmp(a, b) >= 0; }
 
 //U128 U128_div(U128 a, U128 b);
 //U128 U128_mod(U128 a, U128 b);

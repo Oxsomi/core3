@@ -70,6 +70,8 @@ impl I32x2 I32x2_or(I32x2 a, I32x2 b);
 impl I32x2 I32x2_and(I32x2 a, I32x2 b);
 impl I32x2 I32x2_xor(I32x2 a, I32x2 b);
 
+impl I32x2 I32x2_not(I32x2 a);
+
 Bool I32x2_eq2(I32x2 a, I32x2 b);
 Bool I32x2_neq2(I32x2 a, I32x2 b);
 
