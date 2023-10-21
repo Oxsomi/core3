@@ -54,6 +54,7 @@
 	F32x2 F32x2_sub(F32x2 a, F32x2 b) _NONE_OP2F(a.v[i] - b.v[i])
 
 	I32x4 I32x4_mul(I32x4 a, I32x4 b) _NONE_OP4I(a.v[i] * b.v[i])
+
 	F32x4 F32x4_mul(F32x4 a, F32x4 b) _NONE_OP4F(a.v[i] * b.v[i])
 	I32x2 I32x2_mul(I32x2 a, I32x2 b) _NONE_OP2I(a.v[i] * b.v[i])
 	F32x2 F32x2_mul(F32x2 a, F32x2 b) _NONE_OP2F(a.v[i] * b.v[i])
@@ -62,6 +63,24 @@
 	F32x4 F32x4_div(F32x4 a, F32x4 b) _NONE_OP4F(a.v[i] / b.v[i])
 	I32x2 I32x2_div(I32x2 a, I32x2 b) _NONE_OP2I(a.v[i] / b.v[i])
 	F32x2 F32x2_div(F32x2 a, F32x2 b) _NONE_OP2F(a.v[i] / b.v[i])
+
+	//Used for big ints
+	//64-bit add but stored in 32-bit int
+	//64-bit mul but fetched as 32-bit int
+
+	I32x4 I32x4_addU64x2(I32x4 a, I32x4 b) {
+
+		I32x4 res = a;
+
+		for(U64 i = 0; i < 2; ++i)
+			((U64*)&res)[i] += ((const U64*)&b)[i];
+
+		return res;
+	}
+
+	I32x4 I32x4_mulU32x2AsU64x2(I32x4 a, I32x4 b) _NONE_OP4I(
+		(I32)(U32)(((U64)(U32)a.v[i & ~1] * (U32)b.v[i & ~1]) >> ((i & 1) << 5))
+	)
 
 	//Swizzle
 

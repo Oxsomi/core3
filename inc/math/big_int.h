@@ -96,8 +96,8 @@ Error BigInt_nyto(BigInt b, Allocator allocator, CharString *result);
 
 U128 U128_create(const U8 data[16]);
 U128 U128_createU64x2(U64 a, U64 b);
-U128 U128_mul64(U64 a, U64 b, Allocator alloc);		//Multiply two 64-bit numbers to generate a 128-bit number
-U128 U128_add64(U64 a, U64 b);						//Add two 64-bit numbers but keep the overflow bit
+U128 U128_mul64(U64 a, U64 b);			//Multiply two 64-bit numbers to generate a 128-bit number
+U128 U128_add64(U64 a, U64 b);			//Add two 64-bit numbers but keep the overflow bit
 
 U128 U128_zero();
 U128 U128_one();

@@ -1591,16 +1591,16 @@ int main() {
 	//BigInt unit test
 
 	const U64 mulParams[][2] = { 
-		{ U64_MAX, U64_MAX },
 		{ 0x0123456789ABCDEF, 0xFEDCBA9876543210 },
+		{ U64_MAX, U64_MAX },
 		{ 0x2ABA5DA1FDF6DB0F, 0xE1147CF49D662B78 },
 		{ 0x04D7A36BB020207F, 0xAC03EB4D2257AED9 },
 		{ 0xC9DB73597154808E, 0xCE841590CDB048A4 }
 	};
 
 	const U64 mulResult[][2] = { 
-		{ 0x0000000000000001, 0xFFFFFFFFFFFFFFFE },
 		{ 0x2236D88FE5618CF0, 0x0121FA00AD77D742 },
+		{ 0x0000000000000001, 0xFFFFFFFFFFFFFFFE },
 		{ 0xE9F1BC96FD7C3408, 0x259137B5CA1EDC29 },
 		{ 0xAFD5326D0A7ADDA7, 0x340F4C6AD1EF492 },
 		{ 0x3191981675EA4AF8, 0xA2D6BCFAA1676325 }
@@ -1637,7 +1637,7 @@ int main() {
 	for(U64 i = 0; i < sizeof(mulParams) / sizeof(mulParams[0]); ++i) {
 
 		U128 mulRes = U128_create((const U8*) mulResult[i]);
-		U128 mulReal = U128_mul64(mulParams[i][0], mulParams[i][1], alloc);
+		U128 mulReal = U128_mul64(mulParams[i][0], mulParams[i][1]);
 
 		if (U128_neq(mulRes, mulReal))
 			_gotoIfError(clean, Error_invalidOperation((U32)i));
