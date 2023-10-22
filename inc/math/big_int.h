@@ -50,11 +50,11 @@ Error BigInt_createFromOct(CharString text, U16 bitCount, Allocator allocator, B
 Error BigInt_createFromBin(CharString text, U16 bitCount, Allocator allocator, BigInt *big);
 Error BigInt_createFromNyto(CharString text, U16 bitCount, Allocator allocator, BigInt *big);
 Error BigInt_createFromText(CharString text, U16 bitCount, Allocator allocator, BigInt *big);
-Bool BigInt_free(BigInt *b, Allocator allocator);
+Bool BigInt_free(BigInt *a, Allocator allocator);
 
-Bool BigInt_mul(BigInt *a, BigInt b, Allocator allocator);		//Multiply on self and keep bit count
-Bool BigInt_add(BigInt *a, BigInt b);		//Add on self and keep bit count
-Bool BigInt_sub(BigInt *a, BigInt b);		//Subtract on self and keep bit count
+Bool BigInt_mul(BigInt *a, BigInt b, Allocator allocator);					//Multiply on self and keep bit count
+Bool BigInt_add(BigInt *a, BigInt b);										//Add on self and keep bit count
+Bool BigInt_sub(BigInt *a, BigInt b);										//Subtract on self and keep bit count
 
 Bool BigInt_xor(BigInt *a, BigInt b);
 Bool BigInt_or(BigInt *a, BigInt b);
@@ -70,17 +70,18 @@ Bool BigInt_leq(BigInt a, BigInt b);
 Bool BigInt_gt(BigInt a, BigInt b);
 Bool BigInt_geq(BigInt a, BigInt b);
 
-BigInt *BigInt_min(BigInt *a, BigInt *b);					//Returns one of two passed pointers
-BigInt *BigInt_max(BigInt *a, BigInt *b);					//Returns one of two passed pointers
-BigInt *BigInt_clamp(BigInt *a, BigInt *mi, BigInt *ma);	//Returns one of two passed pointers
+BigInt *BigInt_min(BigInt *a, BigInt *b);									//Returns one of two passed pointers
+BigInt *BigInt_max(BigInt *a, BigInt *b);									//Returns one of two passed pointers
+BigInt *BigInt_clamp(BigInt *a, BigInt *mi, BigInt *ma);					//Returns one of two passed pointers
 
-Error BigInt_resize(BigInt *a, U64 newSize, Allocator alloc);
-Bool BigInt_set(BigInt *a, BigInt b);
+Error BigInt_resize(BigInt *a, U8 newSize, Allocator alloc);				//newSize in U64s
+Bool BigInt_set(BigInt *a, BigInt b, Bool allowResize, Allocator alloc);	//Set all bits to b, resize if allowResize is set.
 Error BigInt_copy(BigInt *a, Allocator alloc, BigInt *b);
 
-//TODO:
-//Bool BigInt_mod(BigInt *a, BigInt b);
-//Bool BigInt_div(BigInt *a, BigInt b);
+Bool BigInt_lsh(BigInt *a, U16 bits);
+Bool BigInt_rsh(BigInt *a, U16 bits);
+Bool BigInt_mod(BigInt *a, BigInt b);
+Bool BigInt_div(BigInt *a, BigInt b);
 
 Bool BigInt_trunc(BigInt *big, Allocator allocator);							//Gets rid of all hi bits that are unset
 
@@ -126,8 +127,10 @@ Bool U128_leq(U128 a, U128 b);
 Bool U128_gt(U128 a, U128 b);
 Bool U128_geq(U128 a, U128 b);
 
-//U128 U128_div(U128 a, U128 b);
-//U128 U128_mod(U128 a, U128 b);
+U128 U128_lsh(U128 a, U8 x);
+U128 U128_rsh(U128 a, U8 x);
+U128 U128_div(U128 a, U128 b);
+U128 U128_mod(U128 a, U128 b);
 U128 U128_mul(U128 a, U128 b);
 U128 U128_add(U128 a, U128 b);
 U128 U128_sub(U128 a, U128 b);

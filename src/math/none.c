@@ -318,6 +318,41 @@
 		return result;
 	}
 
+	I32x4 I32x4_lsh32(I32x4 a, U8 bits) _NONE_OP4I(bits >= 32 ? 0 : a.v[i] << bits)
+	I32x4 I32x4_rsh32(I32x4 a, U8 bits) _NONE_OP4I(bits >= 32 ? 0 : a.v[i] >> bits)
+
+	I32x4 I32x4_lsh64(I32x4 a, U8 bits) {
+
+		if(!bits)
+			return a;
+
+		if(bits >= 64)
+			return I32x4_zero();
+
+		I32x4 res = a;
+
+		for(U64 i = 0; i < 2; ++i)
+			((U64*)&res)[i] <<= bits;
+
+		return res;
+	}
+
+	I32x4 I32x4_rsh64(I32x4 a, U8 bits)  {
+
+		if(!bits)
+			return a;
+
+		if(bits >= 64)
+			return I32x4_zero();
+
+		I32x4 res = a;
+
+		for(U64 i = 0; i < 2; ++i)
+			((U64*)&res)[i] >>= bits;
+
+		return res;
+	}
+
 	I32x4 I32x4_lshByte32(I32x4 a) {
 		return I32x4_create4(
 			0,

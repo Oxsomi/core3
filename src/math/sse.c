@@ -279,20 +279,9 @@
 	I32x4 I32x4_lshByte(I32x4 a, U8 bytes) {
 		switch (bytes) {
 			case 0:		return a;
-			case  1:	return _mm_slli_si128(a,  1);
-			case  2:	return _mm_slli_si128(a,  2);
-			case  3:	return _mm_slli_si128(a,  3);
-			case  4:	return _mm_slli_si128(a,  4);
-			case  5:	return _mm_slli_si128(a,  5);
-			case  6:	return _mm_slli_si128(a,  6);
-			case  7:	return _mm_slli_si128(a,  7);
-			case  8:	return _mm_slli_si128(a,  8);
-			case  9:	return _mm_slli_si128(a,  9);
-			case 10:	return _mm_slli_si128(a, 10);
-			case 11:	return _mm_slli_si128(a, 11);
-			case 12:	return _mm_slli_si128(a, 12);
-			case 13:	return _mm_slli_si128(a, 13);
-			case 14:	return _mm_slli_si128(a, 14);
+			_expand8(1, _mm_slli_si128, a);
+			_expand4(9, _mm_slli_si128, a);
+			_expand2(13, _mm_slli_si128, a);
 			case 15:	return _mm_slli_si128(a, 15);
 			default:	return I32x4_zero();
 		}
@@ -301,21 +290,60 @@
 	I32x4 I32x4_rshByte(I32x4 a, U8 bytes) {
 		switch (bytes) {
 			case 0:		return a;
-			case  1:	return _mm_srli_si128(a,  1);
-			case  2:	return _mm_srli_si128(a,  2);
-			case  3:	return _mm_srli_si128(a,  3);
-			case  4:	return _mm_srli_si128(a,  4);
-			case  5:	return _mm_srli_si128(a,  5);
-			case  6:	return _mm_srli_si128(a,  6);
-			case  7:	return _mm_srli_si128(a,  7);
-			case  8:	return _mm_srli_si128(a,  8);
-			case  9:	return _mm_srli_si128(a,  9);
-			case 10:	return _mm_srli_si128(a, 10);
-			case 11:	return _mm_srli_si128(a, 11);
-			case 12:	return _mm_srli_si128(a, 12);
-			case 13:	return _mm_srli_si128(a, 13);
-			case 14:	return _mm_srli_si128(a, 14);
+			_expand8(1, _mm_srli_si128, a);
+			_expand4(9, _mm_srli_si128, a);
+			_expand2(13, _mm_srli_si128, a);
 			case 15:	return _mm_srli_si128(a, 15);
+			default:	return I32x4_zero();
+		}
+	}
+
+	I32x4 I32x4_lsh32(I32x4 a, U8 bits) {
+		switch (bits) {
+			case 0:		return a;
+			_expand16(1, _mm_slli_epi32, a);
+			_expand8(17, _mm_slli_epi32, a);
+			_expand4(25, _mm_slli_epi32, a);
+			_expand2(29, _mm_slli_epi32, a);
+			case 31:	return _mm_slli_epi32(a, 31);
+			default:	return I32x4_zero();
+		}
+	}
+
+	I32x4 I32x4_rsh32(I32x4 a, U8 bits) {
+		switch (bits) {
+			case 0:		return a;
+			_expand16(1, _mm_srli_epi32, a);
+			_expand8(17, _mm_srli_epi32, a);
+			_expand4(25, _mm_srli_epi32, a);
+			_expand2(29, _mm_srli_epi32, a);
+			case 31:	return _mm_srli_epi32(a, 31);
+			default:	return I32x4_zero();
+		}
+	}
+
+	I32x4 I32x4_lsh64(I32x4 a, U8 bits) {
+		switch (bits) {
+			case 0:		return a;
+			_expand32(1, _mm_slli_epi64, a);
+			_expand16(33, _mm_slli_epi64, a);
+			_expand8(49, _mm_slli_epi64, a);
+			_expand4(57, _mm_slli_epi64, a);
+			_expand2(61, _mm_slli_epi64, a);
+			case 63:	return _mm_slli_epi64(a, 63);
+			default:	return I32x4_zero();
+		}
+	}
+
+	I32x4 I32x4_rsh64(I32x4 a, U8 bits) {
+		switch (bits) {
+			case 0:		return a;
+			_expand32(1, _mm_srli_epi64, a);
+			_expand16(33, _mm_srli_epi64, a);
+			_expand8(49, _mm_srli_epi64, a);
+			_expand4(57, _mm_srli_epi64, a);
+			_expand2(61, _mm_srli_epi64, a);
+			case 63:	return _mm_srli_epi64(a, 63);
 			default:	return I32x4_zero();
 		}
 	}

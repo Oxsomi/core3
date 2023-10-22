@@ -84,17 +84,17 @@ Error BigInt_createFromBin(CharString text, U16 bitCount, Allocator allocator, B
 Error BigInt_createFromNyto(CharString text, U16 bitCount, Allocator allocator, BigInt *big);
 Error BigInt_createFromText(CharString text, U16 bitCount, Allocator allocator, BigInt *big);
 
-Bool BigInt_free(BigInt *b, Allocator allocator) {
+Bool BigInt_free(BigInt *a, Allocator allocator) {
 
-	if(!b)
+	if(!a)
 		return false;
 
-	if(!b->isRef && b->length) {
-		Buffer buf = Buffer_createManagedPtr((U8*)b->data, b->length * sizeof(U64));
+	if(!a->isRef && a->length) {
+		Buffer buf = Buffer_createManagedPtr((U8*)a->data, a->length * sizeof(U64));
 		Buffer_free(&buf, allocator);
 	}
 
-	*b = (BigInt) { 0 };
+	*a = (BigInt) { 0 };
 	return true;
 }
 
@@ -190,10 +190,8 @@ Bool BigInt_mul(BigInt *a, BigInt b, Allocator allocator) {
 
 Bool BigInt_add(BigInt *a, BigInt b) {
 
-	if(!a)
+	if(!a || a->isConst)
 		return false;
-
-	U64 clock = Time_clocks();
 
 	Bool overflow = false;
 	U64 len = U64_min(a->length, b.length);
@@ -221,12 +219,42 @@ Bool BigInt_add(BigInt *a, BigInt b) {
 		overflow = (++((U64*)a->data)[next]) < prev;
 	}
 
-	printf("%llu clocks\n", Time_clocksElapsed(clock));
-
 	return true;
 }
 
-Bool BigInt_sub(BigInt *a, BigInt b);		//Subtract on self and keep bit count
+Bool BigInt_sub(BigInt *a, BigInt b) {
+
+	if(!a || a->isConst)
+		return false;
+
+	Bool underflow = false;
+	U64 len = U64_min(a->length, b.length);
+
+	for(U64 i = 0; i < len; ++i) {
+
+		U64 prev = a->data[i];
+		U64 sub = prev - b.data[i];
+		Bool nextUnderflow = sub > prev;
+
+		if(underflow) {
+			prev = sub;
+			--sub; 
+			nextUnderflow |= sub > prev;
+		}
+
+		((U64*)a->data)[i] = sub;
+		underflow = nextUnderflow;
+	}
+
+	U64 next = b.length;
+
+	while(underflow && next < a->length) {
+		U64 prev = a->data[next];
+		underflow = (--((U64*)a->data)[next]) > prev;
+	}
+
+	return true;
+}
 
 Bool BigInt_xor(BigInt *a, BigInt b) {
 
@@ -277,6 +305,60 @@ Bool BigInt_not(BigInt *a) {
 	return true;
 }
 
+Bool BigInt_lsh(BigInt *a, U16 bits) {
+
+	if(!a || a->isConst)
+		return false;
+
+	if(!bits)
+		return true;
+
+	if(bits >= BigInt_bitCount(*a))
+		return BigInt_and(a, BigInt_createNull());
+
+	for(U64 i = a->length - 1; i != U64_MAX; --i) {
+		
+		U64 right = i < (bits >> 6) ? 0 : a->data[i - (bits >> 6)];
+		U64 left = i <= (bits >> 6) ? 0 : a->data[i - (bits >> 6) - 1];
+
+		U64 shift = bits & 63;
+
+		right <<= shift;
+		left >>= 64 - shift;
+
+		((U64*)a->data)[i] = left | right;
+	}
+
+	return true;
+}
+
+Bool BigInt_rsh(BigInt *a, U16 bits) {
+
+	if(!a || a->isConst)
+		return false;
+
+	if(!bits)
+		return true;
+
+	if(bits >= BigInt_bitCount(*a))
+		return BigInt_and(a, BigInt_createNull());
+
+	for(U64 i = 0; i < a->length; ++i) {
+
+		U64 left = i + (bits >> 6) > a->length - 1 ? 0 : a->data[i + (bits >> 6)];
+		U64 right = i + (bits >> 6) >= a->length - 1 ? 0 : a->data[i + (bits >> 6) + 1];
+
+		U64 shift = bits & 63;
+
+		right <<= 64 - shift;
+		left >>= shift;
+
+		((U64*)a->data)[i] = left | right;
+	}
+
+	return true;
+}
+
 I8 BigInt_cmp(BigInt a, BigInt b) {
 
 	U64 biggestLen = U64_max(a.length, b.length);
@@ -309,15 +391,93 @@ BigInt *BigInt_min(BigInt *a, BigInt *b) { return !a ? b : (!b ? a : (BigInt_leq
 BigInt *BigInt_max(BigInt *a, BigInt *b) { return !a ? b : (!b ? a : (BigInt_geq(*a, *b) ? a : b)); }
 BigInt *BigInt_clamp(BigInt *a, BigInt *mi, BigInt *ma) { return BigInt_max(BigInt_min(a, ma), mi); }
 
-Error BigInt_resize(BigInt *a, U64 newSize, Allocator alloc);
-Bool BigInt_set(BigInt *a, BigInt b);
-Error BigInt_copy(BigInt *a, Allocator alloc, BigInt *b);
+Error BigInt_resize(BigInt *a, U8 newSize, Allocator alloc) {
 
-Bool BigInt_trunc(BigInt *big, Allocator allocator);							//Gets rid of all hi bits that are unset
+	if(!a)
+		return Error_nullPointer(0);
 
-//TODO:
-//Bool BigInt_mod(BigInt *a, BigInt b);
-//Bool BigInt_div(BigInt *a, BigInt b);
+	if(a->isRef)
+		return Error_invalidOperation(0);
+
+	if(a->length == newSize)
+		return Error_none();
+
+	if(!newSize) {
+		BigInt_free(a, alloc);
+		return Error_none();
+	}
+
+	BigInt temp = (BigInt) { 0 };
+	Error err = BigInt_create((U16)newSize << 6, alloc, &temp);
+
+	if(err.genericError)
+		return err;
+
+	if(!BigInt_set(&temp, *a, false, (Allocator) { 0 }))
+		return Error_invalidState(0);
+
+	BigInt_free(a, alloc);
+	*a = temp;
+	return err;
+}
+
+Bool BigInt_set(BigInt *a, BigInt b, Bool allowResize, Allocator alloc) {
+
+	if(!a || a->isConst)
+		return false;
+
+	if (allowResize && a->length != b.length) {
+	
+		Error err = BigInt_resize(a, b.length, alloc);
+
+		if(err.genericError)
+			return false;
+	}
+
+	for(U64 i = 0; i < a->length && i < b.length; ++i)
+		((U64*)a->data)[i] = b.data[i];
+
+	for(U64 i = b.length; i < a->length; ++i)
+		((U64*)a->data)[i] = 0;
+
+	return true;
+}
+
+Error BigInt_copy(BigInt *a, Allocator alloc, BigInt *b) {
+
+	if(!a || !b)
+		return Error_nullPointer(!a ? 0 : 2);
+
+	if(b->data)
+		return Error_invalidParameter(2, 0);
+
+	Error err = BigInt_create((U16)a->length << 6, alloc, b);
+
+	if(err.genericError)
+		return err;
+
+	if(!BigInt_set(a, *b, false, (Allocator) { 0 }))
+		return Error_invalidState(0);
+
+	return err;
+}
+
+Bool BigInt_trunc(BigInt *big, Allocator allocator) {
+
+	if(!big)
+		return false;
+
+	U8 i = big->length - 1;
+
+	for(; i != U8_MAX; --i)
+		if(big->data[i])
+			break;
+
+	return !BigInt_resize(big, i + 1, allocator).genericError;
+}
+
+Bool BigInt_mod(BigInt *a, BigInt b);
+Bool BigInt_div(BigInt *a, BigInt b);
 
 Buffer BigInt_bufferConst(BigInt b) { 
 	return b.isConst ? Buffer_createNull() : Buffer_createRef((U64*)b.data, BigInt_byteCount(b));
@@ -326,7 +486,7 @@ Buffer BigInt_bufferConst(BigInt b) {
 Buffer BigInt_buffer(BigInt b) { return Buffer_createConstRef(b.data, BigInt_byteCount(b)); }
 
 U16 BigInt_byteCount(BigInt b) { return (U16)(b.length * sizeof(U64)); }
-U16 BigInt_bitCount(BigInt b) { return (U16)(BigInt_byteCount(b) * 8); }
+U16 BigInt_bitCount(BigInt b) { return BigInt_byteCount(b) * 8; }
 
 Error BigInt_hex(BigInt b, Allocator allocator, CharString *result);
 Error BigInt_oct(BigInt b, Allocator allocator, CharString *result);
@@ -416,6 +576,9 @@ U128 U128_mul64(U64 au, U64 bu) {
 	U128 U128_add(U128 a, U128 b) { return a + b; }
 	U128 U128_sub(U128 a, U128 b) {  return a - b; }
 
+	U128 U128_lsh(U128 a, U8 x) { return a << x; }
+	U128 U128_rsh(U128 a, U8 x) { return a >> x; }
+
 #else
 
 	U128 U128_zero() { return I32x4_zero(); }
@@ -448,6 +611,9 @@ U128 U128_mul64(U64 au, U64 bu) {
 		return U128_add(a, U128_add(U128_not(b), U128_one()));
 	}
 
+	U128 U128_lsh(U128 a, U8 x) { return I32x4_lsh128(a, x); }
+	U128 U128_rsh(U128 a, U8 x) { return I32x4_rsh128(a, x); }
+
 #endif
 
 I8 U128_cmp(U128 a, U128 b) {
@@ -461,27 +627,11 @@ I8 U128_cmp(U128 a, U128 b) {
 		return a < b ? -1 : 1;
 	#else
 
-		//The I32x4 data contains 0x00... -> 0x7F... as >0
-		//And then 0x80... -> 0xFF... as <0.
-		//So compare won't work correctly since it contains unsigned data.
-		//To hack around this, we have to mask out everything except sign bits.
-		//Then we can use the sign bits to generate a final verdict
+		const U64 *a64 = (const U64*)&a;
+		const U64 *b64 = (const U64*)&b;
 
-		I32x4 aSign = I32x4_lt(a, I32x4_zero());
-		I32x4 bSign = I32x4_lt(b, I32x4_zero());
-		I32x4 signEq = I32x4_eq(aSign, bSign);
-		I32x4 signGt = I32x4_gt(aSign, bSign);
-
-		I32x4 mask = I32x4_xxxx4(I32_MAX);
-		a = I32x4_and(a, mask);
-		b = I32x4_and(b, mask);
-
-		I32x4 signSameAndGt = I32x4_and(signEq, I32x4_gt(a, b));
-		I32x4 result = I32x4_or(signGt, signSameAndGt);
-
-		for(U8 i = 0; i < 4; ++i)
-			if(I32x4_get(result, i))
-				return 1;
+		if(a64[1] > b64[1] || (a64[1] == b64[1] && a64[0] > b64[0]))
+			return 1;
 
 		return -1;
 
@@ -494,8 +644,8 @@ Bool U128_leq(U128 a, U128 b) { return U128_cmp(a, b) <= 0; }
 Bool U128_gt(U128 a, U128 b) { return U128_cmp(a, b) > 0; }
 Bool U128_geq(U128 a, U128 b) { return U128_cmp(a, b) >= 0; }
 
-//U128 U128_div(U128 a, U128 b);
-//U128 U128_mod(U128 a, U128 b);
+U128 U128_div(U128 a, U128 b);
+U128 U128_mod(U128 a, U128 b);
 U128 U128_mul(U128 a, U128 b);
 
 U128 U128_min(U128 a, U128 b) { return U128_leq(a, b) ? a : b; }

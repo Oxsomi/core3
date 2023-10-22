@@ -169,3 +169,30 @@ _I32x2_expand(x);
 _I32x2_expand(y);
 _I32x2_expand(z);
 _I32x2_expand(w);
+
+//Generic helper functions
+//Adapted from https://stackoverflow.com/questions/17610696/shift-a-m128i-of-n-bits
+
+I32x4 I32x4_lsh128(I32x4 a, U8 bits) {
+
+	I32x4 b = a;
+	a = I32x4_lshByte(a, 8);
+
+	if (bits >= 64)
+		return I32x4_lsh64(a, bits - 64);
+	
+	a = I32x4_rsh64(a, 64 - bits);
+	return I32x4_or(I32x4_lsh64(b, bits), a);
+}
+
+I32x4 I32x4_rsh128(I32x4 a, U8 bits) {
+
+	I32x4 b = a;
+	a = I32x4_rshByte(a, 8);
+
+	if (bits >= 64)
+		return I32x4_rsh64(a, bits - 64);
+
+	a = I32x4_lsh64(a, 64 - bits);
+	return I32x4_or(I32x4_rsh64(b, bits), a);
+}

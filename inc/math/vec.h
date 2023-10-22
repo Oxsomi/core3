@@ -40,6 +40,18 @@
 #define _NONE_OP2I(...) _NONE_OP_SELF_T(I32x2, 2, __VA_ARGS__)
 #define _NONE_OP2F(...) _NONE_OP_SELF_T(F32x2, 2, __VA_ARGS__)
 
+//Helper function to expand switch case
+
+#define _expand2(offset, func, var)						\
+		case offset:		return func(var, offset);		\
+		case offset + 1:	return func(var, offset + 1)
+
+#define _expand4(offset, func, var) _expand2(offset, func, var); _expand2(offset + 2, func, var)
+#define _expand8(offset, func, var) _expand4(offset, func, var); _expand4(offset + 4, func, var)
+#define _expand16(offset, func, var) _expand8(offset, func, var); _expand8(offset + 8, func, var)
+#define _expand32(offset, func, var) _expand16(offset, func, var); _expand16(offset + 16, func, var)
+#define _expand64(offset, func, var) _expand32(offset, func, var); _expand32(offset + 32, func, var)
+
 //
 
 #if _SIMD == SIMD_NEON
