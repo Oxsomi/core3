@@ -24,6 +24,8 @@
 #include "types/allocator.h"
 #include "types/time.h"
 
+#include <stdio.h>
+
 //BigInt
 
 BigInt BigInt_createNull() { return (BigInt) { .isRef = true, .isConst = true }; }
@@ -186,8 +188,45 @@ Bool BigInt_mul(BigInt *a, BigInt b, Allocator allocator) {
 	return res;
 }
 
-Bool BigInt_add(BigInt *a, BigInt b, Allocator alloc);		//Add on self and keep bit count
-Bool BigInt_sub(BigInt *a, BigInt b, Allocator alloc);		//Subtract on self and keep bit count
+Bool BigInt_add(BigInt *a, BigInt b) {
+
+	if(!a)
+		return false;
+
+	U64 clock = Time_clocks();
+
+	Bool overflow = false;
+	U64 len = U64_min(a->length, b.length);
+
+	for(U64 i = 0; i < len; ++i) {
+
+		U64 prev = a->data[i];
+		U64 add = prev + b.data[i];
+		Bool nextOverflow = add < prev;
+
+		if(overflow) {
+			prev = add;
+			++add; 
+			nextOverflow |= add < prev;
+		}
+
+		((U64*)a->data)[i] = add;
+		overflow = nextOverflow;
+	}
+
+	U64 next = b.length;
+
+	while(overflow && next < a->length) {
+		U64 prev = a->data[next];
+		overflow = (++((U64*)a->data)[next]) < prev;
+	}
+
+	printf("%llu clocks\n", Time_clocksElapsed(clock));
+
+	return true;
+}
+
+Bool BigInt_sub(BigInt *a, BigInt b);		//Subtract on self and keep bit count
 
 Bool BigInt_xor(BigInt *a, BigInt b) {
 
@@ -266,7 +305,19 @@ Bool BigInt_geq(BigInt a, BigInt b) { return BigInt_cmp(a, b) >= 0; }
 
 //TODO: div and mod
 
+BigInt *BigInt_min(BigInt *a, BigInt *b) { return !a ? b : (!b ? a : (BigInt_leq(*a, *b) ? a : b)); }
+BigInt *BigInt_max(BigInt *a, BigInt *b) { return !a ? b : (!b ? a : (BigInt_geq(*a, *b) ? a : b)); }
+BigInt *BigInt_clamp(BigInt *a, BigInt *mi, BigInt *ma) { return BigInt_max(BigInt_min(a, ma), mi); }
+
+Error BigInt_resize(BigInt *a, U64 newSize, Allocator alloc);
+Bool BigInt_set(BigInt *a, BigInt b);
+Error BigInt_copy(BigInt *a, Allocator alloc, BigInt *b);
+
 Bool BigInt_trunc(BigInt *big, Allocator allocator);							//Gets rid of all hi bits that are unset
+
+//TODO:
+//Bool BigInt_mod(BigInt *a, BigInt b);
+//Bool BigInt_div(BigInt *a, BigInt b);
 
 Buffer BigInt_bufferConst(BigInt b) { 
 	return b.isConst ? Buffer_createNull() : Buffer_createRef((U64*)b.data, BigInt_byteCount(b));
@@ -296,7 +347,7 @@ U128 U128_createU64x2(U64 a, U64 b) {
 U128 U128_mul64(U64 au, U64 bu) {
 
 	#if _PLATFORM_TYPE == EPlatform_Linux
-		return (__int128) au * (__int128) bu;
+		return (__uint128) au * (__uint128) bu;
 	#else
 
 		U32 D[4];
@@ -327,16 +378,16 @@ U128 U128_mul64(U64 au, U64 bu) {
 
 		//Calculate D1 by adding the overflow to the two other numbers
 
-		const I32x4 D1_2 = I32x4_addU64x2(aXbyLo, aXbxHi);					//Add overflows of D0 and D1 to D1 and D2
-		const I32x4 D1_2Temp = I32x4_addU64x2(D1_2, I32x4_zwzw(aXbxLo));	//Add last D1 to combine final value
+		const I32x4 D1_2 = I32x4_addI64x2(aXbyLo, aXbxHi);					//Add overflows of D0 and D1 to D1 and D2
+		const I32x4 D1_2Temp = I32x4_addI64x2(D1_2, I32x4_zwzw(aXbxLo));	//Add last D1 to combine final value
 
 		D[1] = (U32) I32x4_x(D1_2Temp);
 
 		//Calculate D2 by adding the overflow to aXby.y 
 
 		I32x4 D2_3 = I32x4_and(I32x4_rshByte(D1_2Temp, 4), low);
-		D2_3 = I32x4_addU64x2(D2_3, I32x4_xyxy(aXbyHi));
-		D2_3 = I32x4_addU64x2(D2_3, I32x4_zwzw(D1_2));
+		D2_3 = I32x4_addI64x2(D2_3, I32x4_xyxy(aXbyHi));
+		D2_3 = I32x4_addI64x2(D2_3, I32x4_zwzw(D1_2));
 
 		D[2] = (U32) I32x4_x(D2_3);
 
@@ -351,19 +402,53 @@ U128 U128_mul64(U64 au, U64 bu) {
 	#endif
 }
 
-U128 U128_add64(U64 a, U64 b) {
-	U64 c = a + b;
-	return I32x4_create4((U32)c, (U32)(c >> 32), c < a, 0);
-}
+#if _PLATFORM_TYPE == EPlatform_Linux
 
-U128 U128_zero() { return I32x4_zero(); }
-U128 U128_one() { return I32x4_create4(0, 0, 0, 1); }
+	U128 U128_zero() { return (__uint128) 0; }
+	U128 U128_one() { return (__uint128) 1; }
 
-U128 U128_xor(U128 a, U128 b) { return I32x4_xor(a, b); }
-U128 U128_or(U128 a, U128 b) { return I32x4_or(a, b); }
-U128 U128_and(U128 a, U128 b) { return I32x4_and(a, b); }
+	U128 U128_xor(U128 a, U128 b) { return a ^ b; }
+	U128 U128_or(U128 a, U128 b) { return a | b; }
+	U128 U128_and(U128 a, U128 b) { return a & b; }
+	U128 U128_not(U128 a) {  return ~a; }
+	U128 U128_add64(U64 a, U64 b) { return (__uint128)a + b; }
+	Bool U128_eq(U128 a, U128 b) { return a == b; }
+	U128 U128_add(U128 a, U128 b) { return a + b; }
+	U128 U128_sub(U128 a, U128 b) {  return a - b; }
 
-U128 U128_not(U128 a) { return I32x4_not(a); }
+#else
+
+	U128 U128_zero() { return I32x4_zero(); }
+	U128 U128_one() { return I32x4_create4(1, 0, 0, 0); }
+
+	U128 U128_xor(U128 a, U128 b) { return I32x4_xor(a, b); }
+	U128 U128_or(U128 a, U128 b) { return I32x4_or(a, b); }
+	U128 U128_and(U128 a, U128 b) { return I32x4_and(a, b); }
+	U128 U128_not(U128 a) {  return I32x4_not(a); }
+	Bool U128_eq(U128 a, U128 b) { return I32x4_eq4(a, b); }
+
+	U128 U128_add64(U64 a, U64 b) {
+		U64 c = a + b;
+		return I32x4_create4((U32)c, (U32)(c >> 32), c < a, 0);
+	}
+
+	U128 U128_add(U128 av, U128 bv) {
+
+		const U64 *a = (const U64*)&av;
+		const U64 *b = (const U64*)&bv;
+
+		U64 lo = a[0] + b[0];
+		U64 hi = lo < a[0];
+		hi += a[1] + b[1];
+
+		return U128_createU64x2(lo, hi);
+	}
+
+	U128 U128_sub(U128 a, U128 b) { 
+		return U128_add(a, U128_add(U128_not(b), U128_one()));
+	}
+
+#endif
 
 I8 U128_cmp(U128 a, U128 b) {
 
@@ -372,32 +457,37 @@ I8 U128_cmp(U128 a, U128 b) {
 	if(U128_eq(a, b))
 		return 0;
 
-	//The I32x4 data contains 0x00... -> 0x7F... as >0
-	//And then 0x80... -> 0xFF... as <0.
-	//So compare won't work correctly since it contains unsigned data.
-	//To hack around this, we have to mask out everything except sign bits.
-	//Then we can use the sign bits to generate a final verdict
+	#if _PLATFORM_TYPE == EPlatform_Linux
+		return a < b ? -1 : 1;
+	#else
 
-	I32x4 aSign = I32x4_lt(a, I32x4_zero());
-	I32x4 bSign = I32x4_lt(b, I32x4_zero());
-	I32x4 signEq = I32x4_eq(aSign, bSign);
-	I32x4 signGt = I32x4_gt(aSign, bSign);
+		//The I32x4 data contains 0x00... -> 0x7F... as >0
+		//And then 0x80... -> 0xFF... as <0.
+		//So compare won't work correctly since it contains unsigned data.
+		//To hack around this, we have to mask out everything except sign bits.
+		//Then we can use the sign bits to generate a final verdict
 
-	I32x4 mask = I32x4_xxxx4(I32_MAX);
-	a = I32x4_and(a, mask);
-	b = I32x4_and(b, mask);
+		I32x4 aSign = I32x4_lt(a, I32x4_zero());
+		I32x4 bSign = I32x4_lt(b, I32x4_zero());
+		I32x4 signEq = I32x4_eq(aSign, bSign);
+		I32x4 signGt = I32x4_gt(aSign, bSign);
 
-	I32x4 signSameAndGt = I32x4_and(signEq, I32x4_gt(a, b));
-	I32x4 result = I32x4_or(signGt, signSameAndGt);
+		I32x4 mask = I32x4_xxxx4(I32_MAX);
+		a = I32x4_and(a, mask);
+		b = I32x4_and(b, mask);
 
-	for(U8 i = 0; i < 4; ++i)
-		if(I32x4_get(result, i))
-			return 1;
+		I32x4 signSameAndGt = I32x4_and(signEq, I32x4_gt(a, b));
+		I32x4 result = I32x4_or(signGt, signSameAndGt);
 
-	return -1;
+		for(U8 i = 0; i < 4; ++i)
+			if(I32x4_get(result, i))
+				return 1;
+
+		return -1;
+
+	#endif
 }
 
-Bool U128_eq(U128 a, U128 b) { return I32x4_eq4(a, b); }
 Bool U128_neq(U128 a, U128 b) { return !U128_eq(a, b); }
 Bool U128_lt(U128 a, U128 b) { return U128_cmp(a, b) < 0; }
 Bool U128_leq(U128 a, U128 b) { return U128_cmp(a, b) <= 0; }
@@ -407,12 +497,7 @@ Bool U128_geq(U128 a, U128 b) { return U128_cmp(a, b) >= 0; }
 //U128 U128_div(U128 a, U128 b);
 //U128 U128_mod(U128 a, U128 b);
 U128 U128_mul(U128 a, U128 b);
-U128 U128_add(U128 a, U128 b);
-U128 U128_sub(U128 a, U128 b);
 
-//U128 U128_negate(U128 a) { return U128_sub(U128_zero(), a); }
-//U128 U128_complement(U128 a) { return U128_sub(U128_one(), a); }
-
-U128 U128_min(U128 a, U128 b);
-U128 U128_max(U128 a, U128 b);
-U128 U128_clamp(U128 a, U128 mi, U128 ma);
+U128 U128_min(U128 a, U128 b) { return U128_leq(a, b) ? a : b; }
+U128 U128_max(U128 a, U128 b) { return U128_geq(a, b) ? a : b; }
+U128 U128_clamp(U128 a, U128 mi, U128 ma) { return U128_max(U128_min(a, ma), mi); }

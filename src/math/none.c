@@ -68,12 +68,12 @@
 	//64-bit add but stored in 32-bit int
 	//64-bit mul but fetched as 32-bit int
 
-	I32x4 I32x4_addU64x2(I32x4 a, I32x4 b) {
+	I32x4 I32x4_addI64x2(I32x4 a, I32x4 b) {
 
 		I32x4 res = a;
 
 		for(U64 i = 0; i < 2; ++i)
-			((U64*)&res)[i] += ((const U64*)&b)[i];
+			((I64*)&res)[i] += ((const I64*)&b)[i];
 
 		return res;
 	}

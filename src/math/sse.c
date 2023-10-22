@@ -22,7 +22,7 @@
 
 #if _SIMD == SIMD_SSE
 
-	//Cast
+	//Castit
 
 	I32x4 I32x4_fromF32x4(F32x4 a) { return _mm_cvtps_epi32(a); }
 	F32x4 F32x4_fromI32x4(I32x4 a) { return _mm_cvtepi32_ps(a); }
@@ -32,7 +32,7 @@
 	//Arithmetic
 
 	I32x4 I32x4_add(I32x4 a, I32x4 b) { return _mm_add_epi32(a, b); }
-	I32x4 I32x4_addU64x2(I32x4 a, I32x4 b) { return _mm_add_epi64(a, b); }
+	I32x4 I32x4_addI64x2(I32x4 a, I32x4 b) { return _mm_add_epi64(a, b); }
 	F32x4 F32x4_add(F32x4 a, F32x4 b) { return _mm_add_ps(a, b); }
 	I32x2 I32x2_add(I32x2 a, I32x2 b) _NONE_OP2I(a.v[i] + b.v[i])
 	F32x2 F32x2_add(F32x2 a, F32x2 b) _NONE_OP2F(a.v[i] + b.v[i])

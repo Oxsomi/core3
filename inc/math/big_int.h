@@ -53,8 +53,8 @@ Error BigInt_createFromText(CharString text, U16 bitCount, Allocator allocator, 
 Bool BigInt_free(BigInt *b, Allocator allocator);
 
 Bool BigInt_mul(BigInt *a, BigInt b, Allocator allocator);		//Multiply on self and keep bit count
-Bool BigInt_add(BigInt *a, BigInt b, Allocator allocator);		//Add on self and keep bit count
-Bool BigInt_sub(BigInt *a, BigInt b, Allocator allocator);		//Subtract on self and keep bit count
+Bool BigInt_add(BigInt *a, BigInt b);		//Add on self and keep bit count
+Bool BigInt_sub(BigInt *a, BigInt b);		//Subtract on self and keep bit count
 
 Bool BigInt_xor(BigInt *a, BigInt b);
 Bool BigInt_or(BigInt *a, BigInt b);
@@ -70,7 +70,17 @@ Bool BigInt_leq(BigInt a, BigInt b);
 Bool BigInt_gt(BigInt a, BigInt b);
 Bool BigInt_geq(BigInt a, BigInt b);
 
-//TODO: div and mod
+BigInt *BigInt_min(BigInt *a, BigInt *b);					//Returns one of two passed pointers
+BigInt *BigInt_max(BigInt *a, BigInt *b);					//Returns one of two passed pointers
+BigInt *BigInt_clamp(BigInt *a, BigInt *mi, BigInt *ma);	//Returns one of two passed pointers
+
+Error BigInt_resize(BigInt *a, U64 newSize, Allocator alloc);
+Bool BigInt_set(BigInt *a, BigInt b);
+Error BigInt_copy(BigInt *a, Allocator alloc, BigInt *b);
+
+//TODO:
+//Bool BigInt_mod(BigInt *a, BigInt b);
+//Bool BigInt_div(BigInt *a, BigInt b);
 
 Bool BigInt_trunc(BigInt *big, Allocator allocator);							//Gets rid of all hi bits that are unset
 
@@ -89,7 +99,7 @@ Error BigInt_nyto(BigInt b, Allocator allocator, CharString *result);
 //U128
 
 #if _PLATFORM_TYPE == EPlatform_Linux
-	typedef __int128 U128;
+	typedef __uint128 U128;
 #else
 	typedef I32x4 U128;
 #endif

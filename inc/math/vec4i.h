@@ -35,7 +35,7 @@ I32x4 I32x4_negOne();
 impl I32x4 I32x4_xxxx4(I32 x);
 
 impl I32x4 I32x4_add(I32x4 a, I32x4 b);
-impl I32x4 I32x4_addU64x2(I32x4 a, I32x4 b);			//Add two U64x2s
+impl I32x4 I32x4_addI64x2(I32x4 a, I32x4 b);			//Add two U64x2s
 impl I32x4 I32x4_sub(I32x4 a, I32x4 b);
 impl I32x4 I32x4_mul(I32x4 a, I32x4 b);
 impl I32x4 I32x4_mulU32x2AsU64x2(I32x4 a, I32x4 b);		//U32x4 as U64x2 * U64x2 (clear upper 32-bit)

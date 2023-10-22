@@ -1606,6 +1606,14 @@ int main() {
 		{ 0x3191981675EA4AF8, 0xA2D6BCFAA1676325 }
 	};
 
+	const U64 addResult[][2] = { 
+		{ 0x235A1DF76F0D5ADF, 0xFFFEB49923CC0952 },
+		{ 0x0000000000000000, 0xFFFFFFFFFFFFFFFE },
+		{ 0x14AC1A38FB730F17, 0x6A5B4AA678507A2 },
+		{ 0xB4ACD5D8BA9AFE26, 0xAF44E013CF76A36B },
+		{ 0xFB6D0B6FE73ECB86, 0x715AD28B6F17ABC9 }
+	};
+
 	//_gotoIfError(clean, BigInt_createFromHex(CharString_createConstRefCStr("0x0123456789ABCDEF"), 128, alloc, &a));
 	//_gotoIfError(clean, BigInt_createFromHex(CharString_createConstRefCStr("0xFEDCBA9876543210"), 128, alloc, &a));
 	//
@@ -1626,8 +1634,23 @@ int main() {
 		_gotoIfError(clean, BigInt_createConstRef(&temp[2], 2, &bBig));
 		_gotoIfError(clean, BigInt_createConstRef((const U64*) &mulResult[i][0], 2, &cBig));
 
-		if(!BigInt_mul(&aBig, bBig, alloc) || !BigInt_eq(aBig, cBig))
-			_gotoIfError(clean, Error_invalidOperation(0));
+		if(!BigInt_mul(&aBig, bBig, alloc) || BigInt_neq(aBig, cBig))
+			_gotoIfError(clean, Error_invalidOperation((U32)i));
+	}
+
+	printf("Testing big int add\n");
+
+	for(U64 i = 0; i < sizeof(mulParams) / sizeof(mulParams[0]); ++i) {
+
+		aBig = bBig = cBig = (BigInt) { 0 };
+
+		U64 temp[2] = { mulParams[i][0], mulParams[i][1] };
+		_gotoIfError(clean, BigInt_createRef(&temp[0], 2, &aBig));
+		_gotoIfError(clean, BigInt_createConstRef(&mulResult[i][0], 2, &bBig));
+		_gotoIfError(clean, BigInt_createConstRef(&addResult[i][0], 2, &cBig));
+
+		if(!BigInt_add(&aBig, bBig) || BigInt_neq(aBig, cBig))
+			_gotoIfError(clean, Error_invalidOperation((U32)i));
 	}
 
 	//U64 x U64 unit test
@@ -1640,6 +1663,18 @@ int main() {
 		U128 mulReal = U128_mul64(mulParams[i][0], mulParams[i][1]);
 
 		if (U128_neq(mulRes, mulReal))
+			_gotoIfError(clean, Error_invalidOperation((U32)i));
+	}
+
+	printf("Testing U128 + U128 = U128 (optimized)\n");
+
+	for(U64 i = 0; i < sizeof(mulParams) / sizeof(mulParams[0]); ++i) {
+
+		U128 a = U128_create((const U8*) mulParams[i]);
+		U128 b = U128_create((const U8*) mulResult[i]);
+		U128 c = U128_create((const U8*) addResult[i]);
+
+		if(U128_neq(U128_add(a, b), c))
 			_gotoIfError(clean, Error_invalidOperation((U32)i));
 	}
 
