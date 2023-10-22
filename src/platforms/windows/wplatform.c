@@ -149,7 +149,7 @@ int main(int argc, const char *argv[]) {
 	#if _SIMD == SIMD_SSE
 
 		//We need to double check that our CPU supports 
-		//AVX, SSE4.2, SSE4.1, (S)SSE3, SSE2, SSE, AES, PCLMULQDQ and RDRAND
+		//SSE4.2, SSE4.1, (S)SSE3, SSE2, SSE, AES, PCLMULQDQ, BMI1 and RDRAND
 		//https://gist.github.com/hi2p-perim/7855506
 		//https://en.wikipedia.org/wiki/CPUID
 
@@ -161,14 +161,19 @@ int main(int argc, const char *argv[]) {
 		int cpuInfo[4];
 		__cpuid(cpuInfo, 1);
 
+		int cpuInfo1[4];
+		__cpuidex(cpuInfo1, 7, 0);
+
+		int mask1_1 = 1 << 3;				//BMI1
+
 		//Unsupported CPU
 
-		if ((cpuInfo[3] & mask3) != mask3 || (cpuInfo[2] & mask2) != mask2) {
+		if ((cpuInfo[3] & mask3) != mask3 || (cpuInfo[2] & mask2) != mask2 || (cpuInfo1[1] & mask1_1) != mask1_1) {
 
 			Log_error(
 				ELogOptions_Default,
 				"Unsupported CPU. The following extensions are required: "
-				"SSE, SSE2, SSE3, SSSE3, SSE4.1, SSE4.2, AES"
+				"SSE, SSE2, SSE3, SSSE3, SSE4.1, SSE4.2, AES, RDRAND, BMI1, PCLMULQDQ"
 			);
 
 			Platform_cleanup();

@@ -1836,6 +1836,19 @@ int main() {
 			_gotoIfError(clean, Error_invalidOperation((U32)i));
 	}
 
+	printf("Testing big int bitScan\n");
+
+	for (U64 i = 0; i < sizeof(rshResult) / sizeof(rshResult[0]); ++i) {
+
+		aBig = (BigInt){ 0 };
+		_gotoIfError(clean, BigInt_createConstRef(&rshResult[i][0], 2, &aBig));
+		
+		U16 off = BigInt_bitScan(aBig);
+
+		if(off != (U16)(sizeof(rshResult) / sizeof(rshResult[0]) - 1 - i))
+			_gotoIfError(clean, Error_invalidOperation((U32)i));
+	}
+
 	//U128 unit test
 
 	printf("Testing U64 x U64 = U128 (optimized)\n");
@@ -1894,6 +1907,17 @@ int main() {
 		U128 c = U128_rsh(a, (U8)(1 + i));
 
 		if(U128_neq(c, b))
+			_gotoIfError(clean, Error_invalidOperation((U32)i));
+	}
+
+	printf("Testing U128 bitScan\n");
+
+	for (U64 i = 0; i < sizeof(rshResult) / sizeof(rshResult[0]); ++i) {
+
+		U128 a = U128_create((const U8*) rshResult[i]);
+		U16 off = U128_bitScan(a);
+
+		if(off != (U16)(sizeof(rshResult) / sizeof(rshResult[0]) - 1 - i))
 			_gotoIfError(clean, Error_invalidOperation((U32)i));
 	}
 

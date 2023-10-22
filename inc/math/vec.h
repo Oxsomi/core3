@@ -60,6 +60,7 @@
 
 #elif _SIMD == SIMD_SSE
 
+	#include <intrin.h>
 	#include <immintrin.h>
 	#include <xmmintrin.h>
 	#include <emmintrin.h>

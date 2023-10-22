@@ -44,23 +44,40 @@ BigInt BigInt_createNull();
 Error BigInt_create(U16 bitCount, Allocator allocator, BigInt *big);			//Aligns bitCount to 64.
 Error BigInt_createRef(U64 *ptr, U64 ptrCount, BigInt *big);					//ref U64 ptr[ptrCount]
 Error BigInt_createConstRef(const U64 *ptr, U64 ptrCount, BigInt *big);			//const ref U64 ptr[ptrCount]
+Error BigInt_createCopy(BigInt *a, Allocator alloc, BigInt *b);
+
+Bool BigInt_free(BigInt *a, Allocator allocator);
+
+//bitCount set to 0 indicates "auto".
+//bitCount set to U16_MAX indicates "already allocated"
+
 Error BigInt_createFromHex(CharString text, U16 bitCount, Allocator allocator, BigInt *big);
 Error BigInt_createFromDec(CharString text, U16 bitCount, Allocator allocator, BigInt *big);
 Error BigInt_createFromOct(CharString text, U16 bitCount, Allocator allocator, BigInt *big);
 Error BigInt_createFromBin(CharString text, U16 bitCount, Allocator allocator, BigInt *big);
 Error BigInt_createFromNyto(CharString text, U16 bitCount, Allocator allocator, BigInt *big);
 Error BigInt_createFromText(CharString text, U16 bitCount, Allocator allocator, BigInt *big);
-Bool BigInt_free(BigInt *a, Allocator allocator);
 
-Bool BigInt_mul(BigInt *a, BigInt b, Allocator allocator);					//Multiply on self and keep bit count
-Bool BigInt_add(BigInt *a, BigInt b);										//Add on self and keep bit count
-Bool BigInt_sub(BigInt *a, BigInt b);										//Subtract on self and keep bit count
+//Arithmetic
+
+Bool BigInt_mul(BigInt *a, BigInt b, Allocator allocator);						//Multiply on self and keep bit count
+Bool BigInt_add(BigInt *a, BigInt b);											//Add on self and keep bit count
+Bool BigInt_sub(BigInt *a, BigInt b);											//Subtract on self and keep bit count
+
+Bool BigInt_mod(BigInt *a, BigInt b);
+Bool BigInt_div(BigInt *a, BigInt b);
+
+//Bitwise
 
 Bool BigInt_xor(BigInt *a, BigInt b);
 Bool BigInt_or(BigInt *a, BigInt b);
 Bool BigInt_and(BigInt *a, BigInt b);
-
 Bool BigInt_not(BigInt *a);
+
+Bool BigInt_lsh(BigInt *a, U16 bits);
+Bool BigInt_rsh(BigInt *a, U16 bits);
+
+//Compare
 
 I8 BigInt_cmp(BigInt a, BigInt b);
 Bool BigInt_eq(BigInt a, BigInt b);
@@ -70,18 +87,14 @@ Bool BigInt_leq(BigInt a, BigInt b);
 Bool BigInt_gt(BigInt a, BigInt b);
 Bool BigInt_geq(BigInt a, BigInt b);
 
-BigInt *BigInt_min(BigInt *a, BigInt *b);									//Returns one of two passed pointers
-BigInt *BigInt_max(BigInt *a, BigInt *b);									//Returns one of two passed pointers
-BigInt *BigInt_clamp(BigInt *a, BigInt *mi, BigInt *ma);					//Returns one of two passed pointers
+BigInt *BigInt_min(BigInt *a, BigInt *b);										//Returns one of two passed pointers
+BigInt *BigInt_max(BigInt *a, BigInt *b);										//Returns one of two passed pointers
+BigInt *BigInt_clamp(BigInt *a, BigInt *mi, BigInt *ma);						//Returns one of two passed pointers
 
-Error BigInt_resize(BigInt *a, U8 newSize, Allocator alloc);				//newSize in U64s
-Bool BigInt_set(BigInt *a, BigInt b, Bool allowResize, Allocator alloc);	//Set all bits to b, resize if allowResize is set.
-Error BigInt_copy(BigInt *a, Allocator alloc, BigInt *b);
+//Helpers
 
-Bool BigInt_lsh(BigInt *a, U16 bits);
-Bool BigInt_rsh(BigInt *a, U16 bits);
-Bool BigInt_mod(BigInt *a, BigInt b);
-Bool BigInt_div(BigInt *a, BigInt b);
+Error BigInt_resize(BigInt *a, U8 newSize, Allocator alloc);					//newSize in U64s
+Bool BigInt_set(BigInt *a, BigInt b, Bool allowResize, Allocator alloc);		//Set all bits to b, resize if allowResize
 
 Bool BigInt_trunc(BigInt *big, Allocator allocator);							//Gets rid of all hi bits that are unset
 
@@ -90,6 +103,11 @@ Buffer BigInt_buffer(BigInt b);
 
 U16 BigInt_byteCount(BigInt b);
 U16 BigInt_bitCount(BigInt b);
+
+U16 BigInt_bitScan(BigInt a);						//Find highest bit that was on. Returns U16_MAX if 0
+Error BigInt_isBase2(BigInt a, Allocator allocator, Bool *isBase2);
+
+//Transform to string
 
 Error BigInt_hex(BigInt b, Allocator allocator, CharString *result);
 Error BigInt_oct(BigInt b, Allocator allocator, CharString *result);
@@ -105,19 +123,32 @@ Error BigInt_nyto(BigInt b, Allocator allocator, CharString *result);
 	typedef I32x4 U128;
 #endif
 
+//Create
+
 U128 U128_create(const U8 data[16]);
 U128 U128_createU64x2(U64 a, U64 b);
-U128 U128_mul64(U64 a, U64 b);			//Multiply two 64-bit numbers to generate a 128-bit number
-U128 U128_add64(U64 a, U64 b);			//Add two 64-bit numbers but keep the overflow bit
 
 U128 U128_zero();
 U128 U128_one();
+
+U128 U128_createFromHex(CharString text, Error *failed);
+U128 U128_createFromOct(CharString text, Error *failed);
+U128 U128_createFromBin(CharString text, Error *failed);
+U128 U128_createFromNyto(CharString text, Error *failed);
+U128 U128_createFromDec(CharString text, Error *failed);
+
+//Bitwise
 
 U128 U128_xor(U128 a, U128 b);
 U128 U128_or(U128 a, U128 b);
 U128 U128_and(U128 a, U128 b);
 
 U128 U128_not(U128 a);
+
+U128 U128_lsh(U128 a, U8 x);
+U128 U128_rsh(U128 a, U8 x);
+
+//Comparison
 
 I8 U128_cmp(U128 a, U128 b);
 Bool U128_eq(U128 a, U128 b);
@@ -127,14 +158,21 @@ Bool U128_leq(U128 a, U128 b);
 Bool U128_gt(U128 a, U128 b);
 Bool U128_geq(U128 a, U128 b);
 
-U128 U128_lsh(U128 a, U8 x);
-U128 U128_rsh(U128 a, U8 x);
+U128 U128_min(U128 a, U128 b);
+U128 U128_max(U128 a, U128 b);
+U128 U128_clamp(U128 a, U128 mi, U128 ma);
+
+//Arithmetic
+
+U128 U128_mul64(U64 a, U64 b);			//Multiply two 64-bit numbers to generate a 128-bit number
+U128 U128_add64(U64 a, U64 b);			//Add two 64-bit numbers but keep the overflow bit
 U128 U128_div(U128 a, U128 b);
 U128 U128_mod(U128 a, U128 b);
 U128 U128_mul(U128 a, U128 b);
 U128 U128_add(U128 a, U128 b);
 U128 U128_sub(U128 a, U128 b);
 
-U128 U128_min(U128 a, U128 b);
-U128 U128_max(U128 a, U128 b);
-U128 U128_clamp(U128 a, U128 mi, U128 ma);
+//Helpers
+
+U8 U128_bitScan(U128 a);						//Find highest bit that was on. Returns U8_MAX if 0
+Bool U128_isBase2(U128 a);

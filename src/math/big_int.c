@@ -77,12 +77,245 @@ Error BigInt_createConstRef(const U64 *ptr, U64 ptrCount, BigInt *big) {
 	return Error_none();
 }
 
-Error BigInt_createFromHex(CharString text, U16 bitCount, Allocator allocator, BigInt *big);
-Error BigInt_createFromDec(CharString text, U16 bitCount, Allocator allocator, BigInt *big);
-Error BigInt_createFromOct(CharString text, U16 bitCount, Allocator allocator, BigInt *big);
-Error BigInt_createFromBin(CharString text, U16 bitCount, Allocator allocator, BigInt *big);
-Error BigInt_createFromNyto(CharString text, U16 bitCount, Allocator allocator, BigInt *big);
-Error BigInt_createFromText(CharString text, U16 bitCount, Allocator allocator, BigInt *big);
+typedef enum EBase2Type {
+	EBase2Type_Hex,
+	EBase2Type_Bin,
+	EBase2Type_Oct,
+	EBase2Type_Nyto
+} EBase2Type;
+
+Error BigInt_createFromBase2Type(CharString text, U16 bitCount, Allocator alloc, BigInt *big, EBase2Type type) {
+
+	if(!big)
+		return Error_nullPointer(3);
+
+	static const C8 *base2Types[] = { "0x", "0b", "0o", "0n" };
+	static const U8 base2Count[] = { 4, 1, 3, 6 };
+
+	Bool prefix = CharString_startsWithString(text, CharString_createConstRefCStr(base2Types[type]), EStringCase_Insensitive);
+	U8 prefixChars = prefix * 2;
+	U8 countPerChar = base2Count[type];
+
+	U64 chars = CharString_length(text) - prefixChars;
+
+	if(!chars)
+		return Error_invalidParameter(0, 0);
+
+	if (bitCount == U16_MAX) {
+
+		if(!big->data)
+			return Error_nullPointer(3);
+
+		bitCount = BigInt_bitCount(*big);
+	}
+
+	else if(!bitCount)
+		bitCount = (U16) U64_min(chars * countPerChar, 0xFF * 64);
+
+	else {
+
+		if(big->data)
+			return Error_invalidParameter(3, 0);
+
+		if(bitCount > 0xFF * 64)
+			return Error_invalidParameter(1, 0);
+	}
+
+	if(chars * countPerChar > (bitCount + countPerChar - 1) / countPerChar)
+		return Error_outOfBounds(0, chars * countPerChar, bitCount);
+
+	Bool allocated = false;
+	Error err = Error_none();
+
+	if (!big->data) {
+
+		err = BigInt_create(bitCount, alloc, big);
+
+		if(err.genericError)
+			return err;
+
+		allocated = true;
+	}
+
+	for (
+		U64 i = CharString_length(text) - 1, j = 0; 
+		i >= prefixChars && i != U64_MAX; 
+		--i, ++j
+	) {
+		U8 v = 0;
+
+		switch (type) {
+			case EBase2Type_Hex:	v = C8_hex(text.ptr[i]);	break;
+			case EBase2Type_Bin:	v = C8_bin(text.ptr[i]);	break;
+			case EBase2Type_Oct:	v = C8_oct(text.ptr[i]);	break;
+			case EBase2Type_Nyto:	v = C8_nyto(text.ptr[i]);	break;
+		}
+
+		if(v == U8_MAX)
+			_gotoIfError(clean, Error_invalidParameter(0, 1));
+
+		((U8*)big->data)[j >> 1] |= j & 1 ? (v << countPerChar) : v;
+	}
+
+	if(bitCount & 63) {		//Fix last U64 to handle out of bounds
+
+		if(big->data[big->length - 1] >> (bitCount & 63))
+			return Error_outOfBounds(0, bitCount, bitCount);
+	}
+
+	goto success;
+
+success:
+	allocated = false;		//avoid allocation
+
+clean:
+
+	if(allocated)
+		BigInt_free(big, alloc);
+
+	return err;
+}
+
+Error BigInt_createFromHex(CharString text, U16 bitCount, Allocator alloc, BigInt *big) {
+	return BigInt_createFromBase2Type(text, bitCount, alloc, big, EBase2Type_Hex);
+}
+
+Error BigInt_createFromOct(CharString text, U16 bitCount, Allocator alloc, BigInt *big) {
+	return BigInt_createFromBase2Type(text, bitCount, alloc, big, EBase2Type_Oct);
+}
+
+Error BigInt_createFromBin(CharString text, U16 bitCount, Allocator alloc, BigInt *big) {
+	return BigInt_createFromBase2Type(text, bitCount, alloc, big, EBase2Type_Bin);
+}
+
+Error BigInt_createFromNyto(CharString text, U16 bitCount, Allocator alloc, BigInt *big) {
+	return BigInt_createFromBase2Type(text, bitCount, alloc, big, EBase2Type_Nyto);
+}
+
+#define _STRING_TO_U16(a, b) ((a) | ((U16)b << 8))
+
+Error BigInt_createFromText(CharString text, U16 bitCount, Allocator alloc, BigInt *big) {
+
+	if (CharString_length(text) > 2) {
+
+		U16 start = *(const U16*) text.ptr;
+
+		switch(start) {
+			case _STRING_TO_U16('0', 'b'):	return BigInt_createFromBin(text, bitCount, alloc, big);
+			case _STRING_TO_U16('0', 'x'):	return BigInt_createFromHex(text, bitCount, alloc, big);
+			case _STRING_TO_U16('0', 'o'):	return BigInt_createFromOct(text, bitCount, alloc, big);
+			case _STRING_TO_U16('0', 'n'):	return BigInt_createFromNyto(text, bitCount, alloc, big);
+		}
+	}
+
+	return BigInt_createFromDec(text, bitCount, alloc, big);
+}
+
+Error BigInt_createFromDec(CharString text, U16 bitCount, Allocator alloc, BigInt *big) {
+
+	if(!big)
+		return Error_nullPointer(3);
+
+	if(!CharString_length(text))
+		return Error_nullPointer(0);
+
+	if(CharString_length(text) >> 52)
+		return Error_invalidParameter(0, 0);
+
+	U64 estBitCount = (U64) F64_ceil(F64_log2((F64)CharString_length(text)));
+
+	if (bitCount == U16_MAX) {
+
+		if(!big->data)
+			return Error_nullPointer(3);
+
+		if(!BigInt_and(big, BigInt_createNull()))
+			return Error_invalidState(0);
+
+		bitCount = BigInt_bitCount(*big);
+	}
+
+	else if(!bitCount)
+		bitCount = (U16) U64_min(estBitCount, 0xFF * 64);
+
+	else {
+
+		if(big->data)
+			return Error_invalidParameter(3, 0);
+
+		if(bitCount > 0xFF * 64)
+			return Error_invalidParameter(1, 0);
+	}
+
+	if(estBitCount > 0xFF * 64 + 1)			//+1 to align to base10
+		return Error_outOfMemory(0);
+
+	Bool allocated = false;
+	Error err = Error_none();
+	BigInt temp = (BigInt) { 0 }, multiplier = (BigInt) { 0 };
+
+	if (!big->data) {
+
+		err = BigInt_create(bitCount, alloc, big);
+
+		if(err.genericError)
+			return err;
+
+		allocated = true;
+	}
+
+	_gotoIfError(clean, BigInt_create(bitCount, alloc, &multiplier));
+	_gotoIfError(clean, BigInt_create(bitCount, alloc, &temp));
+
+	((U64*)multiplier.data)[0] = 1;		//Multiplier
+
+	for (U64 i = CharString_length(text) - 1; i != U64_MAX; --i) {
+
+		U8 v = C8_dec(text.ptr[i]);
+
+		if(v == U8_MAX)
+			_gotoIfError(clean, Error_invalidParameter(0, 1));
+
+		((U8*)temp.data)[0] = v;
+
+		if(!BigInt_mul(&temp, multiplier, alloc))
+			_gotoIfError(clean, Error_invalidState(1));
+
+		if(!BigInt_add(big, temp))
+			_gotoIfError(clean, Error_invalidState(2));
+
+		//Multiply multiplier by 10
+
+		if(!BigInt_and(&temp, BigInt_createNull()))
+			_gotoIfError(clean, Error_invalidState(2));
+
+		((U8*)temp.data)[0] = 10;
+
+		if(!BigInt_mul(&multiplier, temp, alloc))
+			_gotoIfError(clean, Error_invalidState(3));
+	}
+
+	if(bitCount & 63) {		//Fix last U64 to handle out of bounds
+
+		if(big->data[big->length - 1] >> (bitCount & 63))
+			return Error_outOfBounds(0, bitCount, bitCount);
+	}
+
+	goto success;
+
+success:
+	allocated = false;		//avoid allocation
+
+clean:
+
+	BigInt_free(&multiplier, alloc);
+	BigInt_free(&temp, alloc);
+
+	if(allocated)
+		BigInt_free(big, alloc);
+
+	return err;
+}
 
 Bool BigInt_free(BigInt *a, Allocator allocator) {
 
@@ -443,7 +676,7 @@ Bool BigInt_set(BigInt *a, BigInt b, Bool allowResize, Allocator alloc) {
 	return true;
 }
 
-Error BigInt_copy(BigInt *a, Allocator alloc, BigInt *b) {
+Error BigInt_createCopy(BigInt *a, Allocator alloc, BigInt *b) {
 
 	if(!a || !b)
 		return Error_nullPointer(!a ? 0 : 2);
@@ -488,6 +721,66 @@ Buffer BigInt_buffer(BigInt b) { return Buffer_createConstRef(b.data, BigInt_byt
 U16 BigInt_byteCount(BigInt b) { return (U16)(b.length * sizeof(U64)); }
 U16 BigInt_bitCount(BigInt b) { return BigInt_byteCount(b) * 8; }
 
+U16 BigInt_bitScan(BigInt ai) {
+
+	for (U64 i = ai.length - 1; i != U64_MAX; --i) {
+
+		U64 a = ai.data[i];
+
+		U64 offset = (Bool)((const U32*)&a)[1];
+		offset <<= 1;
+
+		offset |= (Bool)((const U16*)&a)[offset + 1];
+		offset <<= 1;
+
+		offset |= (Bool)((const U8*)&a)[offset + 1];
+		U8 b = ((const U8*)&a)[offset];
+		offset <<= 1;
+
+		offset |= (Bool)(b >> 4);
+		offset <<= 1;
+
+		offset |= (Bool)((b >> (((offset & 2) + 1) * 2)) & 3);
+		offset <<= 1;
+
+		offset |= (Bool)((b >> ((offset & 6) + 1)) & 1);
+
+		if((a >> offset) & 1)
+			return (U16)(i * 64 + offset);
+	}
+
+	return U16_MAX;
+}
+
+Error BigInt_isBase2(BigInt a, Allocator alloc, Bool *isBase2) {
+
+	if(!isBase2)
+		return Error_nullPointer(2);
+
+	U16 v = BigInt_bitScan(a);
+
+	if(v == U16_MAX) {
+		*isBase2 = false;
+		return Error_none();
+	}
+
+	BigInt temp = (BigInt) { 0 };
+	Error err = BigInt_create(BigInt_bitCount(a), alloc, &temp);
+
+	if(err.genericError)
+		return err;
+
+	*(U64*)temp.data = 1;
+
+	if(!BigInt_lsh(&temp, v)) 
+		_gotoIfError(clean, Error_invalidState(0));
+
+	*isBase2 = BigInt_eq(temp, a);
+clean:
+	BigInt_free(&temp, alloc);
+	return err;
+}
+
 Error BigInt_hex(BigInt b, Allocator allocator, CharString *result);
 Error BigInt_oct(BigInt b, Allocator allocator, CharString *result);
 Error BigInt_dec(BigInt b, Allocator allocator, CharString *result);
@@ -508,6 +801,13 @@ U128 U128_mul64(U64 au, U64 bu) {
 
 	#if _PLATFORM_TYPE == EPlatform_Linux
 		return (__uint128) au * (__uint128) bu;
+
+	#elif _PLATFORM_TYPE == EPlatform_Windows
+
+		U64 hiProd = 0;
+		U64 loProd = _umul128(bu, au, &hiProd);
+		return U128_createU64x2(loProd, hiProd);
+
 	#else
 
 		U32 D[4];
@@ -616,6 +916,102 @@ U128 U128_mul64(U64 au, U64 bu) {
 
 #endif
 
+U8 U128_bitScan(U128 a) {
+
+	#if _PLATFORM_TYPE == EPlatform_Windows
+
+		unsigned long index = 0;
+		Bool hasFirstBit = _BitScanReverse64(&index, ((const U64*)&a)[1]);
+
+		if (hasFirstBit)
+			return (U8)index + 64;
+
+		Bool hasLastBit = _BitScanReverse64(&index, ((const U64*)&a)[0]);
+		return hasLastBit ? (U8) index : U8_MAX;
+
+	//TODO: #elif _SIMD == SIMD_SSE: _lzcnt_u64
+
+	#else
+
+		//Keep subdividing by 2x until the first bit is found
+
+		U64 offset = (Bool)((const U64*)&a)[1];
+		offset <<= 1;
+
+		offset |= (Bool)((const U32*)&a)[offset + 1];
+		offset <<= 1;
+
+		offset |= (Bool)((const U16*)&a)[offset + 1];
+		offset <<= 1;
+
+		offset |= (Bool)((const U8*)&a)[offset + 1];
+		U8 b = ((const U8*)&a)[offset];
+		offset <<= 1;
+
+		offset |= (Bool)(b >> 4);
+		offset <<= 1;
+
+		offset |= (Bool)((b >> (((offset & 2) + 1) * 2)) & 3);
+		offset <<= 1;
+
+		offset |= (Bool)((b >> ((offset & 6) + 1)) & 1);
+
+		return offset;
+
+	#endif
+}
+
+Bool U128_isBase2(U128 a) {
+
+	U8 v = U128_bitScan(a);
+
+	if(v == U8_MAX)
+		return false;
+
+	return U128_eq(U128_lsh(U128_one(), v), a);
+}
+
+U128 U128_createFromBase2(CharString text, Error *failed, EBase2Type type) {
+	
+	U128 result = U128_zero();
+	BigInt asBigInt = (BigInt) { 0 };
+	Error err;
+	
+	_gotoIfError(clean, BigInt_createRef((U64*) &result, 2, &asBigInt));
+	_gotoIfError(clean, BigInt_createFromBase2Type(text, U16_MAX, (Allocator) { 0 }, &asBigInt, type));
+
+clean:
+	
+	if(failed && err.genericError)
+		*failed = err;
+
+	return result;
+}
+
+U128 U128_createFromHex(CharString text, Error *failed) { return U128_createFromBase2(text, failed, EBase2Type_Hex); }
+U128 U128_createFromOct(CharString text, Error *failed) { return U128_createFromBase2(text, failed, EBase2Type_Oct); }
+U128 U128_createFromBin(CharString text, Error *failed) { return U128_createFromBase2(text, failed, EBase2Type_Bin); }
+U128 U128_createFromNyto(CharString text, Error *failed) { return U128_createFromBase2(text, failed, EBase2Type_Nyto); }
+
+U128 U128_createFromDec(CharString text, Error *failed) {
+
+	U128 result = U128_zero();
+	BigInt asBigInt = (BigInt) { 0 };
+	Error err;
+
+	//TODO: Optimize with U128_mul when available!
+
+	_gotoIfError(clean, BigInt_createRef((U64*) &result, 2, &asBigInt));
+	_gotoIfError(clean, BigInt_createFromDec(text, U16_MAX, (Allocator) { 0 }, &asBigInt));
+
+clean:
+
+	if(failed && err.genericError)
+		*failed = err;
+
+	return result;
+}
+
 I8 U128_cmp(U128 a, U128 b) {
 
 	//Early exit
@@ -644,7 +1040,7 @@ Bool U128_leq(U128 a, U128 b) { return U128_cmp(a, b) <= 0; }
 Bool U128_gt(U128 a, U128 b) { return U128_cmp(a, b) > 0; }
 Bool U128_geq(U128 a, U128 b) { return U128_cmp(a, b) >= 0; }
 
-U128 U128_div(U128 a, U128 b);
+U128 U128_div(U128 a, U128 b);			//if(isBase2) rsh(a, firstBitId)
 U128 U128_mod(U128 a, U128 b);
 U128 U128_mul(U128 a, U128 b);
 
