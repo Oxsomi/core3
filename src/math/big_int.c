@@ -121,7 +121,7 @@ Error BigInt_createFromBase2Type(CharString text, U16 bitCount, Allocator alloc,
 			return Error_invalidParameter(1, 0);
 	}
 
-	if(chars * countPerChar > (bitCount + countPerChar - 1) / countPerChar)
+	if(chars * countPerChar > ((bitCount + countPerChar - 1) / countPerChar * countPerChar))
 		return Error_outOfBounds(0, chars * countPerChar, bitCount);
 
 	Bool allocated = false;
@@ -138,7 +138,7 @@ Error BigInt_createFromBase2Type(CharString text, U16 bitCount, Allocator alloc,
 	}
 
 	for (
-		U64 i = CharString_length(text) - 1, j = 0; 
+		U64 i = CharString_length(text) - 1, j = 0, k = 0; 
 		i >= prefixChars && i != U64_MAX; 
 		--i, ++j
 	) {
@@ -154,7 +154,26 @@ Error BigInt_createFromBase2Type(CharString text, U16 bitCount, Allocator alloc,
 		if(v == U8_MAX)
 			_gotoIfError(clean, Error_invalidParameter(0, 1));
 
-		((U8*)big->data)[j >> 1] |= j & 1 ? (v << countPerChar) : v;
+		switch (type) {
+
+			case EBase2Type_Hex:	((U8*)big->data)[j >> 1] |= v << (countPerChar * (j & 1));	break;
+			case EBase2Type_Bin:	((U8*)big->data)[j >> 3] |= v << (countPerChar * (j & 7));	break;
+
+			case EBase2Type_Nyto:
+			case EBase2Type_Oct: {
+
+				U64 lo = (U64)v << ((countPerChar * j) & 63);
+
+				((U64*)big->data)[k] |= lo;
+
+				if (((countPerChar * j) & ~63) != ((countPerChar * (j + 1)) & ~63)) {
+					U64 hi = (U64)v >> (64 - (countPerChar * j) & 63);
+					((U64*)big->data)[++k] |= hi;
+				}
+
+				break;
+			}
+		}
 	}
 
 	if(bitCount & 63) {		//Fix last U64 to handle out of bounds

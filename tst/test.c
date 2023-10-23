@@ -1614,14 +1614,62 @@ int main() {
 		{ 0xFB6D0B6FE73ECB86, 0x715AD28B6F17ABC9 }
 	};
 
-	//_gotoIfError(clean, BigInt_createFromHex(CharString_createConstRefCStr("0x0123456789ABCDEF"), 128, alloc, &a));
-	//_gotoIfError(clean, BigInt_createFromHex(CharString_createConstRefCStr("0xFEDCBA9876543210"), 128, alloc, &a));
-	//
-	//_gotoIfError(clean, BigInt_createFromHex(
-	//	CharString_createConstRefCStr("0x2236D88FE5618CF00121FA00AD77D742"), 128, alloc, &a
-	//));
+	const C8 *stringified[] = {
 
-	BigInt aBig, bBig, cBig;
+		"0xFEDCBA98765432100123456789ABCDEF",
+
+		"0b1111111111111111111111111111111111111111111111111111111111111111"
+		  "1111111111111111111111111111111111111111111111111111111111111111",
+
+		"0o3410507636447263053360252722732077575555417",
+
+		"0n2i0_jD8bUksGJNeskm821$",
+		"274506787720133886812119851071477940366"
+	};
+
+	BigInt aBig = (BigInt) { 0 }, bBig = (BigInt) { 0 }, cBig = (BigInt) { 0 };
+
+	printf("Testing big int create from hex/bin/oct/dec\n");
+
+	_gotoIfError(clean, BigInt_createFromHex(CharString_createConstRefCStr(stringified[0]), 128, alloc, &aBig));
+	_gotoIfError(clean, BigInt_createConstRef(&mulParams[0][0], 2, &bBig));
+
+	if(BigInt_neq(aBig, bBig))
+		_gotoIfError(clean, Error_invalidState(0));
+
+	BigInt_free(&aBig, alloc);
+	bBig.data = &mulParams[1][0];
+
+	_gotoIfError(clean, BigInt_createFromBin(CharString_createConstRefCStr(stringified[1]), 128, alloc, &aBig));
+
+	if(BigInt_neq(aBig, bBig))
+		_gotoIfError(clean, Error_invalidState(1));
+
+	BigInt_free(&aBig, alloc);
+	bBig.data = &mulParams[2][0];
+
+	_gotoIfError(clean, BigInt_createFromOct(CharString_createConstRefCStr(stringified[2]), 128, alloc, &aBig));
+
+	if(BigInt_neq(aBig, bBig))
+		_gotoIfError(clean, Error_invalidState(1));
+
+	BigInt_free(&aBig, alloc);
+	bBig.data = &mulParams[3][0];
+
+	_gotoIfError(clean, BigInt_createFromNyto(CharString_createConstRefCStr(stringified[3]), 128, alloc, &aBig));
+
+	if(BigInt_neq(aBig, bBig))
+		_gotoIfError(clean, Error_invalidState(1));
+
+	BigInt_free(&aBig, alloc);
+	bBig.data = &mulParams[4][0];
+
+	_gotoIfError(clean, BigInt_createFromDec(CharString_createConstRefCStr(stringified[4]), 128, alloc, &aBig));
+
+	if(BigInt_neq(aBig, bBig))
+		_gotoIfError(clean, Error_invalidState(1));
+
+	BigInt_free(&aBig, alloc);
 
 	printf("Testing big int mul\n");
 
