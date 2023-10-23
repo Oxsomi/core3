@@ -56,7 +56,7 @@ Error BigInt_createFromDec(CharString text, U16 bitCount, Allocator allocator, B
 Error BigInt_createFromOct(CharString text, U16 bitCount, Allocator allocator, BigInt *big);
 Error BigInt_createFromBin(CharString text, U16 bitCount, Allocator allocator, BigInt *big);
 Error BigInt_createFromNyto(CharString text, U16 bitCount, Allocator allocator, BigInt *big);
-Error BigInt_createFromText(CharString text, U16 bitCount, Allocator allocator, BigInt *big);
+Error BigInt_createFromString(CharString text, U16 bitCount, Allocator allocator, BigInt *big);
 
 //Arithmetic
 
@@ -135,7 +135,8 @@ U128 U128_createFromHex(CharString text, Error *failed);
 U128 U128_createFromOct(CharString text, Error *failed);
 U128 U128_createFromBin(CharString text, Error *failed);
 U128 U128_createFromNyto(CharString text, Error *failed);
-U128 U128_createFromDec(CharString text, Error *failed);
+U128 U128_createFromDec(CharString text, Error *failed, Allocator alloc);
+U128 U128_createFromString(CharString text, Error *failed, Allocator alloc);
 
 //Bitwise
 

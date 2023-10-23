@@ -213,17 +213,25 @@ Error BigInt_createFromNyto(CharString text, U16 bitCount, Allocator alloc, BigI
 
 #define _STRING_TO_U16(a, b) ((a) | ((U16)b << 8))
 
-Error BigInt_createFromText(CharString text, U16 bitCount, Allocator alloc, BigInt *big) {
+Error BigInt_createFromString(CharString text, U16 bitCount, Allocator alloc, BigInt *big) {
 
 	if (CharString_length(text) > 2) {
 
 		U16 start = *(const U16*) text.ptr;
 
 		switch(start) {
-			case _STRING_TO_U16('0', 'b'):	return BigInt_createFromBin(text, bitCount, alloc, big);
-			case _STRING_TO_U16('0', 'x'):	return BigInt_createFromHex(text, bitCount, alloc, big);
-			case _STRING_TO_U16('0', 'o'):	return BigInt_createFromOct(text, bitCount, alloc, big);
-			case _STRING_TO_U16('0', 'n'):	return BigInt_createFromNyto(text, bitCount, alloc, big);
+
+			case _STRING_TO_U16('0', 'b'): case _STRING_TO_U16('0', 'B'):
+				return BigInt_createFromBin(text, bitCount, alloc, big);
+
+			case _STRING_TO_U16('0', 'x'): case _STRING_TO_U16('0', 'X'):
+				return BigInt_createFromHex(text, bitCount, alloc, big);
+
+			case _STRING_TO_U16('0', 'o'): case _STRING_TO_U16('0', 'O'):
+				return BigInt_createFromOct(text, bitCount, alloc, big);
+
+			case _STRING_TO_U16('0', 'n'): case _STRING_TO_U16('0', 'N'):
+				return BigInt_createFromNyto(text, bitCount, alloc, big);
 		}
 	}
 
@@ -1012,7 +1020,7 @@ U128 U128_createFromOct(CharString text, Error *failed) { return U128_createFrom
 U128 U128_createFromBin(CharString text, Error *failed) { return U128_createFromBase2(text, failed, EBase2Type_Bin); }
 U128 U128_createFromNyto(CharString text, Error *failed) { return U128_createFromBase2(text, failed, EBase2Type_Nyto); }
 
-U128 U128_createFromDec(CharString text, Error *failed) {
+U128 U128_createFromDec(CharString text, Error *failed, Allocator alloc) {
 
 	U128 result = U128_zero();
 	BigInt asBigInt = (BigInt) { 0 };
@@ -1021,7 +1029,7 @@ U128 U128_createFromDec(CharString text, Error *failed) {
 	//TODO: Optimize with U128_mul when available!
 
 	_gotoIfError(clean, BigInt_createRef((U64*) &result, 2, &asBigInt));
-	_gotoIfError(clean, BigInt_createFromDec(text, U16_MAX, (Allocator) { 0 }, &asBigInt));
+	_gotoIfError(clean, BigInt_createFromDec(text, U16_MAX, alloc, &asBigInt));
 
 clean:
 
@@ -1029,6 +1037,47 @@ clean:
 		*failed = err;
 
 	return result;
+}
+
+//U128 has special implementation for dec that's faster because mul is overloaded which is faster than BigInt
+
+U128 U128_createFromString(CharString text, Error *failed, Allocator alloc) {
+
+	U128 v = U128_zero();
+
+	if (CharString_length(text) > 2) {
+
+		U16 start = *(const U16*) text.ptr;
+
+		switch(start) {
+
+			case _STRING_TO_U16('0', 'b'): case _STRING_TO_U16('0', 'B'):
+			case _STRING_TO_U16('0', 'x'): case _STRING_TO_U16('0', 'X'):
+			case _STRING_TO_U16('0', 'o'): case _STRING_TO_U16('0', 'O'):
+			case _STRING_TO_U16('0', 'n'): case _STRING_TO_U16('0', 'N'): {
+
+				BigInt bigInt = (BigInt) { 0 };
+				Error err = BigInt_createRef((U64*)&v, 2, &bigInt);
+
+				if(err.genericError) {
+
+					if(failed)
+						*failed = err;
+
+					return v;
+				}
+
+				err = BigInt_createFromString(text, U16_MAX, (Allocator) { 0 }, &bigInt);
+
+				if(failed)
+					*failed = err;
+				
+				return v;
+			}
+		}
+	}
+
+	return U128_createFromDec(text, failed, alloc);
 }
 
 I8 U128_cmp(U128 a, U128 b) {

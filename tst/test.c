@@ -1615,14 +1615,10 @@ int main() {
 	};
 
 	const C8 *stringified[] = {
-
 		"0xFEDCBA98765432100123456789ABCDEF",
-
 		"0b1111111111111111111111111111111111111111111111111111111111111111"
 		  "1111111111111111111111111111111111111111111111111111111111111111",
-
 		"0o3410507636447263053360252722732077575555417",
-
 		"0n2i0_jD8bUksGJNeskm821$",
 		"274506787720133886812119851071477940366"
 	};
@@ -1631,45 +1627,17 @@ int main() {
 
 	printf("Testing big int create from hex/bin/oct/dec\n");
 
-	_gotoIfError(clean, BigInt_createFromHex(CharString_createConstRefCStr(stringified[0]), 128, alloc, &aBig));
-	_gotoIfError(clean, BigInt_createConstRef(&mulParams[0][0], 2, &bBig));
+	for(U64 i = 0; i < sizeof(stringified) / sizeof(stringified[0]); ++i) {
 
-	if(BigInt_neq(aBig, bBig))
-		_gotoIfError(clean, Error_invalidState(0));
+		_gotoIfError(clean, BigInt_createFromString(CharString_createConstRefCStr(stringified[i]), 128, alloc, &aBig));
+		_gotoIfError(clean, BigInt_createConstRef(&mulParams[i][0], 2, &bBig));
 
-	BigInt_free(&aBig, alloc);
-	bBig.data = &mulParams[1][0];
+		if(BigInt_neq(aBig, bBig))
+			_gotoIfError(clean, Error_invalidState((U32)i));
 
-	_gotoIfError(clean, BigInt_createFromBin(CharString_createConstRefCStr(stringified[1]), 128, alloc, &aBig));
-
-	if(BigInt_neq(aBig, bBig))
-		_gotoIfError(clean, Error_invalidState(1));
-
-	BigInt_free(&aBig, alloc);
-	bBig.data = &mulParams[2][0];
-
-	_gotoIfError(clean, BigInt_createFromOct(CharString_createConstRefCStr(stringified[2]), 128, alloc, &aBig));
-
-	if(BigInt_neq(aBig, bBig))
-		_gotoIfError(clean, Error_invalidState(1));
-
-	BigInt_free(&aBig, alloc);
-	bBig.data = &mulParams[3][0];
-
-	_gotoIfError(clean, BigInt_createFromNyto(CharString_createConstRefCStr(stringified[3]), 128, alloc, &aBig));
-
-	if(BigInt_neq(aBig, bBig))
-		_gotoIfError(clean, Error_invalidState(1));
-
-	BigInt_free(&aBig, alloc);
-	bBig.data = &mulParams[4][0];
-
-	_gotoIfError(clean, BigInt_createFromDec(CharString_createConstRefCStr(stringified[4]), 128, alloc, &aBig));
-
-	if(BigInt_neq(aBig, bBig))
-		_gotoIfError(clean, Error_invalidState(1));
-
-	BigInt_free(&aBig, alloc);
+		BigInt_free(&aBig, alloc);
+		bBig = (BigInt) { 0 };
+	}
 
 	printf("Testing big int mul\n");
 
@@ -1967,6 +1935,19 @@ int main() {
 
 		if(off != (U16)(sizeof(rshResult) / sizeof(rshResult[0]) - 1 - i))
 			_gotoIfError(clean, Error_invalidOperation((U32)i));
+	}
+
+	printf("Testing U128 create from hex/bin/oct/dec\n");
+
+	for(U64 i = 0; i < sizeof(stringified) / sizeof(stringified[0]); ++i) {
+
+		U128 vi = U128_createFromString(CharString_createConstRefCStr(stringified[i]), &err, alloc);
+		U128 realVi = U128_create((const U8*) &mulParams[i][0]);
+
+		_gotoIfError(clean, err);
+
+		if(U128_neq(vi, realVi))
+			_gotoIfError(clean, Error_invalidState((U32)i));
 	}
 
 	//
