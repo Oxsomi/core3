@@ -109,11 +109,27 @@ Error BigInt_isBase2(BigInt a, Allocator allocator, Bool *isBase2);
 
 //Transform to string
 
-Error BigInt_hex(BigInt b, Allocator allocator, CharString *result);
-Error BigInt_oct(BigInt b, Allocator allocator, CharString *result);
-Error BigInt_dec(BigInt b, Allocator allocator, CharString *result);
-Error BigInt_bin(BigInt b, Allocator allocator, CharString *result);
-Error BigInt_nyto(BigInt b, Allocator allocator, CharString *result);
+typedef enum EIntegerEncoding {
+	EIntegerEncoding_Hex,
+	EIntegerEncoding_Bin,
+	EIntegerEncoding_Oct,
+	EIntegerEncoding_Nyto,
+	//EIntegerEncoding_Dec,
+	EIntegerEncoding_Count
+} EIntegerEncoding;
+
+Error BigInt_hex(BigInt b, Allocator allocator, CharString *result, Bool leadingZeros);
+Error BigInt_oct(BigInt b, Allocator allocator, CharString *result, Bool leadingZeros);
+Error BigInt_dec(BigInt b, Allocator allocator, CharString *result, Bool leadingZeros);
+Error BigInt_bin(BigInt b, Allocator allocator, CharString *result, Bool leadingZeros);
+Error BigInt_nyto(BigInt b, Allocator allocator, CharString *result, Bool leadingZeros);
+Error BigInt_toString(
+	BigInt b, 
+	Allocator allocator, 
+	CharString *result, 
+	EIntegerEncoding encoding, 
+	Bool leadingZeros
+);
 
 //U128
 

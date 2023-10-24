@@ -84,13 +84,13 @@ typedef enum EBase2Type {
 	EBase2Type_Nyto
 } EBase2Type;
 
+static const C8 *base2Types[] = { "0x", "0b", "0o", "0n" };
+static const U8 base2Count[] = { 4, 1, 3, 6 };
+
 Error BigInt_createFromBase2Type(CharString text, U16 bitCount, Allocator alloc, BigInt *big, EBase2Type type) {
 
 	if(!big)
 		return Error_nullPointer(3);
-
-	static const C8 *base2Types[] = { "0x", "0b", "0o", "0n" };
-	static const U8 base2Count[] = { 4, 1, 3, 6 };
 
 	Bool prefix = CharString_startsWithString(text, CharString_createConstRefCStr(base2Types[type]), EStringCase_Insensitive);
 	U8 prefixChars = prefix * 2;
@@ -808,11 +808,93 @@ clean:
 	return err;
 }
 
-Error BigInt_hex(BigInt b, Allocator allocator, CharString *result);
-Error BigInt_oct(BigInt b, Allocator allocator, CharString *result);
-Error BigInt_dec(BigInt b, Allocator allocator, CharString *result);
-Error BigInt_bin(BigInt b, Allocator allocator, CharString *result);
-Error BigInt_nyto(BigInt b, Allocator allocator, CharString *result);
+Error BigInt_base2(BigInt b, Allocator alloc, CharString *result, EBase2Type type, Bool leadingZeros) {
+
+	U8 countPerChar = base2Count[type];
+	U64 len = U64_max(3, (((U64)b.length * 64 + countPerChar - 1) / countPerChar) + 2);
+	Error err = CharString_resize(result, len, '0', alloc);
+
+	if(err.genericError)
+		return err;
+
+	((C8*)result->ptr)[1] = base2Types[type][1];
+
+	U64 firstLoc = len - 1;
+	U8 mask = (1 << countPerChar) - 1;
+	U64 i = len - 1;
+
+	for (U64 j = 0, k = 0; j < len - 2 && k < b.length; ++j) {
+	
+		U64 v = b.data[k];
+		v = ((U64)v >> ((countPerChar * j) & 63)) & mask;
+
+		if (((countPerChar * j) & ~63) != ((countPerChar * (j + 1)) & ~63)) {
+
+			U64 mask2 = ((U64)U64_MAX << (64 - (countPerChar * j) & 63)) & mask;
+
+			if(k + 1 < b.length)
+				v |= ((U64)((U64*)b.data)[k + 1] & mask2);
+
+			++k;
+		}
+
+		if(!v)
+			continue;
+
+		switch(type) {
+			case EBase2Type_Bin:	((C8*)result->ptr)[i - j] = C8_createBin((U8)v);	break;
+			case EBase2Type_Oct:	((C8*)result->ptr)[i - j] = C8_createOct((U8)v);	break;
+			case EBase2Type_Hex:	((C8*)result->ptr)[i - j] = C8_createHex((U8)v);	break;
+			case EBase2Type_Nyto:	((C8*)result->ptr)[i - j] = C8_createNyto((U8)v);	break;
+		}
+
+		firstLoc = j + 1;
+	}
+
+	if(!leadingZeros)
+		_gotoIfError(clean, CharString_eraseAtCount(result, 2, (len - 2) - firstLoc));
+
+	goto success;
+
+clean:
+	CharString_free(result, alloc);
+success:
+	return err;
+}
+
+Error BigInt_hex(BigInt b, Allocator alloc, CharString *result, Bool leadingZeros) { 
+	return BigInt_base2(b, alloc, result, EBase2Type_Hex, leadingZeros);
+}
+
+Error BigInt_oct(BigInt b, Allocator alloc, CharString *result, Bool leadingZeros) { 
+	return BigInt_base2(b, alloc, result, EBase2Type_Oct, leadingZeros);
+}
+
+Error BigInt_bin(BigInt b, Allocator alloc, CharString *result, Bool leadingZeros) {
+	return BigInt_base2(b, alloc, result, EBase2Type_Bin, leadingZeros);
+}
+
+Error BigInt_nyto(BigInt b, Allocator alloc, CharString *result, Bool leadingZeros) {
+	return BigInt_base2(b, alloc, result, EBase2Type_Nyto, leadingZeros);
+}
+
+Error BigInt_dec(BigInt b, Allocator allocator, CharString *result, Bool leadingZeros);
+
+Error BigInt_toString(
+	BigInt b, 
+	Allocator allocator, 
+	CharString *result, 
+	EIntegerEncoding encoding, 
+	Bool leadingZeros
+) {
+	switch (encoding) {
+		case EIntegerEncoding_Bin:		return BigInt_bin(b, allocator, result, leadingZeros);
+		case EIntegerEncoding_Oct:		return BigInt_oct(b, allocator, result, leadingZeros);
+		case EIntegerEncoding_Hex:		return BigInt_hex(b, allocator, result, leadingZeros);
+		case EIntegerEncoding_Nyto:		return BigInt_nyto(b, allocator, result, leadingZeros);
+		default:						return Error_invalidParameter(3, 0);
+	}
+}
 
 //U128
 

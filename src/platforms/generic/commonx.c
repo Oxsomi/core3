@@ -28,6 +28,7 @@
 #include "types/allocation_buffer.h"
 #include "types/error.h"
 #include "types/archive.h"
+#include "math/big_int.h"
 #include "platforms/platform.h"
 
 //Contains small helper functions that don't require their own .c file
@@ -174,6 +175,73 @@ Error List_shrinkToFitx(List *list) { return List_shrinkToFit(list, Platform_ins
 
 Error List_pushBackx(List *list, Buffer buf) { return List_pushBack(list, buf, Platform_instance.alloc); }
 Bool List_freex(List *result) { return List_free(result, Platform_instance.alloc); }
+
+//BigInt
+
+Error BigInt_createx(U16 bitCount, BigInt *big) { return BigInt_create(bitCount, Platform_instance.alloc, big); }
+Error BigInt_createCopyx(BigInt *a, BigInt *b) { return BigInt_createCopy(a, Platform_instance.alloc, b); }
+
+Bool BigInt_freex(BigInt *a) { return BigInt_free(a, Platform_instance.alloc); }
+
+Error BigInt_createFromHexx(CharString text, U16 bitCount, BigInt *big) { 
+	return BigInt_createFromHex(text, bitCount, Platform_instance.alloc, big);
+}
+
+Error BigInt_createFromDecx(CharString text, U16 bitCount, BigInt *big) { 
+	return BigInt_createFromDec(text, bitCount, Platform_instance.alloc, big);
+}
+
+Error BigInt_createFromOctx(CharString text, U16 bitCount, BigInt *big) { 
+	return BigInt_createFromOct(text, bitCount, Platform_instance.alloc, big);
+}
+
+Error BigInt_createFromBinx(CharString text, U16 bitCount, BigInt *big) { 
+	return BigInt_createFromBin(text, bitCount, Platform_instance.alloc, big);
+}
+
+Error BigInt_createFromNytox(CharString text, U16 bitCount, BigInt *big) { 
+	return BigInt_createFromNyto(text, bitCount, Platform_instance.alloc, big);
+}
+
+Error BigInt_createFromStringx(CharString text, U16 bitCount, BigInt *big) { 
+	return BigInt_createFromString(text, bitCount, Platform_instance.alloc, big);
+}
+
+Bool BigInt_mulx(BigInt *a, BigInt b) { return BigInt_mul(a, b, Platform_instance.alloc); }
+
+Error BigInt_resizex(BigInt *a, U8 newSize) { return BigInt_resize(a, newSize, Platform_instance.alloc); }
+Bool BigInt_setx(BigInt *a, BigInt b, Bool allowResize) { return BigInt_set(a, b, allowResize, Platform_instance.alloc); }
+
+Bool BigInt_truncx(BigInt *big) { return BigInt_trunc(big, Platform_instance.alloc); }
+
+Error BigInt_isBase2x(BigInt a, Bool *isBase2) { return BigInt_isBase2(a, Platform_instance.alloc, isBase2); }
+U128 U128_createFromDecx(CharString text, Error *failed) { return U128_createFromDec(text, failed, Platform_instance.alloc); }
+
+U128 U128_createFromStringx(CharString text, Error *failed) { 
+	return U128_createFromString(text, failed, Platform_instance.alloc); 
+}
+
+Error BigInt_hexx(BigInt b, CharString *result, Bool leadingZeros) {
+	return BigInt_hex(b, Platform_instance.alloc, result, leadingZeros);
+}
+
+Error BigInt_octx(BigInt b, CharString *result, Bool leadingZeros) {
+	return BigInt_oct(b, Platform_instance.alloc, result, leadingZeros);
+}
+
+Error BigInt_binx(BigInt b, CharString *result, Bool leadingZeros) {
+	return BigInt_bin(b, Platform_instance.alloc, result, leadingZeros);
+}
+
+Error BigInt_nytox(BigInt b, CharString *result, Bool leadingZeros) {
+	return BigInt_nyto(b, Platform_instance.alloc, result, leadingZeros);
+}
+
+Error BigInt_toStringx(BigInt b, CharString *result, EIntegerEncoding encoding, Bool leadingZeros) {
+	return BigInt_toString(b, Platform_instance.alloc, result, encoding, leadingZeros);
+}
+
+//Error BigInt_decx(BigInt b, CharString *result, Bool leadingZeros);
 
 //CharString
 

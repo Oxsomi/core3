@@ -1639,6 +1639,22 @@ int main() {
 		bBig = (BigInt) { 0 };
 	}
 
+	printf("Testing big int to hex/bin/oct\n");
+
+	for(U64 i = 0; i < sizeof(stringified) / sizeof(stringified[0]) && i < EIntegerEncoding_Count; ++i) {
+
+		_gotoIfError(clean, BigInt_createConstRef(&mulParams[i][0], 2, &bBig));
+		_gotoIfError(clean, BigInt_toString(bBig, alloc, &tmp, (EIntegerEncoding)i, false));
+
+		CharString ref = CharString_createConstRefCStr(stringified[i]);
+
+		if(!CharString_equalsString(ref, tmp, EStringCase_Sensitive))
+			_gotoIfError(clean, Error_invalidState((U32)i));
+
+		CharString_free(&tmp, alloc);
+		bBig = (BigInt) { 0 };
+	}
+
 	printf("Testing big int mul\n");
 
 	for(U64 i = 0; i < sizeof(mulParams) / sizeof(mulParams[0]); ++i) {

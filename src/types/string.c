@@ -2112,7 +2112,7 @@ Error CharString_eraseAtCount(CharString *s, U64 i, U64 count) {
 		return Error_nullPointer(0);
 
 	if(!count)
-		return Error_invalidParameter(2, 0);
+		return Error_none();
 
 	if(CharString_isRef(*s))
 		return Error_constData(0, 0);
