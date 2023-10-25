@@ -709,13 +709,20 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 				GPUBuffer *dispatchBuffer = GPUBufferRef_ptr(drawIndirect.buffer);
 				VkGPUBuffer *bufferExt = GPUBuffer_ext(dispatchBuffer, Vk);
 
+				for(U64 i = 0; i < 17; ++i)
+					if(
+						temp->boundBuffers[i] == drawIndirect.buffer || 
+						(drawIndirect.countBuffer && temp->boundBuffers[i] == drawIndirect.countBuffer)
+					)
+						_gotoIfError(cleanDrawIndirect, Error_invalidOperation(0));
+
 				_gotoIfError(cleanDrawIndirect, VkGPUBuffer_transition(
 					bufferExt,
 					VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
 					VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT,
 					graphicsQueueId,
 					drawIndirect.bufferOffset,
-					(U64)drawIndirect.bufferStride * drawIndirect.maxDrawCalls,
+					(U64)drawIndirect.bufferStride * drawIndirect.drawCalls,
 					&bufferBarriers,
 					&dependency
 				));
@@ -744,14 +751,14 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 							buffer, 
 							bufferExt->buffer, drawIndirect.bufferOffset, 
 							counterExt->buffer, drawIndirect.countOffset, 
-							drawIndirect.maxDrawCalls, drawIndirect.bufferStride
+							drawIndirect.drawCalls, drawIndirect.bufferStride
 						);
 
 					else vkCmdDrawIndirectCount(
 						buffer,
 						bufferExt->buffer, drawIndirect.bufferOffset,
 						counterExt->buffer, drawIndirect.countOffset, 
-						drawIndirect.maxDrawCalls, drawIndirect.bufferStride
+						drawIndirect.drawCalls, drawIndirect.bufferStride
 					);
 				}
 
@@ -764,12 +771,12 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 						vkCmdDrawIndexedIndirect(
 							buffer,
 							bufferExt->buffer, drawIndirect.bufferOffset,
-							drawIndirect.maxDrawCalls, drawIndirect.bufferStride
+							drawIndirect.drawCalls, drawIndirect.bufferStride
 						);
 
 					else vkCmdDrawIndirect(
 						buffer, bufferExt->buffer, drawIndirect.bufferOffset,
-						drawIndirect.maxDrawCalls, drawIndirect.bufferStride
+						drawIndirect.drawCalls, drawIndirect.bufferStride
 					);
 				}
 
@@ -799,6 +806,10 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 				GPUBuffer *dispatchBuffer = GPUBufferRef_ptr(dispatch.buffer);
 				VkGPUBuffer *bufferExt = GPUBuffer_ext(dispatchBuffer, Vk);
 
+				for(U64 i = 0; i < 17; ++i)
+					if(temp->boundBuffers[i] == dispatch.buffer)
+						_gotoIfError(cleanDispatchIndirect, Error_invalidOperation(0));
+
 				List bufferBarriers = List_createEmpty(sizeof(VkBufferMemoryBarrier2));
 				_gotoIfError(cleanDispatchIndirect, List_reservex(&bufferBarriers, 2));
 
@@ -809,7 +820,7 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 					.dependencyFlags = 0
 				};
 
-				_gotoIfError(cleanDrawIndirect, VkGPUBuffer_transition(
+				_gotoIfError(cleanDispatchIndirect, VkGPUBuffer_transition(
 					bufferExt,
 					VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
 					VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT,

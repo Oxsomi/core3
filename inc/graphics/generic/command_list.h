@@ -250,7 +250,7 @@ typedef struct DrawIndirect {
 
 	U64 bufferOffset, countOffset;
 
-	U32 maxDrawCalls, bufferStride;
+	U32 drawCalls, bufferStride;
 
 	Bool isIndexed;
 	U8 pad[7];
@@ -275,7 +275,7 @@ typedef struct DrawCallIndexed {
 Error CommandListRef_drawIndirect(
 	CommandListRef *commandList, 
 	GPUBufferRef *buffer, U64 bufferOffset, U32 bufferStride, 
-	U32 maxDrawCalls, Bool indexed
+	U32 drawCalls, Bool indexed
 );
 
 Error CommandListRef_drawIndirectCount(

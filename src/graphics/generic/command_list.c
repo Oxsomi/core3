@@ -605,7 +605,7 @@ Error CommandListRef_drawIndirectBase(
 	GPUBufferRef *buffer,
 	U64 bufferOffset,
 	U32 *bufferStride,
-	U32 *maxDrawCalls,
+	U32 drawCalls,
 	Bool indexed
 ) {
 
@@ -622,20 +622,10 @@ Error CommandListRef_drawIndirectBase(
 	if(*bufferStride < minStride)
 		return Error_invalidParameter(2, 0);
 
-	if (!*maxDrawCalls) {
+	if (!drawCalls)
+		return Error_invalidParameter(2, 1);
 
-		U64 max = buf->length / *bufferStride;
-
-		if(buf->length % *bufferStride)
-			return Error_invalidParameter(2, 1);
-
-		if(max >> 32)
-			return Error_invalidParameter(3, 0);
-
-		*maxDrawCalls = (U32) max;
-	}
-
-	return CommandListRef_checkDispatchBuffer(buffer, bufferOffset, (U64)*bufferStride * *maxDrawCalls);
+	return CommandListRef_checkDispatchBuffer(buffer, bufferOffset, (U64)*bufferStride * drawCalls);
 }
 
 Error CommandListRef_drawIndirect(
@@ -643,11 +633,11 @@ Error CommandListRef_drawIndirect(
 	GPUBufferRef *buffer,
 	U64 bufferOffset,
 	U32 bufferStride,
-	U32 maxDrawCalls,
+	U32 drawCalls,
 	Bool indexed
 ) {
 
-	Error err = CommandListRef_drawIndirectBase(buffer, bufferOffset, &bufferStride, &maxDrawCalls, indexed);
+	Error err = CommandListRef_drawIndirectBase(buffer, bufferOffset, &bufferStride, drawCalls, indexed);
 
 	if(err.genericError)
 		return err;
@@ -659,7 +649,7 @@ Error CommandListRef_drawIndirect(
 	DrawIndirect draw = (DrawIndirect) {
 		.buffer = buffer,
 		.bufferOffset = bufferOffset,
-		.maxDrawCalls = maxDrawCalls,
+		.drawCalls = drawCalls,
 		.bufferStride = bufferStride,
 		.isIndexed = indexed
 	};
@@ -680,7 +670,7 @@ Error CommandListRef_drawIndirectCount(
 	Bool indexed
 ) {
 
-	Error err = CommandListRef_drawIndirectBase(buffer, bufferOffset, &bufferStride, &maxDrawCalls, indexed);
+	Error err = CommandListRef_drawIndirectBase(buffer, bufferOffset, &bufferStride, maxDrawCalls, indexed);
 
 	if(err.genericError)
 		return err;
@@ -698,7 +688,7 @@ Error CommandListRef_drawIndirectCount(
 		.countBuffer = countBuffer,
 		.bufferOffset = bufferOffset,
 		.countOffset = countOffset,
-		.maxDrawCalls = maxDrawCalls,
+		.drawCalls = maxDrawCalls,
 		.bufferStride = bufferStride,
 		.isIndexed = indexed
 	};

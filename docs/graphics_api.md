@@ -484,7 +484,45 @@ When using the baker, the binaries can simply be loaded using the oiCS helper fu
 
 **TODO: The baker currently doesn't include this functionality just yet.** 
 
-## TODO: GPUBuffer
+## GPUBuffer
+
+### Summary
+
+A GPUBuffer is a buffer partially or fully located on the device (such as a GPU). A buffer defines the usage for various purposes such as; a vertex buffer, index buffer, indirect arguments buffer, shader read/write and if it is allocated on the CPU and accessible by the device or fully on the device (with potential access from the CPU). It also specifies if it should allocate a CPU copy to hold temporary data for future buffer updates. 
+
+```c
+VertexPosBuffer vertexPos[] = {
+    (VertexPosBuffer) { { F32_castF16(-0.5f), F32_castF16(-0.5f) } },
+    (VertexPosBuffer) { { F32_castF16(0.5f), F32_castF16(-0.5f) } },
+    (VertexPosBuffer) { { F32_castF16(0.5f), F32_castF16(0.5f) } },
+    (VertexPosBuffer) { { F32_castF16(-0.5f), F32_castF16(0.5f) } }
+};
+
+Buffer vertexData = Buffer_createConstRef(vertexPos, sizeof(vertexPos));
+CharString name = CharString_createConstRefCStr("Vertex position buffer");
+_gotoIfError(clean, GraphicsDeviceRef_createBufferData(
+    device, EGPUBufferUsage_Vertex, name, &vertexData, &vertexBuffers[0]
+));
+```
+
+### Properties
+
+- device: ref to the graphics device that owns it.
+- usage: ShaderRead (accessible for read from shader), ShaderWrite (accessible for write from shader), Vertex (use as vertex buffer), Index (use as index buffer), Indirect (use for indirect draw calls), CPUBacked (There's a CPU copy of the buffer to facilitate reads/writes), CPUAllocated (The entire resource has to be located in "shared" memory or on the CPU if there's a dedicated GPU).
+- isPending(FullCopy): Information about if any data is pending for the next submit and if the entire resource is pending.
+- isFirstFrame: Useful to detect if the resource is in flight to allow quicker copies.
+- length: Length of the buffer.
+- cpuData: If CPUBacked stores the CPU copy for the resource or temporary data for the next submit to copy CPU data to the real resource.
+- pendingChanges: `[U64 startRange, U64 endRange][]` list of marked regions for copy.
+
+### Functions
+
+- `markDirty(U64 offset, U64 length)` marks part or entire resource dirty. This means that next commit the implementation will decide on how to copy to the resource in an efficient way. For example if the resource isn't in flight and ReBAR is turned on or shared memory is in use then it can directly copy to CPU accessible memory. Otherwise it might have to use a copy queue or something similar. The region is merged with any other pending region 256 bytes on either side to avoid lots of fragmented copies. Please make sure to only call this when necessary as this might cause extra allocations or copies to a RingBuffer; a good strategy might be to make the buffer 2 or 3x as big as necessary and index based on frameId % 3 and make the buffer CPUAllocated to allow direct writes always and then copy from this buffer only when needed. The framework will try to optimize these copies as much as possible (to avoid having to do that manually), but more work might be needed from the developers using it instead.
+
+### Used functions and obtained
+
+- Obtained through createBuffer and createBufferData from GraphicsDeviceRef. 
+- Used in GPUBufferRef's markDirty, as vertex/index/indirect buffer for commands such as draw/drawIndirect/drawIndirectCount/dispatchIndirectCount, shaders if the resource is readable/writable (through transitions), copy and clear buffer operations. 
 
 ## Commands
 
@@ -601,7 +639,32 @@ This command is generalized with the `draw` command which takes the `Draw` struc
 
 Primitive buffers should only deviate when necessary. Please try to combine multiple meshes into a single mesh as a suballocation. Example could be counting the vertices and indices, making sure the index type and vertex formats/bindings/attributes are the same and allocating only once. Then when issuing draw calls, the index and vertex offset can be used in the draw command.
 
-### TODO: setPrimitiveBuffers
+#### drawIndirect
+
+Same as draw except the GPU reads the parameters of the draw from a GPUBuffer.
+
+- buffer: a buffer with the DrawCallUnindexed or DrawCallIndexed struct(s) depending on the 'indexed' boolean. Buffer needs to enable Indirect usage to be usable by indirect draws.
+- bufferOffset: offset into the draw call buffer. Align to 16-byte for optimal result.
+- bufferStride: stride of the draw call buffer. If 0 it will be defaulted to tightly packed (16 or 24 byte depending on if it's indexed or not). Has to be bigger or equal to the current draw call struct size.
+- drawCalls: how many draw calls are expected to be filled in this buffer. A draw can also set the draw parameters to zero to disable it (instanceCount / index / vertexCount), though for that purpose drawIndirectCount is recommended. Make sure the buffer has `U8[stride][maxDrawCalls]` allocated at bufferOffset. 
+- indexed: if the draw calls are indexed or not. The GPU can't combine non indexed and indexed draw calls, so if you want to combine them you need to do this as two separate steps.
+  - If not indexed; the buffer takes a DrawCallUnindexed struct: U32 vertexCount, instanceCount, vertexOffset, instanceOffset.
+  - Otherwise; the buffer takes a DrawCallIndexed struct: U32 indexCount, instanceCount, indexOffset, I32 vertexOffset, U32 instanceOffset.
+
+drawIndirect transitions the input buffer to IndirectDraw. This means that the buffer can't also be bound as a Vertex/Index buffer or be used in the shader as a read/write buffer.
+
+#### drawIndirectCount
+
+Same as drawIndirect, except it adds a GPUBuffer counter which specifies how many active draw calls there are. This is very useful as it allows culling to be done entirely by compute. 
+
+- drawCalls now represents 'maxDrawCalls' which limits how many draw calls might be issued by the GPU.
+- countBuffer now represents a U32 in the GPUBuffer at the offset. Make sure to align 4-byte to satisfy alignment requirements.
+
+drawIndirect transitions the input buffer to IndirectDraw. This means that the buffer can't also be bound as a Vertex/Index buffer or be used in the shader as a read/write buffer.
+
+### setPrimitiveBuffers
+
+Sets the primitive buffers (vertex + index buffer(s)) for use by draw commands such as draw, drawIndirect and drawIndirectCount. The buffers need the Vertex and/or Index usage set if they're used for that purpose. While the setPrimitiveBuffers is active it is illegal to transition the resource(s) back to a different state or to write/read from other sources that use it. To see when a primitive buffers call is active, check the Scope section of this document. The vertex buffer(s) need to have the same layout as specified in the pipeline and the ranges specified by the draw calls (such as count and offset) need to match up as well. 
 
 ### dispatch
 
@@ -612,6 +675,12 @@ _gotoIfError(clean, CommandListRef_dispatch2D(commandList, tilesX, tilesY));
 ```
 
 dispatch2D, dispatch1D and dispatch3D are the easiest implementations. You dispatch in groups, so it has to be aligned to the thread count of the compute shader. This command is also generalized with the dispatch command which takes in a `Dispatch` struct.
+
+#### dispatchIndirect
+
+Same thing as dispatch, except the GPU reads from a U32x3 into the GPUBuffer at the offset and dispatches the groups stored there. For optimal use please align offset to 16-byte. For 2D dispatches please set z to 1, for 1D set y to 1 as well. 
+
+dispatchIndirect transitions the input buffer to IndirectDraw. This means that the buffer can't also be bound as a Vertex/Index buffer or be used in the shader as a read/write buffer. Buffer needs to enable Indirect usage to be usable by indirect draws.
 
 ### DebugMarkers feature
 

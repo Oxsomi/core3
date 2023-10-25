@@ -90,4 +90,5 @@ Error GraphicsDeviceRef_createBufferData(
 //Each region that doesn't intersect will be considered as 1 copy (otherwise it will be merged).
 //Call this as little as possible while still not copying too much data.
 //Only possible if buffer has a backed CPU buffer.
+
 Error GPUBufferRef_markDirty(GPUBufferRef *buffer, U64 offset, U64 count);
