@@ -31,8 +31,8 @@ EGraphicsTypeId EGraphicsTypeId_all[EGraphicsTypeId_Count] = {
 	EGraphicsTypeId_RenderTexture,
 	EGraphicsTypeId_RenderPass,
 
-	EGraphicsTypeId_GPUTexture,
-	EGraphicsTypeId_GPUBuffer,
+	EGraphicsTypeId_DeviceTexture,
+	EGraphicsTypeId_DeviceBuffer,
 	EGraphicsTypeId_Pipeline,
 	EGraphicsTypeId_DescriptorSet,
 	EGraphicsTypeId_Sampler,

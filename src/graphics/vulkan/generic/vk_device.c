@@ -1191,16 +1191,16 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 
 		switch(type) {
 
-			case EGraphicsTypeId_GPUBuffer: {
+			case EGraphicsTypeId_DeviceBuffer: {
 
-				GPUBuffer *buffer = GPUBufferRef_ptr(pending);
-				VkGPUBuffer *bufferExt = GPUBuffer_ext(buffer, Vk);
+				DeviceBuffer *buffer = DeviceBufferRef_ptr(pending);
+				VkDeviceBuffer *bufferExt = DeviceBuffer_ext(buffer, Vk);
 
 				if(buffer->isFirstFrame) {
 					
 					if (bufferExt->mappedMemory) {
 
-						GPUBlock block = *(GPUBlock*) List_ptr(device->allocator.blocks, bufferExt->blockId);
+						DeviceMemoryBlock block = *(DeviceMemoryBlock*) List_ptr(device->allocator.blocks, bufferExt->blockId);
 						Bool incoherent = !(block.allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
 						if(incoherent && buffer->pendingChanges.length >> 32)
@@ -1211,7 +1211,7 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 
 						for(U64 j = 0; j < buffer->pendingChanges.length; ++j) {
 
-							GPUPendingRange range = *(GPUPendingRange*) List_ptr(buffer->pendingChanges, j);
+							DevicePendingRange range = *(DevicePendingRange*) List_ptr(buffer->pendingChanges, j);
 
 							U64 start = range.buffer.startRange;
 							U64 len = range.buffer.endRange - range.buffer.startRange;
@@ -1238,7 +1238,7 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 
 					else _gotoIfError(clean, Error_unsupportedOperation(1));		//TODO: Staging buffer!
 
-					if(!(buffer->usage & EGPUBufferUsage_CPUBacked))
+					if(!(buffer->usage & EDeviceBufferUsage_CPUBacked))
 						Buffer_freex(&buffer->cpuData);
 
 					buffer->isFirstFrame = buffer->isPending = buffer->isPendingFullCopy = false;

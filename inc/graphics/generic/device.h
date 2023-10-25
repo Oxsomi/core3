@@ -48,12 +48,12 @@ typedef struct TextureRange {
 	U8 endRange[4];
 } TextureRange;
 
-typedef union GPUPendingRange {
+typedef union DevicePendingRange {
 
 	BufferRange buffer;
 	TextureRange texture;
 
-} GPUPendingRange;
+} DevicePendingRange;
 
 typedef struct GraphicsDevice {
 
@@ -67,9 +67,9 @@ typedef struct GraphicsDevice {
 
 	Ns firstSubmit;				//Start of time
 
-	List pendingResources;		//<WeakRefPtr> Resources pending copy from CPU to GPU next submit
+	List pendingResources;		//<WeakRefPtr> Resources pending copy from CPU to device next submit
 
-	GPUAllocator allocator;
+	DeviceMemoryAllocator allocator;
 
 } GraphicsDevice;
 

@@ -338,7 +338,7 @@ The graphics pipeline has the following properties:
 - vertexLayout: how to interpret vertex and instance data bound to the vertex bind points at draw call.
   - Optional if the shader generates all data itself (default to 0).
   - bufferStrides12_isInstance1[16]: buffer description and if it's an instance.
-    - bufferStride is limited to 0-2048 for GPU limit reasons. So the other values (2048-4095) are invalid.
+    - bufferStride is limited to 0-2048 for device limit reasons. So the other values (2048-4095) are invalid.
     - isInstance is when the buffer changes; if it's false it changes per vertex, otherwise it changes per instance.
     - The buffer id is the same as the index into the array. So [0] describes vertex buffer bound at id 0.
     - These are tightly packed to avoid having to dynamically allocate the PipelineGraphicsInfo and keeping it POD while still using limited resources. (bufferStride & 4095) | (isInstance << 12).
@@ -347,7 +347,7 @@ The graphics pipeline has the following properties:
     - format: ETextureFormatId (8-bit) such as 'RGB32f'.
     - buffer4 (0-15): buffer id the attribute point to. Points to vertexLayout.bufferStrides12_isInstance1.
     - offset11: offset into the buffer.
-      - offset is 0-2047 for GPU limit reasons. Since the offset is into the buffer, offset + size can't exceed the stride of the buffer. 
+      - offset is 0-2047 for device limit reasons. Since the offset is into the buffer, offset + size can't exceed the stride of the buffer. 
     - attribute id is inferred from the index into the array. If attribute bindings are used [0] would refer to binding 0.
 - rasterizer: how to rasterize the triangles into pixels.
   - Optional if no special rasterizer info is needed. Default to 0 will to create CCW backface-culled filled geometry with no depth clamp or bias.
@@ -484,11 +484,11 @@ When using the baker, the binaries can simply be loaded using the oiCS helper fu
 
 **TODO: The baker currently doesn't include this functionality just yet.** 
 
-## GPUBuffer
+## DeviceBuffer
 
 ### Summary
 
-A GPUBuffer is a buffer partially or fully located on the device (such as a GPU). A buffer defines the usage for various purposes such as; a vertex buffer, index buffer, indirect arguments buffer, shader read/write and if it is allocated on the CPU and accessible by the device or fully on the device (with potential access from the CPU). It also specifies if it should allocate a CPU copy to hold temporary data for future buffer updates. 
+A DeviceBuffer is a buffer partially or fully located on the device (such as a GPU). A buffer defines the usage for various purposes such as; a vertex buffer, index buffer, indirect arguments buffer, shader read/write and if it is allocated on the CPU and accessible by the device or fully on the device (with potential access from the CPU). It also specifies if it should allocate a CPU copy to hold temporary data for future buffer updates. 
 
 ```c
 VertexPosBuffer vertexPos[] = {
@@ -501,7 +501,7 @@ VertexPosBuffer vertexPos[] = {
 Buffer vertexData = Buffer_createConstRef(vertexPos, sizeof(vertexPos));
 CharString name = CharString_createConstRefCStr("Vertex position buffer");
 _gotoIfError(clean, GraphicsDeviceRef_createBufferData(
-    device, EGPUBufferUsage_Vertex, name, &vertexData, &vertexBuffers[0]
+    device, EDeviceBufferUsage_Vertex, name, &vertexData, &vertexBuffers[0]
 ));
 ```
 
@@ -522,7 +522,7 @@ _gotoIfError(clean, GraphicsDeviceRef_createBufferData(
 ### Used functions and obtained
 
 - Obtained through createBuffer and createBufferData from GraphicsDeviceRef. 
-- Used in GPUBufferRef's markDirty, as vertex/index/indirect buffer for commands such as draw/drawIndirect/drawIndirectCount/dispatchIndirectCount, shaders if the resource is readable/writable (through transitions), copy and clear buffer operations. 
+- Used in DeviceBufferRef's markDirty, as vertex/index/indirect buffer for commands such as draw/drawIndirect/drawIndirectCount/dispatchIndirectCount, shaders if the resource is readable/writable (through transitions), copy and clear buffer operations. 
 
 ## Commands
 
@@ -641,13 +641,13 @@ Primitive buffers should only deviate when necessary. Please try to combine mult
 
 #### drawIndirect
 
-Same as draw except the GPU reads the parameters of the draw from a GPUBuffer.
+Same as draw except the device reads the parameters of the draw from a DeviceBuffer.
 
 - buffer: a buffer with the DrawCallUnindexed or DrawCallIndexed struct(s) depending on the 'indexed' boolean. Buffer needs to enable Indirect usage to be usable by indirect draws.
 - bufferOffset: offset into the draw call buffer. Align to 16-byte for optimal result.
 - bufferStride: stride of the draw call buffer. If 0 it will be defaulted to tightly packed (16 or 24 byte depending on if it's indexed or not). Has to be bigger or equal to the current draw call struct size.
 - drawCalls: how many draw calls are expected to be filled in this buffer. A draw can also set the draw parameters to zero to disable it (instanceCount / index / vertexCount), though for that purpose drawIndirectCount is recommended. Make sure the buffer has `U8[stride][maxDrawCalls]` allocated at bufferOffset. 
-- indexed: if the draw calls are indexed or not. The GPU can't combine non indexed and indexed draw calls, so if you want to combine them you need to do this as two separate steps.
+- indexed: if the draw calls are indexed or not. The device can't combine non indexed and indexed draw calls, so if you want to combine them you need to do this as two separate steps.
   - If not indexed; the buffer takes a DrawCallUnindexed struct: U32 vertexCount, instanceCount, vertexOffset, instanceOffset.
   - Otherwise; the buffer takes a DrawCallIndexed struct: U32 indexCount, instanceCount, indexOffset, I32 vertexOffset, U32 instanceOffset.
 
@@ -655,10 +655,10 @@ drawIndirect transitions the input buffer to IndirectDraw. This means that the b
 
 #### drawIndirectCount
 
-Same as drawIndirect, except it adds a GPUBuffer counter which specifies how many active draw calls there are. This is very useful as it allows culling to be done entirely by compute. 
+Same as drawIndirect, except it adds a DeviceBuffer counter which specifies how many active draw calls there are. This is very useful as it allows culling to be done entirely by compute. 
 
-- drawCalls now represents 'maxDrawCalls' which limits how many draw calls might be issued by the GPU.
-- countBuffer now represents a U32 in the GPUBuffer at the offset. Make sure to align 4-byte to satisfy alignment requirements.
+- drawCalls now represents 'maxDrawCalls' which limits how many draw calls might be issued by the device.
+- countBuffer now represents a U32 in the DeviceBuffer at the offset. Make sure to align 4-byte to satisfy alignment requirements.
 
 drawIndirect transitions the input buffer to IndirectDraw. This means that the buffer can't also be bound as a Vertex/Index buffer or be used in the shader as a read/write buffer.
 
@@ -678,7 +678,7 @@ dispatch2D, dispatch1D and dispatch3D are the easiest implementations. You dispa
 
 #### dispatchIndirect
 
-Same thing as dispatch, except the GPU reads from a U32x3 into the GPUBuffer at the offset and dispatches the groups stored there. For optimal use please align offset to 16-byte. For 2D dispatches please set z to 1, for 1D set y to 1 as well. 
+Same thing as dispatch, except the device reads from a U32x3 into the DeviceBuffer at the offset and dispatches the groups stored there. For optimal use please align offset to 16-byte. For 2D dispatches please set z to 1, for 1D set y to 1 as well. 
 
 dispatchIndirect transitions the input buffer to IndirectDraw. This means that the buffer can't also be bound as a Vertex/Index buffer or be used in the shader as a read/write buffer. Buffer needs to enable Indirect usage to be usable by indirect draws.
 

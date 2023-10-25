@@ -563,12 +563,12 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 
 			for(U32 i = 0; i < 16; ++i) {
 
-				GPUBufferRef *bufferRef = prim.vertexBuffers[i];
+				DeviceBufferRef *bufferRef = prim.vertexBuffers[i];
 
 				if (bufferRef) {
 
-					GPUBuffer *buf = GPUBufferRef_ptr(bufferRef);
-					VkGPUBuffer *bufExt = GPUBuffer_ext(buf, Vk);
+					DeviceBuffer *buf = DeviceBufferRef_ptr(bufferRef);
+					VkDeviceBuffer *bufExt = DeviceBuffer_ext(buf, Vk);
 
 					if(start == 16)
 						start = i;
@@ -584,7 +584,7 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 						transitionedIndex = true;
 					}
 
-					_gotoIfError(cleanSetPrimitiveBuffers, VkGPUBuffer_transition(
+					_gotoIfError(cleanSetPrimitiveBuffers, VkDeviceBuffer_transition(
 						bufExt,
 						flags,
 						access,
@@ -603,10 +603,10 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 
 			if(!transitionedIndex && prim.indexBuffer) {
 			
-				GPUBuffer *buf = GPUBufferRef_ptr(prim.indexBuffer);
-				VkGPUBuffer *bufExt = GPUBuffer_ext(buf, Vk);
+				DeviceBuffer *buf = DeviceBufferRef_ptr(prim.indexBuffer);
+				VkDeviceBuffer *bufExt = DeviceBuffer_ext(buf, Vk);
 
-				_gotoIfError(cleanSetPrimitiveBuffers, VkGPUBuffer_transition(
+				_gotoIfError(cleanSetPrimitiveBuffers, VkDeviceBuffer_transition(
 					bufExt,
 					VK_PIPELINE_STAGE_2_INDEX_INPUT_BIT,
 					VK_ACCESS_2_INDEX_READ_BIT,
@@ -636,7 +636,7 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 
 				vkCmdBindIndexBuffer(
 					temp->buffer,
-					GPUBuffer_ext(GPUBufferRef_ptr(prim.indexBuffer), Vk)->buffer, 
+					DeviceBuffer_ext(DeviceBufferRef_ptr(prim.indexBuffer), Vk)->buffer, 
 					0,
 					prim.isIndex32Bit ? VK_INDEX_TYPE_UINT32 : VK_INDEX_TYPE_UINT16
 				);
@@ -706,8 +706,8 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 				};
 
 				DrawIndirect drawIndirect = *(const DrawIndirect*)data;
-				GPUBuffer *dispatchBuffer = GPUBufferRef_ptr(drawIndirect.buffer);
-				VkGPUBuffer *bufferExt = GPUBuffer_ext(dispatchBuffer, Vk);
+				DeviceBuffer *dispatchBuffer = DeviceBufferRef_ptr(drawIndirect.buffer);
+				VkDeviceBuffer *bufferExt = DeviceBuffer_ext(dispatchBuffer, Vk);
 
 				for(U64 i = 0; i < 17; ++i)
 					if(
@@ -716,7 +716,7 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 					)
 						_gotoIfError(cleanDrawIndirect, Error_invalidOperation(0));
 
-				_gotoIfError(cleanDrawIndirect, VkGPUBuffer_transition(
+				_gotoIfError(cleanDrawIndirect, VkDeviceBuffer_transition(
 					bufferExt,
 					VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
 					VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT,
@@ -729,10 +729,10 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 
 				if (drawIndirect.countBuffer) {
 
-					GPUBuffer *counterBuffer = GPUBufferRef_ptr(drawIndirect.countBuffer);
-					VkGPUBuffer *counterExt = GPUBuffer_ext(counterBuffer, Vk);
+					DeviceBuffer *counterBuffer = DeviceBufferRef_ptr(drawIndirect.countBuffer);
+					VkDeviceBuffer *counterExt = DeviceBuffer_ext(counterBuffer, Vk);
 
-					_gotoIfError(cleanDrawIndirect, VkGPUBuffer_transition(
+					_gotoIfError(cleanDrawIndirect, VkDeviceBuffer_transition(
 						counterExt,
 						VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
 						VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT,
@@ -803,8 +803,8 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 
 				DispatchIndirect dispatch = *(const DispatchIndirect*)data;
 
-				GPUBuffer *dispatchBuffer = GPUBufferRef_ptr(dispatch.buffer);
-				VkGPUBuffer *bufferExt = GPUBuffer_ext(dispatchBuffer, Vk);
+				DeviceBuffer *dispatchBuffer = DeviceBufferRef_ptr(dispatch.buffer);
+				VkDeviceBuffer *bufferExt = DeviceBuffer_ext(dispatchBuffer, Vk);
 
 				for(U64 i = 0; i < 17; ++i)
 					if(temp->boundBuffers[i] == dispatch.buffer)
@@ -820,7 +820,7 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 					.dependencyFlags = 0
 				};
 
-				_gotoIfError(cleanDispatchIndirect, VkGPUBuffer_transition(
+				_gotoIfError(cleanDispatchIndirect, VkDeviceBuffer_transition(
 					bufferExt,
 					VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
 					VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT,
@@ -861,7 +861,7 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 
 				Transition transition = transitions[i];
 
-				//TODO: boundBuffers and GPUBuffer support
+				//TODO: boundBuffers and DeviceBuffer support
 
 				Swapchain *swapchain = SwapchainRef_ptr(transition.resource);
 				VkSwapchain *swapchainExt = Swapchain_ext(swapchain, Vk);

@@ -26,22 +26,22 @@
 #include "types/error.h"
 #include "types/string.h"
 
-Error GPUBufferRef_dec(GPUBufferRef **buffer) {
+Error DeviceBufferRef_dec(DeviceBufferRef **buffer) {
 	return !RefPtr_dec(buffer) ? Error_invalidOperation(0) : Error_none();
 }
 
-Error GPUBufferRef_add(GPUBufferRef *buffer) {
+Error DeviceBufferRef_add(DeviceBufferRef *buffer) {
 	return buffer ? (!RefPtr_inc(buffer) ? Error_invalidOperation(0) : Error_none()) : Error_nullPointer(0);
 }
 
-Error GPUBufferRef_markDirty(GPUBufferRef *buf, U64 offset, U64 count) {
+Error DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count) {
 
 	if(!buf)
 		return Error_nullPointer(0);
 
-	GPUBuffer *buffer = GPUBufferRef_ptr(buf);
+	DeviceBuffer *buffer = DeviceBufferRef_ptr(buf);
 
-	if(!(buffer->usage & EGPUBufferUsage_CPUBacked) && !(buffer->isFirstFrame && !offset && !count))
+	if(!(buffer->usage & EDeviceBufferUsage_CPUBacked) && !(buffer->isFirstFrame && !offset && !count))
 		return Error_invalidOperation(0);
 
 	//Check range
@@ -88,7 +88,7 @@ Error GPUBufferRef_markDirty(GPUBufferRef *buf, U64 offset, U64 count) {
 
 			for (U64 i = buffer->pendingChanges.length - 1; i != U64_MAX; --i) {
 
-				GPUPendingRange *pending = &((GPUPendingRange*)buffer->pendingChanges.ptr)[i];
+				DevicePendingRange *pending = &((DevicePendingRange*)buffer->pendingChanges.ptr)[i];
 
 				//If intersects, we either merge with first occurence or pop last occurence and merge range with current
 
@@ -101,7 +101,7 @@ Error GPUBufferRef_markDirty(GPUBufferRef *buf, U64 offset, U64 count) {
 
 					else {
 
-						GPUPendingRange last = ((GPUPendingRange*)buffer->pendingChanges.ptr)[lastMatch];
+						DevicePendingRange last = ((DevicePendingRange*)buffer->pendingChanges.ptr)[lastMatch];
 
 						pending->buffer.startRange = U64_min(pending->buffer.startRange, last.buffer.startRange);
 						pending->buffer.endRange = U64_max(pending->buffer.endRange, last.buffer.endRange);
@@ -131,7 +131,7 @@ Error GPUBufferRef_markDirty(GPUBufferRef *buf, U64 offset, U64 count) {
 		//Recommended solution in that case would be making a uv only buffer and copying that with compute.
 		//But this would 
 
-		GPUPendingRange change = (GPUPendingRange) { .buffer = { .startRange = start, .endRange = end } };
+		DevicePendingRange change = (DevicePendingRange) { .buffer = { .startRange = start, .endRange = end } };
 
 		Error err = List_pushBackx(&buffer->pendingChanges, Buffer_createConstRef(&change, sizeof(change)));
 
@@ -155,21 +155,21 @@ Error GPUBufferRef_markDirty(GPUBufferRef *buf, U64 offset, U64 count) {
 	return err;
 }
 
-impl extern const U64 GPUBufferExt_size;
-impl Bool GPUBuffer_freeExt(GPUBuffer *buffer);
-impl Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, GPUBuffer *buf, CharString name);
+impl extern const U64 DeviceBufferExt_size;
+impl Bool DeviceBuffer_freeExt(DeviceBuffer *buffer);
+impl Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *buf, CharString name);
 
-Bool GPUBuffer_free(GPUBuffer *buffer, Allocator allocator) {
+Bool DeviceBuffer_free(DeviceBuffer *buffer, Allocator allocator) {
 
 	allocator;
 
 	RefPtr *refPtr = (RefPtr*)((const U8*)buffer - sizeof(RefPtr));
 
-	Bool success = GPUBuffer_freeExt(buffer);
+	Bool success = DeviceBuffer_freeExt(buffer);
 	success &= GraphicsDeviceRef_removePending(buffer->device, refPtr);
 	success &= !GraphicsDeviceRef_dec(&buffer->device).genericError;
 
-	if(buffer->usage & EGPUBufferUsage_CPUBacked)
+	if(buffer->usage & EDeviceBufferUsage_CPUBacked)
 		success &= Buffer_freex(&buffer->cpuData);
 
 	return success;
@@ -177,42 +177,42 @@ Bool GPUBuffer_free(GPUBuffer *buffer, Allocator allocator) {
 
 Error GraphicsDeviceRef_createBuffer(
 	GraphicsDeviceRef *dev, 
-	EGPUBufferUsage usage, 
+	EDeviceBufferUsage usage, 
 	CharString name, 
 	U64 len, 
-	GPUBufferRef **buf
+	DeviceBufferRef **buf
 ) {
 
 	if(!dev)
 		return Error_nullPointer(0);
 
 	Error err = RefPtr_createx(
-		(U32)(sizeof(GPUBuffer) + GPUBufferExt_size), 
-		(ObjectFreeFunc) GPUBuffer_free, 
-		EGraphicsTypeId_GPUBuffer, 
+		(U32)(sizeof(DeviceBuffer) + DeviceBufferExt_size), 
+		(ObjectFreeFunc) DeviceBuffer_free, 
+		EGraphicsTypeId_DeviceBuffer, 
 		buf
 	);
 
 	if(err.genericError)
 		return err;
 
-	//Init GPUBuffer
+	//Init DeviceBuffer
 
-	GPUBuffer *buffer = GPUBufferRef_ptr(*buf);
+	DeviceBuffer *buffer = DeviceBufferRef_ptr(*buf);
 
 	_gotoIfError(clean, GraphicsDeviceRef_add(dev));
 
-	*buffer = (GPUBuffer) {
+	*buffer = (DeviceBuffer) {
 		.device = dev,
 		.usage = usage,
 		.length = len,
-		.pendingChanges = List_createEmpty(sizeof(GPUPendingRange)),
+		.pendingChanges = List_createEmpty(sizeof(DevicePendingRange)),
 		.isFirstFrame = true
 	};
 
-	_gotoIfError(clean, List_reservex(&buffer->pendingChanges, usage & EGPUBufferUsage_CPUBacked ? 16 : 1));
+	_gotoIfError(clean, List_reservex(&buffer->pendingChanges, usage & EDeviceBufferUsage_CPUBacked ? 16 : 1));
 
-	if(usage & EGPUBufferUsage_CPUBacked)
+	if(usage & EDeviceBufferUsage_CPUBacked)
 		_gotoIfError(clean, Buffer_createEmptyBytesx(buffer->length, &buffer->cpuData));
 
 	_gotoIfError(clean, GraphicsDeviceRef_createBufferExt(dev, buffer, name));
@@ -227,10 +227,10 @@ clean:
 
 Error GraphicsDeviceRef_createBufferData(
 	GraphicsDeviceRef *dev, 
-	EGPUBufferUsage usage, 
+	EDeviceBufferUsage usage, 
 	CharString name, 
 	Buffer *dat, 
-	GPUBufferRef **buf
+	DeviceBufferRef **buf
 ) {
 
 	if(!dat)
@@ -241,15 +241,15 @@ Error GraphicsDeviceRef_createBufferData(
 	if(err.genericError)
 		return err;
 
-	GPUBuffer *buffer = GPUBufferRef_ptr(*buf);
+	DeviceBuffer *buffer = DeviceBufferRef_ptr(*buf);
 
-	if(usage & EGPUBufferUsage_CPUBacked)
+	if(usage & EDeviceBufferUsage_CPUBacked)
 		Buffer_copy(buffer->cpuData, *dat);
 	
 	else buffer->cpuData = *dat;
 
-	if((err = GPUBufferRef_markDirty(*buf, 0, 0)).genericError) {
-		GPUBufferRef_dec(buf);
+	if((err = DeviceBufferRef_markDirty(*buf, 0, 0)).genericError) {
+		DeviceBufferRef_dec(buf);
 		return err;
 	}
 

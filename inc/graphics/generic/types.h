@@ -35,8 +35,8 @@ typedef enum EGraphicsTypeId {
 	EGraphicsTypeId_RenderTexture			= _makeObjectId(0xC4,  4, 0),
 	EGraphicsTypeId_RenderPass				= _makeObjectId(0xC4,  5, 0),
 
-	EGraphicsTypeId_GPUTexture				= _makeObjectId(0xC4,  6, 1),
-	EGraphicsTypeId_GPUBuffer				= _makeObjectId(0xC4,  7, 1),
+	EGraphicsTypeId_DeviceTexture			= _makeObjectId(0xC4,  6, 1),
+	EGraphicsTypeId_DeviceBuffer			= _makeObjectId(0xC4,  7, 1),
 	EGraphicsTypeId_Pipeline				= _makeObjectId(0xC4,  8, 1),
 	EGraphicsTypeId_DescriptorSet			= _makeObjectId(0xC4,  9, 1),
 	EGraphicsTypeId_Sampler					= _makeObjectId(0xC4, 10, 1),

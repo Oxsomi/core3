@@ -30,10 +30,10 @@
 #include "types/list.h"
 #include "types/error.h"
 
-U64 GPUBufferExt_size = sizeof(VkGPUBuffer);
+U64 DeviceBufferExt_size = sizeof(VkDeviceBuffer);
 
-Error VkGPUBuffer_transition(
-	VkGPUBuffer *buffer,
+Error VkDeviceBuffer_transition(
+	VkDeviceBuffer *buffer,
 	VkPipelineStageFlags2 stage,
 	VkAccessFlagBits2 access,
 	U32 graphicsQueueId,
@@ -83,12 +83,12 @@ Error VkGPUBuffer_transition(
 }
 
 
-Bool GPUBuffer_freeExt(GPUBuffer *buffer) {
+Bool DeviceBuffer_freeExt(DeviceBuffer *buffer) {
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(buffer->device);
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 
-	VkGPUBuffer *bufferExt = GPUBuffer_ext(buffer, Vk);
+	VkDeviceBuffer *bufferExt = DeviceBuffer_ext(buffer, Vk);
 
 	if(bufferExt->buffer) {
 
@@ -101,14 +101,14 @@ Bool GPUBuffer_freeExt(GPUBuffer *buffer) {
 
 		Lock_unlock(&deviceExt->descriptorLock);
 
-		GPUAllocator_freeAllocation(&device->allocator, bufferExt->blockId, bufferExt->blockOffset);
+		DeviceMemoryAllocator_freeAllocation(&device->allocator, bufferExt->blockId, bufferExt->blockOffset);
 		vkDestroyBuffer(deviceExt->device, bufferExt->buffer, NULL);
 	}
 
 	return true;
 }
 
-Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, GPUBuffer *buf, CharString name) {
+Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *buf, CharString name) {
 
 	name;
 
@@ -122,16 +122,16 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, GPUBuffer *buf, 
 
 	VkBufferUsageFlags usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 
-	if(buf->usage & (EGPUBufferUsage_ShaderRead | EGPUBufferUsage_ShaderWrite))
+	if(buf->usage & (EDeviceBufferUsage_ShaderRead | EDeviceBufferUsage_ShaderWrite))
 		usage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
 
-	if(buf->usage & EGPUBufferUsage_Vertex)
+	if(buf->usage & EDeviceBufferUsage_Vertex)
 		usage |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
 
-	if(buf->usage & EGPUBufferUsage_Index)
+	if(buf->usage & EDeviceBufferUsage_Index)
 		usage |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
 
-	if(buf->usage & EGPUBufferUsage_Indirect)
+	if(buf->usage & EDeviceBufferUsage_Indirect)
 		usage |= VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
 
 	VkBufferCreateInfo bufferInfo = (VkBufferCreateInfo) {
@@ -170,20 +170,20 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, GPUBuffer *buf, 
 
 	instanceExt->getBufferMemoryRequirements2(deviceExt->device, &bufferReq, &requirements);
 
-	_gotoIfError(clean, GPUAllocator_allocate(
+	_gotoIfError(clean, DeviceMemoryAllocator_allocate(
 		&device->allocator, 
 		&requirements, 
-		buf->usage & EGPUBufferUsage_CPUAllocatedBit, 
+		buf->usage & EDeviceBufferUsage_CPUAllocatedBit, 
 		&blockId, 
 		&blockOffset,
 		name
 	));
 
-	GPUBlock *block = (GPUBlock*)List_ptr(device->allocator.blocks, blockId);
+	DeviceMemoryBlock *block = (DeviceMemoryBlock*)List_ptr(device->allocator.blocks, blockId);
 	
 	//Fill relevant descriptor sets if shader accessible
 
-	if(buf->usage & (EGPUBufferUsage_ShaderRead | EGPUBufferUsage_ShaderWrite)) {
+	if(buf->usage & (EDeviceBufferUsage_ShaderRead | EDeviceBufferUsage_ShaderWrite)) {
 
 		if(!lock && !Lock_lock(&deviceExt->descriptorLock, U64_MAX))
 			_gotoIfError(clean, Error_invalidState(0));
@@ -206,7 +206,7 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, GPUBuffer *buf, 
 
 		U32 counter = 0;
 
-		if (usage & EGPUBufferUsage_ShaderRead) {
+		if (usage & EDeviceBufferUsage_ShaderRead) {
 
 			locationRead = VkGraphicsDevice_allocateDescriptor(deviceExt, EDescriptorType_Buffer);
 
@@ -219,7 +219,7 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, GPUBuffer *buf, 
 			++counter;
 		}
 
-		if (usage & EGPUBufferUsage_ShaderWrite) {
+		if (usage & EDeviceBufferUsage_ShaderWrite) {
 
 			locationWrite = VkGraphicsDevice_allocateDescriptor(deviceExt, EDescriptorType_RWBuffer);
 
@@ -261,7 +261,7 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, GPUBuffer *buf, 
 
 	_gotoIfError(clean, vkCheck(vkBindBufferMemory(deviceExt->device, tempBuffer, (VkDeviceMemory) block->ext, blockOffset)));
 
-	*GPUBuffer_ext(buf, Vk) = (VkGPUBuffer) {
+	*DeviceBuffer_ext(buf, Vk) = (VkDeviceBuffer) {
 		.buffer = tempBuffer,
 		.blockOffset = blockOffset,
 		.mappedMemory = memoryLocation,
@@ -282,7 +282,7 @@ clean:
 		vkDestroyBuffer(deviceExt->device, tempBuffer, NULL);
 
 		if(blockId != U32_MAX)
-			GPUAllocator_freeAllocation(&device->allocator, blockId, blockOffset);
+			DeviceMemoryAllocator_freeAllocation(&device->allocator, blockId, blockOffset);
 	}
 
 	if(lock)

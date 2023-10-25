@@ -210,7 +210,7 @@ typedef struct VkCommandBufferState {		//Caching state variables
 
 	PipelineRef *boundPipelines[2];			//Graphics, Compute
 
-	GPUBufferRef *boundBuffers[17];			//Vertex + index buffers
+	DeviceBufferRef *boundBuffers[17];			//Vertex + index buffers
 
 } VkCommandBufferState;
 

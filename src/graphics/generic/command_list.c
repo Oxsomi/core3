@@ -444,15 +444,15 @@ Error CommandListRef_setPipeline(CommandListRef *commandList, PipelineRef *pipel
 	);
 }
 
-Error validateBufferDesc(GPUBufferRef *buffer, U64 *counter, EGPUBufferUsage usage) {
+Error validateBufferDesc(DeviceBufferRef *buffer, U64 *counter, EDeviceBufferUsage usage) {
 
 	if(!buffer)
 		return Error_none();
 
-	if(buffer->typeId != EGraphicsTypeId_GPUBuffer)
+	if(buffer->typeId != EGraphicsTypeId_DeviceBuffer)
 		return Error_unsupportedOperation(0);
 
-	GPUBuffer *buf = GPUBufferRef_ptr(buffer);
+	DeviceBuffer *buf = DeviceBufferRef_ptr(buffer);
 
 	if((buf->usage & usage) != usage)
 		return Error_unsupportedOperation(1);
@@ -466,13 +466,13 @@ Error CommandListRef_setPrimitiveBuffers(CommandListRef *commandList, PrimitiveB
 	//Validate index and vertex buffers
 
 	U64 counter = 0;
-	Error err = validateBufferDesc(buffers.indexBuffer, &counter, EGPUBufferUsage_Index);
+	Error err = validateBufferDesc(buffers.indexBuffer, &counter, EDeviceBufferUsage_Index);
 
 	if(err.genericError)
 		return err;
 
 	for(U8 i = 0; i < 8; ++i)
-		if((err = validateBufferDesc(buffers.vertexBuffers[i], &counter, EGPUBufferUsage_Vertex)).genericError)
+		if((err = validateBufferDesc(buffers.vertexBuffers[i], &counter, EDeviceBufferUsage_Vertex)).genericError)
 			return err;
 
 	List refs = List_createEmpty(sizeof(RefPtr*));
@@ -564,26 +564,26 @@ Error CommandListRef_dispatch3D(CommandListRef *commandList, U32 groupsX, U32 gr
 
 //Indirect rendering
 
-Error CommandListRef_checkDispatchBuffer(GPUBufferRef *buffer, U64 offset, U64 siz) {
+Error CommandListRef_checkDispatchBuffer(DeviceBufferRef *buffer, U64 offset, U64 siz) {
 
 	if(!buffer)
 		return Error_nullPointer(1);
 
-	if(buffer->typeId != EGraphicsTypeId_GPUBuffer)
+	if(buffer->typeId != EGraphicsTypeId_DeviceBuffer)
 		return Error_invalidParameter(1, 0);
 
-	GPUBuffer *buf = GPUBufferRef_ptr(buffer);
+	DeviceBuffer *buf = DeviceBufferRef_ptr(buffer);
 
 	if(offset + siz > buf->length)
 		return Error_outOfBounds(1, offset + siz, buf->length);
 
-	if(!(buf->usage & EGPUBufferUsage_Indirect))
+	if(!(buf->usage & EDeviceBufferUsage_Indirect))
 		return Error_unsupportedOperation(0);
 
 	return Error_none();
 }
 
-Error CommandListRef_dispatchIndirect(CommandListRef *commandList, GPUBufferRef *buffer, U64 offset) {
+Error CommandListRef_dispatchIndirect(CommandListRef *commandList, DeviceBufferRef *buffer, U64 offset) {
 
 	Error err = CommandListRef_checkDispatchBuffer(buffer, offset, sizeof(U32) * 3);
 
@@ -602,7 +602,7 @@ Error CommandListRef_dispatchIndirect(CommandListRef *commandList, GPUBufferRef 
 }
 
 Error CommandListRef_drawIndirectBase(
-	GPUBufferRef *buffer,
+	DeviceBufferRef *buffer,
 	U64 bufferOffset,
 	U32 *bufferStride,
 	U32 drawCalls,
@@ -611,7 +611,7 @@ Error CommandListRef_drawIndirectBase(
 
 	U32 minStride = (U32)(indexed ? sizeof(DrawCallIndexed) : sizeof(DrawCallUnindexed));
 
-	GPUBuffer *buf = GPUBufferRef_ptr(buffer);
+	DeviceBuffer *buf = DeviceBufferRef_ptr(buffer);
 
 	if(!buf)
 		return Error_nullPointer(0);
@@ -630,7 +630,7 @@ Error CommandListRef_drawIndirectBase(
 
 Error CommandListRef_drawIndirect(
 	CommandListRef *commandList, 
-	GPUBufferRef *buffer,
+	DeviceBufferRef *buffer,
 	U64 bufferOffset,
 	U32 bufferStride,
 	U32 drawCalls,
@@ -661,10 +661,10 @@ Error CommandListRef_drawIndirect(
 
 Error CommandListRef_drawIndirectCount(
 	CommandListRef *commandList, 
-	GPUBufferRef *buffer,
+	DeviceBufferRef *buffer,
 	U64 bufferOffset,
 	U32 bufferStride, 
-	GPUBufferRef *countBuffer,
+	DeviceBufferRef *countBuffer,
 	U64 countOffset,
 	U32 maxDrawCalls,
 	Bool indexed
@@ -678,7 +678,7 @@ Error CommandListRef_drawIndirectCount(
 	if((err = CommandListRef_checkDispatchBuffer(countBuffer, countOffset, sizeof(U32))).genericError)
 		return err;
 
-	GPUBufferRef *refArr[2] = { buffer, countBuffer };
+	DeviceBufferRef *refArr[2] = { buffer, countBuffer };
 	List refs = (List) { 0 };
 	if((err = List_createConstRef((const U8*)refArr, 2, sizeof(refArr[0]), &refs)).genericError)
 		return err;

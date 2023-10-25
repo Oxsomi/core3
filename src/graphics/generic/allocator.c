@@ -23,24 +23,24 @@
 #include "types/buffer.h"
 #include "types/error.h"
 
-impl Bool GPUAllocator_freeAllocationExt(GraphicsDevice *device, void *ext);
+impl Bool DeviceMemoryAllocator_freeAllocationExt(GraphicsDevice *device, void *ext);
 
-Bool GPUAllocator_freeAllocation(GPUAllocator *allocator, U32 blockId, U64 blockOffset) {
+Bool DeviceMemoryAllocator_freeAllocation(DeviceMemoryAllocator *allocator, U32 blockId, U64 blockOffset) {
 
 	if(!allocator || blockId >= allocator->blocks.length)
 		return false;
 
-	GPUBlock *block = (GPUBlock*) List_ptr(allocator->blocks, blockId);
+	DeviceMemoryBlock *block = (DeviceMemoryBlock*) List_ptr(allocator->blocks, blockId);
 
 	Bool success = AllocationBuffer_freeBlock(&block->allocations, (const U8*) blockOffset);
 
 	if (!block->allocations.allocations.length) {
 		AllocationBuffer_freex(&block->allocations);
-		GPUAllocator_freeAllocationExt(allocator->device, block->ext);
+		DeviceMemoryAllocator_freeAllocationExt(allocator->device, block->ext);
 	}
 
 	if(blockId + 1 == allocator->blocks.length)
-		while(allocator->blocks.length && !((GPUBlock*) List_last(allocator->blocks))->ext)
+		while(allocator->blocks.length && !((DeviceMemoryBlock*) List_last(allocator->blocks))->ext)
 			success &= !List_popBack(&allocator->blocks, Buffer_createNull()).genericError;
 
 	return success;

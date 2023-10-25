@@ -25,27 +25,27 @@
 typedef RefPtr GraphicsDeviceRef;
 typedef struct CharString CharString;
 
-typedef enum EGPUBufferUsage {
+typedef enum EDeviceBufferUsage {
 
-	EGPUBufferUsage_ShaderRead			= 1 << 0,		//Allow for use as ByteAddressBuffer
-	EGPUBufferUsage_ShaderWrite			= 1 << 1,		//Allow for use as RWByteAddressBuffer
-	EGPUBufferUsage_Vertex				= 1 << 2,		//Allow for use as vertex buffer
-	EGPUBufferUsage_Index				= 1 << 3,		//Allow for use as index buffer
-	EGPUBufferUsage_Indirect			= 1 << 4,		//Allow for use in indirect draw/dispatch calls
-	EGPUBufferUsage_CPUBacked			= 1 << 5,		//Keep a CPU side copy buffer for read/write operations
-	EGPUBufferUsage_CPUAllocatedBit		= 1 << 6,		//Keep buffer entirely on CPU for transfer or allowing more allocations
+	EDeviceBufferUsage_ShaderRead			= 1 << 0,		//Allow for use as ByteAddressBuffer
+	EDeviceBufferUsage_ShaderWrite			= 1 << 1,		//Allow for use as RWByteAddressBuffer
+	EDeviceBufferUsage_Vertex				= 1 << 2,		//Allow for use as vertex buffer
+	EDeviceBufferUsage_Index				= 1 << 3,		//Allow for use as index buffer
+	EDeviceBufferUsage_Indirect			= 1 << 4,		//Allow for use in indirect draw/dispatch calls
+	EDeviceBufferUsage_CPUBacked			= 1 << 5,		//Keep a CPU side copy buffer for read/write operations
+	EDeviceBufferUsage_CPUAllocatedBit		= 1 << 6,		//Keep buffer entirely on CPU for transfer or allowing more allocations
 
-	EGPUBufferUsage_CPUAllocated		= EGPUBufferUsage_CPUBacked | EGPUBufferUsage_CPUAllocatedBit
+	EDeviceBufferUsage_CPUAllocated		= EDeviceBufferUsage_CPUBacked | EDeviceBufferUsage_CPUAllocatedBit
 
-} EGPUBufferUsage;
+} EDeviceBufferUsage;
 
-typedef RefPtr GPUBufferRef;
+typedef RefPtr DeviceBufferRef;
 
-typedef struct GPUBuffer {
+typedef struct DeviceBuffer {
 
 	GraphicsDeviceRef *device;
 
-	EGPUBufferUsage usage;
+	EDeviceBufferUsage usage;
 	Bool isPendingFullCopy;
 	Bool isPending;
 	Bool isFirstFrame;
@@ -55,40 +55,40 @@ typedef struct GPUBuffer {
 
 	Buffer cpuData;				//Null if not cpu backed and uploaded. If not cpu backed this will free after upload
 
-	List pendingChanges;		//Pending ranges (GPUPendingRange)
+	List pendingChanges;		//Pending ranges (DevicePendingRange)
 
-} GPUBuffer;
+} DeviceBuffer;
 
-#define GPUBuffer_ext(ptr, T) (!ptr ? NULL : (T##GPUBuffer*)(ptr + 1))		//impl
-#define GPUBufferRef_ptr(ptr) RefPtr_data(ptr, GPUBuffer)
+#define DeviceBuffer_ext(ptr, T) (!ptr ? NULL : (T##DeviceBuffer*)(ptr + 1))		//impl
+#define DeviceBufferRef_ptr(ptr) RefPtr_data(ptr, DeviceBuffer)
 
-Error GPUBufferRef_dec(GPUBufferRef **buffer);
-Error GPUBufferRef_add(GPUBufferRef *buffer);
+Error DeviceBufferRef_dec(DeviceBufferRef **buffer);
+Error DeviceBufferRef_add(DeviceBufferRef *buffer);
 
 //Create empty buffer or initialized with data.
 //Initializing to non zero isn't free due to copies.
-//	Initializing to non zero will move the buffer to created GPUBuffer. If it's a ref, it has to be kept active.
+//	Initializing to non zero will move the buffer to created DeviceBuffer. If it's a ref, it has to be kept active.
 
 Error GraphicsDeviceRef_createBuffer(
 	GraphicsDeviceRef *dev, 
-	EGPUBufferUsage usage, 
+	EDeviceBufferUsage usage, 
 	CharString name, 
 	U64 len, 
-	GPUBufferRef **buf
+	DeviceBufferRef **buf
 );
 
 Error GraphicsDeviceRef_createBufferData(
 	GraphicsDeviceRef *dev, 
-	EGPUBufferUsage usage, 
+	EDeviceBufferUsage usage, 
 	CharString name, 
 	Buffer *dat, 
-	GPUBufferRef **buf
+	DeviceBufferRef **buf
 );
 
-//Mark the underlying data for the GPUBuffer as dirty. 
+//Mark the underlying data for the DeviceBuffer as dirty. 
 //Count 0 indicates rest of the buffer starting at offset.
 //Each region that doesn't intersect will be considered as 1 copy (otherwise it will be merged).
 //Call this as little as possible while still not copying too much data.
 //Only possible if buffer has a backed CPU buffer.
 
-Error GPUBufferRef_markDirty(GPUBufferRef *buffer, U64 offset, U64 count);
+Error DeviceBufferRef_markDirty(DeviceBufferRef *buffer, U64 offset, U64 count);

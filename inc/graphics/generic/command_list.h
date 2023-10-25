@@ -25,7 +25,7 @@
 
 typedef RefPtr GraphicsDeviceRef;
 typedef RefPtr PipelineRef;
-typedef RefPtr GPUBufferRef;
+typedef RefPtr DeviceBufferRef;
 typedef struct CharString CharString;
 typedef struct GraphicsDevice GraphicsDevice;
 
@@ -204,8 +204,8 @@ Error CommandListRef_setPipeline(CommandListRef *commandList, PipelineRef *pipel
 
 typedef struct PrimitiveBuffers {
 
-	GPUBufferRef *vertexBuffers[16];
-	GPUBufferRef *indexBuffer;
+	DeviceBufferRef *vertexBuffers[16];
+	DeviceBufferRef *indexBuffer;
 
 	Bool isIndex32Bit;
 	U8 padding[3];
@@ -245,8 +245,8 @@ Error CommandListRef_drawUnindexedAdv(
 
 typedef struct DrawIndirect {
 
-	GPUBufferRef *buffer;				//Draw commands (or draw indexed commands)
-	GPUBufferRef *countBuffer;			//If defined, uses draw indirect count and specifies the buffer that holds the counter
+	DeviceBufferRef *buffer;				//Draw commands (or draw indexed commands)
+	DeviceBufferRef *countBuffer;			//If defined, uses draw indirect count and specifies the buffer that holds the counter
 
 	U64 bufferOffset, countOffset;
 
@@ -274,14 +274,14 @@ typedef struct DrawCallIndexed {
 
 Error CommandListRef_drawIndirect(
 	CommandListRef *commandList, 
-	GPUBufferRef *buffer, U64 bufferOffset, U32 bufferStride, 
+	DeviceBufferRef *buffer, U64 bufferOffset, U32 bufferStride, 
 	U32 drawCalls, Bool indexed
 );
 
 Error CommandListRef_drawIndirectCount(
 	CommandListRef *commandList, 
-	GPUBufferRef *buffer, U64 bufferOffset, U32 bufferStride, 
-	GPUBufferRef *countBuffer, U64 countOffset,
+	DeviceBufferRef *buffer, U64 bufferOffset, U32 bufferStride, 
+	DeviceBufferRef *countBuffer, U64 countOffset,
 	U32 maxDrawCalls, Bool indexed
 );
 
@@ -294,9 +294,9 @@ Error CommandListRef_dispatch1D(CommandListRef *commandList, U32 groupsX);
 Error CommandListRef_dispatch2D(CommandListRef *commandList, U32 groupsX, U32 groupsY);
 Error CommandListRef_dispatch3D(CommandListRef *commandList, U32 groupsX, U32 groupsY, U32 groupsZ);
 
-typedef struct DispatchIndirect { GPUBufferRef *buffer; U64 offset; } DispatchIndirect;
+typedef struct DispatchIndirect { DeviceBufferRef *buffer; U64 offset; } DispatchIndirect;
 
-Error CommandListRef_dispatchIndirect(CommandListRef *commandList, GPUBufferRef *buffer, U64 offset);
+Error CommandListRef_dispatchIndirect(CommandListRef *commandList, DeviceBufferRef *buffer, U64 offset);
 
 //DynamicRendering feature
 

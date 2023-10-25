@@ -30,8 +30,8 @@
 #include "types/buffer.h"
 #include "types/string.h"
 
-Error GPUAllocator_allocate(
-	GPUAllocator *allocator, 
+Error DeviceMemoryAllocator_allocate(
+	DeviceMemoryAllocator *allocator, 
 	void *requirementsExt, 
 	Bool cpuSided, 
 	U32 *blockId, 
@@ -68,7 +68,7 @@ Error GPUAllocator_allocate(
 
 		for(U64 i = 0; i < allocator->blocks.length; ++i) {
 
-			GPUBlock *block = (GPUBlock*)List_ptr(allocator->blocks, i);
+			DeviceMemoryBlock *block = (DeviceMemoryBlock*)List_ptr(allocator->blocks, i);
 
 			if(
 				!block->ext ||
@@ -148,7 +148,7 @@ Error GPUAllocator_allocate(
 	};
 
 	VkDeviceMemory mem = NULL;
-	GPUBlock block = (GPUBlock) { 0 };
+	DeviceMemoryBlock block = (DeviceMemoryBlock) { 0 };
 	CharString temp = CharString_createNull();
 	Error err = vkCheck(vkAllocateMemory(deviceExt->device, &alloc, NULL, &mem));
 
@@ -163,7 +163,7 @@ Error GPUAllocator_allocate(
 
 	//Initialize block
 
-	block = (GPUBlock) {
+	block = (DeviceMemoryBlock) {
 		.typeExt = memReq.memoryTypeBits,
 		.allocationTypeExt = (U16) prop,
 		.isDedicated = isDedicated,
@@ -178,7 +178,7 @@ Error GPUAllocator_allocate(
 	U64 i = 0;
 
 	for(; i < allocator->blocks.length; ++i)
-		if (!((GPUBlock*)List_ptr(allocator->blocks, i))->ext)
+		if (!((DeviceMemoryBlock*)List_ptr(allocator->blocks, i))->ext)
 			break;
 
 	const U8 *allocLoc = NULL;
@@ -192,7 +192,7 @@ Error GPUAllocator_allocate(
 		_gotoIfError(clean, List_pushBackx(&allocator->blocks, Buffer_createConstRef(&block, sizeof(block))))
 	}
 
-	else *((GPUBlock*)List_ptr(allocator->blocks, i)) = block;
+	else *((DeviceMemoryBlock*)List_ptr(allocator->blocks, i)) = block;
 
 	*blockId = (U32) i;
 	*blockOffset = (U64) allocLoc;
@@ -237,7 +237,7 @@ clean:
 	return err;
 }
 
-Bool GPUAllocator_freeAllocationExt(GraphicsDevice *device, void *ext) {
+Bool DeviceMemoryAllocator_freeAllocationExt(GraphicsDevice *device, void *ext) {
 	
 	if(!device || !ext)
 		return false;

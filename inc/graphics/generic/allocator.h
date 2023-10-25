@@ -25,7 +25,7 @@
 typedef struct GraphicsDevice GraphicsDevice;
 typedef struct CharString CharString;
 
-typedef struct GPUBlock {
+typedef struct DeviceMemoryBlock {
 
 	AllocationBuffer allocations;
 
@@ -39,18 +39,18 @@ typedef struct GPUBlock {
 
 	void *ext;						//Extended data
 
-} GPUBlock;
+} DeviceMemoryBlock;
 
-typedef struct GPUAllocator {
+typedef struct DeviceMemoryAllocator {
 
 	GraphicsDevice *device;
 
 	List blocks;
 
-} GPUAllocator;
+} DeviceMemoryAllocator;
 
-impl Error GPUAllocator_allocate(
-	GPUAllocator *allocator, 
+impl Error DeviceMemoryAllocator_allocate(
+	DeviceMemoryAllocator *allocator, 
 	void *requirementsExt, 
 	Bool cpuSIded, 
 	U32 *blockId, 
@@ -58,4 +58,4 @@ impl Error GPUAllocator_allocate(
 	CharString objectName				//Name of the object that allocates (for dedicated allocations)
 );
 
-Bool GPUAllocator_freeAllocation(GPUAllocator *allocator, U32 blockId, U64 blockOffset);
+Bool DeviceMemoryAllocator_freeAllocation(DeviceMemoryAllocator *allocator, U32 blockId, U64 blockOffset);

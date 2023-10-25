@@ -223,9 +223,9 @@ Error GraphicsDeviceRef_create(
 
 	//Init allocator
 
-	device->allocator = (GPUAllocator) {
+	device->allocator = (DeviceMemoryAllocator) {
 		 .device = device,
-		 .blocks = List_createEmpty(sizeof(GPUBlock))
+		 .blocks = List_createEmpty(sizeof(DeviceMemoryBlock))
 	};
 
 	err = List_reservex(&device->allocator.blocks, 16);

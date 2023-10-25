@@ -23,7 +23,7 @@
 
 typedef struct List List;
 
-typedef struct VkGPUBuffer {
+typedef struct VkDeviceBuffer {
 
 	VkBuffer buffer;
 
@@ -38,10 +38,10 @@ typedef struct VkGPUBuffer {
 
 	U32 readDescriptor, writeDescriptor;
 
-} VkGPUBuffer;
+} VkDeviceBuffer;
 
-Error VkGPUBuffer_transition(
-	VkGPUBuffer *buffer, 
+Error VkDeviceBuffer_transition(
+	VkDeviceBuffer *buffer, 
 	VkPipelineStageFlags2 stage, 
 	VkAccessFlagBits2 access,
 	U32 graphicsQueueId,
