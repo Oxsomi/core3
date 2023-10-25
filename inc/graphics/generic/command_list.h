@@ -55,7 +55,11 @@ typedef enum ECommandOp {
 	ECommandOp_SetPrimitiveBuffers,
 
 	ECommandOp_Draw,
+	ECommandOp_DrawIndirect,
+	ECommandOp_DrawIndirectCount,
+
 	ECommandOp_Dispatch,
+	ECommandOp_DispatchIndirect,
 
 	//Clearing depth + color views
 
@@ -239,6 +243,48 @@ Error CommandListRef_drawUnindexedAdv(
 	U32 vertexOffset, U32 instanceOffset
 );
 
+typedef struct DrawIndirect {
+
+	GPUBufferRef *buffer;				//Draw commands (or draw indexed commands)
+	GPUBufferRef *countBuffer;			//If defined, uses draw indirect count and specifies the buffer that holds the counter
+
+	U64 bufferOffset, countOffset;
+
+	U32 maxDrawCalls, bufferStride;
+
+	Bool isIndexed;
+	U8 pad[7];
+
+} DrawIndirect;
+
+typedef struct DrawCallUnindexed {
+
+	U32 vertexCount, instanceCount;
+	U32 vertexOffset, instanceOffset;
+
+} DrawCallUnindexed;
+
+typedef struct DrawCallIndexed {
+
+	U32 indexCount, instanceCount;
+	U32 indexOffset; I32 vertexOffset;
+	U32 instanceOffset;
+
+} DrawCallIndexed;
+
+Error CommandListRef_drawIndirect(
+	CommandListRef *commandList, 
+	GPUBufferRef *buffer, U64 bufferOffset, U32 bufferStride, 
+	U32 maxDrawCalls, Bool indexed
+);
+
+Error CommandListRef_drawIndirectCount(
+	CommandListRef *commandList, 
+	GPUBufferRef *buffer, U64 bufferOffset, U32 bufferStride, 
+	GPUBufferRef *countBuffer, U64 countOffset,
+	U32 maxDrawCalls, Bool indexed
+);
+
 //TODO: Allow specifying resource and group count the dispatch should align to
 
 typedef struct Dispatch { U32 groups[3]; } Dispatch;
@@ -247,6 +293,10 @@ Error CommandListRef_dispatch(CommandListRef *commandList, Dispatch dispatch);
 Error CommandListRef_dispatch1D(CommandListRef *commandList, U32 groupsX);
 Error CommandListRef_dispatch2D(CommandListRef *commandList, U32 groupsX, U32 groupsY);
 Error CommandListRef_dispatch3D(CommandListRef *commandList, U32 groupsX, U32 groupsY, U32 groupsZ);
+
+typedef struct DispatchIndirect { GPUBufferRef *buffer; U64 offset; } DispatchIndirect;
+
+Error CommandListRef_dispatchIndirect(CommandListRef *commandList, GPUBufferRef *buffer, U64 offset);
 
 //DynamicRendering feature
 

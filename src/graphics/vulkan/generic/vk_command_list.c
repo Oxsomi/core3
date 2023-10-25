@@ -110,6 +110,8 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 	VkCommandBufferState *temp = (VkCommandBufferState*) commandListExt;
 	VkCommandBuffer buffer = temp->buffer;
 
+	Error err = Error_none();
+
 	switch (op) {
 	
 		case ECommandOp_SetViewport:
@@ -192,8 +194,6 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 			U64 imageClearCount = *(const U32*) data;
 
 			List imageBarriers = List_createEmpty(sizeof(VkImageMemoryBarrier2));
-			Error err = Error_none();
-
 			_gotoIfError(cleanClearImages, List_reservex(&imageBarriers, imageClearCount));
 
 			//Combine transitions into one call.
@@ -262,7 +262,7 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 
 				//Get image
 
-				ClearImage image = ((ClearImage*) (data + sizeof(U32)))[i];
+				ClearImage image = ((const ClearImage*) (data + sizeof(U32)))[i];
 
 				Swapchain *swapchain = SwapchainRef_ptr(image.image);
 				VkSwapchain *swapchainExt = Swapchain_ext(swapchain, Vk);
@@ -295,7 +295,7 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 		/*
 		case ECommandOp_clearDepth: {
 
-			ClearDepthStencil *clear = (ClearDepthStencil*) data;
+			ClearDepthStencil *clear = (const ClearDepthStencil*) data;
 			ImageRange image = clear->image;
 
 			VkClearDepthStencilValue clearValue = (VkClearDepthStencilValue) {
@@ -362,8 +362,6 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 				.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
 				.dependencyFlags = 0
 			};
-
-			Error err = Error_none();
 
 			List imageBarriers = List_createEmpty(sizeof(VkImageMemoryBarrier2));
 			_gotoIfError(cleanStartRendering, List_reservex(&imageBarriers, startRender->colorCount));
@@ -521,7 +519,7 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 
 		case ECommandOp_SetPipeline: {
 
-			PipelineRef *setPipeline = *(PipelineRef**) data;
+			PipelineRef *setPipeline = *(PipelineRef* const*) data;
 
 			Pipeline *pipeline = PipelineRef_ptr(setPipeline);
 			VkPipeline *pipelineExt = Pipeline_ext(pipeline, Vk);
@@ -542,7 +540,6 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 			if(I32x2_eq2(temp->currentSize, I32x2_zero()))
 				return Error_invalidOperation(0);
 
-			Error err = Error_none();
 			List bufferBarriers = List_createEmpty(sizeof(VkBufferMemoryBarrier2));
 			_gotoIfError(cleanSetPrimitiveBuffers, List_reservex(&bufferBarriers, 17));
 
@@ -653,6 +650,8 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 			return err;
 		}
 
+		case ECommandOp_DrawIndirect:
+		case ECommandOp_DrawIndirectCount:
 		case ECommandOp_Draw: {
 
 			if(I32x2_eq2(temp->currentSize, I32x2_zero()))
@@ -666,7 +665,7 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 
 			Pipeline *pipeline = PipelineRef_ptr(temp->boundPipelines[0]);
 
-			Error err = CommandList_validateGraphicsPipeline(
+			err = CommandList_validateGraphicsPipeline(
 				pipeline, temp->boundImages, temp->boundImageCount, (EDepthStencilFormat) temp->boundDepthFormat
 			);
 
@@ -675,33 +674,162 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 
 			//Otherwise we have a valid draw
 
-			Draw draw = *(Draw*)data;
+			if(op == ECommandOp_Draw) {
 
-			if(draw.isIndexed)
-				vkCmdDrawIndexed(
-					buffer, 
+				Draw draw = *(const Draw*)data;
+
+				if(draw.isIndexed)
+					vkCmdDrawIndexed(
+						buffer, 
+						draw.count, draw.instanceCount, 
+						draw.indexOffset, draw.vertexOffset, 
+						draw.instanceOffset
+					);
+
+				else vkCmdDraw(
+					buffer,
 					draw.count, draw.instanceCount, 
-					draw.indexOffset, draw.vertexOffset, 
-					draw.instanceOffset
+					draw.indexOffset, draw.vertexOffset
 				);
+			}
 
-			else vkCmdDraw(
-				buffer,
-				draw.count, draw.instanceCount, 
-				draw.indexOffset, draw.vertexOffset
-			);
+			else {
+
+				List bufferBarriers = List_createEmpty(sizeof(VkBufferMemoryBarrier2));
+				_gotoIfError(cleanDrawIndirect, List_reservex(&bufferBarriers, 2));
+
+				U32 graphicsQueueId = deviceExt->queues[EVkCommandQueue_Graphics].queueId;
+
+				VkDependencyInfo dependency = (VkDependencyInfo) {
+					.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+					.dependencyFlags = 0
+				};
+
+				DrawIndirect drawIndirect = *(const DrawIndirect*)data;
+				GPUBuffer *dispatchBuffer = GPUBufferRef_ptr(drawIndirect.buffer);
+				VkGPUBuffer *bufferExt = GPUBuffer_ext(dispatchBuffer, Vk);
+
+				_gotoIfError(cleanDrawIndirect, VkGPUBuffer_transition(
+					bufferExt,
+					VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
+					VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT,
+					graphicsQueueId,
+					drawIndirect.bufferOffset,
+					(U64)drawIndirect.bufferStride * drawIndirect.maxDrawCalls,
+					&bufferBarriers,
+					&dependency
+				));
+
+				if (drawIndirect.countBuffer) {
+
+					GPUBuffer *counterBuffer = GPUBufferRef_ptr(drawIndirect.countBuffer);
+					VkGPUBuffer *counterExt = GPUBuffer_ext(counterBuffer, Vk);
+
+					_gotoIfError(cleanDrawIndirect, VkGPUBuffer_transition(
+						counterExt,
+						VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
+						VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT,
+						graphicsQueueId,
+						drawIndirect.countOffset,
+						sizeof(U32),
+						&bufferBarriers,
+						&dependency
+					));
+
+					if(dependency.bufferMemoryBarrierCount)
+						instanceExt->cmdPipelineBarrier2(buffer, &dependency);
+
+					if(drawIndirect.isIndexed)
+						vkCmdDrawIndexedIndirectCount(
+							buffer, 
+							bufferExt->buffer, drawIndirect.bufferOffset, 
+							counterExt->buffer, drawIndirect.countOffset, 
+							drawIndirect.maxDrawCalls, drawIndirect.bufferStride
+						);
+
+					else vkCmdDrawIndirectCount(
+						buffer,
+						bufferExt->buffer, drawIndirect.bufferOffset,
+						counterExt->buffer, drawIndirect.countOffset, 
+						drawIndirect.maxDrawCalls, drawIndirect.bufferStride
+					);
+				}
+
+				else {
+
+					if(dependency.bufferMemoryBarrierCount)
+						instanceExt->cmdPipelineBarrier2(buffer, &dependency);
+
+					if(drawIndirect.isIndexed)
+						vkCmdDrawIndexedIndirect(
+							buffer,
+							bufferExt->buffer, drawIndirect.bufferOffset,
+							drawIndirect.maxDrawCalls, drawIndirect.bufferStride
+						);
+
+					else vkCmdDrawIndirect(
+						buffer, bufferExt->buffer, drawIndirect.bufferOffset,
+						drawIndirect.maxDrawCalls, drawIndirect.bufferStride
+					);
+				}
+
+			cleanDrawIndirect:
+				List_freex(&bufferBarriers);
+				return err;
+			}
 
 			break;
 		}
 
+		case ECommandOp_DispatchIndirect:
 		case ECommandOp_Dispatch: {
 
 			if (!temp->boundPipelines[1])
 				return Error_invalidOperation(0);
 
-			Dispatch dispatch = *(Dispatch*)data;
+			if(op == ECommandOp_Dispatch) {
+				Dispatch dispatch = *(const Dispatch*)data;
+				vkCmdDispatch(buffer, dispatch.groups[0], dispatch.groups[1], dispatch.groups[2]);
+			}
 
-			vkCmdDispatch(buffer, dispatch.groups[0], dispatch.groups[1], dispatch.groups[2]);
+			else {
+
+				DispatchIndirect dispatch = *(const DispatchIndirect*)data;
+
+				GPUBuffer *dispatchBuffer = GPUBufferRef_ptr(dispatch.buffer);
+				VkGPUBuffer *bufferExt = GPUBuffer_ext(dispatchBuffer, Vk);
+
+				List bufferBarriers = List_createEmpty(sizeof(VkBufferMemoryBarrier2));
+				_gotoIfError(cleanDispatchIndirect, List_reservex(&bufferBarriers, 2));
+
+				U32 graphicsQueueId = deviceExt->queues[EVkCommandQueue_Graphics].queueId;
+
+				VkDependencyInfo dependency = (VkDependencyInfo) {
+					.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+					.dependencyFlags = 0
+				};
+
+				_gotoIfError(cleanDrawIndirect, VkGPUBuffer_transition(
+					bufferExt,
+					VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
+					VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT,
+					graphicsQueueId,
+					dispatch.offset,
+					sizeof(U32) * 3,
+					&bufferBarriers,
+					&dependency
+				));
+
+				if(dependency.bufferMemoryBarrierCount)
+					instanceExt->cmdPipelineBarrier2(buffer, &dependency);
+
+				vkCmdDispatchIndirect(buffer, bufferExt->buffer, dispatch.offset);
+
+			cleanDispatchIndirect:
+				List_freex(&bufferBarriers);
+				return err;
+			}
+
 			break;
 		}
 
@@ -714,8 +842,6 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 				.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
 				.dependencyFlags = 0
 			};
-
-			Error err = Error_none();
 
 			List imageBarriers = List_createEmpty(sizeof(VkImageMemoryBarrier2));
 			_gotoIfError(cleanTransition, List_reservex(&imageBarriers, transitionCount));

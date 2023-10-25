@@ -562,6 +562,152 @@ Error CommandListRef_dispatch3D(CommandListRef *commandList, U32 groupsX, U32 gr
 	return CommandListRef_dispatch(commandList, dispatch);
 }
 
+//Indirect rendering
+
+Error CommandListRef_checkDispatchBuffer(GPUBufferRef *buffer, U64 offset, U64 siz) {
+
+	if(!buffer)
+		return Error_nullPointer(1);
+
+	if(buffer->typeId != EGraphicsTypeId_GPUBuffer)
+		return Error_invalidParameter(1, 0);
+
+	GPUBuffer *buf = GPUBufferRef_ptr(buffer);
+
+	if(offset + siz > buf->length)
+		return Error_outOfBounds(1, offset + siz, buf->length);
+
+	if(!(buf->usage & EGPUBufferUsage_Indirect))
+		return Error_unsupportedOperation(0);
+
+	return Error_none();
+}
+
+Error CommandListRef_dispatchIndirect(CommandListRef *commandList, GPUBufferRef *buffer, U64 offset) {
+
+	Error err = CommandListRef_checkDispatchBuffer(buffer, offset, sizeof(U32) * 3);
+
+	if(err.genericError)
+		return err;
+
+	List refs = (List) { 0 };
+	if((err = List_createConstRef((const U8*)&buffer, 1, sizeof(buffer), &refs)).genericError)
+		return err;
+
+	DispatchIndirect dispatch = (DispatchIndirect) { .buffer = buffer, .offset = offset };
+
+	return CommandListRef_append(
+		commandList, ECommandOp_DispatchIndirect, Buffer_createConstRef(&dispatch, sizeof(dispatch)), refs, 0
+	);
+}
+
+Error CommandListRef_drawIndirectBase(
+	GPUBufferRef *buffer,
+	U64 bufferOffset,
+	U32 *bufferStride,
+	U32 *maxDrawCalls,
+	Bool indexed
+) {
+
+	U32 minStride = (U32)(indexed ? sizeof(DrawCallIndexed) : sizeof(DrawCallUnindexed));
+
+	GPUBuffer *buf = GPUBufferRef_ptr(buffer);
+
+	if(!buf)
+		return Error_nullPointer(0);
+
+	if(!*bufferStride)
+		*bufferStride = minStride;
+
+	if(*bufferStride < minStride)
+		return Error_invalidParameter(2, 0);
+
+	if (!*maxDrawCalls) {
+
+		U64 max = buf->length / *bufferStride;
+
+		if(buf->length % *bufferStride)
+			return Error_invalidParameter(2, 1);
+
+		if(max >> 32)
+			return Error_invalidParameter(3, 0);
+
+		*maxDrawCalls = (U32) max;
+	}
+
+	return CommandListRef_checkDispatchBuffer(buffer, bufferOffset, (U64)*bufferStride * *maxDrawCalls);
+}
+
+Error CommandListRef_drawIndirect(
+	CommandListRef *commandList, 
+	GPUBufferRef *buffer,
+	U64 bufferOffset,
+	U32 bufferStride,
+	U32 maxDrawCalls,
+	Bool indexed
+) {
+
+	Error err = CommandListRef_drawIndirectBase(buffer, bufferOffset, &bufferStride, &maxDrawCalls, indexed);
+
+	if(err.genericError)
+		return err;
+
+	List refs = (List) { 0 };
+	if((err = List_createConstRef((const U8*)&buffer, 1, sizeof(buffer), &refs)).genericError)
+		return err;
+
+	DrawIndirect draw = (DrawIndirect) {
+		.buffer = buffer,
+		.bufferOffset = bufferOffset,
+		.maxDrawCalls = maxDrawCalls,
+		.bufferStride = bufferStride,
+		.isIndexed = indexed
+	};
+
+	return CommandListRef_append(
+		commandList, ECommandOp_DrawIndirect, Buffer_createConstRef(&draw, sizeof(draw)), refs, 0
+	);
+}
+
+Error CommandListRef_drawIndirectCount(
+	CommandListRef *commandList, 
+	GPUBufferRef *buffer,
+	U64 bufferOffset,
+	U32 bufferStride, 
+	GPUBufferRef *countBuffer,
+	U64 countOffset,
+	U32 maxDrawCalls,
+	Bool indexed
+) {
+
+	Error err = CommandListRef_drawIndirectBase(buffer, bufferOffset, &bufferStride, &maxDrawCalls, indexed);
+
+	if(err.genericError)
+		return err;
+
+	if((err = CommandListRef_checkDispatchBuffer(countBuffer, countOffset, sizeof(U32))).genericError)
+		return err;
+
+	GPUBufferRef *refArr[2] = { buffer, countBuffer };
+	List refs = (List) { 0 };
+	if((err = List_createConstRef((const U8*)refArr, 2, sizeof(refArr[0]), &refs)).genericError)
+		return err;
+
+	DrawIndirect draw = (DrawIndirect) {
+		.buffer = buffer,
+		.countBuffer = countBuffer,
+		.bufferOffset = bufferOffset,
+		.countOffset = countOffset,
+		.maxDrawCalls = maxDrawCalls,
+		.bufferStride = bufferStride,
+		.isIndexed = indexed
+	};
+
+	return CommandListRef_append(
+		commandList, ECommandOp_DrawIndirectCount, Buffer_createConstRef(&draw, sizeof(draw)), refs, 0
+	);
+}
+
 //Dynamic rendering
 
 Error CommandListRef_startRenderExt(

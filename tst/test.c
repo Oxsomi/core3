@@ -1966,6 +1966,21 @@ int main() {
 			_gotoIfError(clean, Error_invalidState((U32)i));
 	}
 
+	/*printf("Testing U128 to hex/bin/oct\n");
+
+	for(U64 i = 0; i < sizeof(stringified) / sizeof(stringified[0]) && i < EIntegerEncoding_Count; ++i) {
+
+		U128 realVi = U128_create((const U8*) &mulParams[i][0]);
+		_gotoIfError(clean, U128_toString(realVi, alloc, &tmp, (EIntegerEncoding)i, false));
+
+		CharString ref = CharString_createConstRefCStr(stringified[i]);
+
+		if(!CharString_equalsString(ref, tmp, EStringCase_Sensitive))
+			_gotoIfError(clean, Error_invalidState((U32)i));
+
+		CharString_free(&tmp, alloc);
+	}*/
+
 	//
 
 	F64 dt = (Time_now() - now) / (F64)SECOND;
