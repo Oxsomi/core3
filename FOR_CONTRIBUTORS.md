@@ -1,3 +1,0 @@
-# Providing pull requests
-
-The pull requests have to follow the same code style as this repository and may be rejected for any reason by Oxsomi or the developers. Copyright has to be transferred from the developer to us and/or we should be allowed to distribute it with our own custom license. Copyright doesn't have to be forfeited as long as we're allowed to make modifications, redistribute and relicense it as we see fit. Oxsomi is under no obligation to provide payment for this, though could decide to do so if it's deemed critical or a major improvement by the team. A contract has to be requested by email to be allowed to merge.
