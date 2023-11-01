@@ -575,7 +575,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 		)
 			return Error_unsupportedOperation(11);
 
-		//TODO: Implement renderPass here!
+		//TODO: Implement renderPass here! Also don't forgor to properly handle check if this is the same device
 
 		if(info->renderPass)
 			return Error_unsupportedOperation(3);
@@ -1097,7 +1097,6 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 			switch (info->depthFormatExt) {
 
 				case EDepthStencilFormat_None:	break;
-				case EDepthStencilFormat_D16:	depthFormat = VK_FORMAT_D16_UNORM;		break;
 				case EDepthStencilFormat_D32:	depthFormat = VK_FORMAT_D32_SFLOAT;		break;
 
 				case EDepthStencilFormat_D24S8:	

@@ -150,8 +150,13 @@ Error AllocationBuffer_allocateAndFillBlock(
 	if(!allocationBuffer || !allocationBuffer->buffer.ptr || !result)
 		return Error_nullPointer(!allocationBuffer ? 0 : (!allocationBuffer->buffer.ptr ? 0 : 4));
 
-	U8 *ptr = NULL;
+	U8 *defaultPtr = (U8*)1, *ptr = defaultPtr;
 	Error err = AllocationBuffer_allocateBlock(allocationBuffer, Buffer_length(data), alignment, alloc, &ptr);
+
+	if (err.genericError && ptr != defaultPtr) {	//Touch pointer so it can be checked if blocks are all gone or not.
+		*result = NULL;
+		return err;
+	}
 
 	if(err.genericError)
 		return err;
@@ -172,7 +177,7 @@ Error AllocationBuffer_allocateBlock(
 	if (!allocationBuffer || !size || !alignment || !result)
 		return Error_nullPointer(!allocationBuffer ? 0 : (!size ? 1 : (!alignment ? 2 : 4)));
 
-	if(*result)
+	if(*result && *result != (const U8*)1)
 		return Error_invalidParameter(4, 0);
 
 	if((size >> 48) || (alignment >> 48))
@@ -338,6 +343,7 @@ Error AllocationBuffer_allocateBlock(
 		}
 	}
 
+	*result = NULL;					//Write null so out of memory can be detected
 	return Error_outOfMemory(0);
 }
 
@@ -416,4 +422,8 @@ Bool AllocationBuffer_freeBlock(AllocationBuffer *allocationBuffer, const U8 *pt
 	}
 
 	return false;
+}
+
+Bool AllocationBuffer_freeAll(AllocationBuffer *allocationBuffer) {
+	return !List_clear(&allocationBuffer->allocations).genericError;
 }

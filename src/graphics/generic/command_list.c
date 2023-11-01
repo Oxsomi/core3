@@ -21,7 +21,8 @@
 #include "graphics/generic/command_list.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/swapchain.h"
-#include "graphics/generic/buffer.h"
+#include "graphics/generic/device_buffer.h"
+#include "graphics/generic/pipeline.h"
 #include "platforms/ext/listx.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/log.h"
@@ -269,6 +270,9 @@ Error CommandListRef_clearImages(CommandListRef *commandList, List clearImages) 
 		if(image->typeId != EGraphicsTypeId_Swapchain)
 			_gotoIfError(clean, Error_invalidParameter(1, 0));
 
+		if(SwapchainRef_ptr(image)->device != CommandListRef_ptr(commandList)->device)
+			_gotoIfError(clean, Error_unsupportedOperation(0));
+
 		//Check if range conflicts 
 
 		for (U64 j = 0; j < i; ++j) {
@@ -388,6 +392,9 @@ Error CommandListRef_transition(CommandListRef *commandList, List transitions) {
 		if(res->typeId != EGraphicsTypeId_Swapchain)
 			_gotoIfError(clean, Error_invalidParameter(1, 0));
 
+		if(SwapchainRef_ptr(res)->device != CommandListRef_ptr(commandList)->device)
+			_gotoIfError(clean, Error_unsupportedOperation(0));
+
 		//Check if range conflicts 
 
 		for (U64 j = 0; j < i; ++j) {
@@ -433,6 +440,9 @@ Error CommandListRef_setPipeline(CommandListRef *commandList, PipelineRef *pipel
 	if (pipeline->typeId != EGraphicsTypeId_Pipeline)
 		return Error_invalidParameter(1, 0);
 
+	if(PipelineRef_ptr(pipeline)->device != CommandListRef_ptr(commandList)->device)
+		return Error_unsupportedOperation(0);
+
 	List refs = (List) { 0 };
 	Error err = List_createConstRef((const U8*) &pipeline, 1, sizeof(pipeline), &refs);
 
@@ -444,7 +454,7 @@ Error CommandListRef_setPipeline(CommandListRef *commandList, PipelineRef *pipel
 	);
 }
 
-Error validateBufferDesc(DeviceBufferRef *buffer, U64 *counter, EDeviceBufferUsage usage) {
+Error validateBufferDesc(GraphicsDeviceRef *device, DeviceBufferRef *buffer, U64 *counter, EDeviceBufferUsage usage) {
 
 	if(!buffer)
 		return Error_none();
@@ -452,10 +462,13 @@ Error validateBufferDesc(DeviceBufferRef *buffer, U64 *counter, EDeviceBufferUsa
 	if(buffer->typeId != EGraphicsTypeId_DeviceBuffer)
 		return Error_unsupportedOperation(0);
 
+	if(DeviceBufferRef_ptr(buffer)->device != device)
+		return Error_unsupportedOperation(1);
+
 	DeviceBuffer *buf = DeviceBufferRef_ptr(buffer);
 
 	if((buf->usage & usage) != usage)
-		return Error_unsupportedOperation(1);
+		return Error_unsupportedOperation(2);
 
 	++*counter;
 	return Error_none();
@@ -465,14 +478,16 @@ Error CommandListRef_setPrimitiveBuffers(CommandListRef *commandList, PrimitiveB
 
 	//Validate index and vertex buffers
 
+	GraphicsDeviceRef *device = CommandListRef_ptr(commandList)->device;
+
 	U64 counter = 0;
-	Error err = validateBufferDesc(buffers.indexBuffer, &counter, EDeviceBufferUsage_Index);
+	Error err = validateBufferDesc(device, buffers.indexBuffer, &counter, EDeviceBufferUsage_Index);
 
 	if(err.genericError)
 		return err;
 
 	for(U8 i = 0; i < 8; ++i)
-		if((err = validateBufferDesc(buffers.vertexBuffers[i], &counter, EDeviceBufferUsage_Vertex)).genericError)
+		if((err = validateBufferDesc(device, buffers.vertexBuffers[i], &counter, EDeviceBufferUsage_Vertex)).genericError)
 			return err;
 
 	List refs = List_createEmpty(sizeof(RefPtr*));
@@ -564,7 +579,7 @@ Error CommandListRef_dispatch3D(CommandListRef *commandList, U32 groupsX, U32 gr
 
 //Indirect rendering
 
-Error CommandListRef_checkDispatchBuffer(DeviceBufferRef *buffer, U64 offset, U64 siz) {
+Error CommandListRef_checkDispatchBuffer(GraphicsDeviceRef *device, DeviceBufferRef *buffer, U64 offset, U64 siz) {
 
 	if(!buffer)
 		return Error_nullPointer(1);
@@ -573,6 +588,9 @@ Error CommandListRef_checkDispatchBuffer(DeviceBufferRef *buffer, U64 offset, U6
 		return Error_invalidParameter(1, 0);
 
 	DeviceBuffer *buf = DeviceBufferRef_ptr(buffer);
+
+	if(buf->device != device)
+		return Error_unsupportedOperation(3);
 
 	if(offset + siz > buf->length)
 		return Error_outOfBounds(1, offset + siz, buf->length);
@@ -585,7 +603,9 @@ Error CommandListRef_checkDispatchBuffer(DeviceBufferRef *buffer, U64 offset, U6
 
 Error CommandListRef_dispatchIndirect(CommandListRef *commandList, DeviceBufferRef *buffer, U64 offset) {
 
-	Error err = CommandListRef_checkDispatchBuffer(buffer, offset, sizeof(U32) * 3);
+	GraphicsDeviceRef *device = CommandListRef_ptr(commandList)->device;
+
+	Error err = CommandListRef_checkDispatchBuffer(device, buffer, offset, sizeof(U32) * 3);
 
 	if(err.genericError)
 		return err;
@@ -602,6 +622,7 @@ Error CommandListRef_dispatchIndirect(CommandListRef *commandList, DeviceBufferR
 }
 
 Error CommandListRef_drawIndirectBase(
+	GraphicsDeviceRef *device,
 	DeviceBufferRef *buffer,
 	U64 bufferOffset,
 	U32 *bufferStride,
@@ -625,7 +646,7 @@ Error CommandListRef_drawIndirectBase(
 	if (!drawCalls)
 		return Error_invalidParameter(2, 1);
 
-	return CommandListRef_checkDispatchBuffer(buffer, bufferOffset, (U64)*bufferStride * drawCalls);
+	return CommandListRef_checkDispatchBuffer(device, buffer, bufferOffset, (U64)*bufferStride * drawCalls);
 }
 
 Error CommandListRef_drawIndirect(
@@ -637,7 +658,8 @@ Error CommandListRef_drawIndirect(
 	Bool indexed
 ) {
 
-	Error err = CommandListRef_drawIndirectBase(buffer, bufferOffset, &bufferStride, drawCalls, indexed);
+	GraphicsDeviceRef *device = CommandListRef_ptr(commandList)->device;
+	Error err = CommandListRef_drawIndirectBase(device, buffer, bufferOffset, &bufferStride, drawCalls, indexed);
 
 	if(err.genericError)
 		return err;
@@ -670,12 +692,13 @@ Error CommandListRef_drawIndirectCount(
 	Bool indexed
 ) {
 
-	Error err = CommandListRef_drawIndirectBase(buffer, bufferOffset, &bufferStride, maxDrawCalls, indexed);
+	GraphicsDeviceRef *device = CommandListRef_ptr(commandList)->device;
+	Error err = CommandListRef_drawIndirectBase(device, buffer, bufferOffset, &bufferStride, maxDrawCalls, indexed);
 
 	if(err.genericError)
 		return err;
 
-	if((err = CommandListRef_checkDispatchBuffer(countBuffer, countOffset, sizeof(U32))).genericError)
+	if((err = CommandListRef_checkDispatchBuffer(device, countBuffer, countOffset, sizeof(U32))).genericError)
 		return err;
 
 	DeviceBufferRef *refArr[2] = { buffer, countBuffer };
@@ -769,6 +792,9 @@ Error CommandListRef_startRenderExt(
 
 		if(info.image && info.image->typeId != EGraphicsTypeId_Swapchain)		//TODO: Support other types
 			_gotoIfError(clean, Error_unsupportedOperation(2));
+
+		if(SwapchainRef_ptr(info.image)->device != commandList->device)
+			return Error_unsupportedOperation(3);
 
 		if (info.image) {
 

@@ -23,7 +23,7 @@
 #include "graphics/generic/instance.h"
 #include "graphics/generic/swapchain.h"
 #include "graphics/generic/pipeline.h"
-#include "graphics/generic/buffer.h"
+#include "graphics/generic/device_buffer.h"
 #include "graphics/vulkan/vulkan.h"
 #include "graphics/vulkan/vk_device.h"
 #include "graphics/vulkan/vk_instance.h"

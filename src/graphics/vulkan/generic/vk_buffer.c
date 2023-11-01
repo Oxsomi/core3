@@ -18,7 +18,7 @@
 *  This is called dual licensing.
 */
 
-#include "graphics/generic/buffer.h"
+#include "graphics/generic/device_buffer.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
 #include "graphics/vulkan/vulkan.h"
@@ -133,6 +133,9 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 
 	if(buf->usage & EDeviceBufferUsage_Indirect)
 		usage |= VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
+
+	if(buf->usage & EDeviceBufferUsage_CPUAllocatedBit)		//Only for internal usage
+		usage |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
 
 	VkBufferCreateInfo bufferInfo = (VkBufferCreateInfo) {
 		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,

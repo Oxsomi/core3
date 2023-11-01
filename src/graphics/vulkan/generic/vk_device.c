@@ -26,7 +26,7 @@
 #include "graphics/generic/instance.h"
 #include "graphics/generic/swapchain.h"
 #include "graphics/generic/command_list.h"
-#include "graphics/generic/buffer.h"
+#include "graphics/generic/device_buffer.h"
 #include "platforms/ext/listx.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
@@ -43,6 +43,11 @@
 		*currPNext = &tmp##T;			\
 		currPNext = &tmp##T.pNext;		\
 	}
+
+const U64 GraphicsDeviceExt_size = sizeof(VkGraphicsDevice);
+
+//Convert command into API dependent instructions
+impl Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data, void *commandListExt);
 
 Error GraphicsDevice_initExt(
 	const GraphicsInstance *instance, 
@@ -268,16 +273,6 @@ Error GraphicsDevice_initExt(
 		}
 	);
 
-	Error err = RefPtr_createx(
-		(U32)(sizeof(GraphicsDevice) + sizeof(VkGraphicsDevice)), 
-		(ObjectFreeFunc) GraphicsDevice_free, 
-		EGraphicsTypeId_GraphicsDevice, 
-		deviceRef
-	);
-
-	if(err.genericError)
-		return err;
-
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(*deviceRef);
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 
@@ -286,6 +281,7 @@ Error GraphicsDevice_initExt(
 	List queueFamilies = List_createEmpty(sizeof(VkQueueFamilyProperties));
 	CharString tempStr = CharString_createNull();
 
+	Error err = Error_none();
 	_gotoIfError(clean, List_reservex(&extensions, 32));
 	_gotoIfError(clean, List_reservex(&queues, EVkCommandQueue_Count));
 
@@ -791,69 +787,44 @@ Error GraphicsDevice_initExt(
 
 	_gotoIfError(clean, Lock_create(&deviceExt->descriptorLock));
 
-	//Allocate UBO
-
-	VkBufferCreateInfo uboInfo = (VkBufferCreateInfo) {
-		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-		.size = sizeof(CBufferData) * 3,
-		.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-		.sharingMode = VK_SHARING_MODE_CONCURRENT,
-		.queueFamilyIndexCount = deviceExt->resolvedQueues,
-		.pQueueFamilyIndices = deviceExt->uniqueQueues
-	};
-
-	_gotoIfError(clean, vkCheck(vkCreateBuffer(deviceExt->device, &uboInfo, NULL, &deviceExt->ubo)));
-
 	//Get memory properties
 
 	vkGetPhysicalDeviceMemoryProperties((VkPhysicalDevice) physicalDevice->ext, &deviceExt->memoryProperties);
 
-	//Allocate buffer memory
+	//Allocate staging buffer.
+	//256 MiB - 256 * 3 to allow CBuffer at the end of the memory.
+	//This gets divided into 3 for each frame id to have their own allocator into that subblock.
+	//This allows way easier management.
 
-	VkMemoryRequirements requirements = (VkMemoryRequirements) { 0 };
-	vkGetBufferMemoryRequirements(deviceExt->device, deviceExt->ubo, &requirements);
+	U64 stagingSize = DeviceMemoryBlock_defaultSize - sizeof(CBufferData) * 3;
 
-	if(requirements.alignment > 256)					//Force 256-byte alignment or less.
-		_gotoIfError(clean, Error_invalidOperation(0));
+	_gotoIfError(clean, GraphicsDeviceRef_createBuffer(
+		*deviceRef, EDeviceBufferUsage_CPUAllocatedBit, CharString_createConstRefCStr("Staging buffer"),
+		stagingSize, &deviceExt->staging
+	));
 
-	U32 memoryIndex = U32_MAX;
-	VkMemoryPropertyFlags required = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+	DeviceBuffer *staging = DeviceBufferRef_ptr(deviceExt->staging);
+	VkDeviceBuffer *stagingExt = DeviceBuffer_ext(staging, Vk);
 
-	for (U32 i = 0; i < deviceExt->memoryProperties.memoryTypeCount; ++i)
-		if (
-			(requirements.memoryTypeBits & (1 << i)) && 
-			(deviceExt->memoryProperties.memoryTypes[i].propertyFlags & required) == required
-		) {
-			memoryIndex = i;
-			break;
-		}
+	Buffer stagingBuffer = Buffer_createRef(stagingExt->mappedMemory, stagingSize);
 
-	if (memoryIndex == U32_MAX)
-		_gotoIfError(clean, Error_invalidState(0));
+	for(U64 i = 0; i < sizeof(deviceExt->stagingAllocations) / sizeof(deviceExt->stagingAllocations[0]); ++i)
+		_gotoIfError(clean, AllocationBuffer_createRefFromRegionx(
+			stagingBuffer, stagingSize / 3 * i, stagingSize / 3, &deviceExt->stagingAllocations[i]
+		));
 
-	VkMemoryAllocateInfo uboAlloc = (VkMemoryAllocateInfo) {
-		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-		.allocationSize = requirements.size,
-		.memoryTypeIndex = memoryIndex
-	};
+	//Allocate UBO
 
-	_gotoIfError(clean, vkCheck(vkAllocateMemory(deviceExt->device, &uboAlloc, NULL, &deviceExt->uboMem)));
-
-	_gotoIfError(clean, vkCheck(vkBindBufferMemory(deviceExt->device, deviceExt->ubo, deviceExt->uboMem, 0)));
-
-	//Map UBO as persistent data
-
-	_gotoIfError(clean, vkCheck(vkMapMemory(
-		deviceExt->device, deviceExt->uboMem, 0, sizeof(CBufferData) * 3, 0, &deviceExt->mappedUbo.ptr
-	)));
-
-	deviceExt->mappedUbo.lengthAndRefBits = ((U64)1 << 63) | (sizeof(CBufferData) * 3);
+	_gotoIfError(clean, GraphicsDeviceRef_createBuffer(
+		*deviceRef, EDeviceBufferUsage_CPUAllocatedBit, CharString_createConstRefCStr("Per frame data"),
+		sizeof(CBufferData) * 3, &deviceExt->ubo
+	));
 
 	//Fill last 3 descriptor sets with UBO[i] to ensure we only modify things in flight.
 
 	VkDescriptorBufferInfo uboBufferInfo[3] = {
 		(VkDescriptorBufferInfo) {
-			.buffer = deviceExt->ubo,
+			.buffer = DeviceBuffer_ext(DeviceBufferRef_ptr(deviceExt->ubo), Vk)->buffer,
 			.range = sizeof(CBufferData)
 		}
 	};
@@ -948,14 +919,11 @@ Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext) {
 		if(deviceExt->defaultLayout)
 			vkDestroyPipelineLayout(deviceExt->device, deviceExt->defaultLayout, NULL);
 
-		if(deviceExt->ubo)
-			vkDestroyBuffer(deviceExt->device, deviceExt->ubo, NULL);
-
-		if(deviceExt->uboMem)
-			vkFreeMemory(deviceExt->device, deviceExt->uboMem, NULL);
-
 		vkDestroyDevice(deviceExt->device, NULL);
 	}
+
+	DeviceBufferRef_dec(&deviceExt->ubo);
+	DeviceBufferRef_dec(&deviceExt->staging);
 
 	List_freex(&deviceExt->commandPools);
 	List_freex(&deviceExt->submitSemaphores);
@@ -973,6 +941,9 @@ Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext) {
 	List_freex(&deviceExt->swapchainIndices);
 	List_freex(&deviceExt->swapchainHandles);
 
+	for(U64 i = 0; i < sizeof(deviceExt->stagingAllocations) / sizeof(deviceExt->stagingAllocations[0]); ++i)
+		AllocationBuffer_freex(&deviceExt->stagingAllocations[i]);
+
 	return true;
 }
 
@@ -982,6 +953,8 @@ Error GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef) {
 
 	if(!deviceRef)
 		return Error_nullPointer(0);
+
+	//TODO: Perform copies, get rid of all pending changes and in flight resources after
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
@@ -1045,6 +1018,302 @@ VkCommandAllocator *VkGraphicsDevice_getCommandAllocator(
 	return (VkCommandAllocator*) device->commandPools.ptr + id;
 }
 
+Error DeviceBufferRef_flush(VkCommandBuffer commandBuffer, GraphicsDeviceRef *deviceRef, DeviceBufferRef *pending) {
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
+
+	GraphicsInstance *instance = GraphicsInstanceRef_ptr(device->instance);
+	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
+
+	U32 graphicsQueueId = deviceExt->queues[EVkCommandQueue_Graphics].queueId;
+
+	DeviceBuffer *buffer = DeviceBufferRef_ptr(pending);
+	VkDeviceBuffer *bufferExt = DeviceBuffer_ext(buffer, Vk);
+
+	Error err = Error_none();
+	List tempList = (List) { 0 };
+
+	Bool isInFlight = false;
+	List *currentFlight = &device->resourcesInFlight[device->submitId % 3];
+	DeviceBufferRef *tempStagingResource = NULL;
+	List pendingCopies = List_createEmpty(sizeof(VkBufferCopy));
+
+	for(U64 j = 0; j < sizeof(device->resourcesInFlight) / sizeof(device->resourcesInFlight[0]); ++j) {
+
+		List inFlight = device->resourcesInFlight[j];
+
+		for(U64 i = 0; i < inFlight.length; ++i)
+			if (((RefPtr**)inFlight.ptr)[i] == pending) {
+				isInFlight = true;
+				break;
+			}
+
+		if(isInFlight)
+			break;
+	}
+
+	if(!isInFlight && bufferExt->mappedMemory) {
+
+		DeviceMemoryBlock block = *(DeviceMemoryBlock*) List_ptr(device->allocator.blocks, bufferExt->blockId);
+		Bool incoherent = !(block.allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+		if(incoherent) {
+			tempList = List_createEmpty(sizeof(VkMappedMemoryRange));
+			_gotoIfError(clean, List_resizex(&tempList, buffer->pendingChanges.length));
+		}
+
+		for(U64 j = 0; j < buffer->pendingChanges.length; ++j) {
+
+			DevicePendingRange range = *(DevicePendingRange*) List_ptr(buffer->pendingChanges, j);
+
+			U64 start = range.buffer.startRange;
+			U64 len = range.buffer.endRange - range.buffer.startRange;
+
+			Buffer dst = Buffer_createRef((U8*)bufferExt->mappedMemory + start, len);
+			Buffer src = Buffer_createConstRef(buffer->cpuData.ptr + start, len);
+
+			Buffer_copy(dst, src);
+
+			if(incoherent)
+				*(VkMappedMemoryRange*)List_ptr(tempList, j) = (VkMappedMemoryRange) {
+					.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+					.memory = (VkDeviceMemory) block.ext,
+					.offset = start + bufferExt->blockOffset,
+					.size = len
+				};
+		}
+
+		if(incoherent)
+			_gotoIfError(clean, vkCheck(vkFlushMappedMemoryRanges(
+				deviceExt->device, (U32) tempList.length, (const VkMappedMemoryRange*) tempList.ptr
+			)));
+	}
+
+	else {
+
+		//TODO: Copy queue
+
+		if(!deviceExt->staging)
+			_gotoIfError(clean, Error_invalidOperation(0));
+
+		U64 allocRange = 0;
+
+		for(U64 j = 0; j < buffer->pendingChanges.length; ++j) {
+			BufferRange bufferj = ((DevicePendingRange*) List_ptr(buffer->pendingChanges, j))->buffer;
+			allocRange += bufferj.endRange - bufferj.startRange;
+		}
+
+		_gotoIfError(clean, List_resizex(&pendingCopies, buffer->pendingChanges.length));
+
+		VkDependencyInfo dependency = (VkDependencyInfo) {
+			.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+			.dependencyFlags = 0
+		};
+
+		List_freex(&tempList);
+		tempList = List_createEmpty(sizeof(VkBufferMemoryBarrier2));
+		_gotoIfError(clean, List_reservex(&tempList, 1 + buffer->pendingChanges.length));
+
+		if (allocRange > 64 * MIBI) {		//Resource is too big, allocate dedicated staging resource
+
+			_gotoIfError(clean, GraphicsDeviceRef_createBuffer(
+				deviceRef, EDeviceBufferUsage_CPUAllocatedBit, CharString_createConstRefCStr("Dedicated staging buffer"),
+				allocRange, &tempStagingResource
+			));
+
+			DeviceBuffer *stagingResource = DeviceBufferRef_ptr(tempStagingResource);
+			VkDeviceBuffer *stagingResourceExt = DeviceBuffer_ext(stagingResource, Vk);
+			U8 *location = stagingResourceExt->mappedMemory;
+
+			DeviceMemoryBlock block = *(DeviceMemoryBlock*) List_ptr(device->allocator.blocks, stagingResourceExt->blockId);
+			Bool incoherent = !(block.allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+			//Copy into our buffer
+
+			allocRange = 0;
+
+			for(U64 j = 0; j < buffer->pendingChanges.length; ++j) {
+
+				BufferRange bufferj = ((DevicePendingRange*) List_ptr(buffer->pendingChanges, j))->buffer;
+				U64 len = bufferj.endRange - bufferj.startRange;
+
+				Buffer_copy(
+					Buffer_createRef(location + allocRange, len), 
+					Buffer_createConstRef(buffer->cpuData.ptr + bufferj.startRange, len)
+				);
+
+				_gotoIfError(clean, VkDeviceBuffer_transition(
+					bufferExt, 
+					VK_PIPELINE_STAGE_2_COPY_BIT, 
+					VK_ACCESS_2_TRANSFER_WRITE_BIT,
+					graphicsQueueId,
+					bufferj.startRange,
+					len,
+					&tempList,
+					&dependency
+				));
+
+				((VkBufferCopy*)pendingCopies.ptr)[j] = (VkBufferCopy) {
+					.srcOffset = allocRange,
+					.dstOffset = bufferj.startRange,
+					.size = len
+				};
+				
+				allocRange += len;
+			}
+
+			if(incoherent) {
+
+				VkMappedMemoryRange memoryRange = (VkMappedMemoryRange) {
+					.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+					.memory = (VkDeviceMemory) block.ext,
+					.offset = stagingResourceExt->blockOffset,
+					.size = allocRange
+				};
+
+				vkFlushMappedMemoryRanges(deviceExt->device, 1, &memoryRange);
+			}
+
+			_gotoIfError(clean, VkDeviceBuffer_transition(
+				stagingResourceExt, 
+				VK_PIPELINE_STAGE_2_COPY_BIT, 
+				VK_ACCESS_2_TRANSFER_READ_BIT,
+				graphicsQueueId,
+				0,
+				allocRange,
+				&tempList,
+				&dependency
+			));
+
+			if(dependency.bufferMemoryBarrierCount)
+				instanceExt->cmdPipelineBarrier2(commandBuffer, &dependency);
+
+			vkCmdCopyBuffer(
+				commandBuffer, 
+				stagingResourceExt->buffer, 
+				bufferExt->buffer, 
+				(U32) pendingCopies.length, 
+				(const VkBufferCopy*) pendingCopies.ptr
+			);
+
+			//When staging resource is commited to current in flight then we can relinguish ownership.
+
+			_gotoIfError(clean, List_pushBackx(currentFlight, Buffer_createConstRef(&tempStagingResource, sizeof(RefPtr*))));
+			tempStagingResource = NULL;
+		}
+
+		//Use staging buffer
+
+		else {
+
+			_gotoIfError(clean, List_resizex(&pendingCopies, buffer->pendingChanges.length));
+
+			AllocationBuffer *stagingBuffer = &deviceExt->stagingAllocations[device->submitId % 3];
+			VkDeviceBuffer *stagingExt = DeviceBuffer_ext(DeviceBufferRef_ptr(deviceExt->staging), Vk);
+
+			U8 *defaultLocation = (U8*) 1, *location = defaultLocation;
+			Error temp = AllocationBuffer_allocateBlockx(stagingBuffer, allocRange, 4, (const U8**) &location);
+
+			if(temp.genericError && location == defaultLocation)		//Something else went wrong
+				_gotoIfError(clean, temp);
+
+			//We flush the GPU to ensure we have space if necessary.
+
+			if (temp.genericError) {
+
+				//TODO: Create secondary staging buffer before doing this!
+				//		Because this is super slow!
+
+				Log_performanceLn(
+					"Pushing too much data to the GPU this frame for the staging buffer to handle\n"
+					"Flushing outstanding changes to GPU to make space for new allocations."
+				);
+
+				//TODO: Commit commandBuffer here
+
+				GraphicsDeviceRef_wait(deviceRef);
+				_gotoIfError(clean, AllocationBuffer_allocateBlockx(stagingBuffer, allocRange, 4, &location));
+			}
+
+			DeviceMemoryBlock block = *(DeviceMemoryBlock*) List_ptr(device->allocator.blocks, stagingExt->blockId);
+			Bool incoherent = !(block.allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+			//Copy into our buffer
+
+			allocRange = 0;
+
+			for(U64 j = 0; j < buffer->pendingChanges.length; ++j) {
+
+				BufferRange bufferj = ((DevicePendingRange*) List_ptr(buffer->pendingChanges, j))->buffer;
+				U64 len = bufferj.endRange - bufferj.startRange;
+
+				Buffer_copy(
+					Buffer_createRef(location + allocRange, len), 
+					Buffer_createConstRef(buffer->cpuData.ptr + bufferj.startRange, len)
+				);
+
+				((VkBufferCopy*)pendingCopies.ptr)[j] = (VkBufferCopy) {
+					.srcOffset = allocRange + (location - block.mappedMemory),
+					.dstOffset = bufferj.startRange,
+					.size = len
+				};
+
+				_gotoIfError(clean, VkDeviceBuffer_transition(
+					bufferExt, 
+					VK_PIPELINE_STAGE_2_COPY_BIT, 
+					VK_ACCESS_2_TRANSFER_WRITE_BIT,
+					graphicsQueueId,
+					bufferj.startRange,
+					len,
+					&tempList,
+					&dependency
+				));
+
+				allocRange += len;
+			}
+
+			if (incoherent) {
+
+				VkMappedMemoryRange memoryRange = (VkMappedMemoryRange) {
+					.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+					.memory = (VkDeviceMemory) block.ext,
+					.offset = location - block.mappedMemory,
+					.size = allocRange
+				};
+
+				vkFlushMappedMemoryRanges(deviceExt->device, 1, &memoryRange);
+			}
+
+			if(dependency.bufferMemoryBarrierCount)
+				instanceExt->cmdPipelineBarrier2(commandBuffer, &dependency);
+
+			vkCmdCopyBuffer(
+				commandBuffer, 
+				stagingExt->buffer,
+				bufferExt->buffer, 
+				(U32) buffer->pendingChanges.length, 
+				(const VkBufferCopy*) pendingCopies.ptr
+			);
+		}
+	}
+
+	if(!(buffer->usage & EDeviceBufferUsage_CPUBacked))
+		Buffer_freex(&buffer->cpuData);
+
+	buffer->isFirstFrame = buffer->isPending = buffer->isPendingFullCopy = false;
+	_gotoIfError(clean, List_clear(&buffer->pendingChanges));
+
+	if(RefPtr_inc(pending))
+		_gotoIfError(clean, List_pushBackx(currentFlight, Buffer_createConstRef(&pending, sizeof(pending))));
+
+clean:
+	DeviceBufferRef_dec(&tempStagingResource);
+	List_freex(&tempList);
+	List_freex(&pendingCopies);
+	return err;
+}
+
 Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List commandLists, List swapchains, Buffer appData) {
 
 	//Validation and ext structs
@@ -1066,9 +1335,16 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 
 	//Validate command lists
 
-	for(U64 i = 0; i < commandLists.length; ++i)
-		if(!CommandListRef_ptr(((CommandListRef**) commandLists.ptr)[i]))
+	for(U64 i = 0; i < commandLists.length; ++i) {
+
+		CommandList *cmd = CommandListRef_ptr(((CommandListRef**) commandLists.ptr)[i]);
+
+		if(!cmd)
 			return Error_nullPointer(1);
+
+		if(cmd->device != deviceRef)
+			return Error_unsupportedOperation(0);
+	}
 
 	//Swapchains all need to have the same vsync option.
 
@@ -1086,16 +1362,18 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 		if(!swapchaini)
 			return Error_nullPointer(2);
 
+		if(swapchaini->device != deviceRef)
+			return Error_unsupportedOperation(1);
+
 		if(swapchaini->info.vsync != vsync)
-			return Error_unsupportedOperation(0);
+			return Error_unsupportedOperation(2);
 	}
 
 	//Unpack pointers
 
 	Error err = Error_none();
 	CharString temp = CharString_createNull();
-	List imageBarriers = List_createEmpty(sizeof(VkImageMemoryBarrier2));
-	List tempList = List_createEmpty(sizeof(VkMappedMemoryRange));
+	List barriers = (List) { 0 };
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
@@ -1181,90 +1459,56 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 		_gotoIfError(clean, vkCheck(vkWaitSemaphores(deviceExt->device, &waitInfo, U64_MAX)));
 	}
 
-	//Update buffer data
+	//Prepare per frame cbuffer
 
-	for(U64 i = 0; i < device->pendingResources.length; ++i) {
+	VkDeviceBuffer *uboExt = DeviceBuffer_ext(DeviceBufferRef_ptr(deviceExt->ubo), Vk);
 
-		RefPtr *pending = *(RefPtr**) List_ptr(device->pendingResources, i);
+	{
+		CBufferData *data = (CBufferData*) uboExt->mappedMemory + (device->submitId % 3);
+		Ns now = Time_now();
 
-		EGraphicsTypeId type = (EGraphicsTypeId) pending->typeId;
+		*data = (CBufferData) {
+			.frameId = (U32) device->submitId,
+			.time = device->firstSubmit ? (F32)((F64)(now - device->firstSubmit) / SECOND) : 0,
+			.deltaTime = device->firstSubmit ? (F32)((F64)(now - device->lastSubmit) / SECOND) : 0,
+			.swapchainCount = (U32) swapchains.length
+		};
 
-		switch(type) {
+		for(U32 i = 0; i < data->swapchainCount; ++i) {
 
-			case EGraphicsTypeId_DeviceBuffer: {
+			Swapchain *swapchain = SwapchainRef_ptr(((SwapchainRef**) swapchains.ptr)[i]);
+			VkSwapchain *swapchainExt = Swapchain_ext(swapchain, Vk);
 
-				DeviceBuffer *buffer = DeviceBufferRef_ptr(pending);
-				VkDeviceBuffer *bufferExt = DeviceBuffer_ext(buffer, Vk);
+			data->appData[i] = ((const U32*)swapchainExt->descriptorAllocations.ptr)[swapchainExt->currentIndex * 2 + 0];
+		}
 
-				if(buffer->isFirstFrame) {
-					
-					if (bufferExt->mappedMemory) {
+		Buffer_copy(
+			Buffer_createRef((U8*)data + 16 + 4 * swapchains.length, sizeof(*data)), 
+			appData		//appData is already range checked (no out of bounds write)
+		);
 
-						DeviceMemoryBlock block = *(DeviceMemoryBlock*) List_ptr(device->allocator.blocks, bufferExt->blockId);
-						Bool incoherent = !(block.allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+		DeviceMemoryBlock block = *(DeviceMemoryBlock*) List_ptr(device->allocator.blocks, uboExt->blockId);
+		Bool incoherent = !(block.allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
-						if(incoherent && buffer->pendingChanges.length >> 32)
-							_gotoIfError(clean, Error_outOfBounds(0, buffer->pendingChanges.length, U32_MAX));
+		if (incoherent) {
 
-						if(incoherent)
-							_gotoIfError(clean, List_resizex(&tempList, buffer->pendingChanges.length));
+			VkMappedMemoryRange range = (VkMappedMemoryRange) {
+				.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+				.memory = (VkDeviceMemory) block.ext,
+				.offset = uboExt->blockOffset + (device->submitId % 3) * sizeof(CBufferData),
+				.size = sizeof(CBufferData)
+			};
 
-						for(U64 j = 0; j < buffer->pendingChanges.length; ++j) {
-
-							DevicePendingRange range = *(DevicePendingRange*) List_ptr(buffer->pendingChanges, j);
-
-							U64 start = range.buffer.startRange;
-							U64 len = range.buffer.endRange - range.buffer.startRange;
-
-							Buffer dst = Buffer_createRef((U8*)bufferExt->mappedMemory + start, len);
-							Buffer src = Buffer_createConstRef(buffer->cpuData.ptr + start, len);
-
-							Buffer_copy(dst, src);
-
-							if(incoherent)
-								*(VkMappedMemoryRange*)List_ptr(tempList, j) = (VkMappedMemoryRange) {
-									.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
-									.memory = (VkDeviceMemory) block.ext,
-									.offset = start + bufferExt->blockOffset,
-									.size = len
-								};
-						}
-
-						if(incoherent)
-							_gotoIfError(clean, vkCheck(vkFlushMappedMemoryRanges(
-								deviceExt->device, (U32) tempList.length, (const VkMappedMemoryRange*) tempList.ptr
-							)));
-					}
-
-					else _gotoIfError(clean, Error_unsupportedOperation(1));		//TODO: Staging buffer!
-
-					if(!(buffer->usage & EDeviceBufferUsage_CPUBacked))
-						Buffer_freex(&buffer->cpuData);
-
-					buffer->isFirstFrame = buffer->isPending = buffer->isPendingFullCopy = false;
-					_gotoIfError(clean, List_clear(&buffer->pendingChanges));
-				}
-
-				else {
-					//TODO: Check if in flight, if not then use staging buffer
-					_gotoIfError(clean, Error_unsupportedOperation(2));		//TODO: Staging buffer!
-				}
-
-				break;
-			}
-
-			default:
-				_gotoIfError(clean, Error_unsupportedOperation(0));
+			_gotoIfError(clean, vkCheck(vkFlushMappedMemoryRanges(deviceExt->device, 1, &range)));
 		}
 	}
-
-	_gotoIfError(clean, List_clear(&device->pendingResources));
 
 	//Record command list
 
 	VkCommandBuffer commandBuffer = NULL;
 
 	VkCommandQueue queue = deviceExt->queues[EVkCommandQueue_Graphics];
+	U32 graphicsQueueId = queue.queueId;
 	
 	if (commandLists.length) {
 
@@ -1383,34 +1627,44 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 
 		_gotoIfError(clean, vkCheck(vkBeginCommandBuffer(commandBuffer, &beginInfo)));
 
-		//Prepare per frame cbuffer
+		//Ensure ubo and staging buffer are the correct states
 
-		CBufferData data = (CBufferData) {
-			.frameId = (U32) device->submitId,
-			.time = device->firstSubmit ? (F32)((F64)(Time_now() - device->firstSubmit) / SECOND) : 0,
-			.deltaTime = device->firstSubmit ? (F32)((F64)(Time_now() - device->lastSubmit) / SECOND) : 0,
-			.swapchainCount = (U32) swapchains.length
+		VkDependencyInfo dependency = (VkDependencyInfo) {
+			.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+			.dependencyFlags = 0
 		};
 
-		for(U32 i = 0; i < data.swapchainCount; ++i) {
+		List_freex(&barriers);
+		barriers = List_createEmpty(sizeof(VkBufferMemoryBarrier2));
+		_gotoIfError(clean, List_reservex(&barriers, 2));
 
-			Swapchain *swapchain = SwapchainRef_ptr(((SwapchainRef**) swapchains.ptr)[i]);
-			VkSwapchain *swapchainExt = Swapchain_ext(swapchain, Vk);
+		DeviceBuffer *staging = DeviceBufferRef_ptr(deviceExt->staging);
+		VkDeviceBuffer *stagingExt = DeviceBuffer_ext(staging, Vk);
 
-			data.appData[i] = ((const U32*)swapchainExt->descriptorAllocations.ptr)[swapchainExt->currentIndex * 2 + 0];
-		}
-
-		Buffer_copy(
-			Buffer_createRef((U8*)&data + 16 + 4 * swapchains.length, sizeof(data)), 
-			appData		//appData is already range checked (no out of bounds write)
-		);
-
-		Buffer currentRegion = Buffer_createNull();
-		_gotoIfError(clean, Buffer_createSubset(
-			deviceExt->mappedUbo, sizeof(data) * (device->submitId % 3), sizeof(data), false, &currentRegion
+		_gotoIfError(clean, VkDeviceBuffer_transition(
+			stagingExt, 
+			VK_PIPELINE_STAGE_2_COPY_BIT, 
+			VK_ACCESS_2_TRANSFER_READ_BIT,
+			graphicsQueueId,
+			(device->submitId % 3) * (staging->length / 3),
+			staging->length / 3,
+			&barriers,
+			&dependency
 		));
 
-		Buffer_copy(currentRegion, Buffer_createConstRef(&data, sizeof(data)));
+		_gotoIfError(clean, VkDeviceBuffer_transition(
+			uboExt, 
+			VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT, 
+			VK_ACCESS_2_UNIFORM_READ_BIT,
+			graphicsQueueId,
+			(device->submitId % 3) * sizeof(CBufferData),
+			sizeof(CBufferData),
+			&barriers,
+			&dependency
+		));
+
+		if(dependency.bufferMemoryBarrierCount)
+			instanceExt->cmdPipelineBarrier2(commandBuffer, &dependency);
 
 		//Bind pipeline layout and descriptors since they stay the same for the entire frame.
 		//For every bind point
@@ -1430,6 +1684,43 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 				0, EDescriptorType_Count, sets, 
 				0, NULL
 			);
+
+		//Release resources that were in flight.
+		//This might cause resource deletions because we might be the last one releasing them.
+		//For example temporary staging resources are released this way.
+
+		List *inFlight = &device->resourcesInFlight[device->submitId % 3];
+
+		for (U64 i = 0; i < inFlight->length; ++i)
+			RefPtr_dec((RefPtr**)inFlight->ptr + i);
+
+		_gotoIfError(clean, List_clear(inFlight));
+
+		//Release all allocations of buffer that was in flight
+
+		if(!AllocationBuffer_freeAll(&deviceExt->stagingAllocations[device->submitId % 3]))
+			_gotoIfError(clean, Error_invalidState(0));
+
+		//Update buffer data
+
+		for(U64 i = 0; i < device->pendingResources.length; ++i) {
+
+			RefPtr *pending = *(RefPtr**) List_ptr(device->pendingResources, i);
+
+			EGraphicsTypeId type = (EGraphicsTypeId) pending->typeId;
+
+			switch(type) {
+
+				case EGraphicsTypeId_DeviceBuffer: 
+					_gotoIfError(clean, DeviceBufferRef_flush(commandBuffer, deviceRef, pending));
+					break;
+
+				default:
+					_gotoIfError(clean, Error_unsupportedOperation(5));
+			}
+		}
+
+		_gotoIfError(clean, List_clear(&device->pendingResources));
 
 		//Record commands
 
@@ -1482,12 +1773,14 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 
 		//Combine transitions into one call.
 
-		VkDependencyInfo dependency = (VkDependencyInfo) {
+		dependency = (VkDependencyInfo) {
 			.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
 			.dependencyFlags = 0
 		};
 
-		_gotoIfError(clean, List_reservex(&imageBarriers, swapchains.length));
+		List_freex(&barriers);
+		barriers = List_createEmpty(sizeof(VkImageMemoryBarrier2));;
+		_gotoIfError(clean, List_reservex(&barriers, swapchains.length));
 
 		for (U64 i = 0; i < swapchains.length; ++i) {
 
@@ -1502,8 +1795,6 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 				.layerCount = 1
 			};
 
-			U32 graphicsQueueId = deviceExt->queues[EVkCommandQueue_Graphics].queueId;
-
 			_gotoIfError(clean, VkSwapchain_transition(
 				imageExt,
 				VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, 
@@ -1511,7 +1802,7 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 				VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
 				graphicsQueueId,
 				&range,
-				&imageBarriers,
+				&barriers,
 				&dependency
 			));
 		}
@@ -1578,6 +1869,8 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 			_gotoIfError(clean, vkCheck(((const VkResult*) deviceExt->results.ptr)[i]));
 	}
 
+	//TODO: Add resources from command lists & swapchains to resources in flight
+
 	//Ensure our next fence value is used
 
 	++device->submitId;
@@ -1587,7 +1880,7 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 		device->firstSubmit = device->lastSubmit;
 
 clean: 
-	List_freex(&tempList);
+	List_freex(&barriers);
 	CharString_freex(&temp);
 	return err;
 }

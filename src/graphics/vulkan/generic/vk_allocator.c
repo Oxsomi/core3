@@ -30,6 +30,96 @@
 #include "types/buffer.h"
 #include "types/string.h"
 
+static const VkMemoryPropertyFlags host = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+static const VkMemoryPropertyFlags coherent = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+static const VkMemoryPropertyFlags local = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+
+Error VkDeviceMemoryAllocator_findMemory(
+	VkGraphicsDevice *deviceExt, 
+	Bool cpuSided, 
+	U32 memoryBits, 
+	U32 *outMemoryId,
+	VkMemoryPropertyFlags *outPropertyFlags
+) {
+
+	//Find suitable memory type
+
+	VkMemoryPropertyFlags all = local | host | coherent;
+
+	VkMemoryPropertyFlags properties[3] = {			//Contains local if force cpu sided is turned off
+		host | coherent,
+		host,
+		0
+	};
+
+	U32 memoryId = U32_MAX;
+	U32 propertyId = 2;
+
+	if (!cpuSided) {
+
+		for(U32 i = 0; i < 3; ++i)
+			properties[i] |= local;
+
+		++propertyId;
+	}
+
+	U64 maxHeapSizes[2] = { 0 };
+	U32 heapIds[2] = { 0 };
+
+	for (U32 i = 0; i < deviceExt->memoryProperties.memoryHeapCount; ++i) {
+
+		VkMemoryHeap heap = deviceExt->memoryProperties.memoryHeaps[i];
+		heap.flags &= 1;													//OOB
+
+		if (heap.size > maxHeapSizes[heap.flags]) {
+			maxHeapSizes[heap.flags] = heap.size;
+			heapIds[heap.flags] = i;
+		}
+	}
+
+	if (!maxHeapSizes[0]) {						//If there's only local heaps then we know we're on mobile. Use local heap.
+		maxHeapSizes[0] = maxHeapSizes[1];
+		heapIds[0] = heapIds[1];
+	}
+
+	if (!maxHeapSizes[0] || !maxHeapSizes[1])
+		return Error_notFound(0, 0);
+
+	//Allocate from the heaps we selected
+
+	for (U32 i = 0; i < deviceExt->memoryProperties.memoryTypeCount; ++i) {
+
+		if(!((memoryBits >> i) & 1))
+			continue;
+
+		VkMemoryType type = deviceExt->memoryProperties.memoryTypes[i];
+
+		if(type.heapIndex != heapIds[0] && type.heapIndex != heapIds[1])
+			continue;
+
+		VkMemoryPropertyFlags propFlag = type.propertyFlags;
+
+		for(U32 j = 0; j < propertyId; ++j) {
+
+			if ((propFlag & all) == properties[j]) {
+				propertyId = j;
+				memoryId = i;
+				break;
+			}
+		}
+
+		if(!propertyId)
+			break;
+	}
+
+	if (memoryId == U32_MAX)
+		return Error_notFound(1, 0);
+
+	*outMemoryId = memoryId;
+	*outPropertyFlags = properties[propertyId];
+	return Error_none();
+}
+
 Error DeviceMemoryAllocator_allocate(
 	DeviceMemoryAllocator *allocator, 
 	void *requirementsExt, 
@@ -41,7 +131,7 @@ Error DeviceMemoryAllocator_allocate(
 
 	objectName;
 	
-	U64 blockSize = 64 * MIBI;
+	U64 blockSize = DeviceMemoryBlock_defaultSize;
 
 	if(!allocator || !requirementsExt || !blockId || !blockOffset)
 		return Error_nullPointer(!allocator ? 0 : (!requirementsExt ? 1 : (!blockId ? 2 : 3)));
@@ -90,54 +180,14 @@ Error DeviceMemoryAllocator_allocate(
 		}
 	}
 
-	//Find suitable memory type
-	
-	VkMemoryPropertyFlags host = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
-	VkMemoryPropertyFlags coherent = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-	VkMemoryPropertyFlags local = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-	VkMemoryPropertyFlags all = local | host | coherent;
-
-	VkMemoryPropertyFlags properties[3] = {			//Contains local if force cpu sided is turned off
-		host | coherent,
-		host,
-		0
-	};
-
-	U32 memoryId = U32_MAX;
-	U32 propertyId = 2;
-
-	if (!cpuSided) {
-
-		for(U32 i = 0; i < 3; ++i)
-			properties[i] |= local;
-
-		++propertyId;
-	}
-
-	for (U32 i = 0; i < deviceExt->memoryProperties.memoryTypeCount; ++i) {
-
-		if(!(memReq.memoryTypeBits & (1 << i)))
-			continue;
-
-		VkMemoryPropertyFlags propFlag = deviceExt->memoryProperties.memoryTypes[i].propertyFlags;
-
-		for(U32 j = 0; j < propertyId; ++j) {
-
-			if ((propFlag & all) == properties[j]) {
-				propertyId = j;
-				memoryId = i;
-				break;
-			}
-		}
-
-		if(!propertyId)
-			break;
-	}
-
-	if (memoryId == U32_MAX)
-		return Error_invalidState(0);
-
 	//Allocate memory
+
+	U32 memoryId = 0;
+	VkMemoryPropertyFlags prop = 0;
+	Error err = VkDeviceMemoryAllocator_findMemory(deviceExt, cpuSided, memReq.memoryTypeBits, &memoryId, &prop);
+
+	if(err.genericError)
+		return err;
 		
 	U64 realBlockSize = (U64_max(blockSize, memReq.size * 2) + blockSize - 1) / blockSize * blockSize;
 
@@ -150,13 +200,11 @@ Error DeviceMemoryAllocator_allocate(
 	VkDeviceMemory mem = NULL;
 	DeviceMemoryBlock block = (DeviceMemoryBlock) { 0 };
 	CharString temp = CharString_createNull();
-	Error err = vkCheck(vkAllocateMemory(deviceExt->device, &alloc, NULL, &mem));
 
-	if(err.genericError)
+	if((err = vkCheck(vkAllocateMemory(deviceExt->device, &alloc, NULL, &mem))).genericError)
 		return err;
 
 	void *mappedMem = NULL;
-	VkMemoryPropertyFlags prop = properties[propertyId];
 
 	if(prop & host)
 		_gotoIfError(clean, vkCheck(vkMapMemory(deviceExt->device, mem, 0, alloc.allocationSize, 0, &mappedMem)));

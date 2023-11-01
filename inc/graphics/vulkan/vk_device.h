@@ -24,6 +24,7 @@
 #include "graphics/generic/command_list.h"
 #include "platforms/lock.h"
 #include "types/list.h"
+#include "types/allocation_buffer.h"
 #include "math/vec.h"
 
 typedef RefPtr PipelineRef;
@@ -151,21 +152,21 @@ typedef struct VkGraphicsDevice {
 	VkDescriptorPool descriptorPool;
 
 	VkPhysicalDeviceMemoryProperties memoryProperties;
+	DeviceBufferRef *ubo;
 
 	//Used for allocating descriptors
 
 	Lock descriptorLock;
 	Buffer freeList[EDescriptorType_ResourceCount];
 
-	//256 x 3 UBO for per frame data.
-
-	Buffer mappedUbo;
-	VkBuffer ubo;
-	VkDeviceMemory uboMem;
-
 	//Temporary storage for submit time stuff
 
 	List waitSemaphores, results, swapchainIndices, swapchainHandles, waitStages;
+
+	//Staging to get 
+
+	DeviceBufferRef *staging;					//Staging buffer split by 3
+	AllocationBuffer stagingAllocations[3];
 
 } VkGraphicsDevice;
 
@@ -216,6 +217,14 @@ typedef struct VkCommandBufferState {		//Caching state variables
 
 VkCommandAllocator *VkGraphicsDevice_getCommandAllocator(
 	VkGraphicsDevice *device, U32 resolvedQueueId, U32 threadId, U8 backBufferId
+);
+
+Error VkDeviceMemoryAllocator_findMemory(
+	VkGraphicsDevice *deviceExt, 
+	Bool cpuSided, 
+	U32 memoryBits, 
+	U32 *memoryId,
+	VkMemoryPropertyFlags *propertyFlags
 );
 
 //Lower 20 bit: id

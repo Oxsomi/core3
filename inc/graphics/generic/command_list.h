@@ -285,8 +285,6 @@ Error CommandListRef_drawIndirectCount(
 	U32 maxDrawCalls, Bool indexed
 );
 
-//TODO: Allow specifying resource and group count the dispatch should align to
-
 typedef struct Dispatch { U32 groups[3]; } Dispatch;
 
 Error CommandListRef_dispatch(CommandListRef *commandList, Dispatch dispatch);
@@ -352,8 +350,3 @@ Error CommandListRef_endRenderExt(CommandListRef *commandList);
 Error CommandListRef_addMarkerDebugExt(CommandListRef *commandList, F32x4 color, CharString name);
 Error CommandListRef_startRegionDebugExt(CommandListRef *commandList, F32x4 color, CharString name);
 Error CommandListRef_endRegionDebugExt(CommandListRef *commandList);
-
-//Convert command into API dependent instructions
-//Don't call manually.
-
-impl Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data, void *commandListExt);

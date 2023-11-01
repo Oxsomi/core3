@@ -269,9 +269,8 @@ typedef struct VertexBindingLayout {
 typedef enum EDepthStencilFormat {
 
 	EDepthStencilFormat_None,
-	EDepthStencilFormat_D16,
-	EDepthStencilFormat_D32,		//Prefer this if stencil isn't needed.
-	EDepthStencilFormat_D24S8,		//TODO: Validate if NV, AMD, Intel and ARM actually allocate this as D32S8, else remove.
+	EDepthStencilFormat_D32,		//Prefer this if stencil isn't needed. Less memory on AMD than D24S8!
+	EDepthStencilFormat_D24S8,		//On AMD this and D32S8 are the same thing. Prefer D32S8 for better depth precision.
 	EDepthStencilFormat_D32S8
 
 } EDepthStencilFormat;

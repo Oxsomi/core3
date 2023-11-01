@@ -46,7 +46,11 @@ Bool AllocationBuffer_free(AllocationBuffer *allocationBuffer, Allocator alloc);
 
 Bool AllocationBuffer_freeBlock(AllocationBuffer *allocationBuffer, const U8 *ptr);
 
+Bool AllocationBuffer_freeAll(AllocationBuffer *allocationBuffer);						//Frees all blocks
+
 //If !allocationBuffer->buffer.ptr the pointer shouldn't be dereferenced, it's just for offset tracking.
+//Result doesn't get touched if validation of arguments failed or if out of memory is triggered by the list.
+//If there's no available blocks then it will set *result to NULL and return out of memory.
 
 Error AllocationBuffer_allocateBlock(
 	AllocationBuffer *allocationBuffer,

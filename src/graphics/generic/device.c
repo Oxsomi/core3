@@ -20,6 +20,7 @@
 
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
+#include "graphics/generic/device_buffer.h"
 #include "platforms/ext/listx.h"
 #include "platforms/log.h"
 #include "types/error.h"
@@ -174,6 +175,8 @@ Error GraphicsDeviceRef_add(GraphicsDeviceRef *device) {
 
 //Ext
 
+impl extern const U64 GraphicsDeviceExt_size;
+
 impl Error GraphicsDevice_initExt(
 	const GraphicsInstance *instance, 
 	const GraphicsDeviceInfo *deviceInfo, 
@@ -182,6 +185,29 @@ impl Error GraphicsDevice_initExt(
 );
 
 impl Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext);
+
+Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
+
+	alloc;
+
+	if(!device)
+		return true;
+
+	List_freex(&device->pendingResources);
+
+	for(U64 i = 0; i < sizeof(device->resourcesInFlight) / sizeof(device->resourcesInFlight[0]); ++i) {
+
+		for(U64 j = 0; j < device->resourcesInFlight[i].length; ++j)
+			RefPtr_dec((RefPtr**)device->resourcesInFlight[i].ptr + j);
+
+		List_freex(&device->resourcesInFlight[i]);
+	}
+
+	GraphicsDevice_freeExt(GraphicsInstanceRef_ptr(device->instance), (void*) GraphicsInstance_ext(device, ));
+	GraphicsInstanceRef_dec(&device->instance);
+
+	return true;
+}
 
 Error GraphicsDeviceRef_create(
 	GraphicsInstanceRef *instanceRef, 
@@ -196,62 +222,52 @@ Error GraphicsDeviceRef_create(
 	if(*deviceRef)
 		return Error_invalidParameter(1, 0);
 
-	List pendingResources = List_createEmpty(sizeof(RefPtr*));
-	Error err = List_reservex(&pendingResources, 128);
+	//Create RefPtr
 
-	if(err.genericError)
-		return err;
+	Error err = Error_none();
+	_gotoIfError(clean, RefPtr_createx(
+		(U32)(sizeof(GraphicsDevice) + GraphicsDeviceExt_size),
+		(ObjectFreeFunc) GraphicsDevice_free, 
+		EGraphicsTypeId_GraphicsDevice, 
+		deviceRef
+	));
+	
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(*deviceRef);
+	
+	device->pendingResources = List_createEmpty(sizeof(RefPtr*));;
+	_gotoIfError(clean, List_reservex(&device->pendingResources, 128));
 
-	//Create extended device
-
-	err = GraphicsDevice_initExt(GraphicsInstanceRef_ptr(instanceRef), info, verbose, deviceRef);
-
-	if(err.genericError) {
-		List_freex(&pendingResources);
-		return err;
-	}
-
-	//Graphics device success
+	device->info = *info;
+	device->instance = instanceRef;
 
 	GraphicsInstanceRef_add(instanceRef);
 
-	 GraphicsDevice *device = GraphicsDeviceRef_ptr(*deviceRef);
-
-	 device->info = *info;
-	 device->instance = instanceRef;
-	 device->pendingResources = pendingResources;
-
-	//Init allocator
+	//Create mem alloc, set info/instance/pending resources
 
 	device->allocator = (DeviceMemoryAllocator) {
-		 .device = device,
-		 .blocks = List_createEmpty(sizeof(DeviceMemoryBlock))
+		.device = device,
+		.blocks = List_createEmpty(sizeof(DeviceMemoryBlock))
 	};
 
-	err = List_reservex(&device->allocator.blocks, 16);
+	_gotoIfError(clean, List_reservex(&device->allocator.blocks, 16));
 
-	if (err.genericError) {
-		GraphicsDevice_freeExt(GraphicsInstanceRef_ptr(device->instance), (void*) GraphicsInstance_ext(device, ));
-		List_freex(&device->pendingResources);
-		return err;
+	//Create in flight resource refs
+
+	for(U64 i = 0; i < sizeof(device->resourcesInFlight) / sizeof(device->resourcesInFlight[0]); ++i)  {
+		device->resourcesInFlight[i] = List_createEmpty(sizeof(RefPtr*));
+		_gotoIfError(clean, List_reservex(&device->resourcesInFlight[i], 64));
 	}
 
-	return Error_none();
-}
+	//Create extended device
 
-Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
+	_gotoIfError(clean, GraphicsDevice_initExt(GraphicsInstanceRef_ptr(instanceRef), info, verbose, deviceRef));
 
-	alloc;
+clean:
 
-	if(!device)
-		return true;
+	if (err.genericError)
+		GraphicsDeviceRef_dec(deviceRef);
 
-	List_freex(&device->pendingResources);
-
-	GraphicsDevice_freeExt(GraphicsInstanceRef_ptr(device->instance), (void*) GraphicsInstance_ext(device, ));
-	GraphicsInstanceRef_dec(&device->instance);
-
-	return true;
+	return err;
 }
 
 Bool GraphicsDeviceRef_removePending(GraphicsDeviceRef *deviceRef, RefPtr *resource) {
@@ -259,8 +275,20 @@ Bool GraphicsDeviceRef_removePending(GraphicsDeviceRef *deviceRef, RefPtr *resou
 	if(!deviceRef)
 		return false;
 
-	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+	Bool supported = false;
 
+	EGraphicsTypeId type = (EGraphicsTypeId) resource->typeId;
+
+	switch (type) {
+		case EGraphicsTypeId_DeviceBuffer:	supported = DeviceBufferRef_ptr(resource)->device == deviceRef;		break;
+		default:
+			return false;
+	}
+
+	if(!supported)
+		return false;
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	U64 found = List_findFirst(device->pendingResources, Buffer_createConstRef(&resource, sizeof(resource)), 0);
 
 	if(found == U64_MAX)

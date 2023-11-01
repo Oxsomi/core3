@@ -18,7 +18,7 @@
 *  This is called dual licensing.
 */
 
-#include "graphics/generic/buffer.h"
+#include "graphics/generic/device_buffer.h"
 #include "graphics/generic/device.h"
 #include "platforms/ext/listx.h"
 #include "platforms/ext/bufferx.h"
@@ -95,8 +95,8 @@ Error DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count) {
 				if (end >= pending->buffer.startRange && start <= pending->buffer.endRange) {
 
 					if (lastMatch == U64_MAX) {
-						pending->buffer.startRange = U64_min(pending->buffer.startRange, start);
-						pending->buffer.endRange = U64_max(pending->buffer.endRange, end);
+						pending->buffer.startRange = U64_min(pending->buffer.startRange, offset);
+						pending->buffer.endRange = U64_max(pending->buffer.endRange, offset + count);
 					}
 
 					else {
@@ -124,6 +124,9 @@ Error DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count) {
 
 	if (shouldPush) {
 
+		if((buffer->pendingChanges.length + 1) >> 32)
+			return Error_outOfBounds(0, U32_MAX, U32_MAX);
+
 		//start/end are offset by 256 bytes to ensure there's less fragmenting.
 		//Example:
 		//vertexBuffer mark dirty uv 0 and 1. If stride < 256 (very likely) then this would mark up to 128 bytes.
@@ -131,7 +134,7 @@ Error DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count) {
 		//Recommended solution in that case would be making a uv only buffer and copying that with compute.
 		//But this would 
 
-		DevicePendingRange change = (DevicePendingRange) { .buffer = { .startRange = start, .endRange = end } };
+		DevicePendingRange change = (DevicePendingRange) { .buffer = { .startRange = offset, .endRange = offset + count } };
 
 		Error err = List_pushBackx(&buffer->pendingChanges, Buffer_createConstRef(&change, sizeof(change)));
 

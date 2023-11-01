@@ -35,7 +35,7 @@ typedef struct DeviceMemoryBlock {
 	U8 padding;
 	U16 allocationTypeExt;		//Allocation type flags (e.g. host visible)
 
-	void *mappedMemory;
+	U8 *mappedMemory;
 
 	void *ext;						//Extended data
 
@@ -48,6 +48,8 @@ typedef struct DeviceMemoryAllocator {
 	List blocks;
 
 } DeviceMemoryAllocator;
+
+static const U64 DeviceMemoryBlock_defaultSize = 268'435'456;
 
 impl Error DeviceMemoryAllocator_allocate(
 	DeviceMemoryAllocator *allocator, 

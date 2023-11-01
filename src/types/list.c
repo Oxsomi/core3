@@ -1160,7 +1160,7 @@ Bool List_free(List *result, Allocator allocator) {
 
 	Bool err = true;
 
-	if (!List_isRef(*result) && result->length) {
+	if (!List_isRef(*result) && result->capacityAndRefInfo) {
 		Buffer buf = Buffer_createManagedPtr((U8*)result->ptr, List_allocatedBytes(*result));
 		err = Buffer_free(&buf, allocator);
 	}

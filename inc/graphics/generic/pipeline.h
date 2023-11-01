@@ -85,21 +85,19 @@ Bool PipelineRef_decAll(List *list);					//Decrements all refs and frees list
 
 PipelineRef *PipelineRef_at(List list, U64 index);
 
-//List<Buffer> *shaderBinaries, List<PipelineRef*> *pipelines
 //shaderBinaries's Buffer will be moved (shaderBinaries will be cleared if moved)
 impl Error GraphicsDeviceRef_createPipelinesCompute(
 	GraphicsDeviceRef *deviceRef, 
-	List *shaderBinaries, 
+	List *shaderBinaries,			//<Buffer>
 	List names,						//Temporary names for debugging. Can be empty too, else match shaderBinaries->length
-	List *pipelines
+	List *pipelines					//<PipelineRef*>
 );
 
-//List<PipelineStage> *stages, List<PipelineGraphicsInfo> *infos, List<PipelineRef*> *pipelines
 //stages and info will be freed and binaries of stages will be moved.
 impl Error GraphicsDeviceRef_createPipelinesGraphics(
 	GraphicsDeviceRef *deviceRef, 
-	List *stages, 
-	List *infos, 
+	List *stages,					//<PipelineStage>
+	List *infos,					//<PipelineGraphicsInfo>
 	List names,						//Temporary names for debugging. Can be empty too, else match infos->length 
-	List *pipelines
+	List *pipelines					//<PipelineRef*>
 );

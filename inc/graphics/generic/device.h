@@ -67,7 +67,9 @@ typedef struct GraphicsDevice {
 
 	Ns firstSubmit;				//Start of time
 
-	List pendingResources;		//<WeakRefPtr> Resources pending copy from CPU to device next submit
+	List pendingResources;		//<WeakRefPtr*> Resources pending copy from CPU to device next submit
+
+	List resourcesInFlight[3];	//<RefPtr*> Resources in flight
 
 	DeviceMemoryAllocator allocator;
 
@@ -87,8 +89,6 @@ Error GraphicsDeviceRef_create(
 	Bool verbose,
 	GraphicsDeviceRef **device
 );
-
-Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc);		//Don't call directly.
 
 //Ensure there are no pending changes from non existent resources.
 Bool GraphicsDeviceRef_removePending(GraphicsDeviceRef *deviceRef, RefPtr *resource);
