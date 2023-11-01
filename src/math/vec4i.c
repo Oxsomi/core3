@@ -60,14 +60,17 @@ I32x4 I32x4_load4(const I32 *arr) {
 
 I32x4 I32x4_swapEndianness(I32x4 v) {
 
-	//TODO: Optimize, but needs shift
+	//TODO: This could also just be 1 swizzle if U8x16 was available
 
-	I32x4 res = I32x4_zero();
+	I32x4 swapped = I32x4_wzyx(v);
 
-	for(U8 i = 0; i < 4; ++i)
-		I32x4_set(&res, i, I32_swapEndianness(I32x4_get(v, i)));
+	swapped = I32x4_or(I32x4_lsh32(swapped, 16), I32x4_rsh32(swapped, 16));		//Swap low 16 with hi 16
 
-	return I32x4_wzyx(res);
+	I32x4 byteMask = I32x4_xxxx4(0x00FF00FF);
+	I32x4 lo = I32x4_and(swapped, byteMask);
+	I32x4 hi = I32x4_and(I32x4_rsh32(swapped, 8), byteMask);
+
+	return I32x4_or(I32x4_lsh32(lo, 8), hi);
 }
 
 void I32x4_setX(I32x4 *a, I32 v) { if(a) *a = I32x4_create4(v,				I32x4_y(*a),	I32x4_z(*a),	I32x4_w(*a)); }

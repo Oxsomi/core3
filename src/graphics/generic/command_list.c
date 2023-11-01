@@ -143,8 +143,9 @@ Error CommandListRef_append(CommandListRef *commandListRef, ECommandOp op, Buffe
 		Buffer bufi = Buffer_createConstRef(&ptr, sizeof(ptr));
 
 		if(!List_contains(commandList->resources, bufi, 0)) {						//TODO: hashSet
-			RefPtr_inc(ptr);		//CommandList will keep resource alive.
-			_gotoIfError(clean, List_pushBackx(&commandList->resources, bufi));
+
+			if(RefPtr_inc(ptr))		//CommandList will keep resource alive.
+				_gotoIfError(clean, List_pushBackx(&commandList->resources, bufi));
 		}
 	}
 

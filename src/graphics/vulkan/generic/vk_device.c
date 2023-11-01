@@ -954,12 +954,35 @@ Error GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef) {
 	if(!deviceRef)
 		return Error_nullPointer(0);
 
-	//TODO: Perform copies, get rid of all pending changes and in flight resources after
-
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 
-	return vkCheck(vkDeviceWaitIdle(deviceExt->device));
+	Error err = vkCheck(vkDeviceWaitIdle(deviceExt->device));
+
+	if(err.genericError)
+		return err;
+
+	for (U64 i = 0; i < sizeof(device->resourcesInFlight) / sizeof(device->resourcesInFlight[0]); ++i) {
+
+		//Release resources that were in flight.
+		//This might cause resource deletions because we might be the last one releasing them.
+		//For example temporary staging resources are released this way.
+
+		List *inFlight = &device->resourcesInFlight[i];
+
+		for (U64 j = 0; j < inFlight->length; ++j)
+			RefPtr_dec((RefPtr**)inFlight->ptr + j);
+
+		_gotoIfError(clean, List_clear(inFlight));
+
+		//Release all allocations of buffer that was in flight
+
+		if(!AllocationBuffer_freeAll(&deviceExt->stagingAllocations[i]))
+			_gotoIfError(clean, Error_invalidState(0));
+	}
+
+clean:
+	return err;
 }
 
 U32 VkGraphicsDevice_allocateDescriptor(VkGraphicsDevice *deviceExt, EDescriptorType type) {
@@ -1328,7 +1351,7 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 		return Error_invalidParameter(2, 1);
 
 	if(commandLists.length && commandLists.stride != sizeof(CommandListRef*))
-		return Error_invalidParameter(2, 0);
+		return Error_invalidParameter(1, 0);
 
 	if(Buffer_length(appData) >= 256 - 16 - 4 * swapchains.length)
 		return Error_invalidParameter(3, 0);
@@ -1348,25 +1371,21 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 
 	//Swapchains all need to have the same vsync option.
 
-	Swapchain *firstSwapchain = swapchains.length ? SwapchainRef_ptr(((SwapchainRef**) swapchains.ptr)[0]) : 0;
+	for (U64 i = 0; i < swapchains.length; ++i) {
 
-	if(swapchains.length && !firstSwapchain)
-		return Error_nullPointer(2);
+		SwapchainRef *swapchainRef = ((SwapchainRef**) swapchains.ptr)[i];
 
-	Bool vsync = swapchains.length ? firstSwapchain->info.vsync : false;
+		for(U64 j = 0; j < i; ++j)
+			if(swapchainRef == ((SwapchainRef**) swapchains.ptr)[j])
+				return Error_invalidParameter(2, 2);
 
-	for (U64 i = 1; i < swapchains.length; ++i) {
-
-		Swapchain *swapchaini = SwapchainRef_ptr(((SwapchainRef**) swapchains.ptr)[i]);
+		Swapchain *swapchaini = SwapchainRef_ptr(swapchainRef);
 
 		if(!swapchaini)
 			return Error_nullPointer(2);
 
 		if(swapchaini->device != deviceRef)
 			return Error_unsupportedOperation(1);
-
-		if(swapchaini->info.vsync != vsync)
-			return Error_unsupportedOperation(2);
 	}
 
 	//Unpack pointers
@@ -1509,6 +1528,8 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 
 	VkCommandQueue queue = deviceExt->queues[EVkCommandQueue_Graphics];
 	U32 graphicsQueueId = queue.queueId;
+
+	List *currentFlight = &device->resourcesInFlight[device->submitId % 3];
 	
 	if (commandLists.length) {
 
@@ -1784,7 +1805,8 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 
 		for (U64 i = 0; i < swapchains.length; ++i) {
 
-			Swapchain *swapchain = SwapchainRef_ptr(((SwapchainRef**) swapchains.ptr)[i]);
+			SwapchainRef *swapchainRef = ((SwapchainRef**) swapchains.ptr)[i];
+			Swapchain *swapchain = SwapchainRef_ptr(swapchainRef);
 			VkSwapchain *swapchainExt = Swapchain_ext(swapchain, Vk);
 
 			VkManagedImage *imageExt = &((VkManagedImage*)swapchainExt->images.ptr)[swapchainExt->currentIndex];
@@ -1805,6 +1827,9 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 				&barriers,
 				&dependency
 			));
+
+			if(RefPtr_inc(swapchainRef))
+				_gotoIfError(clean, List_pushBackx(currentFlight, Buffer_createConstRef(&swapchainRef, sizeof(swapchainRef))));
 		}
 
 		if(dependency.imageMemoryBarrierCount)
@@ -1869,7 +1894,25 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 			_gotoIfError(clean, vkCheck(((const VkResult*) deviceExt->results.ptr)[i]));
 	}
 
-	//TODO: Add resources from command lists & swapchains to resources in flight
+	//Add resources from command lists to resources in flight
+
+	for (U64 j = 0; j < commandLists.length; ++j) {
+
+		CommandListRef *cmdRef = ((CommandListRef**)commandLists.ptr)[j];
+		CommandList *cmd = CommandListRef_ptr(cmdRef);
+
+		for(U64 i = 0; i < cmd->resources.length; ++i) {
+
+			RefPtr *ptr = ((RefPtr**) cmd->resources.ptr)[i];
+			Buffer bufi = Buffer_createConstRef(&ptr, sizeof(ptr));
+
+			if(List_contains(*currentFlight, bufi, 0))
+				continue;
+
+			if(RefPtr_inc(ptr))
+				_gotoIfError(clean, List_pushBackx(currentFlight, bufi));
+		}
+	}
 
 	//Ensure our next fence value is used
 

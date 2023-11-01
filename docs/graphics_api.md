@@ -42,9 +42,9 @@ Once this instance is acquired, it can be used to query devices and to detect wh
 
 ### Properties
 
-- application: The name and version of the application.
-- api: Which api is ran by the runtime: Vulkan, DirectX12, Metal3 or WebGPU.
-- apiVersion: What version of the graphics api is being ran (e.g. Vulkan 1.2, DirectX 12_2, Metal 3, etc.).
+- readonly application: The name and version of the application.
+- readonly api: Which api is ran by the runtime: Vulkan, DirectX12, Metal3 or WebGPU.
+- readonly apiVersion: What version of the graphics api is being ran (e.g. Vulkan 1.2, DirectX 12_2, Metal 3, etc.).
 
 ### (Member) Functions
 
@@ -94,14 +94,14 @@ _gotoIfError(clean, GraphicsInstance_getPreferredDevice(
 
 ### Properties
 
-- name, driverName, driverInfo; All null-terminated UTF-8 strings giving information about the device and driver.
-- type; what type this device is (dedicated GPU, integrated GPU, simulated GPU, CPU or other (unrecognized)).
-- vendor; what company designed the device (Nvidia (NV), AMD, ARM, Qualcomm (QCOM), Intel (INTC), Imagination Technologies (IMGT), Apple (APPL) or unknown).
-- id; number in the list of supported devices.
-- luid; ID to identify this device primarily on Windows devices. This would allow sharing a resource between other APIs for interop (not supported yet). This is optional to support; check capabilities.features & LUID.
-- uuid; unique id to identify the device. In APIs that don't support this natively, the other identifier will be used here instead. For example DirectX12 would use the luid here and clear the other U64.
-- ext; extended physical device representation for the current API.
-- capabilities; what data types, features and api dependent features are enabled. See capabilities section.
+- readonly name, driverName, driverInfo; All null-terminated UTF-8 strings giving information about the device and driver.
+- readonly type; what type this device is (dedicated GPU, integrated GPU, simulated GPU, CPU or other (unrecognized)).
+- readonly vendor; what company designed the device (Nvidia (NV), AMD, ARM, Qualcomm (QCOM), Intel (INTC), Imagination Technologies (IMGT), Apple (APPL) or unknown).
+- readonly id; number in the list of supported devices.
+- readonly luid; ID to identify this device primarily on Windows devices. This would allow sharing a resource between other APIs for interop (not supported yet). This is optional to support; check capabilities.features & LUID.
+- readonly uuid; unique id to identify the device. In APIs that don't support this natively, the other identifier will be used here instead. For example DirectX12 would use the luid here and clear the other U64.
+- readonly ext; extended physical device representation for the current API.
+- readonly capabilities; what data types, features and api dependent features are enabled. See capabilities section.
 
 #### Capabilities
 
@@ -143,9 +143,9 @@ _gotoIfError(clean, GraphicsDeviceRef_create(
 
 ### Properties
 
-- instance; owning instance.
-- info; physical device.
-- submitId; counter of how many times submit was called (can be used as frame id).
+- readonly instance; owning instance.
+- readonly info; physical device.
+- readonly submitId; counter of how many times submit was called (can be used as frame id).
 
 ### Functions
 
@@ -240,8 +240,8 @@ For more info on commands check out the "Commands" section.
 
 ### Properties
 
-- device; owning device.
-- state; if the command list has been opened before and if it's open or closed right now.
+- readonly device; owning device.
+- readonly state; if the command list has been opened before and if it's open or closed right now.
 - private:
   - data: The current recorded commands.
   - commandOps: The opcodes for which commands are recorded.
@@ -271,7 +271,7 @@ Swapchain isn't always supported. In that case your final target can just be a r
 SwapchainRef *swapchain = NULL;
 _gotoIfError(clean, GraphicsDeviceRef_createSwapchain(
     device, 		//See "Graphics device"
-    (SwapchainInfo) { .window = w, .vsync = false }, 
+    (SwapchainInfo) { .window = w }, 
     &swapchain
 ));
 
@@ -283,15 +283,29 @@ void onResize(Window *w) {
 }
 ```
 
+info.presentModePriorities are the requests for what type of swapchains are desired by the application. Keeping this empty means [ mailbox, fifo, fifoRelaxed, immediate ]. On Android mailbox is unsupported because it may introduce another swapchain image, the rest is driver dependent if it's supported. Immediate is always supported, so make sure to always request immediate otherwise createSwapchain may fail (depending on device + driver). For more info see Swapchain/Present mode.
+
+### Present mode
+
+The present mode is how the device handles it when an image is already being presented. Some may introduce tearing while others may drop frames. The application should be given control over these modes, as some applications may want the latency improvements at the cost of tearing.
+
+- Mailbox: While an image is presenting, it will drop the oldest queued image and continue rendering and queuing the next frame. This ensures you're not bound to your refresh rate, so the performance is better but lots of frames are rendered that may be discarded. This present mode is generally ideal for games and other interactive 3D applications, though some very low latency games might not want to use this. This mode is the default on most platforms.
+- Fifo: While an image is presenting, it will just wait. This means no frames are dropped, but it does mean that the performance is lower. This is ideal for low power devices or if your application doesn't need constant updates. This is the default on mobile.
+- FifoRelaxed: If the vsync interval is missed, it will try to skip frame(s) to catch up. Other than that it will behave similar to Fifo (it tries to keep up with the refresh rate of the screen).
+- Immediate: Render over the current image anyways, this is ideal if you want the best low latency available but will introduce tearing. A good application might be shooting games or other games that require the lowest latency.
+
+By default the swapchain will use triple buffering to ensure best performance. Even mobile benefits from this, so it was decided not to expose this setting to simplify the backend.
+
 ### Properties
 
-- info.window: the Window handle created using OxC3 platforms.
-- info.requiresManualComposite: Whether or not the application is requested to explicitly handle rotation from the device. For desktop this is generally false, for Android this is on to avoid the extra overhead of the compositor. 
-- info.vsync: Whether or not the window is expected to use vsync. Keep in mind that all swapchains that are presented need to share this setting.
-- device: The owning device.
-- size: Current size of the swapchain.
-- format: Current format of the swapchain.
-- versionId: The version id changes everytime a change is applied. This could be resizes or format changes.
+- readonly info.window: the Window handle created using OxC3 platforms.
+- readonly info.requiresManualComposite: Whether or not the application is requested to explicitly handle rotation from the device. For desktop this is generally false, for Android this is on to avoid the extra overhead of the compositor. 
+- readonly info.presentModePriorities: What present modes were requested on create.
+- readonly device: The owning device.
+- readonly size: Current size of the swapchain.
+- readonly format: Current format of the swapchain.
+- readonly versionId: The version id changes everytime a change is applied. This could be resizes or format changes.
+- readonly presentMode: What present mode is currently used (see Swapchain/Present mode).
 
 ### Functions
 
@@ -314,12 +328,12 @@ A pipeline is a combination of the states and shader binaries that are required 
 
 ### Properties
 
-- device: ref to the graphics device that owns it.
-- type: compute, graphics or raytracing pipeline type.
-- stages: `List<PipelineStage>` the binaries that are used for the shader.
+- readonly device: ref to the graphics device that owns it.
+- readonly type: compute, graphics or raytracing pipeline type.
+- readonly stages: `List<PipelineStage>` the binaries that are used for the shader.
   - stageType: which stage the binary is for. This is not necessarily unique, but should be unique for graphics shaders and compute. For raytracing shaders there can be multiple for the same stage.
   - shaderBinary: the format as explained in "Shader binary types" that is required by the current graphics API.
-- extraInfo: a pointer to behind the API dependent pipeline extension struct that allows extra info that's only applicable to a certain pipeline type. 
+- readonly extraInfo: a pointer to behind the API dependent pipeline extension struct that allows extra info that's only applicable to a certain pipeline type. 
   - For compute: this is NULL.
   - For graphics: this is PipelineGraphicsInfo.
   - For raytracing: this is PipelineRaytracingInfoExt.
@@ -507,13 +521,13 @@ _gotoIfError(clean, GraphicsDeviceRef_createBufferData(
 
 ### Properties
 
-- device: ref to the graphics device that owns it.
-- usage: ShaderRead (accessible for read from shader), ShaderWrite (accessible for write from shader), Vertex (use as vertex buffer), Index (use as index buffer), Indirect (use for indirect draw calls), CPUBacked (There's a CPU copy of the buffer to facilitate reads/writes), CPUAllocated (The entire resource has to be located in "shared" memory or on the CPU if there's a dedicated GPU).
-- isPending(FullCopy): Information about if any data is pending for the next submit and if the entire resource is pending.
-- isFirstFrame: Useful to detect if the resource is in flight to allow quicker copies.
-- length: Length of the buffer.
-- cpuData: If CPUBacked stores the CPU copy for the resource or temporary data for the next submit to copy CPU data to the real resource.
-- pendingChanges: `[U64 startRange, U64 endRange][]` list of marked regions for copy.
+- readonly device: ref to the graphics device that owns it.
+- readonly usage: ShaderRead (accessible for read from shader), ShaderWrite (accessible for write from shader), Vertex (use as vertex buffer), Index (use as index buffer), Indirect (use for indirect draw calls), CPUBacked (There's a CPU copy of the buffer to facilitate reads/writes), CPUAllocated (The entire resource has to be located in "shared" memory or on the CPU if there's a dedicated GPU).
+- readonly isPending(FullCopy): Information about if any data is pending for the next submit and if the entire resource is pending.
+- readonly isFirstFrame: Useful to detect if the resource is in flight to allow quicker copies.
+- readonly length: Length of the buffer.
+- readonly cpuData: If CPUBacked stores the CPU copy for the resource or temporary data for the next submit to copy CPU data to the real resource.
+- readonly pendingChanges: `[U64 startRange, U64 endRange][]` list of marked regions for copy.
 
 ### Functions
 

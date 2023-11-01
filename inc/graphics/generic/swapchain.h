@@ -28,6 +28,17 @@ typedef struct List List;
 typedef struct Window Window;
 typedef enum EWindowFormat EWindowFormat;
 
+typedef enum ESwapchainPresentMode {
+
+	ESwapchainPresentMode_None,
+	ESwapchainPresentMode_Immediate,		//Low latency apps (shooters, etc.): Allows tearing for less latency
+	ESwapchainPresentMode_Mailbox,			//High performance apps (games): Pops oldest image while continuing
+	ESwapchainPresentMode_Fifo,				//Best quality: Always presents images in order (no dropped frames)
+	ESwapchainPresentMode_FifoRelaxed,		//^ but if vblank is missed continue with the next (can allow tearing)
+	ESwapchainPresentMode_Count
+
+} ESwapchainPresentMode;
+
 typedef struct SwapchainInfo {
 
 	//Window that this swapchain is created for.
@@ -43,10 +54,13 @@ typedef struct SwapchainInfo {
 
 	Bool requiresManualComposite;
 
-	//Double buffering (vsync on) or triple buffering (vsync off)
-	//Input into createSwapchain, mutable after.
+	//Triple buffering is always on to allow mixing swapchains with different present modes.
+	//Tries to use presentModePriorities[i] until it reaches one that's supported.
+	//If there's no supported, it will fallback to the ideal fallback (Android: fifo, otherwise mailbox).
+	//On Android mailbox isn't supported, because it may return 4 images (conflicts with our versioning).
+	//Don't set this if you want to use the default always.
 
-	Bool vsync;
+	U8 presentModePriorities[ESwapchainPresentMode_Count - 1];		//ESwapchainPresentMode
 
 } SwapchainInfo;
 
@@ -59,7 +73,7 @@ typedef struct Swapchain {
 	I32x2 size;
 
 	EWindowFormat format;
-	U32 pad;
+	ESwapchainPresentMode presentMode;
 
 	U64 versionId;				//Everytime this swapchain changes format or is resized this will increase.
 

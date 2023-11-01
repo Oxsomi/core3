@@ -38,6 +38,13 @@ Bool GraphicsDevice_freeSwapchain(Swapchain *data, Allocator alloc);
 
 Error GraphicsDeviceRef_createSwapchainInternal(GraphicsDeviceRef *deviceRef, SwapchainInfo info, Swapchain *swapchain) {
 
+	if(!info.presentModePriorities[0]) {
+		info.presentModePriorities[0] = ESwapchainPresentMode_Mailbox;
+		info.presentModePriorities[1] = ESwapchainPresentMode_Fifo;
+		info.presentModePriorities[2] = ESwapchainPresentMode_FifoRelaxed;
+		info.presentModePriorities[3] = ESwapchainPresentMode_Immediate;
+	}
+
 	//Prepare temporary free-ables and extended data.
 
 	Error err = Error_none();
@@ -213,30 +220,63 @@ Error GraphicsDeviceRef_createSwapchainInternal(GraphicsDeviceRef *deviceRef, Sw
 		physicalDevice, swapchainExt->surface, &modes, (VkPresentModeKHR*) list.ptr
 	)));
 
-	Bool supportsMailbox = false, supportsFifo = false;
+	Bool supports[ESwapchainPresentMode_Count - 1] = { 0 };
+
+	//supportsMailbox ? VK_PRESENT_MODE_MAILBOX_KHR : VK_PRESENT_MODE_FIFO_KHR
 
 	for (U32 i = 0; i < modes; ++i) {
 
-		VkPresentModeKHR mode = ((VkPresentModeKHR*)list.ptr)[i];
+		VkPresentModeKHR modei = ((VkPresentModeKHR*)list.ptr)[i];
 
-		if(mode == VK_PRESENT_MODE_FIFO_KHR)
-			supportsFifo = true;
+		switch(modei) {
 
-		//Mailbox can allocate additional images on Android, 
-		//we don't want to deal with versioning 4x.
+			case VK_PRESENT_MODE_IMMEDIATE_KHR:		supports[ESwapchainPresentMode_Immediate - 1] = true;		break;
+			case VK_PRESENT_MODE_FIFO_KHR:			supports[ESwapchainPresentMode_Fifo - 1] = true;			break;
+			case VK_PRESENT_MODE_FIFO_RELAXED_KHR:	supports[ESwapchainPresentMode_FifoRelaxed - 1] = true;		break;
 
-		else if(mode == VK_PRESENT_MODE_MAILBOX_KHR && _PLATFORM_TYPE != EPlatform_Android)
-			supportsMailbox = true;
+			//Mailbox can allocate additional images on Android, 
+			//we don't want to deal with versioning 4x.
+
+			case VK_PRESENT_MODE_MAILBOX_KHR:
+				supports[ESwapchainPresentMode_Mailbox - 1] = _PLATFORM_TYPE != EPlatform_Android;
+				break;
+		}
 	}
 
 	List_freex(&list);
 
-	if(!supportsFifo && !supportsMailbox)
+	VkPresentModeKHR presentMode = -1;
+
+	for(U8 i = 0; i < ESwapchainPresentMode_Count - 1; ++i) {
+
+		ESwapchainPresentMode mode = info.presentModePriorities[i];
+
+		if(!mode)
+			break;
+
+		if(supports[mode - 1]) {
+
+			swapchain->presentMode = mode;
+
+			switch(mode) {
+				case ESwapchainPresentMode_Immediate:		presentMode = VK_PRESENT_MODE_IMMEDIATE_KHR;		break;
+				case ESwapchainPresentMode_Fifo:			presentMode = VK_PRESENT_MODE_FIFO_KHR;				break;
+				case ESwapchainPresentMode_FifoRelaxed:		presentMode = VK_PRESENT_MODE_FIFO_RELAXED_KHR;		break;
+				case ESwapchainPresentMode_Mailbox:			presentMode = VK_PRESENT_MODE_MAILBOX_KHR;			break;
+				default:
+					_gotoIfError(clean, Error_unsupportedOperation(0));
+			}
+
+			break;
+		}
+	}
+
+	if(presentMode == -1)
 		_gotoIfError(clean, Error_invalidOperation(7));
 
 	//Turn it into a swapchain
 	
-	U32 images = info.vsync ? 2 : 3;
+	U32 images = 3;
 
 	Bool hasMultiQueue = deviceExt->resolvedQueues > 1;
 
@@ -263,7 +303,7 @@ Error GraphicsDeviceRef_createSwapchainInternal(GraphicsDeviceRef *deviceRef, Sw
 			capabilities.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR ? 
 			VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR : VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR,
 
-		.presentMode = supportsMailbox ? VK_PRESENT_MODE_MAILBOX_KHR : VK_PRESENT_MODE_FIFO_KHR,
+		.presentMode = presentMode,
 		.clipped = true,
 		.oldSwapchain = prevSwapchain
 	};
