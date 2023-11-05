@@ -815,6 +815,9 @@ Error GraphicsDevice_initExt(
 		stagingSize, &deviceExt->staging
 	));
 
+	GraphicsDeviceRef *tempDeviceRef = *deviceRef;
+	GraphicsDeviceRef_dec(&tempDeviceRef);			//Make sure that our staging buffer isn't keeping our device alive!
+
 	DeviceBuffer *staging = DeviceBufferRef_ptr(deviceExt->staging);
 	VkDeviceBuffer *stagingExt = DeviceBuffer_ext(staging, Vk);
 
@@ -831,6 +834,9 @@ Error GraphicsDevice_initExt(
 		*deviceRef, EDeviceBufferUsage_CPUAllocatedBit, CharString_createConstRefCStr("Per frame data"),
 		sizeof(CBufferData) * 3, &deviceExt->ubo
 	));
+
+	tempDeviceRef = *deviceRef;
+	GraphicsDeviceRef_dec(&tempDeviceRef);			//Make sure that our UBO isn't keeping our device alive!
 
 	//Fill last 3 descriptor sets with UBO[i] to ensure we only modify things in flight.
 
@@ -931,16 +937,16 @@ Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext) {
 		if(deviceExt->defaultLayout)
 			vkDestroyPipelineLayout(deviceExt->device, deviceExt->defaultLayout, NULL);
 
+		DeviceBufferRef_dec(&deviceExt->ubo);
+		DeviceBufferRef_dec(&deviceExt->staging);
+
 		vkDestroyDevice(deviceExt->device, NULL);
 	}
-
-	DeviceBufferRef_dec(&deviceExt->ubo);
-	DeviceBufferRef_dec(&deviceExt->staging);
 
 	List_freex(&deviceExt->commandPools);
 	List_freex(&deviceExt->submitSemaphores);
 
-	for(U32 i = 0; i < EDescriptorType_Count; ++i)
+	for(U32 i = 0; i < EDescriptorType_ResourceCount; ++i)
 		Buffer_freex(&deviceExt->freeList[i]);
 
 	Lock_free(&deviceExt->descriptorLock);

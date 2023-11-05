@@ -425,7 +425,7 @@ Error GraphicsDeviceRef_createSwapchainInternal(GraphicsDeviceRef *deviceRef, Sw
 
 	if(!prevSwapchain) {
 
-		GraphicsDeviceRef_add(deviceRef);
+		GraphicsDeviceRef_inc(deviceRef);
 
 		*swapchain = (Swapchain) {
 			.info = info,
@@ -441,7 +441,9 @@ Error GraphicsDeviceRef_createSwapchainInternal(GraphicsDeviceRef *deviceRef, Sw
 
 	U64 descriptors = info.usage & ESwapchainUsage_AllowCompute ? 2 : 1;
 
-	swapchainExt->descriptorAllocations = List_createEmpty(sizeof(U32));
+	if(!swapchainExt->descriptorAllocations.stride)
+		swapchainExt->descriptorAllocations = List_createEmpty(sizeof(U32));
+
 	_gotoIfError(clean, List_resizex(&swapchainExt->descriptorAllocations, descriptors * imageCount));
 
 	U32 *allocPtr = (U32*) swapchainExt->descriptorAllocations.ptr;
@@ -669,7 +671,6 @@ Bool GraphicsDevice_freeSwapchain(Swapchain *swapchain, Allocator alloc) {
 	List_freex(&swapchainExt->semaphores);
 	List_freex(&swapchainExt->images);
 
-	VkGraphicsDevice_freeAllocations(deviceExt, &swapchainExt->descriptorAllocations);
 	List_freex(&swapchainExt->descriptorAllocations);
 
 	if(swapchainExt->swapchain)

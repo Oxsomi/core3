@@ -26,11 +26,13 @@ if "%~2" == "ds" (
 )
 
 echo Compiling for %target%
+echo Compiling SPIRV
 
 mkdir "%~dp1spirv" 2> NUL
 dxc "%~1" -T "%target%" -spirv -Fo "%~dp1spirv/%~n1.%~3" -HV 2021 -Qstrip_debug -E "%~3" -I "%~dp0..\src\graphics\shaders" -fspv-entrypoint-name=main %extra%
 
 echo Compiled SPIR-V
+echo Compiling DXIL
 
 mkdir "%~dp1dxil" 2> NUL
 dxc "%~1" -T "%target%" -Fo "%~dp1dxil/%~n1.%~3" -HV 2021 -Qstrip_debug -E "%~3" -I "%~dp0..\src\graphics\shaders"

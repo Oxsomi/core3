@@ -13,7 +13,7 @@ The core pillars of the abstraction of this graphics library are the following:
 
 ## Ref counting
 
-OxC3 graphics works in a similar way as DirectX's ref counting system; everything is ref counted. This allows you to just call `RefPtr_dec` on the RefPtr to ensure it's properly released. If the command list is still in flight, it will maintain this resource until it's out of flight. It also allows you to safely share resources between user libraries without worrying about resource deletion. When sharing a resource, you simply increment the refptr by using `RefPtr_add` and when the library is done using it can decrement it again. This concept was added in OxC3 platforms, but widely used in the graphics library.
+OxC3 graphics works in a similar way as DirectX's ref counting system; everything is ref counted. This allows you to just call `RefPtr_dec` on the RefPtr to ensure it's properly released. If the command list is still in flight, it will maintain this resource until it's out of flight. It also allows you to safely share resources between user libraries without worrying about resource deletion. When sharing a resource, you simply increment the refptr by using `RefPtr_inc` and when the library is done using it can decrement it again. This concept was added in OxC3 platforms, but widely used in the graphics library.
 
 ### Obtaining the real object
 

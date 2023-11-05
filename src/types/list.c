@@ -812,10 +812,11 @@ Error List_erase(List *list, U64 index) {
 	if(index >= list->length)
 		return Error_outOfBounds(1, index, list->length);
 
-	Buffer_revCopy(
-		Buffer_createRef((U8*)list->ptr + index * list->stride, (list->length - 1) * list->stride),
-		Buffer_createConstRef(list->ptr + (index + 1) * list->stride, (list->length - 1) * list->stride)
-	);
+	if(index + 1 != list->length)
+		Buffer_copy(
+			Buffer_createRef((U8*)list->ptr + index * list->stride, (list->length - 1 - index) * list->stride),
+			Buffer_createConstRef(list->ptr + (index + 1) * list->stride, (list->length - 1 - index) * list->stride)
+		);
 
 	--list->length;
 	return Error_none();

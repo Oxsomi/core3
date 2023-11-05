@@ -114,7 +114,7 @@ typedef RefPtr CommandListRef;
 #define CommandListRef_ptr(ptr) RefPtr_data(ptr, CommandList)
 
 Error CommandListRef_dec(CommandListRef **cmd);
-Error CommandListRef_add(CommandListRef *cmd);
+Error CommandListRef_inc(CommandListRef *cmd);
 
 Error GraphicsDeviceRef_createCommandList(
 	GraphicsDeviceRef *device, 

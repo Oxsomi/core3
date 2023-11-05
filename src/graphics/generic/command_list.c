@@ -34,7 +34,7 @@ Error CommandListRef_dec(CommandListRef **cmd) {
 	return !RefPtr_dec(cmd) ? Error_invalidOperation(0) : Error_none();
 }
 
-Error CommandListRef_add(CommandListRef *cmd) {
+Error CommandListRef_inc(CommandListRef *cmd) {
 	return cmd ? (!RefPtr_inc(cmd) ? Error_invalidOperation(0) : Error_none()) : Error_nullPointer(0);
 }
 
@@ -971,7 +971,7 @@ Error GraphicsDeviceRef_createCommandList(
 		_gotoIfError(clean, List_reservex(&commandList->callstacks, estimatedCommandCount));
 	#endif
 
-	GraphicsDeviceRef_add(deviceRef);
+	GraphicsDeviceRef_inc(deviceRef);
 	commandList->device = deviceRef;
 	commandList->allowResize = allowResize;
 

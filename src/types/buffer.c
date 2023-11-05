@@ -105,8 +105,8 @@ Bool Buffer_revCopy(Buffer dst, Buffer src) {
 
 	U64 dstLen = Buffer_length(dst), srcLen = Buffer_length(src);
 
-	U64 *dstPtr = (U64*)(dst.ptr + dstLen), *dstBeg = (U64*)(dstPtr - (dstLen >> 3));
-	const U64 *srcPtr = (const U64*)(src.ptr + srcLen), *srcBeg = (U64*)(srcPtr - (srcLen >> 3));
+	U64 *dstPtr = (U64*)(dst.ptr + dstLen), *dstBeg = dstPtr - (dstLen >> 3);
+	const U64 *srcPtr = (const U64*)(src.ptr + srcLen), *srcBeg = srcPtr - (srcLen >> 3);
 
 	for(; dstPtr > dstBeg && srcPtr > srcBeg; ) {
 		--srcPtr; --dstPtr;

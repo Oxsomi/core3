@@ -31,7 +31,7 @@ Error GraphicsInstanceRef_dec(GraphicsInstanceRef **inst) {
 	return !RefPtr_dec(inst) ? Error_invalidOperation(0) : Error_none();
 }
 
-Error GraphicsInstanceRef_add(GraphicsInstanceRef *inst) {
+Error GraphicsInstanceRef_inc(GraphicsInstanceRef *inst) {
 	return inst ? (!RefPtr_inc(inst) ? Error_invalidOperation(0) : Error_none()) : Error_nullPointer(0);
 }
 

@@ -86,7 +86,7 @@ Error Platform_create(
 
 	Platform_instance.args = sl;
 
-	if ((err = Platform_initExt(&Platform_instance, CharString_createConstRefCStr(cmdArgs[0]))).genericError) {
+	if ((err = Platform_initExt(CharString_createConstRefCStr(cmdArgs[0]))).genericError) {
 		CharStringList_freex(&sl);
 		WindowManager_free(&Platform_instance.windowManager);
 		Platform_instance =	(Platform) { 0 };
@@ -101,11 +101,11 @@ void Platform_cleanup() {
 	if(Platform_instance.platformType == EPlatform_Uninitialized)
 		return;
 
-	Platform_cleanupExt(&Platform_instance);
-
 	CharString_freex(&Platform_instance.workingDirectory);
 	WindowManager_free(&Platform_instance.windowManager);
 	CharStringList_freex(&Platform_instance.args);
+
+	Platform_cleanupExt();
 
 	Platform_instance =	(Platform) { 0 };
 }

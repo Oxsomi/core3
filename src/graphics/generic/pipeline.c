@@ -26,7 +26,7 @@ Error PipelineRef_dec(PipelineRef **pipeline) {
 	return !RefPtr_dec(pipeline) ? Error_invalidOperation(0) : Error_none();
 }
 
-Error PipelineRef_add(PipelineRef *pipeline) {
+Error PipelineRef_inc(PipelineRef *pipeline) {
 	return pipeline ? (!RefPtr_inc(pipeline) ? Error_invalidOperation(0) : Error_none()) : Error_nullPointer(0);
 }
 

@@ -117,7 +117,7 @@ Bool Pipeline_free(Pipeline *pipeline, Allocator allocator) {
 	List_freex(&pipeline->stages);
 	vkDestroyPipeline(deviceExt->device, *Pipeline_ext(pipeline, Vk), NULL);
 
-	RefPtr_dec(&pipeline->device);
+	GraphicsDeviceRef_dec(&pipeline->device);
 	return true;
 }
 
@@ -223,7 +223,7 @@ Error GraphicsDeviceRef_createPipelinesCompute(
 
 		Pipeline *pipeline = PipelineRef_ptr(*refPtr);
 
-		RefPtr_inc(deviceRef);
+		GraphicsDeviceRef_inc(deviceRef);
 
 		*pipeline = (Pipeline) {
 			.device = deviceRef,
@@ -1226,7 +1226,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 
 		Pipeline *pipeline = PipelineRef_ptr(*refPtr);
 
-		RefPtr_inc(deviceRef);
+		GraphicsDeviceRef_inc(deviceRef);
 
 		*pipeline = (Pipeline) {
 			.device = deviceRef,

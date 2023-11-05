@@ -102,7 +102,22 @@ void sigFunc(int signal) {
 	exit(signal);
 }
 
-Error allocCallback(void *allocator, U64 length, Buffer *output) {
+U64 Allocator_memoryAllocationCount = 0;
+U64 Allocator_memoryAllocationSize = 0;
+
+//Allocator has special allocator for the allocations
+
+typedef struct DebugAllocation {
+
+	U64 location, length;
+	StackTrace stack;
+
+} DebugAllocation;
+
+Allocator Allocator_allocationsAllocator;
+List Allocator_allocations;						//TODO: Use hashmap here!
+
+Error allocCallbackNoCheck(void *allocator, U64 length, Buffer *output) {
 
 	allocator;
 
@@ -118,10 +133,149 @@ Error allocCallback(void *allocator, U64 length, Buffer *output) {
 	return Error_none();
 }
 
-Bool freeCallback(void *allocator, Buffer buf) {
+Bool freeCallbackNoCheck(void *allocator, Buffer buf) {
 	allocator;
 	free((U8*) buf.ptr);
 	return true;
+}
+
+//Normal allocator
+
+Error allocCallback(void *allocator, U64 length, Buffer *output) {
+
+	allocator;
+
+	if(!output)
+		return Error_nullPointer(2);
+
+	void *ptr = malloc(length);
+
+	if(!ptr)
+		return Error_outOfMemory(0);
+
+	++Allocator_memoryAllocationCount;
+	Allocator_memoryAllocationSize += length;
+	
+	#ifndef NDEBUG
+
+		DebugAllocation captured = (DebugAllocation) { 0 };
+		captured.location = (U64) ptr;
+		captured.length = length;
+
+		Log_captureStackTrace(captured.stack, _STACKTRACE_SIZE, 1);
+
+		Buffer buf = Buffer_createConstRef(&captured, sizeof(captured));
+		Error err = List_pushBack(&Allocator_allocations, buf, Allocator_allocationsAllocator);
+
+		if(err.genericError)
+			return err;
+
+	#endif
+
+	*output = Buffer_createManagedPtr(ptr, length);
+	return Error_none();
+}
+
+Bool freeCallback(void *allocator, Buffer buf) {
+
+	allocator;
+
+	//Validate if allocation and allocation size matches.
+	//If not, warn here and return false
+
+	#ifndef NDEBUG
+
+		U64 i = 0;
+
+		for (; i < Allocator_allocations.length; ++i) {
+
+			DebugAllocation *captured = &((DebugAllocation*) Allocator_allocations.ptr)[i];
+
+			if (captured->location == (U64)buf.ptr) {
+
+				if(Buffer_length(buf) != captured->length) {
+
+					Log_errorLn(
+						"Allocation at %p was allocated with length %llu but freed with length %llu!",
+						buf.ptr,
+						captured->length,
+						Buffer_length(buf)
+					);
+
+					return false;
+				}
+
+				break;
+			}
+		}
+
+		if(i == Allocator_allocations.length) {
+
+			Log_errorLn(
+				"Allocation that was freed at %p with length %llu was not found in the allocation list!",
+				buf.ptr,
+				Buffer_length(buf)
+			);
+
+			return false;
+		}
+
+		List_erase(&Allocator_allocations, i);
+
+	#endif
+
+	//Free from counter
+
+	--Allocator_memoryAllocationCount;
+	Allocator_memoryAllocationSize -= Buffer_length(buf);
+	
+	//Free mem
+
+	free((U8*) buf.ptr);
+
+	return true;
+}
+
+void Platform_printAllocations(U64 offset, U64 length, U64 minAllocationSize) {
+
+	offset; length;
+
+	#ifndef NDEBUG
+
+		if(!length)
+			length = Allocator_allocations.length;
+
+		Log_debugLn("Showing up to %llu allocations starting at offset %llu", length, offset);
+
+		U64 capturedLength = 0;
+	
+		for(U64 i = offset; i < offset + length && i < Allocator_allocations.length; ++i) {
+
+			DebugAllocation *captured = &((DebugAllocation*) Allocator_allocations.ptr)[i];
+
+			if(captured->length < minAllocationSize)
+				continue;
+
+			Log_debugLn("Allocation %llu at %p with length %llu allocated at:", i, captured->location, captured->length);
+			Log_printCapturedStackTrace(captured->stack, ELogLevel_Debug, ELogOptions_Default);
+
+			capturedLength += captured->length;
+		}
+
+		Log_debugLn("Showed %llu bytes of allocations", capturedLength);
+
+	#endif
+}
+
+U64 Platform_getAllocationCount()  { return Allocator_memoryAllocationCount; }
+U64 Platform_getAllocationSize() { return Allocator_memoryAllocationSize; }
+
+void Allocator_reportLeaks() {
+
+	if (Allocator_memoryAllocationCount || Allocator_memoryAllocationSize) {
+		Log_warnLn("Leaked %llu bytes in %llu allocations.", Allocator_memoryAllocationSize, Allocator_memoryAllocationCount);
+		Platform_printAllocations(0, 16, 0);
+	}
 }
 
 WORD oldColor = 0;
@@ -141,10 +295,25 @@ int main(int argc, const char *argv[]) {
 	GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &info);
 	oldColor = info.wAttributes;
 
+	Allocator_allocationsAllocator = (Allocator) {
+		.alloc = allocCallbackNoCheck,
+		.free = freeCallbackNoCheck
+	};
+
+	#ifndef NDEBUG
+		{
+			Allocator_allocations = List_createEmpty(sizeof(DebugAllocation));
+			Error err = List_reserve(&Allocator_allocations, 256, Allocator_allocationsAllocator);
+
+			if(err.genericError)
+				return -1;
+		}
+	#endif
+
 	Error err = Platform_create(argc, argv, GetModuleHandleA(NULL), freeCallback, allocCallback, NULL);
 
 	if(err.genericError)
-		return -1;
+		return -2;
 
 	#if _SIMD == SIMD_SSE
 
@@ -177,7 +346,7 @@ int main(int argc, const char *argv[]) {
 			);
 
 			Platform_cleanup();
-			return -1;
+			return -3;
 		}
 
 	#endif
@@ -189,7 +358,7 @@ int main(int argc, const char *argv[]) {
 	return res;
 }
 
-void Platform_cleanupExt(Platform *p) {
+void Platform_cleanupExt() {
 
 	//Properly clean virtual files
 
@@ -203,13 +372,17 @@ void Platform_cleanupExt(Platform *p) {
 
 	//Cleanup platform ext
 
-	if(p->dataExt) {
-		Buffer buf = Buffer_createManagedPtr(p->dataExt, sizeof(PlatformExt));
+	if(Platform_instance.dataExt) {
+		Buffer buf = Buffer_createManagedPtr(Platform_instance.dataExt, sizeof(PlatformExt));
 		Buffer_freex(&buf);
-		p->dataExt = NULL;
+		Platform_instance.dataExt = NULL;
 	}
 
 	//Reset console text color
+
+	Allocator_reportLeaks();
+
+	List_free(&Allocator_allocations, Allocator_allocationsAllocator);
 
 	SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), oldColor);
 }
@@ -244,7 +417,7 @@ clean:
 	return !err.genericError;
 }
 
-Error Platform_initExt(Platform *result, CharString currAppDir) {
+Error Platform_initExt(CharString currAppDir) {
 
 	//
 
@@ -310,7 +483,7 @@ Error Platform_initExt(Platform *result, CharString currAppDir) {
 		}
 
 		CharString_freex(&appDir);
-		result->workingDirectory = workDir;
+		Platform_instance.workingDirectory = workDir;
 
 	} else {
 
@@ -326,15 +499,17 @@ Error Platform_initExt(Platform *result, CharString currAppDir) {
 
 		//Move to heap and standardize
 
-		if((err = CharString_createCopyx(CharString_createConstRefSized(buff, chars, true), &result->workingDirectory)).genericError) {
+		if((err = CharString_createCopyx(
+			CharString_createConstRefSized(buff, chars, true), &Platform_instance.workingDirectory
+		)).genericError) {
 			Buffer_freex(&platformExt);
 			return err;
 		}
 
-		CharString_replaceAll(&result->workingDirectory, '\\', '/', EStringCase_Sensitive);
+		CharString_replaceAll(&Platform_instance.workingDirectory, '\\', '/', EStringCase_Sensitive);
 
-		if ((err = CharString_appendx(&result->workingDirectory, '/')).genericError)  {
-			CharString_freex(&result->workingDirectory);
+		if ((err = CharString_appendx(&Platform_instance.workingDirectory, '/')).genericError)  {
+			CharString_freex(&Platform_instance.workingDirectory);
 			Buffer_freex(&platformExt);
 			return err;
 		}
@@ -342,29 +517,31 @@ Error Platform_initExt(Platform *result, CharString currAppDir) {
 	
 	//Init virtual files
 
-	result->virtualSections = List_createEmpty(sizeof(VirtualSection));
+	Platform_instance.virtualSections = List_createEmpty(sizeof(VirtualSection));
+
 	if (!EnumResourceNamesA(
 		NULL, RT_RCDATA,
 		(ENUMRESNAMEPROCA)enumerateFiles,
-		(LONG_PTR)&result->virtualSections
+		(LONG_PTR)&Platform_instance.virtualSections
 	)) {
 
 		//Enum resource names also fails if we don't have any resources.
 		//To counter this, enumerateFiles sets stride to 0 if the reason it returned false was because of the function.
 
-		if(!result->virtualSections.stride) {
+		if(!Platform_instance.virtualSections.stride) {
 
-			result->virtualSections.stride = sizeof(VirtualSection);
+			Platform_instance.virtualSections.stride = sizeof(VirtualSection);
 
-			List_freex(&result->virtualSections);
-			CharString_freex(&result->workingDirectory);
+			List_freex(&Platform_instance.virtualSections);
+			CharString_freex(&Platform_instance.workingDirectory);
 			Buffer_freex(&platformExt);
 			return Error_invalidState(1);
 		}
 	}
 
-	//
+	//Set platformExt
 
-	result->dataExt = pext;
+	Platform_instance.dataExt = pext;
+
 	return Error_none();
 }

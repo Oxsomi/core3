@@ -755,7 +755,13 @@ Bool WindowManager_freePhysical(WindowManager *manager, Window **w) {
 	//Ensure our window safely exits
 
 	CharString_freex(&(*w)->title);
-	List_freex(&(*w)->devices);
+
+	List *devices = &(*w)->devices;
+
+	for(U64 i = 0; i < devices->length; ++i)
+		InputDevice_free((InputDevice*) List_ptr(*devices, i));
+
+	List_freex(devices);
 	List_freex(&(*w)->monitors);
 
 	Lock_free(&(*w)->lock);
@@ -767,6 +773,8 @@ Bool WindowManager_freePhysical(WindowManager *manager, Window **w) {
 
 	UnregisterClassA("OxC3: Oxsomi core 3", mainModule);
 	DestroyWindow((*w)->nativeHandle);
+
+	Thread_free(&(*w)->mainThread);
 
 	*w = NULL;
 	return true;

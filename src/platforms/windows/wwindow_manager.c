@@ -32,7 +32,7 @@
 #define MICROSOFT_WINDOWS_WINBASE_H_DEFINE_INTERLOCKED_CPLUSPLUS_OVERLOADS 0
 #include <Windows.h>
 
-const U8 WindowManager_MAX_PHYSICAL_WINDOWS = 16;
+const U8 WindowManager_MAX_PHYSICAL_WINDOWS = 8;
 
 //Defined in wwindow.c
 //

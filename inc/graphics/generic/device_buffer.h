@@ -65,7 +65,7 @@ typedef struct DeviceBuffer {
 #define DeviceBufferRef_ptr(ptr) RefPtr_data(ptr, DeviceBuffer)
 
 Error DeviceBufferRef_dec(DeviceBufferRef **buffer);
-Error DeviceBufferRef_add(DeviceBufferRef *buffer);
+Error DeviceBufferRef_inc(DeviceBufferRef *buffer);
 
 //Create empty buffer or initialized with data.
 //Initializing to non zero isn't free due to copies.

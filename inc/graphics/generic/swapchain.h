@@ -94,7 +94,7 @@ typedef RefPtr SwapchainRef;
 #define SwapchainRef_ptr(ptr) RefPtr_data(ptr, Swapchain)
 
 Error SwapchainRef_dec(SwapchainRef **swapchain);
-Error SwapchainRef_add(SwapchainRef *swapchain);
+Error SwapchainRef_inc(SwapchainRef *swapchain);
 
 impl Error GraphicsDeviceRef_createSwapchain(GraphicsDeviceRef *deviceRef, SwapchainInfo info, SwapchainRef **swapchain);
 

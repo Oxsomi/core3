@@ -59,7 +59,7 @@ typedef RefPtr GraphicsInstanceRef;
 #define GraphicsInstanceRef_ptr(ptr) RefPtr_data(ptr, GraphicsInstance)
 
 Error GraphicsInstanceRef_dec(GraphicsInstanceRef **inst);
-Error GraphicsInstanceRef_add(GraphicsInstanceRef *inst);
+Error GraphicsInstanceRef_inc(GraphicsInstanceRef *inst);
 
 impl Error GraphicsInstance_create(GraphicsApplicationInfo info, Bool isVerbose, GraphicsInstanceRef **inst);
 

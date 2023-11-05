@@ -29,7 +29,7 @@
 #include "types/buffer.h"
 #include "types/error.h"
 
-const U8 WindowManager_MAX_VIRTUAL_WINDOWS = 16;
+const U8 WindowManager_MAX_VIRTUAL_WINDOWS = 8;
 const U64 WindowManager_OUT_OF_WINDOWS = 0x1111111111;
 
 Error WindowManager_create(WindowManager *result) {

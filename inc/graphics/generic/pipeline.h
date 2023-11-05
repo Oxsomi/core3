@@ -79,7 +79,7 @@ typedef RefPtr PipelineRef;
 #define PipelineRef_ptr(ptr) RefPtr_data(ptr, Pipeline)
 
 Error PipelineRef_dec(PipelineRef **pipeline);
-Error PipelineRef_add(PipelineRef *pipeline);
+Error PipelineRef_inc(PipelineRef *pipeline);
 
 Bool PipelineRef_decAll(List *list);					//Decrements all refs and frees list
 

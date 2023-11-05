@@ -30,7 +30,7 @@ Error DeviceBufferRef_dec(DeviceBufferRef **buffer) {
 	return !RefPtr_dec(buffer) ? Error_invalidOperation(0) : Error_none();
 }
 
-Error DeviceBufferRef_add(DeviceBufferRef *buffer) {
+Error DeviceBufferRef_inc(DeviceBufferRef *buffer) {
 	return buffer ? (!RefPtr_inc(buffer) ? Error_invalidOperation(0) : Error_none()) : Error_nullPointer(0);
 }
 
@@ -175,6 +175,8 @@ Bool DeviceBuffer_free(DeviceBuffer *buffer, Allocator allocator) {
 	if(buffer->usage & EDeviceBufferUsage_CPUBacked)
 		success &= Buffer_freex(&buffer->cpuData);
 
+	success &= List_freex(&buffer->pendingChanges);
+
 	return success;
 }
 
@@ -203,7 +205,7 @@ Error GraphicsDeviceRef_createBuffer(
 
 	DeviceBuffer *buffer = DeviceBufferRef_ptr(*buf);
 
-	_gotoIfError(clean, GraphicsDeviceRef_add(dev));
+	_gotoIfError(clean, GraphicsDeviceRef_inc(dev));
 
 	*buffer = (DeviceBuffer) {
 		.device = dev,

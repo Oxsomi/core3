@@ -25,6 +25,6 @@ Error SwapchainRef_dec(SwapchainRef **swapchain) {
 	return !RefPtr_dec(swapchain) ? Error_invalidOperation(0) : Error_none();
 }
 
-Error SwapchainRef_add(SwapchainRef *swapchain) {
+Error SwapchainRef_inc(SwapchainRef *swapchain) {
 	return swapchain ? (!RefPtr_inc(swapchain) ? Error_invalidOperation(0) : Error_none()) : Error_nullPointer(0);
 }

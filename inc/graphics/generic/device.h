@@ -81,7 +81,7 @@ typedef RefPtr GraphicsDeviceRef;
 #define GraphicsDeviceRef_ptr(ptr) RefPtr_data(ptr, GraphicsDevice)
 
 Error GraphicsDeviceRef_dec(GraphicsDeviceRef **device);
-Error GraphicsDeviceRef_add(GraphicsDeviceRef *device);
+Error GraphicsDeviceRef_inc(GraphicsDeviceRef *device);
 
 Error GraphicsDeviceRef_create(
 	GraphicsInstanceRef *instanceRef, 
