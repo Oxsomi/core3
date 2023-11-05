@@ -90,14 +90,14 @@ Bool CLI_package(ParsedArgs args) {
 			(ParsedArgs_getArg(args, EOperationHasParameter_AESShift, &key)).genericError || 
 			!CharString_isHex(key)
 		) {
-			Log_errorLn("Invalid parameter sent to -aes. Expecting key in hex (32 bytes)");
+			Log_errorLnx("Invalid parameter sent to -aes. Expecting key in hex (32 bytes)");
 			return false;
 		}
 
 		U64 off = CharString_startsWithString(key, CharString_createConstRefCStr("0x"), EStringCase_Insensitive) ? 2 : 0;
 
 		if (CharString_length(key) - off != 64) {
-			Log_errorLn("Invalid parameter sent to -aes. Expecting key in hex (32 bytes)");
+			Log_errorLnx("Invalid parameter sent to -aes. Expecting key in hex (32 bytes)");
 			return false;
 		}
 
@@ -191,9 +191,9 @@ Bool CLI_package(ParsedArgs args) {
 clean:
 
 	if(!err.genericError)
-		Log_debugLn("-- Packaging %s success!", resolved.ptr);
+		Log_debugLnx("-- Packaging %s success!", resolved.ptr);
 
-	else Log_errorLn("-- Packaging %s failed!!", resolved.ptr);
+	else Log_errorLnx("-- Packaging %s failed!!", resolved.ptr);
 
 	Buffer_freex(&res);
 	CAFile_freex(&file);

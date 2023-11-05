@@ -45,26 +45,48 @@ typedef enum ELogOptions {
 
 impl void Log_captureStackTrace(void **stackTrace, U64 stackSize, U64 skip);
 
-impl void Log_printCapturedStackTraceCustom(const void **stackTrace, U64 stackSize, ELogLevel lvl, ELogOptions options);
-impl void Log_log(ELogLevel lvl, ELogOptions options, CharString arg);
+impl void Log_printCapturedStackTraceCustom(
+	Allocator alloc, const void **stackTrace, U64 stackSize, ELogLevel lvl, ELogOptions options
+);
 
-void Log_printCapturedStackTrace(const StackTrace stackTrace, ELogLevel lvl, ELogOptions options);
+void Log_printCapturedStackTraceCustomx(const void **stackTrace, U64 stackSize, ELogLevel lvl, ELogOptions options);
 
-void Log_printStackTrace(U64 skip, ELogLevel lvl, ELogOptions options);
+impl void Log_log(Allocator alloc, ELogLevel lvl, ELogOptions options, CharString arg);
+void Log_logx(ELogLevel lvl, ELogOptions options, CharString arg);
+
+void Log_printCapturedStackTrace(Allocator alloc, const StackTrace stackTrace, ELogLevel lvl, ELogOptions options);
+void Log_printCapturedStackTracex(const StackTrace stackTrace, ELogLevel lvl, ELogOptions options);
+
+void Log_printStackTrace(Allocator alloc, U64 skip, ELogLevel lvl, ELogOptions options);
+void Log_printStackTracex(U64 skip, ELogLevel lvl, ELogOptions options);
 
 //IMPORTANT:
 //NEVER! Supply user generated content into format. Instead use "%.*s".
 //When displaying strings, use "%.*s", args.length, arg.ptr instead of args.ptr, because strings aren't null terminated.
 //(Only exception is if the strings are safely generated from code and are determined to be null terminated, then use %s)
 
-void Log_debug(ELogOptions options, const C8 *format, ...);
-void Log_performance(ELogOptions options, const C8 *format, ...);
-void Log_warn(ELogOptions options, const C8 *format, ...);
-void Log_error(ELogOptions options, const C8 *format, ...);
-void Log_fatal(ELogOptions options, const C8 *format, ...);
+void Log_debugx(ELogOptions options, const C8 *format, ...);
+void Log_performancex(ELogOptions options, const C8 *format, ...);
+void Log_warnx(ELogOptions options, const C8 *format, ...);
+void Log_errorx(ELogOptions options, const C8 *format, ...);
+void Log_fatalx(ELogOptions options, const C8 *format, ...);
 
-#define Log_debugLn(...)		Log_debug(ELogOptions_NewLine, __VA_ARGS__)
-#define Log_performanceLn(...)	Log_performance(ELogOptions_NewLine, __VA_ARGS__)
-#define Log_warnLn(...)			Log_warn(ELogOptions_NewLine, __VA_ARGS__)
-#define Log_errorLn(...)		Log_error(ELogOptions_NewLine, __VA_ARGS__)
-#define Log_fatalLn(...)		Log_fatal(ELogOptions_NewLine, __VA_ARGS__)
+#define Log_debugLnx(...)				Log_debugx(ELogOptions_NewLine, __VA_ARGS__)
+#define Log_performanceLnx(...)			Log_performancex(ELogOptions_NewLine, __VA_ARGS__)
+#define Log_warnLnx(...)				Log_warnx(ELogOptions_NewLine, __VA_ARGS__)
+#define Log_errorLnx(...)				Log_errorx(ELogOptions_NewLine, __VA_ARGS__)
+#define Log_fatalLnx(...)				Log_fatalx(ELogOptions_NewLine, __VA_ARGS__)
+
+//Custom allocator to avoid using Platform_instance.alloc
+
+void Log_debug(Allocator alloc, ELogOptions options, const C8 *format, ...);
+void Log_performance(Allocator alloc, ELogOptions options, const C8 *format, ...);
+void Log_warn(Allocator alloc, ELogOptions options, const C8 *format, ...);
+void Log_error(Allocator alloc, ELogOptions options, const C8 *format, ...);
+void Log_fatal(Allocator alloc, ELogOptions options, const C8 *format, ...);
+
+#define Log_debugLn(alloc, ...)			Log_debug(alloc, ELogOptions_NewLine, __VA_ARGS__)
+#define Log_performanceLn(alloc, ...)	Log_performance(alloc, ELogOptions_NewLine, __VA_ARGS__)
+#define Log_warnLn(alloc, ...)			Log_warn(alloc, ELogOptions_NewLine, __VA_ARGS__)
+#define Log_errorLn(alloc, ...)			Log_error(alloc, ELogOptions_NewLine, __VA_ARGS__)
+#define Log_fatalLn(alloc, ...)			Log_fatal(alloc, ELogOptions_NewLine, __VA_ARGS__)

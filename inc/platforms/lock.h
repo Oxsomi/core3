@@ -19,11 +19,15 @@
 */
 
 #pragma once
-#include "types/types.h"
+#include "atomic.h"
 
 typedef struct Lock {
-	void *data;
-	U32 lockThread;
+
+	AtomicI64 lockedThreadId;
+
+	Bool active;
+	U8 pad[7];
+
 } Lock;
 
 typedef struct Error Error;
@@ -39,6 +43,4 @@ impl Bool Lock_lock(Lock *l, Ns maxTime);
 
 impl Bool Lock_unlock(Lock *l);
 
-Bool Lock_isLocked(Lock l);
-
-impl Bool Lock_isLockedForThread(Lock l);		//If it's locked for the current thread
+Bool Lock_isLockedForThread(Lock *l);

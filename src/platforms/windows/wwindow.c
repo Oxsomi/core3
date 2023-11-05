@@ -225,7 +225,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 			if (GetRawInputData((HRAWINPUT)lParam, RID_INPUT, (U8*) buf.ptr, &size, sizeof(RAWINPUTHEADER)) != size) {
 				Error_printx(Error_platformError(0, GetLastError()), ELogLevel_Error, ELogOptions_Default);
 				Buffer_freex(&buf);
-				Log_error(ELogOptions_Default, "Couldn't get raw input");
+				Log_errorx(ELogOptions_Default, "Couldn't get raw input");
 				break;
 			}
 
@@ -385,6 +385,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 				if(prevState != newState && w->callbacks.onDeviceButton)
 					w->callbacks.onDeviceButton(w, dev, handle, isKeyDown);
 
+				Buffer_freex(&buf);
 				return 0;
 
 			} else {
@@ -474,10 +475,11 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 			RID_DEVICE_INFO deviceInfo = (RID_DEVICE_INFO) { 0 };
 			U32 size = sizeof(deviceInfo);
+			deviceInfo.cbSize = size;
 
 			if (!GetRawInputDeviceInfoA((HANDLE)lParam, RIDI_DEVICEINFO, &deviceInfo, &size)) {
 				Error_printx(Error_platformError(0, GetLastError()), ELogLevel_Error, ELogOptions_Default);
-				Log_error(ELogOptions_Default, "Invalid data in WM_INPUT_DEVICE_CHANGE");
+				Log_errorx(ELogOptions_Default, "Invalid data in WM_INPUT_DEVICE_CHANGE");
 				break;
 			}
 
@@ -549,7 +551,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 					if(err.genericError) {
 						Buffer_freex(&device.dataExt);
 						InputDevice_free(&device);
-						Log_error(ELogOptions_Default, "Couldn't register device");
+						Log_errorx(ELogOptions_Default, "Couldn't register device");
 						break;
 					}
 
@@ -569,7 +571,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 					Buffer_freex(&device.dataExt);
 					InputDevice_free(&device);
 
-					Log_error(ELogOptions_Default, "Couldn't create raw input device");
+					Log_errorx(ELogOptions_Default, "Couldn't create raw input device");
 					break;
 				}
 
@@ -737,13 +739,13 @@ Bool WindowManager_supportsFormat(WindowManager manager, EWindowFormat format) {
 
 Bool WindowManager_freePhysical(WindowManager *manager, Window **w) {
 
-	if(!manager || !manager->lock.data)
+	if(!manager || !manager->lock.active)
 		return false;
 
 	if(!w || !*w)
 		return true;
 
-	if(!Lock_isLockedForThread(manager->lock))
+	if(!Lock_isLockedForThread(&manager->lock))
 		return false;
 
 	if(*w < (Window*) List_begin(manager->windows) || *w >= (Window*) List_end(manager->windows))

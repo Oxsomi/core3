@@ -70,12 +70,12 @@ Bool _CLI_convert(ParsedArgs args, Bool isTo) {
 	}
 
 	if (!(f.flags & EFormatFlags_SupportFiles) && info.type == EFileType_File) {
-		Log_errorLn("Invalid file passed to convertTo. Only accepting folders.");
+		Log_errorLnx("Invalid file passed to convertTo. Only accepting folders.");
 		return false;
 	}
 
 	if (!(f.flags & EFormatFlags_SupportFolders) && info.type == EFileType_Folder) {
-		Log_errorLn("Invalid file passed to convertTo. Only accepting files.");
+		Log_errorLnx("Invalid file passed to convertTo. Only accepting files.");
 		return false;
 	}
 
@@ -92,14 +92,14 @@ Bool _CLI_convert(ParsedArgs args, Bool isTo) {
 			(ParsedArgs_getArg(args, EOperationHasParameter_AESShift, &key)).genericError || 
 			!CharString_isHex(key)
 		) {
-			Log_errorLn("Invalid parameter sent to -aes. Expecting key in hex (32 bytes)");
+			Log_errorLnx("Invalid parameter sent to -aes. Expecting key in hex (32 bytes)");
 			return false;
 		}
 
 		U64 off = CharString_startsWithString(key, CharString_createConstRefCStr("0x"), EStringCase_Insensitive) ? 2 : 0;
 
 		if (CharString_length(key) - off != 64) {
-			Log_errorLn("Invalid parameter sent to -aes. Expecting key in hex (32 bytes)");
+			Log_errorLnx("Invalid parameter sent to -aes. Expecting key in hex (32 bytes)");
 			return false;
 		}
 
@@ -138,19 +138,19 @@ Bool _CLI_convert(ParsedArgs args, Bool isTo) {
 			break;
 		
 		default:
-			Log_debugLn("Unsupported format");
+			Log_debugLnx("Unsupported format");
 			return false;
 	}
 
 	if (err.genericError) {
-		Log_errorLn("File conversion failed!");
+		Log_errorLnx("File conversion failed!");
 		Error_printx(err, ELogLevel_Error, ELogOptions_NewLine);
 		return false;
 	}
 
 	//Tell CLI users
 
-	Log_debugLn("Converted file oiXX format in %ums", (Time_now() - start + MS - 1) / MS);
+	Log_debugLnx("Converted file oiXX format in %ums", (Time_now() - start + MS - 1) / MS);
 	return true;
 }
 

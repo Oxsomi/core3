@@ -49,15 +49,15 @@ VkBool32 onDebugReport(
 	layerPrefix;
 
 	if (flags & VK_DEBUG_REPORT_ERROR_BIT_EXT)
-		Log_errorLn("Error: %s", message);
+		Log_errorLnx("Error: %s", message);
 
 	else if (flags & VK_DEBUG_REPORT_WARNING_BIT_EXT)
-		Log_warnLn("Warning: %s", message);
+		Log_warnLnx("Warning: %s", message);
 
 	else if (flags & VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT)
-		Log_performanceLn("Performance warning: %s", message);
+		Log_performanceLnx("Performance warning: %s", message);
 
-	else Log_debugLn("Debug: %s", message);
+	else Log_debugLnx("Debug: %s", message);
 
 	return VK_FALSE;
 }
@@ -124,7 +124,7 @@ Error GraphicsInstance_create(GraphicsApplicationInfo info, Bool isVerbose, Grap
 		CharString debugUtils = CharString_createConstRefCStr("VK_EXT_debug_utils");
 
 		if(isVerbose)
-			Log_debugLn("Supported extensions:");
+			Log_debugLnx("Supported extensions:");
 
 	#endif
 
@@ -161,15 +161,15 @@ Error GraphicsInstance_create(GraphicsApplicationInfo info, Bool isVerbose, Grap
 		#endif
 
 		if(isVerbose)
-			Log_debugLn("\t%s", name);
+			Log_debugLnx("\t%s", name);
 	}
 
 	if(isVerbose) {
 
-		Log_debugLn("Supported layers:");
+		Log_debugLnx("Supported layers:");
 
 		for(U64 i = 0; i < layerCount; ++i)
-			Log_debugLn("\t%s", ((VkLayerProperties*)layers.ptr)[i].layerName);
+			Log_debugLnx("\t%s", ((VkLayerProperties*)layers.ptr)[i].layerName);
 	}
 
 	#ifndef NDEBUG
@@ -234,15 +234,15 @@ Error GraphicsInstance_create(GraphicsApplicationInfo info, Bool isVerbose, Grap
 
 	if(isVerbose) {
 
-		Log_debugLn("Enabling layers:");
+		Log_debugLnx("Enabling layers:");
 
 		for(U64 i = 0; i < enabledLayers.length; ++i)
-			Log_debugLn("\t%s", ((const char* const*)enabledLayers.ptr)[i]);
+			Log_debugLnx("\t%s", ((const char* const*)enabledLayers.ptr)[i]);
 
-		Log_debugLn("Enabling extensions:");
+		Log_debugLnx("Enabling extensions:");
 
 		for(U64 i = 0; i < enabledExtensions.length; ++i)
-			Log_debugLn("\t%s", ((const char* const*)enabledExtensions.ptr)[i]);
+			Log_debugLnx("\t%s", ((const char* const*)enabledExtensions.ptr)[i]);
 
 	}
 
@@ -491,12 +491,12 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 
 		if(isVerbose) {
 
-			Log_debugLn("Supported device layers:");
+			Log_debugLnx("Supported device layers:");
 
 			for(U32 k = 0; k < layerCount; ++k)
-				Log_debugLn("\t%s", ((VkLayerProperties*)temp3.ptr)[k].layerName);
+				Log_debugLnx("\t%s", ((VkLayerProperties*)temp3.ptr)[k].layerName);
 
-			Log_debugLn("Supported device extensions:");
+			Log_debugLnx("Supported device extensions:");
 		}
 
 		//Check if all required extensions are present
@@ -510,7 +510,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 			const C8 *name = ((VkExtensionProperties*)temp4.ptr)[k].extensionName;
 
 			if(isVerbose)
-				Log_debugLn("\t%s", name);
+				Log_debugLnx("\t%s", name);
 
 			//Check if required extension
 
@@ -553,7 +553,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 
 		if (!supported) {
 
-			Log_debugLn(
+			Log_debugLnx(
 				"Vulkan: Unsupported device %u, one of the required extensions wasn't present (%s)", 
 				i, reqExtensionsName[firstUnavailable]
 			);
@@ -595,7 +595,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 			!(features.textureCompressionBC || features.textureCompressionASTC_LDR) ||
 			!features.multiDrawIndirect
 		) {
-			Log_debugLn("Vulkan: Unsupported device %u, one of the required features wasn't enabled", i);
+			Log_debugLnx("Vulkan: Unsupported device %u, one of the required features wasn't enabled", i);
 			continue;
 		}
 
@@ -654,7 +654,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 			limits.viewportBoundsRange[0] > -32768 ||
 			limits.viewportBoundsRange[1] < 32767
 		) {
-			Log_debugLn("Vulkan: Unsupported device %u, one of the required limit wasn't sufficient", i);
+			Log_debugLnx("Vulkan: Unsupported device %u, one of the required limit wasn't sufficient", i);
 			continue;
 		}
 
@@ -788,7 +788,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 			}
 
 			if(!eq) {
-				Log_debugLn("Vulkan: Unsupported device %u, descriptor indexing isn't properly supported.", i);
+				Log_debugLnx("Vulkan: Unsupported device %u, descriptor indexing isn't properly supported.", i);
 				continue;
 			}
 		}
@@ -842,12 +842,12 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 			VK_SUBGROUP_FEATURE_BALLOT_BIT;
 
 		if((subgroup.supportedOperations & requiredSubOp) != requiredSubOp) {
-			Log_debugLn("Vulkan: Unsupported device %u, one of the required subgroup operations wasn't supported!", i);
+			Log_debugLnx("Vulkan: Unsupported device %u, one of the required subgroup operations wasn't supported!", i);
 			continue;
 		}
 
 		if(subgroup.subgroupSize < 16 || subgroup.subgroupSize > 128) {
-			Log_debugLn("Vulkan: Unsupported device %u, subgroup size is not in range 16-128!", i);
+			Log_debugLnx("Vulkan: Unsupported device %u, subgroup size is not in range 16-128!", i);
 			continue;
 		}
 
@@ -867,7 +867,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 			);
 
 			if (!semaphore.timelineSemaphore) {
-				Log_debugLn("Vulkan: Unsupported device %u, Timeline semaphores unsupported!", i);
+				Log_debugLnx("Vulkan: Unsupported device %u, Timeline semaphores unsupported!", i);
 				continue;
 			}
 		}
@@ -880,7 +880,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 			);
 
 			if (!sync2.synchronization2) {
-				Log_debugLn("Vulkan: Unsupported device %u, Synchronization 2 unsupported!", i);
+				Log_debugLnx("Vulkan: Unsupported device %u, Synchronization 2 unsupported!", i);
 				continue;
 			}
 		}
@@ -1217,7 +1217,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 			limits.maxDescriptorSetSampledImages < 250 * KIBI ||
 			limits.maxDescriptorSetStorageImages < 250 * KIBI
 		) {
-			Log_debugLn("Vulkan: Unsupported device %u, graphics binding tier not supported!", i);
+			Log_debugLnx("Vulkan: Unsupported device %u, graphics binding tier not supported!", i);
 			continue;
 		}
 

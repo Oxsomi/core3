@@ -433,10 +433,10 @@ Error GraphicsDevice_initExt(
 
 	if (verbose) {
 
-		Log_debugLn("Enabling extensions:");
+		Log_debugLnx("Enabling extensions:");
 
 		for(U32 i = 0; i < (U32) extensions.length; ++i)
-			Log_debugLn("\t%s", ((const char* const*) extensions.ptr)[i]);
+			Log_debugLnx("\t%s", ((const char* const*) extensions.ptr)[i]);
 	}
 
 	_gotoIfError(clean, vkCheck(vkCreateDevice(physicalDeviceExt, &deviceInfo, NULL, &deviceExt->device)));
@@ -1007,7 +1007,7 @@ clean:
 
 U32 VkGraphicsDevice_allocateDescriptor(VkGraphicsDevice *deviceExt, EDescriptorType type) {
 
-	if(!Lock_isLockedForThread(deviceExt->descriptorLock))
+	if(!Lock_isLockedForThread(&deviceExt->descriptorLock))
 		return U32_MAX;
 
 	Buffer buf = deviceExt->freeList[type];
@@ -1030,7 +1030,7 @@ U32 VkGraphicsDevice_allocateDescriptor(VkGraphicsDevice *deviceExt, EDescriptor
 
 Bool VkGraphicsDevice_freeAllocations(VkGraphicsDevice *deviceExt, List *allocations) {
 
-	if(!Lock_isLockedForThread(deviceExt->descriptorLock))
+	if(!Lock_isLockedForThread(&deviceExt->descriptorLock))
 		return false;
 
 	Bool success = true;
@@ -1158,7 +1158,7 @@ Error DeviceBufferRef_flush(VkCommandBuffer commandBuffer, GraphicsDeviceRef *de
 		tempList = List_createEmpty(sizeof(VkBufferMemoryBarrier2));
 		_gotoIfError(clean, List_reservex(&tempList, 1 + buffer->pendingChanges.length));
 
-		if (allocRange > 64 * MIBI) {		//Resource is too big, allocate dedicated staging resource
+		if (allocRange >= 64 * MIBI) {		//Resource is too big, allocate dedicated staging resource
 
 			_gotoIfError(clean, GraphicsDeviceRef_createBuffer(
 				deviceRef, EDeviceBufferUsage_CPUAllocatedBit, CharString_createConstRefCStr("Dedicated staging buffer"),
@@ -1268,7 +1268,7 @@ Error DeviceBufferRef_flush(VkCommandBuffer commandBuffer, GraphicsDeviceRef *de
 				//TODO: Create secondary staging buffer before doing this!
 				//		Because this is super slow!
 
-				Log_performanceLn(
+				Log_performanceLnx(
 					"Pushing too much data to the GPU this frame for the staging buffer to handle\n"
 					"Flushing outstanding changes to GPU to make space for new allocations."
 				);
@@ -1421,31 +1421,31 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 	
 	//Reserve temp storage
 
-	if(!deviceExt->swapchainHandles.capacityAndRefInfo)
+	if(!deviceExt->swapchainHandles.stride)
 		deviceExt->swapchainHandles = List_createEmpty(sizeof(VkSwapchainKHR));
 
 	_gotoIfError(clean, List_clear(&deviceExt->swapchainHandles));
 	_gotoIfError(clean, List_reservex(&deviceExt->swapchainHandles, swapchains.length));
 
-	if(!deviceExt->swapchainIndices.capacityAndRefInfo)
+	if(!deviceExt->swapchainIndices.stride)
 		deviceExt->swapchainIndices = List_createEmpty(sizeof(U32));
 
 	_gotoIfError(clean, List_clear(&deviceExt->swapchainIndices));
 	_gotoIfError(clean, List_reservex(&deviceExt->swapchainIndices, swapchains.length));
 
-	if(!deviceExt->results.capacityAndRefInfo)
+	if(!deviceExt->results.stride)
 		deviceExt->results = List_createEmpty(sizeof(VkResult));
 
 	_gotoIfError(clean, List_clear(&deviceExt->results));
 	_gotoIfError(clean, List_reservex(&deviceExt->results, swapchains.length));
 
-	if(!deviceExt->waitSemaphores.capacityAndRefInfo)
+	if(!deviceExt->waitSemaphores.stride)
 		deviceExt->waitSemaphores = List_createEmpty(sizeof(VkSemaphore));
 
 	_gotoIfError(clean, List_clear(&deviceExt->waitSemaphores));
 	_gotoIfError(clean, List_reservex(&deviceExt->waitSemaphores, swapchains.length + 1));
 
-	if(!deviceExt->waitStages.capacityAndRefInfo)
+	if(!deviceExt->waitStages.stride)
 		deviceExt->waitStages = List_createEmpty(sizeof(VkPipelineStageFlags));
 
 	_gotoIfError(clean, List_clear(&deviceExt->waitStages));
@@ -1783,9 +1783,9 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 
 						const U8 *callstack = commandList->callstacks.ptr + commandList->callstacks.stride * j;
 
-						Log_warnLn("Command process failed. Command inserted at callstack:");
+						Log_warnLnx("Command process failed. Command inserted at callstack:");
 
-						Log_printCapturedStackTraceCustom(
+						Log_printCapturedStackTraceCustomx(
 							(const void**) callstack, 
 							commandList->callstacks.stride / sizeof(void*),
 							ELogLevel_Error, 

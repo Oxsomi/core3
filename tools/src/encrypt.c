@@ -59,7 +59,7 @@ Bool CLI_encryptDo(ParsedArgs args) {
 clean:
 
 	if(!b) {
-		Log_errorLn("CLI_encryptDo failed.");
+		Log_errorLnx("CLI_encryptDo failed.");
 		Error_printx(err, ELogLevel_Error, ELogOptions_NewLine);
 	}
 

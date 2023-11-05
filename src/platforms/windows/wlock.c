@@ -21,6 +21,7 @@
 #include "platforms/lock.h"
 #include "platforms/thread.h"
 #include "types/error.h"
+#include "types/time.h"
 #include "math/math.h"
 
 #define WIN32_LEAN_AND_MEAN
@@ -32,55 +33,61 @@ Error Lock_create(Lock *res) {
 	if(!res)
 		return Error_nullPointer(0);
 
-	if(res->data)
+	if(res->active)
 		return Error_invalidOperation(0);
 
-	*res = (Lock) { .data = CreateMutexA(NULL, FALSE, NULL) };
-
-	if (!res->data) {
-		*res = (Lock) { 0 };
-		return Error_platformError(0, GetLastError());
-	}
-
+	*res = (Lock) { .active = true };
 	return Error_none();
 }
 
 Bool Lock_free(Lock *res) {
 
-	if(!res || !res->data)
+	if(!res || !res->active)
 		return true;
 
-	if(Lock_isLocked(*res))
+	if(!Lock_lock(res, U64_MAX))
 		return false;
 
-	CloseHandle(res->data);
 	*res = (Lock){ 0 };
 	return true;
 }
 
 Bool Lock_lock(Lock *l, Ns maxTime) {
 
-	if (l && !Lock_isLocked(*l)) {
+	if (l && l->active) {
 
-		DWORD wait = WaitForSingleObject(
-			l->data, (DWORD) U64_min((U64_min(maxTime, U64_MAX - MS) + MS - 1) / MS, U32_MAX)
-		);
+		U32 tid = Thread_getId();
+		I64 prevValue = AtomicI64_compareExchange(&l->lockedThreadId, 0, tid);
 
-		if (wait == WAIT_OBJECT_0) {
-			l->lockThread = Thread_getId();
+		if(prevValue == tid)		//Already locked
 			return true;
+
+		//If the previous result was not 0 then it means someone already locked this.
+		//We have to wait for it and attempt to lock it again.
+		//It's possible that within this time someone else is waiting for it and locked it before us.
+		//So we have to wait in a loop.
+
+		Ns time = Time_now();
+
+		while(prevValue != 0) {
+
+			Thread_sleep(100 * MU);
+			prevValue = AtomicI64_compareExchange(&l->lockedThreadId, 0, tid);
+
+			if(Time_now() - time >= maxTime)
+				return false;
 		}
+
+		return prevValue == 0;
 	}
 
 	return false;
 }
 
-Bool Lock_isLockedForThread(Lock l) { return l.lockThread == Thread_getId(); }
-
 Bool Lock_unlock(Lock *l) {
 
-	if (l && Lock_isLockedForThread(*l) && ReleaseMutex(l->data)) {
-		l->lockThread = 0;
+	if (l && l->active && Lock_isLockedForThread(l)) {
+		AtomicI64_and(&l->lockedThreadId, 0);	//Clear thread id
 		return true;
 	}
 

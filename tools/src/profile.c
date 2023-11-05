@@ -169,7 +169,7 @@ Error _CLI_profileCast(ParsedArgs args, Buffer buf) {
 
 				Ns now = Time_now();
 
-				Log_debugLn(
+				Log_debugLnx(
 					"%s: %llux %s -> %s within %fs (%fns/op). (Operation hash: %llu)", 
 					iterationNames[l], number, 
 					floatTypeNames[k], floatTypeNames[j], 
@@ -186,7 +186,7 @@ Error _CLI_profileCast(ParsedArgs args, Buffer buf) {
 	Ns nowOuter = Time_now();
 	U64 totalIt = itCount * floatTypes * (floatTypes - 1) * number;
 
-	Log_debugLn(
+	Log_debugLnx(
 		"Performed %llu casts within %fs. Avg time per cast %fns.", 
 		totalIt,
 		(F64)(nowOuter - thenOuter) / SECOND,
@@ -212,7 +212,7 @@ Error _CLI_profileRNG(ParsedArgs args, Buffer buf) {
 
 	Ns now = Time_now();
 
-	Log_debugLn(
+	Log_debugLnx(
 		"Profile RNG: %llu bytes within %fs (%fns/byte, %fbytes/sec).", 
 		Buffer_length(buf),
 		(F64)(now - then) / SECOND,
@@ -237,7 +237,7 @@ Error _CLI_profileCRC32C(ParsedArgs args, Buffer buf) {
 
 	Ns now = Time_now();
 
-	Log_debugLn(
+	Log_debugLnx(
 		"Profile CRC32C: %llu bytes within %fs (%fns/byte, %fbytes/sec). Random hash %u.", 
 		Buffer_length(buf),
 		(F64)(now - then) / SECOND,
@@ -264,7 +264,7 @@ Error _CLI_profileSHA256(ParsedArgs args, Buffer buf) {
 
 	Ns now = Time_now();
 
-	Log_debugLn(
+	Log_debugLnx(
 		"Profile SHA256: %llu bytes within %fs (%fns/byte, %fbytes/sec). Random hash %08x%08x%08x%08x%08x%08x%08x%08x.", 
 		Buffer_length(buf),
 		(F64)(now - then) / SECOND,
@@ -304,7 +304,7 @@ Error _CLI_profileAES256(ParsedArgs args, Buffer buf) {
 
 	Ns now = Time_now();
 
-	Log_debugLn(
+	Log_debugLnx(
 		"Encrypt AES256GCM: %llu bytes within %fs (%fns/byte, %fbytes/sec).", 
 		Buffer_length(buf),
 		(F64)(now - then) / SECOND,
@@ -325,7 +325,7 @@ Error _CLI_profileAES256(ParsedArgs args, Buffer buf) {
 
 	now = Time_now();
 
-	Log_debugLn(
+	Log_debugLnx(
 		"Decrypt AES256GCM: %llu bytes within %fs (%fns/byte, %fbytes/sec).", 
 		Buffer_length(buf),
 		(F64)(now - then) / SECOND,

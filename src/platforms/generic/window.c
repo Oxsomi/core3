@@ -73,7 +73,7 @@ Error Window_waitForExit(Window *w, Ns maxTimeout) {
 	//We lock to check window state
 	//If there's no lock, then we've already been released
 
-	if(w->lock.data && !Lock_isLockedForThread(w->lock) && !Lock_lock(&w->lock, maxTimeout))
+	if(!Lock_lock(&w->lock, maxTimeout))
 		return Error_invalidOperation(0);
 
 	//If our window isn't marked as active, then our window is gone
@@ -105,7 +105,7 @@ Error Window_waitForExit(Window *w, Ns maxTimeout) {
 
 		//Try to reacquire the lock
 
-		if(w->lock.data && !Lock_isLockedForThread(w->lock) && !Lock_lock(&w->lock, left))
+		if(!Lock_lock(&w->lock, left))
 			return Error_invalidOperation(2);
 
 		//Our window has been released!
@@ -375,7 +375,7 @@ Bool Window_terminate(Window *w) {
 	if(!Window_initialized(w))
 		return false;
 
-	if(!Lock_isLockedForThread(w->lock))
+	if(!Lock_isLockedForThread(&w->lock))
 		return false;
 
 	w->flags |= EWindowFlags_ShouldThreadTerminate;		//Mark thread for destroy

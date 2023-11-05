@@ -37,7 +37,7 @@ Error WindowManager_create(WindowManager *result) {
 	if(!result)
 		return Error_nullPointer(0);
 
-	if(result->lock.data)
+	if(result->lock.active)
 		return Error_invalidOperation(0);
 
 	Error err;
@@ -58,10 +58,10 @@ Error WindowManager_create(WindowManager *result) {
 
 Bool WindowManager_free(WindowManager *manager) {
 
-	if(!manager || !manager->lock.data)
+	if(!manager || !manager->lock.active)
 		return true;
 
-	if(!Lock_isLockedForThread(manager->lock) && !WindowManager_lock(manager, 5 * SECOND))
+	if(!WindowManager_lock(manager, 5 * SECOND))
 		return false;
 
 	List_freex(&manager->windows);
@@ -112,10 +112,10 @@ Error WindowManager_createVirtual(
 	Window **result
 ) {
 
-	if(!manager || !manager->lock.data || !result || !callbacks.onDraw)
-		return Error_nullPointer(!manager || !manager->lock.data  ? 0 : (!result ? 4 : 2));
+	if(!manager || !manager->lock.active || !result || !callbacks.onDraw)
+		return Error_nullPointer(!manager || !manager->lock.active  ? 0 : (!result ? 4 : 2));
 
-	if(!Lock_isLockedForThread(manager->lock))
+	if(!Lock_isLockedForThread(&manager->lock))
 		return Error_invalidOperation(0);
 
 	if(*result)
@@ -211,16 +211,16 @@ Error WindowManager_createVirtual(
 Bool WindowManager_freeVirtual(WindowManager *manager, Window **handle) {
 
 	if(
-		!manager || !manager->lock.data || 
+		!manager || !manager->lock.active || 
 		!handle || !*handle || 
-		!Lock_isLockedForThread(manager->lock) || 
+		!Lock_isLockedForThread(&manager->lock) || 
 		!Window_isVirtual(*handle)
 	)
 		return false;
 
 	Window *w = *handle;
 
-	if(!Lock_isLockedForThread(w->lock) || !Lock_unlock(&w->lock)) 
+	if(!Lock_isLockedForThread(&w->lock) || !Lock_unlock(&w->lock)) 
 		return false;
 
 	if(w->callbacks.onDestroy)
@@ -252,7 +252,7 @@ inline U16 WindowManager_getEmptyWindows(WindowManager manager) {
 
 Error WindowManager_waitForExitAll(WindowManager *manager, Ns maxTimeout) {
 
-	if(!manager || !manager->lock.data)
+	if(!manager || !manager->lock.active)
 		return Error_nullPointer(0);
 
 	//Checking for WindowManager is a lot easier, as we can just acquire the lock
@@ -280,7 +280,7 @@ Error WindowManager_waitForExitAll(WindowManager *manager, Ns maxTimeout) {
 
 		//Try to reacquire the lock
 
-		while(!Lock_isLockedForThread(manager->lock) && !Lock_lock(&manager->lock, left))
+		while(!Lock_isLockedForThread(&manager->lock) && !Lock_lock(&manager->lock, left))
 			Thread_sleep(1 * MS);
 
 		//Our windows have been released!
@@ -378,7 +378,7 @@ Error WindowManager_createWindow(
 	Window **w
 ) {
 
-	if(!manager || !manager->lock.data)
+	if(!manager || !manager->lock.active)
 		return Error_nullPointer(0);
 
 	Error err = WindowManager_createPhysical(manager, position, size, minSize, maxSize, hint, title, callbacks, format, w);
@@ -394,13 +394,13 @@ Error WindowManager_createWindow(
 
 Bool WindowManager_freeWindow(WindowManager *manager, Window **w) {
 
-	if(!manager || !manager->lock.data)
+	if(!manager || !manager->lock.active)
 		return false;
 
 	if (!w || !*w)
 		return true;
 
-	if(!Lock_isLockedForThread(manager->lock))
+	if(!Lock_isLockedForThread(&manager->lock))
 		return false;
 
 	return Window_isVirtual(*w) ? WindowManager_freeVirtual(manager, w) : WindowManager_freePhysical(manager, w);
@@ -422,6 +422,6 @@ Bool WindowManager_unlock(WindowManager *manager) {
 
 Window *WindowManager_getWindow(WindowManager *manager, WindowHandle windowHandle) {
 	return 
-		manager && Lock_isLockedForThread(manager->lock) ? 
+		manager && Lock_isLockedForThread(&manager->lock) ? 
 		(Window*) List_ptr(manager->windows, windowHandle) : NULL;
 }

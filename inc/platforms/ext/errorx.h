@@ -26,6 +26,8 @@ typedef enum ELogOptions ELogOptions;
 typedef struct CharString CharString;
 typedef struct Error Error;
 
+void Error_print(Allocator alloc, Error err, ELogLevel logLevel, ELogOptions options);
 void Error_printx(Error err, ELogLevel logLevel, ELogOptions options);
 
-impl CharString Error_formatPlatformError(Error err);
+impl CharString Error_formatPlatformError(Allocator alloc, Error err);
+CharString Error_formatPlatformErrorx(Error err);

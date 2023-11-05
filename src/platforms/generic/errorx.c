@@ -37,21 +37,30 @@ void Error_fillStackTrace(Error *err) {
 }
 
 void Error_printx(Error err, ELogLevel logLevel, ELogOptions options) {
+	Error_print(Platform_instance.alloc, err, logLevel, options);
+}
+
+CharString Error_formatPlatformErrorx(Error err) {
+	return Error_formatPlatformError(Platform_instance.alloc, err);
+}
+
+void Error_print(Allocator alloc, Error err, ELogLevel logLevel, ELogOptions options) {
 
 	if(!err.genericError)
 		return;
 
 	CharString result = CharString_createNull();
-	CharString platformErr = Error_formatPlatformError(err);
+	CharString platformErr = Error_formatPlatformError(alloc, err);
 
 	if(err.genericError == EGenericError_Stderr)
 		platformErr = CharString_createConstRefCStr(strerror((int)err.paramValue0));
 
-	Log_printCapturedStackTraceCustom(err.stackTrace, ERROR_STACKTRACE, ELogLevel_Error, options);
+	Log_printCapturedStackTraceCustom(alloc, err.stackTrace, ERROR_STACKTRACE, ELogLevel_Error, options);
 
 	if(
-		!CharString_formatx(
+		!CharString_format(
 
+			alloc,
 			&result, 
 
 			"%s: sub id: %X, param id: %u, param0: %08X, param1: %08X.\nPlatform/std error: %.*s.", 
@@ -66,10 +75,10 @@ void Error_printx(Error err, ELogLevel logLevel, ELogOptions options) {
 
 		).genericError
 	)
-		Log_log(logLevel == ELogLevel_Fatal ? ELogLevel_Error : logLevel, options, result);
+		Log_log(alloc, logLevel == ELogLevel_Fatal ? ELogLevel_Error : logLevel, options, result);
 
-	CharString_freex(&result);
-	CharString_freex(&platformErr);
+	CharString_free(&result, alloc);
+	CharString_free(&platformErr, alloc);
 
 	if(logLevel == ELogLevel_Fatal)
 		exit(1);

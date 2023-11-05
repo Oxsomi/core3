@@ -32,7 +32,7 @@ void GraphicsDeviceInfo_print(const GraphicsDeviceInfo *deviceInfo, Bool printCa
 	if(!deviceInfo || !deviceInfo->ext)
 		return;
 
-	Log_debugLn(
+	Log_debugLnx(
 		"%s (%s %s):\n\t%s %u\n\tLUID %016llx\n\tUUID %016llx%016llx", 
 		deviceInfo->name, 
 		deviceInfo->driverName, 
@@ -56,112 +56,112 @@ void GraphicsDeviceInfo_print(const GraphicsDeviceInfo *deviceInfo, Bool printCa
 
 		U32 feat = cap.features;
 
-		Log_debugLn("\tFeatures:");
+		Log_debugLnx("\tFeatures:");
 
 		if(feat & EGraphicsFeatures_DirectRendering)
-			Log_debugLn("\t\tDirect rendering");
+			Log_debugLnx("\t\tDirect rendering");
 
 		//if(feat & EGraphicsFeatures_VariableRateShading)
-		//	Log_debugLn("\t\tVariable rate shading");
+		//	Log_debugLnx("\t\tVariable rate shading");
 
 		if(feat & EGraphicsFeatures_MultiDrawIndirectCount)
-			Log_debugLn("\t\tMulti draw indirect count");
+			Log_debugLnx("\t\tMulti draw indirect count");
 
 		if(feat & EGraphicsFeatures_MeshShader)
-			Log_debugLn("\t\tMesh shaders");
+			Log_debugLnx("\t\tMesh shaders");
 
 		if(feat & EGraphicsFeatures_GeometryShader)
-			Log_debugLn("\t\tGeometry shaders");
+			Log_debugLnx("\t\tGeometry shaders");
 
 		if(feat & EGraphicsFeatures_TessellationShader)
-			Log_debugLn("\t\tTessellation shaders");
+			Log_debugLnx("\t\tTessellation shaders");
 
 		if(feat & EGraphicsFeatures_SubgroupArithmetic)
-			Log_debugLn("\t\tSubgroup arithmetic");
+			Log_debugLnx("\t\tSubgroup arithmetic");
 
 		if(feat & EGraphicsFeatures_SubgroupShuffle)
-			Log_debugLn("\t\tSubgroup shuffle");
+			Log_debugLnx("\t\tSubgroup shuffle");
 
 		if(feat & EGraphicsFeatures_Swapchain)
-			Log_debugLn("\t\tSwapchain");
+			Log_debugLnx("\t\tSwapchain");
 
 		//if(feat & EGraphicsFeatures_Multiview)
-		//	Log_debugLn("\t\tMultiview");
+		//	Log_debugLnx("\t\tMultiview");
 
 		if(feat & EGraphicsFeatures_Raytracing)
-			Log_debugLn("\t\tRaytracing");
+			Log_debugLnx("\t\tRaytracing");
 
 		if(feat & EGraphicsFeatures_RayPipeline)
-			Log_debugLn("\t\tRaytracing pipeline");
+			Log_debugLnx("\t\tRaytracing pipeline");
 
 		if(feat & EGraphicsFeatures_RayQuery)
-			Log_debugLn("\t\tRay query");
+			Log_debugLnx("\t\tRay query");
 
 		if(feat & EGraphicsFeatures_RayIndirect)
-			Log_debugLn("\t\tTraceRay indirect");
+			Log_debugLnx("\t\tTraceRay indirect");
 
 		if(feat & EGraphicsFeatures_RayMicromapOpacity)
-			Log_debugLn("\t\tRaytracing opacity micromap");
+			Log_debugLnx("\t\tRaytracing opacity micromap");
 
 		if(feat & EGraphicsFeatures_RayMicromapDisplacement)
-			Log_debugLn("\t\tRaytracing displacement micromap");
+			Log_debugLnx("\t\tRaytracing displacement micromap");
 
 		if(feat & EGraphicsFeatures_RayMotionBlur)
-			Log_debugLn("\t\tRaytracing motion blur");
+			Log_debugLnx("\t\tRaytracing motion blur");
 
 		if(feat & EGraphicsFeatures_RayReorder)
-			Log_debugLn("\t\tRay reorder");
+			Log_debugLnx("\t\tRay reorder");
 
 		if(feat & EGraphicsFeatures_DebugMarkers)
-			Log_debugLn("\t\tDebug markers");
+			Log_debugLnx("\t\tDebug markers");
 
 		if(feat & EGraphicsFeatures_Wireframe)
-			Log_debugLn("\t\tWireframe (rasterizer fill mode: line)");
+			Log_debugLnx("\t\tWireframe (rasterizer fill mode: line)");
 
 		if(feat & EGraphicsFeatures_LogicOp)
-			Log_debugLn("\t\tLogic op (blend state)");
+			Log_debugLnx("\t\tLogic op (blend state)");
 
 		if(feat & EGraphicsFeatures_DualSrcBlend)
-			Log_debugLn("\t\tDual src blend (blend state)");
+			Log_debugLnx("\t\tDual src blend (blend state)");
 
 		//Data types
 
 		U32 dat = cap.dataTypes;
 
-		Log_debugLn("\tData types:");
+		Log_debugLnx("\tData types:");
 		
 		if(dat & EGraphicsDataTypes_I64)
-			Log_debugLn("\t\t64-bit integers");
+			Log_debugLnx("\t\t64-bit integers");
 		
 		if(dat & EGraphicsDataTypes_F16)
-			Log_debugLn("\t\t16-bit floats");
+			Log_debugLnx("\t\t16-bit floats");
 		
 		if(dat & EGraphicsDataTypes_F64)
-			Log_debugLn("\t\t64-bit floats");
+			Log_debugLnx("\t\t64-bit floats");
 		
 		if(dat & EGraphicsDataTypes_AtomicI64)
-			Log_debugLn("\t\t64-bit integer atomics (buffer)");
+			Log_debugLnx("\t\t64-bit integer atomics (buffer)");
 		
 		if(dat & EGraphicsDataTypes_AtomicF32)
-			Log_debugLn("\t\t32-bit float atomics (buffer)");
+			Log_debugLnx("\t\t32-bit float atomics (buffer)");
 		
 		if(dat & EGraphicsDataTypes_AtomicF64)
-			Log_debugLn("\t\t64-bit float atomics (buffer)");
+			Log_debugLnx("\t\t64-bit float atomics (buffer)");
 		
 		if(dat & EGraphicsDataTypes_ASTC)
-			Log_debugLn("\t\tASTC compression");
+			Log_debugLnx("\t\tASTC compression");
 		
 		if(dat & EGraphicsDataTypes_BCn)
-			Log_debugLn("\t\tBCn compression");
+			Log_debugLnx("\t\tBCn compression");
 		
 		if(dat & EGraphicsDataTypes_MSAA2x)
-			Log_debugLn("\t\tMSAA 2x");
+			Log_debugLnx("\t\tMSAA 2x");
 		
 		if(dat & EGraphicsDataTypes_MSAA8x)
-			Log_debugLn("\t\tMSAA 8x");
+			Log_debugLnx("\t\tMSAA 8x");
 
 		if(dat & EGraphicsDataTypes_MSAA16x)
-			Log_debugLn("\t\tMSAA 16x");
+			Log_debugLnx("\t\tMSAA 16x");
 	}
 }
 

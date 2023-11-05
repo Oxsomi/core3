@@ -243,7 +243,7 @@ Error WindowManager_createPhysical(
 	if(!manager)
 		return Error_nullPointer(0);
 
-	if(!Lock_isLockedForThread(manager->lock))
+	if(!Lock_isLockedForThread(&manager->lock))
 		return Error_invalidOperation(0);
 
 	if(!w)
@@ -331,7 +331,7 @@ Error WindowManager_createPhysical(
 
 	//Wait for window creation...
 	//It either sets isActive or the error
-	while (win->lock.data) {
+	while (win->lock.active) {
 
 		if (Lock_lock(&win->lock, 1 * SECOND)) {
 

@@ -66,18 +66,18 @@ void XXFile_printType(U8 type) {
 			case EXXCompressionType_Brotli1:	typeStr = "Brotli:1";		break;
 		}
 
-		Log_debugLn("Compression type: %s.", typeStr);
+		Log_debugLnx("Compression type: %s.", typeStr);
 	}
 
 	if (type & 0xF) {
 		const C8 *typeStr = (type & 0xF) == EXXEncryptionType_AES256GCM ? "AES256GCM" : "Unrecognized";
-		Log_debugLn("Encryption type: %s.", typeStr);
+		Log_debugLnx("Encryption type: %s.", typeStr);
 	}
 }
 
 void XXFile_printVersion(U8 v) {
 	VersionString str = VersionCharString_get(v);
-	Log_debugLn("Version: %s", str.v);
+	Log_debugLnx("Version: %s", str.v);
 }
 
 //Inspect header is a lightweight checker for the header.
@@ -94,17 +94,17 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 	CharString tmp = CharString_createNull();
 
 	if ((err = ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &path)).genericError) {
-		Log_errorLn("Invalid argument -i <string>.");
+		Log_errorLnx("Invalid argument -i <string>.");
 		goto clean;
 	}
 
 	if ((err = File_read(path, 1 * SECOND, &buf)).genericError) {
-		Log_errorLn("Invalid file path.");
+		Log_errorLnx("Invalid file path.");
 		goto clean;
 	}
 
 	if (Buffer_length(buf) < 4) {
-		Log_errorLn("File has to start with magic number.");
+		Log_errorLnx("File has to start with magic number.");
 		goto clean;
 	}
 
@@ -116,7 +116,7 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 	}
 
 	if (Buffer_length(buf) < reqLen) {
-		Log_errorLn("File wasn't the right size.");
+		Log_errorLnx("File wasn't the right size.");
 		goto clean;
 	}
 
@@ -128,7 +128,7 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 			
 			CAHeader caHeader = *(const CAHeader*)buf.ptr;
 
-			Log_debugLn("Detected oiCA file with following info:");
+			Log_debugLnx("Detected oiCA file with following info:");
 
 			XXFile_printVersion(caHeader.version);
 
@@ -141,13 +141,13 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 				"U64 (64-bit number)"
 			};
 
-			Log_debugLn(
+			Log_debugLnx(
 				"Data size type uses %s.", 
 				dataTypes[(caHeader.flags >> ECAFlags_FileSizeType_Shift) & ECAFlags_FileSizeType_Mask]
 			);
 
 			if (caHeader.type >> 4)
-				Log_debugLn(
+				Log_debugLnx(
 					"Compression size type uses %s.", 
 					dataTypes[(caHeader.flags >> ECAFlags_CompressedSizeType_Shift) & ECAFlags_CompressedSizeType_Mask]
 				);
@@ -161,7 +161,7 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 			reqLen += caHeader.flags & ECAFlags_DirectoriesCountLong ? sizeof(U16) : sizeof(U8);
 
 			if (Buffer_length(buf) < reqLen) {
-				Log_errorLn("File wasn't the right size.");
+				Log_errorLnx("File wasn't the right size.");
 				goto clean;
 			}
 
@@ -177,8 +177,8 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 				caHeader.flags & ECAFlags_DirectoriesCountLong ? EXXDataSizeType_U16 : EXXDataSizeType_U8
 			);
 
-			Log_debugLn("Directory count: %u", dirCount);
-			Log_debugLn("File count: %u", fileCount);
+			Log_debugLnx("Directory count: %u", dirCount);
+			Log_debugLnx("File count: %u", fileCount);
 
 			//AES chunking
 
@@ -192,7 +192,7 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 					"500 MiB"
 				};
 
-				Log_debugLn(
+				Log_debugLnx(
 					"AES Chunking uses %s per chunk.", 
 					chunking[(aesChunking >> ECAFlags_AESChunkShift) - 1]
 				);
@@ -210,16 +210,16 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 				reqLen += sizeof(CAExtraInfo);
 
 				if (Buffer_length(buf) < reqLen) {
-					Log_errorLn("File wasn't the right size.");
+					Log_errorLnx("File wasn't the right size.");
 					goto clean;
 				}
 
 				CAExtraInfo extraInfo = *(const CAExtraInfo*)(buf.ptr + oldPtr);
 
-				Log_debugLn("Extended magic number: %08X", extraInfo.extendedMagicNumber);
-				Log_debugLn("Extended header size: %u", extraInfo.headerExtensionSize);
-				Log_debugLn("Extended per directory size: %u", extraInfo.directoryExtensionSize);
-				Log_debugLn("Extended per file size: %u", extraInfo.fileExtensionSize);
+				Log_debugLnx("Extended magic number: %08X", extraInfo.extendedMagicNumber);
+				Log_debugLnx("Extended header size: %u", extraInfo.headerExtensionSize);
+				Log_debugLnx("Extended per directory size: %u", extraInfo.directoryExtensionSize);
+				Log_debugLnx("Extended per file size: %u", extraInfo.fileExtensionSize);
 			}
 
 			//Flags
@@ -242,14 +242,14 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 
 			if(caHeader.flags & ~ECAFlags_NonFlagTypes) {
 
-				Log_debugLn("Flags: ");
+				Log_debugLnx("Flags: ");
 
 				for(U64 i = 0; i < sizeof(caHeader.flags) << 3; ++i) {
 
 					const C8 *flag = flags[U64_min(i, sizeof(flags) / sizeof(flags[0]) - 1)];
 
 					if((caHeader.flags >> i) & 1 && flag)
-						Log_debugLn(flag);
+						Log_debugLnx(flag);
 				}
 			}
 
@@ -262,7 +262,7 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 		
 			DLHeader dlHeader = *(const DLHeader*)(buf.ptr + sizeof(U32));
 
-			Log_debugLn("Detected oiDL file with following info:");
+			Log_debugLnx("Detected oiDL file with following info:");
 
 			XXFile_printVersion(dlHeader.version);
 			
@@ -278,7 +278,7 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 					"100 MiB"
 				};
 
-				Log_debugLn(
+				Log_debugLnx(
 					"AES Chunking uses %s per chunk.", 
 					chunking[(aesChunking >> EDLFlags_AESChunkShift) - 1]
 				);
@@ -297,17 +297,17 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 				"U64 (64-bit number)"
 			};
 
-			Log_debugLn("Entry count size type uses %s", dataTypes[dlHeader.sizeTypes & 3]);
+			Log_debugLnx("Entry count size type uses %s", dataTypes[dlHeader.sizeTypes & 3]);
 
 			if (dlHeader.type >> 4)
-				Log_debugLn("Compression size type uses %s", dataTypes[(dlHeader.sizeTypes >> 2) & 3]);
+				Log_debugLnx("Compression size type uses %s", dataTypes[(dlHeader.sizeTypes >> 2) & 3]);
 
-			Log_debugLn("Buffer size type uses %s", dataTypes[(dlHeader.sizeTypes >> 4) & 3]);
+			Log_debugLnx("Buffer size type uses %s", dataTypes[(dlHeader.sizeTypes >> 4) & 3]);
 
 			reqLen += (U64)1 << (dlHeader.sizeTypes & 3);
 
 			if (Buffer_length(buf) < reqLen) {
-				Log_errorLn("File wasn't the right size.");
+				Log_errorLnx("File wasn't the right size.");
 				goto clean;
 			}
 
@@ -318,7 +318,7 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 				(EXXDataSizeType)(dlHeader.sizeTypes & 3)
 			);
 
-			Log_debugLn("Entry count: %u", entryCount);
+			Log_debugLnx("Entry count: %u", entryCount);
 
 			//Extended data
 
@@ -328,15 +328,15 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 				reqLen += sizeof(DLExtraInfo);
 
 				if (Buffer_length(buf) < reqLen) {
-					Log_errorLn("File wasn't the right size.");
+					Log_errorLnx("File wasn't the right size.");
 					goto clean;
 				}
 
 				DLExtraInfo extraInfo = *(const DLExtraInfo*)(buf.ptr + oldPtr);
 
-				Log_debugLn("Extended magic number: %08X", extraInfo.extendedMagicNumber);
-				Log_debugLn("Extended header size: %u", extraInfo.extendedHeader);
-				Log_debugLn("Extended per entry size: %u", extraInfo.perEntryExtendedData);
+				Log_debugLnx("Extended magic number: %08X", extraInfo.extendedMagicNumber);
+				Log_debugLnx("Extended header size: %u", extraInfo.extendedHeader);
+				Log_debugLnx("Extended per entry size: %u", extraInfo.perEntryExtendedData);
 			}
 
 			//Flags
@@ -353,14 +353,14 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 
 			if(dlHeader.flags & ~EDLFlags_AESChunkMask) {
 
-				Log_debugLn("Flags: ");
+				Log_debugLnx("Flags: ");
 
 				for (U64 i = 0; i < sizeof(dlHeader.flags) << 3; ++i) {
 
 					const C8 *flag = flags[U64_min(i, sizeof(flags) / sizeof(flags[0]) - 1)];
 
 					if((dlHeader.flags >> i) & 1 && flag)
-						Log_debugLn(flag);
+						Log_debugLnx(flag);
 				}
 			}
 
@@ -370,7 +370,7 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 		//Invalid
 
 		default:
-			Log_errorLn("File had unrecognized magic number");
+			Log_errorLnx("File had unrecognized magic number");
 			goto clean;
 	}
 
@@ -444,7 +444,7 @@ Bool CLI_showFile(ParsedArgs args, Buffer b, U64 start, U64 length, Bool isAscii
 	//Validate offset
 
 	if (start + ((Bool)Buffer_length(b)) > Buffer_length(b)) {
-		Log_debugLn("Section out of bounds.");
+		Log_debugLnx("Section out of bounds.");
 		return false;
 	}
 
@@ -461,14 +461,14 @@ Bool CLI_showFile(ParsedArgs args, Buffer b, U64 start, U64 length, Bool isAscii
 			length = Buffer_length(b) - start;
 
 		if (start + length > Buffer_length(b)) {
-			Log_debugLn("Section out of bounds.");
+			Log_debugLnx("Section out of bounds.");
 			goto clean;
 		}
 
 		CharString out = CharString_createNull();
 
 		if ((err = ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &out)).genericError) {
-			Log_errorLn("Invalid argument -o <string>.");
+			Log_errorLnx("Invalid argument -o <string>.");
 			goto clean;
 		}
 
@@ -481,11 +481,11 @@ Bool CLI_showFile(ParsedArgs args, Buffer b, U64 start, U64 length, Bool isAscii
 	else {
 
 		if (!Buffer_length(b)) {
-			Log_debugLn("Section is empty.");
+			Log_debugLnx("Section is empty.");
 			goto clean;
 		}
 
-		Log_debugLn("Section has %u bytes.", Buffer_length(b));
+		Log_debugLnx("Section has %u bytes.", Buffer_length(b));
 
 		//Get length
 
@@ -497,20 +497,20 @@ Bool CLI_showFile(ParsedArgs args, Buffer b, U64 start, U64 length, Bool isAscii
 		else length = U64_min(max * 2, length);
 
 		if (start + length > Buffer_length(b)) {
-			Log_debugLn("Section out of bounds.");
+			Log_debugLnx("Section out of bounds.");
 			goto clean;
 		}
 
 		//Show what offset is being displayed
 
-		Log_debugLn("Showing offset %X with size %u", start, length);
-		Log_debugLn(isAscii ? "File contents: (ascii)" : "File contents: (binary)");
+		Log_debugLnx("Showing offset %X with size %u", start, length);
+		Log_debugLnx(isAscii ? "File contents: (ascii)" : "File contents: (binary)");
 
 		//Ascii can be directly output to log
 
 		if (isAscii) {
 			tmp = CharString_createConstRefSized((const C8*)b.ptr + start, length, false);
-			Log_debugLn("%.*s", CharString_length(tmp), tmp.ptr);
+			Log_debugLnx("%.*s", CharString_length(tmp), tmp.ptr);
 			tmp = CharString_createNull();
 		}
 
@@ -531,7 +531,7 @@ Bool CLI_showFile(ParsedArgs args, Buffer b, U64 start, U64 length, Bool isAscii
 				CharString_freex(&tmp1);
 			}
 
-			Log_debugLn("%.*s", CharString_length(tmp), tmp.ptr);
+			Log_debugLnx("%.*s", CharString_length(tmp), tmp.ptr);
 			CharString_freex(&tmp);
 		}
 	}
@@ -557,12 +557,12 @@ Bool CLI_storeFileOrFolder(ParsedArgs args, ArchiveEntry e, Archive a, Bool *mad
 	if (e.type == EFileType_Folder) {
 
 		if(start || (len && len != a.entries.length))
-			Log_warnLn("Folder output to disk ignores offset and/or count.");
+			Log_warnLnx("Folder output to disk ignores offset and/or count.");
 
 		CharString out = CharString_createNull();
 
 		if ((err = ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &out)).genericError) {
-			Log_errorLn("Invalid argument -o <string>.");
+			Log_errorLnx("Invalid argument -o <string>.");
 			goto clean;
 		}
 
@@ -623,17 +623,17 @@ Bool CLI_inspectData(ParsedArgs args) {
 	//Get file
 
 	if ((err = ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &path)).genericError) {
-		Log_errorLn("Invalid argument -i <string>.");
+		Log_errorLnx("Invalid argument -i <string>.");
 		goto clean;
 	}
 
 	if ((err = File_read(path, 1 * SECOND, &buf)).genericError) {
-		Log_errorLn("Invalid file path.");
+		Log_errorLnx("Invalid file path.");
 		goto clean;
 	}
 
 	if (Buffer_length(buf) < 4) {
-		Log_errorLn("File has to start with magic number.");
+		Log_errorLnx("File has to start with magic number.");
 		goto clean;
 	}
 
@@ -643,7 +643,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 	if (args.parameters & EOperationHasParameter_Entry)
 		if ((err = ParsedArgs_getArg(args, EOperationHasParameter_EntryShift, &entry)).genericError) {
-			Log_errorLn("Invalid argument -e <string or uint>.");
+			Log_errorLnx("Invalid argument -e <string or uint>.");
 			goto clean;
 		}
 
@@ -658,7 +658,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 			!CharString_parseU64(starts, &start) ||
 			(start >> 32)
 		) {
-			Log_errorLn("Invalid argument -s <uint>.");
+			Log_errorLnx("Invalid argument -s <uint>.");
 			goto clean;
 		}
 
@@ -673,7 +673,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 			!CharString_parseU64(lengths, &length) ||
 			(length >> 32)
 		) {
-			Log_errorLn("Invalid argument -l <uint>.");
+			Log_errorLnx("Invalid argument -l <uint>.");
 			goto clean;
 		}
 
@@ -690,14 +690,14 @@ Bool CLI_inspectData(ParsedArgs args) {
 			(ParsedArgs_getArg(args, EOperationHasParameter_AESShift, &key)).genericError || 
 			!CharString_isHex(key)
 		) {
-			Log_errorLn("Invalid parameter sent to -aes. Expecting key in hex (32 bytes)");
+			Log_errorLnx("Invalid parameter sent to -aes. Expecting key in hex (32 bytes)");
 			return false;
 		}
 
 		U64 off = CharString_startsWithString(key, CharString_createConstRefCStr("0x"), EStringCase_Insensitive) ? 2 : 0;
 
 		if (CharString_length(key) - off != 64) {
-			Log_errorLn("Invalid parameter sent to -aes. Expecting key in hex (32 bytes)");
+			Log_errorLnx("Invalid parameter sent to -aes. Expecting key in hex (32 bytes)");
 			return false;
 		}
 
@@ -739,12 +739,12 @@ Bool CLI_inspectData(ParsedArgs args) {
 				if (index == U64_MAX) {
 
 					if (!CharString_parseU64(entry, &index)) {
-						Log_errorLn("Invalid argument -e <uint> or <valid path> expected.");
+						Log_errorLnx("Invalid argument -e <uint> or <valid path> expected.");
 						goto cleanCa;
 					}
 
 					if (index >= file.archive.entries.length) {
-						Log_errorLn("Index out of bounds, max is %u.", file.archive.entries.length);
+						Log_errorLnx("Index out of bounds, max is %u.", file.archive.entries.length);
 						goto cleanCa;
 					}
 				}
@@ -786,7 +786,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 							CharString_createConstRefSized((const C8*) e.data.ptr, Buffer_length(e.data), false)
 						);
 
-						Log_debugLn("%.*s", CharString_length(e.path), e.path.ptr);
+						Log_debugLnx("%.*s", CharString_length(e.path), e.path.ptr);
 						CLI_showFile(args, e.data, start, length, isAscii);
 						goto cleanCa;
 					}
@@ -831,7 +831,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 			U64 end = start + length;
 
-			Log_debugLn(
+			Log_debugLnx(
 				"Showing offset %X with count %u in selected folder (File contains %u entries)",
 				start, length, file.archive.entries.length
 			);
@@ -865,12 +865,12 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 				//Log and free temp
 
-				Log_debugLn("%.*s", CharString_length(tmp), tmp.ptr);
+				Log_debugLnx("%.*s", CharString_length(tmp), tmp.ptr);
 				CharString_freex(&tmp);
 			}
 
 			if(!strings.length)
-				Log_debugLn("Folder is empty.");
+				Log_debugLnx("Folder is empty.");
 
 		cleanCa:
 
@@ -914,12 +914,12 @@ Bool CLI_inspectData(ParsedArgs args) {
 				U64 entryI = 0;
 
 				if (!CharString_parseU64(entry, &entryI)) {
-					Log_errorLn("Invalid argument -e <uint> expected.");
+					Log_errorLnx("Invalid argument -e <uint> expected.");
 					goto cleanDl;
 				}
 
 				if (entryI >= file.entries.length) {
-					Log_errorLn("Index out of bounds, max is %u", file.entries.length);
+					Log_errorLnx("Index out of bounds, max is %u", file.entries.length);
 					goto cleanDl;
 				}
 
@@ -936,7 +936,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 			else {
 
-				Log_debugLn("oiDL Entries:");
+				Log_debugLnx("oiDL Entries:");
 
 				for (U64 i = start; i < end && i < file.entries.length; ++i) {
 
@@ -952,7 +952,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 					_gotoIfError(cleanDl, CharString_createDecx(entrySize, 0, &tmp1));
 					_gotoIfError(cleanDl, CharString_appendStringx(&tmp, tmp1));
 
-					Log_debugLn("%.*s", tmp);
+					Log_debugLnx("%.*s", tmp);
 					CharString_freex(&tmp);
 					CharString_freex(&tmp1);
 				}
@@ -973,7 +973,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 		//Invalid
 
 		default:
-			Log_errorLn("File had unrecognized magic number.");
+			Log_errorLnx("File had unrecognized magic number.");
 			goto clean;
 	}
 

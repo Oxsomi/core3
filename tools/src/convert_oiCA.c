@@ -201,7 +201,7 @@ Error _CLI_convertFromCA(ParsedArgs args, CharString input, FileInfo inputInfo, 
 	//TODO: Batch multiple files
 
 	if (inputInfo.type != EFileType_File) {
-		Log_errorLn("oiCA can only be converted from single file");
+		Log_errorLnx("oiCA can only be converted from single file");
 		return Error_invalidOperation(0);
 	}
 

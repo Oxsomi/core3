@@ -21,6 +21,7 @@
 #include "types/buffer.h"
 #include "platforms/platform.h"
 #include "platforms/log.h"
+#include "platforms/atomic.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/listx.h"
@@ -33,7 +34,7 @@
 
 #include <intrin.h>
 
-CharString Error_formatPlatformError(Error err) {
+CharString Error_formatPlatformError(Allocator alloc, Error err) {
 
 	if(err.genericError != EGenericError_PlatformError)
 		return CharString_createNull();
@@ -65,7 +66,7 @@ CharString Error_formatPlatformError(Error err) {
 		return CharString_createNull();
 
 	CharString res;
-	if((err = CharString_createCopyx(CharString_createConstRefSized(lpBuffer, f, true), &res)).genericError) {
+	if((err = CharString_createCopy(CharString_createConstRefSized(lpBuffer, f, true), alloc, &res)).genericError) {
 		LocalFree(lpBuffer);
 		return CharString_createNull();
 	}
@@ -97,13 +98,13 @@ void sigFunc(int signal) {
 	//For debugging purposed however, this is very useful
 	//Turn this off by defining _NO_SIGNAL_HANDLING
 
-	Log_printStackTrace(1, ELogLevel_Error, ELogOptions_Default);
-	Log_log(ELogLevel_Fatal, ELogOptions_Default, CharString_createConstRefCStr(msg));
+	Log_printStackTracex(1, ELogLevel_Error, ELogOptions_Default);
+	Log_logx(ELogLevel_Fatal, ELogOptions_Default, CharString_createConstRefCStr(msg));
 	exit(signal);
 }
 
-U64 Allocator_memoryAllocationCount = 0;
-U64 Allocator_memoryAllocationSize = 0;
+AtomicI64 Allocator_memoryAllocationCount;
+AtomicI64 Allocator_memoryAllocationSize;
 
 //Allocator has special allocator for the allocations
 
@@ -116,6 +117,7 @@ typedef struct DebugAllocation {
 
 Allocator Allocator_allocationsAllocator;
 List Allocator_allocations;						//TODO: Use hashmap here!
+Lock Allocator_lock;							//Multi threading safety
 
 Error allocCallbackNoCheck(void *allocator, U64 length, Buffer *output) {
 
@@ -153,8 +155,8 @@ Error allocCallback(void *allocator, U64 length, Buffer *output) {
 	if(!ptr)
 		return Error_outOfMemory(0);
 
-	++Allocator_memoryAllocationCount;
-	Allocator_memoryAllocationSize += length;
+	AtomicI64_add(&Allocator_memoryAllocationCount, 1);
+	AtomicI64_add(&Allocator_memoryAllocationSize, length);
 	
 	#ifndef NDEBUG
 
@@ -164,8 +166,12 @@ Error allocCallback(void *allocator, U64 length, Buffer *output) {
 
 		Log_captureStackTrace(captured.stack, _STACKTRACE_SIZE, 1);
 
+		if(!Lock_lock(&Allocator_lock, U64_MAX))
+			return Error_invalidState(0);			//Should never happen
+
 		Buffer buf = Buffer_createConstRef(&captured, sizeof(captured));
 		Error err = List_pushBack(&Allocator_allocations, buf, Allocator_allocationsAllocator);
+		Lock_unlock(&Allocator_lock);
 
 		if(err.genericError)
 			return err;
@@ -185,6 +191,9 @@ Bool freeCallback(void *allocator, Buffer buf) {
 
 	#ifndef NDEBUG
 
+		if(!Lock_lock(&Allocator_lock, U64_MAX))
+			return false;
+
 		U64 i = 0;
 
 		for (; i < Allocator_allocations.length; ++i) {
@@ -196,12 +205,14 @@ Bool freeCallback(void *allocator, Buffer buf) {
 				if(Buffer_length(buf) != captured->length) {
 
 					Log_errorLn(
+						Allocator_allocationsAllocator,
 						"Allocation at %p was allocated with length %llu but freed with length %llu!",
 						buf.ptr,
 						captured->length,
 						Buffer_length(buf)
 					);
 
+					Lock_unlock(&Allocator_lock);
 					return false;
 				}
 
@@ -212,23 +223,26 @@ Bool freeCallback(void *allocator, Buffer buf) {
 		if(i == Allocator_allocations.length) {
 
 			Log_errorLn(
+				Allocator_allocationsAllocator,
 				"Allocation that was freed at %p with length %llu was not found in the allocation list!",
 				buf.ptr,
 				Buffer_length(buf)
 			);
 
+			Lock_unlock(&Allocator_lock);
 			return false;
 		}
 
 		List_erase(&Allocator_allocations, i);
+		Lock_unlock(&Allocator_lock);
 
 	#endif
 
 	//Free from counter
 
-	--Allocator_memoryAllocationCount;
-	Allocator_memoryAllocationSize -= Buffer_length(buf);
-	
+	AtomicI64_sub(&Allocator_memoryAllocationCount, 1);
+	AtomicI64_sub(&Allocator_memoryAllocationSize, Buffer_length(buf));
+
 	//Free mem
 
 	free((U8*) buf.ptr);
@@ -238,14 +252,19 @@ Bool freeCallback(void *allocator, Buffer buf) {
 
 void Platform_printAllocations(U64 offset, U64 length, U64 minAllocationSize) {
 
-	offset; length;
+	offset; length; minAllocationSize;
 
 	#ifndef NDEBUG
+
+		if(!Lock_lock(&Allocator_lock, U64_MAX))
+			return;
 
 		if(!length)
 			length = Allocator_allocations.length;
 
-		Log_debugLn("Showing up to %llu allocations starting at offset %llu", length, offset);
+		Log_debugLn(
+			Allocator_allocationsAllocator, "Showing up to %llu allocations starting at offset %llu", length, offset
+		);
 
 		U64 capturedLength = 0;
 	
@@ -256,25 +275,35 @@ void Platform_printAllocations(U64 offset, U64 length, U64 minAllocationSize) {
 			if(captured->length < minAllocationSize)
 				continue;
 
-			Log_debugLn("Allocation %llu at %p with length %llu allocated at:", i, captured->location, captured->length);
-			Log_printCapturedStackTrace(captured->stack, ELogLevel_Debug, ELogOptions_Default);
+			Log_debugLn(
+				Allocator_allocationsAllocator, 
+				"Allocation %llu at %p with length %llu allocated at:", 
+				i, captured->location, captured->length
+			);
+
+			Log_printCapturedStackTrace(Allocator_allocationsAllocator, captured->stack, ELogLevel_Debug, ELogOptions_Default);
 
 			capturedLength += captured->length;
 		}
 
-		Log_debugLn("Showed %llu bytes of allocations", capturedLength);
+		Log_debugLn(Allocator_allocationsAllocator, "Showed %llu bytes of allocations", capturedLength);
+		Lock_unlock(&Allocator_lock);
 
 	#endif
 }
 
-U64 Platform_getAllocationCount()  { return Allocator_memoryAllocationCount; }
-U64 Platform_getAllocationSize() { return Allocator_memoryAllocationSize; }
-
 void Allocator_reportLeaks() {
 
-	if (Allocator_memoryAllocationCount || Allocator_memoryAllocationSize) {
-		Log_warnLn("Leaked %llu bytes in %llu allocations.", Allocator_memoryAllocationSize, Allocator_memoryAllocationCount);
-		Platform_printAllocations(0, 16, 0);
+	I64 memCount = AtomicI64_add(&Allocator_memoryAllocationCount, 0);
+	I64 memSize = AtomicI64_add(&Allocator_memoryAllocationSize, 0);
+
+	if (memCount || memSize) {
+
+		Log_warnLn(Allocator_allocationsAllocator, "Leaked %llu bytes in %llu allocations.", memSize, memCount);
+
+		#ifndef NDEBUG
+			Platform_printAllocations(0, 16, 0);
+		#endif
 	}
 }
 
@@ -307,13 +336,20 @@ int main(int argc, const char *argv[]) {
 
 			if(err.genericError)
 				return -1;
+
+			Allocator_lock = (Lock) { 0 };
+
+			if ((err = Lock_create(&Allocator_lock)).genericError)
+				return -2;
+
+			Allocator_memoryAllocationCount = Allocator_memoryAllocationSize = (AtomicI64) { 0 };
 		}
 	#endif
 
 	Error err = Platform_create(argc, argv, GetModuleHandleA(NULL), freeCallback, allocCallback, NULL);
 
 	if(err.genericError)
-		return -2;
+		return -3;
 
 	#if _SIMD == SIMD_SSE
 
@@ -339,14 +375,14 @@ int main(int argc, const char *argv[]) {
 
 		if ((cpuInfo[3] & mask3) != mask3 || (cpuInfo[2] & mask2) != mask2 || (cpuInfo1[1] & mask1_1) != mask1_1) {
 
-			Log_error(
+			Log_errorx(
 				ELogOptions_Default,
 				"Unsupported CPU. The following extensions are required: "
 				"SSE, SSE2, SSE3, SSSE3, SSE4.1, SSE4.2, AES, RDRAND, BMI1, PCLMULQDQ"
 			);
 
 			Platform_cleanup();
-			return -3;
+			return -4;
 		}
 
 	#endif
@@ -397,7 +433,7 @@ BOOL enumerateFiles(HMODULE mod, LPCSTR unused, LPSTR name, List *sections) {
 	CharString copy = CharString_createNull();
 
 	if(CharString_countAll(str, '/', EStringCase_Sensitive) != 1)
-		Log_warnLn("Executable contained unrecognized RCDATA. Ignoring it...");
+		Log_warnLnx("Executable contained unrecognized RCDATA. Ignoring it...");
 
 	else {
 

@@ -76,5 +76,3 @@ user_impl extern void Program_exit();
 //Debugging to see where allocations came from and how many are active
 
 impl void Platform_printAllocations(U64 offset, U64 length, U64 minAllocationSize);
-impl U64 Platform_getAllocationCount();
-impl U64 Platform_getAllocationSize();

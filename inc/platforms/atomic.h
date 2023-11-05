@@ -25,6 +25,14 @@ typedef struct AtomicI64 {
 	volatile I64 atomic;		//Don't manually touch
 } AtomicI64;
 
+//Bitwise
+
+I64 AtomicI64_xor(AtomicI64 *ptr, I64 value);
+I64 AtomicI64_and(AtomicI64 *ptr, I64 value);
+I64 AtomicI64_or(AtomicI64 *ptr, I64 value);
+I64 AtomicI64_exchange(AtomicI64 *ptr, I64 value);
+I64 AtomicI64_compareExchange(AtomicI64 *ptr, I64 compare, I64 value);		//If value in atomic is compare set to value
+
 //Return state of atomic before adding value.
 
 I64 AtomicI64_add(AtomicI64 *ptr, I64 value);

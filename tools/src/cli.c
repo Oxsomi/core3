@@ -38,10 +38,10 @@ void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f) {
 
 	if (invalidCat) {
 
-		Log_debug(ELogOptions_None, "All categories:\n\n");
+		Log_debugx(ELogOptions_None, "All categories:\n\n");
 
 		for(U64 i = EOperationCategory_Start; i < EOperationCategory_End; ++i)
-			Log_debugLn(
+			Log_debugLnx(
 				"%s: %s", 
 				EOperationCategory_names[i - 1], EOperationCategory_description[i - 1]
 			);
@@ -53,7 +53,7 @@ void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f) {
 
 	if(invalidOp) {
 
-		Log_debug(ELogOptions_None, "All operations:\n\n");
+		Log_debugx(ELogOptions_None, "All operations:\n\n");
 
 		for(U64 i = 0; i < EOperation_Invalid; ++i) {
 
@@ -62,13 +62,13 @@ void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f) {
 			if(opVal.category != category)
 				continue;
 
-			Log_debugLn(
+			Log_debugLnx(
 				"%s %s %s", 
 				EOperationCategory_names[opVal.category - 1], opVal.name,
 				opVal.isFormatLess ? "" : "-f <format> ...{format dependent syntax}"
 			);
 
-			Log_debug(ELogOptions_None, "%s\n\n", opVal.desc);
+			Log_debugx(ELogOptions_None, "%s\n\n", opVal.desc);
 		}
 
 		return;
@@ -80,13 +80,13 @@ void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f) {
 
 	if (invalidF && !opVal.isFormatLess) {
 
-		Log_debugLn(
+		Log_debugLnx(
 			"Please use syntax:\n%s %s -f <format> ...{format dependent syntax}", 
 			EOperationCategory_names[category - 1],
 			opVal.name
 		);
 
-		Log_debug(ELogOptions_None, "All formats:\n\n");
+		Log_debugx(ELogOptions_None, "All formats:\n\n");
 
 		for (U64 i = 0; i < EFormat_Invalid; ++i) {
 
@@ -101,7 +101,7 @@ void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f) {
 			if(!containsCat)
 				continue;
 
-			Log_debugLn("%s: %s", Format_values[i].name, Format_values[i].desc);
+			Log_debugLnx("%s: %s", Format_values[i].name, Format_values[i].desc);
 		}
 
 		return;
@@ -109,7 +109,7 @@ void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f) {
 
 	//Show more about the current operation and format
 
-	Log_debugLn(
+	Log_debugLnx(
 		"Please use syntax:\n%s %s %s %s", 
 		EOperationCategory_names[category - 1],
 		opVal.name,
@@ -130,12 +130,12 @@ void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f) {
 
 	if(format.requiredParameters | format.optionalParameters) {
 
-		Log_debug(ELogOptions_None, "With the following parameters:\n\n");
+		Log_debugx(ELogOptions_None, "With the following parameters:\n\n");
 
 		for(U64 i = EOperationHasParameter_InputShift; i < EOperationHasParameter_Count; ++i)
 
 			if (((format.requiredParameters | format.optionalParameters) >> i) & 1)
-				Log_debugLn(
+				Log_debugLnx(
 					"%s:\t%s\t%s",
 					EOperationHasParameter_names[i],
 					EOperationHasParameter_descriptions[i],
@@ -144,16 +144,16 @@ void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f) {
 	}
 
 	if((format.requiredParameters | format.optionalParameters) && format.operationFlags)
-		Log_debugLn("");
+		Log_debugLnx("");
 
 	if(format.operationFlags) {
 
-		Log_debug(ELogOptions_None, "With the following flags:\n\n");
+		Log_debugx(ELogOptions_None, "With the following flags:\n\n");
 
 		for(U64 i = EOperationFlags_None; i < EOperationFlags_Count; ++i)
 
 			if ((format.operationFlags >> i) & 1) 
-				Log_debugLn(
+				Log_debugLnx(
 					"%s:\t%s",
 					EOperationFlags_names[i],
 					EOperationFlags_descriptions[i]
@@ -323,7 +323,7 @@ Bool CLI_execute(CharStringList arglist) {
 			)) {
 
 				if ((args.flags >> i) & 1) {
-					Log_errorLn("Duplicate flag: %.*s.", CharString_length(arglist.ptr[j]), arglist.ptr[j].ptr);
+					Log_errorLnx("Duplicate flag: %.*s.", CharString_length(arglist.ptr[j]), arglist.ptr[j].ptr);
 					goto clean;
 				}
 
@@ -351,7 +351,7 @@ Bool CLI_execute(CharStringList arglist) {
 					j + 1 >= arglist.length ||
 					CharString_getAt(arglist.ptr[j + 1], 0) == '-'
 				) {
-					Log_errorLn("Parameter is missing argument: %.*s.", CharString_length(arglist.ptr[j]), arglist.ptr[j].ptr);
+					Log_errorLnx("Parameter is missing argument: %.*s.", CharString_length(arglist.ptr[j]), arglist.ptr[j].ptr);
 					goto clean;
 				}
 
@@ -377,7 +377,7 @@ Bool CLI_execute(CharStringList arglist) {
 					//Mark as present
 
 					if (args.parameters & param) {
-						Log_errorLn("Duplicate parameter: %.*s.", CharString_length(arglist.ptr[j]), arglist.ptr[j].ptr);
+						Log_errorLnx("Duplicate parameter: %.*s.", CharString_length(arglist.ptr[j]), arglist.ptr[j].ptr);
 						goto clean;
 					}
 
@@ -438,7 +438,7 @@ Bool CLI_execute(CharStringList arglist) {
 						break;
 
 				if(i == EOperationHasParameter_Count) {
-					Log_errorLn("Invalid parameter is present: %.*s.", CharString_length(arglist.ptr[j]), arglist.ptr[j].ptr);
+					Log_errorLnx("Invalid parameter is present: %.*s.", CharString_length(arglist.ptr[j]), arglist.ptr[j].ptr);
 					CLI_showHelp(category, operation, args.format);
 					goto clean;
 				}
@@ -460,7 +460,7 @@ Bool CLI_execute(CharStringList arglist) {
 					break;
 
 			if(i == EOperationFlags_Count) {
-				Log_errorLn("Invalid flag is present: %.*s.", CharString_length(arglist.ptr[j]), arglist.ptr[j].ptr);
+				Log_errorLnx("Invalid flag is present: %.*s.", CharString_length(arglist.ptr[j]), arglist.ptr[j].ptr);
 				CLI_showHelp(category, operation, args.format);
 				goto clean;
 			}
@@ -468,7 +468,7 @@ Bool CLI_execute(CharStringList arglist) {
 			continue;
 		}
 
-		Log_errorLn("Invalid argument is present: %.*s", CharString_length(arglist.ptr[j]), arglist.ptr[j].ptr);
+		Log_errorLnx("Invalid argument is present: %.*s", CharString_length(arglist.ptr[j]), arglist.ptr[j].ptr);
 		CLI_showHelp(category, operation, args.format);
 		goto clean;
 	}
@@ -498,7 +498,7 @@ Bool CLI_execute(CharStringList arglist) {
 	//It must have all required params
 
 	if ((args.parameters & reqParam) != reqParam) {
-		Log_errorLn("Required parameter is missing.");
+		Log_errorLnx("Required parameter is missing.");
 		CLI_showHelp(category, operation, args.format);
 		goto clean;
 	}
@@ -506,7 +506,7 @@ Bool CLI_execute(CharStringList arglist) {
 	//It has some parameter that we don't support
 
 	if (args.parameters & ~(reqParam | optParam)) {
-		Log_errorLn("Unsupported parameter is present.");
+		Log_errorLnx("Unsupported parameter is present.");
 		CLI_showHelp(category, operation, args.format);
 		goto clean;
 	}
@@ -514,7 +514,7 @@ Bool CLI_execute(CharStringList arglist) {
 	//It has some flag we don't support
 
 	if (args.flags & ~opFlags) {
-		Log_errorLn("Unsupported flag is present.");
+		Log_errorLnx("Unsupported flag is present.");
 		CLI_showHelp(category, operation, args.format);
 		goto clean;
 	}

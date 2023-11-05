@@ -110,10 +110,14 @@ void Platform_cleanup() {
 	Platform_instance =	(Platform) { 0 };
 }
 
-Bool Lock_isLocked(Lock l) {
-	return l.lockThread;
+Bool Lock_isLockedForThread(Lock *l) { 
+	return AtomicI64_add(&l->lockedThreadId, 0) == Thread_getId();
 }
 
-void Log_printCapturedStackTrace(const StackTrace stackTrace, ELogLevel lvl, ELogOptions options) {
-	Log_printCapturedStackTraceCustom((const void**) stackTrace, _STACKTRACE_SIZE, lvl, options);
+void Log_printCapturedStackTrace(Allocator alloc, const StackTrace stackTrace, ELogLevel lvl, ELogOptions options) {
+	Log_printCapturedStackTraceCustom(alloc, (const void**) stackTrace, _STACKTRACE_SIZE, lvl, options);
+}
+
+void Log_printCapturedStackTracex(const StackTrace stackTrace, ELogLevel lvl, ELogOptions options) {
+	Log_printCapturedStackTrace(Platform_instance.alloc, stackTrace, lvl, options);
 }

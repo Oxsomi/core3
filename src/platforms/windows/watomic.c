@@ -21,8 +21,28 @@
 #include "platforms/windows/wplatform_ext.h"
 #include "platforms/atomic.h"
 
+I64 AtomicI64_and(AtomicI64 *ptr, I64 value) {
+	return InterlockedAnd64(&ptr->atomic, value);
+}
+
+I64 AtomicI64_xor(AtomicI64 *ptr, I64 value) {
+	return InterlockedXor64(&ptr->atomic, value);
+}
+
+I64 AtomicI64_or(AtomicI64 *ptr, I64 value) {
+	return InterlockedOr64(&ptr->atomic, value);
+}
+
 I64 AtomicI64_add(AtomicI64 *ptr, I64 value) {
 	return InterlockedExchangeAdd64(&ptr->atomic, value);
+}
+
+I64 AtomicI64_exchange(AtomicI64 *ptr, I64 value) {
+	return InterlockedExchange64(&ptr->atomic, value);
+}
+
+I64 AtomicI64_compareExchange(AtomicI64 *ptr, I64 compare, I64 value) {
+	return InterlockedCompareExchange64(&ptr->atomic, value, compare);
 }
 
 I64 AtomicI64_sub(AtomicI64 *ptr, I64 value) {

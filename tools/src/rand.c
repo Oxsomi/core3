@@ -44,7 +44,7 @@ Bool CLI_rand(ParsedArgs args) {
 			!CharString_parseU64(str, &n) ||
 			(n >> 32)
 		) {
-			Log_errorLn("Invalid argument -n <string>, uint expected.");
+			Log_errorLnx("Invalid argument -n <string>, uint expected.");
 			return false;
 		}
 	}
@@ -60,7 +60,7 @@ Bool CLI_rand(ParsedArgs args) {
 			!CharString_parseU64(str, &l) ||
 			(l >> 32)
 		) {
-			Log_errorLn("Invalid argument -l <string>, uint expected.");
+			Log_errorLnx("Invalid argument -l <string>, uint expected.");
 			return false;
 		}
 	}
@@ -76,7 +76,7 @@ Bool CLI_rand(ParsedArgs args) {
 			!CharString_parseU64(str, &b) ||
 			(b >> 16)
 		) {
-			Log_errorLn("Invalid argument -b <string>, ushort expected.");
+			Log_errorLnx("Invalid argument -b <string>, ushort expected.");
 			return false;
 		}
 	}
@@ -131,7 +131,7 @@ Bool CLI_rand(ParsedArgs args) {
 				outputAsBase = 10;
 
 			if (hasMultiFlag) {
-				Log_errorLn("Invalid argument. Can only pick one base.");
+				Log_errorLnx("Invalid argument. Can only pick one base.");
 				return false;
 			}
 			
@@ -144,7 +144,7 @@ Bool CLI_rand(ParsedArgs args) {
 			break;
 
 		default:
-			Log_errorLn("Invalid operation.");
+			Log_errorLnx("Invalid operation.");
 			return false;
 	}
 
@@ -164,7 +164,7 @@ Bool CLI_rand(ParsedArgs args) {
 			default: {
 
 				if (b > 64) {
-					Log_errorLn("Decimal numbers can only support up to 64 bit (if -b is set).");
+					Log_errorLnx("Decimal numbers can only support up to 64 bit (if -b is set).");
 					return false;
 				}
 
@@ -256,7 +256,7 @@ Bool CLI_rand(ParsedArgs args) {
 							CharString str = CharString_createNull();
 
 							if (ParsedArgs_getArg(args, EOperationHasParameter_CharacterShift, &str).genericError) {
-								Log_errorLn("Invalid argument -c <string>.");
+								Log_errorLnx("Invalid argument -c <string>.");
 								return false;
 							}
 
@@ -368,7 +368,7 @@ Bool CLI_rand(ParsedArgs args) {
 		CharString outputPath = CharString_createNull();
 		
 		if (ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &outputPath).genericError) {
-			Log_errorLn("Invalid argument -o <string>, file path expected.");
+			Log_errorLnx("Invalid argument -o <string>, file path expected.");
 			return false;
 		}
 
@@ -377,8 +377,8 @@ Bool CLI_rand(ParsedArgs args) {
 	}
 
 	else {
-		Log_debugLn("Random operation returned:");
-		Log_debug(ELogOptions_None, "%.*s", CharString_length(outputString), outputString.ptr);
+		Log_debugLnx("Random operation returned:");
+		Log_debugx(ELogOptions_None, "%.*s", CharString_length(outputString), outputString.ptr);
 	}
 
 clean:
@@ -386,7 +386,7 @@ clean:
 	if(err.genericError) {
 
 		if(errorString)
-			Log_errorLn(errorString);
+			Log_errorLnx(errorString);
 
 		else Error_printx(err, ELogLevel_Error, ELogOptions_NewLine);
 	}

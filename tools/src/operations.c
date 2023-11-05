@@ -28,7 +28,7 @@ Bool CLI_info(ParsedArgs args) {
 
 	args;
 
-	Log_debugLn(
+	Log_debugLnx(
 
 		"OxC3 (Oxsomi core 3), a general framework and toolset for cross platform applications.\n"
 		"Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)"

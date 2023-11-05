@@ -156,8 +156,8 @@ Error CommandListRef_append(CommandListRef *commandListRef, ECommandOp op, Buffe
 
 	#ifndef NDEBUG
 
-		void *stackTrace[32];
-		Log_captureStackTrace(stackTrace, 32, 1 + extraSkipStacktrace);
+		void *stackTrace[16];
+		Log_captureStackTrace(stackTrace, 16, 1 + extraSkipStacktrace);
 
 		_gotoIfError(clean, List_pushBackx(
 			&commandList->callstacks, Buffer_createConstRef(stackTrace, sizeof(stackTrace))
@@ -960,7 +960,7 @@ Error GraphicsDeviceRef_createCommandList(
 
 	commandList->commandOps = List_createEmpty(sizeof(CommandOpInfo));
 	commandList->resources = List_createEmpty(sizeof(RefPtr*));
-	commandList->callstacks = List_createEmpty(sizeof(void*) * 32);
+	commandList->callstacks = List_createEmpty(sizeof(void*) * 16);
 
 	_gotoIfError(clean, Buffer_createEmptyBytesx(commandListLen, &commandList->data));
 

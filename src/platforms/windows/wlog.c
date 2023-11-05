@@ -64,7 +64,7 @@ static const WORD COLORS[] = {
 	12	/* bright red */
 };
 
-void Log_printCapturedStackTraceCustom(const void **stackTrace, U64 stackSize, ELogLevel lvl, ELogOptions opt) {
+void Log_printCapturedStackTraceCustom(Allocator alloc, const void **stackTrace, U64 stackSize, ELogLevel lvl, ELogOptions opt) {
 
 	if(!stackTrace)
 		return;
@@ -148,19 +148,19 @@ void Log_printCapturedStackTraceCustom(const void **stackTrace, U64 stackSize, E
 
 			if(CharString_length(capture->mod)) {
 				CharString tmp = CharString_createNull();
-				_gotoIfError(cleanup, CharString_createCopyx(capture->mod, &tmp));
+				_gotoIfError(cleanup, CharString_createCopy(capture->mod, alloc, &tmp));
 				capture->mod = tmp;
 			}
 
 			if(CharString_length(capture->sym)) {
 				CharString tmp = CharString_createNull();
-				_gotoIfError(cleanup, CharString_createCopyx(capture->sym, &tmp));
+				_gotoIfError(cleanup, CharString_createCopy(capture->sym, alloc, &tmp));
 				capture->sym = tmp;
 			}
 
 			if(CharString_length(capture->fil)) {
 				CharString tmp = CharString_createNull();
-				_gotoIfError(cleanup, CharString_createCopyx(capture->fil, &tmp));
+				_gotoIfError(cleanup, CharString_createCopy(capture->fil, alloc, &tmp));
 				capture->fil = tmp;
 			}
 
@@ -172,12 +172,12 @@ void Log_printCapturedStackTraceCustom(const void **stackTrace, U64 stackSize, E
 		cleanup:
 			
 			for (U64 j = 0; j < i; ++j) {
-				CharString_freex(&captured[j].fil);
-				CharString_freex(&captured[j].sym);
-				CharString_freex(&captured[j].mod);
+				CharString_free(&captured[j].fil, alloc);
+				CharString_free(&captured[j].sym, alloc);
+				CharString_free(&captured[j].mod, alloc);
 			}
 
-			Error_printx(err, lvl, opt);
+			Error_print(alloc, err, lvl, opt);
 			return;
 		}
 
@@ -212,15 +212,15 @@ void Log_printCapturedStackTraceCustom(const void **stackTrace, U64 stackSize, E
 
 		//We now don't need the strings anymore
 
-		CharString_freex(&capture.fil);
-		CharString_freex(&capture.sym);
-		CharString_freex(&capture.mod);
+		CharString_free(&capture.fil, alloc);
+		CharString_free(&capture.sym, alloc);
+		CharString_free(&capture.mod, alloc);
 	}
 
 	SymCleanup(process);
 }
 
-void Log_log(ELogLevel lvl, ELogOptions options, CharString arg) {
+void Log_log(Allocator alloc, ELogLevel lvl, ELogOptions options, CharString arg) {
 
 	Ns t = Time_now();
 
@@ -277,8 +277,8 @@ void Log_log(ELogLevel lvl, ELogOptions options, CharString arg) {
 	Bool panic = false;
 
 	if (
-		CharString_createCopyx(arg, &copy).genericError ||
-		(hasNewLine && CharString_appendx(&copy, '\n').genericError)
+		CharString_createCopy(arg, alloc, &copy).genericError ||
+		(hasNewLine && CharString_append(&copy, '\n', alloc).genericError)
 	) {
 
 		OutputDebugStringA(
@@ -293,7 +293,7 @@ void Log_log(ELogLevel lvl, ELogOptions options, CharString arg) {
 	if(!panic)
 		OutputDebugStringA(copy.ptr);
 
-	CharString_freex(&copy);
+	CharString_free(&copy, alloc);
 
 	if (lvl >= ELogLevel_Error)
 		DebugBreak();
