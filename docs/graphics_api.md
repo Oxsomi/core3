@@ -271,7 +271,7 @@ Swapchain isn't always supported. In that case your final target can just be a r
 SwapchainRef *swapchain = NULL;
 _gotoIfError(clean, GraphicsDeviceRef_createSwapchain(
     device, 		//See "Graphics device"
-    (SwapchainInfo) { .window = w }, 
+    (SwapchainInfo) { .window = w, .usage = ESwapchainUsage_AllowCompute }, 
     &swapchain
 ));
 
@@ -284,6 +284,8 @@ void onResize(Window *w) {
 ```
 
 info.presentModePriorities are the requests for what type of swapchains are desired by the application. Keeping this empty means [ mailbox, fifo, fifoRelaxed, immediate ]. On Android mailbox is unsupported because it may introduce another swapchain image, the rest is driver dependent if it's supported. Immediate is always supported, so make sure to always request immediate otherwise createSwapchain may fail (depending on device + driver). For more info see Swapchain/Present mode.
+
+info.usage in this case allows the swapchain to be used for compute shaders. If this is not required, please try to avoid it. It might introduce reduced or remove compression for the swapchain depending on the underlying hardware.
 
 ### Present mode
 
@@ -306,6 +308,7 @@ By default the swapchain will use triple buffering to ensure best performance. E
 - readonly format: Current format of the swapchain.
 - readonly versionId: The version id changes everytime a change is applied. This could be resizes or format changes.
 - readonly presentMode: What present mode is currently used (see Swapchain/Present mode).
+- readonly usage: What the swapchain is allowed to be used for.
 
 ### Functions
 

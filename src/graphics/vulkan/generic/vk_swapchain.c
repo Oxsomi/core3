@@ -167,7 +167,7 @@ Error GraphicsDeviceRef_createSwapchainInternal(GraphicsDeviceRef *deviceRef, Sw
 		VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
 		VK_IMAGE_USAGE_TRANSFER_DST_BIT |
 		VK_IMAGE_USAGE_SAMPLED_BIT |
-		VK_IMAGE_USAGE_STORAGE_BIT |
+		(info.usage & ESwapchainUsage_AllowCompute ? VK_IMAGE_USAGE_STORAGE_BIT : 0) |
 		VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
 	if((capabilities.supportedUsageFlags & requiredUsageFlags) != requiredUsageFlags)
@@ -439,8 +439,10 @@ Error GraphicsDeviceRef_createSwapchainInternal(GraphicsDeviceRef *deviceRef, Sw
 
 	//Allocate in descriptors
 
+	U64 descriptors = info.usage & ESwapchainUsage_AllowCompute ? 2 : 1;
+
 	swapchainExt->descriptorAllocations = List_createEmpty(sizeof(U32));
-	_gotoIfError(clean, List_resizex(&swapchainExt->descriptorAllocations, 2 * imageCount));
+	_gotoIfError(clean, List_resizex(&swapchainExt->descriptorAllocations, descriptors * imageCount));
 
 	U32 *allocPtr = (U32*) swapchainExt->descriptorAllocations.ptr;
 
@@ -463,21 +465,21 @@ Error GraphicsDeviceRef_createSwapchainInternal(GraphicsDeviceRef *deviceRef, Sw
 		if(locationRead == U32_MAX)
 			_gotoIfError(clean, Error_outOfMemory(0));
 
-		allocPtr[i * 2] = locationRead;
+		allocPtr[i * descriptors] = locationRead;
 
-		imageInfo[i * 2] = (VkDescriptorImageInfo) {
+		imageInfo[i * descriptors] = (VkDescriptorImageInfo) {
 			.imageView = ((VkManagedImage*)swapchainExt->images.ptr)[i].view,
 			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
 		};
 
-		((VkWriteDescriptorSet*)list.ptr)[i * 2 + 0] = (VkWriteDescriptorSet) {
+		((VkWriteDescriptorSet*)list.ptr)[i * descriptors + 0] = (VkWriteDescriptorSet) {
 			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 			.dstSet = deviceExt->sets[EDescriptorType_Texture2D],
 			.dstBinding = 0,
 			.dstArrayElement = locationRead & ((1 << 20) - 1),
 			.descriptorCount = 1,
 			.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
-			.pImageInfo = &imageInfo[i * 2]
+			.pImageInfo = &imageInfo[i * descriptors]
 		};
 
 		//Create read write image
@@ -493,25 +495,28 @@ Error GraphicsDeviceRef_createSwapchainInternal(GraphicsDeviceRef *deviceRef, Sw
 				break;
 		}
 
-		U32 locationWrite = VkGraphicsDevice_allocateDescriptor(deviceExt, textureWriteType);
+		if(info.usage & ESwapchainUsage_AllowCompute) {
 
-		if(locationWrite == U32_MAX)
-			_gotoIfError(clean, Error_outOfMemory(1));
+			U32 locationWrite = VkGraphicsDevice_allocateDescriptor(deviceExt, textureWriteType);
 
-		allocPtr[i * 2 + 1] = locationWrite;
+			if(locationWrite == U32_MAX)
+				_gotoIfError(clean, Error_outOfMemory(1));
 
-		imageInfo[i * 2 + 1] = imageInfo[i * 2];
-		imageInfo[i * 2 + 1].imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+			allocPtr[i * descriptors + 1] = locationWrite;
 
-		((VkWriteDescriptorSet*)list.ptr)[i * 2 + 1] = (VkWriteDescriptorSet) {
-			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-			.dstSet = deviceExt->sets[textureWriteType],
-			.dstBinding = 0,
-			.dstArrayElement = locationWrite & ((1 << 20) - 1),
-			.descriptorCount = 1,
-			.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-			.pImageInfo = &imageInfo[i * 2 + 1]
-		};
+			imageInfo[i * descriptors + 1] = imageInfo[i * descriptors];
+			imageInfo[i * descriptors + 1].imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+			((VkWriteDescriptorSet*)list.ptr)[i * descriptors + 1] = (VkWriteDescriptorSet) {
+				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+				.dstSet = deviceExt->sets[textureWriteType],
+				.dstBinding = 0,
+				.dstArrayElement = locationWrite & ((1 << 20) - 1),
+				.descriptorCount = 1,
+				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+				.pImageInfo = &imageInfo[i * descriptors + 1]
+			};
+		}
 	}
 
 	vkUpdateDescriptorSets(deviceExt->device, (U32) list.length, (const VkWriteDescriptorSet*) list.ptr, 0, NULL);

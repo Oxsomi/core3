@@ -31,13 +31,20 @@ typedef enum EWindowFormat EWindowFormat;
 typedef enum ESwapchainPresentMode {
 
 	ESwapchainPresentMode_None,
-	ESwapchainPresentMode_Immediate,		//Low latency apps (shooters, etc.): Allows tearing for less latency
-	ESwapchainPresentMode_Mailbox,			//High performance apps (games): Pops oldest image while continuing
-	ESwapchainPresentMode_Fifo,				//Best quality: Always presents images in order (no dropped frames)
-	ESwapchainPresentMode_FifoRelaxed,		//^ but if vblank is missed continue with the next (can allow tearing)
+	ESwapchainPresentMode_Immediate,			//Low latency apps (shooters, etc.): Allows tearing for less latency
+	ESwapchainPresentMode_Mailbox,				//High performance apps (games): Pops oldest image while continuing
+	ESwapchainPresentMode_Fifo,					//Best quality: Always presents images in order (no dropped frames)
+	ESwapchainPresentMode_FifoRelaxed,			//^ but if vblank is missed continue with the next (can allow tearing)
 	ESwapchainPresentMode_Count
 
 } ESwapchainPresentMode;
+
+typedef enum ESwapchainUsage {
+
+	ESwapchainUsage_None			= 0,		//Only allow basic usage as render target (best compression)
+	ESwapchainUsage_AllowCompute	= 1 << 0	//Allow compute as well (might introduce issues w compression)
+
+} ESwapchainUsage;
 
 typedef struct SwapchainInfo {
 
@@ -53,6 +60,8 @@ typedef struct SwapchainInfo {
 	//This is set by the implementation, can't be manually turned off.
 
 	Bool requiresManualComposite;
+	U8 usage;							//ESwapchainUsage
+	U8 padding[2];
 
 	//Triple buffering is always on to allow mixing swapchains with different present modes.
 	//Tries to use presentModePriorities[i] until it reaches one that's supported.

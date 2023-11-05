@@ -162,6 +162,7 @@ typedef struct VkGraphicsDevice {
 	//Temporary storage for submit time stuff
 
 	List waitSemaphores, results, swapchainIndices, swapchainHandles, waitStages;
+	List bufferTransitions, imageTransitions;
 
 	//Staging to get 
 

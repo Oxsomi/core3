@@ -382,9 +382,6 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 				.dependencyFlags = 0
 			};
 
-			List imageBarriers = List_createEmpty(sizeof(VkImageMemoryBarrier2));
-			_gotoIfError(cleanStartRendering, List_reservex(&imageBarriers, startRender->colorCount));
-
 			U32 graphicsQueueId = deviceExt->queues[EVkCommandQueue_Graphics].queueId;
 
 			VkRenderingAttachmentInfoKHR attachmentsExt[8] = { 0 };
@@ -450,7 +447,7 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 					graphicsQueueId,
 					&range,
 
-					&imageBarriers,
+					&deviceExt->imageTransitions,
 					&dependency
 				));
 
@@ -513,7 +510,7 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 			Buffer_copy(Buffer_createRef(temp->boundImages, siz), Buffer_createRef(ranges, siz));
 
 		cleanStartRendering:
-			List_freex(&imageBarriers);
+			List_clear(&deviceExt->imageTransitions);
 			return err;
 		}
 
@@ -558,9 +555,6 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 
 			if(I32x2_eq2(temp->currentSize, I32x2_zero()))
 				return Error_invalidOperation(0);
-
-			List bufferBarriers = List_createEmpty(sizeof(VkBufferMemoryBarrier2));
-			_gotoIfError(cleanSetPrimitiveBuffers, List_reservex(&bufferBarriers, 17));
 
 			PrimitiveBuffers prim = *(const PrimitiveBuffers*) data;
 
@@ -610,7 +604,7 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 						graphicsQueueId,
 						0,
 						buf->length,
-						&bufferBarriers,
+						&deviceExt->bufferTransitions,
 						&dependency
 					));
 
@@ -632,7 +626,7 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 					graphicsQueueId,
 					0,
 					buf->length,
-					&bufferBarriers,
+					&deviceExt->bufferTransitions,
 					&dependency
 				));
 			}
@@ -665,7 +659,7 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 			temp->boundBuffers[16] = prim.indexBuffer;
 		
 		cleanSetPrimitiveBuffers:
-			List_freex(&bufferBarriers);
+			List_clear(&deviceExt->bufferTransitions);
 			return err;
 		}
 
@@ -871,11 +865,6 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 				.dependencyFlags = 0
 			};
 
-			List imageBarriers = List_createEmpty(sizeof(VkImageMemoryBarrier2));
-			List bufferBarriers = List_createEmpty(sizeof(VkBufferMemoryBarrier2));
-			_gotoIfError(cleanTransition, List_reservex(&imageBarriers, transitionCount));
-			_gotoIfError(cleanTransition, List_reservex(&bufferBarriers, transitionCount));
-
 			U32 graphicsQueueId = deviceExt->queues[EVkCommandQueue_Graphics].queueId;
 
 			for (U64 i = 0; i < transitionCount; ++i) {
@@ -933,7 +922,7 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 						graphicsQueueId,
 						&range,
 
-						&imageBarriers,
+						&deviceExt->imageTransitions,
 						&dependency
 					));
 				}
@@ -958,7 +947,7 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 						graphicsQueueId,
 						0,						//TODO: range
 						devBuffer->length,
-						&bufferBarriers,
+						&deviceExt->bufferTransitions,
 						&dependency
 					));
 				}
@@ -968,8 +957,8 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 				instanceExt->cmdPipelineBarrier2(buffer, &dependency);
 
 		cleanTransition:
-			List_freex(&bufferBarriers);
-			List_freex(&imageBarriers);
+			List_clear(&deviceExt->bufferTransitions);
+			List_clear(&deviceExt->imageTransitions);
 			return err;
 		}
 

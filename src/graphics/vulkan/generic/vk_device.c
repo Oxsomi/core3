@@ -795,6 +795,14 @@ Error GraphicsDevice_initExt(
 
 	vkGetPhysicalDeviceMemoryProperties((VkPhysicalDevice) physicalDevice->ext, &deviceExt->memoryProperties);
 
+	//Allocate temp storage for transitions
+
+	deviceExt->bufferTransitions = List_createEmpty(sizeof(VkBufferMemoryBarrier2));
+	_gotoIfError(clean, List_reservex(&deviceExt->bufferTransitions, 17));
+
+	deviceExt->imageTransitions = List_createEmpty(sizeof(VkImageMemoryBarrier2));
+	_gotoIfError(clean, List_reservex(&deviceExt->imageTransitions, 16));
+
 	//Allocate staging buffer.
 	//256 MiB - 256 * 3 to allow CBuffer at the end of the memory.
 	//This gets divided into 3 for each frame id to have their own allocator into that subblock.
@@ -944,6 +952,8 @@ Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext) {
 	List_freex(&deviceExt->results);
 	List_freex(&deviceExt->swapchainIndices);
 	List_freex(&deviceExt->swapchainHandles);
+	List_freex(&deviceExt->bufferTransitions);
+	List_freex(&deviceExt->imageTransitions);
 
 	for(U64 i = 0; i < sizeof(deviceExt->stagingAllocations) / sizeof(deviceExt->stagingAllocations[0]); ++i)
 		AllocationBuffer_freex(&deviceExt->stagingAllocations[i]);
@@ -1396,7 +1406,6 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 
 	Error err = Error_none();
 	CharString temp = CharString_createNull();
-	List barriers = (List) { 0 };
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
@@ -1502,7 +1511,9 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 			Swapchain *swapchain = SwapchainRef_ptr(((SwapchainRef**) swapchains.ptr)[i]);
 			VkSwapchain *swapchainExt = Swapchain_ext(swapchain, Vk);
 
-			data->appData[i] = ((const U32*)swapchainExt->descriptorAllocations.ptr)[swapchainExt->currentIndex * 2 + 0];
+			U64 stride = swapchain->info.usage & ESwapchainUsage_AllowCompute ? 2 : 1;
+
+			data->appData[i] = ((const U32*)swapchainExt->descriptorAllocations.ptr)[swapchainExt->currentIndex * stride + 0];
 		}
 
 		Buffer_copy(
@@ -1659,10 +1670,6 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 			.dependencyFlags = 0
 		};
 
-		List_freex(&barriers);
-		barriers = List_createEmpty(sizeof(VkBufferMemoryBarrier2));
-		_gotoIfError(clean, List_reservex(&barriers, 2));
-
 		DeviceBuffer *staging = DeviceBufferRef_ptr(deviceExt->staging);
 		VkDeviceBuffer *stagingExt = DeviceBuffer_ext(staging, Vk);
 
@@ -1673,7 +1680,7 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 			graphicsQueueId,
 			(device->submitId % 3) * (staging->length / 3),
 			staging->length / 3,
-			&barriers,
+			&deviceExt->bufferTransitions,
 			&dependency
 		));
 
@@ -1684,12 +1691,14 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 			graphicsQueueId,
 			(device->submitId % 3) * sizeof(CBufferData),
 			sizeof(CBufferData),
-			&barriers,
+			&deviceExt->bufferTransitions,
 			&dependency
 		));
 
 		if(dependency.bufferMemoryBarrierCount)
 			instanceExt->cmdPipelineBarrier2(commandBuffer, &dependency);
+
+		List_clear(&deviceExt->bufferTransitions);
 
 		//Bind pipeline layout and descriptors since they stay the same for the entire frame.
 		//For every bind point
@@ -1803,10 +1812,6 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 			.dependencyFlags = 0
 		};
 
-		List_freex(&barriers);
-		barriers = List_createEmpty(sizeof(VkImageMemoryBarrier2));;
-		_gotoIfError(clean, List_reservex(&barriers, swapchains.length));
-
 		for (U64 i = 0; i < swapchains.length; ++i) {
 
 			SwapchainRef *swapchainRef = ((SwapchainRef**) swapchains.ptr)[i];
@@ -1828,7 +1833,7 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 				VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
 				graphicsQueueId,
 				&range,
-				&barriers,
+				&deviceExt->imageTransitions,
 				&dependency
 			));
 
@@ -1838,6 +1843,8 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 
 		if(dependency.imageMemoryBarrierCount)
 			instanceExt->cmdPipelineBarrier2(commandBuffer, &dependency);
+
+		List_clear(&deviceExt->imageTransitions);
 
 		//End buffer
 
@@ -1927,7 +1934,8 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 		device->firstSubmit = device->lastSubmit;
 
 clean: 
-	List_freex(&barriers);
+	List_clear(&deviceExt->bufferTransitions);
+	List_clear(&deviceExt->imageTransitions);
 	CharString_freex(&temp);
 	return err;
 }
