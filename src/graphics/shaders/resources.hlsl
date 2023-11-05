@@ -1,29 +1,26 @@
 #pragma once
-#pragma dxc diagnostic ignored "-Wignored-attributes"
 #include "types.hlsl"
 
 static const uint ResourceId_mask = (1 << 20) - 1;
 
-//Overlapping registers ala Darius (https://blog.traverseresearch.nl/bindless-rendering-setup-afeb678d77fc)
+SamplerState _samplers[]					: register(space0);
 
-[[vk::binding(0,  0)]] SamplerState _samplers[];
+Texture2D _textures2D[]						: register(space1);
+TextureCube _textureCubes[]					: register(space2);
+Texture3D _textures3D[]						: register(space3);
+ByteAddressBuffer _buffer[]					: register(space4);
 
-[[vk::binding(0,  1)]] Texture2D _textures2D[];
-[[vk::binding(0,  2)]] TextureCube _textureCubes[];
-[[vk::binding(0,  3)]] Texture3D _textures3D[];
-[[vk::binding(0,  4)]] ByteAddressBuffer _buffer[];
-
-[[vk::binding(0,  5)]] RWByteAddressBuffer _rwBuffer[];
-[[vk::binding(0,  6)]] RWTexture3D<unorm F32x4> _rwTextures3D[];
-[[vk::binding(0,  7)]] RWTexture3D<snorm F32x4> _rwTextures3Ds[];
-[[vk::binding(0,  8)]] RWTexture3D<F32x4> _rwTextures3Df[];
-[[vk::binding(0,  9)]] RWTexture3D<I32x4> _rwTextures3Di[];
-[[vk::binding(0, 10)]] RWTexture3D<U32x4> _rwTextures3Du[];
-[[vk::binding(0, 11)]] RWTexture2D<unorm F32x4> _rwTextures2D[];
-[[vk::binding(0, 12)]] RWTexture2D<snorm F32x4> _rwTextures2Ds[];
-[[vk::binding(0, 13)]] RWTexture2D<F32x4> _rwTextures2Df[];
-[[vk::binding(0, 14)]] RWTexture2D<I32x4> _rwTextures2Di[];
-[[vk::binding(0, 15)]] RWTexture2D<U32x4> _rwTextures2Du[];
+RWByteAddressBuffer _rwBuffer[]				: register(space5);
+RWTexture3D<unorm F32x4> _rwTextures3D[]	: register(space6);
+RWTexture3D<snorm F32x4> _rwTextures3Ds[]	: register(space7);
+RWTexture3D<F32x4> _rwTextures3Df[]			: register(space8);
+RWTexture3D<I32x4> _rwTextures3Di[]			: register(space9);
+RWTexture3D<U32x4> _rwTextures3Du[]			: register(space10);
+RWTexture2D<unorm F32x4> _rwTextures2D[]	: register(space11);
+RWTexture2D<snorm F32x4> _rwTextures2Ds[]	: register(space12);
+RWTexture2D<F32x4> _rwTextures2Df[]			: register(space13);
+RWTexture2D<I32x4> _rwTextures2Di[]			: register(space14);
+RWTexture2D<U32x4> _rwTextures2Du[]			: register(space15);
 
 #define rwBufferUniform(i) _rwBuffer[i]
 #define bufferUniform(i) _buffer[i]
@@ -84,7 +81,7 @@ void setAt(U32 resourceId, U32 id, T t) {
 
 //Globals used during the entire frame for useful information such as frame id.
 
-[[vk::binding(0, 16)]] cbuffer globals {
+cbuffer globals : register(space16) {
 
 	U32 _frameId;					//Can loop back to 0 after U32_MAX!
 	F32 _time;						//Time since launch of app

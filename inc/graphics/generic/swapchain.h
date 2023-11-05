@@ -66,9 +66,9 @@ typedef struct SwapchainInfo {
 
 typedef struct Swapchain {
 
-	SwapchainInfo info;
-
 	GraphicsDeviceRef *device;
+
+	SwapchainInfo info;
 
 	I32x2 size;
 

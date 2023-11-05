@@ -36,8 +36,6 @@ typedef struct VkDeviceBuffer {
 
 	U32 blockId, padding;
 
-	U32 readDescriptor, writeDescriptor;
-
 } VkDeviceBuffer;
 
 Error VkDeviceBuffer_transition(

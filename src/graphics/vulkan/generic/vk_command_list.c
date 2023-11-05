@@ -35,11 +35,18 @@
 #include "types/buffer.h"
 #include "types/error.h"
 
-Bool VkCommandBufferState_rangeConflicts(RefPtr *image1, ImageRange range1, RefPtr *image2, ImageRange range2) {
+Bool VkCommandBufferState_imageRangeConflicts(RefPtr *image1, ImageRange range1, RefPtr *image2, ImageRange range2) {
 
 	range2; range1;		//TODO:
 
 	return image1 == image2;
+}
+
+Bool VkCommandBufferState_bufferRangeConflicts(RefPtr *buffer1, BufferRange range1, RefPtr *buffer2, BufferRange range2) {
+
+	range2; range1;		//TODO:
+
+	return buffer1 == buffer2;
 }
 
 Bool VkCommandBufferState_isImageBound(VkCommandBufferState *state, RefPtr *image, ImageRange range) {
@@ -48,7 +55,19 @@ Bool VkCommandBufferState_isImageBound(VkCommandBufferState *state, RefPtr *imag
 		return false;
 
 	for(U64 i = 0; i < state->boundImageCount; ++i)
-		if(VkCommandBufferState_rangeConflicts(image, range, state->boundImages[i].ref, state->boundImages[i].range))
+		if(VkCommandBufferState_imageRangeConflicts(image, range, state->boundImages[i].ref, state->boundImages[i].range))
+			return true;
+
+	return false;
+}
+
+Bool VkCommandBufferState_isBufferBound(VkCommandBufferState *state, RefPtr *image, BufferRange range) {
+
+	if(!state)
+		return false;
+
+	for(U64 i = 0; i < 17; ++i)
+		if(VkCommandBufferState_bufferRangeConflicts(image, range, state->boundBuffers[i], (BufferRange){ 0 }))	//TODO: range
 			return true;
 
 	return false;
@@ -709,12 +728,11 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 				DeviceBuffer *dispatchBuffer = DeviceBufferRef_ptr(drawIndirect.buffer);
 				VkDeviceBuffer *bufferExt = DeviceBuffer_ext(dispatchBuffer, Vk);
 
-				for(U64 i = 0; i < 17; ++i)
-					if(
-						temp->boundBuffers[i] == drawIndirect.buffer || 
-						(drawIndirect.countBuffer && temp->boundBuffers[i] == drawIndirect.countBuffer)
-					)
-						_gotoIfError(cleanDrawIndirect, Error_invalidOperation(0));
+				if(VkCommandBufferState_isBufferBound(temp, drawIndirect.buffer, (BufferRange) { 0 }))			//TODO: range
+					_gotoIfError(cleanDrawIndirect, Error_invalidOperation(0));
+
+				if(VkCommandBufferState_isBufferBound(temp, drawIndirect.countBuffer, (BufferRange) { 0 }))		//TODO: range
+					_gotoIfError(cleanDrawIndirect, Error_invalidOperation(1));
 
 				_gotoIfError(cleanDrawIndirect, VkDeviceBuffer_transition(
 					bufferExt,
@@ -806,9 +824,8 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 				DeviceBuffer *dispatchBuffer = DeviceBufferRef_ptr(dispatch.buffer);
 				VkDeviceBuffer *bufferExt = DeviceBuffer_ext(dispatchBuffer, Vk);
 
-				for(U64 i = 0; i < 17; ++i)
-					if(temp->boundBuffers[i] == dispatch.buffer)
-						_gotoIfError(cleanDispatchIndirect, Error_invalidOperation(0));
+				if(VkCommandBufferState_isBufferBound(temp, dispatch.buffer, (BufferRange) { 0 }))		//TODO: range
+					_gotoIfError(cleanDrawIndirect, Error_invalidOperation(0));
 
 				List bufferBarriers = List_createEmpty(sizeof(VkBufferMemoryBarrier2));
 				_gotoIfError(cleanDispatchIndirect, List_reservex(&bufferBarriers, 2));
@@ -855,30 +872,16 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 			};
 
 			List imageBarriers = List_createEmpty(sizeof(VkImageMemoryBarrier2));
+			List bufferBarriers = List_createEmpty(sizeof(VkBufferMemoryBarrier2));
 			_gotoIfError(cleanTransition, List_reservex(&imageBarriers, transitionCount));
+			_gotoIfError(cleanTransition, List_reservex(&bufferBarriers, transitionCount));
+
+			U32 graphicsQueueId = deviceExt->queues[EVkCommandQueue_Graphics].queueId;
 
 			for (U64 i = 0; i < transitionCount; ++i) {
 
 				Transition transition = transitions[i];
-
-				//TODO: boundBuffers and DeviceBuffer support
-
-				Swapchain *swapchain = SwapchainRef_ptr(transition.resource);
-				VkSwapchain *swapchainExt = Swapchain_ext(swapchain, Vk);
-
-				VkManagedImage *imageExt = &((VkManagedImage*)swapchainExt->images.ptr)[swapchainExt->currentIndex];
-
-				if(VkCommandBufferState_isImageBound(temp, transition.resource, transition.range))
-					return Error_invalidOperation(0);
-
-				VkImageSubresourceRange range = (VkImageSubresourceRange) {
-					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-					.levelCount = 1,
-					.layerCount = 1
-				};
-
-				//Transition resource
-
+				
 				VkPipelineStageFlags2 pipelineStage = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
 
 				switch (transition.stage) {
@@ -900,30 +903,72 @@ Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data,
 						_gotoIfError(cleanTransition, Error_unsupportedOperation(0));
 				}
 
-				VkAccessFlags2 accessFlags =
-					!transition.isWrite ? VK_ACCESS_2_SHADER_SAMPLED_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_READ_BIT :
-					VK_ACCESS_2_SHADER_STORAGE_READ_BIT | VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
+				if(transition.resource->typeId == EGraphicsTypeId_Swapchain) {
 
-				U32 graphicsQueueId = deviceExt->queues[EVkCommandQueue_Graphics].queueId;
+					Swapchain *swapchain = SwapchainRef_ptr(transition.resource);
+					VkSwapchain *swapchainExt = Swapchain_ext(swapchain, Vk);
 
-				_gotoIfError(cleanTransition, VkSwapchain_transition(
+					VkManagedImage *imageExt = &((VkManagedImage*)swapchainExt->images.ptr)[swapchainExt->currentIndex];
 
-					imageExt, 
-					pipelineStage,
-					accessFlags,
-					!transition.isWrite ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_GENERAL,
-					graphicsQueueId,
-					&range,
+					if(VkCommandBufferState_isImageBound(temp, transition.resource, transition.range.image))
+						return Error_invalidOperation(0);
 
-					&imageBarriers,
-					&dependency
-				));
+					VkImageSubresourceRange range = (VkImageSubresourceRange) {
+						.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+						.levelCount = 1,
+						.layerCount = 1
+					};
+
+					//Transition resource
+
+					VkAccessFlags2 accessFlags =
+						!transition.isWrite ? VK_ACCESS_2_SHADER_SAMPLED_READ_BIT : VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
+
+					_gotoIfError(cleanTransition, VkSwapchain_transition(
+
+						imageExt, 
+						pipelineStage,
+						accessFlags,
+						!transition.isWrite ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_GENERAL,
+						graphicsQueueId,
+						&range,
+
+						&imageBarriers,
+						&dependency
+					));
+				}
+
+				else {
+
+					DeviceBuffer *devBuffer = DeviceBufferRef_ptr(transition.resource);
+					VkDeviceBuffer *bufferExt = DeviceBuffer_ext(devBuffer, Vk);
+
+					if(VkCommandBufferState_isBufferBound(temp, transition.resource, transition.range.buffer))
+						_gotoIfError(cleanTransition, Error_invalidOperation(0));
+
+					//Transition resource
+
+					VkAccessFlags2 accessFlags =
+						!transition.isWrite ? VK_ACCESS_2_SHADER_STORAGE_READ_BIT : VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
+
+					_gotoIfError(cleanTransition, VkDeviceBuffer_transition(
+						bufferExt,
+						pipelineStage,
+						accessFlags,
+						graphicsQueueId,
+						0,						//TODO: range
+						devBuffer->length,
+						&bufferBarriers,
+						&dependency
+					));
+				}
 			}
 
-			if(dependency.imageMemoryBarrierCount)
+			if(dependency.imageMemoryBarrierCount || dependency.bufferMemoryBarrierCount)
 				instanceExt->cmdPipelineBarrier2(buffer, &dependency);
 
 		cleanTransition:
+			List_freex(&bufferBarriers);
 			List_freex(&imageBarriers);
 			return err;
 		}

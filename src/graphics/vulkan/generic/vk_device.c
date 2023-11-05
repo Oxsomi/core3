@@ -613,12 +613,12 @@ Error GraphicsDevice_initExt(
 				binding.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
 				break;
 
-			case 4: case 16:
-				binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+			case 4: case 5:
+				binding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 				break;
 
-			case 5:
-				binding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+			case 16:
+				binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 				break;
 
 			default:
@@ -685,12 +685,16 @@ Error GraphicsDevice_initExt(
 		descriptorTypeCount[EDescriptorType_RWTexture3Di] +
 		descriptorTypeCount[EDescriptorType_RWTexture3Du];
 
+	U32 storageBuffers = 
+		descriptorTypeCount[EDescriptorType_Buffer] + 
+		descriptorTypeCount[EDescriptorType_RWBuffer];
+
 	VkDescriptorPoolSize poolSizes[] = {
-		(VkDescriptorPoolSize) { .type = VK_DESCRIPTOR_TYPE_SAMPLER, descriptorTypeCount[EDescriptorType_Sampler] },
-		(VkDescriptorPoolSize) { .type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, storageImages },
-		(VkDescriptorPoolSize) { .type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, sampledImages },
-		(VkDescriptorPoolSize) { .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, descriptorTypeCount[EDescriptorType_RWBuffer] },
-		(VkDescriptorPoolSize) { .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, descriptorTypeCount[EDescriptorType_Buffer] + 1 }
+		(VkDescriptorPoolSize) { VK_DESCRIPTOR_TYPE_SAMPLER, descriptorTypeCount[EDescriptorType_Sampler] },
+		(VkDescriptorPoolSize) { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, storageImages },
+		(VkDescriptorPoolSize) { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, sampledImages },
+		(VkDescriptorPoolSize) { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, storageBuffers },
+		(VkDescriptorPoolSize) { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1 }
 	};
 
 	VkDescriptorPoolCreateInfo poolInfo = (VkDescriptorPoolCreateInfo) {

@@ -31,7 +31,7 @@ typedef enum EDeviceBufferUsage {
 	EDeviceBufferUsage_ShaderWrite			= 1 << 1,		//Allow for use as RWByteAddressBuffer
 	EDeviceBufferUsage_Vertex				= 1 << 2,		//Allow for use as vertex buffer
 	EDeviceBufferUsage_Index				= 1 << 3,		//Allow for use as index buffer
-	EDeviceBufferUsage_Indirect			= 1 << 4,		//Allow for use in indirect draw/dispatch calls
+	EDeviceBufferUsage_Indirect				= 1 << 4,		//Allow for use in indirect draw/dispatch calls
 	EDeviceBufferUsage_CPUBacked			= 1 << 5,		//Keep a CPU side copy buffer for read/write operations
 	EDeviceBufferUsage_CPUAllocatedBit		= 1 << 6,		//Keep buffer entirely on CPU for transfer or allowing more allocations
 
@@ -51,11 +51,13 @@ typedef struct DeviceBuffer {
 	Bool isFirstFrame;
 	U8 pad0[1];
 
+	U32 readHandle, writeHandle;		//Place in heap/descriptor set. First 12 bits are reserved for type.
+
 	U64 length;
 
-	Buffer cpuData;				//Null if not cpu backed and uploaded. If not cpu backed this will free after upload
+	Buffer cpuData;						//Null if not cpu backed and uploaded. If not cpu backed this will free after upload
 
-	List pendingChanges;		//Pending ranges (DevicePendingRange)
+	List pendingChanges;				//Pending ranges (DevicePendingRange)
 
 } DeviceBuffer;
 

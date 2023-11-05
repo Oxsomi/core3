@@ -390,11 +390,39 @@ Error CommandListRef_transition(CommandListRef *commandList, List transitions) {
 		if(!res)
 			_gotoIfError(clean, Error_nullPointer(1));
 
-		if(res->typeId != EGraphicsTypeId_Swapchain)
-			_gotoIfError(clean, Error_invalidParameter(1, 0));
+		EGraphicsTypeId typeId = (EGraphicsTypeId) res->typeId;
 
-		if(SwapchainRef_ptr(res)->device != CommandListRef_ptr(commandList)->device)
-			_gotoIfError(clean, Error_unsupportedOperation(0));
+		switch (typeId) {
+
+			case EGraphicsTypeId_Swapchain:
+
+				if(SwapchainRef_ptr(res)->device != CommandListRef_ptr(commandList)->device)
+					_gotoIfError(clean, Error_unsupportedOperation(0));
+
+				break;
+
+			case EGraphicsTypeId_DeviceBuffer: {
+
+				DeviceBuffer *devBuf = DeviceBufferRef_ptr(res);
+
+				if (transition.isWrite) {
+
+					if(!(devBuf->usage & EDeviceBufferUsage_ShaderWrite))
+						_gotoIfError(clean, Error_constData(0, 0));
+				}
+
+				else if(!(devBuf->usage & EDeviceBufferUsage_ShaderRead))
+					_gotoIfError(clean, Error_unsupportedOperation(1));
+
+				if(devBuf->device != CommandListRef_ptr(commandList)->device)
+					_gotoIfError(clean, Error_unsupportedOperation(2));
+
+				break;
+			}
+
+			default:
+				_gotoIfError(clean, Error_invalidParameter(1, 0));
+		}
 
 		//Check if range conflicts 
 
@@ -406,7 +434,7 @@ Error CommandListRef_transition(CommandListRef *commandList, List transitions) {
 			if(resj != res)
 				continue;
 
-			//TODO: Multiple types of images.
+			//TODO: Multiple types of images / buffers.
 			//		We have to loop through all subresources that are covered 
 			//		and check if they conflict.
 			//		For now, only swapchain is supported w/o layers and levels.

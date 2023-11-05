@@ -1206,14 +1206,14 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 
 		if(
 			limits.maxPerStageDescriptorSamplers < 2 * KIBI ||
-			limits.maxPerStageDescriptorUniformBuffers < 250 * KIBI ||
-			limits.maxPerStageDescriptorStorageBuffers < 250 * KIBI ||
+			limits.maxPerStageDescriptorUniformBuffers < 1 ||
+			limits.maxPerStageDescriptorStorageBuffers < (500 * KIBI) - 1 ||
 			limits.maxPerStageDescriptorSampledImages < 250 * KIBI ||
 			limits.maxPerStageDescriptorStorageImages < 250 * KIBI ||
 			limits.maxPerStageResources < MEGA ||
 			limits.maxDescriptorSetSamplers < 2 * KIBI ||
-			limits.maxDescriptorSetUniformBuffers < 250 * KIBI ||
-			limits.maxDescriptorSetStorageBuffers < 250 * KIBI ||
+			limits.maxDescriptorSetUniformBuffers < 1 ||
+			limits.maxDescriptorSetStorageBuffers < (500 * KIBI) - 1 ||
 			limits.maxDescriptorSetSampledImages < 250 * KIBI ||
 			limits.maxDescriptorSetStorageImages < 250 * KIBI
 		) {

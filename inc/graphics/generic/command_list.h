@@ -22,6 +22,7 @@
 #include "types/list.h"
 #include "math/vec.h"
 #include "platforms/ref_ptr.h"
+#include "graphics/generic/device.h"
 
 typedef RefPtr GraphicsDeviceRef;
 typedef RefPtr PipelineRef;
@@ -187,10 +188,17 @@ Error CommandListRef_clearImages(CommandListRef *commandList, List clearImages);
 
 typedef enum EPipelineStage EPipelineStage;
 
+typedef union ResourceRange {
+	
+	ImageRange image;
+	BufferRange buffer;
+
+} ResourceRange;
+
 typedef struct Transition {
 
 	RefPtr *resource;			//Currently only supports swapchain
-	ImageRange range;
+	ResourceRange range;
 
 	EPipelineStage stage;		//First shader stage that will access this resource
 	U8 padding[3];

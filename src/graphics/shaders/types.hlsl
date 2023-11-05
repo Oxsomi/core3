@@ -57,3 +57,5 @@ typedef int4 I32x4;
 typedef int64_t4 I64x4;
 
 typedef bool Bool;
+
+#define _bind(x) TEXCOORD##x

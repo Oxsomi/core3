@@ -94,7 +94,7 @@ Bool DeviceBuffer_freeExt(DeviceBuffer *buffer) {
 
 		Lock_lock(&deviceExt->descriptorLock, U64_MAX);
 
-		U32 allocations[2] = { bufferExt->readDescriptor, bufferExt->writeDescriptor };
+		U32 allocations[2] = { buffer->readHandle, buffer->writeHandle };
 		List allocationList = (List) { 0 };
 		List_createConstRef((const U8*) allocations, 2, sizeof(U32), &allocationList);
 		VkGraphicsDevice_freeAllocations(deviceExt, &allocationList);
@@ -183,6 +183,15 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 	));
 
 	DeviceMemoryBlock *block = (DeviceMemoryBlock*)List_ptr(device->allocator.blocks, blockId);
+
+	//Bind memory
+
+	_gotoIfError(clean, vkCheck(vkBindBufferMemory(deviceExt->device, tempBuffer, (VkDeviceMemory) block->ext, blockOffset)));
+
+	U8 *memoryLocation = (U8*)block->mappedMemory;
+
+	if (memoryLocation)
+		memoryLocation += blockOffset;
 	
 	//Fill relevant descriptor sets if shader accessible
 
@@ -229,6 +238,7 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 			if(locationWrite == U32_MAX)
 				_gotoIfError(clean, Error_outOfMemory(0));
 
+			descriptors[counter] = descriptors[0];
 			descriptors[counter].dstArrayElement = locationWrite & ((1 << 20) - 1);
 			descriptors[counter].dstSet = deviceExt->sets[EDescriptorType_RWBuffer];
 
@@ -237,11 +247,6 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 
 		vkUpdateDescriptorSets(deviceExt->device, counter, descriptors, 0, NULL);
 	}
-
-	U8 *memoryLocation = (U8*)block->mappedMemory;
-
-	if (memoryLocation)
-		memoryLocation += blockOffset;
 
 	if (name.ptr) {
 	
@@ -262,16 +267,15 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 		#endif
 	}
 
-	_gotoIfError(clean, vkCheck(vkBindBufferMemory(deviceExt->device, tempBuffer, (VkDeviceMemory) block->ext, blockOffset)));
-
 	*DeviceBuffer_ext(buf, Vk) = (VkDeviceBuffer) {
 		.buffer = tempBuffer,
 		.blockOffset = blockOffset,
 		.mappedMemory = memoryLocation,
-		.blockId = blockId,
-		.readDescriptor = locationRead,
-		.writeDescriptor = locationWrite
+		.blockId = blockId
 	};
+
+	buf->readHandle = locationRead;
+	buf->writeHandle = locationWrite;
 
 clean:
 
