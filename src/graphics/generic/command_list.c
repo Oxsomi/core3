@@ -634,7 +634,7 @@ Error CommandListRef_dispatchIndirect(CommandListRef *commandList, DeviceBufferR
 
 	GraphicsDeviceRef *device = CommandListRef_ptr(commandList)->device;
 
-	Error err = CommandListRef_checkDispatchBuffer(device, buffer, offset, sizeof(U32) * 3);
+	Error err = CommandListRef_checkDispatchBuffer(device, buffer, offset, sizeof(U32) * 4);
 
 	if(err.genericError)
 		return err;
@@ -710,7 +710,7 @@ Error CommandListRef_drawIndirect(
 	);
 }
 
-Error CommandListRef_drawIndirectCount(
+Error CommandListRef_drawIndirectCountExt(
 	CommandListRef *commandList, 
 	DeviceBufferRef *buffer,
 	U64 bufferOffset,

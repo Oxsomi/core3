@@ -49,7 +49,7 @@ typedef struct DeviceMemoryAllocator {
 
 } DeviceMemoryAllocator;
 
-static const U64 DeviceMemoryBlock_defaultSize = 268'435'456;
+static const U64 DeviceMemoryBlock_defaultSize = 67'108'864;
 
 impl Error DeviceMemoryAllocator_allocate(
 	DeviceMemoryAllocator *allocator, 

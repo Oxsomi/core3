@@ -51,7 +51,7 @@ Bool VkCommandBufferState_bufferRangeConflicts(RefPtr *buffer1, BufferRange rang
 
 Bool VkCommandBufferState_isImageBound(VkCommandBufferState *state, RefPtr *image, ImageRange range) {
 
-	if(!state)
+	if(!state || !image)
 		return false;
 
 	for(U64 i = 0; i < state->boundImageCount; ++i)
@@ -61,13 +61,13 @@ Bool VkCommandBufferState_isImageBound(VkCommandBufferState *state, RefPtr *imag
 	return false;
 }
 
-Bool VkCommandBufferState_isBufferBound(VkCommandBufferState *state, RefPtr *image, BufferRange range) {
+Bool VkCommandBufferState_isBufferBound(VkCommandBufferState *state, RefPtr *buffer, BufferRange range) {
 
-	if(!state)
+	if(!state || !buffer)
 		return false;
 
 	for(U64 i = 0; i < 17; ++i)
-		if(VkCommandBufferState_bufferRangeConflicts(image, range, state->boundBuffers[i], (BufferRange){ 0 }))	//TODO: range
+		if(VkCommandBufferState_bufferRangeConflicts(buffer, range, state->boundBuffers[i], (BufferRange){ 0 }))	//TODO: range
 			return true;
 
 	return false;

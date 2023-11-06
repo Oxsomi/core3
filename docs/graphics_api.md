@@ -99,16 +99,16 @@ _gotoIfError(clean, GraphicsInstance_getPreferredDevice(
 - readonly vendor; what company designed the device (Nvidia (NV), AMD, ARM, Qualcomm (QCOM), Intel (INTC), Imagination Technologies (IMGT), Apple (APPL) or unknown).
 - readonly id; number in the list of supported devices.
 - readonly luid; ID to identify this device primarily on Windows devices. This would allow sharing a resource between other APIs for interop (not supported yet). This is optional to support; check capabilities.features & LUID.
-- readonly uuid; unique id to identify the device. In APIs that don't support this natively, the other identifier will be used here instead. For example DirectX12 would use the luid here and clear the other U64.
+- readonly uuid; unique id to identify the device. In APIs that don't support this natively, the other identifier (luid) will be used here instead. For example DirectX12 would use the luid here and clear the other U64.
 - readonly ext; extended physical device representation for the current API.
 - readonly capabilities; what data types, features and api dependent features are enabled. See capabilities section.
 
 #### Capabilities
 
-- features: DirectRendering, VariableRateShading, MultiDrawIndirectCount, MeshShader, GeometryShader, TessellationShader, SubgroupArithmetic, SubgroupShuffle, Swapchain, Multiview, Raytracing, RayPipeline, RayIndirect, RayQuery, RayMicromapOpacity, RayMicromapDisplacement, RayMotionBlur, RayReorder, LUID, DebugMarkers.
+- features: DirectRendering, VariableRateShading, MultiDrawIndirectCount, MeshShader, GeometryShader, TessellationShader, SubgroupArithmetic, SubgroupShuffle, Swapchain, Multiview, Raytracing, RayPipeline, RayIndirect, RayQuery, RayMicromapOpacity, RayMicromapDisplacement, RayMotionBlur, RayReorder, LUID, DebugMarkers, Wireframe, LogicOp, DualSrcBlend.
 - features2: reserved for future features.
 - dataTypes: I64, F16, F64, AtomicI64, AtomicF32, AtomicF64, ASTC, BCn, MSAA2x, MSAA8x, MSAA16x.
-  - MSAA4x and MSAA1x are supported by default.
+  - MSAA4x and MSAA1x (off) are supported by default.
 - featuresExt: API dependent features.
   - Vulkan: Performance query.
 
@@ -146,6 +146,9 @@ _gotoIfError(clean, GraphicsDeviceRef_create(
 - readonly instance; owning instance.
 - readonly info; physical device.
 - readonly submitId; counter of how many times submit was called (can be used as frame id).
+- readonly lastSubmit, firstSubmit; used to track when a submit was called.
+- readonly pendingResources, resourcesInFlight; used to track if resources are dirty, in flight (in use on the GPU) and if they need updates in the next submit.
+- readonly allocator; used to allocate memory.
 
 ### Functions
 
@@ -178,15 +181,35 @@ _gotoIfError(clean, GraphicsDeviceRef_create(
 - ```c
   Error createPipelinesCompute(
       List<Buffer> computeBinaries, 
+      optional List<CharString> names,
       PipelineRef **computeShaders
   );
-  ```
-
+```
+  
 - ```c
   Error createPipelinesGraphics(
   	List<PipelineStage> stages, 
       List<PipelineGraphicsInfo> infos, 
+      optional List<CharString> names,
       List<PipelineRef*> *pipelines
+  );
+  ```
+
+- ```C
+  Error createBuffer(
+  	EDeviceBufferUsage usage,
+   	CharString name,
+      U64 len,
+      DeviceBufferRef **ref
+  );
+  ```
+
+- ```c
+  Error createBufferData(
+  	EDeviceBufferUsage usage,
+   	CharString name,
+      Buffer *data,					//Moves data to device buffer
+      DeviceBufferRef **ref
   );
   ```
 
@@ -204,9 +227,9 @@ A command list in OxC3 is a virtual command list. The commands get recorded in a
 CommandListRef *commandList = NULL;
 _gotoIfError(clean, GraphicsDeviceRef_createCommandList(
     device, 	//See "Graphics device"
-    4 * KIBI, 	//Max command buffer size
-    128, 		//Estimated command count (can auto resize)
-    KIBI, 		//Estimated resource count (can auto resize)
+    2 * KIBI, 	//Max command buffer size
+    64, 		//Estimated command count (can auto resize)
+    64, 		//Estimated resource count (can auto resize)
     true,		//Allow resize
     &commandList
 ));
@@ -217,9 +240,11 @@ _gotoIfError(clean, GraphicsDeviceRef_createCommandList(
 ```c
 _gotoIfError(clean, CommandListRef_begin(commandList, true /* clear previous */));
 
+_gotoIfError(clean, CommandListRef_startScope(commandList, (List) { 0 }));
 _gotoIfError(clean, CommandListRef_clearImagef(
     commandList, F32x4_create4(1, 0, 0, 1), (ImageRange){ 0 }, swapchain
 ));
+_gotoIfError(clean, CommandListRef_endScope(commandList));
 
 _gotoIfError(clean, CommandListRef_end(commandList));
 ```
@@ -242,6 +267,7 @@ For more info on commands check out the "Commands" section.
 
 - readonly device; owning device.
 - readonly state; if the command list has been opened before and if it's open or closed right now.
+- readonly allowResize; if command list is allowed to resize if it runs out of memory.
 - private:
   - data: The current recorded commands.
   - commandOps: The opcodes for which commands are recorded.
@@ -285,7 +311,7 @@ void onResize(Window *w) {
 
 info.presentModePriorities are the requests for what type of swapchains are desired by the application. Keeping this empty means [ mailbox, fifo, fifoRelaxed, immediate ]. On Android mailbox is unsupported because it may introduce another swapchain image, the rest is driver dependent if it's supported. Immediate is always supported, so make sure to always request immediate otherwise createSwapchain may fail (depending on device + driver). For more info see Swapchain/Present mode.
 
-info.usage in this case allows the swapchain to be used for compute shaders. If this is not required, please try to avoid it. It might introduce reduced or remove compression for the swapchain depending on the underlying hardware.
+info.usage in this case allows the swapchain to be used for compute shaders. If this is not required, please try to avoid it. It might reduce or remove compression for the swapchain depending on the underlying hardware.
 
 ### Present mode
 
@@ -344,7 +370,7 @@ A pipeline is a combination of the states and shader binaries that are required 
 ### Used functions and obtained
 
 - Obtained through GraphicsDeviceRef's createPipelinesGraphics and createPipelinesCompute.
-- Used in CommandListRef's bindPipeline.
+- Used in CommandListRef's bindComputePipeline & bindGraphicsPipeline.
 
 ### PipelineGraphicsInfo
 
@@ -360,7 +386,7 @@ The graphics pipeline has the following properties:
     - The buffer id is the same as the index into the array. So [0] describes vertex buffer bound at id 0.
     - These are tightly packed to avoid having to dynamically allocate the PipelineGraphicsInfo and keeping it POD while still using limited resources. (bufferStride & 4095) | (isInstance << 12).
   - attributes[16]: the vertex attributes that use the buffers defined before.
-    - inferred semanticName: for HLSL/DirectX12, semantic name is quite important. However, it supports semantic name and value, so we just use semantic name TEXCOORD and the binding id. So TEXCOORD1 would be attribute[1]. This is done to save a lot of space in the PipelineGraphicsInfo.
+    - inferred semanticName: for HLSL/DirectX12, semantic name is quite important. However, it supports semantic name and value, so we just use semantic name TEXCOORD and the binding id. So TEXCOORD1 would be attribute[1]. This is done to save a lot of space in the PipelineGraphicsInfo. Our custom HLSL syntax for this is `_bind(N)`.
     - format: ETextureFormatId (8-bit) such as 'RGB32f'.
     - buffer4 (0-15): buffer id the attribute point to. Points to vertexLayout.bufferStrides12_isInstance1.
     - offset11: offset into the buffer.
@@ -375,7 +401,7 @@ The graphics pipeline has the following properties:
 - depthStencil: how to handle depth and stencil operations.
   - Optional if no special depth stencil is needed. Default to no depth or stencil operations.
   - flags: DepthTest (1), DepthWriteBit (2), StencilTest (4).
-    - For DepthWrite (3), both DepthTest and DepthWriteBit are required.
+    - For DepthWrite (3), both DepthTest and DepthWriteBit are set.
   - depthCompare, stencilCompare: compare operations for depth and stencil.
     - Gt (default), Geq, Eq, Neq, Leq, Lt, Always, Never.
   - stencilFail, stencilPass, stencilDepthFail: operations for when a stencil event occurs (fail, pass, depthFail).
@@ -386,7 +412,7 @@ The graphics pipeline has the following properties:
   - enable: whether or not to enable the blend state. If this is disabled then all attachments that are used for the pipeline will have the entire write mask enabled and blending disabled.
   - allowIndependentBlend: if disabled only reads from attachments[0], writeMask[0] and renderTargetMask & 1.
   - renderTargetMask: Bool[8] (U8) of which attachments have blend enabled.
-  - logicOpExt (default = off): if the logicOp feature is enabled represents the logic op the blend will perform.
+  - logicOpExt (default = off): if the logicOp feature is enabled allows to define the logic op the blend will perform.
     - Off, Clear, Set, Copy, CopyInvert, None, Invert, And, Nand, Or, Nor, Xor, Equiv, AndReverse, AndInvert, OrReverse, OrInvert.
   - writeMask[16]: EWriteMask mask of which channel writes are enabled for write (R: 1, G: 2, B: 4, A: 8). Can also be RGBA, RGB, RG.
   - attachments[16]: blend information about each state.
@@ -407,24 +433,30 @@ The graphics pipeline has the following properties:
 - Using DirectRendering:
   - If DirectRendering is enabled, a simpler way of creating can be used to aid porting and simplify development for desktop.
   - attachmentCountExt: how many render targets should be used.
-  - attachmentFormatsExt[i < attachmentCountExt]: the ETextureFormatId of the format. Needs to match the render target's exactly (Swapchain BGRA8 doesn't match a RGBA8 pipeline!).
+  - attachmentFormatsExt[i < attachmentCountExt]: the ETextureFormatId of the format. Needs to match the render target's exactly (Swapchain BGRA8 doesn't match an RGBA8 pipeline!).
   - depthFormatExt: depth format of the depth buffer: None, D16, D32, D24S8, D32S8.
 - **TODO**: Not using DirectRendering:
-  - If DirectRendering is not supported or the developer doesn't want to use it a unified mobile + desktop architecture can be used. However; generally desktop techniques don't lend themselves well for mobile techniques and vice versa. So it's still recommended to implement two separate rendering backends on mobile.
+  - If DirectRendering is not supported or the developer doesn't want to use it; a unified mobile + desktop architecture can be used. However; generally desktop techniques don't lend themselves well for mobile techniques and vice versa. So it's still recommended to implement two separate rendering backends on mobile.
   - **TODO**: renderPass:
   - **TODO**: subPass: 
 
 #### PipelineStages
 
-A pipeline stage is simply a Buffer and an EPipelineStage. The Buffer is in the format declared in "Shader binary types" and EPipelineStage can be Vertex, Pixel, Compute, GeometryExt, HullExt or DomainExt. Hull and domain are enabled by the Tessellation feature and GeometryExt by the Geometry feature.
+A pipeline stage is simply a Buffer and an EPipelineStage. The Buffer is in the format declared in "Shader binary types" and EPipelineStage can be Vertex, Pixel, Compute, GeometryExt, HullExt or DomainExt. Hull and domain are enabled by the TessellationShader feature and GeometryExt by the GeometryShader feature.
 
 ### Compute example
 
 ```c
 tempShader = ...;		//Buffer: Load from virtual file or hardcode in code.
+
+CharString nameArr[] = {
+    CharString_createConstRefCStr("Test compute pipeline")
+};
+
 List computeBinaries = (List) { 0 };
 _gotoIfError(clean, List_createConstRef(&tempShader, 1, sizeof(Buffer), &computeBinaries));
-_gotoIfError(clean, GraphicsDeviceRef_createPipelinesCompute(device, &computeBinaries, &computeShaders));
+_gotoIfError(clean, List_createConstRef((const U8*) &nameArr, 1, sizeof(nameArr[0]), &names));
+_gotoIfError(clean, GraphicsDeviceRef_createPipelinesCompute(device, &computeBinaries, names, &computeShaders));
 
 tempShader = Buffer_createNull();
 ```
@@ -491,7 +523,7 @@ In OxC3 graphics, either the application or the OxC3 baker is responsible for co
 - DirectX12: DXIL (binary).
   - HLSL Semantics can only be TEXCOORDi where i < 16. This maps directly to the binding.
 - Vulkan: SPIR-V (binary).
-- HLSL Entrypoint needs to be remapped to main.
+  - HLSL Entrypoint needs to be remapped to main.
 - Metal: MSL (text).
 - WebGPU: WGSL (text).
 
@@ -505,7 +537,7 @@ When using the baker, the binaries can simply be loaded using the oiCS helper fu
 
 ### Summary
 
-A DeviceBuffer is a buffer partially or fully located on the device (such as a GPU). A buffer defines the usage for various purposes such as; a vertex buffer, index buffer, indirect arguments buffer, shader read/write and if it is allocated on the CPU and accessible by the device or fully on the device (with potential access from the CPU). It also specifies if it should allocate a CPU copy to hold temporary data for future buffer updates. 
+A DeviceBuffer is a buffer partially or fully located on the device (such as a GPU). A device buffer defines the usage for various purposes such as; a vertex buffer, index buffer, indirect arguments buffer, shader read/write and if it is allocated on the CPU and accessible by the device or fully on the device (with potential access from the CPU). It also specifies if it should allocate a CPU copy to hold temporary data for future buffer updates. 
 
 ```c
 VertexPosBuffer vertexPos[] = {
@@ -527,7 +559,6 @@ _gotoIfError(clean, GraphicsDeviceRef_createBufferData(
 - readonly device: ref to the graphics device that owns it.
 - readonly usage: ShaderRead (accessible for read from shader), ShaderWrite (accessible for write from shader), Vertex (use as vertex buffer), Index (use as index buffer), Indirect (use for indirect draw calls), CPUBacked (There's a CPU copy of the buffer to facilitate reads/writes), CPUAllocated (The entire resource has to be located in "shared" memory or on the CPU if there's a dedicated GPU).
 - readonly isPending(FullCopy): Information about if any data is pending for the next submit and if the entire resource is pending.
-- readonly isFirstFrame: Useful to detect if the resource is in flight to allow quicker copies.
 - readonly length: Length of the buffer.
 - readonly cpuData: If CPUBacked stores the CPU copy for the resource or temporary data for the next submit to copy CPU data to the real resource.
 - readonly pendingChanges: `[U64 startRange, U64 endRange][]` list of marked regions for copy.
@@ -535,20 +566,20 @@ _gotoIfError(clean, GraphicsDeviceRef_createBufferData(
 
 ### Functions
 
-- `markDirty(U64 offset, U64 length)` marks part or entire resource dirty. This means that next commit the implementation will decide on how to copy to the resource in an efficient way. For example if the resource isn't in flight and ReBAR is turned on or shared memory is in use then it can directly copy to CPU accessible memory. Otherwise it might have to use a copy queue or something similar. The region is merged with any other pending region 256 bytes on either side to avoid lots of fragmented copies. Please make sure to only call this when necessary as this might cause extra allocations or copies to a RingBuffer; a good strategy might be to make the buffer 2 or 3x as big as necessary and index based on frameId % 3 and make the buffer CPUAllocated to allow direct writes always and then copy from this buffer only when needed. The framework will try to optimize these copies as much as possible (to avoid having to do that manually), but more work might be needed from the developers using it instead.
+- `markDirty(U64 offset, U64 length)` marks part or entire resource dirty. This means that next commit the implementation will decide on how to copy to the resource in an efficient way. For example if the resource isn't in flight and ReBAR is turned on or shared memory is in use then it can directly copy to CPU accessible memory. Otherwise it might have to use a copy queue or something similar. The region is merged with any other pending region 256 bytes on either side to avoid lots of fragmented copies. Please make sure to only call this when necessary as this might cause extra allocations or copies to a RingBuffer; a good strategy (if the buffer changes each frame) might be to make the buffer 3x as big as necessary and index based on frameId % 3 and make the buffer CPUAllocated to allow direct writes always and then copy from this buffer only when needed. The framework will try to optimize these copies as much as possible (to avoid having to do that manually), but more work might be needed from the developers using it instead.
 
 ### Used functions and obtained
 
 - Obtained through createBuffer and createBufferData from GraphicsDeviceRef. 
-- Used in DeviceBufferRef's markDirty, as vertex/index/indirect buffer for commands such as draw/drawIndirect/drawIndirectCount/dispatchIndirectCount, shaders if the resource is readable/writable (through transitions), copy and clear buffer operations. 
+- Used in DeviceBufferRef's markDirty, as vertex/index/indirect buffer for commands such as draw/drawIndirect/drawIndirectCountExt, shaders if the resource is readable/writable (through transitions), copy and clear buffer operations. 
 
 ## Commands
 
 ### Summary
 
-Command lists store the commands referenced in the next section. These are virtual commands; they approximately map to the underlying API. If the underlying API doesn't support a commands, it might have to simulate the behavior with a custom shader (such as creating a mip chain of an image). It is also possible that a command might need certain extensions, without them the command will give an error to prevent it from being inserted into the command list (some unimportant ones such as debugging are safely ignored if not supported instead). These commands are then processed at runtime when they need to. If the command list remains the same, it's the same swapchain (if applicable) and the resources aren't recreated then it can safely be re-used. 
+Command lists store the commands referenced in the next section. These are virtual commands; they approximately map to the underlying API. If the underlying API doesn't support commands, it might have to simulate the behavior with a custom shader (such as creating a mip chain of an image). It is also possible that a command might need certain extensions, without them the command will give an error to prevent it from being inserted into the command list (some unimportant ones such as debugging are safely ignored if not supported instead). These commands are then processed at runtime when they need to. If the command list remains the same, it's the same swapchain (if applicable) and the resources aren't recreated then it can safely be re-used. 
 
-Invalid API usage will be attempted to be found out when inserting the command, but this is not always possible. Because the state is only accessible when presenting to the device, since multiple command lists can safely be combined without invalidating state in between. 
+Invalid API usage will be attempted to be found out when inserting the command, but this is not always possible. 
 
 ### begin/end
 
@@ -605,12 +636,12 @@ Clear image is only allowed on images which aren't currently bound as a render t
 
 Clear image can currently only be called on a Swapchain object.
 
-### setPipeline
+### setComputePipeline/setGraphicsPipeline
 
 The set pipeline command does one of the following; bind a graphics pipeline, raytracing pipeline or a compute pipeline. These pipelines are the only bind points and they're maintained separately. So a bind pipeline of a graphics shader and one of a compute shader don't interfere. This is used before a draw, dispatch or traceRaysExt to ensure the shader is used.
 
 ```c
-_gotoIfError(clean, CommandListRef_setPipeline(commandList, pipeline));
+_gotoIfError(clean, CommandListRef_setComputePipeline(commandList, pipeline));
 ```
 
 ### draw
@@ -637,19 +668,19 @@ When issuing the draw, the state needs to be valid: a render has to be started (
 - If the state uses a stencil then it needs to set a stencil ref using CommandListRef_setStencil.
 - If the state uses a blend type that uses the blend constants then it has to set the blend constants using CommandListRef_setBlendConstants.
 
-#### Example of a good (legacy) draw call system (Pseudocode)
+#### Example of a legacy draw call system (Pseudocode)
 
 ```c
-//Transition all drawn materials to read
+//Transition all drawn materials to read in scope
 //Bind render target(s)
 //Bind viewport/scissor
+//Bind primitive buffers (allocate all meshes into one buffer for less rebinds)
 //Foreach shader:
 //  Bind pipeline 
-//	Bind primitive buffers
 //	All draw calls of relevant objects
 ```
 
-The example above should be fine as long as the draw calls don't need extra synchronization because they write and read from a shared resource. In that case, it would need a transition before drawing the next. However, this transition should only be done for the resources that can be modified from the draw call(s), as long as they're not the currently bound textures. These currently bound textures can't be used in a transition or the shader as a read/write input as well.
+The example above should be fine as long as the draw calls don't need extra synchronization because they write and read from a shared resource. In that case, it would need a transition before drawing the next (and might need to end the scope). However, this transition should only be done for the resources that can be modified from the draw call(s), as long as they're not the currently bound textures. These currently bound textures can't be used in a transition or the shader as a read/write input as well.
 
 To find a more modern way of rendering, check out the multi draw indirect section.
 
@@ -663,30 +694,31 @@ Same as draw except the device reads the parameters of the draw from a DeviceBuf
 
 - buffer: a buffer with the DrawCallUnindexed or DrawCallIndexed struct(s) depending on the 'indexed' boolean. Buffer needs to enable Indirect usage to be usable by indirect draws.
 - bufferOffset: offset into the draw call buffer. Align to 16-byte for optimal result.
-- bufferStride: stride of the draw call buffer. If 0 it will be defaulted to tightly packed (16 or 24 byte depending on if it's indexed or not). Has to be bigger or equal to the current draw call struct size.
-- drawCalls: how many draw calls are expected to be filled in this buffer. A draw can also set the draw parameters to zero to disable it (instanceCount / index / vertexCount), though for that purpose drawIndirectCount is recommended. Make sure the buffer has `U8[stride][maxDrawCalls]` allocated at bufferOffset. 
+- bufferStride: stride of the draw call buffer. If 0 it will be defaulted to tightly packed (16 or 32 byte depending on if it's indexed or not). Has to be bigger or equal to the current draw call struct size.
+- drawCalls: how many draw calls are expected to be filled in this buffer. A draw can also set the draw parameters to zero to disable it (instanceCount / index / vertexCount), though for that purpose drawIndirectCountExt is recommended. Make sure the buffer has `U8[bufferStride][maxDrawCalls]` allocated at bufferOffset. 
 - indexed: if the draw calls are indexed or not. The device can't combine non indexed and indexed draw calls, so if you want to combine them you need to do this as two separate steps.
   - If not indexed; the buffer takes a DrawCallUnindexed struct: U32 vertexCount, instanceCount, vertexOffset, instanceOffset.
-  - Otherwise; the buffer takes a DrawCallIndexed struct: U32 indexCount, instanceCount, indexOffset, I32 vertexOffset, U32 instanceOffset.
+  - Otherwise; the buffer takes a DrawCallIndexed struct: U32 indexCount, instanceCount, indexOffset, I32 vertexOffset, U32 instanceOffset, U32 padding[3].
 
-drawIndirect transitions the input buffer to IndirectDraw. This means that the buffer can't also be bound as a Vertex/Index buffer or be used in the shader as a read/write buffer.
+drawIndirect transitions the input buffer to IndirectDraw. This means that the buffer can't also be bound as a Vertex/Index buffer or be used in the shader as a read/write buffer in the same scope. Buffer needs to enable Indirect usage to be usable by indirect draws.
 
-#### drawIndirectCount
+#### drawIndirectCountExt
 
 Same as drawIndirect, except it adds a DeviceBuffer counter which specifies how many active draw calls there are. This is very useful as it allows culling to be done entirely by compute. 
 
 - drawCalls now represents 'maxDrawCalls' which limits how many draw calls might be issued by the device.
 - countBuffer now represents a U32 in the DeviceBuffer at the offset. Make sure to align 4-byte to satisfy alignment requirements.
+- Requires drawIndirectCount extension.
 
-drawIndirect transitions the input buffer to IndirectDraw. This means that the buffer can't also be bound as a Vertex/Index buffer or be used in the shader as a read/write buffer.
+drawIndirect transitions the input buffer to IndirectDraw. This means that the buffer can't also be bound as a Vertex/Index buffer or be used in the shader as a read/write buffer in the same scope. Buffer needs to enable Indirect usage to be usable by indirect draws.
 
 ### setPrimitiveBuffers
 
-Sets the primitive buffers (vertex + index buffer(s)) for use by draw commands such as draw, drawIndirect and drawIndirectCount. The buffers need the Vertex and/or Index usage set if they're used for that purpose. While the setPrimitiveBuffers is active it is illegal to transition the resource(s) back to a different state or to write/read from other sources that use it. To see when a primitive buffers call is active, check the Scope section of this document. The vertex buffer(s) need to have the same layout as specified in the pipeline and the ranges specified by the draw calls (such as count and offset) need to match up as well. 
+Sets the primitive buffers (vertex + index buffer(s)) for use by draw commands such as draw, drawIndirect and drawIndirectCountExt. The buffers need the Vertex and/or Index usage set if they're used for that purpose. In the same scope of the setPrimitiveBuffers it is illegal to transition the subresource(s) back to a different state or to write/read from other sources that use it (check the Scope section of this document). The vertex buffer(s) need to have the same layout as specified in the pipeline and the ranges specified by the draw calls (such as count and offset) need to match up as well. 
 
 ### dispatch
 
-Dispatch has some of the same requirements as draw calls as it needs a correct state of the resources and needs a compute pipeline bound as well. However, it doesn't need to be in an active render (render pass or direct rendering) and it also doesn't use the viewport/scissor. This makes compute one of the easiest to handle, though transitions are just as important as with graphics shaders.
+Dispatch has some of the same requirements as draw calls as it needs a correct state of the resources and needs a compute pipeline bound as well. However, it doesn't need to be in an active render (render pass or direct rendering) and it also doesn't use the viewport/scissor. This makes compute one of the easiest to handle, though transitions are just as important as with graphics shaders (resources need to be transitioned through a scope).
 
 ```c
 _gotoIfError(clean, CommandListRef_dispatch2D(commandList, tilesX, tilesY));
@@ -696,13 +728,13 @@ dispatch2D, dispatch1D and dispatch3D are the easiest implementations. You dispa
 
 #### dispatchIndirect
 
-Same thing as dispatch, except the device reads from a U32x3 into the DeviceBuffer at the offset and dispatches the groups stored there. For optimal use please align offset to 16-byte. For 2D dispatches please set z to 1, for 1D set y to 1 as well. 
+Same thing as dispatch, except the device reads from a U32x3 into the DeviceBuffer at the offset and dispatches the groups stored there. Has to be aligned to 16-byte. For 2D dispatches please set z to 1, for 1D set y to 1 as well. 
 
-dispatchIndirect transitions the input buffer to IndirectDraw. This means that the buffer can't also be bound as a Vertex/Index buffer or be used in the shader as a read/write buffer. Buffer needs to enable Indirect usage to be usable by indirect draws.
+dispatchIndirect transitions the input buffer to IndirectDraw. This means that the buffer can't also be bound as a Vertex/Index buffer or be used in the shader as a read/write buffer in the same scope. Buffer needs to enable Indirect usage to be usable by indirect draws.
 
 ### DebugMarkers feature
 
-The DebugMarkers feature adds three commands: addMarkerDebugExt, startRegionDebugExt and endRegionDebugExt. If the DebugMarkers feature isn't present, these are safely ignored and won't be inserted into the virtual command list. This can be used to provide extra debugging info to tools such as RenderDoc, NSight, Pix, etc. to show where important events such as render calls happened and what they represented. A debug region or debug marker has a color and a name. A debug region is like a stack; you can only end the current region and push another region. Every region you start has to be ended over the command lists that are submitted (you can start & end the same region in two separate command lists, as long as they're always both submitted).
+The DebugMarkers feature adds three commands: addMarkerDebugExt, startRegionDebugExt and endRegionDebugExt. If the DebugMarkers feature isn't present, these are safely ignored and won't be inserted into the virtual command list. This can be used to provide extra debugging info to tools such as RenderDoc, NSight, Pix, etc. to show where important events such as render calls happened and what they represented. A debug region or debug marker has a color and a name. A debug region is like a stack; you can only end the current region and push another region. Every region you start has to be ended in the same scope that is submitted.
 
 ```c
 _gotoIfError(clean, CommandListRef_startRegionDebugExt(
@@ -755,15 +787,51 @@ _gotoIfError(clean, CommandListRef_startRenderExt(
 _gotoIfError(clean, CommandListRef_endRenderExt(commandList));
 ```
 
-Keep in mind that during a render call, you can't transition the resources passed into the attachments of the active render call. They're not allowed to be used as a read (SRV) or write textures (UAV); they're only allowed to be output attachments (RTV). Special care should be taken on the developer's side to avoid this from happening.
+*Keep in mind that during the scope, you can't transition the resources passed into the attachments of the active render call. They're not allowed to be used as a read (SRV) or write textures (UAV); they're only allowed to be output attachments (RTV). Doing otherwise will cause the command list to give an error and remove the current scope.*
 
 Every startRender needs to match an endRender. During the render it's not allowed to access the render textures as a write or read texture. Other operations that change state (implicit transitions) such as clears and copies are also not allowed. If this is required, the developer can end the render and restart it after this operation.
 
 A graphics pipeline for use with DirectRendering needs to set the attachment count (and format(s)) or the depth stencil format. One that doesn't use direct rendering can't be used.
 
-### transition
+### Scope (startScope/endScope)
 
-Because the API requires bindless to function, it has certain limits. One of these limits/benefits is that a shader is now able to access all write buffers/textures and read buffers/textures. This would mean that everything is accessible by all shaders; making automatic transitions impossible. To fix this; the user will only have to manually do transitions for draw/dispatch calls. Here you specify the (sub)resource and in which shader stage it is first used and if it's a write (or if any subsequent shaders could write to it). Then the runtime will automatically transition only when it's needed. 
+A scope is the replacement of the "transition" command. The scope makes sure all resources are in the right state for the commands that follow and it collects transitions from any other commands in the scope. It also makes sure to signal the api that the resources referenced are still in flight and shouldn't be deleted. When a scope is exited, it will undo the sets of temporary command states (though under the hood the api's command list is allowed to maintain these states to reduce api overhead). Scopes allow the implementation to figure out more clearly what areas of the command list are important together, and as such it can use them to determine dependencies between them and/or optimize unnecessary calls. It also allows the recorder to optimally record them in separate threads (if supported) since each scope doesn't maintain a global state. There can only be one scope active at a time: nesting scopes is unsupported.
+
+```C
+startScope		//Transitions resources
+    
+    addMarkerDebugExt
+    startRegionDebugExt (starts deb region, push)
+        endRegionDebugExt (end deb region, pop: req for each startRegionDebugExt)
+    
+	clearImages
+	setGraphicsPipeline
+    setComputePipeline
+    dispatch requires setComputePipeline
+    
+    startRenderExt
+        setPrimitiveBuffers
+        setViewport/Scissor
+        setBlendConstants
+        setStencil
+        draw(Indirect(Count))
+            requires: 
+                setGraphicsPipeline
+                setViewport/Scissor
+                probably setPrimitiveBuffers
+                optional setBlendConstants & setStencil
+        endRenderExt (required for each startRender)
+                    
+    endScope
+```
+
+Because a scope hoists the transitions of operations such as clearImages, drawIndirect(Count), setPrimitiveBuffers it is impossible to use the same subresource in the same scope for different usages (be it copy/shader write/read). If this is the case then a separate scope is needed.
+
+All startRenderExts in a scope should be ended and all startRegionDebugExts as well. Since a scope should be self contained.
+
+#### Transitions
+
+Because the API requires bindless to function, it has certain limits. One of these limits/benefits is that a shader is now able to access all write buffers/textures and read buffers/textures. This would mean that everything is accessible by all shaders; making automatic transitions impossible. To fix this; the user will only have to manually do transitions for draw/dispatch calls. For other usages the current scope will handle the transition for you (though this disallows usages of the same subresource for different purposes). Here you specify the (sub)resource and in which shader stage it is first used and if it's a write (or if any subsequent shaders could write to it). Then the runtime will automatically transition only when it's needed. 
 
 Even though Metal doesn't need transitions, they're still required to allow DirectX and Vulkan support. More importantly; transitions allow OxC3 to know which resources are required for the command list to be executed. It uses this to keep the resources alive until the command list was executed on the device. 
 
@@ -781,49 +849,19 @@ Transition transitions[] = {
 	}
 };
 
-List transitionArr = (List) { 0 };
+List transitionArr = (List) { 0 };		//No need to free since it's a ref.
 _gotoIfError(
     clean, 
     List_createConstRef((const U8*) &transitionArr, 1, sizeof(Transition), transitions)
 );
 
-_gotoIfError(clean, CommandListRef_transition(commandList, transitionArr));
+_gotoIfError(clean, CommandListRef_startScope(commandList, transitionArr));
+//TODO: Bind compute shader(s) and dispatch
+_gotoIfError(clean, CommandListRef_endScope(commandList));
 ```
 
 Transitions can currently only be called on a Swapchain object.
 
-#### Validation
+##### Validation
 
-Unfortunately, validation is only possible in DirectX and Vulkan using their respective validation layers. It is impossible to tell which resource was accessed in a certain frame (without running our own GPU-based validation layer). This makes it impossible to know if it was in the correct state. Make sure to validate on Vulkan since it's the strictest with transitions. However, if you're using Metal and doing transitions incorrectly, it could show up as some resources being deleted too early (if they're still in flight).
-
-### Scope
-
-Each command has a scope in which it will affect anything. If that scope ends the effect of the command will end. A good example is the startRenderExt call, whereafter the graphics pipeline and such will be unset automatically to prevent unclear usage:
-
-```C
-addMarkerDebugExt
-startRegionDebugExt (starts debugging region, push)
-    endRegionDebugExt (end debugging region, pop)
-
-transition
-clearImages
-    
-startRenderExt (start of scope)
-    setPipeline (graphics)
-    setPrimitiveBuffers
-    setViewport/Scissor
-    setBlendConstants
-    setStencil
-	draw
-    	requires: 
-			setPipeline
-            setViewport/Scissor
-			probably setPrimitiveBuffers
-            probably transition
-            optional setBlendConstants & setStencil
-	endRenderExt (end of scope)
-    
-setPipeline (compute)
-	dispatch
-```
-
+Unfortunately, validation is only possible in DirectX and Vulkan using their respective validation layers. It is very hard to tell which resources were accessed in a certain frame (without running our own GPU-based validation layer). This makes it impossible to know if it was in the correct state. Make sure to validate on Vulkan since it's the strictest with transitions. However, if you're using Metal and doing transitions incorrectly, it could show up as some resources being deleted too early (if they're still in flight). Vulkan and DirectX's debug layers are automatically turned on on Debug mode.

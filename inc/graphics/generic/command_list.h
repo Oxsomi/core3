@@ -276,7 +276,9 @@ typedef struct DrawCallIndexed {
 
 	U32 indexCount, instanceCount;
 	U32 indexOffset; I32 vertexOffset;
+
 	U32 instanceOffset;
+	U32 padding[3];			//For alignment
 
 } DrawCallIndexed;
 
@@ -286,7 +288,7 @@ Error CommandListRef_drawIndirect(
 	U32 drawCalls, Bool indexed
 );
 
-Error CommandListRef_drawIndirectCount(
+Error CommandListRef_drawIndirectCountExt(
 	CommandListRef *commandList, 
 	DeviceBufferRef *buffer, U64 bufferOffset, U32 bufferStride, 
 	DeviceBufferRef *countBuffer, U64 countOffset,

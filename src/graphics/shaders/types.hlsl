@@ -59,3 +59,16 @@ typedef int64_t4 I64x4;
 typedef bool Bool;
 
 #define _bind(x) TEXCOORD##x
+
+struct IndirectDraw {
+	U32 vertexCount, instanceCount, vertexOffset, instanceOffset;
+};
+
+struct IndirectDrawIndexed {
+
+	U32 indexCount, instanceCount, indexOffset;
+	I32 vertexOffset;
+
+	U32 instanceOffset;
+	U32 padding[3];			//For alignment
+};

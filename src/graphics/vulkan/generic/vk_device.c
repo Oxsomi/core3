@@ -804,7 +804,7 @@ Error GraphicsDevice_initExt(
 	_gotoIfError(clean, List_reservex(&deviceExt->imageTransitions, 16));
 
 	//Allocate staging buffer.
-	//256 MiB - 256 * 3 to allow CBuffer at the end of the memory.
+	//64 MiB - 256 * 3 to allow CBuffer at the end of the memory.
 	//This gets divided into 3 for each frame id to have their own allocator into that subblock.
 	//This allows way easier management.
 
@@ -1158,7 +1158,7 @@ Error DeviceBufferRef_flush(VkCommandBuffer commandBuffer, GraphicsDeviceRef *de
 		tempList = List_createEmpty(sizeof(VkBufferMemoryBarrier2));
 		_gotoIfError(clean, List_reservex(&tempList, 1 + buffer->pendingChanges.length));
 
-		if (allocRange >= 64 * MIBI) {		//Resource is too big, allocate dedicated staging resource
+		if (allocRange >= 16 * MIBI) {		//Resource is too big, allocate dedicated staging resource
 
 			_gotoIfError(clean, GraphicsDeviceRef_createBuffer(
 				deviceRef, EDeviceBufferUsage_CPUAllocatedBit, CharString_createConstRefCStr("Dedicated staging buffer"),
