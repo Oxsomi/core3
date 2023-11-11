@@ -149,7 +149,6 @@ typedef struct Transition {
 typedef enum ECommandScopeDependencyType {
 
 	ECommandScopeDependencyType_Unconditional,	//If dependency is present, wait for it to finish, otherwise no-op.
-	ECommandScopeDependencyType_Weak,			//If dependency is hidden then hide self.
 	ECommandScopeDependencyType_Strong			//If dependency is hidden, give error and hide self.
 
 } ECommandScopeDependencyType;

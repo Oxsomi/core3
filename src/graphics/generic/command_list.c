@@ -665,7 +665,7 @@ Error CommandListRef_startScope(CommandListRef *commandListRef, List transitions
 clean:
 
 	if(err.genericError)
-		commandList->state = ECommandListState_Invalid;
+		commandList->tempStateFlags = ECommandStateFlags_InvalidState;
 
 	return err;
 }
