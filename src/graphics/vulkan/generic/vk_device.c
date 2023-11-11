@@ -47,7 +47,13 @@
 const U64 GraphicsDeviceExt_size = sizeof(VkGraphicsDevice);
 
 //Convert command into API dependent instructions
-impl Error CommandList_process(GraphicsDevice *device, ECommandOp op, const U8 *data, void *commandListExt);
+impl void CommandList_process(
+	CommandList *commandList, 
+	GraphicsDevice *device, 
+	ECommandOp op, 
+	const U8 *data, 
+	void *commandListExt
+);
 
 Error GraphicsDevice_initExt(
 	const GraphicsInstance *instance, 
@@ -1387,6 +1393,9 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 
 		if(cmd->device != deviceRef)
 			return Error_unsupportedOperation(0);
+
+		if(cmd->state != ECommandListState_Closed)
+			return Error_invalidParameter(1, (U32)i);
 	}
 
 	//Swapchains all need to have the same vsync option.
@@ -1775,39 +1784,10 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 				
 				//Extra debugging if an error happens while processing the command
 
-				err = CommandList_process(device, info.op, ptr, &state);
-
-				if (err.genericError) {
-
-					#ifndef NDEBUG
-
-						const U8 *callstack = commandList->callstacks.ptr + commandList->callstacks.stride * j;
-
-						Log_warnLnx("Command process failed. Command inserted at callstack:");
-
-						Log_printCapturedStackTraceCustomx(
-							(const void**) callstack, 
-							commandList->callstacks.stride / sizeof(void*),
-							ELogLevel_Error, 
-							ELogOptions_Default
-						);
-
-					#endif
-
-					goto clean;
-				}
-
+				CommandList_process(commandList, device, info.op, ptr, &state);
 				ptr += info.opSize;
 			}
 		}
-
-		//Check for invalid state.
-
-		if(state.debugRegionStack)
-			_gotoIfError(clean, Error_invalidOperation(0));
-
-		if(!I32x2_eq2(state.currentSize, I32x2_zero()))
-			_gotoIfError(clean, Error_invalidOperation(1));
 
 		//Transition back swapchains to present
 

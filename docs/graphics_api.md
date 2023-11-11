@@ -184,6 +184,7 @@ _gotoIfError(clean, GraphicsDeviceRef_create(
       optional List<CharString> names,
       PipelineRef **computeShaders
   );
+  ```
 ```
   
 - ```c
@@ -193,7 +194,7 @@ _gotoIfError(clean, GraphicsDeviceRef_create(
       optional List<CharString> names,
       List<PipelineRef*> *pipelines
   );
-  ```
+```
 
 - ```C
   Error createBuffer(
@@ -240,7 +241,7 @@ _gotoIfError(clean, GraphicsDeviceRef_createCommandList(
 ```c
 _gotoIfError(clean, CommandListRef_begin(commandList, true /* clear previous */));
 
-_gotoIfError(clean, CommandListRef_startScope(commandList, (List) { 0 }));
+_gotoIfError(clean, CommandListRef_startScope(commandList, (List) { 0 }, 0, (List) { 0 },));
 _gotoIfError(clean, CommandListRef_clearImagef(
     commandList, F32x4_create4(1, 0, 0, 1), (ImageRange){ 0 }, swapchain
 ));
@@ -268,12 +269,20 @@ For more info on commands check out the "Commands" section.
 - readonly device; owning device.
 - readonly state; if the command list has been opened before and if it's open or closed right now.
 - readonly allowResize; if command list is allowed to resize if it runs out of memory.
-- private:
-  - data: The current recorded commands.
-  - commandOps: The opcodes for which commands are recorded.
-  - resources: Which resources are in use by the command list.
-  - callstacks: On debug mode, contains the stacktrace of each command. Used for debugging if an error occurs in the API-dependent layer.
-  - next: the next offset into the data buffer for the next command to record.
+- readonly resources; Which resources are in use by the command list.
+- private readonly:
+  - data; The current recorded commands.
+  - commandOps; The opcodes for which commands are recorded.
+  - callstacks; On debug mode, contains the stacktrace of each command (up to 16 deep callstack). Used for debugging if an error occurs in the API-dependent layer.
+  - next; the next offset into the data buffer for the next command to record.
+  - transitions; list of transitions issued in the command list. Scopes point into this to execute transitions.
+  - activeScopes; list of scopes that weren't collapsed (scope command id & scope id, what transitions it did and how many commands it contains & the length of the sub command buffer).
+  - computePipeline/graphicsPipeline; currently bound pipeline.
+  -  tempStateFlags; AnyScissor, AnyViewport, HasModifyOp, HasScope, InvalidState. Used for validation and optimization.
+  - debugRegionStack; used for validating debug regions.
+  - lastCommandId, lastOffset, lastTransition; locations at the start of a scope for command id, buffer location and transition offset. Used for the next scope description.
+  - currentSize; size of the current renderpass.
+  - pendingTransitions; list of transitions waiting for the current scope. Get pushed into transitions if the scope is visible.
 
 ### Functions
 
@@ -804,10 +813,10 @@ startScope		//Transitions resources
     startRegionDebugExt (starts deb region, push)
         endRegionDebugExt (end deb region, pop: req for each startRegionDebugExt)
     
-	clearImages
+	clearImages								//Keeps scope alive
 	setGraphicsPipeline
     setComputePipeline
-    dispatch requires setComputePipeline
+    	dispatch(Indirect)					//Keeps scope alive
     
     startRenderExt
         setPrimitiveBuffers
@@ -855,13 +864,38 @@ _gotoIfError(
     List_createConstRef((const U8*) &transitionArr, 1, sizeof(Transition), transitions)
 );
 
-_gotoIfError(clean, CommandListRef_startScope(commandList, transitionArr));
+_gotoIfError(clean, CommandListRef_startScope(commandList, transitionArr, 0 /* id */, (List) { 0 } /* deps */));
 //TODO: Bind compute shader(s) and dispatch
 _gotoIfError(clean, CommandListRef_endScope(commandList));
 ```
 
-Transitions can currently only be called on a Swapchain object.
+Transitions can currently only be called on a Swapchain or DeviceBuffer object.
+
+It's recommended to use enums to define the ids of scopes to avoid mistakes with hardcoding numbers for each scope.
 
 ##### Validation
 
 Unfortunately, validation is only possible in DirectX and Vulkan using their respective validation layers. It is very hard to tell which resources were accessed in a certain frame (without running our own GPU-based validation layer). This makes it impossible to know if it was in the correct state. Make sure to validate on Vulkan since it's the strictest with transitions. However, if you're using Metal and doing transitions incorrectly, it could show up as some resources being deleted too early (if they're still in flight). Vulkan and DirectX's debug layers are automatically turned on on Debug mode.
+
+#### Dependencies
+
+The final parameter of startScope is the dependencies; this is a `List<ScopeDependency>` which references the scopes by id it has a dependency on. It contains the dependency type (unconditional, weak, strong) and a scope id of the dependency. A strong dependency means that the dependency needs to be available, otherwise the scope is invalid and it should be an error to insert it if the dependency isn't available. A weak dependency is one where if the dependency doesn't exist it won't error, it just will collapse the scope (won't execute it) without erroring. An unconditional dependency is one where the execution will happen always even if the scope is not present; but it does mean that the scope needs to be executed before it. Consider the following:
+
+```
+startScope (0)					//Render visibility buffer
+	startRenderExt
+		setGraphicsPipeline
+		setViewportAndScissor
+		X draw calls			//Generates vertices dynamically
+		endRenderExt
+	endScope
+	
+startScope (1)
+	setComputePipeline
+	dispatch					//Unpack V-Buffer into G-Buffer
+	endScope
+```
+
+Scope 1 is dependent on scope 0 since it uses the V-Buffer generated by it. The type of dependency in this case can be weak, since if scope 0 doesn't issue any draw calls it won't have to execute the dispatch to unpack the G-Buffer. We don't want an error if it hid the scope, we just want it to hide itself (that's what weak dependencies do).
+
+Working in this way allows the implementation to thread scopes that are independent. Which results in better performance in cases where lots of GPU commands have to be issued.

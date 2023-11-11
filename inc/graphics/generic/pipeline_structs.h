@@ -24,7 +24,8 @@
 typedef enum EPipelineType {
 
 	EPipelineType_Graphics,
-	EPipelineType_Compute
+	EPipelineType_Compute,
+	EPipelineType_Count
 
 } EPipelineType;
 
@@ -35,7 +36,9 @@ typedef enum EPipelineStage {
 	EPipelineStage_Compute,
 	EPipelineStage_GeometryExt,			//Query graphics feature GeometryShader
 	EPipelineStage_HullExt,				//Query graphics feature TessellationShader
-	EPipelineStage_DomainExt			//^
+	EPipelineStage_DomainExt,			//^
+
+	EPipelineStage_Count
 
 } EPipelineStage;
 

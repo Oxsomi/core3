@@ -178,41 +178,24 @@ typedef struct VkCommandAllocator {
 
 } VkCommandAllocator;
 
-typedef enum EVkCommandBufferFlags {
+typedef struct VkCommandBufferState {
 
-	EVkCommandBufferFlags_HasDepth		= 1 << 0,
-	EVkCommandBufferFlags_HasStencil	= 1 << 1
+	RefPtr *tempPipelines[EPipelineType_Count];		//Pipelines that were set via command, but not bound yet
+	RefPtr *pipelines[EPipelineType_Count];			//Currently bound pipelines
 
-} EVkCommandBufferFlags;
+	F32x4 blendConstants, tempBlendConstants;
 
-typedef struct VkImageRange {
+	U8 stencilRef, tempStencilRef;
+	U16 padding;
 
-	RefPtr *ref;
-
-	ImageRange range;
-
-} VkImageRange;
-
-typedef struct VkCommandBufferState {		//Caching state variables
-
-	I32x2 currentSize;						//Size of currently bound render target(s), 0 if none
-
-	EVkCommandBufferFlags flags;
-	U32 debugRegionStack;
+	U32 scopeCounter;
 
 	VkCommandBuffer buffer;
 
-	U32 pad0;
+	PrimitiveBuffers boundBuffers, tempBoundBuffers;
 
-	U8 boundDepthFormat;					//EDepthStencilFormat
-	Bool anyScissor, anyViewport;
-	U8 boundImageCount;
-
-	VkImageRange boundImages[8];
-
-	PipelineRef *boundPipelines[2];			//Graphics, Compute
-
-	DeviceBufferRef *boundBuffers[17];			//Vertex + index buffers
+	VkViewport boundViewport, tempViewport;
+	VkRect2D boundScissor, tempScissor;
 
 } VkCommandBufferState;
 

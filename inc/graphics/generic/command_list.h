@@ -19,92 +19,48 @@
 */
 
 #pragma once
-#include "types/list.h"
-#include "math/vec.h"
-#include "platforms/ref_ptr.h"
-#include "graphics/generic/device.h"
+#include "command_structs.h"
+#include "pipeline_structs.h"
 
-typedef RefPtr GraphicsDeviceRef;
-typedef RefPtr PipelineRef;
-typedef RefPtr DeviceBufferRef;
 typedef struct CharString CharString;
 typedef struct GraphicsDevice GraphicsDevice;
-
-typedef enum ECommandOp {
-
-	ECommandOp_Nop,
-
-	//Setting dynamic graphic pipeline
-
-	ECommandOp_SetViewport,
-	ECommandOp_SetScissor,
-	ECommandOp_SetViewportAndScissor,
-
-	ECommandOp_SetStencil,
-	ECommandOp_SetBlendConstants,
-
-	//Direct rendering
-
-	ECommandOp_StartRenderingExt,
-	ECommandOp_EndRenderingExt,
-
-	//Draw calls and dispatches
-
-	ECommandOp_SetPipeline,
-	ECommandOp_Transition,
-
-	ECommandOp_SetPrimitiveBuffers,
-
-	ECommandOp_Draw,
-	ECommandOp_DrawIndirect,
-	ECommandOp_DrawIndirectCount,
-
-	ECommandOp_Dispatch,
-	ECommandOp_DispatchIndirect,
-
-	//Clearing depth + color views
-
-	ECommandOp_ClearImages,
-	//ECommandOp_ClearDepths,
-
-	//Debugging
-
-	ECommandOp_AddMarkerDebugExt,
-	ECommandOp_StartRegionDebugExt,
-	ECommandOp_EndRegionDebugExt
-
-} ECommandOp;
-
-typedef enum ECommandListState {
-
-	ECommandListState_New,			//Never opened
-	ECommandListState_Open,			//No end has been called yet
-	ECommandListState_Closed		//End has already been called
-
-} ECommandListState;
-
-typedef struct CommandOpInfo {
-
-	ECommandOp op;
-	U32 opSize;
-
-} CommandOpInfo;
+typedef enum EPipelineType EPipelineType;
 
 typedef struct CommandList {
 
 	GraphicsDeviceRef *device;
 
-	Buffer data;			//Data for all commands
-	List commandOps;		//List<CommandOpInfo>
-	List resources;			//List<RefPtr*> resources used by this command list (TODO: HashSet<RefPtr*>)
+	Buffer data;						//Data for all commands
+	List commandOps;					//List<CommandOpInfo>
+	List resources;						//List<RefPtr*> resources used by this command list (TODO: HashSet<RefPtr*>)
 
-	List callstacks;		//Used to handle error handling (Only has call stack depth 32 to save some space)
+	List transitions;					//<TransitionInternal> Transitions that are pending
+	List activeScopes;					//<CommandScope> Scopes that were successfully inserted
 
-	U8 padding[3];
+	U8 padding0[3];
 	Bool allowResize;
 	ECommandListState state;
 
 	U64 next;
+
+	//Temp state for the last scope
+
+	PipelineRef *pipeline[EPipelineType_Count];
+
+	ImageAndRange boundImages[8];
+
+	U16 tempStateFlags;					//ECommandStateFlags
+	U8 debugRegionStack, boundImageCount;
+	U32 lastCommandId;
+
+	I32x2 currentSize;
+
+	U64 lastOffset;
+
+	U32 lastScopeId;
+	EDepthStencilFormat boundDepthFormat;
+	
+	List pendingTransitions;			//<TransitionInternal>
 
 } CommandList;
 
@@ -138,41 +94,6 @@ Error CommandListRef_setBlendConstants(CommandListRef *commandList, F32x4 blendC
 
 //Setting clear parameters and clearing render texture
 
-typedef struct ImageRange {
-
-	U32 levelId;		//Set to U32_MAX to indicate all levels, otherwise indicates specific index.
-	U32 layerId;		//Set to U32_MAX to indicate all layers, otherwise indicates specific index.
-
-} ImageRange;
-
-typedef union ClearColor {
-
-	U32 coloru[4];
-	I32 colori[4];
-	F32 colorf[4];
-
-} ClearColor;
-
-typedef struct ClearImage {
-
-	ClearColor color;
-
-	ImageRange range;
-
-	RefPtr *image;
-
-} ClearImage;
-
-/* typedef struct ClearDepthStencil {
-
-	F32 depth;
-
-	U8 stencil, padding[3];
-
-	ImageRange image;
-
-} ClearDepthStencil; */
-
 //Clear entire resource or subresource .
 //Color: SwapchainRef or RenderTargetRef, Depth: RenderTargetRef
 
@@ -186,53 +107,15 @@ Error CommandListRef_clearImages(CommandListRef *commandList, List clearImages);
 
 //Draw calls and dispatches
 
-typedef enum EPipelineStage EPipelineStage;
+//List<Transition>, List<CommandScopeDependency>
+Error CommandListRef_startScope(CommandListRef *commandList, List transitions, U32 id, List dependencies);
+Error CommandListRef_endScope(CommandListRef *commandList);
 
-typedef union ResourceRange {
-	
-	ImageRange image;
-	BufferRange buffer;
-
-} ResourceRange;
-
-typedef struct Transition {
-
-	RefPtr *resource;			//Currently only supports swapchain
-	ResourceRange range;
-
-	EPipelineStage stage;		//First shader stage that will access this resource
-	U8 padding[3];
-	Bool isWrite;
-
-} Transition;
-
-Error CommandListRef_transition(CommandListRef *commandList, List transitions);			//<Transition>
-
-Error CommandListRef_setPipeline(CommandListRef *commandList, PipelineRef *pipeline);
-
-typedef struct PrimitiveBuffers {
-
-	DeviceBufferRef *vertexBuffers[16];
-	DeviceBufferRef *indexBuffer;
-
-	Bool isIndex32Bit;
-	U8 padding[3];
-
-} PrimitiveBuffers;
+Error CommandListRef_setPipeline(CommandListRef *commandList, PipelineRef *pipeline, EPipelineType type);
+Error CommandListRef_setComputePipeline(CommandListRef *commandList, PipelineRef *pipeline);
+Error CommandListRef_setGraphicsPipeline(CommandListRef *commandList, PipelineRef *pipeline);
 
 Error CommandListRef_setPrimitiveBuffers(CommandListRef *commandList, PrimitiveBuffers buffers);
-
-typedef struct Draw {
-
-	U32 count, instanceCount;
-	U32 vertexOffset, instanceOffset;
-
-	U32 indexOffset;
-
-	Bool isIndexed;
-	U8 padding[3];
-
-} Draw;
 
 Error CommandListRef_draw(CommandListRef *commandList, Draw draw);
 
@@ -251,37 +134,6 @@ Error CommandListRef_drawUnindexedAdv(
 	U32 vertexOffset, U32 instanceOffset
 );
 
-typedef struct DrawIndirect {
-
-	DeviceBufferRef *buffer;				//Draw commands (or draw indexed commands)
-	DeviceBufferRef *countBuffer;			//If defined, uses draw indirect count and specifies the buffer that holds the counter
-
-	U64 bufferOffset, countOffset;
-
-	U32 drawCalls, bufferStride;
-
-	Bool isIndexed;
-	U8 pad[7];
-
-} DrawIndirect;
-
-typedef struct DrawCallUnindexed {
-
-	U32 vertexCount, instanceCount;
-	U32 vertexOffset, instanceOffset;
-
-} DrawCallUnindexed;
-
-typedef struct DrawCallIndexed {
-
-	U32 indexCount, instanceCount;
-	U32 indexOffset; I32 vertexOffset;
-
-	U32 instanceOffset;
-	U32 padding[3];			//For alignment
-
-} DrawCallIndexed;
-
 Error CommandListRef_drawIndirect(
 	CommandListRef *commandList, 
 	DeviceBufferRef *buffer, U64 bufferOffset, U32 bufferStride, 
@@ -295,55 +147,14 @@ Error CommandListRef_drawIndirectCountExt(
 	U32 maxDrawCalls, Bool indexed
 );
 
-typedef struct Dispatch { U32 groups[3]; } Dispatch;
-
 Error CommandListRef_dispatch(CommandListRef *commandList, Dispatch dispatch);
 Error CommandListRef_dispatch1D(CommandListRef *commandList, U32 groupsX);
 Error CommandListRef_dispatch2D(CommandListRef *commandList, U32 groupsX, U32 groupsY);
 Error CommandListRef_dispatch3D(CommandListRef *commandList, U32 groupsX, U32 groupsY, U32 groupsZ);
 
-typedef struct DispatchIndirect { DeviceBufferRef *buffer; U64 offset; } DispatchIndirect;
-
 Error CommandListRef_dispatchIndirect(CommandListRef *commandList, DeviceBufferRef *buffer, U64 offset);
 
 //DynamicRendering feature
-
-typedef enum ELoadAttachmentType {
-	
-	ELoadAttachmentType_Preserve,		//Don't modify the contents. Can have overhead because it has to load it.
-	ELoadAttachmentType_Clear,			//Clears the contents at start.
-	ELoadAttachmentType_Any				//Can preserve or clear depending on implementation. Result will be overwritten.
-
-} ELoadAttachmentType;
-
-typedef struct AttachmentInfo {
-
-	ImageRange range;			//Subresource. Multiple resources isn't allowed (layerId, levelId != U32_MAX)
-	RefPtr *image;				//Swapchain or RenderTexture. Null is allowed to disable it.
-
-	ELoadAttachmentType load;
-
-	U8 padding[3];
-	Bool readOnly;				//If true, this attachment will only be an input, output is ignored
-
-	ClearColor color;
-
-} AttachmentInfo;
-
-typedef struct StartRenderExt {
-
-	I32x2 offset, size;
-
-	U8 colorCount;			//Count of render targets (even inactive ones).
-	U8 activeMask;			//Which render targets are active.
-	U8 depthStencil;		//& 1 = depth, & 2 = stencil
-	U8 pad0;
-
-	U32 pad1;
-
-	//AttachmentInfo attachments[];	//[ active attachments go here ]
-
-} StartRenderExt;
 
 Error CommandListRef_startRenderExt(
 	CommandListRef *commandList, 
