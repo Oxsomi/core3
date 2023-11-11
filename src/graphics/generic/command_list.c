@@ -936,7 +936,7 @@ Error CommandListRef_drawUnindexedAdv(
 	return CommandListRef_draw(commandList, draw);
 }
 
-Error CommandListRef_dispatch(CommandListRef *commandListRef, Dispatch dispatch) {
+Error CommandListRef_dispatch(CommandListRef *commandListRef, DispatchCmd dispatch) {
 
 	CommandListRef_validateScope(commandListRef, clean);
 
@@ -963,17 +963,17 @@ clean:
 }
 
 Error CommandListRef_dispatch1D(CommandListRef *commandList, U32 groupsX) {
-	Dispatch dispatch = (Dispatch) { .groups = { groupsX, 1, 1 } };
+	DispatchCmd dispatch = (DispatchCmd) { .groups = { groupsX, 1, 1 } };
 	return CommandListRef_dispatch(commandList, dispatch);
 }
 
 Error CommandListRef_dispatch2D(CommandListRef *commandList, U32 groupsX, U32 groupsY) {
-	Dispatch dispatch = (Dispatch) { .groups = { groupsX, groupsY, 1 } };
+	DispatchCmd dispatch = (DispatchCmd) { .groups = { groupsX, groupsY, 1 } };
 	return CommandListRef_dispatch(commandList, dispatch);
 }
 
 Error CommandListRef_dispatch3D(CommandListRef *commandList, U32 groupsX, U32 groupsY, U32 groupsZ) {
-	Dispatch dispatch = (Dispatch) { .groups = { groupsX, groupsY, groupsZ } };
+	DispatchCmd dispatch = (DispatchCmd) { .groups = { groupsX, groupsY, groupsZ } };
 	return CommandListRef_dispatch(commandList, dispatch);
 }
 
@@ -1001,10 +1001,13 @@ Error CommandListRef_checkDispatchBuffer(GraphicsDeviceRef *device, DeviceBuffer
 Error CommandListRef_dispatchIndirect(CommandListRef *commandListRef, DeviceBufferRef *buffer, U64 offset) {
 
 	CommandListRef_validateScope(commandListRef, clean);
-	GraphicsDeviceRef *device = CommandListRef_ptr(commandList)->device;
+	GraphicsDeviceRef *device = commandList->device;
 
 	if (!commandList->pipeline[EPipelineType_Compute])
 		_gotoIfError(clean, Error_invalidOperation(1));
+
+	if(offset & 15)
+		return Error_invalidParameter(2, 0);
 
 	_gotoIfError(clean, CommandListRef_checkDispatchBuffer(device, buffer, offset, sizeof(U32) * 4));
 
@@ -1012,7 +1015,7 @@ Error CommandListRef_dispatchIndirect(CommandListRef *commandListRef, DeviceBuff
 
 	_gotoIfError(clean, CommandListRef_transitionBuffer(commandList, buffer, range, ETransitionType_Indirect));
 
-	DispatchIndirect dispatch = (DispatchIndirect) { .buffer = buffer, .offset = offset };
+	DispatchIndirectCmd dispatch = (DispatchIndirectCmd) { .buffer = buffer, .offset = offset };
 
 	_gotoIfError(clean, CommandList_append(
 		commandList, ECommandOp_DispatchIndirect, Buffer_createConstRef(&dispatch, sizeof(dispatch)), 0
@@ -1044,7 +1047,7 @@ Error CommandList_drawIndirectBase(
 	if(!buf)
 		return Error_nullPointer(0);
 
-	if(bufferOffset & 3)
+	if(bufferOffset & 15)
 		return Error_invalidParameter(2, 0);
 
 	if(!*bufferStride)

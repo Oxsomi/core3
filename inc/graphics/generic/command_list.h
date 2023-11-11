@@ -147,7 +147,7 @@ Error CommandListRef_drawIndirectCountExt(
 	U32 maxDrawCalls, Bool indexed
 );
 
-Error CommandListRef_dispatch(CommandListRef *commandList, Dispatch dispatch);
+Error CommandListRef_dispatch(CommandListRef *commandList, DispatchCmd dispatch);
 Error CommandListRef_dispatch1D(CommandListRef *commandList, U32 groupsX);
 Error CommandListRef_dispatch2D(CommandListRef *commandList, U32 groupsX, U32 groupsY);
 Error CommandListRef_dispatch3D(CommandListRef *commandList, U32 groupsX, U32 groupsY, U32 groupsZ);

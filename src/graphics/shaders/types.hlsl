@@ -72,3 +72,7 @@ struct IndirectDrawIndexed {
 	U32 instanceOffset;
 	U32 padding[3];			//For alignment
 };
+
+struct Dispatch {
+	U32 x, y, z, pad;
+};

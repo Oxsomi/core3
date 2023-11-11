@@ -490,12 +490,12 @@ void CommandList_process(
 			}
 
 			if(op == ECommandOp_Dispatch) {
-				Dispatch dispatch = *(const Dispatch*)data;
+				DispatchCmd dispatch = *(const DispatchCmd*)data;
 				vkCmdDispatch(buffer, dispatch.groups[0], dispatch.groups[1], dispatch.groups[2]);
 			}
 
 			else {
-				DispatchIndirect dispatch = *(const DispatchIndirect*)data;
+				DispatchIndirectCmd dispatch = *(const DispatchIndirectCmd*)data;
 				VkDeviceBuffer *bufferExt = DeviceBuffer_ext(DeviceBufferRef_ptr(dispatch.buffer), Vk);
 				vkCmdDispatchIndirect(buffer, bufferExt->buffer, dispatch.offset);
 			}

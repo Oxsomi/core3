@@ -248,6 +248,8 @@ typedef struct DrawIndirect {
 
 } DrawIndirect;
 
+//GPU commands
+
 typedef struct DrawCallUnindexed {
 
 	U32 vertexCount, instanceCount;
@@ -265,8 +267,14 @@ typedef struct DrawCallIndexed {
 
 } DrawCallIndexed;
 
-typedef struct Dispatch { U32 groups[3]; } Dispatch;
-typedef struct DispatchIndirect { DeviceBufferRef *buffer; U64 offset; } DispatchIndirect;
+typedef struct Dispatch {
+	U32 x, y, z, pad;
+} Dispatch;
+
+//CPU commands
+
+typedef struct DispatchCmd { U32 groups[3]; } DispatchCmd;
+typedef struct DispatchIndirectCmd { DeviceBufferRef *buffer; U64 offset; } DispatchIndirectCmd;
 
 typedef enum ELoadAttachmentType {
 

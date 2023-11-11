@@ -702,7 +702,7 @@ Primitive buffers should only deviate when necessary. Please try to combine mult
 Same as draw except the device reads the parameters of the draw from a DeviceBuffer.
 
 - buffer: a buffer with the DrawCallUnindexed or DrawCallIndexed struct(s) depending on the 'indexed' boolean. Buffer needs to enable Indirect usage to be usable by indirect draws.
-- bufferOffset: offset into the draw call buffer. Align to 16-byte for optimal result.
+- bufferOffset: offset into the draw call buffer. Align to 16-byte (unaligned is disallowed).
 - bufferStride: stride of the draw call buffer. If 0 it will be defaulted to tightly packed (16 or 32 byte depending on if it's indexed or not). Has to be bigger or equal to the current draw call struct size.
 - drawCalls: how many draw calls are expected to be filled in this buffer. A draw can also set the draw parameters to zero to disable it (instanceCount / index / vertexCount), though for that purpose drawIndirectCountExt is recommended. Make sure the buffer has `U8[bufferStride][maxDrawCalls]` allocated at bufferOffset. 
 - indexed: if the draw calls are indexed or not. The device can't combine non indexed and indexed draw calls, so if you want to combine them you need to do this as two separate steps.
