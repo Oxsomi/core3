@@ -26,6 +26,8 @@
 #include "graphics/vulkan/vk_device.h"
 #include "graphics/vulkan/vk_instance.h"
 #include "platforms/ext/listx.h"
+#include "platforms/ext/bufferx.h"
+#include "platforms/log.h"
 #include "types/buffer.h"
 #include "types/list.h"
 #include "types/error.h"
@@ -92,14 +94,17 @@ Bool DeviceBuffer_freeExt(DeviceBuffer *buffer) {
 
 	if(bufferExt->buffer) {
 
-		Lock_lock(&deviceExt->descriptorLock, U64_MAX);
+		if(buffer->writeHandle != U32_MAX || buffer->readHandle != U32_MAX) {
 
-		U32 allocations[2] = { buffer->readHandle, buffer->writeHandle };
-		List allocationList = (List) { 0 };
-		List_createConstRef((const U8*) allocations, 2, sizeof(U32), &allocationList);
-		VkGraphicsDevice_freeAllocations(deviceExt, &allocationList);
+			Lock_lock(&deviceExt->descriptorLock, U64_MAX);
 
-		Lock_unlock(&deviceExt->descriptorLock);
+			U32 allocations[2] = { buffer->readHandle, buffer->writeHandle };
+			List allocationList = (List) { 0 };
+			List_createConstRef((const U8*) allocations, 2, sizeof(U32), &allocationList);
+			VkGraphicsDevice_freeAllocations(deviceExt, &allocationList);
+
+			Lock_unlock(&deviceExt->descriptorLock);
+		}
 
 		DeviceMemoryAllocator_freeAllocation(&device->allocator, bufferExt->blockId, bufferExt->blockOffset);
 		vkDestroyBuffer(deviceExt->device, bufferExt->buffer, NULL);
@@ -182,13 +187,13 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 		name
 	));
 
-	DeviceMemoryBlock *block = (DeviceMemoryBlock*)List_ptr(device->allocator.blocks, blockId);
+	const DeviceMemoryBlock *block = (const DeviceMemoryBlock*)List_ptrConst(device->allocator.blocks, blockId);
 
 	//Bind memory
 
 	_gotoIfError(clean, vkCheck(vkBindBufferMemory(deviceExt->device, tempBuffer, (VkDeviceMemory) block->ext, blockOffset)));
 
-	U8 *memoryLocation = (U8*)block->mappedMemory;
+	U8 *memoryLocation = block->mappedMemory;
 
 	if (memoryLocation)
 		memoryLocation += blockOffset;
@@ -295,5 +300,301 @@ clean:
 	if(lock)
 		Lock_unlock(&deviceExt->descriptorLock);
 
+	return err;
+}
+
+Error DeviceBufferRef_flush(VkCommandBuffer commandBuffer, GraphicsDeviceRef *deviceRef, DeviceBufferRef *pending) {
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
+
+	GraphicsInstance *instance = GraphicsInstanceRef_ptr(device->instance);
+	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
+
+	U32 graphicsQueueId = deviceExt->queues[EVkCommandQueue_Graphics].queueId;
+
+	DeviceBuffer *buffer = DeviceBufferRef_ptr(pending);
+	VkDeviceBuffer *bufferExt = DeviceBuffer_ext(buffer, Vk);
+
+	Error err = Error_none();
+	List tempList = (List) { 0 };
+
+	Bool isInFlight = false;
+	List *currentFlight = &device->resourcesInFlight[device->submitId % 3];
+	DeviceBufferRef *tempStagingResource = NULL;
+	List pendingCopies = List_createEmpty(sizeof(VkBufferCopy));
+
+	for(U64 j = 0; j < sizeof(device->resourcesInFlight) / sizeof(device->resourcesInFlight[0]); ++j) {
+
+		List inFlight = device->resourcesInFlight[j];
+
+		for(U64 i = 0; i < inFlight.length; ++i)
+			if (((RefPtr**)inFlight.ptr)[i] == pending) {
+				isInFlight = true;
+				break;
+			}
+
+		if(isInFlight)
+			break;
+	}
+
+	if(!isInFlight && bufferExt->mappedMemory) {
+
+		DeviceMemoryBlock block = *(const DeviceMemoryBlock*) List_ptr(device->allocator.blocks, bufferExt->blockId);
+		Bool incoherent = !(block.allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+		if(incoherent) {
+			tempList = List_createEmpty(sizeof(VkMappedMemoryRange));
+			_gotoIfError(clean, List_resizex(&tempList, buffer->pendingChanges.length));
+		}
+
+		for(U64 j = 0; j < buffer->pendingChanges.length; ++j) {
+
+			DevicePendingRange range = *(DevicePendingRange*) List_ptr(buffer->pendingChanges, j);
+
+			U64 start = range.buffer.startRange;
+			U64 len = range.buffer.endRange - range.buffer.startRange;
+
+			Buffer dst = Buffer_createRef((U8*)bufferExt->mappedMemory + start, len);
+			Buffer src = Buffer_createConstRef(buffer->cpuData.ptr + start, len);
+
+			Buffer_copy(dst, src);
+
+			if(incoherent)
+				*(VkMappedMemoryRange*)List_ptr(tempList, j) = (VkMappedMemoryRange) {
+					.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+					.memory = (VkDeviceMemory) block.ext,
+					.offset = start + bufferExt->blockOffset,
+					.size = len
+				};
+		}
+
+		if(incoherent)
+			_gotoIfError(clean, vkCheck(vkFlushMappedMemoryRanges(
+				deviceExt->device, (U32) tempList.length, (const VkMappedMemoryRange*) tempList.ptr
+			)));
+	}
+
+	else {
+
+		//TODO: Copy queue
+
+		if(!deviceExt->staging)
+			_gotoIfError(clean, Error_invalidOperation(0));
+
+		U64 allocRange = 0;
+
+		for(U64 j = 0; j < buffer->pendingChanges.length; ++j) {
+			BufferRange bufferj = ((DevicePendingRange*) List_ptr(buffer->pendingChanges, j))->buffer;
+			allocRange += bufferj.endRange - bufferj.startRange;
+		}
+
+		_gotoIfError(clean, List_resizex(&pendingCopies, buffer->pendingChanges.length));
+
+		VkDependencyInfo dependency = (VkDependencyInfo) {
+			.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+			.dependencyFlags = 0
+		};
+
+		List_freex(&tempList);
+		tempList = List_createEmpty(sizeof(VkBufferMemoryBarrier2));
+		_gotoIfError(clean, List_reservex(&tempList, 1 + buffer->pendingChanges.length));
+
+		if (allocRange >= 16 * MIBI) {		//Resource is too big, allocate dedicated staging resource
+
+			_gotoIfError(clean, GraphicsDeviceRef_createBuffer(
+				deviceRef, EDeviceBufferUsage_CPUAllocatedBit, CharString_createConstRefCStr("Dedicated staging buffer"),
+				allocRange, &tempStagingResource
+			));
+
+			DeviceBuffer *stagingResource = DeviceBufferRef_ptr(tempStagingResource);
+			VkDeviceBuffer *stagingResourceExt = DeviceBuffer_ext(stagingResource, Vk);
+			U8 *location = stagingResourceExt->mappedMemory;
+
+			DeviceMemoryBlock block = *(DeviceMemoryBlock*) List_ptr(device->allocator.blocks, stagingResourceExt->blockId);
+			Bool incoherent = !(block.allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+			//Copy into our buffer
+
+			allocRange = 0;
+
+			for(U64 j = 0; j < buffer->pendingChanges.length; ++j) {
+
+				BufferRange bufferj = ((const DevicePendingRange*) List_ptr(buffer->pendingChanges, j))->buffer;
+				U64 len = bufferj.endRange - bufferj.startRange;
+
+				Buffer_copy(
+					Buffer_createRef(location + allocRange, len), 
+					Buffer_createConstRef(buffer->cpuData.ptr + bufferj.startRange, len)
+				);
+
+				_gotoIfError(clean, VkDeviceBuffer_transition(
+					bufferExt, 
+					VK_PIPELINE_STAGE_2_COPY_BIT, 
+					VK_ACCESS_2_TRANSFER_WRITE_BIT,
+					graphicsQueueId,
+					bufferj.startRange,
+					len,
+					&tempList,
+					&dependency
+				));
+
+				((VkBufferCopy*)pendingCopies.ptr)[j] = (VkBufferCopy) {
+					.srcOffset = allocRange,
+					.dstOffset = bufferj.startRange,
+					.size = len
+				};
+
+				allocRange += len;
+			}
+
+			if(incoherent) {
+
+				VkMappedMemoryRange memoryRange = (VkMappedMemoryRange) {
+					.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+					.memory = (VkDeviceMemory) block.ext,
+					.offset = stagingResourceExt->blockOffset,
+					.size = allocRange
+				};
+
+				vkFlushMappedMemoryRanges(deviceExt->device, 1, &memoryRange);
+			}
+
+			_gotoIfError(clean, VkDeviceBuffer_transition(
+				stagingResourceExt, 
+				VK_PIPELINE_STAGE_2_COPY_BIT, 
+				VK_ACCESS_2_TRANSFER_READ_BIT,
+				graphicsQueueId,
+				0,
+				allocRange,
+				&tempList,
+				&dependency
+			));
+
+			if(dependency.bufferMemoryBarrierCount)
+				instanceExt->cmdPipelineBarrier2(commandBuffer, &dependency);
+
+			vkCmdCopyBuffer(
+				commandBuffer, 
+				stagingResourceExt->buffer, 
+				bufferExt->buffer, 
+				(U32) pendingCopies.length, 
+				(const VkBufferCopy*) pendingCopies.ptr
+			);
+
+			//When staging resource is commited to current in flight then we can relinguish ownership.
+
+			_gotoIfError(clean, List_pushBackx(currentFlight, Buffer_createConstRef(&tempStagingResource, sizeof(RefPtr*))));
+			tempStagingResource = NULL;
+		}
+
+		//Use staging buffer
+
+		else {
+
+			_gotoIfError(clean, List_resizex(&pendingCopies, buffer->pendingChanges.length));
+
+			AllocationBuffer *stagingBuffer = &deviceExt->stagingAllocations[device->submitId % 3];
+			VkDeviceBuffer *stagingExt = DeviceBuffer_ext(DeviceBufferRef_ptr(deviceExt->staging), Vk);
+
+			U8 *defaultLocation = (U8*) 1, *location = defaultLocation;
+			Error temp = AllocationBuffer_allocateBlockx(stagingBuffer, allocRange, 4, (const U8**) &location);
+
+			if(temp.genericError && location == defaultLocation)		//Something else went wrong
+				_gotoIfError(clean, temp);
+
+			//We flush the GPU to ensure we have space if necessary.
+
+			if (temp.genericError) {
+
+				//TODO: Create secondary staging buffer before doing this!
+				//		Because this is super slow!
+
+				Log_performanceLnx(
+					"Pushing too much data to the GPU this frame for the staging buffer to handle\n"
+					"Flushing outstanding changes to GPU to make space for new allocations."
+				);
+
+				//TODO: Commit commandBuffer here
+
+				GraphicsDeviceRef_wait(deviceRef);
+				_gotoIfError(clean, AllocationBuffer_allocateBlockx(stagingBuffer, allocRange, 4, &location));
+			}
+
+			DeviceMemoryBlock block = *(DeviceMemoryBlock*) List_ptr(device->allocator.blocks, stagingExt->blockId);
+			Bool incoherent = !(block.allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+			//Copy into our buffer
+
+			allocRange = 0;
+
+			for(U64 j = 0; j < buffer->pendingChanges.length; ++j) {
+
+				BufferRange bufferj = ((DevicePendingRange*) List_ptr(buffer->pendingChanges, j))->buffer;
+				U64 len = bufferj.endRange - bufferj.startRange;
+
+				Buffer_copy(
+					Buffer_createRef(location + allocRange, len), 
+					Buffer_createConstRef(buffer->cpuData.ptr + bufferj.startRange, len)
+				);
+
+				((VkBufferCopy*)pendingCopies.ptr)[j] = (VkBufferCopy) {
+					.srcOffset = allocRange + (location - block.mappedMemory),
+					.dstOffset = bufferj.startRange,
+					.size = len
+				};
+
+				_gotoIfError(clean, VkDeviceBuffer_transition(
+					bufferExt, 
+					VK_PIPELINE_STAGE_2_COPY_BIT, 
+					VK_ACCESS_2_TRANSFER_WRITE_BIT,
+					graphicsQueueId,
+					bufferj.startRange,
+					len,
+					&tempList,
+					&dependency
+				));
+
+				allocRange += len;
+			}
+
+			if (incoherent) {
+
+				VkMappedMemoryRange memoryRange = (VkMappedMemoryRange) {
+					.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+					.memory = (VkDeviceMemory) block.ext,
+					.offset = location - block.mappedMemory,
+					.size = allocRange
+				};
+
+				vkFlushMappedMemoryRanges(deviceExt->device, 1, &memoryRange);
+			}
+
+			if(dependency.bufferMemoryBarrierCount)
+				instanceExt->cmdPipelineBarrier2(commandBuffer, &dependency);
+
+			vkCmdCopyBuffer(
+				commandBuffer, 
+				stagingExt->buffer,
+				bufferExt->buffer, 
+				(U32) buffer->pendingChanges.length, 
+				(const VkBufferCopy*) pendingCopies.ptr
+			);
+		}
+	}
+
+	if(!(buffer->usage & EDeviceBufferUsage_CPUBacked))
+		Buffer_freex(&buffer->cpuData);
+
+	buffer->isFirstFrame = buffer->isPending = buffer->isPendingFullCopy = false;
+	_gotoIfError(clean, List_clear(&buffer->pendingChanges));
+
+	if(RefPtr_inc(pending))
+		_gotoIfError(clean, List_pushBackx(currentFlight, Buffer_createConstRef(&pending, sizeof(pending))));
+
+clean:
+	DeviceBufferRef_dec(&tempStagingResource);
+	List_freex(&tempList);
+	List_freex(&pendingCopies);
 	return err;
 }

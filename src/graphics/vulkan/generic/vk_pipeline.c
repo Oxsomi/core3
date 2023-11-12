@@ -1025,21 +1025,21 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 			switch (info->blendState.logicOpExt) {
 				case ELogicOpExt_Off:			break;
 				case ELogicOpExt_Clear:			logicOp = VK_LOGIC_OP_CLEAR;			break;
-				case ELogicOpExt_Set:			logicOp = VK_LOGIC_OP_SET;			break;
-				case ELogicOpExt_Copy:			logicOp = VK_LOGIC_OP_COPY;			break;
+				case ELogicOpExt_Set:			logicOp = VK_LOGIC_OP_SET;				break;
+				case ELogicOpExt_Copy:			logicOp = VK_LOGIC_OP_COPY;				break;
 				case ELogicOpExt_CopyInvert:	logicOp = VK_LOGIC_OP_COPY_INVERTED;	break;
 				case ELogicOpExt_None:			logicOp = VK_LOGIC_OP_NO_OP;			break;
 				case ELogicOpExt_Invert:		logicOp = VK_LOGIC_OP_INVERT;			break;
-				case ELogicOpExt_And:			logicOp = VK_LOGIC_OP_AND;			break;
-				case ELogicOpExt_Nand:			logicOp = VK_LOGIC_OP_NAND;			break;
+				case ELogicOpExt_And:			logicOp = VK_LOGIC_OP_AND;				break;
+				case ELogicOpExt_Nand:			logicOp = VK_LOGIC_OP_NAND;				break;
 				case ELogicOpExt_Or:			logicOp = VK_LOGIC_OP_OR;				break;
-				case ELogicOpExt_Nor:			logicOp = VK_LOGIC_OP_NOR;			break;
-				case ELogicOpExt_Xor:			logicOp = VK_LOGIC_OP_XOR;			break;
+				case ELogicOpExt_Nor:			logicOp = VK_LOGIC_OP_NOR;				break;
+				case ELogicOpExt_Xor:			logicOp = VK_LOGIC_OP_XOR;				break;
 				case ELogicOpExt_Equiv:			logicOp = VK_LOGIC_OP_EQUIVALENT;		break;
-				case ELogicOpExt_AndReverse:	logicOp = VK_LOGIC_OP_AND_REVERSE;	break;
-				case ELogicOpExt_AndInvert:		logicOp = VK_LOGIC_OP_AND_INVERTED;	break;
+				case ELogicOpExt_AndReverse:	logicOp = VK_LOGIC_OP_AND_REVERSE;		break;
+				case ELogicOpExt_AndInvert:		logicOp = VK_LOGIC_OP_AND_INVERTED;		break;
 				case ELogicOpExt_OrReverse:		logicOp = VK_LOGIC_OP_OR_REVERSE;		break;
-				case ELogicOpExt_OrInvert:		logicOp = VK_LOGIC_OP_OR_INVERTED;	break;
+				case ELogicOpExt_OrInvert:		logicOp = VK_LOGIC_OP_OR_INVERTED;		break;
 				default:
 					_gotoIfError(clean, Error_invalidOperation(1));
 			}

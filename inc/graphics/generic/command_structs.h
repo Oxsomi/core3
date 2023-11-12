@@ -30,11 +30,16 @@ typedef RefPtr DeviceBufferRef;
 
 typedef enum ECommandOp {
 
+	//Every command needs to belong to a CommandScope (see Scopes in the api spec)
+
+	ECommandOp_StartScope,
+	ECommandOp_EndScope,
+
 	//Setting dynamic graphic pipeline
 
-	ECommandOp_SetViewport,						//Don't move, these use op bitmask (0-2)
-	ECommandOp_SetScissor,						//Don't move, these use bitmask (0-2)
-	ECommandOp_SetViewportAndScissor,			//Don't move, these use bitmask (0-2)
+	ECommandOp_SetViewport,						//Don't move id, these use op bitmask (0-2)
+	ECommandOp_SetScissor,						//^
+	ECommandOp_SetViewportAndScissor,			//^
 
 	ECommandOp_SetStencil,
 	ECommandOp_SetBlendConstants,
@@ -48,8 +53,6 @@ typedef enum ECommandOp {
 
 	ECommandOp_SetGraphicsPipeline,
 	ECommandOp_SetComputePipeline,
-	ECommandOp_StartScope,
-	ECommandOp_EndScope,
 
 	ECommandOp_SetPrimitiveBuffers,
 
@@ -124,7 +127,7 @@ typedef struct TransitionInternal {		//Transitions issued by a scope.
 
 	ResourceRange range;
 
-	EPipelineStage stage;				//First shader stage that will access this resource (if !usage)
+	EPipelineStage stage;				//First shader stage that will access this resource (if !type)
 
 	U8 padding[3];
 	U8 type;							//ETransitionType
@@ -149,7 +152,7 @@ typedef struct Transition {
 typedef enum ECommandScopeDependencyType {
 
 	ECommandScopeDependencyType_Unconditional,	//If dependency is present, wait for it to finish, otherwise no-op.
-	ECommandScopeDependencyType_Strong			//If dependency is hidden, give error and hide self.
+	ECommandScopeDependencyType_Conditional		//If dependency is hidden, give error and hide self.
 
 } ECommandScopeDependencyType;
 
@@ -192,7 +195,7 @@ typedef union ClearColor {
 
 } ClearColor;
 
-typedef struct ClearImage {
+typedef struct ClearImageCmd {
 
 	ClearColor color;
 
@@ -200,9 +203,9 @@ typedef struct ClearImage {
 
 	RefPtr *image;
 
-} ClearImage;
+} ClearImageCmd;
 
-/* typedef struct ClearDepthStencil {		TODO:
+/* typedef struct ClearDepthStencilCmd {		TODO:
 
 	F32 depth;
 
@@ -210,9 +213,9 @@ typedef struct ClearImage {
 
 	ImageRange image;
 
-} ClearDepthStencil; */
+} ClearDepthStencilCmd; */
 
-typedef struct PrimitiveBuffers {
+typedef struct SetPrimitiveBuffersCmd {
 
 	DeviceBufferRef *vertexBuffers[16];
 	DeviceBufferRef *indexBuffer;
@@ -220,9 +223,9 @@ typedef struct PrimitiveBuffers {
 	Bool isIndex32Bit;
 	U8 padding[3];
 
-} PrimitiveBuffers;
+} SetPrimitiveBuffersCmd;
 
-typedef struct Draw {
+typedef struct DrawCmd {
 
 	U32 count, instanceCount;
 	U32 vertexOffset, instanceOffset;
@@ -232,9 +235,9 @@ typedef struct Draw {
 	Bool isIndexed;
 	U8 padding[3];
 
-} Draw;
+} DrawCmd;
 
-typedef struct DrawIndirect {
+typedef struct DrawIndirectCmd {
 
 	DeviceBufferRef *buffer;				//Draw commands (or draw indexed commands)
 	DeviceBufferRef *countBufferExt;		//If defined, uses draw indirect count and specifies the buffer that holds counter
@@ -246,32 +249,7 @@ typedef struct DrawIndirect {
 	Bool isIndexed;
 	U8 pad[7];
 
-} DrawIndirect;
-
-//GPU commands
-
-typedef struct DrawCallUnindexed {
-
-	U32 vertexCount, instanceCount;
-	U32 vertexOffset, instanceOffset;
-
-} DrawCallUnindexed;
-
-typedef struct DrawCallIndexed {
-
-	U32 indexCount, instanceCount;
-	U32 indexOffset; I32 vertexOffset;
-
-	U32 instanceOffset;
-	U32 padding[3];			//For alignment
-
-} DrawCallIndexed;
-
-typedef struct Dispatch {
-	U32 x, y, z, pad;
-} Dispatch;
-
-//CPU commands
+} DrawIndirectCmd;
 
 typedef struct DispatchCmd { U32 groups[3]; } DispatchCmd;
 typedef struct DispatchIndirectCmd { DeviceBufferRef *buffer; U64 offset; } DispatchIndirectCmd;
@@ -305,7 +283,7 @@ typedef struct AttachmentInfo {
 
 } AttachmentInfo;
 
-typedef struct StartRenderExt {
+typedef struct StartRenderCmdExt {
 
 	I32x2 offset, size;
 
@@ -318,4 +296,28 @@ typedef struct StartRenderExt {
 
 	//AttachmentInfo attachments[];	//[ active attachments go here ]
 
-} StartRenderExt;
+} StartRenderCmdExt;
+
+//GPU commands
+
+typedef struct DrawCallUnindexed {
+
+	U32 vertexCount, instanceCount;
+	U32 vertexOffset, instanceOffset;
+
+} DrawCallUnindexed;
+
+typedef struct DrawCallIndexed {
+
+	U32 indexCount, instanceCount;
+	U32 indexOffset; I32 vertexOffset;
+
+	U32 instanceOffset;
+	U32 padding[3];			//For alignment
+
+} DrawCallIndexed;
+
+typedef struct Dispatch {
+	U32 x, y, z, pad;
+} Dispatch;
+

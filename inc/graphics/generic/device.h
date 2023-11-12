@@ -34,7 +34,9 @@ typedef struct CBufferData {
 	F32 deltaTime;					//deltaTime since last frame.
 	U32 swapchainCount;				//How many swapchains are present (will insert ids into appData)
 
-	U32 appData[(256 - 16) / 4];
+	U32 swapchains[2 * 16];
+
+	U32 appData[(512 - 16 - 2 * 16 * 4) / 4];
 
 } CBufferData;
 

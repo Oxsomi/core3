@@ -37,7 +37,7 @@ typedef struct DeviceMemoryBlock {
 
 	U8 *mappedMemory;
 
-	void *ext;						//Extended data
+	void *ext;					//Extended data
 
 } DeviceMemoryBlock;
 
@@ -49,12 +49,12 @@ typedef struct DeviceMemoryAllocator {
 
 } DeviceMemoryAllocator;
 
-static const U64 DeviceMemoryBlock_defaultSize = 67'108'864;
+static const U64 DeviceMemoryBlock_defaultSize = 67'108'864;		//64 * MIBI
 
 impl Error DeviceMemoryAllocator_allocate(
 	DeviceMemoryAllocator *allocator, 
 	void *requirementsExt, 
-	Bool cpuSIded, 
+	Bool cpuSided, 
 	U32 *blockId, 
 	U64 *blockOffset,
 	CharString objectName				//Name of the object that allocates (for dedicated allocations)

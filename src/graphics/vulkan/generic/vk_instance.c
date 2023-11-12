@@ -411,30 +411,31 @@ const C8 *optExtensionsName[] = {
 
 U64 optExtensionsNameCount = sizeof(optExtensionsName) / sizeof(optExtensionsName[0]);
 
-#define getDeviceFeatures(StructName, Name, StructType)						\
-																			\
-StructName Name = (StructName) { .sType = StructType };						\
-																			\
-{																			\
-	VkPhysicalDeviceFeatures2 tempFeat2 = (VkPhysicalDeviceFeatures2) { 	\
-		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,				\
-		.pNext = &Name														\
-	};																		\
-																			\
-	graphicsExt->getPhysicalDeviceFeatures2(dev, &tempFeat2);				\
-}
-#define getDeviceProperties(StructName, Name, StructType)					\
-																			\
-StructName Name = (StructName) { .sType = StructType };						\
-																			\
-{																			\
-	VkPhysicalDeviceProperties2 tempProp2 = (VkPhysicalDeviceProperties2) { \
-		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,			\
-		.pNext = &Name														\
-	};																		\
-																			\
-	graphicsExt->getPhysicalDeviceProperties2(dev, &tempProp2);				\
-}
+#define getDeviceFeatures(StructName, Name, StructType)							\
+																				\
+	StructName Name = (StructName) { .sType = StructType };						\
+																				\
+	{																			\
+		VkPhysicalDeviceFeatures2 tempFeat2 = (VkPhysicalDeviceFeatures2) { 	\
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,				\
+			.pNext = &Name														\
+		};																		\
+																				\
+		graphicsExt->getPhysicalDeviceFeatures2(dev, &tempFeat2);				\
+	}
+
+#define getDeviceProperties(StructName, Name, StructType)						\
+																				\
+	StructName Name = (StructName) { .sType = StructType };						\
+																				\
+	{																			\
+		VkPhysicalDeviceProperties2 tempProp2 = (VkPhysicalDeviceProperties2) { \
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,			\
+			.pNext = &Name														\
+		};																		\
+																				\
+		graphicsExt->getPhysicalDeviceProperties2(dev, &tempProp2);				\
+	}
 
 Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbose, List *result) {
 
@@ -649,8 +650,6 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 			limits.maxVertexOutputComponents < 124 ||
 			limits.maxMemoryAllocationCount < 4096 ||
 			limits.maxBoundDescriptorSets < 4 ||
-			limits.maxDescriptorSetStorageBuffersDynamic < 16 ||
-			limits.maxDescriptorSetUniformBuffersDynamic < 15 ||
 			limits.viewportBoundsRange[0] > -32768 ||
 			limits.viewportBoundsRange[1] < 32767
 		) {
@@ -1207,13 +1206,13 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 		if(
 			limits.maxPerStageDescriptorSamplers < 2 * KIBI ||
 			limits.maxPerStageDescriptorUniformBuffers < 1 ||
-			limits.maxPerStageDescriptorStorageBuffers < (500 * KIBI) - 1 ||
+			limits.maxPerStageDescriptorStorageBuffers < 500 * KIBI - 1 ||
 			limits.maxPerStageDescriptorSampledImages < 250 * KIBI ||
 			limits.maxPerStageDescriptorStorageImages < 250 * KIBI ||
 			limits.maxPerStageResources < MEGA ||
 			limits.maxDescriptorSetSamplers < 2 * KIBI ||
 			limits.maxDescriptorSetUniformBuffers < 1 ||
-			limits.maxDescriptorSetStorageBuffers < (500 * KIBI) - 1 ||
+			limits.maxDescriptorSetStorageBuffers < 500 * KIBI - 1 ||
 			limits.maxDescriptorSetSampledImages < 250 * KIBI ||
 			limits.maxDescriptorSetStorageImages < 250 * KIBI
 		) {

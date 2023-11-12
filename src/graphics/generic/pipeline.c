@@ -27,7 +27,7 @@ Error PipelineRef_dec(PipelineRef **pipeline) {
 }
 
 Error PipelineRef_inc(PipelineRef *pipeline) {
-	return pipeline ? (!RefPtr_inc(pipeline) ? Error_invalidOperation(0) : Error_none()) : Error_nullPointer(0);
+	return !RefPtr_inc(pipeline) ? Error_invalidOperation(0) : Error_none();
 }
 
 Bool PipelineRef_decAll(List *list) {
@@ -45,4 +45,14 @@ Bool PipelineRef_decAll(List *list) {
 
 	List_freex(list);
 	return success;
+}
+
+PipelineRef *PipelineRef_at(List list, U64 index) {
+
+	Buffer buf = List_at(list, index);
+
+	if(Buffer_length(buf) != sizeof(PipelineRef*))
+		return NULL;
+
+	return *(PipelineRef* const*) buf.ptr;
 }

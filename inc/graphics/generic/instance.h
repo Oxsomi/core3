@@ -24,7 +24,7 @@
 
 //In line with vulkan standard.
 #define GraphicsApplicationInfo_Version(major, minor, patch)	\
-((major) << 22) | ((minor) << 12) | (patch)
+	((major) << 22) | ((minor) << 12) | (patch)
 
 typedef struct GraphicsApplicationInfo {
 
@@ -65,8 +65,8 @@ impl Error GraphicsInstance_create(GraphicsApplicationInfo info, Bool isVerbose,
 
 impl Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbose, List *infos);	//<GraphicsDeviceInfo>
 
-extern U64 GraphicsInstance_vendorMaskAll;
-extern U64 GraphicsInstance_deviceTypeAll;
+static const U64 GraphicsInstance_vendorMaskAll = 0xFFFFFFFFFFFFFFFF;
+static const U64 GraphicsInstance_deviceTypeAll = 0xFFFFFFFFFFFFFFFF;
 
 Error GraphicsInstance_getPreferredDevice(
 	const GraphicsInstance *inst, 

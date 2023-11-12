@@ -145,12 +145,12 @@ Error DeviceMemoryAllocator_allocate(
 	VkMemoryRequirements memReq = req.memoryRequirements;
 	VkMemoryDedicatedRequirements dedicated = *(VkMemoryDedicatedRequirements*) req.pNext;
 
-	//When block count hits 2047 that means there were at least 2048 memory objects (+1 UBO)
+	//When block count hits 1999 that means there were at least 2000 memory objects (+1 UBO)
 	//After that, the allocator should be more conservative for dedicating separate memory blocks.
-	//Most devices only support up to 4096 memory objects.
+	//Most devices only support up to 4000 memory objects.
 
 	Bool isDedicated = dedicated.requiresDedicatedAllocation;
-	isDedicated |= dedicated.prefersDedicatedAllocation && allocator->blocks.length < 2048;
+	isDedicated |= dedicated.prefersDedicatedAllocation && allocator->blocks.length < 2000;
 
 	//Find an existing allocation
 

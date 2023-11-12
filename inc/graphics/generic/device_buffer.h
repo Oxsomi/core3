@@ -33,7 +33,9 @@ typedef enum EDeviceBufferUsage {
 	EDeviceBufferUsage_Index				= 1 << 3,		//Allow for use as index buffer
 	EDeviceBufferUsage_Indirect				= 1 << 4,		//Allow for use in indirect draw/dispatch calls
 	EDeviceBufferUsage_CPUBacked			= 1 << 5,		//Keep a CPU side copy buffer for read/write operations
-	EDeviceBufferUsage_CPUAllocatedBit		= 1 << 6,		//Keep buffer entirely on CPU for transfer or allowing more allocations
+	EDeviceBufferUsage_CPUAllocatedBit		= 1 << 6,		//Keep buffer entirely on CPU
+
+	EDeviceBufferUsage_InternalWeakRef		= 1 << 7,		//Internal only, uses weak device ref
 
 	EDeviceBufferUsage_CPUAllocated		= EDeviceBufferUsage_CPUBacked | EDeviceBufferUsage_CPUAllocatedBit
 
@@ -46,12 +48,10 @@ typedef struct DeviceBuffer {
 	GraphicsDeviceRef *device;
 
 	EDeviceBufferUsage usage;
-	Bool isPendingFullCopy;
-	Bool isPending;
-	Bool isFirstFrame;
-	U8 pad0[1];
+	Bool isPendingFullCopy, isPending, isFirstFrame;
+	U8 padding;
 
-	U32 readHandle, writeHandle;		//Place in heap/descriptor set. First 12 bits are reserved for type.
+	U32 readHandle, writeHandle;		//Place in heap/descriptor set. First 12 bits are reserved for type and/or version.
 
 	U64 length;
 

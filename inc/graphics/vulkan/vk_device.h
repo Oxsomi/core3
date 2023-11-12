@@ -123,9 +123,7 @@ static const U32 descriptorTypeCount[] = {
 
 	//Swappable CBuffer per frame (only 1 of them is bound each time)
 
-	1,
-	1,
-	1
+	1, 1, 1
 };
 
 typedef struct VkGraphicsDevice {
@@ -192,7 +190,7 @@ typedef struct VkCommandBufferState {
 
 	VkCommandBuffer buffer;
 
-	PrimitiveBuffers boundBuffers, tempBoundBuffers;
+	SetPrimitiveBuffersCmd boundBuffers, tempBoundBuffers;
 
 	VkViewport boundViewport, tempViewport;
 	VkRect2D boundScissor, tempScissor;
@@ -200,7 +198,10 @@ typedef struct VkCommandBufferState {
 } VkCommandBufferState;
 
 VkCommandAllocator *VkGraphicsDevice_getCommandAllocator(
-	VkGraphicsDevice *device, U32 resolvedQueueId, U32 threadId, U8 backBufferId
+	VkGraphicsDevice *device, 
+	U32 resolvedQueueId, 
+	U32 threadId, 
+	U8 backBufferId
 );
 
 Error VkDeviceMemoryAllocator_findMemory(

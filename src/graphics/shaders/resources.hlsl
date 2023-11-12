@@ -2,6 +2,7 @@
 #include "types.hlsl"
 
 static const uint ResourceId_mask = (1 << 20) - 1;
+static const uint U32_MAX = 0xFFFFFFFF;
 
 SamplerState _samplers[]					: register(space0);
 
@@ -88,11 +89,12 @@ cbuffer globals : register(space16) {
 	F32 _deltaTime;					//deltaTime since last frame.
 	U32 _swapchainCount;			//How many swapchains are present (will insert ids into appData)
 
-	//Up to 240 bytes of user data, useful for supplying constant per frame data.
-	//However, offset [0, _swapchainCount> are reserved for swapchain handles.
+	U32x4 _swapchains[8];			//Descriptors of swapchains: (Read, write)[2][8]
+
+	//Up to 368 bytes of user data, useful for supplying constant per frame data.
 	//Make sure to offset to make sure.
 
-	U32x4 _appData[15];
+	U32x4 _appData[23];
 };
 
 //Fetch per frame data from the application.
@@ -100,9 +102,12 @@ cbuffer globals : register(space16) {
 //Offset is in uints (4-byte), not in bytes!
 //Aligned fetches only return non 0 if all of the vector can be fetched!
 
+U32 getReadSwapchain(uint offset) { return offset & 1 ? _swapchains[offset >> 1].z : _swapchains[offset >> 1].x; }
+U32 getWriteSwapchain(uint offset) { return offset & 1 ? _swapchains[offset >> 1].w : _swapchains[offset >> 1].y; }
+
 //Fetch 1 element from user data
 
-U32 getAppData1u(uint offset) { return offset >= 60 ? 0 : _appData[offset >> 2][offset & 3]; }
+U32 getAppData1u(uint offset) { return offset >= 92 ? 0 : _appData[offset >> 2][offset & 3]; }
 I32 getAppData1i(uint offset) { return (int) getAppData1u(offset); }
 F32 getAppData1f(uint offset) { return asfloat(getAppData1u(offset)); }
 
@@ -110,7 +115,7 @@ F32 getAppData1f(uint offset) { return asfloat(getAppData1u(offset)); }
 //Use unaligned only if necessary, otherwise please align offset to 8-byte!
 
 U32x2 getAppData2u(uint offset) { 
-	return offset >= 59 ? 0.xx : (
+	return offset >= 92 ? 0.xx : (
 		(offset & 2) == 0 ? _appData[offset >> 2].xy : _appData[offset >> 2].zw
 	);
 }
@@ -125,7 +130,7 @@ F32x2 getAppData2fUnaligned(uint offset) { return asfloat(getAppData2uUnaligned(
 //Fetch 4 element vector from user data
 //Use unaligned only if necessary, otherwise please align offset to 8-byte!
 
-U32x4 getAppData4u(uint offset) { return offset >= 56 ? 0 : _appData[offset >> 2]; }
+U32x4 getAppData4u(uint offset) { return offset >= 92 ? 0 : _appData[offset >> 2]; }
 I32x4 getAppData4i(uint offset) { return (I32x4) getAppData4u(offset); }
 F32x4 getAppData4f(uint offset) { return asfloat(getAppData4u(offset)); }
 

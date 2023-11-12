@@ -170,7 +170,7 @@ Error GraphicsDeviceRef_dec(GraphicsDeviceRef **device) {
 }
 
 Error GraphicsDeviceRef_inc(GraphicsDeviceRef *device) {
-	return device ? (!RefPtr_inc(device) ? Error_invalidOperation(0) : Error_none()) : Error_nullPointer(0);
+	return !RefPtr_inc(device) ? Error_invalidOperation(0) : Error_none();
 }
 
 //Ext
@@ -202,7 +202,6 @@ Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 
 		List_freex(&device->resourcesInFlight[i]);
 	}
-
 
 	GraphicsDevice_freeExt(GraphicsInstanceRef_ptr(device->instance), (void*) GraphicsInstance_ext(device, ));
 
@@ -242,9 +241,9 @@ Error GraphicsDeviceRef_create(
 	_gotoIfError(clean, List_reservex(&device->pendingResources, 128));
 
 	device->info = *info;
-	device->instance = instanceRef;
 
-	GraphicsInstanceRef_inc(instanceRef);
+	_gotoIfError(clean, GraphicsInstanceRef_inc(instanceRef));
+	device->instance = instanceRef;
 
 	//Create mem alloc, set info/instance/pending resources
 

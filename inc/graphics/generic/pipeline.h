@@ -28,7 +28,7 @@ typedef enum ETextureFormat ETextureFormat;
 
 typedef struct PipelineGraphicsInfo {
 
-	VertexBindingLayout vertexLayout;			//Can be empty if pipeline generates all vertices itself
+	VertexBindingLayout vertexLayout;		//Can be empty if pipeline generates all vertices itself
 
 	Rasterizer rasterizer;
 
@@ -38,24 +38,24 @@ typedef struct PipelineGraphicsInfo {
 	EMSAASamples msaa;
 	ETopologyMode topologyMode;
 
-	U32 patchControlPointsExt;		//Only if TessellationShader feature is enabled.
-	U32 stageCount;					//Non zero used to determine where stages start/end.
+	U32 patchControlPointsExt;				//Only if TessellationShader feature is enabled.
+	U32 stageCount;							//Non zero used to determine where stages start/end.
 
 	//One of these can be used but not together.
 
 	//If DirectRendering is on (used in between start render).
 	//Otherwise this is ignored.
 
-	U8 attachmentFormatsExt[8];		//ETextureFormatId
+	U8 attachmentFormatsExt[8];				//ETextureFormatId
 
 	U32 attachmentCountExt;
 	EDepthStencilFormat depthFormatExt;
 
 	//If DirectRendering is off (used in between start render pass).
 
-	RefPtr *renderPass;				//Required only if DirectRendering is not on.
+	RefPtr *renderPass;						//Required only if DirectRendering is not on.
 
-	U32 subPass;					//^
+	U32 subPass;							//^
 	U32 padding2;
 
 } PipelineGraphicsInfo;
@@ -67,9 +67,9 @@ typedef struct Pipeline {
 	EPipelineType type;
 	U32 padding;
 
-	List stages;					//<PipelineStage>
+	List stages;							//<PipelineStage>
 
-	const void *extraInfo;			//Null or points to after ext data for extraInfo (e.g. PipelineGraphicsInfo)
+	const void *extraInfo;					//Null or points to after ext data for extraInfo (e.g. PipelineGraphicsInfo)
 
 } Pipeline;
 

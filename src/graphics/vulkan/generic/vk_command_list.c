@@ -62,7 +62,7 @@ void CommandList_process(
 			I32x2 offset = ((const I32x2*) data)[0];
 			I32x2 size = ((const I32x2*) data)[1];
 
-			if((op + 1) & 1)
+			if((op - ECommandOp_SetViewport + 1) & 1)
 				temp->tempViewport = (VkViewport) {
 					.x = (F32) I32x2_x(offset),
 					.y = (F32) I32x2_y(offset),
@@ -72,7 +72,7 @@ void CommandList_process(
 					.maxDepth = 0
 				};
 
-			if ((op + 1) & 2)
+			if ((op - ECommandOp_SetViewport + 1) & 2)
 				temp->tempScissor = (VkRect2D) {
 					.offset = (VkOffset2D) {
 						.x = I32x2_x(offset),
@@ -115,7 +115,7 @@ void CommandList_process(
 
 				//Get image
 
-				ClearImage image = ((const ClearImage*) (data + sizeof(U32)))[i];
+				ClearImageCmd image = ((const ClearImageCmd*) (data + sizeof(U32)))[i];
 
 				Swapchain *swapchain = SwapchainRef_ptr(image.image);
 				VkSwapchain *swapchainExt = Swapchain_ext(swapchain, Vk);
@@ -146,10 +146,10 @@ void CommandList_process(
 		/*
 		case ECommandOp_clearDepth: {
 
-			ClearDepthStencil *clear = (const ClearDepthStencil*) data;
+			ClearDepthStencilCmd *clear = (const ClearDepthStencilCmd*) data;
 			ImageRange image = clear->image;
 
-			VkClearDepthStencilValue clearValue = (VkClearDepthStencilValue) {
+			VkClearDepthStencilCmdValue clearValue = (VkClearDepthStencilCmdValue) {
 				.depth = clear->depth,
 				.stencil = clear->stencil
 			};
@@ -183,7 +183,7 @@ void CommandList_process(
 				.baseMipLevel = image.levelId == U32_MAX ? image.levelId : 0
 			};
 
-			vkCmdClearDepthStencilImage(
+			vkCmdClearDepthStencilCmdImage(
 				buffer, 
 				temp->depthStencil, 
 				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -199,7 +199,7 @@ void CommandList_process(
 
 		case ECommandOp_StartRenderingExt: {
 
-			const StartRenderExt *startRender = (const StartRenderExt*) data;
+			const StartRenderCmdExt *startRender = (const StartRenderCmdExt*) data;
 			const AttachmentInfo *attachments = (const AttachmentInfo*) (startRender + 1);
 
 			//Prepare attachments
@@ -285,7 +285,7 @@ void CommandList_process(
 			break;
 
 		case ECommandOp_SetPrimitiveBuffers:
-			temp->tempBoundBuffers = *(const PrimitiveBuffers*) data;
+			temp->tempBoundBuffers = *(const SetPrimitiveBuffersCmd*) data;
 			break;
 
 		case ECommandOp_DrawIndirect:
@@ -408,7 +408,7 @@ void CommandList_process(
 
 			if(op == ECommandOp_Draw) {
 
-				Draw draw = *(const Draw*)data;
+				DrawCmd draw = *(const DrawCmd*)data;
 
 				if(draw.isIndexed)
 					vkCmdDrawIndexed(
@@ -429,7 +429,7 @@ void CommandList_process(
 
 			else {
 
-				DrawIndirect drawIndirect = *(const DrawIndirect*)data;
+				DrawIndirectCmd drawIndirect = *(const DrawIndirectCmd*)data;
 				VkDeviceBuffer *bufferExt = DeviceBuffer_ext(DeviceBufferRef_ptr(drawIndirect.buffer), Vk);
 
 				//Indirect draw count

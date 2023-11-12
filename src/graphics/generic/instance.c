@@ -24,15 +24,12 @@
 #include "platforms/ext/bufferx.h"
 #include "types/error.h"
 
-U64 GraphicsInstance_vendorMaskAll = 0xFFFFFFFFFFFFFFFF;
-U64 GraphicsInstance_deviceTypeAll = 0xFFFFFFFFFFFFFFFF;
-
 Error GraphicsInstanceRef_dec(GraphicsInstanceRef **inst) {
 	return !RefPtr_dec(inst) ? Error_invalidOperation(0) : Error_none();
 }
 
 Error GraphicsInstanceRef_inc(GraphicsInstanceRef *inst) {
-	return inst ? (!RefPtr_inc(inst) ? Error_invalidOperation(0) : Error_none()) : Error_nullPointer(0);
+	return !RefPtr_inc(inst) ? Error_invalidOperation(0) : Error_none();
 }
 
 Error GraphicsInstance_getPreferredDevice(
@@ -76,6 +73,9 @@ Error GraphicsInstance_getPreferredDevice(
 			continue;
 
 		if((info.capabilities.features & requiredCapabilities.features) != requiredCapabilities.features)
+			continue;
+
+		if((info.capabilities.featuresExt & requiredCapabilities.featuresExt) != requiredCapabilities.featuresExt)
 			continue;
 
 		//Remember

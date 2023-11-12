@@ -111,8 +111,6 @@ Because of this, a device needs the following requirements to be OxC3 compatible
 - maxComputeWorkGroupSize[0,1] of 1024 or higher. and maxComputeWorkGroupSize[2] of 64 or higher.
 - maxMemoryAllocationCount of 4096 or higher.
 - maxBoundDescriptorSets of 4 or higher.
-- maxDescriptorSetStorageBuffersDynamic of  >=16.
-- maxDescriptorSetUniformBuffersDynamic of >=15.
 - maxPerStageDescriptorSamplers of 2Ki or higher.
 - maxPerStageDescriptorUniformBuffers of 1 or higher.
 - maxPerStageDescriptorStorageBuffers of 499'999 or higher.

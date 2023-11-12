@@ -173,7 +173,7 @@ typedef enum EWriteMask {
 
 typedef enum EMSAASamples {
 
-	EMSAASamples_Off,		//Turn off MSAA
+	EMSAASamples_Off,		//Turn off MSAA ("x1")
 	EMSAASamples_x2Ext,		//Query MSAA2x data types from device
 	EMSAASamples_x4,		//4x Always supported
 	EMSAASamples_x8Ext,		//Query MSAA8x data types from device

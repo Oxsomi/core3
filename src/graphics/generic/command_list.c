@@ -407,7 +407,7 @@ Error CommandListRef_clearImages(CommandListRef *commandListRef, List clearImage
 	if(!clearImages.length)
 		_gotoIfError(clean, Error_nullPointer(1));
 
-	if(clearImages.stride != sizeof(ClearImage))
+	if(clearImages.stride != sizeof(ClearImageCmd))
 		_gotoIfError(clean, Error_invalidParameter(1, 0));
 
 	if(clearImages.length > U32_MAX)
@@ -415,7 +415,7 @@ Error CommandListRef_clearImages(CommandListRef *commandListRef, List clearImage
 
 	for(U64 i = 0; i < clearImages.length; ++i) {
 
-		ClearImage clearImage = ((ClearImage*)clearImages.ptr)[i];
+		ClearImageCmd clearImage = ((ClearImageCmd*)clearImages.ptr)[i];
 		RefPtr *image = clearImage.image;
 
 		if(!image)
@@ -474,7 +474,7 @@ Error CommandListRef_clearImageu(CommandListRef *commandListRef, const U32 color
 
 	CommandListRef_validate(commandListRef);
 
-	ClearImage clearImage = (ClearImage) {
+	ClearImageCmd clearImage = (ClearImageCmd) {
 		.image = image,
 		.range = range
 	};
@@ -482,7 +482,7 @@ Error CommandListRef_clearImageu(CommandListRef *commandListRef, const U32 color
 	Buffer_copy(Buffer_createRef(&clearImage.color, sizeof(F32x4)), Buffer_createConstRef(coloru, sizeof(F32x4)));
 
 	List clearImages = (List) { 0 };
-	Error err = List_createConstRef((const U8*) &clearImage, 1, sizeof(ClearImage), &clearImages);
+	Error err = List_createConstRef((const U8*) &clearImage, 1, sizeof(ClearImageCmd), &clearImages);
 
 	if(err.genericError) {
 		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
@@ -511,7 +511,7 @@ Error CommandListRef_clearDepthStencil(CommandListRef *commandListRef, F32 depth
 	if(listErr.genericError)
 		return listErr;
 
-	ClearDepthStencil depthStencil = (ClearDepthStencil) { 
+	ClearDepthStencilCmd depthStencil = (ClearDepthStencilCmd) { 
 		.depth = depth, 
 		.stencil = stencil,
 		.image = image
@@ -646,7 +646,7 @@ Error CommandListRef_startScope(CommandListRef *commandListRef, List transitions
 		if(found)
 			continue;
 
-		if(dep.type == ECommandScopeDependencyType_Strong)		//Error for strong scopes
+		if(dep.type == ECommandScopeDependencyType_Conditional)		//Error for strong scopes
 			_gotoIfError(clean, Error_notFound(0, 0));
 
 		goto clean;		//Ignore scope for weak refs
@@ -810,7 +810,7 @@ Error CommandListRef_validateBufferDesc(GraphicsDeviceRef *device, DeviceBufferR
 	return Error_none();
 }
 
-Error CommandListRef_setPrimitiveBuffers(CommandListRef *commandListRef, PrimitiveBuffers buffers) {
+Error CommandListRef_setPrimitiveBuffers(CommandListRef *commandListRef, SetPrimitiveBuffersCmd buffers) {
 
 	CommandListRef_validateScope(commandListRef, clean);
 
@@ -889,7 +889,7 @@ clean:
 	return err;
 }
 
-Error CommandListRef_draw(CommandListRef *commandListRef, Draw draw) {
+Error CommandListRef_draw(CommandListRef *commandListRef, DrawCmd draw) {
 
 	if(!draw.count || !draw.instanceCount)		//No-op
 		return Error_none();
@@ -898,7 +898,7 @@ Error CommandListRef_draw(CommandListRef *commandListRef, Draw draw) {
 }
 
 Error CommandListRef_drawIndexed(CommandListRef *commandList, U32 indexCount, U32 instanceCount) {
-	Draw draw = (Draw) { .count = indexCount, .instanceCount = instanceCount, .isIndexed = true };
+	DrawCmd draw = (DrawCmd) { .count = indexCount, .instanceCount = instanceCount, .isIndexed = true };
 	return CommandListRef_draw(commandList, draw);
 }
 
@@ -908,7 +908,7 @@ Error CommandListRef_drawIndexedAdv(
 	U32 indexOffset, U32 instanceOffset,
 	U32 vertexOffset
 ) {
-	Draw draw = (Draw) { 
+	DrawCmd draw = (DrawCmd) { 
 		.count = indexCount, .instanceCount = instanceCount, 
 		.indexOffset = indexOffset, .instanceOffset = instanceOffset,
 		.vertexOffset = vertexOffset,
@@ -919,7 +919,7 @@ Error CommandListRef_drawIndexedAdv(
 }
 
 Error CommandListRef_drawUnindexed(CommandListRef *commandList, U32 vertexCount, U32 instanceCount) {
-	Draw draw = (Draw) { .count = vertexCount, .instanceCount = instanceCount };
+	DrawCmd draw = (DrawCmd) { .count = vertexCount, .instanceCount = instanceCount };
 	return CommandListRef_draw(commandList, draw);
 }
 
@@ -928,7 +928,7 @@ Error CommandListRef_drawUnindexedAdv(
 	U32 vertexCount, U32 instanceCount, 
 	U32 vertexOffset, U32 instanceOffset
 ) {
-	Draw draw = (Draw) { 
+	DrawCmd draw = (DrawCmd) { 
 		.count = vertexCount, .instanceCount = instanceCount, 
 		.vertexOffset = vertexOffset, .instanceOffset = instanceOffset
 	};
@@ -1085,7 +1085,7 @@ Error CommandListRef_drawIndirect(
 
 	_gotoIfError(clean, CommandList_drawIndirectBase(commandList, buffer, bufferOffset, &bufferStride, drawCalls, indexed));
 
-	DrawIndirect draw = (DrawIndirect) {
+	DrawIndirectCmd draw = (DrawIndirectCmd) {
 		.buffer = buffer,
 		.bufferOffset = bufferOffset,
 		.drawCalls = drawCalls,
@@ -1135,7 +1135,7 @@ Error CommandListRef_drawIndirectCountExt(
 
 	_gotoIfError(clean, CommandListRef_transitionBuffer(commandList, countBuffer, range, ETransitionType_Indirect));
 
-	DrawIndirect draw = (DrawIndirect) {
+	DrawIndirectCmd draw = (DrawIndirectCmd) {
 		.buffer = buffer,
 		.countBufferExt = countBuffer,
 		.bufferOffset = bufferOffset,
@@ -1219,14 +1219,14 @@ Error CommandListRef_startRenderExt(
 	   size = I32x2_sub(targetSize, offset);
 
 	_gotoIfError(clean, CommandListRef_checkBounds(offset, size, 0, 32'767));
-	_gotoIfError(clean, Buffer_createEmptyBytesx(sizeof(StartRenderExt) + sizeof(AttachmentInfo) * 16, &command));
+	_gotoIfError(clean, Buffer_createEmptyBytesx(sizeof(StartRenderCmdExt) + sizeof(AttachmentInfo) * 16, &command));
 
 	if(!I32x2_all(I32x2_eq(commandList->currentSize, I32x2_zero())))
 		_gotoIfError(clean, Error_invalidOperation(2));
 
-	StartRenderExt *startRender = (StartRenderExt*)command.ptr;
+	StartRenderCmdExt *startRender = (StartRenderCmdExt*)command.ptr;
 
-	*startRender = (StartRenderExt) {
+	*startRender = (StartRenderCmdExt) {
 		.offset = offset,
 		.size = size,
 		.colorCount = (U8) colors.length
@@ -1242,15 +1242,8 @@ Error CommandListRef_startRenderExt(
 
 		//TODO: Properly validate this
 
-		if(
-			(info.range.levelId != U32_MAX && info.range.levelId >= 1) || 
-			(info.range.layerId != U32_MAX && info.range.layerId >= 1)
-		)
-			_gotoIfError(clean, Error_outOfBounds(
-				3, 
-				info.range.levelId != U32_MAX && info.range.levelId >= 1 ? info.range.levelId : info.range.layerId, 
-				1
-			));
+		if(info.range.levelId >= 1 || info.range.layerId >= 1)
+			_gotoIfError(clean, Error_outOfBounds(3, info.range.levelId >= 1 ? info.range.levelId : info.range.layerId, 1));
 
 		if (info.image) {
 
@@ -1290,7 +1283,7 @@ Error CommandListRef_startRenderExt(
 	_gotoIfError(clean, CommandList_append(
 		commandList, 
 		ECommandOp_StartRenderingExt, 
-		Buffer_createConstRef(startRender, sizeof(StartRenderExt) + sizeof(AttachmentInfo) * counter), 
+		Buffer_createConstRef(startRender, sizeof(StartRenderCmdExt) + sizeof(AttachmentInfo) * counter), 
 		0
 	));
 

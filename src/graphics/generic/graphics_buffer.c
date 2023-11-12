@@ -31,7 +31,7 @@ Error DeviceBufferRef_dec(DeviceBufferRef **buffer) {
 }
 
 Error DeviceBufferRef_inc(DeviceBufferRef *buffer) {
-	return buffer ? (!RefPtr_inc(buffer) ? Error_invalidOperation(0) : Error_none()) : Error_nullPointer(0);
+	return !RefPtr_inc(buffer) ? Error_invalidOperation(0) : Error_none();
 }
 
 Error DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count) {
@@ -106,7 +106,7 @@ Error DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count) {
 						pending->buffer.startRange = U64_min(pending->buffer.startRange, last.buffer.startRange);
 						pending->buffer.endRange = U64_max(pending->buffer.endRange, last.buffer.endRange);
 
-						Error err = List_popLocation(&buffer->pendingChanges, lastMatch, Buffer_createNull());
+						Error err = List_erase(&buffer->pendingChanges, lastMatch);
 
 						if(err.genericError)
 							return err;
@@ -126,13 +126,6 @@ Error DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count) {
 
 		if((buffer->pendingChanges.length + 1) >> 32)
 			return Error_outOfBounds(0, U32_MAX, U32_MAX);
-
-		//start/end are offset by 256 bytes to ensure there's less fragmenting.
-		//Example:
-		//vertexBuffer mark dirty uv 0 and 1. If stride < 256 (very likely) then this would mark up to 128 bytes.
-		//Otherwise it'd have to do lots of small copies which is slow.
-		//Recommended solution in that case would be making a uv only buffer and copying that with compute.
-		//But this would 
 
 		DevicePendingRange change = (DevicePendingRange) { .buffer = { .startRange = offset, .endRange = offset + count } };
 
@@ -170,7 +163,9 @@ Bool DeviceBuffer_free(DeviceBuffer *buffer, Allocator allocator) {
 
 	Bool success = DeviceBuffer_freeExt(buffer);
 	success &= GraphicsDeviceRef_removePending(buffer->device, refPtr);
-	success &= !GraphicsDeviceRef_dec(&buffer->device).genericError;
+
+	if(!(buffer->usage & EDeviceBufferUsage_InternalWeakRef))
+		success &= !GraphicsDeviceRef_dec(&buffer->device).genericError;
 
 	if(buffer->usage & EDeviceBufferUsage_CPUBacked)
 		success &= Buffer_freex(&buffer->cpuData);
@@ -205,7 +200,8 @@ Error GraphicsDeviceRef_createBuffer(
 
 	DeviceBuffer *buffer = DeviceBufferRef_ptr(*buf);
 
-	_gotoIfError(clean, GraphicsDeviceRef_inc(dev));
+	if(!(usage & EDeviceBufferUsage_InternalWeakRef))
+		_gotoIfError(clean, GraphicsDeviceRef_inc(dev));
 
 	*buffer = (DeviceBuffer) {
 		.device = dev,
@@ -225,7 +221,7 @@ Error GraphicsDeviceRef_createBuffer(
 clean:
 
 	if(err.genericError)
-		RefPtr_dec(buf);
+		DeviceBufferRef_dec(buf);
 
 	return err;
 }

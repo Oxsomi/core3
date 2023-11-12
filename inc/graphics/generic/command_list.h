@@ -50,7 +50,8 @@ typedef struct CommandList {
 	ImageAndRange boundImages[8];
 
 	U16 tempStateFlags;					//ECommandStateFlags
-	U8 debugRegionStack, boundImageCount;
+	U8 debugRegionStack;
+	U8 boundImageCount;
 	U32 lastCommandId;
 
 	I32x2 currentSize;
@@ -101,7 +102,7 @@ Error CommandListRef_clearImagef(CommandListRef *commandList, F32x4 color, Image
 Error CommandListRef_clearImagei(CommandListRef *commandList, I32x4 color, ImageRange range, RefPtr *image);
 Error CommandListRef_clearImageu(CommandListRef *commandList, const U32 color[4], ImageRange range, RefPtr *image);
 
-Error CommandListRef_clearImages(CommandListRef *commandList, List clearImages);		//<ClearImage>
+Error CommandListRef_clearImages(CommandListRef *commandList, List clearImages);		//<ClearImageCmd>
 
 //Error CommandListRef_clearDepthStencil(CommandListRef *commandList, F32 depth, U8 stencil, ImageRange image);
 
@@ -115,36 +116,47 @@ Error CommandListRef_setPipeline(CommandListRef *commandList, PipelineRef *pipel
 Error CommandListRef_setComputePipeline(CommandListRef *commandList, PipelineRef *pipeline);
 Error CommandListRef_setGraphicsPipeline(CommandListRef *commandList, PipelineRef *pipeline);
 
-Error CommandListRef_setPrimitiveBuffers(CommandListRef *commandList, PrimitiveBuffers buffers);
+Error CommandListRef_setPrimitiveBuffers(CommandListRef *commandList, SetPrimitiveBuffersCmd buffers);
 
-Error CommandListRef_draw(CommandListRef *commandList, Draw draw);
+Error CommandListRef_draw(CommandListRef *commandList, DrawCmd draw);
 
 Error CommandListRef_drawIndexed(CommandListRef *commandList, U32 indexCount, U32 instanceCount);
+Error CommandListRef_drawUnindexed(CommandListRef *commandList, U32 vertexCount, U32 instanceCount);
+
 Error CommandListRef_drawIndexedAdv(
 	CommandListRef *commandList, 
-	U32 indexCount, U32 instanceCount, 
-	U32 indexOffset, U32 instanceOffset,
+	U32 indexCount, 
+	U32 instanceCount, 
+	U32 indexOffset, 
+	U32 instanceOffset,
 	U32 vertexOffset
 );
 
-Error CommandListRef_drawUnindexed(CommandListRef *commandList, U32 vertexCount, U32 instanceCount);
 Error CommandListRef_drawUnindexedAdv(
 	CommandListRef *commandList, 
-	U32 vertexCount, U32 instanceCount, 
-	U32 vertexOffset, U32 instanceOffset
+	U32 vertexCount, 
+	U32 instanceCount, 
+	U32 vertexOffset, 
+	U32 instanceOffset
 );
 
 Error CommandListRef_drawIndirect(
 	CommandListRef *commandList, 
-	DeviceBufferRef *buffer, U64 bufferOffset, U32 bufferStride, 
+	DeviceBufferRef *buffer, 
+	U64 bufferOffset, 
+	U32 bufferStride, 
 	U32 drawCalls, Bool indexed
 );
 
 Error CommandListRef_drawIndirectCountExt(
 	CommandListRef *commandList, 
-	DeviceBufferRef *buffer, U64 bufferOffset, U32 bufferStride, 
-	DeviceBufferRef *countBuffer, U64 countOffset,
-	U32 maxDrawCalls, Bool indexed
+	DeviceBufferRef *buffer, 
+	U64 bufferOffset, 
+	U32 bufferStride, 
+	DeviceBufferRef *countBuffer, 
+	U64 countOffset,
+	U32 maxDrawCalls, 
+	Bool indexed
 );
 
 Error CommandListRef_dispatch(CommandListRef *commandList, DispatchCmd dispatch);
