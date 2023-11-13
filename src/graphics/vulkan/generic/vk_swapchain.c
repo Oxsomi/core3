@@ -199,7 +199,7 @@ Error GraphicsDeviceRef_createSwapchainInternal(GraphicsDeviceRef *deviceRef, Sw
 			case VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR:	current = EMonitorOrientation_FlippedPortrait;		break;
 		}
 
-		MonitorOrientation target = ((Monitor*)window->monitors.ptr)->orientation;
+		MonitorOrientation target = ((const Monitor*)window->monitors.ptr)->orientation;
 
 		if(current != target)
 			_gotoIfError(clean, Error_invalidOperation(6));
@@ -226,7 +226,7 @@ Error GraphicsDeviceRef_createSwapchainInternal(GraphicsDeviceRef *deviceRef, Sw
 
 	for (U32 i = 0; i < modes; ++i) {
 
-		VkPresentModeKHR modei = ((VkPresentModeKHR*)list.ptr)[i];
+		VkPresentModeKHR modei = ((const VkPresentModeKHR*)list.ptr)[i];
 
 		switch(modei) {
 

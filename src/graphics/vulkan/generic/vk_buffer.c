@@ -521,7 +521,7 @@ Error DeviceBufferRef_flush(VkCommandBuffer commandBuffer, GraphicsDeviceRef *de
 				_gotoIfError(clean, AllocationBuffer_allocateBlockx(stagingBuffer, allocRange, 4, &location));
 			}
 
-			DeviceMemoryBlock block = *(DeviceMemoryBlock*) List_ptr(device->allocator.blocks, stagingExt->blockId);
+			DeviceMemoryBlock block = *(const DeviceMemoryBlock*) List_ptr(device->allocator.blocks, stagingExt->blockId);
 			Bool incoherent = !(block.allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
 			//Copy into our buffer

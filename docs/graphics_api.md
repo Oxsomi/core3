@@ -241,7 +241,7 @@ _gotoIfError(clean, GraphicsDeviceRef_createCommandList(
 #### Recording a command list
 
 ```c
-_gotoIfError(clean, CommandListRef_begin(commandList, true /* clear previous */));
+_gotoIfError(clean, CommandListRef_begin(commandList, true /* clear previous */, U64_MAX /* long long timeout */));
 
 _gotoIfError(clean, CommandListRef_startScope(commandList, (List) { 0 }, 0, (List) { 0 },));
 _gotoIfError(clean, CommandListRef_clearImagef(
@@ -591,6 +591,8 @@ _gotoIfError(clean, GraphicsDeviceRef_createBufferData(
 Command lists store the commands referenced in the next section. These are virtual commands; they approximately map to the underlying API. If the underlying API doesn't support commands, it might have to simulate the behavior with a custom shader (such as creating a mip chain of an image). It is also possible that a command might need certain extensions, without them the command will give an error to prevent it from being inserted into the command list (some unimportant ones such as debugging are safely ignored if not supported instead). These commands are then processed at runtime when they need to. If the command list remains the same, it's the same swapchain (if applicable) and the resources aren't recreated then it can safely be re-used. 
 
 Invalid API usage will be attempted to be found out when inserting the command, but this is not always possible. 
+
+*Note: A CommandList is only accessible to the thread that opened it. It can however be acquired on a separate thread after it closed on the other thread. This is why the begin also has a timeout value.*
 
 ### begin/end
 

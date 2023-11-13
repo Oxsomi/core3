@@ -41,6 +41,8 @@ typedef struct CommandList {
 	Bool allowResize;
 	ECommandListState state;
 
+	Lock lock;							//Begin locks this, end unlocks this.
+
 	U64 next;
 
 	//Temp state for the last scope
@@ -83,7 +85,7 @@ Error GraphicsDeviceRef_createCommandList(
 );
 
 Error CommandListRef_clear(CommandListRef *commandList);
-Error CommandListRef_begin(CommandListRef *commandList, Bool doClear);
+Error CommandListRef_begin(CommandListRef *commandList, Bool doClear, U64 lockTimeout);
 Error CommandListRef_end(CommandListRef *commandList);
 
 Error CommandListRef_setViewport(CommandListRef *commandList, I32x2 offset, I32x2 size);
@@ -145,7 +147,8 @@ Error CommandListRef_drawIndirect(
 	DeviceBufferRef *buffer, 
 	U64 bufferOffset, 
 	U32 bufferStride, 
-	U32 drawCalls, Bool indexed
+	U32 drawCalls, 
+	Bool indexed
 );
 
 Error CommandListRef_drawIndirectCountExt(

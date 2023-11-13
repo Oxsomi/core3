@@ -48,8 +48,11 @@ Error CommandListRef_inc(CommandListRef *cmd) {
 																		\
 	CommandList *commandList = CommandListRef_ptr(v);					\
 																		\
+	if(!Lock_isLockedForThread(&commandList->lock))						\
+		return Error_invalidOperation(0);								\
+																		\
 	if(commandList->state != ECommandListState_Open)					\
-		return Error_invalidOperation(0);
+		return Error_invalidOperation(1);
 
 #define CommandListRef_validateScope(v, label)							\
 																		\
@@ -81,18 +84,30 @@ Error CommandListRef_clear(CommandListRef *commandListRef) {
 	return Error_none();
 }
 
-Error CommandListRef_begin(CommandListRef *commandListRef, Bool doClear) {
+Error CommandListRef_begin(CommandListRef *commandListRef, Bool doClear, U64 lockTimeout) {
 
 	if(!commandListRef)
 		return Error_nullPointer(0);
 
 	CommandList *commandList = CommandListRef_ptr(commandListRef);
 
-	if(commandList->state == ECommandListState_Open)
+	if(!Lock_lock(&commandList->lock, lockTimeout))
 		return Error_invalidOperation(0);
 
+	Error err = Error_none();
+
+	if(commandList->state == ECommandListState_Open)
+		_gotoIfError(clean, Error_invalidOperation(1));
+
 	commandList->state = ECommandListState_Open;
-	return doClear ? CommandListRef_clear(commandListRef) : Error_none();
+	_gotoIfError(clean, doClear ? CommandListRef_clear(commandListRef) : Error_none());
+
+clean:
+
+	if(err.genericError)
+		Lock_unlock(&commandList->lock);
+
+	return err;
 }
 
 Error CommandListRef_end(CommandListRef *commandListRef) {
@@ -120,6 +135,7 @@ Error CommandListRef_end(CommandListRef *commandListRef) {
 	}
 
 	commandList->state = ECommandListState_Closed;
+	Lock_unlock(&commandList->lock);
 
 clean:
 
@@ -1414,6 +1430,8 @@ Bool CommandList_free(CommandList *cmd, Allocator alloc) {
 
 	alloc;
 
+	Lock_lock(&cmd->lock, U64_MAX);
+
 	for (U64 i = 0; i < cmd->resources.length; ++i) {
 
 		RefPtr **ptr = (RefPtr**)cmd->resources.ptr + i;
@@ -1430,6 +1448,8 @@ Bool CommandList_free(CommandList *cmd, Allocator alloc) {
 	Buffer_freex(&cmd->data);
 
 	GraphicsDeviceRef_dec(&cmd->device);
+
+	Lock_free(&cmd->lock);
 
 	return true;
 }
@@ -1468,6 +1488,7 @@ Error GraphicsDeviceRef_createCommandList(
 	_gotoIfError(clean, List_reservex(&commandList->activeScopes, 16));
 	_gotoIfError(clean, List_reservex(&commandList->transitions, estimatedResources));
 	_gotoIfError(clean, List_reservex(&commandList->pendingTransitions, 32));
+	_gotoIfError(clean, Lock_create(&commandList->lock));
 
 	GraphicsDeviceRef_inc(deviceRef);
 	commandList->device = deviceRef;

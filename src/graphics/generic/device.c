@@ -205,6 +205,7 @@ Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 
 	GraphicsDevice_freeExt(GraphicsInstanceRef_ptr(device->instance), (void*) GraphicsInstance_ext(device, ));
 
+	Lock_free(&device->allocator.lock);
 	List_freex(&device->allocator.blocks);
 
 	GraphicsInstanceRef_dec(&device->instance);
@@ -253,6 +254,7 @@ Error GraphicsDeviceRef_create(
 	};
 
 	_gotoIfError(clean, List_reservex(&device->allocator.blocks, 16));
+	_gotoIfError(clean, Lock_create(&device->allocator.lock));
 
 	//Create in flight resource refs
 

@@ -18,6 +18,7 @@
 *  This is called dual licensing.
 */
 
+#define VK_USE_PLATFORM_WIN32_KHR
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
 #include "graphics/vulkan/vk_swapchain.h"
@@ -41,5 +42,10 @@ Error VkSurface_create(GraphicsDevice *device, const Window *window, VkSurfaceKH
 		.hinstance = Platform_instance.data
 	};
 
-	return vkCheck(instanceExt->createWin32Surface(instanceExt->instance, &surfaceInfo, NULL, surface));
+	if (!instanceExt->createSurfaceExt)
+		instanceExt->createSurfaceExt = (void*) vkGetInstanceProcAddr(instanceExt->instance, "vkCreateWin32SurfaceKHR");
+
+	return vkCheck(
+		((PFN_vkCreateWin32SurfaceKHR)instanceExt->createSurfaceExt)(instanceExt->instance, &surfaceInfo, NULL, surface)
+	);
 }

@@ -266,8 +266,6 @@ Error GraphicsInstance_create(GraphicsApplicationInfo info, Bool isVerbose, Grap
 	vkExtensionNoCheck(vkGetSwapchainImagesKHR, instanceExt->getSwapchainImages);
 	vkExtensionNoCheck(vkGetPhysicalDeviceSurfaceSupportKHR, instanceExt->getPhysicalDeviceSurfaceSupport);
 
-	vkExtensionNoCheck(vkCreateWin32SurfaceKHR, instanceExt->createWin32Surface);
-
 	if(supportsDebug[1]) {
 		vkExtension(clean, vkSetDebugUtilsObjectNameEXT, instanceExt->debugSetName);
 		vkExtension(clean, vkCmdDebugMarkerBeginEXT, instanceExt->cmdDebugMarkerBegin);
@@ -546,7 +544,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 		U64 firstUnavailable = 0;
 
 		for(U64 k = 0; k < sizeof(reqExtensions); ++k)
-			if(!reqExtensions[k] && strlen(reqExtensionsName[k])) {
+			if(!reqExtensions[k] && CharString_calcStrLen(reqExtensionsName[k], U64_MAX)) {
 				supported = false;
 				firstUnavailable = k;
 				break;

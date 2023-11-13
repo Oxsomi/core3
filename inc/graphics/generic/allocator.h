@@ -21,6 +21,7 @@
 #pragma once
 #include "types/list.h"
 #include "types/allocation_buffer.h"
+#include "platforms/lock.h"
 
 typedef struct GraphicsDevice GraphicsDevice;
 typedef struct CharString CharString;
@@ -44,6 +45,8 @@ typedef struct DeviceMemoryBlock {
 typedef struct DeviceMemoryAllocator {
 
 	GraphicsDevice *device;
+
+	Lock lock;
 
 	List blocks;
 
