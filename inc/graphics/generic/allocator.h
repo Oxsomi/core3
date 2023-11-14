@@ -54,6 +54,7 @@ typedef struct DeviceMemoryAllocator {
 
 static const U64 DeviceMemoryBlock_defaultSize = 67'108'864;		//64 * MIBI
 
+//Needs explicit lock, because allocator is accessed after.
 impl Error DeviceMemoryAllocator_allocate(
 	DeviceMemoryAllocator *allocator, 
 	void *requirementsExt, 
@@ -63,4 +64,5 @@ impl Error DeviceMemoryAllocator_allocate(
 	CharString objectName				//Name of the object that allocates (for dedicated allocations)
 );
 
+//Locks automatically
 Bool DeviceMemoryAllocator_freeAllocation(DeviceMemoryAllocator *allocator, U32 blockId, U64 blockOffset);

@@ -107,6 +107,7 @@ Error CommandListRef_clearImageu(CommandListRef *commandList, const U32 color[4]
 Error CommandListRef_clearImages(CommandListRef *commandList, List clearImages);		//<ClearImageCmd>
 
 //Error CommandListRef_clearDepthStencil(CommandListRef *commandList, F32 depth, U8 stencil, ImageRange image);
+//Error CommandListRef_clearDepthStencils(CommandListRef *commandList, List clearDepthStencils);	//<ClearDepthStencilCmd>
 
 //Draw calls and dispatches
 

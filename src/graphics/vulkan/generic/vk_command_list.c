@@ -511,14 +511,14 @@ void CommandList_process(
 
 			U32 graphicsQueueId = deviceExt->queues[EVkCommandQueue_Graphics].queueId;
 
-			CommandScope scope = *(const CommandScope*) List_ptr(commandList->activeScopes, temp->scopeCounter);
+			CommandScope scope = *(const CommandScope*) List_ptrConst(commandList->activeScopes, temp->scopeCounter);
 			++temp->scopeCounter;
 
 			Error err = Error_none();
 
 			for (U64 i = scope.transitionOffset; i < scope.transitionOffset + scope.transitionCount; ++i) {
 
-				TransitionInternal transition = *(const TransitionInternal*) List_ptr(commandList->transitions, i);
+				TransitionInternal transition = *(const TransitionInternal*) List_ptrConst(commandList->transitions, i);
 
 				//Grab transition type
 				

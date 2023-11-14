@@ -107,6 +107,7 @@ Bool DeviceBuffer_freeExt(DeviceBuffer *buffer) {
 		}
 
 		DeviceMemoryAllocator_freeAllocation(&device->allocator, bufferExt->blockId, bufferExt->blockOffset);
+
 		vkDestroyBuffer(deviceExt->device, bufferExt->buffer, NULL);
 	}
 

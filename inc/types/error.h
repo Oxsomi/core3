@@ -83,7 +83,13 @@ typedef struct Error {
 
 } Error;
 
-#define _gotoIfError(x, ...) { err = __VA_ARGS__; if(err.genericError) goto x; }		//Shortcut to handle cleanup on error
+//Shortcut to handle cleanup on error, can be disabled to save CPU time
+
+#ifndef _DISABLE_ERRORS
+	#define _gotoIfError(x, ...) { err = __VA_ARGS__; if(err.genericError) goto x; }
+#else
+	#define _gotoIfError(x, ...) { x; } /* suppress unused goto label */
+#endif
 
 impl void Error_fillStackTrace(Error *err);
 

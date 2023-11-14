@@ -30,6 +30,8 @@ Bool DeviceMemoryAllocator_freeAllocation(DeviceMemoryAllocator *allocator, U32 
 	if(!allocator || blockId >= allocator->blocks.length)
 		return false;
 
+	Lock_lock(&allocator->lock, U64_MAX);
+
 	DeviceMemoryBlock *block = (DeviceMemoryBlock*) List_ptr(allocator->blocks, blockId);
 
 	Bool success = AllocationBuffer_freeBlock(&block->allocations, (const U8*) blockOffset);
@@ -43,5 +45,6 @@ Bool DeviceMemoryAllocator_freeAllocation(DeviceMemoryAllocator *allocator, U32 
 		while(allocator->blocks.length && !((DeviceMemoryBlock*) List_last(allocator->blocks))->ext)
 			success &= !List_popBack(&allocator->blocks, Buffer_createNull()).genericError;
 
+	Lock_unlock(&allocator->lock);
 	return success;
 }

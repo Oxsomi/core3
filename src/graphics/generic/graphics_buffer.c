@@ -153,7 +153,7 @@ Error DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count) {
 
 impl extern const U64 DeviceBufferExt_size;
 impl Bool DeviceBuffer_freeExt(DeviceBuffer *buffer);
-impl Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *buf, CharString name);
+impl Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *buf, CharString name);	//Only use in lock
 
 Bool DeviceBuffer_free(DeviceBuffer *buffer, Allocator allocator) {
 
@@ -183,7 +183,7 @@ Error GraphicsDeviceRef_createBuffer(
 	DeviceBufferRef **buf
 ) {
 
-	if(!dev)
+	if(!dev || dev->typeId != (ETypeId)EGraphicsTypeId_GraphicsDevice)
 		return Error_nullPointer(0);
 
 	Error err = RefPtr_createx(
@@ -195,6 +195,9 @@ Error GraphicsDeviceRef_createBuffer(
 
 	if(err.genericError)
 		return err;
+
+	Bool locked = false;
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(dev);
 
 	//Init DeviceBuffer
 
@@ -216,9 +219,15 @@ Error GraphicsDeviceRef_createBuffer(
 	if(usage & EDeviceBufferUsage_CPUBacked)
 		_gotoIfError(clean, Buffer_createEmptyBytesx(buffer->length, &buffer->cpuData));
 
+	Lock_lock(&device->allocator.lock, U64_MAX);
+	locked = true;
+
 	_gotoIfError(clean, GraphicsDeviceRef_createBufferExt(dev, buffer, name));
 
 clean:
+
+	if(locked)
+		Lock_unlock(&device->allocator.lock);
 
 	if(err.genericError)
 		DeviceBufferRef_dec(buf);

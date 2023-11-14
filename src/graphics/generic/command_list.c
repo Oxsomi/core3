@@ -36,7 +36,7 @@ Error CommandListRef_dec(CommandListRef **cmd) {
 }
 
 Error CommandListRef_inc(CommandListRef *cmd) {
-	return cmd ? (!RefPtr_inc(cmd) ? Error_invalidOperation(0) : Error_none()) : Error_nullPointer(0);
+	return !RefPtr_inc(cmd) ? Error_invalidOperation(0) : Error_none();
 }
 
 //Clear, append, begin and end
@@ -86,7 +86,7 @@ Error CommandListRef_clear(CommandListRef *commandListRef) {
 
 Error CommandListRef_begin(CommandListRef *commandListRef, Bool doClear, U64 lockTimeout) {
 
-	if(!commandListRef)
+	if(!commandListRef || commandListRef->typeId != (ETypeId)EGraphicsTypeId_CommandList)
 		return Error_nullPointer(0);
 
 	CommandList *commandList = CommandListRef_ptr(commandListRef);
@@ -135,13 +135,13 @@ Error CommandListRef_end(CommandListRef *commandListRef) {
 	}
 
 	commandList->state = ECommandListState_Closed;
-	Lock_unlock(&commandList->lock);
 
 clean:
 
 	if(err.genericError)
 		commandList->state = ECommandListState_Invalid;
 
+	Lock_unlock(&commandList->lock);
 	return err;
 }
 
@@ -157,12 +157,12 @@ Error CommandList_validateGraphicsPipeline(
 	//Depth stencil state can be set to None to ignore writing to depth stencil
 
 	if (info->depthFormatExt != EDepthStencilFormat_None && depthFormat != info->depthFormatExt)
-		return Error_invalidState(1);
+		return Error_invalidState(0);
 
 	//Validate attachments
 
 	if (info->attachmentCountExt != imageCount)
-		return Error_invalidState(0);
+		return Error_invalidState(1);
 
 	for (U8 i = 0; i < imageCount && i < 8; ++i) {
 
@@ -305,7 +305,6 @@ Error CommandListRef_transitionBuffer(
 	};
 
 	Buffer transitionBuf = Buffer_createConstRef(&transition, sizeof(transition));
-
 	return List_pushBackx(&commandList->pendingTransitions, transitionBuf);
 }
 
@@ -360,7 +359,7 @@ Error CommandListRef_setViewportCmd(CommandListRef *commandListRef, I32x2 offset
 	if(op == ECommandOp_SetViewport || op == ECommandOp_SetViewportAndScissor)
 		commandList->tempStateFlags |= ECommandStateFlags_AnyViewport;
 
-	if(op == ECommandOp_SetScissor || op == ECommandOp_SetViewportAndScissor)
+	if(op == ECommandOp_SetScissor  || op == ECommandOp_SetViewportAndScissor)
 		commandList->tempStateFlags |= ECommandStateFlags_AnyScissor;
 
 clean:
@@ -387,9 +386,7 @@ Error CommandListRef_setStencil(CommandListRef *commandListRef, U8 stencilValue)
 
 	CommandListRef_validateScope(commandListRef, clean);
 
-	_gotoIfError(clean, CommandList_append(
-		commandList, ECommandOp_SetStencil, Buffer_createConstRef(&stencilValue, 1), 0
-	));
+	_gotoIfError(clean, CommandList_append(commandList, ECommandOp_SetStencil, Buffer_createConstRef(&stencilValue, 1), 0));
 
 clean:
 
@@ -464,7 +461,6 @@ Error CommandListRef_clearImages(CommandListRef *commandListRef, List clearImage
 		};
 
 		Buffer transitionBuf = Buffer_createConstRef(&transition, sizeof(transition));
-
 		_gotoIfError(clean, List_pushBackx(&commandList->pendingTransitions, transitionBuf));
 	}
 
@@ -498,14 +494,17 @@ Error CommandListRef_clearImageu(CommandListRef *commandListRef, const U32 color
 	Buffer_copy(Buffer_createRef(&clearImage.color, sizeof(F32x4)), Buffer_createConstRef(coloru, sizeof(F32x4)));
 
 	List clearImages = (List) { 0 };
-	Error err = List_createConstRef((const U8*) &clearImage, 1, sizeof(ClearImageCmd), &clearImages);
+	Error err = Error_none();
+	_gotoIfError(clean, List_createConstRef((const U8*) &clearImage, 1, sizeof(ClearImageCmd), &clearImages));
 
-	if(err.genericError) {
+	_gotoIfError(clean, CommandListRef_clearImages(commandListRef, clearImages));
+
+clean:
+
+	if(err.genericError)
 		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
-		return err;
-	}
 
-	return CommandListRef_clearImages(commandListRef, clearImages);
+	return err;
 }
 
 Error CommandListRef_clearImagei(CommandListRef *commandListRef, I32x4 color, ImageRange range, RefPtr *image) {
@@ -521,12 +520,6 @@ Error CommandListRef_clearDepthStencil(CommandListRef *commandListRef, F32 depth
 
 	CommandListRef_validateScope(commandListRef, clean);
 
-	List refs = (List) { 0 };
-	Error listErr = List_createConstRef((const U8*) &image.image, sizeof(RefPtr*), 1, &refs);
-
-	if(listErr.genericError)
-		return listErr;
-
 	ClearDepthStencilCmd depthStencil = (ClearDepthStencilCmd) { 
 		.depth = depth, 
 		.stencil = stencil,
@@ -536,7 +529,9 @@ Error CommandListRef_clearDepthStencil(CommandListRef *commandListRef, F32 depth
 	return CommandList_append(
 		commandList, ECommandOp_clearDepth, Buffer_createConstRef(&depthStencil, sizeof(depthStencil)), refs
 	);
-}*/
+}
+
+Error CommandListRef_clearDepthStencils(CommandListRef *commandList, List clearDepthStencils);	//<ClearDepthStencilCmd>*/
 
 //Render calls
 
@@ -662,10 +657,7 @@ Error CommandListRef_startScope(CommandListRef *commandListRef, List transitions
 		if(found)
 			continue;
 
-		if(dep.type == ECommandScopeDependencyType_Conditional)		//Error for strong scopes
-			_gotoIfError(clean, Error_notFound(0, 0));
-
-		goto clean;		//Ignore scope for weak refs
+		_gotoIfError(clean, Error_notFound(0, 0));
 	}
 
 	//TODO: Append deps to array so runtime can use it (U32 only)
@@ -1254,7 +1246,7 @@ Error CommandListRef_startRenderExt(
 
 	for (U64 i = 0; i < colors.length; ++i) {
 
-		AttachmentInfo info = ((AttachmentInfo*) colors.ptr)[i];
+		AttachmentInfo info = ((const AttachmentInfo*) colors.ptr)[i];
 
 		//TODO: Properly validate this
 

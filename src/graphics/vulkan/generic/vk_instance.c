@@ -409,30 +409,18 @@ const C8 *optExtensionsName[] = {
 
 U64 optExtensionsNameCount = sizeof(optExtensionsName) / sizeof(optExtensionsName[0]);
 
-#define getDeviceFeatures(StructName, Name, StructType)							\
-																				\
+#define getDeviceProperties(Condition, StructName, Name, StructType)			\
 	StructName Name = (StructName) { .sType = StructType };						\
-																				\
-	{																			\
-		VkPhysicalDeviceFeatures2 tempFeat2 = (VkPhysicalDeviceFeatures2) { 	\
-			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,				\
-			.pNext = &Name														\
-		};																		\
-																				\
-		graphicsExt->getPhysicalDeviceFeatures2(dev, &tempFeat2);				\
+	if(Condition) {																\
+		*propertiesNext = &Name;												\
+		propertiesNext = &Name.pNext;											\
 	}
 
-#define getDeviceProperties(StructName, Name, StructType)						\
-																				\
+#define getDeviceFeatures(Condition, StructName, Name, StructType)				\
 	StructName Name = (StructName) { .sType = StructType };						\
-																				\
-	{																			\
-		VkPhysicalDeviceProperties2 tempProp2 = (VkPhysicalDeviceProperties2) { \
-			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,			\
-			.pNext = &Name														\
-		};																		\
-																				\
-		graphicsExt->getPhysicalDeviceProperties2(dev, &tempProp2);				\
+	if(Condition) {																\
+		*featuresNext = &Name;													\
+		featuresNext = &Name.pNext;												\
 	}
 
 Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbose, List *result) {
@@ -562,16 +550,188 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 
 		//Grab limits and features
 
+		//Build up list of properties
+
 		VkPhysicalDeviceProperties2 properties2 = (VkPhysicalDeviceProperties2) { 
 			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2
 		};
+
+		void **propertiesNext = &properties2.pNext;
+
+		getDeviceProperties(
+			true,
+			VkPhysicalDeviceSubgroupProperties,
+			subgroup,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES
+		);
+
+		getDeviceProperties(
+			optExtensions[EOptExtensions_MeshShader],
+			VkPhysicalDeviceMeshShaderPropertiesEXT,
+			meshShaderProp,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_PROPERTIES_EXT
+		);
+
+		getDeviceProperties(
+			optExtensions[EOptExtensions_RayAcceleration],
+			VkPhysicalDeviceAccelerationStructurePropertiesKHR,
+			rtasProp,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_PROPERTIES_KHR
+		);
+
+		getDeviceProperties(
+			optExtensions[EOptExtensions_RayPipeline],
+			VkPhysicalDeviceRayTracingPipelinePropertiesKHR,
+			rtpProp,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR
+		);
+
+		getDeviceProperties(
+			optExtensions[EOptExtensions_RayReorder],
+			VkPhysicalDeviceRayTracingInvocationReorderPropertiesNV,
+			rayReorderProp,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_INVOCATION_REORDER_PROPERTIES_NV
+		);
+
+		getDeviceProperties(
+			true,
+			VkPhysicalDeviceIDProperties,
+			id,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES
+		);
+
+		getDeviceProperties(
+			true,
+			VkPhysicalDeviceDriverProperties,
+			driver,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES
+		);
+
+		graphicsExt->getPhysicalDeviceProperties2(dev, &properties2);
+
+		//Build up list of features
 
 		VkPhysicalDeviceFeatures2 features2 = (VkPhysicalDeviceFeatures2) { 
 			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2
 		};
 
-		graphicsExt->getPhysicalDeviceProperties2(dev, &properties2);
+		void **featuresNext = &features2.pNext;
+
+		getDeviceFeatures(
+			true,
+			VkPhysicalDeviceDescriptorIndexingFeatures, 
+			descriptorIndexing, 
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES
+		);
+
+		getDeviceFeatures(
+			optExtensions[EOptExtensions_DynamicRendering],
+			VkPhysicalDeviceDynamicRenderingFeatures, 
+			dynamicRendering,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES
+		);
+
+		getDeviceFeatures(
+			true,
+			VkPhysicalDeviceTimelineSemaphoreFeatures,
+			semaphore,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES
+		);
+
+		getDeviceFeatures(
+			true,
+			VkPhysicalDeviceSynchronization2Features,
+			sync2,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES
+		);
+
+		getDeviceFeatures(
+			optExtensions[EOptExtensions_MeshShader],
+			VkPhysicalDeviceMeshShaderFeaturesEXT,
+			meshShader,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT
+		);
+
+		getDeviceFeatures(
+			optExtensions[EOptExtensions_RayAcceleration],
+			VkPhysicalDeviceAccelerationStructureFeaturesKHR,
+			rtasFeat,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR
+		);
+
+		getDeviceFeatures(
+			optExtensions[EOptExtensions_RayPipeline],
+			VkPhysicalDeviceRayTracingPipelineFeaturesKHR,
+			rtpFeat,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR
+		);
+
+		getDeviceFeatures(
+			optExtensions[EOptExtensions_RayQuery],
+			VkPhysicalDeviceRayQueryFeaturesKHR,
+			rayQueryFeat,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR
+		);
+
+		getDeviceFeatures(
+			optExtensions[EOptExtensions_RayMotionBlur],
+			VkPhysicalDeviceRayTracingMotionBlurFeaturesNV,
+			rayMotionBlurFeat,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_MOTION_BLUR_FEATURES_NV
+		);
+
+		getDeviceFeatures(
+			optExtensions[EOptExtensions_RayReorder],
+			VkPhysicalDeviceRayTracingInvocationReorderFeaturesNV,
+			rayReorderFeat,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_INVOCATION_REORDER_FEATURES_NV
+		);
+
+		getDeviceFeatures(
+			optExtensions[EOptExtensions_RayMicromapOpacity],
+			VkPhysicalDeviceOpacityMicromapFeaturesEXT,
+			rayOpacityMicroFeat,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_OPACITY_MICROMAP_FEATURES_EXT
+		);
+
+		getDeviceFeatures(
+			optExtensions[EOptExtensions_RayMicromapDisplacement],
+			VkPhysicalDeviceDisplacementMicromapFeaturesNV,
+			rayDispMicroFeat,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DISPLACEMENT_MICROMAP_FEATURES_NV
+		);
+
+		getDeviceFeatures(
+			optExtensions[EOptExtensions_F16],
+			VkPhysicalDeviceShaderFloat16Int8Features,
+			float16,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES
+		);
+
+		getDeviceFeatures(
+			optExtensions[EOptExtensions_AtomicI64],
+			VkPhysicalDeviceShaderAtomicInt64Features,
+			atomics64,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_INT64_FEATURES
+		);
+
+		getDeviceFeatures(
+			optExtensions[EOptExtensions_AtomicF32],
+			VkPhysicalDeviceShaderAtomicFloatFeaturesEXT,
+			atomicsF32,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_FLOAT_FEATURES_EXT
+		);
+
+		getDeviceFeatures(
+			optExtensions[EOptExtensions_PerfQuery],
+			VkPhysicalDevicePerformanceQueryFeaturesKHR,
+			perfQuery,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PERFORMANCE_QUERY_FEATURES_KHR
+		);
+
 		graphicsExt->getPhysicalDeviceFeatures2(dev, &features2);
+
+		//Query
 
 		VkPhysicalDeviceProperties properties = properties2.properties;
 		VkPhysicalDeviceFeatures features = features2.features;
@@ -731,81 +891,77 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 		if(features.fillModeNonSolid)
 			capabilities.features |= EGraphicsFeatures_Wireframe;
 
+		//Force enable synchronization and timeline semaphores
+
+		if (!semaphore.timelineSemaphore) {
+			Log_debugLnx("Vulkan: Unsupported device %u, Timeline semaphores unsupported!", i);
+			continue;
+		}
+
+		if (!sync2.synchronization2) {
+			Log_debugLnx("Vulkan: Unsupported device %u, Synchronization 2 unsupported!", i);
+			continue;
+		}
+
 		//Check if indexing is properly supported
 
-		{
-			getDeviceFeatures(
-				VkPhysicalDeviceDescriptorIndexingFeatures, 
-				current, 
-				VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES
+		VkPhysicalDeviceDescriptorIndexingFeatures target = (VkPhysicalDeviceDescriptorIndexingFeatures) {
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES,
+			.shaderUniformTexelBufferArrayDynamicIndexing = true,
+			.shaderStorageTexelBufferArrayDynamicIndexing = true,
+			.shaderUniformBufferArrayNonUniformIndexing = true,
+			.shaderSampledImageArrayNonUniformIndexing = true,
+			.shaderStorageBufferArrayNonUniformIndexing = true,
+			.shaderStorageImageArrayNonUniformIndexing = true,
+			.shaderUniformTexelBufferArrayNonUniformIndexing = true,
+			.shaderStorageTexelBufferArrayNonUniformIndexing = true,
+			.descriptorBindingUniformBufferUpdateAfterBind = true,
+			.descriptorBindingSampledImageUpdateAfterBind = true,
+			.descriptorBindingStorageImageUpdateAfterBind = true,
+			.descriptorBindingStorageBufferUpdateAfterBind = true,
+			.descriptorBindingUniformTexelBufferUpdateAfterBind = true,
+			.descriptorBindingStorageTexelBufferUpdateAfterBind = true,
+			.descriptorBindingUpdateUnusedWhilePending = true,
+			.descriptorBindingPartiallyBound = true,
+			.descriptorBindingVariableDescriptorCount = true,
+			.runtimeDescriptorArray = true
+		};
+
+		Bool eq = false;
+
+		for(U32 q = 0; q < 2; ++q) {
+
+			target.shaderInputAttachmentArrayNonUniformIndexing = q & 1;
+
+			//We skip shaderInputAttachmentArrayDynamicIndexing as well by not starting there.
+
+			U64 sz = sizeof(target) - offsetof(
+				VkPhysicalDeviceDescriptorIndexingFeatures, shaderUniformTexelBufferArrayDynamicIndexing
 			);
 
-			VkPhysicalDeviceDescriptorIndexingFeatures target = (VkPhysicalDeviceDescriptorIndexingFeatures) {
-				.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES,
-				.shaderUniformTexelBufferArrayDynamicIndexing = true,
-				.shaderStorageTexelBufferArrayDynamicIndexing = true,
-				.shaderUniformBufferArrayNonUniformIndexing = true,
-				.shaderSampledImageArrayNonUniformIndexing = true,
-				.shaderStorageBufferArrayNonUniformIndexing = true,
-				.shaderStorageImageArrayNonUniformIndexing = true,
-				.shaderUniformTexelBufferArrayNonUniformIndexing = true,
-				.shaderStorageTexelBufferArrayNonUniformIndexing = true,
-				.descriptorBindingUniformBufferUpdateAfterBind = true,
-				.descriptorBindingSampledImageUpdateAfterBind = true,
-				.descriptorBindingStorageImageUpdateAfterBind = true,
-				.descriptorBindingStorageBufferUpdateAfterBind = true,
-				.descriptorBindingUniformTexelBufferUpdateAfterBind = true,
-				.descriptorBindingStorageTexelBufferUpdateAfterBind = true,
-				.descriptorBindingUpdateUnusedWhilePending = true,
-				.descriptorBindingPartiallyBound = true,
-				.descriptorBindingVariableDescriptorCount = true,
-				.runtimeDescriptorArray = true
-			};
+			Buffer_eq(
+				Buffer_createConstRef(&target.shaderUniformTexelBufferArrayDynamicIndexing, sz), 
+				Buffer_createConstRef(&descriptorIndexing.shaderUniformTexelBufferArrayDynamicIndexing, sz),
+				&eq
+			);
 
-			//Make sure the padding is clear too.
+			if(eq)
+				break;
+		}
 
-			((U32*)&target)[1] = 0;
-			((U32*)&current)[1] = 0;
-
-			Bool eq = false;
-
-			for(U32 q = 0; q < 4; ++q) {
-
-				target.shaderInputAttachmentArrayDynamicIndexing = q & 1;
-				target.shaderInputAttachmentArrayNonUniformIndexing = q >> 1;
-
-				Buffer_eq(
-					Buffer_createConstRef(&target, sizeof(target)), 
-					Buffer_createConstRef(&current, sizeof(current)),
-					&eq
-				);
-
-				if(eq)
-					break;
-			}
-
-			if(!eq) {
-				Log_debugLnx("Vulkan: Unsupported device %u, descriptor indexing isn't properly supported.", i);
-				continue;
-			}
+		if(!eq) {
+			Log_debugLnx("Vulkan: Unsupported device %u, descriptor indexing isn't properly supported.", i);
+			continue;
 		}
 
 		//Direct rendering
 
 		if (
 			(vendor == EGraphicsVendor_NV || vendor == EGraphicsVendor_AMD || vendor == EGraphicsVendor_INTC) &&
-			optExtensions[EOptExtensions_DynamicRendering]
-		) {
-
-			getDeviceFeatures(
-				VkPhysicalDeviceDynamicRenderingFeatures, 
-				dynamicRendering,
-				VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES
-			);
-
-			if(dynamicRendering.dynamicRendering)
-				capabilities.features |= EGraphicsFeatures_DirectRendering;
-		}
+			optExtensions[EOptExtensions_DynamicRendering] &&
+			dynamicRendering.dynamicRendering
+		)
+			capabilities.features |= EGraphicsFeatures_DirectRendering;
 
 		//Swapchain
 		
@@ -827,12 +983,6 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 
 		//Subgroup operations
 
-		getDeviceProperties(
-			VkPhysicalDeviceSubgroupProperties,
-			subgroup,
-			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES
-		);
-
 		VkSubgroupFeatureFlags requiredSubOp = 
 			VK_SUBGROUP_FEATURE_BASIC_BIT | 
 			VK_SUBGROUP_FEATURE_VOTE_BIT |
@@ -853,98 +1003,45 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 
 		if(subgroup.supportedOperations & VK_SUBGROUP_FEATURE_SHUFFLE_BIT)
 			capabilities.features |= EGraphicsFeatures_SubgroupShuffle;
-		
-		//Force enable synchronization and timeline semaphores
-
-		{
-			getDeviceFeatures(
-				VkPhysicalDeviceTimelineSemaphoreFeatures,
-				semaphore,
-				VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES
-			);
-
-			if (!semaphore.timelineSemaphore) {
-				Log_debugLnx("Vulkan: Unsupported device %u, Timeline semaphores unsupported!", i);
-				continue;
-			}
-		}
-
-		{
-			getDeviceFeatures(
-				VkPhysicalDeviceSynchronization2Features,
-				sync2,
-				VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES
-			);
-
-			if (!sync2.synchronization2) {
-				Log_debugLnx("Vulkan: Unsupported device %u, Synchronization 2 unsupported!", i);
-				continue;
-			}
-		}
 
 		//Mesh shaders
 
-		if(optExtensions[EOptExtensions_MeshShader]) {
-
-			getDeviceFeatures(
-				VkPhysicalDeviceMeshShaderFeaturesEXT,
-				meshShader,
-				VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT
-			);
-
-			if(
-				!meshShader.taskShader || 
-				!meshShader.primitiveFragmentShadingRateMeshShader || 
-				!meshShader.multiviewMeshShader
-			)
-				meshShader.meshShader = false;
-
-			if (meshShader.meshShader) {
-
-				getDeviceProperties(
-					VkPhysicalDeviceMeshShaderPropertiesEXT,
-					meshShaderProp,
-					VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_PROPERTIES_EXT
-				);
-
-				if(
-					meshShaderProp.maxMeshMultiviewViewCount < 4 ||
-					meshShaderProp.maxMeshOutputComponents < 127 ||
-					meshShaderProp.maxMeshOutputLayers < 8 ||
-					meshShaderProp.maxMeshOutputMemorySize < 32 * KIBI ||
-					meshShaderProp.maxMeshOutputPrimitives < 256 ||
-					meshShaderProp.maxMeshOutputVertices < 256 ||
-					meshShaderProp.maxMeshPayloadAndOutputMemorySize < 47 * KIBI ||
-					meshShaderProp.maxMeshPayloadAndSharedMemorySize < 28 * KIBI ||
-					meshShaderProp.maxMeshSharedMemorySize < 28 * KIBI ||
-					meshShaderProp.maxMeshWorkGroupCount[0] < U16_MAX ||
-					meshShaderProp.maxMeshWorkGroupCount[1] < U16_MAX ||
-					meshShaderProp.maxMeshWorkGroupCount[2] < U16_MAX ||
-					meshShaderProp.maxMeshWorkGroupInvocations < 128 ||
-					meshShaderProp.maxTaskWorkGroupInvocations < 128 ||
-					meshShaderProp.maxMeshWorkGroupSize[0] < 128 ||
-					meshShaderProp.maxMeshWorkGroupSize[1] < 128 ||
-					meshShaderProp.maxMeshWorkGroupSize[2] < 128 ||
-					meshShaderProp.maxTaskWorkGroupSize[0] < 128 ||
-					meshShaderProp.maxTaskWorkGroupSize[1] < 128 ||
-					meshShaderProp.maxTaskWorkGroupSize[2] < 128 ||
-					meshShaderProp.maxMeshWorkGroupTotalCount < 4 * MIBI ||
-					meshShaderProp.maxPreferredMeshWorkGroupInvocations < 32 || 
-					meshShaderProp.maxPreferredTaskWorkGroupInvocations < 32 || 
-					meshShaderProp.meshOutputPerPrimitiveGranularity < 32 || 
-					meshShaderProp.meshOutputPerVertexGranularity < 32 || 
-					meshShaderProp.maxTaskPayloadAndSharedMemorySize < 32 * KIBI || 
-					meshShaderProp.maxTaskPayloadSize < 16 * KIBI || 
-					meshShaderProp.maxTaskSharedMemorySize < 32 * KIBI || 
-					meshShaderProp.maxTaskWorkGroupTotalCount < 4 * MIBI || 
-					!meshShaderProp.prefersCompactPrimitiveOutput
-				)
-					meshShader.meshShader = false;
-			}
-
-			if(meshShader.meshShader)
-				capabilities.features |= EGraphicsFeatures_MeshShader;
-		}
+		if(optExtensions[EOptExtensions_MeshShader] && !(
+			!meshShader.taskShader || 
+			!meshShader.primitiveFragmentShadingRateMeshShader || 
+			!meshShader.multiviewMeshShader ||
+			meshShaderProp.maxMeshMultiviewViewCount < 4 ||
+			meshShaderProp.maxMeshOutputComponents < 127 ||
+			meshShaderProp.maxMeshOutputLayers < 8 ||
+			meshShaderProp.maxMeshOutputMemorySize < 32 * KIBI ||
+			meshShaderProp.maxMeshOutputPrimitives < 256 ||
+			meshShaderProp.maxMeshOutputVertices < 256 ||
+			meshShaderProp.maxMeshPayloadAndOutputMemorySize < 47 * KIBI ||
+			meshShaderProp.maxMeshPayloadAndSharedMemorySize < 28 * KIBI ||
+			meshShaderProp.maxMeshSharedMemorySize < 28 * KIBI ||
+			meshShaderProp.maxMeshWorkGroupCount[0] < U16_MAX ||
+			meshShaderProp.maxMeshWorkGroupCount[1] < U16_MAX ||
+			meshShaderProp.maxMeshWorkGroupCount[2] < U16_MAX ||
+			meshShaderProp.maxMeshWorkGroupInvocations < 128 ||
+			meshShaderProp.maxTaskWorkGroupInvocations < 128 ||
+			meshShaderProp.maxMeshWorkGroupSize[0] < 128 ||
+			meshShaderProp.maxMeshWorkGroupSize[1] < 128 ||
+			meshShaderProp.maxMeshWorkGroupSize[2] < 128 ||
+			meshShaderProp.maxTaskWorkGroupSize[0] < 128 ||
+			meshShaderProp.maxTaskWorkGroupSize[1] < 128 ||
+			meshShaderProp.maxTaskWorkGroupSize[2] < 128 ||
+			meshShaderProp.maxMeshWorkGroupTotalCount < 4 * MIBI ||
+			meshShaderProp.maxPreferredMeshWorkGroupInvocations < 32 || 
+			meshShaderProp.maxPreferredTaskWorkGroupInvocations < 32 || 
+			meshShaderProp.meshOutputPerPrimitiveGranularity < 32 || 
+			meshShaderProp.meshOutputPerVertexGranularity < 32 || 
+			meshShaderProp.maxTaskPayloadAndSharedMemorySize < 32 * KIBI || 
+			meshShaderProp.maxTaskPayloadSize < 16 * KIBI || 
+			meshShaderProp.maxTaskSharedMemorySize < 32 * KIBI || 
+			meshShaderProp.maxTaskWorkGroupTotalCount < 4 * MIBI || 
+			!meshShaderProp.prefersCompactPrimitiveOutput
+		))
+			capabilities.features |= EGraphicsFeatures_MeshShader;
 
 		//Raytracing
 
@@ -953,21 +1050,9 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 
 		if(optExtensions[EOptExtensions_RayAcceleration]) {
 
-			getDeviceFeatures(
-				VkPhysicalDeviceAccelerationStructureFeaturesKHR,
-				rtasFeat,
-				VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR
-			);
-
 			//Disable raytracing if minimum limits aren't reached
 
 			if(rtasFeat.accelerationStructure) {
-
-				getDeviceProperties(
-					VkPhysicalDeviceAccelerationStructurePropertiesKHR,
-					rtasProp,
-					VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_PROPERTIES_KHR
-				);
 
 				if(
 					U64_min(
@@ -994,12 +1079,6 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 
 				if(optExtensions[EOptExtensions_RayPipeline]) {
 
-					getDeviceFeatures(
-						VkPhysicalDeviceRayTracingPipelineFeaturesKHR,
-						rtpFeat,
-						VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR
-					);
-
 					if(!rtpFeat.rayTracingPipeline || !rtpFeat.rayTraversalPrimitiveCulling)
 						optExtensions[EOptExtensions_RayPipeline] = false;
 
@@ -1009,38 +1088,22 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 
 				//Query ray query
 
-				if(optExtensions[EOptExtensions_RayQuery]) {
-
-					getDeviceFeatures(
-						VkPhysicalDeviceRayQueryFeaturesKHR,
-						rayQueryFeat,
-						VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR
-					);
-
-					if(!rayQueryFeat.rayQuery)
-						optExtensions[EOptExtensions_RayQuery] = false;
-				}
+				if(optExtensions[EOptExtensions_RayQuery] && !rayQueryFeat.rayQuery)
+					optExtensions[EOptExtensions_RayQuery] = false;
 
 				//Disable if invalid state
 
-				if (optExtensions[EOptExtensions_RayPipeline]) {
-
-					getDeviceProperties(
-						VkPhysicalDeviceRayTracingPipelinePropertiesKHR,
-						rtpProp,
-						VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR
-					);
-
-					if(
+				if (
+					optExtensions[EOptExtensions_RayPipeline] && (
 						rtpProp.maxRayDispatchInvocationCount < GIBI ||
 						rtpProp.maxRayHitAttributeSize < 32 ||
 						rtpProp.maxRayRecursionDepth < 1 ||
 						rtpProp.maxShaderGroupStride < 4096
-					) {
-						optExtensions[EOptExtensions_RayQuery] = false;
-						optExtensions[EOptExtensions_RayPipeline] = false;
-						capabilities.features &=~ EGraphicsFeatures_RayIndirect;
-					}
+					)
+				) {
+					optExtensions[EOptExtensions_RayQuery] = false;
+					optExtensions[EOptExtensions_RayPipeline] = false;
+					capabilities.features &=~ EGraphicsFeatures_RayIndirect;
 				}
 
 				//Enable extension
@@ -1055,70 +1118,26 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 
 					capabilities.features |= EGraphicsFeatures_Raytracing;
 
-					if(optExtensions[EOptExtensions_RayMotionBlur]) {
+					if(rayMotionBlurFeat.rayTracingMotionBlur)
+						capabilities.features |= EGraphicsFeatures_RayMotionBlur;
 
-						getDeviceFeatures(
-							VkPhysicalDeviceRayTracingMotionBlurFeaturesNV,
-							rayMotionBlurFeat,
-							VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_MOTION_BLUR_FEATURES_NV
-						);
+					//Indirect must allow motion blur too (if it's enabled)
 
-						if(rayMotionBlurFeat.rayTracingMotionBlur)
-							capabilities.features |= EGraphicsFeatures_RayMotionBlur;
+					if(
+						rayMotionBlurFeat.rayTracingMotionBlur &&
+						!rayMotionBlurFeat.rayTracingMotionBlurPipelineTraceRaysIndirect &&
+						capabilities.features & EGraphicsFeatures_RayIndirect
+					)
+						capabilities.features &= ~EGraphicsFeatures_RayIndirect;
 
-						//Indirect must allow motion blur too
+					if(rayReorderFeat.rayTracingInvocationReorder && rayReorderProp.rayTracingInvocationReorderReorderingHint)
+						capabilities.features |= EGraphicsFeatures_RayReorder;
 
-						if(
-							!rayMotionBlurFeat.rayTracingMotionBlurPipelineTraceRaysIndirect &&
-							capabilities.features & EGraphicsFeatures_RayIndirect
-						)
-							capabilities.features &= ~EGraphicsFeatures_RayIndirect;
-					}
+					if(rayOpacityMicroFeat.micromap)
+						capabilities.features |= EGraphicsFeatures_RayMicromapOpacity;
 
-					if(optExtensions[EOptExtensions_RayReorder]) {
-
-						getDeviceFeatures(
-							VkPhysicalDeviceRayTracingInvocationReorderFeaturesNV,
-							rayReorderFeat,
-							VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_INVOCATION_REORDER_FEATURES_NV
-						);
-
-						getDeviceProperties(
-							VkPhysicalDeviceRayTracingInvocationReorderPropertiesNV,
-							rayReorderProp,
-							VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_INVOCATION_REORDER_PROPERTIES_NV
-						);
-
-						if(
-							rayReorderFeat.rayTracingInvocationReorder && 
-							rayReorderProp.rayTracingInvocationReorderReorderingHint
-						)
-							capabilities.features |= EGraphicsFeatures_RayReorder;
-					}
-
-					if(optExtensions[EOptExtensions_RayMicromapOpacity]) {
-
-						getDeviceFeatures(
-							VkPhysicalDeviceOpacityMicromapFeaturesEXT,
-							rayOpacityMicroFeat,
-							VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_OPACITY_MICROMAP_FEATURES_EXT
-						);
-
-						if(rayOpacityMicroFeat.micromap)
-							capabilities.features |= EGraphicsFeatures_RayMicromapOpacity;
-					}
-
-					if(optExtensions[EOptExtensions_RayMicromapDisplacement]) {
-
-						getDeviceFeatures(
-							VkPhysicalDeviceDisplacementMicromapFeaturesNV,
-							rayDispMicroFeat,
-							VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DISPLACEMENT_MICROMAP_FEATURES_NV
-						);
-
-						if(rayDispMicroFeat.displacementMicromap)
-							capabilities.features |= EGraphicsFeatures_RayMicromapDisplacement;
-					}
+					if(rayDispMicroFeat.displacementMicromap)
+						capabilities.features |= EGraphicsFeatures_RayMicromapDisplacement;
 				}
 			}
 		}
@@ -1133,17 +1152,8 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 
 		//Get data types
 
-		if(optExtensions[EOptExtensions_F16]) {
-
-			getDeviceFeatures(
-				VkPhysicalDeviceShaderFloat16Int8Features,
-				float16,
-				VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES
-			);
-
-			if(float16.shaderFloat16)
-				capabilities.dataTypes |= EGraphicsDataTypes_F16;
-		}
+		if(float16.shaderFloat16)
+			capabilities.dataTypes |= EGraphicsDataTypes_F16;
 
 		if(features.shaderInt64)
 			capabilities.dataTypes |= EGraphicsDataTypes_I64;
@@ -1153,32 +1163,14 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 
 		//Atomics
 
-		if(optExtensions[EOptExtensions_AtomicI64]) {
+		if(atomics64.shaderBufferInt64Atomics)
+			capabilities.dataTypes |= EGraphicsDataTypes_AtomicI64;
 
-			getDeviceFeatures(
-				VkPhysicalDeviceShaderAtomicInt64Features,
-				atomics64,
-				VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_INT64_FEATURES
-			);
+		if(atomicsF32.shaderBufferFloat32AtomicAdd && atomicsF32.shaderBufferFloat32Atomics)
+			capabilities.dataTypes |= EGraphicsDataTypes_AtomicF32;
 
-			if(atomics64.shaderBufferInt64Atomics)
-				capabilities.dataTypes |= EGraphicsDataTypes_AtomicI64;
-		}
-
-		if(optExtensions[EOptExtensions_AtomicF32]) {
-
-			getDeviceFeatures(
-				VkPhysicalDeviceShaderAtomicFloatFeaturesEXT,
-				atomicsF32,
-				VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_FLOAT_FEATURES_EXT
-			);
-
-			if(atomicsF32.shaderBufferFloat32AtomicAdd && atomicsF32.shaderBufferFloat32Atomics)
-				capabilities.dataTypes |= EGraphicsDataTypes_AtomicF32;
-
-			if(atomicsF32.shaderBufferFloat64AtomicAdd && atomicsF32.shaderBufferFloat64Atomics)
-				capabilities.dataTypes |= EGraphicsDataTypes_AtomicF64;
-		}
+		if(atomicsF32.shaderBufferFloat64AtomicAdd && atomicsF32.shaderBufferFloat64Atomics)
+			capabilities.dataTypes |= EGraphicsDataTypes_AtomicF64;
 
 		//Compression
 
@@ -1220,37 +1212,16 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 
 		//Grab LUID/UUID
 
-		getDeviceProperties(
-			VkPhysicalDeviceIDProperties,
-			id,
-			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES
-		);
-
 		if(id.deviceLUIDValid)
 			capabilities.features |= EGraphicsFeatures_LUID;
-
-		getDeviceProperties(
-			VkPhysicalDeviceDriverProperties,
-			driver,
-			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES
-		);
 
 		//API dependent stuff for the runtime
 
 		if(optExtensions[EOptExtensions_DebugMarker])
 			capabilities.features |= EGraphicsFeatures_DebugMarkers;
 
-		if(optExtensions[EOptExtensions_PerfQuery]) {
-
-			getDeviceFeatures(
-				VkPhysicalDevicePerformanceQueryFeaturesKHR,
-				perfQuery,
-				VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PERFORMANCE_QUERY_FEATURES_KHR
-			);
-
-			if(perfQuery.performanceCounterQueryPools)
-				capabilities.featuresExt |= EVkGraphicsFeatures_PerfQuery;
-		}
+		if(perfQuery.performanceCounterQueryPools)
+			capabilities.featuresExt |= EVkGraphicsFeatures_PerfQuery;
 
 		//Fully converted type
 
