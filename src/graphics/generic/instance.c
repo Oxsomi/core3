@@ -102,3 +102,44 @@ clean:
 	List_freex(&tmp);
 	return err;
 }
+
+impl Error GraphicsInstance_createExt(
+	GraphicsApplicationInfo info, 
+	Bool isVerbose, 
+	GraphicsInstanceRef **instanceRef, 
+	U32 *version
+);
+
+impl Bool GraphicsInstance_free(GraphicsInstance *inst, Allocator alloc);
+impl extern const U64 GraphicsInstanceExt_size;
+
+Error GraphicsInstance_create(GraphicsApplicationInfo info, Bool isVerbose, GraphicsInstanceRef **instanceRef) {
+
+	Error err = RefPtr_createx(
+		(U32)(sizeof(GraphicsInstance) + GraphicsInstanceExt_size), 
+		(ObjectFreeFunc) GraphicsInstance_free, 
+		EGraphicsTypeId_GraphicsInstance, 
+		instanceRef
+	);
+
+	if(err.genericError)
+		return err;
+
+	U32 version = 0;
+	_gotoIfError(clean, GraphicsInstance_createExt(info, isVerbose, instanceRef, &version));
+
+	GraphicsInstance *instance = GraphicsInstanceRef_ptr(*instanceRef);
+
+	*instance = (GraphicsInstance) {
+		.application = info,
+		.api = EGraphicsApi_Vulkan,
+		.apiVersion = version
+	};
+
+	goto success;
+
+clean:
+	GraphicsInstanceRef_dec(instanceRef);
+success:
+	return err;
+}

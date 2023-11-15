@@ -78,7 +78,14 @@ VkBool32 onDebugReport(
 
 Bool GraphicsInstance_free(GraphicsInstance *data, Allocator alloc);
 
-Error GraphicsInstance_create(GraphicsApplicationInfo info, Bool isVerbose, GraphicsInstanceRef **instanceRef) {
+const U64 GraphicsInstanceExt_size = sizeof(VkGraphicsInstance);
+
+Error GraphicsInstance_createExt(
+	GraphicsApplicationInfo info, 
+	Bool isVerbose, 
+	GraphicsInstanceRef **instanceRef,
+	U32 *version
+) {
 
 	U32 layerCount = 0, extensionCount = 0;
 	List extensions = (List) { 0 }, layers = (List) { 0 };
@@ -87,18 +94,9 @@ Error GraphicsInstance_create(GraphicsApplicationInfo info, Bool isVerbose, Grap
 	List enabledExtensions = List_createEmpty(sizeof(const C8*));
 	List enabledLayers = List_createEmpty(sizeof(const C8*));
 
-	Error err = RefPtr_createx(
-		(U32)(sizeof(GraphicsInstance) + sizeof(VkGraphicsInstance)), 
-		(ObjectFreeFunc) GraphicsInstance_free, 
-		EGraphicsTypeId_GraphicsInstance, 
-		instanceRef
-	);
-
-	if(err.genericError)
-		return err;
-
 	GraphicsInstance *instance = GraphicsInstanceRef_ptr(*instanceRef);
 	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
+	Error err = Error_none();
 
 	_gotoIfError(clean, vkCheck(vkEnumerateInstanceLayerProperties(&layerCount, NULL)));
 	_gotoIfError(clean, vkCheck(vkEnumerateInstanceExtensionProperties(NULL, &extensionCount, NULL)));
@@ -322,18 +320,9 @@ Error GraphicsInstance_create(GraphicsApplicationInfo info, Bool isVerbose, Grap
 
 	#endif
 
-	*instance = (GraphicsInstance) {
-		.application = info,
-		.api = EGraphicsApi_Vulkan,
-		.apiVersion = application.apiVersion
-	};
-
-	goto success;
+	*version = application.apiVersion;
 
 clean:
-	GraphicsInstanceRef_dec(instanceRef);
-
-success:
 
 	CharString_freex(&title);
 
@@ -349,9 +338,6 @@ success:
 Bool GraphicsInstance_free(GraphicsInstance *inst, Allocator alloc) {
 
 	alloc;
-
-	if(!inst)
-		return false;
 
 	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(inst, Vk);
 

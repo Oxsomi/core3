@@ -61,7 +61,7 @@ typedef RefPtr GraphicsInstanceRef;
 Error GraphicsInstanceRef_dec(GraphicsInstanceRef **inst);
 Error GraphicsInstanceRef_inc(GraphicsInstanceRef *inst);
 
-impl Error GraphicsInstance_create(GraphicsApplicationInfo info, Bool isVerbose, GraphicsInstanceRef **inst);
+Error GraphicsInstance_create(GraphicsApplicationInfo info, Bool isVerbose, GraphicsInstanceRef **inst);
 
 impl Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbose, List *infos);	//<GraphicsDeviceInfo>
 
