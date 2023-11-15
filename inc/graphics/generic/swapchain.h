@@ -21,6 +21,7 @@
 #pragma once
 #include "math/vec.h"
 #include "platforms/ref_ptr.h"
+#include "platforms/lock.h"
 
 typedef RefPtr GraphicsDeviceRef;
 typedef struct Error Error;
@@ -85,6 +86,8 @@ typedef struct Swapchain {
 	ESwapchainPresentMode presentMode;
 
 	U64 versionId;				//Everytime this swapchain changes format or is resized this will increase.
+
+	Lock lock;
 
 } Swapchain;
 

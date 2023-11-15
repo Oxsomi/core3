@@ -433,10 +433,6 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 		};
 	}
 
-	swapchain->format = window->format;
-	swapchain->size = size;
-	++swapchain->versionId;
-
 	//Allocate in descriptors
 
 	U64 descriptors = info.usage & ESwapchainUsage_AllowCompute ? 2 : 1;
@@ -489,7 +485,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 
 		EDescriptorType textureWriteType = EDescriptorType_RWTexture2D;
 
-		switch (swapchain->format) {
+		switch (window->format) {
 
 			case EWindowFormat_RGBA32f:
 			case EWindowFormat_RGBA16f:

@@ -41,17 +41,34 @@ Error Swapchain_resize(Swapchain *swapchain) {
 	if(!swapchain)
 		return Error_nullPointer(0);
 
+	if(!Lock_lock(&swapchain->lock, U64_MAX))
+		return Error_invalidState(0);
+
 	//Resize with same format and same size is a NOP
 
-	if(I32x2_eq2(swapchain->info.window->size, swapchain->size) && swapchain->info.window->format == swapchain->format)
-		return Error_none();
+	Error err = Error_none();
+	I32x2 newSize = swapchain->info.window->size;
+	EWindowFormat newFormat = swapchain->info.window->format;
+
+	if(I32x2_eq2(newSize, swapchain->size) && newFormat == swapchain->format)
+		goto clean;
 
 	//Otherwise, we properly resize
 
-	return GraphicsDeviceRef_createSwapchainExt(swapchain->device, swapchain->info, swapchain);
+	_gotoIfError(clean, GraphicsDeviceRef_createSwapchainExt(swapchain->device, swapchain->info, swapchain));
+
+	++swapchain->versionId;
+
+	swapchain->format = newFormat;
+	swapchain->size = newSize;
+
+clean:
+	Lock_unlock(&swapchain->lock);
+	return err;
 }
 
 Bool GraphicsDevice_freeSwapchain(Swapchain *swapchain, Allocator alloc) {
+	Lock_free(&swapchain->lock);
 	GraphicsDevice_freeSwapchainExt(swapchain, alloc);
 	GraphicsDeviceRef_dec(&swapchain->device);
 	return true;
@@ -77,12 +94,14 @@ Error GraphicsDeviceRef_createSwapchain(GraphicsDeviceRef *deviceRef, SwapchainI
 	if(err.genericError)
 		return err;
 
-	err = GraphicsDeviceRef_createSwapchainExt(deviceRef, info, SwapchainRef_ptr(*swapchainRef));
+	Swapchain *swapchain = SwapchainRef_ptr(*swapchainRef);
+	_gotoIfError(clean, GraphicsDeviceRef_createSwapchainExt(deviceRef, info, swapchain));
+	_gotoIfError(clean, Lock_create(&swapchain->lock));
 
-	if(err.genericError) {
-		RefPtr_dec(swapchainRef);
-		return err;
-	}
+clean:
 
-	return Error_none();
+	if(err.genericError)
+		SwapchainRef_dec(swapchainRef);
+
+	return err;
 }
