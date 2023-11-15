@@ -602,69 +602,77 @@ Error GraphicsDevice_initExt(
 
 	//Create shared layout since we use bindless
 
-	for (U32 i = 0; i < EDescriptorType_Count; ++i) {
+	for (U32 i = 0; i < EDescriptorSetType_UniqueLayouts; ++i) {
 
-		VkDescriptorSetLayoutBinding binding = (VkDescriptorSetLayoutBinding) {
-			.stageFlags = VK_SHADER_STAGE_ALL,
-			.descriptorCount = descriptorTypeCount[i]
-		};
+		VkDescriptorSetLayoutBinding bindings[EDescriptorType_ResourceCount - 1];
+		U8 bindingCount = 0;
 
-		switch (i) {
+		if (i == EDescriptorSetType_Resources) {
 
-			case 0:
-				binding.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
-				break;
+			for(U32 j = EDescriptorType_Texture2D; j < EDescriptorType_ResourceCount; ++j)
+				bindings[j - 1] = (VkDescriptorSetLayoutBinding) {
+					.binding = j - 1,
+					.stageFlags = VK_SHADER_STAGE_ALL,
+					.descriptorCount = descriptorTypeCount[j],
+					.descriptorType = 
+						j < EDescriptorType_Buffer ? VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE : (
+							j <= EDescriptorType_RWBuffer ? VK_DESCRIPTOR_TYPE_STORAGE_BUFFER :
+							VK_DESCRIPTOR_TYPE_STORAGE_IMAGE
+						)
+				};
 
-			case 1: case 2: case 3:
-				binding.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-				break;
+			bindingCount = EDescriptorType_ResourceCount - 1;
+		}
 
-			case 4: case 5:
-				binding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-				break;
+		else {
 
-			case 16:
-				binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-				break;
+			Bool isSampler = i == EDescriptorSetType_Sampler;
 
-			default:
-				binding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-				break;
+			bindings[0] = (VkDescriptorSetLayoutBinding) {
+				.stageFlags = VK_SHADER_STAGE_ALL,
+				.descriptorCount = isSampler ? EDescriptorTypeCount_Sampler : 1,
+				.descriptorType = isSampler ? VK_DESCRIPTOR_TYPE_SAMPLER : VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
+			};
+
+			bindingCount = 1;
 		}
 
 		//One binding per set.
 
-		VkDescriptorBindingFlags flag = 
+		VkDescriptorBindingFlags flags[EDescriptorType_ResourceCount - 1] = {
 			VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT |
 			VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT |
-			VK_DESCRIPTOR_BINDING_UPDATE_UNUSED_WHILE_PENDING_BIT |
-			VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT;
+			VK_DESCRIPTOR_BINDING_UPDATE_UNUSED_WHILE_PENDING_BIT
+		};
+
+		for(U32 j = 1; j < EDescriptorType_ResourceCount - 1; ++j)
+			flags[j] = flags[0];
 
 		VkDescriptorSetLayoutBindingFlagsCreateInfo partiallyBound = (VkDescriptorSetLayoutBindingFlagsCreateInfo) {
 			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
-			.bindingCount = 1,
-			.pBindingFlags = &flag
+			.bindingCount = bindingCount,
+			.pBindingFlags = flags
 		};
 
 		VkDescriptorSetLayoutCreateInfo setInfo = (VkDescriptorSetLayoutCreateInfo) {
 			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
 			.pNext = &partiallyBound,
 			.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT,
-			.bindingCount = 1,
-			.pBindings = &binding
+			.bindingCount = bindingCount,
+			.pBindings = bindings
 		};
 
 		_gotoIfError(clean, vkCheck(vkCreateDescriptorSetLayout(
 			deviceExt->device, &setInfo, NULL, &deviceExt->setLayouts[i]
 		)));
-
-		if(i < EDescriptorType_ResourceCount)
-			_gotoIfError(clean, Buffer_createEmptyBytesx((binding.descriptorCount + 7) >> 3, &deviceExt->freeList[i]));
 	}
+
+	for(U64 i = 0; i < EDescriptorType_ResourceCount; ++i)
+		_gotoIfError(clean, Buffer_createEmptyBytesx((descriptorTypeCount[i] + 7) >> 3, &deviceExt->freeList[i]));
 
 	VkPipelineLayoutCreateInfo layoutInfo = (VkPipelineLayoutCreateInfo) {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-		.setLayoutCount = EDescriptorType_Count,
+		.setLayoutCount = EDescriptorSetType_UniqueLayouts,
 		.pSetLayouts = deviceExt->setLayouts
 	};
 
@@ -674,63 +682,35 @@ Error GraphicsDevice_initExt(
 	//Every resource is automatically allocated into their respective descriptor set.
 	//Last descriptor set (cbuffer) is triple buffered to allow swapping part of the UBO
 
-	U32 sampledImages = 
-		descriptorTypeCount[EDescriptorType_Texture2D] + 
-		descriptorTypeCount[EDescriptorType_Texture3D] +
-		descriptorTypeCount[EDescriptorType_TextureCube];
-
-	U32 storageImages = 
-		descriptorTypeCount[EDescriptorType_RWTexture2D] + 
-		descriptorTypeCount[EDescriptorType_RWTexture2Ds] + 
-		descriptorTypeCount[EDescriptorType_RWTexture2Df] + 
-		descriptorTypeCount[EDescriptorType_RWTexture2Di] + 
-		descriptorTypeCount[EDescriptorType_RWTexture2Du] + 
-		descriptorTypeCount[EDescriptorType_RWTexture3D] +
-		descriptorTypeCount[EDescriptorType_RWTexture3Ds] +
-		descriptorTypeCount[EDescriptorType_RWTexture3Df] +
-		descriptorTypeCount[EDescriptorType_RWTexture3Di] +
-		descriptorTypeCount[EDescriptorType_RWTexture3Du];
-
-	U32 storageBuffers = 
-		descriptorTypeCount[EDescriptorType_Buffer] + 
-		descriptorTypeCount[EDescriptorType_RWBuffer];
-
 	VkDescriptorPoolSize poolSizes[] = {
-		(VkDescriptorPoolSize) { VK_DESCRIPTOR_TYPE_SAMPLER, descriptorTypeCount[EDescriptorType_Sampler] },
-		(VkDescriptorPoolSize) { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, storageImages },
-		(VkDescriptorPoolSize) { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, sampledImages },
-		(VkDescriptorPoolSize) { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, storageBuffers },
+		(VkDescriptorPoolSize) { VK_DESCRIPTOR_TYPE_SAMPLER, EDescriptorTypeCount_Sampler },
+		(VkDescriptorPoolSize) { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, EDescriptorTypeCount_RWTextures },
+		(VkDescriptorPoolSize) { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, EDescriptorTypeCount_Textures },
+		(VkDescriptorPoolSize) { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, EDescriptorTypeCount_SSBO },
 		(VkDescriptorPoolSize) { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1 }
 	};
 
 	VkDescriptorPoolCreateInfo poolInfo = (VkDescriptorPoolCreateInfo) {
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
 		.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
-		.maxSets = EDescriptorType_Count + 2,
+		.maxSets = EDescriptorSetType_Count,
 		.poolSizeCount = sizeof(poolSizes) / sizeof(poolSizes[0]),
 		.pPoolSizes = poolSizes
 	};
 
 	_gotoIfError(clean, vkCheck(vkCreateDescriptorPool(deviceExt->device, &poolInfo, NULL, &deviceExt->descriptorPool)));
 
-	VkDescriptorSetVariableDescriptorCountAllocateInfo allocationCount = (VkDescriptorSetVariableDescriptorCountAllocateInfo) {
-		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO,
-		.descriptorSetCount = EDescriptorType_Count + 2,
-		.pDescriptorCounts = descriptorTypeCount
-	};
-
 	//Last layout repeat 3x (that's the CBuffer which needs 3 different versions)
 
-	VkDescriptorSetLayout setLayouts[EDescriptorType_Count + 2];
+	VkDescriptorSetLayout setLayouts[EDescriptorSetType_Count];
 
-	for(U64 i = 0; i < EDescriptorType_Count + 2; ++i)
-		setLayouts[i] = deviceExt->setLayouts[U64_min(i, EDescriptorType_Count - 1)];
+	for(U64 i = 0; i < EDescriptorSetType_Count; ++i)
+		setLayouts[i] = deviceExt->setLayouts[U64_min(i, EDescriptorSetType_UniqueLayouts - 1)];
 
 	VkDescriptorSetAllocateInfo setInfo = (VkDescriptorSetAllocateInfo) {
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-		.pNext = &allocationCount,
 		.descriptorPool = deviceExt->descriptorPool,
-		.descriptorSetCount = EDescriptorType_Count + 2,
+		.descriptorSetCount = EDescriptorSetType_Count,
 		.pSetLayouts = setLayouts
 	};
 
@@ -739,29 +719,15 @@ Error GraphicsDevice_initExt(
 	#ifndef NDEBUG
 
 		static const C8 *debugNames[] = {
-			"Sampler",
-			"Texture2D",
-			"TextureCube",
-			"Texture3D",
-			"Buffer",
-			"RWBuffer",
-			"RWTexture3D",
-			"RWTexture3Ds",
-			"RWTexture3Df",
-			"RWTexture3Di",
-			"RWTexture3Du",
-			"RWTexture2D",
-			"RWTexture2Ds",
-			"RWTexture2Df",
-			"RWTexture2Di",
-			"RWTexture2Du",
+			"Samplers",
+			"Resources",
 			"Global frame cbuffer (0)",
 			"Global frame cbuffer (1)",
 			"Global frame cbuffer (2)"
 		};
 
 		if(instanceExt->debugSetName)
-			for (U32 i = 0; i < EDescriptorType_Count + 2; ++i) {
+			for (U32 i = 0; i < EDescriptorSetType_Count; ++i) {
 
 				CharString_freex(&tempStr);
 
@@ -780,7 +746,7 @@ Error GraphicsDevice_initExt(
 
 				_gotoIfError(clean, CharString_formatx(&tempStr, "Descriptor set layout (%i: %s)", i, debugNames[i]));
 
-				if(i < EDescriptorType_Count) {
+				if(i < EDescriptorSetType_UniqueLayouts) {
 
 					debugName2 = (VkDebugUtilsObjectNameInfoEXT) {
 						.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
@@ -860,7 +826,7 @@ Error GraphicsDevice_initExt(
 	VkWriteDescriptorSet uboDescriptor[3] = {
 		(VkWriteDescriptorSet) {
 			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-			.dstSet = deviceExt->sets[EDescriptorType_CBuffer + 0],
+			.dstSet = deviceExt->sets[EDescriptorSetType_CBuffer0],
 			.dstBinding = 0,
 			.dstArrayElement = 0,
 			.descriptorCount = 1,
@@ -873,9 +839,9 @@ Error GraphicsDevice_initExt(
 	uboDescriptor[2] = uboDescriptor[0];
 
 	uboDescriptor[1].pBufferInfo = &uboBufferInfo[1];
-	uboDescriptor[1].dstSet = deviceExt->sets[EDescriptorType_CBuffer + 1];
+	uboDescriptor[1].dstSet = deviceExt->sets[EDescriptorSetType_CBuffer1];
 	uboDescriptor[2].pBufferInfo = &uboBufferInfo[2];
-	uboDescriptor[2].dstSet = deviceExt->sets[EDescriptorType_CBuffer + 2];
+	uboDescriptor[2].dstSet = deviceExt->sets[EDescriptorSetType_CBuffer2];
 
 	vkUpdateDescriptorSets(deviceExt->device, 3, uboDescriptor, 0, NULL);
 
@@ -927,7 +893,7 @@ Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext) {
 			deviceExt->commitSemaphore = NULL;
 		}
 
-		for(U32 i = 0; i < EDescriptorType_Count; ++i) {
+		for(U32 i = 0; i < EDescriptorSetType_UniqueLayouts; ++i) {
 
 			VkDescriptorSetLayout layout = deviceExt->setLayouts[i];
 
@@ -1425,19 +1391,19 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 		//Bind pipeline layout and descriptors since they stay the same for the entire frame.
 		//For every bind point
 
-		VkDescriptorSet sets[EDescriptorType_Count];
+		VkDescriptorSet sets[EDescriptorSetType_UniqueLayouts];
 
-		for(U32 i = 0; i < EDescriptorType_Count; ++i)
+		for(U32 i = 0; i < EDescriptorSetType_UniqueLayouts; ++i)
 			sets[i] = 
-				i != EDescriptorType_CBuffer ? deviceExt->sets[i] :
-				deviceExt->sets[EDescriptorType_CBuffer + (device->submitId % 3)];
+				i != EDescriptorSetType_CBuffer0 ? deviceExt->sets[i] :
+				deviceExt->sets[EDescriptorSetType_CBuffer0 + (device->submitId % 3)];
 
 		for(U64 i = 0; i < 2; ++i)
 			vkCmdBindDescriptorSets(
 				commandBuffer, 
 				i == 0 ? VK_PIPELINE_BIND_POINT_COMPUTE : VK_PIPELINE_BIND_POINT_GRAPHICS, 
 				deviceExt->defaultLayout, 
-				0, EDescriptorType_Count, sets, 
+				0, EDescriptorSetType_UniqueLayouts, sets, 
 				0, NULL
 			);
 

@@ -92,38 +92,77 @@ typedef enum EDescriptorType {
 	EDescriptorType_RWTexture2Di,
 	EDescriptorType_RWTexture2Du,
 
-	EDescriptorType_ResourceCount,		//Count of totally accessible resources (without cbuffer)
-
-	//Global CBuffer for communicating frameId, deltaTime, etc.
-
-	EDescriptorType_CBuffer = EDescriptorType_ResourceCount,
-
-	EDescriptorType_Count
+	EDescriptorType_ResourceCount		//Count of totally accessible resources (without cbuffer)
 
 } EDescriptorType;
 
+typedef enum EDescriptorSetType {
+
+	EDescriptorSetType_Sampler,
+	EDescriptorSetType_Resources,
+	EDescriptorSetType_CBuffer0,
+	EDescriptorSetType_CBuffer1,		//Versioning
+	EDescriptorSetType_CBuffer2,
+
+	EDescriptorSetType_Count,
+	EDescriptorSetType_UniqueLayouts = EDescriptorSetType_CBuffer1
+
+} EDescriptorSetType;
+
+typedef enum EDescriptorTypeCount {
+
+	EDescriptorTypeCount_Sampler		= 2048,		//All samplers
+
+	EDescriptorTypeCount_Texture2D		= 184464,	//~74% of textures (2D)
+	EDescriptorTypeCount_TextureCube	= 32768,	//~13% of textures (Cube)
+	EDescriptorTypeCount_Texture3D		= 32768,	//~13% of textures (3D)
+	EDescriptorTypeCount_Buffer			= 249999,	//All buffers (readonly)
+	EDescriptorTypeCount_RWBuffer		= 250000,	//All buffers (RW)
+	EDescriptorTypeCount_RWTexture3D	= 6553,		//10% of 64Ki (3D + Cube) for RW 3D unorm
+	EDescriptorTypeCount_RWTexture3Ds	= 4809,		//~7.3% of 64Ki (Remainder) (3D + Cube) for RW 3D snorm
+	EDescriptorTypeCount_RWTexture3Df	= 43690,	//66% of 64Ki (3D + Cube) for RW 3D float
+	EDescriptorTypeCount_RWTexture3Di	= 5242,		//8% of 64Ki (3D + Cube) for RW 3D int
+	EDescriptorTypeCount_RWTexture3Du	= 5242,		//8% of 64Ki (3D + Cube) for RW 3D uint
+	EDescriptorTypeCount_RWTexture2D	= 92232,	//50% of 250K - 64Ki (2D) for 2D unorm
+	EDescriptorTypeCount_RWTexture2Ds	= 9224,		//5% of 250K - 64Ki (2D) for 2D snorm
+	EDescriptorTypeCount_RWTexture2Df	= 61488,	//33% of 250K - 64Ki (2D) for 2D float
+	EDescriptorTypeCount_RWTexture2Di	= 10760,	//5.8% of 250K - 64Ki (2D) for 2D int
+	EDescriptorTypeCount_RWTexture2Du	= 10760,	//5.8% of 250K - 64Ki (2D) for 2D uint
+
+	EDescriptorTypeCount_Textures		= 
+		EDescriptorTypeCount_Texture2D + EDescriptorTypeCount_Texture3D + EDescriptorTypeCount_TextureCube,
+
+	EDescriptorTypeCount_RWTextures2D	=
+		EDescriptorTypeCount_RWTexture2D  + EDescriptorTypeCount_RWTexture2Ds +	EDescriptorTypeCount_RWTexture2Df +
+		EDescriptorTypeCount_RWTexture2Du + EDescriptorTypeCount_RWTexture2Di,
+
+	EDescriptorTypeCount_RWTextures3D	=
+		EDescriptorTypeCount_RWTexture3D  + EDescriptorTypeCount_RWTexture3Ds +	EDescriptorTypeCount_RWTexture3Df +
+		EDescriptorTypeCount_RWTexture3Du + EDescriptorTypeCount_RWTexture3Di,
+
+	EDescriptorTypeCount_RWTextures		= EDescriptorTypeCount_RWTextures2D + EDescriptorTypeCount_RWTextures3D,
+
+	EDescriptorTypeCount_SSBO			= EDescriptorTypeCount_Buffer + EDescriptorTypeCount_RWBuffer
+
+} EDescriptorTypeCount;
+
 static const U32 descriptorTypeCount[] = {
-
-	2048,		//All samplers
-	184464,		//~74% of RW textures (2D)
-	32768,		//~13% of RW textures (Cube)
-	32768,		//~13% of RW textures (3D)
-	249999,		//All buffers (readonly)
-	250000,		//All buffers (RW)
-	6553,		//10% of 64Ki (3D + Cube) for RW 3D unorm
-	4809,		//~7.3% of 64Ki (Remainder) (3D + Cube) for RW 3D snorm
-	43690,		//66% of 64Ki (3D + Cube) for RW 3D float
-	5242,		//8% of 64Ki (3D + Cube) for RW 3D int
-	5242,		//8% of 64Ki (3D + Cube) for RW 3D uint
-	92232,		//50% of 250K - 64Ki (2D) for 2D unorm
-	9224,		//5% of 250K - 64Ki (2D) for 2D snorm
-	61488,		//33% of 250K - 64Ki (2D) for 2D float
-	10760,		//5.8% of 250K - 64Ki (2D) for 2D int
-	10760,		//5.8% of 250K - 64Ki (2D) for 2D uint
-
-	//Swappable CBuffer per frame (only 1 of them is bound each time)
-
-	1, 1, 1
+	EDescriptorTypeCount_Sampler,
+	EDescriptorTypeCount_Texture2D,
+	EDescriptorTypeCount_TextureCube,
+	EDescriptorTypeCount_Texture3D,
+	EDescriptorTypeCount_Buffer,
+	EDescriptorTypeCount_RWBuffer,
+	EDescriptorTypeCount_RWTexture3D,
+	EDescriptorTypeCount_RWTexture3Ds,
+	EDescriptorTypeCount_RWTexture3Df,
+	EDescriptorTypeCount_RWTexture3Di,
+	EDescriptorTypeCount_RWTexture3Du,
+	EDescriptorTypeCount_RWTexture2D,
+	EDescriptorTypeCount_RWTexture2Ds,
+	EDescriptorTypeCount_RWTexture2Df,
+	EDescriptorTypeCount_RWTexture2Di,
+	EDescriptorTypeCount_RWTexture2Du
 };
 
 typedef struct VkGraphicsDevice {
@@ -143,8 +182,8 @@ typedef struct VkGraphicsDevice {
 
 	VkSemaphore commitSemaphore;
 
-	VkDescriptorSetLayout setLayouts[EDescriptorType_Count];
-	VkDescriptorSet sets[EDescriptorType_Count + 2];			//1 per type and 2 extra for ubo to allow versioning
+	VkDescriptorSetLayout setLayouts[EDescriptorSetType_UniqueLayouts];
+	VkDescriptorSet sets[EDescriptorSetType_Count];				//1 per type and 2 extra for ubo to allow versioning
 	VkPipelineLayout defaultLayout;								//Default layout if push constants aren't present
 
 	VkDescriptorPool descriptorPool;

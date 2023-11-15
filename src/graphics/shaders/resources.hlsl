@@ -4,24 +4,46 @@
 static const uint ResourceId_mask = (1 << 20) - 1;
 static const uint U32_MAX = 0xFFFFFFFF;
 
-SamplerState _samplers[]					: register(space0);
+#ifdef __spirv__
+	#define _binding(a, b) [[vk::binding(a, b)]]
+#else
+	#define _binding(a, b)
+#endif
 
-Texture2D _textures2D[]						: register(space1);
-TextureCube _textureCubes[]					: register(space2);
-Texture3D _textures3D[]						: register(space3);
-ByteAddressBuffer _buffer[]					: register(space4);
+_binding( 0, 0) SamplerState _samplers[2048];
 
-RWByteAddressBuffer _rwBuffer[]				: register(space5);
-RWTexture3D<unorm F32x4> _rwTextures3D[]	: register(space6);
-RWTexture3D<snorm F32x4> _rwTextures3Ds[]	: register(space7);
-RWTexture3D<F32x4> _rwTextures3Df[]			: register(space8);
-RWTexture3D<I32x4> _rwTextures3Di[]			: register(space9);
-RWTexture3D<U32x4> _rwTextures3Du[]			: register(space10);
-RWTexture2D<unorm F32x4> _rwTextures2D[]	: register(space11);
-RWTexture2D<snorm F32x4> _rwTextures2Ds[]	: register(space12);
-RWTexture2D<F32x4> _rwTextures2Df[]			: register(space13);
-RWTexture2D<I32x4> _rwTextures2Di[]			: register(space14);
-RWTexture2D<U32x4> _rwTextures2Du[]			: register(space15);
+_binding( 0, 1) Texture2D _textures2D[184464];
+_binding( 1, 1) TextureCube _textureCubes[32768];
+_binding( 2, 1) Texture3D _textures3D[32768];
+
+_binding( 3, 1) ByteAddressBuffer _buffer[249999];
+_binding( 4, 1) RWByteAddressBuffer _rwBuffer[250000];
+
+_binding( 5, 1) RWTexture3D<unorm F32x4> _rwTextures3D[6553];
+_binding( 6, 1) RWTexture3D<snorm F32x4> _rwTextures3Ds[4809];
+_binding( 7, 1) RWTexture3D<F32x4> _rwTextures3Df[43690];
+_binding( 8, 1) RWTexture3D<I32x4> _rwTextures3Di[5242];
+_binding( 9, 1) RWTexture3D<U32x4> _rwTextures3Du[5242];
+_binding(10, 1) RWTexture2D<unorm F32x4> _rwTextures2D[92232];
+_binding(11, 1) RWTexture2D<snorm F32x4> _rwTextures2Ds[9224];
+_binding(12, 1) RWTexture2D<F32x4> _rwTextures2Df[61488];
+_binding(13, 1) RWTexture2D<I32x4> _rwTextures2Di[10760];
+_binding(14, 1) RWTexture2D<U32x4> _rwTextures2Du[10760];
+
+_binding( 0, 2) cbuffer globals {	//Globals used during the entire frame for useful information such as frame id.
+
+	U32 _frameId;					//Can loop back to 0 after U32_MAX!
+	F32 _time;						//Time since launch of app
+	F32 _deltaTime;					//deltaTime since last frame.
+	U32 _swapchainCount;			//How many swapchains are present (will insert ids into appData)
+
+	U32x4 _swapchains[8];			//Descriptors of swapchains: (Read, write)[2][8]
+
+	//Up to 368 bytes of user data, useful for supplying constant per frame data.
+	//Make sure to offset to make sure.
+
+	U32x4 _appData[23];
+};
 
 #define rwBufferUniform(i) _rwBuffer[i & ResourceId_mask]
 #define bufferUniform(i) _buffer[i & ResourceId_mask]
@@ -79,23 +101,6 @@ template<typename T>
 void setAt(U32 resourceId, U32 id, T t) {
 	rwBuffer(resourceId).Store<T>(id, t);
 }
-
-//Globals used during the entire frame for useful information such as frame id.
-
-cbuffer globals : register(space16) {
-
-	U32 _frameId;					//Can loop back to 0 after U32_MAX!
-	F32 _time;						//Time since launch of app
-	F32 _deltaTime;					//deltaTime since last frame.
-	U32 _swapchainCount;			//How many swapchains are present (will insert ids into appData)
-
-	U32x4 _swapchains[8];			//Descriptors of swapchains: (Read, write)[2][8]
-
-	//Up to 368 bytes of user data, useful for supplying constant per frame data.
-	//Make sure to offset to make sure.
-
-	U32x4 _appData[23];
-};
 
 //Fetch per frame data from the application.
 //If possible, please make sure the offset is const so it's as fast as possible.

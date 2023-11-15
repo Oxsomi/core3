@@ -56,4 +56,3 @@ Error VkGraphicsInstance_getLayers(List *layers) {
 		return Error_none();
 	#endif
 }
-

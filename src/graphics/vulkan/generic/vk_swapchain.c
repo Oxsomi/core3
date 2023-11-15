@@ -476,8 +476,8 @@ Error GraphicsDeviceRef_createSwapchainInternal(GraphicsDeviceRef *deviceRef, Sw
 
 		((VkWriteDescriptorSet*)list.ptr)[i * descriptors + 0] = (VkWriteDescriptorSet) {
 			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-			.dstSet = deviceExt->sets[EDescriptorType_Texture2D],
-			.dstBinding = 0,
+			.dstSet = deviceExt->sets[EDescriptorSetType_Resources],
+			.dstBinding = EDescriptorType_Texture2D - 1,
 			.dstArrayElement = locationRead & ((1 << 20) - 1),
 			.descriptorCount = 1,
 			.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
@@ -511,8 +511,8 @@ Error GraphicsDeviceRef_createSwapchainInternal(GraphicsDeviceRef *deviceRef, Sw
 
 			((VkWriteDescriptorSet*)list.ptr)[i * descriptors + 1] = (VkWriteDescriptorSet) {
 				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-				.dstSet = deviceExt->sets[textureWriteType],
-				.dstBinding = 0,
+				.dstSet = deviceExt->sets[EDescriptorSetType_Resources],
+				.dstBinding = textureWriteType - 1,
 				.dstArrayElement = locationWrite & ((1 << 20) - 1),
 				.descriptorCount = 1,
 				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,

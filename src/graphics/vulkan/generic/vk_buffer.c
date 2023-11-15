@@ -161,11 +161,9 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 	U32 locationRead = U32_MAX;
 	U32 locationWrite = U32_MAX;
 
-	_gotoIfError(clean, vkCheck(vkCreateBuffer(deviceExt->device, &bufferInfo, NULL, &tempBuffer)));
-
-	VkBufferMemoryRequirementsInfo2 bufferReq = (VkBufferMemoryRequirementsInfo2) { 
-		.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_REQUIREMENTS_INFO_2,
-		.buffer = tempBuffer
+	VkDeviceBufferMemoryRequirementsKHR bufferReq = (VkDeviceBufferMemoryRequirementsKHR) { 
+		.sType = VK_STRUCTURE_TYPE_DEVICE_BUFFER_MEMORY_REQUIREMENTS_KHR,
+		.pCreateInfo = &bufferInfo
 	};
 
 	VkMemoryDedicatedRequirements dedicatedReq = { 
@@ -177,7 +175,7 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 		.pNext = &dedicatedReq
 	};
 
-	instanceExt->getBufferMemoryRequirements2(deviceExt->device, &bufferReq, &requirements);
+	instanceExt->getDeviceBufferMemoryRequirements(deviceExt->device, &bufferReq, &requirements);
 
 	_gotoIfError(clean, DeviceMemoryAllocator_allocate(
 		&device->allocator, 
@@ -192,6 +190,7 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 
 	//Bind memory
 
+	_gotoIfError(clean, vkCheck(vkCreateBuffer(deviceExt->device, &bufferInfo, NULL, &tempBuffer)));
 	_gotoIfError(clean, vkCheck(vkBindBufferMemory(deviceExt->device, tempBuffer, (VkDeviceMemory) block->ext, blockOffset)));
 
 	U8 *memoryLocation = block->mappedMemory;
@@ -231,8 +230,9 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 			if(locationRead == U32_MAX)
 				_gotoIfError(clean, Error_outOfMemory(0));
 
+			descriptors[0].dstBinding = EDescriptorType_Buffer - 1;
 			descriptors[0].dstArrayElement = locationRead & ((1 << 20) - 1);
-			descriptors[0].dstSet = deviceExt->sets[EDescriptorType_Buffer];
+			descriptors[0].dstSet = deviceExt->sets[EDescriptorSetType_Resources];
 
 			++counter;
 		}
@@ -245,8 +245,9 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 				_gotoIfError(clean, Error_outOfMemory(0));
 
 			descriptors[counter] = descriptors[0];
+			descriptors[counter].dstBinding = EDescriptorType_RWBuffer - 1;
 			descriptors[counter].dstArrayElement = locationWrite & ((1 << 20) - 1);
-			descriptors[counter].dstSet = deviceExt->sets[EDescriptorType_RWBuffer];
+			descriptors[counter].dstSet = deviceExt->sets[EDescriptorSetType_Resources];
 
 			++counter;
 		}

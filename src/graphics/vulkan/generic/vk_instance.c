@@ -252,8 +252,7 @@ Error GraphicsInstance_create(GraphicsApplicationInfo info, Bool isVerbose, Grap
 	
 	//Load functions
 
-	vkExtension(clean, vkGetImageMemoryRequirements2KHR, instanceExt->getImageMemoryRequirements2);
-	vkExtension(clean, vkGetBufferMemoryRequirements2KHR, instanceExt->getBufferMemoryRequirements2);
+	vkExtension(clean, vkGetDeviceBufferMemoryRequirementsKHR, instanceExt->getDeviceBufferMemoryRequirements);
 
 	vkExtension(clean, vkGetPhysicalDeviceFeatures2KHR, instanceExt->getPhysicalDeviceFeatures2);
 	vkExtension(clean, vkGetPhysicalDeviceProperties2KHR, instanceExt->getPhysicalDeviceProperties2);
@@ -375,7 +374,8 @@ const C8 *reqExtensionsName[] = {
 	"VK_EXT_descriptor_indexing",
 	"VK_KHR_driver_properties",
 	"VK_KHR_synchronization2",
-	"VK_KHR_timeline_semaphore"
+	"VK_KHR_timeline_semaphore",
+	"VK_KHR_maintenance4"
 };
 
 U64 reqExtensionsNameCount = sizeof(reqExtensionsName) / sizeof(reqExtensionsName[0]);
