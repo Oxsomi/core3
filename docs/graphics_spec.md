@@ -34,6 +34,7 @@ Because of this, a device needs the following requirements to be OxC3 compatible
 
 - Vulkan 1.1 or higher.
 - Tessellation shaders and geometry shaders are optional.
+- More than 512 MiB of CPU + GPU visible memory (At least 1GB total).
 - Required instance extensions:
   - VK_KHR_get_physical_device_properties2
   - VK_KHR_external_memory_capabilities
