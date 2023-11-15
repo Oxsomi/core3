@@ -104,20 +104,14 @@ clean:
 	return err;
 }
 
-Bool Pipeline_free(Pipeline *pipeline, Allocator allocator) {
+Bool Pipeline_freeExt(Pipeline *pipeline, Allocator allocator) {
 
 	allocator;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(pipeline->device);
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 
-	for (U64 i = 0; i < pipeline->stages.length; ++i)
-		Buffer_freex(&((PipelineStage*)pipeline->stages.ptr)[i].shaderBinary);
-
-	List_freex(&pipeline->stages);
 	vkDestroyPipeline(deviceExt->device, *Pipeline_ext(pipeline, Vk), NULL);
-
-	GraphicsDeviceRef_dec(&pipeline->device);
 	return true;
 }
 

@@ -34,9 +34,9 @@
 #include "types/buffer.h"
 #include "types/error.h"
 
-Bool GraphicsDevice_freeSwapchain(Swapchain *data, Allocator alloc);
+const U64 SwapchainExt_size = sizeof(VkSwapchain);
 
-Error GraphicsDeviceRef_createSwapchainInternal(GraphicsDeviceRef *deviceRef, SwapchainInfo info, Swapchain *swapchain) {
+Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, SwapchainInfo info, Swapchain *swapchain) {
 
 	if(!info.presentModePriorities[0]) {
 		info.presentModePriorities[0] = ESwapchainPresentMode_Mailbox;
@@ -594,57 +594,9 @@ clean:
 	return err;
 }
 
-Error Swapchain_resize(Swapchain *swapchain) {
-
-	if(!swapchain)
-		return Error_nullPointer(0);
-
-	//Resize with same format and same size is a NOP
-
-	if(I32x2_eq2(swapchain->info.window->size, swapchain->size) && swapchain->info.window->format == swapchain->format)
-		return Error_none();
-
-	//Otherwise, we properly resize
-
-	return GraphicsDeviceRef_createSwapchainInternal(swapchain->device, swapchain->info, swapchain);
-}
-
-Error GraphicsDeviceRef_createSwapchain(GraphicsDeviceRef *deviceRef, SwapchainInfo info, SwapchainRef **swapchainRef) {
-
-	if(!deviceRef || !info.window || !info.window->nativeHandle)
-		return Error_nullPointer(!deviceRef ? 1 : 0);
-
-	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
-
-	if(!(device->info.capabilities.features & EGraphicsFeatures_Swapchain))
-		return Error_unsupportedOperation(0);
-
-	Error err = RefPtr_createx(
-		(U32)(sizeof(Swapchain) + sizeof(VkSwapchain)), 
-		(ObjectFreeFunc) GraphicsDevice_freeSwapchain, 
-		EGraphicsTypeId_Swapchain, 
-		swapchainRef
-	);
-
-	if(err.genericError)
-		return err;
-
-	err = GraphicsDeviceRef_createSwapchainInternal(deviceRef, info, SwapchainRef_ptr(*swapchainRef));
-
-	if(err.genericError) {
-		RefPtr_dec(swapchainRef);
-		return err;
-	}
-
-	return Error_none();
-}
-
-Bool GraphicsDevice_freeSwapchain(Swapchain *swapchain, Allocator alloc) {
+Bool GraphicsDevice_freeSwapchainExt(Swapchain *swapchain, Allocator alloc) {
 
 	alloc;
-
-	if(!swapchain || !swapchain->device)
-		return false;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(swapchain->device);
 	VkSwapchain *swapchainExt = Swapchain_ext(swapchain, Vk);
@@ -678,8 +630,6 @@ Bool GraphicsDevice_freeSwapchain(Swapchain *swapchain, Allocator alloc) {
 
 	if(swapchainExt->surface)
 		vkDestroySurfaceKHR(instance->instance, swapchainExt->surface, NULL);
-
-	GraphicsDeviceRef_dec(&swapchain->device);
 
 	return true;
 }

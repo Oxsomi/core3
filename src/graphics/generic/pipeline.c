@@ -19,7 +19,9 @@
 */
 
 #include "graphics/generic/pipeline.h"
+#include "graphics/generic/device.h"
 #include "platforms/ext/listx.h"
+#include "platforms/ext/bufferx.h"
 #include "types/error.h"
 
 Error PipelineRef_dec(PipelineRef **pipeline) {
@@ -55,4 +57,16 @@ PipelineRef *PipelineRef_at(List list, U64 index) {
 		return NULL;
 
 	return *(PipelineRef* const*) buf.ptr;
+}
+
+Bool Pipeline_free(Pipeline *pipeline, Allocator alloc) {
+
+	Pipeline_freeExt(pipeline, alloc);
+
+	for (U64 i = 0; i < pipeline->stages.length; ++i)
+		Buffer_freex(&((PipelineStage*)pipeline->stages.ptr)[i].shaderBinary);
+
+	List_freex(&pipeline->stages);
+	GraphicsDeviceRef_dec(&pipeline->device);
+	return true;
 }
