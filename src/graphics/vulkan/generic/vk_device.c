@@ -775,44 +775,30 @@ Error GraphicsDevice_initExt(
 	deviceExt->imageTransitions = List_createEmpty(sizeof(VkImageMemoryBarrier2));
 	_gotoIfError(clean, List_reservex(&deviceExt->imageTransitions, 16));
 
-	//Allocate staging buffer.
-	//64 MiB - 256 * 3 to potentially allow CBuffer at the end of the memory.
-	//This gets divided into 3 for each frame id to have their own allocator into that subblock.
-	//This allows way easier management.
+	goto success;
 
-	U64 stagingSize = DeviceMemoryBlock_defaultSize - sizeof(CBufferData) * 3;
+clean:
 
-	_gotoIfError(clean, GraphicsDeviceRef_createBuffer(
-		*deviceRef, 
-		EDeviceBufferUsage_CPUAllocatedBit | EDeviceBufferUsage_InternalWeakRef, 
-		CharString_createConstRefCStr("Staging buffer"),
-		stagingSize, &deviceExt->staging
-	));
+	GraphicsDeviceRef_dec(deviceRef);
 
-	DeviceBuffer *staging = DeviceBufferRef_ptr(deviceExt->staging);
-	VkDeviceBuffer *stagingExt = DeviceBuffer_ext(staging, Vk);
+success:
 
-	Buffer stagingBuffer = Buffer_createRef(stagingExt->mappedMemory, stagingSize);
+	CharString_freex(&tempStr);
+	List_freex(&extensions);
+	List_freex(&queues);
+	List_freex(&queueFamilies);
+	return err;
+}
 
-	for(U64 i = 0; i < sizeof(deviceExt->stagingAllocations) / sizeof(deviceExt->stagingAllocations[0]); ++i)
-		_gotoIfError(clean, AllocationBuffer_createRefFromRegionx(
-			stagingBuffer, stagingSize / 3 * i, stagingSize / 3, &deviceExt->stagingAllocations[i]
-		));
+void GraphicsDevice_postInit(GraphicsDevice *device) {
 
-	//Allocate UBO
-
-	_gotoIfError(clean, GraphicsDeviceRef_createBuffer(
-		*deviceRef, 
-		EDeviceBufferUsage_CPUAllocatedBit | EDeviceBufferUsage_InternalWeakRef, 
-		CharString_createConstRefCStr("Per frame data"),
-		sizeof(CBufferData) * 3, &deviceExt->ubo
-	));
+	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 
 	//Fill last 3 descriptor sets with UBO[i] to ensure we only modify things in flight.
 
 	VkDescriptorBufferInfo uboBufferInfo[3] = {
 		(VkDescriptorBufferInfo) {
-			.buffer = DeviceBuffer_ext(DeviceBufferRef_ptr(deviceExt->ubo), Vk)->buffer,
+			.buffer = DeviceBuffer_ext(DeviceBufferRef_ptr(device->frameData), Vk)->buffer,
 			.range = sizeof(CBufferData)
 		}
 	};
@@ -845,19 +831,6 @@ Error GraphicsDevice_initExt(
 
 	vkUpdateDescriptorSets(deviceExt->device, 3, uboDescriptor, 0, NULL);
 
-	goto success;
-
-clean:
-
-	GraphicsDeviceRef_dec(deviceRef);
-
-success:
-
-	CharString_freex(&tempStr);
-	List_freex(&extensions);
-	List_freex(&queues);
-	List_freex(&queueFamilies);
-	return err;
 }
 
 Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext) {
@@ -907,9 +880,6 @@ Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext) {
 		if(deviceExt->defaultLayout)
 			vkDestroyPipelineLayout(deviceExt->device, deviceExt->defaultLayout, NULL);
 
-		DeviceBufferRef_dec(&deviceExt->ubo);
-		DeviceBufferRef_dec(&deviceExt->staging);
-
 		vkDestroyDevice(deviceExt->device, NULL);
 	}
 
@@ -931,48 +901,13 @@ Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext) {
 	List_freex(&deviceExt->bufferTransitions);
 	List_freex(&deviceExt->imageTransitions);
 
-	for(U64 i = 0; i < sizeof(deviceExt->stagingAllocations) / sizeof(deviceExt->stagingAllocations[0]); ++i)
-		AllocationBuffer_freex(&deviceExt->stagingAllocations[i]);
-
 	return true;
 }
 
 //Executing commands
 
-Error GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef) {
-
-	if(!deviceRef)
-		return Error_nullPointer(0);
-
-	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
-	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
-
-	Error err = vkCheck(vkDeviceWaitIdle(deviceExt->device));
-
-	if(err.genericError)
-		return err;
-
-	for (U64 i = 0; i < sizeof(device->resourcesInFlight) / sizeof(device->resourcesInFlight[0]); ++i) {
-
-		//Release resources that were in flight.
-		//This might cause resource deletions because we might be the last one releasing them.
-		//For example temporary staging resources are released this way.
-
-		List *inFlight = &device->resourcesInFlight[i];
-
-		for (U64 j = 0; j < inFlight->length; ++j)
-			RefPtr_dec((RefPtr**)inFlight->ptr + j);
-
-		_gotoIfError(clean, List_clear(inFlight));
-
-		//Release all allocations of buffer that was in flight
-
-		if(!AllocationBuffer_freeAll(&deviceExt->stagingAllocations[i]))
-			_gotoIfError(clean, Error_invalidState(0));
-	}
-
-clean:
-	return err;
+Error GraphicsDeviceRef_waitExt(GraphicsDeviceRef *deviceRef) {
+	return vkCheck(vkDeviceWaitIdle(GraphicsDevice_ext(GraphicsDeviceRef_ptr(deviceRef), Vk)->device));
 }
 
 U32 VkGraphicsDevice_allocateDescriptor(VkGraphicsDevice *deviceExt, EDescriptorType type) {
@@ -1178,10 +1113,10 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 
 	//Prepare per frame cbuffer
 
-	VkDeviceBuffer *uboExt = DeviceBuffer_ext(DeviceBufferRef_ptr(deviceExt->ubo), Vk);
+	DeviceBuffer *frameData = DeviceBufferRef_ptr(device->frameData);
 
 	{
-		CBufferData *data = (CBufferData*) uboExt->mappedMemory + (device->submitId % 3);
+		CBufferData *data = (CBufferData*) frameData->mappedMemory + (device->submitId % 3);
 		Ns now = Time_now();
 
 		*data = (CBufferData) {
@@ -1209,7 +1144,7 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 
 		Buffer_copy(Buffer_createRef((U8*)data->appData, sizeof(*data)), appData);
 
-		DeviceMemoryBlock block = *(DeviceMemoryBlock*) List_ptr(device->allocator.blocks, uboExt->blockId);
+		DeviceMemoryBlock block = *(DeviceMemoryBlock*) List_ptr(device->allocator.blocks, frameData->blockId);
 		Bool incoherent = !(block.allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
 		if (incoherent) {
@@ -1217,7 +1152,7 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 			VkMappedMemoryRange range = (VkMappedMemoryRange) {
 				.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
 				.memory = (VkDeviceMemory) block.ext,
-				.offset = uboExt->blockOffset + (device->submitId % 3) * sizeof(CBufferData),
+				.offset = frameData->blockOffset + (device->submitId % 3) * sizeof(CBufferData),
 				.size = sizeof(CBufferData)
 			};
 
@@ -1358,7 +1293,7 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 			.dependencyFlags = 0
 		};
 
-		DeviceBuffer *staging = DeviceBufferRef_ptr(deviceExt->staging);
+		DeviceBuffer *staging = DeviceBufferRef_ptr(device->staging);
 		VkDeviceBuffer *stagingExt = DeviceBuffer_ext(staging, Vk);
 
 		_gotoIfError(clean, VkDeviceBuffer_transition(
@@ -1371,6 +1306,8 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 			&deviceExt->bufferTransitions,
 			&dependency
 		));
+
+		VkDeviceBuffer *uboExt = DeviceBuffer_ext(DeviceBufferRef_ptr(device->frameData), Vk);
 
 		_gotoIfError(clean, VkDeviceBuffer_transition(
 			uboExt, 
@@ -1420,7 +1357,7 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 
 		//Release all allocations of buffer that was in flight
 
-		if(!AllocationBuffer_freeAll(&deviceExt->stagingAllocations[device->submitId % 3]))
+		if(!AllocationBuffer_freeAll(&device->stagingAllocations[device->submitId % 3]))
 			_gotoIfError(clean, Error_invalidState(0));
 
 		//Update buffer data

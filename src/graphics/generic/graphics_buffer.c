@@ -161,6 +161,10 @@ Bool DeviceBuffer_free(DeviceBuffer *buffer, Allocator allocator) {
 
 	RefPtr *refPtr = (RefPtr*)((const U8*)buffer - sizeof(RefPtr));
 
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(buffer->device);
+
+	DeviceMemoryAllocator_freeAllocation(&device->allocator, buffer->blockId, buffer->blockOffset);
+
 	Bool success = DeviceBuffer_freeExt(buffer);
 	success &= GraphicsDeviceRef_removePending(buffer->device, refPtr);
 

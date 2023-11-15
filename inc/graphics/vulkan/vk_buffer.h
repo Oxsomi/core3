@@ -27,14 +27,8 @@ typedef struct VkDeviceBuffer {
 
 	VkBuffer buffer;
 
-	U64 blockOffset;
-
-	void *mappedMemory;						//Only accessible if not in flight
-
 	VkPipelineStageFlagBits2 lastStage;
 	VkAccessFlagBits2 lastAccess;
-
-	U32 blockId, padding;
 
 } VkDeviceBuffer;
 

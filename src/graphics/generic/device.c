@@ -22,6 +22,7 @@
 #include "graphics/generic/instance.h"
 #include "graphics/generic/device_buffer.h"
 #include "platforms/ext/listx.h"
+#include "platforms/ext/bufferx.h"
 #include "platforms/log.h"
 #include "types/error.h"
 #include "types/buffer.h"
@@ -184,6 +185,7 @@ impl Error GraphicsDevice_initExt(
 	GraphicsDeviceRef **deviceRef
 );
 
+impl void GraphicsDevice_postInit(GraphicsDevice *device);
 impl Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext);
 
 Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
@@ -193,6 +195,8 @@ Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 	if(!device)
 		return true;
 
+	Lock_free(&device->lock);
+	Lock_free(&device->allocator.lock);
 	List_freex(&device->pendingResources);
 
 	for(U64 i = 0; i < sizeof(device->resourcesInFlight) / sizeof(device->resourcesInFlight[0]); ++i) {
@@ -203,9 +207,14 @@ Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 		List_freex(&device->resourcesInFlight[i]);
 	}
 
+	DeviceBufferRef_dec(&device->frameData);
+	DeviceBufferRef_dec(&device->staging);
+
+	for(U64 i = 0; i < sizeof(device->stagingAllocations) / sizeof(device->stagingAllocations[0]); ++i)
+		AllocationBuffer_freex(&device->stagingAllocations[i]);
+
 	GraphicsDevice_freeExt(GraphicsInstanceRef_ptr(device->instance), (void*) GraphicsInstance_ext(device, ));
 
-	Lock_free(&device->allocator.lock);
 	List_freex(&device->allocator.blocks);
 
 	GraphicsInstanceRef_dec(&device->instance);
@@ -255,6 +264,7 @@ Error GraphicsDeviceRef_create(
 
 	_gotoIfError(clean, List_reservex(&device->allocator.blocks, 16));
 	_gotoIfError(clean, Lock_create(&device->allocator.lock));
+	_gotoIfError(clean, Lock_create(&device->lock));
 
 	//Create in flight resource refs
 
@@ -266,6 +276,41 @@ Error GraphicsDeviceRef_create(
 	//Create extended device
 
 	_gotoIfError(clean, GraphicsDevice_initExt(GraphicsInstanceRef_ptr(instanceRef), info, verbose, deviceRef));
+
+	//Create constant buffer and staging buffer / allocators
+
+	//Allocate staging buffer.
+	//64 MiB - 256 * 3 to potentially allow CBuffer at the end of the memory.
+	//This gets divided into 3 for each frame id to have their own allocator into that subblock.
+	//This allows way easier management.
+
+	U64 stagingSize = DeviceMemoryBlock_defaultSize - sizeof(CBufferData) * 3;
+
+	_gotoIfError(clean, GraphicsDeviceRef_createBuffer(
+		*deviceRef, 
+		EDeviceBufferUsage_CPUAllocatedBit | EDeviceBufferUsage_InternalWeakRef, 
+		CharString_createConstRefCStr("Staging buffer"),
+		stagingSize, &device->staging
+	));
+
+	DeviceBuffer *staging = DeviceBufferRef_ptr(device->staging);
+	Buffer stagingBuffer = Buffer_createRef(staging->mappedMemory, stagingSize);
+
+	for(U64 i = 0; i < sizeof(device->stagingAllocations) / sizeof(device->stagingAllocations[0]); ++i)
+		_gotoIfError(clean, AllocationBuffer_createRefFromRegionx(
+			stagingBuffer, stagingSize / 3 * i, stagingSize / 3, &device->stagingAllocations[i]
+		));
+
+	//Allocate UBO
+
+	_gotoIfError(clean, GraphicsDeviceRef_createBuffer(
+		*deviceRef, 
+		EDeviceBufferUsage_CPUAllocatedBit | EDeviceBufferUsage_InternalWeakRef, 
+		CharString_createConstRefCStr("Per frame data"),
+		sizeof(CBufferData) * 3, &device->frameData
+	));
+
+	GraphicsDevice_postInit(device);
 
 clean:
 
@@ -300,4 +345,44 @@ Bool GraphicsDeviceRef_removePending(GraphicsDeviceRef *deviceRef, RefPtr *resou
 		return true;
 
 	return !List_erase(&device->pendingResources, found).genericError;
+}
+
+impl Error GraphicsDeviceRef_waitExt(GraphicsDeviceRef *deviceRef);
+
+Error GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef) {
+
+	if(!deviceRef || deviceRef->typeId != (ETypeId)EGraphicsTypeId_GraphicsDevice)
+		return Error_nullPointer(0);
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+
+	Error err = Error_none();
+	
+	if(!Lock_lock(&device->lock, U64_MAX))
+		return Error_invalidOperation(0);
+
+	_gotoIfError(clean, GraphicsDeviceRef_waitExt(deviceRef));
+
+	for (U64 i = 0; i < sizeof(device->resourcesInFlight) / sizeof(device->resourcesInFlight[0]); ++i) {
+
+		//Release resources that were in flight.
+		//This might cause resource deletions because we might be the last one releasing them.
+		//For example temporary staging resources are released this way.
+
+		List *inFlight = &device->resourcesInFlight[i];
+
+		for (U64 j = 0; j < inFlight->length; ++j)
+			RefPtr_dec((RefPtr**)inFlight->ptr + j);
+
+		_gotoIfError(clean, List_clear(inFlight));
+
+		//Release all allocations of buffer that was in flight
+
+		if(!AllocationBuffer_freeAll(&device->stagingAllocations[i]))
+			_gotoIfError(clean, Error_invalidState(0));
+	}
+
+clean:
+	Lock_unlock(&device->lock);
+	return err;
 }

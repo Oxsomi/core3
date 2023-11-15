@@ -87,29 +87,24 @@ Error VkDeviceBuffer_transition(
 
 Bool DeviceBuffer_freeExt(DeviceBuffer *buffer) {
 
-	GraphicsDevice *device = GraphicsDeviceRef_ptr(buffer->device);
-	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
+	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(GraphicsDeviceRef_ptr(buffer->device), Vk);
+
+	if(buffer->writeHandle != U32_MAX || buffer->readHandle != U32_MAX) {
+
+		Lock_lock(&deviceExt->descriptorLock, U64_MAX);
+
+		U32 allocations[2] = { buffer->readHandle, buffer->writeHandle };
+		List allocationList = (List) { 0 };
+		List_createConstRef((const U8*) allocations, 2, sizeof(U32), &allocationList);
+		VkGraphicsDevice_freeAllocations(deviceExt, &allocationList);
+
+		Lock_unlock(&deviceExt->descriptorLock);
+	}
 
 	VkDeviceBuffer *bufferExt = DeviceBuffer_ext(buffer, Vk);
 
-	if(bufferExt->buffer) {
-
-		if(buffer->writeHandle != U32_MAX || buffer->readHandle != U32_MAX) {
-
-			Lock_lock(&deviceExt->descriptorLock, U64_MAX);
-
-			U32 allocations[2] = { buffer->readHandle, buffer->writeHandle };
-			List allocationList = (List) { 0 };
-			List_createConstRef((const U8*) allocations, 2, sizeof(U32), &allocationList);
-			VkGraphicsDevice_freeAllocations(deviceExt, &allocationList);
-
-			Lock_unlock(&deviceExt->descriptorLock);
-		}
-
-		DeviceMemoryAllocator_freeAllocation(&device->allocator, bufferExt->blockId, bufferExt->blockOffset);
-
+	if(bufferExt->buffer)
 		vkDestroyBuffer(deviceExt->device, bufferExt->buffer, NULL);
-	}
 
 	return true;
 }
@@ -275,13 +270,11 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 		#endif
 	}
 
-	*DeviceBuffer_ext(buf, Vk) = (VkDeviceBuffer) {
-		.buffer = tempBuffer,
-		.blockOffset = blockOffset,
-		.mappedMemory = memoryLocation,
-		.blockId = blockId
-	};
-
+	*DeviceBuffer_ext(buf, Vk) = (VkDeviceBuffer) { .buffer = tempBuffer };
+	
+	buf->blockOffset = blockOffset;
+	buf->blockId = blockId;
+	buf->mappedMemory = memoryLocation;
 	buf->readHandle = locationRead;
 	buf->writeHandle = locationWrite;
 
@@ -341,9 +334,9 @@ Error DeviceBufferRef_flush(VkCommandBuffer commandBuffer, GraphicsDeviceRef *de
 			break;
 	}
 
-	if(!isInFlight && bufferExt->mappedMemory) {
+	if(!isInFlight && buffer->mappedMemory) {
 
-		DeviceMemoryBlock block = *(const DeviceMemoryBlock*) List_ptr(device->allocator.blocks, bufferExt->blockId);
+		DeviceMemoryBlock block = *(const DeviceMemoryBlock*) List_ptr(device->allocator.blocks, buffer->blockId);
 		Bool incoherent = !(block.allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
 		if(incoherent) {
@@ -358,7 +351,7 @@ Error DeviceBufferRef_flush(VkCommandBuffer commandBuffer, GraphicsDeviceRef *de
 			U64 start = range.buffer.startRange;
 			U64 len = range.buffer.endRange - range.buffer.startRange;
 
-			Buffer dst = Buffer_createRef((U8*)bufferExt->mappedMemory + start, len);
+			Buffer dst = Buffer_createRef((U8*)buffer->mappedMemory + start, len);
 			Buffer src = Buffer_createConstRef(buffer->cpuData.ptr + start, len);
 
 			Buffer_copy(dst, src);
@@ -367,7 +360,7 @@ Error DeviceBufferRef_flush(VkCommandBuffer commandBuffer, GraphicsDeviceRef *de
 				*(VkMappedMemoryRange*)List_ptr(tempList, j) = (VkMappedMemoryRange) {
 					.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
 					.memory = (VkDeviceMemory) block.ext,
-					.offset = start + bufferExt->blockOffset,
+					.offset = start + buffer->blockOffset,
 					.size = len
 				};
 		}
@@ -381,9 +374,6 @@ Error DeviceBufferRef_flush(VkCommandBuffer commandBuffer, GraphicsDeviceRef *de
 	else {
 
 		//TODO: Copy queue
-
-		if(!deviceExt->staging)
-			_gotoIfError(clean, Error_invalidOperation(0));
 
 		U64 allocRange = 0;
 
@@ -412,9 +402,9 @@ Error DeviceBufferRef_flush(VkCommandBuffer commandBuffer, GraphicsDeviceRef *de
 
 			DeviceBuffer *stagingResource = DeviceBufferRef_ptr(tempStagingResource);
 			VkDeviceBuffer *stagingResourceExt = DeviceBuffer_ext(stagingResource, Vk);
-			U8 *location = stagingResourceExt->mappedMemory;
+			U8 *location = stagingResource->mappedMemory;
 
-			DeviceMemoryBlock block = *(DeviceMemoryBlock*) List_ptr(device->allocator.blocks, stagingResourceExt->blockId);
+			DeviceMemoryBlock block = *(DeviceMemoryBlock*) List_ptr(device->allocator.blocks, stagingResource->blockId);
 			Bool incoherent = !(block.allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
 			//Copy into our buffer
@@ -456,7 +446,7 @@ Error DeviceBufferRef_flush(VkCommandBuffer commandBuffer, GraphicsDeviceRef *de
 				VkMappedMemoryRange memoryRange = (VkMappedMemoryRange) {
 					.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
 					.memory = (VkDeviceMemory) block.ext,
-					.offset = stagingResourceExt->blockOffset,
+					.offset = stagingResource->blockOffset,
 					.size = allocRange
 				};
 
@@ -497,8 +487,9 @@ Error DeviceBufferRef_flush(VkCommandBuffer commandBuffer, GraphicsDeviceRef *de
 
 			_gotoIfError(clean, List_resizex(&pendingCopies, buffer->pendingChanges.length));
 
-			AllocationBuffer *stagingBuffer = &deviceExt->stagingAllocations[device->submitId % 3];
-			VkDeviceBuffer *stagingExt = DeviceBuffer_ext(DeviceBufferRef_ptr(deviceExt->staging), Vk);
+			AllocationBuffer *stagingBuffer = &device->stagingAllocations[device->submitId % 3];
+			DeviceBuffer *staging = DeviceBufferRef_ptr(device->staging);
+			VkDeviceBuffer *stagingExt = DeviceBuffer_ext(staging, Vk);
 
 			U8 *defaultLocation = (U8*) 1, *location = defaultLocation;
 			Error temp = AllocationBuffer_allocateBlockx(stagingBuffer, allocRange, 4, (const U8**) &location);
@@ -524,7 +515,7 @@ Error DeviceBufferRef_flush(VkCommandBuffer commandBuffer, GraphicsDeviceRef *de
 				_gotoIfError(clean, AllocationBuffer_allocateBlockx(stagingBuffer, allocRange, 4, &location));
 			}
 
-			DeviceMemoryBlock block = *(const DeviceMemoryBlock*) List_ptr(device->allocator.blocks, stagingExt->blockId);
+			DeviceMemoryBlock block = *(const DeviceMemoryBlock*) List_ptr(device->allocator.blocks, staging->blockId);
 			Bool incoherent = !(block.allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
 			//Copy into our buffer

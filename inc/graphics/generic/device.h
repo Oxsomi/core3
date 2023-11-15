@@ -26,6 +26,7 @@
 
 typedef struct Error Error;
 typedef RefPtr GraphicsInstanceRef;
+typedef RefPtr DeviceBufferRef;
 
 typedef struct CBufferData {
 
@@ -73,7 +74,18 @@ typedef struct GraphicsDevice {
 
 	List resourcesInFlight[3];	//<RefPtr*> Resources in flight
 
+	Lock lock;					//Lock for submission and marking resources dirty
+
 	DeviceMemoryAllocator allocator;
+
+	//Staging allocations and buffers that are used to transmit/receive data from the device
+
+	DeviceBufferRef *staging;					//Staging buffer split by 3
+	AllocationBuffer stagingAllocations[3];
+
+	//Graphics constants (globals) accessible by all shaders
+
+	DeviceBufferRef *frameData;
 
 } GraphicsDevice;
 
@@ -104,4 +116,4 @@ Bool GraphicsDeviceRef_removePending(GraphicsDeviceRef *deviceRef, RefPtr *resou
 impl Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List commandLists, List swapchains, Buffer appData);
 
 //Wait on previously submitted commands
-impl Error GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef);
+Error GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef);

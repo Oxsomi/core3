@@ -49,7 +49,7 @@ typedef struct DeviceBuffer {
 
 	EDeviceBufferUsage usage;
 	Bool isPendingFullCopy, isPending, isFirstFrame;
-	U8 padding;
+	U8 padding0;
 
 	U32 readHandle, writeHandle;		//Place in heap/descriptor set. First 12 bits are reserved for type and/or version.
 
@@ -58,6 +58,11 @@ typedef struct DeviceBuffer {
 	Buffer cpuData;						//Null if not cpu backed and uploaded. If not cpu backed this will free after upload
 
 	List pendingChanges;				//Pending ranges (DevicePendingRange)
+
+	void *mappedMemory;					//Mapped memory, only accessible through markDirty.
+
+	U64 blockOffset;
+	U32 blockId, padding1;
 
 } DeviceBuffer;
 

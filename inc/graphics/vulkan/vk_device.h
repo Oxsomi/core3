@@ -189,7 +189,6 @@ typedef struct VkGraphicsDevice {
 	VkDescriptorPool descriptorPool;
 
 	VkPhysicalDeviceMemoryProperties memoryProperties;
-	DeviceBufferRef *ubo;
 
 	//Used for allocating descriptors
 
@@ -200,11 +199,6 @@ typedef struct VkGraphicsDevice {
 
 	List waitSemaphores, results, swapchainIndices, swapchainHandles, waitStages;
 	List bufferTransitions, imageTransitions;
-
-	//Staging to get 
-
-	DeviceBufferRef *staging;					//Staging buffer split by 3
-	AllocationBuffer stagingAllocations[3];
 
 } VkGraphicsDevice;
 

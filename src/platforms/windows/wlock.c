@@ -86,9 +86,9 @@ Bool Lock_lock(Lock *l, Ns maxTime) {
 
 Bool Lock_unlock(Lock *l) {
 
-	if (l && l->active && Lock_isLockedForThread(l)) {
-		AtomicI64_and(&l->lockedThreadId, 0);	//Clear thread id
-		return true;
+	if (l && l->active) {
+		U32 tid = Thread_getId();
+		return (U32) AtomicI64_compareExchange(&l->lockedThreadId, tid, 0) == tid;
 	}
 
 	return false;
