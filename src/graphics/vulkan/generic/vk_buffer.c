@@ -183,6 +183,7 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 		buf->usage & EDeviceBufferUsage_CPUAllocatedBit, 
 		&blockId, 
 		&blockOffset,
+		EResourceType_Buffer,
 		name
 	));
 

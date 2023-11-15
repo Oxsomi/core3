@@ -126,6 +126,7 @@ Error DeviceMemoryAllocator_allocate(
 	Bool cpuSided, 
 	U32 *blockId, 
 	U64 *blockOffset,
+	EResourceType resourceType,
 	CharString objectName
 ) {
 
@@ -164,7 +165,8 @@ Error DeviceMemoryAllocator_allocate(
 				!block->ext ||
 				block->isDedicated || 
 				(block->typeExt & memReq.memoryTypeBits) != memReq.memoryTypeBits ||
-				(Bool)(block->allocationTypeExt & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) != !cpuSided
+				(Bool)(block->allocationTypeExt & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) != !cpuSided ||
+				block->resourceType != resourceType
 			)
 				continue;
 
@@ -216,7 +218,8 @@ Error DeviceMemoryAllocator_allocate(
 		.allocationTypeExt = (U16) prop,
 		.isDedicated = isDedicated,
 		.mappedMemory = mappedMem,
-		.ext = mem
+		.ext = mem,
+		.resourceType = resourceType
 	};
 
 	_gotoIfError(clean, AllocationBuffer_createx(alloc.allocationSize, true, &block.allocations));

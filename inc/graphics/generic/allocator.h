@@ -26,6 +26,14 @@
 typedef struct GraphicsDevice GraphicsDevice;
 typedef struct CharString CharString;
 
+typedef enum EResourceType {
+
+	EResourceType_Texture,			//Readonly texture
+	EResourceType_RenderTarget,		//Also depth stencil
+	EResourceType_Buffer			//Any buffer type
+
+} EResourceType;
+
 typedef struct DeviceMemoryBlock {
 
 	AllocationBuffer allocations;
@@ -33,7 +41,7 @@ typedef struct DeviceMemoryBlock {
 	U32 typeExt;				//Resource flags
 
 	Bool isDedicated;
-	U8 padding;
+	U8 resourceType;			//EResourceType
 	U16 allocationTypeExt;		//Allocation type flags (e.g. host visible)
 
 	U8 *mappedMemory;
@@ -61,6 +69,7 @@ impl Error DeviceMemoryAllocator_allocate(
 	Bool cpuSided, 
 	U32 *blockId, 
 	U64 *blockOffset,
+	EResourceType resourceType,
 	CharString objectName				//Name of the object that allocates (for dedicated allocations)
 );
 
