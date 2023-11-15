@@ -69,9 +69,9 @@ Error VkDeviceMemoryAllocator_findMemory(
 	for (U32 i = 0; i < deviceExt->memoryProperties.memoryHeapCount; ++i) {
 
 		VkMemoryHeap heap = deviceExt->memoryProperties.memoryHeaps[i];
-		heap.flags &= 1;													//OOB
+		heap.flags &= 1;														//OOB
 
-		if (heap.size > maxHeapSizes[heap.flags]) {
+		if (heap.size > maxHeapSizes[heap.flags] && heap.size > 256 * MIBI) {	//Ignore 256MB to allow AMD APU to work.
 			maxHeapSizes[heap.flags] = heap.size;
 			heapIds[heap.flags] = i;
 		}
@@ -80,6 +80,11 @@ Error VkDeviceMemoryAllocator_findMemory(
 	if (!maxHeapSizes[0]) {						//If there's only local heaps then we know we're on mobile. Use local heap.
 		maxHeapSizes[0] = maxHeapSizes[1];
 		heapIds[0] = heapIds[1];
+	}
+
+	else if (!maxHeapSizes[1]) {				//If there's only host heaps then we know we're on AMD APU. Use host heap.
+		maxHeapSizes[1] = maxHeapSizes[0];
+		heapIds[1] = heapIds[0];
 	}
 
 	if (!maxHeapSizes[0] || !maxHeapSizes[1])
