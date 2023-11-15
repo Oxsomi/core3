@@ -1049,8 +1049,6 @@ int main() {
 		if(!b)
 			_gotoIfError(clean, Error_invalidState(2));
 
-		printf("Passed encrypt %llu\n", i);
-
 		//Decrypt the encrypted string and verify if it decrypts to the same thing
 
 		_gotoIfError(clean, Buffer_decrypt(
@@ -1079,8 +1077,6 @@ int main() {
 			_gotoIfError(clean, Error_invalidState(4));
 
 		CharString_free(&tmp, alloc);
-
-		printf("Passed decrypt %llu\n", i);
 	}
 
 	//Check for floating point conversions

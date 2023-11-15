@@ -318,8 +318,8 @@
 		return result;
 	}
 
-	I32x4 I32x4_lsh32(I32x4 a, U8 bits) _NONE_OP4I(bits >= 32 ? 0 : a.v[i] << bits)
-	I32x4 I32x4_rsh32(I32x4 a, U8 bits) _NONE_OP4I(bits >= 32 ? 0 : a.v[i] >> bits)
+	I32x4 I32x4_lsh32(I32x4 a, U8 bits) _NONE_OP4I((I32)(bits >= 32 ? 0 : (U32)a.v[i] << bits))
+	I32x4 I32x4_rsh32(I32x4 a, U8 bits) _NONE_OP4I((I32)(bits >= 32 ? 0 : (U32)a.v[i] >> bits))
 
 	I32x4 I32x4_lsh64(I32x4 a, U8 bits) {
 
