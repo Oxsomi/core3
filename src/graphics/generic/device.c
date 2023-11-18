@@ -339,12 +339,25 @@ Bool GraphicsDeviceRef_removePending(GraphicsDeviceRef *deviceRef, RefPtr *resou
 		return false;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+	if(!Lock_lock(&device->lock, U64_MAX))
+		return false;
+
 	U64 found = List_findFirst(device->pendingResources, Buffer_createConstRef(&resource, sizeof(resource)), 0);
+	Bool success = false;
 
-	if(found == U64_MAX)
-		return true;
+	if (found == U64_MAX) {
+		success = true;
+		goto clean;
+	}
 
-	return !List_erase(&device->pendingResources, found).genericError;
+	Error err = Error_none();
+	_gotoIfError(clean, List_erase(&device->pendingResources, found));
+
+	success = true;
+
+clean:
+	Lock_unlock(&device->lock);
+	return success;
 }
 
 impl Error GraphicsDeviceRef_waitExt(GraphicsDeviceRef *deviceRef);

@@ -143,11 +143,16 @@ Error DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count) {
 	buffer->isPending = true;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(buffer->device);
+
+	if(!Lock_lock(&device->lock, U64_MAX))
+		return Error_invalidState(0);
+
 	Error err = List_pushBackx(&device->pendingResources, Buffer_createConstRef(&buf, sizeof(buf)));
 
 	if(err.genericError)
 		List_clear(&buffer->pendingChanges);
 
+	Lock_unlock(&device->lock);
 	return err;
 }
 
