@@ -22,6 +22,7 @@
 #include "graphics/generic/device.h"
 #include "platforms/ext/listx.h"
 #include "platforms/ext/bufferx.h"
+#include "platforms/ext/bufferx.h"
 #include "types/buffer.h"
 #include "types/error.h"
 #include "types/string.h"
@@ -41,16 +42,24 @@ Error DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count) {
 
 	DeviceBuffer *buffer = DeviceBufferRef_ptr(buf);
 
-	if(!(buffer->usage & EDeviceBufferUsage_CPUBacked) && !(buffer->isFirstFrame && !offset && !count))
-		return Error_invalidOperation(0);
-
 	//Check range
 
 	if(offset >= buffer->length || offset + count > buffer->length)
 		return Error_outOfBounds(1, offset + count, buffer->length);
 
+	if(!Lock_lock(&buffer->lock, U64_MAX))
+		return Error_invalidOperation(1);
+
+	Error err = Error_none();
+	Bool lockedDevice = false;
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(buffer->device);
+
 	if(buffer->isPendingFullCopy)		//Already has a full pending change, so no need to check anything.
-		return Error_none();
+		goto clean;
+
+	if(!(buffer->usage & EDeviceBufferUsage_CPUBacked) && !(buffer->isFirstFrame && !offset && !count))
+		_gotoIfError(clean, Error_invalidOperation(2));
 
 	if(!count)
 		count = buffer->length - offset;
@@ -65,12 +74,7 @@ Error DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count) {
 	Bool shouldPush = false;
 
 	if(fullRange) {
-
-		Error err = List_clear(&buffer->pendingChanges);
-
-		if(err.genericError)
-			return err;
-
+		_gotoIfError(clean, List_clear(&buffer->pendingChanges));
 		buffer->isPendingFullCopy = true;
 		shouldPush = true;
 	}
@@ -100,16 +104,10 @@ Error DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count) {
 					}
 
 					else {
-
 						DevicePendingRange last = ((DevicePendingRange*)buffer->pendingChanges.ptr)[lastMatch];
-
 						pending->buffer.startRange = U64_min(pending->buffer.startRange, last.buffer.startRange);
 						pending->buffer.endRange = U64_max(pending->buffer.endRange, last.buffer.endRange);
-
-						Error err = List_erase(&buffer->pendingChanges, lastMatch);
-
-						if(err.genericError)
-							return err;
+						_gotoIfError(clean, List_erase(&buffer->pendingChanges, lastMatch));
 					}
 
 					lastMatch = i;
@@ -125,34 +123,31 @@ Error DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count) {
 	if (shouldPush) {
 
 		if((buffer->pendingChanges.length + 1) >> 32)
-			return Error_outOfBounds(0, U32_MAX, U32_MAX);
+			_gotoIfError(clean, Error_outOfBounds(0, U32_MAX, U32_MAX));
 
 		DevicePendingRange change = (DevicePendingRange) { .buffer = { .startRange = offset, .endRange = offset + count } };
-
-		Error err = List_pushBackx(&buffer->pendingChanges, Buffer_createConstRef(&change, sizeof(change)));
-
-		if(err.genericError)
-			return err;
+		_gotoIfError(clean, List_pushBackx(&buffer->pendingChanges, Buffer_createConstRef(&change, sizeof(change))));
 	}
 
 	//Tell the device that on next submit it should handle copies from 
 
 	if(buffer->isPending)
-		return Error_none();
+		goto clean;
 
 	buffer->isPending = true;
 
-	GraphicsDevice *device = GraphicsDeviceRef_ptr(buffer->device);
-
 	if(!Lock_lock(&device->lock, U64_MAX))
-		return Error_invalidState(0);
+		_gotoIfError(clean, Error_invalidState(0));
 
-	Error err = List_pushBackx(&device->pendingResources, Buffer_createConstRef(&buf, sizeof(buf)));
+	lockedDevice = true;
+	_gotoIfError(clean, List_pushBackx(&device->pendingResources, Buffer_createConstRef(&buf, sizeof(buf))));
 
-	if(err.genericError)
-		List_clear(&buffer->pendingChanges);
+clean:
 
-	Lock_unlock(&device->lock);
+	if(lockedDevice)
+		Lock_unlock(&device->lock);
+
+	Lock_unlock(&buffer->lock);
 	return err;
 }
 
@@ -166,8 +161,9 @@ Bool DeviceBuffer_free(DeviceBuffer *buffer, Allocator allocator) {
 
 	RefPtr *refPtr = (RefPtr*)((const U8*)buffer - sizeof(RefPtr));
 
-	GraphicsDevice *device = GraphicsDeviceRef_ptr(buffer->device);
+	Lock_free(&buffer->lock);
 
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(buffer->device);
 	DeviceMemoryAllocator_freeAllocation(&device->allocator, buffer->blockId, buffer->blockOffset);
 
 	Bool success = DeviceBuffer_freeExt(buffer);
@@ -232,6 +228,7 @@ Error GraphicsDeviceRef_createBuffer(
 	locked = true;
 
 	_gotoIfError(clean, GraphicsDeviceRef_createBufferExt(dev, buffer, name));
+	_gotoIfError(clean, Lock_create(&buffer->lock));
 
 clean:
 

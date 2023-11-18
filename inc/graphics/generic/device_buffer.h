@@ -20,6 +20,7 @@
 
 #pragma once
 #include "platforms/ref_ptr.h"
+#include "platforms/lock.h"
 #include "types/list.h"
 
 typedef RefPtr GraphicsDeviceRef;
@@ -63,6 +64,8 @@ typedef struct DeviceBuffer {
 
 	U64 blockOffset;
 	U32 blockId, padding1;
+
+	Lock lock;
 
 } DeviceBuffer;
 
