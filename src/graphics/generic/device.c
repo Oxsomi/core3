@@ -198,10 +198,6 @@ Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 	if(!device)
 		return true;
 
-	Lock_free(&device->lock);
-	Lock_free(&device->allocator.lock);
-	List_freex(&device->pendingResources);
-
 	for(U64 i = 0; i < sizeof(device->resourcesInFlight) / sizeof(device->resourcesInFlight[0]); ++i) {
 
 		for(U64 j = 0; j < device->resourcesInFlight[i].length; ++j)
@@ -212,6 +208,10 @@ Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 
 	DeviceBufferRef_dec(&device->frameData);
 	DeviceBufferRef_dec(&device->staging);
+
+	Lock_free(&device->lock);
+	Lock_free(&device->allocator.lock);
+	List_freex(&device->pendingResources);
 
 	for(U64 i = 0; i < sizeof(device->stagingAllocations) / sizeof(device->stagingAllocations[0]); ++i)
 		AllocationBuffer_freex(&device->stagingAllocations[i]);
@@ -332,7 +332,9 @@ Bool GraphicsDeviceRef_removePending(GraphicsDeviceRef *deviceRef, RefPtr *resou
 		return false;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
-	if(!Lock_lock(&device->lock, U64_MAX))
+	ELockAcquire acq = Lock_lock(&device->lock, U64_MAX);
+
+	if(acq < ELockAcquire_Success)
 		return false;
 
 	U64 found = List_findFirst(device->pendingResources, Buffer_createConstRef(&resource, sizeof(resource)), 0);
@@ -349,7 +351,10 @@ Bool GraphicsDeviceRef_removePending(GraphicsDeviceRef *deviceRef, RefPtr *resou
 	success = true;
 
 clean:
-	Lock_unlock(&device->lock);
+
+	if(acq == ELockAcquire_Acquired)
+		Lock_unlock(&device->lock);
+
 	return success;
 }
 
@@ -471,14 +476,15 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 	Error err = Error_none();
 
 	Lock *lockPtr = &device->lock;
+	ELockAcquire acq = Lock_lock(lockPtr, U64_MAX);
 
-	if((err = List_pushBackx(&device->currentLocks, Buffer_createConstRef(&lockPtr, sizeof(Lock*)))).genericError)
-		return err;
-
-	if(!Lock_lock(&device->lock, U64_MAX)) {
-		List_popBack(&device->currentLocks, Buffer_createNull());
+	if(acq < ELockAcquire_Success)
 		return Error_invalidState(0);
-	}
+
+	if(acq == ELockAcquire_Acquired)
+		_gotoIfError(clean, List_pushBackx(&device->currentLocks, Buffer_createConstRef(&lockPtr, sizeof(Lock*))));
+
+	lockPtr = NULL;
 
 	//Validate command lists
 
@@ -495,13 +501,17 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 			_gotoIfError(clean, Error_unsupportedOperation(0));
 
 		lockPtr = &cmd->lock;
+		acq = Lock_lock(lockPtr, U64_MAX);
 
-		_gotoIfError(clean, List_pushBackx(&device->currentLocks, Buffer_createConstRef(&lockPtr, sizeof(Lock*))));
-
-		if(!Lock_lock(lockPtr, U64_MAX)) {
-			List_popBack(&device->currentLocks, Buffer_createNull());
+		if(acq < ELockAcquire_Success) {
+			lockPtr = NULL;
 			_gotoIfError(clean, Error_invalidState(1));
 		}
+
+		if(acq == ELockAcquire_Acquired)
+			_gotoIfError(clean, List_pushBackx(&device->currentLocks, Buffer_createConstRef(&lockPtr, sizeof(Lock*))));
+
+		lockPtr = NULL;
 
 		if(cmd->state != ECommandListState_Closed)
 			_gotoIfError(clean, Error_invalidParameter(1, (U32)i));
@@ -526,13 +536,17 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 			_gotoIfError(clean, Error_unsupportedOperation(1));
 
 		lockPtr = &swapchaini->lock;
+		acq = Lock_lock(lockPtr, U64_MAX);
 
-		_gotoIfError(clean, List_pushBackx(&device->currentLocks, Buffer_createConstRef(&lockPtr, sizeof(Lock*))));
-
-		if(!Lock_lock(lockPtr, U64_MAX)) {
-			List_popBack(&device->currentLocks, Buffer_createNull());
+		if(acq < ELockAcquire_Success) {
+			lockPtr = NULL;
 			_gotoIfError(clean, Error_invalidState(2));
 		}
+
+		if(acq == ELockAcquire_Acquired)
+			_gotoIfError(clean, List_pushBackx(&device->currentLocks, Buffer_createConstRef(&lockPtr, sizeof(Lock*))));
+
+		lockPtr = NULL;
 
 		//Validate if the swapchain with a different version is bound, if yes, we have a stale cmdlist
 
@@ -556,8 +570,6 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 
 	for(U64 i = 0; i < device->pendingResources.length; ++i) {
 
-		Lock *lock = NULL;
-
 		WeakRefPtr *res = *(WeakRefPtr* const *) List_ptrConst(device->pendingResources, i);
 
 		EGraphicsTypeId id = (EGraphicsTypeId) res->typeId;
@@ -565,24 +577,27 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 		switch (id) {
 
 			case EGraphicsTypeId_DeviceBuffer:
-				lock = &DeviceBufferRef_ptr(res)->lock;
+				lockPtr = &DeviceBufferRef_ptr(res)->lock;
 				break;
 
 			default:
 				_gotoIfError(clean, Error_unimplemented(0));	//TODO: DeviceTexture
 		}
 
-		if(!lock)
+		if(!lockPtr)
 			continue;
 
-		Buffer buf = Buffer_createConstRef(&lock, sizeof(Lock*));
+		acq = Lock_lock(lockPtr, U64_MAX);
 
-		_gotoIfError(clean, List_pushBackx(&device->currentLocks, buf));
-
-		if(!Lock_lock(lock, U64_MAX)) {
-			List_popBack(&device->currentLocks, Buffer_createNull());
-			_gotoIfError(clean, Error_invalidState(3));
+		if(acq < ELockAcquire_Success) {
+			lockPtr = NULL;
+			_gotoIfError(clean, Error_invalidState(2));
 		}
+
+		if(acq == ELockAcquire_Acquired)
+			_gotoIfError(clean, List_pushBackx(&device->currentLocks, Buffer_createConstRef(&lockPtr, sizeof(Lock*))));
+
+		lockPtr = NULL;
 	}
 
 	//Set app data
@@ -622,8 +637,8 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 			if(List_contains(*currentFlight, bufi, 0))
 				continue;
 
-			RefPtr_inc(ptr);
 			_gotoIfError(clean, List_pushBackx(currentFlight, bufi));
+			RefPtr_inc(ptr);
 		}
 	}
 
@@ -638,6 +653,9 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 	device->pendingBytes = 0;
 
 clean:
+
+	if(lockPtr)
+		Lock_unlock(lockPtr);
 
 	for(U64 i = 0; i < device->currentLocks.length; ++i)
 		Lock_unlock(*(Lock**)List_ptr(device->currentLocks, i));
@@ -655,7 +673,9 @@ Error GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef) {
 
 	Error err = Error_none();
 	
-	if(!Lock_lock(&device->lock, U64_MAX))
+	ELockAcquire acq = Lock_lock(&device->lock, U64_MAX);
+
+	if(acq < ELockAcquire_Success)
 		return Error_invalidOperation(0);
 
 	_gotoIfError(clean, GraphicsDeviceRef_waitExt(deviceRef));
@@ -680,6 +700,9 @@ Error GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef) {
 	}
 
 clean:
-	Lock_unlock(&device->lock);
+
+	if(acq == ELockAcquire_Acquired)
+		Lock_unlock(&device->lock);
+
 	return err;
 }

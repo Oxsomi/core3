@@ -50,7 +50,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 	Error err = Error_none();
 	CharString temp = CharString_createNull();
 	List list = List_createEmpty(sizeof(VkSurfaceFormatKHR));
-	Bool lock = false;
+	ELockAcquire acq = ELockAcquire_Invalid;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	VkSwapchain *swapchainExt = Swapchain_ext(swapchain, Vk);
@@ -309,10 +309,10 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 
 		instance->destroySwapchain(deviceExt->device, prevSwapchain, NULL);
 
-		if(!Lock_lock(&deviceExt->descriptorLock, U64_MAX))
-			_gotoIfError(clean, Error_invalidOperation(0));
+		acq = Lock_lock(&deviceExt->descriptorLock, U64_MAX);
 
-		lock = true;
+		if(acq < ELockAcquire_Success)
+			_gotoIfError(clean, Error_invalidOperation(0));
 
 		if(!VkGraphicsDevice_freeAllocations(deviceExt, &swapchainExt->descriptorAllocations))
 			_gotoIfError(clean, Error_invalidOperation(1));
@@ -442,10 +442,13 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 	list = List_createEmpty(sizeof(VkWriteDescriptorSet));
 	_gotoIfError(clean, List_resizex(&list, swapchainExt->descriptorAllocations.length));
 
-	if(!lock && !Lock_lock(&deviceExt->descriptorLock, U64_MAX))
-		_gotoIfError(clean, Error_invalidState(0));
+	if(acq < ELockAcquire_Success) {
 
-	lock = true;
+		acq = Lock_lock(&deviceExt->descriptorLock, U64_MAX);
+
+		if(acq < ELockAcquire_Success)
+			_gotoIfError(clean, Error_invalidState(0));
+	}
 
 	VkDescriptorImageInfo imageInfo[6];
 
@@ -515,8 +518,10 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 	vkUpdateDescriptorSets(deviceExt->device, (U32) list.length, (const VkWriteDescriptorSet*) list.ptr, 0, NULL);
 	List_freex(&list);
 
-	Lock_unlock(&deviceExt->descriptorLock);
-	lock = false;
+	if(acq == ELockAcquire_Acquired)
+		Lock_unlock(&deviceExt->descriptorLock);
+
+	acq = ELockAcquire_Invalid;
 	
 	#ifndef NDEBUG
 
@@ -577,7 +582,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 
 clean:
 
-	if(lock)
+	if(acq == ELockAcquire_Acquired)
 		Lock_unlock(&deviceExt->descriptorLock);
 	
 	CharString_freex(&temp);

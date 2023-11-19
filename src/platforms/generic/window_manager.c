@@ -61,17 +61,11 @@ Bool WindowManager_free(WindowManager *manager) {
 	if(!manager || !manager->lock.active)
 		return true;
 
-	if(!WindowManager_lock(manager, 5 * SECOND))
-		return false;
-
+	Lock_free(&manager->lock);
 	List_freex(&manager->windows);
-	
-	if(!WindowManager_unlock(manager))
-		return false;
-
-	Bool freed = Lock_free(&manager->lock);
 	*manager = (WindowManager) { 0 };
-	return freed;
+
+	return true;
 }
 
 void WindowManager_virtualWindowLoop(Window *w) {
@@ -80,26 +74,40 @@ void WindowManager_virtualWindowLoop(Window *w) {
 
 		while(!(w->flags & EWindowFlags_ShouldThreadTerminate)) {
 
-			if(Lock_lock(&w->lock, 5 * SECOND)) {
+			ELockAcquire acq = Lock_lock(&w->lock, 5 * SECOND);
+
+			if(acq >= ELockAcquire_Success) {
 
 				w->isDrawing = true;
 				w->callbacks.onDraw(w);
 				w->isDrawing = false;
 
-				Lock_unlock(&w->lock);
+				if(acq == ELockAcquire_Acquired)
+					Lock_unlock(&w->lock);
 			}
 		}
 	}
 
 	//Ensure we're allowed to free
 
-	while (!Lock_lock(&Platform_instance.windowManager.lock, 1 * SECOND)) { }
+	ELockAcquire acq0 = Lock_lock(&Platform_instance.windowManager.lock, U64_MAX);
+	Error err = Error_none();
 
-	Lock_lock(&w->lock, 1 * SECOND);
+	if(acq0 < ELockAcquire_Success)
+		_gotoIfError(clean, Error_invalidState(0));
+
+	if(Lock_lock(&w->lock, U64_MAX) < ELockAcquire_Success)
+		_gotoIfError(clean, Error_invalidState(1));
 
 	WindowManager_freeVirtual(&Platform_instance.windowManager, &w);
-	Lock_unlock(&Platform_instance.windowManager.lock);
 
+clean:
+
+	if(acq0 == ELockAcquire_Acquired)
+		Lock_unlock(&Platform_instance.windowManager.lock);
+
+	if(err.genericError)
+		Error_printx(err, ELogLevel_Error, ELogOptions_Default);
 }
 
 Error WindowManager_createVirtual(
@@ -250,7 +258,7 @@ inline U16 WindowManager_getEmptyWindows(WindowManager manager) {
 	return v;
 }
 
-Error WindowManager_waitForExitAll(WindowManager *manager, Ns maxTimeout) {
+Error WindowManager_waitForExitAll(WindowManager *manager) {
 
 	if(!manager || !manager->lock.active)
 		return Error_nullPointer(0);
@@ -258,35 +266,37 @@ Error WindowManager_waitForExitAll(WindowManager *manager, Ns maxTimeout) {
 	//Checking for WindowManager is a lot easier, as we can just acquire the lock
 	//And check how many windows are active
 
-	Ns start = Time_now();
+	Error err = Error_none();
+	ELockAcquire acq = ELockAcquire_Invalid;
 
-	if(!WindowManager_lock(manager, maxTimeout))
-		return Error_invalidOperation(0);
+	acq = Lock_lock(&manager->lock, U64_MAX);
+
+	if(acq < ELockAcquire_Success)
+		return Error_invalidState(0);
 
 	//Check if we should exit
 
 	if(WindowManager_getEmptyWindows(*manager) == WindowManager_maxWindows())
-		return WindowManager_unlock(manager) ? Error_none() : Error_invalidOperation(1);
+		goto clean;
 
-	//Now we have to make sure we still have time left to wait
+	Lock_unlock(&manager->lock);
+	acq = ELockAcquire_Invalid;
 
-	maxTimeout = U64_min(maxTimeout, I64_MAX);
+	//Keep checking
 
-	Ns left = (Ns) I64_max(0, maxTimeout - (DNs)(Time_now() - start));
-
-	//Keep checking until we run out of time
-
-	while(left > 0) {
+	while(true) {
 
 		//Try to reacquire the lock
 
-		while(!Lock_isLockedForThread(&manager->lock) && !Lock_lock(&manager->lock, left))
-			Thread_sleep(1 * MS);
+		acq = Lock_lock(&manager->lock, U64_MAX);
+
+		if(acq < ELockAcquire_Success)
+			return Error_invalidState(0);
 
 		//Our windows have been released!
 
-		if(WindowManager_getEmptyWindows(*manager) == WindowManager_maxWindows()) 
-			return WindowManager_unlock(manager) ? Error_none() : Error_invalidOperation(3);
+		if(WindowManager_getEmptyWindows(*manager) == WindowManager_maxWindows())
+			goto clean;
 
 		//Grab our virtual windows, to ensure we complete them
 		//The virtual window should properly exit if it's completed
@@ -306,21 +316,19 @@ Error WindowManager_waitForExitAll(WindowManager *manager, Ns maxTimeout) {
 
 		//Release the lock to check for the next time
 
-		if(!WindowManager_unlock(manager))
-			return Error_invalidOperation(4);
+		Lock_unlock(&manager->lock);
+		acq = ELockAcquire_Invalid;
 
 		//Wait to ensure we don't waste cycles
 		//Virtual windows are allowed to update as fast as possible though
 		
 		if(!containsVirtualWindow)
-			Thread_sleep(10 * MS);
-
-		//
-
-		left = (Ns) I64_max(0, maxTimeout - (DNs)(Time_now() - start));
+			Thread_sleep(1 * MS);
 	}
 
-	return Error_timedOut(0, maxTimeout);
+clean:
+	Lock_unlock(&manager->lock);
+	return err;
 }
 
 Error WindowManager_adaptSizes(I32x2 *sizep, I32x2 *minSizep, I32x2 *maxSizep) {
@@ -408,14 +416,6 @@ Bool WindowManager_freeWindow(WindowManager *manager, Window **w) {
 
 WindowHandle WindowManager_maxWindows() {
 	return (WindowHandle) WindowManager_MAX_VIRTUAL_WINDOWS + WindowManager_MAX_PHYSICAL_WINDOWS;
-}
-
-Bool WindowManager_lock(WindowManager *manager, Ns maxTimeout) {
-	return manager && Lock_lock(&manager->lock, maxTimeout);
-}
-
-Bool WindowManager_unlock(WindowManager *manager) {
-	return manager && Lock_unlock(&manager->lock);
 }
 
 //Simple helper functions (need locks)

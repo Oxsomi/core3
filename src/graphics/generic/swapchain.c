@@ -41,7 +41,7 @@ Error Swapchain_resize(Swapchain *swapchain) {
 	if(!swapchain)
 		return Error_nullPointer(0);
 
-	if(!Lock_lock(&swapchain->lock, U64_MAX))
+	if(Lock_lock(&swapchain->lock, U64_MAX) != ELockAcquire_Acquired)
 		return Error_invalidState(0);
 
 	//Resize with same format and same size is a NOP

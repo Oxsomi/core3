@@ -242,7 +242,8 @@ Error VkDeviceMemoryAllocator_findMemory(
 	Bool cpuSided, 
 	U32 memoryBits, 
 	U32 *memoryId,
-	VkMemoryPropertyFlags *propertyFlags
+	VkMemoryPropertyFlags *propertyFlags,
+	U64 *size
 );
 
 //Lower 20 bit: id

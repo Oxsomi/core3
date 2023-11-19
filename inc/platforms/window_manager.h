@@ -58,7 +58,7 @@ impl Error WindowManager_createPhysical(
 
 impl Bool WindowManager_freePhysical(WindowManager *manager, Window **handle);
 
-Error WindowManager_waitForExitAll(WindowManager *manager, Ns maxTimeout);
+Error WindowManager_waitForExitAll(WindowManager *manager);
 
 Error WindowManager_createVirtual(
 	WindowManager *manager, 
@@ -75,9 +75,6 @@ Bool WindowManager_freeVirtual(WindowManager *manager, Window **handle);
 impl Bool WindowManager_supportsFormat(WindowManager manager, EWindowFormat format);
 
 WindowHandle WindowManager_maxWindows();
-
-Bool WindowManager_lock(WindowManager *manager, Ns maxTimeout);
-Bool WindowManager_unlock(WindowManager *manager);
 
 //Simple helper functions (need locks)
 

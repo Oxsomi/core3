@@ -45,14 +45,14 @@ Bool Lock_free(Lock *res) {
 	if(!res || !res->active)
 		return true;
 
-	if(!Lock_lock(res, U64_MAX))
+	if (Lock_lock(res, U64_MAX) < ELockAcquire_Success)
 		return false;
 
 	*res = (Lock){ 0 };
 	return true;
 }
 
-Bool Lock_lock(Lock *l, Ns maxTime) {
+ELockAcquire Lock_lock(Lock *l, Ns maxTime) {
 
 	if (l && l->active) {
 
@@ -60,28 +60,28 @@ Bool Lock_lock(Lock *l, Ns maxTime) {
 		I64 prevValue = AtomicI64_compareExchange(&l->lockedThreadId, 0, tid);
 
 		if(prevValue == tid)		//Already locked
-			return true;
+			return ELockAcquire_AlreadyLocked;
 
 		//If the previous result was not 0 then it means someone already locked this.
 		//We have to wait for it and attempt to lock it again.
 		//It's possible that within this time someone else is waiting for it and locked it before us.
 		//So we have to wait in a loop.
 
-		Ns time = Time_now();
+		Ns time = maxTime == U64_MAX ? 0 : Time_now();
 
 		while(prevValue != 0) {
 
 			Thread_sleep(100 * MU);
 			prevValue = AtomicI64_compareExchange(&l->lockedThreadId, 0, tid);
 
-			if(Time_now() - time >= maxTime)
-				return false;
+			if(maxTime != U64_MAX && Time_now() - time >= maxTime)
+				return ELockAcquire_TimedOut;
 		}
 
-		return prevValue == 0;
+		return prevValue == 0 ? ELockAcquire_Acquired : ELockAcquire_Invalid;
 	}
 
-	return false;
+	return ELockAcquire_Invalid;
 }
 
 Bool Lock_unlock(Lock *l) {

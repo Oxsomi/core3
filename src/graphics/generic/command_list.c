@@ -62,15 +62,6 @@ Error CommandListRef_inc(CommandListRef *cmd) {
 	if(!(commandList->tempStateFlags & ECommandStateFlags_HasScope))	\
 		_gotoIfError(label, Error_invalidOperation(0));
 
-void CommandList_unlockSwapchains(CommandList *commandList) {
-
-	for (U64 i = 0; i < commandList->activeSwapchains.length; ++i) {
-		RefPtr *res = (*(const DeviceResourceVersion*) List_ptrConst(commandList->activeSwapchains, i)).resource;
-		Swapchain *swapchain = SwapchainRef_ptr(res);
-		Lock_unlock(&swapchain->lock);
-	}
-}
-
 Error CommandListRef_clear(CommandListRef *commandListRef) {
 
 	CommandListRef_validate(commandListRef);
@@ -89,8 +80,6 @@ Error CommandListRef_clear(CommandListRef *commandListRef) {
 	_gotoIfError(clean, List_clear(&commandList->transitions));
 	_gotoIfError(clean, List_clear(&commandList->activeScopes));
 
-	CommandList_unlockSwapchains(commandList);
-
 	_gotoIfError(clean, List_clear(&commandList->activeSwapchains));
 
 	commandList->next = 0;
@@ -106,7 +95,7 @@ Error CommandListRef_begin(CommandListRef *commandListRef, Bool doClear, U64 loc
 
 	CommandList *commandList = CommandListRef_ptr(commandListRef);
 
-	if(!Lock_lock(&commandList->lock, lockTimeout))
+	if(Lock_lock(&commandList->lock, lockTimeout) != ELockAcquire_Acquired)
 		return Error_invalidOperation(0);
 
 	Error err = Error_none();
@@ -129,20 +118,33 @@ Error CommandListRef_begin(CommandListRef *commandListRef, Bool doClear, U64 loc
 			RefPtr *res = v.resource;
 			Swapchain *swapchain = SwapchainRef_ptr(res);
 
-			if(!Lock_lock(&swapchain->lock, U64_MAX))
+			if(Lock_lock(&swapchain->lock, U64_MAX) != ELockAcquire_Acquired)
 				_gotoIfError(clean, Error_invalidOperation(0));
 
 			if(swapchain->versionId != v.version) {
 				++activeSwapchains;
 				_gotoIfError(clean, Error_invalidOperation(1));
 			}
+
+			Lock_unlock(&swapchain->lock);
 		}
 	}
 
 clean:
 
 	if(err.genericError) {
-		List_resize(&commandList->activeSwapchains, activeSwapchains, (Allocator) { 0 });		//Unacquired locks
+
+		for (U64 i = 0; i < activeSwapchains; ++i) {
+
+			DeviceResourceVersion v = *(const DeviceResourceVersion*) List_ptrConst(
+				commandList->activeSwapchains, activeSwapchains
+			);
+
+			Lock_unlock(&SwapchainRef_ptr(v.resource)->lock);
+		}
+
+		List_clear(&commandList->activeSwapchains);
+
 		commandList->state = ECommandListState_Invalid;
 		Lock_unlock(&commandList->lock);
 	}
@@ -174,7 +176,6 @@ Error CommandListRef_end(CommandListRef *commandListRef) {
 		}
 	}
 
-	CommandList_unlockSwapchains(commandList);
 	commandList->state = ECommandListState_Closed;
 
 clean:
@@ -1271,17 +1272,25 @@ Error CommandListRef_startRenderExt(
 			if(SwapchainRef_ptr(info.image)->device != commandList->device)
 				_gotoIfError(clean, Error_unsupportedOperation(3));
 
-			if(!Lock_lock(&swapchain->lock, U64_MAX))
+			ELockAcquire acq = Lock_lock(&swapchain->lock, U64_MAX);
+
+			if(acq < ELockAcquire_Success)
 				_gotoIfError(clean, Error_invalidState(0));
 
 			DeviceResourceVersion v = (DeviceResourceVersion) { .resource = info.image, .version = swapchain->versionId };
 			Buffer buf = Buffer_createConstRef(&v, sizeof(v));
 
 			if(!List_contains(commandList->activeSwapchains, buf, 0)) {
-				toRelease = &swapchain->lock;
+
+				if(acq == ELockAcquire_Acquired)
+					toRelease = &swapchain->lock;
+
 				_gotoIfError(clean, List_pushBackx(&commandList->activeSwapchains, buf));
 				toRelease = NULL;
 			}
+
+			if(acq == ELockAcquire_Acquired)
+				Lock_unlock(&swapchain->lock);
 
 			if(!counter)
 				targetSize = swapchain->size;
@@ -1486,7 +1495,7 @@ Bool CommandList_free(CommandList *cmd, Allocator alloc) {
 
 	alloc;
 
-	Lock_lock(&cmd->lock, U64_MAX);
+	Lock_free(&cmd->lock);
 
 	for (U64 i = 0; i < cmd->resources.length; ++i) {
 
@@ -1505,8 +1514,6 @@ Bool CommandList_free(CommandList *cmd, Allocator alloc) {
 	Buffer_freex(&cmd->data);
 
 	GraphicsDeviceRef_dec(&cmd->device);
-
-	Lock_free(&cmd->lock);
 
 	return true;
 }

@@ -39,7 +39,18 @@ impl Bool Lock_free(Lock *res);
 //As a different unit by the runtime.
 //Ex. Windows uses ms so it'll round up to ms
 
-impl Bool Lock_lock(Lock *l, Ns maxTime);
+typedef enum ELockAcquire {
+
+	ELockAcquire_Invalid = -2,
+	ELockAcquire_TimedOut = -1,
+	ELockAcquire_Acquired = 0,
+	ELockAcquire_AlreadyLocked = 1,
+
+	ELockAcquire_Success = 0			//Anything geq this is success
+
+} ELockAcquire;
+
+impl ELockAcquire Lock_lock(Lock *l, Ns maxTime);
 
 impl Bool Lock_unlock(Lock *l);
 

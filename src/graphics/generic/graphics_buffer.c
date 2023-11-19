@@ -47,11 +47,13 @@ Error DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count) {
 	if(offset >= buffer->length || offset + count > buffer->length)
 		return Error_outOfBounds(1, offset + count, buffer->length);
 
-	if(!Lock_lock(&buffer->lock, U64_MAX))
+	ELockAcquire acq0 = Lock_lock(&buffer->lock, U64_MAX);
+
+	if(acq0 < ELockAcquire_Success)
 		return Error_invalidOperation(1);
 
 	Error err = Error_none();
-	Bool lockedDevice = false;
+	ELockAcquire acq1 = ELockAcquire_Invalid;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(buffer->device);
 
@@ -136,18 +138,21 @@ Error DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count) {
 
 	buffer->isPending = true;
 
-	if(!Lock_lock(&device->lock, U64_MAX))
+	acq1 = Lock_lock(&device->lock, U64_MAX);
+
+	if(acq1 < ELockAcquire_Success)
 		_gotoIfError(clean, Error_invalidState(0));
 
-	lockedDevice = true;
 	_gotoIfError(clean, List_pushBackx(&device->pendingResources, Buffer_createConstRef(&buf, sizeof(buf))));
 
 clean:
 
-	if(lockedDevice)
+	if(acq1 == ELockAcquire_Acquired)
 		Lock_unlock(&device->lock);
 
-	Lock_unlock(&buffer->lock);
+	if(acq0 == ELockAcquire_Acquired)
+		Lock_unlock(&buffer->lock);
+
 	return err;
 }
 
@@ -201,7 +206,7 @@ Error GraphicsDeviceRef_createBuffer(
 	if(err.genericError)
 		return err;
 
-	Bool locked = false;
+	ELockAcquire acq = ELockAcquire_Invalid;
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(dev);
 
 	//Init DeviceBuffer
@@ -224,15 +229,17 @@ Error GraphicsDeviceRef_createBuffer(
 	if(usage & EDeviceBufferUsage_CPUBacked)
 		_gotoIfError(clean, Buffer_createEmptyBytesx(buffer->length, &buffer->cpuData));
 
-	Lock_lock(&device->allocator.lock, U64_MAX);
-	locked = true;
+	acq = Lock_lock(&device->allocator.lock, U64_MAX);
+
+	if(acq < ELockAcquire_Success)
+		_gotoIfError(clean, Error_invalidState(0));
 
 	_gotoIfError(clean, GraphicsDeviceRef_createBufferExt(dev, buffer, name));
 	_gotoIfError(clean, Lock_create(&buffer->lock));
 
 clean:
 
-	if(locked)
+	if(acq == ELockAcquire_Acquired)
 		Lock_unlock(&device->allocator.lock);
 
 	if(err.genericError)

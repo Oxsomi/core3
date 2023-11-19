@@ -73,14 +73,18 @@ Error Window_waitForExit(Window *w, Ns maxTimeout) {
 	//We lock to check window state
 	//If there's no lock, then we've already been released
 
-	if(!Lock_lock(&w->lock, maxTimeout))
+	ELockAcquire acq;
+
+	if((acq = Lock_lock(&w->lock, maxTimeout)) != ELockAcquire_Acquired)
 		return Error_invalidOperation(0);
 
 	//If our window isn't marked as active, then our window is gone
 	//We've successfully waited
 
+	Error err = Error_none();
+
 	if (!(w->flags & EWindowFlags_IsActive))
-		return Error_none();
+		goto clean;
 
 	//Now we have to make sure we still have time left to wait
 
@@ -90,8 +94,8 @@ Error Window_waitForExit(Window *w, Ns maxTimeout) {
 
 	//Release the lock, because otherwise our window can't resume itself
 
-	if(!Lock_unlock(&w->lock))
-		return Error_invalidOperation(1);
+	Lock_unlock(&w->lock);
+	acq = ELockAcquire_Invalid;
 
 	//Keep checking until we run out of time
 
@@ -105,13 +109,13 @@ Error Window_waitForExit(Window *w, Ns maxTimeout) {
 
 		//Try to reacquire the lock
 
-		if(!Lock_lock(&w->lock, left))
-			return Error_invalidOperation(2);
+		if((acq = Lock_lock(&w->lock, left)) != ELockAcquire_Acquired)
+			_gotoIfError(clean, Error_invalidOperation(2));
 
 		//Our window has been released!
 
 		if (!(w->flags & EWindowFlags_IsActive))
-			return Error_none();
+			goto clean;
 
 		//Virtual windows can draw really quickly
 
@@ -120,13 +124,18 @@ Error Window_waitForExit(Window *w, Ns maxTimeout) {
 
 		//Release the lock to check for the next time
 
-		if(!Lock_unlock(&w->lock))
-			return Error_invalidOperation(3);
+		Lock_unlock(&w->lock);
+		acq = ELockAcquire_Invalid;
 
 		//
 
 		left = (Ns) I64_max(0, maxTimeout - (DNs)(Time_now() - start));
 	}
+
+clean:
+	
+	if(acq == ELockAcquire_Acquired)
+		Lock_free(&w->lock);
 
 	return Error_timedOut(0, maxTimeout);
 }

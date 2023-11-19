@@ -91,14 +91,17 @@ Bool DeviceBuffer_freeExt(DeviceBuffer *buffer) {
 
 	if(buffer->writeHandle != U32_MAX || buffer->readHandle != U32_MAX) {
 
-		Lock_lock(&deviceExt->descriptorLock, U64_MAX);
+		ELockAcquire acq = Lock_lock(&deviceExt->descriptorLock, U64_MAX);
 
-		U32 allocations[2] = { buffer->readHandle, buffer->writeHandle };
-		List allocationList = (List) { 0 };
-		List_createConstRef((const U8*) allocations, 2, sizeof(U32), &allocationList);
-		VkGraphicsDevice_freeAllocations(deviceExt, &allocationList);
+		if(acq >= ELockAcquire_Success) {
+			U32 allocations[2] = { buffer->readHandle, buffer->writeHandle };
+			List allocationList = (List) { 0 };
+			List_createConstRef((const U8*) allocations, 2, sizeof(U32), &allocationList);
+			VkGraphicsDevice_freeAllocations(deviceExt, &allocationList);
+		}
 
-		Lock_unlock(&deviceExt->descriptorLock);
+		if(acq == ELockAcquire_Acquired)
+			Lock_unlock(&deviceExt->descriptorLock);
 	}
 
 	VkDeviceBuffer *bufferExt = DeviceBuffer_ext(buffer, Vk);
@@ -146,11 +149,11 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 	};
 
 	Error err = Error_none();
+	ELockAcquire acq = ELockAcquire_Invalid;
 
 	U32 blockId = U32_MAX;
 	U64 blockOffset = 0;
 
-	Bool lock = false;
 	U32 locationRead = U32_MAX;
 	U32 locationWrite = U32_MAX;
 
@@ -196,10 +199,10 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 
 	if(buf->usage & (EDeviceBufferUsage_ShaderRead | EDeviceBufferUsage_ShaderWrite)) {
 
-		if(!lock && !Lock_lock(&deviceExt->descriptorLock, U64_MAX))
-			_gotoIfError(clean, Error_invalidState(0));
+		acq = Lock_lock(&deviceExt->descriptorLock, U64_MAX);
 
-		lock = true;
+		if(acq < ELockAcquire_Success)
+			_gotoIfError(clean, Error_invalidState(0));
 
 		//Create readonly buffer
 
@@ -291,7 +294,7 @@ clean:
 			DeviceMemoryAllocator_freeAllocation(&device->allocator, blockId, blockOffset);
 	}
 
-	if(lock)
+	if(acq == ELockAcquire_Acquired)
 		Lock_unlock(&deviceExt->descriptorLock);
 
 	return err;
@@ -603,6 +606,59 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 
 	if(RefPtr_inc(pending))
 		_gotoIfError(clean, List_pushBackx(currentFlight, Buffer_createConstRef(&pending, sizeof(pending))));
+
+	if (device->pendingBytes >= device->flushThreshold) {
+
+		//End current command list
+
+		_gotoIfError(clean, vkCheck(vkEndCommandBuffer(commandBuffer)));
+
+		//Submit only the copy command list
+
+		U64 waitValue = device->submitId - 1;
+
+		VkTimelineSemaphoreSubmitInfo timelineInfo = (VkTimelineSemaphoreSubmitInfo) {
+			.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO,
+			.waitSemaphoreValueCount = device->submitId > 0,
+			.pWaitSemaphoreValues = device->submitId > 0 ? &waitValue : NULL,
+		};
+
+		VkSubmitInfo submitInfo = (VkSubmitInfo) {
+			.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+			.pNext = &timelineInfo,
+			.waitSemaphoreCount = timelineInfo.waitSemaphoreValueCount,
+			.pWaitSemaphores = (VkSemaphore*) &deviceExt->commitSemaphore,
+			.pCommandBuffers = &commandBuffer,
+			.commandBufferCount = 1
+		};
+
+		VkCommandQueue queue = deviceExt->queues[EVkCommandQueue_Graphics];
+		_gotoIfError(clean, vkCheck(vkQueueSubmit(queue.queue, 1, &submitInfo, VK_NULL_HANDLE)));
+
+		//Wait for the device
+
+		_gotoIfError(clean, GraphicsDeviceRef_wait(deviceRef));
+
+		//Reset command list
+
+		U32 threadId = 0;
+
+		VkCommandAllocator *allocator = VkGraphicsDevice_getCommandAllocator(
+			deviceExt, queue.resolvedQueueId, threadId, (U8)(device->submitId % 3)
+		);
+
+		_gotoIfError(clean, vkCheck(vkResetCommandPool(
+			deviceExt->device, allocator->pool, VK_COMMAND_POOL_RESET_RELEASE_RESOURCES_BIT
+		)));
+
+		//Re-open
+
+		VkCommandBufferBeginInfo beginInfo = (VkCommandBufferBeginInfo) {
+			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO
+		};
+
+		_gotoIfError(clean, vkCheck(vkBeginCommandBuffer(commandBuffer, &beginInfo)));
+	}
 
 clean:
 	DeviceBufferRef_dec(&tempStagingResource);

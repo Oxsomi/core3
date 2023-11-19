@@ -39,7 +39,8 @@ Error VkDeviceMemoryAllocator_findMemory(
 	Bool cpuSided, 
 	U32 memoryBits, 
 	U32 *outMemoryId,
-	VkMemoryPropertyFlags *outPropertyFlags
+	VkMemoryPropertyFlags *outPropertyFlags,
+	U64 *size
 ) {
 
 	//Find suitable memory type
@@ -77,18 +78,27 @@ Error VkDeviceMemoryAllocator_findMemory(
 		}
 	}
 
+	Bool distinct = true;
+
 	if (!maxHeapSizes[0]) {						//If there's only local heaps then we know we're on mobile. Use local heap.
 		maxHeapSizes[0] = maxHeapSizes[1];
 		heapIds[0] = heapIds[1];
+		distinct = false;
 	}
 
 	else if (!maxHeapSizes[1]) {				//If there's only host heaps then we know we're on AMD APU. Use host heap.
 		maxHeapSizes[1] = maxHeapSizes[0];
 		heapIds[1] = heapIds[0];
+		distinct = false;
 	}
 
 	if (!maxHeapSizes[0] || !maxHeapSizes[1])
 		return Error_notFound(0, 0);
+
+	if (size) {
+		*size = (cpuSided ? maxHeapSizes[0] : maxHeapSizes[1]) | ((U64)distinct << 63);
+		return Error_none();
+	}
 
 	//Allocate from the heaps we selected
 
@@ -122,6 +132,7 @@ Error VkDeviceMemoryAllocator_findMemory(
 
 	*outMemoryId = memoryId;
 	*outPropertyFlags = properties[propertyId];
+
 	return Error_none();
 }
 
@@ -191,7 +202,7 @@ Error DeviceMemoryAllocator_allocate(
 
 	U32 memoryId = 0;
 	VkMemoryPropertyFlags prop = 0;
-	Error err = VkDeviceMemoryAllocator_findMemory(deviceExt, cpuSided, memReq.memoryTypeBits, &memoryId, &prop);
+	Error err = VkDeviceMemoryAllocator_findMemory(deviceExt, cpuSided, memReq.memoryTypeBits, &memoryId, &prop, NULL);
 
 	if(err.genericError)
 		return err;

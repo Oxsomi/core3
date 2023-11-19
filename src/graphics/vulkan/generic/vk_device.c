@@ -767,6 +767,28 @@ Error GraphicsDevice_initExt(
 
 	vkGetPhysicalDeviceMemoryProperties((VkPhysicalDevice) physicalDevice->ext, &deviceExt->memoryProperties);
 
+	//Determine when we need to flush.
+	//As a rule of thumb I decided for 20% occupied mem by just copies.
+	//Or if there's distinct shared mem available too it can allocate 10% more in that memory too 
+	// (as long as it doesn't exceed 33%).
+	//Flush threshold is kept under 4 GiB to avoid TDRs because even if the mem is available it might be slow.
+
+	U64 cpuHeapSize = 0;
+	_gotoIfError(clean, VkDeviceMemoryAllocator_findMemory(deviceExt, true, U32_MAX, NULL, NULL, &cpuHeapSize));
+
+	U64 gpuHeapSize = 0;
+	_gotoIfError(clean, VkDeviceMemoryAllocator_findMemory(deviceExt, false, U32_MAX, NULL, NULL, &gpuHeapSize));
+
+	Bool isDistinct = gpuHeapSize >> 63;
+	gpuHeapSize &= (U64)I64_MAX;
+	cpuHeapSize &= (U64)I64_MAX;
+
+	device->flushThreshold = U64_min(
+		4 * GIBI, 
+		isDistinct ? U64_min(gpuHeapSize / 3, cpuHeapSize / 10 + gpuHeapSize / 5) : 
+		cpuHeapSize / 5
+	);
+
 	//Allocate temp storage for transitions
 
 	deviceExt->bufferTransitions = List_createEmpty(sizeof(VkBufferMemoryBarrier2));
@@ -1204,13 +1226,17 @@ Error GraphicsDevice_submitCommandsImpl(GraphicsDeviceRef *deviceRef, List comma
 
 		commandBuffer = allocator->cmd;
 
-		VkCommandBufferState state = (VkCommandBufferState) { .buffer = commandBuffer };
-
 		VkCommandBufferBeginInfo beginInfo = (VkCommandBufferBeginInfo) {
 			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO
 		};
 
 		_gotoIfError(clean, vkCheck(vkBeginCommandBuffer(commandBuffer, &beginInfo)));
+
+		//Start copies
+
+		_gotoIfError(clean, GraphicsDeviceRef_handleNextFrame(deviceRef, commandBuffer));
+
+		VkCommandBufferState state = (VkCommandBufferState) { .buffer = commandBuffer };
 
 		//Ensure ubo and staging buffer are the correct states
 
@@ -1252,8 +1278,6 @@ Error GraphicsDevice_submitCommandsImpl(GraphicsDeviceRef *deviceRef, List comma
 				0, EDescriptorSetType_UniqueLayouts, sets, 
 				0, NULL
 			);
-
-		_gotoIfError(clean, GraphicsDeviceRef_handleNextFrame(deviceRef, commandBuffer));
 
 		//Record commands
 

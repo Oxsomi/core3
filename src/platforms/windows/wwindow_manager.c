@@ -186,7 +186,9 @@ void Window_physicalLoop(Window *w) {
 
 		while(!(w->flags & EWindowFlags_ShouldThreadTerminate)) {
 
-			if(Lock_lock(&w->lock, 5 * SECOND)) {
+			ELockAcquire acq = Lock_lock(&w->lock, U64_MAX);
+
+			if(acq >= ELockAcquire_Success) {
 
 				if (PeekMessageA(&msg, w->nativeHandle, 0, 0, PM_REMOVE)) {
 					TranslateMessage(&msg);
@@ -198,23 +200,32 @@ void Window_physicalLoop(Window *w) {
 				if(msg.message == WM_QUIT)
 					w->flags |= EWindowFlags_ShouldThreadTerminate;
 
-				Lock_unlock(&w->lock);
+				if(acq == ELockAcquire_Acquired)
+					Lock_unlock(&w->lock);
 			}
 		}
 	}
 
 	//Free the window if we're done with the window loop
 
-	while (!Lock_lock(&Platform_instance.windowManager.lock, 1 * SECOND)) { }
+	ELockAcquire acq0 = Lock_lock(&Platform_instance.windowManager.lock, U64_MAX);
 
-	Lock_lock(&w->lock, 1 * SECOND);
+	if(acq0 < ELockAcquire_Success)
+		_gotoIfError(clean, Error_invalidState(0));
+
+	ELockAcquire acq1 = Lock_lock(&w->lock, U64_MAX);
+
+	if(acq1 >= ELockAcquire_Success) {
 	
-	Window *w0 = w;
+		Window *w0 = w;
 	
-	WindowManager_freePhysical(&Platform_instance.windowManager, &w);
-	*w0 = (Window) { 0 };
+		WindowManager_freePhysical(&Platform_instance.windowManager, &w);
+		*w0 = (Window) { 0 };
+	}
 	
-	Lock_unlock(&Platform_instance.windowManager.lock);
+	if(acq0 == ELockAcquire_Acquired)
+		Lock_unlock(&Platform_instance.windowManager.lock);
+
 	return;
 
 	//When an error happens, we're not the one freeing it, rather the calling thread would be.

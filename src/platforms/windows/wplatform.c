@@ -166,12 +166,16 @@ Error allocCallback(void *allocator, U64 length, Buffer *output) {
 
 		Log_captureStackTrace(captured.stack, _STACKTRACE_SIZE, 1);
 
-		if(!Lock_lock(&Allocator_lock, U64_MAX))
+		ELockAcquire acq = Lock_lock(&Allocator_lock, U64_MAX);
+
+		if(acq < ELockAcquire_Success)
 			return Error_invalidState(0);			//Should never happen
 
 		Buffer buf = Buffer_createConstRef(&captured, sizeof(captured));
 		Error err = List_pushBack(&Allocator_allocations, buf, Allocator_allocationsAllocator);
-		Lock_unlock(&Allocator_lock);
+
+		if(acq == ELockAcquire_Acquired)
+			Lock_unlock(&Allocator_lock);
 
 		if(err.genericError)
 			return err;
@@ -189,9 +193,14 @@ Bool freeCallback(void *allocator, Buffer buf) {
 	//Validate if allocation and allocation size matches.
 	//If not, warn here and return false
 
+	ELockAcquire acq = ELockAcquire_Invalid;
+	Bool success = true;
+
 	#ifndef NDEBUG
 
-		if(!Lock_lock(&Allocator_lock, U64_MAX))
+		acq = Lock_lock(&Allocator_lock, U64_MAX);
+
+		if(acq < ELockAcquire_Success)
 			return false;
 
 		U64 i = 0;
@@ -212,8 +221,8 @@ Bool freeCallback(void *allocator, Buffer buf) {
 						Buffer_length(buf)
 					);
 
-					Lock_unlock(&Allocator_lock);
-					return false;
+					success = false;
+					goto clean;
 				}
 
 				break;
@@ -229,12 +238,14 @@ Bool freeCallback(void *allocator, Buffer buf) {
 				Buffer_length(buf)
 			);
 
-			Lock_unlock(&Allocator_lock);
-			return false;
+			success = false;
+			goto clean;
 		}
 
 		List_erase(&Allocator_allocations, i);
-		Lock_unlock(&Allocator_lock);
+
+		if(acq == ELockAcquire_Acquired)
+			Lock_unlock(&Allocator_lock);
 
 	#endif
 
@@ -246,8 +257,14 @@ Bool freeCallback(void *allocator, Buffer buf) {
 	//Free mem
 
 	free((U8*) buf.ptr);
+	goto clean;
 
-	return true;
+clean:
+
+	if(acq == ELockAcquire_Acquired)
+		Lock_unlock(&Allocator_lock);
+
+	return success;
 }
 
 void Platform_printAllocations(U64 offset, U64 length, U64 minAllocationSize) {
@@ -256,7 +273,9 @@ void Platform_printAllocations(U64 offset, U64 length, U64 minAllocationSize) {
 
 	#ifndef NDEBUG
 
-		if(!Lock_lock(&Allocator_lock, U64_MAX))
+		ELockAcquire acq = Lock_lock(&Allocator_lock, U64_MAX);
+
+		if(acq < ELockAcquire_Success)
 			return;
 
 		if(!length)
@@ -287,7 +306,9 @@ void Platform_printAllocations(U64 offset, U64 length, U64 minAllocationSize) {
 		}
 
 		Log_debugLn(Allocator_allocationsAllocator, "Showed %llu bytes of allocations", capturedLength);
-		Lock_unlock(&Allocator_lock);
+
+		if(acq == ELockAcquire_Acquired)
+			Lock_unlock(&Allocator_lock);
 
 	#endif
 }

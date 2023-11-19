@@ -93,6 +93,8 @@ typedef struct GraphicsDevice {
 
 	U64 pendingBytes;			//For determining if it's time to flush or to resize staging buffer
 
+	U64 flushThreshold;			//When the pending bytes are too much and the device should flush to try and re-acquire memory
+
 } GraphicsDevice;
 
 typedef RefPtr GraphicsDeviceRef;
