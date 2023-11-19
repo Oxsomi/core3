@@ -284,26 +284,13 @@ Error GraphicsDeviceRef_create(
 	//Create constant buffer and staging buffer / allocators
 
 	//Allocate staging buffer.
-	//64 MiB - 256 * 3 to potentially allow CBuffer at the end of the memory.
-	//This gets divided into 3 for each frame id to have their own allocator into that subblock.
-	//This allows way easier management.
+	//64 MiB / 3 = 21.333 MiB per frame.
+	//If out of mem this will grow to be bigger.
+	//But it's only used for "small" allocations (< 16 MiB)
+	//If a lot of these larger allocations are found it will resize the staging buffer to try to encompass it too.
 
-	U64 stagingSize = DeviceMemoryBlock_defaultSize - sizeof(CBufferData) * 3;
-
-	_gotoIfError(clean, GraphicsDeviceRef_createBuffer(
-		*deviceRef, 
-		EDeviceBufferUsage_CPUAllocatedBit | EDeviceBufferUsage_InternalWeakRef, 
-		CharString_createConstRefCStr("Staging buffer"),
-		stagingSize, &device->staging
-	));
-
-	DeviceBuffer *staging = DeviceBufferRef_ptr(device->staging);
-	Buffer stagingBuffer = Buffer_createRef(staging->mappedMemory, stagingSize);
-
-	for(U64 i = 0; i < sizeof(device->stagingAllocations) / sizeof(device->stagingAllocations[0]); ++i)
-		_gotoIfError(clean, AllocationBuffer_createRefFromRegionx(
-			stagingBuffer, stagingSize / 3 * i, stagingSize / 3, &device->stagingAllocations[i]
-		));
+	U64 stagingSize = 64 * MIBI;
+	_gotoIfError(clean, GraphicsDeviceRef_resizeStagingBuffer(*deviceRef, stagingSize));
 
 	//Allocate UBO
 
@@ -417,6 +404,41 @@ Error GraphicsDeviceRef_handleNextFrame(GraphicsDeviceRef *deviceRef, void *comm
 	}
 
 	_gotoIfError(clean, List_clear(&device->pendingResources));
+
+clean:
+	return err;
+}
+
+Error GraphicsDeviceRef_resizeStagingBuffer(GraphicsDeviceRef *deviceRef, U64 newSize) {
+
+	Error err = Error_none();
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+
+	if (device->staging) {
+
+		//"Free" staging buffer.
+		//If the staging buffer was already in flight this won't do anything until it's out of flight.
+
+		for(U64 i = 0; i < sizeof(device->stagingAllocations) / sizeof(device->stagingAllocations[0]); ++i)
+			AllocationBuffer_freex(&device->stagingAllocations[i]);
+
+		DeviceBufferRef_dec(&device->staging);
+	}
+
+	_gotoIfError(clean, GraphicsDeviceRef_createBuffer(
+		deviceRef, 
+		EDeviceBufferUsage_CPUAllocatedBit | EDeviceBufferUsage_InternalWeakRef, 
+		CharString_createConstRefCStr("Staging buffer"),
+		newSize, &device->staging
+	));
+
+	DeviceBuffer *staging = DeviceBufferRef_ptr(device->staging);
+	Buffer stagingBuffer = Buffer_createRef(staging->mappedMemory, newSize);
+
+	for(U64 i = 0; i < sizeof(device->stagingAllocations) / sizeof(device->stagingAllocations[0]); ++i)
+		_gotoIfError(clean, AllocationBuffer_createRefFromRegionx(
+			stagingBuffer, newSize / 3 * i, newSize / 3, &device->stagingAllocations[i]
+		));
 
 clean:
 	return err;
@@ -600,8 +622,8 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 			if(List_contains(*currentFlight, bufi, 0))
 				continue;
 
-			if(RefPtr_inc(ptr))
-				_gotoIfError(clean, List_pushBackx(currentFlight, bufi));
+			RefPtr_inc(ptr);
+			_gotoIfError(clean, List_pushBackx(currentFlight, bufi));
 		}
 	}
 
@@ -612,6 +634,8 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 
 	if(!device->firstSubmit)
 		device->firstSubmit = device->lastSubmit;
+
+	device->pendingBytes = 0;
 
 clean:
 

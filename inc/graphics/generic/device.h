@@ -91,6 +91,8 @@ typedef struct GraphicsDevice {
 
 	List currentLocks;
 
+	U64 pendingBytes;			//For determining if it's time to flush or to resize staging buffer
+
 } GraphicsDevice;
 
 typedef RefPtr GraphicsDeviceRef;
@@ -121,4 +123,6 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 Error GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef);
 
 //Private
+
 Error GraphicsDeviceRef_handleNextFrame(GraphicsDeviceRef *deviceRef, void *commandBuffer);
+Error GraphicsDeviceRef_resizeStagingBuffer(GraphicsDeviceRef *deviceRef, U64 newSize);

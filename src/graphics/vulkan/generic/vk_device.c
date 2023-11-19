@@ -1216,20 +1216,6 @@ Error GraphicsDevice_submitCommandsImpl(GraphicsDeviceRef *deviceRef, List comma
 
 		VkDependencyInfo dependency = (VkDependencyInfo) { .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO };
 
-		DeviceBuffer *staging = DeviceBufferRef_ptr(device->staging);
-		VkDeviceBuffer *stagingExt = DeviceBuffer_ext(staging, Vk);
-
-		_gotoIfError(clean, VkDeviceBuffer_transition(
-			stagingExt, 
-			VK_PIPELINE_STAGE_2_COPY_BIT, 
-			VK_ACCESS_2_TRANSFER_READ_BIT,
-			graphicsQueueId,
-			(device->submitId % 3) * (staging->length / 3),
-			staging->length / 3,
-			&deviceExt->bufferTransitions,
-			&dependency
-		));
-
 		VkDeviceBuffer *uboExt = DeviceBuffer_ext(DeviceBufferRef_ptr(device->frameData), Vk);
 
 		_gotoIfError(clean, VkDeviceBuffer_transition(

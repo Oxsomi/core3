@@ -185,8 +185,10 @@ Error AllocationBuffer_allocateBlock(
 
 	U64 len = Buffer_length(allocationBuffer->buffer);
 
-	if(size > len || alignment > len)
+	if(size > len || alignment > len) {
+		*result = NULL;
 		return Error_outOfBounds(size > len ? 1 : 2, size > len ? size : alignment, len);
+	}
 
 	//No allocations? We start at the front, it's always aligned
 

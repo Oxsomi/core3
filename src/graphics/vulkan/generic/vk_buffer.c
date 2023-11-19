@@ -341,7 +341,7 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 
 		if(incoherent) {
 			tempList = List_createEmpty(sizeof(VkMappedMemoryRange));
-			_gotoIfError(clean, List_resizex(&tempList, buffer->pendingChanges.length));
+			_gotoIfError(clean, List_resizex(&tempList, buffer->pendingChanges.length + 1));
 		}
 
 		for(U64 j = 0; j < buffer->pendingChanges.length; ++j) {
@@ -382,6 +382,8 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 			allocRange += bufferj.endRange - bufferj.startRange;
 		}
 
+		device->pendingBytes += allocRange;
+
 		_gotoIfError(clean, List_resizex(&pendingCopies, buffer->pendingChanges.length));
 
 		VkDependencyInfo dependency = (VkDependencyInfo) {
@@ -391,7 +393,7 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 
 		List_freex(&tempList);
 		tempList = List_createEmpty(sizeof(VkBufferMemoryBarrier2));
-		_gotoIfError(clean, List_reservex(&tempList, 1 + buffer->pendingChanges.length));
+		_gotoIfError(clean, List_reservex(&tempList, 2 + buffer->pendingChanges.length));
 
 		if (allocRange >= 16 * MIBI) {		//Resource is too big, allocate dedicated staging resource
 
@@ -497,22 +499,20 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 			if(temp.genericError && location == defaultLocation)		//Something else went wrong
 				_gotoIfError(clean, temp);
 
-			//We flush the GPU to ensure we have space if necessary.
+			//We re-create the staging buffer to fit the new allocation.
 
 			if (temp.genericError) {
 
-				//TODO: Create secondary staging buffer before doing this!
-				//		Because this is super slow!
+				U64 prevSize = DeviceBufferRef_ptr(device->staging)->length;
 
-				Log_performanceLnx(
-					"Pushing too much data to the GPU this frame for the staging buffer to handle\n"
-					"Flushing outstanding changes to GPU to make space for new allocations."
-				);
+				//Allocate new staging buffer.
 
-				//TODO: Commit commandBuffer here
+				U64 newSize = prevSize * 2 + allocRange * 3;
+				_gotoIfError(clean, GraphicsDeviceRef_resizeStagingBuffer(deviceRef, newSize));
+				_gotoIfError(clean, AllocationBuffer_allocateBlockx(stagingBuffer, allocRange, 4, (const U8**) &location));
 
-				GraphicsDeviceRef_wait(deviceRef);
-				_gotoIfError(clean, AllocationBuffer_allocateBlockx(stagingBuffer, allocRange, 4, &location));
+				staging = DeviceBufferRef_ptr(device->staging);
+				stagingExt = DeviceBuffer_ext(staging, Vk);
 			}
 
 			DeviceMemoryBlock block = *(const DeviceMemoryBlock*) List_ptr(device->allocator.blocks, staging->blockId);
@@ -533,7 +533,7 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 				);
 
 				((VkBufferCopy*)pendingCopies.ptr)[j] = (VkBufferCopy) {
-					.srcOffset = allocRange + (location - block.mappedMemory),
+					.srcOffset = allocRange + (location - stagingBuffer->buffer.ptr),
 					.dstOffset = bufferj.startRange,
 					.size = len
 				};
@@ -562,6 +562,24 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 				};
 
 				vkFlushMappedMemoryRanges(deviceExt->device, 1, &memoryRange);
+			}
+
+			Buffer stagingBuf = Buffer_createConstRef(&device->staging, sizeof(RefPtr*));
+			if(!List_contains(*currentFlight, stagingBuf, 0)) {
+
+				_gotoIfError(clean, VkDeviceBuffer_transition(						//Ensure resource is transitioned
+					stagingExt, 
+					VK_PIPELINE_STAGE_2_COPY_BIT, 
+					VK_ACCESS_2_TRANSFER_READ_BIT,
+					graphicsQueueId,
+					(device->submitId % 3) * (staging->length / 3),
+					staging->length / 3,
+					&tempList,
+					&dependency
+				));
+
+				RefPtr_inc(device->staging);
+				_gotoIfError(clean, List_pushBackx(currentFlight, stagingBuf));		//Add to in flight
 			}
 
 			if(dependency.bufferMemoryBarrierCount)
