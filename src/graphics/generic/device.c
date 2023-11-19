@@ -21,10 +21,13 @@
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
 #include "graphics/generic/device_buffer.h"
+#include "graphics/generic/swapchain.h"
+#include "graphics/generic/command_list.h"
 #include "platforms/ext/listx.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/log.h"
 #include "types/error.h"
+#include "types/time.h"
 #include "types/buffer.h"
 #include "types/type_cast.h"
 
@@ -216,6 +219,7 @@ Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 	GraphicsDevice_freeExt(GraphicsInstanceRef_ptr(device->instance), (void*) GraphicsInstance_ext(device, ));
 
 	List_freex(&device->allocator.blocks);
+	List_freex(&device->currentLocks);
 
 	GraphicsInstanceRef_dec(&device->instance);
 
@@ -312,6 +316,8 @@ Error GraphicsDeviceRef_create(
 
 	GraphicsDevice_postInit(device);
 
+	device->currentLocks = List_createEmpty(sizeof(Lock*));
+
 clean:
 
 	if (err.genericError)
@@ -361,6 +367,243 @@ clean:
 }
 
 impl Error GraphicsDeviceRef_waitExt(GraphicsDeviceRef *deviceRef);
+impl Error GraphicsDevice_submitCommandsImpl(GraphicsDeviceRef *deviceRef, List commandLists, List swapchains);
+impl Error DeviceBufferRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceBufferRef *pending);
+
+Error GraphicsDeviceRef_handleNextFrame(GraphicsDeviceRef *deviceRef, void *commandBuffer) {
+	
+	if(!deviceRef || deviceRef->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
+		return Error_nullPointer(0);
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+
+	if(!Lock_isLockedForThread(&device->lock))
+		return Error_invalidState(0);
+
+	//Release resources that were in flight.
+	//This might cause resource deletions because we might be the last one releasing them.
+	//For example temporary staging resources are released this way.
+
+	List *inFlight = &device->resourcesInFlight[device->submitId % 3];
+
+	for (U64 i = 0; i < inFlight->length; ++i)
+		RefPtr_dec((RefPtr**)inFlight->ptr + i);
+
+	Error err = Error_none();
+	_gotoIfError(clean, List_clear(inFlight));
+
+	//Release all allocations of buffer that was in flight
+
+	if(!AllocationBuffer_freeAll(&device->stagingAllocations[device->submitId % 3]))
+	_gotoIfError(clean, Error_invalidState(0));
+
+	//Update buffer data
+
+	for(U64 i = 0; i < device->pendingResources.length; ++i) {
+
+		RefPtr *pending = *(RefPtr**) List_ptr(device->pendingResources, i);
+
+		EGraphicsTypeId type = (EGraphicsTypeId) pending->typeId;
+
+		switch(type) {
+
+		case EGraphicsTypeId_DeviceBuffer: 
+			_gotoIfError(clean, DeviceBufferRef_flush(commandBuffer, deviceRef, pending));
+			break;
+
+		default:
+			_gotoIfError(clean, Error_unsupportedOperation(5));
+		}
+	}
+
+	_gotoIfError(clean, List_clear(&device->pendingResources));
+
+clean:
+	return err;
+}
+
+Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List commandLists, List swapchains, Buffer appData) {
+
+	//Validation
+
+	if(!deviceRef || deviceRef->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
+		return Error_nullPointer(0);
+
+	if(!swapchains.length && !commandLists.length)
+		return Error_invalidOperation(0);
+
+	if(swapchains.length && swapchains.stride != sizeof(SwapchainRef*))
+		return Error_invalidParameter(2, 0);
+
+	if(swapchains.length > 16)						//Hard limit of 16 swapchains
+		return Error_invalidParameter(2, 1);
+
+	if(commandLists.length && commandLists.stride != sizeof(CommandListRef*))
+		return Error_invalidParameter(1, 0);
+
+	if(Buffer_length(appData) > sizeof(((CBufferData*)NULL)->appData))
+		return Error_invalidParameter(3, 0);
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+
+	Error err = Error_none();
+
+	Lock *lockPtr = &device->lock;
+
+	if((err = List_pushBackx(&device->currentLocks, Buffer_createConstRef(&lockPtr, sizeof(Lock*)))).genericError)
+		return err;
+
+	if(!Lock_lock(&device->lock, U64_MAX)) {
+		List_popBack(&device->currentLocks, Buffer_createNull());
+		return Error_invalidState(0);
+	}
+
+	//Validate command lists
+
+	for(U64 i = 0; i < commandLists.length; ++i) {
+
+		CommandListRef *cmdRef = ((CommandListRef**) commandLists.ptr)[i];
+
+		if(!cmdRef || cmdRef->typeId != (ETypeId) EGraphicsTypeId_CommandList)
+			_gotoIfError(clean, Error_nullPointer(1));
+
+		CommandList *cmd = CommandListRef_ptr(cmdRef);
+
+		if(cmd->device != deviceRef)
+			_gotoIfError(clean, Error_unsupportedOperation(0));
+
+		lockPtr = &cmd->lock;
+
+		_gotoIfError(clean, List_pushBackx(&device->currentLocks, Buffer_createConstRef(&lockPtr, sizeof(Lock*))));
+
+		if(!Lock_lock(lockPtr, U64_MAX)) {
+			List_popBack(&device->currentLocks, Buffer_createNull());
+			_gotoIfError(clean, Error_invalidState(1));
+		}
+
+		if(cmd->state != ECommandListState_Closed)
+			_gotoIfError(clean, Error_invalidParameter(1, (U32)i));
+	}
+
+	//Swapchains all need to have the same vsync option.
+
+	for (U64 i = 0; i < swapchains.length; ++i) {
+
+		SwapchainRef *swapchainRef = ((SwapchainRef**) swapchains.ptr)[i];
+
+		for(U64 j = 0; j < i; ++j)
+			if(swapchainRef == ((SwapchainRef**) swapchains.ptr)[j])
+				_gotoIfError(clean, Error_invalidParameter(2, 2));
+
+		if(!swapchainRef || swapchainRef->typeId != (ETypeId) EGraphicsTypeId_Swapchain)
+			_gotoIfError(clean, Error_nullPointer(2));
+
+		Swapchain *swapchaini = SwapchainRef_ptr(swapchainRef);
+
+		if(swapchaini->device != deviceRef)
+			_gotoIfError(clean, Error_unsupportedOperation(1));
+
+		lockPtr = &swapchaini->lock;
+
+		_gotoIfError(clean, List_pushBackx(&device->currentLocks, Buffer_createConstRef(&lockPtr, sizeof(Lock*))));
+
+		if(!Lock_lock(lockPtr, U64_MAX)) {
+			List_popBack(&device->currentLocks, Buffer_createNull());
+			_gotoIfError(clean, Error_invalidState(2));
+		}
+	}
+
+	//Lock all resources linked to command lists
+
+	for(U64 i = 0; i < device->pendingResources.length; ++i) {
+
+		Lock *lock = NULL;
+
+		WeakRefPtr *res = *(WeakRefPtr* const *) List_ptrConst(device->pendingResources, i);
+
+		EGraphicsTypeId id = (EGraphicsTypeId) res->typeId;
+
+		switch (id) {
+
+			case EGraphicsTypeId_DeviceBuffer:
+				lock = &DeviceBufferRef_ptr(res)->lock;
+				break;
+
+			default:
+				_gotoIfError(clean, Error_unimplemented(0));	//TODO: DeviceTexture
+		}
+
+		if(!lock)
+			continue;
+
+		Buffer buf = Buffer_createConstRef(&lock, sizeof(Lock*));
+
+		_gotoIfError(clean, List_pushBackx(&device->currentLocks, buf));
+
+		if(!Lock_lock(lock, U64_MAX)) {
+			List_popBack(&device->currentLocks, Buffer_createNull());
+			_gotoIfError(clean, Error_invalidState(3));
+		}
+	}
+
+	//Set app data
+
+	DeviceBuffer *frameData = DeviceBufferRef_ptr(device->frameData);
+	CBufferData *data = (CBufferData*) frameData->mappedMemory + (device->submitId % 3);
+	Ns now = Time_now();
+
+	*data = (CBufferData) {
+		.frameId = (U32) device->submitId,
+		.time = device->firstSubmit ? (F32)((F64)(now - device->firstSubmit) / SECOND) : 0,
+		.deltaTime = device->firstSubmit ? (F32)((F64)(now - device->lastSubmit) / SECOND) : 0,
+		.swapchainCount = (U32) swapchains.length
+	};
+
+	Buffer_copy(Buffer_createRef((U8*)data->appData, sizeof(*data)), appData);
+
+	//Submit impl should also set the swapchains and process all command lists and swapchains.
+	//This is not present here because the API impl is the one in charge of how it is threaded.
+
+	_gotoIfError(clean, GraphicsDevice_submitCommandsImpl(deviceRef, commandLists, swapchains));
+
+	//Add resources from command lists to resources in flight
+
+	List *currentFlight = &device->resourcesInFlight[device->submitId % 3];
+
+	for (U64 j = 0; j < commandLists.length; ++j) {
+
+		CommandListRef *cmdRef = ((CommandListRef**)commandLists.ptr)[j];
+		CommandList *cmd = CommandListRef_ptr(cmdRef);
+
+		for(U64 i = 0; i < cmd->resources.length; ++i) {
+
+			RefPtr *ptr = ((RefPtr**) cmd->resources.ptr)[i];
+			Buffer bufi = Buffer_createConstRef(&ptr, sizeof(ptr));
+
+			if(List_contains(*currentFlight, bufi, 0))
+				continue;
+
+			if(RefPtr_inc(ptr))
+				_gotoIfError(clean, List_pushBackx(currentFlight, bufi));
+		}
+	}
+
+	//Ensure our next fence value is used
+
+	++device->submitId;
+	device->lastSubmit = Time_now();
+
+	if(!device->firstSubmit)
+		device->firstSubmit = device->lastSubmit;
+
+clean:
+
+	for(U64 i = 0; i < device->currentLocks.length; ++i)
+		Lock_unlock(*(Lock**)List_ptr(device->currentLocks, i));
+
+	List_clear(&device->currentLocks);
+	return err;
+}
 
 Error GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef) {
 

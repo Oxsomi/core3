@@ -299,7 +299,9 @@ clean:
 	return err;
 }
 
-Error DeviceBufferRef_flush(VkCommandBuffer commandBuffer, GraphicsDeviceRef *deviceRef, DeviceBufferRef *pending) {
+Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, DeviceBufferRef *pending) {
+
+	VkCommandBuffer commandBuffer = (VkCommandBuffer) commandBufferExt;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);

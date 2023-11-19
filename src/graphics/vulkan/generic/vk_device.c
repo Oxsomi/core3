@@ -831,6 +831,11 @@ void GraphicsDevice_postInit(GraphicsDevice *device) {
 
 	vkUpdateDescriptorSets(deviceExt->device, 3, uboDescriptor, 0, NULL);
 
+	deviceExt->swapchainHandles = List_createEmpty(sizeof(VkSwapchainKHR));
+	deviceExt->swapchainIndices = List_createEmpty(sizeof(U32));
+	deviceExt->results = List_createEmpty(sizeof(VkResult));
+	deviceExt->waitStages = List_createEmpty(sizeof(VkPipelineStageFlags));
+	deviceExt->waitSemaphores = List_createEmpty(sizeof(VkSemaphore));
 }
 
 Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext) {
@@ -900,7 +905,6 @@ Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext) {
 	List_freex(&deviceExt->swapchainHandles);
 	List_freex(&deviceExt->bufferTransitions);
 	List_freex(&deviceExt->imageTransitions);
-	List_freex(&deviceExt->currentLocks);
 
 	return true;
 }
@@ -967,28 +971,9 @@ VkCommandAllocator *VkGraphicsDevice_getCommandAllocator(
 	return (VkCommandAllocator*) device->commandPools.ptr + id;
 }
 
-Error DeviceBufferRef_flush(VkCommandBuffer commandBuffer, GraphicsDeviceRef *deviceRef, DeviceBufferRef *pending);
-
-Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List commandLists, List swapchains, Buffer appData) {
-
-	//Validation and ext structs
-
-	if(!deviceRef || (!swapchains.length && !commandLists.length))
-		return Error_nullPointer(!deviceRef ? 0 : 1);
-
-	if(swapchains.length && swapchains.stride != sizeof(SwapchainRef*))
-		return Error_invalidParameter(2, 0);
-
-	if(swapchains.length > 16)						//Hard limit of 16 swapchains
-		return Error_invalidParameter(2, 1);
-
-	if(commandLists.length && commandLists.stride != sizeof(CommandListRef*))
-		return Error_invalidParameter(1, 0);
-
-	if(Buffer_length(appData) > sizeof(((CBufferData*)NULL)->appData))
-		return Error_invalidParameter(3, 0);
-
-	CharString temp = CharString_createNull();
+Error GraphicsDevice_submitCommandsImpl(GraphicsDeviceRef *deviceRef, List commandLists, List swapchains) {
+	
+	//Unpack ext
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
@@ -996,144 +981,27 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 	GraphicsInstance *instance = GraphicsInstanceRef_ptr(device->instance);
 	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
 
+	CharString temp = CharString_createNull();
 	Error err = Error_none();
 
-	if(!deviceExt->currentLocks.stride)
-		deviceExt->currentLocks = List_createEmpty(sizeof(Lock*));
-
-	Lock *lockPtr = &device->lock;
-
-	if((err = List_pushBackx(&deviceExt->currentLocks, Buffer_createConstRef(&lockPtr, sizeof(Lock*)))).genericError)
-		return err;
-
-	if(!Lock_lock(&device->lock, U64_MAX)) {
-		List_popBack(&deviceExt->currentLocks, Buffer_createNull());
-		return Error_invalidState(0);
-	}
-
-	//Validate command lists
-
-	for(U64 i = 0; i < commandLists.length; ++i) {
-
-		CommandListRef *cmdRef = ((CommandListRef**) commandLists.ptr)[i];
-
-		if(!cmdRef || cmdRef->typeId != (ETypeId) EGraphicsTypeId_CommandList)
-			_gotoIfError(clean, Error_nullPointer(1));
-
-		CommandList *cmd = CommandListRef_ptr(cmdRef);
-
-		if(cmd->device != deviceRef)
-			_gotoIfError(clean, Error_unsupportedOperation(0));
-
-		lockPtr = &cmd->lock;
-
-		_gotoIfError(clean, List_pushBackx(&deviceExt->currentLocks, Buffer_createConstRef(&lockPtr, sizeof(Lock*))));
-
-		if(!Lock_lock(lockPtr, U64_MAX)) {
-			List_popBack(&deviceExt->currentLocks, Buffer_createNull());
-			_gotoIfError(clean, Error_invalidState(1));
-		}
-
-		if(cmd->state != ECommandListState_Closed)
-			_gotoIfError(clean, Error_invalidParameter(1, (U32)i));
-	}
-
-	//Swapchains all need to have the same vsync option.
-
-	for (U64 i = 0; i < swapchains.length; ++i) {
-
-		SwapchainRef *swapchainRef = ((SwapchainRef**) swapchains.ptr)[i];
-
-		for(U64 j = 0; j < i; ++j)
-			if(swapchainRef == ((SwapchainRef**) swapchains.ptr)[j])
-				_gotoIfError(clean, Error_invalidParameter(2, 2));
-
-		if(!swapchainRef || swapchainRef->typeId != (ETypeId) EGraphicsTypeId_Swapchain)
-			_gotoIfError(clean, Error_nullPointer(2));
-
-		Swapchain *swapchaini = SwapchainRef_ptr(swapchainRef);
-
-		if(swapchaini->device != deviceRef)
-			_gotoIfError(clean, Error_unsupportedOperation(1));
-
-		lockPtr = &swapchaini->lock;
-
-		_gotoIfError(clean, List_pushBackx(&deviceExt->currentLocks, Buffer_createConstRef(&lockPtr, sizeof(Lock*))));
-
-		if(!Lock_lock(lockPtr, U64_MAX)) {
-			List_popBack(&deviceExt->currentLocks, Buffer_createNull());
-			_gotoIfError(clean, Error_invalidState(2));
-		}
-	}
-
-	//Lock all resources linked to command lists
-
-	for(U64 i = 0; i < device->pendingResources.length; ++i) {
-
-		Lock *lock = NULL;
-
-		WeakRefPtr *res = *(WeakRefPtr* const *) List_ptrConst(device->pendingResources, i);
-
-		EGraphicsTypeId id = (EGraphicsTypeId) res->typeId;
-
-		switch (id) {
-
-			case EGraphicsTypeId_DeviceBuffer:
-				lock = &DeviceBufferRef_ptr(res)->lock;
-				break;
-
-			//TODO: DeviceTexture
-		}
-
-		if(!lock)
-			continue;
-
-		Buffer buf = Buffer_createConstRef(&lock, sizeof(Lock*));
-
-		_gotoIfError(clean, List_pushBackx(&deviceExt->currentLocks, buf));
-
-		if(!Lock_lock(lock, U64_MAX)) {
-			List_popBack(&deviceExt->currentLocks, Buffer_createNull());
-			_gotoIfError(clean, Error_invalidState(3));
-		}
-	}
-	
 	//Reserve temp storage
-
-	if(!deviceExt->swapchainHandles.stride)
-		deviceExt->swapchainHandles = List_createEmpty(sizeof(VkSwapchainKHR));
 
 	_gotoIfError(clean, List_clear(&deviceExt->swapchainHandles));
 	_gotoIfError(clean, List_reservex(&deviceExt->swapchainHandles, swapchains.length));
 
-	if(!deviceExt->swapchainIndices.stride)
-		deviceExt->swapchainIndices = List_createEmpty(sizeof(U32));
-
 	_gotoIfError(clean, List_clear(&deviceExt->swapchainIndices));
 	_gotoIfError(clean, List_reservex(&deviceExt->swapchainIndices, swapchains.length));
-
-	if(!deviceExt->results.stride)
-		deviceExt->results = List_createEmpty(sizeof(VkResult));
 
 	_gotoIfError(clean, List_clear(&deviceExt->results));
 	_gotoIfError(clean, List_reservex(&deviceExt->results, swapchains.length));
 
-	if(!deviceExt->waitSemaphores.stride)
-		deviceExt->waitSemaphores = List_createEmpty(sizeof(VkSemaphore));
-
 	_gotoIfError(clean, List_clear(&deviceExt->waitSemaphores));
 	_gotoIfError(clean, List_reservex(&deviceExt->waitSemaphores, swapchains.length + 1));
-
-	if(!deviceExt->waitStages.stride)
-		deviceExt->waitStages = List_createEmpty(sizeof(VkPipelineStageFlags));
 
 	_gotoIfError(clean, List_clear(&deviceExt->waitStages));
 	_gotoIfError(clean, List_reservex(&deviceExt->waitStages, swapchains.length + 1));
 
 	//Acquire swapchain images
-
-	VkPipelineStageFlagBits pipelineStage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-	Buffer pipelineStageBuffer = Buffer_createConstRef(&pipelineStage, sizeof(pipelineStage));
 
 	for(U64 i = 0; i < swapchains.length; ++i) {
 
@@ -1154,6 +1022,12 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 
 		((VkSwapchainKHR*) deviceExt->swapchainHandles.ptr)[i] = swapchainExt->swapchain;
 		((U32*) deviceExt->swapchainIndices.ptr)[i] = swapchainExt->currentIndex;
+
+		VkPipelineStageFlagBits pipelineStage = 
+			swapchain->info.usage & ESwapchainUsage_AllowCompute ? VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT :
+			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+
+		Buffer pipelineStageBuffer = Buffer_createConstRef(&pipelineStage, sizeof(pipelineStage));
 
 		Buffer acquireSemaphore = Buffer_createConstRef(&semaphore, sizeof(semaphore));
 		_gotoIfError(clean, List_pushBackx(&deviceExt->waitSemaphores, acquireSemaphore));
@@ -1178,18 +1052,9 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 
 	//Prepare per frame cbuffer
 
-	DeviceBuffer *frameData = DeviceBufferRef_ptr(device->frameData);
-
 	{
+		DeviceBuffer *frameData = DeviceBufferRef_ptr(device->frameData);
 		CBufferData *data = (CBufferData*) frameData->mappedMemory + (device->submitId % 3);
-		Ns now = Time_now();
-
-		*data = (CBufferData) {
-			.frameId = (U32) device->submitId,
-			.time = device->firstSubmit ? (F32)((F64)(now - device->firstSubmit) / SECOND) : 0,
-			.deltaTime = device->firstSubmit ? (F32)((F64)(now - device->lastSubmit) / SECOND) : 0,
-			.swapchainCount = (U32) swapchains.length
-		};
 
 		for(U32 i = 0; i < data->swapchainCount; ++i) {
 
@@ -1206,8 +1071,6 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 			if(allowCompute)
 				data->swapchains[i * 2 + 1] = descLoc[swapchainExt->currentIndex * stride + 1];
 		}
-
-		Buffer_copy(Buffer_createRef((U8*)data->appData, sizeof(*data)), appData);
 
 		DeviceMemoryBlock block = *(DeviceMemoryBlock*) List_ptr(device->allocator.blocks, frameData->blockId);
 		Bool incoherent = !(block.allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
@@ -1341,9 +1204,7 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 
 		commandBuffer = allocator->cmd;
 
-		VkCommandBufferState state = (VkCommandBufferState) {
-			.buffer = commandBuffer
-		};
+		VkCommandBufferState state = (VkCommandBufferState) { .buffer = commandBuffer };
 
 		VkCommandBufferBeginInfo beginInfo = (VkCommandBufferBeginInfo) {
 			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO
@@ -1353,10 +1214,7 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 
 		//Ensure ubo and staging buffer are the correct states
 
-		VkDependencyInfo dependency = (VkDependencyInfo) {
-			.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-			.dependencyFlags = 0
-		};
+		VkDependencyInfo dependency = (VkDependencyInfo) { .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO };
 
 		DeviceBuffer *staging = DeviceBufferRef_ptr(device->staging);
 		VkDeviceBuffer *stagingExt = DeviceBuffer_ext(staging, Vk);
@@ -1409,42 +1267,7 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 				0, NULL
 			);
 
-		//Release resources that were in flight.
-		//This might cause resource deletions because we might be the last one releasing them.
-		//For example temporary staging resources are released this way.
-
-		List *inFlight = &device->resourcesInFlight[device->submitId % 3];
-
-		for (U64 i = 0; i < inFlight->length; ++i)
-			RefPtr_dec((RefPtr**)inFlight->ptr + i);
-
-		_gotoIfError(clean, List_clear(inFlight));
-
-		//Release all allocations of buffer that was in flight
-
-		if(!AllocationBuffer_freeAll(&device->stagingAllocations[device->submitId % 3]))
-			_gotoIfError(clean, Error_invalidState(0));
-
-		//Update buffer data
-
-		for(U64 i = 0; i < device->pendingResources.length; ++i) {
-
-			RefPtr *pending = *(RefPtr**) List_ptr(device->pendingResources, i);
-
-			EGraphicsTypeId type = (EGraphicsTypeId) pending->typeId;
-
-			switch(type) {
-
-				case EGraphicsTypeId_DeviceBuffer: 
-					_gotoIfError(clean, DeviceBufferRef_flush(commandBuffer, deviceRef, pending));
-					break;
-
-				default:
-					_gotoIfError(clean, Error_unsupportedOperation(5));
-			}
-		}
-
-		_gotoIfError(clean, List_clear(&device->pendingResources));
+		_gotoIfError(clean, GraphicsDeviceRef_handleNextFrame(deviceRef, commandBuffer));
 
 		//Record commands
 
@@ -1566,43 +1389,11 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 			_gotoIfError(clean, vkCheck(((const VkResult*) deviceExt->results.ptr)[i]));
 	}
 
-	//Add resources from command lists to resources in flight
-
-	for (U64 j = 0; j < commandLists.length; ++j) {
-
-		CommandListRef *cmdRef = ((CommandListRef**)commandLists.ptr)[j];
-		CommandList *cmd = CommandListRef_ptr(cmdRef);
-
-		for(U64 i = 0; i < cmd->resources.length; ++i) {
-
-			RefPtr *ptr = ((RefPtr**) cmd->resources.ptr)[i];
-			Buffer bufi = Buffer_createConstRef(&ptr, sizeof(ptr));
-
-			if(List_contains(*currentFlight, bufi, 0))
-				continue;
-
-			if(RefPtr_inc(ptr))
-				_gotoIfError(clean, List_pushBackx(currentFlight, bufi));
-		}
-	}
-
-	//Ensure our next fence value is used
-
-	++device->submitId;
-	device->lastSubmit = Time_now();
-
-	if(!device->firstSubmit)
-		device->firstSubmit = device->lastSubmit;
-
 clean: 
 
 	List_clear(&deviceExt->bufferTransitions);
 	List_clear(&deviceExt->imageTransitions);
 	CharString_freex(&temp);
 
-	for(U64 i = 0; i < deviceExt->currentLocks.length; ++i)
-		Lock_unlock(*(Lock**)List_ptr(deviceExt->currentLocks, i));
-	
-	List_clear(&deviceExt->currentLocks);
 	return err;
 }

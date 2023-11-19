@@ -87,6 +87,10 @@ typedef struct GraphicsDevice {
 
 	DeviceBufferRef *frameData;
 
+	//Temporary for processing command list and to avoid allocations
+
+	List currentLocks;
+
 } GraphicsDevice;
 
 typedef RefPtr GraphicsDeviceRef;
@@ -110,10 +114,11 @@ Bool GraphicsDeviceRef_removePending(GraphicsDeviceRef *deviceRef, RefPtr *resou
 //Submit commands to device
 //List<CommandListRef*> commandLists
 //List<SwapchainRef*> swapchains
-//appData is up to a 240 byte per frame array used for transmitting render critical info.
-//	This includes swapchain handles too! appData will get 4 bytes shorter every time another swapchain is added here.
-//	Make sure to align to it if maximum performance is needed.
-impl Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List commandLists, List swapchains, Buffer appData);
+//appData is up to a 368 byte per frame array used for transmitting render critical info.
+Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List commandLists, List swapchains, Buffer appData);
 
 //Wait on previously submitted commands
 Error GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef);
+
+//Private
+Error GraphicsDeviceRef_handleNextFrame(GraphicsDeviceRef *deviceRef, void *commandBuffer);
