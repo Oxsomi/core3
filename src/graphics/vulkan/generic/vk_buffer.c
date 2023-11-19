@@ -142,9 +142,7 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
 		.size = buf->length,
 		.usage = usage,
-		.sharingMode = VK_SHARING_MODE_CONCURRENT,
-		.queueFamilyIndexCount = deviceExt->resolvedQueues,
-		.pQueueFamilyIndices = deviceExt->uniqueQueues
+		.sharingMode = VK_SHARING_MODE_EXCLUSIVE
 	};
 
 	Error err = Error_none();

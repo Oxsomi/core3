@@ -278,8 +278,6 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 	
 	U32 images = 3;
 
-	Bool hasMultiQueue = deviceExt->resolvedQueues > 1;
-
 	VkSwapchainKHR prevSwapchain = swapchainExt->swapchain;
 
 	VkSwapchainCreateInfoKHR swapchainInfo = (VkSwapchainCreateInfoKHR) {
@@ -292,10 +290,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 		.imageExtent = capabilities.currentExtent,
 		.imageArrayLayers = 1,
 		.imageUsage = requiredUsageFlags,
-		.imageSharingMode = hasMultiQueue ? VK_SHARING_MODE_CONCURRENT : VK_SHARING_MODE_EXCLUSIVE,
-
-		.queueFamilyIndexCount = hasMultiQueue ? deviceExt->resolvedQueues : 0,
-		.pQueueFamilyIndices = hasMultiQueue ? deviceExt->uniqueQueues : NULL,
+		.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
 
 		.preTransform = capabilities.currentTransform,
 
