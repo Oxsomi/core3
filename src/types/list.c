@@ -1010,6 +1010,9 @@ Error List_reserve(List *list, U64 capacity, Allocator allocator) {
 	if(List_isRef(*list) && list->length)
 		return Error_invalidOperation(0);
 
+	if(!list->stride)
+		return Error_invalidOperation(0);
+
 	if(capacity * list->stride / list->stride != capacity)
 		return Error_overflow(1, capacity * list->stride, U64_MAX);
 

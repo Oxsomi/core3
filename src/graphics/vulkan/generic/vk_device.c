@@ -900,6 +900,7 @@ Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext) {
 	List_freex(&deviceExt->swapchainHandles);
 	List_freex(&deviceExt->bufferTransitions);
 	List_freex(&deviceExt->imageTransitions);
+	List_freex(&deviceExt->currentLocks);
 
 	return true;
 }
@@ -987,20 +988,54 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 	if(Buffer_length(appData) > sizeof(((CBufferData*)NULL)->appData))
 		return Error_invalidParameter(3, 0);
 
+	CharString temp = CharString_createNull();
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
+
+	GraphicsInstance *instance = GraphicsInstanceRef_ptr(device->instance);
+	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
+
+	Error err = Error_none();
+
+	if(!deviceExt->currentLocks.stride)
+		deviceExt->currentLocks = List_createEmpty(sizeof(Lock*));
+
+	Lock *lockPtr = &device->lock;
+
+	if((err = List_pushBackx(&deviceExt->currentLocks, Buffer_createConstRef(&lockPtr, sizeof(Lock*)))).genericError)
+		return err;
+
+	if(!Lock_lock(&device->lock, U64_MAX)) {
+		List_popBack(&deviceExt->currentLocks, Buffer_createNull());
+		return Error_invalidState(0);
+	}
+
 	//Validate command lists
 
 	for(U64 i = 0; i < commandLists.length; ++i) {
 
-		CommandList *cmd = CommandListRef_ptr(((CommandListRef**) commandLists.ptr)[i]);
+		CommandListRef *cmdRef = ((CommandListRef**) commandLists.ptr)[i];
 
-		if(!cmd)
-			return Error_nullPointer(1);
+		if(!cmdRef || cmdRef->typeId != (ETypeId) EGraphicsTypeId_CommandList)
+			_gotoIfError(clean, Error_nullPointer(1));
+
+		CommandList *cmd = CommandListRef_ptr(cmdRef);
 
 		if(cmd->device != deviceRef)
-			return Error_unsupportedOperation(0);
+			_gotoIfError(clean, Error_unsupportedOperation(0));
+
+		lockPtr = &cmd->lock;
+
+		_gotoIfError(clean, List_pushBackx(&deviceExt->currentLocks, Buffer_createConstRef(&lockPtr, sizeof(Lock*))));
+
+		if(!Lock_lock(lockPtr, U64_MAX)) {
+			List_popBack(&deviceExt->currentLocks, Buffer_createNull());
+			_gotoIfError(clean, Error_invalidState(1));
+		}
 
 		if(cmd->state != ECommandListState_Closed)
-			return Error_invalidParameter(1, (U32)i);
+			_gotoIfError(clean, Error_invalidParameter(1, (U32)i));
 	}
 
 	//Swapchains all need to have the same vsync option.
@@ -1011,27 +1046,57 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 
 		for(U64 j = 0; j < i; ++j)
 			if(swapchainRef == ((SwapchainRef**) swapchains.ptr)[j])
-				return Error_invalidParameter(2, 2);
+				_gotoIfError(clean, Error_invalidParameter(2, 2));
+
+		if(!swapchainRef || swapchainRef->typeId != (ETypeId) EGraphicsTypeId_Swapchain)
+			_gotoIfError(clean, Error_nullPointer(2));
 
 		Swapchain *swapchaini = SwapchainRef_ptr(swapchainRef);
 
-		if(!swapchaini)
-			return Error_nullPointer(2);
-
 		if(swapchaini->device != deviceRef)
-			return Error_unsupportedOperation(1);
+			_gotoIfError(clean, Error_unsupportedOperation(1));
+
+		lockPtr = &swapchaini->lock;
+
+		_gotoIfError(clean, List_pushBackx(&deviceExt->currentLocks, Buffer_createConstRef(&lockPtr, sizeof(Lock*))));
+
+		if(!Lock_lock(lockPtr, U64_MAX)) {
+			List_popBack(&deviceExt->currentLocks, Buffer_createNull());
+			_gotoIfError(clean, Error_invalidState(2));
+		}
 	}
 
-	//Unpack pointers
+	//Lock all resources linked to command lists
 
-	Error err = Error_none();
-	CharString temp = CharString_createNull();
+	for(U64 i = 0; i < device->pendingResources.length; ++i) {
 
-	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
-	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
+		Lock *lock = NULL;
 
-	GraphicsInstance *instance = GraphicsInstanceRef_ptr(device->instance);
-	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
+		WeakRefPtr *res = *(WeakRefPtr* const *) List_ptrConst(device->pendingResources, i);
+
+		EGraphicsTypeId id = (EGraphicsTypeId) res->typeId;
+
+		switch (id) {
+
+			case EGraphicsTypeId_DeviceBuffer:
+				lock = &DeviceBufferRef_ptr(res)->lock;
+				break;
+
+			//TODO: DeviceTexture
+		}
+
+		if(!lock)
+			continue;
+
+		Buffer buf = Buffer_createConstRef(&lock, sizeof(Lock*));
+
+		_gotoIfError(clean, List_pushBackx(&deviceExt->currentLocks, buf));
+
+		if(!Lock_lock(lock, U64_MAX)) {
+			List_popBack(&deviceExt->currentLocks, Buffer_createNull());
+			_gotoIfError(clean, Error_invalidState(3));
+		}
+	}
 	
 	//Reserve temp storage
 
@@ -1530,8 +1595,14 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 		device->firstSubmit = device->lastSubmit;
 
 clean: 
+
 	List_clear(&deviceExt->bufferTransitions);
 	List_clear(&deviceExt->imageTransitions);
 	CharString_freex(&temp);
+
+	for(U64 i = 0; i < deviceExt->currentLocks.length; ++i)
+		Lock_unlock(*(Lock**)List_ptr(deviceExt->currentLocks, i));
+	
+	List_clear(&deviceExt->currentLocks);
 	return err;
 }

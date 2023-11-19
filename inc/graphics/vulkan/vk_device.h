@@ -199,6 +199,7 @@ typedef struct VkGraphicsDevice {
 
 	List waitSemaphores, results, swapchainIndices, swapchainHandles, waitStages;
 	List bufferTransitions, imageTransitions;
+	List currentLocks;
 
 } VkGraphicsDevice;
 
