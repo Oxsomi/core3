@@ -511,6 +511,23 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 			List_popBack(&device->currentLocks, Buffer_createNull());
 			_gotoIfError(clean, Error_invalidState(2));
 		}
+
+		//Validate if the swapchain with a different version is bound, if yes, we have a stale cmdlist
+
+		for (U64 j = 0; j < commandLists.length; ++j) {
+
+			CommandListRef *cmdRef = ((CommandListRef**) commandLists.ptr)[i];
+			CommandList *cmd = CommandListRef_ptr(cmdRef);
+
+			for(U64 k = 0; k < cmd->activeSwapchains.length; ++k) {
+			
+				DeviceResourceVersion vK = *(const DeviceResourceVersion*) List_ptrConst(cmd->activeSwapchains, i);
+
+				if(vK.resource == swapchainRef && vK.version != swapchaini->versionId)
+					_gotoIfError(clean, Error_invalidState(0));
+			}
+
+		}
 	}
 
 	//Lock all resources linked to command lists

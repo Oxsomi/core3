@@ -26,6 +26,13 @@ typedef struct CharString CharString;
 typedef struct GraphicsDevice GraphicsDevice;
 typedef enum EPipelineType EPipelineType;
 
+typedef struct DeviceResourceVersion {
+
+	RefPtr *resource;		//SwapchainRef
+	U64 version;
+
+} DeviceResourceVersion;
+
 typedef struct CommandList {
 
 	GraphicsDeviceRef *device;
@@ -64,6 +71,8 @@ typedef struct CommandList {
 	EDepthStencilFormat boundDepthFormat;
 	
 	List pendingTransitions;			//<TransitionInternal>
+
+	List activeSwapchains;				//<DeviceResourceVersion>, Locks swapchain when it's first inserted.
 
 } CommandList;
 

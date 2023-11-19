@@ -62,6 +62,15 @@ Error CommandListRef_inc(CommandListRef *cmd) {
 	if(!(commandList->tempStateFlags & ECommandStateFlags_HasScope))	\
 		_gotoIfError(label, Error_invalidOperation(0));
 
+void CommandList_unlockSwapchains(CommandList *commandList) {
+
+	for (U64 i = 0; i < commandList->activeSwapchains.length; ++i) {
+		RefPtr *res = (*(const DeviceResourceVersion*) List_ptrConst(commandList->activeSwapchains, i)).resource;
+		Swapchain *swapchain = SwapchainRef_ptr(res);
+		Lock_unlock(&swapchain->lock);
+	}
+}
+
 Error CommandListRef_clear(CommandListRef *commandListRef) {
 
 	CommandListRef_validate(commandListRef);
@@ -74,14 +83,20 @@ Error CommandListRef_clear(CommandListRef *commandListRef) {
 			RefPtr_dec(ptr);
 	}
 
-	List_clear(&commandList->commandOps);
-	List_clear(&commandList->resources);
-	List_clear(&commandList->transitions);
-	List_clear(&commandList->activeScopes);
+	Error err = Error_none();
+	_gotoIfError(clean, List_clear(&commandList->commandOps));
+	_gotoIfError(clean, List_clear(&commandList->resources));
+	_gotoIfError(clean, List_clear(&commandList->transitions));
+	_gotoIfError(clean, List_clear(&commandList->activeScopes));
+
+	CommandList_unlockSwapchains(commandList);
+
+	_gotoIfError(clean, List_clear(&commandList->activeSwapchains));
 
 	commandList->next = 0;
 
-	return Error_none();
+clean:
+	return err;
 }
 
 Error CommandListRef_begin(CommandListRef *commandListRef, Bool doClear, U64 lockTimeout) {
@@ -95,6 +110,7 @@ Error CommandListRef_begin(CommandListRef *commandListRef, Bool doClear, U64 loc
 		return Error_invalidOperation(0);
 
 	Error err = Error_none();
+	U64 activeSwapchains = 0;
 
 	if(commandList->state == ECommandListState_Open)
 		_gotoIfError(clean, Error_invalidOperation(1));
@@ -102,10 +118,34 @@ Error CommandListRef_begin(CommandListRef *commandListRef, Bool doClear, U64 loc
 	commandList->state = ECommandListState_Open;
 	_gotoIfError(clean, doClear ? CommandListRef_clear(commandListRef) : Error_none());
 
+	if (!doClear) {		//Reacquire swapchains to ensure versions are the same
+
+		for (; activeSwapchains < commandList->activeSwapchains.length; ++activeSwapchains ) {
+
+			DeviceResourceVersion v = *(const DeviceResourceVersion*) List_ptrConst(
+				commandList->activeSwapchains, activeSwapchains
+			);
+
+			RefPtr *res = v.resource;
+			Swapchain *swapchain = SwapchainRef_ptr(res);
+
+			if(!Lock_lock(&swapchain->lock, U64_MAX))
+				_gotoIfError(clean, Error_invalidOperation(0));
+
+			if(swapchain->versionId != v.version) {
+				++activeSwapchains;
+				_gotoIfError(clean, Error_invalidOperation(1));
+			}
+		}
+	}
+
 clean:
 
-	if(err.genericError)
+	if(err.genericError) {
+		List_resize(&commandList->activeSwapchains, activeSwapchains, (Allocator) { 0 });		//Unacquired locks
+		commandList->state = ECommandListState_Invalid;
 		Lock_unlock(&commandList->lock);
+	}
 
 	return err;
 }
@@ -134,6 +174,7 @@ Error CommandListRef_end(CommandListRef *commandListRef) {
 		}
 	}
 
+	CommandList_unlockSwapchains(commandList);
 	commandList->state = ECommandListState_Closed;
 
 clean:
@@ -1178,6 +1219,9 @@ Error CommandListRef_startRenderExt(
 ) {
 
 	Buffer command = Buffer_createNull();
+	U64 lockedId = 0;
+	Lock *toRelease = NULL;
+
 	CommandListRef_validateScope(commandListRef, clean);
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(commandList->device);
@@ -1201,21 +1245,59 @@ Error CommandListRef_startRenderExt(
 		_gotoIfError(clean, Error_invalidParameter(4, 0));
 		
 	I32x2 targetSize = I32x2_zero();
+	U8 counter = 0;
 
-	for (U64 i = 0; i < colors.length + depthStencil.length; ++i) {
+	for (; lockedId < colors.length + depthStencil.length; ++lockedId) {
 
-		if (i == colors.length) {
+		if (lockedId == colors.length) {
 			//TODO: Depth stencil
 			break;
 		}
 
-		AttachmentInfo info = ((AttachmentInfo*) colors.ptr)[i];
+		AttachmentInfo info = ((const AttachmentInfo*) colors.ptr)[lockedId];
 
-		if (info.image && info.image->typeId == (ETypeId)EGraphicsTypeId_Swapchain) {
-			targetSize = SwapchainRef_ptr(info.image)->size;
-			break;
+		//TODO: Properly validate this
+
+		if(info.range.levelId >= 1 || info.range.layerId >= 1)
+			_gotoIfError(clean, Error_outOfBounds(3, info.range.levelId >= 1 ? info.range.levelId : info.range.layerId, 1));
+
+		if (info.image) {
+
+			if(info.image->typeId != (ETypeId)EGraphicsTypeId_Swapchain)
+				_gotoIfError(clean, Error_invalidParameter(3, (U32)lockedId));
+
+			Swapchain *swapchain = SwapchainRef_ptr(info.image);
+
+			if(SwapchainRef_ptr(info.image)->device != commandList->device)
+				_gotoIfError(clean, Error_unsupportedOperation(3));
+
+			if(!Lock_lock(&swapchain->lock, U64_MAX))
+				_gotoIfError(clean, Error_invalidState(0));
+
+			DeviceResourceVersion v = (DeviceResourceVersion) { .resource = info.image, .version = swapchain->versionId };
+			Buffer buf = Buffer_createConstRef(&v, sizeof(v));
+
+			if(!List_contains(commandList->activeSwapchains, buf, 0)) {
+				toRelease = &swapchain->lock;
+				_gotoIfError(clean, List_pushBackx(&commandList->activeSwapchains, buf));
+				toRelease = NULL;
+			}
+
+			if(!counter)
+				targetSize = swapchain->size;
+
+			else if(I32x2_neq2(targetSize, swapchain->size)) {
+				++lockedId;
+				_gotoIfError(clean, Error_invalidOperation(3));
+			}
+
+			++counter;
+			continue;
 		}
 	}
+
+	if(!counter)
+		_gotoIfError(clean, Error_invalidParameter(3, 1));
 
 	if(I32x2_any(I32x2_eq(targetSize, I32x2_zero())))
 		_gotoIfError(clean, Error_invalidOperation(5));
@@ -1224,7 +1306,7 @@ Error CommandListRef_startRenderExt(
 		_gotoIfError(clean, Error_invalidOperation(6));
 
 	if(I32x2_any(I32x2_eq(size, I32x2_zero())))
-	   size = I32x2_sub(targetSize, offset);
+		size = I32x2_sub(targetSize, offset);
 
 	_gotoIfError(clean, CommandListRef_checkBounds(offset, size, 0, 32'767));
 	_gotoIfError(clean, Buffer_createEmptyBytesx(sizeof(StartRenderCmdExt) + sizeof(AttachmentInfo) * 16, &command));
@@ -1241,31 +1323,13 @@ Error CommandListRef_startRenderExt(
 	};
 
 	AttachmentInfo *attachments = (AttachmentInfo*)(startRender + 1);
-
-	U8 counter = 0;
+	counter = 0;
 
 	for (U64 i = 0; i < colors.length; ++i) {
 
 		AttachmentInfo info = ((const AttachmentInfo*) colors.ptr)[i];
 
-		//TODO: Properly validate this
-
-		if(info.range.levelId >= 1 || info.range.layerId >= 1)
-			_gotoIfError(clean, Error_outOfBounds(3, info.range.levelId >= 1 ? info.range.levelId : info.range.layerId, 1));
-
 		if (info.image) {
-
-			if(info.image && info.image->typeId != EGraphicsTypeId_Swapchain)		//TODO: Support other types
-				_gotoIfError(clean, Error_unsupportedOperation(2));
-
-			if(!i)
-				targetSize = SwapchainRef_ptr(info.image)->size;
-
-			else if(!I32x2_eq2(targetSize, SwapchainRef_ptr(info.image)->size))
-				_gotoIfError(clean, Error_invalidOperation(3));
-
-			if(SwapchainRef_ptr(info.image)->device != commandList->device)
-				_gotoIfError(clean, Error_unsupportedOperation(3));
 
 			startRender->activeMask |= (U8)1 << i;
 			attachments[counter++] = info;
@@ -1284,9 +1348,6 @@ Error CommandListRef_startRenderExt(
 			_gotoIfError(clean, List_pushBackx(&commandList->pendingTransitions, transitionBuf));
 		}
 	}
-
-	if(!counter)
-		_gotoIfError(clean, Error_invalidParameter(3, 1));
 
 	_gotoIfError(clean, CommandList_append(
 		commandList, 
@@ -1307,7 +1368,10 @@ Error CommandListRef_startRenderExt(
 
 clean:
 
-	if(err.genericError)
+	if(toRelease)
+		Lock_unlock(toRelease);
+
+	if(err.genericError) 
 		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
 
 	Buffer_freex(&command);
@@ -1437,6 +1501,7 @@ Bool CommandList_free(CommandList *cmd, Allocator alloc) {
 	List_freex(&cmd->activeScopes);
 	List_freex(&cmd->transitions);
 	List_freex(&cmd->pendingTransitions);
+	List_freex(&cmd->activeSwapchains);
 	Buffer_freex(&cmd->data);
 
 	GraphicsDeviceRef_dec(&cmd->device);
@@ -1472,6 +1537,7 @@ Error GraphicsDeviceRef_createCommandList(
 	commandList->transitions = List_createEmpty(sizeof(TransitionInternal));
 	commandList->activeScopes = List_createEmpty(sizeof(CommandScope));
 	commandList->pendingTransitions = List_createEmpty(sizeof(TransitionInternal));
+	commandList->activeSwapchains = List_createEmpty(sizeof(DeviceResourceVersion));
 
 	_gotoIfError(clean, Buffer_createEmptyBytesx(commandListLen, &commandList->data));
 
