@@ -39,10 +39,17 @@ const U64 SwapchainExt_size = sizeof(VkSwapchain);
 Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, SwapchainInfo info, Swapchain *swapchain) {
 
 	if(!info.presentModePriorities[0]) {
-		info.presentModePriorities[0] = ESwapchainPresentMode_Mailbox;
-		info.presentModePriorities[1] = ESwapchainPresentMode_Fifo;
-		info.presentModePriorities[2] = ESwapchainPresentMode_FifoRelaxed;
-		info.presentModePriorities[3] = ESwapchainPresentMode_Immediate;
+
+		#if _PLATFORM_TYPE != EPlatform_Android
+			info.presentModePriorities[0] = ESwapchainPresentMode_Mailbox;			//Priority is to be low latency
+			info.presentModePriorities[1] = ESwapchainPresentMode_Immediate;
+			info.presentModePriorities[2] = ESwapchainPresentMode_Fifo;
+			info.presentModePriorities[3] = ESwapchainPresentMode_FifoRelaxed;
+		#else 
+			info.presentModePriorities[0] = ESwapchainPresentMode_Fifo;				//Priority is to conserve power
+			info.presentModePriorities[1] = ESwapchainPresentMode_FifoRelaxed;
+			info.presentModePriorities[2] = ESwapchainPresentMode_Immediate;
+		#endif
 	}
 
 	//Prepare temporary free-ables and extended data.

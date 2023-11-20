@@ -158,6 +158,7 @@ _gotoIfError(clean, GraphicsDeviceRef_create(
 
   - Submits commands to the device and readies the swapchains to present if available. If the device doesn't have any swapchains, it can be used to just submit commands. This is useful for multi GPU rendering as well.
 - There's a limit of 16 swapchains per device.
+  
   - Runtime data is accessible from a CBuffer to all shaders and can be used for simple data such as resource handles. This buffer has a limit of 368 bytes.
   
 - ```c
@@ -320,7 +321,7 @@ void onResize(Window *w) {
 }
 ```
 
-info.presentModePriorities are the requests for what type of swapchains are desired by the application. Keeping this empty means [ mailbox, fifo, fifoRelaxed, immediate ]. On Android mailbox is unsupported because it may introduce another swapchain image, the rest is driver dependent if it's supported. Immediate is always supported, so make sure to always request immediate otherwise createSwapchain may fail (depending on device + driver). For more info see Swapchain/Present mode.
+info.presentModePriorities are the requests for what type of swapchains are desired by the application. Keeping this empty means [ mailbox, immediate, fifo, fifoRelaxed ]. On Android mailbox is unsupported because it may introduce another swapchain image, the rest is driver dependent if it's supported and the default is changed to [ fifo, fifoRelaxed, immediate] to conserve power. Immediate is always supported, so make sure to always request immediate otherwise createSwapchain may fail (depending on device + driver). For more info see Swapchain/Present mode.
 
 info.usage in this case allows the swapchain to be used for compute shaders. If this is not required, please try to avoid it. It might reduce or remove compression for the swapchain depending on the underlying hardware.
 

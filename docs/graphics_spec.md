@@ -72,7 +72,7 @@ Because of this, a device needs the following requirements to be OxC3 compatible
     - Requires at least 1 image layer.
     - Requires ability to make 2 (vsync) or 3 (!vsync) images.
     - Requires usage flags of transfer (src, dst), sampled, storage, color attachment bits.
-    - Requires FIFO or mailbox. 
+    - Requires FIFO or MAILBOX. Allows FIFO_RELAXED and IMMEDIATE as well.
     - Requires inherit alpha or opaque support.
     - Application is responsible for presenting image in the right rotation if SwapchainInfo::requiresManualComposite.
   - VK_NV_ray_tracing_motion_blur as RayMotionBlur
