@@ -65,167 +65,130 @@ Error vkCheck(VkResult result) {
 	}
 }
 
-Error mapVkFormat(
-	EGraphicsDataTypes *types, 
-	ETextureFormat format, 
-	VkFormat *output, 
-	Bool isForRenderTarget,
-	Bool supportsUndefined
-) {
-
-	if(!output)
-		return Error_nullPointer(2);
+VkFormat mapVkFormat(ETextureFormat format) {
 
 	switch (format) {
 
-		case ETextureFormat_Undefined:
-
-			if(!supportsUndefined)
-				return Error_unsupportedOperation(4);
-
-			*output = VK_FORMAT_UNDEFINED;
-			break;
+		default:								return VK_FORMAT_UNDEFINED;
 
 		//8-bit formats
 
-		case ETextureFormat_R8:					*output = VK_FORMAT_R8_UNORM;					break;
-		case ETextureFormat_RG8:				*output = VK_FORMAT_R8G8_UNORM;					break;
-		case ETextureFormat_RGBA8:				*output = VK_FORMAT_R8G8B8A8_UNORM;				break;
-		case ETextureFormat_BGRA8:				*output = VK_FORMAT_B8G8R8A8_UNORM;				break;
+		case ETextureFormat_R8:					return  VK_FORMAT_R8_UNORM;
+		case ETextureFormat_RG8:				return  VK_FORMAT_R8G8_UNORM;
+		case ETextureFormat_RGBA8:				return  VK_FORMAT_R8G8B8A8_UNORM;
+		case ETextureFormat_BGRA8:				return  VK_FORMAT_B8G8R8A8_UNORM;
 
-		case ETextureFormat_R8s:				*output = VK_FORMAT_R8_SNORM;					break;
-		case ETextureFormat_RG8s:				*output = VK_FORMAT_R8G8_SNORM;					break;
-		case ETextureFormat_RGBA8s:				*output = VK_FORMAT_R8G8B8A8_SNORM;				break;
+		case ETextureFormat_R8s:				return  VK_FORMAT_R8_SNORM;
+		case ETextureFormat_RG8s:				return  VK_FORMAT_R8G8_SNORM;
+		case ETextureFormat_RGBA8s:				return  VK_FORMAT_R8G8B8A8_SNORM;
 
-		case ETextureFormat_R8u:				*output = VK_FORMAT_R8_UINT;					break;
-		case ETextureFormat_RG8u:				*output = VK_FORMAT_R8G8_UINT;					break;
-		case ETextureFormat_RGBA8u:				*output = VK_FORMAT_R8G8B8A8_UINT;				break;
+		case ETextureFormat_R8u:				return  VK_FORMAT_R8_UINT;
+		case ETextureFormat_RG8u:				return  VK_FORMAT_R8G8_UINT;
+		case ETextureFormat_RGBA8u:				return  VK_FORMAT_R8G8B8A8_UINT;
 
-		case ETextureFormat_R8i:				*output = VK_FORMAT_R8_SINT;					break;
-		case ETextureFormat_RG8i:				*output = VK_FORMAT_R8G8_SINT;					break;
-		case ETextureFormat_RGBA8i:				*output = VK_FORMAT_R8G8B8A8_SINT;				break;
+		case ETextureFormat_R8i:				return  VK_FORMAT_R8_SINT;
+		case ETextureFormat_RG8i:				return  VK_FORMAT_R8G8_SINT;
+		case ETextureFormat_RGBA8i:				return  VK_FORMAT_R8G8B8A8_SINT;
 
 		//16-bit formats
 
-		case ETextureFormat_R16:				*output = VK_FORMAT_R16_UNORM;					break;
-		case ETextureFormat_RG16:				*output = VK_FORMAT_R16G16_UNORM;				break;
-		case ETextureFormat_RGBA16:				*output = VK_FORMAT_R16G16B16A16_UNORM;			break;
+		case ETextureFormat_R16:				return VK_FORMAT_R16_UNORM;
+		case ETextureFormat_RG16:				return VK_FORMAT_R16G16_UNORM;
+		case ETextureFormat_RGBA16:				return VK_FORMAT_R16G16B16A16_UNORM;
 
-		case ETextureFormat_R16s:				*output = VK_FORMAT_R16_SNORM;					break;
-		case ETextureFormat_RG16s:				*output = VK_FORMAT_R16G16_SNORM;				break;
-		case ETextureFormat_RGBA16s:			*output = VK_FORMAT_R16G16B16A16_SNORM;			break;
+		case ETextureFormat_R16s:				return VK_FORMAT_R16_SNORM;
+		case ETextureFormat_RG16s:				return VK_FORMAT_R16G16_SNORM;
+		case ETextureFormat_RGBA16s:			return VK_FORMAT_R16G16B16A16_SNORM;
 
-		case ETextureFormat_R16u:				*output = VK_FORMAT_R16_UINT;					break;
-		case ETextureFormat_RG16u:				*output = VK_FORMAT_R16G16_UINT;				break;
-		case ETextureFormat_RGBA16u:			*output = VK_FORMAT_R16G16B16A16_UINT;			break;
+		case ETextureFormat_R16u:				return VK_FORMAT_R16_UINT;
+		case ETextureFormat_RG16u:				return VK_FORMAT_R16G16_UINT;
+		case ETextureFormat_RGBA16u:			return VK_FORMAT_R16G16B16A16_UINT;
 
-		case ETextureFormat_R16i:				*output = VK_FORMAT_R16_SINT;					break;
-		case ETextureFormat_RG16i:				*output = VK_FORMAT_R16G16_SINT;				break;
-		case ETextureFormat_RGBA16i:			*output = VK_FORMAT_R16G16B16A16_SINT;			break;
+		case ETextureFormat_R16i:				return VK_FORMAT_R16_SINT;
+		case ETextureFormat_RG16i:				return VK_FORMAT_R16G16_SINT;
+		case ETextureFormat_RGBA16i:			return VK_FORMAT_R16G16B16A16_SINT;
 
-		case ETextureFormat_R16f:				*output = VK_FORMAT_R16_SFLOAT;					break;
-		case ETextureFormat_RG16f:				*output = VK_FORMAT_R16G16_SFLOAT;				break;
-		case ETextureFormat_RGBA16f:			*output = VK_FORMAT_R16G16B16A16_SFLOAT;		break;
+		case ETextureFormat_R16f:				return VK_FORMAT_R16_SFLOAT;
+		case ETextureFormat_RG16f:				return VK_FORMAT_R16G16_SFLOAT;
+		case ETextureFormat_RGBA16f:			return VK_FORMAT_R16G16B16A16_SFLOAT;
 
 		//32-bit formats
 
-		case ETextureFormat_R32u:				*output = VK_FORMAT_R32_UINT;					break;
-		case ETextureFormat_RG32u:				*output = VK_FORMAT_R32G32_UINT;				break;
-		case ETextureFormat_RGB32u:				*output = VK_FORMAT_R32G32B32_UINT;				break;
-		case ETextureFormat_RGBA32u:			*output = VK_FORMAT_R32G32B32A32_UINT;			break;
+		case ETextureFormat_R32u:				return VK_FORMAT_R32_UINT;
+		case ETextureFormat_RG32u:				return VK_FORMAT_R32G32_UINT;
+		case ETextureFormat_RGB32u:				return VK_FORMAT_R32G32B32_UINT;
+		case ETextureFormat_RGBA32u:			return VK_FORMAT_R32G32B32A32_UINT;
 
-		case ETextureFormat_R32i:				*output = VK_FORMAT_R32_SINT;					break;
-		case ETextureFormat_RG32i:				*output = VK_FORMAT_R32G32_SINT;				break;
-		case ETextureFormat_RGB32i:				*output = VK_FORMAT_R32G32B32_SINT;				break;
-		case ETextureFormat_RGBA32i:			*output = VK_FORMAT_R32G32B32A32_SINT;			break;
+		case ETextureFormat_R32i:				return VK_FORMAT_R32_SINT;
+		case ETextureFormat_RG32i:				return VK_FORMAT_R32G32_SINT;
+		case ETextureFormat_RGB32i:				return VK_FORMAT_R32G32B32_SINT;
+		case ETextureFormat_RGBA32i:			return VK_FORMAT_R32G32B32A32_SINT;
 
-		case ETextureFormat_R32f:				*output = VK_FORMAT_R32_SFLOAT;					break;
-		case ETextureFormat_RG32f:				*output = VK_FORMAT_R32G32_SFLOAT;				break;
-		case ETextureFormat_RGB32f:				*output = VK_FORMAT_R32G32B32_SFLOAT;			break;
-		case ETextureFormat_RGBA32f:			*output = VK_FORMAT_R32G32B32A32_SFLOAT;		break;
+		case ETextureFormat_R32f:				return VK_FORMAT_R32_SFLOAT;
+		case ETextureFormat_RG32f:				return VK_FORMAT_R32G32_SFLOAT;
+		case ETextureFormat_RGB32f:				return VK_FORMAT_R32G32B32_SFLOAT;
+		case ETextureFormat_RGBA32f:			return VK_FORMAT_R32G32B32A32_SFLOAT;
 
 		//Special formats
 
-		case ETextureFormat_RGB10A2:			*output = VK_FORMAT_A2R10G10B10_UNORM_PACK32;	break;
-		case ETextureFormat_BGR10A2:			*output = VK_FORMAT_A2B10G10R10_UNORM_PACK32;	break;
+		case ETextureFormat_RGB10A2:			return VK_FORMAT_A2R10G10B10_UNORM_PACK32;
+		case ETextureFormat_BGR10A2:			return VK_FORMAT_A2B10G10R10_UNORM_PACK32;
 
 		//BCn formats
 
-		case ETextureFormat_BC4:				*output = VK_FORMAT_BC4_UNORM_BLOCK;			break;
-		case ETextureFormat_BC4s:				*output = VK_FORMAT_BC4_SNORM_BLOCK;			break;
+		case ETextureFormat_BC4:				return VK_FORMAT_BC4_UNORM_BLOCK;
+		case ETextureFormat_BC4s:				return VK_FORMAT_BC4_SNORM_BLOCK;
 
-		case ETextureFormat_BC5:				*output = VK_FORMAT_BC5_UNORM_BLOCK;			break;
-		case ETextureFormat_BC5s:				*output = VK_FORMAT_BC5_SNORM_BLOCK;			break;
+		case ETextureFormat_BC5:				return VK_FORMAT_BC5_UNORM_BLOCK;
+		case ETextureFormat_BC5s:				return VK_FORMAT_BC5_SNORM_BLOCK;
 
-		case ETextureFormat_BC7:				*output = VK_FORMAT_BC7_UNORM_BLOCK;			break;
-		case ETextureFormat_BC7_sRGB:			*output = VK_FORMAT_BC7_SRGB_BLOCK;				break;
+		case ETextureFormat_BC6H:				return VK_FORMAT_BC6H_SFLOAT_BLOCK;
 
-		case ETextureFormat_BC6H:				*output = VK_FORMAT_BC6H_SFLOAT_BLOCK;			break;
+		case ETextureFormat_BC7:				return VK_FORMAT_BC7_UNORM_BLOCK;
+		case ETextureFormat_BC7_sRGB:			return VK_FORMAT_BC7_SRGB_BLOCK;
 
 		//ASTC formats
 
-		case ETextureFormat_ASTC_4x4:			*output = VK_FORMAT_ASTC_4x4_UNORM_BLOCK;		break;
-		case ETextureFormat_ASTC_4x4_sRGB:		*output = VK_FORMAT_ASTC_4x4_SRGB_BLOCK;		break;
+		case ETextureFormat_ASTC_4x4:			return VK_FORMAT_ASTC_4x4_UNORM_BLOCK;
+		case ETextureFormat_ASTC_4x4_sRGB:		return VK_FORMAT_ASTC_4x4_SRGB_BLOCK;
 
-		case ETextureFormat_ASTC_5x4:			*output = VK_FORMAT_ASTC_5x4_UNORM_BLOCK;		break;
-		case ETextureFormat_ASTC_5x4_sRGB:		*output = VK_FORMAT_ASTC_5x4_SRGB_BLOCK;		break;
+		case ETextureFormat_ASTC_5x4:			return VK_FORMAT_ASTC_5x4_UNORM_BLOCK;
+		case ETextureFormat_ASTC_5x4_sRGB:		return VK_FORMAT_ASTC_5x4_SRGB_BLOCK;
 
-		case ETextureFormat_ASTC_5x5:			*output = VK_FORMAT_ASTC_5x5_UNORM_BLOCK;		break;
-		case ETextureFormat_ASTC_5x5_sRGB:		*output = VK_FORMAT_ASTC_5x5_SRGB_BLOCK;		break;
+		case ETextureFormat_ASTC_5x5:			return VK_FORMAT_ASTC_5x5_UNORM_BLOCK;
+		case ETextureFormat_ASTC_5x5_sRGB:		return VK_FORMAT_ASTC_5x5_SRGB_BLOCK;
 
-		case ETextureFormat_ASTC_6x5:			*output = VK_FORMAT_ASTC_6x5_UNORM_BLOCK;		break;
-		case ETextureFormat_ASTC_6x5_sRGB:		*output = VK_FORMAT_ASTC_6x5_SRGB_BLOCK;		break;
+		case ETextureFormat_ASTC_6x5:			return VK_FORMAT_ASTC_6x5_UNORM_BLOCK;
+		case ETextureFormat_ASTC_6x5_sRGB:		return VK_FORMAT_ASTC_6x5_SRGB_BLOCK;
 
-		case ETextureFormat_ASTC_6x6:			*output = VK_FORMAT_ASTC_6x6_UNORM_BLOCK;		break;
-		case ETextureFormat_ASTC_6x6_sRGB:		*output = VK_FORMAT_ASTC_6x6_SRGB_BLOCK;		break;
+		case ETextureFormat_ASTC_6x6:			return VK_FORMAT_ASTC_6x6_UNORM_BLOCK;
+		case ETextureFormat_ASTC_6x6_sRGB:		return VK_FORMAT_ASTC_6x6_SRGB_BLOCK;
 
-		case ETextureFormat_ASTC_8x5:			*output = VK_FORMAT_ASTC_8x5_UNORM_BLOCK;		break;
-		case ETextureFormat_ASTC_8x5_sRGB:		*output = VK_FORMAT_ASTC_8x5_SRGB_BLOCK;		break;
+		case ETextureFormat_ASTC_8x5:			return VK_FORMAT_ASTC_8x5_UNORM_BLOCK;
+		case ETextureFormat_ASTC_8x5_sRGB:		return VK_FORMAT_ASTC_8x5_SRGB_BLOCK;
 
-		case ETextureFormat_ASTC_8x6:			*output = VK_FORMAT_ASTC_8x6_UNORM_BLOCK;		break;
-		case ETextureFormat_ASTC_8x6_sRGB:		*output = VK_FORMAT_ASTC_8x6_SRGB_BLOCK;		break;
+		case ETextureFormat_ASTC_8x6:			return VK_FORMAT_ASTC_8x6_UNORM_BLOCK;
+		case ETextureFormat_ASTC_8x6_sRGB:		return VK_FORMAT_ASTC_8x6_SRGB_BLOCK;
 
-		case ETextureFormat_ASTC_8x8:			*output = VK_FORMAT_ASTC_8x8_UNORM_BLOCK;		break;
-		case ETextureFormat_ASTC_8x8_sRGB:		*output = VK_FORMAT_ASTC_8x8_SRGB_BLOCK;		break;
+		case ETextureFormat_ASTC_8x8:			return VK_FORMAT_ASTC_8x8_UNORM_BLOCK;
+		case ETextureFormat_ASTC_8x8_sRGB:		return VK_FORMAT_ASTC_8x8_SRGB_BLOCK;
 
-		case ETextureFormat_ASTC_10x5:			*output = VK_FORMAT_ASTC_10x5_UNORM_BLOCK;		break;
-		case ETextureFormat_ASTC_10x5_sRGB:		*output = VK_FORMAT_ASTC_10x5_SRGB_BLOCK;		break;
+		case ETextureFormat_ASTC_10x5:			return VK_FORMAT_ASTC_10x5_UNORM_BLOCK;
+		case ETextureFormat_ASTC_10x5_sRGB:		return VK_FORMAT_ASTC_10x5_SRGB_BLOCK;
 
-		case ETextureFormat_ASTC_10x6:			*output = VK_FORMAT_ASTC_10x6_UNORM_BLOCK;		break;
-		case ETextureFormat_ASTC_10x6_sRGB:		*output = VK_FORMAT_ASTC_10x6_SRGB_BLOCK;		break;
+		case ETextureFormat_ASTC_10x6:			return VK_FORMAT_ASTC_10x6_UNORM_BLOCK;
+		case ETextureFormat_ASTC_10x6_sRGB:		return VK_FORMAT_ASTC_10x6_SRGB_BLOCK;
 
-		case ETextureFormat_ASTC_10x8:			*output = VK_FORMAT_ASTC_10x8_UNORM_BLOCK;		break;
-		case ETextureFormat_ASTC_10x8_sRGB:		*output = VK_FORMAT_ASTC_10x8_SRGB_BLOCK;		break;
+		case ETextureFormat_ASTC_10x8:			return VK_FORMAT_ASTC_10x8_UNORM_BLOCK;
+		case ETextureFormat_ASTC_10x8_sRGB:		return VK_FORMAT_ASTC_10x8_SRGB_BLOCK;
 
-		case ETextureFormat_ASTC_10x10:			*output = VK_FORMAT_ASTC_10x10_UNORM_BLOCK;		break;
-		case ETextureFormat_ASTC_10x10_sRGB:	*output = VK_FORMAT_ASTC_10x10_SRGB_BLOCK;		break;
+		case ETextureFormat_ASTC_10x10:			return VK_FORMAT_ASTC_10x10_UNORM_BLOCK;
+		case ETextureFormat_ASTC_10x10_sRGB:	return VK_FORMAT_ASTC_10x10_SRGB_BLOCK;
 
-		case ETextureFormat_ASTC_12x10:			*output = VK_FORMAT_ASTC_12x10_UNORM_BLOCK;		break;
-		case ETextureFormat_ASTC_12x10_sRGB:	*output = VK_FORMAT_ASTC_12x10_SRGB_BLOCK;		break;
+		case ETextureFormat_ASTC_12x10:			return VK_FORMAT_ASTC_12x10_UNORM_BLOCK;
+		case ETextureFormat_ASTC_12x10_sRGB:	return VK_FORMAT_ASTC_12x10_SRGB_BLOCK;
 
-		case ETextureFormat_ASTC_12x12:			*output = VK_FORMAT_ASTC_12x12_UNORM_BLOCK;		break;
-		case ETextureFormat_ASTC_12x12_sRGB:	*output = VK_FORMAT_ASTC_12x12_SRGB_BLOCK;		break;
-
-		//Invalid
-
-		default:
-			return Error_unsupportedOperation(0);
+		case ETextureFormat_ASTC_12x12:			return VK_FORMAT_ASTC_12x12_UNORM_BLOCK;
+		case ETextureFormat_ASTC_12x12_sRGB:	return VK_FORMAT_ASTC_12x12_SRGB_BLOCK;
 	}
-
-	//Only support converting to type if it's supported
-
-	Bool isBCn = *output >= VK_FORMAT_BC1_RGB_UNORM_BLOCK && *output <= VK_FORMAT_BC7_SRGB_BLOCK;
-
-	if(types && !(*types & EGraphicsDataTypes_BCn) && isBCn)
-		return Error_unsupportedOperation(1);
-
-	Bool isASTC = *output >= VK_FORMAT_ASTC_4x4_UNORM_BLOCK && *output <= VK_FORMAT_ASTC_12x12_SRGB_BLOCK;
-
-	if(types && !(*types & EGraphicsDataTypes_ASTC) && isASTC)
-		return Error_unsupportedOperation(2);
-
-	if(isForRenderTarget && (isASTC || isBCn))
-		return Error_unsupportedOperation(3);
-
-	return Error_none();
 }

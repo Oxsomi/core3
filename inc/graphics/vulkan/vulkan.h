@@ -46,10 +46,4 @@ Error vkCheck(VkResult result);
 
 //Pass types as non NULL to allow validating if the texture format is supported.
 //Sometimes you don't want this, for example when serializing.
-Error mapVkFormat(
-	EGraphicsDataTypes *types, 
-	ETextureFormat format, 
-	VkFormat *output, 
-	Bool isForRenderTarget,
-	Bool supportsUndefined			//Is format undefined supported?
-);
+VkFormat mapVkFormat(ETextureFormat format);

@@ -423,6 +423,10 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 
 		if(info->depthFormatExt >= EDepthStencilFormat_Count)
 			return Error_invalidOperation(20);
+
+		for(U32 j = 0; j < 8; ++j)
+			if(info->attachmentFormatsExt[j] >= ETextureFormatId_Count)
+				return Error_invalidOperation(22);
 	}
 
 	//Create ref ptrs

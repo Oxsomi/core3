@@ -528,10 +528,7 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, List nam
 				if(!attrib.format)
 					continue;
 
-				ETextureFormat format = ETextureFormatId_unpack[attrib.format];
-				VkFormat formatExt = 0;
-
-				_gotoIfError(clean, mapVkFormat(NULL, format, &formatExt, true, false));
+				VkFormat formatExt =  mapVkFormat(ETextureFormatId_unpack[attrib.format]);
 
 				attributes[attribCount++] = (VkVertexInputAttributeDescription) {
 					.location = j,
@@ -823,9 +820,7 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, List nam
 				];
 
 			for(U64 j = 0; j < info->attachmentCountExt; ++j)
-				_gotoIfError(clean, mapVkFormat(
-					NULL, ETextureFormatId_unpack[info->attachmentFormatsExt[j]], &formats[j], true, true
-				));
+				formats[j] = mapVkFormat(ETextureFormatId_unpack[info->attachmentFormatsExt[j]]);
 
 			VkPipelineRenderingCreateInfo *infoi = 
 				&((VkPipelineRenderingCreateInfo*)states[EPipelineStateType_DirectRendering].ptr)[total];
