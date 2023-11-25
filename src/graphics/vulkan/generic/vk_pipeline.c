@@ -104,6 +104,8 @@ clean:
 	return err;
 }
 
+const U64 PipelineExt_size = sizeof(VkPipeline);
+
 Bool Pipeline_freeExt(Pipeline *pipeline, Allocator allocator) {
 
 	allocator;
@@ -115,49 +117,21 @@ Bool Pipeline_freeExt(Pipeline *pipeline, Allocator allocator) {
 	return true;
 }
 
-Error GraphicsDeviceRef_createPipelinesCompute(
-	GraphicsDeviceRef *deviceRef, 
-	List *shaderBinaries, 
-	List names,
-	List *pipelines
-) {
+Error GraphicsDevice_createPipelinesComputeExt(GraphicsDevice *device, List names, List *pipelines) {
 
-	if(!deviceRef || !shaderBinaries || !pipelines)
-		return Error_nullPointer(!deviceRef ? 0 : (!shaderBinaries ? 1 : 2));
-
-	if(!shaderBinaries->length || shaderBinaries->stride != sizeof(Buffer))
-		return Error_invalidParameter(1, 0);
-
-	if(names.length && (names.length != shaderBinaries->length || names.stride != sizeof(CharString)))
-		return Error_invalidParameter(2, 0);
-
-	if(shaderBinaries->length >> 32)
-		return Error_outOfBounds(1, shaderBinaries->length, U32_MAX);
-
-	if(pipelines->ptr)
-		return Error_invalidParameter(3, 0);
-
-	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
-
 	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(GraphicsInstanceRef_ptr(device->instance), Vk);
 
 	List pipelineInfos = List_createEmpty(sizeof(VkComputePipelineCreateInfo));
 	List pipelineHandles = List_createEmpty(sizeof(VkPipeline));
 
-	*pipelines = List_createEmpty(sizeof(PipelineRef*));
-
-	Error err = List_resizex(&pipelineInfos, shaderBinaries->length);
-
-	if(err.genericError)
-		return err;
-
-	_gotoIfError(clean, List_resizex(&pipelineHandles, shaderBinaries->length));
-	_gotoIfError(clean, List_resizex(pipelines, shaderBinaries->length));
+	Error err = Error_none();
+	_gotoIfError(clean, List_resizex(&pipelineInfos, pipelines->length));
+	_gotoIfError(clean, List_resizex(&pipelineHandles, pipelines->length));
 
 	//TODO: Push constants
 
-	for(U64 i = 0; i < shaderBinaries->length; ++i) {
+	for(U64 i = 0; i < pipelines->length; ++i) {
 
 		((VkComputePipelineCreateInfo*)pipelineInfos.ptr)[i] = (VkComputePipelineCreateInfo) {
 			.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
@@ -169,8 +143,10 @@ Error GraphicsDeviceRef_createPipelinesCompute(
 			.layout = deviceExt->defaultLayout
 		};
 
+		Pipeline *pipeline = PipelineRef_ptr(((PipelineRef**)pipelines->ptr)[i]);
+
 		_gotoIfError(clean, createShaderModule(
-			((Buffer*)shaderBinaries->ptr)[i], 
+			((const PipelineStage*) pipeline->stages.ptr)[0].shaderBinary, 
 			&((VkComputePipelineCreateInfo*) pipelineInfos.ptr)[i].stage.module, 
 			deviceExt,
 			instanceExt,
@@ -190,15 +166,6 @@ Error GraphicsDeviceRef_createPipelinesCompute(
 
 	for (U64 i = 0; i < pipelines->length; ++i) {
 
-		RefPtr **refPtr = &((RefPtr**)pipelines->ptr)[i];
-
-		_gotoIfError(clean, RefPtr_createx(
-			(U32)(sizeof(Pipeline) + sizeof(VkPipeline)), 
-			(ObjectFreeFunc) Pipeline_free, 
-			EGraphicsTypeId_Pipeline, 
-			refPtr
-		));
-
 		#ifndef NDEBUG
 
 			if(instanceExt->debugSetName && names.length) {
@@ -206,7 +173,7 @@ Error GraphicsDeviceRef_createPipelinesCompute(
 				VkDebugUtilsObjectNameInfoEXT debugName2 = (VkDebugUtilsObjectNameInfoEXT) {
 					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
 					.objectType = VK_OBJECT_TYPE_PIPELINE,
-					.objectHandle = (U64) ((VkPipeline*) pipelineHandles.ptr)[i],
+					.objectHandle = (U64) ((const VkPipeline*) pipelineHandles.ptr)[i],
 					.pObjectName = ((const CharString*)names.ptr)[i].ptr
 				};
 
@@ -215,39 +182,11 @@ Error GraphicsDeviceRef_createPipelinesCompute(
 
 		#endif
 
-		Pipeline *pipeline = PipelineRef_ptr(*refPtr);
-
-		GraphicsDeviceRef_inc(deviceRef);
-
-		*pipeline = (Pipeline) {
-			.device = deviceRef,
-			.type = EPipelineType_Compute,
-			.stages = List_createEmpty(sizeof(PipelineStage))
-		};
-
-		_gotoIfError(clean, List_resizex(&pipeline->stages, 1));
-
-		*(PipelineStage*) pipeline->stages.ptr = (PipelineStage) {
-			.stageType = EPipelineStage_Compute,
-			.shaderBinary = ((Buffer*)shaderBinaries->ptr)[i]
-		};
-
-		((Buffer*)shaderBinaries->ptr)[i] = Buffer_createNull();		//Moved
-
-		*Pipeline_ext(pipeline, Vk) = ((VkPipeline*) pipelineHandles.ptr)[i];
+		Pipeline *pipeline = PipelineRef_ptr(((PipelineRef**)pipelines->ptr)[i]);
+		*Pipeline_ext(pipeline, Vk) = ((const VkPipeline*) pipelineHandles.ptr)[i];
 	}
 
-	List_freex(shaderBinaries);
-	goto success;
-
 clean:
-
-	for (U64 i = 0; i < pipelines->length; ++i)
-		RefPtr_dec(&((RefPtr**)pipelines->ptr)[i]);
-
-	List_freex(pipelines);
-
-success:
 
 	List_freex(&pipelineHandles);
 
@@ -260,7 +199,7 @@ success:
 	}
 
 	List_freex(&pipelineInfos);
-	return Error_none();
+	return err;
 }
 
 Error mapVkCompareOp(ECompareOp op, VkCompareOp *result) {

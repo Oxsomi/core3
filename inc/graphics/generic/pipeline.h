@@ -85,11 +85,10 @@ Bool PipelineRef_decAll(List *list);					//Decrements all refs and frees list
 
 PipelineRef *PipelineRef_at(List list, U64 index);
 
-impl Bool Pipeline_freeExt(Pipeline *pipeline, Allocator alloc);
 Bool Pipeline_free(Pipeline *pipeline, Allocator alloc);
 
 //shaderBinaries's Buffer will be moved (shaderBinaries will be cleared if moved)
-impl Error GraphicsDeviceRef_createPipelinesCompute(
+Error GraphicsDeviceRef_createPipelinesCompute(
 	GraphicsDeviceRef *deviceRef, 
 	List *shaderBinaries,			//<Buffer>
 	List names,						//Temporary names for debugging. Can be empty too, else match shaderBinaries->length
