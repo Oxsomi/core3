@@ -38,7 +38,10 @@ typedef enum EPipelineStage {
 	EPipelineStage_HullExt,				//Query graphics feature TessellationShader
 	EPipelineStage_DomainExt,			//^
 
-	EPipelineStage_Count
+	EPipelineStage_RtStart,
+	EPipelineStage_RtEnd = EPipelineStage_RtStart,		//TODO:
+
+	EPipelineStage_Count = EPipelineStage_RtStart
 
 } EPipelineStage;
 
@@ -46,7 +49,8 @@ typedef enum ECullMode {
 
 	ECullMode_Back,
 	ECullMode_None,
-	ECullMode_Front
+	ECullMode_Front,
+	ECullMode_Count
 
 } ECullMode;
 
@@ -68,7 +72,8 @@ typedef enum ECompareOp {
 	ECompareOp_Leq,
 	ECompareOp_Lt,
 	ECompareOp_Always,
-	ECompareOp_Never
+	ECompareOp_Never,
+	ECompareOp_Count
 
 } ECompareOp;
 
@@ -81,7 +86,8 @@ typedef enum EStencilOp {
 	EStencilOp_DecClamp,
 	EStencilOp_Invert,
 	EStencilOp_IncWrap,
-	EStencilOp_DecWrap
+	EStencilOp_DecWrap,
+	EStencilOp_Count
 
 } EStencilOp;
 
@@ -113,7 +119,8 @@ typedef enum ELogicOpExt {
 	ELogicOpExt_AndReverse,
 	ELogicOpExt_AndInvert,
 	ELogicOpExt_OrReverse,
-	ELogicOpExt_OrInvert
+	ELogicOpExt_OrInvert,
+	ELogicOpExt_Count
 
 } ELogicOpExt;
 
@@ -143,7 +150,9 @@ typedef enum EBlend {
 	EBlend_Src1ColorExt,
 	EBlend_Src1AlphaExt,
 	EBlend_InvSrc1ColorExt,
-	EBlend_InvSrc1AlphaExt
+	EBlend_InvSrc1AlphaExt,
+
+	EBlend_Count
 
 } EBlend;
 
@@ -153,7 +162,8 @@ typedef enum EBlendOp {
 	EBlendOp_Subtract,
 	EBlendOp_ReverseSubtract,
 	EBlendOp_Min,
-	EBlendOp_Max
+	EBlendOp_Max,
+	EBlendOp_Count
 
 } EBlendOp;
 
@@ -195,7 +205,9 @@ typedef enum ETopologyMode {
 	ETopologyMode_TriangleStripAdj,
 
 	ETopologyMode_LineListAdj,
-	ETopologyMode_LineStripAdj
+	ETopologyMode_LineStripAdj,
+
+	EToplogyMode_Count
 
 } ETopologyMode;
 
@@ -274,6 +286,8 @@ typedef enum EDepthStencilFormat {
 	EDepthStencilFormat_None,
 	EDepthStencilFormat_D32,		//Prefer this if stencil isn't needed. Less memory on AMD than D24S8!
 	EDepthStencilFormat_D24S8,		//On AMD this and D32S8 are the same thing. Prefer D32S8 for better depth precision.
-	EDepthStencilFormat_D32S8
+	EDepthStencilFormat_D32S8,
+
+	EDepthStencilFormat_Count
 
 } EDepthStencilFormat;

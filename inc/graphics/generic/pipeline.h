@@ -96,7 +96,7 @@ Error GraphicsDeviceRef_createPipelinesCompute(
 );
 
 //stages and info will be freed and binaries of stages will be moved.
-impl Error GraphicsDeviceRef_createPipelinesGraphics(
+Error GraphicsDeviceRef_createPipelinesGraphics(
 	GraphicsDeviceRef *deviceRef, 
 	List *stages,					//<PipelineStage>
 	List *infos,					//<PipelineGraphicsInfo>

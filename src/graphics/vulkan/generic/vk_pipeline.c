@@ -202,128 +202,72 @@ clean:
 	return err;
 }
 
-Error mapVkCompareOp(ECompareOp op, VkCompareOp *result) {
-
+VkCompareOp mapVkCompareOp(ECompareOp op) {
 	switch (op) {
-			
-		case ECompareOp_Gt:			*result = VK_COMPARE_OP_GREATER;			break;
-		case ECompareOp_Geq:		*result = VK_COMPARE_OP_GREATER_OR_EQUAL;	break;
-		case ECompareOp_Eq:			*result = VK_COMPARE_OP_EQUAL;				break;
-		case ECompareOp_Neq:		*result = VK_COMPARE_OP_NOT_EQUAL;			break;
-		case ECompareOp_Leq:		*result = VK_COMPARE_OP_LESS_OR_EQUAL;		break;
-		case ECompareOp_Lt:			*result = VK_COMPARE_OP_LESS;				break;
-		case ECompareOp_Always:		*result = VK_COMPARE_OP_ALWAYS;				break;
-		case ECompareOp_Never:		*result = VK_COMPARE_OP_NEVER;				break;
-
-		default:
-			return Error_invalidOperation(0);
+		case ECompareOp_Gt:			return VK_COMPARE_OP_GREATER;
+		case ECompareOp_Geq:		return VK_COMPARE_OP_GREATER_OR_EQUAL;
+		case ECompareOp_Eq:			return VK_COMPARE_OP_EQUAL;
+		case ECompareOp_Neq:		return VK_COMPARE_OP_NOT_EQUAL;
+		case ECompareOp_Leq:		return VK_COMPARE_OP_LESS_OR_EQUAL;
+		case ECompareOp_Lt:			return VK_COMPARE_OP_LESS;
+		case ECompareOp_Always:		return VK_COMPARE_OP_ALWAYS;
+		default:					return VK_COMPARE_OP_NEVER;
 	}
-
-	return Error_none();
 }
 
-Error mapVkStencilOp(EStencilOp op, VkStencilOp *result) {
-
+VkStencilOp mapVkStencilOp(EStencilOp op) {
 	switch (op) {
-			
-		case EStencilOp_Keep:		*result = VK_STENCIL_OP_KEEP;					break;
-		case EStencilOp_Zero:		*result = VK_STENCIL_OP_ZERO;					break;
-		case EStencilOp_Replace:	*result = VK_STENCIL_OP_REPLACE;				break;
-		case EStencilOp_IncClamp:	*result = VK_STENCIL_OP_INCREMENT_AND_CLAMP;	break;
-		case EStencilOp_DecClamp:	*result = VK_STENCIL_OP_DECREMENT_AND_CLAMP;	break;
-		case EStencilOp_Invert:		*result = VK_STENCIL_OP_INVERT;					break;
-		case EStencilOp_IncWrap:	*result = VK_STENCIL_OP_INCREMENT_AND_WRAP;		break;
-		case EStencilOp_DecWrap:	*result = VK_STENCIL_OP_DECREMENT_AND_WRAP;		break;
-
-		default:
-			return Error_invalidOperation(0);
+		default:					return VK_STENCIL_OP_KEEP;
+		case EStencilOp_Zero:		return VK_STENCIL_OP_ZERO;
+		case EStencilOp_Replace:	return VK_STENCIL_OP_REPLACE;
+		case EStencilOp_IncClamp:	return VK_STENCIL_OP_INCREMENT_AND_CLAMP;
+		case EStencilOp_DecClamp:	return VK_STENCIL_OP_DECREMENT_AND_CLAMP;
+		case EStencilOp_Invert:		return VK_STENCIL_OP_INVERT;
+		case EStencilOp_IncWrap:	return VK_STENCIL_OP_INCREMENT_AND_WRAP;
+		case EStencilOp_DecWrap:	return VK_STENCIL_OP_DECREMENT_AND_WRAP;
 	}
-
-	return Error_none();
 }
 
-Error mapVkBlendOp(EBlendOp op, VkBlendOp *result) {
+VkBlendOp mapVkBlendOp(EBlendOp op) {
+	switch (op) {
+		default:							return VK_BLEND_OP_ADD;
+		case EBlendOp_Subtract:				return VK_BLEND_OP_SUBTRACT;
+		case EBlendOp_ReverseSubtract:		return VK_BLEND_OP_REVERSE_SUBTRACT;
+		case EBlendOp_Min:					return VK_BLEND_OP_MIN;
+		case EBlendOp_Max:					return VK_BLEND_OP_MAX;
+	}
+}
+
+VkBlendFactor mapVkBlend(EBlend op) {
 
 	switch (op) {
 
-		case EBlendOp_Add:					*result = VK_BLEND_OP_ADD;				break;
-		case EBlendOp_Subtract:				*result = VK_BLEND_OP_SUBTRACT;			break;
-		case EBlendOp_ReverseSubtract:		*result = VK_BLEND_OP_REVERSE_SUBTRACT;	break;
-		case EBlendOp_Min:					*result = VK_BLEND_OP_MIN;				break;
-		case EBlendOp_Max:					*result = VK_BLEND_OP_MAX;				break;
+		default:						return VK_BLEND_FACTOR_ZERO;
+		case EBlend_One:				return VK_BLEND_FACTOR_ONE;
+		case EBlend_SrcColor:			return VK_BLEND_FACTOR_SRC_COLOR;
+		case EBlend_InvSrcColor:		return VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR;
+		case EBlend_DstColor:			return VK_BLEND_FACTOR_DST_COLOR;
+		case EBlend_InvDstColor:		return VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR;
+		case EBlend_SrcAlpha:			return VK_BLEND_FACTOR_SRC_ALPHA;
+		case EBlend_InvSrcAlpha:		return VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+		case EBlend_DstAlpha:			return VK_BLEND_FACTOR_DST_ALPHA;
+		case EBlend_InvDstAlpha:		return VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
+		case EBlend_BlendFactor:		return VK_BLEND_FACTOR_CONSTANT_COLOR;
+		case EBlend_InvBlendFactor:		return VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_COLOR;
+		case EBlend_AlphaFactor:		return VK_BLEND_FACTOR_CONSTANT_ALPHA;
+		case EBlend_InvAlphaFactor:		return VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_ALPHA;
+		case EBlend_SrcAlphaSat:		return VK_BLEND_FACTOR_SRC_ALPHA_SATURATE;
 
-		default:
-			return Error_invalidOperation(0);
+		case EBlend_Src1ColorExt:		return VK_BLEND_FACTOR_ZERO;
+		case EBlend_Src1AlphaExt:		return VK_BLEND_FACTOR_ZERO;
+		case EBlend_InvSrc1ColorExt:	return VK_BLEND_FACTOR_ZERO;
+		case EBlend_InvSrc1AlphaExt:	return VK_BLEND_FACTOR_ZERO;
 	}
-
-	return Error_none();
 }
 
-Error mapVkBlend(Bool dualSrc, EBlend op, VkBlendFactor *result) {
+Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, List names, List *pipelines) {
 
-	Bool wasDualSrc = false;
-
-	switch (op) {
-																								break;
-		case EBlend_Zero:				*result = VK_BLEND_FACTOR_ZERO;							break;
-		case EBlend_One:				*result = VK_BLEND_FACTOR_ONE;							break;
-		case EBlend_SrcColor:			*result = VK_BLEND_FACTOR_SRC_COLOR;					break;
-		case EBlend_InvSrcColor:		*result = VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR;			break;
-		case EBlend_DstColor:			*result = VK_BLEND_FACTOR_DST_COLOR;					break;
-		case EBlend_InvDstColor:		*result = VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR;			break;
-		case EBlend_SrcAlpha:			*result = VK_BLEND_FACTOR_SRC_ALPHA;					break;
-		case EBlend_InvSrcAlpha:		*result = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;			break;
-		case EBlend_DstAlpha:			*result = VK_BLEND_FACTOR_DST_ALPHA;					break;
-		case EBlend_InvDstAlpha:		*result = VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;			break;
-		case EBlend_BlendFactor:		*result = VK_BLEND_FACTOR_CONSTANT_COLOR;				break;
-		case EBlend_InvBlendFactor:		*result = VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_COLOR;		break;
-		case EBlend_AlphaFactor:		*result = VK_BLEND_FACTOR_CONSTANT_ALPHA;				break;
-		case EBlend_InvAlphaFactor:		*result = VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_ALPHA;		break;
-		case EBlend_SrcAlphaSat:		*result = VK_BLEND_FACTOR_SRC_ALPHA_SATURATE;			break;
-
-		case EBlend_Src1ColorExt:		wasDualSrc = true; *result = VK_BLEND_FACTOR_ZERO;		break;
-		case EBlend_Src1AlphaExt:		wasDualSrc = true; *result = VK_BLEND_FACTOR_ZERO;		break;
-		case EBlend_InvSrc1ColorExt:	wasDualSrc = true; *result = VK_BLEND_FACTOR_ZERO;		break;
-		case EBlend_InvSrc1AlphaExt:	wasDualSrc = true; *result = VK_BLEND_FACTOR_ZERO;		break;
-
-		default:
-			return Error_invalidOperation(0);
-	}
-
-	if(wasDualSrc && !dualSrc)
-		return Error_invalidOperation(1);
-
-	return Error_none();
-}
-
-Error GraphicsDeviceRef_createPipelinesGraphics(
-	GraphicsDeviceRef *deviceRef, 
-	List *stages, 
-	List *infos, 
-	List names,
-	List *pipelines
-) {
-
-	if(!deviceRef || !stages || !infos || !pipelines)
-		return Error_nullPointer(!deviceRef ? 0 : (!stages ? 1 : (!infos ? 2 : 3)));
-
-	if(!stages->length || stages->stride != sizeof(PipelineStage))
-		return Error_invalidParameter(1, 0);
-
-	U64 total = infos->length;
-
-	if(!infos->length || infos->stride != sizeof(PipelineGraphicsInfo) || infos->length >> 32)
-		return Error_invalidParameter(2, 0);
-
-	if(names.length && (names.length != infos->length || names.stride != sizeof(CharString)))
-		return Error_invalidParameter(2, 0);
-
-	if(pipelines->ptr)
-		return Error_invalidParameter(4, 0);
-
-	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
-
 	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(GraphicsInstanceRef_ptr(device->instance), Vk);
 
 	typedef enum EPipelineStateType {
@@ -365,13 +309,15 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 
 	U64 counts[EPipelineStateType_Count] = { 0 };
 	Error err = Error_none();
+	U64 total = 0;
 
-	counts[EPipelineStateType_PipelineCreateInfo] = infos->length;
-	counts[EPipelineStateType_VkPipeline] = infos->length;
+	counts[EPipelineStateType_PipelineCreateInfo] = pipelines->length;
+	counts[EPipelineStateType_VkPipeline] = pipelines->length;
 
-	for(U64 i = 0; i < infos->length; ++i) {
+	for(U64 i = 0; i < pipelines->length; ++i) {
 
-		const PipelineGraphicsInfo *info = &((const PipelineGraphicsInfo*) infos->ptr)[i];
+		const PipelineGraphicsInfo *info = 
+			(const PipelineGraphicsInfo*) PipelineRef_ptr(((const PipelineRef**)pipelines->ptr)[i])->extraInfo;
 
 		//Count if available
 
@@ -398,8 +344,6 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 
 		//Count variable
 
-		U64 countStart = counts[EPipelineStateType_Stage];
-
 		counts[EPipelineStateType_Stage] += info->stageCount;
 
 		if(info->attachmentCountExt)
@@ -420,98 +364,6 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 
 		if(anyAttrib)
 			++counts[EPipelineStateType_VertexInput];
-
-		//Validate info struct
-
-		//Validate some basics
-
-		if(info->attachmentCountExt > 8)
-			return Error_outOfBounds((U32)i, info->attachmentCountExt, 8);
-
-		if(!info->stageCount || counts[EPipelineStateType_Stage] > stages->length)
-			return Error_invalidOperation(0);
-
-		if(!info->renderPass && info->subPass)
-			return Error_invalidOperation(1);
-
-		//Validate tesselation and msaa extensions
-
-		if(info->patchControlPointsExt && !(device->info.capabilities.features & EGraphicsFeatures_TessellationShader))
-			return Error_unsupportedOperation(0);
-
-		U32 dataTypeCheck = 0;
-
-		switch (info->msaa) {
-
-			case EMSAASamples_x2Ext:
-				dataTypeCheck = EGraphicsDataTypes_MSAA2x;
-				break;
-
-			case EMSAASamples_x8Ext:
-				dataTypeCheck = EGraphicsDataTypes_MSAA8x;
-				break;
-
-			case EMSAASamples_x16Ext:
-				dataTypeCheck = EGraphicsDataTypes_MSAA16x;
-				break;
-		}
-
-		if(dataTypeCheck && !(device->info.capabilities.dataTypes & dataTypeCheck))
-			return Error_unsupportedOperation(1);
-
-		//Validate render pass / attachments
-
-		if (!(device->info.capabilities.features & EGraphicsFeatures_DirectRendering)) {
-
-			//Force renderPass definition and no direct rendering stuff
-
-			if(!info->renderPass || info->attachmentCountExt || info->depthFormatExt)
-				return Error_unsupportedOperation(2);
-		}
-
-		else {
-
-			//Force one of render pass or dynamic rendering.
-
-			if((!!info->renderPass) == (info->attachmentCountExt || info->depthFormatExt))
-				return Error_invalidOperation(4);
-		}
-
-		//Validate that stages are unique, are compatible.
-
-		U64 stageFlags = 0;
-
-		for (U64 j = countStart; j < countStart + info->stageCount; ++j) {
-
-			PipelineStage stage = ((const PipelineStage*)stages->ptr)[j - countStart];
-
-			if((stageFlags >> stage.stageType) & 1)
-				return Error_alreadyDefined(0);
-
-			if(stageFlags && stage.stageType == EPipelineStage_Compute)
-				return Error_invalidState(0);
-
-			stageFlags |= (U64)1 << stage.stageType;
-		}
-
-		//Validate if stages are allowed due to TesselationShader, GeometryShader
-
-		if(
-			stageFlags & (((U64)1 << EPipelineStage_HullExt) | ((U64)1 << EPipelineStage_DomainExt)) && 
-			!(device->info.capabilities.features & EGraphicsFeatures_TessellationShader)
-		)
-			return Error_unsupportedOperation(10);
-
-		if(
-			((stageFlags >> EPipelineStage_GeometryExt) & 1) && 
-			!(device->info.capabilities.features & EGraphicsFeatures_GeometryShader)
-		)
-			return Error_unsupportedOperation(11);
-
-		//TODO: Implement renderPass here! Also don't forgor to properly handle check if this is the same device
-
-		if(info->renderPass)
-			return Error_unsupportedOperation(3);
 	}
 
 	//Create temp data to store these
@@ -542,9 +394,6 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 		states[i] = List_createEmpty(strides[i]);
 		_gotoIfError(clean, List_resizex(&states[i], counts[i]));
 	}
-
-	*pipelines = List_createEmpty(sizeof(PipelineRef*));
-	_gotoIfError(clean, List_resizex(pipelines, infos->length));
 
 	//TODO: Push constants
 
@@ -601,18 +450,18 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 	for(U64 i = EPipelineStateType_PerPipelinePropertyStart; i < EPipelineStateType_Count; ++i)
 		counts[i] = 0;
 
-	for(U64 i = 0; i < infos->length; ++i) {
+	for(; total < pipelines->length; ++total) {
 
-		PipelineGraphicsInfo *info = &((PipelineGraphicsInfo*) infos->ptr)[i];
+		const PipelineGraphicsInfo *info =
+			(const PipelineGraphicsInfo*) PipelineRef_ptr(((const PipelineRef**)pipelines->ptr)[total])->extraInfo;
 
 		//Convert info struct to vulkan struct
 
 		VkGraphicsPipelineCreateInfo *currentInfo = 
-			&((VkGraphicsPipelineCreateInfo*)states[EPipelineStateType_PipelineCreateInfo].ptr)[i];
+			&((VkGraphicsPipelineCreateInfo*)states[EPipelineStateType_PipelineCreateInfo].ptr)[total];
 
 		*currentInfo = (VkGraphicsPipelineCreateInfo) {
 			.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-			.stageCount = info->stageCount,
 			//.pStages = stages,
 			.pVertexInputState = &vertexInput,
 			.pInputAssemblyState = &inputAssembly,
@@ -628,49 +477,17 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 
 		//Vertex input
 
-		U64 vertexBuffers = 0, vertexAttribs = 0;
+		Bool hasAttrib = false;
 
-		for(U32 j = 0; j < 16; ++j) {
-
-			//Validate buffer strides
-
-			U16 stride = info->vertexLayout.bufferStrides12_isInstance1[j] & 4095;
-
-			if(stride > 2048)
-				_gotoIfError(clean, Error_invalidOperation(7));
-
-			if(stride)
-				++vertexBuffers;
-
-			//Validate format for attribute
-
-			VertexAttribute attrib = info->vertexLayout.attributes[j];
-
-			if(attrib.format >= ETextureFormatId_Count)
-				_gotoIfError(clean, Error_invalidOperation(8));
-
-			ETextureFormat format = ETextureFormatId_unpack[attrib.format];
-
-			if(!attrib.format)
-				continue;
-
-			++vertexAttribs;
-
-			if(ETextureFormat_getIsCompressed(format))
-				_gotoIfError(clean, Error_invalidOperation(9));
-
-			//Validate bounds for attribute
-
-			U64 size = ETextureFormat_getSize(format, 1, 1);
-			U64 offset = attrib.offset11 & 2047;
-
-			if(offset + size > stride)
-				_gotoIfError(clean, Error_outOfBounds(0, offset + size, stride));
-		}
+		for(U32 j = 0; j < 16; ++j)
+			if(info->vertexLayout.attributes[j].format) {
+				hasAttrib = true;
+				break;
+			}
 
 		//Transform into description
 
-		if (vertexAttribs) {
+		if (hasAttrib) {
 
 			VkVertexInputBindingDescription *bindings = 
 				&((VkVertexInputBindingDescription*)states[EPipelineStateType_InputBuffers].ptr)[
@@ -727,7 +544,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 			counts[EPipelineStateType_InputAttributes] += attribCount;
 
 			VkPipelineVertexInputStateCreateInfo *infoi = 
-				&((VkPipelineVertexInputStateCreateInfo*)states[EPipelineStateType_VertexInput].ptr)[i];
+				&((VkPipelineVertexInputStateCreateInfo*)states[EPipelineStateType_VertexInput].ptr)[total];
 
 			*infoi = (VkPipelineVertexInputStateCreateInfo) {
 				.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
@@ -748,7 +565,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 
 			switch (info->topologyMode) {
 				
-				case ETopologyMode_TriangleList:		topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;		break;
+				default:								topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;		break;
 				case ETopologyMode_TriangleStrip:		topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;	break;
 
 				case ETopologyMode_LineList:			topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;			break;
@@ -771,13 +588,10 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 				case ETopologyMode_LineStripAdj:
 					topology = VK_PRIMITIVE_TOPOLOGY_LINE_STRIP_WITH_ADJACENCY;
 					break;
-
-				default:
-					_gotoIfError(clean, Error_unsupportedOperation(9));
 			}
 
 			VkPipelineInputAssemblyStateCreateInfo *infoi = 
-				&((VkPipelineInputAssemblyStateCreateInfo*)states[EPipelineStateType_InputAssembly].ptr)[i];
+				&((VkPipelineInputAssemblyStateCreateInfo*)states[EPipelineStateType_InputAssembly].ptr)[total];
 
 			*infoi = (VkPipelineInputAssemblyStateCreateInfo) {
 				.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
@@ -789,24 +603,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 
 		//Rasterizer
 
-		if(
-			!(info->rasterizer.flags & ERasterizerFlags_EnableDepthBias) && (
-				info->rasterizer.depthBiasConstantFactor ||
-				info->rasterizer.depthBiasClamp ||
-				info->rasterizer.depthBiasSlopeFactor
-			)
-		)
-			_gotoIfError(clean, Error_unsupportedOperation(5));
-
 		if(info->rasterizer.flags || info->rasterizer.cullMode) {
-
-			Bool wireframe = info->rasterizer.flags & ERasterizerFlags_IsWireframeExt;
-
-			if(
-				wireframe && 
-				!(device->info.capabilities.features & EGraphicsFeatures_Wireframe)
-			)
-				_gotoIfError(clean, Error_unsupportedOperation(4));
 
 			VkCullModeFlags cullMode = 0;
 
@@ -814,25 +611,25 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 
 				case ECullMode_Back:	cullMode = VK_CULL_MODE_BACK_BIT;	break;
 				case ECullMode_Front:	cullMode = VK_CULL_MODE_FRONT_BIT;	break;
-				case ECullMode_None:	cullMode = VK_CULL_MODE_NONE;		break;
-
-				default:
-					_gotoIfError(clean, Error_invalidOperation(0));
+				default:				cullMode = VK_CULL_MODE_NONE;		break;
 			}
 
 			VkFrontFace windingOrder = 
 				info->rasterizer.flags & ERasterizerFlags_IsClockWise ? VK_FRONT_FACE_CLOCKWISE : 
 				VK_FRONT_FACE_COUNTER_CLOCKWISE;
+
+			VkPolygonMode polygonMode = 
+				info->rasterizer.flags & ERasterizerFlags_IsWireframeExt ? VK_POLYGON_MODE_LINE : VK_POLYGON_MODE_FILL;
 			
 			VkPipelineRasterizationStateCreateInfo *infoi = 
-				&((VkPipelineRasterizationStateCreateInfo*)states[EPipelineStateType_Rasterizer].ptr)[i];
+				&((VkPipelineRasterizationStateCreateInfo*)states[EPipelineStateType_Rasterizer].ptr)[total];
 
 			*infoi = (VkPipelineRasterizationStateCreateInfo) {
 				.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
 				.cullMode = cullMode,
 				.frontFace = windingOrder,
 				.depthClampEnable = info->rasterizer.flags & ERasterizerFlags_EnableDepthClamp,
-				.polygonMode = wireframe ? VK_POLYGON_MODE_LINE : VK_POLYGON_MODE_FILL,
+				.polygonMode = polygonMode,
 				.depthBiasEnable = info->rasterizer.flags & ERasterizerFlags_EnableDepthBias,
 				.depthBiasConstantFactor = info->rasterizer.depthBiasConstantFactor,
 				.depthBiasClamp = info->rasterizer.depthBiasClamp,
@@ -849,13 +646,11 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 
 		if (info->depthStencil.flags & EDepthStencilFlags_StencilTest) {
 
-			VkCompareOp stencilCompareOp = 0;
-			_gotoIfError(clean, mapVkCompareOp(info->depthStencil.stencilCompare, &stencilCompareOp));
+			VkCompareOp stencilCompareOp = mapVkCompareOp(info->depthStencil.stencilCompare);
 
-			VkStencilOp failOp = 0, passOp = 0, depthFailOp = 0;
-			_gotoIfError(clean, mapVkStencilOp(info->depthStencil.stencilFail, &failOp));
-			_gotoIfError(clean, mapVkStencilOp(info->depthStencil.stencilPass, &passOp));
-			_gotoIfError(clean, mapVkStencilOp(info->depthStencil.stencilDepthFail, &depthFailOp));
+			VkStencilOp failOp = mapVkStencilOp(info->depthStencil.stencilFail);
+			VkStencilOp passOp = mapVkStencilOp(info->depthStencil.stencilPass);
+			VkStencilOp depthFailOp = mapVkStencilOp(info->depthStencil.stencilDepthFail);
 
 			stencil = (VkStencilOpState) {
 				.failOp = failOp,
@@ -867,26 +662,12 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 			};
 		}
 
-		else if(
-			info->depthStencil.stencilCompare ||
-			info->depthStencil.stencilFail ||
-			info->depthStencil.stencilPass ||
-			info->depthStencil.stencilDepthFail ||
-			info->depthStencil.stencilReadMask ||
-			info->depthStencil.stencilWriteMask
-		)
-			_gotoIfError(clean, Error_unsupportedOperation(6));
-
-		if(info->depthStencil.depthCompare && !(info->depthStencil.flags & EDepthStencilFlags_DepthTest))
-			_gotoIfError(clean, Error_unsupportedOperation(7));
-
 		if(info->depthStencil.flags) {
 
-			VkCompareOp depthCompareOp = 0;
-			_gotoIfError(clean, mapVkCompareOp(info->depthStencil.depthCompare, &depthCompareOp));
+			VkCompareOp depthCompareOp = mapVkCompareOp(info->depthStencil.depthCompare);
 
 			VkPipelineDepthStencilStateCreateInfo *infoi = 
-				&((VkPipelineDepthStencilStateCreateInfo*)states[EPipelineStateType_DepthStencil].ptr)[i];
+				&((VkPipelineDepthStencilStateCreateInfo*)states[EPipelineStateType_DepthStencil].ptr)[total];
 
 			*infoi = (VkPipelineDepthStencilStateCreateInfo) {
 				.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
@@ -906,9 +687,6 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 		//Blend state
 
 		{
-			if(info->blendState.logicOpExt && !(device->info.capabilities.features & EGraphicsFeatures_LogicOp))
-				_gotoIfError(clean, Error_unsupportedOperation(8));
-
 			//TODO: Validate render target count with renderPass
 
 			//Find attachments
@@ -917,8 +695,6 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 				&((VkPipelineColorBlendAttachmentState*)states[EPipelineStateType_BlendAttachment].ptr)[
 					counts[EPipelineStateType_BlendAttachment]
 				];
-
-			Bool dualSrc = device->info.capabilities.features & EGraphicsFeatures_DualSrcBlend;
 
 			for(U64 j = 0; j < info->attachmentCountExt; ++j) {
 
@@ -941,14 +717,14 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 					.colorWriteMask = (VkColorComponentFlags) info->blendState.writeMask[index]
 				};
 
-				_gotoIfError(clean, mapVkBlendOp(attachment.blendOp, &attachments[j].colorBlendOp));
-				_gotoIfError(clean, mapVkBlendOp(attachment.blendOpAlpha, &attachments[j].alphaBlendOp));
+				attachments[j].colorBlendOp = mapVkBlendOp(attachment.blendOp);
+				attachments[j].alphaBlendOp = mapVkBlendOp(attachment.blendOpAlpha);
 
-				_gotoIfError(clean, mapVkBlend(dualSrc, attachment.srcBlend, &attachments[j].srcColorBlendFactor));
-				_gotoIfError(clean, mapVkBlend(dualSrc, attachment.dstBlend, &attachments[j].dstColorBlendFactor));
+				attachments[j].srcColorBlendFactor = mapVkBlend(attachment.srcBlend);
+				attachments[j].dstColorBlendFactor = mapVkBlend(attachment.dstBlend);
 
-				_gotoIfError(clean, mapVkBlend(dualSrc, attachment.srcBlendAlpha, &attachments[j].srcAlphaBlendFactor));
-				_gotoIfError(clean, mapVkBlend(dualSrc, attachment.dstBlendAlpha, &attachments[j].dstAlphaBlendFactor));
+				attachments[j].srcAlphaBlendFactor = mapVkBlend(attachment.srcBlendAlpha);
+				attachments[j].dstAlphaBlendFactor = mapVkBlend(attachment.dstBlendAlpha);
 			}
 
 			//Turn into blend state
@@ -956,7 +732,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 			VkLogicOp logicOp = 0;
 
 			switch (info->blendState.logicOpExt) {
-				case ELogicOpExt_Off:			break;
+				default:						break;
 				case ELogicOpExt_Clear:			logicOp = VK_LOGIC_OP_CLEAR;			break;
 				case ELogicOpExt_Set:			logicOp = VK_LOGIC_OP_SET;				break;
 				case ELogicOpExt_Copy:			logicOp = VK_LOGIC_OP_COPY;				break;
@@ -973,12 +749,10 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 				case ELogicOpExt_AndInvert:		logicOp = VK_LOGIC_OP_AND_INVERTED;		break;
 				case ELogicOpExt_OrReverse:		logicOp = VK_LOGIC_OP_OR_REVERSE;		break;
 				case ELogicOpExt_OrInvert:		logicOp = VK_LOGIC_OP_OR_INVERTED;		break;
-				default:
-					_gotoIfError(clean, Error_invalidOperation(1));
 			}
 
 			VkPipelineColorBlendStateCreateInfo *infoi = 
-				&((VkPipelineColorBlendStateCreateInfo*)states[EPipelineStateType_BlendState].ptr)[i];
+				&((VkPipelineColorBlendStateCreateInfo*)states[EPipelineStateType_BlendState].ptr)[total];
 
 			*infoi = (VkPipelineColorBlendStateCreateInfo) {
 				.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
@@ -996,7 +770,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 		if (info->patchControlPointsExt) {
 
 			VkPipelineTessellationStateCreateInfo *infoi = 
-				&((VkPipelineTessellationStateCreateInfo*)states[EPipelineStateType_Tessellation].ptr)[i];
+				&((VkPipelineTessellationStateCreateInfo*)states[EPipelineStateType_Tessellation].ptr)[total];
 
 			*infoi = (VkPipelineTessellationStateCreateInfo) {
 				.sType = VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO,
@@ -1011,7 +785,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 		if (info->msaa) {
 
 			VkPipelineMultisampleStateCreateInfo *infoi = 
-				&((VkPipelineMultisampleStateCreateInfo*)states[EPipelineStateType_MSAA].ptr)[i];
+				&((VkPipelineMultisampleStateCreateInfo*)states[EPipelineStateType_MSAA].ptr)[total];
 
 			*infoi = (VkPipelineMultisampleStateCreateInfo) {
 				.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
@@ -1029,7 +803,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 
 			switch (info->depthFormatExt) {
 
-				case EDepthStencilFormat_None:	break;
+				default:						break;
 				case EDepthStencilFormat_D32:	depthFormat = VK_FORMAT_D32_SFLOAT;		break;
 
 				case EDepthStencilFormat_D24S8:	
@@ -1054,7 +828,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 				));
 
 			VkPipelineRenderingCreateInfo *infoi = 
-				&((VkPipelineRenderingCreateInfo*)states[EPipelineStateType_DirectRendering].ptr)[i];
+				&((VkPipelineRenderingCreateInfo*)states[EPipelineStateType_DirectRendering].ptr)[total];
 
 			*infoi = (VkPipelineRenderingCreateInfo) {
 				.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
@@ -1074,15 +848,16 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 				counts[EPipelineStateType_Stage]
 			];
 
+		Pipeline *pipeline = PipelineRef_ptr(((const PipelineRef**)pipelines->ptr)[total]);
+
 		for(U64 j = 0; j < info->stageCount; ++j) {
 
 			VkShaderStageFlagBits stageBit = 0;
-			PipelineStage stage = ((PipelineStage*) stages->ptr)[j + counts[EPipelineStateType_Stage]];
+			PipelineStage stage = ((const PipelineStage*) pipeline->stages.ptr)[j];
 
 			switch (stage.stageType) {
-				case EPipelineStage_Vertex:			stageBit = VK_SHADER_STAGE_VERTEX_BIT;						break;
+				default:							stageBit = VK_SHADER_STAGE_VERTEX_BIT;						break;
 				case EPipelineStage_Pixel:			stageBit = VK_SHADER_STAGE_FRAGMENT_BIT;					break;
-				case EPipelineStage_Compute:		stageBit = VK_SHADER_STAGE_COMPUTE_BIT;						break;
 				case EPipelineStage_GeometryExt:	stageBit = VK_SHADER_STAGE_GEOMETRY_BIT;					break;
 				case EPipelineStage_HullExt:		stageBit = VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT;		break;
 				case EPipelineStage_DomainExt:		stageBit = VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;		break;
@@ -1095,7 +870,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 				&module, 
 				deviceExt,
 				instanceExt,
-				!names.length ? CharString_createNull() : ((const CharString*)names.ptr)[i],
+				!names.length ? CharString_createNull() : ((const CharString*)names.ptr)[total],
 				stage.stageType
 			));
 
@@ -1105,6 +880,8 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 				.module = module,
 				.pName = "main"
 			};
+
+			++currentInfo->stageCount;
 		}
 
 		currentInfo->pStages = vkStages;
@@ -1119,7 +896,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 	_gotoIfError(clean, vkCheck(vkCreateGraphicsPipelines(
 		deviceExt->device,
 		NULL,
-		(U32) infos->length,
+		(U32) pipelines->length,
 		(const VkGraphicsPipelineCreateInfo*) states[EPipelineStateType_PipelineCreateInfo].ptr,
 		NULL,
 		(VkPipeline*) states[EPipelineStateType_VkPipeline].ptr
@@ -1127,19 +904,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 
 	//Create RefPtrs for OxC3 usage.
 
-	counts[EPipelineStateType_Stage] = 0;
-
 	for (U64 i = 0; i < pipelines->length; ++i) {
-
-		PipelineGraphicsInfo *info = &((PipelineGraphicsInfo*) infos->ptr)[i];
-		RefPtr **refPtr = &((RefPtr**)pipelines->ptr)[i];
-
-		_gotoIfError(clean, RefPtr_createx(
-			(U32)(sizeof(Pipeline) + sizeof(VkPipeline) + sizeof(PipelineGraphicsInfo)), 
-			(ObjectFreeFunc) Pipeline_free, 
-			EGraphicsTypeId_Pipeline, 
-			refPtr
-		));
 
 		#ifndef NDEBUG
 
@@ -1148,7 +913,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 				VkDebugUtilsObjectNameInfoEXT debugName2 = (VkDebugUtilsObjectNameInfoEXT) {
 					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
 					.objectType = VK_OBJECT_TYPE_PIPELINE,
-					.objectHandle = (U64) ((VkPipeline*) states[EPipelineStateType_VkPipeline].ptr)[i],
+					.objectHandle = (U64) ((const VkPipeline*) states[EPipelineStateType_VkPipeline].ptr)[i],
 					.pObjectName = ((const CharString*)names.ptr)[i].ptr
 				};
 
@@ -1157,46 +922,11 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 
 		#endif
 
-		Pipeline *pipeline = PipelineRef_ptr(*refPtr);
-
-		GraphicsDeviceRef_inc(deviceRef);
-
-		*pipeline = (Pipeline) {
-			.device = deviceRef,
-			.type = EPipelineType_Graphics,
-			.stages = List_createEmpty(sizeof(PipelineStage))
-		};
-
-		_gotoIfError(clean, List_resizex(&pipeline->stages, info->stageCount));
-
-		List tempList = (List) { 0 };
-		_gotoIfError(clean, List_createSubset(*stages, counts[EPipelineStateType_Stage], info->stageCount, &tempList));
-
-		Buffer_copy(List_buffer(pipeline->stages), List_bufferConst(tempList));
-
-		for(U64 k = counts[EPipelineStateType_Stage], j = k; j < k + info->stageCount; ++j)
-			((PipelineStage*)stages->ptr)[j].shaderBinary = Buffer_createNull();			//Moved
-
-		VkPipeline *pipelineExt = Pipeline_ext(pipeline, Vk);
+		VkPipeline *pipelineExt = Pipeline_ext(PipelineRef_ptr(((const PipelineRef**)pipelines->ptr)[i]), Vk);
 		*pipelineExt = ((VkPipeline*) states[EPipelineStateType_VkPipeline].ptr)[i];
-		*(PipelineGraphicsInfo*)(pipelineExt + 1) = ((const PipelineGraphicsInfo*) infos->ptr)[i];
-		pipeline->extraInfo = pipelineExt + 1;
-
-		counts[EPipelineStateType_Stage] += info->stageCount;
 	}
 
-	List_freex(stages);
-	List_freex(infos);
-	goto success;
-
 clean:
-
-	for (U64 i = 0; i < pipelines->length; ++i)
-		RefPtr_dec(&((RefPtr**)pipelines->ptr)[i]);
-
-	List_freex(pipelines);
-
-success:
 
 	for (U64 i = 0; i < total; ++i) {
 
