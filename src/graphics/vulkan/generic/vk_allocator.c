@@ -56,14 +56,6 @@ Error VkDeviceMemoryAllocator_findMemory(
 	U32 memoryId = U32_MAX;
 	U32 propertyId = 2;
 
-	if (!cpuSided) {
-
-		for(U32 i = 0; i < 3; ++i)
-			properties[i] |= local;
-
-		++propertyId;
-	}
-
 	U64 maxHeapSizes[2] = { 0 };
 	U32 heapIds[2] = { 0 };
 
@@ -79,8 +71,9 @@ Error VkDeviceMemoryAllocator_findMemory(
 	}
 
 	Bool distinct = true;
+	Bool hasLocal = true;
 
-	if (!maxHeapSizes[0]) {						//If there's only local heaps then we know we're on mobile. Use local heap.
+ 	if (!maxHeapSizes[0]) {						//If there's only local heaps then we know we're on mobile. Use local heap.
 		maxHeapSizes[0] = maxHeapSizes[1];
 		heapIds[0] = heapIds[1];
 		distinct = false;
@@ -90,6 +83,16 @@ Error VkDeviceMemoryAllocator_findMemory(
 		maxHeapSizes[1] = maxHeapSizes[0];
 		heapIds[1] = heapIds[0];
 		distinct = false;
+		hasLocal = false;
+	}
+
+	if (!cpuSided) {
+
+		if(hasLocal)
+			for (U32 i = 0; i < 3; ++i)
+				properties[i] |= local;
+
+		++propertyId;
 	}
 
 	if (!maxHeapSizes[0] || !maxHeapSizes[1])
