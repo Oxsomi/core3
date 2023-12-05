@@ -57,13 +57,13 @@ DWORD ThreadFunc(Thread *thread) {
 Error Thread_create(ThreadCallbackFunction callback, void *objectHandle, Thread **thread) {
 
 	if(!thread)
-		return Error_nullPointer(2);
+		return Error_nullPointer(2, "Thread_create()::thread is required");
 
 	if(*thread)
-		return Error_invalidParameter(2, 0);
+		return Error_invalidParameter(2, 0, "Thread_create()::*thread isn't NULL, might indicate memleak");
 
 	if(!callback)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "Thread_create()::callback is required");
 
 	Buffer buf = Buffer_createNull();
 
@@ -81,7 +81,7 @@ Error Thread_create(ThreadCallbackFunction callback, void *objectHandle, Thread 
 
 	if (!thr->nativeHandle) {
 		Thread_free(thread);
-		return Error_platformError(0, GetLastError());
+		return Error_platformError(0, GetLastError(), "Thread_wait() couldn't create thread");
 	}
 
 	return Error_none();
@@ -90,10 +90,10 @@ Error Thread_create(ThreadCallbackFunction callback, void *objectHandle, Thread 
 Error Thread_wait(Thread *thread, U32 maxWaitTimeMs) {
 
 	if(!thread)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "Thread_wait()::thread is required");
 
 	if(WaitForSingleObject(thread->nativeHandle, maxWaitTimeMs) == WAIT_FAILED)
-		return Error_timedOut(0, maxWaitTimeMs);
+		return Error_timedOut(0, maxWaitTimeMs, "Thread_wait() couldn't wait on thread");
 
 	return Error_none();
 }

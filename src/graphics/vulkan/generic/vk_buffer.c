@@ -202,7 +202,7 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 		acq = Lock_lock(&deviceExt->descriptorLock, U64_MAX);
 
 		if(acq < ELockAcquire_Success)
-			_gotoIfError(clean, Error_invalidState(0));
+			_gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_createBufferExt() couldn't acquire descriptor lock"));
 
 		//Create readonly buffer
 
@@ -225,7 +225,9 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 			locationRead = VkGraphicsDevice_allocateDescriptor(deviceExt, EDescriptorType_Buffer);
 
 			if(locationRead == U32_MAX)
-				_gotoIfError(clean, Error_outOfMemory(0));
+				_gotoIfError(clean, Error_outOfMemory(
+					0, "GraphicsDeviceRef_createBufferExt() couldn't allocate Buffer descriptor"
+				));
 
 			descriptors[0].dstBinding = EDescriptorType_Buffer - 1;
 			descriptors[0].dstArrayElement = locationRead & ((1 << 20) - 1);
@@ -239,7 +241,9 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 			locationWrite = VkGraphicsDevice_allocateDescriptor(deviceExt, EDescriptorType_RWBuffer);
 
 			if(locationWrite == U32_MAX)
-				_gotoIfError(clean, Error_outOfMemory(0));
+				_gotoIfError(clean, Error_outOfMemory(
+					0, "GraphicsDeviceRef_createBufferExt() couldn't allocate RWBuffer descriptor"
+				));
 
 			descriptors[counter] = descriptors[0];
 			descriptors[counter].dstBinding = EDescriptorType_RWBuffer - 1;

@@ -419,7 +419,7 @@ Error writeToDisk(FileInfo info, OutputFolderToDisk *output) {
 	U64 start = CharString_length(output->base) == 1 && output->base.ptr[0] == '.' ? 0 : CharString_length(output->base);
 
 	if(!CharString_cut(info.path, start, 0, &subDir))
-		_gotoIfError(clean, Error_invalidOperation(0));
+		_gotoIfError(clean, Error_invalidOperation(0, "writeToDisk()::info.path cut failed"));
 
 	_gotoIfError(clean, CharString_createCopyx(output->output, &tmp));
 	_gotoIfError(clean, CharString_appendStringx(&tmp, subDir));
@@ -822,7 +822,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 			//Sort to ensure the subdirectories are correct
 
 			if(!List_sortString(strings, EStringCase_Insensitive))
-				_gotoIfError(cleanCa, Error_invalidOperation(0));
+				_gotoIfError(cleanCa, Error_invalidOperation(0, "CLI_inspectData() sort strings (oiCA) failed"));
 
 			//Process all and print
 
@@ -848,7 +848,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 				//001:   child (indented by 2)
 
 				if(v == U64_MAX)
-					_gotoIfError(cleanCa, Error_notFound(0, 0));
+					_gotoIfError(cleanCa, Error_notFound(0, 0, "CLI_inspectData() couldn't find archive entry (oiCA)"));
 
 				_gotoIfError(cleanCa, CharString_createDecx(v, 3, &tmp));
  				_gotoIfError(cleanCa, CharString_createx(' ', 2 * (parentCount - baseCount), &tmp1));

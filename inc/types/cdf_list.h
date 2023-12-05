@@ -102,6 +102,6 @@ typedef struct CDFListElement {
 	F32 chance;
 } CDFListElement;
 
-Error CDFList_getRandomElement(CDFList *list, CDFListElement *elementValue);
+Error CDFList_getRandomElementSecure(CDFList *list, CDFListElement *elementValue);
 Error CDFList_getRandomElementFast(CDFList *list, CDFListElement *elementValue, U32 *seed);
 Error CDFList_getElementAtOffset(CDFList *list, F32 offset, CDFListElement *elementValue);

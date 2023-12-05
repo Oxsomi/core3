@@ -31,11 +31,7 @@ const C8 *vkApiDump = "VK_LAYER_LUNARG_api_dump";
 
 Error VkGraphicsInstance_getLayers(List *layers) {
 
-	if(!layers)
-		return Error_nullPointer(0);
-
-	if(layers->stride != sizeof(const C8*))
-		return Error_invalidParameter(0, 0);
+	layers;
 
 	#ifndef NDEBUG
 

@@ -24,11 +24,11 @@
 #include "types/error.h"
 
 Error SwapchainRef_dec(SwapchainRef **swapchain) {
-	return !RefPtr_dec(swapchain) ? Error_invalidOperation(0) : Error_none();
+	return !RefPtr_dec(swapchain) ? Error_invalidOperation(0, "SwapchainRef_dec()::swapchain is invalid") : Error_none();
 }
 
 Error SwapchainRef_inc(SwapchainRef *swapchain) {
-	return !RefPtr_inc(swapchain) ? Error_invalidOperation(0) : Error_none();
+	return !RefPtr_inc(swapchain) ? Error_invalidOperation(0, "SwapchainRef_inc()::swapchain is invalid") : Error_none();
 }
 
 impl Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, SwapchainInfo info, Swapchain *swapchain);
@@ -39,10 +39,10 @@ impl extern const U64 SwapchainExt_size;
 Error Swapchain_resize(Swapchain *swapchain) {
 
 	if(!swapchain)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "Swapchain_resize()::swapchain is required");
 
 	if(Lock_lock(&swapchain->lock, U64_MAX) != ELockAcquire_Acquired)
-		return Error_invalidState(0);
+		return Error_invalidState(0, "Swapchain_resize() couldn't lock swapchain");
 
 	//Resize with same format and same size is a NOP
 
@@ -77,12 +77,16 @@ Bool GraphicsDevice_freeSwapchain(Swapchain *swapchain, Allocator alloc) {
 Error GraphicsDeviceRef_createSwapchain(GraphicsDeviceRef *deviceRef, SwapchainInfo info, SwapchainRef **swapchainRef) {
 
 	if(!deviceRef || !info.window || !info.window->nativeHandle)
-		return Error_nullPointer(!deviceRef ? 1 : 0);
+		return Error_nullPointer(
+			!deviceRef ? 1 : 0, "GraphicsDeviceRef_createSwapchain()::deviceRef and info.window (physical) are required"
+		);
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 
 	if(!(device->info.capabilities.features & EGraphicsFeatures_Swapchain))
-		return Error_unsupportedOperation(0);
+		return Error_unsupportedOperation(
+			0, "GraphicsDeviceRef_createSwapchain() is called, but swapchain extension isn't supported"
+		);
 
 	Error err = RefPtr_createx(
 		(U32)(sizeof(Swapchain) + SwapchainExt_size), 

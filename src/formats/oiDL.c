@@ -32,25 +32,25 @@ static const U8 DLHeader_V1_0  = 0;
 Error DLFile_create(DLSettings settings, Allocator alloc, DLFile *dlFile) {
 
 	if(!dlFile)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "DLFile_create()::dlFile is required");
 
 	if(dlFile->entries.ptr)
-		return Error_invalidOperation(0);
+		return Error_invalidOperation(0, "DLFile_create()::dlFile isn't empty, might indicate memleak");
 
 	if(settings.compressionType >= EXXCompressionType_Count)
-		return Error_invalidParameter(0, 0);
+		return Error_invalidParameter(0, 0, "DLFile_create()::settings.compressionType is invalid");
 
 	if(settings.compressionType > EXXCompressionType_None)
-		return Error_invalidOperation(0);							//TODO: Add support for compression
+		return Error_invalidOperation(0, "DLFile_create() compression not supported yet");		//TODO:
 
 	if(settings.encryptionType >= EXXEncryptionType_Count)
-		return Error_invalidParameter(0, 1);
+		return Error_invalidParameter(0, 1, "DLFile_create()::settings.encryptionType is invalid");
 
 	if(settings.dataType >= EDLDataType_Count)
-		return Error_invalidParameter(0, 2);
+		return Error_invalidParameter(0, 2, "DLFile_create()::settings.dataType is invalid");
 
 	if(settings.flags & EDLSettingsFlags_Invalid)
-		return Error_invalidParameter(0, 3);
+		return Error_invalidParameter(0, 3, "DLFile_create()::settings.flags contained unsupported flag");
 
 	dlFile->entries = List_createEmpty(sizeof(DLEntry));
 
@@ -88,58 +88,44 @@ Bool DLFile_free(DLFile *dlFile, Allocator alloc) {
 Error DLFile_addEntry(DLFile *dlFile, Buffer entryBuf, Allocator alloc) {
 
 	if(!dlFile || !dlFile->entries.ptr)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "DLFile_addEntry()::dlFile is required");
 
 	if(dlFile->settings.dataType != EDLDataType_Data)
-		return Error_invalidOperation(0);
+		return Error_invalidOperation(0, "DLFile_addEntry() is unsupported if type isn't Data");
 
 	DLEntry entry = { .entryBuffer = entryBuf };
-
-	return List_pushBack(
-		&dlFile->entries,
-		Buffer_createConstRef(&entry, sizeof(entry)),
-		alloc
-	);
+	return List_pushBack(&dlFile->entries, Buffer_createConstRef(&entry, sizeof(entry)), alloc);
 }
 
 Error DLFile_addEntryAscii(DLFile *dlFile, CharString entryStr, Allocator alloc) {
 
 	if(!dlFile || !dlFile->entries.ptr)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "DLFile_addEntryAscii()::dlFile is required");
 
 	if(dlFile->settings.dataType != EDLDataType_Ascii)
-		return Error_invalidOperation(0);
+		return Error_invalidOperation(0, "DLFile_addEntryAscii() is unsupported if type isn't Ascii");
 
 	if(!CharString_isValidAscii(entryStr))
-		return Error_invalidParameter(1, 0);
+		return Error_invalidParameter(1, 0, "DLFile_addEntryAscii()::entryStr isn't valid Ascii");
 
 	DLEntry entry = { .entryString = entryStr };
-
-	return List_pushBack(
-		&dlFile->entries,
-		Buffer_createConstRef(&entry, sizeof(entry)),
-		alloc
-	);
+	return List_pushBack(&dlFile->entries, Buffer_createConstRef(&entry, sizeof(entry)), alloc);
 }
 
 Error DLFile_addEntryUTF8(DLFile *dlFile, Buffer entryBuf, Allocator alloc) {
 
 	if(!dlFile || !dlFile->entries.ptr)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "DLFile_addEntryUTF8()::dlFile is required");
 
 	if(dlFile->settings.dataType != EDLDataType_UTF8)
-		return Error_invalidOperation(0);
+		return Error_invalidOperation(0, "DLFile_addEntryUTF8() is unsupported if type isn't UTF8");
 
 	if(!Buffer_isUTF8(entryBuf, 1))
-		return Error_invalidParameter(1, 0);
+		return Error_invalidParameter(1, 0, "DLFile_addEntryAscii()::entryBuf isn't valid UTF8");
 
 	DLEntry entry = { .entryBuffer = entryBuf };
 
-	return List_pushBack(
-		&dlFile->entries,
-		Buffer_createConstRef(&entry, sizeof(entry)),
-		alloc
-	);
+	return List_pushBack(&dlFile->entries, Buffer_createConstRef(&entry, sizeof(entry)), alloc);
 }
 
 //We currently don't support compression yet. But once Buffer_compress/uncompress is available, it should be easy.
@@ -147,20 +133,20 @@ Error DLFile_addEntryUTF8(DLFile *dlFile, Buffer entryBuf, Allocator alloc) {
 Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result) {
 
 	if(!dlFile.entries.ptr)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "DLFile_write()::dlFile is required");
 
 	if(!result)
-		return Error_nullPointer(2);
+		return Error_nullPointer(2, "DLFile_write()::result is required");
 
 	if(result->ptr)
-		return Error_invalidOperation(0);
+		return Error_invalidOperation(0, "DLFile_write()::result wasn't empty, might indicate memleak");
 
 	//Get header size (excluding compressedSize + entryCount)
 
 	U64 hashSize = !dlFile.settings.compressionType ? 0 : (dlFile.settings.flags & EDLSettingsFlags_UseSHA256 ? 32 : 4);
 	U64 headerSize = sizeof(DLHeader) + hashSize;
 
-	if(!(dlFile.settings.flags & EDLSettingsFlags_HideMagicNumber))		//Magic number
+	if(!(dlFile.settings.flags & EDLSettingsFlags_HideMagicNumber))		//Magic number (can be hidden by parent; such as oiCA)
 		headerSize += sizeof(U32);
 
 	//Get data size
@@ -176,7 +162,7 @@ Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result) {
 			CharString_length(entry.entryString);
 
 		if(outputSize + len < outputSize)
-			return Error_overflow(0, outputSize + len, outputSize);
+			return Error_overflow(0, outputSize + len, outputSize, "DLFile_write() overflow");
 
 		outputSize += len;
 		maxSize = U64_max(maxSize, len);
@@ -187,7 +173,7 @@ Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result) {
 	U64 entrySizes = dataSizeTypeSize * dlFile.entries.length;
 
 	if(entrySizes / dataSizeTypeSize != dlFile.entries.length)
-		return Error_overflow(0, entrySizes, entrySizes / dataSizeTypeSize);
+		return Error_overflow(0, entrySizes, entrySizes / dataSizeTypeSize, "DLFile_write() overflow (2)");
 
 	EXXDataSizeType entrySizeType = EXXDataSizeType_getRequiredType(dlFile.entries.length);
 	headerSize += SIZE_BYTE_TYPE[entrySizeType];
@@ -204,7 +190,7 @@ Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result) {
 		headerSize += SIZE_BYTE_TYPE[uncompressedSizeType];
 
 	if(outputSize + headerSize < outputSize)
-		return Error_overflow(0, outputSize + headerSize, outputSize);
+		return Error_overflow(0, outputSize + headerSize, outputSize, "DLFile_write() overflow (3)");
 
 	//Create our final uncompressed buffer
 
@@ -220,11 +206,12 @@ Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result) {
 	for (U64 i = 0; i < dlFile.entries.length; ++i) {
 
 		DLEntry entry = ((DLEntry*)dlFile.entries.ptr)[i];
-		Buffer buf = dlFile.settings.dataType != EDLDataType_Ascii ? entry.entryBuffer : CharString_bufferConst(entry.entryString);
+		Buffer buf = 
+			dlFile.settings.dataType != EDLDataType_Ascii ? entry.entryBuffer : CharString_bufferConst(entry.entryString);
+
 		U64 len = Buffer_length(buf);
 
-		volatile U64 t = Buffer_forceWriteSizeType(sizes + dataSizeTypeSize * i, dataSizeType, len);
-		t;
+		volatile U64 t = Buffer_forceWriteSizeType(sizes + dataSizeTypeSize * i, dataSizeType, len); t;
 
 		Buffer_copy(Buffer_createRef(dat, len), buf);
 		dat += len;
@@ -409,10 +396,10 @@ Error DLFile_read(
 ) {
 
 	if(!dlFile)
-		return Error_nullPointer(2);
+		return Error_nullPointer(2, "DLFile_read()::dlFile is required");
 
 	if(dlFile->entries.ptr)
-		return Error_invalidOperation(0);
+		return Error_invalidOperation(0, "DLFile_read()::dlFile is empty, might indicate memleak");
 
 	Buffer entireFile = file;
 
@@ -425,7 +412,7 @@ Error DLFile_read(
 		_gotoIfError(clean, Buffer_consume(&file, &magic, sizeof(magic)));
 		
 		if(magic != DLHeader_MAGIC)
-			_gotoIfError(clean, Error_invalidParameter(0, 0));
+			_gotoIfError(clean, Error_invalidParameter(0, 0, "DLFile_read() requires magicNumber prefix"));
 	}
 
 	//Read from binary
@@ -436,30 +423,30 @@ Error DLFile_read(
 	//Validate header
 
 	if(header.version != DLHeader_V1_0)
-		_gotoIfError(clean, Error_invalidParameter(0, 1));
+		_gotoIfError(clean, Error_invalidParameter(0, 1, "DLFile_read() header.version is invalid"));
 
 	if(header.flags & (EDLFlags_UseAESChunksA | EDLFlags_UseAESChunksB))		//TODO: AES chunks
-		_gotoIfError(clean, Error_unsupportedOperation(0));
+		_gotoIfError(clean, Error_unsupportedOperation(0, "DLFile_read() AES chunks not supported yet"));
 
 	if(header.type >> 4)								//TODO: Compression
-		_gotoIfError(clean, Error_unsupportedOperation(1));
+		_gotoIfError(clean, Error_unsupportedOperation(1, "DLFile_read() compression not supported yet"));
 
 	if(header.flags & EDLFlags_UseSHA256)				//TODO: SHA256
-		_gotoIfError(clean, Error_unsupportedOperation(2));
+		_gotoIfError(clean, Error_unsupportedOperation(2, "DLFile_read() SHA256 not supported yet"));
 
 	if((header.type & 0xF) >= EXXEncryptionType_Count)
-		_gotoIfError(clean, Error_invalidParameter(0, 4));
+		_gotoIfError(clean, Error_invalidParameter(0, 4, "DLFile_read() invalid encryption type"));
 
 	if(header.sizeTypes >> 6)
-		_gotoIfError(clean, Error_invalidParameter(0, 7));
+		_gotoIfError(clean, Error_invalidParameter(0, 7, "DLFile_read() header.sizeTypes is invalid"));
 
 	//Ensure encryption key isn't provided if we're not encrypting
 
 	if(encryptionKey && !(header.type & 0xF))
-		_gotoIfError(clean, Error_invalidOperation(3));
+		_gotoIfError(clean, Error_invalidOperation(3, "DLFile_read() encryptionKey is provided but no encryption is used"));
 
 	if(!encryptionKey && (header.type & 0xF))
-		_gotoIfError(clean, Error_unauthorized(0));
+		_gotoIfError(clean, Error_unauthorized(0, "DLFile_read() encryptionKey is required"));
 
 	//
 
@@ -504,7 +491,7 @@ Error DLFile_read(
 		U64 entryLen = Buffer_forceReadSizeType(entryi, dataSizeType);
 
 		if(dataSize + entryLen < dataSize)
-			return Error_overflow(0, dataSize + entryLen, U64_MAX);
+			return Error_overflow(0, dataSize + entryLen, U64_MAX, "DLFile_read() overflow");
 
 		dataSize += entryLen;
 	}
@@ -526,10 +513,7 @@ Error DLFile_read(
 	if (header.type & 0xF) {
 
 		if(Buffer_isConstRef(entireFile))
-			return Error_constData(0, 0);
-
-		if(!encryptionKey)
-			return Error_nullPointer(3);
+			return Error_constData(0, 0, "DLFile_read() file needs to be writable to allow decryption");
 
 		//Get tag and iv
 
@@ -546,12 +530,15 @@ Error DLFile_read(
 		if(Buffer_length(file) < dataSize)
 			_gotoIfError(
 				clean, Error_outOfBounds(
-					0, file.ptr + dataSize - entireFile.ptr, Buffer_length(entireFile)
+					0, file.ptr + dataSize - entireFile.ptr, Buffer_length(entireFile), 
+					"DLFile_read() doesn't contain enough data"
 				)
 			);
 
 		if(!isSubfile && Buffer_length(file) != dataSize)
-			_gotoIfError(clean, Error_invalidState(0));
+			_gotoIfError(clean, Error_invalidState(
+				0, "DLFile_read() contained extra data, which isn't allowed if it's not a subfile"
+			));
 
 		//Decrypt
 
@@ -613,7 +600,7 @@ Error DLFile_read(
 	}
 
 	if(!isSubfile && Buffer_length(file))
-		_gotoIfError(clean, Error_invalidState(1));
+		_gotoIfError(clean, Error_invalidState(1, "DLFile_read() contained extra data, not allowed if it's not a subfile"));
 
 	if(file.ptr)
 		dlFile->readLength = file.ptr - entireFile.ptr;

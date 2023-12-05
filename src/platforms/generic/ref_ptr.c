@@ -25,11 +25,13 @@
 
 Error RefPtr_create(U32 objectLength, Allocator alloc, ObjectFreeFunc free, ETypeId type, RefPtr **result) {
 
-	if(!objectLength || !free|| !result)
-		return Error_nullPointer(!result ? 3 : (!free ? 2 : 0));
+	if(!objectLength || !free || !result)
+		return Error_nullPointer(
+			!result ? 3 : (!free ? 2 : 0), "RefPtr_create()::objectLength, free and result are required"
+		);
 
 	if(*result)
-		return Error_invalidParameter(3, 0);
+		return Error_invalidParameter(3, 0, "RefPtr_create()::result isn't empty, might indicate memleak");
 
 	Buffer buf = Buffer_createNull();
 	Error err = Buffer_createEmptyBytes(sizeof(RefPtr) + objectLength, alloc, &buf);

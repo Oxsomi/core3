@@ -116,13 +116,13 @@ inline BitRef InputDevice_getButtonValue(InputDevice dev, U16 localHandle, Bool 
 Error InputDevice_create(U16 buttons, U16 axes, EInputDeviceType type, InputDevice *result) {
 
 	if(!result)
-		return Error_nullPointer(3);
+		return Error_nullPointer(3, "InputDevice_create()::result is required");
 
 	if(result->handles.ptr || result->states.ptr)
-		return Error_invalidOperation(0);
+		return Error_invalidOperation(0, "InputDevice_create()::result wasn't empty, indicating possible memleak");
 
 	if(!buttons && !axes)
-		return Error_invalidOperation(1);
+		return Error_invalidOperation(1, "InputDevice_create()::buttons or axes is required");
 
 	*result = (InputDevice) {
 		.buttons = buttons,
@@ -150,33 +150,36 @@ Error InputDevice_create(U16 buttons, U16 axes, EInputDeviceType type, InputDevi
 	return Error_none();
 }
 
-#define InputDeviceCreate(EInputType) 													\
-																						\
-	if(d.type == EInputDeviceType_Undefined)											\
-		return Error_invalidOperation(0);												\
-																						\
-	Input##EInputType *inputType = InputDevice_get##EInputType(d, localHandle);			\
-																						\
-	if(!res)																			\
-		return Error_nullPointer(4);													\
-																						\
-	if(!inputType)																		\
-		return Error_nullPointer(0);													\
-																						\
-	if(inputType->name[0])																\
-		return Error_alreadyDefined(0);													\
-																						\
-	if(CharString_isEmpty(keyName))														\
-		return Error_invalidParameter(2, 0);											\
-																						\
-	if(CharString_length(keyName) >= _LONGSTRING_LEN)									\
-		return Error_outOfBounds(2, CharString_length(keyName), _LONGSTRING_LEN);		\
-																						\
-	Buffer_copy(																		\
-		Buffer_createRef(inputType->name, _LONGSTRING_LEN), 							\
-		Buffer_createConstRef(keyName.ptr, CharString_length(keyName))					\
-	);																					\
-																						\
+#define InputDeviceCreate(EInputType) 															\
+																								\
+	if(d.type == EInputDeviceType_Undefined)													\
+		return Error_invalidOperation(0, "InputDeviceCreate()::d.type is undefined");			\
+																								\
+	Input##EInputType *inputType = InputDevice_get##EInputType(d, localHandle);					\
+																								\
+	if(!res)																					\
+		return Error_nullPointer(4, "InputDeviceCreate()::res is required");					\
+																								\
+	if(!inputType)																				\
+		return Error_nullPointer(0, "InputDeviceCreate() localHandle wasn't found");			\
+																								\
+	if(inputType->name[0])																		\
+		return Error_alreadyDefined(0, "InputDeviceCreate() localHandle was already defined");	\
+																								\
+	if(CharString_isEmpty(keyName))																\
+		return Error_invalidParameter(2, 0, "InputDeviceCreate()::keyName is required");		\
+																								\
+	if(CharString_length(keyName) >= _LONGSTRING_LEN)											\
+		return Error_outOfBounds(																\
+			2, CharString_length(keyName), _LONGSTRING_LEN, 									\
+			"InputDeviceCreate()::keyName out of bounds"										\
+		);																						\
+																								\
+	Buffer_copy(																				\
+		Buffer_createRef(inputType->name, _LONGSTRING_LEN), 									\
+		Buffer_createConstRef(keyName.ptr, CharString_length(keyName))							\
+	);																							\
+																								\
 	inputType->name[U64_min(CharString_length(keyName), _LONGSTRING_LEN - 1)] = '\0';
 
 Error InputDevice_createButton(

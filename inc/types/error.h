@@ -71,9 +71,12 @@ typedef struct Error {
 	U32 errorSubId;
 
 	U32 paramId;
+	U32 pad;
 
 	U64 paramValue0;
 	U64 paramValue1;
+
+	const C8 *errorStr;
 
 	//These are optional for functions that don't know about any platform dependent stuff
 	//Code calling that should include their own stack trace if necessary.
@@ -95,27 +98,27 @@ impl void Error_fillStackTrace(Error *err);
 
 #define _Error_base(...) Error err = (Error) { __VA_ARGS__ }; Error_fillStackTrace(&err); return err
 
-Error Error_platformError(U32 subId, U64 platformError);
-Error Error_outOfMemory(U32 subId);
-Error Error_outOfBounds(U32 paramId, U64 id, U64 limit);
-Error Error_nullPointer(U32 paramId);
-Error Error_unauthorized(U32 subId);
-Error Error_notFound(U32 subId, U32 paramId);
-Error Error_divideByZero(U32 subId, U64 a, U64 b);
-Error Error_overflow(U32 paramId, U64 a, U64 b);
-Error Error_underflow(U32 paramId, U64 a, U64 b);
-Error Error_NaN(U32 subId);
-Error Error_invalidEnum(U32 paramId, U64 value, U64 maxValue);
-Error Error_invalidParameter(U32 paramId, U32 subId);
-Error Error_invalidOperation(U32 subId);
-Error Error_invalidCast(U32 subId, U32 typeId, U32 castTypeId);
-Error Error_invalidState(U32 subId);
-Error Error_rateLimit(U32 subId, U64 limit);
-Error Error_loopLimit(U32 subId, U64 limit);
-Error Error_alreadyDefined(U32 subId);
-Error Error_unimplemented(U32 subId);
-Error Error_unsupportedOperation(U32 subId);
-Error Error_timedOut(U32 subId, U64 limit);
-Error Error_constData(U32 paramId, U32 subId);
-Error Error_stderr(U32 subId);
+Error Error_platformError(U32 subId, U64 platformError, const C8 *errorStr);
+Error Error_outOfMemory(U32 subId, const C8 *errorStr);
+Error Error_outOfBounds(U32 paramId, U64 id, U64 limit, const C8 *errorStr);
+Error Error_nullPointer(U32 paramId, const C8 *errorStr);
+Error Error_unauthorized(U32 subId, const C8 *errorStr);
+Error Error_notFound(U32 subId, U32 paramId, const C8 *errorStr);
+Error Error_divideByZero(U32 subId, U64 a, U64 b, const C8 *errorStr);
+Error Error_overflow(U32 paramId, U64 a, U64 b, const C8 *errorStr);
+Error Error_underflow(U32 paramId, U64 a, U64 b, const C8 *errorStr);
+Error Error_NaN(U32 subId, const C8 *errorStr);
+Error Error_invalidEnum(U32 paramId, U64 value, U64 maxValue, const C8 *errorStr);
+Error Error_invalidParameter(U32 paramId, U32 subId, const C8 *errorStr);
+Error Error_invalidOperation(U32 subId, const C8 *errorStr);
+Error Error_invalidCast(U32 subId, U32 typeId, U32 castTypeId, const C8 *errorStr);
+Error Error_invalidState(U32 subId, const C8 *errorStr);
+Error Error_rateLimit(U32 subId, U64 limit, const C8 *errorStr);
+Error Error_loopLimit(U32 subId, U64 limit, const C8 *errorStr);
+Error Error_alreadyDefined(U32 subId, const C8 *errorStr);
+Error Error_unimplemented(U32 subId, const C8 *errorStr);
+Error Error_unsupportedOperation(U32 subId, const C8 *errorStr);
+Error Error_timedOut(U32 subId, U64 limit, const C8 *errorStr);
+Error Error_constData(U32 paramId, U32 subId, const C8 *errorStr);
+Error Error_stderr(U32 subId, const C8 *errorStr);
 Error Error_none();

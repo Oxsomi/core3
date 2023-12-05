@@ -62,18 +62,18 @@ Error BMP_writeRGBA(
 ) {
 
 	if(!result)
-		return Error_nullPointer(5);
+		return Error_nullPointer(5, "BMP_writeRGBA()::result is required");
 
 	if(result->ptr)
-		return Error_invalidParameter(5, 0);
+		return Error_invalidParameter(5, 0, "BMP_writeRGBA()::result isn't empty, indicating possible memleak");
 
 	if(!w || !h)
-		return Error_invalidParameter(!w ? 1 : 2, 0);
+		return Error_invalidParameter(!w ? 1 : 2, 0, "BMP_writeRGBA()::w and h are required");
 
 	U64 bufLen = Buffer_length(buf);
 
 	if(bufLen > I32_MAX || bufLen != (U64)w * h * 4)
-		return Error_invalidParameter(0, 0);
+		return Error_invalidParameter(0, 0, "BMP_writeRGBA() BMP has an image limit of 2GiB");
 
 	U32 headersSize = (U32) (
 		sizeof(BMPHeader) + 

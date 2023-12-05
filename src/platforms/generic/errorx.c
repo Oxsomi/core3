@@ -63,8 +63,9 @@ void Error_print(Allocator alloc, Error err, ELogLevel logLevel, ELogOptions opt
 			alloc,
 			&result, 
 
-			"%s: sub id: %X, param id: %u, param0: %08X, param1: %08X.\nPlatform/std error: %.*s.", 
+			"%s (%s)\nsub id: %X, param id: %u, param0: %08X, param1: %08X.\nPlatform/std error: %.*s.", 
 
+			err.errorStr,
 			EGenericError_TO_STRING[err.genericError],
 
 			err.errorSubId,

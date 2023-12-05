@@ -39,7 +39,7 @@ Error addFileToCAFile(FileInfo file, CAFileRecursion *caFile) {
 	CharString subPath = CharString_createNull();
 	
 	if(!CharString_cut(file.path, CharString_length(caFile->root), 0, &subPath))
-		return Error_invalidState(0);
+		return Error_invalidState(0, "addFileToCAFile() cut failed");
 
 	ArchiveEntry entry = (ArchiveEntry) {
 		.path = subPath,
@@ -95,10 +95,10 @@ Error _CLI_convertToCA(ParsedArgs args, CharString input, FileInfo inputInfo, Ch
 	//Ensure encryption key isn't provided if we're not encrypting
 
 	if(encryptionKey && !settings.encryptionType)
-		return Error_invalidOperation(3);
+		return Error_invalidOperation(3, "_CLI_convertToCA() encryptionKey provided but no encryption was used");
 
 	if(!encryptionKey && settings.encryptionType)
-		return Error_unauthorized(0);
+		return Error_unauthorized(0, "_CLI_convertToCA() requires encryptionKey but not provided");
 
 	//Compression type
 
@@ -136,7 +136,7 @@ Error _CLI_convertToCA(ParsedArgs args, CharString input, FileInfo inputInfo, Ch
 	_gotoIfError(clean, File_resolvex(input, &isVirtual, 0, &resolved));
 
 	if (isVirtual)
-		_gotoIfError(clean, Error_invalidOperation(0));
+		_gotoIfError(clean, Error_invalidOperation(0, "_CLI_convertToCA() can't be used on virtual file"));
 
 	CAFileRecursion caFileRecursion = (CAFileRecursion) { 
 		.archive = &archive, 
@@ -148,7 +148,7 @@ Error _CLI_convertToCA(ParsedArgs args, CharString input, FileInfo inputInfo, Ch
 		CharString subPath = CharString_createNull();
 
 		if(!CharString_cutBeforeLast(resolved, '/', EStringCase_Sensitive, &subPath))
-			_gotoIfError(clean, Error_invalidState(0));
+			_gotoIfError(clean, Error_invalidState(0, "_CLI_convertToCA() cutBeforeLast failed"));
 
 		_gotoIfError(clean, File_getInfo(resolved, &fileInfo));
 		_gotoIfError(clean, File_read(resolved, 1 * SECOND, &fileData));
@@ -202,7 +202,7 @@ Error _CLI_convertFromCA(ParsedArgs args, CharString input, FileInfo inputInfo, 
 
 	if (inputInfo.type != EFileType_File) {
 		Log_errorLnx("oiCA can only be converted from single file");
-		return Error_invalidOperation(0);
+		return Error_invalidOperation(0, "_CLI_convertFromCA()::inputInfo.type needs to be file");
 	}
 
 	//Read file

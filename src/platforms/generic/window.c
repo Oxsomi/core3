@@ -55,10 +55,10 @@ Bool Window_doesAllowFullScreen(const Window *w) { return Window_initialized(w) 
 Error Window_presentCPUBuffer(Window *w, CharString file, Ns maxTimeout) {
 
 	if (!Window_initialized(w))
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "Window_presentCPUBuffer()::w is required");
 
 	if (!w->isDrawing)
-		return Error_invalidOperation(0);
+		return Error_invalidOperation(0, "Window_presentCPUBuffer() isn't allowed if the window isn't currently drawing");
 
 	return Window_isVirtual(w) ? Window_storeCPUBufferToDisk(w, file, maxTimeout) : Window_presentPhysical(w);
 }
@@ -66,7 +66,7 @@ Error Window_presentCPUBuffer(Window *w, CharString file, Ns maxTimeout) {
 Error Window_waitForExit(Window *w, Ns maxTimeout) {
 
 	if(!Window_initialized(w))
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "Window_waitForExit()::w is required");
 
 	Ns start = Time_now();
 
@@ -76,7 +76,7 @@ Error Window_waitForExit(Window *w, Ns maxTimeout) {
 	ELockAcquire acq;
 
 	if((acq = Lock_lock(&w->lock, maxTimeout)) != ELockAcquire_Acquired)
-		return Error_invalidOperation(0);
+		return Error_invalidOperation(0, "Window_waitForExit()::w couldn't be acquired (1)");
 
 	//If our window isn't marked as active, then our window is gone
 	//We've successfully waited
@@ -110,7 +110,7 @@ Error Window_waitForExit(Window *w, Ns maxTimeout) {
 		//Try to reacquire the lock
 
 		if((acq = Lock_lock(&w->lock, left)) != ELockAcquire_Acquired)
-			_gotoIfError(clean, Error_invalidOperation(2));
+			_gotoIfError(clean, Error_invalidOperation(2, "Window_waitForExit()::w couldn't be acquired (2)"));
 
 		//Our window has been released!
 
@@ -137,7 +137,7 @@ clean:
 	if(acq == ELockAcquire_Acquired)
 		Lock_free(&w->lock);
 
-	return Error_timedOut(0, maxTimeout);
+	return Error_timedOut(0, maxTimeout, "Window_waitForExit()::w couldn't be acquired (timeout)");
 }
 
 //TODO: Move this to texture class
@@ -145,16 +145,18 @@ clean:
 Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 
 	if (!Window_initialized(w))
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "Window_resizeCPUBuffer()::w is required");
 
 	if(!Window_isVirtual(w) && !(w->hint & EWindowHint_ProvideCPUBuffer))
-		return Error_invalidParameter(0, 0);
+		return Error_invalidParameter(
+			0, 0, "Window_resizeCPUBuffer()::w must be a virtual window or have EWindowHint_ProvideCPUBuffer"
+		);
 
 	if(I32x2_eq2(w->size, newSiz))
 		return Error_none();
 
 	if(I32x2_any(I32x2_leq(newSiz, I32x2_zero())))
-		return Error_invalidParameter(2, 0);
+		return Error_invalidParameter(2, 0, "Window_resizeCPUBuffer()::newSiz should be >0");
 
 	//Because we're resizing, we assume we will be resizing more often
 	//To combat constantly reallocating, we will allocate 25% more memory than is needed.
@@ -168,7 +170,7 @@ Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 	U64 linSiz = ETextureFormat_getSize((ETextureFormat) w->format, I32x2_x(newSiz), I32x2_y(newSiz));
 	
 	if(linSizOld * 5 < linSizOld)
-		return Error_overflow(2, linSizOld * 5, U64_MAX);
+		return Error_overflow(2, linSizOld * 5, U64_MAX, "Window_resizeCPUBuffer() overflow");
 
 	//We need to grow; we're out of bounds
 
@@ -350,18 +352,22 @@ Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 Error Window_storeCPUBufferToDisk(const Window *w, CharString filePath, Ns maxTimeout) {
 
 	if (!Window_initialized(w))
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "Window_storeCPUBufferToDisk()::w is required");
 
 	Buffer buf = w->cpuVisibleBuffer;
 
 	if(!Buffer_length(buf))
-		return Error_invalidOperation(0);
+		return Error_invalidOperation(
+			0, "Window_storeCPUBufferToDisk()::w must be a virtual window or have EWindowHint_ProvideCPUBuffer"
+		);
 
 	if(w->format != EWindowFormat_BGRA8)
-		return Error_unsupportedOperation(0);		//TODO: Add support for other formats
+		return Error_unsupportedOperation(
+			0, "Window_storeCPUBufferToDisk() is only supported for BGRA8 for now"		//TODO: Add support for other formats
+		);
 
 	if(I32x2_any(I32x2_gt(w->size, I32x2_xx2(U16_MAX))))
-		return Error_invalidOperation(1);
+		return Error_invalidOperation(1, "Window_storeCPUBufferToDisk()::w resolution needs to be <65536");
 
 	Buffer file = Buffer_createNull();
 

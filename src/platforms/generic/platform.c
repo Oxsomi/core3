@@ -37,16 +37,16 @@ Error Platform_create(
 	U16 v = 1;
 
 	if(!*(U8*)&v)
-		return Error_unsupportedOperation(0);		//Invalid endianness
+		return Error_unsupportedOperation(0, "Platform_create() failed, invalid endianness (only little endian supported)");
 
 	if(Platform_instance.platformType != EPlatform_Uninitialized)
-		return Error_invalidOperation(0);
+		return Error_invalidOperation(0, "Platform_create() failed, platform was already initialized");
 
 	if(!cmdArgc || !cmdArgs)
-		return Error_invalidParameter(!cmdArgc ? 0 : 1, 0);
+		return Error_invalidParameter(!cmdArgc ? 0 : 1, 0, "Platform_create()::cmdArgc and cmdArgs are required");
 
 	if(!free || !alloc)
-		return Error_invalidParameter(!free ? 3 : 4, 0);
+		return Error_invalidParameter(!free ? 3 : 4, 0, "Platform_create()::free and alloc are required");
 
 	Platform_instance =	(Platform) {
 		.platformType = _PLATFORM_TYPE,

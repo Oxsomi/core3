@@ -68,7 +68,7 @@ Error _CLI_convertToDL(ParsedArgs args, CharString input, FileInfo inputInfo, Ch
 
 	if ((args.flags & EOperationFlags_UTF8) && (args.flags & EOperationFlags_Ascii)) {
 		Log_errorLnx("oiDL can only pick UTF8 or Ascii, not both.");
-		return Error_invalidParameter(0, 0);
+		return Error_invalidParameter(0, 0, "_CLI_convertToDL() oiDL can only pick UTF8 or Ascii, not both");
 	}
 
 	if(args.flags & EOperationFlags_UTF8)
@@ -88,10 +88,10 @@ Error _CLI_convertToDL(ParsedArgs args, CharString input, FileInfo inputInfo, Ch
 	//Ensure encryption key isn't provided if we're not encrypting
 
 	if(encryptionKey && !settings.encryptionType)
-		return Error_invalidOperation(3);
+		return Error_invalidOperation(3, "_CLI_convertToDL() encryptionKey was provided but encryption wasn't used");
 
 	if(!encryptionKey && settings.encryptionType)
-		return Error_unauthorized(0);
+		return Error_unauthorized(0, "_CLI_convertToDL() encryptionKey was needed but not provided");
 
 	//Copying encryption key
 
@@ -108,7 +108,10 @@ Error _CLI_convertToDL(ParsedArgs args, CharString input, FileInfo inputInfo, Ch
 		//TODO: Support split UTF8
 
 		Log_errorLnx("oiDL doesn't support splitting by a character if it's not a string list.");
-		return Error_invalidParameter(0, 1);
+
+		return Error_invalidParameter(
+			0, 1, "_CLI_convertToDL() oiDL doesn't support splitting by a character if it's not a string list."
+		);
 	}
 
 	List buffers = List_createEmpty(sizeof(Buffer));
@@ -321,7 +324,7 @@ Error _CLI_convertFromDL(ParsedArgs args, CharString input, FileInfo inputInfo, 
 
 	if (inputInfo.type != EFileType_File) {
 		Log_errorLnx("oiDL can only be converted from single file");
-		return Error_invalidOperation(0);
+		return Error_invalidOperation(0, "_CLI_convertFromDL() oiDL can only be converted from single file");
 	}
 
 	//Read file

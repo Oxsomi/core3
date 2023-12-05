@@ -374,7 +374,7 @@ Error CharString_formatVariadicx(CharString *result, const C8 *format, va_list a
 Error CharString_formatx(CharString *result, const C8 *format, ...) {
 
 	if(!result || !format)
-		return Error_nullPointer(!result ? 1 : 2);
+		return Error_nullPointer(!result ? 1 : 2, "CharString_formatx()::result and format are required");
 
 	va_list arg1;
 	va_start(arg1, format);

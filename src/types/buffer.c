@@ -37,10 +37,10 @@ void BitRef_setTo(BitRef b, Bool v) {
 Error Buffer_getBit(Buffer buf, U64 offset, Bool *output) {
 
 	if(!output || !buf.ptr)
-		return Error_nullPointer(!buf.ptr ? 0 : 2);
+		return Error_nullPointer(!buf.ptr ? 0 : 2, "Buffer_getBit()::output and buf are required");
 
 	if((offset >> 3) >= Buffer_length(buf))
-		return Error_outOfBounds(1, offset >> 3, Buffer_length(buf));
+		return Error_outOfBounds(1, offset >> 3, Buffer_length(buf), "Buffer_getBit()::offset out of bounds");
 
 	*output = (buf.ptr[offset >> 3] >> (offset & 7)) & 1;
 	return Error_none();
@@ -143,13 +143,13 @@ Bool Buffer_revCopy(Buffer dst, Buffer src) {
 Error Buffer_setBit(Buffer buf, U64 offset) {
 
 	if(!buf.ptr)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "Buffer_setBit()::buf is required");
 
 	if(Buffer_isConstRef(buf))
-		return Error_constData(0, 0);
+		return Error_constData(0, 0, "Buffer_setBit()::buf should be writable");
 
 	if((offset >> 3) >= Buffer_length(buf))
-		return Error_outOfBounds(1, offset, Buffer_length(buf) << 3);
+		return Error_outOfBounds(1, offset, Buffer_length(buf) << 3, "Buffer_setBit()::offset out of bounds");
 
 	((U8*)buf.ptr)[offset >> 3] |= 1 << (offset & 7);
 	return Error_none();
@@ -158,13 +158,13 @@ Error Buffer_setBit(Buffer buf, U64 offset) {
 Error Buffer_resetBit(Buffer buf, U64 offset) {
 
 	if(!buf.ptr)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "Buffer_resetBit()::buf is required");
 
 	if(Buffer_isConstRef(buf))
-		return Error_constData(0, 0);
+		return Error_constData(0, 0, "Buffer_resetBit()::buf should be writable");
 
 	if((offset >> 3) >= Buffer_length(buf))
-		return Error_outOfBounds(1, offset, Buffer_length(buf) << 3);
+		return Error_outOfBounds(1, offset, Buffer_length(buf) << 3, "Buffer_resetBit()::offset out of bounds");
 
 	((U8*)buf.ptr)[offset >> 3] &= ~(1 << (offset & 7));
 	return Error_none();
@@ -173,10 +173,10 @@ Error Buffer_resetBit(Buffer buf, U64 offset) {
 #define BitOp(x, dst, src) {															\
 																						\
 	if(!dst.ptr || !src.ptr)															\
-		return Error_nullPointer(!dst.ptr ? 0 : 1);										\
+		return Error_nullPointer(!dst.ptr ? 0 : 1, "BitOp::dst and src are required");	\
 																						\
 	if(Buffer_isConstRef(dst))															\
-		return Error_constData(0, 0);													\
+		return Error_constData(0, 0, "BitOp::dst should be writable");					\
 																						\
 	U64 l = U64_min(Buffer_length(dst), Buffer_length(src));							\
 																						\
@@ -225,7 +225,7 @@ Buffer Buffer_createConstRef(const void *v, U64 length) {
 Error Buffer_eq(Buffer buf0, Buffer buf1, Bool *result) {
 
 	if(!result)
-		return Error_nullPointer(2);
+		return Error_nullPointer(2, "Buffer_eq()::result is required");
 
 	if (!buf0.ptr && !buf1.ptr) {
 		*result = true;
@@ -233,7 +233,7 @@ Error Buffer_eq(Buffer buf0, Buffer buf1, Bool *result) {
 	}
 	
 	if(!buf0.ptr || !buf1.ptr)
-		return Error_nullPointer(!buf0.ptr ? 0 : 1);
+		return Error_nullPointer(!buf0.ptr ? 0 : 1, "Buffer_eq()::buf0 and buf1 are required");
 
 	*result = false;
 
@@ -268,16 +268,16 @@ Error Buffer_neq(Buffer buf0, Buffer buf1, Bool *result) {
 Error Buffer_setBitRange(Buffer dst, U64 dstOff, U64 bits) {
 
 	if(!dst.ptr)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "Buffer_setBitRange()::dst is required");
 
 	if(Buffer_isConstRef(dst))
-		return Error_constData(0, 0);
+		return Error_constData(0, 0, "Buffer_setBitRange()::dst should be writable");
 
 	if(!bits)
-		return Error_invalidParameter(2, 0);
+		return Error_invalidParameter(2, 0, "Buffer_setBitRange()::bits should be non zero");
 
 	if(dstOff + bits > (Buffer_length(dst) << 3))
-		return Error_outOfBounds(1, dstOff + bits, Buffer_length(dst) << 3);
+		return Error_outOfBounds(1, dstOff + bits, Buffer_length(dst) << 3, "Buffer_setBitRange()::dstOff out of bounds");
 
 	U64 dstOff8 = (dstOff + 7) >> 3;
 	U64 bitEnd = dstOff + bits;
@@ -318,16 +318,16 @@ Error Buffer_setBitRange(Buffer dst, U64 dstOff, U64 bits) {
 Error Buffer_unsetBitRange(Buffer dst, U64 dstOff, U64 bits) {
 
 	if(!dst.ptr)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "Buffer_unsetBitRange()::dst is required");
 
 	if(Buffer_isConstRef(dst))
-		return Error_constData(0, 0);
+		return Error_constData(0, 0, "Buffer_unsetBitRange()::dst should be writable");
 
 	if(!bits)
-		return Error_invalidParameter(2, 0);
+		return Error_invalidParameter(2, 0, "Buffer_unsetBitRange()::bits should be non zero");
 
 	if(dstOff + bits > (Buffer_length(dst) << 3))
-		return Error_outOfBounds(1, dstOff + bits, Buffer_length(dst) << 3);
+		return Error_outOfBounds(1, dstOff + bits, Buffer_length(dst) << 3, "Buffer_unsetBitRange()::dstOff out of bounds");
 
 	U64 dstOff8 = (dstOff + 7) >> 3;
 	U64 bitEnd = dstOff + bits;
@@ -368,10 +368,10 @@ Error Buffer_unsetBitRange(Buffer dst, U64 dstOff, U64 bits) {
 inline Error Buffer_setAllToInternal(Buffer buf, U64 b64, U8 b8) {
 
 	if(!buf.ptr)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "Buffer_setAllToInternal()::buf is required");
 
 	if(Buffer_isConstRef(buf))
-		return Error_constData(0, 0);
+		return Error_constData(0, 0, "Buffer_setAllToInternal()::buf should be writable");
 
 	U64 l = Buffer_length(buf);
 
@@ -399,16 +399,16 @@ Error Buffer_unsetAllBits(Buffer buf) {
 Error Buffer_allocBitsInternal(U64 length, Allocator alloc, Buffer *result) {
 
 	if(!length)
-		return Error_invalidParameter(0, 0);
+		return Error_invalidParameter(0, 0, "Buffer_allocBitsInternal()::length should be non zero");
 
 	if(!alloc.alloc)
-		return Error_nullPointer(1);
+		return Error_nullPointer(1, "Buffer_allocBitsInternal()::alloc should have allocator");
 
 	if(!result)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "Buffer_allocBitsInternal()::result is required");
 
 	if(result->ptr)
-		return Error_invalidParameter(2, 0);
+		return Error_invalidParameter(2, 0, "Buffer_allocBitsInternal()::result->ptr is non zero, could indicate memleak");
 
 	length = (length + 7) >> 3;	//Align to bytes
 	return alloc.alloc(alloc.ptr, length, result);
@@ -447,7 +447,7 @@ Error Buffer_createOneBits(U64 length, Allocator alloc, Buffer *result) {
 Error Buffer_createCopy(Buffer buf, Allocator alloc, Buffer *result) {
 
 	if (result && result->ptr)
-		return Error_invalidOperation(0);
+		return Error_invalidOperation(0, "Buffer_createCopy()::result is non zero, could indicate memleak");
 
 	if(!Buffer_length(buf)) {
 
@@ -506,15 +506,15 @@ Error Buffer_createUninitializedBytes(U64 length, Allocator alloc, Buffer *resul
 Error Buffer_offset(Buffer *buf, U64 length) {
 
 	if(!buf || !buf->ptr)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "Buffer_offset()::buf and buf->ptr are required");
 
 	if(!Buffer_isRef(*buf))								//Ensure we don't accidentally call this and leak memory
-		return Error_invalidOperation(0);
+		return Error_invalidOperation(0, "Buffer_offset() can only be called on a ref");
 
 	U64 bufLen = Buffer_length(*buf);
 
 	if(length > bufLen)
-		return Error_outOfBounds(1, length, bufLen);
+		return Error_outOfBounds(1, length, bufLen, "Buffer_offset()::length is out of bounds");
 
 	buf->ptr += length;
 
@@ -540,10 +540,10 @@ inline void Buffer_copyBytesInternal(U8 *ptr, const void *v, U64 length) {
 Error Buffer_appendBuffer(Buffer *buf, Buffer append) {
 
 	if(!append.ptr)
-		return Error_nullPointer(1);
+		return Error_nullPointer(1, "Buffer_appendBuffer()::append is required");
 
 	if(buf && Buffer_isConstRef(*buf))					//We need write access
-		return Error_constData(0, 0);
+		return Error_constData(0, 0, "Buffer_appendBuffer()::buf should be writable");
 
 	void *ptr = buf ? (U8*)buf->ptr : NULL;
 
@@ -563,7 +563,7 @@ Error Buffer_append(Buffer *buf, const void *v, U64 length) {
 Error Buffer_consume(Buffer *buf, void *v, U64 length) {
 
 	if(!buf)
-		return Error_nullPointer(!buf ? 0 : 1);
+		return Error_nullPointer(!buf ? 0 : 1, "Buffer_consume()::buf is required");
 
 	const void *ptr = buf ? buf->ptr : NULL;
 
@@ -587,13 +587,13 @@ Error Buffer_createSubset(
 ) {
 
 	if (!output)
-		return Error_nullPointer(4);
+		return Error_nullPointer(4, "Buffer_createSubset()::output is required");
 
 	if (output && output->ptr)
-		return Error_invalidOperation(0);
+		return Error_invalidOperation(0, "Buffer_createSubset()::output->ptr is non zero, could indicate memleak");
 
 	if(Buffer_isConstRef(buf) && !isConst)
-		return Error_constData(0, 0);
+		return Error_constData(0, 0, "Buffer_createSubset() tried creating non const subset from const data");
 
 	//Since our buffer was passed here, it's safe to make a ref (to ensure Buffer_offset doesn't fail)
 
@@ -604,7 +604,7 @@ Error Buffer_createSubset(
 		return e;
 
 	if(length > Buffer_length(buf))
-		return Error_outOfBounds(2, length, Buffer_length(buf));
+		return Error_outOfBounds(2, length, Buffer_length(buf), "Buffer_createSubset()::length out of bounds");
 
 	buf.lengthAndRefBits = length | (buf.lengthAndRefBits >> 62 << 62);
 	*output = buf;
@@ -616,7 +616,7 @@ Error Buffer_combine(Buffer a, Buffer b, Allocator alloc, Buffer *output) {
 	U64 alen = Buffer_length(a), blen = Buffer_length(b);
 
 	if(alen + blen < alen)
-		return Error_overflow(0, alen + blen, alen);
+		return Error_overflow(0, alen + blen, alen, "Buffer_combine() overflow");
 
 	Error err = Buffer_createUninitializedBytes(alen + blen, alloc, output);
 
@@ -659,10 +659,10 @@ _BUFFER_IMPL(F32x4);
 Error Buffer_readAsUTF8(Buffer buf, U64 i, UTF8CodePointInfo *codepoint) {
 
 	if(!codepoint)
-		return Error_nullPointer(3);
+		return Error_nullPointer(3, "Buffer_readAsUTF8()::codepoint is required");
 
 	if(i >= U64_MAX - 4 || i + 1 > Buffer_length(buf))
-		return Error_outOfBounds(0, i, Buffer_length(buf));
+		return Error_outOfBounds(0, i, Buffer_length(buf), "Buffer_readAsUTF8() out of bounds");
 
 	//Ascii
 
@@ -671,24 +671,24 @@ Error Buffer_readAsUTF8(Buffer buf, U64 i, UTF8CodePointInfo *codepoint) {
 	if (!(v0 >> 7)) {
 
 		if(!C8_isValidAscii((C8)v0))
-			return Error_invalidParameter(0, 0);
+			return Error_invalidParameter(0, 0, "Buffer_readAsUTF8()::buf[i] didn't contain valid ascii");
 
 		*codepoint = (UTF8CodePointInfo) { .size = 1, .index = v0 };
 		return Error_none();
 	}
 
 	if(v0 < 0xC0)
-		return Error_invalidParameter(0, 1);
+		return Error_invalidParameter(0, 1, "Buffer_readAsUTF8()::buf[i] didn't contain valid UTF8");
 
 	//2-4 bytes
 
 	if(i + 1 > Buffer_length(buf))
-		return Error_outOfBounds(1, i, Buffer_length(buf));
+		return Error_outOfBounds(1, i, Buffer_length(buf), "Buffer_readAsUTF8()::buf UTF8 ended unexpectedly");
 
 	U8 v1 = buf.ptr[i++];
 
 	if(v1 < 0x80 || v1 >= 0xC0)
-		return Error_invalidParameter(0, 2);
+		return Error_invalidParameter(0, 2, "Buffer_readAsUTF8()::buf[i + 1] had invalid encoding");
 
 	//2 bytes
 
@@ -700,12 +700,12 @@ Error Buffer_readAsUTF8(Buffer buf, U64 i, UTF8CodePointInfo *codepoint) {
 	//3 bytes
 
 	if(i + 1 > Buffer_length(buf))
-		return Error_outOfBounds(2, i, Buffer_length(buf));
+		return Error_outOfBounds(2, i, Buffer_length(buf), "Buffer_readAsUTF8()::buf UTF8 ended unexpectedly");
 
 	U8 v2 = buf.ptr[i++];
 
 	if(v2 < 0x80 || v2 >= 0xC0)
-		return Error_invalidParameter(0, 3);
+		return Error_invalidParameter(0, 3, "Buffer_readAsUTF8()::buf[i + 2] had invalid encoding");
 
 	if (v0 < 0xF0) {
 		*codepoint = (UTF8CodePointInfo) { .size = 3, .index = (((U32)v0 & 0xF) << 12) | (((U32)v1 & 0x3F) << 6) | (v2 & 0x3F) };
@@ -715,12 +715,12 @@ Error Buffer_readAsUTF8(Buffer buf, U64 i, UTF8CodePointInfo *codepoint) {
 	//4 bytes
 
 	if(i + 1 > Buffer_length(buf))
-		return Error_outOfBounds(3, i, Buffer_length(buf));
+		return Error_outOfBounds(3, i, Buffer_length(buf), "Buffer_readAsUTF8()::buf UTF8 ended unexpectedly");
 
 	U8 v3 = buf.ptr[i++];
 
 	if(v3 < 0x80 || v3 >= 0xC0)
-		return Error_invalidParameter(0, 4);
+		return Error_invalidParameter(0, 4, "Buffer_readAsUTF8()::buf[i + 3] had invalid encoding");
 
 	*codepoint = (UTF8CodePointInfo) { 
 		.size = 4, 
@@ -733,7 +733,7 @@ Error Buffer_readAsUTF8(Buffer buf, U64 i, UTF8CodePointInfo *codepoint) {
 Error Buffer_writeAsUTF8(Buffer buf, U64 i, UTF8CodePoint codepoint) {
 
 	if(Buffer_isConstRef(buf))
-		return Error_constData(0, 0);
+		return Error_constData(0, 0, "Buffer_writeAsUTF8()::buf should be writable");
 
 	if ((codepoint & 0x7F) == codepoint)
 		return Buffer_appendU8(&buf, (U8) codepoint);
@@ -741,7 +741,7 @@ Error Buffer_writeAsUTF8(Buffer buf, U64 i, UTF8CodePoint codepoint) {
 	if ((codepoint & 0x7FF) == codepoint) {
 
 		if(i + 2 > Buffer_length(buf))
-			return Error_outOfBounds(0, i + 2, Buffer_length(buf));
+			return Error_outOfBounds(0, i + 2, Buffer_length(buf), "Buffer_writeAsUTF8()::i + 1 out of bounds");
 
 		((U8*)buf.ptr)[i]		= 0xC0 | (U8)(codepoint >> 6);
 		((U8*)buf.ptr)[i + 1]	= 0x80 | (U8)(codepoint & 0x3F);
@@ -751,7 +751,7 @@ Error Buffer_writeAsUTF8(Buffer buf, U64 i, UTF8CodePoint codepoint) {
 	if ((codepoint & 0xFFFF) == codepoint) {
 
 		if(i + 3 > Buffer_length(buf))
-			return Error_outOfBounds(0, i + 3, Buffer_length(buf));
+			return Error_outOfBounds(0, i + 3, Buffer_length(buf), "Buffer_writeAsUTF8()::i + 2 out of bounds");
 
 		((U8*)buf.ptr)[i]		= 0xE0 | (U8)(codepoint >> 12);
 		((U8*)buf.ptr)[i + 1]	= 0x80 | (U8)((codepoint >> 6) & 0x3F);
@@ -762,7 +762,7 @@ Error Buffer_writeAsUTF8(Buffer buf, U64 i, UTF8CodePoint codepoint) {
 	if (codepoint <= 0x10FFFF) {
 
 		if(i + 4 > Buffer_length(buf))
-			return Error_outOfBounds(0, i + 4, Buffer_length(buf));
+			return Error_outOfBounds(0, i + 4, Buffer_length(buf), "Buffer_writeAsUTF8()::i + 3 out of bounds");
 
 		((U8*)buf.ptr)[i]		= 0xF0 | (U8)(codepoint >> 18);
 		((U8*)buf.ptr)[i + 1]	= 0x80 | (U8)((codepoint >> 12) & 0x3F);
@@ -771,7 +771,7 @@ Error Buffer_writeAsUTF8(Buffer buf, U64 i, UTF8CodePoint codepoint) {
 		return Error_none();
 	}
 
-	return Error_invalidParameter(2, 0);
+	return Error_invalidParameter(2, 0, "Buffer_writeAsUTF8()::codepoint out of bounds (>0x10FFFF)");
 }
 
 Bool Buffer_isUTF8(Buffer buf, F32 threshold) {

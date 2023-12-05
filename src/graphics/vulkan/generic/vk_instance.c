@@ -71,7 +71,7 @@ VkBool32 onDebugReport(
 	PFN_vkVoidFunction v = vkGetInstanceProcAddr(instanceExt->instance, #function); 			\
 																								\
 	if(!v)																						\
-		_gotoIfError(clean, Error_nullPointer(0));												\
+		_gotoIfError(clean, Error_nullPointer(0, "vkExtension() failed"));						\
 																								\
 	*(void**)&result = (void*) v;																\
 }
@@ -412,10 +412,10 @@ U64 optExtensionsNameCount = sizeof(optExtensionsName) / sizeof(optExtensionsNam
 Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbose, List *result) {
 
 	if(!inst || !result)
-		return Error_nullPointer(!inst ? 0 : 2);
+		return Error_nullPointer(!inst ? 0 : 2, "GraphicsInstance_getDeviceInfos()::inst and result are required");
 
 	if(result->ptr)
-		return Error_invalidParameter(1, 0);
+		return Error_invalidParameter(1, 0, "GraphicsInstance_getDeviceInfos()::result isn't empty, may indicate memleak");
 
 	VkGraphicsInstance *graphicsExt = GraphicsInstance_ext(inst, Vk);
 
@@ -1244,7 +1244,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 	}
 
 	if(!temp2.length)
-		_gotoIfError(clean, Error_unsupportedOperation(0));
+		_gotoIfError(clean, Error_unsupportedOperation(0, "GraphicsInstance_getDeviceInfos() no supported OxC3 device found"));
 
 	*result = temp2;
 	goto success;

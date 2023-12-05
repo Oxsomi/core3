@@ -124,12 +124,12 @@ Error allocCallbackNoCheck(void *allocator, U64 length, Buffer *output) {
 	allocator;
 
 	if(!output)
-		return Error_nullPointer(2);
+		return Error_nullPointer(2, "allocCallbackNoCheck()::output is required");
 
 	void *ptr = malloc(length);
 
 	if(!ptr)
-		return Error_outOfMemory(0);
+		return Error_outOfMemory(0, "allocCallbackNoCheck() malloc failed");
 
 	*output = Buffer_createManagedPtr(ptr, length);
 	return Error_none();
@@ -148,12 +148,12 @@ Error allocCallback(void *allocator, U64 length, Buffer *output) {
 	allocator;
 
 	if(!output)
-		return Error_nullPointer(2);
+		return Error_nullPointer(2, "allocCallback()::output is required");
 
 	void *ptr = malloc(length);
 
 	if(!ptr)
-		return Error_outOfMemory(0);
+		return Error_outOfMemory(0, "allocCallback() malloc failed");
 
 	AtomicI64_add(&Allocator_memoryAllocationCount, 1);
 	AtomicI64_add(&Allocator_memoryAllocationSize, length);
@@ -169,7 +169,7 @@ Error allocCallback(void *allocator, U64 length, Buffer *output) {
 		ELockAcquire acq = Lock_lock(&Allocator_lock, U64_MAX);
 
 		if(acq < ELockAcquire_Success)
-			return Error_invalidState(0);			//Should never happen
+			return Error_invalidState(0, "allocCallback() allocator lock failed to acquire");			//Should never happen
 
 		Buffer buf = Buffer_createConstRef(&captured, sizeof(captured));
 		Error err = List_pushBack(&Allocator_allocations, buf, Allocator_allocationsAllocator);
@@ -490,14 +490,14 @@ Error Platform_initExt(CharString currAppDir) {
 
 	if (!pext->ntdll) {
 		Buffer_freex(&platformExt);
-		return Error_platformError(0, GetLastError());
+		return Error_platformError(0, GetLastError(), "Platform_initExt() couldn't find ntdll");
 	}
 
 	*((void**)&pext->ntDelayExecution) = (void*)GetProcAddress(pext->ntdll, "NtDelayExecution");
 
 	if (!pext->ntDelayExecution) {
 		Buffer_freex(&platformExt);
-		return Error_platformError(1, GetLastError());
+		return Error_platformError(1, GetLastError(), "Platform_initExt() couldn't find NtDelayExecution");
 	}
 	
 	if(!Platform_useWorkingDirectory) {
@@ -508,7 +508,7 @@ Error Platform_initExt(CharString currAppDir) {
 		if ((err = CharString_createCopyx(currAppDir, &appDir)).genericError) {
 			CharString_freex(&appDir);
 			Buffer_freex(&platformExt);
-			return Error_platformError(1, GetLastError());
+			return Error_platformError(1, GetLastError(), "Platform_initExt()::currAppDir couldn't createCopyx");
 		}
 
 		CharString_replaceAll(&appDir, '\\', '/', EStringCase_Sensitive);
@@ -526,7 +526,7 @@ Error Platform_initExt(CharString currAppDir) {
 		if ((err = CharString_createCopyx(basePath, &workDir)).genericError) {
 			CharString_freex(&appDir);
 			Buffer_freex(&platformExt);
-			return Error_platformError(1, GetLastError());
+			return Error_platformError(1, GetLastError(), "Platform_initExt() basePath couldn't createCopyx");
 		}
 
 		if(
@@ -550,8 +550,14 @@ Error Platform_initExt(CharString currAppDir) {
 		DWORD chars = GetCurrentDirectoryA(MAX_PATH + 1, buff);
 
 		if(!chars) {
+
 			Buffer_freex(&platformExt);
-			return Error_platformError(0, GetLastError());		//Needs no cleaning. cleanup(Ext) will handle it
+
+			//Needs no additional cleaning. cleanup(Ext) will handle it
+
+			return Error_platformError(
+				0, GetLastError(), "Platform_initExt() GetCurrentDirectory failed"
+			);
 		}
 
 		//Move to heap and standardize
@@ -592,7 +598,7 @@ Error Platform_initExt(CharString currAppDir) {
 			List_freex(&Platform_instance.virtualSections);
 			CharString_freex(&Platform_instance.workingDirectory);
 			Buffer_freex(&platformExt);
-			return Error_invalidState(1);
+			return Error_invalidState(1, "Platform_initExt() EnumResourceNames failed");
 		}
 	}
 

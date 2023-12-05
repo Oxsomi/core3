@@ -31,7 +31,7 @@
 Error VkSurface_create(GraphicsDevice *device, const Window *window, VkSurfaceKHR *surface) {
 
 	if(!device || !window || !surface)
-		return Error_nullPointer(!device ? 0 : (!window ? 0 : 1));
+		return Error_nullPointer(!device ? 0 : (!window ? 0 : 1), "VkSurface_create()::device, window or surface is NULL");
 
 	GraphicsInstance *instance = GraphicsInstanceRef_ptr(device->instance);
 	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);

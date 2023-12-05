@@ -24,17 +24,13 @@
 #include "types/time.h"
 #include "math/math.h"
 
-#define WIN32_LEAN_AND_MEAN
-#define MICROSOFT_WINDOWS_WINBASE_H_DEFINE_INTERLOCKED_CPLUSPLUS_OVERLOADS 0
-#include <Windows.h>
-
 Error Lock_create(Lock *res) {
 
 	if(!res)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "Lock_create()::res is required");
 
 	if(res->active)
-		return Error_invalidOperation(0);
+		return Error_invalidOperation(0, "Lock_create()::res was already initialized, may indicate memleak");
 
 	*res = (Lock) { .active = true };
 	return Error_none();

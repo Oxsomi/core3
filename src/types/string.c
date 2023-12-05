@@ -340,7 +340,7 @@ CharString CharString_createRefLongString(LongString str) {
 Error CharString_offsetAsRef(CharString s, U64 off, CharString *result) {
 	
 	if (!result)
-		return Error_nullPointer(2);
+		return Error_nullPointer(2, "CharString_offsetAsRef()::result is required");
 
 	if (CharString_isEmpty(s)) {
 		*result = CharString_createNull();
@@ -350,7 +350,7 @@ Error CharString_offsetAsRef(CharString s, U64 off, CharString *result) {
 	U64 strl = CharString_length(s);
 
 	if(off >= strl)
-		return Error_outOfBounds(1, off, strl);
+		return Error_outOfBounds(1, off, strl, "CharString_offsetAsRef()::off is out of bounds");
 
 	*result = (CharString) {
 		.ptr = s.ptr + off,
@@ -500,16 +500,16 @@ Bool CharString_isFloat(CharString s) {
 Error CharString_create(C8 c, U64 size, Allocator alloc, CharString *result) {
 
 	if (!alloc.alloc)
-		return Error_nullPointer(2);
+		return Error_nullPointer(2, "CharString_create()::alloc is required");
 
 	if (!result)
-		return Error_nullPointer(3);
+		return Error_nullPointer(3, "CharString_create()::result is required");
 
 	if (result->ptr)
-		return Error_invalidOperation(0);
+		return Error_invalidOperation(0, "CharString_create()::result isn't empty, might indicate memleak");
 
 	if (size >> 48)
-		return Error_invalidOperation(1);
+		return Error_invalidOperation(1, "CharString_create()::size must be 48-bit");
 
 	if (!size) {
 		*result = CharString_createNull();
@@ -532,13 +532,10 @@ Error CharString_create(C8 c, U64 size, Allocator alloc, CharString *result) {
 	U32 cc4 = ((U32)cc2 << 16) | cc2;
 	U64 cc8 = ((U64)cc4 << 32) | cc4;
 
-	if (size >= 8) {
+	for (U64 i = 0; i < size >> 3; ++i)
+		*((U64*)b.ptr + i) = cc8;
 
-		for (U64 i = 0; i < size >> 3; ++i)
-			*((U64*)b.ptr + i) = cc8;
-
-		size &= 7;
-	}
+	size &= 7;
 
 	if (size & 4) {
 		*(U32*)(b.ptr + (realSize >> 3 << 3)) = cc4;
@@ -565,10 +562,10 @@ Error CharString_create(C8 c, U64 size, Allocator alloc, CharString *result) {
 Error CharString_createCopy(CharString str, Allocator alloc, CharString *result) {
 
 	if (!alloc.alloc || !result)
-		return Error_nullPointer(!result ? 2 : 1);
+		return Error_nullPointer(!result ? 2 : 1, "CharString_createCopy()::alloc and result are required");
 
 	if (result->ptr)
-		return Error_invalidOperation(0);
+		return Error_invalidOperation(0, "CharString_createCopy()::result wasn't empty, might indicate a memleak");
 
 	U64 strl = CharString_length(str);
 
@@ -617,64 +614,64 @@ Bool CharString_free(CharString *str, Allocator alloc) {
 	return freed;
 }
 
-#define CharString_createNum(maxVal, func, prefixRaw, ...)				\
-																		\
-	if (!result)														\
-		return Error_nullPointer(3);									\
-																		\
-	CharString prefix = CharString_createConstRefCStr(prefixRaw);		\
-																		\
-	if (result->ptr)													\
-		return Error_invalidOperation(0);								\
-																		\
-	*result = CharString_createNull();									\
-	Error err = CharString_reserve(										\
-		result, maxVal + CharString_length(prefix) + 1, allocator		\
-	);																	\
-																		\
-	if (err.genericError) 												\
-		return err;														\
-																		\
-	err = CharString_appendString(result, prefix, allocator);			\
-																		\
-	if (err.genericError) {												\
-		CharString_free(result, allocator);								\
-		return err;														\
-	}																	\
-																		\
-	Bool foundFirstNonZero = false;										\
-																		\
-	for (U64 i = maxVal - 1; i != U64_MAX; --i) {						\
-																		\
-		C8 c = C8_create##func(__VA_ARGS__);							\
-																		\
-		if (!foundFirstNonZero)											\
-			foundFirstNonZero = c != '0' || i < leadingZeros;			\
-																		\
-		if (foundFirstNonZero) {										\
-																		\
-			err = CharString_append(result, c, allocator);				\
-																		\
-			if (err.genericError) {										\
-				CharString_free(result, allocator);						\
-				return err;												\
-			}															\
-		}																\
-	}																	\
-																		\
-	/* Ensure we don't return an empty string on 0 */					\
-																		\
-	if (!v && !foundFirstNonZero) {										\
-																		\
-		err = CharString_append(result, '0', allocator);				\
-																		\
-		if (err.genericError) {											\
-			CharString_free(result, allocator);							\
-			return err;													\
-		}																\
-	}																	\
-																		\
-	((C8*)result->ptr)[CharString_length(*result)] = '\0';				\
+#define CharString_createNum(maxVal, func, prefixRaw, ...)															\
+																													\
+	if (!result)																									\
+		return Error_nullPointer(3, "CharString_createNum()::result is required");									\
+																													\
+	CharString prefix = CharString_createConstRefCStr(prefixRaw);													\
+																													\
+	if (result->ptr)																								\
+		return Error_invalidOperation(0, "CharString_createNum()::result wasn't empty, might indicate memleak");	\
+																													\
+	*result = CharString_createNull();																				\
+	Error err = CharString_reserve(																					\
+		result, maxVal + CharString_length(prefix) + 1, allocator													\
+	);																												\
+																													\
+	if (err.genericError) 																							\
+		return err;																									\
+																													\
+	err = CharString_appendString(result, prefix, allocator);														\
+																													\
+	if (err.genericError) {																							\
+		CharString_free(result, allocator);																			\
+		return err;																									\
+	}																												\
+																													\
+	Bool foundFirstNonZero = false;																					\
+																													\
+	for (U64 i = maxVal - 1; i != U64_MAX; --i) {																	\
+																													\
+		C8 c = C8_create##func(__VA_ARGS__);																		\
+																													\
+		if (!foundFirstNonZero)																						\
+			foundFirstNonZero = c != '0' || i < leadingZeros;														\
+																													\
+		if (foundFirstNonZero) {																					\
+																													\
+			err = CharString_append(result, c, allocator);															\
+																													\
+			if (err.genericError) {																					\
+				CharString_free(result, allocator);																	\
+				return err;																							\
+			}																										\
+		}																											\
+	}																												\
+																													\
+	/* Ensure we don't return an empty string on 0 */																\
+																													\
+	if (!v && !foundFirstNonZero) {																					\
+																													\
+		err = CharString_append(result, '0', allocator);															\
+																													\
+		if (err.genericError) {																						\
+			CharString_free(result, allocator);																		\
+			return err;																								\
+		}																											\
+	}																												\
+																													\
+	((C8*)result->ptr)[CharString_length(*result)] = '\0';															\
 	return Error_none();
 
 Error CharString_createNyto(U64 v, U8 leadingZeros, Allocator allocator, CharString *result){
@@ -813,10 +810,10 @@ Error CharString_splitString(
 Error CharString_splitLine(CharString s, Allocator alloc, CharStringList *result) {
 
 	if(!result)
-		return Error_nullPointer(2);
+		return Error_nullPointer(2, "CharString_splitLine()::result is invalid");
 
 	if(result->ptr)
-		return Error_invalidParameter(2, 1);
+		return Error_invalidParameter(2, 1, "CharString_splitLine()::result wasn't empty, might indicate memleak");
 
 	U64 v = 0, lastLineEnd = U64_MAX;
 	U64 strl = CharString_length(s);
@@ -888,16 +885,16 @@ Error CharString_splitLine(CharString s, Allocator alloc, CharStringList *result
 Error CharString_reserve(CharString *str, U64 length, Allocator alloc) {
 
 	if (!str)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "CharString_reserve()::str is required");
 
 	if (CharString_isRef(*str) && CharString_length(*str))
-		return Error_invalidOperation(0);
+		return Error_invalidOperation(0, "CharString_reserve()::str has to be managed memory");
 
 	if (length >> 48)
-		return Error_invalidOperation(1);
+		return Error_invalidOperation(1, "CharString_reserve()::length should be 48-bit");
 
 	if (!alloc.alloc || !alloc.free)
-		return Error_nullPointer(2);
+		return Error_nullPointer(2, "CharString_reserve()::alloc is required");
 
 	if (length + 1 <= str->capacityAndRefInfo)
 		return Error_none();
@@ -915,7 +912,7 @@ Error CharString_reserve(CharString *str, U64 length, Allocator alloc) {
 
 	err = 
 		alloc.free(alloc.ptr, Buffer_createManagedPtr((U8*)str->ptr, str->capacityAndRefInfo)) ? 
-		Error_none() : Error_invalidOperation(0);
+		Error_none() : Error_invalidOperation(0, "CharString_reserve() free failed");
 
 	str->capacityAndRefInfo = Buffer_length(b);
 	str->ptr = (const C8*) b.ptr;
@@ -925,18 +922,18 @@ Error CharString_reserve(CharString *str, U64 length, Allocator alloc) {
 Error CharString_resize(CharString *str, U64 length, C8 defaultChar, Allocator alloc) {
 
 	if (!str)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "CharString_resize()::str is required");
 
 	U64 strl = CharString_length(*str);
 
 	if (CharString_isRef(*str) && strl)
-		return Error_invalidOperation(0);
+		return Error_invalidOperation(0, "CharString_resize()::str needs to be managed memory");
 
 	if (length >> 48)
-		return Error_invalidOperation(1);
+		return Error_invalidOperation(1, "CharString_resize()::length should be 48-bit");
 
 	if (!alloc.alloc || !alloc.free)
-		return Error_nullPointer(3);
+		return Error_nullPointer(3, "CharString_resize()::alloc is required");
 
 	if (length == strl && CharString_isNullTerminated(*str))
 		return Error_none();
@@ -980,7 +977,7 @@ Error CharString_resize(CharString *str, U64 length, C8 defaultChar, Allocator a
 Error CharString_append(CharString *s, C8 c, Allocator allocator) {
 
 	if (!s)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "CharString_append()::s is required");
 
 	if(!c && CharString_isNullTerminated(*s))
 		return Error_none();
@@ -988,11 +985,7 @@ Error CharString_append(CharString *s, C8 c, Allocator allocator) {
 	return CharString_resize(s, CharString_length(*s) + (Bool)c, c, allocator);
 }
 
-#if _WIN32
-	CharString CharString_newLine() { return CharString_createConstRefCStr("\r\n"); }
-#else
-	CharString CharString_newLine() { return CharString_createConstRefCStr("\n"); }
-#endif
+CharString CharString_newLine() { return CharString_createConstRefCStr("\n"); }
 
 Error CharString_appendString(CharString *s, CharString other, Allocator allocator) {
 
@@ -1004,12 +997,12 @@ Error CharString_appendString(CharString *s, CharString other, Allocator allocat
 	other = CharString_createConstRefSized(other.ptr, otherl, CharString_isNullTerminated(other));
 
 	if (!s)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "CharString_appendString()::s is required");
 
 	U64 oldLen = CharString_length(*s);
 
 	if (CharString_isRef(*s) && oldLen)
-		return Error_invalidParameter(0, 0);
+		return Error_invalidParameter(0, 0, "CharString_appendString()::s has to be managed memory");
 
 	Error err = CharString_resize(s, oldLen + otherl, other.ptr[0], allocator);
 
@@ -1023,21 +1016,21 @@ Error CharString_appendString(CharString *s, CharString other, Allocator allocat
 Error CharString_insert(CharString *s, C8 c, U64 i, Allocator allocator) {
 
 	if (!s)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "CharString_insert()::s is required");
 
 	U64 strl = CharString_length(*s);
 
 	if (CharString_isRef(*s) && strl)
-		return Error_invalidParameter(0, 0);
+		return Error_invalidParameter(0, 0, "CharString_insert()::s should be managed memory");
 
 	if(i > strl)
-		return Error_outOfBounds(2, i, strl);
+		return Error_outOfBounds(2, i, strl, "CharString_insert()::i is out of bounds");
 
 	if(i == strl && !c && CharString_isNullTerminated(*s))
 		return Error_none();
 
 	if(!c && i != strl)
-		return Error_invalidOperation(0);
+		return Error_invalidOperation(0, "CharString_insert()::c is 0, which isn't allowed if i != strl");
 
 	Error err = CharString_resize(s, strl + 1, c, allocator);
 
@@ -1064,12 +1057,12 @@ Error CharString_insert(CharString *s, C8 c, U64 i, Allocator allocator) {
 Error CharString_insertString(CharString *s, CharString other, U64 i, Allocator allocator) {
 
 	if (!s)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "CharString_insertString()::s is required");
 
 	U64 oldLen = CharString_length(*s);
 
 	if (CharString_isRef(*s) && oldLen)
-		return Error_invalidParameter(0, 0);
+		return Error_invalidParameter(0, 0, "CharString_insertString()::s should be managed memory");
 
 	U64 otherl = CharString_length(other);
 
@@ -1105,10 +1098,10 @@ Error CharString_replaceAllString(
 ) {
 
 	if (!s)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "CharString_replaceAllString()::s is required");
 
-	if(CharString_isConstRef(*s))
-		return Error_constData(0, 0);
+	if(CharString_isRef(*s))
+		return Error_constData(0, 0, "CharString_replaceAllString()::s must be managed memory");
 
 	List finds = List_createEmpty(sizeof(U64));
 	Error err = CharString_findAllString(*s, search, allocator, caseSensitive, &finds);
@@ -1135,9 +1128,6 @@ Error CharString_replaceAllString(
 
 		goto clean;
 	}
-
-	if(CharString_isRef(*s))
-		return Error_invalidOperation(0);
 
 	//Shrink replaces
 
@@ -1231,10 +1221,10 @@ Error CharString_replaceString(
 ) {
 
 	if (!s)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "CharString_replaceString()::s is required");
 
-	if(CharString_isConstRef(*s))
-		return Error_constData(0, 0);
+	if(CharString_isRef(*s))
+		return Error_constData(0, 0, "CharString_replaceString()::s must use managed memory");
 
 	U64 res = isFirst ? CharString_findFirstString(*s, search, caseSensitive) : 
 		CharString_findLastString(*s, search, caseSensitive);
@@ -1252,9 +1242,6 @@ Error CharString_replaceString(
 		Buffer_copy(Buffer_createRef((U8*)s->ptr + res, replacel), CharString_bufferConst(replace));
 		return Error_none();
 	}
-
-	if(CharString_isRef(*s))
-		return Error_invalidOperation(0);
 
 	//Replacement is smaller than our search
 	//So we can just move from left to right
@@ -1437,10 +1424,10 @@ Error CharString_findAll(
 ) {
 
 	if(!result)
-		return Error_nullPointer(4);
+		return Error_nullPointer(4, "CharString_findAll()::result is required");
 
 	if(result->ptr)
-		return Error_invalidParameter(4, 0);
+		return Error_invalidParameter(4, 0, "CharString_findAll()::result wasn't empty, might indicate memleak");
 
 	U64 strl = CharString_length(s);
 
@@ -1472,16 +1459,16 @@ Error CharString_findAllString(
 ) {
 
 	if(!result)
-		return Error_nullPointer(4);
+		return Error_nullPointer(4, "CharString_findAllString()::result is required");
 
 	if(result->ptr)
-		return Error_invalidParameter(4, 0);
+		return Error_invalidParameter(4, 0, "CharString_findAllString()::result wasn't empty, might indicate memleak");
 
 	U64 otherl = CharString_length(other);
 	U64 strl = CharString_length(s);
 
 	if(!otherl)
-		return Error_invalidParameter(1, 0);
+		return Error_invalidParameter(1, 0, "CharString_findAllString()::other is empty");
 
 	List l = List_createEmpty(sizeof(U64));
 
@@ -2109,18 +2096,18 @@ Bool CharString_erase(CharString *s, C8 c, EStringCase caseSensitive, Bool isFir
 Error CharString_eraseAtCount(CharString *s, U64 i, U64 count) {
 
 	if(!s)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "CharString_eraseAtCount()::s is required");
 
 	if(!count)
 		return Error_none();
 
 	if(CharString_isRef(*s))
-		return Error_constData(0, 0);
+		return Error_constData(0, 0, "CharString_eraseAtCount()::s should be managed memory");
 
 	U64 strl = CharString_length(*s);
 
 	if(i + count > strl)
-		return Error_outOfBounds(0, i + count, strl);
+		return Error_outOfBounds(0, i + count, strl, "CharString_eraseAtCount()::i + count is out of bounds");
 
 	Buffer_copy(
 		Buffer_createRef((U8*)s->ptr + i, strl - i - count),
@@ -2314,10 +2301,10 @@ CharString CharString_trim(CharString s) {
 Error CharStringList_create(U64 length, Allocator alloc, CharStringList *arr) {
 
 	if (!arr)
-		return Error_nullPointer(2);
+		return Error_nullPointer(2, "CharStringList_create()::arr is required");
 
 	if (arr->ptr)
-		return Error_invalidOperation(0);
+		return Error_invalidOperation(0, "CharStringList_create()::arr isn't empty, might indicate memleak");
 
 	CharStringList sl = (CharStringList) { .length = length };
 
@@ -2360,7 +2347,7 @@ Bool CharStringList_free(CharStringList *arr, Allocator alloc) {
 Error CharStringList_createCopy(CharStringList toCopy, Allocator alloc, CharStringList *arr) {
 
 	if(!toCopy.length)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "CharStringList_createCopy()::toCopy.length can't be 0");
 
 	Error err = CharStringList_create(toCopy.length, alloc, arr);
 
@@ -2383,7 +2370,7 @@ Error CharStringList_createCopy(CharStringList toCopy, Allocator alloc, CharStri
 Error CharStringList_unset(CharStringList arr, U64 i, Allocator alloc) {
 
 	if(i >= arr.length)
-		return Error_outOfBounds(1, i, arr.length);
+		return Error_outOfBounds(1, i, arr.length, "CharStringList_unset()::i out of bounds");
 
 	CharString *pstr = arr.ptr + i;
 	CharString_free(pstr, alloc);
@@ -2656,7 +2643,7 @@ ECompareResult CharString_compare(CharString a, CharString b, EStringCase caseSe
 Error CharString_formatVariadic(Allocator alloc, CharString *result, const C8 *format, va_list args) {
 
 	if(!result || !format)
-		return Error_nullPointer(!result ? 1 : 2);
+		return Error_nullPointer(!result ? 1 : 2, "CharString_formatVariadic()::result and format are required");
 
 	va_list arg2;
 	va_copy(arg2, args);
@@ -2664,10 +2651,10 @@ Error CharString_formatVariadic(Allocator alloc, CharString *result, const C8 *f
 	int len = calcFormatLen(format, arg2);
 
 	if(len < 0)
-		return Error_stderr(0);
+		return Error_stderr(0, "CharString_formatVariadic() len can't be <0");
 
 	if (result->ptr)
-		return Error_invalidOperation(0);
+		return Error_invalidOperation(0, "CharString_formatVariadic()::result isn't empty, could indicate memleak");
 
 	if (len == 0) {
 		*result = CharString_createNull();
@@ -2680,7 +2667,7 @@ Error CharString_formatVariadic(Allocator alloc, CharString *result, const C8 *f
 		return err;
 
 	if(vsnprintf((C8*)result->ptr, len + 1, format, args) < 0)
-		return Error_stderr(0);
+		return Error_stderr(0, "CharString_formatVariadic() vsnprintf failed");
 
 	return Error_none();
 }
@@ -2688,7 +2675,7 @@ Error CharString_formatVariadic(Allocator alloc, CharString *result, const C8 *f
 Error CharString_format(Allocator alloc, CharString *result, const C8 *format, ...) {
 
 	if(!result || !format)
-		return Error_nullPointer(!result ? 1 : 2);
+		return Error_nullPointer(!result ? 1 : 2, "CharString_format()::result and format are required");
 
 	va_list arg1;
 	va_start(arg1, format);

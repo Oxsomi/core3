@@ -26,11 +26,11 @@
 #include "types/error.h"
 
 Error PipelineRef_dec(PipelineRef **pipeline) {
-	return !RefPtr_dec(pipeline) ? Error_invalidOperation(0) : Error_none();
+	return !RefPtr_dec(pipeline) ? Error_invalidOperation(0, "PipelineRef_dec():: pipeline invalid") : Error_none();
 }
 
 Error PipelineRef_inc(PipelineRef *pipeline) {
-	return !RefPtr_inc(pipeline) ? Error_invalidOperation(0) : Error_none();
+	return !RefPtr_inc(pipeline) ? Error_invalidOperation(0, "PipelineRef_inc()::pipeline invalid") : Error_none();
 }
 
 Bool PipelineRef_decAll(List *list) {
@@ -85,19 +85,32 @@ Error GraphicsDeviceRef_createPipelinesCompute(
 ) {
 
 	if(!deviceRef || !shaderBinaries || !pipelines)
-		return Error_nullPointer(!deviceRef ? 0 : (!shaderBinaries ? 1 : 2));
+		return Error_nullPointer(
+			!deviceRef ? 0 : (!shaderBinaries ? 1 : 2), 
+			"GraphicsDeviceRef_createPipelinesCompute()::deviceRef, shaderBinaries and pipelines are required"
+		);
 
 	if(!shaderBinaries->length || shaderBinaries->stride != sizeof(Buffer))
-		return Error_invalidParameter(1, 0);
+		return Error_invalidParameter(
+			1, 0, "GraphicsDeviceRef_createPipelinesCompute()::shaderBinaries should be a Buffer[] of length > 0"
+		);
 
 	if(names.length && (names.length != shaderBinaries->length || names.stride != sizeof(CharString)))
-		return Error_invalidParameter(2, 0);
+		return Error_invalidParameter(
+			2, 0, 
+			"GraphicsDeviceRef_createPipelinesCompute()::names should be a CharString[] with same length as shaderBinaries"
+		);
 
 	if(shaderBinaries->length >> 32)
-		return Error_outOfBounds(1, shaderBinaries->length, U32_MAX);
+		return Error_outOfBounds(
+			1, shaderBinaries->length, U32_MAX, 
+			"GraphicsDeviceRef_createPipelinesCompute()::shaderBinaries.length should be less than U32_MAX"
+		);
 
 	if(pipelines->ptr)
-		return Error_invalidParameter(3, 0);
+		return Error_invalidParameter(
+			3, 0, "GraphicsDeviceRef_createPipelinesCompute()::pipelines->ptr is non zero, indicating a possible memleak"
+		);
 
 	*pipelines = List_createEmpty(sizeof(PipelineRef*));
 	Error err = Error_none();
@@ -153,13 +166,13 @@ success:
 	return err;
 }
 
-Error validateBlend(EBlend blend, Bool hasDualSrc) {
+Error validateBlend(EBlend blend, Bool hasDualSrcBlend) {
 
 	if(blend >= EBlend_Count)
-		return Error_invalidEnum(0, (U64)blend, EBlend_Count);
+		return Error_invalidEnum(0, (U64)blend, EBlend_Count, "validateBlend()::blend is out of bounds");
 
-	if(!hasDualSrc && blend >= EBlend_Src1ColorExt && blend <= EBlend_InvSrc1AlphaExt)
-		return Error_unsupportedOperation(0);
+	if(!hasDualSrcBlend && blend >= EBlend_Src1ColorExt && blend <= EBlend_InvSrc1AlphaExt)
+		return Error_unsupportedOperation(0, "validateBlend()::blend is unsupported since hasDualSrcBlend is false");
 
 	return Error_none();
 }
@@ -177,19 +190,32 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 	//Validate
 
 	if(!deviceRef || !stages || !infos || !pipelines)
-		return Error_nullPointer(!deviceRef ? 0 : (!stages ? 1 : (!infos ? 2 : 3)));
+		return Error_nullPointer(
+			!deviceRef ? 0 : (!stages ? 1 : (!infos ? 2 : 3)),
+			"GraphicsDeviceRef_createPipelinesGraphics()::deviceRef, stages, infos and pipelines are required"
+		);
 
 	if(!stages->length || stages->stride != sizeof(PipelineStage))
-		return Error_invalidParameter(1, 0);
+		return Error_invalidParameter(
+			1, 0, "GraphicsDeviceRef_createPipelinesGraphics()::stages should be PipelineStage[] of length > 0"
+		);
 
 	if(!infos->length || infos->stride != sizeof(PipelineGraphicsInfo) || infos->length >> 32)
-		return Error_invalidParameter(2, 0);
+		return Error_invalidParameter(
+			2, 0,
+			"GraphicsDeviceRef_createPipelinesGraphics()::infos should be PipelineGraphicsInfo[] where length = <0, U32_MAX>"
+		);
 
 	if(names.length && (names.length != infos->length || names.stride != sizeof(CharString)))
-		return Error_invalidParameter(2, 0);
+		return Error_invalidParameter(
+			2, 0, 
+			"GraphicsDeviceRef_createPipelinesGraphics()::names should be a CharString[] with same length as infos"
+		);
 
 	if(pipelines->ptr)
-		return Error_invalidParameter(4, 0);
+		return Error_invalidParameter(
+			4, 0, "GraphicsDeviceRef_createPipelinesGraphics()::pipelines->ptr is non zero, indicating a possible memleak"
+		);
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	U64 totalStageCount = 0;
@@ -201,21 +227,30 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 		//Validate some basics
 
 		if(info->attachmentCountExt > 8)
-			return Error_outOfBounds((U32)i, info->attachmentCountExt, 8);
+			return Error_outOfBounds(
+				(U32)i, info->attachmentCountExt, 8, 
+				"GraphicsDeviceRef_createPipelinesGraphics()::infos[i].attachmentCountExt out of bounds"
+			);
 
 		if(!info->stageCount || totalStageCount > stages->length)
-			return Error_invalidOperation(0);
+			return Error_invalidOperation(0, "GraphicsDeviceRef_createPipelinesGraphics()::infos[i] stage out of bounds");
 
 		U64 countStart = totalStageCount;
 		totalStageCount += stages->length;
 
 		if(!info->renderPass && info->subPass)
-			return Error_invalidOperation(1);
+			return Error_invalidOperation(
+				1, "GraphicsDeviceRef_createPipelinesGraphics()::infos[i].subPass is specified while renderPass is NULL"
+			);
 
 		//Validate tesselation and msaa extensions
 
 		if(info->patchControlPointsExt && !(device->info.capabilities.features & EGraphicsFeatures_TessellationShader))
-			return Error_unsupportedOperation(0);
+			return Error_unsupportedOperation(
+				0, 
+				"GraphicsDeviceRef_createPipelinesGraphics()::infos[i].patchControlPointsExt is specified while "
+				"TesselationShader is unsupported"
+			);
 
 		U32 dataTypeCheck = 0;
 
@@ -235,7 +270,11 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 		}
 
 		if(dataTypeCheck && !(device->info.capabilities.dataTypes & dataTypeCheck))
-			return Error_unsupportedOperation(1);
+			return Error_unsupportedOperation(
+				1, 
+				"GraphicsDeviceRef_createPipelinesGraphics()::infos[i] uses an MSAA variant that's not supported "
+				"(1 and 4 samples are always supported"
+			);
 
 		//Validate render pass / attachments
 
@@ -244,15 +283,21 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 			//Force renderPass definition and no direct rendering stuff
 
 			if(!info->renderPass || info->attachmentCountExt || info->depthFormatExt)
-				return Error_unsupportedOperation(2);
+				return Error_unsupportedOperation(
+					2, 
+					"GraphicsDeviceRef_createPipelinesGraphics()::infos[i].renderPass is required when "
+					"directRendering is unsupported and attachmentCountExt and depthFormatExt should be 0 and None"
+				);
 		}
 
 		else {
 
 			//Force one of render pass or dynamic rendering.
 
-			if((!!info->renderPass) == (info->attachmentCountExt || info->depthFormatExt))
-				return Error_invalidOperation(4);
+			if((info->renderPass != NULL) == (info->attachmentCountExt || info->depthFormatExt))
+				return Error_invalidOperation(
+					4, "GraphicsDeviceRef_createPipelinesGraphics()::infos[i] should pick either directRendering or renderPass"
+				);
 		}
 
 		//Validate that stages are unique, are compatible.
@@ -264,10 +309,14 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 			PipelineStage stage = ((const PipelineStage*)stages->ptr)[j];
 
 			if(stage.stageType >= EPipelineStage_Count)
-				return Error_invalidOperation(21);
+				return Error_invalidOperation(
+					21, "GraphicsDeviceRef_createPipelinesGraphics()::stages[j].stageType is invalid"
+				);
 
 			if((stageFlags >> stage.stageType) & 1)
-				return Error_alreadyDefined(0);
+				return Error_alreadyDefined(
+					0, "GraphicsDeviceRef_createPipelinesGraphics()::stages[j].stageType is duplicate for infos[i]"
+				);
 
 			stageFlags |= (U64)1 << stage.stageType;
 		}
@@ -275,11 +324,11 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 		//Invalidate compute or raytracing stages
 
 		if((stageFlags >> EPipelineStage_Compute) & 1)
-			return Error_invalidOperation(5);
+			return Error_invalidOperation(5, "GraphicsDeviceRef_createPipelinesGraphics()::infos[i] contains compute stage");
 
 		for(U32 j = EPipelineStage_RtStart; j < EPipelineStage_RtEnd; ++j)
 			if((stageFlags >> j) & 1)
-				return Error_invalidOperation(6);
+				return Error_invalidOperation(6, "GraphicsDeviceRef_createPipelinesGraphics()::infos[i] contains RT stage(s)");
 
 		//Validate if stages are allowed due to TesselationShader, GeometryShader
 
@@ -287,18 +336,28 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 			stageFlags & (((U64)1 << EPipelineStage_HullExt) | ((U64)1 << EPipelineStage_DomainExt)) && 
 			!(device->info.capabilities.features & EGraphicsFeatures_TessellationShader)
 		)
-			return Error_unsupportedOperation(10);
+			return Error_unsupportedOperation(
+				10, 
+				"GraphicsDeviceRef_createPipelinesGraphics()::infos[i] contains hull or domain shader, "
+				"but tessellation isn't supported"
+			);
 
 		if(
 			((stageFlags >> EPipelineStage_GeometryExt) & 1) && 
 			!(device->info.capabilities.features & EGraphicsFeatures_GeometryShader)
 		)
-			return Error_unsupportedOperation(11);
+			return Error_unsupportedOperation(
+				11, 
+				"GraphicsDeviceRef_createPipelinesGraphics()::infos[i] contains geometry shader, "
+				"but geometry shaders aren't supported"
+			);
 
 		//TODO: Implement renderPass here! Also don't forgor to properly handle check if this is the same device
 
 		if(info->renderPass)
-			return Error_unsupportedOperation(3);
+			return Error_unsupportedOperation(
+				3, "GraphicsDeviceRef_createPipelinesGraphics()::infos[i] contains renderPass but this isn't supported yet"
+			);
 
 		//Vertex input
 
@@ -309,14 +368,20 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 			U16 stride = info->vertexLayout.bufferStrides12_isInstance1[j] & 4095;
 
 			if(stride > 2048)
-				return Error_invalidOperation(7);
+				return Error_invalidOperation(
+					7, 
+					"GraphicsDeviceRef_createPipelinesGraphics()::infos[i].vertexLayout.bufferStrides12_isInstance1[j] "
+					"contains stride that's bigger than 2048, which is illegal."
+				);
 
 			//Validate format for attribute
 
 			VertexAttribute attrib = info->vertexLayout.attributes[j];
 
 			if(attrib.format >= ETextureFormatId_Count)
-				return Error_invalidOperation(8);
+				return Error_invalidOperation(
+					8, "GraphicsDeviceRef_createPipelinesGraphics()::infos[i].vertexLayout.attributes[j].format is invalid"
+				);
 
 			ETextureFormat format = ETextureFormatId_unpack[attrib.format];
 
@@ -324,7 +389,11 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 				continue;
 
 			if(ETextureFormat_getIsCompressed(format))
-				return Error_invalidOperation(9);
+				return Error_invalidOperation(
+					9, 
+					"GraphicsDeviceRef_createPipelinesGraphics()::infos[i].vertexLayout.attributes[j].format is compressed "
+					"this is not supported as such as vertex input layout"
+				);
 
 			//Validate bounds for attribute
 
@@ -332,7 +401,10 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 			U64 offset = attrib.offset11 & 2047;
 
 			if(offset + size > stride)
-				return Error_outOfBounds(0, offset + size, stride);
+				return Error_outOfBounds(
+					0, offset + size, stride,
+					"GraphicsDeviceRef_createPipelinesGraphics()::infos[i].vertexLayout.attributes[j].offset is out of bounds"
+				);
 		}
 
 		if(
@@ -342,13 +414,17 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 				info->rasterizer.depthBiasSlopeFactor
 			)
 		)
-			return Error_unsupportedOperation(5);
+			return Error_unsupportedOperation(
+				5, "GraphicsDeviceRef_createPipelinesGraphics()::infos[i] rasterizer uses depth bias but depthBias is disabled"
+			);
 
 		if(
 			(info->rasterizer.flags & ERasterizerFlags_IsWireframeExt) &&
 			!(device->info.capabilities.features & EGraphicsFeatures_Wireframe)
 		)
-			return Error_unsupportedOperation(4);
+			return Error_unsupportedOperation(
+				4, "GraphicsDeviceRef_createPipelinesGraphics()::infos[i] requires wireframe extension, which isn't supported"
+			);
 
 		if (
 			!(info->depthStencil.flags & EDepthStencilFlags_StencilTest) && (
@@ -360,36 +436,58 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 				info->depthStencil.stencilWriteMask
 			)
 		)
-			return Error_unsupportedOperation(6);
+			return Error_unsupportedOperation(
+				6, "GraphicsDeviceRef_createPipelinesGraphics()::infos[i] stencilTest is off, but stencil params were set"
+			);
 
 		if(info->depthStencil.depthCompare && !(info->depthStencil.flags & EDepthStencilFlags_DepthTest))
-			return Error_unsupportedOperation(7);
+			return Error_unsupportedOperation(
+				7, "GraphicsDeviceRef_createPipelinesGraphics()::infos[i] depthTest is off but depthCompare was set"
+			);
 
 		if(info->blendState.logicOpExt && !(device->info.capabilities.features & EGraphicsFeatures_LogicOp))
-			return Error_unsupportedOperation(8);
+			return Error_unsupportedOperation(
+				8, 
+				"GraphicsDeviceRef_createPipelinesGraphics()::infos[i].blendState.logicOpExt "
+				"was set but logicOp wasn't supported"
+			);
 
 		//Validate enums
 
 		if(info->topologyMode >= EToplogyMode_Count)
-			return Error_invalidOperation(10);
+			return Error_invalidOperation(
+				10, "GraphicsDeviceRef_createPipelinesGraphics()::infos[i].topologyMode is out of bounds"
+			);
 
 		if(info->rasterizer.cullMode >= ECullMode_Count)
-			return Error_invalidOperation(11);
+			return Error_invalidOperation(
+				11, "GraphicsDeviceRef_createPipelinesGraphics()::infos[i].rasterizer.cullMode is out of bounds"
+			);
 
 		if(info->depthStencil.stencilCompare >= ECompareOp_Count)
-			return Error_invalidOperation(12);
+			return Error_invalidOperation(
+				12, "GraphicsDeviceRef_createPipelinesGraphics()::infos[i].depthStencil.stencilCompare is out of bounds"
+			);
 
 		if(info->depthStencil.depthCompare >= ECompareOp_Count)
-			return Error_invalidOperation(13);
+			return Error_invalidOperation(
+				13, "GraphicsDeviceRef_createPipelinesGraphics()::infos[i].depthStencil.depthCompare is out of bounds"
+			);
 
 		if(info->depthStencil.stencilFail >= EStencilOp_Count)
-			return Error_invalidOperation(14);
+			return Error_invalidOperation(
+				14, "GraphicsDeviceRef_createPipelinesGraphics()::infos[i].depthStencil.stencilFail is out of bounds"
+			);
 
 		if(info->depthStencil.stencilPass >= EStencilOp_Count)
-			return Error_invalidOperation(15);
+			return Error_invalidOperation(
+				15, "GraphicsDeviceRef_createPipelinesGraphics()::infos[i].depthStencil.stencilPass is out of bounds"
+			);
 
 		if(info->depthStencil.stencilDepthFail >= EStencilOp_Count)
-			return Error_invalidOperation(16);
+			return Error_invalidOperation(
+				16, "GraphicsDeviceRef_createPipelinesGraphics()::infos[i].depthStencil.stencilDepthFail is out of bounds"
+			);
 
 		Bool dualBlend = device->info.capabilities.features & EGraphicsFeatures_DualSrcBlend;
 
@@ -398,10 +496,16 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 			BlendStateAttachment attachj = info->blendState.attachments[j];
 
 			if(attachj.blendOp >= EBlendOp_Count)
-				return Error_invalidOperation(17);
+				return Error_invalidOperation(
+					17, "GraphicsDeviceRef_createPipelinesGraphics()::infos[i].blendState.attachments[j].blendOp out of bounds"
+				);
 
 			if(attachj.blendOpAlpha >= EBlendOp_Count)
-				return Error_invalidOperation(18);
+				return Error_invalidOperation(
+					18, 
+					"GraphicsDeviceRef_createPipelinesGraphics()::infos[i].blendState.attachments[j].blendOpAlpha "
+					"out of bounds"
+				);
 
 			Error err = validateBlend(attachj.srcBlend, dualBlend);
 
@@ -419,14 +523,20 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 		}
 
 		if(info->blendState.logicOpExt >= ELogicOpExt_Count)
-			return Error_invalidOperation(19);
+			return Error_invalidOperation(
+				19, "GraphicsDeviceRef_createPipelinesGraphics()::infos[i].blendState.logicOpExt out of bounds"
+			);
 
 		if(info->depthFormatExt >= EDepthStencilFormat_Count)
-			return Error_invalidOperation(20);
+			return Error_invalidOperation(
+				20, "GraphicsDeviceRef_createPipelinesGraphics()::infos[i].depthFormatExt out of bounds"
+			);
 
 		for(U32 j = 0; j < 8; ++j)
 			if(info->attachmentFormatsExt[j] >= ETextureFormatId_Count)
-				return Error_invalidOperation(22);
+				return Error_invalidOperation(
+					22, "GraphicsDeviceRef_createPipelinesGraphics()::infos[i].attachmentFormatsExt[j] out of bounds"
+				);
 	}
 
 	//Create ref ptrs

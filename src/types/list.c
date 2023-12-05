@@ -99,16 +99,16 @@ Bool List_contains(List list, Buffer buf, U64 offset) {
 Error List_create(U64 length, U64 stride, Allocator allocator, List *result) {
 
 	if(!result)
-		return Error_nullPointer(3);
+		return Error_nullPointer(3, "List_create()::result is required");
 
 	if (result->ptr)
-		return Error_invalidOperation(0);
+		return Error_invalidOperation(0, "List_create()::result wasn't empty, which might indicate memleak");
 
 	if(!length || !stride)
-		return Error_invalidParameter(!length ? 0 : 1, 0);
+		return Error_invalidParameter(!length ? 0 : 1, 0, "List_create()::length and stride are required");
 
 	if(length * stride / stride != length)
-		return Error_overflow(0, length * stride, U64_MAX);
+		return Error_overflow(0, length * stride, U64_MAX, "List_create() overflow");
 
 	Buffer buf = Buffer_createNull();
 	Error err = Buffer_createEmptyBytes(length * stride, allocator, &buf);
@@ -129,16 +129,16 @@ Error List_create(U64 length, U64 stride, Allocator allocator, List *result) {
 Error List_createFromBuffer(Buffer buf, U64 stride, List *result) {
 
 	if(!result)
-		return Error_nullPointer(3);
+		return Error_nullPointer(3, "List_createFromBuffer()::result is required");
 
 	if (result->ptr)
-		return Error_invalidOperation(0);
+		return Error_invalidOperation(0, "List_createFromBuffer()::result wasn't empty, might indicate memleak");
 
 	if(!buf.ptr || !stride)
-		return Error_invalidParameter(!buf.ptr ? 0 : 1, 0);
+		return Error_invalidParameter(!buf.ptr ? 0 : 1, 0, "List_createFromBuffer()::buf.ptr and stride are required");
 
 	if(Buffer_length(buf) % stride)
-		return Error_invalidParameter(0, 1);
+		return Error_invalidParameter(0, 1, "List_createFromBuffer()::buf.length isn't a multiple of stride");
 
 	*result = (List) { 
 		.ptr = buf.ptr, 
@@ -159,16 +159,16 @@ Error List_createRepeated(
 ) {
 
 	if(!result)
-		return Error_nullPointer(4);
+		return Error_nullPointer(4, "List_createRepeated()::result is required");
 
 	if (result->ptr)
-		return Error_invalidOperation(0);
+		return Error_invalidOperation(0, "List_createRepeated()::result wasn't empty, might indicate memleak");
 
 	if(!length || !stride)
-		return Error_invalidParameter(!length ? 0 : 1, 0);
+		return Error_invalidParameter(!length ? 0 : 1, 0, "List_createRepeated()::length and stride are required");
 
 	if(length * stride / stride != length)
-		return Error_overflow(0, length * stride, U64_MAX);
+		return Error_overflow(0, length * stride, U64_MAX, "List_createRepeated() overflow");
 
 	Buffer buf = Buffer_createNull();
 	Error err = Buffer_createUninitializedBytes(length * stride, allocator, &buf);
@@ -196,10 +196,10 @@ Error List_createRepeated(
 Error List_createCopy(List list, Allocator allocator, List *result) {
 
 	if(!result)
-		return Error_nullPointer(2);
+		return Error_nullPointer(2, "List_createCopy()::result is required");
 
 	if (result->ptr)
-		return Error_invalidOperation(0);
+		return Error_invalidOperation(0, "List_createCopy()::result wasn't empty, might indicate memleak");
 
 	if(List_empty(list)) {
 		*result = List_createEmpty(list.stride);
@@ -217,20 +217,17 @@ Error List_createCopy(List list, Allocator allocator, List *result) {
 
 Error List_createSubset(List list, U64 index, U64 length, List *result) {
 
-	if(!result)
-		return Error_nullPointer(3);
+	if(!result || !length)
+		return Error_nullPointer(3, "List_createSubset()::result and length are required");
 
 	if (result->ptr)
-		return Error_invalidOperation(0);
-
-	if(!length)
-		return Error_invalidParameter(2, 0);
+		return Error_invalidOperation(0, "List_createSubset()::result wasn't empty, might indicate memleak");
 
 	if(index + length < index)
-		return Error_overflow(1, index + length, U64_MAX);
+		return Error_overflow(1, index + length, U64_MAX, "List_createSubset() overflow");
 
 	if(index + length > list.length)
-		return Error_outOfBounds(1, index + length, list.length);
+		return Error_outOfBounds(1, index + length, list.length, "List_createSubset()::index + length out of bounds");
 
 	if(List_isConstRef(list))
 		return List_createConstRef(list.ptr + index * list.stride, length, list.stride, result);
@@ -246,20 +243,17 @@ Error List_createSubsetReverse(
 	List *result
 ) {
 	
-	if(!result)
-		return Error_nullPointer(4);
+	if(!result || !length)
+		return Error_nullPointer(4, "List_createSubsetReverse()::result and length are required");
 	
 	if(result->ptr)
-		return Error_nullPointer(4);
-
-	if(!length)
-		return Error_invalidParameter(2, 0);
+		return Error_invalidOperation(0, "List_createSubsetReverse()::result wasn't empty, might indicate memleak");
 
 	if(index + length < length)
-		return Error_overflow(1, index + length, U64_MAX);
+		return Error_overflow(1, index + length, U64_MAX, "List_createSubsetReverse() overflow");
 
 	if(index + length > list.length)
-		return Error_outOfBounds(1, index + length, list.length);
+		return Error_outOfBounds(1, index + length, list.length, "List_createSubsetReverse()::index + length out of bounds");
 
 	Error err = List_create(length, list.stride, allocator, result);
 
@@ -270,7 +264,7 @@ Error List_createSubsetReverse(
 
 		Buffer buf = Buffer_createNull();
 
-		if((err = List_getConst(list, last, &buf)).genericError) {
+		if((err = List_get(list, last, &buf)).genericError) {
 			List_free(result, allocator);
 			return err;
 		}
@@ -287,16 +281,16 @@ Error List_createSubsetReverse(
 Error List_createRef(U8 *ptr, U64 length, U64 stride, List *result) {
 
 	if(!ptr || !result)
-		return Error_nullPointer(!ptr ? 0 : 3);
+		return Error_nullPointer(!ptr ? 0 : 3, "List_createRef()::ptr and result are required");
 
 	if (result->ptr)
-		return Error_invalidOperation(0);
+		return Error_invalidOperation(0, "List_createRef()::result wasn't empty, might indicate memleak");
 
 	if(!length || !stride)
-		return Error_invalidParameter(!length ? 1 : 2, 0);
+		return Error_invalidParameter(!length ? 1 : 2, 0, "List_createRef()::length and stride are required");
 
 	if(length * stride / stride != length)
-		return Error_overflow(1, length * stride, U64_MAX);
+		return Error_overflow(1, length * stride, U64_MAX, "List_createRef() overflow");
 
 	*result = (List) { 
 		.ptr = ptr, 
@@ -310,16 +304,16 @@ Error List_createRef(U8 *ptr, U64 length, U64 stride, List *result) {
 Error List_createConstRef(const U8 *ptr, U64 length, U64 stride, List *result) {
 
 	if(!ptr || !result)
-		return Error_nullPointer(!ptr ? 0 : 3);
+		return Error_nullPointer(!ptr ? 0 : 3, "List_createConstRef()::ptr and result are required");
 
 	if (result->ptr)
-		return Error_invalidOperation(0);
+		return Error_invalidOperation(0, "List_createConstRef()::result wasn't empty, might indicate memleak");
 
 	if(!length || !stride)
-		return Error_invalidParameter(!length ? 1 : 2, 0);
+		return Error_invalidParameter(!length ? 1 : 2, 0, "List_createConstRef()::length and stride are required");
 
 	if(length * stride / stride != length)
-		return Error_overflow(1, length * stride, U64_MAX);
+		return Error_overflow(1, length * stride, U64_MAX, "List_createConstRef() overflow");
 
 	*result = (List) { 
 		.ptr = (U8*) ptr, 
@@ -334,15 +328,15 @@ Error List_createConstRef(const U8 *ptr, U64 length, U64 stride, List *result) {
 Error List_set(List list, U64 index, Buffer buf) {
 
 	if(List_isConstRef(list))
-		return Error_constData(0, 0);
+		return Error_constData(0, 0, "List_set()::list is const");
 
 	if(index >= list.length)
-		return Error_outOfBounds(1, index, list.length);
+		return Error_outOfBounds(1, index, list.length, "List_set()::index is out of bounds");
 
 	U64 bufLen = Buffer_length(buf);
 
 	if(bufLen && bufLen != list.stride)
-		return Error_invalidOperation(0);
+		return Error_invalidOperation(0, "List_set()::buf.length incompatible with list");
 
 	if(bufLen)
 		Buffer_copy(Buffer_createRef((U8*)list.ptr + index * list.stride, list.stride), buf);
@@ -355,40 +349,30 @@ Error List_set(List list, U64 index, Buffer buf) {
 Error List_get(List list, U64 index, Buffer *result) {
 
 	if(!result)
-		return Error_nullPointer(2);
+		return Error_nullPointer(2, "List_get()::result is required");
 
 	if(index >= list.length)
-		return Error_outOfBounds(1, index, list.length);
+		return Error_outOfBounds(1, index, list.length, "List_get()::index out of bounds");
 
-	if(List_isConstRef(list))
-		return Error_constData(0, 0);
+	if (List_isConstRef(list)) {
+		*result = Buffer_createConstRef(list.ptr + index * list.stride, list.stride);
+		return Error_none();
+	}
 
 	*result = Buffer_createRef((U8*)list.ptr + index * list.stride, list.stride);
-	return Error_none();
-}
-
-Error List_getConst(List list, U64 index, Buffer *result) {
-
-	if(!result)
-		return Error_nullPointer(2);
-
-	if(index >= list.length)
-		return Error_outOfBounds(1, index, list.length);
-
-	*result = Buffer_createConstRef(list.ptr + index * list.stride, list.stride);
 	return Error_none();
 }
 
 Error List_find(List list, Buffer buf, Allocator allocator, List *result) {
 
 	if(Buffer_length(buf) != list.stride)
-		return Error_invalidParameter(1, 0);
+		return Error_invalidParameter(1, 0, "List_find()::buf.length incompatible with list");
 
 	if(!result)
-		return Error_nullPointer(3);
+		return Error_nullPointer(3, "List_find()::result is required");
 
 	if(result->ptr)
-		return Error_invalidParameter(3, 0);
+		return Error_invalidParameter(3, 0, "List_find()::result isn't empty, might indicate memleak");
 
 	*result = List_createEmpty(sizeof(U64));
 	Error err = List_reserve(result, list.length / 100 + 16, allocator);
@@ -490,7 +474,7 @@ Error List_copy(List src, U64 srcOffset, List dst, U64 dstOffset, U64 count) {
 		return err;
 
 	if(List_isConstRef(dst))
-		return Error_constData(2, 0);
+		return Error_constData(2, 0, "List_copy()::dst should be writable");
 
 	if((err = List_createSubset(dst, dstOffset, count, &dst)).genericError)
 		return err;
@@ -502,10 +486,10 @@ Error List_copy(List src, U64 srcOffset, List dst, U64 dstOffset, U64 count) {
 Error List_shrinkToFit(List *list, Allocator allocator) {
 
 	if(!list || !list->ptr)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "List_shrinkToFit()::list is required");
 
-	if(List_isConstRef(*list))
-		return Error_constData(0, 0);
+	if(List_isRef(*list))
+		return Error_constData(0, 0, "List_shrinkToFit() is only allowed on managed memory");
 
 	if(list->capacityAndRefInfo == list->length)
 		return Error_none();
@@ -524,19 +508,19 @@ Error List_shrinkToFit(List *list, Allocator allocator) {
 Error List_eraseAllIndices(List *list, List indices) {
 
 	if(!list)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "List_eraseAllIndices()::list is required");
 
-	if(List_isConstRef(*list))
-		return Error_constData(0, 0);
+	if(List_isRef(*list))
+		return Error_constData(0, 0, "List_eraseAllIndices()::list is only allowed on managed memory");
 
 	if(!indices.length || !list->length)
 		return Error_none();
 
 	if(indices.stride != sizeof(U64))
-		return Error_invalidOperation(0);
+		return Error_invalidOperation(0, "List_eraseAllIndices()::indices needs to be a U64[]");
 
 	if(!List_sortU64(indices))
-		return Error_invalidParameter(1, 0);
+		return Error_invalidParameter(1, 0, "List_eraseAllIndices()::indices sort failed");
 
 	//Ensure none of them reference out of bounds or are duplicate
 
@@ -545,10 +529,12 @@ Error List_eraseAllIndices(List *list, List indices) {
 	for(U64 *ptr = (U64*)indices.ptr, *end = (U64*)List_end(indices); ptr < end; ++ptr) {
 
 		if(last == *ptr)
-			return Error_alreadyDefined(0);
+			return Error_alreadyDefined(0, "List_eraseAllIndices()::indices had a duplicate");
 
 		if(*ptr >= list->length)
-			return Error_outOfBounds(0, ptr - (U64*)indices.ptr, list->length);
+			return Error_outOfBounds(
+				0, ptr - (U64*)indices.ptr, list->length, "List_eraseAllIndices()::indices[i] out of bounds"
+			);
 
 		last = *ptr;
 	}
@@ -770,7 +756,7 @@ Bool List_sortString(List list, EStringCase stringCase) {
 Error List_eraseFirst(List *list, Buffer buf, U64 offset) {
 
 	if(!list)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "List_eraseFirst()::list is required");
 
 	U64 ind = List_findLast(*list, buf, offset);
 	return ind == U64_MAX ? Error_none() : List_erase(list, ind);
@@ -779,7 +765,7 @@ Error List_eraseFirst(List *list, Buffer buf, U64 offset) {
 Error List_eraseLast(List *list, Buffer buf, U64 offset) {
 
 	if(!list)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "List_eraseLast()::list is required");
 
 	U64 ind = List_findLast(*list, buf, offset);
 	return ind == U64_MAX ? Error_none() : List_erase(list, ind);
@@ -788,7 +774,7 @@ Error List_eraseLast(List *list, Buffer buf, U64 offset) {
 Error List_eraseAll(List *list, Buffer buf, Allocator allocator) {
 
 	if(!list)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "List_eraseAll()::list is required");
 	
 	List indices = (List) { 0 };
 	Error err = List_find(*list, buf, allocator, &indices);
@@ -804,13 +790,13 @@ Error List_eraseAll(List *list, Buffer buf, Allocator allocator) {
 Error List_erase(List *list, U64 index) {
 
 	if(!list)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "List_erase()::list is required");
 
 	if(List_isRef(*list))
-		return Error_invalidParameter(0, 0);
+		return Error_invalidParameter(0, 0, "List_erase()::list needs to be managed memory");
 
 	if(index >= list->length)
-		return Error_outOfBounds(1, index, list->length);
+		return Error_outOfBounds(1, index, list->length, "List_erase()::index out of bounds");
 
 	if(index + 1 != list->length)
 		Buffer_copy(
@@ -825,16 +811,16 @@ Error List_erase(List *list, U64 index) {
 Error List_insert(List *list, U64 index, Buffer buf, Allocator allocator) {
 
 	if(!list)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "List_insert()::list out of bounds");
 
 	if(List_isRef(*list))
-		return Error_invalidParameter(0, 0);
+		return Error_invalidParameter(0, 0, "List_insert()::list must be managed memory");
 
 	if(list->stride != Buffer_length(buf))
-		return Error_invalidOperation(0);
+		return Error_invalidOperation(0, "List_insert()::stride and buf.length are incompatible");
 
-	if(list->length + 1 == 0)
-		return Error_overflow(0, 0, U64_MAX);
+	if(!(list->length + 1))
+		return Error_overflow(0, 0, U64_MAX, "List_insert() overflow");
 
 	if (index == list->length) {		//Push back
 
@@ -852,7 +838,7 @@ Error List_insert(List *list, U64 index, Buffer buf, Allocator allocator) {
 	}
 
 	if(index >= list->length)
-		return Error_outOfBounds(1, index, list->length);
+		return Error_outOfBounds(1, index, list->length, "List_insert()::index out of bounds");
 
 	U64 prevSize = list->length;
 	Error err = List_resize(list, list->length + 1, allocator);
@@ -881,19 +867,19 @@ Error List_insert(List *list, U64 index, Buffer buf, Allocator allocator) {
 Error List_pushAll(List *list, List other, Allocator allocator) {
 
 	if(!list)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "List_pushAll()::list is required");
 
 	if(List_isRef(*list) && list->length)
-		return Error_invalidParameter(0, 0);
+		return Error_invalidParameter(0, 0, "List_pushAll()::list must be managed memory");
 
 	if(list->stride != other.stride)
-		return Error_invalidOperation(0);
+		return Error_invalidOperation(0, "List_pushAll()::list.stride and other.stride are incompatible");
 
 	if(!other.length)
 		return Error_none();
 
 	if(list->length + other.length < list->length)
-		return Error_overflow(0, list->length + other.length, U64_MAX);
+		return Error_overflow(0, list->length + other.length, U64_MAX, "List_pushAll() overflow");
 
 	U64 oldSize = List_bytes(*list);
 	Error err = List_resize(list, list->length + other.length, allocator);
@@ -912,10 +898,13 @@ Error List_pushAll(List *list, List other, Allocator allocator) {
 Error List_swap(List l, U64 i, U64 j) {
 
 	if(i >= l.length || j >= l.length)
-		return Error_outOfBounds(i >= l.length ? 1 : 2, i >= l.length ? i : j, l.length);
+		return Error_outOfBounds(
+			i >= l.length ? 1 : 2, i >= l.length ? i : j, l.length, 
+			"List_swap()::i or j is out of bounds"
+		);
 
 	if(List_isConstRef(l))
-		return Error_constData(0, 0);
+		return Error_constData(0, 0, "List_swap()::list is const");
 
 	U8 *iptr = List_ptr(l, i);
 	U8 *jptr = List_ptr(l, j);
@@ -961,22 +950,22 @@ Bool List_reverse(List l) {
 Error List_insertAll(List *list, List other, U64 offset, Allocator allocator) {
 
 	if(!list)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "List_insertAll()::list is required");
 
 	if(List_isRef(*list))
-		return Error_invalidParameter(0, 0);
+		return Error_invalidParameter(0, 0, "List_insertAll()::list must be managed memory");
 
 	if(!other.length)
 		return Error_none();
 
 	if(list->stride != other.stride)
-		return Error_invalidOperation(0);
+		return Error_invalidOperation(0, "List_insertAll()::list->stride and other.stride are incompatible");
 
 	if(list->length + other.length < list->length)
-		return Error_overflow(0, list->length + other.length, U64_MAX);
+		return Error_overflow(0, list->length + other.length, U64_MAX, "List_insertAll() overflow");
 
 	if(offset >= list->length)
-		return Error_outOfBounds(2, offset, list->length);
+		return Error_outOfBounds(2, offset, list->length, "List_insertAll()::offset out of bounds");
 
 	U64 prevSize = list->length;
 	Error err = List_resize(list, list->length + other.length, allocator);
@@ -1005,16 +994,16 @@ Error List_insertAll(List *list, List other, U64 offset, Allocator allocator) {
 Error List_reserve(List *list, U64 capacity, Allocator allocator) {
 
 	if(!list)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "List_reserve()::list is required");
 
 	if(List_isRef(*list) && list->length)
-		return Error_invalidOperation(0);
+		return Error_invalidOperation(0, "List_reserve()::list must be managed memory");
 
 	if(!list->stride)
-		return Error_invalidOperation(0);
+		return Error_invalidOperation(0, "List_reserve()::stride is required");
 
 	if(capacity * list->stride / list->stride != capacity)
-		return Error_overflow(1, capacity * list->stride, U64_MAX);
+		return Error_overflow(1, capacity * list->stride, U64_MAX, "List_reserve() overflow");
 
 	if(capacity <= list->capacityAndRefInfo)
 		return Error_none();
@@ -1040,10 +1029,10 @@ Error List_reserve(List *list, U64 capacity, Allocator allocator) {
 Error List_resize(List *list, U64 size, Allocator allocator) {
 
 	if(!list)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "List_resize()::list is required");
 
 	if(List_isRef(*list) && list->length)
-		return Error_constData(0, 0);
+		return Error_constData(0, 0, "List_resize()::list has to be managed memory");
 
 	if (size <= list->capacityAndRefInfo) {
 
@@ -1056,7 +1045,7 @@ Error List_resize(List *list, U64 size, Allocator allocator) {
 	}
 
 	if(size * 3 / 3 != size)
-		return Error_overflow(1, size * 3, U64_MAX);
+		return Error_overflow(1, size * 3, U64_MAX, "List_resize() overflow");
 
 	Error err = List_reserve(list, size * 3 / 2, allocator);
 
@@ -1074,10 +1063,10 @@ Error List_resize(List *list, U64 size, Allocator allocator) {
 Error List_pushBack(List *list, Buffer buf, Allocator allocator) {
 
 	if(!list)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "List_pushBack()::list is required");
 
-	if(List_isConstRef(*list))
-		return Error_constData(0, 0);
+	if(List_isRef(*list) && list->ptr)
+		return Error_constData(0, 0, "List_pushBack()::list needs to be managed memory");
 
 	Error err = List_resize(list, list->length + 1, allocator);
 
@@ -1098,16 +1087,16 @@ Error List_pushFront(List *list, Buffer buf, Allocator allocator) {
 Error List_popLocation(List *list, U64 index, Buffer buf) {
 
 	if(!list)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "List_popLocation()::list is required");
 
 	if(index >= list->length)
-		return Error_outOfBounds(1, index, list->length);
+		return Error_outOfBounds(1, index, list->length, "List_popLocation()::index out of bounds");
 
-	if(List_isConstRef(*list))
-		return Error_constData(0, 0);
+	if(List_isRef(*list))
+		return Error_constData(0, 0, "List_popLocation()::list needs to be managed memory");
 
 	Buffer result = Buffer_createNull();
-	Error err = List_getConst(*list, index, &result);
+	Error err = List_get(*list, index, &result);
 
 	if(err.genericError)
 		return err;
@@ -1115,7 +1104,7 @@ Error List_popLocation(List *list, U64 index, Buffer buf) {
 	if(Buffer_length(buf)) {
 
 		if(Buffer_length(buf) != Buffer_length(result))
-			return Error_invalidOperation(0);
+			return Error_invalidOperation(0, "List_popLocation()::buf.length and list->stride are incompatible");
 
 		Buffer_copy(buf, result);
 	}
@@ -1126,16 +1115,16 @@ Error List_popLocation(List *list, U64 index, Buffer buf) {
 Error List_popBack(List *list, Buffer output) {
 
 	if(!list)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "List_popBack()::list is required");
 
 	if(!list->length)
-		return Error_outOfBounds(0, 0, 0);
+		return Error_outOfBounds(0, 0, 0, "List_popBack()::list.length needs to be at least 1");
 
 	if(Buffer_length(output) && Buffer_length(output) != list->stride)
-		return Error_invalidOperation(0);
+		return Error_invalidOperation(0, "List_popBack()::output.length must be equal to list->stride");
 
-	if(List_isConstRef(*list))
-		return Error_constData(0, 0);
+	if(List_isRef(*list))
+		return Error_constData(0, 0, "List_popBack()::list must be managed memory");
 
 	if(Buffer_length(output))
 		Buffer_copy(output, Buffer_createConstRef(list->ptr + (list->length - 1) * list->stride, list->stride));
@@ -1151,7 +1140,7 @@ Error List_popFront(List *list, Buffer output) {
 Error List_clear(List *list) {
 
 	if(!list)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "List_clear()::list is required");
 
 	list->length = 0;
 	return Error_none();

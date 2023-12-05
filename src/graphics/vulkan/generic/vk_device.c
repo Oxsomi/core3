@@ -338,7 +338,7 @@ Error GraphicsDevice_initExt(
 	vkGetPhysicalDeviceQueueFamilyProperties(physicalDeviceExt, &familyCount, NULL);
 
 	if(!familyCount)
-		_gotoIfError(clean, Error_invalidOperation(0));
+		_gotoIfError(clean, Error_invalidOperation(0, "GraphicsDevice_initExt() no supported queues"));
 
 	_gotoIfError(clean, List_resizex(&queueFamilies, familyCount));
 	vkGetPhysicalDeviceQueueFamilyProperties(physicalDeviceExt, &familyCount, (VkQueueFamilyProperties*) queueFamilies.ptr);
@@ -399,7 +399,7 @@ Error GraphicsDevice_initExt(
 	//Ensure we have all queues. Should be impossible, but still.
 
 	if(copyQueueId == U32_MAX || computeQueueId == U32_MAX || graphicsQueueId == U32_MAX)
-		_gotoIfError(clean, Error_invalidOperation(1));
+		_gotoIfError(clean, Error_invalidOperation(1, "GraphicsDevice_initExt() doesn't have copy, comp or gfx queue"));
 
 	//Assign queues to queues (deviceInfo)
 
@@ -1128,7 +1128,7 @@ Error GraphicsDevice_submitCommandsImpl(GraphicsDeviceRef *deviceRef, List comma
 		);
 
 		if(!allocator)
-			_gotoIfError(clean, Error_nullPointer(0));
+			_gotoIfError(clean, Error_nullPointer(0, "GraphicsDevice_submitCommandsImpl() command allocator is NULL"));
 
 		//We create command pools only the first 3 frames, after that they're cached.
 		//This is because we have space for [queues][threads][3] command pools.

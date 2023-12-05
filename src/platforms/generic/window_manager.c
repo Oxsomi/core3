@@ -35,10 +35,10 @@ const U64 WindowManager_OUT_OF_WINDOWS = 0x1111111111;
 Error WindowManager_create(WindowManager *result) {
 
 	if(!result)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "WindowManager_create()::result is required");
 
 	if(result->lock.active)
-		return Error_invalidOperation(0);
+		return Error_invalidOperation(0, "WindowManager_create()::result is already initialized, indicates possible memleak");
 
 	Error err;
 
@@ -94,10 +94,10 @@ void WindowManager_virtualWindowLoop(Window *w) {
 	Error err = Error_none();
 
 	if(acq0 < ELockAcquire_Success)
-		_gotoIfError(clean, Error_invalidState(0));
+		_gotoIfError(clean, Error_invalidState(0, "WindowManager_virtualWindowLoop() couldn't acquire WindowManager's lock"));
 
 	if(Lock_lock(&w->lock, U64_MAX) < ELockAcquire_Success)
-		_gotoIfError(clean, Error_invalidState(1));
+		_gotoIfError(clean, Error_invalidState(1, "WindowManager_virtualWindowLoop() couldn't acquire window's lock"));
 
 	WindowManager_freeVirtual(&Platform_instance.windowManager, &w);
 
@@ -121,16 +121,21 @@ Error WindowManager_createVirtual(
 ) {
 
 	if(!manager || !manager->lock.active || !result || !callbacks.onDraw)
-		return Error_nullPointer(!manager || !manager->lock.active  ? 0 : (!result ? 4 : 2));
+		return Error_nullPointer(
+			!manager || !manager->lock.active  ? 0 : (!result ? 4 : 2), 
+			"WindowManager_createVirtual()::manager, result and callbacks.onDraw are required"
+		);
 
 	if(!Lock_isLockedForThread(&manager->lock))
-		return Error_invalidOperation(0);
+		return Error_invalidOperation(0, "WindowManager_createVirtual() couldn't lock WindowManager");
 
 	if(*result)
-		return Error_invalidOperation(1);
+		return Error_invalidOperation(1, "WindowManager_createVirtual()::*result is not NULL, indicates possible memleak");
 
 	if(I32x2_any(I32x2_leq(size, I32x2_zero())))
-		return Error_outOfBounds(1, (U64) (I64) I32x2_x(size), (U64) (I64) I32x2_y(size));
+		return Error_outOfBounds(
+			1, (U64) (I64) I32x2_x(size), (U64) (I64) I32x2_y(size), "WindowManager_createVirtual()::size[i] must be >0"
+		);
 
 	switch (format) {
 
@@ -141,7 +146,9 @@ Error WindowManager_createVirtual(
 			break;
 
 		default:
-			return Error_invalidEnum(3, (U64) format, 0);
+			return Error_invalidEnum(
+				3, (U64) format, 0, "WindowManager_createVirtual()::format must be one of BGRA8, BGR10A2, RGBA16f, RGBA32f"
+			);
 	}
 
 	//Ensure the sizes are valid
@@ -213,7 +220,7 @@ Error WindowManager_createVirtual(
 		}
 	}
 
-	return Error_outOfMemory(0);
+	return Error_outOfMemory(0, "WindowManager_createVirtual() couldn't find a spot for a window");
 }
 
 Bool WindowManager_freeVirtual(WindowManager *manager, Window **handle) {
@@ -261,7 +268,7 @@ inline U16 WindowManager_getEmptyWindows(WindowManager manager) {
 Error WindowManager_waitForExitAll(WindowManager *manager) {
 
 	if(!manager || !manager->lock.active)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "WindowManager_waitForExitAll()::manager is required");
 
 	//Checking for WindowManager is a lot easier, as we can just acquire the lock
 	//And check how many windows are active
@@ -272,7 +279,7 @@ Error WindowManager_waitForExitAll(WindowManager *manager) {
 	acq = Lock_lock(&manager->lock, U64_MAX);
 
 	if(acq < ELockAcquire_Success)
-		return Error_invalidState(0);
+		return Error_invalidState(0, "WindowManager_waitForExitAll() couldn't lock WindowManager (1)");
 
 	//Check if we should exit
 
@@ -291,7 +298,7 @@ Error WindowManager_waitForExitAll(WindowManager *manager) {
 		acq = Lock_lock(&manager->lock, U64_MAX);
 
 		if(acq < ELockAcquire_Success)
-			return Error_invalidState(0);
+			return Error_invalidState(0, "WindowManager_waitForExitAll() couldn't lock WindowManager (2)");
 
 		//Our windows have been released!
 
@@ -340,30 +347,24 @@ Error WindowManager_adaptSizes(I32x2 *sizep, I32x2 *minSizep, I32x2 *maxSizep) {
 	//Verify size
 
 	if(I32x2_any(I32x2_leq(size, I32x2_zero())))
-		return Error_invalidParameter(2, 0);
+		return Error_invalidParameter(2, 0, "WindowManager_adaptSizes()::*sizep should be >0");
 
 	//Verify min size. By default should be 360p+.
 	//Can't go below EResolution_SD.
 
-	if(I32x2_any(I32x2_lt(minSize, I32x2_zero())))
-		return Error_invalidParameter(3, 0);
-
 	if(I32x2_any(I32x2_eq(minSize, I32x2_zero())))
 		minSize = EResolution_get(EResolution_360);
 
-	if(I32x2_any(I32x2_lt(minSize, EResolution_get(EResolution_SD))))
-		return Error_invalidParameter(3, 0);
+	if(I32x2_any(I32x2_lt(minSize, EResolution_get(EResolution_SD))) || I32x2_any(I32x2_lt(minSize, I32x2_zero())))
+		return Error_invalidParameter(3, 0, "WindowManager_adaptSizes()::*minSizep should be >=240p (0 = 640x360, >=426x240)");
 
-	//Graphics APIs generally limit the resolution to 16k, so let's ensure the window can't get bigger than that
-
-	if(I32x2_any(I32x2_lt(maxSize, I32x2_zero())))
-		return Error_invalidParameter(4, 0);
+	//Graphics APIs generally limit the resolution to 16Ki, so let's ensure the window can't get bigger than that
 
 	if(I32x2_any(I32x2_eq(maxSize, I32x2_zero())))
-		maxSize = EResolution_get(EResolution_16K);
+		maxSize = I32x2_xx2(16384);
 
-	if(I32x2_any(I32x2_gt(maxSize, EResolution_get(EResolution_16K))))
-		return Error_invalidParameter(4, 0);
+	if(I32x2_any(I32x2_gt(maxSize, I32x2_xx2(16384))) || I32x2_any(I32x2_lt(maxSize, I32x2_zero())))
+		return Error_invalidParameter(4, 0, "WindowManager_adaptSizes()::*maxSizep should be >=0 && <16384");
 		
 	*minSizep = minSize;
 	*maxSizep = maxSize;
@@ -387,7 +388,7 @@ Error WindowManager_createWindow(
 ) {
 
 	if(!manager || !manager->lock.active)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "WindowManager_createWindow()::manager is required");
 
 	Error err = WindowManager_createPhysical(manager, position, size, minSize, maxSize, hint, title, callbacks, format, w);
 

@@ -323,7 +323,7 @@ inline I32x4 AESEncryptionContext_blockHash(I32x4 block, const I32x4 k[15]) {
 
 		I32x4 tmp[8];
 
-		tmp[0] = _mm_clmulepi64_si128(a, b, 0x00);
+		tmp[0] = _mm_clmulepi64_si128(a, b, 0x00);		//TODO: Abstract this so this can be generalized
 
 		tmp[3] = I32x4_xor(
 			_mm_clmulepi64_si128(a, b, 0x10),
@@ -333,15 +333,15 @@ inline I32x4 AESEncryptionContext_blockHash(I32x4 block, const I32x4 k[15]) {
 		tmp[2] = _mm_clmulepi64_si128(a, b, 0x11);
 
 		tmp[1] = I32x4_lshByte(tmp[3], 8);
-		tmp[3] = _mm_srli_si128(tmp[3], 8);
+		tmp[3] = I32x4_rshByte(tmp[3], 8);
 
 		for(U8 i = 0; i < 2; ++i) {
 			I32x4 t = I32x4_xor(tmp[i << 1], tmp[(i << 1) + 1]);
-			tmp[i << 1] = _mm_slli_epi32(t, 1);
-			tmp[4 + (i << 1)] = _mm_srli_epi32(t, 31);
+			tmp[i << 1] = I32x4_lsh32(t, 1);
+			tmp[4 + (i << 1)] = I32x4_rsh32(t, 31);
 		}
 
-		tmp[7] = _mm_srli_si128(tmp[4], 12);
+		tmp[7] = I32x4_rshByte(tmp[4], 12);
 
 		for(U8 i = 0; i < 2; ++i)
 			tmp[6 - i] = I32x4_lshByte(tmp[6 - (i << 1)], 4);
@@ -350,19 +350,19 @@ inline I32x4 AESEncryptionContext_blockHash(I32x4 block, const I32x4 k[15]) {
 
 		for(U8 i = 0; i < 3; ++i) {
 			tmp[i << 1] = I32x4_or(tmp[i ? 2 : 0], tmp[5 + i]);
-			tmp[5 + i] = _mm_slli_epi32(tmp[0], v0[i]);
+			tmp[5 + i] = I32x4_lsh32(tmp[0], v0[i]);
 		}
 
 		for(U8 i = 0; i < 2; ++i)
 			tmp[5] = I32x4_xor(tmp[5], tmp[6 + i]);
 
-		tmp[3] = _mm_srli_si128(tmp[5], 4);
+		tmp[3] = I32x4_rshByte(tmp[5], 4);
 		tmp[5] = I32x4_xor(tmp[0], I32x4_lshByte(tmp[5], 12));
 
 		const U8 v1[3] = { 1, 2, 7 };
 		
 		for(U8 i = 0; i < 3; ++i)
-			tmp[i] = _mm_srli_epi32(tmp[5], v1[i]);
+			tmp[i] = I32x4_rsh32(tmp[5], v1[i]);
 
 		for(U8 i = 1; i < 6; ++i)
 			tmp[0] = I32x4_xor(tmp[0], tmp[i]);
@@ -608,7 +608,11 @@ inline Error AESEncryptionContext_encrypt(
 	//-3 because we start at 2 since 1 is used at the end for verification (and 0 is skipped).
 
 	if(Buffer_length(target) > (4 * GIBI - 3) * sizeof(I32x4))
-		return Error_unsupportedOperation(0);
+		return Error_unsupportedOperation(
+			0, 
+			"AESEncryptionContext_encrypt()::target has a limit of 64GB - 48 bytes to avoid block counter re-use.\n"
+			"If file size exceeds 64GB encrypt in blocks with a unique IV each 64GB block"
+		);
 
 	//Generate iv & context
 
@@ -617,13 +621,13 @@ inline Error AESEncryptionContext_encrypt(
 	if(flags & EBufferEncryptionFlags_GenerateIv) {
 
 		if(!Buffer_csprng(Buffer_createRef(ivPtr, 12)))
-			return Error_invalidState(0);
+			return Error_invalidState(0, "AESEncryptionContext_encrypt() couldn't generate iv");
 	}
 
 	if(flags & EBufferEncryptionFlags_GenerateKey) {
 
 		if(!Buffer_csprng(Buffer_createRef(realKey, sizeof(U32) * 8)))
-			return Error_invalidState(1);
+			return Error_invalidState(1, "AESEncryptionContext_encrypt() couldn't generate key");
 	}
 
 	AESEncryptionContext ctx = AESEncryptionContext_create(realKey, *ivPtr, additionalData);
@@ -665,16 +669,18 @@ Error Buffer_encrypt(
 ) {
 
 	if(Buffer_isConstRef(target))
-		return Error_constData(0, 0);
+		return Error_constData(0, 0, "Buffer_encrypt()::target must be writable");
 
 	if(type >= EBufferEncryptionType_Count)
-		return Error_invalidEnum(2, (U64)type, (U64)EBufferEncryptionType_Count);
+		return Error_invalidEnum(2, (U64)type, (U64)EBufferEncryptionType_Count, "Buffer_encrypt()::type out of bounds");
 
 	if(flags & EBufferEncryptionFlags_Invalid)
-		return Error_invalidEnum(3, (U64)flags, ((U64)1 << EBufferEncryptionFlags_Count) - 1);
+		return Error_invalidEnum(
+			3, (U64)flags, ((U64)1 << EBufferEncryptionFlags_Count) - 1, "Buffer_encrypt()::flags are invalid"
+		);
 
 	if(!key || !iv || !tag)
-		return Error_nullPointer(!key ? 4 : (!iv ? 5 : 6));
+		return Error_nullPointer(!key ? 4 : (!iv ? 5 : 6), "Buffer_encrypt()::key, iv and tag are required");
 
 	return AESEncryptionContext_encrypt(target, additionalData, flags, key, iv, tag);
 }
@@ -697,7 +703,11 @@ inline Error AESEncryptionContext_decrypt(
 	//-3 because we start at 2 since 1 is used at the end for verification (and 0 is skipped).
 
 	if(targetLen > (4 * GIBI - 3) * sizeof(I32x4))
-		return Error_unsupportedOperation(0);
+		return Error_unsupportedOperation(
+			0, 
+			"AESEncryptionContext_decrypt()::target has a limit of 64GB - 48 bytes to avoid block counter re-use.\n"
+			"If file size exceeds 64GB encrypt in blocks with a unique IV each 64GB block"
+		);
 
 	//Create context
 
@@ -720,7 +730,7 @@ inline Error AESEncryptionContext_decrypt(
 	AESEncryptionContext_finish(&ctx, additionalData, target);
 
 	if(I32x4_any(I32x4_neq(ctx.tag, tag)))
-		return Error_invalidState(0);
+		return Error_invalidState(0, "AESEncryptionContext_decrypt() GMAC tag is invalid");
 
 	//Decrypt blocks blocks
 	//TODO: We might wanna multithread this if we ever get big enough data
@@ -749,13 +759,13 @@ Error Buffer_decrypt(
 ) {
 
 	if(Buffer_isConstRef(target))
-		return Error_constData(0, 0);
+		return Error_constData(0, 0, "Buffer_decrypt()::target needs to be writable");
 
 	if(type >= EBufferEncryptionType_Count)
-		return Error_invalidEnum(1, (U64) type, EBufferEncryptionType_Count);
+		return Error_invalidEnum(1, (U64) type, EBufferEncryptionType_Count, "Buffer_decrypt()::type is out of bounds");
 
 	if(!key)
-		return Error_nullPointer(3);
+		return Error_nullPointer(3, "Buffer_decrypt()::key is required");
 
 	return AESEncryptionContext_decrypt(target, additionalData, key, tag, iv);
 }

@@ -108,7 +108,6 @@ Error List_createConstRef(const U8 *ptr, U64 length, U64 stride, List *result);
 
 Error List_set(List list, U64 index, Buffer buf);
 Error List_get(List list, U64 index, Buffer *result);
-Error List_getConst(List list, U64 index, Buffer *result);
 
 Error List_copy(
 	List src, 
@@ -118,8 +117,8 @@ Error List_copy(
 	U64 count
 );
 
-Error List_swap(List l, U64 i, U64 j);
-Bool List_reverse(List l);
+Error List_swap(List list, U64 i, U64 j);
+Bool List_reverse(List list);
 
 //Find all occurrences in list
 //Returns U64[]

@@ -68,7 +68,7 @@ void Window_physicalLoop(Window *w) {
 	wc.cbWndExtra = sizeof(void*);
 
 	if (!RegisterClassExA(&wc))
-		_gotoIfError(clean, Error_platformError(0, GetLastError()));
+		_gotoIfError(clean, Error_platformError(0, GetLastError(), "Window_physicalLoop() RegisterClassEx failed"));
 
 	DWORD style = WS_VISIBLE;
 
@@ -113,7 +113,7 @@ void Window_physicalLoop(Window *w) {
 	if(!nativeWindow) {
 		HRESULT hr = GetLastError();
 		UnregisterClassA(wc.lpszClassName, wc.hInstance);
-		_gotoIfError(clean, Error_platformError(1, hr));
+		_gotoIfError(clean, Error_platformError(1, hr, "Window_physicalLoop() CreateWindowEx failed"));
 	}
 
 	//Get real size and position
@@ -176,7 +176,7 @@ void Window_physicalLoop(Window *w) {
 	};
 
 	if (!RegisterRawInputDevices(registerDevices, 2, sizeof(registerDevices[0])))
-		_gotoIfError(clean, Error_invalidState(0));
+		_gotoIfError(clean, Error_invalidState(0, "Window_physicalLoop() RegisterRawInputDevices failed"));
 
 	//Window loop
 
@@ -211,7 +211,7 @@ void Window_physicalLoop(Window *w) {
 	ELockAcquire acq0 = Lock_lock(&Platform_instance.windowManager.lock, U64_MAX);
 
 	if(acq0 < ELockAcquire_Success)
-		_gotoIfError(clean, Error_invalidState(0));
+		_gotoIfError(clean, Error_invalidState(0, "Window_physicalLoop() acquire WindowManager lock failed"));
 
 	ELockAcquire acq1 = Lock_lock(&w->lock, U64_MAX);
 
@@ -252,16 +252,16 @@ Error WindowManager_createPhysical(
 	//Validate state
 
 	if(!manager)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "WindowManager_createPhysical()::manager is required");
 
 	if(!Lock_isLockedForThread(&manager->lock))
-		return Error_invalidOperation(0);
+		return Error_invalidOperation(0, "WindowManager_createPhysical()::manager needs to be locked");
 
 	if(!w)
-		return Error_nullPointer(9);
+		return Error_nullPointer(9, "WindowManager_createPhysical()::w is required");
 
 	if(*w)
-		return Error_invalidParameter(9, 0);
+		return Error_invalidParameter(9, 0, "WindowManager_createPhysical()::*w isn't NULL, might indicate memleak");
 
 	switch (format) {
 
@@ -271,12 +271,16 @@ Error WindowManager_createPhysical(
 		case EWindowFormat_RGBA32f:
 
 			if(!WindowManager_supportsFormat(*manager, format))
-				return Error_unsupportedOperation(0);
+				return Error_unsupportedOperation(
+					0, "WindowManager_createPhysical()::format is unsupported by window manager"
+				);
 
 			break;
 
 		default:
-			return Error_invalidParameter(8, 0);
+			return Error_invalidParameter(
+				8, 0, "WindowManager_createPhysical()::format must be one of BGRA8, BGR10A2, RGBA16f or RGBA32f"
+			);
 	}
 
 	//Ensure the sizes are valid
@@ -286,10 +290,12 @@ Error WindowManager_createPhysical(
 	if(err.genericError)
 		return err;
 
-	//Validate path
+	//Validate title
 
 	if (CharString_length(title) >= MAX_PATH)
-		return Error_outOfBounds(6, CharString_length(title), MAX_PATH);
+		return Error_outOfBounds(
+			6, CharString_length(title), MAX_PATH, "WindowManager_createPhysical()::title must be below 260 chars"
+		);
 
 	//Find free spot in physical windows
 
@@ -311,7 +317,9 @@ Error WindowManager_createPhysical(
 	}
 
 	if(!win)
-		return Error_outOfMemory(WindowManager_MAX_PHYSICAL_WINDOWS);
+		return Error_outOfMemory(
+			WindowManager_MAX_PHYSICAL_WINDOWS, "WindowManager_createPhysical() is limited to 8 active windows"
+		);
 
 	//Fill window object so our thread can read from it
 

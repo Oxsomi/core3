@@ -37,10 +37,10 @@ Error CDFList_create(
 ) {
 
 	if(!result)
-		return Error_nullPointer(4);
+		return Error_nullPointer(4, "CDFList_create()::result is required");
 
 	if(result->cdf.ptr)
-		return Error_invalidOperation(0);
+		return Error_invalidOperation(0, "CDFList_create()::result wasn't empty, indicating a possible memleak");
 
 	Error err = Error_none();
 
@@ -95,13 +95,13 @@ Error CDFList_createSubset(
 ) {
 
 	if(!result)
-		return Error_nullPointer(4);
+		return Error_nullPointer(4, "CDFList_createSubset()::result is required");
 
 	if(result->cdf.ptr)
-		return Error_invalidOperation(0);
+		return Error_invalidOperation(0, "CDFList_createSubset()::result isn't empty, this could indicate possible memleak");
 
 	if(!preallocated.stride || !elementCount)
-		return Error_invalidOperation(1);
+		return Error_invalidOperation(1, "CDFList_createSubset()::elementCount or preallocated.stride can't be 0");
 
 	Error err = List_createSubset(preallocated, elementsOffset, elementCount, &result->elements);
 
@@ -211,16 +211,16 @@ Bool CDFList_set(CDFList *list, U64 i, F32 value, Buffer element, Bool updateTot
 Error CDFList_pushIndex(CDFList *list, U64 i, F32 value, Buffer element, Allocator allocator) {
 
 	if(!list)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "CDFList_pushIndex()::list is required");
 
 	if(List_isRef(list->elements))
-		return Error_invalidOperation(0);
+		return Error_invalidOperation(0, "CDFList_pushIndex()::list can't be a ref");
 
 	if(value < 0)
-		return Error_invalidParameter(2, 0);
+		return Error_invalidParameter(2, 0, "CDFList_pushIndex()::value can't be <0");
 
 	if(Buffer_length(element) != list->elements.stride)
-		return Error_invalidParameter(3, 0);
+		return Error_invalidParameter(3, 0, "CDFList_pushIndex()::element can't mismatch list->elements.stride");
 
 	Bool isLast = list->totalElements == i;
 
@@ -246,16 +246,16 @@ Error CDFList_pushIndex(CDFList *list, U64 i, F32 value, Buffer element, Allocat
 Error CDFList_popIndex(CDFList *list, U64 i, Buffer element) {
 
 	if(!list)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "CDFList_popIndex()::list is required");
 
 	if(List_isRef(list->elements))
-		return Error_invalidOperation(0);
+		return Error_invalidOperation(0, "CDFList_popIndex()::list can't be a ref");
 
 	if(!list->totalElements)
-		return Error_invalidOperation(1);
+		return Error_invalidOperation(1, "CDFList_popIndex()::list can't be empty");
 
 	if(Buffer_length(element) != list->elements.stride)
-		return Error_invalidParameter(2, 0);
+		return Error_invalidParameter(2, 0, "CDFList_popIndex()::element can't mismatch list->elements.stride");
 
 	CDFValue prevProbability = (CDFValue) { 0 };
 	Bool isLast = (list->totalElements - 1) == i;
@@ -298,7 +298,7 @@ Error CDFList_popBack(CDFList *list, Buffer elementValue) {
 Error CDFList_finalize(CDFList *list) {
 
 	if(!list || !list->totalElements)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "CDFList_finalize()::list is required and should have at least 1 element");
 
 	if(list->flags & ECDFListFlags_IsFinalized)
 		return Error_none();
@@ -317,16 +317,18 @@ Error CDFList_finalize(CDFList *list) {
 	return Error_none();
 }
 
-Error CDFList_getRandomElement(CDFList *list, CDFListElement *elementValue) {
+Error CDFList_getRandomElementSecure(CDFList *list, CDFListElement *elementValue) {
 
 	if(!list || !elementValue)
-		return Error_nullPointer(elementValue ? 1 : 0);
+		return Error_nullPointer(
+			elementValue ? 1 : 0, "CDFList_getRandomElementSecure()::list and elementValue are required"
+		);
 
 	U32 v;
 	Buffer b = Buffer_createRef(&v, sizeof(v));
 
 	if(!Buffer_csprng(b))
-		return Error_invalidOperation(0);
+		return Error_invalidOperation(0, "");
 
 	F32 f = (v << 8 >> 8) / 16'777'215.f * list->total;
 	return CDFList_getElementAtOffset(list, f, elementValue);
@@ -335,7 +337,7 @@ Error CDFList_getRandomElement(CDFList *list, CDFListElement *elementValue) {
 Error CDFList_getRandomElementFast(CDFList *list, CDFListElement *elementValue, U32 *seed) {
 
 	if(!seed)
-		return Error_nullPointer(2);
+		return Error_nullPointer(2, "CDFList_getRandomElementFast()::seed is required");
 
 	return CDFList_getElementAtOffset(list, Random_sample(seed), elementValue);
 }
@@ -343,16 +345,19 @@ Error CDFList_getRandomElementFast(CDFList *list, CDFListElement *elementValue, 
 Error CDFList_getElementAtOffset(CDFList *list, F32 randomValue, CDFListElement *elementValue) {
 
 	if(!list || !elementValue)
-		return Error_nullPointer(list ? 2 : 0);
+		return Error_nullPointer(list ? 2 : 0, "CDFList_getElementAtOffset()::list and elementValue are required");
 
 	if(randomValue < 0 || randomValue >= list->total)
-		return Error_outOfBounds(1, *(const U32*)&randomValue, *(const U32*)&list->total);
+		return Error_outOfBounds(
+			1, *(const U32*)&randomValue, *(const U32*)&list->total,
+			"CDFList_getElementAtOffset()::randomValue is out of bounds"
+		);
 
 	if(!(list->flags & ECDFListFlags_IsFinalized))
-		return Error_invalidOperation(0);
+		return Error_invalidOperation(0, "CDFList_getElementAtOffset()::list isn't finalized");
 
 	if(!list->totalElements || !list->total)
-		return Error_invalidOperation(1);
+		return Error_invalidOperation(1, "CDFList_getElementAtOffset()::list doesn't have any elements");
 
 	U64 startRegion = 0, endRegion = list->totalElements;
 	U64 j = (startRegion + endRegion) / 2;
@@ -381,8 +386,10 @@ Error CDFList_getElementAtOffset(CDFList *list, F32 randomValue, CDFListElement 
 		U64 oldJ = j;
 		j = (startRegion + endRegion) / 2;
 
+		//Should never happen, it should always find a match before this
+
 		if(j == oldJ || j >= list->totalElements)
-			return Error_notFound(0, 0);		//Should never happen, it should always find a match before this
+			return Error_notFound(0, 0, "CDFList_getElementAtOffset() couldn't find value");
 	}
 
 	return Error_none();

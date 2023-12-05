@@ -64,7 +64,7 @@ Error WWindow_initSize(Window *w, I32x2 size) {
 		screen = GetDC(w->nativeHandle);
 
 		if(!screen)
-			_gotoIfError(clean, Error_platformError(2, GetLastError()));
+			_gotoIfError(clean, Error_platformError(2, GetLastError(), "WWindow_initSize() GetDC failed"));
 
 		//TODO: Support something other than RGBA8
 
@@ -85,7 +85,7 @@ Error WWindow_initSize(Window *w, I32x2 size) {
 		);
 
 		if(!screen)
-			_gotoIfError(clean, Error_platformError(3, GetLastError()));
+			_gotoIfError(clean, Error_platformError(3, GetLastError(), "WWindow_initSize() CreateDIBSection failed"));
 
 		//Manually set it to be a reference
 		//This makes it so we don't free it, because we don't own the memory
@@ -223,7 +223,12 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 			}
 
 			if (GetRawInputData((HRAWINPUT)lParam, RID_INPUT, (U8*) buf.ptr, &size, sizeof(RAWINPUTHEADER)) != size) {
-				Error_printx(Error_platformError(0, GetLastError()), ELogLevel_Error, ELogOptions_Default);
+
+				Error_printx(
+					Error_platformError(0, GetLastError(), "WWindow_onCallback() GetRawInputData failed"),
+					ELogLevel_Error, ELogOptions_Default
+				);
+
 				Buffer_freex(&buf);
 				Log_errorx(ELogOptions_Default, "Couldn't get raw input");
 				break;
@@ -478,7 +483,12 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 			deviceInfo.cbSize = size;
 
 			if (!GetRawInputDeviceInfoA((HANDLE)lParam, RIDI_DEVICEINFO, &deviceInfo, &size)) {
-				Error_printx(Error_platformError(0, GetLastError()), ELogLevel_Error, ELogOptions_Default);
+
+				Error_printx(
+					Error_platformError(0, GetLastError(), "WWindow_onCallback() GetRawInputDeviceInfo failed"),
+					ELogLevel_Error, ELogOptions_Default
+				);
+
 				Log_errorx(ELogOptions_Default, "Invalid data in WM_INPUT_DEVICE_CHANGE");
 				break;
 			}
@@ -563,7 +573,10 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 				if (!RegisterRawInputDevices(&rawDevice, 1, sizeof(RAWINPUTDEVICE))) {
 
-					Error_printx(Error_platformError(0, GetLastError()), ELogLevel_Error, ELogOptions_Default);
+					Error_printx(
+						Error_platformError(0, GetLastError(), "WWindow_onCallback() RegisterRawInputDevices failed"),
+						ELogLevel_Error, ELogOptions_Default
+					);
 
 					if(pushed)
 						List_popBack(&w->devices, Buffer_createNull());
@@ -787,10 +800,10 @@ Error Window_updatePhysicalTitle(const Window *w, CharString title) {
 	U64 titlel = CharString_length(title);
 
 	if(!w || !I32x2_any(w->size) || !title.ptr || !titlel)
-		return Error_nullPointer(!w || !I32x2_any(w->size) ? 0 : 1);
+		return Error_nullPointer(!w || !I32x2_any(w->size) ? 0 : 1, "Window_updatePhysicalTitle()::w and title are required");
 
 	if (titlel >= MAX_PATH)
-		return Error_outOfBounds(1, titlel, MAX_PATH);
+		return Error_outOfBounds(1, titlel, MAX_PATH, "Window_updatePhysicalTitle()::title must be less than 260 characters");
 
 	C8 windowName[MAX_PATH + 1];
 	Buffer_copy(Buffer_createRef(windowName, sizeof(windowName)), CharString_bufferConst(title));
@@ -798,7 +811,7 @@ Error Window_updatePhysicalTitle(const Window *w, CharString title) {
 	windowName[titlel] = '\0';
 
 	if(!SetWindowTextA(w->nativeHandle, windowName))
-		return Error_platformError(0, GetLastError());
+		return Error_platformError(0, GetLastError(), "Window_updatePhysicalTitle() SetWindowText failed");
 
 	return Error_none();
 }
@@ -806,10 +819,10 @@ Error Window_updatePhysicalTitle(const Window *w, CharString title) {
 Error Window_toggleFullScreen(Window *w) {
 
 	if(!w || !I32x2_any(w->size))
-		return Error_nullPointer(!w || !I32x2_any(w->size) ? 0 : 1);
+		return Error_nullPointer(!w || !I32x2_any(w->size) ? 0 : 1, "Window_toggleFullScreen()::w is required");
 
 	if(!(w->hint & EWindowHint_AllowFullscreen))
-		return Error_unsupportedOperation(0);
+		return Error_unsupportedOperation(0, "Window_toggleFullScreen() isn't allowed if EWindowHint_AllowFullscreen is off");
 
 	DWORD style = WS_VISIBLE;
 
@@ -859,10 +872,10 @@ Error Window_toggleFullScreen(Window *w) {
 Error Window_presentPhysical(const Window *w) {
 
 	if(!w || !I32x2_any(w->size))
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "Window_presentPhysical()::w is required");
 
 	if(!(w->flags & EWindowFlags_IsActive) || !(w->hint & EWindowHint_ProvideCPUBuffer))
-		return Error_invalidOperation(0);
+		return Error_invalidOperation(0, "Window_presentPhysical() can only be called if there's a CPU-sided buffer");
 
 	PAINTSTRUCT ps;
 	HDC hdcBmp = NULL, oldBmp = NULL;
@@ -871,7 +884,7 @@ Error Window_presentPhysical(const Window *w) {
 	HDC hdc = BeginPaint(w->nativeHandle, &ps);
 
 	if(!hdc)
-		return Error_platformError(0, GetLastError());
+		return Error_platformError(0, GetLastError(), "Window_presentPhysical() BeginPaint failed");
 
 	hdcBmp = CreateCompatibleDC(hdc);
 
@@ -903,5 +916,5 @@ cleanup:
 		DeleteDC(hdcBmp);
 
 	EndPaint(w->nativeHandle, &ps);
-	return errId ? Error_platformError(errId, res) : Error_none();
+	return errId ? Error_platformError(errId, res, "Window_presentPhysical() failed in WinApi call") : Error_none();
 }

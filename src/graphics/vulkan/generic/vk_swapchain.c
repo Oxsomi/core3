@@ -81,7 +81,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 	)));
 
 	if(!support)
-		_gotoIfError(clean, Error_unsupportedOperation(0));
+		_gotoIfError(clean, Error_unsupportedOperation(0, "GraphicsDeviceRef_createSwapchainExt() has no queue support"));
 
 	//It's possible that format has changed when calling Swapchain_resize.
 	//So we can't skip this.
@@ -93,7 +93,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 	)));
 
 	if(!formatCount)
-		_gotoIfError(clean, Error_invalidState(0));
+		_gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_createSwapchainExt() format isn't supported"));
 
 	_gotoIfError(clean, List_resizex(&list, formatCount));
 
@@ -133,9 +133,6 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 			};
 
 			break;
-
-		default:
-			_gotoIfError(clean, Error_invalidParameter(2, 0));
 	}
 
 	for (U32 j = 0; j < formatCount; ++j) {
@@ -150,7 +147,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 	}
 
 	if(swapchainExt->format.format == VK_FORMAT_UNDEFINED)
-		_gotoIfError(clean, Error_unsupportedOperation(0));
+		_gotoIfError(clean, Error_unsupportedOperation(0, "GraphicsDeviceRef_createSwapchainExt() invalid format"));
 
 	List_freex(&list);
 
@@ -165,10 +162,10 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 	//Validate if it's compatible with the OxC3_platforms window
 
 	if(I32x2_neq2(window->size, size) || !capabilities.maxImageArrayLayers)
-		_gotoIfError(clean, Error_invalidOperation(0));
+		_gotoIfError(clean, Error_invalidOperation(0, "GraphicsDeviceRef_createSwapchainExt() incompatible window size"));
 
 	if(!(capabilities.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR))
-		_gotoIfError(clean, Error_invalidOperation(1));
+		_gotoIfError(clean, Error_invalidOperation(1, "GraphicsDeviceRef_createSwapchainExt() requires alpha opaque"));
 
 	VkFlags requiredUsageFlags = 
 		VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
@@ -178,13 +175,17 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 		VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
 	if((capabilities.supportedUsageFlags & requiredUsageFlags) != requiredUsageFlags)
-		_gotoIfError(clean, Error_invalidOperation(2));
+		_gotoIfError(clean, Error_invalidOperation(2, "GraphicsDeviceRef_createSwapchainExt() doesn't have required flags"));
 
 	if(!(capabilities.supportedCompositeAlpha & (VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR | VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR)))
-		_gotoIfError(clean, Error_invalidOperation(3));
+		_gotoIfError(clean, Error_invalidOperation(
+			3, "GraphicsDeviceRef_createSwapchainExt() doesn't have required composite alpha"
+		));
 
 	if(capabilities.minImageCount > 2 || capabilities.maxImageCount < 3)
-		_gotoIfError(clean, Error_invalidOperation(4));
+		_gotoIfError(clean, Error_invalidOperation(
+			4, "GraphicsDeviceRef_createSwapchainExt() requires support for 2 and 3 images"
+		));
 
 	VkFlags anyRotate = 
 		VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR |
@@ -196,7 +197,9 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 	if(info.requiresManualComposite) {
 
 		if(window->monitors.length > 1)
-			_gotoIfError(clean, Error_invalidOperation(5));
+			_gotoIfError(clean, Error_invalidOperation(
+				5, "GraphicsDeviceRef_createSwapchainExt() requiresManualComposite only allowed with 1 monitor"
+			));
 
 		MonitorOrientation current = EMonitorOrientation_Landscape;
 
@@ -209,7 +212,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 		MonitorOrientation target = ((const Monitor*)window->monitors.ptr)->orientation;
 
 		if(current != target)
-			_gotoIfError(clean, Error_invalidOperation(6));
+			_gotoIfError(clean, Error_invalidOperation(6, "GraphicsDeviceRef_createSwapchainExt() invalid orientation"));
 	}
 
 	//Get present mode
@@ -270,8 +273,6 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 				case ESwapchainPresentMode_Fifo:			presentMode = VK_PRESENT_MODE_FIFO_KHR;				break;
 				case ESwapchainPresentMode_FifoRelaxed:		presentMode = VK_PRESENT_MODE_FIFO_RELAXED_KHR;		break;
 				case ESwapchainPresentMode_Mailbox:			presentMode = VK_PRESENT_MODE_MAILBOX_KHR;			break;
-				default:
-					_gotoIfError(clean, Error_unsupportedOperation(0));
 			}
 
 			break;
@@ -279,7 +280,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 	}
 
 	if(presentMode == -1)
-		_gotoIfError(clean, Error_invalidOperation(7));
+		_gotoIfError(clean, Error_invalidOperation(7, "GraphicsDeviceRef_createSwapchainExt() unsupported present mode"));
 
 	//Turn it into a swapchain
 	
@@ -319,10 +320,12 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 		acq = Lock_lock(&deviceExt->descriptorLock, U64_MAX);
 
 		if(acq < ELockAcquire_Success)
-			_gotoIfError(clean, Error_invalidOperation(0));
+			_gotoIfError(clean, Error_invalidOperation(
+				0, "GraphicsDeviceRef_createSwapchainExt() couldn't get descriptor lock"
+			));
 
 		if(!VkGraphicsDevice_freeAllocations(deviceExt, &swapchainExt->descriptorAllocations))
-			_gotoIfError(clean, Error_invalidOperation(1));
+			_gotoIfError(clean, Error_invalidOperation(1, "GraphicsDeviceRef_createSwapchainExt() couldn't free allocations"));
 	}
 
 	//Acquire images
@@ -334,7 +337,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 	)));
 
 	if(imageCount != images)
-		_gotoIfError(clean, Error_invalidState(1));
+		_gotoIfError(clean, Error_invalidState(1, "GraphicsDeviceRef_createSwapchainExt() imageCount doesn't match"));
 
 	//Only recreate semaphores if needed.
 
@@ -454,7 +457,9 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 		acq = Lock_lock(&deviceExt->descriptorLock, U64_MAX);
 
 		if(acq < ELockAcquire_Success)
-			_gotoIfError(clean, Error_invalidState(0));
+			_gotoIfError(clean, Error_invalidState(
+				0, "GraphicsDeviceRef_createSwapchainExt() couldn't acquire descriptor lock"
+			));
 	}
 
 	VkDescriptorImageInfo imageInfo[6];
@@ -466,7 +471,9 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 		U32 locationRead = VkGraphicsDevice_allocateDescriptor(deviceExt, EDescriptorType_Texture2D);
 
 		if(locationRead == U32_MAX)
-			_gotoIfError(clean, Error_outOfMemory(0));
+			_gotoIfError(clean, Error_outOfMemory(
+				0, "GraphicsDeviceRef_createSwapchainExt() couldn't allocate image descriptor"
+			));
 
 		allocPtr[i * descriptors] = locationRead;
 
@@ -503,7 +510,9 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 			U32 locationWrite = VkGraphicsDevice_allocateDescriptor(deviceExt, textureWriteType);
 
 			if(locationWrite == U32_MAX)
-				_gotoIfError(clean, Error_outOfMemory(1));
+				_gotoIfError(clean, Error_outOfMemory(
+					1, "GraphicsDeviceRef_createSwapchainExt() couldn't allocate image rw descriptor"
+				));
 
 			allocPtr[i * descriptors + 1] = locationWrite;
 

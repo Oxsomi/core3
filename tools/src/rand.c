@@ -198,7 +198,7 @@ Bool CLI_rand(ParsedArgs args) {
 		_gotoIfError(clean, Buffer_createUninitializedBytesx(bytesToGenerate, &tmp));
 
 		if(!Buffer_csprng(tmp))
-			_gotoIfError(clean, Error_invalidOperation(0));
+			_gotoIfError(clean, Error_invalidOperation(0, "CLI_rand() Buffer_csprng failed"));
 
 		if(outputAsBase == 256)
 			_gotoIfError(clean, Buffer_appendBuffer(&outputFilePtr, tmp))

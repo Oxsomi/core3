@@ -62,7 +62,7 @@ Error recurseDelete(FileInfo info, void *unused) {
 	unused;
 
 	if (removeFileOrFolder(info.path.ptr))
-		return Error_invalidOperation(0);
+		return Error_invalidOperation(0, "recurseDelete() removeFileOrFolder failed");
 
 	return Error_none();
 }
@@ -114,13 +114,13 @@ Error File_getInfo(CharString loc, FileInfo *info) {
 	Error err = Error_none();
 
 	if(!info) 
-		_gotoIfError(clean, Error_nullPointer(0));
+		_gotoIfError(clean, Error_nullPointer(0, "File_getInfo()::info is required"));
 
 	if(info->path.ptr) 
-		_gotoIfError(clean, Error_invalidOperation(0));
+		_gotoIfError(clean, Error_invalidOperation(0, "File_getInfo()::info was already defined, may indicate memleak"));
 
 	if(!CharString_isValidFilePath(loc))
-		_gotoIfError(clean, Error_invalidParameter(0, 0));
+		_gotoIfError(clean, Error_invalidParameter(0, 0, "File_getInfo()::loc wasn't a valid file path"));
 
 	Bool isVirtual = File_isVirtual(loc);
 
@@ -134,13 +134,15 @@ Error File_getInfo(CharString loc, FileInfo *info) {
 	struct stat inf = (struct stat) { 0 };
 
 	if (stat(resolved.ptr, &inf))
-		_gotoIfError(clean, Error_notFound(0, 0));
+		_gotoIfError(clean, Error_notFound(0, 0, "File_getInfo()::loc file not found"));
 
 	if (!S_ISDIR(inf.st_mode) && !S_ISREG(inf.st_mode))
-		_gotoIfError(clean, Error_invalidOperation(2));
+		_gotoIfError(clean, Error_invalidOperation(
+			2, "File_getInfo()::loc file type not supporterd (must be file or folder)"
+		));
 
 	if (!(inf.st_mode & (S_IREAD | S_IWRITE)))
-		_gotoIfError(clean, Error_unauthorized(0));
+		_gotoIfError(clean, Error_unauthorized(0, "File_getInfo()::loc file must be read and/or write"));
 
 	*info = (FileInfo) {
 
@@ -198,13 +200,13 @@ Error File_queryFileObjectCount(CharString loc, EFileType type, Bool isRecursive
 	CharString resolved = CharString_createNull();
 
 	if(!res)
-		_gotoIfError(clean, Error_nullPointer(3));
+		_gotoIfError(clean, Error_nullPointer(3, "File_queryFileObjectCount()::res is required"));
 
 	//Virtual files can supply a faster way of counting files
 	//Such as caching it and updating it if something is changed
 
 	if(!CharString_isValidFilePath(loc)) 
-		_gotoIfError(clean, Error_invalidParameter(0, 0));
+		_gotoIfError(clean, Error_invalidParameter(0, 0, "File_queryFileObjectCount()::res must be a valid file path"));
 
 	Bool isVirtual = File_isVirtual(loc);
 
@@ -232,10 +234,10 @@ Error File_queryFileObjectCountAll(CharString loc, Bool isRecursive, U64 *res) {
 	Error err = Error_none();
 
 	if(!res)
-		_gotoIfError(clean, Error_nullPointer(2));
+		_gotoIfError(clean, Error_nullPointer(2, "File_queryFileObjectCountAll()::res is required"));
 
 	if(!CharString_isValidFilePath(loc))
-		_gotoIfError(clean, Error_invalidParameter(0, 0));
+		_gotoIfError(clean, Error_invalidParameter(0, 0, "File_queryFileObjectCountAll()::res must be a valid file path"));
 
 	//Virtual files can supply a faster way of counting files
 	//Such as caching it and updating it if something is changed
@@ -268,7 +270,7 @@ Error File_add(CharString loc, EFileType type, Ns maxTimeout) {
 	Error err = Error_none();
 
 	if(!CharString_isValidFilePath(loc))
-		_gotoIfError(clean, Error_invalidParameter(0, 0));
+		_gotoIfError(clean, Error_invalidParameter(0, 0, "File_add()::loc must be a valid file path"));
 
 	Bool isVirtual = File_isVirtual(loc);
 
@@ -293,7 +295,7 @@ Error File_add(CharString loc, EFileType type, Ns maxTimeout) {
 	//Already exists
 
 	if(!err.genericError)
-		_gotoIfError(clean, info.type != type ? Error_alreadyDefined(0) : Error_none());
+		_gotoIfError(clean, info.type != type ? Error_alreadyDefined(0, "File_add()::loc already exists") : Error_none());
 
 	FileInfo_freex(&info);
 
@@ -302,7 +304,7 @@ Error File_add(CharString loc, EFileType type, Ns maxTimeout) {
 	if(CharString_contains(resolved, '/', EStringCase_Sensitive)) {
 
 		if(!CharString_eraseFirstString(&resolved, Platform_instance.workingDirectory, EStringCase_Insensitive))
-			_gotoIfError(clean, Error_unauthorized(0));
+			_gotoIfError(clean, Error_unauthorized(0, "File_add() escaped working directory. This is not supported."));
 
 		_gotoIfError(clean, CharString_splitx(resolved, '/', EStringCase_Sensitive, &str));
 
@@ -316,7 +318,7 @@ Error File_add(CharString loc, EFileType type, Ns maxTimeout) {
 				_gotoIfError(clean, err);
 
 			if(info.type != EFileType_Folder)
-				_gotoIfError(clean, Error_invalidOperation(2));
+				_gotoIfError(clean, Error_invalidOperation(2, "File_add() one of the parents wasn't a folder"));
 
 			FileInfo_freex(&info);
 
@@ -336,7 +338,7 @@ Error File_add(CharString loc, EFileType type, Ns maxTimeout) {
 			//Make parent
 
 			if (mkdir(parent.ptr))
-				_gotoIfError(clean, Error_stderr(0));
+				_gotoIfError(clean, Error_stderr(0, "File_add() couldn't mkdir parent"));
 
 			//Reset character that was replaced with \0
 
@@ -350,7 +352,7 @@ Error File_add(CharString loc, EFileType type, Ns maxTimeout) {
 	//Create folder
 
 	if (type == EFileType_Folder && mkdir(resolved.ptr))
-		_gotoIfError(clean, Error_stderr(1));
+		_gotoIfError(clean, Error_stderr(1, "File_add() couldn't mkdir"));
 
 	//Create file
 
@@ -370,7 +372,7 @@ Error File_remove(CharString loc, Ns maxTimeout) {
 	Error err = Error_none();
 
 	if(!CharString_isValidFilePath(loc))
-		_gotoIfError(clean, Error_invalidParameter(0, 0));
+		_gotoIfError(clean, Error_invalidParameter(0, 0, "File_remove()::loc must be a valid file path"));
 
 	Bool isVirtual = File_isVirtual(loc);
 
@@ -398,7 +400,7 @@ Error File_remove(CharString loc, Ns maxTimeout) {
 	}
 
 	if (res)
-		_gotoIfError(clean, Error_stderr(0));
+		_gotoIfError(clean, Error_stderr(0, "File_remove() couldn't remove file"));
 
 clean:
 	CharString_freex(&resolved);
@@ -426,11 +428,11 @@ Error File_rename(CharString loc, CharString newFileName, Ns maxTimeout) {
 	Error err = Error_none();
 	FileInfo info = (FileInfo) { 0 };
 
-	if(!CharString_isValidFilePath(newFileName))
-		_gotoIfError(clean, Error_invalidParameter(0, 0));
+	if(!CharString_isValidFilePath(loc))
+		_gotoIfError(clean, Error_invalidParameter(0, 0, "File_rename()::loc must be a valid file path"));
 
 	if(!CharString_isValidFileName(newFileName))
-		_gotoIfError(clean, Error_invalidParameter(1, 0));
+		_gotoIfError(clean, Error_invalidParameter(1, 0, "File_rename()::newFileName must be a valid file name"));
 
 	Bool isVirtual = File_isVirtual(loc);
 
@@ -446,7 +448,7 @@ Error File_rename(CharString loc, CharString newFileName, Ns maxTimeout) {
 	Bool fileExists = File_has(loc);
 
 	if(!fileExists)
-		_gotoIfError(clean, Error_notFound(0, 0));
+		_gotoIfError(clean, Error_notFound(0, 0, "File_rename()::loc doesn't exist"));
 
 	Ns maxTimeoutTry = U64_min((maxTimeout + 7) >> 2, 1 * SECOND);		//Try ~4x+ up to 1s of wait
 
@@ -464,7 +466,7 @@ Error File_rename(CharString loc, CharString newFileName, Ns maxTimeout) {
 	}
 
 	if(ren)
-		_gotoIfError(clean, Error_stderr(0));
+		_gotoIfError(clean, Error_stderr(0, "File_rename() rename failed"));
 
 clean:
 	FileInfo_freex(&info);
@@ -479,10 +481,10 @@ Error File_move(CharString loc, CharString directoryName, Ns maxTimeout) {
 	FileInfo info = (FileInfo) { 0 };
 
 	if(!CharString_isValidFilePath(loc))
-		_gotoIfError(clean, Error_invalidParameter(0, 0));
+		_gotoIfError(clean, Error_invalidParameter(0, 0, "File_move()::loc must be a valid file path"));
 
 	if(!CharString_isValidFilePath(directoryName))
-		_gotoIfError(clean, Error_invalidParameter(1, 0));
+		_gotoIfError(clean, Error_invalidParameter(1, 0, "File_move()::directoryName must be a valid file path"));
 
 	Bool isVirtual = File_isVirtual(loc);
 
@@ -495,15 +497,15 @@ Error File_move(CharString loc, CharString directoryName, Ns maxTimeout) {
 	_gotoIfError(clean, File_resolvex(directoryName, &isVirtual, 0, &resolvedFile));
 
 	if(isVirtual)
-		_gotoIfError(clean, Error_invalidOperation(0));
+		_gotoIfError(clean, Error_invalidOperation(0, "File_move() can't resolve to virtual file here?"));
 
 	//Check if file exists
 
 	if(!File_has(resolved))
-		_gotoIfError(clean, Error_notFound(0, 0));
+		_gotoIfError(clean, Error_notFound(0, 0, "File_move()::loc can't be found"));
 
 	if(!File_hasFolder(resolvedFile))
-		_gotoIfError(clean, Error_notFound(0, 1));
+		_gotoIfError(clean, Error_notFound(0, 1, "File_move()::directoryName can't be found"));
 
 	Ns maxTimeoutTry = U64_min((maxTimeout + 7) >> 2, 1 * SECOND);		//Try ~4x+ up to 1s of wait
 
@@ -531,7 +533,7 @@ Error File_move(CharString loc, CharString directoryName, Ns maxTimeout) {
 	}
 
 	if(ren)
-		_gotoIfError(clean, Error_stderr(0));
+		_gotoIfError(clean, Error_stderr(0, "File_move() couldn't move file"));
 
 clean:
 	FileInfo_freex(&info);
@@ -547,7 +549,7 @@ Error File_write(Buffer buf, CharString loc, Ns maxTimeout) {
 	FILE *f = NULL;
 
 	if(!CharString_isValidFilePath(loc))
-		_gotoIfError(clean, Error_invalidParameter(0, 0));
+		_gotoIfError(clean, Error_invalidParameter(0, 0, "File_write()::loc must be a valid file path"));
 
 	Bool isVirtual = File_isVirtual(loc);
 
@@ -574,12 +576,12 @@ Error File_write(Buffer buf, CharString loc, Ns maxTimeout) {
 	}
 
 	if(!f)
-		_gotoIfError(clean, Error_stderr(0));
+		_gotoIfError(clean, Error_stderr(0, "File_write() couldn't open file for write"));
 
 	U64 bufLen = Buffer_length(buf);
 
 	if(bufLen && fwrite(buf.ptr, 1, bufLen, f) != bufLen)
-		_gotoIfError(clean, Error_stderr(1));
+		_gotoIfError(clean, Error_stderr(1, "File_write() couldn't write file"));
 
 clean:
 	if(f) fclose(f);
@@ -594,13 +596,13 @@ Error File_read(CharString loc, Ns maxTimeout, Buffer *output) {
 	FILE *f = NULL;
 
 	if(!CharString_isValidFilePath(loc))
-		_gotoIfError(clean, Error_invalidParameter(0, 0));
+		_gotoIfError(clean, Error_invalidParameter(0, 0, "File_read()::loc must be a valid file path"));
 
 	if(!output)
-		_gotoIfError(clean, Error_nullPointer(2));
+		_gotoIfError(clean, Error_nullPointer(2, "File_read()::output is required"));
 
 	if(output->ptr)
-		_gotoIfError(clean, Error_invalidOperation(0));
+		_gotoIfError(clean, Error_invalidOperation(0, "File_read()::output was filled, may indicate memleak"));
 
 	Bool isVirtual = File_isVirtual(loc);
 
@@ -627,10 +629,10 @@ Error File_read(CharString loc, Ns maxTimeout, Buffer *output) {
 	}
 
 	if(!f)
-		_gotoIfError(clean, Error_stderr(0));
+		_gotoIfError(clean, Error_stderr(0, "File_read() couldn't open file for read"));
 
 	if(fseek(f, 0, SEEK_END))
-		_gotoIfError(clean, Error_stderr(1));
+		_gotoIfError(clean, Error_stderr(1, "File_read() couldn't seek end"));
 
 	U64 size = (U64)_ftelli64(f);
 
@@ -640,13 +642,13 @@ Error File_read(CharString loc, Ns maxTimeout, Buffer *output) {
 	_gotoIfError(clean, Buffer_createUninitializedBytesx(size, output));
 
 	if(fseek(f, 0, SEEK_SET))
-		_gotoIfError(clean, Error_stderr(2));
+		_gotoIfError(clean, Error_stderr(2, "File_read() couldn't seek begin"));
 
 	Buffer b = *output;
 	U64 bufLen = Buffer_length(b);
 
 	if (fread((U8*)b.ptr, 1, bufLen, f) != bufLen)
-		_gotoIfError(clean, Error_stderr(3));
+		_gotoIfError(clean, Error_stderr(3, "File_read() couldn't read file"));
 
 	goto success;
 

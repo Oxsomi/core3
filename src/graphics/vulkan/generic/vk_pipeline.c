@@ -54,10 +54,10 @@ Error createShaderModule(
 	stage;
 
 	if(Buffer_length(buf) >> 32)
-		return Error_outOfBounds(0, Buffer_length(buf), U32_MAX);
+		return Error_outOfBounds(0, Buffer_length(buf), U32_MAX, "createShaderModule()::buf.length is limited to U32_MAX");
 
 	if(!Buffer_length(buf) || Buffer_length(buf) % sizeof(U32))
-		return Error_invalidParameter(0, 0);
+		return Error_invalidParameter(0, 0, "createShaderModule()::buf.length must be in U32s when SPIR-V is used");
 
 	VkShaderModuleCreateInfo info = (VkShaderModuleCreateInfo) {
 		.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,

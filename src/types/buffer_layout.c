@@ -110,19 +110,21 @@ U64 BufferLayoutStruct_allocatedData(BufferLayoutStructInfo info, U64 memberData
 Error BufferLayoutStruct_create(BufferLayoutStructInfo info, U32 id, Allocator alloc, BufferLayoutStruct *layoutStruct) {
 
 	if(!layoutStruct)
-		return Error_nullPointer(1);
+		return Error_nullPointer(1, "BufferLayoutStruct_create()::layoutStruct is required");
 
 	if(layoutStruct->data.ptr)
-		return Error_invalidParameter(1, 0);
+		return Error_invalidParameter(
+			1, 0, "BufferLayoutStruct_create()::layoutStruct wasn't empty, indicating a possible memleak"
+		);
 
 	if(id == U32_MAX)
-		return Error_invalidParameter(2, 0);
+		return Error_invalidParameter(2, 0, "BufferLayoutStruct_create()::id is invalid");
 
 	if(CharString_length(info.name) > U8_MAX)
-		return Error_invalidParameter(0, 0);
+		return Error_invalidParameter(0, 0, "BufferLayoutStruct_create()::info.name is limited to 255 C8s (chars)");
 
 	if(info.members.length >= U16_MAX)
-		return Error_invalidParameter(0, 1);
+		return Error_invalidParameter(0, 1, "BufferLayoutStruct_create()::info.members is limited to 65534");
 
 	U64 memberDataLen = 0;
 		
@@ -131,25 +133,41 @@ Error BufferLayoutStruct_create(BufferLayoutStructInfo info, U32 id, Allocator a
 		BufferLayoutMemberInfo m = ((const BufferLayoutMemberInfo*)info.members.ptr)[i];
 
 		if(!CharString_length(m.name) || CharString_length(m.name) > U8_MAX || !CharString_isValidAscii(m.name))
-			return Error_invalidParameter(0, 0 + (((U32)i + 1) << 16));
+			return Error_invalidParameter(
+				0, 0 + (((U32)i + 1) << 16), 
+				"BufferLayoutStruct_create()::info.members[i].name should have <0, 255] characters"
+			);
 
 		if(m.arraySizes.length && m.arraySizes.stride != sizeof(U32))
-			return Error_invalidParameter(0, 1 + (((U32)i + 1) << 16));
+			return Error_invalidParameter(
+				0, 1 + (((U32)i + 1) << 16), "BufferLayoutStruct_create()::info.members[i].arraySizes should be a U32[]"
+			);
 
 		if(m.arraySizes.length > U8_MAX)
-			return Error_invalidParameter(0, 1 + (((U32)i + 1) << 16));
+			return Error_invalidParameter(
+				0, 1 + (((U32)i + 1) << 16), "BufferLayoutStruct_create()::info.members[i].arraySizes.length is limited to 255"
+			);
 
 		if(((U32)m.typeId == U32_MAX) && (m.structId == U32_MAX))
-			return Error_invalidParameter(0, 2 + (((U32)i + 1) << 16));
+			return Error_invalidParameter(
+				0, 2 + (((U32)i + 1) << 16), "BufferLayoutStruct_create()::info.members[i].typeId or structId is invalid"
+			);
 
 		if(((U32)m.typeId != U32_MAX) && (m.structId != U32_MAX))
-			return Error_invalidParameter(0, 2 + (((U32)i + 1) << 16));
+			return Error_invalidParameter(
+				0, 2 + (((U32)i + 1) << 16), 
+				"BufferLayoutStruct_create()::info.members[i] can either be POD or struct, not both"
+			);
 
 		if(m.structId != U32_MAX && m.structId >= id)
-			return Error_invalidParameter(0, 3 + (((U32)i + 1) << 16));
+			return Error_invalidParameter(
+				0, 3 + (((U32)i + 1) << 16), "BufferLayoutStruct_create()::info.members[i].structId is invalid"
+			);
 
 		if(m.offset >> 47)
-			return Error_invalidParameter(0, 4 + (((U32)i + 1) << 16));
+			return Error_invalidParameter(
+				0, 4 + (((U32)i + 1) << 16), "BufferLayoutStruct_create()::info.members[i].offset is out of bounds"
+			);
 
 		U64 totalLen = 1;
 
@@ -160,20 +178,24 @@ Error BufferLayoutStruct_create(BufferLayoutStructInfo info, U32 id, Allocator a
 			//An array length of 0 is only allowed if there's one element
 
 			if(!leni && !(!j && m.arraySizes.length == 1))
-				return Error_invalidParameter(0, 1 + (((U32)j + 1) << 16));
+				return Error_invalidParameter(
+					0, 1 + (((U32)j + 1) << 16), "BufferLayoutStruct_create()::info.members[i].arraySizes[j] is invalid"
+				);
 
 			U64 prevLen = totalLen;
 			totalLen *= leni;
 
 			if(totalLen < prevLen)
-				return Error_overflow((((U32)j + 1) << 16), totalLen, prevLen);
+				return Error_overflow((((U32)j + 1) << 16), totalLen, prevLen, "BufferLayoutStruct_create() overflow");
 		}
 
 		U64 prevLen = totalLen;
 		totalLen *= m.stride;
 
 		if(totalLen < prevLen || totalLen >> 48)
-			return Error_overflow((((U32)i + 1) << 16), totalLen, ((U64) 1 << 48) - 1);
+			return Error_overflow(
+				(((U32)i + 1) << 16), totalLen, ((U64) 1 << 48) - 1, "BufferLayoutStruct_create() overflow (2)"
+			);
 
 		memberDataLen += CharString_length(m.name) + List_bytes(m.arraySizes);
 	}
@@ -329,10 +351,10 @@ U16 BufferLayoutStruct_findMember(BufferLayoutStruct info, CharString copy) {
 Error BufferLayout_create(Allocator alloc, BufferLayout *layout) {
 	
 	if(!layout)
-		return Error_nullPointer(1);
+		return Error_nullPointer(1, "BufferLayout_create()::layout is required");
 
 	if(layout->structs.ptr)
-		return Error_invalidParameter(1, 0);
+		return Error_invalidParameter(1, 0, "BufferLayout_create()::layout wasn't empty, could indicate memleak");
 
 	layout->structs = List_createEmpty(sizeof(BufferLayoutStruct));
 	Error err = List_reserve(&layout->structs, 128, alloc);
@@ -345,7 +367,6 @@ Error BufferLayout_create(Allocator alloc, BufferLayout *layout) {
 	//Root struct hasn't been selected yet, so set it to unset.
 
 	layout->rootStructIndex = U32_MAX;
-
 	return Error_none();
 }
 
@@ -364,21 +385,26 @@ Bool BufferLayout_free(Allocator alloc, BufferLayout *layout) {
 Error BufferLayout_createStruct(BufferLayout *layout, BufferLayoutStructInfo info, Allocator alloc, U32 *id) {
 
 	if(!layout || !layout->structs.ptr)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "BufferLayout_createStruct()::layout is required");
 
 	if(!id)
-		return Error_nullPointer(3);
+		return Error_nullPointer(3, "BufferLayout_createStruct()::id is required");
 
 	for (U16 i = 0; i < (U16) info.members.length; ++i) {
 
 		BufferLayoutMemberInfo member = ((const BufferLayoutMemberInfo*) info.members.ptr)[i];
 
 		if(member.structId != U32_MAX && member.structId >= layout->structs.length)
-			return Error_outOfBounds(1, member.structId, layout->structs.length);
+			return Error_outOfBounds(
+				1, member.structId, layout->structs.length, 
+				"BufferLayout_createStruct()::info.members[i].structId out of bounds"
+			);
 	}
 
 	if(layout->structs.length + 1 >= U32_MAX)
-		return Error_outOfBounds(3, layout->structs.length, U32_MAX);
+		return Error_outOfBounds(
+			3, layout->structs.length, U32_MAX, "BufferLayout_createStruct()::layout->structs.length is limited to U32_MAX"
+		);
 
 	BufferLayoutStruct layoutStruct = (BufferLayoutStruct) { 0 };
 
@@ -400,10 +426,10 @@ clean:
 Error BufferLayout_assignRootStruct(BufferLayout *layout, U32 id) {
 
 	if(!layout || !layout->structs.ptr)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "BufferLayout_assignRootStruct()::layout is required");
 
 	if(id >= layout->structs.length)
-		return Error_outOfBounds(1, id, layout->structs.length);
+		return Error_outOfBounds(1, id, layout->structs.length, "BufferLayout_assignRootStruct()::id out of bounds");
 
 	layout->rootStructIndex = id;
 	return Error_none();
@@ -412,10 +438,10 @@ Error BufferLayout_assignRootStruct(BufferLayout *layout, U32 id) {
 Error BufferLayout_createInstance(BufferLayout layout, U64 count, Allocator alloc, Buffer *result) {
 
 	if(!result)
-		return Error_nullPointer(3);
+		return Error_nullPointer(3, "BufferLayout_createInstance()::result is required");
 
 	if(result->ptr)
-		return Error_invalidParameter(3, 0);
+		return Error_invalidParameter(3, 0, "BufferLayout_createInstance()::result isn't empty, might indicate memleak");
 
 	LayoutPathInfo info = (LayoutPathInfo) { 0 };
 	Error err = BufferLayout_resolveLayout(layout, CharString_createConstRefCStr("/"), &info, alloc);
@@ -426,7 +452,7 @@ Error BufferLayout_createInstance(BufferLayout layout, U64 count, Allocator allo
 	U64 bufLen = info.length * count;
 
 	if(bufLen < info.length)
-		return Error_overflow(0, bufLen, info.length);
+		return Error_overflow(0, bufLen, info.length, "BufferLayout_createInstance() overflow");
 
 	return Buffer_createEmptyBytes(bufLen, alloc, result);
 }
@@ -434,16 +460,13 @@ Error BufferLayout_createInstance(BufferLayout layout, U64 count, Allocator allo
 Error BufferLayout_resolveLayout(BufferLayout layout, CharString path, LayoutPathInfo *info, Allocator alloc) {
 
 	if(!layout.structs.ptr)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "BufferLayout_resolveLayout()::layout is empty");
 
 	if(!info)
-		return Error_nullPointer(2);
-
-	if(layout.rootStructIndex >= layout.structs.length)
-		return Error_unsupportedOperation(0);
+		return Error_nullPointer(2, "BufferLayout_resolveLayout()::info is NULL");
 
 	if(CharString_equalsString(path, CharString_createConstRefCStr("//"), EStringCase_Sensitive))
-		return Error_invalidParameter(1, 0);
+		return Error_invalidParameter(1, 0, "BufferLayout_resolveLayout()::path is invalid");
 
 	U64 start = CharString_startsWith(path, '/', EStringCase_Sensitive);
 	U64 end = CharString_length(path) - CharString_endsWith(path, '/', EStringCase_Sensitive);
@@ -494,7 +517,7 @@ Error BufferLayout_resolveLayout(BufferLayout layout, CharString path, LayoutPat
 		C8 v = CharString_getAt(path, i);
 
 		if(!C8_isValidAscii(v))
-			_gotoIfError(clean, Error_invalidParameter(1, 3));
+			_gotoIfError(clean, Error_invalidParameter(1, 3, "BufferLayout_resolveLayout()::path contains non ascii char"));
 
 		//For the final character we append first so we can process the final access here.
 
@@ -508,7 +531,7 @@ Error BufferLayout_resolveLayout(BufferLayout layout, CharString path, LayoutPat
 		if (v == '/' || isEnd) {
 
 			if(!CharString_length(copy))
-				_gotoIfError(clean, Error_invalidParameter(1, 1));
+				_gotoIfError(clean, Error_invalidParameter(1, 1, "BufferLayout_resolveLayout() had missing member (//)"));
 
 			//Access struct member
 		
@@ -517,7 +540,7 @@ Error BufferLayout_resolveLayout(BufferLayout layout, CharString path, LayoutPat
 				U16 memberId = BufferLayoutStruct_findMember(currentStruct, copy);
 
 				if(memberId == U16_MAX)
-					_gotoIfError(clean, Error_invalidParameter(1, 2));
+					_gotoIfError(clean, Error_invalidParameter(1, 2, "BufferLayout_resolveLayout()::path member not found"));
 
 				isInMember = true;
 				currentMember = BufferLayoutStruct_getMemberInfo(currentStruct, memberId);
@@ -544,7 +567,9 @@ Error BufferLayout_resolveLayout(BufferLayout layout, CharString path, LayoutPat
 					U16 memberId = BufferLayoutStruct_findMember(currentStruct, copy);
 
 					if(memberId == U16_MAX)
-						_gotoIfError(clean, Error_invalidParameter(1, 2));
+						_gotoIfError(clean, Error_invalidParameter(
+							1, 2, "BufferLayout_resolveLayout()::path member not found"
+						));
 
 					isInMember = true;
 					currentMember = BufferLayoutStruct_getMemberInfo(currentStruct, memberId);
@@ -559,12 +584,16 @@ Error BufferLayout_resolveLayout(BufferLayout layout, CharString path, LayoutPat
 
 					U64 arrayOffset;
 					if(!CharString_parseU64(copy, &arrayOffset))
-						_gotoIfError(clean, Error_invalidParameter(1, 4));
+						_gotoIfError(clean, Error_invalidParameter(
+							1, 4, "BufferLayout_resolveLayout()::path expected U64 for array index"
+						));
 					
 					U32 currentDim = ((const U32*) currentMember.arraySizes.ptr)[currentArrayDim];
 
 					if(arrayOffset >= currentDim)
-						_gotoIfError(clean, Error_outOfBounds(0, arrayOffset, currentDim));
+						_gotoIfError(clean, Error_outOfBounds(
+							0, arrayOffset, currentDim, "BufferLayout_resolveLayout()::path array index out of bounds"
+						));
 
 					U64 arrayStride = currentMember.stride;
 
@@ -630,13 +659,13 @@ Error BufferLayout_resolve(
 ) {
 
 	if(!location)
-		return Error_nullPointer(3);
+		return Error_nullPointer(3, "BufferLayout_resolve()::location is required");
 
 	if(!buffer.ptr)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "BufferLayout_resolve()::buffer is required");
 
 	if(location->ptr)
-		return Error_invalidParameter(3, 0);
+		return Error_invalidParameter(3, 0, "BufferLayout_resolve()::location isn't empty, might indicate memleak");
 
 	LayoutPathInfo info = (LayoutPathInfo) { 0 };
 	Error err = BufferLayout_resolveLayout(layout, path, &info, alloc);
@@ -645,7 +674,9 @@ Error BufferLayout_resolve(
 		return err;
 
 	if(info.offset + info.length > Buffer_length(buffer))
-		return Error_outOfBounds(0, info.offset + info.length, Buffer_length(buffer));
+		return Error_outOfBounds(
+			0, info.offset + info.length, Buffer_length(buffer), "BufferLayout_resolve()::offset + length out of bounds"
+		);
 
 	*location = 
 		Buffer_isConstRef(buffer) ? Buffer_createConstRef(buffer.ptr + info.offset, info.length) : 
@@ -663,23 +694,16 @@ Error BufferLayout_setData(
 ) {
 
 	if(Buffer_isConstRef(buffer))
-		return Error_constData(0, 0);
+		return Error_constData(0, 0, "BufferLayout_setData()::buffer must be writable");
 
 	Buffer buf = Buffer_createNull();
-
-	Error err = BufferLayout_resolve(
-		buffer, 
-		layout, 
-		path, 
-		&buf, 
-		alloc
-	);
+	Error err = BufferLayout_resolve(buffer, layout, path, &buf, alloc);
 
 	if(err.genericError)
 		return err;
 
 	if(Buffer_length(newData) != Buffer_length(buf))
-		return Error_invalidParameter(3, 0);
+		return Error_invalidParameter(3, 0, "BufferLayout_setData()::buffer size mismatches");
 
 	Buffer_copy(buf, newData);
 	return Error_none();
@@ -694,20 +718,13 @@ Error BufferLayout_getData(
 ) {
 
 	if(!currentData)
-		return Error_nullPointer(3);
+		return Error_nullPointer(3, "BufferLayout_getData()::currentData is required");
 
 	if(currentData->ptr)
-		return Error_invalidParameter(3, 0);
+		return Error_invalidParameter(3, 0, "BufferLayout_getData()::currentData isn't empty, might indicate memleak");
 
 	Buffer buf = Buffer_createNull();
-
-	Error err = BufferLayout_resolve(
-		buffer, 
-		layout, 
-		path, 
-		&buf, 
-		alloc
-	);
+	Error err = BufferLayout_resolve(buffer, layout, path, &buf, alloc);
 
 	if(err.genericError)
 		return err;
@@ -716,51 +733,38 @@ Error BufferLayout_getData(
 	return Error_none();
 }
 
-#define _BUFFER_LAYOUT_SGET_IMPL(T)																	\
-																									\
-Error BufferLayout_set##T(																			\
-	Buffer buffer, 																					\
-	BufferLayout layout, 																			\
-	CharString path, 																				\
-	T t, 																							\
-	Allocator alloc																					\
-) {																									\
-	return BufferLayout_setData(																	\
-		buffer,																						\
-		layout,																						\
-		path,																						\
-		Buffer_createConstRef(&t, sizeof(T)),														\
-		alloc																						\
-	);																								\
-}																									\
-																									\
-Error BufferLayout_get##T(																			\
-	Buffer buffer, 																					\
-	BufferLayout layout, 																			\
-	CharString path, 																				\
-	T *t, 																							\
-	Allocator alloc																					\
-) {																									\
-																									\
-	if(!t)																							\
-		return Error_nullPointer(3);																\
-																									\
-	Buffer buf = Buffer_createRef(t, sizeof(T));													\
-	Buffer currentData = Buffer_createNull();														\
-																									\
-	Error err = BufferLayout_getData(																\
-		buffer, 																					\
-		layout, 																					\
-		path, 																						\
-		&currentData, 																				\
-		alloc																						\
-	);																								\
-																									\
-	if(err.genericError)																			\
-		return err;																					\
-																									\
-	Buffer_copy(buf, currentData);																	\
-	return Error_none();																			\
+#define _BUFFER_LAYOUT_SGET_IMPL(T)																		\
+																										\
+Error BufferLayout_set##T(																				\
+	Buffer buffer, 																						\
+	BufferLayout layout, 																				\
+	CharString path, 																					\
+	T t, 																								\
+	Allocator alloc																						\
+) {																										\
+	return BufferLayout_setData(buffer, layout, path, Buffer_createConstRef(&t, sizeof(T)), alloc);		\
+}																										\
+																										\
+Error BufferLayout_get##T(																				\
+	Buffer buffer, 																						\
+	BufferLayout layout, 																				\
+	CharString path, 																					\
+	T *t, 																								\
+	Allocator alloc																						\
+) {																										\
+																										\
+	if(!t)																								\
+		return Error_nullPointer(3, "BufferLayout_get" #T " t is required");							\
+																										\
+	Buffer buf = Buffer_createRef(t, sizeof(T));														\
+	Buffer currentData = Buffer_createNull();															\
+	Error err = BufferLayout_getData(buffer, layout, path, &currentData, alloc);						\
+																										\
+	if(err.genericError)																				\
+		return err;																						\
+																										\
+	Buffer_copy(buf, currentData);																		\
+	return Error_none();																				\
 }
 
 #define _BUFFER_LAYOUT_XINT_SGET_IMPL(prefix, suffix)												\

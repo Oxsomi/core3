@@ -30,13 +30,13 @@ typedef struct AllocationBufferBlock {
 Error AllocationBuffer_create(U64 size, Bool isVirtual, Allocator alloc, AllocationBuffer *allocationBuffer) {
 
 	if(!allocationBuffer || !size)
-		return Error_nullPointer(!size ? 0 : 2);
+		return Error_nullPointer(!size ? 0 : 2, "AllocationBuffer_create()::size or allocationBuffer is NULL");
 
-	if(allocationBuffer->buffer.ptr || allocationBuffer->allocations.ptr)
-		return Error_invalidOperation(0);
+	if(allocationBuffer->allocations.ptr)
+		return Error_invalidOperation(0, "AllocationBuffer_create()::allocationBuffer isn't NULL, might indicate memleak");
 
-	if(size >> 48)
-		return Error_invalidParameter(0, 0);
+	if(size >> 48 && !isVirtual)
+		return Error_invalidParameter(0, 0, "AllocationBuffer_create()::size is out of bounds (should be max 48-bit)");
 
 	Error err = Error_none();
 
@@ -48,9 +48,7 @@ Error AllocationBuffer_create(U64 size, Bool isVirtual, Allocator alloc, Allocat
 			return err;
 	}
 
-	else allocationBuffer->buffer = (Buffer) {
-		.lengthAndRefBits = ((U64)3 << 62) | size
-	};
+	else allocationBuffer->buffer = (Buffer) { .lengthAndRefBits = ((U64)3 << 62) | size };
 		
 	allocationBuffer->allocations = List_createEmpty(sizeof(AllocationBufferBlock));
 	err = List_reserve(&allocationBuffer->allocations, 16, alloc);
@@ -73,10 +71,12 @@ Error AllocationBuffer_createRefFromRegion(
 ) {
 
 	if(!allocationBuffer || !size)
-		return Error_nullPointer(!size ? 2 : 3);
+		return Error_nullPointer(!size ? 2 : 3, "AllocationBuffer_createRefFromRegion()::size or allocationBuffer is NULL");
 
-	if(allocationBuffer->buffer.ptr || allocationBuffer->allocations.ptr)
-		return Error_invalidOperation(0);
+	if(allocationBuffer->allocations.ptr)
+		return Error_invalidOperation(
+			0, "AllocationBuffer_createRefFromRegion()::allocationBuffer isn't NULL, might indicate memleak"
+		);
 
 	Error err = Buffer_createSubset(origin, offset, size, false, &allocationBuffer->buffer);
 
@@ -148,7 +148,10 @@ Error AllocationBuffer_allocateAndFillBlock(
 ) {
 
 	if(!allocationBuffer || !allocationBuffer->buffer.ptr || !result)
-		return Error_nullPointer(!allocationBuffer ? 0 : (!allocationBuffer->buffer.ptr ? 0 : 4));
+		return Error_nullPointer(
+			!allocationBuffer ? 0 : (!allocationBuffer->buffer.ptr ? 0 : 4),
+			"AllocationBuffer_allocateAndFillBlock()::allocationBuffer is NULL"
+		);
 
 	U8 *defaultPtr = (U8*)1, *ptr = defaultPtr;
 	Error err = AllocationBuffer_allocateBlock(allocationBuffer, Buffer_length(data), alignment, alloc, &ptr);
@@ -175,19 +178,28 @@ Error AllocationBuffer_allocateBlock(
 ) {
 
 	if (!allocationBuffer || !size || !alignment || !result)
-		return Error_nullPointer(!allocationBuffer ? 0 : (!size ? 1 : (!alignment ? 2 : 4)));
+		return Error_nullPointer(
+			!allocationBuffer ? 0 : (!size ? 1 : (!alignment ? 2 : 4)),
+			"AllocationBuffer_allocateBlock()::allocationBuffer or result is NULL or size or alignment is 0"
+		);
 
 	if(*result && *result != (const U8*)1)
-		return Error_invalidParameter(4, 0);
+		return Error_invalidParameter(4, 0, "AllocationBuffer_allocateBlock()::*result is not NULL, might indicate memleak");
 
-	if((size >> 48) || (alignment >> 48))
-		return Error_outOfBounds(size >> 48 ? 2 : 1, size >> 48 ? size : alignment, (U64)1 << 48);
+	if(((size >> 48) || (alignment >> 48)) && allocationBuffer->buffer.ptr)
+		return Error_outOfBounds(
+			size >> 48 ? 2 : 1, size >> 48 ? size : alignment, (U64)1 << 48, 
+			"AllocationBuffer_allocateBlock()::size or alignment is out of bounds (should be max 48-bit)"
+		);
 
 	U64 len = Buffer_length(allocationBuffer->buffer);
 
 	if(size > len || alignment > len) {
 		*result = NULL;
-		return Error_outOfBounds(size > len ? 1 : 2, size > len ? size : alignment, len);
+		return Error_outOfBounds(
+			size > len ? 1 : 2, size > len ? size : alignment, len,
+			"AllocationBuffer_allocateBlock()::size or alignment is bigger than allocationBuffer->buffer"
+		);
 	}
 
 	//No allocations? We start at the front, it's always aligned
@@ -346,7 +358,7 @@ Error AllocationBuffer_allocateBlock(
 	}
 
 	*result = NULL;					//Write null so out of memory can be detected
-	return Error_outOfMemory(0);
+	return Error_outOfMemory(0, "AllocationBuffer_allocateBlock() out of memory");
 }
 
 Bool AllocationBuffer_freeBlock(AllocationBuffer *allocationBuffer, const U8 *ptr) {

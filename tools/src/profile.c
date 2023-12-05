@@ -39,7 +39,7 @@ Bool CLI_profileData(ParsedArgs args, ProfileOperation op) {
 	_gotoIfError(clean, Buffer_createUninitializedBytesx(bufferSize, &dat));
 
 	if(!Buffer_csprng(dat))
-		_gotoIfError(clean, Error_invalidState(0));
+		_gotoIfError(clean, Error_invalidState(0, "CLI_profileData() Buffer_csprng failed"));
 
 	_gotoIfError(clean, op(args, dat));
 
@@ -139,7 +139,7 @@ Error _CLI_profileCast(ParsedArgs args, Buffer buf) {
 	Error err = Error_none();
 
 	if(Buffer_length(buf) < GIBI)
-		_gotoIfError(clean, Error_invalidParameter(1, 0));
+		_gotoIfError(clean, Error_invalidParameter(1, 0, "_CLI_profileCast() assumes buf to be >= 1 GIBI"));
 
 	const U64 number = GIBI / sizeof(F64) / 32;
 	const C8 *iterationNames[] = { "Non denormalized", "(Un)Signed zero", "NaN", "Inf", "DeN" };
@@ -208,7 +208,7 @@ Error _CLI_profileRNG(ParsedArgs args, Buffer buf) {
 	Ns then = Time_now();
 
 	if(!Buffer_csprng(buf))
-		return Error_invalidState(0);
+		return Error_invalidState(0, "_CLI_profileRNG() Buffer_csprng failed");
 
 	Ns now = Time_now();
 

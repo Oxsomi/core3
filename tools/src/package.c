@@ -39,7 +39,7 @@ Error packageFile(FileInfo file, CAFileRecursion *caFile) {
 	CharString subPath = CharString_createNull();
 	
 	if(!CharString_cut(file.path, CharString_length(caFile->root), 0, &subPath))
-		return Error_invalidState(0);
+		return Error_invalidState(0, "packageFile()::file.path cut failed");
 
 	ArchiveEntry entry = (ArchiveEntry) {
 		.path = subPath,
@@ -162,7 +162,7 @@ Bool CLI_package(ParsedArgs args) {
 	_gotoIfError(clean, File_resolvex(input, &isVirtual, 0, &resolved));
 
 	if (isVirtual)
-		_gotoIfError(clean, Error_invalidOperation(0));
+		_gotoIfError(clean, Error_invalidOperation(0, "CLI_package() failed, file starts with //"));
 
 	_gotoIfError(clean, CharString_appendx(&resolved, '/'));
 

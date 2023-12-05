@@ -163,15 +163,15 @@ T T##_abs(T v) { return v < 0 ? -v : v; }													\
 Error T##_mod(T v, T mod, T *res) { 														\
 																							\
 	if(!res)																				\
-		return Error_nullPointer(1);														\
+		return Error_nullPointer(1, #T "_mod()::res is required");							\
 																							\
 	if(!mod)																				\
-		return Error_divideByZero(0, *(const TInt*) &v, 0);									\
+		return Error_divideByZero(0, *(const TInt*) &v, 0, #T "_mod() division by zero");	\
 																							\
 	T r = fmod##suffix(v, mod); 															\
 																							\
 	if(!T##_isValid(r))																		\
-		return Error_NaN(0);																\
+		return Error_NaN(0, #T "_mod() generated NaN or Inf");								\
 																							\
 	*res = r;																				\
 	return Error_none();																	\
@@ -207,46 +207,50 @@ T T##_floor(T v) { return floor##suffix(v); }												\
 Error T##_pow2(T v, T *res) { 																\
 																							\
 	if(!res)																				\
-		return Error_nullPointer(1);														\
+		return Error_nullPointer(1, #T "_pow2()::res is required");							\
 																							\
 	*res = v * v; 																			\
-	return !T##_isValid(*res) ? Error_overflow(0, *(const TInt*)&v, *(const TInt*)res) : 	\
-		Error_none();																		\
+	return !T##_isValid(*res) ? Error_overflow(												\
+		0, *(const TInt*)&v, *(const TInt*)res, #T "_pow2() generated an inf"				\
+	) : Error_none();																		\
 }																							\
 																							\
 Error T##_pow3(T v, T *res) { 																\
 																							\
 	if(!res)																				\
-		return Error_nullPointer(1);														\
+		return Error_nullPointer(1, #T "_pow3()::res is required");							\
 																							\
 	*res = v * v * v;																		\
-	return !T##_isValid(*res) ? Error_overflow(0, *(const TInt*)&v, *(const TInt*)res) : 	\
-		Error_none();																		\
+	return !T##_isValid(*res) ? Error_overflow(												\
+		0, *(const TInt*)&v, *(const TInt*)res, #T "_pow3() generated an inf"				\
+	) : Error_none();																		\
 }																							\
 																							\
 Error T##_pow4(T v, T *res) { 																\
 																							\
 	if(!res)																				\
-		return Error_nullPointer(1);														\
+		return Error_nullPointer(1, #T "_pow4()::res is required");							\
 																							\
 	*res = v * v;																			\
 	*res *= *res;																			\
 																							\
-	return !T##_isValid(*res) ? Error_overflow(0, *(const TInt*)&v, *(const TInt*)res) : 	\
-		Error_none();																		\
+	return !T##_isValid(*res) ? Error_overflow(												\
+		0, *(const TInt*)&v, *(const TInt*)res, #T "_pow4() generated an inf"				\
+	) : Error_none();																		\
 }																							\
 																							\
 Error T##_pow5(T v, T *res) { 																\
 																							\
 	if(!res)																				\
-		return Error_nullPointer(1);														\
+		return Error_nullPointer(1, #T "_pow5()::res is required");							\
 																							\
 	*res = v * v; 																			\
 	*res *= *res; 																			\
 	*res *= v;																				\
 																							\
-	return !T##_isValid(*res) ? Error_overflow(0, *(const TInt*)&v, *(const TInt*)res) : 	\
-		Error_none();																		\
+	return !T##_isValid(*res) ? Error_overflow(												\
+		0, *(const TInt*)&v, *(const TInt*)res, #T "_pow5() generated an inf"				\
+	) : Error_none();																		\
 }																							\
 																							\
 Error T##_pow(T v, T exp, T *res) { 														\
@@ -254,7 +258,9 @@ Error T##_pow(T v, T exp, T *res) { 														\
 	T r = pow##suffix(v, exp); 																\
 																							\
 	if(!T##_isValid(r))																		\
-		return Error_overflow(0, *(const TInt*)&v, *(const TInt*)&r);						\
+		return Error_overflow(																\
+			0, *(const TInt*)&v, *(const TInt*)res, #T "_pow() generated an inf"			\
+		);																					\
 																							\
 	*res = r;																				\
 	return Error_none();																	\

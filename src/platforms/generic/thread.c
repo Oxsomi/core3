@@ -39,7 +39,7 @@ Bool Thread_free(Thread **thread) {
 Error Thread_waitAndCleanup(Thread **thread, U32 maxWaitTime) {
 
 	if(!thread || !*thread)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "Thread_waitAndCleanup()::thread and *thread are required");
 
 	Error err = Thread_wait(*thread, maxWaitTime);
 

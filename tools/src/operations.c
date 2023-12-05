@@ -509,14 +509,11 @@ void Operations_init() {
 
 Error ParsedArgs_getArg(ParsedArgs args, EOperationHasParameter parameterId, CharString *arg) {
 
-	if(!arg)
-		return Error_nullPointer(2);
-
-	if(!parameterId)
-		return Error_unsupportedOperation(0);
+	if(!arg || !parameterId)
+		return Error_nullPointer(!arg ? 2 : 0, "ParsedArgs_getArg()::arg and parameterId are required");
 
 	if(!((args.parameters >> parameterId) & 1))
-		return Error_notFound(0, 1);
+		return Error_notFound(0, 1, "ParsedArgs_getArg()::parameterId not found");
 
 	U64 ourLoc = 0;
 

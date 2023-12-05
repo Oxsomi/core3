@@ -25,11 +25,11 @@
 #include "types/error.h"
 
 Error GraphicsInstanceRef_dec(GraphicsInstanceRef **inst) {
-	return !RefPtr_dec(inst) ? Error_invalidOperation(0) : Error_none();
+	return !RefPtr_dec(inst) ? Error_invalidOperation(0, "GraphicsInstanceRef_dec()::inst is required") : Error_none();
 }
 
 Error GraphicsInstanceRef_inc(GraphicsInstanceRef *inst) {
-	return !RefPtr_inc(inst) ? Error_invalidOperation(0) : Error_none();
+	return !RefPtr_inc(inst) ? Error_invalidOperation(0, "GraphicsInstanceRef_inc()::inst is required") : Error_none();
 }
 
 Error GraphicsInstance_getPreferredDevice(
@@ -42,10 +42,10 @@ Error GraphicsInstance_getPreferredDevice(
 ) {
 
 	if(!deviceInfo)
-		return Error_nullPointer(4);
+		return Error_nullPointer(4, "GraphicsInstance_getPreferredDevice()::deviceInfo is required");
 
 	if(deviceInfo->ext)
-		return Error_invalidParameter(4, 0);
+		return Error_invalidParameter(4, 0, "GraphicsInstance_getPreferredDevice()::*deviceInfo must be empty");
 
 	List tmp = (List) { 0 };
 	Error err = GraphicsInstance_getDeviceInfos(inst, verbose, &tmp);
@@ -92,7 +92,7 @@ Error GraphicsInstance_getPreferredDevice(
 	}
 
 	if(!hasAny)
-		_gotoIfError(clean, Error_notFound(0, 0));
+		_gotoIfError(clean, Error_notFound(0, 0, "GraphicsInstance_getPreferredDevice() no supported queried devices"));
 
 	U64 picked = hasDedicated ? preferredDedicated : preferredNonDedicated;
 

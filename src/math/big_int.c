@@ -35,7 +35,7 @@ Error BigInt_create(U16 bitCount, Allocator alloc, BigInt *big) {
 	U64 u64s = (bitCount + 63) >> 6;
 
 	if(u64s >> 8)
-		return Error_outOfBounds(0, bitCount, (U64)U8_MAX << 6);
+		return Error_outOfBounds(0, bitCount, (U64)U8_MAX << 6, "BigInt_create()::bitCount out of bounds");
 
 	Buffer buffer = Buffer_createNull();
 	Error err = Buffer_createEmptyBytes(u64s * sizeof(U64), alloc, &buffer);
@@ -50,13 +50,13 @@ Error BigInt_create(U16 bitCount, Allocator alloc, BigInt *big) {
 Error BigInt_createRef(U64 *ptr, U64 ptrCount, BigInt *big) {
 
 	if(!big)
-		return Error_nullPointer(2);
+		return Error_nullPointer(2, "BigInt_createRef()::big is required");
 
 	if(big->data)
-		return Error_invalidParameter(2, 0);
+		return Error_invalidParameter(2, 0, "BigInt_createRef()::big->data is required");
 
 	if(ptrCount >> 8)
-		return Error_outOfBounds(1, ptrCount, U8_MAX);
+		return Error_outOfBounds(1, ptrCount, U8_MAX, "BigInt_createRef()::ptrCount is more than the BigInt limit (256 U64s)");
 
 	*big = (BigInt) { .data = ptr, .isConst = false, .isRef = true, .length = (U8) ptrCount };
 	return Error_none();
@@ -65,13 +65,13 @@ Error BigInt_createRef(U64 *ptr, U64 ptrCount, BigInt *big) {
 Error BigInt_createConstRef(const U64 *ptr, U64 ptrCount, BigInt *big) {
 
 	if(!big)
-		return Error_nullPointer(2);
+		return Error_nullPointer(2, "BigInt_createConstRef()::big is required");
 
 	if(big->data)
-		return Error_invalidParameter(2, 0);
+		return Error_invalidParameter(2, 0, "BigInt_createConstRef()::big->data is required");
 
 	if(ptrCount >> 8)
-		return Error_outOfBounds(1, 0, U8_MAX);
+		return Error_outOfBounds(1, 0, U8_MAX, "BigInt_createConstRef()::ptrCount is more than the BigInt limit (256 U64s)");
 
 	*big = (BigInt) { .data = ptr, .isConst = true, .isRef = true, .length = (U8) ptrCount };
 	return Error_none();
@@ -90,7 +90,7 @@ static const U8 base2Count[] = { 4, 1, 3, 6 };
 Error BigInt_createFromBase2Type(CharString text, U16 bitCount, Allocator alloc, BigInt *big, EBase2Type type) {
 
 	if(!big)
-		return Error_nullPointer(3);
+		return Error_nullPointer(3, "BigInt_createFromBase2Type()::big is required");
 
 	Bool prefix = CharString_startsWithString(text, CharString_createConstRefCStr(base2Types[type]), EStringCase_Insensitive);
 	U8 prefixChars = prefix * 2;
@@ -99,12 +99,12 @@ Error BigInt_createFromBase2Type(CharString text, U16 bitCount, Allocator alloc,
 	U64 chars = CharString_length(text) - prefixChars;
 
 	if(!chars)
-		return Error_invalidParameter(0, 0);
+		return Error_invalidParameter(0, 0, "BigInt_createFromBase2Type()::text starts with 0[xbon] but doesn't have content");
 
 	if (bitCount == U16_MAX) {
 
 		if(!big->data)
-			return Error_nullPointer(3);
+			return Error_nullPointer(3, "BigInt_createFromBase2Type()::big->data is required if bitCount is auto (U16_MAX)");
 
 		bitCount = BigInt_bitCount(*big);
 	}
@@ -115,14 +115,18 @@ Error BigInt_createFromBase2Type(CharString text, U16 bitCount, Allocator alloc,
 	else {
 
 		if(big->data)
-			return Error_invalidParameter(3, 0);
+			return Error_invalidParameter(
+				3, 0, "BigInt_createFromBase2Type()::big->data should be NULL if bitCount isn't auto (U16_MAX)"
+			);
 
 		if(bitCount > 0xFF * 64)
-			return Error_invalidParameter(1, 0);
+			return Error_invalidParameter(1, 0, "BigInt_createFromBase2Type()::bitCount is out of bounds (>16320)");
 	}
 
 	if(chars * countPerChar > ((bitCount + countPerChar - 1) / countPerChar * countPerChar))
-		return Error_outOfBounds(0, chars * countPerChar, bitCount);
+		return Error_outOfBounds(
+			0, chars * countPerChar, bitCount, "BigInt_createFromBase2Type()::text would overflow BigInt bitCount"
+		);
 
 	Bool allocated = false;
 	Error err = Error_none();
@@ -152,7 +156,7 @@ Error BigInt_createFromBase2Type(CharString text, U16 bitCount, Allocator alloc,
 		}
 
 		if(v == U8_MAX)
-			_gotoIfError(clean, Error_invalidParameter(0, 1));
+			_gotoIfError(clean, Error_invalidParameter(0, 1, "BigInt_createFromBase2Type()::text contains invalid char"));
 
 		switch (type) {
 
@@ -179,7 +183,7 @@ Error BigInt_createFromBase2Type(CharString text, U16 bitCount, Allocator alloc,
 	if(bitCount & 63) {		//Fix last U64 to handle out of bounds
 
 		if(big->data[big->length - 1] >> (bitCount & 63))
-			return Error_outOfBounds(0, bitCount, bitCount);
+			return Error_outOfBounds(0, bitCount, bitCount, "BigInt_createFromBase2Type()::text contains too much data");
 	}
 
 	goto success;
@@ -241,23 +245,23 @@ Error BigInt_createFromString(CharString text, U16 bitCount, Allocator alloc, Bi
 Error BigInt_createFromDec(CharString text, U16 bitCount, Allocator alloc, BigInt *big) {
 
 	if(!big)
-		return Error_nullPointer(3);
+		return Error_nullPointer(3, "BigInt_createFromDec()::big is required");
 
 	if(!CharString_length(text))
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "BigInt_createFromDec()::text is required");
 
-	if(CharString_length(text) >> 52)
-		return Error_invalidParameter(0, 0);
+	if(CharString_length(text) > 4913)
+		return Error_invalidParameter(0, 0, "BigInt_createFromDec()::text should be below 4913 characters (16320 bits)");
 
 	U64 estBitCount = (U64) F64_ceil(F64_log2((F64)CharString_length(text)));
 
 	if (bitCount == U16_MAX) {
 
 		if(!big->data)
-			return Error_nullPointer(3);
+			return Error_nullPointer(3, "BigInt_createFromDec()::big->data is required when bitCount is auto (U16_MAX)");
 
 		if(!BigInt_and(big, BigInt_createNull()))
-			return Error_invalidState(0);
+			return Error_invalidState(0, "BigInt_createFromDec()::big clear failed");
 
 		bitCount = BigInt_bitCount(*big);
 	}
@@ -268,14 +272,16 @@ Error BigInt_createFromDec(CharString text, U16 bitCount, Allocator alloc, BigIn
 	else {
 
 		if(big->data)
-			return Error_invalidParameter(3, 0);
+			return Error_invalidParameter(
+				3, 0, "BigInt_createFromDec()::big->data should be NULL when bitCount isn't auto (U16_MAX)"
+			);
 
 		if(bitCount > 0xFF * 64)
-			return Error_invalidParameter(1, 0);
+			return Error_invalidParameter(1, 0, "BigInt_createFromBase2Type()::bitCount is out of bounds (>16320)");
 	}
 
 	if(estBitCount > 0xFF * 64 + 1)			//+1 to align to base10
-		return Error_outOfMemory(0);
+		return Error_outOfMemory(0, "BigInt_createFromBase2Type() estBitCount is out of bounds (>16321)");
 
 	Bool allocated = false;
 	Error err = Error_none();
@@ -301,31 +307,31 @@ Error BigInt_createFromDec(CharString text, U16 bitCount, Allocator alloc, BigIn
 		U8 v = C8_dec(text.ptr[i]);
 
 		if(v == U8_MAX)
-			_gotoIfError(clean, Error_invalidParameter(0, 1));
+			_gotoIfError(clean, Error_invalidParameter(0, 1, "BigInt_createFromBase2Type()::text contains non alpha char"));
 
 		((U8*)temp.data)[0] = v;
 
 		if(!BigInt_mul(&temp, multiplier, alloc))
-			_gotoIfError(clean, Error_invalidState(1));
+			_gotoIfError(clean, Error_invalidState(1, "BigInt_createFromBase2Type() mul failed"));
 
 		if(!BigInt_add(big, temp))
-			_gotoIfError(clean, Error_invalidState(2));
+			_gotoIfError(clean, Error_invalidState(2, "BigInt_createFromBase2Type() add failed"));
 
 		//Multiply multiplier by 10
 
 		if(!BigInt_and(&temp, BigInt_createNull()))
-			_gotoIfError(clean, Error_invalidState(2));
+			_gotoIfError(clean, Error_invalidState(2, "BigInt_createFromBase2Type() clear failed"));
 
 		((U8*)temp.data)[0] = 10;
 
 		if(!BigInt_mul(&multiplier, temp, alloc))
-			_gotoIfError(clean, Error_invalidState(3));
+			_gotoIfError(clean, Error_invalidState(3, "BigInt_createFromBase2Type() mul failed"));
 	}
 
 	if(bitCount & 63) {		//Fix last U64 to handle out of bounds
 
 		if(big->data[big->length - 1] >> (bitCount & 63))
-			return Error_outOfBounds(0, bitCount, bitCount);
+			return Error_outOfBounds(0, bitCount, bitCount, "BigInt_createFromBase2Type()::text contains too much data");
 	}
 
 	goto success;
@@ -654,10 +660,10 @@ BigInt *BigInt_clamp(BigInt *a, BigInt *mi, BigInt *ma) { return BigInt_max(BigI
 Error BigInt_resize(BigInt *a, U8 newSize, Allocator alloc) {
 
 	if(!a)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "BigInt_resize()::a is required");
 
 	if(a->isRef)
-		return Error_invalidOperation(0);
+		return Error_invalidOperation(0, "BigInt_resize()::a is a ref, resize can't be called on that");
 
 	if(a->length == newSize)
 		return Error_none();
@@ -674,7 +680,7 @@ Error BigInt_resize(BigInt *a, U8 newSize, Allocator alloc) {
 		return err;
 
 	if(!BigInt_set(&temp, *a, false, (Allocator) { 0 }))
-		return Error_invalidState(0);
+		return Error_invalidState(0, "BigInt_resize() set failed");
 
 	BigInt_free(a, alloc);
 	*a = temp;
@@ -706,10 +712,10 @@ Bool BigInt_set(BigInt *a, BigInt b, Bool allowResize, Allocator alloc) {
 Error BigInt_createCopy(BigInt *a, Allocator alloc, BigInt *b) {
 
 	if(!a || !b)
-		return Error_nullPointer(!a ? 0 : 2);
+		return Error_nullPointer(!a ? 0 : 2, "BigInt_createCopy()::a or b is NULL");
 
 	if(b->data)
-		return Error_invalidParameter(2, 0);
+		return Error_invalidParameter(2, 0, "BigInt_createCopy()::b->data should be NULL to avoid memory leaks");
 
 	Error err = BigInt_create((U16)a->length << 6, alloc, b);
 
@@ -717,7 +723,7 @@ Error BigInt_createCopy(BigInt *a, Allocator alloc, BigInt *b) {
 		return err;
 
 	if(!BigInt_set(a, *b, false, (Allocator) { 0 }))
-		return Error_invalidState(0);
+		return Error_invalidState(0, "BigInt_createCopy() set failed");
 
 	return err;
 }
@@ -782,7 +788,7 @@ U16 BigInt_bitScan(BigInt ai) {
 Error BigInt_isBase2(BigInt a, Allocator alloc, Bool *isBase2) {
 
 	if(!isBase2)
-		return Error_nullPointer(2);
+		return Error_nullPointer(2, "BigInt_isBase2()->isBase2 is required");
 
 	U16 v = BigInt_bitScan(a);
 
@@ -800,7 +806,7 @@ Error BigInt_isBase2(BigInt a, Allocator alloc, Bool *isBase2) {
 	*(U64*)temp.data = 1;
 
 	if(!BigInt_lsh(&temp, v)) 
-		_gotoIfError(clean, Error_invalidState(0));
+		_gotoIfError(clean, Error_invalidState(0, "BigInt_isBase2() lsh failed"));
 
 	*isBase2 = BigInt_eq(temp, a);
 clean:
@@ -892,7 +898,7 @@ Error BigInt_toString(
 		case EIntegerEncoding_Oct:		return BigInt_oct(b, allocator, result, leadingZeros);
 		case EIntegerEncoding_Hex:		return BigInt_hex(b, allocator, result, leadingZeros);
 		case EIntegerEncoding_Nyto:		return BigInt_nyto(b, allocator, result, leadingZeros);
-		default:						return Error_invalidParameter(3, 0);
+		default:						return Error_invalidParameter(3, 0, "BigInt_toString()::encoding is invalid");
 	}
 }
 

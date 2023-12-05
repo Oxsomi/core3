@@ -26,10 +26,10 @@
 Error Archive_create(Allocator alloc, Archive *archive) {
 
 	if(!archive)
-		return Error_nullPointer(1);
+		return Error_nullPointer(1, "Archive_create()::archive is required");
 
 	if(archive->entries.ptr)
-		return Error_invalidOperation(0);
+		return Error_invalidOperation(0, "Archive_create()::archive is already initialized, indicates possible memleak");
 
 	archive->entries = List_createEmpty(sizeof(ArchiveEntry));
 	return List_reserve(&archive->entries, 100, alloc);
@@ -152,7 +152,7 @@ Bool Archive_createOrFindParent(Archive *archive, CharString path, Allocator all
 Error Archive_addInternal(Archive *archive, ArchiveEntry entry, Bool successIfExists, Allocator alloc) {
 
 	if (!archive || !archive->entries.ptr)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "Archive_addInternal()::archive is required");
 
 	//If folder already exists, we're done
 
@@ -164,7 +164,7 @@ Error Archive_addInternal(Archive *archive, ArchiveEntry entry, Bool successIfEx
 	if (Archive_getPath(*archive, entry.path, &out, NULL, NULL, alloc)) {
 
 		if(out.type != entry.type || !successIfExists)
-			err = Error_alreadyDefined(0);
+			err = Error_alreadyDefined(0, "Archive_addInternal()::entry.path already exists");
 
 		goto clean;
 	}
@@ -175,7 +175,7 @@ Error Archive_addInternal(Archive *archive, ArchiveEntry entry, Bool successIfEx
 	_gotoIfError(clean, File_resolve(entry.path, &isVirtual, 128, CharString_createNull(), alloc, &resolved));
 
 	if (isVirtual)
-		_gotoIfError(clean, Error_unsupportedOperation(0));
+		_gotoIfError(clean, Error_unsupportedOperation(0, "Archive_addInternal()::entry.path was virtual (//)"));
 
 	oldPath = entry.path;
 	entry.path = resolved;
@@ -183,7 +183,7 @@ Error Archive_addInternal(Archive *archive, ArchiveEntry entry, Bool successIfEx
 	//Try to find a parent or make one
 
 	if(!Archive_createOrFindParent(archive, entry.path, alloc))
-		_gotoIfError(clean, Error_notFound(0, 0));
+		_gotoIfError(clean, Error_notFound(0, 0, "Archive_addInternal()::entry.path parent couldn't be created"));
 
 	_gotoIfError(clean, List_pushBack(&archive->entries, Buffer_createConstRef(&entry, sizeof(entry)), alloc));
 	resolved = CharString_createNull();
@@ -224,7 +224,7 @@ Error Archive_addFile(Archive *archive, CharString path, Buffer data, Ns timesta
 Error Archive_removeInternal(Archive *archive, CharString path, Allocator alloc, EFileType type) {
 
 	if (!archive || !archive->entries.ptr)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "Archive_removeInternal()::archive is required");
 
 	ArchiveEntry entry = (ArchiveEntry) { 0 };
 	U64 i = 0;
@@ -232,10 +232,10 @@ Error Archive_removeInternal(Archive *archive, CharString path, Allocator alloc,
 	Error err = Error_none();
 
 	if(!Archive_getPath(*archive, path, &entry, &i, &resolved, alloc))
-		return Error_notFound(0, 1);
+		return Error_notFound(0, 1, "Archive_removeInternal()::path doesn't exist");
 
 	if(type != EFileType_Any && entry.type != type)
-		_gotoIfError(clean, Error_invalidOperation(0));
+		_gotoIfError(clean, Error_invalidOperation(0, "Archive_removeInternal()::type doesn't match file type"));
 
 	//Remove children
 
@@ -300,17 +300,17 @@ Error Archive_rename(
 ) {
 
 	if (!archive || !archive->entries.ptr)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "Archive_rename()::archive is required");
 
 	CharString resolvedLoc = CharString_createNull();
 	Error err = Error_none();
 
 	if (!CharString_isValidFileName(newFileName))
-		return Error_invalidParameter(1, 0);
+		return Error_invalidParameter(1, 0, "Archive_rename()::newFileName isn't a valid filename");
 
 	U64 i = 0;
 	if (!Archive_getPath(*archive, loc, NULL, &i, &resolvedLoc, alloc))
-		return Error_notFound(0, 1);
+		return Error_notFound(0, 1, "Archive_rename()::loc couldn't be resolved to path");
 
 	//Rename 
 
@@ -335,22 +335,22 @@ Error Archive_move(
 ) {
 
 	if (!archive || !archive->entries.ptr)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "Archive_move()::archive is required");
 
 	CharString resolved = CharString_createNull();
 	U64 i = 0;
 	ArchiveEntry parent = (ArchiveEntry) { 0 };
 
 	if (!Archive_getPath(*archive, loc, NULL, &i, NULL, alloc))
-		return Error_notFound(0, 1);
+		return Error_notFound(0, 1, "Archive_move()::loc couldn't be resolved to path");
 
 	if (!Archive_getPath(*archive, directoryName, &parent, NULL, &resolved, alloc))
-		return Error_notFound(0, 2);
+		return Error_notFound(0, 2, "Archive_move()::directoryName couldn't be resolved to path");
 
 	Error err = Error_none();
 
 	if (parent.type != EFileType_Folder)
-		_gotoIfError(clean, Error_invalidOperation(0));
+		_gotoIfError(clean, Error_invalidOperation(0, "Archive_move()::directoryName should resolve to folder file"));
 
 	CharString *filePath = &((ArchiveEntry*)archive->entries.ptr)[i].path;
 
@@ -372,13 +372,13 @@ clean:
 Error Archive_getInfo(Archive archive, CharString path, FileInfo *info, Allocator alloc) {
 
 	if(!archive.entries.ptr || !info)
-		return Error_nullPointer(!info ? 2 : 0);
+		return Error_nullPointer(!info ? 2 : 0, "Archive_getInfo()::archive and info are required");
 
 	ArchiveEntry entry = (ArchiveEntry) { 0 };
 	CharString resolved = CharString_createNull();
 
 	if(!Archive_getPath(archive, path, &entry, NULL, &resolved, alloc))
-		return Error_notFound(0, 1);
+		return Error_notFound(0, 1, "Archive_getInfo()::path couldn't resolve to path");
 
 	*info = (FileInfo) {
 		.access = Buffer_isConstRef(entry.data) ? EFileAccess_Read : EFileAccess_ReadWrite,
@@ -400,13 +400,13 @@ U64 Archive_getIndex(Archive archive, CharString path, Allocator alloc) {
 Error Archive_updateFileData(Archive *archive, CharString path, Buffer data, Allocator alloc) {
 
 	if (!archive || !archive->entries.ptr)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "Archive_updateFileData()::archive is required");
 
 	ArchiveEntry entry = (ArchiveEntry) { 0 };
 	U64 i = 0;
 
 	if(!Archive_getPath(*archive, path, &entry, &i, NULL, alloc))
-		return Error_notFound(0, 1);
+		return Error_notFound(0, 1, "Archive_updateFileData()::path couldn't resolve to path");
 
 	Buffer_free(&entry.data, alloc);
 	((ArchiveEntry*)archive->entries.ptr)[i].data = data;
@@ -422,21 +422,24 @@ Error Archive_getFileDataInternal(
 ) {
 
 	if (!archive.entries.ptr || !data)
-		return Error_nullPointer(!data ? 2 : 0);
+		return Error_nullPointer(!data ? 2 : 0, "Archive_getFileDataInternal()::archive and data are required");
+
+	if(data->ptr)
+		return Error_invalidParameter(2, 0, "Archive_getFileDataInternal()::data wasn't empty, might indicate memleak");
 
 	ArchiveEntry entry = (ArchiveEntry) { 0 };
 
 	if(!Archive_getPath(archive, path, &entry, NULL, NULL, alloc))
-		return Error_notFound(0, 1);
+		return Error_notFound(0, 1, "Archive_getFileDataInternal()::path couldn't be resolved to path");
 
 	if (entry.type != EFileType_File)
-		return Error_invalidOperation(0);
+		return Error_invalidOperation(0, "Archive_getFileDataInternal()::entry.type isn't file, can't get data of folder");
 
 	if(isConst)
 		*data = Buffer_createConstRef(entry.data.ptr, Buffer_length(entry.data));
 
 	else if(Buffer_isConstRef(entry.data))
-		return Error_constData(1, 0);
+		return Error_constData(1, 0, "Archive_getFileDataInternal()::entry.data should be writable");
 
 	else *data = Buffer_createRef((U8*)entry.data.ptr, Buffer_length(entry.data));
 
@@ -462,10 +465,10 @@ Error Archive_foreach(
 ) {
 
 	if(!archive.entries.ptr || !callback)
-		return Error_nullPointer(!callback ? 3 : 0);
+		return Error_nullPointer(!callback ? 3 : 0, "Archive_foreach()::archive and callback are required");
 
 	if(type > EFileType_Any)
-		return Error_invalidEnum(5, (U64)type, (U64)EFileType_Any);
+		return Error_invalidEnum(5, (U64)type, (U64)EFileType_Any, "Archive_foreach()::type should be file, folder or any");
 
 	CharString resolved = CharString_createNull();
 	Bool isVirtual = false;
@@ -474,7 +477,7 @@ Error Archive_foreach(
 	_gotoIfError(clean, err);
 
 	if(isVirtual)
-		_gotoIfError(clean, Error_invalidOperation(0));
+		_gotoIfError(clean, Error_invalidOperation(0, "Archive_foreach()::path can't start with start with // (virtual)"));
 
 	//Append / (replace last \0)
 
@@ -538,7 +541,7 @@ Error Archive_queryFileObjectCount(
 ) {
 
 	if(!res)
-		return Error_nullPointer(4);
+		return Error_nullPointer(4, "Archive_queryFileObjectCount()::res is required");
 
 	return Archive_foreach(
 		archive,

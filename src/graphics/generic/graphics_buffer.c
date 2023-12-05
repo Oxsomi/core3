@@ -28,29 +28,29 @@
 #include "types/string.h"
 
 Error DeviceBufferRef_dec(DeviceBufferRef **buffer) {
-	return !RefPtr_dec(buffer) ? Error_invalidOperation(0) : Error_none();
+	return !RefPtr_dec(buffer) ? Error_invalidOperation(0, "DeviceBufferRef_dec()::buffer is required") : Error_none();
 }
 
 Error DeviceBufferRef_inc(DeviceBufferRef *buffer) {
-	return !RefPtr_inc(buffer) ? Error_invalidOperation(0) : Error_none();
+	return !RefPtr_inc(buffer) ? Error_invalidOperation(0, "DeviceBufferRef_dec()::buffer is required") : Error_none();
 }
 
 Error DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count) {
 
 	if(!buf)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "DeviceBufferRef_markDirty()::buf is required");
 
 	DeviceBuffer *buffer = DeviceBufferRef_ptr(buf);
 
 	//Check range
 
 	if(offset >= buffer->length || offset + count > buffer->length)
-		return Error_outOfBounds(1, offset + count, buffer->length);
+		return Error_outOfBounds(1, offset + count, buffer->length, "DeviceBufferRef_markDirty()::offset+count out of bounds");
 
 	ELockAcquire acq0 = Lock_lock(&buffer->lock, U64_MAX);
 
 	if(acq0 < ELockAcquire_Success)
-		return Error_invalidOperation(1);
+		return Error_invalidOperation(1, "DeviceBufferRef_markDirty() couldn't acquire buffer lock");
 
 	Error err = Error_none();
 	ELockAcquire acq1 = ELockAcquire_Invalid;
@@ -61,7 +61,9 @@ Error DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count) {
 		goto clean;
 
 	if(!(buffer->usage & EDeviceBufferUsage_CPUBacked) && !(buffer->isFirstFrame && !offset && !count))
-		_gotoIfError(clean, Error_invalidOperation(2));
+		_gotoIfError(clean, Error_invalidOperation(
+			2, "DeviceBufferRef_markDirty() can only be called on first frame for entire resource or if it's CPU backed"
+		));
 
 	if(!count)
 		count = buffer->length - offset;
@@ -125,7 +127,9 @@ Error DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count) {
 	if (shouldPush) {
 
 		if((buffer->pendingChanges.length + 1) >> 32)
-			_gotoIfError(clean, Error_outOfBounds(0, U32_MAX, U32_MAX));
+			_gotoIfError(clean, Error_outOfBounds(
+				0, U32_MAX, U32_MAX, "DeviceBufferRef_markDirty() buffer pendingRanges is limited to U32_MAX"
+			));
 
 		DevicePendingRange change = (DevicePendingRange) { .buffer = { .startRange = offset, .endRange = offset + count } };
 		_gotoIfError(clean, List_pushBackx(&buffer->pendingChanges, Buffer_createConstRef(&change, sizeof(change))));
@@ -141,7 +145,7 @@ Error DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count) {
 	acq1 = Lock_lock(&device->lock, U64_MAX);
 
 	if(acq1 < ELockAcquire_Success)
-		_gotoIfError(clean, Error_invalidState(0));
+		_gotoIfError(clean, Error_invalidState(0, "DeviceBufferRef_markDirty() couldn't lock device"));
 
 	_gotoIfError(clean, List_pushBackx(&device->pendingResources, Buffer_createConstRef(&buf, sizeof(buf))));
 
@@ -194,7 +198,7 @@ Error GraphicsDeviceRef_createBuffer(
 ) {
 
 	if(!dev || dev->typeId != (ETypeId)EGraphicsTypeId_GraphicsDevice)
-		return Error_nullPointer(0);
+		return Error_nullPointer(0, "GraphicsDeviceRef_createBuffer()::dev is required");
 
 	Error err = RefPtr_createx(
 		(U32)(sizeof(DeviceBuffer) + DeviceBufferExt_size), 
@@ -232,7 +236,7 @@ Error GraphicsDeviceRef_createBuffer(
 	acq = Lock_lock(&device->allocator.lock, U64_MAX);
 
 	if(acq < ELockAcquire_Success)
-		_gotoIfError(clean, Error_invalidState(0));
+		_gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_createBuffer() couldn't acquire device allocator"));
 
 	_gotoIfError(clean, GraphicsDeviceRef_createBufferExt(dev, buffer, name));
 	_gotoIfError(clean, Lock_create(&buffer->lock));
@@ -257,7 +261,7 @@ Error GraphicsDeviceRef_createBufferData(
 ) {
 
 	if(!dat)
-		return Error_nullPointer(2);
+		return Error_nullPointer(2, "GraphicsDeviceRef_createBufferData()::dat is required");
 
 	Error err = GraphicsDeviceRef_createBuffer(dev, usage, name, Buffer_length(*dat), buf);
 

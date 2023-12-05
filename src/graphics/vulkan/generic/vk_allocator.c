@@ -96,7 +96,7 @@ Error VkDeviceMemoryAllocator_findMemory(
 	}
 
 	if (!maxHeapSizes[0] || !maxHeapSizes[1])
-		return Error_notFound(0, 0);
+		return Error_notFound(0, 0, "VkDeviceMemoryAllocator_findMemory() failed, no heaps found");
 
 	if (size) {
 		*size = (cpuSided ? maxHeapSizes[0] : maxHeapSizes[1]) | ((U64)distinct << 63);
@@ -131,7 +131,7 @@ Error VkDeviceMemoryAllocator_findMemory(
 	}
 
 	if (memoryId == U32_MAX)
-		return Error_notFound(1, 0);
+		return Error_notFound(1, 0, "VkDeviceMemoryAllocator_findMemory() found no suitable memoryId");
 
 	*outMemoryId = memoryId;
 	*outPropertyFlags = properties[propertyId];
@@ -154,7 +154,10 @@ Error DeviceMemoryAllocator_allocate(
 	U64 blockSize = DeviceMemoryBlock_defaultSize;
 
 	if(!allocator || !requirementsExt || !blockId || !blockOffset)
-		return Error_nullPointer(!allocator ? 0 : (!requirementsExt ? 1 : (!blockId ? 2 : 3)));
+		return Error_nullPointer(
+			!allocator ? 0 : (!requirementsExt ? 1 : (!blockId ? 2 : 3)), 
+			"DeviceMemoryAllocator_allocate()::allocator, requirementsExt, blockId and blockOffset are required"
+		);
 
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(allocator->device, Vk);
 	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(GraphicsInstanceRef_ptr(allocator->device->instance), Vk);
@@ -257,7 +260,7 @@ Error DeviceMemoryAllocator_allocate(
 	if(i == allocator->blocks.length) {
 		
 		if(i == U32_MAX)
-			_gotoIfError(clean, Error_outOfBounds(0, i, U32_MAX));
+			_gotoIfError(clean, Error_outOfBounds(0, i, U32_MAX, "DeviceMemoryAllocator_allocate() block out of bounds"));
 
 		_gotoIfError(clean, List_pushBackx(&allocator->blocks, Buffer_createConstRef(&block, sizeof(block))))
 	}

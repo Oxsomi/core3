@@ -40,10 +40,10 @@ Error File_foreach(CharString loc, FileCallback callback, void *userData, Bool i
 	HANDLE file = NULL;
 
 	if(!callback) 
-		_gotoIfError(clean, Error_nullPointer(1));
+		_gotoIfError(clean, Error_nullPointer(1, "File_foreach()::callback is required"));
 
 	if(!CharString_isValidFilePath(loc))
-		_gotoIfError(clean, Error_invalidParameter(0, 0));
+		_gotoIfError(clean, Error_invalidParameter(0, 0, "File_foreach()::loc must be a valid file path"));
 
 	Bool isVirtual = File_isVirtual(loc);
 
@@ -55,7 +55,7 @@ Error File_foreach(CharString loc, FileCallback callback, void *userData, Bool i
 	_gotoIfError(clean, File_resolvex(loc, &isVirtual, 0, &resolved));
 
 	if(isVirtual)
-		_gotoIfError(clean, Error_invalidOperation(0));
+		_gotoIfError(clean, Error_invalidOperation(0, "File_foreach()::loc can't resolve to virtual here"));
 
 	//Append /*
 
@@ -66,7 +66,9 @@ Error File_foreach(CharString loc, FileCallback callback, void *userData, Bool i
 	_gotoIfError(clean, CharString_appendx(&resolved, '*'));
 
 	if(CharString_length(resolved) > MAX_PATH)
-		_gotoIfError(clean, Error_outOfBounds(0, CharString_length(resolved), MAX_PATH));
+		_gotoIfError(clean, Error_outOfBounds(
+			0, CharString_length(resolved), MAX_PATH, "File_foreach()::loc file path is too big (>260 chars)"
+		));
 
 	//Skip .
 
@@ -74,10 +76,10 @@ Error File_foreach(CharString loc, FileCallback callback, void *userData, Bool i
 	file = FindFirstFileA(resolved.ptr, &dat);
 
 	if(file == INVALID_HANDLE_VALUE)
-		_gotoIfError(clean, Error_notFound(0, 0));
+		_gotoIfError(clean, Error_notFound(0, 0, "File_foreach()::loc couldn't be found"));
 
 	if(!FindNextFileA(file, &dat))
-		_gotoIfError(clean, Error_notFound(0, 0));
+		_gotoIfError(clean, Error_notFound(0, 0, "File_foreach() FindNextFile failed (1)"));
 
 	//Loop through real files (while instead of do while because we wanna skip ..)
 
@@ -95,7 +97,7 @@ Error File_foreach(CharString loc, FileCallback callback, void *userData, Bool i
 		static const U64 UNIX_START_WIN = (Ns)11644473600 * (1'000'000'000 / 100);	//ns to 100s of ns
 
 		if ((U64)time.QuadPart >= UNIX_START_WIN)
-			timestamp = (time.QuadPart - UNIX_START_WIN) * 100;	//Convert to Oxsomi time
+			timestamp = (time.QuadPart - UNIX_START_WIN) * 100;		//Convert to Oxsomi time
 
 		//Grab local file name
 
@@ -143,7 +145,7 @@ Error File_foreach(CharString loc, FileCallback callback, void *userData, Bool i
 	DWORD hr = GetLastError();
 
 	if(hr != ERROR_NO_MORE_FILES)
-		_gotoIfError(clean, Error_platformError(0, hr));
+		_gotoIfError(clean, Error_platformError(0, hr, "File_foreach() FindNextFile failed (2)"));
 
 clean:
 
@@ -171,22 +173,27 @@ Error File_virtualOp(CharString loc, Ns maxTimeout, VirtualFileFunc f, void *use
 	_gotoIfError(clean, File_resolvex(loc, &isVirtual, 128, &resolved));
 
 	if(!isVirtual)
-		_gotoIfError(clean, Error_unsupportedOperation(0));
+		_gotoIfError(clean, Error_unsupportedOperation(0, "File_virtualOp()::loc should resolve to virtual path (//*)"));
 
 	CharString access = CharString_createConstRefCStr("//access/");
 	CharString function = CharString_createConstRefCStr("//function/");
 
 	if (CharString_startsWithString(loc, access, EStringCase_Insensitive)) {
 		//TODO: Allow //access folder
-		return Error_unimplemented(0);
+		return Error_unimplemented(0, "File_virtualOp()::loc //access/ not supported yet");
 	}
 
 	if (CharString_startsWithString(loc, function, EStringCase_Insensitive)) {
 		//TODO: Allow //function folder (user callbacks)
-		return Error_unimplemented(1);
+		return Error_unimplemented(1, "File_virtualOp()::loc //function/ not supported yet");
 	}
 
-	err = isWrite ? Error_constData(1, 0) : (!f ? Error_unimplemented(2) : f(userData, resolved));
+	err = 
+		isWrite ? Error_constData(
+			1, 0, "File_virtualOp()::isWrite is disallowed when acting on virtual files (except //access/* or //function/*"
+		) : (
+			!f ? Error_unimplemented(2, "File_virtualOp()::f is required") : f(userData, resolved)
+		);
 
 clean:
 	CharString_freex(&resolved);
@@ -270,7 +277,7 @@ Error File_resolveVirtual(CharString loc, CharString *subPath, VirtualSection **
 		}
 	}
 
-	_gotoIfError(clean, Error_notFound(0, 0));
+	_gotoIfError(clean, Error_notFound(0, 0, "File_resolveVirtual() can't find section"));
 
 clean:
 
@@ -296,7 +303,7 @@ Error File_readVirtualInternal(Buffer *output, CharString loc) {
 	_gotoIfError(clean, File_resolveVirtual(loc, &subPath, &section));
 
 	if(!section)
-		_gotoIfError(clean, Error_invalidOperation(0));
+		_gotoIfError(clean, Error_invalidOperation(0, "File_readVirtualInternal() section couldn't be found"));
 
 	_gotoIfError(clean, Archive_getFileDataConstx(section->loadedData, subPath, output));
 
@@ -308,7 +315,7 @@ clean:
 Error File_readVirtual(CharString loc, Buffer *output, Ns maxTimeout) { 
 
 	if(!output)
-		return Error_nullPointer(1);
+		return Error_nullPointer(1, "File_readVirtual()::output is required");
 
 	return File_virtualOp(
 		loc, maxTimeout, 
@@ -365,10 +372,10 @@ clean:
 Error File_getInfoVirtual(CharString loc, FileInfo *info) { 
 
 	if(!info)
-		return Error_nullPointer(1);
+		return Error_nullPointer(1, "File_getInfoVirtual()::info is required");
 
 	if(info->access)
-		return Error_invalidOperation(0);
+		return Error_invalidOperation(0, "File_getInfoVirtual()::info isn't empty, might indicate memleak");
 
 	return File_virtualOp(
 		loc, 1 * SECOND, 
@@ -447,7 +454,7 @@ Error File_foreachVirtualInternal(ForeachFile *userData, CharString resolved) {
 
 			CharString parent = CharString_createNull();
 			if(!CharString_cutAfterFirst(copy1, '/', EStringCase_Sensitive, &parent))
-				_gotoIfError(clean, Error_invalidState(0));
+				_gotoIfError(clean, Error_invalidState(0, "File_foreachVirtualInternal() cutAfterFirst failed"));
 
 			Bool contains = false;
 
@@ -508,7 +515,7 @@ Error File_foreachVirtualInternal(ForeachFile *userData, CharString resolved) {
 				CharString child = CharString_createNull();
 
 				if(baseCount > 2 && !CharString_cut(resolved, CharString_length(copy2), 0, &child))
-					_gotoIfError(clean, Error_invalidState(1))
+					_gotoIfError(clean, Error_invalidState(1, "File_foreachVirtualInternal() cut failed"))
 
 				if(!CharString_length(child))
 					child = root;
@@ -524,19 +531,21 @@ Error File_foreachVirtualInternal(ForeachFile *userData, CharString resolved) {
 		}
 	}
 
+	_gotoIfError(clean, Error_unimplemented(0, "File_foreachVirtualInternal() couldn't find virtual section"));
+
 clean:
 	List_freex(&visited);
 	CharString_freex(&copy);
 	CharString_freex(&copy1);
 	CharString_freex(&copy2);
 	CharString_freex(&copy3);
-	return Error_unimplemented(0); 
+	return err;
 }
 
 Error File_foreachVirtual(CharString loc, FileCallback callback, void *userData, Bool isRecursive) { 
 
 	if(!callback)
-		return Error_nullPointer(1);
+		return Error_nullPointer(1, "File_foreachVirtual()::callback is required");
 
 	ForeachFile foreachFile = (ForeachFile) { 
 		.callback = callback, 
@@ -576,7 +585,7 @@ Error File_queryFileObjectCountVirtual(CharString loc, EFileType type, Bool isRe
 	Error err = Error_none();
 
 	if(!res)
-		_gotoIfError(clean, Error_nullPointer(3));
+		_gotoIfError(clean, Error_nullPointer(3, "File_queryFileObjectCountVirtual()::res is required"));
 
 	FileCounter counter = (FileCounter) { .type = type, .useType = true };
 	_gotoIfError(clean, File_foreachVirtual(loc, (FileCallback) countFileType, &counter, isRecursive));
@@ -591,7 +600,7 @@ Error File_queryFileObjectCountAllVirtual(CharString loc, Bool isRecursive, U64 
 	Error err = Error_none();
 
 	if(!res)
-		_gotoIfError(clean, Error_nullPointer(2));
+		_gotoIfError(clean, Error_nullPointer(2, "File_queryFileObjectCountAllVirtual()::res is required"));
 
 	FileCounter counter = (FileCounter) { 0 };
 	_gotoIfError(clean, File_foreachVirtual(loc, (FileCallback) countFileType, &counter, isRecursive));
@@ -638,13 +647,13 @@ inline Error File_loadVirtualInternal(FileLoadVirtual *userData, CharString loc)
 				Buffer copy = Buffer_createNull();
 
 				if(!data)
-					_gotoIfError(clean0, Error_notFound(0, 1));
+					_gotoIfError(clean0, Error_notFound(0, 1, "File_loadVirtualInternal() FindResource failed"));
 
 				U32 size = (U32) SizeofResource(NULL, data);
 				handle = LoadResource(NULL, data);
 
 				if(!handle)
-					_gotoIfError(clean0, Error_notFound(3, 1));
+					_gotoIfError(clean0, Error_notFound(3, 1, "File_loadVirtualInternal() LoadResource failed"));
 
 				const U8 *dat = (const U8*) LockResource(handle);
 				_gotoIfError(clean0, Buffer_createCopyx(Buffer_createConstRef(dat, size), &copy));
@@ -670,12 +679,12 @@ inline Error File_loadVirtualInternal(FileLoadVirtual *userData, CharString loc)
 
 		//Otherwise we want to use error to determine if it's present or not
 
-		else err = section->loaded ? Error_none() : Error_notFound(1, 1);
+		else err = section->loaded ? Error_none() : Error_notFound(1, 1, "File_loadVirtualInternal()::loc not found (1)");
 
 		goto clean;
 	}
 
-	err = Error_notFound(2, 1);
+	err = Error_notFound(2, 1, "File_loadVirtualInternal()::loc not found (2)");
 
 clean:
 	CharString_freex(&isChild);
