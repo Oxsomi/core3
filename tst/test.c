@@ -1570,8 +1570,8 @@ int main() {
 		for(U64 i = 1; i < sizeof(compares) / sizeof(compares[0]); ++i) {
 
 			if(
-				U128_cmp(compares[i - 1], compares[i]) != -1 || 
-				U128_cmp(compares[i], compares[i - 1]) != 1
+				U128_cmp(compares[i - 1], compares[i]) != ECompareResult_Lt || 
+				U128_cmp(compares[i], compares[i - 1]) != ECompareResult_Gt
 			)
 				_gotoIfError(clean, Error_invalidState((U32)i, "U128_cmp failed"));
 
@@ -1580,8 +1580,8 @@ int main() {
 			_gotoIfError(clean, BigInt_createConstRef((const U64*)&compares[i], 2, &bBig));
 
 			if(
-				BigInt_cmp(aBig, bBig) != -1 ||
-				BigInt_cmp(bBig, aBig) != 1
+				BigInt_cmp(aBig, bBig) != ECompareResult_Lt ||
+				BigInt_cmp(bBig, aBig) != ECompareResult_Gt
 			)
 				_gotoIfError(clean, Error_invalidState((U32)i, "BigInt_cmp failed"));
 		}
@@ -1989,7 +1989,7 @@ int main() {
 
 clean:
 
-	printf("Failed unit test... Freeing\n");
+	printf("Failed unit test (%s)... Freeing\n", err.errorStr);
 
 	BufferLayout_free(alloc, &bufferLayout);
 

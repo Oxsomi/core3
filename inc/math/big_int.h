@@ -79,7 +79,7 @@ Bool BigInt_rsh(BigInt *a, U16 bits);
 
 //Compare
 
-I8 BigInt_cmp(BigInt a, BigInt b);
+ECompareResult BigInt_cmp(BigInt a, BigInt b);
 Bool BigInt_eq(BigInt a, BigInt b);
 Bool BigInt_neq(BigInt a, BigInt b);
 Bool BigInt_lt(BigInt a, BigInt b);
@@ -167,7 +167,7 @@ U128 U128_rsh(U128 a, U8 x);
 
 //Comparison
 
-I8 U128_cmp(U128 a, U128 b);
+ECompareResult U128_cmp(U128 a, U128 b);
 Bool U128_eq(U128 a, U128 b);
 Bool U128_neq(U128 a, U128 b);
 Bool U128_lt(U128 a, U128 b);

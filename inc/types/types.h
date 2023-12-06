@@ -120,6 +120,12 @@ extern const F32 F32_MAX;
 extern const F64 F64_MIN;
 extern const F64 F64_MAX;
 
+typedef enum ECompareResult {
+	ECompareResult_Lt,
+	ECompareResult_Eq,
+	ECompareResult_Gt
+} ECompareResult;
+
 //Buffer (more functions in types/buffer.h)
 
 typedef struct Buffer {

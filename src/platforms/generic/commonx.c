@@ -248,8 +248,13 @@ Error BigInt_toStringx(BigInt b, CharString *result, EIntegerEncoding encoding, 
 Bool CharString_freex(CharString *str) { return CharString_free(str, Platform_instance.alloc); }
 Bool CharStringList_freex(CharStringList *arr) { return CharStringList_free(arr, Platform_instance.alloc); }
 
-Error CharString_createx(C8 c, U64 size, CharString *result) { return CharString_create(c, size, Platform_instance.alloc, result); }
-Error CharString_createCopyx(CharString str, CharString *result) { return CharString_createCopy(str, Platform_instance.alloc, result); }
+Error CharString_createx(C8 c, U64 size, CharString *result) { 
+	return CharString_create(c, size, Platform_instance.alloc, result);
+}
+
+Error CharString_createCopyx(CharString str, CharString *result) { 
+	return CharString_createCopy(str, Platform_instance.alloc, result);
+}
 
 Error CharString_createNytox(U64 v, U8 leadingZeros, CharString *result) {
 	return CharString_createNyto(v, leadingZeros, Platform_instance.alloc, result);

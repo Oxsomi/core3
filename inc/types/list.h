@@ -37,12 +37,6 @@ typedef struct List {
 	U64 capacityAndRefInfo;		//If capacityAndRefInfo is 0 or U64_MAX, it indicates a ref
 } List;
 
-typedef enum ECompareResult {
-	ECompareResult_Lt,
-	ECompareResult_Eq,
-	ECompareResult_Gt
-} ECompareResult;
-
 typedef ECompareResult (*CompareFunction)(const void *aPtr, const void *bPtr);
 
 Bool List_isConstRef(List l);

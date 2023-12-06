@@ -625,7 +625,7 @@ Bool BigInt_rsh(BigInt *a, U16 bits) {
 	return true;
 }
 
-I8 BigInt_cmp(BigInt a, BigInt b) {
+ECompareResult BigInt_cmp(BigInt a, BigInt b) {
 
 	U64 biggestLen = U64_max(a.length, b.length);
 
@@ -635,21 +635,21 @@ I8 BigInt_cmp(BigInt a, BigInt b) {
 		U64 bi = i >= b.length ? 0 : b.data[i];
 
 		if(ai > bi)
-			return 1;		//Greater
+			return ECompareResult_Gt;
 
 		else if(ai < bi)
-			return -1;		//Less
+			return ECompareResult_Lt;
 	}
 
-	return 0;				//Equal
+	return ECompareResult_Eq;
 }
 
-Bool BigInt_eq(BigInt a, BigInt b) { return !BigInt_cmp(a, b); }
-Bool BigInt_neq(BigInt a, BigInt b) { return BigInt_cmp(a, b); }
-Bool BigInt_lt(BigInt a, BigInt b) { return BigInt_cmp(a, b) < 0; }
-Bool BigInt_leq(BigInt a, BigInt b) { return BigInt_cmp(a, b) <= 0; }
-Bool BigInt_gt(BigInt a, BigInt b) { return BigInt_cmp(a, b) > 0; }
-Bool BigInt_geq(BigInt a, BigInt b) { return BigInt_cmp(a, b) >= 0; }
+Bool BigInt_eq(BigInt a, BigInt b) { return BigInt_cmp(a, b) == ECompareResult_Eq; }
+Bool BigInt_neq(BigInt a, BigInt b) { return BigInt_cmp(a, b) != ECompareResult_Eq; }
+Bool BigInt_lt(BigInt a, BigInt b) { return BigInt_cmp(a, b) < ECompareResult_Eq; }
+Bool BigInt_leq(BigInt a, BigInt b) { return BigInt_cmp(a, b) <= ECompareResult_Eq; }
+Bool BigInt_gt(BigInt a, BigInt b) { return BigInt_cmp(a, b) > ECompareResult_Eq; }
+Bool BigInt_geq(BigInt a, BigInt b) { return BigInt_cmp(a, b) >= ECompareResult_Eq; }
 
 //TODO: div and mod
 
@@ -1168,12 +1168,12 @@ U128 U128_createFromString(CharString text, Error *failed, Allocator alloc) {
 	return U128_createFromDec(text, failed, alloc);
 }
 
-I8 U128_cmp(U128 a, U128 b) {
+ECompareResult U128_cmp(U128 a, U128 b) {
 
 	//Early exit
 
 	if(U128_eq(a, b))
-		return 0;
+		return ECompareResult_Eq;
 
 	#if _PLATFORM_TYPE == EPlatform_Linux
 		return a < b ? -1 : 1;
@@ -1183,18 +1183,18 @@ I8 U128_cmp(U128 a, U128 b) {
 		const U64 *b64 = (const U64*)&b;
 
 		if(a64[1] > b64[1] || (a64[1] == b64[1] && a64[0] > b64[0]))
-			return 1;
+			return ECompareResult_Gt;
 
-		return -1;
+		return ECompareResult_Lt;
 
 	#endif
 }
 
-Bool U128_neq(U128 a, U128 b) { return !U128_eq(a, b); }
-Bool U128_lt(U128 a, U128 b) { return U128_cmp(a, b) < 0; }
-Bool U128_leq(U128 a, U128 b) { return U128_cmp(a, b) <= 0; }
-Bool U128_gt(U128 a, U128 b) { return U128_cmp(a, b) > 0; }
-Bool U128_geq(U128 a, U128 b) { return U128_cmp(a, b) >= 0; }
+Bool U128_neq(U128 a, U128 b) { return U128_eq(a, b) != ECompareResult_Eq; }
+Bool U128_lt(U128 a, U128 b) { return U128_cmp(a, b) < ECompareResult_Eq; }
+Bool U128_leq(U128 a, U128 b) { return U128_cmp(a, b) <= ECompareResult_Eq; }
+Bool U128_gt(U128 a, U128 b) { return U128_cmp(a, b) > ECompareResult_Eq; }
+Bool U128_geq(U128 a, U128 b) { return U128_cmp(a, b) >= ECompareResult_Eq; }
 
 U128 U128_div(U128 a, U128 b);			//if(isBase2) rsh(a, firstBitId)
 U128 U128_mod(U128 a, U128 b);
