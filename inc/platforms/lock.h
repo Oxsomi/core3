@@ -32,7 +32,7 @@ typedef struct Lock {
 
 typedef struct Error Error;
 
-impl Error Lock_create(Lock *res);
+impl Lock Lock_create();
 impl Bool Lock_free(Lock *res);
 
 //Even though maxTime is in Ns it may be interpreted 

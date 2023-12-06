@@ -44,6 +44,7 @@ typedef struct Platform {
 	Allocator alloc;
 	WindowManager windowManager;
 
+	Lock virtualSectionsLock;
 	List virtualSections;			//<VirtualSection>
 
 	void *data, *dataExt;

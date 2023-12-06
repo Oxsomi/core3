@@ -761,7 +761,7 @@ Error GraphicsDevice_initExt(
 
 	#endif
 
-	_gotoIfError(clean, Lock_create(&deviceExt->descriptorLock));
+	deviceExt->descriptorLock = Lock_create();
 
 	//Get memory properties
 

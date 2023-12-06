@@ -1602,7 +1602,7 @@ Error GraphicsDeviceRef_createCommandList(
 	_gotoIfError(clean, List_reservex(&commandList->activeScopes, 16));
 	_gotoIfError(clean, List_reservex(&commandList->transitions, estimatedResources));
 	_gotoIfError(clean, List_reservex(&commandList->pendingTransitions, 32));
-	_gotoIfError(clean, Lock_create(&commandList->lock));
+	commandList->lock = Lock_create();
 
 	GraphicsDeviceRef_inc(deviceRef);
 	commandList->device = deviceRef;

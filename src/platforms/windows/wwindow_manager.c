@@ -340,7 +340,7 @@ Error WindowManager_createPhysical(
 
 	_gotoIfError(clean, CharString_createCopyx(title, &win->title));
 
-	_gotoIfError(clean, Lock_create(&win->lock));
+	win->lock = Lock_create();
 
 	//Start event loop thread
 

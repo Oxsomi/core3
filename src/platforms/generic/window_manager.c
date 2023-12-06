@@ -40,11 +40,9 @@ Error WindowManager_create(WindowManager *result) {
 	if(result->lock.active)
 		return Error_invalidOperation(0, "WindowManager_create()::result is already initialized, indicates possible memleak");
 
+	result->lock = Lock_create();
+
 	Error err;
-
-	if((err = Lock_create(&result->lock)).genericError)
-		return err;
-
 	if ((err = List_createx(
 		WindowManager_maxWindows(), sizeof(Window),
 		&result->windows
@@ -175,12 +173,7 @@ Error WindowManager_createVirtual(
 			)).genericError)
 				return err;
 
-			Lock lock = (Lock) { 0 };
-
-			if ((err = Lock_create(&lock)).genericError) {
-				Buffer_freex(&cpuVisibleBuffer);
-				return err;
-			}
+			Lock lock = Lock_create();
 
 			*w = (Window) {
 

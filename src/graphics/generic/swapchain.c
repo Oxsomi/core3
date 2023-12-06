@@ -100,7 +100,7 @@ Error GraphicsDeviceRef_createSwapchain(GraphicsDeviceRef *deviceRef, SwapchainI
 
 	Swapchain *swapchain = SwapchainRef_ptr(*swapchainRef);
 	_gotoIfError(clean, GraphicsDeviceRef_createSwapchainExt(deviceRef, info, swapchain));
-	_gotoIfError(clean, Lock_create(&swapchain->lock));
+	swapchain->lock = Lock_create();
 
 clean:
 

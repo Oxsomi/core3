@@ -24,16 +24,8 @@
 #include "types/time.h"
 #include "math/math.h"
 
-Error Lock_create(Lock *res) {
-
-	if(!res)
-		return Error_nullPointer(0, "Lock_create()::res is required");
-
-	if(res->active)
-		return Error_invalidOperation(0, "Lock_create()::res was already initialized, may indicate memleak");
-
-	*res = (Lock) { .active = true };
-	return Error_none();
+Lock Lock_create() {
+	return (Lock) { .active = true };
 }
 
 Bool Lock_free(Lock *res) {
@@ -44,7 +36,7 @@ Bool Lock_free(Lock *res) {
 	if (Lock_lock(res, U64_MAX) < ELockAcquire_Success)
 		return false;
 
-	*res = (Lock){ 0 };
+	res->active = false;
 	return true;
 }
 

@@ -358,11 +358,7 @@ int main(int argc, const char *argv[]) {
 			if(err.genericError)
 				return -1;
 
-			Allocator_lock = (Lock) { 0 };
-
-			if ((err = Lock_create(&Allocator_lock)).genericError)
-				return -2;
-
+			Allocator_lock = Lock_create();
 			Allocator_memoryAllocationCount = Allocator_memoryAllocationSize = (AtomicI64) { 0 };
 		}
 	#endif
@@ -418,6 +414,8 @@ int main(int argc, const char *argv[]) {
 void Platform_cleanupExt() {
 
 	//Properly clean virtual files
+
+	Lock_free(&Platform_instance.virtualSectionsLock);
 
 	for (U64 i = 0; i < Platform_instance.virtualSections.length; ++i) {
 		VirtualSection *sect = ((VirtualSection*)Platform_instance.virtualSections.ptr) + i;
@@ -601,6 +599,8 @@ Error Platform_initExt(CharString currAppDir) {
 			return Error_invalidState(1, "Platform_initExt() EnumResourceNames failed");
 		}
 	}
+
+	Platform_instance.virtualSectionsLock = Lock_create();
 
 	//Set platformExt
 

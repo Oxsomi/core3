@@ -269,8 +269,9 @@ Error GraphicsDeviceRef_create(
 	};
 
 	_gotoIfError(clean, List_reservex(&device->allocator.blocks, 16));
-	_gotoIfError(clean, Lock_create(&device->allocator.lock));
-	_gotoIfError(clean, Lock_create(&device->lock));
+
+	device->allocator.lock = Lock_create();
+	device->lock = Lock_create();
 
 	//Create in flight resource refs
 

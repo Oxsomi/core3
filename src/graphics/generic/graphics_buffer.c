@@ -239,7 +239,7 @@ Error GraphicsDeviceRef_createBuffer(
 		_gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_createBuffer() couldn't acquire device allocator"));
 
 	_gotoIfError(clean, GraphicsDeviceRef_createBufferExt(dev, buffer, name));
-	_gotoIfError(clean, Lock_create(&buffer->lock));
+	buffer->lock = Lock_create();
 
 clean:
 
