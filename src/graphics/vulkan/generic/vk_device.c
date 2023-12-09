@@ -1283,6 +1283,7 @@ Error GraphicsDevice_submitCommandsImpl(GraphicsDeviceRef *deviceRef, List comma
 
 		for (U64 i = 0; i < commandLists.length; ++i) {
 
+			state.scopeCounter = 0;
 			CommandList *commandList = CommandListRef_ptr(((CommandListRef**) commandLists.ptr)[i]);
 			const U8 *ptr = commandList->data.ptr;
 

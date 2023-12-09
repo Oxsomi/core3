@@ -20,11 +20,13 @@
 
 #include "types/buffer.h"
 #include "platforms/window.h"
+#include "platforms/window_manager.h"
 #include "platforms/platform.h"
 #include "platforms/log.h"
 #include "platforms/input_device.h"
 #include "platforms/keyboard.h"
 #include "platforms/mouse.h"
+#include "platforms/monitor.h"
 #include "platforms/ext/errorx.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/listx.h"
@@ -36,9 +38,6 @@
 #define WIN32_LEAN_AND_MEAN
 #define MICROSOFT_WINDOWS_WINBASE_H_DEFINE_INTERLOCKED_CPLUSPLUS_OVERLOADS 0
 #include <Windows.h>
-
-const U16 Window_MAX_DEVICES = 64;
-const U16 Window_MAX_MONITORS = 64;
 
 void WWindow_updateMonitors(Window *w) {
 
@@ -76,13 +75,10 @@ Error WWindow_initSize(Window *w, I32x2 size) {
 				.biPlanes = 1,
 				.biBitCount = 32,
 				.biCompression = BI_RGB
-		}
+			}
 		};
 
-		w->nativeData = CreateDIBSection(
-			screen, &bmi, DIB_RGB_COLORS, (void**) &w->cpuVisibleBuffer.ptr, 
-			NULL, 0
-		);
+		w->nativeData = CreateDIBSection(screen, &bmi, DIB_RGB_COLORS, (void**) &w->cpuVisibleBuffer.ptr, NULL, 0);
 
 		if(!screen)
 			_gotoIfError(clean, Error_platformError(3, GetLastError(), "WWindow_initSize() CreateDIBSection failed"));
@@ -113,14 +109,9 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 	switch (message) {
 
-		case WM_DESTROY: {
-
-			if(w->callbacks.onDestroy)
-				w->callbacks.onDestroy(w);
-
-			w->flags |= EWindowFlags_ShouldThreadTerminate;
+		case WM_DESTROY:
+			w->flags |= EWindowFlags_ShouldTerminate;
 			break;
-		}
 
 		case WM_CLOSE:
 		case WM_CREATE:
@@ -393,7 +384,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 				Buffer_freex(&buf);
 				return 0;
 
-			} else {
+			} else if (dev->type == EInputDeviceType_Mouse) {
 
 				RAWMOUSE mouseDat = data->data.mouse;
 
@@ -555,7 +546,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 					//Try to allocate without allowing allocation
 					//If it fails, we can't create a new device
 
-					err = List_pushBack(&w->devices, Buffer_createNull(), (Allocator) { 0 });
+					err = List_pushBackx(&w->devices, Buffer_createNull());
 					pushed = true;
 
 					if(err.genericError) {
@@ -667,11 +658,8 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 			//Render (if not minimized)
 
-			if(w->callbacks.onDraw && !(w->flags & EWindowFlags_IsMinimized)) {
-				w->isDrawing = true;
+			if(w->callbacks.onDraw && !(w->flags & EWindowFlags_IsMinimized))
 				w->callbacks.onDraw(w);
-				w->isDrawing = false;
-			}
 
 			return 0;
 		}
@@ -739,7 +727,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 	return DefWindowProc(hwnd, message, wParam, lParam);
 }
 
-Bool WindowManager_supportsFormat(WindowManager manager, EWindowFormat format) {
+Bool WindowManager_supportsFormat(const WindowManager *manager, EWindowFormat format) {
 
 	manager;
 
@@ -750,48 +738,18 @@ Bool WindowManager_supportsFormat(WindowManager manager, EWindowFormat format) {
 	return format == EWindowFormat_BGRA8;
 }
 
-Bool WindowManager_freePhysical(WindowManager *manager, Window **w) {
+Bool WindowManager_freePhysical(Window *w) {
 
-	if(!manager || !manager->lock.active)
-		return false;
-
-	if(!w || !*w)
-		return true;
-
-	if(!Lock_isLockedForThread(&manager->lock))
-		return false;
-
-	if(*w < (Window*) List_begin(manager->windows) || *w >= (Window*) List_end(manager->windows))
-		return false;
-
-	if(!((*w)->flags & (EWindowFlags_IsActive | EWindowFlags_IsVirtual)))
-		return false;
-
-	//Ensure our window safely exits
-
-	CharString_freex(&(*w)->title);
-
-	List *devices = &(*w)->devices;
-
-	for(U64 i = 0; i < devices->length; ++i)
-		InputDevice_free((InputDevice*) List_ptr(*devices, i));
-
-	List_freex(devices);
-	List_freex(&(*w)->monitors);
-
-	Lock_free(&(*w)->lock);
-
-	if((*w)->nativeData)
-		DeleteObject((HGDIOBJ) (*w)->nativeData);
+	if(w->nativeData)
+		DeleteObject((HGDIOBJ) w->nativeData);
 
 	HINSTANCE mainModule = Platform_instance.data;
 
 	UnregisterClassA("OxC3: Oxsomi core 3", mainModule);
-	DestroyWindow((*w)->nativeHandle);
 
-	Thread_free(&(*w)->mainThread);
+	if(w->nativeHandle)
+		DestroyWindow(w->nativeHandle);
 
-	*w = NULL;
 	return true;
 }
 
@@ -917,4 +875,145 @@ cleanup:
 
 	EndPaint(w->nativeHandle, &ps);
 	return errId ? Error_platformError(errId, res, "Window_presentPhysical() failed in WinApi call") : Error_none();
+}
+
+void Window_updateExt(Window *w) {
+
+	MSG msg = (MSG) { 0 };
+
+	if (PeekMessageA(&msg, w->nativeHandle, 0, 0, PM_REMOVE)) {
+		TranslateMessage(&msg);
+		DispatchMessageA(&msg);
+	}
+
+	else InvalidateRect(w->nativeHandle, NULL, false);
+
+	if(msg.message == WM_QUIT)
+		Window_terminate(w);
+}
+
+impl Error WindowManager_createWindowPhysical(Window *w) {
+
+	//Create native window
+
+	WNDCLASSEXA wc = (WNDCLASSEXA){ 0 };
+	HINSTANCE mainModule = Platform_instance.data;
+
+	wc.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
+	wc.lpfnWndProc = WWindow_onCallback;
+	wc.hInstance = mainModule;
+
+	wc.hIcon = (HICON) LoadImageA(mainModule, "LOGO", IMAGE_ICON, 32, 32, 0);
+	wc.hIconSm = (HICON) LoadImageA(mainModule, "LOGO", IMAGE_ICON, 16, 16, 0);
+
+	wc.hCursor = LoadCursorA(NULL, IDC_ARROW);
+
+	wc.hbrBackground = (HBRUSH) GetStockObject(BLACK_BRUSH);
+
+	wc.lpszClassName = "OxC3: Oxsomi core 3";
+	wc.cbSize = sizeof(wc);
+	wc.cbWndExtra = sizeof(void*);
+
+	Error err = Error_none();
+
+	if (!RegisterClassExA(&wc))
+		_gotoIfError(clean, Error_platformError(0, GetLastError(), "WindowManager_createWindowPhysical() RegisterClassEx failed"));
+
+	DWORD style = WS_VISIBLE;
+
+	Bool isFullScreen = w->hint & EWindowHint_ForceFullscreen;
+
+	if(!isFullScreen) {
+
+		style |= WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
+
+		if(!(w->hint & EWindowHint_DisableResize))
+			style |= WS_SIZEBOX | WS_MAXIMIZEBOX;
+	}
+
+	else style |= WS_POPUP;
+
+	I32x2 maxSize = I32x2_create2(GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN));
+
+	I32x2 size = w->size;
+	I32x2 position = w->offset;
+
+	for (U8 i = 0; i < 2; ++i)
+		if (isFullScreen || (!I32x2_get(size, i) || I32x2_get(size, i) >= I32x2_get(maxSize, i)))
+			I32x2_set(&size, i, I32x2_get(maxSize, i));
+
+	//Our strings aren't null terminated, so ensure windows doesn't read garbage
+
+	C8 windowName[MAX_PATH + 1];
+	Buffer_copy(Buffer_createRef(windowName, sizeof(windowName)), CharString_bufferConst(w->title));
+
+	windowName[CharString_length(w->title)] = '\0';
+
+	HWND nativeWindow = CreateWindowExA(
+		WS_EX_APPWINDOW, wc.lpszClassName, windowName, style,
+		I32x2_x(position), I32x2_y(position),
+		I32x2_x(size), I32x2_y(size),
+		NULL, NULL, mainModule, NULL
+	);
+
+	if(!nativeWindow) {
+		HRESULT hr = GetLastError();
+		UnregisterClassA(wc.lpszClassName, wc.hInstance);
+		_gotoIfError(clean, Error_platformError(1, hr, "WindowManager_createWindowPhysical() CreateWindowEx failed"));
+	}
+
+	//Get real size and position
+
+	RECT r = (RECT) { 0 };
+	GetClientRect(nativeWindow, &r);
+	w->size = I32x2_create2(r.right - r.left, r.bottom - r.top);
+
+	GetWindowRect(nativeWindow, &r);
+	w->offset = I32x2_create2(r.left, r.top);
+
+	//Alloc cpu visible buffer if needed
+
+	w->devices = List_createEmpty(sizeof(InputDevice));
+	w->monitors = List_createEmpty(sizeof(Monitor));
+
+	_gotoIfError(clean, WWindow_initSize(w, w->size));
+
+	//Lock for when we are updating this window
+
+	_gotoIfError(clean, List_reservex(&w->devices,  16));
+	_gotoIfError(clean, List_reservex(&w->monitors, 16));
+
+	w->nativeHandle = nativeWindow;
+
+	//Bind our window
+
+	SetWindowLongPtrA(nativeWindow, 0, (LONG_PTR) w);
+
+	if(w->hint & EWindowHint_ForceFullscreen)
+		w->flags |= EWindowFlags_IsFullscreen;
+
+	//Ensure we get all input devices
+	//Register for raw input of these types
+	//https://learn.microsoft.com/en-us/windows-hardware/drivers/hid/hid-usages#usage-page
+
+	RAWINPUTDEVICE registerDevices[2] = {
+		{									//Keyboard
+			.dwFlags = RIDEV_DEVNOTIFY,
+			.usUsagePage = 1,
+			.usUsage = 6,
+			.hwndTarget = nativeWindow
+		},
+		{									//Mouse
+			.dwFlags = RIDEV_DEVNOTIFY,
+			.usUsagePage = 1,
+			.usUsage = 2,
+			.hwndTarget = nativeWindow
+		}
+	};
+
+	if (!RegisterRawInputDevices(registerDevices, 2, sizeof(registerDevices[0])))
+		_gotoIfError(clean, Error_invalidState(0, "Window_physicalLoop() RegisterRawInputDevices failed"));
+
+clean:
+	return err;
 }

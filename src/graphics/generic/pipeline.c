@@ -24,6 +24,7 @@
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
 #include "types/error.h"
+#include "formats/texture.h"
 
 Error PipelineRef_dec(PipelineRef **pipeline) {
 	return !RefPtr_dec(pipeline) ? Error_invalidOperation(0, "PipelineRef_dec():: pipeline invalid") : Error_none();

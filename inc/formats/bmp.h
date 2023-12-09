@@ -28,8 +28,8 @@ typedef struct Error Error;
 
 Error BMP_writeRGBA(
 	Buffer buf, 
-	U16 w, 
-	U16 h, 
+	U32 w, 
+	U32 h, 
 	Bool isFlipped, 
 	Allocator allocator,
 	Buffer *result

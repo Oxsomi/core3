@@ -20,6 +20,7 @@
 
 #include "platforms/platform.h"
 #include "platforms/log.h"
+#include "platforms/thread.h"
 #include "platforms/ext/stringx.h"
 #include "types/error.h"
 
@@ -58,12 +59,7 @@ Error Platform_create(
 		}
 	};
 
-	Error err = WindowManager_create(&Platform_instance.windowManager);
-
-	if (err.genericError) {
-		Platform_instance =	(Platform) { 0 };
-		return err;
-	}
+	Error err = Error_none();
 
 	CharStringList sl = (CharStringList){ 0 };
 
@@ -72,7 +68,6 @@ Error Platform_create(
 		err = CharStringList_createx(cmdArgc - 1, &sl);
 
 		if (err.genericError) {
-			WindowManager_free(&Platform_instance.windowManager);
 			Platform_instance =	(Platform) { 0 };
 			return err;
 		}
@@ -88,7 +83,6 @@ Error Platform_create(
 
 	if ((err = Platform_initExt(CharString_createConstRefCStr(cmdArgs[0]))).genericError) {
 		CharStringList_freex(&sl);
-		WindowManager_free(&Platform_instance.windowManager);
 		Platform_instance =	(Platform) { 0 };
 		return err;
 	}
@@ -102,7 +96,6 @@ void Platform_cleanup() {
 		return;
 
 	CharString_freex(&Platform_instance.workingDirectory);
-	WindowManager_free(&Platform_instance.windowManager);
 	CharStringList_freex(&Platform_instance.args);
 
 	Platform_cleanupExt();

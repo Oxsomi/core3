@@ -19,113 +19,103 @@
 */
 
 #include "platforms/window_manager.h"
+#include "platforms/window.h"
 #include "platforms/platform.h"
 #include "platforms/thread.h"
 #include "platforms/log.h"
+#include "platforms/input_device.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/listx.h"
 #include "platforms/ext/errorx.h"
+#include "platforms/ext/stringx.h"
 #include "types/time.h"
 #include "types/buffer.h"
 #include "types/error.h"
 
-const U8 WindowManager_MAX_VIRTUAL_WINDOWS = 8;
-const U64 WindowManager_OUT_OF_WINDOWS = 0x1111111111;
+const U32 WindowManager_magic = (U32)'W' | ((U32)'I' << 8) | ((U32)'N' << 16) | ((U32)'D' << 24);
 
-Error WindowManager_create(WindowManager *result) {
+Error WindowManager_create(WindowManagerCallbacks callbacks, U64 extendedDataSize, WindowManager *manager) {
 
-	if(!result)
-		return Error_nullPointer(0, "WindowManager_create()::result is required");
+	if(!manager)
+		return Error_nullPointer(2, "WindowManager_create()::manager is required");
 
-	if(result->lock.active)
-		return Error_invalidOperation(0, "WindowManager_create()::result is already initialized, indicates possible memleak");
+	Buffer extendedData = Buffer_createNull();
+	Error err = Buffer_createEmptyBytesx(extendedDataSize, &extendedData);
 
-	result->lock = Lock_create();
-
-	Error err;
-	if ((err = List_createx(
-		WindowManager_maxWindows(), sizeof(Window),
-		&result->windows
-	)).genericError) {
-		Lock_free(&result->lock);
+	if(err.genericError)
 		return err;
-	}
+
+	*manager = (WindowManager) { 
+		.isActive = WindowManager_magic, 
+		.owningThread = Thread_getId(), 
+		.windows = List_createEmpty(sizeof(Window)),
+		.callbacks = callbacks,
+		.extendedData = extendedData
+	};
+
+	if(callbacks.onCreate)
+		callbacks.onCreate(manager);
 
 	return Error_none();
 }
 
+Bool WindowManager_isAccessible(const WindowManager *manager) {
+	return manager && manager->isActive == WindowManager_magic && manager->owningThread == Thread_getId();
+}
+
 Bool WindowManager_free(WindowManager *manager) {
 
-	if(!manager || !manager->lock.active)
+	if(!manager || manager->isActive != WindowManager_magic)
 		return true;
 
-	Lock_free(&manager->lock);
-	List_freex(&manager->windows);
-	*manager = (WindowManager) { 0 };
+	if(manager->owningThread != Thread_getId())
+		return false;
 
+	if(manager->callbacks.onDestroy)
+		manager->callbacks.onDestroy(manager);
+
+	manager->isActive = 0;
+
+	for(WindowHandle i = 0; i < (WindowHandle) manager->windows.length; ++i) {
+		WindowHandle w = i + 1;
+		WindowManager_freeWindow(manager, &w);
+	}
+
+	List_freex(&manager->windows);
+	Buffer_freex(&manager->extendedData);
 	return true;
 }
 
-void WindowManager_virtualWindowLoop(Window *w) {
+Error WindowManager_adaptSizes(I32x2 *size, I32x2 *minSize, I32x2 *maxSize);
 
-	if(w->callbacks.onDraw) {
+impl Bool WindowManager_freePhysical(Window *w);
 
-		while(!(w->flags & EWindowFlags_ShouldThreadTerminate)) {
+impl Error WindowManager_createWindowPhysical(Window *w);
 
-			ELockAcquire acq = Lock_lock(&w->lock, 5 * SECOND);
+Error WindowManager_createWindow(
 
-			if(acq >= ELockAcquire_Success) {
+	WindowManager *manager, 
 
-				w->isDrawing = true;
-				w->callbacks.onDraw(w);
-				w->isDrawing = false;
+	EWindowType type,
 
-				if(acq == ELockAcquire_Acquired)
-					Lock_unlock(&w->lock);
-			}
-		}
-	}
-
-	//Ensure we're allowed to free
-
-	ELockAcquire acq0 = Lock_lock(&Platform_instance.windowManager.lock, U64_MAX);
-	Error err = Error_none();
-
-	if(acq0 < ELockAcquire_Success)
-		_gotoIfError(clean, Error_invalidState(0, "WindowManager_virtualWindowLoop() couldn't acquire WindowManager's lock"));
-
-	if(Lock_lock(&w->lock, U64_MAX) < ELockAcquire_Success)
-		_gotoIfError(clean, Error_invalidState(1, "WindowManager_virtualWindowLoop() couldn't acquire window's lock"));
-
-	WindowManager_freeVirtual(&Platform_instance.windowManager, &w);
-
-clean:
-
-	if(acq0 == ELockAcquire_Acquired)
-		Lock_unlock(&Platform_instance.windowManager.lock);
-
-	if(err.genericError)
-		Error_printx(err, ELogLevel_Error, ELogOptions_Default);
-}
-
-Error WindowManager_createVirtual(
-	WindowManager *manager,
-	I32x2 size,
-	I32x2 minSize,
+	I32x2 position, 
+	I32x2 size, 
+	I32x2 minSize, 
 	I32x2 maxSize,
-	WindowCallbacks callbacks,
+
+	EWindowHint hint, 
+	CharString title, 
+	WindowCallbacks callbacks, 
 	EWindowFormat format,
-	Window **result
+	U64 extendedDataSize,
+	WindowHandle *result
 ) {
 
-	if(!manager || !manager->lock.active || !result || !callbacks.onDraw)
-		return Error_nullPointer(
-			!manager || !manager->lock.active  ? 0 : (!result ? 4 : 2), 
-			"WindowManager_createVirtual()::manager, result and callbacks.onDraw are required"
-		);
+	if(!result)
+		return Error_nullPointer(!result ? 4 : 2, "WindowManager_createVirtual()::result and callbacks.onDraw are required");
 
-	if(!Lock_isLockedForThread(&manager->lock))
-		return Error_invalidOperation(0, "WindowManager_createVirtual() couldn't lock WindowManager");
+	if(!WindowManager_isAccessible(manager))
+		return Error_invalidOperation(0, "WindowManager_createVirtual() manager is NULL or inaccessible to current thread");
 
 	if(*result)
 		return Error_invalidOperation(1, "WindowManager_createVirtual()::*result is not NULL, indicates possible memleak");
@@ -134,6 +124,9 @@ Error WindowManager_createVirtual(
 		return Error_outOfBounds(
 			1, (U64) (I64) I32x2_x(size), (U64) (I64) I32x2_y(size), "WindowManager_createVirtual()::size[i] must be >0"
 		);
+
+	if(CharString_length(title) >= 260)
+		return Error_outOfBounds(7, 260, 260, "WindowManager_createWindow()::title can't exceed 260 chars");
 
 	switch (format) {
 
@@ -156,182 +149,187 @@ Error WindowManager_createVirtual(
 	if(err.genericError)
 		return err;
 
-	for(U8 i = 0; i < WindowManager_MAX_VIRTUAL_WINDOWS; ++i) {
-
-		Window *w = (Window*) List_ptr(manager->windows, i + WindowManager_MAX_PHYSICAL_WINDOWS);
-
-		if(!w)
-			break;
-
-		if (!(w->flags & EWindowFlags_IsActive)) {
-
-			Buffer cpuVisibleBuffer = Buffer_createNull();
-
-			if((err = Buffer_createEmptyBytesx(
-				ETextureFormat_getSize((ETextureFormat) format, I32x2_x(size), I32x2_y(size)),
-				&cpuVisibleBuffer
-			)).genericError)
-				return err;
-
-			Lock lock = Lock_create();
-
-			*w = (Window) {
-
-				.size = size,
-				.prevSize = size,
-
-				.cpuVisibleBuffer = cpuVisibleBuffer,
-				.lock = lock,
-				.callbacks = callbacks,
-
-				.minSize = minSize,
-				.maxSize = maxSize,
-
-				.hint = EWindowHint_ProvideCPUBuffer,
-				.format = format,
-				.flags = EWindowFlags_IsFocussed | EWindowFlags_IsVirtual | EWindowFlags_IsActive
-			};
-
-			if(callbacks.onCreate)
-				callbacks.onCreate(w);
-
-			if ((err = Thread_create(
-				(ThreadCallbackFunction) WindowManager_virtualWindowLoop, w, &w->mainThread)
-			).genericError) {
-				*w = (Window) { 0 };
-				Lock_free(&lock);
-				Buffer_freex(&cpuVisibleBuffer);
-				return err;
-			}
-
-			if(w->callbacks.onResize)
-				w->callbacks.onResize(w);
-
-			*result = w;
-
-			return Error_none();
-		}
-	}
-
-	return Error_outOfMemory(0, "WindowManager_createVirtual() couldn't find a spot for a window");
-}
-
-Bool WindowManager_freeVirtual(WindowManager *manager, Window **handle) {
+	Buffer cpuVisibleBuffer = Buffer_createNull();
 
 	if(
-		!manager || !manager->lock.active || 
-		!handle || !*handle || 
-		!Lock_isLockedForThread(&manager->lock) || 
-		!Window_isVirtual(*handle)
+		(type == EWindowType_Virtual) || (hint & EWindowHint_ProvideCPUBuffer) ||
+		(err = Buffer_createEmptyBytesx(
+			ETextureFormat_getSize((ETextureFormat) format, I32x2_x(size), I32x2_y(size)),
+			&cpuVisibleBuffer
+		)).genericError
 	)
-		return false;
+		return err;
 
-	Window *w = *handle;
+	WindowHandle i = 0;
 
-	if(!Lock_isLockedForThread(&w->lock) || !Lock_unlock(&w->lock)) 
-		return false;
+	for(; i < (WindowHandle) manager->windows.length; ++i)
+		if(!((Window*) List_ptr(manager->windows, i))->owner)
+			break;
 
-	if(w->callbacks.onDestroy)
-		w->callbacks.onDestroy(w);
-
-	Bool err = Lock_free(&w->lock);
-
-	Buffer_free(&w->cpuVisibleBuffer, Platform_instance.alloc);
-
-	*w = (Window) { 0 };
-	*handle = NULL;
-
-	return err;
-}
-
-inline U16 WindowManager_getEmptyWindows(WindowManager manager) {
-
-	U16 v = 0;
-
-	Window *wstart = (Window*) List_begin(manager.windows);
-	Window *wend = (Window*) List_end(manager.windows);
-
-	for(; wstart != wend; ++wstart)
-		if(!(wstart->flags & EWindowFlags_IsActive))
-			++v;
-
-	return v;
-}
-
-Error WindowManager_waitForExitAll(WindowManager *manager) {
-
-	if(!manager || !manager->lock.active)
-		return Error_nullPointer(0, "WindowManager_waitForExitAll()::manager is required");
-
-	//Checking for WindowManager is a lot easier, as we can just acquire the lock
-	//And check how many windows are active
-
-	Error err = Error_none();
-	ELockAcquire acq = ELockAcquire_Invalid;
-
-	acq = Lock_lock(&manager->lock, U64_MAX);
-
-	if(acq < ELockAcquire_Success)
-		return Error_invalidState(0, "WindowManager_waitForExitAll() couldn't lock WindowManager (1)");
-
-	//Check if we should exit
-
-	if(WindowManager_getEmptyWindows(*manager) == WindowManager_maxWindows())
-		goto clean;
-
-	Lock_unlock(&manager->lock);
-	acq = ELockAcquire_Invalid;
-
-	//Keep checking
-
-	while(true) {
-
-		//Try to reacquire the lock
-
-		acq = Lock_lock(&manager->lock, U64_MAX);
-
-		if(acq < ELockAcquire_Success)
-			return Error_invalidState(0, "WindowManager_waitForExitAll() couldn't lock WindowManager (2)");
-
-		//Our windows have been released!
-
-		if(WindowManager_getEmptyWindows(*manager) == WindowManager_maxWindows())
-			goto clean;
-
-		//Grab our virtual windows, to ensure we complete them
-		//The virtual window should properly exit if it's completed
-
-		Bool containsVirtualWindow = false;
-
-		for(U8 i = 0; i < WindowManager_MAX_VIRTUAL_WINDOWS; ++i) {
-
-			Window *w = (Window*) List_ptr(manager->windows, i + WindowManager_MAX_PHYSICAL_WINDOWS);
-
-			if(!w)
-				break;
-
-			if(w->flags & EWindowFlags_IsActive)
-				containsVirtualWindow = true;
-		}
-
-		//Release the lock to check for the next time
-
-		Lock_unlock(&manager->lock);
-		acq = ELockAcquire_Invalid;
-
-		//Wait to ensure we don't waste cycles
-		//Virtual windows are allowed to update as fast as possible though
-		
-		if(!containsVirtualWindow)
-			Thread_sleep(1 * MS);
+	if (i == (WindowHandle)-1) {
+		Buffer_freex(&cpuVisibleBuffer);
+		return Error_outOfBounds(
+			0, (WindowHandle)-1, (WindowHandle)-1, "WindowManager_createVirtual() only allows up to (WindowHandle)-1 windows"
+		);
 	}
 
-clean:
-	Lock_unlock(&manager->lock);
-	return err;
+	Buffer extendedData = Buffer_createNull();
+
+	if((err = Buffer_createEmptyBytesx(extendedDataSize, &extendedData)).genericError) { 
+		Buffer_freex(&cpuVisibleBuffer);
+		return err;
+	}
+
+	CharString titleCopy = CharString_createNull();
+	if((err = CharString_createCopyx(title, &titleCopy)).genericError) { 
+		Buffer_freex(&extendedData);
+		Buffer_freex(&cpuVisibleBuffer);
+		return err;
+	}
+
+	Bool pushed = false;
+
+	if(i == manager->windows.length) {
+		Window empty = (Window) { 0 };
+		if ((err = List_pushBackx(&manager->windows, Buffer_createConstRef(&empty, sizeof(empty)))).genericError) {
+			Buffer_freex(&extendedData);
+			Buffer_freex(&cpuVisibleBuffer);
+			CharString_freex(&titleCopy);
+			return err;
+		}
+
+		pushed = true;
+	}
+
+	Window *w = (Window*) List_ptr(manager->windows, i);
+	*w = (Window) {
+
+		.owner = manager,
+
+		.type = type,
+		.hint = hint | (type == EWindowType_Virtual ? EWindowHint_ProvideCPUBuffer : 0),
+		.format = format,
+		.flags = (type == EWindowType_Virtual ? EWindowFlags_IsFocussed : 0),
+				
+		.offset = position,
+		.size = size,
+		.minSize = minSize,
+		.maxSize = maxSize,
+		.prevSize = size,
+
+		.cpuVisibleBuffer = cpuVisibleBuffer,
+		.callbacks = callbacks,
+		.handle = i + 1,
+		.title = titleCopy,
+		.extendedData = extendedData
+	};
+
+	if (type == EWindowType_Physical && (err = WindowManager_createWindowPhysical(w)).genericError) {
+		WindowManager_freePhysical(w);
+		return err;
+	}
+
+	w->flags |= EWindowFlags_IsActive;
+
+	if(callbacks.onCreate)
+		callbacks.onCreate(w);
+
+	if(callbacks.onResize)
+		callbacks.onResize(w);
+
+	*result = i + 1;
+	return Error_none();
+}
+
+WindowHandle WindowManager_firstActiveWindow(WindowManager *manager) {
+
+	WindowHandle i = 0;
+
+	for(; i < (WindowHandle) manager->windows.length; ++i)
+		if(((Window*) List_ptr(manager->windows, i))->owner)
+			break;
+
+	return i + 1;
+}
+
+Bool WindowManager_isActive(WindowManager *manager) {
+	return WindowManager_firstActiveWindow(manager) != manager->windows.length;
+}
+
+WindowHandle WindowManager_countActiveWindows(WindowManager *manager) {
+
+	WindowHandle counter = 0;
+
+	for(WindowHandle i = 0; i < (WindowHandle) manager->windows.length; ++i)
+		if(((Window*) List_ptr(manager->windows, i))->owner)
+			++counter;
+
+	return counter;
+}
+
+impl void Window_updateExt(Window *w);
+
+Error WindowManager_wait(WindowManager *manager) {
+
+	if(!WindowManager_isAccessible(manager))
+		return Error_invalidOperation(0, "WindowManager_wait() manager is NULL or inaccessible to current thread");
+
+	while(WindowManager_countActiveWindows(manager)) {
+
+		//Update all windows
+
+		for (U64 i = manager->windows.length - 1; i != U64_MAX; --i) {
+
+			Window *w = (Window*) List_ptr(manager->windows, i);
+
+			if(!w->owner)
+				continue;
+
+			//Update interface
+
+			Ns now = Time_now();
+
+			if (w->callbacks.onUpdate) {
+				F64 dt = w->lastUpdate ? (now - w->lastUpdate) / (F64)SECOND : 0;
+				w->callbacks.onUpdate(w, dt);
+			}
+
+			w->lastUpdate = now;
+
+			if(w->type == EWindowType_Physical)
+				Window_updateExt(w);
+
+			else if(w->callbacks.onDraw)		//Virtual 
+				w->callbacks.onDraw(w);
+
+			if (w->flags & EWindowFlags_ShouldTerminate) {
+				WindowHandle handle = (WindowHandle)i + 1;
+				WindowManager_freeWindow(manager, &handle);
+			}
+		}
+
+		Ns now = Time_now();
+
+		if(manager->callbacks.onUpdate) {
+			F64 dt = manager->lastUpdate ? (now - manager->lastUpdate) / (F64)SECOND : 0;
+			manager->callbacks.onUpdate(manager, dt);
+		} 
+		
+		if(manager->callbacks.onDraw)
+			manager->callbacks.onDraw(manager);
+
+		manager->lastUpdate = now;
+	}
+
+	return Error_none();
 }
 
 Error WindowManager_adaptSizes(I32x2 *sizep, I32x2 *minSizep, I32x2 *maxSizep) {
+
+	if(!sizep || !minSizep || !maxSizep)
+		return Error_nullPointer(
+			!sizep ? 0 : (!minSizep ? 1 : 2), "WindowManager_adaptSizes() requires sizep, minSizep and maxSizep"
+		);
 
 	I32x2 size = *sizep;
 	I32x2 minSize = *minSizep;
@@ -366,56 +364,54 @@ Error WindowManager_adaptSizes(I32x2 *sizep, I32x2 *minSizep, I32x2 *maxSizep) {
 	return Error_none();
 }
 
-//All types of windows
+Bool WindowManager_freeWindow(WindowManager *manager, WindowHandle *handle) {
 
-Error WindowManager_createWindow(
-	WindowManager *manager, 
-	I32x2 position,
-	I32x2 size,
-	I32x2 minSize, I32x2 maxSize,
-	EWindowHint hint,
-	CharString title, 
-	WindowCallbacks callbacks,
-	EWindowFormat format,
-	Window **w
-) {
-
-	if(!manager || !manager->lock.active)
-		return Error_nullPointer(0, "WindowManager_createWindow()::manager is required");
-
-	Error err = WindowManager_createPhysical(manager, position, size, minSize, maxSize, hint, title, callbacks, format, w);
-
-	//Window manager doesn't support physical windows
-	//So it will make a virtual one
-
-	if(err.genericError == EGenericError_OutOfMemory && err.errorSubId == WindowManager_MAX_PHYSICAL_WINDOWS)
-		return WindowManager_createVirtual(manager, size, minSize, maxSize, callbacks, format, w);
-
-	return err;
-}
-
-Bool WindowManager_freeWindow(WindowManager *manager, Window **w) {
-
-	if(!manager || !manager->lock.active)
+	if(!handle)
 		return false;
 
-	if (!w || !*w)
+	Window *w = WindowManager_getWindow(manager, *handle);
+
+	if(!w || !w->owner)
 		return true;
 
-	if(!Lock_isLockedForThread(&manager->lock))
+	if(!WindowManager_isAccessible(w->owner)) 
 		return false;
 
-	return Window_isVirtual(*w) ? WindowManager_freeVirtual(manager, w) : WindowManager_freePhysical(manager, w);
-}
+	//Ensure our window safely exits
 
-WindowHandle WindowManager_maxWindows() {
-	return (WindowHandle) WindowManager_MAX_VIRTUAL_WINDOWS + WindowManager_MAX_PHYSICAL_WINDOWS;
-}
+	if(w->flags & EWindowFlags_IsActive && w->callbacks.onDestroy)
+		w->callbacks.onDestroy(w);
 
-//Simple helper functions (need locks)
+	Buffer_freex(&w->cpuVisibleBuffer);
+	Buffer_freex(&w->extendedData);
+	CharString_freex(&w->title);
+
+	List *devices = &w->devices;
+
+	for(U64 i = 0; i < devices->length; ++i)
+		InputDevice_free((InputDevice*) List_ptr(*devices, i));
+
+	List_freex(devices);
+	List_freex(&w->monitors);
+
+	Bool b = true;
+
+	if(w->type == EWindowType_Physical)
+		b = WindowManager_freePhysical(w);
+
+	*w = (Window) { 0 };
+
+	if(*handle == manager->windows.length)
+		while((w = (Window*)List_last(manager->windows)) != NULL && !w->owner)
+			List_popBack(&manager->windows, Buffer_createNull());
+
+	*handle = 0;
+	return b;
+}
 
 Window *WindowManager_getWindow(WindowManager *manager, WindowHandle windowHandle) {
 	return 
-		manager && Lock_isLockedForThread(&manager->lock) ? 
-		(Window*) List_ptr(manager->windows, windowHandle) : NULL;
+		manager && manager->owningThread == Thread_getId() && 
+		windowHandle && windowHandle <= manager->windows.length ? 
+		(Window*) List_ptr(manager->windows, windowHandle - 1) : NULL;
 }

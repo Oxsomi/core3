@@ -21,74 +21,72 @@
 #pragma once
 #include "types/list.h"
 #include "math/vec.h"
-#include "lock.h"
-#include "window.h"
 
-//Our manager can tell us when windows are done being used 
+typedef struct Window Window;
+typedef struct CharString CharString;
+typedef struct WindowCallbacks WindowCallbacks;
+typedef enum EWindowHint EWindowHint;
+typedef enum EWindowFormat EWindowFormat;
+typedef enum EWindowType EWindowType;
+
+typedef U16 WindowHandle;
+
+extern const U32 WindowManager_magic;
+
+typedef struct WindowManager WindowManager;
+
+typedef void (*WindowManagerCallback)(WindowManager*);
+typedef void (*WindowManagerUpdateCallback)(WindowManager*, F64);
+
+typedef struct WindowManagerCallbacks {
+	WindowManagerCallback onCreate, onDestroy, onDraw;
+	WindowManagerUpdateCallback onUpdate;
+} WindowManagerCallbacks;
 
 typedef struct WindowManager {
-	Lock lock;
-	List windows;
+
+	U32 owningThread;	//Only one thread can own a window manager at a time
+	U32 isActive;		//WindowManager_magic if active
+
+	List windows;		//<Window>
+
+	WindowManagerCallbacks callbacks;
+
+	Buffer extendedData;
+
+	Ns lastUpdate;
+
 } WindowManager;
 
-extern const U8 WindowManager_MAX_VIRTUAL_WINDOWS;
-extern const U64 WindowManager_OUT_OF_WINDOWS;
-impl extern const U8 WindowManager_MAX_PHYSICAL_WINDOWS;
-
-//Before doing any actions on WindowManager it needs to be locked.
-//This includes getters, since otherwise the result might vary.
-
-Error WindowManager_create(WindowManager *result);
+Error WindowManager_create(WindowManagerCallbacks callbacks, U64 extendedData, WindowManager *manager);
+Bool WindowManager_isAccessible(const WindowManager *manager);
 Bool WindowManager_free(WindowManager *manager);
 
-Error WindowManager_adaptSizes(I32x2 *size, I32x2 *minSize, I32x2 *maxSize);
+Error WindowManager_wait(WindowManager *manager);
+WindowHandle WindowManager_firstActiveWindow(WindowManager *manager);		//returns WindowManager->windows.length if empty
+WindowHandle WindowManager_countActiveWindows(WindowManager *manager);
+Bool WindowManager_isActive(WindowManager *manager);
 
-impl Error WindowManager_createPhysical(
-	WindowManager *manager,
-	I32x2 position,
-	I32x2 size, 
-	I32x2 minSize,
-	I32x2 maxSize,
-	EWindowHint hint,
-	CharString title, 
-	WindowCallbacks callbacks,
-	EWindowFormat format,
-	Window **result
-);
-
-impl Bool WindowManager_freePhysical(WindowManager *manager, Window **handle);
-
-Error WindowManager_waitForExitAll(WindowManager *manager);
-
-Error WindowManager_createVirtual(
-	WindowManager *manager, 
-	I32x2 size, 
-	I32x2 minSize,
-	I32x2 maxSize,
-	WindowCallbacks callbacks, 
-	EWindowFormat format,
-	Window **result
-);
-
-Bool WindowManager_freeVirtual(WindowManager *manager, Window **handle);
-
-impl Bool WindowManager_supportsFormat(WindowManager manager, EWindowFormat format);
-
-WindowHandle WindowManager_maxWindows();
-
-//Simple helper functions (need locks)
-
+impl Bool WindowManager_supportsFormat(const WindowManager *manager, EWindowFormat format);
 Window *WindowManager_getWindow(WindowManager *manager, WindowHandle windowHandle);
 
-//All types of windows
-
 Error WindowManager_createWindow(
+
 	WindowManager *manager, 
-	I32x2 position, I32x2 size, 
-	I32x2 minSize, I32x2 maxSize,
-	EWindowHint hint, CharString title, 
-	WindowCallbacks callbacks, EWindowFormat format,
-	Window **w
+
+	EWindowType type,
+
+	I32x2 position, 
+	I32x2 size, 
+	I32x2 minSize, 
+	I32x2 maxSize,
+
+	EWindowHint hint, 
+	CharString title, 
+	WindowCallbacks callbacks, 
+	EWindowFormat format,
+	U64 extendedData,
+	WindowHandle *w
 );
 
-Bool WindowManager_freeWindow(WindowManager *manager, Window **w);
+Bool WindowManager_freeWindow(WindowManager *manager, WindowHandle *handle);

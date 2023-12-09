@@ -23,7 +23,7 @@
 #include "types/allocator.h"
 #include "types/archive.h"
 #include "types/platform_types.h"
-#include "platforms/window_manager.h"
+#include "platforms/lock.h"
 
 typedef struct VirtualSection {
 
@@ -42,7 +42,6 @@ typedef struct Platform {
 	CharString workingDirectory;		//Contains a trailing slash to make file stuff easier
 
 	Allocator alloc;
-	WindowManager windowManager;
 
 	Lock virtualSectionsLock;
 	List virtualSections;			//<VirtualSection>

@@ -40,114 +40,23 @@ EResolution EResolution_create(I32x2 v) {
 	return _RESOLUTION(I32x2_x(v), I32x2_y(v));
 }
 
-Bool Window_initialized(const Window *w) { return w && I32x2_any(w->size); }
+Bool Window_isMinimized(const Window *w) { return w && w->flags & EWindowFlags_IsMinimized; }
+Bool Window_isFocussed(const Window *w) { return w && w->flags & EWindowFlags_IsFocussed; }
+Bool Window_isFullScreen(const Window *w) { return w && w->flags & EWindowFlags_IsFullscreen; }
 
-Bool Window_isVirtual(const Window *w) { return Window_initialized(w) && w->flags & EWindowFlags_IsVirtual; }
-Bool Window_isMinimized(const Window *w) { return Window_initialized(w) && w->flags & EWindowFlags_IsMinimized; }
-Bool Window_isFocussed(const Window *w) { return Window_initialized(w) && w->flags & EWindowFlags_IsFocussed; }
-Bool Window_isFullScreen(const Window *w) { return Window_initialized(w) && w->flags & EWindowFlags_IsFullscreen; }
-
-Bool Window_doesAllowFullScreen(const Window *w) { return Window_initialized(w) && w->hint & EWindowHint_AllowFullscreen; }
-
-//Presenting CPU buffer to a file (when virtual) or window when physical
-//This can only be called in a draw function!
-
-Error Window_presentCPUBuffer(Window *w, CharString file, Ns maxTimeout) {
-
-	if (!Window_initialized(w))
-		return Error_nullPointer(0, "Window_presentCPUBuffer()::w is required");
-
-	if (!w->isDrawing)
-		return Error_invalidOperation(0, "Window_presentCPUBuffer() isn't allowed if the window isn't currently drawing");
-
-	return Window_isVirtual(w) ? Window_storeCPUBufferToDisk(w, file, maxTimeout) : Window_presentPhysical(w);
-}
-
-Error Window_waitForExit(Window *w, Ns maxTimeout) {
-
-	if(!Window_initialized(w))
-		return Error_nullPointer(0, "Window_waitForExit()::w is required");
-
-	Ns start = Time_now();
-
-	//We lock to check window state
-	//If there's no lock, then we've already been released
-
-	ELockAcquire acq;
-
-	if((acq = Lock_lock(&w->lock, maxTimeout)) != ELockAcquire_Acquired)
-		return Error_invalidOperation(0, "Window_waitForExit()::w couldn't be acquired (1)");
-
-	//If our window isn't marked as active, then our window is gone
-	//We've successfully waited
-
-	Error err = Error_none();
-
-	if (!(w->flags & EWindowFlags_IsActive))
-		goto clean;
-
-	//Now we have to make sure we still have time left to wait
-
-	maxTimeout = U64_min(maxTimeout, I64_MAX);
-
-	Ns left = (Ns) I64_max(0, maxTimeout - (DNs)(Time_now() - start));
-
-	//Release the lock, because otherwise our window can't resume itself
-
-	Lock_unlock(&w->lock);
-	acq = ELockAcquire_Invalid;
-
-	//Keep checking until we run out of time
-
-	while(left > 0) {
-
-		//Wait to ensure we don't waste cycles
-		//Virtual windows are allowed to run as fast as possible to produce the frames
-
-		if(!Window_isVirtual(w))
-			Thread_sleep(10 * MS);
-
-		//Try to reacquire the lock
-
-		if((acq = Lock_lock(&w->lock, left)) != ELockAcquire_Acquired)
-			_gotoIfError(clean, Error_invalidOperation(2, "Window_waitForExit()::w couldn't be acquired (2)"));
-
-		//Our window has been released!
-
-		if (!(w->flags & EWindowFlags_IsActive))
-			goto clean;
-
-		//Virtual windows can draw really quickly
-
-		if(Window_isVirtual(w) && w->callbacks.onDraw)
-			w->callbacks.onDraw(w);
-
-		//Release the lock to check for the next time
-
-		Lock_unlock(&w->lock);
-		acq = ELockAcquire_Invalid;
-
-		//
-
-		left = (Ns) I64_max(0, maxTimeout - (DNs)(Time_now() - start));
-	}
-
-clean:
-	
-	if(acq == ELockAcquire_Acquired)
-		Lock_free(&w->lock);
-
-	return Error_timedOut(0, maxTimeout, "Window_waitForExit()::w couldn't be acquired (timeout)");
-}
+Bool Window_doesAllowFullScreen(const Window *w) { return w && w->hint & EWindowHint_AllowFullscreen; }
 
 //TODO: Move this to texture class
 
 Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 
-	if (!Window_initialized(w))
+	if (w)
 		return Error_nullPointer(0, "Window_resizeCPUBuffer()::w is required");
 
-	if(!Window_isVirtual(w) && !(w->hint & EWindowHint_ProvideCPUBuffer))
+	if(w->type >= EWindowType_Extended)
+		return Error_unsupportedOperation(0, "Window_resizeCPUBuffer() isn't supported for extended windows");
+
+	if(w->type == EWindowType_Physical && !(w->hint & EWindowHint_ProvideCPUBuffer))
 		return Error_invalidParameter(
 			0, 0, "Window_resizeCPUBuffer()::w must be a virtual window or have EWindowHint_ProvideCPUBuffer"
 		);
@@ -351,7 +260,7 @@ Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 
 Error Window_storeCPUBufferToDisk(const Window *w, CharString filePath, Ns maxTimeout) {
 
-	if (!Window_initialized(w))
+	if (!w)
 		return Error_nullPointer(0, "Window_storeCPUBufferToDisk()::w is required");
 
 	Buffer buf = w->cpuVisibleBuffer;
@@ -366,13 +275,10 @@ Error Window_storeCPUBufferToDisk(const Window *w, CharString filePath, Ns maxTi
 			0, "Window_storeCPUBufferToDisk() is only supported for BGRA8 for now"		//TODO: Add support for other formats
 		);
 
-	if(I32x2_any(I32x2_gt(w->size, I32x2_xx2(U16_MAX))))
-		return Error_invalidOperation(1, "Window_storeCPUBufferToDisk()::w resolution needs to be <65536");
-
 	Buffer file = Buffer_createNull();
 
 	Error err = BMP_writeRGBAx(
-		buf, (U16) I32x2_x(w->size), (U16) I32x2_y(w->size),
+		buf, (U32) I32x2_x(w->size), (U32) I32x2_y(w->size),
 		false, &file
 	);
 
@@ -387,12 +293,9 @@ Error Window_storeCPUBufferToDisk(const Window *w, CharString filePath, Ns maxTi
 
 Bool Window_terminate(Window *w) {
 
-	if(!Window_initialized(w))
+	if(!w)
 		return false;
 
-	if(!Lock_isLockedForThread(&w->lock))
-		return false;
-
-	w->flags |= EWindowFlags_ShouldThreadTerminate;		//Mark thread for destroy
+	w->flags |= EWindowFlags_ShouldTerminate;		//Mark thread for destroy
 	return true;
 }

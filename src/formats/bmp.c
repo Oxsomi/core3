@@ -54,8 +54,8 @@ const U32 BMP_SRGB_MAGIC = 0x73524742;
 
 Error BMP_writeRGBA(
 	Buffer buf,
-	U16 w,
-	U16 h,
+	U32 w,
+	U32 h,
 	Bool isFlipped, 
 	Allocator allocator,
 	Buffer *result
@@ -69,6 +69,9 @@ Error BMP_writeRGBA(
 
 	if(!w || !h)
 		return Error_invalidParameter(!w ? 1 : 2, 0, "BMP_writeRGBA()::w and h are required");
+
+	if((w >> 31) || (h >> 31))
+		return Error_invalidParameter((w >> 31) ? 1 : 2, 0, "BMP_writeRGBA()::w and h can't exceed I32_MAX");
 
 	U64 bufLen = Buffer_length(buf);
 
@@ -89,8 +92,8 @@ Error BMP_writeRGBA(
 
 	BMPInfoHeader infoHeader = (BMPInfoHeader) {
 		.size = sizeof(BMPInfoHeader),
-		.width = w,
-		.height = h,
+		.width = (I32) w,
+		.height = (I32) h,
 		.planes = 1,
 		.bitCount = 32,
 		.compression = 3		//rgba8
