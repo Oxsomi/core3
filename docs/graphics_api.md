@@ -149,6 +149,11 @@ _gotoIfError(clean, GraphicsDeviceRef_create(
 - readonly lastSubmit, firstSubmit; used to track when a submit was called.
 - readonly pendingResources, resourcesInFlight; used to track if resources are dirty, in flight (in use on the GPU) and if they need updates in the next submit.
 - readonly allocator; used to allocate memory.
+- readonly lock; TODO
+- readonly staging, stagingAllocations; staging allocations are used if the resources that are being updated are already in flight, if the resource is a tiled texture (non linear texture) or if the device doesn't support ReBAR/shared memory (and so the GPU memory isn't accessible).
+- readonly frameData; current frame data for this frame.
+- private readonly currentLocks; which resources are currently locked while submitCommands is active.
+- private readonly pendingBytes, flushThreshold; how many bytes of copy data are pending. The higher this is the bigger the chance of a flush happening. This is when there's so much data pending that the submitCommands will split the record in multiple submits. The reason it does this is because too much data can result in the operation taking too long and the GPU will cause a device lost error. Another reason is because these copies might make temporary staging resources which take up VRAM. Surpassing too many copies at once can result in out of memory errors or the device paging the memory to disk (resulting in too slow operations, which might cause a device lost). flushThreshold can be set to control when this happens; though it is set to a default value of < 4 GIBI (20% of cpuHeapSize when on shared memory otherwise 20% of gpuHeapSize + 10% of cpuHeapSize < 33% gpuHeapSize). For example on a system with an RTX 4090 (24GiB) and 128GiB of RAM (64 shared) the formula turns into 24GiB / 5 + 64GiB / 10 = 4.8 + 6.4 = 11.2GiB < 8GiB (24GiB/3) < 4 GiB (so limited to 4GiB). For more normal systems it is expected that flushThreshold is <4GiB.
 
 ### Functions
 
@@ -306,6 +311,8 @@ A swapchain is the interface between the platform Window and the API-dependent w
 Swapchain isn't always supported. In that case your final target can just be a render texture and it can be pulled back to the CPU to allow presenting there (video, photo, or whatever). To make sure it's supported, check deviceInfo.capabilities.features for Swapchain support.
 
 ```c
+//onCreate
+
 SwapchainRef *swapchain = NULL;
 _gotoIfError(clean, GraphicsDeviceRef_createSwapchain(
     device, 		//See "Graphics device"
@@ -313,15 +320,13 @@ _gotoIfError(clean, GraphicsDeviceRef_createSwapchain(
     &swapchain
 ));
 
-//Window callback to make sure format + size stays the same: 
+//onResize: Window callback to make sure format + size stays the same: 
 
-void onResize(Window *w) {
-	if(!(w->flags & EWindowFlags_IsVirtual))
-		Swapchain_resize(SwapchainRef_ptr(swapchain));
-}
+if(!(w->flags & EWindowFlags_IsVirtual))
+    Swapchain_resize(SwapchainRef_ptr(swapchain));
 ```
 
-info.presentModePriorities are the requests for what type of swapchains are desired by the application. Keeping this empty means [ mailbox, immediate, fifo, fifoRelaxed ]. On Android mailbox is unsupported because it may introduce another swapchain image, the rest is driver dependent if it's supported and the default is changed to [ fifo, fifoRelaxed, immediate] to conserve power. Immediate is always supported, so make sure to always request immediate otherwise createSwapchain may fail (depending on device + driver). For more info see Swapchain/Present mode.
+info.presentModePriorities are the requests for what type of swapchains are desired by the application. Keeping this empty means [ mailbox, immediate, fifo, fifoRelaxed ]. On Android mailbox is unsupported because it may introduce another swapchain image, the rest is driver dependent if it's supported and the default is changed to [ fifo, fifoRelaxed, immediate] to conserve power. Immediate is always supported, so make sure to always request immediate as well otherwise createSwapchain may fail (depending on device + driver). For more info see Swapchain/Present mode.
 
 info.usage in this case allows the swapchain to be used for compute shaders. If this is not required, please try to avoid it. It might reduce or remove compression for the swapchain depending on the underlying hardware.
 
@@ -346,7 +351,8 @@ By default the swapchain will use triple buffering to ensure best performance. E
 - readonly format: Current format of the swapchain.
 - readonly versionId: The version id changes everytime a change is applied. This could be resizes or format changes.
 - readonly presentMode: What present mode is currently used (see Swapchain/Present mode).
-- readonly usage: What the swapchain is allowed to be used for.
+- readonly info.usage: What the swapchain is allowed to be used for.
+- private readonly lock: Multi-threading. Is used to maintain versionId. On submitCommands it has to lock the swapchain(s) to see if the versionId is still the same as the one the command list(s) was/were recorded with. A CommandList is deemed stale if the Swapchain has been resized to a different size. Not re-recording will result in submitCommands erroring. This is because lots of commands can use the swapchain size such as SetViewportAndScissor.
 
 ### Functions
 
@@ -575,6 +581,9 @@ _gotoIfError(clean, GraphicsDeviceRef_createBufferData(
 - readonly cpuData: If CPUBacked stores the CPU copy for the resource or temporary data for the next submit to copy CPU data to the real resource.
 - readonly pendingChanges: `[U64 startRange, U64 endRange][]` list of marked regions for copy.
 - readonly readHandle, writeHandle: Places where the resource can be accessed on the GPU side. If a shader uses the writeHandle in a shader it has to transition the resource (or the subresource) to write state before it is accessed as such (at the relevant shader stage); same with the readHandle (but read state). If you're only reading/writing from a part of a resource it is preferred to only transition part of the resource. This will signal the implementation that other parts of the resource aren't in use. Which could lead to more efficient resource updates for example. Imagine streaming in/out meshes from a single buffer; only meshes that are in use need to be updated with the staging buffer, while others could be directly copied to GPU visible memory if available (ReBAR, shared mem, cpu visible, etc.). It could also reduce decompression/compression time occurring on the GPU due to changing the entire resource to write instead of readonly (with subresources this could be eased depending on the driver). 
+- readonly mappedMemory: Where the device buffer is mapped on cpu-accessible memory. NULL if it's not mapped as memory. This data can't be written to/read from without explicitly using the functions for them. This is because the resource might still be in flight, and doing so may cause undefined behavior.
+- readonly blockOffset, blockId: Which memory block the buffer was allocated. 
+- private readonly lock: Multi-threading helper. A buffer gets locked when it's being modified or used by the CPU while recording. For example DeviceBufferRef_markDirty will require a lock and GraphicsDeviceRef_submitCommands will too. So markDirty has to finish before or after the submitCommands is done.
 
 ### Functions
 

@@ -181,9 +181,7 @@ Bool DeviceBuffer_free(DeviceBuffer *buffer, Allocator allocator) {
 	if(!(buffer->usage & EDeviceBufferUsage_InternalWeakRef))
 		success &= !GraphicsDeviceRef_dec(&buffer->device).genericError;
 
-	if(buffer->usage & EDeviceBufferUsage_CPUBacked)
-		success &= Buffer_freex(&buffer->cpuData);
-
+	success &= Buffer_freex(&buffer->cpuData);
 	success &= List_freex(&buffer->pendingChanges);
 
 	return success;
@@ -263,10 +261,26 @@ Error GraphicsDeviceRef_createBufferData(
 	if(!dat)
 		return Error_nullPointer(2, "GraphicsDeviceRef_createBufferData()::dat is required");
 
+	//Ensure our buffer is still active when submitCommands is called by making a copy
+
+	Buffer copy = Buffer_createNull();
+
+	if (Buffer_isRef(*dat) && Buffer_length(*dat)) {
+
+		Error err = Buffer_createCopyx(*dat, &copy);
+
+		if (err.genericError)
+			return err;
+
+		*dat = copy;
+	}
+
 	Error err = GraphicsDeviceRef_createBuffer(dev, usage, name, Buffer_length(*dat), buf);
 
-	if(err.genericError)
+	if (err.genericError) {
+		Buffer_freex(&copy);
 		return err;
+	}
 
 	DeviceBuffer *buffer = DeviceBufferRef_ptr(*buf);
 
@@ -277,6 +291,7 @@ Error GraphicsDeviceRef_createBufferData(
 
 	if((err = DeviceBufferRef_markDirty(*buf, 0, 0)).genericError) {
 		DeviceBufferRef_dec(buf);
+		*dat = Buffer_createNull();
 		return err;
 	}
 
