@@ -580,7 +580,7 @@ Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List comman
 
 			for(U64 k = 0; k < cmd->activeSwapchains.length; ++k) {
 			
-				DeviceResourceVersion vK = *(const DeviceResourceVersion*) List_ptrConst(cmd->activeSwapchains, i);
+				DeviceResourceVersion vK = *(const DeviceResourceVersion*) List_ptrConst(cmd->activeSwapchains, k);
 
 				if(vK.resource == swapchainRef && vK.version != swapchaini->versionId)
 					_gotoIfError(clean, Error_invalidState(

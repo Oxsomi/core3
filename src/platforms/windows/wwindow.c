@@ -896,28 +896,10 @@ impl Error WindowManager_createWindowPhysical(Window *w) {
 
 	//Create native window
 
-	WNDCLASSEXA wc = (WNDCLASSEXA){ 0 };
+	WNDCLASSEXA wc = *(const WNDCLASSEXA*) w->owner->platformData.ptr;
 	HINSTANCE mainModule = Platform_instance.data;
 
-	wc.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
-	wc.lpfnWndProc = WWindow_onCallback;
-	wc.hInstance = mainModule;
-
-	wc.hIcon = (HICON) LoadImageA(mainModule, "LOGO", IMAGE_ICON, 32, 32, 0);
-	wc.hIconSm = (HICON) LoadImageA(mainModule, "LOGO", IMAGE_ICON, 16, 16, 0);
-
-	wc.hCursor = LoadCursorA(NULL, IDC_ARROW);
-
-	wc.hbrBackground = (HBRUSH) GetStockObject(BLACK_BRUSH);
-
-	wc.lpszClassName = "OxC3: Oxsomi core 3";
-	wc.cbSize = sizeof(wc);
-	wc.cbWndExtra = sizeof(void*);
-
 	Error err = Error_none();
-
-	if (!RegisterClassExA(&wc))
-		_gotoIfError(clean, Error_platformError(0, GetLastError(), "WindowManager_createWindowPhysical() RegisterClassEx failed"));
 
 	DWORD style = WS_VISIBLE;
 
@@ -958,7 +940,6 @@ impl Error WindowManager_createWindowPhysical(Window *w) {
 
 	if(!nativeWindow) {
 		HRESULT hr = GetLastError();
-		UnregisterClassA(wc.lpszClassName, wc.hInstance);
 		_gotoIfError(clean, Error_platformError(1, hr, "WindowManager_createWindowPhysical() CreateWindowEx failed"));
 	}
 

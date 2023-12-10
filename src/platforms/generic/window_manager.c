@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -34,24 +34,32 @@
 
 const U32 WindowManager_magic = (U32)'W' | ((U32)'I' << 8) | ((U32)'N' << 16) | ((U32)'D' << 24);
 
+impl Error WindowManager_createNative(WindowManager *w);
+impl Bool WindowManager_freeNative(WindowManager *w);
+
 Error WindowManager_create(WindowManagerCallbacks callbacks, U64 extendedDataSize, WindowManager *manager) {
 
-	if(!manager)
+	if (!manager)
 		return Error_nullPointer(2, "WindowManager_create()::manager is required");
 
 	Buffer extendedData = Buffer_createNull();
 	Error err = Buffer_createEmptyBytesx(extendedDataSize, &extendedData);
 
-	if(err.genericError)
+	if (err.genericError)
 		return err;
 
-	*manager = (WindowManager) { 
-		.isActive = WindowManager_magic, 
-		.owningThread = Thread_getId(), 
+	*manager = (WindowManager) {
+		.isActive = WindowManager_magic,
+		.owningThread = Thread_getId(),
 		.windows = List_createEmpty(sizeof(Window)),
 		.callbacks = callbacks,
 		.extendedData = extendedData
 	};
+
+	if ((err = WindowManager_createNative(manager)).genericError) {
+		*manager = (WindowManager) { 0 };
+		return err;
+	}
 
 	if(callbacks.onCreate)
 		callbacks.onCreate(manager);
@@ -83,6 +91,9 @@ Bool WindowManager_free(WindowManager *manager) {
 
 	List_freex(&manager->windows);
 	Buffer_freex(&manager->extendedData);
+
+	WindowManager_freeNative(manager);
+	Buffer_freex(&manager->platformData);
 	return true;
 }
 
@@ -152,7 +163,7 @@ Error WindowManager_createWindow(
 	Buffer cpuVisibleBuffer = Buffer_createNull();
 
 	if(
-		(type == EWindowType_Virtual) || (hint & EWindowHint_ProvideCPUBuffer) ||
+		((type == EWindowType_Virtual) || (hint & EWindowHint_ProvideCPUBuffer)) &&
 		(err = Buffer_createEmptyBytesx(
 			ETextureFormat_getSize((ETextureFormat) format, I32x2_x(size), I32x2_y(size)),
 			&cpuVisibleBuffer

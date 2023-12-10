@@ -56,6 +56,8 @@ typedef struct WindowManager {
 
 	Ns lastUpdate;
 
+	Buffer platformData;
+
 } WindowManager;
 
 Error WindowManager_create(WindowManagerCallbacks callbacks, U64 extendedData, WindowManager *manager);
