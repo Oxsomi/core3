@@ -19,7 +19,7 @@
 */
 
 #pragma once
-#include "math/quat.h"
+#include "types/quat.h"
 
 //Transform contains how to go from one space to another
 //A transform can also be an inverse transform, which is way faster to apply to go back to the space

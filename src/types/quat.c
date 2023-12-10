@@ -18,7 +18,7 @@
 *  This is called dual licensing.
 */
 
-#include "math/quat.h"
+#include "types/quat.h"
 #include "types/error.h"
 
 #define _QUAT_IMPL(T, suffix)																							\

@@ -21,7 +21,7 @@
 #include "types/allocator.h"
 #include "types/error.h"
 #include "types/buffer.h"
-#include "math/vec.h"
+#include "types/vec.h"
 
 //SHA state
 

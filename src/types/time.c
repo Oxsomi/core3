@@ -21,7 +21,7 @@
 #include "types/time.h"
 #include "types/string.h"
 #include "types/buffer.h"
-#include "math/math.h"
+#include "types/math.h"
 #include <time.h>
 
 #ifdef _WIN32

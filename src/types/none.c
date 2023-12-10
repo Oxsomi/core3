@@ -18,7 +18,7 @@
 *  This is called dual licensing.
 */
 
-#include "math/vec.h"
+#include "types/vec.h"
 #include "types/type_cast.h"
 #include "types/buffer.h"
 

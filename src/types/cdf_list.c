@@ -22,7 +22,7 @@
 #include "types/allocator.h"
 #include "types/error.h"
 #include "types/buffer.h"
-#include "math/rand.h"
+#include "types/rand.h"
 
 typedef struct CDFValue {
 	F32 self, predecessors;
@@ -50,9 +50,8 @@ Error CDFList_create(
 
 		result->cdf = List_createEmpty(sizeof(CDFValue));
 
-		if(isReserved) {
-			_gotoIfError(clean, List_reserve(&result->cdf, maxElements, allocator));
-		}
+		if(isReserved)
+			_gotoIfError(clean, List_reserve(&result->cdf, maxElements, allocator))
 		
 		else {
 			_gotoIfError(clean, List_resize(&result->cdf, maxElements, allocator));
@@ -66,13 +65,10 @@ Error CDFList_create(
 
 		if(maxElements) {
 
-			if(isReserved) {
-				_gotoIfError(clean, List_reserve(&result->elements, maxElements, allocator));
-			}
+			if(isReserved)
+				_gotoIfError(clean, List_reserve(&result->elements, maxElements, allocator))
 
-			else {
-				_gotoIfError(clean, List_resize(&result->elements, maxElements, allocator));
-			}
+			else _gotoIfError(clean, List_resize(&result->elements, maxElements, allocator))
 		}
 	}
 
@@ -139,7 +135,7 @@ U64 CDFList_getLinearIndex(CDFList *list, U64 i) {			//We might override this la
 	return i;
 }
 
-Bool CDFList_setProbability(CDFList *list, U64 i, F32 value, Bool updateTotal, F32 *oldValue) {
+Bool CDFList_setProbability(CDFList *list, U64 i, F32 value, F32 *oldValue) {
 
 	if(!list || i >= list->totalElements || value < 0)
 		return false;
@@ -155,15 +151,8 @@ Bool CDFList_setProbability(CDFList *list, U64 i, F32 value, Bool updateTotal, F
 	if(oldValue)
 		*oldValue = v;
 
-	if(!updateTotal || i != list->totalElements - 1)
-		list->flags &= ~ECDFListFlags_IsFinalized;
-
+	list->flags &= ~ECDFListFlags_IsFinalized;
 	f[j].self = value;
-
-	if(updateTotal && (list->flags & ECDFListFlags_IsFinalized)) {
-		f[j].predecessors = list->total - v;
-		list->total = f[j].predecessors + value;
-	}
 		
 	return true;
 
@@ -173,23 +162,23 @@ Bool CDFList_setElement(CDFList *list, U64 i, Buffer element) {
 	return list && !List_isConstRef(list->elements)  && !List_set(list->elements, i, element).genericError;
 }
 
-Bool CDFList_set(CDFList *list, U64 i, F32 value, Buffer element, Bool updateTotal) {
+Bool CDFList_set(CDFList *list, U64 i, F32 value, Buffer element) {
 
 	if(
 		!list || (
-			list && ((
+			(
 				Buffer_length(element) != list->elements.stride && 
 				!(List_isConstRef(list->elements) && !Buffer_length(element))
 			) || (
 				List_isConstRef(list->elements) && Buffer_length(element)
-			))
+			)
 		)
 	)
 		return false;
 
 	F32 oldValue;
 
-	if(!CDFList_setProbability(list, i, value, updateTotal, &oldValue))
+	if(!CDFList_setProbability(list, i, value, &oldValue))
 		return false;
 
 	if(list && !list->elements.length)		//If elements aren't available
@@ -200,7 +189,7 @@ Bool CDFList_set(CDFList *list, U64 i, F32 value, Buffer element, Bool updateTot
 		Bool b = CDFList_setElement(list, i, element);
 
 		if (!b) {
-			CDFList_setProbability(list, i, oldValue, updateTotal, NULL);
+			CDFList_setProbability(list, i, oldValue, NULL);
 			return false;
 		}
 	}
@@ -254,7 +243,7 @@ Error CDFList_popIndex(CDFList *list, U64 i, Buffer element) {
 	if(!list->totalElements)
 		return Error_invalidOperation(1, "CDFList_popIndex()::list can't be empty");
 
-	if(Buffer_length(element) != list->elements.stride)
+	if(Buffer_length(element) && Buffer_length(element) != list->elements.stride)
 		return Error_invalidParameter(2, 0, "CDFList_popIndex()::element can't mismatch list->elements.stride");
 
 	CDFValue prevProbability = (CDFValue) { 0 };
@@ -342,15 +331,15 @@ Error CDFList_getRandomElementFast(CDFList *list, CDFListElement *elementValue, 
 	return CDFList_getElementAtOffset(list, Random_sample(seed), elementValue);
 }
 
-Error CDFList_getElementAtOffset(CDFList *list, F32 randomValue, CDFListElement *elementValue) {
+Error CDFList_getElementAtOffset(CDFList *list, F32 offset, CDFListElement *elementValue) {
 
 	if(!list || !elementValue)
 		return Error_nullPointer(list ? 2 : 0, "CDFList_getElementAtOffset()::list and elementValue are required");
 
-	if(randomValue < 0 || randomValue >= list->total)
+	if(offset < 0 || offset >= list->total)
 		return Error_outOfBounds(
-			1, *(const U32*)&randomValue, *(const U32*)&list->total,
-			"CDFList_getElementAtOffset()::randomValue is out of bounds"
+			1, *(const U32*)&offset, *(const U32*)&list->total,
+			"CDFList_getElementAtOffset()::offset is out of bounds"
 		);
 
 	if(!(list->flags & ECDFListFlags_IsFinalized))
@@ -367,7 +356,7 @@ Error CDFList_getElementAtOffset(CDFList *list, F32 randomValue, CDFListElement 
 
 		CDFValue curr = f[j];
 
-		if (randomValue >= curr.predecessors && randomValue < curr.predecessors + curr.self) {
+		if (offset >= curr.predecessors && offset < curr.predecessors + curr.self) {
 
 			*elementValue = (CDFListElement) { .chance = curr.self / list->total, .id = j };
 
@@ -377,10 +366,10 @@ Error CDFList_getElementAtOffset(CDFList *list, F32 randomValue, CDFListElement 
 			return Error_none();
 		}
 
-		if (randomValue < curr.predecessors)
+		if (offset < curr.predecessors)
 			endRegion = j;
 
-		if (randomValue >= curr.predecessors + curr.self)
+		if (offset >= curr.predecessors + curr.self)
 			startRegion = j + 1;
 
 		U64 oldJ = j;

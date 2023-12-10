@@ -22,7 +22,7 @@
 #include "types/error.h"
 #include "types/buffer.h"
 #include "types/type_cast.h"
-#include "math/vec.h"
+#include "types/vec.h"
 
 //Explanation of algorithm; AES256 GCM + GMAC
 //https://www.alexeyshmalko.com/20200319144641/

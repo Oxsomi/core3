@@ -22,7 +22,7 @@
 #include "platforms/thread.h"
 #include "types/error.h"
 #include "types/time.h"
-#include "math/math.h"
+#include "types/math.h"
 
 Lock Lock_create() {
 	return (Lock) { .active = true };

@@ -19,7 +19,7 @@
 */
 
 #pragma once
-#include "math/math.h"
+#include "types/math.h"
 #include "error.h"
 
 //Conversions

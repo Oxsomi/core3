@@ -18,7 +18,7 @@
 *  This is called dual licensing.
 */
 
-#include "math/big_int.h"
+#include "types/big_int.h"
 #include "types/error.h"
 #include "types/buffer.h"
 #include "types/allocator.h"

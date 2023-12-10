@@ -28,7 +28,7 @@
 #include "types/allocation_buffer.h"
 #include "types/error.h"
 #include "types/archive.h"
-#include "math/big_int.h"
+#include "types/big_int.h"
 #include "platforms/platform.h"
 
 //Contains small helper functions that don't require their own .c file

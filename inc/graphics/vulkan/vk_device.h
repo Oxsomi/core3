@@ -25,7 +25,7 @@
 #include "platforms/lock.h"
 #include "types/list.h"
 #include "types/allocation_buffer.h"
-#include "math/vec.h"
+#include "types/vec.h"
 
 typedef RefPtr PipelineRef;
 

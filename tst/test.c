@@ -25,9 +25,9 @@
 #include "types/type_cast.h"
 #include "types/buffer_layout.h"
 #include "types/flp.h"
-#include "math/rand.h"
-#include "math/transform.h"
-#include "math/big_int.h"
+#include "types/rand.h"
+#include "types/transform.h"
+#include "types/big_int.h"
 
 #include <stdlib.h>
 #include <stdio.h>

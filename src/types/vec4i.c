@@ -18,7 +18,7 @@
 *  This is called dual licensing.
 */
 
-#include "math/vec.h"
+#include "types/vec.h"
 #include "types/type_cast.h"
 
 F32x4 F32x4_bitsI32x4(I32x4 a) { return *(const F32x4*) &a; }	//Convert raw bits to data type

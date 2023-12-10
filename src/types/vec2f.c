@@ -18,7 +18,7 @@
 *  This is called dual licensing.
 */
 
-#include "math/vec.h"
+#include "types/vec.h"
 
 F32x2 F32x2_one() { return F32x2_xx2(1); }
 F32x2 F32x2_two() { return F32x2_xx2(2); }

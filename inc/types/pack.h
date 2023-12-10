@@ -19,7 +19,7 @@
 */
 
 #pragma once
-#include "math/quat.h"
+#include "types/quat.h"
 
 //U64 packing
 

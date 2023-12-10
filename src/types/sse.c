@@ -18,7 +18,7 @@
 *  This is called dual licensing.
 */
 
-#include "math/vec.h"
+#include "types/vec.h"
 
 #if _SIMD == SIMD_SSE
 

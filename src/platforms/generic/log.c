@@ -21,7 +21,7 @@
 #include "platforms/log.h"
 #include "platforms/ext/stringx.h"
 #include "types/string.h"
-#include "math/math.h"
+#include "types/math.h"
 
 #include <stdlib.h>
 

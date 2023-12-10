@@ -18,7 +18,7 @@
 *  This is called dual licensing.
 */
 
-#include "math/math.h"
+#include "types/math.h"
 #include "types/string.h"
 #include "types/allocator.h"
 #include "types/file.h"

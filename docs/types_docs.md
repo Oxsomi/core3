@@ -4,149 +4,165 @@ OxC3 types contains a lot of very basic types; it's the STL of OxC3. All these t
 
 ## Basic defines
 
-- _SIMD is what type of SIMD is used 
+- **_SIMD** is what type of SIMD is used 
   - *types/types.h* defines these, while _SIMD is a compile define.
-  - SIMD_NONE: Indicates a fallback mode only, useful for validation, debugging and adding new platforms with a lot less effort (if they use a different SIMD setting that isn't supported yet).
-  - SIMD_SSE: Indicates the usage of SSE4.2/SSE4.1/SSE2/SSE/SSE3/SSSE3, AES, PCLMULQDQ, BMI1 and RDRAND and the possible usage of SHA instructions. This allows quicker and/or safer encryption/hashing & computation.
+  - **SIMD_NONE**: Indicates a fallback mode only, useful for validation, debugging and adding new platforms with a lot less effort (if they use a different SIMD setting that isn't supported yet).
+  - **SIMD_SSE**: Indicates the usage of SSE4.2/SSE4.1/SSE2/SSE/SSE3/SSSE3, AES, PCLMULQDQ, BMI1 and RDRAND and the possible usage of SHA instructions. This allows quicker and/or safer encryption/hashing & computation.
   - (**unsupported**): SIMD_NEON: Indicates the usage of ARM NEON intrinsics.
-- _ARCH is what type of architecture is used 
+- **_ARCH** is what type of architecture is used 
   - *types/types.h* defines these, while _ARCH is a compile define.
-  - ARCH_NONE: Unknown architecture; likely abstracted away from assembly level.
-  - ARCH_X64: X86_64 architecture.
-  - ARCH_ARM.
-- _PLATFORM_TYPE is what kind of platform is running 
+  - **ARCH_NONE**: Unknown architecture; likely abstracted away from assembly level.
+  - **ARCH_X64**: X86_64 architecture.
+  - **ARCH_ARM**.
+- **_PLATFORM_TYPE** is what kind of platform is running 
   - *types/platform_types.h* defines these, while _PLATFORM_TYPE is a compile define.
-  - PLATFORM_WINDOWS.
-  - PLATFORM_LINUX.
-  - PLATFORM_ANDROID.
-  - PLATFORM_WEB.
-  - PLATFORM_IOS.
-  - PLATFORM_OSX.
-- _RELAX_FLOAT: Indicates that the floating point operations aren't necessarily accurate, but are faster.
-- _FORCE_FLOAT_FALLBACK: All explicit float cast operations (e.g. F32_castF64) are software simulated.
-- impl indicates that one of the other source files will define this; mostly a platform or API dependent version. For example impl is regularly used to indicate a function that is implemented by the Vulkan or Windows backends rather than one that is generic and used across other platforms & APIs.
-- user_impl indicates that the user is meant to define the function themselves when using the framework. This is used by OxC3 platforms to take control of the main function but provide the Program_run & Program_exit function for the user.
+  - **PLATFORM_WINDOWS**.
+  - **PLATFORM_LINUX**.
+  - **PLATFORM_ANDROID**.
+  - **PLATFORM_WEB**.
+  - **PLATFORM_IOS**.
+  - **PLATFORM_OSX**.
+- **_RELAX_FLOAT**: Indicates that the floating point operations aren't necessarily accurate, but are faster.
+- **_FORCE_FLOAT_FALLBACK**: All explicit float cast operations (e.g. F32_castF64) are software simulated.
+- **impl** indicates that one of the other source files will define this; mostly a platform or API dependent version. For example impl is regularly used to indicate a function that is implemented by the Vulkan or Windows backends rather than one that is generic and used across other platforms & APIs.
+- **user_impl** indicates that the user is meant to define the function themselves when using the framework. This is used by OxC3 platforms to take control of the main function but provide the Program_run & Program_exit function for the user.
 
 ## Basic data types (types/types.h)
 
 - All types use PascalCase, even ints, floats, bool, etc.
 - Basic arithmetic data types are suffixed by the bits that are taken by that type.
 
-| Type name      | Description                                                  | C type                       |
-| -------------- | ------------------------------------------------------------ | ---------------------------- |
-| C8             | 8-bit char                                                   | char                         |
-| U8             | 8-bit unsigned int                                           | uint8_t                      |
-| I8             | 8-bit signed int                                             | int8_t                       |
-| U16            | 16-bit unsigned int                                          | uint16_t                     |
-| I16            | 16-bit signed int                                            | int16_t                      |
-| F16            | **cast only**: 16-bit IEEE754 float                          | uint16_t (manual casting)    |
-| U32            | 32-bit unsigned int                                          | uint32_t                     |
-| I32            | 32-bit signed int                                            | int32_t                      |
-| F32            | 32-bit IEEE754 float                                         | float                        |
-| U64            | 64-bit unsigned int                                          | uint64_t                     |
-| I64            | 64-bit signed int                                            | int64_t                      |
-| F64            | 64-bit IEEE754 float                                         | double                       |
-| U128           | 128-bit unsigned int (limited functionality)                 | complex (__uint128 or I32x4) |
-| BigInt         | Big unsigned int (allocated per 8 bytes)                     | U64[]                        |
-| BF16           | **cast only**: BFloat (8 bit exponent, 7 bit mantissa)       | U16                          |
-| TF19           | **cast only**: TensorFloat (8 bit exponent, 10 bit mantissa) | U32 (19 used)                |
-| PXR24          | **cast only**: PixarFloat (8 bit exponent, 15 bit mantissa)  | U32 (24 used)                |
-| FP24           | **cast only**: AMD Float24 (7 bit exponent, 16 bit mantissa) | U32 (24 used)                |
-| Ns             | 64-bit timestamp (unsigned); nanoseconds                     | U64                          |
-| DNs            | 64-bit timestamp (signed); delta nanoseconds                 | I64                          |
-| Bool           | Boolean                                                      | bool                         |
-| ECompareResult | Compare result: Lt, Eq, Gt                                   | enum (I32)                   |
+| Type name          | Description                                                  | C type                       |
+| ------------------ | ------------------------------------------------------------ | ---------------------------- |
+| **C8**             | 8-bit char                                                   | char                         |
+| **U8**             | 8-bit unsigned int                                           | uint8_t                      |
+| **I8**             | 8-bit signed int                                             | int8_t                       |
+| **U16**            | 16-bit unsigned int                                          | uint16_t                     |
+| **I16**            | 16-bit signed int                                            | int16_t                      |
+| **F16**            | **cast only**: 16-bit IEEE754 float                          | uint16_t (manual casting)    |
+| **U32**            | 32-bit unsigned int                                          | uint32_t                     |
+| **I32**            | 32-bit signed int                                            | int32_t                      |
+| **F32**            | 32-bit IEEE754 float                                         | float                        |
+| **U64**            | 64-bit unsigned int                                          | uint64_t                     |
+| **I64**            | 64-bit signed int                                            | int64_t                      |
+| **F64**            | 64-bit IEEE754 float                                         | double                       |
+| **U128**           | 128-bit unsigned int (limited functionality)                 | complex (__uint128 or I32x4) |
+| **BigInt**         | Big unsigned int (allocated per 8 bytes)                     | U64[]                        |
+| **BF16**           | **cast only**: BFloat (8 bit exponent, 7 bit mantissa)       | U16                          |
+| **TF19**           | **cast only**: TensorFloat (8 bit exponent, 10 bit mantissa) | U32 (19 used)                |
+| **PXR24**          | **cast only**: PixarFloat (8 bit exponent, 15 bit mantissa)  | U32 (24 used)                |
+| **FP24**           | **cast only**: AMD Float24 (7 bit exponent, 16 bit mantissa) | U32 (24 used)                |
+| **Ns**             | 64-bit timestamp (unsigned); nanoseconds                     | U64                          |
+| **DNs**            | 64-bit timestamp (signed); delta nanoseconds                 | I64                          |
+| **Bool**           | Boolean                                                      | bool                         |
+| **ECompareResult** | Compare result: Lt, Eq, Gt                                   | enum (I32)                   |
 
 ## Basic constants (types/types.h)
 
-| Name    | Type | Value                                     |
-| ------- | ---- | ----------------------------------------- |
-| KIBI    | U64  | 1024^1                                    |
-| MIBI    | U64  | 1024^2                                    |
-| GIBI    | U64  | 1024^3                                    |
-| TIBI    | U64  | 1024^4                                    |
-| PEBI    | U64  | 1024^5                                    |
-| KILO    | U64  | 10^3                                      |
-| MEGA    | U64  | 10^6                                      |
-| GIGA    | U64  | 10^9                                      |
-| TERA    | U64  | 10^12                                     |
-| PETA    | U64  | 10^15                                     |
-| MU      | Ns   | 1e3                                       |
-| MS      | Ns   | 1e6                                       |
-| SECOND  | Ns   | 1e9                                       |
-| MIN     | Ns   | 60e9                                      |
-| HOUR    | Ns   | (60 * 60)e9                               |
-| DAY     | Ns   | (60 * 60 * 24)e9                          |
-| WEEK    | Ns   | (60 * 60 * 24 * 7)e9                      |
-| U8_MIN  | U8   | 0                                         |
-| U16_MIN | U16  | 0                                         |
-| U32_MIN | U32  | 0                                         |
-| U64_MIN | U64  | 0                                         |
-| U8_MAX  | U8   | 255 (0xFF)                                |
-| U16_MAX | U16  | 65535 (0xFFFF)                            |
-| U32_MAX | U32  | 4294967295 (0xFFFFFFFF)                   |
-| U64_MAX | U64  | 18446744073709551615 (0xFFFFFFFFFFFFFFFF) |
-| I8_MIN  | I8   | -128 (0x80)                               |
-| C8_MIN  | C8   | -128 (0x80)                               |
-| I16_MIN | I16  | -32768 (0x8000)                           |
-| I32_MIN | I32  | -2147483648 (0x80000000)                  |
-| I64_MAX | I64  | -9223372036854775808 (0x8000000000000000) |
-| I8_MAX  | I8   | 127 (0x7F)                                |
-| C8_MAX  | C8   | 127 (0x7F)                                |
-| I16_MAX | I16  | 32767 (0x7FFF)                            |
-| I32_MAX | I32  | 2147483647 (0x7FFFFFFF)                   |
-| I64_MAX | I64  | 9223372036854775807 (0x7FFFFFFFFFFFFFFF)  |
-| F32_MIN | F32  | -3.402823466e+38F                         |
-| F32_MAX | F32  | 3.402823466e+38F                          |
-| F64_MIN | F64  | -1.7976931348623158e+308                  |
-| F64_MAX | F64  | 1.7976931348623158e+308                   |
+| Name        | Type | Value                                     |
+| ----------- | ---- | ----------------------------------------- |
+| **KIBI**    | U64  | 1024^1                                    |
+| **MIBI**    | U64  | 1024^2                                    |
+| **GIBI**    | U64  | 1024^3                                    |
+| **TIBI**    | U64  | 1024^4                                    |
+| **PEBI**    | U64  | 1024^5                                    |
+| **KILO**    | U64  | 10^3                                      |
+| **MEGA**    | U64  | 10^6                                      |
+| **GIGA**    | U64  | 10^9                                      |
+| **TERA**    | U64  | 10^12                                     |
+| **PETA**    | U64  | 10^15                                     |
+| **MU**      | Ns   | 1e3                                       |
+| **MS**      | Ns   | 1e6                                       |
+| **SECOND**  | Ns   | 1e9                                       |
+| **MIN**     | Ns   | 60e9                                      |
+| **HOUR**    | Ns   | (60 * 60)e9                               |
+| **DAY**     | Ns   | (60 * 60 * 24)e9                          |
+| **WEEK**    | Ns   | (60 * 60 * 24 * 7)e9                      |
+| **U8_MIN**  | U8   | 0                                         |
+| **U16_MIN** | U16  | 0                                         |
+| **U32_MIN** | U32  | 0                                         |
+| **U64_MIN** | U64  | 0                                         |
+| **U8_MAX**  | U8   | 255 (0xFF)                                |
+| **U16_MAX** | U16  | 65535 (0xFFFF)                            |
+| **U32_MAX** | U32  | 4294967295 (0xFFFFFFFF)                   |
+| **U64_MAX** | U64  | 18446744073709551615 (0xFFFFFFFFFFFFFFFF) |
+| **I8_MIN**  | I8   | -128 (0x80)                               |
+| **C8_MIN**  | C8   | -128 (0x80)                               |
+| **I16_MIN** | I16  | -32768 (0x8000)                           |
+| **I32_MIN** | I32  | -2147483648 (0x80000000)                  |
+| **I64_MAX** | I64  | -9223372036854775808 (0x8000000000000000) |
+| **I8_MAX**  | I8   | 127 (0x7F)                                |
+| **C8_MAX**  | C8   | 127 (0x7F)                                |
+| **I16_MAX** | I16  | 32767 (0x7FFF)                            |
+| **I32_MAX** | I32  | 2147483647 (0x7FFFFFFF)                   |
+| **I64_MAX** | I64  | 9223372036854775807 (0x7FFFFFFFFFFFFFFF)  |
+| **F32_MIN** | F32  | -3.402823466e+38F                         |
+| **F32_MAX** | F32  | 3.402823466e+38F                          |
+| **F64_MIN** | F64  | -1.7976931348623158e+308                  |
+| **F64_MAX** | F64  | 1.7976931348623158e+308                   |
 
-## TODO: C8 (char, types/types.h)
+## Nytodecimal
 
-- EStringCase
-- EStringTransform
+Nytodecimal is a base64-like encoding that is easy to decode/encode and quite compact. There are other more efficient encodings but they are very expensive to decode. In Nyto it stores [0-9A-Za-z_$] as 0-63. Nyto can encode an octal pair as 1 character, 6 bits or 1.5 hex chars. 
+
+## C8 (char, types/types.h)
+
+- **EStringCase**: Sensitive, Insensitive: If a string or char operation should care about casing or not.
+- **EStringTransform**: None, Lower, Upper: What transform to apply to a string of char.
 
 C8 has some useful helper functions:
 
-- C8_toLower
-- C8_toUpper
-- C8_transform
-- C8_isBin
-- C8_isOct
-- C8_isDec
-- C8_isHex
-- C8_isNyto
-- C8_isAlpha
-- C8_isAlphaNumeric
-- C8_isUpperCase
-- C8_isLowerCase
-- C8_isUpperCaseHex
-- C8_isLowerCaseHex
-- C8_isWhitespace
-- C8_isValidAscii
-- C8_isValidFileName
-- C8_bin
-- C8_oct
-- C8_dec
-- C8_hex
-- C8_nyto
-- C8_createBin
-- C8_createOct
-- C8_createDec
-- C8_createHex
-- C8_createNyto
+- C8 **C8_toLower**(C8): Transforms char to lowercase.
+- C8 **C8_toUpper**(C8): Transforms char to uppercase.
+- C8 **C8_transform**(C8, EStringTransform): Transforms the character (upper, lower or no modification).
+- Bool **C8_isBin**(C8): Checks if the char is binary (0-1).
+- Bool **C8_isOct**(C8): Checks if the char is octal (0-7).
+- Bool **C8_isDec**(C8): Checks if the char is decimal (0-9).
+- Bool **C8_isHex**(C8): Checks if the char is hex (0-9A-Fa-f).
+- Bool **C8_isNyto**(C8): Checks if the char is nytodecimal (0-9A-Za-z_$).
+- Bool **C8_isAlpha**(C8): Checks if the char is alpha (A-Za-z).
+- Bool **C8_isAlphaNumeric**(C8): Checks if the char is alphanumeric (0-9A-Za-z).
+- Bool **C8_isUpperCase**(C8): Checks if the char is uppercase (A-Z).
+- Bool **C8_isLowerCase**(C8): Checks if the char is lowercase (a-z).
+- Bool **C8_isUpperCaseHex**(C8): Checks if the char is uppercase hex (A-F).
+- Bool **C8_isLowerCaseHex**(C8): Checks if the char is lowercase hex (a-f).
+- Bool **C8_isWhitespace**(C8): Checks if the char is whitespace (space, tab, CR, LF).
+- Bool **C8_isValidAscii**(C8): Checks if the char is valid ascii (>= 0x20 && < 0x7F).
+- Bool **C8_isValidFileName**(C8): Checks if the char is valid for use in a file name (valid ascii and not: <>:"|?*/\\).
+- U8 **C8_bin**(C8): Converts the char to binary (0-1) or returns U8_MAX if invalid.
+- U8 **C8_oct**(C8): Converts the char to octal (0-7) or returns U8_MAX if invalid.
+- U8 **C8_dec**(C8): Converts the char to decimal (0-9) or returns U8_MAX if invalid.
+- U8 **C8_hex**(C8): Converts the char to hex (0-15) or returns U8_MAX if invalid.
+- U8 **C8_nyto**(C8): Converts the char to nytodecimal (0-63) or returns U8_MAX if invalid.
+- C8 **C8_createBin**(U8): Converts the binary (0-1) to a char or returns C8_MAX if invalid.
+- C8 **C8_createOct**(U8): Converts the octal (0-7) to a char or returns C8_MAX if invalid.
+- C8 **C8_createDec**(U8): Converts the decimal (0-9) to a char or returns C8_MAX if invalid.
+- C8 **C8_createHex**(U8): Converts the hex (0-15) to a char or returns C8_MAX if invalid.
+- C8 **C8_createNyto**(U8): Converts the nytodecimal (0-63) to a char or returns C8_MAX if invalid.
 
-## TODO: CharString
+## TODO: BigInt and U128 (types/big_int.h)
 
-## TODO: Float casts (flp)
+## TODO: CharString (types/string.h)
 
-## TODO: Vectors
+## TODO: Float casts (types/flp.h)
 
-## TODO: Error
+Note: For more info check the detailed [IEEE754 Floating point format doc](IEEE754 Floating point format.md).
 
-## TODO: Quaternion
+## TODO: type_id.h
 
-## TODO: Buffer
+## TODO: math.h 
+
+## TODO: pack.h
+
+## TODO: type_cast.h
+
+## TODO: Vectors (types/vec.h)
+
+## TODO: Error (types/error.h)
+
+## TODO: Quaternion (types/quat.h)
+
+## TODO: Buffer (types/buffer.h)
 
 - Buffer_length
 - Buffer_isRef
@@ -154,21 +170,61 @@ C8 has some useful helper functions:
 - Buffer_createManagedPtr
 - Buffer_createRefFromBuffer
 
-## TODO: List
+## TODO: List (types/list.h)
 
-## TODO: Allocator
+## TODO: Allocator (types/allocator.h)
 
-## TODO: AllocationBuffer
+## TODO: AllocationBuffer (types/allocation_buffer.h)
 
-## TODO: Archive
+## TODO: Archive (types/archive.h)
 
-## TODO: BufferLayout
+## TODO: BufferLayout (types/buffer_layout.h)
 
-## TODO: CDFList
+## CDFList (types/cdf_list.h)
 
-## TODO: Basic file util
+A CDFList is a list of entries that have a probability and combined they can form a list from which a random element can be selected. Some examples can be a list of random loot drops, spawn rates or chances of picking a pixel (for example raytracing skybox importance sampling).
 
-## Random (math/rand.h)
+A CDFList consists of the following:
+
+- List **cdf**: a List of F32s that indicate the probability of the current element and the sum of the elements that came before. This allows a binary search to be performed more easily.
+- List **elements**: The elements the CDF represents and the data it should contain.
+- ECDFListFlags **flags**: None, IsFinalized: If IsFinalized is true, the cdf is valid, otherwise CDFList_finalize has to be called first.
+- F32 **total**: Represents the sum of all probabilities (only useful if IsFinalized is true).
+- U64 **totalElements**: How many elements are inserted into the cdf.
+
+A CDF can be created through the following functions:
+
+- Error **CDFList_create**(U64 maxElements, Bool isReserved, U64 elementSize, Allocator allocator, CDFList *result): Creates N entries in a new CDFList or reserves N entries instead if isReserved is true. elementSize is the size of the data that backs the CDFList. 
+- Error **CDFList_createSubset**(List preallocated, U64 elementOffset, U64 elementCount, Allocator allocator, CDFList *result): Creates N entries in a new CDFList but takes the backing memory as a ref from the preallocated list. This is useful for a 2D CDF for example, because it doesn't need to allocate any more.
+
+When the CDF is created, it can be updated through the following functions:
+
+- On an existing element:
+  - Bool **CDFList_setProbability**(CDFList *list, U64 i, F32 value, F32 *oldValue): Sets the probability of the element at i to the value. If oldValue is not NULL, it will be filled with the old value that was replaced.
+  - Bool **CDFList_setElement**(CDFList *list, U64 i, Buffer element): Set the value of the element at i.
+  - Bool **CDFList_set**(CDFList *list, U64 i, F32 value, Buffer element): Set the value and chance of element at i.
+- On a new element (if the CDFList wasn't created through CDFList_createSubset):
+  - Error **CDFList_pushBack**(CDFList *list, F32 value, Buffer element, Allocator allocator): Append the value and element to the cdf list.
+  - Error **CDFList_pushFront**(CDFList *list, F32 value, Buffer element, Allocator allocator): Prepend the value and element to the cdf list.
+  - Error **CDFList_pushIndex**(CDFList *list, U64 i, F32 value, Buffer element, Allocator allocator): Insert the value and element into the cdf list.
+  - Error **CDFList_popFront**(CDFList *list, Buffer elementValue): Remove the first element and if elementValue isn't null store the popped element in elementValue.
+  - Error **CDFList_popBack**(CDFList *list, Buffer elementValue): Remove the last element and if elementValue isn't null store the popped element in elementValue.
+  - Error **CDFList_popIndex**(CDFList *list, U64 i, Buffer elementValue): Remove an element and if elementValue isn't null store the popped element in elementValue.
+- These all return true if successful or Error_none() if it returns an Error.
+
+If anything about the CDF is changed, it will be dirty and can't be sampled. So finalize it through the following function if it's really done (this process can be very expensive, depending on elementCount):
+
+- Error **CDFList_finalize**(CDFList *list).
+
+After the CDFList is finalized, it can be used in one of the following functions:
+
+- Error **CDFList_getElementAtOffset**(CDFList *list, F32 offset, CDFListElement *elementValue): Get the element at the offset, where offset is [0,total>. It finds it through a binary search. CDFListElement is [ Buffer value, U64 id, F32 chance ].
+- Error **CDFList_getRandomElementFast**(CDFList *list, CDFListElement *elementValue, U32 *seed): Sample a random element from the list using a seed. (This is not cryptographically secure).
+- Error **CDFList_getRandomElementSecure**(CDFList *list, CDFListElement *elementValue): Sample a cryptographically secure random element from the list. This isn't fast, so it should only be used when necessary.
+
+## TODO: Basic file util (types/file.h)
+
+## Random (types/rand.h)
 
 Random only provides some basic PRNG for picking a number between 0-1. This is only useful for some basic operations and shouldn't be used for critical applications such as encryption. For CSPRNG (Cryptographically secure PRNG) please use Buffer_csprng instead.
 
@@ -197,5 +253,4 @@ Has the following functionality:
   - Bool **Time_parseFormat**(Ns *time, TimeFormat time, Bool isLocalTime): Parses an ISO 8601 date as an OxC3 timestamp (C8[32] -> Time_date). isLocalTime allows local timezone conversion. 
   - Parsing and formatting to and from local formats are unsupported. ISO 8601 (with a Z as the timezone rather than an offset) is currently the only allowed format.
 
-## TODO: Transform
-
+## TODO: Transform (types/transform.h)

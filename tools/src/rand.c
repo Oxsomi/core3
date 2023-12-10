@@ -21,7 +21,7 @@
 #include "types/string.h"
 #include "types/buffer.h"
 #include "types/error.h"
-#include "math/math.h"
+#include "types/math.h"
 #include "platforms/log.h"
 #include "platforms/file.h"
 #include "platforms/ext/stringx.h"

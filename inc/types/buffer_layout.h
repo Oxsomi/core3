@@ -21,7 +21,7 @@
 #pragma once
 #include "types/type_id.h"
 #include "types/string.h"
-#include "math/vec.h"
+#include "types/vec.h"
 
 //Buffer layout member
 

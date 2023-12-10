@@ -20,7 +20,7 @@
 
 #pragma once
 #include "types/list.h"
-#include "math/vec.h"
+#include "types/vec.h"
 #include "platforms/ref_ptr.h"
 #include "graphics/generic/device.h"
 

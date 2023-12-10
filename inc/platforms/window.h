@@ -19,7 +19,7 @@
 */
 
 #pragma once
-#include "math/vec.h"
+#include "types/vec.h"
 #include "types/list.h"
 #include "types/error.h"
 #include "types/string.h"

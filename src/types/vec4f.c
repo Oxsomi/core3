@@ -18,7 +18,7 @@
 *  This is called dual licensing.
 */
 
-#include "math/vec.h"
+#include "types/vec.h"
 
 F32x4 F32x4_complement(F32x4 a) { return F32x4_sub(F32x4_one(), a); }
 F32x4 F32x4_negate(F32x4 a) { return F32x4_sub(F32x4_zero(), a); }

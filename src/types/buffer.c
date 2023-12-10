@@ -22,8 +22,8 @@
 #include "types/error.h"
 #include "types/buffer.h"
 #include "types/type_cast.h"
-#include "math/math.h"
-#include "math/vec.h"
+#include "types/math.h"
+#include "types/vec.h"
 
 Bool BitRef_get(BitRef b) { return b.ptr && (*b.ptr >> b.off) & 1; }
 void BitRef_set(BitRef b) { if(b.ptr && !b.isConst) *b.ptr |= 1 << b.off; }

@@ -18,7 +18,7 @@
 *  This is called dual licensing.
 */
 
-#include "math/math.h"
+#include "types/math.h"
 #include "types/error.h"
 
 #include <math.h>

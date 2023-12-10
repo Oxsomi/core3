@@ -20,7 +20,7 @@
 
 #pragma once
 #include "types/list.h"
-#include "math/vec.h"
+#include "types/vec.h"
 
 typedef struct Window Window;
 typedef struct CharString CharString;

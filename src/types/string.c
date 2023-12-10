@@ -20,7 +20,7 @@
 
 #include "types/string.h"
 #include "types/allocator.h"
-#include "math/math.h"
+#include "types/math.h"
 #include "types/buffer.h"
 #include "types/list.h"
 #include "types/error.h"

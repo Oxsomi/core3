@@ -19,7 +19,7 @@
 */
 
 #include "types/flp.h"
-#include "math/vec.h"
+#include "types/vec.h"
 #include "types/platform_types.h"
 
 U8 EFloatType_bytes(EFloatType type) {

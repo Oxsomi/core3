@@ -18,7 +18,7 @@
 *  This is called dual licensing.
 */
 
-#include "math/math.h"
+#include "types/math.h"
 #include <float.h>
 
 #define CONST_IMPL(T, suffix)								\

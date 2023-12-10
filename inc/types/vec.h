@@ -19,7 +19,7 @@
 */
 
 #pragma once
-#include "math/math.h"
+#include "types/math.h"
 #include <stdalign.h>
 
 //Helper function to insert a simple non SIMD operation

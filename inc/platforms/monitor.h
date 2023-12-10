@@ -19,7 +19,7 @@
 */
 
 #pragma once
-#include "math/vec.h"
+#include "types/vec.h"
 
 //Monitor
 

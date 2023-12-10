@@ -35,7 +35,7 @@ typedef enum ECDFListFlags {
 typedef struct CDFList {
 	List cdf, elements;
 	F32 total;
-	U8 flags;
+	ECDFListFlags flags;
 	U64 totalElements;
 } CDFList;
 
@@ -64,17 +64,14 @@ Error CDFList_createSubset(
 	CDFList *result
 );
 
-//
-
 Bool CDFList_free(CDFList *list, Allocator allocator);
 
 //Setting probability and/or element.
-//updateTotal should be false if the total calculation process is multi-threaded, as this will cause threading issues.
 
-Bool CDFList_setProbability(CDFList *list, U64 i, F32 value, Bool updateTotal, F32 *oldValue);
+Bool CDFList_setProbability(CDFList *list, U64 i, F32 value, F32 *oldValue);
 Bool CDFList_setElement(CDFList *list, U64 i, Buffer element);
 
-Bool CDFList_set(CDFList *list, U64 i, F32 value, Buffer element, Bool updateTotal);
+Bool CDFList_set(CDFList *list, U64 i, F32 value, Buffer element);
 
 //Pushing/popping is only available if the CFDList is linear.
 //It allows pushing/popping back without breaking the CDF (push & pop at other locations will require a finalize though).

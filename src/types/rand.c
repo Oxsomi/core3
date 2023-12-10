@@ -18,7 +18,7 @@
 *  This is called dual licensing.
 */
 
-#include "math/rand.h"
+#include "types/rand.h"
 
 //Ported from Wisp:
 //https://github.com/TeamWisp/WispRenderer/blob/master/resources/shaders/rand_util.hlsl

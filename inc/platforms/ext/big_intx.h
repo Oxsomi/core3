@@ -19,7 +19,7 @@
 */
 
 #pragma once
-#include "math/big_int.h"
+#include "types/big_int.h"
 
 Error BigInt_createx(U16 bitCount, BigInt *big);
 Error BigInt_createCopyx(BigInt *a, BigInt *b);
