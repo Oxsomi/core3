@@ -121,8 +121,6 @@ typedef struct WindowCallbacks {
 
 //Window itself
 
-typedef U16 WindowHandle;
-
 typedef enum EWindowType {
 
 	EWindowType_Physical,			//Native window of the underlying platform
@@ -158,11 +156,6 @@ typedef struct Window {
 	WindowCallbacks callbacks;
 
 	Ns lastUpdate;
-
-	WindowHandle handle;
-	U16 pad0;
-
-	U32 pad1;
 
 	CharString title;
 

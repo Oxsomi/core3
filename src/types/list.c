@@ -758,7 +758,7 @@ Error List_eraseFirst(List *list, Buffer buf, U64 offset) {
 	if(!list)
 		return Error_nullPointer(0, "List_eraseFirst()::list is required");
 
-	U64 ind = List_findLast(*list, buf, offset);
+	U64 ind = List_findFirst(*list, buf, offset);
 	return ind == U64_MAX ? Error_none() : List_erase(list, ind);
 }
 

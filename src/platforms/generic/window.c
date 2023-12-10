@@ -50,7 +50,7 @@ Bool Window_doesAllowFullScreen(const Window *w) { return w && w->hint & EWindow
 
 Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 
-	if (w)
+	if (!w)
 		return Error_nullPointer(0, "Window_resizeCPUBuffer()::w is required");
 
 	if(w->type >= EWindowType_Extended)

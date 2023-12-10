@@ -109,11 +109,11 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 	switch (message) {
 
-		case WM_DESTROY:
-			w->flags |= EWindowFlags_ShouldTerminate;
-			break;
-
+		case WM_QUIT:
 		case WM_CLOSE:
+			WindowManager_freeWindow(w->owner, &w);
+			return 0;
+
 		case WM_CREATE:
 			break;
 
@@ -906,9 +906,6 @@ void Window_updateExt(Window *w) {
 		TranslateMessage(&msg);
 		DispatchMessageA(&msg);
 	}
-
-	if(msg.message == WM_QUIT)
-		Window_terminate(w);
 }
 
 impl Error WindowManager_createWindowPhysical(Window *w) {

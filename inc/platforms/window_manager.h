@@ -29,8 +29,6 @@ typedef enum EWindowHint EWindowHint;
 typedef enum EWindowFormat EWindowFormat;
 typedef enum EWindowType EWindowType;
 
-typedef U16 WindowHandle;
-
 extern const U32 WindowManager_magic;
 
 typedef struct WindowManager WindowManager;
@@ -48,7 +46,7 @@ typedef struct WindowManager {
 	U32 owningThread;	//Only one thread can own a window manager at a time
 	U32 isActive;		//WindowManager_magic if active
 
-	List windows;		//<Window>
+	List windows;		//<Window*>
 
 	WindowManagerCallbacks callbacks;
 
@@ -65,12 +63,8 @@ Bool WindowManager_isAccessible(const WindowManager *manager);
 Bool WindowManager_free(WindowManager *manager);
 
 Error WindowManager_wait(WindowManager *manager);
-WindowHandle WindowManager_firstActiveWindow(WindowManager *manager);		//returns WindowManager->windows.length if empty
-WindowHandle WindowManager_countActiveWindows(WindowManager *manager);
-Bool WindowManager_isActive(WindowManager *manager);
 
 impl Bool WindowManager_supportsFormat(const WindowManager *manager, EWindowFormat format);
-Window *WindowManager_getWindow(WindowManager *manager, WindowHandle windowHandle);
 
 Error WindowManager_createWindow(
 
@@ -88,7 +82,7 @@ Error WindowManager_createWindow(
 	WindowCallbacks callbacks, 
 	EWindowFormat format,
 	U64 extendedData,
-	WindowHandle *w
+	Window **w
 );
 
-Bool WindowManager_freeWindow(WindowManager *manager, WindowHandle *handle);
+Bool WindowManager_freeWindow(WindowManager *manager, Window **w);

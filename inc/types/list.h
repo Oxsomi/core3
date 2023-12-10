@@ -59,12 +59,16 @@ U8 *List_begin(List list);
 U8 *List_end(List list);
 U8 *List_last(List list);
 
+#define List_lastT(T, list) ((T*)List_last(list))
+
 const U8 *List_beginConst(List list);
 const U8 *List_endConst(List list);
 const U8 *List_lastConst(List list);
 
 const U8 *List_ptrConst(List list, U64 elementOffset);
 U8 *List_ptr(List list, U64 elementOffset);
+
+#define List_ptrT(T, list, elementOffset) ((T*) List_ptr(list, elementOffset))
 
 Buffer List_at(List list, U64 offset);
 Buffer List_atConst(List list, U64 offset);

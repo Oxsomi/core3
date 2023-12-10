@@ -51,7 +51,7 @@ Error WindowManager_create(WindowManagerCallbacks callbacks, U64 extendedDataSiz
 	*manager = (WindowManager) {
 		.isActive = WindowManager_magic,
 		.owningThread = Thread_getId(),
-		.windows = List_createEmpty(sizeof(Window)),
+		.windows = List_createEmpty(sizeof(Window*)),
 		.callbacks = callbacks,
 		.extendedData = extendedData
 	};
@@ -84,10 +84,8 @@ Bool WindowManager_free(WindowManager *manager) {
 
 	manager->isActive = 0;
 
-	for(WindowHandle i = 0; i < (WindowHandle) manager->windows.length; ++i) {
-		WindowHandle w = i + 1;
-		WindowManager_freeWindow(manager, &w);
-	}
+	for(U64 i = 0; i < manager->windows.length; ++i) 
+		WindowManager_freeWindow(manager, List_ptrT(Window*, manager->windows, i));
 
 	List_freex(&manager->windows);
 	Buffer_freex(&manager->extendedData);
@@ -100,7 +98,6 @@ Bool WindowManager_free(WindowManager *manager) {
 Error WindowManager_adaptSizes(I32x2 *size, I32x2 *minSize, I32x2 *maxSize);
 
 impl Bool WindowManager_freePhysical(Window *w);
-
 impl Error WindowManager_createWindowPhysical(Window *w);
 
 Error WindowManager_createWindow(
@@ -119,7 +116,7 @@ Error WindowManager_createWindow(
 	WindowCallbacks callbacks, 
 	EWindowFormat format,
 	U64 extendedDataSize,
-	WindowHandle *result
+	Window **result
 ) {
 
 	if(!result)
@@ -171,19 +168,6 @@ Error WindowManager_createWindow(
 	)
 		return err;
 
-	WindowHandle i = 0;
-
-	for(; i < (WindowHandle) manager->windows.length; ++i)
-		if(!((Window*) List_ptr(manager->windows, i))->owner)
-			break;
-
-	if (i == (WindowHandle)-1) {
-		Buffer_freex(&cpuVisibleBuffer);
-		return Error_outOfBounds(
-			0, (WindowHandle)-1, (WindowHandle)-1, "WindowManager_createVirtual() only allows up to (WindowHandle)-1 windows"
-		);
-	}
-
 	Buffer extendedData = Buffer_createNull();
 
 	if((err = Buffer_createEmptyBytesx(extendedDataSize, &extendedData)).genericError) { 
@@ -198,22 +182,29 @@ Error WindowManager_createWindow(
 		return err;
 	}
 
-	Bool pushed = false;
+	Buffer tmpWindow = Buffer_createNull();
 
-	if(i == manager->windows.length) {
-		Window empty = (Window) { 0 };
-		if ((err = List_pushBackx(&manager->windows, Buffer_createConstRef(&empty, sizeof(empty)))).genericError) {
-			Buffer_freex(&extendedData);
-			Buffer_freex(&cpuVisibleBuffer);
-			CharString_freex(&titleCopy);
-			return err;
-		}
-
-		pushed = true;
+	if ((err = Buffer_createEmptyBytesx(sizeof(Window), &tmpWindow)).genericError) {
+		Buffer_freex(&extendedData);
+		Buffer_freex(&cpuVisibleBuffer);
+		CharString_freex(&titleCopy);
+		return err;
 	}
 
-	Window *w = (Window*) List_ptr(manager->windows, i);
-	*w = (Window) {
+	Window *empty = NULL;
+	if ((err = List_pushBackx(&manager->windows, Buffer_createConstRef(&empty, sizeof(empty)))).genericError) {
+		Buffer_freex(&tmpWindow);
+		Buffer_freex(&extendedData);
+		Buffer_freex(&cpuVisibleBuffer);
+		CharString_freex(&titleCopy);
+		return err;
+	}
+
+	Window **w = List_lastT(Window*, manager->windows);
+
+	*w = (Window*) tmpWindow.ptr;
+
+	**w = (Window) {
 
 		.owner = manager,
 
@@ -230,52 +221,24 @@ Error WindowManager_createWindow(
 
 		.cpuVisibleBuffer = cpuVisibleBuffer,
 		.callbacks = callbacks,
-		.handle = i + 1,
 		.title = titleCopy,
 		.extendedData = extendedData
 	};
 
-	if (type == EWindowType_Physical && (err = WindowManager_createWindowPhysical(w)).genericError) {
-		WindowManager_freePhysical(w);
+	if (type == EWindowType_Physical && (err = WindowManager_createWindowPhysical(*w)).genericError) {
+		WindowManager_freeWindow(manager, result);
 		return err;
 	}
 
-	w->flags |= EWindowFlags_IsActive;
+	(*w)->flags |= EWindowFlags_IsActive;
 
 	if(callbacks.onCreate)
-		callbacks.onCreate(w);
+		callbacks.onCreate(*w);
 
 	if(callbacks.onResize)
-		callbacks.onResize(w);
+		callbacks.onResize(*w);
 
-	*result = i + 1;
 	return Error_none();
-}
-
-WindowHandle WindowManager_firstActiveWindow(WindowManager *manager) {
-
-	WindowHandle i = 0;
-
-	for(; i < (WindowHandle) manager->windows.length; ++i)
-		if(((Window*) List_ptr(manager->windows, i))->owner)
-			break;
-
-	return i + 1;
-}
-
-Bool WindowManager_isActive(WindowManager *manager) {
-	return WindowManager_firstActiveWindow(manager) != manager->windows.length;
-}
-
-WindowHandle WindowManager_countActiveWindows(WindowManager *manager) {
-
-	WindowHandle counter = 0;
-
-	for(WindowHandle i = 0; i < (WindowHandle) manager->windows.length; ++i)
-		if(((Window*) List_ptr(manager->windows, i))->owner)
-			++counter;
-
-	return counter;
 }
 
 impl void Window_updateExt(Window *w);
@@ -285,16 +248,13 @@ Error WindowManager_wait(WindowManager *manager) {
 	if(!WindowManager_isAccessible(manager))
 		return Error_invalidOperation(0, "WindowManager_wait() manager is NULL or inaccessible to current thread");
 
-	while(WindowManager_countActiveWindows(manager)) {
+	while(manager->windows.length) {
 
 		//Update all windows
 
 		for (U64 i = manager->windows.length - 1; i != U64_MAX; --i) {
 
-			Window *w = (Window*) List_ptr(manager->windows, i);
-
-			if(!w->owner)
-				continue;
+			Window *w = *List_ptrT(Window*, manager->windows, i);
 
 			//Update interface
 
@@ -313,10 +273,8 @@ Error WindowManager_wait(WindowManager *manager) {
 			else if(w->callbacks.onDraw)		//Virtual 
 				w->callbacks.onDraw(w);
 
-			if (w->flags & EWindowFlags_ShouldTerminate) {
-				WindowHandle handle = (WindowHandle)i + 1;
-				WindowManager_freeWindow(manager, &handle);
-			}
+			if (w->flags & EWindowFlags_ShouldTerminate)
+				WindowManager_freeWindow(manager, &w);
 		}
 
 		Ns now = Time_now();
@@ -375,54 +333,42 @@ Error WindowManager_adaptSizes(I32x2 *sizep, I32x2 *minSizep, I32x2 *maxSizep) {
 	return Error_none();
 }
 
-Bool WindowManager_freeWindow(WindowManager *manager, WindowHandle *handle) {
+Bool WindowManager_freeWindow(WindowManager *manager, Window **w) {
 
-	if(!handle)
+	if(!w || !*w)
 		return false;
 
-	Window *w = WindowManager_getWindow(manager, *handle);
+	Window *win = *w;
 
-	if(!w || !w->owner)
-		return true;
-
-	if(!WindowManager_isAccessible(w->owner)) 
+	if(!WindowManager_isAccessible(win->owner))
 		return false;
 
 	//Ensure our window safely exits
 
-	if(w->flags & EWindowFlags_IsActive && w->callbacks.onDestroy)
-		w->callbacks.onDestroy(w);
+	if(win->flags & EWindowFlags_IsActive && win->callbacks.onDestroy)
+		win->callbacks.onDestroy(win);
 
-	Buffer_freex(&w->cpuVisibleBuffer);
-	Buffer_freex(&w->extendedData);
-	CharString_freex(&w->title);
+	Buffer_freex(&win->cpuVisibleBuffer);
+	Buffer_freex(&win->extendedData);
+	CharString_freex(&win->title);
 
-	List *devices = &w->devices;
+	List *devices = &win->devices;
 
 	for(U64 i = 0; i < devices->length; ++i)
-		InputDevice_free((InputDevice*) List_ptr(*devices, i));
+		InputDevice_free(List_ptrT(InputDevice, *devices, i));
 
 	List_freex(devices);
-	List_freex(&w->monitors);
+	List_freex(&win->monitors);
 
 	Bool b = true;
 
-	if(w->type == EWindowType_Physical)
-		b = WindowManager_freePhysical(w);
+	if(win->type == EWindowType_Physical)
+		b = WindowManager_freePhysical(win);
 
-	*w = (Window) { 0 };
+	Buffer windowBuf = Buffer_createManagedPtr(win, sizeof(*win));
 
-	if(*handle == manager->windows.length)
-		while((w = (Window*)List_last(manager->windows)) != NULL && !w->owner)
-			List_popBack(&manager->windows, Buffer_createNull());
-
-	*handle = 0;
+	List_eraseFirst(&manager->windows, Buffer_createConstRef(&win, sizeof(win)), 0);
+	Buffer_freex(&windowBuf);
+	*w = NULL;
 	return b;
-}
-
-Window *WindowManager_getWindow(WindowManager *manager, WindowHandle windowHandle) {
-	return 
-		manager && manager->owningThread == Thread_getId() && 
-		windowHandle && windowHandle <= manager->windows.length ? 
-		(Window*) List_ptr(manager->windows, windowHandle - 1) : NULL;
 }
