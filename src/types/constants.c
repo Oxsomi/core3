@@ -51,22 +51,22 @@ const Ns DAY			= 86'400'000'000'000;
 const Ns WEEK			= 604'800'000'000'000;
 
 const U8 U8_MIN			= 0;
-const C8 C8_MIN			= 0;
 const U16 U16_MIN		= 0;
 const U32 U32_MIN		= 0;
 const U64 U64_MIN		= 0;
 
 const I8  I8_MIN		= 0x80;
+const C8 C8_MIN			= 0x80;
 const I16 I16_MIN		= 0x8000;
 const I32 I32_MIN		= 0x80000000;
 const I64 I64_MIN		= 0x8000000000000000;
 
 const U8  U8_MAX		= 0xFF;
-const C8  C8_MAX		= 0xFF;
 const U16 U16_MAX		= 0xFFFF;
 const U32 U32_MAX		= 0xFFFFFFFF;
 const U64 U64_MAX		= 0xFFFFFFFFFFFFFFFF;
 
+const C8  C8_MAX		= 0x7F;
 const I8  I8_MAX		= 0x7F;
 const I16 I16_MAX		= 0x7FFF;
 const I32 I32_MAX		= 0x7FFFFFFF;

@@ -76,7 +76,7 @@ DNs Time_elapsed(Ns prev) { return Time_dns(prev, Time_now()); }
 //as such, using string would be problematic. (This also includes error handling with logging and signals such as segfault).
 //Our stack is less likely to be corrupted, if it is then we can't properly handle it.
 
-void setNum(TimerFormat format, I64 offset, U64 length, U64 v) {
+void setNum(TimeFormat format, I64 offset, U64 length, U64 v) {
 
 	I64 off = (I64)(offset + length) - 1;
 
@@ -91,12 +91,12 @@ const C8 FORMAT_STR[] = "0000-00-00T00:00:00.000000000Z";
 const U8 OFFSETS[] =	{ 0, 5, 8, 11, 14, 17, 20 };
 const U8 SIZES[] =		{ 4, 2, 2,  2,  2,  2, 9 };
 
-void Time_format(Ns time, TimerFormat timeString) {
+void Time_format(Ns time, TimeFormat timeString, Bool isLocalTime) {
 
 	time_t inSecs = (time_t)(time / SECOND);
 	Ns inNs = time % SECOND;
 
-	struct tm *t = gmtime(&inSecs);
+	struct tm *t = isLocalTime ? localtime(&inSecs) : gmtime(&inSecs);
 
 	Buffer_copy(
 		Buffer_createRef(timeString, _SHORTSTRING_LEN), 
@@ -117,10 +117,10 @@ void Time_format(Ns time, TimerFormat timeString) {
 
 const C8 separators[] = "--T::.Z";
 
-EFormatStatus Time_parseFormat(Ns *time, TimerFormat format) {
+Bool Time_parseFormat(Ns *time, TimeFormat format, Bool isLocalTime) {
 
 	if (!time)
-		return EFormatStatus_InvalidInput;
+		return false;
 
 	U64 length = CharString_calcStrLen(format, _SHORTSTRING_LEN - 1);
 
@@ -137,7 +137,7 @@ EFormatStatus Time_parseFormat(Ns *time, TimerFormat format) {
 		if (C8_isDec(c)) {
 
 			if(curr == U64_MAX)
-				return EFormatStatus_Overflow;
+				return false;
 
 			curr *= 10;
 
@@ -145,7 +145,7 @@ EFormatStatus Time_parseFormat(Ns *time, TimerFormat format) {
 			curr += C8_dec(c);
 
 			if(curr < prev)
-				return EFormatStatus_Overflow;
+				return false;
 
 			if (curr * 10 < curr)
 				curr = U64_MAX;
@@ -154,15 +154,15 @@ EFormatStatus Time_parseFormat(Ns *time, TimerFormat format) {
 		}
 
 		if (currSep == sizeof(separators) - 1 || c != separators[currSep])
-			return EFormatStatus_InvalidFormat;
+			return false;
 
 		if(currSep < 6) {
 
 			if (curr > U16_MAX)
-				return EFormatStatus_InvalidValue;
+				return false;
 
 			if (currSep && curr > U8_MAX)			//Everything but year is 8-bit
-				return EFormatStatus_InvalidValue;
+				return false;
 		}
 
 		switch (currSep) {
@@ -179,22 +179,22 @@ EFormatStatus Time_parseFormat(Ns *time, TimerFormat format) {
 				int dif = (int)(i - prevI);
 
 				if(dif == 0)
-					return EFormatStatus_InvalidFormat;
+					return false;
 
 				U64 mul = U64_exp10(9 - dif);
 
 				if(mul == U64_MAX)
-					return EFormatStatus_InvalidFormat;
+					return false;
 
 				if (curr * mul >= SECOND)
-					return EFormatStatus_InvalidValue;
+					return false;
 
 				ns = (U32)(curr * mul);
 				break;
 			}
 
 			default:
-				return EFormatStatus_InvalidFormat;
+				return false;
 		}
 
 		curr = 0;
@@ -202,16 +202,16 @@ EFormatStatus Time_parseFormat(Ns *time, TimerFormat format) {
 		prevI = i + 1;
 	}
 
-	Ns res = Time_date(year, month, day, hour, minute, second, ns);
+	Ns res = Time_date(year, month, day, hour, minute, second, ns, isLocalTime);
 
 	if (res == U64_MAX)
-		return EFormatStatus_InvalidTime;
+		return false;
 
 	*time = res;
-	return EFormatStatus_Success;
+	return true;
 }
 
-Ns Time_date(U16 year, U8 month, U8 day, U8 hour, U8 minute, U8 second, U32 ns) {
+Ns Time_date(U16 year, U8 month, U8 day, U8 hour, U8 minute, U8 second, U32 ns, Bool isLocalTime) {
 
 	if(
 		year < 1970 || 
@@ -227,19 +227,19 @@ Ns Time_date(U16 year, U8 month, U8 day, U8 hour, U8 minute, U8 second, U32 ns) 
 		.tm_hour = hour, .tm_min = minute, .tm_sec = second
 	};
 
-	time_t ts = timegm(&tm);
+	time_t ts = isLocalTime ? mktime(&tm) : timegm(&tm);
 
-	if (ts == (time_t)-1)
+	if (ts == (time_t)-1 || (U64)ts * SECOND + ns < (U64)ts)
 		return U64_MAX;
 
 	return (Ns)ts * SECOND + ns;
 }
 
-Bool Time_getDate(Ns timestamp, U16 *year, U8 *month, U8 *day, U8 *hour, U8 *minute, U8 *second, U32 *ns) {
+Bool Time_getDate(Ns timestamp, U16 *year, U8 *month, U8 *day, U8 *hour, U8 *minute, U8 *second, U32 *ns, Bool isLocalTime) {
 
 	time_t inSecs = (time_t)(timestamp / SECOND);
 
-	struct tm *t = gmtime(&inSecs);
+	struct tm *t = isLocalTime ? localtime(&inSecs) : gmtime(&inSecs);
 
 	if(!t)
 		return false;

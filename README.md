@@ -7,6 +7,7 @@ OxC3 (0xC3 or Oxsomi core 3) is the successor to O(x)somi core v2 and v1. Specif
   - The basic types that you might need and useful utilities.
   - Archive for managing zip-file like entries.
   - 16-bit float casts and arbitrary floating point formats.
+  - 128-bit and bigger unsigned ints (U128 and BigInt).
   - AllocationBuffer for managing block allocations.
   - Buffer manipulation such as compares, copies, bit manipulation, 
     - Encryption (aes256gcm), hashing (sha256, crc32c), cryptographically secure PRNG (CSPRNG).
@@ -15,6 +16,7 @@ OxC3 (0xC3 or Oxsomi core 3) is the successor to O(x)somi core v2 and v1. Specif
   - Error type including stacktrace option.
   - Time utility.
   - Vectors (mathmetical) such as F32x2, F32x4, I32x2, I32x4.
+  - For more info check the [documentation](docs/types_docs.md).
 - OxC3_formats: deps(OxC3_types)
   - A library for reading/writing files. Currently only for BMP and oiCA/oiDL (proprietary zip-style formats).
 - OxC3_platforms: deps(OxC3_types, OxC3_formats)
@@ -50,8 +52,8 @@ One of the useful things about C is that files are incredibly easy to compile an
 ## Running requirements
 
 - Windows.
-- A CPU.
-  - Even though SSE4.2+ is recommended, this can be explicitly turned off. SSE can only be turned off if relax float is turned off; this is because normal floats (without SSE) aren't always IEEE754 compliant. SIMD option requires AES, PCLMULQDQ and RDRAND extensions too.
+- A 64-bit CPU.
+  - Even though SSE4.2+ is recommended, this can be explicitly turned off. SSE can only be turned off if relax float is turned off; this is because normal floats (without SSE) aren't always IEEE754 compliant. SIMD option requires SSE4.2/SSE4.1/SSE2/SSE/SSE3/SSSE3, AES, PCLMULQDQ, BMI1 and RDRAND extensions.
   - Recommended CPUs are AMD Zen, Intel Rocket lake (Gen 11) and up. This is because SHA256 is natively supported on them. These CPUs are faster and more secure. Minimum requirements for SSE build is Intel Broadwell+ (Gen 6+) and AMD Zen+ (1xxx+). **The SSE-less build doesn't have any security guarantees for encryption, as these are software based instead of hardware based. Making them less secure, since no time and effort was put into preventing cache timing attacks.** SSE-less build only exists for emulation purposes or for debugging, it's also notoriously slow since it doesn't use any intrinsics (SHA, AES, CRC, SIMD, etc.). The SSE-less build is also meant for easily porting to a new system without having to support the entire SIMD there first, before finally supporting SIMD after the base has been ported.
 
 ## Installing OxC3
@@ -95,8 +97,8 @@ The example above shows the sections that are supported for our example executab
 
 ```c
 _gotoIfError(clean, File_loadVirtual("//myLibrary/fonts", NULL));	//Load section.
-_gotoIfError(clean, File_loadVirtual("//myLibrary", NULL));		//Load myLibrary.
-_gotoIfError(clean, File_loadVirtual("//.", NULL));			//Load everything.
+_gotoIfError(clean, File_loadVirtual("//myLibrary", NULL));			//Load myLibrary.
+_gotoIfError(clean, File_loadVirtual("//.", NULL));					//Load everything.
 ```
 
 These files are decompressed and unencrypted (if they were) and kept in memory, so they can be quickly accessed. They can then be unloaded if they're deemed unimportant. 
@@ -111,7 +113,7 @@ The only reserved library names besides the windows ones (NUL, COM, etc.) are: a
 
 ### Usage in CMake
 
-to add the files to your project, you can use the following:
+to add the virtual files to your project, you can use the following:
 
 ```cmake
 

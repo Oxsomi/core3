@@ -914,10 +914,10 @@ U128 U128_createU64x2(U64 a, U64 b) {
 
 U128 U128_mul64(U64 au, U64 bu) {
 
-	#if _PLATFORM_TYPE == EPlatform_Linux
+	#if _PLATFORM_TYPE == PLATFORM_LINUX
 		return (__uint128) au * (__uint128) bu;
 
-	#elif _PLATFORM_TYPE == EPlatform_Windows
+	#elif _PLATFORM_TYPE == PLATFORM_WINDOWS
 
 		U64 hiProd = 0;
 		U64 loProd = _umul128(bu, au, &hiProd);
@@ -977,7 +977,7 @@ U128 U128_mul64(U64 au, U64 bu) {
 	#endif
 }
 
-#if _PLATFORM_TYPE == EPlatform_Linux
+#if _PLATFORM_TYPE == PLATFORM_LINUX
 
 	U128 U128_zero() { return (__uint128) 0; }
 	U128 U128_one() { return (__uint128) 1; }
@@ -1033,7 +1033,7 @@ U128 U128_mul64(U64 au, U64 bu) {
 
 U8 U128_bitScan(U128 a) {
 
-	#if _PLATFORM_TYPE == EPlatform_Windows
+	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
 
 		unsigned long index = 0;
 		Bool hasFirstBit = _BitScanReverse64(&index, ((const U64*)&a)[1]);
@@ -1175,7 +1175,7 @@ ECompareResult U128_cmp(U128 a, U128 b) {
 	if(U128_eq(a, b))
 		return ECompareResult_Eq;
 
-	#if _PLATFORM_TYPE == EPlatform_Linux
+	#if _PLATFORM_TYPE == PLATFORM_LINUX
 		return a < b ? -1 : 1;
 	#else
 

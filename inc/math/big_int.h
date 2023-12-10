@@ -133,7 +133,7 @@ Error BigInt_toString(
 
 //U128
 
-#if _PLATFORM_TYPE == EPlatform_Linux
+#if _PLATFORM_TYPE == PLATFORM_LINUX
 	typedef __uint128 U128;
 #else
 	typedef I32x4 U128;

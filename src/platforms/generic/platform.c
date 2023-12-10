@@ -40,7 +40,7 @@ Error Platform_create(
 	if(!*(U8*)&v)
 		return Error_unsupportedOperation(0, "Platform_create() failed, invalid endianness (only little endian supported)");
 
-	if(Platform_instance.platformType != EPlatform_Uninitialized)
+	if(Platform_instance.platformType != PLATFORM_UNINITIALIZED)
 		return Error_invalidOperation(0, "Platform_create() failed, platform was already initialized");
 
 	if(!cmdArgc || !cmdArgs)
@@ -92,7 +92,7 @@ Error Platform_create(
 
 void Platform_cleanup() {
 
-	if(Platform_instance.platformType == EPlatform_Uninitialized)
+	if(Platform_instance.platformType == PLATFORM_UNINITIALIZED)
 		return;
 
 	CharString_freex(&Platform_instance.workingDirectory);

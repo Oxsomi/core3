@@ -249,8 +249,8 @@ void Log_log(Allocator alloc, ELogLevel lvl, ELogOptions options, CharString arg
 
 	if (hasTimestamp) {
 
-		TimerFormat tf;
-		Time_format(t, tf);
+		TimeFormat tf;
+		Time_format(t, tf, true);
 
 		printf("%s%s", hasThread ? " " : "", tf);
 	}

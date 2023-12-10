@@ -40,7 +40,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 
 	if(!info.presentModePriorities[0]) {
 
-		#if _PLATFORM_TYPE != EPlatform_Android
+		#if _PLATFORM_TYPE != PLATFORM_ANDROID
 			info.presentModePriorities[0] = ESwapchainPresentMode_Mailbox;			//Priority is to be low latency
 			info.presentModePriorities[1] = ESwapchainPresentMode_Immediate;
 			info.presentModePriorities[2] = ESwapchainPresentMode_Fifo;
@@ -248,7 +248,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 			//we don't want to deal with versioning 4x.
 
 			case VK_PRESENT_MODE_MAILBOX_KHR:
-				supports[ESwapchainPresentMode_Mailbox - 1] = _PLATFORM_TYPE != EPlatform_Android;
+				supports[ESwapchainPresentMode_Mailbox - 1] = _PLATFORM_TYPE != PLATFORM_ANDROID;
 				break;
 		}
 	}

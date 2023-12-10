@@ -23,9 +23,7 @@
 //Ported from Wisp:
 //https://github.com/TeamWisp/WispRenderer/blob/master/resources/shaders/rand_util.hlsl
 
-U32 Random_seed(U16 x, U16 y, U16 w, U32 val1) {
-
-	U32 val0 = (U32)x + (U32)y * w;
+U32 Random_seed(U32 val0, U32 val1) {
 
 	U32 v0 = val0, v1 = val1, s0 = 0;
 
@@ -47,6 +45,10 @@ F32 Random_sample(U32 *seed) {
 	return (F32)(*seed & 0x00FFFFFF) / (F32)(0x01000000);
 }
 
-F32x4 Random_sample2(U32 *seed) {
-	return F32x4_create2(Random_sample(seed), Random_sample(seed));
+F32x2 Random_sample2(U32 *seed) {
+	return F32x2_create2(Random_sample(seed), Random_sample(seed));
+}
+
+F32x4 Random_sample4(U32 *seed) {
+	return F32x4_create4(Random_sample(seed), Random_sample(seed), Random_sample(seed), Random_sample(seed));
 }

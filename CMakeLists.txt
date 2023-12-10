@@ -112,18 +112,11 @@ endif()
 if(WIN32)
 	message("-- Enabling Windows support...")
 	set(platform windows)
-	set(_PLATFORM_TYPE EPlatform_Windows)
+	set(_PLATFORM_TYPE PLATFORM_WINDOWS)
 else()
 	message("-- Enabling Linux support...")
 	set(platform linux)
-	set(_PLATFORM_TYPE EPlatform_Linux)
-endif()
-
-if(TRUE)
-	message("-- Enabling Vulkan support...")
-	set(graphicsApi vulkan)
-	set(_GRAPHICS_API EGraphicsApi_Vulkan)
-	set_property(GLOBAL PROPERTY graphicsApi "${graphicsApi}")
+	set(_PLATFORM_TYPE PLATFORM_LINUX)
 endif()
 
 # Types 
@@ -191,6 +184,13 @@ set_target_properties(OxC3_platforms PROPERTIES FOLDER Oxsomi)
 target_link_libraries(OxC3_platforms PUBLIC OxC3_formats)
 
 # Graphics layer
+
+if(TRUE)
+	message("-- Enabling Vulkan support...")
+	set(graphicsApi vulkan)
+	set(_GRAPHICS_API EGraphicsApi_Vulkan)
+	set_property(GLOBAL PROPERTY graphicsApi "${graphicsApi}")
+endif()
 
 message("-- Targeting graphics api: ${graphicsApi} on platform ${platform}")
 

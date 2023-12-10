@@ -34,7 +34,7 @@ static const U8 CAHeader_V1_0  = 0;
 inline Ns CAFile_loadDate(U16 time, U16 date) {
 	return Time_date(
 		1980 + (date >> 9), 1 + ((date >> 5) & 0xF), date & 0x1F, 
-		time >> 11, (time >> 5) & 0x3F, (time & 0x1F) << 1, 0
+		time >> 11, (time >> 5) & 0x3F, (time & 0x1F) << 1, 0, false
 	);
 }
 
@@ -44,7 +44,7 @@ inline Bool CAFile_storeDate(Ns ns, U16 *time, U16 *date) {
 		return false;
 
 	U16 year; U8 month, day, hour, minute, second;
-	Bool b = Time_getDate(ns, &year, &month, &day, &hour, &minute, &second, NULL);
+	Bool b = Time_getDate(ns, &year, &month, &day, &hour, &minute, &second, NULL, false);
 
 	if(!b || year < 1980 || year > (1980 + 0x7F))
 		return false;

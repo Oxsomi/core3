@@ -95,16 +95,22 @@ int main() {
 	printf("Testing Time\n");
 
 	Ns now = Time_now();
-	TimerFormat nowStr;
+	TimeFormat nowStr;
 
-	Time_format(now, nowStr);
+	Time_format(now, nowStr, false);
 
 	Ns now2 = 0;
-	EFormatStatus stat = Time_parseFormat(&now2, nowStr);
 
-	if (stat != EFormatStatus_Success || now2 != now) {
+	if (!(Time_parseFormat(&now2, nowStr, false)) || now2 != now) {
 		printf("Failed unit test: Time_parseFormat or Time_format is broken\n");
 		return 1;
+	}
+
+	Time_format(now, nowStr, true);
+
+	if (!(Time_parseFormat(&now2, nowStr, true))  || now2 != now) {
+		printf("Failed unit test: Time_parseFormat or Time_format (local time) is broken\n");
+		return 2;
 	}
 
 	Allocator alloc = (Allocator) {
