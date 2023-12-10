@@ -819,9 +819,9 @@ Error Window_toggleFullScreen(Window *w) {
 
 	if (!I32x2_all(I32x2_eq(newSize, w->size)))
 		SetWindowPos(
-			w->nativeHandle, NULL, 
-			0, 0, I32x2_x(newSize), I32x2_y(newSize), 
-			SWP_SHOWWINDOW
+			w->nativeHandle, NULL,
+			0, 0, I32x2_x(newSize), I32x2_y(newSize),
+			SWP_SHOWWINDOW | SWP_FRAMECHANGED
 		);
 
 	return Error_none();
@@ -881,12 +881,31 @@ void Window_updateExt(Window *w) {
 
 	MSG msg = (MSG) { 0 };
 
-	if (PeekMessageA(&msg, w->nativeHandle, 0, 0, PM_REMOVE)) {
+	Bool didPaint = false;
+
+	while(PeekMessageA(&msg, w->nativeHandle, 0, 0, PM_REMOVE)) {
+
+		if (msg.message == WM_PAINT) {
+
+			if (didPaint) {
+
+				//Paint is dispatched if there's no more messages left,
+				//so after this, we need to return to the main thread so we can process other windows
+				//We do this by checking if the next message is also paint. If not, we continue
+
+				MSG msgCheck = (MSG){ 0 };
+				PeekMessageA(&msgCheck, w->nativeHandle, 0, 0, PM_NOREMOVE);
+
+				if (msgCheck.message == msg.message)
+					break;
+			}
+
+			didPaint = true;
+		}
+
 		TranslateMessage(&msg);
 		DispatchMessageA(&msg);
 	}
-
-	else InvalidateRect(w->nativeHandle, NULL, false);
 
 	if(msg.message == WM_QUIT)
 		Window_terminate(w);
