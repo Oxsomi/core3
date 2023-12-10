@@ -99,14 +99,6 @@ U64 EFloatType_isZero(EFloatType type, U64 v) {
 	return !EFloatType_abs(type, v);
 }
 
-U64 EFloatType_getNaN(EFloatType type) {
-	return EFloatType_getInf(type) | ((U64)1 << EFloatType_mantissaShift(type));
-}
-
-U64 EFloatType_getInf(EFloatType type) { 
-	return EFloatType_exponentMask(type) << EFloatType_exponentShift(type);
-}
-
 U64 EFloatType_convertMantissa(EFloatType type1, U64 v, EFloatType type2, Bool *carry) {
 
 	U8 mbit1 = EFloatType_mantissaBits(type1);

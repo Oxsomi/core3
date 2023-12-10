@@ -21,8 +21,8 @@
 #pragma once
 #include "types/types.h"
 
-#define _EFloatType(exponentBits, mantissaBits, bytes) \
-(bytes << 16) | (exponentBits << 8) | (mantissaBits << 0)
+#define _EFloatType(exponentBits, mantissaBits, bytes)			\
+	(bytes << 16) | (exponentBits << 8) | (mantissaBits << 0)
 
 typedef enum EFloatType {
 
@@ -48,7 +48,7 @@ U64 EFloatType_signShift(EFloatType type);
 U64 EFloatType_exponentShift(EFloatType type);
 U64 EFloatType_mantissaShift(EFloatType type);
 
-U64 EFloatType_signMask(EFloatType type);			//Shifted left
+U64 EFloatType_signMask(EFloatType type);
 U64 EFloatType_exponentMask(EFloatType type);		//Not shifted
 U64 EFloatType_mantissaMask(EFloatType type);		//Not shifted
 
@@ -63,9 +63,6 @@ U64 EFloatType_isDeN(EFloatType type, U64 v);
 U64 EFloatType_isNaN(EFloatType type, U64 v);
 U64 EFloatType_isInf(EFloatType type, U64 v);
 U64 EFloatType_isZero(EFloatType type, U64 v);
-
-U64 EFloatType_getNaN(EFloatType type);
-U64 EFloatType_getInf(EFloatType type);
 
 U64 EFloatType_convert(EFloatType type, U64 v, EFloatType conversionType);
 

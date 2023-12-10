@@ -56,6 +56,7 @@ OxC3 types contains a lot of very basic types; it's the STL of OxC3. All these t
 | **DNs**            | 64-bit timestamp (signed); delta nanoseconds                 | I64                          |
 | **Bool**           | Boolean                                                      | bool                         |
 | **ECompareResult** | Compare result: Lt, Eq, Gt                                   | enum (I32)                   |
+| **F8**             | **cast only**: MiniFloat (4 bit exponent, 3 bit mantissa)    | U8                           |
 
 ## Basic constants (types/types.h)
 
@@ -144,7 +145,48 @@ C8 has some useful helper functions:
 
 ## TODO: CharString (types/string.h)
 
-## TODO: Float casts (types/flp.h)
+## Float casts (types/flp.h)
+
+EFloatType defines the way the bits are laid out of a float. Currently the following types are supported:
+
+- **EFloatType_F8** (See basic data types)
+- **EFloatType_F16** (See basic data types)
+- **EFloatType_F32** (See basic data types)
+- **EFloatType_F64** (See basic data types)
+- **EFloatType_BF16** (See basic data types)
+- **EFloatType_TF19** (See basic data types)
+- **EFloatType_PXR24** (See basic data types)
+- **EFloatType_FP24** (See basic data types)
+
+On these enums the following functions can be used to extract the information about the float data types:
+
+- U8 **EFloatType_bytes**(EFloatType type): The minimal data type size that can represent it (U8, U16, U32, U64).
+- U8 **EFloatType_exponentBits**(EFloatType type): How many bits are used for the exponent.
+- U8 **EFloatType_mantissaBits**(EFloatType type): How many bits are used for the mantissa.
+- U64 **EFloatType_signShift**(EFloatType type): How many bits to shift to get to the sign bit.
+- U64 **EFloatType_exponentShift**(EFloatType type): How many bits to shift to get to the exponent.
+- U64 **EFloatType_mantissaShift**(EFloatType type): How many bits to shift to get to the mantissa.
+- U64 **EFloatType_signMask**(EFloatType type): Sign bit active to be able to mask it.
+- U64 **EFloatType_exponentMask**(EFloatType type): Exponent mask if it's already shifted.
+- U64 **EFloatType_mantissaMask**(EFloatType type): Mantissa mask if it's already shifted.
+
+The following functions can be used to parse the float stored as a U64 (raw bits). Only the bytes are used that are specified by the EFloatType.
+
+- Bool **EFloatType_sign**(EFloatType type, U64 v): If the sign bit is active.
+- U64 **EFloatType_abs**(EFloatType type, U64 v): Unset sign bit (return positive value always).
+- U64 **EFloatType_negate**(EFloatType type, U64 v): Set sign bit (return negative value always).
+- U64 **EFloatType_exponent**(EFloatType type, U64 v): Get the exponent bits.
+- U64 **EFloatType_mantissa**(EFloatType type, U64 v): Get the mantissa bits.
+- U64 **EFloatType_isFinite**(EFloatType type, U64 v): Check if the flp is finite (not NaN or Inf, exponent isn't all 1s, ignoring sign).
+- U64 **EFloatType_isDeN**(EFloatType type, U64 v): Check if the flp is denormalized (exponent is 0, ignoring sign).
+- U64 **EFloatType_isNaN**(EFloatType type, U64 v): Check if the flp is Not a Number (NaN, exponent is all 1s but one of the mantissa bits is set, ignoring sign).
+- U64 **EFloatType_isInf**(EFloatType type, U64 v): Check if the flp is Infinite (Inf, exponent is all 1s and the mantissa is all 0s, ignoring sign).
+- U64 **EFloatType_isZero**(EFloatType type, U64 v): If mantissa and exponent are 0 (ignoring sign).
+- U64 **EFloatType_convert**(EFloatType type, U64 v, EFloatType conversionType): Convert two floating point types to eachother. If this is hardware supported it will accelerate it (e.g. F32->F64, F64->F32) as long as *_FORCE_FLOAT_FALLBACK* is not turned on.
+
+The convert can be accessed through a more straightforward way by using the specialized functions:
+
+- `ResultType <StartType>_cast<ResultType>(StartType v)` e.g. `F32 F16_castF32(F16 v)` and `F16 F32_castF16(F32 v)`.
 
 Note: For more info check the detailed [IEEE754 Floating point format doc](IEEE754 Floating point format.md).
 
