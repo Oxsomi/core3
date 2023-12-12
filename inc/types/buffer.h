@@ -132,6 +132,7 @@ Error Buffer_readAsUTF8(Buffer buf, U64 i, UTF8CodePointInfo *codepoint);
 Error Buffer_writeAsUTF8(Buffer buf, U64 i, UTF8CodePoint codepoint);
 
 Bool Buffer_isUTF8(Buffer buf, F32 threshold);		//If the threshold (%) is met, it is identified as (mostly) UTF8
+Bool Buffer_isAscii(Buffer buf);
 
 //What hash & encryption functions are good for:
 // 

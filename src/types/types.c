@@ -75,6 +75,7 @@ Bool C8_isLowerCase(C8 c) { return c >= 'a' && c <= 'z'; }
 Bool C8_isUpperCaseHex(C8 c) { return c >= 'A' && c <= 'F'; }
 Bool C8_isLowerCaseHex(C8 c) { return c >= 'a' && c <= 'f'; }
 Bool C8_isWhitespace(C8 c) { return c == ' ' || c == '\t' || c == '\n' || c == '\r'; }
+Bool C8_isNewLine(C8 c) { return c == '\n' || c == '\r'; }
 
 Bool C8_isHex(C8 c) { return C8_isDec(c) || C8_isUpperCaseHex(c) || C8_isLowerCaseHex(c); }
 Bool C8_isNyto(C8 c) { return C8_isDec(c) || C8_isUpperCase(c) || C8_isLowerCase(c) || c == '_' || c == '$'; }

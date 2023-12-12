@@ -802,3 +802,16 @@ Bool Buffer_isUTF8(Buffer buf, F32 threshold) {
 
 	return i;
 }
+
+Bool Buffer_isAscii(Buffer buf) {
+
+	for (U64 i = 0; i < Buffer_length(buf); ++i) {
+
+		C8 c = (C8) buf.ptr[i];
+
+		if(!C8_isValidAscii(c))
+			return false;
+	}
+
+	return Buffer_length(buf);
+}

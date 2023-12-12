@@ -174,6 +174,7 @@ Bool C8_isLowerCase(C8 c);
 Bool C8_isUpperCaseHex(C8 c);
 Bool C8_isLowerCaseHex(C8 c);
 Bool C8_isWhitespace(C8 c);
+Bool C8_isNewLine(C8 c);
 
 Bool C8_isHex(C8 c);
 Bool C8_isNyto(C8 c);
@@ -196,5 +197,4 @@ C8 C8_createDec(U8 v);
 C8 C8_createHex(U8 v);
 
 //Nytodecimal: 0-9A-Za-z_$
-
 C8 C8_createNyto(U8 v);
