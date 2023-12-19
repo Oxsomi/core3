@@ -39,12 +39,13 @@ Error Program_parseFile(FileInfo info, void *dummy) {
 
 	_gotoIfError(clean, File_read(info.path, U64_MAX, &buf));
 
-	if(!Buffer_isAscii(buf))
-		_gotoIfError(clean, Error_invalidOperation(0, "Parse_file()::info.path's file isn't valid ascii"));
+	CharString file = CharString_createConstRefSized((const C8*) buf.ptr, Buffer_length(buf), false);
 
-	_gotoIfError(clean, Parser_exec(CharString_createConstRefSized((const C8*) buf.ptr, Buffer_length(buf), false)));
+	Parser parser = (Parser) { 0 };
+	_gotoIfError(clean, Parser_create(file, &parser));
 
 clean:
+	Parser_free(&parser);
 	Buffer_freex(&buf);
 	return Error_none();
 }

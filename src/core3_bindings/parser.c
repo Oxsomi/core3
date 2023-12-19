@@ -22,183 +22,301 @@
 #include "platforms/ext/errorx.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
+#include "platforms/ext/listx.h"
 #include "types/error.h"
 #include "types/buffer.h"
+#include "core3_bindings/parser.h"
 
-void Parser_handlePreprocess(CharString str, U64 i) {
-	Log_debugLnx("%llu\tPreprocessor:\t%s", i, str.ptr);
-	int dbg = 0;
-	dbg;
+const C8 *NaiveToken_getTokenEnd(NaiveToken tok, CharString c) {
+
+	if((tok.offsetType << 2 >> 2) + tok.length > CharString_length(c))
+		return NULL;
+
+	return c.ptr + (tok.offsetType << 2 >> 2) + tok.length;
 }
 
-void Parser_handleComment(CharString str, Bool multiline, U64 i) {
-	Log_debugLnx("%llu\t%s:\t%s", i, multiline ? "Multiline comment" : "Comment", str.ptr);
-	int dbg = 0;
-	dbg;
+const C8 *NaiveToken_getTokenStart(NaiveToken tok, CharString c) {
+
+	if((tok.offsetType << 2 >> 2) > CharString_length(c))
+		return NULL;
+
+	return c.ptr + (tok.offsetType << 2 >> 2);
 }
 
-void Parser_handleExpression(CharString str, U64 i) {
-	Log_debugLnx("%llu\tExpression:\t%s", i, str.ptr);
-	int dbg = 0;
-	dbg;
+void Parser_handleExpression(CharString str, const Parser *p, U64 index, Expression e) {
+
+	NaiveToken tStart = *(const NaiveToken*) List_ptrConst(p->tokens, e.tokenOffset);
+	NaiveToken tEnd = *(const NaiveToken*) List_ptrConst(p->tokens, e.tokenOffset + e.tokenCount - 1);
+
+	const C8 *cStart = NaiveToken_getTokenStart(tStart, str);
+	const C8 *cEnd = NaiveToken_getTokenEnd(tEnd, str);
+
+	Bool printTokens = true;
+
+	switch (e.type) {
+
+		case EExpressionType_Comment:
+			Log_debugLnx("E%llu\tComment:\t%.*s", index, cEnd - cStart, cStart);
+			break;
+
+		case EExpressionType_MultiLineComment:
+			Log_debugLnx("E%llu\tMulti line comment:\t%.*s", index, cEnd - cStart, cStart);
+			break;
+
+		case EExpressionType_Preprocessor:
+			Log_debugLnx("E%llu\tPreprocessor:\t%.*s", index, cEnd - cStart, cStart);
+			break;
+
+		default:
+			Log_debugLnx("E%llu\tGeneric expression:\t%.*s", index, cEnd - cStart, cStart);
+			break;
+	}
+
+	if(printTokens)
+		for (U64 i = 0; i < e.tokenCount; ++i) {
+
+			U64 j = e.tokenOffset + i;
+			NaiveToken t = *(const NaiveToken*) List_ptrConst(p->tokens, j);
+			const C8 *cStart = NaiveToken_getTokenStart(t, str);
+			const C8 *cEnd = NaiveToken_getTokenEnd(t, str);
+
+			U64 tline = t.lineId, tchar = t.charId;
+			U64 toff = (U64) (t.offsetType << 2 >> 2);
+			U64 tlen = (U64) t.length;
+
+			const C8 *fmt = "\tT%llu(%llu,%llu: L#%llu:%llu)\t%s:\t%.*s";
+
+			switch(t.offsetType >> 30) {
+
+				case ENaiveTokenType_Symbols:
+					Log_debugLnx(fmt, j, toff, tlen, tline, tchar, "Symbols", cEnd - cStart, cStart);
+					break;
+
+				case ENaiveTokenType_Float:
+					Log_debugLnx(fmt, j, toff, tlen, tline, tchar, "Float", cEnd - cStart, cStart);
+					break;
+
+				case ENaiveTokenType_Integer:
+					Log_debugLnx(fmt, j, toff, tlen, tline, tchar, "Integer", cEnd - cStart, cStart);
+					break;
+
+				default:
+					Log_debugLnx(fmt, j, toff, tlen, tline, tchar, "Identifier", cEnd - cStart, cStart);
+					break;
+			}
+		}
 }
 
-Error Parser_exec(CharString str) {
+Error Parser_create(CharString str, Parser *parser) {
 	
+	if(!parser)
+		return Error_nullPointer(!str.ptr ? 0 : 1, "Parser_create()::str and parser are required");
+	
+	if(parser->tokens.ptr)
+		return Error_invalidParameter(1, 0, "Parser_create()::parser wasn't empty, might indicate memleak");
+
+	if(CharString_length(str) >> 30)
+		return Error_outOfBounds(0, GIBI, GIBI, "Parser_create()::str is limited to a GiB");
+
 	Error err = Error_none();
-	CharString pending = CharString_createNull();
-	_gotoIfError(clean, CharString_reservex(&pending, 128));
+	List tokens = List_createEmpty(sizeof(NaiveToken));
+	List expressions = List_createEmpty(sizeof(Expression));
+	_gotoIfError(clean, List_reservex(&expressions, 64 + CharString_length(str) / 64));
+	_gotoIfError(clean, List_reservex(&tokens, 64 + CharString_length(str) / 6));
 
-	Bool isPreprocessorOp = false;
-	Bool isEscaped = false, hadAnyChar = false;
-	Bool isFirstChar = true;
-	Bool isComment = false, isMultiLineComment = false;
+	const C8 *prevIt = NULL;
+	C8 prev = 0;
+	EExpressionType expressionType = EExpressionType_None;
+	ENaiveTokenType tokenType = ENaiveTokenType_Count;
 
-	U64 counter = 0;
+	U64 lineCounter = 1, lastLineStart = 0;
+	U64 lastToken = 0;
 
 	for (U64 i = 0; i < CharString_length(str); ++i) {
 
 		C8 c = CharString_getAt(str, i);
+
+		if(!C8_isValidAscii(c))
+			_gotoIfError(clean, Error_invalidParameter(0, 0, "Parser_create()::str has to be ascii"));
+
 		C8 next = CharString_getAt(str, i + 1);
+		C8 prevTemp = prev;
+		prev = c;
 
-		//Escaping end of line
+		Bool endExpression = false;
+		Bool multiChar = false;
 
-		if (c == '\\') {
+		//Newline; end last expression in some cases
 
-			if(isEscaped)
-				isEscaped = false;
+		if(c == '\r' && next == '\n')		//Consume \r\n as one char
+			multiChar = true;
 
-			else isEscaped = true;
+		if(C8_isNewLine(c)) {
+
+			++lineCounter;
+			lastLineStart = i + multiChar + 1;
+
+			if (lineCounter >> 16)
+				_gotoIfError(clean, Error_outOfBounds(0, U16_MAX, U16_MAX, "Parser_create() line count is limited to 64Ki"));
 		}
 
-		//Newline; end define
+		if (prevTemp != '\\' && C8_isNewLine(c)) {
 
-		if (C8_isNewLine(c)) {
-
-			Bool isMultiNewLine = false;
-
-			if(c == '\r' && next == '\n') {		//Consume \r\n as one token
-
-				if (!isEscaped && isMultiLineComment) {
-					_gotoIfError(clean, CharString_appendx(&pending, '\r'));
-					_gotoIfError(clean, CharString_appendx(&pending, '\n'));
-					isMultiNewLine = true;
-				}
-
-				++i;
-			}
-
-			else if(!isEscaped && isMultiLineComment)
-				_gotoIfError(clean, CharString_appendx(&pending, '\n'));
-
-			if(!isEscaped) {
-
-				if (isComment) {
-					Parser_handleComment(pending, false, counter++);
-					CharString_clear(&pending);
-					hadAnyChar = false;
-				}
-
-				else if(isPreprocessorOp) {
-					Parser_handlePreprocess(pending, counter++);
-					CharString_clear(&pending);
-					hadAnyChar = false;
-				}
-
-				if(isPreprocessorOp || isComment || isMultiLineComment)
-					hadAnyChar = false;
-
-				isPreprocessorOp = false;
-				isFirstChar = true;
-				isComment = false;
-			}
-
-			if(!isComment && !isMultiLineComment && !isPreprocessorOp) {
-
-				if(hadAnyChar) {
-
-					if(isMultiNewLine)
-						_gotoIfError(clean, CharString_appendx(&pending, '\r'));
-
-					_gotoIfError(clean, CharString_appendx(&pending, '\n'));
-				}
-
-				else CharString_clear(&pending);
-
-				continue;
-			}
+			if(expressionType == EExpressionType_Comment || expressionType == EExpressionType_Preprocessor)
+				endExpression = true;
 		}
-
-		isEscaped = false;
 
 		//Preprocessor
 
-		if(c == '#' && isFirstChar)
-			isPreprocessorOp = true;
-
-		//First non whitespace char
-
-		if(!C8_isWhitespace(c)) {
-			hadAnyChar = true;
-			isFirstChar = false;
+		if(c == '#' && !expressionType) {
+			expressionType = EExpressionType_Preprocessor;
+			prevIt = str.ptr + i;
 		}
 
 		//Handle starting comment
 
-		if(c == '/' && next == '/' && !isMultiLineComment) {
-			_gotoIfError(clean, CharString_appendx(&pending, '/'));
-			_gotoIfError(clean, CharString_appendx(&pending, '/'));
-			isComment = true;
-			++i;
-			continue;
+		if(c == '/' && next == '/' && expressionType != EExpressionType_MultiLineComment) {
+			expressionType = EExpressionType_Comment;
+			multiChar = true;
 		}
 
 		//Handle starting multi line comment
 
-		if(c == '/' && next == '*' && !isMultiLineComment) {
-			_gotoIfError(clean, CharString_appendx(&pending, '/'));
-			_gotoIfError(clean, CharString_appendx(&pending, '*'));
-			isMultiLineComment = true;
-			++i;
-			continue;
+		if(c == '/' && next == '*' && !expressionType) {
+			expressionType = EExpressionType_MultiLineComment;
+			multiChar = true;
 		}
 
 		//Deal with closing multi line comment
 
-		if (isMultiLineComment) {
+		else if (expressionType == EExpressionType_MultiLineComment) {
 
 			if (c == '*' && next == '/') {
-
-				_gotoIfError(clean, CharString_appendx(&pending, '*'));
-				_gotoIfError(clean, CharString_appendx(&pending, '/'));
-
-				++i;
-				isMultiLineComment = false;
-				Parser_handleComment(pending, true, counter++);
-				CharString_clear(&pending);
-				hadAnyChar = false;
-				continue;
+				multiChar = true;
+				endExpression = true;
 			}
 		}
 
-		//Ignore leading whitespace
-
-		if(C8_isWhitespace(c) && !(isComment || isMultiLineComment || isPreprocessorOp) && isFirstChar)
-			continue;
-
-		_gotoIfError(clean, CharString_appendx(&pending, c));
-
 		//Parse ; as end of expression
 
-		if(c == ';' && !isPreprocessorOp && !isComment && !isMultiLineComment) {
-			Parser_handleExpression(pending, counter++);
-			CharString_clear(&pending);
-			isFirstChar = true;
-			hadAnyChar = false;
+		if(c == ';' && expressionType == EExpressionType_Generic)
+			endExpression = true;
+
+		//First non whitespace char
+
+		Bool endToken = false;
+		ENaiveTokenType current = ENaiveTokenType_Count;
+
+		if(!C8_isWhitespace(c)) {
+
+			if(!expressionType)
+				expressionType = EExpressionType_Generic;
+
+			if(!prevIt)
+				prevIt = str.ptr + i;
+
+			/* TODO: If . merge with prev int to form float if no whitespace */
+
+			tokenType = 
+				tokenType != ENaiveTokenType_Identifier && C8_isDec(c) ? ENaiveTokenType_Integer : (
+					C8_isNyto(c) ? ENaiveTokenType_Identifier : ENaiveTokenType_Symbols
+				);
+
+			ENaiveTokenType nextType = 
+				tokenType != ENaiveTokenType_Identifier && C8_isDec(next) ? ENaiveTokenType_Integer : (
+					C8_isNyto(next) ? ENaiveTokenType_Identifier : (
+						C8_isWhitespace(next) ? ENaiveTokenType_Count : ENaiveTokenType_Symbols
+					)
+				);
+
+			if(nextType != tokenType)
+				endToken = true;
 		}
+
+		else if (prevIt) endToken = true;
+		
+		if(endToken || (prevIt && endExpression)) {
+
+			U64 len = (str.ptr + i + 1 + multiChar) - prevIt;
+
+			if(len >> 8)
+				_gotoIfError(clean, Error_outOfBounds(0, 256, 256, "Parser_create() tokens are limited to 256 C8s"));
+
+			if((i + 2  - lastLineStart) >> 7)
+				_gotoIfError(clean, Error_outOfBounds(0, 128, 128, "Parser_create() lines are limited to 128 C8s"));
+
+			NaiveToken tok = (NaiveToken) { 
+				.lineId = (U16) lineCounter, 
+				.charId = (U8) (i + 1 - len - lastLineStart) + 1,
+				.length = (U8) len, 
+				.offsetType = (i + 1 + multiChar - len) | ((U64)tokenType << 30)
+			};
+
+			_gotoIfError(clean, List_pushBackx(&tokens, Buffer_createConstRef(&tok, sizeof(tok))));
+			prevIt = NULL;
+			tokenType = ENaiveTokenType_Count;
+		}
+
+		//Push it as an expression
+
+		if (endExpression) {
+
+			if(lastToken >> 32)
+				_gotoIfError(clean, Error_outOfBounds(
+					0, lastToken, U32_MAX, "Parser_create() Expression offset is limited to U32_MAX tokens"
+				));
+
+			if((tokens.length - lastToken) >> 16)
+				_gotoIfError(clean, Error_outOfBounds(
+					0, tokens.length - lastToken, U16_MAX, "Parser_create() Expression is limited to U16_MAX tokens"
+				));
+
+			Expression exp = (Expression) { 
+				.type = expressionType,
+				.tokenOffset = (U32) lastToken,
+				.tokenCount = (U16) (tokens.length - lastToken)
+			};
+
+			_gotoIfError(clean, List_pushBackx(&expressions, Buffer_createConstRef(&exp, sizeof(exp))));
+			lastToken = tokens.length;
+			expressionType = EExpressionType_None;
+			endExpression = false;
+		}
+
+		if(multiChar)
+			++i;
 	}
 
 clean:
-	CharString_freex(&pending);
-	return Error_none();
+
+	if(err.genericError) {
+		List_freex(&tokens);
+		List_freex(&expressions);
+	}
+	else {
+
+		*parser = (Parser) { .expressions = expressions, .tokens = tokens };
+
+		for (U64 i = 0; i < expressions.length; ++i) {
+
+			Expression e = *(const Expression*) List_ptrConst(expressions, i);
+
+			if(e.type != EExpressionType_Generic)
+				continue;
+
+			Parser_handleExpression(str, parser, i, e);
+		}
+	}
+
+	return err;
+}
+
+Bool Parser_free(Parser *parser) {
+
+	if(!parser)
+		return true;
+
+	List_freex(&parser->expressions);
+	List_freex(&parser->tokens);
+	return true;
 }
