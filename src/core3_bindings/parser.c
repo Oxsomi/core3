@@ -43,68 +43,53 @@ const C8 *NaiveToken_getTokenStart(NaiveToken tok, CharString c) {
 	return c.ptr + (tok.offsetType << 2 >> 2);
 }
 
-void Parser_handleExpression(CharString str, const Parser *p, U64 index, Expression e) {
+CharString NaiveToken_asString(NaiveToken tok, CharString c) {
+	const C8 *ptr = NaiveToken_getTokenStart(tok, c);
+	return CharString_createConstRefSized(ptr, tok.length, false);
+}
 
-	NaiveToken tStart = *(const NaiveToken*) List_ptrConst(p->tokens, e.tokenOffset);
-	NaiveToken tEnd = *(const NaiveToken*) List_ptrConst(p->tokens, e.tokenOffset + e.tokenCount - 1);
+CharString Expression_asString(Expression e, Parser p, CharString str) {
+
+	NaiveToken tStart = *(const NaiveToken*) List_ptrConst(p.tokens, e.tokenOffset);
+	NaiveToken tEnd = *(const NaiveToken*) List_ptrConst(p.tokens, e.tokenOffset + e.tokenCount - 1);
 
 	const C8 *cStart = NaiveToken_getTokenStart(tStart, str);
 	const C8 *cEnd = NaiveToken_getTokenEnd(tEnd, str);
 
-	Bool printTokens = true;
+	return CharString_createConstRefSized(cStart, cEnd - cStart, false);
+}
 
-	switch (e.type) {
+Error Parser_endExpression(U64 *lastTokenPtr, List *expressions, U64 tokenCount, EExpressionType *expressionType) {
 
-		case EExpressionType_Comment:
-			Log_debugLnx("E%llu\tComment:\t%.*s", index, cEnd - cStart, cStart);
-			break;
+	Error err = Error_none();
 
-		case EExpressionType_MultiLineComment:
-			Log_debugLnx("E%llu\tMulti line comment:\t%.*s", index, cEnd - cStart, cStart);
-			break;
+	U64 lastToken = *lastTokenPtr;
 
-		case EExpressionType_Preprocessor:
-			Log_debugLnx("E%llu\tPreprocessor:\t%.*s", index, cEnd - cStart, cStart);
-			break;
+	if(lastToken == tokenCount)
+		return err;
 
-		default:
-			Log_debugLnx("E%llu\tGeneric expression:\t%.*s", index, cEnd - cStart, cStart);
-			break;
-	}
+	if(lastToken >> 32)
+		_gotoIfError(clean, Error_outOfBounds(
+			0, lastToken, U32_MAX, "Parser_create() Expression offset is limited to U32_MAX tokens"
+		));
 
-	if(printTokens)
-		for (U64 i = 0; i < e.tokenCount; ++i) {
+	if((tokenCount - lastToken) >> 16)
+		_gotoIfError(clean, Error_outOfBounds(
+			0, tokenCount - lastToken, U16_MAX, "Parser_create() Expression is limited to U16_MAX tokens"
+		));
 
-			U64 j = e.tokenOffset + i;
-			NaiveToken t = *(const NaiveToken*) List_ptrConst(p->tokens, j);
-			const C8 *cStart = NaiveToken_getTokenStart(t, str);
-			const C8 *cEnd = NaiveToken_getTokenEnd(t, str);
+	Expression exp = (Expression) { 
+		.type = *expressionType,
+		.tokenOffset = (U32) lastToken,
+		.tokenCount = (U16) (tokenCount - lastToken)
+	};
 
-			U64 tline = t.lineId, tchar = t.charId;
-			U64 toff = (U64) (t.offsetType << 2 >> 2);
-			U64 tlen = (U64) t.length;
+	_gotoIfError(clean, List_pushBackx(expressions, Buffer_createConstRef(&exp, sizeof(exp))));
+	*lastTokenPtr = tokenCount;
+	*expressionType = EExpressionType_None;
 
-			const C8 *fmt = "\tT%llu(%llu,%llu: L#%llu:%llu)\t%s:\t%.*s";
-
-			switch(t.offsetType >> 30) {
-
-				case ENaiveTokenType_Symbols:
-					Log_debugLnx(fmt, j, toff, tlen, tline, tchar, "Symbols", cEnd - cStart, cStart);
-					break;
-
-				case ENaiveTokenType_Float:
-					Log_debugLnx(fmt, j, toff, tlen, tline, tchar, "Float", cEnd - cStart, cStart);
-					break;
-
-				case ENaiveTokenType_Integer:
-					Log_debugLnx(fmt, j, toff, tlen, tline, tchar, "Integer", cEnd - cStart, cStart);
-					break;
-
-				default:
-					Log_debugLnx(fmt, j, toff, tlen, tline, tchar, "Identifier", cEnd - cStart, cStart);
-					break;
-			}
-		}
+clean:
+	return err;
 }
 
 Error Parser_create(CharString str, Parser *parser) {
@@ -143,8 +128,9 @@ Error Parser_create(CharString str, Parser *parser) {
 		C8 prevTemp = prev;
 		prev = c;
 
-		Bool endExpression = false;
 		Bool multiChar = false;
+		Bool endExpression = false;
+		Bool endToken = false;
 
 		//Newline; end last expression in some cases
 
@@ -176,15 +162,19 @@ Error Parser_create(CharString str, Parser *parser) {
 		//Handle starting comment
 
 		if(c == '/' && next == '/' && expressionType != EExpressionType_MultiLineComment) {
+			_gotoIfError(clean, Parser_endExpression(&lastToken, &expressions, tokens.length, &expressionType));
 			expressionType = EExpressionType_Comment;
 			multiChar = true;
+			endToken = true;
 		}
 
 		//Handle starting multi line comment
 
 		if(c == '/' && next == '*' && !expressionType) {
+			_gotoIfError(clean, Parser_endExpression(&lastToken, &expressions, tokens.length, &expressionType));
 			expressionType = EExpressionType_MultiLineComment;
 			multiChar = true;
+			endToken = true;
 		}
 
 		//Deal with closing multi line comment
@@ -204,7 +194,6 @@ Error Parser_create(CharString str, Parser *parser) {
 
 		//First non whitespace char
 
-		Bool endToken = false;
 		ENaiveTokenType current = ENaiveTokenType_Count;
 
 		if(!C8_isWhitespace(c)) {
@@ -259,29 +248,8 @@ Error Parser_create(CharString str, Parser *parser) {
 
 		//Push it as an expression
 
-		if (endExpression) {
-
-			if(lastToken >> 32)
-				_gotoIfError(clean, Error_outOfBounds(
-					0, lastToken, U32_MAX, "Parser_create() Expression offset is limited to U32_MAX tokens"
-				));
-
-			if((tokens.length - lastToken) >> 16)
-				_gotoIfError(clean, Error_outOfBounds(
-					0, tokens.length - lastToken, U16_MAX, "Parser_create() Expression is limited to U16_MAX tokens"
-				));
-
-			Expression exp = (Expression) { 
-				.type = expressionType,
-				.tokenOffset = (U32) lastToken,
-				.tokenCount = (U16) (tokens.length - lastToken)
-			};
-
-			_gotoIfError(clean, List_pushBackx(&expressions, Buffer_createConstRef(&exp, sizeof(exp))));
-			lastToken = tokens.length;
-			expressionType = EExpressionType_None;
-			endExpression = false;
-		}
+		if (endExpression)
+			_gotoIfError(clean, Parser_endExpression(&lastToken, &expressions, tokens.length, &expressionType));
 
 		if(multiChar)
 			++i;
@@ -293,20 +261,7 @@ clean:
 		List_freex(&tokens);
 		List_freex(&expressions);
 	}
-	else {
-
-		*parser = (Parser) { .expressions = expressions, .tokens = tokens };
-
-		for (U64 i = 0; i < expressions.length; ++i) {
-
-			Expression e = *(const Expression*) List_ptrConst(expressions, i);
-
-			if(e.type != EExpressionType_Generic)
-				continue;
-
-			Parser_handleExpression(str, parser, i, e);
-		}
-	}
+	else *parser = (Parser) { .expressions = expressions, .tokens = tokens };
 
 	return err;
 }

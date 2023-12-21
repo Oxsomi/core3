@@ -46,6 +46,10 @@ typedef struct Expression {
 
 } Expression;
 
+typedef struct Parser Parser;
+
+CharString Expression_asString(Expression e, Parser p, CharString c);
+
 //A NaiveToken is defined as any subsequent 
 
 typedef enum ENaiveTokenType {
@@ -67,6 +71,7 @@ typedef struct NaiveToken {
 
 const C8 *NaiveToken_getTokenStart(NaiveToken tok, CharString c);
 const C8 *NaiveToken_getTokenEnd(NaiveToken tok, CharString c);
+CharString NaiveToken_asString(NaiveToken tok, CharString c);
 
 typedef struct Parser {
 	List tokens;			//<NaiveToken>
