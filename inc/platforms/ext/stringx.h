@@ -41,6 +41,8 @@ Error CharString_reservex(CharString *str, U64 length);
 
 Error CharString_appendx(CharString *s, C8 c);
 Error CharString_appendStringx(CharString *s, CharString other);
+Error CharString_prependx(CharString *s, C8 c);
+Error CharString_prependStringx(CharString *s, CharString other);
 
 Error CharString_insertx(CharString *s, C8 c, U64 i);
 Error CharString_insertStringx(CharString *s, CharString other, U64 i);

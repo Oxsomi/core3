@@ -169,6 +169,9 @@ Error CharString_reserve(CharString *str, U64 length, Allocator alloc);
 Error CharString_append(CharString *s, C8 c, Allocator allocator);
 Error CharString_appendString(CharString *s, CharString other, Allocator allocator);
 
+Error CharString_prepend(CharString *s, C8 c, Allocator allocator);
+Error CharString_prependString(CharString *s, CharString other, Allocator allocator);
+
 CharString CharString_newLine();			//Should only be used when writing a file for the current OS. Not when parsing files.
 
 Error CharString_insert(CharString *s, C8 c, U64 i, Allocator allocator);

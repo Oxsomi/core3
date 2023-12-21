@@ -1014,6 +1014,14 @@ Error CharString_appendString(CharString *s, CharString other, Allocator allocat
 	return Error_none();
 }
 
+Error CharString_prepend(CharString *s, C8 c, Allocator allocator) {
+	return CharString_insert(s, c, 0, allocator);
+}
+
+Error CharString_prependString(CharString *s, CharString other, Allocator allocator) {
+	return CharString_insertString(s, other, 0, allocator);
+}
+
 Error CharString_insert(CharString *s, C8 c, U64 i, Allocator allocator) {
 
 	if (!s)

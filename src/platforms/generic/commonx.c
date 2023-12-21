@@ -304,6 +304,14 @@ Error CharString_appendStringx(CharString *s, CharString other) {
 	return CharString_appendString(s, other, Platform_instance.alloc);
 }
 
+Error CharString_prependx(CharString *s, C8 c) { 
+	return CharString_prepend(s, c, Platform_instance.alloc); 
+}
+
+Error CharString_prependStringx(CharString *s, CharString other) { 
+	return CharString_prependString(s, other, Platform_instance.alloc);
+}
+
 Error CharString_insertx(CharString *s, C8 c, U64 i) { 
 	return CharString_insert(s, c, i, Platform_instance.alloc);
 }
