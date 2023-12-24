@@ -22,61 +22,183 @@
 #include "types/list.h"
 
 typedef struct CharString CharString;
+typedef struct Lexer Lexer;
 
-//An expression is a bunch of NaiveTokens that are grouped together.
-//If the type is generic then one token can actually be multiple due 
-// and the tokenizer will decide what it represents.
-//For example: abc*def will be seen as 3 tokens but abc*=+1 is also seen as 3 tokens.
-//The tokenizer will then split *=+ up into *= and + from NaiveToken to Token.
+//A token is a resolved LexerToken (because a LexerToken can contain multiple real tokens for example)
 
-typedef enum EExpressionType {
+typedef enum ETokenType {
 
-	EExpressionType_None,
-	EExpressionType_Preprocessor,
-	EExpressionType_Comment,
-	EExpressionType_MultiLineComment,
-	EExpressionType_Generic
+	ETokenType_Identifier,				// [A-Za-z_$]+[0-9A-Za-z_$]*
+	ETokenType_Integer,					// [-+]?[0-9]+
+	ETokenType_Float,					// Approximately equal to: [-+]?[0-9]*[.[0-9]*]?[[eE][-+]?[0-9]+]?
+	ETokenType_String,					// "[0-9A-Za-z_\s$]*"
 
-} EExpressionType;
+	ETokenType_Inc,						// ++
+	ETokenType_Dec,						// --
 
-typedef struct Expression {
+	ETokenType_Not,						// ~ (bitwise)
+	ETokenType_BooleanNot,				// !
 
-	U16 type, tokenCount;
-	U32 tokenOffset;
+	ETokenType_Mul,						// *
+	ETokenType_Div,						// /
+	ETokenType_Mod,						// %
+	ETokenType_Add,						// +
+	ETokenType_Sub,						// -
 
-} Expression;
+	ETokenType_MulAsg,					// *=
+	ETokenType_DivAsg,					// /=
+	ETokenType_ModAsg,					// %=
+	ETokenType_AddAsg,					// +=
+	ETokenType_SubAsg,					// -=
 
-typedef struct Parser Parser;
+	ETokenType_BooleanAnd,				// &&
+	ETokenType_BooleanOr,				// ||
 
-CharString Expression_asString(Expression e, Parser p, CharString c);
+	ETokenType_And,						// &
+	ETokenType_Or,						// |
+	ETokenType_Xor,						// ^
 
-//A NaiveToken is defined as any subsequent 
+	ETokenType_AndAsg,					// &=
+	ETokenType_OrAsg,					// |=
+	ETokenType_XorAsg,					// ^=
 
-typedef enum ENaiveTokenType {
-	ENaiveTokenType_Identifier,		//[A-Za-z_$]+[0-9A-Za-z_$]*
-	ENaiveTokenType_Integer,		//[0-9]
-	ENaiveTokenType_Float,			//Approximately equal to: [-+]?[0-9]*[.[0-9]*]?[[eE][-+]?[0-9]+]?
-	ENaiveTokenType_Symbols,		//Any number of subsequent symbols
-	ENaiveTokenType_Count
-} ENaiveTokenType;
+	ETokenType_Lsh,						// <<
+	ETokenType_Rsh,						// >>
 
-typedef struct NaiveToken {
+	ETokenType_LshAsg,					// <<=
+	ETokenType_RshAsg,					// >>=
 
-	U16 lineId;
-	U8 charId, length;
+	ETokenType_Lt,						// <
+	ETokenType_Gt,						// >
+	ETokenType_Leq,						// <=
+	ETokenType_Geq,						// >=
 
-	U32 offsetType;			//upper 2 bits is type
+	ETokenType_Asg,						// =
+	ETokenType_Eq,						// ==
+	ETokenType_Neq,						// !=
 
-} NaiveToken;
+	ETokenType_RoundParenthesisStart,	// (
+	ETokenType_RoundParenthesisEnd,		// )
 
-const C8 *NaiveToken_getTokenStart(NaiveToken tok, CharString c);
-const C8 *NaiveToken_getTokenEnd(NaiveToken tok, CharString c);
-CharString NaiveToken_asString(NaiveToken tok, CharString c);
+	ETokenType_SquareBracketStart,		// [
+	ETokenType_SquareBracketEnd,		// ]
+
+	ETokenType_CurlyBraceStart,			// {
+	ETokenType_CurlyBraceEnd,			// }
+
+	ETokenType_Colon,					// :
+	ETokenType_Semicolon,				// ;
+
+	ETokenType_Count
+
+} ETokenType;
+
+typedef struct Token {
+
+	U32 naiveTokenId;
+
+	U16 tokenType;			//ETokenType
+	U8 padding;
+	U8 lexerTokenSubId;		//For example *=- is split into *= (subId=0) and - (subId=2)
+
+} Token;
+
+//A symbol is a function, constant or typedef.
+
+typedef enum ESymbolType {
+
+	ESymbolType_Function,
+	ESymbolType_Constant,
+	ESymbolType_Typedef,	//typedef T T2
+	ESymbolType_Struct,		//typedef struct ...
+	ESymbolType_Enum,		//typedef enum ...
+	ESymbolType_Count
+
+} ESymbolType;
+
+typedef enum ESymbolFlag {
+
+	//For constants
+
+	ESymbolFlag_IsConst			= 1 << 0,		//const
+	ESymbolFlag_IsPtr			= 1 << 1,		//T*
+	ESymbolFlag_IsPtrRef		= 1 << 2,		//T**
+	ESymbolFlag_IsExtern		= 1 << 3,		//extern ...
+
+	//For functions
+
+	ESymbolFlag_HasImpl			= 1 << 4,		//impl ...
+	ESymbolFlag_HasUserImpl		= 1 << 5		//user_impl ...
+
+} ESymbolFlag;
+
+typedef struct Symbol {
+
+	U16 symbolFlag;			//ESymbolFlag
+	U8 symbolType;			//ESymbolType
+	U8 children;			//For example enum values, struct members or function parameters
+
+	U32 nameTokenId;
+
+	U32 typeTokenId;		//U32_MAX indicates void (only for enum and 
+
+	U32 childStartTokenId;	//See Symbol::children
+
+	U32 bodyStartTokenId;	//U32_MAX for enum & struct & typedef
+
+} Symbol;
+
+//A define can have four types; (value or macro)(empty, full). Macro is like a function that generates code.
+//The list of defines at the end of parsing the file will be stored; also including the defines of the includes (if present).
+//Standard includes get excluded from the define list, only libraries will have this property.
+
+typedef enum EDefineType {
+
+	EDefineType_ValueEmpty,		//The define will always evaluate to nothing, but it's present (#define X)
+	EDefineType_MacroEmpty,		//The macro will always evaluate to nothing, but it's present (#define X(y))
+
+	EDefineType_ValueFull,		//#define MY_VALUE 1
+	EDefineType_MacroFull,		//#define MY_VALUE(y) 1
+
+	EDefineType_Count,
+
+	EDefineType_IsMacro		= 1 << 0,
+	EDefineType_IsFull		= 1 << 1
+
+} EDefineType;
+
+typedef struct Define {
+
+	U8 defineType;			//EDefineType
+	U8 children;			//For macros defines 
+	U16 valueTokens;		//How many tokens the define's value contains
+
+	U32 nameTokenId;		//Lexer token id
+
+	U32 childStartTokenId;	//Lexer token id of the child start (skip a token in between; that's ,)
+
+	U32 valueStartId;		//Lexer token id
+
+} Define;
+
+//Parser takes the output from the lexer and splits it up in real tokens and handles preprocessor-specific things.
+//After the parser, the file's symbols can be obtained.
 
 typedef struct Parser {
-	List tokens;			//<NaiveToken>
-	List expressions;		//<Expression>
+	const Lexer *lexer;
+	List tokens;			//<Token>
+	List symbols;			//<Symbol>
+	List defines;			//<Define>
 } Parser;
 
-Error Parser_create(CharString source, Parser *parser);
+typedef struct UserDefine {		//Value can be empty/null to indicate present (but no value)
+	CharString name, value;
+} UserDefine;
+
+Error Parser_create(const Lexer *lexer, Parser *parser, List/*<UserDefine>*/ userDefine);
 Bool Parser_free(Parser *parser);
+
+//Classify a token at str.ptr[*subTokenOffset]
+//Increment subTokenOffset by the length of the token
+
+ETokenType Parser_getTokenType(CharString str, U64 *subTokenOffset);

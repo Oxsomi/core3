@@ -27,27 +27,28 @@
 #include "types/error.h"
 #include "types/buffer.h"
 #include "types/string.h"
+#include "core3_bindings/lexer.h"
 #include "core3_bindings/parser.h"
 
 const Bool Platform_useWorkingDirectory = true;
 
-void Parser_handleExpression(CharString str, const Parser *p, U64 index, Expression e) {
+void Lexer_handleExpression(CharString str, const Lexer *p, U64 index, LexerExpression e) {
 
-	CharString expressionRaw = Expression_asString(e, *p, str);
+	CharString expressionRaw = LexerExpression_asString(e, *p);
 
 	Bool printTokens = true;
 
 	switch (e.type) {
 
-		case EExpressionType_Comment:
+		case ELexerExpressionType_Comment:
 			Log_debugLnx("E%llu\tComment:\t%.*s", index, CharString_length(expressionRaw), expressionRaw.ptr);
 			break;
 
-		case EExpressionType_MultiLineComment:
+		case ELexerExpressionType_MultiLineComment:
 			Log_debugLnx("E%llu\tMulti line comment:\t%.*s", index, CharString_length(expressionRaw), expressionRaw.ptr);
 			break;
 
-		case EExpressionType_Preprocessor:
+		case ELexerExpressionType_Preprocessor:
 			Log_debugLnx("E%llu\tPreprocessor:\t%.*s", index, CharString_length(expressionRaw), expressionRaw.ptr);
 			break;
 
@@ -60,9 +61,9 @@ void Parser_handleExpression(CharString str, const Parser *p, U64 index, Express
 		for (U64 i = 0; i < e.tokenCount; ++i) {
 
 			U64 j = e.tokenOffset + i;
-			NaiveToken t = *(const NaiveToken*) List_ptrConst(p->tokens, j);
-			const C8 *cStart = NaiveToken_getTokenStart(t, str);
-			const C8 *cEnd = NaiveToken_getTokenEnd(t, str);
+			LexerToken t = *(const LexerToken*) List_ptrConst(p->tokens, j);
+			const C8 *cStart = LexerToken_getTokenStart(t, *p);
+			const C8 *cEnd = LexerToken_getTokenEnd(t, *p);
 
 			U64 tline = t.lineId, tchar = t.charId;
 			U64 toff = (U64) (t.offsetType << 2 >> 2);
@@ -72,15 +73,15 @@ void Parser_handleExpression(CharString str, const Parser *p, U64 index, Express
 
 			switch(t.offsetType >> 30) {
 
-				case ENaiveTokenType_Symbols:
+				case ELexerTokenType_Symbols:
 					Log_debugLnx(fmt, j, toff, tlen, tline, tchar, "Symbols", cEnd - cStart, cStart);
 					break;
 
-				case ENaiveTokenType_Float:
+				case ELexerTokenType_Float:
 					Log_debugLnx(fmt, j, toff, tlen, tline, tchar, "Float", cEnd - cStart, cStart);
 					break;
 
-				case ENaiveTokenType_Integer:
+				case ELexerTokenType_Integer:
 					Log_debugLnx(fmt, j, toff, tlen, tline, tchar, "Integer", cEnd - cStart, cStart);
 					break;
 
@@ -103,7 +104,7 @@ typedef enum EBindingLanguage {
 
 } EBindingLanguage;
 
-Error Program_generateBindings(CharString str, Parser parser, CharString *result, EBindingLanguage lang) {
+Error Program_generateBindings(CharString str, Lexer lexer, CharString *result, EBindingLanguage lang) {
 
 	if(lang != EBindingLanguage_CPP)
 		return Error_unimplemented(0, "Program_generateBindings()::lang required to be CPP, no others are supported yet");
@@ -111,22 +112,22 @@ Error Program_generateBindings(CharString str, Parser parser, CharString *result
 	Error err = Error_none();
 	Bool hasOxC3 = false;
 
-	for (U64 i = 0; i < parser.expressions.length; ++i) {
+	for (U64 i = 0; i < lexer.expressions.length; ++i) {
 
-		Expression e = *(const Expression*) List_ptrConst(parser.expressions, i);
-		Parser_handleExpression(str, &parser, i, e);
+		LexerExpression e = *(const LexerExpression*) List_ptrConst(lexer.expressions, i);
+		Lexer_handleExpression(str, &lexer, i, e);
 		continue;
 
-		if(e.type == EExpressionType_Comment || e.type == EExpressionType_MultiLineComment) {
+		if(e.type == ELexerExpressionType_Comment || e.type == ELexerExpressionType_MultiLineComment) {
 
 			//Detect license
 
 			if (!i && e.tokenCount >= 2) {
 
-				NaiveToken t = *(const NaiveToken*) List_ptrConst(parser.tokens, 1);
+				LexerToken t = *(const LexerToken*) List_ptrConst(lexer.tokens, 1);
 
-				hasOxC3 = CharString_equalsString(
-					NaiveToken_asString(t, str), CharString_createConstRefCStr("OxC3"), EStringCase_Sensitive
+				hasOxC3 = CharString_equalsStringSensitive(
+					LexerToken_asString(t, lexer), CharString_createConstRefCStr("OxC3")
 				);
 
 				if(hasOxC3)
@@ -139,7 +140,7 @@ Error Program_generateBindings(CharString str, Parser parser, CharString *result
 
 			for (U64 i = 0; i < e.tokenCount; ++i) {
 
-				NaiveToken t = *(const NaiveToken*) List_ptrConst(parser.tokens, e.tokenOffset + i);
+				LexerToken t = *(const LexerToken*) List_ptrConst(lexer.tokens, e.tokenOffset + i);
 
 				if(lastLine != t.lineId) {
 					_gotoIfError(clean, CharString_appendx(result, '\n'));		//Maintain consistent namespace indenting
@@ -151,7 +152,7 @@ Error Program_generateBindings(CharString str, Parser parser, CharString *result
 
 				}
 
-				_gotoIfError(clean, CharString_appendStringx(result, NaiveToken_asString(t, str)));
+				_gotoIfError(clean, CharString_appendStringx(result, LexerToken_asString(t, lexer)));
 			}
 		}
 
@@ -169,8 +170,8 @@ Error Program_generateBindings(CharString str, Parser parser, CharString *result
 	)));
 
 	if (hasOxC3) {
-		Expression e = *(const Expression*) List_ptrConst(parser.expressions, 0);
-		CharString expressionRaw = Expression_asString(e, parser, str);
+		LexerExpression e = *(const LexerExpression*) List_ptrConst(lexer.expressions, 0);
+		CharString expressionRaw = LexerExpression_asString(e, lexer);
 		_gotoIfError(clean, CharString_prependStringx(result, expressionRaw));
 	}
 
@@ -179,6 +180,9 @@ Error Program_generateBindings(CharString str, Parser parser, CharString *result
 clean:
 	return err;
 }
+
+#define Program_userDefine(x, y) { CharString_createConstRefCStr(x), CharString_createConstRefCStr(y) }
+#define Program_stringify(x) Program_userDefine(#x, values[x])
 
 Error Program_parseFile(FileInfo info, void *dummy) {
 
@@ -192,13 +196,39 @@ Error Program_parseFile(FileInfo info, void *dummy) {
 
 	CharString file = CharString_createConstRefSized((const C8*) buf.ptr, Buffer_length(buf), false);
 
+	typedef struct ProgramUserDefine {
+
+		const C8 *name;
+		const C8 *value;
+
+	} ProgramUserDefine;
+
+	const C8 *values[] = { "0", "1", "2", "3", "4", "5", "6", "7", "8", "9" };
+
+	UserDefine defines[] = {
+		Program_stringify(_ARCH),
+		Program_stringify(_SIMD),
+		Program_stringify(_RELAX_FLOAT),
+		Program_stringify(_FORCE_FLOAT_FALLBACK),
+		Program_stringify(_PLATFORM_TYPE),
+		Program_userDefine("FLT_EVAL_METHOD", values[0])
+	};
+
+	List userDefines = (List) { 0 };
+	_gotoIfError(clean, List_createConstRef(
+		(const U8*)defines, sizeof(defines) / sizeof(UserDefine), sizeof(UserDefine), &userDefines
+	));
+
+	Lexer lexer = (Lexer) { 0 };
 	Parser parser = (Parser) { 0 };
-	_gotoIfError(clean, Parser_create(file, &parser));
-	_gotoIfError(clean, Program_generateBindings(file, parser, &newFile, EBindingLanguage_CPP));
+	_gotoIfError(clean, Lexer_create(file, &lexer));
+	_gotoIfError(clean, Parser_create(&lexer, &parser, userDefines));
+	_gotoIfError(clean, Program_generateBindings(file, lexer, &newFile, EBindingLanguage_CPP));
 
 clean:
-	CharString_freex(&newFile);
 	Parser_free(&parser);
+	Lexer_free(&lexer);
+	CharString_freex(&newFile);
 	Buffer_freex(&buf);
 	return Error_none();
 }
