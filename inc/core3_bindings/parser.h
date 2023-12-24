@@ -30,7 +30,7 @@ typedef enum ETokenType {
 
 	ETokenType_Identifier,				// [A-Za-z_$]+[0-9A-Za-z_$]*
 	ETokenType_Integer,					// [-+]?[0-9]+
-	ETokenType_Float,					// Approximately equal to: [-+]?[0-9]*[.[0-9]*]?[[eE][-+]?[0-9]+]?
+	ETokenType_Double,					// Approximately equal to: [-+]?[0-9]*[.[0-9]*]?[[eE][-+]?[0-9]+]?
 	ETokenType_String,					// "[0-9A-Za-z_\s$]*"
 
 	ETokenType_Inc,						// ++
@@ -89,17 +89,21 @@ typedef enum ETokenType {
 	ETokenType_Colon,					// :
 	ETokenType_Semicolon,				// ;
 
+	ETokenType_Comma,					// ,
+
 	ETokenType_Count
 
 } ETokenType;
 
 typedef struct Token {
 
+	I64 value;				//If tokenType = int this represents the int value, if token type is double (*(F64*)&value)
+
 	U32 naiveTokenId;
 
 	U16 tokenType;			//ETokenType
-	U8 padding;
 	U8 lexerTokenSubId;		//For example *=- is split into *= (subId=0) and - (subId=2)
+	U8 padding;
 
 } Token;
 

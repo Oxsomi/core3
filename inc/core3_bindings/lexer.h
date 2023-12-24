@@ -54,7 +54,7 @@ CharString LexerExpression_asString(LexerExpression e, Lexer p);
 typedef enum ELexerTokenType {
 	ELexerTokenType_Identifier,		//[A-Za-z_$]+[0-9A-Za-z_$]*
 	ELexerTokenType_Integer,		//[0-9]
-	ELexerTokenType_Float,			//Approximately equal to: [0-9]*[.[0-9]*]?[[eE][-+]?[0-9]+]?
+	ELexerTokenType_Double,			//Approximately equal to: [0-9]*[.[0-9]*]?[[eE][-+]?[0-9]+]?
 	ELexerTokenType_Symbols,		//Any number of subsequent symbols
 	ELexerTokenType_Count
 } ELexerTokenType;

@@ -256,6 +256,9 @@ Error Lexer_create(CharString str, Lexer *lexer) {
 			++i;
 	}
 
+	if (lastToken != tokens.length)
+		_gotoIfError(clean, Lexer_endExpression(&lastToken, &expressions, tokens.length, &expressionType));
+
 clean:
 
 	if(err.genericError) {

@@ -77,7 +77,7 @@ void Lexer_handleExpression(CharString str, const Lexer *p, U64 index, LexerExpr
 					Log_debugLnx(fmt, j, toff, tlen, tline, tchar, "Symbols", cEnd - cStart, cStart);
 					break;
 
-				case ELexerTokenType_Float:
+				case ELexerTokenType_Double:
 					Log_debugLnx(fmt, j, toff, tlen, tline, tchar, "Float", cEnd - cStart, cStart);
 					break;
 
