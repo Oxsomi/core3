@@ -26,6 +26,20 @@
 #include "core3_bindings/parser.h"
 #include "core3_bindings/lexer.h"
 
+CharString Token_asString(Token t, const Parser *p) {
+
+	if(!p || t.naiveTokenId >= p->lexer->tokens.length)
+		return CharString_createNull();
+
+	LexerToken lt = *List_ptrConstT(LexerToken, p->lexer->tokens, t.naiveTokenId);
+	CharString lextStr = LexerToken_asString(lt, *p->lexer);
+
+	if((U32)t.lexerTokenSubId + t.tokenSize > CharString_length(lextStr))
+		return CharString_createNull();
+
+	return CharString_createConstRefSized(lextStr.ptr + t.lexerTokenSubId, t.tokenSize, false);
+}
+
 //Helpers for handling defines
 
 //Returns U64_MAX if not found
@@ -1024,6 +1038,9 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 			CharString lextStr = LexerToken_asString(lext, *lexer);
 			ELexerTokenType lextType = (ELexerTokenType)(lext.offsetType >> 30);
 
+			if(CharString_length(lextStr) >> 8)
+				_gotoIfError(clean, Error_invalidParameter(0, 0, "ParserContext_visit() token max size is 256"));
+
 			switch(lextType) {
 
 				//Handle define/macro and normal keyword
@@ -1064,7 +1081,13 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 					//Otherwise it's probably a type of a keyword
 
 					else {
-						Token tok = (Token) { .naiveTokenId = lexerTokenId + i, .tokenType = ETokenType_Identifier };
+
+						Token tok = (Token) { 
+							.naiveTokenId = lexerTokenId + i, 
+							.tokenType = ETokenType_Identifier,
+							.tokenSize = (U8) CharString_length(lextStr)
+						};
+
 						_gotoIfError(clean, List_pushBackx(&context->tokens, Buffer_createConstRef(&tok, sizeof(tok))));
 					}
 
@@ -1084,7 +1107,8 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 					Token tok = (Token) {
 						.naiveTokenId = lexerTokenId + i,
 						.tokenType = ETokenType_Double,
-						.value = (I64) (const U64*) &tmp
+						.value = (I64) (const U64*) &tmp,
+						.tokenSize = (U8) CharString_length(lextStr)
 					};
 
 					_gotoIfError(clean, List_pushBackx(&context->tokens, Buffer_createConstRef(&tok, sizeof(tok))));
@@ -1102,7 +1126,8 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 					Token tok = (Token) {
 						.naiveTokenId = lexerTokenId + i,
 						.tokenType = ETokenType_Integer,
-						.value = (I64) tmp
+						.value = (I64) tmp,
+						.tokenSize = (U8) CharString_length(lextStr)
 					};
 
 					_gotoIfError(clean, List_pushBackx(&context->tokens, Buffer_createConstRef(&tok, sizeof(tok))));
@@ -1118,6 +1143,7 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 
 					while(subTokenOffset < CharString_length(lextStr)) {
 
+						U64 prev = subTokenOffset;
 						ETokenType tokenType = Parser_getTokenType(lextStr, &subTokenOffset);
 
 						if(tokenType == ETokenType_Count)
@@ -1126,7 +1152,8 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 						Token tok = (Token) {
 							.naiveTokenId = lexerTokenId + i,
 							.tokenType = tokenType,
-							.lexerTokenSubId = (U8) subTokenOffset
+							.lexerTokenSubId = (U8) prev,
+							.tokenSize = (U8)(subTokenOffset - prev)
 						};
 
 						_gotoIfError(clean, List_pushBackx(&context->tokens, Buffer_createConstRef(&tok, sizeof(tok))));
@@ -1192,7 +1219,8 @@ clean:
 	else *parser = (Parser) { 
 		.symbols = context.symbols, 
 		.tokens = context.tokens, 
-		.defines = context.defines 
+		.defines = context.defines,
+		.lexer = lexer
 	};
 
 	List_freex(&context.userDefines);

@@ -32,64 +32,28 @@
 
 const Bool Platform_useWorkingDirectory = true;
 
-void Lexer_handleExpression(CharString str, const Lexer *p, U64 index, LexerExpression e) {
+void Program_handleToken(CharString str, const Parser *p, U64 index, Token t) {
 
-	CharString expressionRaw = LexerExpression_asString(e, *p);
+	LexerToken lt = *List_ptrConstT(LexerToken, p->lexer->tokens, t.naiveTokenId);
 
-	Bool printTokens = true;
+	CharString tokenRaw = Token_asString(t, p);
 
-	switch (e.type) {
+	Log_debugLnx(
 
-		case ELexerExpressionType_Comment:
-			Log_debugLnx("E%llu\tComment:\t%.*s", index, CharString_length(expressionRaw), expressionRaw.ptr);
-			break;
+		"T%llu(%llu,%llu[%llu]: L#%llu:%llu)\t\t%.*s", 
 
-		case ELexerExpressionType_MultiLineComment:
-			Log_debugLnx("E%llu\tMulti line comment:\t%.*s", index, CharString_length(expressionRaw), expressionRaw.ptr);
-			break;
+		index, 
 
-		case ELexerExpressionType_Preprocessor:
-			Log_debugLnx("E%llu\tPreprocessor:\t%.*s", index, CharString_length(expressionRaw), expressionRaw.ptr);
-			break;
+		t.naiveTokenId, 
+		t.lexerTokenSubId, 
+		t.tokenSize, 
 
-		default:
-			Log_debugLnx("E%llu\tGeneric expression:\t%.*s", index, CharString_length(expressionRaw), expressionRaw.ptr);
-			break;
-	}
+		lt.lineId, 
+		lt.charId + t.lexerTokenSubId,
 
-	if(printTokens)
-		for (U64 i = 0; i < e.tokenCount; ++i) {
-
-			U64 j = e.tokenOffset + i;
-			LexerToken t = *(const LexerToken*) List_ptrConst(p->tokens, j);
-			const C8 *cStart = LexerToken_getTokenStart(t, *p);
-			const C8 *cEnd = LexerToken_getTokenEnd(t, *p);
-
-			U64 tline = t.lineId, tchar = t.charId;
-			U64 toff = (U64) (t.offsetType << 2 >> 2);
-			U64 tlen = (U64) t.length;
-
-			const C8 *fmt = "\tT%llu(%llu,%llu: L#%llu:%llu)\t%s:\t%.*s";
-
-			switch(t.offsetType >> 30) {
-
-				case ELexerTokenType_Symbols:
-					Log_debugLnx(fmt, j, toff, tlen, tline, tchar, "Symbols", cEnd - cStart, cStart);
-					break;
-
-				case ELexerTokenType_Double:
-					Log_debugLnx(fmt, j, toff, tlen, tline, tchar, "Float", cEnd - cStart, cStart);
-					break;
-
-				case ELexerTokenType_Integer:
-					Log_debugLnx(fmt, j, toff, tlen, tline, tchar, "Integer", cEnd - cStart, cStart);
-					break;
-
-				default:
-					Log_debugLnx(fmt, j, toff, tlen, tline, tchar, "Identifier", cEnd - cStart, cStart);
-					break;
-			}
-		}
+		CharString_length(tokenRaw), 
+		tokenRaw.ptr
+	);
 }
 
 typedef enum EBindingLanguage {
@@ -104,7 +68,7 @@ typedef enum EBindingLanguage {
 
 } EBindingLanguage;
 
-Error Program_generateBindings(CharString str, Lexer lexer, CharString *result, EBindingLanguage lang) {
+Error Program_generateBindings(CharString str, Parser parser, CharString *result, EBindingLanguage lang) {
 
 	if(lang != EBindingLanguage_CPP)
 		return Error_unimplemented(0, "Program_generateBindings()::lang required to be CPP, no others are supported yet");
@@ -112,70 +76,12 @@ Error Program_generateBindings(CharString str, Lexer lexer, CharString *result, 
 	Error err = Error_none();
 	Bool hasOxC3 = false;
 
-	for (U64 i = 0; i < lexer.expressions.length; ++i) {
-
-		LexerExpression e = *(const LexerExpression*) List_ptrConst(lexer.expressions, i);
-		Lexer_handleExpression(str, &lexer, i, e);
-		continue;
-
-		if(e.type == ELexerExpressionType_Comment || e.type == ELexerExpressionType_MultiLineComment) {
-
-			//Detect license
-
-			if (!i && e.tokenCount >= 2) {
-
-				LexerToken t = *(const LexerToken*) List_ptrConst(lexer.tokens, 1);
-
-				hasOxC3 = CharString_equalsStringSensitive(
-					LexerToken_asString(t, lexer), CharString_createConstRefCStr("OxC3")
-				);
-
-				if(hasOxC3)
-					continue;
-			}
-
-			//Maintain comments
-
-			U64 lastLine = U64_MAX;
-
-			for (U64 i = 0; i < e.tokenCount; ++i) {
-
-				LexerToken t = *(const LexerToken*) List_ptrConst(lexer.tokens, e.tokenOffset + i);
-
-				if(lastLine != t.lineId) {
-					_gotoIfError(clean, CharString_appendx(result, '\n'));		//Maintain consistent namespace indenting
-					_gotoIfError(clean, CharString_appendx(result, '\t'));
-					lastLine = t.lineId;
-				}
-
-				else {		//Maintain same whitespace
-
-				}
-
-				_gotoIfError(clean, CharString_appendStringx(result, LexerToken_asString(t, lexer)));
-			}
-		}
-
-		//Parse real info
-
-		else {
-
-		}
+	for (U64 i = 0; i < parser.tokens.length; ++i) {
+		Token t = *List_ptrConstT(Token, parser.tokens, i);
+		Program_handleToken(str, &parser, i, t);
 	}
 
-	//Add header and footer
-
-	_gotoIfError(clean, CharString_prependStringx(result, CharString_createConstRefCStr(
-		"\n#pragma once\n\nnamespace oxc {\n"
-	)));
-
-	if (hasOxC3) {
-		LexerExpression e = *(const LexerExpression*) List_ptrConst(lexer.expressions, 0);
-		CharString expressionRaw = LexerExpression_asString(e, lexer);
-		_gotoIfError(clean, CharString_prependStringx(result, expressionRaw));
-	}
-
-	_gotoIfError(clean, CharString_appendStringx(result, CharString_createConstRefCStr("\n}\n")));
+	goto clean;
 
 clean:
 	return err;
@@ -223,7 +129,7 @@ Error Program_parseFile(FileInfo info, void *dummy) {
 	Parser parser = (Parser) { 0 };
 	_gotoIfError(clean, Lexer_create(file, &lexer));
 	_gotoIfError(clean, Parser_create(&lexer, &parser, userDefines));
-	_gotoIfError(clean, Program_generateBindings(file, lexer, &newFile, EBindingLanguage_CPP));
+	_gotoIfError(clean, Program_generateBindings(file, parser, &newFile, EBindingLanguage_CPP));
 
 clean:
 	Parser_free(&parser);

@@ -104,9 +104,13 @@ typedef struct Token {
 
 	U16 tokenType;			//ETokenType
 	U8 lexerTokenSubId;		//For example *=- is split into *= (subId=0) and - (subId=2)
-	U8 padding;
+	U8 tokenSize;
 
 } Token;
+
+typedef struct Parser Parser;
+
+CharString Token_asString(Token t, const Parser *p);
 
 //A symbol is a function, constant or typedef.
 
