@@ -1609,11 +1609,16 @@ Bool CharString_equalsString(CharString s, CharString other, EStringCase caseSen
 	if (strl != otherl)
 		return false;
 
+	if (caseSensitive == EStringCase_Sensitive) {
+
+		Bool eq = false;
+		Buffer_eq(CharString_bufferConst(s), CharString_bufferConst(other), &eq);
+
+		return eq;
+	}
+
 	for (U64 i = 0; i < strl; ++i)
-		if (
-			C8_transform(s.ptr[i], (EStringTransform)caseSensitive) != 
-			C8_transform(other.ptr[i], (EStringTransform)caseSensitive)
-		)
+		if (C8_toLower(s.ptr[i]) != C8_toLower(other.ptr[i]))
 			return false;
 
 	return true;
@@ -1624,6 +1629,17 @@ Bool CharString_equals(CharString s, C8 c, EStringCase caseSensitive) {
 	return CharString_length(s) == 1 && s.ptr && 
 		C8_transform(s.ptr[0], (EStringTransform) caseSensitive) == 
 		C8_transform(c, (EStringTransform) caseSensitive);
+}
+
+Bool CharString_equalsSensitive(CharString s, C8 c) { return CharString_equals(s, c, EStringCase_Sensitive); }
+Bool CharString_equalsInsensitive(CharString s, C8 c) { return CharString_equals(s, c, EStringCase_Insensitive); }
+
+Bool CharString_equalsStringSensitive(CharString s, CharString c) { 
+	return CharString_equalsString(s, c, EStringCase_Sensitive); 
+}
+
+Bool CharString_equalsStringInsensitive(CharString s, CharString c) { 
+	return CharString_equalsString(s, c, EStringCase_Insensitive); 
 }
 
 Bool CharString_parseNyto(CharString s, U64 *result){

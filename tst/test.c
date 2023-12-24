@@ -197,7 +197,7 @@ int main() {
 		CharString tmpStr = CharString_createNull();
 		_gotoIfError(clean, CharString_createHex(resultsU64[0], 0, alloc, &tmpStr));
 
-		if (!CharString_equalsString(resultsStr[0], tmpStr, EStringCase_Sensitive)) {
+		if (!CharString_equalsStringSensitive(resultsStr[0], tmpStr)) {
 			CharString_free(&tmpStr, alloc);
 			_gotoIfError(clean, Error_invalidState(0, "CharString_createHex test failed"));
 		}
@@ -205,7 +205,7 @@ int main() {
 		CharString_free(&tmpStr, alloc);
 		_gotoIfError(clean, CharString_createBin(resultsU64[1], 0, alloc, &tmpStr));
 
-		if (!CharString_equalsString(resultsStr[1], tmpStr, EStringCase_Sensitive)) {
+		if (!CharString_equalsStringSensitive(resultsStr[1], tmpStr)) {
 			CharString_free(&tmpStr, alloc);
 			_gotoIfError(clean, Error_invalidState(1, "CharString_createBin test failed"));
 		}
@@ -213,7 +213,7 @@ int main() {
 		CharString_free(&tmpStr, alloc);
 		_gotoIfError(clean, CharString_createOct(resultsU64[2], 0, alloc, &tmpStr));
 
-		if (!CharString_equalsString(resultsStr[2], tmpStr, EStringCase_Sensitive)) {
+		if (!CharString_equalsStringSensitive(resultsStr[2], tmpStr)) {
 			CharString_free(&tmpStr, alloc);
 			_gotoIfError(clean, Error_invalidState(2, "CharString_createOct test failed"));
 		}
@@ -221,7 +221,7 @@ int main() {
 		CharString_free(&tmpStr, alloc);
 		_gotoIfError(clean, CharString_createNyto(resultsU64[3], 0, alloc, &tmpStr));
 
-		if (!CharString_equalsString(resultsStr[3], tmpStr, EStringCase_Sensitive)) {
+		if (!CharString_equalsStringSensitive(resultsStr[3], tmpStr)) {
 			CharString_free(&tmpStr, alloc);
 			_gotoIfError(clean, Error_invalidState(3, "CharString_createNyto test failed"));
 		}
@@ -229,7 +229,7 @@ int main() {
 		CharString_free(&tmpStr, alloc);
 		_gotoIfError(clean, CharString_createDec(resultsU64[4], 0, alloc, &tmpStr));
 
-		if (!CharString_equalsString(resultsStr[4], tmpStr, EStringCase_Sensitive)) {
+		if (!CharString_equalsStringSensitive(resultsStr[4], tmpStr)) {
 			CharString_free(&tmpStr, alloc);
 			_gotoIfError(clean, Error_invalidState(4, "CharString_createDec test failed"));
 		}
@@ -1653,7 +1653,7 @@ int main() {
 
 		CharString ref = CharString_createConstRefCStr(stringified[i]);
 
-		if(!CharString_equalsString(ref, tmp, EStringCase_Sensitive))
+		if(!CharString_equalsStringSensitive(ref, tmp))
 			_gotoIfError(clean, Error_invalidState((U32)i, "BigInt_toString failed"));
 
 		CharString_free(&tmp, alloc);
@@ -1980,7 +1980,7 @@ int main() {
 
 		CharString ref = CharString_createConstRefCStr(stringified[i]);
 
-		if(!CharString_equalsString(ref, tmp, EStringCase_Sensitive))
+		if(!CharString_equalsStringSensitive(ref, tmp))
 			_gotoIfError(clean, Error_invalidState((U32)i, "U128_toString failed"));
 
 		CharString_free(&tmp, alloc);

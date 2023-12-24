@@ -327,10 +327,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 
 			for(U64 j = i - 1; j != U64_MAX; --j)
 
-				if (CharString_equalsString(
-					((CharString*)directories.ptr)[j], realParentDir, 
-					EStringCase_Insensitive
-				)) {
+				if (CharString_equalsStringInsensitive(((CharString*)directories.ptr)[j], realParentDir)) {
 					parent = (U16) j;
 					break;
 				}
@@ -378,10 +375,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 			
 			for(U64 j = directories.length - 1; j != U64_MAX; --j)
 
-				if (CharString_equalsString(
-					((CharString*)directories.ptr)[j], realParentDir, 
-					EStringCase_Sensitive
-				)) {
+				if (CharString_equalsStringInsensitive(((CharString*)directories.ptr)[j], realParentDir)) {
 					parent = (U16) j;
 					break;
 				}
@@ -395,10 +389,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 		ArchiveEntry *entry = NULL;
 
 		for(U64 j = 0; j < caFile.archive.entries.length; ++j)
-			if (CharString_equalsString(
-				((ArchiveEntry*)caFile.archive.entries.ptr + j)->path, file, 
-				EStringCase_Sensitive
-			)) {
+			if (CharString_equalsStringSensitive(((ArchiveEntry*)caFile.archive.entries.ptr + j)->path, file)) {
 				entry = (ArchiveEntry*)caFile.archive.entries.ptr + j;
 				break;
 			}

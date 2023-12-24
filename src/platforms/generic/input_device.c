@@ -280,18 +280,14 @@ InputHandle InputDevice_getHandle(InputDevice d, CharString name) {
 	//TODO: We probably wanna optimize this at some point like use a hashmap
 
 	for(U16 i = 0; i < d.buttons; ++i)
-		if(CharString_equalsString(
-			CharString_createConstRefLongString(InputDevice_getButton(d, i)->name), 
-			name,
-			EStringCase_Insensitive
+		if(CharString_equalsStringInsensitive(
+			CharString_createConstRefLongString(InputDevice_getButton(d, i)->name), name
 		))
 			return InputDevice_createHandle(d, i, EInputType_Button);
 
 	for(U16 i = 0; i < d.axes; ++i)
-		if(CharString_equalsString(
-			CharString_createConstRefLongString(InputDevice_getAxis(d, i)->name), 
-			name,
-			EStringCase_Insensitive
+		if(CharString_equalsStringInsensitive(
+			CharString_createConstRefLongString(InputDevice_getAxis(d, i)->name), name
 		))
 			return InputDevice_createHandle(d, i, EInputType_Axis);
 

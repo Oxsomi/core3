@@ -336,11 +336,7 @@ BufferLayoutMemberInfo BufferLayoutStruct_getMemberInfo(BufferLayoutStruct layou
 U16 BufferLayoutStruct_findMember(BufferLayoutStruct info, CharString copy) {
 
 	for (U16 i = 0; i < (U16)info.memberCount; ++i)
-		if (CharString_equalsString(
-			copy, 
-			BufferLayoutStruct_getMemberInfo(info, i).name, 
-			EStringCase_Sensitive
-		))
+		if (CharString_equalsStringSensitive(copy, BufferLayoutStruct_getMemberInfo(info, i).name))
 			return i;
 
 	return U16_MAX;
@@ -465,7 +461,7 @@ Error BufferLayout_resolveLayout(BufferLayout layout, CharString path, LayoutPat
 	if(!info)
 		return Error_nullPointer(2, "BufferLayout_resolveLayout()::info is NULL");
 
-	if(CharString_equalsString(path, CharString_createConstRefCStr("//"), EStringCase_Sensitive))
+	if(CharString_equalsStringSensitive(path, CharString_createConstRefCStr("//")))
 		return Error_invalidParameter(1, 0, "BufferLayout_resolveLayout()::path is invalid");
 
 	U64 start = CharString_startsWith(path, '/', EStringCase_Sensitive);

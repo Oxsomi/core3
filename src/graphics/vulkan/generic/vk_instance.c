@@ -139,21 +139,21 @@ Error GraphicsInstance_createExt(
 		const C8 *name = ((VkExtensionProperties*)extensions.ptr)[i].extensionName;
 		CharString nameStr = CharString_createConstRefCStr(name);
 
-		if(CharString_equalsString(nameStr, surfaceKhr, EStringCase_Sensitive))
+		if(CharString_equalsStringSensitive(nameStr, surfaceKhr))
 			supportsSurface = true;
 
-		else if(CharString_equalsString(nameStr, surfacePlatform, EStringCase_Sensitive))
+		else if(CharString_equalsStringSensitive(nameStr, surfacePlatform))
 			supportsSurfacePlatform = true;
 
-		else if(CharString_equalsString(nameStr, swapchainColorspace, EStringCase_Sensitive))
+		else if(CharString_equalsStringSensitive(nameStr, swapchainColorspace))
 			supportsColorSpace = true;
 
 		#ifndef NDEBUG
 
-			else if(CharString_equalsString(nameStr, debugReport, EStringCase_Sensitive))
+			else if(CharString_equalsStringSensitive(nameStr, debugReport))
 				supportsDebug[0] = true;
 
-			else if(CharString_equalsString(nameStr, debugUtils, EStringCase_Sensitive))
+			else if(CharString_equalsStringSensitive(nameStr, debugUtils))
 				supportsDebug[1] = true;
 
 		#endif
@@ -490,10 +490,9 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 			Bool found = false;
 
 			for(U64 l = 0; l < sizeof(reqExtensions); ++l)
-				if (CharString_equalsString(
+				if (CharString_equalsStringSensitive(
 					CharString_createConstRefCStr(reqExtensionsName[l]),
-					CharString_createConstRefCStr(name),
-					EStringCase_Sensitive
+					CharString_createConstRefCStr(name)
 				)) {
 					reqExtensions[l] = true;
 					found = true;
@@ -504,10 +503,9 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 
 			if (!found)
 				for(U64 l = 0; l < sizeof(optExtensions); ++l)
-					if (CharString_equalsString(
+					if (CharString_equalsStringSensitive(
 						CharString_createConstRefCStr(optExtensionsName[l]),
-						CharString_createConstRefCStr(name),
-						EStringCase_Sensitive
+						CharString_createConstRefCStr(name)
 					)) {
 						optExtensions[l] = true;
 						break;

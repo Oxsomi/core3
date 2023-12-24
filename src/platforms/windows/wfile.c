@@ -259,7 +259,7 @@ Error File_resolveVirtual(CharString loc, CharString *subPath, const VirtualSect
 		//This section won't return any subPath or section,
 		//This will force it to be identified as a folder.
 
-		if (CharString_equalsString(loc, sectioni->path, EStringCase_Insensitive))
+		if (CharString_equalsStringInsensitive(loc, sectioni->path))
 			goto clean;
 
 		//Parent folder.
@@ -473,7 +473,7 @@ Error File_foreachVirtualInternal(ForeachFile *userData, CharString resolved) {
 
 		if(
 			!CharString_startsWithString(copy1, copy, EStringCase_Sensitive) &&
-			!CharString_equalsString(copy1, resolved, EStringCase_Sensitive) &&
+			!CharString_equalsStringSensitive(copy1, resolved) &&
 			!CharString_startsWithString(copy, copy2, EStringCase_Sensitive)
 		)
 			continue;
@@ -489,7 +489,7 @@ Error File_foreachVirtualInternal(ForeachFile *userData, CharString resolved) {
 			Bool contains = false;
 
 			for(U64 j = 0; j < visited.length; ++j)
-				if (CharString_equalsString(parent, ((CharString*)(visited.ptr))[j], EStringCase_Sensitive)) {
+				if (CharString_equalsStringSensitive(parent, ((CharString*)(visited.ptr))[j])) {
 					contains = true;
 					break;
 				}
@@ -670,7 +670,7 @@ inline Error File_loadVirtualInternal(FileLoadVirtual *userData, CharString loc)
 		VirtualSection *section = (VirtualSection*)Platform_instance.virtualSections.ptr + i;
 
 		if(
-			!CharString_equalsString(loc, section->path, EStringCase_Insensitive) &&
+			!CharString_equalsStringInsensitive(loc, section->path) &&
 			!CharString_startsWithString(section->path, isChild, EStringCase_Insensitive)
 		)
 			continue;
@@ -758,7 +758,7 @@ Error File_unloadVirtualInternal(void *userData, CharString loc) {
 		VirtualSection *section = (VirtualSection*)Platform_instance.virtualSections.ptr + i;
 
 		if(
-			!CharString_equalsString(loc, section->path, EStringCase_Insensitive) &&
+			!CharString_equalsStringInsensitive(loc, section->path) &&
 			!CharString_startsWithString(section->path, isChild, EStringCase_Insensitive)
 		)
 			continue;

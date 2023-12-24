@@ -256,6 +256,12 @@ Bool CharString_containsString(CharString str, CharString other, EStringCase cas
 Bool CharString_equalsString(CharString s, CharString other, EStringCase caseSensitive);
 Bool CharString_equals(CharString s, C8 c, EStringCase caseSensitive);
 
+Bool CharString_equalsStringSensitive(CharString s, CharString other);
+Bool CharString_equalsSensitive(CharString s, C8 c);
+
+Bool CharString_equalsStringInsensitive(CharString s, CharString other);
+Bool CharString_equalsInsensitive(CharString s, C8 c);
+
 Bool CharString_parseNyto(CharString s, U64 *result);
 Bool CharString_parseHex(CharString s, U64 *result);
 Bool CharString_parseDec(CharString s, U64 *result);

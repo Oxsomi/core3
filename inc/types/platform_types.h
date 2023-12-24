@@ -23,12 +23,12 @@
 
 //Defines instead of enums to allow #if
 
-#define PLATFORM_UNINITIALIZED (0)
-#define PLATFORM_WINDOWS (1)
-#define PLATFORM_LINUX (2)
-#define PLATFORM_ANDROID (3)
-#define PLATFORM_WEB (4)
-#define PLATFORM_IOS (5)
-#define PLATFORM_OSX (6)
+#define PLATFORM_UNINITIALIZED 0
+#define PLATFORM_WINDOWS 1
+#define PLATFORM_LINUX 2
+#define PLATFORM_ANDROID 3
+#define PLATFORM_WEB 4
+#define PLATFORM_IOS 5
+#define PLATFORM_OSX 6
 
 typedef U32 EPlatform;

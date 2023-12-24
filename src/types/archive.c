@@ -81,10 +81,7 @@ Bool Archive_getPath(
 	//TODO: Optimize this with a hashmap
 
 	for(U64 i = 0; i < archive.entries.length; ++i)
-		if (CharString_equalsString(
-			((ArchiveEntry*)archive.entries.ptr)[i].path, resolvedPath, 
-			EStringCase_Insensitive
-		)) {
+		if (CharString_equalsStringInsensitive(((ArchiveEntry*)archive.entries.ptr)[i].path, resolvedPath)) {
 
 			if(entryOut && !CharString_length(entryOut->path))
 				*entryOut = ((ArchiveEntry*)archive.entries.ptr)[i];
