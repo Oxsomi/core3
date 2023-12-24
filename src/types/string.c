@@ -76,10 +76,10 @@ Bool CharString_isValidFileName(CharString str) {
 
 	//Trailing or leading space is illegal
 
-	if(CharString_endsWith(str, ' ', EStringCase_Sensitive))
+	if(CharString_endsWithSensitive(str, ' '))
 		return false;
 
-	if(CharString_startsWith(str, ' ', EStringCase_Sensitive))
+	if(CharString_startsWithSensitive(str, ' '))
 		return false;
 	
 	//Validation to make sure we're not using weird legacy MS DOS keywords
@@ -90,10 +90,10 @@ Bool CharString_isValidFileName(CharString str) {
 	if (strl >= 3) {
 
 		if(
-			CharString_startsWithString(str, CharString_createConstRefCStr("CON"), EStringCase_Insensitive) ||
-			CharString_startsWithString(str, CharString_createConstRefCStr("AUX"), EStringCase_Insensitive) ||
-			CharString_startsWithString(str, CharString_createConstRefCStr("NUL"), EStringCase_Insensitive) ||
-			CharString_startsWithString(str, CharString_createConstRefCStr("PRN"), EStringCase_Insensitive)
+			CharString_startsWithStringInsensitive(str, CharString_createConstRefCStr("CON")) ||
+			CharString_startsWithStringInsensitive(str, CharString_createConstRefCStr("AUX")) ||
+			CharString_startsWithStringInsensitive(str, CharString_createConstRefCStr("NUL")) ||
+			CharString_startsWithStringInsensitive(str, CharString_createConstRefCStr("PRN"))
 		)
 			illegalStart = 3;
 
@@ -101,8 +101,8 @@ Bool CharString_isValidFileName(CharString str) {
 
 			if(
 				(
-					CharString_startsWithString(str, CharString_createConstRefCStr("COM"), EStringCase_Insensitive) ||
-					CharString_startsWithString(str, CharString_createConstRefCStr("LPT"), EStringCase_Insensitive)
+					CharString_startsWithStringInsensitive(str, CharString_createConstRefCStr("COM")) ||
+					CharString_startsWithStringInsensitive(str, CharString_createConstRefCStr("LPT"))
 				) &&
 				C8_isDec(str.ptr[3])
 			)
@@ -377,10 +377,8 @@ Error CharString_offsetAsRef(CharString s, U64 off, CharString *result) {
 
 #define CharString_matchesPatternNum(testFunc, num) CharString_matchesPattern(	\
 	testFunc,																	\
-	CharString_startsWithString(												\
-		s,																		\
-		CharString_createConstRefCStr(num),										\
-		EStringCase_Insensitive													\
+	CharString_startsWithStringInsensitive(										\
+		s, CharString_createConstRefCStr(num)									\
 	) ? CharString_calcStrLen(num, U64_MAX) : 0									\
 )
 
@@ -411,15 +409,14 @@ Bool CharString_isDec(CharString s) {
 Bool CharString_isSignedNumber(CharString s) {
 	CharString_matchesPattern(
 		C8_isDec,
-		CharString_startsWith(s, '-', EStringCase_Sensitive) ||
-		CharString_startsWith(s, '+', EStringCase_Sensitive)
+		CharString_startsWithSensitive(s, '-') || CharString_startsWithSensitive(s, '+')
 	);
 }
 
 Bool CharString_isUnsignedNumber(CharString s) {
 	CharString_matchesPattern(
 		C8_isDec,
-		CharString_startsWith(s, '+', EStringCase_Sensitive)
+		CharString_startsWithSensitive(s, '+')
 	);
 }
 
@@ -1424,6 +1421,39 @@ U64 CharString_countAllString(CharString s, CharString other, EStringCase casing
 	return j;
 }
 
+Bool CharString_startsWithSensitive(CharString str, C8 c) { return CharString_startsWith(str, c, EStringCase_Sensitive); }
+Bool CharString_startsWithInsensitive(CharString str, C8 c) { return CharString_startsWith(str, c, EStringCase_Insensitive); }
+
+Bool CharString_startsWithStringSensitive(CharString str, CharString s) {
+	return CharString_startsWithString(str, s, EStringCase_Sensitive);
+}
+
+Bool CharString_startsWithStringInsensitive(CharString str, CharString s) {
+	return CharString_startsWithString(str, s, EStringCase_Insensitive);
+}
+
+Bool CharString_endsWithSensitive(CharString str, C8 c) { return CharString_endsWith(str, c, EStringCase_Sensitive); }
+Bool CharString_endsWithInsensitive(CharString str, C8 c) { return CharString_endsWith(str, c, EStringCase_Insensitive); }
+
+Bool CharString_endsWithStringSensitive(CharString str, CharString s) {
+	return CharString_endsWithString(str, s, EStringCase_Sensitive);
+}
+
+Bool CharString_endsWithStringInsensitive(CharString str, CharString s) {
+	return CharString_endsWithString(str, s, EStringCase_Insensitive);
+}
+
+U64 CharString_countAllSensitive(CharString s, C8 c) { return CharString_countAll(s, c, EStringCase_Sensitive); }
+U64 CharString_countAllInsensitive(CharString s, C8 c) { return CharString_countAll(s, c, EStringCase_Insensitive); }
+
+U64 CharString_countAllStringSensitive(CharString str, CharString s) {
+	return CharString_countAllString(str, s, EStringCase_Sensitive);
+}
+
+U64 CharString_countAllStringInsensitive(CharString str, CharString s) {
+	return CharString_countAllString(str, s, EStringCase_Insensitive);
+}
+
 Error CharString_findAll(
 	CharString s,
 	C8 c,
@@ -1647,7 +1677,7 @@ Bool CharString_parseNyto(CharString s, U64 *result){
 	CharString prefix = CharString_createConstRefCStr("0n");
 
 	Error err = CharString_offsetAsRef(
-		s, CharString_startsWithString(s, prefix, EStringCase_Insensitive) ? CharString_length(prefix) : 0, &s
+		s, CharString_startsWithStringInsensitive(s, prefix) ? CharString_length(prefix) : 0, &s
 	);
 
 	U64 strl = CharString_length(s);
@@ -1680,7 +1710,7 @@ Bool CharString_parseHex(CharString s, U64 *result){
 
 	CharString prefix = CharString_createConstRefCStr("0x");
 	Error err = CharString_offsetAsRef(
-		s, CharString_startsWithString(s, prefix, EStringCase_Insensitive) ? CharString_length(prefix) : 0, &s
+		s, CharString_startsWithStringInsensitive(s, prefix) ? CharString_length(prefix) : 0, &s
 	);
 
 	if (err.genericError)
@@ -1733,7 +1763,7 @@ Bool CharString_parseDec(CharString s, U64 *result) {
 
 Bool CharString_parseDecSigned(CharString s, I64 *result) {
 
-	Bool neg = CharString_startsWith(s, '-', EStringCase_Sensitive);
+	Bool neg = CharString_startsWithSensitive(s, '-');
 
 	Error err = CharString_offsetAsRef(s, neg, &s);
 
@@ -1770,7 +1800,7 @@ Bool CharString_parseDouble(CharString s, F64 *result) {
 
 	Bool sign = false;
 
-	if (CharString_startsWith(s, '-', EStringCase_Sensitive)) {
+	if (CharString_startsWithSensitive(s, '-')) {
 
 		sign = true;
 
@@ -1778,7 +1808,7 @@ Bool CharString_parseDouble(CharString s, F64 *result) {
 			return false;
 	}
 
-	else if (CharString_startsWith(s, '+', EStringCase_Sensitive)) {
+	else if (CharString_startsWithSensitive(s, '+')) {
 
 		if (CharString_offsetAsRef(s, 1, &s).genericError)
 			return false;
@@ -1789,8 +1819,8 @@ Bool CharString_parseDouble(CharString s, F64 *result) {
 	F64 intPart = 0;
 
 	while(
-		!CharString_startsWith(s, '.', EStringCase_Sensitive) && 
-		!CharString_startsWith(s, 'e', EStringCase_Insensitive)
+		!CharString_startsWithSensitive(s, '.') && 
+		!CharString_startsWithInsensitive(s, 'e')
 	) {
 
 		U8 v = C8_dec(s.ptr[0]);
@@ -1815,14 +1845,14 @@ Bool CharString_parseDouble(CharString s, F64 *result) {
 	//Parse fraction
 
 	if (
-		CharString_startsWith(s, '.', EStringCase_Sensitive) && 
+		CharString_startsWithSensitive(s, '.') && 
 		CharString_offsetAsRef(s, 1, &s).genericError
 	)
 		return false;
 
 	F64 fraction = 0, multiplier = 0.1;
 
-	while(!CharString_startsWith(s, 'e', EStringCase_Insensitive)) {
+	while(!CharString_startsWithInsensitive(s, 'e')) {
 
 		U8 v = C8_dec(s.ptr[0]);
 
@@ -1852,7 +1882,7 @@ Bool CharString_parseDouble(CharString s, F64 *result) {
 
 	Bool esign = false;
 
-	if (CharString_startsWith(s, '-', EStringCase_Sensitive)) {
+	if (CharString_startsWithSensitive(s, '-')) {
 
 		esign = true;
 
@@ -1860,7 +1890,7 @@ Bool CharString_parseDouble(CharString s, F64 *result) {
 			return false;
 	}
 
-	else if (CharString_startsWith(s, '+', EStringCase_Sensitive)) {
+	else if (CharString_startsWithSensitive(s, '+')) {
 
 		if (CharString_offsetAsRef(s, 1, &s).genericError)
 			return false;
@@ -1917,7 +1947,7 @@ Bool CharString_parseOct(CharString s, U64 *result) {
 
 	CharString prefix = CharString_createConstRefCStr("0o");
 	Error err = CharString_offsetAsRef(
-		s, CharString_startsWithString(s, prefix, EStringCase_Insensitive) ? CharString_length(prefix) : 0, &s
+		s, CharString_startsWithStringInsensitive(s, prefix) ? CharString_length(prefix) : 0, &s
 	);
 
 	if (err.genericError)
@@ -1949,7 +1979,7 @@ Bool CharString_parseBin(CharString s, U64 *result) {
 	CharString prefix = CharString_createConstRefCStr("0b");
 	Error err = CharString_offsetAsRef(
 		s, 
-		CharString_startsWithString(s, prefix, EStringCase_Insensitive) ? 
+		CharString_startsWithStringInsensitive(s, prefix) ? 
 		CharString_length(prefix) : 0, 
 		&s
 	);
@@ -1978,22 +2008,13 @@ Bool CharString_parseBin(CharString s, U64 *result) {
 
 Bool CharString_parseU64(CharString s, U64 *result) {
 
-	CharString bin = CharString_createConstRefCStr("0b");
-	CharString hex = CharString_createConstRefCStr("0x");
-	CharString oct = CharString_createConstRefCStr("0o");
-	CharString nyto = CharString_createConstRefCStr("0n");
-
-	if(CharString_startsWithString(s, hex, EStringCase_Insensitive))
-		return CharString_parseHex(s, result);
-
-	if(CharString_startsWithString(s, bin, EStringCase_Insensitive))
-		return CharString_parseBin(s, result);
-
-	if(CharString_startsWithString(s, oct, EStringCase_Insensitive))
-		return CharString_parseOct(s, result);
-
-	if(CharString_startsWithString(s, nyto, EStringCase_Insensitive))
-		return CharString_parseNyto(s, result);
+	if (CharString_startsWithSensitive(s, '0'))
+		switch (CharString_getAt(s, 1)) {
+			case 'B':	case 'b':	return CharString_parseBin(s, result);
+			case 'O':	case 'o':	return CharString_parseOct(s, result);
+			case 'X':	case 'x':	return CharString_parseHex(s, result);
+			case 'N':	case 'n':	return CharString_parseNyto(s, result);
+		}
 
 	return CharString_parseDec(s, result);
 }
@@ -2654,6 +2675,14 @@ ECompareResult CharString_compare(CharString a, CharString b, EStringCase caseSe
 		return ECompareResult_Gt;
 
 	return ECompareResult_Eq;
+}
+
+ECompareResult CharString_compareSensitive(CharString a, CharString b) {
+	return CharString_compare(a, b, EStringCase_Sensitive);
+}
+
+ECompareResult CharString_compareInsensitive(CharString a, CharString b) {
+	return CharString_compare(a, b, EStringCase_Insensitive);
 }
 
 //Format

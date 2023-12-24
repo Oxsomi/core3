@@ -248,7 +248,7 @@ Error Archive_removeInternal(Archive *archive, CharString path, Allocator alloc,
 
 			ArchiveEntry cai = ((ArchiveEntry*)archive->entries.ptr)[i];
 
-			if(!CharString_startsWithString(cai.path, resolved, EStringCase_Insensitive))
+			if(!CharString_startsWithStringInsensitive(cai.path, resolved))
 				continue;
 
 			//Free and remove from array
@@ -481,7 +481,7 @@ Error Archive_foreach(
 	if(CharString_length(resolved))									//Ignore root
 		_gotoIfError(clean, CharString_append(&resolved, '/', alloc));
 
-	U64 baseSlash = isRecursive ? 0 : CharString_countAll(resolved, '/', EStringCase_Sensitive);
+	U64 baseSlash = isRecursive ? 0 : CharString_countAllSensitive(resolved, '/');
 
 	//TODO: Have a map where it's easy to find child files/folders.
 	//		For now we'll have to loop over every file.
@@ -495,12 +495,12 @@ Error Archive_foreach(
 		if(type != EFileType_Any && type != cai.type)
 			continue;
 
-		if(!CharString_startsWithString(cai.path, resolved, EStringCase_Insensitive))
+		if(!CharString_startsWithStringInsensitive(cai.path, resolved))
 			continue;
 
 		//It contains at least one sub dir
 
-		if(!isRecursive && baseSlash != CharString_countAll(cai.path, '/', EStringCase_Sensitive))
+		if(!isRecursive && baseSlash != CharString_countAllSensitive(cai.path, '/'))
 			continue;
 
 		FileInfo info = (FileInfo) {

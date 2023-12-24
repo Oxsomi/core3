@@ -92,7 +92,7 @@ Error BigInt_createFromBase2Type(CharString text, U16 bitCount, Allocator alloc,
 	if(!big)
 		return Error_nullPointer(3, "BigInt_createFromBase2Type()::big is required");
 
-	Bool prefix = CharString_startsWithString(text, CharString_createConstRefCStr(base2Types[type]), EStringCase_Insensitive);
+	Bool prefix = CharString_startsWithStringInsensitive(text, CharString_createConstRefCStr(base2Types[type]));
 	U8 prefixChars = prefix * 2;
 	U8 countPerChar = base2Count[type];
 

@@ -694,7 +694,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 			return false;
 		}
 
-		U64 off = CharString_startsWithString(key, CharString_createConstRefCStr("0x"), EStringCase_Insensitive) ? 2 : 0;
+		U64 off = CharString_startsWithStringInsensitive(key, CharString_createConstRefCStr("0x")) ? 2 : 0;
 
 		if (CharString_length(key) - off != 64) {
 			Log_errorLnx("Invalid parameter sent to -aes. Expecting key in hex (32 bytes)");
@@ -766,7 +766,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 					if (e.type == EFileType_Folder) {
 
-						baseCount = CharString_countAll(e.path, '/', EStringCase_Sensitive) + 1;
+						baseCount = CharString_countAllSensitive(e.path, '/') + 1;
 
 						_gotoIfError(cleanCa, Archive_foreachx(
 							file.archive,
@@ -821,7 +821,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 			//Sort to ensure the subdirectories are correct
 
-			if(!List_sortString(strings, EStringCase_Insensitive))
+			if(!List_sortStringInsensitive(strings))
 				_gotoIfError(cleanCa, Error_invalidOperation(0, "CLI_inspectData() sort strings (oiCA) failed"));
 
 			//Process all and print
@@ -840,7 +840,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 				CharString pathi = ((const CharString*)strings.ptr)[i];
 
-				U64 parentCount = CharString_countAll(pathi, '/', EStringCase_Sensitive);
+				U64 parentCount = CharString_countAllSensitive(pathi, '/');
 
 				U64 v = Archive_getIndexx(file.archive, pathi);
 

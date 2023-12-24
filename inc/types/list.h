@@ -159,6 +159,8 @@ Bool List_sortF32(List list);
 Bool List_sortF64(List list);
 
 Bool List_sortString(List list, EStringCase stringCase);
+Bool List_sortStringSensitive(List list);
+Bool List_sortStringInsensitive(List list);
 
 Bool List_sortCustom(List list, CompareFunction func);
 

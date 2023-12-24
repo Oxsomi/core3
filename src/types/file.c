@@ -205,7 +205,7 @@ Error File_resolve(
 
 	#ifdef _WIN32	//Starts with [A-Z]:/ if absolute. If it starts with / it's unsupported!
 
-		if (CharString_startsWith(*result, '/', EStringCase_Sensitive))
+		if (CharString_startsWithSensitive(*result, '/'))
 			_gotoIfError(clean, Error_unsupportedOperation(
 				4, "File_resolve()::loc contained Unix path (/absolute), which is unsupported on Windows"
 			));
@@ -213,7 +213,7 @@ Error File_resolve(
 		isAbsolute = CharString_length(*result) >= 2 && result->ptr[1] == ':';
 
 	#else			//Starts with / if absolute
-		isAbsolute = CharString_startsWith(*result, '/', EStringCase_Sensitive);
+		isAbsolute = CharString_startsWithSensitive(*result, '/');
 	#endif
 
 	//Our path has to be made relative to our working directory.
@@ -221,7 +221,7 @@ Error File_resolve(
 
 	if (isAbsolute) {
 
-		if(!CharString_length(absoluteDir) || !CharString_startsWithString(*result, absoluteDir, EStringCase_Insensitive))
+		if(!CharString_length(absoluteDir) || !CharString_startsWithStringInsensitive(*result, absoluteDir))
 			_gotoIfError(clean, Error_unauthorized(
 				0, "File_resolve()::loc tried to escape working directory, which is unsupported for security reasons"
 			));

@@ -451,7 +451,7 @@ BOOL enumerateFiles(HMODULE mod, LPCSTR unused, LPSTR name, List *sections) {
 	Error err = Error_none();
 	CharString copy = CharString_createNull();
 
-	if(CharString_countAll(str, '/', EStringCase_Sensitive) != 1)
+	if(CharString_countAllSensitive(str, '/') != 1)
 		Log_warnLnx("Executable contained unrecognized RCDATA. Ignoring it...");
 
 	else {
@@ -528,7 +528,7 @@ Error Platform_initExt(CharString currAppDir) {
 		}
 
 		if(
-			!CharString_endsWith(basePath, '/', EStringCase_Sensitive) && 
+			!CharString_endsWithSensitive(basePath, '/') && 
 			(err = CharString_appendx(&workDir, '/')).genericError
 		)  {
 			CharString_freex(&appDir);

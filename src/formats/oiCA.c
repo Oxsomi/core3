@@ -96,8 +96,8 @@ Bool CAFile_free(CAFile *caFile, Allocator alloc) {
 
 ECompareResult sortParentCountAndFileNames(CharString *a, CharString *b) {
 
-	U64 foldersA = CharString_countAll(*a, '/', EStringCase_Sensitive);
-	U64 foldersB = CharString_countAll(*b, '/', EStringCase_Sensitive);
+	U64 foldersA = CharString_countAllSensitive(*a, '/');
+	U64 foldersB = CharString_countAllSensitive(*b, '/');
 
 	//We wanna sort on folder count first
 	//This ensures the root dirs are always at [0,N] and their children at [N, N+M], etc.
@@ -108,7 +108,7 @@ ECompareResult sortParentCountAndFileNames(CharString *a, CharString *b) {
 	if (foldersA > foldersB)
 		return ECompareResult_Gt;
 
-	return CharString_compare(*a, *b, EStringCase_Insensitive);
+	return CharString_compareInsensitive(*a, *b);
 }
 
 //We don't support any compression yet, but should be trivial to add once Buffer_compress/Buffer_decompress is supported.

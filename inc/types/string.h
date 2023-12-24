@@ -91,6 +91,8 @@ Bool CharString_isValidAscii(CharString str);
 Bool CharString_isValidFileName(CharString str);
 
 ECompareResult CharString_compare(CharString a, CharString b, EStringCase caseSensitive);
+ECompareResult CharString_compareSensitive(CharString a, CharString b);
+ECompareResult CharString_compareInsensitive(CharString a, CharString b);
 
 //Only checks characters. Please use resolvePath to actually validate if it's safely accessible.
 
@@ -220,6 +222,24 @@ Bool CharString_endsWithString(CharString str, CharString other, EStringCase cas
 
 U64 CharString_countAll(CharString s, C8 c, EStringCase caseSensitive);
 U64 CharString_countAllString(CharString s, CharString other, EStringCase caseSensitive);
+
+Bool CharString_startsWithSensitive(CharString str, C8 c);
+Bool CharString_startsWithStringSensitive(CharString str, CharString other);
+
+Bool CharString_endsWithSensitive(CharString str, C8 c);
+Bool CharString_endsWithStringSensitive(CharString str, CharString other);
+
+U64 CharString_countAllSensitive(CharString s, C8 c);
+U64 CharString_countAllStringSensitive(CharString s, CharString other);
+
+Bool CharString_startsWithInsensitive(CharString str, C8 c);
+Bool CharString_startsWithStringInsensitive(CharString str, CharString other);
+
+Bool CharString_endsWithInsensitive(CharString str, C8 c);
+Bool CharString_endsWithStringInsensitive(CharString str, CharString other);
+
+U64 CharString_countAllInsensitive(CharString s, C8 c);
+U64 CharString_countAllStringInsensitive(CharString s, CharString other);
 
 //Returns the locations (U64[])
 

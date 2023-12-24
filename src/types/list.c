@@ -736,11 +736,11 @@ Bool List_sortCustom(List list, CompareFunction f) {
 TList_sorts(TList_sort);
 
 ECompareResult List_compareString(const CharString *a, const CharString *b) {
-	return CharString_compare(*a, *b, EStringCase_Sensitive);
+	return CharString_compareSensitive(*a, *b);
 }
 
 ECompareResult List_compareStringInsensitive(const CharString *a, const CharString *b) {
-	return CharString_compare(*a, *b, EStringCase_Insensitive);
+	return CharString_compareInsensitive(*a, *b);
 }
 
 Bool List_sortString(List list, EStringCase stringCase) {
@@ -752,6 +752,9 @@ Bool List_sortString(List list, EStringCase stringCase) {
 		stringCase == EStringCase_Insensitive ? List_sortCustom(list, (CompareFunction) List_compareStringInsensitive) :
 		List_sortCustom(list, (CompareFunction) List_compareString);
 }
+
+Bool List_sortStringSensitive(List list) { return List_sortString(list, EStringCase_Sensitive); }
+Bool List_sortStringInsensitive(List list) { return List_sortString(list, EStringCase_Insensitive); }
 
 Error List_eraseFirst(List *list, Buffer buf, U64 offset) {
 

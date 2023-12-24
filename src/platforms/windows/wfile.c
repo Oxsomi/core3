@@ -178,12 +178,12 @@ Error File_virtualOp(CharString loc, Ns maxTimeout, VirtualFileFunc f, void *use
 	CharString access = CharString_createConstRefCStr("//access/");
 	CharString function = CharString_createConstRefCStr("//function/");
 
-	if (CharString_startsWithString(loc, access, EStringCase_Insensitive)) {
+	if (CharString_startsWithStringInsensitive(loc, access)) {
 		//TODO: Allow //access folder
 		return Error_unimplemented(0, "File_virtualOp()::loc //access/ not supported yet");
 	}
 
-	if (CharString_startsWithString(loc, function, EStringCase_Insensitive)) {
+	if (CharString_startsWithStringInsensitive(loc, function)) {
 		//TODO: Allow //function folder (user callbacks)
 		return Error_unimplemented(1, "File_virtualOp()::loc //function/ not supported yet");
 	}
@@ -264,7 +264,7 @@ Error File_resolveVirtual(CharString loc, CharString *subPath, const VirtualSect
 
 		//Parent folder.
 
-		if(CharString_startsWithString(sectioni->path, copy2, EStringCase_Insensitive))
+		if(CharString_startsWithStringInsensitive(sectioni->path, copy2))
 			goto clean;
 
 		//Check if the section includes the referenced file/folder
@@ -273,7 +273,7 @@ Error File_resolveVirtual(CharString loc, CharString *subPath, const VirtualSect
 		_gotoIfError(clean, CharString_createCopyx(sectioni->path, &copy1));
 		_gotoIfError(clean, CharString_appendx(&copy1, '/'));
 
-		if(CharString_startsWithString(copy, copy1, EStringCase_Insensitive)) {
+		if(CharString_startsWithStringInsensitive(copy, copy1)) {
 			CharString_cut(copy, CharString_length(copy1), 0, subPath);
 			*section = sectioni;
 			goto clean;
@@ -456,7 +456,7 @@ Error File_foreachVirtualInternal(ForeachFile *userData, CharString resolved) {
 	if(acq < ELockAcquire_Success)
 		_gotoIfError(clean, Error_invalidState(0, "File_unloadVirtualInternal() couldn't lock virtualSectionsLock"));
 
-	U64 baseCount = CharString_countAll(copy, '/', EStringCase_Sensitive);
+	U64 baseCount = CharString_countAllSensitive(copy, '/');
 
 	for (U64 i = 0; i < Platform_instance.virtualSections.length; ++i) {
 
@@ -472,9 +472,9 @@ Error File_foreachVirtualInternal(ForeachFile *userData, CharString resolved) {
 		_gotoIfError(clean, CharString_appendx(&copy2, '/'));
 
 		if(
-			!CharString_startsWithString(copy1, copy, EStringCase_Sensitive) &&
+			!CharString_startsWithStringSensitive(copy1, copy) &&
 			!CharString_equalsStringSensitive(copy1, resolved) &&
-			!CharString_startsWithString(copy, copy2, EStringCase_Sensitive)
+			!CharString_startsWithStringSensitive(copy, copy2)
 		)
 			continue;
 
@@ -517,8 +517,8 @@ Error File_foreachVirtualInternal(ForeachFile *userData, CharString resolved) {
 		//All folders 
 		
 		if (
-			(!userData->isRecursive && baseCount == CharString_countAll(section->path, '/', EStringCase_Sensitive)) ||
-			(userData->isRecursive && baseCount <= CharString_countAll(section->path, '/', EStringCase_Sensitive))
+			(!userData->isRecursive && baseCount == CharString_countAllSensitive(section->path, '/')) ||
+			(userData->isRecursive && baseCount <= CharString_countAllSensitive(section->path, '/'))
 		) {
 
 			CharString_freex(&copy3);
@@ -671,7 +671,7 @@ inline Error File_loadVirtualInternal(FileLoadVirtual *userData, CharString loc)
 
 		if(
 			!CharString_equalsStringInsensitive(loc, section->path) &&
-			!CharString_startsWithString(section->path, isChild, EStringCase_Insensitive)
+			!CharString_startsWithStringInsensitive(section->path, isChild)
 		)
 			continue;
 
@@ -759,7 +759,7 @@ Error File_unloadVirtualInternal(void *userData, CharString loc) {
 
 		if(
 			!CharString_equalsStringInsensitive(loc, section->path) &&
-			!CharString_startsWithString(section->path, isChild, EStringCase_Insensitive)
+			!CharString_startsWithStringInsensitive(section->path, isChild)
 		)
 			continue;
 

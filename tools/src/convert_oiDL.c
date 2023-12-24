@@ -347,10 +347,7 @@ Error _CLI_convertFromDL(ParsedArgs args, CharString input, FileInfo inputInfo, 
 	CharString txt = CharString_createConstRefCStr(".txt");
 
 	if(
-		(
-			CharString_endsWithString(output, txt, EStringCase_Insensitive) ||
-			(args.parameters & EOperationHasParameter_SplitBy)
-		) &&
+		(CharString_endsWithStringInsensitive(output, txt) || (args.parameters & EOperationHasParameter_SplitBy)) &&
 		file.settings.dataType == EDLDataType_Ascii
 	)
 		type = EFileType_File;
@@ -366,7 +363,7 @@ Error _CLI_convertFromDL(ParsedArgs args, CharString input, FileInfo inputInfo, 
 
 		_gotoIfError(clean, CharString_createCopyx(output, &outputBase));
 
-		if(!CharString_endsWith(outputBase, '/', EStringCase_Sensitive))
+		if(!CharString_endsWithSensitive(outputBase, '/'))
 			_gotoIfError(clean, CharString_appendx(&outputBase, '/'));
 
 		CharString bin = CharString_createConstRefCStr(".bin");
