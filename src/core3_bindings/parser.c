@@ -214,7 +214,7 @@ ETokenType Parser_getTokenType(CharString str, U64 *subTokenOffset) {
 
 			break;
 
-		//()[]{}:;,
+		//()[]{}:;,.
 
 		case ')':	count = 1;	tokenType = ETokenType_RoundParenthesisStart;	break;
 		case '(':	count = 1;	tokenType = ETokenType_RoundParenthesisEnd;		break;
@@ -225,6 +225,7 @@ ETokenType Parser_getTokenType(CharString str, U64 *subTokenOffset) {
 		case ':':	count = 1;	tokenType = ETokenType_Colon;					break;
 		case ';':	count = 1;	tokenType = ETokenType_Semicolon;				break;
 		case ',':	count = 1;	tokenType = ETokenType_Comma;					break;
+		case '.':	count = 1;	tokenType = ETokenType_Period;					break;
 	}
 
 	*subTokenOffset += count;

@@ -90,6 +90,7 @@ typedef enum ETokenType {
 	ETokenType_Semicolon,				// ;
 
 	ETokenType_Comma,					// ,
+	ETokenType_Period,					// .
 
 	ETokenType_Count
 
