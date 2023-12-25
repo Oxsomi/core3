@@ -879,6 +879,22 @@ Error CharString_splitLine(CharString s, Allocator alloc, CharStringList *result
 	return Error_none();
 }
 
+Error CharString_splitSensitive(CharString s, C8 c, Allocator allocator, CharStringList *result) {
+	return CharString_split(s, c, EStringCase_Sensitive, allocator, result);
+}
+
+Error CharString_splitInsensitive(CharString s, C8 c, Allocator allocator, CharStringList *result) {
+	return CharString_split(s, c, EStringCase_Insensitive, allocator, result);
+}
+
+Error CharString_splitStringSensitive(CharString s, CharString other, Allocator allocator, CharStringList *result) {
+	return CharString_splitString(s, other, EStringCase_Sensitive, allocator, result);
+}
+
+Error CharString_splitStringInsensitive(CharString s, CharString other, Allocator allocator, CharStringList *result) {
+	return CharString_splitString(s, other, EStringCase_Insensitive, allocator, result);
+}
+
 Error CharString_reserve(CharString *str, U64 length, Allocator alloc) {
 
 	if (!str)
@@ -2573,6 +2589,17 @@ Bool CharString_containsString(CharString str, CharString other, EStringCase cas
 	return CharString_findFirstString(str, other, caseSensitive) != U64_MAX; 
 }
 
+Bool CharString_containsSensitive(CharString str, C8 c) { return CharString_contains(str, c, EStringCase_Sensitive); }
+Bool CharString_containsInsensitive(CharString str, C8 c) { return CharString_contains(str, c, EStringCase_Insensitive); }
+
+Bool CharString_containsStringSensitive(CharString str, CharString other) {
+	return CharString_containsString(str, other, EStringCase_Sensitive);
+}
+
+Bool CharString_containsStringInsensitive(CharString str, CharString other) {
+	return CharString_containsString(str, other, EStringCase_Insensitive);
+}
+
 Bool CharString_cutAfterLast(CharString s, C8 c, EStringCase caseSensitive, CharString *result) {
 	return CharString_cutAfter(s, c, caseSensitive, false, result);
 }
@@ -2606,7 +2633,10 @@ Bool CharString_cutBeforeFirstString(CharString s, CharString other, EStringCase
 }
 
 Error CharString_popFrontCount(CharString *s, U64 count) { return CharString_eraseAtCount(s, 0, count); }
-Error CharString_popEndCount(CharString *s, U64 count) { return CharString_eraseAtCount(s, s ? CharString_length(*s) : 0, count); }
+
+Error CharString_popEndCount(CharString *s, U64 count) { 
+	return CharString_eraseAtCount(s, s ? CharString_length(*s) : 0, count); 
+}
 
 Error CharString_eraseAt(CharString *s, U64 i) { return CharString_eraseAtCount(s, i, 1); }
 Error CharString_popFront(CharString *s) { return CharString_eraseAt(s, 0); }
@@ -2626,6 +2656,55 @@ Bool CharString_eraseFirstString(CharString *s, CharString other, EStringCase ca
 
 Bool CharString_eraseLastString(CharString *s, CharString other, EStringCase caseSensitive) {
 	return CharString_eraseString(s, other, caseSensitive, false);
+}
+
+Bool CharString_eraseAllSensitive(CharString *s, C8 c) { return CharString_eraseAll(s, c, EStringCase_Sensitive); }
+Bool CharString_eraseAllInsensitive(CharString *s, C8 c) { return CharString_eraseAll(s, c, EStringCase_Insensitive); }
+
+Bool CharString_eraseSensitive(CharString *s, C8 c, Bool isFirst) { 
+	return CharString_erase(s, c, EStringCase_Sensitive, isFirst);
+}
+
+Bool CharString_eraseInsensitive(CharString *s, C8 c, Bool isFirst) { 
+	return CharString_erase(s, c, EStringCase_Insensitive, isFirst);
+}
+
+Bool CharString_eraseFirstSensitive(CharString *s, C8 c) { return CharString_eraseFirst(s, c, EStringCase_Sensitive); }
+Bool CharString_eraseFirstInsensitive(CharString *s, C8 c) { return CharString_eraseFirst(s, c, EStringCase_Insensitive); }
+
+Bool CharString_eraseLastSensitive(CharString *s, C8 c) { return CharString_eraseLast(s, c, EStringCase_Sensitive); }
+Bool CharString_eraseLastInsensitive(CharString *s, C8 c) { return CharString_eraseLast(s, c, EStringCase_Insensitive); }
+
+Bool CharString_eraseAllStringSensitive(CharString *s, CharString other) { 
+	return CharString_eraseAllString(s, other, EStringCase_Sensitive);
+}
+
+Bool CharString_eraseAllStringInsensitive(CharString *s, CharString other) { 
+	return CharString_eraseAllString(s, other, EStringCase_Insensitive);
+}
+
+Bool CharString_eraseStringSensitive(CharString *s, CharString other, Bool isFirst) { 
+	return CharString_eraseString(s, other, EStringCase_Sensitive, isFirst);
+}
+
+Bool CharString_eraseStringInsensitive(CharString *s, CharString other, Bool isFirst) { 
+	return CharString_eraseString(s, other, EStringCase_Insensitive, isFirst);
+}
+
+Bool CharString_eraseFirstStringSensitive(CharString *s, CharString other) { 
+	return CharString_eraseFirstString(s, other, EStringCase_Sensitive);
+}
+
+Bool CharString_eraseFirstStringInsensitive(CharString *s, CharString other) { 
+	return CharString_eraseFirstString(s, other, EStringCase_Insensitive);
+}
+
+Bool CharString_eraseLastStringSensitive(CharString *s, CharString other) { 
+	return CharString_eraseLastString(s, other, EStringCase_Sensitive);
+}
+
+Bool CharString_eraseLastStringInsensitive(CharString *s, CharString other) { 
+	return CharString_eraseLastString(s, other, EStringCase_Insensitive);
 }
 
 Bool CharString_replaceFirst(CharString *s, C8 c, C8 v, EStringCase caseSensitive) {

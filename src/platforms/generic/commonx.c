@@ -284,6 +284,22 @@ Error CharString_splitStringx(CharString s, CharString other, EStringCase casing
 	return CharString_splitString(s, other, casing, Platform_instance.alloc, result);
 }
 
+Error CharString_splitSensitivex(CharString s, C8 c, CharStringList *result) {
+	return CharString_splitSensitive(s, c, Platform_instance.alloc, result);
+}
+
+Error CharString_splitInsensitivex(CharString s, C8 c, CharStringList *result) {
+	return CharString_splitInsensitive(s, c, Platform_instance.alloc, result);
+}
+
+Error CharString_splitStringSensitivex(CharString s, CharString other, CharStringList *result) {
+	return CharString_splitStringSensitive(s, other, Platform_instance.alloc, result);
+}
+
+Error CharString_splitStringInsensitivex(CharString s, CharString other, CharStringList *result) {
+	return CharString_splitStringInsensitive(s, other, Platform_instance.alloc, result);
+}
+
 Error CharString_splitLinex(CharString s, CharStringList *result) {
 	return CharString_splitLine(s, Platform_instance.alloc, result);
 }

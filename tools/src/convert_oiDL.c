@@ -145,7 +145,7 @@ Error _CLI_convertToDL(ParsedArgs args, CharString input, FileInfo inputInfo, Ch
 				CharString splitBy;
 				_gotoIfError(clean, ParsedArgs_getArg(args, EOperationHasParameter_SplitByShift, &splitBy));
 					
-				_gotoIfError(clean, CharString_splitStringx(str, splitBy, EStringCase_Sensitive, &split));
+				_gotoIfError(clean, CharString_splitStringSensitivex(str, splitBy, &split));
 			}
 
 			else _gotoIfError(clean, CharString_splitLinex(str, &split));

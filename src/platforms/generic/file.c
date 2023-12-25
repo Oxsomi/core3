@@ -301,12 +301,12 @@ Error File_add(CharString loc, EFileType type, Ns maxTimeout) {
 
 	//Check parent directories until none left
 
-	if(CharString_contains(resolved, '/', EStringCase_Sensitive)) {
+	if(CharString_containsSensitive(resolved, '/')) {
 
-		if(!CharString_eraseFirstString(&resolved, Platform_instance.workingDirectory, EStringCase_Insensitive))
+		if(!CharString_eraseFirstStringInsensitive(&resolved, Platform_instance.workingDirectory))
 			_gotoIfError(clean, Error_unauthorized(0, "File_add() escaped working directory. This is not supported."));
 
-		_gotoIfError(clean, CharString_splitx(resolved, '/', EStringCase_Sensitive, &str));
+		_gotoIfError(clean, CharString_splitSensitivex(resolved, '/', &str));
 
 		for (U64 i = 0; i < str.length - 1; ++i) {
 

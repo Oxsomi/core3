@@ -36,6 +36,11 @@ Error CharString_splitx(CharString s, C8 c, EStringCase casing, CharStringList *
 Error CharString_splitStringx(CharString s, CharString other, EStringCase casing, CharStringList *result);
 Error CharString_splitLinex(CharString s, CharStringList *result);
 
+Error CharString_splitSensitivex(CharString s, C8 c, CharStringList *result);
+Error CharString_splitStringSensitivex(CharString s, CharString other, CharStringList *result);
+Error CharString_splitInsensitivex(CharString s, C8 c, CharStringList *result);
+Error CharString_splitStringInsensitivex(CharString s, CharString other, CharStringList *result);
+
 Error CharString_resizex(CharString *str, U64 length, C8 defaultChar);
 Error CharString_reservex(CharString *str, U64 length);
 

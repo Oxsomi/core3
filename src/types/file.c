@@ -108,7 +108,7 @@ Error File_resolve(
 	//Now we have to discover the real directory it references to. This means resolving:
 	//Empty filename and . to mean no difference and .. to step back
 
-	_gotoIfError(clean, CharString_split(*result, '/', EStringCase_Sensitive, alloc, &res));
+	_gotoIfError(clean, CharString_splitSensitive(*result, '/', alloc, &res));
 
 	U64 realSplitLen = res.length;		//We have to reset this before unallocating the CharStringList!
 

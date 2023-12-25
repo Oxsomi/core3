@@ -161,6 +161,11 @@ Error CharString_splitString(
 	CharStringList *result
 );
 
+Error CharString_splitSensitive(CharString s, C8 c, Allocator allocator, CharStringList *result);
+Error CharString_splitInsensitive(CharString s, C8 c, Allocator allocator, CharStringList *result);
+Error CharString_splitStringSensitive(CharString s, CharString other, Allocator allocator, CharStringList *result);
+Error CharString_splitStringInsensitive(CharString s, CharString other, Allocator allocator, CharStringList *result);
+
 Error CharString_splitLine(CharString s, Allocator alloc, CharStringList *result);
 
 //This will operate on this string, so it will need a heap allocated string
@@ -273,6 +278,12 @@ U64 CharString_findString(CharString s, CharString other, EStringCase caseSensit
 Bool CharString_contains(CharString str, C8 c, EStringCase caseSensitive);
 Bool CharString_containsString(CharString str, CharString other, EStringCase caseSensitive);
 
+Bool CharString_containsSensitive(CharString str, C8 c);
+Bool CharString_containsInsensitive(CharString str, C8 c);
+
+Bool CharString_containsStringSensitive(CharString str, CharString other);
+Bool CharString_containsStringInsensitive(CharString str, CharString other);
+
 Bool CharString_equalsString(CharString s, CharString other, EStringCase caseSensitive);
 Bool CharString_equals(CharString s, C8 c, EStringCase caseSensitive);
 
@@ -373,6 +384,36 @@ Bool CharString_eraseString(CharString *s, CharString other, EStringCase caseSen
 
 Bool CharString_eraseFirstString(CharString *s, CharString other, EStringCase caseSensitive);
 Bool CharString_eraseLastString(CharString *s, CharString other, EStringCase caseSensitive);
+
+//Duplicates of erase to simplify casing
+
+Bool CharString_eraseAllSensitive(CharString *s, C8 c);
+Bool CharString_eraseAllStringSensitive(CharString *s, CharString other);
+
+Bool CharString_eraseSensitive(CharString *s, C8 c, Bool isFirst);
+
+Bool CharString_eraseFirstSensitive(CharString *s, C8 c);
+Bool CharString_eraseLastSensitive(CharString *s, C8 c);
+
+Bool CharString_eraseStringSensitive(CharString *s, CharString other, Bool isFirst);
+
+Bool CharString_eraseFirstStringSensitive(CharString *s, CharString other);
+Bool CharString_eraseLastStringSensitive(CharString *s, CharString other);
+
+Bool CharString_eraseAllInsensitive(CharString *s, C8 c);
+Bool CharString_eraseAllStringInsensitive(CharString *s, CharString other);
+
+Bool CharString_eraseInsensitive(CharString *s, C8 c, Bool isFirst);
+
+Bool CharString_eraseFirstInsensitive(CharString *s, C8 c);
+Bool CharString_eraseLastInsensitive(CharString *s, C8 c);
+
+Bool CharString_eraseStringInsensitive(CharString *s, CharString other, Bool isFirst);
+
+Bool CharString_eraseFirstStringInsensitive(CharString *s, CharString other);
+Bool CharString_eraseLastStringInsensitive(CharString *s, CharString other);
+
+//Replace
 
 Bool CharString_replaceAll(CharString *s, C8 c, C8 v, EStringCase caseSensitive);
 

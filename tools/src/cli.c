@@ -167,7 +167,7 @@ Bool CLI_helpOperation(ParsedArgs args) {
 	CharStringList split = (CharStringList) { 0 };
 
 	if(args.parameters & EOperationHasParameter_Input)
-		_gotoIfError(clean, CharString_splitx(*(const CharString*)args.args.ptr, ':', EStringCase_Sensitive, &split));
+		_gotoIfError(clean, CharString_splitSensitivex(*(const CharString*)args.args.ptr, ':', &split));
 
 	if(split.length > 0)
 		for (EOperationCategory cat = EOperationCategory_Start; cat < EOperationCategory_End; ++cat) {
