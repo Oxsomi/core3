@@ -65,8 +65,26 @@ Error CharString_replaceStringx(
 Error CharString_replaceFirstStringx(CharString *s, CharString search, CharString replace, EStringCase caseSensitive);
 Error CharString_replaceLastStringx(CharString *s, CharString search, CharString replace, EStringCase caseSensitive);
 
+Error CharString_replaceAllStringSensitivex(CharString *s, CharString search, CharString replace);
+Error CharString_replaceStringSensitivex(CharString *s, CharString search, CharString replace, Bool isFirst);
+
+Error CharString_replaceFirstStringSensitivex(CharString *s, CharString search, CharString replace);
+Error CharString_replaceLastStringSensitivex(CharString *s, CharString search, CharString replace);
+
+Error CharString_replaceAllStringInsensitivex(CharString *s, CharString search, CharString replace);
+Error CharString_replaceStringInsensitivex(CharString *s, CharString search, CharString replace, Bool isFirst);
+
+Error CharString_replaceFirstStringInsensitivex(CharString *s, CharString search, CharString replace);
+Error CharString_replaceLastStringInsensitivex(CharString *s, CharString search, CharString replace);
+
 Error CharString_findAllx(CharString s, C8 c, EStringCase caseSensitive, List *result);
 Error CharString_findAllStringx(CharString s, CharString other, EStringCase caseSensitive, List *result);
+
+Error CharString_findAllSensitivex(CharString s, C8 c, List *result);
+Error CharString_findAllStringSensitivex(CharString s, CharString other, List *result);
+
+Error CharString_findAllInsensitivex(CharString s, C8 c, List *result);
+Error CharString_findAllStringInsensitivex(CharString s, CharString other, List *result);
 
 Bool CharStringList_freex(CharStringList *arr);
 

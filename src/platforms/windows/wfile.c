@@ -483,7 +483,7 @@ Error File_foreachVirtualInternal(ForeachFile *userData, CharString resolved) {
 		if (!CharString_length(resolved)) {
 
 			CharString parent = CharString_createNull();
-			if(!CharString_cutAfterFirst(copy1, '/', EStringCase_Sensitive, &parent))
+			if(!CharString_cutAfterFirstSensitive(copy1, '/', &parent))
 				_gotoIfError(clean, Error_invalidState(0, "File_foreachVirtualInternal() cutAfterFirst failed"));
 
 			Bool contains = false;

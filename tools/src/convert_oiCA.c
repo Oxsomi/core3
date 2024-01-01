@@ -147,7 +147,7 @@ Error _CLI_convertToCA(ParsedArgs args, CharString input, FileInfo inputInfo, Ch
 
 		CharString subPath = CharString_createNull();
 
-		if(!CharString_cutBeforeLast(resolved, '/', EStringCase_Sensitive, &subPath))
+		if(!CharString_cutBeforeLastSensitive(resolved, '/', &subPath))
 			_gotoIfError(clean, Error_invalidState(0, "_CLI_convertToCA() cutBeforeLast failed"));
 
 		_gotoIfError(clean, File_getInfo(resolved, &fileInfo));

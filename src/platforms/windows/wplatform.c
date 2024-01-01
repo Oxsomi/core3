@@ -509,9 +509,9 @@ Error Platform_initExt(CharString currAppDir) {
 			return Error_platformError(1, GetLastError(), "Platform_initExt()::currAppDir couldn't createCopyx");
 		}
 
-		CharString_replaceAll(&appDir, '\\', '/', EStringCase_Sensitive);
+		CharString_replaceAllSensitive(&appDir, '\\', '/');
 
-		U64 loc = CharString_findLast(appDir, '/', EStringCase_Sensitive);
+		U64 loc = CharString_findLastSensitive(appDir, '/');
 		CharString basePath = CharString_createNull();
 
 		if (loc == CharString_length(appDir))
@@ -567,7 +567,7 @@ Error Platform_initExt(CharString currAppDir) {
 			return err;
 		}
 
-		CharString_replaceAll(&Platform_instance.workingDirectory, '\\', '/', EStringCase_Sensitive);
+		CharString_replaceAllSensitive(&Platform_instance.workingDirectory, '\\', '/');
 
 		if ((err = CharString_appendx(&Platform_instance.workingDirectory, '/')).genericError)  {
 			CharString_freex(&Platform_instance.workingDirectory);

@@ -86,7 +86,7 @@ Error File_resolve(
 
 	//Backslash is replaced with forward slash for easy windows compatibility
 
-	if (!CharString_replaceAll(result, '\\', '/', EStringCase_Sensitive))
+	if (!CharString_replaceAllSensitive(result, '\\', '/'))
 		_gotoIfError(clean, Error_invalidOperation(1, "File_resolve() can't replaceAll"));
 
 	//On Windows, it's possible to change drive but keep same relative path. We don't support it.

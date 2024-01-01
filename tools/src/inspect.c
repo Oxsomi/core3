@@ -858,7 +858,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 				CharString_freex(&tmp1);
 
 				CharString sub = CharString_createNull();
-				if(!CharString_cutBeforeLast(pathi, '/', EStringCase_Sensitive, &sub))
+				if(!CharString_cutBeforeLastSensitive(pathi, '/', &sub))
 					sub = CharString_createConstRefSized(pathi.ptr, CharString_length(pathi), false);
 
 				_gotoIfError(cleanCa, CharString_appendStringx(&tmp, sub));

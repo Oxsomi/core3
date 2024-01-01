@@ -133,7 +133,7 @@ Bool Archive_createOrFindParent(Archive *archive, CharString path, Allocator all
 	//So we don't need to create a parent
 
 	CharString substr = CharString_createNull();
-	if (!CharString_cutAfterLast(path, '/', EStringCase_Sensitive, &substr))
+	if (!CharString_cutAfterLastSensitive(path, '/', &substr))
 		return true;
 
 	//Try to add parent (returns true if already exists)
@@ -314,7 +314,7 @@ Error Archive_rename(
 	CharString *prevPath = &((ArchiveEntry*)archive->entries.ptr)[i].path;
 	CharString subStr = CharString_createNull();
 
-	CharString_cutAfterLast(*prevPath, '/', EStringCase_Sensitive, &subStr);
+	CharString_cutAfterLastSensitive(*prevPath, '/', &subStr);
 	prevPath->lenAndNullTerminated = CharString_length(subStr);
 
 	_gotoIfError(clean, CharString_appendString(prevPath, newFileName, alloc));
@@ -351,7 +351,7 @@ Error Archive_move(
 
 	CharString *filePath = &((ArchiveEntry*)archive->entries.ptr)[i].path;
 
-	U64 v = CharString_findLast(*filePath, '/', EStringCase_Sensitive);
+	U64 v = CharString_findLastSensitive(*filePath, '/');
 
 	if (v != U64_MAX)
 		_gotoIfError(clean, CharString_popFrontCount(filePath, v + 1));

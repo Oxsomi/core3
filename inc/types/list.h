@@ -37,6 +37,8 @@ typedef struct List {
 	U64 capacityAndRefInfo;		//If capacityAndRefInfo is 0 or U64_MAX, it indicates a ref
 } List;
 
+#define TList(T) List
+
 typedef ECompareResult (*CompareFunction)(const void *aPtr, const void *bPtr);
 
 Bool List_isConstRef(List l);

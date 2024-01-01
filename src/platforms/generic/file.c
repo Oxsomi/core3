@@ -511,7 +511,7 @@ Error File_move(CharString loc, CharString directoryName, Ns maxTimeout) {
 
 	CharString fileName = CharString_createNull();
 
-	if(!CharString_cutBeforeLast(fileName, '/', EStringCase_Sensitive, &fileName))
+	if(!CharString_cutBeforeLastSensitive(fileName, '/', &fileName))
 		fileName = resolved;
 
 	CharString_setAt(resolvedFile, CharString_length(resolvedFile) - 1, '/');

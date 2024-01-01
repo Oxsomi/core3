@@ -194,11 +194,11 @@ Error _CLI_convertToDL(ParsedArgs args, CharString input, FileInfo inputInfo, Ch
 		for (U64 i = 0; i < paths.length; ++i) {
 
 			CharString stri = ((const CharString*)paths.ptr)[i];
-			CharString_cutBeforeLast(stri, '/', EStringCase_Sensitive, &basePath);
+			CharString_cutBeforeLastSensitive(stri, '/', &basePath);
 
 			CharString tmp = CharString_createNull();
 
-			if(CharString_cutAfterLast(basePath, '.', EStringCase_Sensitive, &tmp))
+			if(CharString_cutAfterLastSensitive(basePath, '.', &tmp))
 				basePath = tmp;
 
 			U64 dec = 0;

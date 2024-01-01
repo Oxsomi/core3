@@ -242,7 +242,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 		CharString dir = ((CharString*)directories.ptr)[i];
 		CharString dirName = CharString_createNull();
 
-		if(!CharString_cutBeforeLast(dir, '/', EStringCase_Sensitive, &dirName))
+		if(!CharString_cutBeforeLastSensitive(dir, '/', &dirName))
 			dirName = CharString_createConstRefSized(dir.ptr, CharString_length(dir), CharString_isNullTerminated(dir));
 
 		_gotoIfError(clean, DLFile_addEntryAscii(&dlFile, dirName, alloc));
@@ -253,7 +253,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 		CharString file = ((CharString*)files.ptr)[i];
 		CharString fileName = CharString_createNull();
 
-		if(!CharString_cutBeforeLast(file, '/', EStringCase_Sensitive, &fileName))
+		if(!CharString_cutBeforeLastSensitive(file, '/', &fileName))
 			fileName = CharString_createConstRefSized(file.ptr, CharString_length(file), CharString_isNullTerminated(file));
 
 		_gotoIfError(clean, DLFile_addEntryAscii(&dlFile, fileName, alloc));
@@ -304,7 +304,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 	for (U16 i = 0; i < (U16) directories.length; ++i) {
 
 		CharString dir = ((CharString*)directories.ptr)[i];
-		U64 it = CharString_findLast(dir, '/', EStringCase_Sensitive);
+		U64 it = CharString_findLastSensitive(dir, '/');
 
 		U16 parent = U16_MAX;
 
@@ -352,7 +352,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 	for (U32 i = 0; i < (U32) files.length; ++i) {
 
 		CharString file = ((CharString*)files.ptr)[i];
-		U64 it = CharString_findLast(file, '/', EStringCase_Sensitive);
+		U64 it = CharString_findLastSensitive(file, '/');
 
 		U16 parent = U16_MAX;
 
