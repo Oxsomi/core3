@@ -19,9 +19,7 @@
 */
 
 #pragma once
-#include "types/list.h"
-
-typedef struct CharString CharString;
+#include "types/string.h"
 
 //Parameters
 
@@ -201,7 +199,7 @@ typedef struct ParsedArgs {
 	EFormat format;
 	EOperationFlags flags;
 	EOperationHasParameter parameters;
-	List args;					//[CharString]; use parameter flags to extract from low to high
+	ListCharString args;					//Use parameter flags to extract from low to high
 } ParsedArgs;
 
 typedef Bool (*OperationFunc)(ParsedArgs);

@@ -18,18 +18,25 @@
 *  This is called dual licensing.
 */
 
+#include "platforms/ext/listx_impl.h"
 #include "graphics/generic/command_list.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/swapchain.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/pipeline.h"
-#include "platforms/ext/listx.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/log.h"
-#include "types/buffer.h"
 #include "types/string.h"
-#include "types/error.h"
 #include "formats/texture.h"
+
+TListImpl(CommandOpInfo);
+TListImpl(TransitionInternal);
+TListImpl(CommandScope);
+TListImpl(DeviceResourceVersion);
+TListImpl(Transition);
+TListImpl(CommandScopeDependency);
+TListImpl(ClearImageCmd);
+TListImpl(AttachmentInfo);
 
 Error CommandListRef_dec(CommandListRef **cmd) {
 	return !RefPtr_dec(cmd) ? Error_invalidOperation(0, "CommandListRef_dec()::cmd invalid") : Error_none();
@@ -68,19 +75,19 @@ Error CommandListRef_clear(CommandListRef *commandListRef) {
 
 	for (U64 i = 0; i < commandList->resources.length; ++i) {
 
-		RefPtr **ptr = (RefPtr**)commandList->resources.ptr + i;
+		RefPtr **ptr = &commandList->resources.ptrNonConst[i];
 
 		if(*ptr)
 			RefPtr_dec(ptr);
 	}
 
 	Error err = Error_none();
-	_gotoIfError(clean, List_clear(&commandList->commandOps));
-	_gotoIfError(clean, List_clear(&commandList->resources));
-	_gotoIfError(clean, List_clear(&commandList->transitions));
-	_gotoIfError(clean, List_clear(&commandList->activeScopes));
+	_gotoIfError(clean, ListCommandOpInfo_clear(&commandList->commandOps));
+	_gotoIfError(clean, ListRefPtr_clear(&commandList->resources));
+	_gotoIfError(clean, ListTransitionInternal_clear(&commandList->transitions));
+	_gotoIfError(clean, ListCommandScope_clear(&commandList->activeScopes));
 
-	_gotoIfError(clean, List_clear(&commandList->activeSwapchains));
+	_gotoIfError(clean, ListDeviceResourceVersion_clear(&commandList->activeSwapchains));
 
 	commandList->next = 0;
 
@@ -110,10 +117,8 @@ Error CommandListRef_begin(CommandListRef *commandListRef, Bool doClear, U64 loc
 
 		for (U64 i = 0; i < commandList->activeSwapchains.length; ++i ) {
 
-			DeviceResourceVersion v = *(const DeviceResourceVersion*) List_ptrConst(commandList->activeSwapchains, i);
-
-			RefPtr *res = v.resource;
-			Swapchain *swapchain = SwapchainRef_ptr(res);
+			DeviceResourceVersion v = commandList->activeSwapchains.ptr[i];
+			Swapchain *swapchain = SwapchainRef_ptr(v.resource);
 
 			if(Lock_lock(&swapchain->lock, U64_MAX) != ELockAcquire_Acquired)
 				_gotoIfError(clean, Error_invalidOperation(0, "CommandListRef_begin() couldn't re-acquire swapchain locks"));
@@ -132,7 +137,7 @@ clean:
 
 	if(err.genericError) {
 
-		List_clear(&commandList->activeSwapchains);
+		ListDeviceResourceVersion_clear(&commandList->activeSwapchains);
 
 		commandList->state = ECommandListState_Invalid;
 		Lock_unlock(&commandList->lock);
@@ -150,18 +155,16 @@ Error CommandListRef_end(CommandListRef *commandListRef) {
 	if (commandList->tempStateFlags & ECommandStateFlags_HasScope)
 		_gotoIfError(clean, Error_invalidState(0, "CommandListRef_end() can't be called if a scope is open"));
 
-	_gotoIfError(clean, List_reservex(&commandList->resources, commandList->transitions.length));
+	_gotoIfError(clean, ListRefPtr_reservex(&commandList->resources, commandList->transitions.length));
 
 	for (U64 i = 0; i < commandList->transitions.length; ++i) {
 
-		TransitionInternal *transitions = &((TransitionInternal*) commandList->transitions.ptr)[i];
+		TransitionInternal *transitions = &commandList->transitions.ptrNonConst[i];
 
-		Buffer bufi = Buffer_createConstRef(&transitions->resource, sizeof(RefPtr*));
-
-		if(!List_contains(commandList->resources, bufi, 0)) {						//TODO: hashSet
+		if(!ListRefPtr_contains(commandList->resources, transitions->resource, 0)) {						//TODO: hashSet
 
 			if(RefPtr_inc(transitions->resource))		//CommandList will keep resource alive.
-				_gotoIfError(clean, List_pushBackx(&commandList->resources, bufi));
+				_gotoIfError(clean, ListRefPtr_pushBackx(&commandList->resources, transitions->resource));
 		}
 	}
 
@@ -242,17 +245,17 @@ Bool CommandListRef_isBound(CommandList *commandList, RefPtr *resource, Resource
 
 	for(U64 i = 0; i < commandList->pendingTransitions.length; ++i) {
 
-		const TransitionInternal *transition = (const TransitionInternal*) List_ptrConst(commandList->pendingTransitions, i);
+		TransitionInternal transition = commandList->pendingTransitions.ptr[i];
 
-		if(transition->resource->typeId != resource->typeId)
+		if(transition.resource->typeId != resource->typeId)
 			continue;
 
 		if(resource->typeId == EGraphicsTypeId_Swapchain) {
-			if(CommandListRef_imageRangeConflicts(resource, range.image, transition->resource, transition->range.image))
+			if(CommandListRef_imageRangeConflicts(resource, range.image, transition.resource, transition.range.image))
 				return true;
 		}
 
-		else if(CommandListRef_bufferRangeConflicts(resource, range.buffer, transition->resource, transition->range.buffer))
+		else if(CommandListRef_bufferRangeConflicts(resource, range.buffer, transition.resource, transition.range.buffer))
 			return true;
 	}
 
@@ -294,7 +297,7 @@ Error CommandList_append(CommandList *commandList, ECommandOp op, Buffer buf, U3
 		.opSize = (U32) len
 	};
 
-	_gotoIfError(clean, List_pushBackx(&commandList->commandOps, Buffer_createConstRef(&info, sizeof(info))));
+	_gotoIfError(clean, ListCommandOpInfo_pushBackx(&commandList->commandOps, info));
 	didPush = true;
 
 	if(len) {
@@ -307,7 +310,7 @@ clean:
 	if(err.genericError) {
 
 		if(didPush)
-			List_popBack(&commandList->commandOps, Buffer_createNull());
+			ListCommandOpInfo_popBack(&commandList->commandOps, NULL);
 
 		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
 	}
@@ -335,8 +338,7 @@ Error CommandListRef_transitionBuffer(
 		.type = type
 	};
 
-	Buffer transitionBuf = Buffer_createConstRef(&transition, sizeof(transition));
-	return List_pushBackx(&commandList->pendingTransitions, transitionBuf);
+	return ListTransitionInternal_pushBackx(&commandList->pendingTransitions, transition);
 }
 
 //Standard commands
@@ -382,7 +384,7 @@ Error CommandListRef_setViewportCmd(CommandListRef *commandListRef, I32x2 offset
 	_gotoIfError(clean, CommandListRef_checkBounds(offset, size, -32'768, 32'767));
 
 	I32x4 values = I32x4_create2_2(offset, size);
-	_gotoIfError(clean, CommandList_append(commandList, op, Buffer_createConstRef(&values, sizeof(values)), 1));
+	_gotoIfError(clean, CommandList_append(commandList, op, Buffer_createRefConst(&values, sizeof(values)), 1));
 
 	if(op == ECommandOp_SetViewport || op == ECommandOp_SetViewportAndScissor)
 		commandList->tempStateFlags |= ECommandStateFlags_AnyViewport;
@@ -414,7 +416,7 @@ Error CommandListRef_setStencil(CommandListRef *commandListRef, U8 stencilValue)
 
 	CommandListRef_validateScope(commandListRef, clean);
 
-	_gotoIfError(clean, CommandList_append(commandList, ECommandOp_SetStencil, Buffer_createConstRef(&stencilValue, 1), 0));
+	_gotoIfError(clean, CommandList_append(commandList, ECommandOp_SetStencil, Buffer_createRefConst(&stencilValue, 1), 0));
 
 clean:
 
@@ -429,7 +431,7 @@ Error CommandListRef_setBlendConstants(CommandListRef *commandListRef, F32x4 ble
 	CommandListRef_validateScope(commandListRef, clean);
 
 	_gotoIfError(clean, CommandList_append(
-		commandList, ECommandOp_SetBlendConstants, Buffer_createConstRef(&blendConstants, sizeof(F32x4)), 0
+		commandList, ECommandOp_SetBlendConstants, Buffer_createRefConst(&blendConstants, sizeof(F32x4)), 0
 	));
 
 clean:
@@ -440,16 +442,13 @@ clean:
 	return err;
 }
 
-Error CommandListRef_clearImages(CommandListRef *commandListRef, List clearImages) {
+Error CommandListRef_clearImages(CommandListRef *commandListRef, ListClearImageCmd clearImages) {
 
 	Buffer buf = Buffer_createNull();
 	CommandListRef_validateScope(commandListRef, clean);
 
 	if(!clearImages.length)
 		_gotoIfError(clean, Error_nullPointer(1, "CommandListRef_clearImages()::clearImages.length is 0"));
-
-	if(clearImages.stride != sizeof(ClearImageCmd))
-		_gotoIfError(clean, Error_invalidParameter(1, 0, "CommandListRef_clearImages()::clearImages is not ClearImageCmd[]"));
 
 	if(clearImages.length > U32_MAX)
 		_gotoIfError(clean, Error_outOfBounds(
@@ -458,7 +457,7 @@ Error CommandListRef_clearImages(CommandListRef *commandListRef, List clearImage
 
 	for(U64 i = 0; i < clearImages.length; ++i) {
 
-		ClearImageCmd clearImage = ((ClearImageCmd*)clearImages.ptr)[i];
+		ClearImageCmd clearImage = clearImages.ptr[i];
 		RefPtr *image = clearImage.image;
 
 		if(!image || image->typeId != EGraphicsTypeId_Swapchain)
@@ -495,16 +494,18 @@ Error CommandListRef_clearImages(CommandListRef *commandListRef, List clearImage
 			.type = ETransitionType_ClearColor
 		};
 
-		Buffer transitionBuf = Buffer_createConstRef(&transition, sizeof(transition));
-		_gotoIfError(clean, List_pushBackx(&commandList->pendingTransitions, transitionBuf));
+		_gotoIfError(clean, ListTransitionInternal_pushBackx(&commandList->pendingTransitions, transition));
 	}
 
 	//Copy buffer
 	
-	_gotoIfError(clean, Buffer_createEmptyBytesx(List_bytes(clearImages) + sizeof(U32), &buf));
+	_gotoIfError(clean, Buffer_createEmptyBytesx(ListClearImageCmd_bytes(clearImages) + sizeof(U32), &buf));
 
 	*(U32*)buf.ptr = (U32) clearImages.length;
-	Buffer_copy(Buffer_createRef((U8*) buf.ptr + sizeof(U32), List_bytes(clearImages)), List_bufferConst(clearImages));
+	Buffer_copy(
+		Buffer_createRef((U8*) buf.ptr + sizeof(U32), ListClearImageCmd_bytes(clearImages)), 
+		ListClearImageCmd_bufferConst(clearImages)
+	);
 
 	_gotoIfError(clean, CommandList_append(commandList, ECommandOp_ClearImages, buf, 0));
 
@@ -526,11 +527,11 @@ Error CommandListRef_clearImageu(CommandListRef *commandListRef, const U32 color
 		.range = range
 	};
 
-	Buffer_copy(Buffer_createRef(&clearImage.color, sizeof(F32x4)), Buffer_createConstRef(coloru, sizeof(F32x4)));
+	Buffer_copy(Buffer_createRef(&clearImage.color, sizeof(F32x4)), Buffer_createRefConst(coloru, sizeof(F32x4)));
 
-	List clearImages = (List) { 0 };
+	ListClearImageCmd clearImages = (ListClearImageCmd) { 0 };
 	Error err = Error_none();
-	_gotoIfError(clean, List_createConstRef((const U8*) &clearImage, 1, sizeof(ClearImageCmd), &clearImages));
+	_gotoIfError(clean, ListClearImageCmd_createRefConst(&clearImage, 1, &clearImages));
 
 	_gotoIfError(clean, CommandListRef_clearImages(commandListRef, clearImages));
 
@@ -562,27 +563,26 @@ Error CommandListRef_clearDepthStencil(CommandListRef *commandListRef, F32 depth
 	};
 
 	return CommandList_append(
-		commandList, ECommandOp_clearDepth, Buffer_createConstRef(&depthStencil, sizeof(depthStencil)), refs
+		commandList, ECommandOp_clearDepth, Buffer_createRefConst(&depthStencil, sizeof(depthStencil)), refs
 	);
 }
 
-Error CommandListRef_clearDepthStencils(CommandListRef *commandList, List clearDepthStencils);	//<ClearDepthStencilCmd>*/
+Error CommandListRef_clearDepthStencils(CommandListRef *commandList, ListClearDepthStencilCmd clearDepthStencils);*/
 
 //Render calls
 
-Error CommandListRef_startScope(CommandListRef *commandListRef, List transitions, U32 id, List deps) {
+Error CommandListRef_startScope(
+	CommandListRef *commandListRef, 
+	ListTransition transitions, 
+	U32 id, 
+	ListCommandScopeDependency deps
+) {
 
 	CommandListRef_validate(commandListRef);
 
 	GraphicsDeviceRef *device = commandList->device;
 
 	Error err = Error_none();
-
-	if(transitions.length && transitions.stride != sizeof(Transition))
-		_gotoIfError(clean, Error_invalidParameter(1, 0, "CommandListRef_startScope()::transitions is not Transition[]"));
-
-	if(deps.length && deps.stride != sizeof(CommandScopeDependency))
-		_gotoIfError(clean, Error_invalidParameter(3, 0, "CommandListRef_startScope()::deps is not CommandScopeDependency[]"));
 
 	if(transitions.length > U32_MAX)
 		_gotoIfError(clean, Error_outOfBounds(
@@ -594,12 +594,12 @@ Error CommandListRef_startScope(CommandListRef *commandListRef, List transitions
 			0, "CommandListRef_startScope() scope is already present. Nested scopes are unsupported"
 		));
 
-	_gotoIfError(clean, List_clear(&commandList->pendingTransitions));
-	_gotoIfError(clean, List_reservex(&commandList->pendingTransitions, transitions.length));
+	_gotoIfError(clean, ListTransitionInternal_clear(&commandList->pendingTransitions));
+	_gotoIfError(clean, ListTransitionInternal_reservex(&commandList->pendingTransitions, transitions.length));
 
 	for(U64 i = 0; i < transitions.length; ++i) {
 
-		Transition transition = ((Transition*)transitions.ptr)[i];
+		Transition transition = transitions.ptr[i];
 		RefPtr *res = transition.resource;
 
 		if(!res)
@@ -672,17 +672,16 @@ Error CommandListRef_startScope(CommandListRef *commandListRef, List transitions
 			.type = transition.isWrite ? ETransitionType_ShaderWrite : ETransitionType_ShaderRead
 		};
 
-		Buffer transitionDstBuf = Buffer_createConstRef(&transitionDst, sizeof(transitionDst));
-		_gotoIfError(clean, List_pushBackx(&commandList->pendingTransitions, transitionDstBuf));
+		_gotoIfError(clean, ListTransitionInternal_pushBackx(&commandList->pendingTransitions, transitionDst));
 	}
 
 	//Scope has to be unique
 
 	for (U64 i = 0; i < commandList->activeScopes.length; ++i) {
 
-		CommandScope *scope = (CommandScope*) List_ptr(commandList->activeScopes, i);
+		CommandScope scope = commandList->activeScopes.ptr[i];
 
-		if(scope->scopeId == id)
+		if(scope.scopeId == id)
 			_gotoIfError(clean, Error_alreadyDefined(0, "CommandListRef_startScope()::id should be unique"));
 	}
 
@@ -690,7 +689,7 @@ Error CommandListRef_startScope(CommandListRef *commandListRef, List transitions
 
 	for (U64 j = 0; j < deps.length; ++j) {
 
-		CommandScopeDependency dep = *(const CommandScopeDependency*) List_ptrConst(deps, j);
+		CommandScopeDependency dep = deps.ptr[j];
 
 		if(dep.type == ECommandScopeDependencyType_Unconditional)		//Don't care
 			continue;
@@ -699,9 +698,9 @@ Error CommandListRef_startScope(CommandListRef *commandListRef, List transitions
 
 		for (U64 i = 0; i < commandList->activeScopes.length; ++i) {	//TODO: HashSet
 
-			CommandScope *scope = (CommandScope*) List_ptr(commandList->activeScopes, i);
+			CommandScope scope = commandList->activeScopes.ptr[i];
 
-			if (scope->scopeId == dep.id) {
+			if (scope.scopeId == dep.id) {
 				found = true;
 				break;
 			}
@@ -743,7 +742,7 @@ Error CommandListRef_endScope(CommandListRef *commandListRef) {
 	) {
 		//Pretend the last commands didn't happen
 
-		_gotoIfError(clean, List_resize(&commandList->commandOps, commandList->lastCommandId, (Allocator) { 0 }));
+		_gotoIfError(clean, ListCommandOpInfo_resize(&commandList->commandOps, commandList->lastCommandId, (Allocator) { 0 }));
 		commandList->next = commandList->lastOffset;
 
 		goto clean;
@@ -770,7 +769,7 @@ Error CommandListRef_endScope(CommandListRef *commandListRef) {
 	U32 transitionOffset = (U32) commandList->transitions.length;
 
 	_gotoIfError(clean, CommandList_append(commandList, ECommandOp_EndScope, Buffer_createNull(), 0));
-	_gotoIfError(clean, List_pushAllx(&commandList->transitions, commandList->pendingTransitions));
+	_gotoIfError(clean, ListTransitionInternal_pushAllx(&commandList->transitions, commandList->pendingTransitions));
 
 	CommandScope scope = (CommandScope) {
 		.commandBufferOffset = commandList->lastOffset,
@@ -782,15 +781,14 @@ Error CommandListRef_endScope(CommandListRef *commandListRef) {
 		.scopeId = commandList->lastScopeId
 	};
 
-	Buffer scopeBuf = Buffer_createConstRef(&scope, sizeof(scope));
-	_gotoIfError(clean, List_pushBackx(&commandList->activeScopes, scopeBuf));
+	_gotoIfError(clean, ListCommandScope_pushBackx(&commandList->activeScopes, scope));
 
 clean:
 
 	for(U64 i = 0; i < EPipelineType_Count; ++i)
 		commandList->pipeline[i] = NULL;
 
-	_gotoIfError(clean, List_clear(&commandList->pendingTransitions));
+	_gotoIfError(clean, ListTransitionInternal_clear(&commandList->pendingTransitions));
 
 	commandList->tempStateFlags = 0;
 	commandList->debugRegionStack = 0;
@@ -827,14 +825,12 @@ Error CommandListRef_setPipeline(CommandListRef *commandListRef, PipelineRef *pi
 		op = ECommandOp_SetGraphicsPipeline;
 
 	_gotoIfError(clean, CommandList_append(
-		commandList, op, Buffer_createConstRef((const U8*) &pipelineRef, sizeof(pipelineRef)), 0
+		commandList, op, Buffer_createRefConst((const U8*) &pipelineRef, sizeof(pipelineRef)), 0
 	));
 
-	Buffer bufi = Buffer_createConstRef(&pipelineRef, sizeof(RefPtr*));
-
-	if(!List_contains(commandList->resources, bufi, 0)) {						//TODO: hashSet
+	if(!ListRefPtr_contains(commandList->resources, pipelineRef, 0)) {						//TODO: hashSet
 		RefPtr_inc(pipelineRef);		//CommandList will keep resource alive.
-		_gotoIfError(clean, List_pushBackx(&commandList->resources, bufi));
+		_gotoIfError(clean, ListRefPtr_pushBackx(&commandList->resources, pipelineRef));
 	}
 
 	commandList->pipeline[type] = pipelineRef;
@@ -908,7 +904,7 @@ Error CommandListRef_setPrimitiveBuffers(CommandListRef *commandListRef, SetPrim
 	//Issue command
 
 	_gotoIfError(clean, CommandList_append(
-		commandList, ECommandOp_SetPrimitiveBuffers, Buffer_createConstRef((const U8*) &buffers, sizeof(buffers)), 0
+		commandList, ECommandOp_SetPrimitiveBuffers, Buffer_createRefConst((const U8*) &buffers, sizeof(buffers)), 0
 	));
 
 clean:
@@ -960,7 +956,7 @@ Error CommandListRef_draw(CommandListRef *commandListRef, DrawCmd draw) {
 	if(!draw.count || !draw.instanceCount)		//No-op
 		return Error_none();
 
-	return CommandListRef_drawBase(commandListRef, Buffer_createConstRef(&draw, sizeof(draw)), ECommandOp_Draw);
+	return CommandListRef_drawBase(commandListRef, Buffer_createRefConst(&draw, sizeof(draw)), ECommandOp_Draw);
 }
 
 Error CommandListRef_drawIndexed(CommandListRef *commandList, U32 indexCount, U32 instanceCount) {
@@ -1017,7 +1013,7 @@ Error CommandListRef_dispatch(CommandListRef *commandListRef, DispatchCmd dispat
 		));
 
 	_gotoIfError(clean, CommandList_append(
-		commandList, ECommandOp_Dispatch, Buffer_createConstRef(&dispatch, sizeof(dispatch)), 0
+		commandList, ECommandOp_Dispatch, Buffer_createRefConst(&dispatch, sizeof(dispatch)), 0
 	));
 
 	commandList->tempStateFlags |= ECommandStateFlags_HasModifyOp;
@@ -1088,7 +1084,7 @@ Error CommandListRef_dispatchIndirect(CommandListRef *commandListRef, DeviceBuff
 	DispatchIndirectCmd dispatch = (DispatchIndirectCmd) { .buffer = buffer, .offset = offset };
 
 	_gotoIfError(clean, CommandList_append(
-		commandList, ECommandOp_DispatchIndirect, Buffer_createConstRef(&dispatch, sizeof(dispatch)), 0
+		commandList, ECommandOp_DispatchIndirect, Buffer_createRefConst(&dispatch, sizeof(dispatch)), 0
 	));
 
 	commandList->tempStateFlags |= ECommandStateFlags_HasModifyOp;
@@ -1166,7 +1162,7 @@ Error CommandListRef_drawIndirect(
 	};
 
 	_gotoIfError(clean, CommandListRef_drawBase(
-		commandListRef, Buffer_createConstRef(&draw, sizeof(draw)), ECommandOp_DrawIndirect
+		commandListRef, Buffer_createRefConst(&draw, sizeof(draw)), ECommandOp_DrawIndirect
 	));
 
 	commandList->tempStateFlags |= ECommandStateFlags_HasModifyOp;
@@ -1220,7 +1216,7 @@ Error CommandListRef_drawIndirectCountExt(
 	};
 
 	_gotoIfError(clean, CommandListRef_drawBase(
-		commandListRef, Buffer_createConstRef(&draw, sizeof(draw)), ECommandOp_DrawIndirectCount
+		commandListRef, Buffer_createRefConst(&draw, sizeof(draw)), ECommandOp_DrawIndirectCount
 	));
 
 	commandList->tempStateFlags |= ECommandStateFlags_HasModifyOp;
@@ -1239,8 +1235,8 @@ Error CommandListRef_startRenderExt(
 	CommandListRef *commandListRef, 
 	I32x2 offset, 
 	I32x2 size, 
-	List colors, 
-	List depthStencil
+	ListAttachmentInfo colors, 
+	ListAttachmentInfo depthStencil
 ) {
 
 	Buffer command = Buffer_createNull();
@@ -1262,17 +1258,9 @@ Error CommandListRef_startRenderExt(
 	if(colors.length > 8)
 		_gotoIfError(clean, Error_outOfBounds(3, colors.length, 8, "CommandListRef_startRenderExt()::colors has to be <=8"));
 
-	if(colors.length && colors.stride != sizeof(AttachmentInfo))
-		_gotoIfError(clean, Error_invalidParameter(3, 0, "CommandListRef_startRenderExt()::colors isn't AttachmentInfo[]"));
-
 	if(depthStencil.length)									//TODO: Check depthStencil for depth, stencil and/or DS
 		_gotoIfError(clean, Error_unsupportedOperation(
 			1, "CommandListRef_startRenderExt()::depthStencil isn't supported yet"	
-		));	
-
-	if(depthStencil.length && depthStencil.stride != sizeof(AttachmentInfo))
-		_gotoIfError(clean, Error_invalidParameter(
-			4, 0, "CommandListRef_startRenderExt()::depthStencil isn't AttachmentInfo[]"
 		));
 		
 	I32x2 targetSize = I32x2_zero();
@@ -1285,7 +1273,7 @@ Error CommandListRef_startRenderExt(
 			break;
 		}
 
-		AttachmentInfo info = ((const AttachmentInfo*) colors.ptr)[lockedId];
+		AttachmentInfo info = colors.ptr[lockedId];
 
 		//TODO: Properly validate this
 
@@ -1317,14 +1305,13 @@ Error CommandListRef_startRenderExt(
 				));
 
 			DeviceResourceVersion v = (DeviceResourceVersion) { .resource = info.image, .version = swapchain->versionId };
-			Buffer buf = Buffer_createConstRef(&v, sizeof(v));
 
-			if(!List_contains(commandList->activeSwapchains, buf, 0)) {
+			if(!ListDeviceResourceVersion_contains(commandList->activeSwapchains, v, 0)) {
 
 				if(acq == ELockAcquire_Acquired)
 					toRelease = &swapchain->lock;
 
-				_gotoIfError(clean, List_pushBackx(&commandList->activeSwapchains, buf));
+				_gotoIfError(clean, ListDeviceResourceVersion_pushBackx(&commandList->activeSwapchains, v));
 				toRelease = NULL;
 			}
 
@@ -1377,7 +1364,7 @@ Error CommandListRef_startRenderExt(
 
 	for (U64 i = 0; i < colors.length; ++i) {
 
-		AttachmentInfo info = ((const AttachmentInfo*) colors.ptr)[i];
+		AttachmentInfo info = colors.ptr[i];
 
 		if (info.image) {
 
@@ -1396,15 +1383,14 @@ Error CommandListRef_startRenderExt(
 				.type = info.readOnly ? ETransitionType_RenderTargetRead : ETransitionType_RenderTargetWrite
 			};
 
-			Buffer transitionBuf = Buffer_createConstRef(&transition, sizeof(transition));
-			_gotoIfError(clean, List_pushBackx(&commandList->pendingTransitions, transitionBuf));
+			_gotoIfError(clean, ListTransitionInternal_pushBackx(&commandList->pendingTransitions, transition));
 		}
 	}
 
 	_gotoIfError(clean, CommandList_append(
 		commandList, 
 		ECommandOp_StartRenderingExt, 
-		Buffer_createConstRef(startRender, sizeof(StartRenderCmdExt) + sizeof(AttachmentInfo) * counter), 
+		Buffer_createRefConst(startRender, sizeof(StartRenderCmdExt) + sizeof(AttachmentInfo) * counter), 
 		0
 	));
 
@@ -1412,7 +1398,7 @@ Error CommandListRef_startRenderExt(
 	commandList->boundImageCount = (U8) colors.length;
 
 	for (U8 i = 0; i < commandList->boundImageCount; ++i) {
-		AttachmentInfo info = ((AttachmentInfo*) colors.ptr)[i];
+		AttachmentInfo info = colors.ptr[i];
 		commandList->boundImages[i] = (ImageAndRange) { .image = info.image, .range = info.range };
 	}
 
@@ -1472,7 +1458,7 @@ Error CommandList_markerDebugExt(CommandListRef *commandListRef, F32x4 color, Ch
 
 	_gotoIfError(clean, Buffer_createEmptyBytesx(sizeof(color) + CharString_length(name) + 1, &buf));
 
-	Buffer_copy(buf, Buffer_createConstRef(&color, sizeof(color)));
+	Buffer_copy(buf, Buffer_createRefConst(&color, sizeof(color)));
 	Buffer_copy(Buffer_createRef((U8*)buf.ptr + sizeof(color), CharString_length(name)), CharString_bufferConst(name));
 
 	_gotoIfError(clean, CommandList_append(commandList, op, buf, 1));
@@ -1548,18 +1534,18 @@ Bool CommandList_free(CommandList *cmd, Allocator alloc) {
 
 	for (U64 i = 0; i < cmd->resources.length; ++i) {
 
-		RefPtr **ptr = (RefPtr**)cmd->resources.ptr + i;
+		RefPtr **ptr = cmd->resources.ptrNonConst + i;
 
 		if(*ptr)
 			RefPtr_dec(ptr);
 	}
 
-	List_freex(&cmd->commandOps);
-	List_freex(&cmd->resources);
-	List_freex(&cmd->activeScopes);
-	List_freex(&cmd->transitions);
-	List_freex(&cmd->pendingTransitions);
-	List_freex(&cmd->activeSwapchains);
+	ListCommandOpInfo_freex(&cmd->commandOps);
+	ListRefPtr_freex(&cmd->resources);
+	ListCommandScope_freex(&cmd->activeScopes);
+	ListTransitionInternal_freex(&cmd->transitions);
+	ListTransitionInternal_freex(&cmd->pendingTransitions);
+	ListDeviceResourceVersion_freex(&cmd->activeSwapchains);
 	Buffer_freex(&cmd->data);
 
 	GraphicsDeviceRef_dec(&cmd->device);
@@ -1588,20 +1574,13 @@ Error GraphicsDeviceRef_createCommandList(
 
 	CommandList *commandList = CommandListRef_ptr(*commandListRef);
 
-	commandList->commandOps = List_createEmpty(sizeof(CommandOpInfo));
-	commandList->resources = List_createEmpty(sizeof(RefPtr*));
-	commandList->transitions = List_createEmpty(sizeof(TransitionInternal));
-	commandList->activeScopes = List_createEmpty(sizeof(CommandScope));
-	commandList->pendingTransitions = List_createEmpty(sizeof(TransitionInternal));
-	commandList->activeSwapchains = List_createEmpty(sizeof(DeviceResourceVersion));
-
 	_gotoIfError(clean, Buffer_createEmptyBytesx(commandListLen, &commandList->data));
 
-	_gotoIfError(clean, List_reservex(&commandList->commandOps, estimatedCommandCount));
-	_gotoIfError(clean, List_reservex(&commandList->resources, estimatedResources));
-	_gotoIfError(clean, List_reservex(&commandList->activeScopes, 16));
-	_gotoIfError(clean, List_reservex(&commandList->transitions, estimatedResources));
-	_gotoIfError(clean, List_reservex(&commandList->pendingTransitions, 32));
+	_gotoIfError(clean, ListCommandOpInfo_reservex(&commandList->commandOps, estimatedCommandCount));
+	_gotoIfError(clean, ListRefPtr_reservex(&commandList->resources, estimatedResources));
+	_gotoIfError(clean, ListCommandScope_reservex(&commandList->activeScopes, 16));
+	_gotoIfError(clean, ListTransitionInternal_reservex(&commandList->transitions, estimatedResources));
+	_gotoIfError(clean, ListTransitionInternal_reservex(&commandList->pendingTransitions, 32));
 	commandList->lock = Lock_create();
 
 	GraphicsDeviceRef_inc(deviceRef);

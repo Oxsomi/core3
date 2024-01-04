@@ -165,6 +165,20 @@ static const U32 descriptorTypeCount[] = {
 	EDescriptorTypeCount_RWTexture2Du
 };
 
+typedef struct VkCommandAllocator {
+	VkCommandPool pool;
+	VkCommandBuffer cmd;
+} VkCommandAllocator;
+
+TList(VkCommandAllocator);
+TList(VkSemaphore);
+TList(VkResult);
+TList(VkSwapchainKHR);
+TList(VkPipelineStageFlags);
+TList(VkImageMemoryBarrier2);
+TList(VkBufferMemoryBarrier2);
+TList(VkWriteDescriptorSet);
+
 typedef struct VkGraphicsDevice {
 
 	VkDevice device;
@@ -175,10 +189,10 @@ typedef struct VkGraphicsDevice {
 	U32 resolvedQueues;
 	U32 pad;
 
-	//3D as 1D flat List<VkCommandAllocator>: resolvedQueueId + (backBufferId * threadCount + threadId) * resolvedQueues
-	List commandPools;
+	//3D as 1D flat List: resolvedQueueId + (backBufferId * threadCount + threadId) * resolvedQueues
+	ListVkCommandAllocator commandPools;
 
-	List submitSemaphores;
+	ListVkSemaphore submitSemaphores;
 
 	VkSemaphore commitSemaphore;
 
@@ -197,17 +211,15 @@ typedef struct VkGraphicsDevice {
 
 	//Temporary storage for submit time stuff
 
-	List waitSemaphores, results, swapchainIndices, swapchainHandles, waitStages;
-	List bufferTransitions, imageTransitions;
+	ListVkSemaphore waitSemaphores;
+	ListVkResult results;
+	ListU32 swapchainIndices;
+	ListVkSwapchainKHR swapchainHandles;
+	ListVkPipelineStageFlags waitStages;
+	ListVkBufferMemoryBarrier2 bufferTransitions;
+	ListVkImageMemoryBarrier2 imageTransitions;
 
 } VkGraphicsDevice;
-
-typedef struct VkCommandAllocator {
-
-	VkCommandPool pool;
-	VkCommandBuffer cmd;
-
-} VkCommandAllocator;
 
 typedef struct VkCommandBufferState {
 
@@ -249,4 +261,4 @@ Error VkDeviceMemoryAllocator_findMemory(
 //Lower 20 bit: id
 //4 bit higher: descriptor type
 U32 VkGraphicsDevice_allocateDescriptor(VkGraphicsDevice *deviceExt, EDescriptorType type);
-Bool VkGraphicsDevice_freeAllocations(VkGraphicsDevice *deviceExt, List *allocations);			//List<U32>
+Bool VkGraphicsDevice_freeAllocations(VkGraphicsDevice *deviceExt, ListU32 *allocations);

@@ -23,6 +23,9 @@
 #include "types/vec.h"
 
 typedef struct Window Window;
+
+TListNamed(Window*, ListWindowPtr);
+
 typedef struct CharString CharString;
 typedef struct WindowCallbacks WindowCallbacks;
 typedef enum EWindowHint EWindowHint;
@@ -43,10 +46,10 @@ typedef struct WindowManagerCallbacks {
 
 typedef struct WindowManager {
 
-	U32 owningThread;	//Only one thread can own a window manager at a time
-	U32 isActive;		//WindowManager_magic if active
+	U32 owningThread;		//Only one thread can own a window manager at a time
+	U32 isActive;			//WindowManager_magic if active
 
-	List windows;		//<Window*>
+	ListWindowPtr windows;
 
 	WindowManagerCallbacks callbacks;
 

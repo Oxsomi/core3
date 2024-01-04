@@ -35,26 +35,22 @@ Bool _CLI_convert(ParsedArgs args, Bool isTo) {
 	Format f = Format_values[args.format];
 	U64 offset = 0;
 
-	Buffer inputArgBuf;
-	Error err = List_get(args.args, offset++, &inputArgBuf);
+	CharString inputArg = CharString_createNull();
+	Error err = ListCharString_get(args.args, offset++, &inputArg);
 
 	if (err.genericError) {
 		Error_printx(err, ELogLevel_Error, ELogOptions_Default);
 		return false;
 	}
 
-	CharString inputArg = *(const CharString*)inputArgBuf.ptr;
-
 	//Check if output is valid
 
-	Buffer outputArgBuf;
+	CharString outputArg = CharString_createNull();
 
-	if ((err = List_get(args.args, offset++, &outputArgBuf)).genericError) {
+	if ((err = ListCharString_get(args.args, offset++, &outputArg)).genericError) {
 		Error_printx(err, ELogLevel_Error, ELogOptions_Default);
 		return false;
 	}
-
-	CharString outputArg = *(const CharString*)outputArgBuf.ptr;
 
 	//TODO: Support multiple files
 

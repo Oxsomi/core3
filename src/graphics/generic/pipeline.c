@@ -18,13 +18,16 @@
 *  This is called dual licensing.
 */
 
+#include "platforms/ext/listx_impl.h"
 #include "graphics/generic/pipeline.h"
 #include "graphics/generic/device.h"
-#include "platforms/ext/listx.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
-#include "types/error.h"
 #include "formats/texture.h"
+
+TListImpl(PipelineGraphicsInfo);
+TListImpl(PipelineStage);
+TListNamedImpl(ListPipelineRef);
 
 Error PipelineRef_dec(PipelineRef **pipeline) {
 	return !RefPtr_dec(pipeline) ? Error_invalidOperation(0, "PipelineRef_dec():: pipeline invalid") : Error_none();
@@ -34,31 +37,18 @@ Error PipelineRef_inc(PipelineRef *pipeline) {
 	return !RefPtr_inc(pipeline) ? Error_invalidOperation(0, "PipelineRef_inc()::pipeline invalid") : Error_none();
 }
 
-Bool PipelineRef_decAll(List *list) {
+Bool PipelineRef_decAll(ListPipelineRef *list) {
 
 	if(!list)
 		return true;
 
-	if(list->stride != sizeof(PipelineRef*))
-		return false;
-
 	Bool success = true;
 
 	for(U64 i = 0; i < list->length; ++i)
-		success &= !PipelineRef_dec(&((PipelineRef**) list->ptr)[i]).genericError;
+		success &= !PipelineRef_dec(&list->ptrNonConst[i]).genericError;
 
-	List_freex(list);
+	ListPipelineRef_freex(list);
 	return success;
-}
-
-PipelineRef *PipelineRef_at(List list, U64 index) {
-
-	Buffer buf = List_at(list, index);
-
-	if(Buffer_length(buf) != sizeof(PipelineRef*))
-		return NULL;
-
-	return *(PipelineRef* const*) buf.ptr;
 }
 
 impl Bool Pipeline_freeExt(Pipeline *pipeline, Allocator alloc);
@@ -69,20 +59,20 @@ Bool Pipeline_free(Pipeline *pipeline, Allocator alloc) {
 	Pipeline_freeExt(pipeline, alloc);
 
 	for (U64 i = 0; i < pipeline->stages.length; ++i)
-		Buffer_freex(&((PipelineStage*)pipeline->stages.ptr)[i].shaderBinary);
+		Buffer_freex(&pipeline->stages.ptrNonConst[i].shaderBinary);
 
-	List_freex(&pipeline->stages);
+	ListPipelineStage_freex(&pipeline->stages);
 	GraphicsDeviceRef_dec(&pipeline->device);
 	return true;
 }
 
-impl Error GraphicsDevice_createPipelinesComputeExt(GraphicsDevice *device, List names, List *pipelines);
+impl Error GraphicsDevice_createPipelinesComputeExt(GraphicsDevice *device, ListCharString names, ListPipelineRef *pipelines);
 
 Error GraphicsDeviceRef_createPipelinesCompute(
 	GraphicsDeviceRef *deviceRef,
-	List *shaderBinaries,			//<Buffer>
-	List names,						//Temporary names for debugging. Can be empty too, else match shaderBinaries->length
-	List *pipelines					//<PipelineRef*>
+	ListBuffer *shaderBinaries,
+	ListCharString names,			//Temporary names for debugging. Can be empty too, else match shaderBinaries->length
+	ListPipelineRef *pipelines
 ) {
 
 	if(!deviceRef || !shaderBinaries || !pipelines)
@@ -91,15 +81,15 @@ Error GraphicsDeviceRef_createPipelinesCompute(
 			"GraphicsDeviceRef_createPipelinesCompute()::deviceRef, shaderBinaries and pipelines are required"
 		);
 
-	if(!shaderBinaries->length || shaderBinaries->stride != sizeof(Buffer))
+	if(!shaderBinaries->length)
 		return Error_invalidParameter(
-			1, 0, "GraphicsDeviceRef_createPipelinesCompute()::shaderBinaries should be a Buffer[] of length > 0"
+			1, 0, "GraphicsDeviceRef_createPipelinesCompute()::shaderBinaries should be of length > 0"
 		);
 
-	if(names.length && (names.length != shaderBinaries->length || names.stride != sizeof(CharString)))
+	if(names.length && names.length != shaderBinaries->length)
 		return Error_invalidParameter(
 			2, 0, 
-			"GraphicsDeviceRef_createPipelinesCompute()::names should be a CharString[] with same length as shaderBinaries"
+			"GraphicsDeviceRef_createPipelinesCompute()::names should have the same length as shaderBinaries"
 		);
 
 	if(shaderBinaries->length >> 32)
@@ -113,15 +103,14 @@ Error GraphicsDeviceRef_createPipelinesCompute(
 			3, 0, "GraphicsDeviceRef_createPipelinesCompute()::pipelines->ptr is non zero, indicating a possible memleak"
 		);
 
-	*pipelines = List_createEmpty(sizeof(PipelineRef*));
 	Error err = Error_none();
-	_gotoIfError(clean, List_resizex(pipelines, shaderBinaries->length));
+	_gotoIfError(clean, ListPipelineRef_resizex(pipelines, shaderBinaries->length));
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 
 	for (U64 i = 0; i < pipelines->length; ++i) {
 
-		RefPtr **refPtr = &((RefPtr**)pipelines->ptr)[i];
+		RefPtr **refPtr = &pipelines->ptrNonConst[i];
 
 		_gotoIfError(clean, RefPtr_createx(
 			(U32)(sizeof(Pipeline) + PipelineExt_size), 
@@ -134,23 +123,18 @@ Error GraphicsDeviceRef_createPipelinesCompute(
 
 		GraphicsDeviceRef_inc(deviceRef);
 
-		*pipeline = (Pipeline) {
-			.device = deviceRef,
-			.type = EPipelineType_Compute,
-			.stages = List_createEmpty(sizeof(PipelineStage))
-		};
+		*pipeline = (Pipeline) { .device = deviceRef, .type = EPipelineType_Compute };
+		_gotoIfError(clean, ListPipelineStage_resizex(&pipeline->stages, 1));
 
-		_gotoIfError(clean, List_resizex(&pipeline->stages, 1));
-
-		*(PipelineStage*) pipeline->stages.ptr = (PipelineStage) {
+		pipeline->stages.ptrNonConst[0] = (PipelineStage) {
 			.stageType = EPipelineStage_Compute,
-			.shaderBinary = ((Buffer*)shaderBinaries->ptr)[i]
+			.shaderBinary = shaderBinaries->ptr[i]
 		};
 
-		((Buffer*)shaderBinaries->ptr)[i] = Buffer_createNull();		//Moved
+		shaderBinaries->ptrNonConst[i] = Buffer_createNull();		//Moved
 	}
 
-	List_freex(shaderBinaries);
+	ListBuffer_freex(shaderBinaries);
 
 	_gotoIfError(clean, GraphicsDevice_createPipelinesComputeExt(device, names, pipelines));
 
@@ -159,9 +143,9 @@ Error GraphicsDeviceRef_createPipelinesCompute(
 clean:
 
 	for (U64 i = 0; i < pipelines->length; ++i)
-		RefPtr_dec(&((RefPtr**)pipelines->ptr)[i]);
+		RefPtr_dec((RefPtr**)&pipelines->ptr[i]);
 
-	List_freex(pipelines);
+	ListPipelineRef_freex(pipelines);
 
 success:
 	return err;
@@ -178,14 +162,14 @@ Error validateBlend(EBlend blend, Bool hasDualSrcBlend) {
 	return Error_none();
 }
 
-impl Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, List names, List *pipelines);
+impl Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListCharString names, ListPipelineRef *pipelines);
 
 Error GraphicsDeviceRef_createPipelinesGraphics(
 	GraphicsDeviceRef *deviceRef,
-	List *stages,					//<PipelineStage>
-	List *infos,					//<PipelineGraphicsInfo>
-	List names,						//Temporary names for debugging. Can be empty too, else match infos->length 
-	List *pipelines					//<PipelineRef*>
+	ListPipelineStage *stages,
+	ListPipelineGraphicsInfo *infos,
+	ListCharString names,					//Temporary names for debugging. Can be empty too, else match infos->length 
+	ListPipelineRef *pipelines
 ) {
 
 	//Validate
@@ -196,21 +180,20 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 			"GraphicsDeviceRef_createPipelinesGraphics()::deviceRef, stages, infos and pipelines are required"
 		);
 
-	if(!stages->length || stages->stride != sizeof(PipelineStage))
+	if(!stages->length)
 		return Error_invalidParameter(
-			1, 0, "GraphicsDeviceRef_createPipelinesGraphics()::stages should be PipelineStage[] of length > 0"
+			1, 0, "GraphicsDeviceRef_createPipelinesGraphics()::stages should be of length > 0"
 		);
 
-	if(!infos->length || infos->stride != sizeof(PipelineGraphicsInfo) || infos->length >> 32)
+	if(!infos->length || infos->length >> 32)
 		return Error_invalidParameter(
 			2, 0,
-			"GraphicsDeviceRef_createPipelinesGraphics()::infos should be PipelineGraphicsInfo[] where length = <0, U32_MAX>"
+			"GraphicsDeviceRef_createPipelinesGraphics()::infos should be length = <0, U32_MAX>"
 		);
 
-	if(names.length && (names.length != infos->length || names.stride != sizeof(CharString)))
+	if(names.length && (names.length != infos->length))
 		return Error_invalidParameter(
-			2, 0, 
-			"GraphicsDeviceRef_createPipelinesGraphics()::names should be a CharString[] with same length as infos"
+			2, 0, "GraphicsDeviceRef_createPipelinesGraphics()::names should be the same length as infos"
 		);
 
 	if(pipelines->ptr)
@@ -223,7 +206,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 
 	for(U64 i = 0; i < infos->length; ++i) {
 
-		const PipelineGraphicsInfo *info = &((const PipelineGraphicsInfo*) infos->ptr)[i];
+		const PipelineGraphicsInfo *info = &infos->ptr[i];
 
 		//Validate some basics
 
@@ -307,7 +290,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 
 		for (U64 j = countStart; j < countStart + info->stageCount; ++j) {
 
-			PipelineStage stage = ((const PipelineStage*)stages->ptr)[j];
+			PipelineStage stage = stages->ptr[j];
 
 			if(stage.stageType >= EPipelineStage_Count)
 				return Error_invalidOperation(
@@ -544,15 +527,14 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 
 	Error err = Error_none();
 	
-	*pipelines = List_createEmpty(sizeof(PipelineRef*));
-	_gotoIfError(clean, List_resizex(pipelines, infos->length));
+	_gotoIfError(clean, ListPipelineRef_resizex(pipelines, infos->length));
 
 	totalStageCount = 0;
 
 	for (U64 i = 0; i < pipelines->length; ++i) {
 
-		PipelineGraphicsInfo *info = &((PipelineGraphicsInfo*) infos->ptr)[i];
-		PipelineRef **refPtr = &((PipelineRef**)pipelines->ptr)[i];
+		PipelineGraphicsInfo *info = &infos->ptrNonConst[i];
+		PipelineRef **refPtr = &pipelines->ptrNonConst[i];
 
 		_gotoIfError(clean, RefPtr_createx(
 			(U32)(sizeof(Pipeline) + PipelineExt_size + sizeof(PipelineGraphicsInfo)), 
@@ -565,33 +547,28 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 
 		GraphicsDeviceRef_inc(deviceRef);
 
-		*pipeline = (Pipeline) {
-			.device = deviceRef,
-			.type = EPipelineType_Graphics,
-			.stages = List_createEmpty(sizeof(PipelineStage))
-		};
+		*pipeline = (Pipeline) { .device = deviceRef, .type = EPipelineType_Graphics };
+		_gotoIfError(clean, ListPipelineStage_resizex(&pipeline->stages, info->stageCount));
 
-		_gotoIfError(clean, List_resizex(&pipeline->stages, info->stageCount));
+		ListPipelineStage tempList = (ListPipelineStage) { 0 };
+		_gotoIfError(clean, ListPipelineStage_createSubset(*stages, totalStageCount, info->stageCount, &tempList));
 
-		List tempList = (List) { 0 };
-		_gotoIfError(clean, List_createSubset(*stages, totalStageCount, info->stageCount, &tempList));
-
-		Buffer_copy(List_buffer(pipeline->stages), List_bufferConst(tempList));
+		Buffer_copy(ListPipelineStage_buffer(pipeline->stages), ListPipelineStage_bufferConst(tempList));
 
 		for(U64 k = totalStageCount, j = k; j < k + info->stageCount; ++j)
-			((PipelineStage*)stages->ptr)[j].shaderBinary = Buffer_createNull();			//Moved
+			stages->ptrNonConst[j].shaderBinary = Buffer_createNull();			//Moved
 
 		void *pipelineExt = Pipeline_ext(pipeline, );
 		pipeline->extraInfo = (U8*)pipelineExt + PipelineExt_size;
-		*(PipelineGraphicsInfo*)pipeline->extraInfo = ((const PipelineGraphicsInfo*) infos->ptr)[i];
+		*(PipelineGraphicsInfo*)pipeline->extraInfo = infos->ptr[i];
 
 		totalStageCount += info->stageCount;
 	}
 
 	//Free stages and info since they moved
 
-	List_freex(stages);
-	List_freex(infos);
+	ListPipelineStage_freex(stages);
+	ListPipelineGraphicsInfo_freex(infos);
 
 	//Create API objects
 
@@ -603,9 +580,9 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 clean:
 
 	for (U64 i = 0; i < pipelines->length; ++i)
-		RefPtr_dec(&((RefPtr**)pipelines->ptr)[i]);
+		RefPtr_dec(&pipelines->ptrNonConst[i]);
 
-	List_freex(pipelines);
+	ListPipelineRef_freex(pipelines);
 
 success:
 	return err;

@@ -120,7 +120,7 @@ inline void Buffer_sha256Internal(Buffer buf, U32 *output) {
 
 			else {
 
-				Buffer_copy(Buffer_createRef(block, 64), Buffer_createConstRef((const void*)realPtr, realLen));
+				Buffer_copy(Buffer_createRef(block, 64), Buffer_createRefConst((const void*)realPtr, realLen));
 
 				*((U8*)(void*)block + realLen) = 0x80;
 
@@ -244,7 +244,7 @@ inline void Buffer_sha256Internal(Buffer buf, U32 *output) {
 
 	//Store output
 
-	Buffer_copy(Buffer_createRef(output, sizeof(U32) * 8), Buffer_createConstRef(state, sizeof(U32) * 8));
+	Buffer_copy(Buffer_createRef(output, sizeof(U32) * 8), Buffer_createRefConst(state, sizeof(U32) * 8));
 }
 
 #if _SIMD == SIMD_SSE
@@ -487,7 +487,7 @@ inline void Buffer_sha256Internal(Buffer buf, U32 *output) {
 
 					Buffer_copy(
 						Buffer_createRef(block, 64), 
-						Buffer_createConstRef((const void*)realPtr, realLen)
+						Buffer_createRefConst((const void*)realPtr, realLen)
 					);
 
 					*((U8*)(void*)block + realLen) = 0x80;

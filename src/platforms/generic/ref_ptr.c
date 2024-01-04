@@ -18,11 +18,13 @@
 *  This is called dual licensing.
 */
 
+#include "platforms/ext/listx_impl.h"
 #include "platforms/ref_ptr.h"
 #include "platforms/platform.h"
-#include "types/buffer.h"
 #include "types/type_id.h"
-#include "types/error.h"
+
+TListNamedImpl(ListRefPtr);
+TListNamedImpl(ListWeakRefPtr);
 
 Error RefPtr_create(U32 objectLength, Allocator alloc, ObjectFreeFunc free, ETypeId type, RefPtr **result) {
 

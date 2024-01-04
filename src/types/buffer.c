@@ -211,7 +211,7 @@ Buffer Buffer_createRef(void *v, U64 length) {
 	return (Buffer) { .ptr = (U8*) v, .lengthAndRefBits = length | ((U64)1 << 63) };
 }
 
-Buffer Buffer_createConstRef(const void *v, U64 length) { 
+Buffer Buffer_createRefConst(const void *v, U64 length) { 
 
 	if(!length || !v)
 		return Buffer_createNull();
@@ -222,48 +222,31 @@ Buffer Buffer_createConstRef(const void *v, U64 length) {
 	return (Buffer) { .ptr = (U8*) v, .lengthAndRefBits = length | ((U64)3 << 62) };
 }
 
-Error Buffer_eq(Buffer buf0, Buffer buf1, Bool *result) {
+Bool Buffer_eq(Buffer buf0, Buffer buf1) {
 
-	if(!result)
-		return Error_nullPointer(2, "Buffer_eq()::result is required");
-
-	if (!buf0.ptr && !buf1.ptr) {
-		*result = true;
-		return Error_none();
-	}
+	if (!buf0.ptr && !buf1.ptr)
+		return true;
 	
-	if(!buf0.ptr || !buf1.ptr)
-		return Error_nullPointer(!buf0.ptr ? 0 : 1, "Buffer_eq()::buf0 and buf1 are required");
-
-	*result = false;
+	if (!buf0.ptr || !buf1.ptr)
+		return false;
 
 	U64 len0 = Buffer_length(buf0);
 
 	if(len0 != Buffer_length(buf1))
-		return Error_none();
+		return false;
 
 	for (U64 i = 0, j = len0 >> 3; i < j; ++i)
 		if (((const U64*)buf0.ptr)[i] != ((const U64*)buf1.ptr)[i])
-			return Error_none();
+			return false;
 
 	for (U64 i = len0 >> 3 << 3; i < len0; ++i)
 		if (buf0.ptr[i] != buf1.ptr[i])
-			return Error_none();
+			return false;
 
-	*result = true;
-	return Error_none();
+	return true;
 }
 
-Error Buffer_neq(Buffer buf0, Buffer buf1, Bool *result) {
-
-	Error e = Buffer_eq(buf0, buf1, result);
-
-	if(e.genericError)
-		return e;
-
-	*result = !*result;
-	return Error_none();
-}
+Bool Buffer_neq(Buffer buf0, Buffer buf1) { return !Buffer_eq(buf0, buf1); }
 
 Error Buffer_setBitRange(Buffer dst, U64 dstOff, U64 bits) {
 
@@ -557,7 +540,7 @@ Error Buffer_appendBuffer(Buffer *buf, Buffer append) {
 }
 
 Error Buffer_append(Buffer *buf, const void *v, U64 length) {
-	return Buffer_appendBuffer(buf, Buffer_createConstRef(v, length));
+	return Buffer_appendBuffer(buf, Buffer_createRefConst(v, length));
 }
 
 Error Buffer_consume(Buffer *buf, void *v, U64 length) {

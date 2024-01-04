@@ -20,6 +20,7 @@
 
 #pragma once
 #include "types/list.h"
+#include "types/string.h"
 #include "platforms/ref_ptr.h"
 #include "pipeline_structs.h"
 
@@ -60,6 +61,9 @@ typedef struct PipelineGraphicsInfo {
 
 } PipelineGraphicsInfo;
 
+TList(PipelineGraphicsInfo);
+TList(PipelineStage);
+
 typedef struct Pipeline {
 
 	GraphicsDeviceRef *device;
@@ -67,7 +71,7 @@ typedef struct Pipeline {
 	EPipelineType type;
 	U32 padding;
 
-	List stages;							//<PipelineStage>
+	ListPipelineStage stages;
 
 	const void *extraInfo;					//Null or points to after ext data for extraInfo (e.g. PipelineGraphicsInfo)
 
@@ -81,25 +85,25 @@ typedef RefPtr PipelineRef;
 Error PipelineRef_dec(PipelineRef **pipeline);
 Error PipelineRef_inc(PipelineRef *pipeline);
 
-Bool PipelineRef_decAll(List *list);					//Decrements all refs and frees list
+TListNamed(PipelineRef*, ListPipelineRef);
 
-PipelineRef *PipelineRef_at(List list, U64 index);
+Bool PipelineRef_decAll(ListPipelineRef *list);					//Decrements all refs and frees list
 
 Bool Pipeline_free(Pipeline *pipeline, Allocator alloc);
 
 //shaderBinaries's Buffer will be moved (shaderBinaries will be cleared if moved)
 Error GraphicsDeviceRef_createPipelinesCompute(
 	GraphicsDeviceRef *deviceRef, 
-	List *shaderBinaries,			//<Buffer>
-	List names,						//Temporary names for debugging. Can be empty too, else match shaderBinaries->length
-	List *pipelines					//<PipelineRef*>
+	ListBuffer *shaderBinaries,
+	ListCharString names,					//Temporary names for debugging. Can be empty, else match shaderBinaries->length
+	ListPipelineRef *pipelines
 );
 
 //stages and info will be freed and binaries of stages will be moved.
 Error GraphicsDeviceRef_createPipelinesGraphics(
 	GraphicsDeviceRef *deviceRef, 
-	List *stages,					//<PipelineStage>
-	List *infos,					//<PipelineGraphicsInfo>
-	List names,						//Temporary names for debugging. Can be empty too, else match infos->length 
-	List *pipelines					//<PipelineRef*>
+	ListPipelineStage *stages,
+	ListPipelineGraphicsInfo *infos,
+	ListCharString names,					//Temporary names for debugging. Can be empty, else match infos->length 
+	ListPipelineRef *pipelines
 );

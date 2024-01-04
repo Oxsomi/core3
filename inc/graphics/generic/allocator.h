@@ -50,13 +50,15 @@ typedef struct DeviceMemoryBlock {
 
 } DeviceMemoryBlock;
 
+TList(DeviceMemoryBlock);
+
 typedef struct DeviceMemoryAllocator {
 
 	GraphicsDevice *device;
 
 	Lock lock;
 
-	List blocks;
+	ListDeviceMemoryBlock blocks;
 
 } DeviceMemoryAllocator;
 

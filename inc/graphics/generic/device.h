@@ -58,6 +58,8 @@ typedef union DevicePendingRange {
 
 } DevicePendingRange;
 
+TListNamed(Lock*, ListLockPtr);
+
 typedef struct GraphicsDevice {
 
 	GraphicsInstanceRef *instance;
@@ -68,13 +70,13 @@ typedef struct GraphicsDevice {
 
 	Ns lastSubmit;
 
-	Ns firstSubmit;				//Start of time
+	Ns firstSubmit;								//Start of time
 
-	List pendingResources;		//<WeakRefPtr*> Resources pending copy from CPU to device next submit
+	ListWeakRefPtr pendingResources;			//Resources pending copy from CPU to device next submit
 
-	List resourcesInFlight[3];	//<RefPtr*> Resources in flight
+	ListRefPtr resourcesInFlight[3];			//Resources in flight
 
-	Lock lock;					//Lock for submission and marking resources dirty
+	Lock lock;									//Lock for submission and marking resources dirty
 
 	DeviceMemoryAllocator allocator;
 
@@ -89,11 +91,11 @@ typedef struct GraphicsDevice {
 
 	//Temporary for processing command list and to avoid allocations
 
-	List currentLocks;
+	ListLockPtr currentLocks;
 
-	U64 pendingBytes;			//For determining if it's time to flush or to resize staging buffer
+	U64 pendingBytes;							//For determining if it's time to flush or to resize staging buffer
 
-	U64 flushThreshold;			//When the pending bytes are too much and the device should flush to try and re-acquire memory
+	U64 flushThreshold;							//When the pending bytes are too much and the device should flush
 
 } GraphicsDevice;
 
@@ -115,11 +117,20 @@ Error GraphicsDeviceRef_create(
 //Ensure there are no pending changes from non existent resources.
 Bool GraphicsDeviceRef_removePending(GraphicsDeviceRef *deviceRef, RefPtr *resource);
 
+typedef RefPtr CommandListRef;
+typedef RefPtr SwapchainRef;
+
+TListNamed(CommandListRef*, ListCommandListRef);
+TListNamed(SwapchainRef*, ListSwapchainRef);
+
 //Submit commands to device
-//List<CommandListRef*> commandLists
-//List<SwapchainRef*> swapchains
 //appData is up to a 368 byte per frame array used for transmitting render critical info.
-Error GraphicsDeviceRef_submitCommands(GraphicsDeviceRef *deviceRef, List commandLists, List swapchains, Buffer appData);
+Error GraphicsDeviceRef_submitCommands(
+	GraphicsDeviceRef *deviceRef, 
+	ListCommandListRef commandLists, 
+	ListSwapchainRef swapchains, 
+	Buffer appData
+);
 
 //Wait on previously submitted commands
 Error GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef);

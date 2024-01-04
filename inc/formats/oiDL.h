@@ -56,9 +56,11 @@ typedef union DLEntry {
 
 //Check docs/oiDL.md for the file spec
 
+TList(DLEntry);
+
 typedef struct DLFile {
 
-	List entries;				//<DLEntry>
+	ListDLEntry entries;
 	DLSettings settings;
 	U64 readLength;				//How many bytes were read for this file
 

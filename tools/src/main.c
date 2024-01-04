@@ -18,10 +18,10 @@
 *  This is called dual licensing.
 */
 
+#include "platforms/ext/listx_impl.h"
 #include "types/time.h"
 #include "types/buffer.h"
 #include "types/file.h"
-#include "platforms/ext/listx.h"
 #include "platforms/ext/errorx.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/ext/bufferx.h"

@@ -18,20 +18,20 @@
 *  This is called dual licensing.
 */
 
+#include "platforms/ext/listx_impl.h"
 #include "types/error.h"
 #include "types/list.h"
 #include "types/buffer.h"
 #include "formats/oiDL.h"
 #include "platforms/log.h"
 #include "platforms/file.h"
-#include "platforms/ext/listx.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/ext/formatx.h"
 #include "platforms/ext/errorx.h"
 #include "platforms/ext/bufferx.h"
 #include "cli.h"
 
-Error addFileToDLFile(FileInfo file, List *names) {
+Error addFileToDLFile(FileInfo file, ListCharString *names) {
 
 	if (file.type == EFileType_Folder)
 		return Error_none();
@@ -42,7 +42,7 @@ Error addFileToDLFile(FileInfo file, List *names) {
 	if((err = CharString_createCopyx(file.path, &copy)).genericError)
 		return err;
 
-	if ((err = List_pushBackx(names, Buffer_createConstRef(&copy, sizeof(copy)))).genericError) {
+	if ((err = ListCharString_pushBackx(names, copy)).genericError) {
 		CharString_freex(&copy);
 		return err;
 	}
@@ -114,9 +114,9 @@ Error _CLI_convertToDL(ParsedArgs args, CharString input, FileInfo inputInfo, Ch
 		);
 	}
 
-	List buffers = List_createEmpty(sizeof(Buffer));
-	List paths = List_createEmpty(sizeof(CharString));
-	List sortedPaths = List_createEmpty(sizeof(CharString));
+	ListBuffer buffers = { 0 };
+	ListCharString paths = { 0 };
+	ListCharString sortedPaths = { 0 };
 
 	Error err = Error_none();
 	CharStringList split = (CharStringList) { 0 };
@@ -164,8 +164,8 @@ Error _CLI_convertToDL(ParsedArgs args, CharString input, FileInfo inputInfo, Ch
 
 		//Add single file entry and create it as normal
 
-		Buffer ref = Buffer_createConstRef(&buf, sizeof(buf));
-		_gotoIfError(clean, List_pushBackx(&buffers, ref));
+		Buffer ref = Buffer_createRefConst(&buf, sizeof(buf));
+		_gotoIfError(clean, ListBuffer_pushBackx(&buffers, ref));
 
 		buf = Buffer_createNull();		//Ensure we don't free twice.
 	}
@@ -174,7 +174,7 @@ Error _CLI_convertToDL(ParsedArgs args, CharString input, FileInfo inputInfo, Ch
 
 		//Merge folder's children
 
-		_gotoIfError(clean, List_reservex(&buffers, 256));
+		_gotoIfError(clean, ListBuffer_reservex(&buffers, 256));
 
 		_gotoIfError(clean, File_foreach(
 			input, (FileCallback) addFileToDLFile, &paths, 
@@ -187,13 +187,13 @@ Error _CLI_convertToDL(ParsedArgs args, CharString input, FileInfo inputInfo, Ch
 
 		//To do this, we will create a list that can hold all paths in sorted order
 
-		_gotoIfError(clean, List_resizex(&sortedPaths, paths.length));
+		_gotoIfError(clean, ListCharString_resizex(&sortedPaths, paths.length));
 
 		Bool allLinear = true;
 
 		for (U64 i = 0; i < paths.length; ++i) {
 
-			CharString stri = ((const CharString*)paths.ptr)[i];
+			CharString stri = paths.ptr[i];
 			CharString_cutBeforeLastSensitive(stri, '/', &basePath);
 
 			CharString tmp = CharString_createNull();
@@ -212,14 +212,14 @@ Error _CLI_convertToDL(ParsedArgs args, CharString input, FileInfo inputInfo, Ch
 				break;
 			}
 
-			CharString sortedI = ((const CharString*)sortedPaths.ptr)[dec];
+			CharString sortedI = sortedPaths.ptr[dec];
 
 			if (CharString_length(sortedI)) {
 				allLinear = false;
 				break;
 			}
 
-			((CharString*)sortedPaths.ptr)[dec] = CharString_createConstRefSized(stri.ptr, CharString_length(stri), false);
+			sortedPaths.ptrNonConst[dec] = CharString_createConstRefSized(stri.ptr, CharString_length(stri), false);
 		}
 
 		//Keep the sorting as is, since it's not linear
@@ -228,9 +228,9 @@ Error _CLI_convertToDL(ParsedArgs args, CharString input, FileInfo inputInfo, Ch
 
 			for (U64 i = 0; i < paths.length; ++i) {
 
-				CharString stri = ((const CharString*)paths.ptr)[i];
+				CharString stri = paths.ptr[i];
 				_gotoIfError(clean, File_read(stri, 1 * SECOND, &fileBuf));
-				_gotoIfError(clean, List_pushBackx(&buffers, Buffer_createConstRef(&fileBuf, sizeof(fileBuf))));
+				_gotoIfError(clean, ListBuffer_pushBackx(&buffers, fileBuf));
 
 				fileBuf = Buffer_createNull();
 			}
@@ -241,17 +241,17 @@ Error _CLI_convertToDL(ParsedArgs args, CharString input, FileInfo inputInfo, Ch
 
 		else for (U64 i = 0; i < sortedPaths.length; ++i) {
 
-			CharString stri = ((const CharString*)sortedPaths.ptr)[i];
+			CharString stri = sortedPaths.ptr[i];
 			_gotoIfError(clean, File_read(stri, 1 * SECOND, &fileBuf));
-			_gotoIfError(clean, List_pushBackx(&buffers, Buffer_createConstRef(&fileBuf, sizeof(fileBuf))));
+			_gotoIfError(clean, ListBuffer_pushBackx(&buffers, fileBuf));
 
 			fileBuf = Buffer_createNull();
 		}
 
 		//
 
-		List_freex(&sortedPaths);
-		List_freex(&paths);
+		ListCharString_freex(&sortedPaths);
+		ListCharString_freex(&paths);
 	}
 
 	//Now we're left with only data entries
@@ -266,21 +266,21 @@ Error _CLI_convertToDL(ParsedArgs args, CharString input, FileInfo inputInfo, Ch
 		//Add entry
 
 		if(settings.dataType == EDLDataType_Data)
-			_gotoIfError(clean, DLFile_addEntryx(&file, *((Buffer*)buffers.ptr + i)))
+			_gotoIfError(clean, DLFile_addEntryx(&file, buffers.ptr[i]))
 
 		else if(settings.dataType == EDLDataType_Ascii) {
 
-			Buffer bufi = *((Buffer*)buffers.ptr + i);
+			Buffer bufi = buffers.ptr[i];
 			CharString str = CharString_createConstRefSized((const C8*)bufi.ptr, Buffer_length(bufi), false);
 			
 			_gotoIfError(clean, DLFile_addEntryAsciix(&file, str));
 		}
 
-		else _gotoIfError(clean, DLFile_addEntryUTF8x(&file, *((Buffer*)buffers.ptr + i)));
+		else _gotoIfError(clean, DLFile_addEntryUTF8x(&file, buffers.ptr[i]));
 
 		//Ensure we get don't free the same thing multiple times
 
-		*((Buffer*)buffers.ptr + i) = Buffer_createNull();
+		buffers.ptrNonConst[i] = Buffer_createNull();
 	}
 
 	//Convert to binary
@@ -297,12 +297,12 @@ clean:
 		Error_printx(err, ELogLevel_Error, ELogOptions_Default);
 
 	for(U64 i = 0; i < paths.length; ++i) {
-		CharString str = *((const CharString*)paths.ptr + i);
+		CharString str = paths.ptr[i];
 		CharString_freex(&str);
 	}
 
 	for(U64 i = 0; i < buffers.length; ++i) {
-		Buffer bufi = *((Buffer*)buffers.ptr + i);
+		Buffer bufi = buffers.ptr[i];
 		Buffer_freex(&bufi);
 	}
 
@@ -311,9 +311,9 @@ clean:
 	Buffer_freex(&res);
 	Buffer_freex(&buf);
 	Buffer_freex(&fileBuf);
-	List_freex(&buffers);
-	List_freex(&paths);
-	List_freex(&sortedPaths);
+	ListBuffer_freex(&buffers);
+	ListCharString_freex(&paths);
+	ListCharString_freex(&sortedPaths);
 
 	return err;
 }
@@ -370,7 +370,7 @@ Error _CLI_convertFromDL(ParsedArgs args, CharString input, FileInfo inputInfo, 
 
 		for (U64 i = 0; i < file.entries.length; ++i) {
 
-			DLEntry entry = ((DLEntry*)file.entries.ptr)[i];
+			DLEntry entry = file.entries.ptr[i];
 
 			//File name "$base/$(i).+?(isBin ? ".bin" : ".txt")"
 
@@ -403,7 +403,7 @@ Error _CLI_convertFromDL(ParsedArgs args, CharString input, FileInfo inputInfo, 
 
 		for (U64 i = 0; i < file.entries.length; ++i) {
 
-			DLEntry entry = ((DLEntry*)file.entries.ptr)[i];
+			DLEntry entry = file.entries.ptr[i];
 			_gotoIfError(clean, CharString_appendStringx(&concatFile, entry.entryString));
 
 			if(i == file.entries.length - 1)
@@ -422,7 +422,7 @@ Error _CLI_convertFromDL(ParsedArgs args, CharString input, FileInfo inputInfo, 
 
 		}
 
-		Buffer fileDat = Buffer_createConstRef(concatFile.ptr, CharString_length(concatFile));
+		Buffer fileDat = Buffer_createRefConst(concatFile.ptr, CharString_length(concatFile));
 
 		_gotoIfError(clean, File_write(fileDat, output, 1 * SECOND));
 

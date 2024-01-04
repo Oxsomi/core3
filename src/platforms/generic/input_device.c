@@ -177,7 +177,7 @@ Error InputDevice_create(U16 buttons, U16 axes, EInputDeviceType type, InputDevi
 																								\
 	Buffer_copy(																				\
 		Buffer_createRef(inputType->name, _LONGSTRING_LEN), 									\
-		Buffer_createConstRef(keyName.ptr, CharString_length(keyName))							\
+		Buffer_createRefConst(keyName.ptr, CharString_length(keyName))							\
 	);																							\
 																								\
 	inputType->name[U64_min(CharString_length(keyName), _LONGSTRING_LEN - 1)] = '\0';

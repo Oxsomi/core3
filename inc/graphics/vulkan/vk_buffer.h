@@ -19,9 +19,7 @@
 */
 
 #pragma once
-#include "graphics/vulkan/vulkan.h"
-
-typedef struct List List;
+#include "graphics/vulkan/vk_device.h"
 
 typedef struct VkDeviceBuffer {
 
@@ -39,6 +37,6 @@ Error VkDeviceBuffer_transition(
 	U32 graphicsQueueId,
 	U64 offset,
 	U64 size,
-	List *bufferBarriers,
+	ListVkBufferMemoryBarrier2 *bufferBarriers,
 	VkDependencyInfo *dependency
 );

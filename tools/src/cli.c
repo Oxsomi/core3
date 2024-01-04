@@ -18,13 +18,13 @@
 *  This is called dual licensing.
 */
 
+#include "platforms/ext/listx_impl.h"
 #include "types/buffer.h"
 #include "types/string.h"
 #include "types/error.h"
 #include "platforms/platform.h"
 #include "platforms/log.h"
 #include "platforms/ext/errorx.h"
-#include "platforms/ext/listx.h"
 #include "platforms/ext/stringx.h"
 #include "cli.h"
 
@@ -167,7 +167,7 @@ Bool CLI_helpOperation(ParsedArgs args) {
 	CharStringList split = (CharStringList) { 0 };
 
 	if(args.parameters & EOperationHasParameter_Input)
-		_gotoIfError(clean, CharString_splitSensitivex(*(const CharString*)args.args.ptr, ':', &split));
+		_gotoIfError(clean, CharString_splitSensitivex(*args.args.ptr, ':', &split));
 
 	if(split.length > 0)
 		for (EOperationCategory cat = EOperationCategory_Start; cat < EOperationCategory_End; ++cat) {
@@ -295,12 +295,10 @@ Bool CLI_execute(CharStringList arglist) {
 
 	//Parse command line options
 
-	ParsedArgs args = (ParsedArgs) { 0 };
-	args.args = List_createEmpty(sizeof(CharString));
-	args.operation = operation;
+	ParsedArgs args = (ParsedArgs) { .operation = operation };
 
-	Error err = List_reservex(&args.args, 100);
-	_gotoIfError(clean, err);
+	Error err = Error_none();
+	_gotoIfError(clean, ListCharString_reservex(&args.args, 16));
 
 	//Grab all flags
 
@@ -336,7 +334,11 @@ Bool CLI_execute(CharStringList arglist) {
 					j + 1 >= arglist.length ||
 					CharString_getAt(arglist.ptr[j + 1], 0) == '-'
 				) {
-					Log_errorLnx("Parameter is missing argument: %.*s.", CharString_length(arglist.ptr[j]), arglist.ptr[j].ptr);
+
+					Log_errorLnx(
+						"Parameter is missing argument: %.*s.", CharString_length(arglist.ptr[j]), arglist.ptr[j].ptr
+					);
+
 					goto clean;
 				}
 
@@ -368,10 +370,7 @@ Bool CLI_execute(CharStringList arglist) {
 
 					//Store param for parsing later
 
-					_gotoIfError(clean, List_pushBackx(
-						&args.args, 
-						Buffer_createConstRef(&arglist.ptr[j + 1], sizeof(CharString))
-					));
+					_gotoIfError(clean, ListCharString_pushBackx(&args.args, arglist.ptr[j + 1]));
 				}
 
 				++j;			//Skip next argument
@@ -501,7 +500,7 @@ Bool CLI_execute(CharStringList arglist) {
 	//Now we can enter the function
 
 	Bool res = Operation_values[operation].func(args);
-	List_freex(&args.args);
+	ListCharString_freex(&args.args);
 	return res;
 
 clean:
@@ -509,6 +508,6 @@ clean:
 	if(err.genericError)
 		Error_printx(err, ELogLevel_Error, ELogOptions_Default);
 
-	List_freex(&args.args);
+	ListCharString_freex(&args.args);
 	return false;
 }

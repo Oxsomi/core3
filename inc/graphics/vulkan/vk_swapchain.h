@@ -19,24 +19,26 @@
 */
 
 #pragma once
-#include "graphics/vulkan/vulkan.h"
+#include "graphics/vulkan/vk_device.h"
 
 typedef struct Window Window;
 typedef struct VkGraphicsInstance VkGraphicsInstance;
+
+TList(VkManagedImage);
 
 typedef struct VkSwapchain {
 
 	VkSurfaceKHR surface;			//Platform's surface implementation
 	VkSwapchainKHR swapchain;
 
-	List semaphores;				//<VkSemaphore>
-	List images;					//<VkManagedImage>
+	ListVkSemaphore semaphores;
+	ListVkManagedImage images;
 
 	VkSurfaceFormatKHR format;
 
 	U32 currentIndex;				//Swapchain index
 
-	List descriptorAllocations;
+	ListU32 descriptorAllocations;
 
 } VkSwapchain;
 
@@ -51,6 +53,6 @@ Error VkSwapchain_transition(
 	VkImageLayout layout,
 	U32 graphicsQueueId,
 	const VkImageSubresourceRange *range,
-	List *imageBarriers,
+	ListVkImageMemoryBarrier2 *imageBarriers,
 	VkDependencyInfo *dependency
 );

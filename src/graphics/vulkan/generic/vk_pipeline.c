@@ -18,13 +18,13 @@
 *  This is called dual licensing.
 */
 
+#include "platforms/ext/listx_impl.h"
 #include "graphics/generic/pipeline.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
 #include "graphics/vulkan/vk_device.h"
 #include "graphics/vulkan/vk_instance.h"
 #include "platforms/ext/bufferx.h"
-#include "platforms/ext/listx.h"
 #include "platforms/ext/stringx.h"
 #include "formats/texture.h"
 #include "types/buffer.h"
@@ -117,23 +117,28 @@ Bool Pipeline_freeExt(Pipeline *pipeline, Allocator allocator) {
 	return true;
 }
 
-Error GraphicsDevice_createPipelinesComputeExt(GraphicsDevice *device, List names, List *pipelines) {
+TList(VkComputePipelineCreateInfo);
+TList(VkPipeline);
+TListImpl(VkComputePipelineCreateInfo);
+TListImpl(VkPipeline);
+
+Error GraphicsDevice_createPipelinesComputeExt(GraphicsDevice *device, ListCharString names, ListPipelineRef *pipelines) {
 
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(GraphicsInstanceRef_ptr(device->instance), Vk);
 
-	List pipelineInfos = List_createEmpty(sizeof(VkComputePipelineCreateInfo));
-	List pipelineHandles = List_createEmpty(sizeof(VkPipeline));
+	ListVkComputePipelineCreateInfo pipelineInfos = (ListVkComputePipelineCreateInfo) { 0 };
+	ListVkPipeline pipelineHandles = (ListVkPipeline) { 0 };
 
 	Error err = Error_none();
-	_gotoIfError(clean, List_resizex(&pipelineInfos, pipelines->length));
-	_gotoIfError(clean, List_resizex(&pipelineHandles, pipelines->length));
+	_gotoIfError(clean, ListVkComputePipelineCreateInfo_resizex(&pipelineInfos, pipelines->length));
+	_gotoIfError(clean, ListVkPipeline_resizex(&pipelineHandles, pipelines->length));
 
 	//TODO: Push constants
 
 	for(U64 i = 0; i < pipelines->length; ++i) {
 
-		((VkComputePipelineCreateInfo*)pipelineInfos.ptr)[i] = (VkComputePipelineCreateInfo) {
+		pipelineInfos.ptrNonConst[i] = (VkComputePipelineCreateInfo) {
 			.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
 			.stage = (VkPipelineShaderStageCreateInfo) {
 				.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
@@ -143,14 +148,14 @@ Error GraphicsDevice_createPipelinesComputeExt(GraphicsDevice *device, List name
 			.layout = deviceExt->defaultLayout
 		};
 
-		Pipeline *pipeline = PipelineRef_ptr(((PipelineRef**)pipelines->ptr)[i]);
+		Pipeline *pipeline = PipelineRef_ptr(pipelines->ptr[i]);
 
 		_gotoIfError(clean, createShaderModule(
-			((const PipelineStage*) pipeline->stages.ptr)[0].shaderBinary, 
-			&((VkComputePipelineCreateInfo*) pipelineInfos.ptr)[i].stage.module, 
+			pipeline->stages.ptr[0].shaderBinary, 
+			&pipelineInfos.ptrNonConst[i].stage.module, 
 			deviceExt,
 			instanceExt,
-			!names.length ? CharString_createNull() : ((const CharString*)names.ptr)[i],
+			!names.length ? CharString_createNull() : names.ptr[i],
 			EPipelineStage_Compute
 		));
 	}
@@ -159,9 +164,9 @@ Error GraphicsDevice_createPipelinesComputeExt(GraphicsDevice *device, List name
 		deviceExt->device,
 		NULL,
 		(U32) pipelineInfos.length,
-		(const VkComputePipelineCreateInfo*) pipelineInfos.ptr,
+		pipelineInfos.ptr,
 		NULL,
-		(VkPipeline*) pipelineHandles.ptr
+		pipelineHandles.ptrNonConst
 	)));
 
 	for (U64 i = 0; i < pipelines->length; ++i) {
@@ -173,8 +178,8 @@ Error GraphicsDevice_createPipelinesComputeExt(GraphicsDevice *device, List name
 				VkDebugUtilsObjectNameInfoEXT debugName2 = (VkDebugUtilsObjectNameInfoEXT) {
 					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
 					.objectType = VK_OBJECT_TYPE_PIPELINE,
-					.objectHandle = (U64) ((const VkPipeline*) pipelineHandles.ptr)[i],
-					.pObjectName = ((const CharString*)names.ptr)[i].ptr
+					.objectHandle = (U64) pipelineHandles.ptr[i],
+					.pObjectName = names.ptr[i].ptr
 				};
 
 				_gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName2)));
@@ -182,23 +187,23 @@ Error GraphicsDevice_createPipelinesComputeExt(GraphicsDevice *device, List name
 
 		#endif
 
-		Pipeline *pipeline = PipelineRef_ptr(((PipelineRef**)pipelines->ptr)[i]);
-		*Pipeline_ext(pipeline, Vk) = ((const VkPipeline*) pipelineHandles.ptr)[i];
+		Pipeline *pipeline = PipelineRef_ptr(pipelines->ptr[i]);
+		*Pipeline_ext(pipeline, Vk) = pipelineHandles.ptr[i];
 	}
 
 clean:
 
-	List_freex(&pipelineHandles);
+	ListVkPipeline_freex(&pipelineHandles);
 
 	for (U64 i = 0; i < pipelineInfos.length; ++i) {
 
-		VkShaderModule mod = ((VkComputePipelineCreateInfo*) pipelineInfos.ptr)[i].stage.module;
+		VkShaderModule mod = pipelineInfos.ptr[i].stage.module;
 
 		if(mod)
 			vkDestroyShaderModule(deviceExt->device, mod, NULL);
 	}
 
-	List_freex(&pipelineInfos);
+	ListVkComputePipelineCreateInfo_freex(&pipelineInfos);
 	return err;
 }
 
@@ -265,7 +270,7 @@ VkBlendFactor mapVkBlend(EBlend op) {
 	}
 }
 
-Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, List names, List *pipelines) {
+Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListCharString names, ListPipelineRef *pipelines) {
 
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(GraphicsInstanceRef_ptr(device->instance), Vk);
@@ -316,8 +321,7 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, List nam
 
 	for(U64 i = 0; i < pipelines->length; ++i) {
 
-		const PipelineGraphicsInfo *info = 
-			(const PipelineGraphicsInfo*) PipelineRef_ptr(((const PipelineRef**)pipelines->ptr)[i])->extraInfo;
+		const PipelineGraphicsInfo *info = (const PipelineGraphicsInfo*) PipelineRef_ptr(pipelines->ptr[i])->extraInfo;
 
 		//Count if available
 
@@ -388,11 +392,11 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, List nam
 		sizeof(VkVertexInputAttributeDescription)
 	};
 
-	List states[EPipelineStateType_Count] = { 0 };
+	GenericList states[EPipelineStateType_Count] = { 0 };
 
 	for(U64 i = EPipelineStateType_PerPipelineStart; i < EPipelineStateType_Count; ++i) {
-		states[i] = List_createEmpty(strides[i]);
-		_gotoIfError(clean, List_resizex(&states[i], counts[i]));
+		states[i] = GenericList_createEmpty(strides[i]);
+		_gotoIfError(clean, GenericList_resizex(&states[i], counts[i]));
 	}
 
 	//TODO: Push constants
@@ -452,8 +456,7 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, List nam
 
 	for(; total < pipelines->length; ++total) {
 
-		const PipelineGraphicsInfo *info =
-			(const PipelineGraphicsInfo*) PipelineRef_ptr(((const PipelineRef**)pipelines->ptr)[total])->extraInfo;
+		const PipelineGraphicsInfo *info = (const PipelineGraphicsInfo*) PipelineRef_ptr(pipelines->ptr[total])->extraInfo;
 
 		//Convert info struct to vulkan struct
 
@@ -843,12 +846,12 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, List nam
 				counts[EPipelineStateType_Stage]
 			];
 
-		Pipeline *pipeline = PipelineRef_ptr(((const PipelineRef**)pipelines->ptr)[total]);
+		Pipeline *pipeline = PipelineRef_ptr(pipelines->ptr[total]);
 
 		for(U64 j = 0; j < info->stageCount; ++j) {
 
 			VkShaderStageFlagBits stageBit = 0;
-			PipelineStage stage = ((const PipelineStage*) pipeline->stages.ptr)[j];
+			PipelineStage stage = pipeline->stages.ptr[j];
 
 			switch (stage.stageType) {
 				default:							stageBit = VK_SHADER_STAGE_VERTEX_BIT;						break;
@@ -865,7 +868,7 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, List nam
 				&module, 
 				deviceExt,
 				instanceExt,
-				!names.length ? CharString_createNull() : ((const CharString*)names.ptr)[total],
+				!names.length ? CharString_createNull() : names.ptr[total],
 				stage.stageType
 			));
 
@@ -909,7 +912,7 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, List nam
 					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
 					.objectType = VK_OBJECT_TYPE_PIPELINE,
 					.objectHandle = (U64) ((const VkPipeline*) states[EPipelineStateType_VkPipeline].ptr)[i],
-					.pObjectName = ((const CharString*)names.ptr)[i].ptr
+					.pObjectName = names.ptr[i].ptr
 				};
 
 				_gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName2)));
@@ -917,7 +920,7 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, List nam
 
 		#endif
 
-		VkPipeline *pipelineExt = Pipeline_ext(PipelineRef_ptr(((const PipelineRef**)pipelines->ptr)[i]), Vk);
+		VkPipeline *pipelineExt = Pipeline_ext(PipelineRef_ptr(pipelines->ptr[i]), Vk);
 		*pipelineExt = ((VkPipeline*) states[EPipelineStateType_VkPipeline].ptr)[i];
 	}
 
@@ -939,7 +942,7 @@ clean:
 	}
 
 	for(U64 i = 0; i < sizeof(states) / sizeof(states[0]); ++i)
-		List_freex(&states[i]);
+		GenericList_freex(&states[i]);
 
 	return err;
 }

@@ -46,11 +46,6 @@
 typedef C8 ShortString[_SHORTSTRING_LEN];
 typedef C8 LongString[_LONGSTRING_LEN];
 
-typedef struct List List;
-typedef struct Buffer Buffer;
-typedef struct Allocator Allocator;
-typedef struct Error Error;
-
 //Heap string
 
 typedef struct CharString {
@@ -58,6 +53,13 @@ typedef struct CharString {
 	U64 capacityAndRefInfo;			//capacityAndRefInfo = 0: ref, capacityAndRefInfo = -1: const ref
 	const C8 *ptr;					//This is non const if not a const ref, but for safety this is const (cast away if not).
 } CharString;
+
+TList(CharString);
+TListNamed(const C8*, ListConstC8);
+
+Bool ListCharString_sort(ListCharString list, EStringCase stringCase);
+Bool ListCharString_sortSensitive(ListCharString list);
+Bool ListCharString_sortInsensitive(ListCharString list);
 
 typedef struct CharStringList {
 	U64 length;
@@ -272,25 +274,8 @@ Bool CharString_endsWithStringInsensitive(CharString str, CharString other);
 U64 CharString_countAllInsensitive(CharString s, C8 c);
 U64 CharString_countAllStringInsensitive(CharString s, CharString other);
 
-//Returns the locations (U64[])
-
-Error CharString_findAll(
-	CharString s, 
-	C8 c, 
-	Allocator alloc,
-	EStringCase caseSensitive,
-	List *result
-);
-
-Error CharString_findAllString(
-	CharString s, 
-	CharString other,
-	Allocator alloc,
-	EStringCase caseSensitive,
-	List *result
-);
-
-//
+Error CharString_findAll(CharString s, C8 c, Allocator alloc, EStringCase caseSensitive, ListU64 *result);
+Error CharString_findAllString(CharString s, CharString other, Allocator alloc, EStringCase caseSensitive, ListU64 *result);
 
 U64 CharString_findFirst(CharString s, C8 c, EStringCase caseSensitive);
 U64 CharString_findLast(CharString s, C8 c, EStringCase caseSensitive);
@@ -301,11 +286,11 @@ U64 CharString_findFirstString(CharString s, CharString other, EStringCase caseS
 U64 CharString_findLastString(CharString s, CharString other, EStringCase caseSensitive);
 U64 CharString_findString(CharString s, CharString other, EStringCase caseSensitive, Bool isFirst);
 
-Error CharString_findAllSensitive(CharString s, C8 c, Allocator alloc, List *result);
-Error CharString_findAllInsensitive(CharString s, C8 c, Allocator alloc, List *result);
+Error CharString_findAllSensitive(CharString s, C8 c, Allocator alloc, ListU64 *result);
+Error CharString_findAllInsensitive(CharString s, C8 c, Allocator alloc, ListU64 *result);
 
-Error CharString_findAllStringSensitive(CharString s, CharString other, Allocator alloc, List *result);
-Error CharString_findAllStringInsensitive(CharString s, CharString other, Allocator alloc, List *result);
+Error CharString_findAllStringSensitive(CharString s, CharString other, Allocator alloc, ListU64 *result);
+Error CharString_findAllStringInsensitive(CharString s, CharString other, Allocator alloc, ListU64 *result);
 
 U64 CharString_findFirstSensitive(CharString s, C8 c);
 U64 CharString_findFirstInsensitive(CharString s, C8 c);

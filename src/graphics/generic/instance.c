@@ -18,11 +18,13 @@
 *  This is called dual licensing.
 */
 
+#include "platforms/ext/listx_impl.h"
 #include "graphics/generic/instance.h"
 #include "graphics/generic/device.h"
-#include "platforms/ext/listx.h"
 #include "platforms/ext/bufferx.h"
 #include "types/error.h"
+
+TListImpl(GraphicsDeviceInfo);
 
 Error GraphicsInstanceRef_dec(GraphicsInstanceRef **inst) {
 	return !RefPtr_dec(inst) ? Error_invalidOperation(0, "GraphicsInstanceRef_dec()::inst is required") : Error_none();
@@ -47,7 +49,7 @@ Error GraphicsInstance_getPreferredDevice(
 	if(deviceInfo->ext)
 		return Error_invalidParameter(4, 0, "GraphicsInstance_getPreferredDevice()::*deviceInfo must be empty");
 
-	List tmp = (List) { 0 };
+	ListGraphicsDeviceInfo tmp = (ListGraphicsDeviceInfo) { 0 };
 	Error err = GraphicsInstance_getDeviceInfos(inst, verbose, &tmp);
 
 	if(err.genericError)
@@ -60,7 +62,7 @@ Error GraphicsInstance_getPreferredDevice(
 
 	for (U64 i = 0; i < tmp.length; ++i) {
 
-		GraphicsDeviceInfo info = ((GraphicsDeviceInfo*)tmp.ptr)[i];
+		GraphicsDeviceInfo info = tmp.ptr[i];
 
 		//Check if vendor and device type are supported
 
@@ -96,10 +98,10 @@ Error GraphicsInstance_getPreferredDevice(
 
 	U64 picked = hasDedicated ? preferredDedicated : preferredNonDedicated;
 
-	*deviceInfo = ((const GraphicsDeviceInfo*)tmp.ptr)[picked];
+	*deviceInfo = tmp.ptr[picked];
 
 clean:
-	List_freex(&tmp);
+	ListGraphicsDeviceInfo_freex(&tmp);
 	return err;
 }
 

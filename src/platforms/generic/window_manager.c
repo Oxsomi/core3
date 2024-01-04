@@ -18,6 +18,7 @@
 *  This is called dual licensing.
 */
 
+#include "platforms/ext/listx_impl.h"
 #include "platforms/window_manager.h"
 #include "platforms/window.h"
 #include "platforms/platform.h"
@@ -25,12 +26,12 @@
 #include "platforms/log.h"
 #include "platforms/input_device.h"
 #include "platforms/ext/bufferx.h"
-#include "platforms/ext/listx.h"
 #include "platforms/ext/errorx.h"
 #include "platforms/ext/stringx.h"
 #include "types/time.h"
-#include "types/buffer.h"
-#include "types/error.h"
+#include "types/string.h"
+
+TListNamedImpl(ListWindowPtr);
 
 const U32 WindowManager_magic = (U32)'W' | ((U32)'I' << 8) | ((U32)'N' << 16) | ((U32)'D' << 24);
 
@@ -51,7 +52,6 @@ Error WindowManager_create(WindowManagerCallbacks callbacks, U64 extendedDataSiz
 	*manager = (WindowManager) {
 		.isActive = WindowManager_magic,
 		.owningThread = Thread_getId(),
-		.windows = List_createEmpty(sizeof(Window*)),
 		.callbacks = callbacks,
 		.extendedData = extendedData
 	};
@@ -85,9 +85,9 @@ Bool WindowManager_free(WindowManager *manager) {
 	manager->isActive = 0;
 
 	for(U64 i = 0; i < manager->windows.length; ++i) 
-		WindowManager_freeWindow(manager, List_ptrT(Window*, manager->windows, i));
+		WindowManager_freeWindow(manager, &manager->windows.ptrNonConst[i]);
 
-	List_freex(&manager->windows);
+	ListWindowPtr_freex(&manager->windows);
 	Buffer_freex(&manager->extendedData);
 
 	WindowManager_freeNative(manager);
@@ -191,8 +191,8 @@ Error WindowManager_createWindow(
 		return err;
 	}
 
-	Window *empty = NULL;
-	if ((err = List_pushBackx(&manager->windows, Buffer_createConstRef(&empty, sizeof(empty)))).genericError) {
+	Window *w = (Window*) tmpWindow.ptr;
+	if ((err = ListWindowPtr_pushBackx(&manager->windows, w)).genericError) {
 		Buffer_freex(&tmpWindow);
 		Buffer_freex(&extendedData);
 		Buffer_freex(&cpuVisibleBuffer);
@@ -200,11 +200,7 @@ Error WindowManager_createWindow(
 		return err;
 	}
 
-	Window **w = List_lastT(Window*, manager->windows);
-
-	*w = (Window*) tmpWindow.ptr;
-
-	**w = (Window) {
+	*w = (Window) {
 
 		.owner = manager,
 
@@ -225,18 +221,18 @@ Error WindowManager_createWindow(
 		.extendedData = extendedData
 	};
 
-	if (type == EWindowType_Physical && (err = WindowManager_createWindowPhysical(*w)).genericError) {
+	if (type == EWindowType_Physical && (err = WindowManager_createWindowPhysical(w)).genericError) {
 		WindowManager_freeWindow(manager, result);
 		return err;
 	}
 
-	(*w)->flags |= EWindowFlags_IsActive;
+	w->flags |= EWindowFlags_IsActive;
 
 	if(callbacks.onCreate)
-		callbacks.onCreate(*w);
+		callbacks.onCreate(w);
 
 	if(callbacks.onResize)
-		callbacks.onResize(*w);
+		callbacks.onResize(w);
 
 	return Error_none();
 }
@@ -254,7 +250,7 @@ Error WindowManager_wait(WindowManager *manager) {
 
 		for (U64 i = manager->windows.length - 1; i != U64_MAX; --i) {
 
-			Window *w = *List_ptrT(Window*, manager->windows, i);
+			Window *w = ListWindowPtr_at(manager->windows, i);
 
 			//Update interface
 
@@ -352,13 +348,13 @@ Bool WindowManager_freeWindow(WindowManager *manager, Window **w) {
 	Buffer_freex(&win->extendedData);
 	CharString_freex(&win->title);
 
-	List *devices = &win->devices;
+	ListInputDevice *devices = &win->devices;
 
 	for(U64 i = 0; i < devices->length; ++i)
-		InputDevice_free(List_ptrT(InputDevice, *devices, i));
+		InputDevice_free(&devices->ptrNonConst[i]);
 
-	List_freex(devices);
-	List_freex(&win->monitors);
+	ListInputDevice_freex(devices);
+	ListMonitor_freex(&win->monitors);
 
 	Bool b = true;
 
@@ -367,7 +363,7 @@ Bool WindowManager_freeWindow(WindowManager *manager, Window **w) {
 
 	Buffer windowBuf = Buffer_createManagedPtr(win, sizeof(*win));
 
-	List_eraseFirst(&manager->windows, Buffer_createConstRef(&win, sizeof(win)), 0);
+	ListWindowPtr_eraseFirst(&manager->windows, win, 0);
 	Buffer_freex(&windowBuf);
 	*w = NULL;
 	return b;

@@ -18,12 +18,12 @@
 *  This is called dual licensing.
 */
 
+#include "types/list_impl.h"
 #include "formats/oiDL.h"
-#include "types/list.h"
 #include "types/time.h"
 #include "types/error.h"
-#include "types/buffer.h"
-#include "types/allocator.h"
+
+TListImpl(DLEntry);
 
 static const U8 DLHeader_V1_0  = 0;
 
@@ -52,9 +52,8 @@ Error DLFile_create(DLSettings settings, Allocator alloc, DLFile *dlFile) {
 	if(settings.flags & EDLSettingsFlags_Invalid)
 		return Error_invalidParameter(0, 3, "DLFile_create()::settings.flags contained unsupported flag");
 
-	dlFile->entries = List_createEmpty(sizeof(DLEntry));
-
-	Error err = List_reserve(&dlFile->entries, 100, alloc);
+	dlFile->entries = (ListDLEntry) { 0 };
+	Error err = ListDLEntry_reserve(&dlFile->entries, 100, alloc);
 
 	if(err.genericError)
 		return err;
@@ -70,7 +69,7 @@ Bool DLFile_free(DLFile *dlFile, Allocator alloc) {
 
 	for (U64 i = 0; i < dlFile->entries.length; ++i) {
 
-		DLEntry entry = ((DLEntry*)dlFile->entries.ptr)[i];
+		DLEntry entry = dlFile->entries.ptr[i];
 
 		if(dlFile->settings.dataType == EDLDataType_Ascii)
 			CharString_free(&entry.entryString, alloc);
@@ -78,7 +77,7 @@ Bool DLFile_free(DLFile *dlFile, Allocator alloc) {
 		else Buffer_free(&entry.entryBuffer, alloc);
 	}
 
-	List_free(&dlFile->entries, alloc);
+	ListDLEntry_free(&dlFile->entries, alloc);
 	*dlFile = (DLFile) { 0 };
 	return true;
 }
@@ -94,7 +93,7 @@ Error DLFile_addEntry(DLFile *dlFile, Buffer entryBuf, Allocator alloc) {
 		return Error_invalidOperation(0, "DLFile_addEntry() is unsupported if type isn't Data");
 
 	DLEntry entry = { .entryBuffer = entryBuf };
-	return List_pushBack(&dlFile->entries, Buffer_createConstRef(&entry, sizeof(entry)), alloc);
+	return ListDLEntry_pushBack(&dlFile->entries, entry, alloc);
 }
 
 Error DLFile_addEntryAscii(DLFile *dlFile, CharString entryStr, Allocator alloc) {
@@ -109,7 +108,7 @@ Error DLFile_addEntryAscii(DLFile *dlFile, CharString entryStr, Allocator alloc)
 		return Error_invalidParameter(1, 0, "DLFile_addEntryAscii()::entryStr isn't valid Ascii");
 
 	DLEntry entry = { .entryString = entryStr };
-	return List_pushBack(&dlFile->entries, Buffer_createConstRef(&entry, sizeof(entry)), alloc);
+	return ListDLEntry_pushBack(&dlFile->entries, entry, alloc);
 }
 
 Error DLFile_addEntryUTF8(DLFile *dlFile, Buffer entryBuf, Allocator alloc) {
@@ -125,7 +124,7 @@ Error DLFile_addEntryUTF8(DLFile *dlFile, Buffer entryBuf, Allocator alloc) {
 
 	DLEntry entry = { .entryBuffer = entryBuf };
 
-	return List_pushBack(&dlFile->entries, Buffer_createConstRef(&entry, sizeof(entry)), alloc);
+	return ListDLEntry_pushBack(&dlFile->entries, entry, alloc);
 }
 
 //We currently don't support compression yet. But once Buffer_compress/uncompress is available, it should be easy.
@@ -155,7 +154,7 @@ Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result) {
 
 	for (U64 i = 0; i < dlFile.entries.length; ++i) {
 
-		DLEntry entry = ((DLEntry*)dlFile.entries.ptr)[i];
+		DLEntry entry = dlFile.entries.ptr[i];
 
 		U64 len = 
 			dlFile.settings.dataType != EDLDataType_Ascii ? Buffer_length(entry.entryBuffer) : 
@@ -205,7 +204,7 @@ Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result) {
 
 	for (U64 i = 0; i < dlFile.entries.length; ++i) {
 
-		DLEntry entry = ((DLEntry*)dlFile.entries.ptr)[i];
+		DLEntry entry = dlFile.entries.ptr[i];
 		Buffer buf = 
 			dlFile.settings.dataType != EDLDataType_Ascii ? entry.entryBuffer : CharString_bufferConst(entry.entryString);
 
@@ -259,7 +258,7 @@ Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result) {
 
 	headerIt += Buffer_forceWriteSizeType(headerIt, entrySizeType, dlFile.entries.length);
 
-	Buffer_copy(Buffer_createRef(headerIt, entrySizes), Buffer_createConstRef(sizes, entrySizes));
+	Buffer_copy(Buffer_createRef(headerIt, entrySizes), Buffer_createRefConst(sizes, entrySizes));
 	headerIt += entrySizes;		//Already filled
 
 	if (dlFile.settings.compressionType)
@@ -270,7 +269,7 @@ Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result) {
 	if(dlFile.settings.compressionType) 
 		Buffer_copy(
 			Buffer_createRef(headerIt, hashSize),
-			Buffer_createConstRef(hash, hashSize)
+			Buffer_createRefConst(hash, hashSize)
 		);
 
 	//Hash
@@ -288,7 +287,7 @@ Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result) {
 
 		Buffer_copy(
 			Buffer_createRef(headerIt, hashSize),
-			Buffer_createConstRef(hash, hashSize)
+			Buffer_createRefConst(hash, hashSize)
 		);
 
 		headerIt += hashSize;
@@ -335,24 +334,18 @@ Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result) {
 	
 		U32 key[8] = { 0 };
 
-		Bool b = false;
-		Error cmpErr = Buffer_eq(
-			Buffer_createConstRef(key, sizeof(key)), 
-			Buffer_createConstRef(dlFile.settings.encryptionKey, sizeof(key)), 
-			&b
+		Bool b = Buffer_eq(
+			Buffer_createRefConst(key, sizeof(key)), 
+			Buffer_createRefConst(dlFile.settings.encryptionKey, sizeof(key))
 		);
 
 		if ((err = Buffer_encrypt(
 
 			compressedOutput, 
-			Buffer_createConstRef(uncompressedData.ptr, headerSize - sizeof(I32x4) - 12), 
+			Buffer_createRefConst(uncompressedData.ptr, headerSize - sizeof(I32x4) - 12), 
 
 			EBufferEncryptionType_AES256GCM, 
-
-			EBufferEncryptionFlags_GenerateIv | (
-				b || cmpErr.genericError ? EBufferEncryptionFlags_GenerateKey :
-				EBufferEncryptionFlags_None
-			),
+			EBufferEncryptionFlags_GenerateIv | (b ? EBufferEncryptionFlags_GenerateKey : EBufferEncryptionFlags_None),
 
 			dlFile.settings.encryptionKey,
 
@@ -379,7 +372,7 @@ Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result) {
 
 	//Compression happened, we need to merge compressed data and header.
 
-	Buffer headerBuf = Buffer_createConstRef(uncompressedData.ptr, headerSize);
+	Buffer headerBuf = Buffer_createRefConst(uncompressedData.ptr, headerSize);
 
 	err = Buffer_combine(headerBuf, compressedOutput, alloc, result);
 	Buffer_free(&compressedOutput, alloc);
@@ -544,7 +537,7 @@ Error DLFile_read(
 
 		_gotoIfError(clean, Buffer_decrypt(
 			Buffer_createRef((U8*)file.ptr, dataSize),
-			Buffer_createConstRef(entireFile.ptr, headerExEnc.ptr - entireFile.ptr),
+			Buffer_createRefConst(entireFile.ptr, headerExEnc.ptr - entireFile.ptr),
 			EBufferEncryptionType_AES256GCM,
 			encryptionKey,
 			tag,
@@ -584,7 +577,7 @@ Error DLFile_read(
 		const U8 *ptr = file.ptr;
 		_gotoIfError(clean, Buffer_consume(&file, NULL, entryLen));
 
-		Buffer buf = Buffer_createConstRef(ptr, entryLen);
+		Buffer buf = Buffer_createRefConst(ptr, entryLen);
 
 		switch(settings.dataType) {
 

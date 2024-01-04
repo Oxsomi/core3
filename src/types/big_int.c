@@ -749,7 +749,7 @@ Buffer BigInt_bufferConst(BigInt b) {
 	return b.isConst ? Buffer_createNull() : Buffer_createRef((U64*)b.data, BigInt_byteCount(b));
 }
 
-Buffer BigInt_buffer(BigInt b) { return Buffer_createConstRef(b.data, BigInt_byteCount(b)); }
+Buffer BigInt_buffer(BigInt b) { return Buffer_createRefConst(b.data, BigInt_byteCount(b)); }
 
 U16 BigInt_byteCount(BigInt b) { return (U16)(b.length * sizeof(U64)); }
 U16 BigInt_bitCount(BigInt b) { return BigInt_byteCount(b) * 8; }

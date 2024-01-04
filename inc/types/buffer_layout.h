@@ -58,7 +58,7 @@ U32 BufferLayoutMember_getStructId(BufferLayoutMember member);
 typedef struct BufferLayoutMemberInfo {
 
 	CharString name;
-	List arraySizes;		//List<U32>
+	ListU32 arraySizes;
 
 	ETypeId typeId;			//Set to ETypeId_Undefined to use structId
 	U32 structId;
@@ -70,13 +70,15 @@ typedef struct BufferLayoutMemberInfo {
 
 } BufferLayoutMemberInfo;
 
+TList(BufferLayoutMemberInfo);
+
 BufferLayoutMemberInfo BufferLayoutMemberInfo_create(ETypeId typeId, CharString name, U64 offset, U32 stride);
 BufferLayoutMemberInfo BufferLayoutMemberInfo_createStruct(U32 structId, CharString name, U64 offset, U32 stride);
 
 BufferLayoutMemberInfo BufferLayoutMemberInfo_createArray(
 	ETypeId typeId, 
 	CharString name, 
-	List arraySizes, 
+	ListU32 arraySizes, 
 	U64 offset, 
 	U32 stride
 );
@@ -84,7 +86,7 @@ BufferLayoutMemberInfo BufferLayoutMemberInfo_createArray(
 BufferLayoutMemberInfo BufferLayoutMemberInfo_createStructArray(
 	U32 structId, 
 	CharString name, 
-	List arraySizes, 
+	ListU32 arraySizes, 
 	U64 offset, 
 	U32 stride
 );
@@ -110,9 +112,11 @@ typedef struct BufferLayoutStruct {
 typedef struct BufferLayoutStructInfo {
 
 	CharString name;
-	List members;		//List<BufferLayoutMemberInfo>
+	ListBufferLayoutMemberInfo members;
 
 } BufferLayoutStructInfo;
+
+TList(BufferLayoutStruct);
 
 CharString BufferLayoutStruct_getName(BufferLayoutStruct layoutStruct);
 
@@ -123,7 +127,7 @@ BufferLayoutMemberInfo BufferLayoutStruct_getMemberInfo(BufferLayoutStruct layou
 
 typedef struct BufferLayout {
 
-	List structs;				//List<BufferLayoutStruct>
+	ListBufferLayoutStruct structs;
 
 	U32 rootStructIndex;
 
@@ -163,7 +167,7 @@ typedef struct LayoutPathInfo {
 	U64 offset, length;
 	ETypeId typeId;
 	U32 structId;
-	List leftoverArray;		//How long the remainder of array is
+	ListU32 leftoverArray;		//How long the remainder of array is
 
 } LayoutPathInfo;
 

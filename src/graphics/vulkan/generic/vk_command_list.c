@@ -18,6 +18,7 @@
 *  This is called dual licensing.
 */
 
+#include "platforms/ext/listx_impl.h"
 #include "graphics/generic/command_list.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
@@ -30,7 +31,6 @@
 #include "graphics/vulkan/vk_swapchain.h"
 #include "graphics/vulkan/vk_buffer.h"
 #include "platforms/ext/bufferx.h"
-#include "platforms/ext/listx.h"
 #include "platforms/ext/errorx.h"
 #include "platforms/log.h"
 #include "formats/texture.h"
@@ -95,7 +95,7 @@ void CommandList_process(
 
 			Buffer_copy(
 				Buffer_createRef(&temp->tempBlendConstants, sizeof(F32x4)), 
-				Buffer_createConstRef(data, sizeof(F32x4))
+				Buffer_createRefConst(data, sizeof(F32x4))
 			);
 
 			break;
@@ -120,7 +120,7 @@ void CommandList_process(
 				Swapchain *swapchain = SwapchainRef_ptr(image.image);
 				VkSwapchain *swapchainExt = Swapchain_ext(swapchain, Vk);
 
-				VkManagedImage *imageExt = &((VkManagedImage*)swapchainExt->images.ptr)[swapchainExt->currentIndex];
+				VkManagedImage *imageExt = &swapchainExt->images.ptrNonConst[swapchainExt->currentIndex];
 
 				//Clear
 
@@ -228,7 +228,7 @@ void CommandList_process(
 				Swapchain *swapchain = SwapchainRef_ptr(attachmentsj->image);
 				VkSwapchain *swapchainExt = Swapchain_ext(swapchain, Vk);
 
-				VkManagedImage *imageExt = &((VkManagedImage*)swapchainExt->images.ptr)[swapchainExt->currentIndex];
+				VkManagedImage *imageExt = &swapchainExt->images.ptrNonConst[swapchainExt->currentIndex];
 
 				VkAttachmentLoadOp loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
 
@@ -294,11 +294,9 @@ void CommandList_process(
 
 			//Bind viewport and scissor
 
-			Bool eq = false;
-			Buffer_eq(
-				Buffer_createConstRef(&temp->boundViewport, sizeof(VkViewport)),
-				Buffer_createConstRef(&temp->tempViewport, sizeof(VkViewport)),
-				&eq
+			Bool eq = Buffer_eq(
+				Buffer_createRefConst(&temp->boundViewport, sizeof(VkViewport)),
+				Buffer_createRefConst(&temp->tempViewport, sizeof(VkViewport))
 			);
 
 			if(!eq) {
@@ -306,10 +304,9 @@ void CommandList_process(
 				vkCmdSetViewport(buffer, 0, 1, &temp->boundViewport);
 			}
 
-			Buffer_eq(
-				Buffer_createConstRef(&temp->boundScissor, sizeof(VkRect2D)),
-				Buffer_createConstRef(&temp->tempScissor, sizeof(VkRect2D)),
-				&eq
+			eq = Buffer_eq(
+				Buffer_createRefConst(&temp->boundScissor, sizeof(VkRect2D)),
+				Buffer_createRefConst(&temp->tempScissor, sizeof(VkRect2D))
 			);
 
 			if(!eq) {
@@ -511,14 +508,14 @@ void CommandList_process(
 
 			U32 graphicsQueueId = deviceExt->queues[EVkCommandQueue_Graphics].queueId;
 
-			CommandScope scope = *(const CommandScope*) List_ptrConst(commandList->activeScopes, temp->scopeCounter);
+			CommandScope scope = commandList->activeScopes.ptr[temp->scopeCounter];
 			++temp->scopeCounter;
 
 			Error err = Error_none();
 
 			for (U64 i = scope.transitionOffset; i < scope.transitionOffset + scope.transitionCount; ++i) {
 
-				TransitionInternal transition = *(const TransitionInternal*) List_ptrConst(commandList->transitions, i);
+				TransitionInternal transition = commandList->transitions.ptr[i];
 
 				//Grab transition type
 				
@@ -603,7 +600,7 @@ void CommandList_process(
 					Swapchain *swapchain = SwapchainRef_ptr(transition.resource);
 					VkSwapchain *swapchainExt = Swapchain_ext(swapchain, Vk);
 
-					VkManagedImage *imageExt = &((VkManagedImage*)swapchainExt->images.ptr)[swapchainExt->currentIndex];
+					VkManagedImage *imageExt = &swapchainExt->images.ptrNonConst[swapchainExt->currentIndex];
 
 					VkImageSubresourceRange range = (VkImageSubresourceRange) {		//TODO:
 						.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -651,8 +648,8 @@ void CommandList_process(
 			if(dependency.imageMemoryBarrierCount || dependency.bufferMemoryBarrierCount)
 				instanceExt->cmdPipelineBarrier2(buffer, &dependency);
 
-			List_clear(&deviceExt->bufferTransitions);
-			List_clear(&deviceExt->imageTransitions);
+			ListVkBufferMemoryBarrier2_clear(&deviceExt->bufferTransitions);
+			ListVkImageMemoryBarrier2_clear(&deviceExt->imageTransitions);
 			break;
 		}
 
@@ -670,7 +667,7 @@ void CommandList_process(
 				.pMarkerName = (const char*) data + sizeof(F32x4),
 			};
 
-			Buffer_copy(Buffer_createRef(&markerInfo.color, sizeof(F32x4)), Buffer_createConstRef(data, sizeof(F32x4)));
+			Buffer_copy(Buffer_createRef(&markerInfo.color, sizeof(F32x4)), Buffer_createRefConst(data, sizeof(F32x4)));
 			
 			if(op == ECommandOp_AddMarkerDebugExt)
 				instanceExt->cmdDebugMarkerInsert(buffer, &markerInfo);

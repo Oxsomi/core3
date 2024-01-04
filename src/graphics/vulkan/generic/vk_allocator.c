@@ -18,13 +18,13 @@
 *  This is called dual licensing.
 */
 
+#include "platforms/ext/listx_impl.h"
 #include "graphics/generic/allocator.h"
 #include "graphics/vulkan/vk_device.h"
 #include "graphics/vulkan/vk_instance.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
 #include "platforms/ext/bufferx.h"
-#include "platforms/ext/listx.h"
 #include "platforms/ext/stringx.h"
 #include "types/error.h"
 #include "types/buffer.h"
@@ -181,7 +181,7 @@ Error DeviceMemoryAllocator_allocate(
 
 		for(U64 i = 0; i < allocator->blocks.length; ++i) {
 
-			DeviceMemoryBlock *block = (DeviceMemoryBlock*)List_ptr(allocator->blocks, i);
+			DeviceMemoryBlock *block = &allocator->blocks.ptrNonConst[i];
 
 			if(
 				!block->ext ||
@@ -251,7 +251,7 @@ Error DeviceMemoryAllocator_allocate(
 	U64 i = 0;
 
 	for(; i < allocator->blocks.length; ++i)
-		if (!((DeviceMemoryBlock*)List_ptr(allocator->blocks, i))->ext)
+		if (!allocator->blocks.ptr[i].ext)
 			break;
 
 	const U8 *allocLoc = NULL;
@@ -262,10 +262,10 @@ Error DeviceMemoryAllocator_allocate(
 		if(i == U32_MAX)
 			_gotoIfError(clean, Error_outOfBounds(0, i, U32_MAX, "DeviceMemoryAllocator_allocate() block out of bounds"));
 
-		_gotoIfError(clean, List_pushBackx(&allocator->blocks, Buffer_createConstRef(&block, sizeof(block))))
+		_gotoIfError(clean, ListDeviceMemoryBlock_pushBackx(&allocator->blocks, block))
 	}
 
-	else *((DeviceMemoryBlock*)List_ptr(allocator->blocks, i)) = block;
+	else allocator->blocks.ptrNonConst[i] = block;
 
 	*blockId = (U32) i;
 	*blockOffset = (U64) allocLoc;

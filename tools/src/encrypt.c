@@ -18,9 +18,9 @@
 *  This is called dual licensing.
 */
 
+#include "platforms/ext/listx_impl.h"
 #include "types/buffer.h"
 #include "platforms/log.h"
-#include "platforms/ext/listx.h"
 #include "platforms/ext/errorx.h"
 #include "platforms/ext/stringx.h"
 #include "cli.h"
@@ -36,14 +36,9 @@ Bool CLI_encryptDo(ParsedArgs args) {
 	//Modify arguments so it can be passed to oiCA convert function.
 
 	if (generateOutput) {
-
-		_gotoIfError(clean, CharString_createCopyx(*((const CharString*)args.args.ptr), &tmpString));
+		_gotoIfError(clean, CharString_createCopyx(*args.args.ptr, &tmpString));
 		_gotoIfError(clean, CharString_appendStringx(&tmpString, CharString_createConstRefCStr(".oiCA")));
-
-		_gotoIfError(
-			clean, 
-			List_insertx(&args.args, generatedOutputIndex, Buffer_createConstRef(&tmpString, sizeof(tmpString)))
-		);
+		_gotoIfError(clean, ListCharString_insertx(&args.args, generatedOutputIndex, tmpString));
 	}
 
 	ParsedArgs caArgs = (ParsedArgs) {
@@ -64,7 +59,7 @@ clean:
 	}
 
 	if(generateOutput)
-		List_popLocation(&args.args, generatedOutputIndex, Buffer_createNull());
+		ListCharString_popLocation(&args.args, generatedOutputIndex, NULL);
 
 	CharString_freex(&tmpString);
 

@@ -219,7 +219,7 @@ Error _CLI_convertFromCA(ParsedArgs args, CharString input, FileInfo inputInfo, 
 	_gotoIfError(clean, CAFile_readx(buf, encryptionKey, &file));
 
 	Bool outputAsSingle = file.archive.entries.length == 1;
-	EFileType outputType = outputAsSingle ? ((ArchiveEntry*)file.archive.entries.ptr)->type : EFileType_Folder;
+	EFileType outputType = outputAsSingle ? file.archive.entries.ptr->type : EFileType_Folder;
 
 	_gotoIfError(clean, File_add(output, outputType, 1 * SECOND));
 	didMakeFile = true;
@@ -227,7 +227,7 @@ Error _CLI_convertFromCA(ParsedArgs args, CharString input, FileInfo inputInfo, 
 	if (outputAsSingle) {
 
 		if(outputType == EFileType_File)
-			_gotoIfError(clean, File_write(((ArchiveEntry*)file.archive.entries.ptr)->data, output, 1 * SECOND));
+			_gotoIfError(clean, File_write(file.archive.entries.ptr->data, output, 1 * SECOND));
 	}
 
 	else {
@@ -243,7 +243,7 @@ Error _CLI_convertFromCA(ParsedArgs args, CharString input, FileInfo inputInfo, 
 
 		for (U64 i = 0; i < file.archive.entries.length; ++i) {
 
-			ArchiveEntry ei = ((const ArchiveEntry*)file.archive.entries.ptr)[i];
+			ArchiveEntry ei = file.archive.entries.ptr[i];
 
 			_gotoIfError(clean, CharString_createCopyx(outputPath, &loc));
 			_gotoIfError(clean, CharString_appendStringx(&loc, ei.path));

@@ -521,12 +521,10 @@ Error ParsedArgs_getArg(ParsedArgs args, EOperationHasParameter parameterId, Cha
 		if((args.parameters >> j) & 1)
 			++ourLoc;
 
-	Buffer res = Buffer_createNull();
-	Error err = List_get(args.args, ourLoc, &res);
+	Error err = ListCharString_get(args.args, ourLoc, arg);
 
 	if(err.genericError)
 		return err;
 
-	*arg = *(CharString*)res.ptr;
 	return Error_none();
 }

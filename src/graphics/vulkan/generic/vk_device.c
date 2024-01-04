@@ -18,6 +18,7 @@
 *  This is called dual licensing.
 */
 
+#include "platforms/ext/listx_impl.h"
 #include "graphics/vulkan/vk_device.h"
 #include "graphics/vulkan/vk_instance.h"
 #include "graphics/vulkan/vk_swapchain.h"
@@ -27,14 +28,20 @@
 #include "graphics/generic/swapchain.h"
 #include "graphics/generic/command_list.h"
 #include "graphics/generic/device_buffer.h"
-#include "platforms/ext/listx.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/log.h"
 #include "platforms/thread.h"
-#include "types/error.h"
-#include "types/buffer.h"
 #include "types/time.h"
+
+TListImpl(VkCommandAllocator);
+TListImpl(VkSemaphore);
+TListImpl(VkResult);
+TListImpl(VkSwapchainKHR);
+TListImpl(VkPipelineStageFlags);
+TListImpl(VkImageMemoryBarrier2);
+TListImpl(VkBufferMemoryBarrier2);
+TListImpl(VkWriteDescriptorSet);
 
 #define vkBindNext(T, condition, ...)	\
 	T tmp##T = __VA_ARGS__;				\
@@ -54,6 +61,11 @@ impl void CommandList_process(
 	const U8 *data, 
 	void *commandListExt
 );
+
+TList(VkDeviceQueueCreateInfo);
+TList(VkQueueFamilyProperties);
+TListImpl(VkDeviceQueueCreateInfo);
+TListImpl(VkQueueFamilyProperties);
 
 Error GraphicsDevice_initExt(
 	const GraphicsInstance *instance, 
@@ -282,21 +294,21 @@ Error GraphicsDevice_initExt(
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(*deviceRef);
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 
-	List extensions = List_createEmpty(sizeof(const C8*));
-	List queues = List_createEmpty(sizeof(VkDeviceQueueCreateInfo));
-	List queueFamilies = List_createEmpty(sizeof(VkQueueFamilyProperties));
+	ListConstC8 extensions = (ListConstC8) { 0 };
+	ListVkDeviceQueueCreateInfo queues = (ListVkDeviceQueueCreateInfo) { 0 };
+	ListVkQueueFamilyProperties queueFamilies = (ListVkQueueFamilyProperties) { 0 };
 	CharString tempStr = CharString_createNull();
 
 	Error err = Error_none();
-	_gotoIfError(clean, List_reservex(&extensions, 32));
-	_gotoIfError(clean, List_reservex(&queues, EVkCommandQueue_Count));
+	_gotoIfError(clean, ListConstC8_reservex(&extensions, 32));
+	_gotoIfError(clean, ListVkDeviceQueueCreateInfo_reservex(&queues, EVkCommandQueue_Count));
 
 	for(U64 i = 0; i < reqExtensionsNameCount; ++i)
-		_gotoIfError(clean, List_pushBackx(&extensions, Buffer_createConstRef(reqExtensionsName + i, sizeof(const C8*))));
+		_gotoIfError(clean, ListConstC8_pushBackx(&extensions, reqExtensionsName[i]));
 
 	for (U64 i = 0; i < optExtensionsNameCount; ++i) {
 
-		const C8 **ptr = optExtensionsName + i;
+		const C8 *ptr = optExtensionsName[i];
 		Bool on = false;
 
 		switch (i) {
@@ -327,7 +339,7 @@ Error GraphicsDevice_initExt(
 		}
 
 		if(on)
-			_gotoIfError(clean, List_pushBackx(&extensions, Buffer_createConstRef(ptr, sizeof(const C8*))));
+			_gotoIfError(clean, ListConstC8_pushBackx(&extensions, ptr));
 	}
 
 	VkPhysicalDevice physicalDeviceExt = (VkPhysicalDevice) physicalDevice->ext;
@@ -340,8 +352,8 @@ Error GraphicsDevice_initExt(
 	if(!familyCount)
 		_gotoIfError(clean, Error_invalidOperation(0, "GraphicsDevice_initExt() no supported queues"));
 
-	_gotoIfError(clean, List_resizex(&queueFamilies, familyCount));
-	vkGetPhysicalDeviceQueueFamilyProperties(physicalDeviceExt, &familyCount, (VkQueueFamilyProperties*) queueFamilies.ptr);
+	_gotoIfError(clean, ListVkQueueFamilyProperties_resizex(&queueFamilies, familyCount));
+	vkGetPhysicalDeviceQueueFamilyProperties(physicalDeviceExt, &familyCount, queueFamilies.ptrNonConst);
 
 	//Assign queues to deviceExt (don't have to be unique)
 
@@ -358,7 +370,7 @@ Error GraphicsDevice_initExt(
 
 	for (U32 i = 0; i < familyCount; ++i) {
 
-		VkQueueFamilyProperties q = ((VkQueueFamilyProperties*)queueFamilies.ptr)[i];
+		VkQueueFamilyProperties q = queueFamilies.ptr[i];
 
 		if(!q.queueCount)
 			continue;
@@ -412,19 +424,19 @@ Error GraphicsDevice_initExt(
 		.pQueuePriorities = &prio
 	};
 
-	_gotoIfError(clean, List_pushBackx(&queues, Buffer_createConstRef(&graphicsQueue, sizeof(graphicsQueue))));
+	_gotoIfError(clean, ListVkDeviceQueueCreateInfo_pushBackx(&queues, graphicsQueue));
 
 	VkDeviceQueueCreateInfo copyQueue = graphicsQueue;
 	copyQueue.queueFamilyIndex = copyQueueId;
 
 	if(copyQueueId != graphicsQueueId)
-		_gotoIfError(clean, List_pushBackx(&queues, Buffer_createConstRef(&copyQueue, sizeof(copyQueue))));
+		_gotoIfError(clean, ListVkDeviceQueueCreateInfo_pushBackx(&queues, copyQueue));
 
 	VkDeviceQueueCreateInfo computeQueue = graphicsQueue;
 	computeQueue.queueFamilyIndex = computeQueueId;
 
 	if(computeQueueId != graphicsQueueId && computeQueueId != copyQueueId)
-		_gotoIfError(clean, List_pushBackx(&queues, Buffer_createConstRef(&computeQueue, sizeof(computeQueue))));
+		_gotoIfError(clean, ListVkDeviceQueueCreateInfo_pushBackx(&queues, computeQueue));
 
 	//Create device
 
@@ -432,9 +444,9 @@ Error GraphicsDevice_initExt(
 		.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
 		.pNext = &features2,
 		.enabledExtensionCount = (U32) extensions.length,
-		.ppEnabledExtensionNames = (const char* const*) extensions.ptr,
+		.ppEnabledExtensionNames = extensions.ptr,
 		.queueCreateInfoCount = (U32) queues.length,
-		.pQueueCreateInfos = (const VkDeviceQueueCreateInfo*) queues.ptr
+		.pQueueCreateInfos = queues.ptr
 	};
 
 	if (verbose) {
@@ -442,7 +454,7 @@ Error GraphicsDevice_initExt(
 		Log_debugLnx("Enabling extensions:");
 
 		for(U32 i = 0; i < (U32) extensions.length; ++i)
-			Log_debugLnx("\t%s", ((const char* const*) extensions.ptr)[i]);
+			Log_debugLnx("\t%s", extensions.ptr[i]);
 	}
 
 	_gotoIfError(clean, vkCheck(vkCreateDevice(physicalDeviceExt, &deviceInfo, NULL, &deviceExt->device)));
@@ -548,18 +560,16 @@ Error GraphicsDevice_initExt(
 
 	U32 threads = Thread_getLogicalCores();
 
-	deviceExt->commandPools = List_createEmpty(sizeof(VkCommandAllocator));
-	_gotoIfError(clean, List_resizex(&deviceExt->commandPools, 3 * threads * resolvedId));
+	_gotoIfError(clean, ListVkCommandAllocator_resizex(&deviceExt->commandPools, 3 * threads * resolvedId));
 
 	//Semaphores
 
-	deviceExt->submitSemaphores = List_createEmpty(sizeof(VkSemaphore));
-	_gotoIfError(clean, List_resizex(&deviceExt->submitSemaphores, 3));
+	_gotoIfError(clean, ListVkSemaphore_resizex(&deviceExt->submitSemaphores, 3));
 
 	for (U64 k = 0; k < 3; ++k) {
 
 		VkSemaphoreCreateInfo semaphoreInfo = (VkSemaphoreCreateInfo) { .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
-		VkSemaphore *semaphore = ((VkSemaphore*)deviceExt->submitSemaphores.ptr) + k;
+		VkSemaphore *semaphore = deviceExt->submitSemaphores.ptrNonConst + k;
 
 		_gotoIfError(clean, vkCheck(vkCreateSemaphore(deviceExt->device, &semaphoreInfo, NULL, semaphore)));
 
@@ -791,11 +801,8 @@ Error GraphicsDevice_initExt(
 
 	//Allocate temp storage for transitions
 
-	deviceExt->bufferTransitions = List_createEmpty(sizeof(VkBufferMemoryBarrier2));
-	_gotoIfError(clean, List_reservex(&deviceExt->bufferTransitions, 17));
-
-	deviceExt->imageTransitions = List_createEmpty(sizeof(VkImageMemoryBarrier2));
-	_gotoIfError(clean, List_reservex(&deviceExt->imageTransitions, 16));
+	_gotoIfError(clean, ListVkBufferMemoryBarrier2_reservex(&deviceExt->bufferTransitions, 17));
+	_gotoIfError(clean, ListVkImageMemoryBarrier2_reservex(&deviceExt->imageTransitions, 16));
 
 	goto success;
 
@@ -806,9 +813,9 @@ clean:
 success:
 
 	CharString_freex(&tempStr);
-	List_freex(&extensions);
-	List_freex(&queues);
-	List_freex(&queueFamilies);
+	ListConstC8_freex(&extensions);
+	ListVkDeviceQueueCreateInfo_freex(&queues);
+	ListVkQueueFamilyProperties_freex(&queueFamilies);
 	return err;
 }
 
@@ -852,12 +859,6 @@ void GraphicsDevice_postInit(GraphicsDevice *device) {
 	uboDescriptor[2].dstSet = deviceExt->sets[EDescriptorSetType_CBuffer2];
 
 	vkUpdateDescriptorSets(deviceExt->device, 3, uboDescriptor, 0, NULL);
-
-	deviceExt->swapchainHandles = List_createEmpty(sizeof(VkSwapchainKHR));
-	deviceExt->swapchainIndices = List_createEmpty(sizeof(U32));
-	deviceExt->results = List_createEmpty(sizeof(VkResult));
-	deviceExt->waitStages = List_createEmpty(sizeof(VkPipelineStageFlags));
-	deviceExt->waitSemaphores = List_createEmpty(sizeof(VkSemaphore));
 }
 
 Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext) {
@@ -871,7 +872,7 @@ Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext) {
 
 		for(U64 i = 0; i < deviceExt->commandPools.length; ++i) {
 
-			VkCommandAllocator alloc = ((VkCommandAllocator*)deviceExt->commandPools.ptr)[i];
+			VkCommandAllocator alloc = deviceExt->commandPools.ptr[i];
 
 			if(alloc.cmd)
 				vkFreeCommandBuffers(deviceExt->device, alloc.pool, 1, &alloc.cmd);
@@ -882,7 +883,7 @@ Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext) {
 
 		for(U64 i = 0; i < deviceExt->submitSemaphores.length; ++i) {
 
-			VkSemaphore semaphore = ((VkSemaphore*)deviceExt->submitSemaphores.ptr)[i];
+			VkSemaphore semaphore = deviceExt->submitSemaphores.ptr[i];
 
 			if(semaphore)
 				vkDestroySemaphore(deviceExt->device, semaphore, NULL);
@@ -910,8 +911,8 @@ Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext) {
 		vkDestroyDevice(deviceExt->device, NULL);
 	}
 
-	List_freex(&deviceExt->commandPools);
-	List_freex(&deviceExt->submitSemaphores);
+	ListVkCommandAllocator_freex(&deviceExt->commandPools);
+	ListVkSemaphore_freex(&deviceExt->submitSemaphores);
 
 	for(U32 i = 0; i < EDescriptorType_ResourceCount; ++i)
 		Buffer_freex(&deviceExt->freeList[i]);
@@ -920,13 +921,13 @@ Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext) {
 
 	//Free temp storage
 
-	List_freex(&deviceExt->waitStages);
-	List_freex(&deviceExt->waitSemaphores);
-	List_freex(&deviceExt->results);
-	List_freex(&deviceExt->swapchainIndices);
-	List_freex(&deviceExt->swapchainHandles);
-	List_freex(&deviceExt->bufferTransitions);
-	List_freex(&deviceExt->imageTransitions);
+	ListVkPipelineStageFlags_freex(&deviceExt->waitStages);
+	ListVkSemaphore_freex(&deviceExt->waitSemaphores);
+	ListVkResult_freex(&deviceExt->results);
+	ListU32_freex(&deviceExt->swapchainIndices);
+	ListVkSwapchainKHR_freex(&deviceExt->swapchainHandles);
+	ListVkBufferMemoryBarrier2_freex(&deviceExt->bufferTransitions);
+	ListVkImageMemoryBarrier2_freex(&deviceExt->imageTransitions);
 
 	return true;
 }
@@ -960,7 +961,7 @@ U32 VkGraphicsDevice_allocateDescriptor(VkGraphicsDevice *deviceExt, EDescriptor
 	return U32_MAX;
 }
 
-Bool VkGraphicsDevice_freeAllocations(VkGraphicsDevice *deviceExt, List *allocations) {
+Bool VkGraphicsDevice_freeAllocations(VkGraphicsDevice *deviceExt, ListU32 *allocations) {
 
 	if(!Lock_isLockedForThread(&deviceExt->descriptorLock))
 		return false;
@@ -969,13 +970,13 @@ Bool VkGraphicsDevice_freeAllocations(VkGraphicsDevice *deviceExt, List *allocat
 
 	for (U64 i = 0; i < allocations->length; ++i) {
 
-		U32 id = ((const U32*)allocations->ptr)[i];
+		U32 id = allocations->ptr[i];
 
 		if(id != U32_MAX)
 			success &= !Buffer_resetBit(deviceExt->freeList[id >> 20], id & ((1 << 20) - 1)).genericError;
 	}
 
-	List_clear(allocations);
+	ListU32_clear(allocations);
 	return success;
 }
 
@@ -990,10 +991,10 @@ VkCommandAllocator *VkGraphicsDevice_getCommandAllocator(
 
 	U32 id = resolvedQueueId + (backBufferId * threadCount + threadId) * device->resolvedQueues;
 
-	return (VkCommandAllocator*) device->commandPools.ptr + id;
+	return device->commandPools.ptrNonConst + id;
 }
 
-Error GraphicsDevice_submitCommandsImpl(GraphicsDeviceRef *deviceRef, List commandLists, List swapchains) {
+Error GraphicsDevice_submitCommandsImpl(GraphicsDeviceRef *deviceRef, ListCommandListRef commandLists, ListSwapchainRef swapchains) {
 	
 	//Unpack ext
 
@@ -1008,30 +1009,29 @@ Error GraphicsDevice_submitCommandsImpl(GraphicsDeviceRef *deviceRef, List comma
 
 	//Reserve temp storage
 
-	_gotoIfError(clean, List_clear(&deviceExt->swapchainHandles));
-	_gotoIfError(clean, List_reservex(&deviceExt->swapchainHandles, swapchains.length));
+	_gotoIfError(clean, ListVkSwapchainKHR_clear(&deviceExt->swapchainHandles));
+	_gotoIfError(clean, ListVkSwapchainKHR_reservex(&deviceExt->swapchainHandles, swapchains.length));
 
-	_gotoIfError(clean, List_clear(&deviceExt->swapchainIndices));
-	_gotoIfError(clean, List_reservex(&deviceExt->swapchainIndices, swapchains.length));
+	_gotoIfError(clean, ListU32_clear(&deviceExt->swapchainIndices));
+	_gotoIfError(clean, ListU32_reservex(&deviceExt->swapchainIndices, swapchains.length));
 
-	_gotoIfError(clean, List_clear(&deviceExt->results));
-	_gotoIfError(clean, List_reservex(&deviceExt->results, swapchains.length));
+	_gotoIfError(clean, ListVkResult_clear(&deviceExt->results));
+	_gotoIfError(clean, ListVkResult_reservex(&deviceExt->results, swapchains.length));
 
-	_gotoIfError(clean, List_clear(&deviceExt->waitSemaphores));
-	_gotoIfError(clean, List_reservex(&deviceExt->waitSemaphores, swapchains.length + 1));
+	_gotoIfError(clean, ListVkSemaphore_clear(&deviceExt->waitSemaphores));
+	_gotoIfError(clean, ListVkSemaphore_reservex(&deviceExt->waitSemaphores, swapchains.length + 1));
 
-	_gotoIfError(clean, List_clear(&deviceExt->waitStages));
-	_gotoIfError(clean, List_reservex(&deviceExt->waitStages, swapchains.length + 1));
+	_gotoIfError(clean, ListVkPipelineStageFlags_clear(&deviceExt->waitStages));
+	_gotoIfError(clean, ListVkPipelineStageFlags_reservex(&deviceExt->waitStages, swapchains.length + 1));
 
 	//Acquire swapchain images
 
 	for(U64 i = 0; i < swapchains.length; ++i) {
 
-		Swapchain *swapchain = SwapchainRef_ptr(((SwapchainRef**) swapchains.ptr)[i]);
+		Swapchain *swapchain = SwapchainRef_ptr(swapchains.ptr[i]);
 		VkSwapchain *swapchainExt = Swapchain_ext(swapchain, Vk);
 
-		VkSemaphore semaphore = 
-			((VkSemaphore*)swapchainExt->semaphores.ptr)[device->submitId % swapchainExt->semaphores.length];
+		VkSemaphore semaphore = swapchainExt->semaphores.ptr[device->submitId % swapchainExt->semaphores.length];
 
 		_gotoIfError(clean, vkCheck(instanceExt->acquireNextImage(
 			deviceExt->device,
@@ -1042,18 +1042,15 @@ Error GraphicsDevice_submitCommandsImpl(GraphicsDeviceRef *deviceRef, List comma
 			&swapchainExt->currentIndex
 		)));
 
-		((VkSwapchainKHR*) deviceExt->swapchainHandles.ptr)[i] = swapchainExt->swapchain;
-		((U32*) deviceExt->swapchainIndices.ptr)[i] = swapchainExt->currentIndex;
+		deviceExt->swapchainHandles.ptrNonConst[i] = swapchainExt->swapchain;
+		deviceExt->swapchainIndices.ptrNonConst[i] = swapchainExt->currentIndex;
 
 		VkPipelineStageFlagBits pipelineStage = 
 			swapchain->info.usage & ESwapchainUsage_AllowCompute ? VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT :
 			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
-		Buffer pipelineStageBuffer = Buffer_createConstRef(&pipelineStage, sizeof(pipelineStage));
-
-		Buffer acquireSemaphore = Buffer_createConstRef(&semaphore, sizeof(semaphore));
-		_gotoIfError(clean, List_pushBackx(&deviceExt->waitSemaphores, acquireSemaphore));
-		_gotoIfError(clean, List_pushBackx(&deviceExt->waitStages, pipelineStageBuffer));
+		_gotoIfError(clean, ListVkSemaphore_pushBackx(&deviceExt->waitSemaphores, semaphore));
+		_gotoIfError(clean, ListVkPipelineStageFlags_pushBackx(&deviceExt->waitStages, pipelineStage));
 	}
 
 	//Wait for previous frame semaphore
@@ -1080,13 +1077,13 @@ Error GraphicsDevice_submitCommandsImpl(GraphicsDeviceRef *deviceRef, List comma
 
 		for(U32 i = 0; i < data->swapchainCount; ++i) {
 
-			Swapchain *swapchain = SwapchainRef_ptr(((SwapchainRef**) swapchains.ptr)[i]);
+			Swapchain *swapchain = SwapchainRef_ptr(swapchains.ptr[i]);
 			VkSwapchain *swapchainExt = Swapchain_ext(swapchain, Vk);
 
 			Bool allowCompute = swapchain->info.usage & ESwapchainUsage_AllowCompute;
 			U64 stride = allowCompute ? 2 : 1;
 
-			const U32 *descLoc = (const U32*)swapchainExt->descriptorAllocations.ptr;
+			const U32 *descLoc = swapchainExt->descriptorAllocations.ptr;
 
 			data->swapchains[i * 2 + 0] = descLoc[swapchainExt->currentIndex * stride + 0];
 
@@ -1094,7 +1091,7 @@ Error GraphicsDevice_submitCommandsImpl(GraphicsDeviceRef *deviceRef, List comma
 				data->swapchains[i * 2 + 1] = descLoc[swapchainExt->currentIndex * stride + 1];
 		}
 
-		DeviceMemoryBlock block = *(DeviceMemoryBlock*) List_ptr(device->allocator.blocks, frameData->blockId);
+		DeviceMemoryBlock block = device->allocator.blocks.ptr[frameData->blockId];
 		Bool incoherent = !(block.allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
 		if (incoherent) {
@@ -1117,7 +1114,7 @@ Error GraphicsDevice_submitCommandsImpl(GraphicsDeviceRef *deviceRef, List comma
 	VkCommandQueue queue = deviceExt->queues[EVkCommandQueue_Graphics];
 	U32 graphicsQueueId = queue.queueId;
 
-	List *currentFlight = &device->resourcesInFlight[device->submitId % 3];
+	ListRefPtr *currentFlight = &device->resourcesInFlight[device->submitId % 3];
 	
 	if (commandLists.length) {
 
@@ -1258,7 +1255,7 @@ Error GraphicsDevice_submitCommandsImpl(GraphicsDeviceRef *deviceRef, List comma
 		if(dependency.bufferMemoryBarrierCount)
 			instanceExt->cmdPipelineBarrier2(commandBuffer, &dependency);
 
-		List_clear(&deviceExt->bufferTransitions);
+		ListVkBufferMemoryBarrier2_clear(&deviceExt->bufferTransitions);
 
 		//Bind pipeline layout and descriptors since they stay the same for the entire frame.
 		//For every bind point
@@ -1284,12 +1281,12 @@ Error GraphicsDevice_submitCommandsImpl(GraphicsDeviceRef *deviceRef, List comma
 		for (U64 i = 0; i < commandLists.length; ++i) {
 
 			state.scopeCounter = 0;
-			CommandList *commandList = CommandListRef_ptr(((CommandListRef**) commandLists.ptr)[i]);
+			CommandList *commandList = CommandListRef_ptr(commandLists.ptr[i]);
 			const U8 *ptr = commandList->data.ptr;
 
 			for (U64 j = 0; j < commandList->commandOps.length; ++j) {
 
-				CommandOpInfo info = ((CommandOpInfo*) commandList->commandOps.ptr)[j];
+				CommandOpInfo info = commandList->commandOps.ptr[j];
 				
 				//Extra debugging if an error happens while processing the command
 
@@ -1309,11 +1306,11 @@ Error GraphicsDevice_submitCommandsImpl(GraphicsDeviceRef *deviceRef, List comma
 
 		for (U64 i = 0; i < swapchains.length; ++i) {
 
-			SwapchainRef *swapchainRef = ((SwapchainRef**) swapchains.ptr)[i];
+			SwapchainRef *swapchainRef = swapchains.ptr[i];
 			Swapchain *swapchain = SwapchainRef_ptr(swapchainRef);
 			VkSwapchain *swapchainExt = Swapchain_ext(swapchain, Vk);
 
-			VkManagedImage *imageExt = &((VkManagedImage*)swapchainExt->images.ptr)[swapchainExt->currentIndex];
+			VkManagedImage *imageExt = &swapchainExt->images.ptrNonConst[swapchainExt->currentIndex];
 
 			VkImageSubresourceRange range = (VkImageSubresourceRange) {
 				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -1333,13 +1330,13 @@ Error GraphicsDevice_submitCommandsImpl(GraphicsDeviceRef *deviceRef, List comma
 			));
 
 			if(RefPtr_inc(swapchainRef))
-				_gotoIfError(clean, List_pushBackx(currentFlight, Buffer_createConstRef(&swapchainRef, sizeof(swapchainRef))));
+				_gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, swapchainRef));
 		}
 
 		if(dependency.imageMemoryBarrierCount)
 			instanceExt->cmdPipelineBarrier2(commandBuffer, &dependency);
 
-		List_clear(&deviceExt->imageTransitions);
+		ListVkImageMemoryBarrier2_clear(&deviceExt->imageTransitions);
 
 		//End buffer
 
@@ -1353,7 +1350,7 @@ Error GraphicsDevice_submitCommandsImpl(GraphicsDeviceRef *deviceRef, List comma
 
 	VkSemaphore signalSemaphores[2] = {
 		deviceExt->commitSemaphore,
-		((const VkSemaphore*)deviceExt->submitSemaphores.ptr)[device->submitId % 3]
+		deviceExt->submitSemaphores.ptr[device->submitId % 3]
 	};
 
 	U64 signalValues[2] = { device->submitId + 1, 1 };
@@ -1370,12 +1367,12 @@ Error GraphicsDevice_submitCommandsImpl(GraphicsDeviceRef *deviceRef, List comma
 		.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
 		.pNext = &timelineInfo,
 		.waitSemaphoreCount = (U32) deviceExt->waitSemaphores.length,
-		.pWaitSemaphores = (VkSemaphore*) deviceExt->waitSemaphores.ptr,
+		.pWaitSemaphores = deviceExt->waitSemaphores.ptr,
 		.signalSemaphoreCount = swapchains.length ? 2 : 1,
 		.pSignalSemaphores = signalSemaphores,
 		.pCommandBuffers = &commandBuffer,
 		.commandBufferCount = commandBuffer ? 1 : 0,
-		.pWaitDstStageMask = (const VkPipelineStageFlags*) deviceExt->waitStages.ptr
+		.pWaitDstStageMask = deviceExt->waitStages.ptr
 	};
 
 	_gotoIfError(clean, vkCheck(vkQueueSubmit(queue.queue, 1, &submitInfo, VK_NULL_HANDLE)));
@@ -1387,23 +1384,23 @@ Error GraphicsDevice_submitCommandsImpl(GraphicsDeviceRef *deviceRef, List comma
 		VkPresentInfoKHR presentInfo = (VkPresentInfoKHR) {
 			.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
 			.waitSemaphoreCount = 1,
-			.pWaitSemaphores = ((const VkSemaphore*) deviceExt->submitSemaphores.ptr) + device->submitId % 3,
+			.pWaitSemaphores = deviceExt->submitSemaphores.ptr + device->submitId % 3,
 			.swapchainCount = (U32) swapchains.length,
-			.pSwapchains = (const VkSwapchainKHR*) deviceExt->swapchainHandles.ptr,
-			.pImageIndices = (const U32*) deviceExt->swapchainIndices.ptr,
-			.pResults = (VkResult*) deviceExt->results.ptr
+			.pSwapchains = deviceExt->swapchainHandles.ptr,
+			.pImageIndices = deviceExt->swapchainIndices.ptr,
+			.pResults = deviceExt->results.ptrNonConst
 		};
 
 		_gotoIfError(clean, vkCheck(vkQueuePresentKHR(queue.queue, &presentInfo)));
 
 		for(U64 i = 0; i < deviceExt->results.length; ++i)
-			_gotoIfError(clean, vkCheck(((const VkResult*) deviceExt->results.ptr)[i]));
+			_gotoIfError(clean, vkCheck(deviceExt->results.ptr[i]));
 	}
 
 clean: 
 
-	List_clear(&deviceExt->bufferTransitions);
-	List_clear(&deviceExt->imageTransitions);
+	ListVkBufferMemoryBarrier2_clear(&deviceExt->bufferTransitions);
+	ListVkImageMemoryBarrier2_clear(&deviceExt->imageTransitions);
 	CharString_freex(&temp);
 
 	return err;

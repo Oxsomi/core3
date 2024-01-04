@@ -18,6 +18,7 @@
 *  This is called dual licensing.
 */
 
+#include "platforms/ext/listx_impl.h"
 #include "graphics/generic/swapchain.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
@@ -29,12 +30,17 @@
 #include "platforms/platform.h"
 #include "platforms/ref_ptr.h"
 #include "platforms/ext/bufferx.h"
-#include "platforms/ext/listx.h"
 #include "platforms/ext/stringx.h"
-#include "types/buffer.h"
-#include "types/error.h"
+
+TListImpl(VkManagedImage);
 
 const U64 SwapchainExt_size = sizeof(VkSwapchain);
+
+TList(VkSurfaceFormatKHR);
+TList(VkPresentModeKHR);
+
+TListImpl(VkSurfaceFormatKHR);
+TListImpl(VkPresentModeKHR);
 
 Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, SwapchainInfo info, Swapchain *swapchain) {
 
@@ -56,7 +62,9 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 
 	Error err = Error_none();
 	CharString temp = CharString_createNull();
-	List list = List_createEmpty(sizeof(VkSurfaceFormatKHR));
+	ListVkSurfaceFormatKHR surfaceFormats = (ListVkSurfaceFormatKHR) { 0 };
+	ListVkPresentModeKHR presentModes = (ListVkPresentModeKHR) { 0 };
+	ListVkWriteDescriptorSet descriptorSets = (ListVkWriteDescriptorSet) { 0 };
 	ELockAcquire acq = ELockAcquire_Invalid;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
@@ -95,10 +103,10 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 	if(!formatCount)
 		_gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_createSwapchainExt() format isn't supported"));
 
-	_gotoIfError(clean, List_resizex(&list, formatCount));
+	_gotoIfError(clean, ListVkSurfaceFormatKHR_resizex(&surfaceFormats, formatCount));
 
 	_gotoIfError(clean, vkCheck(instance->getPhysicalDeviceSurfaceFormats(
-		physicalDevice, swapchainExt->surface, &formatCount, (VkSurfaceFormatKHR*) list.ptr
+		physicalDevice, swapchainExt->surface, &formatCount, surfaceFormats.ptrNonConst
 	)));
 
 	VkSurfaceFormatKHR searchFormat = (VkSurfaceFormatKHR) { 0 };
@@ -137,7 +145,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 
 	for (U32 j = 0; j < formatCount; ++j) {
 
-		VkSurfaceFormatKHR fj = ((VkSurfaceFormatKHR*)list.ptr)[j];
+		VkSurfaceFormatKHR fj = surfaceFormats.ptr[j];
 
 		if(fj.colorSpace != searchFormat.colorSpace || fj.format != searchFormat.format)
 			continue;
@@ -148,8 +156,6 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 
 	if(swapchainExt->format.format == VK_FORMAT_UNDEFINED)
 		_gotoIfError(clean, Error_unsupportedOperation(0, "GraphicsDeviceRef_createSwapchainExt() invalid format"));
-
-	List_freex(&list);
 
 	VkSurfaceCapabilitiesKHR capabilities = (VkSurfaceCapabilitiesKHR) { 0 };
 
@@ -209,7 +215,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 			case VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR:	current = EMonitorOrientation_FlippedPortrait;		break;
 		}
 
-		MonitorOrientation target = ((const Monitor*)window->monitors.ptr)->orientation;
+		MonitorOrientation target = window->monitors.ptr->orientation;
 
 		if(current != target)
 			_gotoIfError(clean, Error_invalidOperation(6, "GraphicsDeviceRef_createSwapchainExt() invalid orientation"));
@@ -223,11 +229,10 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 		physicalDevice, swapchainExt->surface, &modes, NULL
 	)));
 
-	list = List_createEmpty(sizeof(VkPresentModeKHR));
-	_gotoIfError(clean, List_resizex(&list, modes));
+	_gotoIfError(clean, ListVkPresentModeKHR_resizex(&presentModes, modes));
 
 	_gotoIfError(clean, vkCheck(instance->getPhysicalDeviceSurfacePresentModes(
-		physicalDevice, swapchainExt->surface, &modes, (VkPresentModeKHR*) list.ptr
+		physicalDevice, swapchainExt->surface, &modes, presentModes.ptrNonConst
 	)));
 
 	Bool supports[ESwapchainPresentMode_Count - 1] = { 0 };
@@ -236,7 +241,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 
 	for (U32 i = 0; i < modes; ++i) {
 
-		VkPresentModeKHR modei = ((const VkPresentModeKHR*)list.ptr)[i];
+		VkPresentModeKHR modei = presentModes.ptr[i];
 
 		switch(modei) {
 
@@ -252,8 +257,6 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 				break;
 		}
 	}
-
-	List_freex(&list);
 
 	VkPresentModeKHR presentMode = -1;
 
@@ -344,31 +347,24 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 	Bool createSemaphores = false;
 
 	if(swapchainExt->semaphores.length != imageCount) {
-		List_freex(&swapchainExt->semaphores);
-		swapchainExt->semaphores = List_createEmpty(sizeof(VkSemaphore));
-		_gotoIfError(clean, List_resizex(&swapchainExt->semaphores, imageCount));
+		ListVkSemaphore_freex(&swapchainExt->semaphores);
+		_gotoIfError(clean, ListVkSemaphore_resizex(&swapchainExt->semaphores, imageCount));
 		createSemaphores = true;
 	}
 
 	//Destroy image views
 
 	for(U64 i = 0; i < swapchainExt->images.length; ++i) {
-
-		VkManagedImage *managedImage = &((VkManagedImage*) swapchainExt->images.ptr)[i];
-
-		managedImage->lastAccess = 0;
-		managedImage->lastStage = 0;
-		managedImage->lastLayout = 0;
-
+		VkManagedImage *managedImage = &swapchainExt->images.ptrNonConst[i];
+		managedImage->lastAccess = managedImage->lastStage = managedImage->lastLayout = 0;
 		vkDestroyImageView(deviceExt->device, managedImage->view, NULL);
 	}
 
 	//Get images
 
 	if(swapchainExt->images.length != imageCount) {
-		List_freex(&swapchainExt->images);
-		swapchainExt->images = List_createEmpty(sizeof(VkManagedImage));
-		_gotoIfError(clean, List_resizex(&swapchainExt->images, imageCount));
+		ListVkManagedImage_freex(&swapchainExt->images);
+		_gotoIfError(clean, ListVkManagedImage_resizex(&swapchainExt->images, imageCount));
 	}
 
 	VkImage vkImages[3];		//Temp alloc, we only allow up to 3 images.
@@ -378,7 +374,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 	)));
 
 	for(U64 i = 0; i < swapchainExt->images.length; ++i)
-		((VkManagedImage*) swapchainExt->images.ptr)[i].image = vkImages[i];
+		swapchainExt->images.ptrNonConst[i].image = vkImages[i];
 
 	//Grab semaphores
 
@@ -387,7 +383,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 		if(createSemaphores) {
 
 			VkSemaphoreCreateInfo semaphoreInfo = (VkSemaphoreCreateInfo) { .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
-			VkSemaphore *semaphore = (VkSemaphore*)swapchainExt->semaphores.ptr + i;
+			VkSemaphore *semaphore = swapchainExt->semaphores.ptrNonConst + i;
 
 			_gotoIfError(clean, vkCheck(vkCreateSemaphore(deviceExt->device, &semaphoreInfo, NULL, semaphore)));
 
@@ -409,11 +405,11 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 
 		//Image views
 
-		VkImageView *view = &((VkManagedImage*) swapchainExt->images.ptr + i)->view;
+		VkImageView *view = &swapchainExt->images.ptrNonConst[i].view;
 
 		VkImageViewCreateInfo viewCreate = (VkImageViewCreateInfo) {
 			.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-			.image = ((VkManagedImage*) swapchainExt->images.ptr)[i].image,
+			.image = swapchainExt->images.ptr[i].image,
 			.viewType = VK_IMAGE_VIEW_TYPE_2D,
 			.format = swapchainExt->format.format,
 			.subresourceRange = (VkImageSubresourceRange) {
@@ -442,15 +438,11 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 
 	U64 descriptors = info.usage & ESwapchainUsage_AllowCompute ? 2 : 1;
 
-	if(!swapchainExt->descriptorAllocations.stride)
-		swapchainExt->descriptorAllocations = List_createEmpty(sizeof(U32));
+	_gotoIfError(clean, ListU32_resizex(&swapchainExt->descriptorAllocations, descriptors * imageCount));
 
-	_gotoIfError(clean, List_resizex(&swapchainExt->descriptorAllocations, descriptors * imageCount));
+	U32 *allocPtr = swapchainExt->descriptorAllocations.ptrNonConst;
 
-	U32 *allocPtr = (U32*) swapchainExt->descriptorAllocations.ptr;
-
-	list = List_createEmpty(sizeof(VkWriteDescriptorSet));
-	_gotoIfError(clean, List_resizex(&list, swapchainExt->descriptorAllocations.length));
+	_gotoIfError(clean, ListVkWriteDescriptorSet_resizex(&descriptorSets, swapchainExt->descriptorAllocations.length));
 
 	if(acq < ELockAcquire_Success) {
 
@@ -478,11 +470,11 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 		allocPtr[i * descriptors] = locationRead;
 
 		imageInfo[i * descriptors] = (VkDescriptorImageInfo) {
-			.imageView = ((VkManagedImage*)swapchainExt->images.ptr)[i].view,
+			.imageView = swapchainExt->images.ptr[i].view,
 			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
 		};
 
-		((VkWriteDescriptorSet*)list.ptr)[i * descriptors + 0] = (VkWriteDescriptorSet) {
+		descriptorSets.ptrNonConst[i * descriptors + 0] = (VkWriteDescriptorSet) {
 			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 			.dstSet = deviceExt->sets[EDescriptorSetType_Resources],
 			.dstBinding = EDescriptorType_Texture2D - 1,
@@ -519,7 +511,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 			imageInfo[i * descriptors + 1] = imageInfo[i * descriptors];
 			imageInfo[i * descriptors + 1].imageLayout = VK_IMAGE_LAYOUT_GENERAL;
 
-			((VkWriteDescriptorSet*)list.ptr)[i * descriptors + 1] = (VkWriteDescriptorSet) {
+			descriptorSets.ptrNonConst[i * descriptors + 1] = (VkWriteDescriptorSet) {
 				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 				.dstSet = deviceExt->sets[EDescriptorSetType_Resources],
 				.dstBinding = textureWriteType - 1,
@@ -531,8 +523,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 		}
 	}
 
-	vkUpdateDescriptorSets(deviceExt->device, (U32) list.length, (const VkWriteDescriptorSet*) list.ptr, 0, NULL);
-	List_freex(&list);
+	vkUpdateDescriptorSets(deviceExt->device, (U32) descriptorSets.length, descriptorSets.ptr, 0, NULL);
 
 	if(acq == ELockAcquire_Acquired)
 		Lock_unlock(&deviceExt->descriptorLock);
@@ -571,7 +562,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
 					.objectType = VK_OBJECT_TYPE_IMAGE_VIEW,
 					.pObjectName = temp.ptr,
-					.objectHandle =  (U64) ((VkManagedImage*) swapchainExt->images.ptr)[i].view
+					.objectHandle =  (U64) swapchainExt->images.ptr[i].view
 				};
 
 				_gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)));
@@ -587,7 +578,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
 					.objectType = VK_OBJECT_TYPE_IMAGE,
 					.pObjectName = temp.ptr,
-					.objectHandle =  (U64) ((VkManagedImage*) swapchainExt->images.ptr)[i].image
+					.objectHandle =  (U64) swapchainExt->images.ptr[i].image
 				};
 
 				_gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)));
@@ -602,7 +593,9 @@ clean:
 		Lock_unlock(&deviceExt->descriptorLock);
 	
 	CharString_freex(&temp);
-	List_freex(&list);
+	ListVkSurfaceFormatKHR_freex(&surfaceFormats);
+	ListVkPresentModeKHR_freex(&presentModes);
+	ListVkWriteDescriptorSet_freex(&descriptorSets);
 	return err;
 }
 
@@ -618,7 +611,7 @@ Bool GraphicsDevice_freeSwapchainExt(Swapchain *swapchain, Allocator alloc) {
 
 	for(U64 i = 0; i < swapchainExt->semaphores.length; ++i) {
 	
-		VkSemaphore semaphore = ((VkSemaphore*)swapchainExt->semaphores.ptr)[i];
+		VkSemaphore semaphore = swapchainExt->semaphores.ptr[i];
 
 		if(semaphore)
 			vkDestroySemaphore(deviceExt->device, semaphore, NULL);
@@ -626,16 +619,16 @@ Bool GraphicsDevice_freeSwapchainExt(Swapchain *swapchain, Allocator alloc) {
 
 	for (U64 i = 0; i < swapchainExt->images.length; ++i) {
 
-		VkImageView view = ((VkManagedImage*)swapchainExt->images.ptr)[i].view;
+		VkImageView view = swapchainExt->images.ptr[i].view;
 
 		if(view)
 			vkDestroyImageView(deviceExt->device, view, NULL);
 	}
 
-	List_freex(&swapchainExt->semaphores);
-	List_freex(&swapchainExt->images);
+	ListVkSemaphore_freex(&swapchainExt->semaphores);
+	ListVkManagedImage_freex(&swapchainExt->images);
 
-	List_freex(&swapchainExt->descriptorAllocations);
+	ListU32_freex(&swapchainExt->descriptorAllocations);
 
 	if(swapchainExt->swapchain)
 		vkDestroySwapchainKHR(deviceExt->device, swapchainExt->swapchain, NULL);
@@ -653,7 +646,7 @@ Error VkSwapchain_transition(
 	VkImageLayout layout,
 	U32 graphicsQueueId,
 	const VkImageSubresourceRange *range,
-	List *imageBarriers,
+	ListVkImageMemoryBarrier2 *imageBarriers,
 	VkDependencyInfo *dependency
 ) {
 
@@ -684,7 +677,7 @@ Error VkSwapchain_transition(
 		.subresourceRange = *range
 	};
 
-	Error err = List_pushBackx(imageBarriers, Buffer_createConstRef(&imageBarrier, sizeof(imageBarrier)));
+	Error err = ListVkImageMemoryBarrier2_pushBackx(imageBarriers, imageBarrier);
 
 	if(err.genericError)
 		return err;
@@ -693,7 +686,7 @@ Error VkSwapchain_transition(
 	imageExt->lastStage = imageBarrier.dstStageMask;
 	imageExt->lastAccess = imageBarrier.dstAccessMask;
 
-	dependency->pImageMemoryBarriers = (VkImageMemoryBarrier2*) imageBarriers->ptr;
+	dependency->pImageMemoryBarriers = imageBarriers->ptr;
 	dependency->imageMemoryBarrierCount = (U32) imageBarriers->length;
 
 	return Error_none();

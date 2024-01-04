@@ -19,9 +19,8 @@
 */
 
 #pragma once
-#include "platforms/ref_ptr.h"
 #include "platforms/lock.h"
-#include "types/list.h"
+#include "device.h"
 
 typedef RefPtr GraphicsDeviceRef;
 typedef struct CharString CharString;
@@ -44,6 +43,8 @@ typedef enum EDeviceBufferUsage {
 
 typedef RefPtr DeviceBufferRef;
 
+TList(DevicePendingRange);
+
 typedef struct DeviceBuffer {
 
 	GraphicsDeviceRef *device;
@@ -52,15 +53,15 @@ typedef struct DeviceBuffer {
 	Bool isPendingFullCopy, isPending, isFirstFrame;
 	U8 padding0;
 
-	U32 readHandle, writeHandle;		//Place in heap/descriptor set. First 12 bits are reserved for type and/or version.
+	U32 readHandle, writeHandle;			//Place in heap/descriptor set. First 12 bits are reserved for type and/or version
 
 	U64 length;
 
-	Buffer cpuData;						//Null if not cpu backed and uploaded. If not cpu backed this will free after upload
+	Buffer cpuData;							//Null if not cpu backed & uploaded. If not cpu backed this will free post upload
 
-	List pendingChanges;				//Pending ranges (DevicePendingRange)
+	ListDevicePendingRange pendingChanges;
 
-	void *mappedMemory;					//Mapped memory, only accessible through markDirty.
+	void *mappedMemory;						//Mapped memory, only accessible through markDirty.
 
 	U64 blockOffset;
 	U32 blockId, padding1;

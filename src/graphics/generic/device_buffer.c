@@ -18,14 +18,14 @@
 *  This is called dual licensing.
 */
 
+#include "platforms/ext/listx_impl.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/device.h"
-#include "platforms/ext/listx.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/bufferx.h"
-#include "types/buffer.h"
-#include "types/error.h"
 #include "types/string.h"
+
+TListImpl(DevicePendingRange);
 
 Error DeviceBufferRef_dec(DeviceBufferRef **buffer) {
 	return !RefPtr_dec(buffer) ? Error_invalidOperation(0, "DeviceBufferRef_dec()::buffer is required") : Error_none();
@@ -78,7 +78,7 @@ Error DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count) {
 	Bool shouldPush = false;
 
 	if(fullRange) {
-		_gotoIfError(clean, List_clear(&buffer->pendingChanges));
+		_gotoIfError(clean, ListDevicePendingRange_clear(&buffer->pendingChanges));
 		buffer->isPendingFullCopy = true;
 		shouldPush = true;
 	}
@@ -96,7 +96,7 @@ Error DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count) {
 
 			for (U64 i = buffer->pendingChanges.length - 1; i != U64_MAX; --i) {
 
-				DevicePendingRange *pending = &((DevicePendingRange*)buffer->pendingChanges.ptr)[i];
+				DevicePendingRange *pending = &buffer->pendingChanges.ptrNonConst[i];
 
 				//If intersects, we either merge with first occurence or pop last occurence and merge range with current
 
@@ -108,10 +108,10 @@ Error DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count) {
 					}
 
 					else {
-						DevicePendingRange last = ((DevicePendingRange*)buffer->pendingChanges.ptr)[lastMatch];
+						DevicePendingRange last = buffer->pendingChanges.ptr[lastMatch];
 						pending->buffer.startRange = U64_min(pending->buffer.startRange, last.buffer.startRange);
 						pending->buffer.endRange = U64_max(pending->buffer.endRange, last.buffer.endRange);
-						_gotoIfError(clean, List_erase(&buffer->pendingChanges, lastMatch));
+						_gotoIfError(clean, ListDevicePendingRange_erase(&buffer->pendingChanges, lastMatch));
 					}
 
 					lastMatch = i;
@@ -132,7 +132,7 @@ Error DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count) {
 			));
 
 		DevicePendingRange change = (DevicePendingRange) { .buffer = { .startRange = offset, .endRange = offset + count } };
-		_gotoIfError(clean, List_pushBackx(&buffer->pendingChanges, Buffer_createConstRef(&change, sizeof(change))));
+		_gotoIfError(clean, ListDevicePendingRange_pushBackx(&buffer->pendingChanges, change));
 	}
 
 	//Tell the device that on next submit it should handle copies from 
@@ -147,7 +147,7 @@ Error DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count) {
 	if(acq1 < ELockAcquire_Success)
 		_gotoIfError(clean, Error_invalidState(0, "DeviceBufferRef_markDirty() couldn't lock device"));
 
-	_gotoIfError(clean, List_pushBackx(&device->pendingResources, Buffer_createConstRef(&buf, sizeof(buf))));
+	_gotoIfError(clean, ListWeakRefPtr_pushBackx(&device->pendingResources, buf));
 
 clean:
 
@@ -182,7 +182,7 @@ Bool DeviceBuffer_free(DeviceBuffer *buffer, Allocator allocator) {
 		success &= !GraphicsDeviceRef_dec(&buffer->device).genericError;
 
 	success &= Buffer_freex(&buffer->cpuData);
-	success &= List_freex(&buffer->pendingChanges);
+	success &= ListDevicePendingRange_freex(&buffer->pendingChanges);
 
 	return success;
 }
@@ -218,15 +218,10 @@ Error GraphicsDeviceRef_createBuffer(
 	if(!(usage & EDeviceBufferUsage_InternalWeakRef))
 		_gotoIfError(clean, GraphicsDeviceRef_inc(dev));
 
-	*buffer = (DeviceBuffer) {
-		.device = dev,
-		.usage = usage,
-		.length = len,
-		.pendingChanges = List_createEmpty(sizeof(DevicePendingRange)),
-		.isFirstFrame = true
-	};
-
-	_gotoIfError(clean, List_reservex(&buffer->pendingChanges, usage & EDeviceBufferUsage_CPUBacked ? 16 : 1));
+	*buffer = (DeviceBuffer) { .device = dev, .usage = usage, .length = len, .isFirstFrame = true };
+	_gotoIfError(clean, ListDevicePendingRange_reservex(
+		&buffer->pendingChanges, usage & EDeviceBufferUsage_CPUBacked ? 16 : 1
+	));
 
 	if(usage & EDeviceBufferUsage_CPUBacked)
 		_gotoIfError(clean, Buffer_createEmptyBytesx(buffer->length, &buffer->cpuData));

@@ -59,15 +59,15 @@ Error Buffer_setAllBitsTo(Buffer buf, Bool isOn);
 
 //Comparison
 
-Error Buffer_eq(Buffer buf0, Buffer buf1, Bool *result);		//Also compares size
-Error Buffer_neq(Buffer buf0, Buffer buf1, Bool *result);		//Also compares size
+Bool Buffer_eq(Buffer buf0, Buffer buf1);			//Also compares size
+Bool Buffer_neq(Buffer buf0, Buffer buf1);			//Also compares size
 
 //These should never be Buffer_free-d because Buffer doesn't know if it's allocated
 
 Buffer Buffer_createNull();
 
 Buffer Buffer_createRef(void *v, U64 length);
-Buffer Buffer_createConstRef(const void *v, U64 length);
+Buffer Buffer_createRefConst(const void *v, U64 length);
 
 //All these functions allocate, so Buffer_free them later
 

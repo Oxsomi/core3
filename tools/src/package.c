@@ -129,26 +129,22 @@ Bool CLI_package(ParsedArgs args) {
 	//Get input
 
 	U64 offset = 0;
-	Buffer inputArgBuf;
-	Error err = List_get(args.args, offset++, &inputArgBuf);
+	CharString input = (CharString) { 0 };
+	Error err = ListCharString_get(args.args, offset++, &input);
 
 	if (err.genericError) {
 		Error_printx(err, ELogLevel_Error, ELogOptions_Default);
 		return false;
 	}
 
-	CharString input = *(const CharString*)inputArgBuf.ptr;
-
 	//Check if output is valid
 
-	Buffer outputArgBuf;
+	CharString output = (CharString) { 0 };
 
-	if ((err = List_get(args.args, offset++, &outputArgBuf)).genericError) {
+	if ((err = ListCharString_get(args.args, offset++, &output)).genericError) {
 		Error_printx(err, ELogLevel_Error, ELogOptions_Default);
 		return false;
 	}
-
-	CharString output = *(const CharString*)outputArgBuf.ptr;
 
 	//Make archive
 

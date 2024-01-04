@@ -18,6 +18,7 @@
 *  This is called dual licensing.
 */
 
+#include "platforms/ext/listx_impl.h"
 #include "types/error.h"
 #include "types/buffer.h"
 #include "formats/oiCA.h"
@@ -26,7 +27,6 @@
 #include "platforms/ext/formatx.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/archivex.h"
-#include "platforms/ext/listx.h"
 
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
@@ -253,7 +253,7 @@ Error File_resolveVirtual(CharString loc, CharString *subPath, const VirtualSect
 
 	for (U64 i = 0; i < Platform_instance.virtualSections.length; ++i) {
 
-		const VirtualSection *sectioni = (const VirtualSection*)Platform_instance.virtualSections.ptr + i;
+		const VirtualSection *sectioni = Platform_instance.virtualSections.ptr + i;
 
 		//If folder is the same, we found a section.
 		//This section won't return any subPath or section,
@@ -442,7 +442,7 @@ Error File_foreachVirtualInternal(ForeachFile *userData, CharString resolved) {
 	CharString copy2 = CharString_createNull();
 	CharString copy3 = CharString_createNull();
 	CharString root = CharString_createConstRefCStr(".");
-	List visited = List_createEmpty(sizeof(CharString));
+	ListCharString visited = (ListCharString) { 0 };
 	ELockAcquire acq = ELockAcquire_Invalid;
 
 	CharString_toLower(resolved);
@@ -460,7 +460,7 @@ Error File_foreachVirtualInternal(ForeachFile *userData, CharString resolved) {
 
 	for (U64 i = 0; i < Platform_instance.virtualSections.length; ++i) {
 
-		const VirtualSection *section = (const VirtualSection*)Platform_instance.virtualSections.ptr + i;
+		const VirtualSection *section = Platform_instance.virtualSections.ptr + i;
 
 		CharString_freex(&copy1);
 		CharString_freex(&copy2);
@@ -489,7 +489,7 @@ Error File_foreachVirtualInternal(ForeachFile *userData, CharString resolved) {
 			Bool contains = false;
 
 			for(U64 j = 0; j < visited.length; ++j)
-				if (CharString_equalsStringSensitive(parent, ((CharString*)(visited.ptr))[j])) {
+				if (CharString_equalsStringSensitive(parent, visited.ptr[j])) {
 					contains = true;
 					break;
 				}
@@ -498,7 +498,7 @@ Error File_foreachVirtualInternal(ForeachFile *userData, CharString resolved) {
 
 				//Avoid duplicates
 
-				_gotoIfError(clean, List_pushBackx(&visited, Buffer_createConstRef(&parent, sizeof(parent))));
+				_gotoIfError(clean, ListCharString_pushBackx(&visited, parent));
 
 				CharString_freex(&copy3);
 				_gotoIfError(clean, CharString_createCopyx(parent, &copy3));
@@ -568,7 +568,7 @@ clean:
 	if(acq == ELockAcquire_Acquired)
 		Lock_unlock(&Platform_instance.virtualSectionsLock);
 
-	List_freex(&visited);
+	ListCharString_freex(&visited);
 	CharString_freex(&copy);
 	CharString_freex(&copy1);
 	CharString_freex(&copy2);
@@ -667,7 +667,7 @@ inline Error File_loadVirtualInternal(FileLoadVirtual *userData, CharString loc)
 
 	for (U64 i = 0; i < Platform_instance.virtualSections.length; ++i) {
 
-		VirtualSection *section = (VirtualSection*)Platform_instance.virtualSections.ptr + i;
+		VirtualSection *section = Platform_instance.virtualSections.ptrNonConst + i;
 
 		if(
 			!CharString_equalsStringInsensitive(loc, section->path) &&
@@ -696,7 +696,7 @@ inline Error File_loadVirtualInternal(FileLoadVirtual *userData, CharString loc)
 					_gotoIfError(clean0, Error_notFound(3, 1, "File_loadVirtualInternal() LoadResource failed"));
 
 				const U8 *dat = (const U8*) LockResource(handle);
-				_gotoIfError(clean0, Buffer_createCopyx(Buffer_createConstRef(dat, size), &copy));
+				_gotoIfError(clean0, Buffer_createCopyx(Buffer_createRefConst(dat, size), &copy));
 
 				_gotoIfError(clean0, CAFile_readx(copy, userData->encryptionKey, &file));
 
@@ -755,7 +755,7 @@ Error File_unloadVirtualInternal(void *userData, CharString loc) {
 
 	for (U64 i = 0; i < Platform_instance.virtualSections.length; ++i) {
 
-		VirtualSection *section = (VirtualSection*)Platform_instance.virtualSections.ptr + i;
+		VirtualSection *section = Platform_instance.virtualSections.ptrNonConst + i;
 
 		if(
 			!CharString_equalsStringInsensitive(loc, section->path) &&

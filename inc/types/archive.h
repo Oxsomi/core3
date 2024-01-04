@@ -34,9 +34,10 @@ typedef struct ArchiveEntry {
 
 } ArchiveEntry;
 
+TList(ArchiveEntry);
 
 typedef struct Archive {
-	List entries;			//<ArchiveEntry>
+	ListArchiveEntry entries;
 } Archive;
 
 Error Archive_create(Allocator alloc, Archive *archive);

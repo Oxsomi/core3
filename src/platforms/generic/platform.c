@@ -18,11 +18,13 @@
 *  This is called dual licensing.
 */
 
+#include "platforms/ext/listx_impl.h"
 #include "platforms/platform.h"
 #include "platforms/log.h"
 #include "platforms/thread.h"
 #include "platforms/ext/stringx.h"
-#include "types/error.h"
+
+TListImpl(VirtualSection);
 
 Platform Platform_instance = { 0 };
 

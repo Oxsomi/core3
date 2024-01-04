@@ -277,7 +277,7 @@ inline void AESEncryptionContext_expandKey(const U32 key[8], I32x4 k[15]) {
 	//Otherwise this might crash!
 
 	if((U64)key & 15)
-		Buffer_copy(Buffer_createRef(k, sizeof(U32[8])), Buffer_createConstRef(key, sizeof(U32[8])));
+		Buffer_copy(Buffer_createRef(k, sizeof(U32[8])), Buffer_createRefConst(key, sizeof(U32[8])));
 
 	else {
 		k[0] = *(const I32x4*)key;
@@ -457,7 +457,7 @@ I32x4 AESEncryptionContext_fetchBlock(const I32x4 *dat, U64 leftOver) {
 		I32x4 v = I32x4_zero();
 		Buffer_copy(
 			Buffer_createRef(&v, sizeof(v)),
-			Buffer_createConstRef(dat, leftOver)
+			Buffer_createRefConst(dat, leftOver)
 		);
 
 		return v;
@@ -467,7 +467,7 @@ I32x4 AESEncryptionContext_fetchBlock(const I32x4 *dat, U64 leftOver) {
 
 	if((U64)dat & 15) {
 		I32x4 res;
-		Buffer_copy(Buffer_createRef(&res, sizeof(res)), Buffer_createConstRef(dat, sizeof(res)));
+		Buffer_copy(Buffer_createRef(&res, sizeof(res)), Buffer_createRefConst(dat, sizeof(res)));
 		return res;
 	}
 
@@ -548,7 +548,7 @@ void AESEncryptionContext_storeBlock(I32x4 *io, U64 leftOver, I32x4 *v) {
 
 		Buffer_copy(
 			Buffer_createRef(io, leftOver),
-			Buffer_createConstRef(v, leftOver)
+			Buffer_createRefConst(v, leftOver)
 		);
 	}
 

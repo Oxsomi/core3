@@ -18,17 +18,19 @@
 *  This is called dual licensing.
 */
 
+#include "platforms/ext/listx_impl.h"
 #include "platforms/window.h"
 #include "platforms/platform.h"
 #include "platforms/thread.h"
 #include "platforms/file.h"
-#include "types/error.h"
-#include "types/buffer.h"
 #include "types/string.h"
 #include "types/time.h"
 #include "formats/texture.h"
 #include "platforms/ext/bmpx.h"
 #include "platforms/ext/bufferx.h"
+
+TListImpl(InputDevice);
+TListImpl(Monitor);
 
 I32x2 EResolution_get(EResolution r) { return I32x2_create2(r >> 16, r & U16_MAX); }
 
@@ -125,7 +127,7 @@ Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 			//If we resized the buffer, we still have to copy the old data
 
 			if(resize)
-				Buffer_copy(neo, Buffer_createConstRef(old.ptr, U64_min(linSizOld, linSiz)));
+				Buffer_copy(neo, Buffer_createRefConst(old.ptr, U64_min(linSizOld, linSiz)));
 
 			//If we added size, we need to clear those pixels
 

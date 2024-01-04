@@ -18,15 +18,30 @@
 *  This is called dual licensing.
 */
 
+#include "types/list_impl.h"
 #include "types/string.h"
 #include "types/allocator.h"
 #include "types/math.h"
 #include "types/buffer.h"
-#include "types/list.h"
 #include "types/error.h"
 
 #include <ctype.h>
 #include <stdio.h>
+
+TListImpl(CharString);
+TListNamedImpl(ListConstC8);
+
+Bool ListCharString_sort(ListCharString list, EStringCase stringCase) { 
+	return GenericList_sortString(ListCharString_toList(list), stringCase); 
+}
+
+Bool ListCharString_sortSensitive(ListCharString list) { 
+	return GenericList_sortStringSensitive(ListCharString_toList(list)); 
+}
+
+Bool ListCharString_sortInsensitive(ListCharString list) { 
+	return GenericList_sortStringInsensitive(ListCharString_toList(list)); 
+}
 
 Bool CharString_isConstRef(CharString str) { return str.capacityAndRefInfo == U64_MAX; }
 Bool CharString_isRef(CharString str) { return !str.capacityAndRefInfo || CharString_isConstRef(str); }
@@ -40,7 +55,7 @@ Buffer CharString_buffer(CharString str) {
 }
 
 Buffer CharString_bufferConst(CharString str) { 
-	return Buffer_createConstRef(str.ptr, CharString_bytes(str));
+	return Buffer_createRefConst(str.ptr, CharString_bytes(str));
 }
 
 //Iteration
@@ -1067,7 +1082,7 @@ Error CharString_insert(CharString *s, C8 c, U64 i, Allocator allocator) {
 
 		Buffer_revCopy(
 			Buffer_createRef((U8*)s->ptr + i + 1,  strl),
-			Buffer_createConstRef(s->ptr + i, strl)
+			Buffer_createRefConst(s->ptr + i, strl)
 		);
 
 		((C8*)s->ptr)[i] = c;
@@ -1100,7 +1115,7 @@ Error CharString_insertString(CharString *s, CharString other, U64 i, Allocator 
 
 	Buffer_revCopy(
 		Buffer_createRef((U8*)s->ptr + i + otherl, oldLen - i),
-		Buffer_createConstRef(s->ptr + i, oldLen - i)
+		Buffer_createRefConst(s->ptr + i, oldLen - i)
 	);
 
 	Buffer_copy(
@@ -1125,7 +1140,7 @@ Error CharString_replaceAllString(
 	if(CharString_isRef(*s))
 		return Error_constData(0, 0, "CharString_replaceAllString()::s must be managed memory");
 
-	List finds = List_createEmpty(sizeof(U64));
+	ListU64 finds = { 0 };
 	Error err = CharString_findAllString(*s, search, allocator, caseSensitive, &finds);
 
 	if(err.genericError)
@@ -1136,7 +1151,7 @@ Error CharString_replaceAllString(
 
 	//Easy replace
 
-	const U64 *ptr = (const U64*) finds.ptr;
+	const U64 *ptr = finds.ptr;
 
 	U64 searchl = CharString_length(search);
 	U64 replacel = CharString_length(replace);
@@ -1177,7 +1192,7 @@ Error CharString_replaceAllString(
 
 			Buffer_copy(
 				Buffer_createRef((U8*)s->ptr + iCurrent, iEnd - iStart), 
-				Buffer_createConstRef(s->ptr + iStart, iEnd - iStart)
+				Buffer_createRefConst(s->ptr + iStart, iEnd - iStart)
 			);
 
 			iCurrent += iEnd - iStart;
@@ -1213,7 +1228,7 @@ Error CharString_replaceAllString(
 
 		Buffer_revCopy(
 			Buffer_createRef((U8*)s->ptr + newLoc - (iEnd - iStart), iEnd - iStart),
-			Buffer_createConstRef(s->ptr + iStart, iEnd - iStart)
+			Buffer_createRefConst(s->ptr + iStart, iEnd - iStart)
 		);
 
 		newLoc -= iEnd - iStart;
@@ -1229,7 +1244,7 @@ Error CharString_replaceAllString(
 	}
 
 clean:
-	List_free(&finds, allocator);
+	ListU64_free(&finds, allocator);
 	return err;
 }
 
@@ -1276,7 +1291,7 @@ Error CharString_replaceString(
 
 		Buffer_copy(
 			Buffer_createRef((U8*)s->ptr + res + replacel, strl - (res + searchl)), 
-			Buffer_createConstRef(s->ptr + res + searchl, strl - (res + searchl)) 
+			Buffer_createRefConst(s->ptr + res + searchl, strl - (res + searchl)) 
 		);
 
 		//Throw our replacement in there
@@ -1307,7 +1322,7 @@ Error CharString_replaceString(
 
 	Buffer_revCopy(
 		Buffer_createRef((U8*)s->ptr + res + replacel, strl - (res + searchl)), 
-		Buffer_createConstRef(s->ptr + res + searchl, strl - (res + searchl)) 
+		Buffer_createRefConst(s->ptr + res + searchl, strl - (res + searchl)) 
 	);
 
 	//Throw our replacement in there
@@ -1519,7 +1534,7 @@ Error CharString_findAll(
 	C8 c,
 	Allocator alloc,
 	EStringCase caseSensitive,
-	List *result
+	ListU64 *result
 ) {
 
 	if(!result)
@@ -1530,8 +1545,8 @@ Error CharString_findAll(
 
 	U64 strl = CharString_length(s);
 
-	List l = List_createEmpty(sizeof(U64));
-	Error err = List_reserve(&l, strl / 25 + 16, alloc);
+	ListU64 l = (ListU64) { 0 };
+	Error err = ListU64_reserve(&l, strl / 25 + 16, alloc);
 
 	if (err.genericError)
 		return err;
@@ -1540,8 +1555,8 @@ Error CharString_findAll(
 
 	for (U64 i = 0; i < strl; ++i)
 		if (c == C8_transform(s.ptr[i], (EStringTransform)caseSensitive))
-			if ((err = List_pushBack(&l, Buffer_createConstRef(&i, sizeof(i)), alloc)).genericError) {
-				List_free(&l, alloc);
+			if ((err = ListU64_pushBack(&l, i, alloc)).genericError) {
+				ListU64_free(&l, alloc);
 				return err;
 			}
 
@@ -1554,7 +1569,7 @@ Error CharString_findAllString(
 	CharString other,
 	Allocator alloc,
 	EStringCase casing,
-	List *result
+	ListU64 *result
 ) {
 
 	if(!result)
@@ -1569,14 +1584,14 @@ Error CharString_findAllString(
 	if(!otherl)
 		return Error_invalidParameter(1, 0, "CharString_findAllString()::other is empty");
 
-	List l = List_createEmpty(sizeof(U64));
+	ListU64 l = (ListU64) { 0 };
 
 	if(strl < otherl) {
 		*result = l;
 		return Error_none();
 	}
 
-	Error err = List_reserve(&l, strl / otherl / 25 + 16, alloc);
+	Error err = ListU64_reserve(&l, strl / otherl / 25 + 16, alloc);
 
 	if (err.genericError)
 		return err;
@@ -1596,8 +1611,8 @@ Error CharString_findAllString(
 
 		if (match) {
 
-			if ((err = List_pushBack(&l, Buffer_createConstRef(&i, sizeof(i)), alloc)).genericError) {
-				List_free(&l, alloc);
+			if ((err = ListU64_pushBack(&l, i, alloc)).genericError) {
+				ListU64_free(&l, alloc);
 				return err;
 			}
 
@@ -1699,13 +1714,8 @@ Bool CharString_equalsString(CharString s, CharString other, EStringCase caseSen
 	if (strl != otherl)
 		return false;
 
-	if (caseSensitive == EStringCase_Sensitive) {
-
-		Bool eq = false;
-		Buffer_eq(CharString_bufferConst(s), CharString_bufferConst(other), &eq);
-
-		return eq;
-	}
+	if (caseSensitive == EStringCase_Sensitive)
+		return Buffer_eq(CharString_bufferConst(s), CharString_bufferConst(other));
 
 	for (U64 i = 0; i < strl; ++i)
 		if (C8_toLower(s.ptr[i]) != C8_toLower(other.ptr[i]))
@@ -2190,7 +2200,7 @@ Bool CharString_erase(CharString *s, C8 c, EStringCase caseSensitive, Bool isFir
 
 	Buffer_copy(
 		Buffer_createRef((U8*)s->ptr + find, strl - find - 1),
-		Buffer_createConstRef(s->ptr + find + 1, strl - find - 1)
+		Buffer_createRefConst(s->ptr + find + 1, strl - find - 1)
 	);
 
 	((C8*)s->ptr)[strl - 1] = '\0';
@@ -2217,7 +2227,7 @@ Error CharString_eraseAtCount(CharString *s, U64 i, U64 count) {
 
 	Buffer_copy(
 		Buffer_createRef((U8*)s->ptr + i, strl - i - count),
-		Buffer_createConstRef(s->ptr + i + count, strl - i - count)
+		Buffer_createRefConst(s->ptr + i + count, strl - i - count)
 	);
 
 	U64 end = strl - count;
@@ -2244,7 +2254,7 @@ Bool CharString_eraseString(CharString *s, CharString other, EStringCase casing,
 
 	Buffer_copy(
 		Buffer_createRef((U8*)s->ptr + find, strl - find - otherl),
-		Buffer_createConstRef(s->ptr + find + otherl, strl - find - otherl)
+		Buffer_createRefConst(s->ptr + find + otherl, strl - find - otherl)
 	);
 
 	U64 end = strl - otherl;
@@ -2625,19 +2635,19 @@ U64 CharString_findString(CharString s, CharString other, EStringCase caseSensit
 		CharString_findLastString(s, other, caseSensitive);
 }
 
-Error CharString_findAllSensitive(CharString s, C8 c, Allocator alloc, List *result) {
+Error CharString_findAllSensitive(CharString s, C8 c, Allocator alloc, ListU64 *result) {
 	return CharString_findAll(s, c, alloc, EStringCase_Sensitive, result);
 }
 
-Error CharString_findAllInsensitive(CharString s, C8 c, Allocator alloc, List *result) {
+Error CharString_findAllInsensitive(CharString s, C8 c, Allocator alloc, ListU64 *result) {
 	return CharString_findAll(s, c, alloc, EStringCase_Insensitive, result);
 }
 
-Error CharString_findAllStringSensitive(CharString s, CharString other, Allocator alloc, List *result) {
+Error CharString_findAllStringSensitive(CharString s, CharString other, Allocator alloc, ListU64 *result) {
 	return CharString_findAllString(s, other, alloc, EStringCase_Sensitive, result);
 }
 
-Error CharString_findAllStringInsensitive(CharString s, CharString other, Allocator alloc, List *result) {
+Error CharString_findAllStringInsensitive(CharString s, CharString other, Allocator alloc, ListU64 *result) {
 	return CharString_findAllString(s, other, alloc, EStringCase_Insensitive, result);
 }
 

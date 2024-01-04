@@ -77,14 +77,14 @@ Error CharString_replaceStringInsensitivex(CharString *s, CharString search, Cha
 Error CharString_replaceFirstStringInsensitivex(CharString *s, CharString search, CharString replace);
 Error CharString_replaceLastStringInsensitivex(CharString *s, CharString search, CharString replace);
 
-Error CharString_findAllx(CharString s, C8 c, EStringCase caseSensitive, List *result);
-Error CharString_findAllStringx(CharString s, CharString other, EStringCase caseSensitive, List *result);
+Error CharString_findAllx(CharString s, C8 c, EStringCase caseSensitive, ListU64 *result);
+Error CharString_findAllStringx(CharString s, CharString other, EStringCase caseSensitive, ListU64 *result);
 
-Error CharString_findAllSensitivex(CharString s, C8 c, List *result);
-Error CharString_findAllStringSensitivex(CharString s, CharString other, List *result);
+Error CharString_findAllSensitivex(CharString s, C8 c, ListU64 *result);
+Error CharString_findAllStringSensitivex(CharString s, CharString other, ListU64 *result);
 
-Error CharString_findAllInsensitivex(CharString s, C8 c, List *result);
-Error CharString_findAllStringInsensitivex(CharString s, CharString other, List *result);
+Error CharString_findAllInsensitivex(CharString s, C8 c, ListU64 *result);
+Error CharString_findAllStringInsensitivex(CharString s, CharString other, ListU64 *result);
 
 Bool CharStringList_freex(CharStringList *arr);
 

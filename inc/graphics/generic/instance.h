@@ -21,6 +21,7 @@
 #pragma once
 #include "types/string.h"
 #include "platforms/ref_ptr.h"
+#include "device_info.h"
 
 //In line with vulkan standard.
 #define GraphicsApplicationInfo_Version(major, minor, patch)	\
@@ -63,7 +64,9 @@ Error GraphicsInstanceRef_inc(GraphicsInstanceRef *inst);
 
 Error GraphicsInstance_create(GraphicsApplicationInfo info, Bool isVerbose, GraphicsInstanceRef **inst);
 
-impl Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbose, List *infos);	//<GraphicsDeviceInfo>
+TList(GraphicsDeviceInfo);
+
+impl Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbose, ListGraphicsDeviceInfo *infos);
 
 static const U64 GraphicsInstance_vendorMaskAll = 0xFFFFFFFFFFFFFFFF;
 static const U64 GraphicsInstance_deviceTypeAll = 0xFFFFFFFFFFFFFFFF;

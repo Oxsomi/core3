@@ -18,10 +18,13 @@
 *  This is called dual licensing.
 */
 
+#include "platforms/ext/listx_impl.h"
 #include "graphics/generic/allocator.h"
 #include "platforms/ext/bufferx.h"
 #include "types/buffer.h"
 #include "types/error.h"
+
+TListImpl(DeviceMemoryBlock);
 
 impl Bool DeviceMemoryAllocator_freeAllocationExt(GraphicsDevice *device, void *ext);
 
@@ -35,8 +38,7 @@ Bool DeviceMemoryAllocator_freeAllocation(DeviceMemoryAllocator *allocator, U32 
 	if (acq < ELockAcquire_Success)
 		return false;		//Can't free.
 
-	DeviceMemoryBlock *block = (DeviceMemoryBlock*) List_ptr(allocator->blocks, blockId);
-
+	DeviceMemoryBlock *block = &allocator->blocks.ptrNonConst[blockId];
 	Bool success = AllocationBuffer_freeBlock(&block->allocations, (const U8*) blockOffset);
 
 	if (!block->allocations.allocations.length) {
@@ -45,8 +47,8 @@ Bool DeviceMemoryAllocator_freeAllocation(DeviceMemoryAllocator *allocator, U32 
 	}
 
 	if(blockId + 1 == allocator->blocks.length)
-		while(allocator->blocks.length && !((DeviceMemoryBlock*) List_last(allocator->blocks))->ext)
-			success &= !List_popBack(&allocator->blocks, Buffer_createNull()).genericError;
+		while(allocator->blocks.length && !ListDeviceMemoryBlock_last(allocator->blocks)->ext)
+			success &= !ListDeviceMemoryBlock_popBack(&allocator->blocks, NULL).genericError;
 
 	if(acq == ELockAcquire_Acquired)	//Only release if it wasn't already active
 		Lock_unlock(&allocator->lock);

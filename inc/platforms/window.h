@@ -19,14 +19,11 @@
 */
 
 #pragma once
-#include "types/vec.h"
 #include "types/list.h"
 #include "types/error.h"
-#include "types/string.h"
 #include "formats/texture.h"
-
-typedef U32 InputHandle;
-typedef struct InputDevice InputDevice;
+#include "platforms/input_device.h"
+#include "platforms/monitor.h"
 
 //There are three types of windows;
 //Physical windows, virtual windows and extended.
@@ -134,6 +131,9 @@ typedef enum EWindowType {
 
 typedef struct WindowManager WindowManager;
 
+TList(InputDevice);
+TList(Monitor);
+
 typedef struct Window {
 
 	WindowManager *owner;
@@ -161,7 +161,8 @@ typedef struct Window {
 
 	//TODO: Make this a map at some point
 
-	List devices, monitors;
+	ListInputDevice devices;
+	ListMonitor monitors;
 
 	//Data initialized by onCreate such as extended window data
 

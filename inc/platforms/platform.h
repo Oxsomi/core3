@@ -34,6 +34,8 @@ typedef struct VirtualSection {
 
 } VirtualSection;
 
+TList(VirtualSection);
+
 typedef struct Platform {
 
 	EPlatform platformType;
@@ -44,7 +46,7 @@ typedef struct Platform {
 	Allocator alloc;
 
 	Lock virtualSectionsLock;
-	List virtualSections;			//<VirtualSection>
+	ListVirtualSection virtualSections;
 
 	void *data, *dataExt;
 

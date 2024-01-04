@@ -126,6 +126,8 @@ typedef enum ECompareResult {
 	ECompareResult_Gt
 } ECompareResult;
 
+typedef ECompareResult (*CompareFunction)(const void *aPtr, const void *bPtr);
+
 //Buffer (more functions in types/buffer.h)
 
 typedef struct Buffer {

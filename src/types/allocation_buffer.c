@@ -18,14 +18,11 @@
 *  This is called dual licensing.
 */
 
+#include "types/list_impl.h"
 #include "types/allocation_buffer.h"
 #include "types/allocator.h"
-#include "types/error.h"
-#include "types/buffer.h"
 
-typedef struct AllocationBufferBlock {
-	U64 start, end, alignment;
-} AllocationBufferBlock;
+TListImpl(AllocationBufferBlock);
 
 Error AllocationBuffer_create(U64 size, Bool isVirtual, Allocator alloc, AllocationBuffer *allocationBuffer) {
 
@@ -50,10 +47,7 @@ Error AllocationBuffer_create(U64 size, Bool isVirtual, Allocator alloc, Allocat
 
 	else allocationBuffer->buffer = (Buffer) { .lengthAndRefBits = ((U64)3 << 62) | size };
 		
-	allocationBuffer->allocations = List_createEmpty(sizeof(AllocationBufferBlock));
-	err = List_reserve(&allocationBuffer->allocations, 16, alloc);
-
-	if(err.genericError) {
+	if ((err = ListAllocationBufferBlock_reserve(&allocationBuffer->allocations, 16, alloc)).genericError) {
 		Buffer_free(&allocationBuffer->buffer, alloc);		//Ignores if !ptr
 		*allocationBuffer = (AllocationBuffer) { 0 };
 		return err;
@@ -83,10 +77,7 @@ Error AllocationBuffer_createRefFromRegion(
 	if(err.genericError)
 		return err;
 
-	allocationBuffer->allocations = List_createEmpty(sizeof(AllocationBufferBlock));
-	err = List_reserve(&allocationBuffer->allocations, 16, alloc);
-
-	if(err.genericError) {
+	if((err = ListAllocationBufferBlock_reserve(&allocationBuffer->allocations, 16, alloc)).genericError) {
 		*allocationBuffer = (AllocationBuffer) { 0 };
 		return err;
 	}
@@ -100,7 +91,7 @@ Bool AllocationBuffer_free(AllocationBuffer *allocationBuffer, Allocator alloc) 
 		return true;
 
 	Bool success = Buffer_free(&allocationBuffer->buffer, alloc);		//Ignores if !ptr
-	success &= List_free(&allocationBuffer->allocations, alloc);
+	success &= ListAllocationBufferBlock_free(&allocationBuffer->allocations, alloc);
 	*allocationBuffer = (AllocationBuffer) { 0 };
 	return success;
 }
@@ -204,14 +195,10 @@ Error AllocationBuffer_allocateBlock(
 
 	//No allocations? We start at the front, it's always aligned
 
-	AllocationBufferBlock v;
-	Buffer vb = Buffer_createRef(&v, sizeof(v));
+	if (ListAllocationBufferBlock_empty(allocationBuffer->allocations)) {
 
-	if (List_empty(allocationBuffer->allocations)) {
-
-		v = (AllocationBufferBlock) { .end = size, .alignment = alignment };
-
-		Error err = List_pushBack(&allocationBuffer->allocations, vb, alloc);
+		AllocationBufferBlock v = (AllocationBufferBlock) { .end = size, .alignment = alignment };
+		Error err = ListAllocationBufferBlock_pushBack(&allocationBuffer->allocations, v, alloc);
 
 		if(err.genericError)
 			return err;
@@ -222,14 +209,16 @@ Error AllocationBuffer_allocateBlock(
 
 	//Grab area behind last allocation to see if there's still space
 
-	AllocationBufferBlock last = *(const AllocationBufferBlock*) List_lastConst(allocationBuffer->allocations);
+	AllocationBufferBlock last = *ListAllocationBufferBlock_last(allocationBuffer->allocations);
 	U64 lastAlign = AllocationBufferBlock_alignTo(last.end, alignment);
 
 	if (lastAlign + size <= len) {
 
-		v = (AllocationBufferBlock) { .start = last.end, .end = lastAlign + size, .alignment = alignment };
+		AllocationBufferBlock v = (AllocationBufferBlock) { 
+			.start = last.end, .end = lastAlign + size, .alignment = alignment 
+		};
 
-		Error err = List_pushBack(&allocationBuffer->allocations, vb, alloc);
+		Error err = ListAllocationBufferBlock_pushBack(&allocationBuffer->allocations, v, alloc);
 
 		if(err.genericError)
 			return err;
@@ -240,17 +229,17 @@ Error AllocationBuffer_allocateBlock(
 
 	//Grab area before first allocation to see if there's still space
 
-	AllocationBufferBlock first = *(const AllocationBufferBlock*) List_beginConst(allocationBuffer->allocations);
+	AllocationBufferBlock first = *allocationBuffer->allocations.ptr;
 
 	if (size <= AllocationBufferBlock_getStart(first)) {
 
-		v = (AllocationBufferBlock) { 
+		AllocationBufferBlock v = (AllocationBufferBlock) { 
 			.start = AllocationBufferBlock_alignToBackwards(AllocationBufferBlock_getStart(first) - size, alignment), 
 			.end = AllocationBufferBlock_getStart(first),
 			.alignment = alignment
 		};
 
-		Error err = List_pushFront(&allocationBuffer->allocations, vb, alloc);
+		Error err = ListAllocationBufferBlock_pushFront(&allocationBuffer->allocations, v, alloc);
 
 		if(err.genericError)
 			return err;
@@ -264,8 +253,7 @@ Error AllocationBuffer_allocateBlock(
 
 	for (U64 i = 0; i < allocationBuffer->allocations.length; ++i) {
 
-		AllocationBufferBlock *b = (AllocationBufferBlock*) List_ptr(allocationBuffer->allocations, i);
-		v = *b;
+		AllocationBufferBlock *b = &allocationBuffer->allocations.ptrNonConst[i], v = *b;
 
 		if(!AllocationBufferBlock_isFree(v))
 			continue;
@@ -304,9 +292,7 @@ Error AllocationBuffer_allocateBlock(
 						.alignment = 1
 					};
 
-					Buffer emptyb = Buffer_createRef(&empty, sizeof(empty));
-
-					Error err = List_insert(&allocationBuffer->allocations, i + 1, emptyb, alloc);
+					Error err = ListAllocationBufferBlock_insert(&allocationBuffer->allocations, i + 1, empty, alloc);
 						
 					if(err.genericError)
 						return err;
@@ -316,8 +302,7 @@ Error AllocationBuffer_allocateBlock(
 				v.end = aligned + size;
 				v.alignment = alignment;
 
-				((AllocationBufferBlock*)allocationBuffer->allocations.ptr)[i] = v;
-
+				allocationBuffer->allocations.ptrNonConst[i] = v;
 				*result = allocationBuffer->buffer.ptr + aligned;
 				return Error_none();
 			}
@@ -337,9 +322,7 @@ Error AllocationBuffer_allocateBlock(
 					.alignment = 1
 				};
 
-				Buffer emptyb = Buffer_createRef(&empty, sizeof(empty));
-
-				Error err = List_insert(&allocationBuffer->allocations, i, emptyb, alloc);
+				Error err = ListAllocationBufferBlock_insert(&allocationBuffer->allocations, i, empty, alloc);
 				
 				if(err.genericError)
 					return err;
@@ -350,8 +333,7 @@ Error AllocationBuffer_allocateBlock(
 			v.start = aligned;
 			v.end = aligned + size;
 
-			((AllocationBufferBlock*)allocationBuffer->allocations.ptr)[i + spaceLeft] = v;
-
+			allocationBuffer->allocations.ptrNonConst[i + spaceLeft] = v;
 			*result = allocationBuffer->buffer.ptr + aligned;
 			return Error_none();
 		}
@@ -377,7 +359,7 @@ Bool AllocationBuffer_freeBlock(AllocationBuffer *allocationBuffer, const U8 *pt
 
 	for (U64 i = 0, j = allocationBuffer->allocations.length; i < j; ++i) {
 
-		AllocationBufferBlock *p = (AllocationBufferBlock*) List_ptr(allocationBuffer->allocations, i);
+		AllocationBufferBlock *p = &allocationBuffer->allocations.ptrNonConst[i];
 
 		if (!AllocationBufferBlock_isSame(*p, allocationBuffer->buffer.ptr, ptr)) 
 			continue;
@@ -392,11 +374,11 @@ Bool AllocationBuffer_freeBlock(AllocationBuffer *allocationBuffer, const U8 *pt
 		while (
 			self + 1 < allocationBuffer->allocations.length && 
 			AllocationBufferBlock_isFree(
-				*(tmp = (AllocationBufferBlock*) List_ptr(allocationBuffer->allocations, self + 1))
+				*(tmp = &allocationBuffer->allocations.ptrNonConst[self + 1])
 			)
 		) {
 			p->end = tmp->end;
-			List_popLocation(&allocationBuffer->allocations, self + 1, Buffer_createNull());
+			ListAllocationBufferBlock_popLocation(&allocationBuffer->allocations, self + 1, NULL);
 		}
 
 		//Merge freed left blocks until they're gone
@@ -404,11 +386,11 @@ Bool AllocationBuffer_freeBlock(AllocationBuffer *allocationBuffer, const U8 *pt
 		while (
 			self &&
 			AllocationBufferBlock_isFree(
-				*(tmp = (AllocationBufferBlock *)List_ptr(allocationBuffer->allocations, self - 1))
+				*(tmp = &allocationBuffer->allocations.ptrNonConst[self - 1])
 			)
 		) {
 			tmp->end = p->end;
-			List_popLocation(&allocationBuffer->allocations, self, Buffer_createNull());
+			ListAllocationBufferBlock_popLocation(&allocationBuffer->allocations, self, NULL);
 			--self;
 		}
 
@@ -416,9 +398,9 @@ Bool AllocationBuffer_freeBlock(AllocationBuffer *allocationBuffer, const U8 *pt
 
 		if (
 			allocationBuffer->allocations.length &&
-			AllocationBufferBlock_isFree(*(AllocationBufferBlock*)List_begin(allocationBuffer->allocations))
+			AllocationBufferBlock_isFree(*allocationBuffer->allocations.ptr)
 		) {
-			List_popFront(&allocationBuffer->allocations, Buffer_createNull());
+			ListAllocationBufferBlock_popFront(&allocationBuffer->allocations, NULL);
 			return true;
 		}
 
@@ -426,9 +408,9 @@ Bool AllocationBuffer_freeBlock(AllocationBuffer *allocationBuffer, const U8 *pt
 
 		if (
 			allocationBuffer->allocations.length &&
-			AllocationBufferBlock_isFree(*(AllocationBufferBlock*)List_last(allocationBuffer->allocations))
+			AllocationBufferBlock_isFree(*ListAllocationBufferBlock_last(allocationBuffer->allocations))
 		) {
-			List_popBack(&allocationBuffer->allocations, Buffer_createNull());
+			ListAllocationBufferBlock_popBack(&allocationBuffer->allocations, NULL);
 			return true;
 		}
 
@@ -439,5 +421,5 @@ Bool AllocationBuffer_freeBlock(AllocationBuffer *allocationBuffer, const U8 *pt
 }
 
 Bool AllocationBuffer_freeAll(AllocationBuffer *allocationBuffer) {
-	return !List_clear(&allocationBuffer->allocations).genericError;
+	return !ListAllocationBufferBlock_clear(&allocationBuffer->allocations).genericError;
 }

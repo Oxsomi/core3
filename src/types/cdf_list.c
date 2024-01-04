@@ -18,15 +18,12 @@
 *  This is called dual licensing.
 */
 
+#include "types/list_impl.h"
 #include "types/cdf_list.h"
 #include "types/allocator.h"
-#include "types/error.h"
-#include "types/buffer.h"
 #include "types/rand.h"
 
-typedef struct CDFValue {
-	F32 self, predecessors;
-} CDFValue;
+TListImpl(CDFValue);
 
 Error CDFList_create(
 	U64 maxElements, 
@@ -48,27 +45,25 @@ Error CDFList_create(
 
 	if(maxElements) {
 
-		result->cdf = List_createEmpty(sizeof(CDFValue));
-
 		if(isReserved)
-			_gotoIfError(clean, List_reserve(&result->cdf, maxElements, allocator))
+			_gotoIfError(clean, ListCDFValue_reserve(&result->cdf, maxElements, allocator))
 		
 		else {
-			_gotoIfError(clean, List_resize(&result->cdf, maxElements, allocator));
+			_gotoIfError(clean, ListCDFValue_resize(&result->cdf, maxElements, allocator));
 			result->totalElements = maxElements;
 		}
 	}
 
 	if (elementSize) {
 
-		result->elements = List_createEmpty(elementSize);
+		result->elements = GenericList_createEmpty(elementSize);
 
 		if(maxElements) {
 
 			if(isReserved)
-				_gotoIfError(clean, List_reserve(&result->elements, maxElements, allocator))
+				_gotoIfError(clean, GenericList_reserve(&result->elements, maxElements, allocator))
 
-			else _gotoIfError(clean, List_resize(&result->elements, maxElements, allocator))
+			else _gotoIfError(clean, GenericList_resize(&result->elements, maxElements, allocator))
 		}
 	}
 
@@ -76,14 +71,14 @@ Error CDFList_create(
 
 clean:
 	
-	List_free(&result->cdf, allocator);
-	List_free(&result->elements, allocator);
+	ListCDFValue_free(&result->cdf, allocator);
+	GenericList_free(&result->elements, allocator);
 	*result = (CDFList) { 0 };
 	return err;
 }
 
 Error CDFList_createSubset(
-	List preallocated,
+	GenericList preallocated,
 	U64 elementsOffset,
 	U64 elementCount,
 	Allocator allocator,
@@ -99,16 +94,14 @@ Error CDFList_createSubset(
 	if(!preallocated.stride || !elementCount)
 		return Error_invalidOperation(1, "CDFList_createSubset()::elementCount or preallocated.stride can't be 0");
 
-	Error err = List_createSubset(preallocated, elementsOffset, elementCount, &result->elements);
+	Error err = GenericList_createSubset(preallocated, elementsOffset, elementCount, &result->elements);
 
 	if(err.genericError)
 		return err;
 
 	result->flags |= ECDFListFlags_IsFinalized;
 
-	result->cdf = List_createEmpty(sizeof(CDFValue));
-
-	_gotoIfError(clean, List_resize(&result->cdf, elementCount, allocator));
+	_gotoIfError(clean, ListCDFValue_resize(&result->cdf, elementCount, allocator));
 	result->totalElements = elementCount;
 
 	return Error_none();
@@ -123,8 +116,8 @@ Bool CDFList_free(CDFList *list, Allocator allocator) {
 	if(!list || !list->cdf.ptr)
 		return true;
 
-	Bool success = List_free(&list->cdf, allocator);
-	success &= List_free(&list->elements, allocator);
+	Bool success = ListCDFValue_free(&list->cdf, allocator);
+	success &= GenericList_free(&list->elements, allocator);
 
 	*list = (CDFList) { 0 };
 	return success;
@@ -142,7 +135,7 @@ Bool CDFList_setProbability(CDFList *list, U64 i, F32 value, F32 *oldValue) {
 
 	U64 j = CDFList_getLinearIndex(list, i);
 
-	CDFValue *f = (CDFValue*) list->cdf.ptr;
+	CDFValue *f = list->cdf.ptrNonConst;
 	F32 v = f[j].self;
 
 	if(v == value)
@@ -159,7 +152,7 @@ Bool CDFList_setProbability(CDFList *list, U64 i, F32 value, F32 *oldValue) {
 }
 
 Bool CDFList_setElement(CDFList *list, U64 i, Buffer element) {
-	return list && !List_isConstRef(list->elements)  && !List_set(list->elements, i, element).genericError;
+	return list && !GenericList_isConstRef(list->elements)  && !GenericList_set(list->elements, i, element).genericError;
 }
 
 Bool CDFList_set(CDFList *list, U64 i, F32 value, Buffer element) {
@@ -168,9 +161,9 @@ Bool CDFList_set(CDFList *list, U64 i, F32 value, Buffer element) {
 		!list || (
 			(
 				Buffer_length(element) != list->elements.stride && 
-				!(List_isConstRef(list->elements) && !Buffer_length(element))
+				!(GenericList_isConstRef(list->elements) && !Buffer_length(element))
 			) || (
-				List_isConstRef(list->elements) && Buffer_length(element)
+				GenericList_isConstRef(list->elements) && Buffer_length(element)
 			)
 		)
 	)
@@ -184,7 +177,7 @@ Bool CDFList_set(CDFList *list, U64 i, F32 value, Buffer element) {
 	if(list && !list->elements.length)		//If elements aren't available
 		return true;
 
-	if(List_isConstRef(list->elements)) {
+	if(GenericList_isConstRef(list->elements)) {
 
 		Bool b = CDFList_setElement(list, i, element);
 
@@ -202,7 +195,7 @@ Error CDFList_pushIndex(CDFList *list, U64 i, F32 value, Buffer element, Allocat
 	if(!list)
 		return Error_nullPointer(0, "CDFList_pushIndex()::list is required");
 
-	if(List_isRef(list->elements))
+	if(GenericList_isRef(list->elements))
 		return Error_invalidOperation(0, "CDFList_pushIndex()::list can't be a ref");
 
 	if(value < 0)
@@ -213,13 +206,13 @@ Error CDFList_pushIndex(CDFList *list, U64 i, F32 value, Buffer element, Allocat
 
 	Bool isLast = list->totalElements == i;
 
-	Error err = List_insert(&list->cdf, i, Buffer_createConstRef(&value, sizeof(value)), allocator);
+	Error err = ListCDFValue_insert(&list->cdf, i, (CDFValue) { value, 0 }, allocator);
 
 	if(err.genericError)
 		return err;
 
-	if (list->elements.stride && (err = List_insert(&list->elements, i, element, allocator)).genericError) {
-		List_popLocation(&list->cdf, i, Buffer_createNull());
+	if (list->elements.stride && (err = GenericList_insert(&list->elements, i, element, allocator)).genericError) {
+		ListCDFValue_popLocation(&list->cdf, i, NULL);
 		return err;
 	}
 
@@ -237,7 +230,7 @@ Error CDFList_popIndex(CDFList *list, U64 i, Buffer element) {
 	if(!list)
 		return Error_nullPointer(0, "CDFList_popIndex()::list is required");
 
-	if(List_isRef(list->elements))
+	if(GenericList_isRef(list->elements))
 		return Error_invalidOperation(0, "CDFList_popIndex()::list can't be a ref");
 
 	if(!list->totalElements)
@@ -249,13 +242,13 @@ Error CDFList_popIndex(CDFList *list, U64 i, Buffer element) {
 	CDFValue prevProbability = (CDFValue) { 0 };
 	Bool isLast = (list->totalElements - 1) == i;
 
-	Error err = List_popLocation(&list->cdf, i, Buffer_createRef(&prevProbability, sizeof(prevProbability)));
+	Error err = ListCDFValue_popLocation(&list->cdf, i, &prevProbability);
 
 	if(err.genericError)
 		return err;
 
-	if (list->elements.stride && (err = List_popLocation(&list->elements, i, element)).genericError) {
-		List_insert(&list->cdf, i, Buffer_createConstRef(&prevProbability, sizeof(prevProbability)), (Allocator) { 0 });
+	if (list->elements.stride && (err = GenericList_popLocation(&list->elements, i, element)).genericError) {
+		ListCDFValue_insert(&list->cdf, i, prevProbability, (Allocator) { 0 });
 		return err;
 	}
 
@@ -292,7 +285,7 @@ Error CDFList_finalize(CDFList *list) {
 	if(list->flags & ECDFListFlags_IsFinalized)
 		return Error_none();
 
-	CDFValue *f = (CDFValue*) list->cdf.ptr;
+	CDFValue *f = list->cdf.ptrNonConst;
 
 	F32 total = 0;
 
@@ -350,7 +343,7 @@ Error CDFList_getElementAtOffset(CDFList *list, F32 offset, CDFListElement *elem
 
 	U64 startRegion = 0, endRegion = list->totalElements;
 	U64 j = (startRegion + endRegion) / 2;
-	CDFValue *f = (CDFValue*) list->cdf.ptr;
+	CDFValue *f = list->cdf.ptrNonConst;
 
 	for (U64 i = 0; i < 64; ++i) {
 
@@ -361,7 +354,7 @@ Error CDFList_getElementAtOffset(CDFList *list, F32 offset, CDFListElement *elem
 			*elementValue = (CDFListElement) { .chance = curr.self / list->total, .id = j };
 
 			if(list->elements.length)
-				elementValue->value = Buffer_createConstRef(List_ptrConst(list->elements, j), list->elements.stride);
+				elementValue->value = Buffer_createRefConst(GenericList_ptrConst(list->elements, j), list->elements.stride);
 
 			return Error_none();
 		}

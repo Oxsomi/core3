@@ -18,6 +18,7 @@
 *  This is called dual licensing.
 */
 
+#include "platforms/ext/listx_impl.h"
 #include "types/buffer.h"
 #include "platforms/window.h"
 #include "platforms/window_manager.h"
@@ -29,7 +30,6 @@
 #include "platforms/monitor.h"
 #include "platforms/ext/errorx.h"
 #include "platforms/ext/bufferx.h"
-#include "platforms/ext/listx.h"
 #include "platforms/ext/stringx.h"
 #include "types/time.h"
 
@@ -131,7 +131,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 				for (U64 i = 0; i < w->devices.length; ++i) {
 
-					InputDevice *dev = (InputDevice*)w->devices.ptr + i;
+					InputDevice *dev = &w->devices.ptrNonConst[i];
 
 					//Reset buttons
 
@@ -229,10 +229,8 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 			RAWINPUT *data = (RAWINPUT*) buf.ptr;
 
-			InputDevice *beg = (InputDevice*) List_begin(w->devices);
-			InputDevice *end = (InputDevice*) List_end(w->devices);
-
-			InputDevice *dev = beg;
+			InputDevice *dev = w->devices.ptrNonConst;
+			InputDevice *end = ListInputDevice_end(w->devices);
 
 			for(; dev != end; ++dev)
 				if(*(HANDLE*) dev->dataExt.ptr == data->header.hDevice)
@@ -528,10 +526,8 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 				//Find free spot in device array
 				//If this happens, we don't need to resize the array
 
-				InputDevice *beg = (InputDevice*) List_begin(w->devices);
-				InputDevice *end = (InputDevice*) List_end(w->devices);
-
-				InputDevice *dev = beg;
+				InputDevice *dev = ListInputDevice_begin(w->devices);
+				InputDevice *end = ListInputDevice_end(w->devices);
 
 				for(; dev != end; ++dev)
 					if(dev->type == EInputDeviceType_Undefined)
@@ -543,10 +539,10 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 				if(dev == end) {
 
-					//Try to allocate without allowing allocation
 					//If it fails, we can't create a new device
 
-					err = List_pushBackx(&w->devices, Buffer_createNull());
+					err = ListInputDevice_pushBackx(&w->devices, (InputDevice) { 0 });
+					dev = ListInputDevice_last(w->devices);
 					pushed = true;
 
 					if(err.genericError) {
@@ -570,7 +566,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 					);
 
 					if(pushed)
-						List_popBack(&w->devices, Buffer_createNull());
+						ListInputDevice_popBack(&w->devices, NULL);
 
 					Buffer_freex(&device.dataExt);
 					InputDevice_free(&device);
@@ -591,10 +587,8 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 				//Find our device
 
-				InputDevice *beg = (InputDevice*) List_begin(w->devices);
-				InputDevice *end = (InputDevice*) List_end(w->devices);
-
-				InputDevice *ours = beg;
+				InputDevice *ours = ListInputDevice_begin(w->devices);
+				InputDevice *end = ListInputDevice_end(w->devices);
 
 				for(; ours != end; ++ours)
 					if(*(HANDLE*) ours->dataExt.ptr == (HANDLE) lParam)
@@ -620,9 +614,9 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 				if(ours == end - 1)
 					while(
 						w->devices.length && 
-						((InputDevice*)List_last(w->devices))->type == EInputDeviceType_Undefined
+						ListInputDevice_last(w->devices)->type == EInputDeviceType_Undefined
 					)
-						if((List_popBack(&w->devices, Buffer_createNull())).genericError)
+						if((ListInputDevice_popBack(&w->devices, NULL)).genericError)
 							break;
 
 			}
@@ -650,8 +644,8 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 			//Update input
 
-			InputDevice *dit = (InputDevice*) List_begin(w->devices);
-			InputDevice *dend = (InputDevice*) List_end(w->devices);
+			InputDevice *dit = ListInputDevice_begin(w->devices);
+			InputDevice *dend = ListInputDevice_end(w->devices);
 
 			for(; dit != dend; ++dit)
 				InputDevice_markUpdate(*dit);
@@ -970,15 +964,12 @@ impl Error WindowManager_createWindowPhysical(Window *w) {
 
 	//Alloc cpu visible buffer if needed
 
-	w->devices = List_createEmpty(sizeof(InputDevice));
-	w->monitors = List_createEmpty(sizeof(Monitor));
-
 	_gotoIfError(clean, WWindow_initSize(w, w->size));
 
 	//Lock for when we are updating this window
 
-	_gotoIfError(clean, List_reservex(&w->devices,  16));
-	_gotoIfError(clean, List_reservex(&w->monitors, 16));
+	_gotoIfError(clean, ListInputDevice_reservex(&w->devices,  16));
+	_gotoIfError(clean, ListMonitor_reservex(&w->monitors, 16));
 
 	w->nativeHandle = nativeWindow;
 

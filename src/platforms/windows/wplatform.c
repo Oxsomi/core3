@@ -18,13 +18,12 @@
 *  This is called dual licensing.
 */
 
-#include "types/buffer.h"
+#include "platforms/ext/listx_impl.h"
 #include "platforms/platform.h"
 #include "platforms/log.h"
 #include "platforms/atomic.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/ext/bufferx.h"
-#include "platforms/ext/listx.h"
 #include "platforms/ext/archivex.h"
 #include "platforms/windows/wplatform_ext.h"
 
@@ -115,8 +114,11 @@ typedef struct DebugAllocation {
 
 } DebugAllocation;
 
+TList(DebugAllocation);
+TListImpl(DebugAllocation);
+
 Allocator Allocator_allocationsAllocator;
-List Allocator_allocations;						//TODO: Use hashmap here!
+ListDebugAllocation Allocator_allocations;						//TODO: Use hashmap here!
 Lock Allocator_lock;							//Multi threading safety
 
 Error allocCallbackNoCheck(void *allocator, U64 length, Buffer *output) {
@@ -171,8 +173,7 @@ Error allocCallback(void *allocator, U64 length, Buffer *output) {
 		if(acq < ELockAcquire_Success)
 			return Error_invalidState(0, "allocCallback() allocator lock failed to acquire");			//Should never happen
 
-		Buffer buf = Buffer_createConstRef(&captured, sizeof(captured));
-		Error err = List_pushBack(&Allocator_allocations, buf, Allocator_allocationsAllocator);
+		Error err = ListDebugAllocation_pushBack(&Allocator_allocations, captured, Allocator_allocationsAllocator);
 
 		if(acq == ELockAcquire_Acquired)
 			Lock_unlock(&Allocator_lock);
@@ -207,7 +208,7 @@ Bool freeCallback(void *allocator, Buffer buf) {
 
 		for (; i < Allocator_allocations.length; ++i) {
 
-			DebugAllocation *captured = &((DebugAllocation*) Allocator_allocations.ptr)[i];
+			DebugAllocation *captured = &Allocator_allocations.ptrNonConst[i];
 
 			if (captured->location == (U64)buf.ptr) {
 
@@ -242,7 +243,7 @@ Bool freeCallback(void *allocator, Buffer buf) {
 			goto clean;
 		}
 
-		List_erase(&Allocator_allocations, i);
+		ListDebugAllocation_erase(&Allocator_allocations, i);
 
 		if(acq == ELockAcquire_Acquired)
 			Lock_unlock(&Allocator_lock);
@@ -289,7 +290,7 @@ void Platform_printAllocations(U64 offset, U64 length, U64 minAllocationSize) {
 	
 		for(U64 i = offset; i < offset + length && i < Allocator_allocations.length; ++i) {
 
-			DebugAllocation *captured = &((DebugAllocation*) Allocator_allocations.ptr)[i];
+			DebugAllocation *captured = &Allocator_allocations.ptrNonConst[i];
 
 			if(captured->length < minAllocationSize)
 				continue;
@@ -352,8 +353,7 @@ int main(int argc, const char *argv[]) {
 
 	#ifndef NDEBUG
 		{
-			Allocator_allocations = List_createEmpty(sizeof(DebugAllocation));
-			Error err = List_reserve(&Allocator_allocations, 256, Allocator_allocationsAllocator);
+			Error err = ListDebugAllocation_reserve(&Allocator_allocations, 256, Allocator_allocationsAllocator);
 
 			if(err.genericError)
 				return -1;
@@ -418,12 +418,12 @@ void Platform_cleanupExt() {
 	Lock_free(&Platform_instance.virtualSectionsLock);
 
 	for (U64 i = 0; i < Platform_instance.virtualSections.length; ++i) {
-		VirtualSection *sect = ((VirtualSection*)Platform_instance.virtualSections.ptr) + i;
+		VirtualSection *sect = &Platform_instance.virtualSections.ptrNonConst[i];
 		CharString_freex(&sect->path);
 		Archive_freex(&sect->loadedData);
 	}
 
-	List_freex(&Platform_instance.virtualSections);
+	ListVirtualSection_freex(&Platform_instance.virtualSections);
 
 	//Cleanup platform ext
 
@@ -437,12 +437,17 @@ void Platform_cleanupExt() {
 
 	Allocator_reportLeaks();
 
-	List_free(&Allocator_allocations, Allocator_allocationsAllocator);
+	ListDebugAllocation_free(&Allocator_allocations, Allocator_allocationsAllocator);
 
 	SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), oldColor);
 }
 
-BOOL enumerateFiles(HMODULE mod, LPCSTR unused, LPSTR name, List *sections) {
+typedef struct EnumerateFiles {
+	ListVirtualSection *sections;
+	Bool b;
+} EnumerateFiles;
+
+BOOL enumerateFiles(HMODULE mod, LPCSTR unused, LPSTR name, EnumerateFiles *sections) {
 
 	mod; unused;
 
@@ -459,13 +464,13 @@ BOOL enumerateFiles(HMODULE mod, LPCSTR unused, LPSTR name, List *sections) {
 		_gotoIfError(clean, CharString_createCopyx(str, &copy));
 
 		VirtualSection section = (VirtualSection) { .path = copy };
-		_gotoIfError(clean, List_pushBackx(sections, Buffer_createConstRef(&section, sizeof(section))));
+		_gotoIfError(clean, ListVirtualSection_pushBackx(sections->sections, section));
 	}
 
 clean:
 
 	if(err.genericError) {
-		sections->stride = 0;		//Signal that we failed
+		sections->b = true;			//Signal that we failed
 		CharString_freex(&copy);
 	}
 
@@ -578,7 +583,7 @@ Error Platform_initExt(CharString currAppDir) {
 	
 	//Init virtual files
 
-	Platform_instance.virtualSections = List_createEmpty(sizeof(VirtualSection));
+	EnumerateFiles files = (EnumerateFiles) { .sections = &Platform_instance.virtualSections };
 
 	if (!EnumResourceNamesA(
 		NULL, RT_RCDATA,
@@ -589,11 +594,8 @@ Error Platform_initExt(CharString currAppDir) {
 		//Enum resource names also fails if we don't have any resources.
 		//To counter this, enumerateFiles sets stride to 0 if the reason it returned false was because of the function.
 
-		if(!Platform_instance.virtualSections.stride) {
-
-			Platform_instance.virtualSections.stride = sizeof(VirtualSection);
-
-			List_freex(&Platform_instance.virtualSections);
+		if(files.b) {
+			ListVirtualSection_freex(&Platform_instance.virtualSections);
 			CharString_freex(&Platform_instance.workingDirectory);
 			Buffer_freex(&platformExt);
 			return Error_invalidState(1, "Platform_initExt() EnumResourceNames failed");

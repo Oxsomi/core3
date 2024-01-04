@@ -18,6 +18,7 @@
 *  This is called dual licensing.
 */
 
+#include "platforms/ext/listx_impl.h"
 #include "platforms/ext/bmpx.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/formatx.h"
@@ -29,7 +30,27 @@
 #include "types/error.h"
 #include "types/archive.h"
 #include "types/big_int.h"
+#include "types/cdf_list.h"
+#include "types/buffer_layout.h"
 #include "platforms/platform.h"
+
+TListXImpl(DLEntry);
+TListXImpl(CharString);
+TListXBaseImpl(ListConstC8);
+
+TListXImpl(U64);
+TListXImpl(U8);		TListXImpl(U16);	TListXImpl(U32);
+TListXImpl(I8);		TListXImpl(I16);	TListXImpl(I32); TListXImpl(I64);
+TListXImpl(F32);	TListXImpl(F64);
+
+TListXImpl(Buffer);
+
+TListXImpl(CDFValue);
+TListXImpl(ArchiveEntry);
+
+TListXImpl(BufferLayoutMemberInfo);
+TListXImpl(BufferLayoutStruct);
+TListXImpl(AllocationBufferBlock);
 
 //Contains small helper functions that don't require their own .c file
 
@@ -131,50 +152,56 @@ Error DLFile_readx(Buffer file, const U32 encryptionKey[8], Bool allowLeftOverDa
 
 //List
 
-Error List_createx(U64 length, U64 stride, List *result) {
-	return List_create(length, stride, Platform_instance.alloc, result);
+Error GenericList_createx(U64 length, U64 stride, GenericList *result) {
+	return GenericList_create(length, stride, Platform_instance.alloc, result);
 }
 
-Error List_createRepeatedx(U64 length, U64 stride, Buffer data, List *result) {
-	return List_createRepeated(length, stride, data, Platform_instance.alloc, result);
+Error GenericList_createRepeatedx(U64 length, U64 stride, Buffer data, GenericList *result) {
+	return GenericList_createRepeated(length, stride, data, Platform_instance.alloc, result);
 }
 
-Error List_createCopyx(List list, List *result) {
-	return List_createCopy(list, Platform_instance.alloc, result);
+Error GenericList_createCopyx(GenericList list, GenericList *result) {
+	return GenericList_createCopy(list, Platform_instance.alloc, result);
 }
 
-Error List_createSubsetReversex(List list, U64 index, U64 length, List *result) {
-	return List_createSubsetReverse(list, index, length, Platform_instance.alloc, result);
+Error GenericList_createSubsetReversex(GenericList list, U64 index, U64 length, GenericList *result) {
+	return GenericList_createSubsetReverse(list, index, length, Platform_instance.alloc, result);
 }
 
-Error List_createReversex(List list, List *result) { 
-	return List_createSubsetReversex(list, 0, list.length, result); 
+Error GenericList_createReversex(GenericList list, GenericList *result) { 
+	return GenericList_createSubsetReversex(list, 0, list.length, result); 
 }
 
-Error List_findx(List list, Buffer buf, List *result) {
-	return List_find(list, buf, Platform_instance.alloc, result);
+Error GenericList_findx(GenericList list, Buffer buf, ListU64 *result) {
+	return GenericList_find(list, buf, Platform_instance.alloc, result);
 }
 
-Error List_eraseAllx(List *list, Buffer buf) {
-	return List_eraseAll(list, buf, Platform_instance.alloc);
+Error GenericList_eraseAllx(GenericList *list, Buffer buf) {
+	return GenericList_eraseAll(list, buf, Platform_instance.alloc);
 }
 
-Error List_insertx(List *list, U64 index, Buffer buf) {
-	return List_insert(list, index, buf, Platform_instance.alloc);
+Error GenericList_insertx(GenericList *list, U64 index, Buffer buf) {
+	return GenericList_insert(list, index, buf, Platform_instance.alloc);
 }
 
-Error List_pushAllx(List *list, List other) { return List_pushAll(list, other, Platform_instance.alloc); }
-
-Error List_insertAllx(List *list, List other, U64 offset) {
-	return List_insertAll(list, other, offset, Platform_instance.alloc);
+Error GenericList_pushAllx(GenericList *list, GenericList other) { 
+	return GenericList_pushAll(list, other, Platform_instance.alloc);
 }
 
-Error List_reservex(List *list, U64 capacity) { return List_reserve(list, capacity, Platform_instance.alloc); }
-Error List_resizex(List *list, U64 size) { return List_resize(list, size, Platform_instance.alloc); }
-Error List_shrinkToFitx(List *list) { return List_shrinkToFit(list, Platform_instance.alloc); }
+Error GenericList_insertAllx(GenericList *list, GenericList other, U64 offset) {
+	return GenericList_insertAll(list, other, offset, Platform_instance.alloc);
+}
 
-Error List_pushBackx(List *list, Buffer buf) { return List_pushBack(list, buf, Platform_instance.alloc); }
-Bool List_freex(List *result) { return List_free(result, Platform_instance.alloc); }
+Error GenericList_reservex(GenericList *list, U64 capacity) { 
+	return GenericList_reserve(list, capacity, Platform_instance.alloc);
+}
+
+Error GenericList_resizex(GenericList *list, U64 size) { return GenericList_resize(list, size, Platform_instance.alloc); }
+Error GenericList_shrinkToFitx(GenericList *list) { return GenericList_shrinkToFit(list, Platform_instance.alloc); }
+
+Error GenericList_pushBackx(GenericList *l, Buffer buf) { return GenericList_pushBack(l, buf, Platform_instance.alloc); }
+Error GenericList_pushFrontx(GenericList *l, Buffer buf) { return GenericList_pushFront(l, buf, Platform_instance.alloc); }
+Bool GenericList_freex(GenericList *result) { return GenericList_free(result, Platform_instance.alloc); }
 
 //BigInt
 
@@ -390,27 +417,27 @@ Error CharString_replaceLastStringInsensitivex(CharString *s, CharString search,
 	return CharString_replaceLastStringInsensitive(s, search, replace, Platform_instance.alloc);
 }
 
-Error CharString_findAllx(CharString s, C8 c, EStringCase caseSensitive, List *result) {
+Error CharString_findAllx(CharString s, C8 c, EStringCase caseSensitive, ListU64 *result) {
 	return CharString_findAll(s, c, Platform_instance.alloc, caseSensitive, result);
 }
 
-Error CharString_findAllStringx(CharString s, CharString other, EStringCase caseSensitive, List *result) {
+Error CharString_findAllStringx(CharString s, CharString other, EStringCase caseSensitive, ListU64 *result) {
 	return CharString_findAllString(s, other, Platform_instance.alloc, caseSensitive, result);
 }
 
-Error CharString_findAllSensitivex(CharString s, C8 c, List *result) {
+Error CharString_findAllSensitivex(CharString s, C8 c, ListU64 *result) {
 	return CharString_findAllSensitive(s, c, Platform_instance.alloc, result);
 }
 
-Error CharString_findAllInsensitivex(CharString s, C8 c, List *result) {
+Error CharString_findAllInsensitivex(CharString s, C8 c, ListU64 *result) {
 	return CharString_findAllInsensitive(s, c, Platform_instance.alloc, result);
 }
 
-Error CharString_findAllStringSensitivex(CharString s, CharString other, List *result) {
+Error CharString_findAllStringSensitivex(CharString s, CharString other, ListU64 *result) {
 	return CharString_findAllStringSensitive(s, other, Platform_instance.alloc, result);
 }
 
-Error CharString_findAllStringInsensitivex(CharString s, CharString other, List *result) {
+Error CharString_findAllStringInsensitivex(CharString s, CharString other, ListU64 *result) {
 	return CharString_findAllStringInsensitive(s, other, Platform_instance.alloc, result);
 }
 

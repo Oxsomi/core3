@@ -100,7 +100,7 @@ void Time_format(Ns time, TimeFormat timeString, Bool isLocalTime) {
 
 	Buffer_copy(
 		Buffer_createRef(timeString, _SHORTSTRING_LEN), 
-		Buffer_createConstRef(FORMAT_STR, sizeof(FORMAT_STR))
+		Buffer_createRefConst(FORMAT_STR, sizeof(FORMAT_STR))
 	);
 
 	if(!t)

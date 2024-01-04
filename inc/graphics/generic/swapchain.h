@@ -25,7 +25,6 @@
 
 typedef RefPtr GraphicsDeviceRef;
 typedef struct Error Error;
-typedef struct List List;
 typedef struct Window Window;
 typedef enum EWindowFormat EWindowFormat;
 

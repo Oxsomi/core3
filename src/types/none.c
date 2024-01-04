@@ -299,7 +299,7 @@
 			return I32x4_zero();
 
 		I32x4 result = I32x4_zero();
-		Buffer_copy(Buffer_createRef((U8*)&result + bytes, sizeof(result) - bytes), Buffer_createConstRef(&a, sizeof(a)));
+		Buffer_copy(Buffer_createRef((U8*)&result + bytes, sizeof(result) - bytes), Buffer_createRefConst(&a, sizeof(a)));
 
 		return result;
 	}
@@ -313,7 +313,7 @@
 			return I32x4_zero();
 
 		I32x4 result = I32x4_zero();
-		Buffer_copy(Buffer_createRef(&result, sizeof(result)), Buffer_createConstRef((U8*)&a + bytes, sizeof(a) - bytes));
+		Buffer_copy(Buffer_createRef(&result, sizeof(result)), Buffer_createRefConst((U8*)&a + bytes, sizeof(a) - bytes));
 
 		return result;
 	}

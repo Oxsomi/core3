@@ -18,10 +18,11 @@
 *  This is called dual licensing.
 */
 
+#include "platforms/ext/listx_impl.h"
 #include "graphics/vulkan/vk_instance.h"
-#include "platforms/ext/listx.h"
 #include "types/error.h"
 #include "types/list.h"
+#include "types/string.h"
 #include "types/buffer.h"
 
 const C8 *vkValidation = "VK_LAYER_KHRONOS_validation";
@@ -29,21 +30,19 @@ const C8 *vkApiDump = "VK_LAYER_LUNARG_api_dump";
 
 //#define _GRAPHICS_VERBOSE_DEBUGGING
 
-Error VkGraphicsInstance_getLayers(List *layers) {
+Error VkGraphicsInstance_getLayers(ListConstC8 *layers) {
 
 	layers;
 
 	#ifndef NDEBUG
 
-		Buffer tmp = Buffer_createConstRef(&vkValidation, sizeof(vkValidation));
-		Error err = List_pushBackx(layers, tmp);
+		Error err = ListConstC8_pushBackx(layers, vkValidation);
 
 		if(err.genericError)
 			return err;
 
 		#ifdef _GRAPHICS_VERBOSE_DEBUGGING
-			tmp = Buffer_createConstRef(&vkApiDump, sizeof(vkApiDump));
-			return List_pushBackx(layers, tmp);
+			return ListConstC8_pushBackx(layers, vkApiDump);
 		#else
 			return Error_none();
 		#endif

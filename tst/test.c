@@ -134,14 +134,12 @@ int main() {
 	_gotoIfError(clean, Buffer_createZeroBits(256, alloc, &emp));
 	_gotoIfError(clean, Buffer_createOneBits(256, alloc, &full));
 
-	Bool res = false;
-
-	if (Buffer_eq(emp, full, &res).genericError || res)
+	if (Buffer_eq(emp, full))
 		_gotoIfError(clean, Error_invalidOperation(0, "Buffer_eq test failed"));
 
 	Buffer_bitwiseNot(emp);
 
-	if (Buffer_eq(emp, full, &res).genericError || !res)
+	if (!Buffer_eq(emp, full))
 		_gotoIfError(clean, Error_invalidOperation(1, "!Buffer_eq test failed"));
 
 	Buffer_bitwiseNot(emp);
@@ -151,7 +149,7 @@ int main() {
 
 	Buffer_bitwiseNot(emp);
 
-	if (Buffer_neq(emp, full, &res).genericError || res)
+	if (Buffer_neq(emp, full))
 		_gotoIfError(clean, Error_invalidOperation(2, "Buffer_neq test failed"));
 
 	Buffer_free(&emp, alloc);
@@ -280,7 +278,7 @@ int main() {
 
 	for (U64 i = 0; i < sizeof(TEST_CRC32C) / sizeof(TEST_CRC32C[0]); ++i) {
 
-		Buffer buf = Buffer_createConstRef(
+		Buffer buf = Buffer_createRefConst(
 			TEST_CRC32C[i].str, CharString_calcStrLen(TEST_CRC32C[i].str, U64_MAX)
 		);
 
@@ -298,7 +296,7 @@ int main() {
 
 	printf("Testing Buffer SHA256\n");
 
-	static const U32 RESULTS[][8] = {
+	static const U32 resultHashes[][8] = {
 		{ 0xE3B0C442, 0x98FC1C14, 0x9AFBF4C8, 0x996FB924, 0x27AE41E4, 0x649B934C, 0xA495991B, 0x7852B855 },	
 		{ 0xBA7816BF, 0x8F01CFEA, 0x414140DE, 0x5DAE2223, 0xB00361A3, 0x96177A9C, 0xB410FF61, 0xF20015AD },
 		{ 0xCDC76E5C, 0x9914FB92, 0x81A1C7E2, 0x84D73E67, 0xF1809A48, 0xA497200E, 0x046D39CC, 0xC7112CD0 },
@@ -383,12 +381,7 @@ int main() {
 		U32 result[8];
 		Buffer_sha256(CharString_bufferConst(inputs[i]), result);
 	
-		Bool b = false;
-		Buffer_eq(
-			Buffer_createConstRef(result, 32), 
-			Buffer_createConstRef(RESULTS[i], 32), 
-			&b
-		);
+		Bool b = Buffer_eq(Buffer_createRefConst(result, 32), Buffer_createRefConst(resultHashes[i], 32));
 	
 		if(!b)
 			_gotoIfError(clean, Error_invalidOperation(4, "Buffer_sha256 test failed"));
@@ -435,10 +428,9 @@ int main() {
 		}
 	};
 
-	_gotoIfError(clean, List_createConstRef(
-		(const U8*) transformMembers, 
+	_gotoIfError(clean, ListBufferLayoutMemberInfo_createRefConst(
+		transformMembers, 
 		sizeof(transformMembers) / sizeof(transformMembers[0]), 
-		sizeof(transformMembers[0]),
 		&transformStructInfo.members
 	));
 
@@ -509,10 +501,9 @@ int main() {
 		}
 	};
 
-	_gotoIfError(clean, List_createConstRef(
-		(const U8*) cameraMembers, 
+	_gotoIfError(clean, ListBufferLayoutMemberInfo_createRefConst(
+		cameraMembers, 
 		sizeof(cameraMembers) / sizeof(cameraMembers[0]), 
-		sizeof(cameraMembers[0]),
 		&cameraStructInfo.members
 	));
 
@@ -534,16 +525,11 @@ int main() {
 	};
 
 	U32 cameraArrayLen = 10;
+	_gotoIfError(clean, ListU32_createRefConst(&cameraArrayLen, 1, &cameraStructArrayMembers[0].arraySizes));
 
-	_gotoIfError(clean, List_createConstRef(
-		(const U8*) &cameraArrayLen, 1, sizeof(cameraArrayLen),
-		&cameraStructArrayMembers[0].arraySizes
-	));
-
-	_gotoIfError(clean, List_createConstRef(
-		(const U8*) cameraStructArrayMembers, 
+	_gotoIfError(clean, ListBufferLayoutMemberInfo_createRefConst(
+		cameraStructArrayMembers, 
 		sizeof(cameraStructArrayMembers) / sizeof(cameraStructArrayMembers[0]), 
-		sizeof(cameraStructArrayMembers[0]),
 		&cameraStructArrayInfo.members
 	));
 
@@ -1003,7 +989,7 @@ int main() {
 		//Fetch iv
 
 		I32x4 iv = I32x4_zero();
-		Buffer_copy(Buffer_createRef(&iv, 12), Buffer_createConstRef(ivs[i], 12));
+		Buffer_copy(Buffer_createRef(&iv, 12), Buffer_createRefConst(ivs[i], 12));
 
 		//Copy into tmp variable to be able to modify it instead of using const mem
 
@@ -1033,7 +1019,7 @@ int main() {
 		I32x4 tmpTag = I32x4_zero();
 		Buffer_copy(
 			Buffer_createRef(&tmpTag, sizeof(tmpTag)),
-			Buffer_createConstRef(results[i].ptr + CharString_length(tmp), sizeof(I32x4))
+			Buffer_createRefConst(results[i].ptr + CharString_length(tmp), sizeof(I32x4))
 		);
 
 		if(I32x4_any(I32x4_neq(tag, tmpTag)))
@@ -1041,15 +1027,9 @@ int main() {
 
 		//Check result
 
-		Bool b = false;
-
-		_gotoIfError(
-			clean, 
-			Buffer_eq(
-				Buffer_createConstRef(results[i].ptr, CharString_length(testPlainText[i])),
-				CharString_bufferConst(tmp),
-				&b
-			)
+		Bool b = Buffer_eq(
+			Buffer_createRefConst(results[i].ptr, CharString_length(testPlainText[i])),
+			CharString_bufferConst(tmp)
 		);
 
 		if(!b)
@@ -1068,15 +1048,9 @@ int main() {
 
 		//Check result
 
-		b = false;
-
-		_gotoIfError(
-			clean, 
-			Buffer_eq(
-				CharString_bufferConst(testPlainText[i]),
-				CharString_bufferConst(tmp),
-				&b
-			)
+		b = Buffer_eq(
+			CharString_bufferConst(testPlainText[i]),
+			CharString_bufferConst(tmp)
 		);
 
 		if(!b)

@@ -21,6 +21,7 @@
 #pragma once
 #include "command_structs.h"
 #include "pipeline_structs.h"
+#include "platforms/ref_ptr.h"
 
 typedef struct CharString CharString;
 typedef struct GraphicsDevice GraphicsDevice;
@@ -33,22 +34,27 @@ typedef struct DeviceResourceVersion {
 
 } DeviceResourceVersion;
 
+TList(CommandOpInfo);
+TList(TransitionInternal);
+TList(CommandScope);
+TList(DeviceResourceVersion);
+
 typedef struct CommandList {
 
 	GraphicsDeviceRef *device;
 
-	Buffer data;						//Data for all commands
-	List commandOps;					//List<CommandOpInfo>
-	List resources;						//List<RefPtr*> resources used by this command list (TODO: HashSet<RefPtr*>)
+	Buffer data;									//Data for all commands
+	ListCommandOpInfo commandOps;
+	ListRefPtr resources;							//Resources used by this command list (TODO: HashSet<RefPtr*>)
 
-	List transitions;					//<TransitionInternal> Transitions that are pending
-	List activeScopes;					//<CommandScope> Scopes that were successfully inserted
+	ListTransitionInternal transitions;				//Transitions that are pending
+	ListCommandScope activeScopes;					//Scopes that were successfully inserted
 
 	U8 padding0[3];
 	Bool allowResize;
 	ECommandListState state;
 
-	Lock lock;							//Begin locks this, end unlocks this.
+	Lock lock;										//Begin locks this, end unlocks this.
 
 	U64 next;
 
@@ -58,7 +64,7 @@ typedef struct CommandList {
 
 	ImageAndRange boundImages[8];
 
-	U16 tempStateFlags;					//ECommandStateFlags
+	U16 tempStateFlags;								//ECommandStateFlags
 	U8 debugRegionStack;
 	U8 boundImageCount;
 	U32 lastCommandId;
@@ -70,9 +76,9 @@ typedef struct CommandList {
 	U32 lastScopeId;
 	EDepthStencilFormat boundDepthFormat;
 	
-	List pendingTransitions;			//<TransitionInternal>
+	ListTransitionInternal pendingTransitions;
 
-	List activeSwapchains;				//<DeviceResourceVersion>, Locks swapchain when it's first inserted.
+	ListDeviceResourceVersion activeSwapchains;		//Locks swapchain when it's first inserted
 
 } CommandList;
 
@@ -113,15 +119,27 @@ Error CommandListRef_clearImagef(CommandListRef *commandList, F32x4 color, Image
 Error CommandListRef_clearImagei(CommandListRef *commandList, I32x4 color, ImageRange range, RefPtr *image);
 Error CommandListRef_clearImageu(CommandListRef *commandList, const U32 color[4], ImageRange range, RefPtr *image);
 
-Error CommandListRef_clearImages(CommandListRef *commandList, List clearImages);		//<ClearImageCmd>
+TList(ClearImageCmd);
 
+Error CommandListRef_clearImages(CommandListRef *commandList, ListClearImageCmd clearImages);
+
+//TList(ClearDepthStencilCmd);
+//
 //Error CommandListRef_clearDepthStencil(CommandListRef *commandList, F32 depth, U8 stencil, ImageRange image);
-//Error CommandListRef_clearDepthStencils(CommandListRef *commandList, List clearDepthStencils);	//<ClearDepthStencilCmd>
+//Error CommandListRef_clearDepthStencils(CommandListRef *commandList, ListClearDepthStencilCmd clearDepthStencils);
 
 //Draw calls and dispatches
 
-//List<Transition>, List<CommandScopeDependency>
-Error CommandListRef_startScope(CommandListRef *commandList, List transitions, U32 id, List dependencies);
+TList(Transition);
+TList(CommandScopeDependency);
+
+Error CommandListRef_startScope(
+	CommandListRef *commandList, 
+	ListTransition transitions, 
+	U32 id, 
+	ListCommandScopeDependency dependencies
+);
+
 Error CommandListRef_endScope(CommandListRef *commandList);
 
 Error CommandListRef_setPipeline(CommandListRef *commandList, PipelineRef *pipeline, EPipelineType type);
@@ -181,12 +199,14 @@ Error CommandListRef_dispatchIndirect(CommandListRef *commandList, DeviceBufferR
 
 //DynamicRendering feature
 
+TList(AttachmentInfo);
+
 Error CommandListRef_startRenderExt(
 	CommandListRef *commandList, 
 	I32x2 offset, 
 	I32x2 size, 
-	List colors,				//<AttachmentInfo>
-	List depthStencil			//<AttachmentInfo>
+	ListAttachmentInfo colors,
+	ListAttachmentInfo depthStencil
 );
 
 Error CommandListRef_endRenderExt(CommandListRef *commandList);

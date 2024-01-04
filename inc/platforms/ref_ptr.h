@@ -21,6 +21,7 @@
 #pragma once
 #include "types/types.h"
 #include "types/allocator.h"
+#include "types/list.h"
 #include "atomic.h"
 
 typedef Bool (*ObjectFreeFunc)(void *ptr, Allocator allocator);
@@ -40,6 +41,8 @@ typedef struct RefPtr {
 
 } RefPtr;
 
+TListNamed(RefPtr*, ListRefPtr);
+
 Error RefPtr_create(U32 objectLength, Allocator alloc, ObjectFreeFunc free, ETypeId type, RefPtr **result);
 Error RefPtr_createx(U32 objectLength, ObjectFreeFunc free, ETypeId type, RefPtr **result);
 
@@ -51,3 +54,5 @@ Bool RefPtr_dec(RefPtr **ptr);	//Clears pointer if it's gone
 //Signifies that the RefPtr will not need inc/dec, because the owner will manually ensure 
 //that the ref is removed before it's important.
 typedef RefPtr WeakRefPtr;
+
+TListNamed(WeakRefPtr*, ListWeakRefPtr);

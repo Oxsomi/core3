@@ -19,162 +19,113 @@
 */
 
 #pragma once
-#include "types.h"
+#include "generic_list.h"
 
-typedef struct Buffer Buffer;
-typedef struct Allocator Allocator;
-typedef struct Error Error;
-typedef enum EStringCase EStringCase;
+//Extended TList functions
 
-//A POD list
-//(Not applicable for types that resize)
-//Allows both const and non const
+#ifndef TListX
+	#define TListX(Name)
+#endif
 
-typedef struct List {
-	const U8 *ptr;
-	U64 stride;
-	U64 length;
-	U64 capacityAndRefInfo;		//If capacityAndRefInfo is 0 or U64_MAX, it indicates a ref
-} List;
+//TList is a simple wrapper around GenericList to make it easier and safer to use.
+//GenericList doesn't care about the type (only the stride), TList does care about type too.
+//GenericList[] can be useful when handling lots of arrays of different types (though it adds a U64 for the stride each).
 
-#define TList(T) List
+GenericList ListVoid_toList(ListVoid ptr, U64 stride);
+Error ListVoid_fromList(GenericList list, U64 stride, ListVoid *result);
 
-typedef ECompareResult (*CompareFunction)(const void *aPtr, const void *bPtr);
+#define TListNamedBase(Name) 																			\
+																										\
+GenericList Name##_toList(Name t);																		\
+Error Name##_fromList(GenericList list, Name *result); 													\
+																										\
+Bool Name##_isConstRef(Name l);																			\
+Bool Name##_isRef(Name l);																				\
+Bool Name##_empty(Name l);																				\
+Bool Name##_any(Name l);																				\
+U64  Name##_bytes(Name l);																				\
+U64  Name##_allocatedBytes(Name l);																		\
+U64  Name##_stride();																					\
+																										\
+Buffer Name##_buffer(Name l);																			\
+Buffer Name##_bufferConst(Name l);																		\
+Buffer Name##_allocatedBuffer(Name l);																	\
+Buffer Name##_allocatedBufferConst(Name l);																\
+																										\
+Name##_Type *Name##_begin(Name l);																		\
+Name##_Type *Name##_end(Name l);																		\
+Name##_Type *Name##_last(Name l);																		\
+Name##_Type *Name##_ptr(Name l, U64 i);																	\
+Name##_Type Name##_at(Name l, U64 i);																	\
+																										\
+const Name##_Type *Name##_beginConst(Name l);															\
+const Name##_Type *Name##_endConst(Name l);																\
+const Name##_Type *Name##_lastConst(Name l);															\
+const Name##_Type *Name##_ptrConst(Name l, U64 i);														\
+Name##_Type Name##_atConst(Name l, U64 i);																\
+																										\
+Error Name##_swap(Name l, U64 i, U64 j);																\
+Bool Name##_reverse(Name l);																			\
+Bool Name##_sortCustom(Name l, CompareFunction func);													\
+																										\
+Bool Name##_eq(Name a, Name b);																			\
+Bool Name##_neq(Name a, Name b);																		\
+																										\
+Error Name##_createFromBuffer(Buffer buf, Name *result);												\
+Error Name##_createSubset(Name l, U64 index, U64 length, Name *result);									\
+Error Name##_create(U64 length, Allocator alloc, Name *result);											\
+Error Name##_createCopy(Name l, Allocator alloc, Name *result);											\
+Error Name##_createRepeated(U64 length, Name##_Type data, Allocator alloc, Name *result);				\
+Error Name##_createSubsetReverse(Name l, U64 index, U64 length, Allocator alloc, Name *result);			\
+Error Name##_createReverse(Name l, Allocator alloc, Name *result);										\
+Error Name##_createRef(Name##_Type *ptr, U64 length, Name *result);										\
+Error Name##_createRefConst(const Name##_Type *ptr, U64 length, Name *result);							\
+																										\
+Error Name##_set(Name l, U64 index, Name##_Type t);														\
+Error Name##_get(Name l, U64 index, Name##_Type *t);													\
+																										\
+Bool Name##_contains(Name l, Name##_Type t, U64 offset);												\
+U64 Name##_count(Name l, Name##_Type t);																\
+U64 Name##_findFirst(Name l, Name##_Type t, U64 index);													\
+U64 Name##_findLast(Name l, Name##_Type t, U64 index);													\
+																										\
+Error Name##_copy(Name src, U64 srcOffset, Name dst, U64 dstOffset, U64 count);							\
+Error Name##_find(Name l, Name##_Type t, Allocator allocator, ListU64 *result);							\
+																										\
+Error Name##_popBack(Name *l, Name##_Type *output);														\
+Error Name##_popFront(Name *l, Name##_Type *output);													\
+Error Name##_popLocation(Name *l, U64 index, Name##_Type *output);										\
+																										\
+Error Name##_pushBack(Name *l, Name##_Type t, Allocator allocator);										\
+Error Name##_pushFront(Name *l, Name##_Type t, Allocator allocator);									\
+																										\
+Error Name##_reserve(Name *l, U64 capacity, Allocator allocator);										\
+Error Name##_resize(Name *l, U64 size, Allocator allocator);											\
+Error Name##_shrinkToFit(Name *l, Allocator allocator);													\
+																										\
+Error Name##_eraseFirst(Name *l, Name##_Type t, U64 offset);											\
+Error Name##_eraseLast(Name *l, Name##_Type t, U64 offset);												\
+Error Name##_eraseAll(Name *l, Name##_Type t, Allocator allocator);										\
+Error Name##_erase(Name *l, U64 index);																	\
+Error Name##_eraseAllIndices(Name *l, ListU64 indices);													\
+																										\
+Error Name##_insert(Name *l, U64 index, Name##_Type t, Allocator allocator);							\
+																										\
+Error Name##_pushAll(Name *l, Name other, Allocator allocator);											\
+Error Name##_insertAll(Name *l, Name other, U64 offset, Allocator allocator);							\
+																										\
+Error Name##_clear(Name *l);																			\
+Bool Name##_free(Name *l, Allocator allocator);															\
+																										\
+TListX(Name)
 
-Bool List_isConstRef(List l);
-Bool List_isRef(List l);
+#define TListNamed(T, Name) TListDefinition(T, Name); TListNamedBase(Name);
+#define TList(T) TListNamed(T, List##T)
+#define TListSort(T) TList(T);						Bool List##T##_sort(List##T l);
 
-Bool List_empty(List l);
-Bool List_any(List l);
-U64  List_bytes(List l);
-U64  List_allocatedBytes(List l);
+TListNamedBase(ListU64);
+TListSort(U8); TListSort(U16); TListSort(U32);
+TListSort(I8); TListSort(I16); TListSort(I32); TListSort(I64);
+TListSort(F32); TListSort(F64);
 
-U64 List_capacity(List l);
-
-Buffer List_buffer(List l);
-Buffer List_allocatedBuffer(List l);
-
-Buffer List_bufferConst(List l);
-Buffer List_allocatedBufferConst(List l);
-
-U8 *List_begin(List list);
-U8 *List_end(List list);
-U8 *List_last(List list);
-
-const U8 *List_beginConst(List list);
-const U8 *List_endConst(List list);
-const U8 *List_lastConst(List list);
-
-#define List_lastT(T, list) ((T*)List_last(list))
-#define List_lastConstT(T, list) ((T*)List_lastConst(list))
-
-const U8 *List_ptrConst(List list, U64 elementOffset);
-U8 *List_ptr(List list, U64 elementOffset);
-
-#define List_ptrT(T, list, elementOffset) ((T*) List_ptr(list, elementOffset))
-#define List_ptrConstT(T, list, elementOffset) ((T*) List_ptrConst(list, elementOffset))
-
-Buffer List_at(List list, U64 offset);
-Buffer List_atConst(List list, U64 offset);
-
-Error List_eq(List a, List b, Bool *result);
-Error List_neq(List a, List b, Bool *result);
-
-List List_createEmpty(U64 stride);
-Error List_createFromBuffer(Buffer buf, U64 stride, List *result);
-Error List_createSubset(List list, U64 index, U64 length, List *result);
-
-Error List_create(U64 length, U64 stride, Allocator allocator, List *result);
-Error List_createCopy(List list, Allocator allocator, List *result);
-
-Error List_createRepeated(
-	U64 length, 
-	U64 stride, 
-	Buffer data, 
-	Allocator allocator, 
-	List *result
-);
-
-Error List_createSubsetReverse(
-	List list, 
-	U64 index,
-	U64 length, 
-	Allocator allocator, 
-	List *result
-);
-
-Error List_createReverse(List list, Allocator allocator, List *result);
-
-Error List_createRef(U8 *ptr, U64 length, U64 stride, List *result);
-Error List_createConstRef(const U8 *ptr, U64 length, U64 stride, List *result);
-
-Error List_set(List list, U64 index, Buffer buf);
-Error List_get(List list, U64 index, Buffer *result);
-
-Error List_copy(
-	List src, 
-	U64 srcOffset, 
-	List dst, 
-	U64 dstOffset, 
-	U64 count
-);
-
-Error List_swap(List list, U64 i, U64 j);
-Bool List_reverse(List list);
-
-//Find all occurrences in list
-//Returns U64[]
-//
-Error List_find(List list, Buffer buf, Allocator allocator, List *result);
-
-U64 List_findFirst(List list, Buffer buf, U64 index);
-U64 List_findLast(List list, Buffer buf, U64 index);
-U64 List_count(List list, Buffer buf);
-
-Bool List_contains(List list, Buffer buf, U64 offset);
-
-Error List_eraseFirst(List *list, Buffer buf, U64 offset);
-Error List_eraseLast(List *list, Buffer buf, U64 offset);
-Error List_eraseAll(List *list, Buffer buf, Allocator allocator);
-Error List_erase(List *list, U64 index);
-Error List_eraseAllIndices(List *list, List indices);			//Sorts indices (U64[])
-Error List_insert(List *list, U64 index, Buffer buf, Allocator allocator);
-Error List_pushAll(List *list, List other, Allocator allocator);
-Error List_insertAll(List *list, List other, U64 offset, Allocator allocator);
-
-Error List_reserve(List *list, U64 capacity, Allocator allocator);
-Error List_resize(List *list, U64 size, Allocator allocator);
-
-Error List_shrinkToFit(List *list, Allocator allocator);
-
-Bool List_sortU64(List list);
-Bool List_sortU32(List list);
-Bool List_sortU16(List list);
-Bool List_sortU8(List list);
-
-Bool List_sortI64(List list);
-Bool List_sortI32(List list);
-Bool List_sortI16(List list);
-Bool List_sortI8(List list);
-
-Bool List_sortF32(List list);
-Bool List_sortF64(List list);
-
-Bool List_sortString(List list, EStringCase stringCase);
-Bool List_sortStringSensitive(List list);
-Bool List_sortStringInsensitive(List list);
-
-Bool List_sortCustom(List list, CompareFunction func);
-
-//Expects buf to be sized to stride (to allow copying to the stack)
-
-Error List_popBack(List *list, Buffer output);
-Error List_popFront(List *list, Buffer output);
-Error List_popLocation(List *list, U64 index, Buffer buf);
-
-Error List_pushBack(List *list, Buffer buf, Allocator allocator);
-Error List_pushFront(List *list, Buffer buf, Allocator allocator);
-
-Error List_clear(List *list);		//Doesn't remove data, only makes it unavailable
-
-Bool List_free(List *result, Allocator allocator);
+TList(Buffer);

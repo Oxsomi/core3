@@ -25,10 +25,16 @@
 //normal block buffer if it can't allocate in O(1) (e.g. space at back or front is unavailable).
 //This means it can be used for both purposes.
 
+typedef struct AllocationBufferBlock {
+	U64 start, end, alignment;
+} AllocationBufferBlock;
+
+TList(AllocationBufferBlock);
+
 typedef struct AllocationBuffer {
 
-	Buffer buffer;			//Our data buffer
-	List allocations;		//List<[U64 start, U64 end]>. Top bit of start indicates the block is free
+	Buffer buffer;							//Our data buffer
+	ListAllocationBufferBlock allocations;
 
 } AllocationBuffer;
 

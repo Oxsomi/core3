@@ -18,6 +18,7 @@
 *  This is called dual licensing.
 */
 
+#include "platforms/ext/listx.h"
 #include "types/buffer.h"
 #include "types/error.h"
 #include "types/string.h"
@@ -29,7 +30,6 @@
 #include "platforms/ext/stringx.h"
 #include "platforms/ext/errorx.h"
 #include "platforms/ext/archivex.h"
-#include "platforms/ext/listx.h"
 #include "platforms/file.h"
 #include "platforms/log.h"
 #include "cli.h"
@@ -388,13 +388,13 @@ clean:
 
 //Printing an entry
 
-Error collectArchiveEntries(FileInfo info, List *arg) {
+Error collectArchiveEntries(FileInfo info, ListCharString *arg) {
 
 	CharString tmp = CharString_createNull();
 	Error err = Error_none();
 
 	_gotoIfError(clean, CharString_createCopyx(info.path, &tmp));
-	_gotoIfError(clean, List_pushBackx(arg, Buffer_createConstRef(&tmp, sizeof(tmp))));
+	_gotoIfError(clean, ListCharString_pushBackx(arg, tmp));
 
 	tmp = CharString_createNull();		//Belongs to list now
 
@@ -472,7 +472,7 @@ Bool CLI_showFile(ParsedArgs args, Buffer b, U64 start, U64 length, Bool isAscii
 			goto clean;
 		}
 
-		Buffer subBuffer = Buffer_createConstRef(b.ptr + start, length);
+		Buffer subBuffer = Buffer_createRefConst(b.ptr + start, length);
 		_gotoIfError(clean, File_write(subBuffer, out, 1 * SECOND));
 	}
 
@@ -720,7 +720,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 		case CAHeader_MAGIC: {
 		
 			CAFile file = (CAFile) { 0 };
-			List strings = List_createEmpty(sizeof(CharString));
+			ListCharString strings = { 0 };
 			U64 baseCount = 0;
 
 			Bool madeFile = false;
@@ -749,7 +749,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 					}
 				}
 
-				ArchiveEntry e = ((const ArchiveEntry*)file.archive.entries.ptr)[index];
+				ArchiveEntry e = file.archive.entries.ptr[index];
 
 				//Output it to a folder on disk was requested
 
@@ -821,7 +821,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 			//Sort to ensure the subdirectories are correct
 
-			if(!List_sortStringInsensitive(strings))
+			if(!ListCharString_sortInsensitive(strings))
 				_gotoIfError(cleanCa, Error_invalidOperation(0, "CLI_inspectData() sort strings (oiCA) failed"));
 
 			//Process all and print
@@ -838,8 +838,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 			for(U64 i = start; i < end && i < strings.length; ++i) {
 
-				CharString pathi = ((const CharString*)strings.ptr)[i];
-
+				CharString pathi = strings.ptr[i];
 				U64 parentCount = CharString_countAllSensitive(pathi, '/');
 
 				U64 v = Archive_getIndexx(file.archive, pathi);
@@ -878,10 +877,10 @@ Bool CLI_inspectData(ParsedArgs args) {
 				File_remove(out, 1 * SECOND);
 
 			for(U64 i = 0; i < strings.length; ++i)
-				CharString_freex((CharString*)strings.ptr + i);
+				CharString_freex(strings.ptrNonConst + i);
 
 			CAFile_freex(&file);
-			List_freex(&strings);
+			ListCharString_freex(&strings);
 			CharString_freex(&tmp);
 
 			if(err.genericError)
@@ -923,7 +922,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 					goto cleanDl;
 				}
 
-				DLEntry e = ((const DLEntry*)file.entries.ptr)[entryI];
+				DLEntry e = file.entries.ptr[entryI];
 
 				Bool isAscii = file.settings.dataType == EDLDataType_Ascii;
 				Buffer b = 
@@ -940,7 +939,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 				for (U64 i = start; i < end && i < file.entries.length; ++i) {
 
-					DLEntry entryi = ((const DLEntry*)file.entries.ptr)[i];
+					DLEntry entryi = file.entries.ptr[i];
 
 					U64 entrySize = 
 						file.settings.dataType == EDLDataType_Ascii ? CharString_length(entryi.entryString) : 

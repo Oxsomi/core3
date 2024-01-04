@@ -32,8 +32,15 @@ typedef enum ECDFListFlags {
 	ECDFListFlags_IsFinalized		= 1 << 0			//If the total is known
 } ECDFListFlags;
 
+typedef struct CDFValue {
+	F32 self, predecessors;
+} CDFValue;
+
+TList(CDFValue);
+
 typedef struct CDFList {
-	List cdf, elements;
+	ListCDFValue cdf;
+	GenericList elements;
 	F32 total;
 	ECDFListFlags flags;
 	U64 totalElements;
@@ -57,7 +64,7 @@ Error CDFList_create(
 //Keep in mind that since the probabilities aren't available, you'd have to CDFList_setProbability.
 
 Error CDFList_createSubset(
-	List preallocated,
+	GenericList preallocated,
 	U64 elementsOffset,
 	U64 elementCount,
 	Allocator allocator,

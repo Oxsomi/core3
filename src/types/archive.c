@@ -20,8 +20,9 @@
 
 #include "types/archive.h"
 #include "types/allocator.h"
-#include "types/error.h"
-#include "types/buffer.h"
+#include "types/list_impl.h"
+
+TListImpl(ArchiveEntry);
 
 Error Archive_create(Allocator alloc, Archive *archive) {
 
@@ -31,8 +32,7 @@ Error Archive_create(Allocator alloc, Archive *archive) {
 	if(archive->entries.ptr)
 		return Error_invalidOperation(0, "Archive_create()::archive is already initialized, indicates possible memleak");
 
-	archive->entries = List_createEmpty(sizeof(ArchiveEntry));
-	return List_reserve(&archive->entries, 100, alloc);
+	return ListArchiveEntry_reserve(&archive->entries, 100, alloc);
 }
 
 Bool Archive_free(Archive *archive, Allocator alloc) {
@@ -41,14 +41,12 @@ Bool Archive_free(Archive *archive, Allocator alloc) {
 		return true;
 
 	for (U64 i = 0; i < archive->entries.length; ++i) {
-
-		ArchiveEntry entry = ((ArchiveEntry*)archive->entries.ptr)[i];
-
+		ArchiveEntry entry = archive->entries.ptr[i];
 		Buffer_free(&entry.data, alloc);
 		CharString_free(&entry.path, alloc);
 	}
 
-	List_free(&archive->entries, alloc);
+	ListArchiveEntry_free(&archive->entries, alloc);
 	*archive = (Archive) { 0 };
 	return true;
 }
@@ -81,10 +79,10 @@ Bool Archive_getPath(
 	//TODO: Optimize this with a hashmap
 
 	for(U64 i = 0; i < archive.entries.length; ++i)
-		if (CharString_equalsStringInsensitive(((ArchiveEntry*)archive.entries.ptr)[i].path, resolvedPath)) {
+		if (CharString_equalsStringInsensitive(archive.entries.ptr[i].path, resolvedPath)) {
 
 			if(entryOut && !CharString_length(entryOut->path))
-				*entryOut = ((ArchiveEntry*)archive.entries.ptr)[i];
+				*entryOut = archive.entries.ptr[i];
 
 			if(iPtr)
 				*iPtr = i;
@@ -182,7 +180,7 @@ Error Archive_addInternal(Archive *archive, ArchiveEntry entry, Bool successIfEx
 	if(!Archive_createOrFindParent(archive, entry.path, alloc))
 		_gotoIfError(clean, Error_notFound(0, 0, "Archive_addInternal()::entry.path parent couldn't be created"));
 
-	_gotoIfError(clean, List_pushBack(&archive->entries, Buffer_createConstRef(&entry, sizeof(entry)), alloc));
+	_gotoIfError(clean, ListArchiveEntry_pushBack(&archive->entries, entry, alloc));
 	resolved = CharString_createNull();
 
 	CharString_free(&oldPath, alloc);
@@ -246,7 +244,7 @@ Error Archive_removeInternal(Archive *archive, CharString path, Allocator alloc,
 
 		for (U64 j = archive->entries.length - 1; j != U64_MAX; --j) {
 
-			ArchiveEntry cai = ((ArchiveEntry*)archive->entries.ptr)[i];
+			ArchiveEntry cai = archive->entries.ptr[i];
 
 			if(!CharString_startsWithStringInsensitive(cai.path, resolved))
 				continue;
@@ -256,7 +254,7 @@ Error Archive_removeInternal(Archive *archive, CharString path, Allocator alloc,
 			Buffer_free(&entry.data, alloc);
 			CharString_free(&entry.path, alloc);
 
-			_gotoIfError(clean, List_popLocation(&archive->entries, j, Buffer_createNull()));
+			_gotoIfError(clean, ListArchiveEntry_popLocation(&archive->entries, j, NULL));
 
 			//Ensure our *self* id still makes sense
 
@@ -270,7 +268,7 @@ Error Archive_removeInternal(Archive *archive, CharString path, Allocator alloc,
 	Buffer_free(&entry.data, alloc);
 	CharString_free(&entry.path, alloc);
 
-	_gotoIfError(clean, List_popLocation(&archive->entries, i, Buffer_createNull()));
+	_gotoIfError(clean, ListArchiveEntry_popLocation(&archive->entries, i, NULL));
 	
 clean:
 	CharString_free(&resolved, alloc);
@@ -311,7 +309,7 @@ Error Archive_rename(
 
 	//Rename 
 
-	CharString *prevPath = &((ArchiveEntry*)archive->entries.ptr)[i].path;
+	CharString *prevPath = &archive->entries.ptrNonConst[i].path;
 	CharString subStr = CharString_createNull();
 
 	CharString_cutAfterLastSensitive(*prevPath, '/', &subStr);
@@ -349,7 +347,7 @@ Error Archive_move(
 	if (parent.type != EFileType_Folder)
 		_gotoIfError(clean, Error_invalidOperation(0, "Archive_move()::directoryName should resolve to folder file"));
 
-	CharString *filePath = &((ArchiveEntry*)archive->entries.ptr)[i].path;
+	CharString *filePath = &archive->entries.ptrNonConst[i].path;
 
 	U64 v = CharString_findLastSensitive(*filePath, '/');
 
@@ -406,7 +404,7 @@ Error Archive_updateFileData(Archive *archive, CharString path, Buffer data, All
 		return Error_notFound(0, 1, "Archive_updateFileData()::path couldn't resolve to path");
 
 	Buffer_free(&entry.data, alloc);
-	((ArchiveEntry*)archive->entries.ptr)[i].data = data;
+	archive->entries.ptrNonConst[i].data = data;
 	return Error_none();
 }
 
@@ -433,7 +431,7 @@ Error Archive_getFileDataInternal(
 		return Error_invalidOperation(0, "Archive_getFileDataInternal()::entry.type isn't file, can't get data of folder");
 
 	if(isConst)
-		*data = Buffer_createConstRef(entry.data.ptr, Buffer_length(entry.data));
+		*data = Buffer_createRefConst(entry.data.ptr, Buffer_length(entry.data));
 
 	else if(Buffer_isConstRef(entry.data))
 		return Error_constData(1, 0, "Archive_getFileDataInternal()::entry.data should be writable");
@@ -490,7 +488,7 @@ Error Archive_foreach(
 
 	for (U64 i = 0; i < archive.entries.length; ++i) {
 
-		ArchiveEntry cai = ((ArchiveEntry*)archive.entries.ptr)[i];
+		ArchiveEntry cai = archive.entries.ptr[i];
 
 		if(type != EFileType_Any && type != cai.type)
 			continue;

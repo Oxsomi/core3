@@ -21,8 +21,6 @@
 #pragma once
 #include "graphics/vulkan/vulkan.h"
 
-typedef struct List List;
-
 extern const C8 *reqExtensionsName[];
 extern U64 reqExtensionsNameCount;
 
@@ -104,4 +102,6 @@ typedef struct VkGraphicsInstance {
 
 } VkGraphicsInstance;
 
-impl Error VkGraphicsInstance_getLayers(List *layers);
+typedef struct ListConstC8 ListConstC8;
+
+impl Error VkGraphicsInstance_getLayers(ListConstC8 *layers);
