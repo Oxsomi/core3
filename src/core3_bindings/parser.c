@@ -39,7 +39,7 @@ CharString Token_asString(Token t, const Parser *p) {
 	if((U32)t.lexerTokenSubId + t.tokenSize > CharString_length(lextStr))
 		return CharString_createNull();
 
-	return CharString_createConstRefSized(lextStr.ptr + t.lexerTokenSubId, t.tokenSize, false);
+	return CharString_createRefSizedConst(lextStr.ptr + t.lexerTokenSubId, t.tokenSize, false);
 }
 
 //Helpers for handling defines
@@ -298,7 +298,7 @@ Error Parser_preprocessContents(
 
 				//If keyword is "defined" then match defined(identifier)
 
-				if (CharString_equalsStringSensitive(lextStr, CharString_createConstRefCStr("defined"))) {
+				if (CharString_equalsStringSensitive(lextStr, CharString_createRefCStrConst("defined"))) {
 
 					if(tokenCount < 3)
 						_gotoIfError(clean, Error_invalidState(2, "Parser_handleIfCondition() expected defined(identifier)"));
@@ -379,7 +379,7 @@ Error Parser_preprocessContents(
 					const C8 *tokenStart = LexerToken_getTokenStart(start, *lexer);
 					const C8 *tokenEnd = LexerToken_getTokenEnd(end, *lexer);
 
-					_gotoIfError(clean, CharString_appendStringx(replaced, CharString_createConstRefSized(
+					_gotoIfError(clean, CharString_appendStringx(replaced, CharString_createRefSizedConst(
 						tokenStart, tokenEnd - tokenStart, false
 					)));
 				}
@@ -655,8 +655,8 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 					goto clean;
 
 				const C8 *pragmaOnce[] = { "pragma", "once" };
-				CharString pragma = CharString_createConstRefCStr(pragmaOnce[0]);
-				CharString once = CharString_createConstRefCStr(pragmaOnce[1]);
+				CharString pragma = CharString_createRefCStrConst(pragmaOnce[0]);
+				CharString once = CharString_createRefCStrConst(pragmaOnce[1]);
 
 				if(!CharString_equalsStringSensitive(pragma, lextStr) || lexerTokenCount != 3)
 					_gotoIfError(clean, Error_invalidParameter(
@@ -679,7 +679,7 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 				if(!isPreprocessorScopeActive)
 					goto clean;
 
-				if (!CharString_equalsStringSensitive(CharString_createConstRefCStr("include"), lextStr))
+				if (!CharString_equalsStringSensitive(CharString_createRefCStrConst("include"), lextStr))
 					_gotoIfError(clean, Error_invalidParameter(
 						0, 0, "ParserContext_visit() source was invalid. Expected #include if #in is detected"
 					));
@@ -693,7 +693,7 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 				if(!isPreprocessorScopeActive)
 					goto clean;
 
-				if (!CharString_equalsStringSensitive(CharString_createConstRefCStr("define"), lextStr))
+				if (!CharString_equalsStringSensitive(CharString_createRefCStrConst("define"), lextStr))
 					_gotoIfError(clean, Error_invalidParameter(
 						0, 0, "ParserContext_visit() source was invalid. Expected #define if #de is detected"
 					));
@@ -711,7 +711,7 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 
 				//"defined" is not allowed
 
-				if(CharString_equalsStringSensitive(lextStr, CharString_createConstRefCStr("defined")))
+				if(CharString_equalsStringSensitive(lextStr, CharString_createRefCStrConst("defined")))
 					_gotoIfError(clean, Error_invalidParameter(
 						0, 0, "ParserContext_visit() source was invalid. #define defined is illegal"
 					));
@@ -760,7 +760,7 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 							lext = lexer->tokens.ptr[j];
 							lextStr = LexerToken_asString(lext, *lexer);
 
-							if (CharString_equalsStringSensitive(lextStr, CharString_createConstRefCStr("..."))) {
+							if (CharString_equalsStringSensitive(lextStr, CharString_createRefCStrConst("..."))) {
 								++j;
 								break;
 							}
@@ -842,14 +842,14 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 				if (lext.length == 5 || lext.length == 6) {			//#ifdef, #ifndef
 
 					if(lext.length == 5 && !CharString_equalsStringSensitive(			//#ifdef
-						CharString_createConstRefCStr("ifdef"), lextStr
+						CharString_createRefCStrConst("ifdef"), lextStr
 					))
 						_gotoIfError(clean, Error_invalidParameter(
 							0, 0, "ParserContext_visit() source was invalid. Expected #ifdef"
 						));
 
 					if(lext.length == 6 && !CharString_equalsStringSensitive(			//#ifndef
-						CharString_createConstRefCStr("ifndef"), lextStr
+						CharString_createRefCStrConst("ifndef"), lextStr
 					))
 						_gotoIfError(clean, Error_invalidParameter(
 							0, 0, "ParserContext_visit() source was invalid. Expected #ifdef"
@@ -963,7 +963,7 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 
 			case C8x2('e', 'n'):		//#endif
 
-				if (!CharString_equalsStringSensitive(CharString_createConstRefCStr("endif"), lextStr))
+				if (!CharString_equalsStringSensitive(CharString_createRefCStrConst("endif"), lextStr))
 					_gotoIfError(clean, Error_invalidParameter(
 						0, 0, "ParserContext_visit() source was invalid. Expected #endif if #en is detected"
 					));
@@ -981,7 +981,7 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 				if(!isPreprocessorScopeActive)
 					goto clean;
 
-				if (!CharString_equalsStringSensitive(CharString_createConstRefCStr("error"), lextStr))
+				if (!CharString_equalsStringSensitive(CharString_createRefCStrConst("error"), lextStr))
 					_gotoIfError(clean, Error_invalidParameter(
 						0, 0, "ParserContext_visit() source was invalid. Expected #error if #er is detected"
 					));
@@ -1005,7 +1005,7 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 					goto clean;
 
 				if (
-					!CharString_equalsStringSensitive(CharString_createConstRefCStr("undef"), lextStr) ||
+					!CharString_equalsStringSensitive(CharString_createRefCStrConst("undef"), lextStr) ||
 					lexerTokenCount != 3
 				)
 					_gotoIfError(clean, Error_invalidParameter(

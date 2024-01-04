@@ -46,7 +46,7 @@ const C8 *LexerToken_getTokenStart(LexerToken tok, Lexer l) {
 
 CharString LexerToken_asString(LexerToken tok, Lexer l) {
 	const C8 *ptr = LexerToken_getTokenStart(tok, l);
-	return CharString_createConstRefSized(ptr, tok.length, false);
+	return CharString_createRefSizedConst(ptr, tok.length, false);
 }
 
 CharString LexerExpression_asString(LexerExpression e, Lexer l) {
@@ -57,7 +57,7 @@ CharString LexerExpression_asString(LexerExpression e, Lexer l) {
 	const C8 *cStart = LexerToken_getTokenStart(tStart, l);
 	const C8 *cEnd = LexerToken_getTokenEnd(tEnd, l);
 
-	return CharString_createConstRefSized(cStart, cEnd - cStart, false);
+	return CharString_createRefSizedConst(cStart, cEnd - cStart, false);
 }
 
 Error Lexer_endExpression(
@@ -272,7 +272,7 @@ clean:
 		ListLexerExpression_freex(&expressions);
 	}
 	else *lexer = (Lexer) { 
-		.source = CharString_createConstRefSized(str.ptr, CharString_length(str), false),
+		.source = CharString_createRefSizedConst(str.ptr, CharString_length(str), false),
 		.expressions = expressions, 
 		.tokens = tokens 
 	};

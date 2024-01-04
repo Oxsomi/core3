@@ -84,7 +84,7 @@ clean:
 	return err;
 }
 
-#define Program_userDefine(x, y) { CharString_createConstRefCStr(x), CharString_createConstRefCStr(y) }
+#define Program_userDefine(x, y) { CharString_createRefCStrConst(x), CharString_createRefCStrConst(y) }
 #define Program_stringify(x) Program_userDefine(#x, values[x])
 
 Error Program_parseFile(FileInfo info, void *dummy) {
@@ -97,7 +97,7 @@ Error Program_parseFile(FileInfo info, void *dummy) {
 
 	_gotoIfError(clean, File_read(info.path, U64_MAX, &buf));
 
-	CharString file = CharString_createConstRefSized((const C8*) buf.ptr, Buffer_length(buf), false);
+	CharString file = CharString_createRefSizedConst((const C8*) buf.ptr, Buffer_length(buf), false);
 
 	typedef struct ProgramUserDefine {
 
@@ -136,11 +136,11 @@ clean:
 
 int Program_run() {
 
-	//Error err = File_foreach(CharString_createConstRefCStr("core3"), Parse_file, NULL, true);
+	//Error err = File_foreach(CharString_createRefCStrConst("core3"), Parse_file, NULL, true);
 
 	FileInfo info = (FileInfo) { 0 };
 	Error err = Error_none();
-	_gotoIfError(clean, File_getInfo(CharString_createConstRefCStr("core3/inc/types/types.h"), &info));
+	_gotoIfError(clean, File_getInfo(CharString_createRefCStrConst("core3/inc/types/types.h"), &info));
 	_gotoIfError(clean, Program_parseFile(info, NULL));
 
 clean:
