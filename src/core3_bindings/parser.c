@@ -18,21 +18,23 @@
 *  This is called dual licensing.
 */
 
+#include "platforms/ext/listx_impl.h"
 #include "types/string.h"
-#include "types/error.h"
-#include "types/buffer.h"
-#include "platforms/ext/listx.h"
 #include "platforms/ext/stringx.h"
 #include "core3_bindings/parser.h"
 #include "core3_bindings/lexer.h"
+
+TListImpl(Token);
+TListImpl(Symbol);
+TListImpl(Define);
+TListImpl(UserDefine);
 
 CharString Token_asString(Token t, const Parser *p) {
 
 	if(!p || t.naiveTokenId >= p->lexer->tokens.length)
 		return CharString_createNull();
 
-	LexerToken lt = *List_ptrConstT(LexerToken, p->lexer->tokens, t.naiveTokenId);
-	CharString lextStr = LexerToken_asString(lt, *p->lexer);
+	CharString lextStr = LexerToken_asString(p->lexer->tokens.ptr[t.naiveTokenId], *p->lexer);
 
 	if((U32)t.lexerTokenSubId + t.tokenSize > CharString_length(lextStr))
 		return CharString_createNull();
@@ -45,14 +47,14 @@ CharString Token_asString(Token t, const Parser *p) {
 //Returns U64_MAX if not found
 //Returns [ defines.length, defines.length + userDefines.length > if found in a user define
 
-U64 Parser_findDefine(List defines, List userDefines, CharString str, const Lexer *lexer) {
+U64 Parser_findDefine(ListDefine defines, ListUserDefine userDefines, CharString str, const Lexer *lexer) {
 
 	//TODO: Map
 
 	for (U64 i = 0; i < defines.length; ++i) {
 
-		Define d = *List_ptrT(Define, defines, i);
-		CharString ds = LexerToken_asString(*List_ptrT(LexerToken, lexer->tokens, d.nameTokenId), *lexer);
+		Define d = defines.ptr[i];
+		CharString ds = LexerToken_asString(lexer->tokens.ptr[d.nameTokenId], *lexer);
 
 		if (CharString_equalsStringSensitive(str, ds))
 			return i;
@@ -60,7 +62,7 @@ U64 Parser_findDefine(List defines, List userDefines, CharString str, const Lexe
 
 	for (U64 i = 0; i < userDefines.length; ++i) {
 
-		UserDefine ud = *List_ptrT(UserDefine, userDefines, i);
+		UserDefine ud = userDefines.ptr[i];
 
 		if (CharString_equalsStringSensitive(str, ud.name))
 			return i + defines.length;
@@ -69,18 +71,18 @@ U64 Parser_findDefine(List defines, List userDefines, CharString str, const Lexe
 	return U64_MAX;
 }
 
-Error Parser_eraseDefine(List *defines, List *userDefines, U64 i) {
+Error Parser_eraseDefine(ListDefine *defines, ListUserDefine *userDefines, U64 i) {
 
 	if(i == U64_MAX)
 		return Error_none();
 
 	if(i < defines->length)
-		return List_erase(defines, i);
+		return ListDefine_erase(defines, i);
 
 	i -= defines->length;
 
 	if(i < userDefines->length)
-		return List_erase(userDefines, i);
+		return ListUserDefine_erase(userDefines, i);
 
 	return Error_outOfBounds(
 		2, i, userDefines->length, "Parser_eraseDefine()::i exceeded userDefines->length + defines->length"
@@ -89,14 +91,14 @@ Error Parser_eraseDefine(List *defines, List *userDefines, U64 i) {
 
 //Define without value
 
-Error Parser_addDefine(List *defines, U32 nameLexerTokenId) {
+Error Parser_addDefine(ListDefine *defines, U32 nameLexerTokenId) {
 	Define define = (Define) { .defineType = EDefineType_ValueEmpty, .nameTokenId = nameLexerTokenId };
-	return List_pushBackx(defines, Buffer_createConstRef(&define, sizeof(define)));
+	return ListDefine_pushBackx(defines, define);
 }
 
 //Define with value
 
-Error Parser_addDefineWithValue(List *defines, U32 nameLexerTokenId, U32 childLexerTokenId, U16 valueTokenCount) {
+Error Parser_addDefineWithValue(ListDefine *defines, U32 nameLexerTokenId, U32 childLexerTokenId, U16 valueTokenCount) {
 
 	Define define = (Define) { 
 		.defineType = EDefineType_ValueFull, 
@@ -105,13 +107,13 @@ Error Parser_addDefineWithValue(List *defines, U32 nameLexerTokenId, U32 childLe
 		.valueStartId = childLexerTokenId
 	};
 
-	return List_pushBackx(defines, Buffer_createConstRef(&define, sizeof(define)));
+	return ListDefine_pushBackx(defines, define);
 }
 
 //Macro with(out) value
 
 Error Parser_addMacro(
-	List *defines, 
+	ListDefine *defines, 
 	U32 nameLexerTokenId, 
 	U32 childLexerTokenId, 
 	U8 childCount,
@@ -128,7 +130,7 @@ Error Parser_addMacro(
 		.valueStartId = valueLexerTokenId
 	};
 
-	return List_pushBackx(defines, Buffer_createConstRef(&define, sizeof(define)));
+	return ListDefine_pushBackx(defines, define);
 }
 
 //Parse token type
@@ -265,8 +267,8 @@ typedef struct PreprocessorIfStack {
 
 Error Parser_preprocessContents(
 	const Lexer *lexer, 
-	List defines, 
-	List userDefines, 
+	ListDefine defines, 
+	ListUserDefine userDefines, 
 	U64 tokenOffset, 
 	U64 totalTokenCount,
 	CharString *replaced
@@ -279,7 +281,7 @@ Error Parser_preprocessContents(
 
 	while(i < tokenOffset + totalTokenCount) {
 	
-		LexerToken lext = ((const LexerToken*) lexer->tokens.ptr)[i];
+		LexerToken lext = lexer->tokens.ptr[i];
 		CharString lextStr = LexerToken_asString(lext, *lexer);
 
 		++i;
@@ -301,21 +303,21 @@ Error Parser_preprocessContents(
 					if(tokenCount < 3)
 						_gotoIfError(clean, Error_invalidState(2, "Parser_handleIfCondition() expected defined(identifier)"));
 
-					lextStr = LexerToken_asString(((const LexerToken*) lexer->tokens.ptr)[tokenOffset], *lexer);
+					lextStr = LexerToken_asString(lexer->tokens.ptr[tokenOffset], *lexer);
 
 					if(!CharString_equalsSensitive(lextStr, '('))
 						_gotoIfError(clean, Error_invalidState(
 							3, "Parser_handleIfCondition() expected '(' in defined(identifier)"
 						));
 
-					LexerToken identifier = ((const LexerToken*) lexer->tokens.ptr)[tokenOffset + 1];
+					LexerToken identifier = lexer->tokens.ptr[tokenOffset + 1];
 
 					if((identifier.offsetType >> 30) != ELexerTokenType_Identifier)
 						_gotoIfError(clean, Error_invalidState(
 							4, "Parser_handleIfCondition() expected identifier in defined(identifier)"
 						));
 
-					lextStr = LexerToken_asString(((const LexerToken*) lexer->tokens.ptr)[tokenOffset + 2], *lexer);
+					lextStr = LexerToken_asString(lexer->tokens.ptr[tokenOffset + 2], *lexer);
 
 					if (!CharString_equalsSensitive(lextStr, ')'))
 						_gotoIfError(clean, Error_invalidState(
@@ -341,7 +343,7 @@ Error Parser_preprocessContents(
 
 				if (defineId >= defines.length) {		//User defined (must be int)
 
-					UserDefine ud = *List_ptrT(UserDefine, userDefines, defineId - defines.length);
+					UserDefine ud = userDefines.ptr[defineId - defines.length];
 
 					if(!CharString_length(ud.value))
 						_gotoIfError(clean, Error_invalidState(
@@ -360,7 +362,7 @@ Error Parser_preprocessContents(
 
 				//Macro
 
-				Define def = *List_ptrT(Define, defines, defineId);
+				Define def = defines.ptr[defineId];
 
 				if (def.defineType & EDefineType_IsMacro) {
 					//TODO: Support macros
@@ -371,8 +373,8 @@ Error Parser_preprocessContents(
 
 				if(def.valueStartId != U32_MAX) {
 
-					LexerToken start = *List_ptrConstT(LexerToken, lexer->tokens, def.valueStartId);
-					LexerToken end = *List_ptrConstT(LexerToken, lexer->tokens, def.valueStartId + def.valueTokens - 1);
+					LexerToken start = lexer->tokens.ptr[def.valueStartId];
+					LexerToken end = lexer->tokens.ptr[def.valueStartId + def.valueTokens - 1];
 
 					const C8 *tokenStart = LexerToken_getTokenStart(start, *lexer);
 					const C8 *tokenEnd = LexerToken_getTokenEnd(end, *lexer);
@@ -421,8 +423,8 @@ clean:
 Error Parser_handleIfCondition(
 	PreprocessorIfStack *stack,
 	const Lexer *lexer,
-	List defines,
-	List userDefines,
+	ListDefine defines,
+	ListUserDefine userDefines,
 	U64 tokenOffset,
 	U64 tokenCount,
 	Bool *value
@@ -451,7 +453,7 @@ Error Parser_handleIfCondition(
 		hasAnyIdentifier = false;
 
 		for(U64 i = 0; i < tempLexer.tokens.length; ++i)
-			if ((List_ptrConstT(LexerToken, tempLexer.tokens, i)->offsetType >> 30) == ETokenType_Identifier) {
+			if ((tempLexer.tokens.ptr[i].offsetType >> 30) == ETokenType_Identifier) {
 				hasAnyIdentifier = true;
 				break;
 			}
@@ -471,16 +473,16 @@ Error Parser_handleIfCondition(
 	//Everything except tokens are cleared.
 	//Tokens can be modified to evaluate the expression
 
-	_gotoIfError(clean, Parser_create(&tempLexer, &tempParser, (List) { 0 }));
+	_gotoIfError(clean, Parser_create(&tempLexer, &tempParser, (ListUserDefine) { 0 }));
 
-	_gotoIfError(clean, List_clear(&tempParser.symbols));
-	_gotoIfError(clean, List_clear(&tempParser.defines));
+	_gotoIfError(clean, ListSymbol_clear(&tempParser.symbols));
+	_gotoIfError(clean, ListDefine_clear(&tempParser.defines));
 
 	//Then we have to scan for tokens in order of operator precedence and replace the affected tokens by a value
 
 	if(tempParser.tokens.length >= 1) {
 
-		Token *firstToken = List_ptrConstT(Token, tempParser.tokens, 0);
+		const Token *firstToken = tempParser.tokens.ptr;
 		ETokenType first = firstToken->tokenType;
 
 		//We can expand this to complex operations by finding combos in order of precedence and replacing it with the value.
@@ -497,7 +499,7 @@ Error Parser_handleIfCondition(
 
 		else if(tempParser.tokens.length == 2) {			//!x, ~x, -x, +x
 
-			Token *secondToken = List_ptrConstT(Token, tempParser.tokens, 1);
+			const Token *secondToken = tempParser.tokens.ptr + 1;
 			ETokenType second = secondToken->tokenType;
 
 			if(second != ETokenType_Integer)
@@ -525,7 +527,7 @@ Error Parser_handleIfCondition(
 
 		else if (tempParser.tokens.length == 3) {		//a >= b, <=, >, <, !=, ==, *, /, %, +, -, &&, ||, &, |, ^, <<, >>
 
-			Token *thirdToken = List_ptrConstT(Token, tempParser.tokens, 2);
+			const Token *thirdToken = tempParser.tokens.ptr + 2;
 			ETokenType third = thirdToken->tokenType;
 
 			if(first != ETokenType_Integer || third != ETokenType_Integer)
@@ -540,7 +542,7 @@ Error Parser_handleIfCondition(
 
 			Bool nullCheck = false;
 
-			switch(List_ptrConstT(Token, tempParser.tokens, 1)->tokenType) {
+			switch(tempParser.tokens.ptr[1].tokenType) {
 			
 				case ETokenType_Add:			result += thirdValue;										break;
 				case ETokenType_Sub:			result -= thirdValue;										break;
@@ -600,7 +602,10 @@ clean:
 }
 
 typedef struct ParserContext {
-	List userDefines, defines, symbols, tokens;
+	ListUserDefine userDefines;
+	ListDefine defines;
+	ListSymbol symbols;
+	ListToken tokens;
 	PreprocessorIfStack stack;
 	const Lexer *lexer;
 } ParserContext;
@@ -617,7 +622,7 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 
 	//Handle preprocessor
 
-	LexerToken lext = ((const LexerToken*) lexer->tokens.ptr)[lexerTokenId];
+	LexerToken lext = lexer->tokens.ptr[lexerTokenId];
 
 	if (lext.length >= 1 && lexer->source.ptr[lext.offsetType << 2 >> 2] == '#') {
 
@@ -629,7 +634,7 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 				0, 0, "ParserContext_visit() source was invalid. Expected # for preprocessor"
 			));
 
-		lext = ((const LexerToken*) lexer->tokens.ptr)[lexerTokenId + 1];
+		lext = lexer->tokens.ptr[lexerTokenId + 1];
 
 		if(lext.length < 2)
 			_gotoIfError(clean, Error_invalidParameter(
@@ -658,7 +663,7 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 						0, 0, "ParserContext_visit() source was invalid. Expected #pragma once if #pr is detected"
 					));
 
-				lext = ((const LexerToken*) lexer->tokens.ptr)[lexerTokenId + 2];
+				lext = lexer->tokens.ptr[lexerTokenId + 2];
 				lextStr = LexerToken_asString(lext, *lexer);
 
 				if(!CharString_equalsStringSensitive(once, lextStr))
@@ -698,7 +703,7 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 						0, 0, "ParserContext_visit() source was invalid. Expected #define <define>..."
 					));
 
-				lext = ((const LexerToken*) lexer->tokens.ptr)[lexerTokenId + 2];
+				lext = lexer->tokens.ptr[lexerTokenId + 2];
 				lextStr = LexerToken_asString(lext, *lexer);
 
 				U64 i = Parser_findDefine(context->defines, context->userDefines, lextStr, lexer);
@@ -725,7 +730,7 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 					Bool isMacro = false;
 
 					if (lexerTokenCount >= 4) {
-						LexerToken tok = ((const LexerToken*) lexer->tokens.ptr)[lexerTokenId + 3];
+						LexerToken tok = lexer->tokens.ptr[lexerTokenId + 3];
 						isMacro = tok.length == 1 && lexer->source.ptr[tok.offsetType << 2 >> 2] == '(';
 					}
 
@@ -740,7 +745,7 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 
 						U32 j = lexerTokenId + 3;
 
-						lext = ((const LexerToken*) lexer->tokens.ptr)[j];
+						lext = lexer->tokens.ptr[j];
 						lextStr = LexerToken_asString(lext, *lexer);
 
 						if(!CharString_equalsSensitive(lextStr, '('))
@@ -752,7 +757,7 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 
 						for (; j < lexerTokenId + lexerTokenCount; j += 2) {
 
-							lext = ((const LexerToken*) lexer->tokens.ptr)[j];
+							lext = lexer->tokens.ptr[j];
 							lextStr = LexerToken_asString(lext, *lexer);
 
 							if (CharString_equalsStringSensitive(lextStr, CharString_createConstRefCStr("..."))) {
@@ -770,7 +775,7 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 									0, 0, "ParserContext_visit() source was invalid. Expected token in macro"
 								));
 
-							lext = ((const LexerToken*) lexer->tokens.ptr)[j + 1];
+							lext = lexer->tokens.ptr[j + 1];
 							lextStr = LexerToken_asString(lext, *lexer);
 
 							if(CharString_equalsSensitive(lextStr, ')')) {
@@ -784,7 +789,7 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 								));
 						}
 
-						lext = ((const LexerToken*) lexer->tokens.ptr)[j];
+						lext = lexer->tokens.ptr[j];
 						lextStr = LexerToken_asString(lext, *lexer);
 
 						if(!CharString_equalsSensitive(lextStr, ')'))
@@ -857,7 +862,7 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 							0, 0, "ParserContext_visit() source was invalid. Expected #if(n)def <define>"
 						));
 
-					lext = ((const LexerToken*) lexer->tokens.ptr)[lexerTokenId + 2];
+					lext = lexer->tokens.ptr[lexerTokenId + 2];
 					lextStr = LexerToken_asString(lext, *lexer);
 
 					U64 i = Parser_findDefine(context->defines, context->userDefines, lextStr, lexer);
@@ -982,7 +987,7 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 					));
 
 				const C8 *startPtr = lexer->source.ptr + (lext.offsetType << 2 >> 2);
-				lext = ((const LexerToken*) lexer->tokens.ptr)[lexerTokenId + lexerTokenCount - 1];
+				lext = lexer->tokens.ptr[lexerTokenId + lexerTokenCount - 1];
 
 				const C8 *endPtr = lexer->source.ptr + (lext.offsetType << 2 >> 2) + lext.length - 1;
 
@@ -1007,7 +1012,7 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 						0, 0, "ParserContext_visit() source was invalid. Expected #undef <value> if #un is detected"
 					));
 
-				lext = ((const LexerToken*) lexer->tokens.ptr)[lexerTokenId + 2];
+				lext = lexer->tokens.ptr[lexerTokenId + 2];
 				lextStr = LexerToken_asString(lext, *lexer);
 
 				U64 i = Parser_findDefine(context->defines, context->userDefines, lextStr, lexer);
@@ -1034,7 +1039,7 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 
 		for(U32 i = 0; i < lexerTokenCount; ++i) {
 
-			LexerToken lext = ((const LexerToken*) lexer->tokens.ptr)[lexerTokenId + i];
+			LexerToken lext = lexer->tokens.ptr[lexerTokenId + i];
 			CharString lextStr = LexerToken_asString(lext, *lexer);
 			ELexerTokenType lextType = (ELexerTokenType)(lext.offsetType >> 30);
 
@@ -1055,7 +1060,7 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 
 						if (defineId >= context->defines.length) {		//User defined (must be int)
 
-							UserDefine ud = *List_ptrT(UserDefine, context->userDefines, defineId - context->defines.length);
+							UserDefine ud = context->userDefines.ptr[defineId - context->defines.length];
 							ud;
 
 							//TODO: Support user define as identifier
@@ -1065,7 +1070,7 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 
 						//Macro
 
-						Define def = *List_ptrT(Define, context->defines, defineId);
+						Define def = context->defines.ptr[defineId];
 
 						if (def.defineType & EDefineType_IsMacro) {
 							//TODO: Support macros
@@ -1088,7 +1093,7 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 							.tokenSize = (U8) CharString_length(lextStr)
 						};
 
-						_gotoIfError(clean, List_pushBackx(&context->tokens, Buffer_createConstRef(&tok, sizeof(tok))));
+						_gotoIfError(clean, ListToken_pushBackx(&context->tokens, tok));
 					}
 
 					break;
@@ -1111,7 +1116,7 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 						.tokenSize = (U8) CharString_length(lextStr)
 					};
 
-					_gotoIfError(clean, List_pushBackx(&context->tokens, Buffer_createConstRef(&tok, sizeof(tok))));
+					_gotoIfError(clean, ListToken_pushBackx(&context->tokens, tok));
 					break;
 				}
 
@@ -1130,7 +1135,7 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 						.tokenSize = (U8) CharString_length(lextStr)
 					};
 
-					_gotoIfError(clean, List_pushBackx(&context->tokens, Buffer_createConstRef(&tok, sizeof(tok))));
+					_gotoIfError(clean, ListToken_pushBackx(&context->tokens, tok));
 					break;
 				}
 
@@ -1156,7 +1161,7 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 							.tokenSize = (U8)(subTokenOffset - prev)
 						};
 
-						_gotoIfError(clean, List_pushBackx(&context->tokens, Buffer_createConstRef(&tok, sizeof(tok))));
+						_gotoIfError(clean, ListToken_pushBackx(&context->tokens, tok));
 					}
 			}
 		}
@@ -1166,39 +1171,30 @@ clean:
 	return err;
 }
 
-Error Parser_create(const Lexer *lexer, Parser *parser, List userDefinesOuter) {
+Error Parser_create(const Lexer *lexer, Parser *parser, ListUserDefine userDefinesOuter) {
 
 	if(!lexer || !parser)
 		return Error_nullPointer(!lexer ? 0 : 1, "Parser_create()::parser and lexer are required");
 
-	if(userDefinesOuter.stride && userDefinesOuter.stride != sizeof(UserDefine))
-		return Error_invalidParameter(2, 0, "Parser_create()::userDefines needs to be UserDefine[]");
-
 	for (U64 i = 0; i < userDefinesOuter.length; ++i) {
 
-		UserDefine ud = *List_ptrConstT(UserDefine, userDefinesOuter, i);
+		UserDefine ud = userDefinesOuter.ptr[i];
 
 		if (!CharString_length(ud.name))
 			return Error_nullPointer(2, "Parser_create()::userDefines[i].name is required");
 	}
 
 	Error err = Error_none();
-	ParserContext context = (ParserContext) {
-		.symbols = List_createEmpty(sizeof(Symbol)),
-		.tokens = List_createEmpty(sizeof(Token)),
-		.defines = List_createEmpty(sizeof(Define)),
-		.userDefines = (List) { 0 },
-		.lexer = lexer
-	};
+	ParserContext context = (ParserContext) { .lexer = lexer };
 
-	_gotoIfError(clean, List_reservex(&context.symbols, 64));
-	_gotoIfError(clean, List_reservex(&context.defines, 64));
-	_gotoIfError(clean, List_reservex(&context.tokens, lexer->tokens.length * 3 / 2));
-	_gotoIfError(clean, List_createCopyx(userDefinesOuter, &context.userDefines));
+	_gotoIfError(clean, ListSymbol_reservex(&context.symbols, 64));
+	_gotoIfError(clean, ListDefine_reservex(&context.defines, 64));
+	_gotoIfError(clean, ListToken_reservex(&context.tokens, lexer->tokens.length * 3 / 2));
+	_gotoIfError(clean, ListUserDefine_createCopyx(userDefinesOuter, &context.userDefines));
 
 	for (U64 i = 0; i < lexer->expressions.length; ++i) {
 
-		LexerExpression e = ((const LexerExpression*) lexer->expressions.ptr)[i];
+		LexerExpression e = lexer->expressions.ptr[i];
 
 		if(e.type == ELexerExpressionType_MultiLineComment || e.type == ELexerExpressionType_Comment)
 			continue;
@@ -1211,9 +1207,9 @@ Error Parser_create(const Lexer *lexer, Parser *parser, List userDefinesOuter) {
 clean:
 
 	if(err.genericError) {
-		List_freex(&context.tokens);
-		List_freex(&context.symbols);
-		List_freex(&context.defines);
+		ListToken_freex(&context.tokens);
+		ListSymbol_freex(&context.symbols);
+		ListDefine_freex(&context.defines);
 	}
 
 	else *parser = (Parser) { 
@@ -1223,7 +1219,7 @@ clean:
 		.lexer = lexer
 	};
 
-	List_freex(&context.userDefines);
+	ListUserDefine_freex(&context.userDefines);
 	return err;
 }
 
@@ -1232,8 +1228,8 @@ Bool Parser_free(Parser *parser) {
 	if(!parser)
 		return true;
 
-	List_freex(&parser->symbols);
-	List_freex(&parser->tokens);
-	List_freex(&parser->defines);
+	ListSymbol_freex(&parser->symbols);
+	ListToken_freex(&parser->tokens);
+	ListDefine_freex(&parser->defines);
 	return true;
 }

@@ -193,18 +193,24 @@ typedef struct Define {
 //Parser takes the output from the lexer and splits it up in real tokens and handles preprocessor-specific things.
 //After the parser, the file's symbols can be obtained.
 
+TList(Token);
+TList(Symbol);
+TList(Define);
+
 typedef struct Parser {
 	const Lexer *lexer;
-	List tokens;			//<Token>
-	List symbols;			//<Symbol>
-	List defines;			//<Define>
+	ListToken tokens;
+	ListSymbol symbols;
+	ListDefine defines;
 } Parser;
 
 typedef struct UserDefine {		//Value can be empty/null to indicate present (but no value)
 	CharString name, value;
 } UserDefine;
 
-Error Parser_create(const Lexer *lexer, Parser *parser, List/*<UserDefine>*/ userDefine);
+TList(UserDefine);
+
+Error Parser_create(const Lexer *lexer, Parser *parser, ListUserDefine userDefine);
 Bool Parser_free(Parser *parser);
 
 //Classify a token at str.ptr[*subTokenOffset]

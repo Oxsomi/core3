@@ -18,14 +18,15 @@
 *  This is called dual licensing.
 */
 
+#include "platforms/ext/listx_impl.h"
 #include "platforms/log.h"
 #include "platforms/ext/errorx.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
-#include "platforms/ext/listx.h"
-#include "types/error.h"
-#include "types/buffer.h"
 #include "core3_bindings/lexer.h"
+
+TListImpl(LexerToken);
+TListImpl(LexerExpression);
 
 const C8 *LexerToken_getTokenEnd(LexerToken tok, Lexer l) {
 
@@ -50,8 +51,8 @@ CharString LexerToken_asString(LexerToken tok, Lexer l) {
 
 CharString LexerExpression_asString(LexerExpression e, Lexer l) {
 
-	LexerToken tStart = *(const LexerToken*) List_ptrConst(l.tokens, e.tokenOffset);
-	LexerToken tEnd = *(const LexerToken*) List_ptrConst(l.tokens, e.tokenOffset + e.tokenCount - 1);
+	LexerToken tStart = l.tokens.ptr[e.tokenOffset];
+	LexerToken tEnd = l.tokens.ptr[e.tokenOffset + e.tokenCount - 1];
 
 	const C8 *cStart = LexerToken_getTokenStart(tStart, l);
 	const C8 *cEnd = LexerToken_getTokenEnd(tEnd, l);
@@ -59,7 +60,12 @@ CharString LexerExpression_asString(LexerExpression e, Lexer l) {
 	return CharString_createConstRefSized(cStart, cEnd - cStart, false);
 }
 
-Error Lexer_endExpression(U64 *lastTokenPtr, List *expressions, U64 tokenCount, ELexerExpressionType *expressionType) {
+Error Lexer_endExpression(
+	U64 *lastTokenPtr, 
+	ListLexerExpression *expressions, 
+	U64 tokenCount, 
+	ELexerExpressionType *expressionType
+) {
 
 	Error err = Error_none();
 
@@ -84,7 +90,7 @@ Error Lexer_endExpression(U64 *lastTokenPtr, List *expressions, U64 tokenCount, 
 		.tokenCount = (U16) (tokenCount - lastToken)
 	};
 
-	_gotoIfError(clean, List_pushBackx(expressions, Buffer_createConstRef(&exp, sizeof(exp))));
+	_gotoIfError(clean, ListLexerExpression_pushBackx(expressions, exp));
 	*lastTokenPtr = tokenCount;
 	*expressionType = ELexerExpressionType_None;
 
@@ -104,10 +110,10 @@ Error Lexer_create(CharString str, Lexer *lexer) {
 		return Error_outOfBounds(0, GIBI, GIBI, "Lexer_create()::str is limited to a GiB");
 
 	Error err = Error_none();
-	List tokens = List_createEmpty(sizeof(LexerToken));
-	List expressions = List_createEmpty(sizeof(LexerExpression));
-	_gotoIfError(clean, List_reservex(&expressions, 64 + CharString_length(str) / 64));
-	_gotoIfError(clean, List_reservex(&tokens, 64 + CharString_length(str) / 6));
+	ListLexerToken tokens = { 0 };
+	ListLexerExpression expressions = { 0 };
+	_gotoIfError(clean, ListLexerExpression_reservex(&expressions, 64 + CharString_length(str) / 64));
+	_gotoIfError(clean, ListLexerToken_reservex(&tokens, 64 + CharString_length(str) / 6));
 
 	const C8 *prevIt = NULL;
 	C8 prev = 0;
@@ -242,7 +248,7 @@ Error Lexer_create(CharString str, Lexer *lexer) {
 				.offsetType = (U32)((i + 1 + multiChar - len) | (tokenType << 30))
 			};
 
-			_gotoIfError(clean, List_pushBackx(&tokens, Buffer_createConstRef(&tok, sizeof(tok))));
+			_gotoIfError(clean, ListLexerToken_pushBackx(&tokens, tok));
 			prevIt = NULL;
 			tokenType = ELexerTokenType_Count;
 		}
@@ -262,8 +268,8 @@ Error Lexer_create(CharString str, Lexer *lexer) {
 clean:
 
 	if(err.genericError) {
-		List_freex(&tokens);
-		List_freex(&expressions);
+		ListLexerToken_freex(&tokens);
+		ListLexerExpression_freex(&expressions);
 	}
 	else *lexer = (Lexer) { 
 		.source = CharString_createConstRefSized(str.ptr, CharString_length(str), false),
@@ -279,7 +285,7 @@ Bool Lexer_free(Lexer *parser) {
 	if(!parser)
 		return true;
 
-	List_freex(&parser->expressions);
-	List_freex(&parser->tokens);
+	ListLexerExpression_freex(&parser->expressions);
+	ListLexerToken_freex(&parser->tokens);
 	return true;
 }

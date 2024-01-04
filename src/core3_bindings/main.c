@@ -34,8 +34,7 @@ const Bool Platform_useWorkingDirectory = true;
 
 void Program_handleToken(CharString str, const Parser *p, U64 index, Token t) {
 
-	LexerToken lt = *List_ptrConstT(LexerToken, p->lexer->tokens, t.naiveTokenId);
-
+	LexerToken lt = p->lexer->tokens.ptr[t.naiveTokenId];
 	CharString tokenRaw = Token_asString(t, p);
 
 	Log_debugLnx(
@@ -76,10 +75,8 @@ Error Program_generateBindings(CharString str, Parser parser, CharString *result
 	Error err = Error_none();
 	Bool hasOxC3 = false;
 
-	for (U64 i = 0; i < parser.tokens.length; ++i) {
-		Token t = *List_ptrConstT(Token, parser.tokens, i);
-		Program_handleToken(str, &parser, i, t);
-	}
+	for (U64 i = 0; i < parser.tokens.length; ++i)
+		Program_handleToken(str, &parser, i, parser.tokens.ptr[i]);
 
 	goto clean;
 
@@ -120,10 +117,8 @@ Error Program_parseFile(FileInfo info, void *dummy) {
 		Program_userDefine("FLT_EVAL_METHOD", values[0])
 	};
 
-	List userDefines = (List) { 0 };
-	_gotoIfError(clean, List_createConstRef(
-		(const U8*)defines, sizeof(defines) / sizeof(UserDefine), sizeof(UserDefine), &userDefines
-	));
+	ListUserDefine userDefines = { 0 };
+	_gotoIfError(clean, ListUserDefine_createRefConst(defines, sizeof(defines) / sizeof(UserDefine), &userDefines));
 
 	Lexer lexer = (Lexer) { 0 };
 	Parser parser = (Parser) { 0 };

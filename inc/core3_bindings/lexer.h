@@ -72,10 +72,13 @@ const C8 *LexerToken_getTokenStart(LexerToken tok, Lexer p);
 const C8 *LexerToken_getTokenEnd(LexerToken tok, Lexer p);
 CharString LexerToken_asString(LexerToken tok, Lexer p);
 
+TList(LexerToken);
+TList(LexerExpression);
+
 typedef struct Lexer {
-	CharString source;		//Ref to source (source needs to be kept active)
-	List tokens;			//<LexerToken>
-	List expressions;		//<LexerExpression>
+	CharString source;						//Ref to source (source needs to be kept active)
+	ListLexerToken tokens;
+	ListLexerExpression expressions;
 } Lexer;
 
 Error Lexer_create(CharString source, Lexer *lexer);
