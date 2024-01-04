@@ -1,7 +1,7 @@
 # OxC3 (Oxsomi core 3 0.2)
 ![](https://github.com/Oxsomi/core3/workflows/C%2FC++%20CI/badge.svg)
 
-OxC3 (0xC3 or Oxsomi core 3) is the successor to O(x)somi core v2 and v1. Specifically it combines the ostlc (standard template library), owc (window core) and ogc (graphics core) in the future. Focused more on being minimal abstraction compared to the predecessors by using C17 instead of C++20. Written so it can be wrapped with other languages (bindings) or even a VM in the future. Could also provide a C++20 layer for easier usage, such as operator overloads.
+OxC3 (0xC3 or Oxsomi core 3) is the successor to O(x)somi core v2 and v1. Specifically it combines the ostlc (standard template library), owc (window core) and ogc (graphics core). Focused more on being minimal abstraction compared to the predecessors by using C17 instead of C++20. Written so it can be wrapped with other languages (bindings) or even a VM in the future. Could also provide a C++20 layer for easier usage, such as operator overloads.
 
 - OxC3_types
   - The basic types that you might need and useful utilities.
@@ -12,10 +12,10 @@ OxC3 (0xC3 or Oxsomi core 3) is the successor to O(x)somi core v2 and v1. Specif
   - Buffer manipulation such as compares, copies, bit manipulation, 
     - Encryption (aes256gcm), hashing (sha256, crc32c), cryptographically secure PRNG (CSPRNG).
     - Buffer layouts for manipulating buffers using struct metadata and a path.
-  - List, CharString, CharStringList and CDFList.
+  - GenericList, CharString, TList (Makes Lists such as ListCharString, ListU32, etc.) and CDFList.
   - Error type including stacktrace option.
   - Time utility.
-  - Vectors (mathmetical) such as F32x2, F32x4, I32x2, I32x4.
+  - Vectors (mathematical) such as F32x2, F32x4, I32x2, I32x4.
   - For more info check the [documentation](docs/types_docs.md).
 - OxC3_formats: deps(OxC3_types)
   - A library for reading/writing files. Currently only for BMP and oiCA/oiDL (proprietary zip-style formats).
@@ -23,7 +23,7 @@ OxC3 (0xC3 or Oxsomi core 3) is the successor to O(x)somi core v2 and v1. Specif
   - For everything that's platform dependent (excluding some exceptions for OxC3_types).
   - Helpers for default allocator to simplify OxC3_types functions that require allocators.
   - File manipulation (in working or app dir only) such as read, write, move, rename, delete, create, info, foreach, checking.
-  - Virtual file system; for accessing files included into the exe, apk, etc.
+  - Virtual file system; for accessing files included into the exe, apk, etc. Which are built through CMake.
   - Input devices: multiple mice and keyboards (all accessible individually).
   - Lock and Thread for multi threading purposes.
   - Log for colored and proper cross platform logging.

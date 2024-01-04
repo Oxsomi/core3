@@ -128,6 +128,7 @@ C8 has some useful helper functions:
 - Bool **C8_isUpperCaseHex**(C8): Checks if the char is uppercase hex (A-F).
 - Bool **C8_isLowerCaseHex**(C8): Checks if the char is lowercase hex (a-f).
 - Bool **C8_isWhitespace**(C8): Checks if the char is whitespace (space, tab, CR, LF).
+- Bool **C8_isNewLine**(C8): Checks if the char is a newline (CR, LF).
 - Bool **C8_isValidAscii**(C8): Checks if the char is valid ascii (>= 0x20 && < 0x7F).
 - Bool **C8_isValidFileName**(C8): Checks if the char is valid for use in a file name (valid ascii and not: <>:"|?*/\\).
 - U8 **C8_bin**(C8): Converts the char to binary (0-1) or returns U8_MAX if invalid.
@@ -212,7 +213,7 @@ Note: For more info check the detailed [IEEE754 Floating point format doc](IEEE7
 - Buffer_createManagedPtr
 - Buffer_createRefFromBuffer
 
-## TODO: List (types/list.h)
+## TODO: GenericList and TList (types/list.h)
 
 ## TODO: Allocator (types/allocator.h)
 
@@ -228,8 +229,8 @@ A CDFList is a list of entries that have a probability and combined they can for
 
 A CDFList consists of the following:
 
-- List **cdf**: a List of F32s that indicate the probability of the current element and the sum of the elements that came before. This allows a binary search to be performed more easily.
-- List **elements**: The elements the CDF represents and the data it should contain.
+- ListCDFValue **cdf**: a List of F32s that indicate the probability of the current element and the sum of the elements that came before. This allows a binary search to be performed more easily.
+- GenericList **elements**: The elements the CDF represents and the data it should contain.
 - ECDFListFlags **flags**: None, IsFinalized: If IsFinalized is true, the cdf is valid, otherwise CDFList_finalize has to be called first.
 - F32 **total**: Represents the sum of all probabilities (only useful if IsFinalized is true).
 - U64 **totalElements**: How many elements are inserted into the cdf.
@@ -237,7 +238,7 @@ A CDFList consists of the following:
 A CDF can be created through the following functions:
 
 - Error **CDFList_create**(U64 maxElements, Bool isReserved, U64 elementSize, Allocator allocator, CDFList *result): Creates N entries in a new CDFList or reserves N entries instead if isReserved is true. elementSize is the size of the data that backs the CDFList. 
-- Error **CDFList_createSubset**(List preallocated, U64 elementOffset, U64 elementCount, Allocator allocator, CDFList *result): Creates N entries in a new CDFList but takes the backing memory as a ref from the preallocated list. This is useful for a 2D CDF for example, because it doesn't need to allocate any more.
+- Error **CDFList_createSubset**(GenericList preallocated, U64 elementOffset, U64 elementCount, Allocator allocator, CDFList *result): Creates N entries in a new CDFList but takes the backing memory as a ref from the preallocated list. This is useful for a 2D CDF for example, because it doesn't need to allocate any more.
 
 When the CDF is created, it can be updated through the following functions:
 

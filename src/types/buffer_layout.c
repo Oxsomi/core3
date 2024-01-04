@@ -271,7 +271,7 @@ Bool BufferLayoutStruct_free(Allocator alloc, BufferLayoutStruct *layoutStruct) 
 //Getting data
 
 CharString BufferLayoutStruct_getName(BufferLayoutStruct layoutStruct) {
-	return CharString_createConstRefSized((const C8*) layoutStruct.data.ptr, layoutStruct.nameLength, false);
+	return CharString_createRefSizedConst((const C8*) layoutStruct.data.ptr, layoutStruct.nameLength, false);
 }
 
 BufferLayoutMember BufferLayoutStruct_getMember(BufferLayoutStruct layoutStruct, U16 memberId) {
@@ -306,7 +306,7 @@ BufferLayoutMemberInfo BufferLayoutStruct_getMemberInfo(BufferLayoutStruct layou
 
 			Buffer_offset(&tmp, member.arrayIndices * sizeof(U32));
 
-			CharString name = CharString_createConstRefSized((const C8*)tmp.ptr, member.nameLength, false);
+			CharString name = CharString_createRefSizedConst((const C8*)tmp.ptr, member.nameLength, false);
 			Buffer_offset(&tmp, member.nameLength * sizeof(C8));
 
 			return (BufferLayoutMemberInfo) {
@@ -434,7 +434,7 @@ Error BufferLayout_createInstance(BufferLayout layout, U64 count, Allocator allo
 		return Error_invalidParameter(3, 0, "BufferLayout_createInstance()::result isn't empty, might indicate memleak");
 
 	LayoutPathInfo info = (LayoutPathInfo) { 0 };
-	Error err = BufferLayout_resolveLayout(layout, CharString_createConstRefCStr("/"), &info, alloc);
+	Error err = BufferLayout_resolveLayout(layout, CharString_createRefCStrConst("/"), &info, alloc);
 
 	if(err.genericError)
 		return err;
@@ -455,7 +455,7 @@ Error BufferLayout_resolveLayout(BufferLayout layout, CharString path, LayoutPat
 	if(!info)
 		return Error_nullPointer(2, "BufferLayout_resolveLayout()::info is NULL");
 
-	if(CharString_equalsStringSensitive(path, CharString_createConstRefCStr("//")))
+	if(CharString_equalsStringSensitive(path, CharString_createRefCStrConst("//")))
 		return Error_invalidParameter(1, 0, "BufferLayout_resolveLayout()::path is invalid");
 
 	U64 start = CharString_startsWithSensitive(path, '/');

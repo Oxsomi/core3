@@ -112,22 +112,22 @@ Bool CharString_setAt(CharString str, U64 i, C8 c);
 
 CharString CharString_createNull();
 
-CharString CharString_createConstRefAuto(const C8 *ptr, U64 maxSize);		//Auto detect end (up to maxSize chars)
+CharString CharString_createRefAutoConst(const C8 *ptr, U64 maxSize);		//Auto detect end (up to maxSize chars)
 
-CharString CharString_createConstRefCStr(const C8 *ptr);					//Only use this if string is created safely (null terminator)
+CharString CharString_createRefCStrConst(const C8 *ptr);					//Only use this if string is created safely (\0)
 CharString CharString_createRefAuto(C8 *ptr, U64 maxSize);					//Auto detect end (up to maxSize chars)
 
 //hasNullAfterSize is true if the size given excludes the null terminator (e.g. ptr[size] == '\0').
 //In this case ptr[size] has to be the null terminator.
 //If this is false, it will automatically check if ptr contains a null terminator
 
-CharString CharString_createConstRefSized(const C8 *ptr, U64 size, Bool hasNullAfterSize);
+CharString CharString_createRefSizedConst(const C8 *ptr, U64 size, Bool hasNullAfterSize);
 CharString CharString_createRefSized(C8 *ptr, U64 size, Bool hasNullAfterSize);
 
 //
 
-CharString CharString_createConstRefShortString(const ShortString str);
-CharString CharString_createConstRefLongString(const LongString str);
+CharString CharString_createRefShortStringConst(const ShortString str);
+CharString CharString_createRefLongStringConst(const LongString str);
 
 CharString CharString_createRefShortString(ShortString str);
 CharString CharString_createRefLongString(LongString str);

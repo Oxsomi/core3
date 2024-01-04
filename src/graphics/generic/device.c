@@ -295,7 +295,7 @@ Error GraphicsDeviceRef_create(
 	_gotoIfError(clean, GraphicsDeviceRef_createBuffer(
 		*deviceRef, 
 		EDeviceBufferUsage_CPUAllocatedBit | EDeviceBufferUsage_InternalWeakRef, 
-		CharString_createConstRefCStr("Per frame data"),
+		CharString_createRefCStrConst("Per frame data"),
 		sizeof(CBufferData) * 3, &device->frameData
 	));
 
@@ -439,7 +439,7 @@ Error GraphicsDeviceRef_resizeStagingBuffer(GraphicsDeviceRef *deviceRef, U64 ne
 	_gotoIfError(clean, GraphicsDeviceRef_createBuffer(
 		deviceRef, 
 		EDeviceBufferUsage_CPUAllocatedBit | EDeviceBufferUsage_InternalWeakRef, 
-		CharString_createConstRefCStr("Staging buffer"),
+		CharString_createRefCStrConst("Staging buffer"),
 		newSize, &device->staging
 	));
 

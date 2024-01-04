@@ -172,7 +172,7 @@ Bool CLI_helpOperation(ParsedArgs args) {
 	if(split.length > 0)
 		for (EOperationCategory cat = EOperationCategory_Start; cat < EOperationCategory_End; ++cat) {
 
-			CharString catStr = CharString_createConstRefCStr(EOperationCategory_names[cat - 1]);
+			CharString catStr = CharString_createRefCStrConst(EOperationCategory_names[cat - 1]);
 
 			if(CharString_equalsStringInsensitive(split.ptr[0], catStr)) {
 
@@ -186,7 +186,7 @@ Bool CLI_helpOperation(ParsedArgs args) {
 						if (
 							cat == Operation_values[i].category &&
 							CharString_equalsStringInsensitive(
-								split.ptr[1], CharString_createConstRefCStr(Operation_values[i].name)
+								split.ptr[1], CharString_createRefCStrConst(Operation_values[i].name)
 							)
 						) {
 							operation = i;
@@ -203,7 +203,7 @@ Bool CLI_helpOperation(ParsedArgs args) {
 
 						if (
 							CharString_equalsStringInsensitive(
-								split.ptr[2], CharString_createConstRefCStr(Format_values[i].name)
+								split.ptr[2], CharString_createRefCStrConst(Format_values[i].name)
 							)
 						) {
 							format = i;
@@ -254,7 +254,7 @@ Bool CLI_execute(CharStringList arglist) {
 
 		if (CharString_equalsStringInsensitive(
 			arg0, 
-			CharString_createConstRefCStr(EOperationCategory_names[i - 1])
+			CharString_createRefCStrConst(EOperationCategory_names[i - 1])
 		)) {
 			category = i;
 			break;
@@ -282,7 +282,7 @@ Bool CLI_execute(CharStringList arglist) {
 
 		if (
 			category == Operation_values[i].category &&
-			CharString_equalsStringInsensitive(arg1, CharString_createConstRefCStr(Operation_values[i].name))
+			CharString_equalsStringInsensitive(arg1, CharString_createRefCStrConst(Operation_values[i].name))
 		) {
 			operation = i;
 			break;
@@ -305,7 +305,7 @@ Bool CLI_execute(CharStringList arglist) {
 	for(U64 i = 0; i < EOperationFlags_Count; ++i)
 		for(U64 j = 2; j < arglist.length; ++j)
 
-			if (CharString_equalsStringInsensitive(arglist.ptr[j], CharString_createConstRefCStr(EOperationFlags_names[i]))) {
+			if (CharString_equalsStringInsensitive(arglist.ptr[j], CharString_createRefCStrConst(EOperationFlags_names[i]))) {
 
 				if ((args.flags >> i) & 1) {
 					Log_errorLnx("Duplicate flag: %.*s.", CharString_length(arglist.ptr[j]), arglist.ptr[j].ptr);
@@ -323,7 +323,7 @@ Bool CLI_execute(CharStringList arglist) {
 	for(U64 i = 0; i < EOperationHasParameter_Count; ++i)
 		for(U64 j = 2; j < arglist.length; ++j)
 			if (CharString_equalsStringInsensitive(
-				arglist.ptr[j], CharString_createConstRefCStr(EOperationHasParameter_names[i])
+				arglist.ptr[j], CharString_createRefCStrConst(EOperationHasParameter_names[i])
 			)) {
 
 				EOperationHasParameter param = (EOperationHasParameter)(1 << i);
@@ -350,7 +350,7 @@ Bool CLI_execute(CharStringList arglist) {
 
 						for (U64 k = 0; k < EFormat_Invalid; ++k)
 							if (CharString_equalsStringInsensitive(
-								arglist.ptr[j + 1], CharString_createConstRefCStr(Format_values[k].name)
+								arglist.ptr[j + 1], CharString_createRefCStrConst(Format_values[k].name)
 							)) {
 								args.format = (EFormat) k;
 								break;
@@ -413,7 +413,7 @@ Bool CLI_execute(CharStringList arglist) {
 
 				for (; i < EOperationHasParameter_Count; ++i)
 					if (CharString_equalsStringInsensitive(
-						arglist.ptr[j], CharString_createConstRefCStr(EOperationHasParameter_names[i])
+						arglist.ptr[j], CharString_createRefCStrConst(EOperationHasParameter_names[i])
 					))
 						break;
 
@@ -433,7 +433,7 @@ Bool CLI_execute(CharStringList arglist) {
 
 			for (; i < EOperationFlags_Count; ++i)
 				if (CharString_equalsStringInsensitive(
-					arglist.ptr[j], CharString_createConstRefCStr(EOperationFlags_names[i])
+					arglist.ptr[j], CharString_createRefCStrConst(EOperationFlags_names[i])
 				))
 					break;
 

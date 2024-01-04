@@ -238,7 +238,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 		CharString dirName = CharString_createNull();
 
 		if(!CharString_cutBeforeLastSensitive(dir, '/', &dirName))
-			dirName = CharString_createConstRefSized(dir.ptr, CharString_length(dir), CharString_isNullTerminated(dir));
+			dirName = CharString_createRefSizedConst(dir.ptr, CharString_length(dir), CharString_isNullTerminated(dir));
 
 		_gotoIfError(clean, DLFile_addEntryAscii(&dlFile, dirName, alloc));
 	}
@@ -249,7 +249,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 		CharString fileName = CharString_createNull();
 
 		if(!CharString_cutBeforeLastSensitive(file, '/', &fileName))
-			fileName = CharString_createConstRefSized(file.ptr, CharString_length(file), CharString_isNullTerminated(file));
+			fileName = CharString_createRefSizedConst(file.ptr, CharString_length(file), CharString_isNullTerminated(file));
 
 		_gotoIfError(clean, DLFile_addEntryAscii(&dlFile, fileName, alloc));
 	}

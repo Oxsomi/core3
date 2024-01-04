@@ -401,7 +401,7 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 		if (allocRange >= 16 * MIBI) {		//Resource is too big, allocate dedicated staging resource
 
 			_gotoIfError(clean, GraphicsDeviceRef_createBuffer(
-				deviceRef, EDeviceBufferUsage_CPUAllocatedBit, CharString_createConstRefCStr("Dedicated staging buffer"),
+				deviceRef, EDeviceBufferUsage_CPUAllocatedBit, CharString_createRefCStrConst("Dedicated staging buffer"),
 				allocRange, &tempStagingResource
 			));
 

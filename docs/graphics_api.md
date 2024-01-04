@@ -42,14 +42,14 @@ Once this instance is acquired, it can be used to query devices and to detect wh
 
 ### Properties
 
-- readonly application: The name and version of the application.
-- readonly api: Which api is ran by the runtime: Vulkan, DirectX12, Metal3 or WebGPU.
-- readonly apiVersion: What version of the graphics api is being ran (e.g. Vulkan 1.2, DirectX 12_2, Metal 3, etc.).
+- application: The name and version of the application.
+- api: Which api is ran by the runtime: Vulkan, DirectX12, Metal3 or WebGPU.
+- apiVersion: What version of the graphics api is being ran (e.g. Vulkan 1.2, DirectX 12_2, Metal 3, etc.).
 
 ### (Member) Functions
 
 - ```c
-  Error getDeviceInfos(Bool isVerbose, List<GraphicsDeviceInfo> *infos);
+  Error getDeviceInfos(Bool isVerbose, ListGraphicsDeviceInfo *infos);
   ```
 
   - Queries all physical devices to detect if they're supported and what features they have.
@@ -94,14 +94,14 @@ _gotoIfError(clean, GraphicsInstance_getPreferredDevice(
 
 ### Properties
 
-- readonly name, driverName, driverInfo; All null-terminated UTF-8 strings giving information about the device and driver.
-- readonly type; what type this device is (dedicated GPU, integrated GPU, simulated GPU, CPU or other (unrecognized)).
-- readonly vendor; what company designed the device (Nvidia (NV), AMD, ARM, Qualcomm (QCOM), Intel (INTC), Imagination Technologies (IMGT), Apple (APPL) or unknown).
-- readonly id; number in the list of supported devices.
-- readonly luid; ID to identify this device primarily on Windows devices. This would allow sharing a resource between other APIs for interop (not supported yet). This is optional to support; check capabilities.features & LUID.
-- readonly uuid; unique id to identify the device. In APIs that don't support this natively, the other identifier (luid) will be used here instead. For example DirectX12 would use the luid here and clear the other U64.
-- readonly ext; extended physical device representation for the current API.
-- readonly capabilities; what data types, features and api dependent features are enabled. See capabilities section.
+- name, driverName, driverInfo; All null-terminated UTF-8 strings giving information about the device and driver.
+- type; what type this device is (dedicated GPU, integrated GPU, simulated GPU, CPU or other (unrecognized)).
+- vendor; what company designed the device (Nvidia (NV), AMD, ARM, Qualcomm (QCOM), Intel (INTC), Imagination Technologies (IMGT), Apple (APPL) or unknown).
+- id; number in the list of supported devices.
+- luid; ID to identify this device primarily on Windows devices. This would allow sharing a resource between other APIs for interop (not supported yet). This is optional to support; check capabilities.features & LUID.
+- uuid; unique id to identify the device. In APIs that don't support this natively, the other identifier (luid) will be used here instead. For example DirectX12 would use the luid here and clear the other U64.
+- ext; extended physical device representation for the current API.
+- capabilities; what data types, features and api dependent features are enabled. See capabilities section.
 
 #### Capabilities
 
@@ -110,7 +110,7 @@ _gotoIfError(clean, GraphicsInstance_getPreferredDevice(
 - dataTypes: I64, F16, F64, AtomicI64, AtomicF32, AtomicF64, ASTC, BCn, MSAA2x, MSAA8x, MSAA16x.
   - MSAA4x and MSAA1x (off) are supported by default.
 - featuresExt: API dependent features.
-  - Vulkan: Performance query.
+  - Vulkan: PerformanceQuery.
 
 ### Functions
 
@@ -143,25 +143,26 @@ _gotoIfError(clean, GraphicsDeviceRef_create(
 
 ### Properties
 
-- readonly instance; owning instance.
-- readonly info; physical device.
-- readonly submitId; counter of how many times submit was called (can be used as frame id).
-- readonly lastSubmit, firstSubmit; used to track when a submit was called.
-- readonly pendingResources, resourcesInFlight; used to track if resources are dirty, in flight (in use on the GPU) and if they need updates in the next submit.
-- readonly allocator; used to allocate memory.
-- readonly lock; TODO
-- readonly staging, stagingAllocations; staging allocations are used if the resources that are being updated are already in flight, if the resource is a tiled texture (non linear texture) or if the device doesn't support ReBAR/shared memory (and so the GPU memory isn't accessible).
-- readonly frameData; current frame data for this frame.
-- private readonly currentLocks; which resources are currently locked while submitCommands is active.
-- private readonly pendingBytes, flushThreshold; how many bytes of copy data are pending. The higher this is the bigger the chance of a flush happening. This is when there's so much data pending that the submitCommands will split the record in multiple submits. The reason it does this is because too much data can result in the operation taking too long and the GPU will cause a device lost error. Another reason is because these copies might make temporary staging resources which take up VRAM. Surpassing too many copies at once can result in out of memory errors or the device paging the memory to disk (resulting in too slow operations, which might cause a device lost). flushThreshold can be set to control when this happens; though it is set to a default value of < 4 GIBI (20% of cpuHeapSize when on shared memory otherwise 20% of gpuHeapSize + 10% of cpuHeapSize < 33% gpuHeapSize). For example on a system with an RTX 4090 (24GiB) and 128GiB of RAM (64 shared) the formula turns into 24GiB / 5 + 64GiB / 10 = 4.8 + 6.4 = 11.2GiB < 8GiB (24GiB/3) < 4 GiB (so limited to 4GiB). For more normal systems it is expected that flushThreshold is <4GiB.
+- instance; owning instance.
+- info; physical device.
+- submitId; counter of how many times submit was called (can be used as frame id).
+- lastSubmit, firstSubmit; used to track when a submit was called.
+- pendingResources, resourcesInFlight; used to track if resources are dirty, in flight (in use on the GPU) and if they need updates in the next submit.
+- allocator; used to allocate memory.
+- lock; used to ensure flushes aren't done while a commit is busy for example.
+- staging, stagingAllocations; staging allocations are used if the resources that are being updated are already in flight, if the resource is a tiled texture (non linear texture) or if the device doesn't support ReBAR/shared memory (and so the GPU memory isn't accessible).
+- frameData; current frame data for this frame.
+- currentLocks; which resources are currently locked while submitCommands is active.
+- pendingBytes, flushThreshold; how many bytes of copy data are pending. The higher this is the bigger the chance of a flush happening. This is when there's so much data pending that the submitCommands will split the record in multiple submits. The reason it does this is because too much data can result in the operation taking too long and the GPU will cause a device lost error. Another reason is because these copies might make temporary staging resources which take up VRAM. Surpassing too many copies at once can result in out of memory errors or the device paging the memory to disk (resulting in too slow operations, which might cause a device lost). flushThreshold can be set to control when this happens; though it is set to a default value of < 4 GIBI (20% of cpuHeapSize when on shared memory otherwise 20% of gpuHeapSize + 10% of cpuHeapSize < 33% gpuHeapSize). For example on a system with an RTX 4090 (24GiB) and 128GiB of RAM (64 shared) the formula turns into 24GiB / 5 + 64GiB / 10 = 4.8 + 6.4 = 11.2GiB < 8GiB (24GiB/3) < 4 GiB (so limited to 4GiB). For more normal systems it is expected that flushThreshold is <4GiB.
 
 ### Functions
 
 - ```c
-  Error submitCommands(List<CommandListRef*> commandLists, List<SwapchainRef*> swapchains, Buffer runtimeData);
+  Error submitCommands(ListCommandListRef commandLists, ListSwapchainRef swapchains, Buffer runtimeData);
   ```
 
   - Submits commands to the device and readies the swapchains to present if available. If the device doesn't have any swapchains, it can be used to just submit commands. This is useful for multi GPU rendering as well.
+  
 - There's a limit of 16 swapchains per device.
   
   - Runtime data is accessible from a CBuffer to all shaders and can be used for simple data such as resource handles. This buffer has a limit of 368 bytes.
@@ -188,22 +189,21 @@ _gotoIfError(clean, GraphicsDeviceRef_create(
 
 - ```c
   Error createPipelinesCompute(
-      List<Buffer> computeBinaries, 
-      optional List<CharString> names,
+      ListBuffer computeBinaries, 
+      ListCharString names,		//Empty = ignore, otherwise computeBinaries.length
       PipelineRef **computeShaders
   );
+  
   ```
-```
   
 - ```c
   Error createPipelinesGraphics(
-  	List<PipelineStage> stages, 
-      List<PipelineGraphicsInfo> infos, 
-      optional List<CharString> names,
-      List<PipelineRef*> *pipelines
+  	ListPipelineStage stages, 
+  	ListPipelineGraphicsInfo infos, 
+  	ListCharString names,			//Empty = ignore, otherwise info.length
+  	ListPipelineRef *pipelines
   );
-```
-
+  ```
 - ```C
   Error createBuffer(
   	EDeviceBufferUsage usage,
@@ -249,7 +249,7 @@ _gotoIfError(clean, GraphicsDeviceRef_createCommandList(
 ```c
 _gotoIfError(clean, CommandListRef_begin(commandList, true /* clear previous */, U64_MAX /* long long timeout */));
 
-_gotoIfError(clean, CommandListRef_startScope(commandList, (List) { 0 }, 0, (List) { 0 },));
+_gotoIfError(clean, CommandListRef_startScope(commandList, (ListTransition) { 0 }, 0, (ListCommandScopeDependency) { 0 },));
 _gotoIfError(clean, CommandListRef_clearImagef(
     commandList, F32x4_create4(1, 0, 0, 1), (ImageRange){ 0 }, swapchain
 ));
@@ -261,11 +261,11 @@ _gotoIfError(clean, CommandListRef_end(commandList));
 Every frame, this can be passed onto the submit commands call:
 
 ```c
-List commandLists = (List) { 0 };
-List swapchains = (List) { 0 };
+ListCommandListRef commandLists = (ListCommandListRef) { 0 };
+ListSwapchainRef swapchains = (ListSwapchainRef) { 0 };
 
-_gotoIfError(clean, List_createConstRef((const U8*) &commandList, 1, sizeof(commandList), &commandLists));
-_gotoIfError(clean, List_createConstRef((const U8*) &swapchain, 1, sizeof(swapchain), &swapchains));
+_gotoIfError(clean, ListCommandListRef_createRefConst(commandList, 1, &commandLists));
+_gotoIfError(clean, ListSwapchainRef_createRefConst(swapchain, 1, &swapchains));
 
 _gotoIfError(clean, GraphicsDeviceRef_submitCommands(device, commandLists, swapchains));
 ```
@@ -274,23 +274,22 @@ For more info on commands check out the "Commands" section.
 
 ### Properties
 
-- readonly device; owning device.
-- readonly state; if the command list has been opened before and if it's open or closed right now.
-- readonly allowResize; if command list is allowed to resize if it runs out of memory.
-- readonly resources; Which resources are in use by the command list.
-- private readonly:
-  - data; The current recorded commands.
-  - commandOps; The opcodes for which commands are recorded.
-  - callstacks; On debug mode, contains the stacktrace of each command (up to 16 deep callstack). Used for debugging if an error occurs in the API-dependent layer.
-  - next; the next offset into the data buffer for the next command to record.
-  - transitions; list of transitions issued in the command list. Scopes point into this to execute transitions.
-  - activeScopes; list of scopes that weren't collapsed (scope command id & scope id, what transitions it did and how many commands it contains & the length of the sub command buffer).
-  - computePipeline/graphicsPipeline; currently bound pipeline.
-  -  tempStateFlags; AnyScissor, AnyViewport, HasModifyOp, HasScope, InvalidState. Used for validation and optimization.
-  - debugRegionStack; used for validating debug regions.
-  - lastCommandId, lastOffset, lastTransition; locations at the start of a scope for command id, buffer location and transition offset. Used for the next scope description.
-  - currentSize; size of the current renderpass.
-  - pendingTransitions; list of transitions waiting for the current scope. Get pushed into transitions if the scope is visible.
+- device; owning device.
+- state; if the command list has been opened before and if it's open or closed right now.
+- allowResize; if command list is allowed to resize if it runs out of memory.
+- resources; Which resources are in use by the command list.
+- data; The current recorded commands.
+- commandOps; The opcodes for which commands are recorded.
+- callstacks; On debug mode, contains the stacktrace of each command (up to 16 deep callstack). Used for debugging if an error occurs in the API-dependent layer.
+- next; the next offset into the data buffer for the next command to record.
+- transitions; list of transitions issued in the command list. Scopes point into this to execute transitions.
+- activeScopes; list of scopes that weren't collapsed (scope command id & scope id, what transitions it did and how many commands it contains & the length of the sub command buffer).
+- computePipeline/graphicsPipeline; currently bound pipeline.
+- tempStateFlags; AnyScissor, AnyViewport, HasModifyOp, HasScope, InvalidState. Used for validation and optimization.
+- debugRegionStack; used for validating debug regions.
+- lastCommandId, lastOffset, lastTransition; locations at the start of a scope for command id, buffer location and transition offset. Used for the next scope description.
+- currentSize; size of the current renderpass.
+- pendingTransitions; list of transitions waiting for the current scope. Get pushed into transitions if the scope is visible.
 
 ### Functions
 
@@ -343,16 +342,16 @@ By default the swapchain will use triple buffering to ensure best performance. E
 
 ### Properties
 
-- readonly info.window: the Window handle created using OxC3 platforms.
-- readonly info.requiresManualComposite: Whether or not the application is requested to explicitly handle rotation from the device. For desktop this is generally false, for Android this is on to avoid the extra overhead of the compositor. 
-- readonly info.presentModePriorities: What present modes were requested on create.
-- readonly device: The owning device.
-- readonly size: Current size of the swapchain.
-- readonly format: Current format of the swapchain.
-- readonly versionId: The version id changes everytime a change is applied. This could be resizes or format changes.
-- readonly presentMode: What present mode is currently used (see Swapchain/Present mode).
-- readonly info.usage: What the swapchain is allowed to be used for.
-- private readonly lock: Multi-threading. Is used to maintain versionId. On submitCommands it has to lock the swapchain(s) to see if the versionId is still the same as the one the command list(s) was/were recorded with. A CommandList is deemed stale if the Swapchain has been resized to a different size. Not re-recording will result in submitCommands erroring. This is because lots of commands can use the swapchain size such as SetViewportAndScissor.
+- info.window: the Window handle created using OxC3 platforms.
+- info.requiresManualComposite: Whether or not the application is requested to explicitly handle rotation from the device. For desktop this is generally false, for Android this is on to avoid the extra overhead of the compositor. 
+- info.presentModePriorities: What present modes were requested on create.
+- device: The owning device.
+- size: Current size of the swapchain.
+- format: Current format of the swapchain.
+- versionId: The version id changes everytime a change is applied. This could be resizes or format changes.
+- presentMode: What present mode is currently used (see Swapchain/Present mode).
+- info.usage: What the swapchain is allowed to be used for.
+- lock: Multi-threading. Is used to maintain versionId. On submitCommands it has to lock the swapchain(s) to see if the versionId is still the same as the one the command list(s) was/were recorded with. A CommandList is deemed stale if the Swapchain has been resized to a different size. Not re-recording will result in submitCommands erroring. This is because lots of commands can use the swapchain size such as SetViewportAndScissor.
 
 ### Functions
 
@@ -375,12 +374,12 @@ A pipeline is a combination of the states and shader binaries that are required 
 
 ### Properties
 
-- readonly device: ref to the graphics device that owns it.
-- readonly type: compute, graphics or raytracing pipeline type.
-- readonly stages: `List<PipelineStage>` the binaries that are used for the shader.
+- device: ref to the graphics device that owns it.
+- type: compute, graphics or raytracing pipeline type.
+- stages: `ListPipelineStage` the binaries that are used for the shader.
   - stageType: which stage the binary is for. This is not necessarily unique, but should be unique for graphics shaders and compute. For raytracing shaders there can be multiple for the same stage.
   - shaderBinary: the format as explained in "Shader binary types" that is required by the current graphics API.
-- readonly extraInfo: a pointer to behind the API dependent pipeline extension struct that allows extra info that's only applicable to a certain pipeline type. 
+- extraInfo: a pointer to behind the API dependent pipeline extension struct that allows extra info that's only applicable to a certain pipeline type. 
   - For compute: this is NULL.
   - For graphics: this is PipelineGraphicsInfo.
   - For raytracing: this is PipelineRaytracingInfoExt.
@@ -471,9 +470,9 @@ CharString nameArr[] = {
     CharString_createConstRefCStr("Test compute pipeline")
 };
 
-List computeBinaries = (List) { 0 };
-_gotoIfError(clean, List_createConstRef(&tempShader, 1, sizeof(Buffer), &computeBinaries));
-_gotoIfError(clean, List_createConstRef((const U8*) &nameArr, 1, sizeof(nameArr[0]), &names));
+ListBuffer computeBinaries = (ListBuffer) { 0 };
+_gotoIfError(clean, ListBuffer_createRefConst(tempShader, 1, &computeBinaries));
+_gotoIfError(clean, ListCharString_createConstRefConst(nameArr, 1, &names));
 _gotoIfError(clean, GraphicsDeviceRef_createPipelinesCompute(device, &computeBinaries, names, &computeShaders));
 
 tempShader = Buffer_createNull();
@@ -500,10 +499,8 @@ PipelineStage stage[2] = {
     }
 };
 
-List stageInfos = (List) { 0 };
-_gotoIfError(clean, List_createConstRef(
-    (const U8*) stage, sizeof(stage) / sizeof(stage[0]), sizeof(stage[0]), &stageInfos
-));
+ListPipelineStage stageInfos = (ListPipelineStage) { 0 };
+_gotoIfError(clean, ListPipelineStage_createRefConst(stage, sizeof(stage) / sizeof(stage[0]), &stageInfos));
 
 //Define all pipelines.
 //These pipelines require the graphics feature DirectRendering and will error otherwise!
@@ -521,8 +518,8 @@ PipelineGraphicsInfo info[1] = {
 //Create pipelines, this will take ownership of the binaries (if they're managed).
 //Make sure to release them after to avoid freeing twice!
 
-List infos = (List) { 0 };
-_gotoIfError(clean, List_createConstRef((const U8*) info, sizeof(info) / sizeof(info[0]), sizeof(info[0]), &infos));
+ListPipelineGraphicsInfo infos = (ListPipelineGraphicsInfo) { 0 };
+_gotoIfError(clean, ListPipelineGraphicsInfo_createConstRef(info, sizeof(info) / sizeof(info[0]), &infos));
 _gotoIfError(clean, GraphicsDeviceRef_createPipelinesGraphics(
     device, &stageInfos, &infos, &graphicsShaders
 ));
@@ -574,16 +571,16 @@ _gotoIfError(clean, GraphicsDeviceRef_createBufferData(
 
 ### Properties
 
-- readonly device: ref to the graphics device that owns it.
-- readonly usage: ShaderRead (accessible for read from shader), ShaderWrite (accessible for write from shader), Vertex (use as vertex buffer), Index (use as index buffer), Indirect (use for indirect draw calls), CPUBacked (There's a CPU copy of the buffer to facilitate reads/writes), CPUAllocated (The entire resource has to be located in "shared" memory or on the CPU if there's a dedicated GPU).
-- readonly isPending(FullCopy): Information about if any data is pending for the next submit and if the entire resource is pending.
-- readonly length: Length of the buffer.
-- readonly cpuData: If CPUBacked stores the CPU copy for the resource or temporary data for the next submit to copy CPU data to the real resource.
-- readonly pendingChanges: `[U64 startRange, U64 endRange][]` list of marked regions for copy.
-- readonly readHandle, writeHandle: Places where the resource can be accessed on the GPU side. If a shader uses the writeHandle in a shader it has to transition the resource (or the subresource) to write state before it is accessed as such (at the relevant shader stage); same with the readHandle (but read state). If you're only reading/writing from a part of a resource it is preferred to only transition part of the resource. This will signal the implementation that other parts of the resource aren't in use. Which could lead to more efficient resource updates for example. Imagine streaming in/out meshes from a single buffer; only meshes that are in use need to be updated with the staging buffer, while others could be directly copied to GPU visible memory if available (ReBAR, shared mem, cpu visible, etc.). It could also reduce decompression/compression time occurring on the GPU due to changing the entire resource to write instead of readonly (with subresources this could be eased depending on the driver). 
-- readonly mappedMemory: Where the device buffer is mapped on cpu-accessible memory. NULL if it's not mapped as memory. This data can't be written to/read from without explicitly using the functions for them. This is because the resource might still be in flight, and doing so may cause undefined behavior.
-- readonly blockOffset, blockId: Which memory block the buffer was allocated. 
-- private readonly lock: Multi-threading helper. A buffer gets locked when it's being modified or used by the CPU while recording. For example DeviceBufferRef_markDirty will require a lock and GraphicsDeviceRef_submitCommands will too. So markDirty has to finish before or after the submitCommands is done.
+- device: ref to the graphics device that owns it.
+- usage: ShaderRead (accessible for read from shader), ShaderWrite (accessible for write from shader), Vertex (use as vertex buffer), Index (use as index buffer), Indirect (use for indirect draw calls), CPUBacked (There's a CPU copy of the buffer to facilitate reads/writes), CPUAllocated (The entire resource has to be located in "shared" memory or on the CPU if there's a dedicated GPU).
+- isPending(FullCopy): Information about if any data is pending for the next submit and if the entire resource is pending.
+- length: Length of the buffer.
+- cpuData: If CPUBacked stores the CPU copy for the resource or temporary data for the next submit to copy CPU data to the real resource.
+- pendingChanges: `[U64 startRange, U64 endRange][]` list of marked regions for copy.
+- readHandle, writeHandle: Places where the resource can be accessed on the GPU side. If a shader uses the writeHandle in a shader it has to transition the resource (or the subresource) to write state before it is accessed as such (at the relevant shader stage); same with the readHandle (but read state). If you're only reading/writing from a part of a resource it is preferred to only transition part of the resource. This will signal the implementation that other parts of the resource aren't in use. Which could lead to more efficient resource updates for example. Imagine streaming in/out meshes from a single buffer; only meshes that are in use need to be updated with the staging buffer, while others could be directly copied to GPU visible memory if available (ReBAR, shared mem, cpu visible, etc.). It could also reduce decompression/compression time occurring on the GPU due to changing the entire resource to write instead of readonly (with subresources this could be eased depending on the driver). 
+- mappedMemory: Where the device buffer is mapped on cpu-accessible memory. NULL if it's not mapped as memory. This data can't be written to/read from without explicitly using the functions for them. This is because the resource might still be in flight, and doing so may cause undefined behavior.
+- blockOffset, blockId: Which memory block the buffer was allocated. 
+- lock: Multi-threading helper. A buffer gets locked when it's being modified or used by the CPU while recording. For example DeviceBufferRef_markDirty will require a lock and GraphicsDeviceRef_submitCommands will too. So markDirty has to finish before or after the submitCommands is done.
 
 ### Functions
 
@@ -653,7 +650,7 @@ _gotoIfError(clean, CommandListRef_clearImagef(
 ));
 ```
 
-To clear multiple at once, call clearImages with a `List<ClearImageCmd>`. ClearImageCmd takes a color, a range and the image ref ptr. It's the same as a single clear image but it allows multiple.
+To clear multiple at once, call clearImages with a `ListClearImageCmd`. ClearImageCmd takes a color, a range and the image ref ptr. It's the same as a single clear image but it allows multiple.
 
 Clear image is only allowed on images which aren't currently bound as a render target. The image is leading in determining the format which will be read out. If you use clearImagef but it's a uint texture then it will bitcast the float color to a uint for you.
 
@@ -802,17 +799,15 @@ AttachmentInfo attachmentInfo = (AttachmentInfo) {
     .color = (ClearColor) { .colorf = {  1, 0, 0, 1 } }
 };
 
-List colors = (List) { 0 };
-_gotoIfError(clean, List_createConstRef(
-    (const U8*) &attachmentInfo, 1, sizeof(AttachmentInfo), &colors
-));
+ListAttachmentInfo colors = (ListAttachmentInfo) { 0 };
+_gotoIfError(clean, ListAttachmentInfo_createRefConst(attachmentInfo, 1, &colors));
 
 _gotoIfError(clean, CommandListRef_startRenderExt(
     commandList, 		//See "Command list"
     I32x2_zero(), 		//No offset
     I32x2_zero(), 		//Use attachment's size
     colors, 
-    (List) { 0 }		//No depth stencil buffers
+    (ListAttachmentInfo) { 0 }		//No depth stencil buffers
 ));
 
 //Draw calls here
@@ -882,13 +877,10 @@ Transition transitions[] = {
 	}
 };
 
-List transitionArr = (List) { 0 };		//No need to free since it's a ref.
-_gotoIfError(
-    clean, 
-    List_createConstRef((const U8*) &transitionArr, 1, sizeof(Transition), transitions)
-);
+ListTransition transitionArr = (ListTransition) { 0 };		
+_gotoIfError(clean, ListTransition_createRefConst(&transitionArr, 1, transitions));
 
-_gotoIfError(clean, CommandListRef_startScope(commandList, transitionArr, 0 /* id */, (List) { 0 } /* deps */));
+_gotoIfError(clean, CommandListRef_startScope(commandList, transitionArr, 0 /* id */, (ListCommandScopeDependency) { 0 } /* deps */));
 //TODO: Bind compute shader(s) and dispatch
 _gotoIfError(clean, CommandListRef_endScope(commandList));
 ```
@@ -903,7 +895,7 @@ Unfortunately, validation is only possible in DirectX and Vulkan using their res
 
 #### Dependencies
 
-The final parameter of startScope is the dependencies; this is a `List<ScopeDependency>` which references the scopes by id it has a dependency on. It contains the dependency type (unconditional, conditional) and a scope id of the dependency. A conditional dependency means that the dependency needs to be available, otherwise the scope is invalid and it should be an error to insert it if the dependency isn't available. An unconditional dependency is one where the execution will happen always even if the scope is not present; but it does mean that the scope needs to be executed before it. Consider the following:
+The final parameter of startScope is the dependencies; this is a ListCommandScopeDependency which references the scopes by id it has a dependency on. It contains the dependency type (unconditional, conditional) and a scope id of the dependency. A conditional dependency means that the dependency needs to be available, otherwise the scope is invalid and it should be an error to insert it if the dependency isn't available. An unconditional dependency is one where the execution will happen always even if the scope is not present; but it does mean that the scope needs to be executed before it. Consider the following:
 
 ```
 startScope (0)					//Render visibility buffer

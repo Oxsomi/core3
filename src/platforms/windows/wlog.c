@@ -140,7 +140,7 @@ void Log_printCapturedStackTraceCustom(Allocator alloc, const void **stackTrace,
 				capture->mod = CharString_getFilePath(&capture->mod);
 
 			if(line.FileName)
-				capture->fil = CharString_createConstRefAuto(line.FileName, MAX_PATH);
+				capture->fil = CharString_createRefAutoConst(line.FileName, MAX_PATH);
 
 			//Copy strings to heap, since they'll go out of scope
 

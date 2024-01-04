@@ -121,8 +121,8 @@ Error GraphicsInstance_createExt(
 
 	#ifndef NDEBUG
 
-		CharString debugReport = CharString_createConstRefCStr("VK_EXT_debug_report");
-		CharString debugUtils = CharString_createConstRefCStr("VK_EXT_debug_utils");
+		CharString debugReport = CharString_createRefCStrConst("VK_EXT_debug_report");
+		CharString debugUtils = CharString_createRefCStrConst("VK_EXT_debug_utils");
 
 		if(isVerbose)
 			Log_debugLnx("Supported extensions:");
@@ -133,14 +133,14 @@ Error GraphicsInstance_createExt(
 	Bool supportsSurfacePlatform = false;
 	Bool supportsColorSpace = false;
 
-	CharString surfaceKhr = CharString_createConstRefCStr("VK_KHR_surface");
-	CharString surfacePlatform = CharString_createConstRefCStr(_VK_SURFACE_EXT);
-	CharString swapchainColorspace = CharString_createConstRefCStr("VK_EXT_swapchain_colorspace");
+	CharString surfaceKhr = CharString_createRefCStrConst("VK_KHR_surface");
+	CharString surfacePlatform = CharString_createRefCStrConst(_VK_SURFACE_EXT);
+	CharString swapchainColorspace = CharString_createRefCStrConst("VK_EXT_swapchain_colorspace");
 
 	for(U64 i = 0; i < extensionCount; ++i) {
 
 		const C8 *name = extensions.ptr[i].extensionName;
-		CharString nameStr = CharString_createConstRefCStr(name);
+		CharString nameStr = CharString_createRefCStrConst(name);
 
 		if(CharString_equalsStringSensitive(nameStr, surfaceKhr))
 			supportsSurface = true;
@@ -474,8 +474,8 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 
 			for(U64 l = 0; l < sizeof(reqExtensions); ++l)
 				if (CharString_equalsStringSensitive(
-					CharString_createConstRefCStr(reqExtensionsName[l]),
-					CharString_createConstRefCStr(name)
+					CharString_createRefCStrConst(reqExtensionsName[l]),
+					CharString_createRefCStrConst(name)
 				)) {
 					reqExtensions[l] = true;
 					found = true;
@@ -487,8 +487,8 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 			if (!found)
 				for(U64 l = 0; l < sizeof(optExtensions); ++l)
 					if (CharString_equalsStringSensitive(
-						CharString_createConstRefCStr(optExtensionsName[l]),
-						CharString_createConstRefCStr(name)
+						CharString_createRefCStrConst(optExtensionsName[l]),
+						CharString_createRefCStrConst(name)
 					)) {
 						optExtensions[l] = true;
 						break;

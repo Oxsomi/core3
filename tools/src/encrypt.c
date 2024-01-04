@@ -37,7 +37,7 @@ Bool CLI_encryptDo(ParsedArgs args) {
 
 	if (generateOutput) {
 		_gotoIfError(clean, CharString_createCopyx(*args.args.ptr, &tmpString));
-		_gotoIfError(clean, CharString_appendStringx(&tmpString, CharString_createConstRefCStr(".oiCA")));
+		_gotoIfError(clean, CharString_appendStringx(&tmpString, CharString_createRefCStrConst(".oiCA")));
 		_gotoIfError(clean, ListCharString_insertx(&args.args, generatedOutputIndex, tmpString));
 	}
 

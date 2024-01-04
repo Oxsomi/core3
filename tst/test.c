@@ -169,11 +169,11 @@ int main() {
 		printf("Testing number to CharString conversions\n");
 
 		CharString resultsStr[] = {
-			CharString_createConstRefCStr("0x1234"),
-			CharString_createConstRefCStr("0b10101"),
-			CharString_createConstRefCStr("0o707"),
-			CharString_createConstRefCStr("0nNiceNumber"),
-			CharString_createConstRefCStr("69420")
+			CharString_createRefCStrConst("0x1234"),
+			CharString_createRefCStrConst("0b10101"),
+			CharString_createRefCStrConst("0o707"),
+			CharString_createRefCStrConst("0nNiceNumber"),
+			CharString_createRefCStrConst("69420")
 		};
 
 		U64 resultsU64[] = {
@@ -322,13 +322,13 @@ int main() {
 		{ 0xC23CE8A7, 0x895F4B21, 0xEC0DAF37, 0x920AC0A2, 0x62A22004, 0x5A03EB2D, 0xFED48EF9, 0xB05AABEA }
 	};
 
-	inputs[1] = CharString_createConstRefCStr("abc");
+	inputs[1] = CharString_createRefCStrConst("abc");
 
 	_gotoIfError(clean, CharString_create('a', MEGA, alloc, inputs + 2));
 
-	inputs[3] = CharString_createConstRefSized("\xde\x18\x89\x41\xa3\x37\x5d\x3a\x8a\x06\x1e\x67\x57\x6e\x92\x6d", 16, true);
+	inputs[3] = CharString_createRefSizedConst("\xde\x18\x89\x41\xa3\x37\x5d\x3a\x8a\x06\x1e\x67\x57\x6e\x92\x6d", 16, true);
 
-	inputs[4] = CharString_createConstRefSized(
+	inputs[4] = CharString_createRefSizedConst(
 		"\xDE\x18\x89\x41\xA3\x37\x5D\x3A\x8A\x06\x1E\x67\x57\x6E\x92\x6D\xC7\x1A\x7F\xA3\xF0"
 		"\xCC\xEB\x97\x45\x2B\x4D\x32\x27\x96\x5F\x9E\xA8\xCC\x75\x07\x6D\x9F\xB9\xC5\x41\x7A"
 		"\xA5\xCB\x30\xFC\x22\x19\x8B\x34\x98\x2D\xBB\x62\x9E", 
@@ -336,31 +336,31 @@ int main() {
 		true
 	);
 
-	inputs[5] = CharString_createConstRefCStr("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq");
+	inputs[5] = CharString_createRefCStrConst("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq");
 
-	inputs[6] = CharString_createConstRefCStr(
+	inputs[6] = CharString_createRefCStrConst(
 		"abcdefghbcdefghicdefghijdefghijkefghijklfghijklmghijklmnhijklmnoijklmnopjklmnopqklmnopqrlmnopqrsmnopqrstnopqrstu"
 	);
 
-	inputs[7] = CharString_createConstRefCStr("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
-	inputs[8] = CharString_createConstRefCStr("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde");
-	inputs[9] = CharString_createConstRefCStr("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0");
+	inputs[7] = CharString_createRefCStrConst("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
+	inputs[8] = CharString_createRefCStrConst("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcde");
+	inputs[9] = CharString_createRefCStrConst("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0");
 
-	inputs[10] = CharString_createConstRefSized("\xBD", 1, true);
-	inputs[11] = CharString_createConstRefSized("\xC9\x8C\x8E\x55", 4, true);
+	inputs[10] = CharString_createRefSizedConst("\xBD", 1, true);
+	inputs[11] = CharString_createRefSizedConst("\xC9\x8C\x8E\x55", 4, true);
 
 	U8 data7[1001] = { 0 }, data8[1000], data9[1005];
 
 	memset(data8, 0x41, sizeof(data8));
 	memset(data9, 0x55, sizeof(data9));
 
-	inputs[12] = CharString_createConstRefSized((const C8*)data7, 55, true);
-	inputs[13] = CharString_createConstRefSized((const C8*)data7, 56, true);
-	inputs[14] = CharString_createConstRefSized((const C8*)data7, 57, true);
-	inputs[15] = CharString_createConstRefSized((const C8*)data7, 64, true);
-	inputs[16] = CharString_createConstRefSized((const C8*)data7, 1000, true);
-	inputs[17] = CharString_createConstRefSized((const C8*)data8, 1000, false);
-	inputs[18] = CharString_createConstRefSized((const C8*)data9, 1005, false);
+	inputs[12] = CharString_createRefSizedConst((const C8*)data7, 55, true);
+	inputs[13] = CharString_createRefSizedConst((const C8*)data7, 56, true);
+	inputs[14] = CharString_createRefSizedConst((const C8*)data7, 57, true);
+	inputs[15] = CharString_createRefSizedConst((const C8*)data7, 64, true);
+	inputs[16] = CharString_createRefSizedConst((const C8*)data7, 1000, true);
+	inputs[17] = CharString_createRefSizedConst((const C8*)data8, 1000, false);
+	inputs[18] = CharString_createRefSizedConst((const C8*)data9, 1005, false);
 
 	//More extreme checks. Don't wanna run this every time.
 
@@ -370,7 +370,7 @@ int main() {
 		_gotoIfError(clean, CharString_create('\0', 1'090'519'040, alloc, inputs + 21));
 		_gotoIfError(clean, CharString_create('\x42', 1'610'612'798, alloc, inputs + 22));
 
-		inputs[19] = CharString_createConstRefSized(inputs[21].ptr, 1'000'000, true);
+		inputs[19] = CharString_createRefSizedConst(inputs[21].ptr, 1'000'000, true);
 
 	#endif
 
@@ -399,20 +399,20 @@ int main() {
 	//Transform
 
 	BufferLayoutStructInfo transformStructInfo = (BufferLayoutStructInfo) {
-		.name = CharString_createConstRefCStr("Transform")
+		.name = CharString_createRefCStrConst("Transform")
 	};
 
 	BufferLayoutMemberInfo transformMembers[] = {
 
 		(BufferLayoutMemberInfo) {
-			.name = CharString_createConstRefCStr("rot"),
+			.name = CharString_createRefCStrConst("rot"),
 			.typeId = ETypeId_F32x4,
 			.stride = sizeof(F32x4),
 			.structId = U32_MAX
 		},
 
 		(BufferLayoutMemberInfo) {
-			.name = CharString_createConstRefCStr("pos"),
+			.name = CharString_createRefCStrConst("pos"),
 			.typeId = ETypeId_F32x4,
 			.stride = sizeof(F32x4),
 			.offset = sizeof(F32x4),
@@ -420,7 +420,7 @@ int main() {
 		},
 
 		(BufferLayoutMemberInfo) {
-			.name = CharString_createConstRefCStr("scale"),
+			.name = CharString_createRefCStrConst("scale"),
 			.typeId = ETypeId_F32x4,
 			.stride = sizeof(F32x4),
 			.offset = sizeof(F32x4) * 2,
@@ -440,20 +440,20 @@ int main() {
 	//
 
 	BufferLayoutStructInfo cameraStructInfo = (BufferLayoutStructInfo) {
-		.name = CharString_createConstRefCStr("Camera")
+		.name = CharString_createRefCStrConst("Camera")
 	};
 
 	BufferLayoutMemberInfo cameraMembers[] = {
 
 		(BufferLayoutMemberInfo) {
-			.name = CharString_createConstRefCStr("transform"),
+			.name = CharString_createRefCStrConst("transform"),
 			.structId = transformStruct,
 			.stride = sizeof(F32x4) * 3,
 			.typeId = ETypeId_Undefined
 		},
 
 		(BufferLayoutMemberInfo) {
-			.name = CharString_createConstRefCStr("p0"),
+			.name = CharString_createRefCStrConst("p0"),
 			.typeId = ETypeId_F32x4,
 			.stride = sizeof(F32x4),
 			.offset = sizeof(F32x4) * 3,
@@ -461,7 +461,7 @@ int main() {
 		},
 
 		(BufferLayoutMemberInfo) {
-			.name = CharString_createConstRefCStr("right"),
+			.name = CharString_createRefCStrConst("right"),
 			.typeId = ETypeId_F32x4,
 			.stride = sizeof(F32x4),
 			.offset = sizeof(F32x4) * 4,
@@ -469,7 +469,7 @@ int main() {
 		},
 
 		(BufferLayoutMemberInfo) {
-			.name = CharString_createConstRefCStr("up"),
+			.name = CharString_createRefCStrConst("up"),
 			.typeId = ETypeId_F32x4,
 			.stride = sizeof(F32x4),
 			.offset = sizeof(F32x4) * 5,
@@ -477,7 +477,7 @@ int main() {
 		},
 
 		(BufferLayoutMemberInfo) {
-			.name = CharString_createConstRefCStr("near"),
+			.name = CharString_createRefCStrConst("near"),
 			.typeId = ETypeId_F32,
 			.stride = sizeof(F32),
 			.offset = sizeof(F32x4) * 6,
@@ -485,7 +485,7 @@ int main() {
 		},
 
 		(BufferLayoutMemberInfo) {
-			.name = CharString_createConstRefCStr("far"),
+			.name = CharString_createRefCStrConst("far"),
 			.typeId = ETypeId_F32,
 			.stride = sizeof(F32),
 			.offset = sizeof(F32x4) * 6 + sizeof(F32),
@@ -493,7 +493,7 @@ int main() {
 		},
 
 		(BufferLayoutMemberInfo) {
-			.name = CharString_createConstRefCStr("fovRad"),
+			.name = CharString_createRefCStrConst("fovRad"),
 			.typeId = ETypeId_F32,
 			.stride = sizeof(F32),
 			.offset = sizeof(F32x4) * 6 + sizeof(F32) * 2,
@@ -517,7 +517,7 @@ int main() {
 	BufferLayoutMemberInfo cameraStructArrayMembers[] = {
 
 		(BufferLayoutMemberInfo) {
-			.name = CharString_createConstRefCStr("arr"),
+			.name = CharString_createRefCStrConst("arr"),
 			.structId = cameraStruct,
 			.stride = sizeof(F32x4) * 6 + sizeof(F32) * 4 /* 1 float for padding */,
 			.typeId = ETypeId_Undefined
@@ -561,7 +561,7 @@ int main() {
 
 	_gotoIfError(clean, BufferLayout_setF32x4(
 		emp, bufferLayout, 
-		CharString_createConstRefCStr("arr/0/p0"),
+		CharString_createRefCStrConst("arr/0/p0"),
 		p0,
 		alloc
 	));
@@ -571,7 +571,7 @@ int main() {
 
 	_gotoIfError(clean, BufferLayout_setF32x4(
 		emp, bufferLayout, 
-		CharString_createConstRefCStr("arr/1/p0"),
+		CharString_createRefCStrConst("arr/1/p0"),
 		p0,
 		alloc
 	));
@@ -581,7 +581,7 @@ int main() {
 
 	_gotoIfError(clean, BufferLayout_setF32x4(
 		emp, bufferLayout, 
-		CharString_createConstRefCStr("arr/1/transform/scale"),
+		CharString_createRefCStrConst("arr/1/transform/scale"),
 		p0,
 		alloc
 	));
@@ -593,7 +593,7 @@ int main() {
 
 	_gotoIfError(clean, BufferLayout_setF32(
 		emp, bufferLayout, 
-		CharString_createConstRefCStr("arr/1/fovRad"),
+		CharString_createRefCStrConst("arr/1/fovRad"),
 		fovRadTest,
 		alloc
 	));
@@ -631,84 +631,84 @@ int main() {
 
 	CharString testKeys[] = {
 
-		CharString_createConstRefSized(
+		CharString_createRefSizedConst(
 			"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
 			"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00", 
 			32,
 			true
 		),
 
-		CharString_createConstRefSized(
+		CharString_createRefSizedConst(
 			"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
 			"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00", 
 			32,
 			true
 		),
 
-		CharString_createConstRefSized(
+		CharString_createRefSizedConst(
 			"\xFE\xFF\xE9\x92\x86\x65\x73\x1C\x6D\x6A\x8F\x94\x67\x30\x83\x08"
 			"\xFE\xFF\xE9\x92\x86\x65\x73\x1C\x6D\x6A\x8F\x94\x67\x30\x83\x08", 
 			32,
 			true
 		),
 
-		CharString_createConstRefSized(
+		CharString_createRefSizedConst(
 			"\xFE\xFF\xE9\x92\x86\x65\x73\x1C\x6D\x6A\x8F\x94\x67\x30\x83\x08"
 			"\xFE\xFF\xE9\x92\x86\x65\x73\x1C\x6D\x6A\x8F\x94\x67\x30\x83\x08", 
 			32,
 			true
 		),
 
-		CharString_createConstRefSized(
+		CharString_createRefSizedConst(
 			"\xE3\xC0\x8A\x8F\x06\xC6\xE3\xAD\x95\xA7\x05\x57\xB2\x3F\x75\x48"
 			"\x3C\xE3\x30\x21\xA9\xC7\x2B\x70\x25\x66\x62\x04\xC6\x9C\x0B\x72", 
 			32,
 			true
 		),
 
-		CharString_createConstRefSized(
+		CharString_createRefSizedConst(
 			"\xE3\xC0\x8A\x8F\x06\xC6\xE3\xAD\x95\xA7\x05\x57\xB2\x3F\x75\x48"
 			"\x3C\xE3\x30\x21\xA9\xC7\x2B\x70\x25\x66\x62\x04\xC6\x9C\x0B\x72", 
 			32,
 			true
 		),
 
-		CharString_createConstRefSized(
+		CharString_createRefSizedConst(
 			"\x69\x1D\x3E\xE9\x09\xD7\xF5\x41\x67\xFD\x1C\xA0\xB5\xD7\x69\x08"
 			"\x1F\x2B\xDE\x1A\xEE\x65\x5F\xDB\xAB\x80\xBD\x52\x95\xAE\x6B\xE7", 
 			32,
 			true
 		),
 
-		CharString_createConstRefSized(
+		CharString_createRefSizedConst(
 			"\x69\x1D\x3E\xE9\x09\xD7\xF5\x41\x67\xFD\x1C\xA0\xB5\xD7\x69\x08"
 			"\x1F\x2B\xDE\x1A\xEE\x65\x5F\xDB\xAB\x80\xBD\x52\x95\xAE\x6B\xE7", 
 			32,
 			true
 		),
 
-		CharString_createConstRefSized(
+		CharString_createRefSizedConst(
 			"\x83\xC0\x93\xB5\x8D\xE7\xFF\xE1\xC0\xDA\x92\x6A\xC4\x3F\xB3\x60"
 			"\x9A\xC1\xC8\x0F\xEE\x1B\x62\x44\x97\xEF\x94\x2E\x2F\x79\xA8\x23", 
 			32,
 			true
 		),
 
-		CharString_createConstRefSized(
+		CharString_createRefSizedConst(
 			"\x83\xC0\x93\xB5\x8D\xE7\xFF\xE1\xC0\xDA\x92\x6A\xC4\x3F\xB3\x60"
 			"\x9A\xC1\xC8\x0F\xEE\x1B\x62\x44\x97\xEF\x94\x2E\x2F\x79\xA8\x23", 
 			32,
 			true
 		),
 
-		CharString_createConstRefSized(
+		CharString_createRefSizedConst(
 			"\x4C\x97\x3D\xBC\x73\x64\x62\x16\x74\xF8\xB5\xB8\x9E\x5C\x15\x51"
 			"\x1F\xCE\xD9\x21\x64\x90\xFB\x1C\x1A\x2C\xAA\x0F\xFE\x04\x07\xE5", 
 			32,
 			true
 		),
 
-		CharString_createConstRefSized(
+		CharString_createRefSizedConst(
 			"\x4C\x97\x3D\xBC\x73\x64\x62\x16\x74\xF8\xB5\xB8\x9E\x5C\x15\x51"
 			"\x1F\xCE\xD9\x21\x64\x90\xFB\x1C\x1A\x2C\xAA\x0F\xFE\x04\x07\xE5", 
 			32,
@@ -720,13 +720,13 @@ int main() {
 
 		CharString_createNull(),
 
-		CharString_createConstRefSized(
+		CharString_createRefSizedConst(
 			"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00", 
 			16,
 			true
 		),
 
-		CharString_createConstRefSized(
+		CharString_createRefSizedConst(
 			"\xD9\x31\x32\x25\xF8\x84\x06\xE5\xA5\x59\x09\xC5\xAF\xF5\x26\x9A"
 			"\x86\xA7\xA9\x53\x15\x34\xF7\xDA\x2E\x4C\x30\x3D\x8A\x31\x8A\x72"
 			"\x1C\x3C\x0C\x95\x95\x68\x09\x53\x2F\xCF\x0E\x24\x49\xA6\xB5\x25"
@@ -735,7 +735,7 @@ int main() {
 			true
 		),
 
-		CharString_createConstRefSized(
+		CharString_createRefSizedConst(
 			"\xD9\x31\x32\x25\xF8\x84\x06\xE5\xA5\x59\x09\xC5\xAF\xF5\x26\x9A"
 			"\x86\xA7\xA9\x53\x15\x34\xF7\xDA\x2E\x4C\x30\x3D\x8A\x31\x8A\x72"
 			"\x1C\x3C\x0C\x95\x95\x68\x09\x53\x2F\xCF\x0E\x24\x49\xA6\xB5\x25"
@@ -746,7 +746,7 @@ int main() {
 
 		CharString_createNull(),
 
-		CharString_createConstRefSized(
+		CharString_createRefSizedConst(
 			"\x08\x00\x0F\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1A\x1B\x1C"
 			"\x1D\x1E\x1F\x20\x21\x22\x23\x24\x25\x26\x27\x28\x29\x2A\x2B\x2C"
 			"\x2D\x2E\x2F\x30\x31\x32\x33\x34\x35\x36\x37\x38\x39\x3A\x00\x02", 
@@ -756,7 +756,7 @@ int main() {
 
 		CharString_createNull(),
 
-		CharString_createConstRefSized(
+		CharString_createRefSizedConst(
 			"\x08\x00\x0F\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1A\x1B\x1C"
 			"\x1D\x1E\x1F\x20\x21\x22\x23\x24\x25\x26\x27\x28\x29\x2A\x2B\x2C"
 			"\x2D\x2E\x2F\x30\x31\x32\x33\x34\x00\x04", 
@@ -766,7 +766,7 @@ int main() {
 
 		CharString_createNull(),
 
-		CharString_createConstRefSized(
+		CharString_createRefSizedConst(
 			"\x08\x00\x0F\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1A\x1B\x1C"
 			"\x1D\x1E\x1F\x20\x21\x22\x23\x24\x25\x26\x27\x28\x29\x2A\x2B\x2C"
 			"\x2D\x2E\x2F\x30\x31\x32\x33\x34\x35\x36\x37\x38\x39\x3A\x3B\x00"
@@ -777,7 +777,7 @@ int main() {
 
 		CharString_createNull(),
 
-		CharString_createConstRefSized(
+		CharString_createRefSizedConst(
 			"\x08\x00\x0F\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1A\x1B\x1C"
 			"\x1D\x1E\x1F\x20\x21\x22\x23\x24\x25\x26\x27\x28\x29\x2A\x2B\x2C"
 			"\x2D\x2E\x2F\x30\x31\x32\x33\x34\x35\x36\x37\x38\x39\x3A\x3B\x3C"
@@ -793,14 +793,14 @@ int main() {
 		CharString_createNull(),
 		CharString_createNull(),
 
-		CharString_createConstRefSized(
+		CharString_createRefSizedConst(
 			"\xFE\xED\xFA\xCE\xDE\xAD\xBE\xEF\xFE\xED\xFA\xCE\xDE\xAD\xBE\xEF"
 			"\xAB\xAD\xDA\xD2", 
 			20,
 			true
 		),
 
-		CharString_createConstRefSized(
+		CharString_createRefSizedConst(
 			"\xD6\x09\xB1\xF0\x56\x63\x7A\x0D\x46\xDF\x99\x8D\x88\xE5\x22\x2A"
 			"\xB2\xC2\x84\x65\x12\x15\x35\x24\xC0\x89\x5E\x81\x08\x00\x0F\x10"
 			"\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1A\x1B\x1C\x1D\x1E\x1F\x20"
@@ -810,14 +810,14 @@ int main() {
 			true
 		),
 
-		CharString_createConstRefSized(
+		CharString_createRefSizedConst(
 			"\xD6\x09\xB1\xF0\x56\x63\x7A\x0D\x46\xDF\x99\x8D\x88\xE5\x2E\x00"
 			"\xB2\xC2\x84\x65\x12\x15\x35\x24\xC0\x89\x5E\x81",
 			28,
 			true
 		),
 
-		CharString_createConstRefSized(
+		CharString_createRefSizedConst(
 			"\xE2\x01\x06\xD7\xCD\x0D\xF0\x76\x1E\x8D\xCD\x3D\x88\xE5\x40\x00"
 			"\x76\xD4\x57\xED\x08\x00\x0F\x10\x11\x12\x13\x14\x15\x16\x17\x18"
 			"\x19\x1A\x1B\x1C\x1D\x1E\x1F\x20\x21\x22\x23\x24\x25\x26\x27\x28"
@@ -827,14 +827,14 @@ int main() {
 			true
 		),
 
-		CharString_createConstRefSized(
+		CharString_createRefSizedConst(
 			"\xE2\x01\x06\xD7\xCD\x0D\xF0\x76\x1E\x8D\xCD\x3D\x88\xE5\x4C\x2A"
 			"\x76\xD4\x57\xED",
 			20,
 			true
 		),
 
-		CharString_createConstRefSized(
+		CharString_createRefSizedConst(
 			"\x84\xC5\xD5\x13\xD2\xAA\xF6\xE5\xBB\xD2\x72\x77\x88\xE5\x23\x00"
 			"\x89\x32\xD6\x12\x7C\xFD\xE9\xF9\xE3\x37\x24\xC6\x08\x00\x0F\x10"
 			"\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1A\x1B\x1C\x1D\x1E\x1F\x20"
@@ -845,14 +845,14 @@ int main() {
 			true
 		),
 
-		CharString_createConstRefSized(
+		CharString_createRefSizedConst(
 			"\x84\xC5\xD5\x13\xD2\xAA\xF6\xE5\xBB\xD2\x72\x77\x88\xE5\x2F\x00"
 			"\x89\x32\xD6\x12\x7C\xFD\xE9\xF9\xE3\x37\x24\xC6",
 			28,
 			true
 		),
 
-		CharString_createConstRefSized(
+		CharString_createRefSizedConst(
 			"\x68\xF2\xE7\x76\x96\xCE\x7A\xE8\xE2\xCA\x4E\xC5\x88\xE5\x41\x00"
 			"\x2E\x58\x49\x5C\x08\x00\x0F\x10\x11\x12\x13\x14\x15\x16\x17\x18"
 			"\x19\x1A\x1B\x1C\x1D\x1E\x1F\x20\x21\x22\x23\x24\x25\x26\x27\x28"
@@ -863,7 +863,7 @@ int main() {
 			true
 		),
 
-		CharString_createConstRefSized(
+		CharString_createRefSizedConst(
 			"\x68\xF2\xE7\x76\x96\xCE\x7A\xE8\xE2\xCA\x4E\xC5\x88\xE5\x4D\x00"
 			"\x2E\x58\x49\x5C",
 			20,
@@ -888,20 +888,20 @@ int main() {
 
 	CharString results[] = {
 
-		CharString_createConstRefSized(
+		CharString_createRefSizedConst(
 			"\x53\x0F\x8A\xFB\xC7\x45\x36\xB9\xA9\x63\xB4\xF1\xC4\xCB\x73\x8B",		//Tag (iv is prepended automatically)
 			16,
 			true
 		),
 
-		CharString_createConstRefSized(
+		CharString_createRefSizedConst(
 			"\xCE\xA7\x40\x3D\x4D\x60\x6B\x6E\x07\x4E\xC5\xD3\xBA\xF3\x9D\x18"		//Block 0
 			"\xD0\xD1\xC8\xA7\x99\x99\x6B\xF0\x26\x5B\x98\xB5\xD4\x8A\xB9\x19",		//Tag
 			32,
 			true
 		),
 
-		CharString_createConstRefSized(
+		CharString_createRefSizedConst(
 			"\x52\x2D\xC1\xF0\x99\x56\x7D\x07\xF4\x7F\x37\xA3\x2A\x84\x42\x7D"		//Cipher
 			"\x64\x3A\x8C\xDC\xBF\xE5\xC0\xC9\x75\x98\xA2\xBD\x25\x55\xD1\xAA"
 			"\x8C\xB0\x8E\x48\x59\x0D\xBB\x3D\xA7\xB0\x8B\x10\x56\x82\x88\x38"
@@ -911,7 +911,7 @@ int main() {
 			true
 		),
 
-		CharString_createConstRefSized(
+		CharString_createRefSizedConst(
 			"\x52\x2D\xC1\xF0\x99\x56\x7D\x07\xF4\x7F\x37\xA3\x2A\x84\x42\x7D"		//Cipher
 			"\x64\x3A\x8C\xDC\xBF\xE5\xC0\xC9\x75\x98\xA2\xBD\x25\x55\xD1\xAA"
 			"\x8C\xB0\x8E\x48\x59\x0D\xBB\x3D\xA7\xB0\x8B\x10\x56\x82\x88\x38"
@@ -921,13 +921,13 @@ int main() {
 			true
 		),
 
-		CharString_createConstRefSized(
+		CharString_createRefSizedConst(
 			"\x2F\x0B\xC5\xAF\x40\x9E\x06\xD6\x09\xEA\x8B\x7D\x0F\xA5\xEA\x50",		//Tag (iv is prepended automatically)
 			16,
 			true
 		),
 
-		CharString_createConstRefSized(
+		CharString_createRefSizedConst(
 			"\xE2\x00\x6E\xB4\x2F\x52\x77\x02\x2D\x9B\x19\x92\x5B\xC4\x19\xD7"		//Cipher
 			"\xA5\x92\x66\x6C\x92\x5F\xE2\xEF\x71\x8E\xB4\xE3\x08\xEF\xEA\xA7"
 			"\xC5\x27\x3B\x39\x41\x18\x86\x0A\x5B\xE2\xA9\x7F\x56\xAB\x78\x36"
@@ -936,13 +936,13 @@ int main() {
 			true
 		),
 
-		CharString_createConstRefSized(
+		CharString_createRefSizedConst(
 			"\x35\x21\x7C\x77\x4B\xBC\x31\xB6\x31\x66\xBC\xF9\xD4\xAB\xED\x07",		//Tag (iv is prepended automatically)
 			16,
 			true
 		),
 
-		CharString_createConstRefSized(
+		CharString_createRefSizedConst(
 			"\xC1\x62\x3F\x55\x73\x0C\x93\x53\x30\x97\xAD\xDA\xD2\x56\x64\x96"		//Cipher
 			"\x61\x25\x35\x2B\x43\xAD\xAC\xBD\x61\xC5\xEF\x3A\xC9\x0B\x5B\xEE"
 			"\x92\x9C\xE4\x63\x0E\xA7\x9F\x6C\xE5\x19"
@@ -951,13 +951,13 @@ int main() {
 			true
 		),
 
-		CharString_createConstRefSized(
+		CharString_createRefSizedConst(
 			"\x6E\xE1\x60\xE8\xFA\xEC\xA4\xB3\x6C\x86\xB2\x34\x92\x0C\xA9\x75",		//Tag (iv is prepended automatically)
 			16,
 			true
 		),
 
-		CharString_createConstRefSized(
+		CharString_createRefSizedConst(
 			"\x11\x02\x22\xFF\x80\x50\xCB\xEC\xE6\x6A\x81\x3A\xD0\x9A\x73\xED"		//Cipher
 			"\x7A\x9A\x08\x9C\x10\x6B\x95\x93\x89\x16\x8E\xD6\xE8\x69\x8E\xA9"
 			"\x02\xEB\x12\x77\xDB\xEC\x2E\x68\xE4\x73\x15\x5A\x15\xA7\xDA\xEE"
@@ -967,13 +967,13 @@ int main() {
 			true
 		),
 
-		CharString_createConstRefSized(
+		CharString_createRefSizedConst(
 			"\x00\xBD\xA1\xB7\xE8\x76\x08\xBC\xBF\x47\x0F\x12\x15\x7F\x4C\x07",		//Tag (iv is prepended automatically)
 			16,
 			true
 		),
 
-		CharString_createConstRefSized(
+		CharString_createRefSizedConst(
 			"\xBA\x8A\xE3\x1B\xC5\x06\x48\x6D\x68\x73\xE4\xFC\xE4\x60\xE7\xDC"
 			"\x57\x59\x1F\xF0\x06\x11\xF3\x1C\x38\x34\xFE\x1C\x04\xAD\x80\xB6"
 			"\x68\x03\xAF\xCF\x5B\x27\xE6\x33\x3F\xA6\x7C\x99\xDA\x47\xC2\xF0"
@@ -1608,7 +1608,7 @@ int main() {
 
 	for(U64 i = 0; i < sizeof(stringified) / sizeof(stringified[0]); ++i) {
 
-		_gotoIfError(clean, BigInt_createFromString(CharString_createConstRefCStr(stringified[i]), 128, alloc, &aBig));
+		_gotoIfError(clean, BigInt_createFromString(CharString_createRefCStrConst(stringified[i]), 128, alloc, &aBig));
 		_gotoIfError(clean, BigInt_createConstRef(&mulParams[i][0], 2, &bBig));
 
 		if(BigInt_neq(aBig, bBig))
@@ -1625,7 +1625,7 @@ int main() {
 		_gotoIfError(clean, BigInt_createConstRef(&mulParams[i][0], 2, &bBig));
 		_gotoIfError(clean, BigInt_toString(bBig, alloc, &tmp, (EIntegerEncoding)i, false));
 
-		CharString ref = CharString_createConstRefCStr(stringified[i]);
+		CharString ref = CharString_createRefCStrConst(stringified[i]);
 
 		if(!CharString_equalsStringSensitive(ref, tmp))
 			_gotoIfError(clean, Error_invalidState((U32)i, "BigInt_toString failed"));
@@ -1936,7 +1936,7 @@ int main() {
 
 	for(U64 i = 0; i < sizeof(stringified) / sizeof(stringified[0]); ++i) {
 
-		U128 vi = U128_createFromString(CharString_createConstRefCStr(stringified[i]), &err, alloc);
+		U128 vi = U128_createFromString(CharString_createRefCStrConst(stringified[i]), &err, alloc);
 		U128 realVi = U128_create((const U8*) &mulParams[i][0]);
 
 		_gotoIfError(clean, err);
@@ -1952,7 +1952,7 @@ int main() {
 		U128 realVi = U128_create((const U8*) &mulParams[i][0]);
 		_gotoIfError(clean, U128_toString(realVi, alloc, &tmp, (EIntegerEncoding)i, false));
 
-		CharString ref = CharString_createConstRefCStr(stringified[i]);
+		CharString ref = CharString_createRefCStrConst(stringified[i]);
 
 		if(!CharString_equalsStringSensitive(ref, tmp))
 			_gotoIfError(clean, Error_invalidState((U32)i, "U128_toString failed"));

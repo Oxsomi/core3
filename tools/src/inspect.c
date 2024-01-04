@@ -509,7 +509,7 @@ Bool CLI_showFile(ParsedArgs args, Buffer b, U64 start, U64 length, Bool isAscii
 		//Ascii can be directly output to log
 
 		if (isAscii) {
-			tmp = CharString_createConstRefSized((const C8*)b.ptr + start, length, false);
+			tmp = CharString_createRefSizedConst((const C8*)b.ptr + start, length, false);
 			Log_debugLnx("%.*s", CharString_length(tmp), tmp.ptr);
 			tmp = CharString_createNull();
 		}
@@ -694,7 +694,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 			return false;
 		}
 
-		U64 off = CharString_startsWithStringInsensitive(key, CharString_createConstRefCStr("0x")) ? 2 : 0;
+		U64 off = CharString_startsWithStringInsensitive(key, CharString_createRefCStrConst("0x")) ? 2 : 0;
 
 		if (CharString_length(key) - off != 64) {
 			Log_errorLnx("Invalid parameter sent to -aes. Expecting key in hex (32 bytes)");
@@ -783,7 +783,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 					else {
 
 						Bool isAscii = CharString_isValidAscii(
-							CharString_createConstRefSized((const C8*) e.data.ptr, Buffer_length(e.data), false)
+							CharString_createRefSizedConst((const C8*) e.data.ptr, Buffer_length(e.data), false)
 						);
 
 						Log_debugLnx("%.*s", CharString_length(e.path), e.path.ptr);
@@ -802,7 +802,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 					ArchiveEntry e = (ArchiveEntry) {
 						.type = EFileType_Folder,
-						.path = CharString_createConstRefCStr(".")
+						.path = CharString_createRefCStrConst(".")
 					};
 
 					CLI_storeFileOrFolder(args, e, file.archive, &madeFile, start, length);
@@ -811,7 +811,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 				_gotoIfError(cleanCa, Archive_foreachx(
 					file.archive,
-					CharString_createConstRefCStr("."),
+					CharString_createRefCStrConst("."),
 					(FileCallback) collectArchiveEntries,
 					&strings,
 					true,
@@ -858,7 +858,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 				CharString sub = CharString_createNull();
 				if(!CharString_cutBeforeLastSensitive(pathi, '/', &sub))
-					sub = CharString_createConstRefSized(pathi.ptr, CharString_length(pathi), false);
+					sub = CharString_createRefSizedConst(pathi.ptr, CharString_length(pathi), false);
 
 				_gotoIfError(cleanCa, CharString_appendStringx(&tmp, sub));
 
@@ -946,7 +946,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 						Buffer_length(entryi.entryBuffer);
 
 					_gotoIfError(cleanDl, CharString_createDecx(i, 3, &tmp));
-					_gotoIfError(cleanDl, CharString_appendStringx(&tmp, CharString_createConstRefCStr(": length = ")));
+					_gotoIfError(cleanDl, CharString_appendStringx(&tmp, CharString_createRefCStrConst(": length = ")));
 
 					_gotoIfError(cleanDl, CharString_createDecx(entrySize, 0, &tmp1));
 					_gotoIfError(cleanDl, CharString_appendStringx(&tmp, tmp1));

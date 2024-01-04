@@ -92,7 +92,7 @@ Bool _CLI_convert(ParsedArgs args, Bool isTo) {
 			return false;
 		}
 
-		U64 off = CharString_startsWithStringInsensitive(key, CharString_createConstRefCStr("0x")) ? 2 : 0;
+		U64 off = CharString_startsWithStringInsensitive(key, CharString_createRefCStrConst("0x")) ? 2 : 0;
 
 		if (CharString_length(key) - off != 64) {
 			Log_errorLnx("Invalid parameter sent to -aes. Expecting key in hex (32 bytes)");

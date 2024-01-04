@@ -26,7 +26,7 @@
 #define _button(name)																				\
 	if ((err = InputDevice_createButton(															\
 		*result, EMouseButton_##name  - EMouseButton_Begin, 										\
-		CharString_createConstRefCStr("EMouseButton_" #name), &res									\
+		CharString_createRefCStrConst("EMouseButton_" #name), &res									\
 	)).genericError) {																				\
 		InputDevice_free(result);																	\
 		return err;																					\
@@ -35,7 +35,7 @@
 #define _axis(name, resetOnUnfocus)																	\
 	if ((err = InputDevice_createAxis(																\
 		*result, EMouseAxis_##name - EMouseAxis_Begin, 												\
-		CharString_createConstRefCStr("EMouseAxis_" #name), 0, resetOnUnfocus, &res					\
+		CharString_createRefCStrConst("EMouseAxis_" #name), 0, resetOnUnfocus, &res					\
 	)).genericError) {																				\
 		InputDevice_free(result);																	\
 		return err;																					\

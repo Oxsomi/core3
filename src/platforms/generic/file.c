@@ -80,7 +80,7 @@ int removeFileOrFolder(const C8 *ptr) {
 		//Delete every file, because RemoveDirecotryA requires it to be empty
 		//We'll handle recursion ourselves
 
-		Error err = File_foreach(CharString_createConstRefCStr(ptr), recurseDelete, NULL, false);
+		Error err = File_foreach(CharString_createRefCStrConst(ptr), recurseDelete, NULL, false);
 
 		if(err.genericError)
 			return -1;

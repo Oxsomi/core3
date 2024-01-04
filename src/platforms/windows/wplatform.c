@@ -65,7 +65,7 @@ CharString Error_formatPlatformError(Allocator alloc, Error err) {
 		return CharString_createNull();
 
 	CharString res;
-	if((err = CharString_createCopy(CharString_createConstRefSized(lpBuffer, f, true), alloc, &res)).genericError) {
+	if((err = CharString_createCopy(CharString_createRefSizedConst(lpBuffer, f, true), alloc, &res)).genericError) {
 		LocalFree(lpBuffer);
 		return CharString_createNull();
 	}
@@ -98,7 +98,7 @@ void sigFunc(int signal) {
 	//Turn this off by defining _NO_SIGNAL_HANDLING
 
 	Log_printStackTracex(1, ELogLevel_Error, ELogOptions_Default);
-	Log_logx(ELogLevel_Fatal, ELogOptions_Default, CharString_createConstRefCStr(msg));
+	Log_logx(ELogLevel_Fatal, ELogOptions_Default, CharString_createRefCStrConst(msg));
 	exit(signal);
 }
 
@@ -451,7 +451,7 @@ BOOL enumerateFiles(HMODULE mod, LPCSTR unused, LPSTR name, EnumerateFiles *sect
 
 	mod; unused;
 
-	CharString str = CharString_createConstRefCStr(name);
+	CharString str = CharString_createRefCStrConst(name);
 
 	Error err = Error_none();
 	CharString copy = CharString_createNull();
@@ -520,7 +520,7 @@ Error Platform_initExt(CharString currAppDir) {
 		CharString basePath = CharString_createNull();
 
 		if (loc == CharString_length(appDir))
-			basePath = CharString_createConstRefAuto(appDir.ptr, CharString_length(appDir));
+			basePath = CharString_createRefAutoConst(appDir.ptr, CharString_length(appDir));
 	
 		else CharString_cut(appDir, 0, loc + 1, &basePath);
 
@@ -566,7 +566,7 @@ Error Platform_initExt(CharString currAppDir) {
 		//Move to heap and standardize
 
 		if((err = CharString_createCopyx(
-			CharString_createConstRefSized(buff, chars, true), &Platform_instance.workingDirectory
+			CharString_createRefSizedConst(buff, chars, true), &Platform_instance.workingDirectory
 		)).genericError) {
 			Buffer_freex(&platformExt);
 			return err;
@@ -588,7 +588,7 @@ Error Platform_initExt(CharString currAppDir) {
 	if (!EnumResourceNamesA(
 		NULL, RT_RCDATA,
 		(ENUMRESNAMEPROCA)enumerateFiles,
-		(LONG_PTR)&Platform_instance.virtualSections
+		(LONG_PTR)&files
 	)) {
 
 		//Enum resource names also fails if we don't have any resources.

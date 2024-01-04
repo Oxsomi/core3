@@ -136,7 +136,7 @@ Error _CLI_convertToDL(ParsedArgs args, CharString input, FileInfo inputInfo, Ch
 
 		if (args.flags & EOperationFlags_Ascii) {
 
-			CharString str = CharString_createConstRefSized((const C8*)buf.ptr, Buffer_length(buf), false);
+			CharString str = CharString_createRefSizedConst((const C8*)buf.ptr, Buffer_length(buf), false);
 
 			//Grab split string
 
@@ -219,7 +219,7 @@ Error _CLI_convertToDL(ParsedArgs args, CharString input, FileInfo inputInfo, Ch
 				break;
 			}
 
-			sortedPaths.ptrNonConst[dec] = CharString_createConstRefSized(stri.ptr, CharString_length(stri), false);
+			sortedPaths.ptrNonConst[dec] = CharString_createRefSizedConst(stri.ptr, CharString_length(stri), false);
 		}
 
 		//Keep the sorting as is, since it's not linear
@@ -271,7 +271,7 @@ Error _CLI_convertToDL(ParsedArgs args, CharString input, FileInfo inputInfo, Ch
 		else if(settings.dataType == EDLDataType_Ascii) {
 
 			Buffer bufi = buffers.ptr[i];
-			CharString str = CharString_createConstRefSized((const C8*)bufi.ptr, Buffer_length(bufi), false);
+			CharString str = CharString_createRefSizedConst((const C8*)bufi.ptr, Buffer_length(bufi), false);
 			
 			_gotoIfError(clean, DLFile_addEntryAsciix(&file, str));
 		}
@@ -344,7 +344,7 @@ Error _CLI_convertFromDL(ParsedArgs args, CharString input, FileInfo inputInfo, 
 	//Write file
 
 	EFileType type = EFileType_Folder;
-	CharString txt = CharString_createConstRefCStr(".txt");
+	CharString txt = CharString_createRefCStrConst(".txt");
 
 	if(
 		(CharString_endsWithStringInsensitive(output, txt) || (args.parameters & EOperationHasParameter_SplitBy)) &&
@@ -366,7 +366,7 @@ Error _CLI_convertFromDL(ParsedArgs args, CharString input, FileInfo inputInfo, 
 		if(!CharString_endsWithSensitive(outputBase, '/'))
 			_gotoIfError(clean, CharString_appendx(&outputBase, '/'));
 
-		CharString bin = CharString_createConstRefCStr(".bin");
+		CharString bin = CharString_createRefCStrConst(".bin");
 
 		for (U64 i = 0; i < file.entries.length; ++i) {
 

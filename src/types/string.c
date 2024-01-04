@@ -105,10 +105,10 @@ Bool CharString_isValidFileName(CharString str) {
 	if (strl >= 3) {
 
 		if(
-			CharString_startsWithStringInsensitive(str, CharString_createConstRefCStr("CON")) ||
-			CharString_startsWithStringInsensitive(str, CharString_createConstRefCStr("AUX")) ||
-			CharString_startsWithStringInsensitive(str, CharString_createConstRefCStr("NUL")) ||
-			CharString_startsWithStringInsensitive(str, CharString_createConstRefCStr("PRN"))
+			CharString_startsWithStringInsensitive(str, CharString_createRefCStrConst("CON")) ||
+			CharString_startsWithStringInsensitive(str, CharString_createRefCStrConst("AUX")) ||
+			CharString_startsWithStringInsensitive(str, CharString_createRefCStrConst("NUL")) ||
+			CharString_startsWithStringInsensitive(str, CharString_createRefCStrConst("PRN"))
 		)
 			illegalStart = 3;
 
@@ -116,8 +116,8 @@ Bool CharString_isValidFileName(CharString str) {
 
 			if(
 				(
-					CharString_startsWithStringInsensitive(str, CharString_createConstRefCStr("COM")) ||
-					CharString_startsWithStringInsensitive(str, CharString_createConstRefCStr("LPT"))
+					CharString_startsWithStringInsensitive(str, CharString_createRefCStrConst("COM")) ||
+					CharString_startsWithStringInsensitive(str, CharString_createRefCStrConst("LPT"))
 				) &&
 				C8_isDec(str.ptr[3])
 			)
@@ -157,7 +157,7 @@ Bool CharString_isValidFilePath(CharString str) {
 
 	//myTest/ <-- or myTest\ to myTest
 		
-	str = CharString_createConstRefSized(str.ptr, CharString_length(str), CharString_isNullTerminated(str));
+	str = CharString_createRefSizedConst(str.ptr, CharString_length(str), CharString_isNullTerminated(str));
 
 	if(CharString_getAt(str, CharString_length(str) - 1) == '/' || CharString_getAt(str, CharString_length(str) - 1) == '\\')
 		str.lenAndNullTerminated = CharString_length(str) - 1;
@@ -235,7 +235,7 @@ Bool CharString_isValidFilePath(CharString str) {
 			if(!(i - prev))
 				return false;
 
-			CharString part = CharString_createConstRefSized(str.ptr + prev, i - prev, false);
+			CharString part = CharString_createRefSizedConst(str.ptr + prev, i - prev, false);
 
 			if(!CharString_isSupportedInFilePath(part))
 				return false;
@@ -246,7 +246,7 @@ Bool CharString_isValidFilePath(CharString str) {
 
 	//Validate ending
 
-	CharString part = CharString_createConstRefSized(str.ptr + prev, strl - prev, CharString_isNullTerminated(str));
+	CharString part = CharString_createRefSizedConst(str.ptr + prev, strl - prev, CharString_isNullTerminated(str));
 
 	if(!CharString_isSupportedInFilePath(part))
 		return false;
@@ -281,7 +281,7 @@ Bool CharString_setAt(CharString str, U64 i, C8 c) {
 
 CharString CharString_createNull() { return (CharString) { 0 }; }
 
-CharString CharString_createConstRefAuto(const C8 *ptr, U64 maxSize) { 
+CharString CharString_createRefAutoConst(const C8 *ptr, U64 maxSize) { 
 
 	if(!ptr)
 		return CharString_createNull();
@@ -295,17 +295,17 @@ CharString CharString_createConstRefAuto(const C8 *ptr, U64 maxSize) {
 	};
 }
 
-CharString CharString_createConstRefCStr(const C8 *ptr) {
-	return CharString_createConstRefAuto(ptr, U64_MAX);
+CharString CharString_createRefCStrConst(const C8 *ptr) {
+	return CharString_createRefAutoConst(ptr, U64_MAX);
 }
 
 CharString CharString_createRefAuto(C8 *ptr, U64 maxSize) { 
-	CharString str = CharString_createConstRefAuto(ptr, maxSize);
+	CharString str = CharString_createRefAutoConst(ptr, maxSize);
 	str.capacityAndRefInfo = 0;	//Flag as dynamic
 	return str;
 }
 
-CharString CharString_createConstRefSized(const C8 *ptr, U64 size, Bool isNullTerminated) {
+CharString CharString_createRefSizedConst(const C8 *ptr, U64 size, Bool isNullTerminated) {
 
 	if(!ptr || (size >> 48))
 		return CharString_createNull();
@@ -329,17 +329,17 @@ CharString CharString_createConstRefSized(const C8 *ptr, U64 size, Bool isNullTe
 }
 
 CharString CharString_createRefSized(C8 *ptr, U64 size, Bool isNullTerminated) {
-	CharString str = CharString_createConstRefSized(ptr, size, isNullTerminated);
+	CharString str = CharString_createRefSizedConst(ptr, size, isNullTerminated);
 	str.capacityAndRefInfo = 0;	//Flag as dynamic
 	return str;
 }
 
-CharString CharString_createConstRefShortString(const ShortString str) {
-	return CharString_createConstRefAuto(str, _SHORTSTRING_LEN);
+CharString CharString_createRefShortStringConst(const ShortString str) {
+	return CharString_createRefAutoConst(str, _SHORTSTRING_LEN);
 }
 
-CharString CharString_createConstRefLongString(const LongString str) {
-	return CharString_createConstRefAuto(str, _LONGSTRING_LEN);
+CharString CharString_createRefLongStringConst(const LongString str) {
+	return CharString_createRefAutoConst(str, _LONGSTRING_LEN);
 }
 
 CharString CharString_createRefShortString(ShortString str) {
@@ -393,7 +393,7 @@ Error CharString_offsetAsRef(CharString s, U64 off, CharString *result) {
 #define CharString_matchesPatternNum(testFunc, num) CharString_matchesPattern(	\
 	testFunc,																	\
 	CharString_startsWithStringInsensitive(										\
-		s, CharString_createConstRefCStr(num)									\
+		s, CharString_createRefCStrConst(num)									\
 	) ? CharString_calcStrLen(num, U64_MAX) : 0									\
 )
 
@@ -631,7 +631,7 @@ Bool CharString_free(CharString *str, Allocator alloc) {
 	if (!result)																									\
 		return Error_nullPointer(3, "CharString_createNum()::result is required");									\
 																													\
-	CharString prefix = CharString_createConstRefCStr(prefixRaw);													\
+	CharString prefix = CharString_createRefCStrConst(prefixRaw);													\
 																													\
 	if (result->ptr)																								\
 		return Error_invalidOperation(0, "CharString_createNum()::result wasn't empty, might indicate memleak");	\
@@ -727,7 +727,7 @@ Error CharString_split(
 
 		Bool b = CharString_isNullTerminated(s);
 
-		result->ptr[0] = CharString_isConstRef(s) ? CharString_createConstRefSized(s.ptr, strl, b) :
+		result->ptr[0] = CharString_isConstRef(s) ? CharString_createRefSizedConst(s.ptr, strl, b) :
 			CharString_createRefSized((C8*)s.ptr, strl, b);
 
 		return Error_none();
@@ -743,7 +743,7 @@ Error CharString_split(
 		if (C8_transform(s.ptr[i], (EStringTransform) casing) == c) {
 
 			str.ptr[count++] = 
-				CharString_isConstRef(s) ? CharString_createConstRefSized(s.ptr + last, i - last, false) : 
+				CharString_isConstRef(s) ? CharString_createRefSizedConst(s.ptr + last, i - last, false) : 
 				CharString_createRefSized((C8*)s.ptr + last, i - last, false);
 
 			last = i + 1;
@@ -752,7 +752,7 @@ Error CharString_split(
 	Bool b = CharString_isNullTerminated(s);
 
 	str.ptr[count++] = 
-		CharString_isConstRef(s) ? CharString_createConstRefSized(s.ptr + last, strl - last, b) : 
+		CharString_isConstRef(s) ? CharString_createRefSizedConst(s.ptr + last, strl - last, b) : 
 		CharString_createRefSized((C8*)s.ptr + last, strl - last, b);
 
 	return Error_none();
@@ -778,7 +778,7 @@ Error CharString_splitString(
 
 	if (!length) {
 
-		*result->ptr = CharString_isConstRef(s) ? CharString_createConstRefSized(s.ptr, strl, b) :
+		*result->ptr = CharString_isConstRef(s) ? CharString_createRefSizedConst(s.ptr, strl, b) :
 			CharString_createRefSized((C8*)s.ptr, strl, b);
 
 		return Error_none();
@@ -804,7 +804,7 @@ Error CharString_splitString(
 		if (match) {
 
 			str.ptr[count++] = 
-				CharString_isConstRef(s) ? CharString_createConstRefSized(s.ptr + last, i - last, false) : 
+				CharString_isConstRef(s) ? CharString_createRefSizedConst(s.ptr + last, i - last, false) : 
 				CharString_createRefSized((C8*)s.ptr + last, i - last, false);
 
 			last = i + strl;
@@ -813,7 +813,7 @@ Error CharString_splitString(
 	}
 
 	str.ptr[count++] = 
-		CharString_isConstRef(s) ? CharString_createConstRefSized(s.ptr + last, strl - last, b) : 
+		CharString_isConstRef(s) ? CharString_createRefSizedConst(s.ptr + last, strl - last, b) : 
 		CharString_createRefSized((C8*)s.ptr + last, strl - last, b);
 
 	return Error_none();
@@ -880,7 +880,7 @@ Error CharString_splitLine(CharString s, Allocator alloc, CharStringList *result
 			continue;
 
 		result->ptr[v++] = CharString_isConstRef(s) ? 
-			CharString_createConstRefSized(s.ptr + lastLineEnd, iOld - lastLineEnd, false) : 
+			CharString_createRefSizedConst(s.ptr + lastLineEnd, iOld - lastLineEnd, false) : 
 			CharString_createRefSized((C8*)s.ptr + lastLineEnd, iOld - lastLineEnd, false);
 
 		lastLineEnd = i + 1;
@@ -888,7 +888,7 @@ Error CharString_splitLine(CharString s, Allocator alloc, CharStringList *result
 
 	if(lastLineEnd != strl)
 		result->ptr[v++] = CharString_isConstRef(s) ? 
-			CharString_createConstRefSized(s.ptr + lastLineEnd, strl - lastLineEnd, CharString_isNullTerminated(s)) : 
+			CharString_createRefSizedConst(s.ptr + lastLineEnd, strl - lastLineEnd, CharString_isNullTerminated(s)) : 
 			CharString_createRefSized((C8*)s.ptr + lastLineEnd, strl - lastLineEnd, CharString_isNullTerminated(s));
 
 	return Error_none();
@@ -1014,7 +1014,7 @@ Error CharString_append(CharString *s, C8 c, Allocator allocator) {
 	return CharString_resize(s, CharString_length(*s) + (Bool)c, c, allocator);
 }
 
-CharString CharString_newLine() { return CharString_createConstRefCStr("\n"); }
+CharString CharString_newLine() { return CharString_createRefCStrConst("\n"); }
 
 Error CharString_appendString(CharString *s, CharString other, Allocator allocator) {
 
@@ -1023,7 +1023,7 @@ Error CharString_appendString(CharString *s, CharString other, Allocator allocat
 	if (!otherl)
 		return Error_none();
 
-	other = CharString_createConstRefSized(other.ptr, otherl, CharString_isNullTerminated(other));
+	other = CharString_createRefSizedConst(other.ptr, otherl, CharString_isNullTerminated(other));
 
 	if (!s)
 		return Error_nullPointer(0, "CharString_appendString()::s is required");
@@ -1744,7 +1744,7 @@ Bool CharString_equalsStringInsensitive(CharString s, CharString c) {
 
 Bool CharString_parseNyto(CharString s, U64 *result){
 
-	CharString prefix = CharString_createConstRefCStr("0n");
+	CharString prefix = CharString_createRefCStrConst("0n");
 
 	Error err = CharString_offsetAsRef(
 		s, CharString_startsWithStringInsensitive(s, prefix) ? CharString_length(prefix) : 0, &s
@@ -1778,7 +1778,7 @@ Bool CharString_parseNyto(CharString s, U64 *result){
 
 Bool CharString_parseHex(CharString s, U64 *result){
 
-	CharString prefix = CharString_createConstRefCStr("0x");
+	CharString prefix = CharString_createRefCStrConst("0x");
 	Error err = CharString_offsetAsRef(
 		s, CharString_startsWithStringInsensitive(s, prefix) ? CharString_length(prefix) : 0, &s
 	);
@@ -2015,7 +2015,7 @@ Bool CharString_parseFloat(CharString s, F32 *result) {
 
 Bool CharString_parseOct(CharString s, U64 *result) {
 
-	CharString prefix = CharString_createConstRefCStr("0o");
+	CharString prefix = CharString_createRefCStrConst("0o");
 	Error err = CharString_offsetAsRef(
 		s, CharString_startsWithStringInsensitive(s, prefix) ? CharString_length(prefix) : 0, &s
 	);
@@ -2046,7 +2046,7 @@ Bool CharString_parseOct(CharString s, U64 *result) {
 
 Bool CharString_parseBin(CharString s, U64 *result) {
 
-	CharString prefix = CharString_createConstRefCStr("0b");
+	CharString prefix = CharString_createRefCStrConst("0b");
 	Error err = CharString_offsetAsRef(
 		s, 
 		CharString_startsWithStringInsensitive(s, prefix) ? 
@@ -2117,7 +2117,7 @@ Bool CharString_cut(CharString s, U64 offset, U64 length, CharString *result) {
 
 	Bool isNullTerm = CharString_isNullTerminated(s) && offset + length == strl;
 
-	*result = CharString_isConstRef(s) ? CharString_createConstRefSized(s.ptr + offset, length, isNullTerm) :
+	*result = CharString_isConstRef(s) ? CharString_createRefSizedConst(s.ptr + offset, length, isNullTerm) :
 		CharString_createRefSized((C8*)s.ptr + offset, length, isNullTerm);
 
 	return true;
@@ -2408,7 +2408,7 @@ CharString CharString_trim(CharString s) {
 
 	Bool isNullTerm = CharString_isNullTerminated(s) && last == strl;
 	
-	return CharString_isConstRef(s) ? CharString_createConstRefSized(s.ptr + first, last - first, isNullTerm) :
+	return CharString_isConstRef(s) ? CharString_createRefSizedConst(s.ptr + first, last - first, isNullTerm) :
 		CharString_createRefSized((C8*)s.ptr + first, last - first, isNullTerm);
 }
 
