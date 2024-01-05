@@ -142,33 +142,33 @@ Error Name##_get(Name l, U64 index, Name##_Type *t) {																	\
 	return Error_none();																								\
 }																														\
 																														\
-Bool Name##_contains(Name l, Name##_Type t, U64 offset) {																\
+Bool Name##_contains(Name l, Name##_Type t, U64 offset, EqualsFunction eq) {											\
 	Buffer buf = Buffer_createRefConst((const U8*)&t, sizeof(Name##_Type));												\
-	return GenericList_contains(Name##_toList(l), buf, offset);															\
+	return GenericList_contains(Name##_toList(l), buf, offset, eq);														\
 }																														\
 																														\
-U64 Name##_count(Name l, Name##_Type t) {																				\
+U64 Name##_count(Name l, Name##_Type t, EqualsFunction eq) {															\
 	Buffer buf = Buffer_createRefConst((const U8*)&t, sizeof(Name##_Type));												\
-	return GenericList_count(Name##_toList(l), buf);																	\
+	return GenericList_count(Name##_toList(l), buf, eq);																\
 }																														\
 																														\
-U64 Name##_findFirst(Name l, Name##_Type t, U64 index) {																\
+U64 Name##_findFirst(Name l, Name##_Type t, U64 index, EqualsFunction eq) {												\
 	Buffer buf = Buffer_createRefConst((const U8*)&t, sizeof(Name##_Type));												\
-	return GenericList_findFirst(Name##_toList(l), buf, index);															\
+	return GenericList_findFirst(Name##_toList(l), buf, index, eq);														\
 }																														\
 																														\
-U64 Name##_findLast(Name l, Name##_Type t, U64 index) {																	\
+U64 Name##_findLast(Name l, Name##_Type t, U64 index, EqualsFunction eq) {												\
 	Buffer buf = Buffer_createRefConst((const U8*)&t, sizeof(Name##_Type));												\
-	return GenericList_findLast(Name##_toList(l), buf, index);															\
+	return GenericList_findLast(Name##_toList(l), buf, index, eq);														\
 }																														\
 																														\
 Error Name##_copy(Name src, U64 srcOffset, Name dst, U64 dstOffset, U64 count) {										\
 	return GenericList_copy(Name##_toList(src), srcOffset, Name##_toList(dst), dstOffset, count);						\
 }																														\
 																														\
-Error Name##_find(Name l, Name##_Type t, Allocator allocator, ListU64 *result) {										\
+Error Name##_find(Name l, Name##_Type t, EqualsFunction eq, Allocator allocator, ListU64 *result) {						\
 	Buffer buf = Buffer_createRefConst((const U8*)&t, sizeof(Name##_Type));												\
-	return GenericList_find(Name##_toList(l), buf, allocator, result);													\
+	return GenericList_find(Name##_toList(l), buf, eq, allocator, result);												\
 }																														\
 																														\
 Error Name##_popBack(Name *l, Name##_Type *output) {																	\
@@ -215,19 +215,19 @@ Error Name##_shrinkToFit(Name *l, Allocator allocator) {																\
 	TListWrapModifying(Name, Error err = GenericList_shrinkToFit(&list, allocator));									\
 }																														\
 																														\
-Error Name##_eraseFirst(Name *l, Name##_Type t, U64 offset) {															\
+Error Name##_eraseFirst(Name *l, Name##_Type t, U64 offset, EqualsFunction eq) {										\
 	Buffer buf = Buffer_createRefConst(&t, sizeof(Name##_Type));														\
-	TListWrapModifying(Name, Error err = GenericList_eraseFirst(&list, buf, offset));									\
+	TListWrapModifying(Name, Error err = GenericList_eraseFirst(&list, buf, offset, eq));								\
 }																														\
 																														\
-Error Name##_eraseLast(Name *l, Name##_Type t, U64 offset) {															\
+Error Name##_eraseLast(Name *l, Name##_Type t, U64 offset, EqualsFunction eq) {											\
 	Buffer buf = Buffer_createRefConst(&t, sizeof(Name##_Type));														\
-	TListWrapModifying(Name, Error err = GenericList_eraseLast(&list, buf, offset));									\
+	TListWrapModifying(Name, Error err = GenericList_eraseLast(&list, buf, offset, eq));								\
 }																														\
 																														\
-Error Name##_eraseAll(Name *l, Name##_Type t, Allocator allocator) {													\
+Error Name##_eraseAll(Name *l, Name##_Type t, Allocator allocator, EqualsFunction eq) {									\
 	Buffer buf = Buffer_createRefConst(&t, sizeof(Name##_Type));														\
-	TListWrapModifying(Name, Error err = GenericList_eraseAll(&list, buf, allocator));									\
+	TListWrapModifying(Name, Error err = GenericList_eraseAll(&list, buf, allocator, eq));								\
 }																														\
 																														\
 Error Name##_erase(Name *l, U64 index) {																				\

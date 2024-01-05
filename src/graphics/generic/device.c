@@ -337,7 +337,7 @@ Bool GraphicsDeviceRef_removePending(GraphicsDeviceRef *deviceRef, RefPtr *resou
 	if(acq < ELockAcquire_Success)
 		return false;
 
-	U64 found = ListWeakRefPtr_findFirst(device->pendingResources, resource, 0);
+	U64 found = ListWeakRefPtr_findFirst(device->pendingResources, resource, 0, NULL);
 	Bool success = false;
 
 	if (found == U64_MAX) {
@@ -656,7 +656,7 @@ Error GraphicsDeviceRef_submitCommands(
 
 			RefPtr *ptr = cmd->resources.ptr[i];
 
-			if(ListRefPtr_contains(*currentFlight, ptr, 0))
+			if(ListRefPtr_contains(*currentFlight, ptr, 0, NULL))
 				continue;
 
 			_gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, ptr));

@@ -161,7 +161,7 @@ Error CommandListRef_end(CommandListRef *commandListRef) {
 
 		TransitionInternal *transitions = &commandList->transitions.ptrNonConst[i];
 
-		if(!ListRefPtr_contains(commandList->resources, transitions->resource, 0)) {						//TODO: hashSet
+		if(!ListRefPtr_contains(commandList->resources, transitions->resource, 0, NULL)) {				//TODO: hashSet
 
 			if(RefPtr_inc(transitions->resource))		//CommandList will keep resource alive.
 				_gotoIfError(clean, ListRefPtr_pushBackx(&commandList->resources, transitions->resource));
@@ -828,7 +828,7 @@ Error CommandListRef_setPipeline(CommandListRef *commandListRef, PipelineRef *pi
 		commandList, op, Buffer_createRefConst((const U8*) &pipelineRef, sizeof(pipelineRef)), 0
 	));
 
-	if(!ListRefPtr_contains(commandList->resources, pipelineRef, 0)) {						//TODO: hashSet
+	if(!ListRefPtr_contains(commandList->resources, pipelineRef, 0, NULL)) {						//TODO: hashSet
 		RefPtr_inc(pipelineRef);		//CommandList will keep resource alive.
 		_gotoIfError(clean, ListRefPtr_pushBackx(&commandList->resources, pipelineRef));
 	}
@@ -1306,7 +1306,7 @@ Error CommandListRef_startRenderExt(
 
 			DeviceResourceVersion v = (DeviceResourceVersion) { .resource = info.image, .version = swapchain->versionId };
 
-			if(!ListDeviceResourceVersion_contains(commandList->activeSwapchains, v, 0)) {
+			if(!ListDeviceResourceVersion_contains(commandList->activeSwapchains, v, 0, NULL)) {
 
 				if(acq == ELockAcquire_Acquired)
 					toRelease = &swapchain->lock;

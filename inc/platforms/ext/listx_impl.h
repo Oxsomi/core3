@@ -64,14 +64,14 @@ Error Name##_createReversex(Name l, Name *result) {																		\
 	TListWrapCtorx(Name, Error err = GenericList_createReversex(Name##_toList(l), &list));								\
 }																														\
 																														\
-Error Name##_findx(Name l, Name##_Type t, ListU64 *result) {															\
+Error Name##_findx(Name l, Name##_Type t, EqualsFunction eq, ListU64 *result) {											\
 	Buffer buf = Buffer_createRefConst(&t, sizeof(Name##_Type));														\
-	return GenericList_findx(Name##_toList(l), buf, result);															\
+	return GenericList_findx(Name##_toList(l), buf, eq, result);														\
 }																														\
 																														\
-Error Name##_eraseAllx(Name *l, Name##_Type t) {																		\
+Error Name##_eraseAllx(Name *l, Name##_Type t, EqualsFunction eq) {														\
 	Buffer buf = Buffer_createRefConst(&t, sizeof(Name##_Type));														\
-	TListWrapModifying(Name, Error err = GenericList_eraseAllx(&list, buf));											\
+	TListWrapModifying(Name, Error err = GenericList_eraseAllx(&list, buf, eq));										\
 }																														\
 																														\
 Error Name##_insertx(Name *l, U64 index, Name##_Type t) {																\

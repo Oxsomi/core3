@@ -34,9 +34,9 @@ Error GenericList_createCopyx(GenericList list, GenericList *result);
 Error GenericList_createSubsetReversex(GenericList list, U64 index, U64 length, GenericList *result);
 Error GenericList_createReversex(GenericList list, GenericList *result);
 
-Error GenericList_findx(GenericList list, Buffer buf, ListU64 *result);
+Error GenericList_findx(GenericList list, Buffer buf, EqualsFunction eq, ListU64 *result);
 
-Error GenericList_eraseAllx(GenericList *list, Buffer buf);
+Error GenericList_eraseAllx(GenericList *list, Buffer buf, EqualsFunction eq);
 Error GenericList_insertx(GenericList *list, U64 index, Buffer buf);
 Error GenericList_pushAllx(GenericList *list, GenericList other);
 Error GenericList_insertAllx(GenericList *list, GenericList other, U64 offset);
@@ -57,9 +57,9 @@ Error Name##_createCopyx(Name l, Name *result);											\
 Error Name##_createSubsetReversex(Name l, U64 index, U64 length, Name *result);			\
 Error Name##_createReversex(Name l, Name *result);										\
 																						\
-Error Name##_findx(Name l, Name##_Type t, ListU64 *result);								\
+Error Name##_findx(Name l, Name##_Type t, EqualsFunction eq, ListU64 *result);			\
 																						\
-Error Name##_eraseAllx(Name *l, Name##_Type t);											\
+Error Name##_eraseAllx(Name *l, Name##_Type t, EqualsFunction eq);						\
 Error Name##_insertx(Name *l, U64 index, Name##_Type t);								\
 Error Name##_pushAllx(Name *l, Name other);												\
 Error Name##_insertAllx(Name *l, Name other, U64 offset);								\

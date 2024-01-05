@@ -363,7 +363,7 @@ Bool WindowManager_freeWindow(WindowManager *manager, Window **w) {
 
 	Buffer windowBuf = Buffer_createManagedPtr(win, sizeof(*win));
 
-	ListWindowPtr_eraseFirst(&manager->windows, win, 0);
+	ListWindowPtr_eraseFirst(&manager->windows, win, 0, NULL);
 	Buffer_freex(&windowBuf);
 	*w = NULL;
 	return b;

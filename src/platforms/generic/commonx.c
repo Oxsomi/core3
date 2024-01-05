@@ -172,12 +172,12 @@ Error GenericList_createReversex(GenericList list, GenericList *result) {
 	return GenericList_createSubsetReversex(list, 0, list.length, result); 
 }
 
-Error GenericList_findx(GenericList list, Buffer buf, ListU64 *result) {
-	return GenericList_find(list, buf, Platform_instance.alloc, result);
+Error GenericList_findx(GenericList list, Buffer buf, EqualsFunction eq, ListU64 *result) {
+	return GenericList_find(list, buf, eq, Platform_instance.alloc, result);
 }
 
-Error GenericList_eraseAllx(GenericList *list, Buffer buf) {
-	return GenericList_eraseAll(list, buf, Platform_instance.alloc);
+Error GenericList_eraseAllx(GenericList *list, Buffer buf, EqualsFunction eq) {
+	return GenericList_eraseAll(list, buf, Platform_instance.alloc, eq);
 }
 
 Error GenericList_insertx(GenericList *list, U64 index, Buffer buf) {

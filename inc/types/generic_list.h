@@ -133,18 +133,18 @@ Error GenericList_copy(
 Error GenericList_swap(GenericList list, U64 i, U64 j);
 Bool GenericList_reverse(GenericList list);
 
-Error GenericList_find(GenericList list, Buffer buf, Allocator allocator, ListU64 *result);
+Error GenericList_find(GenericList list, Buffer buf, EqualsFunction eq, Allocator allocator, ListU64 *result);
 Error GenericList_eraseAllIndices(GenericList *list, ListU64 indices);
 
-U64 GenericList_findFirst(GenericList list, Buffer buf, U64 index);
-U64 GenericList_findLast(GenericList list, Buffer buf, U64 index);
-U64 GenericList_count(GenericList list, Buffer buf);
+U64 GenericList_findFirst(GenericList list, Buffer buf, U64 index, EqualsFunction eq);
+U64 GenericList_findLast(GenericList list, Buffer buf, U64 index, EqualsFunction eq);
+U64 GenericList_count(GenericList list, Buffer buf, EqualsFunction eq);
 
-Bool GenericList_contains(GenericList list, Buffer buf, U64 offset);
+Bool GenericList_contains(GenericList list, Buffer buf, U64 offset, EqualsFunction eq);
 
-Error GenericList_eraseFirst(GenericList *list, Buffer buf, U64 offset);
-Error GenericList_eraseLast(GenericList *list, Buffer buf, U64 offset);
-Error GenericList_eraseAll(GenericList *list, Buffer buf, Allocator allocator);
+Error GenericList_eraseFirst(GenericList *list, Buffer buf, U64 offset, EqualsFunction eq);
+Error GenericList_eraseLast(GenericList *list, Buffer buf, U64 offset, EqualsFunction eq);
+Error GenericList_eraseAll(GenericList *list, Buffer buf, Allocator allocator, EqualsFunction eq);
 Error GenericList_erase(GenericList *list, U64 index);
 Error GenericList_insert(GenericList *list, U64 index, Buffer buf, Allocator allocator);
 Error GenericList_pushAll(GenericList *list, GenericList other, Allocator allocator);

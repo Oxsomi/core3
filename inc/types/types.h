@@ -127,6 +127,8 @@ typedef enum ECompareResult {
 } ECompareResult;
 
 typedef ECompareResult (*CompareFunction)(const void *aPtr, const void *bPtr);
+typedef Bool (*EqualsFunction)(const void *aPtr, const void *bPtr);		//Passing NULL generally indicates raw buffer compare
+typedef U64 (*HashFunction)(const void *aPtr);							//Passing NULL generally indicates raw buffer hash
 
 //Buffer (more functions in types/buffer.h)
 

@@ -567,7 +567,7 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 				vkFlushMappedMemoryRanges(deviceExt->device, 1, &memoryRange);
 			}
 
-			if(!ListRefPtr_contains(*currentFlight, device->staging, 0)) {
+			if(!ListRefPtr_contains(*currentFlight, device->staging, 0, NULL)) {
 
 				_gotoIfError(clean, VkDeviceBuffer_transition(						//Ensure resource is transitioned
 					stagingExt, 

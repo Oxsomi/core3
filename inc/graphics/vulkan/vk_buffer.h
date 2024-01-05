@@ -19,7 +19,9 @@
 */
 
 #pragma once
-#include "graphics/vulkan/vk_device.h"
+#include "graphics/vulkan/vulkan.h"
+
+typedef struct ListVkBufferMemoryBarrier2 ListVkBufferMemoryBarrier2;
 
 typedef struct VkDeviceBuffer {
 

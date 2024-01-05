@@ -121,8 +121,8 @@ Error GenericList_createReverse(GenericList list, Allocator allocator, GenericLi
 	return GenericList_createSubsetReverse(list, 0, list.length, allocator, result); 
 }
 
-Bool GenericList_contains(GenericList list, Buffer buf, U64 offset) { 
-	return GenericList_findFirst(list, buf, offset) != U64_MAX; 
+Bool GenericList_contains(GenericList list, Buffer buf, U64 offset, EqualsFunction eq) { 
+	return GenericList_findFirst(list, buf, offset, eq) != U64_MAX; 
 }
 
 Error GenericList_create(U64 length, U64 stride, Allocator allocator, GenericList *result) {
@@ -394,7 +394,7 @@ Error GenericList_get(GenericList list, U64 index, Buffer *result) {
 	return Error_none();
 }
 
-Error GenericList_find(GenericList list, Buffer buf, Allocator allocator, ListU64 *result) {
+Error GenericList_find(GenericList list, Buffer buf, EqualsFunction eq, Allocator allocator, ListU64 *result) {
 
 	if(Buffer_length(buf) != list.stride)
 		return Error_invalidParameter(1, 0, "GenericList_find()::buf.length incompatible with list");
@@ -412,7 +412,7 @@ Error GenericList_find(GenericList list, Buffer buf, Allocator allocator, ListU6
 
 	for(U64 i = 0; i < list.length; ++i) {
 
-		Bool b = Buffer_eq(GenericList_atConst(list, i), buf);
+		Bool b = !eq ? Buffer_eq(GenericList_atConst(list, i), buf) : eq(GenericList_ptrConst(list, i), buf.ptr);
 
 		if(b && (err = ListU64_pushBack(result, i, allocator)).genericError) {
 			ListU64_free(result, allocator);
@@ -423,31 +423,31 @@ Error GenericList_find(GenericList list, Buffer buf, Allocator allocator, ListU6
 	return Error_none();
 }
 
-U64 GenericList_findFirst(GenericList list, Buffer buf, U64 index) {
+U64 GenericList_findFirst(GenericList list, Buffer buf, U64 index, EqualsFunction eq) {
 
 	if(Buffer_length(buf) != list.stride)
 		return U64_MAX;
 
 	for(U64 i = index; i < list.length; ++i)
-		if(Buffer_eq(GenericList_atConst(list, i), buf))
+		if(!eq ? Buffer_eq(GenericList_atConst(list, i), buf) : eq(GenericList_ptrConst(list, i), buf.ptr))
 			return i;
 
 	return U64_MAX;
 }
 
-U64 GenericList_findLast(GenericList list, Buffer buf, U64 index) {
+U64 GenericList_findLast(GenericList list, Buffer buf, U64 index, EqualsFunction eq) {
 
 	if(Buffer_length(buf) != list.stride)
 		return U64_MAX;
 
 	for(U64 i = list.length - 1; i != U64_MAX && i >= index; --i)
-		if(Buffer_eq(GenericList_atConst(list, i), buf))
+		if(!eq ? Buffer_eq(GenericList_atConst(list, i), buf) : eq(GenericList_ptrConst(list, i), buf.ptr))
 			return i;
 
 	return U64_MAX;
 }
 
-U64 GenericList_count(GenericList list, Buffer buf) {
+U64 GenericList_count(GenericList list, Buffer buf, EqualsFunction eq) {
 
 	if(Buffer_length(buf) != list.stride)
 		return U64_MAX;
@@ -455,7 +455,7 @@ U64 GenericList_count(GenericList list, Buffer buf) {
 	U64 count = 0;
 
 	for(U64 i = 0; i < list.length; ++i)
-		if(Buffer_eq(GenericList_atConst(list, i), buf))
+		if(!eq ? Buffer_eq(GenericList_atConst(list, i), buf) : eq(GenericList_ptrConst(list, i), buf.ptr))
 			++count;
 
 	return count;
@@ -735,31 +735,31 @@ Bool GenericList_sortString(GenericList list, EStringCase stringCase) {
 Bool GenericList_sortStringSensitive(GenericList list) { return GenericList_sortString(list, EStringCase_Sensitive); }
 Bool GenericList_sortStringInsensitive(GenericList list) { return GenericList_sortString(list, EStringCase_Insensitive); }
 
-Error GenericList_eraseFirst(GenericList *list, Buffer buf, U64 offset) {
+Error GenericList_eraseFirst(GenericList *list, Buffer buf, U64 offset, EqualsFunction eq) {
 
 	if(!list)
 		return Error_nullPointer(0, "GenericList_eraseFirst()::list is required");
 
-	U64 ind = GenericList_findFirst(*list, buf, offset);
+	U64 ind = GenericList_findFirst(*list, buf, offset, eq);
 	return ind == U64_MAX ? Error_none() : GenericList_erase(list, ind);
 }
 
-Error GenericList_eraseLast(GenericList *list, Buffer buf, U64 offset) {
+Error GenericList_eraseLast(GenericList *list, Buffer buf, U64 offset, EqualsFunction eq) {
 
 	if(!list)
 		return Error_nullPointer(0, "GenericList_eraseLast()::list is required");
 
-	U64 ind = GenericList_findLast(*list, buf, offset);
+	U64 ind = GenericList_findLast(*list, buf, offset, eq);
 	return ind == U64_MAX ? Error_none() : GenericList_erase(list, ind);
 }
 
-Error GenericList_eraseAll(GenericList *list, Buffer buf, Allocator allocator) {
+Error GenericList_eraseAll(GenericList *list, Buffer buf, Allocator allocator, EqualsFunction eq) {
 
 	if(!list)
 		return Error_nullPointer(0, "GenericList_eraseAll()::list is required");
 	
 	ListU64 indices = (ListU64) { 0 };
-	Error err = GenericList_find(*list, buf, allocator, &indices);
+	Error err = GenericList_find(*list, buf, eq, allocator, &indices);
 
 	if(err.genericError)
 		return err;

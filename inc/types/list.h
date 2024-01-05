@@ -84,13 +84,13 @@ Error Name##_createRefConst(const Name##_Type *ptr, U64 length, Name *result);		
 Error Name##_set(Name l, U64 index, Name##_Type t);														\
 Error Name##_get(Name l, U64 index, Name##_Type *t);													\
 																										\
-Bool Name##_contains(Name l, Name##_Type t, U64 offset);												\
-U64 Name##_count(Name l, Name##_Type t);																\
-U64 Name##_findFirst(Name l, Name##_Type t, U64 index);													\
-U64 Name##_findLast(Name l, Name##_Type t, U64 index);													\
+Bool Name##_contains(Name l, Name##_Type t, U64 offset, EqualsFunction eq);								\
+U64 Name##_count(Name l, Name##_Type t, EqualsFunction eq);												\
+U64 Name##_findFirst(Name l, Name##_Type t, U64 index, EqualsFunction eq);								\
+U64 Name##_findLast(Name l, Name##_Type t, U64 index, EqualsFunction eq);								\
 																										\
 Error Name##_copy(Name src, U64 srcOffset, Name dst, U64 dstOffset, U64 count);							\
-Error Name##_find(Name l, Name##_Type t, Allocator allocator, ListU64 *result);							\
+Error Name##_find(Name l, Name##_Type t, EqualsFunction eq, Allocator allocator, ListU64 *result);		\
 																										\
 Error Name##_popBack(Name *l, Name##_Type *output);														\
 Error Name##_popFront(Name *l, Name##_Type *output);													\
@@ -103,9 +103,9 @@ Error Name##_reserve(Name *l, U64 capacity, Allocator allocator);										\
 Error Name##_resize(Name *l, U64 size, Allocator allocator);											\
 Error Name##_shrinkToFit(Name *l, Allocator allocator);													\
 																										\
-Error Name##_eraseFirst(Name *l, Name##_Type t, U64 offset);											\
-Error Name##_eraseLast(Name *l, Name##_Type t, U64 offset);												\
-Error Name##_eraseAll(Name *l, Name##_Type t, Allocator allocator);										\
+Error Name##_eraseFirst(Name *l, Name##_Type t, U64 offset, EqualsFunction eq);							\
+Error Name##_eraseLast(Name *l, Name##_Type t, U64 offset, EqualsFunction eq);							\
+Error Name##_eraseAll(Name *l, Name##_Type t, Allocator allocator, EqualsFunction eq);					\
 Error Name##_erase(Name *l, U64 index);																	\
 Error Name##_eraseAllIndices(Name *l, ListU64 indices);													\
 																										\
