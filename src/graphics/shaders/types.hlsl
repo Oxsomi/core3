@@ -219,10 +219,10 @@ F32x4x4 F32x4x4_scale(F32 x, F32 y, F32 z, F32 w = 1) { return F32x4x4_scale(F32
 
 F32x4x4 F32x4x4_translate(F32x3 translate) {
 	return F32x4x4(
-		1, 0, 0, translate.x,
-		0, 1, 0, translate.y,
-		0, 0, 1, translate.z,
-		0, 0, 0, 1
+		1, 0, 0, 0,
+		0, 1, 0, 0,
+		0, 0, 1, 0,
+		translate.x, translate.y, translate.z, 1
 	);
 }
 
@@ -250,17 +250,17 @@ F32x4x4 F32x4x4_rotateZ(F32 rad) {
 }
 
 F32x4x4 F32x4x4_rotate(F32x3 rotate) {
-	return F32x4x4_rotateX(rotate.x) * F32x4x4_rotateY(rotate.y) * F32x4x4_rotateZ(rotate.z);
+	return mul(F32x4x4_rotateZ(rotate.z), mul(F32x4x4_rotateY(rotate.y), F32x4x4_rotateX(rotate.x)));
 }
 
 F32x4x4 F32x4x4_rotate(F32 x, F32 y, F32 z) { return F32x4x4_rotate(F32x3(x, y, z)); }
 
 F32x4x4 F32x4x4_transform(F32x3 position, F32x3 rotation, F32x3 scale) {
-	return F32x4x4_translate(-position) * F32x4x4_rotate(rotation) * F32x4x4_scale(F32x4(scale, 1));
+	return mul(F32x4x4_scale(F32x4(scale, 1)), mul(F32x4x4_rotate(rotation), F32x4x4_translate(-position)));
 }
 
 F32x4x4 F32x4x4_view(F32x3 position, F32x3 rotation) {
-	return F32x4x4_translate(-position) * F32x4x4_rotate(rotation);
+	return mul(F32x4x4_rotate(rotation), F32x4x4_translate(-position));
 }
 
 F32x4x4 F32x4x4_perspective(F32 fovYRad, F32 aspect, F32 near, F32 far) {
