@@ -162,7 +162,9 @@ Error validateBlend(EBlend blend, Bool hasDualSrcBlend) {
 	return Error_none();
 }
 
-impl Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListCharString names, ListPipelineRef *pipelines);
+impl Error GraphicsDevice_createPipelinesGraphicsExt(
+	GraphicsDevice *device, ListCharString names, ListPipelineRef *pipelines
+);
 
 Error GraphicsDeviceRef_createPipelinesGraphics(
 	GraphicsDeviceRef *deviceRef,
@@ -216,11 +218,11 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 				"GraphicsDeviceRef_createPipelinesGraphics()::infos[i].attachmentCountExt out of bounds"
 			);
 
-		if(!info->stageCount || totalStageCount > stages->length)
+		if(!info->stageCount || totalStageCount + info->stageCount > stages->length)
 			return Error_invalidOperation(0, "GraphicsDeviceRef_createPipelinesGraphics()::infos[i] stage out of bounds");
 
 		U64 countStart = totalStageCount;
-		totalStageCount += stages->length;
+		totalStageCount += info->stageCount;
 
 		if(!info->renderPass && info->subPass)
 			return Error_invalidOperation(

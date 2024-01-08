@@ -803,11 +803,12 @@ ListAttachmentInfo colors = (ListAttachmentInfo) { 0 };
 _gotoIfError(clean, ListAttachmentInfo_createRefConst(attachmentInfo, 1, &colors));
 
 _gotoIfError(clean, CommandListRef_startRenderExt(
-    commandList, 		//See "Command list"
-    I32x2_zero(), 		//No offset
-    I32x2_zero(), 		//Use attachment's size
+    commandList, 				//See "Command list"
+    I32x2_zero(), 				//No offset
+    I32x2_zero(), 				//Use attachment's size
     colors, 
-    (ListAttachmentInfo) { 0 }		//No depth stencil buffers
+    (AttachmentInfo) { 0 },		//No depth attachment
+    (AttachmentInfo) { 0 }		//No stencil attachment
 ));
 
 //Draw calls here

@@ -25,6 +25,7 @@
 #include "graphics/generic/swapchain.h"
 #include "graphics/generic/pipeline.h"
 #include "graphics/generic/device_buffer.h"
+#include "graphics/generic/depth_stencil.h"
 #include "graphics/vulkan/vulkan.h"
 #include "graphics/vulkan/vk_device.h"
 #include "graphics/vulkan/vk_instance.h"
@@ -104,7 +105,7 @@ void CommandList_process(
 
 		case ECommandOp_ClearImages: {
 
-			U64 imageClearCount = *(const U32*) data;
+			U32 imageClearCount = *(const U32*) data;
 
 			//Handle copies.
 			//To do so, we will search for all images that are the same and have the same clear color.
@@ -143,57 +144,49 @@ void CommandList_process(
 			break;
 		}
 
-		/*
-		case ECommandOp_clearDepth: {
+		case ECommandOp_ClearDepthStencils: {
 
-			ClearDepthStencilCmd *clear = (const ClearDepthStencilCmd*) data;
-			ImageRange image = clear->image;
+			U32 imageClearCount = *(const U32*) data;
 
-			VkClearDepthStencilCmdValue clearValue = (VkClearDepthStencilCmdValue) {
-				.depth = clear->depth,
-				.stencil = clear->stencil
-			};
+			const ClearDepthStencilCmd *clear = (const ClearDepthStencilCmd*) (data + sizeof(imageClearCount));
 
-			//Validate range
+			for(U64 i = 0; i < imageClearCount; ++i) {
 
-			Swapchain *swapchain = SwapchainRef_ptr(image.image);
+				//ImageRange image = clear[i].range;
 
-			U32 layerCount = 1, levelCount = 1;
+				VkClearDepthStencilValue clearValue = (VkClearDepthStencilValue) {
+					.depth = clear[i].depth,
+					.stencil = clear[i].stencil
+				};
 
-			//Validate subresource range
+				//Validate range
 
-			if(swapchain) {
+				DepthStencil *depthStencil = DepthStencilRef_ptr(clear[i].depthStencil);
 
-				if (image.layerId != U32_MAX && image.layerId >= 1)
-					return Error_invalidParameter(4, 1);
+				U32 layerCount = 1, levelCount = 1;
 
-				if (image.levelId != U32_MAX && image.levelId >= 1)
-					return Error_invalidParameter(4, 2);
+				VkImageSubresourceRange range = (VkImageSubresourceRange) {
+			
+					.aspectMask = 
+						(clear[i].depth ? VK_IMAGE_ASPECT_DEPTH_BIT : 0) |
+						(clear[i].stencil ? VK_IMAGE_ASPECT_STENCIL_BIT : 0),
+
+					.levelCount = levelCount,
+					.layerCount = layerCount
+				};
+
+				vkCmdClearDepthStencilImage(
+					buffer, 
+					((const VkManagedImage*) DepthStencil_ext(depthStencil,))->image, 
+					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+					&clearValue,
+					1,
+					&range
+				);
 			}
 
-			VkImageSubresourceRange range = (VkImageSubresourceRange) {
-			
-				.aspectMask = 
-					(temp->flags & EVkCommandBufferFlags_HasDepth ? VK_IMAGE_ASPECT_DEPTH_BIT : 0) |
-					(temp->flags & EVkCommandBufferFlags_HasStencil ? VK_IMAGE_ASPECT_STENCIL_BIT : 0),
-
-				.levelCount = image.levelId == U32_MAX ? levelCount : 1,
-				.layerCount = image.layerId == U32_MAX ? layerCount : 1,
-				.baseArrayLayer = image.layerId == U32_MAX ? image.layerId : 0,
-				.baseMipLevel = image.levelId == U32_MAX ? image.levelId : 0
-			};
-
-			vkCmdClearDepthStencilCmdImage(
-				buffer, 
-				temp->depthStencil, 
-				VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-				&clearValue,
-				1,
-				&range
-			);
-
 			break;
-		}*/
+		}
 
 		//Dynamic rendering / direct rendering
 
@@ -249,6 +242,59 @@ void CommandList_process(
 
 			//Send begin render command
 
+			VkRenderingAttachmentInfoKHR depthAttachment;
+			VkRenderingAttachmentInfoKHR stencilAttachment;
+
+			if (startRender->flags & EStartRenderFlags_Depth) {
+
+				DepthStencil *depth = DepthStencilRef_ptr(startRender->depth);
+				VkManagedImage *depthExt = (VkManagedImage*) DepthStencil_ext(depth, );
+
+				Bool readOnly = startRender->flags & EStartRenderFlags_ReadOnlyDepth;
+
+				VkAttachmentLoadOp loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+
+				if(startRender->flags & EStartRenderFlags_ClearDepth)
+					loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+
+				else if(startRender->flags & EStartRenderFlags_PreserveDepth)
+					loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+
+				depthAttachment = (VkRenderingAttachmentInfoKHR) {
+					.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+					.imageView = depthExt->view,
+					.imageLayout = depthExt->lastLayout,
+					.loadOp = loadOp,
+					.storeOp = readOnly ? VK_ATTACHMENT_STORE_OP_DONT_CARE : VK_ATTACHMENT_STORE_OP_STORE,
+					.clearValue = (VkClearColorValue) { .float32 = { startRender->clearDepth } }
+				};
+			}
+
+			if (startRender->flags & EStartRenderFlags_Stencil) {
+
+				DepthStencil *stencil = DepthStencilRef_ptr(startRender->stencil);
+				VkManagedImage *stencilExt = (VkManagedImage*) DepthStencil_ext(stencil, );
+
+				Bool readOnly = startRender->flags & EStartRenderFlags_ReadOnlyStencil;
+
+				VkAttachmentLoadOp loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+
+				if(startRender->flags & EStartRenderFlags_ClearStencil)
+					loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+
+				else if(startRender->flags & EStartRenderFlags_PreserveStencil)
+					loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+
+				stencilAttachment = (VkRenderingAttachmentInfoKHR) {
+					.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+					.imageView = stencilExt->view,
+					.imageLayout = stencilExt->lastLayout,
+					.loadOp = loadOp,
+					.storeOp = readOnly ? VK_ATTACHMENT_STORE_OP_DONT_CARE : VK_ATTACHMENT_STORE_OP_STORE,
+					.clearValue = (VkClearColorValue) { .uint32 = { startRender->clearStencil } }
+				};
+			}
+
 			VkRenderingInfoKHR renderInfo = (VkRenderingInfoKHR) {
 				.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR,
 				.renderArea = (VkRect2D) {
@@ -263,7 +309,9 @@ void CommandList_process(
 				},
 				.layerCount = 1,
 				.colorAttachmentCount = startRender->colorCount,
-				.pColorAttachments = attachmentsExt
+				.pColorAttachments = attachmentsExt,
+				.pDepthAttachment = startRender->flags & EStartRenderFlags_Depth ? &depthAttachment : NULL,
+				.pStencilAttachment = startRender->flags & EStartRenderFlags_Stencil ? &stencilAttachment : NULL
 			};
 
 			instanceExt->cmdBeginRendering(buffer, &renderInfo);
@@ -519,14 +567,16 @@ void CommandList_process(
 
 				//Grab transition type
 				
-				Bool isImage = transition.resource->typeId == EGraphicsTypeId_Swapchain;
+				Bool isSwapchain = transition.resource->typeId == EGraphicsTypeId_Swapchain;
+				Bool isDepthStencil = transition.resource->typeId == EGraphicsTypeId_DepthStencil;
+				Bool isImage = isSwapchain || isDepthStencil;
 				Bool isShaderRead = transition.type == ETransitionType_ShaderRead;
 
 				VkImageLayout layout = VK_IMAGE_LAYOUT_GENERAL;
 				VkAccessFlags2 access = 0;
 
 				if(isImage) {
-					access = isShaderRead ? VK_ACCESS_2_SHADER_SAMPLED_READ_BIT : VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;;
+					access = isShaderRead ? VK_ACCESS_2_SHADER_SAMPLED_READ_BIT : VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
 					layout = isShaderRead ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_GENERAL;
 				}
 
@@ -557,18 +607,40 @@ void CommandList_process(
 						switch ((ETransitionType) transition.type) {
 
 							case ETransitionType_RenderTargetRead:
-								pipelineStage = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
-								access = VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT;
-								layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;
+
+								pipelineStage = 
+									isDepthStencil ? VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT :
+									VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+
+								access = 
+									isDepthStencil ? VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT :
+									VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT;
+
+								layout = 
+									isDepthStencil ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL :
+									VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;
+
 								break;
 
 							case ETransitionType_RenderTargetWrite:
-								pipelineStage = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
-								access = VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
-								layout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;
+
+								pipelineStage = 
+									isDepthStencil ? VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT :
+									VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+
+								access = 
+									isDepthStencil ? VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
+									VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT :
+									VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | 
+									VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
+
+								layout = 
+									isDepthStencil ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL :
+									VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;
+
 								break;
 
-							case ETransitionType_ClearColor:
+							case ETransitionType_Clear:
 								pipelineStage = VK_PIPELINE_STAGE_2_CLEAR_BIT;
 								access = VK_ACCESS_2_TRANSFER_WRITE_BIT;
 								layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
@@ -597,18 +669,25 @@ void CommandList_process(
 
 				if(isImage) {
 
-					Swapchain *swapchain = SwapchainRef_ptr(transition.resource);
-					VkSwapchain *swapchainExt = Swapchain_ext(swapchain, Vk);
+					VkManagedImage *imageExt = NULL;
 
-					VkManagedImage *imageExt = &swapchainExt->images.ptrNonConst[swapchainExt->currentIndex];
+					if(isSwapchain) {
+
+						Swapchain *swapchain = SwapchainRef_ptr(transition.resource);
+						VkSwapchain *swapchainExt = Swapchain_ext(swapchain, Vk);
+
+						imageExt = &swapchainExt->images.ptrNonConst[swapchainExt->currentIndex];
+					}
+
+					else imageExt = (VkManagedImage*) DepthStencil_ext(DepthStencilRef_ptr(transition.resource), );
 
 					VkImageSubresourceRange range = (VkImageSubresourceRange) {		//TODO:
-						.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+						.aspectMask = isDepthStencil ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT,
 						.levelCount = 1,
 						.layerCount = 1
 					};
 
-					_gotoIfError(nextTransition, VkSwapchain_transition(
+					_gotoIfError(nextTransition, VkManagedImage_transition(
 
 						imageExt, 
 						pipelineStage,

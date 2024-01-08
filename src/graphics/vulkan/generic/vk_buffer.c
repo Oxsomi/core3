@@ -95,6 +95,7 @@ Bool DeviceBuffer_freeExt(DeviceBuffer *buffer) {
 			ListU32 allocationList = (ListU32) { 0 };
 			ListU32_createRefConst(allocations, 2, &allocationList);
 			VkGraphicsDevice_freeAllocations(deviceExt, &allocationList);
+			buffer->readHandle = buffer->writeHandle = U32_MAX;
 		}
 
 		if(acq == ELockAcquire_Acquired)
@@ -148,12 +149,6 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 	Error err = Error_none();
 	ELockAcquire acq = ELockAcquire_Invalid;
 
-	U32 blockId = U32_MAX;
-	U64 blockOffset = 0;
-
-	U32 locationRead = U32_MAX;
-	U32 locationWrite = U32_MAX;
-
 	VkDeviceBufferMemoryRequirementsKHR bufferReq = (VkDeviceBufferMemoryRequirementsKHR) { 
 		.sType = VK_STRUCTURE_TYPE_DEVICE_BUFFER_MEMORY_REQUIREMENTS_KHR,
 		.pCreateInfo = &bufferInfo
@@ -174,23 +169,25 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 		&device->allocator, 
 		&requirements, 
 		buf->usage & EDeviceBufferUsage_CPUAllocatedBit, 
-		&blockId, 
-		&blockOffset,
+		&buf->blockId, 
+		&buf->blockOffset,
 		EResourceType_Buffer,
 		name
 	));
 
-	DeviceMemoryBlock block = device->allocator.blocks.ptr[blockId];
+	DeviceMemoryBlock block = device->allocator.blocks.ptr[buf->blockId];
 
 	//Bind memory
 
 	_gotoIfError(clean, vkCheck(vkCreateBuffer(deviceExt->device, &bufferInfo, NULL, &tempBuffer)));
-	_gotoIfError(clean, vkCheck(vkBindBufferMemory(deviceExt->device, tempBuffer, (VkDeviceMemory) block.ext, blockOffset)));
+	_gotoIfError(clean, vkCheck(vkBindBufferMemory(
+		deviceExt->device, tempBuffer, (VkDeviceMemory) block.ext, buf->blockOffset
+	)));
 
 	U8 *memoryLocation = block.mappedMemory;
 
 	if (memoryLocation)
-		memoryLocation += blockOffset;
+		memoryLocation += buf->blockOffset;
 	
 	//Fill relevant descriptor sets if shader accessible
 
@@ -199,7 +196,9 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 		acq = Lock_lock(&deviceExt->descriptorLock, U64_MAX);
 
 		if(acq < ELockAcquire_Success)
-			_gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_createBufferExt() couldn't acquire descriptor lock"));
+			_gotoIfError(clean, Error_invalidState(
+				0, "GraphicsDeviceRef_createBufferExt() couldn't acquire descriptor lock"
+			));
 
 		//Create readonly buffer
 
@@ -219,15 +218,15 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 
 		if (usage & EDeviceBufferUsage_ShaderRead) {
 
-			locationRead = VkGraphicsDevice_allocateDescriptor(deviceExt, EDescriptorType_Buffer);
+			buf->readHandle = VkGraphicsDevice_allocateDescriptor(deviceExt, EDescriptorType_Buffer);
 
-			if(locationRead == U32_MAX)
+			if(buf->readHandle == U32_MAX)
 				_gotoIfError(clean, Error_outOfMemory(
 					0, "GraphicsDeviceRef_createBufferExt() couldn't allocate Buffer descriptor"
 				));
 
 			descriptors[0].dstBinding = EDescriptorType_Buffer - 1;
-			descriptors[0].dstArrayElement = locationRead & ((1 << 20) - 1);
+			descriptors[0].dstArrayElement = buf->readHandle & ((1 << 20) - 1);
 			descriptors[0].dstSet = deviceExt->sets[EDescriptorSetType_Resources];
 
 			++counter;
@@ -235,16 +234,16 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 
 		if (usage & EDeviceBufferUsage_ShaderWrite) {
 
-			locationWrite = VkGraphicsDevice_allocateDescriptor(deviceExt, EDescriptorType_RWBuffer);
+			buf->writeHandle = VkGraphicsDevice_allocateDescriptor(deviceExt, EDescriptorType_RWBuffer);
 
-			if(locationWrite == U32_MAX)
+			if(buf->writeHandle == U32_MAX)
 				_gotoIfError(clean, Error_outOfMemory(
 					0, "GraphicsDeviceRef_createBufferExt() couldn't allocate RWBuffer descriptor"
 				));
 
 			descriptors[counter] = descriptors[0];
 			descriptors[counter].dstBinding = EDescriptorType_RWBuffer - 1;
-			descriptors[counter].dstArrayElement = locationWrite & ((1 << 20) - 1);
+			descriptors[counter].dstArrayElement = buf->writeHandle & ((1 << 20) - 1);
 			descriptors[counter].dstSet = deviceExt->sets[EDescriptorSetType_Resources];
 
 			++counter;
@@ -274,26 +273,9 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 
 	*DeviceBuffer_ext(buf, Vk) = (VkDeviceBuffer) { .buffer = tempBuffer };
 	
-	buf->blockOffset = blockOffset;
-	buf->blockId = blockId;
 	buf->mappedMemory = memoryLocation;
-	buf->readHandle = locationRead;
-	buf->writeHandle = locationWrite;
 
 clean:
-
-	if(err.genericError) {
-
-		U32 allocations[2] = { locationRead, locationWrite };
-		ListU32 allocationList = (ListU32) { 0 };
-		ListU32_createRefConst(allocations, 2, &allocationList);
-		VkGraphicsDevice_freeAllocations(deviceExt, &allocationList);
-
-		vkDestroyBuffer(deviceExt->device, tempBuffer, NULL);
-
-		if(blockId != U32_MAX)
-			DeviceMemoryAllocator_freeAllocation(&device->allocator, blockId, blockOffset);
-	}
 
 	if(acq == ELockAcquire_Acquired)
 		Lock_unlock(&deviceExt->descriptorLock);

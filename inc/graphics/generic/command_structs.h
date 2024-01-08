@@ -25,6 +25,7 @@
 
 typedef RefPtr GraphicsDeviceRef;
 typedef RefPtr PipelineRef;
+typedef RefPtr DepthStencilRef;
 typedef RefPtr DeviceBufferRef;
 
 typedef enum ECommandOp {
@@ -65,7 +66,7 @@ typedef enum ECommandOp {
 	//Clearing depth + color views
 
 	ECommandOp_ClearImages,
-	//ECommandOp_ClearDepths,
+	ECommandOp_ClearDepthStencils,
 
 	//Debugging
 
@@ -109,7 +110,7 @@ typedef union ResourceRange {
 
 typedef enum ETransitionType {
 
-	ETransitionType_ClearColor,
+	ETransitionType_Clear,
 	ETransitionType_Vertex,
 	ETransitionType_Index,
 	ETransitionType_Indirect,
@@ -204,15 +205,19 @@ typedef struct ClearImageCmd {
 
 } ClearImageCmd;
 
-/* typedef struct ClearDepthStencilCmd {		TODO:
+typedef struct ClearDepthStencilCmd {
 
 	F32 depth;
 
-	U8 stencil, padding[3];
+	U8 stencil;
+	Bool depthClear, stencilClear;
+	U8 padding;
 
-	ImageRange image;
+	ImageRange range;
 
-} ClearDepthStencilCmd; */
+	DepthStencilRef *depthStencil;
+
+} ClearDepthStencilCmd;
 
 typedef struct SetPrimitiveBuffersCmd {
 
@@ -255,9 +260,9 @@ typedef struct DispatchIndirectCmd { DeviceBufferRef *buffer; U64 offset; } Disp
 
 typedef enum ELoadAttachmentType {
 
-	ELoadAttachmentType_Preserve,		//Don't modify the contents. Can have overhead because it has to load it.
-	ELoadAttachmentType_Clear,			//Clears the contents at start.
-	ELoadAttachmentType_Any				//Can preserve or clear depending on implementation. Result will be overwritten.
+	ELoadAttachmentType_Any,			//Can preserve or clear depending on implementation. Result will be overwritten.
+	ELoadAttachmentType_Preserve,		//Keep the contents. Can have overhead because it has to load it (preserveMask).
+	ELoadAttachmentType_Clear			//Clears the contents at start.
 
 } ELoadAttachmentType;
 
@@ -274,26 +279,67 @@ typedef struct AttachmentInfo {
 	RefPtr *image;				//Swapchain or RenderTexture. Null is allowed to disable it.
 
 	ELoadAttachmentType load;
-
-	U8 padding[3];
-	Bool readOnly;				//If true, this attachment will only be an input, output is ignored
+	Bool readOnly;
+	U8 pad0[3];
+	U32 pad1[2];
 
 	ClearColor color;
 
 } AttachmentInfo;
 
+typedef struct AttachmentInfoInternal {
+
+	ImageRange range;			//Subresource. Multiple resources isn't allowed (layerId, levelId != U32_MAX)
+	RefPtr *image;				//Swapchain or RenderTexture. Null is allowed to disable it.
+
+	ClearColor color;
+
+} AttachmentInfoInternal;
+
+typedef enum EStartRenderFlags {
+
+	EStartRenderFlags_Depth				= 1 << 0,
+	EStartRenderFlags_Stencil			= 1 << 1,
+	EStartRenderFlags_ClearDepth		= 1 << 2,
+	EStartRenderFlags_ClearStencil		= 1 << 3,
+	EStartRenderFlags_PreserveDepth		= 1 << 4,
+	EStartRenderFlags_PreserveStencil	= 1 << 5,
+	EStartRenderFlags_ReadOnlyStencil	= 1 << 6,
+	EStartRenderFlags_ReadOnlyDepth		= 1 << 7,
+
+	EStartRenderFlags_DepthFlags		= 
+		EStartRenderFlags_Depth | EStartRenderFlags_ClearDepth | 
+		EStartRenderFlags_PreserveDepth | EStartRenderFlags_ReadOnlyStencil,
+
+	EStartRenderFlags_StencilFlags		= 
+		EStartRenderFlags_Stencil | EStartRenderFlags_ClearStencil | 
+		EStartRenderFlags_PreserveStencil | EStartRenderFlags_ReadOnlyStencil
+
+} EStartRenderFlags;
+
 typedef struct StartRenderCmdExt {
 
 	I32x2 offset, size;
 
+	U32 padding0;
+
+	U8 padding1;
+	U8 preserveMask;		//Mark which render targets are preserved (ELoadAttachmentType) only if clearMask isn't set.
+	U8 clearMask;			//Mark which render targets are for clear (ELoadAttachmentType) take prio over preserve.
+	U8 readOnlyMask;		//Mark which render targets are readonly
+
 	U8 colorCount;			//Count of render targets (even inactive ones).
 	U8 activeMask;			//Which render targets are active.
-	U8 depthStencil;		//& 1 = depth, & 2 = stencil
-	U8 pad0;
+	U8 flags;				//EStartRenderFlags
+	U8 clearStencil;
 
-	U32 pad1;
+	F32 clearDepth;
 
-	//AttachmentInfo attachments[];	//[ active attachments go here ]
+	ImageRange depthRange, stencilRange;
+
+	DepthStencilRef *depth, *stencil;
+
+	//AttachmentInfoInternal attachments[];		//[ active attachments go here ]
 
 } StartRenderCmdExt;
 

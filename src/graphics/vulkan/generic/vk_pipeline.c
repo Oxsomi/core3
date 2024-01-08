@@ -451,7 +451,7 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListChar
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO
 	};
 
-	for(U64 i = EPipelineStateType_PerPipelinePropertyStart; i < EPipelineStateType_Count; ++i)
+	for(U64 i = EPipelineStateType_MSAA; i < EPipelineStateType_Count; ++i)
 		counts[i] = 0;
 
 	for(; total < pipelines->length; ++total) {
@@ -544,7 +544,9 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListChar
 			counts[EPipelineStateType_InputAttributes] += attribCount;
 
 			VkPipelineVertexInputStateCreateInfo *infoi = 
-				&((VkPipelineVertexInputStateCreateInfo*)states[EPipelineStateType_VertexInput].ptr)[total];
+				&((VkPipelineVertexInputStateCreateInfo*)states[EPipelineStateType_VertexInput].ptr)[
+					counts[EPipelineStateType_VertexInput]++
+				];
 
 			*infoi = (VkPipelineVertexInputStateCreateInfo) {
 				.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
@@ -591,7 +593,9 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListChar
 			}
 
 			VkPipelineInputAssemblyStateCreateInfo *infoi = 
-				&((VkPipelineInputAssemblyStateCreateInfo*)states[EPipelineStateType_InputAssembly].ptr)[total];
+				&((VkPipelineInputAssemblyStateCreateInfo*)states[EPipelineStateType_InputAssembly].ptr)[
+					counts[EPipelineStateType_InputAssembly]++
+				];
 
 			*infoi = (VkPipelineInputAssemblyStateCreateInfo) {
 				.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
@@ -622,7 +626,9 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListChar
 				info->rasterizer.flags & ERasterizerFlags_IsWireframeExt ? VK_POLYGON_MODE_LINE : VK_POLYGON_MODE_FILL;
 			
 			VkPipelineRasterizationStateCreateInfo *infoi = 
-				&((VkPipelineRasterizationStateCreateInfo*)states[EPipelineStateType_Rasterizer].ptr)[total];
+				&((VkPipelineRasterizationStateCreateInfo*)states[EPipelineStateType_Rasterizer].ptr)[
+					counts[EPipelineStateType_Rasterizer]++
+				];
 
 			*infoi = (VkPipelineRasterizationStateCreateInfo) {
 				.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
@@ -667,14 +673,16 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListChar
 			VkCompareOp depthCompareOp = mapVkCompareOp(info->depthStencil.depthCompare);
 
 			VkPipelineDepthStencilStateCreateInfo *infoi = 
-				&((VkPipelineDepthStencilStateCreateInfo*)states[EPipelineStateType_DepthStencil].ptr)[total];
+				&((VkPipelineDepthStencilStateCreateInfo*)states[EPipelineStateType_DepthStencil].ptr)[
+					counts[EPipelineStateType_DepthStencil]++
+				];
 
 			*infoi = (VkPipelineDepthStencilStateCreateInfo) {
 				.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-				.depthTestEnable = info->depthStencil.flags & EDepthStencilFlags_DepthTest,
-				.depthWriteEnable = info->depthStencil.flags & EDepthStencilFlags_DepthWriteBit,
+				.depthTestEnable = (Bool)(info->depthStencil.flags & EDepthStencilFlags_DepthTest),
+				.depthWriteEnable = (Bool)(info->depthStencil.flags & EDepthStencilFlags_DepthWriteBit),
 				.depthCompareOp = depthCompareOp,
-				.stencilTestEnable = info->depthStencil.flags & EDepthStencilFlags_StencilTest,
+				.stencilTestEnable = (Bool)(info->depthStencil.flags & EDepthStencilFlags_StencilTest),
 				.front = stencil,
 				.back = stencil,
 				.minDepthBounds = 1,
@@ -770,7 +778,9 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListChar
 		if (info->patchControlPointsExt) {
 
 			VkPipelineTessellationStateCreateInfo *infoi = 
-				&((VkPipelineTessellationStateCreateInfo*)states[EPipelineStateType_Tessellation].ptr)[total];
+				&((VkPipelineTessellationStateCreateInfo*)states[EPipelineStateType_Tessellation].ptr)[
+					counts[EPipelineStateType_Tessellation]++
+				];
 
 			*infoi = (VkPipelineTessellationStateCreateInfo) {
 				.sType = VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO,
@@ -785,7 +795,9 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListChar
 		if (info->msaa) {
 
 			VkPipelineMultisampleStateCreateInfo *infoi = 
-				&((VkPipelineMultisampleStateCreateInfo*)states[EPipelineStateType_MSAA].ptr)[total];
+				&((VkPipelineMultisampleStateCreateInfo*)states[EPipelineStateType_MSAA].ptr)[
+					counts[EPipelineStateType_MSAA]++
+				];
 
 			*infoi = (VkPipelineMultisampleStateCreateInfo) {
 				.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
@@ -803,8 +815,18 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListChar
 
 			switch (info->depthFormatExt) {
 
-				default:						break;
-				case EDepthStencilFormat_D32:	depthFormat = VK_FORMAT_D32_SFLOAT;		break;
+				case EDepthStencilFormat_D16:	
+					depthFormat = VK_FORMAT_D16_UNORM;
+					break;
+
+				case EDepthStencilFormat_D16S8:	
+					depthFormat = VK_FORMAT_D16_UNORM_S8_UINT;
+					stencilFormat = VK_FORMAT_S8_UINT;
+					break;
+
+				case EDepthStencilFormat_D32:	
+					depthFormat = VK_FORMAT_D32_SFLOAT;
+					break;
 
 				case EDepthStencilFormat_D24S8:	
 					depthFormat = VK_FORMAT_D24_UNORM_S8_UINT;
@@ -814,6 +836,13 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListChar
 				case EDepthStencilFormat_D32S8:	
 					depthFormat = VK_FORMAT_D32_SFLOAT_S8_UINT;
 					stencilFormat = VK_FORMAT_S8_UINT;
+					break;
+
+				case EDepthStencilFormat_S8:	
+					stencilFormat = VK_FORMAT_S8_UINT;
+					break;
+
+				default:
 					break;
 			}
 

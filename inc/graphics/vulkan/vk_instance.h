@@ -56,6 +56,7 @@ typedef struct VkGraphicsInstance {
 	VkDebugReportCallbackEXT debugReportCallback;
 
 	PFN_vkGetDeviceBufferMemoryRequirementsKHR getDeviceBufferMemoryRequirements;
+	PFN_vkGetDeviceImageMemoryRequirementsKHR getDeviceImageMemoryRequirements;
 
 	PFN_vkGetPhysicalDeviceFeatures2KHR getPhysicalDeviceFeatures2;
 	PFN_vkGetPhysicalDeviceProperties2KHR getPhysicalDeviceProperties2;

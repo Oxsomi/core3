@@ -32,7 +32,12 @@ typedef struct VkManagedImage {
 	VkAccessFlagBits2 lastAccess;
 
 	VkImageLayout lastLayout;
-	U32 padding;
+	U32 readHandle;
+
+	U32 writeHandle;
+	U32 blockId;			//If specifically allocated, indicates which block this is present in
+
+	U64 blockOffset;
 
 } VkManagedImage;
 

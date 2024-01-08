@@ -35,5 +35,6 @@ EGraphicsTypeId EGraphicsTypeId_all[EGraphicsTypeId_Count] = {
 	EGraphicsTypeId_DeviceBuffer,
 	EGraphicsTypeId_Pipeline,
 	EGraphicsTypeId_Sampler,
-	EGraphicsTypeId_AccelerationStructureExt
+	EGraphicsTypeId_AccelerationStructureExt,
+	EGraphicsTypeId_DepthStencil
 };

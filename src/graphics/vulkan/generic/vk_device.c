@@ -1081,14 +1081,13 @@ Error GraphicsDevice_submitCommandsImpl(GraphicsDeviceRef *deviceRef, ListComman
 			VkSwapchain *swapchainExt = Swapchain_ext(swapchain, Vk);
 
 			Bool allowCompute = swapchain->info.usage & ESwapchainUsage_AllowCompute;
-			U64 stride = allowCompute ? 2 : 1;
 
-			const U32 *descLoc = swapchainExt->descriptorAllocations.ptr;
+			VkManagedImage managedImage = swapchainExt->images.ptr[swapchainExt->currentIndex];
 
-			data->swapchains[i * 2 + 0] = descLoc[swapchainExt->currentIndex * stride + 0];
+			data->swapchains[i * 2 + 0] = managedImage.readHandle;
 
 			if(allowCompute)
-				data->swapchains[i * 2 + 1] = descLoc[swapchainExt->currentIndex * stride + 1];
+				data->swapchains[i * 2 + 1] = managedImage.writeHandle;
 		}
 
 		DeviceMemoryBlock block = device->allocator.blocks.ptr[frameData->blockId];
@@ -1318,7 +1317,7 @@ Error GraphicsDevice_submitCommandsImpl(GraphicsDeviceRef *deviceRef, ListComman
 				.layerCount = 1
 			};
 
-			_gotoIfError(clean, VkSwapchain_transition(
+			_gotoIfError(clean, VkManagedImage_transition(
 				imageExt,
 				VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, 
 				0, 

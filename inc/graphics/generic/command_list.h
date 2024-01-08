@@ -36,6 +36,7 @@ typedef struct DeviceResourceVersion {
 
 TList(CommandOpInfo);
 TList(TransitionInternal);
+TList(AttachmentInfoInternal);
 TList(CommandScope);
 TList(DeviceResourceVersion);
 
@@ -123,10 +124,13 @@ TList(ClearImageCmd);
 
 Error CommandListRef_clearImages(CommandListRef *commandList, ListClearImageCmd clearImages);
 
-//TList(ClearDepthStencilCmd);
-//
-//Error CommandListRef_clearDepthStencil(CommandListRef *commandList, F32 depth, U8 stencil, ImageRange image);
-//Error CommandListRef_clearDepthStencils(CommandListRef *commandList, ListClearDepthStencilCmd clearDepthStencils);
+TList(ClearDepthStencilCmd);
+
+Error CommandListRef_clearDepthStencil(
+	CommandListRef *commandList, const F32 *depth, const U8 *stencil, ImageRange range, DepthStencilRef *depthStencil
+);
+
+Error CommandListRef_clearDepthStencils(CommandListRef *commandList, ListClearDepthStencilCmd clearDepthStencils);
 
 //Draw calls and dispatches
 
@@ -206,7 +210,8 @@ Error CommandListRef_startRenderExt(
 	I32x2 offset, 
 	I32x2 size, 
 	ListAttachmentInfo colors,
-	ListAttachmentInfo depthStencil
+	AttachmentInfo depth,
+	AttachmentInfo stencil
 );
 
 Error CommandListRef_endRenderExt(CommandListRef *commandList);

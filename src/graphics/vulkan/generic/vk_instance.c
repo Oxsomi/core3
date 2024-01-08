@@ -240,6 +240,7 @@ Error GraphicsInstance_createExt(
 	//Load functions
 
 	vkExtension(clean, vkGetDeviceBufferMemoryRequirementsKHR, instanceExt->getDeviceBufferMemoryRequirements);
+	vkExtension(clean, vkGetDeviceImageMemoryRequirementsKHR, instanceExt->getDeviceImageMemoryRequirements);
 
 	vkExtension(clean, vkGetPhysicalDeviceFeatures2KHR, instanceExt->getPhysicalDeviceFeatures2);
 	vkExtension(clean, vkGetPhysicalDeviceProperties2KHR, instanceExt->getPhysicalDeviceProperties2);

@@ -162,7 +162,7 @@ clean:
 
 impl extern const U64 DeviceBufferExt_size;
 impl Bool DeviceBuffer_freeExt(DeviceBuffer *buffer);
-impl Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *buf, CharString name);	//Only use in lock
+impl Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *buf, CharString name);
 
 Bool DeviceBuffer_free(DeviceBuffer *buffer, Allocator allocator) {
 

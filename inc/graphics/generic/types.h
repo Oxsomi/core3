@@ -40,7 +40,9 @@ typedef enum EGraphicsTypeId {
 	EGraphicsTypeId_Sampler						= _makeObjectId(0xC4,  9, 1),
 	EGraphicsTypeId_AccelerationStructureExt	= _makeObjectId(0xC4, 10, 1),
 
-	EGraphicsTypeId_Count						= 11
+	EGraphicsTypeId_DepthStencil				= _makeObjectId(0xC4, 11, 1),
+
+	EGraphicsTypeId_Count						= 12
 
 } EGraphicsTypeId;
 

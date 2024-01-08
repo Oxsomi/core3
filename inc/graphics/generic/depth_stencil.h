@@ -19,39 +19,39 @@
 */
 
 #pragma once
-#include "graphics/vulkan/vk_device.h"
+#include "types/vec.h"
+#include "platforms/ref_ptr.h"
+#include "pipeline_structs.h"
 
-typedef struct Window Window;
-typedef struct VkGraphicsInstance VkGraphicsInstance;
+typedef RefPtr GraphicsDeviceRef;
+typedef struct Error Error;
+typedef struct CharString CharString;
 
-TList(VkManagedImage);
+typedef struct DepthStencil {
 
-typedef struct VkSwapchain {
+	GraphicsDeviceRef *device;
 
-	VkSurfaceKHR surface;			//Platform's surface implementation
-	VkSwapchainKHR swapchain;
+	I32x2 size;
 
-	ListVkSemaphore semaphores;
-	ListVkManagedImage images;
+	EDepthStencilFormat format;
+	Bool allowShaderRead;
+	U8 padding[3];
 
-	VkSurfaceFormatKHR format;
+} DepthStencil;
 
-	U32 currentIndex;				//Swapchain index
-	U32 padding;
+typedef RefPtr DepthStencilRef;
 
-} VkSwapchain;
+#define DepthStencil_ext(ptr, T) (!ptr ? NULL : (T##DepthStencil*)(ptr + 1))		//impl
+#define DepthStencilRef_ptr(ptr) RefPtr_data(ptr, DepthStencil)
 
-impl Error VkSurface_create(GraphicsDevice *device, const Window *window, VkSurfaceKHR *surface);
+Error DepthStencilRef_dec(DepthStencilRef **depthStencil);
+Error DepthStencilRef_inc(DepthStencilRef *depthStencil);
 
-//Transitions entire resource rather than subresources
-
-Error VkManagedImage_transition(
-	VkManagedImage *image, 
-	VkPipelineStageFlags2 stage, 
-	VkAccessFlagBits2 access,
-	VkImageLayout layout,
-	U32 graphicsQueueId,
-	const VkImageSubresourceRange *range,
-	ListVkImageMemoryBarrier2 *imageBarriers,
-	VkDependencyInfo *dependency
+Error GraphicsDeviceRef_createDepthStencil(
+	GraphicsDeviceRef *deviceRef, 
+	I32x2 size, 
+	EDepthStencilFormat format, 
+	Bool allowShaderRead,
+	CharString name,
+	DepthStencilRef **swapchain
 );

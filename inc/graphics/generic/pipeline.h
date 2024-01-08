@@ -33,7 +33,7 @@ typedef struct PipelineGraphicsInfo {
 
 	Rasterizer rasterizer;
 
-	DepthStencil depthStencil;
+	DepthStencilState depthStencil;
 	BlendState blendState;
 
 	EMSAASamples msaa;

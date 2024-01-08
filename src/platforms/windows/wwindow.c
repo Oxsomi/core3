@@ -111,7 +111,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 		case WM_QUIT:
 		case WM_CLOSE:
-			WindowManager_freeWindow(w->owner, &w);
+			w->flags |= EWindowFlags_ShouldTerminate;
 			return 0;
 
 		case WM_CREATE:

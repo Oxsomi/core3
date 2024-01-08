@@ -53,7 +53,7 @@ typedef struct DeviceBuffer {
 	Bool isPendingFullCopy, isPending, isFirstFrame;
 	U8 padding0;
 
-	U32 readHandle, writeHandle;			//Place in heap/descriptor set. First 12 bits are reserved for type and/or version
+	U32 readHandle, writeHandle;			//Place in heap/descriptor set. 12 bits are reserved for type and/or version
 
 	U64 length;
 

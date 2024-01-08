@@ -314,7 +314,9 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 		.oldSwapchain = prevSwapchain
 	};
 
-	_gotoIfError(clean, vkCheck(instance->createSwapchain(deviceExt->device, &swapchainInfo, NULL, &swapchainExt->swapchain)));
+	_gotoIfError(clean, vkCheck(instance->createSwapchain(
+		deviceExt->device, &swapchainInfo, NULL, &swapchainExt->swapchain
+	)));
 
 	if(prevSwapchain) {
 
@@ -327,8 +329,18 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 				0, "GraphicsDeviceRef_createSwapchainExt() couldn't get descriptor lock"
 			));
 
-		if(!VkGraphicsDevice_freeAllocations(deviceExt, &swapchainExt->descriptorAllocations))
-			_gotoIfError(clean, Error_invalidOperation(1, "GraphicsDeviceRef_createSwapchainExt() couldn't free allocations"));
+		for(U64 i = 0; i < swapchainExt->images.length; ++i) {
+
+			const VkManagedImage *managedImage = &swapchainExt->images.ptr[i];
+			U32 allocations[2] = { managedImage->readHandle, managedImage->writeHandle };
+			ListU32 allocationArr = (ListU32) { 0 };
+			ListU32_createRefConst(allocations, 2, &allocationArr);
+			
+			if(!VkGraphicsDevice_freeAllocations(deviceExt, &allocationArr))
+				_gotoIfError(clean, Error_invalidOperation(
+					1, "GraphicsDeviceRef_createSwapchainExt() couldn't free allocations"
+				));
+		}
 	}
 
 	//Acquire images
@@ -355,9 +367,12 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 	//Destroy image views
 
 	for(U64 i = 0; i < swapchainExt->images.length; ++i) {
+
 		VkManagedImage *managedImage = &swapchainExt->images.ptrNonConst[i];
 		managedImage->lastAccess = managedImage->lastStage = managedImage->lastLayout = 0;
 		vkDestroyImageView(deviceExt->device, managedImage->view, NULL);
+
+		managedImage->readHandle = managedImage->readHandle = U32_MAX;		//Reset
 	}
 
 	//Get images
@@ -438,11 +453,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 
 	U64 descriptors = info.usage & ESwapchainUsage_AllowCompute ? 2 : 1;
 
-	_gotoIfError(clean, ListU32_resizex(&swapchainExt->descriptorAllocations, descriptors * imageCount));
-
-	U32 *allocPtr = swapchainExt->descriptorAllocations.ptrNonConst;
-
-	_gotoIfError(clean, ListVkWriteDescriptorSet_resizex(&descriptorSets, swapchainExt->descriptorAllocations.length));
+	_gotoIfError(clean, ListVkWriteDescriptorSet_resizex(&descriptorSets, descriptors * imageCount));
 
 	if(acq < ELockAcquire_Success) {
 
@@ -458,6 +469,8 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 
 	for(U64 i = 0; i < imageCount; ++i) {
 
+		VkManagedImage *managedImage = &swapchainExt->images.ptrNonConst[i];
+
 		//Create readonly image
 
 		U32 locationRead = VkGraphicsDevice_allocateDescriptor(deviceExt, EDescriptorType_Texture2D);
@@ -467,7 +480,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 				0, "GraphicsDeviceRef_createSwapchainExt() couldn't allocate image descriptor"
 			));
 
-		allocPtr[i * descriptors] = locationRead;
+		managedImage->readHandle = locationRead;
 
 		imageInfo[i * descriptors] = (VkDescriptorImageInfo) {
 			.imageView = swapchainExt->images.ptr[i].view,
@@ -506,7 +519,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 					1, "GraphicsDeviceRef_createSwapchainExt() couldn't allocate image rw descriptor"
 				));
 
-			allocPtr[i * descriptors + 1] = locationWrite;
+			managedImage->writeHandle = locationWrite;
 
 			imageInfo[i * descriptors + 1] = imageInfo[i * descriptors];
 			imageInfo[i * descriptors + 1].imageLayout = VK_IMAGE_LAYOUT_GENERAL;
@@ -617,18 +630,32 @@ Bool GraphicsDevice_freeSwapchainExt(Swapchain *swapchain, Allocator alloc) {
 			vkDestroySemaphore(deviceExt->device, semaphore, NULL);
 	}
 
+	ELockAcquire acq = Lock_lock(&deviceExt->descriptorLock, U64_MAX);
+
 	for (U64 i = 0; i < swapchainExt->images.length; ++i) {
 
-		VkImageView view = swapchainExt->images.ptr[i].view;
+		VkManagedImage image = swapchainExt->images.ptr[i];
+		VkImageView view = image.view;
 
 		if(view)
 			vkDestroyImageView(deviceExt->device, view, NULL);
+
+		if(image.readHandle != U32_MAX || image.writeHandle != U32_MAX) {
+
+			if(acq >= ELockAcquire_Success) {
+				U32 arr[2] = { image.readHandle, image.writeHandle };
+				ListU32 allocationList = (ListU32) { 0 };
+				ListU32_createRefConst(arr, 2, &allocationList);
+				VkGraphicsDevice_freeAllocations(deviceExt, &allocationList);
+			}
+		}
 	}
+
+	if(acq == ELockAcquire_Acquired)
+		Lock_unlock(&deviceExt->descriptorLock);
 
 	ListVkSemaphore_freex(&swapchainExt->semaphores);
 	ListVkManagedImage_freex(&swapchainExt->images);
-
-	ListU32_freex(&swapchainExt->descriptorAllocations);
 
 	if(swapchainExt->swapchain)
 		vkDestroySwapchainKHR(deviceExt->device, swapchainExt->swapchain, NULL);
@@ -639,7 +666,7 @@ Bool GraphicsDevice_freeSwapchainExt(Swapchain *swapchain, Allocator alloc) {
 	return true;
 }
 
-Error VkSwapchain_transition(
+Error VkManagedImage_transition(
 	VkManagedImage *imageExt, 
 	VkPipelineStageFlags2 stage, 
 	VkAccessFlagBits2 access,

@@ -230,7 +230,7 @@ typedef struct Rasterizer {
 
 } Rasterizer;
 
-typedef struct DepthStencil {
+typedef struct DepthStencilState {
 
 	EDepthStencilFlags flags;
 	ECompareOp depthCompare;
@@ -242,7 +242,7 @@ typedef struct DepthStencil {
 	U8 stencilWriteMask, stencilReadMask, padding0[2];
 	U32 padding1;
 
-} DepthStencil;
+} DepthStencilState;
 
 typedef struct BlendStateAttachment {
 
@@ -284,10 +284,15 @@ typedef struct VertexBindingLayout {
 typedef enum EDepthStencilFormat {
 
 	EDepthStencilFormat_None,
+	EDepthStencilFormat_D16,		//Prefer this if stencil isn't needed and precision is no concern
 	EDepthStencilFormat_D32,		//Prefer this if stencil isn't needed. Less memory on AMD than D24S8!
+	EDepthStencilFormat_D16S8,
 	EDepthStencilFormat_D24S8,		//On AMD this and D32S8 are the same thing. Prefer D32S8 for better depth precision.
 	EDepthStencilFormat_D32S8,
+	EDepthStencilFormat_S8,
 
-	EDepthStencilFormat_Count
+	EDepthStencilFormat_Count,
+
+	EDepthStencilFormat_StencilStart = EDepthStencilFormat_D16S8
 
 } EDepthStencilFormat;
