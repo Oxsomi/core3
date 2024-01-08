@@ -170,6 +170,14 @@ typedef struct VkCommandAllocator {
 	VkCommandBuffer cmd;
 } VkCommandAllocator;
 
+typedef struct DescriptorStackTrace {
+
+	U32 resourceId, padding;
+
+	void *stackTrace[8];
+
+} DescriptorStackTrace;
+
 TList(VkCommandAllocator);
 TList(VkSemaphore);
 TList(VkResult);
@@ -178,6 +186,7 @@ TList(VkPipelineStageFlags);
 TList(VkImageMemoryBarrier2);
 TList(VkBufferMemoryBarrier2);
 TList(VkWriteDescriptorSet);
+TList(DescriptorStackTrace);
 
 typedef struct VkGraphicsDevice {
 
@@ -208,6 +217,7 @@ typedef struct VkGraphicsDevice {
 
 	Lock descriptorLock;
 	Buffer freeList[EDescriptorType_ResourceCount];
+	ListDescriptorStackTrace descriptorStackTraces;
 
 	//Temporary storage for submit time stuff
 

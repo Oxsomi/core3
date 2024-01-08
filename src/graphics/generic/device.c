@@ -220,6 +220,33 @@ Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 
 	GraphicsDevice_freeExt(GraphicsInstanceRef_ptr(device->instance), (void*) GraphicsInstance_ext(device, ));
 
+	U64 leakedBlocks = 0;
+
+	for (U64 i = 0; i < device->allocator.blocks.length; ++i) {
+		DeviceMemoryBlock block = device->allocator.blocks.ptr[i];
+		leakedBlocks += (Bool)Buffer_length(block.allocations.buffer);
+	}
+
+	if(leakedBlocks)
+		Log_warnLnx("Leaked graphics device memory (showing up to 16/%llu entries):", leakedBlocks);
+
+	for (U64 i = 0; i < leakedBlocks && i < 16; ++i) {
+
+		DeviceMemoryBlock block = device->allocator.blocks.ptr[i];
+		U64 leaked = Buffer_length(block.allocations.buffer);
+
+		if(!leaked)
+			continue;
+
+		Log_warnLnx("%llu: %llu bytes", i, leaked);
+
+		#ifndef NDEBUG
+			Log_printCapturedStackTraceCustomx(
+				block.stackTrace, sizeof(block.stackTrace) / sizeof(void*), ELogLevel_Warn, ELogOptions_NewLine
+			);
+		#endif
+	}
+
 	ListDeviceMemoryBlock_freex(&device->allocator.blocks);
 	ListLockPtr_freex(&device->currentLocks);
 

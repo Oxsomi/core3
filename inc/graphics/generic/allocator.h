@@ -20,6 +20,7 @@
 
 #pragma once
 #include "types/list.h"
+#include "types/error.h"
 #include "types/allocation_buffer.h"
 #include "platforms/lock.h"
 
@@ -38,15 +39,19 @@ typedef struct DeviceMemoryBlock {
 
 	AllocationBuffer allocations;
 
-	U32 typeExt;				//Resource flags
+	U32 typeExt;					//Resource flags
 
 	Bool isDedicated;
-	U8 resourceType;			//EResourceType
-	U16 allocationTypeExt;		//Allocation type flags (e.g. host visible)
+	U8 resourceType;				//EResourceType
+	U16 allocationTypeExt;			//Allocation type flags (e.g. host visible)
 
 	U8 *mappedMemory;
 
-	void *ext;					//Extended data
+	void *ext;						//Extended data
+
+	#ifndef NDEBUG
+		void *stackTrace[16];		//Tracking memleaks
+	#endif
 
 } DeviceMemoryBlock;
 

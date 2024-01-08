@@ -42,6 +42,7 @@ TListImpl(VkPipelineStageFlags);
 TListImpl(VkImageMemoryBarrier2);
 TListImpl(VkBufferMemoryBarrier2);
 TListImpl(VkWriteDescriptorSet);
+TListImpl(DescriptorStackTrace);
 
 #define vkBindNext(T, condition, ...)	\
 	T tmp##T = __VA_ARGS__;				\
@@ -804,6 +805,12 @@ Error GraphicsDevice_initExt(
 	_gotoIfError(clean, ListVkBufferMemoryBarrier2_reservex(&deviceExt->bufferTransitions, 17));
 	_gotoIfError(clean, ListVkImageMemoryBarrier2_reservex(&deviceExt->imageTransitions, 16));
 
+	//Allocate temp storage for descriptor tracking
+
+	#ifndef NDEBUG
+		_gotoIfError(clean, ListDescriptorStackTrace_reservex(&deviceExt->descriptorStackTraces, 16));
+	#endif
+
 	goto success;
 
 clean:
@@ -929,6 +936,36 @@ Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext) {
 	ListVkBufferMemoryBarrier2_freex(&deviceExt->bufferTransitions);
 	ListVkImageMemoryBarrier2_freex(&deviceExt->imageTransitions);
 
+	//Announce descriptor memleaks
+
+	#ifndef NDEBUG
+
+		//TODO: HashMap
+
+		ListDescriptorStackTrace *stack = &deviceExt->descriptorStackTraces;
+
+		if(stack->length)
+			Log_warnLnx("Leaked %llu descriptors. Displaying up to 16:", stack->length);
+
+		for (U64 j = 0; j < stack->length; ++j) {
+
+			DescriptorStackTrace elem = stack->ptr[j];
+
+			if(j < 16)
+				Log_warnLnx(
+					"%llu: Resource type: %llu, id: %llu", 
+					j, (U64)elem.resourceId >> 20, (U64)elem.resourceId & ((1 << 20) - 1)
+				);
+
+			Log_printCapturedStackTraceCustomx(
+				elem.stackTrace, sizeof(elem.stackTrace) / sizeof(void*), ELogLevel_Warn, ELogOptions_Default
+			);
+		}
+
+		ListDescriptorStackTrace_freex(stack);
+
+	#endif
+
 	return true;
 }
 
@@ -953,8 +990,21 @@ U32 VkGraphicsDevice_allocateDescriptor(VkGraphicsDevice *deviceExt, EDescriptor
 			return U32_MAX;
 
 		if(!bit) {
+
+			U32 resourceId = i | (type << 20);
+
+			#ifndef NDEBUG
+
+				DescriptorStackTrace stackTrace = (DescriptorStackTrace) {  .resourceId = resourceId };
+				Log_captureStackTrace(stackTrace.stackTrace, sizeof(stackTrace.stackTrace) / sizeof(void*), 1);
+
+				if(ListDescriptorStackTrace_pushBackx(&deviceExt->descriptorStackTraces, stackTrace).genericError)
+					return U32_MAX;
+
+			#endif
+
 			Buffer_setBit(buf, i);
-			return i | (type << 20);
+			return resourceId;
 		}
 	}
 
@@ -972,8 +1022,24 @@ Bool VkGraphicsDevice_freeAllocations(VkGraphicsDevice *deviceExt, ListU32 *allo
 
 		U32 id = allocations->ptr[i];
 
-		if(id != U32_MAX)
+		if(id != U32_MAX) {
+
 			success &= !Buffer_resetBit(deviceExt->freeList[id >> 20], id & ((1 << 20) - 1)).genericError;
+
+			#ifndef NDEBUG
+
+				//TODO: HashMap
+
+				ListDescriptorStackTrace *stack = &deviceExt->descriptorStackTraces;
+				
+				for (U64 j = 0; j < stack->length; ++j)
+					if (stack->ptr[j].resourceId == id) {
+						ListDescriptorStackTrace_erase(stack, j);
+						break;
+					}
+
+			#endif
+		}
 	}
 
 	ListU32_clear(allocations);
@@ -994,7 +1060,9 @@ VkCommandAllocator *VkGraphicsDevice_getCommandAllocator(
 	return device->commandPools.ptrNonConst + id;
 }
 
-Error GraphicsDevice_submitCommandsImpl(GraphicsDeviceRef *deviceRef, ListCommandListRef commandLists, ListSwapchainRef swapchains) {
+Error GraphicsDevice_submitCommandsImpl(
+	GraphicsDeviceRef *deviceRef, ListCommandListRef commandLists, ListSwapchainRef swapchains
+) {
 	
 	//Unpack ext
 

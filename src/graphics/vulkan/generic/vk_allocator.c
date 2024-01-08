@@ -26,6 +26,7 @@
 #include "graphics/generic/instance.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
+#include "platforms/log.h"
 #include "types/error.h"
 #include "types/buffer.h"
 #include "types/string.h"
@@ -245,6 +246,10 @@ Error DeviceMemoryAllocator_allocate(
 	};
 
 	_gotoIfError(clean, AllocationBuffer_createx(alloc.allocationSize, true, &block.allocations));
+
+	#ifndef NDEBUG
+		Log_captureStackTrace(block.stackTrace, sizeof(block.stackTrace) / sizeof(void*), 1);
+	#endif
 
 	//Find a spot in the blocks list
 
