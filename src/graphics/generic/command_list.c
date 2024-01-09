@@ -38,7 +38,6 @@ TListImpl(Transition);
 TListImpl(CommandScopeDependency);
 TListImpl(ClearImageCmd);
 TListImpl(AttachmentInfo);
-TListImpl(ClearDepthStencilCmd);
 
 Error CommandListRef_dec(CommandListRef **cmd) {
 	return !RefPtr_dec(cmd) ? Error_invalidOperation(0, "CommandListRef_dec()::cmd invalid") : Error_none();
@@ -551,120 +550,6 @@ Error CommandListRef_clearImagei(CommandListRef *commandListRef, I32x4 color, Im
 
 Error CommandListRef_clearImagef(CommandListRef *commandListRef, F32x4 color, ImageRange range, RefPtr *image) {
 	return CommandListRef_clearImageu(commandListRef, (const U32*) &color, range, image);
-}
-
-Error CommandListRef_clearDepthStencil(
-	CommandListRef *commandListRef, 
-	const F32 *depth, 
-	const U8 *stencil, 
-	ImageRange range,
-	DepthStencilRef *depthStencil
-) {
-
-	if(!depth && !stencil)
-		return Error_invalidParameter(1, 0, "CommandListRef_clearDepthStencil() either depth or stencil is required");
-
-	CommandListRef_validateScope(commandListRef, clean);
-
-	ClearDepthStencilCmd depthStencilCmd = (ClearDepthStencilCmd) { 
-		.depth = depth ? *depth : 1, 
-		.stencil = stencil ? *stencil : 0,
-		.depthClear = depth,
-		.stencilClear = stencil,
-		.range = range,
-		.depthStencil = depthStencil
-	};
-
-	ListClearDepthStencilCmd depthStencilArr = (ListClearDepthStencilCmd) { 0 };
-	_gotoIfError(clean, ListClearDepthStencilCmd_createRefConst(&depthStencilCmd, 1, &depthStencilArr));
-	_gotoIfError(clean, CommandListRef_clearDepthStencils(commandListRef, depthStencilArr));
-
-clean:
-
-	if(err.genericError)
-		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
-
-	return err;
-}
-
-Error CommandListRef_clearDepthStencils(CommandListRef *commandListRef, ListClearDepthStencilCmd clearDepthStencils) {
-
-	Buffer buf = Buffer_createNull();
-	CommandListRef_validateScope(commandListRef, clean);
-
-	if(!clearDepthStencils.length)
-		_gotoIfError(clean, Error_nullPointer(1, "CommandListRef_clearDepthStencils()::clearDepthStencils.length is 0"));
-
-	if(clearDepthStencils.length > U32_MAX)
-		_gotoIfError(clean, Error_outOfBounds(
-			1, clearDepthStencils.length, U32_MAX, "CommandListRef_clearDepthStencils()::clearDepthStencils.length > U32_MAX"
-		));
-
-	for(U64 i = 0; i < clearDepthStencils.length; ++i) {
-
-		ClearDepthStencilCmd clearImage = clearDepthStencils.ptr[i];
-		DepthStencilRef *image = clearImage.depthStencil;
-
-		if(!image || image->typeId != EGraphicsTypeId_DepthStencil)
-			_gotoIfError(clean, Error_nullPointer(
-				1, "CommandListRef_clearDepthStencils()::clearDepthStencils[i].image is invalid"
-			));
-
-		if(SwapchainRef_ptr(image)->device != CommandListRef_ptr(commandList)->device)
-			_gotoIfError(clean, Error_unsupportedOperation(
-				0, "CommandListRef_clearImages()::clearDepthStencils[i].image belongs to other device"
-			));
-
-		//TODO: Properly support this
-
-		if (clearImage.range.layerId != U32_MAX && clearImage.range.layerId >= 1)
-			_gotoIfError(clean, Error_outOfBounds(
-				1, clearImage.range.layerId, 1, 
-				"CommandListRef_clearDepthStencils()::clearDepthStencils[i].range.layerId is invalid"
-			));
-
-		if (clearImage.range.levelId != U32_MAX && clearImage.range.levelId >= 1)
-			_gotoIfError(clean, Error_outOfBounds(
-				2, clearImage.range.levelId, 1, 
-				"CommandListRef_clearDepthStencils()::clearDepthStencils[i].range.levelId is invalid"
-			));
-
-		//Add transition
-
-		if(CommandListRef_isBound(commandList, image, (ResourceRange) { .image = clearImage.range }))
-			_gotoIfError(clean, Error_invalidOperation(
-				0, "CommandListRef_clearDepthStencils()::clearDepthStencils[i].image is already transitioned"
-			));
-
-		TransitionInternal transition = (TransitionInternal) {
-			.resource = image,
-			.range = (ResourceRange) { .image = clearImage.range },
-			.stage = EPipelineStage_Count,
-			.type = ETransitionType_Clear
-		};
-
-		_gotoIfError(clean, ListTransitionInternal_pushBackx(&commandList->pendingTransitions, transition));
-	}
-
-	//Copy buffer
-
-	_gotoIfError(clean, Buffer_createEmptyBytesx(ListClearDepthStencilCmd_bytes(clearDepthStencils) + sizeof(U32), &buf));
-
-	*(U32*)buf.ptr = (U32) clearDepthStencils.length;
-	Buffer_copy(
-		Buffer_createRef((U8*) buf.ptr + sizeof(U32), ListClearDepthStencilCmd_bytes(clearDepthStencils)), 
-		ListClearDepthStencilCmd_bufferConst(clearDepthStencils)
-	);
-
-	_gotoIfError(clean, CommandList_append(commandList, ECommandOp_ClearDepthStencils, buf, 0));
-
-clean:
-
-	if(err.genericError)
-		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
-
-	Buffer_freex(&buf);
-	return err;
 }
 
 //Render calls
@@ -1398,7 +1283,7 @@ Error CommandListRef_startRenderExt(
 
 			DepthStencil *depthStencil = DepthStencilRef_ptr(info.image);
 
-			if (isDepth && depthStencil->format == EDepthStencilFormat_S8)
+			if (isDepth && depthStencil->format == EDepthStencilFormat_S8Ext)
 				_gotoIfError(clean, Error_invalidOperation(
 					3, "CommandListRef_startRenderExt()::depth has format S8, which is not usable for depth attachment"
 				));
@@ -1667,13 +1552,12 @@ Error CommandListRef_startRenderExt(
 			//If stencil is missing, we try to make the format stencil-less to indicate we won't need to write.
 
 			case EDepthStencilFormat_D16:
-			case EDepthStencilFormat_D16S8:
-				depthFormat = stencil.image ? EDepthStencilFormat_D16S8 : EDepthStencilFormat_D16;
+				depthFormat = EDepthStencilFormat_D16;
 				break;
 
 			case EDepthStencilFormat_D32:
-			case EDepthStencilFormat_D32S8:
-				depthFormat = stencil.image ? EDepthStencilFormat_D32S8 : EDepthStencilFormat_D32;
+			case EDepthStencilFormat_D32S8Ext:
+				depthFormat = stencil.image ? EDepthStencilFormat_D32S8Ext : EDepthStencilFormat_D32;
 				break;
 
 			//D24S8 can't be made stencil-less
@@ -1684,7 +1568,7 @@ Error CommandListRef_startRenderExt(
 		}
 
 	if(!depth.image && stencil.image)
-		depthFormat = EDepthStencilFormat_S8;
+		depthFormat = EDepthStencilFormat_S8Ext;
 
 	commandList->boundDepthFormat = depthFormat;
 

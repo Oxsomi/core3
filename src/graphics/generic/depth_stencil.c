@@ -61,11 +61,16 @@ Error GraphicsDeviceRef_createDepthStencil(
 	DepthStencilRef **depthStencilRef
 ) {
 
-	if(!deviceRef)
+	if(!deviceRef || deviceRef->typeId != EGraphicsTypeId_GraphicsDevice)
 		return Error_nullPointer(0, "GraphicsDeviceRef_createDepthStencil()::deviceRef is required");
+
 
 	if(format <= EDepthStencilFormat_None || format >= EDepthStencilFormat_Count)
 		return Error_invalidParameter(2, 0, "GraphicsDeviceRef_createDepthStencil()::format is required");
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+	if(!GraphicsDeviceInfo_supportsDepthStencilFormat(&device->info, format))
+		return Error_unsupportedOperation(0, "GraphicsDeviceRef_createDepthStencil()::format is unsupported");
 
 	Error err = RefPtr_createx(
 		(U32)(sizeof(DepthStencil) + DepthStencilExt_size), 

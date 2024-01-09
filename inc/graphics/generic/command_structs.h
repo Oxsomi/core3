@@ -205,20 +205,6 @@ typedef struct ClearImageCmd {
 
 } ClearImageCmd;
 
-typedef struct ClearDepthStencilCmd {
-
-	F32 depth;
-
-	U8 stencil;
-	Bool depthClear, stencilClear;
-	U8 padding;
-
-	ImageRange range;
-
-	DepthStencilRef *depthStencil;
-
-} ClearDepthStencilCmd;
-
 typedef struct SetPrimitiveBuffersCmd {
 
 	DeviceBufferRef *vertexBuffers[16];

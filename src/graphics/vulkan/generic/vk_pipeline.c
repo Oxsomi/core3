@@ -819,11 +819,6 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListChar
 					depthFormat = VK_FORMAT_D16_UNORM;
 					break;
 
-				case EDepthStencilFormat_D16S8:	
-					depthFormat = VK_FORMAT_D16_UNORM_S8_UINT;
-					stencilFormat = VK_FORMAT_S8_UINT;
-					break;
-
 				case EDepthStencilFormat_D32:	
 					depthFormat = VK_FORMAT_D32_SFLOAT;
 					break;
@@ -833,12 +828,12 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListChar
 					stencilFormat = VK_FORMAT_S8_UINT;
 					break;
 
-				case EDepthStencilFormat_D32S8:	
+				case EDepthStencilFormat_D32S8Ext:	
 					depthFormat = VK_FORMAT_D32_SFLOAT_S8_UINT;
 					stencilFormat = VK_FORMAT_S8_UINT;
 					break;
 
-				case EDepthStencilFormat_S8:	
+				case EDepthStencilFormat_S8Ext:	
 					stencilFormat = VK_FORMAT_S8_UINT;
 					break;
 

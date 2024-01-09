@@ -56,9 +56,8 @@ Error GraphicsDeviceRef_createDepthStencilExt(
 	switch(format) {
 		case EDepthStencilFormat_D16:		vkFormat = VK_FORMAT_D16_UNORM;					break;
 		case EDepthStencilFormat_D32:		vkFormat = VK_FORMAT_D32_SFLOAT;				break;
-		case EDepthStencilFormat_D16S8:		vkFormat = VK_FORMAT_D16_UNORM_S8_UINT;			break;
 		case EDepthStencilFormat_D24S8:		vkFormat = VK_FORMAT_D24_UNORM_S8_UINT;			break;
-		case EDepthStencilFormat_D32S8:		vkFormat = VK_FORMAT_D32_SFLOAT_S8_UINT;		break;
+		case EDepthStencilFormat_D32S8Ext:		vkFormat = VK_FORMAT_D32_SFLOAT_S8_UINT;		break;
 	}
 
 	VkImageCreateInfo imageInfo = (VkImageCreateInfo) {

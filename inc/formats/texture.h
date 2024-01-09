@@ -150,7 +150,6 @@ typedef enum ETextureFormat {
 
 	//Special purpose formats
 
-	ETextureFormat_RGB10A2			= _ETextureFormat(ETexturePrimitive_UNorm, 10, 10, 10, 2),
 	ETextureFormat_BGR10A2			= _ETextureFormat(ETexturePrimitive_UnormBGR, 10, 10, 10, 2),
 
 	//Compression formats
@@ -462,7 +461,7 @@ static const ETextureFormat ETextureFormatId_unpack[] = {
 
 	//Special format
 
-	ETextureFormat_RGB10A2,		ETextureFormat_BGR10A2,
+	ETextureFormat_BGR10A2,
 
 	//BCn
 

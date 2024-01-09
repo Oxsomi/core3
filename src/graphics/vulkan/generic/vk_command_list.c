@@ -144,50 +144,6 @@ void CommandList_process(
 			break;
 		}
 
-		case ECommandOp_ClearDepthStencils: {
-
-			U32 imageClearCount = *(const U32*) data;
-
-			const ClearDepthStencilCmd *clear = (const ClearDepthStencilCmd*) (data + sizeof(imageClearCount));
-
-			for(U64 i = 0; i < imageClearCount; ++i) {
-
-				//ImageRange image = clear[i].range;
-
-				VkClearDepthStencilValue clearValue = (VkClearDepthStencilValue) {
-					.depth = clear[i].depth,
-					.stencil = clear[i].stencil
-				};
-
-				//Validate range
-
-				DepthStencil *depthStencil = DepthStencilRef_ptr(clear[i].depthStencil);
-
-				U32 layerCount = 1, levelCount = 1;
-
-				VkImageSubresourceRange range = (VkImageSubresourceRange) {
-			
-					.aspectMask = 
-						(clear[i].depth ? VK_IMAGE_ASPECT_DEPTH_BIT : 0) |
-						(clear[i].stencil ? VK_IMAGE_ASPECT_STENCIL_BIT : 0),
-
-					.levelCount = levelCount,
-					.layerCount = layerCount
-				};
-
-				vkCmdClearDepthStencilImage(
-					buffer, 
-					((const VkManagedImage*) DepthStencil_ext(depthStencil,))->image, 
-					VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-					&clearValue,
-					1,
-					&range
-				);
-			}
-
-			break;
-		}
-
 		//Dynamic rendering / direct rendering
 
 		case ECommandOp_StartRenderingExt: {

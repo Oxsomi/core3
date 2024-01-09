@@ -28,6 +28,7 @@
 #include "platforms/log.h"
 #include "types/time.h"
 #include "types/type_cast.h"
+#include "formats/texture.h"
 
 TListNamedImpl(ListLockPtr);
 TListNamedImpl(ListCommandListRef);
@@ -168,7 +169,64 @@ void GraphicsDeviceInfo_print(const GraphicsDeviceInfo *deviceInfo, Bool printCa
 
 		if(dat & EGraphicsDataTypes_MSAA16x)
 			Log_debugLnx("\t\tMSAA 16x");
+
+		if(dat & EGraphicsDataTypes_S8)
+			Log_debugLnx("\t\tEDepthStencilFormat_S8");
+
+		if(dat & EGraphicsDataTypes_D32S8)
+			Log_debugLnx("\t\tEDepthStencilFormat_D32S8");
+
+		if(dat & EGraphicsDataTypes_RGB32f)
+			Log_debugLnx("\t\tETextureFormat_RGBA32f for use in textures (not just vertex input)");
+
+		if(dat & EGraphicsDataTypes_RGB32u)
+			Log_debugLnx("\t\tETextureFormat_RGBA32u for use in textures (not just vertex input)");
+
+		if(dat & EGraphicsDataTypes_RGB32i)
+			Log_debugLnx("\t\tETextureFormat_RGBA32i for use in textures (not just vertex input)");
 	}
+}
+
+Bool GraphicsDeviceInfo_supportsFormat(const GraphicsDeviceInfo *deviceInfo, ETextureFormat format) {
+
+	if(!deviceInfo)
+		return false;
+
+	ETextureCompressionAlgo algo = ETextureFormat_getCompressionAlgo(format);
+
+	if(algo == ETextureCompressionAlgo_ASTC)
+		return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_ASTC;
+
+	if(algo == ETextureCompressionAlgo_BCn)
+		return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_BCn;
+
+	switch (format) {
+		case ETextureFormat_RGB32f:		return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_RGB32f;
+		case ETextureFormat_RGB32i:		return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_RGB32i;
+		case ETextureFormat_RGB32u:		return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_RGB32u;
+	}
+
+	return true;
+}
+
+Bool GraphicsDeviceInfo_supportsFormatVertexAttribute(ETextureFormat format) {
+
+	ETextureCompressionAlgo algo = ETextureFormat_getCompressionAlgo(format);
+
+	if(algo != ETextureCompressionAlgo_None)
+		return false;
+
+	return true;
+}
+
+Bool GraphicsDeviceInfo_supportsDepthStencilFormat(const GraphicsDeviceInfo *deviceInfo, EDepthStencilFormat format) {
+
+	switch(format) {
+		case EDepthStencilFormat_D32S8Ext:		return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_D32S8;
+		case EDepthStencilFormat_S8Ext:		return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_S8;
+	}
+
+	return true;
 }
 
 Error GraphicsDeviceRef_dec(GraphicsDeviceRef **device) {

@@ -202,6 +202,68 @@ Requires task shaders to be present and multiviewMeshShader, primitiveFragmentSh
 - AtomicF32 means atomic exchange/read and atomic float add operations on a buffer. Images are optional.
 - AtomicF64 ^ except 64-bit.
 
+### Formats
+
+A lossless format is defined as "supported" if it has the following flags in the format properties when using a tiled/non linear layout (check  "49.3. Required Format Support" of the Vulkan spec).
+
+- VK_FORMAT_FEATURE_VERTEX_BUFFER_BIT.
+- VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT
+- VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT
+- VK_FORMAT_FEATURE_BLIT_DST_BIT
+- VK_FORMAT_FEATURE_BLIT_SRC_BIT
+- VK_FORMAT_FEATURE_TRANSFER_DST_BIT
+
+The following lossless formats have to be supported for a valid OxC3 implementation:
+
+- R8, R8s, R8u, R8i
+- RG8, RG8s, RG8u, RG8i
+- RGBA8, RGBA8s, RGBA8i, RGBA8u
+- R16, R16s, R16u, R16i, R16f
+- RG16, RG16s, RG16u, RG16i, RG16f
+- RGBA16, RGBA16s, RGBA16u, RGBA16i, RGBA16f
+- R32u, R32i, R32f
+- RG32u, RG32i, RG32f
+- RGBA32u, RGBA32i, RGBA32f
+- BGRA8, BGR10A2
+
+The following are required with VK_FORMAT_FEATURE_VERTEX_BUFFER_BIT only:
+
+- RGB32u, RGB32i, RGB32f
+
+The following depth stencil formats are required (meaning VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT and VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT are set):
+
+- D16, D32, D24S8.
+
+Only the following are not always supported properly by the Vulkan implementation (so certain devices might not support them and thus they won't support OxC3). OxC3 will still enforce them to be present. Minimum spec was enforced here and it seems like all targeted systems support them.
+
+- R8s, RG8s, RGBA8s
+- R16, R16s
+- RG16, RG16s
+- RGBA16, RGBA16s
+- D32, D24S8
+- BGRA8 (write is optional, but is enforced by OxC3. The rest is required)
+
+Lossy formats:
+
+- The following always have to be supported (this is already forced by the Vulkan spec):
+  - VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT
+  - VK_FORMAT_FEATURE_BLIT_SRC_BIT
+  - VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT
+- All ASTC formats have to be supported if EGraphicsDataTypes_ASTC is on.
+- All BCn formats have to be supported if EGraphicsDataTypes_BCn is on.
+
+The following are optional: If they're not properly supported `GraphicsDeviceInfo_supportsFormat` or `GraphicsDeviceInfo_supportsDepthStencilFormat` will return false.
+
+- All ASTC formats have to be supported if EGraphicsDataTypes_ASTC is on.
+- All BCn formats have to be supported if EGraphicsDataTypes_BCn is on.
+
+- RGB32u, RGB32i, RGB32f if they allow all other required bits (as mentioned at the start) besides VK_FORMAT_FEATURE_VERTEX_BUFFER_BIT.
+- D32S8, S8.
+
+`GraphicsDeviceInfo_supportsFormatVertexAttribute` returns whether or not a format is applicable as a vertex attribute. The following are explicitly prohibited:
+
+- Any format that uses compression (ASTC or BCn).
+
 ## List of DirectX12 requirements
 
 - DirectX12 Feature level 12_1. 

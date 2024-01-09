@@ -1158,7 +1158,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 		if(allMSAA & VK_SAMPLE_COUNT_16_BIT)
 			capabilities.dataTypes |= EGraphicsDataTypes_MSAA16x;
 
-		//Get graphics binding tier
+		//Enforce support for bindless
 
 		if(
 			limits.maxPerStageDescriptorSamplers < 2 * KIBI ||
@@ -1175,6 +1175,152 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 		) {
 			Log_debugLnx("Vulkan: Unsupported device %u, graphics binding tier not supported!", i);
 			continue;
+		}
+
+		//Enforce format support
+		//We don't enforce VK_FORMAT_FEATURE_VERTEX_BUFFER_BIT because the standard guarantees it.
+
+		VkFormat toSupport[]  = {
+
+			//R8s, RG8s, RGBA8s
+
+			VK_FORMAT_R8_SNORM,
+			VK_FORMAT_R8G8_SNORM,
+			VK_FORMAT_R8G8B8A8_SNORM,
+
+			//R16, R16s
+			//RG16, RG16s
+
+			VK_FORMAT_R16_SNORM,
+			VK_FORMAT_R16G16_SNORM,
+
+			VK_FORMAT_R16_UNORM,
+			VK_FORMAT_R16G16_UNORM,
+
+			//RGBA16, RGBA16s
+
+			VK_FORMAT_R16G16B16A16_UNORM,
+			VK_FORMAT_R16G16B16A16_SNORM,
+
+			//BGRA8
+
+			VK_FORMAT_B8G8R8A8_UNORM,
+
+			//D24S8, D32
+
+			VK_FORMAT_D24_UNORM_S8_UINT,
+			VK_FORMAT_D32_SFLOAT
+		};
+
+		VkFormatFeatureFlags reqFormatDef = 
+			VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT |
+			VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT |
+			VK_FORMAT_FEATURE_BLIT_DST_BIT |
+			VK_FORMAT_FEATURE_BLIT_SRC_BIT |
+			VK_FORMAT_FEATURE_TRANSFER_DST_BIT;
+
+		VkFormatFeatureFlags depthStencilDef = 
+			VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT | 
+			VK_FORMAT_FEATURE_BLIT_SRC_BIT | 
+			VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT;
+
+		VkFormatFeatureFlags reqFormatFeatFlags[] = {
+
+			//R8s, RG8s, RGBA8s
+			//R16, R16s
+			//RG16, RG16s
+			//RGBA16, RGBA16s
+
+			reqFormatDef, reqFormatDef, reqFormatDef,
+			reqFormatDef, reqFormatDef,
+			reqFormatDef, reqFormatDef,
+
+			reqFormatDef, reqFormatDef,
+
+			//BGRA8 
+
+			VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT,
+
+			//D24S8, D32
+
+			depthStencilDef, depthStencilDef,
+		};
+
+		Bool unsupported = false;
+
+		for(U64 k = 0; k < sizeof(toSupport) / sizeof(VkFormat); ++k) {
+
+			VkFormatProperties formatInfo = (VkFormatProperties) { 0 };
+			vkGetPhysicalDeviceFormatProperties(dev, toSupport[k], &formatInfo);
+
+			VkFormatFeatureFlags reqk = reqFormatFeatFlags[k];
+
+			if((formatInfo.optimalTilingFeatures & reqk) != reqk) {
+				unsupported = true;
+				break;
+			}
+		}
+
+		if (unsupported) {
+			Log_debugLnx("Vulkan: Unsupported device %u, required texture format not supported!", i);
+			continue;
+		}
+
+		//Get optional formats (RGB32u, RGB32i, RGB32f)
+
+		typedef struct OptionalFormat {
+
+			VkFormat format;
+
+			EGraphicsDataTypes optFormat;
+
+			VkFormatFeatureFlags flags;
+
+			Bool support;
+			U8 pad[3];
+
+		} OptionalFormat;
+
+		OptionalFormat optionalFormats[]  = { 
+
+			(OptionalFormat) {
+				.format = VK_FORMAT_R32G32B32_SFLOAT,
+				.optFormat = EGraphicsDataTypes_RGB32f,
+				.flags = reqFormatDef
+			},
+
+			(OptionalFormat) { 
+				.format = VK_FORMAT_R32G32B32_SINT,
+				.optFormat = EGraphicsDataTypes_RGB32i,
+				.flags = reqFormatDef
+			},
+
+			(OptionalFormat) { 
+				.format = VK_FORMAT_R32G32B32_UINT,
+				.optFormat = EGraphicsDataTypes_RGB32u,
+				.flags = reqFormatDef 
+			},
+
+			(OptionalFormat) { 
+				.format = VK_FORMAT_D32_SFLOAT_S8_UINT,
+				.optFormat = EGraphicsDataTypes_D32S8,
+				.flags = depthStencilDef
+			},
+
+			(OptionalFormat) { 
+				.format = VK_FORMAT_S8_UINT,
+				.optFormat = EGraphicsDataTypes_S8,
+				.flags = depthStencilDef
+			}
+		};
+
+		for(U64 k = 0; k < sizeof(optionalFormats) / sizeof(OptionalFormat); ++k) {
+
+			VkFormatProperties formatInfo = (VkFormatProperties) { 0 };
+			vkGetPhysicalDeviceFormatProperties(dev, optionalFormats[k].format, &formatInfo);
+
+			if((formatInfo.optimalTilingFeatures & optionalFormats[k].flags) == optionalFormats[k].flags)
+				capabilities.dataTypes |= optionalFormats[k].optFormat;
 		}
 
 		//Grab LUID/UUID

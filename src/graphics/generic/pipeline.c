@@ -374,11 +374,11 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 			if(!attrib.format)
 				continue;
 
-			if(ETextureFormat_getIsCompressed(format))
+			if(!GraphicsDeviceInfo_supportsFormatVertexAttribute(format))
 				return Error_invalidOperation(
 					9, 
-					"GraphicsDeviceRef_createPipelinesGraphics()::infos[i].vertexLayout.attributes[j].format is compressed "
-					"this is not supported as such as vertex input layout"
+					"GraphicsDeviceRef_createPipelinesGraphics()::infos[i].vertexLayout.attributes[j].format is "
+					"unsupported as a vertex input attribute"
 				);
 
 			//Validate bounds for attribute

@@ -21,6 +21,9 @@
 #pragma once
 #include "graphics/generic/types.h"
 
+typedef enum ETextureFormat ETextureFormat;
+typedef enum EDepthStencilFormat EDepthStencilFormat;
+
 typedef enum EGraphicsDeviceType {
 
 	EGraphicsDeviceType_Dedicated,
@@ -125,7 +128,18 @@ typedef enum EGraphicsDataTypes {
 
 	EGraphicsDataTypes_MSAA2x				= 1 << 8,
 	EGraphicsDataTypes_MSAA8x				= 1 << 9,
-	EGraphicsDataTypes_MSAA16x				= 1 << 10
+	EGraphicsDataTypes_MSAA16x				= 1 << 10,
+
+	//Formats for use other than just vertex buffer usage
+
+	EGraphicsDataTypes_RGB32f				= 1 << 11,
+	EGraphicsDataTypes_RGB32i				= 1 << 12,
+	EGraphicsDataTypes_RGB32u				= 1 << 13,
+
+	//Depth stencil
+
+	EGraphicsDataTypes_D32S8				= 1 << 14,
+	EGraphicsDataTypes_S8					= 1 << 15
 
 } EGraphicsDataTypes;
 
@@ -154,7 +168,7 @@ typedef struct GraphicsDeviceInfo {
 	EGraphicsVendor vendor;
 
 	U32 id;
-	U32 pad;
+	U32 padding;
 
 	GraphicsDeviceCapabilities capabilities;
 
@@ -167,3 +181,11 @@ typedef struct GraphicsDeviceInfo {
 } GraphicsDeviceInfo;
 
 void GraphicsDeviceInfo_print(const GraphicsDeviceInfo *deviceInfo, Bool printCapabilities);
+
+//If a texture and render texture can be created with the format.
+Bool GraphicsDeviceInfo_supportsFormat(const GraphicsDeviceInfo *deviceInfo, ETextureFormat format);
+
+//If a texture format is allowed as a vertex attribute
+Bool GraphicsDeviceInfo_supportsFormatVertexAttribute(ETextureFormat format);
+
+Bool GraphicsDeviceInfo_supportsDepthStencilFormat(const GraphicsDeviceInfo *deviceInfo, EDepthStencilFormat format);

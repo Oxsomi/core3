@@ -107,7 +107,7 @@ _gotoIfError(clean, GraphicsInstance_getPreferredDevice(
 
 - features: DirectRendering, VariableRateShading, MultiDrawIndirectCount, MeshShader, GeometryShader, TessellationShader, SubgroupArithmetic, SubgroupShuffle, Swapchain, Multiview, Raytracing, RayPipeline, RayIndirect, RayQuery, RayMicromapOpacity, RayMicromapDisplacement, RayMotionBlur, RayReorder, LUID, DebugMarkers, Wireframe, LogicOp, DualSrcBlend.
 - features2: reserved for future features.
-- dataTypes: I64, F16, F64, AtomicI64, AtomicF32, AtomicF64, ASTC, BCn, MSAA2x, MSAA8x, MSAA16x.
+- dataTypes: I64, F16, F64, AtomicI64, AtomicF32, AtomicF64, ASTC, BCn, MSAA2x, MSAA8x, MSAA16x, RGB32f, RGB32i, RGB32u, D32S8, S8.
   - MSAA4x and MSAA1x (off) are supported by default.
 - featuresExt: API dependent features.
   - Vulkan: PerformanceQuery.
@@ -119,6 +119,18 @@ _gotoIfError(clean, GraphicsInstance_getPreferredDevice(
   ```
 
   - Prints all relevant information about the device. If printCapabilities is on it will also show extensions and supported data types.
+  
+- `supportsFormat(ETextureFormat format)`
+
+  - Checks if the format is supported for use as a texture by the current device.
+
+- `supportsFormatVertexAttribute(ETextureFormat format)`
+
+  - Checks if the format is supported for use as a vertex attribute.
+
+- `supportsDepthStencilFormat(EDepthStencilFormat format)`
+
+  - Checks if the depth stencil format is supported for use by the current device.
 
 ### Used functions and obtained
 

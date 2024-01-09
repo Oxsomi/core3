@@ -124,14 +124,6 @@ TList(ClearImageCmd);
 
 Error CommandListRef_clearImages(CommandListRef *commandList, ListClearImageCmd clearImages);
 
-TList(ClearDepthStencilCmd);
-
-Error CommandListRef_clearDepthStencil(
-	CommandListRef *commandList, const F32 *depth, const U8 *stencil, ImageRange range, DepthStencilRef *depthStencil
-);
-
-Error CommandListRef_clearDepthStencils(CommandListRef *commandList, ListClearDepthStencilCmd clearDepthStencils);
-
 //Draw calls and dispatches
 
 TList(Transition);
