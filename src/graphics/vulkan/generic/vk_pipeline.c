@@ -823,12 +823,12 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListChar
 					depthFormat = VK_FORMAT_D32_SFLOAT;
 					break;
 
-				case EDepthStencilFormat_D24S8:	
+				case EDepthStencilFormat_D24S8Ext:	
 					depthFormat = VK_FORMAT_D24_UNORM_S8_UINT;
 					stencilFormat = VK_FORMAT_S8_UINT;
 					break;
 
-				case EDepthStencilFormat_D32S8Ext:	
+				case EDepthStencilFormat_D32S8:	
 					depthFormat = VK_FORMAT_D32_SFLOAT_S8_UINT;
 					stencilFormat = VK_FORMAT_S8_UINT;
 					break;

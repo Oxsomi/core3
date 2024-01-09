@@ -173,8 +173,8 @@ void GraphicsDeviceInfo_print(const GraphicsDeviceInfo *deviceInfo, Bool printCa
 		if(dat & EGraphicsDataTypes_S8)
 			Log_debugLnx("\t\tEDepthStencilFormat_S8");
 
-		if(dat & EGraphicsDataTypes_D32S8)
-			Log_debugLnx("\t\tEDepthStencilFormat_D32S8");
+		if(dat & EGraphicsDataTypes_D24S8)
+			Log_debugLnx("\t\tEDepthStencilFormat_D24S8");
 
 		if(dat & EGraphicsDataTypes_RGB32f)
 			Log_debugLnx("\t\tETextureFormat_RGBA32f for use in textures (not just vertex input)");
@@ -222,7 +222,7 @@ Bool GraphicsDeviceInfo_supportsFormatVertexAttribute(ETextureFormat format) {
 Bool GraphicsDeviceInfo_supportsDepthStencilFormat(const GraphicsDeviceInfo *deviceInfo, EDepthStencilFormat format) {
 
 	switch(format) {
-		case EDepthStencilFormat_D32S8Ext:		return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_D32S8;
+		case EDepthStencilFormat_D24S8Ext:	return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_D24S8;
 		case EDepthStencilFormat_S8Ext:		return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_S8;
 	}
 

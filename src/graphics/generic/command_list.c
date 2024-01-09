@@ -1556,14 +1556,14 @@ Error CommandListRef_startRenderExt(
 				break;
 
 			case EDepthStencilFormat_D32:
-			case EDepthStencilFormat_D32S8Ext:
-				depthFormat = stencil.image ? EDepthStencilFormat_D32S8Ext : EDepthStencilFormat_D32;
+			case EDepthStencilFormat_D32S8:
+				depthFormat = stencil.image ? EDepthStencilFormat_D32S8 : EDepthStencilFormat_D32;
 				break;
 
 			//D24S8 can't be made stencil-less
 
-			case EDepthStencilFormat_D24S8:
-				depthFormat = EDepthStencilFormat_D24S8;
+			case EDepthStencilFormat_D24S8Ext:
+				depthFormat = EDepthStencilFormat_D24S8Ext;
 				break;
 		}
 

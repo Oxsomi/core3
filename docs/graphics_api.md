@@ -463,7 +463,7 @@ The graphics pipeline has the following properties:
   - If DirectRendering is enabled, a simpler way of creating can be used to aid porting and simplify development for desktop.
   - attachmentCountExt: how many render targets should be used.
   - attachmentFormatsExt[i < attachmentCountExt]: the ETextureFormatId of the format. Needs to match the render target's exactly (Swapchain BGRA8 doesn't match an RGBA8 pipeline!).
-  - depthFormatExt: depth format of the depth buffer: None, D16, D32, D24S8, D32S8.
+  - depthFormatExt: depth format of the depth buffer: None, D16, D32, D32S8, D24S8Ext, S8Ext.
 - **TODO**: Not using DirectRendering:
   - If DirectRendering is not supported or the developer doesn't want to use it; a unified mobile + desktop architecture can be used. However; generally desktop techniques don't lend themselves well for mobile techniques and vice versa. So it's still recommended to implement two separate rendering backends on mobile.
   - **TODO**: renderPass:

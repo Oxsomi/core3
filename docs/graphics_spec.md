@@ -232,7 +232,7 @@ The following are required with VK_FORMAT_FEATURE_VERTEX_BUFFER_BIT only:
 
 The following depth stencil formats are required (meaning VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT and VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT are set):
 
-- D16, D32, D24S8.
+- D16, D32, D32S8.
 
 Only the following are not always supported properly by the Vulkan implementation (so certain devices might not support them and thus they won't support OxC3). OxC3 will still enforce them to be present. Minimum spec was enforced here and it seems like all targeted systems support them.
 
@@ -240,7 +240,7 @@ Only the following are not always supported properly by the Vulkan implementatio
 - R16, R16s
 - RG16, RG16s
 - RGBA16, RGBA16s
-- D32, D24S8
+- D32, D32S8
 - BGRA8 (write is optional, but is enforced by OxC3. The rest is required)
 
 Lossy formats:
@@ -258,7 +258,7 @@ The following are optional: If they're not properly supported `GraphicsDeviceInf
 - All BCn formats have to be supported if EGraphicsDataTypes_BCn is on.
 
 - RGB32u, RGB32i, RGB32f if they allow all other required bits (as mentioned at the start) besides VK_FORMAT_FEATURE_VERTEX_BUFFER_BIT.
-- D32S8, S8.
+- S8, D24S8.
 
 `GraphicsDeviceInfo_supportsFormatVertexAttribute` returns whether or not a format is applicable as a vertex attribute. The following are explicitly prohibited:
 

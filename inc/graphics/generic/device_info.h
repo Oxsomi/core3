@@ -138,7 +138,7 @@ typedef enum EGraphicsDataTypes {
 
 	//Depth stencil
 
-	EGraphicsDataTypes_D32S8				= 1 << 14,
+	EGraphicsDataTypes_D24S8				= 1 << 14,
 	EGraphicsDataTypes_S8					= 1 << 15
 
 } EGraphicsDataTypes;

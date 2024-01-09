@@ -1206,9 +1206,9 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 
 			VK_FORMAT_B8G8R8A8_UNORM,
 
-			//D24S8, D32
+			//D32S8, D32
 
-			VK_FORMAT_D24_UNORM_S8_UINT,
+			VK_FORMAT_D32_SFLOAT_S8_UINT,
 			VK_FORMAT_D32_SFLOAT
 		};
 
@@ -1241,7 +1241,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 
 			VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT,
 
-			//D24S8, D32
+			//D32S8, D32
 
 			depthStencilDef, depthStencilDef,
 		};
@@ -1302,8 +1302,8 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 			},
 
 			(OptionalFormat) { 
-				.format = VK_FORMAT_D32_SFLOAT_S8_UINT,
-				.optFormat = EGraphicsDataTypes_D32S8,
+				.format = VK_FORMAT_D24_UNORM_S8_UINT,
+				.optFormat = EGraphicsDataTypes_D24S8,
 				.flags = depthStencilDef
 			},
 
