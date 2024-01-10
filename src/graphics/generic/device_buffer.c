@@ -70,8 +70,8 @@ Error DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count) {
 
 	Bool fullRange = count == buffer->length;
 
-	U64 start = U64_max(offset, 256) - 256;
-	U64 end = U64_min(offset + count + 256, buffer->length);
+	U64 start = (offset + 255) &~ 255;
+	U64 end = U64_min((offset + count + 255) &~ 255, buffer->length);
 
 	//If the entire buffer is marked dirty, we have to make sure we don't duplicate it
 

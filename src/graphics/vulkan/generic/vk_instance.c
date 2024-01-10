@@ -705,6 +705,11 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 		VkPhysicalDeviceFeatures features = features2.features;
 		VkPhysicalDeviceLimits limits = properties.limits;
 
+		if (limits.nonCoherentAtomSize > 256) {
+			Log_debugLnx("Vulkan: Unsupported device %u, nonCoherentAtomSize needs to be up to 256", i);
+			continue;
+		}
+
 		//Ensure device is compatible first
 
 		if(

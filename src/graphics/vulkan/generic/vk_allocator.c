@@ -193,8 +193,13 @@ Error DeviceMemoryAllocator_allocate(
 			)
 				continue;
 
+			U64 tempAlignment = memReq.alignment;
+
+			if(!(block->allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT))		//Adhere to memory requirements
+				tempAlignment = U64_max(256, tempAlignment);
+
 			const U8 *alloc = NULL; 
-			Error err = AllocationBuffer_allocateBlockx(&block->allocations, memReq.size, memReq.alignment, &alloc);
+			Error err = AllocationBuffer_allocateBlockx(&block->allocations, memReq.size, tempAlignment, &alloc);
 
 			if(err.genericError)
 				continue;

@@ -125,6 +125,7 @@ Because of this, a device needs the following requirements to be OxC3 compatible
 - maxDescriptorSetStorageImages of 250k or higher.
 - viewportBoundsRange[0] <= -32768.
 - viewportBoundsRange[1] >= 32767.
+- nonCoherentAtomSize of 0 -> 256 and has to be base2.
 - Requires UBO alignment of <=256.
 
 ### Extensions
