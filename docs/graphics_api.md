@@ -378,6 +378,40 @@ By default the swapchain will use triple buffering to ensure best performance. E
 - Obtained through GraphicsDeviceRef's createSwapchain, see overview.
 - Used in GraphicsDeviceRef's submitCommands as well as read & write image commands and dispatches.
 
+## Sampler
+
+### Summary
+
+A sampler is a standalone object that will be used to describe how a texture is sampled. These are not combined samplers because it is possible that one texture is used as two different usages (e.g. one for anisotropy and one for linear) and logically it doesn't make sense that it's linked to the texture rather than a standalone object. This object is given space in the bindless descriptor arrays just like shader visible buffers, depth stencils, render textures, swapchains and depth stencils. However, there are only 2048 sampler slots available, so use them sparingly. 
+
+Once on the GPU, the sampler resource index can be passed to the GPU and the sampler array can be accessed. Then this sampler can be used to sample any resource that's required.
+
+```c
+SamplerInfo nearestSampler = (SamplerInfo) { .filter = ESamplerFilterMode_Nearest };
+_gotoIfError(clean, GraphicsDeviceRef_createSampler(device, nearestSampler, samplerName, &nearest));
+```
+
+### Properties
+
+- device: ref to the device that owns it.
+- samplerLocation: resource index into the bindless array that specifies where the sampler is located. It does contain additional info in the upper 12 bits, so only the low 20 bits store the index (samplerUniform(resourceId) and sampler(resourceId) can be used to do this automatically).
+- info: used to create the sampler and stores information about the sampler.
+  - filter: determining how the sampler filters the input image. A bitset of three properties: Mag, Min and Mip. If the respective bit is true it represents linear filtering rather than nearest filtering. This means there's 7 combinations ranging from nearest min/mag/mip all the way to linear min/mag/mip. 
+  - addressU, addressV, addressW: determining how out of bounds access for each texture is treated: Repeat, MirrorRepeat, ClampToEdge, ClampToBorder. ClampToBorder uses the borderColor to be filtered.
+  - aniso: is anisotropy is applied and how much. 0 means no anisotropy and 1-16 means anistropy of that level.
+  - borderColor: what border color is used if one of the address modes (uvw) is ClampToBorder. TransparentBlack (0.xxxx), OpaqueBlackFloat (0.xxx, 1.f), OpaqueBlackInt (0.xxx, 1), OpaqueWhiteFloat(1.f.xxxx), OpaqueWhiteInt (1.xxxx).
+  - comparisonFunction: comparison function for SamplerComparisonState. Same type (ECompareOp) as depth stencil state. One of Gt, Geq, Eq, Neq, Leq, Lt, Always, Never.
+  - enableComparison: whether or not the comparison function is used.
+  - mipBias, minLod, maxLod:
+    - These properties are F16s (halfs) and require conversion from F32 by using F32_castF16 or F64_castF16. 
+    - mipBias: mip bias that is applied before reading from the mip.
+    - minLod, maxLod: min and max mip. If maxLod is 0 it is assumed that this property isn't set and 65504 (F16_max) is used. If maxLod of 0 is desired it can be achieved by setting it to >5.97e-8 or just any other small number like 0.001.
+
+### Used functions and obtained
+
+- Obtained through GraphicsDeviceRef's createSampler.
+- Used directly in shaders by passing the samplerLocation to the shader and using samplerUniform() or sampler() in the shader.
+
 ## Pipeline
 
 ### Summary

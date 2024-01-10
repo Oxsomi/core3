@@ -73,7 +73,7 @@ typedef struct SamplerInfo {
 	U8 filter;							//ESamplerFilterMode
 	U8 addressU, addressV, addressW;	//ESamplerAddressMode[3] (3 bits each)
 
-	U8 aniso;							//1-16 if ESamplerFilterMode_Anisotropy
+	U8 aniso;							//0-16
 	U8 borderColor;						//ESamplerBorderColor
 	U8 comparisonFunction;				//ECompareOp
 	Bool enableComparison;

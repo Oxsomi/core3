@@ -45,6 +45,9 @@ _binding( 0, 2) cbuffer globals {	//Globals used during the entire frame for use
 	U32x4 _appData[23];
 };
 
+#define samplerUniform(i) _samplers[i & ResourceId_mask]
+#define sampler(i) _samplers[NonUniformResourceIndex(i & ResourceId_mask)]
+
 #define rwBufferUniform(i) _rwBuffer[i & ResourceId_mask]
 #define bufferUniform(i) _buffer[i & ResourceId_mask]
 #define rwBuffer(i) _rwBuffer[NonUniformResourceIndex(i & ResourceId_mask)]
