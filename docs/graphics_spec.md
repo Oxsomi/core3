@@ -265,6 +265,10 @@ The following are optional: If they're not properly supported `GraphicsDeviceInf
 
 - Any format that uses compression (ASTC or BCn).
 
+If raytracing is enabled, the following formats will be enabled for BLAS building:
+
+- RG32f, RGBA32f, RG16f, RGBA16f, RG16s, RGBA16s
+
 ## List of DirectX12 requirements
 
 - DirectX12 Feature level 12_1. 
