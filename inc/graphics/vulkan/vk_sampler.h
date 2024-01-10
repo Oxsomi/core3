@@ -19,39 +19,10 @@
 */
 
 #pragma once
-#include "types/types.h"
-#define VK_ENABLE_BETA_EXTENSIONS
-#include <vulkan/vulkan.h>
+#include "graphics/vulkan/vulkan.h"
 
-typedef struct VkManagedImage {
+typedef struct VkManagedSampler {
 
-	VkImage image;
-	VkImageView view;
+	VkSampler sampler;
 
-	VkPipelineStageFlagBits2 lastStage;
-	VkAccessFlagBits2 lastAccess;
-
-	VkImageLayout lastLayout;
-	U32 readHandle;
-
-	U32 writeHandle;
-	U32 blockId;			//If specifically allocated, indicates which block this is present in
-
-	U64 blockOffset;
-
-} VkManagedImage;
-
-typedef struct CharString CharString;
-typedef struct GraphicsDevice GraphicsDevice;
-typedef struct Error Error;
-typedef enum ETextureFormat ETextureFormat;
-typedef enum EGraphicsDataTypes EGraphicsDataTypes;
-typedef enum ECompareOp ECompareOp;
-
-Error vkCheck(VkResult result);
-
-//Pass types as non NULL to allow validating if the texture format is supported.
-//Sometimes you don't want this, for example when serializing.
-VkFormat mapVkFormat(ETextureFormat format);
-
-VkCompareOp mapVkCompareOp(ECompareOp op);
+} VkManagedSampler;

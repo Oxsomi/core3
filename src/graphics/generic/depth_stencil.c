@@ -29,7 +29,7 @@ Error DepthStencilRef_dec(DepthStencilRef **depthStencil) {
 }
 
 Error DepthStencilRef_inc(DepthStencilRef *depthStencil) {
-	return !RefPtr_inc(depthStencil) ? Error_invalidOperation(0, "DepthStencilRef_dec()::depthStencil is invalid") : 
+	return !RefPtr_inc(depthStencil) ? Error_invalidOperation(0, "DepthStencilRef_inc()::depthStencil is invalid") : 
 	Error_none();
 }
 

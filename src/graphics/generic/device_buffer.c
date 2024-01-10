@@ -22,7 +22,6 @@
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/device.h"
 #include "platforms/ext/bufferx.h"
-#include "platforms/ext/bufferx.h"
 #include "types/string.h"
 
 TListImpl(DevicePendingRange);
@@ -32,7 +31,7 @@ Error DeviceBufferRef_dec(DeviceBufferRef **buffer) {
 }
 
 Error DeviceBufferRef_inc(DeviceBufferRef *buffer) {
-	return !RefPtr_inc(buffer) ? Error_invalidOperation(0, "DeviceBufferRef_dec()::buffer is required") : Error_none();
+	return !RefPtr_inc(buffer) ? Error_invalidOperation(0, "DeviceBufferRef_inc()::buffer is required") : Error_none();
 }
 
 Error DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count) {
