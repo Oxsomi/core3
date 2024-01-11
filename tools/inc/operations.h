@@ -161,6 +161,7 @@ typedef enum EOperation {
 	EOperation_ProfileCRC32C,
 	EOperation_ProfileSHA256,
 	EOperation_ProfileAES256,
+	EOperation_ProfileAES128,
 
 	EOperation_HelpCategories,
 	EOperation_HelpOperations,

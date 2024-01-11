@@ -161,6 +161,7 @@ void Buffer_sha256(Buffer buf, U32 output[8]);
 
 typedef enum EBufferEncryptionType {
 	EBufferEncryptionType_AES256GCM,		//Additional data; IV (96 bits), TAG (128 bits)
+	EBufferEncryptionType_AES128GCM,		//^
 	EBufferEncryptionType_Count
 } EBufferEncryptionType;
 
@@ -190,7 +191,7 @@ Error Buffer_encrypt(
 	Buffer additionalData,			//Non secret data. Data which can't be modified after enc w/o key
 	EBufferEncryptionType type,		//Only AES256GCM is currently supported
 	EBufferEncryptionFlags flags,	//Whether or not to use supplied keys or generate new ones
-	U32 key[8],						//Secret key; used for encryption and decryption
+	U32 *key,						//Secret key; used to en/decrypt (AES256: U32[8], AES128: U32[4])
 	I32x4 *iv,						//Iv should be random 12 bytes. Can be generated if flag is set
 	I32x4 *tag						//Tag should be non zero if encryption type supports it. 
 );
@@ -205,7 +206,7 @@ Error Buffer_decrypt(
 	Buffer target,						//"Cyphertext" aka data to decrypt. Leave empty to verify with AES256GCM
 	Buffer additionalData,				//Data that was supplied to verify integrity of the data
 	EBufferEncryptionType type,			//Only AES256GCM is currently supported
-	const U32 key[8],					//Secret key used to encrypt; used for encryption and decryption
+	const U32 *key,						//Secret key used to en/decrypt (AES256: U32[8], AES128: U32[4])
 	I32x4 tag,							//Tag that was generated to verify integrity of encrypted data
 	I32x4 iv							//Iv was the 12-byte random number that was used to encrypt the data
 );

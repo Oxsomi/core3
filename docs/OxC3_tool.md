@@ -142,11 +142,11 @@ With `-e <offset or path>` a specific entry can be viewed. If an entry is specif
 
 ## Encrypt
 
-`OxC3 file encr -i <file> -k <key in hex> (optional: -o output)`  
+`OxC3 file encr -f <encryptionType> -i <file> -k <key in hex> (optional: -o output)`  
 
-`OxC3 file decr -i <file> -o <file> -k <key in hex> `
+`OxC3 file decr -f <encryptionType> -i <file> -o <file> -k <key in hex> `
 
-Generates an encrypted oiCA file. Works on files and folders.
+Generates an encrypted oiCA file. Works on files and folders. oiCA doesn't support AES128GCM, so AES256GCM is used by default.
 
 ## TODO: Compress
 
@@ -155,3 +155,28 @@ Generates an encrypted oiCA file. Works on files and folders.
 `OxC3 file unpack -f <file> (optional: --k <key in hex>)`
 
 Generates a compressed oiCA file. Can be encrypted. Works on files and folders.
+
+## Profile
+
+Profiles the speed of important operations that might be happening a lot or operations that might take long.
+
+- `OxC3 profile cast`: profiles how long casts take between F64, F32, F16 and a smaller or bigger float type. This doesn't include any additional floating point formats (only half, float and double). It does tests with normal numbers, denormalized numbers, NaNs and Infs.
+- `OxC3 profile rng`: profiles how expensive Buffer_CSPRNG is (cryptographically secure random).
+- `OxC3 profile crc32c`: profiles how much time a Buffer CRC32C takes up if the buffer isn't small.
+- `OxC3 profile sha256`: profiles how fast a Buffer SHA256 is if the buffer isn't small.
+- `OxC3 profile aes256/aes128`: how fast AES encryption is. AES256 should be preferred though for legacy reasons the other two might be used (It's about the same speed). The encryption mode is always GCM.
+
+## Helper functions
+
+The following helper functions provide more information about the tool and commands that are available:
+
+```bat
+OxC3 info license
+OxC3 info about
+OxC3 help
+OxC3 help categories
+OxC3 help operations -i category
+OxC3 help operation -i category:operation
+OxC3 help format -i category:operation:format
+```
+

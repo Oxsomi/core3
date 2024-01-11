@@ -81,6 +81,8 @@ Error GraphicsDeviceRef_createSamplerExt(GraphicsDeviceRef *dev, Sampler *sample
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 
 	VkGraphicsInstance *instance = GraphicsInstance_ext(GraphicsInstanceRef_ptr(device->instance), Vk);
+	instance;
+
 	VkManagedSampler *samplerExt = Sampler_ext(sampler, VkManaged);
 
 	SamplerInfo sinfo = sampler->info;

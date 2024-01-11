@@ -450,6 +450,18 @@ void Operations_init() {
 		.isFormatLess = true
 	};
 
+	Operation_values[EOperation_ProfileAES128] = (Operation) { 
+
+		.category = EOperationCategory_Profile, 
+
+		.name = "aes128", 
+		.desc = "Profiles encrypting and decrypting random data using aes128-gcm.", 
+
+		.func = &CLI_profileAES128,
+
+		.isFormatLess = true
+	};
+
 	//Help operations
 
 	Operation_values[EOperation_HelpCategories] = (Operation) { 

@@ -59,7 +59,7 @@
 
 	I32x4 AES_keyGenAssist(I32x4 a, U8 i) {
 
-		if(i >= 8)
+		if(i >= 11)
 			return I32x4_zero();
 
 		switch (i) {
@@ -70,7 +70,10 @@
 			case 4:		return _mm_aeskeygenassist_si128(a, 0x08);
 			case 5:		return _mm_aeskeygenassist_si128(a, 0x10);
 			case 6:		return _mm_aeskeygenassist_si128(a, 0x20);
-			default:	return _mm_aeskeygenassist_si128(a, 0x40);
+			case 7:		return _mm_aeskeygenassist_si128(a, 0x40);
+			case 8:		return _mm_aeskeygenassist_si128(a, 0x80);
+			case 9:		return _mm_aeskeygenassist_si128(a, 0x1B);
+			default:	return _mm_aeskeygenassist_si128(a, 0x36);
 		}
 	}
 
@@ -119,7 +122,7 @@
 
 	I32x4 AES_keyGenAssist(I32x4 a, U8 i) {
 
-		if(i >= 8)
+		if(i >= 11)
 			return I32x4_zero();
 
 		//https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm_aeskeygenassist_si128&ig_expand=6746,293
@@ -244,6 +247,9 @@ typedef struct AESEncryptionContext {
 
 	I32x4 iv;
 
+	EBufferEncryptionType encryptionType;
+	U32 padding[3];
+
 } AESEncryptionContext;
 
 //Key expansion for AES256
@@ -271,18 +277,37 @@ inline I32x4 AESEncryptionContext_expandKey2(I32x4 im1, I32x4 im3) {
 	return AESEncryptionContext_expandKeyN(im3, I32x4_zzzz(AES_keyGenAssist(im1, 0)));
 }
 
-inline void AESEncryptionContext_expandKey(const U32 key[8], I32x4 k[15]) {
+inline void AESEncryptionContext_expandKey(const U32 *key, I32x4 k[15], EBufferEncryptionType encryptionType) {
+
+	U8 len = encryptionType == EBufferEncryptionType_AES128GCM ? 4 : 8;
 
 	//Can't assume key is aligned :(
 	//Otherwise this might crash!
 
 	if((U64)key & 15)
-		Buffer_copy(Buffer_createRef(k, sizeof(U32[8])), Buffer_createRefConst(key, sizeof(U32[8])));
+		Buffer_copy(Buffer_createRef(k, sizeof(U32) * len), Buffer_createRefConst(key, sizeof(U32) * len));
 
 	else {
+
 		k[0] = *(const I32x4*)key;
-		k[1] = ((const I32x4*)key)[1];
+
+		if(encryptionType == EBufferEncryptionType_AES256GCM)
+			k[1] = ((const I32x4*)key)[1];
 	}
+
+	//Only use AESEncryptionContext_expandKey1 for AES128,
+
+	if(encryptionType == EBufferEncryptionType_AES128GCM) {
+
+		I32x4 im1 = k[0];
+
+		for (U8 i = 0; i < 10; ++i)
+			k[i + 1] = (im1 = AESEncryptionContext_expandKey1(im1, AES_keyGenAssist(im1, i + 1)));
+
+		return;
+	}
+
+	//AESEncryptionContext_expandKey2 and 1 are also used for AES256
 
 	I32x4 im1 = k[0];
 	I32x4 im3 = k[1];
@@ -298,14 +323,16 @@ inline void AESEncryptionContext_expandKey(const U32 key[8], I32x4 k[15]) {
 
 //Aes block encryption. Don't use this plainly, it's a part of the larger AES256-CTR algorithm
 
-inline I32x4 AESEncryptionContext_blockHash(I32x4 block, const I32x4 k[15]) {
+inline I32x4 AESEncryptionContext_blockHash(I32x4 block, const I32x4 k[15], EBufferEncryptionType type) {
 
 	block = I32x4_xor(block, k[0]);
 
-	for(U8 i = 1; i < 14; ++i)				//AES256 uses 14 rounds
+	U8 rounds = type == EBufferEncryptionType_AES128GCM ? 10 : 14;
+
+	for(U8 i = 1; i < rounds; ++i)
 		block = AES_encodeBlock(block, k[i], false);
 
-	return AES_encodeBlock(block, k[14], true);
+	return AES_encodeBlock(block, k[rounds], true);
 }
 
 #if _SIMD == SIMD_SSE
@@ -492,17 +519,22 @@ I32x4 AESEncryptionContext_initTag(Buffer additionalData, const I32x4 ghashLut[1
 	return tag;
 }
 
-AESEncryptionContext AESEncryptionContext_create(const U32 realKey[8], I32x4 iv, Buffer additionalData) {
+AESEncryptionContext AESEncryptionContext_create(
+	const U32 *realKey, 
+	I32x4 iv, 
+	Buffer additionalData, 
+	EBufferEncryptionType encryptionType
+) {
 
-	AESEncryptionContext ctx;
+	AESEncryptionContext ctx = (AESEncryptionContext) { .encryptionType = encryptionType };
 
 	//Get key that's gonna be used for aes blocks
 
-	AESEncryptionContext_expandKey(realKey, ctx.key);
+	AESEncryptionContext_expandKey(realKey, ctx.key, ctx.encryptionType);
 
 	//Prepare ghash
 
-	ctx.H = AESEncryptionContext_blockHash(I32x4_zero(), ctx.key);
+	ctx.H = AESEncryptionContext_blockHash(I32x4_zero(), ctx.key, ctx.encryptionType);
 
 	AESEncryptionContext_ghashPrepare(ctx.H, ctx.ghashLut);
 
@@ -512,7 +544,7 @@ AESEncryptionContext AESEncryptionContext_create(const U32 realKey[8], I32x4 iv,
 	I32x4_setW(&Y0, I32_swapEndianness(1));
 
 	ctx.iv = iv;
-	ctx.EKY0 = AESEncryptionContext_blockHash(Y0, ctx.key);
+	ctx.EKY0 = AESEncryptionContext_blockHash(Y0, ctx.key, ctx.encryptionType);
 	ctx.tag = AESEncryptionContext_initTag(additionalData, ctx.ghashLut);
 
 	return ctx;
@@ -572,7 +604,7 @@ void AESEncryptionContext_processBlock(
 	I32x4 ivi = ctx->iv;
 	I32x4_setW(&ivi, I32_swapEndianness((U32)i + 2));
 
-	v = I32x4_xor(v, AESEncryptionContext_blockHash(ivi, ctx->key));
+	v = I32x4_xor(v, AESEncryptionContext_blockHash(ivi, ctx->key, ctx->encryptionType));
 
 	AESEncryptionContext_storeBlock(io, leftOver, &v);
 
@@ -588,6 +620,7 @@ void AESEncryptionContext_fetchAndUpdateTag(AESEncryptionContext *ctx, const I32
 
 U64 EBufferEncryptionType_getAdditionalData(EBufferEncryptionType type) {
 	switch (type) {
+		case EBufferEncryptionType_AES128GCM:
 		case EBufferEncryptionType_AES256GCM:	return 16 + 12;
 		default:								return 0;
 	}
@@ -597,9 +630,10 @@ inline Error AESEncryptionContext_encrypt(
 	Buffer target, 
 	Buffer additionalData,
 	EBufferEncryptionFlags flags,
-	U32 realKey[8], 
+	U32 *realKey, 
 	I32x4 *ivPtr,
-	I32x4 *tag
+	I32x4 *tag,
+	EBufferEncryptionType encryptionType
 ) {
 
 	//Since we have a 12-byte IV, we have a 4-byte block counter.
@@ -626,11 +660,13 @@ inline Error AESEncryptionContext_encrypt(
 
 	if(flags & EBufferEncryptionFlags_GenerateKey) {
 
-		if(!Buffer_csprng(Buffer_createRef(realKey, sizeof(U32) * 8)))
+		U8 len = encryptionType == EBufferEncryptionType_AES128GCM ? 4 : 8;
+
+		if(!Buffer_csprng(Buffer_createRef(realKey, sizeof(U32) * len)))
 			return Error_invalidState(1, "AESEncryptionContext_encrypt() couldn't generate key");
 	}
 
-	AESEncryptionContext ctx = AESEncryptionContext_create(realKey, *ivPtr, additionalData);
+	AESEncryptionContext ctx = AESEncryptionContext_create(realKey, *ivPtr, additionalData, encryptionType);
 
 	//Handle blocks
 	//TODO: We might wanna multithread this if we ever get big enough data
@@ -663,7 +699,7 @@ Error Buffer_encrypt(
 	Buffer additionalData,
 	EBufferEncryptionType type,
 	EBufferEncryptionFlags flags,
-	U32 key[8],
+	U32 *key,
 	I32x4 *iv,
 	I32x4 *tag
 ) {
@@ -682,15 +718,16 @@ Error Buffer_encrypt(
 	if(!key || !iv || !tag)
 		return Error_nullPointer(!key ? 4 : (!iv ? 5 : 6), "Buffer_encrypt()::key, iv and tag are required");
 
-	return AESEncryptionContext_encrypt(target, additionalData, flags, key, iv, tag);
+	return AESEncryptionContext_encrypt(target, additionalData, flags, key, iv, tag, type);
 }
 
 inline Error AESEncryptionContext_decrypt(
 	Buffer target,
 	Buffer additionalData,
-	const U32 realKey[8],
+	const U32 *realKey,
 	I32x4 tag,
-	I32x4 iv
+	I32x4 iv,
+	EBufferEncryptionType type
 ) {
 
 	//Validate inputs
@@ -711,7 +748,7 @@ inline Error AESEncryptionContext_decrypt(
 
 	//Create context
 
-	AESEncryptionContext ctx = AESEncryptionContext_create(realKey, iv, additionalData);
+	AESEncryptionContext ctx = AESEncryptionContext_create(realKey, iv, additionalData, type);
 
 	//Verify tegridy before we continue decryption. This does mean we're reading twice, 
 	//but it's against the spec to start decrypting while still unsure if it's valid.
@@ -753,7 +790,7 @@ Error Buffer_decrypt(
 	Buffer target,						//"Cyphertext" aka data to decrypt. Leave empty to verify with AES256GCM
 	Buffer additionalData,				//Data that was supplied to verify integrity of the data
 	EBufferEncryptionType type,			//Only AES256GCM is currently supported
-	const U32 key[8],					//Secret key; used for encryption and decryption
+	const U32 *key,					//Secret key; used for encryption and decryption
 	I32x4 tag,							//Tag to verify integrity of encrypted data
 	I32x4 iv							//Iv is a 12-byte random number that was used to encrypt the data
 ) {
@@ -767,5 +804,5 @@ Error Buffer_decrypt(
 	if(!key)
 		return Error_nullPointer(3, "Buffer_decrypt()::key is required");
 
-	return AESEncryptionContext_decrypt(target, additionalData, key, tag, iv);
+	return AESEncryptionContext_decrypt(target, additionalData, key, tag, iv, type);
 }

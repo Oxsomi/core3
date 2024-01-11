@@ -281,7 +281,7 @@ Bool CLI_profileSHA256(ParsedArgs args) {
 	return CLI_profileData(args, _CLI_profileSHA256);
 }
 
-Error _CLI_profileAES256(ParsedArgs args, Buffer buf) {
+Error _CLI_profileEncryption(ParsedArgs args, Buffer buf, EBufferEncryptionType encryptionType) {
 
 	args;
 
@@ -293,7 +293,7 @@ Error _CLI_profileAES256(ParsedArgs args, Buffer buf) {
 	Error err = Buffer_encrypt(
 		buf, 
 		Buffer_createNull(), 
-		EBufferEncryptionType_AES256GCM, 
+		encryptionType, 
 		EBufferEncryptionFlags_GenerateIv | EBufferEncryptionFlags_GenerateKey,
 		key,
 		&iv,
@@ -305,7 +305,7 @@ Error _CLI_profileAES256(ParsedArgs args, Buffer buf) {
 	Ns now = Time_now();
 
 	Log_debugLnx(
-		"Encrypt AES256GCM: %llu bytes within %fs (%fns/byte, %fbytes/sec).", 
+		"Encrypt AES GCM: %llu bytes within %fs (%fns/byte, %fbytes/sec).", 
 		Buffer_length(buf),
 		(F64)(now - then) / SECOND,
 		(F64)(now - then) / Buffer_length(buf),
@@ -317,7 +317,7 @@ Error _CLI_profileAES256(ParsedArgs args, Buffer buf) {
 	_gotoIfError(clean, Buffer_decrypt(
 		buf,
 		Buffer_createNull(), 
-		EBufferEncryptionType_AES256GCM, 
+		encryptionType, 
 		key,
 		tag,
 		iv
@@ -326,7 +326,7 @@ Error _CLI_profileAES256(ParsedArgs args, Buffer buf) {
 	now = Time_now();
 
 	Log_debugLnx(
-		"Decrypt AES256GCM: %llu bytes within %fs (%fns/byte, %fbytes/sec).", 
+		"Decrypt AES GCM: %llu bytes within %fs (%fns/byte, %fbytes/sec).", 
 		Buffer_length(buf),
 		(F64)(now - then) / SECOND,
 		(F64)(now - then) / Buffer_length(buf),
@@ -337,6 +337,18 @@ clean:
 	return err;
 }
 
+Error _CLI_profileAES256(ParsedArgs args, Buffer buf) {
+	return _CLI_profileEncryption(args, buf, EBufferEncryptionType_AES256GCM);
+}
+
+Error _CLI_profileAES128(ParsedArgs args, Buffer buf) {
+	return _CLI_profileEncryption(args, buf, EBufferEncryptionType_AES128GCM);
+}
+
 Bool CLI_profileAES256(ParsedArgs args) {
 	return CLI_profileData(args, _CLI_profileAES256);
+}
+
+Bool CLI_profileAES128(ParsedArgs args) {
+	return CLI_profileData(args, _CLI_profileAES128);
 }
