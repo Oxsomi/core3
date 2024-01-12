@@ -29,7 +29,7 @@ typedef enum ETexturePrimitive {
 	ETexturePrimitive_SInt,
 	ETexturePrimitive_Float,
 	ETexturePrimitive_Compressed,
-	ETexturePrimitive_UnormBGR				//Special kind of formats
+	ETexturePrimitive_UNormBGR				//Special kind of formats
 } ETexturePrimitive;
 
 typedef enum ETextureAlignment {
@@ -95,7 +95,7 @@ typedef enum ETextureFormat {
 	ETextureFormat_R8				= _ETextureFormat(ETexturePrimitive_UNorm, 8, 0, 0, 0),
 	ETextureFormat_RG8				= _ETextureFormat(ETexturePrimitive_UNorm, 8, 8, 0, 0),
 	ETextureFormat_RGBA8			= _ETextureFormat(ETexturePrimitive_UNorm, 8, 8, 8, 8),
-	ETextureFormat_BGRA8			= _ETextureFormat(ETexturePrimitive_UnormBGR, 8, 8, 8, 8),		//Swapchain format
+	ETextureFormat_BGRA8			= _ETextureFormat(ETexturePrimitive_UNormBGR, 8, 8, 8, 8),		//Swapchain format
 
 	ETextureFormat_R8s				= _ETextureFormat(ETexturePrimitive_SNorm, 8, 0, 0, 0),
 	ETextureFormat_RG8s				= _ETextureFormat(ETexturePrimitive_SNorm, 8, 8, 0, 0),
@@ -150,7 +150,7 @@ typedef enum ETextureFormat {
 
 	//Special purpose formats
 
-	ETextureFormat_BGR10A2			= _ETextureFormat(ETexturePrimitive_UnormBGR, 10, 10, 10, 2),
+	ETextureFormat_BGR10A2			= _ETextureFormat(ETexturePrimitive_UNormBGR, 10, 10, 10, 2),
 
 	//Compression formats
 

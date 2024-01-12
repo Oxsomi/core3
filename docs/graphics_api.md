@@ -170,10 +170,10 @@ _gotoIfError(clean, GraphicsDeviceRef_create(
 ### Functions
 
 - ```c
-  Error submitCommands(ListCommandListRef commandLists, ListSwapchainRef swapchains, Buffer runtimeData);
+  Error submitCommands(ListCommandListRef commandLists, ListSwapchainRef swapchains, Buffer runtimeData, F32 deltaTime, F32 time);
   ```
 
-  - Submits commands to the device and readies the swapchains to present if available. If the device doesn't have any swapchains, it can be used to just submit commands. This is useful for multi GPU rendering as well.
+  - Submits commands to the device and readies the swapchains to present if available. If the device doesn't have any swapchains, it can be used to just submit commands. This is useful for multi GPU rendering as well. If deltaTime is set to -1 it will automatically calculate deltaTime itself, but some applications might want to bypass this by manually passing deltaTime and time (for example when rendering a movie or a photo). The time argument is also ignored if deltaTime is -1 and will be calculated automatically. 
   
 - There's a limit of 16 swapchains per device.
   
@@ -234,6 +234,31 @@ _gotoIfError(clean, GraphicsDeviceRef_create(
   );
   ```
 
+- ```c
+  Error createSampler(SamplerInfo info, CharString name, SamplerRef **ref));
+  ```
+
+- ```c
+  Error createRenderTexture(
+      ERenderTextureType type, 
+      I32x4 size,
+      ETextureFormatId format, 
+      ERenderTextureUsage usage,
+      CharString name,
+      RenderTextureRef **ref
+  );
+  ```
+
+- ```c
+  Error createDepthStencil(
+      I32x2 size,
+      EDepthStencilFormat format, 
+      Bool allowShaderRead,
+      CharString name,
+      DepthStencilRef **ref
+  );
+  ```
+
 ### Obtained
 
 - Through GraphicsDeviceRef_create; see overview.
@@ -279,7 +304,7 @@ ListSwapchainRef swapchains = (ListSwapchainRef) { 0 };
 _gotoIfError(clean, ListCommandListRef_createRefConst(commandList, 1, &commandLists));
 _gotoIfError(clean, ListSwapchainRef_createRefConst(swapchain, 1, &swapchains));
 
-_gotoIfError(clean, GraphicsDeviceRef_submitCommands(device, commandLists, swapchains));
+_gotoIfError(clean, GraphicsDeviceRef_submitCommands(device, commandLists, swapchains, -1, 0));
 ```
 
 For more info on commands check out the "Commands" section.
@@ -327,7 +352,7 @@ Swapchain isn't always supported. In that case your final target can just be a r
 SwapchainRef *swapchain = NULL;
 _gotoIfError(clean, GraphicsDeviceRef_createSwapchain(
     device, 		//See "Graphics device"
-    (SwapchainInfo) { .window = w, .usage = ESwapchainUsage_AllowCompute }, 
+    (SwapchainInfo) { .window = w, .usage = ESwapchainUsage_ShaderWrite }, 
     &swapchain
 ));
 
@@ -496,7 +521,7 @@ The graphics pipeline has the following properties:
 - Using DirectRendering:
   - If DirectRendering is enabled, a simpler way of creating can be used to aid porting and simplify development for desktop.
   - attachmentCountExt: how many render targets should be used.
-  - attachmentFormatsExt[i < attachmentCountExt]: the ETextureFormatId of the format. Needs to match the render target's exactly (Swapchain BGRA8 doesn't match an RGBA8 pipeline!).
+  - attachmentFormatsExt[i < attachmentCountExt]: the ETextureFormatId of the format. Needs to match the render target's exactly (BGRA8 doesn't match an RGBA8 pipeline!).
   - depthFormatExt: depth format of the depth buffer: None, D16, D32, D32S8, D24S8Ext, S8Ext.
 - **TODO**: Not using DirectRendering:
   - If DirectRendering is not supported or the developer doesn't want to use it; a unified mobile + desktop architecture can be used. However; generally desktop techniques don't lend themselves well for mobile techniques and vice versa. So it's still recommended to implement two separate rendering backends on mobile.
@@ -692,7 +717,7 @@ _gotoIfError(clean, CommandListRef_clearImagef(
     commandList, 				//See "Command list"
     F32x4_create4(1, 0, 0, 1), 	//Clear red
     (ImageRange){ 0 }, 			//Clear layer and level 0
-    swapchain					//See "Swapchain"
+    swapchain					//See "Swapchain" or "RenderTexture"
 ));
 ```
 
@@ -700,7 +725,7 @@ To clear multiple at once, call clearImages with a `ListClearImageCmd`. ClearIma
 
 Clear image is only allowed on images which aren't currently bound as a render target. The image is leading in determining the format which will be read out. If you use clearImagef but it's a uint texture then it will bitcast the float color to a uint for you.
 
-Clear image can currently only be called on a Swapchain object.
+Clear image can currently only be called on a Swapchain or RenderTexture object.
 
 ### setComputePipeline/setGraphicsPipeline
 
@@ -838,10 +863,10 @@ Just like *most* commands, this will automatically transition the resources (ren
 //In command list recording
 
 AttachmentInfo attachmentInfo = (AttachmentInfo) {
-    .range = (ImageRange) { 0 },						//Layer 0, level 0
-    .image = swapchain,									//See "Swapchain"
-    .load = ELoadAttachmentType_Clear,					//Clear image
-    .readOnly = false,									//Allow draw calls to write
+    .range = (ImageRange) { 0 },					//Layer 0, level 0
+    .image = swapchain,								//See "Swapchain" or "RenderTexture"
+    .load = ELoadAttachmentType_Clear,				//Clear image
+    .readOnly = false,								//Allow draw calls to write
     .color = (ClearColor) { .colorf = {  1, 0, 0, 1 } }
 };
 
@@ -917,7 +942,7 @@ Even though Metal doesn't need transitions, they're still required to allow Dire
 
 Transition transitions[] = {
 	(Transition) {
-		.resource = swapchain,
+		.resource = swapchain,				//See "Swapchain" or "RenderTexture"
 		.range = (ImageRange) { 0 },
 		.stage = EPipelineStage_Compute,
 		.isWrite = true

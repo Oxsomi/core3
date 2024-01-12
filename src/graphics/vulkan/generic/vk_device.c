@@ -1061,7 +1061,9 @@ VkCommandAllocator *VkGraphicsDevice_getCommandAllocator(
 }
 
 Error GraphicsDevice_submitCommandsImpl(
-	GraphicsDeviceRef *deviceRef, ListCommandListRef commandLists, ListSwapchainRef swapchains
+	GraphicsDeviceRef *deviceRef, 
+	ListCommandListRef commandLists, 
+	ListSwapchainRef swapchains
 ) {
 	
 	//Unpack ext
@@ -1114,7 +1116,7 @@ Error GraphicsDevice_submitCommandsImpl(
 		deviceExt->swapchainIndices.ptrNonConst[i] = swapchainExt->currentIndex;
 
 		VkPipelineStageFlagBits pipelineStage = 
-			swapchain->info.usage & ESwapchainUsage_AllowCompute ? VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT :
+			swapchain->info.usage & ESwapchainUsage_ShaderWrite ? VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT :
 			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
 		_gotoIfError(clean, ListVkSemaphore_pushBackx(&deviceExt->waitSemaphores, semaphore));
@@ -1148,7 +1150,7 @@ Error GraphicsDevice_submitCommandsImpl(
 			Swapchain *swapchain = SwapchainRef_ptr(swapchains.ptr[i]);
 			VkSwapchain *swapchainExt = Swapchain_ext(swapchain, Vk);
 
-			Bool allowCompute = swapchain->info.usage & ESwapchainUsage_AllowCompute;
+			Bool allowCompute = swapchain->info.usage & ESwapchainUsage_ShaderWrite;
 
 			VkManagedImage managedImage = swapchainExt->images.ptr[swapchainExt->currentIndex];
 

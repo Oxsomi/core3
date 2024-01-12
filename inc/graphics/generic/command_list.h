@@ -114,7 +114,7 @@ Error CommandListRef_setBlendConstants(CommandListRef *commandList, F32x4 blendC
 //Setting clear parameters and clearing render texture
 
 //Clear entire resource or subresource .
-//Color: SwapchainRef or RenderTargetRef, Depth: RenderTargetRef
+//Color: SwapchainRef or RenderTargetRef
 
 Error CommandListRef_clearImagef(CommandListRef *commandList, F32x4 color, ImageRange range, RefPtr *image);
 Error CommandListRef_clearImagei(CommandListRef *commandList, I32x4 color, ImageRange range, RefPtr *image);

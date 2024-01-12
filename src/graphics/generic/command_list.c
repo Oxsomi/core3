@@ -25,6 +25,7 @@
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/pipeline.h"
 #include "graphics/generic/depth_stencil.h"
+#include "graphics/generic/render_texture.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/log.h"
 #include "types/string.h"
@@ -213,13 +214,23 @@ Error CommandList_validateGraphicsPipeline(
 		if (!ref)
 			return Error_nullPointer(1, "CommandList_validateGraphicsPipeline()::images[i] is required by pipeline");
 
-		if (ref->typeId != EGraphicsTypeId_Swapchain)
+		if (ref->typeId != EGraphicsTypeId_Swapchain && ref->typeId != EGraphicsTypeId_RenderTexture)
 			return Error_invalidParameter(1, i, "CommandList_validateGraphicsPipeline()::images[i] is invalid type");
 
-		Swapchain *swapchain = SwapchainRef_ptr(ref);
+		if(ref->typeId == EGraphicsTypeId_Swapchain) {
 
-		if (swapchain->format != ETextureFormatId_unpack[info->attachmentFormatsExt[i]])
-			return Error_invalidState(i + 2, "CommandList_validateGraphicsPipeline()::images[i] is invalid format");
+			Swapchain *swapchain = SwapchainRef_ptr(ref);
+
+			if (swapchain->format != ETextureFormatId_unpack[info->attachmentFormatsExt[i]])
+				return Error_invalidState(i + 2, "CommandList_validateGraphicsPipeline()::images[i] is invalid format");
+
+		} else {
+
+			RenderTexture *renderTexture = RenderTextureRef_ptr(ref);
+
+			if (renderTexture->format != ETextureFormatId_unpack[info->attachmentFormatsExt[i]])
+				return Error_invalidState(i + 2, "CommandList_validateGraphicsPipeline()::images[i] is invalid format");
+		}
 	}
 
 	return Error_none();
@@ -251,7 +262,11 @@ Bool CommandListRef_isBound(CommandList *commandList, RefPtr *resource, Resource
 		if(transition.resource->typeId != resource->typeId)
 			continue;
 
-		if(resource->typeId == EGraphicsTypeId_Swapchain || resource->typeId == EGraphicsTypeId_DepthStencil) {
+		if(
+			resource->typeId == EGraphicsTypeId_Swapchain || 
+			resource->typeId == EGraphicsTypeId_DepthStencil ||
+			resource->typeId == EGraphicsTypeId_RenderTexture
+		) {
 			if(CommandListRef_imageRangeConflicts(resource, range.image, transition.resource, transition.range.image))
 				return true;
 		}
@@ -456,15 +471,22 @@ Error CommandListRef_clearImages(CommandListRef *commandListRef, ListClearImageC
 			1, clearImages.length, U32_MAX, "CommandListRef_clearImages()::clearImages.length > U32_MAX"
 		));
 
+	GraphicsDeviceRef *device = CommandListRef_ptr(commandList)->device;
+
 	for(U64 i = 0; i < clearImages.length; ++i) {
 
 		ClearImageCmd clearImage = clearImages.ptr[i];
 		RefPtr *image = clearImage.image;
 
-		if(!image || image->typeId != EGraphicsTypeId_Swapchain)
+		if(!image || (image->typeId != EGraphicsTypeId_Swapchain && image->typeId != EGraphicsTypeId_RenderTexture))
 			_gotoIfError(clean, Error_nullPointer(1, "CommandListRef_clearImages()::clearImages[i].image is invalid"));
 
-		if(SwapchainRef_ptr(image)->device != CommandListRef_ptr(commandList)->device)
+		if(image->typeId == EGraphicsTypeId_Swapchain && SwapchainRef_ptr(image)->device != device)
+			_gotoIfError(clean, Error_unsupportedOperation(
+				0, "CommandListRef_clearImages()::clearImages[i].image belongs to other device"
+			))
+
+		else if(image->typeId == EGraphicsTypeId_RenderTexture && RenderTextureRef_ptr(image)->device != device)
 			_gotoIfError(clean, Error_unsupportedOperation(
 				0, "CommandListRef_clearImages()::clearImages[i].image belongs to other device"
 			));
@@ -592,19 +614,36 @@ Error CommandListRef_startScope(
 
 		switch (typeId) {
 
+			case EGraphicsTypeId_RenderTexture:
 			case EGraphicsTypeId_Swapchain: {
 
-				Swapchain *swapchain = SwapchainRef_ptr(res);
+				Bool allowShaderWrite = false, allowShaderRead = true;
+				GraphicsDeviceRef *objectDevice = NULL;
 
-				if (transition.isWrite) {
-
-					if(!(swapchain->info.usage & ESwapchainUsage_AllowCompute))
-						_gotoIfError(clean, Error_constData(
-							0, 0, "CommandListRef_startScope()::transitions[i].resource should be writable"
-						));
+				if(typeId == EGraphicsTypeId_Swapchain) {
+					Swapchain *swapchain = SwapchainRef_ptr(res);
+					allowShaderWrite = swapchain->info.usage & ESwapchainUsage_ShaderWrite;
+					objectDevice = swapchain->device;
 				}
 
-				if(swapchain->device != device)
+				else {
+					RenderTexture *renderTexture = RenderTextureRef_ptr(res);
+					allowShaderWrite = renderTexture->usage & ERenderTextureUsage_ShaderWrite;
+					allowShaderRead = renderTexture->usage & ERenderTextureUsage_ShaderRead;
+					objectDevice = renderTexture->device;
+				}
+
+				if (transition.isWrite && !allowShaderWrite)
+					_gotoIfError(clean, Error_constData(
+						0, 0, "CommandListRef_startScope()::transitions[i].resource should be writable"
+					));
+
+				if(!transition.isWrite && !allowShaderRead)
+					_gotoIfError(clean, Error_unsupportedOperation(
+						1, "CommandListRef_startScope()::transitions[i].resource should be readable"
+					));
+
+				if(objectDevice != device)
 					_gotoIfError(clean, Error_unsupportedOperation(
 						0, "CommandListRef_startScope()::transitions[i].resource's device is incompatible"
 					));
@@ -1330,10 +1369,36 @@ Error CommandListRef_startRenderExt(
 
 		if (info.image) {
 
-			if(info.image->typeId != (ETypeId)EGraphicsTypeId_Swapchain)
+			if(
+				info.image->typeId != (ETypeId)EGraphicsTypeId_Swapchain && 
+				info.image->typeId != (ETypeId)EGraphicsTypeId_RenderTexture
+			)
 				_gotoIfError(clean, Error_invalidParameter(
 					3, (U32)lockedId, "CommandListRef_startRenderExt()::colors[i].image is invalid"
 				));
+
+			if (info.image->typeId == (ETypeId) EGraphicsTypeId_RenderTexture) {
+
+				RenderTexture *renderTexture = RenderTextureRef_ptr(info.image);
+
+				if(renderTexture->type != ERenderTextureType_2D)
+					_gotoIfError(clean, Error_invalidParameter(
+						3, (U32)lockedId, "CommandListRef_startRenderExt()::colors[i].image needs to be a 2D texture"
+					));
+
+				if(!counter)
+					targetSize = I32x2_fromI32x4(renderTexture->size);
+
+				else if(I32x2_neq2(targetSize, I32x2_fromI32x4(renderTexture->size))) {
+					++lockedId;
+					_gotoIfError(clean, Error_invalidOperation(
+						3, "CommandListRef_startRenderExt()::colors[i].image dimensions are incompatible with others"
+					));
+				}
+
+				++counter;
+				continue;
+			}
 
 			Swapchain *swapchain = SwapchainRef_ptr(info.image);
 

@@ -42,7 +42,7 @@ typedef enum ESwapchainPresentMode {
 typedef enum ESwapchainUsage {
 
 	ESwapchainUsage_None			= 0,		//Only allow basic usage as render target (best compression)
-	ESwapchainUsage_AllowCompute	= 1 << 0	//Allow compute as well (might introduce issues w compression)
+	ESwapchainUsage_ShaderWrite	= 1 << 0		//Allow compute as well (might introduce issues w compression)
 
 } ESwapchainUsage;
 

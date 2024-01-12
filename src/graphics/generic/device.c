@@ -209,6 +209,10 @@ Bool GraphicsDeviceInfo_supportsFormat(const GraphicsDeviceInfo *deviceInfo, ETe
 	return true;
 }
 
+Bool GraphicsDeviceInfo_supportsRenderTextureFormat(const GraphicsDeviceInfo *deviceInfo, ETextureFormat format) {
+	return !ETextureFormat_getIsCompressed(format) && GraphicsDeviceInfo_supportsFormat(deviceInfo, format);
+}
+
 Bool GraphicsDeviceInfo_supportsFormatVertexAttribute(ETextureFormat format) {
 
 	ETextureCompressionAlgo algo = ETextureFormat_getCompressionAlgo(format);
@@ -550,7 +554,9 @@ Error GraphicsDeviceRef_submitCommands(
 	GraphicsDeviceRef *deviceRef, 
 	ListCommandListRef commandLists, 
 	ListSwapchainRef swapchains, 
-	Buffer appData
+	Buffer appData,
+	F32 deltaTime,
+	F32 time
 ) {
 
 	//Validation
@@ -618,8 +624,6 @@ Error GraphicsDeviceRef_submitCommands(
 				1, (U32)i, "GraphicsDeviceRef_submitCommands()::commandLists[i] wasn't closed properly"
 			));
 	}
-
-	//Swapchains all need to have the same vsync option.
 
 	for (U64 i = 0; i < swapchains.length; ++i) {
 
@@ -726,6 +730,11 @@ Error GraphicsDeviceRef_submitCommands(
 		.deltaTime = device->firstSubmit ? (F32)((F64)(now - device->lastSubmit) / SECOND) : 0,
 		.swapchainCount = (U32) swapchains.length
 	};
+
+	if (deltaTime >= 0) {
+		data->deltaTime = deltaTime;
+		data->time = time;
+	}
 
 	Buffer_copy(Buffer_createRef((U8*)data->appData, sizeof(*data)), appData);
 

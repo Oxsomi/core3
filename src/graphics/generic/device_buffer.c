@@ -217,7 +217,15 @@ Error GraphicsDeviceRef_createBuffer(
 	if(!(usage & EDeviceBufferUsage_InternalWeakRef))
 		_gotoIfError(clean, GraphicsDeviceRef_inc(dev));
 
-	*buffer = (DeviceBuffer) { .device = dev, .usage = usage, .length = len, .isFirstFrame = true };
+	*buffer = (DeviceBuffer) { 
+		.device = dev, 
+		.usage = usage, 
+		.length = len, 
+		.isFirstFrame = true, 
+		.readHandle = U32_MAX,
+		.writeHandle = U32_MAX
+	};
+
 	_gotoIfError(clean, ListDevicePendingRange_reservex(
 		&buffer->pendingChanges, usage & EDeviceBufferUsage_CPUBacked ? 16 : 1
 	));

@@ -51,6 +51,8 @@ Error GraphicsDeviceRef_createDepthStencilExt(
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 	VkGraphicsInstance *instance = GraphicsInstance_ext(GraphicsInstanceRef_ptr(device->instance), Vk);
 
+	depthStencilExt->readHandle = depthStencilExt->writeHandle = U32_MAX;
+
 	VkFormat vkFormat = VK_FORMAT_S8_UINT;
 
 	switch(format) {

@@ -21,37 +21,59 @@
 #pragma once
 #include "types/vec.h"
 #include "platforms/ref_ptr.h"
-#include "pipeline_structs.h"
+#include "formats/texture.h"
 
 typedef RefPtr GraphicsDeviceRef;
 typedef struct Error Error;
 typedef struct CharString CharString;
 
-typedef struct DepthStencil {
+typedef enum ERenderTextureType {
+
+	ERenderTextureType_2D,
+	ERenderTextureType_3D,
+	ERenderTextureType_Cube,
+	ERenderTextureType_Count
+
+} ERenderTextureType;
+
+typedef enum ERenderTextureUsage {
+
+	ERenderTextureUsage_None,
+	ERenderTextureUsage_ShaderRead		= 1 << 0,
+	ERenderTextureUsage_ShaderWrite		= 1 << 1,
+
+	ERenderTextureUsage_ShaderRW		= ERenderTextureUsage_ShaderRead | ERenderTextureUsage_ShaderWrite
+
+} ERenderTextureUsage;
+
+typedef struct RenderTexture {
 
 	GraphicsDeviceRef *device;
 
-	I32x2 size;
+	ERenderTextureType type;
+	U32 padding;
 
-	EDepthStencilFormat format;
-	Bool allowShaderRead;
-	U8 padding[3];
+	I32x4 size;
 
-} DepthStencil;
+	ETextureFormat format;
+	ERenderTextureUsage usage;
 
-typedef RefPtr DepthStencilRef;
+} RenderTexture;
 
-#define DepthStencil_ext(ptr, T) (!ptr ? NULL : (T##DepthStencil*)(ptr + 1))		//impl
-#define DepthStencilRef_ptr(ptr) RefPtr_data(ptr, DepthStencil)
+typedef RefPtr RenderTextureRef;
 
-Error DepthStencilRef_dec(DepthStencilRef **depthStencil);
-Error DepthStencilRef_inc(DepthStencilRef *depthStencil);
+#define RenderTexture_ext(ptr, T) (!ptr ? NULL : (T##RenderTexture*)(ptr + 1))		//impl
+#define RenderTextureRef_ptr(ptr) RefPtr_data(ptr, RenderTexture)
 
-Error GraphicsDeviceRef_createDepthStencil(
+Error RenderTextureRef_dec(RenderTextureRef **renderTexture);
+Error RenderTextureRef_inc(RenderTextureRef *renderTexture);
+
+Error GraphicsDeviceRef_createRenderTexture(
 	GraphicsDeviceRef *deviceRef, 
-	I32x2 size, 
-	EDepthStencilFormat format, 
-	Bool allowShaderRead,
+	ERenderTextureType type,
+	I32x4 size, 
+	ETextureFormatId format, 
+	ERenderTextureUsage usage,
 	CharString name,
-	DepthStencilRef **depthStencil
+	RenderTextureRef **renderTexture
 );

@@ -185,6 +185,9 @@ void GraphicsDeviceInfo_print(const GraphicsDeviceInfo *deviceInfo, Bool printCa
 //If a texture and render texture can be created with the format.
 Bool GraphicsDeviceInfo_supportsFormat(const GraphicsDeviceInfo *deviceInfo, ETextureFormat format);
 
+//If a render texture can be created with the format.
+Bool GraphicsDeviceInfo_supportsRenderTextureFormat(const GraphicsDeviceInfo *deviceInfo, ETextureFormat format);
+
 //If a texture format is allowed as a vertex attribute
 Bool GraphicsDeviceInfo_supportsFormatVertexAttribute(ETextureFormat format);
 

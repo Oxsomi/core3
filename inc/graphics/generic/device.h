@@ -126,10 +126,17 @@ TListNamed(SwapchainRef*, ListSwapchainRef);
 //Submit commands to device
 //appData is up to a 368 byte per frame array used for transmitting render critical info.
 Error GraphicsDeviceRef_submitCommands(
+
 	GraphicsDeviceRef *deviceRef, 
 	ListCommandListRef commandLists, 
 	ListSwapchainRef swapchains, 
-	Buffer appData
+	Buffer appData,
+
+	//Set deltaTime < 0 to indicate it has to auto calculate time and deltaTime. 
+	//But this is not recommended when the deltaTime is constant for example.
+
+	F32 deltaTime,
+	F32 time
 );
 
 //Wait on previously submitted commands

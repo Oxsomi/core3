@@ -213,6 +213,7 @@ A lossless format is defined as "supported" if it has the following flags in the
 - VK_FORMAT_FEATURE_BLIT_DST_BIT
 - VK_FORMAT_FEATURE_BLIT_SRC_BIT
 - VK_FORMAT_FEATURE_TRANSFER_DST_BIT
+- VK_FORMAT_FEATURE_TRANSFER_SRC_BIT
 
 The following lossless formats have to be supported for a valid OxC3 implementation:
 

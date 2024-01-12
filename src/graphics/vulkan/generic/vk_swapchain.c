@@ -177,7 +177,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 		VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
 		VK_IMAGE_USAGE_TRANSFER_DST_BIT |
 		VK_IMAGE_USAGE_SAMPLED_BIT |
-		(info.usage & ESwapchainUsage_AllowCompute ? VK_IMAGE_USAGE_STORAGE_BIT : 0) |
+		(info.usage & ESwapchainUsage_ShaderWrite ? VK_IMAGE_USAGE_STORAGE_BIT : 0) |
 		VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
 	if((capabilities.supportedUsageFlags & requiredUsageFlags) != requiredUsageFlags)
@@ -451,7 +451,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 
 	//Allocate in descriptors
 
-	U64 descriptors = info.usage & ESwapchainUsage_AllowCompute ? 2 : 1;
+	U64 descriptors = info.usage & ESwapchainUsage_ShaderWrite ? 2 : 1;
 
 	_gotoIfError(clean, ListVkWriteDescriptorSet_resizex(&descriptorSets, descriptors * imageCount));
 
@@ -510,7 +510,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 				break;
 		}
 
-		if(info.usage & ESwapchainUsage_AllowCompute) {
+		if(info.usage & ESwapchainUsage_ShaderWrite) {
 
 			U32 locationWrite = VkGraphicsDevice_allocateDescriptor(deviceExt, textureWriteType);
 

@@ -120,7 +120,7 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 	GraphicsInstance *instance = GraphicsInstanceRef_ptr(device->instance);
 	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
 
-	VkBuffer tempBuffer = NULL;
+	VkDeviceBuffer *bufExt = DeviceBuffer_ext(buf, Vk);
 
 	VkBufferUsageFlags usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 
@@ -179,9 +179,9 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 
 	//Bind memory
 
-	_gotoIfError(clean, vkCheck(vkCreateBuffer(deviceExt->device, &bufferInfo, NULL, &tempBuffer)));
+	_gotoIfError(clean, vkCheck(vkCreateBuffer(deviceExt->device, &bufferInfo, NULL, &bufExt->buffer)));
 	_gotoIfError(clean, vkCheck(vkBindBufferMemory(
-		deviceExt->device, tempBuffer, (VkDeviceMemory) block.ext, buf->blockOffset
+		deviceExt->device, bufExt->buffer, (VkDeviceMemory) block.ext, buf->blockOffset
 	)));
 
 	U8 *memoryLocation = block.mappedMemory;
@@ -202,7 +202,7 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 
 		//Create readonly buffer
 
-		VkDescriptorBufferInfo bufferDesc = (VkDescriptorBufferInfo) { .buffer = tempBuffer, .range = buf->length };
+		VkDescriptorBufferInfo bufferDesc = (VkDescriptorBufferInfo) { .buffer = bufExt->buffer, .range = buf->length };
 
 		VkWriteDescriptorSet descriptors[2] = {
 			(VkWriteDescriptorSet) {
@@ -262,7 +262,7 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
 					.objectType = VK_OBJECT_TYPE_BUFFER,
 					.pObjectName = name.ptr,
-					.objectHandle = (U64) tempBuffer
+					.objectHandle = (U64) bufExt->buffer
 				};
 
 				_gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName)));
@@ -271,8 +271,6 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 		#endif
 	}
 
-	*DeviceBuffer_ext(buf, Vk) = (VkDeviceBuffer) { .buffer = tempBuffer };
-	
 	buf->mappedMemory = memoryLocation;
 
 clean:

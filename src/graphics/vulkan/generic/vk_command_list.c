@@ -26,6 +26,7 @@
 #include "graphics/generic/pipeline.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/depth_stencil.h"
+#include "graphics/generic/render_texture.h"
 #include "graphics/vulkan/vulkan.h"
 #include "graphics/vulkan/vk_device.h"
 #include "graphics/vulkan/vk_instance.h"
@@ -118,10 +119,17 @@ void CommandList_process(
 
 				ClearImageCmd image = ((const ClearImageCmd*) (data + sizeof(U32)))[i];
 
-				Swapchain *swapchain = SwapchainRef_ptr(image.image);
-				VkSwapchain *swapchainExt = Swapchain_ext(swapchain, Vk);
+				VkManagedImage *imageExt = NULL;
 
-				VkManagedImage *imageExt = &swapchainExt->images.ptrNonConst[swapchainExt->currentIndex];
+				if(image.image->typeId == EGraphicsTypeId_Swapchain) {
+
+					Swapchain *swapchain = SwapchainRef_ptr(image.image);
+					VkSwapchain *swapchainExt = Swapchain_ext(swapchain, Vk);
+
+					imageExt = &swapchainExt->images.ptrNonConst[swapchainExt->currentIndex];
+				}
+
+				else imageExt = (VkManagedImage*) RenderTexture_ext(RenderTextureRef_ptr(image.image), );
 
 				//Clear
 
@@ -174,10 +182,17 @@ void CommandList_process(
 
 				const AttachmentInfo *attachmentsj = &attachments[j];
 
-				Swapchain *swapchain = SwapchainRef_ptr(attachmentsj->image);
-				VkSwapchain *swapchainExt = Swapchain_ext(swapchain, Vk);
+				VkManagedImage *imageExt = NULL;
 
-				VkManagedImage *imageExt = &swapchainExt->images.ptrNonConst[swapchainExt->currentIndex];
+				if(attachmentsj->image->typeId == EGraphicsTypeId_Swapchain) {
+
+					Swapchain *swapchain = SwapchainRef_ptr(attachmentsj->image);
+					VkSwapchain *swapchainExt = Swapchain_ext(swapchain, Vk);
+
+					imageExt = &swapchainExt->images.ptrNonConst[swapchainExt->currentIndex];
+				}
+
+				else imageExt = (VkManagedImage*) RenderTexture_ext(RenderTextureRef_ptr(attachmentsj->image), );
 
 				VkAttachmentLoadOp loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
 
@@ -524,8 +539,9 @@ void CommandList_process(
 				//Grab transition type
 				
 				Bool isSwapchain = transition.resource->typeId == EGraphicsTypeId_Swapchain;
+				Bool isRenderTexture = transition.resource->typeId == EGraphicsTypeId_RenderTexture;
 				Bool isDepthStencil = transition.resource->typeId == EGraphicsTypeId_DepthStencil;
-				Bool isImage = isSwapchain || isDepthStencil;
+				Bool isImage = isSwapchain || isRenderTexture || isDepthStencil;
 				Bool isShaderRead = transition.type == ETransitionType_ShaderRead;
 
 				VkImageLayout layout = VK_IMAGE_LAYOUT_GENERAL;
@@ -634,6 +650,9 @@ void CommandList_process(
 
 						imageExt = &swapchainExt->images.ptrNonConst[swapchainExt->currentIndex];
 					}
+
+					else if(isRenderTexture)
+						imageExt = (VkManagedImage*) RenderTexture_ext(RenderTextureRef_ptr(transition.resource), );
 
 					else imageExt = (VkManagedImage*) DepthStencil_ext(DepthStencilRef_ptr(transition.resource), );
 
