@@ -129,7 +129,9 @@
 
 		U32 x1 = I32x4_y(a);
 		U32 x3 = I32x4_w(a);
-		U32 rcon = i ? 1 << (i - 1) : 0;
+
+		U32 rcons[] = { 0x00, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1B, 0x36 };
+		U32 rcon = rcons[i];
 
 		x1 = AES_subWord(x1);
 		x3 = AES_subWord(x3);
