@@ -437,6 +437,78 @@ _gotoIfError(clean, GraphicsDeviceRef_createSampler(device, nearestSampler, samp
 - Obtained through GraphicsDeviceRef's createSampler.
 - Used directly in shaders by passing the samplerLocation to the shader and using samplerUniform() or sampler() in the shader.
 
+## DepthStencil
+
+### Summary
+
+A DepthStencil is an object that holds the depth and stencil buffers as a 2D image which can be used together with a RenderTexture or by itself for 3D rendering (to avoid overdraw) and to handle shadow maps or other tricks such as portals/reflections (stencil buffer). 
+
+The depth stencil is quite straight forward; it has up to 3 stencil enabled formats (D24S8Ext, D32S8, S8Ext) that can be used to provide a stencil attachment to startRenderExt and 2 non stencil enabled formats (D16, D32). D24S8Ext is optional, but is important for NV and Intel GPUs since it packs the depth and stencil into 32-bits. D24S8Ext and S8Ext support can be queried through the GraphicsDeviceInfo's capabilities. Whenever possible please use D16 or D32 since it doesn't waste any space for a stencil buffer if it isn't needed. D16 should only be used if depth precision isn't a great priority (performance and memory usage is prioritized). D16 can be used on mobile to save space and time. If allowShaderRead is on, the depth stencil can be accessed through shader logic by passing the resource handle to the GPU.
+
+```c
+_gotoIfError(clean, GraphicsDeviceRef_createDepthStencil(
+    twm->device, 
+    w->size, EDepthStencilFormat_D16, false /* allow shader access */, 
+    CharString_createRefCStrConst("Test depth stencil"), 
+    &tw->depthStencil
+));
+```
+
+### Properties
+
+- device: ref to the device that owns it.
+- readLocation: resource index into the bindless Texture2D[] that specifies where the depth stencil is located. It does contain additional info in the upper 12 bits, so only the low 20 bits store the index (texture2DUniform(resourceId) and texture2D(resourceId) can be used to do this automatically).
+- size: the dimensions of the depth stencil buffer/image.
+- format: the format the depth stencil was created with.
+- allowShaderRead: whether or not readLocation contains a valid position and can be used in shader read operations.
+
+### Used functions and obtained
+
+- Obtained through GraphicsDeviceRef's createDepthStencil.
+- Can be written to by passing the depth or stencil attachment in the startRenderExt command and ensuring the right pipeline state object DepthStencilState settings are active.
+- Can be used in shaders (if allowShaderRead is on) by passing the readLocation to the shader and using texture2DUniform() or texture2D() in the shader.
+
+## RenderTexture
+
+### Summary
+
+A RenderTexture is a texture that can be rendered to by either a startRenderExt or directly from a compute shader. While a normal DeviceTexture would represent a texture that can only be written to by copying from the GPU or CPU. A DeviceTexture supports compression but a RenderTexture does not.
+
+Some formats are optional such as RGB32f, RGB32i and RGB32u. These have to be queried through the GraphicsDeviceInfo, however they are always available for use as vertex attributes.
+
+A RenderTexture itself can currently only be 2D, but will be possible to be 3D or a TextureCube in the future. Currently no mip levels are supported and 2DArray and TextureCubeArray won't be supported (since array of textures should be sufficient).
+
+```c
+_gotoIfError(clean, GraphicsDeviceRef_createRenderTexture(
+	twm->device, 
+	ERenderTextureType_2D, 			//2D is only supported currently
+    I32x4_fromI32x2(w->size), 		//For 2D textures we can just use { x, y, 0, 0 }
+    ETextureFormatId_BGRA8, 		//Non compressed texture format
+    ERenderTextureUsage_ShaderRW, 	//Allow both shader writes and reads
+	CharString_createRefCStrConst("Virtual window backbuffer"),
+	&tw->swapchain
+));
+```
+
+### Properties
+
+- device: ref to the device that owns it.
+- type: 2D, 3D or Cube.
+- readLocation: resource index into the bindless Texture2D[] that specifies where the render texture is located. It does contain additional info in the upper 12 bits, so only the low 20 bits store the index (texture2DUniform(resourceId) and texture2D(resourceId) can be used to do this automatically).
+- writeLocation: resource index into the bindless RWTexture2D(format)[] that specifies where the render texture is located. It does contain additional info in the upper 12 bits, so only the low 20 bits store the index (rwTexture2D(format)Uniform(resourceId) and rwTexture2D(format)(resourceId) can be used to do this automatically).
+  - Where format is the type of primitive the texture uses. Such as: (none): unorm, (s): snorm, (i): int, (u): uint, (f): float. e.g. rwTexture2DfUniform(resourceId) would access the writeonly float texture at resourceId.
+- size: the dimensions of the render texture.
+- format: the format the render texture was created with.
+- usage: if the render texture is allowed for shader read and/or write.
+
+### Used functions and obtained
+
+- Obtained through GraphicsDeviceRef's createRenderTexture.
+- Can be written to by passing as an attachment in the startRenderExt command and ensuring the right pipeline state object settings are active.
+- Can be read in shaders (if usage permits it) by passing the readLocation to the shader and using texture2DUniform() or texture2D() in the shader.
+- Can be written in (compute) shaders (if usage permits it) by passing the writeLocation to the shader and using rwTexture2D(format)Uniform() or rwTexture2D(format)() in the shader.
+  - Where format is the type of primitive the texture uses. Such as: (none): unorm, (s): snorm, (i): int, (u): uint, (f): float. e.g. rwTexture2DfUniform(resourceId) would access the writeonly float texture at resourceId and rwTexture2DUniform would access a unorm RW texture.
+
 ## Pipeline
 
 ### Summary

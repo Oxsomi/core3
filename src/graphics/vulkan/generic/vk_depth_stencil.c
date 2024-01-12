@@ -145,7 +145,8 @@ Error GraphicsDeviceRef_createDepthStencilExt(
 		.device = deviceRef,
 		.size = size,
 		.format = format,
-		.allowShaderRead = allowShaderRead
+		.allowShaderRead = allowShaderRead,
+		.readLocation = U32_MAX
 	};
 
 	//Allocate in descriptors
@@ -168,7 +169,7 @@ Error GraphicsDeviceRef_createDepthStencilExt(
 				0, "GraphicsDeviceRef_createDepthStencilExt() couldn't allocate image descriptor"
 			));
 
-		depthStencilExt->readHandle = locationRead;
+		depthStencil->readLocation = depthStencilExt->readHandle = locationRead;
 
 		VkDescriptorImageInfo descriptorImageInfo = (VkDescriptorImageInfo) {
 			.imageView = *view,

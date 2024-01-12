@@ -187,7 +187,9 @@ Error GraphicsDeviceRef_createRenderTextureExt(
 		.size = size,
 		.format = format,
 		.usage = usage,
-		.type = type
+		.type = type,
+		.readLocation = U32_MAX,
+		.writeLocation = U32_MAX
 	};
 
 	//Allocate in descriptors
@@ -237,7 +239,7 @@ Error GraphicsDeviceRef_createRenderTextureExt(
 					0, "GraphicsDeviceRef_createRenderTextureExt() couldn't allocate image descriptor"
 				));
 
-			renderTextureExt->readHandle = locationRead;
+			renderTexture->readLocation = renderTextureExt->readHandle = locationRead;
 
 			writeDescriptorSet[0].dstBinding = descType - 1;
 			writeDescriptorSet[0].dstArrayElement = locationRead & ((1 << 20) - 1);
@@ -274,7 +276,7 @@ Error GraphicsDeviceRef_createRenderTextureExt(
 					0, "GraphicsDeviceRef_createRenderTextureExt() couldn't allocate image descriptor"
 				));
 
-			renderTextureExt->writeHandle = locationWrite;
+			renderTexture->writeLocation = renderTextureExt->writeHandle = locationWrite;
 
 			writeDescriptorSet[counter] = writeDescriptorSet[0];
 			writeDescriptorSet[counter].dstBinding = descType - 1;

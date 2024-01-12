@@ -33,6 +33,8 @@ typedef struct DepthStencil {
 
 	I32x2 size;
 
+	U32 readLocation;
+
 	EDepthStencilFormat format;
 	Bool allowShaderRead;
 	U8 padding[3];

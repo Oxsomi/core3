@@ -51,12 +51,15 @@ typedef struct RenderTexture {
 	GraphicsDeviceRef *device;
 
 	ERenderTextureType type;
-	U32 padding;
+	U32 readLocation;
 
 	I32x4 size;
 
 	ETextureFormat format;
 	ERenderTextureUsage usage;
+
+	U32 writeLocation;
+	U32 padding;
 
 } RenderTexture;
 
