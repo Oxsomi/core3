@@ -81,6 +81,11 @@ Error GraphicsDeviceRef_createPipelinesCompute(
 			"GraphicsDeviceRef_createPipelinesCompute()::deviceRef, shaderBinaries and pipelines are required"
 		);
 
+	if(deviceRef->typeId != EGraphicsTypeId_GraphicsDevice)
+		return Error_invalidParameter(
+			0, 0, "GraphicsDeviceRef_createPipelinesCompute()::deviceRef is an invalid type"
+		);
+
 	if(!shaderBinaries->length)
 		return Error_invalidParameter(
 			1, 0, "GraphicsDeviceRef_createPipelinesCompute()::shaderBinaries should be of length > 0"
@@ -180,6 +185,11 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 		return Error_nullPointer(
 			!deviceRef ? 0 : (!stages ? 1 : (!infos ? 2 : 3)),
 			"GraphicsDeviceRef_createPipelinesGraphics()::deviceRef, stages, infos and pipelines are required"
+		);
+
+	if(deviceRef->typeId != EGraphicsTypeId_GraphicsDevice)
+		return Error_invalidParameter(
+			0, 0, "GraphicsDeviceRef_createPipelinesGraphics()::deviceRef is an invalid type"
 		);
 
 	if(!stages->length)

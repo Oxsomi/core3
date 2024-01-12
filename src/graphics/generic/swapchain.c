@@ -81,6 +81,11 @@ Error GraphicsDeviceRef_createSwapchain(GraphicsDeviceRef *deviceRef, SwapchainI
 			!deviceRef ? 1 : 0, "GraphicsDeviceRef_createSwapchain()::deviceRef and info.window (physical) are required"
 		);
 
+	if(deviceRef->typeId != EGraphicsTypeId_GraphicsDevice)
+		return Error_nullPointer(
+			0, "GraphicsDeviceRef_createSwapchain()::deviceRef is an invalid type"
+		);
+
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 
 	if(!(device->info.capabilities.features & EGraphicsFeatures_Swapchain))

@@ -36,7 +36,7 @@ Error DeviceBufferRef_inc(DeviceBufferRef *buffer) {
 
 Error DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count) {
 
-	if(!buf)
+	if(!buf || buf->typeId != EGraphicsTypeId_DeviceBuffer)
 		return Error_nullPointer(0, "DeviceBufferRef_markDirty()::buf is required");
 
 	DeviceBuffer *buffer = DeviceBufferRef_ptr(buf);

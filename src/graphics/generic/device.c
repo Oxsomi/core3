@@ -325,6 +325,9 @@ Error GraphicsDeviceRef_create(
 			!instanceRef ? 0 : (!info ? 1 : 2), "GraphicsDeviceRef_create()::instanceRef, info and deviceRef are required"
 		);
 
+	if(instanceRef->typeId != EGraphicsTypeId_GraphicsInstance)
+		return Error_invalidParameter(0, 0, "GraphicsDeviceRef_create()::instanceRef was an invalid type");
+
 	if(*deviceRef)
 		return Error_invalidParameter(1, 0, "GraphicsDeviceRef_create()::*deviceRef wasn't NULL, probably indicates memleak");
 
@@ -396,7 +399,7 @@ clean:
 
 Bool GraphicsDeviceRef_removePending(GraphicsDeviceRef *deviceRef, RefPtr *resource) {
 
-	if(!deviceRef)
+	if(!deviceRef || deviceRef->typeId != EGraphicsTypeId_GraphicsDevice)
 		return false;
 
 	Bool supported = false;
@@ -506,6 +509,9 @@ clean:
 }
 
 Error GraphicsDeviceRef_resizeStagingBuffer(GraphicsDeviceRef *deviceRef, U64 newSize) {
+
+	if(!deviceRef || deviceRef->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
+		return Error_nullPointer(0, "GraphicsDeviceRef_resizeStagingBuffer()::deviceRef is required");
 
 	Error err = Error_none();
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);

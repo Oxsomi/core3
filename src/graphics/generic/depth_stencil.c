@@ -64,7 +64,6 @@ Error GraphicsDeviceRef_createDepthStencil(
 	if(!deviceRef || deviceRef->typeId != EGraphicsTypeId_GraphicsDevice)
 		return Error_nullPointer(0, "GraphicsDeviceRef_createDepthStencil()::deviceRef is required");
 
-
 	if(format <= EDepthStencilFormat_None || format >= EDepthStencilFormat_Count)
 		return Error_invalidParameter(2, 0, "GraphicsDeviceRef_createDepthStencil()::format is required");
 
