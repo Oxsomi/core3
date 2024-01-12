@@ -250,7 +250,7 @@ Bool CommandListRef_bufferRangeConflicts(RefPtr *buffer1, BufferRange range1, Re
 	return buffer1 == buffer2;
 }
 
-Bool CommandListRef_isBound(CommandList *commandList, RefPtr *resource, ResourceRange range) {
+Bool CommandListRef_isBound(CommandList *commandList, RefPtr *resource, ResourceRange range, TransitionInternal **found) {
 
 	if(!resource)
 		return false;
@@ -267,12 +267,16 @@ Bool CommandListRef_isBound(CommandList *commandList, RefPtr *resource, Resource
 			resource->typeId == EGraphicsTypeId_DepthStencil ||
 			resource->typeId == EGraphicsTypeId_RenderTexture
 		) {
-			if(CommandListRef_imageRangeConflicts(resource, range.image, transition.resource, transition.range.image))
+			if(CommandListRef_imageRangeConflicts(resource, range.image, transition.resource, transition.range.image)) {
+				if(found) *found = &commandList->pendingTransitions.ptrNonConst[i];
 				return true;
+			}
 		}
 
-		else if(CommandListRef_bufferRangeConflicts(resource, range.buffer, transition.resource, transition.range.buffer))
+		else if(CommandListRef_bufferRangeConflicts(resource, range.buffer, transition.resource, transition.range.buffer)) {
+			if(found) *found = &commandList->pendingTransitions.ptrNonConst[i];
 			return true;
+		}
 	}
 
 	return false;
@@ -344,8 +348,14 @@ Error CommandListRef_transitionBuffer(
 	if(!buffer)
 		return Error_none();
 
-	if(CommandListRef_isBound(commandList, buffer, (ResourceRange) { .buffer = range } ))
-		return Error_invalidOperation(4, "CommandListRef_transitionBuffer()::buffer was already transitioned in scope!");
+	TransitionInternal *oldState = NULL;
+	if(CommandListRef_isBound(commandList, buffer, (ResourceRange) { .buffer = range }, &oldState)) {
+
+		if(oldState->type != type)
+			return Error_invalidOperation(4, "CommandListRef_transitionBuffer()::buffer was already transitioned in scope!");
+
+		return Error_none();
+	}
 
 	TransitionInternal transition = (TransitionInternal) {
 		.resource = buffer,
@@ -505,10 +515,16 @@ Error CommandListRef_clearImages(CommandListRef *commandListRef, ListClearImageC
 
 		//Add transition
 
-		if(CommandListRef_isBound(commandList, image, (ResourceRange) { .image = clearImage.range }))
-			_gotoIfError(clean, Error_invalidOperation(
-				0, "CommandListRef_clearImages()::clearImages[i].image is already transitioned"
-			));
+		TransitionInternal *found = NULL;
+		if(CommandListRef_isBound(commandList, image, (ResourceRange) { .image = clearImage.range }, &found)) {
+
+			if(found->type != ETransitionType_Clear)
+				_gotoIfError(clean, Error_invalidOperation(
+					0, "CommandListRef_clearImages()::clearImages[i].image is already transitioned"
+				));
+
+			continue;
+		}
 
 		TransitionInternal transition = (TransitionInternal) {
 			.resource = image,
@@ -699,17 +715,26 @@ Error CommandListRef_startScope(
 				));
 		}
 
-		if(CommandListRef_isBound(commandList, res, transition.range))
-			_gotoIfError(clean, Error_invalidOperation(
-				0, "CommandListRef_startScope()::transitions[i].resource is already transitioned"
-			));
-
 		TransitionInternal transitionDst = (TransitionInternal) {
 			.resource = res,
 			.range = transition.range,
 			.stage = transition.stage,
 			.type = transition.isWrite ? ETransitionType_ShaderWrite : ETransitionType_ShaderRead
 		};
+
+		TransitionInternal *found = NULL;
+		if(CommandListRef_isBound(commandList, res, transition.range, &found)) {
+
+			if(found->type != transitionDst.type)
+				_gotoIfError(clean, Error_invalidOperation(
+					0, "CommandListRef_startScope()::transitions[i].resource is already transitioned"
+				));
+
+			//To combine shader transitions we just take the highest up shader stage it's used
+
+			found->stage = (EPipelineStage) U64_min(found->stage, transitionDst.stage);
+			continue;
+		}
 
 		_gotoIfError(clean, ListTransitionInternal_pushBackx(&commandList->pendingTransitions, transitionDst));
 	}
@@ -1576,17 +1601,23 @@ Error CommandListRef_startRenderExt(
 				};
 			}
 
-			if(CommandListRef_isBound(commandList, info.image, (ResourceRange) { .image = info.range } ))
-				_gotoIfError(clean, Error_invalidOperation(
-					4, "CommandListRef_startRenderExt()::colors[i] or depthStencil was already transitioned!"
-				));
-
 			TransitionInternal transition = (TransitionInternal) {
 				.resource = info.image,
 				.range = info.range,
 				.stage = EPipelineStage_Count,
 				.type = info.readOnly ? ETransitionType_RenderTargetRead : ETransitionType_RenderTargetWrite
 			};
+
+			TransitionInternal *state = NULL;
+			if(CommandListRef_isBound(commandList, info.image, (ResourceRange) { .image = info.range }, &state)) {
+
+				if(state->type != transition.type)
+					_gotoIfError(clean, Error_invalidOperation(
+						4, "CommandListRef_startRenderExt()::colors[i] or depthStencil was already transitioned!"
+					));
+
+				continue;
+			}
 
 			_gotoIfError(clean, ListTransitionInternal_pushBackx(&commandList->pendingTransitions, transition));
 		}
