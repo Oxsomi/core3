@@ -102,16 +102,11 @@ void CommandList_process(
 
 			break;
 
-		//Clear commands
+		//Clear and copy commands
 
 		case ECommandOp_ClearImages: {
 
 			U32 imageClearCount = *(const U32*) data;
-
-			//Handle copies.
-			//To do so, we will search for all images that are the same and have the same clear color.
-			//If this is the case, we can combine a clear into 1 operation.
-			//An example: clear layer 2 and layer 3 with 0.xxxx could be done in 1 op.
 
 			for(U64 i = 0; i < imageClearCount; ++i) {
 
@@ -149,6 +144,117 @@ void CommandList_process(
 				);
 			}
 
+			break;
+		}
+
+		case ECommandOp_CopyImage: {
+
+			CopyImageCmd copyImage = *(const CopyImageCmd*) data;
+			const CopyImageRegion *copyImageRegions = (const CopyImageRegion*) (data + sizeof(copyImage));
+
+			VkImageAspectFlags aspectFlags = VK_IMAGE_ASPECT_COLOR_BIT;
+
+			I32x4 srcSize = I32x4_zero();
+
+			if(copyImage.src->typeId == EGraphicsTypeId_DepthStencil) {
+				aspectFlags = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+				srcSize = I32x4_fromI32x2(DepthStencilRef_ptr(copyImage.src)->size);
+			}
+
+			else if(copyImage.src->typeId == EGraphicsTypeId_Swapchain)
+				srcSize = I32x4_fromI32x2(SwapchainRef_ptr(copyImage.src)->size);
+
+			else srcSize = RenderTextureRef_ptr(copyImage.src)->size;		//TODO: DeviceTexture
+
+			if(copyImage.copyType == ECopyType_DepthOnly)
+				aspectFlags = VK_IMAGE_ASPECT_DEPTH_BIT;
+
+			else if(copyImage.copyType == ECopyType_StencilOnly)
+				aspectFlags = VK_IMAGE_ASPECT_STENCIL_BIT;
+
+			for(U64 i = 0; i < copyImage.regionCount; ++i) {
+
+				CopyImageRegion image = copyImageRegions[i];
+
+				if(!image.width)
+					image.width = (U32)I32x4_x(srcSize) - image.srcX;
+
+				if(!image.height)
+					image.height = (U32)I32x4_y(srcSize) - image.srcY;
+
+				if(!image.length)
+					image.length = (U32)U64_max((U32)I32x4_z(srcSize), 1) - image.srcZ;
+
+				VkImageSubresourceLayers subResource = (VkImageSubresourceLayers) {
+					.aspectMask = aspectFlags,
+					.layerCount = 1
+				};
+
+				Error err = Error_none();
+
+				_gotoIfError(next, ListVkImageCopy_pushBackx(&deviceExt->imageCopyRanges, (VkImageCopy) {
+					.srcSubresource = subResource,
+					.srcOffset = (VkOffset3D) {
+						.x = (I32) image.srcX,
+						.y = (I32) image.srcY,
+						.z = (I32) image.srcZ
+					},
+					.dstSubresource = subResource,
+					.dstOffset = (VkOffset3D) {
+						.x = (I32) image.dstX,
+						.y = (I32) image.dstY,
+						.z = (I32) image.dstZ
+					},
+					.extent = (VkExtent3D) {
+						.width = image.width,
+						.height = image.height,
+						.depth = image.length
+					}
+				}));
+
+			next:
+
+				if(err.genericError) {
+					Error_printx(err, ELogLevel_Error, ELogOptions_Default);
+					break;
+				}
+			}
+
+			VkManagedImage *srcExt = NULL;
+
+			if(copyImage.src->typeId == EGraphicsTypeId_Swapchain) {
+				VkSwapchain *swapchainExt = Swapchain_ext(SwapchainRef_ptr(copyImage.src), Vk);
+				srcExt = &swapchainExt->images.ptrNonConst[swapchainExt->currentIndex];
+			}
+
+			else if(copyImage.src->typeId == EGraphicsTypeId_DepthStencil)
+				srcExt = (VkManagedImage*) DepthStencil_ext(DepthStencilRef_ptr(copyImage.src), );
+
+			else srcExt = (VkManagedImage*) RenderTexture_ext(RenderTextureRef_ptr(copyImage.src), );
+
+			VkManagedImage *dstExt = NULL;
+
+			if(copyImage.dst->typeId == EGraphicsTypeId_Swapchain) {
+				VkSwapchain *swapchainExt = Swapchain_ext(SwapchainRef_ptr(copyImage.dst), Vk);
+				dstExt = &swapchainExt->images.ptrNonConst[swapchainExt->currentIndex];
+			}
+
+			else if(copyImage.src->typeId == EGraphicsTypeId_DepthStencil)
+				dstExt = (VkManagedImage*) DepthStencil_ext(DepthStencilRef_ptr(copyImage.dst), );
+
+			else dstExt = (VkManagedImage*) RenderTexture_ext(RenderTextureRef_ptr(copyImage.dst), );
+
+			vkCmdCopyImage(
+				buffer, 
+				srcExt->image,
+				srcExt->lastLayout,
+				dstExt->image,
+				dstExt->lastLayout,
+				copyImage.regionCount,
+				deviceExt->imageCopyRanges.ptr
+			);
+
+			ListVkImageCopy_clear(&deviceExt->imageCopyRanges);
 			break;
 		}
 
@@ -614,6 +720,18 @@ void CommandList_process(
 
 							case ETransitionType_Clear:
 								pipelineStage = VK_PIPELINE_STAGE_2_CLEAR_BIT;
+								access = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+								layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+								break;
+
+							case ETransitionType_CopyRead:
+								pipelineStage =  VK_PIPELINE_STAGE_2_COPY_BIT;
+								access = VK_ACCESS_2_TRANSFER_READ_BIT;
+								layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+								break;
+
+							case ETransitionType_CopyWrite:
+								pipelineStage =  VK_PIPELINE_STAGE_2_COPY_BIT;
 								access = VK_ACCESS_2_TRANSFER_WRITE_BIT;
 								layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
 								break;

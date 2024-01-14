@@ -63,10 +63,10 @@ typedef enum ECommandOp {
 	ECommandOp_Dispatch,
 	ECommandOp_DispatchIndirect,
 
-	//Clearing depth + color views
+	//Clearing and copying images
 
 	ECommandOp_ClearImages,
-	ECommandOp_ClearDepthStencils,
+	ECommandOp_CopyImage,
 
 	//Debugging
 
@@ -103,8 +103,8 @@ typedef struct ImageRange {
 
 typedef union ResourceRange {
 
-	ImageRange image;
 	BufferRange buffer;
+	ImageRange image;
 
 } ResourceRange;
 
@@ -117,7 +117,9 @@ typedef enum ETransitionType {
 	ETransitionType_ShaderRead,
 	ETransitionType_ShaderWrite,
 	ETransitionType_RenderTargetRead,
-	ETransitionType_RenderTargetWrite
+	ETransitionType_RenderTargetWrite,
+	ETransitionType_CopyRead,
+	ETransitionType_CopyWrite
 
 } ETransitionType;
 
@@ -328,6 +330,37 @@ typedef struct StartRenderCmdExt {
 	//AttachmentInfoInternal attachments[];		//[ active attachments go here ]
 
 } StartRenderCmdExt;
+
+typedef struct CopyImageRegion {
+
+	U32 srcLevelId, dstLevelId;
+
+	U32 srcX, srcY, srcZ;
+	U32 dstX, dstY, dstZ;
+
+	U32 width, height, length;
+	U32 padding;
+
+} CopyImageRegion;
+
+typedef enum ECopyType {
+
+	ECopyType_All,				//Color or DepthStencil
+	ECopyType_DepthOnly,		//DepthStencil: Stencil isn't copied and only depth has to be compatible
+	ECopyType_StencilOnly		//DepthStencil: Depth isn't copied and only stencil has to be compatible
+
+} ECopyType;
+
+typedef struct CopyImageCmd {
+
+	RefPtr *src, *dst;
+
+	U32 regionCount;
+	ECopyType copyType;
+
+	//CopyImageRegion regions[regionCount];
+
+} CopyImageCmd;
 
 //GPU commands
 

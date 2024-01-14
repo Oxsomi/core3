@@ -43,6 +43,7 @@ TListImpl(VkImageMemoryBarrier2);
 TListImpl(VkBufferMemoryBarrier2);
 TListImpl(VkWriteDescriptorSet);
 TListImpl(DescriptorStackTrace);
+TListImpl(VkImageCopy);
 
 #define vkBindNext(T, condition, ...)	\
 	T tmp##T = __VA_ARGS__;				\
@@ -804,6 +805,7 @@ Error GraphicsDevice_initExt(
 
 	_gotoIfError(clean, ListVkBufferMemoryBarrier2_reservex(&deviceExt->bufferTransitions, 17));
 	_gotoIfError(clean, ListVkImageMemoryBarrier2_reservex(&deviceExt->imageTransitions, 16));
+	_gotoIfError(clean, ListVkImageCopy_reservex(&deviceExt->imageCopyRanges, 8));
 
 	//Allocate temp storage for descriptor tracking
 
@@ -935,6 +937,7 @@ Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext) {
 	ListVkSwapchainKHR_freex(&deviceExt->swapchainHandles);
 	ListVkBufferMemoryBarrier2_freex(&deviceExt->bufferTransitions);
 	ListVkImageMemoryBarrier2_freex(&deviceExt->imageTransitions);
+	ListVkImageCopy_freex(&deviceExt->imageCopyRanges);
 
 	//Announce descriptor memleaks
 
@@ -1468,6 +1471,7 @@ Error GraphicsDevice_submitCommandsImpl(
 
 clean: 
 
+	ListVkImageCopy_clear(&deviceExt->imageCopyRanges);
 	ListVkBufferMemoryBarrier2_clear(&deviceExt->bufferTransitions);
 	ListVkImageMemoryBarrier2_clear(&deviceExt->imageTransitions);
 	CharString_freex(&temp);

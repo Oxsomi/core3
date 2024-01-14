@@ -799,6 +799,30 @@ Clear image is only allowed on images which aren't currently bound as a render t
 
 Clear image can currently only be called on a Swapchain or RenderTexture object.
 
+### copyImage/copyImageRegions
+
+copyImage and copyImageRegions are actually the same command. They allow copying either one or multiple regions from the same image to another, as long as the two have the same format.
+
+```c
+_gotoIfError(clean, CommandListRef_copyImage(
+    commandList, 				
+    tw->swapchain, 				//src (Swapchain, DepthStencil, RenderTexture)
+    tw->renderTextureBackup, 	//dst (^)
+    ECopyType_All, 				//Copy depth & stencil or color
+    (CopyImageRegion) { 0 }		//Copy everything
+));
+```
+
+Clearing multiple ranges at once can be done by calling copyImageRegions with a ListCopyImageRegion. The src and dst must both be able to contain the pixels copied.
+
+If depth, width or height isn't defined, they are automatically set to res[i] - offset[i]. 
+
+DepthStencil is only compatible with depth stencil. If ECopyType_All is used, the depth stencil format has to be identical. If ECopyType_DepthOnly is used the depth has to be compatible (D32, D32S8). If ECopyType_StencilOnly is used the stencil has to be compatible.
+
+Copy image is only allowed on images which aren't currently bound as a render target or for a different use in this scope. 
+
+Copy image (ranges) can currently only be called on a Swapchain, DepthStencil or RenderTexture object.
+
 ### setComputePipeline/setGraphicsPipeline
 
 The set pipeline command does one of the following; bind a graphics pipeline, raytracing pipeline or a compute pipeline. These pipelines are the only bind points and they're maintained separately. So a bind pipeline of a graphics shader and one of a compute shader don't interfere. This is used before a draw, dispatch or traceRaysExt to ensure the shader is used.
@@ -977,6 +1001,7 @@ startScope		//Transitions resources
         endRegionDebugExt (end deb region, pop: req for each startRegionDebugExt)
     
 	clearImages								//Keeps scope alive
+    copyImageRegions						//Keeps scope alive
 	setGraphicsPipeline
     setComputePipeline
     	dispatch(Indirect)					//Keeps scope alive
@@ -986,7 +1011,7 @@ startScope		//Transitions resources
         setViewport/Scissor
         setBlendConstants
         setStencil
-        draw(Indirect(Count))
+        draw(Indirect(Count))				//Keeps scope alive
             requires: 
                 setGraphicsPipeline
                 setViewport/Scissor
@@ -997,7 +1022,7 @@ startScope		//Transitions resources
     endScope
 ```
 
-Because a scope hoists the transitions of operations such as clearImages, drawIndirect(Count), setPrimitiveBuffers it is impossible to use the same subresource in the same scope for different usages (be it copy/shader write/read). If this is the case then a separate scope is needed.
+Because a scope hoists the transitions of operations such as clearImages, copyImages, drawIndirect(Count), setPrimitiveBuffers it is impossible to use the same subresource in the same scope for different usages (be it copy/shader write/read). If this is the case then a separate scope is needed.
 
 All startRenderExts in a scope should be ended and all startRegionDebugExts as well. Since a scope should be self contained.
 

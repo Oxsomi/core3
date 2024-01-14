@@ -39,6 +39,7 @@ TListImpl(Transition);
 TListImpl(CommandScopeDependency);
 TListImpl(ClearImageCmd);
 TListImpl(AttachmentInfo);
+TListImpl(CopyImageRegion);
 
 Error CommandListRef_dec(CommandListRef **cmd) {
 	return !RefPtr_dec(cmd) ? Error_invalidOperation(0, "CommandListRef_dec()::cmd invalid") : Error_none();
@@ -548,12 +549,266 @@ Error CommandListRef_clearImages(CommandListRef *commandListRef, ListClearImageC
 
 	_gotoIfError(clean, CommandList_append(commandList, ECommandOp_ClearImages, buf, 0));
 
+	commandList->tempStateFlags |= ECommandStateFlags_HasModifyOp;
+
 clean:
 
 	if(err.genericError)
 		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
 
 	Buffer_freex(&buf);
+	return err;
+}
+
+Error CommandListRef_copyImageRegions(
+	CommandListRef *commandListRef, 
+	RefPtr *src, 
+	RefPtr *dst, 
+	ECopyType copyType,
+	ListCopyImageRegion regions
+) {
+
+	Buffer buf = Buffer_createNull();
+	CommandListRef_validateScope(commandListRef, clean);
+
+	//Validate regions.length to be <0, U32_MAX]
+
+	if(!regions.length)
+		_gotoIfError(clean, Error_nullPointer(3, "CommandListRef_copyImage()::regions.length is 0"));
+
+	if(regions.length > U32_MAX)
+		_gotoIfError(clean, Error_outOfBounds(
+			4, regions.length, U32_MAX, "CommandListRef_copyImage()::regions.length > U32_MAX"
+		));
+
+	//Validate src and dst
+
+	if(!src || !dst)
+		_gotoIfError(clean, Error_outOfBounds(
+			!src ? 1 : 2, regions.length, U32_MAX, "CommandListRef_copyImage()::src and dst are required"
+		));
+
+	for (U64 i = 0; i < 2; ++i) {
+
+		RefPtr *ptr = i ? dst : src;
+
+		if(
+			ptr->typeId != EGraphicsTypeId_RenderTexture && 
+			ptr->typeId != EGraphicsTypeId_Swapchain && 
+			ptr->typeId != EGraphicsTypeId_DepthStencil
+			//ptr->typeId != EGraphicsTypeId_DeviceTexture		//TODO: Add DeviceTexture here
+		)
+			_gotoIfError(clean, Error_invalidParameter(
+				i ? 1 : 2, 0, 
+				"CommandListRef_copyImage()::src and dst should be a texture "
+				"(Swapchain, DepthStencil, RenderTexture, DeviceTexture)"
+			));
+	}
+
+	//Validate depth stencil
+
+	Bool isDepthStencil = dst->typeId == EGraphicsTypeId_DepthStencil;
+
+	if(isDepthStencil != (src->typeId == EGraphicsTypeId_DepthStencil))
+		_gotoIfError(clean, Error_invalidParameter(
+			1, 0, 
+			"CommandListRef_copyImage()::src and dst should be DepthStencil if one of them is to be compatible"
+		));
+
+	if(!isDepthStencil && copyType != ECopyType_All)
+		_gotoIfError(clean, Error_invalidParameter(
+			3, 0, 
+			"CommandListRef_copyImage()::copyType should be ECopyType_All if DepthStencil isn't copied"
+		));
+
+	I32x4 srcLen = I32x4_zero();
+	I32x4 dstLen = I32x4_zero();
+	GraphicsDeviceRef *srcDevice = NULL;
+	GraphicsDeviceRef *dstDevice = NULL;
+
+	if (isDepthStencil) {
+
+		srcLen = I32x4_create2_1(DepthStencilRef_ptr(src)->size, 1);
+		dstLen = I32x4_create2_1(DepthStencilRef_ptr(dst)->size, 1);
+
+		srcDevice = DepthStencilRef_ptr(src)->device;
+		dstDevice = DepthStencilRef_ptr(dst)->device;
+
+		EDepthStencilFormat srcFormat = DepthStencilRef_ptr(src)->format;
+		EDepthStencilFormat dstFormat = DepthStencilRef_ptr(dst)->format;
+
+		if(copyType == ECopyType_All && srcFormat != dstFormat)
+			_gotoIfError(clean, Error_invalidParameter(
+				1, 1, "CommandListRef_copyImage()::src and dst don't match in depth stencil format"
+			));
+
+		if (
+			copyType == ECopyType_StencilOnly && (
+				srcFormat < EDepthStencilFormat_StencilStart || dstFormat < EDepthStencilFormat_StencilStart
+			)
+		)
+			_gotoIfError(clean, Error_invalidParameter(
+				1, 2, "CommandListRef_copyImage()::src and dst both require stencil when using ECopyType_StencilOnly"
+			));
+
+		if (copyType == ECopyType_DepthOnly) {
+
+			Bool compatible = srcFormat == dstFormat;
+			
+			switch (srcFormat) {
+				case EDepthStencilFormat_D32: case EDepthStencilFormat_D32S8:
+					compatible = dstFormat == EDepthStencilFormat_D32S8 || dstFormat == EDepthStencilFormat_D32;
+					break;
+			}
+
+			if(!compatible)
+				_gotoIfError(clean, Error_invalidParameter(
+					1, 3, 
+					"CommandListRef_copyImage()::src and dst require the same depth format if ECopyType_DepthOnly is used "
+					"(D32/D32S8 is compatible with D32/D32S8)"
+				));
+		}
+	}
+
+	//Ensure both formats are the same
+
+	else {
+
+		ETextureFormat srcFormat = ETextureFormat_Undefined;
+		ETextureFormat dstFormat = ETextureFormat_Undefined;
+
+		if(src->typeId == EGraphicsTypeId_Swapchain) {
+			srcFormat = SwapchainRef_ptr(src)->format;
+			srcLen = I32x4_fromI32x2(SwapchainRef_ptr(src)->size);
+			srcDevice = SwapchainRef_ptr(src)->device;
+		}
+
+		else {
+			srcFormat = RenderTextureRef_ptr(src)->format;				//TODO: src DeviceTexture
+			srcLen = RenderTextureRef_ptr(src)->size;
+			srcDevice = RenderTextureRef_ptr(src)->device;
+		}
+
+		if(dst->typeId == EGraphicsTypeId_Swapchain) {
+			dstFormat = SwapchainRef_ptr(dst)->format;
+			dstLen = I32x4_fromI32x2(SwapchainRef_ptr(dst)->size);
+			dstDevice = SwapchainRef_ptr(dst)->device;
+		}
+
+		else {
+			dstFormat = RenderTextureRef_ptr(dst)->format;				//TODO: dst DeviceTexture
+			dstLen = RenderTextureRef_ptr(dst)->size;
+			dstDevice = RenderTextureRef_ptr(dst)->device;
+		}
+
+		if(srcFormat != dstFormat)
+			_gotoIfError(clean, Error_invalidParameter(
+				1, 5, "CommandListRef_copyImage()::src and dst require the same texture format"
+			));
+	}
+
+	//Validate devices
+
+	if(srcDevice != commandList->device || dstDevice != commandList->device)
+		_gotoIfError(clean, Error_invalidParameter(
+			1, 6, "CommandListRef_copyImage()::src and dst require the same device as the CommandList"
+		));
+
+	//Validate copy 
+
+	for(U64 i = 0; i < regions.length; ++i) {
+
+		CopyImageRegion clearImage = regions.ptr[i];
+
+		//Validate levelId
+
+		if(clearImage.dstLevelId || clearImage.srcLevelId)		//TODO: Allow levels
+			_gotoIfError(clean, Error_invalidParameter(
+				1, 6, "CommandListRef_copyImage()::regions[i].src/dstLevelId is out of bounds"
+			));
+	}
+
+	//TODO: Check if regions are out of bounds (be sure to keep in mind that w,h,l is 0 means src->w,h,l - src->offset
+
+	//TODO: Check if regions intersect in dst
+
+	//TODO: Ensure there's no overlapping src and dst region
+	//if(src == dst)
+	//	;
+
+	//Add transitions
+
+	ETransitionType types[2] = { ETransitionType_CopyRead, ETransitionType_CopyWrite };
+	RefPtr *ptrs[2] = { src, dst };
+
+	for(U64 i = 0; i < 2; ++i) {
+
+		TransitionInternal *found = NULL;
+		if(CommandListRef_isBound(commandList, ptrs[i], (ResourceRange) { 0 }, &found)) {
+
+			if(found->type != types[i])
+				_gotoIfError(clean, Error_invalidOperation(
+					0, "CommandListRef_clearImages()::src is already transitioned in the same scope"
+				));
+		}
+
+		else {
+
+			TransitionInternal transition = (TransitionInternal) {
+				.resource = ptrs[i],
+				.range = (ResourceRange) { 0 },
+				.stage = EPipelineStage_Count,
+				.type = types[i]
+			};
+
+			_gotoIfError(clean, ListTransitionInternal_pushBackx(&commandList->pendingTransitions, transition));
+		}
+	}
+
+	//Copy buffer
+	
+	_gotoIfError(clean, Buffer_createEmptyBytesx(ListCopyImageRegion_bytes(regions) + sizeof(CopyImageCmd), &buf));
+
+	*(CopyImageCmd*)buf.ptr = (CopyImageCmd) { 
+		.src = src, 
+		.dst = dst, 
+		.regionCount = (U32) regions.length, 
+		.copyType = copyType 
+	};
+
+	Buffer_copy(
+		Buffer_createRef((U8*) buf.ptr + sizeof(CopyImageCmd), ListCopyImageRegion_bytes(regions)), 
+		ListCopyImageRegion_bufferConst(regions)
+	);
+
+	_gotoIfError(clean, CommandList_append(commandList, ECommandOp_CopyImage, buf, 0));
+
+	commandList->tempStateFlags |= ECommandStateFlags_HasModifyOp;
+
+clean:
+
+	if(err.genericError)
+		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
+
+	Buffer_freex(&buf);
+	return err;
+}
+
+Error CommandListRef_copyImage(
+	CommandListRef *commandListRef, RefPtr *src, RefPtr *dst, ECopyType copyType, CopyImageRegion region
+) {
+	CommandListRef_validateScope(commandListRef, clean);
+
+	ListCopyImageRegion regions = (ListCopyImageRegion) { 0 };
+	_gotoIfError(clean, ListCopyImageRegion_createRefConst(&region, 1, &regions));
+
+	_gotoIfError(clean, CommandListRef_copyImageRegions(commandListRef, src, dst, copyType, regions));
+
+clean:
+
+	if(err.genericError)
+		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
+
 	return err;
 }
 
@@ -1603,7 +1858,7 @@ Error CommandListRef_startRenderExt(
 
 			TransitionInternal transition = (TransitionInternal) {
 				.resource = info.image,
-				.range = info.range,
+				.range = (ResourceRange) { .image = info.range },
 				.stage = EPipelineStage_Count,
 				.type = info.readOnly ? ETransitionType_RenderTargetRead : ETransitionType_RenderTargetWrite
 			};

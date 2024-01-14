@@ -113,8 +113,8 @@ Error CommandListRef_setBlendConstants(CommandListRef *commandList, F32x4 blendC
 
 //Setting clear parameters and clearing render texture
 
-//Clear entire resource or subresource .
-//Color: SwapchainRef or RenderTargetRef
+//Clear entire resource or subresource.
+//SwapchainRef or RenderTargetRef
 
 Error CommandListRef_clearImagef(CommandListRef *commandList, F32x4 color, ImageRange range, RefPtr *image);
 Error CommandListRef_clearImagei(CommandListRef *commandList, I32x4 color, ImageRange range, RefPtr *image);
@@ -123,6 +123,23 @@ Error CommandListRef_clearImageu(CommandListRef *commandList, const U32 color[4]
 TList(ClearImageCmd);
 
 Error CommandListRef_clearImages(CommandListRef *commandList, ListClearImageCmd clearImages);
+
+//Copy image
+//Only allowed on SwapchainRef, RenderTargetRef, DeviceTextureRef and DepthStencilRef.
+//Though DepthStencilRef requires both src and dst to be depth stencil.
+//The texture formats need to be the same to allow copying.
+//isStencil is only allowed when the input and output both have stencil buffers.
+//When depthStencil is used, the stride of the stencil and/or depth needs to match between src and dst.
+
+TList(CopyImageRegion);
+
+Error CommandListRef_copyImageRegions(
+	CommandListRef *commandList, RefPtr *src, RefPtr *dst, ECopyType copyType, ListCopyImageRegion regions
+);
+
+Error CommandListRef_copyImage(
+	CommandListRef *commandList, RefPtr *src, RefPtr *dst, ECopyType copyType, CopyImageRegion region
+);
 
 //Draw calls and dispatches
 

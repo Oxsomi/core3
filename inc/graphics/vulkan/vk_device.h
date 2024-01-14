@@ -187,6 +187,7 @@ TList(VkImageMemoryBarrier2);
 TList(VkBufferMemoryBarrier2);
 TList(VkWriteDescriptorSet);
 TList(DescriptorStackTrace);
+TList(VkImageCopy);
 
 typedef struct VkGraphicsDevice {
 
@@ -228,6 +229,7 @@ typedef struct VkGraphicsDevice {
 	ListVkPipelineStageFlags waitStages;
 	ListVkBufferMemoryBarrier2 bufferTransitions;
 	ListVkImageMemoryBarrier2 imageTransitions;
+	ListVkImageCopy imageCopyRanges;
 
 } VkGraphicsDevice;
 
