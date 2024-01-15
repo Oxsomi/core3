@@ -359,7 +359,7 @@ _gotoIfError(clean, GraphicsDeviceRef_createSwapchain(
 //onResize: Window callback to make sure format + size stays the same: 
 
 if(!(w->flags & EWindowFlags_IsVirtual))
-    Swapchain_resize(SwapchainRef_ptr(swapchain));
+    SwapchainRef_resize(swapchain);
 ```
 
 info.presentModePriorities are the requests for what type of swapchains are desired by the application. Keeping this empty means [ mailbox, immediate, fifo, fifoRelaxed ]. On Android mailbox is unsupported because it may introduce another swapchain image, the rest is driver dependent if it's supported and the default is changed to [ fifo, fifoRelaxed, immediate] to conserve power. Immediate is always supported, so make sure to always request immediate as well otherwise createSwapchain may fail (depending on device + driver). For more info see Swapchain/Present mode.

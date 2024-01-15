@@ -100,4 +100,4 @@ Error SwapchainRef_inc(SwapchainRef *swapchain);
 
 Error GraphicsDeviceRef_createSwapchain(GraphicsDeviceRef *deviceRef, SwapchainInfo info, SwapchainRef **swapchain);
 
-Error Swapchain_resize(Swapchain *swapchain);
+Error SwapchainRef_resize(SwapchainRef *swapchain);

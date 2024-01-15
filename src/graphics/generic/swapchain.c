@@ -36,13 +36,39 @@ impl Bool GraphicsDevice_freeSwapchainExt(Swapchain *data, Allocator alloc);
 
 impl extern const U64 SwapchainExt_size;
 
-Error Swapchain_resize(Swapchain *swapchain) {
+Error SwapchainRef_resize(SwapchainRef *swapchainRef) {
 
-	if(!swapchain)
+	if(!swapchainRef || swapchainRef->typeId != EGraphicsTypeId_Swapchain)
 		return Error_nullPointer(0, "Swapchain_resize()::swapchain is required");
+
+	Swapchain *swapchain = SwapchainRef_ptr(swapchainRef);
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(swapchain->device);
 
 	if(Lock_lock(&swapchain->lock, U64_MAX) != ELockAcquire_Acquired)
 		return Error_invalidState(0, "Swapchain_resize() couldn't lock swapchain");
+
+	//Check if swapchain was in flight. If yes, warn that the user has to flush manually
+
+	ELockAcquire acq = Lock_lock(&device->lock, U64_MAX);
+
+	if(acq < ELockAcquire_Success)
+		return Error_invalidState(0, "Swapchain_resize() can't be called while recording commands");
+
+	Bool any = false;
+
+	for (U64 i = 0; i < sizeof(device->resourcesInFlight) / sizeof(ListRefPtr); ++i)
+		if (ListRefPtr_contains(device->resourcesInFlight[i], swapchainRef, 0, NULL)) {
+			any = true;
+			break;
+		}
+
+	if(acq == ELockAcquire_Acquired)
+		Lock_unlock(&device->lock);
+
+	if (any)
+		return Error_invalidState(
+			0, "Swapchain_resize() can't be called on a Swapchain that's in flight. Use GraphicsDeviceRef_wait in onResize"
+		);
 
 	//Resize with same format and same size is a NOP
 
