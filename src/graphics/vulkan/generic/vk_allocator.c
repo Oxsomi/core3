@@ -150,8 +150,6 @@ Error DeviceMemoryAllocator_allocate(
 	CharString objectName
 ) {
 
-	objectName;
-	
 	U64 blockSize = DeviceMemoryBlock_defaultSize;
 
 	if(!allocator || !requirementsExt || !blockId || !blockOffset)
@@ -280,33 +278,36 @@ Error DeviceMemoryAllocator_allocate(
 	*blockId = (U32) i;
 	*blockOffset = (U64) allocLoc;
 
-	#ifndef NDEBUG
+	if(CharString_length(objectName)) {
 
-		if(instanceExt->debugSetName) {
+		#ifndef NDEBUG
 
-			_gotoIfError(clean, CharString_formatx(
-				&temp, 
-				isDedicated ? "Memory block %u (host: %s, coherent: %s, device: %s): %s" : 
-				"Memory block %u (host: %s, coherent: %s, device: %s)",
-				(U32) i,
-				prop & host ? "true" : "false",
-				prop & coherent ? "true" : "false",
-				prop & local ? "true" : "false",
-				objectName.ptr
-			));
+			if(instanceExt->debugSetName) {
 
-			VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
-				.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-				.objectType = VK_OBJECT_TYPE_DEVICE_MEMORY,
-				.pObjectName = temp.ptr,
-				.objectHandle = (U64) mem
-			};
+				_gotoIfError(clean, CharString_formatx(
+					&temp, 
+					isDedicated ? "Memory block %u (host: %s, coherent: %s, device: %s): %s" : 
+					"Memory block %u (host: %s, coherent: %s, device: %s)",
+					(U32) i,
+					prop & host ? "true" : "false",
+					prop & coherent ? "true" : "false",
+					prop & local ? "true" : "false",
+					objectName.ptr
+				));
 
-			_gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName)));
-			CharString_freex(&temp);
-		}
+				VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
+					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+					.objectType = VK_OBJECT_TYPE_DEVICE_MEMORY,
+					.pObjectName = temp.ptr,
+					.objectHandle = (U64) mem
+				};
 
-	#endif
+				_gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName)));
+				CharString_freex(&temp);
+			}
+
+		#endif
+	}
 
 clean:
 

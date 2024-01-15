@@ -38,6 +38,7 @@ impl Error GraphicsDeviceRef_createDepthStencilExt(
 	I32x2 size, 
 	EDepthStencilFormat format, 
 	Bool allowShaderRead,
+	EMSAASamples msaa,
 	CharString name,
 	DepthStencil *depthStencil
 );
@@ -57,6 +58,7 @@ Error GraphicsDeviceRef_createDepthStencil(
 	I32x2 size, 
 	EDepthStencilFormat format, 
 	Bool allowShaderRead,
+	EMSAASamples msaa,
 	CharString name,
 	DepthStencilRef **depthStencilRef
 ) {
@@ -71,6 +73,15 @@ Error GraphicsDeviceRef_createDepthStencil(
 	if(!GraphicsDeviceInfo_supportsDepthStencilFormat(&device->info, format))
 		return Error_unsupportedOperation(0, "GraphicsDeviceRef_createDepthStencil()::format is unsupported");
 
+	if(msaa == EMSAASamples_x2Ext && !(device->info.capabilities.dataTypes & EGraphicsDataTypes_MSAA2x))
+		return Error_unsupportedOperation(1, "GraphicsDeviceRef_createDepthStencil()::msaa MSAA2x is unsupported");
+
+	else if(msaa == EMSAASamples_x8Ext && !(device->info.capabilities.dataTypes & EGraphicsDataTypes_MSAA8x))
+		return Error_unsupportedOperation(1, "GraphicsDeviceRef_createDepthStencil()::msaa MSAA8x is unsupported");
+
+	else if(msaa == EMSAASamples_x16Ext && !(device->info.capabilities.dataTypes & EGraphicsDataTypes_MSAA16x))
+		return Error_unsupportedOperation(1, "GraphicsDeviceRef_createDepthStencil()::msaa MSAA16x is unsupported");
+
 	Error err = RefPtr_createx(
 		(U32)(sizeof(DepthStencil) + DepthStencilExt_size), 
 		(ObjectFreeFunc) GraphicsDevice_freeDepthStencil, 
@@ -83,7 +94,7 @@ Error GraphicsDeviceRef_createDepthStencil(
 
 	DepthStencil *depthStencil = DepthStencilRef_ptr(*depthStencilRef);
 	_gotoIfError(clean, GraphicsDeviceRef_createDepthStencilExt(
-		deviceRef, size, format, allowShaderRead, name, depthStencil
+		deviceRef, size, format, allowShaderRead, msaa, name, depthStencil
 	));
 
 clean:

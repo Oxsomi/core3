@@ -93,6 +93,7 @@ Error GraphicsDevice_initExt(
 		.tessellationShader = (Bool)(feat & EGraphicsFeatures_TessellationShader),
 
 		.multiDrawIndirect = true,
+		.sampleRateShading = true,
 
 		.drawIndirectFirstInstance = true,
 		.depthClamp = true,

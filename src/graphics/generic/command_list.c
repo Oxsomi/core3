@@ -1600,7 +1600,27 @@ Error CommandListRef_startRenderExt(
 			Bool isDepth = lockedId == colors.length && depth.image;
 			AttachmentInfo info = isDepth ? depth : stencil;
 
+			if(info.resolveMode >= EMSAAResolveMode_Count)
+				_gotoIfError(clean, Error_invalidOperation(
+					3, "CommandListRef_startRenderExt()::depth or stencil had invalid resolveMode"
+				));
+
+			if(info.resolveMode && !info.resolveImage)
+				_gotoIfError(clean, Error_invalidOperation(
+					3, "CommandListRef_startRenderExt()::depth or stencil had resolveMode but no resolveImage"
+				));
+
+			if(info.resolveImage && info.resolveImage->typeId != EGraphicsTypeId_DepthStencil)
+				_gotoIfError(clean, Error_invalidOperation(
+					3, "CommandListRef_startRenderExt()::depth or stencil had invalid resolveImage"
+				));
+
 			DepthStencil *depthStencil = DepthStencilRef_ptr(info.image);
+
+			if(info.resolveImage && !depthStencil->msaa)
+				_gotoIfError(clean, Error_invalidOperation(
+					3, "CommandListRef_startRenderExt()::depth or stencil had resolveImage, while MSAA was off"
+				));
 
 			if (isDepth && depthStencil->format == EDepthStencilFormat_S8Ext)
 				_gotoIfError(clean, Error_invalidOperation(
@@ -1639,6 +1659,25 @@ Error CommandListRef_startRenderExt(
 
 		AttachmentInfo info = colors.ptr[lockedId];
 
+		if(info.resolveMode >= EMSAAResolveMode_Count)
+			_gotoIfError(clean, Error_invalidOperation(
+				3, "CommandListRef_startRenderExt() renderTexture had invalid resolveMode"
+			));
+
+		if(
+			info.resolveImage && 
+			info.resolveImage->typeId != EGraphicsTypeId_RenderTexture && 
+			info.resolveImage->typeId != EGraphicsTypeId_Swapchain
+		)
+			_gotoIfError(clean, Error_invalidOperation(
+				3, "CommandListRef_startRenderExt() renderTexture had invalid resolveImage"
+			));
+
+		if(info.resolveMode && !info.resolveImage)
+			_gotoIfError(clean, Error_invalidOperation(
+				3, "CommandListRef_startRenderExt() renderTexture had resolveMode but no resolveImage"
+			));
+
 		//TODO: Properly validate this
 
 		if(info.range.levelId >= 1 || info.range.layerId >= 1)
@@ -1661,6 +1700,11 @@ Error CommandListRef_startRenderExt(
 
 				RenderTexture *renderTexture = RenderTextureRef_ptr(info.image);
 
+				if(info.resolveImage && !renderTexture->msaa)
+					_gotoIfError(clean, Error_invalidOperation(
+						3, "CommandListRef_startRenderExt() renderTexture had resolveImage, while MSAA was off"
+					));
+
 				if(renderTexture->type != ERenderTextureType_2D)
 					_gotoIfError(clean, Error_invalidParameter(
 						3, (U32)lockedId, "CommandListRef_startRenderExt()::colors[i].image needs to be a 2D texture"
@@ -1681,6 +1725,11 @@ Error CommandListRef_startRenderExt(
 			}
 
 			Swapchain *swapchain = SwapchainRef_ptr(info.image);
+
+			if(info.resolveImage)
+				_gotoIfError(clean, Error_invalidOperation(
+					3, "CommandListRef_startRenderExt() renderTexture had resolveImage, while MSAA was off"
+				));
 
 			if(SwapchainRef_ptr(info.image)->device != commandList->device)
 				_gotoIfError(clean, Error_unsupportedOperation(
@@ -1738,7 +1787,7 @@ Error CommandListRef_startRenderExt(
 		size = I32x2_sub(targetSize, offset);
 
 	_gotoIfError(clean, CommandListRef_checkBounds(offset, size, 0, 32'767));
-	_gotoIfError(clean, Buffer_createEmptyBytesx(sizeof(StartRenderCmdExt) + sizeof(AttachmentInfo) * 16, &command));
+	_gotoIfError(clean, Buffer_createEmptyBytesx(sizeof(StartRenderCmdExt) + sizeof(AttachmentInfoInternal) * 16, &command));
 
 	if(!I32x2_all(I32x2_eq(commandList->currentSize, I32x2_zero())))
 		_gotoIfError(clean, Error_invalidOperation(
@@ -1780,13 +1829,17 @@ Error CommandListRef_startRenderExt(
 	*startRender = (StartRenderCmdExt) {
 		.offset = offset,
 		.size = size,
+		.resolveDepthMode = depth.resolveMode,
+		.resolveStencilMode = stencil.resolveMode,
 		.colorCount = (U8) colors.length,
 		.clearStencil = (U8) stencil.color.coloru[0],
 		.clearDepth = depth.color.colorf[0],
 		.depthRange = depth.range,
 		.stencilRange = stencil.range,
 		.depth = depth.image,
-		.stencil = stencil.image
+		.stencil = stencil.image,
+		.resolveDepth = depth.resolveImage,
+		.resolveStencil = stencil.resolveImage
 	};
 
 	if(depth.image)
@@ -1798,8 +1851,8 @@ Error CommandListRef_startRenderExt(
 	else if(depth.load == ELoadAttachmentType_Preserve)
 		startRender->flags |= EStartRenderFlags_PreserveDepth;
 
-	if(depth.readOnly)
-		startRender->flags |= EStartRenderFlags_ReadOnlyDepth;
+	if(depth.unusedAfterRender)
+		startRender->flags |= EStartRenderFlags_DepthUnusedAfterRender;
 
 	if(stencil.image)
 		startRender->flags |= EStartRenderFlags_Stencil;
@@ -1810,8 +1863,8 @@ Error CommandListRef_startRenderExt(
 	else if(stencil.load == ELoadAttachmentType_Preserve)
 		startRender->flags |= EStartRenderFlags_PreserveStencil;
 
-	if(stencil.readOnly)
-		startRender->flags |= EStartRenderFlags_ReadOnlyStencil;
+	if(stencil.unusedAfterRender)
+		startRender->flags |= EStartRenderFlags_StencilUnusedAfterRender;
 
 	if(!stencil.image && (
 		startRender->flags & EStartRenderFlags_StencilFlags || stencil.range.layerId || stencil.range.levelId
@@ -1840,6 +1893,9 @@ Error CommandListRef_startRenderExt(
 			
 				startRender->activeMask |= (U8)1 << i;
 
+				if(info.unusedAfterRender)
+					startRender->unusedAfterRenderMask |= (U8)1 << i;
+
 				if(info.readOnly)
 					startRender->readOnlyMask |= (U8)1 << i;
 
@@ -1852,9 +1908,13 @@ Error CommandListRef_startRenderExt(
 				attachments[counter++] = (AttachmentInfoInternal) { 
 					.color = info.color, 
 					.image = info.image, 
-					.range = info.range 
+					.range = info.range,
+					.resolveImage = info.resolveImage,
+					.resolveMode = info.resolveMode
 				};
 			}
+
+			//Transition image
 
 			TransitionInternal transition = (TransitionInternal) {
 				.resource = info.image,
@@ -1864,17 +1924,35 @@ Error CommandListRef_startRenderExt(
 			};
 
 			TransitionInternal *state = NULL;
-			if(CommandListRef_isBound(commandList, info.image, (ResourceRange) { .image = info.range }, &state)) {
+			if(CommandListRef_isBound(commandList, transition.resource, transition.range, &state)) {
 
 				if(state->type != transition.type)
 					_gotoIfError(clean, Error_invalidOperation(
 						4, "CommandListRef_startRenderExt()::colors[i] or depthStencil was already transitioned!"
 					));
-
-				continue;
 			}
 
-			_gotoIfError(clean, ListTransitionInternal_pushBackx(&commandList->pendingTransitions, transition));
+			else _gotoIfError(clean, ListTransitionInternal_pushBackx(&commandList->pendingTransitions, transition));
+
+			//Transition resolve image
+
+			if(info.resolveImage) {
+
+				transition.resource = info.resolveImage;
+				transition.range = (ResourceRange) { 0 };				//TODO: Range for resolveImage
+				transition.type = ETransitionType_RenderTargetWrite;
+
+				if(CommandListRef_isBound(commandList, transition.resource, transition.range, &state)) {
+
+					if(state->type != transition.type)
+						_gotoIfError(clean, Error_invalidOperation(
+							4, 
+							"CommandListRef_startRenderExt()::colors[i] or depthStencil resolve target was already resolved"
+						));
+				}
+
+				else _gotoIfError(clean, ListTransitionInternal_pushBackx(&commandList->pendingTransitions, transition));
+			}
 		}
 	}
 

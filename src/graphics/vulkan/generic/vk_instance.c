@@ -725,7 +725,8 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 			!features.depthClamp ||
 			!features.depthBiasClamp ||
 			!(features.textureCompressionBC || features.textureCompressionASTC_LDR) ||
-			!features.multiDrawIndirect
+			!features.multiDrawIndirect ||
+			!features.sampleRateShading
 		) {
 			Log_debugLnx("Vulkan: Unsupported device %u, one of the required features wasn't enabled", i);
 			continue;

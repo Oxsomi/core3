@@ -34,11 +34,10 @@ Error GraphicsDeviceRef_createDepthStencilExt(
 	I32x2 size,
 	EDepthStencilFormat format, 
 	Bool allowShaderRead,
+	EMSAASamples msaa,
 	CharString name,
 	DepthStencil *depthStencil
 ) {
-
-	name;
 
 	//Prepare temporary free-ables and extended data.
 
@@ -70,7 +69,7 @@ Error GraphicsDeviceRef_createDepthStencilExt(
 		.extent = (VkExtent3D) { .width = I32x2_x(size), .height = I32x2_y(size), .depth = 1 },
 		.mipLevels = 1,
 		.arrayLayers = 1,
-		.samples = VK_SAMPLE_COUNT_1_BIT,
+		.samples = (VkSampleCountFlagBits) (1 << msaa),
 		.tiling = VK_IMAGE_TILING_OPTIMAL,
 
 		.usage = 
@@ -146,7 +145,8 @@ Error GraphicsDeviceRef_createDepthStencilExt(
 		.size = size,
 		.format = format,
 		.allowShaderRead = allowShaderRead,
-		.readLocation = U32_MAX
+		.readLocation = U32_MAX,
+		.msaa = msaa
 	};
 
 	//Allocate in descriptors
@@ -194,34 +194,37 @@ Error GraphicsDeviceRef_createDepthStencilExt(
 		acq = ELockAcquire_Invalid;
 	}
 	
-	#ifndef NDEBUG
+	if (CharString_length(name)) {
 
-		if(instance->debugSetName) {
+		#ifndef NDEBUG
 
-			_gotoIfError(clean, CharString_formatx(&temp, "%.*s view", CharString_length(temp), temp.ptr));
+			if(instance->debugSetName && CharString_length(name)) {
 
-			VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
-				.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-				.objectType = VK_OBJECT_TYPE_IMAGE_VIEW,
-				.pObjectName = temp.ptr,
-				.objectHandle =  (U64) *view
-			};
+				_gotoIfError(clean, CharString_formatx(&temp, "%.*s view", CharString_length(temp), temp.ptr));
 
-			_gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)));
+				VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
+					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+					.objectType = VK_OBJECT_TYPE_IMAGE_VIEW,
+					.pObjectName = temp.ptr,
+					.objectHandle =  (U64) *view
+				};
 
-			CharString_freex(&temp);
+				_gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)));
 
-			debugName = (VkDebugUtilsObjectNameInfoEXT) {
-				.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-				.objectType = VK_OBJECT_TYPE_IMAGE,
-				.pObjectName = name.ptr,
-				.objectHandle =  (U64) *image
-			};
+				CharString_freex(&temp);
 
-			_gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)));
-		}
+				debugName = (VkDebugUtilsObjectNameInfoEXT) {
+					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+					.objectType = VK_OBJECT_TYPE_IMAGE,
+					.pObjectName = name.ptr,
+					.objectHandle =  (U64) *image
+				};
 
-	#endif
+				_gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)));
+			}
+
+		#endif
+	}
 
 clean:
 

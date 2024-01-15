@@ -261,15 +261,28 @@ typedef struct ImageAndRange {
 
 } ImageAndRange;
 
+typedef enum EMSAAResolveMode {
+
+	EMSAAResolveMode_Average,
+	EMSAAResolveMode_Min,
+	EMSAAResolveMode_Max,
+	EMSAAResolveMode_Count
+
+} EMSAAResolveMode;
+
 typedef struct AttachmentInfo {
 
-	ImageRange range;			//Subresource. Multiple resources isn't allowed (layerId, levelId != U32_MAX)
-	RefPtr *image;				//Swapchain or RenderTexture. Null is allowed to disable it.
+	ImageRange range;					//Subresource. Multiple resources isn't allowed (layerId, levelId != U32_MAX)
+	RefPtr *image;						//Swapchain or RenderTexture. Null is allowed to disable it.
 
 	ELoadAttachmentType load;
+
+	Bool unusedAfterRender;
+	U8 resolveMode;						//EMSAAResolveMode
 	Bool readOnly;
-	U8 pad0[3];
-	U32 pad1[2];
+	U8 pad0;
+
+	RefPtr *resolveImage;				//RenderTexture, DepthStencil or Swapchain. Null is allowed to disable resolving.
 
 	ClearColor color;
 
@@ -277,8 +290,13 @@ typedef struct AttachmentInfo {
 
 typedef struct AttachmentInfoInternal {
 
-	ImageRange range;			//Subresource. Multiple resources isn't allowed (layerId, levelId != U32_MAX)
-	RefPtr *image;				//Swapchain or RenderTexture. Null is allowed to disable it.
+	ImageRange range;					//Subresource. Multiple resources isn't allowed (layerId, levelId != U32_MAX)
+	RefPtr *image;						//Swapchain or RenderTexture. Null is allowed to disable it.
+
+	RefPtr *resolveImage;				//RenderTexture, DepthStencil or Swapchain. Null is allowed to disable resolving.
+	
+	EMSAAResolveMode resolveMode;
+	U32 padding;
 
 	ClearColor color;
 
@@ -286,22 +304,22 @@ typedef struct AttachmentInfoInternal {
 
 typedef enum EStartRenderFlags {
 
-	EStartRenderFlags_Depth				= 1 << 0,
-	EStartRenderFlags_Stencil			= 1 << 1,
-	EStartRenderFlags_ClearDepth		= 1 << 2,
-	EStartRenderFlags_ClearStencil		= 1 << 3,
-	EStartRenderFlags_PreserveDepth		= 1 << 4,
-	EStartRenderFlags_PreserveStencil	= 1 << 5,
-	EStartRenderFlags_ReadOnlyStencil	= 1 << 6,
-	EStartRenderFlags_ReadOnlyDepth		= 1 << 7,
+	EStartRenderFlags_Depth						= 1 << 0,
+	EStartRenderFlags_Stencil					= 1 << 1,
+	EStartRenderFlags_ClearDepth				= 1 << 2,
+	EStartRenderFlags_ClearStencil				= 1 << 3,
+	EStartRenderFlags_PreserveDepth				= 1 << 4,
+	EStartRenderFlags_PreserveStencil			= 1 << 5,
+	EStartRenderFlags_StencilUnusedAfterRender	= 1 << 6,		//Possibly discard after render (no need to keep result)
+	EStartRenderFlags_DepthUnusedAfterRender	= 1 << 7,		//^
 
 	EStartRenderFlags_DepthFlags		= 
 		EStartRenderFlags_Depth | EStartRenderFlags_ClearDepth | 
-		EStartRenderFlags_PreserveDepth | EStartRenderFlags_ReadOnlyStencil,
+		EStartRenderFlags_PreserveDepth | EStartRenderFlags_StencilUnusedAfterRender,
 
 	EStartRenderFlags_StencilFlags		= 
 		EStartRenderFlags_Stencil | EStartRenderFlags_ClearStencil | 
-		EStartRenderFlags_PreserveStencil | EStartRenderFlags_ReadOnlyStencil
+		EStartRenderFlags_PreserveStencil | EStartRenderFlags_StencilUnusedAfterRender
 
 } EStartRenderFlags;
 
@@ -309,16 +327,17 @@ typedef struct StartRenderCmdExt {
 
 	I32x2 offset, size;
 
-	U32 padding0;
+	U16 padding0;
+	U8 resolveDepthMode, resolveStencilMode;	//EMSAAResolveMode
 
-	U8 padding1;
-	U8 preserveMask;		//Mark which render targets are preserved (ELoadAttachmentType) only if clearMask isn't set.
-	U8 clearMask;			//Mark which render targets are for clear (ELoadAttachmentType) take prio over preserve.
-	U8 readOnlyMask;		//Mark which render targets are readonly
+	U8 readOnlyMask;			//Mark which render targets are readonly
+	U8 preserveMask;			//Mark which render targets are preserved (ELoadAttachmentType) only if clearMask isn't set.
+	U8 clearMask;				//Mark which render targets are for clear (ELoadAttachmentType) take prio over preserve.
+	U8 unusedAfterRenderMask;	//Mark which render targets are unused after render
 
-	U8 colorCount;			//Count of render targets (even inactive ones).
-	U8 activeMask;			//Which render targets are active.
-	U8 flags;				//EStartRenderFlags
+	U8 colorCount;				//Count of render targets (even inactive ones).
+	U8 activeMask;				//Which render targets are active.
+	U8 flags;					//EStartRenderFlags
 	U8 clearStencil;
 
 	F32 clearDepth;
@@ -326,6 +345,8 @@ typedef struct StartRenderCmdExt {
 	ImageRange depthRange, stencilRange;
 
 	DepthStencilRef *depth, *stencil;
+
+	DepthStencilRef *resolveDepth, *resolveStencil;
 
 	//AttachmentInfoInternal attachments[];		//[ active attachments go here ]
 

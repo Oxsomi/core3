@@ -42,6 +42,9 @@ typedef struct PipelineGraphicsInfo {
 	U32 patchControlPointsExt;				//Only if TessellationShader feature is enabled.
 	U32 stageCount;							//Non zero used to determine where stages start/end.
 
+	F32 msaaMinSampleShading;				//MSAA quality improvement (but extra perf overhead), set to > 0 to enable
+	U32 padding;
+
 	//One of these can be used but not together.
 
 	//If DirectRendering is on (used in between start render).

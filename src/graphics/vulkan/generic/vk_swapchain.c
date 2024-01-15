@@ -542,63 +542,66 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 		Lock_unlock(&deviceExt->descriptorLock);
 
 	acq = ELockAcquire_Invalid;
+
+	if(CharString_length(info.window->title)) {
 	
-	#ifndef NDEBUG
+		#ifndef NDEBUG
 
-		if(instance->debugSetName) {
-
-			CharString_freex(&temp);
-
-			_gotoIfError(clean, CharString_formatx(
-				&temp, "Swapchain (%.*s)", CharString_length(info.window->title), info.window->title.ptr
-			));
-
-			VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
-				.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-				.objectType = VK_OBJECT_TYPE_SWAPCHAIN_KHR,
-				.pObjectName = temp.ptr,
-				.objectHandle = (U64) swapchainExt->swapchain
-			};
-
-			_gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)));
-
-			for (U64 i = 0; i < imageCount; ++i) {
+			if(instance->debugSetName) {
 
 				CharString_freex(&temp);
 
 				_gotoIfError(clean, CharString_formatx(
-					&temp, "Swapchain image view #%u (%.*s)", 
-					(U32) i, CharString_length(info.window->title), info.window->title.ptr
+					&temp, "Swapchain (%.*s)", CharString_length(info.window->title), info.window->title.ptr
 				));
 
-				debugName = (VkDebugUtilsObjectNameInfoEXT) {
+				VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
 					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-					.objectType = VK_OBJECT_TYPE_IMAGE_VIEW,
+					.objectType = VK_OBJECT_TYPE_SWAPCHAIN_KHR,
 					.pObjectName = temp.ptr,
-					.objectHandle =  (U64) swapchainExt->images.ptr[i].view
+					.objectHandle = (U64) swapchainExt->swapchain
 				};
 
 				_gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)));
 
-				CharString_freex(&temp);
+				for (U64 i = 0; i < imageCount; ++i) {
 
-				_gotoIfError(clean, CharString_formatx(
-					&temp, "Swapchain image #%u (%.*s)", 
-					(U32) i, CharString_length(info.window->title), info.window->title.ptr
-				));
+					CharString_freex(&temp);
 
-				debugName = (VkDebugUtilsObjectNameInfoEXT) {
-					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-					.objectType = VK_OBJECT_TYPE_IMAGE,
-					.pObjectName = temp.ptr,
-					.objectHandle =  (U64) swapchainExt->images.ptr[i].image
-				};
+					_gotoIfError(clean, CharString_formatx(
+						&temp, "Swapchain image view #%u (%.*s)", 
+						(U32) i, CharString_length(info.window->title), info.window->title.ptr
+					));
 
-				_gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)));
+					debugName = (VkDebugUtilsObjectNameInfoEXT) {
+						.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+						.objectType = VK_OBJECT_TYPE_IMAGE_VIEW,
+						.pObjectName = temp.ptr,
+						.objectHandle =  (U64) swapchainExt->images.ptr[i].view
+					};
+
+					_gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)));
+
+					CharString_freex(&temp);
+
+					_gotoIfError(clean, CharString_formatx(
+						&temp, "Swapchain image #%u (%.*s)", 
+						(U32) i, CharString_length(info.window->title), info.window->title.ptr
+					));
+
+					debugName = (VkDebugUtilsObjectNameInfoEXT) {
+						.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+						.objectType = VK_OBJECT_TYPE_IMAGE,
+						.pObjectName = temp.ptr,
+						.objectHandle =  (U64) swapchainExt->images.ptr[i].image
+					};
+
+					_gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)));
+				}
 			}
-		}
 
-	#endif
+		#endif
+	}
 
 clean:
 

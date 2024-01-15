@@ -244,16 +244,18 @@ _gotoIfError(clean, GraphicsDeviceRef_create(
       I32x4 size,
       ETextureFormatId format, 
       ERenderTextureUsage usage,
+      EMSAASamples samples,
       CharString name,
       RenderTextureRef **ref
   );
-  ```
-
+```
+  
 - ```c
   Error createDepthStencil(
       I32x2 size,
       EDepthStencilFormat format, 
       Bool allowShaderRead,
+      EMSAASamples samples,
       CharString name,
       DepthStencilRef **ref
   );
@@ -449,6 +451,7 @@ The depth stencil is quite straight forward; it has up to 3 stencil enabled form
 _gotoIfError(clean, GraphicsDeviceRef_createDepthStencil(
     twm->device, 
     w->size, EDepthStencilFormat_D16, false /* allow shader access */, 
+    EMSAASamples_Off,
     CharString_createRefCStrConst("Test depth stencil"), 
     &tw->depthStencil
 ));
@@ -485,6 +488,7 @@ _gotoIfError(clean, GraphicsDeviceRef_createRenderTexture(
     I32x4_fromI32x2(w->size), 		//For 2D textures we can just use { x, y, 0, 0 }
     ETextureFormatId_BGRA8, 		//Non compressed texture format
     ERenderTextureUsage_ShaderRW, 	//Allow both shader writes and reads
+    EMSAASamples_Off,				//No MSAA
 	CharString_createRefCStrConst("Virtual window backbuffer"),
 	&tw->swapchain
 ));
@@ -585,6 +589,7 @@ The graphics pipeline has the following properties:
   - Optional if no special msaa settings are needed. Defaults to 1.
   - 1 and 4 are always supported (though 4 is slower and needs special care). 
   - 2, 8 and 16 aren't always supported, so make sure to query it and/or fallback to 1 or 4 if not present. EGraphicsDataTypes of the device capabilities lists this.
+  - See Features/MSAA for more info.
 - topologyMode: type of mesh topology.
   - Defaults to TriangleList if not specified.
   - TriangleList, TriangleStrip, LineList, LineStrip, PointList, TriangleListAdj, TriangleStripAdj, LineListAdj, LineStripAdj.
@@ -733,6 +738,14 @@ _gotoIfError(clean, GraphicsDeviceRef_createBufferData(
 
 - Obtained through createBuffer and createBufferData from GraphicsDeviceRef. 
 - Used in DeviceBufferRef's markDirty, as vertex/index/indirect buffer for commands such as draw/drawIndirect/drawIndirectCountExt, shaders if the resource is readable/writable (through transitions), copy and clear buffer operations. 
+
+## Features
+
+### MSAA
+
+MSAA can be enabled by making sure all pipelines for MSAA targets have PipelineGraphicsInfo::msaa set to something that's not EMSAASamples_Off. This setting needs to match 1:1 with the MSAA setting passed to render target(s) and depth stencil(s). PipelineGraphicsInfo::msaaMinSampleShading can be set to a non zero value to indicate [sample shading](https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#primsrast-sampleshading) should be turned on and to what value (an MSAA feature to make texture detail anti alias better). 
+
+If MSAA is enabled for the current target, a resolve image can be passed in the attachmentInfo.resolveImage passed to startRenderExt. This can directly resolve the MSAA texture to a render target, swapchain or depth stencil. attachmentInfo.resolveMode can be used to change it from averaging all samples to EMSAAResolveMode_Min/Max. 
 
 ## Commands
 
@@ -953,7 +966,7 @@ DirectRendering allows rendering without render passes (default behavior in Dire
 
 Even if mobile chips do support this feature, it is automatically disabled to prevent the developer from accidentally enabling it causing performance issues.
 
-Just like *most* commands, this will automatically transition the resources (render targets only) into the correct states for you. Color attachments can always be read, but the user is in charge of specifying if the contents should be cleared or kept. Color attachments can also be readonly if needed.
+Just like *most* commands, this will automatically transition the resources (render targets only) into the correct states for you. Color attachments can always be read, but the user is in charge of specifying if the contents should be cleared or kept. Color attachments can also be marked as discardable, this means the final result won't necessarily be output into a buffer for use after the render. If it's marked as readonly, the shader won't be able to write to it.
 
 ```c
 //In command list recording
@@ -961,8 +974,9 @@ Just like *most* commands, this will automatically transition the resources (ren
 AttachmentInfo attachmentInfo = (AttachmentInfo) {
     .range = (ImageRange) { 0 },					//Layer 0, level 0
     .image = swapchain,								//See "Swapchain" or "RenderTexture"
-    .load = ELoadAttachmentType_Clear,				//Clear image
+    .unusedAfterRender = false,						//Don't discard after endRender
     .readOnly = false,								//Allow draw calls to write
+    .load = ELoadAttachmentType_Clear,				//Clear image
     .color = (ClearColor) { .colorf = {  1, 0, 0, 1 } }
 };
 

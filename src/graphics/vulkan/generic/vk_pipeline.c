@@ -50,7 +50,6 @@ Error createShaderModule(
 ) {
 
 	instance;
-	name;
 	stage;
 
 	if(Buffer_length(buf) >> 32)
@@ -71,26 +70,29 @@ Error createShaderModule(
 	if(err.genericError)
 		return err;
 
-	#ifndef NDEBUG
+	if(CharString_length(name)) {
 
-		if(instance->debugSetName && CharString_length(name)) {
+		#ifndef NDEBUG
 
-			_gotoIfError(clean, CharString_formatx(
-				&temp, "Shader module (\"%.*s\": %s)", 
-				CharString_length(name), name.ptr, EPipelineStage_names[stage]
-			));
+			if(instance->debugSetName && CharString_length(name)) {
 
-			VkDebugUtilsObjectNameInfoEXT debugName2 = (VkDebugUtilsObjectNameInfoEXT) {
-				.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-				.objectType = VK_OBJECT_TYPE_SHADER_MODULE,
-				.objectHandle = (U64) *mod,
-				.pObjectName = temp.ptr
-			};
+				_gotoIfError(clean, CharString_formatx(
+					&temp, "Shader module (\"%.*s\": %s)", 
+					CharString_length(name), name.ptr, EPipelineStage_names[stage]
+				));
 
-			_gotoIfError(clean, vkCheck(instance->debugSetName(device->device, &debugName2)));
-		}
+				VkDebugUtilsObjectNameInfoEXT debugName2 = (VkDebugUtilsObjectNameInfoEXT) {
+					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+					.objectType = VK_OBJECT_TYPE_SHADER_MODULE,
+					.objectHandle = (U64) *mod,
+					.pObjectName = temp.ptr
+				};
 
-	#endif
+				_gotoIfError(clean, vkCheck(instance->debugSetName(device->device, &debugName2)));
+			}
+
+		#endif
+	}
 
 	goto clean;
 	
@@ -801,7 +803,9 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListChar
 
 			*infoi = (VkPipelineMultisampleStateCreateInfo) {
 				.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-				.rasterizationSamples = (VkSampleCountFlagBits)(1 << info->msaa)
+				.rasterizationSamples = (VkSampleCountFlagBits)(1 << info->msaa),
+				.sampleShadingEnable = info->msaaMinSampleShading > 0,
+				.minSampleShading = info->msaaMinSampleShading
 			};
 
 			currentInfo->pMultisampleState = infoi;

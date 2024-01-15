@@ -252,7 +252,7 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 		vkUpdateDescriptorSets(deviceExt->device, counter, descriptors, 0, NULL);
 	}
 
-	if (name.ptr) {
+	if (CharString_length(name)) {
 	
 		#ifndef NDEBUG
 

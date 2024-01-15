@@ -29,7 +29,7 @@ typedef struct CharString CharString;
 
 typedef enum EResourceType {
 
-	EResourceType_Texture,							//Readonly texture
+	EResourceType_DeviceTexture,							//Readonly texture
 	EResourceType_RenderTargetOrDepthStencil,		//Also depth stencil
 	EResourceType_Buffer							//Any buffer type
 

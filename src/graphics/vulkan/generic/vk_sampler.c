@@ -112,7 +112,7 @@ Error GraphicsDeviceRef_createSamplerExt(GraphicsDeviceRef *dev, Sampler *sample
 
 	_gotoIfError(clean, vkCheck(vkCreateSampler(deviceExt->device, &samplerInfo, NULL, &samplerExt->sampler)));
 	
-	if (name.ptr) {
+	if (CharString_length(name)) {
 	
 		#ifndef NDEBUG
 

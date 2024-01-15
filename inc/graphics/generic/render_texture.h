@@ -27,6 +27,8 @@ typedef RefPtr GraphicsDeviceRef;
 typedef struct Error Error;
 typedef struct CharString CharString;
 
+typedef enum EMSAASamples EMSAASamples;
+
 typedef enum ERenderTextureType {
 
 	ERenderTextureType_2D,
@@ -59,7 +61,7 @@ typedef struct RenderTexture {
 	ERenderTextureUsage usage;
 
 	U32 writeLocation;
-	U32 padding;
+	EMSAASamples msaa;
 
 } RenderTexture;
 
@@ -77,6 +79,7 @@ Error GraphicsDeviceRef_createRenderTexture(
 	I32x4 size, 
 	ETextureFormatId format, 
 	ERenderTextureUsage usage,
+	EMSAASamples msaa,
 	CharString name,
 	RenderTextureRef **renderTexture
 );

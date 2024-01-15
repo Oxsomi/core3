@@ -20,6 +20,7 @@
 
 #include "graphics/generic/render_texture.h"
 #include "graphics/generic/device.h"
+#include "graphics/generic/pipeline_structs.h"
 #include "types/error.h"
 #include "types/string.h"
 
@@ -39,6 +40,7 @@ impl Error GraphicsDeviceRef_createRenderTextureExt(
 	I32x4 size, 
 	ETextureFormat format, 
 	ERenderTextureUsage usage,
+	EMSAASamples msaa,
 	CharString name,
 	RenderTexture *renderTexture
 );
@@ -59,6 +61,7 @@ Error GraphicsDeviceRef_createRenderTexture(
 	I32x4 size, 
 	ETextureFormatId formatId, 
 	ERenderTextureUsage usage,
+	EMSAASamples msaa,
 	CharString name,
 	RenderTextureRef **renderTextureRef
 ) {
@@ -92,8 +95,23 @@ Error GraphicsDeviceRef_createRenderTexture(
 			0, "GraphicsDeviceRef_createRenderTexture()::type: currently only 2D images are supported"
 		);
 
-	ETextureFormat format = ETextureFormatId_unpack[formatId];
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+
+	if(msaa == EMSAASamples_x2Ext && !(device->info.capabilities.dataTypes & EGraphicsDataTypes_MSAA2x))
+		return Error_unsupportedOperation(1, "GraphicsDeviceRef_createRenderTexture()::msaa MSAA2x is unsupported");
+
+	else if(msaa == EMSAASamples_x8Ext && !(device->info.capabilities.dataTypes & EGraphicsDataTypes_MSAA8x))
+		return Error_unsupportedOperation(2, "GraphicsDeviceRef_createRenderTexture()::msaa MSAA8x is unsupported");
+
+	else if(msaa == EMSAASamples_x16Ext && !(device->info.capabilities.dataTypes & EGraphicsDataTypes_MSAA16x))
+		return Error_unsupportedOperation(3, "GraphicsDeviceRef_createRenderTexture()::msaa MSAA16x is unsupported");
+
+	if(msaa && usage & ERenderTextureUsage_ShaderRW)
+		return Error_unsupportedOperation(
+			4, "GraphicsDeviceRef_createRenderTexture()::msaa isn't allowed when ShaderRead or Write is enabled"
+		);
+
+	ETextureFormat format = ETextureFormatId_unpack[formatId];
 	if(!GraphicsDeviceInfo_supportsRenderTextureFormat(&device->info, format))
 		return Error_unsupportedOperation(0, "GraphicsDeviceRef_createRenderTexture()::format is unsupported or compressed");
 
@@ -108,7 +126,9 @@ Error GraphicsDeviceRef_createRenderTexture(
 		return err;
 
 	RenderTexture *renderTexture = RenderTextureRef_ptr(*renderTextureRef);
-	_gotoIfError(clean, GraphicsDeviceRef_createRenderTextureExt(deviceRef, type, size, format, usage, name, renderTexture));
+	_gotoIfError(clean, GraphicsDeviceRef_createRenderTextureExt(
+		deviceRef, type, size, format, usage, msaa, name, renderTexture
+	));
 
 clean:
 

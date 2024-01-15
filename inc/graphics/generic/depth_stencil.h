@@ -36,6 +36,9 @@ typedef struct DepthStencil {
 	U32 readLocation;
 
 	EDepthStencilFormat format;
+
+	EMSAASamples msaa;
+
 	Bool allowShaderRead;
 	U8 padding[3];
 
@@ -54,6 +57,7 @@ Error GraphicsDeviceRef_createDepthStencil(
 	I32x2 size, 
 	EDepthStencilFormat format, 
 	Bool allowShaderRead,
+	EMSAASamples msaa,
 	CharString name,
 	DepthStencilRef **depthStencil
 );

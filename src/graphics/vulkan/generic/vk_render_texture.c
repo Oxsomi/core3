@@ -35,11 +35,10 @@ Error GraphicsDeviceRef_createRenderTextureExt(
 	I32x4 size,
 	ETextureFormat format, 
 	ERenderTextureUsage usage,
+	EMSAASamples msaa,
 	CharString name,
 	RenderTexture *renderTexture
 ) {
-
-	name;
 
 	//Prepare temporary free-ables and extended data.
 
@@ -66,7 +65,7 @@ Error GraphicsDeviceRef_createRenderTextureExt(
 		.extent = (VkExtent3D) { .width = I32x4_x(size), .height = I32x4_y(size), .depth = depth },
 		.mipLevels = 1,
 		.arrayLayers = 1,
-		.samples = VK_SAMPLE_COUNT_1_BIT,
+		.samples = (VkSampleCountFlagBits) (1 << msaa),
 		.tiling = VK_IMAGE_TILING_OPTIMAL,
 
 		.usage = 
@@ -116,21 +115,24 @@ Error GraphicsDeviceRef_createRenderTextureExt(
 		deviceExt->device, *image, (VkDeviceMemory) block.ext, renderTextureExt->blockOffset
 	)));
 	
-	#ifndef NDEBUG
+	if(CharString_length(name)) {
 
-		if(instance->debugSetName) {
+		#ifndef NDEBUG
 
-			VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
-				.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-				.objectType = VK_OBJECT_TYPE_IMAGE,
-				.pObjectName = name.ptr,
-				.objectHandle =  (U64) *image
-			};
+			if(instance->debugSetName) {
 
-			_gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)));
-		}
+				VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
+					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+					.objectType = VK_OBJECT_TYPE_IMAGE,
+					.pObjectName = name.ptr,
+					.objectHandle =  (U64) *image
+				};
 
-	#endif
+				_gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)));
+			}
+
+		#endif
+	}
 
 	//Image views
 
@@ -158,25 +160,28 @@ Error GraphicsDeviceRef_createRenderTextureExt(
 
 	_gotoIfError(clean, vkCheck(vkCreateImageView(deviceExt->device, &viewCreate, NULL, view)));
 	
-	#ifndef NDEBUG
+	if(CharString_length(temp)) {
 
-		if(instance->debugSetName) {
+		#ifndef NDEBUG
 
-			_gotoIfError(clean, CharString_formatx(&temp, "%.*s view", CharString_length(temp), temp.ptr));
+			if(instance->debugSetName) {
 
-			VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
-				.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-				.objectType = VK_OBJECT_TYPE_IMAGE_VIEW,
-				.pObjectName = temp.ptr,
-				.objectHandle =  (U64) *view
-			};
+				_gotoIfError(clean, CharString_formatx(&temp, "%.*s view", CharString_length(temp), temp.ptr));
 
-			_gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)));
+				VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
+					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+					.objectType = VK_OBJECT_TYPE_IMAGE_VIEW,
+					.pObjectName = temp.ptr,
+					.objectHandle =  (U64) *view
+				};
 
-			CharString_freex(&temp);
-		}
+				_gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)));
 
-	#endif
+				CharString_freex(&temp);
+			}
+
+		#endif
+	}
 
 	//Return our handle
 
@@ -189,7 +194,8 @@ Error GraphicsDeviceRef_createRenderTextureExt(
 		.usage = usage,
 		.type = type,
 		.readLocation = U32_MAX,
-		.writeLocation = U32_MAX
+		.writeLocation = U32_MAX,
+		.msaa = msaa
 	};
 
 	//Allocate in descriptors

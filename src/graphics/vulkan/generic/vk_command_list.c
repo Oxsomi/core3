@@ -39,6 +39,30 @@
 #include "types/buffer.h"
 #include "types/error.h"
 
+void addResolveImage(AttachmentInfoInternal attachment, VkRenderingAttachmentInfoKHR *result) {
+
+	VkManagedImage *imageExt = NULL;
+
+	if(attachment.resolveImage->typeId == EGraphicsTypeId_Swapchain) {
+		VkSwapchain *swapchain = Swapchain_ext(SwapchainRef_ptr(attachment.resolveImage), Vk);
+		imageExt = &swapchain->images.ptrNonConst[swapchain->currentIndex];
+	}
+
+	else if(attachment.resolveImage->typeId == EGraphicsTypeId_DepthStencil)
+		imageExt = (VkManagedImage*) DepthStencil_ext(DepthStencilRef_ptr(attachment.resolveImage), );
+
+	else imageExt = (VkManagedImage*) RenderTexture_ext(RenderTextureRef_ptr(attachment.resolveImage), );
+
+	switch (attachment.resolveMode) {
+		case EMSAAResolveMode_Average:	result->resolveMode = VK_RESOLVE_MODE_AVERAGE_BIT;	break;
+		case EMSAAResolveMode_Min:		result->resolveMode = VK_RESOLVE_MODE_MIN_BIT;		break;
+		case EMSAAResolveMode_Max:		result->resolveMode = VK_RESOLVE_MODE_MAX_BIT;		break;
+	}
+
+	result->resolveImageView = imageExt->view;
+	result->resolveImageLayout = imageExt->lastLayout;
+}
+
 void CommandList_process(
 	CommandList *commandList, 
 	GraphicsDevice *device, 
@@ -263,7 +287,7 @@ void CommandList_process(
 		case ECommandOp_StartRenderingExt: {
 
 			const StartRenderCmdExt *startRender = (const StartRenderCmdExt*) data;
-			const AttachmentInfo *attachments = (const AttachmentInfo*) (startRender + 1);
+			const AttachmentInfoInternal *attachments = (const AttachmentInfoInternal*) (startRender + 1);
 
 			//Prepare attachments
 
@@ -286,7 +310,7 @@ void CommandList_process(
 
 				++j;
 
-				const AttachmentInfo *attachmentsj = &attachments[j];
+				const AttachmentInfoInternal *attachmentsj = &attachments[j];
 
 				VkManagedImage *imageExt = NULL;
 
@@ -300,21 +324,30 @@ void CommandList_process(
 
 				else imageExt = (VkManagedImage*) RenderTexture_ext(RenderTextureRef_ptr(attachmentsj->image), );
 
-				VkAttachmentLoadOp loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+				VkAttachmentLoadOp loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 
-				switch(attachmentsj->load) {
-					case ELoadAttachmentType_Clear:		loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;		break;
-					case ELoadAttachmentType_Any:		loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;	break;
-				}
+				if((startRender->clearMask >> i) & 1)
+					loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+
+				else if((startRender->preserveMask >> i) & 1)
+					loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
 
 				attachmentsExt[i] = (VkRenderingAttachmentInfoKHR) {
+
 					.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
 					.imageView = imageExt->view,
 					.imageLayout = imageExt->lastLayout,
 					.loadOp = loadOp,
-					.storeOp = attachmentsj->readOnly ? VK_ATTACHMENT_STORE_OP_DONT_CARE : VK_ATTACHMENT_STORE_OP_STORE,
+
+					.storeOp = 
+						!((startRender->unusedAfterRenderMask >> i) & 1) ? VK_ATTACHMENT_STORE_OP_STORE:
+						VK_ATTACHMENT_STORE_OP_DONT_CARE,
+
 					.clearValue = *(const VkClearValue*) &attachmentsj->color
 				};
+
+				if(attachmentsj->resolveImage)
+					addResolveImage(*attachmentsj, &attachmentsExt[i]);
 			}
 
 			//Send begin render command
@@ -327,7 +360,7 @@ void CommandList_process(
 				DepthStencil *depth = DepthStencilRef_ptr(startRender->depth);
 				VkManagedImage *depthExt = (VkManagedImage*) DepthStencil_ext(depth, );
 
-				Bool readOnly = startRender->flags & EStartRenderFlags_ReadOnlyDepth;
+				Bool unusedAfterRender = startRender->flags & EStartRenderFlags_DepthUnusedAfterRender;
 
 				VkAttachmentLoadOp loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 
@@ -336,15 +369,25 @@ void CommandList_process(
 
 				else if(startRender->flags & EStartRenderFlags_PreserveDepth)
 					loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-
+				
 				depthAttachment = (VkRenderingAttachmentInfoKHR) {
 					.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
 					.imageView = depthExt->view,
 					.imageLayout = depthExt->lastLayout,
 					.loadOp = loadOp,
-					.storeOp = readOnly ? VK_ATTACHMENT_STORE_OP_DONT_CARE : VK_ATTACHMENT_STORE_OP_STORE,
+					.storeOp = unusedAfterRender ? VK_ATTACHMENT_STORE_OP_DONT_CARE : VK_ATTACHMENT_STORE_OP_STORE,
 					.clearValue = (VkClearColorValue) { .float32 = { startRender->clearDepth } }
 				};
+
+				if(startRender->resolveDepth) {
+
+					AttachmentInfoInternal tmp = (AttachmentInfoInternal) { 
+						.resolveImage = startRender->resolveDepth,
+						.resolveMode = startRender->resolveDepthMode
+					};
+
+					addResolveImage(tmp, &depthAttachment);
+				}
 			}
 
 			if (startRender->flags & EStartRenderFlags_Stencil) {
@@ -352,7 +395,7 @@ void CommandList_process(
 				DepthStencil *stencil = DepthStencilRef_ptr(startRender->stencil);
 				VkManagedImage *stencilExt = (VkManagedImage*) DepthStencil_ext(stencil, );
 
-				Bool readOnly = startRender->flags & EStartRenderFlags_ReadOnlyStencil;
+				Bool unusedAfterRender = startRender->flags & EStartRenderFlags_StencilUnusedAfterRender;
 
 				VkAttachmentLoadOp loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 
@@ -367,9 +410,19 @@ void CommandList_process(
 					.imageView = stencilExt->view,
 					.imageLayout = stencilExt->lastLayout,
 					.loadOp = loadOp,
-					.storeOp = readOnly ? VK_ATTACHMENT_STORE_OP_DONT_CARE : VK_ATTACHMENT_STORE_OP_STORE,
+					.storeOp = unusedAfterRender ? VK_ATTACHMENT_STORE_OP_DONT_CARE : VK_ATTACHMENT_STORE_OP_STORE,
 					.clearValue = (VkClearColorValue) { .uint32 = { startRender->clearStencil } }
 				};
+
+				if(startRender->resolveStencil) {
+
+					AttachmentInfoInternal tmp = (AttachmentInfoInternal) { 
+						.resolveImage = startRender->resolveStencil,
+						.resolveMode = startRender->resolveStencilMode
+					};
+
+					addResolveImage(tmp, &stencilAttachment);
+				}
 			}
 
 			VkRenderingInfoKHR renderInfo = (VkRenderingInfoKHR) {
