@@ -1590,8 +1590,10 @@ Error CommandListRef_startRenderExt(
 			3, "CommandListRef_startRenderExt()::stencil requires type DepthStencil"
 		));
 		
-	I32x2 targetSize = I32x2_zero();
+	I32x2 targetSize = size;
+	I32x2 firstSize = I32x2_zero();
 	U8 counter = 0;
+	EMSAASamples sampleCount = 0;
 
 	for (; lockedId < colors.length + !!depth.image + !!stencil.image; ++lockedId) {
 
@@ -1617,6 +1619,32 @@ Error CommandListRef_startRenderExt(
 
 			DepthStencil *depthStencil = DepthStencilRef_ptr(info.image);
 
+			if(!lockedId)
+				sampleCount = depthStencil->msaa;
+
+			else if(sampleCount != depthStencil->msaa)
+				_gotoIfError(clean, Error_invalidOperation(
+					3, "CommandListRef_startRenderExt()::depth or stencil had mismatching MSAA setting between others"
+				));
+
+			if(!counter)
+				firstSize = depthStencil->size;
+
+			if (I32x2_any(I32x2_eq(size, I32x2_zero()))) {
+
+				if(I32x2_any(I32x2_geq(offset, depthStencil->size)))
+					_gotoIfError(clean, Error_invalidState(
+						0, "CommandListRef_startRenderExt()::colors[i].image offset was out of bounds"
+					));
+
+				targetSize = I32x2_sub(depthStencil->size, offset);
+			}
+
+			else if(I32x2_any(I32x2_lt(depthStencil->size, I32x2_add(targetSize, offset))))
+				_gotoIfError(clean, Error_invalidOperation(
+					4, "CommandListRef_startRenderExt()::depth/stencil.image dimensions are incompatible with others"
+				));
+
 			if(info.resolveImage && !depthStencil->msaa)
 				_gotoIfError(clean, Error_invalidOperation(
 					3, "CommandListRef_startRenderExt()::depth or stencil had resolveImage, while MSAA was off"
@@ -1632,6 +1660,34 @@ Error CommandListRef_startRenderExt(
 					3, "CommandListRef_startRenderExt()::stencil has format D16/D32, which is unusable for stencil attachment"
 				));
 
+			if(info.resolveImage) {
+
+				DepthStencil *resolveImage = DepthStencilRef_ptr(info.resolveImage);
+
+				if(I32x2_neq2(resolveImage->size, targetSize))
+					_gotoIfError(clean, Error_invalidOperation(
+						3, "CommandListRef_startRenderExt() size of MSAA resolve image of depth stencil is incompatible"
+					));
+
+				EDepthStencilFormat resolveImageDS = resolveImage->format;
+
+				if(!isDepth && resolveImageDS < EDepthStencilFormat_StencilStart)
+					_gotoIfError(clean, Error_invalidOperation(
+						3, "CommandListRef_startRenderExt() MSAA resolve image of stencil image needs stencil buffer"
+					));
+
+				Bool resolveImageIsCompatible = 
+					(resolveImageDS == depthStencil->format) || (
+						(resolveImageDS == EDepthStencilFormat_D32S8 || resolveImageDS == EDepthStencilFormat_D32) &&
+						(depthStencil->format == EDepthStencilFormat_D32S8 || depthStencil->format == EDepthStencilFormat_D32)
+					);
+
+				if(isDepth && !resolveImageIsCompatible)
+					_gotoIfError(clean, Error_invalidOperation(
+						3, "CommandListRef_startRenderExt() MSAA resolve image of depth buffer needs compatible depth format"
+					));
+			}
+
 			//TODO: Properly validate this
 
 			if(info.range.levelId >= 1 || info.range.layerId >= 1)
@@ -1643,14 +1699,6 @@ Error CommandListRef_startRenderExt(
 			if(depthStencil->device != commandList->device)
 				_gotoIfError(clean, Error_unsupportedOperation(
 					4, "CommandListRef_startRenderExt()::depth/stencil.image belongs to different device"
-				));
-
-			if(!counter)
-				targetSize = depthStencil->size;
-
-			else if(I32x2_neq2(targetSize, depthStencil->size))
-				_gotoIfError(clean, Error_invalidOperation(
-					4, "CommandListRef_startRenderExt()::depth/stencil.image dimensions are incompatible with others"
 				));
 
 			++counter;
@@ -1672,6 +1720,22 @@ Error CommandListRef_startRenderExt(
 			_gotoIfError(clean, Error_invalidOperation(
 				3, "CommandListRef_startRenderExt() renderTexture had invalid resolveImage"
 			));
+
+		ETextureFormat resolveFormat = ETextureFormat_Undefined;
+		I32x2 resolveRes = I32x2_zero();
+
+		if(info.resolveImage) {
+
+			if(info.resolveImage->typeId == EGraphicsTypeId_Swapchain) {
+				resolveFormat = SwapchainRef_ptr(info.resolveImage)->format;
+				resolveRes = SwapchainRef_ptr(info.resolveImage)->size;
+			}
+
+			else {
+				resolveFormat = RenderTextureRef_ptr(info.resolveImage)->format;
+				resolveRes = I32x2_fromI32x4(RenderTextureRef_ptr(info.resolveImage)->size);
+			}
+		}
 
 		if(info.resolveMode && !info.resolveImage)
 			_gotoIfError(clean, Error_invalidOperation(
@@ -1700,6 +1764,51 @@ Error CommandListRef_startRenderExt(
 
 				RenderTexture *renderTexture = RenderTextureRef_ptr(info.image);
 
+				if(renderTexture->device != commandList->device)
+					_gotoIfError(clean, Error_unsupportedOperation(
+						3, "CommandListRef_startRenderExt()::colors[i].image belongs to different device"
+					));
+
+				if(!lockedId)
+					sampleCount = renderTexture->msaa;
+
+				else if(sampleCount != renderTexture->msaa)
+					_gotoIfError(clean, Error_invalidOperation(
+						3, "CommandListRef_startRenderExt() renderTexture had mismatching MSAA setting between others"
+					));
+
+				if(!counter)
+					firstSize = I32x2_fromI32x4(renderTexture->size);
+
+				if(I32x2_any(I32x2_eq(size, I32x2_zero()))) {
+
+					I32x2 siz = I32x2_fromI32x4(renderTexture->size);
+
+					if(I32x2_any(I32x2_geq(offset, siz)))
+						_gotoIfError(clean, Error_invalidState(
+							0, "CommandListRef_startRenderExt()::colors[i].image offset was out of bounds"
+						));
+
+					targetSize = I32x2_sub(siz, offset);
+				}
+
+				else if(I32x2_any(I32x2_lt(I32x2_fromI32x4(renderTexture->size), I32x2_add(targetSize, offset)))) {
+					++lockedId;
+					_gotoIfError(clean, Error_invalidOperation(
+						3, "CommandListRef_startRenderExt()::colors[i].image dimensions are incompatible with others"
+					));
+				}
+
+				if(info.resolveImage && I32x2_neq2(resolveRes, targetSize))
+					_gotoIfError(clean, Error_invalidOperation(
+						3, "CommandListRef_startRenderExt() size of MSAA resolve image of render target is incompatible"
+					));
+
+				if(info.resolveImage && resolveFormat != renderTexture->format)
+					_gotoIfError(clean, Error_invalidOperation(
+						3, "CommandListRef_startRenderExt() MSAA resolve image needs compatible format"
+					));
+
 				if(info.resolveImage && !renderTexture->msaa)
 					_gotoIfError(clean, Error_invalidOperation(
 						3, "CommandListRef_startRenderExt() renderTexture had resolveImage, while MSAA was off"
@@ -1710,28 +1819,26 @@ Error CommandListRef_startRenderExt(
 						3, (U32)lockedId, "CommandListRef_startRenderExt()::colors[i].image needs to be a 2D texture"
 					));
 
-				if(!counter)
-					targetSize = I32x2_fromI32x4(renderTexture->size);
-
-				else if(I32x2_neq2(targetSize, I32x2_fromI32x4(renderTexture->size))) {
-					++lockedId;
-					_gotoIfError(clean, Error_invalidOperation(
-						3, "CommandListRef_startRenderExt()::colors[i].image dimensions are incompatible with others"
-					));
-				}
-
 				++counter;
 				continue;
 			}
 
 			Swapchain *swapchain = SwapchainRef_ptr(info.image);
 
+			if(!lockedId)
+				sampleCount = EMSAASamples_Off;
+
+			else if(sampleCount != EMSAASamples_Off)
+				_gotoIfError(clean, Error_invalidOperation(
+					3, "CommandListRef_startRenderExt() swapchain had mismatching MSAA setting between others"
+				));
+
 			if(info.resolveImage)
 				_gotoIfError(clean, Error_invalidOperation(
 					3, "CommandListRef_startRenderExt() renderTexture had resolveImage, while MSAA was off"
 				));
 
-			if(SwapchainRef_ptr(info.image)->device != commandList->device)
+			if(swapchain->device != commandList->device)
 				_gotoIfError(clean, Error_unsupportedOperation(
 					3, "CommandListRef_startRenderExt()::colors[i].image belongs to different device"
 				));
@@ -1742,6 +1849,33 @@ Error CommandListRef_startRenderExt(
 				_gotoIfError(clean, Error_invalidState(
 					0, "CommandListRef_startRenderExt()::colors[i].image couldn't be acquired"
 				));
+
+			if(!counter)
+				firstSize = swapchain->size;
+
+			if(I32x2_any(I32x2_eq(size, I32x2_zero()))) {
+
+				if(I32x2_any(I32x2_geq(offset, swapchain->size)))
+					_gotoIfError(clean, Error_invalidState(
+						0, "CommandListRef_startRenderExt()::colors[i].image offset was out of bounds"
+					));
+
+				targetSize = I32x2_sub(swapchain->size, offset);
+			}
+
+			else if(I32x2_any(I32x2_lt(swapchain->size, I32x2_add(targetSize, offset)))) {
+				++lockedId;
+				_gotoIfError(clean, Error_invalidOperation(
+					3, "CommandListRef_startRenderExt()::colors[i].image dimensions are incompatible with others"
+				));
+			}
+
+			if(info.resolveImage && I32x2_neq2(resolveRes, targetSize)) {
+				++lockedId;
+				_gotoIfError(clean, Error_invalidOperation(
+					3, "CommandListRef_startRenderExt() size of MSAA resolve image of render target is incompatible"
+				));
+			}
 
 			DeviceResourceVersion v = (DeviceResourceVersion) { .resource = info.image, .version = swapchain->versionId };
 
@@ -1757,16 +1891,6 @@ Error CommandListRef_startRenderExt(
 			if(acq == ELockAcquire_Acquired)
 				Lock_unlock(&swapchain->lock);
 
-			if(!counter)
-				targetSize = swapchain->size;
-
-			else if(I32x2_neq2(targetSize, swapchain->size)) {
-				++lockedId;
-				_gotoIfError(clean, Error_invalidOperation(
-					3, "CommandListRef_startRenderExt()::colors[i].image dimensions are incompatible with others"
-				));
-			}
-
 			++counter;
 			continue;
 		}
@@ -1777,11 +1901,8 @@ Error CommandListRef_startRenderExt(
 			3, 1, "CommandListRef_startRenderExt() didn't provide any render targets"
 		));
 
-	if(I32x2_any(I32x2_eq(targetSize, I32x2_zero())))
-		_gotoIfError(clean, Error_invalidOperation(5, "CommandListRef_startRenderExt() targetSize is 0"));
-
-	if(I32x2_any(I32x2_geq(offset, targetSize)))
-		_gotoIfError(clean, Error_invalidOperation(6, "CommandListRef_startRenderExt() offset >= targetSize"));
+	if(I32x2_any(I32x2_or(I32x2_leq(targetSize, I32x2_zero()), I32x2_leq(firstSize, I32x2_zero()))))
+		_gotoIfError(clean, Error_invalidOperation(5, "CommandListRef_startRenderExt() targetSize or firstSize is <=0"));
 
 	if(I32x2_any(I32x2_eq(size, I32x2_zero())))
 		size = I32x2_sub(targetSize, offset);
