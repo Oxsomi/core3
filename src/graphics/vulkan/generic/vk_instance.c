@@ -889,7 +889,6 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 			.shaderStorageImageArrayNonUniformIndexing = true,
 			.shaderUniformTexelBufferArrayNonUniformIndexing = true,
 			.shaderStorageTexelBufferArrayNonUniformIndexing = true,
-			.descriptorBindingUniformBufferUpdateAfterBind = true,
 			.descriptorBindingSampledImageUpdateAfterBind = true,
 			.descriptorBindingStorageImageUpdateAfterBind = true,
 			.descriptorBindingStorageBufferUpdateAfterBind = true,
@@ -903,9 +902,10 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 
 		Bool eq = false;
 
-		for(U32 q = 0; q < 2; ++q) {
+		for(U32 q = 0; q < 4; ++q) {
 
 			target.shaderInputAttachmentArrayNonUniformIndexing = q & 1;
+			target.descriptorBindingUniformBufferUpdateAfterBind = q >> 1;
 
 			//We skip shaderInputAttachmentArrayDynamicIndexing as well by not starting there.
 

@@ -137,7 +137,6 @@ Error GraphicsDevice_initExt(
 			.shaderStorageImageArrayNonUniformIndexing = true,
 			.shaderUniformTexelBufferArrayNonUniformIndexing = true,
 			.shaderStorageTexelBufferArrayNonUniformIndexing = true,
-			.descriptorBindingUniformBufferUpdateAfterBind = true,
 			.descriptorBindingSampledImageUpdateAfterBind = true,
 			.descriptorBindingStorageImageUpdateAfterBind = true,
 			.descriptorBindingStorageBufferUpdateAfterBind = true,
@@ -660,6 +659,9 @@ Error GraphicsDevice_initExt(
 
 		for(U32 j = 1; j < EDescriptorType_ResourceCount - 1; ++j)
 			flags[j] = flags[0];
+
+		if (i >= EDescriptorSetType_CBuffer0 && i <= EDescriptorSetType_CBuffer2)	//We don't touch CBuffer after bind
+			flags[0] &=~ VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
 
 		VkDescriptorSetLayoutBindingFlagsCreateInfo partiallyBound = (VkDescriptorSetLayoutBindingFlagsCreateInfo) {
 			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
