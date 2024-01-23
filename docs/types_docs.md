@@ -201,7 +201,50 @@ Note: For more info check the detailed [IEEE754 Floating point format doc](IEEE7
 
 ## TODO: Vectors (types/vec.h)
 
-## TODO: Error (types/error.h)
+## Error (types/error.h)
+
+Error is a struct generally passed between OxC3 functions that can error for any reason (such as; incorrect inputs or memory allocation issues). Information such as the stacktrace and error string when the error occurred can be obtained from it. It contains the following info:
+
+- genericError: non zero if the function threw an error, specifies type of error.
+- errorStr: hardcoded human readable string, for ease of searching through the code and tracking down the issue.
+- stackTrace: a stacktrace of max ERROR_STACKTRACE length; only 1 level for release mode but up to _STACKTRACE_SIZE (32) for debug. 
+- paramValue0: if genericError allows it, specifies the first value the error was caught on (for example out of bounds id).
+- paramValue1: if genericError allows it, specifies the second value the error was caught on (for example max array length if out of bounds is thrown).
+- paramId: if applicable, can hint which input parameter caused the issue.
+- errorSubId: can be handy as an extra identifier besides the errorStr to identify if two identical errorStrs are used.
+
+The errors can be returned by using `Error_<genericError>` such as `Error_outOfBounds` with the dedicated constructor.
+
+### GenericError
+
+The following generic errors are defined:
+
+```c
+none
+outOfMemory
+outOfBounds
+nullPointer
+unauthorized
+notFound
+divideByZero
+overflow
+underflow
+NaN
+invalidEnum
+invalidParameter
+invalidOperation
+invalidCast
+invalidState
+rateLimit
+loopLimit
+alreadyDefined
+unsupportedOperation
+timedOut
+constData
+platformError
+unimplemented
+stderr
+```
 
 ## TODO: Quaternion (types/quat.h)
 
@@ -212,10 +255,19 @@ Note: For more info check the detailed [IEEE754 Floating point format doc](IEEE7
 - Buffer_isConstRef
 - Buffer_createManagedPtr
 - Buffer_createRefFromBuffer
+- 
 
 ## TODO: GenericList and TList (types/list.h)
 
-## TODO: Allocator (types/allocator.h)
+## Allocator (types/allocator.h)
+
+An allocator is a struct that contains the following:
+
+- Opaque object pointer that can represent any object that's related to the allocator.
+- AllocFunc: `Error alloc(T *ptr, U64 length, Buffer *output);` where T can be the opaque object type if the function is properly cast.
+  - Importantly: Validate if ptr is what you expected (if it's not ignored), ensure length can be allocated and that Buffer doesn't already contain data.
+- FreeFunc: `Bool free(T *ptr, Buffer buf)` where T can be the opaque object type if the function is properly cast.
+  - Importantly: Validate if ptr is as expected (if it's not ignored), ensure the length and position of buf is valid before freeing. 
 
 ## TODO: AllocationBuffer (types/allocation_buffer.h)
 

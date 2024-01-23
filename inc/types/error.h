@@ -21,7 +21,7 @@
 #pragma once
 #include "types.h"
 
-#define _STACKTRACE_SIZE 128
+#define _STACKTRACE_SIZE 32
 typedef void *StackTrace[_STACKTRACE_SIZE];
 
 //TODO: Make errors extendible like TypeId
