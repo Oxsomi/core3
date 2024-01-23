@@ -76,6 +76,9 @@ typedef struct CommandList {
 
 	U32 lastScopeId;
 	EDepthStencilFormat boundDepthFormat;
+
+	EMSAASamples boundSampleCount;
+	U32 padding;
 	
 	ListTransitionInternal pendingTransitions;
 

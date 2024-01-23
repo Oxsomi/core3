@@ -186,7 +186,8 @@ Error CommandList_validateGraphicsPipeline(
 	Pipeline *pipeline, 
 	ImageAndRange images[8], 
 	U8 imageCount, 
-	EDepthStencilFormat depthFormat
+	EDepthStencilFormat depthFormat,
+	EMSAASamples boundSampleCount
 ) {
 
 	PipelineGraphicsInfo *info = (PipelineGraphicsInfo*)pipeline->extraInfo;
@@ -195,6 +196,11 @@ Error CommandList_validateGraphicsPipeline(
 
 	if (info->depthFormatExt != EDepthStencilFormat_None && depthFormat != info->depthFormatExt)
 		return Error_invalidState(0, "CommandList_validateGraphicsPipeline()::depthFormat was incompatible");
+
+	if(info->msaa != boundSampleCount)
+		return Error_invalidState(
+			0, "CommandList_validateGraphicsPipeline()::boundSampleCount is incompatible with pipeline MSAA setting"
+		);
 
 	//Validate attachments
 
@@ -225,12 +231,22 @@ Error CommandList_validateGraphicsPipeline(
 			if (swapchain->format != ETextureFormatId_unpack[info->attachmentFormatsExt[i]])
 				return Error_invalidState(i + 2, "CommandList_validateGraphicsPipeline()::images[i] is invalid format");
 
+			if(info->msaa)
+				return Error_invalidState(
+					i + 2, "CommandList_validateGraphicsPipeline()::images[i] doesn't have MSAA but pipeline requires it"
+				);
+
 		} else {
 
 			RenderTexture *renderTexture = RenderTextureRef_ptr(ref);
 
 			if (renderTexture->format != ETextureFormatId_unpack[info->attachmentFormatsExt[i]])
 				return Error_invalidState(i + 2, "CommandList_validateGraphicsPipeline()::images[i] is invalid format");
+
+			if(info->msaa != renderTexture->msaa)
+				return Error_invalidState(
+					i + 2, "CommandList_validateGraphicsPipeline()::images[i] has mismatching MSAA between pipeline and RenderTarget"
+				);
 		}
 	}
 
@@ -1255,7 +1271,8 @@ Error CommandListRef_drawBase(CommandListRef *commandListRef, Buffer buf, EComma
 		PipelineRef_ptr(pipelineRef), 
 		commandList->boundImages, 
 		commandList->boundImageCount, 
-		(EDepthStencilFormat) commandList->boundDepthFormat
+		commandList->boundDepthFormat,
+		commandList->boundSampleCount
 	));
 
 	_gotoIfError(clean, CommandList_append(commandList, op, buf, 1));
@@ -2121,6 +2138,7 @@ Error CommandListRef_startRenderExt(
 		depthFormat = EDepthStencilFormat_S8Ext;
 
 	commandList->boundDepthFormat = depthFormat;
+	commandList->boundSampleCount = sampleCount;
 
 clean:
 
