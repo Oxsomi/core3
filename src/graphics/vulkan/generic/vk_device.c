@@ -1100,6 +1100,22 @@ Error GraphicsDevice_submitCommandsImpl(
 	_gotoIfError(clean, ListVkPipelineStageFlags_clear(&deviceExt->waitStages));
 	_gotoIfError(clean, ListVkPipelineStageFlags_reservex(&deviceExt->waitStages, swapchains.length + 1));
 
+	//Wait for previous frame semaphore
+
+	if (device->submitId >= 3) {
+
+		U64 value = device->submitId - 3 + 1;
+
+		VkSemaphoreWaitInfo waitInfo = (VkSemaphoreWaitInfo) {
+			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
+			.pSemaphores = &deviceExt->commitSemaphore,
+			.semaphoreCount = 1,
+			.pValues = &value
+		};
+
+		_gotoIfError(clean, vkCheck(vkWaitSemaphores(deviceExt->device, &waitInfo, U64_MAX)));
+	}
+
 	//Acquire swapchain images
 
 	for(U64 i = 0; i < swapchains.length; ++i) {
@@ -1127,22 +1143,6 @@ Error GraphicsDevice_submitCommandsImpl(
 
 		_gotoIfError(clean, ListVkSemaphore_pushBackx(&deviceExt->waitSemaphores, semaphore));
 		_gotoIfError(clean, ListVkPipelineStageFlags_pushBackx(&deviceExt->waitStages, pipelineStage));
-	}
-
-	//Wait for previous frame semaphore
-
-	if (device->submitId >= 3) {
-
-		U64 value = device->submitId - 3 + 1;
-
-		VkSemaphoreWaitInfo waitInfo = (VkSemaphoreWaitInfo) {
-			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
-			.pSemaphores = &deviceExt->commitSemaphore,
-			.semaphoreCount = 1,
-			.pValues = &value
-		};
-
-		_gotoIfError(clean, vkCheck(vkWaitSemaphores(deviceExt->device, &waitInfo, U64_MAX)));
 	}
 
 	//Prepare per frame cbuffer
