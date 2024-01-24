@@ -46,21 +46,20 @@ typedef enum EDataTypeStride {
 Bool EDataType_isSigned(EDataType type);
 
 //Layout is as follows:
-//U8 library id
-//U8 type id
-//U9 padding
+//U13 library id (0x1000-0x1FFF are reserved for default library)
+//U10 type id
 //U2 width
 //U2 height
 //U2 dataTypeStride (EDataTypeStride)
 //U3 dataType (EDataType)
 
-#define _makeTypeId(libId, typeId, width, height, dataTypeStride, dataType)										\
-(((libId) << 24) | ((typeId) << 16) | (((width) - 1) << 7) | (((height) - 1) << 5) | ((dataTypeStride) << 3) | (dataType))
+#define _makeTypeId(libId, typeId, width, height, dataTypeStride, dataType)												\
+(((libId) << 19) | ((typeId) << 9) | (((width) - 1) << 7) | (((height) - 1) << 5) | ((dataTypeStride) << 3) | (dataType))
 
 #define _makeObjectId(libId, typeId, properties) \
-(((libId) << 24) | ((typeId) << 16) | ((properties) << 3) | EDataType_Object)
+(((libId) << 19) | ((typeId) << 9) | ((properties) << 3) | EDataType_Object)
 
-#define _LIBRARYID_DEFAULT 0xC3		//OxC0-OxCF are reserved for default library.
+#define _LIBRARYID_DEFAULT 0x1C30
 
 //Vector expands for ints
 
@@ -141,8 +140,8 @@ _ETypeIdFloatMatW(start + 18, 4)
 
 typedef enum ETypeId {
 
-	ETypeId_C8									= _makeTypeId(_LIBRARYID_DEFAULT, 0, 1, 1, EDataTypeStride_8 , EDataType_Char),
-	ETypeId_Bool								= _makeTypeId(_LIBRARYID_DEFAULT, 1, 1, 1, EDataTypeStride_8 , EDataType_Bool),
+	ETypeId_C8									= _makeTypeId(_LIBRARYID_DEFAULT, 0, 1, 1, EDataTypeStride_8, EDataType_Char),
+	ETypeId_Bool								= _makeTypeId(_LIBRARYID_DEFAULT, 1, 1, 1, EDataTypeStride_8, EDataType_Bool),
 
 	_ETypeIdXInt(2, I, EDataType_Int),			//I<8/16/32/64>
 	_ETypeIdXInt(6, U, EDataType_UInt),			//U<8/16/32/64>
@@ -150,7 +149,7 @@ typedef enum ETypeId {
 	_ETypeIdFloat(10, F, EDataType_Float),		//F<16/32/64>
 
 	_ETypeIdXIntVecN(13, I, EDataType_Int),		//I<8/16/32/64>x<2/3/4>
-	_ETypeIdXIntVecN(25, U, EDataType_UInt),	//I<8/16/32/64>x<2/3/4>
+	_ETypeIdXIntVecN(25, U, EDataType_UInt),	//U<8/16/32/64>x<2/3/4>
 	_ETypeIdFloatVecN(37),						//F<16/32/64>x<2/3/4>
 
 	_ETypeIdXIntMat(46, I, EDataType_Int),		//I<8/16/32/64>x<2/3/4>x<2/3/4>
@@ -163,9 +162,6 @@ typedef enum ETypeId {
 
 } ETypeId;
 
-typedef U16 ETypeIdShort;	//Cuts off the info part to more efficiently store type id.
-typedef U8 ETypeIdOxC3;		//Type id for OxC3; only if standard types are used only (no extensions).
-
 EDataType ETypeId_getDataType(ETypeId id);
 Bool ETypeId_isObject(ETypeId id);
 
@@ -174,5 +170,5 @@ U8 ETypeId_getWidth(ETypeId id);
 U8 ETypeId_getHeight(ETypeId id);
 U8 ETypeId_getElements(ETypeId id);
 U64 ETypeId_getBytes(ETypeId id);
-U8 ETypeId_getLibraryId(ETypeId id);
-U8 ETypeId_getLibraryTypeId(ETypeId id);
+U16 ETypeId_getLibraryId(ETypeId id);
+U16 ETypeId_getLibraryTypeId(ETypeId id);

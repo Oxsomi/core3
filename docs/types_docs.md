@@ -1,4 +1,4 @@
-# OxC3 types
+# OxC3 types (id: 0x1C30)
 
 OxC3 types contains a lot of very basic types; it's the STL of OxC3. All these types are used throughout the entirety of OxC3.
 
@@ -191,7 +191,36 @@ The convert can be accessed through a more straightforward way by using the spec
 
 Note: For more info check the detailed [IEEE754 Floating point format doc](IEEE754 Floating point format.md).
 
-## TODO: type_id.h
+## type_id.h
+
+Type id is a standard that is used to specify what object type something is. It could be stored either with a serialized object or something like a RefPtr.
+
+It consists of the following properties:
+
+- libraryId; U13 representing the library it came from.
+  - The top bit represents if it's seen as a standard library. As such, it's reserved for OxC3 libraries. OxC3 libraries generally start with 0x1C30 and go up from there. It is possible that one day this will wrap around back to 0x1000.
+- typeId; U10 representing the unique id of the object.
+- width; U2 (2-bit) of 1-4 that represents the width of a matrix or vector.
+- height; U2 (2-bit) of 1-4 that represents the height of a matrix.
+- dataTypeStride; U2 (2-bit) [ 8, 16, 32, 64 ] bit stride 
+- dataType; U3 (3-bit): UInt (0), Int (1), Unused (2), Float (3), Bool (4), Object (5), Char (6), Unused (7).
+
+If all bits are on, it represents undefined.
+
+### Base types and ids
+
+- C8 (0), Bool (1)
+- Signed ints: [ I8, I16, I32, I64 ]: [ 2, 3, 4, 5 ]
+- Unsigned ints: [ U8, U16, U32, U64 ]: [ 6, 7, 8, 9 ]
+- Floats: [ F16, F32, F64 ]: [ 10, 11, 12 ]
+- Signed int vectors: `I<8/16/32/64>x<2/3/4>`: [ 13 -> 25 >
+- Unsigned int vectors: `U<8/16/32/64>x<2/3/4>`: [ 25 -> 37 >
+- Float vectors: `F<16/32/64>x<2/3/4>`: [ 37 -> 46 >
+- Signed int matrices: `I<8/16/32/64>x<2/3/4>x<2/3/4>`: [ 46, 82 >
+- Unsigned int matrices: `U<8/16/32/64>x<2/3/4>x<2/3/4>`: [ 82, 118 >
+- Float matrices: `F<16/32/64>x<2/3/4>x<2/3/4>`: [ 118, 145 >
+
+Other types can be made but are external or are part of a different standard library.
 
 ## TODO: math.h 
 

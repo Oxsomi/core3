@@ -1,4 +1,4 @@
-# Graphics library
+# Graphics library (OxC3 id: 0x1C33)
 
 The core pillars of the abstraction of this graphics library are the following:
 
@@ -248,6 +248,7 @@ _gotoIfError(clean, GraphicsDeviceRef_create(
       CharString name,
       RenderTextureRef **ref
   );
+  ```
 ```
   
 - ```c
@@ -259,7 +260,7 @@ _gotoIfError(clean, GraphicsDeviceRef_create(
       CharString name,
       DepthStencilRef **ref
   );
-  ```
+```
 
 ### Obtained
 

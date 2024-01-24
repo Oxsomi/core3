@@ -37,5 +37,5 @@ U64 ETypeId_getBytes(ETypeId id) {
 	return ETypeId_isObject(id) ? 0 : (U64)ETypeId_getDataTypeBytes(id) * ETypeId_getElements(id); 
 }
 
-U8 ETypeId_getLibraryId(ETypeId id) { return (U8)(id >> 24); }
-U8 ETypeId_getLibraryTypeId(ETypeId id) { return (U8)(id >> 16); }
+U16 ETypeId_getLibraryId(ETypeId id) { return (U16)(id >> 19); }
+U16 ETypeId_getLibraryTypeId(ETypeId id) { return (U16)((id >> 9) & ((1 << 10) - 1)); }
