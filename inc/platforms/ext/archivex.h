@@ -51,15 +51,7 @@ Error Archive_movex(Archive *archive, CharString loc, CharString directoryName);
 
 Error Archive_getInfox(Archive archive, CharString loc, FileInfo *info);
 
-Error Archive_queryFileObjectCountx(
-	Archive archive, 
-	CharString loc, 
-	EFileType type, 
-	Bool isRecursive, 
-	U64 *res
-);
-
-Error Archive_queryFileObjectCountAllx(Archive archive, CharString loc, Bool isRecursive, U64 *res);
+Error Archive_queryFileEntryCountx(Archive archive, CharString loc, Bool isRecursive, U64 *res);
 Error Archive_queryFileCountx(Archive archive, CharString loc, Bool isRecursive, U64 *res);
 Error Archive_queryFolderCountx(Archive archive, CharString loc, Bool isRecursive, U64 *res);
 

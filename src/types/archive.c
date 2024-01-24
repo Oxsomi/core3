@@ -287,12 +287,7 @@ Error Archive_remove(Archive *archive, CharString path, Allocator alloc) {
 	return Archive_removeInternal(archive, path, alloc, EFileType_Any);
 }
 
-Error Archive_rename(
-	Archive *archive, 
-	CharString loc, 
-	CharString newFileName,
-	Allocator alloc
-) {
+Error Archive_rename(Archive *archive, CharString loc, CharString newFileName, Allocator alloc) {
 
 	if (!archive || !archive->entries.ptr)
 		return Error_nullPointer(0, "Archive_rename()::archive is required");
@@ -322,12 +317,7 @@ clean:
 	return err;
 }
 
-Error Archive_move(
-	Archive *archive,
-	CharString loc,
-	CharString directoryName,
-	Allocator alloc
-) {
+Error Archive_move(Archive *archive, CharString loc, CharString directoryName, Allocator alloc) {
 
 	if (!archive || !archive->entries.ptr)
 		return Error_nullPointer(0, "Archive_move()::archive is required");
@@ -549,7 +539,7 @@ Error Archive_queryFileObjectCount(
 	);
 }
 
-Error Archive_queryFileObjectCountAll(
+Error Archive_queryFileEntryCount(
 	Archive archive,
 	CharString loc,
 	Bool isRecursive,

@@ -197,13 +197,13 @@ Type id is a standard that is used to specify what object type something is. It 
 
 It consists of the following properties:
 
-- libraryId; U13 representing the library it came from.
+- U13 **libraryId**; representing the library it came from.
   - The top bit represents if it's seen as a standard library. As such, it's reserved for OxC3 libraries. OxC3 libraries generally start with 0x1C30 and go up from there. It is possible that one day this will wrap around back to 0x1000.
-- typeId; U10 representing the unique id of the object.
-- width; U2 (2-bit) of 1-4 that represents the width of a matrix or vector.
-- height; U2 (2-bit) of 1-4 that represents the height of a matrix.
-- dataTypeStride; U2 (2-bit) [ 8, 16, 32, 64 ] bit stride 
-- dataType; U3 (3-bit): UInt (0), Int (1), Unused (2), Float (3), Bool (4), Object (5), Char (6), Unused (7).
+- U10 **typeId**; representing the unique id of the object.
+- U2 **width**; 1-4: represents the width of a matrix or vector.
+- U2 **height**; 1-4: represents the height of a matrix.
+- U2 **dataTypeStride**; [ 8, 16, 32, 64 ] bit stride 
+- U3 **dataType**; UInt (0), Int (1), Unused (2), Float (3), Bool (4), Object (5), Char (6), Unused (7).
 
 If all bits are on, it represents undefined.
 
@@ -234,13 +234,13 @@ Other types can be made but are external or are part of a different standard lib
 
 Error is a struct generally passed between OxC3 functions that can error for any reason (such as; incorrect inputs or memory allocation issues). Information such as the stacktrace and error string when the error occurred can be obtained from it. It contains the following info:
 
-- genericError: non zero if the function threw an error, specifies type of error.
-- errorStr: hardcoded human readable string, for ease of searching through the code and tracking down the issue.
-- stackTrace: a stacktrace of max ERROR_STACKTRACE length; only 1 level for release mode but up to _STACKTRACE_SIZE (32) for debug. 
-- paramValue0: if genericError allows it, specifies the first value the error was caught on (for example out of bounds id).
-- paramValue1: if genericError allows it, specifies the second value the error was caught on (for example max array length if out of bounds is thrown).
-- paramId: if applicable, can hint which input parameter caused the issue.
-- errorSubId: can be handy as an extra identifier besides the errorStr to identify if two identical errorStrs are used.
+- EGenericError **genericError**: non zero if the function threw an error, specifies type of error.
+- const C8* **errorStr**: hardcoded human readable string, for ease of searching through the code and tracking down the issue.
+- void* **stackTrace**[N]: a stacktrace of max ERROR_STACKTRACE length; only 1 level for release mode but up to _STACKTRACE_SIZE (32) for debug. 
+- U64 **paramValue0**: if genericError allows it, specifies the first value the error was caught on (for example out of bounds id).
+- U64 **paramValue1**: if genericError allows it, specifies the second value the error was caught on (for example max array length if out of bounds is thrown).
+- U32 **paramId**: if applicable, can hint which input parameter caused the issue.
+- U32 **errorSubId**: can be handy as an extra identifier besides the errorStr to identify if two identical errorStrs are used.
 
 The errors can be returned by using `Error_<genericError>` such as `Error_outOfBounds` with the dedicated constructor.
 
@@ -292,7 +292,7 @@ stderr
 
 An allocator is a struct that contains the following:
 
-- Opaque object pointer that can represent any object that's related to the allocator.
+- `void *ptr`: Opaque object pointer that can represent any object that's related to the allocator.
 - AllocFunc: `Error alloc(T *ptr, U64 length, Buffer *output);` where T can be the opaque object type if the function is properly cast.
   - Importantly: Validate if ptr is what you expected (if it's not ignored), ensure length can be allocated and that Buffer doesn't already contain data.
 - FreeFunc: `Bool free(T *ptr, Buffer buf)` where T can be the opaque object type if the function is properly cast.
@@ -300,7 +300,50 @@ An allocator is a struct that contains the following:
 
 ## TODO: AllocationBuffer (types/allocation_buffer.h)
 
-## TODO: Archive (types/archive.h)
+## Archive (types/archive.h)
+
+An archive is essentially a flat list of all entries in something like a zip archive (or oiCA file). It can be manipulated through the functions to add files, update data, move files, etc.
+
+An archive is just a list of ArchiveEntries, which consist of the following:
+
+- CharString **path**; fully qualified path that leads to the archive entry (OxC3 fully qualified path). A resolved path has to consist of max 128 characters.
+- EFileType **type**; the type of file the entry represents: Folder, File.
+- Buffer **data**; if type is file, the data is assumed to be owned by it. It is of course possible to supply external data here as well as long as it's a ref (so it won't be freed).
+- Ns **timestamp**; if type is file, it's the OxC3 timestamp since last modification. It is possible that a filesystem doesn't provide this info, in which case it will contain 0 (Unix epoch).
+
+An archive can be created and destroyed through the following functions:
+
+- Error **Archive_create**(Allocator alloc, Archive *result): create an empty archive and reserve some space for future entries.
+- Bool **Archive_free**(Archive *archive, Allocator alloc): free the archive and all data contained in it.
+
+It can be modified through the following:
+
+- Add a file or directory; these operations will attempt to create parent folders until it can add the file itself. If this is not possible, it will fail.
+  - Error **Archive_addDirectory**(Archive *archive, CharString path, Allocator alloc)
+  - Error **Archive_addFile**(Archive *archive, CharString path, Buffer data, Ns time, Allocator alloc)
+- Remove a file or directory; these operations will also delete any children if applicable.
+  - Error **Archive_removeFile**(Archive *archive, CharString path, Allocator alloc): removes an entry if it's a file, if it's a folder it will error.
+  - Error **Archive_removeFolder**(Archive *archive, CharString path, Allocator alloc): removes an entry if it's a folder, if it's a file it will error.
+  - Error **Archive_remove**(Archive *archive, CharString path, Allocator alloc): removes an entry regardless of if it's a file or folder.
+- Error **Archive_rename**(Archive *archive, CharString loc, CharString newFileName, Allocator alloc): rename a file entry while keeping the same parent folder. This operation is faster than a move because it won't require adding a parent or re-parenting. 
+- Error **Archive_move**(Archive *archive, CharString loc, CharString directoryName, Allocator alloc): move a file from its parent to another folder.
+- Error **Archive_updateFileData**(Archive *archive, CharString path, Buffer data, Allocator alloc): overwrites the previous data at the file entry with new data.
+
+It can be queried through the following:
+
+- Bool **Archive_hasFile**(Archive archive, CharString path, Allocator alloc): check if an entry is present and is a file rather than a folder.
+- Bool **Archive_hasFolder**(Archive archive, CharString path, Allocator alloc): check if an entry is present and is a folder rather than a file.
+- Bool **Archive_has**(Archive archive, CharString path, Allocator alloc): check if an entry is present regardless of whether it is a folder or a file.
+- Get data of a file. The const version should be used if no write access is needed. This is only important if an external const source (const ref) is referenced.
+  - Error **Archive_getFileData**(Archive archive, CharString path, Buffer *data, Allocator alloc)
+  - Error **Archive_getFileDataConst**(Archive archive, CharString path, Buffer *data, Allocator alloc)
+- U64 **Archive_getIndex**(Archive archive, CharString path, Allocator alloc): get index of the entry in the archive. Returns U64_MAX if not found.
+- Error **Archive_getInfo**(Archive archive, CharString loc, FileInfo *info, Allocator alloc): grabs the properties of the entry as a FileInfo struct. This FileInfo struct owns the resolved path, so it has to be freed with FileInfo_free.
+- Query file, folder or file entry count:
+  - Error **Archive_queryFileCount**(Archive archive, CharString loc, Bool isRecursive, U64 *res,  Allocator alloc)
+  - Error **Archive_queryFolderCount**(Archive archive, CharString loc, Bool isRecursive, U64 *res,  Allocator alloc)
+  - Error **Archive_queryFileEntryCount**(Archive archive, CharString loc, Bool isRecursive, U64 *res,  Allocator alloc)
+- Error **Archive_foreach**(Archive archive, CharString loc, FileCallback callback, void *userData, Bool isRecursive, EFileType type, Allocator alloc): loop over the children of the entry and the entry itself. FileCallback will be called when something is encountered, it can return Error if it should stop searching and takes FileInfo and a void *userData.
 
 ## TODO: BufferLayout (types/buffer_layout.h)
 

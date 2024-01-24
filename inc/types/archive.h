@@ -59,34 +59,13 @@ Error Archive_removeFile(Archive *archive, CharString path, Allocator alloc);
 Error Archive_removeFolder(Archive *archive, CharString path, Allocator alloc);
 Error Archive_remove(Archive *archive, CharString path, Allocator alloc);
 
-Error Archive_rename(
-	Archive *archive, 
-	CharString loc, 
-	CharString newFileName, 
-	Allocator alloc
-);
+Error Archive_rename(Archive *archive, CharString loc, CharString newFileName, Allocator alloc);
+Error Archive_move(Archive *archive, CharString loc, CharString directoryName, Allocator alloc);
 
 U64 Archive_getIndex(Archive archive, CharString path, Allocator alloc);		//Get index in archive
-
-Error Archive_move(
-	Archive *archive, 
-	CharString loc, 
-	CharString directoryName, 
-	Allocator alloc
-);
-
 Error Archive_getInfo(Archive archive, CharString loc, FileInfo *info, Allocator alloc);
 
-Error Archive_queryFileObjectCount(
-	Archive archive, 
-	CharString loc, 
-	EFileType type, 
-	Bool isRecursive, 
-	U64 *res, 
-	Allocator alloc
-);
-
-Error Archive_queryFileObjectCountAll(
+Error Archive_queryFileEntryCount(
 	Archive archive,
 	CharString loc,
 	Bool isRecursive,

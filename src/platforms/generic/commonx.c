@@ -543,18 +543,8 @@ Error Archive_getInfox(Archive archive, CharString loc, FileInfo *info) {
 	return Archive_getInfo(archive, loc, info, Platform_instance.alloc);
 }
 
-Error Archive_queryFileObjectCountx(
-	Archive archive,
-	CharString loc,
-	EFileType type,
-	Bool isRecursive,
-	U64 *res
-) {
-	return Archive_queryFileObjectCount(archive, loc, type, isRecursive, res, Platform_instance.alloc);
-}
-
-Error Archive_queryFileObjectCountAllx(Archive archive, CharString loc, Bool isRecursive, U64 *res) {
-	return Archive_queryFileObjectCountAll(archive, loc, isRecursive, res, Platform_instance.alloc);
+Error Archive_queryFileEntryCountx(Archive archive, CharString loc, Bool isRecursive, U64 *res) {
+	return Archive_queryFileEntryCount(archive, loc, isRecursive, res, Platform_instance.alloc);
 }
 
 Error Archive_queryFileCountx(Archive archive, CharString loc, Bool isRecursive, U64 *res) {
