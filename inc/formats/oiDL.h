@@ -23,9 +23,9 @@
 #include "types/list.h"
 
 typedef enum EDLDataType {
-	EDLDataType_Data,									//(default)
-	EDLDataType_Ascii,									//--ascii
-	EDLDataType_UTF8,									//--utf8
+	EDLDataType_Data,									//(default, Buffer)
+	EDLDataType_Ascii,									//--ascii (CharString)
+	EDLDataType_UTF8,									//--utf8 (Buffer)
 	EDLDataType_Count
 } EDLDataType;
 
@@ -47,27 +47,33 @@ typedef struct DLSettings {
 
 } DLSettings;
 
-typedef union DLEntry {
-
-	Buffer entryBuffer;
-	CharString entryString;
-
-} DLEntry;
-
 //Check docs/oiDL.md for the file spec
-
-TList(DLEntry);
 
 typedef struct DLFile {
 
-	ListDLEntry entries;
+	union {
+		ListBuffer entryBuffers;
+		ListCharString entryStrings;
+	};
+
 	DLSettings settings;
 	U64 readLength;				//How many bytes were read for this file
 
 } DLFile;
 
+U64 DLFile_entryCount(DLFile file);
+Bool DLFile_isAllocated(DLFile file);
+
 Error DLFile_create(DLSettings settings, Allocator alloc, DLFile *dlFile);
 Bool DLFile_free(DLFile *dlFile, Allocator alloc);
+
+Error DLFile_createBufferList(DLSettings settings, ListBuffer buffers, Allocator alloc, DLFile *dlFile);
+Error DLFile_createAsciiList(DLSettings settings, ListCharString strings, Allocator alloc, DLFile *dlFile);
+Error DLFile_createUTF8List(DLSettings settings, ListBuffer strings, Allocator alloc, DLFile *dlFile);
+
+//Determine what type of list is made with settings.dataType
+
+Error DLFile_createList(DLSettings settings, ListBuffer *buffers, Allocator alloc, DLFile *dlFile);
 
 //DLEntry will belong to DLFile.
 //This means that freeing it will free the CharString + Buffer if they're not a ref

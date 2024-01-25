@@ -31,6 +31,8 @@ typedef struct ArchiveEntry ArchiveEntry;
 typedef struct DLSettings DLSettings;
 typedef struct DLFile DLFile;
 
+typedef struct ListCharString ListCharString;
+
 //oiCA
 
 Bool CAFile_freex(CAFile *caFile);
@@ -42,6 +44,11 @@ Error CAFile_readx(Buffer file, const U32 encryptionKey[8], CAFile *caFile);
 
 Error DLFile_createx(DLSettings settings, DLFile *dlFile);
 Bool DLFile_freex(DLFile *dlFile);
+
+Error DLFile_createListx(DLSettings settings, ListBuffer *buffers, DLFile *dlFile);
+Error DLFile_createUTF8Listx(DLSettings settings, ListBuffer buffers, DLFile *dlFile);
+Error DLFile_createBufferListx(DLSettings settings, ListBuffer buffers, DLFile *dlFile);
+Error DLFile_createAsciiListx(DLSettings settings, ListCharString strings, DLFile *dlFile);
 
 Error DLFile_addEntryx(DLFile *dlFile, Buffer entry);
 Error DLFile_addEntryAsciix(DLFile *dlFile, CharString entry);

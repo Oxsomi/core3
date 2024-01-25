@@ -900,8 +900,8 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 			if (!(args.parameters & EOperationHasParameter_Entry)) {
 
-				if(!length && start < file.entries.length)
-					length = U64_min(64, file.entries.length - start);
+				if(!length && start < DLFile_entryCount(file))
+					length = U64_min(64, DLFile_entryCount(file) - start);
 
 				end = start + length;
 			}
@@ -917,17 +917,15 @@ Bool CLI_inspectData(ParsedArgs args) {
 					goto cleanDl;
 				}
 
-				if (entryI >= file.entries.length) {
-					Log_errorLnx("Index out of bounds, max is %u", file.entries.length);
+				if (entryI >= DLFile_entryCount(file)) {
+					Log_errorLnx("Index out of bounds, max is %u", DLFile_entryCount(file));
 					goto cleanDl;
 				}
 
-				DLEntry e = file.entries.ptr[entryI];
-
 				Bool isAscii = file.settings.dataType == EDLDataType_Ascii;
 				Buffer b = 
-					isAscii ? CharString_bufferConst(e.entryString) : 
-					e.entryBuffer;
+					isAscii ? CharString_bufferConst(file.entryStrings.ptr[entryI]) :
+					file.entryBuffers.ptr[entryI];
 
 				if(!CLI_showFile(args, b, start, length, isAscii))
 					goto cleanDl;
@@ -937,13 +935,11 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 				Log_debugLnx("oiDL Entries:");
 
-				for (U64 i = start; i < end && i < file.entries.length; ++i) {
-
-					DLEntry entryi = file.entries.ptr[i];
+				for (U64 i = start; i < end && i < DLFile_entryCount(file); ++i) {
 
 					U64 entrySize = 
-						file.settings.dataType == EDLDataType_Ascii ? CharString_length(entryi.entryString) : 
-						Buffer_length(entryi.entryBuffer);
+						file.settings.dataType == EDLDataType_Ascii ? CharString_length(file.entryStrings.ptr[i]) :
+						Buffer_length(file.entryBuffers.ptr[i]);
 
 					_gotoIfError(cleanDl, CharString_createDecx(i, 3, &tmp));
 					_gotoIfError(cleanDl, CharString_appendStringx(&tmp, CharString_createRefCStrConst(": length = ")));

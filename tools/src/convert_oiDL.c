@@ -151,6 +151,7 @@ Error _CLI_convertToDL(ParsedArgs args, CharString input, FileInfo inputInfo, Ch
 			else _gotoIfError(clean, CharString_splitLinex(str, &split));
 
 			//Create DLFile and write it
+			//TODO: When split returns ListCharString, replace with DLFile_createAsciiList
 
 			_gotoIfError(clean, DLFile_createx(settings, &file));
 					
@@ -257,31 +258,7 @@ Error _CLI_convertToDL(ParsedArgs args, CharString input, FileInfo inputInfo, Ch
 	//Now we're left with only data entries
 	//Create simple oiDL with all of them
 
-	_gotoIfError(clean, DLFile_createx(settings, &file));
-
-	//Add entries 
-
-	for(U64 i = 0; i < buffers.length; ++i) {
-
-		//Add entry
-
-		if(settings.dataType == EDLDataType_Data)
-			_gotoIfError(clean, DLFile_addEntryx(&file, buffers.ptr[i]))
-
-		else if(settings.dataType == EDLDataType_Ascii) {
-
-			Buffer bufi = buffers.ptr[i];
-			CharString str = CharString_createRefSizedConst((const C8*)bufi.ptr, Buffer_length(bufi), false);
-			
-			_gotoIfError(clean, DLFile_addEntryAsciix(&file, str));
-		}
-
-		else _gotoIfError(clean, DLFile_addEntryUTF8x(&file, buffers.ptr[i]));
-
-		//Ensure we get don't free the same thing multiple times
-
-		buffers.ptrNonConst[i] = Buffer_createNull();
-	}
+	_gotoIfError(clean, DLFile_createListx(settings, &buffers, &file));
 
 	//Convert to binary
 
@@ -368,9 +345,7 @@ Error _CLI_convertFromDL(ParsedArgs args, CharString input, FileInfo inputInfo, 
 
 		CharString bin = CharString_createRefCStrConst(".bin");
 
-		for (U64 i = 0; i < file.entries.length; ++i) {
-
-			DLEntry entry = file.entries.ptr[i];
+		for (U64 i = 0; i < DLFile_entryCount(file); ++i) {
 
 			//File name "$base/$(i).+?(isBin ? ".bin" : ".txt")"
 
@@ -383,8 +358,8 @@ Error _CLI_convertFromDL(ParsedArgs args, CharString input, FileInfo inputInfo, 
 			else _gotoIfError(clean, CharString_appendStringx(&filePathi, txt));
 
 			Buffer fileDat = 
-				file.settings.dataType == EDLDataType_Ascii ? CharString_bufferConst(entry.entryString) : 
-				entry.entryBuffer;
+				file.settings.dataType == EDLDataType_Ascii ? CharString_bufferConst(file.entryStrings.ptr[i]) : 
+				file.entryBuffers.ptr[i];
 
 			//
 
@@ -399,14 +374,13 @@ Error _CLI_convertFromDL(ParsedArgs args, CharString input, FileInfo inputInfo, 
 
 	else {
 
-		_gotoIfError(clean, CharString_reservex(&concatFile, file.entries.length * 16));
+		_gotoIfError(clean, CharString_reservex(&concatFile, DLFile_entryCount(file) * 16));
 
-		for (U64 i = 0; i < file.entries.length; ++i) {
+		for (U64 i = 0; i < DLFile_entryCount(file); ++i) {
 
-			DLEntry entry = file.entries.ptr[i];
-			_gotoIfError(clean, CharString_appendStringx(&concatFile, entry.entryString));
+			_gotoIfError(clean, CharString_appendStringx(&concatFile, file.entryStrings.ptr[i]));
 
-			if(i == file.entries.length - 1)
+			if(i == DLFile_entryCount(file) - 1)
 				break;
 
 			if(args.parameters & EOperationHasParameter_SplitBy) {
@@ -415,7 +389,6 @@ Error _CLI_convertFromDL(ParsedArgs args, CharString input, FileInfo inputInfo, 
 				_gotoIfError(clean, ParsedArgs_getArg(args, EOperationHasParameter_SplitByShift, &split));
 
 				_gotoIfError(clean, CharString_appendStringx(&concatFile, split));
-
 			}
 
 			else _gotoIfError(clean, CharString_appendStringx(&concatFile, CharString_newLine()));

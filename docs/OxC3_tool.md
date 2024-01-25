@@ -156,6 +156,8 @@ Generates an encrypted oiCA file. Works on files and folders. oiCA doesn't suppo
 
 Generates a compressed oiCA file. Can be encrypted. Works on files and folders.
 
+*Note: Currently unimplemented.*
+
 ## Profile
 
 Profiles the speed of important operations that might be happening a lot or operations that might take long.
@@ -164,7 +166,7 @@ Profiles the speed of important operations that might be happening a lot or oper
 - `OxC3 profile rng`: profiles how expensive Buffer_CSPRNG is (cryptographically secure random).
 - `OxC3 profile crc32c`: profiles how much time a Buffer CRC32C takes up if the buffer isn't small.
 - `OxC3 profile sha256`: profiles how fast a Buffer SHA256 is if the buffer isn't small.
-- `OxC3 profile aes256/aes128`: how fast AES encryption is. AES256 should be preferred though for legacy reasons the other two might be used (It's about the same speed). The encryption mode is always GCM.
+- `OxC3 profile aes256/aes128`: how fast AES encryption is. AES256 should be preferred though for legacy reasons the other might be used (It's about the same speed). The encryption mode is always GCM.
 
 ## Helper functions
 

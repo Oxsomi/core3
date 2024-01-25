@@ -34,7 +34,6 @@
 #include "types/buffer_layout.h"
 #include "platforms/platform.h"
 
-TListXImpl(DLEntry);
 TListXImpl(CharString);
 TListXBaseImpl(ListConstC8);
 
@@ -133,6 +132,22 @@ Error DLFile_createx(DLSettings settings, DLFile *dlFile) {
 }
 
 Bool DLFile_freex(DLFile *dlFile) { return DLFile_free(dlFile, Platform_instance.alloc); }
+
+Error DLFile_createListx(DLSettings settings, ListBuffer *buffers, DLFile *dlFile) {
+	return DLFile_createList(settings, buffers, Platform_instance.alloc, dlFile);
+}
+
+Error DLFile_createUTF8Listx(DLSettings settings, ListBuffer buffers, DLFile *dlFile) {
+	return DLFile_createUTF8List(settings, buffers, Platform_instance.alloc, dlFile);
+}
+
+Error DLFile_createBufferListx(DLSettings settings, ListBuffer buffers, DLFile *dlFile) {
+	return DLFile_createBufferList(settings, buffers, Platform_instance.alloc, dlFile);
+}
+
+Error DLFile_createAsciiListx(DLSettings settings, ListCharString strings, DLFile *dlFile) {
+	return DLFile_createAsciiList(settings, strings, Platform_instance.alloc, dlFile);
+}
 
 Error DLFile_addEntryx(DLFile *dlFile, Buffer entry) { return DLFile_addEntry(dlFile, entry, Platform_instance.alloc); }
 

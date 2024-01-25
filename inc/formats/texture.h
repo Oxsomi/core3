@@ -60,8 +60,8 @@ typedef enum ETextureCompressionAlgo {
 (((redBits + greenBits + blueBits + alphaBits) >> 2) - 1) << 27)
 
 #define _ETextureFormatCompressed(algo, blockSizeBits, alignmentX, alignmentY, compType, hasRed, hasGreen, hasBlue, hasAlpha) \
-((hasAlpha ? 1 : 0) | ((hasBlue ? 1 : 0) << 6) | (compType << 9) | ((hasGreen ? 1 : 0) << 12) | (alignmentY << 16) |	\
- ((hasRed ? 1 : 0) << 18) | (alignmentX << 21) | \
+((hasAlpha ? 1 : 0) | ((hasBlue ? 1 : 0) << 6) | (compType << 9) | ((hasGreen ? 1 : 0) << 12) | (alignmentY << 15) |	\
+ ((hasRed ? 1 : 0) << 18) | (alignmentX << 21) |																		\
  (ETexturePrimitive_Compressed << 24) | (((blockSizeBits >> 6) - 1) << 27) | (algo << 30))
 
 //Format of a texture; a bitflag of the properties of the format.

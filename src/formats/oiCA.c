@@ -689,7 +689,7 @@ Error CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFi
 			0, "CAFile_read() embedded oiDL needs to be ascii without compression/encryption or flags"
 		));
 
-	if(fileNames.entries.length != (U64)fileCount + dirCount)
+	if(DLFile_entryCount(fileNames) != (U64)fileCount + dirCount)
 		_gotoIfError(clean, Error_invalidState(0, "CAFile_read() embedded oiDL has mismatching name count with file count"));
 
 	//Ensure we have enough allocated for all files and directories
@@ -720,7 +720,7 @@ Error CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFi
 
 		const U8 *diri = filePtr.ptr + folderStride * i;
 
-		CharString name = fileNames.entries.ptr[i].entryString;
+		CharString name = fileNames.entryStrings.ptr[i];
 
 		if(!CharString_isValidFileName(name))
 			_gotoIfError(clean, Error_invalidParameter(0, 0, "CAFile_read() directory has invalid name"));
@@ -754,7 +754,7 @@ Error CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFi
 
 		const U8 *filei = fileIt + fileStride * i;
 
-		CharString name = fileNames.entries.ptr[(U64)i + dirCount].entryString;
+		CharString name = fileNames.entryStrings.ptr[(U64)i + dirCount];
 
 		if(!CharString_isValidFileName(name))
 			_gotoIfError(clean, Error_invalidParameter(0, 1, "CAFile_read() file has invalid name"));

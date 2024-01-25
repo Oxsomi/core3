@@ -79,7 +79,7 @@ ETextureCompressionAlgo ETextureFormat_getCompressionAlgo(ETextureFormat f) {
 
 Bool ETextureFormat_getAlignment(ETextureFormat f, U8 *x, U8 *y) {
 
-	if(!ETextureFormat_getIsCompressed(f))
+	if(!ETextureFormat_getIsCompressed(f) || !x || !y)
 		return false;
 
 	*x = (f >> 15) & 7;
