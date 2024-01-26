@@ -34,6 +34,8 @@ typedef struct BMPInfo {
 	U8 textureFormatId;		//ETextureFormatId
 	U16 padding;
 
+	I32 xPixPerM, yPixPerM;
+
 } BMPInfo;
 
 Error BMP_write(Buffer buf, BMPInfo info, Allocator allocator, Buffer *result);

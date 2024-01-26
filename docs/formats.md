@@ -15,12 +15,20 @@ BMP support is very basic, it restricts usage to the following:
 - Total image size in bytes must not exceed **2GiB**.
 - Width and height must be <= **I32_MAX**.
 - Flipped images are allowed.
-- **rgba8** is required.
-- Only write is supported for now.
+- **RGBA8** is required.
 
 Usage via:
 
-- Error **BMP_writeRGBA**(Buffer buf, U32 w, U32 h, Bool isFlipped, Allocator allocator, Buffer *result)
+- Error **BMP_write**(Buffer buf, BMPInfo info, Allocator allocator, Buffer *result)
+- Error **BMP_read**(Buffer buf, BMPInfo *info, Allocator allocator, Buffer *result)
+  - returns additional info about the BMP it just read into BMPInfo.
+
+Where BMPInfo has the following properties:
+
+- U32 **w**, **h**: dimensions (width and height)
+- Bool **isFlipped**: if the image should be flipped on load and/or write.
+- U8 **textureFormatId**: ETextureFormatId_RGBA8 is currently the only one supported.
+- I32 **xPixPerM**, **yPixPerM**: preferred display size in pixels per meter. Setting this to 0 is allowed as it might be ignored by the displayer.
 
 ## oiXX
 

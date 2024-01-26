@@ -51,7 +51,6 @@
 #pragma pack(pop)
 
 const U16 BMP_MAGIC = 0x4D42;
-const U32 BMP_SRGB_MAGIC = 0x73524742;
 
 const U32 reqHeadersSize = (U32) (sizeof(BMPHeader) +  sizeof(BMPInfoHeader));
 
@@ -66,10 +65,13 @@ Error BMP_write(Buffer buf, BMPInfo info, Allocator allocator, Buffer *result) {
 	if(!info.w || !info.h)
 		return Error_invalidParameter(!info.w ? 1 : 2, 0, "BMP_write()::w and h are required");
 
+	if(info.xPixPerM < 0 || info.yPixPerM < 0)
+		return Error_invalidParameter(info.xPixPerM < 0 ? 5 : 6, 0, "BMP_write()::xPixPerM and yPixPerM have to be >0");
+
 	if((info.w >> 31) || (info.h >> 31))
 		return Error_invalidParameter((info.w >> 31) ? 1 : 2, 0, "BMP_write()::w and h can't exceed I32_MAX");
 
-	if(info.textureFormatId != ETextureFormatId_RGBA8 && info.textureFormatId != ETextureFormatId_BGRA8)
+	if(info.textureFormatId != ETextureFormatId_RGBA8)
 		return Error_invalidParameter(1, 3, "BMP_write()::textureFormatId is only supported for RGBA8/BGRA8 currently");
 
 	U64 bufLen = Buffer_length(buf);
@@ -88,34 +90,15 @@ Error BMP_write(Buffer buf, BMPInfo info, Allocator allocator, Buffer *result) {
 		.width = (I32) info.w,
 		.height = (I32) info.h * (info.isFlipped ? -1 : 1),
 		.planes = 1,
-		.bitCount = 32
+		.bitCount = 32,
+		.xPixPerM = info.xPixPerM,
+		.yPixPerM = info.yPixPerM
 	};
-
-	BMPColorHeader colorHeader = (BMPColorHeader) {
-
-		.redMask	= (U32) 0xFF << 16,
-		.greenMask	= (U32) 0xFF << 8,
-		.blueMask	= (U32) 0xFF,
-		.alphaMask	= (U32) 0xFF << 24,
-
-		.colorSpaceType = BMP_SRGB_MAGIC
-	};
-
-	Bool isBGR = info.textureFormatId == ETextureFormatId_BGRA8;
-
-	if (isBGR) {		//Swizzle
-
-		U32 blueMask = colorHeader.blueMask;
-		colorHeader.blueMask = colorHeader.redMask;
-		colorHeader.redMask = blueMask;
-
-		header.offsetData += sizeof(BMPColorHeader);
-	}
 
 	Buffer file = Buffer_createNull();
 
 	Error err = Buffer_createUninitializedBytes(
-		reqHeadersSize + (isBGR ? sizeof(BMPColorHeader) : 0) + bufLen,
+		reqHeadersSize + bufLen,
 		allocator,
 		&file
 	);
@@ -127,9 +110,6 @@ Error BMP_write(Buffer buf, BMPInfo info, Allocator allocator, Buffer *result) {
 
 	_gotoIfError(clean, Buffer_append(&fileAppend, &header, sizeof(header)));
 	_gotoIfError(clean, Buffer_append(&fileAppend, &infoHeader, sizeof(infoHeader)));
-
-	if(isBGR)
-		_gotoIfError(clean, Buffer_append(&fileAppend, &colorHeader, sizeof(colorHeader)));
 
 	U64 stride = (U64)info.w * 4;
 
@@ -193,11 +173,15 @@ Error BMP_read(Buffer buf, BMPInfo *info, Allocator allocator, Buffer *result) {
 		!bmpInfo.height ||
 		bmpInfo.headerSize != sizeof(BMPInfoHeader) ||
 		bmpInfo.colorsUsed ||
-		bmpInfo.colorsImportant
+		bmpInfo.colorsImportant ||
+		bmpInfo.xPixPerM < 0 ||
+		bmpInfo.yPixPerM < 0
 	)
 		_gotoIfError(clean, Error_invalidParameter(0, 0, "BMP_read()::buf didn't contain valid header"));
 
 	info->isFlipped = bmpInfo.height < 0;
+	info->xPixPerM = bmpInfo.xPixPerM;
+	info->yPixPerM = bmpInfo.yPixPerM;
 
 	if(bmpInfo.height < 0)
 		bmpInfo.height *= -1;
@@ -217,37 +201,9 @@ Error BMP_read(Buffer buf, BMPInfo *info, Allocator allocator, Buffer *result) {
 	if(len != (U64)info->w * info->h * 4)
 		_gotoIfError(clean, Error_invalidParameter(0, 0, "BMP_read() BMP has an image limit of 2GiB"));
 
-	//Validate color header if present
-	
-	Bool isBGR = false;
-
-	if(header.offsetData != reqHeadersSize) {
-
-		if(header.offsetData < reqHeadersSize + sizeof(BMPColorHeader))
-			_gotoIfError(clean, Error_invalidParameter(0, 0, "BMP_read()::buf didn't contain BMPColorHeader"));
-
-		BMPColorHeader colorHeader;
-		_gotoIfError(clean, Buffer_consume(&buf, &colorHeader, sizeof(colorHeader)));
-
-		if(
-			colorHeader.colorSpaceType != BMP_SRGB_MAGIC || 
-			colorHeader.blueMask != (U32) 0xFF << 8 || 
-			colorHeader.alphaMask != (U32) 0xFF << 24
-		)
-			_gotoIfError(clean, Error_invalidParameter(0, 0, "BMP_read()::buf contained unsupported BMPColorHeader"));
-
-		isBGR = colorHeader.redMask == 0xFF;
-
-		if(isBGR && colorHeader.greenMask != (U32) 0xFF << 16)
-			_gotoIfError(clean, Error_invalidParameter(0, 0, "BMP_read()::buf contained invalid BMPColorHeader"));
-
-		if(!isBGR && (colorHeader.greenMask != 0xFF || colorHeader.redMask != (U32) 0xFF << 16))
-			_gotoIfError(clean, Error_invalidParameter(0, 0, "BMP_read()::buf contained invalid BMPColorHeader"));
-	}
-
-	info->textureFormatId = isBGR ? ETextureFormatId_BGRA8 : ETextureFormatId_RGBA8;
-
 	//If it's not flipped, we don't need to do anything
+
+	info->textureFormatId = ETextureFormatId_RGBA8;
 
 	const U8 *dataStart = start + header.offsetData;
 
