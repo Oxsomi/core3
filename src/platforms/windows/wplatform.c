@@ -502,6 +502,10 @@ Error Platform_initExt(CharString currAppDir) {
 		Buffer_freex(&platformExt);
 		return Error_platformError(1, GetLastError(), "Platform_initExt() couldn't find NtDelayExecution");
 	}
+
+	SYSTEM_INFO info;
+	GetSystemInfo(&info);
+	Platform_instance.threads = info.dwNumberOfProcessors;
 	
 	if(!Platform_useWorkingDirectory) {
 

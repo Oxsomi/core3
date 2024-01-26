@@ -165,58 +165,58 @@ Because of the numbers, it was decided that hardware halfs was turned off on Win
 
 #### Non denormalized numbers
 
-| Cast type             | Baseline (CPU hardware) | Emulated (CPU software)      |
-| --------------------- | ----------------------- | ---------------------------- |
-| Truncation F64 -> F32 | 5.4ns/op                | 18.3ns/op (3.4x *slower*)    |
-| Truncation F64 -> F16 | 536.9ns/op              | 18.2ns/op (29.5x **faster**) |
-| Expansion F32 -> F64  | 5.5ns/op                | 13.6ns/op (2.5x *slower*)    |
-| Truncation F32 -> F16 | 540.2ns/op              | 19.0ns/op (28.4x **faster**) |
-| Expansion F16 -> F64  | 536.1ns/op              | 13.6ns/op (39.4x **faster**) |
-| Expansion F16 -> F32  | 532.9ns/op              | 13.2ns/op (40.4x **faster**) |
+| Cast type             | Baseline (CPU hardware) | Emulated (CPU software)   |
+| --------------------- | ----------------------- | ------------------------- |
+| Truncation F64 -> F32 | 5.5ns/op                | 18.8ns/op (3.4x *slower*) |
+| Truncation F64 -> F16 | 6.3ns/op                | 18.1ns/op (2.9x *slower*) |
+| Expansion F32 -> F64  | 5.4ns/op                | 13.0ns/op (2.4x *slower*) |
+| Truncation F32 -> F16 | 6.8ns/op                | 19.4ns/op (2.9x *slower*) |
+| Expansion F16 -> F64  | 6.5ns/op                | 13.4ns/op (2.1x *slower*) |
+| Expansion F16 -> F32  | 7.0ns/op                | 13.3ns/op (1.9x *slower*) |
 
 #### (Un)Signed zero
 
-| Cast type             | Baseline (CPU hardware) | Emulated (CPU software)      |
-| --------------------- | ----------------------- | ---------------------------- |
-| Truncation F64 -> F32 | 5.4ns/op                | 15.0ns/op (2.8x *slower*)    |
-| Truncation F64 -> F16 | 535.3ns/op              | 14.3ns/op (37.4x **faster**) |
-| Expansion F32 -> F64  | 4.9ns/op                | 8.9ns/op (1.8x *slower*)     |
-| Truncation F32 -> F16 | 532.2ns/op              | 15.2ns/op (35.0x **faster**) |
-| Expansion F16 -> F64  | 530.1ns/op              | 9.4ns/op (56.0x **faster**)  |
-| Expansion F16 -> F32  | 530.4ns/op              | 9.4ns/op (56.4x **faster**)  |
+| Cast type             | Baseline (CPU hardware) | Emulated (CPU software)   |
+| --------------------- | ----------------------- | ------------------------- |
+| Truncation F64 -> F32 | 5.4ns/op                | 15.3ns/op (2.8x *slower*) |
+| Truncation F64 -> F16 | 6.1ns/op                | 14.7ns/op (2.4x *slower*) |
+| Expansion F32 -> F64  | 6.0ns/op                | 9.0ns/op (1.5x *slower*)  |
+| Truncation F32 -> F16 | 6.5ns/op                | 15.7ns/op (2.4x *slower*) |
+| Expansion F16 -> F64  | 5.8ns/op                | 9.6ns/op (1.7x *slower*)  |
+| Expansion F16 -> F32  | 6.2ns/op                | 9.6ns/op (1.5x *slower*)  |
 
 #### NaN
 
-| Cast type             | Baseline (CPU hardware) | Emulated (CPU software)      |
-| --------------------- | ----------------------- | ---------------------------- |
-| Truncation F64 -> F32 | 5.3ns/op                | 14.5ns/op (2.7x *slower*)    |
-| Truncation F64 -> F16 | 536.4ns/op              | 14.5ns/op (37.0x **faster**) |
-| Expansion F32 -> F64  | 4.9ns/op                | 12.9ns/op (2.6x *slower*)    |
-| Truncation F32 -> F16 | 534.7ns/op              | 14.4ns/op (37.1x **faster**) |
-| Expansion F16 -> F64  | 535.1ns/op              | 13.0ns/op (41.1x **faster**) |
-| Expansion F16 -> F32  | 533.7ns/op              | 12.9ns/op (41.4x **faster**) |
+| Cast type             | Baseline (CPU hardware) | Emulated (CPU software)   |
+| --------------------- | ----------------------- | ------------------------- |
+| Truncation F64 -> F32 | 5.4ns/op                | 14.6ns/op (2.7x *slower*) |
+| Truncation F64 -> F16 | 6.1ns/op                | 14.6ns/op (2.4x *slower*) |
+| Expansion F32 -> F64  | 4.9ns/op                | 13.4ns/op (2.7x *slower*) |
+| Truncation F32 -> F16 | 6.2ns/op                | 14.7ns/op (2.4x *slower*) |
+| Expansion F16 -> F64  | 5.6ns/op                | 13.3ns/op (2.4x *slower*) |
+| Expansion F16 -> F32  | 6.0ns/op                | 13.2ns/op (2.2x *slower*) |
 
 #### Inf
 
-| Cast type             | Baseline (CPU hardware) | Emulated (CPU software)      |
-| --------------------- | ----------------------- | ---------------------------- |
-| Truncation F64 -> F32 | 5.5ns/op                | 10.9ns/op (2.0x *slower*)    |
-| Truncation F64 -> F16 | 540.0ns/op              | 10.9ns/op (49.5x **faster**) |
-| Expansion F32 -> F64  | 5.2ns/op                | 9.3ns/op (1.8x *slower*)     |
-| Truncation F32 -> F16 | 534.8ns/op              | 10.9ns/op (49.1x **faster**) |
-| Expansion F16 -> F64  | 533.4ns/op              | 9.1ns/op (58.6x **faster**)  |
-| Expansion F16 -> F32  | 533.2ns/op              | 9.2ns/op (58.0x **faster**)  |
+| Cast type             | Baseline (CPU hardware) | Emulated (CPU software)   |
+| --------------------- | ----------------------- | ------------------------- |
+| Truncation F64 -> F32 | 5.6ns/op                | 11.1ns/op (2.0x *slower*) |
+| Truncation F64 -> F16 | 6.3ns/op                | 11.1ns/op (1.8x *slower*) |
+| Expansion F32 -> F64  | 5.4ns/op                | 9.5ns/op (1.8x *slower*)  |
+| Truncation F32 -> F16 | 6.7ns/op                | 11.2ns/op (1.7x *slower*) |
+| Expansion F16 -> F64  | 6.1ns/op                | 9.3ns/op (1.5x *slower*)  |
+| Expansion F16 -> F32  | 6.4ns/op                | 9.4ns/op (1.5x *slower*)  |
 
 #### Denormalized numbers
 
-| Cast type             | Baseline (CPU hardware) | Emulated (CPU software)      |
-| --------------------- | ----------------------- | ---------------------------- |
-| Truncation F64 -> F32 | 4.8ns/op                | 14.4ns/op (3.0x *slower*)    |
-| Truncation F64 -> F16 | 533.4ns/op              | 14.4ns/op (37.1x **faster**) |
-| Expansion F32 -> F64  | 4.8ns/op                | 25.5ns/op (5.3x *slower*)    |
-| Truncation F32 -> F16 | 531.6ns/op              | 14.3ns/op (37.2x **faster**) |
-| Expansion F16 -> F64  | 527.7ns/op              | 23.0ns/op (22.9x **faster**) |
-| Expansion F16 -> F32  | 528.6ns/op              | 22.8ns/op (23.2x **faster**) |
+| Cast type             | Baseline (CPU hardware) | Emulated (CPU software)   |
+| --------------------- | ----------------------- | ------------------------- |
+| Truncation F64 -> F32 | 5.2ns/op                | 15.0ns/op (2.9x *slower*) |
+| Truncation F64 -> F16 | 5.9ns/op                | 14.3ns/op (2.4x *slower*) |
+| Expansion F32 -> F64  | 5.4ns/op                | 26.0ns/op (5.3x *slower*) |
+| Truncation F32 -> F16 | 6.2ns/op                | 14.9ns/op (2.4x *slower*) |
+| Expansion F16 -> F64  | 5.6ns/op                | 23.2ns/op (4.1x *slower*) |
+| Expansion F16 -> F32  | 6.2ns/op                | 23.6ns/op (3.8x *slower*) |
 
 #### Sources
 

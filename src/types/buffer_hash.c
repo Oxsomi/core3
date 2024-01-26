@@ -380,6 +380,8 @@ inline void Buffer_sha256Internal(Buffer buf, U32 *output) {
 
 	//Ported + cleaned up from https://github.com/noloader/SHA-Intrinsics/blob/master/sha256-x86.c
 
+	static I8 hasSHA256 = -1;
+
 	void Buffer_sha256(Buffer buf, U32 output[8]) {
 
 		if(!output)
@@ -387,10 +389,15 @@ inline void Buffer_sha256Internal(Buffer buf, U32 *output) {
 
 		//Fallback if the hardware doesn't support SHA extension
 
-		int cpuInfo1[4];
-		__cpuidex(cpuInfo1, 7, 0);
+		if(hasSHA256 < 0) {
 
-		if(!((cpuInfo1[1] >> 29) & 1)) {
+			int cpuInfo1[4];
+			__cpuidex(cpuInfo1, 7, 0);
+
+			hasSHA256 = (cpuInfo1[1] >> 29) & 1;
+		}
+
+		if(!hasSHA256) {
 			Buffer_sha256Internal(buf, output);
 			return;
 		}
