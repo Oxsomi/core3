@@ -26,6 +26,7 @@
 #include "types/string.h"
 #include "types/time.h"
 #include "formats/texture.h"
+#include "formats/bmp.h"
 #include "platforms/ext/bmpx.h"
 #include "platforms/ext/bufferx.h"
 
@@ -279,9 +280,10 @@ Error Window_storeCPUBufferToDisk(const Window *w, CharString filePath, Ns maxTi
 
 	Buffer file = Buffer_createNull();
 
-	Error err = BMP_writeRGBAx(
-		buf, (U32) I32x2_x(w->size), (U32) I32x2_y(w->size),
-		false, &file
+	Error err = BMP_writex(
+		buf, 
+		(BMPInfo) { .w = (U32) I32x2_x(w->size), .h = (U32) I32x2_y(w->size) },
+		&file
 	);
 
 	if(err.genericError)

@@ -26,11 +26,15 @@ typedef struct Error Error;
 
 //TODO: writeR(G)(B), loadR(G)(B)(A), compression
 
-Error BMP_writeRGBA(
-	Buffer buf, 
-	U32 w, 
-	U32 h, 
-	Bool isFlipped, 
-	Allocator allocator,
-	Buffer *result
-);
+typedef struct BMPInfo {
+
+	U32 w, h;
+
+	Bool isFlipped;			//Flipped only on pre-load or write time. After load it will allocate
+	U8 textureFormatId;		//ETextureFormatId
+	U16 padding;
+
+} BMPInfo;
+
+Error BMP_write(Buffer buf, BMPInfo info, Allocator allocator, Buffer *result);
+Error BMP_read(Buffer buf, BMPInfo *info, Allocator allocator, Buffer *result);

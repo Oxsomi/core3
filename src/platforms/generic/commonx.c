@@ -55,14 +55,12 @@ TListXImpl(AllocationBufferBlock);
 
 //BMP
 
-Error BMP_writeRGBAx(
-	Buffer buf,
-	U32 w,
-	U32 h,
-	Bool isFlipped,
-	Buffer *result
-) {
-	return BMP_writeRGBA(buf, w, h, isFlipped, Platform_instance.alloc, result);
+Error BMP_writex(Buffer buf, BMPInfo info, Buffer *result) {
+	return BMP_write(buf, info, Platform_instance.alloc, result);
+}
+
+Error BMP_readx(Buffer buf, BMPInfo *info, Buffer *result) {
+	return BMP_read(buf, info, Platform_instance.alloc, result);
 }
 
 //Buffer

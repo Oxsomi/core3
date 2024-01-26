@@ -665,6 +665,8 @@ inline Error File_loadVirtualInternal(FileLoadVirtual *userData, CharString loc)
 	if(acq < ELockAcquire_Success)
 		_gotoIfError(clean, Error_invalidState(0, "File_loadVirtualInternal() couldn't lock virtualSectionsLock"));
 
+	Bool foundAny = false;
+
 	for (U64 i = 0; i < Platform_instance.virtualSections.length; ++i) {
 
 		VirtualSection *section = Platform_instance.virtualSections.ptrNonConst + i;
@@ -704,6 +706,7 @@ inline Error File_loadVirtualInternal(FileLoadVirtual *userData, CharString loc)
 				file.archive = (Archive) { 0 };
 
 				section->loaded = true;
+				foundAny = true;
 
 			clean0:
 
@@ -721,10 +724,12 @@ inline Error File_loadVirtualInternal(FileLoadVirtual *userData, CharString loc)
 
 		else err = section->loaded ? Error_none() : Error_notFound(1, 1, "File_loadVirtualInternal()::loc not found (1)");
 
-		goto clean;
+		if(err.genericError)
+			goto clean;
 	}
 
-	err = Error_notFound(2, 1, "File_loadVirtualInternal()::loc not found (2)");
+	if(!foundAny)
+		err = Error_notFound(2, 1, "File_loadVirtualInternal()::loc not found (2)");
 
 clean:
 

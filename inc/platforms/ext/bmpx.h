@@ -22,11 +22,7 @@
 #include "types/types.h"
 
 typedef struct Error Error;
+typedef struct BMPInfo BMPInfo;
 
-Error BMP_writeRGBAx(
-	Buffer buf,
-	U32 w,
-	U32 h,
-	Bool isFlipped,
-	Buffer *result
-);
+Error BMP_writex(Buffer buf, BMPInfo info, Buffer *result);
+Error BMP_readx(Buffer buf, BMPInfo *info, Buffer *result);
