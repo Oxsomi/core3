@@ -71,17 +71,20 @@ Error BMP_write(Buffer buf, BMPInfo info, Allocator allocator, Buffer *result) {
 	if((info.w >> 31) || (info.h >> 31))
 		return Error_invalidParameter((info.w >> 31) ? 1 : 2, 0, "BMP_write()::w and h can't exceed I32_MAX");
 
-	if(info.textureFormatId != ETextureFormatId_RGBA8)
-		return Error_invalidParameter(1, 3, "BMP_write()::textureFormatId is only supported for RGBA8/BGRA8 currently");
+	if(info.textureFormatId != ETextureFormatId_BGRA8)
+		return Error_invalidParameter(1, 3, "BMP_write()::textureFormatId is only supported for BGRA8 currently");
 
 	U64 bufLen = Buffer_length(buf);
 
-	if(bufLen + reqHeadersSize > I32_MAX || bufLen != (U64)info.w * info.h * 4)
+	U64 pixelStride = info.discardAlpha ? 3 : 4;
+	U64 stride = (info.w * pixelStride + 3) &~ 3;		//Every line needs to be 4-byte aligned
+
+	if(info.h * stride + reqHeadersSize > I32_MAX || bufLen != (U64)info.w * info.h * 4)
 		return Error_invalidParameter(0, 0, "BMP_write() BMP has an image limit of 2GiB");
 
 	BMPHeader header = (BMPHeader) {
 		.fileType = BMP_MAGIC,
-		.fileSize = (U32)bufLen + reqHeadersSize,
+		.fileSize = (U32)(info.h * stride + reqHeadersSize),
 		.offsetData = reqHeadersSize
 	};
 
@@ -97,9 +100,6 @@ Error BMP_write(Buffer buf, BMPInfo info, Allocator allocator, Buffer *result) {
 
 	Buffer file = Buffer_createNull();
 
-	U64 pixelStride = info.discardAlpha ? 3 : 4;
-	U64 stride = info.w * pixelStride;
-
 	Error err = Buffer_createUninitializedBytes(reqHeadersSize + info.h * stride, allocator, &file);
 
 	if(err.genericError)
@@ -112,9 +112,13 @@ Error BMP_write(Buffer buf, BMPInfo info, Allocator allocator, Buffer *result) {
 
 	if (pixelStride == 3) {		//Copy without alpha, since buffer lengths aren't the same
 
-		//Not flipping can do quite a simple copy
+		//Unfortunately we have to copy per row, since image can be flipped or contain padding
 
-		if(!info.isFlipped) {
+		for (
+			U64 j = info.isFlipped ? info.h - 1 : 0, k = 0;
+			info.isFlipped ? j != U64_MAX : j < info.h;
+			info.isFlipped ? --j : ++j, ++k
+		) {
 
 			//Write two pixels at a time through a U64,
 			//We have to shift out the alpha though.
@@ -123,26 +127,21 @@ Error BMP_write(Buffer buf, BMPInfo info, Allocator allocator, Buffer *result) {
 
 			for (
 				; 
-				srcOff + sizeof(U64) <= bufLen && dstOff + sizeof(U64) <= Buffer_length(fileAppend); 
+				srcOff + sizeof(U64) <= 4 * info.w && dstOff + sizeof(U64) <= stride; 
 				srcOff += sizeof(U64), dstOff += 3 * 2
 			) {
 
-				U64 oldPix = *(const U64*)(buf.ptr + srcOff);
+				U64 oldPix = *(const U64*)(buf.ptr + 4 * info.w * j + srcOff);
 				oldPix = (oldPix & 0xFFFFFF) | (oldPix >> 32 << 24);					//Yeet alpha
 
-				*(U64*)(fileAppend.ptr + dstOff) = oldPix;
+				*(U64*)(fileAppend.ptr + stride * k + dstOff) = oldPix;
 			}
 
 			//If we're left with anything, we have to do slow copies
+			//We ignore the padding in the stride because it won't be read anyways
 
-			for(U64 i = dstOff; i < Buffer_length(fileAppend); ++i)
-				((U8*)fileAppend.ptr)[i] = (U8)(buf.ptr[((i / 3) << 2) + (i % 3)]);
-		}
-
-		//Flipping
-
-		else {
-
+			for(U64 i = dstOff; i < info.w * pixelStride; ++i)
+				((U8*)fileAppend.ptr)[i + stride * k] = (U8)(buf.ptr[((i / 3) << 2) + (i % 3) + 4 * info.w * j]);
 		}
 	}
 
@@ -239,7 +238,7 @@ Error BMP_read(Buffer buf, BMPInfo *info, Allocator allocator, Buffer *result) {
 
 	//If it's not flipped, we don't need to do anything
 
-	info->textureFormatId = ETextureFormatId_RGBA8;
+	info->textureFormatId = ETextureFormatId_BGRA8;
 
 	const U8 *dataStart = start + header.offsetData;
 
