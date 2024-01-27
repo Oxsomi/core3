@@ -32,7 +32,8 @@ typedef struct BMPInfo {
 
 	Bool isFlipped;			//Flipped only on pre-load or write time. After load it will allocate
 	U8 textureFormatId;		//ETextureFormatId
-	U16 padding;
+	Bool discardAlpha;		//Allows storing RGBA8 as RGB8, at the runtime cost of re-allocation and copying
+	U8 padding;
 
 	I32 xPixPerM, yPixPerM;
 

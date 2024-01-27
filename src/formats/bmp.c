@@ -76,7 +76,7 @@ Error BMP_write(Buffer buf, BMPInfo info, Allocator allocator, Buffer *result) {
 
 	U64 bufLen = Buffer_length(buf);
 
-	if(bufLen + reqHeadersSize + sizeof(BMPColorHeader) > I32_MAX || bufLen != (U64)info.w * info.h * 4)
+	if(bufLen + reqHeadersSize > I32_MAX || bufLen != (U64)info.w * info.h * 4)
 		return Error_invalidParameter(0, 0, "BMP_write() BMP has an image limit of 2GiB");
 
 	BMPHeader header = (BMPHeader) {
@@ -90,18 +90,17 @@ Error BMP_write(Buffer buf, BMPInfo info, Allocator allocator, Buffer *result) {
 		.width = (I32) info.w,
 		.height = (I32) info.h * (info.isFlipped ? -1 : 1),
 		.planes = 1,
-		.bitCount = 32,
+		.bitCount = info.discardAlpha ? 24 : 32,
 		.xPixPerM = info.xPixPerM,
 		.yPixPerM = info.yPixPerM
 	};
 
 	Buffer file = Buffer_createNull();
 
-	Error err = Buffer_createUninitializedBytes(
-		reqHeadersSize + bufLen,
-		allocator,
-		&file
-	);
+	U64 pixelStride = info.discardAlpha ? 3 : 4;
+	U64 stride = info.w * pixelStride;
+
+	Error err = Buffer_createUninitializedBytes(reqHeadersSize + info.h * stride, allocator, &file);
 
 	if(err.genericError)
 		return err;
@@ -111,12 +110,48 @@ Error BMP_write(Buffer buf, BMPInfo info, Allocator allocator, Buffer *result) {
 	_gotoIfError(clean, Buffer_append(&fileAppend, &header, sizeof(header)));
 	_gotoIfError(clean, Buffer_append(&fileAppend, &infoHeader, sizeof(infoHeader)));
 
-	U64 stride = (U64)info.w * 4;
+	if (pixelStride == 3) {		//Copy without alpha, since buffer lengths aren't the same
 
-	if(!info.isFlipped)
+		//Not flipping can do quite a simple copy
+
+		if(!info.isFlipped) {
+
+			//Write two pixels at a time through a U64,
+			//We have to shift out the alpha though.
+
+			U64 srcOff = 0, dstOff = 0;
+
+			for (
+				; 
+				srcOff + sizeof(U64) <= bufLen && dstOff + sizeof(U64) <= Buffer_length(fileAppend); 
+				srcOff += sizeof(U64), dstOff += 3 * 2
+			) {
+
+				U64 oldPix = *(const U64*)(buf.ptr + srcOff);
+				oldPix = (oldPix & 0xFFFFFF) | (oldPix >> 32 << 24);					//Yeet alpha
+
+				*(U64*)(fileAppend.ptr + dstOff) = oldPix;
+			}
+
+			//If we're left with anything, we have to do slow copies
+
+			for(U64 i = dstOff; i < Buffer_length(fileAppend); ++i)
+				((U8*)fileAppend.ptr)[i] = (U8)(buf.ptr[((i / 3) << 2) + (i % 3)]);
+		}
+
+		//Flipping
+
+		else {
+
+		}
+	}
+
+	//Buffer lengths are the same, we can efficiently copy
+
+	else if(!info.isFlipped)
 		_gotoIfError(clean, Buffer_appendBuffer(&fileAppend, buf))
 
-	else for (U64 j = info.h - 1, k = 0; j != U64_MAX; --j, ++k)
+	else for (U64 j = (U64)info.h - 1, k = 0; j != U64_MAX; --j, ++k)
 		Buffer_copy(
 			Buffer_createRef((U8*)fileAppend.ptr + stride * k, stride),
 			Buffer_createRefConst(buf.ptr + stride * j, stride)
@@ -182,6 +217,7 @@ Error BMP_read(Buffer buf, BMPInfo *info, Allocator allocator, Buffer *result) {
 	info->isFlipped = bmpInfo.height < 0;
 	info->xPixPerM = bmpInfo.xPixPerM;
 	info->yPixPerM = bmpInfo.yPixPerM;
+	info->discardAlpha = false;
 
 	if(bmpInfo.height < 0)
 		bmpInfo.height *= -1;

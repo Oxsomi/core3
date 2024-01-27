@@ -351,7 +351,8 @@ const C8 *reqExtensionsName[] = {
 	"VK_KHR_driver_properties",
 	"VK_KHR_synchronization2",
 	"VK_KHR_timeline_semaphore",
-	"VK_KHR_maintenance4"
+	"VK_KHR_maintenance4",
+	"VK_KHR_swapchain"
 };
 
 U64 reqExtensionsNameCount = sizeof(reqExtensionsName) / sizeof(reqExtensionsName[0]);
@@ -371,7 +372,6 @@ const C8 *optExtensionsName[] = {
 	"VK_KHR_ray_tracing_pipeline",
 	"VK_KHR_ray_query",
 	"VK_KHR_acceleration_structure",
-	"VK_KHR_swapchain",
 	"VK_NV_ray_tracing_motion_blur",
 	"VK_NV_ray_tracing_invocation_reorder",
 	"VK_EXT_mesh_shader",
@@ -935,11 +935,6 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 			dynamicRendering.dynamicRendering
 		)
 			capabilities.features |= EGraphicsFeatures_DirectRendering;
-
-		//Swapchain
-		
-		if(optExtensions[EOptExtensions_Swapchain])
-			capabilities.features |= EGraphicsFeatures_Swapchain;
 
 		//Shader types
 

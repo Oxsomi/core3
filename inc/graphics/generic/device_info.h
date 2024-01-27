@@ -69,8 +69,7 @@ typedef enum EGraphicsFeatures {
 	EGraphicsFeatures_SubgroupArithmetic		= 1 << 6,
 	EGraphicsFeatures_SubgroupShuffle			= 1 << 7,
 
-	EGraphicsFeatures_Swapchain					= 1 << 8,
-
+	//											= 1 << 8
 	//EGraphicsFeatures_Multiview				= 1 << 9,		TODO:
 
 	//Raytracing extensions

@@ -34,7 +34,6 @@ typedef enum EOptExtensions {
 	EOptExtensions_RayPipeline,
 	EOptExtensions_RayQuery,
 	EOptExtensions_RayAcceleration,
-	EOptExtensions_Swapchain,
 	EOptExtensions_RayMotionBlur,
 	EOptExtensions_RayReorder,
 	EOptExtensions_MeshShader,

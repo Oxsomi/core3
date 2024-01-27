@@ -112,13 +112,6 @@ Error GraphicsDeviceRef_createSwapchain(GraphicsDeviceRef *deviceRef, SwapchainI
 			0, "GraphicsDeviceRef_createSwapchain()::deviceRef is an invalid type"
 		);
 
-	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
-
-	if(!(device->info.capabilities.features & EGraphicsFeatures_Swapchain))
-		return Error_unsupportedOperation(
-			0, "GraphicsDeviceRef_createSwapchain() is called, but swapchain extension isn't supported"
-		);
-
 	Error err = RefPtr_createx(
 		(U32)(sizeof(Swapchain) + SwapchainExt_size), 
 		(ObjectFreeFunc) GraphicsDevice_freeSwapchain, 

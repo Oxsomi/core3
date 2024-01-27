@@ -323,7 +323,6 @@ Error GraphicsDevice_initExt(
 			case EOptExtensions_RayPipeline:				on = feat & EGraphicsFeatures_RayPipeline;				break;
 			case EOptExtensions_RayQuery:					on = feat & EGraphicsFeatures_RayQuery;					break;
 			case EOptExtensions_RayAcceleration:			on = feat & EGraphicsFeatures_Raytracing;				break;
-			case EOptExtensions_Swapchain:					on = feat & EGraphicsFeatures_Swapchain;				break;
 			case EOptExtensions_RayMotionBlur:				on = feat & EGraphicsFeatures_RayMotionBlur;			break;
 			case EOptExtensions_RayReorder:					on = feat & EGraphicsFeatures_RayReorder;				break;
 			case EOptExtensions_MeshShader:					on = feat & EGraphicsFeatures_MeshShader;				break;

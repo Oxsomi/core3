@@ -38,7 +38,7 @@ Because of this, a device needs the following requirements to be OxC3 compatible
 - Required instance extensions:
   - VK_KHR_get_physical_device_properties2
   - VK_KHR_external_memory_capabilities
-- Supported instance extensions (optional:
+- Supported instance extensions (optional):
   - Debug build only:
     - VK_EXT_debug_report
     - VK_EXT_debug_utils
@@ -54,11 +54,19 @@ Because of this, a device needs the following requirements to be OxC3 compatible
   - VK_KHR_get_memory_requirements2
   - VK_EXT_shader_subgroup_ballot
   - VK_EXT_shader_subgroup_vote
-  - VK_EXT_descriptor_indexing with all features true except shaderInputAttachmentArrayDynamicIndexing and shaderInputAttachmentArrayNonUniformIndexing.
+  - VK_EXT_descriptor_indexing with all features true except shaderInputAttachmentArrayDynamicIndexing, descriptorBindingUniformBufferUpdateAfterBind and shaderInputAttachmentArrayNonUniformIndexing.
+    - on: shaderUniformTexelBufferArrayDynamicIndexing, shaderStorageTexelBufferArrayDynamicIndexing, shaderUniformBufferArrayNonUniformIndexing, shaderSampledImageArrayNonUniformIndexing, shaderStorageBufferArrayNonUniformIndexing, shaderStorageImageArrayNonUniformIndexing, shaderUniformTexelBufferArrayNonUniformIndexing, shaderStorageTexelBufferArrayNonUniformIndexing, descriptorBindingSampledImageUpdateAfterBind, descriptorBindingStorageImageUpdateAfterBind, descriptorBindingStorageBufferUpdateAfterBind, descriptorBindingUniformTexelBufferUpdateAfterBind, descriptorBindingStorageTexelBufferUpdateAfterBind, descriptorBindingUpdateUnusedWhilePending, descriptorBindingPartiallyBound, descriptorBindingVariableDescriptorCount, runtimeDescriptorArray
   - VK_KHR_driver_properties
   - VK_KHR_synchronization2
   - VK_KHR_timeline_semaphore
-- Supported device extensions:
+  - VK_KHR_swapchain as Swapchain
+    - Requires at least 1 image layer.
+    - Requires ability to make 3 images.
+    - Requires usage flags of transfer (src, dst), sampled, storage, color attachment bits.
+    - Requires FIFO or MAILBOX. Allows FIFO_RELAXED and IMMEDIATE as well.
+    - Requires inherit alpha or opaque support.
+    - Application is responsible for presenting image in the right rotation if SwapchainInfo::requiresManualComposite.
+- Device extensions that can be queried (not all are supported yet):
   - Debug build only:
     - VK_EXT_debug_marker as internal flag
   - VK_KHR_shader_float16_int8 as F16
@@ -68,13 +76,6 @@ Because of this, a device needs the following requirements to be OxC3 compatible
   - VK_KHR_ray_tracing_pipeline as RaytracingPipeline
   - VK_KHR_ray_query as RayQuery
   - VK_KHR_acceleration_structure && (RaytracingPipeline || RaytracingQuery) as Raytracing
-  - VK_KHR_swapchain as Swapchain
-    - Requires at least 1 image layer.
-    - Requires ability to make 2 (vsync) or 3 (!vsync) images.
-    - Requires usage flags of transfer (src, dst), sampled, storage, color attachment bits.
-    - Requires FIFO or MAILBOX. Allows FIFO_RELAXED and IMMEDIATE as well.
-    - Requires inherit alpha or opaque support.
-    - Application is responsible for presenting image in the right rotation if SwapchainInfo::requiresManualComposite.
   - VK_NV_ray_tracing_motion_blur as RayMotionBlur
   - VK_NV_ray_tracing_invocation_reorder as RayReorder
   - VK_EXT_mesh_shader as MeshShader
@@ -82,8 +83,6 @@ Because of this, a device needs the following requirements to be OxC3 compatible
   - VK_NV_displacement_micromap as RayMicromapDisplacement
   - VK_KHR_dynamic_rendering as DirectRendering
   - VK_KHR_deferred_host_operations is required for raytracing. Otherwise all raytracing extensions will be forced off.
-- The following descriptor indexing features have to be turned on:
-- shaderUniformTexelBufferArrayDynamicIndexing, shaderStorageTexelBufferArrayDynamicIndexing, shaderUniformBufferArrayNonUniformIndexing, shaderSampledImageArrayNonUniformIndexing, shaderStorageBufferArrayNonUniformIndexing, shaderStorageImageArrayNonUniformIndexing, shaderUniformTexelBufferArrayNonUniformIndexing, shaderStorageTexelBufferArrayNonUniformIndexing, descriptorBindingSampledImageUpdateAfterBind, descriptorBindingStorageImageUpdateAfterBind, descriptorBindingStorageBufferUpdateAfterBind, descriptorBindingUniformTexelBufferUpdateAfterBind, descriptorBindingStorageTexelBufferUpdateAfterBind, descriptorBindingUpdateUnusedWhilePending, descriptorBindingPartiallyBound, descriptorBindingVariableDescriptorCount, runtimeDescriptorArray
 - subgroupSize of 16 - 128.
 - sampleRateShading of true.
 - subgroup operations of basic, vote, ballot are required. Available only in compute by default. arithmetic and shuffle are optional.

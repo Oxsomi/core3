@@ -89,9 +89,6 @@ void GraphicsDeviceInfo_print(const GraphicsDeviceInfo *deviceInfo, Bool printCa
 		if(feat & EGraphicsFeatures_SubgroupShuffle)
 			Log_debugLnx("\t\tSubgroup shuffle");
 
-		if(feat & EGraphicsFeatures_Swapchain)
-			Log_debugLnx("\t\tSwapchain");
-
 		//if(feat & EGraphicsFeatures_Multiview)
 		//	Log_debugLnx("\t\tMultiview");
 
