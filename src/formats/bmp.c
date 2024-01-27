@@ -141,7 +141,7 @@ Error BMP_write(Buffer buf, BMPInfo info, Allocator allocator, Buffer *result) {
 			//We ignore the padding in the stride because it won't be read anyways
 
 			for(U64 i = dstOff; i < info.w * pixelStride; ++i)
-				((U8*)fileAppend.ptr)[i + stride * k] = (U8)(buf.ptr[((i / 3) << 2) + (i % 3) + 4 * info.w * j]);
+				((U8*)fileAppend.ptr)[i + stride * k] = buf.ptr[((i / 3) << 2) + (i % 3) + 4 * info.w * j];
 		}
 	}
 
@@ -216,13 +216,13 @@ Error BMP_read(Buffer buf, BMPInfo *info, Allocator allocator, Buffer *result) {
 	info->isFlipped = bmpInfo.height < 0;
 	info->xPixPerM = bmpInfo.xPixPerM;
 	info->yPixPerM = bmpInfo.yPixPerM;
-	info->discardAlpha = false;
+	info->discardAlpha = bmpInfo.bitCount == 24;
 
 	if(bmpInfo.height < 0)
 		bmpInfo.height *= -1;
 
 	if(
-		bmpInfo.bitCount != 32 || 
+		(bmpInfo.bitCount != 32 && bmpInfo.bitCount != 24) || 
 		(bmpInfo.compression != 3 && bmpInfo.compression) || 
 		(bmpInfo.compressedSize != len && bmpInfo.compressedSize)
 	)
@@ -233,7 +233,10 @@ Error BMP_read(Buffer buf, BMPInfo *info, Allocator allocator, Buffer *result) {
 	info->w = (U32) bmpInfo.width;
 	info->h = (U32) bmpInfo.height;
 
-	if(len != (U64)info->w * info->h * 4)
+	U64 pixelStride = bmpInfo.bitCount >> 3;
+	U64 stride = (info->w * pixelStride + 3) &~ 3;		//Every line needs to be 4-byte aligned
+
+	if(len != info->h * stride)
 		_gotoIfError(clean, Error_invalidParameter(0, 0, "BMP_read() BMP has an image limit of 2GiB"));
 
 	//If it's not flipped, we don't need to do anything
@@ -242,22 +245,53 @@ Error BMP_read(Buffer buf, BMPInfo *info, Allocator allocator, Buffer *result) {
 
 	const U8 *dataStart = start + header.offsetData;
 
-	if (!info->isFlipped) {
+	if (!info->isFlipped && pixelStride == 4) {				//We can only make a raw reference if bits aren't modified
 		*result = Buffer_createRefConst(dataStart, len);
 		return Error_none();
 	}
 
 	//Otherwise we need to flip it manually and allocate a new buffer
 
-	_gotoIfError(clean, Buffer_createEmptyBytes(len, allocator, result));
+	_gotoIfError(clean, Buffer_createOneBits((U64)info->w * info->h * 32, allocator, result));
 
-	U64 stride = (U64)info->w * 4;
+	for (
+		U64 j = info->isFlipped ? info->h - 1 : 0, k = 0;
+		info->isFlipped ? j != U64_MAX : j < info->h;
+		info->isFlipped ? --j : ++j, ++k
+	) {
 
-	for (U64 j = info->h - 1, k = 0; j != U64_MAX; --j, ++k)
-		Buffer_copy(
-			Buffer_createRef((U8*)result->ptr + stride * k, stride),
-			Buffer_createRefConst(dataStart + stride * j, stride)
-		);
+		if(pixelStride == 4)		//Simple copy
+			Buffer_copy(
+				Buffer_createRef((U8*)result->ptr + stride * k, stride),
+				Buffer_createRefConst(dataStart + stride * j, stride)
+			);
+
+		else {						//Unfortunately we have to copy per row
+
+			//Write two pixels at a time through a U64,
+			//We have to shift out the alpha though.
+
+			U64 dstOff = 0, srcOff = 0;
+
+			for (
+				; 
+				dstOff + sizeof(U64) <= 4 * info->w && srcOff + sizeof(U64) <= stride; 
+				dstOff += sizeof(U64), srcOff += 3 * 2
+			) {
+
+				U64 oldPix = *(const U64*)(dataStart + stride * j + srcOff);
+				oldPix = (oldPix & 0xFFFFFF) | (oldPix >> 24 << 32) | 0xFF000000FF000000;		//Expand alpha
+
+				*(U64*)(result->ptr + (U64)4 * info->w * k + dstOff) = oldPix;
+			}
+
+			//If we're left with anything, we have to do slow copies
+			//We ignore the padding in the stride because it won't be read anyways
+
+			for(U64 i = srcOff; i < info->w * pixelStride; ++i)
+				((U8*)result->ptr)[(U64)4 * info->w * k + ((i / 3) << 2) + (i % 3)] = dataStart[stride * j + i];
+		}
+	}
 
 	return Error_none();
 

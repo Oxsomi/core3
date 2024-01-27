@@ -15,7 +15,7 @@ BMP support is very basic, it restricts usage to the following:
 - Total image size in bytes must not exceed **2GiB**.
 - Width and height must be <= **I32_MAX**.
 - Flipped images are allowed.
-- **BGRA8** is required.
+- **BGRA8** or **BGR8** is required.
 
 Usage via:
 
@@ -27,6 +27,7 @@ Where BMPInfo has the following properties:
 
 - U32 **w**, **h**: dimensions (width and height)
 - Bool **isFlipped**: if the image should be flipped on load and/or write.
+- Bool **discardAlpha**: if the image saves alpha or not (BGR8 is not supported in texture formats, so it's converted at runtime).
 - U8 **textureFormatId**: ETextureFormatId_BGRA8 is currently the only one supported.
 - I32 **xPixPerM**, **yPixPerM**: preferred display size in pixels per meter. Setting this to 0 is allowed as it might be ignored by the displayer.
 
