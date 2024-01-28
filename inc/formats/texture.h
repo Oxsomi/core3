@@ -32,6 +32,15 @@ typedef enum ETexturePrimitive {
 	ETexturePrimitive_UNormBGR				//Special kind of formats
 } ETexturePrimitive;
 
+typedef enum ETextureType {
+
+	ETextureType_2D,
+	ETextureType_3D,
+	ETextureType_Cube,
+	ETextureType_Count
+
+} ETextureType;
+
 typedef enum ETextureAlignment {
 	ETextureAlignment_4,
 	ETextureAlignment_5,
@@ -376,7 +385,7 @@ Bool ETextureFormat_getAlignment(ETextureFormat f, U8 *x, U8 *y);
 //Get texture's size in bytes
 //Returns U64_MAX if misaligned (compressed formats)
 
-U64 ETextureFormat_getSize(ETextureFormat f, U32 w, U32 h);
+U64 ETextureFormat_getSize(ETextureFormat f, U32 w, U32 h, U32 l);
 
 //Map ETextureFormat to simplified id for storing in a more compact manner
 //ETextureFormatId = U8 while ETextureFormat is U32.

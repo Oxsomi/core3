@@ -240,7 +240,7 @@ _gotoIfError(clean, GraphicsDeviceRef_create(
 
 - ```c
   Error createRenderTexture(
-      ERenderTextureType type, 
+      ETextureType type, 
       I32x4 size,
       ETextureFormatId format, 
       ERenderTextureUsage usage,
@@ -485,7 +485,7 @@ A RenderTexture itself can currently only be 2D, but will be possible to be 3D o
 ```c
 _gotoIfError(clean, GraphicsDeviceRef_createRenderTexture(
 	twm->device, 
-	ERenderTextureType_2D, 			//2D is only supported currently
+	ETextureType_2D, 				//2D is only supported currently
     I32x4_fromI32x2(w->size), 		//For 2D textures we can just use { x, y, 0, 0 }
     ETextureFormatId_BGRA8, 		//Non compressed texture format
     ERenderTextureUsage_ShaderRW, 	//Allow both shader writes and reads

@@ -393,7 +393,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 
 			//Validate bounds for attribute
 
-			U64 size = ETextureFormat_getSize(format, 1, 1);
+			U64 size = ETextureFormat_getSize(format, 1, 1, 1);
 			U64 offset = attrib.offset11 & 2047;
 
 			if(offset + size > stride)

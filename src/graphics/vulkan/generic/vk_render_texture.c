@@ -31,7 +31,7 @@ const U64 RenderTextureExt_size = sizeof(VkManagedImage);
 
 Error GraphicsDeviceRef_createRenderTextureExt(
 	GraphicsDeviceRef *deviceRef, 
-	ERenderTextureType type,
+	ETextureType type,
 	I32x4 size,
 	ETextureFormat format, 
 	ERenderTextureUsage usage,
@@ -54,8 +54,8 @@ Error GraphicsDeviceRef_createRenderTextureExt(
 	renderTextureExt->readHandle = renderTextureExt->writeHandle = U32_MAX;
 
 	VkFormat vkFormat = mapVkFormat(format);
-	Bool is3D = type != ERenderTextureType_2D;
-	U32 depth = type == ERenderTextureType_3D ? (U32)I32x4_z(size) : (type == ERenderTextureType_Cube ? 6 : 1);
+	Bool is3D = type != ETextureType_2D;
+	U32 depth = type == ETextureType_3D ? (U32)I32x4_z(size) : (type == ETextureType_Cube ? 6 : 1);
 
 	VkImageCreateInfo imageInfo = (VkImageCreateInfo) {
 
@@ -146,8 +146,7 @@ Error GraphicsDeviceRef_createRenderTextureExt(
 		.image = renderTextureExt->image,
 
 		.viewType = 
-			type == ERenderTextureType_Cube ? VK_IMAGE_VIEW_TYPE_CUBE : 
-			(is3D ? VK_IMAGE_VIEW_TYPE_3D : VK_IMAGE_VIEW_TYPE_2D),
+			type == ETextureType_Cube ? VK_IMAGE_VIEW_TYPE_CUBE : (is3D ? VK_IMAGE_VIEW_TYPE_3D : VK_IMAGE_VIEW_TYPE_2D),
 
 		.format = vkFormat,
 
@@ -160,13 +159,13 @@ Error GraphicsDeviceRef_createRenderTextureExt(
 
 	_gotoIfError(clean, vkCheck(vkCreateImageView(deviceExt->device, &viewCreate, NULL, view)));
 	
-	if(CharString_length(temp)) {
+	if(CharString_length(name)) {
 
 		#ifndef NDEBUG
 
 			if(instance->debugSetName) {
 
-				_gotoIfError(clean, CharString_formatx(&temp, "%.*s view", CharString_length(temp), temp.ptr));
+				_gotoIfError(clean, CharString_formatx(&temp, "%.*s view", CharString_length(name), name.ptr));
 
 				VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
 					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,

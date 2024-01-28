@@ -29,15 +29,6 @@ typedef struct CharString CharString;
 
 typedef enum EMSAASamples EMSAASamples;
 
-typedef enum ERenderTextureType {
-
-	ERenderTextureType_2D,
-	ERenderTextureType_3D,
-	ERenderTextureType_Cube,
-	ERenderTextureType_Count
-
-} ERenderTextureType;
-
 typedef enum ERenderTextureUsage {
 
 	ERenderTextureUsage_None,
@@ -52,7 +43,7 @@ typedef struct RenderTexture {
 
 	GraphicsDeviceRef *device;
 
-	ERenderTextureType type;
+	ETextureType type;
 	U32 readLocation;
 
 	I32x4 size;
@@ -75,7 +66,7 @@ Error RenderTextureRef_inc(RenderTextureRef *renderTexture);
 
 Error GraphicsDeviceRef_createRenderTexture(
 	GraphicsDeviceRef *deviceRef, 
-	ERenderTextureType type,
+	ETextureType type,
 	I32x4 size, 
 	ETextureFormatId format, 
 	ERenderTextureUsage usage,

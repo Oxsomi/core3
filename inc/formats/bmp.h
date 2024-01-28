@@ -24,8 +24,6 @@
 typedef struct Allocator Allocator;
 typedef struct Error Error;
 
-//TODO: writeR(G)(B), loadR(G)(B)(A), compression
-
 typedef struct BMPInfo {
 
 	U32 w, h;

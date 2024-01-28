@@ -88,7 +88,7 @@ Bool ETextureFormat_getAlignment(ETextureFormat f, U8 *x, U8 *y) {
 	return true;
 }
 
-U64 ETextureFormat_getSize(ETextureFormat f, U32 w, U32 h) {
+U64 ETextureFormat_getSize(ETextureFormat f, U32 w, U32 h, U32 l) {
 
 	U8 alignW = 1, alignH = 1;
 
@@ -103,5 +103,5 @@ U64 ETextureFormat_getSize(ETextureFormat f, U32 w, U32 h) {
 		h /= alignH;
 	}
 
-	return (((U64)w * h * ETextureFormat_getBits(f)) + 7) >> 3;
+	return ((((U64)w * h * ETextureFormat_getBits(f)) + 7) >> 3) * l;
 }

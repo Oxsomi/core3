@@ -612,7 +612,7 @@ Error CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFi
 	if(header.flags & (ECAFlags_UseAESChunksA | ECAFlags_UseAESChunksB))		//TODO: AES chunks
 		_gotoIfError(clean, Error_unsupportedOperation(0, "CAFile_read() AES chunks not supported yet"));
 
-	if(header.type >> 4)							//TODO: Compression
+	if(header.type >> 4)								//TODO: Compression
 		_gotoIfError(clean, Error_unsupportedOperation(1, "CAFile_read() decompression not supported yet"));
 
 	if(header.flags & ECAFlags_UseSHA256)				//TODO: SHA256

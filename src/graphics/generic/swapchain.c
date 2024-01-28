@@ -112,6 +112,9 @@ Error GraphicsDeviceRef_createSwapchain(GraphicsDeviceRef *deviceRef, SwapchainI
 			0, "GraphicsDeviceRef_createSwapchain()::deviceRef is an invalid type"
 		);
 
+	if(I32x2_any(I32x2_gt(info.window->size, I32x2_xx2(16384))) || I32x2_any(I32x2_leq(info.window->size, I32x2_zero())))
+		return Error_invalidParameter(1, 0, "GraphicsDeviceRef_createSwapchain()::info.window->size must be >0 and <=16384");
+
 	Error err = RefPtr_createx(
 		(U32)(sizeof(Swapchain) + SwapchainExt_size), 
 		(ObjectFreeFunc) GraphicsDevice_freeSwapchain, 

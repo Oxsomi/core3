@@ -23,6 +23,7 @@
 #include "graphics/generic/device.h"
 #include "graphics/generic/swapchain.h"
 #include "graphics/generic/device_buffer.h"
+#include "graphics/generic/device_texture.h"
 #include "graphics/generic/pipeline.h"
 #include "graphics/generic/depth_stencil.h"
 #include "graphics/generic/render_texture.h"
@@ -282,7 +283,8 @@ Bool CommandListRef_isBound(CommandList *commandList, RefPtr *resource, Resource
 		if(
 			resource->typeId == EGraphicsTypeId_Swapchain || 
 			resource->typeId == EGraphicsTypeId_DepthStencil ||
-			resource->typeId == EGraphicsTypeId_RenderTexture
+			resource->typeId == EGraphicsTypeId_RenderTexture ||
+			resource->typeId == EGraphicsTypeId_DeviceTexture
 		) {
 			if(CommandListRef_imageRangeConflicts(resource, range.image, transition.resource, transition.range.image)) {
 				if(found) *found = &commandList->pendingTransitions.ptrNonConst[i];
@@ -901,23 +903,45 @@ Error CommandListRef_startScope(
 
 		switch (typeId) {
 
+			case EGraphicsTypeId_DeviceBuffer:
+			case EGraphicsTypeId_DepthStencil:
+			case EGraphicsTypeId_DeviceTexture:
 			case EGraphicsTypeId_RenderTexture:
 			case EGraphicsTypeId_Swapchain: {
 
 				Bool allowShaderWrite = false, allowShaderRead = true;
 				GraphicsDeviceRef *objectDevice = NULL;
 
-				if(typeId == EGraphicsTypeId_Swapchain) {
-					Swapchain *swapchain = SwapchainRef_ptr(res);
-					allowShaderWrite = swapchain->info.usage & ESwapchainUsage_ShaderWrite;
-					objectDevice = swapchain->device;
-				}
+				switch (typeId) {
 
-				else {
-					RenderTexture *renderTexture = RenderTextureRef_ptr(res);
-					allowShaderWrite = renderTexture->usage & ERenderTextureUsage_ShaderWrite;
-					allowShaderRead = renderTexture->usage & ERenderTextureUsage_ShaderRead;
-					objectDevice = renderTexture->device;
+					case EGraphicsTypeId_Swapchain:
+						allowShaderWrite = SwapchainRef_ptr(res)->info.usage & ESwapchainUsage_ShaderWrite;
+						objectDevice = SwapchainRef_ptr(res)->device;
+						break;
+
+					case EGraphicsTypeId_DepthStencil:
+						allowShaderRead = DepthStencilRef_ptr(res)->allowShaderRead;
+						objectDevice = DepthStencilRef_ptr(res)->device;
+						break;
+
+					case EGraphicsTypeId_DeviceTexture:
+						allowShaderRead = DeviceTextureRef_ptr(res)->usage & EDeviceTextureUsage_ShaderRead;
+						objectDevice = DeviceTextureRef_ptr(res)->device;
+						break;
+
+					case EGraphicsTypeId_DeviceBuffer:
+						DeviceBuffer *devBuf = DeviceBufferRef_ptr(res);
+						allowShaderWrite = devBuf->usage & EDeviceBufferUsage_ShaderWrite;
+						allowShaderRead = devBuf->usage & EDeviceBufferUsage_ShaderRead;
+						objectDevice = devBuf->device;
+						break;
+
+					default:
+						RenderTexture *renderTexture = RenderTextureRef_ptr(res);
+						allowShaderWrite = renderTexture->usage & ERenderTextureUsage_ShaderWrite;
+						allowShaderRead = renderTexture->usage & ERenderTextureUsage_ShaderRead;
+						objectDevice = renderTexture->device;
+						break;
 				}
 
 				if (transition.isWrite && !allowShaderWrite)
@@ -933,48 +957,6 @@ Error CommandListRef_startScope(
 				if(objectDevice != device)
 					_gotoIfError(clean, Error_unsupportedOperation(
 						0, "CommandListRef_startScope()::transitions[i].resource's device is incompatible"
-					));
-
-				break;
-			}
-
-			case EGraphicsTypeId_DepthStencil: {
-
-				DepthStencil *depthStencil = DepthStencilRef_ptr(res);
-
-				if (transition.isWrite)
-					_gotoIfError(clean, Error_constData(
-						0, 0, "CommandListRef_startScope() depth stencil can only be used as shader read!"
-					));
-
-				if(depthStencil->device != device)
-					_gotoIfError(clean, Error_unsupportedOperation(
-						0, "CommandListRef_startScope()::transitions[i].resource's device is incompatible"
-					));
-
-				break;
-			}
-
-			case EGraphicsTypeId_DeviceBuffer: {
-
-				DeviceBuffer *devBuf = DeviceBufferRef_ptr(res);
-
-				if (transition.isWrite) {
-
-					if(!(devBuf->usage & EDeviceBufferUsage_ShaderWrite))
-						_gotoIfError(clean, Error_constData(
-							0, 1, "CommandListRef_startScope()::transitions[i].resource should be writable"
-						));
-				}
-
-				else if(!(devBuf->usage & EDeviceBufferUsage_ShaderRead))
-					_gotoIfError(clean, Error_unsupportedOperation(
-						1, "CommandListRef_startScope()::transitions[i].resource should be readable"
-					));
-
-				if(devBuf->device != device)
-					_gotoIfError(clean, Error_unsupportedOperation(
-						2, "CommandListRef_startScope()::transitions[i].resource's device is incompatible"
 					));
 
 				break;
@@ -1831,7 +1813,7 @@ Error CommandListRef_startRenderExt(
 						3, "CommandListRef_startRenderExt() renderTexture had resolveImage, while MSAA was off"
 					));
 
-				if(renderTexture->type != ERenderTextureType_2D)
+				if(renderTexture->type != ETextureType_2D)
 					_gotoIfError(clean, Error_invalidParameter(
 						3, (U32)lockedId, "CommandListRef_startRenderExt()::colors[i].image needs to be a 2D texture"
 					));

@@ -47,8 +47,10 @@ typedef struct BufferRange {
 } BufferRange;
 
 typedef struct TextureRange {
-	U8 startRange[4];
-	U8 endRange[4];
+	U16 startRange[3];
+	U16 endRange[3];
+	U16 levelId;
+	U16 padding;
 } TextureRange;
 
 typedef union DevicePendingRange {

@@ -25,6 +25,7 @@
 #include "graphics/generic/swapchain.h"
 #include "graphics/generic/pipeline.h"
 #include "graphics/generic/device_buffer.h"
+#include "graphics/generic/device_texture.h"
 #include "graphics/generic/depth_stencil.h"
 #include "graphics/generic/render_texture.h"
 #include "graphics/vulkan/vulkan.h"
@@ -700,7 +701,8 @@ void CommandList_process(
 				Bool isSwapchain = transition.resource->typeId == EGraphicsTypeId_Swapchain;
 				Bool isRenderTexture = transition.resource->typeId == EGraphicsTypeId_RenderTexture;
 				Bool isDepthStencil = transition.resource->typeId == EGraphicsTypeId_DepthStencil;
-				Bool isImage = isSwapchain || isRenderTexture || isDepthStencil;
+				Bool isDeviceTexture = transition.resource->typeId == EGraphicsTypeId_DeviceTexture;
+				Bool isImage = isSwapchain || isRenderTexture || isDepthStencil || isDeviceTexture;
 				Bool isShaderRead = transition.type == ETransitionType_ShaderRead;
 
 				VkImageLayout layout = VK_IMAGE_LAYOUT_GENERAL;
@@ -815,15 +817,15 @@ void CommandList_process(
 					VkManagedImage *imageExt = NULL;
 
 					if(isSwapchain) {
-
-						Swapchain *swapchain = SwapchainRef_ptr(transition.resource);
-						VkSwapchain *swapchainExt = Swapchain_ext(swapchain, Vk);
-
+						VkSwapchain *swapchainExt = Swapchain_ext(SwapchainRef_ptr(transition.resource), Vk);
 						imageExt = &swapchainExt->images.ptrNonConst[swapchainExt->currentIndex];
 					}
 
 					else if(isRenderTexture)
 						imageExt = (VkManagedImage*) RenderTexture_ext(RenderTextureRef_ptr(transition.resource), );
+
+					else if(isDeviceTexture)
+						imageExt = (VkManagedImage*) DeviceTexture_ext(DeviceTextureRef_ptr(transition.resource), );
 
 					else imageExt = (VkManagedImage*) DepthStencil_ext(DepthStencilRef_ptr(transition.resource), );
 

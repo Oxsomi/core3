@@ -200,7 +200,7 @@ Error GraphicsDeviceRef_createDepthStencilExt(
 
 			if(instance->debugSetName && CharString_length(name)) {
 
-				_gotoIfError(clean, CharString_formatx(&temp, "%.*s view", CharString_length(temp), temp.ptr));
+				_gotoIfError(clean, CharString_formatx(&temp, "%.*s view", CharString_length(name), name.ptr));
 
 				VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
 					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,

@@ -36,7 +36,7 @@ Error RenderTextureRef_inc(RenderTextureRef *renderTexture) {
 
 impl Error GraphicsDeviceRef_createRenderTextureExt(
 	GraphicsDeviceRef *deviceRef, 
-	ERenderTextureType type,
+	ETextureType type,
 	I32x4 size, 
 	ETextureFormat format, 
 	ERenderTextureUsage usage,
@@ -57,7 +57,7 @@ Bool GraphicsDevice_freeRenderTexture(RenderTexture *renderTexture, Allocator al
 
 Error GraphicsDeviceRef_createRenderTexture(
 	GraphicsDeviceRef *deviceRef, 
-	ERenderTextureType type,
+	ETextureType type,
 	I32x4 size, 
 	ETextureFormatId formatId, 
 	ERenderTextureUsage usage,
@@ -72,11 +72,14 @@ Error GraphicsDeviceRef_createRenderTexture(
 	if (formatId >= ETextureFormatId_Count)
 		return Error_invalidParameter(3, 0, "GraphicsDeviceRef_createRenderTexture()::format is out of bounds");
 
-	if (type >= ERenderTextureType_Count)
+	if (type >= ETextureType_Count)
 		return Error_invalidParameter(1, 0, "GraphicsDeviceRef_createRenderTexture()::type is out of bounds");
 
 	if(I32x4_any(I32x4_lt(size, I32x4_zero())))
 		return Error_invalidParameter(2, 0, "GraphicsDeviceRef_createRenderTexture()::size should be >= 0");
+
+	if(I32x4_any(I32x4_gt(size, I32x4_create4(16384, 16384, 256, 1))))
+		return Error_invalidParameter(2, 0, "GraphicsDeviceRef_createRenderTexture()::size must be <=(16384.xx, 256)");
 
 	if(I32x2_any(I32x2_eq(I32x2_fromI32x4(size), I32x2_zero())))
 		return Error_invalidParameter(2, 0, "GraphicsDeviceRef_createRenderTexture()::size.xy should be > 0");
@@ -84,13 +87,13 @@ Error GraphicsDeviceRef_createRenderTexture(
 	if(I32x4_w(size) != 0)
 		return Error_invalidParameter(2, 0, "GraphicsDeviceRef_createRenderTexture()::size.w should be 0");
 
-	if(type != ERenderTextureType_3D && I32x4_z(size) != 0)
+	if(type != ETextureType_3D && I32x4_z(size) != 0)
 		return Error_invalidParameter(2, 0, "GraphicsDeviceRef_createRenderTexture()::size.z should be 0 if type isn't 3D");
 
-	if(type == ERenderTextureType_3D && I32x4_z(size) == 0)
+	if(type == ETextureType_3D && I32x4_z(size) == 0)
 		return Error_invalidParameter(2, 0, "GraphicsDeviceRef_createRenderTexture()::size.z should not be 0 if type is 3D");
 
-	if(type != ERenderTextureType_2D)			//TODO: Implement 3D and cube textures
+	if(type != ETextureType_2D)			//TODO: Implement 3D and cube textures
 		return Error_unsupportedOperation(
 			0, "GraphicsDeviceRef_createRenderTexture()::type: currently only 2D images are supported"
 		);

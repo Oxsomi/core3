@@ -162,7 +162,7 @@ Error WindowManager_createWindow(
 	if(
 		((type == EWindowType_Virtual) || (hint & EWindowHint_ProvideCPUBuffer)) &&
 		(err = Buffer_createEmptyBytesx(
-			ETextureFormat_getSize((ETextureFormat) format, I32x2_x(size), I32x2_y(size)),
+			ETextureFormat_getSize((ETextureFormat) format, I32x2_x(size), I32x2_y(size), 1),
 			&cpuVisibleBuffer
 		)).genericError
 	)

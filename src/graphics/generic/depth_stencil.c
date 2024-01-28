@@ -69,6 +69,9 @@ Error GraphicsDeviceRef_createDepthStencil(
 	if(format <= EDepthStencilFormat_None || format >= EDepthStencilFormat_Count)
 		return Error_invalidParameter(2, 0, "GraphicsDeviceRef_createDepthStencil()::format is required");
 
+	if(I32x2_any(I32x2_gt(size, I32x2_xx2(16384))) || I32x2_any(I32x2_leq(size, I32x2_zero())))
+		return Error_invalidParameter(1, 0, "GraphicsDeviceRef_createDepthStencil()::size must be >0 and <=16384");
+
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	if(!GraphicsDeviceInfo_supportsDepthStencilFormat(&device->info, format))
 		return Error_unsupportedOperation(0, "GraphicsDeviceRef_createDepthStencil()::format is unsupported");

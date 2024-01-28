@@ -125,7 +125,7 @@ typedef enum ETransitionType {
 
 typedef struct TransitionInternal {		//Transitions issued by a scope.
 
-	RefPtr *resource;					//Currently only supports Swapchain, RenderTexture or DeviceBuffer
+	RefPtr *resource;					//Swapchain, RenderTexture, DepthStencil, DeviceBuffer, DeviceTexture
 
 	ResourceRange range;
 
@@ -138,7 +138,7 @@ typedef struct TransitionInternal {		//Transitions issued by a scope.
 
 typedef struct Transition {
 
-	RefPtr *resource;					//Currently only supports Swapchain, RenderTexture or DeviceBuffer
+	RefPtr *resource;					//Swapchain, RenderTexture, DepthStencil, DeviceBuffer, DeviceTexture
 
 	ResourceRange range;
 

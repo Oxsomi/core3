@@ -22,6 +22,7 @@
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
 #include "graphics/generic/device_buffer.h"
+#include "graphics/generic/device_texture.h"
 #include "graphics/generic/swapchain.h"
 #include "graphics/generic/command_list.h"
 #include "platforms/ext/bufferx.h"
@@ -413,6 +414,10 @@ Bool GraphicsDeviceRef_removePending(GraphicsDeviceRef *deviceRef, RefPtr *resou
 			supported = DeviceBufferRef_ptr(resource)->device == deviceRef;
 			break;
 
+		case EGraphicsTypeId_DeviceTexture:	
+			supported = DeviceTextureRef_ptr(resource)->device == deviceRef;
+			break;
+
 		default:
 			return false;
 	}
@@ -454,6 +459,7 @@ impl Error GraphicsDevice_submitCommandsImpl(
 );
 
 impl Error DeviceBufferRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceBufferRef *pending);
+impl Error DeviceTextureRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceTextureRef *pending);
 
 Error GraphicsDeviceRef_handleNextFrame(GraphicsDeviceRef *deviceRef, void *commandBuffer) {
 	
@@ -494,6 +500,10 @@ Error GraphicsDeviceRef_handleNextFrame(GraphicsDeviceRef *deviceRef, void *comm
 
 			case EGraphicsTypeId_DeviceBuffer: 
 				_gotoIfError(clean, DeviceBufferRef_flush(commandBuffer, deviceRef, pending));
+				break;
+
+			case EGraphicsTypeId_DeviceTexture: 
+				_gotoIfError(clean, DeviceTextureRef_flush(commandBuffer, deviceRef, pending));
 				break;
 
 			default:
@@ -693,9 +703,13 @@ Error GraphicsDeviceRef_submitCommands(
 				lockPtr = &DeviceBufferRef_ptr(res)->lock;
 				break;
 
+			case EGraphicsTypeId_DeviceTexture:
+				lockPtr = &DeviceTextureRef_ptr(res)->lock;
+				break;
+
 			default:
 				_gotoIfError(clean, Error_unimplemented(
-					0, "GraphicsDeviceRef_submitCommands() pendingResources contains unsupported type"	//TODO: DeviceTexture
+					0, "GraphicsDeviceRef_submitCommands() pendingResources contains unsupported type"
 				));
 		}
 

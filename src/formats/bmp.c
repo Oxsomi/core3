@@ -42,12 +42,6 @@
 		U32 colorsUsed, colorsImportant;
 	} BMPInfoHeader;
 
-	typedef struct BMPColorHeader {
-		U32 redMask, greenMask, blueMask, alphaMask;
-		U32 colorSpaceType;
-		U32 unused[16];
-	} BMPColorHeader;
-
 #pragma pack(pop)
 
 const U16 BMP_MAGIC = 0x4D42;
