@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -40,8 +40,8 @@ Error Keyboard_create(Keyboard *result) {
 
 	InputHandle res = 0;
 
-	_key(1);	_key(2);	_key(3);	_key(4);	_key(5); 
-	_key(6);	_key(7);	_key(8);	_key(9);	_key(0); 
+	_key(1);	_key(2);	_key(3);	_key(4);	_key(5);
+	_key(6);	_key(7);	_key(8);	_key(9);	_key(0);
 
 	_key(A);	_key(B);	_key(C);	_key(D);	_key(E);
 	_key(F);	_key(G);	_key(H);	_key(I);	_key(J);

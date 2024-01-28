@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -36,9 +36,9 @@ static const VkMemoryPropertyFlags coherent = VK_MEMORY_PROPERTY_HOST_COHERENT_B
 static const VkMemoryPropertyFlags local = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 
 Error VkDeviceMemoryAllocator_findMemory(
-	VkGraphicsDevice *deviceExt, 
-	Bool cpuSided, 
-	U32 memoryBits, 
+	VkGraphicsDevice *deviceExt,
+	Bool cpuSided,
+	U32 memoryBits,
 	U32 *outMemoryId,
 	VkMemoryPropertyFlags *outPropertyFlags,
 	U64 *size
@@ -141,10 +141,10 @@ Error VkDeviceMemoryAllocator_findMemory(
 }
 
 Error DeviceMemoryAllocator_allocate(
-	DeviceMemoryAllocator *allocator, 
-	void *requirementsExt, 
-	Bool cpuSided, 
-	U32 *blockId, 
+	DeviceMemoryAllocator *allocator,
+	void *requirementsExt,
+	Bool cpuSided,
+	U32 *blockId,
 	U64 *blockOffset,
 	EResourceType resourceType,
 	CharString objectName
@@ -154,7 +154,7 @@ Error DeviceMemoryAllocator_allocate(
 
 	if(!allocator || !requirementsExt || !blockId || !blockOffset)
 		return Error_nullPointer(
-			!allocator ? 0 : (!requirementsExt ? 1 : (!blockId ? 2 : 3)), 
+			!allocator ? 0 : (!requirementsExt ? 1 : (!blockId ? 2 : 3)),
 			"DeviceMemoryAllocator_allocate()::allocator, requirementsExt, blockId and blockOffset are required"
 		);
 
@@ -184,7 +184,7 @@ Error DeviceMemoryAllocator_allocate(
 
 			if(
 				!block->ext ||
-				block->isDedicated || 
+				block->isDedicated ||
 				(block->typeExt & memReq.memoryTypeBits) != memReq.memoryTypeBits ||
 				(Bool)(block->allocationTypeExt & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) != !cpuSided ||
 				block->resourceType != resourceType
@@ -196,7 +196,7 @@ Error DeviceMemoryAllocator_allocate(
 			if(!(block->allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT))		//Adhere to memory requirements
 				tempAlignment = U64_max(256, tempAlignment);
 
-			const U8 *alloc = NULL; 
+			const U8 *alloc = NULL;
 			Error err = AllocationBuffer_allocateBlockx(&block->allocations, memReq.size, tempAlignment, &alloc);
 
 			if(err.genericError)
@@ -285,8 +285,8 @@ Error DeviceMemoryAllocator_allocate(
 			if(instanceExt->debugSetName) {
 
 				_gotoIfError(clean, CharString_formatx(
-					&temp, 
-					isDedicated ? "Memory block %u (host: %s, coherent: %s, device: %s): %s" : 
+					&temp,
+					isDedicated ? "Memory block %u (host: %s, coherent: %s, device: %s): %s" :
 					"Memory block %u (host: %s, coherent: %s, device: %s)",
 					(U32) i,
 					prop & host ? "true" : "false",

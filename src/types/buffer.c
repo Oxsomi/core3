@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -29,7 +29,7 @@ Bool BitRef_get(BitRef b) { return b.ptr && (*b.ptr >> b.off) & 1; }
 void BitRef_set(BitRef b) { if(b.ptr && !b.isConst) *b.ptr |= 1 << b.off; }
 void BitRef_reset(BitRef b) { if(b.ptr && !b.isConst) *b.ptr &= ~(1 << b.off); }
 
-void BitRef_setTo(BitRef b, Bool v) { 
+void BitRef_setTo(BitRef b, Bool v) {
 	if(v) BitRef_set(b);
 	else BitRef_reset(b);
 }
@@ -200,7 +200,7 @@ Error Buffer_setAllBitsTo(Buffer buf, Bool isOn) {
 
 Buffer Buffer_createNull() { return (Buffer) { 0 }; }
 
-Buffer Buffer_createRef(void *v, U64 length) { 
+Buffer Buffer_createRef(void *v, U64 length) {
 
 	if(!length || !v)
 		return Buffer_createNull();
@@ -211,7 +211,7 @@ Buffer Buffer_createRef(void *v, U64 length) {
 	return (Buffer) { .ptr = (U8*) v, .lengthAndRefBits = length | ((U64)1 << 63) };
 }
 
-Buffer Buffer_createRefConst(const void *v, U64 length) { 
+Buffer Buffer_createRefConst(const void *v, U64 length) {
 
 	if(!length || !v)
 		return Buffer_createNull();
@@ -562,10 +562,10 @@ Error Buffer_consume(Buffer *buf, void *v, U64 length) {
 }
 
 Error Buffer_createSubset(
-	Buffer buf, 
-	U64 offset, 
-	U64 length, 
-	Bool isConst, 
+	Buffer buf,
+	U64 offset,
+	U64 length,
+	Bool isConst,
 	Buffer *output
 ) {
 
@@ -705,9 +705,9 @@ Error Buffer_readAsUTF8(Buffer buf, U64 i, UTF8CodePointInfo *codepoint) {
 	if(v3 < 0x80 || v3 >= 0xC0)
 		return Error_invalidParameter(0, 4, "Buffer_readAsUTF8()::buf[i + 3] had invalid encoding");
 
-	*codepoint = (UTF8CodePointInfo) { 
-		.size = 4, 
-		.index = (((U32)v0 & 0x7) << 18) | (((U32)v1 & 0x3F) << 12) | (((U32)v2 & 0x3F) << 6) | (v3 & 0x3F) 
+	*codepoint = (UTF8CodePointInfo) {
+		.size = 4,
+		.index = (((U32)v0 & 0x7) << 18) | (((U32)v1 & 0x3F) << 12) | (((U32)v2 & 0x3F) << 6) | (v3 & 0x3F)
 	};
 
 	return Error_none();

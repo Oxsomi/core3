@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -38,18 +38,18 @@
 //- Tag: 0
 //- Foreach additional data block padded to 16-byte with 0s:
 //	- tag = GHASH(tag XOR additional data block)
-// 
+//
 //- IV (Initial vector) = Generate CSPRNG of 12-bytes (if not provided)
 //- Store iv in result
-// 
+//
 //- Foreach plaindata block at i padded to 16-byte with 0s:
 //	- Eki = encrypt(IV append U32BE(i + 2))
 //	- store (cyphertext[i] = plainText[i] XOR Eki) in result
 //	- tag = GHASH(tag XOR cyphertext[i])
-// 
+//
 //- tag = GHASH(combine(U64BE(additionalDataBits), U64BE(plainTextBits)) XOR tag)
 //- tag = tag XOR aes256(IV with U32BE(1) appended)
-// 
+//
 //- Store tag in result
 //
 //For "encrypt" we use AES CTR as explained by the intel paper:
@@ -116,7 +116,7 @@
 		return res;
 	}
 
-	inline U32 AES_rotWord(U32 a) { 
+	inline U32 AES_rotWord(U32 a) {
 		return (a >> 8) | (a << 24);
 	}
 
@@ -198,7 +198,7 @@
 		{ 3, 1, 1, 2 }
 	};
 
-	inline I32x4 AES_mixColumns(I32x4 vvv) { 
+	inline I32x4 AES_mixColumns(I32x4 vvv) {
 
 		U8x4x4 v = *(U8x4x4*)&vvv;
 
@@ -206,7 +206,7 @@
 
 		U8x4x4 r = { 0 };
 
-		for(U8 i = 0; i < 4; ++i) 
+		for(U8 i = 0; i < 4; ++i)
 			for(U8 j = 0; j < 4; ++j) {
 
 				for(U8 k = 0; k < 4; ++k)
@@ -339,7 +339,7 @@ inline I32x4 AESEncryptionContext_blockHash(I32x4 block, const I32x4 k[15], EBuf
 
 #if _SIMD == SIMD_SSE
 
-	inline void AESEncryptionContext_ghashPrepare(I32x4 H, I32x4 ghashLut[17]) { 
+	inline void AESEncryptionContext_ghashPrepare(I32x4 H, I32x4 ghashLut[17]) {
 		ghashLut[0] = I32x4_swapEndianness(H);
 	}
 
@@ -522,9 +522,9 @@ I32x4 AESEncryptionContext_initTag(Buffer additionalData, const I32x4 ghashLut[1
 }
 
 AESEncryptionContext AESEncryptionContext_create(
-	const U32 *realKey, 
-	I32x4 iv, 
-	Buffer additionalData, 
+	const U32 *realKey,
+	I32x4 iv,
+	Buffer additionalData,
 	EBufferEncryptionType encryptionType
 ) {
 
@@ -592,7 +592,7 @@ void AESEncryptionContext_storeBlock(I32x4 *io, U64 leftOver, I32x4 *v) {
 }
 
 void AESEncryptionContext_processBlock(
-	AESEncryptionContext *ctx, 
+	AESEncryptionContext *ctx,
 	I32x4 *io,
 	U64 leftOver,
 	U32 i,
@@ -629,10 +629,10 @@ U64 EBufferEncryptionType_getAdditionalData(EBufferEncryptionType type) {
 }
 
 inline Error AESEncryptionContext_encrypt(
-	Buffer target, 
+	Buffer target,
 	Buffer additionalData,
 	EBufferEncryptionFlags flags,
-	U32 *realKey, 
+	U32 *realKey,
 	I32x4 *ivPtr,
 	I32x4 *tag,
 	EBufferEncryptionType encryptionType
@@ -645,7 +645,7 @@ inline Error AESEncryptionContext_encrypt(
 
 	if(Buffer_length(target) > (4 * GIBI - 3) * sizeof(I32x4))
 		return Error_unsupportedOperation(
-			0, 
+			0,
 			"AESEncryptionContext_encrypt()::target has a limit of 64GB - 48 bytes to avoid block counter re-use.\n"
 			"If file size exceeds 64GB encrypt in blocks with a unique IV each 64GB block"
 		);
@@ -681,7 +681,7 @@ inline Error AESEncryptionContext_encrypt(
 
 	for (U32 i = 0; i < j; ++i)
 		AESEncryptionContext_processBlock(
-			&ctx, 
+			&ctx,
 			(I32x4*)target.ptr + i,
 			targetLen - ((U64)i << 4),
 			i,
@@ -743,7 +743,7 @@ inline Error AESEncryptionContext_decrypt(
 
 	if(targetLen > (4 * GIBI - 3) * sizeof(I32x4))
 		return Error_unsupportedOperation(
-			0, 
+			0,
 			"AESEncryptionContext_decrypt()::target has a limit of 64GB - 48 bytes to avoid block counter re-use.\n"
 			"If file size exceeds 64GB encrypt in blocks with a unique IV each 64GB block"
 		);
@@ -752,7 +752,7 @@ inline Error AESEncryptionContext_decrypt(
 
 	AESEncryptionContext ctx = AESEncryptionContext_create(realKey, iv, additionalData, type);
 
-	//Verify tegridy before we continue decryption. This does mean we're reading twice, 
+	//Verify tegridy before we continue decryption. This does mean we're reading twice,
 	//but it's against the spec to start decrypting while still unsure if it's valid.
 
 	U32 j = (U32)((targetLen + 15) >> 4);

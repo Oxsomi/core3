@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -131,9 +131,9 @@ inline Bool AllocationBufferBlock_isSame(AllocationBufferBlock block, const U8 *
 }
 
 Error AllocationBuffer_allocateAndFillBlock(
-	AllocationBuffer *allocationBuffer, 
-	Buffer data, 
-	U64 alignment, 
+	AllocationBuffer *allocationBuffer,
+	Buffer data,
+	U64 alignment,
 	Allocator alloc,
 	U8 **result
 ) {
@@ -161,9 +161,9 @@ Error AllocationBuffer_allocateAndFillBlock(
 }
 
 Error AllocationBuffer_allocateBlock(
-	AllocationBuffer *allocationBuffer, 
-	U64 size, 
-	U64 alignment, 
+	AllocationBuffer *allocationBuffer,
+	U64 size,
+	U64 alignment,
 	Allocator alloc,
 	const U8 **result
 ) {
@@ -179,7 +179,7 @@ Error AllocationBuffer_allocateBlock(
 
 	if(((size >> 48) || (alignment >> 48)) && allocationBuffer->buffer.ptr)
 		return Error_outOfBounds(
-			size >> 48 ? 2 : 1, size >> 48 ? size : alignment, (U64)1 << 48, 
+			size >> 48 ? 2 : 1, size >> 48 ? size : alignment, (U64)1 << 48,
 			"AllocationBuffer_allocateBlock()::size or alignment is out of bounds (should be max 48-bit)"
 		);
 
@@ -214,8 +214,8 @@ Error AllocationBuffer_allocateBlock(
 
 	if (lastAlign + size <= len) {
 
-		AllocationBufferBlock v = (AllocationBufferBlock) { 
-			.start = last.end, .end = lastAlign + size, .alignment = alignment 
+		AllocationBufferBlock v = (AllocationBufferBlock) {
+			.start = last.end, .end = lastAlign + size, .alignment = alignment
 		};
 
 		Error err = ListAllocationBufferBlock_pushBack(&allocationBuffer->allocations, v, alloc);
@@ -233,8 +233,8 @@ Error AllocationBuffer_allocateBlock(
 
 	if (size <= AllocationBufferBlock_getStart(first)) {
 
-		AllocationBufferBlock v = (AllocationBufferBlock) { 
-			.start = AllocationBufferBlock_alignToBackwards(AllocationBufferBlock_getStart(first) - size, alignment), 
+		AllocationBufferBlock v = (AllocationBufferBlock) {
+			.start = AllocationBufferBlock_alignToBackwards(AllocationBufferBlock_getStart(first) - size, alignment),
 			.end = AllocationBufferBlock_getStart(first),
 			.alignment = alignment
 		};
@@ -278,7 +278,7 @@ Error AllocationBuffer_allocateBlock(
 				return Error_none();
 			}
 
-			//Splitting the buffer, ideally if we're near the back of the buffer 
+			//Splitting the buffer, ideally if we're near the back of the buffer
 			//we want to put the empty buffer at the back too.
 			//This will make it easier for blocks at the end to merge.
 
@@ -286,8 +286,8 @@ Error AllocationBuffer_allocateBlock(
 
 				if(aligned + size != v.end) {
 
-					AllocationBufferBlock empty = (AllocationBufferBlock) { 
-						.start = aligned + size, 
+					AllocationBufferBlock empty = (AllocationBufferBlock) {
+						.start = aligned + size,
 						.end = v.end,
 						.alignment = 1
 					};
@@ -314,10 +314,10 @@ Error AllocationBuffer_allocateBlock(
 
 			if(aligned != AllocationBufferBlock_getStart(v)) {
 
-				//Try to split near the front 
+				//Try to split near the front
 
-				AllocationBufferBlock empty = (AllocationBufferBlock) { 
-					.start = AllocationBufferBlock_getStart(v), 
+				AllocationBufferBlock empty = (AllocationBufferBlock) {
+					.start = AllocationBufferBlock_getStart(v),
 					.end = aligned,
 					.alignment = 1
 				};
@@ -349,7 +349,7 @@ Bool AllocationBuffer_freeBlock(AllocationBuffer *allocationBuffer, const U8 *pt
 		return true;
 
 	if(
-		ptr < allocationBuffer->buffer.ptr || 
+		ptr < allocationBuffer->buffer.ptr ||
 		ptr >= allocationBuffer->buffer.ptr + Buffer_length(allocationBuffer->buffer) ||
 		!allocationBuffer->allocations.length
 	)
@@ -361,7 +361,7 @@ Bool AllocationBuffer_freeBlock(AllocationBuffer *allocationBuffer, const U8 *pt
 
 		AllocationBufferBlock *p = &allocationBuffer->allocations.ptrNonConst[i];
 
-		if (!AllocationBufferBlock_isSame(*p, allocationBuffer->buffer.ptr, ptr)) 
+		if (!AllocationBufferBlock_isSame(*p, allocationBuffer->buffer.ptr, ptr))
 			continue;
 
 		p->start |= (U64)1 << 63;		//Free up
@@ -372,7 +372,7 @@ Bool AllocationBuffer_freeBlock(AllocationBuffer *allocationBuffer, const U8 *pt
 		AllocationBufferBlock *tmp;
 
 		while (
-			self + 1 < allocationBuffer->allocations.length && 
+			self + 1 < allocationBuffer->allocations.length &&
 			AllocationBufferBlock_isFree(
 				*(tmp = &allocationBuffer->allocations.ptrNonConst[self + 1])
 			)

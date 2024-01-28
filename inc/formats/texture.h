@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -74,19 +74,19 @@ typedef enum ETextureCompressionAlgo {
  (ETexturePrimitive_Compressed << 24) | (((blockSizeBits >> 6) - 1) << 27) | (algo << 30))
 
 //Format of a texture; a bitflag of the properties of the format.
-// 
+//
 //A normal texture format contains the following information:
 //(in octal): 0'<nibbleSize>'<primitive>'<redBits>'<greenBits>'<blueBits>'<alphaBits>
-// 
+//
 //Bit count is a multiple of 2 (so shifted by 1)
 //Nibble size up to 5 bits (2 octanibbles where the upper bit is unused, dec by 1).
 //  The size of each pixel in nibbles
-// 
+//
 //If compressed or extended, the get<X>Bits don't have to return a valid number.
 //However, it should be non zero if the channel is present, so the has<X> functions are still available.
-// 
+//
 //Compression used the following;
-//(in octal): 
+//(in octal):
 // 0'<compressionType>'<uint2Size>'<primitive>'<alignmentX>'<hasRed>'<alignmentY>'<hasGreen>'<type>'<hasBlue>'0'<hasAlpha>
 //Type is ETextureAlignment
 //Spaces is ETextureCompressionType
@@ -166,192 +166,192 @@ typedef enum ETextureFormat {
 	//Desktop
 
 	ETextureFormat_BC4				= _ETextureFormatCompressed(
-		ETextureCompressionAlgo_BCn, 64, ETextureAlignment_4, ETextureAlignment_4, 
+		ETextureCompressionAlgo_BCn, 64, ETextureAlignment_4, ETextureAlignment_4,
 		ETextureCompressionType_UNorm, 1, 0, 0, 0
 	),
 
 	ETextureFormat_BC5				= _ETextureFormatCompressed(
-		ETextureCompressionAlgo_BCn, 128, ETextureAlignment_4, ETextureAlignment_4, 
+		ETextureCompressionAlgo_BCn, 128, ETextureAlignment_4, ETextureAlignment_4,
 		ETextureCompressionType_UNorm, 1, 1, 0, 0
 	),
 
 	ETextureFormat_BC6H				= _ETextureFormatCompressed(
-		ETextureCompressionAlgo_BCn, 128, ETextureAlignment_4, ETextureAlignment_4, 
+		ETextureCompressionAlgo_BCn, 128, ETextureAlignment_4, ETextureAlignment_4,
 		ETextureCompressionType_Float, 1, 1, 1, 0
 	),
 
 	ETextureFormat_BC7				= _ETextureFormatCompressed(
-		ETextureCompressionAlgo_BCn, 128, ETextureAlignment_4, ETextureAlignment_4, 
+		ETextureCompressionAlgo_BCn, 128, ETextureAlignment_4, ETextureAlignment_4,
 		ETextureCompressionType_UNorm, 1, 1, 1, 1
 	),
 
 	ETextureFormat_BC4s				= _ETextureFormatCompressed(
-		ETextureCompressionAlgo_BCn, 64, ETextureAlignment_4, ETextureAlignment_4, 
+		ETextureCompressionAlgo_BCn, 64, ETextureAlignment_4, ETextureAlignment_4,
 		ETextureCompressionType_SNorm, 1, 0, 0, 0
 	),
 
 	ETextureFormat_BC5s				= _ETextureFormatCompressed(
-		ETextureCompressionAlgo_BCn, 128, ETextureAlignment_4, ETextureAlignment_4, 
+		ETextureCompressionAlgo_BCn, 128, ETextureAlignment_4, ETextureAlignment_4,
 		ETextureCompressionType_SNorm, 1, 1, 0, 0
 	),
 
 	ETextureFormat_BC7_sRGB			= _ETextureFormatCompressed(
-		ETextureCompressionAlgo_BCn, 128, ETextureAlignment_4, ETextureAlignment_4, 
+		ETextureCompressionAlgo_BCn, 128, ETextureAlignment_4, ETextureAlignment_4,
 		ETextureCompressionType_sRGB, 1, 1, 1, 1
 	),
 
 	//Mobile / console
 
 	ETextureFormat_ASTC_4x4			= _ETextureFormatCompressed(
-		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_4, ETextureAlignment_4, 
+		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_4, ETextureAlignment_4,
 		ETextureCompressionType_UNorm, 1, 1, 1, 1
 	),
 
 	ETextureFormat_ASTC_4x4_sRGB	= _ETextureFormatCompressed(
-		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_4, ETextureAlignment_4, 
+		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_4, ETextureAlignment_4,
 		ETextureCompressionType_sRGB, 1, 1, 1, 1
 	),
 
 
 	ETextureFormat_ASTC_5x4			= _ETextureFormatCompressed(
-		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_5, ETextureAlignment_4, 
+		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_5, ETextureAlignment_4,
 		ETextureCompressionType_UNorm, 1, 1, 1, 1
 	),
 
 	ETextureFormat_ASTC_5x4_sRGB	= _ETextureFormatCompressed(
-		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_5, ETextureAlignment_4, 
+		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_5, ETextureAlignment_4,
 		ETextureCompressionType_sRGB, 1, 1, 1, 1
 	),
 
 
 	ETextureFormat_ASTC_5x5			= _ETextureFormatCompressed(
-		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_5, ETextureAlignment_5, 
+		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_5, ETextureAlignment_5,
 		ETextureCompressionType_UNorm, 1, 1, 1, 1
 	),
 
 	ETextureFormat_ASTC_5x5_sRGB	= _ETextureFormatCompressed(
-		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_5, ETextureAlignment_5, 
+		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_5, ETextureAlignment_5,
 		ETextureCompressionType_sRGB, 1, 1, 1, 1
 	),
 
 
 	ETextureFormat_ASTC_6x5			= _ETextureFormatCompressed(
-		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_6, ETextureAlignment_5, 
+		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_6, ETextureAlignment_5,
 		ETextureCompressionType_UNorm, 1, 1, 1, 1
 	),
 
 	ETextureFormat_ASTC_6x5_sRGB	= _ETextureFormatCompressed(
-		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_6, ETextureAlignment_5, 
+		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_6, ETextureAlignment_5,
 		ETextureCompressionType_sRGB, 1, 1, 1, 1
 	),
 
 
 	ETextureFormat_ASTC_6x6			= _ETextureFormatCompressed(
-		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_6, ETextureAlignment_6, 
+		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_6, ETextureAlignment_6,
 		ETextureCompressionType_UNorm, 1, 1, 1, 1
 	),
 
 	ETextureFormat_ASTC_6x6_sRGB	= _ETextureFormatCompressed(
-		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_6, ETextureAlignment_6, 
+		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_6, ETextureAlignment_6,
 		ETextureCompressionType_sRGB, 1, 1, 1, 1
 	),
 
 
 	ETextureFormat_ASTC_8x5			= _ETextureFormatCompressed(
-		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_8, ETextureAlignment_5, 
+		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_8, ETextureAlignment_5,
 		ETextureCompressionType_UNorm, 1, 1, 1, 1
 	),
 
 	ETextureFormat_ASTC_8x5_sRGB	= _ETextureFormatCompressed(
-		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_8, ETextureAlignment_5, 
+		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_8, ETextureAlignment_5,
 		ETextureCompressionType_sRGB, 1, 1, 1, 1
 	),
 
 
 	ETextureFormat_ASTC_8x6			= _ETextureFormatCompressed(
-		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_8, ETextureAlignment_6, 
+		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_8, ETextureAlignment_6,
 		ETextureCompressionType_UNorm, 1, 1, 1, 1
 	),
 
 	ETextureFormat_ASTC_8x6_sRGB	= _ETextureFormatCompressed(
-		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_8, ETextureAlignment_6, 
+		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_8, ETextureAlignment_6,
 		ETextureCompressionType_sRGB, 1, 1, 1, 1
 	),
 
 
 	ETextureFormat_ASTC_8x8			= _ETextureFormatCompressed(
-		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_8, ETextureAlignment_8, 
+		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_8, ETextureAlignment_8,
 		ETextureCompressionType_UNorm, 1, 1, 1, 1
 	),
 
 	ETextureFormat_ASTC_8x8_sRGB	= _ETextureFormatCompressed(
-		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_8, ETextureAlignment_8, 
+		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_8, ETextureAlignment_8,
 		ETextureCompressionType_sRGB, 1, 1, 1, 1
 	),
 
 
 	ETextureFormat_ASTC_10x5		= _ETextureFormatCompressed(
-		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_10, ETextureAlignment_5, 
+		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_10, ETextureAlignment_5,
 		ETextureCompressionType_UNorm, 1, 1, 1, 1
 	),
 
 	ETextureFormat_ASTC_10x5_sRGB	= _ETextureFormatCompressed(
-		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_10, ETextureAlignment_5, 
+		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_10, ETextureAlignment_5,
 		ETextureCompressionType_sRGB, 1, 1, 1, 1
 	),
 
 
 	ETextureFormat_ASTC_10x6		= _ETextureFormatCompressed(
-		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_10, ETextureAlignment_6, 
+		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_10, ETextureAlignment_6,
 		ETextureCompressionType_UNorm, 1, 1, 1, 1
 	),
 
 	ETextureFormat_ASTC_10x6_sRGB	= _ETextureFormatCompressed(
-		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_10, ETextureAlignment_6, 
+		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_10, ETextureAlignment_6,
 		ETextureCompressionType_sRGB, 1, 1, 1, 1
 	),
 
 
 	ETextureFormat_ASTC_10x8		= _ETextureFormatCompressed(
-		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_10, ETextureAlignment_8, 
+		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_10, ETextureAlignment_8,
 		ETextureCompressionType_UNorm, 1, 1, 1, 1
 	),
 
 	ETextureFormat_ASTC_10x8_sRGB	= _ETextureFormatCompressed(
-		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_10, ETextureAlignment_8, 
+		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_10, ETextureAlignment_8,
 		ETextureCompressionType_sRGB, 1, 1, 1, 1
 	),
 
 
 	ETextureFormat_ASTC_10x10		= _ETextureFormatCompressed(
-		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_10, ETextureAlignment_10, 
+		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_10, ETextureAlignment_10,
 		ETextureCompressionType_UNorm, 1, 1, 1, 1
 	),
 
 	ETextureFormat_ASTC_10x10_sRGB	= _ETextureFormatCompressed(
-		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_10, ETextureAlignment_10, 
+		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_10, ETextureAlignment_10,
 		ETextureCompressionType_sRGB, 1, 1, 1, 1
 	),
 
 
 	ETextureFormat_ASTC_12x10		= _ETextureFormatCompressed(
-		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_12, ETextureAlignment_10, 
+		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_12, ETextureAlignment_10,
 		ETextureCompressionType_UNorm, 1, 1, 1, 1
 	),
 
 	ETextureFormat_ASTC_12x10_sRGB	= _ETextureFormatCompressed(
-		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_12, ETextureAlignment_10, 
+		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_12, ETextureAlignment_10,
 		ETextureCompressionType_sRGB, 1, 1, 1, 1
 	),
 
 
 	ETextureFormat_ASTC_12x12		= _ETextureFormatCompressed(
-		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_12, ETextureAlignment_12, 
+		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_12, ETextureAlignment_12,
 		ETextureCompressionType_UNorm, 1, 1, 1, 1
 	),
 
 	ETextureFormat_ASTC_12x12_sRGB	= _ETextureFormatCompressed(
-		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_12, ETextureAlignment_12, 
+		ETextureCompressionAlgo_ASTC, 128, ETextureAlignment_12, ETextureAlignment_12,
 		ETextureCompressionType_sRGB, 1, 1, 1, 1
 	)
 

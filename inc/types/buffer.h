@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -135,20 +135,20 @@ Bool Buffer_isUTF8(Buffer buf, F32 threshold);		//If the threshold (%) is met, i
 Bool Buffer_isAscii(Buffer buf);
 
 //What hash & encryption functions are good for:
-// 
-//argon2id (Unsupported): 
+//
+//argon2id (Unsupported):
 //	Passwords (limit size (not too low) to avoid DDOS and use pepper if applicable)			TODO:
 //	https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html
 //	https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html
-// 
-//hash/crc32c: Hashmaps / performance critical hashing / 
+//
+//hash/crc32c: Hashmaps / performance critical hashing /
 //	fast data integrity (encryption checksum / compression) when *NOT* dealing with adversaries
-// 
+//
 //hash/sha256: data integrity (encryption checksum / compression) when dealing with adversaries
-// 
+//
 //encryption/aes256: If you wanna recover data that is essential (NOT PASSWORDS) but needs a key
 //
-//For more info: 
+//For more info:
 //	https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html
 
 //CRC32 Castagnoli / iSCSI polynomial (0x82f63b78) not for ethernet/zip (0xedb88320)!
@@ -193,7 +193,7 @@ Error Buffer_encrypt(
 	EBufferEncryptionFlags flags,	//Whether or not to use supplied keys or generate new ones
 	U32 *key,						//Secret key; used to en/decrypt (AES256: U32[8], AES128: U32[4])
 	I32x4 *iv,						//Iv should be random 12 bytes. Can be generated if flag is set
-	I32x4 *tag						//Tag should be non zero if encryption type supports it. 
+	I32x4 *tag						//Tag should be non zero if encryption type supports it.
 );
 
 //Decrypt functions decrypt ciphertext from target into target

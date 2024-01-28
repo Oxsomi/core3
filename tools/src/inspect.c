@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -142,13 +142,13 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 			};
 
 			Log_debugLnx(
-				"Data size type uses %s.", 
+				"Data size type uses %s.",
 				dataTypes[(caHeader.flags >> ECAFlags_FileSizeType_Shift) & ECAFlags_FileSizeType_Mask]
 			);
 
 			if (caHeader.type >> 4)
 				Log_debugLnx(
-					"Compression size type uses %s.", 
+					"Compression size type uses %s.",
 					dataTypes[(caHeader.flags >> ECAFlags_CompressedSizeType_Shift) & ECAFlags_CompressedSizeType_Mask]
 				);
 
@@ -193,7 +193,7 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 				};
 
 				Log_debugLnx(
-					"AES Chunking uses %s per chunk.", 
+					"AES Chunking uses %s per chunk.",
 					chunking[(aesChunking >> ECAFlags_AESChunkShift) - 1]
 				);
 			}
@@ -279,7 +279,7 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 				};
 
 				Log_debugLnx(
-					"AES Chunking uses %s per chunk.", 
+					"AES Chunking uses %s per chunk.",
 					chunking[(aesChunking >> EDLFlags_AESChunkShift) - 1]
 				);
 			}
@@ -516,7 +516,7 @@ Bool CLI_showFile(ParsedArgs args, Buffer b, U64 start, U64 length, Bool isAscii
 
 		//Binary needs to be formatted first
 
-		else { 
+		else {
 
 			for (U64 i = start, j = i + length, k = 0; i < j; ++i, ++k) {
 
@@ -687,7 +687,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 		CharString key = CharString_createNull();
 
 		if (
-			(ParsedArgs_getArg(args, EOperationHasParameter_AESShift, &key)).genericError || 
+			(ParsedArgs_getArg(args, EOperationHasParameter_AESShift, &key)).genericError ||
 			!CharString_isHex(key)
 		) {
 			Log_errorLnx("Invalid parameter sent to -aes. Expecting key in hex (32 bytes)");
@@ -923,7 +923,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 				}
 
 				Bool isAscii = file.settings.dataType == EDLDataType_Ascii;
-				Buffer b = 
+				Buffer b =
 					isAscii ? CharString_bufferConst(file.entryStrings.ptr[entryI]) :
 					file.entryBuffers.ptr[entryI];
 
@@ -937,7 +937,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 				for (U64 i = start; i < end && i < DLFile_entryCount(file); ++i) {
 
-					U64 entrySize = 
+					U64 entrySize =
 						file.settings.dataType == EDLDataType_Ascii ? CharString_length(file.entryStrings.ptr[i]) :
 						Buffer_length(file.entryBuffers.ptr[i]);
 

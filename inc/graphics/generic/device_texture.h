@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -54,6 +54,8 @@ typedef struct DeviceTexture {
 	U8 type;								//ETextureType
 	U8 padding;
 
+	U64 allocSize;
+
 	Buffer cpuData;							//Null if not cpu backed & uploaded. If not cpu backed this will free post upload
 
 	ListDevicePendingRange pendingChanges;
@@ -69,19 +71,19 @@ Error DeviceTextureRef_dec(DeviceTextureRef **texture);
 Error DeviceTextureRef_inc(DeviceTextureRef *texture);
 
 Error GraphicsDeviceRef_createTexture(
-	GraphicsDeviceRef *dev, 
+	GraphicsDeviceRef *dev,
 	ETextureType type,
-	ETextureFormatId format, 
-	EDeviceTextureUsage usage, 
+	ETextureFormatId format,
+	EDeviceTextureUsage usage,
 	U16 width,				//<= 16384
 	U16 height,				//^
 	U16 length,				//<= 256
-	CharString name, 
-	Buffer *dat, 
+	CharString name,
+	Buffer *dat,
 	DeviceTextureRef **tex
 );
 
-//Mark the underlying data for the DeviceTexture as dirty. 
+//Mark the underlying data for the DeviceTexture as dirty.
 //Count 0 indicates rest of the texture starting at offset.
 //Each region that doesn't intersect will be considered as 1 copy (otherwise it will be merged).
 //Call this as little as possible while still not copying too much data.

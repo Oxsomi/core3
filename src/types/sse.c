@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -55,23 +55,23 @@
 
 	//Swizzle
 
-	inline I32x4 _movelh_epi32(I32x4 a, I32x4 b) { 
+	inline I32x4 _movelh_epi32(I32x4 a, I32x4 b) {
 		return I32x4_bitsF32x4(_mm_movelh_ps(
 			F32x4_bitsI32x4(a), F32x4_bitsI32x4(b)
-		)); 
+		));
 	}
 
 	I32x4 I32x4_trunc2(I32x4 a) { return _movelh_epi32(a, I32x4_zero()); }
 	F32x4 F32x4_trunc2(F32x4 a) { return _mm_movelh_ps(a, F32x4_zero()); }
 
-	I32x4 I32x4_trunc3(I32x4 a) { 
+	I32x4 I32x4_trunc3(I32x4 a) {
 		I32x4 z0 = I32x4_xzzz(_movelh_epi32(I32x4_zzzz(a), I32x4_zero()));
-		return _movelh_epi32(a, z0); 
+		return _movelh_epi32(a, z0);
 	}
 
-	F32x4 F32x4_trunc3(F32x4 a) { 
+	F32x4 F32x4_trunc3(F32x4 a) {
 		F32x4 z0 = F32x4_xzzz(_mm_movelh_ps(F32x4_zzzz(a), F32x4_zero()));
-		return _mm_movelh_ps(a, z0); 
+		return _mm_movelh_ps(a, z0);
 	}
 
 	//Swizzle

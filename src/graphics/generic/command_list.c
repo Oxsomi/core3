@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -184,9 +184,9 @@ clean:
 }
 
 Error CommandList_validateGraphicsPipeline(
-	Pipeline *pipeline, 
-	ImageAndRange images[8], 
-	U8 imageCount, 
+	Pipeline *pipeline,
+	ImageAndRange images[8],
+	U8 imageCount,
 	EDepthStencilFormat depthFormat,
 	EMSAASamples boundSampleCount
 ) {
@@ -281,7 +281,7 @@ Bool CommandListRef_isBound(CommandList *commandList, RefPtr *resource, Resource
 			continue;
 
 		if(
-			resource->typeId == EGraphicsTypeId_Swapchain || 
+			resource->typeId == EGraphicsTypeId_Swapchain ||
 			resource->typeId == EGraphicsTypeId_DepthStencil ||
 			resource->typeId == EGraphicsTypeId_RenderTexture ||
 			resource->typeId == EGraphicsTypeId_DeviceTexture
@@ -358,9 +358,9 @@ clean:
 }
 
 Error CommandListRef_transitionBuffer(
-	CommandList *commandList, 
-	DeviceBufferRef *buffer, 
-	BufferRange range, 
+	CommandList *commandList,
+	DeviceBufferRef *buffer,
+	BufferRange range,
 	ETransitionType type
 ) {
 
@@ -561,7 +561,7 @@ Error CommandListRef_clearImages(CommandListRef *commandListRef, ListClearImageC
 
 	*(U32*)buf.ptr = (U32) clearImages.length;
 	Buffer_copy(
-		Buffer_createRef((U8*) buf.ptr + sizeof(U32), ListClearImageCmd_bytes(clearImages)), 
+		Buffer_createRef((U8*) buf.ptr + sizeof(U32), ListClearImageCmd_bytes(clearImages)),
 		ListClearImageCmd_bufferConst(clearImages)
 	);
 
@@ -579,9 +579,9 @@ clean:
 }
 
 Error CommandListRef_copyImageRegions(
-	CommandListRef *commandListRef, 
-	RefPtr *src, 
-	RefPtr *dst, 
+	CommandListRef *commandListRef,
+	RefPtr *src,
+	RefPtr *dst,
 	ECopyType copyType,
 	ListCopyImageRegion regions
 ) {
@@ -611,13 +611,13 @@ Error CommandListRef_copyImageRegions(
 		RefPtr *ptr = i ? dst : src;
 
 		if(
-			ptr->typeId != EGraphicsTypeId_RenderTexture && 
-			ptr->typeId != EGraphicsTypeId_Swapchain && 
+			ptr->typeId != EGraphicsTypeId_RenderTexture &&
+			ptr->typeId != EGraphicsTypeId_Swapchain &&
 			ptr->typeId != EGraphicsTypeId_DepthStencil
 			//ptr->typeId != EGraphicsTypeId_DeviceTexture		//TODO: Add DeviceTexture here
 		)
 			_gotoIfError(clean, Error_invalidParameter(
-				i ? 1 : 2, 0, 
+				i ? 1 : 2, 0,
 				"CommandListRef_copyImage()::src and dst should be a texture "
 				"(Swapchain, DepthStencil, RenderTexture, DeviceTexture)"
 			));
@@ -629,13 +629,13 @@ Error CommandListRef_copyImageRegions(
 
 	if(isDepthStencil != (src->typeId == EGraphicsTypeId_DepthStencil))
 		_gotoIfError(clean, Error_invalidParameter(
-			1, 0, 
+			1, 0,
 			"CommandListRef_copyImage()::src and dst should be DepthStencil if one of them is to be compatible"
 		));
 
 	if(!isDepthStencil && copyType != ECopyType_All)
 		_gotoIfError(clean, Error_invalidParameter(
-			3, 0, 
+			3, 0,
 			"CommandListRef_copyImage()::copyType should be ECopyType_All if DepthStencil isn't copied"
 		));
 
@@ -681,7 +681,7 @@ Error CommandListRef_copyImageRegions(
 
 			if(!compatible)
 				_gotoIfError(clean, Error_invalidParameter(
-					1, 3, 
+					1, 3,
 					"CommandListRef_copyImage()::src and dst require the same depth format if ECopyType_DepthOnly is used "
 					"(D32/D32S8 is compatible with D32/D32S8)"
 				));
@@ -732,7 +732,7 @@ Error CommandListRef_copyImageRegions(
 			1, 6, "CommandListRef_copyImage()::src and dst require the same device as the CommandList"
 		));
 
-	//Validate copy 
+	//Validate copy
 
 	for(U64 i = 0; i < regions.length; ++i) {
 
@@ -787,15 +787,15 @@ Error CommandListRef_copyImageRegions(
 	
 	_gotoIfError(clean, Buffer_createEmptyBytesx(ListCopyImageRegion_bytes(regions) + sizeof(CopyImageCmd), &buf));
 
-	*(CopyImageCmd*)buf.ptr = (CopyImageCmd) { 
-		.src = src, 
-		.dst = dst, 
-		.regionCount = (U32) regions.length, 
-		.copyType = copyType 
+	*(CopyImageCmd*)buf.ptr = (CopyImageCmd) {
+		.src = src,
+		.dst = dst,
+		.regionCount = (U32) regions.length,
+		.copyType = copyType
 	};
 
 	Buffer_copy(
-		Buffer_createRef((U8*) buf.ptr + sizeof(CopyImageCmd), ListCopyImageRegion_bytes(regions)), 
+		Buffer_createRef((U8*) buf.ptr + sizeof(CopyImageCmd), ListCopyImageRegion_bytes(regions)),
 		ListCopyImageRegion_bufferConst(regions)
 	);
 
@@ -866,9 +866,9 @@ Error CommandListRef_clearImagef(CommandListRef *commandListRef, F32x4 color, Im
 //Render calls
 
 Error CommandListRef_startScope(
-	CommandListRef *commandListRef, 
-	ListTransition transitions, 
-	U32 id, 
+	CommandListRef *commandListRef,
+	ListTransition transitions,
+	U32 id,
 	ListCommandScopeDependency deps
 ) {
 
@@ -1250,9 +1250,9 @@ Error CommandListRef_drawBase(CommandListRef *commandListRef, Buffer buf, EComma
 		return Error_invalidOperation(2, "CommandListRef_drawBase() requires viewport and scissor");
 
 	_gotoIfError(clean, CommandList_validateGraphicsPipeline(
-		PipelineRef_ptr(pipelineRef), 
-		commandList->boundImages, 
-		commandList->boundImageCount, 
+		PipelineRef_ptr(pipelineRef),
+		commandList->boundImages,
+		commandList->boundImageCount,
 		commandList->boundDepthFormat,
 		commandList->boundSampleCount
 	));
@@ -1283,16 +1283,16 @@ Error CommandListRef_drawIndexed(CommandListRef *commandList, U32 indexCount, U3
 }
 
 Error CommandListRef_drawIndexedAdv(
-	CommandListRef *commandList, 
-	U32 indexCount, U32 instanceCount, 
+	CommandListRef *commandList,
+	U32 indexCount, U32 instanceCount,
 	U32 indexOffset, U32 instanceOffset,
 	U32 vertexOffset
 ) {
-	DrawCmd draw = (DrawCmd) { 
-		.count = indexCount, .instanceCount = instanceCount, 
+	DrawCmd draw = (DrawCmd) {
+		.count = indexCount, .instanceCount = instanceCount,
 		.indexOffset = indexOffset, .instanceOffset = instanceOffset,
 		.vertexOffset = vertexOffset,
-		.isIndexed = true 
+		.isIndexed = true
 	};
 
 	return CommandListRef_draw(commandList, draw);
@@ -1304,12 +1304,12 @@ Error CommandListRef_drawUnindexed(CommandListRef *commandList, U32 vertexCount,
 }
 
 Error CommandListRef_drawUnindexedAdv(
-	CommandListRef *commandList, 
-	U32 vertexCount, U32 instanceCount, 
+	CommandListRef *commandList,
+	U32 vertexCount, U32 instanceCount,
 	U32 vertexOffset, U32 instanceOffset
 ) {
-	DrawCmd draw = (DrawCmd) { 
-		.count = vertexCount, .instanceCount = instanceCount, 
+	DrawCmd draw = (DrawCmd) {
+		.count = vertexCount, .instanceCount = instanceCount,
 		.vertexOffset = vertexOffset, .instanceOffset = instanceOffset
 	};
 
@@ -1459,7 +1459,7 @@ Error CommandList_drawIndirectBase(
 }
 
 Error CommandListRef_drawIndirect(
-	CommandListRef *commandListRef, 
+	CommandListRef *commandListRef,
 	DeviceBufferRef *buffer,
 	U64 bufferOffset,
 	U32 bufferStride,
@@ -1494,10 +1494,10 @@ clean:
 }
 
 Error CommandListRef_drawIndirectCountExt(
-	CommandListRef *commandListRef, 
+	CommandListRef *commandListRef,
 	DeviceBufferRef *buffer,
 	U64 bufferOffset,
-	U32 bufferStride, 
+	U32 bufferStride,
 	DeviceBufferRef *countBuffer,
 	U64 countOffset,
 	U32 maxDrawCalls,
@@ -1550,10 +1550,10 @@ clean:
 //Dynamic rendering
 
 Error CommandListRef_startRenderExt(
-	CommandListRef *commandListRef, 
-	I32x2 offset, 
-	I32x2 size, 
-	ListAttachmentInfo colors, 
+	CommandListRef *commandListRef,
+	I32x2 offset,
+	I32x2 size,
+	ListAttachmentInfo colors,
 	AttachmentInfo depth,
 	AttachmentInfo stencil
 ) {
@@ -1675,7 +1675,7 @@ Error CommandListRef_startRenderExt(
 						3, "CommandListRef_startRenderExt() MSAA resolve image of stencil image needs stencil buffer"
 					));
 
-				Bool resolveImageIsCompatible = 
+				Bool resolveImageIsCompatible =
 					(resolveImageDS == depthStencil->format) || (
 						(resolveImageDS == EDepthStencilFormat_D32S8 || resolveImageDS == EDepthStencilFormat_D32) &&
 						(depthStencil->format == EDepthStencilFormat_D32S8 || depthStencil->format == EDepthStencilFormat_D32)
@@ -1712,8 +1712,8 @@ Error CommandListRef_startRenderExt(
 			));
 
 		if(
-			info.resolveImage && 
-			info.resolveImage->typeId != EGraphicsTypeId_RenderTexture && 
+			info.resolveImage &&
+			info.resolveImage->typeId != EGraphicsTypeId_RenderTexture &&
 			info.resolveImage->typeId != EGraphicsTypeId_Swapchain
 		)
 			_gotoIfError(clean, Error_invalidOperation(
@@ -1752,7 +1752,7 @@ Error CommandListRef_startRenderExt(
 		if (info.image) {
 
 			if(
-				info.image->typeId != (ETypeId)EGraphicsTypeId_Swapchain && 
+				info.image->typeId != (ETypeId)EGraphicsTypeId_Swapchain &&
 				info.image->typeId != (ETypeId)EGraphicsTypeId_RenderTexture
 			)
 				_gotoIfError(clean, Error_invalidParameter(
@@ -2025,9 +2025,9 @@ Error CommandListRef_startRenderExt(
 				else if(info.load == ELoadAttachmentType_Preserve)
 					startRender->preserveMask |= (U8)1 << i;
 
-				attachments[counter++] = (AttachmentInfoInternal) { 
-					.color = info.color, 
-					.image = info.image, 
+				attachments[counter++] = (AttachmentInfoInternal) {
+					.color = info.color,
+					.image = info.image,
 					.range = info.range,
 					.resolveImage = info.resolveImage,
 					.resolveMode = info.resolveMode
@@ -2066,7 +2066,7 @@ Error CommandListRef_startRenderExt(
 
 					if(state->type != transition.type)
 						_gotoIfError(clean, Error_invalidOperation(
-							4, 
+							4,
 							"CommandListRef_startRenderExt()::colors[i] or depthStencil resolve target was already resolved"
 						));
 				}
@@ -2077,9 +2077,9 @@ Error CommandListRef_startRenderExt(
 	}
 
 	_gotoIfError(clean, CommandList_append(
-		commandList, 
-		ECommandOp_StartRenderingExt, 
-		Buffer_createRefConst(startRender, sizeof(StartRenderCmdExt) + sizeof(AttachmentInfoInternal) * counter), 
+		commandList,
+		ECommandOp_StartRenderingExt,
+		Buffer_createRefConst(startRender, sizeof(StartRenderCmdExt) + sizeof(AttachmentInfoInternal) * counter),
 		0
 	));
 
@@ -2127,7 +2127,7 @@ clean:
 	if(toRelease)
 		Lock_unlock(toRelease);
 
-	if(err.genericError) 
+	if(err.genericError)
 		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
 
 	Buffer_freex(&command);
@@ -2272,8 +2272,8 @@ Bool CommandList_free(CommandList *cmd, Allocator alloc) {
 }
 
 Error GraphicsDeviceRef_createCommandList(
-	GraphicsDeviceRef *deviceRef, 
-	U64 commandListLen, 
+	GraphicsDeviceRef *deviceRef,
+	U64 commandListLen,
 	U64 estimatedCommandCount,
 	U64 estimatedResources,
 	Bool allowResize,
@@ -2281,9 +2281,9 @@ Error GraphicsDeviceRef_createCommandList(
 ) {
 
 	Error err = RefPtr_createx(
-		(U32) sizeof(CommandList), 
-		(ObjectFreeFunc) CommandList_free, 
-		EGraphicsTypeId_CommandList, 
+		(U32) sizeof(CommandList),
+		(ObjectFreeFunc) CommandList_free,
+		EGraphicsTypeId_CommandList,
 		commandListRef
 	);
 

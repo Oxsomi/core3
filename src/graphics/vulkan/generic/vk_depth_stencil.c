@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -30,9 +30,9 @@
 const U64 DepthStencilExt_size = sizeof(VkManagedImage);
 
 Error GraphicsDeviceRef_createDepthStencilExt(
-	GraphicsDeviceRef *deviceRef, 
+	GraphicsDeviceRef *deviceRef,
 	I32x2 size,
-	EDepthStencilFormat format, 
+	EDepthStencilFormat format,
 	Bool allowShaderRead,
 	EMSAASamples msaa,
 	CharString name,
@@ -72,9 +72,9 @@ Error GraphicsDeviceRef_createDepthStencilExt(
 		.samples = (VkSampleCountFlagBits) (1 << msaa),
 		.tiling = VK_IMAGE_TILING_OPTIMAL,
 
-		.usage = 
-			VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | 
-			VK_IMAGE_USAGE_TRANSFER_SRC_BIT | 
+		.usage =
+			VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
+			VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
 			VK_IMAGE_USAGE_TRANSFER_DST_BIT |
 			(allowShaderRead ? VK_IMAGE_USAGE_SAMPLED_BIT : 0),
 
@@ -83,13 +83,13 @@ Error GraphicsDeviceRef_createDepthStencilExt(
 
 	//Allocate memory
 
-	VkDeviceImageMemoryRequirementsKHR imageReq = (VkDeviceImageMemoryRequirementsKHR) { 
+	VkDeviceImageMemoryRequirementsKHR imageReq = (VkDeviceImageMemoryRequirementsKHR) {
 		.sType = VK_STRUCTURE_TYPE_DEVICE_IMAGE_MEMORY_REQUIREMENTS_KHR,
 		.pCreateInfo = &imageInfo
 	};
 
-	VkMemoryDedicatedRequirements dedicatedReq = { 
-		.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_REQUIREMENTS 
+	VkMemoryDedicatedRequirements dedicatedReq = {
+		.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_REQUIREMENTS
 	};
 
 	VkMemoryRequirements2 requirements = (VkMemoryRequirements2) {
@@ -100,10 +100,10 @@ Error GraphicsDeviceRef_createDepthStencilExt(
 	instance->getDeviceImageMemoryRequirements(deviceExt->device, &imageReq, &requirements);
 
 	_gotoIfError(clean, DeviceMemoryAllocator_allocate(
-		&device->allocator, 
-		&requirements, 
-		false, 
-		&depthStencilExt->blockId, 
+		&device->allocator,
+		&requirements,
+		false,
+		&depthStencilExt->blockId,
 		&depthStencilExt->blockOffset,
 		EResourceType_RenderTargetOrDepthStencil,
 		name

@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -77,7 +77,7 @@ Error GraphicsDeviceRef_createPipelinesCompute(
 
 	if(!deviceRef || !shaderBinaries || !pipelines)
 		return Error_nullPointer(
-			!deviceRef ? 0 : (!shaderBinaries ? 1 : 2), 
+			!deviceRef ? 0 : (!shaderBinaries ? 1 : 2),
 			"GraphicsDeviceRef_createPipelinesCompute()::deviceRef, shaderBinaries and pipelines are required"
 		);
 
@@ -93,13 +93,13 @@ Error GraphicsDeviceRef_createPipelinesCompute(
 
 	if(names.length && names.length != shaderBinaries->length)
 		return Error_invalidParameter(
-			2, 0, 
+			2, 0,
 			"GraphicsDeviceRef_createPipelinesCompute()::names should have the same length as shaderBinaries"
 		);
 
 	if(shaderBinaries->length >> 32)
 		return Error_outOfBounds(
-			1, shaderBinaries->length, U32_MAX, 
+			1, shaderBinaries->length, U32_MAX,
 			"GraphicsDeviceRef_createPipelinesCompute()::shaderBinaries.length should be less than U32_MAX"
 		);
 
@@ -118,9 +118,9 @@ Error GraphicsDeviceRef_createPipelinesCompute(
 		RefPtr **refPtr = &pipelines->ptrNonConst[i];
 
 		_gotoIfError(clean, RefPtr_createx(
-			(U32)(sizeof(Pipeline) + PipelineExt_size), 
-			(ObjectFreeFunc) Pipeline_free, 
-			EGraphicsTypeId_Pipeline, 
+			(U32)(sizeof(Pipeline) + PipelineExt_size),
+			(ObjectFreeFunc) Pipeline_free,
+			EGraphicsTypeId_Pipeline,
 			refPtr
 		));
 
@@ -175,7 +175,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 	GraphicsDeviceRef *deviceRef,
 	ListPipelineStage *stages,
 	ListPipelineGraphicsInfo *infos,
-	ListCharString names,					//Temporary names for debugging. Can be empty too, else match infos->length 
+	ListCharString names,					//Temporary names for debugging. Can be empty too, else match infos->length
 	ListPipelineRef *pipelines
 ) {
 
@@ -224,7 +224,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 
 		if(info->attachmentCountExt > 8)
 			return Error_outOfBounds(
-				(U32)i, info->attachmentCountExt, 8, 
+				(U32)i, info->attachmentCountExt, 8,
 				"GraphicsDeviceRef_createPipelinesGraphics()::infos[i].attachmentCountExt out of bounds"
 			);
 
@@ -243,7 +243,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 
 		if(info->patchControlPointsExt && !(device->info.capabilities.features & EGraphicsFeatures_TessellationShader))
 			return Error_unsupportedOperation(
-				0, 
+				0,
 				"GraphicsDeviceRef_createPipelinesGraphics()::infos[i].patchControlPointsExt is specified while "
 				"TesselationShader is unsupported"
 			);
@@ -267,7 +267,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 
 		if(dataTypeCheck && !(device->info.capabilities.dataTypes & dataTypeCheck))
 			return Error_unsupportedOperation(
-				1, 
+				1,
 				"GraphicsDeviceRef_createPipelinesGraphics()::infos[i] uses an MSAA variant that's not supported "
 				"(1 and 4 samples are always supported"
 			);
@@ -280,7 +280,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 
 			if(!info->renderPass || info->attachmentCountExt || info->depthFormatExt)
 				return Error_unsupportedOperation(
-					2, 
+					2,
 					"GraphicsDeviceRef_createPipelinesGraphics()::infos[i].renderPass is required when "
 					"directRendering is unsupported and attachmentCountExt and depthFormatExt should be 0 and None"
 				);
@@ -329,21 +329,21 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 		//Validate if stages are allowed due to TesselationShader, GeometryShader
 
 		if(
-			stageFlags & (((U64)1 << EPipelineStage_HullExt) | ((U64)1 << EPipelineStage_DomainExt)) && 
+			stageFlags & (((U64)1 << EPipelineStage_HullExt) | ((U64)1 << EPipelineStage_DomainExt)) &&
 			!(device->info.capabilities.features & EGraphicsFeatures_TessellationShader)
 		)
 			return Error_unsupportedOperation(
-				10, 
+				10,
 				"GraphicsDeviceRef_createPipelinesGraphics()::infos[i] contains hull or domain shader, "
 				"but tessellation isn't supported"
 			);
 
 		if(
-			((stageFlags >> EPipelineStage_GeometryExt) & 1) && 
+			((stageFlags >> EPipelineStage_GeometryExt) & 1) &&
 			!(device->info.capabilities.features & EGraphicsFeatures_GeometryShader)
 		)
 			return Error_unsupportedOperation(
-				11, 
+				11,
 				"GraphicsDeviceRef_createPipelinesGraphics()::infos[i] contains geometry shader, "
 				"but geometry shaders aren't supported"
 			);
@@ -365,7 +365,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 
 			if(stride > 2048)
 				return Error_invalidOperation(
-					7, 
+					7,
 					"GraphicsDeviceRef_createPipelinesGraphics()::infos[i].vertexLayout.bufferStrides12_isInstance1[j] "
 					"contains stride that's bigger than 2048, which is illegal."
 				);
@@ -386,7 +386,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 
 			if(!GraphicsDeviceInfo_supportsFormatVertexAttribute(format))
 				return Error_invalidOperation(
-					9, 
+					9,
 					"GraphicsDeviceRef_createPipelinesGraphics()::infos[i].vertexLayout.attributes[j].format is "
 					"unsupported as a vertex input attribute"
 				);
@@ -443,7 +443,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 
 		if(info->blendState.logicOpExt && !(device->info.capabilities.features & EGraphicsFeatures_LogicOp))
 			return Error_unsupportedOperation(
-				8, 
+				8,
 				"GraphicsDeviceRef_createPipelinesGraphics()::infos[i].blendState.logicOpExt "
 				"was set but logicOp wasn't supported"
 			);
@@ -498,7 +498,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 
 			if(attachj.blendOpAlpha >= EBlendOp_Count)
 				return Error_invalidOperation(
-					18, 
+					18,
 					"GraphicsDeviceRef_createPipelinesGraphics()::infos[i].blendState.attachments[j].blendOpAlpha "
 					"out of bounds"
 				);
@@ -549,9 +549,9 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 		PipelineRef **refPtr = &pipelines->ptrNonConst[i];
 
 		_gotoIfError(clean, RefPtr_createx(
-			(U32)(sizeof(Pipeline) + PipelineExt_size + sizeof(PipelineGraphicsInfo)), 
-			(ObjectFreeFunc) Pipeline_free, 
-			EGraphicsTypeId_Pipeline, 
+			(U32)(sizeof(Pipeline) + PipelineExt_size + sizeof(PipelineGraphicsInfo)),
+			(ObjectFreeFunc) Pipeline_free,
+			EGraphicsTypeId_Pipeline,
 			refPtr
 		));
 

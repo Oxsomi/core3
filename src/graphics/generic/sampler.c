@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -56,8 +56,8 @@ Error GraphicsDeviceRef_createSampler(GraphicsDeviceRef *dev, SamplerInfo info, 
 		return Error_invalidParameter(1, 0, "GraphicsDeviceRef_createSampler()::info.filter contains invalid bits");
 
 	if(
-		info.addressU >= ESamplerAddressMode_Count || 
-		info.addressV >= ESamplerAddressMode_Count || 
+		info.addressU >= ESamplerAddressMode_Count ||
+		info.addressV >= ESamplerAddressMode_Count ||
 		info.addressW >= ESamplerAddressMode_Count
 	)
 		return Error_invalidParameter(
@@ -76,8 +76,8 @@ Error GraphicsDeviceRef_createSampler(GraphicsDeviceRef *dev, SamplerInfo info, 
 		return Error_invalidParameter(1, 6, "GraphicsDeviceRef_createSampler()::info.comparisonFunction is out of bounds");
 
 	if(
-		!EFloatType_isFinite(EFloatType_F16, info.mipBias) || 
-		!EFloatType_isFinite(EFloatType_F16, info.minLod) || 
+		!EFloatType_isFinite(EFloatType_F16, info.mipBias) ||
+		!EFloatType_isFinite(EFloatType_F16, info.minLod) ||
 		!EFloatType_isFinite(EFloatType_F16, info.maxLod)
 	)
 		return Error_invalidParameter(1, 8, "GraphicsDeviceRef_createSampler()::info.mipBias, minLod or maxLod is invalid");
@@ -86,9 +86,9 @@ Error GraphicsDeviceRef_createSampler(GraphicsDeviceRef *dev, SamplerInfo info, 
 		info.maxLod = F32_castF16(65504.f);		//Set to F16 max
 
 	Error err = RefPtr_createx(
-		(U32)(sizeof(Sampler) + SamplerExt_size), 
-		(ObjectFreeFunc) Sampler_free, 
-		EGraphicsTypeId_Sampler, 
+		(U32)(sizeof(Sampler) + SamplerExt_size),
+		(ObjectFreeFunc) Sampler_free,
+		EGraphicsTypeId_Sampler,
 		sampler
 	);
 

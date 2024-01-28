@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -164,7 +164,7 @@ Error DeviceTextureRef_markDirty(DeviceTextureRef *tex, U16 x, U16 y, U16 z, U16
 				0, U32_MAX, U32_MAX, "DeviceTextureRef_markDirty() texture pendingRanges is limited to U32_MAX"
 			));
 
-		DevicePendingRange change = (DevicePendingRange) { .texture = { 
+		DevicePendingRange change = (DevicePendingRange) { .texture = {
 			.startRange = { x, y, z },
 			.endRange = { x + w, y + h, z + l },
 			.levelId = 0
@@ -173,7 +173,7 @@ Error DeviceTextureRef_markDirty(DeviceTextureRef *tex, U16 x, U16 y, U16 z, U16
 		_gotoIfError(clean, ListDevicePendingRange_pushBackx(&texture->pendingChanges, change));
 	}
 
-	//Tell the device that on next submit it should handle copies from 
+	//Tell the device that on next submit it should handle copies from
 
 	if(texture->isPending)
 		goto clean;
@@ -223,15 +223,15 @@ Bool DeviceTexture_free(DeviceTexture *texture, Allocator allocator) {
 }
 
 Error GraphicsDeviceRef_createTexture(
-	GraphicsDeviceRef *dev, 
+	GraphicsDeviceRef *dev,
 	ETextureType type,
-	ETextureFormatId formatId, 
-	EDeviceTextureUsage usage, 
+	ETextureFormatId formatId,
+	EDeviceTextureUsage usage,
 	U16 width,
 	U16 height,
 	U16 length,
-	CharString name, 
-	Buffer *dat, 
+	CharString name,
+	Buffer *dat,
 	DeviceTextureRef **tex
 ) {
 
@@ -256,7 +256,7 @@ Error GraphicsDeviceRef_createTexture(
 
 	if(width > 16384 || height > 16384 || length > 256)
 		return Error_invalidParameter(
-			width > 16384 ? 5 : (height > 16384 ? 6 : 7), 0, 
+			width > 16384 ? 5 : (height > 16384 ? 6 : 7), 0,
 			"GraphicsDeviceRef_createTexture()::width, height and or length exceed limit (16384, 16384 and 256 respectively)"
 		);
 
@@ -271,10 +271,13 @@ Error GraphicsDeviceRef_createTexture(
 	if(texSize == U64_MAX || Buffer_length(*dat) != texSize)
 		return Error_nullPointer(3, "GraphicsDeviceRef_createTexture()::dat must match expected texture size and alignment");
 
+	if(type != ETextureType_2D)
+		return Error_invalidParameter(1, 0, "GraphicsDeviceRef_createTexture()::type only supports 2D for now");		//TODO:
+
 	Error err = RefPtr_createx(
-		(U32)(sizeof(DeviceTexture) + DeviceTextureExt_size), 
-		(ObjectFreeFunc) DeviceTexture_free, 
-		EGraphicsTypeId_DeviceTexture, 
+		(U32)(sizeof(DeviceTexture) + DeviceTextureExt_size),
+		(ObjectFreeFunc) DeviceTexture_free,
+		EGraphicsTypeId_DeviceTexture,
 		tex
 	);
 
@@ -291,15 +294,16 @@ Error GraphicsDeviceRef_createTexture(
 	DeviceTexture *texture = DeviceTextureRef_ptr(*tex);
 	_gotoIfError(clean, GraphicsDeviceRef_inc(dev));
 
-	*texture = (DeviceTexture) { 
-		.device = dev, 
+	*texture = (DeviceTexture) {
+		.device = dev,
 		.usage = usage,
-		.isFirstFrame = true, 
+		.isFirstFrame = true,
 		.textureFormatId = (U8) formatId,
 		.readHandle = U32_MAX,
 		.width = width,
 		.height = height,
-		.length = length
+		.length = length,
+		.allocSize = texSize
 	};
 
 	//Link buffer and pending ranges

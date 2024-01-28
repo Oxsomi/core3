@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -95,8 +95,8 @@ Error CommandListRef_dec(CommandListRef **cmd);
 Error CommandListRef_inc(CommandListRef *cmd);
 
 Error GraphicsDeviceRef_createCommandList(
-	GraphicsDeviceRef *device, 
-	U64 commandListLen, 
+	GraphicsDeviceRef *device,
+	U64 commandListLen,
 	U64 estimatedCommandCount,
 	U64 estimatedResources,
 	Bool allowResize,
@@ -150,9 +150,9 @@ TList(Transition);
 TList(CommandScopeDependency);
 
 Error CommandListRef_startScope(
-	CommandListRef *commandList, 
-	ListTransition transitions, 
-	U32 id, 
+	CommandListRef *commandList,
+	ListTransition transitions,
+	U32 id,
 	ListCommandScopeDependency dependencies
 );
 
@@ -170,39 +170,39 @@ Error CommandListRef_drawIndexed(CommandListRef *commandList, U32 indexCount, U3
 Error CommandListRef_drawUnindexed(CommandListRef *commandList, U32 vertexCount, U32 instanceCount);
 
 Error CommandListRef_drawIndexedAdv(
-	CommandListRef *commandList, 
-	U32 indexCount, 
-	U32 instanceCount, 
-	U32 indexOffset, 
+	CommandListRef *commandList,
+	U32 indexCount,
+	U32 instanceCount,
+	U32 indexOffset,
 	U32 instanceOffset,
 	U32 vertexOffset
 );
 
 Error CommandListRef_drawUnindexedAdv(
-	CommandListRef *commandList, 
-	U32 vertexCount, 
-	U32 instanceCount, 
-	U32 vertexOffset, 
+	CommandListRef *commandList,
+	U32 vertexCount,
+	U32 instanceCount,
+	U32 vertexOffset,
 	U32 instanceOffset
 );
 
 Error CommandListRef_drawIndirect(
-	CommandListRef *commandList, 
-	DeviceBufferRef *buffer, 
-	U64 bufferOffset, 
-	U32 bufferStride, 
-	U32 drawCalls, 
+	CommandListRef *commandList,
+	DeviceBufferRef *buffer,
+	U64 bufferOffset,
+	U32 bufferStride,
+	U32 drawCalls,
 	Bool indexed
 );
 
 Error CommandListRef_drawIndirectCountExt(
-	CommandListRef *commandList, 
-	DeviceBufferRef *buffer, 
-	U64 bufferOffset, 
-	U32 bufferStride, 
-	DeviceBufferRef *countBuffer, 
+	CommandListRef *commandList,
+	DeviceBufferRef *buffer,
+	U64 bufferOffset,
+	U32 bufferStride,
+	DeviceBufferRef *countBuffer,
 	U64 countOffset,
-	U32 maxDrawCalls, 
+	U32 maxDrawCalls,
 	Bool indexed
 );
 
@@ -218,9 +218,9 @@ Error CommandListRef_dispatchIndirect(CommandListRef *commandList, DeviceBufferR
 TList(AttachmentInfo);
 
 Error CommandListRef_startRenderExt(
-	CommandListRef *commandList, 
-	I32x2 offset, 
-	I32x2 size, 
+	CommandListRef *commandList,
+	I32x2 offset,
+	I32x2 size,
 	ListAttachmentInfo colors,
 	AttachmentInfo depth,
 	AttachmentInfo stencil

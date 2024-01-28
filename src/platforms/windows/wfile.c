@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -39,7 +39,7 @@ Error File_foreach(CharString loc, FileCallback callback, void *userData, Bool i
 	Error err = Error_none();
 	HANDLE file = NULL;
 
-	if(!callback) 
+	if(!callback)
 		_gotoIfError(clean, Error_nullPointer(1, "File_foreach()::callback is required"));
 
 	if(!CharString_isValidFilePath(loc))
@@ -188,7 +188,7 @@ Error File_virtualOp(CharString loc, Ns maxTimeout, VirtualFileFunc f, void *use
 		return Error_unimplemented(1, "File_virtualOp()::loc //function/ not supported yet");
 	}
 
-	err = 
+	err =
 		isWrite ? Error_constData(
 			1, 0, "File_virtualOp()::isWrite is disallowed when acting on virtual files (except //access/* or //function/*"
 		) : (
@@ -206,17 +206,17 @@ Error File_removeVirtual(CharString loc, Ns maxTimeout) {
 	return File_virtualOp(loc, maxTimeout, NULL, NULL, true);
 }
 
-Error File_addVirtual(CharString loc, EFileType type, Ns maxTimeout) { 
+Error File_addVirtual(CharString loc, EFileType type, Ns maxTimeout) {
 	type;
 	return File_virtualOp(loc, maxTimeout, NULL, NULL, true);
 }
 
-Error File_renameVirtual(CharString loc, CharString newFileName, Ns maxTimeout) { 
+Error File_renameVirtual(CharString loc, CharString newFileName, Ns maxTimeout) {
 	newFileName;
 	return File_virtualOp(loc, maxTimeout, NULL, NULL, true);
 }
 
-Error File_moveVirtual(CharString loc, CharString directoryName, Ns maxTimeout) { 
+Error File_moveVirtual(CharString loc, CharString directoryName, Ns maxTimeout) {
 	directoryName;
 	return File_virtualOp(loc, maxTimeout, NULL, NULL, true);
 }
@@ -329,15 +329,15 @@ clean:
 	return err;
 }
 
-Error File_readVirtual(CharString loc, Buffer *output, Ns maxTimeout) { 
+Error File_readVirtual(CharString loc, Buffer *output, Ns maxTimeout) {
 
 	if(!output)
 		return Error_nullPointer(1, "File_readVirtual()::output is required");
 
 	return File_virtualOp(
-		loc, maxTimeout, 
-		(VirtualFileFunc) File_readVirtualInternal, 
-		output, 
+		loc, maxTimeout,
+		(VirtualFileFunc) File_readVirtualInternal,
+		output,
 		false
 	);
 }
@@ -393,7 +393,7 @@ clean:
 	return err;
 }
 
-Error File_getInfoVirtual(CharString loc, FileInfo *info) { 
+Error File_getInfoVirtual(CharString loc, FileInfo *info) {
 
 	if(!info)
 		return Error_nullPointer(1, "File_getInfoVirtual()::info is required");
@@ -402,9 +402,9 @@ Error File_getInfoVirtual(CharString loc, FileInfo *info) {
 		return Error_invalidOperation(0, "File_getInfoVirtual()::info isn't empty, might indicate memleak");
 
 	return File_virtualOp(
-		loc, 1 * SECOND, 
-		(VirtualFileFunc) File_getInfoVirtualInternal, 
-		info, 
+		loc, 1 * SECOND,
+		(VirtualFileFunc) File_getInfoVirtualInternal,
+		info,
 		false
 	);
 }
@@ -514,7 +514,7 @@ Error File_foreachVirtualInternal(ForeachFile *userData, CharString resolved) {
 			}
 		}
 
-		//All folders 
+		//All folders
 		
 		if (
 			(!userData->isRecursive && baseCount == CharString_countAllSensitive(section->path, '/')) ||
@@ -551,9 +551,9 @@ Error File_foreachVirtualInternal(ForeachFile *userData, CharString resolved) {
 					child = root;
 
 				_gotoIfError(clean, Archive_foreachx(
-					section->loadedData, 
-					child, 
-					(FileCallback) File_virtualCallback, userData, 
+					section->loadedData,
+					child,
+					(FileCallback) File_virtualCallback, userData,
 					userData->isRecursive,
 					EFileType_Any
 				));
@@ -576,21 +576,21 @@ clean:
 	return err;
 }
 
-Error File_foreachVirtual(CharString loc, FileCallback callback, void *userData, Bool isRecursive) { 
+Error File_foreachVirtual(CharString loc, FileCallback callback, void *userData, Bool isRecursive) {
 
 	if(!callback)
 		return Error_nullPointer(1, "File_foreachVirtual()::callback is required");
 
-	ForeachFile foreachFile = (ForeachFile) { 
-		.callback = callback, 
-		.userData = userData, 
+	ForeachFile foreachFile = (ForeachFile) {
+		.callback = callback,
+		.userData = userData,
 		.isRecursive = isRecursive
 	};
 
 	return File_virtualOp(
-		loc, 1 * SECOND, 
-		(VirtualFileFunc) File_foreachVirtualInternal, 
-		&foreachFile, 
+		loc, 1 * SECOND,
+		(VirtualFileFunc) File_foreachVirtualInternal,
+		&foreachFile,
 		false
 	);
 }
@@ -614,7 +614,7 @@ Error countFileType(FileInfo info, FileCounter *counter) {
 	return Error_none();
 }
 
-Error File_queryFileObjectCountVirtual(CharString loc, EFileType type, Bool isRecursive, U64 *res) { 
+Error File_queryFileObjectCountVirtual(CharString loc, EFileType type, Bool isRecursive, U64 *res) {
 
 	Error err = Error_none();
 
@@ -629,7 +629,7 @@ clean:
 	return err;
 }
 
-Error File_queryFileObjectCountAllVirtual(CharString loc, Bool isRecursive, U64 *res) { 
+Error File_queryFileObjectCountAllVirtual(CharString loc, Bool isRecursive, U64 *res) {
 
 	Error err = Error_none();
 

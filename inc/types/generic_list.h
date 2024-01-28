@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -99,18 +99,18 @@ Error GenericList_create(U64 length, U64 stride, Allocator allocator, GenericLis
 Error GenericList_createCopy(GenericList list, Allocator allocator, GenericList *result);
 
 Error GenericList_createRepeated(
-	U64 length, 
-	U64 stride, 
-	Buffer data, 
-	Allocator allocator, 
+	U64 length,
+	U64 stride,
+	Buffer data,
+	Allocator allocator,
 	GenericList *result
 );
 
 Error GenericList_createSubsetReverse(
-	GenericList list, 
+	GenericList list,
 	U64 index,
-	U64 length, 
-	Allocator allocator, 
+	U64 length,
+	Allocator allocator,
 	GenericList *result
 );
 
@@ -123,10 +123,10 @@ Error GenericList_set(GenericList list, U64 index, Buffer buf);
 Error GenericList_get(GenericList list, U64 index, Buffer *result);
 
 Error GenericList_copy(
-	GenericList src, 
-	U64 srcOffset, 
-	GenericList dst, 
-	U64 dstOffset, 
+	GenericList src,
+	U64 srcOffset,
+	GenericList dst,
+	U64 dstOffset,
 	U64 count
 );
 

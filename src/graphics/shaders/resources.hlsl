@@ -122,7 +122,7 @@ F32 getAppData1f(uint offset) { return asfloat(getAppData1u(offset)); }
 //Fetch 2 element vector from user data
 //Use unaligned only if necessary, otherwise please align offset to 8-byte!
 
-U32x2 getAppData2u(uint offset) { 
+U32x2 getAppData2u(uint offset) {
 	return offset >= 92 ? 0.xx : (
 		(offset & 2) == 0 ? _appData[offset >> 2].xy : _appData[offset >> 2].zw
 	);

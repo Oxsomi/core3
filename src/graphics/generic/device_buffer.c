@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -133,7 +133,7 @@ Error DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count) {
 		_gotoIfError(clean, ListDevicePendingRange_pushBackx(&buffer->pendingChanges, change));
 	}
 
-	//Tell the device that on next submit it should handle copies from 
+	//Tell the device that on next submit it should handle copies from
 
 	if(buffer->isPending)
 		goto clean;
@@ -186,10 +186,10 @@ Bool DeviceBuffer_free(DeviceBuffer *buffer, Allocator allocator) {
 }
 
 Error GraphicsDeviceRef_createBuffer(
-	GraphicsDeviceRef *dev, 
-	EDeviceBufferUsage usage, 
-	CharString name, 
-	U64 len, 
+	GraphicsDeviceRef *dev,
+	EDeviceBufferUsage usage,
+	CharString name,
+	U64 len,
 	DeviceBufferRef **buf
 ) {
 
@@ -197,9 +197,9 @@ Error GraphicsDeviceRef_createBuffer(
 		return Error_nullPointer(0, "GraphicsDeviceRef_createBuffer()::dev is required");
 
 	Error err = RefPtr_createx(
-		(U32)(sizeof(DeviceBuffer) + DeviceBufferExt_size), 
-		(ObjectFreeFunc) DeviceBuffer_free, 
-		EGraphicsTypeId_DeviceBuffer, 
+		(U32)(sizeof(DeviceBuffer) + DeviceBufferExt_size),
+		(ObjectFreeFunc) DeviceBuffer_free,
+		EGraphicsTypeId_DeviceBuffer,
 		buf
 	);
 
@@ -216,11 +216,11 @@ Error GraphicsDeviceRef_createBuffer(
 	if(!(usage & EDeviceBufferUsage_InternalWeakRef))
 		_gotoIfError(clean, GraphicsDeviceRef_inc(dev));
 
-	*buffer = (DeviceBuffer) { 
-		.device = dev, 
-		.usage = usage, 
-		.length = len, 
-		.isFirstFrame = true, 
+	*buffer = (DeviceBuffer) {
+		.device = dev,
+		.usage = usage,
+		.length = len,
+		.isFirstFrame = true,
 		.readHandle = U32_MAX,
 		.writeHandle = U32_MAX
 	};
@@ -252,10 +252,10 @@ clean:
 }
 
 Error GraphicsDeviceRef_createBufferData(
-	GraphicsDeviceRef *dev, 
-	EDeviceBufferUsage usage, 
-	CharString name, 
-	Buffer *dat, 
+	GraphicsDeviceRef *dev,
+	EDeviceBufferUsage usage,
+	CharString name,
+	Buffer *dat,
 	DeviceBufferRef **buf
 ) {
 

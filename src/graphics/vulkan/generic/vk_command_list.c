@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -65,10 +65,10 @@ void addResolveImage(AttachmentInfoInternal attachment, VkRenderingAttachmentInf
 }
 
 void CommandList_process(
-	CommandList *commandList, 
-	GraphicsDevice *device, 
-	ECommandOp op, 
-	const U8 *data, 
+	CommandList *commandList,
+	GraphicsDevice *device,
+	ECommandOp op,
+	const U8 *data,
 	void *commandListExt
 ) {
 
@@ -121,7 +121,7 @@ void CommandList_process(
 		case ECommandOp_SetBlendConstants:
 
 			Buffer_copy(
-				Buffer_createRef(&temp->tempBlendConstants, sizeof(F32x4)), 
+				Buffer_createRef(&temp->tempBlendConstants, sizeof(F32x4)),
 				Buffer_createRefConst(data, sizeof(F32x4))
 			);
 
@@ -160,8 +160,8 @@ void CommandList_process(
 				};
 
 				vkCmdClearColorImage(
-					buffer, 
-					imageExt->image, 
+					buffer,
+					imageExt->image,
 					imageExt->lastLayout,
 					(const VkClearColorValue*) &image.color,
 					1,
@@ -270,7 +270,7 @@ void CommandList_process(
 			else dstExt = (VkManagedImage*) RenderTexture_ext(RenderTextureRef_ptr(copyImage.dst), );
 
 			vkCmdCopyImage(
-				buffer, 
+				buffer,
 				srcExt->image,
 				srcExt->lastLayout,
 				dstExt->image,
@@ -340,7 +340,7 @@ void CommandList_process(
 					.imageLayout = imageExt->lastLayout,
 					.loadOp = loadOp,
 
-					.storeOp = 
+					.storeOp =
 						!((startRender->unusedAfterRenderMask >> i) & 1) ? VK_ATTACHMENT_STORE_OP_STORE:
 						VK_ATTACHMENT_STORE_OP_DONT_CARE,
 
@@ -382,7 +382,7 @@ void CommandList_process(
 
 				if(startRender->resolveDepth) {
 
-					AttachmentInfoInternal tmp = (AttachmentInfoInternal) { 
+					AttachmentInfoInternal tmp = (AttachmentInfoInternal) {
 						.resolveImage = startRender->resolveDepth,
 						.resolveMode = startRender->resolveDepthMode
 					};
@@ -417,7 +417,7 @@ void CommandList_process(
 
 				if(startRender->resolveStencil) {
 
-					AttachmentInfoInternal tmp = (AttachmentInfoInternal) { 
+					AttachmentInfoInternal tmp = (AttachmentInfoInternal) {
 						.resolveImage = startRender->resolveStencil,
 						.resolveMode = startRender->resolveStencilMode
 					};
@@ -521,9 +521,9 @@ void CommandList_process(
 			//Bind index buffer
 
 			if (
-				temp->tempBoundBuffers.indexBuffer && 
+				temp->tempBoundBuffers.indexBuffer &&
 				(
-					temp->boundBuffers.indexBuffer != temp->tempBoundBuffers.indexBuffer || 
+					temp->boundBuffers.indexBuffer != temp->tempBoundBuffers.indexBuffer ||
 					temp->boundBuffers.isIndex32Bit != temp->tempBoundBuffers.isIndex32Bit
 				)
 			) {
@@ -533,7 +533,7 @@ void CommandList_process(
 
 				vkCmdBindIndexBuffer(
 					temp->buffer,
-					DeviceBuffer_ext(DeviceBufferRef_ptr(temp->boundBuffers.indexBuffer), Vk)->buffer, 
+					DeviceBuffer_ext(DeviceBufferRef_ptr(temp->boundBuffers.indexBuffer), Vk)->buffer,
 					0,
 					temp->boundBuffers.isIndex32Bit ? VK_INDEX_TYPE_UINT32 : VK_INDEX_TYPE_UINT16
 				);
@@ -574,8 +574,8 @@ void CommandList_process(
 					vkCmdBindVertexBuffers(
 						temp->buffer,
 						start,
-						end - start, 
-						&(vertexBuffers)[start], 
+						end - start,
+						&(vertexBuffers)[start],
 						&(vertexBufferOffsets)[start]
 					);
 			}
@@ -588,15 +588,15 @@ void CommandList_process(
 
 				if(draw.isIndexed)
 					vkCmdDrawIndexed(
-						buffer, 
-						draw.count, draw.instanceCount, 
-						draw.indexOffset, draw.vertexOffset, 
+						buffer,
+						draw.count, draw.instanceCount,
+						draw.indexOffset, draw.vertexOffset,
 						draw.instanceOffset
 					);
 
 				else vkCmdDraw(
 					buffer,
-					draw.count, draw.instanceCount, 
+					draw.count, draw.instanceCount,
 					draw.indexOffset, draw.vertexOffset
 				);
 			}
@@ -617,16 +617,16 @@ void CommandList_process(
 
 					if(drawIndirect.isIndexed)
 						vkCmdDrawIndexedIndirectCount(
-							buffer, 
-							bufferExt->buffer, drawIndirect.bufferOffset, 
-							counterExt->buffer, drawIndirect.countOffsetExt, 
+							buffer,
+							bufferExt->buffer, drawIndirect.bufferOffset,
+							counterExt->buffer, drawIndirect.countOffsetExt,
 							drawIndirect.drawCalls, drawIndirect.bufferStride
 						);
 
 					else vkCmdDrawIndirectCount(
 						buffer,
 						bufferExt->buffer, drawIndirect.bufferOffset,
-						counterExt->buffer, drawIndirect.countOffsetExt, 
+						counterExt->buffer, drawIndirect.countOffsetExt,
 						drawIndirect.drawCalls, drawIndirect.bufferStride
 					);
 				}
@@ -652,7 +652,7 @@ void CommandList_process(
 			break;
 
 		case ECommandOp_DispatchIndirect:
-		case ECommandOp_Dispatch: 
+		case ECommandOp_Dispatch:
 
 			if(temp->pipelines[EPipelineType_Compute] != temp->tempPipelines[EPipelineType_Compute]) {
 
@@ -714,8 +714,8 @@ void CommandList_process(
 				}
 
 				if (!isImage)
-					access = 
-						transition.type == ETransitionType_ShaderRead ? VK_ACCESS_2_SHADER_STORAGE_READ_BIT : 
+					access =
+						transition.type == ETransitionType_ShaderRead ? VK_ACCESS_2_SHADER_STORAGE_READ_BIT :
 						VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
 
 				VkPipelineStageFlags2 pipelineStage = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
@@ -741,15 +741,15 @@ void CommandList_process(
 
 							case ETransitionType_RenderTargetRead:
 
-								pipelineStage = 
+								pipelineStage =
 									isDepthStencil ? VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT :
 									VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
 
-								access = 
+								access =
 									isDepthStencil ? VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT :
 									VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT;
 
-								layout = 
+								layout =
 									isDepthStencil ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL :
 									VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;
 
@@ -757,17 +757,17 @@ void CommandList_process(
 
 							case ETransitionType_RenderTargetWrite:
 
-								pipelineStage = 
+								pipelineStage =
 									isDepthStencil ? VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT :
 									VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
 
-								access = 
+								access =
 									isDepthStencil ? VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
 									VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT :
-									VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT | 
+									VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT |
 									VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
 
-								layout = 
+								layout =
 									isDepthStencil ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL :
 									VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;
 
@@ -837,7 +837,7 @@ void CommandList_process(
 
 					_gotoIfError(nextTransition, VkManagedImage_transition(
 
-						imageExt, 
+						imageExt,
 						pipelineStage,
 						access,
 						layout,

@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -29,7 +29,7 @@
 //The null terminator is only useful if it's created unsafely (which is only recommended for hardcoded strings).
 //
 //There are four types of strings:
-// 
+//
 //Stack strings (or heap if you manually allocate it there):
 //	ShortString; 31 chars max
 //	LongString; 63 char max
@@ -107,7 +107,7 @@ U64 CharString_calcStrLen(const C8 *ptr, U64 maxSize);
 C8 CharString_getAt(CharString str, U64 i);
 Bool CharString_setAt(CharString str, U64 i, C8 c);
 
-//Freeing refs won't do anything, but is still recommended for consistency. 
+//Freeing refs won't do anything, but is still recommended for consistency.
 //Const ref disallow modifying functions to be used.
 
 CharString CharString_createNull();
@@ -149,8 +149,8 @@ Error CharString_createBin(U64 v, U8 leadingZeros, Allocator allocator, CharStri
 
 Error CharString_split(
 	CharString s,
-	C8 c, 
-	EStringCase casing, 
+	C8 c,
+	EStringCase casing,
 	Allocator allocator,
 	CharStringList *result
 );
@@ -187,17 +187,17 @@ Error CharString_insert(CharString *s, C8 c, U64 i, Allocator allocator);
 Error CharString_insertString(CharString *s, CharString other, U64 i, Allocator allocator);
 
 Error CharString_replaceAllString(
-	CharString *s, 
-	CharString search, 
-	CharString replace, 
-	EStringCase caseSensitive, 
+	CharString *s,
+	CharString search,
+	CharString replace,
+	EStringCase caseSensitive,
 	Allocator allocator
 );
 
 Error CharString_replaceString(
-	CharString *s, 
-	CharString search, 
-	CharString replace, 
+	CharString *s,
+	CharString search,
+	CharString replace,
 	EStringCase caseSensitive,
 	Allocator allocator,
 	Bool isFirst
@@ -212,9 +212,9 @@ Error CharString_replaceFirstString(
 );
 
 Error CharString_replaceLastString(
-	CharString *s, 
-	CharString search, 
-	CharString replace, 
+	CharString *s,
+	CharString search,
+	CharString replace,
 	EStringCase caseSensitive,
 	Allocator allocator
 );
@@ -222,10 +222,10 @@ Error CharString_replaceLastString(
 Error CharString_replaceAllStringSensitive(CharString *s, CharString search, CharString replace, Allocator allocator);
 
 Error CharString_replaceStringSensitive(
-	CharString *s, 
-	CharString search, 
-	CharString replace, 
-	Allocator allocator, 
+	CharString *s,
+	CharString search,
+	CharString replace,
+	Allocator allocator,
 	Bool isFirst
 );
 
@@ -235,10 +235,10 @@ Error CharString_replaceLastStringSensitive(CharString *s, CharString search, Ch
 Error CharString_replaceAllStringInsensitive(CharString *s, CharString search, CharString replace, Allocator allocator);
 
 Error CharString_replaceStringInsensitive(
-	CharString *s, 
-	CharString search, 
-	CharString replace, 
-	Allocator allocator, 
+	CharString *s,
+	CharString search,
+	CharString replace,
+	Allocator allocator,
 	Bool isFirst
 );
 
@@ -356,10 +356,10 @@ Bool CharString_cutEnd(CharString s, U64 length, CharString *result);
 Bool CharString_cut(CharString s, U64 off, U64 length, CharString *result);
 
 Bool CharString_cutAfter(
-	CharString s, 
-	C8 c, 
-	EStringCase caseSensitive, 
-	Bool isFirst, 
+	CharString s,
+	C8 c,
+	EStringCase caseSensitive,
+	Bool isFirst,
 	CharString *result
 );
 
@@ -378,10 +378,10 @@ Bool CharString_cutAfterLastString(CharString s, CharString other, EStringCase c
 Bool CharString_cutAfterFirstString(CharString s, CharString other, EStringCase caseSensitive, CharString *result);
 
 Bool CharString_cutBefore(
-	CharString s, 
-	C8 c, 
-	EStringCase caseSensitive, 
-	Bool isFirst, 
+	CharString s,
+	C8 c,
+	EStringCase caseSensitive,
+	Bool isFirst,
 	CharString *result
 );
 
@@ -389,10 +389,10 @@ Bool CharString_cutBeforeLast(CharString s, C8 c, EStringCase caseSensitive, Cha
 Bool CharString_cutBeforeFirst(CharString s, C8 c, EStringCase caseSensitive, CharString *result);
 
 Bool CharString_cutBeforeString(
-	CharString s, 
-	CharString other, 
-	EStringCase caseSensitive, 
-	Bool isFirst, 
+	CharString s,
+	CharString other,
+	EStringCase caseSensitive,
+	Bool isFirst,
 	CharString *result
 );
 

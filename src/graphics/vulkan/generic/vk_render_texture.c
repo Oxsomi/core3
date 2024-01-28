@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -30,10 +30,10 @@
 const U64 RenderTextureExt_size = sizeof(VkManagedImage);
 
 Error GraphicsDeviceRef_createRenderTextureExt(
-	GraphicsDeviceRef *deviceRef, 
+	GraphicsDeviceRef *deviceRef,
 	ETextureType type,
 	I32x4 size,
-	ETextureFormat format, 
+	ETextureFormat format,
 	ERenderTextureUsage usage,
 	EMSAASamples msaa,
 	CharString name,
@@ -68,9 +68,9 @@ Error GraphicsDeviceRef_createRenderTextureExt(
 		.samples = (VkSampleCountFlagBits) (1 << msaa),
 		.tiling = VK_IMAGE_TILING_OPTIMAL,
 
-		.usage = 
-			VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | 
-			VK_IMAGE_USAGE_TRANSFER_SRC_BIT | 
+		.usage =
+			VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+			VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
 			VK_IMAGE_USAGE_TRANSFER_DST_BIT |
 			(usage & ERenderTextureUsage_ShaderRead ? VK_IMAGE_USAGE_SAMPLED_BIT : 0) |
 			(usage & ERenderTextureUsage_ShaderWrite ? VK_IMAGE_USAGE_STORAGE_BIT : 0),
@@ -80,13 +80,13 @@ Error GraphicsDeviceRef_createRenderTextureExt(
 
 	//Allocate memory
 
-	VkDeviceImageMemoryRequirementsKHR imageReq = (VkDeviceImageMemoryRequirementsKHR) { 
+	VkDeviceImageMemoryRequirementsKHR imageReq = (VkDeviceImageMemoryRequirementsKHR) {
 		.sType = VK_STRUCTURE_TYPE_DEVICE_IMAGE_MEMORY_REQUIREMENTS_KHR,
 		.pCreateInfo = &imageInfo
 	};
 
-	VkMemoryDedicatedRequirements dedicatedReq = { 
-		.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_REQUIREMENTS 
+	VkMemoryDedicatedRequirements dedicatedReq = {
+		.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_REQUIREMENTS
 	};
 
 	VkMemoryRequirements2 requirements = (VkMemoryRequirements2) {
@@ -97,10 +97,10 @@ Error GraphicsDeviceRef_createRenderTextureExt(
 	instance->getDeviceImageMemoryRequirements(deviceExt->device, &imageReq, &requirements);
 
 	_gotoIfError(clean, DeviceMemoryAllocator_allocate(
-		&device->allocator, 
-		&requirements, 
-		false, 
-		&renderTextureExt->blockId, 
+		&device->allocator,
+		&requirements,
+		false,
+		&renderTextureExt->blockId,
 		&renderTextureExt->blockOffset,
 		EResourceType_RenderTargetOrDepthStencil,
 		name
@@ -145,7 +145,7 @@ Error GraphicsDeviceRef_createRenderTextureExt(
 		.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
 		.image = renderTextureExt->image,
 
-		.viewType = 
+		.viewType =
 			type == ETextureType_Cube ? VK_IMAGE_VIEW_TYPE_CUBE : (is3D ? VK_IMAGE_VIEW_TYPE_3D : VK_IMAGE_VIEW_TYPE_2D),
 
 		.format = vkFormat,

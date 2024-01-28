@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -41,11 +41,11 @@ const C8 *EPipelineStage_names[] = {
 };
 
 Error createShaderModule(
-	Buffer buf, 
-	VkShaderModule *mod, 
-	VkGraphicsDevice *device, 
-	VkGraphicsInstance *instance, 
-	CharString name, 
+	Buffer buf,
+	VkShaderModule *mod,
+	VkGraphicsDevice *device,
+	VkGraphicsInstance *instance,
+	CharString name,
 	EPipelineStage stage
 ) {
 
@@ -77,7 +77,7 @@ Error createShaderModule(
 			if(instance->debugSetName && CharString_length(name)) {
 
 				_gotoIfError(clean, CharString_formatx(
-					&temp, "Shader module (\"%.*s\": %s)", 
+					&temp, "Shader module (\"%.*s\": %s)",
 					CharString_length(name), name.ptr, EPipelineStage_names[stage]
 				));
 
@@ -153,8 +153,8 @@ Error GraphicsDevice_createPipelinesComputeExt(GraphicsDevice *device, ListCharS
 		Pipeline *pipeline = PipelineRef_ptr(pipelines->ptr[i]);
 
 		_gotoIfError(clean, createShaderModule(
-			pipeline->stages.ptr[0].shaderBinary, 
-			&pipelineInfos.ptrNonConst[i].stage.module, 
+			pipeline->stages.ptr[0].shaderBinary,
+			&pipelineInfos.ptrNonConst[i].stage.module,
 			deviceExt,
 			instanceExt,
 			!names.length ? CharString_createNull() : names.ptr[i],
@@ -306,10 +306,10 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListChar
 		EPipelineStateType_PerPipelinePropertyStart = EPipelineStateType_Stage,
 		EPipelineStateType_PerPipelinePropertyEnd = EPipelineStateType_InputAttributes,
 
-		EPipelineStageType_PerPipelineCount = 
+		EPipelineStageType_PerPipelineCount =
 			EPipelineStateType_PerPipelinePropertyStart - EPipelineStateType_PerPipelineStart,
 
-		EPipelineStageType_PerPipelinePropertyCount = 
+		EPipelineStageType_PerPipelinePropertyCount =
 			EPipelineStateType_Count - EPipelineStateType_PerPipelinePropertyStart,
 
 	} EPipelineStateType;
@@ -404,9 +404,9 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListChar
 	//TODO: Push constants
 
 	VkDynamicState dynamicStates[4] = {
-		VK_DYNAMIC_STATE_VIEWPORT, 
-		VK_DYNAMIC_STATE_SCISSOR, 
-		VK_DYNAMIC_STATE_STENCIL_REFERENCE, 
+		VK_DYNAMIC_STATE_VIEWPORT,
+		VK_DYNAMIC_STATE_SCISSOR,
+		VK_DYNAMIC_STATE_STENCIL_REFERENCE,
 		VK_DYNAMIC_STATE_BLEND_CONSTANTS
 	};
 
@@ -422,12 +422,12 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListChar
 		.scissorCount = 1
 	};
 
-	VkPipelineMultisampleStateCreateInfo msaaState = (VkPipelineMultisampleStateCreateInfo) { 
+	VkPipelineMultisampleStateCreateInfo msaaState = (VkPipelineMultisampleStateCreateInfo) {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
 		.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT
 	};
 
-	VkPipelineTessellationStateCreateInfo tessState = (VkPipelineTessellationStateCreateInfo) { 
+	VkPipelineTessellationStateCreateInfo tessState = (VkPipelineTessellationStateCreateInfo) {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO
 	};
 
@@ -462,7 +462,7 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListChar
 
 		//Convert info struct to vulkan struct
 
-		VkGraphicsPipelineCreateInfo *currentInfo = 
+		VkGraphicsPipelineCreateInfo *currentInfo =
 			&((VkGraphicsPipelineCreateInfo*)states[EPipelineStateType_PipelineCreateInfo].ptr)[total];
 
 		*currentInfo = (VkGraphicsPipelineCreateInfo) {
@@ -494,12 +494,12 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListChar
 
 		if (hasAttrib) {
 
-			VkVertexInputBindingDescription *bindings = 
+			VkVertexInputBindingDescription *bindings =
 				&((VkVertexInputBindingDescription*)states[EPipelineStateType_InputBuffers].ptr)[
 					counts[EPipelineStateType_InputBuffers]
 				];
 
-			VkVertexInputAttributeDescription *attributes = 
+			VkVertexInputAttributeDescription *attributes =
 				&((VkVertexInputAttributeDescription*)states[EPipelineStateType_InputAttributes].ptr)[
 					counts[EPipelineStateType_InputAttributes]
 				];
@@ -516,7 +516,7 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListChar
 
 				bindings[bindingCount++] = (VkVertexInputBindingDescription) {
 					.binding = j,
-					.inputRate = 
+					.inputRate =
 						(bufferStrides12_isInstance1 >> 12) & 1 ? VK_VERTEX_INPUT_RATE_INSTANCE : VK_VERTEX_INPUT_RATE_VERTEX,
 					.stride = stride
 				};
@@ -545,7 +545,7 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListChar
 
 			counts[EPipelineStateType_InputAttributes] += attribCount;
 
-			VkPipelineVertexInputStateCreateInfo *infoi = 
+			VkPipelineVertexInputStateCreateInfo *infoi =
 				&((VkPipelineVertexInputStateCreateInfo*)states[EPipelineStateType_VertexInput].ptr)[
 					counts[EPipelineStateType_VertexInput]++
 				];
@@ -594,7 +594,7 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListChar
 					break;
 			}
 
-			VkPipelineInputAssemblyStateCreateInfo *infoi = 
+			VkPipelineInputAssemblyStateCreateInfo *infoi =
 				&((VkPipelineInputAssemblyStateCreateInfo*)states[EPipelineStateType_InputAssembly].ptr)[
 					counts[EPipelineStateType_InputAssembly]++
 				];
@@ -620,14 +620,14 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListChar
 				default:				cullMode = VK_CULL_MODE_NONE;		break;
 			}
 
-			VkFrontFace windingOrder = 
-				info->rasterizer.flags & ERasterizerFlags_IsClockWise ? VK_FRONT_FACE_CLOCKWISE : 
+			VkFrontFace windingOrder =
+				info->rasterizer.flags & ERasterizerFlags_IsClockWise ? VK_FRONT_FACE_CLOCKWISE :
 				VK_FRONT_FACE_COUNTER_CLOCKWISE;
 
-			VkPolygonMode polygonMode = 
+			VkPolygonMode polygonMode =
 				info->rasterizer.flags & ERasterizerFlags_IsWireframeExt ? VK_POLYGON_MODE_LINE : VK_POLYGON_MODE_FILL;
 			
-			VkPipelineRasterizationStateCreateInfo *infoi = 
+			VkPipelineRasterizationStateCreateInfo *infoi =
 				&((VkPipelineRasterizationStateCreateInfo*)states[EPipelineStateType_Rasterizer].ptr)[
 					counts[EPipelineStateType_Rasterizer]++
 				];
@@ -674,7 +674,7 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListChar
 
 			VkCompareOp depthCompareOp = mapVkCompareOp(info->depthStencil.depthCompare);
 
-			VkPipelineDepthStencilStateCreateInfo *infoi = 
+			VkPipelineDepthStencilStateCreateInfo *infoi =
 				&((VkPipelineDepthStencilStateCreateInfo*)states[EPipelineStateType_DepthStencil].ptr)[
 					counts[EPipelineStateType_DepthStencil]++
 				];
@@ -701,7 +701,7 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListChar
 
 			//Find attachments
 
-			VkPipelineColorBlendAttachmentState *attachments = 
+			VkPipelineColorBlendAttachmentState *attachments =
 				&((VkPipelineColorBlendAttachmentState*)states[EPipelineStateType_BlendAttachment].ptr)[
 					counts[EPipelineStateType_BlendAttachment]
 				];
@@ -761,7 +761,7 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListChar
 				case ELogicOpExt_OrInvert:		logicOp = VK_LOGIC_OP_OR_INVERTED;		break;
 			}
 
-			VkPipelineColorBlendStateCreateInfo *infoi = 
+			VkPipelineColorBlendStateCreateInfo *infoi =
 				&((VkPipelineColorBlendStateCreateInfo*)states[EPipelineStateType_BlendState].ptr)[total];
 
 			*infoi = (VkPipelineColorBlendStateCreateInfo) {
@@ -779,7 +779,7 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListChar
 
 		if (info->patchControlPointsExt) {
 
-			VkPipelineTessellationStateCreateInfo *infoi = 
+			VkPipelineTessellationStateCreateInfo *infoi =
 				&((VkPipelineTessellationStateCreateInfo*)states[EPipelineStateType_Tessellation].ptr)[
 					counts[EPipelineStateType_Tessellation]++
 				];
@@ -796,7 +796,7 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListChar
 
 		if (info->msaa) {
 
-			VkPipelineMultisampleStateCreateInfo *infoi = 
+			VkPipelineMultisampleStateCreateInfo *infoi =
 				&((VkPipelineMultisampleStateCreateInfo*)states[EPipelineStateType_MSAA].ptr)[
 					counts[EPipelineStateType_MSAA]++
 				];
@@ -845,7 +845,7 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListChar
 					break;
 			}
 
-			VkFormat *formats = 
+			VkFormat *formats =
 				&((VkFormat*)states[EPipelineStateType_DirectRenderingAttachments].ptr)[
 					counts[EPipelineStateType_DirectRenderingAttachments]
 				];
@@ -853,7 +853,7 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListChar
 			for(U64 j = 0; j < info->attachmentCountExt; ++j)
 				formats[j] = mapVkFormat(ETextureFormatId_unpack[info->attachmentFormatsExt[j]]);
 
-			VkPipelineRenderingCreateInfo *infoi = 
+			VkPipelineRenderingCreateInfo *infoi =
 				&((VkPipelineRenderingCreateInfo*)states[EPipelineStateType_DirectRendering].ptr)[total];
 
 			*infoi = (VkPipelineRenderingCreateInfo) {
@@ -869,7 +869,7 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListChar
 
 		//Stages
 
-		VkPipelineShaderStageCreateInfo *vkStages = 
+		VkPipelineShaderStageCreateInfo *vkStages =
 			&((VkPipelineShaderStageCreateInfo*)states[EPipelineStateType_Stage].ptr)[
 				counts[EPipelineStateType_Stage]
 			];
@@ -892,8 +892,8 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListChar
 			VkShaderModule module = NULL;
 
 			_gotoIfError(clean, createShaderModule(
-				stage.shaderBinary, 
-				&module, 
+				stage.shaderBinary,
+				&module,
 				deviceExt,
 				instanceExt,
 				!names.length ? CharString_createNull() : names.ptr[total],
@@ -956,7 +956,7 @@ clean:
 
 	for (U64 i = 0; i < total; ++i) {
 
-		VkGraphicsPipelineCreateInfo *graphicsInfo = 
+		VkGraphicsPipelineCreateInfo *graphicsInfo =
 			&((VkGraphicsPipelineCreateInfo*) states[EPipelineStateType_PipelineCreateInfo].ptr)[i];
 
 		if(graphicsInfo->pStages)

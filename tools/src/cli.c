@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -42,7 +42,7 @@ void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f) {
 
 		for(U64 i = EOperationCategory_Start; i < EOperationCategory_End; ++i)
 			Log_debugLnx(
-				"%s: %s", 
+				"%s: %s",
 				EOperationCategory_names[i - 1], EOperationCategory_description[i - 1]
 			);
 
@@ -63,7 +63,7 @@ void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f) {
 				continue;
 
 			Log_debugLnx(
-				"%s %s %s", 
+				"%s %s %s",
 				EOperationCategory_names[opVal.category - 1], opVal.name,
 				opVal.isFormatLess ? "" : "-f <format> ...{format dependent syntax}"
 			);
@@ -81,7 +81,7 @@ void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f) {
 	if (invalidF && !opVal.isFormatLess) {
 
 		Log_debugLnx(
-			"Please use syntax:\n%s %s -f <format> ...{format dependent syntax}", 
+			"Please use syntax:\n%s %s -f <format> ...{format dependent syntax}",
 			EOperationCategory_names[category - 1],
 			opVal.name
 		);
@@ -110,7 +110,7 @@ void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f) {
 	//Show more about the current operation and format
 
 	Log_debugLnx(
-		"Please use syntax:\n%s %s %s %s", 
+		"Please use syntax:\n%s %s %s %s",
 		EOperationCategory_names[category - 1],
 		opVal.name,
 		opVal.isFormatLess ? "" : "-f",
@@ -152,7 +152,7 @@ void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f) {
 
 		for(U64 i = EOperationFlags_None; i < EOperationFlags_Count; ++i)
 
-			if ((format.operationFlags >> i) & 1) 
+			if ((format.operationFlags >> i) & 1)
 				Log_debugLnx(
 					"%s:\t%s",
 					EOperationFlags_names[i],
@@ -253,7 +253,7 @@ Bool CLI_execute(CharStringList arglist) {
 	for(U64 i = EOperationCategory_Start; i < EOperationCategory_End; ++i)
 
 		if (CharString_equalsStringInsensitive(
-			arg0, 
+			arg0,
 			CharString_createRefCStrConst(EOperationCategory_names[i - 1])
 		)) {
 			category = i;
@@ -392,7 +392,7 @@ Bool CLI_execute(CharStringList arglist) {
 	//Invalid usage
 
 	if(
-		(args.format == EFormat_Invalid && !formatLess) || 
+		(args.format == EFormat_Invalid && !formatLess) ||
 		!supportsFormat
 	) {
 		CLI_showHelp(category, operation, EFormat_Invalid);

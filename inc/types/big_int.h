@@ -124,10 +124,10 @@ Error BigInt_dec(BigInt b, Allocator allocator, CharString *result, Bool leading
 Error BigInt_bin(BigInt b, Allocator allocator, CharString *result, Bool leadingZeros);
 Error BigInt_nyto(BigInt b, Allocator allocator, CharString *result, Bool leadingZeros);
 Error BigInt_toString(
-	BigInt b, 
-	Allocator allocator, 
-	CharString *result, 
-	EIntegerEncoding encoding, 
+	BigInt b,
+	Allocator allocator,
+	CharString *result,
+	EIntegerEncoding encoding,
 	Bool leadingZeros
 );
 

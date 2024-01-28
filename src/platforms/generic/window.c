@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -35,9 +35,9 @@ TListImpl(Monitor);
 
 I32x2 EResolution_get(EResolution r) { return I32x2_create2(r >> 16, r & U16_MAX); }
 
-EResolution EResolution_create(I32x2 v) { 
+EResolution EResolution_create(I32x2 v) {
 
-	if(I32x2_neq2(I32x2_clamp(v, I32x2_zero(), I32x2_xx2(U16_MAX)), v)) 
+	if(I32x2_neq2(I32x2_clamp(v, I32x2_zero(), I32x2_xx2(U16_MAX)), v))
 		return EResolution_Undefined;
 
 	return _RESOLUTION(I32x2_x(v), I32x2_y(v));
@@ -184,7 +184,7 @@ Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 			I32 smallY = (I32) U64_min(I32x2_y(newSiz), I32x2_y(w->size));
 
 			//We're growing, so we want to copy from high to low
-			//This is because it ends up at a higher address than source and 
+			//This is because it ends up at a higher address than source and
 			//we can safely read from lower addresses
 
 			if(I32x2_x(newSiz) > I32x2_x(w->size)) {
@@ -213,7 +213,7 @@ Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 
 					Buffer_unsetAllBits(toClear);
 
-					//Copy part 
+					//Copy part
 
 					Buffer_revCopy(dst, src);		//Automatically truncates src
 
@@ -281,7 +281,7 @@ Error Window_storeCPUBufferToDisk(const Window *w, CharString filePath, Ns maxTi
 	Buffer file = Buffer_createNull();
 
 	Error err = BMP_writex(
-		buf, 
+		buf,
 		(BMPInfo) { .w = (U32) I32x2_x(w->size), .h = (U32) I32x2_y(w->size) },
 		&file
 	);

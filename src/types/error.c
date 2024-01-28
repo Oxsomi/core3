@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -62,8 +62,8 @@ Error Error_outOfMemory(U32 subId, const C8 *errorStr) {
 
 Error Error_outOfBounds(U32 paramId, U64 id, U64 limit, const C8 *errorStr) {
 	_Error_base(
-		.genericError = EGenericError_OutOfBounds, .paramId = paramId, 
-		.paramValue0 = id, .paramValue1 = limit, 
+		.genericError = EGenericError_OutOfBounds, .paramId = paramId,
+		.paramValue0 = id, .paramValue1 = limit,
 		.errorStr = errorStr
 	);
 }
@@ -82,24 +82,24 @@ Error Error_notFound(U32 subId, U32 paramId, const C8 *errorStr) {
 
 Error Error_divideByZero(U32 subId, U64 a, U64 b, const C8 *errorStr) {
 	_Error_base(
-		.genericError = EGenericError_DivideByZero, .errorSubId = subId, 
-		.paramValue0 = a, .paramValue1 = b, 
+		.genericError = EGenericError_DivideByZero, .errorSubId = subId,
+		.paramValue0 = a, .paramValue1 = b,
 		.errorStr = errorStr
 	);
 }
 
 Error Error_overflow(U32 paramId, U64 a, U64 b, const C8 *errorStr) {
 	_Error_base(
-		.genericError = EGenericError_Overflow, .paramId = paramId, 
-		.paramValue0 = a, .paramValue1 = b, 
+		.genericError = EGenericError_Overflow, .paramId = paramId,
+		.paramValue0 = a, .paramValue1 = b,
 		.errorStr = errorStr
 	);
 }
 
 Error Error_underflow(U32 paramId, U64 a, U64 b, const C8 *errorStr) {
 	_Error_base(
-		.genericError = EGenericError_Underflow, .paramId = paramId, 
-		.paramValue0 = a, .paramValue1 = b, 
+		.genericError = EGenericError_Underflow, .paramId = paramId,
+		.paramValue0 = a, .paramValue1 = b,
 		.errorStr = errorStr
 	);
 }
@@ -110,16 +110,16 @@ Error Error_NaN(U32 subId, const C8 *errorStr) {
 
 Error Error_invalidEnum(U32 paramId, U64 value, U64 maxValue, const C8 *errorStr) {
 	_Error_base(
-		.genericError = EGenericError_InvalidEnum, .paramId = paramId, 
-		.paramValue0 = value, .paramValue1 = maxValue, 
+		.genericError = EGenericError_InvalidEnum, .paramId = paramId,
+		.paramValue0 = value, .paramValue1 = maxValue,
 		.errorStr = errorStr
 	);
 }
 
 Error Error_invalidParameter(U32 paramId, U32 subId, const C8 *errorStr) {
 	_Error_base(
-		.genericError = EGenericError_InvalidParameter, .paramId = paramId, 
-		.errorSubId = subId, 
+		.genericError = EGenericError_InvalidParameter, .paramId = paramId,
+		.errorSubId = subId,
 		.errorStr = errorStr
 	);
 }
@@ -131,7 +131,7 @@ Error Error_invalidOperation(U32 subId, const C8 *errorStr) {
 Error Error_invalidCast(U32 subId, U32 typeId, U32 castTypeId, const C8 *errorStr) {
 	_Error_base(
 		.genericError = EGenericError_InvalidCast, .errorSubId = subId,
-		.paramValue0 = typeId, .paramValue1 = castTypeId, 
+		.paramValue0 = typeId, .paramValue1 = castTypeId,
 		.errorStr = errorStr
 	);
 }

@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -198,14 +198,14 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 			U32 size = 0;
 			GetRawInputData(
-				(HRAWINPUT)lParam, 
-				RID_INPUT, 
-				NULL, 
-				&size, 
+				(HRAWINPUT)lParam,
+				RID_INPUT,
+				NULL,
+				&size,
 				sizeof(RAWINPUTHEADER)
 			);
 
-			Buffer buf = Buffer_createNull(); 
+			Buffer buf = Buffer_createNull();
 			Error err = Buffer_createUninitializedBytesx(size, &buf);
 
 			if(err.genericError) {
@@ -608,12 +608,12 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 				//We need to keep on popping the end of the array until we reach the next element that isn't invalid
 				//This is to keep the list as small as possible because we might be looping over it at some point
-				//We can of course have devices that aren't initialized in between valid ones, 
+				//We can of course have devices that aren't initialized in between valid ones,
 				//because our list isn't contiguous
 
 				if(ours == end - 1)
 					while(
-						w->devices.length && 
+						w->devices.length &&
 						ListInputDevice_last(w->devices)->type == EInputDeviceType_Undefined
 					)
 						if((ListInputDevice_popBack(&w->devices, NULL)).genericError)
@@ -678,7 +678,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 			Bool prevState = w->flags & EWindowFlags_IsMinimized;
 
-			if (wParam == SIZE_MINIMIZED) 
+			if (wParam == SIZE_MINIMIZED)
 				w->flags |= EWindowFlags_IsMinimized;
 
 			else w->flags &= ~EWindowFlags_IsMinimized;
@@ -800,8 +800,8 @@ Error Window_toggleFullScreen(Window *w) {
 	else style |= WS_POPUP;
 
 	I32x2 newSize = I32x2_create2(
-		GetSystemMetrics(SM_CXSCREEN), 
-		GetSystemMetrics(SM_CYSCREEN) 
+		GetSystemMetrics(SM_CXSCREEN),
+		GetSystemMetrics(SM_CYSCREEN)
 	);
 
 	SetWindowLongPtrA(w->nativeHandle, GWL_STYLE, style);

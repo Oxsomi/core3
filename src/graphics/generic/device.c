@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -35,15 +35,19 @@ TListNamedImpl(ListLockPtr);
 TListNamedImpl(ListCommandListRef);
 TListNamedImpl(ListSwapchainRef);
 
+U16 TextureRange_width(TextureRange r) { return r.endRange[0] - r.startRange[0]; }
+U16 TextureRange_height(TextureRange r) { return r.endRange[1] - r.startRange[1]; }
+U16 TextureRange_length(TextureRange r) { return r.endRange[2] - r.startRange[2]; }
+
 void GraphicsDeviceInfo_print(const GraphicsDeviceInfo *deviceInfo, Bool printCapabilities) {
 
 	if(!deviceInfo || !deviceInfo->ext)
 		return;
 
 	Log_debugLnx(
-		"%s (%s %s):\n\t%s %u\n\tLUID %016llx\n\tUUID %016llx%016llx", 
-		deviceInfo->name, 
-		deviceInfo->driverName, 
+		"%s (%s %s):\n\t%s %u\n\tLUID %016llx\n\tUUID %016llx%016llx",
+		deviceInfo->name,
+		deviceInfo->driverName,
 		deviceInfo->driverInfo,
 		(deviceInfo->type == EGraphicsDeviceType_CPU ? "CPU" : (
 			deviceInfo->type == EGraphicsDeviceType_Dedicated ? "dGPU" : (
@@ -244,8 +248,8 @@ Error GraphicsDeviceRef_inc(GraphicsDeviceRef *device) {
 impl extern const U64 GraphicsDeviceExt_size;
 
 impl Error GraphicsDevice_initExt(
-	const GraphicsInstance *instance, 
-	const GraphicsDeviceInfo *deviceInfo, 
+	const GraphicsInstance *instance,
+	const GraphicsDeviceInfo *deviceInfo,
 	Bool verbose,
 	GraphicsDeviceRef **deviceRef
 );
@@ -316,9 +320,9 @@ Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 }
 
 Error GraphicsDeviceRef_create(
-	GraphicsInstanceRef *instanceRef, 
-	const GraphicsDeviceInfo *info, 
-	Bool verbose, 
+	GraphicsInstanceRef *instanceRef,
+	const GraphicsDeviceInfo *info,
+	Bool verbose,
 	GraphicsDeviceRef **deviceRef
 ) {
 
@@ -338,8 +342,8 @@ Error GraphicsDeviceRef_create(
 	Error err = Error_none();
 	_gotoIfError(clean, RefPtr_createx(
 		(U32)(sizeof(GraphicsDevice) + GraphicsDeviceExt_size),
-		(ObjectFreeFunc) GraphicsDevice_free, 
-		EGraphicsTypeId_GraphicsDevice, 
+		(ObjectFreeFunc) GraphicsDevice_free,
+		EGraphicsTypeId_GraphicsDevice,
 		deviceRef
 	));
 	
@@ -383,8 +387,8 @@ Error GraphicsDeviceRef_create(
 	//Allocate UBO
 
 	_gotoIfError(clean, GraphicsDeviceRef_createBuffer(
-		*deviceRef, 
-		EDeviceBufferUsage_CPUAllocatedBit | EDeviceBufferUsage_InternalWeakRef, 
+		*deviceRef,
+		EDeviceBufferUsage_CPUAllocatedBit | EDeviceBufferUsage_InternalWeakRef,
 		CharString_createRefCStrConst("Per frame data"),
 		sizeof(CBufferData) * 3, &device->frameData
 	));
@@ -498,11 +502,11 @@ Error GraphicsDeviceRef_handleNextFrame(GraphicsDeviceRef *deviceRef, void *comm
 
 		switch(type) {
 
-			case EGraphicsTypeId_DeviceBuffer: 
+			case EGraphicsTypeId_DeviceBuffer:
 				_gotoIfError(clean, DeviceBufferRef_flush(commandBuffer, deviceRef, pending));
 				break;
 
-			case EGraphicsTypeId_DeviceTexture: 
+			case EGraphicsTypeId_DeviceTexture:
 				_gotoIfError(clean, DeviceTextureRef_flush(commandBuffer, deviceRef, pending));
 				break;
 
@@ -539,8 +543,8 @@ Error GraphicsDeviceRef_resizeStagingBuffer(GraphicsDeviceRef *deviceRef, U64 ne
 	}
 
 	_gotoIfError(clean, GraphicsDeviceRef_createBuffer(
-		deviceRef, 
-		EDeviceBufferUsage_CPUAllocatedBit | EDeviceBufferUsage_InternalWeakRef, 
+		deviceRef,
+		EDeviceBufferUsage_CPUAllocatedBit | EDeviceBufferUsage_InternalWeakRef,
 		CharString_createRefCStrConst("Staging buffer"),
 		newSize, &device->staging
 	));
@@ -558,9 +562,9 @@ clean:
 }
 
 Error GraphicsDeviceRef_submitCommands(
-	GraphicsDeviceRef *deviceRef, 
-	ListCommandListRef commandLists, 
-	ListSwapchainRef swapchains, 
+	GraphicsDeviceRef *deviceRef,
+	ListCommandListRef commandLists,
+	ListSwapchainRef swapchains,
 	Buffer appData,
 	F32 deltaTime,
 	F32 time

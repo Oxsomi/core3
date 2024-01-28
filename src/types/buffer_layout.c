@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -31,15 +31,15 @@ U64 BufferLayoutMember_getOffset(BufferLayoutMember member) {
 	return ((U64)(member.offsetHiAndIsStruct & 0x7FFF) << 32) | member.offsetLo;
 }
 
-Bool BufferLayoutMember_isStruct(BufferLayoutMember member) { 
+Bool BufferLayoutMember_isStruct(BufferLayoutMember member) {
 	return member.offsetHiAndIsStruct >> 15;
 }
 
-ETypeId BufferLayoutMember_getTypeId(BufferLayoutMember member) { 
+ETypeId BufferLayoutMember_getTypeId(BufferLayoutMember member) {
 	return BufferLayoutMember_isStruct(member) ? ETypeId_Undefined : member.typeIdUnion;
 }
 
-U32 BufferLayoutMember_getStructId(BufferLayoutMember member) { 
+U32 BufferLayoutMember_getStructId(BufferLayoutMember member) {
 	return BufferLayoutMember_isStruct(member) ? member.structIdUnion : U32_MAX;
 }
 
@@ -66,10 +66,10 @@ BufferLayoutMemberInfo BufferLayoutMemberInfo_createStruct(U32 structId, CharStr
 }
 
 BufferLayoutMemberInfo BufferLayoutMemberInfo_createArray(
-	ETypeId typeId, 
-	CharString name, 
-	ListU32 arraySizes, 
-	U64 offset, 
+	ETypeId typeId,
+	CharString name,
+	ListU32 arraySizes,
+	U64 offset,
 	U32 stride
 ) {
 	return (BufferLayoutMemberInfo) {
@@ -83,9 +83,9 @@ BufferLayoutMemberInfo BufferLayoutMemberInfo_createArray(
 }
 
 BufferLayoutMemberInfo BufferLayoutMemberInfo_createStructArray(
-	U32 structId, 
-	CharString name, 
-	ListU32 arraySizes, 
+	U32 structId,
+	CharString name,
+	ListU32 arraySizes,
 	U64 offset,
 	U32 stride
 ) {
@@ -103,7 +103,7 @@ BufferLayoutMemberInfo BufferLayoutMemberInfo_createStructArray(
 
 U64 BufferLayoutStruct_allocatedData(BufferLayoutStructInfo info, U64 memberDataLen) {
 
-	return 
+	return
 		sizeof(C8) * CharString_length(info.name) +
 		sizeof(BufferLayoutMember) * info.members.length +
 		memberDataLen;
@@ -136,7 +136,7 @@ Error BufferLayoutStruct_create(BufferLayoutStructInfo info, U32 id, Allocator a
 
 		if(!CharString_length(m.name) || CharString_length(m.name) > U8_MAX || !CharString_isValidAscii(m.name))
 			return Error_invalidParameter(
-				0, 0 + (((U32)i + 1) << 16), 
+				0, 0 + (((U32)i + 1) << 16),
 				"BufferLayoutStruct_create()::info.members[i].name should have <0, 255] characters"
 			);
 
@@ -152,7 +152,7 @@ Error BufferLayoutStruct_create(BufferLayoutStructInfo info, U32 id, Allocator a
 
 		if(((U32)m.typeId != U32_MAX) && (m.structId != U32_MAX))
 			return Error_invalidParameter(
-				0, 2 + (((U32)i + 1) << 16), 
+				0, 2 + (((U32)i + 1) << 16),
 				"BufferLayoutStruct_create()::info.members[i] can either be POD or struct, not both"
 			);
 
@@ -386,7 +386,7 @@ Error BufferLayout_createStruct(BufferLayout *layout, BufferLayoutStructInfo inf
 
 		if(member.structId != U32_MAX && member.structId >= layout->structs.length)
 			return Error_outOfBounds(
-				1, member.structId, layout->structs.length, 
+				1, member.structId, layout->structs.length,
 				"BufferLayout_createStruct()::info.members[i].structId out of bounds"
 			);
 	}
@@ -641,10 +641,10 @@ clean:
 }
 
 Error BufferLayout_resolve(
-	Buffer buffer, 
-	BufferLayout layout, 
-	CharString path, 
-	Buffer *location, 
+	Buffer buffer,
+	BufferLayout layout,
+	CharString path,
+	Buffer *location,
 	Allocator alloc
 ) {
 
@@ -668,8 +668,8 @@ Error BufferLayout_resolve(
 			0, info.offset + info.length, Buffer_length(buffer), "BufferLayout_resolve()::offset + length out of bounds"
 		);
 
-	*location = 
-		Buffer_isConstRef(buffer) ? Buffer_createRefConst(buffer.ptr + info.offset, info.length) : 
+	*location =
+		Buffer_isConstRef(buffer) ? Buffer_createRefConst(buffer.ptr + info.offset, info.length) :
 		Buffer_createRef((U8*)buffer.ptr + info.offset, info.length);
 
 	return Error_none();
@@ -700,10 +700,10 @@ Error BufferLayout_setData(
 }
 
 Error BufferLayout_getData(
-	Buffer buffer, 
-	BufferLayout layout, 
-	CharString path, 
-	Buffer *currentData, 
+	Buffer buffer,
+	BufferLayout layout,
+	CharString path,
+	Buffer *currentData,
 	Allocator alloc
 ) {
 

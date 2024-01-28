@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -85,11 +85,11 @@ _F32x4_expand(w, 3);
 
 #define _F32x3_expand2(...)										\
 _F32x3_expand3(__VA_ARGS__, x); _F32x3_expand3(__VA_ARGS__, y); \
-_F32x3_expand3(__VA_ARGS__, z); _F32x3_expand3(__VA_ARGS__, w); 
+_F32x3_expand3(__VA_ARGS__, z); _F32x3_expand3(__VA_ARGS__, w);
 
 #define _F32x3_expand(...)										\
 _F32x3_expand2(__VA_ARGS__, x); _F32x3_expand2(__VA_ARGS__, y); \
-_F32x3_expand2(__VA_ARGS__, z); _F32x3_expand2(__VA_ARGS__, w); 
+_F32x3_expand2(__VA_ARGS__, z); _F32x3_expand2(__VA_ARGS__, w);
 
 _F32x3_expand(x);
 _F32x3_expand(y);
@@ -121,9 +121,9 @@ _F32x2_expand(w);
 
 F32x4 F32x4_sign(F32x4 v) {
 	return F32x4_add(
-		F32x4_mul(F32x4_lt(v, F32x4_zero()), F32x4_two()), 
+		F32x4_mul(F32x4_lt(v, F32x4_zero()), F32x4_two()),
 		F32x4_one()
-	); 
+	);
 }
 
 F32x4 F32x4_cross3(F32x4 a, F32x4 b) {
@@ -135,7 +135,7 @@ F32x4 F32x4_cross3(F32x4 a, F32x4 b) {
 	);
 }
 
-F32x4 F32x4_lerp(F32x4 a, F32x4 b, F32 perc) { 
+F32x4 F32x4_lerp(F32x4 a, F32x4 b, F32 perc) {
 	b = F32x4_sub(b, a);
 	return F32x4_add(a, F32x4_mul(b, F32x4_xxxx4(perc)));
 }

@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -129,7 +129,7 @@ typedef enum EDescriptorTypeCount {
 	EDescriptorTypeCount_RWTexture2Di	= 10760,	//5.8% of 250K - 64Ki (2D) for 2D int
 	EDescriptorTypeCount_RWTexture2Du	= 10760,	//5.8% of 250K - 64Ki (2D) for 2D uint
 
-	EDescriptorTypeCount_Textures		= 
+	EDescriptorTypeCount_Textures		=
 		EDescriptorTypeCount_Texture2D + EDescriptorTypeCount_Texture3D + EDescriptorTypeCount_TextureCube,
 
 	EDescriptorTypeCount_RWTextures2D	=
@@ -183,11 +183,8 @@ TList(VkSemaphore);
 TList(VkResult);
 TList(VkSwapchainKHR);
 TList(VkPipelineStageFlags);
-TList(VkImageMemoryBarrier2);
-TList(VkBufferMemoryBarrier2);
 TList(VkWriteDescriptorSet);
 TList(DescriptorStackTrace);
-TList(VkImageCopy);
 
 typedef struct VkGraphicsDevice {
 
@@ -255,16 +252,16 @@ typedef struct VkCommandBufferState {
 } VkCommandBufferState;
 
 VkCommandAllocator *VkGraphicsDevice_getCommandAllocator(
-	VkGraphicsDevice *device, 
-	U32 resolvedQueueId, 
-	U32 threadId, 
+	VkGraphicsDevice *device,
+	U32 resolvedQueueId,
+	U32 threadId,
 	U8 backBufferId
 );
 
 Error VkDeviceMemoryAllocator_findMemory(
-	VkGraphicsDevice *deviceExt, 
-	Bool cpuSided, 
-	U32 memoryBits, 
+	VkGraphicsDevice *deviceExt,
+	Bool cpuSided,
+	U32 memoryBits,
 	U32 *memoryId,
 	VkMemoryPropertyFlags *propertyFlags,
 	U64 *size
@@ -274,3 +271,5 @@ Error VkDeviceMemoryAllocator_findMemory(
 //4 bit higher: descriptor type
 U32 VkGraphicsDevice_allocateDescriptor(VkGraphicsDevice *deviceExt, EDescriptorType type);
 Bool VkGraphicsDevice_freeAllocations(VkGraphicsDevice *deviceExt, ListU32 *allocations);
+
+Error VkGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, VkCommandBuffer commandBuffer);

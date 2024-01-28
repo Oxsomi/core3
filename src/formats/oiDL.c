@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -277,8 +277,8 @@ Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result) {
 
 	for (U64 i = 0; i < DLFile_entryCount(dlFile); ++i) {
 
-		U64 len = 
-			dlFile.settings.dataType != EDLDataType_Ascii ? Buffer_length(dlFile.entryBuffers.ptr[i]) : 
+		U64 len =
+			dlFile.settings.dataType != EDLDataType_Ascii ? Buffer_length(dlFile.entryBuffers.ptr[i]) :
 			CharString_length(dlFile.entryStrings.ptr[i]);
 
 		if(outputSize + len < outputSize)
@@ -325,8 +325,8 @@ Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result) {
 
 	for (U64 i = 0; i < DLFile_entryCount(dlFile); ++i) {
 
-		Buffer buf = 
-			dlFile.settings.dataType != EDLDataType_Ascii ? dlFile.entryBuffers.ptr[i] : 
+		Buffer buf =
+			dlFile.settings.dataType != EDLDataType_Ascii ? dlFile.entryBuffers.ptr[i] :
 			CharString_bufferConst(dlFile.entryStrings.ptr[i]);
 
 		U64 len = Buffer_length(buf);
@@ -356,9 +356,9 @@ Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result) {
 
 			(
 				dlFile.settings.compressionType ? (
-					dlFile.settings.flags & EDLSettingsFlags_UseSHA256 ? EDLFlags_UseSHA256 : 
+					dlFile.settings.flags & EDLSettingsFlags_UseSHA256 ? EDLFlags_UseSHA256 :
 					EDLFlags_None
-				) : 
+				) :
 				EDLFlags_None
 			) |
 
@@ -369,9 +369,9 @@ Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result) {
 
 		.type = (U8)((dlFile.settings.compressionType << 4) | dlFile.settings.encryptionType),
 
-		.sizeTypes = 
-			(U8)EXXDataSizeType_getRequiredType(DLFile_entryCount(dlFile)) | 
-			((U8)EXXDataSizeType_getRequiredType(outputSize) << 2) | 
+		.sizeTypes =
+			(U8)EXXDataSizeType_getRequiredType(DLFile_entryCount(dlFile)) |
+			((U8)EXXDataSizeType_getRequiredType(outputSize) << 2) |
 			((U8)EXXDataSizeType_getRequiredType(maxSize) << 4)
 	};
 
@@ -387,7 +387,7 @@ Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result) {
 
 	//Copy empty hash
 
-	if(dlFile.settings.compressionType) 
+	if(dlFile.settings.compressionType)
 		Buffer_copy(
 			Buffer_createRef(headerIt, hashSize),
 			Buffer_createRefConst(hash, hashSize)
@@ -438,7 +438,7 @@ Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result) {
 
 	else {*/
 		compressedOutput = Buffer_createRef(
-			(U8*)uncompressedData.ptr + headerSize, 
+			(U8*)uncompressedData.ptr + headerSize,
 			Buffer_length(uncompressedData) - headerSize
 		);
 	//}
@@ -456,16 +456,16 @@ Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result) {
 		U32 key[8] = { 0 };
 
 		Bool b = Buffer_eq(
-			Buffer_createRefConst(key, sizeof(key)), 
+			Buffer_createRefConst(key, sizeof(key)),
 			Buffer_createRefConst(dlFile.settings.encryptionKey, sizeof(key))
 		);
 
 		if ((err = Buffer_encrypt(
 
-			compressedOutput, 
-			Buffer_createRefConst(uncompressedData.ptr, headerSize - sizeof(I32x4) - 12), 
+			compressedOutput,
+			Buffer_createRefConst(uncompressedData.ptr, headerSize - sizeof(I32x4) - 12),
 
-			EBufferEncryptionType_AES256GCM, 
+			EBufferEncryptionType_AES256GCM,
 			EBufferEncryptionFlags_GenerateIv | (b ? EBufferEncryptionFlags_GenerateKey : EBufferEncryptionFlags_None),
 
 			dlFile.settings.encryptionKey,
@@ -502,10 +502,10 @@ Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result) {
 }
 
 Error DLFile_read(
-	Buffer file, 
-	const U32 encryptionKey[8], 
+	Buffer file,
+	const U32 encryptionKey[8],
 	Bool isSubfile,
-	Allocator alloc, 
+	Allocator alloc,
 	DLFile *dlFile
 ) {
 
@@ -644,7 +644,7 @@ Error DLFile_read(
 		if(Buffer_length(file) < dataSize)
 			_gotoIfError(
 				clean, Error_outOfBounds(
-					0, file.ptr + dataSize - entireFile.ptr, Buffer_length(entireFile), 
+					0, file.ptr + dataSize - entireFile.ptr, Buffer_length(entireFile),
 					"DLFile_read() doesn't contain enough data"
 				)
 			);
@@ -668,7 +668,7 @@ Error DLFile_read(
 
 	//Allocate DLFile
 
-	DLSettings settings = (DLSettings) { 
+	DLSettings settings = (DLSettings) {
 
 		.compressionType = (EXXCompressionType) (header.type >> 4),
 		.encryptionKey = (EXXEncryptionType) (header.type & 0xF),

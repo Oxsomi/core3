@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -101,9 +101,9 @@ Bool FileInfo_freex(FileInfo *fileInfo) {
 
 Error File_resolvex(CharString loc, Bool *isVirtual, U64 maxFilePathLimit, CharString *result) {
 	return File_resolve(
-		loc, isVirtual, 
-		maxFilePathLimit, 
-		Platform_instance.workingDirectory, Platform_instance.alloc, 
+		loc, isVirtual,
+		maxFilePathLimit,
+		Platform_instance.workingDirectory, Platform_instance.alloc,
 		result
 	);
 }
@@ -113,10 +113,10 @@ Error File_getInfo(CharString loc, FileInfo *info) {
 	CharString resolved = CharString_createNull();
 	Error err = Error_none();
 
-	if(!info) 
+	if(!info)
 		_gotoIfError(clean, Error_nullPointer(0, "File_getInfo()::info is required"));
 
-	if(info->path.ptr) 
+	if(info->path.ptr)
 		_gotoIfError(clean, Error_invalidOperation(0, "File_getInfo()::info was already defined, may indicate memleak"));
 
 	if(!CharString_isValidFilePath(loc))
@@ -152,8 +152,8 @@ Error File_getInfo(CharString loc, FileInfo *info) {
 		.type = S_ISDIR(inf.st_mode) ? EFileType_Folder : EFileType_File,
 		.fileSize = (U64) inf.st_size,
 
-		.access = 
-			(inf.st_mode & S_IWRITE ? EFileAccess_Write : EFileAccess_None) | 
+		.access =
+			(inf.st_mode & S_IWRITE ? EFileAccess_Write : EFileAccess_None) |
 			(inf.st_mode & S_IREAD  ? EFileAccess_Read  : EFileAccess_None)
 	};
 
@@ -167,12 +167,12 @@ clean:
 Bool File_hasFile(CharString loc) { return File_hasType(loc, EFileType_File); }
 Bool File_hasFolder(CharString loc) { return File_hasType(loc, EFileType_Folder); }
 
-Error File_queryFileCount(CharString loc, Bool isRecursive, U64 *res) { 
-	return File_queryFileObjectCount(loc, EFileType_File, isRecursive, res); 
+Error File_queryFileCount(CharString loc, Bool isRecursive, U64 *res) {
+	return File_queryFileObjectCount(loc, EFileType_File, isRecursive, res);
 }
 
-Error File_queryFolderCount(CharString loc, Bool isRecursive, U64 *res) { 
-	return File_queryFileObjectCount(loc, EFileType_Folder, isRecursive, res); 
+Error File_queryFolderCount(CharString loc, Bool isRecursive, U64 *res) {
+	return File_queryFileObjectCount(loc, EFileType_Folder, isRecursive, res);
 }
 
 typedef struct FileCounter {
@@ -205,7 +205,7 @@ Error File_queryFileObjectCount(CharString loc, EFileType type, Bool isRecursive
 	//Virtual files can supply a faster way of counting files
 	//Such as caching it and updating it if something is changed
 
-	if(!CharString_isValidFilePath(loc)) 
+	if(!CharString_isValidFilePath(loc))
 		_gotoIfError(clean, Error_invalidParameter(0, 0, "File_queryFileObjectCount()::res must be a valid file path"));
 
 	Bool isVirtual = File_isVirtual(loc);

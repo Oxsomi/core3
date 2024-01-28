@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -48,8 +48,8 @@ Bool InputDevice_isValidHandle(InputDevice d, InputHandle handle) { return handl
 Bool InputDevice_isAxis(InputDevice d, InputHandle handle) { return handle < d.axes; }
 Bool InputDevice_isButton(InputDevice d, InputHandle handle) { return !InputDevice_isAxis(d, handle); }
 
-InputHandle InputDevice_createHandle(InputDevice d, U16 localHandle, EInputType type) { 
-	return localHandle + (InputHandle)(type == EInputType_Axis ? 0 : d.axes); 
+InputHandle InputDevice_createHandle(InputDevice d, U16 localHandle, EInputType type) {
+	return localHandle + (InputHandle)(type == EInputType_Axis ? 0 : d.axes);
 }
 
 U16 InputDevice_getLocalHandle(InputDevice d, InputHandle handle) {
@@ -88,12 +88,12 @@ Bool InputDevice_setFlagTo(InputDevice *d, U8 flag, Bool value) {
 	return value ? InputDevice_setFlag(d, flag) : InputDevice_resetFlag(d, flag);
 }
 
-Bool InputDevice_getCurrentState(InputDevice d, InputHandle handle) { 
-	return InputDevice_getState(d, handle) & EInputState_Curr; 
+Bool InputDevice_getCurrentState(InputDevice d, InputHandle handle) {
+	return InputDevice_getState(d, handle) & EInputState_Curr;
 }
 
-Bool InputDevice_getPreviousState(InputDevice d, InputHandle handle) { 
-	return InputDevice_getState(d, handle) & EInputState_Prev; 
+Bool InputDevice_getPreviousState(InputDevice d, InputHandle handle) {
+	return InputDevice_getState(d, handle) & EInputState_Prev;
 }
 
 inline F32 *InputDevice_getAxisValue(InputDevice dev, U16 localHandle, Bool isCurrent) {
@@ -183,9 +183,9 @@ Error InputDevice_create(U16 buttons, U16 axes, EInputDeviceType type, InputDevi
 	inputType->name[U64_min(CharString_length(keyName), _LONGSTRING_LEN - 1)] = '\0';
 
 Error InputDevice_createButton(
-	InputDevice d, 
-	U16 localHandle, 
-	CharString keyName, 
+	InputDevice d,
+	U16 localHandle,
+	CharString keyName,
 	InputHandle *res
 ) {
 	InputDeviceCreate(Button);
@@ -194,10 +194,10 @@ Error InputDevice_createButton(
 }
 
 Error InputDevice_createAxis(
-	InputDevice d, 
-	U16 localHandle, 
-	CharString keyName, 
-	F32 deadZone, 
+	InputDevice d,
+	U16 localHandle,
+	CharString keyName,
+	F32 deadZone,
 	Bool resetOnInputLoss,
 	InputHandle *res
 ) {
@@ -235,23 +235,23 @@ EInputState InputDevice_getState(InputDevice d, InputHandle handle) {
 }
 
 F32 InputDevice_getCurrentAxis(InputDevice d, InputHandle handle) {
-	return d.type == EInputDeviceType_Undefined || !InputDevice_isAxis(d, handle) ? 0 : 
+	return d.type == EInputDeviceType_Undefined || !InputDevice_isAxis(d, handle) ? 0 :
 		*InputDevice_getAxisValue(d, InputDevice_getLocalHandle(d, handle), true);
 }
 
 F32 InputDevice_getPreviousAxis(InputDevice d, InputHandle handle) {
-	return d.type == EInputDeviceType_Undefined || !InputDevice_isAxis(d, handle) ? 0 : 
+	return d.type == EInputDeviceType_Undefined || !InputDevice_isAxis(d, handle) ? 0 :
 		*InputDevice_getAxisValue(d, InputDevice_getLocalHandle(d, handle), false);
 }
 
 Bool InputDevice_isDown(InputDevice d, InputHandle handle) { return InputDevice_getState(d, handle) == EInputState_Down; }
 Bool InputDevice_isUp(InputDevice d, InputHandle handle) { return InputDevice_getState(d, handle) == EInputState_Up; }
 
-Bool InputDevice_isReleased(InputDevice d, InputHandle handle) { 
-	return InputDevice_getState(d, handle) == EInputState_Released; 
+Bool InputDevice_isReleased(InputDevice d, InputHandle handle) {
+	return InputDevice_getState(d, handle) == EInputState_Released;
 }
 
-Bool InputDevice_isPressed(InputDevice d, InputHandle handle) { 
+Bool InputDevice_isPressed(InputDevice d, InputHandle handle) {
 	return InputDevice_getState(d, handle) == EInputState_Pressed;
 }
 
@@ -295,7 +295,7 @@ InputHandle InputDevice_getHandle(InputDevice d, CharString name) {
 }
 
 F32 InputDevice_getDeadZone(InputDevice d, InputHandle handle) {
-	return d.type == EInputDeviceType_Undefined || !InputDevice_isAxis(d, handle) ? 0 : 
+	return d.type == EInputDeviceType_Undefined || !InputDevice_isAxis(d, handle) ? 0 :
 		InputDevice_getAxis(d, InputDevice_getLocalHandle(d, handle))->deadZone;
 }
 

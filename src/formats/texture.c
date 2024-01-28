@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -20,34 +20,34 @@
 
 #include "formats/texture.h"
 
-ETexturePrimitive ETextureFormat_getPrimitive(ETextureFormat f) { 
-	return (ETexturePrimitive)((f >> 24) & 7); 
+ETexturePrimitive ETextureFormat_getPrimitive(ETextureFormat f) {
+	return (ETexturePrimitive)((f >> 24) & 7);
 }
 
-Bool ETextureFormat_getIsCompressed(ETextureFormat f) { 
-	return ETextureFormat_getPrimitive(f) == ETexturePrimitive_Compressed; 
+Bool ETextureFormat_getIsCompressed(ETextureFormat f) {
+	return ETextureFormat_getPrimitive(f) == ETexturePrimitive_Compressed;
 }
 
-U64 ETextureFormat_getBits(ETextureFormat f) { 
+U64 ETextureFormat_getBits(ETextureFormat f) {
 	Bool isCompressed = ETextureFormat_getIsCompressed(f);
 	U64 length = ((f >> 27) & (isCompressed ? 7 : 0x1F)) + 1;
 	return length << (isCompressed ? 6 : 2);
 }
 
-U64 ETextureFormat_getAlphaBits(ETextureFormat f) { 
-	return ETextureFormat_getIsCompressed(f) ? f & 7 : (f & 077) << 1; 
+U64 ETextureFormat_getAlphaBits(ETextureFormat f) {
+	return ETextureFormat_getIsCompressed(f) ? f & 7 : (f & 077) << 1;
 }
 
-U64 ETextureFormat_getBlueBits(ETextureFormat f) { 
-	return ETextureFormat_getIsCompressed(f) ? (f >> 6) & 7 : ((f >> 3) & 077) << 1; 
+U64 ETextureFormat_getBlueBits(ETextureFormat f) {
+	return ETextureFormat_getIsCompressed(f) ? (f >> 6) & 7 : ((f >> 3) & 077) << 1;
 }
 
-U64 ETextureFormat_getGreenBits(ETextureFormat f) { 
-	return ETextureFormat_getIsCompressed(f) ? (f >> 12) & 7 : ((f >> 6) & 077) << 1; 
+U64 ETextureFormat_getGreenBits(ETextureFormat f) {
+	return ETextureFormat_getIsCompressed(f) ? (f >> 12) & 7 : ((f >> 6) & 077) << 1;
 }
 
-U64 ETextureFormat_getRedBits(ETextureFormat f) { 
-	return ETextureFormat_getIsCompressed(f) ? (f >> 18) & 7 : ((f >> 9) & 077) << 1; 
+U64 ETextureFormat_getRedBits(ETextureFormat f) {
+	return ETextureFormat_getIsCompressed(f) ? (f >> 18) & 7 : ((f >> 9) & 077) << 1;
 }
 
 Bool ETextureFormat_hasRed(ETextureFormat f) { return ETextureFormat_getRedBits(f); }
@@ -56,8 +56,8 @@ Bool ETextureFormat_hasBlue(ETextureFormat f) { return ETextureFormat_getBlueBit
 Bool ETextureFormat_hasAlpha(ETextureFormat f) { return ETextureFormat_getAlphaBits(f); }
 
 U8 ETextureFormat_getChannels(ETextureFormat f) {
-	return 
-		(U8)ETextureFormat_hasRed(f)  + (U8)ETextureFormat_hasGreen(f) + 
+	return
+		(U8)ETextureFormat_hasRed(f)  + (U8)ETextureFormat_hasGreen(f) +
 		(U8)ETextureFormat_hasBlue(f) + (U8)ETextureFormat_hasAlpha(f);
 }
 

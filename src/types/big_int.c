@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -142,8 +142,8 @@ Error BigInt_createFromBase2Type(CharString text, U16 bitCount, Allocator alloc,
 	}
 
 	for (
-		U64 i = CharString_length(text) - 1, j = 0, k = 0; 
-		i >= prefixChars && i != U64_MAX; 
+		U64 i = CharString_length(text) - 1, j = 0, k = 0;
+		i >= prefixChars && i != U64_MAX;
 		--i, ++j
 	) {
 		U8 v = 0;
@@ -391,7 +391,7 @@ Bool BigInt_mul(BigInt *a, BigInt b, Allocator allocator) {
 
 		//Shoot ray (diagonally) through a Brune matrix.
 		//The concept is as follows:
-		// 
+		//
 		//   a0 a1 a2 a3
 		//b0 0  1  2  3
 		//b1 1  2  3  4
@@ -470,7 +470,7 @@ Bool BigInt_add(BigInt *a, BigInt b) {
 
 		if(overflow) {
 			prev = add;
-			++add; 
+			++add;
 			nextOverflow |= add < prev;
 		}
 
@@ -504,7 +504,7 @@ Bool BigInt_sub(BigInt *a, BigInt b) {
 
 		if(underflow) {
 			prev = sub;
-			--sub; 
+			--sub;
 			nextUnderflow |= sub > prev;
 		}
 
@@ -745,7 +745,7 @@ Bool BigInt_trunc(BigInt *big, Allocator allocator) {
 Bool BigInt_mod(BigInt *a, BigInt b);
 Bool BigInt_div(BigInt *a, BigInt b);
 
-Buffer BigInt_bufferConst(BigInt b) { 
+Buffer BigInt_bufferConst(BigInt b) {
 	return b.isConst ? Buffer_createNull() : Buffer_createRef((U64*)b.data, BigInt_byteCount(b));
 }
 
@@ -805,7 +805,7 @@ Error BigInt_isBase2(BigInt a, Allocator alloc, Bool *isBase2) {
 
 	*(U64*)temp.data = 1;
 
-	if(!BigInt_lsh(&temp, v)) 
+	if(!BigInt_lsh(&temp, v))
 		_gotoIfError(clean, Error_invalidState(0, "BigInt_isBase2() lsh failed"));
 
 	*isBase2 = BigInt_eq(temp, a);
@@ -868,11 +868,11 @@ success:
 	return err;
 }
 
-Error BigInt_hex(BigInt b, Allocator alloc, CharString *result, Bool leadingZeros) { 
+Error BigInt_hex(BigInt b, Allocator alloc, CharString *result, Bool leadingZeros) {
 	return BigInt_base2(b, alloc, result, EBase2Type_Hex, leadingZeros);
 }
 
-Error BigInt_oct(BigInt b, Allocator alloc, CharString *result, Bool leadingZeros) { 
+Error BigInt_oct(BigInt b, Allocator alloc, CharString *result, Bool leadingZeros) {
 	return BigInt_base2(b, alloc, result, EBase2Type_Oct, leadingZeros);
 }
 
@@ -887,10 +887,10 @@ Error BigInt_nyto(BigInt b, Allocator alloc, CharString *result, Bool leadingZer
 Error BigInt_dec(BigInt b, Allocator allocator, CharString *result, Bool leadingZeros);
 
 Error BigInt_toString(
-	BigInt b, 
-	Allocator allocator, 
-	CharString *result, 
-	EIntegerEncoding encoding, 
+	BigInt b,
+	Allocator allocator,
+	CharString *result,
+	EIntegerEncoding encoding,
 	Bool leadingZeros
 ) {
 	switch (encoding) {
@@ -958,7 +958,7 @@ U128 U128_mul64(U64 au, U64 bu) {
 
 		D[1] = (U32) I32x4_x(D1_2Temp);
 
-		//Calculate D2 by adding the overflow to aXby.y 
+		//Calculate D2 by adding the overflow to aXby.y
 
 		I32x4 D2_3 = I32x4_and(I32x4_rshByte(D1_2Temp, 4), low);
 		D2_3 = I32x4_addI64x2(D2_3, I32x4_xyxy(aXbyHi));
@@ -1022,7 +1022,7 @@ U128 U128_mul64(U64 au, U64 bu) {
 		return U128_createU64x2(lo, hi);
 	}
 
-	U128 U128_sub(U128 a, U128 b) { 
+	U128 U128_sub(U128 a, U128 b) {
 		return U128_add(a, U128_add(U128_not(b), U128_one()));
 	}
 

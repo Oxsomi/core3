@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -58,34 +58,34 @@ U64  GenericList_allocatedBytes(GenericList l) { return GenericList_isRef(l) ? 0
 
 U64 GenericList_capacity(GenericList l) { return GenericList_isRef(l) ? 0 : l.capacityAndRefInfo; }
 
-Buffer GenericList_buffer(GenericList l) { 
-	return GenericList_isConstRef(l) ? Buffer_createNull() : Buffer_createRef((U8*)l.ptr, GenericList_bytes(l)); 
+Buffer GenericList_buffer(GenericList l) {
+	return GenericList_isConstRef(l) ? Buffer_createNull() : Buffer_createRef((U8*)l.ptr, GenericList_bytes(l));
 }
 
-Buffer GenericList_allocatedBuffer(GenericList l) { 
-	return GenericList_isRef(l) ? Buffer_createNull() : Buffer_createRef((U8*)l.ptr, GenericList_allocatedBytes(l)); 
+Buffer GenericList_allocatedBuffer(GenericList l) {
+	return GenericList_isRef(l) ? Buffer_createNull() : Buffer_createRef((U8*)l.ptr, GenericList_allocatedBytes(l));
 }
 
 Buffer GenericList_bufferConst(GenericList l) { return Buffer_createRefConst(l.ptr, GenericList_bytes(l)); }
 
-Buffer GenericList_allocatedBufferConst(GenericList l) { 
-	return Buffer_createRefConst(GenericList_isRef(l) ? NULL : l.ptr, GenericList_allocatedBytes(l)); 
+Buffer GenericList_allocatedBufferConst(GenericList l) {
+	return Buffer_createRefConst(GenericList_isRef(l) ? NULL : l.ptr, GenericList_allocatedBytes(l));
 }
 
 void *GenericList_begin(GenericList list) { return GenericList_isConstRef(list) ? NULL : (void*)list.ptr; }
 
 void *GenericList_end(GenericList list) {
-	return GenericList_isConstRef(list) ? NULL : (U8*)list.ptr + GenericList_bytes(list); 
+	return GenericList_isConstRef(list) ? NULL : (U8*)list.ptr + GenericList_bytes(list);
 }
 
-void *GenericList_last(GenericList list) { 
+void *GenericList_last(GenericList list) {
 	return GenericList_isConstRef(list) || !list.length ? NULL : (U8*)list.ptr + GenericList_bytes(list) - list.stride;
 }
 
 const void *GenericList_beginConst(GenericList list) { return list.ptr; }
 const void *GenericList_endConst(GenericList list) { return (const U8*)list.ptr + GenericList_bytes(list); }
 
-const void *GenericList_lastConst(GenericList list) { 
+const void *GenericList_lastConst(GenericList list) {
 	return !list.length ? NULL : (const U8*) list.ptr + GenericList_bytes(list) - list.stride;
 }
 
@@ -98,12 +98,12 @@ void *GenericList_ptr(GenericList list, U64 elementOffset) {
 }
 
 Buffer GenericList_atConst(GenericList list, U64 offset) {
-	return offset < list.length ? 
+	return offset < list.length ?
 		Buffer_createRefConst((const U8*)list.ptr + offset * list.stride, list.stride) : Buffer_createNull();
 }
 
 Buffer GenericList_at(GenericList list, U64 offset) {
-	return offset < list.length && !GenericList_isConstRef(list) ? 
+	return offset < list.length && !GenericList_isConstRef(list) ?
 		Buffer_createRef((U8*)list.ptr + offset * list.stride, list.stride) : Buffer_createNull();
 }
 
@@ -117,12 +117,12 @@ Bool GenericList_neq(GenericList a, GenericList b) {
 
 GenericList GenericList_createEmpty(U64 stride) { return (GenericList) { .stride = stride }; }
 
-Error GenericList_createReverse(GenericList list, Allocator allocator, GenericList *result) { 
-	return GenericList_createSubsetReverse(list, 0, list.length, allocator, result); 
+Error GenericList_createReverse(GenericList list, Allocator allocator, GenericList *result) {
+	return GenericList_createSubsetReverse(list, 0, list.length, allocator, result);
 }
 
-Bool GenericList_contains(GenericList list, Buffer buf, U64 offset, EqualsFunction eq) { 
-	return GenericList_findFirst(list, buf, offset, eq) != U64_MAX; 
+Bool GenericList_contains(GenericList list, Buffer buf, U64 offset, EqualsFunction eq) {
+	return GenericList_findFirst(list, buf, offset, eq) != U64_MAX;
 }
 
 Error GenericList_create(U64 length, U64 stride, Allocator allocator, GenericList *result) {
@@ -145,9 +145,9 @@ Error GenericList_create(U64 length, U64 stride, Allocator allocator, GenericLis
 	if(err.genericError)
 		return err;
 
-	*result = (GenericList) { 
-		.ptr = buf.ptr, 
-		.length = length, 
+	*result = (GenericList) {
+		.ptr = buf.ptr,
+		.length = length,
 		.stride = stride,
 		.capacityAndRefInfo = length
 	};
@@ -169,9 +169,9 @@ Error GenericList_createFromBuffer(Buffer buf, U64 stride, GenericList *result) 
 	if(Buffer_length(buf) % stride)
 		return Error_invalidParameter(0, 1, "GenericList_createFromBuffer()::buf.length isn't a multiple of stride");
 
-	*result = (GenericList) { 
-		.ptr = buf.ptr, 
-		.length = Buffer_length(buf) / stride, 
+	*result = (GenericList) {
+		.ptr = buf.ptr,
+		.length = Buffer_length(buf) / stride,
 		.stride = stride,
 		.capacityAndRefInfo = Buffer_isConstRef(buf) ? U64_MAX : 0
 	};
@@ -205,9 +205,9 @@ Error GenericList_createRepeated(
 	if(err.genericError)
 		return err;
 
-	*result = (GenericList) { 
-		.ptr = buf.ptr, 
-		.length = length, 
+	*result = (GenericList) {
+		.ptr = buf.ptr,
+		.length = length,
 		.stride = stride,
 		.capacityAndRefInfo = length
 	};
@@ -323,10 +323,10 @@ Error GenericList_createRef(U8 *ptr, U64 length, U64 stride, GenericList *result
 	if(length * stride / stride != length)
 		return Error_overflow(1, length * stride, U64_MAX, "GenericList_createRef() overflow");
 
-	*result = (GenericList) { 
-		.ptr = ptr, 
-		.length = length, 
-		.stride = stride 
+	*result = (GenericList) {
+		.ptr = ptr,
+		.length = length,
+		.stride = stride
 	};
 
 	return Error_none();
@@ -346,11 +346,11 @@ Error GenericList_createRefConst(const U8 *ptr, U64 length, U64 stride, GenericL
 	if(length * stride / stride != length)
 		return Error_overflow(1, length * stride, U64_MAX, "GenericList_createConstRef() overflow");
 
-	*result = (GenericList) { 
-		.ptr = (U8*) ptr, 
-		.length = length, 
-		.stride = stride, 
-		.capacityAndRefInfo = U64_MAX 
+	*result = (GenericList) {
+		.ptr = (U8*) ptr,
+		.length = length,
+		.stride = stride,
+		.capacityAndRefInfo = U64_MAX
 	};
 
 	return Error_none();
@@ -531,7 +531,7 @@ Error GenericList_eraseAllIndices(GenericList *list, ListU64 indices) {
 		last = *ptr;
 	}
 
-	//Since we're sorted from small to big, 
+	//Since we're sorted from small to big,
 	//we can just easily fetch where our next block of memory should go and move it backwards
 
 	U64 curr = 0;
@@ -602,7 +602,7 @@ inline Bool GenericList_insertionSort8K(GenericList list, CompareFunction func) 
 		//Now that everything's moved, we can insert ourselves
 
 		Buffer_copy(
-			Buffer_createRef(tsorted + k * list.stride, list.stride), 
+			Buffer_createRef(tsorted + k * list.stride, list.stride),
 			Buffer_createRefConst(t, list.stride)
 		);
 	}
@@ -689,7 +689,7 @@ inline Bool GenericList_qsortRecurse(GenericList list, U64 begin, U64 end, Compa
 	return true;
 }
 
-inline Bool GenericList_qsort(GenericList list, CompareFunction f) { 
+inline Bool GenericList_qsort(GenericList list, CompareFunction f) {
 	return GenericList_qsortRecurse(list, 0, list.length - 1, f);
 }
 
@@ -726,8 +726,8 @@ Bool GenericList_sortString(GenericList list, EStringCase stringCase) {
 	if(list.stride != sizeof(CharString))			//Current limitation, because we don't allocate.
 		return false;
 
-	return 
-		stringCase == EStringCase_Insensitive ? 
+	return
+		stringCase == EStringCase_Insensitive ?
 		GenericList_sortCustom(list, (CompareFunction) GenericList_compareStringInsensitive) :
 		GenericList_sortCustom(list, (CompareFunction) GenericList_compareString);
 }
@@ -812,7 +812,7 @@ Error GenericList_insert(GenericList *list, U64 index, Buffer buf, Allocator all
 			return err;
 
 		Buffer_copy(
-			Buffer_createRef((U8*)list->ptr + index * list->stride, list->stride), 
+			Buffer_createRef((U8*)list->ptr + index * list->stride, list->stride),
 			buf
 		);
 
@@ -832,14 +832,14 @@ Error GenericList_insert(GenericList *list, U64 index, Buffer buf, Allocator all
 
 	if(prevSize)
 		Buffer_revCopy(
-			Buffer_createRef((U8*)list->ptr + (index + 1) * list->stride, (prevSize - index) * list->stride), 
+			Buffer_createRef((U8*)list->ptr + (index + 1) * list->stride, (prevSize - index) * list->stride),
 			Buffer_createRefConst((U8*)list->ptr + index * list->stride, (prevSize - index) * list->stride)
 		);
 
 	//Copy the other data
 
 	Buffer_copy(
-		Buffer_createRef((U8*)list->ptr + index * list->stride, list->stride), 
+		Buffer_createRef((U8*)list->ptr + index * list->stride, list->stride),
 		buf
 	);
 
@@ -881,7 +881,7 @@ Error GenericList_swap(GenericList l, U64 i, U64 j) {
 
 	if(i >= l.length || j >= l.length)
 		return Error_outOfBounds(
-			i >= l.length ? 1 : 2, i >= l.length ? i : j, l.length, 
+			i >= l.length ? 1 : 2, i >= l.length ? i : j, l.length,
 			"GenericList_swap()::i or j is out of bounds"
 		);
 
@@ -959,14 +959,14 @@ Error GenericList_insertAll(GenericList *list, GenericList other, U64 offset, Al
 
 	if(prevSize)
 		Buffer_revCopy(
-			Buffer_createRef((U8*)list->ptr + (offset + other.length) * list->stride, (prevSize - offset) * list->stride), 
+			Buffer_createRef((U8*)list->ptr + (offset + other.length) * list->stride, (prevSize - offset) * list->stride),
 			Buffer_createRefConst((const U8*)list->ptr + offset * list->stride, (prevSize - offset) * list->stride)
 		);
 
 	//Copy the other data
 
 	Buffer_copy(
-		Buffer_createRef((U8*)list->ptr + offset * list->stride, other.length * list->stride), 
+		Buffer_createRef((U8*)list->ptr + offset * list->stride, other.length * list->stride),
 		GenericList_bufferConst(other)
 	);
 

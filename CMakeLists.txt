@@ -1,16 +1,16 @@
 # OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 # Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-# 
+#
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
-# 
+#
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see https://github.com/Oxsomi/rt_core/blob/main/LICENSE.
 # Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -54,7 +54,7 @@ if(MSVC)
 
 	add_compile_options(/W4 /WX /MD /MP /GR /D_CRT_SECURE_NO_WARNINGS /Gy)
 
-	if(EnableSIMD) 
+	if(EnableSIMD)
 		add_compile_options(/d2archSSE42)		# Require SSE4.2
 	endif()
 
@@ -68,7 +68,7 @@ else()
 
 	add_compile_options(-Wall -Wextra -Werror)
 
-	if(EnableSIMD) 
+	if(EnableSIMD)
 		add_compile_options(-mfpmath=sse -msse -msse2 -msse3 -mssse3 -msse4 -msse4.1 -msse4.2 -mrdrnd -msha -maes -mbmi1)
 	elseif(NOT RelaxFloat)
 		add_compile_options(-mfpmath=sse -msse)
@@ -85,7 +85,7 @@ endif()
 message("-- Enabling x64 specific optimizations such as CRC32C, AES256 and SHA256 (optional) instructions")
 set(_ARCH "ARCH_X64")
 
-if(EnableSIMD) 
+if(EnableSIMD)
 	message("-- Enabling SIMD (-DEnableSIMD=ON)")
 	set(_SIMD "SIMD_SSE")
 else()
@@ -93,7 +93,7 @@ else()
 	set(_SIMD "SIMD_NONE")
 endif()
 
-if(RelaxFloat) 
+if(RelaxFloat)
 	message("-- Enabling relaxed float (better perf, but less consistency) (-DRelaxFloat=ON)")
 	set(_RELAX_FLOAT "1")
 else()
@@ -101,7 +101,7 @@ else()
 	set(_RELAX_FLOAT "0")
 endif()
 
-if(ForceFloatFallback) 
+if(ForceFloatFallback)
 	message("-- Enabling float fallback (supported float ops are now handled in software) (-DForceFloatFallback=ON)")
 	set(_FORCE_FLOAT_FALLBACK "1")
 else()
@@ -119,7 +119,7 @@ else()
 	set(_PLATFORM_TYPE PLATFORM_LINUX)
 endif()
 
-# Types 
+# Types
 
 file(GLOB_RECURSE typesHeaders "inc/file/*.h" "inc/math/*.h" "inc/types/*.h" "inc/cfg/*.h" "*.h.in")
 file(GLOB_RECURSE typesSources "src/file/*.c" "src/math/*.c" "src/types/*.c")

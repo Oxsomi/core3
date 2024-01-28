@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -37,11 +37,11 @@ Bool FileInfo_free(FileInfo *info, Allocator alloc) {
 Bool File_isVirtual(CharString loc) { return CharString_getAt(loc, 0) == '/' && CharString_getAt(loc, 1) == '/'; }
 
 Error File_resolve(
-	CharString loc, 
-	Bool *isVirtual, 
-	U64 maxFilePathLimit, 
-	CharString absoluteDir, 
-	Allocator alloc, 
+	CharString loc,
+	Bool *isVirtual,
+	U64 maxFilePathLimit,
+	CharString absoluteDir,
+	Allocator alloc,
 	CharString *result
 ) {
 
@@ -128,7 +128,7 @@ Error File_resolve(
 
 			//Move to left
 
-			for (U64 k = res.length - 1; k > i; --k) 
+			for (U64 k = res.length - 1; k > i; --k)
 				res.ptr[k - 1] = res.ptr[k];			//This is OK, we're dealing with refs from split
 
 			--i;			//Ensure we keep track of the removed element
@@ -147,7 +147,7 @@ Error File_resolve(
 				));
 			}
 
-			for (U64 k = res.length - 1; k > i + 1; --k) 
+			for (U64 k = res.length - 1; k > i + 1; --k)
 				res.ptr[k - 2] = res.ptr[k];			//This is OK, we're dealing with refs from split
 
 			i -= 2;										//Ensure we keep track of the removed element
@@ -229,7 +229,7 @@ Error File_resolve(
 
 	//Prepend our path
 
-	else if(CharString_length(absoluteDir) && !*isVirtual) 
+	else if(CharString_length(absoluteDir) && !*isVirtual)
 		_gotoIfError(clean, CharString_insertString(result, absoluteDir, 0, alloc));
 
 	//Since we're gonna use this in file operations, we wanna have a null terminator
@@ -241,7 +241,7 @@ Error File_resolve(
 		maxFilePathLimit = U64_min(260, maxFilePathLimit);		/* MAX_PATH */
 	#endif
 
-	if(CharString_length(*result) >= maxFilePathLimit) 
+	if(CharString_length(*result) >= maxFilePathLimit)
 		_gotoIfError(clean, Error_outOfBounds(
 			0, CharString_length(*result), maxFilePathLimit, "File_resolve()::loc resolved path is longer than max file limit"
 		));

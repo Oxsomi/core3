@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -25,20 +25,20 @@
 #include "types/string.h"
 
 Error RenderTextureRef_dec(RenderTextureRef **renderTexture) {
-	return !RefPtr_dec(renderTexture) ? Error_invalidOperation(0, "RenderTextureRef_dec()::renderTexture is invalid") : 
+	return !RefPtr_dec(renderTexture) ? Error_invalidOperation(0, "RenderTextureRef_dec()::renderTexture is invalid") :
 	Error_none();
 }
 
 Error RenderTextureRef_inc(RenderTextureRef *renderTexture) {
-	return !RefPtr_inc(renderTexture) ? Error_invalidOperation(0, "RenderTextureRef_inc()::renderTexture is invalid") : 
+	return !RefPtr_inc(renderTexture) ? Error_invalidOperation(0, "RenderTextureRef_inc()::renderTexture is invalid") :
 	Error_none();
 }
 
 impl Error GraphicsDeviceRef_createRenderTextureExt(
-	GraphicsDeviceRef *deviceRef, 
+	GraphicsDeviceRef *deviceRef,
 	ETextureType type,
-	I32x4 size, 
-	ETextureFormat format, 
+	I32x4 size,
+	ETextureFormat format,
 	ERenderTextureUsage usage,
 	EMSAASamples msaa,
 	CharString name,
@@ -56,10 +56,10 @@ Bool GraphicsDevice_freeRenderTexture(RenderTexture *renderTexture, Allocator al
 }
 
 Error GraphicsDeviceRef_createRenderTexture(
-	GraphicsDeviceRef *deviceRef, 
+	GraphicsDeviceRef *deviceRef,
 	ETextureType type,
-	I32x4 size, 
-	ETextureFormatId formatId, 
+	I32x4 size,
+	ETextureFormatId formatId,
 	ERenderTextureUsage usage,
 	EMSAASamples msaa,
 	CharString name,
@@ -119,9 +119,9 @@ Error GraphicsDeviceRef_createRenderTexture(
 		return Error_unsupportedOperation(0, "GraphicsDeviceRef_createRenderTexture()::format is unsupported or compressed");
 
 	Error err = RefPtr_createx(
-		(U32)(sizeof(RenderTexture) + RenderTextureExt_size), 
-		(ObjectFreeFunc) GraphicsDevice_freeRenderTexture, 
-		EGraphicsTypeId_RenderTexture, 
+		(U32)(sizeof(RenderTexture) + RenderTextureExt_size),
+		(ObjectFreeFunc) GraphicsDevice_freeRenderTexture,
+		EGraphicsTypeId_RenderTexture,
 		renderTextureRef
 	);
 

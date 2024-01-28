@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -33,7 +33,7 @@ static const U8 CAHeader_V1_0  = 0;
 
 inline Ns CAFile_loadDate(U16 time, U16 date) {
 	return Time_date(
-		1980 + (date >> 9), 1 + ((date >> 5) & 0xF), date & 0x1F, 
+		1980 + (date >> 9), 1 + ((date >> 5) & 0xF), date & 0x1F,
 		time >> 11, (time >> 5) & 0x3F, (time & 0x1F) << 1, 0, false
 	);
 }
@@ -148,7 +148,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 
 	U64 baseFileHeader = (						//FileInfo, parent directory elsewhere
 		(
-			(caFile.settings.flags & ECASettingsFlags_IncludeFullDate) || 
+			(caFile.settings.flags & ECASettingsFlags_IncludeFullDate) ||
 			(caFile.settings.flags & ECASettingsFlags_IncludeDate)
 		) ? (caFile.settings.flags & ECASettingsFlags_IncludeFullDate ? sizeof(Ns) : sizeof(U16) * 2) : 0
 	);
@@ -194,7 +194,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 
 	EXXDataSizeType sizeType = biggestFileSize <= U8_MAX ? EXXDataSizeType_U8 : (
 		biggestFileSize <= U16_MAX ? EXXDataSizeType_U16 : (
-			biggestFileSize <= U32_MAX ? EXXDataSizeType_U32 : 
+			biggestFileSize <= U32_MAX ? EXXDataSizeType_U32 :
 			EXXDataSizeType_U64
 			)
 		);
@@ -215,13 +215,13 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 	outputSize += fileObjLen;
 
 	//Sort directories and files to ensure our file ids are correct,
-	//This is because we have full directory names, so it automatically resolves 
+	//This is because we have full directory names, so it automatically resolves
 	// in a way where we know where our children are (in a linear way).
 	//This sort is different than just sortString. It sorts on parent count first and then alphabetically.
 	//This allows us to not have to reorder the files down the road since they're already sorted.
 
 	if(
-		!ListCharString_sortCustom(directories, (CompareFunction) sortParentCountAndFileNames) || 
+		!ListCharString_sortCustom(directories, (CompareFunction) sortParentCountAndFileNames) ||
 		!ListCharString_sortCustom(files, (CompareFunction) sortParentCountAndFileNames)
 	)
 		_gotoIfError(clean, Error_invalidOperation(0, "CAFile_write() couldn't sort files and/or directories"));
@@ -317,9 +317,9 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 			CharString baseDir = CharString_createNull(), realParentDir = CharString_createNull();
 
 			if (
-				!CharString_cut(dir, 0, it, &realParentDir) || 
+				!CharString_cut(dir, 0, it, &realParentDir) ||
 				!CharString_cut(dir, 0, it + 1, &baseDir)
-			) 
+			)
 				_gotoIfError(clean, Error_invalidOperation(0, "CAFile_write() couldn't split directory name"));
 
 			for(U64 j = i - 1; j != U64_MAX; --j)
@@ -365,7 +365,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 			CharString baseDir = CharString_createNull(), realParentDir = CharString_createNull();
 
 			if (
-				!CharString_cut(file, 0, it, &realParentDir) || 
+				!CharString_cut(file, 0, it, &realParentDir) ||
 				!CharString_cut(file, 0, it + 1, &baseDir)
 			)
 				_gotoIfError(clean, Error_invalidOperation(0, "CAFile_write() couldn't split file name"));
@@ -456,16 +456,16 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 
 			(
 				caFile.settings.compressionType ? (
-					caFile.settings.flags & ECASettingsFlags_UseSHA256 ? ECAFlags_UseSHA256 : 
+					caFile.settings.flags & ECASettingsFlags_UseSHA256 ? ECAFlags_UseSHA256 :
 					ECAFlags_None
-				) : 
+				) :
 				ECAFlags_None
 			) |
 
 			(caFile.settings.flags & ECASettingsFlags_IncludeDate ? ECAFlags_FilesHaveDate : ECAFlags_None) |
 
 			(
-				caFile.settings.flags & ECASettingsFlags_IncludeFullDate ? 
+				caFile.settings.flags & ECASettingsFlags_IncludeFullDate ?
 				ECAFlags_FilesHaveDate | ECAFlags_FilesHaveExtendedDate : ECAFlags_None
 			) |
 
@@ -507,7 +507,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 
 	if (caFile.settings.compressionType)
 		Buffer_copy(
-			Buffer_createRef(headerIt, sizeof(hash)), 
+			Buffer_createRef(headerIt, sizeof(hash)),
 			Buffer_createRefConst(hash, sizeof(hash))
 		);*/
 
@@ -516,7 +516,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 	/*if (caFile.settings.compressionType != EXXCompressionType_None) {				TODO:
 
 		Buffer toCompress = Buffer_createRefConst(
-			outputBuffer.ptr + realHeaderSize, 
+			outputBuffer.ptr + realHeaderSize,
 			Buffer_length(outputBuffer) - realHeaderSize
 		);
 
@@ -538,7 +538,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 		U32 key[8] = { 0 };
 
 		Bool b = Buffer_eq(
-			Buffer_createRefConst(key, sizeof(key)), 
+			Buffer_createRefConst(key, sizeof(key)),
 			Buffer_createRefConst(caFile.settings.encryptionKey, sizeof(key))
 		);
 
@@ -550,10 +550,10 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 
 		_gotoIfError(clean, Buffer_encrypt(
 
-			toEncrypt, 
-			realHeader, 
+			toEncrypt,
+			realHeader,
 
-			EBufferEncryptionType_AES256GCM, 
+			EBufferEncryptionType_AES256GCM,
 
 			EBufferEncryptionFlags_GenerateIv | (b ? EBufferEncryptionFlags_GenerateKey : EBufferEncryptionFlags_None),
 			b ? NULL : caFile.settings.encryptionKey,
@@ -680,8 +680,8 @@ Error CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFi
 	//File name validation is done when the entries are inserted into the Archive
 
 	if (
-		fileNames.settings.dataType != EDLDataType_Ascii || 
-		fileNames.settings.compressionType || 
+		fileNames.settings.dataType != EDLDataType_Ascii ||
+		fileNames.settings.compressionType ||
 		fileNames.settings.encryptionType ||
 		fileNames.settings.flags
 	)
@@ -831,11 +831,11 @@ Error CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFi
 			header.flags & ECAFlags_UseSHA256 ? ECASettingsFlags_UseSHA256 :
 			ECASettingsFlags_None
 		) | (
-			header.flags & ECAFlags_FilesHaveExtendedDate ? 
+			header.flags & ECAFlags_FilesHaveExtendedDate ?
 			ECASettingsFlags_IncludeFullDate | ECASettingsFlags_IncludeDate :
 			ECASettingsFlags_None
 		) | (
-			header.flags & ECAFlags_FilesHaveDate ? 
+			header.flags & ECAFlags_FilesHaveDate ?
 			ECASettingsFlags_IncludeDate :
 			ECASettingsFlags_None
 		)

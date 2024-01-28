@@ -84,7 +84,7 @@ Bool WindowManager_free(WindowManager *manager) {
 
 	manager->isActive = 0;
 
-	for(U64 i = 0; i < manager->windows.length; ++i) 
+	for(U64 i = 0; i < manager->windows.length; ++i)
 		WindowManager_freeWindow(manager, &manager->windows.ptrNonConst[i]);
 
 	ListWindowPtr_freex(&manager->windows);
@@ -102,18 +102,18 @@ impl Error WindowManager_createWindowPhysical(Window *w);
 
 Error WindowManager_createWindow(
 
-	WindowManager *manager, 
+	WindowManager *manager,
 
 	EWindowType type,
 
-	I32x2 position, 
-	I32x2 size, 
-	I32x2 minSize, 
+	I32x2 position,
+	I32x2 size,
+	I32x2 minSize,
 	I32x2 maxSize,
 
-	EWindowHint hint, 
-	CharString title, 
-	WindowCallbacks callbacks, 
+	EWindowHint hint,
+	CharString title,
+	WindowCallbacks callbacks,
 	EWindowFormat format,
 	U64 extendedDataSize,
 	Window **result
@@ -170,13 +170,13 @@ Error WindowManager_createWindow(
 
 	Buffer extendedData = Buffer_createNull();
 
-	if((err = Buffer_createEmptyBytesx(extendedDataSize, &extendedData)).genericError) { 
+	if((err = Buffer_createEmptyBytesx(extendedDataSize, &extendedData)).genericError) {
 		Buffer_freex(&cpuVisibleBuffer);
 		return err;
 	}
 
 	CharString titleCopy = CharString_createNull();
-	if((err = CharString_createCopyx(title, &titleCopy)).genericError) { 
+	if((err = CharString_createCopyx(title, &titleCopy)).genericError) {
 		Buffer_freex(&extendedData);
 		Buffer_freex(&cpuVisibleBuffer);
 		return err;
@@ -266,7 +266,7 @@ Error WindowManager_wait(WindowManager *manager) {
 			if(w->type == EWindowType_Physical)
 				Window_updateExt(w);
 
-			else if(w->callbacks.onDraw)		//Virtual 
+			else if(w->callbacks.onDraw)		//Virtual
 				w->callbacks.onDraw(w);
 
 			if (w->flags & EWindowFlags_ShouldTerminate)
@@ -278,7 +278,7 @@ Error WindowManager_wait(WindowManager *manager) {
 		if(manager->callbacks.onUpdate) {
 			F64 dt = manager->lastUpdate ? (now - manager->lastUpdate) / (F64)SECOND : 0;
 			manager->callbacks.onUpdate(manager, dt);
-		} 
+		}
 		
 		if(manager->callbacks.onDraw)
 			manager->callbacks.onDraw(manager);

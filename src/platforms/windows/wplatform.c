@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -92,7 +92,7 @@ void sigFunc(int signal) {
 	}
 
 	//Outputting to console is not technically allowed by the Windows docs
-	//If this signal is triggered from the wrong thread it might cause stackoverflow, 
+	//If this signal is triggered from the wrong thread it might cause stackoverflow,
 	//but what are you gonna do? Crash again?
 	//For debugging purposed however, this is very useful
 	//Turn this off by defining _NO_SIGNAL_HANDLING
@@ -296,8 +296,8 @@ void Platform_printAllocations(U64 offset, U64 length, U64 minAllocationSize) {
 				continue;
 
 			Log_debugLn(
-				Allocator_allocationsAllocator, 
-				"Allocation %llu at %p with length %llu allocated at:", 
+				Allocator_allocationsAllocator,
+				"Allocation %llu at %p with length %llu allocated at:",
 				i, captured->location, captured->length
 			);
 
@@ -370,7 +370,7 @@ int main(int argc, const char *argv[]) {
 
 	#if _SIMD == SIMD_SSE
 
-		//We need to double check that our CPU supports 
+		//We need to double check that our CPU supports
 		//SSE4.2, SSE4.1, (S)SSE3, SSE2, SSE, AES, PCLMULQDQ, BMI1 and RDRAND
 		//https://gist.github.com/hi2p-perim/7855506
 		//https://en.wikipedia.org/wiki/CPUID
@@ -537,7 +537,7 @@ Error Platform_initExt(CharString currAppDir) {
 		}
 
 		if(
-			!CharString_endsWithSensitive(basePath, '/') && 
+			!CharString_endsWithSensitive(basePath, '/') &&
 			(err = CharString_appendx(&workDir, '/')).genericError
 		)  {
 			CharString_freex(&appDir);

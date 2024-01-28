@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -84,9 +84,9 @@ Bool C8_isAlpha(C8 c) { return C8_isUpperCase(c) || C8_isLowerCase(c); }
 
 Bool C8_isValidAscii(C8 c) { return (c >= 0x20 && c < 0x7F) || c == '\t' || c == '\n' || c == '\r'; }
 
-Bool C8_isValidFileName(C8 c) { 
+Bool C8_isValidFileName(C8 c) {
 	return
-		(c >= 0x20 && c < 0x7F) && 
+		(c >= 0x20 && c < 0x7F) &&
 		c != '<' && c != '>' && c != ':' && c != '"' && c != '|' &&
 		c != '?' && c != '*' && c != '/' && c != '\\';
 }
@@ -133,7 +133,7 @@ C8 C8_createHex(U8 v) { return v < 10 ? '0' + v : (v < 16 ? 'A' + v - 10 : C8_MA
 
 //Nytodecimal: 0-9A-Za-z_$
 
-C8 C8_createNyto(U8 v) { 
+C8 C8_createNyto(U8 v) {
 	return v < 10 ? '0' + v : (
 		v < 36 ? 'A' + v - 10 : (
 			v < 62 ? 'a' + v - 36 : (
@@ -142,5 +142,5 @@ C8 C8_createNyto(U8 v) {
 				)
 			)
 		)
-	); 
+	);
 }

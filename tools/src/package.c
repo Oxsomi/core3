@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -57,7 +57,7 @@ Error packageFile(FileInfo file, CAFileRecursion *caFile) {
 	if (file.type == EFileType_File) {
 
 		//We have to detect file type and process it here to a custom type.
-		//We don't have a custom file yet, so for now 
+		//We don't have a custom file yet, so for now
 		//this will just be identical to addFileToCAFile.
 
 		//
@@ -87,7 +87,7 @@ Bool CLI_package(ParsedArgs args) {
 		CharString key = CharString_createNull();
 
 		if (
-			(ParsedArgs_getArg(args, EOperationHasParameter_AESShift, &key)).genericError || 
+			(ParsedArgs_getArg(args, EOperationHasParameter_AESShift, &key)).genericError ||
 			!CharString_isHex(key)
 		) {
 			Log_errorLnx("Invalid parameter sent to -aes. Expecting key in hex (32 bytes)");
@@ -162,8 +162,8 @@ Bool CLI_package(ParsedArgs args) {
 
 	_gotoIfError(clean, CharString_appendx(&resolved, '/'));
 
-	CAFileRecursion caFileRecursion = (CAFileRecursion) { 
-		.archive = &archive, 
+	CAFileRecursion caFileRecursion = (CAFileRecursion) {
+		.archive = &archive,
 		.root = resolved
 	};
 

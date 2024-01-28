@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -106,9 +106,9 @@ clean:
 }
 
 impl Error GraphicsInstance_createExt(
-	GraphicsApplicationInfo info, 
-	Bool isVerbose, 
-	GraphicsInstanceRef **instanceRef, 
+	GraphicsApplicationInfo info,
+	Bool isVerbose,
+	GraphicsInstanceRef **instanceRef,
 	U32 *version
 );
 
@@ -118,9 +118,9 @@ impl extern const U64 GraphicsInstanceExt_size;
 Error GraphicsInstance_create(GraphicsApplicationInfo info, Bool isVerbose, GraphicsInstanceRef **instanceRef) {
 
 	Error err = RefPtr_createx(
-		(U32)(sizeof(GraphicsInstance) + GraphicsInstanceExt_size), 
-		(ObjectFreeFunc) GraphicsInstance_free, 
-		EGraphicsTypeId_GraphicsInstance, 
+		(U32)(sizeof(GraphicsInstance) + GraphicsInstanceExt_size),
+		(ObjectFreeFunc) GraphicsInstance_free,
+		EGraphicsTypeId_GraphicsInstance,
 		instanceRef
 	);
 

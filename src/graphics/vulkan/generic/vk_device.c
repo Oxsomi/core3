@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -39,11 +39,8 @@ TListImpl(VkSemaphore);
 TListImpl(VkResult);
 TListImpl(VkSwapchainKHR);
 TListImpl(VkPipelineStageFlags);
-TListImpl(VkImageMemoryBarrier2);
-TListImpl(VkBufferMemoryBarrier2);
 TListImpl(VkWriteDescriptorSet);
 TListImpl(DescriptorStackTrace);
-TListImpl(VkImageCopy);
 
 #define vkBindNext(T, condition, ...)	\
 	T tmp##T = __VA_ARGS__;				\
@@ -57,10 +54,10 @@ const U64 GraphicsDeviceExt_size = sizeof(VkGraphicsDevice);
 
 //Convert command into API dependent instructions
 impl void CommandList_process(
-	CommandList *commandList, 
-	GraphicsDevice *device, 
-	ECommandOp op, 
-	const U8 *data, 
+	CommandList *commandList,
+	GraphicsDevice *device,
+	ECommandOp op,
+	const U8 *data,
 	void *commandListExt
 );
 
@@ -70,8 +67,8 @@ TListImpl(VkDeviceQueueCreateInfo);
 TListImpl(VkQueueFamilyProperties);
 
 Error GraphicsDevice_initExt(
-	const GraphicsInstance *instance, 
-	const GraphicsDeviceInfo *physicalDevice, 
+	const GraphicsInstance *instance,
+	const GraphicsDeviceInfo *physicalDevice,
 	Bool verbose,
 	GraphicsDeviceRef **deviceRef
 ) {
@@ -125,8 +122,8 @@ Error GraphicsDevice_initExt(
 	void **currPNext = &features2.pNext;
 
 	vkBindNext(
-		VkPhysicalDeviceDescriptorIndexingFeatures, 
-		true, 
+		VkPhysicalDeviceDescriptorIndexingFeatures,
+		true,
 		{
 			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES,
 			.shaderUniformTexelBufferArrayDynamicIndexing = true,
@@ -150,8 +147,8 @@ Error GraphicsDevice_initExt(
 	);
 
 	vkBindNext(
-		VkPhysicalDevicePerformanceQueryFeaturesKHR, 
-		physicalDevice->capabilities.featuresExt & EVkGraphicsFeatures_PerfQuery, 
+		VkPhysicalDevicePerformanceQueryFeaturesKHR,
+		physicalDevice->capabilities.featuresExt & EVkGraphicsFeatures_PerfQuery,
 		(VkPhysicalDevicePerformanceQueryFeaturesKHR) {
 			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PERFORMANCE_QUERY_FEATURES_KHR,
 			.performanceCounterQueryPools = true
@@ -159,8 +156,8 @@ Error GraphicsDevice_initExt(
 	);
 
 	vkBindNext(
-		VkPhysicalDeviceSynchronization2Features, 
-		true, 
+		VkPhysicalDeviceSynchronization2Features,
+		true,
 		(VkPhysicalDeviceSynchronization2Features) {
 			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES,
 			.synchronization2 = true
@@ -168,8 +165,8 @@ Error GraphicsDevice_initExt(
 	);
 
 	vkBindNext(
-		VkPhysicalDeviceTimelineSemaphoreFeatures, 
-		true, 
+		VkPhysicalDeviceTimelineSemaphoreFeatures,
+		true,
 		(VkPhysicalDeviceTimelineSemaphoreFeatures) {
 			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES,
 			.timelineSemaphore = true
@@ -177,8 +174,8 @@ Error GraphicsDevice_initExt(
 	);
 
 	vkBindNext(
-		VkPhysicalDeviceDynamicRenderingFeatures, 
-		feat & EGraphicsFeatures_DirectRendering, 
+		VkPhysicalDeviceDynamicRenderingFeatures,
+		feat & EGraphicsFeatures_DirectRendering,
 		{
 			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES,
 			.dynamicRendering = true
@@ -186,8 +183,8 @@ Error GraphicsDevice_initExt(
 	);
 
 	vkBindNext(
-		VkPhysicalDeviceMeshShaderFeaturesEXT, 
-		feat & EGraphicsFeatures_MeshShader, 
+		VkPhysicalDeviceMeshShaderFeaturesEXT,
+		feat & EGraphicsFeatures_MeshShader,
 		{
 			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT,
 			.meshShader = true,
@@ -198,8 +195,8 @@ Error GraphicsDevice_initExt(
 	);
 
 	vkBindNext(
-		VkPhysicalDeviceAccelerationStructureFeaturesKHR, 
-		feat & EGraphicsFeatures_Raytracing, 
+		VkPhysicalDeviceAccelerationStructureFeaturesKHR,
+		feat & EGraphicsFeatures_Raytracing,
 		{
 			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR,
 			.accelerationStructure = true
@@ -207,8 +204,8 @@ Error GraphicsDevice_initExt(
 	);
 
 	vkBindNext(
-		VkPhysicalDeviceRayQueryFeaturesKHR, 
-		feat & EGraphicsFeatures_RayQuery, 
+		VkPhysicalDeviceRayQueryFeaturesKHR,
+		feat & EGraphicsFeatures_RayQuery,
 		{
 			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR,
 			.rayQuery = true
@@ -216,8 +213,8 @@ Error GraphicsDevice_initExt(
 	);
 
 	vkBindNext(
-		VkPhysicalDeviceRayTracingPipelineFeaturesKHR, 
-		feat & EGraphicsFeatures_RayPipeline, 
+		VkPhysicalDeviceRayTracingPipelineFeaturesKHR,
+		feat & EGraphicsFeatures_RayPipeline,
 		{
 			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR,
 			.rayTracingPipeline = true,
@@ -227,8 +224,8 @@ Error GraphicsDevice_initExt(
 	);
 
 	vkBindNext(
-		VkPhysicalDeviceRayTracingMotionBlurFeaturesNV, 
-		feat & EGraphicsFeatures_RayMotionBlur, 
+		VkPhysicalDeviceRayTracingMotionBlurFeaturesNV,
+		feat & EGraphicsFeatures_RayMotionBlur,
 		{
 			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_MOTION_BLUR_FEATURES_NV,
 			.rayTracingMotionBlur = true,
@@ -237,8 +234,8 @@ Error GraphicsDevice_initExt(
 	);
 
 	vkBindNext(
-		VkPhysicalDeviceRayTracingInvocationReorderFeaturesNV, 
-		feat & EGraphicsFeatures_RayReorder, 
+		VkPhysicalDeviceRayTracingInvocationReorderFeaturesNV,
+		feat & EGraphicsFeatures_RayReorder,
 		{
 			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_INVOCATION_REORDER_FEATURES_NV,
 			.rayTracingInvocationReorder = true
@@ -246,8 +243,8 @@ Error GraphicsDevice_initExt(
 	);
 
 	vkBindNext(
-		VkPhysicalDeviceOpacityMicromapFeaturesEXT, 
-		feat & EGraphicsFeatures_RayMicromapOpacity, 
+		VkPhysicalDeviceOpacityMicromapFeaturesEXT,
+		feat & EGraphicsFeatures_RayMicromapOpacity,
 		{
 			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_OPACITY_MICROMAP_FEATURES_EXT,
 			.micromap = true
@@ -255,8 +252,8 @@ Error GraphicsDevice_initExt(
 	);
 
 	vkBindNext(
-		VkPhysicalDeviceDisplacementMicromapFeaturesNV, 
-		feat & EGraphicsFeatures_RayMicromapDisplacement, 
+		VkPhysicalDeviceDisplacementMicromapFeaturesNV,
+		feat & EGraphicsFeatures_RayMicromapDisplacement,
 		{
 			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DISPLACEMENT_MICROMAP_FEATURES_NV,
 			.displacementMicromap = true
@@ -264,8 +261,8 @@ Error GraphicsDevice_initExt(
 	);
 
 	vkBindNext(
-		VkPhysicalDeviceShaderAtomicInt64Features, 
-		types & EGraphicsDataTypes_AtomicI64, 
+		VkPhysicalDeviceShaderAtomicInt64Features,
+		types & EGraphicsDataTypes_AtomicI64,
 		{
 			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_INT64_FEATURES_KHR,
 			.shaderBufferInt64Atomics = true
@@ -273,8 +270,8 @@ Error GraphicsDevice_initExt(
 	);
 
 	vkBindNext(
-		VkPhysicalDeviceShaderAtomicFloatFeaturesEXT, 
-		types & (EGraphicsDataTypes_AtomicF32 | EGraphicsDataTypes_AtomicF64), 
+		VkPhysicalDeviceShaderAtomicFloatFeaturesEXT,
+		types & (EGraphicsDataTypes_AtomicF32 | EGraphicsDataTypes_AtomicF64),
 		{
 			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_FLOAT_FEATURES_EXT,
 			.shaderBufferFloat32AtomicAdd = (Bool)(types & EGraphicsDataTypes_AtomicF32),
@@ -285,8 +282,8 @@ Error GraphicsDevice_initExt(
 	);
 
 	vkBindNext(
-		VkPhysicalDeviceShaderFloat16Int8Features, 
-		types & EGraphicsDataTypes_F16, 
+		VkPhysicalDeviceShaderFloat16Int8Features,
+		types & EGraphicsDataTypes_F16,
 		{
 			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES_KHR,
 			.shaderFloat16 = true
@@ -625,7 +622,7 @@ Error GraphicsDevice_initExt(
 					.binding = j - 1,
 					.stageFlags = VK_SHADER_STAGE_ALL,
 					.descriptorCount = descriptorTypeCount[j],
-					.descriptorType = 
+					.descriptorType =
 						j < EDescriptorType_Buffer ? VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE : (
 							j <= EDescriptorType_RWBuffer ? VK_DESCRIPTOR_TYPE_STORAGE_BUFFER :
 							VK_DESCRIPTOR_TYPE_STORAGE_IMAGE
@@ -783,7 +780,7 @@ Error GraphicsDevice_initExt(
 
 	//Determine when we need to flush.
 	//As a rule of thumb I decided for 20% occupied mem by just copies.
-	//Or if there's distinct shared mem available too it can allocate 10% more in that memory too 
+	//Or if there's distinct shared mem available too it can allocate 10% more in that memory too
 	// (as long as it doesn't exceed 33%).
 	//Flush threshold is kept under 4 GiB to avoid TDRs because even if the mem is available it might be slow.
 
@@ -798,8 +795,8 @@ Error GraphicsDevice_initExt(
 	cpuHeapSize &= (U64)I64_MAX;
 
 	device->flushThreshold = U64_min(
-		4 * GIBI, 
-		isDistinct ? U64_min(gpuHeapSize / 3, cpuHeapSize / 10 + gpuHeapSize / 5) : 
+		4 * GIBI,
+		isDistinct ? U64_min(gpuHeapSize / 3, cpuHeapSize / 10 + gpuHeapSize / 5) :
 		cpuHeapSize / 5
 	);
 
@@ -958,7 +955,7 @@ Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext) {
 
 			if(j < 16)
 				Log_warnLnx(
-					"%llu: Resource type: %llu, id: %llu", 
+					"%llu: Resource type: %llu, id: %llu",
 					j, (U64)elem.resourceId >> 20, (U64)elem.resourceId & ((1 << 20) - 1)
 				);
 
@@ -1066,8 +1063,8 @@ VkCommandAllocator *VkGraphicsDevice_getCommandAllocator(
 }
 
 Error GraphicsDevice_submitCommandsImpl(
-	GraphicsDeviceRef *deviceRef, 
-	ListCommandListRef commandLists, 
+	GraphicsDeviceRef *deviceRef,
+	ListCommandListRef commandLists,
 	ListSwapchainRef swapchains
 ) {
 	
@@ -1136,7 +1133,7 @@ Error GraphicsDevice_submitCommandsImpl(
 		deviceExt->swapchainHandles.ptrNonConst[i] = swapchainExt->swapchain;
 		deviceExt->swapchainIndices.ptrNonConst[i] = swapchainExt->currentIndex;
 
-		VkPipelineStageFlagBits pipelineStage = 
+		VkPipelineStageFlagBits pipelineStage =
 			swapchain->info.usage & ESwapchainUsage_ShaderWrite ? VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT :
 			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
@@ -1223,7 +1220,7 @@ Error GraphicsDevice_submitCommandsImpl(
 				if(instanceExt->debugSetName) {
 
 					_gotoIfError(clean, CharString_formatx(
-						&temp, 
+						&temp,
 						"%s command pool (thread: %u, frame id: %u)",
 						queue.type == EVkCommandQueue_Graphics ? "Graphics" : (
 							queue.type == EVkCommandQueue_Compute ? "Compute" : "Copy"
@@ -1269,7 +1266,7 @@ Error GraphicsDevice_submitCommandsImpl(
 				if(instanceExt->debugSetName) {
 
 					_gotoIfError(clean, CharString_formatx(
-						&temp, 
+						&temp,
 						"%s command buffer (thread: %u, frame id: %u)",
 						queue.type == EVkCommandQueue_Graphics ? "Graphics" : (
 							queue.type == EVkCommandQueue_Compute ? "Compute" : "Copy"
@@ -1316,8 +1313,8 @@ Error GraphicsDevice_submitCommandsImpl(
 		VkDeviceBuffer *uboExt = DeviceBuffer_ext(DeviceBufferRef_ptr(device->frameData), Vk);
 
 		_gotoIfError(clean, VkDeviceBuffer_transition(
-			uboExt, 
-			VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT, 
+			uboExt,
+			VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT,
 			VK_ACCESS_2_UNIFORM_READ_BIT,
 			graphicsQueueId,
 			(device->submitId % 3) * sizeof(CBufferData),
@@ -1337,16 +1334,16 @@ Error GraphicsDevice_submitCommandsImpl(
 		VkDescriptorSet sets[EDescriptorSetType_UniqueLayouts];
 
 		for(U32 i = 0; i < EDescriptorSetType_UniqueLayouts; ++i)
-			sets[i] = 
+			sets[i] =
 				i != EDescriptorSetType_CBuffer0 ? deviceExt->sets[i] :
 				deviceExt->sets[EDescriptorSetType_CBuffer0 + (device->submitId % 3)];
 
 		for(U64 i = 0; i < 2; ++i)
 			vkCmdBindDescriptorSets(
-				commandBuffer, 
-				i == 0 ? VK_PIPELINE_BIND_POINT_COMPUTE : VK_PIPELINE_BIND_POINT_GRAPHICS, 
-				deviceExt->defaultLayout, 
-				0, EDescriptorSetType_UniqueLayouts, sets, 
+				commandBuffer,
+				i == 0 ? VK_PIPELINE_BIND_POINT_COMPUTE : VK_PIPELINE_BIND_POINT_GRAPHICS,
+				deviceExt->defaultLayout,
+				0, EDescriptorSetType_UniqueLayouts, sets,
 				0, NULL
 			);
 
@@ -1394,8 +1391,8 @@ Error GraphicsDevice_submitCommandsImpl(
 
 			_gotoIfError(clean, VkManagedImage_transition(
 				imageExt,
-				VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT, 
-				0, 
+				VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
+				0,
 				VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
 				graphicsQueueId,
 				&range,
@@ -1471,12 +1468,72 @@ Error GraphicsDevice_submitCommandsImpl(
 			_gotoIfError(clean, vkCheck(deviceExt->results.ptr[i]));
 	}
 
-clean: 
+clean:
 
 	ListVkImageCopy_clear(&deviceExt->imageCopyRanges);
 	ListVkBufferMemoryBarrier2_clear(&deviceExt->bufferTransitions);
 	ListVkImageMemoryBarrier2_clear(&deviceExt->imageTransitions);
 	CharString_freex(&temp);
 
+	return err;
+}
+
+Error VkGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, VkCommandBuffer commandBuffer) {
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
+
+	//End current command list
+
+	Error err = Error_none();
+	_gotoIfError(clean, vkCheck(vkEndCommandBuffer(commandBuffer)));
+
+	//Submit only the copy command list
+
+	U64 waitValue = device->submitId - 1;
+
+	VkTimelineSemaphoreSubmitInfo timelineInfo = (VkTimelineSemaphoreSubmitInfo) {
+		.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO,
+		.waitSemaphoreValueCount = device->submitId > 0,
+		.pWaitSemaphoreValues = device->submitId > 0 ? &waitValue : NULL,
+	};
+
+	VkSubmitInfo submitInfo = (VkSubmitInfo) {
+		.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+		.pNext = &timelineInfo,
+		.waitSemaphoreCount = timelineInfo.waitSemaphoreValueCount,
+		.pWaitSemaphores = (VkSemaphore*) &deviceExt->commitSemaphore,
+		.pCommandBuffers = &commandBuffer,
+		.commandBufferCount = 1
+	};
+
+	VkCommandQueue queue = deviceExt->queues[EVkCommandQueue_Graphics];
+	_gotoIfError(clean, vkCheck(vkQueueSubmit(queue.queue, 1, &submitInfo, VK_NULL_HANDLE)));
+
+	//Wait for the device
+
+	_gotoIfError(clean, GraphicsDeviceRef_wait(deviceRef));
+
+	//Reset command list
+
+	U32 threadId = 0;
+
+	VkCommandAllocator *allocator = VkGraphicsDevice_getCommandAllocator(
+		deviceExt, queue.resolvedQueueId, threadId, (U8)(device->submitId % 3)
+	);
+
+	_gotoIfError(clean, vkCheck(vkResetCommandPool(
+		deviceExt->device, allocator->pool, VK_COMMAND_POOL_RESET_RELEASE_RESOURCES_BIT
+	)));
+
+	//Re-open
+
+	VkCommandBufferBeginInfo beginInfo = (VkCommandBufferBeginInfo) {
+		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO
+	};
+
+	_gotoIfError(clean, vkCheck(vkBeginCommandBuffer(commandBuffer, &beginInfo)));
+
+clean:
 	return err;
 }

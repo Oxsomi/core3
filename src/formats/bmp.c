@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -85,7 +85,7 @@ Error BMP_write(Buffer buf, BMPInfo info, Allocator allocator, Buffer *result) {
 	BMPInfoHeader infoHeader = (BMPInfoHeader) {
 		.headerSize = sizeof(BMPInfoHeader),
 		.width = (I32) info.w,
-		.height = (I32) info.h * (info.isFlipped ? -1 : 1),
+		.height = (I32) info.h * (info.isFlipped ? 1 : -1),
 		.planes = 1,
 		.bitCount = info.discardAlpha ? 24 : 32,
 		.xPixPerM = info.xPixPerM,
@@ -120,8 +120,8 @@ Error BMP_write(Buffer buf, BMPInfo info, Allocator allocator, Buffer *result) {
 			U64 srcOff = 0, dstOff = 0;
 
 			for (
-				; 
-				srcOff + sizeof(U64) <= 4 * info.w && dstOff + sizeof(U64) <= stride; 
+				;
+				srcOff + sizeof(U64) <= 4 * info.w && dstOff + sizeof(U64) <= stride;
 				srcOff += sizeof(U64), dstOff += 3 * 2
 			) {
 
@@ -176,8 +176,8 @@ Error BMP_read(Buffer buf, BMPInfo *info, Allocator allocator, Buffer *result) {
 	_gotoIfError(clean, Buffer_consume(&buf, &header, sizeof(header)));
 
 	if(
-		header.fileType != BMP_MAGIC || 
-		header.offsetData < reqHeadersSize || 
+		header.fileType != BMP_MAGIC ||
+		header.offsetData < reqHeadersSize ||
 		header.fileSize != ogLength ||
 		header.reserved
 	)
@@ -207,7 +207,7 @@ Error BMP_read(Buffer buf, BMPInfo *info, Allocator allocator, Buffer *result) {
 	)
 		_gotoIfError(clean, Error_invalidParameter(0, 0, "BMP_read()::buf didn't contain valid header"));
 
-	info->isFlipped = bmpInfo.height < 0;
+	info->isFlipped = bmpInfo.height > 0;		//We have to flip BMP
 	info->xPixPerM = bmpInfo.xPixPerM;
 	info->yPixPerM = bmpInfo.yPixPerM;
 	info->discardAlpha = bmpInfo.bitCount == 24;
@@ -216,8 +216,8 @@ Error BMP_read(Buffer buf, BMPInfo *info, Allocator allocator, Buffer *result) {
 		bmpInfo.height *= -1;
 
 	if(
-		(bmpInfo.bitCount != 32 && bmpInfo.bitCount != 24) || 
-		(bmpInfo.compression != 3 && bmpInfo.compression) || 
+		(bmpInfo.bitCount != 32 && bmpInfo.bitCount != 24) ||
+		(bmpInfo.compression != 3 && bmpInfo.compression) ||
 		(bmpInfo.compressedSize != len && bmpInfo.compressedSize)
 	)
 		_gotoIfError(clean, Error_invalidParameter(
@@ -268,8 +268,8 @@ Error BMP_read(Buffer buf, BMPInfo *info, Allocator allocator, Buffer *result) {
 			U64 dstOff = 0, srcOff = 0;
 
 			for (
-				; 
-				dstOff + sizeof(U64) <= 4 * info->w && srcOff + sizeof(U64) <= stride; 
+				;
+				dstOff + sizeof(U64) <= 4 * info->w && srcOff + sizeof(U64) <= stride;
 				dstOff += sizeof(U64), srcOff += 3 * 2
 			) {
 

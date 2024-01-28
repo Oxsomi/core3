@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -99,7 +99,7 @@ void Time_format(Ns time, TimeFormat timeString, Bool isLocalTime) {
 	struct tm *t = isLocalTime ? localtime(&inSecs) : gmtime(&inSecs);
 
 	Buffer_copy(
-		Buffer_createRef(timeString, _SHORTSTRING_LEN), 
+		Buffer_createRef(timeString, _SHORTSTRING_LEN),
 		Buffer_createRefConst(FORMAT_STR, sizeof(FORMAT_STR))
 	);
 
@@ -214,15 +214,15 @@ Bool Time_parseFormat(Ns *time, TimeFormat format, Bool isLocalTime) {
 Ns Time_date(U16 year, U8 month, U8 day, U8 hour, U8 minute, U8 second, U32 ns, Bool isLocalTime) {
 
 	if(
-		year < 1970 || 
-		month < 1 || month > 12 || 
-		day > 31 || 
+		year < 1970 ||
+		month < 1 || month > 12 ||
+		day > 31 ||
 		hour >= 24 || minute >= 60 || second >= 60 ||
 		ns >= SECOND
 	)
 		return U64_MAX;
 
-	struct tm tm = { 
+	struct tm tm = {
 		.tm_year = year - 1900, .tm_mon = month - 1, .tm_mday = day,
 		.tm_hour = hour, .tm_min = minute, .tm_sec = second
 	};

@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -149,13 +149,13 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 	Error err = Error_none();
 	ELockAcquire acq = ELockAcquire_Invalid;
 
-	VkDeviceBufferMemoryRequirementsKHR bufferReq = (VkDeviceBufferMemoryRequirementsKHR) { 
+	VkDeviceBufferMemoryRequirementsKHR bufferReq = (VkDeviceBufferMemoryRequirementsKHR) {
 		.sType = VK_STRUCTURE_TYPE_DEVICE_BUFFER_MEMORY_REQUIREMENTS_KHR,
 		.pCreateInfo = &bufferInfo
 	};
 
-	VkMemoryDedicatedRequirements dedicatedReq = { 
-		.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_REQUIREMENTS 
+	VkMemoryDedicatedRequirements dedicatedReq = {
+		.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_REQUIREMENTS
 	};
 
 	VkMemoryRequirements2 requirements = (VkMemoryRequirements2) {
@@ -166,10 +166,10 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 	instanceExt->getDeviceBufferMemoryRequirements(deviceExt->device, &bufferReq, &requirements);
 
 	_gotoIfError(clean, DeviceMemoryAllocator_allocate(
-		&device->allocator, 
-		&requirements, 
-		buf->usage & EDeviceBufferUsage_CPUAllocatedBit, 
-		&buf->blockId, 
+		&device->allocator,
+		&requirements,
+		buf->usage & EDeviceBufferUsage_CPUAllocatedBit,
+		&buf->blockId,
 		&buf->blockOffset,
 		EResourceType_Buffer,
 		name
@@ -280,11 +280,6 @@ clean:
 
 	return err;
 }
-
-TList(VkMappedMemoryRange);
-TList(VkBufferCopy);
-TListImpl(VkMappedMemoryRange);
-TListImpl(VkBufferCopy);
 
 Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, DeviceBufferRef *pending) {
 
@@ -402,13 +397,13 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 				U64 len = bufferj.endRange - bufferj.startRange;
 
 				Buffer_copy(
-					Buffer_createRef(location + allocRange, len), 
+					Buffer_createRef(location + allocRange, len),
 					Buffer_createRefConst(buffer->cpuData.ptr + bufferj.startRange, len)
 				);
 
 				_gotoIfError(clean, VkDeviceBuffer_transition(
-					bufferExt, 
-					VK_PIPELINE_STAGE_2_COPY_BIT, 
+					bufferExt,
+					VK_PIPELINE_STAGE_2_COPY_BIT,
 					VK_ACCESS_2_TRANSFER_WRITE_BIT,
 					graphicsQueueId,
 					bufferj.startRange,
@@ -439,8 +434,8 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 			}
 
 			_gotoIfError(clean, VkDeviceBuffer_transition(
-				stagingResourceExt, 
-				VK_PIPELINE_STAGE_2_COPY_BIT, 
+				stagingResourceExt,
+				VK_PIPELINE_STAGE_2_COPY_BIT,
 				VK_ACCESS_2_TRANSFER_READ_BIT,
 				graphicsQueueId,
 				0,
@@ -453,10 +448,10 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 				instanceExt->cmdPipelineBarrier2(commandBuffer, &dependency);
 
 			vkCmdCopyBuffer(
-				commandBuffer, 
-				stagingResourceExt->buffer, 
-				bufferExt->buffer, 
-				(U32) pendingCopies.length, 
+				commandBuffer,
+				stagingResourceExt->buffer,
+				bufferExt->buffer,
+				(U32) pendingCopies.length,
 				pendingCopies.ptr
 			);
 
@@ -511,7 +506,7 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 				U64 len = bufferj.endRange - bufferj.startRange;
 
 				Buffer_copy(
-					Buffer_createRef(location + allocRange, len), 
+					Buffer_createRef(location + allocRange, len),
 					Buffer_createRefConst(buffer->cpuData.ptr + bufferj.startRange, len)
 				);
 
@@ -522,8 +517,8 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 				};
 
 				_gotoIfError(clean, VkDeviceBuffer_transition(
-					bufferExt, 
-					VK_PIPELINE_STAGE_2_COPY_BIT, 
+					bufferExt,
+					VK_PIPELINE_STAGE_2_COPY_BIT,
 					VK_ACCESS_2_TRANSFER_WRITE_BIT,
 					graphicsQueueId,
 					bufferj.startRange,
@@ -550,8 +545,8 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 			if(!ListRefPtr_contains(*currentFlight, device->staging, 0, NULL)) {
 
 				_gotoIfError(clean, VkDeviceBuffer_transition(						//Ensure resource is transitioned
-					stagingExt, 
-					VK_PIPELINE_STAGE_2_COPY_BIT, 
+					stagingExt,
+					VK_PIPELINE_STAGE_2_COPY_BIT,
 					VK_ACCESS_2_TRANSFER_READ_BIT,
 					graphicsQueueId,
 					(device->submitId % 3) * (staging->length / 3),
@@ -568,10 +563,10 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 				instanceExt->cmdPipelineBarrier2(commandBuffer, &dependency);
 
 			vkCmdCopyBuffer(
-				commandBuffer, 
+				commandBuffer,
 				stagingExt->buffer,
-				bufferExt->buffer, 
-				(U32) buffer->pendingChanges.length, 
+				bufferExt->buffer,
+				(U32) buffer->pendingChanges.length,
 				pendingCopies.ptr
 			);
 		}
@@ -586,58 +581,8 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 	if(RefPtr_inc(pending))
 		_gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, pending));
 
-	if (device->pendingBytes >= device->flushThreshold) {
-
-		//End current command list
-
-		_gotoIfError(clean, vkCheck(vkEndCommandBuffer(commandBuffer)));
-
-		//Submit only the copy command list
-
-		U64 waitValue = device->submitId - 1;
-
-		VkTimelineSemaphoreSubmitInfo timelineInfo = (VkTimelineSemaphoreSubmitInfo) {
-			.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO,
-			.waitSemaphoreValueCount = device->submitId > 0,
-			.pWaitSemaphoreValues = device->submitId > 0 ? &waitValue : NULL,
-		};
-
-		VkSubmitInfo submitInfo = (VkSubmitInfo) {
-			.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-			.pNext = &timelineInfo,
-			.waitSemaphoreCount = timelineInfo.waitSemaphoreValueCount,
-			.pWaitSemaphores = (VkSemaphore*) &deviceExt->commitSemaphore,
-			.pCommandBuffers = &commandBuffer,
-			.commandBufferCount = 1
-		};
-
-		VkCommandQueue queue = deviceExt->queues[EVkCommandQueue_Graphics];
-		_gotoIfError(clean, vkCheck(vkQueueSubmit(queue.queue, 1, &submitInfo, VK_NULL_HANDLE)));
-
-		//Wait for the device
-
-		_gotoIfError(clean, GraphicsDeviceRef_wait(deviceRef));
-
-		//Reset command list
-
-		U32 threadId = 0;
-
-		VkCommandAllocator *allocator = VkGraphicsDevice_getCommandAllocator(
-			deviceExt, queue.resolvedQueueId, threadId, (U8)(device->submitId % 3)
-		);
-
-		_gotoIfError(clean, vkCheck(vkResetCommandPool(
-			deviceExt->device, allocator->pool, VK_COMMAND_POOL_RESET_RELEASE_RESOURCES_BIT
-		)));
-
-		//Re-open
-
-		VkCommandBufferBeginInfo beginInfo = (VkCommandBufferBeginInfo) {
-			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO
-		};
-
-		_gotoIfError(clean, vkCheck(vkBeginCommandBuffer(commandBuffer, &beginInfo)));
-	}
+	if (device->pendingBytes >= device->flushThreshold)
+		VkGraphicsDevice_flush(deviceRef, commandBuffer);
 
 clean:
 	DeviceBufferRef_dec(&tempStagingResource);

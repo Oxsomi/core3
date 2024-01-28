@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -31,13 +31,13 @@
 #include "types/buffer.h"
 
 VkBool32 onDebugReport(
-	VkDebugReportFlagsEXT flags, 
-	VkDebugReportObjectTypeEXT objectType, 
-	U64 object, 
-	U64 location, 
-	I32 messageCode,  
-	const C8 *layerPrefix, 
-	const C8 *message, 
+	VkDebugReportFlagsEXT flags,
+	VkDebugReportObjectTypeEXT objectType,
+	U64 object,
+	U64 location,
+	I32 messageCode,
+	const C8 *layerPrefix,
+	const C8 *message,
 	void *userData
 ) {
 
@@ -86,8 +86,8 @@ TListImpl(VkExtensionProperties);
 TListImpl(VkLayerProperties);
 
 Error GraphicsInstance_createExt(
-	GraphicsApplicationInfo info, 
-	Bool isVerbose, 
+	GraphicsApplicationInfo info,
+	Bool isVerbose,
 	GraphicsInstanceRef **instanceRef,
 	U32 *version
 ) {
@@ -296,9 +296,9 @@ Error GraphicsInstance_createExt(
 		
 			.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT,
 
-			.flags = 
-				VK_DEBUG_REPORT_ERROR_BIT_EXT | 
-				VK_DEBUG_REPORT_WARNING_BIT_EXT | 
+			.flags =
+				VK_DEBUG_REPORT_ERROR_BIT_EXT |
+				VK_DEBUG_REPORT_WARNING_BIT_EXT |
 				VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT,
 
 			.pfnCallback = (PFN_vkDebugReportCallbackEXT) onDebugReport
@@ -509,7 +509,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 		if (!supported) {
 
 			Log_debugLnx(
-				"Vulkan: Unsupported device %u, one of the required extensions wasn't present (%s)", 
+				"Vulkan: Unsupported device %u, one of the required extensions wasn't present (%s)",
 				i, reqExtensionsName[firstUnavailable]
 			);
 
@@ -520,7 +520,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 
 		//Build up list of properties
 
-		VkPhysicalDeviceProperties2 properties2 = (VkPhysicalDeviceProperties2) { 
+		VkPhysicalDeviceProperties2 properties2 = (VkPhysicalDeviceProperties2) {
 			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2
 		};
 
@@ -579,7 +579,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 
 		//Build up list of features
 
-		VkPhysicalDeviceFeatures2 features2 = (VkPhysicalDeviceFeatures2) { 
+		VkPhysicalDeviceFeatures2 features2 = (VkPhysicalDeviceFeatures2) {
 			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2
 		};
 
@@ -587,14 +587,14 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 
 		getDeviceFeatures(
 			true,
-			VkPhysicalDeviceDescriptorIndexingFeatures, 
-			descriptorIndexing, 
+			VkPhysicalDeviceDescriptorIndexingFeatures,
+			descriptorIndexing,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES
 		);
 
 		getDeviceFeatures(
 			optExtensions[EOptExtensions_DynamicRendering],
-			VkPhysicalDeviceDynamicRenderingFeatures, 
+			VkPhysicalDeviceDynamicRenderingFeatures,
 			dynamicRendering,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES
 		);
@@ -713,7 +713,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 		//Ensure device is compatible first
 
 		if(
-			!features.shaderInt16 || 
+			!features.shaderInt16 ||
 			!features.shaderSampledImageArrayDynamicIndexing ||
 			!features.shaderStorageBufferArrayDynamicIndexing ||
 			!features.shaderUniformBufferArrayDynamicIndexing ||
@@ -734,7 +734,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 
 		VkSampleCountFlags requiredMSAA = VK_SAMPLE_COUNT_1_BIT | VK_SAMPLE_COUNT_4_BIT;
 
-		VkSampleCountFlags allMSAA = 
+		VkSampleCountFlags allMSAA =
 			limits.framebufferColorSampleCounts &
 			limits.framebufferDepthSampleCounts &
 			limits.framebufferNoAttachmentsSampleCounts &
@@ -796,12 +796,12 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 				U64_min(
 					U64_min(
 						U64_min(
-							limits.maxTessellationControlPerVertexInputComponents, 
+							limits.maxTessellationControlPerVertexInputComponents,
 							limits.maxTessellationControlPerVertexOutputComponents
 						),
 						limits.maxTessellationEvaluationInputComponents
 					),
-					limits.maxTessellationEvaluationOutputComponents 
+					limits.maxTessellationEvaluationOutputComponents
 				) < 124 ||
 				limits.maxTessellationControlTotalOutputComponents < 4088 ||
 				limits.maxTessellationControlPerPatchOutputComponents < 120 ||
@@ -914,7 +914,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 			);
 
 			eq = Buffer_eq(
-				Buffer_createRefConst(&target.shaderUniformTexelBufferArrayDynamicIndexing, sz), 
+				Buffer_createRefConst(&target.shaderUniformTexelBufferArrayDynamicIndexing, sz),
 				Buffer_createRefConst(&descriptorIndexing.shaderUniformTexelBufferArrayDynamicIndexing, sz)
 			);
 
@@ -951,8 +951,8 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 
 		//Subgroup operations
 
-		VkSubgroupFeatureFlags requiredSubOp = 
-			VK_SUBGROUP_FEATURE_BASIC_BIT | 
+		VkSubgroupFeatureFlags requiredSubOp =
+			VK_SUBGROUP_FEATURE_BASIC_BIT |
 			VK_SUBGROUP_FEATURE_VOTE_BIT |
 			VK_SUBGROUP_FEATURE_BALLOT_BIT;
 
@@ -975,8 +975,8 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 		//Mesh shaders
 
 		if(optExtensions[EOptExtensions_MeshShader] && !(
-			!meshShader.taskShader || 
-			!meshShader.primitiveFragmentShadingRateMeshShader || 
+			!meshShader.taskShader ||
+			!meshShader.primitiveFragmentShadingRateMeshShader ||
 			!meshShader.multiviewMeshShader ||
 			meshShaderProp.maxMeshMultiviewViewCount < 4 ||
 			meshShaderProp.maxMeshOutputComponents < 127 ||
@@ -999,14 +999,14 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 			meshShaderProp.maxTaskWorkGroupSize[1] < 128 ||
 			meshShaderProp.maxTaskWorkGroupSize[2] < 128 ||
 			meshShaderProp.maxMeshWorkGroupTotalCount < 4 * MIBI ||
-			meshShaderProp.maxPreferredMeshWorkGroupInvocations < 32 || 
-			meshShaderProp.maxPreferredTaskWorkGroupInvocations < 32 || 
-			meshShaderProp.meshOutputPerPrimitiveGranularity < 32 || 
-			meshShaderProp.meshOutputPerVertexGranularity < 32 || 
-			meshShaderProp.maxTaskPayloadAndSharedMemorySize < 32 * KIBI || 
-			meshShaderProp.maxTaskPayloadSize < 16 * KIBI || 
-			meshShaderProp.maxTaskSharedMemorySize < 32 * KIBI || 
-			meshShaderProp.maxTaskWorkGroupTotalCount < 4 * MIBI || 
+			meshShaderProp.maxPreferredMeshWorkGroupInvocations < 32 ||
+			meshShaderProp.maxPreferredTaskWorkGroupInvocations < 32 ||
+			meshShaderProp.meshOutputPerPrimitiveGranularity < 32 ||
+			meshShaderProp.meshOutputPerVertexGranularity < 32 ||
+			meshShaderProp.maxTaskPayloadAndSharedMemorySize < 32 * KIBI ||
+			meshShaderProp.maxTaskPayloadSize < 16 * KIBI ||
+			meshShaderProp.maxTaskSharedMemorySize < 32 * KIBI ||
+			meshShaderProp.maxTaskWorkGroupTotalCount < 4 * MIBI ||
 			!meshShaderProp.prefersCompactPrimitiveOutput
 		))
 			capabilities.features |= EGraphicsFeatures_MeshShader;
@@ -1213,7 +1213,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 			VK_FORMAT_D32_SFLOAT
 		};
 
-		VkFormatFeatureFlags reqFormatDef = 
+		VkFormatFeatureFlags reqFormatDef =
 			VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT |
 			VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT |
 			VK_FORMAT_FEATURE_BLIT_DST_BIT |
@@ -1221,9 +1221,9 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 			VK_FORMAT_FEATURE_TRANSFER_DST_BIT |
 			VK_FORMAT_FEATURE_TRANSFER_SRC_BIT;
 
-		VkFormatFeatureFlags depthStencilDef = 
-			VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT | 
-			VK_FORMAT_FEATURE_BLIT_SRC_BIT | 
+		VkFormatFeatureFlags depthStencilDef =
+			VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT |
+			VK_FORMAT_FEATURE_BLIT_SRC_BIT |
 			VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT;
 
 		VkFormatFeatureFlags reqFormatFeatFlags[] = {
@@ -1239,7 +1239,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 
 			reqFormatDef, reqFormatDef,
 
-			//BGRA8 
+			//BGRA8
 
 			VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT,
 
@@ -1283,7 +1283,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 
 		} OptionalFormat;
 
-		OptionalFormat optionalFormats[]  = { 
+		OptionalFormat optionalFormats[]  = {
 
 			(OptionalFormat) {
 				.format = VK_FORMAT_R32G32B32_SFLOAT,
@@ -1291,25 +1291,25 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 				.flags = reqFormatDef
 			},
 
-			(OptionalFormat) { 
+			(OptionalFormat) {
 				.format = VK_FORMAT_R32G32B32_SINT,
 				.optFormat = EGraphicsDataTypes_RGB32i,
 				.flags = reqFormatDef
 			},
 
-			(OptionalFormat) { 
+			(OptionalFormat) {
 				.format = VK_FORMAT_R32G32B32_UINT,
 				.optFormat = EGraphicsDataTypes_RGB32u,
-				.flags = reqFormatDef 
+				.flags = reqFormatDef
 			},
 
-			(OptionalFormat) { 
+			(OptionalFormat) {
 				.format = VK_FORMAT_D24_UNORM_S8_UINT,
 				.optFormat = EGraphicsDataTypes_D24S8,
 				.flags = depthStencilDef
 			},
 
-			(OptionalFormat) { 
+			(OptionalFormat) {
 				.format = VK_FORMAT_S8_UINT,
 				.optFormat = EGraphicsDataTypes_S8,
 				.flags = depthStencilDef
@@ -1355,17 +1355,17 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 		};
 
 		Buffer_copy(
-			Buffer_createRef(info->name, sizeof(info->name)), 
+			Buffer_createRef(info->name, sizeof(info->name)),
 			Buffer_createRefConst(properties.deviceName, sizeof(properties.deviceName))
 		);
 
 		Buffer_copy(
-			Buffer_createRef(info->driverName, sizeof(info->driverName)), 
+			Buffer_createRef(info->driverName, sizeof(info->driverName)),
 			Buffer_createRefConst(driver.driverName, sizeof(driver.driverName))
 		);
 
 		Buffer_copy(
-			Buffer_createRef(info->driverInfo, sizeof(info->driverInfo)), 
+			Buffer_createRef(info->driverInfo, sizeof(info->driverInfo)),
 			Buffer_createRefConst(driver.driverInfo, sizeof(driver.driverInfo))
 		);
 

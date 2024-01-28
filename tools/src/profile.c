@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -170,9 +170,9 @@ Error _CLI_profileCast(ParsedArgs args, Buffer buf) {
 				Ns now = Time_now();
 
 				Log_debugLnx(
-					"%s: %llux %s -> %s within %fs (%fns/op). (Operation hash: %llu)", 
-					iterationNames[l], number, 
-					floatTypeNames[k], floatTypeNames[j], 
+					"%s: %llux %s -> %s within %fs (%fns/op). (Operation hash: %llu)",
+					iterationNames[l], number,
+					floatTypeNames[k], floatTypeNames[j],
 					(F64)(now - then) / SECOND,
 					(F64)(now - then) / number,
 					temp
@@ -187,7 +187,7 @@ Error _CLI_profileCast(ParsedArgs args, Buffer buf) {
 	U64 totalIt = itCount * floatTypes * (floatTypes - 1) * number;
 
 	Log_debugLnx(
-		"Performed %llu casts within %fs. Avg time per cast %fns.", 
+		"Performed %llu casts within %fs. Avg time per cast %fns.",
 		totalIt,
 		(F64)(nowOuter - thenOuter) / SECOND,
 		(F64)(nowOuter - thenOuter) / totalIt
@@ -213,7 +213,7 @@ Error _CLI_profileRNG(ParsedArgs args, Buffer buf) {
 	Ns now = Time_now();
 
 	Log_debugLnx(
-		"Profile RNG: %llu bytes within %fs (%fns/byte, %fbytes/sec).", 
+		"Profile RNG: %llu bytes within %fs (%fns/byte, %fbytes/sec).",
 		Buffer_length(buf),
 		(F64)(now - then) / SECOND,
 		(F64)(now - then) / Buffer_length(buf),
@@ -238,7 +238,7 @@ Error _CLI_profileCRC32C(ParsedArgs args, Buffer buf) {
 	Ns now = Time_now();
 
 	Log_debugLnx(
-		"Profile CRC32C: %llu bytes within %fs (%fns/byte, %fbytes/sec). Random hash %u.", 
+		"Profile CRC32C: %llu bytes within %fs (%fns/byte, %fbytes/sec). Random hash %u.",
 		Buffer_length(buf),
 		(F64)(now - then) / SECOND,
 		(F64)(now - then) / Buffer_length(buf),
@@ -265,7 +265,7 @@ Error _CLI_profileSHA256(ParsedArgs args, Buffer buf) {
 	Ns now = Time_now();
 
 	Log_debugLnx(
-		"Profile SHA256: %llu bytes within %fs (%fns/byte, %fbytes/sec). Random hash %08x%08x%08x%08x%08x%08x%08x%08x.", 
+		"Profile SHA256: %llu bytes within %fs (%fns/byte, %fbytes/sec). Random hash %08x%08x%08x%08x%08x%08x%08x%08x.",
 		Buffer_length(buf),
 		(F64)(now - then) / SECOND,
 		(F64)(now - then) / Buffer_length(buf),
@@ -291,9 +291,9 @@ Error _CLI_profileEncryption(ParsedArgs args, Buffer buf, EBufferEncryptionType 
 	I32x4 iv, tag;
 
 	Error err = Buffer_encrypt(
-		buf, 
-		Buffer_createNull(), 
-		encryptionType, 
+		buf,
+		Buffer_createNull(),
+		encryptionType,
 		EBufferEncryptionFlags_GenerateIv | EBufferEncryptionFlags_GenerateKey,
 		key,
 		&iv,
@@ -305,7 +305,7 @@ Error _CLI_profileEncryption(ParsedArgs args, Buffer buf, EBufferEncryptionType 
 	Ns now = Time_now();
 
 	Log_debugLnx(
-		"Encrypt AES GCM: %llu bytes within %fs (%fns/byte, %fbytes/sec).", 
+		"Encrypt AES GCM: %llu bytes within %fs (%fns/byte, %fbytes/sec).",
 		Buffer_length(buf),
 		(F64)(now - then) / SECOND,
 		(F64)(now - then) / Buffer_length(buf),
@@ -316,8 +316,8 @@ Error _CLI_profileEncryption(ParsedArgs args, Buffer buf, EBufferEncryptionType 
 
 	_gotoIfError(clean, Buffer_decrypt(
 		buf,
-		Buffer_createNull(), 
-		encryptionType, 
+		Buffer_createNull(),
+		encryptionType,
 		key,
 		tag,
 		iv
@@ -326,7 +326,7 @@ Error _CLI_profileEncryption(ParsedArgs args, Buffer buf, EBufferEncryptionType 
 	now = Time_now();
 
 	Log_debugLnx(
-		"Decrypt AES GCM: %llu bytes within %fs (%fns/byte, %fbytes/sec).", 
+		"Decrypt AES GCM: %llu bytes within %fs (%fns/byte, %fbytes/sec).",
 		Buffer_length(buf),
 		(F64)(now - then) / SECOND,
 		(F64)(now - then) / Buffer_length(buf),

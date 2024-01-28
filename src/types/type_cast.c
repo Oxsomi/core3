@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -75,7 +75,7 @@ _FLP_FROMBITS(F64, U64);
 Error T##_fromUInt(U64 v, T *res)		_CastFromU(T, (U64)v)											\
 Error T##_fromInt(I64 v, T *res)		_CastFromI(T, TUint, (U64)v)									\
 Error T##_fromFloat(F32 v, T *res)		_CastFromF(T) 													\
-Error T##_fromDouble(F64 v, T *res)		_CastFromD(T) 
+Error T##_fromDouble(F64 v, T *res)		_CastFromD(T)
 
 _ITOF(I8, U8);
 _ITOF(I16, U16);
@@ -101,7 +101,7 @@ Error I64_fromDouble(F64 v, I64 *res)	_CastFromD(I64)
 Error T##_fromUInt(U64 v, T *res)		_CastFromU(T, (U64)v)								\
 Error T##_fromInt(I64 v, T *res)		_CastFromI(T, T, (U64)v)							\
 Error T##_fromFloat(F32 v, T *res)		_CastFromF(T) 										\
-Error T##_fromDouble(F64 v, T *res)		_CastFromD(T) 
+Error T##_fromDouble(F64 v, T *res)		_CastFromD(T)
 
 _UTOF(U8);
 _UTOF(U16);

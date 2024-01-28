@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -165,7 +165,7 @@ void Operations_init() {
 		.supportedCategories = { EOperationCategory_File }
 	};
 
-	Format_values[EFormat_oiDL] = (Format) { 
+	Format_values[EFormat_oiDL] = (Format) {
 		.name = "oiDL",
 		.desc = "Oxsomi Data List; an indexed list of data, can be text (ASCII/UTF8) or binary data.",
 		.operationFlags = EOperationFlags_Default | EOperationFlags_Ascii | EOperationFlags_UTF8,
@@ -175,27 +175,27 @@ void Operations_init() {
 		.supportedCategories = { EOperationCategory_File }
 	};
 
-	Operation_values[EOperation_FileTo] = (Operation) { 
-		.category = EOperationCategory_File, 
-		.name = "to", 
-		.desc = "Converting from a non native file format to a native file format.", 
+	Operation_values[EOperation_FileTo] = (Operation) {
+		.category = EOperationCategory_File,
+		.name = "to",
+		.desc = "Converting from a non native file format to a native file format.",
 		.func = &CLI_convertTo
 	};
 
-	Operation_values[EOperation_FileFrom] = (Operation) { 
-		.category = EOperationCategory_File, 
-		.name = "from", 
-		.desc = "Converting to a non native file format from a native file format.", 
+	Operation_values[EOperation_FileFrom] = (Operation) {
+		.category = EOperationCategory_File,
+		.name = "from",
+		.desc = "Converting to a non native file format from a native file format.",
 		.func = &CLI_convertFrom
 	};
 
 	//Encryption
 
-	Operation_values[EOperation_FileEncr] = (Operation) { 
+	Operation_values[EOperation_FileEncr] = (Operation) {
 
-		.category = EOperationCategory_File, 
-		.name = "encr", 
-		.desc = "Encrypt a file or folder.", 
+		.category = EOperationCategory_File,
+		.name = "encr",
+		.desc = "Encrypt a file or folder.",
 		.func = &CLI_encryptDo,
 
 		.isFormatLess = true,
@@ -204,11 +204,11 @@ void Operations_init() {
 		.optionalParameters = EOperationHasParameter_Output
 	};
 
-	Operation_values[EOperation_FileDecr] = (Operation) { 
+	Operation_values[EOperation_FileDecr] = (Operation) {
 
-		.category = EOperationCategory_File, 
-		.name = "decr", 
-		.desc = "Decrypt a file or folder.", 
+		.category = EOperationCategory_File,
+		.name = "decr",
+		.desc = "Decrypt a file or folder.",
 		.func = &CLI_encryptUndo,
 
 		.isFormatLess = true,
@@ -218,28 +218,28 @@ void Operations_init() {
 
 	//Inspection
 
-	Operation_values[EOperation_FileHeader] = (Operation) { 
+	Operation_values[EOperation_FileHeader] = (Operation) {
 
-		.category = EOperationCategory_File, 
-		.name = "header", 
-		.desc = "Inspect the file header of oiXX files.", 
+		.category = EOperationCategory_File,
+		.name = "header",
+		.desc = "Inspect the file header of oiXX files.",
 		.func = &CLI_inspectHeader,
 
 		.isFormatLess = true,
 		.requiredParameters = EOperationHasParameter_Input
 	};
 
-	Operation_values[EOperation_FileData] = (Operation) { 
+	Operation_values[EOperation_FileData] = (Operation) {
 
-		.category = EOperationCategory_File, 
-		.name = "data", 
-		.desc = "Inspect the file data of oiXX files.", 
+		.category = EOperationCategory_File,
+		.name = "data",
+		.desc = "Inspect the file data of oiXX files.",
 		.func = &CLI_inspectData,
 
 		.isFormatLess = true,
 		.requiredParameters = EOperationHasParameter_Input,
-		.optionalParameters = 
-			EOperationHasParameter_AES | EOperationHasParameter_Output | 
+		.optionalParameters =
+			EOperationHasParameter_AES | EOperationHasParameter_Output |
 			EOperationHasParameter_Entry | EOperationHasParameter_StartOffset | EOperationHasParameter_Length
 	};
 
@@ -255,7 +255,7 @@ void Operations_init() {
 		.supportedCategories = { EOperationCategory_Hash }
 	};
 
-	Format_values[EFormat_SHA256] = (Format) { 
+	Format_values[EFormat_SHA256] = (Format) {
 		.name = "SHA256",
 		.desc = "SHA256 (256-bit hash)",
 		.operationFlags = EOperationFlags_None,
@@ -265,28 +265,28 @@ void Operations_init() {
 		.supportedCategories = { EOperationCategory_Hash }
 	};
 
-	Operation_values[EOperation_HashString] = (Operation) { 
-		.category = EOperationCategory_Hash, 
-		.name = "string", 
-		.desc = "Hashing a string.", 
+	Operation_values[EOperation_HashString] = (Operation) {
+		.category = EOperationCategory_Hash,
+		.name = "string",
+		.desc = "Hashing a string.",
 		.func = &CLI_hashString
 	};
 
-	Operation_values[EOperation_HashFile] = (Operation) { 
-		.category = EOperationCategory_Hash, 
-		.name = "file", 
-		.desc = "Hashing a file.", 
+	Operation_values[EOperation_HashFile] = (Operation) {
+		.category = EOperationCategory_Hash,
+		.name = "file",
+		.desc = "Hashing a file.",
 		.func = &CLI_hashFile
 	};
 
 	//Random operations
 
-	Operation_values[EOperation_RandKey] = (Operation) { 
+	Operation_values[EOperation_RandKey] = (Operation) {
 
-		.category = EOperationCategory_Rand, 
+		.category = EOperationCategory_Rand,
 
-		.name = "key", 
-		.desc = "Generating a key for AES256 (or other purposes), in hex format.", 
+		.name = "key",
+		.desc = "Generating a key for AES256 (or other purposes), in hex format.",
 
 		.func = &CLI_randKey,
 
@@ -295,30 +295,30 @@ void Operations_init() {
 		.optionalParameters = EOperationHasParameter_Number | EOperationHasParameter_Length | EOperationHasParameter_Output
 	};
 
-	Operation_values[EOperation_RandChar] = (Operation) { 
+	Operation_values[EOperation_RandChar] = (Operation) {
 
-		.category = EOperationCategory_Rand, 
+		.category = EOperationCategory_Rand,
 
-		.name = "char", 
-		.desc = "Generating a random sequence of characters.", 
+		.name = "char",
+		.desc = "Generating a random sequence of characters.",
 
 		.func = &CLI_randChar,
 
 		.isFormatLess = true,
 
-		.optionalParameters = 
-			EOperationHasParameter_Number | EOperationHasParameter_Length | 
+		.optionalParameters =
+			EOperationHasParameter_Number | EOperationHasParameter_Length |
 			EOperationHasParameter_Output | EOperationHasParameter_Character,
 		
 		.operationFlags = EOperationFlags_RandChar
 	};
 
-	Operation_values[EOperation_RandData] = (Operation) { 
+	Operation_values[EOperation_RandData] = (Operation) {
 
-		.category = EOperationCategory_Rand, 
+		.category = EOperationCategory_Rand,
 
-		.name = "data", 
-		.desc = "Generating random bytes. As hexdump if no output is specified.", 
+		.name = "data",
+		.desc = "Generating random bytes. As hexdump if no output is specified.",
 
 		.func = &CLI_randData,
 
@@ -327,19 +327,19 @@ void Operations_init() {
 		.optionalParameters = EOperationHasParameter_Number | EOperationHasParameter_Length | EOperationHasParameter_Output
 	};
 
-	Operation_values[EOperation_RandNum] = (Operation) { 
+	Operation_values[EOperation_RandNum] = (Operation) {
 
-		.category = EOperationCategory_Rand, 
+		.category = EOperationCategory_Rand,
 
-		.name = "num", 
-		.desc = "Generating random numbers (in text form).", 
+		.name = "num",
+		.desc = "Generating random numbers (in text form).",
 
 		.func = &CLI_randNum,
 
 		.isFormatLess = true,
 
-		.optionalParameters = 
-			EOperationHasParameter_Number | EOperationHasParameter_Length | EOperationHasParameter_Output | 
+		.optionalParameters =
+			EOperationHasParameter_Number | EOperationHasParameter_Length | EOperationHasParameter_Output |
 			EOperationHasParameter_Bit,
 
 		.operationFlags = EOperationFlags_RandNum
@@ -347,12 +347,12 @@ void Operations_init() {
 
 	//Package file for virtual file system
 
-	Operation_values[EOperation_Package] = (Operation) { 
+	Operation_values[EOperation_Package] = (Operation) {
 
-		.category = EOperationCategory_File, 
+		.category = EOperationCategory_File,
 
-		.name = "package", 
-		.desc = "Package files such as shaders, textures and models into an oiCA as Oxsomi file formats.", 
+		.name = "package",
+		.desc = "Package files such as shaders, textures and models into an oiCA as Oxsomi file formats.",
 
 		.func = &CLI_package,
 
@@ -364,24 +364,24 @@ void Operations_init() {
 
 	//License for the tool
 
-	Operation_values[EOperation_InfoLicense] = (Operation) { 
+	Operation_values[EOperation_InfoLicense] = (Operation) {
 
-		.category = EOperationCategory_Info, 
+		.category = EOperationCategory_Info,
 
-		.name = "license", 
-		.desc = "Shows the license.", 
+		.name = "license",
+		.desc = "Shows the license.",
 
 		.func = &CLI_info,
 
 		.isFormatLess = true
 	};
 
-	Operation_values[EOperation_InfoAbout] = (Operation) { 
+	Operation_values[EOperation_InfoAbout] = (Operation) {
 
-		.category = EOperationCategory_Info, 
+		.category = EOperationCategory_Info,
 
-		.name = "about", 
-		.desc = "Shows information about the tool.", 
+		.name = "about",
+		.desc = "Shows information about the tool.",
 
 		.func = &CLI_info,
 
@@ -390,72 +390,72 @@ void Operations_init() {
 
 	//Profile
 
-	Operation_values[EOperation_ProfileCast] = (Operation) { 
+	Operation_values[EOperation_ProfileCast] = (Operation) {
 
-		.category = EOperationCategory_Profile, 
+		.category = EOperationCategory_Profile,
 
-		.name = "cast", 
-		.desc = "Profiles casting operations from random halfs/floats/doubles to other float types.", 
+		.name = "cast",
+		.desc = "Profiles casting operations from random halfs/floats/doubles to other float types.",
 
 		.func = &CLI_profileCast,
 
 		.isFormatLess = true
 	};
 
-	Operation_values[EOperation_ProfileRNG] = (Operation) { 
+	Operation_values[EOperation_ProfileRNG] = (Operation) {
 
-		.category = EOperationCategory_Profile, 
+		.category = EOperationCategory_Profile,
 
-		.name = "rng", 
-		.desc = "Profiles generating random numbers using CSPRNG (Cryptographically Secure pseudo RNG).", 
+		.name = "rng",
+		.desc = "Profiles generating random numbers using CSPRNG (Cryptographically Secure pseudo RNG).",
 
 		.func = &CLI_profileRNG,
 
 		.isFormatLess = true
 	};
 
-	Operation_values[EOperation_ProfileCRC32C] = (Operation) { 
+	Operation_values[EOperation_ProfileCRC32C] = (Operation) {
 
-		.category = EOperationCategory_Profile, 
+		.category = EOperationCategory_Profile,
 
-		.name = "crc32c", 
-		.desc = "Profiles hashing random data using crc32c.", 
+		.name = "crc32c",
+		.desc = "Profiles hashing random data using crc32c.",
 
 		.func = &CLI_profileCRC32C,
 
 		.isFormatLess = true
 	};
 
-	Operation_values[EOperation_ProfileSHA256] = (Operation) { 
+	Operation_values[EOperation_ProfileSHA256] = (Operation) {
 
-		.category = EOperationCategory_Profile, 
+		.category = EOperationCategory_Profile,
 
-		.name = "sha256", 
-		.desc = "Profiles hashing random data using sha256.", 
+		.name = "sha256",
+		.desc = "Profiles hashing random data using sha256.",
 
 		.func = &CLI_profileSHA256,
 
 		.isFormatLess = true
 	};
 
-	Operation_values[EOperation_ProfileAES256] = (Operation) { 
+	Operation_values[EOperation_ProfileAES256] = (Operation) {
 
-		.category = EOperationCategory_Profile, 
+		.category = EOperationCategory_Profile,
 
-		.name = "aes256", 
-		.desc = "Profiles encrypting and decrypting random data using aes256-gcm.", 
+		.name = "aes256",
+		.desc = "Profiles encrypting and decrypting random data using aes256-gcm.",
 
 		.func = &CLI_profileAES256,
 
 		.isFormatLess = true
 	};
 
-	Operation_values[EOperation_ProfileAES128] = (Operation) { 
+	Operation_values[EOperation_ProfileAES128] = (Operation) {
 
-		.category = EOperationCategory_Profile, 
+		.category = EOperationCategory_Profile,
 
-		.name = "aes128", 
-		.desc = "Profiles encrypting and decrypting random data using aes128-gcm.", 
+		.name = "aes128",
+		.desc = "Profiles encrypting and decrypting random data using aes128-gcm.",
 
 		.func = &CLI_profileAES128,
 
@@ -464,38 +464,24 @@ void Operations_init() {
 
 	//Help operations
 
-	Operation_values[EOperation_HelpCategories] = (Operation) { 
+	Operation_values[EOperation_HelpCategories] = (Operation) {
 
-		.category = EOperationCategory_Help, 
+		.category = EOperationCategory_Help,
 
-		.name = "categories", 
-		.desc = "Help to see all categories.", 
+		.name = "categories",
+		.desc = "Help to see all categories.",
 
 		.func = &CLI_helpOperation,
 
 		.isFormatLess = true
 	};
 
-	Operation_values[EOperation_HelpOperations] = (Operation) { 
+	Operation_values[EOperation_HelpOperations] = (Operation) {
 
-		.category = EOperationCategory_Help, 
+		.category = EOperationCategory_Help,
 
-		.name = "operations", 
-		.desc = "Help to see all operations in the category mentioned by -i.", 
-
-		.func = &CLI_helpOperation,
-
-		.isFormatLess = true,
-
-		.requiredParameters = EOperationHasParameter_Input
-	};
-
-	Operation_values[EOperation_HelpOperation] = (Operation) { 
-
-		.category = EOperationCategory_Help, 
-
-		.name = "operation", 
-		.desc = "Help to see all information about the operation mentioned by -i (category:operation or category).", 
+		.name = "operations",
+		.desc = "Help to see all operations in the category mentioned by -i.",
 
 		.func = &CLI_helpOperation,
 
@@ -504,12 +490,26 @@ void Operations_init() {
 		.requiredParameters = EOperationHasParameter_Input
 	};
 
-	Operation_values[EOperation_HelpFormat] = (Operation) { 
+	Operation_values[EOperation_HelpOperation] = (Operation) {
 
-		.category = EOperationCategory_Help, 
+		.category = EOperationCategory_Help,
 
-		.name = "format", 
-		.desc = "Help to see all information about the format mentioned by -i (category:operation:format).", 
+		.name = "operation",
+		.desc = "Help to see all information about the operation mentioned by -i (category:operation or category).",
+
+		.func = &CLI_helpOperation,
+
+		.isFormatLess = true,
+
+		.requiredParameters = EOperationHasParameter_Input
+	};
+
+	Operation_values[EOperation_HelpFormat] = (Operation) {
+
+		.category = EOperationCategory_Help,
+
+		.name = "format",
+		.desc = "Help to see all information about the format mentioned by -i (category:operation:format).",
 
 		.func = &CLI_helpOperation,
 

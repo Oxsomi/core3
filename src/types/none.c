@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -26,16 +26,16 @@
 
 	//Cast
 
-	F32x4 F32x4_fromI32x4(I32x4 a) { 
-		return (F32x4) { .v = { 
-			(F32) I32x4_x(a), (F32) I32x4_y(a), (F32) I32x4_z(a), (F32) I32x4_w(a) 
-		} }; 
+	F32x4 F32x4_fromI32x4(I32x4 a) {
+		return (F32x4) { .v = {
+			(F32) I32x4_x(a), (F32) I32x4_y(a), (F32) I32x4_z(a), (F32) I32x4_w(a)
+		} };
 	}
 
-	I32x4 I32x4_fromF32x4(F32x4 a) { 
-		return (I32x4) { .v = { 
-			(I32) F32x4_x(a), (I32) F32x4_y(a), (I32) F32x4_z(a), (I32) F32x4_w(a) 
-		} }; 
+	I32x4 I32x4_fromF32x4(F32x4 a) {
+		return (I32x4) { .v = {
+			(I32) F32x4_x(a), (I32) F32x4_y(a), (I32) F32x4_z(a), (I32) F32x4_w(a)
+		} };
 	}
 
 	F32x2 F32x2_fromI32x2(I32x2 a) { return (F32x2) { .v = { (F32) I32x2_x(a), (F32) I32x2_y(a) } }; }

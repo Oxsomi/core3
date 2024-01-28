@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -76,18 +76,18 @@ BufferLayoutMemberInfo BufferLayoutMemberInfo_create(ETypeId typeId, CharString 
 BufferLayoutMemberInfo BufferLayoutMemberInfo_createStruct(U32 structId, CharString name, U64 offset, U32 stride);
 
 BufferLayoutMemberInfo BufferLayoutMemberInfo_createArray(
-	ETypeId typeId, 
-	CharString name, 
-	ListU32 arraySizes, 
-	U64 offset, 
+	ETypeId typeId,
+	CharString name,
+	ListU32 arraySizes,
+	U64 offset,
 	U32 stride
 );
 
 BufferLayoutMemberInfo BufferLayoutMemberInfo_createStructArray(
-	U32 structId, 
-	CharString name, 
-	ListU32 arraySizes, 
-	U64 offset, 
+	U32 structId,
+	CharString name,
+	ListU32 arraySizes,
+	U64 offset,
 	U32 stride
 );
 
@@ -159,7 +159,7 @@ Error BufferLayout_createInstance(BufferLayout layout, U64 count, Allocator allo
 //A layout path can start with a slash, so /a/ and a/ would resolve to the same.
 //Leading slashes are ignored.
 //Empty members are invalid, so that makes // and /a// invalid.
-//Array indices can be given by either hex (0x[0-9A-Fa-f]+), octal (0o[0-7]+), 
+//Array indices can be given by either hex (0x[0-9A-Fa-f]+), octal (0o[0-7]+),
 //binary 0b[0-1]+, decimal ([0-9]+) or Nytodecimal (0n[0-9A-Za-z_$]+).
 
 typedef struct LayoutPathInfo {
@@ -174,28 +174,28 @@ typedef struct LayoutPathInfo {
 Error BufferLayout_resolveLayout(BufferLayout layout, CharString path, LayoutPathInfo *info, Allocator alloc);
 
 Error BufferLayout_resolve(
-	Buffer buffer, 
-	BufferLayout layout, 
-	CharString path, 
-	Buffer *location, 
+	Buffer buffer,
+	BufferLayout layout,
+	CharString path,
+	Buffer *location,
 	Allocator alloc
 );
 
 //Setting data in the buffer
 
 Error BufferLayout_setData(
-	Buffer buffer, 
-	BufferLayout layout, 
-	CharString path, 
-	Buffer newData, 
+	Buffer buffer,
+	BufferLayout layout,
+	CharString path,
+	Buffer newData,
 	Allocator alloc
 );
 
 Error BufferLayout_getData(
-	Buffer buffer, 
-	BufferLayout layout, 
-	CharString path, 
-	Buffer *currentData, 
+	Buffer buffer,
+	BufferLayout layout,
+	CharString path,
+	Buffer *currentData,
 	Allocator alloc
 );
 

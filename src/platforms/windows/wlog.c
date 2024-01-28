@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -92,9 +92,9 @@ void Log_printCapturedStackTraceCustom(Allocator alloc, const void **stackTrace,
 
 	if(hasSymbols)
 		for (
-			U64 i = 0; 
-			i < stackSize && i < _STACKTRACE_SIZE && 
-			stackTrace[i] && stackTrace[i] != (void*)0xCCCCCCCCCCCCCCCC; 
+			U64 i = 0;
+			i < stackSize && i < _STACKTRACE_SIZE &&
+			stackTrace[i] && stackTrace[i] != (void*)0xCCCCCCCCCCCCCCCC;
 			++i, ++stackCount
 		) {
 
@@ -195,18 +195,18 @@ void Log_printCapturedStackTraceCustom(Allocator alloc, const void **stackTrace,
 
 		else if(capture.lin)
 			printf(
-				"%p: %.*s!%.*s (%.*s, Line %u)\n", 
-				stackTrace[i], 
-				(int) CharString_length(capture.mod), capture.mod.ptr, 
+				"%p: %.*s!%.*s (%.*s, Line %u)\n",
+				stackTrace[i],
+				(int) CharString_length(capture.mod), capture.mod.ptr,
 				(int) CharString_length(capture.sym), capture.sym.ptr,
-				(int) CharString_length(capture.fil), capture.fil.ptr, 
+				(int) CharString_length(capture.fil), capture.fil.ptr,
 				capture.lin
 			);
 
 		else printf(
-			"%p: %.*s!%.*s\n", 
-			stackTrace[i], 
-			(int) CharString_length(capture.mod), capture.mod.ptr, 
+			"%p: %.*s!%.*s\n",
+			stackTrace[i],
+			(int) CharString_length(capture.mod), capture.mod.ptr,
 			(int) CharString_length(capture.sym), capture.sym.ptr
 		);
 
@@ -263,7 +263,7 @@ void Log_log(Allocator alloc, ELogLevel lvl, ELogOptions options, CharString arg
 	const C8 *newLine = hasNewLine ? "\n" : "";
 
 	printf(
-		"%.*s%s", 
+		"%.*s%s",
 		(int)CharString_length(arg), arg.ptr,
 		newLine
 	);

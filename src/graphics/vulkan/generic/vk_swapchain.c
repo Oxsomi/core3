@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -51,7 +51,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 			info.presentModePriorities[1] = ESwapchainPresentMode_Immediate;
 			info.presentModePriorities[2] = ESwapchainPresentMode_Fifo;
 			info.presentModePriorities[3] = ESwapchainPresentMode_FifoRelaxed;
-		#else 
+		#else
 			info.presentModePriorities[0] = ESwapchainPresentMode_Fifo;				//Priority is to conserve power
 			info.presentModePriorities[1] = ESwapchainPresentMode_FifoRelaxed;
 			info.presentModePriorities[2] = ESwapchainPresentMode_Immediate;
@@ -115,9 +115,9 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 
 		case EWindowFormat_BGRA8:
 			
-			searchFormat = (VkSurfaceFormatKHR) { 
-				.format = VK_FORMAT_B8G8R8A8_UNORM, 
-				.colorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR 
+			searchFormat = (VkSurfaceFormatKHR) {
+				.format = VK_FORMAT_B8G8R8A8_UNORM,
+				.colorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR
 			};
 
 			break;
@@ -126,8 +126,8 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 
 		case EWindowFormat_BGR10A2:
 			
-			searchFormat = (VkSurfaceFormatKHR) { 
-				.format = VK_FORMAT_A2B10G10R10_UNORM_PACK32, 
+			searchFormat = (VkSurfaceFormatKHR) {
+				.format = VK_FORMAT_A2B10G10R10_UNORM_PACK32,
 				.colorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR
 			};
 
@@ -135,8 +135,8 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 
 		case EWindowFormat_RGBA16f:
 
-			searchFormat = (VkSurfaceFormatKHR) { 
-				.format = VK_FORMAT_R16G16B16A16_SFLOAT, 
+			searchFormat = (VkSurfaceFormatKHR) {
+				.format = VK_FORMAT_R16G16B16A16_SFLOAT,
 				.colorSpace = VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT
 			};
 
@@ -173,7 +173,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 	if(!(capabilities.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR))
 		_gotoIfError(clean, Error_invalidOperation(1, "GraphicsDeviceRef_createSwapchainExt() requires alpha opaque"));
 
-	VkFlags requiredUsageFlags = 
+	VkFlags requiredUsageFlags =
 		VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
 		VK_IMAGE_USAGE_TRANSFER_DST_BIT |
 		VK_IMAGE_USAGE_SAMPLED_BIT |
@@ -193,7 +193,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 			4, "GraphicsDeviceRef_createSwapchainExt() requires support for 2 and 3 images"
 		));
 
-	VkFlags anyRotate = 
+	VkFlags anyRotate =
 		VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR |
 		VK_SURFACE_TRANSFORM_ROTATE_180_BIT_KHR |
 		VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR;
@@ -249,7 +249,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 			case VK_PRESENT_MODE_FIFO_KHR:			supports[ESwapchainPresentMode_Fifo - 1] = true;			break;
 			case VK_PRESENT_MODE_FIFO_RELAXED_KHR:	supports[ESwapchainPresentMode_FifoRelaxed - 1] = true;		break;
 
-			//Mailbox can allocate additional images on Android, 
+			//Mailbox can allocate additional images on Android,
 			//we don't want to deal with versioning 4x.
 
 			case VK_PRESENT_MODE_MAILBOX_KHR:
@@ -305,8 +305,8 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 
 		.preTransform = capabilities.currentTransform,
 
-		.compositeAlpha = 
-			capabilities.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR ? 
+		.compositeAlpha =
+			capabilities.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR ?
 			VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR : VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR,
 
 		.presentMode = presentMode,
@@ -569,7 +569,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 					CharString_freex(&temp);
 
 					_gotoIfError(clean, CharString_formatx(
-						&temp, "Swapchain image view #%u (%.*s)", 
+						&temp, "Swapchain image view #%u (%.*s)",
 						(U32) i, CharString_length(info.window->title), info.window->title.ptr
 					));
 
@@ -585,7 +585,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 					CharString_freex(&temp);
 
 					_gotoIfError(clean, CharString_formatx(
-						&temp, "Swapchain image #%u (%.*s)", 
+						&temp, "Swapchain image #%u (%.*s)",
 						(U32) i, CharString_length(info.window->title), info.window->title.ptr
 					));
 
@@ -670,8 +670,8 @@ Bool GraphicsDevice_freeSwapchainExt(Swapchain *swapchain, Allocator alloc) {
 }
 
 Error VkManagedImage_transition(
-	VkManagedImage *imageExt, 
-	VkPipelineStageFlags2 stage, 
+	VkManagedImage *imageExt,
+	VkPipelineStageFlags2 stage,
 	VkAccessFlagBits2 access,
 	VkImageLayout layout,
 	U32 graphicsQueueId,
