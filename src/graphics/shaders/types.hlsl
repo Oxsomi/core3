@@ -181,6 +181,7 @@ typedef bool Bool;
 //Binding graphics shader outputs (e.g. uv : _bind(0))
 
 #define _bind(x) TEXCOORD##x
+#define _flat nointerpolation
 
 //Indirect draws
 
