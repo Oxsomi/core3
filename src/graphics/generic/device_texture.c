@@ -33,6 +33,14 @@ Error DeviceTextureRef_inc(DeviceTextureRef *texture) {
 	return !RefPtr_inc(texture) ? Error_invalidOperation(0, "DeviceTextureRef_inc()::texture is required") : Error_none();
 }
 
+U16 alignDown(U16 x, U16 alignment) {
+	return x / alignment * alignment;
+}
+
+U16 alignUp(U16 x, U16 alignment) {
+	return (x + alignment - 1) / alignment * alignment;
+}
+
 Error DeviceTextureRef_markDirty(DeviceTextureRef *tex, U16 x, U16 y, U16 z, U16 w, U16 h, U16 l) {
 
 	if(!tex || tex->typeId != EGraphicsTypeId_DeviceTexture)
@@ -80,14 +88,24 @@ Error DeviceTextureRef_markDirty(DeviceTextureRef *tex, U16 x, U16 y, U16 z, U16
 
 	Bool fullRange = w == texture->width && h == texture->height && l == texture->length;
 
-	U16 startX = (x + 3) &~ 3;
-	U16 endX = (U16) U64_min((x + w + 3) &~ 3, texture->width);
+	ETextureFormat format = ETextureFormatId_unpack[texture->textureFormatId];
 
-	U16 startY = (y + 3) &~ 3;
-	U16 endY = (U16) U64_min((y + h + 3) &~ 3, texture->height);
+	U8 alignX = 4, alignY = 4, alignZ = 4;
+	U8 realAlignX = 1, realAlignY = 1;
 
-	U16 startZ = (z + 3) &~ 3;
-	U16 endZ = (U16) U64_min((z + l + 3) &~ 3, texture->length);
+	if (ETextureFormat_getAlignment(format, &alignX, &alignY)) {		//Ensure alignment is respected later on
+		realAlignX = alignX;
+		realAlignY = alignY;
+	}
+
+	U16 startX = alignDown(x, alignX);
+	U16 endX = (U16) U64_min(alignUp(x + w, alignX), texture->width);
+
+	U16 startY = alignDown(y, alignY);
+	U16 endY = (U16) U64_min(alignUp(y + h, alignY), texture->height);
+
+	U16 startZ = alignDown(z, alignZ);
+	U16 endZ = (U16) U64_min(alignUp(z + l, alignZ), texture->length);
 
 	//If the entire texture is marked dirty, we have to make sure we don't duplicate it
 
@@ -117,22 +135,25 @@ Error DeviceTextureRef_markDirty(DeviceTextureRef *tex, U16 x, U16 y, U16 z, U16
 
 				//If intersects, we either merge with first occurence or pop last occurence and merge range with current
 
+				U16 *start = texturei->startRange;
+				U16 *end = texturei->endRange;
+
 				if (
-					endX >= texturei->startRange[0] && startX <= texturei->endRange[0] &&
-					endY >= texturei->startRange[1] && startY <= texturei->endRange[1] &&
-					endZ >= texturei->startRange[2] && startZ <= texturei->endRange[2]
+					endX >= start[0] && startX <= end[0] &&
+					endY >= start[1] && startY <= end[1] &&
+					endZ >= start[2] && startZ <= end[2]
 				) {
 
 					if (lastMatch == U64_MAX) {
 
-						texturei->startRange[0] = (U16) U64_min(texturei->startRange[0], x);
-						texturei->endRange[0] = (U16) U64_max(texturei->endRange[0], x + w);
+						start[0] = (U16) U64_min(start[0], alignDown(x, realAlignX));
+						end[0] = (U16) U64_max(end[0], alignUp(x + w, realAlignX));
 
-						texturei->startRange[1] = (U16) U64_min(texturei->startRange[1], y);
-						texturei->endRange[1] = (U16) U64_max(texturei->endRange[1], y + h);
+						start[1] = (U16) U64_min(start[1], alignDown(y, realAlignY));
+						end[1] = (U16) U64_max(end[1], alignUp(y + h, realAlignY));
 
-						texturei->startRange[2] = (U16) U64_min(texturei->startRange[2], z);
-						texturei->endRange[2] = (U16) U64_max(texturei->endRange[2], z + l);
+						start[2] = (U16) U64_min(start[2], z);
+						end[2] = (U16) U64_max(end[2], z + l);
 					}
 
 					else {
@@ -140,8 +161,8 @@ Error DeviceTextureRef_markDirty(DeviceTextureRef *tex, U16 x, U16 y, U16 z, U16
 						DevicePendingRange last = texture->pendingChanges.ptr[lastMatch];
 
 						for(U64 j = 0; j < 3; ++j) {
-							texturei->startRange[j] = (U16) U64_min(texturei->startRange[j], last.texture.startRange[j]);
-							texturei->endRange[j] = (U16) U64_max(texturei->endRange[j], last.texture.endRange[j]);
+							start[j] = (U16) U64_min(start[j], last.texture.startRange[j]);
+							end[j] = (U16) U64_max(end[j], last.texture.endRange[j]);
 						}
 
 						_gotoIfError(clean, ListDevicePendingRange_erase(&texture->pendingChanges, lastMatch));
