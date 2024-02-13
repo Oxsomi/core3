@@ -21,50 +21,30 @@
 #pragma once
 #include "platforms/lock.h"
 #include "device_buffer.h"
-
-typedef enum EDeviceTextureUsage {
-
-	EDeviceTextureUsage_ShaderRead			= 1 << 0,		//Allow for use in shaders
-	EDeviceTextureUsage_CPUBacked			= 1 << 1,		//Keep a CPU side copy texture for read/write operations
-	EDeviceTextureUsage_CPUAllocatedBit		= 1 << 2,		//Keep entirely on CPU
-
-	EDeviceTextureUsage_CPUAllocated		= EDeviceTextureUsage_CPUBacked | EDeviceTextureUsage_CPUAllocatedBit
-
-} EDeviceTextureUsage;
+#include "texture.h"
 
 typedef enum ETextureFormatId ETextureFormatId;
 typedef enum ETextureType ETextureType;
 
 typedef RefPtr DeviceTextureRef;
 
+//DeviceTexture, UnifiedTexture (Resource, ...), UnifiedTextureImage_size[N], UnifiedTextureExt_size[N], TextureExt
 typedef struct DeviceTexture {
 
-	GraphicsDeviceRef *device;
-
-	EDeviceTextureUsage usage;
 	Bool isPendingFullCopy, isPending, isFirstFrame;
-	U8 textureFormatId;						//ETextureFormatId
+	U8 pad0;
+	U32 pad1;
 
-	U32 readHandle;							//Place in heap/descriptor set. 12 bits are reserved for type and/or version
-	U16 width, height;
-
-	U64 blockOffset;
-	U32 blockId;
-	U16 length;
-	U8 type;								//ETextureType
-	U8 padding;
-
-	U64 allocSize;
-
-	Buffer cpuData;							//Null if not cpu backed & uploaded. If not cpu backed this will free post upload
+	Buffer cpuData;											//If not cpu backed this will free post upload
 
 	ListDevicePendingRange pendingChanges;
 
 	Lock lock;
 
+	UnifiedTexture base;
+
 } DeviceTexture;
 
-#define DeviceTexture_ext(ptr, T) (!ptr ? NULL : (T##DeviceTexture*)(ptr + 1))		//impl
 #define DeviceTextureRef_ptr(ptr) RefPtr_data(ptr, DeviceTexture)
 
 Error DeviceTextureRef_dec(DeviceTextureRef **texture);
@@ -74,10 +54,10 @@ Error GraphicsDeviceRef_createTexture(
 	GraphicsDeviceRef *dev,
 	ETextureType type,
 	ETextureFormatId format,
-	EDeviceTextureUsage usage,
-	U16 width,				//<= 16384
-	U16 height,				//^
-	U16 length,				//<= 256
+	EGraphicsResourceFlag flag,
+	U16 width,					//<= 16384
+	U16 height,					//^
+	U16 length,					//<= 256
 	CharString name,
 	Buffer *dat,
 	DeviceTextureRef **tex

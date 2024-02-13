@@ -34,7 +34,6 @@ Error SamplerRef_inc(SamplerRef *sampler) {
 }
 
 impl extern const U64 SamplerExt_size;
-
 impl Bool Sampler_freeExt(Sampler *sampler);
 impl Error GraphicsDeviceRef_createSamplerExt(GraphicsDeviceRef *dev, Sampler *sampler, CharString name);
 
@@ -42,9 +41,25 @@ Bool Sampler_free(Sampler *sampler, Allocator allocator) {
 
 	allocator;
 
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(sampler->device);
+
+	if(sampler->samplerLocation) {
+
+		ELockAcquire acq = Lock_lock(&device->descriptorLock, U64_MAX);
+
+		if(acq >= ELockAcquire_Success) {
+			ListU32 allocationList = (ListU32) { 0 };
+			ListU32_createRefConst(&sampler->samplerLocation, 1, &allocationList);
+			GraphicsDeviceRef_freeDescriptors(sampler->device, &allocationList);
+			sampler->samplerLocation = 0;
+		}
+
+		if(acq == ELockAcquire_Acquired)
+			Lock_unlock(&device->descriptorLock);
+	}
+
 	Bool success = Sampler_freeExt(sampler);
 	success &= !GraphicsDeviceRef_dec(&sampler->device).genericError;
-
 	return success;
 }
 Error GraphicsDeviceRef_createSampler(GraphicsDeviceRef *dev, SamplerInfo info, CharString name, SamplerRef **sampler) {
@@ -95,14 +110,32 @@ Error GraphicsDeviceRef_createSampler(GraphicsDeviceRef *dev, SamplerInfo info, 
 	if(err.genericError)
 		return err;
 
+	ELockAcquire acq = ELockAcquire_Invalid;
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(dev);
 	_gotoIfError(clean, GraphicsDeviceRef_inc(dev));
 
 	Sampler *samp = SamplerRef_ptr(*sampler);
 
 	*samp = (Sampler) { .device = dev, .info = info };
+
+	acq = Lock_lock(&device->descriptorLock, U64_MAX);
+
+	if(acq < ELockAcquire_Success)
+		_gotoIfError(clean, Error_invalidState(
+			0, "GraphicsDeviceRef_createSampler() couldn't acquire descriptor lock"
+		));
+
+	samp->samplerLocation = GraphicsDeviceRef_allocateDescriptor(dev, EDescriptorType_Sampler);
+
+	if(samp->samplerLocation == U32_MAX)
+		_gotoIfError(clean, Error_outOfMemory(0, "GraphicsDeviceRef_createSampler() couldn't allocate Sampler descriptor"));
+
 	_gotoIfError(clean, GraphicsDeviceRef_createSamplerExt(dev, samp, name));
 
 clean:
+
+	if(acq == ELockAcquire_Acquired)
+		Lock_unlock(&device->descriptorLock);
 
 	if(err.genericError)
 		SamplerRef_dec(sampler);

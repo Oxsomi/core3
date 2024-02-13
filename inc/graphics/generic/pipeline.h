@@ -26,6 +26,7 @@
 
 typedef RefPtr GraphicsDeviceRef;
 typedef enum ETextureFormat ETextureFormat;
+typedef enum EDepthStencilFormat EDepthStencilFormat;
 
 typedef struct PipelineGraphicsInfo {
 

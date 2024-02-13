@@ -23,23 +23,13 @@
 #define VK_ENABLE_BETA_EXTENSIONS
 #include <vulkan/vulkan.h>
 
-typedef struct VkManagedImage {
-
+typedef struct VkUnifiedTexture {
 	VkImage image;
 	VkImageView view;
-
 	VkPipelineStageFlagBits2 lastStage;
 	VkAccessFlagBits2 lastAccess;
-
 	VkImageLayout lastLayout;
-	U32 readHandle;
-
-	U32 writeHandle;
-	U32 blockId;			//If specifically allocated, indicates which block this is present in
-
-	U64 blockOffset;
-
-} VkManagedImage;
+} VkUnifiedTexture;
 
 typedef struct CharString CharString;
 typedef struct GraphicsDevice GraphicsDevice;
@@ -67,8 +57,8 @@ VkCompareOp mapVkCompareOp(ECompareOp op);
 
 typedef struct ListVkImageMemoryBarrier2 ListVkImageMemoryBarrier2;
 
-Error VkManagedImage_transition(
-	VkManagedImage *image,
+Error VkUnifiedTexture_transition(
+	VkUnifiedTexture *image,
 	VkPipelineStageFlags2 stage,
 	VkAccessFlagBits2 access,
 	VkImageLayout layout,

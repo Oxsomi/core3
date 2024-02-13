@@ -46,26 +46,20 @@ typedef enum ESamplerFilterMode {
 } ESamplerFilterMode;
 
 typedef enum ESamplerAddressMode {
-
 	ESamplerAddressMode_Repeat,
 	ESamplerAddressMode_MirrorRepeat,
 	ESamplerAddressMode_ClampToEdge,
 	ESamplerAddressMode_ClampToBorder,
-
 	ESamplerAddressMode_Count
-
 } ESamplerAddressMode;
 
 typedef enum ESamplerBorderColor {
-
 	ESamplerBorderColor_TransparentBlack,		//0.xxxx
 	ESamplerBorderColor_OpaqueBlackFloat,		//0.xxx, 1.f
 	ESamplerBorderColor_OpaqueBlackInt,			//0.xxx, 1
 	ESamplerBorderColor_OpaqueWhiteFloat,		//1.f.xxxx
 	ESamplerBorderColor_OpaqueWhiteInt,			//1.xxxx
-
 	ESamplerBorderColor_Count
-
 } ESamplerBorderColor;
 
 typedef struct SamplerInfo {
@@ -91,9 +85,10 @@ typedef struct Sampler {
 	GraphicsDeviceRef *device;
 
 	U32 samplerLocation;
-	U32 padding;
+	U32 pad0;
 
 	SamplerInfo info;
+	U16 pad1;
 
 } Sampler;
 

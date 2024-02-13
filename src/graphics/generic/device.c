@@ -34,206 +34,7 @@
 TListNamedImpl(ListLockPtr);
 TListNamedImpl(ListCommandListRef);
 TListNamedImpl(ListSwapchainRef);
-
-U16 TextureRange_width(TextureRange r) { return r.endRange[0] - r.startRange[0]; }
-U16 TextureRange_height(TextureRange r) { return r.endRange[1] - r.startRange[1]; }
-U16 TextureRange_length(TextureRange r) { return r.endRange[2] - r.startRange[2]; }
-
-void GraphicsDeviceInfo_print(const GraphicsDeviceInfo *deviceInfo, Bool printCapabilities) {
-
-	if(!deviceInfo || !deviceInfo->ext)
-		return;
-
-	Log_debugLnx(
-		"%s (%s %s):\n\t%s %u\n\tLUID %016llx\n\tUUID %016llx%016llx",
-		deviceInfo->name,
-		deviceInfo->driverName,
-		deviceInfo->driverInfo,
-		(deviceInfo->type == EGraphicsDeviceType_CPU ? "CPU" : (
-			deviceInfo->type == EGraphicsDeviceType_Dedicated ? "dGPU" : (
-				deviceInfo->type == EGraphicsDeviceType_Integrated ? "iGPU" : "Simulated GPU"
-			)
-		)),
-		deviceInfo->id,
-		deviceInfo->capabilities.features & EGraphicsFeatures_LUID ? U64_swapEndianness(deviceInfo->luid) : 0,
-		U64_swapEndianness(deviceInfo->uuid[0]),
-		U64_swapEndianness(deviceInfo->uuid[1])
-	);
-
-	if (printCapabilities) {
-
-		GraphicsDeviceCapabilities cap = deviceInfo->capabilities;
-
-		//Features
-
-		U32 feat = cap.features;
-
-		Log_debugLnx("\tFeatures:");
-
-		if(feat & EGraphicsFeatures_DirectRendering)
-			Log_debugLnx("\t\tDirect rendering");
-
-		//if(feat & EGraphicsFeatures_VariableRateShading)
-		//	Log_debugLnx("\t\tVariable rate shading");
-
-		if(feat & EGraphicsFeatures_MultiDrawIndirectCount)
-			Log_debugLnx("\t\tMulti draw indirect count");
-
-		if(feat & EGraphicsFeatures_MeshShader)
-			Log_debugLnx("\t\tMesh shaders");
-
-		if(feat & EGraphicsFeatures_GeometryShader)
-			Log_debugLnx("\t\tGeometry shaders");
-
-		if(feat & EGraphicsFeatures_TessellationShader)
-			Log_debugLnx("\t\tTessellation shaders");
-
-		if(feat & EGraphicsFeatures_SubgroupArithmetic)
-			Log_debugLnx("\t\tSubgroup arithmetic");
-
-		if(feat & EGraphicsFeatures_SubgroupShuffle)
-			Log_debugLnx("\t\tSubgroup shuffle");
-
-		//if(feat & EGraphicsFeatures_Multiview)
-		//	Log_debugLnx("\t\tMultiview");
-
-		if(feat & EGraphicsFeatures_Raytracing)
-			Log_debugLnx("\t\tRaytracing");
-
-		if(feat & EGraphicsFeatures_RayPipeline)
-			Log_debugLnx("\t\tRaytracing pipeline");
-
-		if(feat & EGraphicsFeatures_RayQuery)
-			Log_debugLnx("\t\tRay query");
-
-		if(feat & EGraphicsFeatures_RayIndirect)
-			Log_debugLnx("\t\tTraceRay indirect");
-
-		if(feat & EGraphicsFeatures_RayMicromapOpacity)
-			Log_debugLnx("\t\tRaytracing opacity micromap");
-
-		if(feat & EGraphicsFeatures_RayMicromapDisplacement)
-			Log_debugLnx("\t\tRaytracing displacement micromap");
-
-		if(feat & EGraphicsFeatures_RayMotionBlur)
-			Log_debugLnx("\t\tRaytracing motion blur");
-
-		if(feat & EGraphicsFeatures_RayReorder)
-			Log_debugLnx("\t\tRay reorder");
-
-		if(feat & EGraphicsFeatures_DebugMarkers)
-			Log_debugLnx("\t\tDebug markers");
-
-		if(feat & EGraphicsFeatures_Wireframe)
-			Log_debugLnx("\t\tWireframe (rasterizer fill mode: line)");
-
-		if(feat & EGraphicsFeatures_LogicOp)
-			Log_debugLnx("\t\tLogic op (blend state)");
-
-		if(feat & EGraphicsFeatures_DualSrcBlend)
-			Log_debugLnx("\t\tDual src blend (blend state)");
-
-		//Data types
-
-		U32 dat = cap.dataTypes;
-
-		Log_debugLnx("\tData types:");
-		
-		if(dat & EGraphicsDataTypes_I64)
-			Log_debugLnx("\t\t64-bit integers");
-		
-		if(dat & EGraphicsDataTypes_F16)
-			Log_debugLnx("\t\t16-bit floats");
-		
-		if(dat & EGraphicsDataTypes_F64)
-			Log_debugLnx("\t\t64-bit floats");
-		
-		if(dat & EGraphicsDataTypes_AtomicI64)
-			Log_debugLnx("\t\t64-bit integer atomics (buffer)");
-		
-		if(dat & EGraphicsDataTypes_AtomicF32)
-			Log_debugLnx("\t\t32-bit float atomics (buffer)");
-		
-		if(dat & EGraphicsDataTypes_AtomicF64)
-			Log_debugLnx("\t\t64-bit float atomics (buffer)");
-		
-		if(dat & EGraphicsDataTypes_ASTC)
-			Log_debugLnx("\t\tASTC compression");
-		
-		if(dat & EGraphicsDataTypes_BCn)
-			Log_debugLnx("\t\tBCn compression");
-		
-		if(dat & EGraphicsDataTypes_MSAA2x)
-			Log_debugLnx("\t\tMSAA 2x");
-		
-		if(dat & EGraphicsDataTypes_MSAA8x)
-			Log_debugLnx("\t\tMSAA 8x");
-
-		if(dat & EGraphicsDataTypes_MSAA16x)
-			Log_debugLnx("\t\tMSAA 16x");
-
-		if(dat & EGraphicsDataTypes_S8)
-			Log_debugLnx("\t\tEDepthStencilFormat_S8");
-
-		if(dat & EGraphicsDataTypes_D24S8)
-			Log_debugLnx("\t\tEDepthStencilFormat_D24S8");
-
-		if(dat & EGraphicsDataTypes_RGB32f)
-			Log_debugLnx("\t\tETextureFormat_RGBA32f for use in textures (not just vertex input)");
-
-		if(dat & EGraphicsDataTypes_RGB32u)
-			Log_debugLnx("\t\tETextureFormat_RGBA32u for use in textures (not just vertex input)");
-
-		if(dat & EGraphicsDataTypes_RGB32i)
-			Log_debugLnx("\t\tETextureFormat_RGBA32i for use in textures (not just vertex input)");
-	}
-}
-
-Bool GraphicsDeviceInfo_supportsFormat(const GraphicsDeviceInfo *deviceInfo, ETextureFormat format) {
-
-	if(!deviceInfo)
-		return false;
-
-	ETextureCompressionAlgo algo = ETextureFormat_getCompressionAlgo(format);
-
-	if(algo == ETextureCompressionAlgo_ASTC)
-		return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_ASTC;
-
-	if(algo == ETextureCompressionAlgo_BCn)
-		return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_BCn;
-
-	switch (format) {
-		case ETextureFormat_RGB32f:		return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_RGB32f;
-		case ETextureFormat_RGB32i:		return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_RGB32i;
-		case ETextureFormat_RGB32u:		return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_RGB32u;
-	}
-
-	return true;
-}
-
-Bool GraphicsDeviceInfo_supportsRenderTextureFormat(const GraphicsDeviceInfo *deviceInfo, ETextureFormat format) {
-	return !ETextureFormat_getIsCompressed(format) && GraphicsDeviceInfo_supportsFormat(deviceInfo, format);
-}
-
-Bool GraphicsDeviceInfo_supportsFormatVertexAttribute(ETextureFormat format) {
-
-	ETextureCompressionAlgo algo = ETextureFormat_getCompressionAlgo(format);
-
-	if(algo != ETextureCompressionAlgo_None)
-		return false;
-
-	return true;
-}
-
-Bool GraphicsDeviceInfo_supportsDepthStencilFormat(const GraphicsDeviceInfo *deviceInfo, EDepthStencilFormat format) {
-
-	switch(format) {
-		case EDepthStencilFormat_D24S8Ext:	return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_D24S8;
-		case EDepthStencilFormat_S8Ext:		return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_S8;
-	}
-
-	return true;
-}
+TListImpl(DescriptorStackTrace);
 
 Error GraphicsDeviceRef_dec(GraphicsDeviceRef **device) {
 	return !RefPtr_dec(device) ? Error_invalidOperation(0, "GraphicsDeviceRef_dec()::device is invalid") : Error_none();
@@ -242,8 +43,6 @@ Error GraphicsDeviceRef_dec(GraphicsDeviceRef **device) {
 Error GraphicsDeviceRef_inc(GraphicsDeviceRef *device) {
 	return !RefPtr_inc(device) ? Error_invalidOperation(0, "GraphicsDeviceRef_inc()::device is invalid") : Error_none();
 }
-
-//Ext
 
 impl extern const U64 GraphicsDeviceExt_size;
 
@@ -313,6 +112,41 @@ Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 
 	ListDeviceMemoryBlock_freex(&device->allocator.blocks);
 	ListLockPtr_freex(&device->currentLocks);
+	
+	//Announce descriptor memleaks
+
+	for(U32 i = 0; i < EDescriptorType_ResourceCount; ++i)
+		Buffer_freex(&device->freeList[i]);
+
+	Lock_free(&device->descriptorLock);
+
+	#ifndef NDEBUG
+
+		//TODO: HashMap
+
+		ListDescriptorStackTrace *stack = &device->descriptorStackTraces;
+
+		if(stack->length)
+			Log_warnLnx("Leaked %llu descriptors. Displaying up to 16:", stack->length);
+
+		for (U64 j = 0; j < stack->length; ++j) {
+
+			DescriptorStackTrace elem = stack->ptr[j];
+
+			if(j < 16)
+				Log_warnLnx(
+					"%llu: Resource type: %llu, id: %llu",
+					j, (U64)elem.resourceId >> 20, (U64)elem.resourceId & ((1 << 20) - 1)
+				);
+
+			Log_printCapturedStackTraceCustomx(
+				elem.stackTrace, sizeof(elem.stackTrace) / sizeof(void*), ELogLevel_Warn, ELogOptions_Default
+			);
+		}
+
+		ListDescriptorStackTrace_freex(stack);
+
+	#endif
 
 	GraphicsInstanceRef_dec(&device->instance);
 
@@ -355,7 +189,6 @@ Error GraphicsDeviceRef_create(
 
 	_gotoIfError(clean, GraphicsInstanceRef_inc(instanceRef));
 	device->instance = instanceRef;
-
 	//Create mem alloc, set info/instance/pending resources
 
 	device->allocator = (DeviceMemoryAllocator) { .device = device };
@@ -368,6 +201,27 @@ Error GraphicsDeviceRef_create(
 
 	for(U64 i = 0; i < sizeof(device->resourcesInFlight) / sizeof(device->resourcesInFlight[0]); ++i)
 		_gotoIfError(clean, ListRefPtr_reservex(&device->resourcesInFlight[i], 64));
+
+	//Create descriptor type free list
+
+	device->descriptorLock = Lock_create();
+
+	for(U64 i = 0; i < EDescriptorType_ResourceCount; ++i)
+		_gotoIfError(clean, Buffer_createEmptyBytesx((descriptorTypeCount[i] + 7) >> 3, &device->freeList[i]));
+
+	//Reserve sampler 0 because we want to be able to use read/write handle 0 as invalid.
+
+	Lock_lock(&device->descriptorLock, U64_MAX);
+	if(GraphicsDeviceRef_allocateDescriptor(*deviceRef, EDescriptorType_Sampler) != 0)
+		_gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_create() couldn't reserve null descriptor (sampler 0)"));
+
+	Lock_unlock(&device->descriptorLock);
+
+	//Allocate temp storage for descriptor tracking
+
+	#ifndef NDEBUG
+		_gotoIfError(clean, ListDescriptorStackTrace_reservex(&device->descriptorStackTraces, 16));
+	#endif
 
 	//Create extended device
 
@@ -388,7 +242,8 @@ Error GraphicsDeviceRef_create(
 
 	_gotoIfError(clean, GraphicsDeviceRef_createBuffer(
 		*deviceRef,
-		EDeviceBufferUsage_CPUAllocatedBit | EDeviceBufferUsage_InternalWeakRef,
+		EDeviceBufferUsage_None,
+		EGraphicsResourceFlag_InternalWeakDeviceRef | EGraphicsResourceFlag_CPUAllocatedBit,
 		CharString_createRefCStrConst("Per frame data"),
 		sizeof(CBufferData) * 3, &device->frameData
 	));
@@ -415,11 +270,11 @@ Bool GraphicsDeviceRef_removePending(GraphicsDeviceRef *deviceRef, RefPtr *resou
 	switch (type) {
 
 		case EGraphicsTypeId_DeviceBuffer:	
-			supported = DeviceBufferRef_ptr(resource)->device == deviceRef;
+			supported = DeviceBufferRef_ptr(resource)->resource.device == deviceRef;
 			break;
 
 		case EGraphicsTypeId_DeviceTexture:	
-			supported = DeviceTextureRef_ptr(resource)->device == deviceRef;
+			supported = DeviceTextureRef_ptr(resource)->base.resource.device == deviceRef;
 			break;
 
 		default:
@@ -531,6 +386,8 @@ Error GraphicsDeviceRef_resizeStagingBuffer(GraphicsDeviceRef *deviceRef, U64 ne
 	Error err = Error_none();
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 
+	newSize = (((newSize + 2) / 3 + 511) &~ 511) * 3;			//Align to ensure we never get incompatible staging buffers
+
 	if (device->staging) {
 
 		//"Free" staging buffer.
@@ -544,13 +401,14 @@ Error GraphicsDeviceRef_resizeStagingBuffer(GraphicsDeviceRef *deviceRef, U64 ne
 
 	_gotoIfError(clean, GraphicsDeviceRef_createBuffer(
 		deviceRef,
-		EDeviceBufferUsage_CPUAllocatedBit | EDeviceBufferUsage_InternalWeakRef,
+		EDeviceBufferUsage_None,
+		EGraphicsResourceFlag_InternalWeakDeviceRef | EGraphicsResourceFlag_CPUAllocatedBit,
 		CharString_createRefCStrConst("Staging buffer"),
 		newSize, &device->staging
 	));
 
 	DeviceBuffer *staging = DeviceBufferRef_ptr(device->staging);
-	Buffer stagingBuffer = Buffer_createRef(staging->mappedMemory, newSize);
+	Buffer stagingBuffer = Buffer_createRef(staging->resource.mappedMemoryExt, newSize);
 
 	for(U64 i = 0; i < sizeof(device->stagingAllocations) / sizeof(device->stagingAllocations[0]); ++i)
 		_gotoIfError(clean, AllocationBuffer_createRefFromRegionx(
@@ -651,7 +509,7 @@ Error GraphicsDeviceRef_submitCommands(
 
 		Swapchain *swapchaini = SwapchainRef_ptr(swapchainRef);
 
-		if(swapchaini->device != deviceRef)
+		if(swapchaini->base.resource.device != deviceRef)
 			_gotoIfError(clean, Error_unsupportedOperation(
 				1, "GraphicsDeviceRef_submitCommands()::swapchains[i]'s device and the current device are different"
 			));
@@ -736,7 +594,7 @@ Error GraphicsDeviceRef_submitCommands(
 	//Set app data
 
 	DeviceBuffer *frameData = DeviceBufferRef_ptr(device->frameData);
-	CBufferData *data = (CBufferData*) frameData->mappedMemory + (device->submitId % 3);
+	CBufferData *data = (CBufferData*) frameData->resource.mappedMemoryExt + (device->submitId % 3);
 	Ns now = Time_now();
 
 	*data = (CBufferData) {
@@ -842,4 +700,88 @@ clean:
 		Lock_unlock(&device->lock);
 
 	return err;
+}
+
+U32 GraphicsDeviceRef_allocateDescriptor(GraphicsDeviceRef *deviceRef, EDescriptorType type) {
+
+	if(!deviceRef || deviceRef->typeId != EGraphicsTypeId_GraphicsDevice)
+		return U32_MAX;
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+
+	if(!Lock_isLockedForThread(&device->descriptorLock))
+		return U32_MAX;
+
+	Buffer buf = device->freeList[type];
+
+	for(U32 i = 0; i < (U32)(Buffer_length(buf) << 3); ++i) {
+
+		Bool bit = false;
+
+		if(Buffer_getBit(buf, i, &bit).genericError)
+			return U32_MAX;
+
+		if(!bit) {
+
+			U32 resourceId = i | (type << 20);
+
+			#ifndef NDEBUG
+
+				DescriptorStackTrace stackTrace = (DescriptorStackTrace) {  .resourceId = resourceId };
+				Log_captureStackTrace(stackTrace.stackTrace, sizeof(stackTrace.stackTrace) / sizeof(void*), 1);
+
+				//Disable tracking for resourceId 0 because that's reserved as a safeguard
+				//It's technically "leaked" but for a good reason.
+
+				if(resourceId && ListDescriptorStackTrace_pushBackx(&device->descriptorStackTraces, stackTrace).genericError)
+					return U32_MAX;
+
+			#endif
+
+			Buffer_setBit(buf, i);
+			return resourceId;
+		}
+	}
+
+	return U32_MAX;
+}
+
+Bool GraphicsDeviceRef_freeDescriptors(GraphicsDeviceRef *deviceRef, ListU32 *allocations) {
+
+	if(!deviceRef || deviceRef->typeId != EGraphicsTypeId_GraphicsDevice)
+		return U32_MAX;
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+
+	if(!Lock_isLockedForThread(&device->descriptorLock))
+		return false;
+
+	Bool success = true;
+
+	for (U64 i = 0; i < allocations->length; ++i) {
+
+		U32 id = allocations->ptr[i];
+
+		if(id && id != U32_MAX) {		//0 and -1 are both invalid to avoid freeing uninitialized memory (NULL descriptor)
+
+			success &= !Buffer_resetBit(device->freeList[id >> 20], id & ((1 << 20) - 1)).genericError;
+
+			#ifndef NDEBUG
+
+				//TODO: HashMap
+
+				ListDescriptorStackTrace *stack = &device->descriptorStackTraces;
+				
+				for (U64 j = 0; j < stack->length; ++j)
+					if (stack->ptr[j].resourceId == id) {
+						ListDescriptorStackTrace_erase(stack, j);
+						break;
+					}
+
+			#endif
+		}
+	}
+
+	ListU32_clear(allocations);
+	return success;
 }

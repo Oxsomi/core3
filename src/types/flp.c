@@ -1,16 +1,16 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -34,7 +34,7 @@ U8 EFloatType_mantissaBits(EFloatType type) {
 	return (U8) type;
 }
 
-U64 EFloatType_mantissaShift(EFloatType type) { 
+U64 EFloatType_mantissaShift(EFloatType type) {
 	type;
 	return 0;
 }
@@ -395,9 +395,9 @@ U64 EFloatType_convert(EFloatType type, U64 v, EFloatType conversionType) {
 	U64 mantissa = EFloatType_convertMantissa(type, v, conversionType, &carry);
 	U64 exponent = EFloatType_convertExponent(type, v, conversionType, &mantissa, carry);
 
-	return 
-		sign | 
-		(exponent << EFloatType_exponentShift(conversionType)) | 
+	return
+		sign |
+		(exponent << EFloatType_exponentShift(conversionType)) |
 		(mantissa << EFloatType_mantissaShift(conversionType));
 }
 
@@ -431,11 +431,11 @@ _EFloatType_cast1(TF19, a);		\
 _EFloatType_cast1(PXR24, a);	\
 _EFloatType_cast1(FP24, a);
 
-_EFloatType_cast(F8); 
-_EFloatType_cast(F16); 
-_EFloatType_cast(F32); 
-_EFloatType_cast(F64); 
-_EFloatType_cast(BF16); 
-_EFloatType_cast(TF19); 
-_EFloatType_cast(PXR24); 
+_EFloatType_cast(F8);
+_EFloatType_cast(F16);
+_EFloatType_cast(F32);
+_EFloatType_cast(F64);
+_EFloatType_cast(BF16);
+_EFloatType_cast(TF19);
+_EFloatType_cast(PXR24);
 _EFloatType_cast(FP24);

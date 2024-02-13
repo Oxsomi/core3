@@ -21,6 +21,7 @@
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/pipeline.h"
 #include "graphics/generic/device.h"
+#include "graphics/generic/texture.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
 #include "formats/texture.h"
@@ -239,14 +240,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 				1, "GraphicsDeviceRef_createPipelinesGraphics()::infos[i].subPass is specified while renderPass is NULL"
 			);
 
-		//Validate tesselation and msaa extensions
-
-		if(info->patchControlPointsExt && !(device->info.capabilities.features & EGraphicsFeatures_TessellationShader))
-			return Error_unsupportedOperation(
-				0,
-				"GraphicsDeviceRef_createPipelinesGraphics()::infos[i].patchControlPointsExt is specified while "
-				"TesselationShader is unsupported"
-			);
+		//Validate msaa extensions
 
 		U32 dataTypeCheck = 0;
 
@@ -322,21 +316,12 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 		if((stageFlags >> EPipelineStage_Compute) & 1)
 			return Error_invalidOperation(5, "GraphicsDeviceRef_createPipelinesGraphics()::infos[i] contains compute stage");
 
-		for(U32 j = EPipelineStage_RtStart; j < EPipelineStage_RtEnd; ++j)
-			if((stageFlags >> j) & 1)
-				return Error_invalidOperation(6, "GraphicsDeviceRef_createPipelinesGraphics()::infos[i] contains RT stage(s)");
+		//TODO:
+		//for(U32 j = EPipelineStage_RtStart; j < EPipelineStage_RtEnd; ++j)
+		//	if((stageFlags >> j) & 1)
+		//		return Error_invalidOperation(6, "GraphicsDeviceRef_createPipelinesGraphics()::infos[i] contains RT stage(s)");
 
-		//Validate if stages are allowed due to TesselationShader, GeometryShader
-
-		if(
-			stageFlags & (((U64)1 << EPipelineStage_HullExt) | ((U64)1 << EPipelineStage_DomainExt)) &&
-			!(device->info.capabilities.features & EGraphicsFeatures_TessellationShader)
-		)
-			return Error_unsupportedOperation(
-				10,
-				"GraphicsDeviceRef_createPipelinesGraphics()::infos[i] contains hull or domain shader, "
-				"but tessellation isn't supported"
-			);
+		//Validate if stages are allowed due to GeometryShader
 
 		if(
 			((stageFlags >> EPipelineStage_GeometryExt) & 1) &&

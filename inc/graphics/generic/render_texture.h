@@ -21,7 +21,7 @@
 #pragma once
 #include "types/vec.h"
 #include "platforms/ref_ptr.h"
-#include "formats/texture.h"
+#include "texture.h"
 
 typedef RefPtr GraphicsDeviceRef;
 typedef struct Error Error;
@@ -29,36 +29,10 @@ typedef struct CharString CharString;
 
 typedef enum EMSAASamples EMSAASamples;
 
-typedef enum ERenderTextureUsage {
-
-	ERenderTextureUsage_None,
-	ERenderTextureUsage_ShaderRead		= 1 << 0,
-	ERenderTextureUsage_ShaderWrite		= 1 << 1,
-
-	ERenderTextureUsage_ShaderRW		= ERenderTextureUsage_ShaderRead | ERenderTextureUsage_ShaderWrite
-
-} ERenderTextureUsage;
-
-typedef struct RenderTexture {
-
-	GraphicsDeviceRef *device;
-
-	ETextureType type;
-	U32 readLocation;
-
-	I32x4 size;
-
-	ETextureFormat format;
-	ERenderTextureUsage usage;
-
-	U32 writeLocation;
-	EMSAASamples msaa;
-
-} RenderTexture;
+typedef UnifiedTexture RenderTexture;
 
 typedef RefPtr RenderTextureRef;
 
-#define RenderTexture_ext(ptr, T) (!ptr ? NULL : (T##RenderTexture*)(ptr + 1))		//impl
 #define RenderTextureRef_ptr(ptr) RefPtr_data(ptr, RenderTexture)
 
 Error RenderTextureRef_dec(RenderTextureRef **renderTexture);
@@ -67,9 +41,11 @@ Error RenderTextureRef_inc(RenderTextureRef *renderTexture);
 Error GraphicsDeviceRef_createRenderTexture(
 	GraphicsDeviceRef *deviceRef,
 	ETextureType type,
-	I32x4 size,
+	U16 width,
+	U16 height,
+	U16 length,
 	ETextureFormatId format,
-	ERenderTextureUsage usage,
+	EGraphicsResourceFlag flag,
 	EMSAASamples msaa,
 	CharString name,
 	RenderTextureRef **renderTexture

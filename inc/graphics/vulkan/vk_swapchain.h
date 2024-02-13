@@ -24,21 +24,11 @@
 typedef struct Window Window;
 typedef struct VkGraphicsInstance VkGraphicsInstance;
 
-TList(VkManagedImage);
-
 typedef struct VkSwapchain {
-
 	VkSurfaceKHR surface;			//Platform's surface implementation
 	VkSwapchainKHR swapchain;
-
 	ListVkSemaphore semaphores;
-	ListVkManagedImage images;
-
 	VkSurfaceFormatKHR format;
-
-	U32 currentIndex;				//Swapchain index
-	U32 padding;
-
 } VkSwapchain;
 
 impl Error VkSurface_create(GraphicsDevice *device, const Window *window, VkSurfaceKHR *surface);

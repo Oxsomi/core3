@@ -71,7 +71,7 @@ VkBool32 onDebugReport(
 	PFN_vkVoidFunction v = vkGetInstanceProcAddr(instanceExt->instance, #function); 			\
 																								\
 	if(!v)																						\
-		_gotoIfError(clean, Error_nullPointer(0, "vkExtension() failed"));						\
+		_gotoIfError(clean, Error_nullPointer(0, "vkExtension() " #function " failed"));		\
 																								\
 	*(void**)&result = (void*) v;																\
 }
@@ -85,12 +85,7 @@ TList(VkLayerProperties);
 TListImpl(VkExtensionProperties);
 TListImpl(VkLayerProperties);
 
-Error GraphicsInstance_createExt(
-	GraphicsApplicationInfo info,
-	Bool isVerbose,
-	GraphicsInstanceRef **instanceRef,
-	U32 *version
-) {
+Error GraphicsInstance_createExt(GraphicsApplicationInfo info, Bool isVerbose, GraphicsInstanceRef **instanceRef) {
 
 	U32 layerCount = 0, extensionCount = 0;
 	CharString title = (CharString) { 0 };
@@ -297,6 +292,8 @@ Error GraphicsInstance_createExt(
 			.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT,
 
 			.flags =
+				VK_DEBUG_REPORT_DEBUG_BIT_EXT |
+				VK_DEBUG_REPORT_INFORMATION_BIT_EXT |
 				VK_DEBUG_REPORT_ERROR_BIT_EXT |
 				VK_DEBUG_REPORT_WARNING_BIT_EXT |
 				VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT,
@@ -310,7 +307,8 @@ Error GraphicsInstance_createExt(
 
 	#endif
 
-	*version = application.apiVersion;
+	instance->api = EGraphicsApi_Vulkan;
+	instance->apiVersion = application.apiVersion;
 
 clean:
 
@@ -413,18 +411,17 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 	VkGraphicsInstance *graphicsExt = GraphicsInstance_ext(inst, Vk);
 
 	U32 deviceCount = 0;
-	vkEnumeratePhysicalDevices(graphicsExt->instance, &deviceCount, NULL);
+	Error err = vkCheck(vkEnumeratePhysicalDevices(graphicsExt->instance, &deviceCount, NULL));
+
+	if(err.genericError)
+		return err;
 
 	ListVkPhysicalDevice temp = (ListVkPhysicalDevice) { 0 };
 	ListGraphicsDeviceInfo temp2 = (ListGraphicsDeviceInfo) { 0 };
 	ListVkLayerProperties temp3 = (ListVkLayerProperties) { 0 };
 	ListVkExtensionProperties temp4 = (ListVkExtensionProperties) { 0 };
 
-	Error err = ListVkPhysicalDevice_createx(deviceCount, &temp);
-
-	if(err.genericError)
-		return err;
-
+	_gotoIfError(clean, ListVkPhysicalDevice_createx(deviceCount, &temp));
 	_gotoIfError(clean, ListGraphicsDeviceInfo_reservex(&temp2, deviceCount));
 
 	_gotoIfError(clean, vkCheck(vkEnumeratePhysicalDevices(graphicsExt->instance, &deviceCount, temp.ptrNonConst)));
@@ -527,10 +524,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 		void **propertiesNext = &properties2.pNext;
 
 		getDeviceProperties(
-			true,
-			VkPhysicalDeviceSubgroupProperties,
-			subgroup,
-			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES
+			true, VkPhysicalDeviceSubgroupProperties, subgroup, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES
 		);
 
 		getDeviceProperties(
@@ -561,19 +555,8 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_INVOCATION_REORDER_PROPERTIES_NV
 		);
 
-		getDeviceProperties(
-			true,
-			VkPhysicalDeviceIDProperties,
-			id,
-			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES
-		);
-
-		getDeviceProperties(
-			true,
-			VkPhysicalDeviceDriverProperties,
-			driver,
-			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES
-		);
+		getDeviceProperties(true, VkPhysicalDeviceIDProperties, id, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES);
+		getDeviceProperties(true, VkPhysicalDeviceDriverProperties, driver, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES);
 
 		graphicsExt->getPhysicalDeviceProperties2(dev, &properties2);
 
@@ -792,7 +775,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 		//Disable tesselation shaders if minimum isn't met
 
 		if (
-			features.tessellationShader && (
+			!features.tessellationShader || (
 				U64_min(
 					U64_min(
 						U64_min(
@@ -808,8 +791,10 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 				limits.maxTessellationGenerationLevel < 64 ||
 				limits.maxTessellationPatchSize < 32
 			)
-		)
-			features.tessellationShader = false;
+		) {
+			Log_debugLnx("Vulkan: Unsupported device %u, tesselation isn't supported but is required", i);
+			continue;
+		}
 
 		//Disable geometry shaders if minimum isn't met
 
@@ -940,9 +925,6 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 
 		if(features.geometryShader)
 			capabilities.features |= EGraphicsFeatures_GeometryShader;
-
-		if(features.tessellationShader)
-			capabilities.features |= EGraphicsFeatures_TessellationShader;
 
 		//Multi draw
 
@@ -1376,11 +1358,12 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 		_gotoIfError(clean, Error_unsupportedOperation(0, "GraphicsInstance_getDeviceInfos() no supported OxC3 device found"));
 
 	*result = temp2;
-	goto success;
 
 clean:
-	ListGraphicsDeviceInfo_freex(&temp2);
-success:
+
+	if(err.genericError)
+		ListGraphicsDeviceInfo_freex(&temp2);
+
 	ListVkPhysicalDevice_freex(&temp);
 	ListVkLayerProperties_freex(&temp3);
 	ListVkExtensionProperties_freex(&temp4);

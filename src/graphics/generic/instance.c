@@ -77,10 +77,11 @@ Error GraphicsInstance_getPreferredDevice(
 		if((info.capabilities.features & requiredCapabilities.features) != requiredCapabilities.features)
 			continue;
 
-		if((info.capabilities.featuresExt & requiredCapabilities.featuresExt) != requiredCapabilities.featuresExt)
+		if((info.capabilities.features2 & requiredCapabilities.features2) != requiredCapabilities.features2)
 			continue;
 
-		//Remember
+		if((info.capabilities.featuresExt & requiredCapabilities.featuresExt) != requiredCapabilities.featuresExt)
+			continue;
 
 		if(info.type == EGraphicsDeviceType_Dedicated) {
 			preferredDedicated = i;
@@ -105,13 +106,7 @@ clean:
 	return err;
 }
 
-impl Error GraphicsInstance_createExt(
-	GraphicsApplicationInfo info,
-	Bool isVerbose,
-	GraphicsInstanceRef **instanceRef,
-	U32 *version
-);
-
+impl Error GraphicsInstance_createExt(GraphicsApplicationInfo info, Bool isVerbose, GraphicsInstanceRef **instanceRef);
 impl Bool GraphicsInstance_free(GraphicsInstance *inst, Allocator alloc);
 impl extern const U64 GraphicsInstanceExt_size;
 
@@ -127,21 +122,15 @@ Error GraphicsInstance_create(GraphicsApplicationInfo info, Bool isVerbose, Grap
 	if(err.genericError)
 		return err;
 
-	U32 version = 0;
-	_gotoIfError(clean, GraphicsInstance_createExt(info, isVerbose, instanceRef, &version));
-
 	GraphicsInstance *instance = GraphicsInstanceRef_ptr(*instanceRef);
 
-	*instance = (GraphicsInstance) {
-		.application = info,
-		.api = EGraphicsApi_Vulkan,
-		.apiVersion = version
-	};
-
-	goto success;
+	*instance = (GraphicsInstance) { .application = info };
+	_gotoIfError(clean, GraphicsInstance_createExt(info, isVerbose, instanceRef));
 
 clean:
-	GraphicsInstanceRef_dec(instanceRef);
-success:
+
+	if(err.genericError)
+		GraphicsInstanceRef_dec(instanceRef);
+
 	return err;
 }

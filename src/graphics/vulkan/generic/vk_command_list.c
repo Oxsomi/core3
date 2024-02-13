@@ -42,17 +42,7 @@
 
 void addResolveImage(AttachmentInfoInternal attachment, VkRenderingAttachmentInfoKHR *result) {
 
-	VkManagedImage *imageExt = NULL;
-
-	if(attachment.resolveImage->typeId == EGraphicsTypeId_Swapchain) {
-		VkSwapchain *swapchain = Swapchain_ext(SwapchainRef_ptr(attachment.resolveImage), Vk);
-		imageExt = &swapchain->images.ptrNonConst[swapchain->currentIndex];
-	}
-
-	else if(attachment.resolveImage->typeId == EGraphicsTypeId_DepthStencil)
-		imageExt = (VkManagedImage*) DepthStencil_ext(DepthStencilRef_ptr(attachment.resolveImage), );
-
-	else imageExt = (VkManagedImage*) RenderTexture_ext(RenderTextureRef_ptr(attachment.resolveImage), );
+	VkUnifiedTexture *imageExt = TextureRef_getCurrImgExtT(attachment.resolveImage, Vk, 0);
 
 	switch (attachment.resolveMode) {
 		case EMSAAResolveMode_Average:	result->resolveMode = VK_RESOLVE_MODE_AVERAGE_BIT;	break;
@@ -135,23 +125,8 @@ void CommandList_process(
 
 			for(U64 i = 0; i < imageClearCount; ++i) {
 
-				//Get image
-
 				ClearImageCmd image = ((const ClearImageCmd*) (data + sizeof(U32)))[i];
-
-				VkManagedImage *imageExt = NULL;
-
-				if(image.image->typeId == EGraphicsTypeId_Swapchain) {
-
-					Swapchain *swapchain = SwapchainRef_ptr(image.image);
-					VkSwapchain *swapchainExt = Swapchain_ext(swapchain, Vk);
-
-					imageExt = &swapchainExt->images.ptrNonConst[swapchainExt->currentIndex];
-				}
-
-				else imageExt = (VkManagedImage*) RenderTexture_ext(RenderTextureRef_ptr(image.image), );
-
-				//Clear
+				VkUnifiedTexture *imageExt = TextureRef_getCurrImgExtT(image.image, Vk, 0);
 
 				VkImageSubresourceRange range = (VkImageSubresourceRange) {
 					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -179,36 +154,31 @@ void CommandList_process(
 
 			VkImageAspectFlags aspectFlags = VK_IMAGE_ASPECT_COLOR_BIT;
 
-			I32x4 srcSize = I32x4_zero();
+			UnifiedTexture src = TextureRef_getUnifiedTexture(copyImage.src, NULL);
 
-			if(copyImage.src->typeId == EGraphicsTypeId_DepthStencil) {
-				aspectFlags = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
-				srcSize = I32x4_fromI32x2(DepthStencilRef_ptr(copyImage.src)->size);
+			if(src.depthFormat) {
+
+				if(copyImage.copyType == ECopyType_DepthOnly)
+					aspectFlags = VK_IMAGE_ASPECT_DEPTH_BIT;
+
+				else if(copyImage.copyType == ECopyType_StencilOnly)
+					aspectFlags = VK_IMAGE_ASPECT_STENCIL_BIT;
+
+				else aspectFlags = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
 			}
-
-			else if(copyImage.src->typeId == EGraphicsTypeId_Swapchain)
-				srcSize = I32x4_fromI32x2(SwapchainRef_ptr(copyImage.src)->size);
-
-			else srcSize = RenderTextureRef_ptr(copyImage.src)->size;		//TODO: DeviceTexture
-
-			if(copyImage.copyType == ECopyType_DepthOnly)
-				aspectFlags = VK_IMAGE_ASPECT_DEPTH_BIT;
-
-			else if(copyImage.copyType == ECopyType_StencilOnly)
-				aspectFlags = VK_IMAGE_ASPECT_STENCIL_BIT;
 
 			for(U64 i = 0; i < copyImage.regionCount; ++i) {
 
 				CopyImageRegion image = copyImageRegions[i];
 
 				if(!image.width)
-					image.width = (U32)I32x4_x(srcSize) - image.srcX;
+					image.width = src.width - image.srcX;
 
 				if(!image.height)
-					image.height = (U32)I32x4_y(srcSize) - image.srcY;
+					image.height = src.height - image.srcY;
 
 				if(!image.length)
-					image.length = (U32)U64_max((U32)I32x4_z(srcSize), 1) - image.srcZ;
+					image.length = src.length - image.srcZ;
 
 				VkImageSubresourceLayers subResource = (VkImageSubresourceLayers) {
 					.aspectMask = aspectFlags,
@@ -245,29 +215,8 @@ void CommandList_process(
 				}
 			}
 
-			VkManagedImage *srcExt = NULL;
-
-			if(copyImage.src->typeId == EGraphicsTypeId_Swapchain) {
-				VkSwapchain *swapchainExt = Swapchain_ext(SwapchainRef_ptr(copyImage.src), Vk);
-				srcExt = &swapchainExt->images.ptrNonConst[swapchainExt->currentIndex];
-			}
-
-			else if(copyImage.src->typeId == EGraphicsTypeId_DepthStencil)
-				srcExt = (VkManagedImage*) DepthStencil_ext(DepthStencilRef_ptr(copyImage.src), );
-
-			else srcExt = (VkManagedImage*) RenderTexture_ext(RenderTextureRef_ptr(copyImage.src), );
-
-			VkManagedImage *dstExt = NULL;
-
-			if(copyImage.dst->typeId == EGraphicsTypeId_Swapchain) {
-				VkSwapchain *swapchainExt = Swapchain_ext(SwapchainRef_ptr(copyImage.dst), Vk);
-				dstExt = &swapchainExt->images.ptrNonConst[swapchainExt->currentIndex];
-			}
-
-			else if(copyImage.src->typeId == EGraphicsTypeId_DepthStencil)
-				dstExt = (VkManagedImage*) DepthStencil_ext(DepthStencilRef_ptr(copyImage.dst), );
-
-			else dstExt = (VkManagedImage*) RenderTexture_ext(RenderTextureRef_ptr(copyImage.dst), );
+			VkUnifiedTexture *srcExt = TextureRef_getCurrImgExtT(copyImage.src, Vk, 0);
+			VkUnifiedTexture *dstExt = TextureRef_getCurrImgExtT(copyImage.dst, Vk, 0);
 
 			vkCmdCopyImage(
 				buffer,
@@ -313,18 +262,7 @@ void CommandList_process(
 
 				const AttachmentInfoInternal *attachmentsj = &attachments[j];
 
-				VkManagedImage *imageExt = NULL;
-
-				if(attachmentsj->image->typeId == EGraphicsTypeId_Swapchain) {
-
-					Swapchain *swapchain = SwapchainRef_ptr(attachmentsj->image);
-					VkSwapchain *swapchainExt = Swapchain_ext(swapchain, Vk);
-
-					imageExt = &swapchainExt->images.ptrNonConst[swapchainExt->currentIndex];
-				}
-
-				else imageExt = (VkManagedImage*) RenderTexture_ext(RenderTextureRef_ptr(attachmentsj->image), );
-
+				VkUnifiedTexture *imageExt = TextureRef_getCurrImgExtT(attachmentsj->image, Vk, 0);
 				VkAttachmentLoadOp loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 
 				if((startRender->clearMask >> i) & 1)
@@ -358,8 +296,7 @@ void CommandList_process(
 
 			if (startRender->flags & EStartRenderFlags_Depth) {
 
-				DepthStencil *depth = DepthStencilRef_ptr(startRender->depth);
-				VkManagedImage *depthExt = (VkManagedImage*) DepthStencil_ext(depth, );
+				VkUnifiedTexture *depthExt = TextureRef_getCurrImgExtT(startRender->depth, Vk, 0);
 
 				Bool unusedAfterRender = startRender->flags & EStartRenderFlags_DepthUnusedAfterRender;
 
@@ -393,8 +330,7 @@ void CommandList_process(
 
 			if (startRender->flags & EStartRenderFlags_Stencil) {
 
-				DepthStencil *stencil = DepthStencilRef_ptr(startRender->stencil);
-				VkManagedImage *stencilExt = (VkManagedImage*) DepthStencil_ext(stencil, );
+				VkUnifiedTexture *stencilExt = TextureRef_getCurrImgExtT(startRender->stencil, Vk, 0);
 
 				Bool unusedAfterRender = startRender->flags & EStartRenderFlags_StencilUnusedAfterRender;
 
@@ -696,13 +632,13 @@ void CommandList_process(
 
 				TransitionInternal transition = commandList->transitions.ptr[i];
 
+				if(transition.type == ETransitionType_KeepAlive)		//TODO: Residency management
+					continue;
+
 				//Grab transition type
 				
-				Bool isSwapchain = transition.resource->typeId == EGraphicsTypeId_Swapchain;
-				Bool isRenderTexture = transition.resource->typeId == EGraphicsTypeId_RenderTexture;
-				Bool isDepthStencil = transition.resource->typeId == EGraphicsTypeId_DepthStencil;
-				Bool isDeviceTexture = transition.resource->typeId == EGraphicsTypeId_DeviceTexture;
-				Bool isImage = isSwapchain || isRenderTexture || isDepthStencil || isDeviceTexture;
+				Bool isImage = TextureRef_isTexture(transition.resource);
+				Bool isDepthStencil = TextureRef_isDepthStencil(transition.resource);
 				Bool isShaderRead = transition.type == ETransitionType_ShaderRead;
 
 				VkImageLayout layout = VK_IMAGE_LAYOUT_GENERAL;
@@ -727,11 +663,11 @@ void CommandList_process(
 					case EPipelineStage_Pixel:			pipelineStage = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;	break;
 					case EPipelineStage_GeometryExt:	pipelineStage = VK_PIPELINE_STAGE_2_GEOMETRY_SHADER_BIT;	break;
 
-					case EPipelineStage_HullExt:		
+					case EPipelineStage_Hull:		
 						pipelineStage = VK_PIPELINE_STAGE_2_TESSELLATION_CONTROL_SHADER_BIT;
 						break;
 
-					case EPipelineStage_DomainExt:
+					case EPipelineStage_Domain:
 						pipelineStage = VK_PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER_BIT;
 						break;
 
@@ -814,20 +750,7 @@ void CommandList_process(
 
 				if(isImage) {
 
-					VkManagedImage *imageExt = NULL;
-
-					if(isSwapchain) {
-						VkSwapchain *swapchainExt = Swapchain_ext(SwapchainRef_ptr(transition.resource), Vk);
-						imageExt = &swapchainExt->images.ptrNonConst[swapchainExt->currentIndex];
-					}
-
-					else if(isRenderTexture)
-						imageExt = (VkManagedImage*) RenderTexture_ext(RenderTextureRef_ptr(transition.resource), );
-
-					else if(isDeviceTexture)
-						imageExt = (VkManagedImage*) DeviceTexture_ext(DeviceTextureRef_ptr(transition.resource), );
-
-					else imageExt = (VkManagedImage*) DepthStencil_ext(DepthStencilRef_ptr(transition.resource), );
+					VkUnifiedTexture *imageExt = TextureRef_getCurrImgExtT(transition.resource, Vk, 0);
 
 					VkImageSubresourceRange range = (VkImageSubresourceRange) {		//TODO:
 						.aspectMask = isDepthStencil ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT,
@@ -835,7 +758,7 @@ void CommandList_process(
 						.layerCount = 1
 					};
 
-					_gotoIfError(nextTransition, VkManagedImage_transition(
+					_gotoIfError(nextTransition, VkUnifiedTexture_transition(
 
 						imageExt,
 						pipelineStage,
@@ -860,7 +783,7 @@ void CommandList_process(
 						access,
 						graphicsQueueId,
 						0,						//TODO: range
-						devBuffer->length,
+						devBuffer->resource.size,
 						&deviceExt->bufferTransitions,
 						&dependency
 					));

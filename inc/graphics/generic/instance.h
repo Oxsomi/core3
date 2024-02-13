@@ -24,22 +24,19 @@
 #include "device_info.h"
 
 //In line with vulkan standard.
-#define GraphicsApplicationInfo_Version(major, minor, patch)	\
-	((major) << 22) | ((minor) << 12) | (patch)
+#define GraphicsApplicationInfo_Version(major, minor, patch)	((major) << 22) | ((minor) << 12) | (patch)
 
 typedef struct GraphicsApplicationInfo {
-
 	CharString name;
-
 	U32 version, padding;
-
 } GraphicsApplicationInfo;
 
 typedef enum EGraphicsApi {
 	EGraphicsApi_Vulkan,
-	EGraphicsApi_DirectX12,
-	EGraphicsApi_Metal,
-	EGraphicsApi_WebGPU
+	//EGraphicsApi_DirectX12,
+	//EGraphicsApi_Metal,
+	//EGraphicsApi_WebGPU,
+	EGraphicsApi_Count
 } EGraphicsApi;
 
 typedef struct GraphicsInstance {

@@ -22,6 +22,7 @@
 #include "graphics/generic/pipeline.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
+#include "graphics/generic/texture.h"
 #include "graphics/vulkan/vk_device.h"
 #include "graphics/vulkan/vk_instance.h"
 #include "platforms/ext/bufferx.h"
@@ -93,9 +94,9 @@ Error createShaderModule(
 
 		#endif
 	}
-
-	goto clean;
 	
+	goto clean;
+
 clean:
 
 	CharString_freex(&temp);
@@ -211,37 +212,37 @@ clean:
 
 VkCompareOp mapVkCompareOp(ECompareOp op) {
 	switch (op) {
-		case ECompareOp_Gt:			return VK_COMPARE_OP_GREATER;
-		case ECompareOp_Geq:		return VK_COMPARE_OP_GREATER_OR_EQUAL;
-		case ECompareOp_Eq:			return VK_COMPARE_OP_EQUAL;
-		case ECompareOp_Neq:		return VK_COMPARE_OP_NOT_EQUAL;
-		case ECompareOp_Leq:		return VK_COMPARE_OP_LESS_OR_EQUAL;
-		case ECompareOp_Lt:			return VK_COMPARE_OP_LESS;
-		case ECompareOp_Always:		return VK_COMPARE_OP_ALWAYS;
-		default:					return VK_COMPARE_OP_NEVER;
+		case ECompareOp_Gt:						return VK_COMPARE_OP_GREATER;
+		case ECompareOp_Geq:					return VK_COMPARE_OP_GREATER_OR_EQUAL;
+		case ECompareOp_Eq:						return VK_COMPARE_OP_EQUAL;
+		case ECompareOp_Neq:					return VK_COMPARE_OP_NOT_EQUAL;
+		case ECompareOp_Leq:					return VK_COMPARE_OP_LESS_OR_EQUAL;
+		case ECompareOp_Lt:						return VK_COMPARE_OP_LESS;
+		case ECompareOp_Always:					return VK_COMPARE_OP_ALWAYS;
+		default:								return VK_COMPARE_OP_NEVER;
 	}
 }
 
 VkStencilOp mapVkStencilOp(EStencilOp op) {
 	switch (op) {
-		default:					return VK_STENCIL_OP_KEEP;
-		case EStencilOp_Zero:		return VK_STENCIL_OP_ZERO;
-		case EStencilOp_Replace:	return VK_STENCIL_OP_REPLACE;
-		case EStencilOp_IncClamp:	return VK_STENCIL_OP_INCREMENT_AND_CLAMP;
-		case EStencilOp_DecClamp:	return VK_STENCIL_OP_DECREMENT_AND_CLAMP;
-		case EStencilOp_Invert:		return VK_STENCIL_OP_INVERT;
-		case EStencilOp_IncWrap:	return VK_STENCIL_OP_INCREMENT_AND_WRAP;
-		case EStencilOp_DecWrap:	return VK_STENCIL_OP_DECREMENT_AND_WRAP;
+		default:								return VK_STENCIL_OP_KEEP;
+		case EStencilOp_Zero:					return VK_STENCIL_OP_ZERO;
+		case EStencilOp_Replace:				return VK_STENCIL_OP_REPLACE;
+		case EStencilOp_IncClamp:				return VK_STENCIL_OP_INCREMENT_AND_CLAMP;
+		case EStencilOp_DecClamp:				return VK_STENCIL_OP_DECREMENT_AND_CLAMP;
+		case EStencilOp_Invert:					return VK_STENCIL_OP_INVERT;
+		case EStencilOp_IncWrap:				return VK_STENCIL_OP_INCREMENT_AND_WRAP;
+		case EStencilOp_DecWrap:				return VK_STENCIL_OP_DECREMENT_AND_WRAP;
 	}
 }
 
 VkBlendOp mapVkBlendOp(EBlendOp op) {
 	switch (op) {
-		default:							return VK_BLEND_OP_ADD;
-		case EBlendOp_Subtract:				return VK_BLEND_OP_SUBTRACT;
-		case EBlendOp_ReverseSubtract:		return VK_BLEND_OP_REVERSE_SUBTRACT;
-		case EBlendOp_Min:					return VK_BLEND_OP_MIN;
-		case EBlendOp_Max:					return VK_BLEND_OP_MAX;
+		default:								return VK_BLEND_OP_ADD;
+		case EBlendOp_Subtract:					return VK_BLEND_OP_SUBTRACT;
+		case EBlendOp_ReverseSubtract:			return VK_BLEND_OP_REVERSE_SUBTRACT;
+		case EBlendOp_Min:						return VK_BLEND_OP_MIN;
+		case EBlendOp_Max:						return VK_BLEND_OP_MAX;
 	}
 }
 
@@ -249,26 +250,26 @@ VkBlendFactor mapVkBlend(EBlend op) {
 
 	switch (op) {
 
-		default:						return VK_BLEND_FACTOR_ZERO;
-		case EBlend_One:				return VK_BLEND_FACTOR_ONE;
-		case EBlend_SrcColor:			return VK_BLEND_FACTOR_SRC_COLOR;
-		case EBlend_InvSrcColor:		return VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR;
-		case EBlend_DstColor:			return VK_BLEND_FACTOR_DST_COLOR;
-		case EBlend_InvDstColor:		return VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR;
-		case EBlend_SrcAlpha:			return VK_BLEND_FACTOR_SRC_ALPHA;
-		case EBlend_InvSrcAlpha:		return VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-		case EBlend_DstAlpha:			return VK_BLEND_FACTOR_DST_ALPHA;
-		case EBlend_InvDstAlpha:		return VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
-		case EBlend_BlendFactor:		return VK_BLEND_FACTOR_CONSTANT_COLOR;
-		case EBlend_InvBlendFactor:		return VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_COLOR;
-		case EBlend_AlphaFactor:		return VK_BLEND_FACTOR_CONSTANT_ALPHA;
-		case EBlend_InvAlphaFactor:		return VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_ALPHA;
-		case EBlend_SrcAlphaSat:		return VK_BLEND_FACTOR_SRC_ALPHA_SATURATE;
+		default:								return VK_BLEND_FACTOR_ZERO;
+		case EBlend_One:						return VK_BLEND_FACTOR_ONE;
+		case EBlend_SrcColor:					return VK_BLEND_FACTOR_SRC_COLOR;
+		case EBlend_InvSrcColor:				return VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR;
+		case EBlend_DstColor:					return VK_BLEND_FACTOR_DST_COLOR;
+		case EBlend_InvDstColor:				return VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR;
+		case EBlend_SrcAlpha:					return VK_BLEND_FACTOR_SRC_ALPHA;
+		case EBlend_InvSrcAlpha:				return VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+		case EBlend_DstAlpha:					return VK_BLEND_FACTOR_DST_ALPHA;
+		case EBlend_InvDstAlpha:				return VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
+		case EBlend_BlendFactor:				return VK_BLEND_FACTOR_CONSTANT_COLOR;
+		case EBlend_InvBlendFactor:				return VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_COLOR;
+		case EBlend_AlphaFactor:				return VK_BLEND_FACTOR_CONSTANT_ALPHA;
+		case EBlend_InvAlphaFactor:				return VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_ALPHA;
+		case EBlend_SrcAlphaSat:				return VK_BLEND_FACTOR_SRC_ALPHA_SATURATE;
 
-		case EBlend_Src1ColorExt:		return VK_BLEND_FACTOR_ZERO;
-		case EBlend_Src1AlphaExt:		return VK_BLEND_FACTOR_ZERO;
-		case EBlend_InvSrc1ColorExt:	return VK_BLEND_FACTOR_ZERO;
-		case EBlend_InvSrc1AlphaExt:	return VK_BLEND_FACTOR_ZERO;
+		case EBlend_Src1ColorExt:				return VK_BLEND_FACTOR_ZERO;
+		case EBlend_Src1AlphaExt:				return VK_BLEND_FACTOR_ZERO;
+		case EBlend_InvSrc1ColorExt:			return VK_BLEND_FACTOR_ZERO;
+		case EBlend_InvSrc1AlphaExt:			return VK_BLEND_FACTOR_ZERO;
 	}
 }
 
@@ -885,8 +886,8 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListChar
 				default:							stageBit = VK_SHADER_STAGE_VERTEX_BIT;						break;
 				case EPipelineStage_Pixel:			stageBit = VK_SHADER_STAGE_FRAGMENT_BIT;					break;
 				case EPipelineStage_GeometryExt:	stageBit = VK_SHADER_STAGE_GEOMETRY_BIT;					break;
-				case EPipelineStage_HullExt:		stageBit = VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT;		break;
-				case EPipelineStage_DomainExt:		stageBit = VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;		break;
+				case EPipelineStage_Hull:			stageBit = VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT;		break;
+				case EPipelineStage_Domain:			stageBit = VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;		break;
 			}
 
 			VkShaderModule module = NULL;

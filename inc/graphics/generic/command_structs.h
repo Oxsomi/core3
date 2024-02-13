@@ -22,6 +22,7 @@
 #include "types/vec.h"
 #include "platforms/ref_ptr.h"
 #include "graphics/generic/device.h"
+#include "graphics/generic/resource.h"
 
 typedef RefPtr GraphicsDeviceRef;
 typedef RefPtr PipelineRef;
@@ -77,39 +78,20 @@ typedef enum ECommandOp {
 } ECommandOp;
 
 typedef enum ECommandListState {
-
 	ECommandListState_New,			//Never opened.
 	ECommandListState_Open,			//No end has been called yet.
 	ECommandListState_Closed,		//End has already been called (successfully).
 	ECommandListState_Invalid		//Something in the command list has gone wrong and it couldn't be closed.
-
 } ECommandListState;
 
 typedef struct CommandOpInfo {
-
 	ECommandOp op;
 	U32 opSize;
-
 } CommandOpInfo;
 
 typedef enum EPipelineStage EPipelineStage;
 
-typedef struct ImageRange {
-
-	U32 levelId;		//Set to U32_MAX to indicate all levels, otherwise indicates specific index.
-	U32 layerId;		//Set to U32_MAX to indicate all layers, otherwise indicates specific index.
-
-} ImageRange;
-
-typedef union ResourceRange {
-
-	BufferRange buffer;
-	ImageRange image;
-
-} ResourceRange;
-
 typedef enum ETransitionType {
-
 	ETransitionType_Clear,
 	ETransitionType_Vertex,
 	ETransitionType_Index,
@@ -119,26 +101,25 @@ typedef enum ETransitionType {
 	ETransitionType_RenderTargetRead,
 	ETransitionType_RenderTargetWrite,
 	ETransitionType_CopyRead,
-	ETransitionType_CopyWrite
-
+	ETransitionType_CopyWrite,
+	ETransitionType_KeepAlive			//If the only reason of this transition is to keep a resource alive
 } ETransitionType;
 
 typedef struct TransitionInternal {		//Transitions issued by a scope.
 
-	RefPtr *resource;					//Swapchain, RenderTexture, DepthStencil, DeviceBuffer, DeviceTexture
+	RefPtr *resource;					//Swapchain, RenderTexture, DepthStencil, DeviceBuffer, DeviceTexture, Sampler
 
 	ResourceRange range;
 
 	EPipelineStage stage;				//First shader stage that will access this resource (if !type)
 
-	U8 padding[3];
-	U8 type;							//ETransitionType
+	ETransitionType type;
 
 } TransitionInternal;
 
 typedef struct Transition {
 
-	RefPtr *resource;					//Swapchain, RenderTexture, DepthStencil, DeviceBuffer, DeviceTexture
+	RefPtr *resource;					//Swapchain, RenderTexture, DepthStencil, DeviceBuffer, DeviceTexture, Sampler
 
 	ResourceRange range;
 
@@ -152,17 +133,13 @@ typedef struct Transition {
 //Dependencies are executed before itself; important for threading.
 
 typedef enum ECommandScopeDependencyType {
-
 	ECommandScopeDependencyType_Unconditional,	//If dependency is present, wait for it to finish, otherwise no-op.
 	ECommandScopeDependencyType_Conditional		//If dependency is hidden, give error and hide self.
-
 } ECommandScopeDependencyType;
 
 typedef struct CommandScopeDependency {
-
 	ECommandScopeDependencyType type;
 	U32 id;
-
 } CommandScopeDependency;
 
 typedef struct CommandScope {
@@ -180,31 +157,23 @@ typedef struct CommandScope {
 } CommandScope;
 
 typedef enum ECommandStateFlags {
-
 	ECommandStateFlags_AnyScissor		= 1 << 0,
 	ECommandStateFlags_AnyViewport		= 1 << 1,
 	ECommandStateFlags_HasModifyOp		= 1 << 2,		//If it has any op that modifies any resource (clear/copy/shader/etc.)
 	ECommandStateFlags_HasScope			= 1 << 3,		//If it's in a scope
 	ECommandStateFlags_InvalidState		= 1 << 4		//One of the commands in the scope was invalid; ignore scope.
-
 } ECommandStateFlags;
 
 typedef union ClearColor {
-
 	U32 coloru[4];
 	I32 colori[4];
 	F32 colorf[4];
-
 } ClearColor;
 
 typedef struct ClearImageCmd {
-
 	ClearColor color;
-
 	ImageRange range;
-
 	RefPtr *image;
-
 } ClearImageCmd;
 
 typedef struct SetPrimitiveBuffersCmd {
@@ -213,7 +182,7 @@ typedef struct SetPrimitiveBuffersCmd {
 	DeviceBufferRef *indexBuffer;
 
 	Bool isIndex32Bit;
-	U8 padding[3];
+	U8 padding[7];
 
 } SetPrimitiveBuffersCmd;
 
@@ -247,27 +216,21 @@ typedef struct DispatchCmd { U32 groups[3]; } DispatchCmd;
 typedef struct DispatchIndirectCmd { DeviceBufferRef *buffer; U64 offset; } DispatchIndirectCmd;
 
 typedef enum ELoadAttachmentType {
-
 	ELoadAttachmentType_Any,			//Can preserve or clear depending on implementation. Result will be overwritten.
 	ELoadAttachmentType_Preserve,		//Keep the contents. Can have overhead because it has to load it (preserveMask).
 	ELoadAttachmentType_Clear			//Clears the contents at start.
-
 } ELoadAttachmentType;
 
 typedef struct ImageAndRange {
-
 	ImageRange range;
 	RefPtr *image;
-
 } ImageAndRange;
 
 typedef enum EMSAAResolveMode {
-
 	EMSAAResolveMode_Average,
 	EMSAAResolveMode_Min,
 	EMSAAResolveMode_Max,
 	EMSAAResolveMode_Count
-
 } EMSAAResolveMode;
 
 typedef struct AttachmentInfo {
@@ -365,11 +328,9 @@ typedef struct CopyImageRegion {
 } CopyImageRegion;
 
 typedef enum ECopyType {
-
 	ECopyType_All,				//Color or DepthStencil
 	ECopyType_DepthOnly,		//DepthStencil: Stencil isn't copied and only depth has to be compatible
 	ECopyType_StencilOnly		//DepthStencil: Depth isn't copied and only stencil has to be compatible
-
 } ECopyType;
 
 typedef struct CopyImageCmd {
@@ -386,10 +347,8 @@ typedef struct CopyImageCmd {
 //GPU commands
 
 typedef struct DrawCallUnindexed {
-
 	U32 vertexCount, instanceCount;
 	U32 vertexOffset, instanceOffset;
-
 } DrawCallUnindexed;
 
 typedef struct DrawCallIndexed {
@@ -402,7 +361,4 @@ typedef struct DrawCallIndexed {
 
 } DrawCallIndexed;
 
-typedef struct Dispatch {
-	U32 x, y, z, pad;
-} Dispatch;
-
+typedef struct Dispatch { U32 x, y, z, pad; } Dispatch;

@@ -24,12 +24,9 @@
 typedef struct ListVkBufferMemoryBarrier2 ListVkBufferMemoryBarrier2;
 
 typedef struct VkDeviceBuffer {
-
 	VkBuffer buffer;
-
 	VkPipelineStageFlagBits2 lastStage;
 	VkAccessFlagBits2 lastAccess;
-
 } VkDeviceBuffer;
 
 Error VkDeviceBuffer_transition(

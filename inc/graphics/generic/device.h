@@ -21,6 +21,7 @@
 #pragma once
 #include "graphics/generic/device_info.h"
 #include "graphics/generic/allocator.h"
+#include "graphics/generic/descriptor.h"
 #include "platforms/ref_ptr.h"
 #include "types/list.h"
 
@@ -41,30 +42,13 @@ typedef struct CBufferData {
 
 } CBufferData;
 
-typedef struct BufferRange {
-	U64 startRange;
-	U64 endRange;
-} BufferRange;
-
-typedef struct TextureRange {
-	U16 startRange[3];
-	U16 endRange[3];
-	U16 levelId;
-	U16 padding;
-} TextureRange;
-
-U16 TextureRange_width(TextureRange r);
-U16 TextureRange_height(TextureRange r);
-U16 TextureRange_length(TextureRange r);
-
-typedef union DevicePendingRange {
-
-	BufferRange buffer;
-	TextureRange texture;
-
-} DevicePendingRange;
+typedef struct DescriptorStackTrace {
+	U32 resourceId, padding;
+	void *stackTrace[8];
+} DescriptorStackTrace;
 
 TListNamed(Lock*, ListLockPtr);
+TList(DescriptorStackTrace);
 
 typedef struct GraphicsDevice {
 
@@ -102,6 +86,12 @@ typedef struct GraphicsDevice {
 	U64 pendingBytes;							//For determining if it's time to flush or to resize staging buffer
 
 	U64 flushThreshold;							//When the pending bytes are too much and the device should flush
+
+	//Used for allocating descriptors
+
+	Lock descriptorLock;
+	Buffer freeList[EDescriptorType_ResourceCount];
+	ListDescriptorStackTrace descriptorStackTraces;
 
 } GraphicsDevice;
 

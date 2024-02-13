@@ -24,16 +24,14 @@ We're targeting the minimum specs of following systems in OxC3 0.2:
   - AMD 6600 XT.
   - Intel A750.
 
-Binding tier is high for all laptops and PCs excluding Apple devices. All Apple devices are binding tier low until they release proper devices.
-
-Just because these are the target minimum specs doesn't mean older hardware is unsupported. The hard requirements should be looked at instead to determine if the device is supported. ***These are just minimum feature targets, they aren't all tested.***
+*Just because these are the target minimum specs doesn't mean older hardware is unsupported*. The hard requirements should be looked at instead to determine if the device is supported. ***These are just minimum feature targets, they aren't all tested.***
 
 ## List of Vulkan requirements
 
 Because of this, a device needs the following requirements to be OxC3 compatible:
 
 - Vulkan 1.1 or higher.
-- Tessellation shaders and geometry shaders are optional.
+- Tessellation shaders are required, but geometry shaders are optional.
 - More than 512 MiB of CPU + GPU visible memory (At least 1GB total).
 - Required instance extensions:
   - VK_KHR_get_physical_device_properties2
@@ -45,9 +43,7 @@ Because of this, a device needs the following requirements to be OxC3 compatible
   - VK_KHR_surface (and the variant of the platform such as VK_KHR_win32_surface)
   - VK_EXT_swapchain_colorspace
 - Required device extensions:
-  - VK_KHR_get_physical_device_properties2
   - VK_KHR_shader_draw_parameters
-  - VK_KHR_external_memory_capabilities
   - VK_KHR_push_descriptor
   - VK_KHR_dedicated_allocation
   - VK_KHR_bind_memory2
@@ -59,7 +55,7 @@ Because of this, a device needs the following requirements to be OxC3 compatible
   - VK_KHR_driver_properties
   - VK_KHR_synchronization2
   - VK_KHR_timeline_semaphore
-  - VK_KHR_swapchain as Swapchain
+  - VK_KHR_swapchain
     - Requires at least 1 image layer.
     - Requires ability to make 3 images.
     - Requires usage flags of transfer (src, dst), sampled, storage, color attachment bits.
@@ -129,6 +125,12 @@ Because of this, a device needs the following requirements to be OxC3 compatible
 - viewportBoundsRange[1] >= 32767.
 - nonCoherentAtomSize of 0 -> 256 and has to be base2.
 - Requires UBO alignment of <=256.
+- Supported tesselation:
+  - maxTessellationControlPerVertexInputComponents, maxTessellationControlPerVertexOutputComponents, maxTessellationEvaluationInputComponents, maxTessellationEvaluationOutputComponents of 124 or higher.
+  - maxTessellationControlTotalOutputComponents of 4088 or higher.
+  - maxTessellationControlPerPatchOutputComponents of 120 or higher.
+  - maxTessellationGenerationLevel of 64 or higher.
+  - maxTessellationPatchSize of 32 or higher.
 
 ### Extensions
 
@@ -145,16 +147,6 @@ Geometry shaders aren't always supported. They're only supported if there's hard
 - maxGeometryOutputVertices of >=256.
 - maxGeometryShaderInvocations of >=32.
 - maxGeometryTotalOutputComponents of >=1024.
-
-#### Tessellation shader
-
-Tessellation shaders are mostly supported, but not always. It's also possible that the limits don't qualify it for enabling in OxC3. The limits require:
-
-- maxTessellationControlPerVertexInputComponents, maxTessellationControlPerVertexOutputComponents, maxTessellationEvaluationInputComponents, maxTessellationEvaluationOutputComponents of 124 or higher.
-- maxTessellationControlTotalOutputComponents of 4088 or higher.
-- maxTessellationControlPerPatchOutputComponents of 120 or higher.
-- maxTessellationGenerationLevel of 64 or higher.
-- maxTessellationPatchSize of 32 or higher.
 
 #### Raytracing
 
@@ -287,7 +279,7 @@ If raytracing is enabled, the following formats will be enabled for BLAS buildin
 Since Vulkan is more fragmented, the features are more split up. However in DirectX, the features supported by default are the following:
 
 - EGraphicsFeatures_SubgroupArithmetic, EGraphicsFeatures_SubgroupShuffle. Wave intrinsics are all supported by default.
-- EGraphicsFeatures_GeometryShader, EGraphicsFeatures_TessellationShader and EGraphicsFeatures_MultiDrawIndirectCount, EGraphicsFeatures_SupportsSwapchain, EGraphicsFeatures_SupportsLUID are enabled by default.
+- EGraphicsFeatures_GeometryShader, EGraphicsFeatures_MultiDrawIndirectCount, EGraphicsFeatures_SupportsLUID are enabled by default.
 - EGraphicsFeatures_Raytracing, EGraphicsFeatures_RayPipeline, EGraphicsFeatures_RayQuery, EGraphicsFeatures_MeshShaders, EGraphicsFeatures_VariableRateShading are a part of DirectX12 Ultimate (Turing, RDNA2, Arc and up).
 - If EGraphicsFeatures_Raytracing is enabled, so is EGraphicsFeatures_RayPipeline. The other RT extensions are optional.
 - EDeviceDataTypes_BCn, EGraphicsDataTypes_I64, EGraphicsDataTypes_F64 are always set.
@@ -303,7 +295,6 @@ Since Vulkan is more fragmented, the features are more split up. However in Dire
 #### Default features in Metal
 
 - EGraphicsFeatures_DirectRendering is never set.
-- EGraphicsFeatures_TessellationShader is always set.
 - EGraphicsDataTypes_ASTC is always set.
 - EGraphicsDataTypes_BCn can be set as well on Mac/MacBook.
 - EGraphicsDataTypes_AtomicF32, EGraphicsDataTypes_AtomicI64, EGraphicsDataTypes_F16, EGraphicsDataTypes_I64 are always set.

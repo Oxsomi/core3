@@ -33,12 +33,10 @@ typedef enum ETexturePrimitive {
 } ETexturePrimitive;
 
 typedef enum ETextureType {
-
 	ETextureType_2D,
 	ETextureType_3D,
 	ETextureType_Cube,
 	ETextureType_Count
-
 } ETextureType;
 
 typedef enum ETextureAlignment {

@@ -40,7 +40,6 @@ TListImpl(VkResult);
 TListImpl(VkSwapchainKHR);
 TListImpl(VkPipelineStageFlags);
 TListImpl(VkWriteDescriptorSet);
-TListImpl(DescriptorStackTrace);
 
 #define vkBindNext(T, condition, ...)	\
 	T tmp##T = __VA_ARGS__;				\
@@ -87,7 +86,7 @@ Error GraphicsDevice_initExt(
 		.independentBlend = true,
 
 		.geometryShader = (Bool)(feat & EGraphicsFeatures_GeometryShader),
-		.tessellationShader = (Bool)(feat & EGraphicsFeatures_TessellationShader),
+		.tessellationShader = true,
 
 		.multiDrawIndirect = true,
 		.sampleRateShading = true,
@@ -678,9 +677,6 @@ Error GraphicsDevice_initExt(
 		)));
 	}
 
-	for(U64 i = 0; i < EDescriptorType_ResourceCount; ++i)
-		_gotoIfError(clean, Buffer_createEmptyBytesx((descriptorTypeCount[i] + 7) >> 3, &deviceExt->freeList[i]));
-
 	VkPipelineLayoutCreateInfo layoutInfo = (VkPipelineLayoutCreateInfo) {
 		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
 		.setLayoutCount = EDescriptorSetType_UniqueLayouts,
@@ -772,8 +768,6 @@ Error GraphicsDevice_initExt(
 
 	#endif
 
-	deviceExt->descriptorLock = Lock_create();
-
 	//Get memory properties
 
 	vkGetPhysicalDeviceMemoryProperties((VkPhysicalDevice) physicalDevice->ext, &deviceExt->memoryProperties);
@@ -806,19 +800,10 @@ Error GraphicsDevice_initExt(
 	_gotoIfError(clean, ListVkImageMemoryBarrier2_reservex(&deviceExt->imageTransitions, 16));
 	_gotoIfError(clean, ListVkImageCopy_reservex(&deviceExt->imageCopyRanges, 8));
 
-	//Allocate temp storage for descriptor tracking
-
-	#ifndef NDEBUG
-		_gotoIfError(clean, ListDescriptorStackTrace_reservex(&deviceExt->descriptorStackTraces, 16));
-	#endif
-
-	goto success;
-
 clean:
 
-	GraphicsDeviceRef_dec(deviceRef);
-
-success:
+	if(err.genericError)
+		GraphicsDeviceRef_dec(deviceRef);
 
 	CharString_freex(&tempStr);
 	ListConstC8_freex(&extensions);
@@ -922,11 +907,6 @@ Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext) {
 	ListVkCommandAllocator_freex(&deviceExt->commandPools);
 	ListVkSemaphore_freex(&deviceExt->submitSemaphores);
 
-	for(U32 i = 0; i < EDescriptorType_ResourceCount; ++i)
-		Buffer_freex(&deviceExt->freeList[i]);
-
-	Lock_free(&deviceExt->descriptorLock);
-
 	//Free temp storage
 
 	ListVkPipelineStageFlags_freex(&deviceExt->waitStages);
@@ -938,36 +918,6 @@ Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext) {
 	ListVkImageMemoryBarrier2_freex(&deviceExt->imageTransitions);
 	ListVkImageCopy_freex(&deviceExt->imageCopyRanges);
 
-	//Announce descriptor memleaks
-
-	#ifndef NDEBUG
-
-		//TODO: HashMap
-
-		ListDescriptorStackTrace *stack = &deviceExt->descriptorStackTraces;
-
-		if(stack->length)
-			Log_warnLnx("Leaked %llu descriptors. Displaying up to 16:", stack->length);
-
-		for (U64 j = 0; j < stack->length; ++j) {
-
-			DescriptorStackTrace elem = stack->ptr[j];
-
-			if(j < 16)
-				Log_warnLnx(
-					"%llu: Resource type: %llu, id: %llu",
-					j, (U64)elem.resourceId >> 20, (U64)elem.resourceId & ((1 << 20) - 1)
-				);
-
-			Log_printCapturedStackTraceCustomx(
-				elem.stackTrace, sizeof(elem.stackTrace) / sizeof(void*), ELogLevel_Warn, ELogOptions_Default
-			);
-		}
-
-		ListDescriptorStackTrace_freex(stack);
-
-	#endif
-
 	return true;
 }
 
@@ -975,77 +925,6 @@ Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext) {
 
 Error GraphicsDeviceRef_waitExt(GraphicsDeviceRef *deviceRef) {
 	return vkCheck(vkDeviceWaitIdle(GraphicsDevice_ext(GraphicsDeviceRef_ptr(deviceRef), Vk)->device));
-}
-
-U32 VkGraphicsDevice_allocateDescriptor(VkGraphicsDevice *deviceExt, EDescriptorType type) {
-
-	if(!Lock_isLockedForThread(&deviceExt->descriptorLock))
-		return U32_MAX;
-
-	Buffer buf = deviceExt->freeList[type];
-
-	for(U32 i = 0; i < (U32)(Buffer_length(buf) << 3); ++i) {
-
-		Bool bit = false;
-
-		if(Buffer_getBit(buf, i, &bit).genericError)
-			return U32_MAX;
-
-		if(!bit) {
-
-			U32 resourceId = i | (type << 20);
-
-			#ifndef NDEBUG
-
-				DescriptorStackTrace stackTrace = (DescriptorStackTrace) {  .resourceId = resourceId };
-				Log_captureStackTrace(stackTrace.stackTrace, sizeof(stackTrace.stackTrace) / sizeof(void*), 1);
-
-				if(ListDescriptorStackTrace_pushBackx(&deviceExt->descriptorStackTraces, stackTrace).genericError)
-					return U32_MAX;
-
-			#endif
-
-			Buffer_setBit(buf, i);
-			return resourceId;
-		}
-	}
-
-	return U32_MAX;
-}
-
-Bool VkGraphicsDevice_freeAllocations(VkGraphicsDevice *deviceExt, ListU32 *allocations) {
-
-	if(!Lock_isLockedForThread(&deviceExt->descriptorLock))
-		return false;
-
-	Bool success = true;
-
-	for (U64 i = 0; i < allocations->length; ++i) {
-
-		U32 id = allocations->ptr[i];
-
-		if(id != U32_MAX) {
-
-			success &= !Buffer_resetBit(deviceExt->freeList[id >> 20], id & ((1 << 20) - 1)).genericError;
-
-			#ifndef NDEBUG
-
-				//TODO: HashMap
-
-				ListDescriptorStackTrace *stack = &deviceExt->descriptorStackTraces;
-				
-				for (U64 j = 0; j < stack->length; ++j)
-					if (stack->ptr[j].resourceId == id) {
-						ListDescriptorStackTrace_erase(stack, j);
-						break;
-					}
-
-			#endif
-		}
-	}
-
-	ListU32_clear(allocations);
-	return success;
 }
 
 VkCommandAllocator *VkGraphicsDevice_getCommandAllocator(
@@ -1061,6 +940,8 @@ VkCommandAllocator *VkGraphicsDevice_getCommandAllocator(
 
 	return device->commandPools.ptrNonConst + id;
 }
+
+UnifiedTexture *TextureRef_getUnifiedTextureIntern(TextureRef *tex, DeviceResourceVersion *version);
 
 Error GraphicsDevice_submitCommandsImpl(
 	GraphicsDeviceRef *deviceRef,
@@ -1117,9 +998,12 @@ Error GraphicsDevice_submitCommandsImpl(
 	for(U64 i = 0; i < swapchains.length; ++i) {
 
 		Swapchain *swapchain = SwapchainRef_ptr(swapchains.ptr[i]);
-		VkSwapchain *swapchainExt = Swapchain_ext(swapchain, Vk);
+		VkSwapchain *swapchainExt = TextureRef_getImplExtT(VkSwapchain, swapchains.ptr[i]);
 
 		VkSemaphore semaphore = swapchainExt->semaphores.ptr[device->submitId % swapchainExt->semaphores.length];
+
+		UnifiedTexture *unifiedTexture = TextureRef_getUnifiedTextureIntern(swapchains.ptr[i], NULL);
+		U32 currImg = 0;
 
 		_gotoIfError(clean, vkCheck(instanceExt->acquireNextImage(
 			deviceExt->device,
@@ -1127,14 +1011,16 @@ Error GraphicsDevice_submitCommandsImpl(
 			U64_MAX,
 			semaphore,
 			VK_NULL_HANDLE,
-			&swapchainExt->currentIndex
+			&currImg
 		)));
 
+		unifiedTexture->currentImageId = (U8) currImg;
+
 		deviceExt->swapchainHandles.ptrNonConst[i] = swapchainExt->swapchain;
-		deviceExt->swapchainIndices.ptrNonConst[i] = swapchainExt->currentIndex;
+		deviceExt->swapchainIndices.ptrNonConst[i] = unifiedTexture->currentImageId;
 
 		VkPipelineStageFlagBits pipelineStage =
-			swapchain->info.usage & ESwapchainUsage_ShaderWrite ? VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT :
+			swapchain->base.resource.flags & EGraphicsResourceFlag_ShaderWrite ? VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT :
 			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
 		_gotoIfError(clean, ListVkSemaphore_pushBackx(&deviceExt->waitSemaphores, semaphore));
@@ -1145,16 +1031,16 @@ Error GraphicsDevice_submitCommandsImpl(
 
 	{
 		DeviceBuffer *frameData = DeviceBufferRef_ptr(device->frameData);
-		CBufferData *data = (CBufferData*) frameData->mappedMemory + (device->submitId % 3);
+		CBufferData *data = (CBufferData*) frameData->resource.mappedMemoryExt + (device->submitId % 3);
 
 		for(U32 i = 0; i < data->swapchainCount; ++i) {
 
-			Swapchain *swapchain = SwapchainRef_ptr(swapchains.ptr[i]);
-			VkSwapchain *swapchainExt = Swapchain_ext(swapchain, Vk);
+			SwapchainRef *swapchainRef = swapchains.ptr[i];
+			Swapchain *swapchain = SwapchainRef_ptr(swapchainRef);
 
-			Bool allowCompute = swapchain->info.usage & ESwapchainUsage_ShaderWrite;
+			Bool allowCompute = swapchain->base.resource.flags & EGraphicsResourceFlag_ShaderWrite;
 
-			VkManagedImage managedImage = swapchainExt->images.ptr[swapchainExt->currentIndex];
+			UnifiedTextureImage managedImage = TextureRef_getCurrImage(swapchainRef, 0);
 
 			data->swapchains[i * 2 + 0] = managedImage.readHandle;
 
@@ -1162,7 +1048,7 @@ Error GraphicsDevice_submitCommandsImpl(
 				data->swapchains[i * 2 + 1] = managedImage.writeHandle;
 		}
 
-		DeviceMemoryBlock block = device->allocator.blocks.ptr[frameData->blockId];
+		DeviceMemoryBlock block = device->allocator.blocks.ptr[frameData->resource.blockId];
 		Bool incoherent = !(block.allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
 		if (incoherent) {
@@ -1170,7 +1056,7 @@ Error GraphicsDevice_submitCommandsImpl(
 			VkMappedMemoryRange range = (VkMappedMemoryRange) {
 				.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
 				.memory = (VkDeviceMemory) block.ext,
-				.offset = frameData->blockOffset + (device->submitId % 3) * sizeof(CBufferData),
+				.offset = frameData->resource.blockOffset + (device->submitId % 3) * sizeof(CBufferData),
 				.size = sizeof(CBufferData)
 			};
 
@@ -1378,10 +1264,7 @@ Error GraphicsDevice_submitCommandsImpl(
 		for (U64 i = 0; i < swapchains.length; ++i) {
 
 			SwapchainRef *swapchainRef = swapchains.ptr[i];
-			Swapchain *swapchain = SwapchainRef_ptr(swapchainRef);
-			VkSwapchain *swapchainExt = Swapchain_ext(swapchain, Vk);
-
-			VkManagedImage *imageExt = &swapchainExt->images.ptrNonConst[swapchainExt->currentIndex];
+			VkUnifiedTexture *imageExt = TextureRef_getCurrImgExtT(swapchainRef, Vk, 0);
 
 			VkImageSubresourceRange range = (VkImageSubresourceRange) {
 				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -1389,7 +1272,7 @@ Error GraphicsDevice_submitCommandsImpl(
 				.layerCount = 1
 			};
 
-			_gotoIfError(clean, VkManagedImage_transition(
+			_gotoIfError(clean, VkUnifiedTexture_transition(
 				imageExt,
 				VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
 				0,

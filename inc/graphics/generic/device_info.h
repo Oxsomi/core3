@@ -25,17 +25,14 @@ typedef enum ETextureFormat ETextureFormat;
 typedef enum EDepthStencilFormat EDepthStencilFormat;
 
 typedef enum EGraphicsDeviceType {
-
 	EGraphicsDeviceType_Dedicated,
 	EGraphicsDeviceType_Integrated,
 	EGraphicsDeviceType_Simulated,
 	EGraphicsDeviceType_CPU,
 	EGraphicsDeviceType_Other
-
 } EGraphicsDeviceType;
 
 typedef enum EGraphicsVendor {
-
 	EGraphicsVendor_NV,
 	EGraphicsVendor_AMD,
 	EGraphicsVendor_ARM,
@@ -44,7 +41,6 @@ typedef enum EGraphicsVendor {
 	EGraphicsVendor_IMGT,
 	EGraphicsVendor_APPL,
 	EGraphicsVendor_Unknown
-
 } EGraphicsVendor;
 
 typedef enum EGraphicsFeatures {
@@ -64,81 +60,77 @@ typedef enum EGraphicsFeatures {
 
 	EGraphicsFeatures_MeshShader				= 1 << 3,		//Mesh and task shaders
 	EGraphicsFeatures_GeometryShader			= 1 << 4,
-	EGraphicsFeatures_TessellationShader		= 1 << 5,
 
-	EGraphicsFeatures_SubgroupArithmetic		= 1 << 6,
-	EGraphicsFeatures_SubgroupShuffle			= 1 << 7,
+	EGraphicsFeatures_SubgroupArithmetic		= 1 << 5,
+	EGraphicsFeatures_SubgroupShuffle			= 1 << 6,
 
-	//											= 1 << 8
-	//EGraphicsFeatures_Multiview				= 1 << 9,		TODO:
+	//EGraphicsFeatures_Multiview				= 1 << 7,		TODO:
 
 	//Raytracing extensions
 
-	EGraphicsFeatures_Raytracing				= 1 << 10,		//Requires RayPipeline or RayQuery
-	EGraphicsFeatures_RayPipeline				= 1 << 11,
-	EGraphicsFeatures_RayIndirect				= 1 << 12,
-	EGraphicsFeatures_RayQuery					= 1 << 13,
-	EGraphicsFeatures_RayMicromapOpacity		= 1 << 14,
-	EGraphicsFeatures_RayMicromapDisplacement	= 1 << 15,
-	EGraphicsFeatures_RayMotionBlur				= 1 << 16,
-	EGraphicsFeatures_RayReorder				= 1 << 17,
+	EGraphicsFeatures_Raytracing				= 1 << 8,		//Requires RayPipeline or RayQuery
+	EGraphicsFeatures_RayPipeline				= 1 << 9,
+	EGraphicsFeatures_RayIndirect				= 1 << 10,
+	EGraphicsFeatures_RayQuery					= 1 << 11,
+	EGraphicsFeatures_RayMicromapOpacity		= 1 << 12,
+	EGraphicsFeatures_RayMicromapDisplacement	= 1 << 13,
+	EGraphicsFeatures_RayMotionBlur				= 1 << 14,
+	EGraphicsFeatures_RayReorder				= 1 << 15,
 
 	//LUID for sharing devices
 
-	EGraphicsFeatures_LUID						= 1 << 18,
+	EGraphicsFeatures_LUID						= 1 << 16,
 
 	//Debug features
 
-	EGraphicsFeatures_DebugMarkers				= 1 << 19,
+	EGraphicsFeatures_DebugMarkers				= 1 << 17,
 
 	//Other features
 
-	EGraphicsFeatures_Wireframe					= 1 << 20,
-	EGraphicsFeatures_LogicOp					= 1 << 21,
-	EGraphicsFeatures_DualSrcBlend				= 1 << 22
+	EGraphicsFeatures_Wireframe					= 1 << 18,
+	EGraphicsFeatures_LogicOp					= 1 << 19,
+	EGraphicsFeatures_DualSrcBlend				= 1 << 20
 
 } EGraphicsFeatures;
 
 typedef enum EGraphicsFeatures2 {
-
 	EGraphicsFeatures2_None
-
 } EGraphicsFeatures2;
 
 typedef enum EGraphicsDataTypes {
 
 	//What operations are available on native data types
 
-	EGraphicsDataTypes_I64					= 1 << 0,
-	EGraphicsDataTypes_F16					= 1 << 1,
-	EGraphicsDataTypes_F64					= 1 << 2,
+	EGraphicsDataTypes_I64						= 1 << 0,
+	EGraphicsDataTypes_F16						= 1 << 1,
+	EGraphicsDataTypes_F64						= 1 << 2,
 
-	EGraphicsDataTypes_AtomicI64			= 1 << 3,
-	EGraphicsDataTypes_AtomicF32			= 1 << 4,
-	EGraphicsDataTypes_AtomicF64			= 1 << 5,
+	EGraphicsDataTypes_AtomicI64				= 1 << 3,
+	EGraphicsDataTypes_AtomicF32				= 1 << 4,
+	EGraphicsDataTypes_AtomicF64				= 1 << 5,
 
 	//What texture formats are available
 	//These can be both supported.
 
-	EGraphicsDataTypes_ASTC					= 1 << 6,			//If false, BCn has to be supported
-	EGraphicsDataTypes_BCn					= 1 << 7,			//If false, ASTC has to be supported
+	EGraphicsDataTypes_ASTC						= 1 << 6,			//If false, BCn has to be supported
+	EGraphicsDataTypes_BCn						= 1 << 7,			//If false, ASTC has to be supported
 
 	//If render targets can have MSAA8x, 2x or 16x.
 
-	EGraphicsDataTypes_MSAA2x				= 1 << 8,
-	EGraphicsDataTypes_MSAA8x				= 1 << 9,
-	EGraphicsDataTypes_MSAA16x				= 1 << 10,
+	EGraphicsDataTypes_MSAA2x					= 1 << 8,
+	EGraphicsDataTypes_MSAA8x					= 1 << 9,
+	EGraphicsDataTypes_MSAA16x					= 1 << 10,
 
 	//Formats for use other than just vertex buffer usage
 
-	EGraphicsDataTypes_RGB32f				= 1 << 11,
-	EGraphicsDataTypes_RGB32i				= 1 << 12,
-	EGraphicsDataTypes_RGB32u				= 1 << 13,
+	EGraphicsDataTypes_RGB32f					= 1 << 11,
+	EGraphicsDataTypes_RGB32i					= 1 << 12,
+	EGraphicsDataTypes_RGB32u					= 1 << 13,
 
 	//Depth stencil
 
-	EGraphicsDataTypes_D24S8				= 1 << 14,
-	EGraphicsDataTypes_S8					= 1 << 15
+	EGraphicsDataTypes_D24S8					= 1 << 14,
+	EGraphicsDataTypes_S8						= 1 << 15
 
 } EGraphicsDataTypes;
 
@@ -173,7 +165,7 @@ typedef struct GraphicsDeviceInfo {
 
 	U64 luid;			//Check SupportsLUID
 
-	U64 uuid[2];
+	U64 uuid[2];		//If UUIDs aren't supported, uuid[0] will be luid and uuid[1] will be 0
 
 	void *ext;
 

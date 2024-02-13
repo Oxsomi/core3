@@ -31,240 +31,6 @@
 #include "platforms/ext/stringx.h"
 #include "platforms/ext/bufferx.h"
 
-const U64 DeviceTextureExt_size = sizeof(VkManagedImage);
-
-Error GraphicsDeviceRef_createTextureExt(GraphicsDeviceRef *deviceRef, DeviceTexture *texture, CharString name) {
-
-	//Prepare temporary free-ables and extended data.
-
-	Error err = Error_none();
-	CharString temp = CharString_createNull();
-	ELockAcquire acq = ELockAcquire_Invalid;
-
-	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
-	VkManagedImage *textureExt = (VkManagedImage*) DeviceTexture_ext(texture, );
-	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
-	VkGraphicsInstance *instance = GraphicsInstance_ext(GraphicsInstanceRef_ptr(device->instance), Vk);
-
-	textureExt->readHandle = textureExt->writeHandle = U32_MAX;
-
-	VkFormat vkFormat = mapVkFormat(ETextureFormatId_unpack[texture->textureFormatId]);
-	Bool is3D = texture->type != ETextureType_2D;
-
-	U32 depth = texture->type == ETextureType_3D ? texture->length : (texture->type == ETextureType_Cube ? 6 : 1);
-
-	VkImageCreateInfo imageInfo = (VkImageCreateInfo) {
-
-		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-		.imageType = is3D ? VK_IMAGE_TYPE_3D : VK_IMAGE_TYPE_2D,
-		.format = vkFormat,
-		.extent = (VkExtent3D) { .width = texture->width, .height = texture->height, .depth = depth },
-		.mipLevels = 1,
-		.arrayLayers = 1,
-		.samples = VK_SAMPLE_COUNT_1_BIT,
-		.tiling = VK_IMAGE_TILING_OPTIMAL,
-
-		.usage =
-			VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
-			VK_IMAGE_USAGE_TRANSFER_DST_BIT |		//TODO: Check for compressed images? vkCmdCopyBufferToImage requires this!
-			(texture->usage & EDeviceTextureUsage_ShaderRead ? VK_IMAGE_USAGE_SAMPLED_BIT : 0),
-
-		.sharingMode = VK_SHARING_MODE_EXCLUSIVE
-	};
-
-	//Allocate memory
-
-	VkDeviceImageMemoryRequirementsKHR imageReq = (VkDeviceImageMemoryRequirementsKHR) {
-		.sType = VK_STRUCTURE_TYPE_DEVICE_IMAGE_MEMORY_REQUIREMENTS_KHR,
-		.pCreateInfo = &imageInfo
-	};
-
-	VkMemoryDedicatedRequirements dedicatedReq = {
-		.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_REQUIREMENTS
-	};
-
-	VkMemoryRequirements2 requirements = (VkMemoryRequirements2) {
-		.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2,
-		.pNext = &dedicatedReq
-	};
-
-	instance->getDeviceImageMemoryRequirements(deviceExt->device, &imageReq, &requirements);
-
-	_gotoIfError(clean, DeviceMemoryAllocator_allocate(
-		&device->allocator,
-		&requirements,
-		false,
-		&textureExt->blockId,
-		&textureExt->blockOffset,
-		EResourceType_DeviceTexture,
-		name
-	));
-
-	DeviceMemoryBlock block = device->allocator.blocks.ptr[textureExt->blockId];
-
-	VkImage *image = &textureExt->image;
-	_gotoIfError(clean, vkCheck(vkCreateImage(deviceExt->device, &imageInfo, NULL, image)));
-
-	_gotoIfError(clean, vkCheck(vkBindImageMemory(
-		deviceExt->device, *image, (VkDeviceMemory) block.ext, textureExt->blockOffset
-	)));
-	
-	if(CharString_length(name)) {
-
-		#ifndef NDEBUG
-
-			if(instance->debugSetName) {
-
-				VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
-					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-					.objectType = VK_OBJECT_TYPE_IMAGE,
-					.pObjectName = name.ptr,
-					.objectHandle =  (U64) *image
-				};
-
-				_gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)));
-			}
-
-		#endif
-	}
-
-	//Image views
-
-	//TODO: 1 UAV and SRV per face for cubemap (2D), 3D won't to avoid allocating too many (and doesn't need it).
-
-	VkImageView *view = &textureExt->view;
-
-	VkImageViewCreateInfo viewCreate = (VkImageViewCreateInfo) {
-
-		.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-		.image = textureExt->image,
-
-		.viewType =
-			texture->type == ETextureType_Cube ? VK_IMAGE_VIEW_TYPE_CUBE :
-			(is3D ? VK_IMAGE_VIEW_TYPE_3D : VK_IMAGE_VIEW_TYPE_2D),
-
-		.format = vkFormat,
-
-		.subresourceRange = (VkImageSubresourceRange) {
-			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-			.layerCount = 1,
-			.levelCount = 1
-		}
-	};
-
-	_gotoIfError(clean, vkCheck(vkCreateImageView(deviceExt->device, &viewCreate, NULL, view)));
-	
-	if(CharString_length(name)) {
-
-		#ifndef NDEBUG
-
-			if(instance->debugSetName) {
-
-				_gotoIfError(clean, CharString_formatx(&temp, "%.*s view", CharString_length(name), name.ptr));
-
-				VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
-					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-					.objectType = VK_OBJECT_TYPE_IMAGE_VIEW,
-					.pObjectName = temp.ptr,
-					.objectHandle =  (U64) *view
-				};
-
-				_gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)));
-
-				CharString_freex(&temp);
-			}
-
-		#endif
-	}
-
-	//Allocate in descriptors
-
-	//TODO: Allocate descriptors (read & write) per face if cubemap
-
-	if(texture->usage & EDeviceTextureUsage_ShaderRead) {
-
-		acq = Lock_lock(&deviceExt->descriptorLock, U64_MAX);
-
-		if(acq < ELockAcquire_Success)
-			_gotoIfError(clean, Error_invalidState(
-				0, "GraphicsDeviceRef_createRenderTextureExt() couldn't acquire descriptor lock"
-			));
-
-		//Create readonly image
-
-		EDescriptorType descType = is3D ? EDescriptorType_Texture3D : EDescriptorType_Texture2D;
-		U32 locationRead = VkGraphicsDevice_allocateDescriptor(deviceExt, descType);
-
-		if(locationRead == U32_MAX)
-			_gotoIfError(clean, Error_outOfMemory(
-				0, "GraphicsDeviceRef_createRenderTextureExt() couldn't allocate image descriptor"
-			));
-
-		texture->readHandle = textureExt->readHandle = locationRead;
-
-		VkDescriptorImageInfo descriptorImageInfo = (VkDescriptorImageInfo) {
-			.imageView = *view,
-			.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-		};
-
-		VkWriteDescriptorSet writeDescriptorSet = (VkWriteDescriptorSet) {
-			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-			.dstSet = deviceExt->sets[EDescriptorSetType_Resources],
-			.descriptorCount = 1,
-			.pImageInfo = &descriptorImageInfo,
-			.dstBinding = descType - 1,
-			.dstArrayElement = locationRead & ((1 << 20) - 1),
-			.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE
-		};
-
-		vkUpdateDescriptorSets(deviceExt->device, 1, &writeDescriptorSet, 0, NULL);
-
-		if(acq == ELockAcquire_Acquired)
-			Lock_unlock(&deviceExt->descriptorLock);
-
-		acq = ELockAcquire_Invalid;
-	}
-
-clean:
-
-	if(acq == ELockAcquire_Acquired)
-		Lock_unlock(&deviceExt->descriptorLock);
-	
-	CharString_freex(&temp);
-	return err;
-}
-
-Bool DeviceTexture_freeExt(DeviceTexture *texture) {
-
-	VkManagedImage *image = (VkManagedImage*) DeviceTexture_ext(texture, );
-	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(GraphicsDeviceRef_ptr(texture->device), Vk);
-
-	if(image->readHandle != U32_MAX) {
-
-		ELockAcquire acq = Lock_lock(&deviceExt->descriptorLock, U64_MAX);
-
-		if(acq >= ELockAcquire_Success) {
-			ListU32 allocationList = (ListU32) { 0 };
-			ListU32_createRefConst(&image->readHandle, 1, &allocationList);
-			VkGraphicsDevice_freeAllocations(deviceExt, &allocationList);
-		}
-
-		if(acq == ELockAcquire_Acquired)
-			Lock_unlock(&deviceExt->descriptorLock);
-	}
-
-	if(image->view)
-		vkDestroyImageView(deviceExt->device, image->view, NULL);
-
-	if(image->image)
-		vkDestroyImage(deviceExt->device, image->image, NULL);
-
-	GraphicsDevice *device = GraphicsDeviceRef_ptr(texture->device);
-	DeviceMemoryAllocator_freeAllocation(&device->allocator, image->blockId, image->blockOffset);
-
-	return true;
-}
-
 Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, DeviceTextureRef *pending) {
 
 	VkCommandBuffer commandBuffer = (VkCommandBuffer) commandBufferExt;
@@ -278,7 +44,7 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 	U32 graphicsQueueId = deviceExt->queues[EVkCommandQueue_Graphics].queueId;
 
 	DeviceTexture *texture = DeviceTextureRef_ptr(pending);
-	VkManagedImage *textureExt = (VkManagedImage*) DeviceTexture_ext(texture, );
+	VkUnifiedTexture *textureExt = TextureRef_getCurrImgExtT(pending, Vk, 0);
 
 	Error err = Error_none();
 	ListVkMappedMemoryRange tempMappedMemRanges = { 0 };
@@ -289,7 +55,7 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 	DeviceBufferRef *tempStagingResource = NULL;
 	ListVkBufferImageCopy pendingCopies = { 0 };
 
-	ETextureFormat format = ETextureFormatId_unpack[texture->textureFormatId];
+	ETextureFormat format = ETextureFormatId_unpack[texture->base.textureFormatId];
 
 	//TODO: Copy queue
 
@@ -311,7 +77,7 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 		}
 	}
 
-	else allocRange = texture->allocSize;
+	else allocRange = texture->base.resource.size;
 
 	device->pendingBytes += allocRange;
 
@@ -328,15 +94,17 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 	if (allocRange >= 16 * MIBI) {		//Resource is too big, allocate dedicated staging resource
 
 		_gotoIfError(clean, GraphicsDeviceRef_createBuffer(
-			deviceRef, EDeviceBufferUsage_CPUAllocatedBit, CharString_createRefCStrConst("Dedicated staging buffer"),
+			deviceRef,
+			EDeviceBufferUsage_None, EGraphicsResourceFlag_InternalWeakDeviceRef | EGraphicsResourceFlag_CPUAllocatedBit,
+			CharString_createRefCStrConst("Dedicated staging buffer"),
 			allocRange, &tempStagingResource
 		));
 
 		DeviceBuffer *stagingResource = DeviceBufferRef_ptr(tempStagingResource);
 		VkDeviceBuffer *stagingResourceExt = DeviceBuffer_ext(stagingResource, Vk);
-		U8 *location = stagingResource->mappedMemory;
+		U8 *location = stagingResource->resource.mappedMemoryExt;
 
-		DeviceMemoryBlock block = device->allocator.blocks.ptr[stagingResource->blockId];
+		DeviceMemoryBlock block = device->allocator.blocks.ptr[stagingResource->resource.blockId];
 		Bool incoherent = !(block.allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
 		//Copy into our buffer
@@ -360,7 +128,7 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 			U64 len = ETextureFormat_getSize(format, w, h, l);
 			U64 start = (U64) rowLen * (y + z * h) + rowOff;
 
-			if(w == texture->width && h == texture->height)
+			if(w == texture->base.width && h == texture->base.height)
 				Buffer_copy(
 					Buffer_createRef(location + allocRange, rowLen * h * l),
 					Buffer_createRefConst(texture->cpuData.ptr + start, rowLen * h * l)
@@ -368,7 +136,7 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 
 			else for(U64 k = z; k < z + l; ++k) {
 
-				if(w == texture->width)
+				if(w == texture->base.width)
 					Buffer_copy(
 						Buffer_createRef(location + allocRange + (U64)rowLen * (k - z) * h, rowLen * h),
 						Buffer_createRefConst(texture->cpuData.ptr + start + (U64)rowLen * (k - z) * h, rowLen * h)
@@ -400,7 +168,7 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 			VkMappedMemoryRange memoryRange = (VkMappedMemoryRange) {
 				.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
 				.memory = (VkDeviceMemory) block.ext,
-				.offset = stagingResource->blockOffset,
+				.offset = stagingResource->resource.blockOffset,
 				.size = allocRange
 			};
 
@@ -424,7 +192,7 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 			.layerCount = 1
 		};
 
-		_gotoIfError(clean, VkManagedImage_transition(
+		_gotoIfError(clean, VkUnifiedTexture_transition(
 			textureExt,
 			VK_PIPELINE_STAGE_2_COPY_BIT,
 			VK_ACCESS_2_TRANSFER_WRITE_BIT,
@@ -473,7 +241,7 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 
 		if (temp.genericError) {
 
-			U64 prevSize = DeviceBufferRef_ptr(device->staging)->length;
+			U64 prevSize = DeviceBufferRef_ptr(device->staging)->resource.size;
 
 			//Allocate new staging buffer.
 
@@ -485,7 +253,7 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 			stagingExt = DeviceBuffer_ext(staging, Vk);
 		}
 
-		DeviceMemoryBlock block = device->allocator.blocks.ptr[staging->blockId];
+		DeviceMemoryBlock block = device->allocator.blocks.ptr[staging->resource.blockId];
 		Bool incoherent = !(block.allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
 		//Copy into our buffer
@@ -509,7 +277,7 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 			U64 len = ETextureFormat_getSize(format, w, h, l);
 			U64 start = (U64) rowLen * (y + z * h) + rowOff;
 
-			if(w == texture->width && h == texture->height)
+			if(w == texture->base.width && h == texture->base.height)
 				Buffer_copy(
 					Buffer_createRef(location + allocRange, rowLen * h * l),
 					Buffer_createRefConst(texture->cpuData.ptr + start, rowLen * h * l)
@@ -517,7 +285,7 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 
 			else for(U64 k = z; k < z + l; ++k) {
 
-				if(w == texture->width)
+				if(w == texture->base.width)
 					Buffer_copy(
 						Buffer_createRef(location + allocRange + (U64)rowLen * (k - z) * h, rowLen * h),
 						Buffer_createRefConst(texture->cpuData.ptr + start + (U64)rowLen * (k - z) * h, rowLen * h)
@@ -563,8 +331,8 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 				VK_PIPELINE_STAGE_2_COPY_BIT,
 				VK_ACCESS_2_TRANSFER_READ_BIT,
 				graphicsQueueId,
-				(device->submitId % 3) * (staging->length / 3),
-				staging->length / 3,
+				(device->submitId % 3) * (staging->resource.size / 3),
+				staging->resource.size / 3,
 				&tempBufferBarriers,
 				&dependency
 			));
@@ -579,7 +347,7 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 			.layerCount = 1
 		};
 
-		_gotoIfError(clean, VkManagedImage_transition(
+		_gotoIfError(clean, VkUnifiedTexture_transition(
 			textureExt,
 			VK_PIPELINE_STAGE_2_COPY_BIT,
 			VK_ACCESS_2_TRANSFER_WRITE_BIT,
@@ -603,7 +371,7 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 		);
 	}
 
-	if(!(texture->usage & EDeviceTextureUsage_CPUBacked))
+	if(!(texture->base.resource.flags & EGraphicsResourceFlag_CPUBacked))
 		Buffer_freex(&texture->cpuData);
 
 	texture->isFirstFrame = texture->isPending = texture->isPendingFullCopy = false;

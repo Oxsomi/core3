@@ -19,6 +19,8 @@ OxC3 graphics works in a similar way as DirectX's ref counting system; everythin
 
 RefPtr doesn't contain the object itself, but it does contain information about the type and length of the constructed type. RefPtr contains this object after the data of the RefPtr itself. RefPtr_data can be used to obtain the data pointed to by the RefPtr. This is generally also a macro from the specialized RefPtr (e.g. `GraphicsInstanceRef_ptr`). It also generally contains the extended object after the common object. For example GraphicsInstance has `GraphicsInstance_ext` which can get the API-specific data of the GraphicsInstance. This is should only be used internally, as there is no public interface of this extended data that won't randomly change.
 
+In the case of multiple inheritance, the data pointed to can be linked however the creator of the object sees fit. For example: The first data could be a UnifiedTexture, then a UnifiedTextureImage * 3, then a UnifiedTextureImageExt * 3 and then a SwapchainExt.
+
 ## Graphics instance
 
 ### Summary
@@ -86,7 +88,7 @@ _gotoIfError(clean, GraphicsInstance_getPreferredDevice(
     GraphicsInstanceRef_ptr(instance),		//See "Graphics instance"
     (GraphicsDeviceCapabilities) { 0 },		//No required features or data types
     GraphicsInstance_vendorMaskAll,			//All vendors supported
-    GraphicsInstance_deviceTypeAll,			//All device types supports
+    GraphicsInstance_deviceTypeAll,			//All device types supported
     false, /* isVerbose; extra logging about the device properties */
     &deviceInfo
 ));
@@ -105,9 +107,9 @@ _gotoIfError(clean, GraphicsInstance_getPreferredDevice(
 
 #### Capabilities
 
-- features: DirectRendering, VariableRateShading, MultiDrawIndirectCount, MeshShader, GeometryShader, TessellationShader, SubgroupArithmetic, SubgroupShuffle, Swapchain, Multiview, Raytracing, RayPipeline, RayIndirect, RayQuery, RayMicromapOpacity, RayMicromapDisplacement, RayMotionBlur, RayReorder, LUID, DebugMarkers, Wireframe, LogicOp, DualSrcBlend.
-- features2: reserved for future features.
-- dataTypes: I64, F16, F64, AtomicI64, AtomicF32, AtomicF64, ASTC, BCn, MSAA2x, MSAA8x, MSAA16x, RGB32f, RGB32i, RGB32u, D32S8, S8.
+- features: DirectRendering, VariableRateShading, MultiDrawIndirectCount, MeshShader, GeometryShader, SubgroupArithmetic, SubgroupShuffle, Multiview, Raytracing, RayPipeline, RayIndirect, RayQuery, RayMicromapOpacity, RayMicromapDisplacement, RayMotionBlur, RayReorder, LUID, DebugMarkers, Wireframe, LogicOp, DualSrcBlend.
+- features2: reserved for future usage.
+- dataTypes: I64, F16, F64, AtomicI64, AtomicF32, AtomicF64, ASTC, BCn, MSAA2x, MSAA8x, MSAA16x, RGB32f, RGB32i, RGB32u, D24S8, S8.
   - MSAA4x and MSAA1x (off) are supported by default.
 - featuresExt: API dependent features.
   - Vulkan: PerformanceQuery.
@@ -123,6 +125,10 @@ _gotoIfError(clean, GraphicsInstance_getPreferredDevice(
 - `supportsFormat(ETextureFormat format)`
 
   - Checks if the format is supported for use as a texture by the current device.
+
+- `supportsRenderTextureFormat(ETextureFormat format)`
+
+  - Checks if the format is supported for use as a render texture format by the current device.
 
 - `supportsFormatVertexAttribute(ETextureFormat format)`
 
@@ -216,24 +222,27 @@ _gotoIfError(clean, GraphicsDeviceRef_create(
   	ListPipelineRef *pipelines
   );
   ```
+  
 - ```C
   Error createBuffer(
   	EDeviceBufferUsage usage,
+      EGraphicsResourceFlag flags,
    	CharString name,
       U64 len,
       DeviceBufferRef **ref
   );
-  ```
-
+```
+  
 - ```c
   Error createBufferData(
   	EDeviceBufferUsage usage,
+      EGraphicsResourceFlag flags,
    	CharString name,
-      Buffer *data,					//Moves data to device buffer
+      Buffer *data,					//Can move data to device buffer (doesn't always)
       DeviceBufferRef **ref
   );
-  ```
-
+```
+  
 - ```c
   Error createSampler(SamplerInfo info, CharString name, SamplerRef **ref));
   ```
@@ -241,27 +250,28 @@ _gotoIfError(clean, GraphicsDeviceRef_create(
 - ```c
   Error createRenderTexture(
       ETextureType type, 
-      I32x4 size,
+      U16 width,
+      U16 height,
+      U16 length,
       ETextureFormatId format, 
-      ERenderTextureUsage usage,
+      EGraphicsResourceFlag flags,
       EMSAASamples samples,
       CharString name,
       RenderTextureRef **ref
   );
   ```
-```
   
 - ```c
   Error createDepthStencil(
-      I32x2 size,
-      EDepthStencilFormat format, 
-      Bool allowShaderRead,
-      EMSAASamples samples,
-      CharString name,
-      DepthStencilRef **ref
-  );
-```
-
+        U16 width,
+        U16 height,
+        EDepthStencilFormat format, 
+        Bool allowShaderRead,
+        EMSAASamples samples,
+        CharString name,
+        DepthStencilRef **ref
+    );
+  ```
 ### Obtained
 
 - Through GraphicsDeviceRef_create; see overview.
@@ -279,7 +289,7 @@ _gotoIfError(clean, GraphicsDeviceRef_createCommandList(
     2 * KIBI, 	//Max command buffer size
     64, 		//Estimated command count (can auto resize)
     64, 		//Estimated resource count (can auto resize)
-    true,		//Allow resize
+    true,		//Allow resize of command buffer data (the 2 KIBI in this example)
     &commandList
 ));
 ```
@@ -289,7 +299,7 @@ _gotoIfError(clean, GraphicsDeviceRef_createCommandList(
 ```c
 _gotoIfError(clean, CommandListRef_begin(commandList, true /* clear previous */, U64_MAX /* long long timeout */));
 
-_gotoIfError(clean, CommandListRef_startScope(commandList, (ListTransition) { 0 }, 0, (ListCommandScopeDependency) { 0 },));
+_gotoIfError(clean, CommandListRef_startScope(commandList, (ListTransition) { 0 }, 0, (ListCommandScopeDependency) { 0 }));
 _gotoIfError(clean, CommandListRef_clearImagef(
     commandList, F32x4_create4(1, 0, 0, 1), (ImageRange){ 0 }, swapchain
 ));
@@ -320,16 +330,16 @@ For more info on commands check out the "Commands" section.
 - resources; Which resources are in use by the command list.
 - data; The current recorded commands.
 - commandOps; The opcodes for which commands are recorded.
-- callstacks; On debug mode, contains the stacktrace of each command (up to 16 deep callstack). Used for debugging if an error occurs in the API-dependent layer.
-- next; the next offset into the data buffer for the next command to record.
 - transitions; list of transitions issued in the command list. Scopes point into this to execute transitions.
 - activeScopes; list of scopes that weren't collapsed (scope command id & scope id, what transitions it did and how many commands it contains & the length of the sub command buffer).
 - computePipeline/graphicsPipeline; currently bound pipeline.
+- boundImages/boundImageCount/boundDepthFormat/boundSampleCount; currently bound images in the renderpass and/or render targets (DirectRendering). As well as the sample count that it was bound with.
 - tempStateFlags; AnyScissor, AnyViewport, HasModifyOp, HasScope, InvalidState. Used for validation and optimization.
 - debugRegionStack; used for validating debug regions.
-- lastCommandId, lastOffset, lastTransition; locations at the start of a scope for command id, buffer location and transition offset. Used for the next scope description.
+- lastCommandId, next, lastTransition; locations at the start of a scope for command id, buffer location and transition offset. Used for the next scope description.
 - currentSize; size of the current renderpass.
 - pendingTransitions; list of transitions waiting for the current scope. Get pushed into transitions if the scope is visible.
+- activeSwapchains; what swapchains are used in the command list including their versionId, to ensure the command list can't be re-submitted once the swapchains were resized.
 
 ### Functions
 
@@ -347,15 +357,14 @@ See the "Commands" section.
 
 A swapchain is the interface between the platform Window and the API-dependent way of handling the surface, swapchain and any synchronization methods that are required.
 
-Swapchain isn't always supported. In that case your final target can just be a render texture and it can be pulled back to the CPU to allow presenting there (video, photo, or whatever). To make sure it's supported, check deviceInfo.capabilities.features for Swapchain support.
-
 ```c
 //onCreate
 
 SwapchainRef *swapchain = NULL;
 _gotoIfError(clean, GraphicsDeviceRef_createSwapchain(
     device, 		//See "Graphics device"
-    (SwapchainInfo) { .window = w, .usage = ESwapchainUsage_ShaderWrite }, 
+    (SwapchainInfo) { .window = w }, 
+    true,			//allowCompute
     &swapchain
 ));
 
@@ -367,7 +376,7 @@ if(!(w->flags & EWindowFlags_IsVirtual))
 
 info.presentModePriorities are the requests for what type of swapchains are desired by the application. Keeping this empty means [ mailbox, immediate, fifo, fifoRelaxed ]. On Android mailbox is unsupported because it may introduce another swapchain image, the rest is driver dependent if it's supported and the default is changed to [ fifo, fifoRelaxed, immediate] to conserve power. Immediate is always supported, so make sure to always request immediate as well otherwise createSwapchain may fail (depending on device + driver). For more info see Swapchain/Present mode.
 
-info.usage in this case allows the swapchain to be used for compute shaders. If this is not required, please try to avoid it. It might reduce or remove compression for the swapchain depending on the underlying hardware.
+allowCompute in this case allows the swapchain to be used for compute shaders. If this is not required, please try to avoid it. It might reduce or remove compression for the swapchain depending on the underlying hardware and to avoid allocating a write descriptor for it.
 
 ### Present mode
 
@@ -383,14 +392,12 @@ By default the swapchain will use triple buffering to ensure best performance. E
 ### Properties
 
 - info.window: the Window handle created using OxC3 platforms.
-- info.requiresManualComposite: Whether or not the application is requested to explicitly handle rotation from the device. For desktop this is generally false, for Android this is on to avoid the extra overhead of the compositor. 
-- info.presentModePriorities: What present modes were requested on create.
-- device: The owning device.
-- size: Current size of the swapchain.
-- format: Current format of the swapchain.
-- versionId: The version id changes everytime a change is applied. This could be resizes or format changes.
+- info.requiresManualComposite: whether or not the application is requested to explicitly handle rotation from the device. For desktop this is generally false, for Android this is on to avoid the extra overhead of the compositor. 
+- info.presentModePriorities: what present modes were requested on create.
+- device: the owning device.
+- base: UnifiedTexture that represents this texture.
+- versionId: the version id changes everytime a change is applied. This could be resizes or format changes.
 - presentMode: What present mode is currently used (see Swapchain/Present mode).
-- info.usage: What the swapchain is allowed to be used for.
 - lock: Multi-threading. Is used to maintain versionId. On submitCommands it has to lock the swapchain(s) to see if the versionId is still the same as the one the command list(s) was/were recorded with. A CommandList is deemed stale if the Swapchain has been resized to a different size. Not re-recording will result in submitCommands erroring. This is because lots of commands can use the swapchain size such as SetViewportAndScissor.
 
 ### Functions
@@ -410,7 +417,7 @@ By default the swapchain will use triple buffering to ensure best performance. E
 
 ### Summary
 
-A sampler is a standalone object that will be used to describe how a texture is sampled. These are not combined samplers because it is possible that one texture is used as two different usages (e.g. one for anisotropy and one for linear) and logically it doesn't make sense that it's linked to the texture rather than a standalone object. This object is given space in the bindless descriptor arrays just like shader visible buffers, depth stencils, render textures, swapchains and depth stencils. However, there are only 2048 sampler slots available, so use them sparingly. 
+A sampler is a standalone object that will be used to describe how a texture is sampled. These are not combined samplers because it is possible that one texture is used as two different usages (e.g. one for anisotropy and one for linear) and logically it doesn't make sense that it's linked to the texture rather than a standalone object. This object is given space in the bindless descriptor arrays just like shader visible buffers, depth stencils, render textures, swapchains and depth stencils. However, there are only 2047 sampler slots available, so use them sparingly. 
 
 Once on the GPU, the sampler resource index can be passed to the GPU and the sampler array can be accessed. Then this sampler can be used to sample any resource that's required.
 
@@ -419,10 +426,12 @@ SamplerInfo nearestSampler = (SamplerInfo) { .filter = ESamplerFilterMode_Neares
 _gotoIfError(clean, GraphicsDeviceRef_createSampler(device, nearestSampler, samplerName, &nearest));
 ```
 
+If the sampler is used on the GPU, it should be passed as a transition; stage is unused so can be safely ignored. The most important part here is that the transition keeps the Sampler alive while the command list is in flight. The graphics implementation is also allowed to manage eviction behind the scenes if it is determined that the resource has not been in flight for too long and it might be hogging space.
+
 ### Properties
 
 - device: ref to the device that owns it.
-- samplerLocation: resource index into the bindless array that specifies where the sampler is located. It does contain additional info in the upper 12 bits, so only the low 20 bits store the index (samplerUniform(resourceId) and sampler(resourceId) can be used to do this automatically).
+- samplerLocation: resource index into the bindless array that specifies where the sampler is located. It does contain additional info in the upper 12 bits, so only the low 20 bits store the index (samplerUniform(resourceId) and sampler(resourceId) can be used to do this automatically). Note: samplerId 0 is reserved because EDescriptorType_Sampler is 0, which means that id 0 is resource location 0. 0 is the default initialization value, so that's automatically reserved by the device to avoid any future issues.
 - info: used to create the sampler and stores information about the sampler.
   - filter: determining how the sampler filters the input image. A bitset of three properties: Mag, Min and Mip. If the respective bit is true it represents linear filtering rather than nearest filtering. This means there's 7 combinations ranging from nearest min/mag/mip all the way to linear min/mag/mip. 
   - addressU, addressV, addressW: determining how out of bounds access for each texture is treated: Repeat, MirrorRepeat, ClampToEdge, ClampToBorder. ClampToBorder uses the borderColor to be filtered.
@@ -438,7 +447,7 @@ _gotoIfError(clean, GraphicsDeviceRef_createSampler(device, nearestSampler, samp
 ### Used functions and obtained
 
 - Obtained through GraphicsDeviceRef's createSampler.
-- Used directly in shaders by passing the samplerLocation to the shader and using samplerUniform() or sampler() in the shader.
+- Used directly in shaders by passing the samplerLocation to the shader and using samplerUniform() or sampler() in the shader. Needs to be marked active by transitioning the sampler in the startScope command to ensure it is present.
 
 ## DepthStencil
 
@@ -451,7 +460,7 @@ The depth stencil is quite straight forward; it has up to 3 stencil enabled form
 ```c
 _gotoIfError(clean, GraphicsDeviceRef_createDepthStencil(
     twm->device, 
-    w->size, EDepthStencilFormat_D16, false /* allow shader access */, 
+    width, height, EDepthStencilFormat_D16, false /* allow shader access */, 
     EMSAASamples_Off,
     CharString_createRefCStrConst("Test depth stencil"), 
     &tw->depthStencil
@@ -460,11 +469,7 @@ _gotoIfError(clean, GraphicsDeviceRef_createDepthStencil(
 
 ### Properties
 
-- device: ref to the device that owns it.
-- readLocation: resource index into the bindless Texture2D[] that specifies where the depth stencil is located. It does contain additional info in the upper 12 bits, so only the low 20 bits store the index (texture2DUniform(resourceId) and texture2D(resourceId) can be used to do this automatically).
-- size: the dimensions of the depth stencil buffer/image.
-- format: the format the depth stencil was created with.
-- allowShaderRead: whether or not readLocation contains a valid position and can be used in shader read operations.
+- A DepthStencil is identical in layout to a UnifiedTexture.
 
 ### Used functions and obtained
 
@@ -476,7 +481,7 @@ _gotoIfError(clean, GraphicsDeviceRef_createDepthStencil(
 
 ### Summary
 
-A RenderTexture is a texture that can be rendered to by either a startRenderExt or directly from a compute shader. While a normal DeviceTexture would represent a texture that can only be written to by copying from the GPU or CPU. A DeviceTexture supports compression but a RenderTexture does not.
+A RenderTexture is a texture that can be rendered to by either a startRenderExt or directly from a compute shader (if enabled). While a normal DeviceTexture would represent a texture that can only be written to by copying from the GPU or CPU. A DeviceTexture supports compression but a RenderTexture does not.
 
 Some formats are optional such as RGB32f, RGB32i and RGB32u. These have to be queried through the GraphicsDeviceInfo, however they are always available for use as vertex attributes.
 
@@ -486,9 +491,9 @@ A RenderTexture itself can currently only be 2D, but will be possible to be 3D o
 _gotoIfError(clean, GraphicsDeviceRef_createRenderTexture(
 	twm->device, 
 	ETextureType_2D, 				//2D is only supported currently
-    I32x4_fromI32x2(w->size), 		//For 2D textures we can just use { x, y, 0, 0 }
+    width, height, 1, 				//x, y, z
     ETextureFormatId_BGRA8, 		//Non compressed texture format
-    ERenderTextureUsage_ShaderRW, 	//Allow both shader writes and reads
+    EGraphicsResourceFlag_ShaderRW, //Allow both shader writes and reads
     EMSAASamples_Off,				//No MSAA
 	CharString_createRefCStrConst("Virtual window backbuffer"),
 	&tw->swapchain
@@ -497,14 +502,7 @@ _gotoIfError(clean, GraphicsDeviceRef_createRenderTexture(
 
 ### Properties
 
-- device: ref to the device that owns it.
-- type: 2D, 3D or Cube.
-- readLocation: resource index into the bindless Texture2D[] that specifies where the render texture is located. It does contain additional info in the upper 12 bits, so only the low 20 bits store the index (texture2DUniform(resourceId) and texture2D(resourceId) can be used to do this automatically).
-- writeLocation: resource index into the bindless RWTexture2D(format)[] that specifies where the render texture is located. It does contain additional info in the upper 12 bits, so only the low 20 bits store the index (rwTexture2D(format)Uniform(resourceId) and rwTexture2D(format)(resourceId) can be used to do this automatically).
-  - Where format is the type of primitive the texture uses. Such as: (none): unorm, (s): snorm, (i): int, (u): uint, (f): float. e.g. rwTexture2DfUniform(resourceId) would access the writeonly float texture at resourceId.
-- size: the dimensions of the render texture.
-- format: the format the render texture was created with.
-- usage: if the render texture is allowed for shader read and/or write.
+- Identical to a UnifiedTexture.
 
 ### Used functions and obtained
 
@@ -720,15 +718,14 @@ _gotoIfError(clean, GraphicsDeviceRef_createBufferData(
 
 ### Properties
 
-- device: ref to the graphics device that owns it.
-- usage: ShaderRead (accessible for read from shader), ShaderWrite (accessible for write from shader), Vertex (use as vertex buffer), Index (use as index buffer), Indirect (use for indirect draw calls), CPUBacked (There's a CPU copy of the buffer to facilitate reads/writes), CPUAllocated (The entire resource has to be located in "shared" memory or on the CPU if there's a dedicated GPU).
+- resource: the GraphicsResource it inherits from.
+- usage: Vertex (use as vertex buffer), Index (use as index buffer), Indirect (use for indirect draw calls).
 - isPending(FullCopy): Information about if any data is pending for the next submit and if the entire resource is pending.
+- isFirstFrame: If the resource was already uploaded before.
 - length: Length of the buffer.
 - cpuData: If CPUBacked stores the CPU copy for the resource or temporary data for the next submit to copy CPU data to the real resource.
 - pendingChanges: `[U64 startRange, U64 endRange][]` list of marked regions for copy.
 - readHandle, writeHandle: Places where the resource can be accessed on the GPU side. If a shader uses the writeHandle in a shader it has to transition the resource (or the subresource) to write state before it is accessed as such (at the relevant shader stage); same with the readHandle (but read state). If you're only reading/writing from a part of a resource it is preferred to only transition part of the resource. This will signal the implementation that other parts of the resource aren't in use. Which could lead to more efficient resource updates for example. Imagine streaming in/out meshes from a single buffer; only meshes that are in use need to be updated with the staging buffer, while others could be directly copied to GPU visible memory if available (ReBAR, shared mem, cpu visible, etc.). It could also reduce decompression/compression time occurring on the GPU due to changing the entire resource to write instead of readonly (with subresources this could be eased depending on the driver). 
-- mappedMemory: Where the device buffer is mapped on cpu-accessible memory. NULL if it's not mapped as memory. This data can't be written to/read from without explicitly using the functions for them. This is because the resource might still be in flight, and doing so may cause undefined behavior.
-- blockOffset, blockId: Which memory block the buffer was allocated. 
 - lock: Multi-threading helper. A buffer gets locked when it's being modified or used by the CPU while recording. For example DeviceBufferRef_markDirty will require a lock and GraphicsDeviceRef_submitCommands will too. So markDirty has to finish before or after the submitCommands is done.
 
 ### Functions
@@ -1047,6 +1044,8 @@ Because the API requires bindless to function, it has certain limits. One of the
 
 Even though Metal doesn't need transitions, they're still required to allow DirectX and Vulkan support. More importantly; transitions allow OxC3 to know which resources are required for the command list to be executed. It uses this to keep the resources alive until the command list was executed on the device. 
 
+For some types such as a Sampler, these transitions are required, even though the underlying API might not support the transitions for these types. In this case it signifies that the scope needs this resource to be active, to ensure it doesn't get deleted while in flight. It also ensures that the graphics API implementation doesn't evict it in an attempt to save memory (irrelevant to samplers though).
+
 *It is important to limit how many transitions are called, since this requires extra data and processing. Batching them and making sure you need them as less as possible is good practice.*
 
 ```c
@@ -1069,7 +1068,7 @@ _gotoIfError(clean, CommandListRef_startScope(commandList, transitionArr, 0 /* i
 _gotoIfError(clean, CommandListRef_endScope(commandList));
 ```
 
-Transitions can currently only be called on a Swapchain or DeviceBuffer object.
+Transitions can currently only be called on a Swapchain, DeviceTexture, RenderTexture, DepthStencil, Sampler or DeviceBuffer object.
 
 It's recommended to use enums to define the ids of scopes to avoid mistakes with hardcoding numbers for each scope.
 

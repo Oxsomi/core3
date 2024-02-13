@@ -18,11 +18,31 @@
 *  This is called dual licensing.
 */
 
-#pragma once
-#include "graphics/vulkan/vulkan.h"
+#include "platforms/ext/listx_impl.h"
+#include "graphics/generic/resource.h"
+#include "graphics/generic/allocator.h"
+#include "graphics/generic/device.h"
 
-typedef struct VkManagedSampler {
+TListImpl(DeviceResourceVersion);
 
-	VkSampler sampler;
+U16 TextureRange_width(TextureRange r) { return r.endRange[0] - r.startRange[0]; }
+U16 TextureRange_height(TextureRange r) { return r.endRange[1] - r.startRange[1]; }
+U16 TextureRange_length(TextureRange r) { return r.endRange[2] - r.startRange[2]; }
 
-} VkManagedSampler;
+Bool GraphicsResource_free(GraphicsResource *resource, RefPtr *resourceRef) {
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(resource->device);
+	Bool success = true;
+
+	if(resource->allocated) {
+		success &= DeviceMemoryAllocator_freeAllocation(&device->allocator, resource->blockId, resource->blockOffset);
+		resource->allocated = false;
+	}
+
+	success &= GraphicsDeviceRef_removePending(resource->device, resourceRef);
+
+	if(!(resource->flags & EGraphicsResourceFlag_InternalWeakDeviceRef))
+		success &= !GraphicsDeviceRef_dec(&resource->device).genericError;
+
+	return success;
+}

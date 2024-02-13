@@ -27,13 +27,7 @@
 typedef struct GraphicsDevice GraphicsDevice;
 typedef struct CharString CharString;
 
-typedef enum EResourceType {
-
-	EResourceType_DeviceTexture,							//Readonly texture
-	EResourceType_RenderTargetOrDepthStencil,		//Also depth stencil
-	EResourceType_Buffer							//Any buffer type
-
-} EResourceType;
+typedef enum EResourceType EResourceType;
 
 typedef struct DeviceMemoryBlock {
 

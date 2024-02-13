@@ -21,35 +21,19 @@
 #include "graphics/generic/sampler.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
-#include "graphics/vulkan/vk_sampler.h"
 #include "graphics/vulkan/vk_device.h"
 #include "graphics/vulkan/vk_instance.h"
 #include "types/string.h"
 
-const U64 SamplerExt_size = sizeof(VkManagedSampler);
+const U64 SamplerExt_size = sizeof(VkSampler);
 
 Bool Sampler_freeExt(Sampler *sampler) {
 
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(GraphicsDeviceRef_ptr(sampler->device), Vk);
-	VkManagedSampler *samplerExt = Sampler_ext(sampler, VkManaged);
+	VkSampler *samplerExt = Sampler_ext(sampler, Vk);
 
-	if(sampler->samplerLocation != U32_MAX) {
-
-		ELockAcquire acq = Lock_lock(&deviceExt->descriptorLock, U64_MAX);
-
-		if(acq >= ELockAcquire_Success) {
-			ListU32 allocationList = (ListU32) { 0 };
-			ListU32_createRefConst(&sampler->samplerLocation, 1, &allocationList);
-			VkGraphicsDevice_freeAllocations(deviceExt, &allocationList);
-			sampler->samplerLocation = U32_MAX;
-		}
-
-		if(acq == ELockAcquire_Acquired)
-			Lock_unlock(&deviceExt->descriptorLock);
-	}
-
-	if(samplerExt->sampler)
-		vkDestroySampler(deviceExt->device, samplerExt->sampler, NULL);
+	if(*samplerExt)
+		vkDestroySampler(deviceExt->device, *samplerExt, NULL);
 
 	return true;
 }
@@ -83,14 +67,14 @@ Error GraphicsDeviceRef_createSamplerExt(GraphicsDeviceRef *dev, Sampler *sample
 	VkGraphicsInstance *instance = GraphicsInstance_ext(GraphicsInstanceRef_ptr(device->instance), Vk);
 	instance;
 
-	VkManagedSampler *samplerExt = Sampler_ext(sampler, VkManaged);
+	VkSampler *samplerExt = Sampler_ext(sampler, Vk);
 
 	SamplerInfo sinfo = sampler->info;
-	ELockAcquire acq = ELockAcquire_Invalid;
 
 	VkSamplerCreateInfo samplerInfo = (VkSamplerCreateInfo) {
 
 		.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+
 		.magFilter = sinfo.filter & ESamplerFilterMode_LinearMag ? VK_FILTER_LINEAR : VK_FILTER_NEAREST,
 		.minFilter = sinfo.filter & ESamplerFilterMode_LinearMin ? VK_FILTER_LINEAR : VK_FILTER_NEAREST,
 
@@ -100,17 +84,22 @@ Error GraphicsDeviceRef_createSamplerExt(GraphicsDeviceRef *dev, Sampler *sample
 		.addressModeU = mapVkAddressMode(sinfo.addressU),
 		.addressModeV = mapVkAddressMode(sinfo.addressV),
 		.addressModeW = mapVkAddressMode(sinfo.addressW),
+
 		.mipLodBias = sinfo.mipBias,
+
 		.anisotropyEnable = (Bool) sinfo.aniso,
 		.maxAnisotropy = sinfo.aniso,
+
 		.compareEnable = sinfo.enableComparison,
 		.compareOp = mapVkCompareOp(sinfo.comparisonFunction),
+
 		.minLod = F16_castF32(sinfo.minLod),
 		.maxLod = F16_castF32(sinfo.maxLod),
+
 		.borderColor = mapVkBorderColor(sinfo.borderColor)
 	};
 
-	_gotoIfError(clean, vkCheck(vkCreateSampler(deviceExt->device, &samplerInfo, NULL, &samplerExt->sampler)));
+	_gotoIfError(clean, vkCheck(vkCreateSampler(deviceExt->device, &samplerInfo, NULL, samplerExt)));
 	
 	if (CharString_length(name)) {
 	
@@ -122,7 +111,7 @@ Error GraphicsDeviceRef_createSamplerExt(GraphicsDeviceRef *dev, Sampler *sample
 					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
 					.objectType = VK_OBJECT_TYPE_SAMPLER,
 					.pObjectName = name.ptr,
-					.objectHandle = (U64) samplerExt->sampler
+					.objectHandle = (U64) *samplerExt
 				};
 
 				_gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)));
@@ -130,24 +119,10 @@ Error GraphicsDeviceRef_createSamplerExt(GraphicsDeviceRef *dev, Sampler *sample
 
 		#endif
 	}
-	
-	acq = Lock_lock(&deviceExt->descriptorLock, U64_MAX);
 
-	if(acq < ELockAcquire_Success)
-		_gotoIfError(clean, Error_invalidState(
-			0, "GraphicsDeviceRef_createSamplerExt() couldn't acquire descriptor lock"
-		));
+	//Allocate descriptor
 
-	//Create readonly buffer
-
-	sampler->samplerLocation = VkGraphicsDevice_allocateDescriptor(deviceExt, EDescriptorType_Sampler);
-
-	if(sampler->samplerLocation == U32_MAX)
-		_gotoIfError(clean, Error_outOfMemory(
-			0, "GraphicsDeviceRef_createSamplerExt() couldn't allocate Sampler descriptor"
-		));
-
-	VkDescriptorImageInfo imageInfo = (VkDescriptorImageInfo) { .sampler = samplerExt->sampler };
+	VkDescriptorImageInfo imageInfo = (VkDescriptorImageInfo) { .sampler = *samplerExt };
 
 	VkWriteDescriptorSet descriptor = (VkWriteDescriptorSet) {
 		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -159,11 +134,7 @@ Error GraphicsDeviceRef_createSamplerExt(GraphicsDeviceRef *dev, Sampler *sample
 	};
 
 	vkUpdateDescriptorSets(deviceExt->device, 1, &descriptor, 0, NULL);
-
+	
 clean:
-
-	if(acq == ELockAcquire_Acquired)
-		Lock_unlock(&deviceExt->descriptorLock);
-
 	return err;
 }

@@ -22,31 +22,16 @@
 #include "types/vec.h"
 #include "platforms/ref_ptr.h"
 #include "pipeline_structs.h"
+#include "texture.h"
 
 typedef RefPtr GraphicsDeviceRef;
 typedef struct Error Error;
 typedef struct CharString CharString;
 
-typedef struct DepthStencil {
-
-	GraphicsDeviceRef *device;
-
-	I32x2 size;
-
-	U32 readLocation;
-
-	EDepthStencilFormat format;
-
-	EMSAASamples msaa;
-
-	Bool allowShaderRead;
-	U8 padding[3];
-
-} DepthStencil;
+typedef UnifiedTexture DepthStencil;
 
 typedef RefPtr DepthStencilRef;
 
-#define DepthStencil_ext(ptr, T) (!ptr ? NULL : (T##DepthStencil*)(ptr + 1))		//impl
 #define DepthStencilRef_ptr(ptr) RefPtr_data(ptr, DepthStencil)
 
 Error DepthStencilRef_dec(DepthStencilRef **depthStencil);
@@ -54,7 +39,8 @@ Error DepthStencilRef_inc(DepthStencilRef *depthStencil);
 
 Error GraphicsDeviceRef_createDepthStencil(
 	GraphicsDeviceRef *deviceRef,
-	I32x2 size,
+	U16 width,
+	U16 height,
 	EDepthStencilFormat format,
 	Bool allowShaderRead,
 	EMSAASamples msaa,

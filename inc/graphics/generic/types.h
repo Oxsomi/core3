@@ -38,11 +38,12 @@ typedef enum EGraphicsTypeId {
 	EGraphicsTypeId_DeviceBuffer				= _makeObjectId(0x1C33,  7, 1),
 	EGraphicsTypeId_Pipeline					= _makeObjectId(0x1C33,  8, 1),
 	EGraphicsTypeId_Sampler						= _makeObjectId(0x1C33,  9, 1),
-	EGraphicsTypeId_AccelerationStructureExt	= _makeObjectId(0x1C33, 10, 1),
 
-	EGraphicsTypeId_DepthStencil				= _makeObjectId(0x1C33, 11, 1),
+	EGraphicsTypeId_DepthStencil				= _makeObjectId(0x1C33, 10, 1),
 
-	EGraphicsTypeId_Count						= 12
+	//EGraphicsTypeId_AccelerationStructureExt	= _makeObjectId(0x1C33, 11, 1),
+
+	EGraphicsTypeId_Count						= 11
 
 } EGraphicsTypeId;
 
