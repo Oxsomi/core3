@@ -52,7 +52,7 @@ typedef enum EGraphicsResourceFlag {
 typedef enum EResourceType {
 	EResourceType_DeviceTexture,					//Readonly texture
 	EResourceType_RenderTargetOrDepthStencil,		//Also depth stencil
-	EResourceType_Buffer,							//Any buffer type
+	EResourceType_DeviceBuffer,						//Any buffer type
 	EResourceType_Swapchain,
 	EResourceType_Count
 } EResourceType;

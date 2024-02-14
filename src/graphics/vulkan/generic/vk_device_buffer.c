@@ -155,7 +155,7 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 		buf->resource.flags & EGraphicsResourceFlag_CPUAllocatedBit,
 		&buf->resource.blockId,
 		&buf->resource.blockOffset,
-		EResourceType_Buffer,
+		EResourceType_DeviceBuffer,
 		name
 	));
 

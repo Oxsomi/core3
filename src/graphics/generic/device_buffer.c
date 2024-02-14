@@ -230,7 +230,7 @@ Error GraphicsDeviceRef_createBufferIntern(
 			.device = dev,
 			.size = len,
 			.flags = (U16) resourceFlags,
-			.type = EResourceType_Buffer
+			.type = EResourceType_DeviceBuffer
 		},
 		.usage = usage,
 		.isFirstFrame = true

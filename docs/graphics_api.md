@@ -351,6 +351,88 @@ See the "Commands" section.
 - Used in GraphicsDeviceRef's submitCommands.
 - Also used in command recording (See "Commands" section).
 
+## GraphicsResource
+
+A GraphicsResource is defined as any object that has allocated memory on the GraphicsDevice. This includes two types of resources: DeviceBuffer and UnifiedTexture. 
+
+A graphics resource consists of the following:
+
+- device: the owning graphics device.
+- size: CPU visible buffer size.
+- blockOffset/blockId/allocated: API dependent allocation information used to track the allocation.
+- flags: ShaderRead, ShaderWrite, InternalWeakDeviceRef, CPUBacked, CPUAllocated(Bit).
+  - ShaderRead: Whether the resource has a valid resource handle and can be accessed on the GPU through the descriptors. MSAA resources are incompatible with this flag, because there's no Texture2DMS[], it needs to be resolved before reading/writing the resource.
+  - ShaderWrite: ^ but for write access. DepthStencil and MSAA disallows this always.
+  - InternalWeakDeviceRef: Internal only; tells the resource it belongs to the device, so the device is the only one in charge of cleaning it up.
+  - Only relevant for DeviceTexture and DeviceBuffer:
+    - CPUBacked: The resource will have CPU backed memory to ensure it can continuously be pushed or pulled from the device whenever necessary. Without this flag, the upload data will only be available on first commit, after that the memory will be freed.
+    - CPUAllocatedBit (Always use as CPUAllocated to force CPUBacked also): Indicates that the device memory with the resource should be CPU-sided whenever possible. This can free up more device memory if the resource is only rarely being accessed (because it's typically slower than local memory). In some cases, this flag won't do anything, because with shared memory models such as mobile or integrated GPUs the memory between CPU and GPU is shared anyways. This is generally not a useful flag, though it can be when consuming large amounts of memory.
+- type: DeviceTexture, RenderTargetOrDepthStencil, DeviceBuffer, Swapchain. This is the base type; useful for memory allocation. Real type info can be obtained through the RefPtr itself.
+- mappedMemoryExt: API dependent location of the memory. Never write to this directly, because of unexpected caching behavior or access limations. Even if CPUAllocatedBit is active, this is not guaranteed to be writable directly on runtime. The graphics API implementation decides if it can directly access it (e.g. the resource is not in flight) and then can directly write to it. If it can't, it will use the staging buffer or create a dedicated staging resource (temporary). Always access this through the markDirty/pullRegion function of DeviceTexture or DeviceBuffer.
+
+### Resource handles
+
+Resource handles are what is passed to the GPU to access the GraphicsResources, these are the following resource handle types:
+
+- Sampler
+- ShaderRead
+- ShaderWrite
+
+Between those types, there are also further subdivisions:
+
+- Sampler
+- ShaderRead: Texture2D, TextureCube, Texture3D, Buffer
+- ShaderWrite: RWBuffer, RWTexture(2/3)D(s/f/i/u/)
+
+With resource handles, it is assumed that both U32_MAX and 0 indicate an invalid descriptor. The bottom 20 bits are the local id, while the 4 bits higher represent this EDescriptorType. Higher bits aren't currently used for anything to try and keep it possible to represent this resource handle as a float without losing any precision. It could be possible that the top 2 bits of the local id might get used by something else in the future, since they are currently inaccessible.
+
+## UnifiedTexture
+
+A UnifiedTexture can represent the following types: DepthStencil, RenderTexture, Swapchain, DeviceTexture. It was chosen to not be only one interface because the four types are very distinct in use, so only the base functionality had to be unified like this.
+
+A UnifiedTexture contains the following:
+
+- resource: the base GraphicsResource.
+- textureFormatId: ETextureFormatId, which can be ETextureFormatId_Undefined in the case of a DepthStencil. 
+- sampleCount: EMSAASamples. When this is defined as > 0, the resource can only be used as a render texture / depth stencil (not depth texture). There is no way to shader read/write MSAA textures in the current API spec, even though Texture2DMS is a type, there is no dedicated resource array for it and thus it's not supported. RWTexture2DMS has been added to later versions of HLSL, but this requires extensions that aren't properly supported yet. The only way to do this is to pass another render target / depth texture as the resolve texture.
+- depthFormat: EDepthFormat, which can be EDepthFormat_None if the texture is not a DepthTexture.
+- type: ETextureType; 2D, 3D or Cube.
+- width, height, length: dimensions of the resource. Length needs to be 1 if the type isn't 3D. For cubes the length will be automatically set to 6. The limits are width/height of 16384 and length of 256.
+- levels: how many mip levels are present.
+- images: how many different images are present. This is generally 1, but for Swapchains it is 3 because of versioning.
+- currentImageId: should only ever be accessed through the graphics API implementation. This value is a lagging value that's unpredictable if it's not in the submitCommands call. However, for Swapchains during that call, this represents what image is currently being rendered to.
+
+The unified texture can be obtained through the RefPtr as follows:
+
+```c
+DeviceResourceVersion v;
+UnifiedTexture tex = TextureRef_getUnifiedTexture(texRef, &v);
+```
+
+The DeviceResourceVersion should only be used if the size, versionId or format of the image are important. Otherwise, it is safe to pass NULL as that parameter. This is only important for Swapchains, because they can be resized and so they need to be locked to ensure it is safe to access that information.
+
+Other helpers:
+
+- U32 **TextureRef_getReadHandle**/**getWriteHandle**(TextureRef *tex, U32 subResource, U8 imageId): get the respective GPU accessible handles. Returns 0 if uninitialized.
+  - getCurr(Read/Write)Handle can be used too, but only if it's obvious that the image isn't a versioned resource (e.g. Swapchain). In that case, the image is always 0 and so it can safely be used. 
+- Bool **TextureRef_isRenderTargetWritable**(TextureRef *tex): if the unified texture is accessible as a color render target.
+- Bool **TextureRef_isDepthStencil**(TextureRef *tex): if the unified texture is accessible as a depth stencil.
+- Bool **TextureRef_isTexture**(RefPtr *tex): if the resource contains a UnifiedTexture.
+
+### Memory layout
+
+Besides the base data, the texture interface should always contain the image information behind the UnifiedTexture struct:
+
+- UnifiedTextureImage[base.images]: the read and write resource handle of the individual subresource and sub image.
+- UnifiedTextureImageExt[base.images] (UnifiedTextureImageExt_size): the extended data of the image, useful for keeping API dependent state, views/image information.
+- Extended data: Such as SwapchainExt (VkSwapchain, DxSwapchain, etc.).
+
+This can be safely accessed through the helpers: 
+
+- UnifiedTextureImage **TextureRef_getImage**(TextureRef *tex, U32 subResource, U8 imageId): gets the image resource handles.
+
+Other helpers are internal use only, such as getImgExtT and getImplExtT,
+
 ## Swapchain
 
 ### Summary
@@ -448,6 +530,41 @@ If the sampler is used on the GPU, it should be passed as a transition; stage is
 
 - Obtained through GraphicsDeviceRef's createSampler.
 - Used directly in shaders by passing the samplerLocation to the shader and using samplerUniform() or sampler() in the shader. Needs to be marked active by transitioning the sampler in the startScope command to ensure it is present.
+
+## DeviceTexture
+
+### Summary 
+
+A DeviceTexture is a texture that can be sent from the CPU to the device. It's essentially a UnifiedTexture that is allowed to be uploaded / downloaded from the device.
+
+```c
+_gotoIfError(clean, GraphicsDeviceRef_createTexture(
+    twm->device,
+    ETextureType_2D,
+    ETextureFormatId_BGRA8,
+    EGraphicsResourceFlag_ShaderRead,
+	128, 128, 1,
+    CharString_createRefCStrConst("Test image"),
+    &imageData,					//Is able to move the Buffer if it's not a ref
+    &twm->deviceTextureRef
+));
+```
+
+### Properties
+
+- A DeviceTexture is almost identical in layout to a UnifiedTexture.
+- Just like a DeviceBuffer, it has the following parameters:
+  - isPending(FullCopy) / pendingChanges: used to detect what data it should send.
+  - cpuData: the CPU backing data that will be pushed / was previously pulled.
+  - lock: for multi threading, every time markDirty is used it will need to mark the range as dirty. The accessor should lock this only if this buffer can be accessed by another thread before reading/writing (lock must be released after of course). 
+  - isFirstFrame: If the resource was already uploaded before.
+- base: UnifiedTexture it represents.
+
+### Used functions and obtained
+
+- Obtained through GraphicsDeviceRef's createTexture.
+- Can be copied to (markDirty(x, y, z, w, h, l)) and read back (pullRegion).
+- Can be used in shaders (if EGraphicsResourceFlag_ShaderRead is on) by passing the readLocation to the shader and using texture2DUniform() or texture2D() in the shader. Can be written (if EGraphicsResourceFlag_ShaderWrite is on) by using the respective rwTexture slot (see GraphicsResource/Resource handles). Can also be used when copying images.
 
 ## DepthStencil
 

@@ -81,19 +81,21 @@ UnifiedTexture TextureRef_getUnifiedTexture(TextureRef *tex, DeviceResourceVersi
 U32 TextureRef_getReadHandle(TextureRef *tex, U32 subResource, U8 imageId);
 U32 TextureRef_getWriteHandle(TextureRef *tex, U32 subResource, U8 imageId);
 
-U32 TextureRef_getCurrReadHandle(TextureRef *tex, U32 subResource);				//Only call this during submitCommands
-U32 TextureRef_getCurrWriteHandle(TextureRef *tex, U32 subResource);			//^
-
 Bool TextureRef_isRenderTargetWritable(TextureRef *tex);
 Bool TextureRef_isDepthStencil(TextureRef *tex);
 Bool TextureRef_isTexture(RefPtr *tex);
 
 UnifiedTextureImage TextureRef_getImage(TextureRef *tex, U32 subResource, U8 imageId);
 
+EDescriptorType UnifiedTexture_getWriteDescriptorType(UnifiedTexture texture);
+
+U32 TextureRef_getCurrReadHandle(TextureRef *tex, U32 subResource);
+U32 TextureRef_getCurrWriteHandle(TextureRef *tex, U32 subResource);
+
+//Only for child classes
+
 Bool UnifiedTexture_free(TextureRef *textureRef);
 Error UnifiedTexture_create(TextureRef *ref, CharString name);
-
-EDescriptorType UnifiedTexture_getWriteDescriptorType(UnifiedTexture texture);
 
 //Internal (only use inside of GraphicsDeviceRef_submitCommands)
 
