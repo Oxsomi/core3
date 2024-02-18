@@ -31,6 +31,30 @@ Where BMPInfo has the following properties:
 - U8 **textureFormatId**: ETextureFormatId_BGRA8 is currently the only one supported.
 - I32 **xPixPerM**, **yPixPerM**: preferred display size in pixels per meter. Setting this to 0 is allowed as it might be ignored by the displayer.
 
+## DDS
+
+DDS support is also very basic, it restricts usage to the following:
+
+- Video textures aren't supported (e.g. YUV textures).
+- Exotic packed textures aren't supported (e.g. RGB9E5).
+- Compression textures for very uncommon formats aren't supported (BC1, BC2, BC3). Though of course normal DXT formats such as BC4-BC7 are supported.
+- Depth stencils aren't supported.
+- Only DDS DXT10 format is supported. This is to simplify image loading and to avoid invalid assumptions due to old formats (such as assuming texture format or misinterpreting some flags). 
+
+Usage via:
+
+- Error **DDS_write**(ListSubResourceData data, DDSInfo info, Allocator allocator, Buffer *result)
+- Error **DDS_read**(Buffer buf, DDSInfo *info, Allocator allocator, ListSubResourceData *result)
+  - *ListSubResourceData* contains the sub resource information alongside the offset / buffer of where it's located. When this is allocated (using read) it should be freed using **ListSubResourceData_freeAll**. Though the DDS reader rarely allocates new memory for the subresource and instead references the loaded buffer.
+
+Where DDSInfo has the following properties:
+
+- U32 **w**, **h**, **l**: dimensions (width, height, length).
+- U32 **mips**: mip maps of the texture that were loaded; can't exceed ceil(log2(max(w, h, l))) > 1.
+- U32 **layers**: layered image, e.g. a cube texture has 6.
+- ETextureFormatId **textureFormatId**: specifies the loaded texture format (loading depth stencil formats isn't supported currently).
+- ETextureType **type**: specifies the type of texture that was loaded. A 1D texture is reinterpreted as a ETextureType_2D with height 1, as this isn't natively supported and has very little real-life use cases.
+
 ## oiXX
 
 oiXX files have the following standards:
@@ -155,6 +179,8 @@ The following formats are present:
   - SInt formats: R(G(BA))(8/16/32)i
   - UInt formats: R(G(BA))(8/16/32)u
   - Float formats: R(G(BA))(16/32)f
+- Usable only as vertex attribute formats, unless otherwise specified by the device by enabling it:
+  - RGB32(f/u/i)
 - Compressed formats:
   - BCn:
     - UNorm: BC(4/5/7)

@@ -230,7 +230,10 @@ Error DDS_read(Buffer buf, DDSInfo *info, Allocator allocator, ListSubResourceDa
 
 	switch (header10.dim) {
 
-		case EDX10Dim_1D: case EDX10Dim_2D:		//Both 2D and 1D are treated as 2D textures. 1D is just 2D tex with height 1
+		case EDX10Dim_1D: 
+			header.height = 1;
+		
+		case EDX10Dim_2D:		//Both 2D and 1D are treated as 2D textures. 1D is just 2D tex with height 1
 			break;
 
 		case EDX10Dim_3D:
@@ -264,8 +267,10 @@ Error DDS_read(Buffer buf, DDSInfo *info, Allocator allocator, ListSubResourceDa
 	)
 		return Error_invalidParameter(0, 0, "DDS_read()::buf had cubemap flag but had invalid state");
 
-	if(header10.miscFlag & EDX10Misc_IsCube)
+	if(header10.miscFlag & EDX10Misc_IsCube) {
 		type = ETextureType_Cube;
+		header10.arraySize = 6;
+	}
 
 	if(header10.miscFlags2 >= EDX10AlphaMode_Count)
 		return Error_invalidParameter(0, 0, "DDS_read()::buf had invalid alpha mode");
