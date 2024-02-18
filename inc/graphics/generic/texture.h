@@ -33,21 +33,6 @@ typedef struct RefPtr RefPtr;
 typedef struct CharString CharString;
 typedef RefPtr GraphicsDeviceRef;
 
-typedef enum EDepthStencilFormat {
-
-	EDepthStencilFormat_None,
-	EDepthStencilFormat_D16,		//Prefer this if stencil isn't needed and precision is no concern
-	EDepthStencilFormat_D32,
-	EDepthStencilFormat_D24S8Ext,	//On AMD this is unsupported, use D32S8 instead.
-	EDepthStencilFormat_D32S8,
-	EDepthStencilFormat_S8Ext,
-
-	EDepthStencilFormat_Count,
-
-	EDepthStencilFormat_StencilStart = EDepthStencilFormat_D24S8Ext
-
-} EDepthStencilFormat;
-
 typedef struct UnifiedTextureImage {
 	U32 readHandle, writeHandle;
 } UnifiedTextureImage;

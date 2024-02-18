@@ -20,9 +20,11 @@
 
 #include "platforms/ext/listx_impl.h"
 #include "platforms/ext/bmpx.h"
+#include "platforms/ext/ddsx.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/formatx.h"
 #include "formats/bmp.h"
+#include "formats/dds.h"
 #include "formats/oiCA.h"
 #include "formats/oiDL.h"
 #include "types/buffer.h"
@@ -51,6 +53,8 @@ TListXImpl(BufferLayoutMemberInfo);
 TListXImpl(BufferLayoutStruct);
 TListXImpl(AllocationBufferBlock);
 
+TListXImpl(SubResourceData);
+
 //Contains small helper functions that don't require their own .c file
 
 //BMP
@@ -61,6 +65,20 @@ Error BMP_writex(Buffer buf, BMPInfo info, Buffer *result) {
 
 Error BMP_readx(Buffer buf, BMPInfo *info, Buffer *result) {
 	return BMP_read(buf, info, Platform_instance.alloc, result);
+}
+
+//DDS
+
+Error DDS_writex(ListSubResourceData buf, DDSInfo info, Buffer *result) {
+	return DDS_write(buf, info, Platform_instance.alloc, result);
+}
+
+Error DDS_readx(Buffer buf, DDSInfo *info, ListSubResourceData *result) {
+	return DDS_read(buf, info, Platform_instance.alloc, result);
+}
+
+Bool ListSubResourceData_freeAllx(ListSubResourceData *buf) {
+	return ListSubResourceData_freeAll(buf, Platform_instance.alloc);
 }
 
 //Buffer

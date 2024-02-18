@@ -85,7 +85,7 @@ Error BMP_write(Buffer buf, BMPInfo info, Allocator allocator, Buffer *result) {
 	BMPInfoHeader infoHeader = (BMPInfoHeader) {
 		.headerSize = sizeof(BMPInfoHeader),
 		.width = (I32) info.w,
-		.height = (I32) info.h * (info.isFlipped ? -1 : 1),
+		.height = (I32) info.h * (info.isFlipped ? 1 : -1),
 		.planes = 1,
 		.bitCount = info.discardAlpha ? 24 : 32,
 		.xPixPerM = info.xPixPerM,
@@ -207,7 +207,7 @@ Error BMP_read(Buffer buf, BMPInfo *info, Allocator allocator, Buffer *result) {
 	)
 		_gotoIfError(clean, Error_invalidParameter(0, 0, "BMP_read()::buf didn't contain valid header"));
 
-	info->isFlipped = bmpInfo.height < 0;
+	info->isFlipped = bmpInfo.height > 0;
 	info->xPixPerM = bmpInfo.xPixPerM;
 	info->yPixPerM = bmpInfo.yPixPerM;
 	info->discardAlpha = bmpInfo.bitCount == 24;

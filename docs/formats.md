@@ -143,8 +143,8 @@ To make usage simpler, the following helper functions have been added:
 - U8 **ETextureFormat_getChannels**(ETextureFormat f)
 - ETextureCompressionType **ETextureFormat_getCompressionType**(ETextureFormat f): UNorm, SNorm, Float or sRGB.
 - ETextureCompressionAlgo **ETextureFormat_getCompressionAlgo**(ETextureFormat f): ASTC or BCn.
-- Bool **ETextureFormat_getAlignment**(ETextureFormat f, U8 *x, U8 *y): unpack x and y alignment (both are required), will return false when one of them isn't supplied or if the format doesn't use compression.
-- U64 **ETextureFormat_getSize**(ETextureFormat f, U32 w, U32 h): calculate the size in bytes of the texture, respecting alignment. Returns U64_MAX if alignment is incorrect.
+- Bool **ETextureFormat_getAlignment**(ETextureFormat f, U8 *x, U8 *y): unpack x and y alignment (both are optional), will return false if the format doesn't use compression.
+- U64 **ETextureFormat_getSize**(ETextureFormat f, U32 w, U32 h): calculate the size in bytes of the texture, respecting alignment. If the size isn't aligned it will add padding to respect the alignment.
 
 The following formats are present:
 

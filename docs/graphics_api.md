@@ -386,6 +386,14 @@ Between those types, there are also further subdivisions:
 
 With resource handles, it is assumed that both U32_MAX and 0 indicate an invalid descriptor. The bottom 20 bits are the local id, while the 4 bits higher represent this EDescriptorType. Higher bits aren't currently used for anything to try and keep it possible to represent this resource handle as a float without losing any precision. It could be possible that the top 2 bits of the local id might get used by something else in the future, since they are currently inaccessible.
 
+### Marking dirty (markDirty)
+
+DeviceTexture and DeviceBuffer can be marked dirty by their respective markDirty functions. This means that at the start of the next frame (submitCommands), the changes will be submitted. Updating the resource in flight is only possible by creating a temporary copy resource to handle it and then manually calling copy commands.
+
+### Pulling region (pullRegion)
+
+DeviceTexture and DeviceBuffer can be pulled back from GPU by their pullRegion functions. These functions run at the end of the next frame (next submitCommands end) and will then be pulled back async to the CPU when the operation is completed on the device. On completion, the callback function can be ran (this is 3 frames later). If the result is important right now, it can be stalled by calling wait after the submitCommands, *though that fully stalls the device and should be prevented at all costs*. If it's desired to copy the current state of the resource (if it gets modified after) then a manual copy resource should be created and manual copy should be done to ensure it won't be modified in between.
+
 ## UnifiedTexture
 
 A UnifiedTexture can represent the following types: DepthStencil, RenderTexture, Swapchain, DeviceTexture. It was chosen to not be only one interface because the four types are very distinct in use, so only the base functionality had to be unified like this.

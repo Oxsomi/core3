@@ -56,6 +56,7 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 	ListVkBufferImageCopy pendingCopies = { 0 };
 
 	ETextureFormat format = ETextureFormatId_unpack[texture->base.textureFormatId];
+	Bool compressed = ETextureFormat_getIsCompressed(format);
 
 	//TODO: Copy queue
 
@@ -203,7 +204,7 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 			&dependency
 		));
 
-		if(dependency.bufferMemoryBarrierCount)
+		if(dependency.bufferMemoryBarrierCount || dependency.imageMemoryBarrierCount)
 			instanceExt->cmdPipelineBarrier2(commandBuffer, &dependency);
 
 		vkCmdCopyBufferToImage(
@@ -232,7 +233,7 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 		VkDeviceBuffer *stagingExt = DeviceBuffer_ext(staging, Vk);
 
 		U8 *defaultLocation = (U8*) 1, *location = defaultLocation;
-		Error temp = AllocationBuffer_allocateBlockx(stagingBuffer, allocRange, 4, (const U8**) &location);
+		Error temp = AllocationBuffer_allocateBlockx(stagingBuffer, allocRange, compressed ? 16 : 4, (const U8**) &location);
 
 		if(temp.genericError && location == defaultLocation)		//Something major went wrong
 			_gotoIfError(clean, temp);
@@ -275,27 +276,28 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 			U32 rowLen = (U32) ETextureFormat_getSize(format, w, alignmentY, 1);
 			U32 rowOff = (U32) ETextureFormat_getSize(format, x, alignmentY, 1);
 			U64 len = ETextureFormat_getSize(format, w, h, l);
-			U64 start = (U64) rowLen * (y + z * h) + rowOff;
+			U64 h2 = h / alignmentY;
+			U64 start = (U64) rowLen * (y + z * h2) + rowOff;
 
 			if(w == texture->base.width && h == texture->base.height)
 				Buffer_copy(
-					Buffer_createRef(location + allocRange, rowLen * h * l),
-					Buffer_createRefConst(texture->cpuData.ptr + start, rowLen * h * l)
+					Buffer_createRef(location + allocRange, rowLen * h2 * l),
+					Buffer_createRefConst(texture->cpuData.ptr + start, rowLen * h2 * l)
 				);
 
 			else for(U64 k = z; k < z + l; ++k) {
 
 				if(w == texture->base.width)
 					Buffer_copy(
-						Buffer_createRef(location + allocRange + (U64)rowLen * (k - z) * h, rowLen * h),
-						Buffer_createRefConst(texture->cpuData.ptr + start + (U64)rowLen * (k - z) * h, rowLen * h)
+						Buffer_createRef(location + allocRange + (U64)rowLen * (k - z) * h2, rowLen * h2),
+						Buffer_createRefConst(texture->cpuData.ptr + start + (U64)rowLen * (k - z) * h2, rowLen * h2)
 					);
 
 				else for (U64 j = y; j < y + h; j += alignmentY) {
 					U64 yOff = (j - y) / alignmentY;
 					Buffer_copy(
-						Buffer_createRef(location + allocRange + (U64)rowLen * (yOff + (k - z) * h), rowLen),
-						Buffer_createRefConst(texture->cpuData.ptr + start + (U64)rowLen * (yOff + (k - z) * h), rowLen)
+						Buffer_createRef(location + allocRange + (U64)rowLen * (yOff + (k - z) * h2), rowLen),
+						Buffer_createRefConst(texture->cpuData.ptr + start + (U64)rowLen * (yOff + (k - z) * h2), rowLen)
 					);
 				}
 			}
@@ -358,7 +360,7 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 			&dependency
 		));
 
-		if(dependency.bufferMemoryBarrierCount)
+		if(dependency.bufferMemoryBarrierCount || dependency.imageMemoryBarrierCount)
 			instanceExt->cmdPipelineBarrier2(commandBuffer, &dependency);
 
 		vkCmdCopyBufferToImage(
