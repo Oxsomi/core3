@@ -37,13 +37,14 @@ DDS support is also very basic, it restricts usage to the following:
 
 - Video textures aren't supported (e.g. YUV textures).
 - Exotic packed textures aren't supported (e.g. RGB9E5).
+- Legacy formats aren't supported (e.g. D3DFMT formats that aren't present anymore in DXGI_FORMAT). This includes luminance textures.
 - Compression textures for very uncommon formats aren't supported (BC1, BC2, BC3). Though of course normal DXT formats such as BC4-BC7 are supported.
 - Depth stencils aren't supported.
-- Only DDS DXT10 format is supported. This is to simplify image loading and to avoid invalid assumptions due to old formats (such as assuming texture format or misinterpreting some flags). 
 
 Usage via:
 
 - Error **DDS_write**(ListSubResourceData data, DDSInfo info, Allocator allocator, Buffer *result)
+  - Important note: the order of "*data*" (ListSubResource) is allowed to be re-sorted by the function as seen fit, though it won't touch the buffers pointed to.
 - Error **DDS_read**(Buffer buf, DDSInfo *info, Allocator allocator, ListSubResourceData *result)
   - *ListSubResourceData* contains the sub resource information alongside the offset / buffer of where it's located. When this is allocated (using read) it should be freed using **ListSubResourceData_freeAll**. Though the DDS reader rarely allocates new memory for the subresource and instead references the loaded buffer.
 

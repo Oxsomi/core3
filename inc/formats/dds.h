@@ -35,7 +35,7 @@ typedef struct SubResourceData {
 
 typedef struct DDSInfo {
 
-	U32 w, h, l;
+	U32 w, h, l;						//Dimensions; these decrease by ~2 for each mip
 	U32 mips, layers;
 
 	ETextureFormatId textureFormatId;
@@ -45,7 +45,7 @@ typedef struct DDSInfo {
 
 TList(SubResourceData);
 
-Error DDS_write(ListSubResourceData buf, DDSInfo info, Allocator allocator, Buffer *result);
+Error DDS_write(ListSubResourceData buf, DDSInfo info, Allocator allocator, Buffer *result);		//buf may be reordered
 Error DDS_read(Buffer buf, DDSInfo *info, Allocator allocator, ListSubResourceData *result);
 
 Bool ListSubResourceData_freeAll(ListSubResourceData *buf, Allocator allocator);

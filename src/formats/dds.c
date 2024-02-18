@@ -31,6 +31,7 @@ TListImpl(SubResourceData);
 //Combo between 
 // http://doc.51windows.net/Directx9_SDK/graphics/reference/ddsfilereference/ddsfileformat.htm#surface_format_header
 // https://learn.microsoft.com/en-us/windows/win32/direct3ddds/dds-header
+// https://learn.microsoft.com/en-us/windows/win32/direct3ddds/dx-graphics-dds-pguide
 
 typedef enum EDDSFlag {
 
@@ -71,25 +72,31 @@ typedef struct DDSCaps2 {
 typedef enum EDDSPixelFormatFlag {
 
 	EDDSPixelFormatFlag_AlphaPixels		= 1 << 0,
-	EDDSPixelFormatFlag_Alpha			= 1 << 1,
+	//EDDSPixelFormatFlag_Alpha			= 1 << 1,		//Unsupported
 	EDDSPixelFormatFlag_MagicNumber		= 1 << 2,
 	EDDSPixelFormatFlag_RGB				= 1 << 6,
-	//EDDSPixelFormatFlag_YUV			= 1 << 9,
-	EDDSPixelFormatFlag_Luminance		= 1 << 17,
+	//EDDSPixelFormatFlag_YUV			= 1 << 9,		//Unsupported
+	//EDDSPixelFormatFlag_Luminance		= 1 << 17,		//Unsupported
 
 	EDDSPixelFormatFlag_Supported		= 
-		EDDSPixelFormatFlag_AlphaPixels | EDDSPixelFormatFlag_Alpha | EDDSPixelFormatFlag_MagicNumber |
-		EDDSPixelFormatFlag_RGB | EDDSPixelFormatFlag_Luminance,
+		EDDSPixelFormatFlag_AlphaPixels | EDDSPixelFormatFlag_MagicNumber | EDDSPixelFormatFlag_RGB,
 
 } EDDSPixelFormatFlag;
 
 typedef enum EDDSFormatMagic {
 	EDDSFormatMagic_DX10				= C8x4('D', 'X', '1', '0'),
-	//EDDSFormatMagic_DXT1				= C8x4('D', 'X', 'T', '1'),
-	//EDDSFormatMagic_DXT2				= C8x4('D', 'X', 'T', '2'),
-	//EDDSFormatMagic_DXT3				= C8x4('D', 'X', 'T', '3'),
-	//EDDSFormatMagic_DXT4				= C8x4('D', 'X', 'T', '4'),
-	//EDDSFormatMagic_DXT5				= C8x4('D', 'X', 'T', '5')
+	EDDSFormatMagic_BC4					= C8x4('B', 'C', '4', 'U'),
+	EDDSFormatMagic_BC4s				= C8x4('B', 'C', '4', 'S'),
+	EDDSFormatMagic_BC5					= C8x4('A', 'T', 'I', '2'),
+	EDDSFormatMagic_BC5s				= C8x4('B', 'C', '5', 'S'),
+	EDDSFormatmagic_RGBA16				= 36,
+	EDDSFormatmagic_RGBA16s				= 110,
+	EDDSFormatmagic_R16f				= 111,
+	EDDSFormatmagic_RG16f				= 112,
+	EDDSFormatmagic_RGBA16f				= 113,
+	EDDSFormatmagic_R32f				= 114,
+	EDDSFormatmagic_RG32f				= 115,
+	EDDSFormatmagic_RGBA32f				= 116
 } EDDSFormatMagic;
 
 typedef struct DDSPixelFormat {
@@ -110,12 +117,7 @@ typedef struct DDSHeader {
 	U32 size;					//sizeof(DDSHeader) - sizeof(magicNumber) = 128 - 4 = 124
 	EDDSFlag flags;
 	U32 height, width;
-
-	union {
-		I32 pitch;				//flags & EDDSFlag_Pitch
-		U32 linearSize;			//flags & EDDSFlag_LinearSize
-	};
-
+	U32 pitchOrLinearSize;		//flags & EDDSFlag_Pitch or LinearSize
 	U32 depth;					//flags & EDDSFlag_Depth
 	U32 mips;					//flags & EDDSFlag_Mips
 
@@ -155,6 +157,8 @@ typedef struct DDSHeaderDXT10 {
 	EDX10AlphaMode miscFlags2;
 } DDSHeaderDXT10;
 
+static const U32 ddsMagic = C8x4('D', 'D', 'S', ' ');
+
 //DDS serialization
 
 Error DDS_read(Buffer buf, DDSInfo *info, Allocator allocator, ListSubResourceData *result) {
@@ -170,7 +174,7 @@ Error DDS_read(Buffer buf, DDSInfo *info, Allocator allocator, ListSubResourceDa
 
 	DDSHeader header = *(const DDSHeader*) buf.ptr;
 
-	if(header.magicNumber != C8x4('D', 'D', 'S', ' '))
+	if(header.magicNumber != ddsMagic)
 		return Error_invalidParameter(0, 0, "DDS_read()::buf had an invalid header magic");
 
 	if(header.size != sizeof(header) - sizeof(header.magicNumber))
@@ -210,6 +214,18 @@ Error DDS_read(Buffer buf, DDSInfo *info, Allocator allocator, ListSubResourceDa
 		return Error_invalidParameter(0, 0, "DDS_read()::buf mip count exceeded available mip count");
 
 	//Here we force DXT10 format so we don't have to handle anything else
+
+	/* TODO: 
+			Special handling for the following formats:
+			case ETextureFormatId_BGR10A2:
+			case ETextureFormatId_RGBA8:
+			case ETextureFormatId_RG16:
+			case ETextureFormatId_BC4:		case ETextureFormatId_BC4s:
+			case ETextureFormatId_BC5:		case ETextureFormatId_BC5s:
+			case ETextureFormat_RGBA16:		case ETextureFormat_RGBA16s:
+			case ETextureFormat_R16f:		case ETextureFormat_RG16f:		case ETextureFormat_RGBA16f:
+			case ETextureFormat_R32f:		case ETextureFormat_RG32f:		case ETextureFormat_RGBA32f:
+	*/
 
 	if(header.format.magicNumber != EDDSFormatMagic_DX10 || !(header.format.flags & EDDSPixelFormatFlag_MagicNumber))
 		return Error_invalidParameter(0, 0, "DDS_read()::buf had an invalid header pixel format magic");
@@ -301,8 +317,7 @@ Error DDS_read(Buffer buf, DDSInfo *info, Allocator allocator, ListSubResourceDa
 
 	U64 totalSubResources = (U64)header.mips * header.depth * header10.arraySize;
 
-	if(totalSubResources >> 32)
-		return Error_invalidParameter(0, 0, "DDS_read()::buf had invalid header sub resource count");
+	//Output parsed result
 
 	Error err = ListSubResourceData_resize(result, totalSubResources, allocator);
 
@@ -339,8 +354,6 @@ Error DDS_read(Buffer buf, DDSInfo *info, Allocator allocator, ListSubResourceDa
 		}
 	}
 
-	//Output real format
-
 	*info = (DDSInfo) {
 		.w = header.width,
 		.h = header.height,
@@ -356,12 +369,240 @@ Error DDS_read(Buffer buf, DDSInfo *info, Allocator allocator, ListSubResourceDa
 	return Error_none();
 }
 
+ECompareResult SubResourceData_sort(const SubResourceData *a, const SubResourceData *b) {
+	return a->layerId > b->layerId || (
+		(a->layerId == b->layerId && a->z > b->z) || (
+			a->layerId == b->layerId && a->z == b->z && a->mipId > b->mipId
+		)
+	);
+}
+
 Error DDS_write(ListSubResourceData buf, DDSInfo info, Allocator allocator, Buffer *result) {
-	buf;
-	info;
-	allocator;
-	result;
-	//TODO:
+
+	if(!result || !buf.length)
+		return Error_nullPointer(!result ? 3 : 0, "DDS_write()::buf and result are required");
+
+	if(result->ptr)
+		return Error_invalidParameter(3, 0, "DDS_write()::result already contained data, possible memleak");
+
+	if(!info.w || !info.h || !info.l || !info.mips || !info.layers || !info.textureFormatId)
+		return Error_invalidParameter(1, 1, "DDS_write()::info.w, h, l, mips, layers and textureFormatId are required");
+
+	if(info.type >= ETextureType_Count || info.textureFormatId >= ETextureFormatId_Count)
+		return Error_invalidParameter(1, 1, "DDS_write()::info.type and textureFormatId have to be valid");
+
+	U32 biggestSize2 = (U32) U64_max(U64_max(info.w, info.h), info.l);
+	U32 mips = (U32) U64_max(1, (U64) F64_ceil(F64_log2((F64)biggestSize2)));
+
+	if(info.mips > mips)
+		return Error_invalidParameter(1, 0, "DDS_write()::info.mips out of bounds");
+
+	U64 totalSubResources = (U64)info.mips * info.l * info.layers;
+
+	if(totalSubResources != buf.length)
+		return Error_invalidParameter(0, 0, "DDS_write()::info's subresource count and buf.length mismatched");
+
+	if(info.type == ETextureType_Cube && info.layers != 6)
+		return Error_invalidParameter(0, 0, "DDS_write()::info specifies a cubemap, but no 6 faces were found");
+
+	if(info.l > 1 && info.type != ETextureType_3D)
+		return Error_invalidParameter(0, 0, "DDS_write()::info specifies length of >1 but ETextureType_3D wasn't specified");
+
+	if(info.layers > 1 && info.type == ETextureType_3D)
+		return Error_invalidParameter(0, 0, "DDS_write()::info specifies layers of >1 but ETextureType_3D was used");
+
+	DXFormat format = ETextureFormatId_toDXFormat(info.textureFormatId);
+
+	if(!format)
+		return Error_invalidParameter(0, 0, "DDS_write()::info.textureFormatId isn't supported as a DDS texture");
+
+	ETextureFormat formatOxC = ETextureFormatId_unpack[info.textureFormatId];
+	Bool isCompressed = ETextureFormat_getIsCompressed(formatOxC);
+
+	//Calculate total size
+
+	Bool requiresDXT10 = info.layers > 1;		//Layers are a DXT10 only feature
+
+	if(!requiresDXT10)
+		switch (info.textureFormatId) {
+
+			//These formats are built in without DXT10
+
+			case ETextureFormatId_RGBA8:
+			case ETextureFormatId_RG16:
+			case ETextureFormatId_BC4:		case ETextureFormatId_BC4s:
+			case ETextureFormatId_BC5:		case ETextureFormatId_BC5s:
+			case ETextureFormatId_RGBA16:	case ETextureFormatId_RGBA16s:
+			case ETextureFormatId_R16f:		case ETextureFormatId_RG16f:		case ETextureFormatId_RGBA16f:
+			case ETextureFormatId_R32f:		case ETextureFormatId_RG32f:		case ETextureFormatId_RGBA32f:
+				break;
+
+			//Normally we'd require DXT10
+
+			default:
+				requiresDXT10 = true;
+				break;
+		}
+
+	U64 bufLen = sizeof(DDSHeader) + (requiresDXT10 ? sizeof(DDSHeaderDXT10) : 0);
+
+	//Sort subresources to ensure we don't have missing or wrongly ordered SubResource data
+
+	ListSubResourceData_sortCustom(buf, (CompareFunction) SubResourceData_sort);
+
+	//Validate size of each subresource
+	
+	for (U32 i = 0, l = 0; i < info.layers; ++i) {
+
+		U32 currW = info.w;
+		U32 currH = info.h;
+		U32 currL = info.l;
+
+		for (U32 j = 0; j < info.mips; ++j) {
+
+			U64 len = ETextureFormat_getSize(formatOxC, currW, currH, currL);
+
+			for (U32 k = 0; k < currL; ++k) {
+
+				SubResourceData dat = buf.ptr[l++];
+
+				if(dat.layerId != i || dat.mipId != j || dat.z != k)
+					return Error_invalidParameter(0, 0, "DDS_write()::buf contained duplicate data");
+
+				if(Buffer_length(dat.data) != len)
+					return Error_invalidParameter(0, 0, "DDS_write()::buf contained invalid sized data");
+
+				if(bufLen + len < bufLen)
+					return Error_overflow(0, bufLen + len, bufLen, "DDS_write() write failed, overflow!");
+
+				bufLen += len;
+			}
+
+			currW = (U32) U64_max(1, currW >> 1);
+			currH = (U32) U64_max(1, currH >> 1);
+			currL = (U32) U64_max(1, currL >> 1);
+		}
+	}
+
+	U8 alignY = 1;
+	ETextureFormat_getAlignment(formatOxC, NULL, &alignY);
+
+	U64 stride = ETextureFormat_getSize(formatOxC, info.w, alignY, 1);
+
+	if(stride >> 32)
+		return Error_overflow(0, stride, U32_MAX, "DDS_write() pitch overflow");
+
+	Error err = Buffer_createUninitializedBytes(bufLen, allocator, result);
+
+	if(err.genericError)
+		return err;
+
+	U8 *ptr = (U8*)result->ptr;
+
+	//Write DDS Header
+
+	DDSPixelFormat pixelFormat = (DDSPixelFormat) {
+		.size = (U32) sizeof(DDSPixelFormat),
+		.flags = EDDSPixelFormatFlag_MagicNumber,
+		.magicNumber = EDDSFormatMagic_DX10
+	};
+
+	if (!requiresDXT10) {
+
+		//These are special formats that don't have to use DXT10 for backwards compatibly reasons
+		//We could force them, but we want to remain a little backwards compatible
+
+		switch (formatOxC) {
+
+			case ETextureFormat_RGBA8:
+
+				pixelFormat = (DDSPixelFormat) {
+					.size = pixelFormat.size,
+					.flags = EDDSPixelFormatFlag_RGB | EDDSPixelFormatFlag_AlphaPixels,
+					.rgbBitCount = 32,
+					.masks = { 0xFF, 0xFF00, 0xFF0000, 0xFF000000 }
+				};
+
+				break;
+
+			case ETextureFormat_RG16:
+
+				pixelFormat = (DDSPixelFormat) {
+					.size = pixelFormat.size,
+					.flags = EDDSPixelFormatFlag_RGB,
+					.rgbBitCount = 32,
+					.masks = { 0xFFFF, 0xFFFF0000 }
+				};
+
+				break;
+
+			case ETextureFormat_BC4:		pixelFormat.magicNumber = EDDSFormatMagic_BC4;		break;
+			case ETextureFormat_BC4s:		pixelFormat.magicNumber = EDDSFormatMagic_BC4s;		break;
+			case ETextureFormat_BC5:		pixelFormat.magicNumber = EDDSFormatMagic_BC5;		break;
+			case ETextureFormat_BC5s:		pixelFormat.magicNumber = EDDSFormatMagic_BC5s;		break;
+
+			case ETextureFormat_RGBA16:		pixelFormat.magicNumber = EDDSFormatmagic_RGBA16;	break;
+			case ETextureFormat_RGBA16s:	pixelFormat.magicNumber = EDDSFormatmagic_RGBA16s;	break;
+
+			case ETextureFormat_R16f:		pixelFormat.magicNumber = EDDSFormatmagic_R16f;		break;
+			case ETextureFormat_RG16f:		pixelFormat.magicNumber = EDDSFormatmagic_RG16f;	break;
+			case ETextureFormat_RGBA16f:	pixelFormat.magicNumber = EDDSFormatmagic_RGBA16f;	break;
+
+			case ETextureFormat_R32f:		pixelFormat.magicNumber = EDDSFormatmagic_R32f;		break;
+			case ETextureFormat_RG32f:		pixelFormat.magicNumber = EDDSFormatmagic_RG32f;	break;
+			case ETextureFormat_RGBA32f:	pixelFormat.magicNumber = EDDSFormatmagic_RGBA32f;	break;
+		}
+
+	}
+
+	*(DDSHeader*)ptr = (DDSHeader) {
+		.magicNumber = ddsMagic,
+		.size = (U32)(sizeof(DDSHeader) - sizeof(((DDSHeader*)ptr)->magicNumber)),
+		.flags = 
+			EDDSFlag_Default | (info.mips > 1 ? EDDSFlag_Mips : 0) | (info.type == ETextureType_3D ? EDDSFlag_Depth : 0) |
+			(isCompressed ? EDDSFlag_LinearSize : EDDSFlag_Pitch),
+		.width = info.w,
+		.height = info.h,
+		.pitchOrLinearSize = (U32) stride,
+		.depth = info.l,
+		.mips = info.mips,
+		.format = pixelFormat,
+		.caps = (DDSCaps2) {
+			.flag1 = (EDDSCapsFlags1_Texture | 
+				(info.mips > 1 ? EDDSCapsFlags1_Mips : 0) | 
+				(info.type != ETextureType_2D ? EDDSCapsFlags1_Complex : 0)
+			),
+			.flag2 = (info.type == ETextureType_3D ? EDDSCapsFlags2_Volume : 
+				(info.type == ETextureType_Cube ? EDDSCapsFlags2_Cubemap : 0)
+			)
+		}
+	};
+
+	ptr += sizeof(DDSHeader);
+
+	//Write DDS ext header
+
+	if(requiresDXT10) {
+
+		*(DDSHeaderDXT10*)ptr = (DDSHeaderDXT10) {
+			.format = format,
+			.dim = (info.type == ETextureType_3D ? EDX10Dim_3D : EDX10Dim_2D),
+			.miscFlag = (info.type == ETextureType_Cube ? EDX10Misc_IsCube : 0),
+			.arraySize = info.layers,
+			.miscFlags2 = EDX10AlphaMode_Unknown
+		};
+
+		ptr += sizeof(DDSHeaderDXT10);
+	}
+
+	//Write subresources
+
+	for (U64 i = 0; i < buf.length; ++i) {
+		bufLen = Buffer_length(buf.ptr[i].data);
+		Buffer_copy(Buffer_createRef(ptr, bufLen), buf.ptr[i].data);
+		ptr += bufLen;
+	}
+
 	return Error_none();
 }
 
