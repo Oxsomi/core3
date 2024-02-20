@@ -1,13 +1,13 @@
-#!/bin/bash
+#!/bin/sh
 
 usage() {
 	echo Usage: build [Build type: Debug/Release] [Enable SIMD: On/Off] [Force float fallback: On/Off]
 	exit 1
 }
 
-if [[ "$1" != @(Release|Debug) ]]; then usage; fi
-if [[ "$2" != @(On|Off) ]]; then usage; fi
-if [[ "$3" != @(On|Off) ]]; then usage; fi
+if [ "$1" != Release ] && [ "$1" != Debug ]; then usage; fi
+if [ "$2" != On ] && [ "$2" != Off ]; then usage; fi
+if [ "$3" != On ] && [ "$3" != Off ]; then usage; fi
 
 # Build normal exes
 
