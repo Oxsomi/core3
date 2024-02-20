@@ -89,14 +89,14 @@ typedef enum EDDSFormatMagic {
 	EDDSFormatMagic_BC4s				= C8x4('B', 'C', '4', 'S'),
 	EDDSFormatMagic_BC5					= C8x4('A', 'T', 'I', '2'),
 	EDDSFormatMagic_BC5s				= C8x4('B', 'C', '5', 'S'),
-	EDDSFormatmagic_RGBA16				= 36,
-	EDDSFormatmagic_RGBA16s				= 110,
-	EDDSFormatmagic_R16f				= 111,
-	EDDSFormatmagic_RG16f				= 112,
-	EDDSFormatmagic_RGBA16f				= 113,
-	EDDSFormatmagic_R32f				= 114,
-	EDDSFormatmagic_RG32f				= 115,
-	EDDSFormatmagic_RGBA32f				= 116
+	EDDSFormatMagic_RGBA16				= 36,
+	EDDSFormatMagic_RGBA16s				= 110,
+	EDDSFormatMagic_R16f				= 111,
+	EDDSFormatMagic_RG16f				= 112,
+	EDDSFormatMagic_RGBA16f				= 113,
+	EDDSFormatMagic_R32f				= 114,
+	EDDSFormatMagic_RG32f				= 115,
+	EDDSFormatMagic_RGBA32f				= 116
 } EDDSFormatMagic;
 
 typedef struct DDSPixelFormat {
@@ -215,84 +215,152 @@ Error DDS_read(Buffer buf, DDSInfo *info, Allocator allocator, ListSubResourceDa
 
 	//Here we force DXT10 format so we don't have to handle anything else
 
-	/* TODO: 
-			Special handling for the following formats:
-			case ETextureFormatId_BGR10A2:
-			case ETextureFormatId_RGBA8:
-			case ETextureFormatId_RG16:
-			case ETextureFormatId_BC4:		case ETextureFormatId_BC4s:
-			case ETextureFormatId_BC5:		case ETextureFormatId_BC5s:
-			case ETextureFormat_RGBA16:		case ETextureFormat_RGBA16s:
-			case ETextureFormat_R16f:		case ETextureFormat_RG16f:		case ETextureFormat_RGBA16f:
-			case ETextureFormat_R32f:		case ETextureFormat_RG32f:		case ETextureFormat_RGBA32f:
-	*/
-
-	if(header.format.magicNumber != EDDSFormatMagic_DX10 || !(header.format.flags & EDDSPixelFormatFlag_MagicNumber))
-		return Error_invalidParameter(0, 0, "DDS_read()::buf had an invalid header pixel format magic");
-
-	if(Buffer_length(buf) < sizeof(DDSHeader) + sizeof(DDSHeaderDXT10))
-		return Error_invalidParameter(0, 0, "DDS_read()::buf had a missing DXT10 header");
-
-	DDSHeaderDXT10 header10 = *(const DDSHeaderDXT10*)((const DDSHeader*) buf.ptr + 1);
-
-	ETextureFormatId formatId = DXFormat_toTextureFormatId(header10.format);
-	ETextureFormat format = ETextureFormatId_unpack[formatId];
-	EDepthStencilFormat depthFormat = DXFormat_toDepthStencilFormat(header10.format);
-
-	if(format == ETextureFormat_Undefined && depthFormat == EDepthStencilFormat_None)
-		return Error_invalidParameter(0, 0, "DDS_read()::buf had an unsupported OxC3 format");
+	Bool useMagic = header.format.flags & EDDSPixelFormatFlag_MagicNumber;
+	Bool hasDXT10 = false;
+	U32 arraySize = 1;
 
 	ETextureType type = ETextureType_2D;
+	ETextureFormatId formatId = ETextureFormatId_Undefined;
+	ETextureFormat format = ETextureFormat_Undefined;
 
-	switch (header10.dim) {
+	if(useMagic && header.format.magicNumber == EDDSFormatMagic_DX10) {
 
-		case EDX10Dim_1D: 
-			header.height = 1;
+		if(Buffer_length(buf) < sizeof(DDSHeader) + sizeof(DDSHeaderDXT10))
+			return Error_invalidParameter(0, 0, "DDS_read()::buf had a missing DXT10 header");
+
+		hasDXT10 = true;
+		DDSHeaderDXT10 header10 = *(const DDSHeaderDXT10*)((const DDSHeader*) buf.ptr + 1);
+
+		formatId = DXFormat_toTextureFormatId(header10.format);
+		format = ETextureFormatId_unpack[formatId];
+		EDepthStencilFormat depthFormat = DXFormat_toDepthStencilFormat(header10.format);
+
+		if(format == ETextureFormat_Undefined && depthFormat == EDepthStencilFormat_None)
+			return Error_invalidParameter(0, 0, "DDS_read()::buf had an unsupported OxC3 format");
+
+		switch (header10.dim) {
+
+			case EDX10Dim_1D: 
+				header.height = 1;
 		
-		case EDX10Dim_2D:		//Both 2D and 1D are treated as 2D textures. 1D is just 2D tex with height 1
-			break;
+			case EDX10Dim_2D:		//Both 2D and 1D are treated as 2D textures. 1D is just 2D tex with height 1
+				break;
 
-		case EDX10Dim_3D:
+			case EDX10Dim_3D:
+				type = ETextureType_3D;
+				break;
+
+			default:
+				return Error_invalidParameter(0, 0, "DDS_read()::buf had an invalid texture type");
+		}
+
+		if(!header10.arraySize || (header10.arraySize > 1 && type == ETextureType_3D))
+			return Error_invalidParameter(0, 0, "DDS_read()::buf had invalid arraySize (either 0 or 3D[]");
+
+		if(header10.miscFlag &~ EDX10Misc_Supported)
+			return Error_invalidParameter(0, 0, "DDS_read()::buf had unsupported misc flag");
+
+		if((header.caps.flag2 & EDDSCapsFlags2_Volume) && header10.dim != EDX10Dim_3D)
+			return Error_invalidParameter(0, 0, "DDS_read()::buf had volume flag but had invalid state");
+
+		if(
+			(header10.miscFlag & EDX10Misc_IsCube) && (
+				header10.dim != EDX10Dim_2D || (header.caps.flag2 & EDDSCapsFlags2_Cubemap) != EDDSCapsFlags2_Cubemap
+			) 
+		)
+			return Error_invalidParameter(0, 0, "DDS_read()::buf had cubemap flag but had invalid state");
+
+		if(header10.miscFlag & EDX10Misc_IsCube) {
+			type = ETextureType_Cube;
+			header10.arraySize = 6;
+		}
+
+		if(header10.miscFlags2 >= EDX10AlphaMode_Count)
+			return Error_invalidParameter(0, 0, "DDS_read()::buf had invalid alpha mode");
+
+		if(depthFormat)
+			return Error_invalidParameter(0, 0, "DDS_read() depth textures aren't currently supported");
+
+		arraySize = header10.arraySize;
+	}
+
+	//DXT10 isn't present, we have to detect format, cube and volume the old way
+
+	else {
+
+		//Detect cubemap and volume
+
+		if(header.caps.flag2 & EDDSCapsFlags2_Cubemap) {
+
+			if((header.caps.flag2 & EDDSCapsFlags2_Cubemap) != EDDSCapsFlags2_Cubemap)
+				return Error_invalidParameter(0, 0, "DDS_read()::buf didn't have all cubemap bits set");
+
+			type = ETextureType_Cube;
+			arraySize = 6;
+		}
+
+		if ((header.caps.flag2 & EDDSCapsFlags2_Volume)) {
+
+			if(type != ETextureType_2D)
+				return Error_invalidParameter(0, 0, "DDS_read()::buf had both cubemap and volume bits set");
+
 			type = ETextureType_3D;
-			break;
+		}
 
-		default:
-			return Error_invalidParameter(0, 0, "DDS_read()::buf had an invalid texture type");
+		//Detect format
+
+		formatId = ETextureFormatId_Undefined;
+
+		//Detect from magic number
+
+		if (useMagic)
+			switch (header.format.magicNumber) {
+
+				case EDDSFormatMagic_BC4:			formatId = ETextureFormatId_BC4;		break;
+				case EDDSFormatMagic_BC4s:			formatId = ETextureFormatId_BC4s;		break;
+				case EDDSFormatMagic_BC5:			formatId = ETextureFormatId_BC5;		break;
+				case EDDSFormatMagic_BC5s:			formatId = ETextureFormatId_BC5s;		break;
+
+				case EDDSFormatMagic_RGBA16:		formatId = ETextureFormatId_RGBA16;		break;
+				case EDDSFormatMagic_RGBA16s:		formatId = ETextureFormatId_RGBA16s;	break;
+
+				case EDDSFormatMagic_R16f:			formatId = ETextureFormatId_R16f;		break;
+				case EDDSFormatMagic_RG16f:			formatId = ETextureFormatId_RG16f;		break;
+				case EDDSFormatMagic_RGBA16f:		formatId = ETextureFormatId_RGBA16f;	break;
+
+				case EDDSFormatMagic_R32f:			formatId = ETextureFormatId_R32f;		break;
+				case EDDSFormatMagic_RG32f:			formatId = ETextureFormatId_RG32f;		break;
+				case EDDSFormatMagic_RGBA32f:		formatId = ETextureFormatId_RGBA32f;	break;
+			}
+
+		//Detect from pixel format
+		
+		if (!formatId && (header.format.flags & EDDSPixelFormatFlag_RGB) && header.format.rgbBitCount == 32) {
+			
+			if(header.format.masks[0] == U16_MAX && header.format.masks[1] == ((U32)U16_MAX << 16))
+				formatId = ETextureFormatId_RG16;
+
+			else if(
+				header.format.masks[0] == 0x3FF && 
+				header.format.masks[1] == (0x3FF << 10) && 
+				header.format.masks[2] == (0x3FF << 20)
+			)
+				formatId = ETextureFormatId_BGR10A2;
+
+			else if (
+				header.format.masks[0] == U8_MAX &&
+				header.format.masks[1] == ((U32)U8_MAX << 8) &&
+				header.format.masks[2] == ((U32)U8_MAX << 16) &&
+				header.format.masks[3] == ((U32)U8_MAX << 24)
+			)
+				formatId = ETextureFormatId_RGBA8;
+		}
+
+		if(formatId == ETextureFormatId_Undefined)
+			return Error_invalidParameter(0, 0, "DDS_read()::buf couldn't detect format");
+
+		format = ETextureFormatId_unpack[formatId];
 	}
-
-	if(!header10.arraySize || (header10.arraySize > 1 && type == ETextureType_3D))
-		return Error_invalidParameter(0, 0, "DDS_read()::buf had invalid arraySize (either 0 or 3D[]");
-
-	if(header10.miscFlag &~ EDX10Misc_Supported)
-		return Error_invalidParameter(0, 0, "DDS_read()::buf had unsupported misc flag");
-
-	if(
-		(header.caps.flag2 & EDDSCapsFlags2_Volume) && (
-			!(header.caps.flag1 & EDDSCapsFlags1_Complex) ||
-			header10.dim != EDX10Dim_3D 
-		) 
-	)
-		return Error_invalidParameter(0, 0, "DDS_read()::buf had volume flag but had invalid state");
-
-	if(
-		(header10.miscFlag & EDX10Misc_IsCube) && (
-			header10.dim != EDX10Dim_2D || 
-			(header.caps.flag2 & EDDSCapsFlags2_Cubemap) != EDDSCapsFlags2_Cubemap ||
-			!(header.caps.flag1 & EDDSCapsFlags1_Complex)
-		) 
-	)
-		return Error_invalidParameter(0, 0, "DDS_read()::buf had cubemap flag but had invalid state");
-
-	if(header10.miscFlag & EDX10Misc_IsCube) {
-		type = ETextureType_Cube;
-		header10.arraySize = 6;
-	}
-
-	if(header10.miscFlags2 >= EDX10AlphaMode_Count)
-		return Error_invalidParameter(0, 0, "DDS_read()::buf had invalid alpha mode");
-
-	if(depthFormat)
-		return Error_invalidParameter(0, 0, "DDS_read() depth textures aren't currently supported");
 
 	U64 len = ETextureFormat_getSize(format, header.width, header.height, header.depth);
 	
@@ -310,12 +378,14 @@ Error DDS_read(Buffer buf, DDSInfo *info, Allocator allocator, ListSubResourceDa
 		currL = (U32) U64_max(1, currL >> 1);
 	}
 
-	expectedLength *= header10.arraySize;
+	expectedLength *= arraySize;
 
-	if(Buffer_length(buf) != sizeof(DDSHeader) + sizeof(DDSHeaderDXT10) + expectedLength)
+	U64 headerSize = sizeof(DDSHeader) + (hasDXT10 ? sizeof(DDSHeaderDXT10) : 0);
+
+	if(Buffer_length(buf) != headerSize + expectedLength)
 		return Error_invalidParameter(0, 0, "DDS_read()::buf had invalid size");
 
-	U64 totalSubResources = (U64)header.mips * header.depth * header10.arraySize;
+	U64 totalSubResources = (U64)header.mips * header.depth * arraySize;
 
 	//Output parsed result
 
@@ -324,9 +394,9 @@ Error DDS_read(Buffer buf, DDSInfo *info, Allocator allocator, ListSubResourceDa
 	if(err.genericError)
 		return err;
 
-	const U8 *ptr = buf.ptr + sizeof(DDSHeader) + sizeof(DDSHeaderDXT10);
+	const U8 *ptr = buf.ptr + headerSize;
 
-	for (U32 i = 0, l = 0; i < header10.arraySize; ++i) {
+	for (U32 i = 0, l = 0; i < arraySize; ++i) {
 
 		currW = header.width;
 		currH = header.height;
@@ -359,7 +429,7 @@ Error DDS_read(Buffer buf, DDSInfo *info, Allocator allocator, ListSubResourceDa
 		.h = header.height,
 		.l = header.depth,
 		.mips = header.mips,
-		.layers = header10.arraySize,
+		.layers = arraySize,
 		.type = type,
 		.textureFormatId = formatId
 	};
@@ -541,16 +611,16 @@ Error DDS_write(ListSubResourceData buf, DDSInfo info, Allocator allocator, Buff
 			case ETextureFormat_BC5:		pixelFormat.magicNumber = EDDSFormatMagic_BC5;		break;
 			case ETextureFormat_BC5s:		pixelFormat.magicNumber = EDDSFormatMagic_BC5s;		break;
 
-			case ETextureFormat_RGBA16:		pixelFormat.magicNumber = EDDSFormatmagic_RGBA16;	break;
-			case ETextureFormat_RGBA16s:	pixelFormat.magicNumber = EDDSFormatmagic_RGBA16s;	break;
+			case ETextureFormat_RGBA16:		pixelFormat.magicNumber = EDDSFormatMagic_RGBA16;	break;
+			case ETextureFormat_RGBA16s:	pixelFormat.magicNumber = EDDSFormatMagic_RGBA16s;	break;
 
-			case ETextureFormat_R16f:		pixelFormat.magicNumber = EDDSFormatmagic_R16f;		break;
-			case ETextureFormat_RG16f:		pixelFormat.magicNumber = EDDSFormatmagic_RG16f;	break;
-			case ETextureFormat_RGBA16f:	pixelFormat.magicNumber = EDDSFormatmagic_RGBA16f;	break;
+			case ETextureFormat_R16f:		pixelFormat.magicNumber = EDDSFormatMagic_R16f;		break;
+			case ETextureFormat_RG16f:		pixelFormat.magicNumber = EDDSFormatMagic_RG16f;	break;
+			case ETextureFormat_RGBA16f:	pixelFormat.magicNumber = EDDSFormatMagic_RGBA16f;	break;
 
-			case ETextureFormat_R32f:		pixelFormat.magicNumber = EDDSFormatmagic_R32f;		break;
-			case ETextureFormat_RG32f:		pixelFormat.magicNumber = EDDSFormatmagic_RG32f;	break;
-			case ETextureFormat_RGBA32f:	pixelFormat.magicNumber = EDDSFormatmagic_RGBA32f;	break;
+			case ETextureFormat_R32f:		pixelFormat.magicNumber = EDDSFormatMagic_R32f;		break;
+			case ETextureFormat_RG32f:		pixelFormat.magicNumber = EDDSFormatMagic_RG32f;	break;
+			case ETextureFormat_RGBA32f:	pixelFormat.magicNumber = EDDSFormatMagic_RGBA32f;	break;
 		}
 
 	}
