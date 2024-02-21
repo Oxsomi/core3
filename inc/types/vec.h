@@ -20,6 +20,7 @@
 
 #pragma once
 #include "types/math.h"
+#include "types/platform_types.h"
 #include <stdalign.h>
 
 //Helper function to insert a simple non SIMD operation
@@ -60,7 +61,12 @@
 
 #elif _SIMD == SIMD_SSE
 
-	#include <x86intrin.h>
+	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
+		#include <immintrin.h>
+	#else
+		#include <x86intrin.h>
+	#endif
+
 	#include <xmmintrin.h>
 	#include <smmintrin.h>
 	#include <emmintrin.h>

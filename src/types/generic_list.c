@@ -712,7 +712,8 @@ Bool GenericList_sortCustom(GenericList list, CompareFunction f) {
 
 #define TGenericList_sort(T) Bool GenericList_sort##T(GenericList l) { 	\
 	return GenericList_sortCustom(l, (CompareFunction) sort##T); 		\
-}																		\
+}
+
 TGenericList_sorts(TGenericList_sort);
 
 ECompareResult GenericList_compareString(const CharString *a, const CharString *b) {
