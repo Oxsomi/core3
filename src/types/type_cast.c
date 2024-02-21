@@ -72,7 +72,17 @@ _FLP_FROMBITS(F64, U64);
 #define _CastFromD(type) _CastFromI(type, type, *(const U64*)&v)
 
 #define _ITOF(T, TUint)																					\
-Error T##_fromUInt(U64 v, T *res)		_CastFromU(T, (U64)v)											\
+Error T##_fromUInt(U64 v, T *res){																		\
+																										\
+	if(!res)																							\
+		return Error_nullPointer(1, #T "_fromUInt()::res is required");									\
+																										\
+	if(v > (U64)T##_MAX)																				\
+		return Error_overflow(0, (U64)v, (U64) T##_MAX, #T "_fromUInt()::v out of bounds");				\
+																										\
+	*res = (T) v;																						\
+	return Error_none();																				\
+}																										\
 Error T##_fromInt(I64 v, T *res)		_CastFromI(T, TUint, (U64)v)									\
 Error T##_fromFloat(F32 v, T *res)		_CastFromF(T) 													\
 Error T##_fromDouble(F64 v, T *res)		_CastFromD(T)

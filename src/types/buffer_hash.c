@@ -22,6 +22,7 @@
 #include "types/error.h"
 #include "types/buffer.h"
 #include "types/vec.h"
+#include "types/platform_types.h"
 
 //SHA state
 
@@ -249,6 +250,10 @@ inline void Buffer_sha256Internal(Buffer buf, U32 *output) {
 
 #if _SIMD == SIMD_SSE
 
+	#if _PLATFORM_TYPE != PLATFORM_WINDOWS
+		#include <cpuid.h>
+	#endif
+	
 	#include <nmmintrin.h>
 
 	//Implementation of hardware CRC32C but ported back to C and restructured a bit
@@ -391,10 +396,14 @@ inline void Buffer_sha256Internal(Buffer buf, U32 *output) {
 
 		if(hasSHA256 < 0) {
 
-			int cpuInfo1[4];
-			__cpuidex(cpuInfo1, 7, 0);
-
-			hasSHA256 = (cpuInfo1[1] >> 29) & 1;
+			#if _PLATFORM_TYPE == PLATFORM_WINDOWS
+				int cpuInfo1[4];
+				__cpuidex(cpuInfo1, 7, 0);
+				hasSHA256 = (cpuInfo1[1] >> 29) & 1;
+			#else
+				U64 cpuInfo = cpuid_leaf7_features();
+				hasSHA256 = cpuInfo & CPUID_LEAF7_FEATURE_SHA;
+			#endif
 		}
 
 		if(!hasSHA256) {
@@ -404,7 +413,7 @@ inline void Buffer_sha256Internal(Buffer buf, U32 *output) {
 
 		//Consts
 
-		const I32x4 MASK = I32x4_createFromU64x2(0x04'05'06'07'00'01'02'03, 0x0C'0D'0E'0F'08'09'0A'0B);
+		const I32x4 MASK = I32x4_createFromU64x2(0x0405060700010203, 0x0C0D0E0F08090A0B);
 
 		const I32x4 ROUNDS[16] = {
 			I32x4_createFromU64x2(0x71374491428A2F98, 0xE9B5DBA5B5C0FBCF),		//0-3

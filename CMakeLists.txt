@@ -69,7 +69,7 @@ else()
 	add_compile_options(-Wall -Wextra -Werror)
 
 	if(EnableSIMD)
-		add_compile_options(-mfpmath=sse -msse -msse2 -msse3 -mssse3 -msse4 -msse4.1 -msse4.2 -mrdrnd -msha -maes -mbmi1)
+		add_compile_options(-mfpmath=sse -msse -msse2 -msse3 -mssse3 -msse4 -msse4.1 -msse4.2 -mrdrnd -msha -maes -mbmi2)
 	elseif(NOT RelaxFloat)
 		add_compile_options(-mfpmath=sse -msse)
 	endif()
@@ -239,18 +239,16 @@ set_target_properties(OxC3_graphics PROPERTIES FOLDER Oxsomi)
 target_link_libraries(OxC3_graphics PUBLIC OxC3_platforms)
 
 if("${graphicsApi}" STREQUAL "vulkan")
+
+	if(DEFINED ENV{VULKAN_SDK})		
+		include_directories(OxC3_graphics PUBLIC $ENV{VULKAN_SDK}/Include)
+		target_link_directories(OxC3_graphics PUBLIC $ENV{VULKAN_SDK}/Lib)
+	else()
+		message(FATAL_ERROR "-- Vulkan incompatible: Please download the latest Vulkan SDK so you can compile")
+	endif()
 	
 	if(WIN32)
-		if(DEFINED ENV{VULKAN_SDK})
-
 			set(VULKAN_LIB vulkan-1)
-			
-			include_directories(OxC3_graphics PUBLIC $ENV{VULKAN_SDK}/Include)
-			target_link_directories(OxC3_graphics PUBLIC $ENV{VULKAN_SDK}/Lib)
-
-		else()
-			message(FATAL_ERROR "-- Vulkan incompatible: Please download the latest Vulkan SDK so you can compile")
-		endif()
 	else()
 		set(VULKAN_LIB vulkan)
 	endif()

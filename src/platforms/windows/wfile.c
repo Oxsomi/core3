@@ -94,7 +94,7 @@ Error File_foreach(CharString loc, FileCallback callback, void *userData, Bool i
 		//Before 1970, unsupported. Default to 1970
 
 		Ns timestamp = 0;
-		static const U64 UNIX_START_WIN = (Ns)11644473600 * (1'000'000'000 / 100);	//ns to 100s of ns
+		static const U64 UNIX_START_WIN = (Ns)11644473600 * (1000000000 / 100);	//ns to 100s of ns
 
 		if ((U64)time.QuadPart >= UNIX_START_WIN)
 			timestamp = (time.QuadPart - UNIX_START_WIN) * 100;		//Convert to Oxsomi time

@@ -22,6 +22,12 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+//Null is apparently non standard
+
+#ifndef NULL
+	#define NULL (void*)0
+#endif
+
 //Platform and arch stuff
 
 #define SIMD_NONE 0

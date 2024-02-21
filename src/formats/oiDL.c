@@ -671,7 +671,7 @@ Error DLFile_read(
 	DLSettings settings = (DLSettings) {
 
 		.compressionType = (EXXCompressionType) (header.type >> 4),
-		.encryptionKey = (EXXEncryptionType) (header.type & 0xF),
+		.encryptionType = (EXXEncryptionType) (header.type & 0xF),
 
 		.dataType = header.flags & EDLFlags_UTF8 ? EDLDataType_UTF8 : (
 			header.flags & EDLFlags_IsString ? EDLDataType_Ascii : EDLDataType_Data
@@ -705,7 +705,7 @@ Error DLFile_read(
 			case EDLDataType_Data:	err = DLFile_addEntry(dlFile, buf, alloc);		break;
 			case EDLDataType_UTF8:	err = DLFile_addEntryUTF8(dlFile, buf, alloc);	break;
 
-			case EDLDataType_Ascii:	
+			default:	
 				err = DLFile_addEntryAscii(dlFile, CharString_createRefSizedConst((const C8*)ptr, entryLen, false), alloc);
 				break;
 		}

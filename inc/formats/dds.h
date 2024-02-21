@@ -21,12 +21,11 @@
 #pragma once
 #include "types/types.h"
 #include "types/list.h"
+#include "formats/texture.h"
 
 typedef struct Allocator Allocator;
 typedef struct Error Error;
-typedef enum ETextureFormatId ETextureFormatId;
 typedef enum EDepthStencilFormat EDepthStencilFormat;
-typedef enum ETextureType ETextureType;
 
 typedef struct SubResourceData {
 	U32 mipId, layerId, z, padding;

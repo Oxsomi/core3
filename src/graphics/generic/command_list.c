@@ -409,7 +409,7 @@ Error CommandListRef_setViewportCmd(CommandListRef *commandListRef, I32x2 offset
 	if(I32x2_eq2(size, I32x2_zero()))
 		size = I32x2_sub(commandList->currentSize, offset);
 
-	_gotoIfError(clean, CommandListRef_checkBounds(offset, size, -32'768, 32'767));
+	_gotoIfError(clean, CommandListRef_checkBounds(offset, size, -32768, 32767));
 
 	I32x4 values = I32x4_create2_2(offset, size);
 	_gotoIfError(clean, CommandList_append(commandList, op, Buffer_createRefConst(&values, sizeof(values)), 1));
@@ -1643,7 +1643,7 @@ Error CommandListRef_startRenderExt(
 	if(I32x2_any(I32x2_eq(size, I32x2_zero())))
 		size = I32x2_sub(targetSize, offset);
 
-	_gotoIfError(clean, CommandListRef_checkBounds(offset, size, 0, 32'767));
+	_gotoIfError(clean, CommandListRef_checkBounds(offset, size, 0, 32767));
 	_gotoIfError(clean, Buffer_createEmptyBytesx(sizeof(StartRenderCmdExt) + sizeof(AttachmentInfoInternal) * 16, &command));
 
 	if(!I32x2_all(I32x2_eq(commandList->currentSize, I32x2_zero())))

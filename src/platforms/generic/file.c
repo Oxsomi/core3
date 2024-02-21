@@ -36,6 +36,7 @@
 #ifndef _WIN32
 	#define _ftelli64 ftell
 	#define removeFolder remove
+	#define _mkdir(a) mkdir(a, DEFFILEMODE)
 #else
 
 	#define WIN32_LEAN_AND_MEAN
@@ -47,7 +48,6 @@
 	#define S_ISREG(x) (x & _S_IFREG)
 	#define S_ISDIR(x) (x & _S_IFDIR)
 
-	#define mkdir _mkdir
 	#define removeFolder(ptr) (RemoveDirectoryA(ptr) ? 0 : -1)
 
 #endif
@@ -59,7 +59,7 @@ int removeFileOrFolder(const C8 *ptr);
 
 Error recurseDelete(FileInfo info, void *unused) {
 
-	unused;
+	(void)unused;
 
 	if (removeFileOrFolder(info.path.ptr))
 		return Error_invalidOperation(0, "recurseDelete() removeFileOrFolder failed");
@@ -337,7 +337,7 @@ Error File_add(CharString loc, EFileType type, Ns maxTimeout) {
 
 			//Make parent
 
-			if (mkdir(parent.ptr))
+			if (_mkdir(parent.ptr))
 				_gotoIfError(clean, Error_stderr(0, "File_add() couldn't mkdir parent"));
 
 			//Reset character that was replaced with \0
@@ -351,7 +351,7 @@ Error File_add(CharString loc, EFileType type, Ns maxTimeout) {
 
 	//Create folder
 
-	if (type == EFileType_Folder && mkdir(resolved.ptr))
+	if (type == EFileType_Folder && _mkdir(resolved.ptr))
 		_gotoIfError(clean, Error_stderr(1, "File_add() couldn't mkdir"));
 
 	//Create file

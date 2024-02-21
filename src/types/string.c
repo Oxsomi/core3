@@ -3006,8 +3006,15 @@ ECompareResult CharString_compareInsensitive(CharString a, CharString b) {
 
 #ifdef _WIN32
 	#define calcFormatLen _vscprintf
-#else
-	#define calcFormatLen vsnprintf
+#else 
+	int calcFormatLen(const char * format, va_list pargs) { 
+      int retval; 
+      va_list argcopy; 
+      va_copy(argcopy, pargs); 
+      retval = vsnprintf(NULL, 0, format, argcopy); 
+      va_end(argcopy); 
+      return retval; 
+   }
 #endif
 
 Error CharString_formatVariadic(Allocator alloc, CharString *result, const C8 *format, va_list args) {

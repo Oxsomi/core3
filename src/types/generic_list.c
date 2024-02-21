@@ -309,7 +309,7 @@ Error GenericList_createSubsetReverse(
 	return Error_none();
 }
 
-Error GenericList_createRef(U8 *ptr, U64 length, U64 stride, GenericList *result) {
+Error GenericList_createRef(void *ptr, U64 length, U64 stride, GenericList *result) {
 
 	if(!ptr || !result)
 		return Error_nullPointer(!ptr ? 0 : 3, "GenericList_createRef()::ptr and result are required");
@@ -324,7 +324,7 @@ Error GenericList_createRef(U8 *ptr, U64 length, U64 stride, GenericList *result
 		return Error_overflow(1, length * stride, U64_MAX, "GenericList_createRef() overflow");
 
 	*result = (GenericList) {
-		.ptr = ptr,
+		.ptr = (U8*) ptr,
 		.length = length,
 		.stride = stride
 	};
@@ -332,7 +332,7 @@ Error GenericList_createRef(U8 *ptr, U64 length, U64 stride, GenericList *result
 	return Error_none();
 }
 
-Error GenericList_createRefConst(const U8 *ptr, U64 length, U64 stride, GenericList *result) {
+Error GenericList_createRefConst(const void *ptr, U64 length, U64 stride, GenericList *result) {
 
 	if(!ptr || !result)
 		return Error_nullPointer(!ptr ? 0 : 3, "GenericList_createConstRef()::ptr and result are required");
@@ -347,7 +347,7 @@ Error GenericList_createRefConst(const U8 *ptr, U64 length, U64 stride, GenericL
 		return Error_overflow(1, length * stride, U64_MAX, "GenericList_createConstRef() overflow");
 
 	*result = (GenericList) {
-		.ptr = (U8*) ptr,
+		.ptr = (const U8*) ptr,
 		.length = length,
 		.stride = stride,
 		.capacityAndRefInfo = U64_MAX
@@ -710,7 +710,9 @@ Bool GenericList_sortCustom(GenericList list, CompareFunction f) {
 	return GenericList_qsort(list, f);
 }
 
-#define TGenericList_sort(T) Bool GenericList_sort##T(GenericList l) { return GenericList_sortCustom(l, sort##T); }
+#define TGenericList_sort(T) Bool GenericList_sort##T(GenericList l) { 	\
+	return GenericList_sortCustom(l, (CompareFunction) sort##T); 		\
+}																		\
 TGenericList_sorts(TGenericList_sort);
 
 ECompareResult GenericList_compareString(const CharString *a, const CharString *b) {

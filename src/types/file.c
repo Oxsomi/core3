@@ -100,7 +100,7 @@ Error File_resolve(
 
 	#else
 
-		if(result->length >= 2 && result->ptr[1] == ':')
+		if(CharString_length(*result) && result->ptr[1] == ':')
 			_gotoIfError(clean, Error_invalidOperation(6, "File_resolve() doesn't support Windows paths outside of Windows."));
 
 	#endif

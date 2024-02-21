@@ -144,7 +144,7 @@ Error AllocationBuffer_allocateAndFillBlock(
 			"AllocationBuffer_allocateAndFillBlock()::allocationBuffer is NULL"
 		);
 
-	U8 *defaultPtr = (U8*)1, *ptr = defaultPtr;
+	const U8 *defaultPtr = (U8*)1, *ptr = defaultPtr;
 	Error err = AllocationBuffer_allocateBlock(allocationBuffer, Buffer_length(data), alignment, alloc, &ptr);
 
 	if (err.genericError && ptr != defaultPtr) {	//Touch pointer so it can be checked if blocks are all gone or not.
@@ -155,8 +155,8 @@ Error AllocationBuffer_allocateAndFillBlock(
 	if(err.genericError)
 		return err;
 
-	Buffer_copy(Buffer_createRef(ptr, Buffer_length(data)), data);
-	*result = ptr;
+	Buffer_copy(Buffer_createRef((U8*)ptr, Buffer_length(data)), data);
+	*result = (U8*)ptr;
 	return Error_none();
 }
 

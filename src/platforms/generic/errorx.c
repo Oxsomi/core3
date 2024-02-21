@@ -55,7 +55,7 @@ void Error_print(Allocator alloc, Error err, ELogLevel logLevel, ELogOptions opt
 	if(err.genericError == EGenericError_Stderr)
 		platformErr = CharString_createRefCStrConst(strerror((int)err.paramValue0));
 
-	Log_printCapturedStackTraceCustom(alloc, err.stackTrace, ERROR_STACKTRACE, ELogLevel_Error, options);
+	Log_printCapturedStackTraceCustom(alloc, (const void**)err.stackTrace, ERROR_STACKTRACE, ELogLevel_Error, options);
 
 	if(
 		!CharString_format(

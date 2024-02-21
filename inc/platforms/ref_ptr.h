@@ -22,6 +22,7 @@
 #include "types/types.h"
 #include "types/allocator.h"
 #include "types/list.h"
+#include "types/type_id.h"
 #include "atomic.h"
 
 typedef Bool (*ObjectFreeFunc)(void *ptr, Allocator allocator);

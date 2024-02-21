@@ -22,6 +22,7 @@
 #include "types/types.h"
 #include "types/list.h"
 #include "types/vec.h"
+#include "formats/texture.h"
 
 typedef struct RefPtr RefPtr;
 typedef struct Error Error;
@@ -29,7 +30,6 @@ typedef RefPtr GraphicsDeviceRef;
 typedef RefPtr GraphicsResourceRef;			//UnifiedTexture or DeviceTexture. This isn't a RefPtr<GraphicsResource>
 
 typedef struct GraphicsDevice GraphicsDevice;
-typedef enum ETextureFormatId ETextureFormatId;
 
 typedef enum EGraphicsResourceFlag {
 

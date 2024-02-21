@@ -124,7 +124,7 @@ Bool CDFList_free(CDFList *list, Allocator allocator) {
 }
 
 U64 CDFList_getLinearIndex(CDFList *list, U64 i) {			//We might override this later if we want to swizzle it around
-	list;
+	(void)list;
 	return i;
 }
 
@@ -312,7 +312,7 @@ Error CDFList_getRandomElementSecure(CDFList *list, CDFListElement *elementValue
 	if(!Buffer_csprng(b))
 		return Error_invalidOperation(0, "");
 
-	F32 f = (v << 8 >> 8) / 16'777'215.f * list->total;
+	F32 f = (v << 8 >> 8) / 16777215.f * list->total;
 	return CDFList_getElementAtOffset(list, f, elementValue);
 }
 

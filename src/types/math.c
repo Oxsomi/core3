@@ -32,23 +32,23 @@ const U64 U64_EXP10[] = {
 	1,
 	10,
 	100,
-	1'000,
-	10'000,
-	100'000,
-	1'000'000,
-	10'000'000,
-	100'000'000,
-	1'000'000'000,
-	10'000'000'000,
-	100'000'000'000,
-	1'000'000'000'000,
-	10'000'000'000'000,
-	100'000'000'000'000,
-	1'000'000'000'000'000,
-	10'000'000'000'000'000,
-	100'000'000'000'000'000,
-	1'000'000'000'000'000'000,
-	10'000'000'000'000'000'000
+	1000,
+	10000,
+	100000,
+	1000000,
+	10000000,
+	100000000,
+	1000000000,
+	10000000000,
+	100000000000,
+	1000000000000,
+	10000000000000,
+	100000000000000,
+	1000000000000000,
+	10000000000000000,
+	100000000000000000,
+	1000000000000000000,
+	UINT64_C(10000000000000000000)
 };
 
 //UInts
@@ -104,46 +104,46 @@ _UINT_OP_IMPL(U8);
 
 //TODO: Properly check Ixx_pow
 
-#define _INT_OP_IMPL(T)												\
-_XINT_OP_IMPL(T);													\
-																	\
-T T##_abs(T v) { return v < 0 ? -v : v; }							\
-																	\
-T T##_pow2(T v) { 													\
-	T res = v * v; 													\
-	return res < T##_abs(v) ? T##_MAX : res;						\
-}																	\
-																	\
-T T##_pow3(T v) { 													\
-	T res = v * v * v; 												\
-	return res < T##_abs(v) ? T##_MAX : res;						\
-}																	\
-																	\
-T T##_pow4(T v) { 													\
-	T res = v * v; res *= res;										\
-	return res < T##_abs(v) ? T##_MAX : res;						\
-}																	\
-																	\
-T T##_pow5(T v) { 													\
-	T res = v * v; res *= res * v;									\
-	return res < T##_abs(v) ? T##_MAX : res;						\
-}																	\
-																	\
-T T##_exp10(T v) {													\
-																	\
-	if(v < 0 || v >= sizeof(U64_EXP10) / sizeof(U64_EXP10[0]) - 1)	\
-		return T##_MAX;												\
-																	\
-	I64 r = (I64) U64_EXP10[v];										\
-	return r < 0 || r >= (I64) T##_MAX ? T##_MAX : (T)r;			\
-}																	\
-																	\
-T T##_exp2(T v) {													\
-																	\
-	if(v >= sizeof(T) * 8)											\
-		return T##_MAX;												\
-																	\
-	return (T)1 << v;												\
+#define _INT_OP_IMPL(T)																		\
+_XINT_OP_IMPL(T);																			\
+																							\
+T T##_abs(T v) { return v < 0 ? -v : v; }													\
+																							\
+T T##_pow2(T v) { 																			\
+	T res = v * v; 																			\
+	return res < T##_abs(v) ? T##_MAX : res;												\
+}																							\
+																							\
+T T##_pow3(T v) { 																			\
+	T res = v * v * v; 																		\
+	return res < T##_abs(v) ? T##_MAX : res;												\
+}																							\
+																							\
+T T##_pow4(T v) { 																			\
+	T res = v * v; res *= res;																\
+	return res < T##_abs(v) ? T##_MAX : res;												\
+}																							\
+																							\
+T T##_pow5(T v) { 																			\
+	T res = v * v; res *= res * v;															\
+	return res < T##_abs(v) ? T##_MAX : res;												\
+}																							\
+																							\
+T T##_exp10(T v) {																			\
+																							\
+	if(v < 0 || v >= (T)(sizeof(U64_EXP10) / sizeof(U64_EXP10[0]) - 1))						\
+		return T##_MAX;																		\
+																							\
+	I64 r = (I64) U64_EXP10[v];																\
+	return r < 0 || r >= (I64) T##_MAX ? T##_MAX : (T)r;									\
+}																							\
+																							\
+T T##_exp2(T v) {																			\
+																							\
+	if(v >= (T)(sizeof(T) * 8))																\
+		return T##_MAX;																		\
+																							\
+	return (T)1 << v;																		\
 }
 
 _INT_OP_IMPL(I64);

@@ -35,7 +35,7 @@
 
 Error ourAlloc(void *allocator, U64 length, Buffer *output) {
 
-	allocator;
+	(void)allocator;
 
 	if(!output)
 		return Error_nullPointer(2, "ourAlloc()::output is required");
@@ -50,7 +50,7 @@ Error ourAlloc(void *allocator, U64 length, Buffer *output) {
 }
 
 Bool ourFree(void *allocator, Buffer buf) {
-	allocator;
+	(void)allocator;
 	free((U8*)buf.ptr);
 	return true;
 }
@@ -63,7 +63,7 @@ void Error_fillStackTrace(Error *err) {
 }
 
 CharString Error_formatPlatformError(Error err) {
-	err;
+	(void)err;
 	return CharString_createNull();
 }
 
@@ -366,11 +366,11 @@ int main() {
 
 	#if _EXTRA_CHECKS
 
-		_gotoIfError(clean, CharString_create('\x5A', 536'870'912, alloc, inputs + 20));
-		_gotoIfError(clean, CharString_create('\0', 1'090'519'040, alloc, inputs + 21));
-		_gotoIfError(clean, CharString_create('\x42', 1'610'612'798, alloc, inputs + 22));
+		_gotoIfError(clean, CharString_create('\x5A', 536870912, alloc, inputs + 20));
+		_gotoIfError(clean, CharString_create('\0', 1090519040, alloc, inputs + 21));
+		_gotoIfError(clean, CharString_create('\x42', 1610612798, alloc, inputs + 22));
 
-		inputs[19] = CharString_createRefSizedConst(inputs[21].ptr, 1'000'000, true);
+		inputs[19] = CharString_createRefSizedConst(inputs[21].ptr, 1000000, true);
 
 	#endif
 
@@ -1911,8 +1911,8 @@ int main() {
 
 	const C8 *stringified[] = {
 		"0xFEDCBA98765432100123456789ABCDEF",
-		"0b1111111111111111111111111111111111111111111111111111111111111111"
-		  "1111111111111111111111111111111111111111111111111111111111111111",
+		("0b1111111111111111111111111111111111111111111111111111111111111111"
+		  "1111111111111111111111111111111111111111111111111111111111111111"),
 		"0o3410507636447263053360252722732077575555417",
 		"0n2i0_jD8bUksGJNeskm821$",
 		"274506787720133886812119851071477940366"

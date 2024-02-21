@@ -35,7 +35,7 @@ U8 EFloatType_mantissaBits(EFloatType type) {
 }
 
 U64 EFloatType_mantissaShift(EFloatType type) {
-	type;
+	(void)type;
 	return 0;
 }
 
@@ -336,7 +336,7 @@ U64 EFloatType_convert(EFloatType type, U64 v, EFloatType conversionType) {
 			return *(const U32*)&f32;
 		}
 		
-		#if _PLATFORM_TYPE == PLATFORM_WINDOWS
+		#if _SIMD == SIMD_SSE
 
 			//Hardware extension for float conversions
 
@@ -381,7 +381,9 @@ U64 EFloatType_convert(EFloatType type, U64 v, EFloatType conversionType) {
 					}
 				}
 			}
-
+			
+		#else
+			(void)hasF16C;
 		#endif
 
 	#endif

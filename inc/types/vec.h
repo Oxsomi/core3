@@ -60,11 +60,10 @@
 
 #elif _SIMD == SIMD_SSE
 
-	#include <intrin.h>
-	#include <immintrin.h>
+	#include <x86intrin.h>
 	#include <xmmintrin.h>
-	#include <emmintrin.h>
 	#include <smmintrin.h>
+	#include <emmintrin.h>
 	
 	//vec3 and vec4 can be represented using 4-element vectors,
 	//These are a lot faster than just doing them manually.

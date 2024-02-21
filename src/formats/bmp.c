@@ -73,7 +73,7 @@ Error BMP_write(Buffer buf, BMPInfo info, Allocator allocator, Buffer *result) {
 	U64 pixelStride = info.discardAlpha ? 3 : 4;
 	U64 stride = (info.w * pixelStride + 3) &~ 3;		//Every line needs to be 4-byte aligned
 
-	if(info.h * stride + reqHeadersSize > I32_MAX || bufLen != (U64)info.w * info.h * 4)
+	if(info.h * stride + reqHeadersSize > (U64)I32_MAX || bufLen != (U64)info.w * info.h * 4)
 		return Error_invalidParameter(0, 0, "BMP_write() BMP has an image limit of 2GiB");
 
 	BMPHeader header = (BMPHeader) {

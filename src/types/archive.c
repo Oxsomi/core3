@@ -511,7 +511,7 @@ clean:
 }
 
 Error countFile(FileInfo info, U64 *res) {
-	info;
+	(void)info;
 	++*res;
 	return Error_none();
 }

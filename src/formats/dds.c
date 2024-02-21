@@ -434,8 +434,6 @@ Error DDS_read(Buffer buf, DDSInfo *info, Allocator allocator, ListSubResourceDa
 		.textureFormatId = formatId
 	};
 
-	allocator;
-	result;
 	return Error_none();
 }
 
@@ -621,6 +619,8 @@ Error DDS_write(ListSubResourceData buf, DDSInfo info, Allocator allocator, Buff
 			case ETextureFormat_R32f:		pixelFormat.magicNumber = EDDSFormatMagic_R32f;		break;
 			case ETextureFormat_RG32f:		pixelFormat.magicNumber = EDDSFormatMagic_RG32f;	break;
 			case ETextureFormat_RGBA32f:	pixelFormat.magicNumber = EDDSFormatMagic_RGBA32f;	break;
+			
+			default: 																			break;
 		}
 
 	}

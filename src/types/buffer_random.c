@@ -20,8 +20,9 @@
 
 #include "types/buffer.h"
 #include "types/time.h"
+#include "types/platform_types.h"
 
-#ifdef _WIN32
+#if _PLATFORM_TYPE == PLATFORM_WINDOWS
 
 	#define WIN32_LEAN_AND_MEAN
 	#include <Windows.h>
@@ -42,6 +43,29 @@
 		return BCRYPT_SUCCESS(stat);
 	}
 
+#elif _PLATFORM_TYPE == PLATFORM_OSX || _PLATFORM_TYPE == PLATFORM_IOS
+
+	#include <Security/SecRandom.h>
+	
+	Bool Buffer_csprng(Buffer target) {
+
+		if(!Buffer_length(target) || Buffer_isConstRef(target))
+			return false;
+		
+		return !SecRandomCopyBytes(kSecRandomDefault, Buffer_length(target), (void*)target.ptr);
+	}
+
 #else
-	#error Other platform random number generation not supported yet.
+
+	#include <sys/random.h>
+
+	Bool Buffer_csprng(Buffer target) {
+		
+		if(!Buffer_length(target) || Buffer_isConstRef(target))
+			return false;
+			
+		size_t bytes = getrandom(target.ptr, Buffer_length(target), GRND_NONBLOCK);	
+		return bytes == Buffer_length(target);
+	}
+	
 #endif
