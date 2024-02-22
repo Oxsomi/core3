@@ -563,7 +563,7 @@ Error GenericList_eraseAllIndices(GenericList *list, ListU64 indices) {
 //Uses about 8KB of cache on stack to hopefully sort quite quickly.
 //Does mean that this can only be used for lists < 8KB.
 
-inline Bool GenericList_insertionSort8K(GenericList list, CompareFunction func) {
+Bool GenericList_insertionSort8K(GenericList list, CompareFunction func) {
 
 	//for U8[8192] -> U64[1024]. Fits neatly into cache.
 	//For bigger objects, qsort should probably be used.
@@ -626,7 +626,7 @@ TGenericList_sorts(TGenericList_tsort);
 //Expect F32 sorting to be at least 2x to 5x slower (and F64 even slower).
 //(Profiled on a 3900x)
 
-inline U64 GenericList_qpartition(GenericList list, U64 begin, U64 last, CompareFunction f) {
+U64 GenericList_qpartition(GenericList list, U64 begin, U64 last, CompareFunction f) {
 
 	U8 tmp[1024 * 2];		//We only support 1024 stride lists. We don't want to allocate
 
@@ -664,7 +664,7 @@ inline U64 GenericList_qpartition(GenericList list, U64 begin, U64 last, Compare
 	}
 }
 
-inline Bool GenericList_qsortRecurse(GenericList list, U64 begin, U64 end, CompareFunction f) {
+Bool GenericList_qsortRecurse(GenericList list, U64 begin, U64 end, CompareFunction f) {
 
 	if(begin >> 63 || end >> 63)
 		return false;
@@ -689,7 +689,7 @@ inline Bool GenericList_qsortRecurse(GenericList list, U64 begin, U64 end, Compa
 	return true;
 }
 
-inline Bool GenericList_qsort(GenericList list, CompareFunction f) {
+Bool GenericList_qsort(GenericList list, CompareFunction f) {
 	return GenericList_qsortRecurse(list, 0, list.length - 1, f);
 }
 

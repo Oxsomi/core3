@@ -152,6 +152,8 @@ target_include_directories(OxC3_types PUBLIC inc)
 
 if(WIN32)
 	target_link_libraries(OxC3_types PUBLIC Bcrypt.lib)
+elseif(APPLE)
+	target_link_libraries(OxC3_types PUBLIC "-framework Security")
 endif()
 
 # Formats

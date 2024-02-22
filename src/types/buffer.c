@@ -348,7 +348,7 @@ Error Buffer_unsetBitRange(Buffer dst, U64 dstOff, U64 bits) {
 	return Error_none();
 }
 
-inline Error Buffer_setAllToInternal(Buffer buf, U64 b64, U8 b8) {
+Error Buffer_setAllToInternal(Buffer buf, U64 b64, U8 b8) {
 
 	if(!buf.ptr)
 		return Error_nullPointer(0, "Buffer_setAllToInternal()::buf is required");

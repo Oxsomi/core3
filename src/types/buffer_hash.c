@@ -51,12 +51,12 @@ static const U32 SHA256_K[64] = {
 
 //Arm7's ror instruction aka Java's >>>; shift that maintains right side of the bits into left side
 
-inline U32 ror(U32 v, U32 amount) {
+U32 ror(U32 v, U32 amount) {
 	amount &= 31;								//Avoid undefined behavior (<< 32 is undefined)
 	return amount ? ((v >> amount) | (v << (32 - amount))) : v;
 }
 
-inline void Buffer_sha256Internal(Buffer buf, U32 *output) {
+void Buffer_sha256Internal(Buffer buf, U32 *output) {
 
 	I32x4 state[2] = {
 		I32x4_load4((const I32*)SHA256_STATE),

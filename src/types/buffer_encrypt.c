@@ -106,7 +106,7 @@
 		0x8C, 0xA1, 0x89, 0x0D, 0xBF, 0xE6, 0x42, 0x68, 0x41, 0x99, 0x2D, 0x0F, 0xB0, 0x54, 0xBB, 0x16
 	};
 
-	inline U32 AES_subWord(U32 a) {
+	U32 AES_subWord(U32 a) {
 
 		U32 res = 0;
 
@@ -116,7 +116,7 @@
 		return res;
 	}
 
-	inline U32 AES_rotWord(U32 a) {
+	U32 AES_rotWord(U32 a) {
 		return (a >> 8) | (a << 24);
 	}
 
@@ -148,7 +148,7 @@
 		U8 v[4][4];
 	} U8x4x4;
 
-	inline U8x4x4 U8x4x4_transpose(const U8x4x4 *r) {
+	U8x4x4 U8x4x4_transpose(const U8x4x4 *r) {
 
 		U8x4x4 t = *r;
 
@@ -159,7 +159,7 @@
 		return t;
 	}
 
-	inline I32x4 AES_shiftRows(I32x4 a) {
+	I32x4 AES_shiftRows(I32x4 a) {
 
 		U8x4x4 *ap = (U8x4x4*) &a;
 
@@ -172,7 +172,7 @@
 		return *(const I32x4*)&res;
 	}
 
-	inline I32x4 AES_subBytes(I32x4 a) {
+	I32x4 AES_subBytes(I32x4 a) {
 
 		I32x4 res = a;
 		U8 *ptr = (U8*)&res;
@@ -183,7 +183,7 @@
 		return res;
 	}
 
-	inline U8 AES_g2_8(U8 v, U8 mul) {
+	U8 AES_g2_8(U8 v, U8 mul) {
 		switch (mul) {
 			case 2:		return (v << 1) ^ ((v >> 7) * 0x1B);
 			case 3:		return v ^ AES_g2_8(v, 2);
@@ -198,7 +198,7 @@
 		{ 3, 1, 1, 2 }
 	};
 
-	inline I32x4 AES_mixColumns(I32x4 vvv) {
+	I32x4 AES_mixColumns(I32x4 vvv) {
 
 		U8x4x4 v = *(U8x4x4*)&vvv;
 
@@ -259,7 +259,7 @@ typedef struct AESEncryptionContext {
 //https://link.springer.com/content/pdf/10.1007/978-3-642-03317-9_4.pdf
 //https://www.samiam.org/key-schedule.html
 
-inline I32x4 AESEncryptionContext_expandKeyN(I32x4 im1, I32x4 im2) {
+I32x4 AESEncryptionContext_expandKeyN(I32x4 im1, I32x4 im2) {
 
 	I32x4 im4 = im1;
 
@@ -271,15 +271,15 @@ inline I32x4 AESEncryptionContext_expandKeyN(I32x4 im1, I32x4 im2) {
 	return I32x4_xor(im1, im2);
 }
 
-inline I32x4 AESEncryptionContext_expandKey1(I32x4 im1, I32x4 im2) {
+I32x4 AESEncryptionContext_expandKey1(I32x4 im1, I32x4 im2) {
 	return AESEncryptionContext_expandKeyN(im1, I32x4_wwww(im2));
 }
 
-inline I32x4 AESEncryptionContext_expandKey2(I32x4 im1, I32x4 im3) {
+I32x4 AESEncryptionContext_expandKey2(I32x4 im1, I32x4 im3) {
 	return AESEncryptionContext_expandKeyN(im3, I32x4_zzzz(AES_keyGenAssist(im1, 0)));
 }
 
-inline void AESEncryptionContext_expandKey(const U32 *key, I32x4 k[15], EBufferEncryptionType encryptionType) {
+void AESEncryptionContext_expandKey(const U32 *key, I32x4 k[15], EBufferEncryptionType encryptionType) {
 
 	k[0] = I32x4_load4((const I32*)key);
 
@@ -314,7 +314,7 @@ inline void AESEncryptionContext_expandKey(const U32 *key, I32x4 k[15], EBufferE
 
 //Aes block encryption. Don't use this plainly, it's a part of the larger AES256-CTR algorithm
 
-inline I32x4 AESEncryptionContext_blockHash(I32x4 block, const I32x4 k[15], EBufferEncryptionType type) {
+I32x4 AESEncryptionContext_blockHash(I32x4 block, const I32x4 k[15], EBufferEncryptionType type) {
 
 	block = I32x4_xor(block, k[0]);
 
@@ -328,13 +328,13 @@ inline I32x4 AESEncryptionContext_blockHash(I32x4 block, const I32x4 k[15], EBuf
 
 #if _SIMD == SIMD_SSE
 
-	inline void AESEncryptionContext_ghashPrepare(I32x4 H, I32x4 ghashLut[17]) {
+	void AESEncryptionContext_ghashPrepare(I32x4 H, I32x4 ghashLut[17]) {
 		ghashLut[0] = I32x4_swapEndianness(H);
 	}
 
 	//Refactored from https://www.intel.com/content/dam/develop/external/us/en/documents/clmul-wp-rev-2-02-2014-04-20.pdf
 
-	inline I32x4 AESEncryptionContext_ghash(I32x4 a, const I32x4 ghashLut[17]) {
+	I32x4 AESEncryptionContext_ghash(I32x4 a, const I32x4 ghashLut[17]) {
 
 		a = I32x4_swapEndianness(a);
 		I32x4 b = ghashLut[0];
@@ -394,7 +394,7 @@ inline I32x4 AESEncryptionContext_blockHash(I32x4 block, const I32x4 k[15], EBuf
 
 #else
 
-	inline I32x4 AESEncryptionContext_rsh(I32x4 v, U8 shift) {
+	I32x4 AESEncryptionContext_rsh(I32x4 v, U8 shift) {
 
 		U64 *a = (U64*) &v;
 		U64 *b = a + 1;
@@ -410,7 +410,7 @@ inline I32x4 AESEncryptionContext_blockHash(I32x4 block, const I32x4 k[15], EBuf
 
 	//LUT creation from https://github.com/mko-x/SharedAES-GCM/blob/master/Sources/gcm.c#L207
 
-	inline void AESEncryptionContext_ghashPrepare(I32x4 H, I32x4 ghashLut[17]) {
+	void AESEncryptionContext_ghashPrepare(I32x4 H, I32x4 ghashLut[17]) {
 
 		H = I32x4_swapEndianness(H);
 
@@ -445,7 +445,7 @@ inline I32x4 AESEncryptionContext_blockHash(I32x4 block, const I32x4 k[15], EBuf
 		0xE100, 0xFD20, 0xD940, 0xC560, 0x9180, 0x8DA0, 0xA9C0, 0xB5E0
 	};
 
-	inline I32x4 AESEncryptionContext_ghash(I32x4 aa, const I32x4 ghashLut[17]) {
+	I32x4 AESEncryptionContext_ghash(I32x4 aa, const I32x4 ghashLut[17]) {
 
 		I32x4 zlZh = ghashLut[((U8*)&aa)[15] & 0xF];
 
@@ -609,7 +609,7 @@ U64 EBufferEncryptionType_getAdditionalData(EBufferEncryptionType type) {
 	}
 }
 
-inline Error AESEncryptionContext_encrypt(
+Error AESEncryptionContext_encrypt(
 	Buffer target,
 	Buffer additionalData,
 	EBufferEncryptionFlags flags,
@@ -704,7 +704,7 @@ Error Buffer_encrypt(
 	return AESEncryptionContext_encrypt(target, additionalData, flags, key, iv, tag, type);
 }
 
-inline Error AESEncryptionContext_decrypt(
+Error AESEncryptionContext_decrypt(
 	Buffer target,
 	Buffer additionalData,
 	const U32 *realKey,
