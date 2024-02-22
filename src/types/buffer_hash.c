@@ -392,7 +392,7 @@ inline void Buffer_sha256Internal(Buffer buf, U32 *output) {
 
 		if(hasSHA256 < 0) {
 			U32 cpuInfo1[4];
-			Platform_getCPUId(7, cpuInfo);
+			Platform_getCPUId(7, cpuInfo1);
 			hasSHA256 = (cpuInfo1[1] >> 29) & 1;
 		}
 
