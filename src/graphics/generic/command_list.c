@@ -244,14 +244,14 @@ Error CommandList_validateGraphicsPipeline(
 
 Bool CommandListRef_imageRangeConflicts(RefPtr *image1, ImageRange range1, RefPtr *image2, ImageRange range2) {
 
-	range2; range1;		//TODO:
+	(void)range2; (void)range1;		//TODO:
 
 	return image1 == image2;
 }
 
 Bool CommandListRef_bufferRangeConflicts(RefPtr *buffer1, BufferRange range1, RefPtr *buffer2, BufferRange range2) {
 
-	range2; range1;		//TODO:
+	(void)range2; (void)range1;		//TODO:
 
 	return buffer1 == buffer2;
 }
@@ -286,7 +286,7 @@ Bool CommandListRef_isBound(CommandList *commandList, RefPtr *resource, Resource
 
 Error CommandList_append(CommandList *commandList, ECommandOp op, Buffer buf, U32 extraSkipStacktrace) {
 
-	extraSkipStacktrace;
+	(void)extraSkipStacktrace;
 
 	U64 len = Buffer_length(buf);
 	Bool didPush = false;
@@ -634,9 +634,13 @@ Error CommandListRef_copyImageRegions(
 			Bool compatible = srcFormat == dstFormat;
 			
 			switch (srcFormat) {
+				
 				case EDepthStencilFormat_D32:
 				case EDepthStencilFormat_D32S8:
 					compatible = dstFormat == EDepthStencilFormat_D32S8 || dstFormat == EDepthStencilFormat_D32;
+					break;
+					
+				default:
 					break;
 			}
 
@@ -1983,7 +1987,7 @@ clean:
 
 Bool CommandList_free(CommandList *cmd, Allocator alloc) {
 
-	alloc;
+	(void)alloc;
 
 	Lock_free(&cmd->lock);
 
@@ -2020,7 +2024,7 @@ Error GraphicsDeviceRef_createCommandList(
 	Error err = RefPtr_createx(
 		(U32) sizeof(CommandList),
 		(ObjectFreeFunc) CommandList_free,
-		EGraphicsTypeId_CommandList,
+		(ETypeId) EGraphicsTypeId_CommandList,
 		commandListRef
 	);
 

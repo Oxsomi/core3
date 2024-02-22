@@ -41,12 +41,12 @@ VkBool32 onDebugReport(
 	void *userData
 ) {
 
-	messageCode;
-	object;
-	location;
-	objectType;
-	userData;
-	layerPrefix;
+	(void)messageCode;
+	(void)object;
+	(void)location;
+	(void)objectType;
+	(void)userData;
+	(void)layerPrefix;
 
 	if (flags & VK_DEBUG_REPORT_ERROR_BIT_EXT)
 		Log_errorLnx("Error: %s", message);
@@ -325,7 +325,7 @@ clean:
 
 Bool GraphicsInstance_free(GraphicsInstance *inst, Allocator alloc) {
 
-	alloc;
+	(void)alloc;
 
 	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(inst, Vk);
 
@@ -820,6 +820,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 			case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU:	type = EGraphicsDeviceType_Integrated;	break;
 			case VK_PHYSICAL_DEVICE_TYPE_CPU:				type = EGraphicsDeviceType_CPU;			break;
 			case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU:		type = EGraphicsDeviceType_Simulated;	break;
+			default:																				break;
 		}
 
 		//Vendor

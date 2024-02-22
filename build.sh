@@ -19,6 +19,6 @@ cmake -DCMAKE_BUILD_TYPE=$1 .. -DEnableSIMD=$2 -DForceFloatFallback=$3
 cmake --build . -j 8 --config $1
 cd ../
 
-rem Run unit test
+# Run unit test
 
 ./builds/bin/$1/OxC3_test.exe

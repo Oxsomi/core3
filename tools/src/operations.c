@@ -26,7 +26,7 @@
 
 Bool CLI_info(ParsedArgs args) {
 
-	args;
+	(void)args;
 
 	Log_debugLnx(
 

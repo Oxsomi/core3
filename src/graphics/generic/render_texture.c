@@ -36,7 +36,7 @@ Error RenderTextureRef_inc(RenderTextureRef *renderTexture) {
 }
 
 Bool GraphicsDevice_freeRenderTexture(RenderTexture *renderTexture, Allocator alloc) {
-	alloc;
+	(void)alloc;
 	return UnifiedTexture_free((TextureRef*)((U8*)renderTexture - sizeof(RefPtr)));
 }
 
@@ -56,7 +56,7 @@ Error GraphicsDeviceRef_createRenderTexture(
 	Error err = RefPtr_createx(
 		(U32)(sizeof(RenderTexture) + UnifiedTextureImageExt_size + sizeof(UnifiedTextureImage)),
 		(ObjectFreeFunc) GraphicsDevice_freeRenderTexture,
-		EGraphicsTypeId_RenderTexture,
+		(ETypeId) EGraphicsTypeId_RenderTexture,
 		renderTextureRef
 	);
 

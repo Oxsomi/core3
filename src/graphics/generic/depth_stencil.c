@@ -33,7 +33,7 @@ Error DepthStencilRef_inc(DepthStencilRef *depth) {
 }
 
 Bool GraphicsDevice_freeDepthStencil(DepthStencil *depthStencil, Allocator alloc) {
-	alloc;
+	(void)alloc;
 	return UnifiedTexture_free((TextureRef*)((U8*)depthStencil - sizeof(RefPtr)));
 }
 
@@ -51,7 +51,7 @@ Error GraphicsDeviceRef_createDepthStencil(
 	Error err = RefPtr_createx(
 		(U32)(sizeof(DepthStencil) + UnifiedTextureImageExt_size + sizeof(UnifiedTextureImage)),
 		(ObjectFreeFunc) GraphicsDevice_freeDepthStencil,
-		EGraphicsTypeId_DepthStencil,
+		(ETypeId) EGraphicsTypeId_DepthStencil,
 		depthStencilRef
 	);
 

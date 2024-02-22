@@ -226,7 +226,7 @@ clean:
 
 Bool DeviceTexture_free(DeviceTexture *texture, Allocator allocator) {
 
-	allocator;
+	(void)allocator;
 
 	RefPtr *refPtr = (RefPtr*)((const U8*)texture - sizeof(RefPtr));
 
@@ -267,7 +267,7 @@ Error GraphicsDeviceRef_createTexture(
 	Error err = RefPtr_createx(
 		(U32)(sizeof(DeviceTexture) + UnifiedTextureImageExt_size + sizeof(UnifiedTextureImage)),
 		(ObjectFreeFunc) DeviceTexture_free,
-		EGraphicsTypeId_DeviceTexture,
+		(ETypeId) EGraphicsTypeId_DeviceTexture,
 		tex
 	);
 

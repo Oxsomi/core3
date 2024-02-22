@@ -23,6 +23,7 @@
 #include "platforms/ref_ptr.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/resource.h"
+#include "graphics/generic/pipeline_structs.h"
 
 typedef RefPtr GraphicsDeviceRef;
 typedef RefPtr PipelineRef;
@@ -88,8 +89,6 @@ typedef struct CommandOpInfo {
 	ECommandOp op;
 	U32 opSize;
 } CommandOpInfo;
-
-typedef enum EPipelineStage EPipelineStage;
 
 typedef enum ETransitionType {
 	ETransitionType_Clear,

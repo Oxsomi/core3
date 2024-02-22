@@ -121,7 +121,7 @@ Error GraphicsDeviceRef_createPipelinesCompute(
 		_gotoIfError(clean, RefPtr_createx(
 			(U32)(sizeof(Pipeline) + PipelineExt_size),
 			(ObjectFreeFunc) Pipeline_free,
-			EGraphicsTypeId_Pipeline,
+			(ETypeId) EGraphicsTypeId_Pipeline,
 			refPtr
 		));
 
@@ -256,6 +256,9 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 
 			case EMSAASamples_x16Ext:
 				dataTypeCheck = EGraphicsDataTypes_MSAA16x;
+				break;
+				
+			default:
 				break;
 		}
 
@@ -536,7 +539,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 		_gotoIfError(clean, RefPtr_createx(
 			(U32)(sizeof(Pipeline) + PipelineExt_size + sizeof(PipelineGraphicsInfo)),
 			(ObjectFreeFunc) Pipeline_free,
-			EGraphicsTypeId_Pipeline,
+			(ETypeId) EGraphicsTypeId_Pipeline,
 			refPtr
 		));
 

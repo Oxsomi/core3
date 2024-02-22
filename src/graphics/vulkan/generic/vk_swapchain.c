@@ -86,6 +86,9 @@ Error GraphicsDeviceRef_postCreateSwapchainExt(GraphicsDeviceRef *deviceRef, Swa
 			case EWindowFormat_RGBA16f:
 				textureWriteType = EDescriptorType_RWTexture2Df;
 				break;
+				
+			default:
+				break;
 		}
 
 		if(isWritable) {
@@ -219,6 +222,9 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 			};
 
 			break;
+			
+		default:
+			break;
 	}
 
 	for (U32 j = 0; j < formatCount; ++j) {
@@ -293,6 +299,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 			case VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR:	current = EMonitorOrientation_Portrait;				break;
 			case VK_SURFACE_TRANSFORM_ROTATE_180_BIT_KHR:	current = EMonitorOrientation_FlippedLandscape;		break;
 			case VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR:	current = EMonitorOrientation_FlippedPortrait;		break;
+			default:																							break;
 		}
 
 		MonitorOrientation target = window->monitors.ptr->orientation;
@@ -325,6 +332,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 
 		switch(modei) {
 
+			default:																							break;
 			case VK_PRESENT_MODE_IMMEDIATE_KHR:		supports[ESwapchainPresentMode_Immediate - 1] = true;		break;
 			case VK_PRESENT_MODE_FIFO_KHR:			supports[ESwapchainPresentMode_Fifo - 1] = true;			break;
 			case VK_PRESENT_MODE_FIFO_RELAXED_KHR:	supports[ESwapchainPresentMode_FifoRelaxed - 1] = true;		break;
@@ -352,6 +360,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 			swapchain->presentMode = mode;
 
 			switch(mode) {
+				default:																						break;
 				case ESwapchainPresentMode_Immediate:		presentMode = VK_PRESENT_MODE_IMMEDIATE_KHR;		break;
 				case ESwapchainPresentMode_Fifo:			presentMode = VK_PRESENT_MODE_FIFO_KHR;				break;
 				case ESwapchainPresentMode_FifoRelaxed:		presentMode = VK_PRESENT_MODE_FIFO_RELAXED_KHR;		break;
@@ -362,7 +371,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 		}
 	}
 
-	if(presentMode == -1)
+	if(presentMode == (VkPresentModeKHR) -1)
 		_gotoIfError(clean, Error_invalidOperation(7, "GraphicsDeviceRef_createSwapchainExt() unsupported present mode"));
 
 	//Turn it into a swapchain
@@ -521,7 +530,7 @@ clean:
 
 Bool GraphicsDevice_freeSwapchainExt(Swapchain *swapchain, Allocator alloc) {
 
-	alloc;
+	(void)alloc;
 
 	SwapchainRef *swapchainRef = (RefPtr*) swapchain - 1;
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(swapchain->base.resource.device);

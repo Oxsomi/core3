@@ -39,7 +39,7 @@ impl Error GraphicsDeviceRef_createSamplerExt(GraphicsDeviceRef *dev, Sampler *s
 
 Bool Sampler_free(Sampler *sampler, Allocator allocator) {
 
-	allocator;
+	(void)allocator;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(sampler->device);
 
@@ -103,7 +103,7 @@ Error GraphicsDeviceRef_createSampler(GraphicsDeviceRef *dev, SamplerInfo info, 
 	Error err = RefPtr_createx(
 		(U32)(sizeof(Sampler) + SamplerExt_size),
 		(ObjectFreeFunc) Sampler_free,
-		EGraphicsTypeId_Sampler,
+		(ETypeId) EGraphicsTypeId_Sampler,
 		sampler
 	);
 

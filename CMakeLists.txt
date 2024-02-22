@@ -69,7 +69,7 @@ else()
 	add_compile_options(-Wall -Wextra -Werror)
 
 	if(EnableSIMD)
-		add_compile_options(-mfpmath=sse -msse -msse2 -msse3 -mssse3 -msse4 -msse4.1 -msse4.2 -mrdrnd -msha -maes -mbmi2)
+		add_compile_options(-mfpmath=sse -msse -msse2 -msse3 -mssse3 -msse4 -msse4.1 -msse4.2 -mrdrnd -msha -maes -mbmi2 -mf16c)
 	elseif(NOT RelaxFloat)
 		add_compile_options(-mfpmath=sse -msse)
 	endif()

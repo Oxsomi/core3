@@ -58,7 +58,7 @@ impl Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext);
 
 Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 
-	alloc;
+	(void)alloc;
 
 	if(!device)
 		return true;
@@ -105,7 +105,7 @@ Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 
 		#ifndef NDEBUG
 			Log_printCapturedStackTraceCustomx(
-				block.stackTrace, sizeof(block.stackTrace) / sizeof(void*), ELogLevel_Warn, ELogOptions_NewLine
+				(const void**) block.stackTrace, sizeof(block.stackTrace) / sizeof(void*), ELogLevel_Warn, ELogOptions_NewLine
 			);
 		#endif
 	}
@@ -140,7 +140,7 @@ Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 				);
 
 			Log_printCapturedStackTraceCustomx(
-				elem.stackTrace, sizeof(elem.stackTrace) / sizeof(void*), ELogLevel_Warn, ELogOptions_Default
+				(const void**) elem.stackTrace, sizeof(elem.stackTrace) / sizeof(void*), ELogLevel_Warn, ELogOptions_Default
 			);
 		}
 
@@ -177,7 +177,7 @@ Error GraphicsDeviceRef_create(
 	_gotoIfError(clean, RefPtr_createx(
 		(U32)(sizeof(GraphicsDevice) + GraphicsDeviceExt_size),
 		(ObjectFreeFunc) GraphicsDevice_free,
-		EGraphicsTypeId_GraphicsDevice,
+		(ETypeId) EGraphicsTypeId_GraphicsDevice,
 		deviceRef
 	));
 	

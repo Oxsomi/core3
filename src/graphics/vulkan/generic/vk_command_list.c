@@ -45,7 +45,7 @@ void addResolveImage(AttachmentInfoInternal attachment, VkRenderingAttachmentInf
 	VkUnifiedTexture *imageExt = TextureRef_getCurrImgExtT(attachment.resolveImage, Vk, 0);
 
 	switch (attachment.resolveMode) {
-		case EMSAAResolveMode_Average:	result->resolveMode = VK_RESOLVE_MODE_AVERAGE_BIT;	break;
+		default:						result->resolveMode = VK_RESOLVE_MODE_AVERAGE_BIT;	break;
 		case EMSAAResolveMode_Min:		result->resolveMode = VK_RESOLVE_MODE_MIN_BIT;		break;
 		case EMSAAResolveMode_Max:		result->resolveMode = VK_RESOLVE_MODE_MAX_BIT;		break;
 	}
@@ -314,7 +314,9 @@ void CommandList_process(
 					.imageLayout = depthExt->lastLayout,
 					.loadOp = loadOp,
 					.storeOp = unusedAfterRender ? VK_ATTACHMENT_STORE_OP_DONT_CARE : VK_ATTACHMENT_STORE_OP_STORE,
-					.clearValue = (VkClearColorValue) { .float32 = { startRender->clearDepth } }
+					.clearValue = (VkClearValue) { 
+						.depthStencil = (VkClearDepthStencilValue) { .depth = startRender->clearDepth }
+					}
 				};
 
 				if(startRender->resolveDepth) {
@@ -348,7 +350,9 @@ void CommandList_process(
 					.imageLayout = stencilExt->lastLayout,
 					.loadOp = loadOp,
 					.storeOp = unusedAfterRender ? VK_ATTACHMENT_STORE_OP_DONT_CARE : VK_ATTACHMENT_STORE_OP_STORE,
-					.clearValue = (VkClearColorValue) { .uint32 = { startRender->clearStencil } }
+					.clearValue = (VkClearValue) { 
+						.depthStencil = (VkClearDepthStencilValue) { .stencil = startRender->clearStencil }
+					}
 				};
 
 				if(startRender->resolveStencil) {
@@ -405,7 +409,7 @@ void CommandList_process(
 
 		case ECommandOp_DrawIndirect:
 		case ECommandOp_DrawIndirectCount:
-		case ECommandOp_Draw:
+		case ECommandOp_Draw: {
 
 			//Bind viewport and scissor
 
@@ -586,6 +590,7 @@ void CommandList_process(
 			}
 
 			break;
+		}
 
 		case ECommandOp_DispatchIndirect:
 		case ECommandOp_Dispatch:
@@ -740,6 +745,9 @@ void CommandList_process(
 							case ETransitionType_Vertex:
 								pipelineStage = VK_PIPELINE_STAGE_2_VERTEX_ATTRIBUTE_INPUT_BIT;
 								access = VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT;
+								break;
+								
+							default:
 								break;
 						}
 

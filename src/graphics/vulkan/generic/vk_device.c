@@ -73,7 +73,7 @@ Error GraphicsDevice_initExt(
 ) {
 
 	const VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
-	instanceExt;
+	(void)instanceExt;
 
 	EGraphicsFeatures feat = physicalDevice->capabilities.features;
 	EGraphicsFeatures featEx = physicalDevice->capabilities.featuresExt;

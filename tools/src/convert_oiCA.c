@@ -70,7 +70,7 @@ clean:
 
 Error _CLI_convertToCA(ParsedArgs args, CharString input, FileInfo inputInfo, CharString output, U32 encryptionKey[8]) {
 
-	inputInfo;
+	(void)inputInfo;
 
 	//TODO: Compression type
 
@@ -196,7 +196,7 @@ clean:
 
 Error _CLI_convertFromCA(ParsedArgs args, CharString input, FileInfo inputInfo, CharString output, U32 encryptionKey[8]) {
 
-	args;
+	(void)args;
 
 	//TODO: Batch multiple files
 
