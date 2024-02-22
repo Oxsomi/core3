@@ -115,7 +115,7 @@ Error GraphicsInstance_create(GraphicsApplicationInfo info, Bool isVerbose, Grap
 	Error err = RefPtr_createx(
 		(U32)(sizeof(GraphicsInstance) + GraphicsInstanceExt_size),
 		(ObjectFreeFunc) GraphicsInstance_free,
-		EGraphicsTypeId_GraphicsInstance,
+		(ETypeId) EGraphicsTypeId_GraphicsInstance,
 		instanceRef
 	);
 

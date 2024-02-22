@@ -24,6 +24,10 @@
 #include "platforms/thread.h"
 #include "platforms/ext/stringx.h"
 
+#ifndef _MSC_VER
+	#include <cpuid.h>
+#endif
+
 TListImpl(VirtualSection);
 
 Platform Platform_instance = { 0 };

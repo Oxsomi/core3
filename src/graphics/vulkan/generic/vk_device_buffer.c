@@ -97,7 +97,7 @@ Bool DeviceBuffer_freeExt(DeviceBuffer *buffer) {
 
 Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *buf, CharString name) {
 
-	name;
+	(void)name;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(dev);
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);

@@ -21,12 +21,11 @@
 #pragma once
 #include "types/list.h"
 #include "types/string.h"
+#include "formats/texture.h"
 #include "platforms/ref_ptr.h"
 #include "pipeline_structs.h"
 
 typedef RefPtr GraphicsDeviceRef;
-typedef enum ETextureFormat ETextureFormat;
-typedef enum EDepthStencilFormat EDepthStencilFormat;
 
 typedef struct PipelineGraphicsInfo {
 

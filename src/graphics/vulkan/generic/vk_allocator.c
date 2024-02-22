@@ -161,7 +161,7 @@ Error DeviceMemoryAllocator_allocate(
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(allocator->device, Vk);
 	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(GraphicsInstanceRef_ptr(allocator->device->instance), Vk);
 
-	instanceExt;
+	(void)instanceExt;
 
 	VkMemoryRequirements2 req = *(VkMemoryRequirements2*) requirementsExt;
 	VkMemoryRequirements memReq = req.memoryRequirements;

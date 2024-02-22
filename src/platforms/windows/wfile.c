@@ -164,7 +164,7 @@ typedef Error (*VirtualFileFunc)(void *userData, CharString resolved);
 
 Error File_virtualOp(CharString loc, Ns maxTimeout, VirtualFileFunc f, void *userData, Bool isWrite) {
 
-	maxTimeout;
+	(void)maxTimeout;
 
 	Bool isVirtual = false;
 	CharString resolved = CharString_createNull();
@@ -207,22 +207,22 @@ Error File_removeVirtual(CharString loc, Ns maxTimeout) {
 }
 
 Error File_addVirtual(CharString loc, EFileType type, Ns maxTimeout) {
-	type;
+	(void)type;
 	return File_virtualOp(loc, maxTimeout, NULL, NULL, true);
 }
 
 Error File_renameVirtual(CharString loc, CharString newFileName, Ns maxTimeout) {
-	newFileName;
+	(void)newFileName;
 	return File_virtualOp(loc, maxTimeout, NULL, NULL, true);
 }
 
 Error File_moveVirtual(CharString loc, CharString directoryName, Ns maxTimeout) {
-	directoryName;
+	(void)directoryName;
 	return File_virtualOp(loc, maxTimeout, NULL, NULL, true);
 }
 
 Error File_writeVirtual(Buffer buf, CharString loc, Ns maxTimeout) {
-	buf;
+	(void)buf;
 	return File_virtualOp(loc, maxTimeout, NULL, NULL, true);
 }
 
@@ -742,7 +742,7 @@ clean:
 
 Error File_unloadVirtualInternal(void *userData, CharString loc) {
 
-	userData;
+	(void)userData;
 
 	CharString isChild = CharString_createNull();
 	Error err = Error_none();

@@ -165,7 +165,7 @@ impl Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffe
 
 Bool DeviceBuffer_free(DeviceBuffer *buffer, Allocator allocator) {
 
-	allocator;
+	(void)allocator;
 
 	RefPtr *refPtr = (RefPtr*)((const U8*)buffer - sizeof(RefPtr));
 
@@ -207,7 +207,7 @@ Error GraphicsDeviceRef_createBufferIntern(
 	Error err = RefPtr_createx(
 		(U32)(sizeof(DeviceBuffer) + DeviceBufferExt_size),
 		(ObjectFreeFunc) DeviceBuffer_free,
-		EGraphicsTypeId_DeviceBuffer,
+		(ETypeId) EGraphicsTypeId_DeviceBuffer,
 		ref
 	);
 

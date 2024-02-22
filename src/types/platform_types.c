@@ -18,19 +18,20 @@
 *  This is called dual licensing.
 */
 
-#pragma once
-#include "types/types.h"
+#include "types/platform_types.h"
 
-//Defines instead of enums to allow #if
+#ifndef _MSC_VER
+    #include <cpuid.h>
+#endif
 
-#define PLATFORM_UNINITIALIZED 0
-#define PLATFORM_WINDOWS 1
-#define PLATFORM_LINUX 2
-#define PLATFORM_ANDROID 3
-#define PLATFORM_WEB 4
-#define PLATFORM_IOS 5
-#define PLATFORM_OSX 6
-
-typedef U32 EPlatform;
-
-void Platform_getCPUId(int leaf, U32 result[4]);
+void Platform_getCPUId(int leaf, U32 result[4]) {
+	
+	if(!result)
+		return;
+	
+	#ifdef _MSC_VER
+		__cpuid(result, leaf);
+	#else
+		__get_cpuid(leaf, &result[0], &result[1], &result[2], &result[3]);
+	#endif
+}

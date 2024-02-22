@@ -205,8 +205,12 @@ Bool CLI_rand(ParsedArgs args) {
 
 		else {
 
-			switch (args.operation) {
+			switch (args.operation) {				
 
+				default:
+					Log_errorLnx("Invalid operation.");
+					return false;
+			
 				case EOperation_RandKey:
 				case EOperation_RandData:
 

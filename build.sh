@@ -13,12 +13,12 @@ if [ "$3" != On ] && [ "$3" != Off ]; then usage; fi
 
 echo -- Building tests...
 
-mkdir builds
+mkdir -p builds
 cd builds
 cmake -DCMAKE_BUILD_TYPE=$1 .. -DEnableSIMD=$2 -DForceFloatFallback=$3
 cmake --build . -j 8 --config $1
 cd ../
 
-rem Run unit test
+# Run unit test
 
 ./builds/bin/$1/OxC3_test.exe

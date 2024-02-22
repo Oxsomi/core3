@@ -128,7 +128,7 @@ Error GraphicsDeviceRef_createSwapchain(GraphicsDeviceRef *dev, SwapchainInfo in
 	Error err = RefPtr_createx(
 		(U32)(sizeof(Swapchain) + (UnifiedTextureImageExt_size + sizeof(UnifiedTextureImage)) * 3 + SwapchainExt_size),
 		(ObjectFreeFunc) GraphicsDevice_freeSwapchain,
-		EGraphicsTypeId_Swapchain,
+		(ETypeId) EGraphicsTypeId_Swapchain,
 		scRef
 	);
 

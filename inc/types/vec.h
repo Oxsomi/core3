@@ -61,15 +61,15 @@
 
 #elif _SIMD == SIMD_SSE
 
-	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
-		#include <immintrin.h>
-	#else
+	#if _PLATFORM_TYPE != PLATFORM_WINDOWS
 		#include <x86intrin.h>
 	#endif
 
+	#include <immintrin.h>
 	#include <xmmintrin.h>
 	#include <smmintrin.h>
 	#include <emmintrin.h>
+	#include <nmmintrin.h>
 	
 	//vec3 and vec4 can be represented using 4-element vectors,
 	//These are a lot faster than just doing them manually.

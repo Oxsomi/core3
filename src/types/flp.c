@@ -343,10 +343,8 @@ U64 EFloatType_convert(EFloatType type, U64 v, EFloatType conversionType) {
 			if (type == EFloatType_F16 || conversionType == EFloatType_F16) {
 
 				if (hasF16C < 0) {
-
-					int cpuInfo[4];
-					__cpuid(cpuInfo, 1);
-
+					U32 cpuInfo[4];
+					Platform_getCPUId(1, cpuInfo);
 					hasF16C = (cpuInfo[2] >> 29) & 1;
 				}
 

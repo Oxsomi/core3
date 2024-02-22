@@ -65,7 +65,7 @@ Error GraphicsDeviceRef_createSamplerExt(GraphicsDeviceRef *dev, Sampler *sample
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 
 	VkGraphicsInstance *instance = GraphicsInstance_ext(GraphicsInstanceRef_ptr(device->instance), Vk);
-	instance;
+	(void)instance;
 
 	VkSampler *samplerExt = Sampler_ext(sampler, Vk);
 

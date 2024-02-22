@@ -50,8 +50,8 @@ Error createShaderModule(
 	EPipelineStage stage
 ) {
 
-	instance;
-	stage;
+	(void)instance;
+	(void)stage;
 
 	if(Buffer_length(buf) >> 32)
 		return Error_outOfBounds(0, Buffer_length(buf), U32_MAX, "createShaderModule()::buf.length is limited to U32_MAX");
@@ -111,7 +111,7 @@ const U64 PipelineExt_size = sizeof(VkPipeline);
 
 Bool Pipeline_freeExt(Pipeline *pipeline, Allocator allocator) {
 
-	allocator;
+	(void)allocator;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(pipeline->device);
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
@@ -314,6 +314,9 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListChar
 			EPipelineStateType_Count - EPipelineStateType_PerPipelinePropertyStart,
 
 	} EPipelineStateType;
+	
+	EPipelineStateType type;
+	(void)type;
 
 	U64 counts[EPipelineStateType_Count] = { 0 };
 	Error err = Error_none();
