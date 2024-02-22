@@ -18,25 +18,37 @@
 *  This is called dual licensing.
 */
 
-#include "graphics/generic/types.h"
+#pragma once
+#include "acceleration_structure.h"
 
-EGraphicsTypeId EGraphicsTypeId_all[EGraphicsTypeId_Count] = {
+typedef enum EBLASInstanceFlag {
+	EBLASInstanceFlag_AvoidDuplicateAnyHit	= 1 << 0,		//Don't run the same anyHit twice on the same triangle/AABB
+	EBLASInstanceFlag_DisableAnyHit			= 1 << 1,		//Force anyHit off for the geometry's triangles/AABBs
+	EBLASInstanceFlag_Count					= 2
+} EBLASInstanceFlag;
 
-	EGraphicsTypeId_GraphicsInstance,
-	EGraphicsTypeId_GraphicsDevice,
+typedef enum EBLASConstructionType {
+	EBLASConstructionType_Geometry,			//Triangles
+	EBLASConstructionType_Procedural,		//AABBs
+	EBLASConstructionType_Serialized,
+	EBLASConstructionType_Count
+} EBLASConstructionType;
 
-	EGraphicsTypeId_Swapchain,
-	EGraphicsTypeId_CommandList,
+typedef struct BLAS {
 
-	EGraphicsTypeId_RenderTexture,
-	EGraphicsTypeId_RenderPass,
+	RTAS base;
 
-	EGraphicsTypeId_DeviceTexture,
-	EGraphicsTypeId_DeviceBuffer,
-	EGraphicsTypeId_Pipeline,
-	EGraphicsTypeId_Sampler,
-	EGraphicsTypeId_DepthStencil,
+	union {
+		DeviceData deviceData;				//Only if EBLASBuildFlags_UseDeviceMemory
+		Buffer cpuData;						//Contains CPU-sided data required to make BLAS
+	};
 
-	EGraphicsTypeId_BLASExt,
-	EGraphicsTypeId_TLASExt
-};
+} BLAS;
+
+typedef RefPtr BLASRef;
+
+#define BLAS_ext(ptr, T) (!ptr ? NULL : (T##BLAS*)(ptr + 1))		//impl
+#define BLASRef_ptr(ptr) RefPtr_data(ptr, BLAS)
+
+Error BLASRef_dec(BLASRef **blas);
+Error BLASRef_inc(BLASRef *blas);

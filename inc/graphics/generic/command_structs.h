@@ -344,7 +344,7 @@ typedef struct CopyImageCmd {
 
 } CopyImageCmd;
 
-//GPU commands
+//Commands
 
 typedef struct DrawCallUnindexed {
 	U32 vertexCount, instanceCount;
