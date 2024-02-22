@@ -21,7 +21,7 @@
 #pragma once
 #include "types/list.h"
 
-//The only thing defined is that the resource handle must be accessible on the GPU
+//The only thing defined is that the resource handle must be accessible on the device
 //	using the allocated handle for the dedicated purpose.
 //For example, device.allocateDescriptor(Texture2D) would do the following across APIs:
 //	In DX12, Texture2D is a specific SRV range into a descriptor heap.

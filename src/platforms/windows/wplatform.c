@@ -375,18 +375,18 @@ int main(int argc, const char *argv[]) {
 		//https://gist.github.com/hi2p-perim/7855506
 		//https://en.wikipedia.org/wiki/CPUID
 
-		int mask3 = (1 << 25) | (1 << 26);										//SSE, SSE2
+		U32 mask3 = (1 << 25) | (1 << 26);										//SSE, SSE2
 
 		//SSE3, PCLMULQDQ, SSSE3, SSE4.1, SSE4.2, AES, RDRAND
-		int mask2 = (1 << 0) | (1 << 1) | (1 << 9) | (1 << 19) | (1 << 20) | (1 << 25) | (1 << 30);
+		U32 mask2 = (1 << 0) | (1 << 1) | (1 << 9) | (1 << 19) | (1 << 20) | (1 << 25) | (1 << 30);
 
-		int cpuInfo[4];
+		U32 cpuInfo[4];
 		Platform_getCPUId(1, cpuInfo);
 
-		int cpuInfo1[4];
+		U32 cpuInfo1[4];
 		Platform_getCPUId(7, cpuInfo1);
 
-		int mask1_1 = 1 << 3;				//BMI1
+		U32 mask1_1 = 1 << 3;				//BMI1
 
 		//Unsupported CPU
 

@@ -34,16 +34,19 @@ typedef enum EGraphicsTypeId {
 	EGraphicsTypeId_RenderTexture				= _makeObjectId(0x1C33,  4, 0),
 	EGraphicsTypeId_RenderPass					= _makeObjectId(0x1C33,  5, 0),
 
-	EGraphicsTypeId_DeviceTexture				= _makeObjectId(0x1C33,  6, 1),
-	EGraphicsTypeId_DeviceBuffer				= _makeObjectId(0x1C33,  7, 1),
-	EGraphicsTypeId_Pipeline					= _makeObjectId(0x1C33,  8, 1),
-	EGraphicsTypeId_Sampler						= _makeObjectId(0x1C33,  9, 1),
+	EGraphicsTypeId_DeviceTexture				= _makeObjectId(0x1C33,  6, 0),
+	EGraphicsTypeId_DeviceBuffer				= _makeObjectId(0x1C33,  7, 0),
+	EGraphicsTypeId_Pipeline					= _makeObjectId(0x1C33,  8, 0),
+	EGraphicsTypeId_Sampler						= _makeObjectId(0x1C33,  9, 0),
 
-	EGraphicsTypeId_DepthStencil				= _makeObjectId(0x1C33, 10, 1),
+	EGraphicsTypeId_DepthStencil				= _makeObjectId(0x1C33, 10, 0),
 
-	//EGraphicsTypeId_AccelerationStructureExt	= _makeObjectId(0x1C33, 11, 1),
+	//Requires EGraphicsFeatures_Raytracing
 
-	EGraphicsTypeId_Count						= 11
+	EGraphicsTypeId_BLASExt						= _makeObjectId(0x1C33, 11, 0),
+	EGraphicsTypeId_TLASExt						= _makeObjectId(0x1C33, 12, 0),
+
+	EGraphicsTypeId_Count						= 13
 
 } EGraphicsTypeId;
 
