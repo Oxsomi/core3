@@ -22,8 +22,6 @@
 #include "types/vec.h"
 #include "types/platform_types.h"
 
-#include <cpuid.h>
-
 U8 EFloatType_bytes(EFloatType type) {
 	return (U8)(type >> 16);
 }
@@ -345,15 +343,8 @@ U64 EFloatType_convert(EFloatType type, U64 v, EFloatType conversionType) {
 			if (type == EFloatType_F16 || conversionType == EFloatType_F16) {
 
 				if (hasF16C < 0) {
-
 					U32 cpuInfo[4];
-					
-					#if _PLATFORM_TYPE == PLATFORM_WINDOWS
-						__cpuid(cpuInfo, 1);
-					#else
-						__get_cpuid(1, &cpuInfo[0], &cpuInfo[1], &cpuInfo[2], &cpuInfo[3]);
-					#endif
-						
+					Platform_getCPUId(1, cpuInfo);
 					hasF16C = (cpuInfo[2] >> 29) & 1;
 				}
 

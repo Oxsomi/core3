@@ -69,6 +69,7 @@
 	#include <xmmintrin.h>
 	#include <smmintrin.h>
 	#include <emmintrin.h>
+	#include <nmmintrin.h>
 	
 	//vec3 and vec4 can be represented using 4-element vectors,
 	//These are a lot faster than just doing them manually.

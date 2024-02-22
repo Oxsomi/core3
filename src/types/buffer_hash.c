@@ -250,10 +250,6 @@ inline void Buffer_sha256Internal(Buffer buf, U32 *output) {
 
 #if _SIMD == SIMD_SSE
 
-	#if _PLATFORM_TYPE != PLATFORM_WINDOWS
-		#include <cpuid.h>
-	#endif
-	
 	#include <nmmintrin.h>
 
 	//Implementation of hardware CRC32C but ported back to C and restructured a bit
@@ -395,15 +391,8 @@ inline void Buffer_sha256Internal(Buffer buf, U32 *output) {
 		//Fallback if the hardware doesn't support SHA extension
 
 		if(hasSHA256 < 0) {
-			
 			U32 cpuInfo1[4];
-
-			#if _PLATFORM_TYPE == PLATFORM_WINDOWS
-				__cpuidex(cpuInfo1, 7, 0);
-			#else
-				__get_cpuid(7, &cpuInfo1[0], &cpuInfo1[1], &cpuInfo1[2], &cpuInfo1[3]);
-			#endif
-			
+			Platform_getCPUId(7, cpuInfo);
 			hasSHA256 = (cpuInfo1[1] >> 29) & 1;
 		}
 
