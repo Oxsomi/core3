@@ -88,9 +88,11 @@ set(_ARCH "ARCH_X64")
 if(EnableSIMD)
 	message("-- Enabling SIMD (-DEnableSIMD=ON)")
 	set(_SIMD "SIMD_SSE")
+	set(simd sse)
 else()
 	message("-- Disabling SIMD (-DEnableSIMD=OFF)")
 	set(_SIMD "SIMD_NONE")
+	set(simd none)
 endif()
 
 if(RelaxFloat)
@@ -133,16 +135,31 @@ endif()
 
 # Types
 
-file(GLOB_RECURSE typesHeaders "inc/file/*.h" "inc/math/*.h" "inc/types/*.h" "inc/cfg/*.h" "*.h.in")
-file(GLOB_RECURSE typesSources "src/file/*.c" "src/math/*.c" "src/types/*.c")
+file(GLOB_RECURSE typesHeaders "inc/types/*.h")
+file(GLOB typesSources "src/types/*.c")
+file(GLOB_RECURSE typesPlatformSources "src/types/platforms/${platform}/*.c")
+file(GLOB_RECURSE typesPlatformHeaders "inc/types/platforms/${platform}/*.h")
+file(GLOB_RECURSE typesSIMDSources "src/types/simd/${simd}/*.c")
+
+if(UNIX)
+	file(GLOB_RECURSE typesUnixSources "src/types/platforms/unix/*.c")
+	list(APPEND typesPlatformSources ${typesUnixSources})
+endif()
 
 add_library(
 	OxC3_types
 	STATIC
 	${typesHeaders}
 	${typesSources}
+	${typesPlatformSources}
+	${typesSIMDSources}
+	${typesPlatformHeaders}
 	CMakeLists.txt
 )
+
+source_group("Source Files (${platform})" FILES ${typesPlatformSources})
+source_group("Header Files (${platform})" FILES ${typesPlatformHeaders})
+source_group("Source Files (simd: ${simd})" FILES ${typesSIMDSources})
 
 set_target_properties(OxC3_types PROPERTIES FOLDER Oxsomi)
 
@@ -178,7 +195,6 @@ target_link_libraries(OxC3_formats PUBLIC OxC3_types)
 message("-- Targeting platform: ${platform}")
 
 file(GLOB platformsHeaders "inc/platforms/*.h")
-file(GLOB_RECURSE platformsHeadersExt "inc/platforms/ext/*.h")
 file(GLOB_RECURSE platformsHeadersDependent "inc/platforms/ext/${platform}/*.h")
 
 file(GLOB_RECURSE platformsSources "src/platforms/${platform}/*.c" "src/platforms/generic/*.c")
@@ -187,7 +203,6 @@ add_library(
 	OxC3_platforms
 	STATIC
 	${platformsHeaders}
-	${platformsHeadersExt}
 	${platformsHeadersDependent}
 	${platformsSources}
 	CMakeLists.txt

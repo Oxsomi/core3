@@ -18,7 +18,7 @@
 *  This is called dual licensing.
 */
 
-#include "platforms/thread.h"
+#include "types/thread.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/file.h"

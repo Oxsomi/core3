@@ -18,42 +18,45 @@
 *  This is called dual licensing.
 */
 
-#pragma once
-#include "types/types.h"
-#include "types/allocator.h"
-#include "types/list.h"
-#include "types/type_id.h"
-#include "atomic.h"
+#include "types/platforms/windows/wplatform_ext.h"
+#include "types/atomic.h"
 
-typedef Bool (*ObjectFreeFunc)(void *ptr, Allocator allocator);
+I64 AtomicI64_and(AtomicI64 *ptr, I64 value) {
+	return InterlockedAnd64(&ptr->atomic, value);
+}
 
-typedef enum ETypeId ETypeId;
+I64 AtomicI64_xor(AtomicI64 *ptr, I64 value) {
+	return InterlockedXor64(&ptr->atomic, value);
+}
 
-typedef struct RefPtr {
+I64 AtomicI64_or(AtomicI64 *ptr, I64 value) {
+	return InterlockedOr64(&ptr->atomic, value);
+}
 
-	AtomicI64 refCount;
+I64 AtomicI64_add(AtomicI64 *ptr, I64 value) {
+	return InterlockedExchangeAdd64(&ptr->atomic, value);
+}
 
-	ETypeId typeId;
-	U32 length;
+I64 AtomicI64_exchange(AtomicI64 *ptr, I64 value) {
+	return InterlockedExchange64(&ptr->atomic, value);
+}
 
-	Allocator alloc;
+I64 AtomicI64_compareExchange(AtomicI64 *ptr, I64 compare, I64 value) {
+	return InterlockedCompareExchange64(&ptr->atomic, value, compare);
+}
 
-	ObjectFreeFunc free;
+I64 AtomicI64_sub(AtomicI64 *ptr, I64 value) {
 
-} RefPtr;
+	if(value == I64_MIN)
+		value = 0;
 
-TListNamed(RefPtr*, ListRefPtr);
+	return AtomicI64_add(ptr, -value);
+}
 
-Error RefPtr_create(U32 objectLength, Allocator alloc, ObjectFreeFunc free, ETypeId type, RefPtr **result);
-Error RefPtr_createx(U32 objectLength, ObjectFreeFunc free, ETypeId type, RefPtr **result);
+I64 AtomicI64_inc(AtomicI64 *ptr) {
+	return InterlockedIncrement64(&ptr->atomic);
+}
 
-Bool RefPtr_inc(RefPtr *ptr);
-Bool RefPtr_dec(RefPtr **ptr);	//Clears pointer if it's gone
-
-#define RefPtr_data(dat, T) (!dat ? NULL : (T*)(dat + 1))
-
-//Signifies that the RefPtr will not need inc/dec, because the owner will manually ensure
-//that the ref is removed before it's important.
-typedef RefPtr WeakRefPtr;
-
-TListNamed(WeakRefPtr*, ListWeakRefPtr);
+I64 AtomicI64_dec(AtomicI64 *ptr) {
+	return InterlockedDecrement64(&ptr->atomic);
+}

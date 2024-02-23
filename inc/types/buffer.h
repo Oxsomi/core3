@@ -229,7 +229,7 @@ typedef enum EBufferCompressionHint {
 	EBufferCompressionHint_Count
 } EBufferCompressionHint;
 
-Error Buffer_compress(
+/*Error Buffer_compress(
 	Buffer target,
 	EBufferCompressionType type,
 	EBufferCompressionHint hint,
@@ -242,4 +242,4 @@ Error Buffer_decompress(
 	EBufferCompressionType type,
 	Allocator allocator,
 	Buffer *output
-);
+);*/

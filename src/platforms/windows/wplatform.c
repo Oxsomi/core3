@@ -21,11 +21,11 @@
 #include "platforms/ext/listx_impl.h"
 #include "platforms/platform.h"
 #include "platforms/log.h"
-#include "platforms/atomic.h"
+#include "types/atomic.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/archivex.h"
-#include "platforms/windows/wplatform_ext.h"
+#include "types/platforms/windows/wplatform_ext.h"
 
 #include <locale.h>
 #include <signal.h>

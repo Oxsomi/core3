@@ -32,10 +32,8 @@ typedef struct AllocationBufferBlock {
 TList(AllocationBufferBlock);
 
 typedef struct AllocationBuffer {
-
 	Buffer buffer;							//Our data buffer
 	ListAllocationBufferBlock allocations;
-
 } AllocationBuffer;
 
 Error AllocationBuffer_create(U64 size, Bool isVirtual, Allocator alloc, AllocationBuffer *allocationBuffer);
@@ -49,9 +47,7 @@ Error AllocationBuffer_createRefFromRegion(
 );
 
 Bool AllocationBuffer_free(AllocationBuffer *allocationBuffer, Allocator alloc);
-
 Bool AllocationBuffer_freeBlock(AllocationBuffer *allocationBuffer, const U8 *ptr);
-
 Bool AllocationBuffer_freeAll(AllocationBuffer *allocationBuffer);						//Frees all blocks
 
 //If !allocationBuffer->buffer.ptr the pointer shouldn't be dereferenced, it's just for offset tracking.

@@ -22,7 +22,7 @@
 #include "graphics/vulkan/vulkan.h"
 #include "graphics/generic/device_info.h"
 #include "graphics/generic/command_list.h"
-#include "platforms/lock.h"
+#include "types/lock.h"
 #include "types/list.h"
 #include "types/allocation_buffer.h"
 #include "types/vec.h"
@@ -156,7 +156,7 @@ typedef struct VkCommandBufferState {
 VkCommandAllocator *VkGraphicsDevice_getCommandAllocator(
 	VkGraphicsDevice *device,
 	U32 resolvedQueueId,
-	U32 threadId,
+	U64 threadId,
 	U8 backBufferId
 );
 

@@ -31,7 +31,7 @@
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/log.h"
-#include "platforms/thread.h"
+#include "types/thread.h"
 #include "types/time.h"
 
 TListImpl(VkCommandAllocator);
@@ -555,7 +555,7 @@ Error GraphicsDevice_initExt(
 	//We only allow triple buffering, so allocate for triple buffers.
 	//These will be initialized JIT because we don't know what thread will be accessing them.
 
-	U32 threads = Thread_getLogicalCores();
+	U64 threads = Thread_getLogicalCores();
 
 	_gotoIfError(clean, ListVkCommandAllocator_resizex(&deviceExt->commandPools, 3 * threads * resolvedId));
 
@@ -928,15 +928,15 @@ Error GraphicsDeviceRef_waitExt(GraphicsDeviceRef *deviceRef) {
 }
 
 VkCommandAllocator *VkGraphicsDevice_getCommandAllocator(
-	VkGraphicsDevice *device, U32 resolvedQueueId, U32 threadId, U8 backBufferId
+	VkGraphicsDevice *device, U32 resolvedQueueId, U64 threadId, U8 backBufferId
 ) {
 
-	U32 threadCount = Thread_getLogicalCores();
+	U64 threadCount = Thread_getLogicalCores();
 
 	if(!device || resolvedQueueId >= device->resolvedQueues || threadId >= threadCount || backBufferId >= 3)
 		return NULL;
 
-	U32 id = resolvedQueueId + (backBufferId * threadCount + threadId) * device->resolvedQueues;
+	U64 id = resolvedQueueId + (backBufferId * threadCount + threadId) * device->resolvedQueues;
 
 	return device->commandPools.ptrNonConst + id;
 }

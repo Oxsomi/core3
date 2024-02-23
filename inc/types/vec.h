@@ -61,10 +61,6 @@
 
 #elif _SIMD == SIMD_SSE
 
-	#if _PLATFORM_TYPE != PLATFORM_WINDOWS
-		#include <x86intrin.h>
-	#endif
-
 	#include <immintrin.h>
 	#include <xmmintrin.h>
 	#include <smmintrin.h>

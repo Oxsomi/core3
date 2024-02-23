@@ -742,8 +742,8 @@ Bool BigInt_trunc(BigInt *big, Allocator allocator) {
 	return !BigInt_resize(big, i + 1, allocator).genericError;
 }
 
-Bool BigInt_mod(BigInt *a, BigInt b);
-Bool BigInt_div(BigInt *a, BigInt b);
+//Bool BigInt_mod(BigInt *a, BigInt b);
+//Bool BigInt_div(BigInt *a, BigInt b);
 
 Buffer BigInt_bufferConst(BigInt b) {
 	return b.isConst ? Buffer_createNull() : Buffer_createRef((U64*)b.data, BigInt_byteCount(b));
@@ -884,7 +884,7 @@ Error BigInt_nyto(BigInt b, Allocator alloc, CharString *result, Bool leadingZer
 	return BigInt_base2(b, alloc, result, EBase2Type_Nyto, leadingZeros);
 }
 
-Error BigInt_dec(BigInt b, Allocator allocator, CharString *result, Bool leadingZeros);
+//Error BigInt_dec(BigInt b, Allocator allocator, CharString *result, Bool leadingZeros);
 
 Error BigInt_toString(
 	BigInt b,
@@ -910,170 +910,6 @@ U128 U128_create(const U8 data[16]) {
 
 U128 U128_createU64x2(U64 a, U64 b) {
 	return I32x4_createFromU64x2(a, b);
-}
-
-U128 U128_mul64(U64 au, U64 bu) {
-
-	#if _PLATFORM_TYPE == PLATFORM_LINUX
-		return (__uint128) au * (__uint128) bu;
-
-	#elif _PLATFORM_TYPE == PLATFORM_WINDOWS
-
-		U64 hiProd = 0;
-		U64 loProd = _umul128(bu, au, &hiProd);
-		return U128_createU64x2(loProd, hiProd);
-
-	#else
-
-		U32 D[4];
-
-		//Multiply two U64 as U32 each
-		//aXbx: 0 1
-		//aXby: 1 2
-		//overflow 2: D3
-
-		const I32x4 auau = I32x4_xxyy(I32x4_createFromU64x2(au, 0));
-		const I32x4 bubu = I32x4_xxyy(I32x4_createFromU64x2(bu, 0));
-
-		const I32x4 aXbx = I32x4_mulU32x2AsU64x2(auau, I32x4_xxxx(bubu));
-		const I32x4 aXby = I32x4_mulU32x2AsU64x2(auau, I32x4_zzzz(bubu));
-
-		//D0 is stored in lowest 32 bytes of first U64
-
-		D[0] = (U32)I32x4_x(aXbx);
-
-		//Obtain hi and lo parts of multiplications
-
-		const I32x4 low = I32x4_createFromU64x2(U32_MAX, U32_MAX);
-		const I32x4 aXbxLo = I32x4_and(aXbx, low);
-		const I32x4 aXbxHi = I32x4_and(I32x4_rshByte(aXbx, 4), low);
-
-		const I32x4 aXbyLo = I32x4_and(aXby, low);
-		const I32x4 aXbyHi = I32x4_and(I32x4_rshByte(aXby, 4), low);
-
-		//Calculate D1 by adding the overflow to the two other numbers
-
-		const I32x4 D1_2 = I32x4_addI64x2(aXbyLo, aXbxHi);					//Add overflows of D0 and D1 to D1 and D2
-		const I32x4 D1_2Temp = I32x4_addI64x2(D1_2, I32x4_zwzw(aXbxLo));	//Add last D1 to combine final value
-
-		D[1] = (U32) I32x4_x(D1_2Temp);
-
-		//Calculate D2 by adding the overflow to aXby.y
-
-		I32x4 D2_3 = I32x4_and(I32x4_rshByte(D1_2Temp, 4), low);
-		D2_3 = I32x4_addI64x2(D2_3, I32x4_xyxy(aXbyHi));
-		D2_3 = I32x4_addI64x2(D2_3, I32x4_zwzw(D1_2));
-
-		D[2] = (U32) I32x4_x(D2_3);
-
-		//Calculate D3 by adding the overflow to aXby.y hi
-
-		D[3] = I32x4_y(D2_3) + I32x4_z(aXbyHi);
-
-		//Grab resulting digits
-
-		return I32x4_create4(D[0], D[1], D[2], D[3]);
-
-	#endif
-}
-
-#if _PLATFORM_TYPE == PLATFORM_LINUX
-
-	U128 U128_zero() { return (__uint128) 0; }
-	U128 U128_one() { return (__uint128) 1; }
-
-	U128 U128_xor(U128 a, U128 b) { return a ^ b; }
-	U128 U128_or(U128 a, U128 b) { return a | b; }
-	U128 U128_and(U128 a, U128 b) { return a & b; }
-	U128 U128_not(U128 a) {  return ~a; }
-	U128 U128_add64(U64 a, U64 b) { return (__uint128)a + b; }
-	Bool U128_eq(U128 a, U128 b) { return a == b; }
-	U128 U128_add(U128 a, U128 b) { return a + b; }
-	U128 U128_sub(U128 a, U128 b) {  return a - b; }
-
-	U128 U128_lsh(U128 a, U8 x) { return a << x; }
-	U128 U128_rsh(U128 a, U8 x) { return a >> x; }
-
-#else
-
-	U128 U128_zero() { return I32x4_zero(); }
-	U128 U128_one() { return I32x4_create4(1, 0, 0, 0); }
-
-	U128 U128_xor(U128 a, U128 b) { return I32x4_xor(a, b); }
-	U128 U128_or(U128 a, U128 b) { return I32x4_or(a, b); }
-	U128 U128_and(U128 a, U128 b) { return I32x4_and(a, b); }
-	U128 U128_not(U128 a) {  return I32x4_not(a); }
-	Bool U128_eq(U128 a, U128 b) { return I32x4_eq4(a, b); }
-
-	U128 U128_add64(U64 a, U64 b) {
-		U64 c = a + b;
-		return I32x4_create4((U32)c, (U32)(c >> 32), c < a, 0);
-	}
-
-	U128 U128_add(U128 av, U128 bv) {
-
-		const U64 *a = (const U64*)&av;
-		const U64 *b = (const U64*)&bv;
-
-		U64 lo = a[0] + b[0];
-		U64 hi = lo < a[0];
-		hi += a[1] + b[1];
-
-		return U128_createU64x2(lo, hi);
-	}
-
-	U128 U128_sub(U128 a, U128 b) {
-		return U128_add(a, U128_add(U128_not(b), U128_one()));
-	}
-
-	U128 U128_lsh(U128 a, U8 x) { return I32x4_lsh128(a, x); }
-	U128 U128_rsh(U128 a, U8 x) { return I32x4_rsh128(a, x); }
-
-#endif
-
-U8 U128_bitScan(U128 a) {
-
-	#if _PLATFORM_TYPE == PLATFORM_WINDOWS
-
-		unsigned long index = 0;
-		Bool hasFirstBit = _BitScanReverse64(&index, ((const U64*)&a)[1]);
-
-		if (hasFirstBit)
-			return (U8)index + 64;
-
-		Bool hasLastBit = _BitScanReverse64(&index, ((const U64*)&a)[0]);
-		return hasLastBit ? (U8) index : U8_MAX;
-
-	//TODO: #elif _SIMD == SIMD_SSE: _lzcnt_u64
-
-	#else
-
-		//Keep subdividing by 2x until the first bit is found
-
-		U64 offset = (Bool)((const U64*)&a)[1];
-		offset <<= 1;
-
-		offset |= (Bool)((const U32*)&a)[offset + 1];
-		offset <<= 1;
-
-		offset |= (Bool)((const U16*)&a)[offset + 1];
-		offset <<= 1;
-
-		offset |= (Bool)((const U8*)&a)[offset + 1];
-		U8 b = ((const U8*)&a)[offset];
-		offset <<= 1;
-
-		offset |= (Bool)(b >> 4);
-		offset <<= 1;
-
-		offset |= (Bool)((b >> (((offset & 2) + 1) * 2)) & 3);
-		offset <<= 1;
-
-		offset |= (Bool)((b >> ((offset & 6) + 1)) & 1);
-
-		return offset;
-
-	#endif
 }
 
 Bool U128_isBase2(U128 a) {
@@ -1168,37 +1004,15 @@ U128 U128_createFromString(CharString text, Error *failed, Allocator alloc) {
 	return U128_createFromDec(text, failed, alloc);
 }
 
-ECompareResult U128_cmp(U128 a, U128 b) {
-
-	//Early exit
-
-	if(U128_eq(a, b))
-		return ECompareResult_Eq;
-
-	#if _PLATFORM_TYPE == PLATFORM_LINUX
-		return a < b ? -1 : 1;
-	#else
-
-		const U64 *a64 = (const U64*)&a;
-		const U64 *b64 = (const U64*)&b;
-
-		if(a64[1] > b64[1] || (a64[1] == b64[1] && a64[0] > b64[0]))
-			return ECompareResult_Gt;
-
-		return ECompareResult_Lt;
-
-	#endif
-}
-
 Bool U128_neq(U128 a, U128 b) { return U128_eq(a, b) != ECompareResult_Eq; }
 Bool U128_lt(U128 a, U128 b) { return U128_cmp(a, b) < ECompareResult_Eq; }
 Bool U128_leq(U128 a, U128 b) { return U128_cmp(a, b) <= ECompareResult_Eq; }
 Bool U128_gt(U128 a, U128 b) { return U128_cmp(a, b) > ECompareResult_Eq; }
 Bool U128_geq(U128 a, U128 b) { return U128_cmp(a, b) >= ECompareResult_Eq; }
 
-U128 U128_div(U128 a, U128 b);			//if(isBase2) rsh(a, firstBitId)
-U128 U128_mod(U128 a, U128 b);
-U128 U128_mul(U128 a, U128 b);
+//U128 U128_div(U128 a, U128 b);			//if(isBase2) rsh(a, firstBitId)
+//U128 U128_mod(U128 a, U128 b);
+//U128 U128_mul(U128 a, U128 b);
 
 U128 U128_min(U128 a, U128 b) { return U128_leq(a, b) ? a : b; }
 U128 U128_max(U128 a, U128 b) { return U128_geq(a, b) ? a : b; }

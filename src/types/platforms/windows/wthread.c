@@ -19,8 +19,8 @@
 */
 
 #include "platforms/platform.h"
-#include "platforms/thread.h"
-#include "platforms/windows/wplatform_ext.h"
+#include "types/thread.h"
+#include "types/platforms/windows/wplatform_ext.h"
 #include "types/error.h"
 #include "types/buffer.h"
 
@@ -28,15 +28,16 @@
 #define MICROSOFT_WINDOWS_WINBASE_H_DEFINE_INTERLOCKED_CPLUSPLUS_OVERLOADS 0
 #include <Windows.h>
 
-U32 Thread_getId() { return GetCurrentThreadId(); }
+U64 Thread_getId() { return GetCurrentThreadId(); }
 
-void Thread_sleep(Ns ns) {
+Bool Thread_sleep(Ns ns) {
 	LARGE_INTEGER interval;
 	interval.QuadPart = -(I64)((U64_min(ns, I64_MAX) + 99) / 100);
 	((PlatformExt*)Platform_instance.dataExt)->ntDelayExecution(false, &interval);
+	return true;
 }
 
-U32 Thread_getLogicalCores() {
+U64 Thread_getLogicalCores() {
 	return Platform_instance.threads;
 }
 

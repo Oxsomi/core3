@@ -18,34 +18,23 @@
 *  This is called dual licensing.
 */
 
-#include "platforms/platform.h"
-#include "platforms/thread.h"
-#include "types/error.h"
-#include "types/buffer.h"
+#pragma once
+#include "types/allocator.h"
 
-Bool Thread_free(Thread **thread) {
+typedef void (*ThreadCallbackFunction)(void*);
 
-	if(!thread || !*thread)
-		return true;
+typedef struct Thread {
+	ThreadCallbackFunction callback;
+	void *nativeHandle, *objectHandle;
+} Thread;
 
-	FreeFunc free = Platform_instance.alloc.free;
-	void *allocator = Platform_instance.alloc.ptr;
+impl U64 Thread_getId();					//Current thread id
+impl U64 Thread_getLogicalCores();
 
-	Bool freed = free(allocator, Buffer_createManagedPtr(*thread, sizeof(Thread)));
-	*thread = NULL;
-	return freed;
-}
+impl Bool Thread_sleep(Ns ns);				//Can be in a different time unit. Ex. on Windows it's rounded up to ms
 
-Error Thread_waitAndCleanup(Thread **thread, U32 maxWaitTime) {
+impl Error Thread_create(ThreadCallbackFunction callback, void *objectHandle, Thread **thread);
+Bool Thread_free(Thread **thread);
 
-	if(!thread || !*thread)
-		return Error_nullPointer(0, "Thread_waitAndCleanup()::thread and *thread are required");
-
-	Error err = Thread_wait(*thread, maxWaitTime);
-
-	if(err.genericError == EGenericError_TimedOut)
-		return err;
-
-	Thread_free(thread);
-	return err;
-}
+impl Error Thread_wait(Thread *thread, U32 maxWaitTimeMs);
+Error Thread_waitAndCleanup(Thread **thread, U32 maxWaitTimeMs);

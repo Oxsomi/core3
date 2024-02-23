@@ -22,7 +22,7 @@
 #include "types/list.h"
 #include "types/string.h"
 #include "formats/texture.h"
-#include "platforms/ref_ptr.h"
+#include "types/ref_ptr.h"
 #include "pipeline_structs.h"
 
 typedef RefPtr GraphicsDeviceRef;

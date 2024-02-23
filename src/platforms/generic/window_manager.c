@@ -22,7 +22,7 @@
 #include "platforms/window_manager.h"
 #include "platforms/window.h"
 #include "platforms/platform.h"
-#include "platforms/thread.h"
+#include "types/thread.h"
 #include "platforms/log.h"
 #include "platforms/input_device.h"
 #include "platforms/ext/bufferx.h"

@@ -32,8 +32,8 @@ typedef struct Lock {
 
 typedef struct Error Error;
 
-impl Lock Lock_create();
-impl Bool Lock_free(Lock *res);
+Lock Lock_create();
+Bool Lock_free(Lock *res);
 
 //Even though maxTime is in Ns it may be interpreted
 //As a different unit by the runtime.
@@ -50,8 +50,8 @@ typedef enum ELockAcquire {
 
 } ELockAcquire;
 
-impl ELockAcquire Lock_lock(Lock *l, Ns maxTime);
+ELockAcquire Lock_lock(Lock *l, Ns maxTime);
 
-impl Bool Lock_unlock(Lock *l);
+Bool Lock_unlock(Lock *l);
 
 Bool Lock_isLockedForThread(Lock *l);

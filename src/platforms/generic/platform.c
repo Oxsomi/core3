@@ -21,7 +21,7 @@
 #include "platforms/ext/listx_impl.h"
 #include "platforms/platform.h"
 #include "platforms/log.h"
-#include "platforms/thread.h"
+#include "types/thread.h"
 #include "platforms/ext/stringx.h"
 
 #ifndef _MSC_VER
@@ -110,7 +110,7 @@ void Platform_cleanup() {
 }
 
 Bool Lock_isLockedForThread(Lock *l) {
-	return AtomicI64_add(&l->lockedThreadId, 0) == Thread_getId();
+	return AtomicI64_add(&l->lockedThreadId, 0) == (I64) Thread_getId();
 }
 
 void Log_printCapturedStackTrace(Allocator alloc, const StackTrace stackTrace, ELogLevel lvl, ELogOptions options) {

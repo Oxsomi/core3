@@ -19,7 +19,7 @@
 */
 
 #include "platforms/ext/listx_impl.h"
-#include "platforms/ref_ptr.h"
+#include "types/ref_ptr.h"
 #include "platforms/platform.h"
 #include "types/type_id.h"
 

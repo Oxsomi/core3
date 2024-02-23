@@ -19,7 +19,7 @@
 */
 
 #include "platforms/log.h"
-#include "platforms/thread.h"
+#include "types/thread.h"
 #include "platforms/platform.h"
 #include "platforms/ext/errorx.h"
 #include "platforms/ext/stringx.h"
@@ -227,7 +227,7 @@ void Log_log(Allocator alloc, ELogLevel lvl, ELogOptions options, CharString arg
 	if(lvl >= ELogLevel_Count)
 		return;
 
-	U32 thread = Thread_getId();
+	U64 thread = Thread_getId();
 
 	//Prepare for message
 
@@ -245,7 +245,7 @@ void Log_log(Allocator alloc, ELogLevel lvl, ELogOptions options, CharString arg
 		printf("[");
 
 	if (hasThread)
-		printf("%u", thread);
+		printf("%llu", thread);
 
 	if (hasTimestamp) {
 

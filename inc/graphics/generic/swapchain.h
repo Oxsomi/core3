@@ -20,8 +20,8 @@
 
 #pragma once
 #include "types/vec.h"
-#include "platforms/ref_ptr.h"
-#include "platforms/lock.h"
+#include "types/ref_ptr.h"
+#include "types/lock.h"
 #include "texture.h"
 
 typedef RefPtr GraphicsDeviceRef;

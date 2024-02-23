@@ -22,7 +22,7 @@
 #include "graphics/generic/device_info.h"
 #include "graphics/generic/allocator.h"
 #include "graphics/generic/descriptor.h"
-#include "platforms/ref_ptr.h"
+#include "types/ref_ptr.h"
 #include "types/list.h"
 
 typedef struct Error Error;

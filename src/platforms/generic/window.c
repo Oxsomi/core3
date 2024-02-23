@@ -21,7 +21,7 @@
 #include "platforms/ext/listx_impl.h"
 #include "platforms/window.h"
 #include "platforms/platform.h"
-#include "platforms/thread.h"
+#include "types/thread.h"
 #include "platforms/file.h"
 #include "types/string.h"
 #include "types/time.h"

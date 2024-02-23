@@ -18,8 +18,8 @@
 *  This is called dual licensing.
 */
 
-#include "platforms/lock.h"
-#include "platforms/thread.h"
+#include "types/lock.h"
+#include "types/thread.h"
 #include "types/error.h"
 #include "types/time.h"
 #include "types/math.h"
@@ -44,7 +44,7 @@ ELockAcquire Lock_lock(Lock *l, Ns maxTime) {
 
 	if (l && l->active) {
 
-		U32 tid = Thread_getId();
+		I64 tid = (I64) Thread_getId();
 		I64 prevValue = AtomicI64_compareExchange(&l->lockedThreadId, 0, tid);
 
 		if(prevValue == tid)		//Already locked
@@ -75,8 +75,8 @@ ELockAcquire Lock_lock(Lock *l, Ns maxTime) {
 Bool Lock_unlock(Lock *l) {
 
 	if (l && l->active) {
-		U32 tid = Thread_getId();
-		return (U32) AtomicI64_compareExchange(&l->lockedThreadId, tid, 0) == tid;
+		U64 tid = Thread_getId();
+		return (U32) AtomicI64_compareExchange(&l->lockedThreadId, tid, 0) == (I64) tid;
 	}
 
 	return false;

@@ -46,8 +46,9 @@ typedef struct WindowManagerCallbacks {
 
 typedef struct WindowManager {
 
-	U32 owningThread;		//Only one thread can own a window manager at a time
+	U64 owningThread;		//Only one thread can own a window manager at a time
 	U32 isActive;			//WindowManager_magic if active
+	U32 padding;
 
 	ListWindowPtr windows;
 

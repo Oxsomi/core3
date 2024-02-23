@@ -19,7 +19,7 @@
 */
 
 #pragma once
-#include "platforms/lock.h"
+#include "types/lock.h"
 #include "device.h"
 #include "resource.h"
 

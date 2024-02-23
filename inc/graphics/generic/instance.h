@@ -20,7 +20,7 @@
 
 #pragma once
 #include "types/string.h"
-#include "platforms/ref_ptr.h"
+#include "types/ref_ptr.h"
 #include "device_info.h"
 
 //In line with vulkan standard.

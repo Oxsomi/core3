@@ -23,7 +23,7 @@
 #include "types/allocator.h"
 #include "types/archive.h"
 #include "types/platform_types.h"
-#include "platforms/lock.h"
+#include "types/lock.h"
 
 typedef struct VirtualSection {
 

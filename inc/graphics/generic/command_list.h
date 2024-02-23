@@ -21,7 +21,7 @@
 #pragma once
 #include "command_structs.h"
 #include "pipeline_structs.h"
-#include "platforms/ref_ptr.h"
+#include "types/ref_ptr.h"
 
 typedef struct CharString CharString;
 typedef struct GraphicsDevice GraphicsDevice;

@@ -21,7 +21,7 @@
 #pragma once
 #include "types/types.h"
 #include "types/flp.h"
-#include "platforms/ref_ptr.h"
+#include "types/ref_ptr.h"
 
 typedef enum ESamplerFilterMode {
 

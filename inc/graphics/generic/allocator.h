@@ -22,7 +22,7 @@
 #include "types/list.h"
 #include "types/error.h"
 #include "types/allocation_buffer.h"
-#include "platforms/lock.h"
+#include "types/lock.h"
 
 typedef struct GraphicsDevice GraphicsDevice;
 typedef struct CharString CharString;
