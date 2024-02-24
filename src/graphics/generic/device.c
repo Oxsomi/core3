@@ -91,7 +91,7 @@ Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 	}
 
 	if(leakedBlocks)
-		Log_warnLnx("Leaked graphics device memory (showing up to 16/%llu entries):", leakedBlocks);
+		Log_warnLnx("Leaked graphics device memory (showing up to 16/"PRIu64" entries):", leakedBlocks);
 
 	for (U64 i = 0; i < leakedBlocks && i < 16; ++i) {
 
@@ -101,7 +101,7 @@ Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 		if(!leaked)
 			continue;
 
-		Log_warnLnx("%llu: %llu bytes", i, leaked);
+		Log_warnLnx("%"PRIu64": %"PRIu64" bytes", i, leaked);
 
 		#ifndef NDEBUG
 			Log_printCapturedStackTraceCustomx(
@@ -127,7 +127,7 @@ Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 		ListDescriptorStackTrace *stack = &device->descriptorStackTraces;
 
 		if(stack->length)
-			Log_warnLnx("Leaked %llu descriptors. Displaying up to 16:", stack->length);
+			Log_warnLnx("Leaked %"PRIu64" descriptors. Displaying up to 16:", stack->length);
 
 		for (U64 j = 0; j < stack->length; ++j) {
 
@@ -135,7 +135,7 @@ Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 
 			if(j < 16)
 				Log_warnLnx(
-					"%llu: Resource type: %llu, id: %llu",
+					"%"PRIu64": Resource type: %"PRIu64", id: %"PRIu64,
 					j, (U64)elem.resourceId >> 20, (U64)elem.resourceId & ((1 << 20) - 1)
 				);
 

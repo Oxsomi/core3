@@ -39,8 +39,8 @@
 
 //Carried over from core2
 
-void Log_captureStackTrace(void **stack, U64 stackSize, U64 skip) {
-	RtlCaptureStackBackTrace((DWORD)(1 + skip), (DWORD) stackSize, stack, NULL);
+void Log_captureStackTrace(void **stack, U64 stackSize, U8 skip) {
+	RtlCaptureStackBackTrace((DWORD)(1 + (U32)skip), (DWORD) stackSize, stack, NULL);
 }
 
 typedef struct CapturedStackTrace {
@@ -60,20 +60,22 @@ static const WORD COLORS[] = {
 	2,	/* green */
 	3,	/* cyan */
 	14,	/* yellow */
-	4,	/* red */
-	12	/* bright red */
+	4	/* red */
 };
 
-void Log_printCapturedStackTraceCustom(Allocator alloc, const void **stackTrace, U64 stackSize, ELogLevel lvl, ELogOptions opt) {
+void Log_printCapturedStackTraceCustom(
+	Allocator alloc, 
+	const void **stackTrace, 
+	U64 stackSize, 
+	ELogLevel lvl, 
+	ELogOptions opt
+) {
 
 	if(!stackTrace)
 		return;
 
 	if(lvl >= ELogLevel_Count)
 		return;
-
-	if(lvl == ELogLevel_Fatal)
-		lvl = ELogLevel_Error;
 
 	HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
 	SetConsoleTextAttribute(handle, COLORS[lvl]);
@@ -195,7 +197,7 @@ void Log_printCapturedStackTraceCustom(Allocator alloc, const void **stackTrace,
 
 		else if(capture.lin)
 			printf(
-				"%p: %.*s!%.*s (%.*s, Line %u)\n",
+				"%p: %.*s!%.*s (%.*s, Line %"PRIu32")\n",
 				stackTrace[i],
 				(int) CharString_length(capture.mod), capture.mod.ptr,
 				(int) CharString_length(capture.sym), capture.sym.ptr,
@@ -245,7 +247,7 @@ void Log_log(Allocator alloc, ELogLevel lvl, ELogOptions options, CharString arg
 		printf("[");
 
 	if (hasThread)
-		printf("%llu", thread);
+		printf("%"PRIu64, thread);
 
 	if (hasTimestamp) {
 

@@ -55,7 +55,7 @@ void sigFunc(int signal) {
 	//Turn this off by defining _NO_SIGNAL_HANDLING
 
 	Log_printStackTracex(1, ELogLevel_Error, ELogOptions_Default);
-	Log_logx(ELogLevel_Fatal, ELogOptions_Default, CharString_createRefCStrConst(msg));
+	Log_logx(ELogLevel_Error, ELogOptions_Default, CharString_createRefCStrConst(msg));
 	exit(signal);
 }
 
@@ -194,7 +194,7 @@ Bool Platform_onFree(void *ptr, U64 len) {
 
 					Log_errorLn(
 						Allocator_allocationsAllocator,
-						"Allocation at %p was allocated with length %llu but freed with length %llu!",
+						"Allocation at %p was allocated with length %"PRIu64" but freed with length %"PRIu64"!",
 						ptr, captured->length, len
 					);
 
@@ -209,7 +209,7 @@ Bool Platform_onFree(void *ptr, U64 len) {
 
 			Log_errorLn(
 				Allocator_allocationsAllocator,
-				"Allocation that was freed at %p with length %llu was not found in the allocation list!",
+				"Allocation that was freed at %p with length %"PRIu64" was not found in the allocation list!",
 				ptr, len
 			);
 
@@ -254,7 +254,7 @@ void Platform_printAllocations(U64 offset, U64 length, U64 minAllocationSize) {
 			length = Allocator_allocations.length;
 
 		Log_debugLn(
-			Allocator_allocationsAllocator, "Showing up to %llu allocations starting at offset %llu", length, offset
+			Allocator_allocationsAllocator, "Showing up to %"PRIu64" allocations starting at offset %"PRIu64"", length, offset
 		);
 
 		U64 capturedLength = 0;
@@ -268,7 +268,7 @@ void Platform_printAllocations(U64 offset, U64 length, U64 minAllocationSize) {
 
 			Log_debugLn(
 				Allocator_allocationsAllocator,
-				"Allocation %llu at %p with length %llu allocated at:",
+				"Allocation %"PRIu64" at %p with length %"PRIu64" allocated at:",
 				i, captured->location, captured->length
 			);
 
@@ -277,7 +277,7 @@ void Platform_printAllocations(U64 offset, U64 length, U64 minAllocationSize) {
 			capturedLength += captured->length;
 		}
 
-		Log_debugLn(Allocator_allocationsAllocator, "Showed %llu bytes of allocations", capturedLength);
+		Log_debugLn(Allocator_allocationsAllocator, "Showed %"PRIu64" bytes of allocations", capturedLength);
 
 		if(acq == ELockAcquire_Acquired)
 			Lock_unlock(&Allocator_lock);
@@ -292,7 +292,7 @@ void Allocator_reportLeaks() {
 
 	if (memCount || memSize) {
 
-		Log_warnLn(Allocator_allocationsAllocator, "Leaked %llu bytes in %llu allocations.", memSize, memCount);
+		Log_warnLn(Allocator_allocationsAllocator, "Leaked %"PRIu64" bytes in %"PRIu64" allocations.", memSize, memCount);
 
 		#ifndef NDEBUG
 			Platform_printAllocations(0, 16, 0);

@@ -25,33 +25,66 @@
 #include "platforms/ext/stringx.h"
 #include "types/time.h"
 
-/*
-void Log_captureStackTrace(void **stack, U64 stackSize, U64 skip) {
-	RtlCaptureStackBackTrace((DWORD)(1 + skip), (DWORD) stackSize, stack, NULL);
+#include <execinfo.h>
+#include <stdio.h>
+
+void Log_captureStackTrace(void **stack, U64 stackSize, U8 skip) {
+
+	U64 realSkip = (U64) skip + 1;
+
+	I32 count = backtrace(stack, stackSize);
+
+	if (count == stackSize) {			//Call backTrace again, but this time we have to allocate
+
+		stackSize += skip;
+
+		Buffer buf = Buffer_createNull();
+		Error err = Buffer_createUninitializedBytesx(stackSize * sizeof(void*), &buf);
+
+		if (!err.genericError) {		//If allocate fails, we'll pretend that the stack ends after
+
+			I32 count = backtrace((void**) buf.ptr, stackSize);
+
+			for (U64 i = skip; i < stackSize && ((const void**)buf.ptr)[i]; ++i)
+				stack[i - skip] = stack[i];
+
+			if((U64)(count - skip) < stackSize)
+				stack[(U64)(count - skip)] = NULL;
+
+			return;
+		}
+	}
+
+	//Skip part of stack
+
+	for (U64 i = skip; i < stackSize && stack[i]; ++i)
+		stack[i - skip] = stack[i];
+
+	if((U64)(count - skip) < stackSize)
+		stack[(U64)(count - skip)] = NULL;
 }
 
-typedef struct CapturedStackTrace {
+#define FONT_GREEN  "\033[32;",
+#define FONT_CYAN   "\x1b[36m",
+#define FONT_YELLOW "\033[33;",
+#define FONT_RED    "\033[31;"
+#define FONT_RESET  "\033[0m"
 
-	//Module and symbol
+#define printColor(lvl, str, ...)																	\
+	switch(lvl) {																					\
+		default:					printf(FONT_GREEN  str FONT_RESET, __VA_ARGS__);		break;	\
+		case ELogLevel_Performance:	printf(FONT_CYAN   str FONT_RESET, __VA_ARGS__);		break;	\
+		case ELogLevel_Error:		printf(FONT_YELLOW str FONT_RESET, __VA_ARGS__);		break;	\
+		case ELogLevel_Debug:		printf(FONT_RED    str FONT_RESET, __VA_ARGS__);		break;	\
+	}
 
-	CharString mod, sym;
-
-	//File and line don't have to be specified, for external calls
-
-	CharString fil;
-	U32 lin;
-
-} CapturedStackTrace;
-
-static const WORD COLORS[] = {
-	2,	// green
-	3,	// cyan
-	14,	// yellow
-	4,	// red
-	12	// bright red
-};
-
-void Log_printCapturedStackTraceCustom(Allocator alloc, const void **stackTrace, U64 stackSize, ELogLevel lvl, ELogOptions opt) {
+void Log_printCapturedStackTraceCustom(
+	Allocator alloc, 
+	const void **stackTrace, 
+	U64 stackSize, 
+	ELogLevel lvl, 
+	ELogOptions opt
+) {
 
 	if(!stackTrace)
 		return;
@@ -59,152 +92,19 @@ void Log_printCapturedStackTraceCustom(Allocator alloc, const void **stackTrace,
 	if(lvl >= ELogLevel_Count)
 		return;
 
-	if(lvl == ELogLevel_Fatal)
-		lvl = ELogLevel_Error;
+	printColor(lvl, "Stacktrace:\n");
 
-	HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
-	SetConsoleTextAttribute(handle, COLORS[lvl]);
+	U64 i = 0;
 
-	CapturedStackTrace captured[_STACKTRACE_SIZE] = { 0 };
+	for(; i < stackSize && stackTrace[i]; ++i)		//Find end
+		;
 
-	U64 stackCount = 0;
+	C8 **symbols = backtrace_symbols(stackTrace, i);
 
-	//Obtain process
+	for(U64 j = 0; j < i; ++j)
+		printColor(lvl, "%s\n", symbols[j]);
 
-	HANDLE process = GetCurrentProcess();
-	HMODULE processModule = GetModuleHandleA(NULL);
-
-	Bool hasSymbols = SymInitialize(process, NULL, TRUE);
-	Bool anySymbol = false;
-
-	if(hasSymbols)
-		for (
-			U64 i = 0;
-			i < stackSize && i < _STACKTRACE_SIZE &&
-			stackTrace[i] && stackTrace[i] != (void*)0xCCCCCCCCCCCCCCCC;
-			++i, ++stackCount
-		) {
-
-			U64 addr = (U64) stackTrace[i];
-
-			//Get module name
-
-			U64 moduleBase = SymGetModuleBase(process, addr);
-
-			C8 modulePath[MAX_PATH + 1] = { 0 };
-			if (!moduleBase || !GetModuleFileNameA((HINSTANCE)moduleBase, modulePath, MAX_PATH))
-				continue;
-
-			anySymbol = true;
-
-			C8 symbolData[sizeof(IMAGEHLP_SYMBOL) + MAX_PATH + 1] = { 0 };
-
-			PIMAGEHLP_SYMBOL symbol = (PIMAGEHLP_SYMBOL)symbolData;
-			symbol->SizeOfStruct = sizeof(symbolData);
-			symbol->MaxNameLength = MAX_PATH;
-
-			C8 *symbolName = symbol->Name;
-
-			if (!SymGetSymFromAddr(process, addr, NULL, symbol))
-				continue;
-
-			DWORD offset = 0;
-			IMAGEHLP_LINE line = { 0 };
-			line.SizeOfStruct = sizeof(line);
-
-			SymGetLineFromAddr(process, addr, &offset, &line);	//Can fail, meaning that line is null
-
-			if (line.FileName && strlen(line.FileName) > MAX_PATH)
-				continue;
-
-			CapturedStackTrace *capture = captured + i;
-			capture->mod = CharString_createRefAuto(modulePath, MAX_PATH);
-			capture->sym = CharString_createRefAuto(symbolName, MAX_PATH);
-
-			CharString_formatPath(&capture->sym);
-
-			if (moduleBase == (U64)processModule)
-				capture->mod = CharString_getFilePath(&capture->mod);
-
-			if(line.FileName)
-				capture->fil = CharString_createRefAutoConst(line.FileName, MAX_PATH);
-
-			//Copy strings to heap, since they'll go out of scope
-
-			Error err;
-
-			if(CharString_length(capture->mod)) {
-				CharString tmp = CharString_createNull();
-				_gotoIfError(cleanup, CharString_createCopy(capture->mod, alloc, &tmp));
-				capture->mod = tmp;
-			}
-
-			if(CharString_length(capture->sym)) {
-				CharString tmp = CharString_createNull();
-				_gotoIfError(cleanup, CharString_createCopy(capture->sym, alloc, &tmp));
-				capture->sym = tmp;
-			}
-
-			if(CharString_length(capture->fil)) {
-				CharString tmp = CharString_createNull();
-				_gotoIfError(cleanup, CharString_createCopy(capture->fil, alloc, &tmp));
-				capture->fil = tmp;
-			}
-
-			capture->lin = line.LineNumber;
-			continue;
-
-			//Cleanup the stack if we can't move anything to heap anymore
-
-		cleanup:
-			
-			for (U64 j = 0; j < i; ++j) {
-				CharString_free(&captured[j].fil, alloc);
-				CharString_free(&captured[j].sym, alloc);
-				CharString_free(&captured[j].mod, alloc);
-			}
-
-			Error_print(alloc, err, lvl, opt);
-			return;
-		}
-
-	if(hasSymbols && anySymbol)
-		printf("Stacktrace:\n");
-
-	else printf("Stacktrace: (No symbols)\n");
-
-	for (U64 i = 0; i < stackCount; ++i) {
-
-		CapturedStackTrace capture = captured[i];
-
-		if(!CharString_length(capture.sym))
-			printf("%p\n", stackTrace[i]);
-
-		else if(capture.lin)
-			printf(
-				"%p: %.*s!%.*s (%.*s, Line %u)\n",
-				stackTrace[i],
-				(int) CharString_length(capture.mod), capture.mod.ptr,
-				(int) CharString_length(capture.sym), capture.sym.ptr,
-				(int) CharString_length(capture.fil), capture.fil.ptr,
-				capture.lin
-			);
-
-		else printf(
-			"%p: %.*s!%.*s\n",
-			stackTrace[i],
-			(int) CharString_length(capture.mod), capture.mod.ptr,
-			(int) CharString_length(capture.sym), capture.sym.ptr
-		);
-
-		//We now don't need the strings anymore
-
-		CharString_free(&capture.fil, alloc);
-		CharString_free(&capture.sym, alloc);
-		CharString_free(&capture.mod, alloc);
-	}
-
-	SymCleanup(process);
+	free(symbols);
 }
 
 void Log_log(Allocator alloc, ELogLevel lvl, ELogOptions options, CharString arg) {
@@ -216,11 +116,6 @@ void Log_log(Allocator alloc, ELogLevel lvl, ELogOptions options, CharString arg
 
 	U64 thread = Thread_getId();
 
-	//Prepare for message
-
-	HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
-	SetConsoleTextAttribute(handle, COLORS[lvl]);
-
 	//[<thread> <time>]: <hr\n><ourStuff> <\n if enabled>
 
 	Bool hasTimestamp = options & ELogOptions_Timestamp;
@@ -229,59 +124,29 @@ void Log_log(Allocator alloc, ELogLevel lvl, ELogOptions options, CharString arg
 	Bool hasPrepend = hasTimestamp || hasThread;
 
 	if (hasPrepend)
-		printf("[");
+		printColor(lvl, "[");
 
 	if (hasThread)
-		printf("%llu", thread);
+		printColor(lvl, "%"PRIu64, thread);
 
 	if (hasTimestamp) {
 
 		TimeFormat tf;
 		Time_format(t, tf, true);
 
-		printf("%s%s", hasThread ? " " : "", tf);
+		printColor(lvl, "%s%s", hasThread ? " " : "", tf);
 	}
 
 	if (hasPrepend)
-		printf("]: ");
+		printColor(lvl, "]: ");
 
 	//Print to console and debug window
 
 	const C8 *newLine = hasNewLine ? "\n" : "";
 
-	printf(
+	printColor(lvl,
 		"%.*s%s",
 		(int)CharString_length(arg), arg.ptr,
 		newLine
 	);
-
-	//Debug utils such as output to VS
-
-	if (!IsDebuggerPresent())
-		return;
-
-	CharString copy = CharString_createNull();
-	Bool panic = false;
-
-	if (
-		CharString_createCopy(arg, alloc, &copy).genericError ||
-		(hasNewLine && CharString_append(&copy, '\n', alloc).genericError)
-	) {
-
-		OutputDebugStringA(
-			"PANIC! Log_print argument was output to debugger, but wasn't null terminated\n"
-			"This is normally okay, as long as a new string can be allocated.\n"
-			"In this case, allocation failed, which suggests corruption or out of memory."
-		);
-
-		panic = true;
-	}
-
-	if(!panic)
-		OutputDebugStringA(copy.ptr);
-
-	CharString_free(&copy, alloc);
-
-	if (lvl >= ELogLevel_Error)
-		DebugBreak();
-}*/
+}

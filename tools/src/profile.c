@@ -167,7 +167,7 @@ Error _CLI_profileCast(ParsedArgs args, Buffer buf) {
 				Ns now = Time_now();
 
 				Log_debugLnx(
-					"%s: %llux %s -> %s within %fs (%fns/op). (Operation hash: %llu)",
+					"%s: %"PRIu64"x %s -> %s within %fs (%fns/op). (Operation hash: %"PRIu64")",
 					iterationNames[l], number,
 					floatTypeNames[k], floatTypeNames[j],
 					(F64)(now - then) / SECOND,
@@ -181,7 +181,7 @@ Error _CLI_profileCast(ParsedArgs args, Buffer buf) {
 	U64 totalIt = itCount * floatTypes * (floatTypes - 1) * number;
 
 	Log_debugLnx(
-		"Performed %llu casts within %fs. Avg time per cast %fns.",
+		"Performed %"PRIu64" casts within %fs. Avg time per cast %fns.",
 		totalIt,
 		(F64)(nowOuter - thenOuter) / SECOND,
 		(F64)(nowOuter - thenOuter) / totalIt
@@ -207,7 +207,7 @@ Error _CLI_profileRNG(ParsedArgs args, Buffer buf) {
 	Ns now = Time_now();
 
 	Log_debugLnx(
-		"Profile RNG: %llu bytes within %fs (%fns/byte, %fbytes/sec).",
+		"Profile RNG: %"PRIu64" bytes within %fs (%fns/byte, %fbytes/sec).",
 		Buffer_length(buf),
 		(F64)(now - then) / SECOND,
 		(F64)(now - then) / Buffer_length(buf),
@@ -232,7 +232,7 @@ Error _CLI_profileCRC32C(ParsedArgs args, Buffer buf) {
 	Ns now = Time_now();
 
 	Log_debugLnx(
-		"Profile CRC32C: %llu bytes within %fs (%fns/byte, %fbytes/sec). Random hash %u.",
+		"Profile CRC32C: %"PRIu64" bytes within %fs (%fns/byte, %fbytes/sec). Random hash %u.",
 		Buffer_length(buf),
 		(F64)(now - then) / SECOND,
 		(F64)(now - then) / Buffer_length(buf),
@@ -259,7 +259,7 @@ Error _CLI_profileSHA256(ParsedArgs args, Buffer buf) {
 	Ns now = Time_now();
 
 	Log_debugLnx(
-		"Profile SHA256: %llu bytes within %fs (%fns/byte, %fbytes/sec). Random hash %08x%08x%08x%08x%08x%08x%08x%08x.",
+		"Profile SHA256: %"PRIu64" bytes within %fs (%fns/byte, %fbytes/sec). Random hash %08x%08x%08x%08x%08x%08x%08x%08x.",
 		Buffer_length(buf),
 		(F64)(now - then) / SECOND,
 		(F64)(now - then) / Buffer_length(buf),
@@ -299,7 +299,7 @@ Error _CLI_profileEncryption(ParsedArgs args, Buffer buf, EBufferEncryptionType 
 	Ns now = Time_now();
 
 	Log_debugLnx(
-		"Encrypt AES GCM: %llu bytes within %fs (%fns/byte, %fbytes/sec).",
+		"Encrypt AES GCM: %"PRIu64" bytes within %fs (%fns/byte, %fbytes/sec).",
 		Buffer_length(buf),
 		(F64)(now - then) / SECOND,
 		(F64)(now - then) / Buffer_length(buf),
@@ -320,7 +320,7 @@ Error _CLI_profileEncryption(ParsedArgs args, Buffer buf, EBufferEncryptionType 
 	now = Time_now();
 
 	Log_debugLnx(
-		"Decrypt AES GCM: %llu bytes within %fs (%fns/byte, %fbytes/sec).",
+		"Decrypt AES GCM: %"PRIu64" bytes within %fs (%fns/byte, %fbytes/sec).",
 		Buffer_length(buf),
 		(F64)(now - then) / SECOND,
 		(F64)(now - then) / Buffer_length(buf),

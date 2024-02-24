@@ -25,7 +25,7 @@
 
 #include <stdlib.h>
 
-void Log_printStackTrace(Allocator alloc, U64 skip, ELogLevel lvl, ELogOptions options) {
+void Log_printStackTrace(Allocator alloc, U8 skip, ELogLevel lvl, ELogOptions options) {
 
 	StackTrace stackTrace;
 	Log_captureStackTrace(stackTrace, _STACKTRACE_SIZE, skip);
@@ -33,8 +33,8 @@ void Log_printStackTrace(Allocator alloc, U64 skip, ELogLevel lvl, ELogOptions o
 	Log_printCapturedStackTrace(alloc, stackTrace, lvl, options);
 }
 
-void Log_printStackTracex(U64 skip, ELogLevel lvl, ELogOptions options) {
-	Log_printStackTrace(Platform_instance.alloc, skip + 1, lvl, options);
+void Log_printStackTracex(U8 skip, ELogLevel lvl, ELogOptions options) {
+	Log_printStackTrace(Platform_instance.alloc, skip + 1 == 0 ? U8_MAX : skip + 1, lvl, options);
 }
 
 void Log_printCapturedStackTraceCustomx(const void **stackTrace, U64 stackSize, ELogLevel lvl, ELogOptions options) {
@@ -78,29 +78,6 @@ void Log_error(Allocator alloc, ELogOptions opt, const C8 *format, ...) {
 	Log_level(ELogLevel_Error);
 }
 
-void Log_fatal(Allocator alloc, ELogOptions opt, const C8 *format, ...) {
-
-	if(!format)
-		return;
-
-	Log_printStackTrace(alloc, 1, ELogLevel_Fatal, opt);
-
-	CharString res = CharString_createNull();
-
-	va_list arg1;
-	va_start(arg1, format);
-	Error err = CharString_formatVariadic(alloc, &res, format, arg1);
-	va_end(arg1);
-
-	if(err.genericError)
-		return;
-
-	Log_log(alloc, ELogLevel_Fatal, opt, res);
-	CharString_free(&res, alloc);
-
-	exit(1);
-}
-
 //Default allocator. Sometimes they can't be safely used
 
 void Log_debugx(ELogOptions opt, const C8 *format, ...) {
@@ -121,27 +98,4 @@ void Log_warnx(ELogOptions opt, const C8 *format, ...) {
 void Log_errorx(ELogOptions opt, const C8 *format, ...) {
 	Allocator alloc = Platform_instance.alloc;
 	Log_level(ELogLevel_Error);
-}
-
-void Log_fatalx(ELogOptions opt, const C8 *format, ...) {
-
-	if(!format)
-		return;
-
-	Log_printStackTracex(1, ELogLevel_Fatal, opt);
-
-	CharString res = CharString_createNull();
-
-	va_list arg1;
-	va_start(arg1, format);
-	Error err = CharString_formatVariadicx(&res, format, arg1);
-	va_end(arg1);
-
-	if(err.genericError)
-		return;
-
-	Log_logx(ELogLevel_Fatal, opt, res);
-	CharString_freex(&res);
-
-	exit(1);
 }

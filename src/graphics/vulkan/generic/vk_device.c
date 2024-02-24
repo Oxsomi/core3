@@ -573,7 +573,7 @@ Error GraphicsDevice_initExt(
 
 			if(instanceExt->debugSetName) {
 
-				_gotoIfError(clean, CharString_formatx(&tempStr, "Queue submit semaphore %i", k));
+				_gotoIfError(clean, CharString_formatx(&tempStr, "Queue submit semaphore %"PRIu64, k));
 
 				VkDebugUtilsObjectNameInfoEXT debugName2 = (VkDebugUtilsObjectNameInfoEXT) {
 					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
@@ -737,7 +737,7 @@ Error GraphicsDevice_initExt(
 
 				CharString_freex(&tempStr);
 
-				_gotoIfError(clean, CharString_formatx(&tempStr, "Descriptor set (%i: %s)", i, debugNames[i]));
+				_gotoIfError(clean, CharString_formatx(&tempStr, "Descriptor set (%"PRIu32": %s)", i, debugNames[i]));
 
 				VkDebugUtilsObjectNameInfoEXT debugName2 = (VkDebugUtilsObjectNameInfoEXT) {
 					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
@@ -750,7 +750,7 @@ Error GraphicsDevice_initExt(
 
 				CharString_freex(&tempStr);
 
-				_gotoIfError(clean, CharString_formatx(&tempStr, "Descriptor set layout (%i: %s)", i, debugNames[i]));
+				_gotoIfError(clean, CharString_formatx(&tempStr, "Descriptor set layout (%"PRIu32": %s)", i, debugNames[i]));
 
 				if(i < EDescriptorSetType_UniqueLayouts) {
 
@@ -1106,7 +1106,7 @@ Error GraphicsDevice_submitCommandsImpl(
 
 					_gotoIfError(clean, CharString_formatx(
 						&temp,
-						"%s command pool (thread: %u, frame id: %u)",
+						"%s command pool (thread: %"PRIu32", frame id: %"PRIu32")",
 						queue.type == EVkCommandQueue_Graphics ? "Graphics" : (
 							queue.type == EVkCommandQueue_Compute ? "Compute" : "Copy"
 						),
@@ -1152,7 +1152,7 @@ Error GraphicsDevice_submitCommandsImpl(
 
 					_gotoIfError(clean, CharString_formatx(
 						&temp,
-						"%s command buffer (thread: %u, frame id: %u)",
+						"%s command buffer (thread: %"PRIu32", frame id: %"PRIu32")",
 						queue.type == EVkCommandQueue_Graphics ? "Graphics" : (
 							queue.type == EVkCommandQueue_Compute ? "Compute" : "Copy"
 						),

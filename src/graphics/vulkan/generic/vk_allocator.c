@@ -286,8 +286,8 @@ Error DeviceMemoryAllocator_allocate(
 
 				_gotoIfError(clean, CharString_formatx(
 					&temp,
-					isDedicated ? "Memory block %u (host: %s, coherent: %s, device: %s): %s" :
-					"Memory block %u (host: %s, coherent: %s, device: %s)",
+					isDedicated ? "Memory block %"PRIu32" (host: %s, coherent: %s, device: %s): %s" :
+					"Memory block %"PRIu32" (host: %s, coherent: %s, device: %s)",
 					(U32) i,
 					prop & host ? "true" : "false",
 					prop & coherent ? "true" : "false",

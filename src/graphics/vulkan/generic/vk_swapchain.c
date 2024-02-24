@@ -460,7 +460,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 				if(instance->debugSetName) {
 
 					CharString_freex(&temp);
-					_gotoIfError(clean, CharString_formatx(&temp, "Swapchain semaphore %i", i));
+					_gotoIfError(clean, CharString_formatx(&temp, "Swapchain semaphore %"PRIu64, (U64)i));
 
 					VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
 						.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
@@ -483,7 +483,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 			CharString_freex(&temp);
 
 			_gotoIfError(clean, CharString_formatx(
-				&temp, "Swapchain image #%u (%.*s)",
+				&temp, "Swapchain image #%"PRIu32" (%.*s)",
 				(U32) i, CharString_length(window->title), window->title.ptr
 			));
 

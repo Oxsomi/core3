@@ -21,6 +21,7 @@
 #pragma once
 #include <stdint.h>
 #include <stdbool.h>
+#include <inttypes.h>
 
 //Null is apparently non standard
 

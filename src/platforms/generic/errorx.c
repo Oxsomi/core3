@@ -63,7 +63,7 @@ void Error_print(Allocator alloc, Error err, ELogLevel logLevel, ELogOptions opt
 			alloc,
 			&result,
 
-			"%s (%s)\nsub id: %X, param id: %u, param0: %08X, param1: %08X.\nPlatform/std error: %.*s.",
+			"%s (%s)\nsub id: %"PRIu32"X, param id: %"PRIu32", param0: %08X, param1: %08X.\nPlatform/std error: %.*s.",
 
 			err.errorStr,
 			EGenericError_TO_STRING[err.genericError],
@@ -76,11 +76,8 @@ void Error_print(Allocator alloc, Error err, ELogLevel logLevel, ELogOptions opt
 
 		).genericError
 	)
-		Log_log(alloc, logLevel == ELogLevel_Fatal ? ELogLevel_Error : logLevel, options, result);
+		Log_log(alloc, logLevel, options, result);
 
 	CharString_free(&result, alloc);
 	CharString_free(&platformErr, alloc);
-
-	if(logLevel == ELogLevel_Fatal)
-		exit(1);
 }

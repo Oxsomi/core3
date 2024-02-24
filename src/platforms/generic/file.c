@@ -1143,11 +1143,6 @@ clean:
 	return err;
 }
 
-typedef struct FileLoadVirtual {
-	Bool doLoad;
-	const U32 *encryptionKey;
-} FileLoadVirtual;
-
 impl Error File_loadVirtualInternal(FileLoadVirtual *userData, CharString loc);
 
 Error File_unloadVirtualInternal(void *userData, CharString loc) {

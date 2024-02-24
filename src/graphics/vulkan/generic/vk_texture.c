@@ -215,7 +215,9 @@ Error UnifiedTexture_createExt(TextureRef *textureRef, CharString name) {
 			#ifndef NDEBUG
 				if(instance->debugSetName && CharString_length(name)) {
 
-					_gotoIfError(clean, CharString_formatx(&temp, "%.*s view (#i)", CharString_length(name), name.ptr, (I32)i));
+					_gotoIfError(clean, CharString_formatx(
+						&temp, "%.*s view (#%"PRIu32")", CharString_length(name), name.ptr, (U32)i
+					));
 
 					VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
 						.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,

@@ -506,7 +506,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 		if (!supported) {
 
 			Log_debugLnx(
-				"Vulkan: Unsupported device %u, one of the required extensions wasn't present (%s)",
+				"Vulkan: Unsupported device %"PRIu32", one of the required extensions wasn't present (%s)",
 				i, reqExtensionsName[firstUnavailable]
 			);
 
@@ -689,7 +689,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 		VkPhysicalDeviceLimits limits = properties.limits;
 
 		if (limits.nonCoherentAtomSize > 256) {
-			Log_debugLnx("Vulkan: Unsupported device %u, nonCoherentAtomSize needs to be up to 256", i);
+			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", nonCoherentAtomSize needs to be up to 256", i);
 			continue;
 		}
 
@@ -711,7 +711,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 			!features.multiDrawIndirect ||
 			!features.sampleRateShading
 		) {
-			Log_debugLnx("Vulkan: Unsupported device %u, one of the required features wasn't enabled", i);
+			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", one of the required features wasn't enabled", i);
 			continue;
 		}
 
@@ -768,7 +768,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 			limits.viewportBoundsRange[0] > -32768 ||
 			limits.viewportBoundsRange[1] < 32767
 		) {
-			Log_debugLnx("Vulkan: Unsupported device %u, one of the required limit wasn't sufficient", i);
+			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", one of the required limit wasn't sufficient", i);
 			continue;
 		}
 
@@ -792,7 +792,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 				limits.maxTessellationPatchSize < 32
 			)
 		) {
-			Log_debugLnx("Vulkan: Unsupported device %u, tesselation isn't supported but is required", i);
+			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", tesselation isn't supported but is required", i);
 			continue;
 		}
 
@@ -854,12 +854,12 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 		//Force enable synchronization and timeline semaphores
 
 		if (!semaphore.timelineSemaphore) {
-			Log_debugLnx("Vulkan: Unsupported device %u, Timeline semaphores unsupported!", i);
+			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", Timeline semaphores unsupported!", i);
 			continue;
 		}
 
 		if (!sync2.synchronization2) {
-			Log_debugLnx("Vulkan: Unsupported device %u, Synchronization 2 unsupported!", i);
+			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", Synchronization 2 unsupported!", i);
 			continue;
 		}
 
@@ -909,7 +909,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 		}
 
 		if(!eq) {
-			Log_debugLnx("Vulkan: Unsupported device %u, descriptor indexing isn't properly supported.", i);
+			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", descriptor indexing isn't properly supported.", i);
 			continue;
 		}
 
@@ -940,12 +940,12 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 			VK_SUBGROUP_FEATURE_BALLOT_BIT;
 
 		if((subgroup.supportedOperations & requiredSubOp) != requiredSubOp) {
-			Log_debugLnx("Vulkan: Unsupported device %u, one of the required subgroup operations wasn't supported!", i);
+			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", one of the required subgroup operations wasn't supported!", i);
 			continue;
 		}
 
 		if(subgroup.subgroupSize < 16 || subgroup.subgroupSize > 128) {
-			Log_debugLnx("Vulkan: Unsupported device %u, subgroup size is not in range 16-128!", i);
+			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", subgroup size is not in range 16-128!", i);
 			continue;
 		}
 
@@ -1157,7 +1157,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 			limits.maxDescriptorSetSampledImages < 250 * KIBI ||
 			limits.maxDescriptorSetStorageImages < 250 * KIBI
 		) {
-			Log_debugLnx("Vulkan: Unsupported device %u, graphics binding tier not supported!", i);
+			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", graphics binding tier not supported!", i);
 			continue;
 		}
 
@@ -1247,7 +1247,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 		}
 
 		if (unsupported) {
-			Log_debugLnx("Vulkan: Unsupported device %u, required texture format not supported!", i);
+			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", required texture format not supported!", i);
 			continue;
 		}
 

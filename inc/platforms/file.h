@@ -69,21 +69,26 @@ Bool File_hasFolder(CharString loc);
 Error File_write(Buffer buf, CharString loc, Ns maxTimeout);		//Read when a file is available (up to maxTimeout)
 Error File_read(CharString loc, Ns maxTimeout, Buffer *output);		//Write when a file is available (up to maxTimeout)
 
-impl Error File_removeVirtual(CharString loc, Ns maxTimeout);						//Can only operate on //access
-impl Error File_addVirtual(CharString loc, EFileType type, Ns maxTimeout);			//Can only operate on folders in //access
-impl Error File_renameVirtual(CharString loc, CharString newFileName, Ns maxTimeout);
-impl Error File_moveVirtual(CharString loc, CharString directoryName, Ns maxTimeout);
+typedef struct FileLoadVirtual {
+	Bool doLoad;
+	const U32 *encryptionKey;
+} FileLoadVirtual;
 
-impl Error File_writeVirtual(Buffer buf, CharString loc, Ns maxTimeout);
-impl Error File_readVirtual(CharString loc, Buffer *output, Ns maxTimeout);
+Error File_removeVirtual(CharString loc, Ns maxTimeout);						//Can only operate on //access
+Error File_addVirtual(CharString loc, EFileType type, Ns maxTimeout);			//Can only operate on folders in //access
+Error File_renameVirtual(CharString loc, CharString newFileName, Ns maxTimeout);
+Error File_moveVirtual(CharString loc, CharString directoryName, Ns maxTimeout);
 
-impl Error File_getInfoVirtual(CharString loc, FileInfo *info);
-impl Error File_foreachVirtual(CharString loc, FileCallback callback, void *userData, Bool isRecursive);
-impl Error File_queryFileObjectCountVirtual(CharString loc, EFileType type, Bool isRecursive, U64 *res);		//Inc files only
-impl Error File_queryFileObjectCountAllVirtual(CharString loc, Bool isRecursive, U64 *res);						//Inc folders + files
+Error File_writeVirtual(Buffer buf, CharString loc, Ns maxTimeout);
+Error File_readVirtual(CharString loc, Buffer *output, Ns maxTimeout);
 
-impl Error File_loadVirtual(CharString loc, const U32 encryptionKey[8]);		//Load a virtual section
-impl Bool File_isVirtualLoaded(CharString loc);		//Check if a virtual section is loaded
-impl Error File_unloadVirtual(CharString loc);		//Unload a virtual section
+Error File_getInfoVirtual(CharString loc, FileInfo *info);
+Error File_foreachVirtual(CharString loc, FileCallback callback, void *userData, Bool isRecursive);
+Error File_queryFileObjectCountVirtual(CharString loc, EFileType type, Bool isRecursive, U64 *res);		//Inc files only
+Error File_queryFileObjectCountAllVirtual(CharString loc, Bool isRecursive, U64 *res);						//Inc folders + files
+
+Error File_loadVirtual(CharString loc, const U32 encryptionKey[8]);		//Load a virtual section
+Bool File_isVirtualLoaded(CharString loc);		//Check if a virtual section is loaded
+Error File_unloadVirtual(CharString loc);		//Unload a virtual section
 
 //TODO: make it more like a DirectStorage-like api

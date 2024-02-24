@@ -146,7 +146,7 @@ Bool _CLI_convert(ParsedArgs args, Bool isTo) {
 
 	//Tell CLI users
 
-	Log_debugLnx("Converted file oiXX format in %ums", (Time_now() - start + MS - 1) / MS);
+	Log_debugLnx("Converted file oiXX format in %"PRIu64"ms", (Time_now() - start + MS - 1) / MS);
 	return true;
 }
 

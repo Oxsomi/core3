@@ -177,8 +177,8 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 				caHeader.flags & ECAFlags_DirectoriesCountLong ? EXXDataSizeType_U16 : EXXDataSizeType_U8
 			);
 
-			Log_debugLnx("Directory count: %u", dirCount);
-			Log_debugLnx("File count: %u", fileCount);
+			Log_debugLnx("Directory count: %"PRIu64, dirCount);
+			Log_debugLnx("File count: %"PRIu64, fileCount);
 
 			//AES chunking
 
@@ -217,9 +217,9 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 				CAExtraInfo extraInfo = *(const CAExtraInfo*)(buf.ptr + oldPtr);
 
 				Log_debugLnx("Extended magic number: %08X", extraInfo.extendedMagicNumber);
-				Log_debugLnx("Extended header size: %u", extraInfo.headerExtensionSize);
-				Log_debugLnx("Extended per directory size: %u", extraInfo.directoryExtensionSize);
-				Log_debugLnx("Extended per file size: %u", extraInfo.fileExtensionSize);
+				Log_debugLnx("Extended header size: %"PRIu32, (U32)extraInfo.headerExtensionSize);
+				Log_debugLnx("Extended per directory size: %"PRIu32, (U32)extraInfo.directoryExtensionSize);
+				Log_debugLnx("Extended per file size: %"PRIu32, (U32)extraInfo.fileExtensionSize);
 			}
 
 			//Flags
@@ -318,7 +318,7 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 				(EXXDataSizeType)(dlHeader.sizeTypes & 3)
 			);
 
-			Log_debugLnx("Entry count: %u", entryCount);
+			Log_debugLnx("Entry count: %"PRIu64, entryCount);
 
 			//Extended data
 
@@ -335,8 +335,8 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 				DLExtraInfo extraInfo = *(const DLExtraInfo*)(buf.ptr + oldPtr);
 
 				Log_debugLnx("Extended magic number: %08X", extraInfo.extendedMagicNumber);
-				Log_debugLnx("Extended header size: %u", extraInfo.extendedHeader);
-				Log_debugLnx("Extended per entry size: %u", extraInfo.perEntryExtendedData);
+				Log_debugLnx("Extended header size: %"PRIu32, (U32)extraInfo.extendedHeader);
+				Log_debugLnx("Extended per entry size: %"PRIu32, (U32)extraInfo.perEntryExtendedData);
 			}
 
 			//Flags
@@ -485,7 +485,7 @@ Bool CLI_showFile(ParsedArgs args, Buffer b, U64 start, U64 length, Bool isAscii
 			goto clean;
 		}
 
-		Log_debugLnx("Section has %u bytes.", Buffer_length(b));
+		Log_debugLnx("Section has %"PRIu64" bytes.", Buffer_length(b));
 
 		//Get length
 
@@ -503,7 +503,7 @@ Bool CLI_showFile(ParsedArgs args, Buffer b, U64 start, U64 length, Bool isAscii
 
 		//Show what offset is being displayed
 
-		Log_debugLnx("Showing offset %X with size %u", start, length);
+		Log_debugLnx("Showing offset %"PRIu64"X with size %"PRIu64, start, length);
 		Log_debugLnx(isAscii ? "File contents: (ascii)" : "File contents: (binary)");
 
 		//Ascii can be directly output to log
@@ -744,7 +744,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 					}
 
 					if (index >= file.archive.entries.length) {
-						Log_errorLnx("Index out of bounds, max is %u.", file.archive.entries.length);
+						Log_errorLnx("Index out of bounds, max is %"PRIu64".", file.archive.entries.length);
 						goto cleanCa;
 					}
 				}
@@ -832,7 +832,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 			U64 end = start + length;
 
 			Log_debugLnx(
-				"Showing offset %X with count %u in selected folder (File contains %u entries)",
+				"Showing offset %"PRIu64"X with count %"PRIu64" in selected folder (File contains %"PRIu64" entries)",
 				start, length, file.archive.entries.length
 			);
 
@@ -918,7 +918,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 				}
 
 				if (entryI >= DLFile_entryCount(file)) {
-					Log_errorLnx("Index out of bounds, max is %u", DLFile_entryCount(file));
+					Log_errorLnx("Index out of bounds, max is %"PRIu64, DLFile_entryCount(file));
 					goto cleanDl;
 				}
 

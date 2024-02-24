@@ -31,7 +31,7 @@ void GraphicsDeviceInfo_print(const GraphicsDeviceInfo *deviceInfo, Bool printCa
 		return;
 
 	Log_debugLnx(
-		"%s (%s %s):\n\t%s %u\n\tLUID %016llx\n\tUUID %016llx%016llx",
+		"%s (%s %s):\n\t%s %"PRIu32"\n\tLUID %016"PRIu64"x\n\tUUID %016"PRIu64"x%016"PRIu64"x",
 		deviceInfo->name,
 		deviceInfo->driverName,
 		deviceInfo->driverInfo,
