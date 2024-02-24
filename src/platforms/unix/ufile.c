@@ -30,13 +30,14 @@
 
 #include <dirent.h>
 #include <stdio.h>
-#include <stat.h>
+#include <sys/stat.h>
 #include <errno.h>
 
 Error File_foreach(CharString loc, FileCallback callback, void *userData, Bool isRecursive) {
 
 	CharString resolved = CharString_createNull();
 	Error err = Error_none();
+	DIR *d = NULL;
 
 	if(!callback)
 		_gotoIfError(clean, Error_nullPointer(1, "File_foreach()::callback is required"));
@@ -48,7 +49,7 @@ Error File_foreach(CharString loc, FileCallback callback, void *userData, Bool i
 
 	if(isVirtual) {
 		_gotoIfError(clean, File_foreachVirtual(loc, callback, userData, isRecursive));
-		return Error_none();
+		goto clean;
 	}
 
 	_gotoIfError(clean, File_resolvex(loc, &isVirtual, 0, &resolved));
@@ -56,10 +57,12 @@ Error File_foreach(CharString loc, FileCallback callback, void *userData, Bool i
 	if(isVirtual)
 		_gotoIfError(clean, Error_invalidOperation(0, "File_foreach()::loc can't resolve to virtual here"));
 
-	DIR *d = opendir(resolved.ptr);
+	d = opendir(resolved.ptr);
 
 	if(!d)
 		_gotoIfError(clean, Error_notFound(0, 0, "File_foreach()::loc not found"));
+
+	struct dirent *dir = NULL;
 
 	while ((dir = readdir(d)) != NULL) {
 
@@ -67,15 +70,16 @@ Error File_foreach(CharString loc, FileCallback callback, void *userData, Bool i
 		if(stat(dir->d_name, &s))
 			_gotoIfError(clean, Error_stderr(errno, "File_foreach() failed to query file properties"));
 
+		CharString tmp = CharString_createRefCStrConst(dir->d_name);
+			
 		//Folder parsing
 
 		if(S_ISDIR(s.st_mode)) {
 
-			CharString tmp = CharString_createRefCStrConst(dir->d_name);
 			FileInfo info = (FileInfo) {
 				.path = tmp,
 				.timestamp = s.st_mtime,
-				.access = !S_IWRITE(s.st_mode) ? EFileAccess_Read : EFileAccess_ReadWrite,
+				.access = s.st_mode & S_IWRITE ? EFileAccess_ReadWrite : EFileAccess_Read,
 				.type = EFileType_Folder
 			};
 
@@ -92,7 +96,7 @@ Error File_foreach(CharString loc, FileCallback callback, void *userData, Bool i
 		FileInfo info = (FileInfo) {
 			.path = tmp,
 			.timestamp = s.st_mtime,
-			.access = !S_IWRITE(s.st_mode) ? EFileAccess_Read : EFileAccess_ReadWrite,
+			.access = s.st_mode & S_IWRITE ? EFileAccess_ReadWrite : EFileAccess_Read,
 			.type = EFileType_File,
 			.fileSize = s.st_size
 		};
@@ -100,6 +104,7 @@ Error File_foreach(CharString loc, FileCallback callback, void *userData, Bool i
 		_gotoIfError(clean, callback(info, userData));
 	}
 
+clean:
 	closedir(d);
 	return err;
 }

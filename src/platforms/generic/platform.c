@@ -83,7 +83,7 @@ Lock Allocator_lock;							//Multi threading safety
 
 Error Platform_allocNoTracking(void *allocator, U64 length, Buffer *output) {
 
-	allocator;
+	(void)allocator;
 
 	if(!output)
 		return Error_nullPointer(2, "allocCallbackNoCheck()::output is required");
@@ -98,7 +98,7 @@ Error Platform_allocNoTracking(void *allocator, U64 length, Buffer *output) {
 }
 
 Bool Platform_freeNoTracking(void *allocator, Buffer buf) {
-	allocator;
+	(void)allocator;
 	Platform_free(allocator, (U8*) buf.ptr, Buffer_length(buf));
 	return true;
 }

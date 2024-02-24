@@ -18,6 +18,7 @@
 *  This is called dual licensing.
 */
 
+/*
 #include "platforms/ext/listx_impl.h"
 #include "platforms/platform.h"
 #include "platforms/log.h"
@@ -26,8 +27,6 @@
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/archivex.h"
 #include "types/platforms/windows/wplatform_ext.h"
-
-/*
 
 CharString Error_formatPlatformError(Allocator alloc, Error err) {
 
