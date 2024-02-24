@@ -20,18 +20,27 @@
 
 #include "types/big_int.h"
 
-U128 U128_mul64(U64 au, U64 bu) {
-	return (__uint128) au * (__uint128) bu;
+U128 U128_create(const U8 data[16]) {
+	return *(const U128*)data;
 }
 
-U128 U128_zero() { return (__uint128) 0; }
-U128 U128_one() { return (__uint128) 1; }
+U128 U128_createU64x2(U64 a, U64 b) {
+	U64 data[2] = { a, b };
+	return *(const U128*)data;
+}
+
+U128 U128_mul64(U64 au, U64 bu) {
+	return (__uint128_t) au * (__uint128_t) bu;
+}
+
+U128 U128_zero() { return (__uint128_t) 0; }
+U128 U128_one() { return (__uint128_t) 1; }
 
 U128 U128_xor(U128 a, U128 b) { return a ^ b; }
 U128 U128_or(U128 a, U128 b) { return a | b; }
 U128 U128_and(U128 a, U128 b) { return a & b; }
 U128 U128_not(U128 a) {  return ~a; }
-U128 U128_add64(U64 a, U64 b) { return (__uint128)a + b; }
+U128 U128_add64(U64 a, U64 b) { return (__uint128_t)a + b; }
 Bool U128_eq(U128 a, U128 b) { return a == b; }
 U128 U128_add(U128 a, U128 b) { return a + b; }
 U128 U128_sub(U128 a, U128 b) {  return a - b; }

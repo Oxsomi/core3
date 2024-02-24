@@ -555,8 +555,7 @@ Error GraphicsDevice_initExt(
 	//We only allow triple buffering, so allocate for triple buffers.
 	//These will be initialized JIT because we don't know what thread will be accessing them.
 
-	U64 threads = Thread_getLogicalCores();
-
+	U64 threads = Platform_instance.threads;
 	_gotoIfError(clean, ListVkCommandAllocator_resizex(&deviceExt->commandPools, 3 * threads * resolvedId));
 
 	//Semaphores
@@ -931,7 +930,7 @@ VkCommandAllocator *VkGraphicsDevice_getCommandAllocator(
 	VkGraphicsDevice *device, U32 resolvedQueueId, U64 threadId, U8 backBufferId
 ) {
 
-	U64 threadCount = Thread_getLogicalCores();
+	U64 threadCount = Platform_instance.threads;
 
 	if(!device || resolvedQueueId >= device->resolvedQueues || threadId >= threadCount || backBufferId >= 3)
 		return NULL;

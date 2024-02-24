@@ -368,6 +368,20 @@ int main(int argc, const char *argv[]) {
 	if(err.genericError)
 		return -3;
 
+	Bool isSupported = Platform_checkCPUSupport();
+	
+	if(!isSupported) {
+		
+		Log_errorx(
+			ELogOptions_Default,
+			"Unsupported CPU. The following extensions are required: "
+			"SSE, SSE2, SSE3, SSSE3, SSE4.1, SSE4.2, AES, RDRAND, BMI1, PCLMULQDQ"
+		);
+
+		Platform_cleanup();
+		return -4;
+	}
+
 	#if _SIMD == SIMD_SSE
 
 		//We need to double check that our CPU supports
@@ -392,14 +406,6 @@ int main(int argc, const char *argv[]) {
 
 		if ((cpuInfo[3] & mask3) != mask3 || (cpuInfo[2] & mask2) != mask2 || (cpuInfo1[1] & mask1_1) != mask1_1) {
 
-			Log_errorx(
-				ELogOptions_Default,
-				"Unsupported CPU. The following extensions are required: "
-				"SSE, SSE2, SSE3, SSSE3, SSE4.1, SSE4.2, AES, RDRAND, BMI1, PCLMULQDQ"
-			);
-
-			Platform_cleanup();
-			return -4;
 		}
 
 	#endif
@@ -412,33 +418,6 @@ int main(int argc, const char *argv[]) {
 }
 
 void Platform_cleanupExt() {
-
-	//Properly clean virtual files
-
-	Lock_free(&Platform_instance.virtualSectionsLock);
-
-	for (U64 i = 0; i < Platform_instance.virtualSections.length; ++i) {
-		VirtualSection *sect = &Platform_instance.virtualSections.ptrNonConst[i];
-		CharString_freex(&sect->path);
-		Archive_freex(&sect->loadedData);
-	}
-
-	ListVirtualSection_freex(&Platform_instance.virtualSections);
-
-	//Cleanup platform ext
-
-	if(Platform_instance.dataExt) {
-		Buffer buf = Buffer_createManagedPtr(Platform_instance.dataExt, sizeof(PlatformExt));
-		Buffer_freex(&buf);
-		Platform_instance.dataExt = NULL;
-	}
-
-	//Reset console text color
-
-	Allocator_reportLeaks();
-
-	ListDebugAllocation_free(&Allocator_allocations, Allocator_allocationsAllocator);
-
 	SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), oldColor);
 }
 

@@ -37,10 +37,6 @@ Bool Thread_sleep(Ns ns) {
 	return true;
 }
 
-U64 Thread_getLogicalCores() {
-	return Platform_instance.threads;
-}
-
 DWORD ThreadFunc(Thread *thread) {
 
 	if(thread && thread->callback)
@@ -82,13 +78,13 @@ Error Thread_create(ThreadCallbackFunction callback, void *objectHandle, Thread 
 	return Error_none();
 }
 
-Error Thread_wait(Thread *thread, U32 maxWaitTimeMs) {
+Error Thread_wait(Thread *thread) {
 
 	if(!thread)
 		return Error_nullPointer(0, "Thread_wait()::thread is required");
 
-	if(WaitForSingleObject(thread->nativeHandle, maxWaitTimeMs) == WAIT_FAILED)
-		return Error_timedOut(0, maxWaitTimeMs, "Thread_wait() couldn't wait on thread");
+	if(WaitForSingleObject(thread->nativeHandle, U64_MAX) == WAIT_FAILED)
+		return Error_timedOut(0, U64_MAX, "Thread_wait() couldn't wait on thread");
 
 	return Error_none();
 }

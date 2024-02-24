@@ -20,9 +20,16 @@
 
 #pragma once
 #include "types/types.h"
+#include "types/platform_types.h"
+
+#if _PLATFORM_TYPE != PLATFORM_WINDOWS
+	#include <stdatomic.h>
+#else
+	#define _Atomic(T) T
+#endif
 
 typedef struct AtomicI64 {
-	volatile I64 atomic;		//Don't manually touch
+	volatile _Atomic(I64) atomic;		//Don't manually touch
 } AtomicI64;
 
 //Bitwise

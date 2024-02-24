@@ -18,8 +18,7 @@
 *  This is called dual licensing.
 */
 
-#include "platforms/atomic.h"
-#include <stdatomic.h>
+#include "types/atomic.h"
 
 I64 AtomicI64_and(AtomicI64 *ptr, I64 value) {
 	return atomic_fetch_and(&ptr->atomic, value);
@@ -42,7 +41,7 @@ I64 AtomicI64_exchange(AtomicI64 *ptr, I64 value) {
 }
 
 I64 AtomicI64_compareExchange(AtomicI64 *ptr, I64 compare, I64 value) {
-	return atomic_compare_exchange_strong(&ptr->atomic, value, compare);
+	return atomic_compare_exchange_strong(&ptr->atomic, &compare, value);
 }
 
 I64 AtomicI64_sub(AtomicI64 *ptr, I64 value) {

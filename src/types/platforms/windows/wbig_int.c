@@ -20,6 +20,14 @@
 
 #include "types/big_int.h"
 
+U128 U128_create(const U8 data[16]) {
+	return I32x4_createFromU64x2(((const U64*)data)[0], ((const U64*)data)[1]);
+}
+
+U128 U128_createU64x2(U64 a, U64 b) {
+	return I32x4_createFromU64x2(a, b);
+}
+
 U128 U128_mul64(U64 au, U64 bu) {
 	U64 hiProd = 0;
 	U64 loProd = _umul128(bu, au, &hiProd);

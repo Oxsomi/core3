@@ -20,20 +20,19 @@
 
 #include "platforms/platform.h"
 #include "types/thread.h"
-#include "types/platforms/windows/wplatform_ext.h"
 #include "types/error.h"
 #include "types/buffer.h"
-#include "types/constants.h"
 
 #include <time.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <errno.h>
 
-U64 Thread_getId() { return pthread_self(); }
+U64 Thread_getId() { return (U64)(void*)pthread_self(); }
 
 Bool Thread_sleep(Ns ns) {
 
-	struct timespec remaining, request = { (time_t)(ns / seconds), (long)(ns % SECONDS) };
+	struct timespec remaining, request = { (time_t)(ns / SECOND), (long)(ns % SECOND) };
 
 	while(true) {
 
@@ -50,11 +49,9 @@ Bool Thread_sleep(Ns ns) {
 	}
 }
 
-U64 Thread_getLogicalCores() {
-	return sysconf(_SC_NPROCESSORS_ONLN);
-}
-
-void *ThreadFunc(Thread *thread) {
+void *ThreadFunc(void *t) {
+	
+	Thread *thread = (Thread*) t;
 
 	if(thread && thread->callback)
 		thread->callback(thread->objectHandle);
@@ -85,24 +82,21 @@ Error Thread_create(ThreadCallbackFunction callback, void *objectHandle, Thread 
 	thr->callback = callback;
 	thr->objectHandle = objectHandle;
 
-	thr->nativeHandle = pthread_create(&thr->nativeHandle, NULL, ThreadFunc, thr);
-
-	if (!thr->nativeHandle) {
+	if (pthread_create((pthread_t*)&thr->nativeHandle, NULL, ThreadFunc, thr)) {
 		Thread_free(thread);
-		return Error_platformError(0, GetLastError(), "Thread_wait() couldn't create thread");
+		return Error_platformError(0, errno, "Thread_wait() couldn't create thread");
 	}
 
 	return Error_none();
 }
 
-Error Thread_wait(Thread *thread, U32 maxWaitTimeMs) {
+Error Thread_wait(Thread *thread) {
 
 	if(!thread)
 		return Error_nullPointer(0, "Thread_wait()::thread is required");
 
-	struct timespec timeWait = { (time_t)(ns / seconds), (long)(ns % SECONDS) };
-	if(pthread_timedjoin_np(thread->nativeHandle, NULL, &timeWait))
-		return Error_timedOut(0, maxWaitTimeMs, "Thread_wait() couldn't wait on thread");
+	if(pthread_join(thread->nativeHandle, NULL))
+		return Error_timedOut(0, U64_MAX, "Thread_wait() couldn't wait on thread");
 
 	return Error_none();
 }

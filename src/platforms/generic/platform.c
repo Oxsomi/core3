@@ -104,6 +104,32 @@ void Platform_cleanup() {
 	CharString_freex(&Platform_instance.workingDirectory);
 	CharStringList_freex(&Platform_instance.args);
 
+	//Properly clean virtual files
+
+	Lock_free(&Platform_instance.virtualSectionsLock);
+
+	for (U64 i = 0; i < Platform_instance.virtualSections.length; ++i) {
+		VirtualSection *sect = &Platform_instance.virtualSections.ptrNonConst[i];
+		CharString_freex(&sect->path);
+		Archive_freex(&sect->loadedData);
+	}
+
+	ListVirtualSection_freex(&Platform_instance.virtualSections);
+
+	//Cleanup platform ext
+
+	if(Platform_instance.dataExt) {
+		Buffer buf = Buffer_createManagedPtr(Platform_instance.dataExt, sizeof(PlatformExt));
+		Buffer_freex(&buf);
+		Platform_instance.dataExt = NULL;
+	}
+
+	//Reset console text color
+
+	Allocator_reportLeaks();
+
+	ListDebugAllocation_free(&Allocator_allocations, Allocator_allocationsAllocator);
+
 	Platform_cleanupExt();
 
 	Platform_instance =	(Platform) { 0 };

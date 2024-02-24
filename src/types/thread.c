@@ -36,12 +36,12 @@ Bool Thread_free(Thread **thread) {
 	return freed;
 }
 
-Error Thread_waitAndCleanup(Thread **thread, U32 maxWaitTime) {
+Error Thread_waitAndCleanup(Thread **thread) {
 
 	if(!thread || !*thread)
 		return Error_nullPointer(0, "Thread_waitAndCleanup()::thread and *thread are required");
 
-	Error err = Thread_wait(*thread, maxWaitTime);
+	Error err = Thread_wait(*thread);
 
 	if(err.genericError == EGenericError_TimedOut)
 		return err;

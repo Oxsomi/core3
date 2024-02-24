@@ -134,7 +134,7 @@ Error BigInt_toString(
 //U128
 
 #if _PLATFORM_TYPE != PLATFORM_WINDOWS
-	typedef __uint128 U128;
+	typedef __uint128_t U128;
 #else
 	typedef I32x4 U128;
 #endif

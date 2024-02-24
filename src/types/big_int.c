@@ -904,14 +904,6 @@ Error BigInt_toString(
 
 //U128
 
-U128 U128_create(const U8 data[16]) {
-	return I32x4_createFromU64x2(((const U64*)data)[0], ((const U64*)data)[1]);
-}
-
-U128 U128_createU64x2(U64 a, U64 b) {
-	return I32x4_createFromU64x2(a, b);
-}
-
 Bool U128_isBase2(U128 a) {
 
 	U8 v = U128_bitScan(a);
