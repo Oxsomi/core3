@@ -687,5 +687,5 @@ Bool ListSubResourceData_freeAll(ListSubResourceData *buf, Allocator allocator) 
 		success &= Buffer_free(&buf->ptrNonConst[i].data, allocator);
 
 	success &= ListSubResourceData_free(buf, allocator);
-	return true;
+	return success;
 }
