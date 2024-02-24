@@ -32,6 +32,6 @@ jobs:
       with:
         cache: true
     - name: build for SIMD fallback check
-      run: D:\a\core3\core3\build.bat Release Off Off
+      run: /Users/runner/work/core3/core3/build.sh Release Off Off
     - name: build for debug check
-      run: D:\a\core3\core3\build.bat Debug Off Off
+      run: /Users/runner/work/core3/core3/build.sh Debug Off Off
