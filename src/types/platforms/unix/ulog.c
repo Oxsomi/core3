@@ -74,16 +74,16 @@ void Log_captureStackTrace(Allocator alloc, void **stack, U64 stackSize, U8 skip
 	switch(lvl) {																					\
 		default:					printf(FONT_GREEN  str FONT_RESET, __VA_ARGS__);		break;	\
 		case ELogLevel_Performance:	printf(FONT_CYAN   str FONT_RESET, __VA_ARGS__);		break;	\
-		case ELogLevel_Error:		printf(FONT_YELLOW str FONT_RESET, __VA_ARGS__);		break;	\
-		case ELogLevel_Debug:		printf(FONT_RED    str FONT_RESET, __VA_ARGS__);		break;	\
+		case ELogLevel_Warn:		printf(FONT_YELLOW str FONT_RESET, __VA_ARGS__);		break;	\
+		case ELogLevel_Error:		printf(FONT_RED    str FONT_RESET, __VA_ARGS__);		break;	\
 	}
 	
 #define printColorSimple(lvl, str)																	\
 	switch(lvl) {																					\
 		default:					printf(FONT_GREEN  str FONT_RESET);		break;					\
 		case ELogLevel_Performance:	printf(FONT_CYAN   str FONT_RESET);		break;					\
-		case ELogLevel_Error:		printf(FONT_YELLOW str FONT_RESET);		break;					\
-		case ELogLevel_Debug:		printf(FONT_RED    str FONT_RESET);		break;					\
+		case ELogLevel_Warn:		printf(FONT_YELLOW str FONT_RESET);		break;					\
+		case ELogLevel_Error:		printf(FONT_RED    str FONT_RESET);		break;					\
 	}
 
 void Log_printCapturedStackTraceCustom(

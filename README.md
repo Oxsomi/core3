@@ -1,7 +1,7 @@
 # OxC3 (Oxsomi core 3 0.2)
 ![](https://github.com/Oxsomi/core3/workflows/C%2FC++%20CI/badge.svg)
 
-OxC3 (0xC3 or Oxsomi core 3) is the successor to O(x)somi core v2 and v1. Specifically it combines the ostlc (standard template library), owc (window core) and ogc (graphics core). Focused more on being minimal abstraction compared to the predecessors by using C17 instead of C++20. Written so it can be wrapped with other languages (bindings) or even a VM in the future. Could also provide a C++20 layer for easier usage, such as operator overloads.
+OxC3 (0xC3 or Oxsomi core 3) is the successor to O(x)somi core v2 and v1. Specifically it combines the ostlc (standard template library), owc (window core) and ogc (graphics core). Focused more on being minimal abstraction compared to the predecessors by using C17 instead of C++20. Written so it can be wrapped with other languages (bindings) or even a VM in the future. Could also provide a C++20 layer for easier usage, such as operator overloads. It currently supports Windows and Mac OS X with Vulkan/MoltenVK.
 
 - OxC3_types
   - The basic types that you might need and useful utilities.
@@ -16,6 +16,8 @@ OxC3 (0xC3 or Oxsomi core 3) is the successor to O(x)somi core v2 and v1. Specif
   - Error type including stacktrace option.
   - Time utility.
   - Vectors (mathematical) such as F32x2, F32x4, I32x2, I32x4.
+  - Lock, Atomics and Thread for multi threading purposes.
+  - Log for colored and proper cross platform logging.
   - For more info check the [documentation](docs/types.md).
 - OxC3_formats: deps(OxC3_types)
   - A library for reading/writing files. Currently only for BMP and oiCA/oiDL (proprietary zip-style formats).
@@ -26,8 +28,6 @@ OxC3 (0xC3 or Oxsomi core 3) is the successor to O(x)somi core v2 and v1. Specif
   - File manipulation (in working or app dir only) such as read, write, move, rename, delete, create, info, foreach, checking.
   - Virtual file system; for accessing files included into the exe, apk, etc. Which are built through CMake.
   - Input devices: multiple mice and keyboards (all accessible individually).
-  - Lock, Atomics and Thread for multi threading purposes.
-  - Log for colored and proper cross platform logging.
   - Window for physical (OS-backed) and virtual (in memory) windows.
   - For more info check the [documentation](docs/platforms.md).
 - OxC3_graphics: deps(OxC3_platforms)
@@ -77,9 +77,17 @@ build Release On Off
 
 This assumes you have VS2022 installed, if not, you can specify a different CMake generator by editing build.bat.
 
+### Mac OS X
+
+```c
+build Release Off Off
+```
+
+Currently the Mac build doesn't support SSE or NEON. So SIMD mode has to be forced to None.
+
 ### Other platforms
 
-Unfortunately it has only been implemented on Windows as of yet, but will be supporting other platforms like Android in the future.
+Other platforms like Android and iOS are coming in the future.
 
 ## Virtual file system
 
