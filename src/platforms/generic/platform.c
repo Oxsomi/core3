@@ -171,6 +171,8 @@ Error Platform_onAllocate(void *ptr, U64 length) {
 
 Bool Platform_onFree(void *ptr, U64 len) {
 
+	(void) ptr;
+
 	//Validate if allocation and allocation size matches.
 	//If not, warn here and return false
 
