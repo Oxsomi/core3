@@ -3,7 +3,7 @@ name: C/C++ CI
 on: [push, pull_request]
 
 jobs:
-  build:
+  build_windows:
     name: Windows build
     runs-on: windows-2022
     env:
@@ -22,7 +22,7 @@ jobs:
       run: D:\a\core3\core3\build.bat Release Off Off
     - name: build for debug check
       run: D:\a\core3\core3\build.bat Debug On Off
-  build:
+  build_osx:
     name: OSX build
     runs-on: macos-latest
     steps:
