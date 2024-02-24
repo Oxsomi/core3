@@ -138,6 +138,8 @@ Bool Platform_freeTracked(void *allocator, Buffer buf) {
 
 Error Platform_onAllocate(void *ptr, U64 length) {
 
+	(void)ptr;
+
 	AtomicI64_add(&Allocator_memoryAllocationCount, 1);
 	AtomicI64_add(&Allocator_memoryAllocationSize, length);
 

@@ -30,6 +30,8 @@
 #define MICROSOFT_WINDOWS_WINBASE_H_DEFINE_INTERLOCKED_CPLUSPLUS_OVERLOADS 0
 #include <Windows.h>
 
+#include <stdlib.h>
+
 CharString Error_formatPlatformError(Allocator alloc, Error err) {
 
 	if(err.genericError != EGenericError_PlatformError)
