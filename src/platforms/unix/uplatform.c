@@ -30,7 +30,7 @@
 #include <stdlib.h>
 #include <errno.h>
 
-CharString Error_formatPlatformError(Allocator alloc, Error err) { return CharString_createNull(); }
+CharString Error_formatPlatformError(Allocator alloc, Error err) { (void) alloc; (void)err; return CharString_createNull(); }
 
 void *Platform_allocate(void *allocator, U64 length) { (void)allocator; return malloc(length); }
 void Platform_free(void *allocator, void *ptr, U64 length) { (void) allocator; (void)length; free(ptr); }
@@ -49,7 +49,8 @@ Error Platform_initExt() {
 
 		CharString_freex(&Platform_instance.workingDirectory);
 
-		C8 cwd[PATH_MAX];
+		#define PATH_MAX 256
+		C8 cwd[PATH_MAX + 1];
 		if (!getcwd(cwd, sizeof(cwd)))
 			_gotoIfError(clean, Error_stderr(errno, "Platform_initExt() getcwd failed"));
 

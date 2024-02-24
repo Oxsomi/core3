@@ -18,7 +18,7 @@
 *  This is called dual licensing.
 */
 
-#include "platform/platform.h"
+#include "platforms/platform.h"
 #include "types/error.h"
 
 Error Platform_initVirtualFilesExt() {		//TODO:
