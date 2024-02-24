@@ -197,16 +197,24 @@ message("-- Targeting platform: ${platform}")
 file(GLOB platformsHeaders "inc/platforms/*.h")
 file(GLOB_RECURSE platformsHeadersDependent "inc/platforms/ext/${platform}/*.h")
 
-file(GLOB_RECURSE platformsSources "src/platforms/${platform}/*.c" "src/platforms/generic/*.c")
+file(GLOB_RECURSE platformsPlatformSources "src/platforms/${platform}/*.c")
+file(GLOB_RECURSE platformsSources  "src/platforms/generic/*.c")
+file(GLOB_RECURSE platformsSIMDSources "src/platforms/simd/${simd}/*.c")
 
 add_library(
 	OxC3_platforms
 	STATIC
 	${platformsHeaders}
 	${platformsHeadersDependent}
+	${platformsPlatformSources}
 	${platformsSources}
+	${platformsSIMDSources}
 	CMakeLists.txt
 )
+
+source_group("Header Files (${platform})" FILES ${platformsHeadersDependent})
+source_group("Source Files (${platform})" FILES ${platformsPlatformSources})
+source_group("Source Files (simd: ${simd})" FILES ${platformsSIMDSources})
 
 set_target_properties(OxC3_platforms PROPERTIES FOLDER Oxsomi)
 
@@ -381,6 +389,8 @@ macro(add_virtual_files)
 			COMMAND OxC3 file package -i "${_ARGS_ROOT}" -o "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA"
 			WORKING_DIRECTORY ${_ARGS_SELF}
 		)
+
+		# message("-- ${_ARGS_TARGET}_package_${_ARGS_NAME}: OxC3 file package -i \"${_ARGS_ROOT}\" -o \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA\" @ work dir ${_ARGS_SELF}")
 
 		set_target_properties(${_ARGS_TARGET}_package_${_ARGS_NAME} PROPERTIES FOLDER Oxsomi/package)
 

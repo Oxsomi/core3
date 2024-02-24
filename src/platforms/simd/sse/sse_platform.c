@@ -18,28 +18,29 @@
 *  This is called dual licensing.
 */
 
-#include "platforms/ext/listx_impl.h"
-#include "types/time.h"
-#include "types/buffer.h"
-#include "types/file.h"
-#include "platforms/ext/errorx.h"
-#include "platforms/ext/stringx.h"
-#include "platforms/ext/bufferx.h"
-#include "platforms/ext/formatx.h"
-#include "platforms/log.h"
-#include "formats/oiDL.h"
-#include "cli.h"
+#include "platforms/platform.h"
 
-const Bool Platform_useWorkingDirectory = true;
+Bool Platform_checkCPUSupport() {
 
-I32 Program_run() {
+	//We need to double check that our CPU supports
+	//SSE4.2, SSE4.1, (S)SSE3, SSE2, SSE, AES, PCLMULQDQ, BMI1 and RDRAND
+	//https://gist.github.com/hi2p-perim/7855506
+	//https://en.wikipedia.org/wiki/CPUID
 
-	Operations_init();
+	U32 mask3 = (1 << 25) | (1 << 26);										//SSE, SSE2
 
-	if(!CLI_execute(Platform_instance.args))
-		return -1;
+	//SSE3, PCLMULQDQ, SSSE3, SSE4.1, SSE4.2, AES, RDRAND
+	U32 mask2 = (1 << 0) | (1 << 1) | (1 << 9) | (1 << 19) | (1 << 20) | (1 << 25) | (1 << 30);
 
-	return 0;
+	U32 cpuInfo[4];
+	Platform_getCPUId(1, cpuInfo);
+
+	U32 cpuInfo1[4];
+	Platform_getCPUId(7, cpuInfo1);
+
+	U32 mask1_1 = 1 << 3;				//BMI1
+
+	//Unsupported CPU
+
+	return (cpuInfo[3] & mask3) == mask3 && (cpuInfo[2] & mask2) == mask2 && (cpuInfo1[1] & mask1_1) == mask1_1;
 }
-
-void Program_exit() { }

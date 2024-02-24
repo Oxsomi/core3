@@ -83,8 +83,8 @@ Error Thread_wait(Thread *thread) {
 	if(!thread)
 		return Error_nullPointer(0, "Thread_wait()::thread is required");
 
-	if(WaitForSingleObject(thread->nativeHandle, U64_MAX) == WAIT_FAILED)
-		return Error_timedOut(0, U64_MAX, "Thread_wait() couldn't wait on thread");
+	if(WaitForSingleObject(thread->nativeHandle, U32_MAX) == WAIT_FAILED)
+		return Error_timedOut(0, U32_MAX, "Thread_wait() couldn't wait on thread");
 
 	return Error_none();
 }

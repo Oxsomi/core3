@@ -18,28 +18,6 @@
 *  This is called dual licensing.
 */
 
-#include "platforms/ext/listx_impl.h"
-#include "types/time.h"
-#include "types/buffer.h"
-#include "types/file.h"
-#include "platforms/ext/errorx.h"
-#include "platforms/ext/stringx.h"
-#include "platforms/ext/bufferx.h"
-#include "platforms/ext/formatx.h"
-#include "platforms/log.h"
-#include "formats/oiDL.h"
-#include "cli.h"
+#include "platforms/platform.h"
 
-const Bool Platform_useWorkingDirectory = true;
-
-I32 Program_run() {
-
-	Operations_init();
-
-	if(!CLI_execute(Platform_instance.args))
-		return -1;
-
-	return 0;
-}
-
-void Program_exit() { }
+Bool Platform_checkCPUSupport() { return true; }

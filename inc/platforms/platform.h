@@ -58,22 +58,29 @@ typedef struct Platform {
 extern Platform Platform_instance;
 user_impl extern const Bool Platform_useWorkingDirectory;			//If false, the app directory will be used instead.
 
-Error Platform_create(
-	int cmdArgc,
-	const C8 *cmdArgs[],
-	void *data,
-	FreeFunc free,
-	AllocFunc alloc,
-	void *allocator
-);
+Error Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *allocator);
+
+impl extern const U32 Platform_extData;
 
 impl void Platform_cleanupExt();
-impl Error Platform_initExt(CharString currentAppDir);
+impl Error Platform_initExt();
+
+impl Bool Platform_checkCPUSupport();								//SIMD dependent: SSE, None, NEON
 
 void Platform_cleanup();
 
-user_impl extern int Program_run();
+user_impl extern I32 Program_run();
 user_impl extern void Program_exit();
+
+//Call this on allocate to make sure the platform's allocator tracks allocations
+
+Error Platform_onAllocate(void *ptr, U64 length);
+Bool Platform_onFree(void *ptr, U64 length);
+
+//Default allocator
+
+impl void *Platform_allocate(void *allocator, U64 length);
+impl void Platform_free(void *allocator, void *ptr, U64 length);
 
 //Debugging to see where allocations came from and how many are active
 

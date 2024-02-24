@@ -33,6 +33,8 @@
 
 #include <intrin.h>
 
+extern const U32 Platform_extData = (U32) sizeof(PlatformExt);
+
 CharString Error_formatPlatformError(Allocator alloc, Error err) {
 
 	if(err.genericError != EGenericError_PlatformError)
@@ -70,347 +72,23 @@ CharString Error_formatPlatformError(Allocator alloc, Error err) {
 		return CharString_createNull();
 	}
 
-	//
-
 	LocalFree(lpBuffer);
 	return res;
 }
 
-//Handle crash signals
-
-void sigFunc(int signal) {
-
-	const C8 *msg = "Undefined instruction";
-
-	switch (signal) {
-		case SIGABRT:	msg = "Abort was called";					break;
-		case SIGFPE:	msg = "Floating point error occurred";		break;
-		case SIGILL:	msg = "Illegal instruction";				break;
-		case SIGINT:	msg = "Interrupt was called";				break;
-		case SIGSEGV:	msg = "Segfault";							break;
-		case SIGTERM:	msg = "Terminate was called";				break;
-	}
-
-	//Outputting to console is not technically allowed by the Windows docs
-	//If this signal is triggered from the wrong thread it might cause stackoverflow,
-	//but what are you gonna do? Crash again?
-	//For debugging purposed however, this is very useful
-	//Turn this off by defining _NO_SIGNAL_HANDLING
-
-	Log_printStackTracex(1, ELogLevel_Error, ELogOptions_Default);
-	Log_logx(ELogLevel_Fatal, ELogOptions_Default, CharString_createRefCStrConst(msg));
-	exit(signal);
-}
-
-AtomicI64 Allocator_memoryAllocationCount;
-AtomicI64 Allocator_memoryAllocationSize;
-
-//Allocator has special allocator for the allocations
-
-typedef struct DebugAllocation {
-
-	U64 location, length;
-	StackTrace stack;
-
-} DebugAllocation;
-
-TList(DebugAllocation);
-TListImpl(DebugAllocation);
-
-Allocator Allocator_allocationsAllocator;
-ListDebugAllocation Allocator_allocations;						//TODO: Use hashmap here!
-Lock Allocator_lock;							//Multi threading safety
-
-Error allocCallbackNoCheck(void *allocator, U64 length, Buffer *output) {
-
-	allocator;
-
-	if(!output)
-		return Error_nullPointer(2, "allocCallbackNoCheck()::output is required");
-
-	void *ptr = malloc(length);
-
-	if(!ptr)
-		return Error_outOfMemory(0, "allocCallbackNoCheck() malloc failed");
-
-	*output = Buffer_createManagedPtr(ptr, length);
-	return Error_none();
-}
-
-Bool freeCallbackNoCheck(void *allocator, Buffer buf) {
-	allocator;
-	free((U8*) buf.ptr);
-	return true;
-}
-
-//Normal allocator
-
-Error allocCallback(void *allocator, U64 length, Buffer *output) {
-
-	allocator;
-
-	if(!output)
-		return Error_nullPointer(2, "allocCallback()::output is required");
-
-	void *ptr = malloc(length);
-
-	if(!ptr)
-		return Error_outOfMemory(0, "allocCallback() malloc failed");
-
-	AtomicI64_add(&Allocator_memoryAllocationCount, 1);
-	AtomicI64_add(&Allocator_memoryAllocationSize, length);
-	
-	#ifndef NDEBUG
-
-		DebugAllocation captured = (DebugAllocation) { 0 };
-		captured.location = (U64) ptr;
-		captured.length = length;
-
-		Log_captureStackTrace(captured.stack, _STACKTRACE_SIZE, 1);
-
-		ELockAcquire acq = Lock_lock(&Allocator_lock, U64_MAX);
-
-		if(acq < ELockAcquire_Success)
-			return Error_invalidState(0, "allocCallback() allocator lock failed to acquire");			//Should never happen
-
-		Error err = ListDebugAllocation_pushBack(&Allocator_allocations, captured, Allocator_allocationsAllocator);
-
-		if(acq == ELockAcquire_Acquired)
-			Lock_unlock(&Allocator_lock);
-
-		if(err.genericError)
-			return err;
-
-	#endif
-
-	*output = Buffer_createManagedPtr(ptr, length);
-	return Error_none();
-}
-
-Bool freeCallback(void *allocator, Buffer buf) {
-
-	allocator;
-
-	//Validate if allocation and allocation size matches.
-	//If not, warn here and return false
-
-	ELockAcquire acq = ELockAcquire_Invalid;
-	Bool success = true;
-
-	#ifndef NDEBUG
-
-		acq = Lock_lock(&Allocator_lock, U64_MAX);
-
-		if(acq < ELockAcquire_Success)
-			return false;
-
-		U64 i = 0;
-
-		for (; i < Allocator_allocations.length; ++i) {
-
-			DebugAllocation *captured = &Allocator_allocations.ptrNonConst[i];
-
-			if (captured->location == (U64)buf.ptr) {
-
-				if(Buffer_length(buf) != captured->length) {
-
-					Log_errorLn(
-						Allocator_allocationsAllocator,
-						"Allocation at %p was allocated with length %llu but freed with length %llu!",
-						buf.ptr,
-						captured->length,
-						Buffer_length(buf)
-					);
-
-					success = false;
-					goto clean;
-				}
-
-				break;
-			}
-		}
-
-		if(i == Allocator_allocations.length) {
-
-			Log_errorLn(
-				Allocator_allocationsAllocator,
-				"Allocation that was freed at %p with length %llu was not found in the allocation list!",
-				buf.ptr,
-				Buffer_length(buf)
-			);
-
-			success = false;
-			goto clean;
-		}
-
-		ListDebugAllocation_erase(&Allocator_allocations, i);
-
-		if(acq == ELockAcquire_Acquired)
-			Lock_unlock(&Allocator_lock);
-
-	#endif
-
-	//Free from counter
-
-	AtomicI64_sub(&Allocator_memoryAllocationCount, 1);
-	AtomicI64_sub(&Allocator_memoryAllocationSize, Buffer_length(buf));
-
-	//Free mem
-
-	free((U8*) buf.ptr);
-	goto clean;
-
-clean:
-
-	if(acq == ELockAcquire_Acquired)
-		Lock_unlock(&Allocator_lock);
-
-	return success;
-}
-
-void Platform_printAllocations(U64 offset, U64 length, U64 minAllocationSize) {
-
-	offset; length; minAllocationSize;
-
-	#ifndef NDEBUG
-
-		ELockAcquire acq = Lock_lock(&Allocator_lock, U64_MAX);
-
-		if(acq < ELockAcquire_Success)
-			return;
-
-		if(!length)
-			length = Allocator_allocations.length;
-
-		Log_debugLn(
-			Allocator_allocationsAllocator, "Showing up to %llu allocations starting at offset %llu", length, offset
-		);
-
-		U64 capturedLength = 0;
-	
-		for(U64 i = offset; i < offset + length && i < Allocator_allocations.length; ++i) {
-
-			DebugAllocation *captured = &Allocator_allocations.ptrNonConst[i];
-
-			if(captured->length < minAllocationSize)
-				continue;
-
-			Log_debugLn(
-				Allocator_allocationsAllocator,
-				"Allocation %llu at %p with length %llu allocated at:",
-				i, captured->location, captured->length
-			);
-
-			Log_printCapturedStackTrace(Allocator_allocationsAllocator, captured->stack, ELogLevel_Debug, ELogOptions_Default);
-
-			capturedLength += captured->length;
-		}
-
-		Log_debugLn(Allocator_allocationsAllocator, "Showed %llu bytes of allocations", capturedLength);
-
-		if(acq == ELockAcquire_Acquired)
-			Lock_unlock(&Allocator_lock);
-
-	#endif
-}
-
-void Allocator_reportLeaks() {
-
-	I64 memCount = AtomicI64_add(&Allocator_memoryAllocationCount, 0);
-	I64 memSize = AtomicI64_add(&Allocator_memoryAllocationSize, 0);
-
-	if (memCount || memSize) {
-
-		Log_warnLn(Allocator_allocationsAllocator, "Leaked %llu bytes in %llu allocations.", memSize, memCount);
-
-		#ifndef NDEBUG
-			Platform_printAllocations(0, 16, 0);
-		#endif
-	}
-}
+void *Platform_allocate(void *allocator, U64 length) { (void)allocator; return malloc(length); }
+void Platform_free(void *allocator, void *ptr, U64 length) { (void) allocator; (void)length; free(ptr); }
 
 WORD oldColor = 0;
 
-int main(int argc, const char *argv[]) {
-	
-	#ifndef _NO_SIGNAL_HANDLING
-		signal(SIGABRT, sigFunc);
-		signal(SIGFPE,	sigFunc);
-		signal(SIGILL,	sigFunc);
-		signal(SIGINT,	sigFunc);
-		signal(SIGSEGV, sigFunc);
-		signal(SIGTERM, sigFunc);
-	#endif
-	
-	CONSOLE_SCREEN_BUFFER_INFO info;
-	GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &info);
-	oldColor = info.wAttributes;
+I32 main(I32 argc, const C8 *argv[]) {
 
-	Allocator_allocationsAllocator = (Allocator) {
-		.alloc = allocCallbackNoCheck,
-		.free = freeCallbackNoCheck
-	};
-
-	#ifndef NDEBUG
-		{
-			Error err = ListDebugAllocation_reserve(&Allocator_allocations, 256, Allocator_allocationsAllocator);
-
-			if(err.genericError)
-				return -1;
-
-			Allocator_lock = Lock_create();
-			Allocator_memoryAllocationCount = Allocator_memoryAllocationSize = (AtomicI64) { 0 };
-		}
-	#endif
-
-	Error err = Platform_create(argc, argv, GetModuleHandleA(NULL), freeCallback, allocCallback, NULL);
+	Error err = Platform_create(argc, argv, GetModuleHandleA(NULL), NULL);
 
 	if(err.genericError)
-		return -3;
+		return -1;
 
-	Bool isSupported = Platform_checkCPUSupport();
-	
-	if(!isSupported) {
-		
-		Log_errorx(
-			ELogOptions_Default,
-			"Unsupported CPU. The following extensions are required: "
-			"SSE, SSE2, SSE3, SSSE3, SSE4.1, SSE4.2, AES, RDRAND, BMI1, PCLMULQDQ"
-		);
-
-		Platform_cleanup();
-		return -4;
-	}
-
-	#if _SIMD == SIMD_SSE
-
-		//We need to double check that our CPU supports
-		//SSE4.2, SSE4.1, (S)SSE3, SSE2, SSE, AES, PCLMULQDQ, BMI1 and RDRAND
-		//https://gist.github.com/hi2p-perim/7855506
-		//https://en.wikipedia.org/wiki/CPUID
-
-		U32 mask3 = (1 << 25) | (1 << 26);										//SSE, SSE2
-
-		//SSE3, PCLMULQDQ, SSSE3, SSE4.1, SSE4.2, AES, RDRAND
-		U32 mask2 = (1 << 0) | (1 << 1) | (1 << 9) | (1 << 19) | (1 << 20) | (1 << 25) | (1 << 30);
-
-		U32 cpuInfo[4];
-		Platform_getCPUId(1, cpuInfo);
-
-		U32 cpuInfo1[4];
-		Platform_getCPUId(7, cpuInfo1);
-
-		U32 mask1_1 = 1 << 3;				//BMI1
-
-		//Unsupported CPU
-
-		if ((cpuInfo[3] & mask3) != mask3 || (cpuInfo[2] & mask2) != mask2 || (cpuInfo1[1] & mask1_1) != mask1_1) {
-
-		}
-
-	#endif
-
-	int res = Program_run();
+	I32 res = Program_run();
 	Program_exit();
 	Platform_cleanup();
 
@@ -456,112 +134,51 @@ clean:
 	return !err.genericError;
 }
 
-Error Platform_initExt(CharString currAppDir) {
+Error Platform_initExt() {
 
-	//
+	Error err = Error_none();
 
-	Buffer platformExt = Buffer_createNull();
-	Error err = Buffer_createEmptyBytesx(sizeof(PlatformExt), &platformExt);
+	CONSOLE_SCREEN_BUFFER_INFO info;
+	GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &info);
+	oldColor = info.wAttributes;
 
-	if(err.genericError)
-		return err;
-
-	PlatformExt *pext = (PlatformExt*) platformExt.ptr;
+	PlatformExt *pext = (PlatformExt*) Platform_instance.dataExt;
 
 	pext->ntdll = GetModuleHandleA("ntdll.dll");
 
-	if (!pext->ntdll) {
-		Buffer_freex(&platformExt);
-		return Error_platformError(0, GetLastError(), "Platform_initExt() couldn't find ntdll");
-	}
+	if (!pext->ntdll)
+		_gotoIfError(clean, Error_platformError(0, GetLastError(), "Platform_initExt() couldn't find ntdll"));
 
 	*((void**)&pext->ntDelayExecution) = (void*)GetProcAddress(pext->ntdll, "NtDelayExecution");
 
-	if (!pext->ntDelayExecution) {
-		Buffer_freex(&platformExt);
-		return Error_platformError(1, GetLastError(), "Platform_initExt() couldn't find NtDelayExecution");
-	}
+	if (!pext->ntDelayExecution)
+		_gotoIfError(clean, Error_platformError(1, GetLastError(), "Platform_initExt() couldn't find NtDelayExecution"));
 
-	SYSTEM_INFO info;
-	GetSystemInfo(&info);
-	Platform_instance.threads = info.dwNumberOfProcessors;
+	SYSTEM_INFO systemInfo;
+	GetSystemInfo(&systemInfo);
+	Platform_instance.threads = systemInfo.dwNumberOfProcessors;
 	
-	if(!Platform_useWorkingDirectory) {
+	if(Platform_useWorkingDirectory) {
 
-		//Grab app directory of where the exe is installed
-
-		CharString appDir = CharString_createNull();
-		if ((err = CharString_createCopyx(currAppDir, &appDir)).genericError) {
-			CharString_freex(&appDir);
-			Buffer_freex(&platformExt);
-			return Error_platformError(1, GetLastError(), "Platform_initExt()::currAppDir couldn't createCopyx");
-		}
-
-		CharString_replaceAllSensitive(&appDir, '\\', '/');
-
-		U64 loc = CharString_findLastSensitive(appDir, '/');
-		CharString basePath = CharString_createNull();
-
-		if (loc == CharString_length(appDir))
-			basePath = CharString_createRefAutoConst(appDir.ptr, CharString_length(appDir));
-	
-		else CharString_cut(appDir, 0, loc + 1, &basePath);
-
-		CharString workDir = CharString_createNull();
-
-		if ((err = CharString_createCopyx(basePath, &workDir)).genericError) {
-			CharString_freex(&appDir);
-			Buffer_freex(&platformExt);
-			return Error_platformError(1, GetLastError(), "Platform_initExt() basePath couldn't createCopyx");
-		}
-
-		if(
-			!CharString_endsWithSensitive(basePath, '/') &&
-			(err = CharString_appendx(&workDir, '/')).genericError
-		)  {
-			CharString_freex(&appDir);
-			CharString_freex(&workDir);
-			Buffer_freex(&platformExt);
-			return err;
-		}
-
-		CharString_freex(&appDir);
-		Platform_instance.workingDirectory = workDir;
-
-	} else {
+		CharString_freex(&Platform_instance.workingDirectory);
 
 		//Init working dir
 
 		C8 buff[MAX_PATH + 1];
 		DWORD chars = GetCurrentDirectoryA(MAX_PATH + 1, buff);
 
-		if(!chars) {
-
-			Buffer_freex(&platformExt);
-
-			//Needs no additional cleaning. cleanup(Ext) will handle it
-
-			return Error_platformError(
+		if(!chars)
+			_gotoIfError(clean, Error_platformError(
 				0, GetLastError(), "Platform_initExt() GetCurrentDirectory failed"
-			);
-		}
+			));
 
-		//Move to heap and standardize
-
-		if((err = CharString_createCopyx(
+		_gotoIfError(clean, CharString_createCopyx(
 			CharString_createRefSizedConst(buff, chars, true), &Platform_instance.workingDirectory
-		)).genericError) {
-			Buffer_freex(&platformExt);
-			return err;
-		}
+		));
 
 		CharString_replaceAllSensitive(&Platform_instance.workingDirectory, '\\', '/');
 
-		if ((err = CharString_appendx(&Platform_instance.workingDirectory, '/')).genericError)  {
-			CharString_freex(&Platform_instance.workingDirectory);
-			Buffer_freex(&platformExt);
-			return err;
-		}
+		_gotoIfError(clean, CharString_appendx(&Platform_instance.workingDirectory, '/'));
 	}
 	
 	//Init virtual files
@@ -577,19 +194,10 @@ Error Platform_initExt(CharString currAppDir) {
 		//Enum resource names also fails if we don't have any resources.
 		//To counter this, enumerateFiles sets stride to 0 if the reason it returned false was because of the function.
 
-		if(files.b) {
-			ListVirtualSection_freex(&Platform_instance.virtualSections);
-			CharString_freex(&Platform_instance.workingDirectory);
-			Buffer_freex(&platformExt);
-			return Error_invalidState(1, "Platform_initExt() EnumResourceNames failed");
-		}
+		if(files.b)
+			_gotoIfError(clean, Error_invalidState(1, "Platform_initExt() EnumResourceNames failed"));
 	}
 
-	Platform_instance.virtualSectionsLock = Lock_create();
-
-	//Set platformExt
-
-	Platform_instance.dataExt = pext;
-
-	return Error_none();
+clean:
+	return err;
 }
