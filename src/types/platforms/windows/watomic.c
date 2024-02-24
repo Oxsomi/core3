@@ -18,7 +18,10 @@
 *  This is called dual licensing.
 */
 
-#include "types/platforms/windows/wplatform_ext.h"
+#define WIN32_LEAN_AND_MEAN
+#define MICROSOFT_WINDOWS_WINBASE_H_DEFINE_INTERLOCKED_CPLUSPLUS_OVERLOADS 0
+#include <Windows.h>
+
 #include "types/atomic.h"
 
 I64 AtomicI64_and(AtomicI64 *ptr, I64 value) {
