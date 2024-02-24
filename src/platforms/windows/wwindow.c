@@ -186,7 +186,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 			break;
 
-		case WM_DISPLAYCHANGE:	
+		case WM_DISPLAYCHANGE:
 			WWindow_updateMonitors(w);
 			break;
 
@@ -693,7 +693,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 			if(err.genericError)
 				Error_printx(err, ELogLevel_Error, ELogOptions_Default);
-			
+
 			WWindow_updateMonitors(w);
 
 			if (w->callbacks.onResize)
@@ -703,10 +703,10 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 		}
 
 		case WM_MOVE: {
-		
+
 			RECT r;
 			GetWindowRect(hwnd, &r);
-		
+
 			w->offset = I32x2_create2(r.left, r.top);
 
 			WWindow_updateMonitors(w);

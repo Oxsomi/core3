@@ -86,7 +86,7 @@ Where *CASettings* contains the following:
 - EXXCompressionType **compressionType**
 - EXXEncryptionType **encryptionType**
   - If not None, the U32 **encryptionKey**[8] must be present (non 0s). Otherwise, the encryptionKey can be left empty (all 0s).
-- ECASettingsFlags **flags**: 
+- ECASettingsFlags **flags**:
   - Date info (present if any of &3 (bottom 2 bits)):
     - IncludeDate (1: short date; U32)
     - IncludeFullDate (2: OxC3 date; U64)

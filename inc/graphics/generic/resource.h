@@ -105,7 +105,7 @@ TList(DeviceResourceVersion);
 //ChildObject -> GraphicsResource -> NextResource -> ExtStruct
 //Example:	DeviceTexture -> GraphicsResource -> UnifiedTexture -> XXManagedImage[N] (e.g. VkManagedImage)
 //			DeviceBuffer -> GraphicsResource -> DeviceBufferExt
-typedef struct GraphicsResource {	
+typedef struct GraphicsResource {
 
 	GraphicsDeviceRef *device;
 

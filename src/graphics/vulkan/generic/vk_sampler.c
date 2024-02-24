@@ -100,9 +100,9 @@ Error GraphicsDeviceRef_createSamplerExt(GraphicsDeviceRef *dev, Sampler *sample
 	};
 
 	_gotoIfError(clean, vkCheck(vkCreateSampler(deviceExt->device, &samplerInfo, NULL, samplerExt)));
-	
+
 	if (CharString_length(name)) {
-	
+
 		#ifndef NDEBUG
 
 			if(instance->debugSetName) {
@@ -134,7 +134,7 @@ Error GraphicsDeviceRef_createSamplerExt(GraphicsDeviceRef *dev, Sampler *sample
 	};
 
 	vkUpdateDescriptorSets(deviceExt->device, 1, &descriptor, 0, NULL);
-	
+
 clean:
 	return err;
 }

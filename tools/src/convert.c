@@ -132,7 +132,7 @@ Bool _CLI_convert(ParsedArgs args, Bool isTo) {
 			else err = _CLI_convertFromCA(args, inputArg, info, outputArg, encryptionKey);
 
 			break;
-		
+
 		default:
 			Log_debugLnx("Unsupported format");
 			return false;

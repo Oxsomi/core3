@@ -37,7 +37,7 @@ typedef struct CAFileRecursion {
 Error packageFile(FileInfo file, CAFileRecursion *caFile) {
 
 	CharString subPath = CharString_createNull();
-	
+
 	if(!CharString_cut(file.path, CharString_length(caFile->root), 0, &subPath))
 		return Error_invalidState(0, "packageFile()::file.path cut failed");
 

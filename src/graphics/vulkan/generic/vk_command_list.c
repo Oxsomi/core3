@@ -71,7 +71,7 @@ void CommandList_process(
 	VkCommandBuffer buffer = temp->buffer;
 
 	switch (op) {
-	
+
 		case ECommandOp_SetViewport:
 		case ECommandOp_SetScissor:
 		case ECommandOp_SetViewportAndScissor: {
@@ -307,14 +307,14 @@ void CommandList_process(
 
 				else if(startRender->flags & EStartRenderFlags_PreserveDepth)
 					loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-				
+
 				depthAttachment = (VkRenderingAttachmentInfoKHR) {
 					.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
 					.imageView = depthExt->view,
 					.imageLayout = depthExt->lastLayout,
 					.loadOp = loadOp,
 					.storeOp = unusedAfterRender ? VK_ATTACHMENT_STORE_OP_DONT_CARE : VK_ATTACHMENT_STORE_OP_STORE,
-					.clearValue = (VkClearValue) { 
+					.clearValue = (VkClearValue) {
 						.depthStencil = (VkClearDepthStencilValue) { .depth = startRender->clearDepth }
 					}
 				};
@@ -350,7 +350,7 @@ void CommandList_process(
 					.imageLayout = stencilExt->lastLayout,
 					.loadOp = loadOp,
 					.storeOp = unusedAfterRender ? VK_ATTACHMENT_STORE_OP_DONT_CARE : VK_ATTACHMENT_STORE_OP_STORE,
-					.clearValue = (VkClearValue) { 
+					.clearValue = (VkClearValue) {
 						.depthStencil = (VkClearDepthStencilValue) { .stencil = startRender->clearStencil }
 					}
 				};
@@ -641,7 +641,7 @@ void CommandList_process(
 					continue;
 
 				//Grab transition type
-				
+
 				Bool isImage = TextureRef_isTexture(transition.resource);
 				Bool isDepthStencil = TextureRef_isDepthStencil(transition.resource);
 				Bool isShaderRead = transition.type == ETransitionType_ShaderRead;
@@ -668,7 +668,7 @@ void CommandList_process(
 					case EPipelineStage_Pixel:			pipelineStage = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;	break;
 					case EPipelineStage_GeometryExt:	pipelineStage = VK_PIPELINE_STAGE_2_GEOMETRY_SHADER_BIT;	break;
 
-					case EPipelineStage_Hull:		
+					case EPipelineStage_Hull:
 						pipelineStage = VK_PIPELINE_STAGE_2_TESSELLATION_CONTROL_SHADER_BIT;
 						break;
 
@@ -746,7 +746,7 @@ void CommandList_process(
 								pipelineStage = VK_PIPELINE_STAGE_2_VERTEX_ATTRIBUTE_INPUT_BIT;
 								access = VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT;
 								break;
-								
+
 							default:
 								break;
 						}
@@ -798,7 +798,7 @@ void CommandList_process(
 				}
 
 			nextTransition:
-				
+
 				if(err.genericError)
 					Error_printx(err, ELogLevel_Error, ELogOptions_Default);
 			}
@@ -826,10 +826,10 @@ void CommandList_process(
 			};
 
 			Buffer_copy(Buffer_createRef(&markerInfo.color, sizeof(F32x4)), Buffer_createRefConst(data, sizeof(F32x4)));
-			
+
 			if(op == ECommandOp_AddMarkerDebugExt)
 				instanceExt->cmdDebugMarkerInsert(buffer, &markerInfo);
-			
+
 			else instanceExt->cmdDebugMarkerBegin(buffer, &markerInfo);
 
 			break;

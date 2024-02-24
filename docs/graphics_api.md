@@ -34,8 +34,8 @@ _gotoIfError(clean, GraphicsInstance_create(
 	(GraphicsApplicationInfo) {
 	    .name = CharString_createConstRefCStr("Rt core test"),
     	.version = GraphicsApplicationInfo_Version(0, 2, 0)
-	}, 
-    false /* isVerbose; extra logging about the instance properties */, 
+	},
+    false /* isVerbose; extra logging about the instance properties */,
     &instance
 ));
 ```
@@ -58,7 +58,7 @@ Once this instance is acquired, it can be used to query devices and to detect wh
 
 - ```c
   Error getPreferredDevice(
-  	GraphicsDeviceCapabilities requiredCapabilities, 
+  	GraphicsDeviceCapabilities requiredCapabilities,
   	U64 vendorMask,
   	U64 deviceTypeMask,
   	Bool verbose,
@@ -121,7 +121,7 @@ _gotoIfError(clean, GraphicsInstance_getPreferredDevice(
   ```
 
   - Prints all relevant information about the device. If printCapabilities is on it will also show extensions and supported data types.
-  
+
 - `supportsFormat(ETextureFormat format)`
 
   - Checks if the format is supported for use as a texture by the current device.
@@ -140,14 +140,14 @@ _gotoIfError(clean, GraphicsInstance_getPreferredDevice(
 
 ### Used functions and obtained
 
-- Obtained through GraphicsInstance's getDeviceInfos and getPreferredDevice. 
+- Obtained through GraphicsInstance's getDeviceInfos and getPreferredDevice.
 - Passed to `GraphicsDeviceRef_create` to turn the physical device into a logical device.
 
 ## Graphics device
 
 ### Summary
 
-The graphics device is the logical device that is used to create objects and execute commands to. 
+The graphics device is the logical device that is used to create objects and execute commands to.
 
 ```c
 GraphicsDeviceRef *device = NULL;
@@ -179,12 +179,12 @@ _gotoIfError(clean, GraphicsDeviceRef_create(
   Error submitCommands(ListCommandListRef commandLists, ListSwapchainRef swapchains, Buffer runtimeData, F32 deltaTime, F32 time);
   ```
 
-  - Submits commands to the device and readies the swapchains to present if available. If the device doesn't have any swapchains, it can be used to just submit commands. This is useful for multi GPU rendering as well. If deltaTime is set to -1 it will automatically calculate deltaTime itself, but some applications might want to bypass this by manually passing deltaTime and time (for example when rendering a movie or a photo). The time argument is also ignored if deltaTime is -1 and will be calculated automatically. 
-  
+  - Submits commands to the device and readies the swapchains to present if available. If the device doesn't have any swapchains, it can be used to just submit commands. This is useful for multi GPU rendering as well. If deltaTime is set to -1 it will automatically calculate deltaTime itself, but some applications might want to bypass this by manually passing deltaTime and time (for example when rendering a movie or a photo). The time argument is also ignored if deltaTime is -1 and will be calculated automatically.
+
 - There's a limit of 16 swapchains per device.
-  
+
   - Runtime data is accessible from a CBuffer to all shaders and can be used for simple data such as resource handles. This buffer has a limit of 368 bytes.
-  
+
 - ```c
   wait();
   ```
@@ -197,7 +197,7 @@ _gotoIfError(clean, GraphicsDeviceRef_create(
 
 - ```c
   Error createCommandList(
-  	U64 commandListLen, 
+  	U64 commandListLen,
   	U64 estimatedCommandCount,
   	U64 estimatedResources,
       Bool allowResize,
@@ -207,22 +207,22 @@ _gotoIfError(clean, GraphicsDeviceRef_create(
 
 - ```c
   Error createPipelinesCompute(
-      ListBuffer computeBinaries, 
+      ListBuffer computeBinaries,
       ListCharString names,		//Empty = ignore, otherwise computeBinaries.length
       PipelineRef **computeShaders
   );
-  
+
   ```
-  
+
 - ```c
   Error createPipelinesGraphics(
-  	ListPipelineStage stages, 
-  	ListPipelineGraphicsInfo infos, 
+  	ListPipelineStage stages,
+  	ListPipelineGraphicsInfo infos,
   	ListCharString names,			//Empty = ignore, otherwise info.length
   	ListPipelineRef *pipelines
   );
   ```
-  
+
 - ```C
   Error createBuffer(
   	EDeviceBufferUsage usage,
@@ -232,7 +232,7 @@ _gotoIfError(clean, GraphicsDeviceRef_create(
       DeviceBufferRef **ref
   );
 ```
-  
+
 - ```c
   Error createBufferData(
   	EDeviceBufferUsage usage,
@@ -242,30 +242,30 @@ _gotoIfError(clean, GraphicsDeviceRef_create(
       DeviceBufferRef **ref
   );
 ```
-  
+
 - ```c
   Error createSampler(SamplerInfo info, CharString name, SamplerRef **ref));
   ```
 
 - ```c
   Error createRenderTexture(
-      ETextureType type, 
+      ETextureType type,
       U16 width,
       U16 height,
       U16 length,
-      ETextureFormatId format, 
+      ETextureFormatId format,
       EGraphicsResourceFlag flags,
       EMSAASamples samples,
       CharString name,
       RenderTextureRef **ref
   );
   ```
-  
+
 - ```c
   Error createDepthStencil(
         U16 width,
         U16 height,
-        EDepthStencilFormat format, 
+        EDepthStencilFormat format,
         Bool allowShaderRead,
         EMSAASamples samples,
         CharString name,
@@ -353,7 +353,7 @@ See the "Commands" section.
 
 ## GraphicsResource
 
-A GraphicsResource is defined as any object that has allocated memory on the GraphicsDevice. This includes two types of resources: DeviceBuffer and UnifiedTexture. 
+A GraphicsResource is defined as any object that has allocated memory on the GraphicsDevice. This includes two types of resources: DeviceBuffer and UnifiedTexture.
 
 A graphics resource consists of the following:
 
@@ -401,7 +401,7 @@ A UnifiedTexture can represent the following types: DepthStencil, RenderTexture,
 A UnifiedTexture contains the following:
 
 - resource: the base GraphicsResource.
-- textureFormatId: ETextureFormatId, which can be ETextureFormatId_Undefined in the case of a DepthStencil. 
+- textureFormatId: ETextureFormatId, which can be ETextureFormatId_Undefined in the case of a DepthStencil.
 - sampleCount: EMSAASamples. When this is defined as > 0, the resource can only be used as a render texture / depth stencil (not depth texture). There is no way to shader read/write MSAA textures in the current API spec, even though Texture2DMS is a type, there is no dedicated resource array for it and thus it's not supported. RWTexture2DMS has been added to later versions of HLSL, but this requires extensions that aren't properly supported yet. The only way to do this is to pass another render target / depth texture as the resolve texture.
 - depthFormat: EDepthFormat, which can be EDepthFormat_None if the texture is not a DepthTexture.
 - type: ETextureType; 2D, 3D or Cube.
@@ -422,7 +422,7 @@ The DeviceResourceVersion should only be used if the size, versionId or format o
 Other helpers:
 
 - U32 **TextureRef_getReadHandle**/**getWriteHandle**(TextureRef *tex, U32 subResource, U8 imageId): get the respective GPU accessible handles. Returns 0 if uninitialized.
-  - getCurr(Read/Write)Handle can be used too, but only if it's obvious that the image isn't a versioned resource (e.g. Swapchain). In that case, the image is always 0 and so it can safely be used. 
+  - getCurr(Read/Write)Handle can be used too, but only if it's obvious that the image isn't a versioned resource (e.g. Swapchain). In that case, the image is always 0 and so it can safely be used.
 - Bool **TextureRef_isRenderTargetWritable**(TextureRef *tex): if the unified texture is accessible as a color render target.
 - Bool **TextureRef_isDepthStencil**(TextureRef *tex): if the unified texture is accessible as a depth stencil.
 - Bool **TextureRef_isTexture**(RefPtr *tex): if the resource contains a UnifiedTexture.
@@ -435,7 +435,7 @@ Besides the base data, the texture interface should always contain the image inf
 - UnifiedTextureImageExt[base.images] (UnifiedTextureImageExt_size): the extended data of the image, useful for keeping API dependent state, views/image information.
 - Extended data: Such as SwapchainExt (VkSwapchain, DxSwapchain, etc.).
 
-This can be safely accessed through the helpers: 
+This can be safely accessed through the helpers:
 
 - UnifiedTextureImage **TextureRef_getImage**(TextureRef *tex, U32 subResource, U8 imageId): gets the image resource handles.
 
@@ -453,12 +453,12 @@ A swapchain is the interface between the platform Window and the API-dependent w
 SwapchainRef *swapchain = NULL;
 _gotoIfError(clean, GraphicsDeviceRef_createSwapchain(
     device, 		//See "Graphics device"
-    (SwapchainInfo) { .window = w }, 
+    (SwapchainInfo) { .window = w },
     true,			//allowCompute
     &swapchain
 ));
 
-//onResize: Window callback to make sure format + size stays the same: 
+//onResize: Window callback to make sure format + size stays the same:
 
 if(!(w->flags & EWindowFlags_IsVirtual))
     SwapchainRef_resize(swapchain);
@@ -482,7 +482,7 @@ By default the swapchain will use triple buffering to ensure best performance. E
 ### Properties
 
 - info.window: the Window handle created using OxC3 platforms.
-- info.requiresManualComposite: whether or not the application is requested to explicitly handle rotation from the device. For desktop this is generally false, for Android this is on to avoid the extra overhead of the compositor. 
+- info.requiresManualComposite: whether or not the application is requested to explicitly handle rotation from the device. For desktop this is generally false, for Android this is on to avoid the extra overhead of the compositor.
 - info.presentModePriorities: what present modes were requested on create.
 - device: the owning device.
 - base: UnifiedTexture that represents this texture.
@@ -507,7 +507,7 @@ By default the swapchain will use triple buffering to ensure best performance. E
 
 ### Summary
 
-A sampler is a standalone object that will be used to describe how a texture is sampled. These are not combined samplers because it is possible that one texture is used as two different usages (e.g. one for anisotropy and one for linear) and logically it doesn't make sense that it's linked to the texture rather than a standalone object. This object is given space in the bindless descriptor arrays just like shader visible buffers, depth stencils, render textures, swapchains and depth stencils. However, there are only 2047 sampler slots available, so use them sparingly. 
+A sampler is a standalone object that will be used to describe how a texture is sampled. These are not combined samplers because it is possible that one texture is used as two different usages (e.g. one for anisotropy and one for linear) and logically it doesn't make sense that it's linked to the texture rather than a standalone object. This object is given space in the bindless descriptor arrays just like shader visible buffers, depth stencils, render textures, swapchains and depth stencils. However, there are only 2047 sampler slots available, so use them sparingly.
 
 Once on the GPU, the sampler resource index can be passed to the GPU and the sampler array can be accessed. Then this sampler can be used to sample any resource that's required.
 
@@ -523,14 +523,14 @@ If the sampler is used on the GPU, it should be passed as a transition; stage is
 - device: ref to the device that owns it.
 - samplerLocation: resource index into the bindless array that specifies where the sampler is located. It does contain additional info in the upper 12 bits, so only the low 20 bits store the index (samplerUniform(resourceId) and sampler(resourceId) can be used to do this automatically). Note: samplerId 0 is reserved because EDescriptorType_Sampler is 0, which means that id 0 is resource location 0. 0 is the default initialization value, so that's automatically reserved by the device to avoid any future issues.
 - info: used to create the sampler and stores information about the sampler.
-  - filter: determining how the sampler filters the input image. A bitset of three properties: Mag, Min and Mip. If the respective bit is true it represents linear filtering rather than nearest filtering. This means there's 7 combinations ranging from nearest min/mag/mip all the way to linear min/mag/mip. 
+  - filter: determining how the sampler filters the input image. A bitset of three properties: Mag, Min and Mip. If the respective bit is true it represents linear filtering rather than nearest filtering. This means there's 7 combinations ranging from nearest min/mag/mip all the way to linear min/mag/mip.
   - addressU, addressV, addressW: determining how out of bounds access for each texture is treated: Repeat, MirrorRepeat, ClampToEdge, ClampToBorder. ClampToBorder uses the borderColor to be filtered.
   - aniso: is anisotropy is applied and how much. 0 means no anisotropy and 1-16 means anistropy of that level.
   - borderColor: what border color is used if one of the address modes (uvw) is ClampToBorder. TransparentBlack (0.xxxx), OpaqueBlackFloat (0.xxx, 1.f), OpaqueBlackInt (0.xxx, 1), OpaqueWhiteFloat(1.f.xxxx), OpaqueWhiteInt (1.xxxx).
   - comparisonFunction: comparison function for SamplerComparisonState. Same type (ECompareOp) as depth stencil state. One of Gt, Geq, Eq, Neq, Leq, Lt, Always, Never.
   - enableComparison: whether or not the comparison function is used.
   - mipBias, minLod, maxLod:
-    - These properties are F16s (halfs) and require conversion from F32 by using F32_castF16 or F64_castF16. 
+    - These properties are F16s (halfs) and require conversion from F32 by using F32_castF16 or F64_castF16.
     - mipBias: mip bias that is applied before reading from the mip.
     - minLod, maxLod: min and max mip. If maxLod is 0 it is assumed that this property isn't set and 65504 (F16_max) is used. If maxLod of 0 is desired it can be achieved by setting it to >5.97e-8 or just any other small number like 0.001.
 
@@ -541,7 +541,7 @@ If the sampler is used on the GPU, it should be passed as a transition; stage is
 
 ## DeviceTexture
 
-### Summary 
+### Summary
 
 A DeviceTexture is a texture that can be sent from the CPU to the device. It's essentially a UnifiedTexture that is allowed to be uploaded / downloaded from the device.
 
@@ -564,7 +564,7 @@ _gotoIfError(clean, GraphicsDeviceRef_createTexture(
 - Just like a DeviceBuffer, it has the following parameters:
   - isPending(FullCopy) / pendingChanges: used to detect what data it should send.
   - cpuData: the CPU backing data that will be pushed / was previously pulled.
-  - lock: for multi threading, every time markDirty is used it will need to mark the range as dirty. The accessor should lock this only if this buffer can be accessed by another thread before reading/writing (lock must be released after of course). 
+  - lock: for multi threading, every time markDirty is used it will need to mark the range as dirty. The accessor should lock this only if this buffer can be accessed by another thread before reading/writing (lock must be released after of course).
   - isFirstFrame: If the resource was already uploaded before.
 - base: UnifiedTexture it represents.
 
@@ -578,16 +578,16 @@ _gotoIfError(clean, GraphicsDeviceRef_createTexture(
 
 ### Summary
 
-A DepthStencil is an object that holds the depth and stencil buffers as a 2D image which can be used together with a RenderTexture or by itself for 3D rendering (to avoid overdraw) and to handle shadow maps or other tricks such as portals/reflections (stencil buffer). 
+A DepthStencil is an object that holds the depth and stencil buffers as a 2D image which can be used together with a RenderTexture or by itself for 3D rendering (to avoid overdraw) and to handle shadow maps or other tricks such as portals/reflections (stencil buffer).
 
 The depth stencil is quite straight forward; it has up to 3 stencil enabled formats (D24S8Ext, D32S8, S8Ext) that can be used to provide a stencil attachment to startRenderExt and 2 non stencil enabled formats (D16, D32). D24S8Ext is optional, but is important for NV and Intel GPUs since it packs the depth and stencil into 32-bits. D24S8Ext and S8Ext support can be queried through the GraphicsDeviceInfo's capabilities. Whenever possible please use D16 or D32 since it doesn't waste any space for a stencil buffer if it isn't needed. D16 should only be used if depth precision isn't a great priority (performance and memory usage is prioritized). D16 can be used on mobile to save space and time. If allowShaderRead is on, the depth stencil can be accessed through shader logic by passing the resource handle to the GPU.
 
 ```c
 _gotoIfError(clean, GraphicsDeviceRef_createDepthStencil(
-    twm->device, 
-    width, height, EDepthStencilFormat_D16, false /* allow shader access */, 
+    twm->device,
+    width, height, EDepthStencilFormat_D16, false /* allow shader access */,
     EMSAASamples_Off,
-    CharString_createRefCStrConst("Test depth stencil"), 
+    CharString_createRefCStrConst("Test depth stencil"),
     &tw->depthStencil
 ));
 ```
@@ -614,7 +614,7 @@ A RenderTexture itself can currently only be 2D, but will be possible to be 3D o
 
 ```c
 _gotoIfError(clean, GraphicsDeviceRef_createRenderTexture(
-	twm->device, 
+	twm->device,
 	ETextureType_2D, 				//2D is only supported currently
     width, height, 1, 				//x, y, z
     ETextureFormatId_BGRA8, 		//Non compressed texture format
@@ -650,7 +650,7 @@ A pipeline is a combination of the states and shader binaries that are required 
 - stages: `ListPipelineStage` the binaries that are used for the shader.
   - stageType: which stage the binary is for. This is not necessarily unique, but should be unique for graphics shaders and compute. For raytracing shaders there can be multiple for the same stage.
   - shaderBinary: the format as explained in "Shader binary types" that is required by the current graphics API.
-- extraInfo: a pointer to behind the API dependent pipeline extension struct that allows extra info that's only applicable to a certain pipeline type. 
+- extraInfo: a pointer to behind the API dependent pipeline extension struct that allows extra info that's only applicable to a certain pipeline type.
   - For compute: this is NULL.
   - For graphics: this is PipelineGraphicsInfo.
   - For raytracing: this is PipelineRaytracingInfoExt.
@@ -678,7 +678,7 @@ The graphics pipeline has the following properties:
     - format: ETextureFormatId (8-bit) such as 'RGB32f'.
     - buffer4 (0-15): buffer id the attribute point to. Points to vertexLayout.bufferStrides12_isInstance1.
     - offset11: offset into the buffer.
-      - offset is 0-2047 for device limit reasons. Since the offset is into the buffer, offset + size can't exceed the stride of the buffer. 
+      - offset is 0-2047 for device limit reasons. Since the offset is into the buffer, offset + size can't exceed the stride of the buffer.
     - attribute id is inferred from the index into the array. If attribute bindings are used [0] would refer to binding 0.
 - rasterizer: how to rasterize the triangles into pixels.
   - Optional if no special rasterizer info is needed. Default to 0 will to create CCW backface-culled filled geometry with no depth clamp or bias.
@@ -709,9 +709,9 @@ The graphics pipeline has the following properties:
       - If dualSrcBlend feature is enabled: Src1ColorExt, Src1AlphaExt, InvSrc1ColorExt, InvSrc1AlphaExt.
     - blendOp, blendOpAlpha: what operation to blend with.
       - Add, Subtract, ReverseSubtract, Min, Max.
-- msaa: multi sample count. 
+- msaa: multi sample count.
   - Optional if no special msaa settings are needed. Defaults to 1.
-  - 1 and 4 are always supported (though 4 is slower and needs special care). 
+  - 1 and 4 are always supported (though 4 is slower and needs special care).
   - 2, 8 and 16 aren't always supported, so make sure to query it and/or fallback to 1 or 4 if not present. EGraphicsDataTypes of the device capabilities lists this.
   - See Features/MSAA for more info.
 - topologyMode: type of mesh topology.
@@ -727,7 +727,7 @@ The graphics pipeline has the following properties:
 - **TODO**: Not using DirectRendering:
   - If DirectRendering is not supported or the developer doesn't want to use it; a unified mobile + desktop architecture can be used. However; generally desktop techniques don't lend themselves well for mobile techniques and vice versa. So it's still recommended to implement two separate rendering backends on mobile.
   - **TODO**: renderPass:
-  - **TODO**: subPass: 
+  - **TODO**: subPass:
 
 #### PipelineStages
 
@@ -750,7 +750,7 @@ _gotoIfError(clean, GraphicsDeviceRef_createPipelinesCompute(device, &computeBin
 tempShader = Buffer_createNull();
 ```
 
-Create pipelines will take ownership of the buffers referenced in computeBinaries and it will therefore free the list (if unmanaged). If the buffers are managed memory (e.g. created with Buffer_create functions that use the allocator) then the Pipeline object will safely delete it. This is why the tempShader is set to null after (the list is a ref, so doesn't need to be). In clean, this temp buffer gets deleted, just in case the createPipelines fails. Using virtual files for this is recommend, as they'll already be present in memory and our ref will be available for the lifetime of our app. If it's a ref that doesn't always stay active, be sure to manually copy the buffers to avoid referencing deleted memory. 
+Create pipelines will take ownership of the buffers referenced in computeBinaries and it will therefore free the list (if unmanaged). If the buffers are managed memory (e.g. created with Buffer_create functions that use the allocator) then the Pipeline object will safely delete it. This is why the tempShader is set to null after (the list is a ref, so doesn't need to be). In clean, this temp buffer gets deleted, just in case the createPipelines fails. Using virtual files for this is recommend, as they'll already be present in memory and our ref will be available for the lifetime of our app. If it's a ref that doesn't always stay active, be sure to manually copy the buffers to avoid referencing deleted memory.
 
 It is recommended to generate all pipelines that are needed in this one call at startup, to avoid stuttering at runtime.
 
@@ -799,7 +799,7 @@ _gotoIfError(clean, GraphicsDeviceRef_createPipelinesGraphics(
 tempShaders[0] = tempShaders[1] = Buffer_createNull();
 ```
 
-Create pipelines will take ownership of the buffers referenced in stages and it will therefore free the list (if unmanaged). If the buffers are managed memory (e.g. created with Buffer_create functions that use the allocator) then the Pipeline object will safely delete it. This is why the tempShader is set to null after (the list is a ref, so doesn't need to be). In clean, this temp buffer gets deleted, just in case the createPipelines fails. Using virtual files for this is recommend, as they'll already be present in memory and our ref will be available for the lifetime of our app. If it's a ref that doesn't always stay active, be sure to manually copy the buffers to avoid referencing deleted memory. 
+Create pipelines will take ownership of the buffers referenced in stages and it will therefore free the list (if unmanaged). If the buffers are managed memory (e.g. created with Buffer_create functions that use the allocator) then the Pipeline object will safely delete it. This is why the tempShader is set to null after (the list is a ref, so doesn't need to be). In clean, this temp buffer gets deleted, just in case the createPipelines fails. Using virtual files for this is recommend, as they'll already be present in memory and our ref will be available for the lifetime of our app. If it's a ref that doesn't always stay active, be sure to manually copy the buffers to avoid referencing deleted memory.
 
 It is recommended to generate all pipelines that are needed in this one call at startup, to avoid stuttering at runtime.
 
@@ -816,15 +816,15 @@ In OxC3 graphics, either the application or the OxC3 baker is responsible for co
 
 The OxC3 baker will (if used) convert HLSL to SPIR-V, DXIL, MSL or WGSL depending on which API is currently used. It can provide this as a pre-baked binary too (.oiCS Oxsomi Compiled Shader). The pre-baked binary contains all 4 formats to ensure it can be loaded on any platform. But the baker will only include the one relevant to the current API to prevent bloating.
 
-When using the baker, the binaries can simply be loaded using the oiCS helper functions and passed to the pipeline creation, as they will only contain one binary. 
+When using the baker, the binaries can simply be loaded using the oiCS helper functions and passed to the pipeline creation, as they will only contain one binary.
 
-**TODO: The baker currently doesn't include this functionality just yet.** 
+**TODO: The baker currently doesn't include this functionality just yet.**
 
 ## DeviceBuffer
 
 ### Summary
 
-A DeviceBuffer is a buffer partially or fully located on the device (such as a GPU). A device buffer defines the usage for various purposes such as; a vertex buffer, index buffer, indirect arguments buffer, shader read/write and if it is allocated on the CPU and accessible by the device or fully on the device (with potential access from the CPU). It also specifies if it should allocate a CPU copy to hold temporary data for future buffer updates. 
+A DeviceBuffer is a buffer partially or fully located on the device (such as a GPU). A device buffer defines the usage for various purposes such as; a vertex buffer, index buffer, indirect arguments buffer, shader read/write and if it is allocated on the CPU and accessible by the device or fully on the device (with potential access from the CPU). It also specifies if it should allocate a CPU copy to hold temporary data for future buffer updates.
 
 ```c
 VertexPosBuffer vertexPos[] = {
@@ -850,7 +850,7 @@ _gotoIfError(clean, GraphicsDeviceRef_createBufferData(
 - length: Length of the buffer.
 - cpuData: If CPUBacked stores the CPU copy for the resource or temporary data for the next submit to copy CPU data to the real resource.
 - pendingChanges: `[U64 startRange, U64 endRange][]` list of marked regions for copy.
-- readHandle, writeHandle: Places where the resource can be accessed on the GPU side. If a shader uses the writeHandle in a shader it has to transition the resource (or the subresource) to write state before it is accessed as such (at the relevant shader stage); same with the readHandle (but read state). If you're only reading/writing from a part of a resource it is preferred to only transition part of the resource. This will signal the implementation that other parts of the resource aren't in use. Which could lead to more efficient resource updates for example. Imagine streaming in/out meshes from a single buffer; only meshes that are in use need to be updated with the staging buffer, while others could be directly copied to GPU visible memory if available (ReBAR, shared mem, cpu visible, etc.). It could also reduce decompression/compression time occurring on the GPU due to changing the entire resource to write instead of readonly (with subresources this could be eased depending on the driver). 
+- readHandle, writeHandle: Places where the resource can be accessed on the GPU side. If a shader uses the writeHandle in a shader it has to transition the resource (or the subresource) to write state before it is accessed as such (at the relevant shader stage); same with the readHandle (but read state). If you're only reading/writing from a part of a resource it is preferred to only transition part of the resource. This will signal the implementation that other parts of the resource aren't in use. Which could lead to more efficient resource updates for example. Imagine streaming in/out meshes from a single buffer; only meshes that are in use need to be updated with the staging buffer, while others could be directly copied to GPU visible memory if available (ReBAR, shared mem, cpu visible, etc.). It could also reduce decompression/compression time occurring on the GPU due to changing the entire resource to write instead of readonly (with subresources this could be eased depending on the driver).
 - lock: Multi-threading helper. A buffer gets locked when it's being modified or used by the CPU while recording. For example DeviceBufferRef_markDirty will require a lock and GraphicsDeviceRef_submitCommands will too. So markDirty has to finish before or after the submitCommands is done.
 
 ### Functions
@@ -859,24 +859,24 @@ _gotoIfError(clean, GraphicsDeviceRef_createBufferData(
 
 ### Used functions and obtained
 
-- Obtained through createBuffer and createBufferData from GraphicsDeviceRef. 
-- Used in DeviceBufferRef's markDirty, as vertex/index/indirect buffer for commands such as draw/drawIndirect/drawIndirectCountExt, shaders if the resource is readable/writable (through transitions), copy and clear buffer operations. 
+- Obtained through createBuffer and createBufferData from GraphicsDeviceRef.
+- Used in DeviceBufferRef's markDirty, as vertex/index/indirect buffer for commands such as draw/drawIndirect/drawIndirectCountExt, shaders if the resource is readable/writable (through transitions), copy and clear buffer operations.
 
 ## Features
 
 ### MSAA
 
-MSAA can be enabled by making sure all pipelines for MSAA targets have PipelineGraphicsInfo::msaa set to something that's not EMSAASamples_Off. This setting needs to match 1:1 with the MSAA setting passed to render target(s) and depth stencil(s). PipelineGraphicsInfo::msaaMinSampleShading can be set to a non zero value to indicate [sample shading](https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#primsrast-sampleshading) should be turned on and to what value (an MSAA feature to make texture detail anti alias better). 
+MSAA can be enabled by making sure all pipelines for MSAA targets have PipelineGraphicsInfo::msaa set to something that's not EMSAASamples_Off. This setting needs to match 1:1 with the MSAA setting passed to render target(s) and depth stencil(s). PipelineGraphicsInfo::msaaMinSampleShading can be set to a non zero value to indicate [sample shading](https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#primsrast-sampleshading) should be turned on and to what value (an MSAA feature to make texture detail anti alias better).
 
-If MSAA is enabled for the current target, a resolve image can be passed in the attachmentInfo.resolveImage passed to startRenderExt. This can directly resolve the MSAA texture to a render target, swapchain or depth stencil. attachmentInfo.resolveMode can be used to change it from averaging all samples to EMSAAResolveMode_Min/Max. 
+If MSAA is enabled for the current target, a resolve image can be passed in the attachmentInfo.resolveImage passed to startRenderExt. This can directly resolve the MSAA texture to a render target, swapchain or depth stencil. attachmentInfo.resolveMode can be used to change it from averaging all samples to EMSAAResolveMode_Min/Max.
 
 ## Commands
 
 ### Summary
 
-Command lists store the commands referenced in the next section. These are virtual commands; they approximately map to the underlying API. If the underlying API doesn't support commands, it might have to simulate the behavior with a custom shader (such as creating a mip chain of an image). It is also possible that a command might need certain extensions, without them the command will give an error to prevent it from being inserted into the command list (some unimportant ones such as debugging are safely ignored if not supported instead). These commands are then processed at runtime when they need to. If the command list remains the same, it's the same swapchain (if applicable) and the resources aren't recreated then it can safely be re-used. 
+Command lists store the commands referenced in the next section. These are virtual commands; they approximately map to the underlying API. If the underlying API doesn't support commands, it might have to simulate the behavior with a custom shader (such as creating a mip chain of an image). It is also possible that a command might need certain extensions, without them the command will give an error to prevent it from being inserted into the command list (some unimportant ones such as debugging are safely ignored if not supported instead). These commands are then processed at runtime when they need to. If the command list remains the same, it's the same swapchain (if applicable) and the resources aren't recreated then it can safely be re-used.
 
-Invalid API usage will be attempted to be found out when inserting the command, but this is not always possible. 
+Invalid API usage will be attempted to be found out when inserting the command, but this is not always possible.
 
 *Note: A CommandList is only accessible to the thread that opened it. It can however be acquired on a separate thread after it closed on the other thread. This is why the begin also has a timeout value.*
 
@@ -886,7 +886,7 @@ To make sure a command list is ready for recording and submission it needs begin
 
 ### setViewport/(And)Scissor
 
-setViewport and setScissor are used to set viewport and scissor rects respectively. However, since in a lot of cases they are set at the same time, there's also a command that does both at once "setViewportAndScissor". 
+setViewport and setScissor are used to set viewport and scissor rects respectively. However, since in a lot of cases they are set at the same time, there's also a command that does both at once "setViewportAndScissor".
 
 ```c
 _gotoIfError(clean, CommandListRef_setViewportAndScissor(
@@ -918,7 +918,7 @@ _gotoIfError(clean, CommandListRef_setBlendConstants(
 
 ### clearImage(f/u/i)/clearImages
 
-clearImagef/clearImageu/clearImagei and clearImages are actually the same command. They allow clearing one or multiple images. clearImages should be used whenever possible because it can batch clear commands in a better way. However, it is possible that only one image needs to be cleared and in that case clearImage(f/u/i) are perfectly fine. The f, u and i suffix are to allow clearing uint, int and float targets. In clearImages these are handled manually. The format should match the format of the underlying images. The images passed here are automatically transitioned to the correct state. 
+clearImagef/clearImageu/clearImagei and clearImages are actually the same command. They allow clearing one or multiple images. clearImages should be used whenever possible because it can batch clear commands in a better way. However, it is possible that only one image needs to be cleared and in that case clearImage(f/u/i) are perfectly fine. The f, u and i suffix are to allow clearing uint, int and float targets. In clearImages these are handled manually. The format should match the format of the underlying images. The images passed here are automatically transitioned to the correct state.
 
 ```c
 _gotoIfError(clean, CommandListRef_clearImagef(
@@ -941,7 +941,7 @@ copyImage and copyImageRegions are actually the same command. They allow copying
 
 ```c
 _gotoIfError(clean, CommandListRef_copyImage(
-    commandList, 				
+    commandList,
     tw->swapchain, 				//src (Swapchain, DepthStencil, RenderTexture)
     tw->renderTextureBackup, 	//dst (^)
     ECopyType_All, 				//Copy depth & stencil or color
@@ -951,11 +951,11 @@ _gotoIfError(clean, CommandListRef_copyImage(
 
 Clearing multiple ranges at once can be done by calling copyImageRegions with a ListCopyImageRegion. The src and dst must both be able to contain the pixels copied.
 
-If depth, width or height isn't defined, they are automatically set to res[i] - offset[i]. 
+If depth, width or height isn't defined, they are automatically set to res[i] - offset[i].
 
 DepthStencil is only compatible with depth stencil. If ECopyType_All is used, the depth stencil format has to be identical. If ECopyType_DepthOnly is used the depth has to be compatible (D32, D32S8). If ECopyType_StencilOnly is used the stencil has to be compatible.
 
-Copy image is only allowed on images which aren't currently bound as a render target or for a different use in this scope. 
+Copy image is only allowed on images which aren't currently bound as a render target or for a different use in this scope.
 
 Copy image (ranges) can currently only be called on a Swapchain, DepthStencil or RenderTexture object.
 
@@ -987,7 +987,7 @@ _gotoIfError(clean, CommandListRef_drawIndexed(commandList, 3, 1));
 When issuing the draw, the state needs to be valid: a render has to be started (render pass or direct rendering), a primitive buffer needs to be bound if relevant, graphics pipeline has to be bound, viewport & scissor has to be set and all relevant transitions need to be done.
 
 - Graphics pipeline needs to be compatible with currently bound render targets; this means the formats specified in graphics pipeline creation need to match the same formats of the render targets.
-- States of currently used resources need to be correct. If you write to a resource it needs to be transitioned to write using the transition command and it needs to specify the first shader which *might* read from/write to it. Same is also true when reading from it. The state of these resources stays as it was when transitioned unless the same resource was used in a different explicit or implicit transition. Implicit transitions can be: binding it as a render target, clearing it, copying it or any other command that is specified in this document as transitioning the resource. So this command should only be used if the state of the resource has already changed. So when the same resources are already transitioned to read then they stay that until they're modified by something else. *For writes however, it is **essential** to transition them even if they're in write already. This is to ensure the command that modified the resource is finished before writing again.* 
+- States of currently used resources need to be correct. If you write to a resource it needs to be transitioned to write using the transition command and it needs to specify the first shader which *might* read from/write to it. Same is also true when reading from it. The state of these resources stays as it was when transitioned unless the same resource was used in a different explicit or implicit transition. Implicit transitions can be: binding it as a render target, clearing it, copying it or any other command that is specified in this document as transitioning the resource. So this command should only be used if the state of the resource has already changed. So when the same resources are already transitioned to read then they stay that until they're modified by something else. *For writes however, it is **essential** to transition them even if they're in write already. This is to ensure the command that modified the resource is finished before writing again.*
 - If the state uses a stencil then it needs to set a stencil ref using CommandListRef_setStencil.
 - If the state uses a blend type that uses the blend constants then it has to set the blend constants using CommandListRef_setBlendConstants.
 
@@ -999,7 +999,7 @@ When issuing the draw, the state needs to be valid: a render has to be started (
 //Bind viewport/scissor
 //Bind primitive buffers (allocate all meshes into one buffer for less rebinds)
 //Foreach shader:
-//  Bind pipeline 
+//  Bind pipeline
 //	All draw calls of relevant objects
 ```
 
@@ -1018,7 +1018,7 @@ Same as draw except the device reads the parameters of the draw from a DeviceBuf
 - buffer: a buffer with the DrawCallUnindexed or DrawCallIndexed struct(s) depending on the 'indexed' boolean. Buffer needs to enable Indirect usage to be usable by indirect draws.
 - bufferOffset: offset into the draw call buffer. Align to 16-byte (unaligned is disallowed).
 - bufferStride: stride of the draw call buffer. If 0 it will be defaulted to tightly packed (16 or 32 byte depending on if it's indexed or not). Has to be bigger or equal to the current draw call struct size.
-- drawCalls: how many draw calls are expected to be filled in this buffer. A draw can also set the draw parameters to zero to disable it (instanceCount / index / vertexCount), though for that purpose drawIndirectCountExt is recommended. Make sure the buffer has `U8[bufferStride][maxDrawCalls]` allocated at bufferOffset. 
+- drawCalls: how many draw calls are expected to be filled in this buffer. A draw can also set the draw parameters to zero to disable it (instanceCount / index / vertexCount), though for that purpose drawIndirectCountExt is recommended. Make sure the buffer has `U8[bufferStride][maxDrawCalls]` allocated at bufferOffset.
 - indexed: if the draw calls are indexed or not. The device can't combine non indexed and indexed draw calls, so if you want to combine them you need to do this as two separate steps.
   - If not indexed; the buffer takes a DrawCallUnindexed struct: U32 vertexCount, instanceCount, vertexOffset, instanceOffset.
   - Otherwise; the buffer takes a DrawCallIndexed struct: U32 indexCount, instanceCount, indexOffset, I32 vertexOffset, U32 instanceOffset, U32 padding[3].
@@ -1027,7 +1027,7 @@ drawIndirect transitions the input buffer to IndirectDraw. This means that the b
 
 #### drawIndirectCountExt
 
-Same as drawIndirect, except it adds a DeviceBuffer counter which specifies how many active draw calls there are. This is very useful as it allows culling to be done entirely by compute. 
+Same as drawIndirect, except it adds a DeviceBuffer counter which specifies how many active draw calls there are. This is very useful as it allows culling to be done entirely by compute.
 
 - drawCalls now represents 'maxDrawCalls' which limits how many draw calls might be issued by the device.
 - countBuffer now represents a U32 in the DeviceBuffer at the offset. Make sure to align 4-byte to satisfy alignment requirements.
@@ -1037,10 +1037,10 @@ drawIndirect transitions the input buffer to IndirectDraw. This means that the b
 
 ### setPrimitiveBuffers
 
-Sets the primitive buffers (vertex + index buffer(s)) for use by draw commands such as draw, drawIndirect and drawIndirectCountExt. The buffers need the Vertex and/or Index usage set if they're used for that purpose. In the same scope of the setPrimitiveBuffers it is illegal to transition the subresource(s) back to a different state or to write/read from other sources that use it (check the Scope section of this document). The vertex buffer(s) need to have the same layout as specified in the pipeline and the ranges specified by the draw calls (such as count and offset) need to match up as well. 
+Sets the primitive buffers (vertex + index buffer(s)) for use by draw commands such as draw, drawIndirect and drawIndirectCountExt. The buffers need the Vertex and/or Index usage set if they're used for that purpose. In the same scope of the setPrimitiveBuffers it is illegal to transition the subresource(s) back to a different state or to write/read from other sources that use it (check the Scope section of this document). The vertex buffer(s) need to have the same layout as specified in the pipeline and the ranges specified by the draw calls (such as count and offset) need to match up as well.
 
 ```c
-SetPrimitiveBuffersCmd primitiveBuffers = (SetPrimitiveBuffersCmd) { 
+SetPrimitiveBuffersCmd primitiveBuffers = (SetPrimitiveBuffersCmd) {
     .vertexBuffers = { vertexBuffers[0], vertexBuffers[1] },
     .indexBuffer = indexBuffer,
     .isIndex32Bit = false
@@ -1061,7 +1061,7 @@ dispatch2D, dispatch1D and dispatch3D are the easiest implementations. You dispa
 
 #### dispatchIndirect
 
-Same thing as dispatch, except the device reads from a U32x3 into the DeviceBuffer at the offset and dispatches the groups stored there. Has to be aligned to 16-byte. For 2D dispatches please set z to 1, for 1D set y to 1 as well. 
+Same thing as dispatch, except the device reads from a U32x3 into the DeviceBuffer at the offset and dispatches the groups stored there. Has to be aligned to 16-byte. For 2D dispatches please set z to 1, for 1D set y to 1 as well.
 
 dispatchIndirect transitions the input buffer to IndirectDraw. This means that the buffer can't also be bound as a Vertex/Index buffer or be used in the shader as a read/write buffer in the same scope. Buffer needs to enable Indirect usage to be usable by indirect draws.
 
@@ -1110,7 +1110,7 @@ _gotoIfError(clean, CommandListRef_startRenderExt(
     commandList, 				//See "Command list"
     I32x2_zero(), 				//No offset
     I32x2_zero(), 				//Use attachment's size
-    colors, 
+    colors,
     (AttachmentInfo) { 0 },		//No depth attachment
     (AttachmentInfo) { 0 }		//No stencil attachment
 ));
@@ -1132,30 +1132,30 @@ A scope is the replacement of the "transition" command. The scope makes sure all
 
 ```C
 startScope		//Transitions resources
-    
+
     addMarkerDebugExt
     startRegionDebugExt (starts deb region, push)
         endRegionDebugExt (end deb region, pop: req for each startRegionDebugExt)
-    
+
 	clearImages								//Keeps scope alive
     copyImageRegions						//Keeps scope alive
 	setGraphicsPipeline
     setComputePipeline
     	dispatch(Indirect)					//Keeps scope alive
-    
+
     startRenderExt
         setPrimitiveBuffers
         setViewport/Scissor
         setBlendConstants
         setStencil
         draw(Indirect(Count))				//Keeps scope alive
-            requires: 
+            requires:
                 setGraphicsPipeline
                 setViewport/Scissor
                 probably setPrimitiveBuffers
                 optional setBlendConstants & setStencil
         endRenderExt (required for each startRender)
-                    
+
     endScope
 ```
 
@@ -1165,9 +1165,9 @@ All startRenderExts in a scope should be ended and all startRegionDebugExts as w
 
 #### Transitions
 
-Because the API requires bindless to function, it has certain limits. One of these limits/benefits is that a shader is now able to access all write buffers/textures and read buffers/textures. This would mean that everything is accessible by all shaders; making automatic transitions impossible. To fix this; the user will only have to manually do transitions for draw/dispatch calls. For other usages the current scope will handle the transition for you (though this disallows usages of the same subresource for different purposes). Here you specify the (sub)resource and in which shader stage it is first used and if it's a write (or if any subsequent shaders could write to it). Then the runtime will automatically transition only when it's needed. 
+Because the API requires bindless to function, it has certain limits. One of these limits/benefits is that a shader is now able to access all write buffers/textures and read buffers/textures. This would mean that everything is accessible by all shaders; making automatic transitions impossible. To fix this; the user will only have to manually do transitions for draw/dispatch calls. For other usages the current scope will handle the transition for you (though this disallows usages of the same subresource for different purposes). Here you specify the (sub)resource and in which shader stage it is first used and if it's a write (or if any subsequent shaders could write to it). Then the runtime will automatically transition only when it's needed.
 
-Even though Metal doesn't need transitions, they're still required to allow DirectX and Vulkan support. More importantly; transitions allow OxC3 to know which resources are required for the command list to be executed. It uses this to keep the resources alive until the command list was executed on the device. 
+Even though Metal doesn't need transitions, they're still required to allow DirectX and Vulkan support. More importantly; transitions allow OxC3 to know which resources are required for the command list to be executed. It uses this to keep the resources alive until the command list was executed on the device.
 
 For some types such as a Sampler, these transitions are required, even though the underlying API might not support the transitions for these types. In this case it signifies that the scope needs this resource to be active, to ensure it doesn't get deleted while in flight. It also ensures that the graphics API implementation doesn't evict it in an attempt to save memory (irrelevant to samplers though).
 
@@ -1185,7 +1185,7 @@ Transition transitions[] = {
 	}
 };
 
-ListTransition transitionArr = (ListTransition) { 0 };		
+ListTransition transitionArr = (ListTransition) { 0 };
 _gotoIfError(clean, ListTransition_createRefConst(&transitionArr, 1, transitions));
 
 _gotoIfError(clean, CommandListRef_startScope(commandList, transitionArr, 0 /* id */, (ListCommandScopeDependency) { 0 } /* deps */));
@@ -1213,7 +1213,7 @@ startScope (0)					//Render visibility buffer
 		X draw calls			//Generates vertices dynamically
 		endRenderExt
 	endScope
-	
+
 startScope (1)
 	setComputePipeline
 	dispatch					//Unpack V-Buffer into G-Buffer

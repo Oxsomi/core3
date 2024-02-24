@@ -71,7 +71,7 @@ typedef struct CommandList {
 
 	EMSAASamples boundSampleCount;
 	U32 padding;
-	
+
 	ListTransitionInternal pendingTransitions;
 
 	ListDeviceResourceVersion activeSwapchains;		//Locks swapchain when it's first inserted

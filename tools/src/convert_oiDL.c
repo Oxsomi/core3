@@ -144,7 +144,7 @@ Error _CLI_convertToDL(ParsedArgs args, CharString input, FileInfo inputInfo, Ch
 
 				CharString splitBy;
 				_gotoIfError(clean, ParsedArgs_getArg(args, EOperationHasParameter_SplitByShift, &splitBy));
-					
+
 				_gotoIfError(clean, CharString_splitStringSensitivex(str, splitBy, &split));
 			}
 
@@ -154,7 +154,7 @@ Error _CLI_convertToDL(ParsedArgs args, CharString input, FileInfo inputInfo, Ch
 			//TODO: When split returns ListCharString, replace with DLFile_createAsciiList
 
 			_gotoIfError(clean, DLFile_createx(settings, &file));
-					
+
 			for(U64 i = 0; i < split.length; ++i)
 				_gotoIfError(clean, DLFile_addEntryAsciix(&file, split.ptr[i]));
 

@@ -183,7 +183,7 @@ I32x4 I32x4_lsh128(I32x4 a, U8 bits) {
 
 	if (bits >= 64)
 		return I32x4_lsh64(a, bits - 64);
-	
+
 	a = I32x4_rsh64(a, 64 - bits);
 	return I32x4_or(I32x4_lsh64(b, bits), a);
 }

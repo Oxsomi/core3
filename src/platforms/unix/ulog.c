@@ -79,10 +79,10 @@ void Log_captureStackTrace(void **stack, U64 stackSize, U8 skip) {
 	}
 
 void Log_printCapturedStackTraceCustom(
-	Allocator alloc, 
-	const void **stackTrace, 
-	U64 stackSize, 
-	ELogLevel lvl, 
+	Allocator alloc,
+	const void **stackTrace,
+	U64 stackSize,
+	ELogLevel lvl,
 	ELogOptions opt
 ) {
 

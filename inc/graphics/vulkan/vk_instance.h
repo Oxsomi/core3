@@ -50,7 +50,7 @@ extern const C8 *optExtensionsName[];
 extern U64 optExtensionsNameCount;
 
 typedef struct VkGraphicsInstance {
-	
+
 	VkInstance instance;
 	VkDebugReportCallbackEXT debugReportCallback;
 

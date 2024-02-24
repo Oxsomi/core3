@@ -335,7 +335,7 @@ U64 EFloatType_convert(EFloatType type, U64 v, EFloatType conversionType) {
 
 			return *(const U32*)&f32;
 		}
-		
+
 		#if _SIMD == SIMD_SSE
 
 			//Hardware extension for float conversions
@@ -352,7 +352,7 @@ U64 EFloatType_convert(EFloatType type, U64 v, EFloatType conversionType) {
 
 				Bool anyFloat = targ == EFloatType_F32;
 				Bool anyDouble = targ == EFloatType_F64;
-					
+
 				if((anyFloat || anyDouble) && hasF16C >= 1) {
 
 					//Expanding from F16
@@ -379,7 +379,7 @@ U64 EFloatType_convert(EFloatType type, U64 v, EFloatType conversionType) {
 					}
 				}
 			}
-			
+
 		#else
 			(void)hasF16C;
 		#endif

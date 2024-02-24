@@ -258,7 +258,7 @@ void Platform_printAllocations(U64 offset, U64 length, U64 minAllocationSize) {
 		);
 
 		U64 capturedLength = 0;
-	
+
 		for(U64 i = offset; i < offset + length && i < Allocator_allocations.length; ++i) {
 
 			DebugAllocation *captured = &Allocator_allocations.ptrNonConst[i];
@@ -316,10 +316,10 @@ Error Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *alloca
 		return Error_unsupportedOperation(0, "Platform_create() failed, invalid endianness (only little endian supported)");
 
 	Bool isSupported = Platform_checkCPUSupport();
-	
+
 	if(!isSupported)
 		return Error_unsupportedOperation(
-			0, 
+			0,
 			"Platform_create() failed: Unsupported CPU. The following extensions are required: "
 			"SSE, SSE2, SSE3, SSSE3, SSE4.1, SSE4.2, AES, RDRAND, BMI1, PCLMULQDQ"
 		);
@@ -369,7 +369,7 @@ Error Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *alloca
 	Buffer platformExt = Buffer_createNull();
 	Error err = Error_none();
 	CharString appDir = CharString_createNull();
-	
+
 	_gotoIfError(clean, Buffer_createEmptyBytesx(Platform_extData, &platformExt));
 
 	Platform_instance.virtualSectionsLock = Lock_create();
@@ -389,7 +389,7 @@ Error Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *alloca
 	}
 
 	Platform_instance.args = sl;
-	
+
 	if(!Platform_useWorkingDirectory) {
 
 		//Grab app directory of where the exe is installed
@@ -403,7 +403,7 @@ Error Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *alloca
 
 		if (loc == CharString_length(appDir))
 			basePath = CharString_createRefAutoConst(appDir.ptr, CharString_length(appDir));
-	
+
 		else CharString_cut(appDir, 0, loc + 1, &basePath);
 
 		_gotoIfError(clean, CharString_createCopyx(basePath, &Platform_instance.workingDirectory));

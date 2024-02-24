@@ -101,7 +101,7 @@ inline F32 *InputDevice_getAxisValue(InputDevice dev, U16 localHandle, Bool isCu
 }
 
 inline BitRef InputDevice_getButtonValue(InputDevice dev, U16 localHandle, Bool isCurrent) {
-	
+
 	if(localHandle >= dev.buttons)
 		return (BitRef){ 0 };
 

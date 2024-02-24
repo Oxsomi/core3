@@ -40,7 +40,7 @@ F32 Random_sample(U32 *seed) {
 
 	if(!seed)
 		return 0;
-	
+
 	*seed = (1664525 * *seed + 1013904223);
 	return (F32)(*seed & 0x00FFFFFF) / (F32)(0x01000000);
 }

@@ -297,7 +297,7 @@ int main() {
 	printf("Testing Buffer SHA256\n");
 
 	static const U32 resultHashes[][8] = {
-		{ 0xE3B0C442, 0x98FC1C14, 0x9AFBF4C8, 0x996FB924, 0x27AE41E4, 0x649B934C, 0xA495991B, 0x7852B855 },	
+		{ 0xE3B0C442, 0x98FC1C14, 0x9AFBF4C8, 0x996FB924, 0x27AE41E4, 0x649B934C, 0xA495991B, 0x7852B855 },
 		{ 0xBA7816BF, 0x8F01CFEA, 0x414140DE, 0x5DAE2223, 0xB00361A3, 0x96177A9C, 0xB410FF61, 0xF20015AD },
 		{ 0xCDC76E5C, 0x9914FB92, 0x81A1C7E2, 0x84D73E67, 0xF1809A48, 0xA497200E, 0x046D39CC, 0xC7112CD0 },
 		{ 0x067C5312, 0x69735CA7, 0xF541FDAC, 0xA8F0DC76, 0x305D3CAD, 0xA140F893, 0x72A410FE, 0x5EFF6E4D },
@@ -380,9 +380,9 @@ int main() {
 
 		U32 result[8];
 		Buffer_sha256(CharString_bufferConst(inputs[i]), result);
-	
+
 		Bool b = Buffer_eq(Buffer_createRefConst(result, 32), Buffer_createRefConst(resultHashes[i], 32));
-	
+
 		if(!b)
 			_gotoIfError(clean, Error_invalidOperation(4, "Buffer_sha256 test failed"));
 	}
@@ -391,7 +391,7 @@ int main() {
 		CharString_free(&inputs[i], alloc);
 
 	//Test buffer layouts
-	
+
 	//Test 1: Camera[10]
 
 	_gotoIfError(clean, BufferLayout_create(alloc, &bufferLayout));
@@ -1059,7 +1059,7 @@ int main() {
 			CharString_free(&tmp, alloc);
 		}
 	}
-	
+
 	{
 		printf("Testing Buffer encrypt/decrypt (AES128)\n");
 
@@ -1532,7 +1532,7 @@ int main() {
 			0x3FF3AC0000000000,		//1.2294921875
 			0x3FEFFC0000000000		//0.99951171875
 		};
-		
+
 		for (U64 i = 0; i < sizeof(halfs) / sizeof(halfs[0]); ++i) {
 
 			for(U64 j = 0; j < 2; ++j) {
@@ -1637,7 +1637,7 @@ int main() {
 			0x47D2CED32A16A1B1,		//1e38
 			0x48078287F49C4A1D,		//1e39
 			0x483D6329F1C35CA5,		//1e40
-	
+
 			0x366244CE242C5561,		//1e-46
 			0x3696D601AD376AB9,		//1e-45
 			0x37A16C262777579C,		//1e-40
@@ -2067,7 +2067,7 @@ int main() {
 		{ 0x0000000000000000, 0xE000000000000000 },	{ 0x0000000000000000, 0xC000000000000000 },
 		{ 0x0000000000000000, 0x8000000000000000 }
 	};
-		
+
 	const U64 rshResult[][2] = {
 		{ 0xFFFFFFFFFFFFFFFF, 0x7FFFFFFFFFFFFFFF },	{ 0xFFFFFFFFFFFFFFFF, 0x3FFFFFFFFFFFFFFF },
 		{ 0xFFFFFFFFFFFFFFFF, 0x1FFFFFFFFFFFFFFF },	{ 0xFFFFFFFFFFFFFFFF, 0x0FFFFFFFFFFFFFFF },
@@ -2169,7 +2169,7 @@ int main() {
 
 		aBig = (BigInt){ 0 };
 		_gotoIfError(clean, BigInt_createConstRef(&rshResult[i][0], 2, &aBig));
-		
+
 		U16 off = BigInt_bitScan(aBig);
 
 		if(off != (U16)(sizeof(rshResult) / sizeof(rshResult[0]) - 1 - i))
@@ -2290,7 +2290,7 @@ clean:
 	BufferLayout_free(alloc, &bufferLayout);
 
 	CharString_free(&tmp, alloc);
-	
+
 	for(U64 j = 0; j < sizeof(inputs) / sizeof(inputs[0]); ++j)
 		CharString_free(&inputs[j], alloc);
 

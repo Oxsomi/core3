@@ -378,7 +378,7 @@ I32x4 AESEncryptionContext_blockHash(I32x4 block, const I32x4 k[15], EBufferEncr
 		tmp[5] = I32x4_xor(tmp[0], I32x4_lshByte(tmp[5], 12));
 
 		const U8 v1[3] = { 1, 2, 7 };
-		
+
 		for(U8 i = 0; i < 3; ++i)
 			tmp[i] = I32x4_rsh32(tmp[5], v1[i]);
 

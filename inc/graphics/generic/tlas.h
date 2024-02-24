@@ -129,7 +129,7 @@ typedef struct TLASInstanceMotion {
 TList(TLASInstanceMotion);
 TList(TLASInstanceStatic);
 
-//A TLAS is a ListTLASInstance or a DeviceBuffer that contains either 
+//A TLAS is a ListTLASInstance or a DeviceBuffer that contains either
 // TLASInstance[] (isMotionBlurExt) or TLASInstanceStatic[] (!isMotionBlurExt)
 
 typedef struct TLAS {

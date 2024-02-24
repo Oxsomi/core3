@@ -208,7 +208,7 @@ Error WindowManager_createWindow(
 		.hint = hint | (type == EWindowType_Virtual ? EWindowHint_ProvideCPUBuffer : 0),
 		.format = format,
 		.flags = (type == EWindowType_Virtual ? EWindowFlags_IsFocussed : 0),
-				
+
 		.offset = position,
 		.size = size,
 		.minSize = minSize,
@@ -279,7 +279,7 @@ Error WindowManager_wait(WindowManager *manager) {
 			F64 dt = manager->lastUpdate ? (now - manager->lastUpdate) / (F64)SECOND : 0;
 			manager->callbacks.onUpdate(manager, dt);
 		}
-		
+
 		if(manager->callbacks.onDraw)
 			manager->callbacks.onDraw(manager);
 
@@ -321,7 +321,7 @@ Error WindowManager_adaptSizes(I32x2 *sizep, I32x2 *minSizep, I32x2 *maxSizep) {
 
 	if(I32x2_any(I32x2_gt(maxSize, I32x2_xx2(16384))) || I32x2_any(I32x2_lt(maxSize, I32x2_zero())))
 		return Error_invalidParameter(4, 0, "WindowManager_adaptSizes()::*maxSizep should be >=0 && <16384");
-		
+
 	*minSizep = minSize;
 	*maxSizep = maxSize;
 	*sizep = I32x2_clamp(size, minSize, maxSize);

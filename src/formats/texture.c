@@ -172,7 +172,7 @@ DXFormat ETextureFormatId_toDXFormat(ETextureFormatId format) {
 
 		case ETextureFormatId_BC7:			return 98;
 		case ETextureFormatId_BC7_sRGB:		return 99;
-		
+
 		default:							return 0;
 	}
 }
@@ -244,7 +244,7 @@ ETextureFormatId DXFormat_toTextureFormatId(DXFormat format) {
 
 		case 98:							return ETextureFormatId_BC7;
 		case 99:							return ETextureFormatId_BC7_sRGB;
-		
+
 		default:							return ETextureFormatId_Undefined;
 	}
 }

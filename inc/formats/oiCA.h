@@ -65,7 +65,7 @@ typedef enum ECAFlags {
    	//Whether SHA256 (1) or CRC32C (0) is used as hash
     //(Only if compression is on)
 
-	ECAFlags_UseSHA256					= 1 << 0,		
+	ECAFlags_UseSHA256					= 1 << 0,
 
 	//See ECAFileObject
 
@@ -132,7 +132,7 @@ typedef struct CAExtraInfo {
 	U16 headerExtensionSize;		//To skip extended data size.
 
 	U8 directoryExtensionSize;		//To skip directory extended data.
-	U8 fileExtensionSize;			//To skip file extended data	
+	U8 fileExtensionSize;			//To skip file extended data
 
 } CAExtraInfo;
 

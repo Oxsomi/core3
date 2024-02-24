@@ -273,14 +273,14 @@ void Buffer_sha256Internal(Buffer buf, U32 *output) {
 	U32 Buffer_crc32c(Buffer buf) {
 
 		U32 crc = U32_MAX;
-	
+
 		U64 bufLen = Buffer_length(buf);
 
 		if(!bufLen)
 			return crc ^ U32_MAX;
 
 		U64 off = (U64)(void*)buf.ptr;
-		
+
 		U64 len = bufLen;
 		U64 offNear8 = U64_min((U64)buf.ptr + bufLen, (off + 7) & ~7);
 
@@ -533,7 +533,7 @@ void Buffer_sha256Internal(Buffer buf, U32 *output) {
 			//Store previous state
 
 			I32x4 currState0 = state0, currState1 = state1;
-			
+
 			//Init messages
 
 			I32x4 msgs[4];
@@ -573,7 +573,7 @@ void Buffer_sha256Internal(Buffer buf, U32 *output) {
 
 			I32x4 msg = I32x4_add(msgs[3], ROUNDS[15]);
 			state1 = _mm_sha256rnds2_epu32(state1, state0, msg);
-			msg = I32x4_zwxx(msg);	
+			msg = I32x4_zwxx(msg);
 			state0 = _mm_sha256rnds2_epu32(state0, state1, msg);
 
 			//Combine state

@@ -50,7 +50,7 @@ Bool Thread_sleep(Ns ns) {
 }
 
 void *ThreadFunc(void *t) {
-	
+
 	Thread *thread = (Thread*) t;
 
 	if(thread && thread->callback)

@@ -82,11 +82,11 @@ U64 _CLI_profileCastStep(U64 l, U64 k, U64 j, const U8 *ptr, U64 i) {
 		case EFloatType_F64:
 			v = ((const U64*)ptr)[i];
 			break;
-			
+
 		case EFloatType_F32:
 			v = ((const U32*)ptr)[i];
 			break;
-			
+
 		default:
 			v = ((const U16*)ptr)[i];
 			break;
@@ -147,7 +147,7 @@ Error _CLI_profileCast(ParsedArgs args, Buffer buf) {
 
 	const U64 itCount = sizeof(iterationNames) / sizeof(iterationNames[0]);
 	const U64 floatTypes = sizeof(floatTypeNames) / sizeof(floatTypeNames[0]);
-	
+
 	Ns thenOuter = Time_now();
 
 	for(U64 l = 0; l < itCount; ++l) {
@@ -213,7 +213,7 @@ Error _CLI_profileRNG(ParsedArgs args, Buffer buf) {
 		(F64)(now - then) / Buffer_length(buf),
 		(F64)Buffer_length(buf) / (now - then) * SECOND
 	);
-	
+
 	return Error_none();
 }
 

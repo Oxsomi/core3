@@ -42,7 +42,7 @@ Error Brotli_compress(
 	if(quality != 11)
 		return Error_invalidParameter(2, 0, 0);
 
-	Bool isUTF8 = Buffer_isUTF8(target, 0.75);	
+	Bool isUTF8 = Buffer_isUTF8(target, 0.75);
 
 	//Setup constants
 
@@ -50,7 +50,7 @@ Error Brotli_compress(
 
 	if(quality >= 9 && BROTLI_WINDOW_SIZE > maxInputBlockBits)
 		maxInputBlockBits = (U8) U64_min(BROTLI_WINDOW_SIZE, 21);
-	
+
 	U64 maxBackwardDistance = ((U64)1 << BROTLI_WINDOW_SIZE) - 16;
 
 	//Allocate requirements
@@ -99,10 +99,10 @@ Error Buffer_compress(
 
 	if(!Buffer_length(target))
 		return Error_nullPointer(0, 0);
-	
+
 	if(type >= EBufferCompressionType_Count)
 		return Error_invalidEnum(1, 0, (U64)type, (U64)EBufferCompressionType_Count);
-	
+
 	if(hint >= EBufferCompressionHint_Count)
 		return Error_invalidEnum(2, 0, (U64)hint, (U64)EBufferCompressionHint_Count);
 

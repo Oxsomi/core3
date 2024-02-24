@@ -4,17 +4,17 @@ OxC3 types contains a lot of very basic types; it's the STL of OxC3. All these t
 
 ## Basic defines
 
-- **_SIMD** is what type of SIMD is used 
+- **_SIMD** is what type of SIMD is used
   - *types/types.h* defines these, while _SIMD is a compile define.
   - **SIMD_NONE**: Indicates a fallback mode only, useful for validation, debugging and adding new platforms with a lot less effort (if they use a different SIMD setting that isn't supported yet).
   - **SIMD_SSE**: Indicates the usage of SSE4.2/SSE4.1/SSE2/SSE/SSE3/SSSE3, AES, PCLMULQDQ, BMI1 and RDRAND and the possible usage of SHA instructions. This allows quicker and/or safer encryption/hashing & computation.
   - (**unsupported**): SIMD_NEON: Indicates the usage of ARM NEON intrinsics.
-- **_ARCH** is what type of architecture is used 
+- **_ARCH** is what type of architecture is used
   - *types/types.h* defines these, while _ARCH is a compile define.
   - **ARCH_NONE**: Unknown architecture; likely abstracted away from assembly level.
   - **ARCH_X64**: X86_64 architecture.
   - **ARCH_ARM**.
-- **_PLATFORM_TYPE** is what kind of platform is running 
+- **_PLATFORM_TYPE** is what kind of platform is running
   - *types/platform_types.h* defines these, while _PLATFORM_TYPE is a compile define.
   - **PLATFORM_WINDOWS**.
   - **PLATFORM_LINUX**.
@@ -104,7 +104,7 @@ OxC3 types contains a lot of very basic types; it's the STL of OxC3. All these t
 
 ## Nytodecimal
 
-Nytodecimal is a base64-like encoding that is easy to decode/encode and quite compact. There are other more efficient encodings but they are very expensive to decode. In Nyto it stores [0-9A-Za-z_$] as 0-63. Nyto can encode an octal pair as 1 character, 6 bits or 1.5 hex chars. 
+Nytodecimal is a base64-like encoding that is easy to decode/encode and quite compact. There are other more efficient encodings but they are very expensive to decode. In Nyto it stores [0-9A-Za-z_$] as 0-63. Nyto can encode an octal pair as 1 character, 6 bits or 1.5 hex chars.
 
 ## C8 (char, types/types.h)
 
@@ -202,7 +202,7 @@ It consists of the following properties:
 - U10 **typeId**; representing the unique id of the object.
 - U2 **width**; 1-4: represents the width of a matrix or vector.
 - U2 **height**; 1-4: represents the height of a matrix.
-- U2 **dataTypeStride**; [ 8, 16, 32, 64 ] bit stride 
+- U2 **dataTypeStride**; [ 8, 16, 32, 64 ] bit stride
 - U3 **dataType**; UInt (0), Int (1), Unused (2), Float (3), Bool (4), Object (5), Char (6), Unused (7).
 
 If all bits are on, it represents undefined.
@@ -222,7 +222,7 @@ If all bits are on, it represents undefined.
 
 Other types can be made but are external or are part of a different standard library.
 
-## TODO: math.h 
+## TODO: math.h
 
 ## TODO: pack.h
 
@@ -236,7 +236,7 @@ Error is a struct generally passed between OxC3 functions that can error for any
 
 - EGenericError **genericError**: non zero if the function threw an error, specifies type of error.
 - const C8* **errorStr**: hardcoded human readable string, for ease of searching through the code and tracking down the issue.
-- void* **stackTrace**[N]: a stacktrace of max ERROR_STACKTRACE length; only 1 level for release mode but up to _STACKTRACE_SIZE (32) for debug. 
+- void* **stackTrace**[N]: a stacktrace of max ERROR_STACKTRACE length; only 1 level for release mode but up to _STACKTRACE_SIZE (32) for debug.
 - U64 **paramValue0**: if genericError allows it, specifies the first value the error was caught on (for example out of bounds id).
 - U64 **paramValue1**: if genericError allows it, specifies the second value the error was caught on (for example max array length if out of bounds is thrown).
 - U32 **paramId**: if applicable, can hint which input parameter caused the issue.
@@ -284,7 +284,7 @@ stderr
 - Buffer_isConstRef
 - Buffer_createManagedPtr
 - Buffer_createRefFromBuffer
-- 
+-
 
 ## TODO: GenericList and TList (types/list.h)
 
@@ -296,7 +296,7 @@ An allocator is a struct that contains the following:
 - AllocFunc: `Error alloc(T *ptr, U64 length, Buffer *output);` where T can be the opaque object type if the function is properly cast.
   - Importantly: Validate if ptr is what you expected (if it's not ignored), ensure length can be allocated and that Buffer doesn't already contain data.
 - FreeFunc: `Bool free(T *ptr, Buffer buf)` where T can be the opaque object type if the function is properly cast.
-  - Importantly: Validate if ptr is as expected (if it's not ignored), ensure the length and position of buf is valid before freeing. 
+  - Importantly: Validate if ptr is as expected (if it's not ignored), ensure the length and position of buf is valid before freeing.
 
 ## TODO: AllocationBuffer (types/allocation_buffer.h)
 
@@ -325,7 +325,7 @@ It can be modified through the following:
   - Error **Archive_removeFile**(Archive *archive, CharString path, Allocator alloc): removes an entry if it's a file, if it's a folder it will error.
   - Error **Archive_removeFolder**(Archive *archive, CharString path, Allocator alloc): removes an entry if it's a folder, if it's a file it will error.
   - Error **Archive_remove**(Archive *archive, CharString path, Allocator alloc): removes an entry regardless of if it's a file or folder.
-- Error **Archive_rename**(Archive *archive, CharString loc, CharString newFileName, Allocator alloc): rename a file entry while keeping the same parent folder. This operation is faster than a move because it won't require adding a parent or re-parenting. 
+- Error **Archive_rename**(Archive *archive, CharString loc, CharString newFileName, Allocator alloc): rename a file entry while keeping the same parent folder. This operation is faster than a move because it won't require adding a parent or re-parenting.
 - Error **Archive_move**(Archive *archive, CharString loc, CharString directoryName, Allocator alloc): move a file from its parent to another folder.
 - Error **Archive_updateFileData**(Archive *archive, CharString path, Buffer data, Allocator alloc): overwrites the previous data at the file entry with new data.
 
@@ -361,7 +361,7 @@ A CDFList consists of the following:
 
 A CDF can be created through the following functions:
 
-- Error **CDFList_create**(U64 maxElements, Bool isReserved, U64 elementSize, Allocator allocator, CDFList *result): Creates N entries in a new CDFList or reserves N entries instead if isReserved is true. elementSize is the size of the data that backs the CDFList. 
+- Error **CDFList_create**(U64 maxElements, Bool isReserved, U64 elementSize, Allocator allocator, CDFList *result): Creates N entries in a new CDFList or reserves N entries instead if isReserved is true. elementSize is the size of the data that backs the CDFList.
 - Error **CDFList_createSubset**(GenericList preallocated, U64 elementOffset, U64 elementCount, Allocator allocator, CDFList *result): Creates N entries in a new CDFList but takes the backing memory as a ref from the preallocated list. This is useful for a 2D CDF for example, because it doesn't need to allocate any more.
 
 When the CDF is created, it can be updated through the following functions:
@@ -395,7 +395,7 @@ After the CDFList is finalized, it can be used in one of the following functions
 
 Random only provides some basic PRNG for picking a number between 0-1. This is only useful for some basic operations and shouldn't be used for critical applications such as encryption. For CSPRNG (Cryptographically secure PRNG) please use Buffer_csprng instead.
 
-- U32 **Random_seed**(U32 val0, U32 val1): Make a seed from a pair of 32-bit unsigned ints. A good example could be raytracing and needing random per pixel, then you could pass y * w + x as val0 and the frameId as val1. 
+- U32 **Random_seed**(U32 val0, U32 val1): Make a seed from a pair of 32-bit unsigned ints. A good example could be raytracing and needing random per pixel, then you could pass y * w + x as val0 and the frameId as val1.
 - The following sample from the seed a couple times to produce a random number [0 - 1>:
   - F32 **Random_sample**(U32 *seed)
   - F32x2 **Random_sample2**(U32 *seed)
@@ -403,7 +403,7 @@ Random only provides some basic PRNG for picking a number between 0-1. This is o
 
 ## Time (types/time.h)
 
-"OxC3 time" is defined as "Ns" (or U64) as in nanoseconds since unix epoch in UTC. 
+"OxC3 time" is defined as "Ns" (or U64) as in nanoseconds since unix epoch in UTC.
 
 Has the following functionality:
 
@@ -417,7 +417,7 @@ Has the following functionality:
 - I64 **Time_clocksElapsed**(U64 prevClocks): Basically Time_dns except it uses hardware cycles instead (see Time_clocks()).
 - TimeFormat is a ShortString (C8[32]) that can be used in the following functions:
   - void **Time_format**(Ns time, TimeFormat time, Bool isLocalTime): Formats an OxC3 timestamp into a human readable format and stringifies it (Time_getDate -> C8[32]) as ISO 8601 (0000-00-00T00:00:00.000000000Z).
-  - Bool **Time_parseFormat**(Ns *time, TimeFormat time, Bool isLocalTime): Parses an ISO 8601 date as an OxC3 timestamp (C8[32] -> Time_date). isLocalTime allows local timezone conversion. 
+  - Bool **Time_parseFormat**(Ns *time, TimeFormat time, Bool isLocalTime): Parses an ISO 8601 date as an OxC3 timestamp (C8[32] -> Time_date). isLocalTime allows local timezone conversion.
   - Parsing and formatting to and from local formats are unsupported. ISO 8601 (with a Z as the timezone rather than an offset) is currently the only allowed format.
 
 ## TODO: Transform (types/transform.h)

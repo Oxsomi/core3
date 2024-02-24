@@ -583,7 +583,7 @@ Bool BigInt_lsh(BigInt *a, U16 bits) {
 		return BigInt_and(a, BigInt_createNull());
 
 	for(U64 i = a->length - 1; i != U64_MAX; --i) {
-		
+
 		U64 right = i < (bits >> 6) ? 0 : a->data[i - (bits >> 6)];
 		U64 left = i <= (bits >> 6) ? 0 : a->data[i - (bits >> 6) - 1];
 
@@ -693,7 +693,7 @@ Bool BigInt_set(BigInt *a, BigInt b, Bool allowResize, Allocator alloc) {
 		return false;
 
 	if (allowResize && a->length != b.length) {
-	
+
 		Error err = BigInt_resize(a, b.length, alloc);
 
 		if(err.genericError)
@@ -830,7 +830,7 @@ Error BigInt_base2(BigInt b, Allocator alloc, CharString *result, EBase2Type typ
 	U64 i = len - 1;
 
 	for (U64 j = 0, k = 0; j < len - 2 && k < b.length; ++j) {
-	
+
 		U64 v = b.data[k];
 		v = ((U64)v >> ((countPerChar * j) & 63)) & mask;
 
@@ -915,16 +915,16 @@ Bool U128_isBase2(U128 a) {
 }
 
 U128 U128_createFromBase2(CharString text, Error *failed, EBase2Type type) {
-	
+
 	U128 result = U128_zero();
 	BigInt asBigInt = (BigInt) { 0 };
 	Error err;
-	
+
 	_gotoIfError(clean, BigInt_createRef((U64*) &result, 2, &asBigInt));
 	_gotoIfError(clean, BigInt_createFromBase2Type(text, U16_MAX, (Allocator) { 0 }, &asBigInt, type));
 
 clean:
-	
+
 	if(failed && err.genericError)
 		*failed = err;
 
@@ -987,7 +987,7 @@ U128 U128_createFromString(CharString text, Error *failed, Allocator alloc) {
 
 				if(failed)
 					*failed = err;
-				
+
 				return v;
 			}
 		}

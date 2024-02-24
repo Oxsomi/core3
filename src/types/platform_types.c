@@ -25,10 +25,10 @@
 #endif
 
 void Platform_getCPUId(int leaf, U32 result[4]) {
-	
+
 	if(!result)
 		return;
-	
+
 	#ifdef _MSC_VER
 		__cpuid(result, leaf);
 	#else

@@ -125,7 +125,7 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 		//oiCA header
 
 		case CAHeader_MAGIC: {
-			
+
 			CAHeader caHeader = *(const CAHeader*)buf.ptr;
 
 			Log_debugLnx("Detected oiCA file with following info:");
@@ -259,13 +259,13 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 		//oiDL header
 
 		case DLHeader_MAGIC: {
-		
+
 			DLHeader dlHeader = *(const DLHeader*)(buf.ptr + sizeof(U32));
 
 			Log_debugLnx("Detected oiDL file with following info:");
 
 			XXFile_printVersion(dlHeader.version);
-			
+
 			//AES chunking
 
 			U32 aesChunking = dlHeader.flags & EDLFlags_AESChunkMask;
@@ -718,7 +718,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 		//oiCA header
 
 		case CAHeader_MAGIC: {
-		
+
 			CAFile file = (CAFile) { 0 };
 			ListCharString strings = { 0 };
 			U64 baseCount = 0;

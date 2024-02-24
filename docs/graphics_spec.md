@@ -1,6 +1,6 @@
 # Minimum spec
 
-OxC3 is not made for devices older than 3 years. OxC3's spec for newer versions would require more recent devices to ensure developers don't keep on having to deal with the backwards compatibility for devices that aren't relevant anymore. For example; phones get replaced approx every 3 years. So it's safe to take 2 years back if you assume a development time/rollout of a year (at the time of OxC3 0.2). 
+OxC3 is not made for devices older than 3 years. OxC3's spec for newer versions would require more recent devices to ensure developers don't keep on having to deal with the backwards compatibility for devices that aren't relevant anymore. For example; phones get replaced approx every 3 years. So it's safe to take 2 years back if you assume a development time/rollout of a year (at the time of OxC3 0.2).
 
 *Keep in mind that a minor or major version change can change this spec! It might be that there was an oversight and a device/api was released that disagreed with our minimum spec. If the device/api is important enough, we might change the future spec (but never in patch versions. Only in minor/major). Please check the changelog to verify.*
 
@@ -266,7 +266,7 @@ If raytracing is enabled, the following formats will be enabled for BLAS buildin
 
 ## List of DirectX12 requirements
 
-- DirectX12 Feature level 12_1. 
+- DirectX12 Feature level 12_1.
 - WDDM 2.7 and above.
 - GPU:
   - Nvidia Maxwell 2nd gen and above.

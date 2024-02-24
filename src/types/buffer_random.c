@@ -46,12 +46,12 @@
 #elif _PLATFORM_TYPE == PLATFORM_OSX || _PLATFORM_TYPE == PLATFORM_IOS
 
 	#include <Security/SecRandom.h>
-	
+
 	Bool Buffer_csprng(Buffer target) {
 
 		if(!Buffer_length(target) || Buffer_isConstRef(target))
 			return false;
-		
+
 		return !SecRandomCopyBytes(kSecRandomDefault, Buffer_length(target), (void*)target.ptr);
 	}
 
@@ -60,12 +60,12 @@
 	#include <sys/random.h>
 
 	Bool Buffer_csprng(Buffer target) {
-		
+
 		if(!Buffer_length(target) || Buffer_isConstRef(target))
 			return false;
-			
-		size_t bytes = getrandom(target.ptr, Buffer_length(target), GRND_NONBLOCK);	
+
+		size_t bytes = getrandom(target.ptr, Buffer_length(target), GRND_NONBLOCK);
 		return bytes == Buffer_length(target);
 	}
-	
+
 #endif

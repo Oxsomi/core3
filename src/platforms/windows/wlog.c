@@ -64,10 +64,10 @@ static const WORD COLORS[] = {
 };
 
 void Log_printCapturedStackTraceCustom(
-	Allocator alloc, 
-	const void **stackTrace, 
-	U64 stackSize, 
-	ELogLevel lvl, 
+	Allocator alloc,
+	const void **stackTrace,
+	U64 stackSize,
+	ELogLevel lvl,
 	ELogOptions opt
 ) {
 
@@ -172,7 +172,7 @@ void Log_printCapturedStackTraceCustom(
 			//Cleanup the stack if we can't move anything to heap anymore
 
 		cleanup:
-			
+
 			for (U64 j = 0; j < i; ++j) {
 				CharString_free(&captured[j].fil, alloc);
 				CharString_free(&captured[j].sym, alloc);

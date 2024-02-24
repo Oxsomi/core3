@@ -43,7 +43,7 @@ typedef enum EOperationHasParameter {
 	EOperationHasParameter_EntryShift,
 	EOperationHasParameter_StartOffsetShift,
 
-	EOperationHasParameter_Count,	
+	EOperationHasParameter_Count,
 
 	EOperationHasParameter_Start		= EOperationHasParameter_FileFormatShift,
 

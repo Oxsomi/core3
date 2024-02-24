@@ -231,7 +231,7 @@ Error GraphicsInstance_createExt(GraphicsApplicationInfo info, Bool isVerbose, G
 	//Create instance
 
 	_gotoIfError(clean, vkCheck(vkCreateInstance(&instanceInfo, NULL, &instanceExt->instance)));
-	
+
 	//Load functions
 
 	vkExtension(clean, vkGetDeviceBufferMemoryRequirementsKHR, instanceExt->getDeviceBufferMemoryRequirements);
@@ -286,9 +286,9 @@ Error GraphicsInstance_createExt(GraphicsApplicationInfo info, Bool isVerbose, G
 	//Add debug callback
 
 	#ifndef NDEBUG
-		
+
 		VkDebugReportCallbackCreateInfoEXT callbackInfo = (VkDebugReportCallbackCreateInfoEXT) {
-		
+
 			.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT,
 
 			.flags =
@@ -316,7 +316,7 @@ clean:
 
 	ListConstC8_freex(&enabledLayers);
 	ListConstC8_freex(&enabledExtensions);
-	
+
 	ListVkExtensionProperties_freex(&extensions);
 	ListVkLayerProperties_freex(&layers);
 

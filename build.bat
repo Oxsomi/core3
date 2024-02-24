@@ -27,7 +27,7 @@ goto :success
 :usage
 	echo Usage: build [Build type: Debug/Release] [Enable SIMD: On/Off] [Force float fallback: On/Off]
 	goto :eof
-	
+
 :success
 
 rem Build normal exes

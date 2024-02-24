@@ -145,7 +145,7 @@ Error GraphicsDeviceRef_createSwapchain(GraphicsDeviceRef *dev, SwapchainInfo in
 		default:
 			_gotoIfError(clean, Error_invalidState(1, "Swapchain_resize() window format is unsupported"));
 	}
-	
+
 	Swapchain *swapchain = SwapchainRef_ptr(*scRef);
 
 	_gotoIfError(clean, GraphicsDeviceRef_inc(dev));

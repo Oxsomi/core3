@@ -94,7 +94,7 @@ Error createShaderModule(
 
 		#endif
 	}
-	
+
 	goto clean;
 
 clean:
@@ -103,7 +103,7 @@ clean:
 
 	if (err.genericError)
 		vkDestroyShaderModule(device->device, *mod, NULL);
-	
+
 	return err;
 }
 
@@ -314,7 +314,7 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListChar
 			EPipelineStateType_Count - EPipelineStateType_PerPipelinePropertyStart,
 
 	} EPipelineStateType;
-	
+
 	EPipelineStateType type;
 	(void)type;
 
@@ -507,7 +507,7 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListChar
 				&((VkVertexInputAttributeDescription*)states[EPipelineStateType_InputAttributes].ptr)[
 					counts[EPipelineStateType_InputAttributes]
 				];
-			
+
 			U32 bindingCount = 0;
 
 			for (U32 j = 0; j < 16; ++j) {
@@ -572,7 +572,7 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListChar
 			VkPrimitiveTopology topology = 0;
 
 			switch (info->topologyMode) {
-				
+
 				default:								topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;		break;
 				case ETopologyMode_TriangleStrip:		topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;	break;
 
@@ -630,7 +630,7 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListChar
 
 			VkPolygonMode polygonMode =
 				info->rasterizer.flags & ERasterizerFlags_IsWireframeExt ? VK_POLYGON_MODE_LINE : VK_POLYGON_MODE_FILL;
-			
+
 			VkPipelineRasterizationStateCreateInfo *infoi =
 				&((VkPipelineRasterizationStateCreateInfo*)states[EPipelineStateType_Rasterizer].ptr)[
 					counts[EPipelineStateType_Rasterizer]++
@@ -823,25 +823,25 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListChar
 
 			switch (info->depthFormatExt) {
 
-				case EDepthStencilFormat_D16:	
+				case EDepthStencilFormat_D16:
 					depthFormat = VK_FORMAT_D16_UNORM;
 					break;
 
-				case EDepthStencilFormat_D32:	
+				case EDepthStencilFormat_D32:
 					depthFormat = VK_FORMAT_D32_SFLOAT;
 					break;
 
-				case EDepthStencilFormat_D24S8Ext:	
+				case EDepthStencilFormat_D24S8Ext:
 					depthFormat = VK_FORMAT_D24_UNORM_S8_UINT;
 					stencilFormat = VK_FORMAT_S8_UINT;
 					break;
 
-				case EDepthStencilFormat_D32S8:	
+				case EDepthStencilFormat_D32S8:
 					depthFormat = VK_FORMAT_D32_SFLOAT_S8_UINT;
 					stencilFormat = VK_FORMAT_S8_UINT;
 					break;
 
-				case EDepthStencilFormat_S8Ext:	
+				case EDepthStencilFormat_S8Ext:
 					stencilFormat = VK_FORMAT_S8_UINT;
 					break;
 

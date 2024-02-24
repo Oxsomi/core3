@@ -134,7 +134,7 @@ Bool CLI_rand(ParsedArgs args) {
 				Log_errorLnx("Invalid argument. Can only pick one base.");
 				return false;
 			}
-			
+
 			bytesToGenerate *= 8;		//Better probability distribution
 			break;
 		}
@@ -205,17 +205,17 @@ Bool CLI_rand(ParsedArgs args) {
 
 		else {
 
-			switch (args.operation) {				
+			switch (args.operation) {
 
 				default:
 					Log_errorLnx("Invalid operation.");
 					return false;
-			
+
 				case EOperation_RandKey:
 				case EOperation_RandData:
 
 					for(U64 j = 0, k = Buffer_length(tmp); j < k; ++j) {
-			
+
 						U8 v = tmp.ptr[j];
 						U8 prefix = 2;
 
@@ -256,7 +256,7 @@ Bool CLI_rand(ParsedArgs args) {
 						Bool pickAll = !anyCharFlags;
 
 						if (args.parameters & EOperationHasParameter_Character) {
-					
+
 							CharString str = CharString_createNull();
 
 							if (ParsedArgs_getArg(args, EOperationHasParameter_CharacterShift, &str).genericError) {
@@ -295,7 +295,7 @@ Bool CLI_rand(ParsedArgs args) {
 
 									if(C8_isDec(c) && !(args.flags & (EOperationFlags_Number | EOperationFlags_Alphanumeric)))
 										continue;
-								
+
 									if(!C8_isAlphaNumeric(c) && !(args.flags & EOperationFlags_Symbols))
 										continue;
 								}
@@ -315,7 +315,7 @@ Bool CLI_rand(ParsedArgs args) {
 					//We can immediately return this (as long as we clamp it)
 
 					if (outputAsBase == 10) {
-						
+
 						U64 v = *(const U64*)tmp.ptr;
 
 						if(b != 64)
@@ -338,7 +338,7 @@ Bool CLI_rand(ParsedArgs args) {
 						v %= CharString_length(options);
 
 						//Ensure we stay within our bit limit
-						
+
 						if(!k && b)
 							switch (outputAsBase) {
 								case 8:		if(b % 3) v &= (1 << (b % 3)) - 1;		break;
@@ -370,7 +370,7 @@ Bool CLI_rand(ParsedArgs args) {
 	if (args.parameters & EOperationHasParameter_Output) {
 
 		CharString outputPath = CharString_createNull();
-		
+
 		if (ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &outputPath).genericError) {
 			Log_errorLnx("Invalid argument -o <string>, file path expected.");
 			return false;

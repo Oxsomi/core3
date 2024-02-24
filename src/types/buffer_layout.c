@@ -129,7 +129,7 @@ Error BufferLayoutStruct_create(BufferLayoutStructInfo info, U32 id, Allocator a
 		return Error_invalidParameter(0, 1, "BufferLayoutStruct_create()::info.members is limited to 65534");
 
 	U64 memberDataLen = 0;
-		
+
 	for(U16 i = 0; i < (U16) info.members.length; ++i) {
 
 		BufferLayoutMemberInfo m = info.members.ptr[i];
@@ -199,7 +199,7 @@ Error BufferLayoutStruct_create(BufferLayoutStructInfo info, U32 id, Allocator a
 
 	U64 len = BufferLayoutStruct_allocatedData(info, memberDataLen);
 	Buffer allocated = Buffer_createNull();
-	
+
 	Error err = Buffer_createUninitializedBytes(len, alloc, &allocated);
 
 	if(err.genericError)
@@ -298,7 +298,7 @@ BufferLayoutMemberInfo BufferLayoutStruct_getMemberInfo(BufferLayoutStruct layou
 		BufferLayoutMember member = members[i];
 
 		if (i == memberId) {
-			
+
 			ListU32 arraySizes = (ListU32) { 0 };
 
 			if(member.arrayIndices)
@@ -342,7 +342,7 @@ U16 BufferLayoutStruct_findMember(BufferLayoutStruct info, CharString copy) {
 //BufferLayout
 
 Error BufferLayout_create(Allocator alloc, BufferLayout *layout) {
-	
+
 	if(!layout)
 		return Error_nullPointer(1, "BufferLayout_create()::layout is required");
 
@@ -406,7 +406,7 @@ Error BufferLayout_createStruct(BufferLayout *layout, BufferLayoutStructInfo inf
 	*id = (U32)layout->structs.length - 1;
 
 clean:
-	
+
 	if(err.genericError)
 		BufferLayoutStruct_free(alloc, &layoutStruct);
 
@@ -524,9 +524,9 @@ Error BufferLayout_resolveLayout(BufferLayout layout, CharString path, LayoutPat
 				_gotoIfError(clean, Error_invalidParameter(1, 1, "BufferLayout_resolveLayout() had missing member (//)"));
 
 			//Access struct member
-		
+
 			if (!isInMember) {
-				
+
 				U16 memberId = BufferLayoutStruct_findMember(currentStruct, copy);
 
 				if(memberId == U16_MAX)
@@ -546,7 +546,7 @@ Error BufferLayout_resolveLayout(BufferLayout layout, CharString path, LayoutPat
 				//It's now safe to access a member of the member in the current array.
 
 				if (currentArrayDim >= currentMember.arraySizes.length) {
-					
+
 					//Access struct
 
 					currentStructId = currentMember.structId;
@@ -577,7 +577,7 @@ Error BufferLayout_resolveLayout(BufferLayout layout, CharString path, LayoutPat
 						_gotoIfError(clean, Error_invalidParameter(
 							1, 4, "BufferLayout_resolveLayout()::path expected U64 for array index"
 						));
-					
+
 					U32 currentDim = currentMember.arraySizes.ptr[currentArrayDim];
 
 					if(arrayOffset >= currentDim)

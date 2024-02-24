@@ -9,7 +9,7 @@ OxC3 (0xC3 or Oxsomi core 3) is the successor to O(x)somi core v2 and v1. Specif
   - 16-bit float casts and arbitrary floating point formats.
   - 128-bit and bigger unsigned ints (U128 and BigInt).
   - AllocationBuffer for managing block allocations.
-  - Buffer manipulation such as compares, copies, bit manipulation, 
+  - Buffer manipulation such as compares, copies, bit manipulation,
     - Encryption (aes256gcm), hashing (sha256, crc32c), cryptographically secure PRNG (CSPRNG).
     - Buffer layouts for manipulating buffers using struct metadata and a path.
   - GenericList, CharString, TList (Makes Lists such as ListCharString, ListU32, etc.) and CDFList.
@@ -34,7 +34,7 @@ OxC3 (0xC3 or Oxsomi core 3) is the successor to O(x)somi core v2 and v1. Specif
   - Abstraction layer possible to port to newer graphics APIs such as D3D12, Vulkan, Metal and WebGPU. Vulkan and Metal would be the first important things supported.
   - For more info check the [documentation](docs/graphics_api.md).
 - OxC3: deps(OxC3_platforms)
-  - Command line tool that exposes useful functions from OxC3. 
+  - Command line tool that exposes useful functions from OxC3.
   - File manipulation:
     - Conversions between oiCA/oiDL and raw files (zip-like).
     - Encryption/decryption.
@@ -79,7 +79,7 @@ This assumes you have VS2022 installed, if not, you can specify a different CMak
 
 ### Other platforms
 
-Unfortunately it has only been implemented on Windows as of yet, but will be supporting other platforms like Android in the future. 
+Unfortunately it has only been implemented on Windows as of yet, but will be supporting other platforms like Android in the future.
 
 ## Virtual file system
 
@@ -104,13 +104,13 @@ _gotoIfError(clean, File_loadVirtual("//myLibrary", NULL));			//Load myLibrary.
 _gotoIfError(clean, File_loadVirtual("//.", NULL));					//Load everything.
 ```
 
-These files are decompressed and unencrypted (if they were) and kept in memory, so they can be quickly accessed. They can then be unloaded if they're deemed unimportant. 
+These files are decompressed and unencrypted (if they were) and kept in memory, so they can be quickly accessed. They can then be unloaded if they're deemed unimportant.
 
-The example layout above is only useful if the dependencies have very little resources. The moment you have lots of resources (or little RAM) then you probably want to split them up based on how they're accessed. For example; if assets are only used in a certain level then consider splitting up the file structure per level to ensure little RAM is wasted on it. Another example could be splitting up assets based on level environment, so if only all forest environment levels use a certain tree, then it's wasteful to load that for every level. The levels would then reference dependencies to sections and these sections would then be loaded. 
+The example layout above is only useful if the dependencies have very little resources. The moment you have lots of resources (or little RAM) then you probably want to split them up based on how they're accessed. For example; if assets are only used in a certain level then consider splitting up the file structure per level to ensure little RAM is wasted on it. Another example could be splitting up assets based on level environment, so if only all forest environment levels use a certain tree, then it's wasteful to load that for every level. The levels would then reference dependencies to sections and these sections would then be loaded.
 
-When a virtual file system is loaded, it can be accessed the same way as a normal file is loaded. The exception being that write access isn't allowed anymore. The only limitation is that files need both a library and a section folder `//myLibrary/fonts/*` rather than `//myLibrary/*` and the section has to be loaded. To ensure it is loaded, a File_loadVirtual can be called or File_isVirtualLoaded can be called. 
+When a virtual file system is loaded, it can be accessed the same way as a normal file is loaded. The exception being that write access isn't allowed anymore. The only limitation is that files need both a library and a section folder `//myLibrary/fonts/*` rather than `//myLibrary/*` and the section has to be loaded. To ensure it is loaded, a File_loadVirtual can be called or File_isVirtualLoaded can be called.
 
-The same limitations as with a normal file system apply here; the file names have to be windows compatible and section/library names are even stricter (Nytodecimal only; 0-9A-Za-z$_). These are case insensitive and will likely be transformed to a different casing depending on platform. 
+The same limitations as with a normal file system apply here; the file names have to be windows compatible and section/library names are even stricter (Nytodecimal only; 0-9A-Za-z$_). These are case insensitive and will likely be transformed to a different casing depending on platform.
 
 The only reserved library names besides the windows ones (NUL, COM, etc.) are: access, function. So `//access/...` is reserved for future access to directories and files outside of the working directory and app directory (access has to be allowed through selecting for example from the Windows file explorer). `//function/...` is reserved for future functionality to allow custom functionality to emulate for example old file formats; the fully resolved path would be passed to a user function to allow custom behavior.
 
@@ -139,7 +139,7 @@ This should be done before the configure_virtual_files and ensures the files for
 
 ## Graphics
 
-The graphics API is built around modern APIs. So it won't be supporting OpenGL, DirectX11-, old Metal/Vulkan versions or WebGL. To keep Vulkan, DirectX12 and Metal usable, it will keep on bumping the minimum specs every so often in a release. 
+The graphics API is built around modern APIs. So it won't be supporting OpenGL, DirectX11-, old Metal/Vulkan versions or WebGL. To keep Vulkan, DirectX12 and Metal usable, it will keep on bumping the minimum specs every so often in a release.
 
 For the graphics minimum spec check the [minimum spec](graphics_spec.md).
 
@@ -154,4 +154,4 @@ This repository is available under two licenses:
 - LGPL3 open source license.
 - Commercial license.
 
-Any company not wanting to adhere to the LGPL3 license can contact us as contact@osomi.net. 
+Any company not wanting to adhere to the LGPL3 license can contact us as contact@osomi.net.

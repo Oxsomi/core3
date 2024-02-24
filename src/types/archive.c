@@ -65,7 +65,7 @@ Bool Archive_getPath(
 
 	Bool isVirtual = false;
 	CharString resolvedPath = CharString_createNull();
-	
+
 	Error err = File_resolve(path, &isVirtual, 128, CharString_createNull(), alloc, &resolvedPath);
 
 	if(err.genericError)
@@ -269,7 +269,7 @@ Error Archive_removeInternal(Archive *archive, CharString path, Allocator alloc,
 	CharString_free(&entry.path, alloc);
 
 	_gotoIfError(clean, ListArchiveEntry_popLocation(&archive->entries, i, NULL));
-	
+
 clean:
 	CharString_free(&resolved, alloc);
 	return err;

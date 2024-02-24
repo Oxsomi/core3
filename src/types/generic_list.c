@@ -271,10 +271,10 @@ Error GenericList_createSubsetReverse(
 	Allocator allocator,
 	GenericList *result
 ) {
-	
+
 	if(!result || !length)
 		return Error_nullPointer(4, "GenericList_createSubsetReverse()::result and length are required");
-	
+
 	if(result->ptr)
 		return Error_invalidOperation(0, "GenericList_createSubsetReverse()::result wasn't empty, might indicate memleak");
 
@@ -760,7 +760,7 @@ Error GenericList_eraseAll(GenericList *list, Buffer buf, Allocator allocator, E
 
 	if(!list)
 		return Error_nullPointer(0, "GenericList_eraseAll()::list is required");
-	
+
 	ListU64 indices = (ListU64) { 0 };
 	Error err = GenericList_find(*list, buf, eq, allocator, &indices);
 
@@ -1057,7 +1057,7 @@ Error GenericList_pushBack(GenericList *list, Buffer buf, Allocator allocator) {
 
 	if(err.genericError)
 		return err;
-	
+
 	return GenericList_set(*list, list->length - 1, buf);
 }
 

@@ -84,7 +84,7 @@ Bool CharString_isValidAscii(CharString a) {
 }
 
 Bool CharString_isValidFileName(CharString str) {
-	
+
 	for(U64 i = 0; i < CharString_length(str); ++i)
 		if(!C8_isValidFileName(str.ptr[i]))
 			return false;
@@ -96,7 +96,7 @@ Bool CharString_isValidFileName(CharString str) {
 
 	if(CharString_startsWithSensitive(str, ' '))
 		return false;
-	
+
 	//Validation to make sure we're not using weird legacy MS DOS keywords
 	//Because these will not be writable correctly!
 
@@ -156,12 +156,12 @@ Bool CharString_isSupportedInFilePath(CharString str) {
 Bool CharString_isValidFilePath(CharString str) {
 
 	//myTest/ <-- or myTest\ to myTest
-		
+
 	str = CharString_createRefSizedConst(str.ptr, CharString_length(str), CharString_isNullTerminated(str));
 
 	if(CharString_getAt(str, CharString_length(str) - 1) == '/' || CharString_getAt(str, CharString_length(str) - 1) == '\\')
 		str.lenAndNullTerminated = CharString_length(str) - 1;
-		
+
 	//On Windows, it's possible to change drive but keep same relative path. We don't support it.
 	//e.g. C:myFolder/ (relative folder on C) instead of C:/myFolder/ (Absolute folder on C)
 	//We also obviously don't support 0:\ and such or A:/ on unix
@@ -353,7 +353,7 @@ CharString CharString_createRefLongString(LongString str) {
 //Simple checks (consts)
 
 Error CharString_offsetAsRef(CharString s, U64 off, CharString *result) {
-	
+
 	if (!result)
 		return Error_nullPointer(2, "CharString_offsetAsRef()::result is required");
 
@@ -1282,7 +1282,7 @@ Error CharString_replaceString(
 
 	//Replacement is smaller than our search
 	//So we can just move from left to right
-	
+
 	if (replacel < searchl) {
 
 		U64 diff = searchl - replacel;	//How much we have to shrink
@@ -1677,7 +1677,7 @@ U64 CharString_findFirstString(CharString s, CharString other, EStringCase casin
 }
 
 U64 CharString_findLastString(CharString s, CharString other, EStringCase casing) {
-	
+
 	U64 strl = CharString_length(s);
 	U64 otherl = CharString_length(other);
 
@@ -2295,7 +2295,7 @@ Bool CharString_eraseAll(CharString *s, C8 c, EStringCase casing) {
 
 		((C8*)s->ptr)[out++] = s->ptr[i];
 	}
-	
+
 	if(out == strl)
 		return false;
 
@@ -2407,7 +2407,7 @@ CharString CharString_trim(CharString s) {
 	++last;		//We wanna include the last character that's non whitespace too
 
 	Bool isNullTerm = CharString_isNullTerminated(s) && last == strl;
-	
+
 	return CharString_isConstRef(s) ? CharString_createRefSizedConst(s.ptr + first, last - first, isNullTerm) :
 		CharString_createRefSized((C8*)s.ptr + first, last - first, isNullTerm);
 }
@@ -3006,14 +3006,14 @@ ECompareResult CharString_compareInsensitive(CharString a, CharString b) {
 
 #ifdef _WIN32
 	#define calcFormatLen _vscprintf
-#else 
-	int calcFormatLen(const char * format, va_list pargs) { 
-      int retval; 
-      va_list argcopy; 
-      va_copy(argcopy, pargs); 
-      retval = vsnprintf(NULL, 0, format, argcopy); 
-      va_end(argcopy); 
-      return retval; 
+#else
+	int calcFormatLen(const char * format, va_list pargs) {
+      int retval;
+      va_list argcopy;
+      va_copy(argcopy, pargs);
+      retval = vsnprintf(NULL, 0, format, argcopy);
+      va_end(argcopy);
+      return retval;
    }
 #endif
 

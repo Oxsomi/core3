@@ -226,7 +226,7 @@ Bool Buffer_eq(Buffer buf0, Buffer buf1) {
 
 	if (!buf0.ptr && !buf1.ptr)
 		return true;
-	
+
 	if (!buf0.ptr || !buf1.ptr)
 		return false;
 
@@ -770,7 +770,7 @@ Bool Buffer_isUTF8(Buffer buf, F32 threshold) {
 		UTF8CodePointInfo info;
 
 		if((Buffer_readAsUTF8(buf, i, &info)).genericError) {
-			
+
 			counter += invLen;
 
 			if(counter >= threshold)

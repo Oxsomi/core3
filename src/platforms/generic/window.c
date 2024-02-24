@@ -80,7 +80,7 @@ Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 
 	U64 linSizOld = ETextureFormat_getSize((ETextureFormat) w->format, I32x2_x(w->size), I32x2_y(w->size), 1);
 	U64 linSiz = ETextureFormat_getSize((ETextureFormat) w->format, I32x2_x(newSiz), I32x2_y(newSiz), 1);
-	
+
 	if(linSizOld * 5 < linSizOld)
 		return Error_overflow(2, linSizOld * 5, U64_MAX, "Window_resizeCPUBuffer() overflow");
 
@@ -139,7 +139,7 @@ Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 				//Revert to old size
 
 				if(err.genericError) {
-				
+
 					if(resize)
 						Buffer_freex(&neo);
 

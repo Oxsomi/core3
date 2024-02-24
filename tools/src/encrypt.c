@@ -48,7 +48,7 @@ Bool CLI_encryptDo(ParsedArgs args) {
 		.parameters = args.parameters | EOperationHasParameter_Output,
 		.args = args.args
 	};
-	
+
 	b = CLI_convertTo(caArgs);
 
 clean:

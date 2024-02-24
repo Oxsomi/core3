@@ -28,7 +28,7 @@
 TListImpl(SubResourceData);
 
 //DDS headers
-//Combo between 
+//Combo between
 // http://doc.51windows.net/Directx9_SDK/graphics/reference/ddsfilereference/ddsfileformat.htm#surface_format_header
 // https://learn.microsoft.com/en-us/windows/win32/direct3ddds/dds-header
 // https://learn.microsoft.com/en-us/windows/win32/direct3ddds/dx-graphics-dds-pguide
@@ -45,7 +45,7 @@ typedef enum EDDSFlag {
 	EDDSFlag_Depth						= 1 << 23,
 
 	EDDSFlag_Default					= EDDSFlag_Caps | EDDSFlag_Height | EDDSFlag_Width | EDDSFlag_PixelFormat,
-	EDDSFlags_Supported					= 
+	EDDSFlags_Supported					=
 		EDDSFlag_Default | EDDSFlag_Pitch | EDDSFlag_Mips | EDDSFlag_LinearSize | EDDSFlag_Depth
 
 } EDDSFlag;
@@ -78,7 +78,7 @@ typedef enum EDDSPixelFormatFlag {
 	//EDDSPixelFormatFlag_YUV			= 1 << 9,		//Unsupported
 	//EDDSPixelFormatFlag_Luminance		= 1 << 17,		//Unsupported
 
-	EDDSPixelFormatFlag_Supported		= 
+	EDDSPixelFormatFlag_Supported		=
 		EDDSPixelFormatFlag_AlphaPixels | EDDSPixelFormatFlag_MagicNumber | EDDSPixelFormatFlag_RGB,
 
 } EDDSPixelFormatFlag;
@@ -240,9 +240,9 @@ Error DDS_read(Buffer buf, DDSInfo *info, Allocator allocator, ListSubResourceDa
 
 		switch (header10.dim) {
 
-			case EDX10Dim_1D: 
+			case EDX10Dim_1D:
 				header.height = 1;
-		
+
 			case EDX10Dim_2D:		//Both 2D and 1D are treated as 2D textures. 1D is just 2D tex with height 1
 				break;
 
@@ -266,7 +266,7 @@ Error DDS_read(Buffer buf, DDSInfo *info, Allocator allocator, ListSubResourceDa
 		if(
 			(header10.miscFlag & EDX10Misc_IsCube) && (
 				header10.dim != EDX10Dim_2D || (header.caps.flag2 & EDDSCapsFlags2_Cubemap) != EDDSCapsFlags2_Cubemap
-			) 
+			)
 		)
 			return Error_invalidParameter(0, 0, "DDS_read()::buf had cubemap flag but had invalid state");
 
@@ -334,15 +334,15 @@ Error DDS_read(Buffer buf, DDSInfo *info, Allocator allocator, ListSubResourceDa
 			}
 
 		//Detect from pixel format
-		
+
 		if (!formatId && (header.format.flags & EDDSPixelFormatFlag_RGB) && header.format.rgbBitCount == 32) {
-			
+
 			if(header.format.masks[0] == U16_MAX && header.format.masks[1] == ((U32)U16_MAX << 16))
 				formatId = ETextureFormatId_RG16;
 
 			else if(
-				header.format.masks[0] == 0x3FF && 
-				header.format.masks[1] == (0x3FF << 10) && 
+				header.format.masks[0] == 0x3FF &&
+				header.format.masks[1] == (0x3FF << 10) &&
 				header.format.masks[2] == (0x3FF << 20)
 			)
 				formatId = ETextureFormatId_BGR10A2;
@@ -363,7 +363,7 @@ Error DDS_read(Buffer buf, DDSInfo *info, Allocator allocator, ListSubResourceDa
 	}
 
 	U64 len = ETextureFormat_getSize(format, header.width, header.height, header.depth);
-	
+
 	//Calculate expected length, because header.pitch is not even close to being reliable.
 
 	U64 expectedLength = len;
@@ -519,7 +519,7 @@ Error DDS_write(ListSubResourceData buf, DDSInfo info, Allocator allocator, Buff
 	ListSubResourceData_sortCustom(buf, (CompareFunction) SubResourceData_sort);
 
 	//Validate size of each subresource
-	
+
 	for (U32 i = 0, l = 0; i < info.layers; ++i) {
 
 		U32 currW = info.w;
@@ -619,7 +619,7 @@ Error DDS_write(ListSubResourceData buf, DDSInfo info, Allocator allocator, Buff
 			case ETextureFormat_R32f:		pixelFormat.magicNumber = EDDSFormatMagic_R32f;		break;
 			case ETextureFormat_RG32f:		pixelFormat.magicNumber = EDDSFormatMagic_RG32f;	break;
 			case ETextureFormat_RGBA32f:	pixelFormat.magicNumber = EDDSFormatMagic_RGBA32f;	break;
-			
+
 			default: 																			break;
 		}
 
@@ -628,7 +628,7 @@ Error DDS_write(ListSubResourceData buf, DDSInfo info, Allocator allocator, Buff
 	*(DDSHeader*)ptr = (DDSHeader) {
 		.magicNumber = ddsMagic,
 		.size = (U32)(sizeof(DDSHeader) - sizeof(((DDSHeader*)ptr)->magicNumber)),
-		.flags = 
+		.flags =
 			EDDSFlag_Default | (info.mips > 1 ? EDDSFlag_Mips : 0) | (info.type == ETextureType_3D ? EDDSFlag_Depth : 0) |
 			(isCompressed ? EDDSFlag_LinearSize : EDDSFlag_Pitch),
 		.width = info.w,
@@ -638,11 +638,11 @@ Error DDS_write(ListSubResourceData buf, DDSInfo info, Allocator allocator, Buff
 		.mips = info.mips,
 		.format = pixelFormat,
 		.caps = (DDSCaps2) {
-			.flag1 = (EDDSCapsFlags1_Texture | 
-				(info.mips > 1 ? EDDSCapsFlags1_Mips : 0) | 
+			.flag1 = (EDDSCapsFlags1_Texture |
+				(info.mips > 1 ? EDDSCapsFlags1_Mips : 0) |
 				(info.type != ETextureType_2D ? EDDSCapsFlags1_Complex : 0)
 			),
-			.flag2 = (info.type == ETextureType_3D ? EDDSCapsFlags2_Volume : 
+			.flag2 = (info.type == ETextureType_3D ? EDDSCapsFlags2_Volume :
 				(info.type == ETextureType_Cube ? EDDSCapsFlags2_Cubemap : 0)
 			)
 		}

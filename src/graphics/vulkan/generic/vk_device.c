@@ -947,7 +947,7 @@ Error GraphicsDevice_submitCommandsImpl(
 	ListCommandListRef commandLists,
 	ListSwapchainRef swapchains
 ) {
-	
+
 	//Unpack ext
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
@@ -1071,7 +1071,7 @@ Error GraphicsDevice_submitCommandsImpl(
 	U32 graphicsQueueId = queue.queueId;
 
 	ListRefPtr *currentFlight = &device->resourcesInFlight[device->submitId % 3];
-	
+
 	if (commandLists.length) {
 
 		U32 threadId = 0;
@@ -1091,7 +1091,7 @@ Error GraphicsDevice_submitCommandsImpl(
 		if(!allocator->pool) {
 
 			//TODO: Multi thread command recording
-		
+
 			VkCommandPoolCreateInfo poolInfo = (VkCommandPoolCreateInfo) {
 				.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
 				.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
@@ -1243,7 +1243,7 @@ Error GraphicsDevice_submitCommandsImpl(
 			for (U64 j = 0; j < commandList->commandOps.length; ++j) {
 
 				CommandOpInfo info = commandList->commandOps.ptr[j];
-				
+
 				//Extra debugging if an error happens while processing the command
 
 				CommandList_process(commandList, device, info.op, ptr, &state);

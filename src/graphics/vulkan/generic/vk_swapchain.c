@@ -86,7 +86,7 @@ Error GraphicsDeviceRef_postCreateSwapchainExt(GraphicsDeviceRef *deviceRef, Swa
 			case EWindowFormat_RGBA16f:
 				textureWriteType = EDescriptorType_RWTexture2Df;
 				break;
-				
+
 			default:
 				break;
 		}
@@ -186,7 +186,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 	switch(swapchain->base.textureFormatId) {
 
 		case ETextureFormatId_BGRA8:
-			
+
 			searchFormat = (VkSurfaceFormatKHR) {
 				.format = VK_FORMAT_B8G8R8A8_UNORM,
 				.colorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR
@@ -197,7 +197,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 		//TODO: HDR10_ST2084_EXT?
 
 		case ETextureFormatId_BGR10A2:
-			
+
 			searchFormat = (VkSurfaceFormatKHR) {
 				.format = VK_FORMAT_A2B10G10R10_UNORM_PACK32,
 				.colorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR
@@ -222,7 +222,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 			};
 
 			break;
-			
+
 		default:
 			break;
 	}
@@ -375,7 +375,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 		_gotoIfError(clean, Error_invalidOperation(7, "GraphicsDeviceRef_createSwapchainExt() unsupported present mode"));
 
 	//Turn it into a swapchain
-	
+
 	VkSwapchainKHR prevSwapchain = swapchainExt->swapchain;
 
 	VkSwapchainCreateInfoKHR swapchainInfo = (VkSwapchainCreateInfoKHR) {
@@ -540,7 +540,7 @@ Bool GraphicsDevice_freeSwapchainExt(Swapchain *swapchain, Allocator alloc) {
 	VkGraphicsInstance *instance = GraphicsInstance_ext(GraphicsInstanceRef_ptr(device->instance), Vk);
 
 	for(U8 i = 0; i < swapchain->base.images; ++i) {
-	
+
 		VkSemaphore semaphore = swapchainExt->semaphores.ptr[i];
 
 		if(semaphore)

@@ -270,19 +270,19 @@ target_link_libraries(OxC3_graphics PUBLIC OxC3_platforms)
 
 if("${graphicsApi}" STREQUAL "vulkan")
 
-	if(DEFINED ENV{VULKAN_SDK})		
+	if(DEFINED ENV{VULKAN_SDK})
 		include_directories(OxC3_graphics PUBLIC $ENV{VULKAN_SDK}/Include)
 		target_link_directories(OxC3_graphics PUBLIC $ENV{VULKAN_SDK}/Lib)
 	else()
 		message(FATAL_ERROR "-- Vulkan incompatible: Please download the latest Vulkan SDK so you can compile")
 	endif()
-	
+
 	if(WIN32)
 			set(VULKAN_LIB vulkan-1)
 	else()
 		set(VULKAN_LIB vulkan)
 	endif()
-	
+
 	if("${platform}" STREQUAL "windows")
 		add_definitions(-D_VK_SURFACE_EXT="VK_KHR_win32_surface")
 	elseif("${platform}" STREQUAL "android")
@@ -354,33 +354,33 @@ macro(add_virtual_files)
 	if(NOT TARGET ${_ARGS_TARGET})
 		message(FATAL_ERROR "add_virtual_files: target ${_ARGS_TARGET} not present.")
 	endif()
-	
+
 	if(NOT _ARGS_ROOT)
 		message(FATAL_ERROR "add_virtual_files: 'ROOT' argument required.")
 	endif()
-	
+
 	if(NOT IS_DIRECTORY ${_ARGS_ROOT})
 		message(FATAL_ERROR "add_virtual_files: 'ROOT' folder not present.")
 	endif()
-	
+
 	if(NOT _ARGS_NAME)
 		message(FATAL_ERROR "add_virtual_files: 'NAME' argument required.")
 	endif()
-	
+
 	if(NOT _ARGS_SELF)
 		message(FATAL_ERROR "add_virtual_files: 'SELF' argument required.")
 	endif()
-	
+
 	if(NOT _ARGS_NAME MATCHES "^[0-9A-Za-z_\$]+$")
 		message(FATAL_ERROR "add_virtual_files: 'NAME' has to conform to alphanumeric (plus _ and $).")
 	endif()
-	
+
 	if(NOT _ARGS_TARGET MATCHES "^[0-9A-Za-z_\$]+$")
 		message(FATAL_ERROR "add_virtual_files: 'TARGET' has to conform to alphanumeric (plus _ and $).")
 	endif()
 
 	string(TOUPPER ${_ARGS_TARGET} ANGRY_TARGET)
-	
+
 	if(ANGRY_TARGET MATCHES "access" OR ANGRY_TARGET MATCHES "function")
 		message(FATAL_ERROR "add_virtual_files: 'TARGET' can't be 'access' or 'function'.")
 	endif()
@@ -403,7 +403,7 @@ macro(add_virtual_files)
 
 		get_property(res TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST)
 		set_property(TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST ${_ARGS_TARGET}/${_ARGS_NAME}\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ RCDATA\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA\"\n${res})
-		
+
 	endif()
 
 endmacro()
@@ -428,13 +428,13 @@ macro(add_virtual_dependencies)
 	if(NOT TARGET ${_ARGS_TARGET})
 		message(FATAL_ERROR "add_virtual_dependencies: target \"${_ARGS_TARGET}\" not present.")
 	endif()
-	
+
 	if(NOT _ARGS_TARGET MATCHES "^[0-9A-Za-z_\$]+$")
 		message(FATAL_ERROR "add_virtual_dependencies: 'TARGET' has to conform to alphanumeric (plus _ and $).")
 	endif()
 
 	# Add dependencies
-	
+
 	if(_ARGS_DEPENDENCIES)
 		foreach(file ${_ARGS_DEPENDENCIES})
 
@@ -470,7 +470,7 @@ function(configure_virtual_files target)
 			target_sources(${target} PRIVATE "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${target}.rc")
 		endif()
 	endif()
-	
+
 endfunction()
 
 # Tests

@@ -121,34 +121,34 @@ void GraphicsDeviceInfo_print(const GraphicsDeviceInfo *deviceInfo, Bool printCa
 		U32 dat = cap.dataTypes;
 
 		Log_debugLnx("\tData types:");
-		
+
 		if(dat & EGraphicsDataTypes_I64)
 			Log_debugLnx("\t\t64-bit integers");
-		
+
 		if(dat & EGraphicsDataTypes_F16)
 			Log_debugLnx("\t\t16-bit floats");
-		
+
 		if(dat & EGraphicsDataTypes_F64)
 			Log_debugLnx("\t\t64-bit floats");
-		
+
 		if(dat & EGraphicsDataTypes_AtomicI64)
 			Log_debugLnx("\t\t64-bit integer atomics (buffer)");
-		
+
 		if(dat & EGraphicsDataTypes_AtomicF32)
 			Log_debugLnx("\t\t32-bit float atomics (buffer)");
-		
+
 		if(dat & EGraphicsDataTypes_AtomicF64)
 			Log_debugLnx("\t\t64-bit float atomics (buffer)");
-		
+
 		if(dat & EGraphicsDataTypes_ASTC)
 			Log_debugLnx("\t\tASTC compression");
-		
+
 		if(dat & EGraphicsDataTypes_BCn)
 			Log_debugLnx("\t\tBCn compression");
-		
+
 		if(dat & EGraphicsDataTypes_MSAA2x)
 			Log_debugLnx("\t\tMSAA 2x");
-		
+
 		if(dat & EGraphicsDataTypes_MSAA8x)
 			Log_debugLnx("\t\tMSAA 8x");
 

@@ -256,7 +256,7 @@ typedef struct AttachmentInfoInternal {
 	RefPtr *image;						//Swapchain or RenderTexture. Null is allowed to disable it.
 
 	RefPtr *resolveImage;				//RenderTexture, DepthStencil or Swapchain. Null is allowed to disable resolving.
-	
+
 	EMSAAResolveMode resolveMode;
 	U32 padding;
 

@@ -179,7 +179,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 
 		if(files.length >= U32_MAX)
 			_gotoIfError(clean, Error_outOfBounds(0, files.length, U32_MAX, "CAFile_write() files are limited to U32_MAX"));
-		
+
 		if(outputSize + Buffer_length(entry.data) < outputSize)
 			_gotoIfError(clean, Error_overflow(
 				0, outputSize + Buffer_length(entry.data), outputSize, "CAFile_write() overflow"
@@ -369,7 +369,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 				!CharString_cut(file, 0, it + 1, &baseDir)
 			)
 				_gotoIfError(clean, Error_invalidOperation(0, "CAFile_write() couldn't split file name"));
-			
+
 			for(U64 j = directories.length - 1; j != U64_MAX; --j)
 
 				if (CharString_equalsStringInsensitive(directories.ptr[j], realParentDir)) {
@@ -724,7 +724,7 @@ Error CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFi
 
 		if(!CharString_isValidFileName(name))
 			_gotoIfError(clean, Error_invalidParameter(0, 0, "CAFile_read() directory has invalid name"));
-		
+
 		_gotoIfError(clean, CharString_createCopy(name, alloc, &tmpPath));
 
 		U16 parent = dirStride == 2 ? *(const U16*)diri : *diri;
@@ -802,7 +802,7 @@ Error CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFi
 		//This introduces a copy because Archive needs a separate alloc per file
 
 		U64 bufferSize = Buffer_forceReadSizeType(filei, sizeType);
-		
+
 		_gotoIfError(clean, Buffer_createUninitializedBytes(bufferSize, alloc, &tmpData));
 
 		const U8 *dataPtr = filePtr.ptr;

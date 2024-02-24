@@ -47,7 +47,7 @@ Error CDFList_create(
 
 		if(isReserved)
 			_gotoIfError(clean, ListCDFValue_reserve(&result->cdf, maxElements, allocator))
-		
+
 		else {
 			_gotoIfError(clean, ListCDFValue_resize(&result->cdf, maxElements, allocator));
 			result->totalElements = maxElements;
@@ -70,7 +70,7 @@ Error CDFList_create(
 	return Error_none();
 
 clean:
-	
+
 	ListCDFValue_free(&result->cdf, allocator);
 	GenericList_free(&result->elements, allocator);
 	*result = (CDFList) { 0 };
@@ -146,7 +146,7 @@ Bool CDFList_setProbability(CDFList *list, U64 i, F32 value, F32 *oldValue) {
 
 	list->flags &= ~ECDFListFlags_IsFinalized;
 	f[j].self = value;
-		
+
 	return true;
 
 }
@@ -186,7 +186,7 @@ Bool CDFList_set(CDFList *list, U64 i, F32 value, Buffer element) {
 			return false;
 		}
 	}
-	
+
 	return true;
 }
 

@@ -154,7 +154,7 @@ typedef struct GraphicsDeviceInfo {
 	C8 name[256];
 	C8 driverName[256];
 	C8 driverInfo[256];
-	
+
 	EGraphicsDeviceType type;
 	EGraphicsVendor vendor;
 

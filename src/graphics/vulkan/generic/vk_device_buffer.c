@@ -172,7 +172,7 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 
 	if (block.mappedMemory)
 		buf->resource.mappedMemoryExt = block.mappedMemory + buf->resource.blockOffset;
-	
+
 	//Fill relevant descriptor sets if shader accessible
 
 	EGraphicsResourceFlag flags = buf->resource.flags;

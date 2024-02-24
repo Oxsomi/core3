@@ -112,7 +112,7 @@ Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 
 	ListDeviceMemoryBlock_freex(&device->allocator.blocks);
 	ListLockPtr_freex(&device->currentLocks);
-	
+
 	//Announce descriptor memleaks
 
 	for(U32 i = 0; i < EDescriptorType_ResourceCount; ++i)
@@ -180,9 +180,9 @@ Error GraphicsDeviceRef_create(
 		(ETypeId) EGraphicsTypeId_GraphicsDevice,
 		deviceRef
 	));
-	
+
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(*deviceRef);
-	
+
 	_gotoIfError(clean, ListWeakRefPtr_reservex(&device->pendingResources, 128));
 
 	device->info = *info;
@@ -269,11 +269,11 @@ Bool GraphicsDeviceRef_removePending(GraphicsDeviceRef *deviceRef, RefPtr *resou
 
 	switch (type) {
 
-		case EGraphicsTypeId_DeviceBuffer:	
+		case EGraphicsTypeId_DeviceBuffer:
 			supported = DeviceBufferRef_ptr(resource)->resource.device == deviceRef;
 			break;
 
-		case EGraphicsTypeId_DeviceTexture:	
+		case EGraphicsTypeId_DeviceTexture:
 			supported = DeviceTextureRef_ptr(resource)->base.resource.device == deviceRef;
 			break;
 
@@ -321,7 +321,7 @@ impl Error DeviceBufferRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceR
 impl Error DeviceTextureRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceTextureRef *pending);
 
 Error GraphicsDeviceRef_handleNextFrame(GraphicsDeviceRef *deviceRef, void *commandBuffer) {
-	
+
 	if(!deviceRef || deviceRef->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
 		return Error_nullPointer(0, "GraphicsDeviceRef_handleNextFrame()::deviceRef is required");
 
@@ -539,7 +539,7 @@ Error GraphicsDeviceRef_submitCommands(
 			CommandList *cmd = CommandListRef_ptr(cmdRef);
 
 			for(U64 k = 0; k < cmd->activeSwapchains.length; ++k) {
-			
+
 				DeviceResourceVersion vK = cmd->activeSwapchains.ptr[k];
 
 				if(vK.resource == swapchainRef && vK.version != swapchaini->versionId)
@@ -667,7 +667,7 @@ Error GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef) {
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 
 	Error err = Error_none();
-	
+
 	ELockAcquire acq = Lock_lock(&device->lock, U64_MAX);
 
 	if(acq < ELockAcquire_Success)
@@ -771,7 +771,7 @@ Bool GraphicsDeviceRef_freeDescriptors(GraphicsDeviceRef *deviceRef, ListU32 *al
 				//TODO: HashMap
 
 				ListDescriptorStackTrace *stack = &device->descriptorStackTraces;
-				
+
 				for (U64 j = 0; j < stack->length; ++j)
 					if (stack->ptr[j].resourceId == id) {
 						ListDescriptorStackTrace_erase(stack, j);

@@ -144,7 +144,7 @@ Error DLFile_addEntryAscii(DLFile *dlFile, CharString entryStr, Allocator alloc)
 }
 
 Error DLFile_createAsciiList(DLSettings settings, ListCharString strings, Allocator alloc, DLFile *dlFile) {
-	
+
 	if(settings.dataType != EDLDataType_Ascii)
 		return Error_invalidOperation(0, "DLFile_createAsciiList() is unsupported if settings.type isn't Ascii");
 
@@ -162,7 +162,7 @@ Error DLFile_createAsciiList(DLSettings settings, ListCharString strings, Alloca
 }
 
 Error DLFile_createAsciiListIntern(DLSettings settings, ListBuffer *strings, Allocator alloc, DLFile *dlFile) {
-	
+
 	ListCharString strs = (ListCharString) { 0 };
 	Error err = ListCharString_resize(&strs, strings->length, alloc);
 
@@ -176,7 +176,7 @@ Error DLFile_createAsciiListIntern(DLSettings settings, ListBuffer *strings, All
 
 		if(Buffer_isConstRef(buf))
 			str = CharString_createRefSizedConst((const C8*)buf.ptr, Buffer_length(buf), false);
-		
+
 		else if(Buffer_isRef(buf))
 			str = CharString_createRefSized((C8*)buf.ptr, Buffer_length(buf), false);
 
@@ -188,7 +188,7 @@ Error DLFile_createAsciiListIntern(DLSettings settings, ListBuffer *strings, All
 
 		strs.ptrNonConst[i] = str;
 	}
-	
+
 	err = DLFile_createAsciiList(settings, strs, alloc, dlFile);
 
 	if(!err.genericError)
@@ -401,7 +401,7 @@ Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result) {
 
 		if (dlFile.settings.flags & EDLSettingsFlags_UseSHA256)
 			Buffer_sha256(uncompressedData, hash);
-		
+
 		else hash[0] = Buffer_crc32c(uncompressedData);
 
 		//Copy real hash to our header
@@ -452,7 +452,7 @@ Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result) {
 		//		Select 10MiB if at least 4 threads can be kept busy.
 		//		Select 50MiB if ^ and utilization is about the same (e.g. 24 threads doing 10MiB would need 1.2GiB).
 		//		Select 100MiB if ^ (24 threads would need 2.4GiB).
-	
+
 		U32 key[8] = { 0 };
 
 		Bool b = Buffer_eq(
@@ -524,7 +524,7 @@ Error DLFile_read(
 
 		U32 magic;
 		_gotoIfError(clean, Buffer_consume(&file, &magic, sizeof(magic)));
-		
+
 		if(magic != DLHeader_MAGIC)
 			_gotoIfError(clean, Error_invalidParameter(0, 0, "DLFile_read() requires magicNumber prefix"));
 	}
@@ -705,7 +705,7 @@ Error DLFile_read(
 			case EDLDataType_Data:	err = DLFile_addEntry(dlFile, buf, alloc);		break;
 			case EDLDataType_UTF8:	err = DLFile_addEntryUTF8(dlFile, buf, alloc);	break;
 
-			default:	
+			default:
 				err = DLFile_addEntryAscii(dlFile, CharString_createRefSizedConst((const C8*)ptr, entryLen, false), alloc);
 				break;
 		}

@@ -383,7 +383,7 @@
 	//SHA256 helper functions
 
 	I32x4 I32x4_shuffleBytes(I32x4 a, I32x4 b) {
-	
+
 		U8 *ua = (U8*)&a;
 		U8 *ub = (U8*)&b;
 		U8 uc[16];
@@ -395,10 +395,10 @@
 
 			else uc[i] = ua[ub[i] & 0xF];
 		}
-	
+
 		return *(const I32x4*)uc;
 	}
-	
+
 	I32x4 I32x4_blend(I32x4 a, I32x4 b, U8 xyzw) {
 
 		for(U8 i = 0; i < 4; ++i)

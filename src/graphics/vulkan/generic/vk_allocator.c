@@ -216,7 +216,7 @@ Error DeviceMemoryAllocator_allocate(
 
 	if(err.genericError)
 		return err;
-		
+
 	U64 realBlockSize = (U64_max(blockSize, memReq.size * 2) + blockSize - 1) / blockSize * blockSize;
 
 	VkMemoryAllocateInfo alloc = (VkMemoryAllocateInfo) {
@@ -266,7 +266,7 @@ Error DeviceMemoryAllocator_allocate(
 	_gotoIfError(clean, AllocationBuffer_allocateBlockx(&block.allocations, memReq.size, memReq.alignment, &allocLoc));
 
 	if(i == allocator->blocks.length) {
-		
+
 		if(i == U32_MAX)
 			_gotoIfError(clean, Error_outOfBounds(0, i, U32_MAX, "DeviceMemoryAllocator_allocate() block out of bounds"));
 
@@ -322,10 +322,10 @@ clean:
 }
 
 Bool DeviceMemoryAllocator_freeAllocationExt(GraphicsDevice *device, void *ext) {
-	
+
 	if(!device || !ext)
 		return false;
-		
+
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 	vkFreeMemory(deviceExt->device, (VkDeviceMemory) ext, NULL);
 	return true;

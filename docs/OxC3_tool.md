@@ -40,7 +40,7 @@ Generates random chars; 32 by default. `-l <charCount>` can be used to customize
 
 `OxC3 rand num`
 
-Is just shorthand for `OxC3 rand char -c <numberKeyset>`. If --hex is used, it'll use 0-9A-Z, if --nyto is used it'll use 0-9a-zA-Z_$, if --oct is used it'll use 0-7, if --bin is used it'll use 0-1. Decimal is the default (0-9). `-l <charCount>` can be used to set a limit by character count and `-b <bitCount>` can be used to limit how many bits the number can have (for decimal output this can only be used with 64-bit numbers and below). 
+Is just shorthand for `OxC3 rand char -c <numberKeyset>`. If --hex is used, it'll use 0-9A-Z, if --nyto is used it'll use 0-9a-zA-Z_$, if --oct is used it'll use 0-7, if --bin is used it'll use 0-1. Decimal is the default (0-9). `-l <charCount>` can be used to set a limit by character count and `-b <bitCount>` can be used to limit how many bits the number can have (for decimal output this can only be used with 64-bit numbers and below).
 
 `OxC3 rand data -l 16 -o myFile.bin`
 
@@ -56,7 +56,7 @@ Will convert the enter separated string in myDialog into a DL file (where each e
 
 `OxC3 file to -f oiDL -i myFolder -o myFolder.oiDL`
 
-This will package all files from myFolder into a nameless archive file. These files can be accessed by file id. 
+This will package all files from myFolder into a nameless archive file. These files can be accessed by file id.
 
 To unpackage this (losing the file names of course):
 
@@ -136,13 +136,13 @@ Data allows you to actually inspect the data section of certain parts of the fil
 
 `file data -i test.oiCA` would tell about the file table for example. File data also needs to provide `-aes` if the source is encrypted. If entry is absent, it will provide a general view of the file.
 
-With `-e <offset or path>` a specific entry can be viewed. If an entry is specified, the `-o` can be used to extract that one entry into a single file (or folder). If this is not specified, it will show the file as either a hexdump or plain text (if it's ascii) or the folder's subdirectories. 
+With `-e <offset or path>` a specific entry can be viewed. If an entry is specified, the `-o` can be used to extract that one entry into a single file (or folder). If this is not specified, it will show the file as either a hexdump or plain text (if it's ascii) or the folder's subdirectories.
 
-`file data` also allows the `-l` specifier for how many entries are shown. Normally in the log it limits to 64 lines (so for data that'd mean 64 * 64 / 2 (hex) = 2KiB per view). The `-s` argument can be used to set an offset of what it should show. An example: we have an oiCA with 128 entries but want to show the last 32; `file data -i our.oiCA -s 96 -l 32`. For a file entry, it would specify the byte offset and length (length is defaulted to 2KiB). If `-o` is used, it will binary dump the entire remainder of the file if `-l` is not specified (the remainder is the entire file size if `-s` is not specified). 
+`file data` also allows the `-l` specifier for how many entries are shown. Normally in the log it limits to 64 lines (so for data that'd mean 64 * 64 / 2 (hex) = 2KiB per view). The `-s` argument can be used to set an offset of what it should show. An example: we have an oiCA with 128 entries but want to show the last 32; `file data -i our.oiCA -s 96 -l 32`. For a file entry, it would specify the byte offset and length (length is defaulted to 2KiB). If `-o` is used, it will binary dump the entire remainder of the file if `-l` is not specified (the remainder is the entire file size if `-s` is not specified).
 
 ## Encrypt
 
-`OxC3 file encr -f <encryptionType> -i <file> -k <key in hex> (optional: -o output)`  
+`OxC3 file encr -f <encryptionType> -i <file> -k <key in hex> (optional: -o output)`
 
 `OxC3 file decr -f <encryptionType> -i <file> -o <file> -k <key in hex> `
 

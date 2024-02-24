@@ -34,7 +34,7 @@ typedef enum EKey {
 
 	EKey_Backspace,		EKey_Space,			EKey_Tab,			EKey_Shift,			EKey_Ctrl,			EKey_Alt,
 	EKey_Pause,			EKey_Caps,			EKey_Escape,		EKey_PageUp,		EKey_PageDown,		EKey_End,
-	EKey_Home,			EKey_Select,		EKey_Print,			EKey_Execute,		EKey_PrintScreen,	EKey_Insert,		
+	EKey_Home,			EKey_Select,		EKey_Print,			EKey_Execute,		EKey_PrintScreen,	EKey_Insert,
 	EKey_Back,			EKey_Forward,		EKey_Sleep,			EKey_Refresh,		EKey_Stop,			EKey_Search,
 	EKey_Favorites,		EKey_Start,			EKey_Mute,			EKey_VolumeDown,	EKey_VolumeUp,		EKey_Skip,
 	EKey_Previous,		EKey_Clear,			EKey_Zoom,			EKey_Enter,			EKey_Delete,		EKey_Help,
@@ -50,9 +50,9 @@ typedef enum EKey {
 	EKey_NumpadMul,		EKey_NumpadAdd,		EKey_NumpadDec,
 	EKey_NumpadDiv,		EKey_NumpadSub,
 
-	EKey_F1,			EKey_F2,			EKey_F3,			EKey_F4,			EKey_F5,		
+	EKey_F1,			EKey_F2,			EKey_F3,			EKey_F4,			EKey_F5,
 	EKey_F6,			EKey_F7,			EKey_F8,			EKey_F9,			EKey_F10,
-	EKey_F11,			EKey_F12,			EKey_F13,			EKey_F14,			EKey_F15,	
+	EKey_F11,			EKey_F12,			EKey_F13,			EKey_F14,			EKey_F15,
 	EKey_F16,			EKey_F17,			EKey_F18,			EKey_F19,			EKey_F20,
 	EKey_F21,			EKey_F22,			EKey_F23,			EKey_F24,
 

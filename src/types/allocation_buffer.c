@@ -46,7 +46,7 @@ Error AllocationBuffer_create(U64 size, Bool isVirtual, Allocator alloc, Allocat
 	}
 
 	else allocationBuffer->buffer = (Buffer) { .lengthAndRefBits = ((U64)3 << 62) | size };
-		
+
 	if ((err = ListAllocationBufferBlock_reserve(&allocationBuffer->allocations, 16, alloc)).genericError) {
 		Buffer_free(&allocationBuffer->buffer, alloc);		//Ignores if !ptr
 		*allocationBuffer = (AllocationBuffer) { 0 };
@@ -293,7 +293,7 @@ Error AllocationBuffer_allocateBlock(
 					};
 
 					Error err = ListAllocationBufferBlock_insert(&allocationBuffer->allocations, i + 1, empty, alloc);
-						
+
 					if(err.genericError)
 						return err;
 				}
@@ -323,7 +323,7 @@ Error AllocationBuffer_allocateBlock(
 				};
 
 				Error err = ListAllocationBufferBlock_insert(&allocationBuffer->allocations, i, empty, alloc);
-				
+
 				if(err.genericError)
 					return err;
 			}

@@ -372,10 +372,10 @@ Error CommandListRef_transitionBuffer(
 //Standard commands
 
 Error CommandListRef_checkBounds(I32x2 offset, I32x2 size, I32 lowerBound1, I32 upperBound1) {
-	
+
 	if(I32x2_any(I32x2_leq(size, I32x2_zero())))
 		return Error_invalidParameter(1, 0, "CommandListRef_checkBounds()::size is <=0");
-	
+
 	I32x2 upperBound = I32x2_xx2(upperBound1);
 	I32x2 lowerBound = I32x2_xx2(lowerBound1);
 
@@ -534,7 +534,7 @@ Error CommandListRef_clearImages(CommandListRef *commandListRef, ListClearImageC
 	}
 
 	//Copy buffer
-	
+
 	_gotoIfError(clean, Buffer_createEmptyBytesx(ListClearImageCmd_bytes(clearImages) + sizeof(U32), &buf));
 
 	*(U32*)buf.ptr = (U32) clearImages.length;
@@ -632,14 +632,14 @@ Error CommandListRef_copyImageRegions(
 		if (copyType == ECopyType_DepthOnly) {
 
 			Bool compatible = srcFormat == dstFormat;
-			
+
 			switch (srcFormat) {
-				
+
 				case EDepthStencilFormat_D32:
 				case EDepthStencilFormat_D32S8:
 					compatible = dstFormat == EDepthStencilFormat_D32S8 || dstFormat == EDepthStencilFormat_D32;
 					break;
-					
+
 				default:
 					break;
 			}
@@ -719,7 +719,7 @@ Error CommandListRef_copyImageRegions(
 	}
 
 	//Copy buffer
-	
+
 	_gotoIfError(clean, Buffer_createEmptyBytesx(ListCopyImageRegion_bytes(regions) + sizeof(CopyImageCmd), &buf));
 
 	*(CopyImageCmd*)buf.ptr = (CopyImageCmd) {
@@ -847,7 +847,7 @@ Error CommandListRef_startScope(
 
 		else if(isSampler)
 			resource = (GraphicsResource){ .device = SamplerRef_ptr(res)->device };		//Only device is required here
-				
+
 		else _gotoIfError(clean, Error_invalidParameter(
 			1, 0, "CommandListRef_startScope()::transitions[i].resource's type is unsupported"
 		));
@@ -1486,7 +1486,7 @@ Error CommandListRef_startRenderExt(
 
 	if(colors.length > 8)
 		_gotoIfError(clean, Error_outOfBounds(3, colors.length, 8, "CommandListRef_startRenderExt()::colors has to be <=8"));
-		
+
 	I32x2 targetSize = size;
 	I32x2 firstSize = I32x2_zero();
 	U8 counter = 0;
@@ -1518,7 +1518,7 @@ Error CommandListRef_startRenderExt(
 				4, info.range.levelId >= 1 ? info.range.levelId : info.range.layerId, 1,
 				"CommandListRef_startRenderExt() image range.levelId or layerId is invalid"
 			));
-			
+
 		//Check generic properties like devices
 
 		if(texture.resource.device != commandList->device)
@@ -1752,7 +1752,7 @@ Error CommandListRef_startRenderExt(
 			continue;
 
 		if(i < colors.length) {
-			
+
 			startRender->activeMask |= (U8)1 << i;
 
 			if(info.unusedAfterRender)

@@ -71,7 +71,7 @@ Error File_foreach(CharString loc, FileCallback callback, void *userData, Bool i
 			_gotoIfError(clean, Error_stderr(errno, "File_foreach() failed to query file properties"));
 
 		CharString tmp = CharString_createRefCStrConst(dir->d_name);
-			
+
 		//Folder parsing
 
 		if(S_ISDIR(s.st_mode)) {

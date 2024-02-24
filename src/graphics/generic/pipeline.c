@@ -257,7 +257,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 			case EMSAASamples_x16Ext:
 				dataTypeCheck = EGraphicsDataTypes_MSAA16x;
 				break;
-				
+
 			default:
 				break;
 		}
@@ -526,7 +526,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 	//Create ref ptrs
 
 	Error err = Error_none();
-	
+
 	_gotoIfError(clean, ListPipelineRef_resizex(pipelines, infos->length));
 
 	totalStageCount = 0;

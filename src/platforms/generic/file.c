@@ -1020,7 +1020,7 @@ Error File_foreachVirtualInternal(ForeachFile *userData, CharString resolved) {
 		}
 
 		//All folders
-		
+
 		if (
 			(!userData->isRecursive && baseCount == CharString_countAllSensitive(section->path, '/')) ||
 			(userData->isRecursive && baseCount <= CharString_countAllSensitive(section->path, '/'))

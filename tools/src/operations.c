@@ -309,7 +309,7 @@ void Operations_init() {
 		.optionalParameters =
 			EOperationHasParameter_Number | EOperationHasParameter_Length |
 			EOperationHasParameter_Output | EOperationHasParameter_Character,
-		
+
 		.operationFlags = EOperationFlags_RandChar
 	};
 

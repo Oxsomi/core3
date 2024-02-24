@@ -150,7 +150,7 @@ Error Platform_initExt() {
 	SYSTEM_INFO systemInfo;
 	GetSystemInfo(&systemInfo);
 	Platform_instance.threads = systemInfo.dwNumberOfProcessors;
-	
+
 	if(Platform_useWorkingDirectory) {
 
 		CharString_freex(&Platform_instance.workingDirectory);
@@ -173,7 +173,7 @@ Error Platform_initExt() {
 
 		_gotoIfError(clean, CharString_appendx(&Platform_instance.workingDirectory, '/'));
 	}
-	
+
 	//Init virtual files
 
 	EnumerateFiles files = (EnumerateFiles) { .sections = &Platform_instance.virtualSections };
