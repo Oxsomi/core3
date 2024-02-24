@@ -77,5 +77,5 @@ U8 U128_bitScan(U128 a) {
 }
 
 ECompareResult U128_cmp(U128 a, U128 b) {
-	return a < b ? -1 : (a == b ? 0 : 1);
+	return a < b ? ECompareResult_Lt : (a == b ? ECompareResult_Eq : ECompareResult_Gt);
 }

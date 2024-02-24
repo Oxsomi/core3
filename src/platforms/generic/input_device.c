@@ -96,11 +96,11 @@ Bool InputDevice_getPreviousState(InputDevice d, InputHandle handle) {
 	return InputDevice_getState(d, handle) & EInputState_Prev;
 }
 
-inline F32 *InputDevice_getAxisValue(InputDevice dev, U16 localHandle, Bool isCurrent) {
+F32 *InputDevice_getAxisValue(InputDevice dev, U16 localHandle, Bool isCurrent) {
 	return localHandle >= dev.axes ? NULL : (F32*)dev.states.ptr + ((U64)localHandle << 1) + isCurrent;
 }
 
-inline BitRef InputDevice_getButtonValue(InputDevice dev, U16 localHandle, Bool isCurrent) {
+BitRef InputDevice_getButtonValue(InputDevice dev, U16 localHandle, Bool isCurrent) {
 
 	if(localHandle >= dev.buttons)
 		return (BitRef){ 0 };

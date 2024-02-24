@@ -96,35 +96,35 @@ Bool AllocationBuffer_free(AllocationBuffer *allocationBuffer, Allocator alloc) 
 	return success;
 }
 
-inline U64 AllocationBufferBlock_getStart(AllocationBufferBlock block) {
+U64 AllocationBufferBlock_getStart(AllocationBufferBlock block) {
 	return block.start << 1 >> 1;
 }
 
-inline U64 AllocationBufferBlock_size(AllocationBufferBlock block) {
+U64 AllocationBufferBlock_size(AllocationBufferBlock block) {
 	return block.end - AllocationBufferBlock_getStart(block);
 }
 
-inline U64 AllocationBufferBlock_isFree(AllocationBufferBlock block) {
+U64 AllocationBufferBlock_isFree(AllocationBufferBlock block) {
 	return block.start >> 63;
 }
 
-inline U64 AllocationBufferBlock_getCenter(AllocationBufferBlock block) {
+U64 AllocationBufferBlock_getCenter(AllocationBufferBlock block) {
 	return (AllocationBufferBlock_getStart(block) + block.end) >> 1;
 }
 
-inline U64 AllocationBufferBlock_alignTo(U64 a, U64 alignment) {
+U64 AllocationBufferBlock_alignTo(U64 a, U64 alignment) {
 	return alignment ? (a + alignment - 1) / alignment * alignment : a;
 }
 
-inline U64 AllocationBufferBlock_alignToBackwards(U64 a, U64 alignment) {
+U64 AllocationBufferBlock_alignToBackwards(U64 a, U64 alignment) {
 	return alignment ? a / alignment * alignment : a;
 }
 
-inline U64 AllocationBufferBlock_getAligned(AllocationBufferBlock block) {
+U64 AllocationBufferBlock_getAligned(AllocationBufferBlock block) {
 	return AllocationBufferBlock_alignTo(AllocationBufferBlock_getStart(block), block.alignment);
 }
 
-inline Bool AllocationBufferBlock_isSame(AllocationBufferBlock block, const U8 *start, const U8 *ptr) {
+Bool AllocationBufferBlock_isSame(AllocationBufferBlock block, const U8 *start, const U8 *ptr) {
 	U64 blockStart = AllocationBufferBlock_getStart(block);
 	U64 aligned = AllocationBufferBlock_getAligned(block);
 	return ptr == start + blockStart || ptr == start + aligned;

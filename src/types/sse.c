@@ -55,7 +55,7 @@
 
 	//Swizzle
 
-	inline I32x4 _movelh_epi32(I32x4 a, I32x4 b) {
+	I32x4 _movelh_epi32(I32x4 a, I32x4 b) {
 		return I32x4_bitsF32x4(_mm_movelh_ps(
 			F32x4_bitsI32x4(a), F32x4_bitsI32x4(b)
 		));

@@ -21,4 +21,4 @@ cd ../
 
 # Run unit test
 
-./builds/bin/$1/OxC3_test.exe
+./builds/bin/OxC3_test

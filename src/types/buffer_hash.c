@@ -258,13 +258,13 @@ void Buffer_sha256Internal(Buffer buf, U32 *output) {
 	extern const U32 CRC32C_LONG_SHIFTS[4][256];
 	extern const U32 CRC32C_SHORT_SHIFTS[4][256];
 
-	inline U32 CRC32C_shiftShort(U32 crc0) {
+	U32 CRC32C_shiftShort(U32 crc0) {
 		return
 			CRC32C_SHORT_SHIFTS[0][(U8) crc0] ^ CRC32C_SHORT_SHIFTS[1][(U8)(crc0 >> 8)] ^
 			CRC32C_SHORT_SHIFTS[2][(U8)(crc0 >> 16)] ^ CRC32C_SHORT_SHIFTS[3][(U8)(crc0 >> 24)];
 	}
 
-	inline U32 CRC32C_shiftLong(U32 crc0) {
+	U32 CRC32C_shiftLong(U32 crc0) {
 		return
 			CRC32C_LONG_SHIFTS[0][(U8) crc0] ^ CRC32C_LONG_SHIFTS[1][(U8)(crc0 >> 8)] ^
 			CRC32C_LONG_SHIFTS[2][(U8)(crc0 >> 16)] ^ CRC32C_LONG_SHIFTS[3][(U8)(crc0 >> 24)];

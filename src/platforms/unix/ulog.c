@@ -67,11 +67,11 @@ void Log_captureStackTrace(void **stack, U64 stackSize, U8 skipTmp) {
 		stack[(U64)(count - skip)] = NULL;
 }
 
-#define FONT_GREEN  "\033[32;"
-#define FONT_CYAN   "\x1b[36m"
-#define FONT_YELLOW "\033[33;"
-#define FONT_RED    "\033[31;"
-#define FONT_RESET  "\033[0m"
+#define FONT_GREEN  "\e[1;32m"
+#define FONT_CYAN   "\e[1;36m"
+#define FONT_YELLOW "\e[1;33m"
+#define FONT_RED    "\e[1;31m"
+#define FONT_RESET  "\e[1;0m"
 
 #define printColor(lvl, str, ...)																	\
 	switch(lvl) {																					\

@@ -511,7 +511,7 @@ Error Buffer_offset(Buffer *buf, U64 length) {
 	return Error_none();
 }
 
-inline void Buffer_copyBytesInternal(U8 *ptr, const void *v, U64 length) {
+void Buffer_copyBytesInternal(U8 *ptr, const void *v, U64 length) {
 
 	for (U64 i = 0, j = length >> 3; i < j; ++i)
 		*((U64*)ptr + i) = *((const U64*)v + i);

@@ -31,14 +31,14 @@ static const U8 CAHeader_V1_0  = 0;
 
 //Helper functions
 
-inline Ns CAFile_loadDate(U16 time, U16 date) {
+Ns CAFile_loadDate(U16 time, U16 date) {
 	return Time_date(
 		1980 + (date >> 9), 1 + ((date >> 5) & 0xF), date & 0x1F,
 		time >> 11, (time >> 5) & 0x3F, (time & 0x1F) << 1, 0, false
 	);
 }
 
-inline Bool CAFile_storeDate(Ns ns, U16 *time, U16 *date) {
+Bool CAFile_storeDate(Ns ns, U16 *time, U16 *date) {
 
 	if(!time || !date)
 		return false;
