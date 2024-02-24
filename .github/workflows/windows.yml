@@ -3,7 +3,7 @@ name: C/C++ CI
 on: [push, pull_request]
 
 jobs:
-  build_windows:
+  build:
     name: Windows build
     runs-on: windows-2022
     env:
@@ -22,16 +22,3 @@ jobs:
       run: D:\a\core3\core3\build.bat Release Off Off
     - name: build for debug check
       run: D:\a\core3\core3\build.bat Debug On Off
-  build_osx:
-    name: OSX build
-    runs-on: macos-latest
-    steps:
-    - uses: actions/checkout@v1
-    - name: Install Vulkan SDK
-      uses: humbletim/install-vulkan-sdk@v1.1.1
-      with:
-        cache: true
-    - name: build for SIMD fallback check
-      run: /Users/runner/work/core3/core3/build.sh Release Off Off
-    - name: build for debug check
-      run: /Users/runner/work/core3/core3/build.sh Debug Off Off

@@ -1,7 +1,10 @@
 # OxC3 (Oxsomi core 3 0.2)
-![](https://github.com/Oxsomi/core3/workflows/C%2FC++%20CI/badge.svg)
+| Platforms | Vulkan/MoltenVK support                                      | Native API support |
+| --------- | ------------------------------------------------------------ | ------------------ |
+| Windows   | ![example workflow](https://github.com/Oxsomi/core3/actions/workflows/windows.yml/badge.svg) | **N/A**            |
+| Mac OS X  | ![example workflow](https://github.com/Oxsomi/core3/actions/workflows/osx.yml/badge.svg) | **N/A**            |
 
-OxC3 (0xC3 or Oxsomi core 3) is the successor to O(x)somi core v2 and v1. Specifically it combines the ostlc (standard template library), owc (window core) and ogc (graphics core). Focused more on being minimal abstraction compared to the predecessors by using C17 instead of C++20. Written so it can be wrapped with other languages (bindings) or even a VM in the future. Could also provide a C++20 layer for easier usage, such as operator overloads. It currently supports Windows and Mac OS X with Vulkan/MoltenVK.
+OxC3 (0xC3 or Oxsomi core 3) is the successor to O(x)somi core v2 and v1. Specifically it combines the ostlc (standard template library), owc (window core) and ogc (graphics core). Focused more on being minimal abstraction compared to the predecessors by using C17 instead of C++20. Written so it can be wrapped with other languages (bindings) or even a VM in the future. Could also provide a C++20 layer for easier usage, such as operator overloads. 
 
 - OxC3_types
   - The basic types that you might need and useful utilities.
