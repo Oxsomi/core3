@@ -18,9 +18,7 @@
 *  This is called dual licensing.
 */
 
-#include "platforms/platform.h"
 #include "types/thread.h"
-#include "types/platforms/windows/wplatform_ext.h"
 #include "types/error.h"
 #include "types/buffer.h"
 
@@ -31,9 +29,18 @@
 U64 Thread_getId() { return GetCurrentThreadId(); }
 
 Bool Thread_sleep(Ns ns) {
-	LARGE_INTEGER interval;
-	interval.QuadPart = -(I64)((U64_min(ns, I64_MAX) + 99) / 100);
-	((PlatformExt*)Platform_instance.dataExt)->ntDelayExecution(false, &interval);
+
+	LARGE_INTEGER ft = (LARGE_INTEGER) { .QuadPart = -(I64)((U64_min(ns, I64_MAX) + 99) / 100) };
+	HANDLE timer = CreateWaitableTimerA(NULL, TRUE, NULL); 
+
+	if(!timer)
+		return false;
+
+	if(!SetWaitableTimer(timer, &ft, 0, NULL, NULL, 0))
+		return false;
+
+	WaitForSingleObject(timer, INFINITE); 
+	CloseHandle(timer);
 	return true;
 }
 
@@ -45,7 +52,7 @@ DWORD ThreadFunc(Thread *thread) {
 	return 0;
 }
 
-Error Thread_create(ThreadCallbackFunction callback, void *objectHandle, Thread **thread) {
+Error Thread_create(Allocator alloc, ThreadCallbackFunction callback, void *objectHandle, Thread **thread) {
 
 	if(!thread)
 		return Error_nullPointer(2, "Thread_create()::thread is required");
@@ -56,9 +63,12 @@ Error Thread_create(ThreadCallbackFunction callback, void *objectHandle, Thread 
 	if(!callback)
 		return Error_nullPointer(0, "Thread_create()::callback is required");
 
+	if(!alloc.alloc || !alloc.free)
+		return Error_nullPointer(0, "Thread_create()::alloc is required");
+
 	Buffer buf = Buffer_createNull();
 
-	Error err = Platform_instance.alloc.alloc(Platform_instance.alloc.ptr, sizeof(Thread), &buf);
+	Error err = alloc.alloc(alloc.ptr, sizeof(Thread), &buf);
 
 	if (err.genericError)
 		return err;
@@ -71,7 +81,7 @@ Error Thread_create(ThreadCallbackFunction callback, void *objectHandle, Thread 
 	thr->nativeHandle = CreateThread(0, 0, (LPTHREAD_START_ROUTINE)ThreadFunc, thr, 0, NULL);
 
 	if (!thr->nativeHandle) {
-		Thread_free(thread);
+		Thread_free(alloc, thread);
 		return Error_platformError(0, GetLastError(), "Thread_wait() couldn't create thread");
 	}
 

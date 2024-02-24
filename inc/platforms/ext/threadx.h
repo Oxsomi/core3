@@ -19,15 +19,8 @@
 */
 
 #pragma once
-#include "types/types.h"
+#include "types/thread.h"
 
-#define WIN32_LEAN_AND_MEAN
-#define MICROSOFT_WINDOWS_WINBASE_H_DEFINE_INTERLOCKED_CPLUSPLUS_OVERLOADS 0
-#include <Windows.h>
-
-typedef struct PlatformExt {
-
-	HMODULE ntdll;
-	void (*ntDelayExecution)(Bool, PLARGE_INTEGER);
-
-} PlatformExt;
+Error Thread_createx(ThreadCallbackFunction callback, void *objectHandle, Thread **thread);
+Bool Thread_freex(Thread **thread);
+Error Thread_waitAndCleanupx(Thread **thread);

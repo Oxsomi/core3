@@ -18,12 +18,11 @@
 *  This is called dual licensing.
 */
 
-#include "platforms/log.h"
+#include "types/log.h"
 #include "types/thread.h"
-#include "platforms/platform.h"
-#include "platforms/ext/errorx.h"
-#include "platforms/ext/stringx.h"
 #include "types/time.h"
+#include "types/error.h"
+#include "types/allocator.h"
 
 //Unfortunately before Windows 10 it doesn't support printing colors into console using printf
 //We also use Windows dependent stack tracing
@@ -39,7 +38,8 @@
 
 //Carried over from core2
 
-void Log_captureStackTrace(void **stack, U64 stackSize, U8 skip) {
+void Log_captureStackTrace(Allocator alloc, void **stack, U64 stackSize, U8 skip) {
+	(void) alloc;
 	RtlCaptureStackBackTrace((DWORD)(1 + (U32)skip), (DWORD) stackSize, stack, NULL);
 }
 

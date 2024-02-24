@@ -215,3 +215,8 @@ C8 C8_createNyto(U8 v);
 #define C8x2(x, y) ((((U16)y) << 8) | x)
 #define C8x4(x, y, z, w) ((((U32)C8x2(z, w)) << 16) | C8x2(x, y))
 #define C8x8(x, y, z, w, a, b, c, d) ((((U64)C8x4(a, b, c, d)) << 32) | C8x4(x, y, z, w))
+
+//Default stacktrace
+
+#define _STACKTRACE_SIZE 32
+typedef void *StackTrace[_STACKTRACE_SIZE];

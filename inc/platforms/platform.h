@@ -48,7 +48,7 @@ typedef struct Platform {
 	Lock virtualSectionsLock;
 	ListVirtualSection virtualSections;
 
-	void *data, *dataExt;
+	void *data;
 
 	U32 threads;
 	U32 padding;
@@ -59,8 +59,6 @@ extern Platform Platform_instance;
 user_impl extern const Bool Platform_useWorkingDirectory;			//If false, the app directory will be used instead.
 
 Error Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *allocator);
-
-impl extern const U32 Platform_extData;
 
 impl void Platform_cleanupExt();
 impl Error Platform_initExt();

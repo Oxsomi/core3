@@ -728,7 +728,7 @@ U32 GraphicsDeviceRef_allocateDescriptor(GraphicsDeviceRef *deviceRef, EDescript
 			#ifndef NDEBUG
 
 				DescriptorStackTrace stackTrace = (DescriptorStackTrace) {  .resourceId = resourceId };
-				Log_captureStackTrace(stackTrace.stackTrace, sizeof(stackTrace.stackTrace) / sizeof(void*), 1);
+				Log_captureStackTracex(stackTrace.stackTrace, sizeof(stackTrace.stackTrace) / sizeof(void*), 1);
 
 				//Disable tracking for resourceId 0 because that's reserved as a safeguard
 				//It's technically "leaked" but for a good reason.

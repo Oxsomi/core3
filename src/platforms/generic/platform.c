@@ -147,7 +147,7 @@ Error Platform_onAllocate(void *ptr, U64 length) {
 		captured.location = (U64) ptr;
 		captured.length = length;
 
-		Log_captureStackTrace(captured.stack, _STACKTRACE_SIZE, 1);
+		Log_captureStackTrace(Allocator_allocationsAllocator, captured.stack, _STACKTRACE_SIZE, 1);
 
 		ELockAcquire acq = Lock_lock(&Allocator_lock, U64_MAX);
 
@@ -366,14 +366,10 @@ Error Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *alloca
 		}
 	};
 
-	Buffer platformExt = Buffer_createNull();
 	Error err = Error_none();
 	CharString appDir = CharString_createNull();
 
-	_gotoIfError(clean, Buffer_createEmptyBytesx(Platform_extData, &platformExt));
-
 	Platform_instance.virtualSectionsLock = Lock_create();
-	Platform_instance.dataExt = (void*) platformExt.ptr;
 
 	CharStringList sl = (CharStringList) { 0 };
 
@@ -443,14 +439,6 @@ void Platform_cleanup() {
 
 	ListVirtualSection_freex(&Platform_instance.virtualSections);
 
-	//Cleanup platform ext
-
-	if(Platform_instance.dataExt) {
-		Buffer buf = Buffer_createManagedPtr(Platform_instance.dataExt, Platform_extData);
-		Buffer_freex(&buf);
-		Platform_instance.dataExt = NULL;
-	}
-
 	//Reset console text color
 
 	Allocator_reportLeaks();
@@ -464,10 +452,6 @@ void Platform_cleanup() {
 
 Bool Lock_isLockedForThread(Lock *l) {
 	return AtomicI64_add(&l->lockedThreadId, 0) == (I64) Thread_getId();
-}
-
-void Log_printCapturedStackTrace(Allocator alloc, const StackTrace stackTrace, ELogLevel lvl, ELogOptions options) {
-	Log_printCapturedStackTraceCustom(alloc, (const void**) stackTrace, _STACKTRACE_SIZE, lvl, options);
 }
 
 void Log_printCapturedStackTracex(const StackTrace stackTrace, ELogLevel lvl, ELogOptions options) {

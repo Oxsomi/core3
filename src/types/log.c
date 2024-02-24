@@ -18,27 +18,24 @@
 *  This is called dual licensing.
 */
 
-#include "platforms/log.h"
-#include "platforms/ext/stringx.h"
+#include "types/log.h"
 #include "types/string.h"
 #include "types/math.h"
+#include "types/allocator.h"
+#include "types/error.h"
 
 #include <stdlib.h>
 
-void Log_captureStackTracex(void **stackTrace, U64 stackSize, U8 skip) {
-	Log_captureStackTrace(Platform_instance.alloc, stackTrace, stackSize, skip == U8_MAX ? U8_MAX : skip + 1);
+void Log_printCapturedStackTrace(Allocator alloc, const StackTrace stackTrace, ELogLevel lvl, ELogOptions options) {
+	Log_printCapturedStackTraceCustom(alloc, (const void**) stackTrace, _STACKTRACE_SIZE, lvl, options);
 }
 
-void Log_printStackTracex(U8 skip, ELogLevel lvl, ELogOptions options) {
-	Log_printStackTrace(Platform_instance.alloc, skip + 1 == 0 ? U8_MAX : skip + 1, lvl, options);
-}
+void Log_printStackTrace(Allocator alloc, U8 skip, ELogLevel lvl, ELogOptions options) {
 
-void Log_printCapturedStackTraceCustomx(const void **stackTrace, U64 stackSize, ELogLevel lvl, ELogOptions options) {
-	Log_printCapturedStackTraceCustom(Platform_instance.alloc, stackTrace, stackSize, lvl, options);
-}
+	StackTrace stackTrace;
+	Log_captureStackTrace(alloc, stackTrace, _STACKTRACE_SIZE, skip);
 
-void Log_logx(ELogLevel lvl, ELogOptions options, CharString arg) {
-	Log_log(Platform_instance.alloc, lvl, options, arg);
+	Log_printCapturedStackTrace(alloc, stackTrace, lvl, options);
 }
 
 #define Log_level(lvl) 													\
@@ -58,24 +55,18 @@ void Log_logx(ELogLevel lvl, ELogOptions options, CharString arg) {
 																		\
 	CharString_free(&res, alloc);
 
-//Default allocator. Sometimes they can't be safely used
-
-void Log_debugx(ELogOptions opt, const C8 *format, ...) {
-	Allocator alloc = Platform_instance.alloc;
+void Log_debug(Allocator alloc, ELogOptions opt, const C8 *format, ...) {
 	Log_level(ELogLevel_Debug);
 }
 
-void Log_performancex(ELogOptions opt, const C8 *format, ...) {
-	Allocator alloc = Platform_instance.alloc;
+void Log_performance(Allocator alloc, ELogOptions opt, const C8 *format, ...) {
 	Log_level(ELogLevel_Performance);
 }
 
-void Log_warnx(ELogOptions opt, const C8 *format, ...) {
-	Allocator alloc = Platform_instance.alloc;
+void Log_warn(Allocator alloc, ELogOptions opt, const C8 *format, ...) {
 	Log_level(ELogLevel_Warn);
 }
 
-void Log_errorx(ELogOptions opt, const C8 *format, ...) {
-	Allocator alloc = Platform_instance.alloc;
+void Log_error(Allocator alloc, ELogOptions opt, const C8 *format, ...) {
 	Log_level(ELogLevel_Error);
 }

@@ -18,12 +18,8 @@
 *  This is called dual licensing.
 */
 
-#include "platforms/log.h"
+#include "types/log.h"
 #include "types/thread.h"
-#include "platforms/platform.h"
-#include "platforms/ext/errorx.h"
-#include "platforms/ext/stringx.h"
-#include "platforms/ext/bufferx.h"
 #include "types/time.h"
 #include "types/buffer.h"
 
@@ -31,7 +27,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-void Log_captureStackTrace(void **stack, U64 stackSize, U8 skipTmp) {
+void Log_captureStackTrace(Allocator alloc, void **stack, U64 stackSize, U8 skipTmp) {
 
 	U64 skip = (U64) skipTmp + 1;
 
@@ -42,7 +38,7 @@ void Log_captureStackTrace(void **stack, U64 stackSize, U8 skipTmp) {
 		stackSize += skip;
 
 		Buffer buf = Buffer_createNull();
-		Error err = Buffer_createUninitializedBytesx(stackSize * sizeof(void*), &buf);
+		Error err = Buffer_createUninitializedBytes(stackSize * sizeof(void*), alloc, &buf);
 
 		if (!err.genericError) {		//If allocate fails, we'll pretend that the stack ends after
 

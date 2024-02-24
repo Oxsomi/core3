@@ -195,7 +195,6 @@ target_link_libraries(OxC3_formats PUBLIC OxC3_types)
 message("-- Targeting platform: ${platform}")
 
 file(GLOB platformsHeaders "inc/platforms/*.h")
-file(GLOB_RECURSE platformsHeadersDependent "inc/platforms/ext/${platform}/*.h")
 
 file(GLOB_RECURSE platformsPlatformSources "src/platforms/${platform}/*.c")
 file(GLOB_RECURSE platformsSources "src/platforms/generic/*.c")
@@ -210,14 +209,12 @@ add_library(
 	OxC3_platforms
 	STATIC
 	${platformsHeaders}
-	${platformsHeadersDependent}
 	${platformsPlatformSources}
 	${platformsSources}
 	${platformsSIMDSources}
 	CMakeLists.txt
 )
 
-source_group("Header Files (${platform})" FILES ${platformsHeadersDependent})
 source_group("Source Files (${platform})" FILES ${platformsPlatformSources})
 source_group("Source Files (simd: ${simd})" FILES ${platformsSIMDSources})
 

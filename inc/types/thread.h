@@ -32,8 +32,8 @@ impl U64 Thread_getId();					//Current thread id
 
 impl Bool Thread_sleep(Ns ns);				//Can be in a different time unit. Ex. on Windows it's rounded up to ms
 
-impl Error Thread_create(ThreadCallbackFunction callback, void *objectHandle, Thread **thread);
-Bool Thread_free(Thread **thread);
+impl Error Thread_create(Allocator alloc, ThreadCallbackFunction callback, void *objectHandle, Thread **thread);
+Bool Thread_free(Allocator alloc, Thread **thread);
 
 impl Error Thread_wait(Thread *thread);
-Error Thread_waitAndCleanup(Thread **thread);
+Error Thread_waitAndCleanup(Allocator alloc, Thread **thread);

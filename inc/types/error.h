@@ -20,9 +20,7 @@
 
 #pragma once
 #include "types.h"
-
-#define _STACKTRACE_SIZE 32
-typedef void *StackTrace[_STACKTRACE_SIZE];
+#include "log.h"
 
 //TODO: Make errors extendible like TypeId
 
@@ -122,3 +120,6 @@ Error Error_timedOut(U32 subId, U64 limit, const C8 *errorStr);
 Error Error_constData(U32 paramId, U32 subId, const C8 *errorStr);
 Error Error_stderr(U32 subId, const C8 *errorStr);
 Error Error_none();
+
+impl CharString Error_formatPlatformError(Allocator alloc, Error err);
+void Error_print(Allocator alloc, Error err, ELogLevel logLevel, ELogOptions options);

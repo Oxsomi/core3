@@ -22,3 +22,16 @@ jobs:
       run: D:\a\core3\core3\build.bat Release Off Off
     - name: build for debug check
       run: D:\a\core3\core3\build.bat Debug On Off
+  build:
+    name: OSX build
+    runs-on: macos-latest
+    steps:
+    - uses: actions/checkout@v1
+    - name: Install Vulkan SDK
+      uses: humbletim/install-vulkan-sdk@v1.1.1
+      with:
+        cache: true
+    - name: build for SIMD fallback check
+      run: D:\a\core3\core3\build.bat Release Off Off
+    - name: build for debug check
+      run: D:\a\core3\core3\build.bat Debug Off Off

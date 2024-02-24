@@ -23,6 +23,7 @@
 #include "platforms/ext/ddsx.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/formatx.h"
+#include "platforms/ext/threadx.h"
 #include "formats/bmp.h"
 #include "formats/dds.h"
 #include "formats/oiCA.h"
@@ -595,4 +596,18 @@ Error Archive_foreachx(
 	EFileType type
 ) {
 	return Archive_foreach(archive, loc, callback, userData, isRecursive, type, Platform_instance.alloc);
+}
+
+//Thread
+
+Error Thread_createx(ThreadCallbackFunction callback, void *objectHandle, Thread **thread) {
+	return Thread_create(Platform_instance.alloc, callback, objectHandle, thread);
+}
+
+Bool Thread_freex(Thread **thread) {
+	return Thread_free(Platform_instance.alloc, thread);
+}
+
+Error Thread_waitAndCleanupx(Thread **thread) {
+	return Thread_waitAndCleanup(Platform_instance.alloc, thread);
 }

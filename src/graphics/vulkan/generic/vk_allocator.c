@@ -251,7 +251,7 @@ Error DeviceMemoryAllocator_allocate(
 	_gotoIfError(clean, AllocationBuffer_createx(alloc.allocationSize, true, &block.allocations));
 
 	#ifndef NDEBUG
-		Log_captureStackTrace(block.stackTrace, sizeof(block.stackTrace) / sizeof(void*), 1);
+		Log_captureStackTracex(block.stackTrace, sizeof(block.stackTrace) / sizeof(void*), 1);
 	#endif
 
 	//Find a spot in the blocks list

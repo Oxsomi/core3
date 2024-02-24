@@ -62,8 +62,8 @@ void Error_fillStackTrace(Error *err) {
 		err->stackTrace[0] = NULL;
 }
 
-CharString Error_formatPlatformError(Error err) {
-	(void)err;
+CharString Error_formatPlatformError(Allocator alloc, Error err) {
+	(void)alloc; (void)err;
 	return CharString_createNull();
 }
 
@@ -81,18 +81,24 @@ const Bool Platform_useWorkingDirectory = false;
 
 int main() {
 
+	Allocator alloc = (Allocator) {
+		.alloc = ourAlloc,
+		.free = ourFree,
+		.ptr = NULL
+	};
+
 	//Fail for big endian systems, because we don't support them.
 
 	U16 v = 1;
 
 	if(!*(U8*)&v) {
-		printf("Failed unit test: Unsupported endianness (only supporting little endian architectures)");
+		Log_errorLn(alloc, "Failed unit test: Unsupported endianness (only supporting little endian architectures)");
 		return -1;
 	}
 
 	//Test timer
 
-	printf("Testing Time\n");
+	Log_debugLn(alloc, "Testing Time");
 
 	Ns now = Time_now();
 	TimeFormat nowStr;
@@ -102,22 +108,16 @@ int main() {
 	Ns now2 = 0;
 
 	if (!(Time_parseFormat(&now2, nowStr, false)) || now2 != now) {
-		printf("Failed unit test: Time_parseFormat or Time_format is broken\n");
+		Log_errorLn(alloc, "Failed unit test: Time_parseFormat or Time_format is broken");
 		return 1;
 	}
 
 	Time_format(now, nowStr, true);
 
 	if (!(Time_parseFormat(&now2, nowStr, true))  || now2 != now) {
-		printf("Failed unit test: Time_parseFormat or Time_format (local time) is broken\n");
+		Log_errorLn(alloc, "Failed unit test: Time_parseFormat or Time_format (local time) is broken");
 		return 2;
 	}
-
-	Allocator alloc = (Allocator) {
-		.alloc = ourAlloc,
-		.free = ourFree,
-		.ptr = NULL
-	};
 
 	Buffer emp = Buffer_createNull(), full = Buffer_createNull();
 	Buffer outputEncrypted = Buffer_createNull(), outputDecrypted = Buffer_createNull();
@@ -129,7 +129,7 @@ int main() {
 
 	//Test Buffer
 
-	printf("Testing Buffer\n");
+	Log_debugLn(alloc, "Testing Buffer");
 
 	_gotoIfError(clean, Buffer_createZeroBits(256, alloc, &emp));
 	_gotoIfError(clean, Buffer_createOneBits(256, alloc, &full));
@@ -166,7 +166,7 @@ int main() {
 	//Test string to number functions
 
 	{
-		printf("Testing number to CharString conversions\n");
+		Log_debugLn(alloc, "Testing number to CharString conversions");
 
 		CharString resultsStr[] = {
 			CharString_createRefCStrConst("0x1234"),
@@ -258,7 +258,7 @@ int main() {
 	//Test CRC32C function
 	//https://stackoverflow.com/questions/20963944/test-vectors-for-crc32c
 
-	printf("Testing Buffer CRC32C\n");
+	Log_debugLn(alloc, "Testing Buffer CRC32C");
 
 	typedef struct TestCRC32C {
 		const C8 *str;
@@ -294,7 +294,7 @@ int main() {
 	//https://www.dlitz.net/crypto/shad256-test-vectors/
 	//https://github.com/amosnier/sha-2/blob/master/test.c
 
-	printf("Testing Buffer SHA256\n");
+	Log_debugLn(alloc, "Testing Buffer SHA256");
 
 	static const U32 resultHashes[][8] = {
 		{ 0xE3B0C442, 0x98FC1C14, 0x9AFBF4C8, 0x996FB924, 0x27AE41E4, 0x649B934C, 0xA495991B, 0x7852B855 },
@@ -603,7 +603,7 @@ int main() {
 
 	//Test big endian conversions
 
-	printf("Testing endianness swapping\n");
+	Log_debugLn(alloc, "Testing endianness swapping");
 
 	U16 be16 = U16_swapEndianness(0x1234);
 	U32 be32 = U32_swapEndianness(0x12345678);
@@ -627,7 +627,7 @@ int main() {
 	//				2.1.2, 2.2.2, 2.3.2, 2.4.2, 2.5.2, 2.6.2, 2.7.2, 2.8.2
 
 	{
-		printf("Testing Buffer encrypt/decrypt (AES256)\n");
+		Log_debugLn(alloc, "Testing Buffer encrypt/decrypt (AES256)");
 
 		CharString testKeys[] = {
 
@@ -1061,7 +1061,7 @@ int main() {
 	}
 
 	{
-		printf("Testing Buffer encrypt/decrypt (AES128)\n");
+		Log_debugLn(alloc, "Testing Buffer encrypt/decrypt (AES128)");
 
 		CharString testKeys[] = {
 			CharString_createRefSizedConst("\xAD\x7A\x2B\xD0\x3E\xAC\x83\x5A\x6F\x62\x0F\xDC\xB5\x06\xB3\x45", 16, true),
@@ -1377,7 +1377,7 @@ int main() {
 
 	//Check for floating point conversions
 
-	printf("Testing software floating point expansion casts...\n");
+	Log_debugLn(alloc, "Testing software floating point expansion casts...");
 
 	{
 		static const U32 expansionTests[] = {
@@ -1565,7 +1565,7 @@ int main() {
 		}
 	}
 
-	printf("Testing software floating point truncation casts...\n");
+	Log_debugLn(alloc, "Testing software floating point truncation casts...");
 
 	{
 		static const U64 truncTests[] = {
@@ -1847,7 +1847,7 @@ int main() {
 	//U128 compare
 
 	{
-		printf("Comparing U128 to U128 as BigInt and U128\n");
+		Log_debugLn(alloc, "Comparing U128 to U128 as BigInt and U128");
 
 		U128 compares[] = {
 			U128_createU64x2(0x0000000000000000, 0x0000000000000000),
@@ -1920,7 +1920,7 @@ int main() {
 
 	BigInt aBig = (BigInt) { 0 }, bBig = (BigInt) { 0 }, cBig = (BigInt) { 0 };
 
-	printf("Testing big int create from hex/bin/oct/dec\n");
+	Log_debugLn(alloc, "Testing big int create from hex/bin/oct/dec");
 
 	for(U64 i = 0; i < sizeof(stringified) / sizeof(stringified[0]); ++i) {
 
@@ -1934,7 +1934,7 @@ int main() {
 		bBig = (BigInt) { 0 };
 	}
 
-	printf("Testing big int to hex/bin/oct\n");
+	Log_debugLn(alloc, "Testing big int to hex/bin/oct");
 
 	for(U64 i = 0; i < sizeof(stringified) / sizeof(stringified[0]) && i < EIntegerEncoding_Count; ++i) {
 
@@ -1950,7 +1950,7 @@ int main() {
 		bBig = (BigInt) { 0 };
 	}
 
-	printf("Testing big int mul\n");
+	Log_debugLn(alloc, "Testing big int mul");
 
 	for(U64 i = 0; i < sizeof(mulParams) / sizeof(mulParams[0]); ++i) {
 
@@ -1965,7 +1965,7 @@ int main() {
 			_gotoIfError(clean, Error_invalidOperation((U32)i, "BigInt_mul failed"));
 	}
 
-	printf("Testing big int add\n");
+	Log_debugLn(alloc, "Testing big int add");
 
 	for(U64 i = 0; i < sizeof(mulParams) / sizeof(mulParams[0]); ++i) {
 
@@ -1980,7 +1980,7 @@ int main() {
 			_gotoIfError(clean, Error_invalidOperation((U32)i, "BigInt_add failed"));
 	}
 
-	printf("Testing big int sub\n");
+	Log_debugLn(alloc, "Testing big int sub");
 
 	for(U64 i = 0; i < sizeof(mulParams) / sizeof(mulParams[0]); ++i) {
 
@@ -2135,7 +2135,7 @@ int main() {
 		{ 0x0000000000000001, 0x0000000000000000 }
 	};
 
-	printf("Testing big int lsh\n");
+	Log_debugLn(alloc, "Testing big int lsh");
 
 	for (U64 i = 0; i < sizeof(lshResult) / sizeof(lshResult[0]); ++i) {
 
@@ -2149,7 +2149,7 @@ int main() {
 			_gotoIfError(clean, Error_invalidOperation((U32)i, "BigInt_lsh failed"));
 	}
 
-	printf("Testing big int rsh\n");
+	Log_debugLn(alloc, "Testing big int rsh");
 
 	for (U64 i = 0; i < sizeof(rshResult) / sizeof(rshResult[0]); ++i) {
 
@@ -2163,7 +2163,7 @@ int main() {
 			_gotoIfError(clean, Error_invalidOperation((U32)i, "BigInt_rsh failed"));
 	}
 
-	printf("Testing big int bitScan\n");
+	Log_debugLn(alloc, "Testing big int bitScan");
 
 	for (U64 i = 0; i < sizeof(rshResult) / sizeof(rshResult[0]); ++i) {
 
@@ -2178,7 +2178,7 @@ int main() {
 
 	//U128 unit test
 
-	printf("Testing U64 x U64 = U128 (optimized)\n");
+	Log_debugLn(alloc, "Testing U64 x U64 = U128 (optimized)");
 
 	for(U64 i = 0; i < sizeof(mulParams) / sizeof(mulParams[0]); ++i) {
 
@@ -2189,7 +2189,7 @@ int main() {
 			_gotoIfError(clean, Error_invalidOperation((U32)i, "U128_mul64 failed"));
 	}
 
-	printf("Testing U128 + U128 = U128 (optimized)\n");
+	Log_debugLn(alloc, "Testing U128 + U128 = U128 (optimized)");
 
 	for(U64 i = 0; i < sizeof(mulParams) / sizeof(mulParams[0]); ++i) {
 
@@ -2201,7 +2201,7 @@ int main() {
 			_gotoIfError(clean, Error_invalidOperation((U32)i, "U128_add failed"));
 	}
 
-	printf("Testing U128 - U128 = U128 (optimized)\n");
+	Log_debugLn(alloc, "Testing U128 - U128 = U128 (optimized)");
 
 	for(U64 i = 0; i < sizeof(mulParams) / sizeof(mulParams[0]); ++i) {
 
@@ -2213,7 +2213,7 @@ int main() {
 			_gotoIfError(clean, Error_invalidOperation((U32)i, "U128_sub failed"));
 	}
 
-	printf("Testing U128 lsh (optimized)\n");
+	Log_debugLn(alloc, "Testing U128 lsh (optimized)");
 
 	for (U64 i = 0; i < sizeof(lshResult) / sizeof(lshResult[0]); ++i) {
 
@@ -2225,7 +2225,7 @@ int main() {
 			_gotoIfError(clean, Error_invalidOperation((U32)i, "U128_lsh failed"));
 	}
 
-	printf("Testing U128 rsh (optimized)\n");
+	Log_debugLn(alloc, "Testing U128 rsh (optimized)");
 
 	for (U64 i = 0; i < sizeof(rshResult) / sizeof(rshResult[0]); ++i) {
 
@@ -2237,7 +2237,7 @@ int main() {
 			_gotoIfError(clean, Error_invalidOperation((U32)i, "U128_rsh failed"));
 	}
 
-	printf("Testing U128 bitScan\n");
+	Log_debugLn(alloc, "Testing U128 bitScan");
 
 	for (U64 i = 0; i < sizeof(rshResult) / sizeof(rshResult[0]); ++i) {
 
@@ -2248,7 +2248,7 @@ int main() {
 			_gotoIfError(clean, Error_invalidOperation((U32)i, "U128_bitScan failed"));
 	}
 
-	printf("Testing U128 create from hex/bin/oct/dec/nyto\n");
+	Log_debugLn(alloc, "Testing U128 create from hex/bin/oct/dec/nyto");
 
 	for(U64 i = 0; i < sizeof(stringified) / sizeof(stringified[0]); ++i) {
 
@@ -2261,7 +2261,7 @@ int main() {
 			_gotoIfError(clean, Error_invalidState((U32)i, "U128_createFromString failed"));
 	}
 
-	/*printf("Testing U128 to hex/bin/oct/dec/nyto\n");
+	/*Log_debugLn(alloc, "Testing U128 to hex/bin/oct/dec/nyto");
 
 	for(U64 i = 0; i < sizeof(stringified) / sizeof(stringified[0]) && i < EIntegerEncoding_Count; ++i) {
 
@@ -2280,12 +2280,12 @@ int main() {
 
 	F64 dt = (Time_now() - now) / (F64)SECOND;
 
-	printf("Successful unit test! After %fs\n", dt);
+	Log_debugLn(alloc, "Successful unit test! After %fs", dt);
 	return 0;
 
 clean:
 
-	printf("Failed unit test (%s)... Freeing\n", err.errorStr);
+	Log_errorLn(alloc, "Failed unit test (%s)... Freeing", err.errorStr);
 
 	BufferLayout_free(alloc, &bufferLayout);
 
@@ -2301,7 +2301,7 @@ clean:
 
 	F64 dt2 = (Time_now() - now) / (F64)SECOND;
 
-	printf("Failed unit test... After %fs\n", dt2);
+	Log_errorLn(alloc, "Failed unit test... After %fs", dt2);
 
 	return (int) err.genericError;
 }

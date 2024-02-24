@@ -25,9 +25,10 @@
 #include "platforms/ext/stringx.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/archivex.h"
-#include "types/platforms/windows/wplatform_ext.h"
 
-extern const U32 Platform_extData = (U32) sizeof(PlatformExt);
+#define WIN32_LEAN_AND_MEAN
+#define MICROSOFT_WINDOWS_WINBASE_H_DEFINE_INTERLOCKED_CPLUSPLUS_OVERLOADS 0
+#include <Windows.h>
 
 CharString Error_formatPlatformError(Allocator alloc, Error err) {
 
@@ -135,18 +136,6 @@ Error Platform_initExt() {
 	CONSOLE_SCREEN_BUFFER_INFO info;
 	GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &info);
 	oldColor = info.wAttributes;
-
-	PlatformExt *pext = (PlatformExt*) Platform_instance.dataExt;
-
-	pext->ntdll = GetModuleHandleA("ntdll.dll");
-
-	if (!pext->ntdll)
-		_gotoIfError(clean, Error_platformError(0, GetLastError(), "Platform_initExt() couldn't find ntdll"));
-
-	*((void**)&pext->ntDelayExecution) = (void*)GetProcAddress(pext->ntdll, "NtDelayExecution");
-
-	if (!pext->ntDelayExecution)
-		_gotoIfError(clean, Error_platformError(1, GetLastError(), "Platform_initExt() couldn't find NtDelayExecution"));
 
 	SYSTEM_INFO systemInfo;
 	GetSystemInfo(&systemInfo);

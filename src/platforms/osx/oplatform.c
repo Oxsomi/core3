@@ -21,8 +21,6 @@
 #include "platforms/platform.h"
 #include "types/error.h"
 
-const U32 Platform_extData = (U32) 1;	//No use for PlatformExt yet
-
 Error Platform_initVirtualFilesExt() {		//TODO:
 	return Error_none();
 }

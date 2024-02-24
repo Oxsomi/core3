@@ -24,16 +24,12 @@
 #include "platforms/log.h"
 #include "platforms/platform.h"
 
-#include <stdlib.h>
-#include <errno.h>
-#include <string.h>
-
 void Error_fillStackTrace(Error *err) {
 
 	//Skip Error_fillStackTrace (skip=1), Error_x (skip=2)
 
 	if(err)
-		Log_captureStackTrace(err->stackTrace, ERROR_STACKTRACE, 2);
+		Log_captureStackTracex(err->stackTrace, ERROR_STACKTRACE, 2);
 }
 
 void Error_printx(Error err, ELogLevel logLevel, ELogOptions options) {
@@ -42,42 +38,4 @@ void Error_printx(Error err, ELogLevel logLevel, ELogOptions options) {
 
 CharString Error_formatPlatformErrorx(Error err) {
 	return Error_formatPlatformError(Platform_instance.alloc, err);
-}
-
-void Error_print(Allocator alloc, Error err, ELogLevel logLevel, ELogOptions options) {
-
-	if(!err.genericError)
-		return;
-
-	CharString result = CharString_createNull();
-	CharString platformErr = Error_formatPlatformError(alloc, err);
-
-	if(err.genericError == EGenericError_Stderr)
-		platformErr = CharString_createRefCStrConst(strerror((int)err.paramValue0));
-
-	Log_printCapturedStackTraceCustom(alloc, (const void**)err.stackTrace, ERROR_STACKTRACE, ELogLevel_Error, options);
-
-	if(
-		!CharString_format(
-
-			alloc,
-			&result,
-
-			"%s (%s)\nsub id: %"PRIu32"X, param id: %"PRIu32", param0: %08X, param1: %08X.\nPlatform/std error: %.*s.",
-
-			err.errorStr,
-			EGenericError_TO_STRING[err.genericError],
-
-			err.errorSubId,
-			err.paramId,
-			err.paramValue0,
-			err.paramValue1,
-			CharString_length(platformErr), platformErr.ptr
-
-		).genericError
-	)
-		Log_log(alloc, logLevel, options, result);
-
-	CharString_free(&result, alloc);
-	CharString_free(&platformErr, alloc);
 }

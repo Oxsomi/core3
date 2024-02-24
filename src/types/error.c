@@ -20,8 +20,12 @@
 
 #include "types/error.h"
 #include "types/string.h"
+#include "types/log.h"
+#include "types/allocator.h"
 
+#include <stdlib.h>
 #include <errno.h>
+#include <string.h>
 
 const C8 *EGenericError_TO_STRING[] = {
 	"None",
@@ -175,3 +179,41 @@ Error Error_stderr(U32 subId, const C8 *errorStr) {
 }
 
 Error Error_none() { return (Error) { 0 }; }
+
+void Error_print(Allocator alloc, Error err, ELogLevel logLevel, ELogOptions options) {
+
+	if(!err.genericError)
+		return;
+
+	CharString result = CharString_createNull();
+	CharString platformErr = Error_formatPlatformError(alloc, err);
+
+	if(err.genericError == EGenericError_Stderr)
+		platformErr = CharString_createRefCStrConst(strerror((int)err.paramValue0));
+
+	Log_printCapturedStackTraceCustom(alloc, (const void**)err.stackTrace, ERROR_STACKTRACE, ELogLevel_Error, options);
+
+	if(
+		!CharString_format(
+
+			alloc,
+			&result,
+
+			"%s (%s)\nsub id: %"PRIu32"X, param id: %"PRIu32", param0: %08X, param1: %08X.\nPlatform/std error: %.*s.",
+
+			err.errorStr,
+			EGenericError_TO_STRING[err.genericError],
+
+			err.errorSubId,
+			err.paramId,
+			err.paramValue0,
+			err.paramValue1,
+			CharString_length(platformErr), platformErr.ptr
+
+		).genericError
+		)
+		Log_log(alloc, logLevel, options, result);
+
+	CharString_free(&result, alloc);
+	CharString_free(&platformErr, alloc);
+}
