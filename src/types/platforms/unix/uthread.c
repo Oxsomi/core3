@@ -84,7 +84,7 @@ Error Thread_create(ThreadCallbackFunction callback, void *objectHandle, Thread 
 
 	if (pthread_create((pthread_t*)&thr->nativeHandle, NULL, ThreadFunc, thr)) {
 		Thread_free(thread);
-		return Error_platformError(0, errno, "Thread_wait() couldn't create thread");
+		return Error_stderr(errno, "Thread_wait() couldn't create thread");
 	}
 
 	return Error_none();

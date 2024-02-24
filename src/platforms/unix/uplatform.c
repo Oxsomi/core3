@@ -27,7 +27,7 @@
 #include "platforms/ext/archivex.h"
 #include "types/platforms/windows/wplatform_ext.h"
 
-extern const U32 Platform_extData = (U32) sizeof(PlatformExt);
+/*
 
 CharString Error_formatPlatformError(Allocator alloc, Error err) {
 
@@ -194,4 +194,4 @@ Error Platform_initExt() {
 
 clean:
 	return err;
-}
+}*/

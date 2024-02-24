@@ -28,16 +28,15 @@
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/archivex.h"
 
-#define WIN32_LEAN_AND_MEAN
-#include <Windows.h>
+#include <dirent.h>
+#include <stdio.h>
+#include <stat.h>
+#include <errno.h>
 
 Error File_foreach(CharString loc, FileCallback callback, void *userData, Bool isRecursive) {
 
 	CharString resolved = CharString_createNull();
-	CharString resolvedNoStar = CharString_createNull();
-	CharString tmp = CharString_createNull();
 	Error err = Error_none();
-	HANDLE file = NULL;
 
 	if(!callback)
 		_gotoIfError(clean, Error_nullPointer(1, "File_foreach()::callback is required"));
@@ -57,61 +56,26 @@ Error File_foreach(CharString loc, FileCallback callback, void *userData, Bool i
 	if(isVirtual)
 		_gotoIfError(clean, Error_invalidOperation(0, "File_foreach()::loc can't resolve to virtual here"));
 
-	//Append /*
+	DIR *d = opendir(resolved.ptr);
 
-	_gotoIfError(clean, CharString_appendx(&resolved, '/'));
+	if(!d)
+		_gotoIfError(clean, Error_notFound(0, 0, "File_foreach()::loc not found"));
 
-	_gotoIfError(clean, CharString_createCopyx(resolved, &resolvedNoStar));
+	while ((dir = readdir(d)) != NULL) {
 
-	_gotoIfError(clean, CharString_appendx(&resolved, '*'));
-
-	if(CharString_length(resolved) > MAX_PATH)
-		_gotoIfError(clean, Error_outOfBounds(
-			0, CharString_length(resolved), MAX_PATH, "File_foreach()::loc file path is too big (>260 chars)"
-		));
-
-	//Skip .
-
-	WIN32_FIND_DATA dat;
-	file = FindFirstFileA(resolved.ptr, &dat);
-
-	if(file == INVALID_HANDLE_VALUE)
-		_gotoIfError(clean, Error_notFound(0, 0, "File_foreach()::loc couldn't be found"));
-
-	if(!FindNextFileA(file, &dat))
-		_gotoIfError(clean, Error_notFound(0, 0, "File_foreach() FindNextFile failed (1)"));
-
-	//Loop through real files (while instead of do while because we wanna skip ..)
-
-	while(FindNextFileA(file, &dat)) {
-
-		//Folders can also have timestamps, so parse timestamp here
-
-		LARGE_INTEGER time;
-		time.LowPart = dat.ftLastWriteTime.dwLowDateTime;
-		time.HighPart = dat.ftLastWriteTime.dwHighDateTime;
-
-		//Before 1970, unsupported. Default to 1970
-
-		Ns timestamp = 0;
-		static const U64 UNIX_START_WIN = (Ns)11644473600 * (1000000000 / 100);	//ns to 100s of ns
-
-		if ((U64)time.QuadPart >= UNIX_START_WIN)
-			timestamp = (time.QuadPart - UNIX_START_WIN) * 100;		//Convert to Oxsomi time
-
-		//Grab local file name
-
-		_gotoIfError(clean, CharString_createCopyx(resolvedNoStar, &tmp));
-		_gotoIfError(clean, CharString_appendStringx(&tmp, CharString_createRefAutoConst(dat.cFileName, MAX_PATH)));
+		struct stat s = (struct stat) { 0 };
+		if(stat(dir->d_name, &s))
+			_gotoIfError(clean, Error_stderr(errno, "File_foreach() failed to query file properties"));
 
 		//Folder parsing
 
-		if(dat.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+		if(S_ISDIR(s.st_mode)) {
 
+			CharString tmp = CharString_createRefCStrConst(dir->d_name);
 			FileInfo info = (FileInfo) {
 				.path = tmp,
-				.timestamp = timestamp,
-				.access = dat.dwFileAttributes & FILE_ATTRIBUTE_READONLY ? EFileAccess_Read : EFileAccess_ReadWrite,
+				.timestamp = s.st_mtime,
+				.access = !S_IWRITE(s.st_mode) ? EFileAccess_Read : EFileAccess_ReadWrite,
 				.type = EFileType_Folder
 			};
 
@@ -120,40 +84,22 @@ Error File_foreach(CharString loc, FileCallback callback, void *userData, Bool i
 			if(isRecursive)
 				_gotoIfError(clean, File_foreach(info.path, callback, userData, true));
 
-			CharString_freex(&tmp);
 			continue;
 		}
-
-		LARGE_INTEGER size;
-		size.LowPart = dat.nFileSizeLow;
-		size.HighPart = dat.nFileSizeHigh;
 
 		//File parsing
 
 		FileInfo info = (FileInfo) {
 			.path = tmp,
-			.timestamp = timestamp,
-			.access = dat.dwFileAttributes & FILE_ATTRIBUTE_READONLY ? EFileAccess_Read : EFileAccess_ReadWrite,
+			.timestamp = s.st_mtime,
+			.access = !S_IWRITE(s.st_mode) ? EFileAccess_Read : EFileAccess_ReadWrite,
 			.type = EFileType_File,
-			.fileSize = size.QuadPart
+			.fileSize = s.st_size
 		};
 
 		_gotoIfError(clean, callback(info, userData));
-		CharString_freex(&tmp);
 	}
 
-	DWORD hr = GetLastError();
-
-	if(hr != ERROR_NO_MORE_FILES)
-		_gotoIfError(clean, Error_platformError(0, hr, "File_foreach() FindNextFile failed (2)"));
-
-clean:
-
-	if(file)
-		FindClose(file);
-
-	CharString_freex(&tmp);
-	CharString_freex(&resolvedNoStar);
-	CharString_freex(&resolved);
+	closedir(d);
 	return err;
 }

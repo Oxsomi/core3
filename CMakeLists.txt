@@ -198,8 +198,13 @@ file(GLOB platformsHeaders "inc/platforms/*.h")
 file(GLOB_RECURSE platformsHeadersDependent "inc/platforms/ext/${platform}/*.h")
 
 file(GLOB_RECURSE platformsPlatformSources "src/platforms/${platform}/*.c")
-file(GLOB_RECURSE platformsSources  "src/platforms/generic/*.c")
+file(GLOB_RECURSE platformsSources "src/platforms/generic/*.c")
 file(GLOB_RECURSE platformsSIMDSources "src/platforms/simd/${simd}/*.c")
+
+if(UNIX)
+	file(GLOB_RECURSE platformsUnixSources "src/platforms/unix/*.c")
+	list(APPEND platformsSources ${platformsUnixSources})
+endif()
 
 add_library(
 	OxC3_platforms
