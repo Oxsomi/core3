@@ -59,7 +59,7 @@ void *ThreadFunc(void *t) {
 	return NULL;
 }
 
-Error Thread_create(ThreadCallbackFunction callback, void *objectHandle, Thread **thread) {
+Error Thread_create(Allocator alloc, ThreadCallbackFunction callback, void *objectHandle, Thread **thread) {
 
 	if(!thread)
 		return Error_nullPointer(2, "Thread_create()::thread is required");
@@ -70,9 +70,12 @@ Error Thread_create(ThreadCallbackFunction callback, void *objectHandle, Thread 
 	if(!callback)
 		return Error_nullPointer(0, "Thread_create()::callback is required");
 
+	if(!alloc.alloc || !alloc.free)
+		return Error_nullPointer(0, "Thread_create()::alloc is required");
+
 	Buffer buf = Buffer_createNull();
 
-	Error err = Platform_instance.alloc.alloc(Platform_instance.alloc.ptr, sizeof(Thread), &buf);
+	Error err = alloc.alloc(alloc.ptr, sizeof(Thread), &buf);
 
 	if (err.genericError)
 		return err;
@@ -83,7 +86,7 @@ Error Thread_create(ThreadCallbackFunction callback, void *objectHandle, Thread 
 	thr->objectHandle = objectHandle;
 
 	if (pthread_create((pthread_t*)&thr->nativeHandle, NULL, ThreadFunc, thr)) {
-		Thread_free(thread);
+		Thread_free(alloc, thread);
 		return Error_stderr(errno, "Thread_wait() couldn't create thread");
 	}
 

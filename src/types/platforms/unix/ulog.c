@@ -22,6 +22,7 @@
 #include "types/thread.h"
 #include "types/time.h"
 #include "types/buffer.h"
+#include "types/error.h"
 
 #include <execinfo.h>
 #include <stdio.h>
