@@ -13,6 +13,6 @@ jobs:
       with:
         cache: true
     - name: build for SIMD fallback check
-      run: /Users/runner/work/core3/core3/build.sh Release Off Off
+      run: /Users/runner/work/core3/core3/build.sh Release Off
     - name: build for debug check
-      run: /Users/runner/work/core3/core3/build.sh Debug Off Off
+      run: /Users/runner/work/core3/core3/build.sh Debug Off

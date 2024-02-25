@@ -16,16 +16,10 @@ if NOT "%2"=="On" (
 	)
 )
 
-if NOT "%3"=="On" (
-	if NOT "%3"=="Off" (
-		goto :usage
-	)
-)
-
 goto :success
 
 :usage
-	echo Usage: build [Build type: Debug/Release] [Enable SIMD: On/Off] [Force float fallback: On/Off]
+	echo Usage: build [Build type: Debug/Release] [Enable SIMD: On/Off]
 	goto :eof
 
 :success
@@ -36,7 +30,7 @@ echo -- Building tests...
 
 mkdir builds 2>nul
 cd builds
-cmake -DCMAKE_BUILD_TYPE=%1 .. -G "Visual Studio 17 2022" -DEnableSIMD=%2 -DForceFloatFallback=%3
+cmake -DCMAKE_BUILD_TYPE=%1 .. -G "Visual Studio 17 2022" -DEnableSIMD=%2 -DForceFloatFallback=Off
 cmake --build . -j 8 --config %1
 cd ../
 

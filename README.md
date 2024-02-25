@@ -75,7 +75,7 @@ Or just download the repo from GitHub.
 ### Windows
 
 ```batch
-build Release On Off
+build Release On
 ```
 
 This assumes you have VS2022 installed, if not, you can specify a different CMake generator by editing build.bat.
@@ -83,7 +83,7 @@ This assumes you have VS2022 installed, if not, you can specify a different CMak
 ### Mac OS X
 
 ```c
-build Release Off Off
+build Release Off
 ```
 
 Currently the Mac build doesn't support SSE or NEON. So SIMD mode has to be forced to None.
