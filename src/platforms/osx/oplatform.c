@@ -32,7 +32,7 @@ Error Platform_initUnixExt() {
 }
 
 void Platform_cleanupUnixExt() {
- 
+  
 }
 
 I32 main(I32 argc, const C8 *argv[]) {
