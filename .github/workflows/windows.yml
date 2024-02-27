@@ -20,3 +20,16 @@ jobs:
       run: D:\a\core3\core3\build.bat Release Off
     - name: build for debug check
       run: D:\a\core3\core3\build.bat Debug On
+    - name: Send webhook notification
+      if: always()
+      env:
+        JOB_STATUS: ${{ job.status }}
+        WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+        HOOK_OS_NAME: ${{ runner.os }}
+        WORKFLOW_NAME: ${{ github.workflow }}
+        WEBHOOK_REPO: ${{ secrets.WEBHOOK_REPO }}
+      run: |
+        echo Status: $JOB_STATUS
+        git clone $WEBHOOK_REPO webhook
+        bash webhook/send.sh $JOB_STATUS $WEBHOOK_URL
+      shell: bash

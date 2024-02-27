@@ -35,9 +35,12 @@ CharString Error_formatPlatformError(Allocator alloc, Error err) { (void) alloc;
 void *Platform_allocate(void *allocator, U64 length) { (void)allocator; return malloc(length); }
 void Platform_free(void *allocator, void *ptr, U64 length) { (void) allocator; (void)length; free(ptr); }
 
-void Platform_cleanupExt() { }
+impl Error Platform_initUnixExt();
+impl void Platform_cleanupUnixExt();
 
-impl Error Platform_initVirtualFilesExt();
+void Platform_cleanupExt() {
+	Platform_cleanupUnixExt();
+}
 
 Error Platform_initExt() {
 
@@ -58,7 +61,7 @@ Error Platform_initExt() {
 		_gotoIfError(clean, CharString_appendx(&Platform_instance.workingDirectory, '/'));
 	}
 
-	_gotoIfError(clean, Platform_initVirtualFilesExt());
+	_gotoIfError(clean, Platform_initUnixExt());
 
 clean:
 	return err;

@@ -19,10 +19,20 @@
 */
 
 #include "platforms/platform.h"
+#include "platforms/ext/osx/objective_c.h"
 #include "types/error.h"
 
-Error Platform_initVirtualFilesExt() {		//TODO:
+//Port of https://github.com/CodaFi/C-Macs/blob/master/CMacs/AppDelegate.c
+//Platform is the one that holds the NSApp, since there can only be done.
+
+extern id NSApp;
+
+Error Platform_initUnixExt() {
 	return Error_none();
+}
+
+void Platform_cleanupUnixExt() {
+
 }
 
 I32 main(I32 argc, const C8 *argv[]) {
