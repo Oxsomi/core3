@@ -34,18 +34,19 @@ typedef struct AtomicI64 {
 
 //Bitwise
 
-I64 AtomicI64_xor(AtomicI64 *ptr, I64 value);
-I64 AtomicI64_and(AtomicI64 *ptr, I64 value);
-I64 AtomicI64_or(AtomicI64 *ptr, I64 value);
-I64 AtomicI64_exchange(AtomicI64 *ptr, I64 value);
-I64 AtomicI64_compareExchange(AtomicI64 *ptr, I64 compare, I64 value);		//If value in atomic is compare set to value
+impl I64 AtomicI64_xor(AtomicI64 *ptr, I64 value);
+impl I64 AtomicI64_and(AtomicI64 *ptr, I64 value);
+impl I64 AtomicI64_or(AtomicI64 *ptr, I64 value);
+impl I64 AtomicI64_load(AtomicI64 *ptr);
+impl I64 AtomicI64_exchange(AtomicI64 *ptr, I64 value);
+impl I64 AtomicI64_compareExchange(AtomicI64 *ptr, I64 compare, I64 value);		//If value in atomic is compare set to value
 
 //Return state of atomic before adding value.
 
-I64 AtomicI64_add(AtomicI64 *ptr, I64 value);
-I64 AtomicI64_sub(AtomicI64 *ptr, I64 value);		//I64 = I64_MIN becomes NO-OP (only fetches, doesn't increment)
+impl I64 AtomicI64_add(AtomicI64 *ptr, I64 value);
+impl I64 AtomicI64_sub(AtomicI64 *ptr, I64 value);		//I64 = I64_MIN becomes NO-OP (only fetches, doesn't increment)
 
 //Return state of atomic after adding value.
 
-I64 AtomicI64_inc(AtomicI64 *ptr);
-I64 AtomicI64_dec(AtomicI64 *ptr);
+impl I64 AtomicI64_inc(AtomicI64 *ptr);
+impl I64 AtomicI64_dec(AtomicI64 *ptr);

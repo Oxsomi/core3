@@ -21,19 +21,77 @@
 #include "platforms/platform.h"
 #include "platforms/ext/osx/objective_c.h"
 #include "types/error.h"
+#include "types/thread.h"
+#include "types/atomic.h"
 
 //Port of https://github.com/CodaFi/C-Macs/blob/master/CMacs/AppDelegate.c
 //Platform is the one that holds the NSApp, since there can only be done.
 
 extern id NSApp;
 
+AtomicI64 isReady;
+
+typedef struct AppDelegate { Class isa; } AppDelegate;
+
+Bool Platform_signalReady(AppDelegate *self, SEL cmd, id notif) {
+	(void)self; (void)cmd; (void)notif;
+	AtomicI64_add(isReady, 1);
+	return true;
+}
+
 Error Platform_initUnixExt() {
+
+	Log_debugLn("Start!");
+
+	//Create delegate
+
+	Class delegateClass = objc_allocateClassPair((Class)objc_getClass("NSObject"), "AppDelegate", 0);
+
+	if(!delegateClass)
+		return Error_invalidState(0, "Platform_initUnixExt() failed to create delegateClass");
+
+	if(!class_addMethod(delegateClass, sel_getUid("applicationDidFinishLaunching:"), (IMP)Platform_signalReady, "i@:@"))
+		return Error_invalidState(0, "Platform_initUnixExt() failed to add function to delegateClass");
+
+	objc_registerClassPair(delegateClass);
+
+	//Instantiate application with our delegate
+
+	objC_msgSimple((id)objc_getClass("NSApplication"), sel_getUid("sharedApplication"));
+
+	if(!NSApp)
+		return Error_invalidState(0, "Platform_initUnixExt() failed to create NSApplication");
+
+	id delegateObj = objC_msgSimple((id)objc_getClass("AppDelegate"), sel_getUid("alloc"));
+
+	if(!delegateObj)
+		return Error_invalidState(1, "Platform_initUnixExt() failed to create AppDelegate");
+
+	delegateObj = objC_msgSimple(delegateObj, sel_getUid("init"));
+
+	if(!delegateObj)
+		return Error_invalidState(2, "Platform_initUnixExt() failed to init AppDelegate");
+
+	objC_msgFuncVoidPtr(NSApp, sel_getUid("setDelegate:"), delegateObj);
+	objC_msgFunc(NSApp, sel_getUid("run"));
+
+	//Wait for the app to be ready (interval of 100ns)
+
+	Ns i = 0;
+
+	while(!AtomicI64_load(isReady) && i < 2 * SECOND) {
+		Thread_sleep(i += 100);
+	}
+
+	if(i >= 2 * SECOND)
+		return Error_invalidState(3, "Platform_initUnixExt() failed to initialize the app; timed out");
+
+	Log_debugLn("Success!");
+
 	return Error_none();
 }
 
-void Platform_cleanupUnixExt() {
-  
-}
+void Platform_cleanupUnixExt() { }
 
 I32 main(I32 argc, const C8 *argv[]) {
 

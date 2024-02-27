@@ -32,6 +32,10 @@ I64 AtomicI64_or(AtomicI64 *ptr, I64 value) {
 	return atomic_fetch_or(&ptr->atomic, value);
 }
 
+I64 AtomicI64_load(AtomicI64 *ptr) {
+	return AtomicI64_add(&ptr->atomic, 0);
+}
+
 I64 AtomicI64_add(AtomicI64 *ptr, I64 value) {
 	return atomic_fetch_add(&ptr->atomic, value);
 }
