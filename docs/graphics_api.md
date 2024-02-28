@@ -231,18 +231,17 @@ _gotoIfError(clean, GraphicsDeviceRef_create(
       U64 len,
       DeviceBufferRef **ref
   );
-```
-
+  ```
 - ```c
-  Error createBufferData(
-  	EDeviceBufferUsage usage,
+    Error createBufferData(
+    	EDeviceBufferUsage usage,
       EGraphicsResourceFlag flags,
-   	CharString name,
-      Buffer *data,					//Can move data to device buffer (doesn't always)
-      DeviceBufferRef **ref
-  );
-```
-
+     	CharString name,
+        Buffer *data,					//Can move data to device buffer (doesn't always)
+        DeviceBufferRef **ref
+    );
+  ```
+  
 - ```c
   Error createSampler(SamplerInfo info, CharString name, SamplerRef **ref));
   ```
@@ -272,6 +271,49 @@ _gotoIfError(clean, GraphicsDeviceRef_create(
         DepthStencilRef **ref
     );
   ```
+- ```c
+  Error createBLASExt(
+  	ERTASBuildFlags buildFlags,
+  	EBLASFlag blasFlags,
+  	ETextureFormatId posFormat,		//RGBA16f, RGBA32f, RGBA16s, RG16f, RG32f, RG16s
+  	U16 positionOffset,				//Offset into first position for first vertex
+  	ETextureFormatId indexFormat,	//R16u, R32u, Undefined
+  	U16 positionBufferStride,		//<=2048 and multiple of 2 or 4 (RGBA32f, RG32f)
+  	DeviceData positionBuffer,		//Required
+  	DeviceData indexBuffer,			//Optional if indexFormat == Undefined
+  	BLASRef *parent,				//If specified, indicates refit
+  	CharString name,
+  	BLASRef **blas
+  );
+  ```
+
+- ```c
+  Error createBLASUnindexedExt(
+  	ERTASBuildFlags buildFlags,
+  	EBLASFlag blasFlags,
+  	ETextureFormatId posFormat,		//RGBA16f, RGBA32f, RGBA16s, RG16f, RG32f, RG16s
+  	U16 positionOffset,				//Offset into first position for first vertex
+  	U16 positionBufferStride,		//<=2048 and multiple of 2 or 4 (RGBA32f, RG32f)
+  	DeviceData positionBuffer,		//Required
+  	BLASRef *parent,				//If specified, indicates refit
+  	CharString name,
+  	BLASRef **blas
+  );
+  ```
+
+- ```c
+  Error createBLASProceduralExt(
+  	ERTASBuildFlags buildFlags,
+  	EBLASFlag blasFlags,
+  	U32 aabbStride,						//Alignment: 8
+  	U32 aabbOffset,						//Offset into the aabb array
+  	DeviceData buffer,					//Required
+  	BLASRef *parent,					//If specified, indicates refit
+  	CharString name,
+  	BLASRef **blas
+  );
+  ```
+
 ### Obtained
 
 - Through GraphicsDeviceRef_create; see overview.
@@ -869,6 +911,118 @@ _gotoIfError(clean, GraphicsDeviceRef_createBufferData(
 MSAA can be enabled by making sure all pipelines for MSAA targets have PipelineGraphicsInfo::msaa set to something that's not EMSAASamples_Off. This setting needs to match 1:1 with the MSAA setting passed to render target(s) and depth stencil(s). PipelineGraphicsInfo::msaaMinSampleShading can be set to a non zero value to indicate [sample shading](https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#primsrast-sampleshading) should be turned on and to what value (an MSAA feature to make texture detail anti alias better).
 
 If MSAA is enabled for the current target, a resolve image can be passed in the attachmentInfo.resolveImage passed to startRenderExt. This can directly resolve the MSAA texture to a render target, swapchain or depth stencil. attachmentInfo.resolveMode can be used to change it from averaging all samples to EMSAAResolveMode_Min/Max.
+
+### Raytracing
+
+Raytracing enables the creation of acceleration structures that are usable by the underlying API; either as a hardware or software layer.
+
+Raytracing has two modes:
+
+- Inline raytracing (RayQuery); this can be invoked from any shader and has more flexibility. This is available on some mobile devices and certain desktop GPUs (excluding Pascal).
+- Raytracing pipelines (RayPipeline); old pipeline which may or may not be more efficient because of certain features such as intersection or anyHit shaders or micromaps. Also makes porting from older raytracing implementations easier.
+
+In both of these modes, EGraphicsFeatures_Raytracing will be set and that means that BLASes/TLASes can be created.
+
+#### DeviceData 
+
+Device data is a subarea of a buffer; it contains the reference to the buffer resource, an offset and length (U64s).
+
+#### BLAS
+
+A BLAS is a bottom level acceleration structure; it is the representation of a couple volumes or triangle geometry. It has an acceleration structure built over this geometry to accelerate tracing rays through it. These BLASes are used through a TLAS (top level AS) and can then be accessed in raytracing.
+
+There are two types of BLASes:
+
+- Regular geometry (triangles).
+- Procedural geometry (AABBs).
+
+The latter can only be used through intersection shaders, while the former has way better traversal speeds. Procedural geometry is generally super slow and it's generally faster to approximate with triangle geometry.
+
+##### Example: Triangle geometry
+
+```c
+_gotoIfError(clean, GraphicsDeviceRef_createBLASExt(
+	twm->device, 
+	ERTASBuildFlags_DefaultBLAS,			//Fast trace & allow compaction
+	EBLASFlag_DisableAnyHit,				//No transparency needed, optimize for opaque
+	ETextureFormatId_RG16f, 0,				//No pos attrib offset and format is RG16f
+	ETextureFormatId_R16u,					//Indices are 16-bit
+	(U16) sizeof(vertexPos[0]),				//Stride is F16[2]
+	(DeviceData) { 
+        .buffer = twm->vertexBuffers[0]		//Entire buffer is accessible
+    },		
+	(DeviceData) { 
+        .buffer = twm->indexBuffer, 
+        .len = sizeof(U16) * 6 				//Only use sub region
+   	},
+	NULL,									//No refit
+	CharString_createRefCStrConst("BLAS"),	//Debug name
+	&twm->blas								//BLASRef*
+));
+```
+
+The example above assumes that there is an index buffer and a position buffer available. Those buffers need to have the ASReadExt buffer usage to be accessible during build time.
+
+There is also a version of this that doesn't require index buffers; createBLASUnindexedExt. The DeviceData for indexBuffer and the index format can be left out for that function.
+
+##### Example: Procedural geometry
+
+```c
+//Make simple AABB test
+
+F32 aabbBuffer[] = {
+
+	-1, -1, -1,		//min 0
+	0, 0, 0,		//max 0
+
+	0, 0, 0,		//min 1
+	1, 1, 1			//max 1
+};
+
+Buffer aabbData = Buffer_createRefConst(aabbBuffer, sizeof(aabbBuffer));
+name = CharString_createRefCStrConst("AABB buffer");
+_gotoIfError(clean, GraphicsDeviceRef_createBufferData(
+	twm->device, 
+    EDeviceBufferUsage_ASReadExt, EGraphicsResourceFlag_None, 
+    name, &aabbData, &twm->aabbs
+));
+
+_gotoIfError(clean, GraphicsDeviceRef_createBLASProceduralExt(
+	twm->device,
+	ERTASBuildFlags_DefaultBLAS,
+	EBLASFlag_DisableAnyHit,
+	sizeof(F32) * 3 * 2,
+	0,
+	(DeviceData) { .buffer = twm->aabbs },
+	NULL,
+	CharString_createRefCStrConst("Test BLAS AABB"),
+	&twm->blasAABB
+));
+```
+
+In the example above, two AABBs are created from a buffer.
+
+##### Properties
+
+- base: RTAS standardizes BLAS and TLAS a little bit.
+- name: the debug name of the BLAS.
+- Depending on base.asConstructionType: (Geometry, AABB, Serialized):
+  - EBLASConstructionType_AABB:
+    - aabbStride, aabbOffset (U32): the stride of the AABB buffer and the offset to encounter the first AABB. E.g. struct: F32x3 min, max at offset + stride * i. The stride has to be 8-byte aligned.
+    - aabbBuffer: DeviceData pointing to the U8[aabbStride].
+  - EBLASConstructionType_Serialized
+    - cpuData: contains a serialized version of the BLAS. Might become invalidated because of a driver update.
+  - EBLASConstructionType_Geometry
+    - positionFormatId: RGBA16f, RGBA32f, RGBA16s, RG16f, RG32f, RG16s. What kind of format the position itself is stored in.
+    - indexFormatId: R16u, R32u or Undefined. The index format; if undefined, the mesh is unindexed.
+    - positionBufferStride: >0 and <=2048. The stride between each vertex. It is more optimal to only have positions in this buffer, so building won't waste time looking at other data. This is generally the case for normal mobile rendering as well (or visibility buffer approaches). This stride needs to be a multiple of 2 (if 16-bit formats are used) or 4 (if 32-bit formats are used).
+    - positionOffset: offset in the vertex to point to the position. Needs to be less than positionBufferStride (including the position itself).
+    - indexBuffer, positionBuffer: DeviceData pointing to the vertex and index buffers.
+
+##### Used functions and obtained
+
+- Obtained through createBLASProceduralExt, createBLASExt and createBLASUnindexedExt from GraphicsDeviceRef.
+- Used in TLAS creation and can be copied to/from the CPU.
 
 ## Commands
 

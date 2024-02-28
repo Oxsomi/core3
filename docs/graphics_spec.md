@@ -55,6 +55,7 @@ Because of this, a device needs the following requirements to be OxC3 compatible
   - VK_KHR_driver_properties
   - VK_KHR_synchronization2
   - VK_KHR_timeline_semaphore
+  - VK_KHR_buffer_device_address
   - VK_KHR_swapchain
     - Requires at least 1 image layer.
     - Requires ability to make 3 images.

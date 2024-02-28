@@ -121,6 +121,8 @@ typedef struct GraphicsResource {
 
 	void *mappedMemoryExt;					//API specific memory range. Don't write/read from this address
 
+	U64 gpuAddress;							//Contains the memory address on the GPU (otherwise 0)
+
 } GraphicsResource;
 
 Bool GraphicsResource_free(GraphicsResource *resource, RefPtr *resourceRef);

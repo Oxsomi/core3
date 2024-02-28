@@ -121,8 +121,19 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 	if(buf->usage & EDeviceBufferUsage_Indirect)
 		usage |= VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
 
+	if(buf->usage & EDeviceBufferUsage_ScratchExt)
+		usage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+
+	if(buf->usage & EDeviceBufferUsage_ASExt)
+		usage |= VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR;
+
+	if(buf->usage & EDeviceBufferUsage_ASReadExt)
+		usage |= VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
+
 	if(buf->resource.flags & EGraphicsResourceFlag_CPUAllocatedBit)		//Only for internal usage
 		usage |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+
+	usage |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
 
 	VkBufferCreateInfo bufferInfo = (VkBufferCreateInfo) {
 		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
@@ -172,6 +183,18 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 
 	if (block.mappedMemory)
 		buf->resource.mappedMemoryExt = block.mappedMemory + buf->resource.blockOffset;
+
+	//Grab GPU location
+
+	VkBufferDeviceAddressInfo address = (VkBufferDeviceAddressInfo) {
+		.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+		.buffer = bufExt->buffer
+	};
+
+	buf->resource.gpuAddress = instanceExt->getBufferDeviceAddress(deviceExt->device, &address);
+
+	if(!buf->resource.gpuAddress)
+		_gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_createBufferExt() Couldn't obtain GPU address"));
 
 	//Fill relevant descriptor sets if shader accessible
 

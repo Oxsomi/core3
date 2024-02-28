@@ -38,6 +38,10 @@ typedef enum ETextureFormat ETextureFormat;
 typedef enum EGraphicsDataTypes EGraphicsDataTypes;
 typedef enum ECompareOp ECompareOp;
 
+typedef struct VkBLAS {
+	VkAccelerationStructureKHR as;
+} VkBLAS;
+
 TList(VkMappedMemoryRange);
 TList(VkBufferCopy);
 TList(VkImageCopy);

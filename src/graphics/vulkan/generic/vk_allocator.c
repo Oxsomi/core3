@@ -219,8 +219,14 @@ Error DeviceMemoryAllocator_allocate(
 
 	U64 realBlockSize = (U64_max(blockSize, memReq.size * 2) + blockSize - 1) / blockSize * blockSize;
 
+	VkMemoryAllocateFlagsInfo allocNext = (VkMemoryAllocateFlagsInfo) {
+		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO,
+		.flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT
+	};
+
 	VkMemoryAllocateInfo alloc = (VkMemoryAllocateInfo) {
 		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+		.pNext = resourceType == EResourceType_DeviceBuffer ? &allocNext : NULL,
 		.allocationSize = isDedicated ? memReq.size : realBlockSize,
 		.memoryTypeIndex = memoryId
 	};

@@ -138,17 +138,17 @@ typedef struct TLAS {
 
 	union {
 
-		//If EBLASBuildFlags_UseDeviceMemory
+		//If ERTASBuildFlags_UseDeviceMemory
 		//TLASInstanceMotion[] (isMotionBlurExt) or TLASInstanceStatic[] (!isMotionBlurExt)
 		DeviceData deviceData;
 
-		//If !EBLASBuildFlags_UseDeviceMemory && isMotionBlurExt
+		//If !ERTASBuildFlags_UseDeviceMemory && isMotionBlurExt
 		ListTLASInstanceMotion cpuInstancesMotion;
 
-		//If !EBLASBuildFlags_UseDeviceMemory && !isMotionBlurExt
+		//If !ERTASBuildFlags_UseDeviceMemory && !isMotionBlurExt
 		ListTLASInstanceStatic cpuInstancesStatic;
 
-		//If !EBLASBuildFlags_UseDeviceMemory && ETLASConstructionType_Serialized
+		//If !ERTASBuildFlags_UseDeviceMemory && ETLASConstructionType_Serialized
 		Buffer cpuData;
 	};
 

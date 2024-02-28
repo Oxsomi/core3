@@ -155,6 +155,15 @@ Error GraphicsDevice_initExt(
 	);
 
 	vkBindNext(
+		VkPhysicalDeviceBufferDeviceAddressFeaturesKHR,
+		true,
+		(VkPhysicalDeviceBufferDeviceAddressFeaturesKHR) {
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES_KHR,
+			.bufferDeviceAddress = true
+		}
+	);
+
+	vkBindNext(
 		VkPhysicalDeviceSynchronization2Features,
 		true,
 		(VkPhysicalDeviceSynchronization2Features) {
@@ -792,6 +801,8 @@ Error GraphicsDevice_initExt(
 		isDistinct ? U64_min(gpuHeapSize / 3, cpuHeapSize / 10 + gpuHeapSize / 5) :
 		cpuHeapSize / 5
 	);
+
+	device->flushThresholdPrimitives = 100 * MIBI / 3;		//100M vertices per frame limit
 
 	//Allocate temp storage for transitions
 

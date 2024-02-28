@@ -124,12 +124,8 @@ Error GraphicsInstance_createExt(GraphicsApplicationInfo info, Bool isVerbose, G
 
 	#endif
 
-	Bool supportsSurface = false;
-	Bool supportsSurfacePlatform = false;
 	Bool supportsColorSpace = false;
 
-	CharString surfaceKhr = CharString_createRefCStrConst("VK_KHR_surface");
-	CharString surfacePlatform = CharString_createRefCStrConst(_VK_SURFACE_EXT);
 	CharString swapchainColorspace = CharString_createRefCStrConst("VK_EXT_swapchain_colorspace");
 
 	for(U64 i = 0; i < extensionCount; ++i) {
@@ -137,13 +133,7 @@ Error GraphicsInstance_createExt(GraphicsApplicationInfo info, Bool isVerbose, G
 		const C8 *name = extensions.ptr[i].extensionName;
 		CharString nameStr = CharString_createRefCStrConst(name);
 
-		if(CharString_equalsStringSensitive(nameStr, surfaceKhr))
-			supportsSurface = true;
-
-		else if(CharString_equalsStringSensitive(nameStr, surfacePlatform))
-			supportsSurfacePlatform = true;
-
-		else if(CharString_equalsStringSensitive(nameStr, swapchainColorspace))
+		if(CharString_equalsStringSensitive(nameStr, swapchainColorspace))
 			supportsColorSpace = true;
 
 		#ifndef NDEBUG
@@ -185,14 +175,11 @@ Error GraphicsInstance_createExt(GraphicsApplicationInfo info, Bool isVerbose, G
 
 	//Enable so we can use swapchain khr
 
-	if(supportsSurface && supportsSurfacePlatform) {
+	_gotoIfError(clean, ListConstC8_pushBackx(&enabledExtensions, "VK_KHR_surface"));
+	_gotoIfError(clean, ListConstC8_pushBackx(&enabledExtensions, _VK_SURFACE_EXT));
 
-		_gotoIfError(clean, ListConstC8_pushBackx(&enabledExtensions, surfaceKhr.ptr));
-		_gotoIfError(clean, ListConstC8_pushBackx(&enabledExtensions, surfacePlatform.ptr));
-
-		if (supportsColorSpace)
-			_gotoIfError(clean, ListConstC8_pushBackx(&enabledExtensions, swapchainColorspace.ptr));
-	}
+	if (supportsColorSpace)
+		_gotoIfError(clean, ListConstC8_pushBackx(&enabledExtensions, swapchainColorspace.ptr));
 
 	_gotoIfError(clean, VkGraphicsInstance_getLayers(&enabledLayers));
 
@@ -241,12 +228,13 @@ Error GraphicsInstance_createExt(GraphicsApplicationInfo info, Bool isVerbose, G
 	vkExtension(clean, vkGetPhysicalDeviceProperties2KHR, instanceExt->getPhysicalDeviceProperties2);
 
 	vkExtension(clean, vkCmdPipelineBarrier2KHR, instanceExt->cmdPipelineBarrier2);
+	vkExtension(clean, vkGetBufferDeviceAddressKHR, instanceExt->getBufferDeviceAddress);
 
-	vkExtensionNoCheck(vkGetPhysicalDeviceSurfaceFormatsKHR, instanceExt->getPhysicalDeviceSurfaceFormats);
-	vkExtensionNoCheck(vkGetPhysicalDeviceSurfaceCapabilitiesKHR, instanceExt->getPhysicalDeviceSurfaceCapabilities);
-	vkExtensionNoCheck(vkGetPhysicalDeviceSurfacePresentModesKHR, instanceExt->getPhysicalDeviceSurfacePresentModes);
-	vkExtensionNoCheck(vkGetSwapchainImagesKHR, instanceExt->getSwapchainImages);
-	vkExtensionNoCheck(vkGetPhysicalDeviceSurfaceSupportKHR, instanceExt->getPhysicalDeviceSurfaceSupport);
+	vkExtension(clean, vkGetPhysicalDeviceSurfaceFormatsKHR, instanceExt->getPhysicalDeviceSurfaceFormats);
+	vkExtension(clean, vkGetPhysicalDeviceSurfaceCapabilitiesKHR, instanceExt->getPhysicalDeviceSurfaceCapabilities);
+	vkExtension(clean, vkGetPhysicalDeviceSurfacePresentModesKHR, instanceExt->getPhysicalDeviceSurfacePresentModes);
+	vkExtension(clean, vkGetSwapchainImagesKHR, instanceExt->getSwapchainImages);
+	vkExtension(clean, vkGetPhysicalDeviceSurfaceSupportKHR, instanceExt->getPhysicalDeviceSurfaceSupport);
 
 	if(supportsDebug[1]) {
 		vkExtension(clean, vkSetDebugUtilsObjectNameEXT, instanceExt->debugSetName);
@@ -260,17 +248,16 @@ Error GraphicsInstance_createExt(GraphicsApplicationInfo info, Bool isVerbose, G
 		vkExtension(clean, vkDestroyDebugReportCallbackEXT, instanceExt->debugDestroyReportCallback);
 	}
 
-	if(supportsSurface) {
-		vkExtension(clean, vkAcquireNextImageKHR, instanceExt->acquireNextImage);
-		vkExtension(clean, vkCreateSwapchainKHR, instanceExt->createSwapchain);
-		vkExtension(clean, vkDestroySurfaceKHR, instanceExt->destroySurface);
-		vkExtension(clean, vkDestroySwapchainKHR, instanceExt->destroySwapchain);
-	}
+	vkExtension(clean, vkAcquireNextImageKHR, instanceExt->acquireNextImage);
+	vkExtension(clean, vkCreateSwapchainKHR, instanceExt->createSwapchain);
+	vkExtension(clean, vkDestroySurfaceKHR, instanceExt->destroySurface);
+	vkExtension(clean, vkDestroySwapchainKHR, instanceExt->destroySwapchain);
 
 	vkExtensionNoCheck(vkCmdDrawIndexedIndirectCountKHR, instanceExt->cmdDrawIndexedIndirectCount);
 	vkExtensionNoCheck(vkCmdDrawIndirectCountKHR, instanceExt->cmdDrawIndirectCount);
 
-	vkExtensionNoCheck(vkBuildAccelerationStructuresKHR, instanceExt->buildAccelerationStructures);
+	vkExtensionNoCheck(vkCmdBuildAccelerationStructuresKHR, instanceExt->cmdBuildAccelerationStructures);
+	vkExtensionNoCheck(vkCreateAccelerationStructureKHR, instanceExt->createAccelerationStructure);
 	vkExtensionNoCheck(vkCmdCopyAccelerationStructureKHR, instanceExt->copyAccelerationStructure);
 	vkExtensionNoCheck(vkDestroyAccelerationStructureKHR, instanceExt->destroyAccelerationStructure);
 	vkExtensionNoCheck(vkGetAccelerationStructureBuildSizesKHR, instanceExt->getAccelerationStructureBuildSizes);
@@ -350,7 +337,8 @@ const C8 *reqExtensionsName[] = {
 	"VK_KHR_synchronization2",
 	"VK_KHR_timeline_semaphore",
 	"VK_KHR_maintenance4",
-	"VK_KHR_swapchain"
+	"VK_KHR_swapchain",
+	"VK_KHR_buffer_device_address"
 };
 
 U64 reqExtensionsNameCount = sizeof(reqExtensionsName) / sizeof(reqExtensionsName[0]);
@@ -556,7 +544,10 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 		);
 
 		getDeviceProperties(true, VkPhysicalDeviceIDProperties, id, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES);
-		getDeviceProperties(true, VkPhysicalDeviceDriverProperties, driver, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES);
+
+		getDeviceProperties(
+			true, VkPhysicalDeviceDriverProperties, driver, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES
+		);
 
 		graphicsExt->getPhysicalDeviceProperties2(dev, &properties2);
 
@@ -680,6 +671,11 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PERFORMANCE_QUERY_FEATURES_KHR
 		);
 
+		getDeviceFeatures(
+			true, VkPhysicalDeviceBufferDeviceAddressFeaturesKHR, deviceAddress, 
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES_KHR
+		);
+
 		graphicsExt->getPhysicalDeviceFeatures2(dev, &features2);
 
 		//Query
@@ -690,6 +686,11 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 
 		if (limits.nonCoherentAtomSize > 256) {
 			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", nonCoherentAtomSize needs to be up to 256", i);
+			continue;
+		}
+
+		if(!deviceAddress.bufferDeviceAddress) {
+			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", bufferDeviceAddress has to be supported", i);
 			continue;
 		}
 

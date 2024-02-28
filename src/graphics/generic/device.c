@@ -25,6 +25,8 @@
 #include "graphics/generic/device_texture.h"
 #include "graphics/generic/swapchain.h"
 #include "graphics/generic/command_list.h"
+#include "graphics/generic/blas.h"
+#include "graphics/generic/tlas.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/log.h"
 #include "types/time.h"
@@ -77,6 +79,8 @@ Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 	Lock_free(&device->lock);
 	Lock_free(&device->allocator.lock);
 	ListWeakRefPtr_freex(&device->pendingResources);
+	ListWeakRefPtr_freex(&device->pendingBlases);
+	ListWeakRefPtr_freex(&device->pendingTlases);
 
 	for(U64 i = 0; i < sizeof(device->stagingAllocations) / sizeof(device->stagingAllocations[0]); ++i)
 		AllocationBuffer_freex(&device->stagingAllocations[i]);
@@ -266,31 +270,45 @@ Bool GraphicsDeviceRef_removePending(GraphicsDeviceRef *deviceRef, RefPtr *resou
 	Bool supported = false;
 
 	EGraphicsTypeId type = (EGraphicsTypeId) resource->typeId;
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+
+	ListWeakRefPtr *pendingList = NULL;
 
 	switch (type) {
 
 		case EGraphicsTypeId_DeviceBuffer:
 			supported = DeviceBufferRef_ptr(resource)->resource.device == deviceRef;
+			pendingList = &device->pendingResources;
 			break;
 
 		case EGraphicsTypeId_DeviceTexture:
 			supported = DeviceTextureRef_ptr(resource)->base.resource.device == deviceRef;
+			pendingList = &device->pendingResources;
+			break;
+
+		case EGraphicsTypeId_BLASExt:
+			supported = BLASRef_ptr(resource)->base.device == deviceRef;
+			pendingList = &device->pendingBlases;
+			break;
+
+		case EGraphicsTypeId_TLASExt:
+			supported = TLASRef_ptr(resource)->base.device == deviceRef;
+			pendingList = &device->pendingTlases;
 			break;
 
 		default:
 			return false;
 	}
 
-	if(!supported)
+	if(!supported || !pendingList)
 		return false;
 
-	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	ELockAcquire acq = Lock_lock(&device->lock, U64_MAX);
 
 	if(acq < ELockAcquire_Success)
 		return false;
 
-	U64 found = ListWeakRefPtr_findFirst(device->pendingResources, resource, 0, NULL);
+	U64 found = ListWeakRefPtr_findFirst(*pendingList, resource, 0, NULL);
 	Bool success = false;
 
 	if (found == U64_MAX) {
@@ -299,7 +317,7 @@ Bool GraphicsDeviceRef_removePending(GraphicsDeviceRef *deviceRef, RefPtr *resou
 	}
 
 	Error err = Error_none();
-	_gotoIfError(clean, ListWeakRefPtr_erase(&device->pendingResources, found));
+	_gotoIfError(clean, ListWeakRefPtr_erase(pendingList, found));
 
 	success = true;
 
@@ -319,6 +337,7 @@ impl Error GraphicsDevice_submitCommandsImpl(
 
 impl Error DeviceBufferRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceBufferRef *pending);
 impl Error DeviceTextureRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceTextureRef *pending);
+impl Error BLASRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, BLASRef *pending);
 
 Error GraphicsDeviceRef_handleNextFrame(GraphicsDeviceRef *deviceRef, void *commandBuffer) {
 
@@ -373,6 +392,23 @@ Error GraphicsDeviceRef_handleNextFrame(GraphicsDeviceRef *deviceRef, void *comm
 	}
 
 	_gotoIfError(clean, ListWeakRefPtr_clear(&device->pendingResources));
+
+	//Update BLASes
+
+	for(U64 i = 0; i < device->pendingBlases.length; ++i) {
+
+		RefPtr *pending = device->pendingBlases.ptr[i];
+		EGraphicsTypeId type = (EGraphicsTypeId) pending->typeId;
+
+		if(type != EGraphicsTypeId_BLASExt)
+			_gotoIfError(clean, Error_unsupportedOperation(
+				6, "GraphicsDeviceRef_handleNextFrame() unsupported pending BLAS type"
+			));
+
+		_gotoIfError(clean, BLASRef_flush(commandBuffer, deviceRef, pending));
+	}
+
+	_gotoIfError(clean, ListWeakRefPtr_clear(&device->pendingBlases));
 
 clean:
 	return err;

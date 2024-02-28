@@ -38,15 +38,15 @@ typedef enum ERTASBuildFlags {
 	ERTASBuildFlags_FastBuild				= 1 << 3,		//Prefer fast builds over longer builds (might be worse RT perf)
 	ERTASBuildFlags_MinimizeMemory			= 1 << 4,		//Ensure both scratch and output mem is reduced (slower builds)
 
-	ERTASBuildFlags_UseDeviceMemory			= 1 << 5,		//Switches between using cpuData or deviceData for all geometries
-	ERTASBuildFlags_IsUpdate				= 1 << 6,		//If the current update is a refit (requires parent AS to be set)
+	ERTASBuildFlags_IsUpdate				= 1 << 5,		//If the current update is a refit (requires parent AS to be set)
+	ERTASBuildFlags_DisableAutomaticUpdate	= 1 << 6,		//For dynamic meshes that are GPU generated
 
 	ERTASBuildFlags_Count					= 7,
 
 	ERTASBuildFlags_DefaultTLAS				= ERTASBuildFlags_FastBuild,
 	ERTASBuildFlags_DefaultBLAS				= ERTASBuildFlags_FastTrace | ERTASBuildFlags_AllowCompaction
 
-} ETLASBuildFlags;
+} ERTASBuildFlags;
 
 typedef struct DeviceData {
 	DeviceBufferRef *buffer;
@@ -55,25 +55,24 @@ typedef struct DeviceData {
 
 typedef struct RTAS {
 
-	GraphicsResource resource;
+	GraphicsDeviceRef *device;
+	U64 gpuAddress;							//Contains the memory address on the GPU (otherwise 0)
 
-	U64 lastBuild;							//Used to check if compaction is allowed yet and if completed
-
-	U8 padding[2];
+	U8 padding0[2];
 	Bool isMotionBlurExt;					//If active, this will make a motion blur AS
-	Bool isCompleted;						//If this is active, we know the TLAS is already done
+	Bool isCompleted;						//If this is active, we know the RTAS is already done
 
-	Bool isPending, isCompactionPending;	//Compaction happens the frame after the real build; so never if animating
+	U8 padding1;
 	U8 flags;								//ERTASBuildFlags
+	U8 flagsExt;							//For BLAS; EBLASFlag
 	U8 asConstructionType;					//ETLASConstructionType or EBlasConstructionType
 
 	RTASRef *parent;						//Only if Updated / this is a refit
 
 	DeviceBufferRef *scratchBuffer;			//Allocated until the build is complete, unless EBLASConstructionType_Update
+	DeviceBufferRef *asBuffer;				//The acceleration structure as a buffer
 
 	Lock lock;								//Before reading on CPU; for example for refitting
-
-	U64 gpuAddress;							//Changes when compaction or a full rebuild happens
 
 } RTAS;
 

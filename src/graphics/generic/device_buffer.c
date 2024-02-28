@@ -220,6 +220,20 @@ Error GraphicsDeviceRef_createBufferIntern(
 	if(!dev || dev->typeId != EGraphicsTypeId_GraphicsDevice)
 		_gotoIfError(clean, Error_nullPointer(0, "GraphicsDeviceRef_createBufferIntern()::dev is required"));
 
+	if((usage & EDeviceBufferUsage_ScratchExt) && (resourceFlags || usage != EDeviceBufferUsage_ScratchExt))
+		_gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_createBufferIntern() invalid scratch usage/flags"));
+
+	if((usage & EDeviceBufferUsage_ASExt) && (resourceFlags || usage != EDeviceBufferUsage_ASExt))
+		_gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_createBufferIntern() invalid AS usage/flags"));
+
+	if(
+		(usage & (EDeviceBufferUsage_ASExt | EDeviceBufferUsage_ScratchExt | EDeviceBufferUsage_ASReadExt)) && 
+		!(device->info.capabilities.features & EGraphicsFeatures_Raytracing)
+	)
+		_gotoIfError(clean, Error_invalidState(
+			0, "GraphicsDeviceRef_createBufferIntern() AS or scratch buffer only allowed if raytracing feature is present"
+		));
+
 	if(!(resourceFlags & EGraphicsResourceFlag_InternalWeakDeviceRef))
 		_gotoIfError(clean, GraphicsDeviceRef_inc(dev));
 
@@ -243,7 +257,9 @@ Error GraphicsDeviceRef_createBufferIntern(
 		acq = Lock_lock(&device->descriptorLock, U64_MAX);
 
 		if(acq < ELockAcquire_Success)
-			_gotoIfError(clean, Error_invalidState(0, "UnifiedTexture_create() couldn't acquire descriptor lock"));
+			_gotoIfError(clean, Error_invalidState(
+				0, "GraphicsDeviceRef_createBufferIntern() couldn't acquire descriptor lock"
+			));
 
 		//Create images
 
@@ -252,7 +268,9 @@ Error GraphicsDeviceRef_createBufferIntern(
 			buf->readHandle = GraphicsDeviceRef_allocateDescriptor(dev, EDescriptorType_Buffer);
 
 			if(buf->readHandle == U32_MAX)
-				_gotoIfError(clean, Error_outOfMemory(0, "UnifiedTexture_create() couldn't allocate texture descriptor"));
+				_gotoIfError(clean, Error_outOfMemory(
+					0, "GraphicsDeviceRef_createBufferIntern() couldn't allocate buffer descriptor"
+				));
 		}
 
 		if(buf->resource.flags & EGraphicsResourceFlag_ShaderWrite) {
@@ -260,7 +278,9 @@ Error GraphicsDeviceRef_createBufferIntern(
 			buf->writeHandle = GraphicsDeviceRef_allocateDescriptor(dev, EDescriptorType_Buffer);
 
 			if(buf->writeHandle == U32_MAX)
-				_gotoIfError(clean, Error_outOfMemory(0, "UnifiedTexture_create() couldn't allocate texture descriptor"));
+				_gotoIfError(clean, Error_outOfMemory(
+					0, "GraphicsDeviceRef_createBufferIntern() couldn't allocate buffer descriptor"
+				));
 		}
 
 		if(acq == ELockAcquire_Acquired)

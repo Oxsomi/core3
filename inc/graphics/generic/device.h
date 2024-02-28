@@ -63,6 +63,8 @@ typedef struct GraphicsDevice {
 	Ns firstSubmit;								//Start of time
 
 	ListWeakRefPtr pendingResources;			//Resources pending copy from CPU to device next submit
+	ListWeakRefPtr pendingBlases;				//Post pending resources copy
+	ListWeakRefPtr pendingTlases;				//Post pending blas create
 
 	ListRefPtr resourcesInFlight[3];			//Resources in flight, TODO: HashMap
 
@@ -86,6 +88,9 @@ typedef struct GraphicsDevice {
 	U64 pendingBytes;							//For determining if it's time to flush or to resize staging buffer
 
 	U64 flushThreshold;							//When the pending bytes are too much and the device should flush
+
+	U64 pendingPrimitives;						//For determining if it's time to flush because of BLAS creation
+	U64 flushThresholdPrimitives;				//When the pending primitives are too much and the device should flush
 
 	//Used for allocating descriptors
 
