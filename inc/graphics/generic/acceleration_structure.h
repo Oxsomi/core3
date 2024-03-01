@@ -56,7 +56,6 @@ typedef struct DeviceData {
 typedef struct RTAS {
 
 	GraphicsDeviceRef *device;
-	U64 gpuAddress;							//Contains the memory address on the GPU (otherwise 0)
 
 	U8 padding0[2];
 	Bool isMotionBlurExt;					//If active, this will make a motion blur AS

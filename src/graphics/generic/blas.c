@@ -266,7 +266,6 @@ Error GraphicsDeviceRef_createBLAS(GraphicsDeviceRef *dev, BLAS blas, CharString
 
 	*blasPtr = blas;
 	blasPtr->base.lock = Lock_create();
-	blasPtr->base.isPending = true;
 
 	if (blas.base.asConstructionType == EBLASConstructionType_Serialized) {
 		blasPtr->cpuData = Buffer_createNull();

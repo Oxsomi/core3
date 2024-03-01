@@ -196,9 +196,26 @@ Error GraphicsDevice_initExt(
 		{
 			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT,
 			.meshShader = true,
-			.taskShader = true,
-			.multiviewMeshShader = true,
-			.primitiveFragmentShadingRateMeshShader = true
+			.taskShader = true
+		}
+	);
+
+	vkBindNext(
+		VkPhysicalDeviceMultiviewFeatures,
+		feat & EGraphicsFeatures_Multiview,
+		{
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_FEATURES,
+			.multiview = true
+		}
+	);
+
+	vkBindNext(
+		VkPhysicalDeviceFragmentShadingRateFeaturesKHR,
+		feat & EGraphicsFeatures_VariableRateShading,
+		{
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_FEATURES_KHR,
+			.pipelineFragmentShadingRate = true,
+			.attachmentFragmentShadingRate = true
 		}
 	);
 
@@ -331,6 +348,8 @@ Error GraphicsDevice_initExt(
 			case EOptExtensions_RayMotionBlur:				on = feat & EGraphicsFeatures_RayMotionBlur;			break;
 			case EOptExtensions_RayReorder:					on = feat & EGraphicsFeatures_RayReorder;				break;
 			case EOptExtensions_MeshShader:					on = feat & EGraphicsFeatures_MeshShader;				break;
+			case EOptExtensions_Multiview:					on = feat & EGraphicsFeatures_Multiview;				break;
+			case EOptExtensions_VariableRateShading:		on = feat & EGraphicsFeatures_VariableRateShading;		break;
 			case EOptExtensions_DynamicRendering:			on = feat & EGraphicsFeatures_DirectRendering;			break;
 			case EOptExtensions_RayMicromapOpacity:			on = feat & EGraphicsFeatures_RayMicromapOpacity;		break;
 			case EOptExtensions_RayMicromapDisplacement:	on = feat & EGraphicsFeatures_RayMicromapDisplacement;	break;

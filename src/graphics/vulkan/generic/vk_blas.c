@@ -30,7 +30,7 @@
 #include "graphics/vulkan/vulkan.h"
 
 VkDeviceAddress getDeviceAddress(DeviceData data) {
-	return DeviceBufferRef_ptr(data.buffer)->resource.gpuAddress + data.offset;
+	return DeviceBufferRef_ptr(data.buffer)->resource.deviceAddress + data.offset;
 }
 
 VkDeviceOrHostAddressConstKHR getLocation(DeviceData data, U64 localOffset) {
@@ -223,7 +223,7 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 	buildInfo.dstAccelerationStructure = BLAS_ext(BLASRef_ptr(pending), Vk)->as;
 
 	buildInfo.scratchData = (VkDeviceOrHostAddressKHR) {
-		.deviceAddress = DeviceBufferRef_ptr(blas->base.scratchBuffer)->resource.gpuAddress
+		.deviceAddress = DeviceBufferRef_ptr(blas->base.scratchBuffer)->resource.deviceAddress
 	};
 
 	if(blas->base.flags & ERTASBuildFlags_IsUpdate)

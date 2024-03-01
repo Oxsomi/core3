@@ -37,10 +37,11 @@ typedef enum EOptExtensions {
 	EOptExtensions_RayMotionBlur,
 	EOptExtensions_RayReorder,
 	EOptExtensions_MeshShader,
+	EOptExtensions_Multiview,
+	EOptExtensions_VariableRateShading,
 	EOptExtensions_DynamicRendering,
 	EOptExtensions_RayMicromapOpacity,
 	EOptExtensions_RayMicromapDisplacement,
-	EOptExtensions_VariableRateShading,
 	EOptExtensions_AtomicF32,
 	EOptExtensions_DeferredHostOperations
 

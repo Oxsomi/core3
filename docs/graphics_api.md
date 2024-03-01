@@ -411,6 +411,7 @@ A graphics resource consists of the following:
     - CPUAllocatedBit (Always use as CPUAllocated to force CPUBacked also): Indicates that the device memory with the resource should be CPU-sided whenever possible. This can free up more device memory if the resource is only rarely being accessed (because it's typically slower than local memory). In some cases, this flag won't do anything, because with shared memory models such as mobile or integrated GPUs the memory between CPU and GPU is shared anyways. This is generally not a useful flag, though it can be when consuming large amounts of memory.
 - type: DeviceTexture, RenderTargetOrDepthStencil, DeviceBuffer, Swapchain. This is the base type; useful for memory allocation. Real type info can be obtained through the RefPtr itself.
 - mappedMemoryExt: API dependent location of the memory. Never write to this directly, because of unexpected caching behavior or access limations. Even if CPUAllocatedBit is active, this is not guaranteed to be writable directly on runtime. The graphics API implementation decides if it can directly access it (e.g. the resource is not in flight) and then can directly write to it. If it can't, it will use the staging buffer or create a dedicated staging resource (temporary). Always access this through the markDirty/pullRegion function of DeviceTexture or DeviceBuffer.
+- deviceAddress: the address of this resource on the GPU (generally only for device buffers).
 
 ### Resource handles
 
@@ -886,7 +887,7 @@ _gotoIfError(clean, GraphicsDeviceRef_createBufferData(
 ### Properties
 
 - resource: the GraphicsResource it inherits from.
-- usage: Vertex (use as vertex buffer), Index (use as index buffer), Indirect (use for indirect draw calls).
+- usage: Vertex (use as vertex buffer), Index (use as index buffer), Indirect (use for indirect draw calls), ScratchExt (used internally for scratch buffers for raytracing), ASExt (used internally for creation of acceleration structures) or ReadASExt (If the acceleration structure needs to be able to read the vertex/index buffer).
 - isPending(FullCopy): Information about if any data is pending for the next submit and if the entire resource is pending.
 - isFirstFrame: If the resource was already uploaded before.
 - length: Length of the buffer.
@@ -927,6 +928,27 @@ In both of these modes, EGraphicsFeatures_Raytracing will be set and that means 
 
 Device data is a subarea of a buffer; it contains the reference to the buffer resource, an offset and length (U64s).
 
+#### RTAS
+
+Contains the following properties:
+
+- device: the device that the AS was created on. An AS is only compatible with other ASes that are from the same device.
+- isMotionBlurExt: relevant for BLAS or TLAS; BLAS it means it contains the previous data of the geometry while TLAS means it contains previous data of all instances (so it can be motion blurred). This is the NV specific extension for Ampere and up.
+- isCompleted: this is set when the BLAS has been signaled as fully built. For example when buildBLASExt has been called or when the first submitCommands has been triggered since it has been queued.
+- flagsExt: BLAS or TLAS specific flags (currently only used for BLAS).
+- asConstructionType: the BLAS or TLAS specific construction type.
+- parent: the acceleration structure that was used as a base (for example: compaction or refitting).
+- scratchBuffer: temporary data that is only available until the AS has been created and the frame has been completed on the CPU.
+- asBuffer: the buffer resource that represents this acceleration structure.
+- flags: 
+  - AllowUpdate (0): refitting is allowed. This is a faster way of updating acceleration structures, but at the cost of traversal time.
+  - AllowCompaction (1): compaction is allowed. This reduces memory overhead for the acceleration structures.
+  - FastTrace (2): optimize trace times over build times / memory.
+  - FastBuild (3): optimize build times over trace times / memory.
+  - MinimizeMemory (4): optimize memory over trace times / build times.
+  - IsUpdate (5): this RTAS build is a refit (reuses old data to expand the ASes).
+  - DisableAutomaticUpdate (6): next submitCommands shouldn't build this acceleration structure. This is useful when the mesh has to be initialized by the GPU using commands first (such as copies, compute or stream out). 
+
 #### BLAS
 
 A BLAS is a bottom level acceleration structure; it is the representation of a couple volumes or triangle geometry. It has an acceleration structure built over this geometry to accelerate tracing rays through it. These BLASes are used through a TLAS (top level AS) and can then be accessed in raytracing.
@@ -964,6 +986,8 @@ _gotoIfError(clean, GraphicsDeviceRef_createBLASExt(
 The example above assumes that there is an index buffer and a position buffer available. Those buffers need to have the ASReadExt buffer usage to be accessible during build time.
 
 There is also a version of this that doesn't require index buffers; createBLASUnindexedExt. The DeviceData for indexBuffer and the index format can be left out for that function.
+
+The BLAS flags are the following: EBLASFlag_AvoidDuplicateAnyHit and EBLASFlag_DisableAnyHit. This is only relevant for raytracing pipelines and is irrelevant if the TLAS instance itself turns off anyHit.
 
 ##### Example: Procedural geometry
 

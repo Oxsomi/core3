@@ -361,10 +361,11 @@ const C8 *optExtensionsName[] = {
 	"VK_NV_ray_tracing_motion_blur",
 	"VK_NV_ray_tracing_invocation_reorder",
 	"VK_EXT_mesh_shader",
+	"VK_KHR_multiview",
+	"VK_KHR_fragment_shading_rate",
 	"VK_KHR_dynamic_rendering",
 	"VK_EXT_opacity_micromap",
 	"VK_NV_displacement_micromap",
-	"VK_KHR_fragment_shading_rate",
 	"VK_EXT_shader_atomic_float",
 	"VK_KHR_deferred_host_operations"
 };
@@ -523,6 +524,20 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 		);
 
 		getDeviceProperties(
+			optExtensions[EOptExtensions_Multiview],
+			VkPhysicalDeviceMultiviewProperties,
+			multiViewProp,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_PROPERTIES
+		);
+
+		getDeviceProperties(
+			optExtensions[EOptExtensions_VariableRateShading],
+			VkPhysicalDeviceFragmentShadingRatePropertiesKHR,
+			vrsProp,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_PROPERTIES_KHR
+		);
+
+		getDeviceProperties(
 			optExtensions[EOptExtensions_RayAcceleration],
 			VkPhysicalDeviceAccelerationStructurePropertiesKHR,
 			rtasProp,
@@ -592,6 +607,20 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 			VkPhysicalDeviceMeshShaderFeaturesEXT,
 			meshShader,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT
+		);
+
+		getDeviceFeatures(
+			optExtensions[EOptExtensions_Multiview],
+			VkPhysicalDeviceMultiviewFeatures,
+			multiViewFeat,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_FEATURES
+		);
+
+		getDeviceFeatures(
+			optExtensions[EOptExtensions_VariableRateShading],
+			VkPhysicalDeviceFragmentShadingRateFeaturesKHR,
+			vrsFeat,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_FEATURES_KHR
 		);
 
 		getDeviceFeatures(
@@ -956,12 +985,32 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 		if(subgroup.supportedOperations & VK_SUBGROUP_FEATURE_SHUFFLE_BIT)
 			capabilities.features |= EGraphicsFeatures_SubgroupShuffle;
 
+		//Multi view
+
+		if(
+			optExtensions[EOptExtensions_Multiview] && 
+			multiViewFeat.multiview && 
+			multiViewProp.maxMultiviewViewCount >= 6 && multiViewProp.maxMultiviewInstanceIndex >= 134217727
+		)
+			capabilities.features |= EGraphicsFeatures_Multiview;
+
+		//Multi view
+
+		if(
+			optExtensions[EOptExtensions_VariableRateShading] && 
+			vrsFeat.pipelineFragmentShadingRate && 
+			vrsFeat.attachmentFragmentShadingRate && 
+			vrsProp.maxFragmentSize.width >= 2 && vrsProp.maxFragmentSize.height >= 2 &&
+			vrsProp.maxFragmentShadingRateCoverageSamples >= 16 &&
+			vrsProp.maxFragmentShadingRateRasterizationSamples >= 4 &&
+			vrsProp.fragmentShadingRateWithSampleMask
+		)
+			capabilities.features |= EGraphicsFeatures_VariableRateShading;
+
 		//Mesh shaders
 
 		if(optExtensions[EOptExtensions_MeshShader] && !(
 			!meshShader.taskShader ||
-			!meshShader.primitiveFragmentShadingRateMeshShader ||
-			!meshShader.multiviewMeshShader ||
 			meshShaderProp.maxMeshMultiviewViewCount < 4 ||
 			meshShaderProp.maxMeshOutputComponents < 127 ||
 			meshShaderProp.maxMeshOutputLayers < 8 ||
