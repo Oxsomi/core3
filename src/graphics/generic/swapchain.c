@@ -32,7 +32,6 @@ Error SwapchainRef_inc(SwapchainRef *swapchain) {
 }
 
 impl Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *dev, SwapchainRef *swapchain);
-impl Error GraphicsDeviceRef_postCreateSwapchainExt(GraphicsDeviceRef *dev, SwapchainRef *swapchain);
 impl Bool GraphicsDevice_freeSwapchainExt(Swapchain *data, Allocator alloc);
 impl extern const U64 SwapchainExt_size;
 
@@ -99,7 +98,6 @@ Error SwapchainRef_resize(SwapchainRef *swapchainRef) {
 
 	_gotoIfError(clean, GraphicsDeviceRef_createSwapchainExt(swapchain->base.resource.device, swapchainRef));
 	_gotoIfError(clean, UnifiedTexture_createExt(swapchainRef, swapchain->info.window->title));		//Re-create views
-	_gotoIfError(clean, GraphicsDeviceRef_postCreateSwapchainExt(swapchain->base.resource.device, swapchainRef));
 	++swapchain->versionId;
 
 	swapchain->base.textureFormatId = (U8) textureFormatId;
@@ -168,7 +166,6 @@ Error GraphicsDeviceRef_createSwapchain(GraphicsDeviceRef *dev, SwapchainInfo in
 
 	_gotoIfError(clean, GraphicsDeviceRef_createSwapchainExt(dev, *scRef));
 	_gotoIfError(clean, UnifiedTexture_create(*scRef, info.window->title));
-	_gotoIfError(clean, GraphicsDeviceRef_postCreateSwapchainExt(dev, *scRef));
 	swapchain->lock = Lock_create();
 
 clean:

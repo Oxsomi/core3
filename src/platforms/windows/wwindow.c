@@ -887,7 +887,7 @@ void Window_updateExt(Window *w) {
 				//so after this, we need to return to the main thread so we can process other windows
 				//We do this by checking if the next message is also paint. If not, we continue
 
-				MSG msgCheck = (MSG){ 0 };
+				MSG msgCheck = (MSG) { 0 };
 				PeekMessageA(&msgCheck, w->nativeHandle, 0, 0, PM_NOREMOVE);
 
 				if (msgCheck.message == msg.message)

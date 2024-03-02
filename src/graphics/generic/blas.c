@@ -61,6 +61,7 @@ Error BLAS_validateDeviceBuffer(DeviceData *bufPtr) {
 	return Error_none();
 }
 
+impl extern const U64 BLASExt_size;
 impl Bool BLAS_freeExt(BLAS *blas);
 
 Bool BLAS_free(BLAS *blas, Allocator allocator) {
@@ -251,7 +252,7 @@ Error GraphicsDeviceRef_createBLAS(GraphicsDeviceRef *dev, BLAS blas, CharString
 	//Allocate refPtr
 
 	_gotoIfError(clean, RefPtr_createx(
-		(U32) sizeof(BLAS),
+		(U32) (sizeof(BLAS) + BLASExt_size),
 		(ObjectFreeFunc) BLAS_free,
 		(ETypeId) EGraphicsTypeId_BLASExt,
 		blasRef

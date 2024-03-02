@@ -132,8 +132,12 @@ Bool Platform_freeTracked(void *allocator, Buffer buf) {
 
 	(void) allocator;
 
-	Platform_free(allocator, (void*) buf.ptr, Buffer_length(buf));
-	return Platform_onFree((void*) buf.ptr, Buffer_length(buf));
+	Bool canFree = Platform_onFree((void*) buf.ptr, Buffer_length(buf));
+
+	if(canFree)
+		Platform_free(allocator, (void*) buf.ptr, Buffer_length(buf));
+
+	return canFree;
 }
 
 Error Platform_onAllocate(void *ptr, U64 length) {

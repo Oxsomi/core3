@@ -29,6 +29,8 @@
 #include "graphics/vulkan/vk_buffer.h"
 #include "graphics/vulkan/vulkan.h"
 
+const U64 BLASExt_size = sizeof(VkBLAS);
+
 VkDeviceAddress getDeviceAddress(DeviceData data) {
 	return DeviceBufferRef_ptr(data.buffer)->resource.deviceAddress + data.offset;
 }
