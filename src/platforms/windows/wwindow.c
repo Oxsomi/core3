@@ -192,42 +192,29 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 		//Input handling
 
+		case WM_UNICHAR: {
+			
+			break;
+		}
+
 		case WM_INPUT: {
 
-			//Grab raw input
-
-			U32 size = 0;
-			GetRawInputData(
-				(HRAWINPUT)lParam,
-				RID_INPUT,
-				NULL,
-				&size,
-				sizeof(RAWINPUTHEADER)
-			);
-
-			Buffer buf = Buffer_createNull();
-			Error err = Buffer_createUninitializedBytesx(size, &buf);
-
-			if(err.genericError) {
-				Error_printx(err, ELogLevel_Error, ELogOptions_Default);
-				break;
-			}
-
-			if (GetRawInputData((HRAWINPUT)lParam, RID_INPUT, (U8*) buf.ptr, &size, sizeof(RAWINPUTHEADER)) != size) {
+			RAWINPUT raw;
+			U32 rawSiz = (U32) sizeof(raw);
+			if (!GetRawInputData((HRAWINPUT)lParam, RID_INPUT, (U8*) &raw, &rawSiz, sizeof(RAWINPUTHEADER))) {
 
 				Error_printx(
 					Error_platformError(0, GetLastError(), "WWindow_onCallback() GetRawInputData failed"),
 					ELogLevel_Error, ELogOptions_Default
 				);
 
-				Buffer_freex(&buf);
 				Log_errorx(ELogOptions_Default, "Couldn't get raw input");
 				break;
 			}
 
-			//Grab device from the list
+			RAWINPUT *data = &raw;
 
-			RAWINPUT *data = (RAWINPUT*) buf.ptr;
+			//Grab device from the list
 
 			InputDevice *dev = w->devices.ptrNonConst;
 			InputDevice *end = ListInputDevice_end(w->devices);
@@ -249,122 +236,175 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 				//It's a shame we have to get the state, but we can't rely on our program to know the exact state
 				//Because locks can be toggled from a different program
 
-				InputDevice_setFlagTo(dev, EKeyboardFlags_Caps, GetKeyState(VK_CAPITAL) & 1);
-				InputDevice_setFlagTo(dev, EKeyboardFlags_NumLock, GetKeyState(VK_NUMLOCK) & 1);
-				InputDevice_setFlagTo(dev, EKeyboardFlags_ScrollLock, GetKeyState(VK_SCROLL) & 1);
+				U32 flags = 
+					((GetKeyState(VK_CAPITAL) & 1) << EKeyboardFlags_Caps) | 
+					((GetKeyState(VK_NUMLOCK) & 1) << EKeyboardFlags_NumLock) | 
+					((GetKeyState(VK_SCROLL) & 1) << EKeyboardFlags_ScrollLock) | 
+					((GetKeyState(VK_SHIFT) & 1) << EKeyboardFlags_Shift) | 
+					((GetKeyState(VK_CONTROL) & 1) << EKeyboardFlags_Control) | 
+					((GetKeyState(VK_MENU) & 1) << EKeyboardFlags_Alt);
 
-				//Translate key to our system and set corresponding device flags
+				dev->flags = flags;
+
+				//Translate scan code to our system and set corresponding device flags.
+				//In case of special keys, we don't want to use scan codes.
+				//Only if it's about our main keyboard or numpad
 
 				InputHandle handle = InputDevice_invalidHandle();
 
 				switch (keyboardDat.VKey) {
 
-					case VK_LSHIFT:
-					case VK_RSHIFT:
-					case VK_SHIFT:
-						InputDevice_setFlagTo(dev, EKeyboardFlags_Shift, isKeyDown);
-						handle = EKey_Shift;
-						break;
+					case VK_SNAPSHOT:			handle = EKey_PrintScreen;		break;
+					case VK_SCROLL:				handle = EKey_ScrollLock;		break;
+					case VK_NUMLOCK:			handle = EKey_NumLock;			break;
+					case VK_PAUSE:				handle = EKey_Pause;			break;
+					case VK_INSERT:				handle = EKey_Insert;			break;
+					case VK_HOME:				handle = EKey_Home;				break;
+					case VK_PRIOR:				handle = EKey_PageUp;			break;
+					case VK_NEXT:				handle = EKey_PageDown;			break;
+					case VK_DELETE:				handle = EKey_Delete;			break;
+					case VK_END:				handle = EKey_End;				break;
 
-					case VK_LMENU:
-					case VK_RMENU:
-					case VK_MENU:
-						InputDevice_setFlagTo(dev, EKeyboardFlags_Alt, isKeyDown);
-						handle = EKey_Alt;
-						break;
-
-					case VK_LCONTROL:
-					case VK_RCONTROL:
-					case VK_CONTROL:
-						InputDevice_setFlagTo(dev, EKeyboardFlags_Control, isKeyDown);
-						handle = EKey_Ctrl;
-						break;
-
-					case VK_NUMLOCK:
-						InputDevice_setFlagTo(dev, EKeyboardFlags_NumLock, isKeyDown);
-						handle = EKey_NumLock;
-						break;
-
-					case VK_SCROLL:
-						InputDevice_setFlagTo(dev, EKeyboardFlags_ScrollLock, isKeyDown);
-						handle = EKey_ScrollLock;
-						break;
-
-					case VK_BACK:				handle = EKey_Backspace;	break;
-					case VK_SPACE:				handle = EKey_Space;		break;
-					case VK_TAB:				handle = EKey_Tab;			break;
-					case VK_PAUSE:				handle = EKey_Pause;		break;
-					case VK_CAPITAL:			handle = EKey_Caps;			break;
-					case VK_ESCAPE:				handle = EKey_Escape;		break;
-					case VK_PRIOR:				handle = EKey_PageUp;		break;
-					case VK_NEXT:				handle = EKey_PageDown;		break;
-					case VK_END:				handle = EKey_End;			break;
-					case VK_HOME:				handle = EKey_Home;			break;
-					case VK_SELECT:				handle = EKey_Select;		break;
-					case VK_PRINT:				handle = EKey_Print;		break;
-					case VK_EXECUTE:			handle = EKey_Execute;		break;
-					case VK_SNAPSHOT:			handle = EKey_PrintScreen;	break;
-					case VK_INSERT:				handle = EKey_Insert;		break;
-					case VK_BROWSER_BACK:		handle = EKey_Back;			break;
-					case VK_BROWSER_FORWARD:	handle = EKey_Forward;		break;
-					case VK_SLEEP:				handle = EKey_Sleep;		break;
-					case VK_BROWSER_REFRESH:	handle = EKey_Refresh;		break;
-					case VK_BROWSER_STOP:		handle = EKey_Stop;			break;
-					case VK_BROWSER_SEARCH:		handle = EKey_Search;		break;
-					case VK_BROWSER_FAVORITES:	handle = EKey_Favorites;	break;
-					case VK_BROWSER_HOME:		handle = EKey_Start;		break;
-					case VK_VOLUME_MUTE:		handle = EKey_Mute;			break;
-					case VK_VOLUME_DOWN:		handle = EKey_VolumeDown;	break;
-					case VK_VOLUME_UP:			handle = EKey_VolumeUp;		break;
-					case VK_MEDIA_NEXT_TRACK:	handle = EKey_Skip;			break;
-					case VK_MEDIA_PREV_TRACK:	handle = EKey_Previous;		break;
-					case VK_CLEAR:				handle = EKey_Clear;		break;
-					case VK_ZOOM:				handle = EKey_Zoom;			break;
-					case VK_RETURN:				handle = EKey_Enter;		break;
-					case VK_DELETE:				handle = EKey_Delete;		break;
-					case VK_HELP:				handle = EKey_Help;			break;
-					case VK_APPS:				handle = EKey_Apps;			break;
-
-					case VK_LEFT:				handle = EKey_Left;			break;
-					case VK_UP:					handle = EKey_Up;			break;
-					case VK_RIGHT:				handle = EKey_Right;		break;
-					case VK_DOWN:				handle = EKey_Down;			break;
-
-					case VK_MULTIPLY:			handle = EKey_NumpadMul;	break;
-					case VK_ADD:				handle = EKey_NumpadAdd;	break;
-					case VK_DECIMAL:			handle = EKey_NumpadDec;	break;
-					case VK_DIVIDE:				handle = EKey_NumpadDiv;	break;
-					case VK_SUBTRACT:			handle = EKey_NumpadSub;	break;
-
-					case VK_OEM_PLUS:			handle = EKey_Equals;		break;
-					case VK_OEM_COMMA:			handle = EKey_Comma;		break;
-					case VK_OEM_MINUS:			handle = EKey_Minus;		break;
-					case VK_OEM_PERIOD:			handle = EKey_Period;		break;
-					case VK_OEM_1:				handle = EKey_Semicolon;	break;
-					case VK_OEM_2:				handle = EKey_Slash;		break;
-					case VK_OEM_3:				handle = EKey_Acute;		break;
-					case VK_OEM_4:				handle = EKey_LBracket;		break;
-					case VK_OEM_6:				handle = EKey_RBracket;		break;
-					case VK_OEM_5:				handle = EKey_Backslash;	break;
-					case VK_OEM_7:				handle = EKey_Quote;		break;
-
-					//Unknown key or common key
+					case VK_UP:					handle = EKey_Up;				break;
+					case VK_LEFT:				handle = EKey_Left;				break;
+					case VK_DOWN:				handle = EKey_Down;				break;
+					case VK_RIGHT:				handle = EKey_Right;			break;
+					
+					case VK_SELECT:				handle = EKey_Select;			break;
+					case VK_PRINT:				handle = EKey_Print;			break;
+					case VK_EXECUTE:			handle = EKey_Execute;			break;
+					case VK_BROWSER_BACK:		handle = EKey_Back;				break;
+					case VK_BROWSER_FORWARD:	handle = EKey_Forward;			break;
+					case VK_SLEEP:				handle = EKey_Sleep;			break;
+					case VK_BROWSER_REFRESH:	handle = EKey_Refresh;			break;
+					case VK_BROWSER_STOP:		handle = EKey_Stop;				break;
+					case VK_BROWSER_SEARCH:		handle = EKey_Search;			break;
+					case VK_BROWSER_FAVORITES:	handle = EKey_Favorites;		break;
+					case VK_BROWSER_HOME:		handle = EKey_Start;			break;
+					case VK_VOLUME_MUTE:		handle = EKey_Mute;				break;
+					case VK_VOLUME_DOWN:		handle = EKey_VolumeDown;		break;
+					case VK_VOLUME_UP:			handle = EKey_VolumeUp;			break;
+					case VK_MEDIA_NEXT_TRACK:	handle = EKey_Skip;				break;
+					case VK_MEDIA_PREV_TRACK:	handle = EKey_Previous;			break;
+					case VK_CLEAR:				handle = EKey_Clear;			break;
+					case VK_ZOOM:				handle = EKey_Zoom;				break;
+					case VK_RETURN:				handle = EKey_Enter;			break;
+					case VK_HELP:				handle = EKey_Help;				break;
+					case VK_APPS:				handle = EKey_Apps;				break;
+					
+					case VK_MULTIPLY:			handle = EKey_NumpadMul;		break;
+					case VK_ADD:				handle = EKey_NumpadAdd;		break;
+					case VK_DECIMAL:			handle = EKey_NumpadDec;		break;
+					case VK_DIVIDE:				handle = EKey_NumpadDiv;		break;
+					case VK_SUBTRACT:			handle = EKey_NumpadSub;		break;
 
 					default:
 
-						if(keyboardDat.VKey >= '0' && keyboardDat.VKey <= '9')
-							handle = EKey_0 + (keyboardDat.VKey - '0');
-
-						else if(keyboardDat.VKey >= 'A' && keyboardDat.VKey <= 'Z')
-							handle = EKey_A + (keyboardDat.VKey - 'A');
-
-						else if(keyboardDat.VKey >= VK_F1 && keyboardDat.VKey <= VK_F24)
-							handle = EKey_F1 + (keyboardDat.VKey - VK_F1);
-
-						else if(keyboardDat.VKey >= VK_NUMPAD0 && keyboardDat.VKey <= VK_NUMPAD9)
+						if(keyboardDat.VKey >= VK_NUMPAD0 && keyboardDat.VKey <= VK_NUMPAD9) {
 							handle = EKey_Numpad0 + (keyboardDat.VKey - VK_NUMPAD0);
+							break;
+						}
+					
+						switch (keyboardDat.MakeCode) {
 
-						else goto cleanup;
+							//Row 0
+
+							case 0x01:					handle = EKey_Escape;		break;
+
+							case 0x3B:					handle = EKey_F1;			break;
+							case 0x3C:					handle = EKey_F2;			break;
+							case 0x3D:					handle = EKey_F3;			break;
+							case 0x3E:					handle = EKey_F4;			break;
+							case 0x3F:					handle = EKey_F5;			break;
+							case 0x40:					handle = EKey_F6;			break;
+							case 0x41:					handle = EKey_F7;			break;
+							case 0x42:					handle = EKey_F8;			break;
+							case 0x43:					handle = EKey_F9;			break;
+							case 0x44:					handle = EKey_F10;			break;
+							case 0x57:					handle = EKey_F11;			break;
+							case 0x58:					handle = EKey_F12;			break;
+
+							case 0x46:					handle = EKey_ScrollLock;	break;
+							case 0xE11D:				handle = EKey_Pause;		break;
+
+							//Row 1
+
+							case 0x29:					handle = EKey_Backtick;		break;
+
+							case 0x02: case 0x03: case 0x04: case 0x05: case 0x06: case 0x07: case 0x08: case 0x09: case 0x0A:
+								handle = EKey_1 + (keyboardDat.MakeCode - 2);
+								break;
+
+							case 0xB:					handle = EKey_0;			break;
+							case 0xC:					handle = EKey_Minus;		break;
+							case 0xD:					handle = EKey_Equals;		break;
+							case 0xE:					handle = EKey_Backspace;	break;
+
+							//Row 2
+
+							case 0x0F:					handle = EKey_Tab;			break;
+							case 0x10:					handle = EKey_Q;			break;
+							case 0x11:					handle = EKey_W;			break;
+							case 0x12:					handle = EKey_E;			break;
+							case 0x13:					handle = EKey_R;			break;
+							case 0x14:					handle = EKey_T;			break;
+							case 0x15:					handle = EKey_Y;			break;
+							case 0x16:					handle = EKey_U;			break;
+							case 0x17:					handle = EKey_I;			break;
+							case 0x18:					handle = EKey_O;			break;
+							case 0x19:					handle = EKey_P;			break;
+							case 0x1A:					handle = EKey_LBracket;		break;
+							case 0x1B:					handle = EKey_RBracket;		break;
+							case 0x1C:					handle = EKey_Enter;		break;
+
+							//Row 3
+
+							case 0x3A:					handle = EKey_Caps;			break;
+							case 0x1E:					handle = EKey_A;			break;
+							case 0x1F:					handle = EKey_S;			break;
+							case 0x20:					handle = EKey_D;			break;
+							case 0x21:					handle = EKey_F;			break;
+							case 0x22:					handle = EKey_G;			break;
+							case 0x23:					handle = EKey_H;			break;
+							case 0x24:					handle = EKey_J;			break;
+							case 0x25:					handle = EKey_K;			break;
+							case 0x26:					handle = EKey_L;			break;
+							case 0x27:					handle = EKey_Semicolon;	break;
+							case 0x28:					handle = EKey_Quote;		break;
+							case 0x2B:					handle = EKey_Backslash;	break;
+
+							//Row 4
+
+							case 0x2A:					handle = EKey_LShift;		break;
+							case 0x56:					handle = EKey_Bar;			break;
+							case 0x2C:					handle = EKey_Z;			break;
+							case 0x2D:					handle = EKey_X;			break;
+							case 0x2E:					handle = EKey_C;			break;
+							case 0x2F:					handle = EKey_V;			break;
+							case 0x30:					handle = EKey_B;			break;
+							case 0x31:					handle = EKey_N;			break;
+							case 0x32:					handle = EKey_M;			break;
+							case 0x33:					handle = EKey_Comma;		break;
+							case 0x34:					handle = EKey_Period;		break;
+							case 0x35:					handle = EKey_Slash;		break;
+							case 0x36:					handle = EKey_RShift;		break;
+
+							//Row 5
+
+							case 0x1D:					handle = EKey_LCtrl;		break;
+							case 0xE05B:				handle = EKey_LMenu;		break;
+							case 0x38:					handle = EKey_LAlt;			break;
+							case 0x39:					handle = EKey_Space;		break;
+							case 0xE038:				handle = EKey_RAlt;			break;
+							case 0xE05C:				handle = EKey_RMenu;		break;
+							case 0xE05D:				handle = EKey_Options;		break;
+							case 0xE01D:				handle = EKey_RCtrl;		break;
+
+							//Unknown key
+
+							default:
+								goto cleanup;
+						}
 
 						break;
 				}
@@ -379,7 +419,6 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 				if(prevState != newState && w->callbacks.onDeviceButton)
 					w->callbacks.onDeviceButton(w, dev, handle, isKeyDown);
 
-				Buffer_freex(&buf);
 				return 0;
 
 			} else if (dev->type == EInputDeviceType_Mouse) {
@@ -459,7 +498,6 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 		cleanup:
 			LRESULT lr = DefRawInputProc(&data, 1, sizeof(*data));
-			Buffer_freex(&buf);
 			return lr;
 		}
 
