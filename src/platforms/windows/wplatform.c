@@ -133,11 +133,11 @@ Error Platform_initExt() {
 
 	Error err = Error_none();
 
+	SetConsoleCP(CP_UTF8);
+
 	CONSOLE_SCREEN_BUFFER_INFO info;
 	GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &info);
 	oldColor = info.wAttributes;
-
-	SetConsoleOutputCP(CP_UTF8);		//Set UTF8 codepage
 
 	SYSTEM_INFO systemInfo;
 	GetSystemInfo(&systemInfo);
