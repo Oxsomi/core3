@@ -121,17 +121,27 @@ _BUFFER_OP(F32x4);
 
 //UTF-8 helpers
 
-typedef U32 UTF8CodePoint;
+typedef U32 UnicodeCodePoint;
 
-typedef struct UTF8CodePointInfo {
-	U8 size;
-	UTF8CodePoint index;
-} UTF8CodePointInfo;
+typedef struct UnicodeCodePointInfo {
+	U8 chars, bytes, padding[2];
+	UnicodeCodePoint index;
+} UnicodeCodePointInfo;
 
-Error Buffer_readAsUTF8(Buffer buf, U64 i, UTF8CodePointInfo *codepoint);
-Error Buffer_writeAsUTF8(Buffer buf, U64 i, UTF8CodePoint codepoint);
+Error Buffer_readAsUTF8(Buffer buf, U64 i, UnicodeCodePointInfo *codepoint);
+Error Buffer_writeAsUTF8(Buffer buf, U64 i, UnicodeCodePoint codepoint, U8 *bytes);
+Error Buffer_readAsUTF16(Buffer buf, U64 i, UnicodeCodePointInfo *codepoint);
+Error Buffer_writeAsUTF16(Buffer buf, U64 i, UnicodeCodePoint codepoint, U8 *bytes);
 
-Bool Buffer_isUTF8(Buffer buf, F32 threshold);		//If the threshold (%) is met, it is identified as (mostly) UTF8
+//If the threshold (%) is met, it is identified as (mostly) unicode.
+//If isUTF16 is set, it will try to find 2-byte width encoding (UTF16),
+//otherwise it uses 1-byte width (UTF8).
+//Both UTF16 and UTF8 can be variable length per codepoint.
+
+Bool Buffer_isUnicode(Buffer buf, F32 threshold, Bool isUTF8);
+Bool Buffer_isUTF8(Buffer buf, F32 threshold);
+Bool Buffer_isUTF16(Buffer buf, F32 threshold);
+
 Bool Buffer_isAscii(Buffer buf);
 
 //What hash & encryption functions are good for:

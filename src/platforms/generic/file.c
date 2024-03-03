@@ -43,7 +43,9 @@
 	#define _mkdir(a) mkdir(a, DEFFILEMODE)
 #else
 
+	#define UNICODE
 	#define WIN32_LEAN_AND_MEAN
+	#define MICROSOFT_WINDOWS_WINBASE_H_DEFINE_INTERLOCKED_CPLUSPLUS_OVERLOADS 0
 	#include <Windows.h>
 	#include <direct.h>
 	#include <fileapi.h>
@@ -52,29 +54,39 @@
 	#define S_ISREG(x) (x & _S_IFREG)
 	#define S_ISDIR(x) (x & _S_IFDIR)
 
-	#define removeFolder(ptr) (RemoveDirectoryA(ptr) ? 0 : -1)
+	I32 removeFolder(CharString str) {
+
+		ListU16 utf8 = (ListU16) { 0 };
+		
+		if (CharString_toUTF16x(str, &utf8).genericError)
+			return -1;
+
+		I32 res = RemoveDirectoryW((const wchar_t*)utf8.ptr) ? 0 : -1;
+		ListU16_freex(&utf8);
+		return res;
+	}
 
 #endif
 
 //Both Linux and Windows require folder to be empty before removing.
 //So we do it manually.
 
-int removeFileOrFolder(const C8 *ptr);
+int removeFileOrFolder(CharString str);
 
 Error recurseDelete(FileInfo info, void *unused) {
 
 	(void)unused;
 
-	if (removeFileOrFolder(info.path.ptr))
+	if (removeFileOrFolder(info.path))
 		return Error_invalidOperation(0, "recurseDelete() removeFileOrFolder failed");
 
 	return Error_none();
 }
 
-int removeFileOrFolder(const C8 *ptr) {
+int removeFileOrFolder(CharString str) {
 
 	struct stat inf = (struct stat) { 0 };
-	int r = stat(ptr, &inf);
+	int r = stat(str.ptr, &inf);
 
 	if(r)
 		return r;
@@ -84,17 +96,17 @@ int removeFileOrFolder(const C8 *ptr) {
 		//Delete every file, because RemoveDirecotryA requires it to be empty
 		//We'll handle recursion ourselves
 
-		Error err = File_foreach(CharString_createRefCStrConst(ptr), recurseDelete, NULL, false);
+		Error err = File_foreach(str, recurseDelete, NULL, false);
 
 		if(err.genericError)
 			return -1;
 
 		//Now that our folder is empty, we can finally delete it
 
-		return removeFolder(ptr);
+		return removeFolder(str);
 	}
 
-	return remove(ptr);
+	return remove(str.ptr);
 }
 
 //
@@ -389,13 +401,13 @@ Error File_remove(CharString loc, Ns maxTimeout) {
 
 	Ns maxTimeoutTry = U64_min((maxTimeout + 7) >> 2, 1 * SECOND);		//Try ~4x+ up to 1s of wait
 
-	int res = removeFileOrFolder(resolved.ptr);
+	int res = removeFileOrFolder(resolved);
 
 	while (res && maxTimeout) {
 
 		Thread_sleep(maxTimeoutTry);
 
-		res = removeFileOrFolder(resolved.ptr);
+		res = removeFileOrFolder(resolved);
 
 		if(maxTimeout <= maxTimeoutTry)
 			break;

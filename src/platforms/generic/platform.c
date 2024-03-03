@@ -420,10 +420,11 @@ Error Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *alloca
 
 clean:
 
+	CharString_freex(&appDir);
+
 	if(err.genericError)
 		Platform_cleanup();
 
-	CharString_freex(&appDir);
 	return err;
 }
 

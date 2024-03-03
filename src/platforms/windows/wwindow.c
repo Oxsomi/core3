@@ -35,6 +35,7 @@
 
 #include <stdlib.h>
 
+#define UNICODE
 #define WIN32_LEAN_AND_MEAN
 #define MICROSOFT_WINDOWS_WINBASE_H_DEFINE_INTERLOCKED_CPLUSPLUS_OVERLOADS 0
 #include <Windows.h>
@@ -102,7 +103,7 @@ clean:
 
 LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
 
-	Window *w = (Window*) GetWindowLongPtrA(hwnd, 0);
+	Window *w = (Window*) GetWindowLongPtrW(hwnd, 0);
 
 	if(!w)
 		return DefWindowProc(hwnd, message, wParam, lParam);
@@ -193,7 +194,14 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 		//Input handling
 
 		case WM_UNICHAR: {
-			
+			int dbg = 0;
+			dbg;
+			break;
+		}
+
+		case WM_CHAR: {
+			int dbg = 0;
+			dbg;
 			break;
 		}
 
@@ -509,7 +517,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 			U32 size = sizeof(deviceInfo);
 			deviceInfo.cbSize = size;
 
-			if (!GetRawInputDeviceInfoA((HANDLE)lParam, RIDI_DEVICEINFO, &deviceInfo, &size)) {
+			if (!GetRawInputDeviceInfoW((HANDLE)lParam, RIDI_DEVICEINFO, &deviceInfo, &size)) {
 
 				Error_printx(
 					Error_platformError(0, GetLastError(), "WWindow_onCallback() GetRawInputDeviceInfo failed"),
@@ -777,7 +785,7 @@ Bool WindowManager_freePhysical(Window *w) {
 
 	HINSTANCE mainModule = Platform_instance.data;
 
-	UnregisterClassA("OxC3: Oxsomi core 3", mainModule);
+	UnregisterClassW(L"OxC3: Oxsomi core 3", mainModule);
 
 	if(w->nativeHandle)
 		DestroyWindow(w->nativeHandle);
@@ -795,15 +803,18 @@ Error Window_updatePhysicalTitle(const Window *w, CharString title) {
 	if (titlel >= MAX_PATH)
 		return Error_outOfBounds(1, titlel, MAX_PATH, "Window_updatePhysicalTitle()::title must be less than 260 characters");
 
-	C8 windowName[MAX_PATH + 1];
-	Buffer_copy(Buffer_createRef(windowName, sizeof(windowName)), CharString_bufferConst(title));
+	ListU16 name = (ListU16) { 0 };
+	Error err = CharString_toUTF16x(title, &name);
 
-	windowName[titlel] = '\0';
+	if (err.genericError)
+		return err;
 
-	if(!SetWindowTextA(w->nativeHandle, windowName))
-		return Error_platformError(0, GetLastError(), "Window_updatePhysicalTitle() SetWindowText failed");
+	if(!SetWindowTextW(w->nativeHandle, (const wchar_t*) name.ptr))
+		_gotoIfError(clean, Error_platformError(0, GetLastError(), "Window_updatePhysicalTitle() SetWindowText failed"));
 
-	return Error_none();
+clean:
+	ListU16_freex(&name);
+	return err;
 }
 
 Error Window_toggleFullScreen(Window *w) {
@@ -842,7 +853,7 @@ Error Window_toggleFullScreen(Window *w) {
 		GetSystemMetrics(SM_CYSCREEN)
 	);
 
-	SetWindowLongPtrA(w->nativeHandle, GWL_STYLE, style);
+	SetWindowLongPtrW(w->nativeHandle, GWL_STYLE, style);
 
 	if(!isFullScreen)
 		newSize = w->prevSize;
@@ -909,42 +920,11 @@ cleanup:
 	return errId ? Error_platformError(errId, res, "Window_presentPhysical() failed in WinApi call") : Error_none();
 }
 
-void Window_updateExt(Window *w) {
-
-	MSG msg = (MSG) { 0 };
-
-	Bool didPaint = false;
-
-	while(PeekMessageA(&msg, w->nativeHandle, 0, 0, PM_REMOVE)) {
-
-		if (msg.message == WM_PAINT) {
-
-			if (didPaint) {
-
-				//Paint is dispatched if there's no more messages left,
-				//so after this, we need to return to the main thread so we can process other windows
-				//We do this by checking if the next message is also paint. If not, we continue
-
-				MSG msgCheck = (MSG) { 0 };
-				PeekMessageA(&msgCheck, w->nativeHandle, 0, 0, PM_NOREMOVE);
-
-				if (msgCheck.message == msg.message)
-					break;
-			}
-
-			didPaint = true;
-		}
-
-		TranslateMessage(&msg);
-		DispatchMessageA(&msg);
-	}
-}
-
 impl Error WindowManager_createWindowPhysical(Window *w) {
 
 	//Create native window
 
-	WNDCLASSEXA wc = *(const WNDCLASSEXA*) w->owner->platformData.ptr;
+	WNDCLASSEXW wc = *(const WNDCLASSEXW*) w->owner->platformData.ptr;
 	HINSTANCE mainModule = Platform_instance.data;
 
 	Error err = Error_none();
@@ -972,15 +952,13 @@ impl Error WindowManager_createWindowPhysical(Window *w) {
 		if (isFullScreen || (!I32x2_get(size, i) || I32x2_get(size, i) >= I32x2_get(maxSize, i)))
 			I32x2_set(&size, i, I32x2_get(maxSize, i));
 
-	//Our strings aren't null terminated, so ensure windows doesn't read garbage
+	//Our strings are UTF8, but windows wants UTF16
 
-	C8 windowName[MAX_PATH + 1];
-	Buffer_copy(Buffer_createRef(windowName, sizeof(windowName)), CharString_bufferConst(w->title));
+	ListU16 tmp = (ListU16) { 0 };
+	_gotoIfError(clean, CharString_toUTF16x(w->title, &tmp));
 
-	windowName[CharString_length(w->title)] = '\0';
-
-	HWND nativeWindow = CreateWindowExA(
-		WS_EX_APPWINDOW, wc.lpszClassName, windowName, style,
+	HWND nativeWindow = CreateWindowExW(
+		WS_EX_APPWINDOW, wc.lpszClassName, (const wchar_t*) tmp.ptr, style,
 		I32x2_x(position), I32x2_y(position),
 		I32x2_x(size), I32x2_y(size),
 		NULL, NULL, mainModule, NULL
@@ -1013,7 +991,7 @@ impl Error WindowManager_createWindowPhysical(Window *w) {
 
 	//Bind our window
 
-	SetWindowLongPtrA(nativeWindow, 0, (LONG_PTR) w);
+	SetWindowLongPtrW(nativeWindow, 0, (LONG_PTR) w);
 
 	if(w->hint & EWindowHint_ForceFullscreen)
 		w->flags |= EWindowFlags_IsFullscreen;
@@ -1041,5 +1019,6 @@ impl Error WindowManager_createWindowPhysical(Window *w) {
 		_gotoIfError(clean, Error_invalidState(0, "Window_physicalLoop() RegisterRawInputDevices failed"));
 
 clean:
+	ListU16_freex(&tmp);
 	return err;
 }

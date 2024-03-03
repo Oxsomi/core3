@@ -237,7 +237,7 @@ Error WindowManager_createWindow(
 	return Error_none();
 }
 
-impl void Window_updateExt(Window *w);
+impl void WindowManager_updateExt();
 
 Error WindowManager_wait(WindowManager *manager) {
 
@@ -246,7 +246,7 @@ Error WindowManager_wait(WindowManager *manager) {
 
 	while(manager->windows.length) {
 
-		//Update all windows
+		//Update all windows first
 
 		for (U64 i = manager->windows.length - 1; i != U64_MAX; --i) {
 
@@ -263,15 +263,18 @@ Error WindowManager_wait(WindowManager *manager) {
 
 			w->lastUpdate = now;
 
-			if(w->type == EWindowType_Physical)
-				Window_updateExt(w);
-
-			else if(w->callbacks.onDraw)		//Virtual
+			if(w->type != EWindowType_Physical && w->callbacks.onDraw)		//Virtual
 				w->callbacks.onDraw(w);
 
-			if (w->flags & EWindowFlags_ShouldTerminate)
+			if (w->flags & EWindowFlags_ShouldTerminate)					//Just in case the window closed now
 				WindowManager_freeWindow(manager, &w);
 		}
+
+		//Then run window manager update; this polls all events.
+
+		WindowManager_updateExt();
+
+		//Finally, we can notify manager that we're ready for draws/updates
 
 		Ns now = Time_now();
 

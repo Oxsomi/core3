@@ -315,6 +315,14 @@ Error CharString_createCopyx(CharString str, CharString *result) {
 	return CharString_createCopy(str, Platform_instance.alloc, result);
 }
 
+Error CharString_createFromUTF16x(const U16 *ptr, U64 max, CharString *result) {
+	return CharString_createFromUTF16(ptr, max, Platform_instance.alloc, result);
+}
+
+Error CharString_toUTF16x(CharString s, ListU16 *arr) {
+	return CharString_toUTF16(s, Platform_instance.alloc, arr);
+}
+
 Error CharString_createNytox(U64 v, U8 leadingZeros, CharString *result) {
 	return CharString_createNyto(v, leadingZeros, Platform_instance.alloc, result);
 }

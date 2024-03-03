@@ -27,8 +27,9 @@
 //Unfortunately before Windows 10 it doesn't support printing colors into console using printf
 //We also use Windows dependent stack tracing
 
-#define MICROSOFT_WINDOWS_WINBASE_H_DEFINE_INTERLOCKED_CPLUSPLUS_OVERLOADS 0
+#define UNICODE
 #define WIN32_LEAN_AND_MEAN
+#define MICROSOFT_WINDOWS_WINBASE_H_DEFINE_INTERLOCKED_CPLUSPLUS_OVERLOADS 0
 #include <Windows.h>
 #include <signal.h>
 #include <DbgHelp.h>
@@ -87,7 +88,6 @@ void Log_printCapturedStackTraceCustom(
 	//Obtain process
 
 	HANDLE process = GetCurrentProcess();
-	HMODULE processModule = GetModuleHandleA(NULL);
 
 	Bool hasSymbols = SymInitialize(process, NULL, TRUE);
 	Bool anySymbol = false;
@@ -106,8 +106,8 @@ void Log_printCapturedStackTraceCustom(
 
 			U64 moduleBase = SymGetModuleBase(process, addr);
 
-			C8 modulePath[MAX_PATH + 1] = { 0 };
-			if (!moduleBase || !GetModuleFileNameA((HINSTANCE)moduleBase, modulePath, MAX_PATH))
+			wchar_t modulePath[MAX_PATH + 1] = { 0 };
+			if (!moduleBase || !GetModuleFileNameW((HINSTANCE)moduleBase, modulePath, MAX_PATH))
 				continue;
 
 			anySymbol = true;
@@ -133,13 +133,9 @@ void Log_printCapturedStackTraceCustom(
 				continue;
 
 			CapturedStackTrace *capture = captured + i;
-			capture->mod = CharString_createRefAuto(modulePath, MAX_PATH);
 			capture->sym = CharString_createRefAuto(symbolName, MAX_PATH);
 
 			CharString_formatPath(&capture->sym);
-
-			if (moduleBase == (U64)processModule)
-				capture->mod = CharString_getFilePath(&capture->mod);
 
 			if(line.FileName)
 				capture->fil = CharString_createRefAutoConst(line.FileName, MAX_PATH);
@@ -148,11 +144,8 @@ void Log_printCapturedStackTraceCustom(
 
 			Error err;
 
-			if(CharString_length(capture->mod)) {
-				CharString tmp = CharString_createNull();
-				_gotoIfError(cleanup, CharString_createCopy(capture->mod, alloc, &tmp));
-				capture->mod = tmp;
-			}
+			if(modulePath[0])
+				_gotoIfError(cleanup, CharString_createFromUTF16((const U16*) modulePath, MAX_PATH, alloc, &capture->mod));
 
 			if(CharString_length(capture->sym)) {
 				CharString tmp = CharString_createNull();
@@ -275,27 +268,27 @@ void Log_log(Allocator alloc, ELogLevel lvl, ELogOptions options, CharString arg
 	if (!IsDebuggerPresent())
 		return;
 
-	CharString copy = CharString_createNull();
+	ListU16 copy = (ListU16) { 0 };
 	Bool panic = false;
 
 	if (
-		CharString_createCopy(arg, alloc, &copy).genericError ||
-		(hasNewLine && CharString_append(&copy, '\n', alloc).genericError)
+		CharString_toUTF16(arg, alloc, &copy).genericError ||
+		(hasNewLine && ListU16_pushBack(&copy, (U16) L'\n', alloc).genericError)
 	) {
 
-		OutputDebugStringA(
-			"PANIC! Log_print argument was output to debugger, but wasn't null terminated\n"
-			"This is normally okay, as long as a new string can be allocated.\n"
-			"In this case, allocation failed, which suggests corruption or out of memory."
+		OutputDebugStringW(
+			L"PANIC! Log_print argument was output to debugger, but wasn't null terminated\n"
+			L"This is normally okay, as long as a new string can be allocated.\n"
+			L"In this case, allocation failed, which suggests corruption or out of memory."
 		);
 
 		panic = true;
 	}
 
-	if(!panic)
-		OutputDebugStringA(copy.ptr);
+	if (!panic)
+		OutputDebugStringW((const wchar_t*)copy.ptr);
 
-	CharString_free(&copy, alloc);
+	ListU16_free(&copy, alloc);
 
 	if (lvl >= ELogLevel_Error)
 		DebugBreak();

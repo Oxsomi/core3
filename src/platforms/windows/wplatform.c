@@ -26,6 +26,7 @@
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/archivex.h"
 
+#define UNICODE
 #define WIN32_LEAN_AND_MEAN
 #define MICROSOFT_WINDOWS_WINBASE_H_DEFINE_INTERLOCKED_CPLUSPLUS_OVERLOADS 0
 #include <Windows.h>
@@ -40,9 +41,9 @@ CharString Error_formatPlatformError(Allocator alloc, Error err) {
 	if(!FAILED(err.paramValue0))
 		return CharString_createNull();
 
-	C8 *lpBuffer = NULL;
+	wchar_t *lpBuffer = NULL;
 
-	DWORD f = FormatMessageA(
+	DWORD f = FormatMessageW(
 
 		FORMAT_MESSAGE_ALLOCATE_BUFFER |
 		FORMAT_MESSAGE_FROM_SYSTEM,
@@ -64,7 +65,7 @@ CharString Error_formatPlatformError(Allocator alloc, Error err) {
 		return CharString_createNull();
 
 	CharString res;
-	if((err = CharString_createCopy(CharString_createRefSizedConst(lpBuffer, f, true), alloc, &res)).genericError) {
+	if((err = CharString_createFromUTF16((const U16*)lpBuffer, U64_MAX, alloc, &res)).genericError) {
 		LocalFree(lpBuffer);
 		return CharString_createNull();
 	}
@@ -80,7 +81,7 @@ WORD oldColor = 0;
 
 I32 main(I32 argc, const C8 *argv[]) {
 
-	Error err = Platform_create(argc, argv, GetModuleHandleA(NULL), NULL);
+	Error err = Platform_create(argc, argv, GetModuleHandleW(NULL), NULL);
 
 	if(err.genericError)
 		return -1;
@@ -101,23 +102,20 @@ typedef struct EnumerateFiles {
 	Bool b;
 } EnumerateFiles;
 
-BOOL enumerateFiles(HMODULE mod, LPCSTR unused, LPSTR name, EnumerateFiles *sections) {
+BOOL enumerateFiles(HMODULE mod, LPWSTR unused, LPWSTR name, EnumerateFiles *sections) {
 
 	mod; unused;
 
-	CharString str = CharString_createRefCStrConst(name);
-
-	Error err = Error_none();
-	CharString copy = CharString_createNull();
+	CharString str = CharString_createNull();
+	Error err = CharString_createFromUTF16x((const U16*)name, U64_MAX, &str);
+	_gotoIfError(clean, err);
 
 	if(CharString_countAllSensitive(str, '/') != 1)
 		Log_warnLnx("Executable contained unrecognized RCDATA. Ignoring it...");
 
 	else {
 
-		_gotoIfError(clean, CharString_createCopyx(str, &copy));
-
-		VirtualSection section = (VirtualSection) { .path = copy };
+		VirtualSection section = (VirtualSection) { .path = str };
 		_gotoIfError(clean, ListVirtualSection_pushBackx(sections->sections, section));
 	}
 
@@ -125,7 +123,7 @@ clean:
 
 	if(err.genericError) {
 		sections->b = true;			//Signal that we failed
-		CharString_freex(&copy);
+		CharString_freex(&str);
 	}
 
 	return !err.genericError;
@@ -149,17 +147,15 @@ Error Platform_initExt() {
 
 		//Init working dir
 
-		C8 buff[MAX_PATH + 1];
-		DWORD chars = GetCurrentDirectoryA(MAX_PATH + 1, buff);
+		wchar_t buff[MAX_PATH + 1];
+		DWORD chars = GetCurrentDirectoryW(MAX_PATH + 1, buff);
 
 		if(!chars)
 			_gotoIfError(clean, Error_platformError(
 				0, GetLastError(), "Platform_initExt() GetCurrentDirectory failed"
 			));
 
-		_gotoIfError(clean, CharString_createCopyx(
-			CharString_createRefSizedConst(buff, chars, true), &Platform_instance.workingDirectory
-		));
+		_gotoIfError(clean, CharString_createFromUTF16x((const U16*)buff, chars, &Platform_instance.workingDirectory));
 
 		CharString_replaceAllSensitive(&Platform_instance.workingDirectory, '\\', '/');
 
@@ -170,9 +166,9 @@ Error Platform_initExt() {
 
 	EnumerateFiles files = (EnumerateFiles) { .sections = &Platform_instance.virtualSections };
 
-	if (!EnumResourceNamesA(
+	if (!EnumResourceNamesW(
 		NULL, RT_RCDATA,
-		(ENUMRESNAMEPROCA)enumerateFiles,
+		(ENUMRESNAMEPROCW)enumerateFiles,
 		(LONG_PTR)&files
 	)) {
 
