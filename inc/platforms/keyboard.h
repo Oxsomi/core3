@@ -63,7 +63,7 @@ typedef enum EKey {
 	EKey_Numpad4,		EKey_Numpad5,		EKey_Numpad6,
 	EKey_Numpad7,		EKey_Numpad8,		EKey_Numpad9,
 
-	EKey_NumpadMul,		EKey_NumpadAdd,		EKey_NumpadDec,
+	EKey_NumpadMul,		EKey_NumpadAdd,		EKey_NumpadDot,
 	EKey_NumpadDiv,		EKey_NumpadSub,
 
 	EKey_F1,			EKey_F2,			EKey_F3,			EKey_F4,			EKey_F5,
@@ -92,4 +92,10 @@ typedef enum EKeyboardFlags {
 } EKeyboardFlags;
 
 Error Keyboard_create(Keyboard *result);
-CharString Keyboard_remap(Keyboard *keyboard, EKey key);		//Remap key to unicode codepoint
+
+//Remap key to unicode codepoint using current language. This is only for debugging keyboard mappings and GUI elements.
+//For text boxes, use the typeChar callback of Window; this handles OS-level input such as IME (Japanese) and emojis.
+//If there's no remap available it will return an empty string.
+//If the key is not a scancode (such as EKey_Home) then it will just name it "Home" for example.
+//Make sure to free this.
+impl CharString Keyboard_remap(EKey key);

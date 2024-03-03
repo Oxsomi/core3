@@ -67,7 +67,7 @@ Error Keyboard_create(Keyboard *result) {
 	_key(Numpad4);		_key(Numpad5);		_key(Numpad6);
 	_key(Numpad7);		_key(Numpad8);		_key(Numpad9);
 
-	_key(NumpadMul);	_key(NumpadAdd);	_key(NumpadDec);
+	_key(NumpadMul);	_key(NumpadAdd);	_key(NumpadDot);
 	_key(NumpadDiv);	_key(NumpadSub);
 
 	_key(F1);			_key(F2);			_key(F3);			_key(F4);			_key(F5);

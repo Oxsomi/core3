@@ -339,7 +339,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 					
 					case VK_MULTIPLY:			handle = EKey_NumpadMul;		break;
 					case VK_ADD:				handle = EKey_NumpadAdd;		break;
-					case VK_DECIMAL:			handle = EKey_NumpadDec;		break;
+					case VK_DECIMAL:			handle = EKey_NumpadDot;		break;
 					case VK_DIVIDE:				handle = EKey_NumpadDiv;		break;
 					case VK_SUBTRACT:			handle = EKey_NumpadSub;		break;
 
@@ -369,9 +369,6 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 							case 0x57:					handle = EKey_F11;			break;
 							case 0x58:					handle = EKey_F12;			break;
 
-							case 0x46:					handle = EKey_ScrollLock;	break;
-							case 0xE11D:				handle = EKey_Pause;		break;
-
 							//Row 1
 
 							case 0x29:					handle = EKey_Backtick;		break;
@@ -400,7 +397,6 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 							case 0x19:					handle = EKey_P;			break;
 							case 0x1A:					handle = EKey_LBracket;		break;
 							case 0x1B:					handle = EKey_RBracket;		break;
-							case 0x1C:					handle = EKey_Enter;		break;
 
 							//Row 3
 

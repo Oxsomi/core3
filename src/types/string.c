@@ -1479,7 +1479,7 @@ Error CharString_toUTF16(CharString s, Allocator allocator, ListU16 *arr) {
 	}
 
 	arr->ptrNonConst[j / 2] = 0;
-	arr->length = j / 2;
+	arr->length = j / 2 + 1;
 
 clean:
 

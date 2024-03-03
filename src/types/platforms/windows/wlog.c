@@ -260,7 +260,7 @@ void Log_log(Allocator alloc, ELogLevel lvl, ELogOptions options, CharString arg
 
 	if (
 		CharString_toUTF16(arg, alloc, &copy).genericError ||
-		(hasNewLine && ListU16_pushBack(&copy, (U16) L'\n', alloc).genericError)
+		(hasNewLine && ListU16_insert(&copy, copy.length - 1, (U16) L'\n', alloc).genericError)
 	) {
 
 		if(debugger)
