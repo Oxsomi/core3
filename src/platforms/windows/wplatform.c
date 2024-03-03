@@ -137,6 +137,8 @@ Error Platform_initExt() {
 	GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &info);
 	oldColor = info.wAttributes;
 
+	SetConsoleOutputCP(CP_UTF8);		//Set UTF8 codepage
+
 	SYSTEM_INFO systemInfo;
 	GetSystemInfo(&systemInfo);
 	Platform_instance.threads = systemInfo.dwNumberOfProcessors;

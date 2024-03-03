@@ -107,6 +107,7 @@ typedef void (*WindowUpdateCallback)(Window*, F64);
 typedef void (*WindowDeviceCallback)(Window*, InputDevice*);
 typedef void (*WindowDeviceButtonCallback)(Window*, InputDevice*, InputHandle, Bool);
 typedef void (*WindowDeviceAxisCallback)(Window*, InputDevice*, InputHandle, F32);
+typedef void (*WindowTypeCallback)(Window*, CharString);
 
 typedef struct WindowCallbacks {
 	WindowCallback onCreate, onDestroy, onDraw, onResize, onWindowMove, onMonitorChange, onUpdateFocus;
@@ -114,6 +115,7 @@ typedef struct WindowCallbacks {
 	WindowDeviceCallback onDeviceAdd, onDeviceRemove;
 	WindowDeviceButtonCallback onDeviceButton;
 	WindowDeviceAxisCallback onDeviceAxis;
+	WindowTypeCallback onTypeChar;
 } WindowCallbacks;
 
 //Window itself
@@ -167,6 +169,10 @@ typedef struct Window {
 	//Data initialized by onCreate such as extended window data
 
 	Buffer extendedData;
+
+	//Temporary data such as input buffer
+
+	U8 buffer[96];
 
 } Window;
 

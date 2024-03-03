@@ -193,15 +193,52 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 		//Input handling
 
-		case WM_UNICHAR: {
-			int dbg = 0;
-			dbg;
-			break;
-		}
-
 		case WM_CHAR: {
-			int dbg = 0;
-			dbg;
+
+			Buffer buf = Buffer_createRef(w->buffer, sizeof(w->buffer));
+			UnicodeCodePoint typed = 0;
+			Bool clearBuffer = true;
+
+			//Single char
+
+			if (wParam <= 0xD7FF)
+				typed = (UnicodeCodePoint) wParam;
+
+			//First char
+
+			else if (wParam < 0xDC00) {				//Cache for final char
+				((U16*)buf.ptr)[0] = (U16)wParam;
+				clearBuffer = false;
+			}
+
+			//Second char
+
+			else if(wParam < 0xE000 && buf.ptr[0]) {
+
+				((U16*)buf.ptr)[1] = (U16)wParam;
+
+				//Now it's time to translate this from UTF16
+
+				UnicodeCodePointInfo codepoint = (UnicodeCodePointInfo) { 0 };
+				if (!Buffer_readAsUTF16(buf, 0, &codepoint).genericError)
+					typed = codepoint.index;
+			}
+
+			if(typed && w->callbacks.onTypeChar) {
+
+				//Translate to UTF8
+
+				U8 bytes = 0;
+				Error err = Buffer_writeAsUTF8(buf, 0, typed, &bytes);
+				((C8*)buf.ptr)[bytes] = '\0';
+
+				if(!err.genericError)
+					w->callbacks.onTypeChar(w, CharString_createRefSizedConst((const C8*)buf.ptr, bytes, true));
+			}
+
+			if(clearBuffer)
+				((C8*)buf.ptr)[0] = '\0';		//Clear buffer
+
 			break;
 		}
 

@@ -818,7 +818,7 @@ Error Buffer_readAsUTF16(Buffer buf, U64 i, UnicodeCodePointInfo *codepoint) {
 	if(v1 < 0xDC00 || (v1 - 0xDC00) >= (1 << 10))
 		return Error_invalidParameter(0, 2, "Buffer_readAsUTF16()::buf[i + 1] had invalid encoding");
 
-	*codepoint = (UnicodeCodePointInfo) { .chars = 2, .bytes = 4, .index = ((v0 - 0xD8000) << 10) | (v1 - 0xDC00) | 0x10000 };
+	*codepoint = (UnicodeCodePointInfo) { .chars = 2, .bytes = 4, .index = ((v0 - 0xD800) << 10) | (v1 - 0xDC00) | 0x10000 };
 	return Error_none();
 }
 
