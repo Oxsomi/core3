@@ -253,20 +253,7 @@ void Log_log(Allocator alloc, ELogLevel lvl, ELogOptions options, CharString arg
 	if (hasPrepend)
 		printf("]: ");
 
-	//Print to console and debug window
-
-	const C8 *newLine = hasNewLine ? "\n" : "";
-
-	printf(
-		"%.*s%s",
-		(int)CharString_length(arg), arg.ptr,
-		newLine
-	);
-
-	//Debug utils such as output to VS
-
-	if (!IsDebuggerPresent())
-		return;
+	Bool debugger = IsDebuggerPresent();
 
 	ListU16 copy = (ListU16) { 0 };
 	Bool panic = false;
@@ -276,20 +263,26 @@ void Log_log(Allocator alloc, ELogLevel lvl, ELogOptions options, CharString arg
 		(hasNewLine && ListU16_pushBack(&copy, (U16) L'\n', alloc).genericError)
 	) {
 
-		OutputDebugStringW(
-			L"PANIC! Log_print argument was output to debugger, but wasn't null terminated\n"
-			L"This is normally okay, as long as a new string can be allocated.\n"
-			L"In this case, allocation failed, which suggests corruption or out of memory."
-		);
+		if(debugger)
+			OutputDebugStringW(
+				L"PANIC! Log_print argument was output to debugger, but wasn't null terminated\n"
+				L"This is normally okay, as long as a new string can be allocated.\n"
+				L"In this case, allocation failed, which suggests corruption or out of memory."
+			);
 
 		panic = true;
 	}
 
-	if (!panic)
-		OutputDebugStringW((const wchar_t*)copy.ptr);
+	if (!panic) {
+
+		if(debugger)
+			OutputDebugStringW((const wchar_t*)copy.ptr);
+
+		WriteConsoleW(GetStdHandle(STD_OUTPUT_HANDLE), copy.ptr, (int)copy.length, NULL, NULL);
+	}
 
 	ListU16_free(&copy, alloc);
 
-	if (lvl >= ELogLevel_Error)
+	if (debugger && lvl >= ELogLevel_Error)
 		DebugBreak();
 }

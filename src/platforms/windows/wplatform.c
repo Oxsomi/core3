@@ -133,8 +133,6 @@ Error Platform_initExt() {
 
 	Error err = Error_none();
 
-	SetConsoleCP(CP_UTF8);
-
 	CONSOLE_SCREEN_BUFFER_INFO info;
 	GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &info);
 	oldColor = info.wAttributes;
@@ -144,7 +142,7 @@ Error Platform_initExt() {
 	Platform_instance.threads = systemInfo.dwNumberOfProcessors;
 
 	if(Platform_useWorkingDirectory) {
-
+	
 		CharString_freex(&Platform_instance.workingDirectory);
 
 		//Init working dir
