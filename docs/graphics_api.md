@@ -241,7 +241,7 @@ _gotoIfError(clean, GraphicsDeviceRef_create(
         DeviceBufferRef **ref
     );
   ```
-  
+
 - ```c
   Error createSampler(SamplerInfo info, CharString name, SamplerRef **ref));
   ```
@@ -924,7 +924,7 @@ Raytracing has two modes:
 
 In both of these modes, EGraphicsFeatures_Raytracing will be set and that means that BLASes/TLASes can be created.
 
-#### DeviceData 
+#### DeviceData
 
 Device data is a subarea of a buffer; it contains the reference to the buffer resource, an offset and length (U64s).
 
@@ -940,14 +940,14 @@ Contains the following properties:
 - parent: the acceleration structure that was used as a base (for example: compaction or refitting).
 - scratchBuffer: temporary data that is only available until the AS has been created and the frame has been completed on the CPU.
 - asBuffer: the buffer resource that represents this acceleration structure.
-- flags: 
+- flags:
   - AllowUpdate (0): refitting is allowed. This is a faster way of updating acceleration structures, but at the cost of traversal time.
   - AllowCompaction (1): compaction is allowed. This reduces memory overhead for the acceleration structures.
   - FastTrace (2): optimize trace times over build times / memory.
   - FastBuild (3): optimize build times over trace times / memory.
   - MinimizeMemory (4): optimize memory over trace times / build times.
   - IsUpdate (5): this RTAS build is a refit (reuses old data to expand the ASes).
-  - DisableAutomaticUpdate (6): next submitCommands shouldn't build this acceleration structure. This is useful when the mesh has to be initialized by the GPU using commands first (such as copies, compute or stream out). 
+  - DisableAutomaticUpdate (6): next submitCommands shouldn't build this acceleration structure. This is useful when the mesh has to be initialized by the GPU using commands first (such as copies, compute or stream out).
 
 #### BLAS
 
@@ -964,17 +964,17 @@ The latter can only be used through intersection shaders, while the former has w
 
 ```c
 _gotoIfError(clean, GraphicsDeviceRef_createBLASExt(
-	twm->device, 
+	twm->device,
 	ERTASBuildFlags_DefaultBLAS,			//Fast trace & allow compaction
 	EBLASFlag_DisableAnyHit,				//No transparency needed, optimize for opaque
 	ETextureFormatId_RG16f, 0,				//No pos attrib offset and format is RG16f
 	ETextureFormatId_R16u,					//Indices are 16-bit
 	(U16) sizeof(vertexPos[0]),				//Stride is F16[2]
-	(DeviceData) { 
+	(DeviceData) {
         .buffer = twm->vertexBuffers[0]		//Entire buffer is accessible
-    },		
-	(DeviceData) { 
-        .buffer = twm->indexBuffer, 
+    },
+	(DeviceData) {
+        .buffer = twm->indexBuffer,
         .len = sizeof(U16) * 6 				//Only use sub region
    	},
 	NULL,									//No refit
@@ -1006,8 +1006,8 @@ F32 aabbBuffer[] = {
 Buffer aabbData = Buffer_createRefConst(aabbBuffer, sizeof(aabbBuffer));
 name = CharString_createRefCStrConst("AABB buffer");
 _gotoIfError(clean, GraphicsDeviceRef_createBufferData(
-	twm->device, 
-    EDeviceBufferUsage_ASReadExt, EGraphicsResourceFlag_None, 
+	twm->device,
+    EDeviceBufferUsage_ASReadExt, EGraphicsResourceFlag_None,
     name, &aabbData, &twm->aabbs
 ));
 

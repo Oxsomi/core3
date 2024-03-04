@@ -57,7 +57,7 @@
 	I32 removeFolder(CharString str) {
 
 		ListU16 utf8 = (ListU16) { 0 };
-		
+
 		if (CharString_toUTF16x(str, &utf8).genericError)
 			return -1;
 

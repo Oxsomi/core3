@@ -29,6 +29,7 @@
 #include "graphics/generic/tlas.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/log.h"
+#include "platforms/ext/ref_ptrx.h"
 #include "types/time.h"
 #include "types/type_cast.h"
 #include "formats/texture.h"

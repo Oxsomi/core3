@@ -21,6 +21,7 @@
 #include "platforms/ext/listx.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/ext/bufferx.h"
+#include "platforms/ext/ref_ptrx.h"
 #include "graphics/generic/blas.h"
 #include "graphics/generic/device_buffer.h"
 #include "types/buffer.h"
@@ -190,7 +191,7 @@ Error GraphicsDeviceRef_createBLAS(GraphicsDeviceRef *dev, BLAS blas, CharString
 					return Error_unsupportedOperation(
 						1, "GraphicsDeviceRef_createBLAS()::indexBuffer should be NULL if indexFormat is Undefined"
 					);
-		
+
 				break;
 
 			case ETextureFormatId_R16u:

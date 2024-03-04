@@ -701,7 +701,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 		);
 
 		getDeviceFeatures(
-			true, VkPhysicalDeviceBufferDeviceAddressFeaturesKHR, deviceAddress, 
+			true, VkPhysicalDeviceBufferDeviceAddressFeaturesKHR, deviceAddress,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES_KHR
 		);
 
@@ -988,8 +988,8 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 		//Multi view
 
 		if(
-			optExtensions[EOptExtensions_Multiview] && 
-			multiViewFeat.multiview && 
+			optExtensions[EOptExtensions_Multiview] &&
+			multiViewFeat.multiview &&
 			multiViewProp.maxMultiviewViewCount >= 6 && multiViewProp.maxMultiviewInstanceIndex >= 134217727
 		)
 			capabilities.features |= EGraphicsFeatures_Multiview;
@@ -997,9 +997,9 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 		//Multi view
 
 		if(
-			optExtensions[EOptExtensions_VariableRateShading] && 
-			vrsFeat.pipelineFragmentShadingRate && 
-			vrsFeat.attachmentFragmentShadingRate && 
+			optExtensions[EOptExtensions_VariableRateShading] &&
+			vrsFeat.pipelineFragmentShadingRate &&
+			vrsFeat.attachmentFragmentShadingRate &&
 			vrsProp.maxFragmentSize.width >= 2 && vrsProp.maxFragmentSize.height >= 2 &&
 			vrsProp.maxFragmentShadingRateCoverageSamples >= 16 &&
 			vrsProp.maxFragmentShadingRateRasterizationSamples >= 4 &&

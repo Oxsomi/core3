@@ -144,7 +144,7 @@ Error Platform_initExt() {
 	Platform_instance.threads = systemInfo.dwNumberOfProcessors;
 
 	if(Platform_useWorkingDirectory) {
-	
+
 		CharString_freex(&Platform_instance.workingDirectory);
 
 		//Init working dir
@@ -207,7 +207,7 @@ CharString Keyboard_remap(EKey key) {
 		case EKey_Left:			vkey = VK_LEFT;					break;
 		case EKey_Down:			vkey = VK_DOWN;					break;
 		case EKey_Right:		vkey = VK_RIGHT;				break;
-					
+
 		case EKey_Select:		vkey = VK_SELECT;				break;
 		case EKey_Print:		vkey = VK_PRINT;				break;
 		case EKey_Execute:		vkey = VK_EXECUTE;				break;
@@ -229,7 +229,7 @@ CharString Keyboard_remap(EKey key) {
 		case EKey_Enter:		vkey = VK_RETURN;				break;
 		case EKey_Help:			vkey = VK_HELP;					break;
 		case EKey_Apps:			vkey = VK_APPS;					break;
-					
+
 		case EKey_NumpadMul:	vkey = VK_MULTIPLY;				break;
 		case EKey_NumpadAdd:	vkey = VK_ADD;					break;
 		case EKey_NumpadDot:	vkey = VK_DECIMAL;				break;

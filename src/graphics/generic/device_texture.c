@@ -23,6 +23,7 @@
 #include "graphics/generic/device_texture.h"
 #include "graphics/generic/pipeline_structs.h"
 #include "platforms/ext/bufferx.h"
+#include "platforms/ext/ref_ptrx.h"
 #include "formats/texture.h"
 #include "types/string.h"
 

@@ -21,6 +21,7 @@
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/device_buffer.h"
 #include "platforms/ext/bufferx.h"
+#include "platforms/ext/ref_ptrx.h"
 #include "types/string.h"
 
 TListImpl(DevicePendingRange);
@@ -227,7 +228,7 @@ Error GraphicsDeviceRef_createBufferIntern(
 		_gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_createBufferIntern() invalid AS usage/flags"));
 
 	if(
-		(usage & (EDeviceBufferUsage_ASExt | EDeviceBufferUsage_ScratchExt | EDeviceBufferUsage_ASReadExt)) && 
+		(usage & (EDeviceBufferUsage_ASExt | EDeviceBufferUsage_ScratchExt | EDeviceBufferUsage_ASReadExt)) &&
 		!(device->info.capabilities.features & EGraphicsFeatures_Raytracing)
 	)
 		_gotoIfError(clean, Error_invalidState(

@@ -189,7 +189,7 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 	//Allocate scratch and final buffer
 
 	_gotoIfError(clean, GraphicsDeviceRef_createBuffer(
-		deviceRef, 
+		deviceRef,
 		EDeviceBufferUsage_ASExt,
 		EGraphicsResourceFlag_None,
 		blas->name,
@@ -199,7 +199,7 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 
 	_gotoIfError(clean, CharString_formatx(&tmp, "%.*s scratch buffer", CharString_length(blas->name), blas->name.ptr));
 	_gotoIfError(clean, GraphicsDeviceRef_createBuffer(
-		deviceRef, 
+		deviceRef,
 		EDeviceBufferUsage_ScratchExt,
 		EGraphicsResourceFlag_None,
 		tmp,

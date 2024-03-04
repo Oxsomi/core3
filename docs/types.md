@@ -13,7 +13,7 @@ OxC3 types contains a lot of very basic types; it's the STL of OxC3. All these t
   - *types/types.h* defines these, while _ARCH is a compile define.
   - **ARCH_NONE**: Unknown architecture; likely abstracted away from assembly level.
   - **ARCH_X64**: X86_64 architecture.
-  - **ARCH_ARM**.
+  - (**unsupported**): ARCH_ARM.
 - **_PLATFORM_TYPE** is what kind of platform is running
   - *types/platform_types.h* defines these, while _PLATFORM_TYPE is a compile define.
   - **PLATFORM_WINDOWS**.
@@ -421,3 +421,111 @@ Has the following functionality:
   - Parsing and formatting to and from local formats are unsupported. ISO 8601 (with a Z as the timezone rather than an offset) is currently the only allowed format.
 
 ## TODO: Transform (types/transform.h)
+
+## TODO: Thread
+
+## Atomic / AtomicI64
+
+AtomicI64 is a 64-bit int that can be accessed simultaneously from different threads. 
+
+- Returns previous result before applying the operation:
+  - I64 **AtomicI64_xor**(AtomicI64 *ptr, I64 value): Bitwise XOR (^).
+  - I64 **AtomicI64_and**(AtomicI64 *ptr, I64 value): Bitwise AND (&).
+  - I64 **AtomicI64_or**(AtomicI64 *ptr, I64 value): Bitwise OR (|).
+  - I64 **AtomicI64_load**(AtomicI64 *ptr): Read atomic value (Be careful: Atomic might be changed right after loading this if other atomics are used on it).
+  - I64 **AtomicI64_store**(AtomicI64 *ptr, I64 value): Store value in atomic.
+  - I64 **AtomicI64_cmpStore**(AtomicI64 *ptr, I64 compare, I64 value): Store value in atomic if it's equal to compare. Always returns previous value.
+  - I64 **AtomicI64_add**(AtomicI64 *ptr, I64 value): Add value to atomic.
+  - I64 **AtomicI64_sub**(AtomicI64 *ptr, I64 value): Subtract value from atomic.
+- Return current result after applying the operation:
+  - I64 **AtomicI64_dec**(AtomicI64 *ptr): Decreasing the atomic by 1.
+  - I64 **AtomicI64_inc**(AtomicI64 *ptr): Increasing the atomic by 1.
+
+## Lock
+
+Lock is a system of safely handling standard data types such as Lists/Maps from multiple threads. Before reading the lock has to be acquired, and after the lock has to be released. A Lock is essentially just an atomic that uses the thread id to acquire it.
+
+```c
+//Global scope (pseudocode)
+Lock testLock = Lock_create();
+ListU8 myList = (ListU8) { 0 };
+
+//Threading function
+Error myThread(U8 i) {
+    
+    //Acquire lock; can return:
+    //Invalid (Lock uninitialized), 
+    //TimedOut (Time limit exceeded), 
+    //Acquired (This thread now owns the lock)
+    //AlreadyLocked (Thread already owns lock, safe to continue)
+    ELockAcquire acq = Lock_lock(&testLock, 1 * SECOND);
+    
+    //Catch Invalid and TimedOut
+    if(acq < ELockAcquire_Success)
+        return Error_timedOut(0, "myThread() lock couldn't be acquired in 1s");
+    
+    //Now we can safely append to the list
+    Error err = Error_none();
+    _gotoIfError(clean, ListU8_pushBackx(&myList, i));
+    
+    //Always use _gotoIfError / clean label syntax to avoid leaking the lock.
+clean:
+    
+    //Only acquired locks should be unlocked. 
+    //It's possible the calling function already acquired it.
+    if(acq == ELockAcquire_Acquired)
+   		Lock_unlock(&testLock);
+        
+    return err;
+}
+```
+
+Make sure to use locks sparingly since they are atomic operations.
+
+## Log
+
+The Log functions should be used to properly handle cross platform. This will forward to the debug log / console on Windows but will forward to system messages (logcat) on Android. The respective error levels should be used for their purposes (not just for their color), since the underlying platform is allowed to determine to treat them more severe (e.g. extra logging).
+
+The following enums exist to allow logging:
+
+- ELogLevel: Debug, Performance, Warn, Error. Each log level generally has a different output color and severity.
+- ELogOptions: Timestamp, NewLine, Thread. If the underlying system doesn't already log timestamp/thread, these options will add it. NewLine will always append a new line after the message.
+
+The following utility function exists:
+
+- void **Log_captureStackTrace**(Allocator alloc, void **stackTrace, U64 stackSize, U8 skip): Capture a `void*[stackSize]`  where each `void*` represents an address in the stack. 'skip' indicates how many previous stacks to skip; this might be because it's called in a helper function where it wants to point higher up in the stack. 
+
+The following functions print an output to the console (or whatever is relevant on the platform).
+
+- void **Log_printCapturedStackTraceCustom**(Allocator, const void **stackTrace, U64 stackSize, ELogLevel lvl, ELogOptions options). Prints a previously captured `void*[stackSize]` stackTrack with the specified options and severity.
+- void **Log_printCapturedStackTrace**(Allocator alloc, const StackTrace stackTrace, ELogLevel lvl, ELogOptions options): Similar to Log_printCapturedStackTraceCustom except the stackTrace always has a max length of _STACKTRACE_SIZE (32).
+- void **Log_log**(Allocator alloc, ELogLevel lvl, ELogOptions options, CharString arg): Log the string.
+
+For ease of use, these printf-like functions have been added. They use the same printf format under the hood. **This means, you should never pass user content into these functions! To avoid undefined behavior / exploits. For user content, use Log_log or use "%.*s" with (int) CharString_length(myStr); myStr.ptr**.
+
+- void **Log_debug/Log_performance/Log_warn/Log_error**(Allocator alloc, ELogOptions options, ...): Log in printf like fashion. Example: Log_debug(alloc, ELogOptions_Default, "Hello world %"PRIu64"\n", (U64)1 << 48).
+- void **Log_debugLn/Log_performanceLn/Log_warnLn/Log_errorLn**(Allocator alloc, ...): Log in printf fashion; always with ELogOptions_NewLine. Log_debugLn(alloc, "Hello world %"PRIu64, (U64)1 << 48).
+
+## RefPtr
+
+A RefPtr is essentially just an object that has type information, a ref counter and the object it represents directly allocated after it.
+
+A RefPtr contains the following properties:
+
+- refCount: AtomicI64. When it reaches 0 it will destroy the data allocated for the RefPtr as well as calling the free function. To avoid this, increase the RefPtr using RefPtr_inc before "copying" it (e.g. adding a reference in a different library or to keep it alive). When done using it, make sure to use RefPtr_dec.
+- typeId: ETypeId. Can be any type defined by any library. The library has to follow the standard as specified in the type_id.h documentation.
+- length: U32. Defines how long the object is in memory. If the object is bigger than this, it should dynamically allocate through the free and alloc functions. 
+- alloc: Allocator. Defines how the memory is freed/allocated.
+- free: ObjectFreeFunc; called before freeing the memory.
+
+The following helper functions exist for a RefPtr:
+
+- Bool **RefPtr_inc**(RefPtr *ptr): Increases the RefPtr, so it can be kept alive by another object or system.
+- Bool **RefPtr_dec**(RefPtr **ptr): Decreases the RefPtr and sets the `RefPtr*` passed to NULL to avoid duplicate decrements. This might free the object if it's the last reference.
+- **RefPtr_data**(dat, T): Get the data from the RefPtr. It assumes you already checked the typeId for the right code. It simply just changes the pointer to directly after the RefPtr.
+
+The RefPtr can be created through the following functions:
+
+- Error **RefPtr_create**(U32 objectLength, Allocator alloc, ObjectFreeFunc free, ETypeId type, RefPtr **result): Create the RefPtr with a struct of objectLength allocated after it. The free function will be called after it's done. 'result' needs to be NULL to ensure that no object is leaked. ETypeId and objectLength should match what the library wants the object to represent.
+
+A WeakRefPtr is just a normal RefPtr, except it indicates to the user that it shouldn't be increased/decreased when using it. Care should be taken to get rid of the WeakRefPtr itself to ensure it doesn't dangle (without using dec or inc on it; just by NULLing the pointer itself).

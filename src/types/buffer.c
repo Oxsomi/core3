@@ -692,8 +692,8 @@ Error Buffer_readAsUTF8(Buffer buf, U64 i, UnicodeCodePointInfo *codepoint) {
 
 	if (v0 < 0xF0) {
 
-		*codepoint = (UnicodeCodePointInfo) { 
-			.chars = 3, .bytes = 3, .index = (((U32)v0 & 0xF) << 12) | (((U32)v1 & 0x3F) << 6) | (v2 & 0x3F) 
+		*codepoint = (UnicodeCodePointInfo) {
+			.chars = 3, .bytes = 3, .index = (((U32)v0 & 0xF) << 12) | (((U32)v1 & 0x3F) << 6) | (v2 & 0x3F)
 		};
 
 		return Error_none();
@@ -870,7 +870,7 @@ Bool Buffer_isUnicode(Buffer buf, F32 threshold, Bool isUTF16) {
 		UnicodeCodePointInfo info = (UnicodeCodePointInfo) { 0 };
 
 		if(
-			(!isUTF16 && (Buffer_readAsUTF8(buf, i, &info)).genericError) || 
+			(!isUTF16 && (Buffer_readAsUTF8(buf, i, &info)).genericError) ||
 			(isUTF16 && (Buffer_readAsUTF16(buf, i, &info)).genericError)
 		) {
 			counter += invLen;

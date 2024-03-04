@@ -21,6 +21,7 @@
 #include "graphics/generic/render_texture.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/pipeline_structs.h"
+#include "platforms/ext/ref_ptrx.h"
 #include "formats/texture.h"
 #include "types/error.h"
 #include "types/string.h"

@@ -19,40 +19,6 @@
 */
 
 #pragma once
-#include "types/types.h"
-#include "types/allocator.h"
-#include "types/list.h"
-#include "types/type_id.h"
-#include "types/atomic.h"
+#include "types/ref_ptr.h"
 
-typedef Bool (*ObjectFreeFunc)(void *ptr, Allocator allocator);
-
-typedef enum ETypeId ETypeId;
-
-typedef struct RefPtr {
-
-	AtomicI64 refCount;
-
-	ETypeId typeId;
-	U32 length;
-
-	Allocator alloc;
-
-	ObjectFreeFunc free;
-
-} RefPtr;
-
-TListNamed(RefPtr*, ListRefPtr);
-
-Error RefPtr_create(U32 objectLength, Allocator alloc, ObjectFreeFunc free, ETypeId type, RefPtr **result);
-
-Bool RefPtr_inc(RefPtr *ptr);
-Bool RefPtr_dec(RefPtr **ptr);	//Clears pointer if it's gone
-
-#define RefPtr_data(dat, T) (!dat ? NULL : (T*)(dat + 1))
-
-//Signifies that the RefPtr will not need inc/dec, because the owner will manually ensure
-//that the ref is removed before it's important.
-typedef RefPtr WeakRefPtr;
-
-TListNamed(WeakRefPtr*, ListWeakRefPtr);
+Error RefPtr_createx(U32 objectLength, ObjectFreeFunc free, ETypeId type, RefPtr **result);

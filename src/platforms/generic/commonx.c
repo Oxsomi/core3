@@ -24,6 +24,7 @@
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/formatx.h"
 #include "platforms/ext/threadx.h"
+#include "platforms/ext/ref_ptrx.h"
 #include "formats/bmp.h"
 #include "formats/dds.h"
 #include "formats/oiCA.h"
@@ -56,6 +57,9 @@ TListXImpl(AllocationBufferBlock);
 
 TListXImpl(SubResourceData);
 
+TListXBaseImpl(ListRefPtr);
+TListXBaseImpl(ListWeakRefPtr);
+
 //Contains small helper functions that don't require their own .c file
 
 //BMP
@@ -66,6 +70,12 @@ Error BMP_writex(Buffer buf, BMPInfo info, Buffer *result) {
 
 Error BMP_readx(Buffer buf, BMPInfo *info, Buffer *result) {
 	return BMP_read(buf, info, Platform_instance.alloc, result);
+}
+
+//RefPtr
+
+Error RefPtr_createx(U32 objectLength, ObjectFreeFunc free, ETypeId type, RefPtr **result) {
+	return RefPtr_create(objectLength, Platform_instance.alloc, free, type, result);
 }
 
 //DDS

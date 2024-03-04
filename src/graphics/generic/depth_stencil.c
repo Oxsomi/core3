@@ -20,6 +20,7 @@
 
 #include "graphics/generic/depth_stencil.h"
 #include "graphics/generic/device.h"
+#include "platforms/ext/ref_ptrx.h"
 #include "formats/texture.h"
 #include "types/error.h"
 #include "types/string.h"

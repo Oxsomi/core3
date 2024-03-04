@@ -194,7 +194,7 @@ target_link_libraries(OxC3_formats PUBLIC OxC3_types)
 
 message("-- Targeting platform: ${platform}")
 
-file(GLOB platformsHeaders "inc/platforms/*.h")
+file(GLOB platformsHeaders "inc/platforms/*.h" "inc/platforms/ext/*.h")
 
 file(GLOB_RECURSE platformsPlatformSources "src/platforms/${platform}/*.c")
 file(GLOB_RECURSE platformsSources "src/platforms/generic/*.c")

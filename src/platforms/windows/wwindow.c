@@ -281,12 +281,12 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 				//It's a shame we have to get the state, but we can't rely on our program to know the exact state
 				//Because locks can be toggled from a different program
 
-				U32 flags = 
-					((GetKeyState(VK_CAPITAL) & 1) << EKeyboardFlags_Caps) | 
-					((GetKeyState(VK_NUMLOCK) & 1) << EKeyboardFlags_NumLock) | 
-					((GetKeyState(VK_SCROLL) & 1) << EKeyboardFlags_ScrollLock) | 
-					((GetKeyState(VK_SHIFT) & 1) << EKeyboardFlags_Shift) | 
-					((GetKeyState(VK_CONTROL) & 1) << EKeyboardFlags_Control) | 
+				U32 flags =
+					((GetKeyState(VK_CAPITAL) & 1) << EKeyboardFlags_Caps) |
+					((GetKeyState(VK_NUMLOCK) & 1) << EKeyboardFlags_NumLock) |
+					((GetKeyState(VK_SCROLL) & 1) << EKeyboardFlags_ScrollLock) |
+					((GetKeyState(VK_SHIFT) & 1) << EKeyboardFlags_Shift) |
+					((GetKeyState(VK_CONTROL) & 1) << EKeyboardFlags_Control) |
 					((GetKeyState(VK_MENU) & 1) << EKeyboardFlags_Alt);
 
 				dev->flags = flags;
@@ -314,7 +314,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 					case VK_LEFT:				handle = EKey_Left;				break;
 					case VK_DOWN:				handle = EKey_Down;				break;
 					case VK_RIGHT:				handle = EKey_Right;			break;
-					
+
 					case VK_SELECT:				handle = EKey_Select;			break;
 					case VK_PRINT:				handle = EKey_Print;			break;
 					case VK_EXECUTE:			handle = EKey_Execute;			break;
@@ -336,7 +336,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 					case VK_RETURN:				handle = EKey_Enter;			break;
 					case VK_HELP:				handle = EKey_Help;				break;
 					case VK_APPS:				handle = EKey_Apps;				break;
-					
+
 					case VK_MULTIPLY:			handle = EKey_NumpadMul;		break;
 					case VK_ADD:				handle = EKey_NumpadAdd;		break;
 					case VK_DECIMAL:			handle = EKey_NumpadDot;		break;
@@ -349,7 +349,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 							handle = EKey_Numpad0 + (keyboardDat.VKey - VK_NUMPAD0);
 							break;
 						}
-					
+
 						switch (keyboardDat.MakeCode) {
 
 							//Row 0
