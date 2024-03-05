@@ -96,6 +96,5 @@ Error Keyboard_create(Keyboard *result);
 //Remap key to unicode codepoint using current language. This is only for debugging keyboard mappings and GUI elements.
 //For text boxes, use the typeChar callback of Window; this handles OS-level input such as IME (Japanese) and emojis.
 //If there's no remap available it will return an empty string.
-//If the key is not a scancode (such as EKey_Home) then it will just name it "Home" for example.
 //Make sure to free this.
 impl CharString Keyboard_remap(EKey key);

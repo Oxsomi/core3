@@ -422,7 +422,21 @@ Has the following functionality:
 
 ## TODO: Transform (types/transform.h)
 
-## TODO: Thread
+## Thread
+
+A thread can be accessed through the following functions:
+
+- U64 **Thread_getId**(): Gets the handle of the current calling thread.
+- Bool **Thread_sleep**(Ns ns): Sleeps for roughly x nanoseconds. Sometimes this unit isn't fully accurate, as it requires the minimal unit of 100ns, though it will round up to the next timepoint.
+- Error **Thread_wait**(Thread *thread): Waits for the created thread from the current thread.
+- Error **Thread_waitAndCleanup**(Allocator alloc, Thread **thread): Waits until the thread is done and then calls Thread_free on it.
+
+A thread can be created/destroyed through the following functions:
+
+- Error **Thread_create**(Allocator alloc, ThreadCallbackFunction callback, void *objectHandle, Thread **thread): Where ThreadCallbackFunction is a (void) function that takes a `void*` and the objectHandle is what is passed to that function.
+- Bool **Thread_free**(Allocator alloc, Thread **thread): Free the thread and NULL the `Thread*`.
+
+Make sure to avoid thread creation and try to use something similar to a job system. Not every thread might be created equally; some might be efficiency cores while others may be performance cores. Be sure that the thread scheduling isn't dependent on each thread to be equal in performance.
 
 ## Atomic / AtomicI64
 
