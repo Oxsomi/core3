@@ -20,6 +20,7 @@
 
 #pragma once
 #include "acceleration_structure.h"
+#include "device_buffer.h"
 #include "types/quat.h"
 
 typedef RefPtr BLASRef;
@@ -27,14 +28,14 @@ typedef RefPtr BLASRef;
 typedef enum ETLASInstanceFlag {
 	ETLASInstanceFlag_DisableCulling			= 1 << 0,		//Culling is force disabled for the BLAS
 	ETLASInstanceFlag_CCW						= 1 << 1,		//Reverse winding order for the BLAS
-	ETLASInstanceFlag_ForceEnableAnyHit			= 1 << 2,		//Force anyHit on for the BLAS
-	ETLASInstanceFlag_ForceDisableAnyHit		= 1 << 3,		//Force anyHit off for the BLAS
+	ETLASInstanceFlag_ForceDisableAnyHit		= 1 << 2,		//Force anyHit off for the BLAS
+	ETLASInstanceFlag_ForceEnableAnyHit			= 1 << 3,		//Force anyHit on for the BLAS
 	ETLASInstanceFlag_Count						= 4,
 	ETLASInstanceFlag_Default					= ETLASInstanceFlag_DisableCulling | ETLASInstanceFlag_ForceDisableAnyHit
 } ETLASInstanceFlag;
 
 typedef enum ETLASConstructionType {
-	ETLASConstructionType_Instances,	//cpuInstancesMotion or cpuInstancesStatic contains valid data
+	ETLASConstructionType_Instances,	//deviceData, cpuInstancesMotion or cpuInstancesStatic contains valid data
 	ETLASConstructionType_Serialized,	//cpuData contains serialized data from a previously created AS
 	ETLASConstructionType_Count
 } ETLASConstructionType;
@@ -56,7 +57,8 @@ typedef struct TLASInstanceData {
 typedef enum ETLASInstanceType {
 	ETLASInstanceType_Static,			//TLASInstanceStatic
 	ETLASInstanceType_Matrix,			//TLASInstanceMatrix
-	ETLASInstanceType_SRT				//TLASInstanceSRT
+	ETLASInstanceType_SRT,				//TLASInstanceSRT
+	ETLASInstanceType_Count
 } ETLASInstanceType;
 
 //These are the different type of TLASInstances;
@@ -126,6 +128,8 @@ typedef struct TLASInstanceMotion {
 
 } TLASInstanceMotion;
 
+TLASInstanceData TLASInstanceMotion_getData(TLASInstanceMotion mot);
+
 TList(TLASInstanceMotion);
 TList(TLASInstanceStatic);
 
@@ -136,19 +140,24 @@ typedef struct TLAS {
 
 	RTAS base;
 
+	Bool useDeviceMemory;
+	U8 padding[3];
+
+	U32 handle;
+
 	union {
 
-		//If ERTASBuildFlags_UseDeviceMemory
+		//If useDeviceMemory
 		//TLASInstanceMotion[] (isMotionBlurExt) or TLASInstanceStatic[] (!isMotionBlurExt)
 		DeviceData deviceData;
 
-		//If !ERTASBuildFlags_UseDeviceMemory && isMotionBlurExt
+		//If !useDeviceMemory && isMotionBlurExt
 		ListTLASInstanceMotion cpuInstancesMotion;
 
-		//If !ERTASBuildFlags_UseDeviceMemory && !isMotionBlurExt
+		//If !useDeviceMemory && !isMotionBlurExt
 		ListTLASInstanceStatic cpuInstancesStatic;
 
-		//If !ERTASBuildFlags_UseDeviceMemory && ETLASConstructionType_Serialized
+		//If ETLASConstructionType_Serialized
 		Buffer cpuData;
 	};
 
@@ -161,6 +170,8 @@ typedef RefPtr TLASRef;
 
 Error TLASRef_dec(TLASRef **tlas);
 Error TLASRef_inc(TLASRef *tlas);
+
+Bool TLAS_getInstanceDataCpu(const TLAS *tlas, U64 i, TLASInstanceData *result);
 
 //Creating TLASes;
 //The changes are queued until the graphics device submits the next commands.
@@ -194,4 +205,4 @@ Error GraphicsDeviceRef_createTLASDeviceExt(
 	TLASRef **tlas
 );
 
-Error GraphicsDeviceRef_createTLASFromCacheExt(GraphicsDeviceRef *dev, Buffer cache, CharString name, TLASRef **tlas);
+//Error GraphicsDeviceRef_createTLASFromCacheExt(GraphicsDeviceRef *dev, Buffer cache, CharString name, TLASRef **tlas);

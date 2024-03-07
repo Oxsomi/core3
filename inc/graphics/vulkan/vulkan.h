@@ -20,6 +20,7 @@
 
 #pragma once
 #include "types/list.h"
+#include "graphics/generic/device_buffer.h"
 #define VK_ENABLE_BETA_EXTENSIONS
 #include <vulkan/vulkan.h>
 
@@ -42,6 +43,10 @@ typedef struct VkBLAS {
 	VkAccelerationStructureKHR as;
 } VkBLAS;
 
+typedef struct VkTLAS {
+	VkAccelerationStructureKHR as;
+} VkTLAS;
+
 TList(VkMappedMemoryRange);
 TList(VkBufferCopy);
 TList(VkImageCopy);
@@ -56,6 +61,9 @@ Error vkCheck(VkResult result);
 VkFormat mapVkFormat(ETextureFormat format);
 
 VkCompareOp mapVkCompareOp(ECompareOp op);
+
+VkDeviceAddress getVkDeviceAddress(DeviceData data);
+VkDeviceOrHostAddressConstKHR getVkLocation(DeviceData data, U64 localOffset);
 
 //Transitions entire resource rather than subresources
 

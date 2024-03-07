@@ -1049,6 +1049,9 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 		if(!optExtensions[EOptExtensions_DeferredHostOperations])
 			optExtensions[EOptExtensions_RayAcceleration] = false;
 
+		if(!rtasFeat.descriptorBindingAccelerationStructureUpdateAfterBind)
+			optExtensions[EOptExtensions_RayAcceleration] = false;
+
 		if(optExtensions[EOptExtensions_RayAcceleration]) {
 
 			//Disable raytracing if minimum limits aren't reached

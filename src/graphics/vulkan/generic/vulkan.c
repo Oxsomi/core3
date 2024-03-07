@@ -21,6 +21,7 @@
 #include "platforms/ext/listx_impl.h"
 #include "graphics/vulkan/vulkan.h"
 #include "graphics/generic/device_info.h"
+#include "graphics/generic/device_buffer.h"
 #include "formats/texture.h"
 #include "types/error.h"
 
@@ -198,4 +199,12 @@ VkFormat mapVkFormat(ETextureFormat format) {
 		case ETextureFormat_ASTC_12x12:					return VK_FORMAT_ASTC_12x12_UNORM_BLOCK;
 		case ETextureFormat_ASTC_12x12_sRGB:			return VK_FORMAT_ASTC_12x12_SRGB_BLOCK;
 	}
+}
+
+VkDeviceAddress getVkDeviceAddress(DeviceData data) {
+	return DeviceBufferRef_ptr(data.buffer)->resource.deviceAddress + data.offset;
+}
+
+VkDeviceOrHostAddressConstKHR getVkLocation(DeviceData data, U64 localOffset) {
+	return (VkDeviceOrHostAddressConstKHR) { .deviceAddress = getVkDeviceAddress(data) + localOffset };
 }

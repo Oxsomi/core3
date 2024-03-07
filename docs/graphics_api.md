@@ -235,7 +235,7 @@ _gotoIfError(clean, GraphicsDeviceRef_create(
 - ```c
     Error createBufferData(
     	EDeviceBufferUsage usage,
-      EGraphicsResourceFlag flags,
+    	EGraphicsResourceFlag flags,
      	CharString name,
         Buffer *data,					//Can move data to device buffer (doesn't always)
         DeviceBufferRef **ref

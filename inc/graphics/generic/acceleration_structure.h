@@ -19,9 +19,7 @@
 */
 
 #pragma once
-#include "types/lock.h"
-#include "device.h"
-#include "resource.h"
+#include "device_buffer.h"
 
 typedef RefPtr GraphicsDeviceRef;
 typedef struct CharString CharString;
@@ -48,11 +46,6 @@ typedef enum ERTASBuildFlags {
 
 } ERTASBuildFlags;
 
-typedef struct DeviceData {
-	DeviceBufferRef *buffer;
-	U64 offset, len;
-} DeviceData;
-
 typedef struct RTAS {
 
 	GraphicsDeviceRef *device;
@@ -68,10 +61,13 @@ typedef struct RTAS {
 
 	RTASRef *parent;						//Only if Updated / this is a refit
 
-	DeviceBufferRef *scratchBuffer;			//Allocated until the build is complete, unless EBLASConstructionType_Update
 	DeviceBufferRef *asBuffer;				//The acceleration structure as a buffer
+
+	CharString name;						//Debug name
 
 	Lock lock;								//Before reading on CPU; for example for refitting
 
 } RTAS;
+
+Error RTAS_validateDeviceBuffer(DeviceData *bufPtr);		//Check if buffer is accessible by RTAS (BLAS/TLAS)
 

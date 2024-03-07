@@ -31,14 +31,6 @@
 
 const U64 BLASExt_size = sizeof(VkBLAS);
 
-VkDeviceAddress getDeviceAddress(DeviceData data) {
-	return DeviceBufferRef_ptr(data.buffer)->resource.deviceAddress + data.offset;
-}
-
-VkDeviceOrHostAddressConstKHR getLocation(DeviceData data, U64 localOffset) {
-	return (VkDeviceOrHostAddressConstKHR) { .deviceAddress = getDeviceAddress(data) + localOffset };
-}
-
 Bool BLAS_freeExt(BLAS *blas) {
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(blas->base.device);
@@ -47,7 +39,11 @@ Bool BLAS_freeExt(BLAS *blas) {
 	GraphicsInstance *instance = GraphicsInstanceRef_ptr(device->instance);
 	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
 
-	instanceExt->destroyAccelerationStructure(deviceExt->device, BLAS_ext(blas, Vk)->as, NULL);
+	VkAccelerationStructureKHR as = BLAS_ext(blas, Vk)->as;
+
+	if(as)
+		instanceExt->destroyAccelerationStructure(deviceExt->device, as, NULL);
+
 	return true;
 }
 
@@ -61,8 +57,9 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 	GraphicsInstance *instance = GraphicsInstanceRef_ptr(device->instance);
 	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
 
+	DeviceBufferRef *tempScratch = NULL;
+
 	ListRefPtr *currentFlight = &device->resourcesInFlight[device->submitId % 3];
-	//U32 graphicsQueueId = deviceExt->queues[EVkCommandQueue_Graphics].queueId;
 
 	BLAS *blas = BLASRef_ptr(pending);
 
@@ -126,14 +123,14 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 		*tri = (VkAccelerationStructureGeometryTrianglesDataKHR) {
 			.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR,
 			.vertexFormat = mapVkFormat(ETextureFormatId_unpack[blas->positionFormatId]),
-			.vertexData = getLocation(blas->positionBuffer, blas->positionOffset),
+			.vertexData = getVkLocation(blas->positionBuffer, blas->positionOffset),
 			.vertexStride = blas->positionBufferStride,
 			.maxVertex = (U32) vertexCount
 		};
 
 		if (blas->indexFormatId) {
 			tri->indexType = blas->indexFormatId == ETextureFormatId_R32u ? VK_INDEX_TYPE_UINT32 : VK_INDEX_TYPE_UINT16;
-			tri->indexData = getLocation(blas->indexBuffer, 0);
+			tri->indexData = getVkLocation(blas->indexBuffer, 0);
 		}
 	}
 
@@ -141,7 +138,7 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 		geometry.geometryType = VK_GEOMETRY_TYPE_AABBS_KHR;
 		geometry.geometry.aabbs = (VkAccelerationStructureGeometryAabbsDataKHR) {
 			.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_AABBS_DATA_KHR,
-			.data = getLocation(blas->aabbBuffer, blas->aabbOffset),
+			.data = getVkLocation(blas->aabbBuffer, blas->aabbOffset),
 			.stride = blas->aabbStride
 		};
 	}
@@ -192,19 +189,22 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 		deviceRef,
 		EDeviceBufferUsage_ASExt,
 		EGraphicsResourceFlag_None,
-		blas->name,
+		blas->base.name,
 		sizes.accelerationStructureSize,
 		&blas->base.asBuffer
 	));
 
-	_gotoIfError(clean, CharString_formatx(&tmp, "%.*s scratch buffer", CharString_length(blas->name), blas->name.ptr));
+	_gotoIfError(clean, CharString_formatx(
+		&tmp, "%.*s scratch buffer", CharString_length(blas->base.name), blas->base.name.ptr
+	));
+
 	_gotoIfError(clean, GraphicsDeviceRef_createBuffer(
 		deviceRef,
 		EDeviceBufferUsage_ScratchExt,
 		EGraphicsResourceFlag_None,
 		tmp,
 		blas->base.flags & ERTASBuildFlags_IsUpdate ? sizes.updateScratchSize : sizes.buildScratchSize,
-		&blas->base.scratchBuffer
+		&tempScratch
 	));
 
 	VkAccelerationStructureCreateInfoKHR createInfo = (VkAccelerationStructureCreateInfoKHR) {
@@ -225,7 +225,7 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 	buildInfo.dstAccelerationStructure = BLAS_ext(BLASRef_ptr(pending), Vk)->as;
 
 	buildInfo.scratchData = (VkDeviceOrHostAddressKHR) {
-		.deviceAddress = DeviceBufferRef_ptr(blas->base.scratchBuffer)->resource.deviceAddress
+		.deviceAddress = DeviceBufferRef_ptr(tempScratch)->resource.deviceAddress
 	};
 
 	if(blas->base.flags & ERTASBuildFlags_IsUpdate)
@@ -238,7 +238,7 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 	VkAccelerationStructureBuildRangeInfoKHR *buildRangeInfoPtr = &buildRangeInfo;
 
 	instanceExt->cmdBuildAccelerationStructures(
-		commandBufferExt,
+		commandBuffer,
 		1,
 		&buildInfo,
 		&buildRangeInfoPtr
@@ -248,14 +248,14 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 
 	device->pendingBytes += primitives;
 
-	RefPtr_inc(pending);
 	_gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, pending));
+	RefPtr_inc(pending);
 
 	//We mark scratch buffer as delete, we do this by pushing it as a current flight resource
 	//And losing the reference from our object
 
-	_gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, blas->base.scratchBuffer));
-	blas->base.scratchBuffer = NULL;
+	_gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, tempScratch));
+	tempScratch = NULL;
 
 	//Ensure we don't exceed a maximum amount of time spent on the GPU
 
@@ -265,6 +265,7 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 	blas->base.isCompleted = true;
 
 clean:
+	DeviceBufferRef_dec(&tempScratch);
 	CharString_freex(&tmp);
 	return err;
 }

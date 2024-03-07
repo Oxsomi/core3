@@ -221,18 +221,17 @@ Error GraphicsDeviceRef_createBufferIntern(
 	if(!dev || dev->typeId != EGraphicsTypeId_GraphicsDevice)
 		_gotoIfError(clean, Error_nullPointer(0, "GraphicsDeviceRef_createBufferIntern()::dev is required"));
 
-	if((usage & EDeviceBufferUsage_ScratchExt) && (resourceFlags || usage != EDeviceBufferUsage_ScratchExt))
+	if((usage & EDeviceBufferUsage_ScratchExt) && (usage != EDeviceBufferUsage_ScratchExt))
 		_gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_createBufferIntern() invalid scratch usage/flags"));
 
 	if((usage & EDeviceBufferUsage_ASExt) && (resourceFlags || usage != EDeviceBufferUsage_ASExt))
-		_gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_createBufferIntern() invalid AS usage/flags"));
+		_gotoIfError(clean, Error_invalidState(1, "GraphicsDeviceRef_createBufferIntern() invalid AS usage/flags"));
 
-	if(
-		(usage & (EDeviceBufferUsage_ASExt | EDeviceBufferUsage_ScratchExt | EDeviceBufferUsage_ASReadExt)) &&
-		!(device->info.capabilities.features & EGraphicsFeatures_Raytracing)
-	)
+	Bool isRTBufferType = usage & (EDeviceBufferUsage_ASExt | EDeviceBufferUsage_ScratchExt | EDeviceBufferUsage_ASReadExt);
+
+	if (isRTBufferType && !(device->info.capabilities.features & EGraphicsFeatures_Raytracing))
 		_gotoIfError(clean, Error_invalidState(
-			0, "GraphicsDeviceRef_createBufferIntern() AS or scratch buffer only allowed if raytracing feature is present"
+			2, "GraphicsDeviceRef_createBufferIntern() AS or scratch buffer only allowed if raytracing feature is present"
 		));
 
 	if(!(resourceFlags & EGraphicsResourceFlag_InternalWeakDeviceRef))

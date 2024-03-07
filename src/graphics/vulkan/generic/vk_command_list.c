@@ -640,6 +640,11 @@ void CommandList_process(
 				if(transition.type == ETransitionType_KeepAlive)		//TODO: Residency management
 					continue;
 
+				//No-op for TLAS, just to keep alive
+
+				if(transition.resource->typeId == (ETypeId) EGraphicsTypeId_TLASExt)
+					continue;
+
 				//Grab transition type
 
 				Bool isImage = TextureRef_isTexture(transition.resource);

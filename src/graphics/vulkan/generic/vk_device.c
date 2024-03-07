@@ -224,7 +224,8 @@ Error GraphicsDevice_initExt(
 		feat & EGraphicsFeatures_Raytracing,
 		{
 			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR,
-			.accelerationStructure = true
+			.accelerationStructure = true,
+			.descriptorBindingAccelerationStructureUpdateAfterBind = true
 		}
 	);
 
@@ -643,17 +644,29 @@ Error GraphicsDevice_initExt(
 
 		if (i == EDescriptorSetType_Resources) {
 
-			for(U32 j = EDescriptorType_Texture2D; j < EDescriptorType_ResourceCount; ++j)
-				bindings[j - 1] = (VkDescriptorSetLayoutBinding) {
-					.binding = j - 1,
+			for(U32 j = EDescriptorType_Texture2D; j < EDescriptorType_ResourceCount; ++j) {
+
+				if(j == EDescriptorType_Sampler)
+					continue;
+
+				U32 id = j;
+
+				if(j > EDescriptorType_Sampler)
+					--id;
+
+				bindings[id] = (VkDescriptorSetLayoutBinding) {
+					.binding = id,
 					.stageFlags = VK_SHADER_STAGE_ALL,
 					.descriptorCount = descriptorTypeCount[j],
 					.descriptorType =
-						j < EDescriptorType_Buffer ? VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE : (
-							j <= EDescriptorType_RWBuffer ? VK_DESCRIPTOR_TYPE_STORAGE_BUFFER :
-							VK_DESCRIPTOR_TYPE_STORAGE_IMAGE
+						j == EDescriptorType_TLASExt ? VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR : (
+							j < EDescriptorType_Buffer ? VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE : (
+								j <= EDescriptorType_RWBuffer ? VK_DESCRIPTOR_TYPE_STORAGE_BUFFER :
+								VK_DESCRIPTOR_TYPE_STORAGE_IMAGE
+							)
 						)
 				};
+			}
 
 			bindingCount = EDescriptorType_ResourceCount - 1;
 		}

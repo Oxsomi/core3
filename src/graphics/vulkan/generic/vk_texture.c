@@ -189,8 +189,8 @@ Error UnifiedTexture_createExt(TextureRef *textureRef, CharString name) {
 			U32 counter = 0;
 
 			if (texture->resource.flags & EGraphicsResourceFlag_ShaderRead) {
-				writeDescriptorSet[0].dstBinding = EDescriptorType_Texture2D - 1;
-				writeDescriptorSet[0].dstArrayElement = managedImage.readHandle & ((1 << 20) - 1);
+				writeDescriptorSet[0].dstBinding = EDescriptorType_Texture2D;
+				writeDescriptorSet[0].dstArrayElement = ResourceHandle_getId(managedImage.readHandle);
 				writeDescriptorSet[0].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
 				writeDescriptorSet[0].pImageInfo = &descriptorImageInfos[0];
 				++counter;
@@ -201,8 +201,8 @@ Error UnifiedTexture_createExt(TextureRef *textureRef, CharString name) {
 				if(counter)
 					writeDescriptorSet[1] = writeDescriptorSet[0];
 
-				writeDescriptorSet[counter].dstBinding = UnifiedTexture_getWriteDescriptorType(*texture) - 1;
-				writeDescriptorSet[counter].dstArrayElement = managedImage.writeHandle & ((1 << 20) - 1);
+				writeDescriptorSet[counter].dstBinding = UnifiedTexture_getWriteDescriptorType(*texture);
+				writeDescriptorSet[counter].dstArrayElement = ResourceHandle_getId(managedImage.writeHandle);
 				writeDescriptorSet[counter].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
 				writeDescriptorSet[counter].pImageInfo = &descriptorImageInfos[1];
 				++counter;
