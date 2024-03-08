@@ -31,6 +31,7 @@
 #include "graphics/generic/device_texture.h"
 #include "graphics/generic/sampler.h"
 #include "graphics/generic/tlas.h"
+#include "graphics/generic/blas.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/log.h"
 #include "platforms/ext/ref_ptrx.h"
@@ -852,6 +853,9 @@ Error CommandListRef_startScope(
 
 		else if (res->typeId == EGraphicsTypeId_TLASExt)									//Get device and mark as readony
 			resource = (GraphicsResource) { .device = TLASRef_ptr(res)->base.device, .flags = EGraphicsResourceFlag_ShaderRead };
+
+		else if (res->typeId == EGraphicsTypeId_BLASExt)									//Get device and mark as readony
+			resource = (GraphicsResource) { .device = BLASRef_ptr(res)->base.device, .flags = EGraphicsResourceFlag_ShaderRead };
 
 		else _gotoIfError(clean, Error_invalidParameter(
 			1, 0, "CommandListRef_startScope()::transitions[i].resource's type is unsupported"

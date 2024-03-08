@@ -115,6 +115,11 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 	if(blas->base.flagsExt & EBLASFlag_AvoidDuplicateAnyHit)
 		geometry.flags |= VK_GEOMETRY_NO_DUPLICATE_ANY_HIT_INVOCATION_BIT_KHR;
 
+	VkDependencyInfo dep = (VkDependencyInfo){ .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO };
+
+	VkCommandQueue queue = deviceExt->queues[EVkCommandQueue_Graphics];
+	U32 graphicsQueueId = queue.queueId;
+
 	if(blas->base.asConstructionType == EBLASConstructionType_Geometry) {
 
 		geometry.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
@@ -128,19 +133,51 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 			.maxVertex = (U32) vertexCount
 		};
 
+		_gotoIfError(clean, VkDeviceBuffer_transition(
+			DeviceBuffer_ext(DeviceBufferRef_ptr(blas->positionBuffer.buffer), Vk),
+			VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+			VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR,
+			graphicsQueueId,
+			0, 0,
+			&deviceExt->bufferTransitions,
+			&dep
+		));
+
 		if (blas->indexFormatId) {
+
 			tri->indexType = blas->indexFormatId == ETextureFormatId_R32u ? VK_INDEX_TYPE_UINT32 : VK_INDEX_TYPE_UINT16;
 			tri->indexData = getVkLocation(blas->indexBuffer, 0);
+
+			_gotoIfError(clean, VkDeviceBuffer_transition(
+				DeviceBuffer_ext(DeviceBufferRef_ptr(blas->indexBuffer.buffer), Vk),
+				VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+				VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR,
+				graphicsQueueId,
+				0, 0,
+				&deviceExt->bufferTransitions,
+				&dep
+			));
 		}
 	}
 
 	else {
+
 		geometry.geometryType = VK_GEOMETRY_TYPE_AABBS_KHR;
 		geometry.geometry.aabbs = (VkAccelerationStructureGeometryAabbsDataKHR) {
 			.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_AABBS_DATA_KHR,
 			.data = getVkLocation(blas->aabbBuffer, blas->aabbOffset),
 			.stride = blas->aabbStride
 		};
+
+		_gotoIfError(clean, VkDeviceBuffer_transition(
+			DeviceBuffer_ext(DeviceBufferRef_ptr(blas->aabbBuffer.buffer), Vk),
+			VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+			VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR,
+			graphicsQueueId,
+			0, 0,
+			&deviceExt->bufferTransitions,
+			&dep
+		));
 	}
 
 	VkBuildAccelerationStructureFlagsKHR flags = (VkBuildAccelerationStructureFlagsKHR) 0;
@@ -230,6 +267,31 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 
 	if(blas->base.flags & ERTASBuildFlags_IsUpdate)
 		buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR;
+
+	_gotoIfError(clean, VkDeviceBuffer_transition(
+		DeviceBuffer_ext(DeviceBufferRef_ptr(blas->base.asBuffer), Vk),
+		VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+		VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR,
+		graphicsQueueId,
+		0, 0,
+		&deviceExt->bufferTransitions,
+		&dep
+	));
+
+	_gotoIfError(clean, VkDeviceBuffer_transition(
+		DeviceBuffer_ext(DeviceBufferRef_ptr(tempScratch), Vk),
+		VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+		VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR,
+		graphicsQueueId,
+		0, 0,
+		&deviceExt->bufferTransitions,
+		&dep
+	));
+
+	if (dep.bufferMemoryBarrierCount)
+		instanceExt->cmdPipelineBarrier2(commandBuffer, &dep);
+
+	ListVkBufferMemoryBarrier2_clear(&deviceExt->bufferTransitions);
 
 	VkAccelerationStructureBuildRangeInfoKHR buildRangeInfo = (VkAccelerationStructureBuildRangeInfoKHR) {
 		.primitiveCount = primitivesU32

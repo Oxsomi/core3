@@ -26,6 +26,7 @@
 typedef RefPtr BLASRef;
 
 typedef enum ETLASInstanceFlag {
+	ETLASInstanceFlag_None						= 0,
 	ETLASInstanceFlag_DisableCulling			= 1 << 0,		//Culling is force disabled for the BLAS
 	ETLASInstanceFlag_CCW						= 1 << 1,		//Reverse winding order for the BLAS
 	ETLASInstanceFlag_ForceDisableAnyHit		= 1 << 2,		//Force anyHit off for the BLAS

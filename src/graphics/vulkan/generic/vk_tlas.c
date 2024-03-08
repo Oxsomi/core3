@@ -92,6 +92,11 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 		.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR
 	};
 
+	VkDependencyInfo dep = (VkDependencyInfo){ .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO };
+
+	VkCommandQueue queue = deviceExt->queues[EVkCommandQueue_Graphics];
+	U32 graphicsQueueId = queue.queueId;
+
 	if(tlas->base.asConstructionType == ETLASConstructionType_Instances) {
 
 		DeviceData instances = tlas->deviceData;
@@ -143,7 +148,27 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 			}
 
 			instances = (DeviceData) { .buffer = tempInstances, .len = stride * instancesU64 };
+
+			_gotoIfError(clean, VkDeviceBuffer_transition(
+				DeviceBuffer_ext(DeviceBufferRef_ptr(tempInstances), Vk),
+				VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+				VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR,
+				graphicsQueueId,
+				0, 0,
+				&deviceExt->bufferTransitions,
+				&dep
+			));
 		}
+
+		else _gotoIfError(clean, VkDeviceBuffer_transition(
+			DeviceBuffer_ext(DeviceBufferRef_ptr(tlas->deviceData.buffer), Vk),
+			VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+			VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR,
+			graphicsQueueId,
+			0, 0,
+			&deviceExt->bufferTransitions,
+			&dep
+		));
 
 		geometry.geometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR;
 
@@ -252,6 +277,31 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 
 	if(tlas->base.flags & ERTASBuildFlags_IsUpdate)
 		buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR;
+
+	_gotoIfError(clean, VkDeviceBuffer_transition(
+		DeviceBuffer_ext(DeviceBufferRef_ptr(tlas->base.asBuffer), Vk),
+		VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+		VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR,
+		graphicsQueueId,
+		0, 0,
+		&deviceExt->bufferTransitions,
+		&dep
+	));
+
+	_gotoIfError(clean, VkDeviceBuffer_transition(
+		DeviceBuffer_ext(DeviceBufferRef_ptr(tempScratch), Vk),
+		VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+		VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR,
+		graphicsQueueId,
+		0, 0,
+		&deviceExt->bufferTransitions,
+		&dep
+	));
+
+	if (dep.bufferMemoryBarrierCount)
+		instanceExt->cmdPipelineBarrier2(commandBuffer, &dep);
+
+	ListVkBufferMemoryBarrier2_clear(&deviceExt->bufferTransitions);
 
 	VkAccelerationStructureBuildRangeInfoKHR buildRangeInfo = (VkAccelerationStructureBuildRangeInfoKHR) {
 		.primitiveCount = instancesU32

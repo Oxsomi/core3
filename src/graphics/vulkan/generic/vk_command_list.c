@@ -28,6 +28,8 @@
 #include "graphics/generic/device_texture.h"
 #include "graphics/generic/depth_stencil.h"
 #include "graphics/generic/render_texture.h"
+#include "graphics/generic/tlas.h"
+#include "graphics/generic/blas.h"
 #include "graphics/vulkan/vulkan.h"
 #include "graphics/vulkan/vk_device.h"
 #include "graphics/vulkan/vk_instance.h"
@@ -640,10 +642,92 @@ void CommandList_process(
 				if(transition.type == ETransitionType_KeepAlive)		//TODO: Residency management
 					continue;
 
-				//No-op for TLAS, just to keep alive
+				VkPipelineStageFlags2 pipelineStage = 0;
 
-				if(transition.resource->typeId == (ETypeId) EGraphicsTypeId_TLASExt)
+				switch (transition.stage) {
+
+					default:																						break;
+					case EPipelineStage_Compute:		pipelineStage = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;		break;
+					case EPipelineStage_Vertex:			pipelineStage = VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT;		break;
+					case EPipelineStage_Pixel:			pipelineStage = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;	break;
+					case EPipelineStage_GeometryExt:	pipelineStage = VK_PIPELINE_STAGE_2_GEOMETRY_SHADER_BIT;	break;
+
+					case EPipelineStage_Hull:
+						pipelineStage = VK_PIPELINE_STAGE_2_TESSELLATION_CONTROL_SHADER_BIT;
+						break;
+
+					case EPipelineStage_Domain:
+						pipelineStage = VK_PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER_BIT;
+						break;
+				}
+
+				//TLAS, if it's on the CPU we already know the BLASes,
+				//If it's on the GPU then we have to rely on manual BLAS transitions
+
+				if (transition.resource->typeId == (ETypeId)EGraphicsTypeId_TLASExt) {
+
+					TLAS *tlas = TLASRef_ptr(transition.resource);
+
+					if (!tlas->base.isCompleted)
+						continue;
+
+					if(!tlas->useDeviceMemory)
+						for (U64 j = 0; j < tlas->cpuInstancesStatic.length; ++j) {
+
+							TLASInstanceData dat = (TLASInstanceData) { 0 };
+							TLAS_getInstanceDataCpu(tlas, j, &dat);
+
+							if (!dat.blasCpu)
+								continue;
+
+							BLAS *blas = BLASRef_ptr(dat.blasCpu);
+
+							if (!blas->base.isCompleted)
+								continue;
+
+							_gotoIfError(nextTransition, VkDeviceBuffer_transition(
+								DeviceBuffer_ext(DeviceBufferRef_ptr(blas->base.asBuffer), Vk),
+								pipelineStage,
+								VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR,
+								graphicsQueueId,
+								0, 0,
+								&deviceExt->bufferTransitions,
+								&dependency
+							));
+						}
+
+					_gotoIfError(nextTransition, VkDeviceBuffer_transition(
+						DeviceBuffer_ext(DeviceBufferRef_ptr(tlas->base.asBuffer), Vk),
+						pipelineStage,
+						VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR,
+						graphicsQueueId,
+						0, 0,
+						&deviceExt->bufferTransitions,
+						&dependency
+					));
+
 					continue;
+				}
+
+				if (transition.resource->typeId == (ETypeId)EGraphicsTypeId_BLASExt) {
+
+					BLAS *blas = BLASRef_ptr(transition.resource);
+
+					if (!blas->base.isCompleted)
+						continue;
+
+					_gotoIfError(nextTransition, VkDeviceBuffer_transition(
+						DeviceBuffer_ext(DeviceBufferRef_ptr(blas->base.asBuffer), Vk),
+						pipelineStage,
+						VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR,
+						graphicsQueueId,
+						0, 0,
+						&deviceExt->bufferTransitions,
+						&dependency
+					));
+
+					continue;
+				}
 
 				//Grab transition type
 
@@ -664,100 +748,79 @@ void CommandList_process(
 						transition.type == ETransitionType_ShaderRead ? VK_ACCESS_2_SHADER_STORAGE_READ_BIT :
 						VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
 
-				VkPipelineStageFlags2 pipelineStage = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+				if(!pipelineStage)
+					switch ((ETransitionType) transition.type) {
 
-				switch (transition.stage) {
+						case ETransitionType_RenderTargetRead:
 
-					case EPipelineStage_Compute:		break;
-					case EPipelineStage_Vertex:			pipelineStage = VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT;		break;
-					case EPipelineStage_Pixel:			pipelineStage = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;	break;
-					case EPipelineStage_GeometryExt:	pipelineStage = VK_PIPELINE_STAGE_2_GEOMETRY_SHADER_BIT;	break;
+							pipelineStage =
+								isDepthStencil ? VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT :
+								VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
 
-					case EPipelineStage_Hull:
-						pipelineStage = VK_PIPELINE_STAGE_2_TESSELLATION_CONTROL_SHADER_BIT;
-						break;
+							access =
+								isDepthStencil ? VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT :
+								VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT;
 
-					case EPipelineStage_Domain:
-						pipelineStage = VK_PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER_BIT;
-						break;
+							layout =
+								isDepthStencil ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL :
+								VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;
 
-					default:		//Indicates special usage
+							break;
 
-						switch ((ETransitionType) transition.type) {
+						case ETransitionType_RenderTargetWrite:
 
-							case ETransitionType_RenderTargetRead:
+							pipelineStage =
+								isDepthStencil ? VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT :
+								VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
 
-								pipelineStage =
-									isDepthStencil ? VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT :
-									VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+							access =
+								isDepthStencil ? VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
+								VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT :
+								VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT |
+								VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
 
-								access =
-									isDepthStencil ? VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT :
-									VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT;
+							layout =
+								isDepthStencil ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL :
+								VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;
 
-								layout =
-									isDepthStencil ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL :
-									VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;
+							break;
 
-								break;
+						case ETransitionType_Clear:
+							pipelineStage = VK_PIPELINE_STAGE_2_CLEAR_BIT;
+							access = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+							layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+							break;
 
-							case ETransitionType_RenderTargetWrite:
+						case ETransitionType_CopyRead:
+							pipelineStage =  VK_PIPELINE_STAGE_2_COPY_BIT;
+							access = VK_ACCESS_2_TRANSFER_READ_BIT;
+							layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+							break;
 
-								pipelineStage =
-									isDepthStencil ? VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT :
-									VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+						case ETransitionType_CopyWrite:
+							pipelineStage =  VK_PIPELINE_STAGE_2_COPY_BIT;
+							access = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+							layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+							break;
 
-								access =
-									isDepthStencil ? VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
-									VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT :
-									VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT |
-									VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
+						case ETransitionType_Indirect:
+							pipelineStage = VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT;
+							access = VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT;
+							break;
 
-								layout =
-									isDepthStencil ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL :
-									VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;
+						case ETransitionType_Index:
+							pipelineStage = VK_PIPELINE_STAGE_2_INDEX_INPUT_BIT;
+							access = VK_ACCESS_2_INDEX_READ_BIT;
+							break;
 
-								break;
+						case ETransitionType_Vertex:
+							pipelineStage = VK_PIPELINE_STAGE_2_VERTEX_ATTRIBUTE_INPUT_BIT;
+							access = VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT;
+							break;
 
-							case ETransitionType_Clear:
-								pipelineStage = VK_PIPELINE_STAGE_2_CLEAR_BIT;
-								access = VK_ACCESS_2_TRANSFER_WRITE_BIT;
-								layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-								break;
-
-							case ETransitionType_CopyRead:
-								pipelineStage =  VK_PIPELINE_STAGE_2_COPY_BIT;
-								access = VK_ACCESS_2_TRANSFER_READ_BIT;
-								layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-								break;
-
-							case ETransitionType_CopyWrite:
-								pipelineStage =  VK_PIPELINE_STAGE_2_COPY_BIT;
-								access = VK_ACCESS_2_TRANSFER_WRITE_BIT;
-								layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-								break;
-
-							case ETransitionType_Indirect:
-								pipelineStage = VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT;
-								access = VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT;
-								break;
-
-							case ETransitionType_Index:
-								pipelineStage = VK_PIPELINE_STAGE_2_INDEX_INPUT_BIT;
-								access = VK_ACCESS_2_INDEX_READ_BIT;
-								break;
-
-							case ETransitionType_Vertex:
-								pipelineStage = VK_PIPELINE_STAGE_2_VERTEX_ATTRIBUTE_INPUT_BIT;
-								access = VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT;
-								break;
-
-							default:
-								break;
-						}
-
-						break;
-				}
+						default:
+							break;
+					}
 
 				//Transition resource
 

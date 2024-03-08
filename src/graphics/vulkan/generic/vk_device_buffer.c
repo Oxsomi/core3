@@ -64,7 +64,7 @@ Error VkDeviceBuffer_transition(
 
 		.buffer = buffer->buffer,
 		.offset = offset,
-		.size = size
+		.size = !size ? VK_WHOLE_SIZE : size
 	};
 
 	Error err = ListVkBufferMemoryBarrier2_pushBackx(bufferBarriers, bufferBarrier);
