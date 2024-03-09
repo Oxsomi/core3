@@ -39,8 +39,25 @@
 
 #ifndef _WIN32
 	#define _ftelli64 ftell
-	#define removeFolder remove
 	#define _mkdir(a) mkdir(a, DEFFILEMODE)
+	
+	I32 removeFolder(CharString str) {
+	
+		CharString strCopy = CharString_createNull();
+		Error err = Error_none();
+		
+		if(!CharString_isNullTerminated(str)) {
+			_gotoIfError(clean, CharString_createCopyx(str, &strCopy));
+			remove(strCopy.ptr);
+		}
+		
+		else remove(str.ptr);
+		
+	clean:
+		CharString_freex(&strCopy);
+		return err.genericError ? -1 : 0;
+	}
+	
 #else
 
 	#define UNICODE

@@ -18,36 +18,33 @@
 *  This is called dual licensing.
 */
 
-#include "platforms/ext/listx_impl.h"
+#define VK_USE_PLATFORM_MACOS_MVK
+#include "graphics/generic/device.h"
+#include "graphics/generic/instance.h"
+#include "graphics/vulkan/vk_swapchain.h"
+#include "graphics/vulkan/vk_device.h"
 #include "graphics/vulkan/vk_instance.h"
+#include "platforms/window.h"
+#include "platforms/platform.h"
 #include "types/error.h"
-#include "types/list.h"
-#include "types/string.h"
-#include "types/buffer.h"
 
-const C8 *vkValidation = "VK_LAYER_KHRONOS_validation";
-const C8 *vkApiDump = "VK_LAYER_LUNARG_api_dump";
+Error VkSurface_create(GraphicsDevice *device, const Window *window, VkSurfaceKHR *surface) {
 
-//#define _GRAPHICS_VERBOSE_DEBUGGING
+	if(!device || !window || !surface)
+		return Error_nullPointer(!device ? 0 : (!window ? 0 : 1), "VkSurface_create()::device, window or surface is NULL");
 
-Error VkGraphicsInstance_getLayers(ListConstC8 *layers) {
+	GraphicsInstance *instance = GraphicsInstanceRef_ptr(device->instance);
+	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
 
-	(void) layers;
+	VkMacOSSurfaceCreateInfoMVK surfaceInfo = (VkMacOSSurfaceCreateInfoMVK) {
+		.sType = VK_STRUCTURE_TYPE_MACOS_SURFACE_CREATE_INFO_MVK,
+		.pView = window->nativeHandle
+	};
 
-	#ifndef NDEBUG
+	if (!instanceExt->createSurfaceExt)
+		instanceExt->createSurfaceExt = (void*) vkGetInstanceProcAddr(instanceExt->instance, "vkCreateWin32SurfaceKHR");
 
-		Error err = ListConstC8_pushBackx(layers, vkValidation);
-
-		if(err.genericError)
-			return err;
-
-		#ifdef _GRAPHICS_VERBOSE_DEBUGGING
-			return ListConstC8_pushBackx(layers, vkApiDump);
-		#else
-			return Error_none();
-		#endif
-
-	#else
-		return Error_none();
-	#endif
+	return vkCheck(
+		((PFN_vkCreateMacOSSurfaceMVK)instanceExt->createSurfaceExt)(instanceExt->instance, &surfaceInfo, NULL, surface)
+	);
 }

@@ -79,8 +79,6 @@ CharString Error_formatPlatformError(Allocator alloc, Error err) {
 void *Platform_allocate(void *allocator, U64 length) { (void)allocator; return malloc(length); }
 void Platform_free(void *allocator, void *ptr, U64 length) { (void) allocator; (void)length; free(ptr); }
 
-WORD oldColor = 0;
-
 I32 main(I32 argc, const C8 *argv[]) {
 
 	Error err = Platform_create(argc, argv, GetModuleHandleW(NULL), NULL);
@@ -95,9 +93,7 @@ I32 main(I32 argc, const C8 *argv[]) {
 	return res;
 }
 
-void Platform_cleanupExt() {
-	SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), oldColor);
-}
+void Platform_cleanupExt() { }
 
 typedef struct EnumerateFiles {
 	ListVirtualSection *sections;
@@ -134,10 +130,6 @@ clean:
 Error Platform_initExt() {
 
 	Error err = Error_none();
-
-	CONSOLE_SCREEN_BUFFER_INFO info;
-	GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &info);
-	oldColor = info.wAttributes;
 
 	SYSTEM_INFO systemInfo;
 	GetSystemInfo(&systemInfo);

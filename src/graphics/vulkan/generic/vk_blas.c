@@ -297,7 +297,7 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 		.primitiveCount = primitivesU32
 	};
 
-	VkAccelerationStructureBuildRangeInfoKHR *buildRangeInfoPtr = &buildRangeInfo;
+	const VkAccelerationStructureBuildRangeInfoKHR *buildRangeInfoPtr = &buildRangeInfo;
 
 	instanceExt->cmdBuildAccelerationStructures(
 		commandBuffer,

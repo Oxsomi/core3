@@ -225,6 +225,10 @@ set_target_properties(OxC3_platforms PROPERTIES FOLDER Oxsomi)
 
 target_link_libraries(OxC3_platforms PUBLIC OxC3_formats)
 
+if(APPLE)
+	target_link_libraries(OxC3_platforms PUBLIC "-framework CoreFoundation" "-framework ApplicationServices" "-framework AppKit")
+endif()
+
 # Graphics layer
 
 if(TRUE)

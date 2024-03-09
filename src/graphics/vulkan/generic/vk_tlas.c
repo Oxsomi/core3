@@ -307,7 +307,7 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 		.primitiveCount = instancesU32
 	};
 
-	VkAccelerationStructureBuildRangeInfoKHR *buildRangeInfoPtr = &buildRangeInfo;
+	const VkAccelerationStructureBuildRangeInfoKHR *buildRangeInfoPtr = &buildRangeInfo;
 
 	instanceExt->cmdBuildAccelerationStructures(
 		commandBuffer,

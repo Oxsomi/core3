@@ -18,48 +18,20 @@
 *  This is called dual licensing.
 */
 
-#include "types/atomic.h"
+#include "platforms/window_manager.h"
+#include "types/error.h"
 
-I64 AtomicI64_and(AtomicI64 *ptr, I64 value) {
-	return atomic_fetch_and(&ptr->atomic, value);
+//There is no need for this, besides managing windows.
+//The windows manage their own loops.
+
+Error WindowManager_createNative(WindowManager *w) {
+	(void)w;
+	return Error_none();
 }
 
-I64 AtomicI64_xor(AtomicI64 *ptr, I64 value) {
-	return atomic_fetch_xor(&ptr->atomic, value);
+Bool WindowManager_freeNative(WindowManager *w) {
+	(void)w;
+	return true;
 }
 
-I64 AtomicI64_or(AtomicI64 *ptr, I64 value) {
-	return atomic_fetch_or(&ptr->atomic, value);
-}
-
-I64 AtomicI64_load(AtomicI64 *ptr) {
-	return AtomicI64_add(ptr, 0);
-}
-
-I64 AtomicI64_add(AtomicI64 *ptr, I64 value) {
-	return atomic_fetch_add(&ptr->atomic, value);
-}
-
-I64 AtomicI64_store(AtomicI64 *ptr, I64 value) {
-	return atomic_exchange(&ptr->atomic, value);
-}
-
-I64 AtomicI64_cmpStore(AtomicI64 *ptr, I64 compare, I64 value) {
-	return atomic_compare_exchange_strong(&ptr->atomic, &compare, value);
-}
-
-I64 AtomicI64_sub(AtomicI64 *ptr, I64 value) {
-
-	if(value == I64_MIN)
-		value = 0;
-
-	return AtomicI64_add(ptr, -value);
-}
-
-I64 AtomicI64_inc(AtomicI64 *ptr) {
-	return AtomicI64_add(ptr, 1);
-}
-
-I64 AtomicI64_dec(AtomicI64 *ptr) {
-	return AtomicI64_sub(ptr, 1);
-}
+void WindowManager_updateExt() { }

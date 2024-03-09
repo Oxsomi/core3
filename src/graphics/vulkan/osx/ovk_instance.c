@@ -18,48 +18,28 @@
 *  This is called dual licensing.
 */
 
-#include "types/atomic.h"
+#include "platforms/ext/listx_impl.h"
+#include "graphics/vulkan/vk_instance.h"
+#include "types/error.h"
+#include "types/list.h"
+#include "types/string.h"
+#include "types/buffer.h"
 
-I64 AtomicI64_and(AtomicI64 *ptr, I64 value) {
-	return atomic_fetch_and(&ptr->atomic, value);
-}
+const C8 *vkApiDump = "VK_LAYER_LUNARG_api_dump";
 
-I64 AtomicI64_xor(AtomicI64 *ptr, I64 value) {
-	return atomic_fetch_xor(&ptr->atomic, value);
-}
+//#define _GRAPHICS_VERBOSE_DEBUGGING
 
-I64 AtomicI64_or(AtomicI64 *ptr, I64 value) {
-	return atomic_fetch_or(&ptr->atomic, value);
-}
+Error VkGraphicsInstance_getLayers(ListConstC8 *layers) {
 
-I64 AtomicI64_load(AtomicI64 *ptr) {
-	return AtomicI64_add(ptr, 0);
-}
+	(void) layers;
 
-I64 AtomicI64_add(AtomicI64 *ptr, I64 value) {
-	return atomic_fetch_add(&ptr->atomic, value);
-}
-
-I64 AtomicI64_store(AtomicI64 *ptr, I64 value) {
-	return atomic_exchange(&ptr->atomic, value);
-}
-
-I64 AtomicI64_cmpStore(AtomicI64 *ptr, I64 compare, I64 value) {
-	return atomic_compare_exchange_strong(&ptr->atomic, &compare, value);
-}
-
-I64 AtomicI64_sub(AtomicI64 *ptr, I64 value) {
-
-	if(value == I64_MIN)
-		value = 0;
-
-	return AtomicI64_add(ptr, -value);
-}
-
-I64 AtomicI64_inc(AtomicI64 *ptr) {
-	return AtomicI64_add(ptr, 1);
-}
-
-I64 AtomicI64_dec(AtomicI64 *ptr) {
-	return AtomicI64_sub(ptr, 1);
+	#ifndef NDEBUG
+		#ifdef _GRAPHICS_VERBOSE_DEBUGGING
+			return ListConstC8_pushBackx(layers, vkApiDump);
+		#else
+			return Error_none();
+		#endif
+	#else
+		return Error_none();
+	#endif
 }
