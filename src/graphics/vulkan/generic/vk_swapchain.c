@@ -363,7 +363,8 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 	for(U8 i = 0; i < swapchain->base.images; ++i) {
 
 		VkUnifiedTexture *managedImage = TextureRef_getImgExtT(swapchainRef, Vk, 0, i);
-		managedImage->lastAccess = managedImage->lastStage = managedImage->lastLayout = 0;
+		managedImage->lastAccess = managedImage->lastLayout = 0;
+		managedImage->lastStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
 		if(managedImage->view)
 			vkDestroyImageView(deviceExt->device, managedImage->view, NULL);

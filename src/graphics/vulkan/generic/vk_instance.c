@@ -201,6 +201,27 @@ Error GraphicsInstance_createExt(GraphicsApplicationInfo info, Bool isVerbose, G
 		.ppEnabledExtensionNames = enabledExtensions.ptr
 	};
 
+	#ifndef NDEBUG
+
+		//Maximum validation
+
+		VkValidationFeatureEnableEXT enables[] = { 
+			VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
+			VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT,
+			VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT,
+			VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT
+		};
+
+		VkValidationFeaturesEXT features = (VkValidationFeaturesEXT) {
+			.sType = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT,
+			.enabledValidationFeatureCount = (U32) (sizeof(enables) / sizeof(enables[0])),
+			.pEnabledValidationFeatures = enables
+		};
+
+		instanceInfo.pNext = &features;
+
+	#endif
+
 	if(isVerbose) {
 
 		Log_debugLnx("Enabling layers:");
