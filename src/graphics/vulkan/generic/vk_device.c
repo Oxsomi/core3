@@ -734,7 +734,8 @@ Error GraphicsDevice_initExt(
 		(VkDescriptorPoolSize) { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, EDescriptorTypeCount_RWTextures },
 		(VkDescriptorPoolSize) { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, EDescriptorTypeCount_Textures },
 		(VkDescriptorPoolSize) { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, EDescriptorTypeCount_SSBO },
-		(VkDescriptorPoolSize) { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 3 }
+		(VkDescriptorPoolSize) { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 3 },
+		(VkDescriptorPoolSize) { VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, EDescriptorTypeCount_TLASExt }
 	};
 
 	VkDescriptorPoolCreateInfo poolInfo = (VkDescriptorPoolCreateInfo) {
@@ -1075,9 +1076,9 @@ Error GraphicsDevice_submitCommandsImpl(
 
 	{
 		DeviceBuffer *frameData = DeviceBufferRef_ptr(device->frameData);
-		CBufferData *data = (CBufferData*) frameData->resource.mappedMemoryExt + (device->submitId % 3);
+		CBufferData *data = (CBufferData*)frameData->resource.mappedMemoryExt + (device->submitId % 3);
 
-		for(U32 i = 0; i < data->swapchainCount; ++i) {
+		for (U32 i = 0; i < data->swapchainCount; ++i) {
 
 			SwapchainRef *swapchainRef = swapchains.ptr[i];
 			Swapchain *swapchain = SwapchainRef_ptr(swapchainRef);
@@ -1087,9 +1088,7 @@ Error GraphicsDevice_submitCommandsImpl(
 			UnifiedTextureImage managedImage = TextureRef_getCurrImage(swapchainRef, 0);
 
 			data->swapchains[i * 2 + 0] = managedImage.readHandle;
-
-			if(allowCompute)
-				data->swapchains[i * 2 + 1] = managedImage.writeHandle;
+			data->swapchains[i * 2 + 1] = allowCompute ? managedImage.writeHandle : 0;
 		}
 
 		DeviceMemoryBlock block = device->allocator.blocks.ptr[frameData->resource.blockId];
@@ -1097,9 +1096,9 @@ Error GraphicsDevice_submitCommandsImpl(
 
 		if (incoherent) {
 
-			VkMappedMemoryRange range = (VkMappedMemoryRange) {
+			VkMappedMemoryRange range = (VkMappedMemoryRange){
 				.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
-				.memory = (VkDeviceMemory) block.ext,
+				.memory = (VkDeviceMemory)block.ext,
 				.offset = frameData->resource.blockOffset + (device->submitId % 3) * sizeof(CBufferData),
 				.size = sizeof(CBufferData)
 			};
