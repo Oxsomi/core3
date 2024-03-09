@@ -19,7 +19,7 @@
 */
 
 #include "platforms/platform.h"
-#include "platforms/ext/osx/objective_c.h"
+#include "platforms/osx/objective_c.h"
 #include "types/error.h"
 #include "types/thread.h"
 #include "types/atomic.h"
@@ -35,7 +35,7 @@ typedef struct AppDelegate { Class isa; } AppDelegate;
 
 Bool Platform_signalReady(AppDelegate *self, SEL cmd, id notif) {
 	(void)self; (void)cmd; (void)notif;
-	AtomicI64_add(isReady, 1);
+	AtomicI64_add(&isReady, 1);
 	return true;
 }
 

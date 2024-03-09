@@ -197,6 +197,7 @@ message("-- Targeting platform: ${platform}")
 file(GLOB platformsHeaders "inc/platforms/*.h")
 
 file(GLOB_RECURSE platformsPlatformSources "src/platforms/${platform}/*.c")
+file(GLOB_RECURSE platformsPlatformIncludes "inc/platforms/${platform}/*.h")
 file(GLOB_RECURSE platformsSources "src/platforms/generic/*.c")
 file(GLOB_RECURSE platformsSIMDSources "src/platforms/simd/${simd}/*.c")
 
@@ -210,12 +211,14 @@ add_library(
 	STATIC
 	${platformsHeaders}
 	${platformsPlatformSources}
+	${platformsPlatformIncludes}
 	${platformsSources}
 	${platformsSIMDSources}
 	CMakeLists.txt
 )
 
 source_group("Source Files (${platform})" FILES ${platformsPlatformSources})
+source_group("Header Files (${platform})" FILES ${platformsPlatformIncludes})
 source_group("Source Files (simd: ${simd})" FILES ${platformsSIMDSources})
 
 set_target_properties(OxC3_platforms PROPERTIES FOLDER Oxsomi)
