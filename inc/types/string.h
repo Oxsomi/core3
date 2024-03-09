@@ -74,9 +74,12 @@ Bool CharString_isEmpty(CharString str);
 Bool CharString_isNullTerminated(CharString str);
 U64  CharString_bytes(CharString str);
 U64  CharString_length(CharString str);
+U64  CharString_capacity(CharString str);		//Returns 0 if ref
 
 Buffer CharString_buffer(CharString str);
 Buffer CharString_bufferConst(CharString str);
+Buffer CharString_allocatedBuffer(CharString str);
+Buffer CharString_allocatedBufferConst(CharString str);
 
 //Iteration
 
@@ -84,24 +87,28 @@ C8 *CharString_begin(CharString str);
 C8 *CharString_end(CharString str);
 
 C8 *CharString_charAt(CharString str, U64 off);
+//TODO: U32 CharString_codepointAtByteConst(CharString str, U64 startByteOffset, U8 *length);		//Returns U32_MAX if it wasn't a valid UTF8 codepoint
+//TODO: U32 CharString_codepointAtConst(CharString str, U64 offset, U8 *length);					//Returns U32_MAX if it wasn't a valid UTF8 codepoint
 
 const C8 *CharString_beginConst(CharString str);
 const C8 *CharString_endConst(CharString str);
 
 const C8 *CharString_charAtConst(CharString str, U64 off);
 Bool CharString_isValidAscii(CharString str);
-Bool CharString_isValidFileName(CharString str);
+//TODO: Bool CHarString_isValidUTF8(CharString str);
+Bool CharString_isValidFileName(CharString str);		//TODO: Understand UTF8
 
 ECompareResult CharString_compare(CharString a, CharString b, EStringCase caseSensitive);
-ECompareResult CharString_compareSensitive(CharString a, CharString b);
+ECompareResult CharString_compareSensitive(CharString a, CharString b);						//TODO: sensitivity for unicode?
 ECompareResult CharString_compareInsensitive(CharString a, CharString b);
 
 //Only checks characters. Please use resolvePath to actually validate if it's safely accessible.
 
-Bool CharString_isValidFilePath(CharString str);
+Bool CharString_isValidFilePath(CharString str);		//TODO: Understand UTF8
 Bool CharString_clear(CharString *str);
 
 U64 CharString_calcStrLen(const C8 *ptr, U64 maxSize);
+//TODO: U64 CharString_calcUTF8Len(const C8 *ptr, U64 maxBytes);
 //U64 CharString_hash(CharString s);								TODO:
 
 C8 CharString_getAt(CharString str, U64 i);
@@ -147,6 +154,9 @@ Error CharString_createDec(U64 v, U8 leadingZeros, Allocator allocator, CharStri
 Error CharString_createOct(U64 v, U8 leadingZeros, Allocator allocator, CharString *result);
 Error CharString_createBin(U64 v, U8 leadingZeros, Allocator allocator, CharString *result);
 
+Error CharString_createFromUTF16(const U16 *ptr, U64 limit, Allocator allocator, CharString *result);		//Windows interop. Converts UTF16 to UTF8
+//TODO: Error CharString_setCodepointAt(CharString str, U64 index, U32 codepoint);
+
 Error CharString_split(
 	CharString s,
 	C8 c,
@@ -168,6 +178,8 @@ Error CharString_splitInsensitive(CharString s, C8 c, Allocator allocator, CharS
 Error CharString_splitStringSensitive(CharString s, CharString other, Allocator allocator, CharStringList *result);
 Error CharString_splitStringInsensitive(CharString s, CharString other, Allocator allocator, CharStringList *result);
 
+//TODO: CharString_splitCodepoint
+
 Error CharString_splitLine(CharString s, Allocator alloc, CharStringList *result);
 
 //This will operate on this string, so it will need a heap allocated string
@@ -175,16 +187,22 @@ Error CharString_splitLine(CharString s, Allocator alloc, CharStringList *result
 Error CharString_resize(CharString *str, U64 length, C8 defaultChar, Allocator alloc);
 Error CharString_reserve(CharString *str, U64 length, Allocator alloc);
 
+//TODO: CharString_resizeCodepoint?
+
 Error CharString_append(CharString *s, C8 c, Allocator allocator);
 Error CharString_appendString(CharString *s, CharString other, Allocator allocator);
 
 Error CharString_prepend(CharString *s, C8 c, Allocator allocator);
 Error CharString_prependString(CharString *s, CharString other, Allocator allocator);
 
+//TODO: CharString_appendCodepoint/prependCodepoint
+
 CharString CharString_newLine();			//Should only be used when writing a file for the current OS. Not when parsing files.
 
 Error CharString_insert(CharString *s, C8 c, U64 i, Allocator allocator);
 Error CharString_insertString(CharString *s, CharString other, U64 i, Allocator allocator);
+
+//TODO: CharString_insertCodepoint
 
 Error CharString_replaceAllString(
 	CharString *s,
@@ -245,6 +263,10 @@ Error CharString_replaceStringInsensitive(
 Error CharString_replaceFirstStringInsensitive(CharString *s, CharString search, CharString replace, Allocator allocator);
 Error CharString_replaceLastStringInsensitive(CharString *s, CharString search, CharString replace, Allocator allocator);
 
+//TODO: CharString_replaceCodepoint
+
+Error CharString_toUTF16(CharString s, Allocator allocator, ListU16 *arr);				//Windows interop. Converts UTF8 to UTF8
+
 //Simple checks (consts)
 
 Bool CharString_startsWith(CharString str, C8 c, EStringCase caseSensitive);
@@ -273,6 +295,8 @@ Bool CharString_endsWithStringInsensitive(CharString str, CharString other);
 
 U64 CharString_countAllInsensitive(CharString s, C8 c);
 U64 CharString_countAllStringInsensitive(CharString s, CharString other);
+
+//TODO: CharString_countCodepoint/endsWithCodepoint/startsWithCodepoint
 
 Error CharString_findAll(CharString s, C8 c, Allocator alloc, EStringCase caseSensitive, ListU64 *result);
 Error CharString_findAllString(CharString s, CharString other, Allocator alloc, EStringCase caseSensitive, ListU64 *result);
@@ -319,6 +343,8 @@ Bool CharString_containsInsensitive(CharString str, C8 c);
 Bool CharString_containsStringSensitive(CharString str, CharString other);
 Bool CharString_containsStringInsensitive(CharString str, CharString other);
 
+//TODO: CharString_containsCodepoint
+
 Bool CharString_equalsString(CharString s, CharString other, EStringCase caseSensitive);
 Bool CharString_equals(CharString s, C8 c, EStringCase caseSensitive);
 
@@ -327,6 +353,8 @@ Bool CharString_equalsSensitive(CharString s, C8 c);
 
 Bool CharString_equalsStringInsensitive(CharString s, CharString other);
 Bool CharString_equalsInsensitive(CharString s, C8 c);
+
+//TODO: CharString_equalsCodepoint
 
 Bool CharString_parseNyto(CharString s, U64 *result);
 Bool CharString_parseHex(CharString s, U64 *result);
@@ -435,6 +463,8 @@ Bool CharString_cutBeforeFirstStringInsensitive(CharString s, CharString other, 
 Bool CharString_cutBeforeLastStringSensitive(CharString s, CharString other, CharString *result);
 Bool CharString_cutBeforeLastStringInsensitive(CharString s, CharString other, CharString *result);
 
+//TODO: CharString_cut(Before/After)Codepoint
+
 Error CharString_eraseAtCount(CharString *s, U64 i, U64 count);
 Error CharString_popFrontCount(CharString *s, U64 count);
 Error CharString_popEndCount(CharString *s, U64 count);
@@ -484,6 +514,8 @@ Bool CharString_eraseStringInsensitive(CharString *s, CharString other, Bool isF
 Bool CharString_eraseFirstStringInsensitive(CharString *s, CharString other);
 Bool CharString_eraseLastStringInsensitive(CharString *s, CharString other);
 
+//TODO: CharString_eraseCodepoint
+
 //Replace
 
 Bool CharString_replaceAll(CharString *s, C8 c, C8 v, EStringCase caseSensitive);
@@ -501,19 +533,21 @@ Bool CharString_replaceInsensitive(CharString *s, C8 c, C8 v, Bool isFirst);
 Bool CharString_replaceFirstInsensitive(CharString *s, C8 c, C8 v);
 Bool CharString_replaceLastInsensitive(CharString *s, C8 c, C8 v);
 
+//TODO: CharString_replaceCodepoint
+
 CharString CharString_trim(CharString s);		//Returns a substring ref in a string
 
 Bool CharString_transform(CharString s, EStringTransform stringTransform);
 
-Bool CharString_toLower(CharString str);
-Bool CharString_toUpper(CharString str);
+Bool CharString_toLower(CharString str);		//TODO: Understand UTF8
+Bool CharString_toUpper(CharString str);		//TODO: Understand UTF8
 
 //Simple file utils
 
 Bool CharString_formatPath(CharString *str);
 
-CharString CharString_getFilePath(CharString *str);	//Formats on string first to ensure it's proper
-CharString CharString_getBasePath(CharString *str);	//Formats on string first to ensure it's proper
+CharString CharString_getFilePath(CharString *str);		//Formats on string first to ensure it's proper
+CharString CharString_getBasePath(CharString *str);		//Formats on string first to ensure it's proper
 
 //TODO: Regex
 

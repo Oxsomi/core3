@@ -43,6 +43,11 @@ typedef RefPtr DeviceBufferRef;
 
 TList(DevicePendingRange);
 
+typedef struct DeviceData {
+	DeviceBufferRef *buffer;
+	U64 offset, len;
+} DeviceData;
+
 typedef struct DeviceBuffer {
 
 	GraphicsResource resource;

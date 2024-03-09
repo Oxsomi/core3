@@ -20,6 +20,7 @@
 
 #pragma once
 #include "acceleration_structure.h"
+#include "device_buffer.h"
 
 typedef enum EBLASFlag {
 	EBLASFlag_None					= 0,
@@ -38,8 +39,6 @@ typedef enum EBLASConstructionType {
 typedef struct BLAS {
 
 	RTAS base;
-
-	CharString name;
 
 	union {
 

@@ -28,7 +28,9 @@
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/archivex.h"
 
+#define UNICODE
 #define WIN32_LEAN_AND_MEAN
+#define MICROSOFT_WINDOWS_WINBASE_H_DEFINE_INTERLOCKED_CPLUSPLUS_OVERLOADS 0
 #include <Windows.h>
 
 Error File_foreach(CharString loc, FileCallback callback, void *userData, Bool isRecursive) {
@@ -36,6 +38,8 @@ Error File_foreach(CharString loc, FileCallback callback, void *userData, Bool i
 	CharString resolved = CharString_createNull();
 	CharString resolvedNoStar = CharString_createNull();
 	CharString tmp = CharString_createNull();
+	CharString tmp2 = CharString_createNull();
+	ListU16 tmpWStr = (ListU16) { 0 };
 	Error err = Error_none();
 	HANDLE file = NULL;
 
@@ -70,20 +74,23 @@ Error File_foreach(CharString loc, FileCallback callback, void *userData, Bool i
 			0, CharString_length(resolved), MAX_PATH, "File_foreach()::loc file path is too big (>260 chars)"
 		));
 
+	_gotoIfError(clean, CharString_toUTF16x(resolved, &tmpWStr));
+
 	//Skip .
 
-	WIN32_FIND_DATA dat;
-	file = FindFirstFileA(resolved.ptr, &dat);
+	WIN32_FIND_DATAW dat;
+	file = FindFirstFileW((const wchar_t*)tmpWStr.ptr, &dat);
+	ListU16_freex(&tmpWStr);
 
 	if(file == INVALID_HANDLE_VALUE)
 		_gotoIfError(clean, Error_notFound(0, 0, "File_foreach()::loc couldn't be found"));
 
-	if(!FindNextFileA(file, &dat))
+	if(!FindNextFileW(file, &dat))
 		_gotoIfError(clean, Error_notFound(0, 0, "File_foreach() FindNextFile failed (1)"));
 
 	//Loop through real files (while instead of do while because we wanna skip ..)
 
-	while(FindNextFileA(file, &dat)) {
+	while(FindNextFileW(file, &dat)) {
 
 		//Folders can also have timestamps, so parse timestamp here
 
@@ -102,7 +109,9 @@ Error File_foreach(CharString loc, FileCallback callback, void *userData, Bool i
 		//Grab local file name
 
 		_gotoIfError(clean, CharString_createCopyx(resolvedNoStar, &tmp));
-		_gotoIfError(clean, CharString_appendStringx(&tmp, CharString_createRefAutoConst(dat.cFileName, MAX_PATH)));
+		_gotoIfError(clean, CharString_createFromUTF16x(dat.cFileName, MAX_PATH, &tmp2));
+		_gotoIfError(clean, CharString_appendStringx(&tmp, tmp2));
+		CharString_freex(&tmp2);
 
 		//Folder parsing
 
@@ -153,14 +162,17 @@ clean:
 		FindClose(file);
 
 	CharString_freex(&tmp);
+	CharString_freex(&tmp2);
 	CharString_freex(&resolvedNoStar);
 	CharString_freex(&resolved);
+	ListU16_freex(&tmpWStr);
 	return err;
 }
 
 Error File_loadVirtualInternal(FileLoadVirtual *userData, CharString loc) {
 
 	CharString isChild = CharString_createNull();
+	ListU16 tmp = (ListU16) { 0 };
 	Error err = Error_none();
 	ELockAcquire acq = ELockAcquire_Invalid;
 
@@ -192,10 +204,13 @@ Error File_loadVirtualInternal(FileLoadVirtual *userData, CharString loc) {
 
 			if (!section->loaded) {
 
-				HRSRC data = FindResourceA(NULL, section->path.ptr, RT_RCDATA);
 				HGLOBAL handle = NULL;
 				CAFile file = (CAFile) { 0 };
 				Buffer copy = Buffer_createNull();
+
+				_gotoIfError(clean0, CharString_toUTF16x(section->path, &tmp));
+				HRSRC data = FindResourceW(NULL, tmp.ptr, RT_RCDATA);
+				ListU16_freex(&tmp);
 
 				if(!data)
 					_gotoIfError(clean0, Error_notFound(0, 1, "File_loadVirtualInternal() FindResource failed"));

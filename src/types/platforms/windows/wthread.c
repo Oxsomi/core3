@@ -22,6 +22,7 @@
 #include "types/error.h"
 #include "types/buffer.h"
 
+#define UNICODE
 #define WIN32_LEAN_AND_MEAN
 #define MICROSOFT_WINDOWS_WINBASE_H_DEFINE_INTERLOCKED_CPLUSPLUS_OVERLOADS 0
 #include <Windows.h>
@@ -31,7 +32,7 @@ U64 Thread_getId() { return GetCurrentThreadId(); }
 Bool Thread_sleep(Ns ns) {
 
 	LARGE_INTEGER ft = (LARGE_INTEGER) { .QuadPart = -(I64)((U64_min(ns, I64_MAX) + 99) / 100) };
-	HANDLE timer = CreateWaitableTimerA(NULL, TRUE, NULL); 
+	HANDLE timer = CreateWaitableTimerW(NULL, TRUE, NULL);
 
 	if(!timer)
 		return false;
@@ -39,7 +40,7 @@ Bool Thread_sleep(Ns ns) {
 	if(!SetWaitableTimer(timer, &ft, 0, NULL, NULL, 0))
 		return false;
 
-	WaitForSingleObject(timer, INFINITE); 
+	WaitForSingleObject(timer, INFINITE);
 	CloseHandle(timer);
 	return true;
 }

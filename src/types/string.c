@@ -47,6 +47,7 @@ Bool CharString_isConstRef(CharString str) { return str.capacityAndRefInfo == U6
 Bool CharString_isRef(CharString str) { return !str.capacityAndRefInfo || CharString_isConstRef(str); }
 U64  CharString_bytes(CharString str) { return str.lenAndNullTerminated << 1 >> 1; }
 U64  CharString_length(CharString str) { return CharString_bytes(str); }
+U64  CharString_capacity(CharString str) { return CharString_isRef(str) ? 0 : str.capacityAndRefInfo; }
 Bool CharString_isEmpty(CharString str) { return !CharString_bytes(str); }
 Bool CharString_isNullTerminated(CharString str) { return str.lenAndNullTerminated >> 63; }
 
@@ -56,6 +57,14 @@ Buffer CharString_buffer(CharString str) {
 
 Buffer CharString_bufferConst(CharString str) {
 	return Buffer_createRefConst(str.ptr, CharString_bytes(str));
+}
+
+Buffer CharString_allocatedBuffer(CharString str) {
+	return CharString_isRef(str) ? Buffer_createNull() : Buffer_createRef((U8*)str.ptr, CharString_capacity(str));
+}
+
+Buffer CharString_allocatedBufferConst(CharString str) {
+	return CharString_isRef(str) ? Buffer_createNull() : Buffer_createRefConst((const U8*)str.ptr, CharString_capacity(str));
 }
 
 //Iteration
@@ -704,6 +713,53 @@ Error CharString_createOct(U64 v, U8 leadingZeros, Allocator allocator, CharStri
 
 Error CharString_createBin(U64 v, U8 leadingZeros, Allocator allocator, CharString *result) {
 	CharString_createNum(64, Bin, "0b", (v >> i) & 1);
+}
+
+Error CharString_createFromUTF16(const U16 *ptr, U64 limit, Allocator allocator, CharString *result) {
+
+	Error err = CharString_reserve(result, limit == U64_MAX ? 16 : (limit * 4 + 1), allocator);
+
+	if (err.genericError)
+		return err;
+
+	UnicodeCodePointInfo codepoint = (UnicodeCodePointInfo) { 0 };
+	U64 j = 0;
+
+	Buffer buf = Buffer_createRefConst(ptr, limit == U64_MAX ? ((U64)1 << 48) - 1 : limit * sizeof(U16));
+	Buffer buf0 = CharString_allocatedBuffer(*result);
+
+	for(U64 i = 0; i < limit * 2; ) {
+
+		U16 c = ptr[i / 2];
+
+		if (!c)
+			break;
+
+		if(limit == U64_MAX) {
+			_gotoIfError(clean, CharString_reserve(result, j + 5, allocator));
+			buf0 = CharString_allocatedBuffer(*result);
+		}
+
+		//Read as UTF16 encoding
+
+		_gotoIfError(clean, Buffer_readAsUTF16(buf, i, &codepoint));
+		i += codepoint.bytes;
+
+		//Write as UTF8 encoding
+
+		_gotoIfError(clean, Buffer_writeAsUTF8(buf0, j, codepoint.index, &codepoint.bytes));
+		j += codepoint.bytes;
+		result->lenAndNullTerminated = j | ((U64)1 << 63);
+	}
+
+	((C8*)result->ptr)[j] = '\0';
+
+clean:
+
+	if(err.genericError)
+		CharString_free(result, allocator);
+
+	return err;
 }
 
 Error CharString_split(
@@ -1393,6 +1449,44 @@ Error CharString_replaceLastStringSensitive(CharString *s, CharString search, Ch
 
 Error CharString_replaceLastStringInsensitive(CharString *s, CharString search, CharString replace, Allocator allocator) {
 	return CharString_replaceLastString(s, search, replace, EStringCase_Insensitive, allocator);
+}
+
+Error CharString_toUTF16(CharString s, Allocator allocator, ListU16 *arr) {
+
+	U64 len = CharString_length(s);
+	Error err = ListU16_reserve(arr, len + 1, allocator);
+
+	if (err.genericError)
+		return err;
+
+	Buffer buf0 = ListU16_allocatedBuffer(*arr);
+	Buffer buf = CharString_bufferConst(s);
+	UnicodeCodePointInfo codepoint = (UnicodeCodePointInfo) { 0 };
+
+	U64 j = 0;
+
+	for (U64 i = 0; i < len; ) {
+
+		//Read as UTF8 encoding
+
+		_gotoIfError(clean, Buffer_readAsUTF8(buf, i, &codepoint));
+		i += codepoint.bytes;
+
+		//Write as UTF16 encoding
+
+		_gotoIfError(clean, Buffer_writeAsUTF16(buf0, j, codepoint.index, &codepoint.bytes));
+		j += codepoint.bytes;
+	}
+
+	arr->ptrNonConst[j / 2] = 0;
+	arr->length = j / 2 + 1;
+
+clean:
+
+	if (err.genericError)
+		ListU16_free(arr, allocator);
+
+	return err;
 }
 
 Bool CharString_startsWith(CharString str, C8 c, EStringCase caseSensitive) {

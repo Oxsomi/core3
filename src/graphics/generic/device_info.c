@@ -59,8 +59,8 @@ void GraphicsDeviceInfo_print(const GraphicsDeviceInfo *deviceInfo, Bool printCa
 		if(feat & EGraphicsFeatures_DirectRendering)
 			Log_debugLnx("\t\tDirect rendering");
 
-		//if(feat & EGraphicsFeatures_VariableRateShading)
-		//	Log_debugLnx("\t\tVariable rate shading");
+		if(feat & EGraphicsFeatures_VariableRateShading)
+			Log_debugLnx("\t\tVariable rate shading");
 
 		if(feat & EGraphicsFeatures_MultiDrawIndirectCount)
 			Log_debugLnx("\t\tMulti draw indirect count");
@@ -77,8 +77,8 @@ void GraphicsDeviceInfo_print(const GraphicsDeviceInfo *deviceInfo, Bool printCa
 		if(feat & EGraphicsFeatures_SubgroupShuffle)
 			Log_debugLnx("\t\tSubgroup shuffle");
 
-		//if(feat & EGraphicsFeatures_Multiview)
-		//	Log_debugLnx("\t\tMultiview");
+		if(feat & EGraphicsFeatures_Multiview)
+			Log_debugLnx("\t\tMultiview");
 
 		if(feat & EGraphicsFeatures_Raytracing)
 			Log_debugLnx("\t\tRaytracing");

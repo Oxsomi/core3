@@ -18,6 +18,7 @@
 *  This is called dual licensing.
 */
 
+#define UNICODE
 #define WIN32_LEAN_AND_MEAN
 #define MICROSOFT_WINDOWS_WINBASE_H_DEFINE_INTERLOCKED_CPLUSPLUS_OVERLOADS 0
 #include <Windows.h>
@@ -44,11 +45,11 @@ I64 AtomicI64_add(AtomicI64 *ptr, I64 value) {
 	return InterlockedExchangeAdd64(&ptr->atomic, value);
 }
 
-I64 AtomicI64_exchange(AtomicI64 *ptr, I64 value) {
+I64 AtomicI64_store(AtomicI64 *ptr, I64 value) {
 	return InterlockedExchange64(&ptr->atomic, value);
 }
 
-I64 AtomicI64_compareExchange(AtomicI64 *ptr, I64 compare, I64 value) {
+I64 AtomicI64_cmpStore(AtomicI64 *ptr, I64 compare, I64 value) {
 	return InterlockedCompareExchange64(&ptr->atomic, value, compare);
 }
 

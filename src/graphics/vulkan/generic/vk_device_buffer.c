@@ -64,7 +64,7 @@ Error VkDeviceBuffer_transition(
 
 		.buffer = buffer->buffer,
 		.offset = offset,
-		.size = size
+		.size = !size ? VK_WHOLE_SIZE : size
 	};
 
 	Error err = ListVkBufferMemoryBarrier2_pushBackx(bufferBarriers, bufferBarrier);
@@ -191,16 +191,16 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 		.buffer = bufExt->buffer
 	};
 
-	buf->resource.gpuAddress = instanceExt->getBufferDeviceAddress(deviceExt->device, &address);
+	buf->resource.deviceAddress = instanceExt->getBufferDeviceAddress(deviceExt->device, &address);
 
-	if(!buf->resource.gpuAddress)
+	if(!buf->resource.deviceAddress)
 		_gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_createBufferExt() Couldn't obtain GPU address"));
 
 	//Fill relevant descriptor sets if shader accessible
 
 	EGraphicsResourceFlag flags = buf->resource.flags;
 
-	if(flags & EGraphicsResourceFlag_ShaderRW) {
+	if(flags & EGraphicsResourceFlag_ShaderRW || (buf->usage & EDeviceBufferUsage_ASExt)) {
 
 		//Create readonly buffer
 
@@ -219,16 +219,16 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 		U32 counter = 0;
 
 		if (flags & EGraphicsResourceFlag_ShaderRead) {
-			descriptors[0].dstBinding = EDescriptorType_Buffer - 1;
-			descriptors[0].dstArrayElement = buf->readHandle & ((1 << 20) - 1);
-			descriptors[0].dstSet = deviceExt->sets[EDescriptorSetType_Resources];
+			descriptors[counter].dstBinding = EDescriptorType_Buffer;
+			descriptors[counter].dstArrayElement = ResourceHandle_getId(buf->readHandle);
+			descriptors[counter].dstSet = deviceExt->sets[EDescriptorSetType_Resources];
 			++counter;
 		}
 
 		if (flags & EGraphicsResourceFlag_ShaderWrite) {
 			descriptors[counter] = descriptors[0];
-			descriptors[counter].dstBinding = EDescriptorType_RWBuffer - 1;
-			descriptors[counter].dstArrayElement = buf->writeHandle & ((1 << 20) - 1);
+			descriptors[counter].dstBinding = EDescriptorType_RWBuffer;
+			descriptors[counter].dstArrayElement = ResourceHandle_getId(buf->writeHandle);
 			descriptors[counter].dstSet = deviceExt->sets[EDescriptorSetType_Resources];
 			++counter;
 		}

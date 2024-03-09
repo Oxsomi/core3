@@ -163,31 +163,15 @@ Error InputDevice_create(U16 buttons, U16 axes, EInputDeviceType type, InputDevi
 	if(!inputType)																				\
 		return Error_nullPointer(0, "InputDeviceCreate() localHandle wasn't found");			\
 																								\
-	if(inputType->name[0])																		\
+	if(inputType->name)																			\
 		return Error_alreadyDefined(0, "InputDeviceCreate() localHandle was already defined");	\
 																								\
-	if(CharString_isEmpty(keyName))																\
+	if(!name)																					\
 		return Error_invalidParameter(2, 0, "InputDeviceCreate()::keyName is required");		\
 																								\
-	if(CharString_length(keyName) >= _LONGSTRING_LEN)											\
-		return Error_outOfBounds(																\
-			2, CharString_length(keyName), _LONGSTRING_LEN, 									\
-			"InputDeviceCreate()::keyName out of bounds"										\
-		);																						\
-																								\
-	Buffer_copy(																				\
-		Buffer_createRef(inputType->name, _LONGSTRING_LEN), 									\
-		Buffer_createRefConst(keyName.ptr, CharString_length(keyName))							\
-	);																							\
-																								\
-	inputType->name[U64_min(CharString_length(keyName), _LONGSTRING_LEN - 1)] = '\0';
+	inputType->name = name;
 
-Error InputDevice_createButton(
-	InputDevice d,
-	U16 localHandle,
-	CharString keyName,
-	InputHandle *res
-) {
+Error InputDevice_createButton(InputDevice d, U16 localHandle, const C8 *name, InputHandle *res) {
 	InputDeviceCreate(Button);
 	*res = InputDevice_createHandle(d, localHandle, EInputType_Button);
 	return Error_none();
@@ -196,7 +180,7 @@ Error InputDevice_createButton(
 Error InputDevice_createAxis(
 	InputDevice d,
 	U16 localHandle,
-	CharString keyName,
+	const C8 *name,
 	F32 deadZone,
 	Bool resetOnInputLoss,
 	InputHandle *res

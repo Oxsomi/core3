@@ -45,14 +45,17 @@ UnifiedTexture *TextureRef_getUnifiedTextureIntern(TextureRef *tex, DeviceResour
 
 		case EGraphicsTypeId_Swapchain: {
 
+			UnifiedTexture *utex = &SwapchainRef_ptr(tex)->base;
+
+			if(!version)
+				return utex;
+
 			Swapchain *swapchain = SwapchainRef_ptr(tex);
 
 			ELockAcquire acq = !version ? ELockAcquire_AlreadyLocked : Lock_lock(&swapchain->lock, U64_MAX);
 
 			if(acq < ELockAcquire_Success)
 				return NULL;
-
-			UnifiedTexture *utex = &SwapchainRef_ptr(tex)->base;
 
 			if(version)
 				*version = (DeviceResourceVersion) {

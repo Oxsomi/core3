@@ -80,6 +80,8 @@ Because of this, a device needs the following requirements to be OxC3 compatible
   - VK_NV_displacement_micromap as RayMicromapDisplacement
   - VK_KHR_dynamic_rendering as DirectRendering
   - VK_KHR_deferred_host_operations is required for raytracing. Otherwise all raytracing extensions will be forced off.
+  - VK_KHR_multiview as Multiview
+  - VK_KHR_fragment_shading_rate as VariableRateShading
 - subgroupSize of 16 - 128.
 - sampleRateShading of true.
 - subgroup operations of basic, vote, ballot are required. Available only in compute by default. arithmetic and shuffle are optional.
@@ -170,7 +172,7 @@ Raytracing requires VK_KHR_acceleration_structure, but also requires either VK_K
 
 #### Mesh shaders
 
-Requires task shaders to be present and multiviewMeshShader, primitiveFragmentShadingRateMeshShader to be available too.
+Requires task shaders to be present.
 
 - Limits of:
   - maxMeshMultiviewViewCount >= 4.
@@ -198,6 +200,20 @@ Requires task shaders to be present and multiviewMeshShader, primitiveFragmentSh
 - AtomicF32 means atomic exchange/read and atomic float add operations on a buffer. Images are optional.
 - AtomicF64 ^ except 64-bit.
 
+#### Multiview
+
+The following are required for multiview: maxMultiviewInstanceIndex >=134217727 and maxMultiviewViewCount >=6 as well as multiview=true.
+
+#### VariableRateShading
+
+Requires the pipelineFragmentShadingRate and attachmentFragmentShadingRate as well as the following properties:
+
+- maxFragmentSize >= [2,2]
+- maxFragmentSizeAspectRatio >= 2
+- maxFragmentShadingRateCoverageSamples >= 16
+- maxFragmentShadingRateRasterizationSamples >= 4
+- on: fragmentShadingRateWithSampleMask
+
 ### Formats
 
 A lossless format is defined as "supported" if it has the following flags in the format properties when using a tiled/non linear layout (check  "49.3. Required Format Support" of the Vulkan spec).
@@ -205,8 +221,6 @@ A lossless format is defined as "supported" if it has the following flags in the
 - VK_FORMAT_FEATURE_VERTEX_BUFFER_BIT.
 - VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT
 - VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT
-- VK_FORMAT_FEATURE_BLIT_DST_BIT
-- VK_FORMAT_FEATURE_BLIT_SRC_BIT
 - VK_FORMAT_FEATURE_TRANSFER_DST_BIT
 - VK_FORMAT_FEATURE_TRANSFER_SRC_BIT
 

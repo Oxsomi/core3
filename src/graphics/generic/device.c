@@ -29,6 +29,7 @@
 #include "graphics/generic/tlas.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/log.h"
+#include "platforms/ext/ref_ptrx.h"
 #include "types/time.h"
 #include "types/type_cast.h"
 #include "formats/texture.h"
@@ -216,7 +217,7 @@ Error GraphicsDeviceRef_create(
 	//Reserve sampler 0 because we want to be able to use read/write handle 0 as invalid.
 
 	Lock_lock(&device->descriptorLock, U64_MAX);
-	if(GraphicsDeviceRef_allocateDescriptor(*deviceRef, EDescriptorType_Sampler) != 0)
+	if(GraphicsDeviceRef_allocateDescriptor(*deviceRef, EDescriptorType_Texture2D) != 0)
 		_gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_create() couldn't reserve null descriptor (sampler 0)"));
 
 	Lock_unlock(&device->descriptorLock);
@@ -338,6 +339,7 @@ impl Error GraphicsDevice_submitCommandsImpl(
 impl Error DeviceBufferRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceBufferRef *pending);
 impl Error DeviceTextureRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceTextureRef *pending);
 impl Error BLASRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, BLASRef *pending);
+impl Error TLASRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, TLASRef *pending);
 
 Error GraphicsDeviceRef_handleNextFrame(GraphicsDeviceRef *deviceRef, void *commandBuffer) {
 
@@ -409,6 +411,23 @@ Error GraphicsDeviceRef_handleNextFrame(GraphicsDeviceRef *deviceRef, void *comm
 	}
 
 	_gotoIfError(clean, ListWeakRefPtr_clear(&device->pendingBlases));
+
+	//Update TLASes
+
+	for(U64 i = 0; i < device->pendingTlases.length; ++i) {
+
+		RefPtr *pending = device->pendingTlases.ptr[i];
+		EGraphicsTypeId type = (EGraphicsTypeId) pending->typeId;
+
+		if(type != EGraphicsTypeId_TLASExt)
+			_gotoIfError(clean, Error_unsupportedOperation(
+				6, "GraphicsDeviceRef_handleNextFrame() unsupported pending TLAS type"
+			));
+
+		_gotoIfError(clean, TLASRef_flush(commandBuffer, deviceRef, pending));
+	}
+
+	_gotoIfError(clean, ListWeakRefPtr_clear(&device->pendingTlases));
 
 clean:
 	return err;
@@ -740,7 +759,7 @@ clean:
 
 U32 GraphicsDeviceRef_allocateDescriptor(GraphicsDeviceRef *deviceRef, EDescriptorType type) {
 
-	if(!deviceRef || deviceRef->typeId != EGraphicsTypeId_GraphicsDevice)
+	if(!deviceRef || deviceRef->typeId != EGraphicsTypeId_GraphicsDevice || type >= EDescriptorType_ResourceCount)
 		return U32_MAX;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
@@ -759,7 +778,14 @@ U32 GraphicsDeviceRef_allocateDescriptor(GraphicsDeviceRef *deviceRef, EDescript
 
 		if(!bit) {
 
-			U32 resourceId = i | (type << 20);
+			U32 extendedType = 0, descType = type;
+
+			if (type >= EDescriptorType_ExtendedType) {
+				extendedType = (U32)(type - EDescriptorType_ExtendedType);
+				descType = EDescriptorType_ExtendedType;
+			}
+
+			U32 resourceId = i | (extendedType << 13) | (descType << 17);
 
 			#ifndef NDEBUG
 
@@ -800,7 +826,14 @@ Bool GraphicsDeviceRef_freeDescriptors(GraphicsDeviceRef *deviceRef, ListU32 *al
 
 		if(id && id != U32_MAX) {		//0 and -1 are both invalid to avoid freeing uninitialized memory (NULL descriptor)
 
-			success &= !Buffer_resetBit(device->freeList[id >> 20], id & ((1 << 20) - 1)).genericError;
+			EDescriptorType type = ResourceHandle_getType(id);
+
+			if(type >= EDescriptorType_ResourceCount)
+				continue;
+
+			U32 realId = ResourceHandle_getId(id);
+
+			success &= !Buffer_resetBit(device->freeList[type], realId).genericError;
 
 			#ifndef NDEBUG
 
@@ -820,4 +853,46 @@ Bool GraphicsDeviceRef_freeDescriptors(GraphicsDeviceRef *deviceRef, ListU32 *al
 
 	ListU32_clear(allocations);
 	return success;
+}
+
+U64 ResourceHandle_pack3(U32 a, U32 b, U32 c) {
+	return a | ((U64)b << 21) |  ((U64)c << 42);
+}
+
+I32x4 ResourceHandle_unpack3(U64 v) {
+
+	U32 a = v & ((1 << 21) - 1);
+	U32 b = (v >> 21) & ((1 << 21) - 1);
+	U32 c = v >> 42;
+
+	return I32x4_create3((I32)a, (I32)b, (I32)c);
+}
+
+EDescriptorType ResourceHandle_getType(U32 handle) {
+
+	EDescriptorType type = (EDescriptorType)(handle >> 17);
+	U32 realId = handle & ((1 << 17) - 1);
+
+	if (type == EDescriptorType_ExtendedType)
+		type += (realId >> 13) & 0xF;
+
+	return type;
+}
+
+U32 ResourceHandle_getId(U32 handle) {
+
+	if ((EDescriptorType)(handle >> 17) == EDescriptorType_ExtendedType)
+		return handle & ((1 << 13) - 1);
+
+	return handle & ((1 << 17) - 1);
+}
+
+Bool ResourceHandle_isValid(U32 handle) {
+
+	EDescriptorType type = ResourceHandle_getType(handle);
+
+	if(type >= EDescriptorType_ResourceCount)
+		return false;
+
+	return ResourceHandle_getId(handle) >= descriptorTypeCount[type];
 }

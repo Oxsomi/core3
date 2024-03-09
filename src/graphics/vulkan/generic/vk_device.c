@@ -196,9 +196,26 @@ Error GraphicsDevice_initExt(
 		{
 			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT,
 			.meshShader = true,
-			.taskShader = true,
-			.multiviewMeshShader = true,
-			.primitiveFragmentShadingRateMeshShader = true
+			.taskShader = true
+		}
+	);
+
+	vkBindNext(
+		VkPhysicalDeviceMultiviewFeatures,
+		feat & EGraphicsFeatures_Multiview,
+		{
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_FEATURES,
+			.multiview = true
+		}
+	);
+
+	vkBindNext(
+		VkPhysicalDeviceFragmentShadingRateFeaturesKHR,
+		feat & EGraphicsFeatures_VariableRateShading,
+		{
+			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_FEATURES_KHR,
+			.pipelineFragmentShadingRate = true,
+			.attachmentFragmentShadingRate = true
 		}
 	);
 
@@ -207,7 +224,8 @@ Error GraphicsDevice_initExt(
 		feat & EGraphicsFeatures_Raytracing,
 		{
 			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR,
-			.accelerationStructure = true
+			.accelerationStructure = true,
+			.descriptorBindingAccelerationStructureUpdateAfterBind = true
 		}
 	);
 
@@ -331,6 +349,8 @@ Error GraphicsDevice_initExt(
 			case EOptExtensions_RayMotionBlur:				on = feat & EGraphicsFeatures_RayMotionBlur;			break;
 			case EOptExtensions_RayReorder:					on = feat & EGraphicsFeatures_RayReorder;				break;
 			case EOptExtensions_MeshShader:					on = feat & EGraphicsFeatures_MeshShader;				break;
+			case EOptExtensions_Multiview:					on = feat & EGraphicsFeatures_Multiview;				break;
+			case EOptExtensions_VariableRateShading:		on = feat & EGraphicsFeatures_VariableRateShading;		break;
 			case EOptExtensions_DynamicRendering:			on = feat & EGraphicsFeatures_DirectRendering;			break;
 			case EOptExtensions_RayMicromapOpacity:			on = feat & EGraphicsFeatures_RayMicromapOpacity;		break;
 			case EOptExtensions_RayMicromapDisplacement:	on = feat & EGraphicsFeatures_RayMicromapDisplacement;	break;
@@ -624,17 +644,29 @@ Error GraphicsDevice_initExt(
 
 		if (i == EDescriptorSetType_Resources) {
 
-			for(U32 j = EDescriptorType_Texture2D; j < EDescriptorType_ResourceCount; ++j)
-				bindings[j - 1] = (VkDescriptorSetLayoutBinding) {
-					.binding = j - 1,
+			for(U32 j = EDescriptorType_Texture2D; j < EDescriptorType_ResourceCount; ++j) {
+
+				if(j == EDescriptorType_Sampler)
+					continue;
+
+				U32 id = j;
+
+				if(j > EDescriptorType_Sampler)
+					--id;
+
+				bindings[id] = (VkDescriptorSetLayoutBinding) {
+					.binding = id,
 					.stageFlags = VK_SHADER_STAGE_ALL,
 					.descriptorCount = descriptorTypeCount[j],
 					.descriptorType =
-						j < EDescriptorType_Buffer ? VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE : (
-							j <= EDescriptorType_RWBuffer ? VK_DESCRIPTOR_TYPE_STORAGE_BUFFER :
-							VK_DESCRIPTOR_TYPE_STORAGE_IMAGE
+						j == EDescriptorType_TLASExt ? VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR : (
+							j < EDescriptorType_Buffer ? VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE : (
+								j <= EDescriptorType_RWBuffer ? VK_DESCRIPTOR_TYPE_STORAGE_BUFFER :
+								VK_DESCRIPTOR_TYPE_STORAGE_IMAGE
+							)
 						)
 				};
+			}
 
 			bindingCount = EDescriptorType_ResourceCount - 1;
 		}
@@ -702,7 +734,8 @@ Error GraphicsDevice_initExt(
 		(VkDescriptorPoolSize) { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, EDescriptorTypeCount_RWTextures },
 		(VkDescriptorPoolSize) { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, EDescriptorTypeCount_Textures },
 		(VkDescriptorPoolSize) { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, EDescriptorTypeCount_SSBO },
-		(VkDescriptorPoolSize) { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 3 }
+		(VkDescriptorPoolSize) { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 3 },
+		(VkDescriptorPoolSize) { VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, EDescriptorTypeCount_TLASExt }
 	};
 
 	VkDescriptorPoolCreateInfo poolInfo = (VkDescriptorPoolCreateInfo) {
@@ -1030,7 +1063,9 @@ Error GraphicsDevice_submitCommandsImpl(
 		deviceExt->swapchainIndices.ptrNonConst[i] = unifiedTexture->currentImageId;
 
 		VkPipelineStageFlagBits pipelineStage =
-			swapchain->base.resource.flags & EGraphicsResourceFlag_ShaderWrite ? VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT :
+			(swapchain->base.resource.flags & EGraphicsResourceFlag_ShaderWrite ? VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT : 0) |
+			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
+			VK_PIPELINE_STAGE_TRANSFER_BIT |
 			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
 		_gotoIfError(clean, ListVkSemaphore_pushBackx(&deviceExt->waitSemaphores, semaphore));
@@ -1041,9 +1076,9 @@ Error GraphicsDevice_submitCommandsImpl(
 
 	{
 		DeviceBuffer *frameData = DeviceBufferRef_ptr(device->frameData);
-		CBufferData *data = (CBufferData*) frameData->resource.mappedMemoryExt + (device->submitId % 3);
+		CBufferData *data = (CBufferData*)frameData->resource.mappedMemoryExt + (device->submitId % 3);
 
-		for(U32 i = 0; i < data->swapchainCount; ++i) {
+		for (U32 i = 0; i < data->swapchainCount; ++i) {
 
 			SwapchainRef *swapchainRef = swapchains.ptr[i];
 			Swapchain *swapchain = SwapchainRef_ptr(swapchainRef);
@@ -1053,9 +1088,7 @@ Error GraphicsDevice_submitCommandsImpl(
 			UnifiedTextureImage managedImage = TextureRef_getCurrImage(swapchainRef, 0);
 
 			data->swapchains[i * 2 + 0] = managedImage.readHandle;
-
-			if(allowCompute)
-				data->swapchains[i * 2 + 1] = managedImage.writeHandle;
+			data->swapchains[i * 2 + 1] = allowCompute ? managedImage.writeHandle : 0;
 		}
 
 		DeviceMemoryBlock block = device->allocator.blocks.ptr[frameData->resource.blockId];
@@ -1063,9 +1096,9 @@ Error GraphicsDevice_submitCommandsImpl(
 
 		if (incoherent) {
 
-			VkMappedMemoryRange range = (VkMappedMemoryRange) {
+			VkMappedMemoryRange range = (VkMappedMemoryRange){
 				.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
-				.memory = (VkDeviceMemory) block.ext,
+				.memory = (VkDeviceMemory)block.ext,
 				.offset = frameData->resource.blockOffset + (device->submitId % 3) * sizeof(CBufferData),
 				.size = sizeof(CBufferData)
 			};

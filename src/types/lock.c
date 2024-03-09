@@ -45,7 +45,7 @@ ELockAcquire Lock_lock(Lock *l, Ns maxTime) {
 	if (l && l->active) {
 
 		I64 tid = (I64) Thread_getId();
-		I64 prevValue = AtomicI64_compareExchange(&l->lockedThreadId, 0, tid);
+		I64 prevValue = AtomicI64_cmpStore(&l->lockedThreadId, 0, tid);
 
 		if(prevValue == tid)		//Already locked
 			return ELockAcquire_AlreadyLocked;
@@ -60,7 +60,7 @@ ELockAcquire Lock_lock(Lock *l, Ns maxTime) {
 		while(prevValue != 0) {
 
 			Thread_sleep(100 * MU);
-			prevValue = AtomicI64_compareExchange(&l->lockedThreadId, 0, tid);
+			prevValue = AtomicI64_cmpStore(&l->lockedThreadId, 0, tid);
 
 			if(maxTime != U64_MAX && Time_now() - time >= maxTime)
 				return ELockAcquire_TimedOut;
@@ -76,7 +76,7 @@ Bool Lock_unlock(Lock *l) {
 
 	if (l && l->active) {
 		U64 tid = Thread_getId();
-		return (U32) AtomicI64_compareExchange(&l->lockedThreadId, tid, 0) == (I64) tid;
+		return (U32) AtomicI64_cmpStore(&l->lockedThreadId, tid, 0) == (I64) tid;
 	}
 
 	return false;

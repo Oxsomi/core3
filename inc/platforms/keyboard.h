@@ -23,6 +23,16 @@
 
 typedef struct Error Error;
 typedef struct InputDevice Keyboard;
+typedef struct CharString CharString;
+
+//EKey is remapped using scan codes for QWERTY iso layout (https://kbdlayout.info/kbdusx)
+// The main part of the keyboard uses scan codes, but the following don't:
+// Extended keyboard (numpad, arrows, insert/page down/etc.)
+// These keystrokes use virtual keys on windows.
+//Don't assume for example Key_W is really the W key! (e.g. AZERTY would be Z instead of W. Might even be non latin char).
+//Use Keyboard_remap(keyboard, key) to get the localized keyboard unicode codepoint.
+//Only use Keyboard_remap for displaying what kind of key is pressed or in option screens.
+//When typing text, please rely on the typeChar callback.
 
 typedef enum EKey {
 
@@ -32,13 +42,19 @@ typedef enum EKey {
 	EKey_K, EKey_L, EKey_M, EKey_N, EKey_O, EKey_P, EKey_Q, EKey_R, EKey_S, EKey_T,
 	EKey_U, EKey_V, EKey_W, EKey_X, EKey_Y, EKey_Z,
 
-	EKey_Backspace,		EKey_Space,			EKey_Tab,			EKey_Shift,			EKey_Ctrl,			EKey_Alt,
-	EKey_Pause,			EKey_Caps,			EKey_Escape,		EKey_PageUp,		EKey_PageDown,		EKey_End,
-	EKey_Home,			EKey_Select,		EKey_Print,			EKey_Execute,		EKey_PrintScreen,	EKey_Insert,
-	EKey_Back,			EKey_Forward,		EKey_Sleep,			EKey_Refresh,		EKey_Stop,			EKey_Search,
-	EKey_Favorites,		EKey_Start,			EKey_Mute,			EKey_VolumeDown,	EKey_VolumeUp,		EKey_Skip,
-	EKey_Previous,		EKey_Clear,			EKey_Zoom,			EKey_Enter,			EKey_Delete,		EKey_Help,
-	EKey_NumLock,		EKey_ScrollLock,	EKey_Apps,
+	EKey_Backspace,		EKey_Space,			EKey_Tab,
+
+	EKey_LShift,		EKey_LCtrl,			EKey_LAlt,			EKey_LMenu,
+	EKey_RShift,		EKey_RCtrl,			EKey_RAlt,			EKey_RMenu,
+
+	EKey_Pause,			EKey_Caps,			EKey_Escape,		EKey_PageUp,
+	EKey_PageDown,		EKey_End,			EKey_Home,			EKey_PrintScreen,
+	EKey_Insert,		EKey_Enter,			EKey_Delete,		EKey_NumLock,		EKey_ScrollLock,
+
+	EKey_Select,		EKey_Print,			EKey_Execute,		EKey_Back,			EKey_Forward,
+	EKey_Sleep,			EKey_Refresh,		EKey_Stop,			EKey_Search,		EKey_Favorites,
+	EKey_Start,			EKey_Mute,			EKey_VolumeDown,	EKey_VolumeUp,		EKey_Skip,
+	EKey_Previous,		EKey_Clear,			EKey_Zoom,			EKey_Help,			EKey_Apps,
 
 	EKey_Left,			EKey_Up,			EKey_Right,			EKey_Down,
 
@@ -47,17 +63,18 @@ typedef enum EKey {
 	EKey_Numpad4,		EKey_Numpad5,		EKey_Numpad6,
 	EKey_Numpad7,		EKey_Numpad8,		EKey_Numpad9,
 
-	EKey_NumpadMul,		EKey_NumpadAdd,		EKey_NumpadDec,
+	EKey_NumpadMul,		EKey_NumpadAdd,		EKey_NumpadDot,
 	EKey_NumpadDiv,		EKey_NumpadSub,
 
 	EKey_F1,			EKey_F2,			EKey_F3,			EKey_F4,			EKey_F5,
 	EKey_F6,			EKey_F7,			EKey_F8,			EKey_F9,			EKey_F10,
-	EKey_F11,			EKey_F12,			EKey_F13,			EKey_F14,			EKey_F15,
-	EKey_F16,			EKey_F17,			EKey_F18,			EKey_F19,			EKey_F20,
-	EKey_F21,			EKey_F22,			EKey_F23,			EKey_F24,
+	EKey_F11,			EKey_F12,
+
+	EKey_Bar,			//Scancode 56 (right half of shift if there's another key there)
+	EKey_Options,		//Scancode E05D (left of ctrl)
 
 	EKey_Equals,		EKey_Comma,			EKey_Minus,			EKey_Period,
-	EKey_Slash,			EKey_Acute,			EKey_Semicolon,		EKey_LBracket,		EKey_RBracket,
+	EKey_Slash,			EKey_Backtick,		EKey_Semicolon,		EKey_LBracket,		EKey_RBracket,
 	EKey_Backslash,		EKey_Quote,
 
 	EKey_Count
@@ -70,7 +87,14 @@ typedef enum EKeyboardFlags {
 	EKeyboardFlags_ScrollLock,
 	EKeyboardFlags_Shift,
 	EKeyboardFlags_Control,
-	EKeyboardFlags_Alt
+	EKeyboardFlags_Alt,
+	EKeyboardFlags_Count
 } EKeyboardFlags;
 
 Error Keyboard_create(Keyboard *result);
+
+//Remap key to unicode codepoint using current language. This is only for debugging keyboard mappings and GUI elements.
+//For text boxes, use the typeChar callback of Window; this handles OS-level input such as IME (Japanese) and emojis.
+//If there's no remap available it will return an empty string.
+//Make sure to free this.
+impl CharString Keyboard_remap(EKey key);

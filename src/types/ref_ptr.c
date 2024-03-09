@@ -18,9 +18,8 @@
 *  This is called dual licensing.
 */
 
-#include "platforms/ext/listx_impl.h"
+#include "types/list_impl.h"
 #include "types/ref_ptr.h"
-#include "platforms/platform.h"
 #include "types/type_id.h"
 
 TListNamedImpl(ListRefPtr);
@@ -51,10 +50,6 @@ Error RefPtr_create(U32 objectLength, Allocator alloc, ObjectFreeFunc free, ETyp
 	};
 
 	return Error_none();
-}
-
-Error RefPtr_createx(U32 objectLength, ObjectFreeFunc free, ETypeId type, RefPtr **result) {
-	return RefPtr_create(objectLength, Platform_instance.alloc, free, type, result);
 }
 
 Bool RefPtr_inc(RefPtr *ptr) {

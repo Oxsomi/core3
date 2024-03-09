@@ -38,8 +38,8 @@ impl I64 AtomicI64_xor(AtomicI64 *ptr, I64 value);
 impl I64 AtomicI64_and(AtomicI64 *ptr, I64 value);
 impl I64 AtomicI64_or(AtomicI64 *ptr, I64 value);
 impl I64 AtomicI64_load(AtomicI64 *ptr);
-impl I64 AtomicI64_exchange(AtomicI64 *ptr, I64 value);
-impl I64 AtomicI64_compareExchange(AtomicI64 *ptr, I64 compare, I64 value);		//If value in atomic is compare set to value
+impl I64 AtomicI64_store(AtomicI64 *ptr, I64 value);
+impl I64 AtomicI64_cmpStore(AtomicI64 *ptr, I64 compare, I64 value);		//If value in atomic is compare set to value
 
 //Return state of atomic before adding value.
 

@@ -129,7 +129,7 @@ Error GraphicsDeviceRef_createSamplerExt(GraphicsDeviceRef *dev, Sampler *sample
 		.descriptorCount = 1,
 		.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
 		.dstSet = deviceExt->sets[EDescriptorSetType_Sampler],
-		.dstArrayElement = sampler->samplerLocation & ((1 << 20) - 1),
+		.dstArrayElement = ResourceHandle_getId(sampler->samplerLocation),
 		.pImageInfo = &imageInfo
 	};
 

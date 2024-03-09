@@ -639,7 +639,7 @@ _BUFFER_IMPL(F32x4);
 //UTF-8
 //https://en.wikipedia.org/wiki/UTF-8
 
-Error Buffer_readAsUTF8(Buffer buf, U64 i, UTF8CodePointInfo *codepoint) {
+Error Buffer_readAsUTF8(Buffer buf, U64 i, UnicodeCodePointInfo *codepoint) {
 
 	if(!codepoint)
 		return Error_nullPointer(3, "Buffer_readAsUTF8()::codepoint is required");
@@ -656,7 +656,7 @@ Error Buffer_readAsUTF8(Buffer buf, U64 i, UTF8CodePointInfo *codepoint) {
 		if(!C8_isValidAscii((C8)v0))
 			return Error_invalidParameter(0, 0, "Buffer_readAsUTF8()::buf[i] didn't contain valid ascii");
 
-		*codepoint = (UTF8CodePointInfo) { .size = 1, .index = v0 };
+		*codepoint = (UnicodeCodePointInfo) { .chars = 1, .bytes = 1, .index = v0 };
 		return Error_none();
 	}
 
@@ -676,7 +676,7 @@ Error Buffer_readAsUTF8(Buffer buf, U64 i, UTF8CodePointInfo *codepoint) {
 	//2 bytes
 
 	if (v0 < 0xE0) {
-		*codepoint = (UTF8CodePointInfo) { .size = 2, .index = (((U16)v0 & 0x1F) << 6) | (v1 & 0x3F) };
+		*codepoint = (UnicodeCodePointInfo) { .chars = 2, .bytes = 2, .index = (((U16)v0 & 0x1F) << 6) | (v1 & 0x3F) };
 		return Error_none();
 	}
 
@@ -691,7 +691,11 @@ Error Buffer_readAsUTF8(Buffer buf, U64 i, UTF8CodePointInfo *codepoint) {
 		return Error_invalidParameter(0, 3, "Buffer_readAsUTF8()::buf[i + 2] had invalid encoding");
 
 	if (v0 < 0xF0) {
-		*codepoint = (UTF8CodePointInfo) { .size = 3, .index = (((U32)v0 & 0xF) << 12) | (((U32)v1 & 0x3F) << 6) | (v2 & 0x3F) };
+
+		*codepoint = (UnicodeCodePointInfo) {
+			.chars = 3, .bytes = 3, .index = (((U32)v0 & 0xF) << 12) | (((U32)v1 & 0x3F) << 6) | (v2 & 0x3F)
+		};
+
 		return Error_none();
 	}
 
@@ -705,26 +709,39 @@ Error Buffer_readAsUTF8(Buffer buf, U64 i, UTF8CodePointInfo *codepoint) {
 	if(v3 < 0x80 || v3 >= 0xC0)
 		return Error_invalidParameter(0, 4, "Buffer_readAsUTF8()::buf[i + 3] had invalid encoding");
 
-	*codepoint = (UTF8CodePointInfo) {
-		.size = 4,
+	*codepoint = (UnicodeCodePointInfo) {
+		.chars = 4,
+		.bytes = 4,
 		.index = (((U32)v0 & 0x7) << 18) | (((U32)v1 & 0x3F) << 12) | (((U32)v2 & 0x3F) << 6) | (v3 & 0x3F)
 	};
 
 	return Error_none();
 }
 
-Error Buffer_writeAsUTF8(Buffer buf, U64 i, UTF8CodePoint codepoint) {
+Error Buffer_writeAsUTF8(Buffer buf, U64 i, UnicodeCodePoint codepoint, U8 *length) {
 
 	if(Buffer_isConstRef(buf))
 		return Error_constData(0, 0, "Buffer_writeAsUTF8()::buf should be writable");
 
-	if ((codepoint & 0x7F) == codepoint)
-		return Buffer_appendU8(&buf, (U8) codepoint);
+	if ((codepoint & 0x7F) == codepoint) {
+
+		if(i + 1 > Buffer_length(buf))
+			return Error_outOfBounds(0, i + 1, Buffer_length(buf), "Buffer_writeAsUTF8()::i out of bounds");
+
+		if(length)
+			*length = 1;
+
+		((U8*)buf.ptr)[i] = (U8) codepoint;
+		return Error_none();
+	}
 
 	if ((codepoint & 0x7FF) == codepoint) {
 
 		if(i + 2 > Buffer_length(buf))
 			return Error_outOfBounds(0, i + 2, Buffer_length(buf), "Buffer_writeAsUTF8()::i + 1 out of bounds");
+
+		if(length)
+			*length = 2;
 
 		((U8*)buf.ptr)[i]		= 0xC0 | (U8)(codepoint >> 6);
 		((U8*)buf.ptr)[i + 1]	= 0x80 | (U8)(codepoint & 0x3F);
@@ -735,6 +752,9 @@ Error Buffer_writeAsUTF8(Buffer buf, U64 i, UTF8CodePoint codepoint) {
 
 		if(i + 3 > Buffer_length(buf))
 			return Error_outOfBounds(0, i + 3, Buffer_length(buf), "Buffer_writeAsUTF8()::i + 2 out of bounds");
+
+		if(length)
+			*length = 3;
 
 		((U8*)buf.ptr)[i]		= 0xE0 | (U8)(codepoint >> 12);
 		((U8*)buf.ptr)[i + 1]	= 0x80 | (U8)((codepoint >> 6) & 0x3F);
@@ -747,6 +767,9 @@ Error Buffer_writeAsUTF8(Buffer buf, U64 i, UTF8CodePoint codepoint) {
 		if(i + 4 > Buffer_length(buf))
 			return Error_outOfBounds(0, i + 4, Buffer_length(buf), "Buffer_writeAsUTF8()::i + 3 out of bounds");
 
+		if(length)
+			*length = 4;
+
 		((U8*)buf.ptr)[i]		= 0xF0 | (U8)(codepoint >> 18);
 		((U8*)buf.ptr)[i + 1]	= 0x80 | (U8)((codepoint >> 12) & 0x3F);
 		((U8*)buf.ptr)[i + 2]	= 0x80 | (U8)((codepoint >> 6) & 0x3F);
@@ -757,34 +780,116 @@ Error Buffer_writeAsUTF8(Buffer buf, U64 i, UTF8CodePoint codepoint) {
 	return Error_invalidParameter(2, 0, "Buffer_writeAsUTF8()::codepoint out of bounds (>0x10FFFF)");
 }
 
-Bool Buffer_isUTF8(Buffer buf, F32 threshold) {
+//https://en.wikipedia.org/wiki/UTF-16
+
+Error Buffer_readAsUTF16(Buffer buf, U64 i, UnicodeCodePointInfo *codepoint) {
+
+	if(!codepoint)
+		return Error_nullPointer(3, "Buffer_readAsUTF16()::codepoint is required");
+
+	if(i >= U64_MAX - 2 || i + 2 > Buffer_length(buf))
+		return Error_outOfBounds(0, i, Buffer_length(buf), "Buffer_readAsUTF16() out of bounds");
+
+	//1 U16
+
+	U16 v0 = *(const U16*)(buf.ptr + i);
+	i += 2;
+
+	if (v0 <= 0xD7FF) {
+
+		if(v0 <= 0x7F && !C8_isValidAscii((C8)v0))
+			return Error_invalidParameter(0, 0, "Buffer_readAsUTF16()::buf[i] didn't contain valid ascii");
+
+		*codepoint = (UnicodeCodePointInfo) { .chars = 1, .bytes = 2, .index = v0 };
+		return Error_none();
+	}
+
+	if((v0 - 0xD800) >= (1 << 10))
+		return Error_invalidParameter(0, 1, "Buffer_readAsUTF16()::buf[i] didn't contain valid UTF16");
+
+	//2 U16s
+
+	if(i + 2 > Buffer_length(buf))
+		return Error_outOfBounds(1, i, Buffer_length(buf), "Buffer_readAsUTF16()::buf UTF16 ended unexpectedly");
+
+	U16 v1 = *(const U16*)(buf.ptr + i);
+	i += 2;
+
+	if(v1 < 0xDC00 || (v1 - 0xDC00) >= (1 << 10))
+		return Error_invalidParameter(0, 2, "Buffer_readAsUTF16()::buf[i + 1] had invalid encoding");
+
+	*codepoint = (UnicodeCodePointInfo) { .chars = 2, .bytes = 4, .index = ((v0 - 0xD800) << 10) | (v1 - 0xDC00) | 0x10000 };
+	return Error_none();
+}
+
+Error Buffer_writeAsUTF16(Buffer buf, U64 i, UnicodeCodePoint codepoint, U8 *length) {
+
+	if(Buffer_isConstRef(buf))
+		return Error_constData(0, 0, "Buffer_writeAsUTF16()::buf should be writable");
+
+	if (codepoint <= 0xD7FF) {
+
+		if(i + 2 > Buffer_length(buf))
+			return Error_outOfBounds(0, i + 2, Buffer_length(buf), "Buffer_writeAsUTF16()::i out of bounds");
+
+		if(length)
+			*length = 2;
+
+		*(U16*)(buf.ptr + i) = (U16) codepoint;
+		return Error_none();
+	}
+
+	if (codepoint <= 0x10FFFF) {
+
+		if(i + 4 > Buffer_length(buf))
+			return Error_outOfBounds(0, i + 4, Buffer_length(buf), "Buffer_writeAsUTF16()::i + 4 out of bounds");
+
+		if(length)
+			*length = 4;
+
+		((U16*)(buf.ptr + i))[0]		= 0xD800 | (U16)(codepoint >> 10);
+		((U16*)(buf.ptr + i))[1]		= 0xDC00 | (U16)(codepoint & 1023);
+		return Error_none();
+	}
+
+	return Error_invalidParameter(2, 0, "Buffer_writeAsUTF16()::codepoint out of bounds (>0x10FFFF)");
+}
+
+//Detect unicode
+
+Bool Buffer_isUnicode(Buffer buf, F32 threshold, Bool isUTF16) {
 
 	threshold = 1 - threshold;
 
-	U64 i = 0;
+	U64 i = 0, minWidth = isUTF16 ? 2 : 1;
 	F32 counter = 0;
 	F32 invLen = 1.f / Buffer_length(buf);
 
-	while (i < Buffer_length(buf)) {
+	while (i + minWidth <= Buffer_length(buf)) {
 
-		UTF8CodePointInfo info;
+		UnicodeCodePointInfo info = (UnicodeCodePointInfo) { 0 };
 
-		if((Buffer_readAsUTF8(buf, i, &info)).genericError) {
-
+		if(
+			(!isUTF16 && (Buffer_readAsUTF8(buf, i, &info)).genericError) ||
+			(isUTF16 && (Buffer_readAsUTF16(buf, i, &info)).genericError)
+		) {
 			counter += invLen;
 
 			if(counter >= threshold)
 				return false;
 
-			++i;
+			i += minWidth;
 			continue;
 		}
 
-		i += info.size;
+		i += info.bytes;
 	}
 
 	return i;
 }
+
+Bool Buffer_isUTF8(Buffer buf, F32 threshold) { return Buffer_isUnicode(buf, threshold, false); }
+Bool Buffer_isUTF16(Buffer buf, F32 threshold) { return Buffer_isUnicode(buf, threshold, true); }
 
 Bool Buffer_isAscii(Buffer buf) {
 

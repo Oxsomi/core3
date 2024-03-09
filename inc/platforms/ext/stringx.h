@@ -31,6 +31,8 @@ Error CharString_createHexx(U64 v, U8 leadingZeros, CharString *result);
 Error CharString_createDecx(U64 v, U8 leadingZeros, CharString *result);
 Error CharString_createOctx(U64 v, U8 leadingZeros, CharString *result);
 Error CharString_createBinx(U64 v, U8 leadingZeros, CharString *result);
+Error CharString_createFromUTF16x(const U16 *ptr, U64 max, CharString *result);
+Error CharString_toUTF16x(CharString s, ListU16 *arr);
 
 Error CharString_splitx(CharString s, C8 c, EStringCase casing, CharStringList *result);
 Error CharString_splitStringx(CharString s, CharString other, EStringCase casing, CharStringList *result);

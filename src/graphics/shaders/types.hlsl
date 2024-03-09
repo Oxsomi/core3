@@ -302,3 +302,51 @@ F32x4x4 F32x4x4_lookAt(F32x3 eye, F32x3 center, F32x3 up) {
 static const F32 F32_pi = 3.1415926535;
 static const F32 F32_degToRad = F32_pi / 180;
 static const F32 F32_radToDeg = 180 / F32_pi;
+
+//Inverting a 4x4 matrix
+//https://gist.github.com/mattatz/86fff4b32d198d0928d0fa4ff32cf6fa
+
+F32x4x4 inverseSlow(F32x4x4 m) {
+
+	F32 n11 = m[0][0], n12 = m[1][0], n13 = m[2][0], n14 = m[3][0];
+	F32 n21 = m[0][1], n22 = m[1][1], n23 = m[2][1], n24 = m[3][1];
+	F32 n31 = m[0][2], n32 = m[1][2], n33 = m[2][2], n34 = m[3][2];
+	F32 n41 = m[0][3], n42 = m[1][3], n43 = m[2][3], n44 = m[3][3];
+	
+	F32 t11 = n23 * n34 * n42 - n24 * n33 * n42 + n24 * n32 * n43 - n22 * n34 * n43 - n23 * n32 * n44 + n22 * n33 * n44;
+	F32 t12 = n14 * n33 * n42 - n13 * n34 * n42 - n14 * n32 * n43 + n12 * n34 * n43 + n13 * n32 * n44 - n12 * n33 * n44;
+	F32 t13 = n13 * n24 * n42 - n14 * n23 * n42 + n14 * n22 * n43 - n12 * n24 * n43 - n13 * n22 * n44 + n12 * n23 * n44;
+	F32 t14 = n14 * n23 * n32 - n13 * n24 * n32 - n14 * n22 * n33 + n12 * n24 * n33 + n13 * n22 * n34 - n12 * n23 * n34;
+	
+	F32 det = n11 * t11 + n21 * t12 + n31 * t13 + n41 * t14;
+	F32 idet = 1 / det;
+	
+	F32x4x4 ret;
+
+	ret[0][0] = t11;
+	ret[0][1] = n24 * n33 * n41 - n23 * n34 * n41 - n24 * n31 * n43 + n21 * n34 * n43 + n23 * n31 * n44 - n21 * n33 * n44;
+	ret[0][2] = n22 * n34 * n41 - n24 * n32 * n41 + n24 * n31 * n42 - n21 * n34 * n42 - n22 * n31 * n44 + n21 * n32 * n44;
+	ret[0][3] = n23 * n32 * n41 - n22 * n33 * n41 - n23 * n31 * n42 + n21 * n33 * n42 + n22 * n31 * n43 - n21 * n32 * n43;
+	
+	ret[1][0] = t12;
+	ret[1][1] = n13 * n34 * n41 - n14 * n33 * n41 + n14 * n31 * n43 - n11 * n34 * n43 - n13 * n31 * n44 + n11 * n33 * n44;
+	ret[1][2] = n14 * n32 * n41 - n12 * n34 * n41 - n14 * n31 * n42 + n11 * n34 * n42 + n12 * n31 * n44 - n11 * n32 * n44;
+	ret[1][3] = n12 * n33 * n41 - n13 * n32 * n41 + n13 * n31 * n42 - n11 * n33 * n42 - n12 * n31 * n43 + n11 * n32 * n43;
+	
+	ret[2][0] = t13;
+	ret[2][1] = n14 * n23 * n41 - n13 * n24 * n41 - n14 * n21 * n43 + n11 * n24 * n43 + n13 * n21 * n44 - n11 * n23 * n44;
+	ret[2][2] = n12 * n24 * n41 - n14 * n22 * n41 + n14 * n21 * n42 - n11 * n24 * n42 - n12 * n21 * n44 + n11 * n22 * n44;
+	ret[2][3] = n13 * n22 * n41 - n12 * n23 * n41 - n13 * n21 * n42 + n11 * n23 * n42 + n12 * n21 * n43 - n11 * n22 * n43;
+	
+	ret[3][0] = t14;
+	ret[3][1] = n13 * n24 * n31 - n14 * n23 * n31 + n14 * n21 * n33 - n11 * n24 * n33 - n13 * n21 * n34 + n11 * n23 * n34;
+	ret[3][2] = n14 * n22 * n31 - n12 * n24 * n31 - n14 * n21 * n32 + n11 * n24 * n32 + n12 * n21 * n34 - n11 * n22 * n34;
+	ret[3][3] = n12 * n23 * n31 - n13 * n22 * n31 + n13 * n21 * n32 - n11 * n23 * n32 - n12 * n21 * n33 + n11 * n22 * n33;
+
+	[unroll]
+	for(U32 i = 0; i < 4; ++i)
+		ret[i] *= idet.xxxx;
+
+	return ret;
+}
+

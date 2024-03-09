@@ -54,7 +54,7 @@ typedef enum EGraphicsFeatures {
 
 	EGraphicsFeatures_DirectRendering			= 1 << 0,
 
-	//EGraphicsFeatures_VariableRateShading		= 1 << 1,		TODO:
+	EGraphicsFeatures_VariableRateShading		= 1 << 1,
 
 	EGraphicsFeatures_MultiDrawIndirectCount	= 1 << 2,
 
@@ -64,7 +64,7 @@ typedef enum EGraphicsFeatures {
 	EGraphicsFeatures_SubgroupArithmetic		= 1 << 5,
 	EGraphicsFeatures_SubgroupShuffle			= 1 << 6,
 
-	//EGraphicsFeatures_Multiview				= 1 << 7,		TODO:
+	EGraphicsFeatures_Multiview					= 1 << 7,
 
 	//Raytracing extensions
 
