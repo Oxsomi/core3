@@ -228,7 +228,7 @@ void Log_log(Allocator alloc, ELogLevel lvl, ELogOptions options, CharString arg
 
 	CONSOLE_SCREEN_BUFFER_INFO info;
 	GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &info);
-	oldColor = info.wAttributes;
+	WORD oldColor = info.wAttributes;
 
 	//Prepare for message
 
