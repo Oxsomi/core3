@@ -38,7 +38,7 @@ Error VkSurface_create(GraphicsDevice *device, const Window *window, VkSurfaceKH
 
 	VkMacOSSurfaceCreateInfoMVK surfaceInfo = (VkMacOSSurfaceCreateInfoMVK) {
 		.sType = VK_STRUCTURE_TYPE_MACOS_SURFACE_CREATE_INFO_MVK,
-		.pView = window->nativeHandle
+		.pView = window->nativeData
 	};
 
 	if (!instanceExt->createSurfaceExt)

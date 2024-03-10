@@ -20,10 +20,12 @@
 
 #include "platforms/platform.h"
 #include "platforms/osx/objective_c.h"
+#include "platforms/ext/stringx.h"
+#include "types/error.h"
 
 typedef id (*ObjCRetId)(id, SEL);
 typedef void (*ObjCRetVoid)(id, SEL);
-typedef void (*ObjCVoidPtrRetVoid)(id, SEL, void*);
+typedef id (*ObjCVoidPtrRetId)(const void*, SEL, const void*);
 typedef id (*ObjCRectRetId)(id, SEL, NSRect);
 typedef id (*ObjCI32x2BoolRetId)(id, SEL, NSRect, I32, I32, Bool);
 
@@ -35,8 +37,8 @@ void ObjC_send(id a, SEL b) {
     return ((ObjCRetVoid)objc_msgSend)(a, b);    
 }
 
-void ObjC_sendVoidPtr(id a, SEL b, void *c) {
-    return ((ObjCVoidPtrRetVoid)objc_msgSend)(a, b, c);    
+id ObjC_sendVoidPtr(const void *a, SEL b, const void *c) {
+    return ((ObjCVoidPtrRetId)objc_msgSend)(a, b, c);    
 }
 
 id ObjC_sendRect(id a, SEL b, NSRect c) {
@@ -45,4 +47,31 @@ id ObjC_sendRect(id a, SEL b, NSRect c) {
 
 id ObjC_sendWindowInit(id a, SEL b, NSRect c, I32 d, I32 e, Bool f) {
     return ((ObjCI32x2BoolRetId)objc_msgSend)(a, b, c, d, e, f);    
+}
+
+Error ObjC_wrapString(CharString original, CharString *copy, id *wrapped) {
+
+    if(!copy || !wrapped)
+        return Error_nullPointer(!copy ? 1 : 2, "ObjC_wrapString()::copy and wrapped are required");
+    
+    Error err = Error_none();
+    
+	const C8 *ptr = original.ptr;
+	
+	if(!CharString_isNullTerminated(original)) {
+		_gotoIfError(clean, CharString_createCopyx(original, copy));
+		ptr = copy->ptr;
+	}
+    
+    *wrapped = ObjC_sendVoidPtr(objc_getClass("NSString"), sel_registerName("stringWithUTF8String:"), ptr);
+    
+    if(!*wrapped)
+        _gotoIfError(clean, Error_invalidState(0, "ObjC_wrapString() failed to create NSString"));
+    
+clean:
+    
+    if(err.genericError)
+        CharString_freex(copy);
+
+    return err;
 }

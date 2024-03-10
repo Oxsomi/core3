@@ -43,6 +43,18 @@ Bool Platform_signalReady(AppDelegate *self, SEL cmd, id notif) {
 Error Platform_initUnixExt() {
 
 	Log_debugLnx("Start!");
+	
+	//Create auto release pool
+	
+    id pool = class_createInstance(objc_getClass("NSAutoreleasePool"), 0);
+
+	if(!pool)
+		return Error_invalidState(0, "Platform_initUnixExt() failed to create auto release pool");
+		
+    id poolAfterInit = ObjC_sendId(pool, sel_registerName("init"));
+
+	if(!poolAfterInit)
+		return Error_invalidState(0, "Platform_initUnixExt() failed to init auto release pool");
 
 	//Create delegate
 

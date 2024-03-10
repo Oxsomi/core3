@@ -43,6 +43,8 @@ typedef enum ENSWindowMask {
 
 id ObjC_sendId(id a, SEL b);
 void ObjC_send(id a, SEL b);
-void ObjC_sendVoidPtr(id a, SEL b, void *c);
+id ObjC_sendVoidPtr(const void *a, SEL b, const void *c);
 id ObjC_sendRect(id a, SEL b, NSRect c);
 id ObjC_sendWindowInit(id a, SEL b, NSRect c, I32 d, I32 e, Bool f);
+
+Error ObjC_wrapString(CharString original, CharString *copy, id *wrapped);
