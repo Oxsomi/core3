@@ -30,9 +30,11 @@
 
 extern id NSApp;
 
-AtomicI64 isReady;
+typedef struct AppDelegate { Class cls; } AppDelegate;
 
-typedef struct AppDelegate { Class isa; } AppDelegate;
+//Wait til app is created
+
+AtomicI64 isReady;
 
 Bool Platform_signalReady(AppDelegate *self, SEL cmd, id notif) {
 	(void)self; (void)cmd; (void)notif;
@@ -40,60 +42,96 @@ Bool Platform_signalReady(AppDelegate *self, SEL cmd, id notif) {
 	return true;
 }
 
+//Initialize all ObjectiveC classes and functions
+
 Error Platform_initUnixExt() {
 
 	Log_debugLnx("Start!");
+
+	//Get all classes
+
+	for (U64 i = 0; i < EObjCClass_Count; ++i) {
+
+		Class c = objc_getClass(EObjCClass_names[i]);
+
+		if(!c)
+			return Error_invalidState(0, "Platform_initUnixExt() couldn't get required class");
+
+		EObjCClass_obj[i] = c;
+	}
+
+	Log_debugLnx("Complete get classes!");
+
+	//Get all functions
+
+	for (U64 i = 0; i < EObjCFunc_Count; ++i) {
+
+		SEL sel = sel_getUid(EObjCFunc_names[i]);
+
+		if(!sel)
+			return Error_invalidState(0, "Platform_initUnixExt() couldn't get SEL / function");
+
+		EObjCFunc_obj[i] = c;
+	}
+
+	Log_debugLnx("Complete get functions!");
 	
 	//Create auto release pool
 	
-    id pool = class_createInstance(objc_getClass("NSAutoreleasePool"), 0);
+	id pool = class_createInstance(clsNSAutoreleasePool(), 0);
 
 	if(!pool)
 		return Error_invalidState(0, "Platform_initUnixExt() failed to create auto release pool");
 		
-    id poolAfterInit = ObjC_sendId(pool, sel_registerName("init"));
-
-	if(!poolAfterInit)
+	if(!ObjC_sendId(pool, selInit()))
 		return Error_invalidState(0, "Platform_initUnixExt() failed to init auto release pool");
+
+	Log_debugLnx("Complete create autorelease pool!");
 
 	//Create delegate
 
-	Class delegateClass = objc_allocateClassPair((Class)objc_getClass("NSObject"), "AppDelegate", 0);
+	Class delegateClass = objc_allocateClassPair(clsNSObject(), "AppDelegate", 0);
 
 	if(!delegateClass)
 		return Error_invalidState(0, "Platform_initUnixExt() failed to create delegateClass");
 
-	if(!class_addMethod(delegateClass, sel_getUid("applicationDidFinishLaunching:"), (IMP)Platform_signalReady, "i@:@"))
+	if(!class_addMethod(delegateClass, selApplicationDidFinishLaunching(), (IMP)Platform_signalReady, "i@:@"))
 		return Error_invalidState(0, "Platform_initUnixExt() failed to add function to delegateClass");
 
 	objc_registerClassPair(delegateClass);
 
+	Log_debugLnx("Complete create delegate!");
+
 	//Instantiate application with our delegate
 
-	ObjC_sendId((id)objc_getClass("NSApplication"), sel_getUid("sharedApplication"));
+	ObjC_sendId(clsNSApplication(), selSharedApplication());
 
 	if(!NSApp)
 		return Error_invalidState(0, "Platform_initUnixExt() failed to create NSApplication");
 
-	id delegateObj = ObjC_sendId((id)objc_getClass("AppDelegate"), sel_getUid("alloc"));
+	id delegateObj = ObjC_sendId((id)objc_getClass("AppDelegate"), selAlloc());
 
 	if(!delegateObj)
 		return Error_invalidState(1, "Platform_initUnixExt() failed to create AppDelegate");
 
-	delegateObj = ObjC_sendId(delegateObj, sel_getUid("init"));
+	delegateObj = ObjC_sendId(delegateObj, selInit());
 
 	if(!delegateObj)
 		return Error_invalidState(2, "Platform_initUnixExt() failed to init AppDelegate");
 
-	ObjC_sendVoidPtr(NSApp, sel_getUid("setDelegate:"), delegateObj);
-	ObjC_send(NSApp, sel_getUid("run"));
+	ObjC_sendVoidPtr(NSApp, selSetDelegate(), delegateObj);
+
+	Log_debugLnx("Complete create delegate!");
+
+	ObjC_send(NSApp, selRun());
 
 	//Wait for the app to be ready (interval of 100ns)
 
 	Ns i = 0;
 
 	while(!AtomicI64_load(&isReady) && i < 2 * SECOND) {
-		Thread_sleep(i += 100);
+		Thread_sleep(100);
+		i += 100;
 	}
 
 	if(i >= 2 * SECOND)

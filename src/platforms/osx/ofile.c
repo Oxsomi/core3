@@ -23,7 +23,7 @@
 #include "platforms/file.h"
 
 Error File_loadVirtualInternal(FileLoadVirtual *userData, CharString loc) {
-    (void)userData;
-    (void)loc;
-    return Error_unimplemented(0, "File_loadVirtualInternal() not implemented in OSX yet");
+	(void)userData;
+	(void)loc;
+	return Error_unimplemented(0, "File_loadVirtualInternal() not implemented in OSX yet");		//TODO:
 }

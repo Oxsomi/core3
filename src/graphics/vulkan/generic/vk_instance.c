@@ -287,6 +287,7 @@ Error GraphicsInstance_createExt(GraphicsApplicationInfo info, Bool isVerbose, G
 	vkExtensionNoCheck(vkCmdTraceRaysKHR, instanceExt->traceRays);
 	vkExtensionNoCheck(vkCmdTraceRaysIndirectKHR, instanceExt->traceRaysIndirect);
 	vkExtensionNoCheck(vkCreateRayTracingPipelinesKHR, instanceExt->createRaytracingPipelines);
+	vkExtensionNoCheck(vkGetRayTracingShaderGroupHandlesKHR, instanceExt->getRayTracingShaderGroupHandles);
 
 	vkExtensionNoCheck(vkCmdBeginRenderingKHR, instanceExt->cmdBeginRendering);
 	vkExtensionNoCheck(vkCmdEndRenderingKHR, instanceExt->cmdEndRendering);
@@ -1104,11 +1105,11 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 
 				if(optExtensions[EOptExtensions_RayPipeline]) {
 
-					if(!rtpFeat.rayTracingPipeline || !rtpFeat.rayTraversalPrimitiveCulling)
+					if(
+						!rtpFeat.rayTracingPipeline || !rtpFeat.rayTraversalPrimitiveCulling || 
+						!rtpFeat.rayTracingPipelineTraceRaysIndirect
+					)
 						optExtensions[EOptExtensions_RayPipeline] = false;
-
-					else if(rtpFeat.rayTracingPipelineTraceRaysIndirect)
-						capabilities.features |= EGraphicsFeatures_RayIndirect;
 				}
 
 				//Query ray query
@@ -1123,12 +1124,13 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 						rtpProp.maxRayDispatchInvocationCount < GIBI ||
 						rtpProp.maxRayHitAttributeSize < 32 ||
 						rtpProp.maxRayRecursionDepth < 1 ||
-						rtpProp.maxShaderGroupStride < 4096
+						rtpProp.maxShaderGroupStride < 4096 ||
+						rtpProp.shaderGroupHandleSize != 32 ||
+						(rtpProp.shaderGroupBaseAlignment != 32 && rtpProp.shaderGroupBaseAlignment != 64)
 					)
 				) {
 					optExtensions[EOptExtensions_RayQuery] = false;
 					optExtensions[EOptExtensions_RayPipeline] = false;
-					capabilities.features &=~ EGraphicsFeatures_RayIndirect;
 				}
 
 				//Enable extension
@@ -1150,10 +1152,9 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 
 					if(
 						rayMotionBlurFeat.rayTracingMotionBlur &&
-						!rayMotionBlurFeat.rayTracingMotionBlurPipelineTraceRaysIndirect &&
-						capabilities.features & EGraphicsFeatures_RayIndirect
+						!rayMotionBlurFeat.rayTracingMotionBlurPipelineTraceRaysIndirect
 					)
-						capabilities.features &= ~EGraphicsFeatures_RayIndirect;
+						capabilities.features &= ~EGraphicsFeatures_RayMotionBlur;
 
 					if(rayReorderFeat.rayTracingInvocationReorder && rayReorderProp.rayTracingInvocationReorderReorderingHint)
 						capabilities.features |= EGraphicsFeatures_RayReorder;

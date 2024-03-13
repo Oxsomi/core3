@@ -130,6 +130,9 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 	if(buf->usage & EDeviceBufferUsage_ASReadExt)
 		usage |= VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
 
+	if(buf->usage & EDeviceBufferUsage_SBTExt)
+		usage |= VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR;
+
 	if(buf->resource.flags & EGraphicsResourceFlag_CPUAllocatedBit)		//Only for internal usage
 		usage |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
 

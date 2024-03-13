@@ -101,6 +101,7 @@ typedef struct VkGraphicsInstance {
 	PFN_vkCmdTraceRaysKHR traceRays;
 	PFN_vkCmdTraceRaysIndirectKHR traceRaysIndirect;
 	PFN_vkCreateRayTracingPipelinesKHR createRaytracingPipelines;
+	PFN_vkGetRayTracingShaderGroupHandlesKHR getRayTracingShaderGroupHandles;
 
 	PFN_vkCmdPipelineBarrier2KHR cmdPipelineBarrier2;
 

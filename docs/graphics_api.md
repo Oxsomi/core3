@@ -107,7 +107,7 @@ _gotoIfError(clean, GraphicsInstance_getPreferredDevice(
 
 #### Capabilities
 
-- features: DirectRendering, VariableRateShading, MultiDrawIndirectCount, MeshShader, GeometryShader, SubgroupArithmetic, SubgroupShuffle, Multiview, Raytracing, RayPipeline, RayIndirect, RayQuery, RayMicromapOpacity, RayMicromapDisplacement, RayMotionBlur, RayReorder, LUID, DebugMarkers, Wireframe, LogicOp, DualSrcBlend.
+- features: DirectRendering, VariableRateShading, MultiDrawIndirectCount, MeshShader, GeometryShader, SubgroupArithmetic, SubgroupShuffle, Multiview, Raytracing, RayPipeline, RayQuery, RayMicromapOpacity, RayMicromapDisplacement, RayMotionBlur, RayReorder, LUID, DebugMarkers, Wireframe, LogicOp, DualSrcBlend.
 - features2: reserved for future usage.
 - dataTypes: I64, F16, F64, AtomicI64, AtomicF32, AtomicF64, ASTC, BCn, MSAA2x, MSAA8x, MSAA16x, RGB32f, RGB32i, RGB32u, D24S8, S8.
   - MSAA4x and MSAA1x (off) are supported by default.
@@ -887,7 +887,15 @@ _gotoIfError(clean, GraphicsDeviceRef_createBufferData(
 ### Properties
 
 - resource: the GraphicsResource it inherits from.
-- usage: Vertex (use as vertex buffer), Index (use as index buffer), Indirect (use for indirect draw calls), ScratchExt (used internally for scratch buffers for raytracing), ASExt (used internally for creation of acceleration structures) or ReadASExt (If the acceleration structure needs to be able to read the vertex/index buffer).
+- usage:
+  - Vertex (use as vertex buffer)
+  - Index (use as index buffer)
+  - Indirect (use for indirect draw calls)
+  - Raytracing related:
+    - ScratchExt (used internally for scratch buffers for raytracing)
+    - ASExt (used internally for creation of acceleration structures)
+    - ReadASExt (If the acceleration structure needs to be able to read the vertex/index buffer)
+    - SBTExt (used internally for shader binding table creation).
 - isPending(FullCopy): Information about if any data is pending for the next submit and if the entire resource is pending.
 - isFirstFrame: If the resource was already uploaded before.
 - length: Length of the buffer.
@@ -1137,12 +1145,14 @@ Copy image is only allowed on images which aren't currently bound as a render ta
 
 Copy image (ranges) can currently only be called on a Swapchain, DepthStencil or RenderTexture object.
 
-### setComputePipeline/setGraphicsPipeline
+### setComputePipeline/setGraphicsPipeline/setRaytracingPipeline
 
-The set pipeline command does one of the following; bind a graphics pipeline, raytracing pipeline or a compute pipeline. These pipelines are the only bind points and they're maintained separately. So a bind pipeline of a graphics shader and one of a compute shader don't interfere. This is used before a draw, dispatch or traceRaysExt to ensure the shader is used.
+The set pipeline command does one of the following; bind a graphics pipeline, raytracing pipeline or a compute pipeline. These pipelines are the only bind points and they're maintained separately. So a bind pipeline of a graphics shader and one of a compute shader don't interfere. This is used before a draw, dispatch or dispatchRaysExt to ensure the shader is used.
 
 ```c
-_gotoIfError(clean, CommandListRef_setComputePipeline(commandList, pipeline));
+_gotoIfError(clean, CommandListRef_setComputePipeline(commandList, compPipeline));
+_gotoIfError(clean, CommandListRef_setGraphicsPipeline(commandList, gfxPipeline));
+_gotoIfError(clean, CommandListRef_setRaytracingPipeline(commandList, rtPipeline));
 ```
 
 ### draw
@@ -1304,6 +1314,18 @@ Every startRender needs to match an endRender. During the render it's not allowe
 
 A graphics pipeline for use with DirectRendering needs to set the attachment count (and format(s)) or the depth stencil format. One that doesn't use direct rendering can't be used.
 
+### RayPipeline feature
+
+#### dispatchRaysExt
+
+dispatchRays has some of the same requirements as dispatch as it needs a correct state of the resources and needs a raytracing pipeline bound as well. It is similar to compute as it doesn't need to be in an active render (render pass or direct rendering) and it also doesn't use the viewport/scissor. Though transitions are just as important as with compute shaders (resources need to be transitioned through a scope).
+
+```c
+_gotoIfError(clean, CommandListRef_dispatch2DRaysExt(commandList, rtId, width, height));
+```
+
+dispatch2DRaysExt, dispatch1DRaysExt and dispatch3DRaysExt are the easiest implementations. This command is also generalized with the dispatchRaysExt command which takes in a `DispatchRaysExt` struct. rtId is the raygen shader id, this is relevant since multiple raygen shaders can be linked into a single raygen pipeline. Each raygen shader has an id that can be passed here to execute it.
+
 ### Scope (startScope/endScope)
 
 A scope is the replacement of the "transition" command. The scope makes sure all resources are in the right state for the commands that follow and it collects transitions from any other commands in the scope. It also makes sure to signal the api that the resources referenced are still in flight and shouldn't be deleted. When a scope is exited, it will undo the sets of temporary command states (though under the hood the api's command list is allowed to maintain these states to reduce api overhead). Scopes allow the implementation to figure out more clearly what areas of the command list are important together, and as such it can use them to determine dependencies between them and/or optimize unnecessary calls. It also allows the recorder to optimally record them in separate threads (if supported) since each scope doesn't maintain a global state. There can only be one scope active at a time: nesting scopes is unsupported.
@@ -1321,6 +1343,9 @@ startScope		//Transitions resources
     setComputePipeline
     	dispatch(Indirect)					//Keeps scope alive
 
+    setRaytracingPipelineExt
+    	dispatchRaysExt						//Keeps scope alive
+    
     startRenderExt
         setPrimitiveBuffers
         setViewport/Scissor
@@ -1348,6 +1373,8 @@ Because the API requires bindless to function, it has certain limits. One of the
 Even though Metal doesn't need transitions, they're still required to allow DirectX and Vulkan support. More importantly; transitions allow OxC3 to know which resources are required for the command list to be executed. It uses this to keep the resources alive until the command list was executed on the device.
 
 For some types such as a Sampler, these transitions are required, even though the underlying API might not support the transitions for these types. In this case it signifies that the scope needs this resource to be active, to ensure it doesn't get deleted while in flight. It also ensures that the graphics API implementation doesn't evict it in an attempt to save memory (irrelevant to samplers though).
+
+For raytracing shaders, EPipelineStage_RtStart can safely be used, as all RT shader stages are seen as a single stage. TLAS also needs to be transitioned to keep them active while rendering (BLAS also too if TLAS build is done from the GPU, since then the TLAS transition doesn't know what resource to transition).
 
 *It is important to limit how many transitions are called, since this requires extra data and processing. Batching them and making sure you need them as less as possible is good practice.*
 

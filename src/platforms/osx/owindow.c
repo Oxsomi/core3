@@ -39,6 +39,9 @@
 // And https://gist.github.com/hasenj/1bba3ca00af1a3c0b2035c9bd14a85ef
 // And https://github.com/CodaFi/C-Macs/blob/master/CMacs/CMacsTypes.h
 
+
+Error OWindow_initSize(Window *w, I32x2 size) { return Error_none(); }
+
 /*
 void OWindow_updateMonitors(Window *w) {
 
@@ -833,18 +836,17 @@ Error Window_updatePhysicalTitle(const Window *w, CharString title) {
 		return Error_nullPointer(!w || !I32x2_any(w->size) ? 0 : 1, "Window_updatePhysicalTitle()::w and title are required");
 
 	CharString copy = CharString_createNull();
-    id wrapped;
+	id wrapped;
 	Error err = ObjC_wrapString(title, &copy, &wrapped);
 	_gotoIfError(clean, err);
 
-	ObjC_sendVoidPtr(w->nativeHandle, sel_getUid("setTitle:"), wrapped);
+	ObjC_sendVoidPtr(w->nativeHandle, selSetTitle()), wrapped);
 	
 clean:
 	CharString_freex(&copy);
 	return err;
 }
 
-/*
 Error Window_toggleFullScreen(Window *w) {
 
 	if(!w || !I32x2_any(w->size))
@@ -860,11 +862,12 @@ Error Window_toggleFullScreen(Window *w) {
 		
 	else w->flags &= ~EWindowFlags_IsFullscreen;
 
-	ObjC_sendId((id)w->nativeHandle, sel_getUid("toggleFullScreen:"), NSApp);
+	ObjC_sendId((id)w->nativeHandle, selToggleFullScreen(), NSApp);
 
 	return Error_none();
 }
 
+/*
 Error Window_presentPhysical(const Window *w) {
 
 	if(!w || !I32x2_any(w->size))
@@ -915,28 +918,18 @@ cleanup:
 	return errId ? Error_platformError(errId, res, "Window_presentPhysical() failed in WinApi call") : Error_none();
 }
 
-impl Error WindowManager_createWindowPhysical(Window *w) {
+Error WindowManager_createWindowPhysical(Window *w) {
 
 	//Create native window
 
-	WNDCLASSEXW wc = *(const WNDCLASSEXW*) w->owner->platformData.ptr;
-	HINSTANCE mainModule = Platform_instance.data;
-
 	Error err = Error_none();
 
-	DWORD style = WS_VISIBLE;
+	w->minSize
+	w->maxSize
 
-	Bool isFullScreen = w->hint & EWindowHint_ForceFullscreen;
+	id window = ObjC_sendId(clsNSWindow(), selAlloc());
 
-	if(!isFullScreen) {
-
-		style |= WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
-
-		if(!(w->hint & EWindowHint_DisableResize))
-			style |= WS_SIZEBOX | WS_MAXIMIZEBOX;
-	}
-
-	else style |= WS_POPUP;
+	if(!window)
 
 	I32x2 maxSize = I32x2_create2(GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN));
 
@@ -946,11 +939,6 @@ impl Error WindowManager_createWindowPhysical(Window *w) {
 	for (U8 i = 0; i < 2; ++i)
 		if (isFullScreen || (!I32x2_get(size, i) || I32x2_get(size, i) >= I32x2_get(maxSize, i)))
 			I32x2_set(&size, i, I32x2_get(maxSize, i));
-
-	//Our strings are UTF8, but windows wants UTF16
-
-	ListU16 tmp = (ListU16) { 0 };
-	_gotoIfError(clean, CharString_toUTF16x(w->title, &tmp));
 
 	HWND nativeWindow = CreateWindowExW(
 		WS_EX_APPWINDOW, wc.lpszClassName, (const wchar_t*) tmp.ptr, style,
@@ -975,45 +963,26 @@ impl Error WindowManager_createWindowPhysical(Window *w) {
 
 	//Alloc cpu visible buffer if needed
 
-	_gotoIfError(clean, WWindow_initSize(w, w->size));
+	_gotoIfError(clean, OWindow_initSize(w, w->size));
 
-	//Lock for when we are updating this window
+	//Reserve monitors and input device(s)
 
 	_gotoIfError(clean, ListInputDevice_reservex(&w->devices,  16));
 	_gotoIfError(clean, ListMonitor_reservex(&w->monitors, 16));
 
 	w->nativeHandle = nativeWindow;
 
+	//Toggle full screen & set title
+
+	if(w->hint & EWindowHint_ForceFullscreen)
+		_gotoIfError(clean, Window_toggleFullScreen(w));
+
+	_gotoIfError(clean, Window_updatePhysicalTitle(w, w->title));
+
 	//Bind our window
 
 	SetWindowLongPtrW(nativeWindow, 0, (LONG_PTR) w);
 
-	if(w->hint & EWindowHint_ForceFullscreen)
-		w->flags |= EWindowFlags_IsFullscreen;
-
-	//Ensure we get all input devices
-	//Register for raw input of these types
-	//https://learn.microsoft.com/en-us/windows-hardware/drivers/hid/hid-usages#usage-page
-
-	RAWINPUTDEVICE registerDevices[2] = {
-		{									//Keyboard
-			.dwFlags = RIDEV_DEVNOTIFY,
-			.usUsagePage = 1,
-			.usUsage = 6,
-			.hwndTarget = nativeWindow
-		},
-		{									//Mouse
-			.dwFlags = RIDEV_DEVNOTIFY,
-			.usUsagePage = 1,
-			.usUsage = 2,
-			.hwndTarget = nativeWindow
-		}
-	};
-
-	if (!RegisterRawInputDevices(registerDevices, 2, sizeof(registerDevices[0])))
-		_gotoIfError(clean, Error_invalidState(0, "Window_physicalLoop() RegisterRawInputDevices failed"));
-
 clean:
-	ListU16_freex(&tmp);
 	return err;
 }*/

@@ -244,6 +244,17 @@ Error GenericList_createCopy(GenericList list, Allocator allocator, GenericList 
 	return Error_none();
 }
 
+Error GenericList_createCopySubset(GenericList list, U64 off, U64 len, Allocator allocator, GenericList *result) {
+
+	GenericList tmp = (GenericList) { 0 };
+	Error err = GenericList_createSubset(list, off, len, &tmp);
+
+	if(err.genericError)
+		return err;
+
+	return GenericList_createCopy(tmp, allocator, result);
+}
+
 Error GenericList_createSubset(GenericList list, U64 index, U64 length, GenericList *result) {
 
 	if(!result || !length)

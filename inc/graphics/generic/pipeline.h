@@ -26,6 +26,9 @@
 #include "pipeline_structs.h"
 
 typedef RefPtr GraphicsDeviceRef;
+typedef RefPtr DeviceBufferRef;
+
+//Graphics pipeline
 
 typedef struct PipelineGraphicsInfo {
 
@@ -64,7 +67,73 @@ typedef struct PipelineGraphicsInfo {
 
 } PipelineGraphicsInfo;
 
+//Raytracing pipeline
+
+typedef enum EPipelineRaytracingFlags {
+
+	EPipelineRaytracingFlags_SkipTriangles			= 1 << 0,
+	EPipelineRaytracingFlags_SkipAABBs				= 1 << 1,
+
+	EPipelineRaytracingFlags_AllowMotionBlurExt		= 1 << 2,		//Requires feature RayMotionBlur
+
+	//Disallowing null shaders in stages.
+	//This is extra validation, but might also signal to the API that library access is safe.
+
+	EPipelineRaytracingFlags_NoNullAnyHit			= 1 << 3,
+	EPipelineRaytracingFlags_NoNullClosestHit		= 1 << 4,
+	EPipelineRaytracingFlags_NoNullMiss				= 1 << 5,
+	EPipelineRaytracingFlags_NoNullIntersection		= 1 << 6,
+
+	EPipelineRaytracingFlags_Count					= 7,
+
+	EPipelineRaytracingFlags_Default				= EPipelineRaytracingFlags_SkipAABBs
+
+} EPipelineRaytracingFlags;
+
+typedef struct PipelineRaytracingGroup {
+
+	//Indices into the local stage offset
+	//Set to U32_MAX to indicate "no shader" (as long as EPipelineRaytracingFlags_NoNull<X> is not set).
+	//Intersection can be U32_MAX anyways for triangle geometry.
+
+	U32 closestHit, anyHit, intersection;
+
+} PipelineRaytracingGroup;
+
+TList(PipelineRaytracingGroup);
+
+typedef struct PipelineRaytracingInfo {
+
+	U8 flags;								//EPipelineRaytracingFlags
+	U8 maxPayloadSize;						//In bytes; has to be 4-byte aligned.
+	U8 maxAttributeSize;					//In bytes (>=8); has to be 4-byte aligned and <32.
+	U8 maxRecursionDepth;					//<= 2. For multiple bounces, use for loop in raygen shader.
+
+	U32 stageCount;							//Non zero used to determine where stages start/end.
+
+	U32 binaryCount;						//Binaries that can be linked to by stages.
+
+	U32 groupCount;							//Makes hit group indices from stages.
+
+	//Only valid after construction
+
+	ListBuffer binaries;
+	ListPipelineRaytracingGroup groups;
+	ListCharString entrypoints;
+
+	DeviceBufferRef *shaderBindingTable;	//Auto generated SBT
+
+	U64 sbtOffset;							//Offset in global SBT
+
+	//Layout: [ hits (groupCount), misses (missCount), raygens (raygenCount), callables (callableCount) ]
+
+	U32 raygenCount, missCount;
+	U32 callableCount, padding;
+
+} PipelineRaytracingInfo;
+
 TList(PipelineGraphicsInfo);
+TList(PipelineRaytracingInfo);
 TList(PipelineStage);
 
 typedef struct Pipeline {
@@ -76,14 +145,16 @@ typedef struct Pipeline {
 
 	ListPipelineStage stages;
 
-	const void *extraInfo;					//Null or points to after ext data for extraInfo (e.g. PipelineGraphicsInfo)
-
 } Pipeline;
 
 typedef RefPtr PipelineRef;
 
-#define Pipeline_ext(ptr, T) (!ptr ? NULL : (T##Pipeline*)(ptr + 1))		//impl
+#define Pipeline_ext(ptr, T) (!(ptr) ? NULL : (T##Pipeline*)(ptr + 1))		//impl
 #define PipelineRef_ptr(ptr) RefPtr_data(ptr, Pipeline)
+
+impl extern const U64 PipelineExt_size;
+
+#define Pipeline_info(ptr, T) ((T*)(!(ptr) ? NULL : ((const U8*)((const Pipeline*)(ptr) + 1) + PipelineExt_size)))
 
 Error PipelineRef_dec(PipelineRef **pipeline);
 Error PipelineRef_inc(PipelineRef *pipeline);
@@ -107,6 +178,18 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 	GraphicsDeviceRef *deviceRef,
 	ListPipelineStage *stages,
 	ListPipelineGraphicsInfo *infos,
+	ListCharString names,					//Temporary names for debugging. Can be empty, else match infos->length
+	ListPipelineRef *pipelines
+);
+
+//stages, binaries, libraries and info will be freed and stages[i].binary be NULL.
+Error GraphicsDeviceRef_createPipelineRaytracing(
+	GraphicsDeviceRef *deviceRef,
+	ListPipelineStage stages,
+	ListBuffer *binaries,
+	ListPipelineRaytracingGroup groups,
+	ListPipelineRaytracingInfo infos,
+	ListCharString *entrypoints,
 	ListCharString names,					//Temporary names for debugging. Can be empty, else match infos->length
 	ListPipelineRef *pipelines
 );

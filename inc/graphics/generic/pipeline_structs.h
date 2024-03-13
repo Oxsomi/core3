@@ -24,7 +24,7 @@
 typedef enum EPipelineType {
 	EPipelineType_Graphics,
 	EPipelineType_Compute,
-	//EPipelineType_Raytracing,
+	EPipelineType_RaytracingExt,
 	EPipelineType_Count
 } EPipelineType;
 
@@ -37,15 +37,19 @@ typedef enum EPipelineStage {
 	EPipelineStage_Hull,
 	EPipelineStage_Domain,
 
-	//EPipelineStage_RaygenExt,
-	//EPipelineStage_ClosestHitExt,
-	//EPipelineStage_AnyHitExt,
-	//EPipelineStage_IntersectionExt,
-	//EPipelineStage_MissExt,
-	//EPipelineStage_CallableExt,
-	//
-	//EPipelineStage_RtStart = EPipelineStage_RaygenExt,
-	//EPipelineStage_RtEnd = EPipelineStage_CallableExt,		//TODO:
+	//Query graphics feature RayPipeline
+
+	EPipelineStage_RaygenExt,
+	EPipelineStage_CallableExt,
+	EPipelineStage_MissExt,
+	EPipelineStage_ClosestHitExt,
+	EPipelineStage_AnyHitExt,
+	EPipelineStage_IntersectionExt,
+	
+	EPipelineStage_RtStart = EPipelineStage_RaygenExt,
+	EPipelineStage_RtEnd = EPipelineStage_IntersectionExt,
+	EPipelineStage_RtHitStart = EPipelineStage_ClosestHitExt,
+	EPipelineStage_RtHitEnd = EPipelineStage_IntersectionExt,
 
 	EPipelineStage_Count
 
@@ -207,9 +211,12 @@ typedef enum ETopologyMode {
 typedef struct PipelineStage {
 
 	EPipelineStage stageType;
-	U32 padding;
+	U32 binaryId;				//For raytracing shaders, indicates the shader offset in the shader stages
 
-	Buffer shaderBinary;
+	Buffer binary;				//Binary for non raytracing shaders
+
+	U32 localShaderId;			//RT only, for example; raygen index, miss index or callable index
+	U32 groupId;				//RT only (for raygen, miss or callable); the group id that's represented
 
 } PipelineStage;
 

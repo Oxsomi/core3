@@ -89,9 +89,6 @@ void GraphicsDeviceInfo_print(const GraphicsDeviceInfo *deviceInfo, Bool printCa
 		if(feat & EGraphicsFeatures_RayQuery)
 			Log_debugLnx("\t\tRay query");
 
-		if(feat & EGraphicsFeatures_RayIndirect)
-			Log_debugLnx("\t\tTraceRay indirect");
-
 		if(feat & EGraphicsFeatures_RayMicromapOpacity)
 			Log_debugLnx("\t\tRaytracing opacity micromap");
 

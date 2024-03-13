@@ -196,7 +196,7 @@ Error CommandList_validateGraphicsPipeline(
 	EMSAASamples boundSampleCount
 ) {
 
-	PipelineGraphicsInfo *info = (PipelineGraphicsInfo*)pipeline->extraInfo;
+	PipelineGraphicsInfo *info = Pipeline_info(pipeline, PipelineGraphicsInfo);
 
 	//Depth stencil state can be set to None to ignore writing to depth stencil
 
@@ -1056,6 +1056,9 @@ Error CommandListRef_setPipeline(CommandListRef *commandListRef, PipelineRef *pi
 	if(type == EPipelineType_Graphics)
 		op = ECommandOp_SetGraphicsPipeline;
 
+	else if(type == EPipelineType_RaytracingExt)
+		op = ECommandOp_SetRaytracingPipelineExt;
+
 	_gotoIfError(clean, CommandList_append(
 		commandList, op, Buffer_createRefConst((const U8*) &pipelineRef, sizeof(pipelineRef)), 0
 	));
@@ -1081,6 +1084,10 @@ Error CommandListRef_setComputePipeline(CommandListRef *commandList, PipelineRef
 
 Error CommandListRef_setGraphicsPipeline(CommandListRef *commandList, PipelineRef *pipeline) {
 	return CommandListRef_setPipeline(commandList, pipeline, EPipelineType_Graphics);
+}
+
+Error CommandListRef_setRaytracingPipeline(CommandListRef *commandList, PipelineRef *pipeline) {
+	return CommandListRef_setPipeline(commandList, pipeline, EPipelineType_RaytracingExt);
 }
 
 Error CommandListRef_validateBufferDesc(GraphicsDeviceRef *device, DeviceBufferRef *buffer, EDeviceBufferUsage usage) {
@@ -1276,6 +1283,59 @@ Error CommandListRef_dispatch2D(CommandListRef *commandList, U32 groupsX, U32 gr
 Error CommandListRef_dispatch3D(CommandListRef *commandList, U32 groupsX, U32 groupsY, U32 groupsZ) {
 	DispatchCmd dispatch = (DispatchCmd) { .groups = { groupsX, groupsY, groupsZ } };
 	return CommandListRef_dispatch(commandList, dispatch);
+}
+
+//Dispatch rays
+
+Error CommandListRef_dispatchRaysExt(CommandListRef *commandListRef, DispatchRaysExt dispatch) {
+
+	CommandListRef_validateScope(commandListRef, clean);
+
+	PipelineRef *rayPipeline = commandList->pipeline[EPipelineType_RaytracingExt];
+
+	if (!rayPipeline)
+		_gotoIfError(clean, Error_invalidOperation(1, "CommandListRef_dispatchRaysExt() requires bound raytracing pipeline"));
+
+	U64 total = dispatch.x * dispatch.y;
+
+	if(total < dispatch.x || total * dispatch.z < total)
+		_gotoIfError(clean, Error_invalidOperation(1, "CommandListRef_dispatchRaysExt() overflow"));
+
+	total *= dispatch.z;
+
+	if(total > 1 * GIBI)
+		_gotoIfError(clean, Error_invalidOperation(1, "CommandListRef_dispatchRaysExt() is limited to 1Gibi rays"));
+
+	if(!total)
+		_gotoIfError(clean, Error_invalidOperation(1, "CommandListRef_dispatchRaysExt() can't be executed with 0 count"));
+
+	if(dispatch.raygenId >= Pipeline_info(PipelineRef_ptr(rayPipeline), PipelineRaytracingInfo)->raygenCount)
+		_gotoIfError(clean, Error_invalidOperation(1, "CommandListRef_dispatchRaysExt() raygen index out of bounds"));
+
+	_gotoIfError(clean, CommandList_append(
+		commandList, ECommandOp_DispatchRaysExt, Buffer_createRefConst(&dispatch, sizeof(dispatch)), 0
+	));
+
+	commandList->tempStateFlags |= ECommandStateFlags_HasModifyOp;
+
+clean:
+
+	if(err.genericError)
+		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
+
+	return err;
+}
+
+Error CommandListRef_dispatch1DRaysExt(CommandListRef *commandList, U32 raygenLocalId, U32 groupsX) {
+	return CommandListRef_dispatchRaysExt(commandList, (DispatchRaysExt) { groupsX, 1, 1, raygenLocalId });
+}
+
+Error CommandListRef_dispatch2DRaysExt(CommandListRef *commandList, U32 raygenLocalId, U32 groupsX, U32 groupsY) {
+	return CommandListRef_dispatchRaysExt(commandList, (DispatchRaysExt) { groupsX, groupsY, 1, raygenLocalId });
+}
+
+Error CommandListRef_dispatch3DRaysExt(CommandListRef *commandList, U32 raygenLocalId, U32 groupsX, U32 groupsY, U32 groupsZ) {
+	return CommandListRef_dispatchRaysExt(commandList, (DispatchRaysExt) { groupsX, groupsY, groupsZ, raygenLocalId });
 }
 
 //Indirect rendering

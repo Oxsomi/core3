@@ -70,26 +70,25 @@ typedef enum EGraphicsFeatures {
 
 	EGraphicsFeatures_Raytracing				= 1 << 8,		//Requires RayPipeline or RayQuery
 	EGraphicsFeatures_RayPipeline				= 1 << 9,
-	EGraphicsFeatures_RayIndirect				= 1 << 10,
-	EGraphicsFeatures_RayQuery					= 1 << 11,
-	EGraphicsFeatures_RayMicromapOpacity		= 1 << 12,
-	EGraphicsFeatures_RayMicromapDisplacement	= 1 << 13,
-	EGraphicsFeatures_RayMotionBlur				= 1 << 14,
-	EGraphicsFeatures_RayReorder				= 1 << 15,
+	EGraphicsFeatures_RayQuery					= 1 << 10,
+	EGraphicsFeatures_RayMicromapOpacity		= 1 << 11,
+	EGraphicsFeatures_RayMicromapDisplacement	= 1 << 12,
+	EGraphicsFeatures_RayMotionBlur				= 1 << 13,
+	EGraphicsFeatures_RayReorder				= 1 << 14,
 
 	//LUID for sharing devices
 
-	EGraphicsFeatures_LUID						= 1 << 16,
+	EGraphicsFeatures_LUID						= 1 << 15,
 
 	//Debug features
 
-	EGraphicsFeatures_DebugMarkers				= 1 << 17,
+	EGraphicsFeatures_DebugMarkers				= 1 << 16,
 
 	//Other features
 
-	EGraphicsFeatures_Wireframe					= 1 << 18,
-	EGraphicsFeatures_LogicOp					= 1 << 19,
-	EGraphicsFeatures_DualSrcBlend				= 1 << 20
+	EGraphicsFeatures_Wireframe					= 1 << 17,
+	EGraphicsFeatures_LogicOp					= 1 << 18,
+	EGraphicsFeatures_DualSrcBlend				= 1 << 19
 
 } EGraphicsFeatures;
 

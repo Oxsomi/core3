@@ -79,6 +79,7 @@ Error CommandListRef_endScope(CommandListRef *commandList);
 Error CommandListRef_setPipeline(CommandListRef *commandList, PipelineRef *pipeline, EPipelineType type);
 Error CommandListRef_setComputePipeline(CommandListRef *commandList, PipelineRef *pipeline);
 Error CommandListRef_setGraphicsPipeline(CommandListRef *commandList, PipelineRef *pipeline);
+Error CommandListRef_setRaytracingPipeline(CommandListRef *commandList, PipelineRef *pipeline);
 
 Error CommandListRef_setPrimitiveBuffers(CommandListRef *commandList, SetPrimitiveBuffersCmd buffers);
 
@@ -130,6 +131,13 @@ Error CommandListRef_dispatch2D(CommandListRef *commandList, U32 groupsX, U32 gr
 Error CommandListRef_dispatch3D(CommandListRef *commandList, U32 groupsX, U32 groupsY, U32 groupsZ);
 
 Error CommandListRef_dispatchIndirect(CommandListRef *commandList, DeviceBufferRef *buffer, U64 offset);
+
+//RayPipeline feature
+
+Error CommandListRef_dispatchRaysExt(CommandListRef *commandList, DispatchRaysExt dispatchRays);
+Error CommandListRef_dispatch1DRaysExt(CommandListRef *commandList, U32 raygenLocalId, U32 raysX);
+Error CommandListRef_dispatch2DRaysExt(CommandListRef *commandList, U32 raygenLocalId, U32 raysX, U32 raysY);
+Error CommandListRef_dispatch3DRaysExt(CommandListRef *commandList, U32 raygenLocalId, U32 raysX, U32 raysY, U32 raysZ);
 
 //DynamicRendering feature
 

@@ -97,6 +97,7 @@ Error GenericList_createSubset(GenericList list, U64 index, U64 length, GenericL
 
 Error GenericList_create(U64 length, U64 stride, Allocator allocator, GenericList *result);
 Error GenericList_createCopy(GenericList list, Allocator allocator, GenericList *result);
+Error GenericList_createCopySubset(GenericList list, U64 off, U64 len, Allocator allocator, GenericList *result);
 
 Error GenericList_createRepeated(
 	U64 length,

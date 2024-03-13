@@ -245,7 +245,7 @@ Error GraphicsDevice_initExt(
 			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR,
 			.rayTracingPipeline = true,
 			.rayTraversalPrimitiveCulling = true,
-			.rayTracingPipelineTraceRaysIndirect = (Bool)(feat & EGraphicsFeatures_RayIndirect)
+			.rayTracingPipelineTraceRaysIndirect = true
 		}
 	);
 
@@ -255,7 +255,7 @@ Error GraphicsDevice_initExt(
 		{
 			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_MOTION_BLUR_FEATURES_NV,
 			.rayTracingMotionBlur = true,
-			.rayTracingMotionBlurPipelineTraceRaysIndirect = (Bool)(feat & EGraphicsFeatures_RayIndirect)
+			.rayTracingMotionBlurPipelineTraceRaysIndirect = true
 		}
 	);
 
@@ -1267,10 +1267,14 @@ Error GraphicsDevice_submitCommandsImpl(
 				i != EDescriptorSetType_CBuffer0 ? deviceExt->sets[i] :
 				deviceExt->sets[EDescriptorSetType_CBuffer0 + (device->submitId % 3)];
 
-		for(U64 i = 0; i < 2; ++i)
+		U64 bindingCount = device->info.capabilities.features & EGraphicsFeatures_RayPipeline ? 3 : 2;
+
+		for(U64 i = 0; i < bindingCount; ++i)
 			vkCmdBindDescriptorSets(
 				commandBuffer,
-				i == 0 ? VK_PIPELINE_BIND_POINT_COMPUTE : VK_PIPELINE_BIND_POINT_GRAPHICS,
+				i == 0 ? VK_PIPELINE_BIND_POINT_COMPUTE : (
+					i == 1 ? VK_PIPELINE_BIND_POINT_GRAPHICS : VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR
+				),
 				deviceExt->defaultLayout,
 				0, EDescriptorSetType_UniqueLayouts, sets,
 				0, NULL

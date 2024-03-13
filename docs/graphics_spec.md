@@ -165,8 +165,10 @@ Raytracing requires VK_KHR_acceleration_structure, but also requires either VK_K
   - maxRayHitAttributeSize >= 32.
   - maxRayRecursionDepth >= 1.
   - maxShaderGroupStride >= 4096.
-  - rayTraversalPrimitiveCulling should be enabled.
-
+  - shaderGroupHandleSize should be 32.
+- shaderGroupBaseAlignment should be 32 or 64.
+  - rayTraversalPrimitiveCulling and rayTracingPipelineTraceRaysIndirect should be enabled.
+  
 - Motion blur:
   - Both indirect and normal rays are allowed to be traced if RayIndirect is on. Otherwise RayIndirect has to be turned off.
 

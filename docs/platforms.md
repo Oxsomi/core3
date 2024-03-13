@@ -83,6 +83,8 @@ Use Keyboard_remap(keyboard, key) to get the localized keyboard unicode codepoin
 
 - CharString **Keyboard_remap**(EKey key): Used for remapping the key for GUI text only. Don't use this to build text fields/text areas. This is purely for debugging the key or key mapping. This function allocates, so be sure to CharString_free.
 
+**Note**: On Windows, it's possible to distinguish multiple keyboards. This might be useful for local multiplayer or simulators (e.g. flight sim). However, this is not standard across all platforms. This means that it is possible for multiple keyboards to have different key states, keep that in mind.
+
 ### Mouse
 
 A mouse has the following bindings:
@@ -94,6 +96,8 @@ A mouse has the following bindings:
   - Left, Middle, Right, Back, Forward.
 
 Just like a Keyboard, the mouse is created/destroyed through the Window/WindowManager implementation.
+
+**Note**: On Windows and OSX, it's possible to distinguish multiple keyboards. This might be useful for local multiplayer. However, this is not standard across all platforms. This means that it is possible for multiple keyboards to have different key states, keep that in mind.
 
 ### Extending InputDevice
 

@@ -33,9 +33,13 @@ typedef enum EDeviceBufferUsage {
 	EDeviceBufferUsage_Vertex				= 1 << 0,		//Allow for use as vertex buffer
 	EDeviceBufferUsage_Index				= 1 << 1,		//Allow for use as index buffer
 	EDeviceBufferUsage_Indirect				= 1 << 2,		//Allow for use in indirect draw/dispatch calls
+
+	//Raytracing types
+
 	EDeviceBufferUsage_ScratchExt			= 1 << 3,		//Allow for internal use as scratch buffer
 	EDeviceBufferUsage_ASExt				= 1 << 4,		//Allow for internal use as acceleration structure
-	EDeviceBufferUsage_ASReadExt			= 1 << 5		//Allow buffer to be read by AS creation
+	EDeviceBufferUsage_ASReadExt			= 1 << 5,		//Allow buffer to be read by AS creation
+	EDeviceBufferUsage_SBTExt				= 1 << 6		//Allow for internal use as shader binding table
 
 } EDeviceBufferUsage;
 

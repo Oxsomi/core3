@@ -74,7 +74,12 @@ typedef enum ECommandOp {
 
 	ECommandOp_AddMarkerDebugExt,
 	ECommandOp_StartRegionDebugExt,
-	ECommandOp_EndRegionDebugExt
+	ECommandOp_EndRegionDebugExt,
+
+	//Raytracing
+
+	ECommandOp_DispatchRaysExt,
+	ECommandOp_SetRaytracingPipelineExt
 
 } ECommandOp;
 
@@ -361,3 +366,6 @@ typedef struct DrawCallIndexed {
 } DrawCallIndexed;
 
 typedef struct Dispatch { U32 x, y, z, pad; } Dispatch;
+
+typedef struct DispatchRaysExt { U32 x, y, z, raygenId; } DispatchRaysExt;		//raygenId can't be set if on GPU
+typedef struct DispatchRaysIndirectExt { DeviceBufferRef *buffer; U64 offset; U32 raygenId; } DispatchRaysIndirectExt;

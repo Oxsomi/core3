@@ -206,6 +206,10 @@ Error GenericList_createCopyx(GenericList list, GenericList *result) {
 	return GenericList_createCopy(list, Platform_instance.alloc, result);
 }
 
+Error GenericList_createCopySubsetx(GenericList list, U64 offset, U64 len, GenericList *result) {
+	return GenericList_createCopySubset(list, offset, len, Platform_instance.alloc, result);
+}
+
 Error GenericList_createSubsetReversex(GenericList list, U64 index, U64 length, GenericList *result) {
 	return GenericList_createSubsetReverse(list, index, length, Platform_instance.alloc, result);
 }

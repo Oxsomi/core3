@@ -56,6 +56,10 @@ Error Name##_createCopyx(Name l, Name *result) {																		\
 	TListWrapCtorx(Name, Error err = GenericList_createCopyx(Name##_toList(l), &list));									\
 }																														\
 																														\
+Error Name##_createCopySubsetx(Name l, U64 off, U64 len, Name *result) {												\
+	TListWrapCtorx(Name, Error err = GenericList_createCopySubsetx(Name##_toList(l), off, len, &list));					\
+}																														\
+																														\
 Error Name##_createSubsetReversex(Name l, U64 index, U64 length, Name *result) {										\
 	TListWrapCtorx(Name, Error err = GenericList_createSubsetReversex(Name##_toList(l), index, length, &list));			\
 }																														\

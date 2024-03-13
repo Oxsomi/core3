@@ -47,6 +47,9 @@ typedef struct VkTLAS {
 	VkAccelerationStructureKHR as;
 } VkTLAS;
 
+static const U32 raytracingShaderIdSize = 32;
+static const U32 raytracingShaderAlignment = 64;
+
 TList(VkMappedMemoryRange);
 TList(VkBufferCopy);
 TList(VkImageCopy);

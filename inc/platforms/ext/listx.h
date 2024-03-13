@@ -30,6 +30,7 @@ typedef struct ListU64 ListU64;
 Error GenericList_createx(U64 length, U64 stride, GenericList *result);
 Error GenericList_createRepeatedx(U64 length, U64 stride, Buffer data, GenericList *result);
 Error GenericList_createCopyx(GenericList list, GenericList *result);
+Error GenericList_createCopySubsetx(GenericList list, U64 offset, U64 len, GenericList *result);
 
 Error GenericList_createSubsetReversex(GenericList list, U64 index, U64 length, GenericList *result);
 Error GenericList_createReversex(GenericList list, GenericList *result);
@@ -54,6 +55,7 @@ Bool GenericList_freex(GenericList *result);
 Error Name##_createx(U64 length, Name *result);											\
 Error Name##_createRepeatedx(U64 length, Name##_Type t, Name *result);					\
 Error Name##_createCopyx(Name l, Name *result);											\
+Error Name##_createCopySubsetx(Name l, U64 off, U64 len, Name *result);					\
 Error Name##_createSubsetReversex(Name l, U64 index, U64 length, Name *result);			\
 Error Name##_createReversex(Name l, Name *result);										\
 																						\

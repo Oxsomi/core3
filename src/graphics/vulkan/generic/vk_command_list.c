@@ -405,6 +405,10 @@ void CommandList_process(
 			temp->tempPipelines[EPipelineType_Compute] = *(PipelineRef* const*) data;
 			break;
 
+		case ECommandOp_SetRaytracingPipelineExt:
+			temp->tempPipelines[EPipelineType_RaytracingExt] = *(PipelineRef* const*) data;
+			break;
+
 		case ECommandOp_SetPrimitiveBuffers:
 			temp->tempBoundBuffers = *(const SetPrimitiveBuffersCmd*) data;
 			break;
@@ -621,6 +625,73 @@ void CommandList_process(
 
 			break;
 
+		//case ECommandOp_DispatchRaysIndirect:
+		case ECommandOp_DispatchRaysExt: {
+
+			Pipeline *raytracingPipeline = PipelineRef_ptr(temp->tempPipelines[EPipelineType_RaytracingExt]);
+
+			if(temp->pipelines[EPipelineType_RaytracingExt] != temp->tempPipelines[EPipelineType_RaytracingExt]) {
+
+				temp->pipelines[EPipelineType_RaytracingExt] = temp->tempPipelines[EPipelineType_RaytracingExt];
+
+				vkCmdBindPipeline(
+					temp->buffer,
+					VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,
+					*Pipeline_ext(raytracingPipeline, Vk)
+				);
+			}
+
+			PipelineRaytracingInfo info = *Pipeline_info(raytracingPipeline, PipelineRaytracingInfo);
+
+			VkStridedDeviceAddressRegionKHR hit = (VkStridedDeviceAddressRegionKHR) {
+				.deviceAddress = getVkDeviceAddress((DeviceData) { 
+					.buffer = info.shaderBindingTable, .offset = info.sbtOffset 
+				}),
+				.size = raytracingShaderAlignment * info.groupCount,
+				.stride = raytracingShaderAlignment
+			};
+
+			VkStridedDeviceAddressRegionKHR miss = (VkStridedDeviceAddressRegionKHR) {
+				.deviceAddress = hit.deviceAddress + hit.size,
+				.size = raytracingShaderAlignment * info.missCount,
+				.stride = raytracingShaderAlignment
+			};
+
+			VkStridedDeviceAddressRegionKHR raygen = (VkStridedDeviceAddressRegionKHR) {
+				.deviceAddress = miss.deviceAddress + miss.size,
+				.size = raytracingShaderAlignment,
+				.stride = raytracingShaderAlignment
+			};
+
+			VkStridedDeviceAddressRegionKHR callable = (VkStridedDeviceAddressRegionKHR) {
+				.deviceAddress = raygen.deviceAddress + raygen.size * info.raygenCount,
+				.size = raytracingShaderAlignment * info.callableCount,
+				.stride = raytracingShaderAlignment
+			};
+
+			if(op == ECommandOp_DispatchRaysExt) {
+				DispatchRaysExt dispatch = *(const DispatchRaysExt*)data;
+				raygen.deviceAddress += raygen.stride * dispatch.raygenId;
+				instanceExt->traceRays(
+					buffer,
+					&raygen, &miss, &hit, &callable,
+					dispatch.x, dispatch.y, dispatch.z
+				);
+			}
+
+			else {
+				DispatchRaysIndirectExt dispatch = *(const DispatchRaysIndirectExt*)data;
+				raygen.deviceAddress += raygen.stride * dispatch.raygenId;
+				instanceExt->traceRaysIndirect(
+					buffer,
+					&raygen, &miss, &hit, &callable,
+					DeviceBufferRef_ptr(dispatch.buffer)->resource.deviceAddress + dispatch.offset
+				);
+			}
+
+			break;
+		}
+
 		case ECommandOp_StartScope: {
 
 			VkDependencyInfo dependency = (VkDependencyInfo) {
@@ -658,6 +729,14 @@ void CommandList_process(
 
 					case EPipelineStage_Domain:
 						pipelineStage = VK_PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER_BIT;
+						break;
+
+					case EPipelineStage_RaygenExt:
+					case EPipelineStage_CallableExt:
+					case EPipelineStage_MissExt:
+					case EPipelineStage_ClosestHitExt:
+					case EPipelineStage_AnyHitExt:
+						pipelineStage = VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR;
 						break;
 				}
 

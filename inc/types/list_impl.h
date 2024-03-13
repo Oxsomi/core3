@@ -99,6 +99,10 @@ Error Name##_createCopy(Name l, Allocator alloc, Name *result) {														\
 	TListWrapCtor(Name, Error err = GenericList_createCopy(Name##_toList(l), alloc, &list));							\
 }																														\
 																														\
+Error Name##_createCopySubset(Name l, U64 off, U64 len, Allocator alloc, Name *result) {								\
+	TListWrapCtor(Name, Error err = GenericList_createCopySubset(Name##_toList(l), off, len, alloc, &list));			\
+}																														\
+																														\
 Error Name##_createRepeated(U64 length, Name##_Type data, Allocator alloc, Name *result) {								\
 	Buffer buf = Buffer_createRefConst((const U8*)&data, sizeof(Name##_Type));											\
 	TListWrapCtor(Name, Error err = GenericList_createRepeated(length, sizeof(Name##_Type), buf, alloc, &list));		\
