@@ -692,7 +692,13 @@ A pipeline is a combination of the states and shader binaries that are required 
 - type: compute, graphics or raytracing pipeline type.
 - stages: `ListPipelineStage` the binaries that are used for the shader.
   - stageType: which stage the binary is for. This is not necessarily unique, but should be unique for graphics shaders and compute. For raytracing shaders there can be multiple for the same stage.
-  - shaderBinary: the format as explained in "Shader binary types" that is required by the current graphics API.
+  - Non raytracing shaders (compute / graphics):
+    - binary: the format as explained in "Shader binary types" that is required by the current graphics API.
+  - Raytracing shaders:
+    - binaryId: the binary index in the binaries passed to createPipelineRaytracingExt (local id, not global: so if two identical pipelines are compiled at the same time, the binaryId should be the same in both).
+    - Accessible after construction for miss, callable and raygen shaders:
+      - localShaderId: the id of that one specific shader type only (raygen 0,1,2, miss 0,1,2, etc.).
+      - groupId: implementation specific id that is used to communicate internally about how the shader can be accessed (through a shader binding table for example).
 - extraInfo: a pointer to behind the API dependent pipeline extension struct that allows extra info that's only applicable to a certain pipeline type.
   - For compute: this is NULL.
   - For graphics: this is PipelineGraphicsInfo.
@@ -700,8 +706,12 @@ A pipeline is a combination of the states and shader binaries that are required 
 
 ### Used functions and obtained
 
-- Obtained through GraphicsDeviceRef's createPipelinesGraphics and createPipelinesCompute.
-- Used in CommandListRef's bindComputePipeline & bindGraphicsPipeline.
+- Obtained through GraphicsDeviceRef's createPipelinesGraphics, createPipelinesCompute and createPipelineRaytracingExt.
+- Used in CommandListRef's setComputePipeline, setGraphicsPipeline and setRaytracingPipelineExt.
+
+### Obtaining an extended Pipeline info
+
+Both graphics and raytracing pipelines have additional info that was used during object creation. This data can be obtained by using "Pipeline_info". E.g. Pipeline_info(pipelinePtr, PipelineRaytracingInfo) or Pipeline_info(pipelinePtr, PipelineGraphicsInfo). Make sure that this is safe by checking pipelinePtr->type.
 
 ### PipelineGraphicsInfo
 
@@ -776,10 +786,47 @@ The graphics pipeline has the following properties:
 
 A pipeline stage is simply a Buffer and an EPipelineStage. The Buffer is in the format declared in "Shader binary types" and EPipelineStage can be Vertex, Pixel, Compute, GeometryExt, HullExt or DomainExt. Hull and domain are enabled by the TessellationShader feature and GeometryExt by the GeometryShader feature.
 
+### PipelineRaytracingInfo
+
+The pipeline raytracing info struct contains two types of members; post init and pre init members. Pre init has to be provided before it can be constructed and post init is the data that represents the fully initialized pipeline.
+
+- Post construction (available after createRaytracingPipelinesExt):
+  - binaries: List of all the binaries that are used by the pipeline (stages can point to the same binaries, to reduce compilation time).
+  - groups: List of all of the hit groups and the stages they point to.
+  - entrypoints: What entrypoint in the binary represents the stage at index i.
+  - shaderBindingTable: Implementation dependent shader binding table. As long as it aligns with the groupId specified in the PipelineRaytracingInfo->PipelineStages section in this document.
+  - sbtOffset: Offset into the SBT (shader binding table). This is if multiple raytracing pipelines are initialized together, because only a single SBT is created per createRaytracingPipelinesExt. sbtOffset will also keep alignment in mind.
+  - raygenCount, missCount, callableCount: Count per stage, useful to know what ids are valid miss/raygen or callable shaders.
+- Pre construction (supply before createRaytracingPipelinesExt):
+  - flags:
+    - SkipTriangles/SkipAABBs: Triangle or AABB primitives are skipped for this raytracing pipeline.
+    - AllowMotionBlurExt: Allow the hardware accelerated motion blur extension to be executed.
+    - NoNull(AnyHit/ClosestHit/Miss/Intersection): (One of) These shaders aren't allowed to be null for both validation and linking reasons.
+  - maxPayloadSize: 4-byte aligned payload size (>0 and <=32). This must be the max of all payload sizes used in the raytracing pipeline.
+  - maxAttributeSize: 4-byte aligned attribute size for intersection shaders (>=8 and <=32). Must be the max of all intersection attribute sizes. If intersection shaders aren't used, this should be 8.
+  - maxRecursionDepth: 1 or 2. 1 indicates having no further traces in the hit/miss shader while 2 indicates having only 1 nested trace in hit/miss shader. For deeper recursions, use a for loop to handle each bounce manually.
+  - stageCount/binaryCount/groupCount: How many stages from the 'stages'/'binaries'/'groups' array belong to this pipeline stage. Post init this will be equal to pipeline->stages.length, binaries.length and groups.length respectively.
+
+#### PipelineStages
+
+A pipeline stage is simply a binary id and an EPipelineStage. binaryId points to a valid id of the raytracing pipeline. can be RaygenExt, CallableExt, MissExt, ClosestHitExt, AnyHitExt or IntersectionExt. After construction, the pipeline stage contains a "localShaderId" and "groupId". These are used to identify miss/raygen and callable shaders and the order they are in is predictable:
+
+- All hit groups have localId 0->groupCount in the exact order that they were registered and groupId 0 -> groupCount.
+- All miss shaders have localId 0->count(stages, EPipelineStage_MissExt) and groupId of groupCount->groupCount+missShaders.
+- All raygen shaders have localId 0->count(stages, EPipelineStage_RaygenExt) and groupId of groupCount+missShaders->groupCount+missShaders+raygenShaders.
+- All callable shaders have localId 0->count(stages, EPipelineStage_CallableExt) and groupId of groupCount+missShaders+raygenShaders->
+  groupCount+missShaders+raygenShaders+callableShaders.
+
+The groupId is used to determine where in the shader binding table it is located. This is only used internally. Miss shader localId / callable shader localId and raygen shader localId are all useful for knowing which shader to execute.
+
+#### Compilation / binaries
+
+Compilation spits out a single binary with HLSL, which means that only a single compile should be sufficient if all entrypoints are in a single file. The entrypoint names of them are maintained and have to be specified if it's not "main" (otherwise it's safe to avoid the entrypoint array or a single CharString entry).
+
 ### Compute example
 
 ```c
-tempShader = ...;		//Buffer: Load from virtual file or hardcode in code.
+tempShader = ...;		//Buffer: Load from virtual file or hardcode.
 
 CharString nameArr[] = {
     CharString_createConstRefCStr("Test compute pipeline")
@@ -846,6 +893,84 @@ Create pipelines will take ownership of the buffers referenced in stages and it 
 
 It is recommended to generate all pipelines that are needed in this one call at startup, to avoid stuttering at runtime.
 
+### Raytracing example
+
+```c
+//... Load shaders from virtual file system into tempShaders[0]
+
+//Define our entrypoints; a single compiled binary with specified entry points.
+
+PipelineStage stageArr[] = {
+    (PipelineStage) { .stageType = EPipelineStage_ClosestHitExt, .binaryId = 0 },
+    (PipelineStage) { .stageType = EPipelineStage_MissExt, .binaryId = 0 },
+    (PipelineStage) { .stageType = EPipelineStage_RaygenExt, .binaryId = 0 }
+};
+
+CharString entrypointArr[] = {
+    CharString_createRefCStrConst("mainClosestHit"),
+    CharString_createRefCStrConst("mainMiss"),
+    CharString_createRefCStrConst("mainRaygen")
+};
+
+//Define a hit group
+
+PipelineRaytracingGroup hitArr[] = {
+    (PipelineRaytracingGroup) { .closestHit = 0, .anyHit = U32_MAX, .intersection = U32_MAX }
+};
+
+//Define the pipeline that links these together as one.
+//We can link multiple at the same time.
+//All ids (in hitArr, stageArr) are relative to the stage itself (no global binary id).
+
+CharString nameArr[] = {
+    CharString_createRefCStrConst("Raytracing pipeline test")
+};
+
+U64 count = sizeof(nameArr) / sizeof(nameArr[0]);
+U64 entrypointCount = sizeof(stageArr) / sizeof(stageArr[0]);
+U64 hitCount = sizeof(hitArr) / sizeof(hitArr[0]);
+
+PipelineRaytracingInfo infoArr[] = {
+    (PipelineRaytracingInfo) {
+
+        (U8) EPipelineRaytracingFlags_Default,	//No intersection shaders
+        16,										//Payload size
+        8,										//Attribute size
+        1,										//Recursion
+
+        (U32) entrypointCount,
+        (U32) count,
+        (U32) hitCount
+    }
+};
+
+//Turn into lists
+
+ListBuffer binaries = (ListBuffer) { 0 };
+ListCharString names = (ListCharString) { 0 };
+ListPipelineStage stages = (ListPipelineStage) { 0 };
+ListCharString entrypoints = (ListCharString) { 0 };
+ListPipelineRaytracingGroup hitGroups = (ListPipelineRaytracingGroup) { 0 };
+ListPipelineRaytracingInfo infos = (ListPipelineRaytracingInfo) { 0 };
+
+_gotoIfError(clean, ListBuffer_createRefConst(tempBuffers, count, &binaries));
+_gotoIfError(clean, ListCharString_createRefConst(nameArr, count, &names));
+_gotoIfError(clean, ListPipelineRaytracingInfo_createRefConst(infoArr, count, &infos));
+
+_gotoIfError(clean, ListPipelineStage_createRefConst(stageArr, entrypointCount, &stages));
+_gotoIfError(clean, ListCharString_createRefConst(entrypointArr, entrypointCount, &entrypoints));
+
+_gotoIfError(clean, ListPipelineRaytracingGroup_createRefConst(hitArr, hitCount, &hitGroups));
+
+//Finalize into pipeline
+
+_gotoIfError(clean, GraphicsDeviceRef_createPipelineRaytracingExt(
+    twm->device, stages, &binaries, hitGroups, infos, &entrypoints, names, &raytracingShaders
+));
+
+tempBuffers[0] = tempBuffers[1] = tempBuffers[2] = Buffer_createNull();
+```
+
 ## Shader binary types
 
 In OxC3 graphics, either the application or the OxC3 baker is responsible for compiling and providing binaries in the right formats. According to OxC3 graphics, the shaders are just a buffer, so they can contain anything (text or binary). Down here is a list of the expected inputs for each graphics API if the developer wishes to sidestep the baking process:
@@ -853,15 +978,15 @@ In OxC3 graphics, either the application or the OxC3 baker is responsible for co
 - DirectX12: DXIL (binary).
   - HLSL Semantics can only be TEXCOORDi where i < 16. This maps directly to the binding.
 - Vulkan: SPIR-V (binary).
-  - HLSL Entrypoint needs to be remapped to main.
-- Metal: MSL (text).
-- WebGPU: WGSL (text).
+  - HLSL Entrypoint needs to be remapped to main, except for raytracing shaders.
+- Metal: MSL (UTF8 text).
+- WebGPU: WGSL (UTF8 text).
 
 The OxC3 baker will (if used) convert HLSL to SPIR-V, DXIL, MSL or WGSL depending on which API is currently used. It can provide this as a pre-baked binary too (.oiCS Oxsomi Compiled Shader). The pre-baked binary contains all 4 formats to ensure it can be loaded on any platform. But the baker will only include the one relevant to the current API to prevent bloating.
 
 When using the baker, the binaries can simply be loaded using the oiCS helper functions and passed to the pipeline creation, as they will only contain one binary.
 
-**TODO: The baker currently doesn't include this functionality just yet.**
+**TODO: The baker currently doesn't include this functionality just yet. Currently, compile.bat and compile_debug.bat are used to compile shaders. **
 
 ## DeviceBuffer
 

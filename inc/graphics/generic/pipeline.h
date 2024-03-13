@@ -105,9 +105,9 @@ TList(PipelineRaytracingGroup);
 typedef struct PipelineRaytracingInfo {
 
 	U8 flags;								//EPipelineRaytracingFlags
-	U8 maxPayloadSize;						//In bytes; has to be 4-byte aligned.
+	U8 maxPayloadSize;						//In bytes; has to be 4-byte aligned and <32.
 	U8 maxAttributeSize;					//In bytes (>=8); has to be 4-byte aligned and <32.
-	U8 maxRecursionDepth;					//<= 2. For multiple bounces, use for loop in raygen shader.
+	U8 maxRecursionDepth;					//1 or 2. For multiple bounces, use for loop in raygen shader.
 
 	U32 stageCount;							//Non zero used to determine where stages start/end.
 
@@ -183,7 +183,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 );
 
 //stages, binaries, libraries and info will be freed and stages[i].binary be NULL.
-Error GraphicsDeviceRef_createPipelineRaytracing(
+Error GraphicsDeviceRef_createPipelineRaytracingExt(
 	GraphicsDeviceRef *deviceRef,
 	ListPipelineStage stages,
 	ListBuffer *binaries,

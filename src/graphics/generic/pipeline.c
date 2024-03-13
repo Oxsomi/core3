@@ -611,7 +611,7 @@ success:
 
 //Raytracing
 
-impl Error GraphicsDevice_createPipelinesRaytracingExt(
+impl Error GraphicsDevice_createPipelinesRaytracingInternalExt(
 	GraphicsDeviceRef *deviceRef,
 	ListCharString names,
 	ListPipelineRef *pipelines,
@@ -620,7 +620,7 @@ impl Error GraphicsDevice_createPipelinesRaytracingExt(
 	U64 groupCounter
 );
 
-Error GraphicsDeviceRef_createPipelineRaytracing(
+Error GraphicsDeviceRef_createPipelineRaytracingExt(
 	GraphicsDeviceRef *device,
 	ListPipelineStage stages,
 	ListBuffer *binaries,
@@ -732,11 +732,11 @@ Error GraphicsDeviceRef_createPipelineRaytracing(
 				"maxAttributeSize, maxRecursionDepth and maxRayHitAttributeSize need to be <=32, <=2 and <=32 respectively"
 			);
 
-		if(info.maxAttributeSize < 8 || info.maxPayloadSize < 4)
+		if(info.maxAttributeSize < 8 || info.maxPayloadSize < 4 || !info.maxRecursionDepth)
 			return Error_invalidParameter(
 				1, 0,
-				"GraphicsDeviceRef_createPipelinesRaytracing()::info[i].maxAttributeSize and maxPayloadSize "
-				"need to be >=8 and >=4 respectively"
+				"GraphicsDeviceRef_createPipelinesRaytracing()::info[i].maxAttributeSize, maxPayloadSize and maxRecursionDepth"
+				"need to be >=8, >=4 and >=1 respectively"
 			);
 
 		if(info.binaries.ptr || info.groups.length)
@@ -928,7 +928,7 @@ Error GraphicsDeviceRef_createPipelineRaytracing(
 	ListBuffer_freex(binaries);
 	ListCharString_freex(entrypoints);
 
-	_gotoIfError(clean, GraphicsDevice_createPipelinesRaytracingExt(
+	_gotoIfError(clean, GraphicsDevice_createPipelinesRaytracingInternalExt(
 		device, names, pipelines, stageCounter, binaryCounter, groupCounter
 	));
 

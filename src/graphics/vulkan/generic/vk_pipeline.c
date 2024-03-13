@@ -1005,7 +1005,7 @@ TListImpl(VkShaderModule);
 TListImpl(VkPipelineShaderStageCreateInfo);
 TListImpl(VkRayTracingShaderGroupCreateInfoKHR);
 
-Error GraphicsDevice_createPipelinesRaytracingExt(
+Error GraphicsDevice_createPipelinesRaytracingInternalExt(
 	GraphicsDeviceRef *deviceRef,
 	ListCharString names,
 	ListPipelineRef *pipelines,
