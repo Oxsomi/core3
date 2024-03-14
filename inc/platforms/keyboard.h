@@ -85,9 +85,6 @@ typedef enum EKeyboardFlags {
 	EKeyboardFlags_Caps,
 	EKeyboardFlags_NumLock,
 	EKeyboardFlags_ScrollLock,
-	EKeyboardFlags_Shift,
-	EKeyboardFlags_Control,
-	EKeyboardFlags_Alt,
 	EKeyboardFlags_Count
 } EKeyboardFlags;
 

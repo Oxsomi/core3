@@ -284,10 +284,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 				U32 flags =
 					((GetKeyState(VK_CAPITAL) & 1) << EKeyboardFlags_Caps) |
 					((GetKeyState(VK_NUMLOCK) & 1) << EKeyboardFlags_NumLock) |
-					((GetKeyState(VK_SCROLL) & 1) << EKeyboardFlags_ScrollLock) |
-					((GetKeyState(VK_SHIFT) & 1) << EKeyboardFlags_Shift) |
-					((GetKeyState(VK_CONTROL) & 1) << EKeyboardFlags_Control) |
-					((GetKeyState(VK_MENU) & 1) << EKeyboardFlags_Alt);
+					((GetKeyState(VK_SCROLL) & 1) << EKeyboardFlags_ScrollLock);
 
 				dev->flags = flags;
 

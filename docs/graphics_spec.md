@@ -43,19 +43,12 @@ Because of this, a device needs the following requirements to be OxC3 compatible
   - VK_KHR_surface (and the variant of the platform such as VK_KHR_win32_surface)
   - VK_EXT_swapchain_colorspace
 - Required device extensions:
-  - VK_KHR_shader_draw_parameters
   - VK_KHR_push_descriptor
-  - VK_KHR_dedicated_allocation
-  - VK_KHR_bind_memory2
-  - VK_KHR_get_memory_requirements2
-  - VK_EXT_shader_subgroup_ballot
-  - VK_EXT_shader_subgroup_vote
-  - VK_EXT_descriptor_indexing with all features true except shaderInputAttachmentArrayDynamicIndexing, descriptorBindingUniformBufferUpdateAfterBind and shaderInputAttachmentArrayNonUniformIndexing.
+  - Descriptor indexing with all features true except shaderInputAttachmentArrayDynamicIndexing, descriptorBindingUniformBufferUpdateAfterBind and shaderInputAttachmentArrayNonUniformIndexing.
     - on: shaderUniformTexelBufferArrayDynamicIndexing, shaderStorageTexelBufferArrayDynamicIndexing, shaderUniformBufferArrayNonUniformIndexing, shaderSampledImageArrayNonUniformIndexing, shaderStorageBufferArrayNonUniformIndexing, shaderStorageImageArrayNonUniformIndexing, shaderUniformTexelBufferArrayNonUniformIndexing, shaderStorageTexelBufferArrayNonUniformIndexing, descriptorBindingSampledImageUpdateAfterBind, descriptorBindingStorageImageUpdateAfterBind, descriptorBindingStorageBufferUpdateAfterBind, descriptorBindingUniformTexelBufferUpdateAfterBind, descriptorBindingStorageTexelBufferUpdateAfterBind, descriptorBindingUpdateUnusedWhilePending, descriptorBindingPartiallyBound, descriptorBindingVariableDescriptorCount, runtimeDescriptorArray
-  - VK_KHR_driver_properties
   - VK_KHR_synchronization2
-  - VK_KHR_timeline_semaphore
-  - VK_KHR_buffer_device_address
+  - Timeline semaphore with timelineSemaphore = true
+  - Buffer device address with bufferDeviceAddress = true
   - VK_KHR_swapchain
     - Requires at least 1 image layer.
     - Requires ability to make 3 images.
@@ -80,7 +73,7 @@ Because of this, a device needs the following requirements to be OxC3 compatible
   - VK_NV_displacement_micromap as RayMicromapDisplacement
   - VK_KHR_dynamic_rendering as DirectRendering
   - VK_KHR_deferred_host_operations is required for raytracing. Otherwise all raytracing extensions will be forced off.
-  - VK_KHR_multiview as Multiview
+  - VK_KHR_multiview as Multiview.
   - VK_KHR_fragment_shading_rate as VariableRateShading
 - subgroupSize of 16 - 128.
 - sampleRateShading of true.

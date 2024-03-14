@@ -695,7 +695,7 @@ A pipeline is a combination of the states and shader binaries that are required 
   - Non raytracing shaders (compute / graphics):
     - binary: the format as explained in "Shader binary types" that is required by the current graphics API.
   - Raytracing shaders:
-    - binaryId: the binary index in the binaries passed to createPipelineRaytracingExt (local id, not global: so if two identical pipelines are compiled at the same time, the binaryId should be the same in both).
+    - binaryId: the binary index in the binaries passed to createPipelineRaytracingExt (local id, not global: so if two identical pipelines are compiled at the same time, the binaryId should be the same in both). binaryId may be U32_MAX to indicate a NULL shader (but only for miss shaders). This could be useful for shadow shaders for example (they might not need a miss shader).
     - Accessible after construction for miss, callable and raygen shaders:
       - localShaderId: the id of that one specific shader type only (raygen 0,1,2, miss 0,1,2, etc.).
       - groupId: implementation specific id that is used to communicate internally about how the shader can be accessed (through a shader binding table for example).
@@ -809,7 +809,7 @@ The pipeline raytracing info struct contains two types of members; post init and
 
 #### PipelineStages
 
-A pipeline stage is simply a binary id and an EPipelineStage. binaryId points to a valid id of the raytracing pipeline. can be RaygenExt, CallableExt, MissExt, ClosestHitExt, AnyHitExt or IntersectionExt. After construction, the pipeline stage contains a "localShaderId" and "groupId". These are used to identify miss/raygen and callable shaders and the order they are in is predictable:
+A pipeline stage is simply a binary id and an EPipelineStage. binaryId points to a valid id of the raytracing pipeline, but can be U32_MAX for miss shaders if NoNullMiss isn't set. can be RaygenExt, CallableExt, MissExt, ClosestHitExt, AnyHitExt or IntersectionExt. After construction, the pipeline stage contains a "localShaderId" and "groupId". These are used to identify miss/raygen and callable shaders and the order they are in is predictable:
 
 - All hit groups have localId 0->groupCount in the exact order that they were registered and groupId 0 -> groupCount.
 - All miss shaders have localId 0->count(stages, EPipelineStage_MissExt) and groupId of groupCount->groupCount+missShaders.
@@ -1180,6 +1180,151 @@ In the example above, two AABBs are created from a buffer.
 
 - Obtained through createBLASProceduralExt, createBLASExt and createBLASUnindexedExt from GraphicsDeviceRef.
 - Used in TLAS creation and can be copied to/from the CPU.
+
+#### TLAS
+
+A TLAS is a top level acceleration structure; it is the representation of a couple instances of triangle geometry or procedural geometry (a scene). It has an acceleration structure built over these instances to accelerate tracing rays through it. BLASes (Bottom level acceleration structures) are used through a TLAS (top level AS) and can be accessed in raytracing.
+
+There are two types of TLASes:
+
+- HW Static intersections (static geometry).
+- HW Motion blur intersections (static, matrix or transform motion).
+
+The latter can only be used with HW motion blur hardware, while the former is always available (if raytracing is available) and is simpler to construct. 
+
+A TLAS can be initialized through two different methods:
+
+- CPU-side (Might introduce a temporary staging resource or ring buffer).
+- GPU side by an already initialized GPU resource.
+
+##### Example: Static instances
+
+```c
+TLASInstanceStatic instances[1] = {
+    (TLASInstanceStatic) {
+        .transform = {
+            { 1, 0, 0, 0 },
+            { 0, 1, 0, 0 },
+            { 0, 0, 1, 0 }
+        },
+        .data = (TLASInstanceData) {
+            .blasCpu = twm->blas,
+            .instanceId24_mask8 = ((U32)0xFF << 24),
+            .sbtOffset24_flags8 = (ETLASInstanceFlag_Default << 24) | 0	//Hit index 0
+        }
+    }
+};
+
+ListTLASInstanceStatic instanceList = (ListTLASInstanceStatic) { 0 };
+_gotoIfError(clean, ListTLASInstanceStatic_createRefConst(
+    instances, sizeof(instances) / sizeof(instances[0]), &instanceList
+));
+
+_gotoIfError(clean, GraphicsDeviceRef_createTLASExt(
+    twm->device,
+    ERTASBuildFlags_DefaultTLAS,
+    NULL,
+    instanceList,
+    CharString_createRefCStrConst("Test TLAS"),
+    &twm->tlas
+));
+```
+
+For GPU construction, the same can be done and has to follow the exact struct; except blasCpu will become the address of the BLAS on the GPU.
+
+##### Example: Motion blur
+
+```c
+TLASInstanceMotion instances[1] = {
+    (TLASInstanceMotion) {
+        .type = ETLASInstanceType_Matrix,			//Static for ETLASInstanceStatic
+        .matrixInst = (TLASInstanceMatrixMotion) {
+            .prev = {
+                { 1, 0, 0, 0 },
+                { 0, 1, 0, 0 },
+                { 0, 0, 1, 0 }
+            },
+            .next = {
+                { 2, 0, 0, 0 },		//Grow twice in size as an animation
+                { 0, 2, 0, 0 },
+                { 0, 0, 2, 0 }
+            },
+            .data = (TLASInstanceData) {
+                .blasCpu = twm->blas,
+                .instanceId24_mask8 = ((U32)0xFF << 24),
+                .sbtOffset24_flags8 = (ETLASInstanceFlag_Default << 24) | 0	//Hit index 0
+            }
+        }
+    }
+};
+
+ListTLASInstanceMotion instanceList = (ListTLASInstanceMotion) { 0 };
+_gotoIfError(clean, ListTLASInstanceMotion_createRefConst(
+    instances, sizeof(instances) / sizeof(instances[0]), &instanceList
+));
+
+_gotoIfError(clean, GraphicsDeviceRef_createTLASMotionExt(
+    twm->device,
+    ERTASBuildFlags_DefaultTLAS,
+    NULL,
+    instanceList,
+    CharString_createRefCStrConst("Test TLAS"),
+    &twm->tlas
+));
+```
+
+For GPU construction, the same can be done and has to follow the exact struct; except blasCpu will become the address of the BLAS on the GPU.
+
+##### Properties
+
+- base: RTAS standardizes BLAS and TLAS a little bit.
+- useDeviceMemory: If the TLAS was created through GPU memory or via a temporary CPU visible buffer.
+- handle: Descriptor index of the acceleration structure.
+- Depending on useDeviceMemory, base.isMotionBlurExt and base.asConstructionType: (Instances, Serialized):
+  - ETLASConstructionType_Serialized:
+    - Buffer cpuData: Indicates cpu memory that represents the TLAS. Might become invalidated because of a driver update.
+  - useDeviceMemory:
+    - deviceData: Represents the resource range that holds the TLASInstanceStatic[] or TLASInstanceMotion[] (isMotionBlurExt) on the GPU.
+  - isMotionBlurExt (requires motion blur feature):
+    - cpuInstancesMotion: List of TLASInstanceMotion.
+  - else
+    - cpuInstancesStatic: List of TLASInstanceStatic.
+
+##### TLASInstanceStatic + TLASInstanceMotion
+
+Both represent a single mesh instance. They both contain one instance data (TLAS_getInstanceDataCpu) while they contain 1 or 2 transforms. TLASInstanceMotion may contain two transforms if the type is not ETLASInstanceType_Static. Otherwise either transform or staticInst.transform contain a F32x4x3 transform matrix.  When the instance type is ETLASInstanceType_Matrix it contains two matrices (matrixInst.prev and matrixInst.next). 
+
+When the type is ETLASInstanceType_SRT, srtInst.prev and next contain a special transform format;
+
+- Scale, pivots, translate and shear: x, y, z
+- Orientation: Quaternion xyzw.
+
+This type has helpers through TLASTransformSRT such as create(scale, pivot, translate, quat, shearing), createSimple(scale, translate, quat) and getters/setters for each type.
+
+##### Instance data
+
+Instance data contains the information that describes everything besides the transform to the acceleration structure:
+
+- instanceId24_mask8: Low 24 bits contain the InstanceID() intrinsic while the high 8 bits are the mask, useful for masking out certain objects when tracing rays.
+- sbtOffset24_flags8: Low 24 bits contain the shader binding table offset (hit shader id), while the high 8 bits contain the instance flags.
+- blasCpu or blasDeviceAddress.
+  - blasCpu is a BLASRef* used only when the TLAS is created from the CPU.
+  - blasDeviceAddress is a U64 that is the GPU buffer address when the TLAS is created from the GPU.
+  - If this parameter is NULL or 0, it indicates the instance should be hidden.
+
+###### Instance flags
+
+The instance flags are identical to both DXR and VkRT:
+
+- DisableCulling (0): Don't listen to the back/front face culling flags of TraceRay.
+- CCW (1): Counter clockwise winding order.
+- ForceDisableAnyHit (2): Never run any hit.
+- ForceEnableAnyHit (3): Always run any hit.
+
+##### Used functions and obtained
+
+- Obtained through createTLASExt, createTLASMotionExt and createTLASDeviceExt from GraphicsDeviceRef.
+- Accessible from TraceRay/traceRayEXT only through the handle.
 
 ## Commands
 

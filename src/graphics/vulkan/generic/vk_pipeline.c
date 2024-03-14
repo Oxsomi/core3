@@ -1102,9 +1102,12 @@ Error GraphicsDevice_createPipelinesRaytracingInternalExt(
 
 		groupCounter += rtPipeline->groupCount;
 
+		U64 stageStart = stageCounter;
+
 		for (U64 j = 0; j < rtPipeline->stageCount; ++j) {
 
 			PipelineStage *stage = &pipeline->stages.ptrNonConst[j];
+
 			VkShaderStageFlagBits shaderStage = 0;
 
 			switch (stage->stageType) {
@@ -1135,26 +1138,29 @@ Error GraphicsDevice_createPipelinesRaytracingInternalExt(
 					break;
 			}
 
-			CharString entrypoint = rtPipeline->entrypoints.ptr[j];
-
-			stages.ptrNonConst[stageCounter + j] = (VkPipelineShaderStageCreateInfo) {
-				.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-				.stage = shaderStage,
-				.module = modules.ptrNonConst[binaryCounter + stage->binaryId],
-				.pName = entrypoint.ptr ? entrypoint.ptr : "main"
-			};
-
 			//Generic shader
 
 			if (!(stage->stageType >= EPipelineStage_RtHitStart && stage->stageType <= EPipelineStage_RtHitEnd))
 				groups.ptrNonConst[groupCounter++] = (VkRayTracingShaderGroupCreateInfoKHR) {
 					.sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR,
 					.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR,
-					.generalShader = (U32) j,
+					.generalShader = stage->binaryId == U32_MAX ? VK_SHADER_UNUSED_KHR : (U32) (stageCounter - stageStart),
 					.closestHitShader = VK_SHADER_UNUSED_KHR,
 					.anyHitShader = VK_SHADER_UNUSED_KHR,
 					.intersectionShader = VK_SHADER_UNUSED_KHR
 				};
+
+			if(stage->binaryId == U32_MAX)		//Invalid shaders get skipped
+				continue;
+
+			CharString entrypoint = !rtPipeline->entrypoints.ptr ? CharString_createNull() : rtPipeline->entrypoints.ptr[j];
+
+			stages.ptrNonConst[stageCounter++] = (VkPipelineShaderStageCreateInfo) {
+				.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+				.stage = shaderStage,
+				.module = modules.ptrNonConst[binaryCounter + stage->binaryId],
+				.pName = entrypoint.ptr ? entrypoint.ptr : "main"
+			};
 		}
 
 		//Init create info
@@ -1186,7 +1192,7 @@ Error GraphicsDevice_createPipelinesRaytracingInternalExt(
 			.sType = VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR,
 			.flags = flags,
 			.stageCount = rtPipeline->stageCount,
-			.pStages = stages.ptr + stageCounter,
+			.pStages = stages.ptr + stageStart,
 			.groupCount = (U32)(groupCounter - startGroupCounter),
 			.pGroups = groups.ptr + startGroupCounter,
 			.maxPipelineRayRecursionDepth = rtPipeline->maxRecursionDepth,
@@ -1198,7 +1204,6 @@ Error GraphicsDevice_createPipelinesRaytracingInternalExt(
 		CharString_freex(&temp1);
 
 		binaryCounter += rtPipeline->binaryCount;
-		stageCounter += rtPipeline->stageCount;
 	}
 
 	//Create vulkan pipelines
@@ -1269,7 +1274,7 @@ Error GraphicsDevice_createPipelinesRaytracingInternalExt(
 
 					PipelineStage stage = pipeline->stages.ptr[k];
 
-					if (stage.groupId != groupId)
+					if (stage.groupId != groupId)		//TODO: Better search
 						continue;
 
 					groupId = rtPipeline->groupCount;
@@ -1287,7 +1292,9 @@ Error GraphicsDevice_createPipelinesRaytracingInternalExt(
 				}
 
 			Buffer_copy(
-				Buffer_createRef((U8*)shaderBindings.ptr + raytracingShaderAlignment * (groupCounter + groupId), raytracingShaderIdSize),
+				Buffer_createRef(
+					(U8*)shaderBindings.ptr + raytracingShaderAlignment * (groupCounter + groupId), raytracingShaderIdSize
+				),
 				Buffer_createRefConst((const U8*)shaderHandles.ptr + raytracingShaderIdSize * j, raytracingShaderIdSize)
 			);
 		}

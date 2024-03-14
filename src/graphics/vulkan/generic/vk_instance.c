@@ -249,7 +249,6 @@ Error GraphicsInstance_createExt(GraphicsApplicationInfo info, Bool isVerbose, G
 	vkExtension(clean, vkGetPhysicalDeviceProperties2KHR, instanceExt->getPhysicalDeviceProperties2);
 
 	vkExtension(clean, vkCmdPipelineBarrier2KHR, instanceExt->cmdPipelineBarrier2);
-	vkExtension(clean, vkGetBufferDeviceAddressKHR, instanceExt->getBufferDeviceAddress);
 
 	vkExtension(clean, vkGetPhysicalDeviceSurfaceFormatsKHR, instanceExt->getPhysicalDeviceSurfaceFormats);
 	vkExtension(clean, vkGetPhysicalDeviceSurfaceCapabilitiesKHR, instanceExt->getPhysicalDeviceSurfaceCapabilities);
@@ -273,9 +272,6 @@ Error GraphicsInstance_createExt(GraphicsApplicationInfo info, Bool isVerbose, G
 	vkExtension(clean, vkCreateSwapchainKHR, instanceExt->createSwapchain);
 	vkExtension(clean, vkDestroySurfaceKHR, instanceExt->destroySurface);
 	vkExtension(clean, vkDestroySwapchainKHR, instanceExt->destroySwapchain);
-
-	vkExtensionNoCheck(vkCmdDrawIndexedIndirectCountKHR, instanceExt->cmdDrawIndexedIndirectCount);
-	vkExtensionNoCheck(vkCmdDrawIndirectCountKHR, instanceExt->cmdDrawIndirectCount);
 
 	vkExtensionNoCheck(vkCmdBuildAccelerationStructuresKHR, instanceExt->cmdBuildAccelerationStructures);
 	vkExtensionNoCheck(vkCreateAccelerationStructureKHR, instanceExt->createAccelerationStructure);
@@ -347,20 +343,10 @@ Bool GraphicsInstance_free(GraphicsInstance *inst, Allocator alloc) {
 }
 
 const C8 *reqExtensionsName[] = {
-	"VK_KHR_shader_draw_parameters",
 	"VK_KHR_push_descriptor",
-	"VK_KHR_dedicated_allocation",
-	"VK_KHR_bind_memory2",
-	"VK_KHR_get_memory_requirements2",
-	"VK_EXT_shader_subgroup_ballot",
-	"VK_EXT_shader_subgroup_vote",
-	"VK_EXT_descriptor_indexing",
-	"VK_KHR_driver_properties",
 	"VK_KHR_synchronization2",
-	"VK_KHR_timeline_semaphore",
 	"VK_KHR_maintenance4",
-	"VK_KHR_swapchain",
-	"VK_KHR_buffer_device_address"
+	"VK_KHR_swapchain"
 };
 
 U64 reqExtensionsNameCount = sizeof(reqExtensionsName) / sizeof(reqExtensionsName[0]);
@@ -373,9 +359,6 @@ const C8 *optExtensionsName[] = {
 		"",
 	#endif
 
-	"VK_KHR_shader_float16_int8",
-	"VK_KHR_draw_indirect_count",
-	"VK_KHR_shader_atomic_int64",
 	"VK_KHR_performance_query",
 	"VK_KHR_ray_tracing_pipeline",
 	"VK_KHR_ray_query",
@@ -383,7 +366,6 @@ const C8 *optExtensionsName[] = {
 	"VK_NV_ray_tracing_motion_blur",
 	"VK_NV_ray_tracing_invocation_reorder",
 	"VK_EXT_mesh_shader",
-	"VK_KHR_multiview",
 	"VK_KHR_fragment_shading_rate",
 	"VK_KHR_dynamic_rendering",
 	"VK_EXT_opacity_micromap",
@@ -546,7 +528,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 		);
 
 		getDeviceProperties(
-			optExtensions[EOptExtensions_Multiview],
+			true,
 			VkPhysicalDeviceMultiviewProperties,
 			multiViewProp,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_PROPERTIES
@@ -632,7 +614,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 		);
 
 		getDeviceFeatures(
-			optExtensions[EOptExtensions_Multiview],
+			true,
 			VkPhysicalDeviceMultiviewFeatures,
 			multiViewFeat,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_FEATURES
@@ -695,14 +677,14 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 		);
 
 		getDeviceFeatures(
-			optExtensions[EOptExtensions_F16],
+			true,
 			VkPhysicalDeviceShaderFloat16Int8Features,
 			float16,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES
 		);
 
 		getDeviceFeatures(
-			optExtensions[EOptExtensions_AtomicI64],
+			true,
 			VkPhysicalDeviceShaderAtomicInt64Features,
 			atomics64,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_INT64_FEATURES
@@ -981,7 +963,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 
 		//Multi draw
 
-		if(optExtensions[EOptExtensions_MultiDrawIndirectCount] && limits.maxDrawIndirectCount >= GIBI)
+		if(limits.maxDrawIndirectCount >= GIBI)
 			capabilities.features |= EGraphicsFeatures_MultiDrawIndirectCount;
 
 		//Subgroup operations
@@ -1010,7 +992,6 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 		//Multi view
 
 		if(
-			optExtensions[EOptExtensions_Multiview] &&
 			multiViewFeat.multiview &&
 			multiViewProp.maxMultiviewViewCount >= 6 && multiViewProp.maxMultiviewInstanceIndex >= 134217727
 		)

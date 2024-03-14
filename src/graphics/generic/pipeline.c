@@ -750,16 +750,28 @@ Error GraphicsDeviceRef_createPipelineRaytracingExt(
 
 			PipelineStage stage = stages.ptr[stageCounter + i];
 
-			if(stage.binaryId >= info.binaryCount)
-				return Error_outOfBounds(
-					1, stage.binaryId, info.binaryCount,
-					"GraphicsDeviceRef_createPipelinesRaytracing()::stages[i].binaryId out of bounds"
-				);
-
 			if (Buffer_length(stage.binary))
 				return Error_invalidParameter(
 					1, 0, 
 					"GraphicsDeviceRef_createPipelinesRaytracing()::stages[i].shaderBinary is not allowed for raytracing shaders"
+				);
+
+			if(
+				stage.binaryId == U32_MAX && stage.stageType == EPipelineStage_MissExt && 
+				!(info.flags & EPipelineRaytracingFlags_NoNullMiss)
+			)
+				continue;
+
+			if(stage.binaryId == U32_MAX)
+				return Error_invalidParameter(
+					1, 0, 
+					"GraphicsDeviceRef_createPipelinesRaytracing()::info[i].binaryId is U32_MAX (unused) but it's not allowed"
+				);
+
+			if(stage.binaryId >= info.binaryCount)
+				return Error_outOfBounds(
+					1, stage.binaryId, info.binaryCount,
+					"GraphicsDeviceRef_createPipelinesRaytracing()::stages[i].binaryId out of bounds"
 				);
 		}
 

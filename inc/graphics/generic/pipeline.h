@@ -77,7 +77,7 @@ typedef enum EPipelineRaytracingFlags {
 	EPipelineRaytracingFlags_AllowMotionBlurExt		= 1 << 2,		//Requires feature RayMotionBlur
 
 	//Disallowing null shaders in stages.
-	//This is extra validation, but might also signal to the API that library access is safe.
+	//This is extra validation, but might also signal to the API that access to all stages are safe.
 
 	EPipelineRaytracingFlags_NoNullAnyHit			= 1 << 3,
 	EPipelineRaytracingFlags_NoNullClosestHit		= 1 << 4,

@@ -52,7 +52,7 @@ An input handle ranges from [ 0, axes > for the axes and [ axes, button + axes >
 
 A keyboard is created/destroyed by the Window/WindowManager implementation and contains the following flags:
 
-- Caps (0), NumLock (1), ScrollLock (2), Shift (3), Control (4), Alt (5).
+- Caps (0), NumLock (1), ScrollLock (2).
 
 And the following keys (EKey_) can be accessed:
 

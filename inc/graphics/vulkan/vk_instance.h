@@ -27,9 +27,6 @@ extern U64 reqExtensionsNameCount;
 typedef enum EOptExtensions {
 
 	EOptExtensions_DebugMarker,
-	EOptExtensions_F16,
-	EOptExtensions_MultiDrawIndirectCount,
-	EOptExtensions_AtomicI64,
 	EOptExtensions_PerfQuery,
 	EOptExtensions_RayPipeline,
 	EOptExtensions_RayQuery,
@@ -37,7 +34,6 @@ typedef enum EOptExtensions {
 	EOptExtensions_RayMotionBlur,
 	EOptExtensions_RayReorder,
 	EOptExtensions_MeshShader,
-	EOptExtensions_Multiview,
 	EOptExtensions_VariableRateShading,
 	EOptExtensions_DynamicRendering,
 	EOptExtensions_RayMicromapOpacity,
@@ -86,17 +82,12 @@ typedef struct VkGraphicsInstance {
 	PFN_vkDestroySurfaceKHR destroySurface;
 	PFN_vkDestroySwapchainKHR destroySwapchain;
 
-	PFN_vkCmdDrawIndexedIndirectCountKHR cmdDrawIndexedIndirectCount;
-	PFN_vkCmdDrawIndirectCountKHR cmdDrawIndirectCount;
-
 	PFN_vkCmdBuildAccelerationStructuresKHR cmdBuildAccelerationStructures;
 	PFN_vkCreateAccelerationStructureKHR createAccelerationStructure;
 	PFN_vkCmdCopyAccelerationStructureKHR copyAccelerationStructure;
 	PFN_vkDestroyAccelerationStructureKHR destroyAccelerationStructure;
 	PFN_vkGetAccelerationStructureBuildSizesKHR getAccelerationStructureBuildSizes;
 	PFN_vkGetDeviceAccelerationStructureCompatibilityKHR getAccelerationStructureCompatibility;
-
-	PFN_vkGetBufferDeviceAddressKHR getBufferDeviceAddress;
 
 	PFN_vkCmdTraceRaysKHR traceRays;
 	PFN_vkCmdTraceRaysIndirectKHR traceRaysIndirect;

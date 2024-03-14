@@ -194,7 +194,7 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 		.buffer = bufExt->buffer
 	};
 
-	buf->resource.deviceAddress = instanceExt->getBufferDeviceAddress(deviceExt->device, &address);
+	buf->resource.deviceAddress = vkGetBufferDeviceAddress(deviceExt->device, &address);
 
 	if(!buf->resource.deviceAddress)
 		_gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_createBufferExt() Couldn't obtain GPU address"));

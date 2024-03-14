@@ -339,9 +339,6 @@ Error GraphicsDevice_initExt(
 		switch (i) {
 
 			case EOptExtensions_DebugMarker:				on = feat & EGraphicsFeatures_DebugMarkers;				break;
-			case EOptExtensions_F16:						on = types & EGraphicsDataTypes_F16;					break;
-			case EOptExtensions_MultiDrawIndirectCount:		on = feat & EGraphicsFeatures_MultiDrawIndirectCount;	break;
-			case EOptExtensions_AtomicI64:					on = types & EGraphicsDataTypes_AtomicI64;				break;
 			case EOptExtensions_PerfQuery:					on = featEx & EVkGraphicsFeatures_PerfQuery;			break;
 			case EOptExtensions_RayPipeline:				on = feat & EGraphicsFeatures_RayPipeline;				break;
 			case EOptExtensions_RayQuery:					on = feat & EGraphicsFeatures_RayQuery;					break;
@@ -349,7 +346,6 @@ Error GraphicsDevice_initExt(
 			case EOptExtensions_RayMotionBlur:				on = feat & EGraphicsFeatures_RayMotionBlur;			break;
 			case EOptExtensions_RayReorder:					on = feat & EGraphicsFeatures_RayReorder;				break;
 			case EOptExtensions_MeshShader:					on = feat & EGraphicsFeatures_MeshShader;				break;
-			case EOptExtensions_Multiview:					on = feat & EGraphicsFeatures_Multiview;				break;
 			case EOptExtensions_VariableRateShading:		on = feat & EGraphicsFeatures_VariableRateShading;		break;
 			case EOptExtensions_DynamicRendering:			on = feat & EGraphicsFeatures_DirectRendering;			break;
 			case EOptExtensions_RayMicromapOpacity:			on = feat & EGraphicsFeatures_RayMicromapOpacity;		break;
