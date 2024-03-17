@@ -220,3 +220,5 @@ C8 C8_createNyto(U8 v);
 
 #define _STACKTRACE_SIZE 32
 typedef void *StackTrace[_STACKTRACE_SIZE];
+
+typedef struct Error Error;

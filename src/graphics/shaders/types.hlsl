@@ -370,3 +370,5 @@ F32x4x4 inverseSlow(F32x4x4 m) {
 	return ret;
 }
 
+U32 U32_fromF32(F32 f) { return asuint(f); }
+F32 F32_fromU32(U32 u) { return asfloat(u); }
