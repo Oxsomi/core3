@@ -1061,7 +1061,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 
 			if(rtasFeat.accelerationStructure) {
 
-				if(
+				if(!(
 					U64_min(
 						U64_min(
 							U64_min(
@@ -1073,8 +1073,8 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 						rtasProp.maxDescriptorSetUpdateAfterBindAccelerationStructures
 					) >= 16 &&
 					U64_min(rtasProp.maxGeometryCount, rtasProp.maxInstanceCount) >= 16777215 &&
-					rtasProp.maxPrimitiveCount >= GIBI / 2
-				)
+					rtasProp.maxPrimitiveCount >= GIBI / 2 - 1
+				))
 					rtasFeat.accelerationStructure = false;
 			}
 
