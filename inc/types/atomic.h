@@ -25,11 +25,11 @@
 #if _PLATFORM_TYPE != PLATFORM_WINDOWS
 	#include <stdatomic.h>
 #else
-	#define Atomic(T) T
+	#define AtomicT(T) T
 #endif
 
 typedef struct AtomicI64 {
-	volatile Atomic(I64) atomic;		//Don't manually touch
+	volatile AtomicT(I64) atomic;		//Don't manually touch
 } AtomicI64;
 
 #undef Atomic
