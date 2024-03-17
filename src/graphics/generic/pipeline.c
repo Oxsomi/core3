@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -133,7 +133,7 @@ Error GraphicsDeviceRef_createPipelinesCompute(
 		);
 
 	Error err = Error_none();
-	_gotoIfError(clean, ListPipelineRef_resizex(pipelines, shaderBinaries->length));
+	gotoIfError(clean, ListPipelineRef_resizex(pipelines, shaderBinaries->length));
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 
@@ -141,7 +141,7 @@ Error GraphicsDeviceRef_createPipelinesCompute(
 
 		RefPtr **refPtr = &pipelines->ptrNonConst[i];
 
-		_gotoIfError(clean, RefPtr_createx(
+		gotoIfError(clean, RefPtr_createx(
 			(U32)(sizeof(Pipeline) + PipelineExt_size),
 			(ObjectFreeFunc) Pipeline_free,
 			(ETypeId) EGraphicsTypeId_Pipeline,
@@ -153,7 +153,7 @@ Error GraphicsDeviceRef_createPipelinesCompute(
 		GraphicsDeviceRef_inc(deviceRef);
 
 		*pipeline = (Pipeline) { .device = deviceRef, .type = EPipelineType_Compute };
-		_gotoIfError(clean, ListPipelineStage_resizex(&pipeline->stages, 1));
+		gotoIfError(clean, ListPipelineStage_resizex(&pipeline->stages, 1));
 
 		pipeline->stages.ptrNonConst[0] = (PipelineStage) {
 			.stageType = EPipelineStage_Compute,
@@ -165,7 +165,7 @@ Error GraphicsDeviceRef_createPipelinesCompute(
 
 	ListBuffer_freex(shaderBinaries);
 
-	_gotoIfError(clean, GraphicsDevice_createPipelinesComputeExt(device, names, pipelines));
+	gotoIfError(clean, GraphicsDevice_createPipelinesComputeExt(device, names, pipelines));
 
 	goto success;
 
@@ -550,7 +550,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 
 	Error err = Error_none();
 
-	_gotoIfError(clean, ListPipelineRef_resizex(pipelines, infos->length));
+	gotoIfError(clean, ListPipelineRef_resizex(pipelines, infos->length));
 
 	totalStageCount = 0;
 
@@ -559,7 +559,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 		PipelineGraphicsInfo *info = &infos->ptrNonConst[i];
 		PipelineRef **refPtr = &pipelines->ptrNonConst[i];
 
-		_gotoIfError(clean, RefPtr_createx(
+		gotoIfError(clean, RefPtr_createx(
 			(U32)(sizeof(Pipeline) + PipelineExt_size + sizeof(PipelineGraphicsInfo)),
 			(ObjectFreeFunc) Pipeline_free,
 			(ETypeId) EGraphicsTypeId_Pipeline,
@@ -571,10 +571,10 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 		GraphicsDeviceRef_inc(deviceRef);
 
 		*pipeline = (Pipeline) { .device = deviceRef, .type = EPipelineType_Graphics };
-		_gotoIfError(clean, ListPipelineStage_resizex(&pipeline->stages, info->stageCount));
+		gotoIfError(clean, ListPipelineStage_resizex(&pipeline->stages, info->stageCount));
 
 		ListPipelineStage tempList = (ListPipelineStage) { 0 };
-		_gotoIfError(clean, ListPipelineStage_createSubset(*stages, totalStageCount, info->stageCount, &tempList));
+		gotoIfError(clean, ListPipelineStage_createSubset(*stages, totalStageCount, info->stageCount, &tempList));
 
 		Buffer_copy(ListPipelineStage_buffer(pipeline->stages), ListPipelineStage_bufferConst(tempList));
 
@@ -593,7 +593,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 
 	//Create API objects
 
-	_gotoIfError(clean, GraphicsDevice_createPipelinesGraphicsExt(device, names, pipelines));
+	gotoIfError(clean, GraphicsDevice_createPipelinesGraphicsExt(device, names, pipelines));
 	goto success;
 
 	//Clean RefPtrs if failed
@@ -875,14 +875,14 @@ Error GraphicsDeviceRef_createPipelineRaytracingExt(
 		);
 
 	Error err = Error_none();
-	_gotoIfError(clean, ListPipelineRef_resizex(pipelines, infos.length));
+	gotoIfError(clean, ListPipelineRef_resizex(pipelines, infos.length));
 
 	for (U64 i = 0; i < pipelines->length; ++i) {
 
 		PipelineRaytracingInfo info = infos.ptr[i];
 		RefPtr **refPtr = &pipelines->ptrNonConst[i];
 
-		_gotoIfError(clean, RefPtr_createx(
+		gotoIfError(clean, RefPtr_createx(
 			(U32)(sizeof(Pipeline) + PipelineExt_size + sizeof(PipelineRaytracingInfo)),
 			(ObjectFreeFunc) Pipeline_free,
 			(ETypeId) EGraphicsTypeId_Pipeline,
@@ -898,10 +898,10 @@ Error GraphicsDeviceRef_createPipelineRaytracingExt(
 		PipelineRaytracingInfo *dstInfo = Pipeline_info(pipeline, PipelineRaytracingInfo);
 		*dstInfo = info;
 
-		_gotoIfError(clean, ListPipelineStage_createCopySubsetx(stages, stageCounter, info.stageCount, &pipeline->stages));
-		_gotoIfError(clean, ListBuffer_createx(info.binaryCount, &dstInfo->binaries));
-		_gotoIfError(clean, ListCharString_createx(info.stageCount, &dstInfo->entrypoints));
-		_gotoIfError(clean, ListPipelineRaytracingGroup_createCopySubsetx(
+		gotoIfError(clean, ListPipelineStage_createCopySubsetx(stages, stageCounter, info.stageCount, &pipeline->stages));
+		gotoIfError(clean, ListBuffer_createx(info.binaryCount, &dstInfo->binaries));
+		gotoIfError(clean, ListCharString_createx(info.stageCount, &dstInfo->entrypoints));
+		gotoIfError(clean, ListPipelineRaytracingGroup_createCopySubsetx(
 			groups, groupCounter, info.groupCount, &dstInfo->groups
 		));
 
@@ -912,7 +912,7 @@ Error GraphicsDeviceRef_createPipelineRaytracingExt(
 			//Move or copy, depending on what's relevant
 
 			if(Buffer_isRef(*buf))
-				_gotoIfError(clean, Buffer_createCopyx(*buf, &dstInfo->binaries.ptrNonConst[j]))
+				gotoIfError(clean, Buffer_createCopyx(*buf, &dstInfo->binaries.ptrNonConst[j]))
 				
 			else dstInfo->binaries.ptrNonConst[j] = *buf;
 
@@ -925,7 +925,7 @@ Error GraphicsDeviceRef_createPipelineRaytracingExt(
 				CharString *name = &entrypoints->ptrNonConst[stageCounter + j];
 
 				if(name->ptr && (CharString_isRef(*name) || !CharString_isNullTerminated(*name)))
-					_gotoIfError(clean, CharString_createCopyx(*name, &dstInfo->entrypoints.ptrNonConst[j]))
+					gotoIfError(clean, CharString_createCopyx(*name, &dstInfo->entrypoints.ptrNonConst[j]))
 
 				else dstInfo->entrypoints.ptrNonConst[j] = *name;
 
@@ -940,7 +940,7 @@ Error GraphicsDeviceRef_createPipelineRaytracingExt(
 	ListBuffer_freex(binaries);
 	ListCharString_freex(entrypoints);
 
-	_gotoIfError(clean, GraphicsDevice_createPipelinesRaytracingInternalExt(
+	gotoIfError(clean, GraphicsDevice_createPipelinesRaytracingInternalExt(
 		device, names, pipelines, stageCounter, binaryCounter, groupCounter
 	));
 

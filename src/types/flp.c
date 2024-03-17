@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -402,7 +402,7 @@ U64 EFloatType_convert(EFloatType type, U64 v, EFloatType conversionType) {
 }
 
 #undef _EFloatType_cast1
-#undef _EFloatType_cast
+#undef EFloatType_cast
 
 #define _EFloatType_cast1(a, b)										\
 a b##_cast##a(b v) {												\
@@ -421,7 +421,7 @@ a b##_cast##a(b v) {												\
 	return *(const a*)&v64;											\
 }
 
-#define _EFloatType_cast(a)		\
+#define EFloatType_cast(a)		\
 _EFloatType_cast1(F8, a);		\
 _EFloatType_cast1(F16, a);		\
 _EFloatType_cast1(F32, a);		\
@@ -431,11 +431,11 @@ _EFloatType_cast1(TF19, a);		\
 _EFloatType_cast1(PXR24, a);	\
 _EFloatType_cast1(FP24, a);
 
-_EFloatType_cast(F8);
-_EFloatType_cast(F16);
-_EFloatType_cast(F32);
-_EFloatType_cast(F64);
-_EFloatType_cast(BF16);
-_EFloatType_cast(TF19);
-_EFloatType_cast(PXR24);
-_EFloatType_cast(FP24);
+EFloatType_cast(F8);
+EFloatType_cast(F16);
+EFloatType_cast(F32);
+EFloatType_cast(F64);
+EFloatType_cast(BF16);
+EFloatType_cast(TF19);
+EFloatType_cast(PXR24);
+EFloatType_cast(FP24);

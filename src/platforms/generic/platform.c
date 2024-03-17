@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -153,7 +153,7 @@ Error Platform_onAllocate(void *ptr, U64 length) {
 		captured.location = (U64) ptr;
 		captured.length = length;
 
-		Log_captureStackTrace(Allocator_allocationsAllocator, captured.stack, _STACKTRACE_SIZE, 1);
+		Log_captureStackTrace(Allocator_allocationsAllocator, captured.stack, STACKTRACE_SIZE, 1);
 
 		ELockAcquire acq = Lock_lock(&Allocator_lock, U64_MAX);
 
@@ -383,7 +383,7 @@ Error Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *alloca
 
 	if(cmdArgc > 1) {
 
-		_gotoIfError(clean, CharStringList_createx(cmdArgc - 1, &sl));
+		gotoIfError(clean, CharStringList_createx(cmdArgc - 1, &sl));
 
 		//If we're passed invalid cmdArg this could be a problem
 		//But that'd happen anyways
@@ -398,7 +398,7 @@ Error Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *alloca
 
 		//Grab app directory of where the exe is installed
 
-		_gotoIfError(clean, CharString_createCopyx(CharString_createRefCStrConst(cmdArgs[0]), &appDir));
+		gotoIfError(clean, CharString_createCopyx(CharString_createRefCStrConst(cmdArgs[0]), &appDir));
 
 		CharString_replaceAllSensitive(&appDir, '\\', '/');
 
@@ -410,13 +410,13 @@ Error Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *alloca
 
 		else CharString_cut(appDir, 0, loc + 1, &basePath);
 
-		_gotoIfError(clean, CharString_createCopyx(basePath, &Platform_instance.workingDirectory));
+		gotoIfError(clean, CharString_createCopyx(basePath, &Platform_instance.workingDirectory));
 
 		if(!CharString_endsWithSensitive(basePath, '/'))
-			_gotoIfError(clean, CharString_appendx(&Platform_instance.workingDirectory, '/'));
+			gotoIfError(clean, CharString_appendx(&Platform_instance.workingDirectory, '/'));
 	}
 
-	_gotoIfError(clean, Platform_initExt());
+	gotoIfError(clean, Platform_initExt());
 
 clean:
 

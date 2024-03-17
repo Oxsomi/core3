@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -48,7 +48,7 @@ TListXImpl(F32);	TListXImpl(F64);
 
 TListXImpl(Buffer);
 
-TListXImpl(CDFValue);
+TListXImpl(CdfValue);
 TListXImpl(ArchiveEntry);
 
 TListXImpl(BufferLayoutMemberInfo);
@@ -334,7 +334,7 @@ Error CharString_createFromUTF16x(const U16 *ptr, U64 max, CharString *result) {
 }
 
 Error CharString_toUTF16x(CharString s, ListU16 *arr) {
-	return CharString_toUTF16(s, Platform_instance.alloc, arr);
+	return CharString_toUtf16(s, Platform_instance.alloc, arr);
 }
 
 Error CharString_createNytox(U64 v, U8 leadingZeros, CharString *result) {

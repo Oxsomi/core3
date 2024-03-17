@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -23,14 +23,14 @@
 
 typedef struct Error Error;
 
-#define _FLP_CONSTS(T)							\
+#define FLP_CONSTS(T)							\
 extern const T T##_E;							\
 extern const T T##_PI;							\
 extern const T T##_RAD_TO_DEG;					\
 extern const T T##_DEG_TO_RAD;
 
-_FLP_CONSTS(F32);
-_FLP_CONSTS(F64);
+FLP_CONSTS(F32);
+FLP_CONSTS(F64);
 
 //Math errors assume inputs aren't nan or inf
 //Ensure it's true with extra validation
@@ -39,37 +39,37 @@ _FLP_CONSTS(F64);
 //Uint
 //TODO: Errors
 
-#define _ARIT_OP(T)								\
+#define ARIT_OP(T)								\
 T T##_min(T v0, T v1);							\
 T T##_max(T v0, T v1);							\
-T T##_clamp(T v, T mi, T ma);
+T T##_clamp(T v, T mi, T ma)
 
-#define _XINT_OP(T)								\
-_ARIT_OP(T)										\
+#define XINT_OP(T)								\
+ARIT_OP(T);										\
 T T##_pow2(T v);								\
 T T##_pow3(T v);								\
 T T##_pow4(T v);								\
 T T##_pow5(T v);								\
 T T##_exp10(T v);								\
-T T##_exp2(T v);
+T T##_exp2(T v)
 
 //TODO: Int, uint %/^*+-
 
-_XINT_OP(U64);
-_XINT_OP(U32);
-_XINT_OP(U16);
-_XINT_OP(U8);
+XINT_OP(U64);
+XINT_OP(U32);
+XINT_OP(U16);
+XINT_OP(U8);
 
 //Int
 
-#define _INT_IOP(T)								\
-_XINT_OP(T)										\
-T T##_abs(T v);
+#define INT_IOP(T)								\
+XINT_OP(T);										\
+T T##_abs(T v)
 
-_INT_IOP(I64);
-_INT_IOP(I32);
-_INT_IOP(I16);
-_INT_IOP(I8);
+INT_IOP(I64);
+INT_IOP(I32);
+INT_IOP(I16);
+INT_IOP(I8);
 
 //Float
 //TODO: %/^+-
@@ -77,9 +77,9 @@ _INT_IOP(I8);
 //		If not, throw! +- etc can check on lost precision (e.g. 1% of value)
 //TODO: Proper error checking!
 
-#define _FLP_OP(T)								\
+#define FLP_OP(T)								\
 												\
-_ARIT_OP(T);									\
+ARIT_OP(T);										\
 												\
 Error T##_pow2(T v, T *res);					\
 Error T##_pow3(T v, T *res);					\
@@ -121,7 +121,7 @@ T T##_fract(T v);								\
 Error T##_mod(T v, T mod, T *result);			\
 												\
 T T##_sign(T v);								\
-T T##_signInc(T v);
+T T##_signInc(T v)
 
-_FLP_OP(F32);
-_FLP_OP(F64);
+FLP_OP(F32);
+FLP_OP(F64);

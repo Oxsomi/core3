@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -82,7 +82,7 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 	else instancesU64 = tlas->cpuInstancesStatic.length;		//Both static and motion length are at the same loc
 
 	if(instancesU64 >> 24)
-		_gotoIfError(clean, Error_outOfBounds(
+		gotoIfError(clean, Error_outOfBounds(
 			0, instancesU64, 1 << 24, "TLASRef_flush() only instance count of <U24_MAX is supported"
 		));
 
@@ -105,11 +105,11 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 
 		if (!tlas->useDeviceMemory) {
 
-			_gotoIfError(clean, CharString_formatx(
+			gotoIfError(clean, CharString_formatx(
 				&tmp, "%.*s instances buffer", CharString_length(tlas->base.name), tlas->base.name.ptr
 			));
 
-			_gotoIfError(clean, GraphicsDeviceRef_createBuffer(
+			gotoIfError(clean, GraphicsDeviceRef_createBuffer(
 				deviceRef,
 				EDeviceBufferUsage_ASReadExt,
 				EGraphicsResourceFlag_CPUAllocatedBit,
@@ -149,7 +149,7 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 
 			instances = (DeviceData) { .buffer = tempInstances, .len = stride * instancesU64 };
 
-			_gotoIfError(clean, VkDeviceBuffer_transition(
+			gotoIfError(clean, VkDeviceBuffer_transition(
 				DeviceBuffer_ext(DeviceBufferRef_ptr(tempInstances), Vk),
 				VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
 				VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR,
@@ -160,7 +160,7 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 			));
 		}
 
-		else _gotoIfError(clean, VkDeviceBuffer_transition(
+		else gotoIfError(clean, VkDeviceBuffer_transition(
 			DeviceBuffer_ext(DeviceBufferRef_ptr(tlas->deviceData.buffer), Vk),
 			VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
 			VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR,
@@ -223,7 +223,7 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 
 	//Allocate scratch and final buffer
 
-	_gotoIfError(clean, GraphicsDeviceRef_createBuffer(
+	gotoIfError(clean, GraphicsDeviceRef_createBuffer(
 		deviceRef,
 		EDeviceBufferUsage_ASExt,
 		EGraphicsResourceFlag_None,
@@ -232,11 +232,11 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 		&tlas->base.asBuffer
 	));
 
-	_gotoIfError(clean, CharString_formatx(
+	gotoIfError(clean, CharString_formatx(
 		&tmp, "%.*s scratch buffer", CharString_length(tlas->base.name), tlas->base.name.ptr
 	));
 
-	_gotoIfError(clean, GraphicsDeviceRef_createBuffer(
+	gotoIfError(clean, GraphicsDeviceRef_createBuffer(
 		deviceRef,
 		EDeviceBufferUsage_ScratchExt,
 		EGraphicsResourceFlag_None,
@@ -253,14 +253,14 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 		.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR
 	};
 
-	_gotoIfError(clean, vkCheck(instanceExt->createAccelerationStructure(
+	gotoIfError(clean, vkCheck(instanceExt->createAccelerationStructure(
 		deviceExt->device, &createInfo, NULL, &TLAS_ext(TLASRef_ptr(pending), Vk)->as
 	)));
 
 	//Delete temporary resource as soon as possible (safely)
 
 	if(tempInstances) {
-		_gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, tempInstances));
+		gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, tempInstances));
 		tempInstances = NULL;
 	}
 
@@ -278,7 +278,7 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 	if(tlas->base.flags & ERTASBuildFlags_IsUpdate)
 		buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR;
 
-	_gotoIfError(clean, VkDeviceBuffer_transition(
+	gotoIfError(clean, VkDeviceBuffer_transition(
 		DeviceBuffer_ext(DeviceBufferRef_ptr(tlas->base.asBuffer), Vk),
 		VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
 		VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR,
@@ -288,7 +288,7 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 		&dep
 	));
 
-	_gotoIfError(clean, VkDeviceBuffer_transition(
+	gotoIfError(clean, VkDeviceBuffer_transition(
 		DeviceBuffer_ext(DeviceBufferRef_ptr(tempScratch), Vk),
 		VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
 		VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR,
@@ -318,13 +318,13 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 
 	//Add as flight (keep alive extra)
 
-	_gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, pending));
+	gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, pending));
 	RefPtr_inc(pending);
 
 	//We mark scratch buffer as delete, we do this by pushing it as a current flight resource
 	//And losing the reference from our object
 
-	_gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, tempScratch));
+	gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, tempScratch));
 	tempScratch = NULL;
 
 	//Add as descriptor

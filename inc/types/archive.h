@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -63,7 +63,7 @@ Error Archive_rename(Archive *archive, CharString loc, CharString newFileName, A
 Error Archive_move(Archive *archive, CharString loc, CharString directoryName, Allocator alloc);
 
 U64 Archive_getIndex(Archive archive, CharString path, Allocator alloc);		//Get index in archive
-Error Archive_getInfo(Archive archive, CharString loc, FileInfo *info, Allocator alloc);
+Error Archive_getInfo(Archive archive, CharString path, FileInfo *info, Allocator alloc);
 
 Error Archive_queryFileEntryCount(
 	Archive archive,

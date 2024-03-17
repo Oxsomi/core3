@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -64,7 +64,7 @@ Error WWindow_initSize(Window *w, I32x2 size) {
 		screen = GetDC(w->nativeHandle);
 
 		if(!screen)
-			_gotoIfError(clean, Error_platformError(2, GetLastError(), "WWindow_initSize() GetDC failed"));
+			gotoIfError(clean, Error_platformError(2, GetLastError(), "WWindow_initSize() GetDC failed"));
 
 		//TODO: Support something other than RGBA8
 
@@ -82,7 +82,7 @@ Error WWindow_initSize(Window *w, I32x2 size) {
 		w->nativeData = CreateDIBSection(screen, &bmi, DIB_RGB_COLORS, (void**) &w->cpuVisibleBuffer.ptr, NULL, 0);
 
 		if(!screen)
-			_gotoIfError(clean, Error_platformError(3, GetLastError(), "WWindow_initSize() CreateDIBSection failed"));
+			gotoIfError(clean, Error_platformError(3, GetLastError(), "WWindow_initSize() CreateDIBSection failed"));
 
 		//Manually set it to be a reference
 		//This makes it so we don't free it, because we don't own the memory
@@ -220,7 +220,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 				//Now it's time to translate this from UTF16
 
 				UnicodeCodePointInfo codepoint = (UnicodeCodePointInfo) { 0 };
-				if (!Buffer_readAsUTF16(buf, 0, &codepoint).genericError)
+				if (!Buffer_readAsUtf16(buf, 0, &codepoint).genericError)
 					typed = codepoint.index;
 			}
 
@@ -229,7 +229,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 				//Translate to UTF8
 
 				U8 bytes = 0;
-				Error err = Buffer_writeAsUTF8(buf, 0, typed, &bytes);
+				Error err = Buffer_writeAsUtf8(buf, 0, typed, &bytes);
 				((C8*)buf.ptr)[bytes] = '\0';
 
 				if(!err.genericError)
@@ -840,7 +840,7 @@ Error Window_updatePhysicalTitle(const Window *w, CharString title) {
 		return err;
 
 	if(!SetWindowTextW(w->nativeHandle, (const wchar_t*) name.ptr))
-		_gotoIfError(clean, Error_platformError(0, GetLastError(), "Window_updatePhysicalTitle() SetWindowText failed"));
+		gotoIfError(clean, Error_platformError(0, GetLastError(), "Window_updatePhysicalTitle() SetWindowText failed"));
 
 clean:
 	ListU16_freex(&name);
@@ -985,7 +985,7 @@ impl Error WindowManager_createWindowPhysical(Window *w) {
 	//Our strings are UTF8, but windows wants UTF16
 
 	ListU16 tmp = (ListU16) { 0 };
-	_gotoIfError(clean, CharString_toUTF16x(w->title, &tmp));
+	gotoIfError(clean, CharString_toUTF16x(w->title, &tmp));
 
 	HWND nativeWindow = CreateWindowExW(
 		WS_EX_APPWINDOW, wc.lpszClassName, (const wchar_t*) tmp.ptr, style,
@@ -996,7 +996,7 @@ impl Error WindowManager_createWindowPhysical(Window *w) {
 
 	if(!nativeWindow) {
 		HRESULT hr = GetLastError();
-		_gotoIfError(clean, Error_platformError(1, hr, "WindowManager_createWindowPhysical() CreateWindowEx failed"));
+		gotoIfError(clean, Error_platformError(1, hr, "WindowManager_createWindowPhysical() CreateWindowEx failed"));
 	}
 
 	//Get real size and position
@@ -1010,12 +1010,12 @@ impl Error WindowManager_createWindowPhysical(Window *w) {
 
 	//Alloc cpu visible buffer if needed
 
-	_gotoIfError(clean, WWindow_initSize(w, w->size));
+	gotoIfError(clean, WWindow_initSize(w, w->size));
 
 	//Lock for when we are updating this window
 
-	_gotoIfError(clean, ListInputDevice_reservex(&w->devices,  16));
-	_gotoIfError(clean, ListMonitor_reservex(&w->monitors, 16));
+	gotoIfError(clean, ListInputDevice_reservex(&w->devices,  16));
+	gotoIfError(clean, ListMonitor_reservex(&w->monitors, 16));
 
 	w->nativeHandle = nativeWindow;
 
@@ -1046,7 +1046,7 @@ impl Error WindowManager_createWindowPhysical(Window *w) {
 	};
 
 	if (!RegisterRawInputDevices(registerDevices, 2, sizeof(registerDevices[0])))
-		_gotoIfError(clean, Error_invalidState(0, "Window_physicalLoop() RegisterRawInputDevices failed"));
+		gotoIfError(clean, Error_invalidState(0, "Window_physicalLoop() RegisterRawInputDevices failed"));
 
 clean:
 	ListU16_freex(&tmp);

@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -106,7 +106,7 @@ BOOL enumerateFiles(HMODULE mod, LPWSTR unused, LPWSTR name, EnumerateFiles *sec
 
 	CharString str = CharString_createNull();
 	Error err = CharString_createFromUTF16x((const U16*)name, U64_MAX, &str);
-	_gotoIfError(clean, err);
+	gotoIfError(clean, err);
 
 	if(CharString_countAllSensitive(str, '/') != 1)
 		Log_warnLnx("Executable contained unrecognized RCDATA. Ignoring it...");
@@ -114,7 +114,7 @@ BOOL enumerateFiles(HMODULE mod, LPWSTR unused, LPWSTR name, EnumerateFiles *sec
 	else {
 
 		VirtualSection section = (VirtualSection) { .path = str };
-		_gotoIfError(clean, ListVirtualSection_pushBackx(sections->sections, section));
+		gotoIfError(clean, ListVirtualSection_pushBackx(sections->sections, section));
 	}
 
 clean:
@@ -145,15 +145,15 @@ Error Platform_initExt() {
 		DWORD chars = GetCurrentDirectoryW(MAX_PATH + 1, buff);
 
 		if(!chars)
-			_gotoIfError(clean, Error_platformError(
+			gotoIfError(clean, Error_platformError(
 				0, GetLastError(), "Platform_initExt() GetCurrentDirectory failed"
 			));
 
-		_gotoIfError(clean, CharString_createFromUTF16x((const U16*)buff, chars, &Platform_instance.workingDirectory));
+		gotoIfError(clean, CharString_createFromUTF16x((const U16*)buff, chars, &Platform_instance.workingDirectory));
 
 		CharString_replaceAllSensitive(&Platform_instance.workingDirectory, '\\', '/');
 
-		_gotoIfError(clean, CharString_appendx(&Platform_instance.workingDirectory, '/'));
+		gotoIfError(clean, CharString_appendx(&Platform_instance.workingDirectory, '/'));
 	}
 
 	//Init virtual files
@@ -170,7 +170,7 @@ Error Platform_initExt() {
 		//To counter this, enumerateFiles sets stride to 0 if the reason it returned false was because of the function.
 
 		if(files.b)
-			_gotoIfError(clean, Error_invalidState(1, "Platform_initExt() EnumResourceNames failed"));
+			gotoIfError(clean, Error_invalidState(1, "Platform_initExt() EnumResourceNames failed"));
 	}
 
 clean:

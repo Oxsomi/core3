@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -35,7 +35,7 @@ Error AllocationBuffer_create(U64 size, Bool isVirtual, Allocator alloc, Allocat
 	if(size >> 48 && !isVirtual)
 		return Error_invalidParameter(0, 0, "AllocationBuffer_create()::size is out of bounds (should be max 48-bit)");
 
-	Error err = Error_none();
+	Error err;
 
 	if(!isVirtual) {
 
@@ -268,7 +268,7 @@ Error AllocationBuffer_allocateBlock(
 				continue;
 
 			//We only split if >33% is left over.
-			//Otherwise we scoop up the entire block.
+			//Otherwise, we scoop up the entire block.
 			//This is to avoid tiny areas left over, causing the ring buffer portion to become slower.
 
 			if (size * 4 / 3 >= AllocationBufferBlock_size(v)) {

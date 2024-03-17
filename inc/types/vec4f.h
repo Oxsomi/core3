@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -62,12 +62,12 @@ impl F32 F32x4_dot2(F32x4 a, F32x4 b);
 impl F32 F32x4_dot3(F32x4 a, F32x4 b);
 impl F32 F32x4_dot4(F32x4 a, F32x4 b);
 
-F32 F32x4_satDot2(F32x4 X, F32x4 Y);
-F32 F32x4_satDot3(F32x4 X, F32x4 Y);
-F32 F32x4_satDot4(F32x4 X, F32x4 Y);
+F32 F32x4_satDot2(F32x4 x, F32x4 y);
+F32 F32x4_satDot3(F32x4 x, F32x4 y);
+F32 F32x4_satDot4(F32x4 x, F32x4 y);
 
-F32x4 F32x4_reflect2(F32x4 I, F32x4 N);
-F32x4 F32x4_reflect3(F32x4 I, F32x4 N);
+F32x4 F32x4_reflect2(F32x4 i, F32x4 n);
+F32x4 F32x4_reflect3(F32x4 i, F32x4 n);
 
 F32 F32x4_sqLen2(F32x4 v);
 F32 F32x4_sqLen3(F32x4 v);
@@ -110,7 +110,7 @@ F32x4 F32x4_saturate(F32x4 a);
 //Boolean
 
 Bool F32x4_all(F32x4 a);
-Bool F32x4_any(F32x4 b);
+Bool F32x4_any(F32x4 a);
 
 impl F32x4 F32x4_eq(F32x4 a, F32x4 b);
 impl F32x4 F32x4_neq(F32x4 a, F32x4 b);
@@ -150,61 +150,61 @@ F32x4 F32x4_load4(const F32 *arr);
 
 //Shuffle and extracting values
 
-#define _shufflef1(a, x) _shufflef(a, x, x, x, x)
+#define vecShufflef1(a, x) vecShufflef(a, x, x, x, x)
 
 //4D swizzles
 
-#define _F32x4_expand4(xv, yv, zv, wv) F32x4 F32x4_##xv##yv##zv##wv(F32x4 a);
+#define F32x4_expand4(xv, yv, zv, wv) F32x4 F32x4_##xv##yv##zv##wv(F32x4 a);
 
-#define _F32x4_expand3(...)											\
-_F32x4_expand4(__VA_ARGS__, x); _F32x4_expand4(__VA_ARGS__, y);		\
-_F32x4_expand4(__VA_ARGS__, z); _F32x4_expand4(__VA_ARGS__, w);
+#define F32x4_expand3(...)											\
+F32x4_expand4(__VA_ARGS__, x); F32x4_expand4(__VA_ARGS__, y);		\
+F32x4_expand4(__VA_ARGS__, z); F32x4_expand4(__VA_ARGS__, w);
 
-#define _F32x4_expand2(...)	\
-_F32x4_expand3(__VA_ARGS__, x); _F32x4_expand3(__VA_ARGS__, y);		\
-_F32x4_expand3(__VA_ARGS__, z); _F32x4_expand3(__VA_ARGS__, w);
+#define F32x4_expand2(...)											\
+F32x4_expand3(__VA_ARGS__, x); F32x4_expand3(__VA_ARGS__, y);		\
+F32x4_expand3(__VA_ARGS__, z); F32x4_expand3(__VA_ARGS__, w);
 
-#define _F32x4_expand(...)	\
-_F32x4_expand2(__VA_ARGS__, x); _F32x4_expand2(__VA_ARGS__, y);		\
-_F32x4_expand2(__VA_ARGS__, z); _F32x4_expand2(__VA_ARGS__, w);
+#define F32x4_expand(...)											\
+F32x4_expand2(__VA_ARGS__, x); F32x4_expand2(__VA_ARGS__, y);		\
+F32x4_expand2(__VA_ARGS__, z); F32x4_expand2(__VA_ARGS__, w);
 
-_F32x4_expand(x);
-_F32x4_expand(y);
-_F32x4_expand(z);
-_F32x4_expand(w);
+F32x4_expand(x);
+F32x4_expand(y);
+F32x4_expand(z);
+F32x4_expand(w);
 
 impl F32x4 F32x4_trunc2(F32x4 a);
 impl F32x4 F32x4_trunc3(F32x4 a);
 
 //2D swizzles
 
-#define _F32x2_expand2(xv, yv) F32x4 F32x4_##xv##yv##4(F32x4 a); F32x2 F32x4_##xv##yv(F32x4 a);
+#define F32x2_expand2(xv, yv) F32x4 F32x4_##xv##yv##4(F32x4 a); F32x2 F32x4_##xv##yv(F32x4 a);
 
-#define _F32x2_expand(...)											\
-_F32x2_expand2(__VA_ARGS__, x); _F32x2_expand2(__VA_ARGS__, y);		\
-_F32x2_expand2(__VA_ARGS__, z); _F32x2_expand2(__VA_ARGS__, w);
+#define F32x2_expand(...)											\
+F32x2_expand2(__VA_ARGS__, x); F32x2_expand2(__VA_ARGS__, y);		\
+F32x2_expand2(__VA_ARGS__, z); F32x2_expand2(__VA_ARGS__, w);
 
-_F32x2_expand(x);
-_F32x2_expand(y);
-_F32x2_expand(z);
-_F32x2_expand(w);
+F32x2_expand(x);
+F32x2_expand(y);
+F32x2_expand(z);
+F32x2_expand(w);
 
 //3D swizzles
 
-#define _F32x3_expand3(xv, yv, zv) F32x4 F32x4_##xv##yv##zv(F32x4 a);
+#define F32x3_expand3(xv, yv, zv) F32x4 F32x4_##xv##yv##zv(F32x4 a);
 
-#define _F32x3_expand2(...)											\
-_F32x3_expand3(__VA_ARGS__, x); _F32x3_expand3(__VA_ARGS__, y);		\
-_F32x3_expand3(__VA_ARGS__, z); _F32x3_expand3(__VA_ARGS__, w);
+#define F32x3_expand2(...)											\
+F32x3_expand3(__VA_ARGS__, x); F32x3_expand3(__VA_ARGS__, y);		\
+F32x3_expand3(__VA_ARGS__, z); F32x3_expand3(__VA_ARGS__, w);
 
-#define _F32x3_expand(...)	\
-_F32x3_expand2(__VA_ARGS__, x); _F32x3_expand2(__VA_ARGS__, y);		\
-_F32x3_expand2(__VA_ARGS__, z); _F32x3_expand2(__VA_ARGS__, w);
+#define F32x3_expand(...)	\
+F32x3_expand2(__VA_ARGS__, x); F32x3_expand2(__VA_ARGS__, y);		\
+F32x3_expand2(__VA_ARGS__, z); F32x3_expand2(__VA_ARGS__, w);
 
-_F32x3_expand(x);
-_F32x3_expand(y);
-_F32x3_expand(z);
-_F32x3_expand(w);
+F32x3_expand(x);
+F32x3_expand(y);
+F32x3_expand(z);
+F32x3_expand(w);
 
 impl F32x4 F32x4_fromI32x4(I32x4 a);
 impl I32x4 I32x4_fromF32x4(F32x4 a);

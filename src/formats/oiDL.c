@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -22,6 +22,7 @@
 #include "formats/oiDL.h"
 #include "types/time.h"
 #include "types/error.h"
+#include "types/math.h"
 
 static const U8 DLHeader_V1_0  = 0;
 
@@ -205,7 +206,7 @@ Error DLFile_addEntryUTF8(DLFile *dlFile, Buffer entryBuf, Allocator alloc) {
 	if(dlFile->settings.dataType != EDLDataType_UTF8)
 		return Error_invalidOperation(0, "DLFile_addEntryUTF8() is unsupported if type isn't UTF8");
 
-	if(!Buffer_isUTF8(entryBuf, 1))
+	if(!Buffer_isUtf8(entryBuf, 1))
 		return Error_invalidParameter(1, 0, "DLFile_addEntryAscii()::entryBuf isn't valid UTF8");
 
 	return ListBuffer_pushBack(&dlFile->entryBuffers, entryBuf, alloc);
@@ -217,7 +218,7 @@ Error DLFile_createUTF8List(DLSettings settings, ListBuffer buffers, Allocator a
 		return Error_invalidOperation(0, "DLFile_createUTF8List() is unsupported if settings.type isn't UTF8");
 
 	for(U64 i = 0; i < buffers.length; ++i)
-		if(!Buffer_isUTF8(buffers.ptr[i], 1))
+		if(!Buffer_isUtf8(buffers.ptr[i], 1))
 			return Error_invalidParameter(1, (U32)i, "DLFile_createUTF8List()::buffers[i] isn't valid UTF8");
 
 	Error err = DLFile_createIntern(settings, alloc, buffers.length, dlFile);
@@ -237,9 +238,9 @@ Error DLFile_createList(DLSettings settings, ListBuffer *buffers, Allocator allo
 	Error err = Error_none();
 
 	switch (settings.dataType) {
-		case EDLDataType_Ascii:			_gotoIfError(clean, DLFile_createAsciiListIntern(settings, buffers, alloc, dlFile));
-		case EDLDataType_UTF8:			_gotoIfError(clean, DLFile_createUTF8List(settings, *buffers, alloc, dlFile));
-		default:						_gotoIfError(clean, DLFile_createBufferList(settings, *buffers, alloc, dlFile));
+		case EDLDataType_Ascii:			gotoIfError(clean, DLFile_createAsciiListIntern(settings, buffers, alloc, dlFile));
+		case EDLDataType_UTF8:			gotoIfError(clean, DLFile_createUTF8List(settings, *buffers, alloc, dlFile));
+		default:						gotoIfError(clean, DLFile_createBufferList(settings, *buffers, alloc, dlFile));
 	}
 
 clean:
@@ -465,7 +466,7 @@ Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result) {
 			compressedOutput,
 			Buffer_createRefConst(uncompressedData.ptr, headerSize - sizeof(I32x4) - 12),
 
-			EBufferEncryptionType_AES256GCM,
+			EBufferEncryptionType_Aes256Gcm,
 			EBufferEncryptionFlags_GenerateIv | (b ? EBufferEncryptionFlags_GenerateKey : EBufferEncryptionFlags_None),
 
 			dlFile.settings.encryptionKey,
@@ -523,44 +524,44 @@ Error DLFile_read(
 	if (!isSubfile) {
 
 		U32 magic;
-		_gotoIfError(clean, Buffer_consume(&file, &magic, sizeof(magic)));
+		gotoIfError(clean, Buffer_consume(&file, &magic, sizeof(magic)));
 
 		if(magic != DLHeader_MAGIC)
-			_gotoIfError(clean, Error_invalidParameter(0, 0, "DLFile_read() requires magicNumber prefix"));
+			gotoIfError(clean, Error_invalidParameter(0, 0, "DLFile_read() requires magicNumber prefix"));
 	}
 
 	//Read from binary
 
 	DLHeader header;
-	_gotoIfError(clean, Buffer_consume(&file, &header, sizeof(header)));
+	gotoIfError(clean, Buffer_consume(&file, &header, sizeof(header)));
 
 	//Validate header
 
 	if(header.version != DLHeader_V1_0)
-		_gotoIfError(clean, Error_invalidParameter(0, 1, "DLFile_read() header.version is invalid"));
+		gotoIfError(clean, Error_invalidParameter(0, 1, "DLFile_read() header.version is invalid"));
 
 	if(header.flags & (EDLFlags_UseAESChunksA | EDLFlags_UseAESChunksB))		//TODO: AES chunks
-		_gotoIfError(clean, Error_unsupportedOperation(0, "DLFile_read() AES chunks not supported yet"));
+		gotoIfError(clean, Error_unsupportedOperation(0, "DLFile_read() AES chunks not supported yet"));
 
 	if(header.type >> 4)								//TODO: Compression
-		_gotoIfError(clean, Error_unsupportedOperation(1, "DLFile_read() compression not supported yet"));
+		gotoIfError(clean, Error_unsupportedOperation(1, "DLFile_read() compression not supported yet"));
 
 	if(header.flags & EDLFlags_UseSHA256)				//TODO: SHA256
-		_gotoIfError(clean, Error_unsupportedOperation(2, "DLFile_read() SHA256 not supported yet"));
+		gotoIfError(clean, Error_unsupportedOperation(2, "DLFile_read() SHA256 not supported yet"));
 
 	if((header.type & 0xF) >= EXXEncryptionType_Count)
-		_gotoIfError(clean, Error_invalidParameter(0, 4, "DLFile_read() invalid encryption type"));
+		gotoIfError(clean, Error_invalidParameter(0, 4, "DLFile_read() invalid encryption type"));
 
 	if(header.sizeTypes >> 6)
-		_gotoIfError(clean, Error_invalidParameter(0, 7, "DLFile_read() header.sizeTypes is invalid"));
+		gotoIfError(clean, Error_invalidParameter(0, 7, "DLFile_read() header.sizeTypes is invalid"));
 
 	//Ensure encryption key isn't provided if we're not encrypting
 
 	if(encryptionKey && !(header.type & 0xF))
-		_gotoIfError(clean, Error_invalidOperation(3, "DLFile_read() encryptionKey is provided but no encryption is used"));
+		gotoIfError(clean, Error_invalidOperation(3, "DLFile_read() encryptionKey is provided but no encryption is used"));
 
 	if(!encryptionKey && (header.type & 0xF))
-		_gotoIfError(clean, Error_unauthorized(0, "DLFile_read() encryptionKey is required"));
+		gotoIfError(clean, Error_unauthorized(0, "DLFile_read() encryptionKey is required"));
 
 	//
 
@@ -571,7 +572,7 @@ Error DLFile_read(
 	//Entry size
 
 	U64 entryCount;
-	_gotoIfError(clean, Buffer_consumeSizeType(&file, entrySizeType, &entryCount));
+	gotoIfError(clean, Buffer_consumeSizeType(&file, entrySizeType, &entryCount));
 
 	//Extending header
 
@@ -580,13 +581,13 @@ Error DLFile_read(
 	if (header.flags & EDLFlags_HasExtendedData) {
 
 		DLExtraInfo extraInfo;
-		_gotoIfError(clean, Buffer_consume(&file, &extraInfo, sizeof(extraInfo)));
+		gotoIfError(clean, Buffer_consume(&file, &extraInfo, sizeof(extraInfo)));
 
 		entrySizeExtension = extraInfo.perEntryExtendedData;
 
 		//We could do something here for new version parsing or extensions.
 
-		_gotoIfError(clean, Buffer_consume(&file, NULL, extraInfo.extendedHeader));
+		gotoIfError(clean, Buffer_consume(&file, NULL, extraInfo.extendedHeader));
 	}
 
 	//Entry counts
@@ -594,7 +595,7 @@ Error DLFile_read(
 	U64 entryStride = entrySizeExtension + SIZE_BYTE_TYPE[dataSizeType];
 
 	const U8 *entryStart = file.ptr;
-	_gotoIfError(clean, Buffer_consume(&file, NULL, entryStride * entryCount));
+	gotoIfError(clean, Buffer_consume(&file, NULL, entryStride * entryCount));
 
 	U64 dataSize = 0;
 
@@ -615,7 +616,7 @@ Error DLFile_read(
 	if (header.type >> 4) {
 
 		U64 uncompressedSize;
-		_gotoIfError(clean, Buffer_consumeSizeType(&file, uncompressedSizeType, &uncompressedSize));
+		gotoIfError(clean, Buffer_consumeSizeType(&file, uncompressedSizeType, &uncompressedSize));
 
 		//TODO: Decompression
 
@@ -634,15 +635,15 @@ Error DLFile_read(
 		Buffer headerExEnc = file;
 
 		I32x4 iv = I32x4_zero();
-		_gotoIfError(clean, Buffer_consume(&file, &iv, 12));
+		gotoIfError(clean, Buffer_consume(&file, &iv, 12));
 
 		I32x4 tag;
-		_gotoIfError(clean, Buffer_consume(&file, &tag, sizeof(I32x4)));
+		gotoIfError(clean, Buffer_consume(&file, &tag, sizeof(I32x4)));
 
 		//Validate remainder
 
 		if(Buffer_length(file) < dataSize)
-			_gotoIfError(
+			gotoIfError(
 				clean, Error_outOfBounds(
 					0, file.ptr + dataSize - entireFile.ptr, Buffer_length(entireFile),
 					"DLFile_read() doesn't contain enough data"
@@ -650,16 +651,16 @@ Error DLFile_read(
 			);
 
 		if(!isSubfile && Buffer_length(file) != dataSize)
-			_gotoIfError(clean, Error_invalidState(
+			gotoIfError(clean, Error_invalidState(
 				0, "DLFile_read() contained extra data, which isn't allowed if it's not a subfile"
 			));
 
 		//Decrypt
 
-		_gotoIfError(clean, Buffer_decrypt(
+		gotoIfError(clean, Buffer_decrypt(
 			Buffer_createRef((U8*)file.ptr, dataSize),
 			Buffer_createRefConst(entireFile.ptr, headerExEnc.ptr - entireFile.ptr),
-			EBufferEncryptionType_AES256GCM,
+			EBufferEncryptionType_Aes256Gcm,
 			encryptionKey,
 			tag,
 			iv
@@ -685,7 +686,7 @@ Error DLFile_read(
 
 	//Create DLFile
 
-	_gotoIfError(clean, DLFile_create(settings, alloc, dlFile));
+	gotoIfError(clean, DLFile_create(settings, alloc, dlFile));
 
 	//Per entry
 
@@ -696,7 +697,7 @@ Error DLFile_read(
 		U64 entryLen = Buffer_forceReadSizeType(entryi, dataSizeType);
 
 		const U8 *ptr = file.ptr;
-		_gotoIfError(clean, Buffer_consume(&file, NULL, entryLen));
+		gotoIfError(clean, Buffer_consume(&file, NULL, entryLen));
 
 		Buffer buf = Buffer_createRefConst(ptr, entryLen);
 
@@ -710,11 +711,11 @@ Error DLFile_read(
 				break;
 		}
 
-		_gotoIfError(clean, err);
+		gotoIfError(clean, err);
 	}
 
 	if(!isSubfile && Buffer_length(file))
-		_gotoIfError(clean, Error_invalidState(1, "DLFile_read() contained extra data, not allowed if it's not a subfile"));
+		gotoIfError(clean, Error_invalidState(1, "DLFile_read() contained extra data, not allowed if it's not a subfile"));
 
 	if(file.ptr)
 		dlFile->readLength = file.ptr - entireFile.ptr;

@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -120,7 +120,7 @@ Error UnifiedTexture_createExt(TextureRef *textureRef, CharString name) {
 
 		instance->getDeviceImageMemoryRequirements(deviceExt->device, &imageReq, &requirements);
 
-		_gotoIfError(clean, DeviceMemoryAllocator_allocate(
+		gotoIfError(clean, DeviceMemoryAllocator_allocate(
 			&device->allocator,
 			&requirements,
 			texture->resource.flags & EGraphicsResourceFlag_CPUAllocatedBit,
@@ -137,9 +137,9 @@ Error UnifiedTexture_createExt(TextureRef *textureRef, CharString name) {
 		//TODO: versioned image
 
 		VkUnifiedTexture *managedImageExt = TextureRef_getImgExtT(textureRef, Vk, 0, 0);
-		_gotoIfError(clean, vkCheck(vkCreateImage(deviceExt->device, &imageInfo, NULL, &managedImageExt->image)));
+		gotoIfError(clean, vkCheck(vkCreateImage(deviceExt->device, &imageInfo, NULL, &managedImageExt->image)));
 
-		_gotoIfError(clean, vkCheck(vkBindImageMemory(
+		gotoIfError(clean, vkCheck(vkBindImageMemory(
 			deviceExt->device, managedImageExt->image, (VkDeviceMemory) block.ext, texture->resource.blockOffset
 		)));
 	}
@@ -163,7 +163,7 @@ Error UnifiedTexture_createExt(TextureRef *textureRef, CharString name) {
 		}
 		};
 
-		_gotoIfError(clean, vkCheck(vkCreateImageView(deviceExt->device, &viewCreate, NULL, &managedImageExt->view)));
+		gotoIfError(clean, vkCheck(vkCreateImageView(deviceExt->device, &viewCreate, NULL, &managedImageExt->view)));
 
 		if(texture->resource.flags & EGraphicsResourceFlag_ShaderRW) {
 
@@ -215,7 +215,7 @@ Error UnifiedTexture_createExt(TextureRef *textureRef, CharString name) {
 			#ifndef NDEBUG
 				if(instance->debugSetName && CharString_length(name)) {
 
-					_gotoIfError(clean, CharString_formatx(
+					gotoIfError(clean, CharString_formatx(
 						&temp, "%.*s view (#%"PRIu32")", CharString_length(name), name.ptr, (U32)i
 					));
 
@@ -226,7 +226,7 @@ Error UnifiedTexture_createExt(TextureRef *textureRef, CharString name) {
 						.objectHandle =  (U64) managedImageExt->view
 					};
 
-					_gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)));
+					gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)));
 
 					CharString_freex(&temp);
 
@@ -237,7 +237,7 @@ Error UnifiedTexture_createExt(TextureRef *textureRef, CharString name) {
 						.objectHandle =  (U64) managedImageExt->image
 					};
 
-					_gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)));
+					gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)));
 				}
 			#endif
 		}

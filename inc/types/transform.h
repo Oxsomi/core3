@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -77,7 +77,6 @@ F32x2 Transform2D_reverse(Transform2D t, F32x2 pos);*/
 //			7 bit layer id
 //			4 bit palette id
 //			2 bit mirrored
-//			2 bit rotated
 //			1 bit valid
 
 typedef U64 TilemapTransform;
@@ -88,14 +87,6 @@ typedef enum EMirrored {
 	EMirrored_Y	 = 1 << 1
 } EMirrored;
 
-typedef enum ERotated {
-	ERotated_None,
-	ERotated_90,
-	ERotated_180,
-	ERotated_270
-} ERotated;
-
-
 //TilemapTransform TilemapTransform_create(U32 x, U32 y, U8 layer, U8 paletteId, EMirrored flipped, ERotated rotated);
 
 U32 TilemapTransform_x(TilemapTransform transform);
@@ -103,7 +94,6 @@ U32 TilemapTransform_y(TilemapTransform transform);
 U8 TilemapTransform_layerId(TilemapTransform transform);
 U8 TilemapTransform_paletteId(TilemapTransform transform);
 EMirrored TilemapTransform_mirrored(TilemapTransform transform);
-ERotated TilemapTransform_rotated(TilemapTransform transform);
 Bool TilemapTransform_isValid(TilemapTransform transform);
 
 /*F32x2 TilemapTransform_applyToDirection(TilemapTransform t, F32x2 dir);

@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -25,6 +25,8 @@
 #include "types/time.h"
 
 #include <stdio.h>
+
+#include "types/math.h"
 
 //BigInt
 
@@ -156,7 +158,7 @@ Error BigInt_createFromBase2Type(CharString text, U16 bitCount, Allocator alloc,
 		}
 
 		if(v == U8_MAX)
-			_gotoIfError(clean, Error_invalidParameter(0, 1, "BigInt_createFromBase2Type()::text contains invalid char"));
+			gotoIfError(clean, Error_invalidParameter(0, 1, "BigInt_createFromBase2Type()::text contains invalid char"));
 
 		switch (type) {
 
@@ -297,8 +299,8 @@ Error BigInt_createFromDec(CharString text, U16 bitCount, Allocator alloc, BigIn
 		allocated = true;
 	}
 
-	_gotoIfError(clean, BigInt_create(bitCount, alloc, &multiplier));
-	_gotoIfError(clean, BigInt_create(bitCount, alloc, &temp));
+	gotoIfError(clean, BigInt_create(bitCount, alloc, &multiplier));
+	gotoIfError(clean, BigInt_create(bitCount, alloc, &temp));
 
 	((U64*)multiplier.data)[0] = 1;		//Multiplier
 
@@ -307,25 +309,25 @@ Error BigInt_createFromDec(CharString text, U16 bitCount, Allocator alloc, BigIn
 		U8 v = C8_dec(text.ptr[i]);
 
 		if(v == U8_MAX)
-			_gotoIfError(clean, Error_invalidParameter(0, 1, "BigInt_createFromBase2Type()::text contains non alpha char"));
+			gotoIfError(clean, Error_invalidParameter(0, 1, "BigInt_createFromBase2Type()::text contains non alpha char"));
 
 		((U8*)temp.data)[0] = v;
 
 		if(!BigInt_mul(&temp, multiplier, alloc))
-			_gotoIfError(clean, Error_invalidState(1, "BigInt_createFromBase2Type() mul failed"));
+			gotoIfError(clean, Error_invalidState(1, "BigInt_createFromBase2Type() mul failed"));
 
 		if(!BigInt_add(big, temp))
-			_gotoIfError(clean, Error_invalidState(2, "BigInt_createFromBase2Type() add failed"));
+			gotoIfError(clean, Error_invalidState(2, "BigInt_createFromBase2Type() add failed"));
 
 		//Multiply multiplier by 10
 
 		if(!BigInt_and(&temp, BigInt_createNull()))
-			_gotoIfError(clean, Error_invalidState(2, "BigInt_createFromBase2Type() clear failed"));
+			gotoIfError(clean, Error_invalidState(2, "BigInt_createFromBase2Type() clear failed"));
 
 		((U8*)temp.data)[0] = 10;
 
 		if(!BigInt_mul(&multiplier, temp, alloc))
-			_gotoIfError(clean, Error_invalidState(3, "BigInt_createFromBase2Type() mul failed"));
+			gotoIfError(clean, Error_invalidState(3, "BigInt_createFromBase2Type() mul failed"));
 	}
 
 	if(bitCount & 63) {		//Fix last U64 to handle out of bounds
@@ -806,7 +808,7 @@ Error BigInt_isBase2(BigInt a, Allocator alloc, Bool *isBase2) {
 	*(U64*)temp.data = 1;
 
 	if(!BigInt_lsh(&temp, v))
-		_gotoIfError(clean, Error_invalidState(0, "BigInt_isBase2() lsh failed"));
+		gotoIfError(clean, Error_invalidState(0, "BigInt_isBase2() lsh failed"));
 
 	*isBase2 = BigInt_eq(temp, a);
 clean:
@@ -858,7 +860,7 @@ Error BigInt_base2(BigInt b, Allocator alloc, CharString *result, EBase2Type typ
 	}
 
 	if(!leadingZeros)
-		_gotoIfError(clean, CharString_eraseAtCount(result, 2, (len - 2) - firstLoc));
+		gotoIfError(clean, CharString_eraseAtCount(result, 2, (len - 2) - firstLoc));
 
 	goto success;
 
@@ -920,8 +922,8 @@ U128 U128_createFromBase2(CharString text, Error *failed, EBase2Type type) {
 	BigInt asBigInt = (BigInt) { 0 };
 	Error err;
 
-	_gotoIfError(clean, BigInt_createRef((U64*) &result, 2, &asBigInt));
-	_gotoIfError(clean, BigInt_createFromBase2Type(text, U16_MAX, (Allocator) { 0 }, &asBigInt, type));
+	gotoIfError(clean, BigInt_createRef((U64*) &result, 2, &asBigInt));
+	gotoIfError(clean, BigInt_createFromBase2Type(text, U16_MAX, (Allocator) { 0 }, &asBigInt, type));
 
 clean:
 
@@ -944,8 +946,8 @@ U128 U128_createFromDec(CharString text, Error *failed, Allocator alloc) {
 
 	//TODO: Optimize with U128_mul when available!
 
-	_gotoIfError(clean, BigInt_createRef((U64*) &result, 2, &asBigInt));
-	_gotoIfError(clean, BigInt_createFromDec(text, U16_MAX, alloc, &asBigInt));
+	gotoIfError(clean, BigInt_createRef((U64*) &result, 2, &asBigInt));
+	gotoIfError(clean, BigInt_createFromDec(text, U16_MAX, alloc, &asBigInt));
 
 clean:
 

@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -42,7 +42,7 @@ Error Brotli_compress(
 	if(quality != 11)
 		return Error_invalidParameter(2, 0, 0);
 
-	Bool isUTF8 = Buffer_isUTF8(target, 0.75);
+	Bool isUTF8 = Buffer_isUtf8(target, 0.75);
 
 	//Setup constants
 
@@ -58,7 +58,7 @@ Error Brotli_compress(
 	Error err = Error_none();
 	AllocationBuffer ringBuffer = (AllocationBuffer) { 0 };
 
-	_gotoIfError(
+	gotoIfError(
 		clean,
 		AllocationBuffer_create(
 			(U64_max(BROTLI_WINDOW_SIZE, maxInputBlockBits) + 7) >> 3,

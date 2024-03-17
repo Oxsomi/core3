@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -189,7 +189,7 @@ void CommandList_process(
 
 				Error err = Error_none();
 
-				_gotoIfError(next, ListVkImageCopy_pushBackx(&deviceExt->imageCopyRanges, (VkImageCopy) {
+				gotoIfError(next, ListVkImageCopy_pushBackx(&deviceExt->imageCopyRanges, (VkImageCopy) {
 					.srcSubresource = subResource,
 					.srcOffset = (VkOffset3D) {
 						.x = (I32) image.srcX,
@@ -764,7 +764,7 @@ void CommandList_process(
 							if (!blas->base.isCompleted)
 								continue;
 
-							_gotoIfError(nextTransition, VkDeviceBuffer_transition(
+							gotoIfError(nextTransition, VkDeviceBuffer_transition(
 								DeviceBuffer_ext(DeviceBufferRef_ptr(blas->base.asBuffer), Vk),
 								pipelineStage,
 								VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR,
@@ -775,7 +775,7 @@ void CommandList_process(
 							));
 						}
 
-					_gotoIfError(nextTransition, VkDeviceBuffer_transition(
+					gotoIfError(nextTransition, VkDeviceBuffer_transition(
 						DeviceBuffer_ext(DeviceBufferRef_ptr(tlas->base.asBuffer), Vk),
 						pipelineStage,
 						VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR,
@@ -795,7 +795,7 @@ void CommandList_process(
 					if (!blas->base.isCompleted)
 						continue;
 
-					_gotoIfError(nextTransition, VkDeviceBuffer_transition(
+					gotoIfError(nextTransition, VkDeviceBuffer_transition(
 						DeviceBuffer_ext(DeviceBufferRef_ptr(blas->base.asBuffer), Vk),
 						pipelineStage,
 						VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR,
@@ -913,7 +913,7 @@ void CommandList_process(
 						.layerCount = 1
 					};
 
-					_gotoIfError(nextTransition, VkUnifiedTexture_transition(
+					gotoIfError(nextTransition, VkUnifiedTexture_transition(
 
 						imageExt,
 						pipelineStage,
@@ -932,7 +932,7 @@ void CommandList_process(
 					DeviceBuffer *devBuffer = DeviceBufferRef_ptr(transition.resource);
 					VkDeviceBuffer *bufferExt = DeviceBuffer_ext(devBuffer, Vk);
 
-					_gotoIfError(nextTransition, VkDeviceBuffer_transition(
+					gotoIfError(nextTransition, VkDeviceBuffer_transition(
 						bufferExt,
 						pipelineStage,
 						access,

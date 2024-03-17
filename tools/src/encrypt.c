@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -36,9 +36,9 @@ Bool CLI_encryptDo(ParsedArgs args) {
 	//Modify arguments so it can be passed to oiCA convert function.
 
 	if (generateOutput) {
-		_gotoIfError(clean, CharString_createCopyx(*args.args.ptr, &tmpString));
-		_gotoIfError(clean, CharString_appendStringx(&tmpString, CharString_createRefCStrConst(".oiCA")));
-		_gotoIfError(clean, ListCharString_insertx(&args.args, generatedOutputIndex, tmpString));
+		gotoIfError(clean, CharString_createCopyx(*args.args.ptr, &tmpString));
+		gotoIfError(clean, CharString_appendStringx(&tmpString, CharString_createRefCStrConst(".oiCA")));
+		gotoIfError(clean, ListCharString_insertx(&args.args, generatedOutputIndex, tmpString));
 	}
 
 	ParsedArgs caArgs = (ParsedArgs) {

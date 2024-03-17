@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -25,26 +25,26 @@
 
 typedef enum EGraphicsTypeId {
 
-	EGraphicsTypeId_GraphicsInstance			= _makeObjectId(0x1C33,  0, 0),
-	EGraphicsTypeId_GraphicsDevice				= _makeObjectId(0x1C33,  1, 0),
+	EGraphicsTypeId_GraphicsInstance			= makeObjectId(0x1C33,  0, 0),
+	EGraphicsTypeId_GraphicsDevice				= makeObjectId(0x1C33,  1, 0),
 
-	EGraphicsTypeId_Swapchain					= _makeObjectId(0x1C33,  2, 0),
-	EGraphicsTypeId_CommandList					= _makeObjectId(0x1C33,  3, 0),
+	EGraphicsTypeId_Swapchain					= makeObjectId(0x1C33,  2, 0),
+	EGraphicsTypeId_CommandList					= makeObjectId(0x1C33,  3, 0),
 
-	EGraphicsTypeId_RenderTexture				= _makeObjectId(0x1C33,  4, 0),
-	EGraphicsTypeId_RenderPass					= _makeObjectId(0x1C33,  5, 0),
+	EGraphicsTypeId_RenderTexture				= makeObjectId(0x1C33,  4, 0),
+	EGraphicsTypeId_RenderPass					= makeObjectId(0x1C33,  5, 0),
 
-	EGraphicsTypeId_DeviceTexture				= _makeObjectId(0x1C33,  6, 0),
-	EGraphicsTypeId_DeviceBuffer				= _makeObjectId(0x1C33,  7, 0),
-	EGraphicsTypeId_Pipeline					= _makeObjectId(0x1C33,  8, 0),
-	EGraphicsTypeId_Sampler						= _makeObjectId(0x1C33,  9, 0),
+	EGraphicsTypeId_DeviceTexture				= makeObjectId(0x1C33,  6, 0),
+	EGraphicsTypeId_DeviceBuffer				= makeObjectId(0x1C33,  7, 0),
+	EGraphicsTypeId_Pipeline					= makeObjectId(0x1C33,  8, 0),
+	EGraphicsTypeId_Sampler						= makeObjectId(0x1C33,  9, 0),
 
-	EGraphicsTypeId_DepthStencil				= _makeObjectId(0x1C33, 10, 0),
+	EGraphicsTypeId_DepthStencil				= makeObjectId(0x1C33, 10, 0),
 
 	//Requires EGraphicsFeatures_Raytracing
 
-	EGraphicsTypeId_BLASExt						= _makeObjectId(0x1C33, 11, 0),
-	EGraphicsTypeId_TLASExt						= _makeObjectId(0x1C33, 12, 0),
+	EGraphicsTypeId_BLASExt						= makeObjectId(0x1C33, 11, 0),
+	EGraphicsTypeId_TLASExt						= makeObjectId(0x1C33, 12, 0),
 
 	EGraphicsTypeId_Count						= 13
 

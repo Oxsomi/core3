@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -37,5 +37,5 @@ F64 Time_dt(Ns timeStamp0, Ns timeStamp1);
 U64 Time_clocks();
 I64 Time_clocksElapsed(U64 prevClocks);
 
-void Time_format(Ns time, TimeFormat format, Bool isLocalTime);
+void Time_format(Ns time, TimeFormat timeString, Bool isLocalTime);
 Bool Time_parseFormat(Ns *time, TimeFormat format, Bool isLocalTime);

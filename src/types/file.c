@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -60,17 +60,17 @@ Error File_resolve(
 	Error err = Error_none();
 
 	if(!CharString_isValidFilePath(loc))
-		_gotoIfError(clean, Error_invalidParameter(0, 0, "File_resolve()::loc is not a valid file path"));
+		gotoIfError(clean, Error_invalidParameter(0, 0, "File_resolve()::loc is not a valid file path"));
 
 	//Copy string so we can modifiy it
 
-	_gotoIfError(clean, CharString_createCopy(loc, alloc, result));
+	gotoIfError(clean, CharString_createCopy(loc, alloc, result));
 	*isVirtual = File_isVirtual(loc);
 
 	//Virtual files
 
 	if (*isVirtual)
-		_gotoIfError(clean, CharString_popFrontCount(result, 2));
+		gotoIfError(clean, CharString_popFrontCount(result, 2));
 
 	//Network drives are a thing on windows and allow starting a path with \\
 	//We shouldn't be supporting this.
@@ -82,12 +82,12 @@ Error File_resolve(
 	//TODO: We should however support this in the future as a custom instruction that allows it such as //network/
 
 	if (CharString_getAt(*result, 0) == '\\' && CharString_getAt(*result, 1) == '\\')
-		_gotoIfError(clean, Error_unsupportedOperation(3, "File_resolve()::loc can't start with \\\\"));
+		gotoIfError(clean, Error_unsupportedOperation(3, "File_resolve()::loc can't start with \\\\"));
 
 	//Backslash is replaced with forward slash for easy windows compatibility
 
 	if (!CharString_replaceAllSensitive(result, '\\', '/'))
-		_gotoIfError(clean, Error_invalidOperation(1, "File_resolve() can't replaceAll"));
+		gotoIfError(clean, Error_invalidOperation(1, "File_resolve() can't replaceAll"));
 
 	//On Windows, it's possible to change drive but keep same relative path. We don't support it.
 	//e.g. C:myFolder/ (relative folder on C) instead of C:/myFolder/ (Absolute folder on C)
@@ -96,19 +96,19 @@ Error File_resolve(
 	#ifdef _WIN32
 
 		if(CharString_length(*result) >= 3 && result->ptr[1] == ':' && (result->ptr[2] != '/' || !C8_isAlpha(result->ptr[0])))
-			_gotoIfError(clean, Error_unsupportedOperation(2, "File_resolve() only supports Windows paths with [A-Z]:/*"));
+			gotoIfError(clean, Error_unsupportedOperation(2, "File_resolve() only supports Windows paths with [A-Z]:/*"));
 
 	#else
 
 		if(CharString_length(*result) && result->ptr[1] == ':')
-			_gotoIfError(clean, Error_invalidOperation(6, "File_resolve() doesn't support Windows paths outside of Windows."));
+			gotoIfError(clean, Error_invalidOperation(6, "File_resolve() doesn't support Windows paths outside of Windows."));
 
 	#endif
 
 	//Now we have to discover the real directory it references to. This means resolving:
 	//Empty filename and . to mean no difference and .. to step back
 
-	_gotoIfError(clean, CharString_splitSensitive(*result, '/', alloc, &res));
+	gotoIfError(clean, CharString_splitSensitive(*result, '/', alloc, &res));
 
 	U64 realSplitLen = res.length;		//We have to reset this before unallocating the CharStringList!
 
@@ -142,7 +142,7 @@ Error File_resolve(
 
 			if(!i) {
 				res.length = realSplitLen;
-				_gotoIfError(clean, Error_invalidParameter(
+				gotoIfError(clean, Error_invalidParameter(
 					0, 0, "File_resolve()::loc tried to exit working directory, this is not allowed for security reasons"
 				));
 			}
@@ -169,7 +169,7 @@ Error File_resolve(
 			#endif
 
 			res.length = realSplitLen;
-			_gotoIfError(clean, Error_invalidParameter(0, 1, "File_resolve()::loc contains subpath with invalid file name"));
+			gotoIfError(clean, Error_invalidParameter(0, 1, "File_resolve()::loc contains subpath with invalid file name"));
 		}
 
 		//Continue processing the path until it's done
@@ -206,7 +206,7 @@ Error File_resolve(
 	#ifdef _WIN32	//Starts with [A-Z]:/ if absolute. If it starts with / it's unsupported!
 
 		if (CharString_startsWithSensitive(*result, '/'))
-			_gotoIfError(clean, Error_unsupportedOperation(
+			gotoIfError(clean, Error_unsupportedOperation(
 				4, "File_resolve()::loc contained Unix path (/absolute), which is unsupported on Windows"
 			));
 
@@ -222,7 +222,7 @@ Error File_resolve(
 	if (isAbsolute) {
 
 		if(!CharString_length(absoluteDir) || !CharString_startsWithStringInsensitive(*result, absoluteDir))
-			_gotoIfError(clean, Error_unauthorized(
+			gotoIfError(clean, Error_unauthorized(
 				0, "File_resolve()::loc tried to escape working directory, which is unsupported for security reasons"
 			));
 	}
@@ -230,7 +230,7 @@ Error File_resolve(
 	//Prepend our path
 
 	else if(CharString_length(absoluteDir) && !*isVirtual)
-		_gotoIfError(clean, CharString_insertString(result, absoluteDir, 0, alloc));
+		gotoIfError(clean, CharString_insertString(result, absoluteDir, 0, alloc));
 
 	//Since we're gonna use this in file operations, we wanna have a null terminator
 
@@ -242,7 +242,7 @@ Error File_resolve(
 	#endif
 
 	if(CharString_length(*result) >= maxFilePathLimit)
-		_gotoIfError(clean, Error_outOfBounds(
+		gotoIfError(clean, Error_outOfBounds(
 			0, CharString_length(*result), maxFilePathLimit, "File_resolve()::loc resolved path is longer than max file limit"
 		));
 

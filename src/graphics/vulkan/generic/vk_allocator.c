@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -29,6 +29,7 @@
 #include "platforms/log.h"
 #include "types/error.h"
 #include "types/buffer.h"
+#include "types/math.h"
 #include "types/string.h"
 
 static const VkMemoryPropertyFlags host = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
@@ -241,7 +242,7 @@ Error DeviceMemoryAllocator_allocate(
 	void *mappedMem = NULL;
 
 	if(prop & host)
-		_gotoIfError(clean, vkCheck(vkMapMemory(deviceExt->device, mem, 0, alloc.allocationSize, 0, &mappedMem)));
+		gotoIfError(clean, vkCheck(vkMapMemory(deviceExt->device, mem, 0, alloc.allocationSize, 0, &mappedMem)));
 
 	//Initialize block
 
@@ -254,7 +255,7 @@ Error DeviceMemoryAllocator_allocate(
 		.resourceType = resourceType
 	};
 
-	_gotoIfError(clean, AllocationBuffer_createx(alloc.allocationSize, true, &block.allocations));
+	gotoIfError(clean, AllocationBuffer_createx(alloc.allocationSize, true, &block.allocations));
 
 	#ifndef NDEBUG
 		Log_captureStackTracex(block.stackTrace, sizeof(block.stackTrace) / sizeof(void*), 1);
@@ -269,14 +270,14 @@ Error DeviceMemoryAllocator_allocate(
 			break;
 
 	const U8 *allocLoc = NULL;
-	_gotoIfError(clean, AllocationBuffer_allocateBlockx(&block.allocations, memReq.size, memReq.alignment, &allocLoc));
+	gotoIfError(clean, AllocationBuffer_allocateBlockx(&block.allocations, memReq.size, memReq.alignment, &allocLoc));
 
 	if(i == allocator->blocks.length) {
 
 		if(i == U32_MAX)
-			_gotoIfError(clean, Error_outOfBounds(0, i, U32_MAX, "DeviceMemoryAllocator_allocate() block out of bounds"));
+			gotoIfError(clean, Error_outOfBounds(0, i, U32_MAX, "DeviceMemoryAllocator_allocate() block out of bounds"));
 
-		_gotoIfError(clean, ListDeviceMemoryBlock_pushBackx(&allocator->blocks, block))
+		gotoIfError(clean, ListDeviceMemoryBlock_pushBackx(&allocator->blocks, block))
 	}
 
 	else allocator->blocks.ptrNonConst[i] = block;
@@ -290,7 +291,7 @@ Error DeviceMemoryAllocator_allocate(
 
 			if(instanceExt->debugSetName) {
 
-				_gotoIfError(clean, CharString_formatx(
+				gotoIfError(clean, CharString_formatx(
 					&temp,
 					isDedicated ? "Memory block %"PRIu32" (host: %s, coherent: %s, device: %s): %s" :
 					"Memory block %"PRIu32" (host: %s, coherent: %s, device: %s)",
@@ -308,7 +309,7 @@ Error DeviceMemoryAllocator_allocate(
 					.objectHandle = (U64) mem
 				};
 
-				_gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName)));
+				gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName)));
 				CharString_freex(&temp);
 			}
 

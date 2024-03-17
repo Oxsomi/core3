@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -79,7 +79,7 @@ Error createShaderModule(
 
 				Bool isRt = stage >= EPipelineStage_RtStart && stage <= EPipelineStage_RtEnd;
 
-				_gotoIfError(clean, CharString_formatx(
+				gotoIfError(clean, CharString_formatx(
 					&temp, "Shader module (\"%.*s\": %s)",
 					CharString_length(name), name.ptr, isRt ? "Raytracing" : EPipelineStage_names[stage]
 				));
@@ -91,7 +91,7 @@ Error createShaderModule(
 					.pObjectName = temp.ptr
 				};
 
-				_gotoIfError(clean, vkCheck(instance->debugSetName(device->device, &debugName2)));
+				gotoIfError(clean, vkCheck(instance->debugSetName(device->device, &debugName2)));
 			}
 
 		#endif
@@ -136,8 +136,8 @@ Error GraphicsDevice_createPipelinesComputeExt(GraphicsDevice *device, ListCharS
 	ListVkPipeline pipelineHandles = (ListVkPipeline) { 0 };
 
 	Error err = Error_none();
-	_gotoIfError(clean, ListVkComputePipelineCreateInfo_resizex(&pipelineInfos, pipelines->length));
-	_gotoIfError(clean, ListVkPipeline_resizex(&pipelineHandles, pipelines->length));
+	gotoIfError(clean, ListVkComputePipelineCreateInfo_resizex(&pipelineInfos, pipelines->length));
+	gotoIfError(clean, ListVkPipeline_resizex(&pipelineHandles, pipelines->length));
 
 	//TODO: Push constants
 
@@ -155,7 +155,7 @@ Error GraphicsDevice_createPipelinesComputeExt(GraphicsDevice *device, ListCharS
 
 		Pipeline *pipeline = PipelineRef_ptr(pipelines->ptr[i]);
 
-		_gotoIfError(clean, createShaderModule(
+		gotoIfError(clean, createShaderModule(
 			pipeline->stages.ptr[0].binary,
 			&pipelineInfos.ptrNonConst[i].stage.module,
 			deviceExt,
@@ -165,7 +165,7 @@ Error GraphicsDevice_createPipelinesComputeExt(GraphicsDevice *device, ListCharS
 		));
 	}
 
-	_gotoIfError(clean, vkCheck(vkCreateComputePipelines(
+	gotoIfError(clean, vkCheck(vkCreateComputePipelines(
 		deviceExt->device,
 		NULL,
 		(U32) pipelineInfos.length,
@@ -187,7 +187,7 @@ Error GraphicsDevice_createPipelinesComputeExt(GraphicsDevice *device, ListCharS
 					.pObjectName = names.ptr[i].ptr
 				};
 
-				_gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName2)));
+				gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName2)));
 			}
 
 		#endif
@@ -411,7 +411,7 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListChar
 
 	for(U64 i = EPipelineStateType_PerPipelineStart; i < EPipelineStateType_Count; ++i) {
 		states[i] = GenericList_createEmpty(strides[i]);
-		_gotoIfError(clean, GenericList_resizex(&states[i], counts[i]));
+		gotoIfError(clean, GenericList_resizex(&states[i], counts[i]));
 	}
 
 	//TODO: Push constants
@@ -904,7 +904,7 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListChar
 
 			VkShaderModule module = NULL;
 
-			_gotoIfError(clean, createShaderModule(
+			gotoIfError(clean, createShaderModule(
 				stage.binary,
 				&module,
 				deviceExt,
@@ -932,7 +932,7 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListChar
 		counts[EPipelineStateType_DirectRenderingAttachments] += info->attachmentCountExt;
 	}
 
-	_gotoIfError(clean, vkCheck(vkCreateGraphicsPipelines(
+	gotoIfError(clean, vkCheck(vkCreateGraphicsPipelines(
 		deviceExt->device,
 		NULL,
 		(U32) pipelines->length,
@@ -956,7 +956,7 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListChar
 					.pObjectName = names.ptr[i].ptr
 				};
 
-				_gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName2)));
+				gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName2)));
 			}
 
 		#endif
@@ -1032,13 +1032,13 @@ Error GraphicsDevice_createPipelinesRaytracingInternalExt(
 
 	//Reserve mem
 
-	_gotoIfError(clean, ListVkRayTracingPipelineCreateInfoKHR_resizex(&createInfos, pipelines->length));
-	_gotoIfError(clean, ListVkPipeline_resizex(&pipelinesExt, pipelines->length));
-	_gotoIfError(clean, ListVkShaderModule_resizex(&modules, binaryCounter));
-	_gotoIfError(clean, ListVkPipelineShaderStageCreateInfo_resizex(&stages, stageCounter));
-	_gotoIfError(clean, GenericList_resizex(&shaderHandles, stageCounter));
-	_gotoIfError(clean, Buffer_createEmptyBytesx(stageCounter * raytracingShaderAlignment, &shaderBindings));
-	_gotoIfError(clean, ListVkRayTracingShaderGroupCreateInfoKHR_resizex(&groups, groupCounter + stageCounter));
+	gotoIfError(clean, ListVkRayTracingPipelineCreateInfoKHR_resizex(&createInfos, pipelines->length));
+	gotoIfError(clean, ListVkPipeline_resizex(&pipelinesExt, pipelines->length));
+	gotoIfError(clean, ListVkShaderModule_resizex(&modules, binaryCounter));
+	gotoIfError(clean, ListVkPipelineShaderStageCreateInfo_resizex(&stages, stageCounter));
+	gotoIfError(clean, GenericList_resizex(&shaderHandles, stageCounter));
+	gotoIfError(clean, Buffer_createEmptyBytesx(stageCounter * raytracingShaderAlignment, &shaderBindings));
+	gotoIfError(clean, ListVkRayTracingShaderGroupCreateInfoKHR_resizex(&groups, groupCounter + stageCounter));
 
 	//Convert
 
@@ -1054,7 +1054,7 @@ Error GraphicsDevice_createPipelinesRaytracingInternalExt(
 		if (names.length) {
 
 			if(!CharString_isNullTerminated(names.ptr[i])) {
-				_gotoIfError(clean, CharString_createCopyx(names.ptr[i], &temp1));
+				gotoIfError(clean, CharString_createCopyx(names.ptr[i], &temp1));
 				name = temp1;
 			}
 
@@ -1066,9 +1066,9 @@ Error GraphicsDevice_createPipelinesRaytracingInternalExt(
 		for(U64 j = 0; j < rtPipeline->binaryCount; ++j) {
 
 			if(names.length)
-				_gotoIfError(clean, CharString_formatx(&temp, "%s binary %"PRIu64, name.ptr, j));
+				gotoIfError(clean, CharString_formatx(&temp, "%s binary %"PRIu64, name.ptr, j));
 
-			_gotoIfError(clean, createShaderModule(
+			gotoIfError(clean, createShaderModule(
 				rtPipeline->binaries.ptr[j], &modules.ptrNonConst[binaryCounter + j],
 				deviceExt, instanceExt, name, EPipelineStage_RtStart
 			));
@@ -1208,7 +1208,7 @@ Error GraphicsDevice_createPipelinesRaytracingInternalExt(
 
 	//Create vulkan pipelines
 
-	_gotoIfError(clean, vkCheck(instanceExt->createRaytracingPipelines(
+	gotoIfError(clean, vkCheck(instanceExt->createRaytracingPipelines(
 		deviceExt->device,
 		NULL,						//deferredOperation
 		NULL,						//pipelineCache
@@ -1235,7 +1235,7 @@ Error GraphicsDevice_createPipelinesRaytracingInternalExt(
 					.pObjectName = names.ptr[i].ptr
 				};
 
-				_gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName2)));
+				gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName2)));
 			}
 
 		#endif
@@ -1250,7 +1250,7 @@ Error GraphicsDevice_createPipelinesRaytracingInternalExt(
 
 		U32 groupCount = rtPipeline->missCount + rtPipeline->raygenCount + rtPipeline->callableCount + rtPipeline->groupCount;
 
-		_gotoIfError(clean, vkCheck(instanceExt->getRayTracingShaderGroupHandles(
+		gotoIfError(clean, vkCheck(instanceExt->getRayTracingShaderGroupHandles(
 			deviceExt->device,
 			vkPipeline,
 			0,
@@ -1308,7 +1308,7 @@ Error GraphicsDevice_createPipelinesRaytracingInternalExt(
 	//The SBT has a stride of 64 as well (since that's expected).
 	//Then we link the SBT per pipeline.
 
-	_gotoIfError(clean, GraphicsDeviceRef_createBufferData(
+	gotoIfError(clean, GraphicsDeviceRef_createBufferData(
 		deviceRef, EDeviceBufferUsage_SBTExt, EGraphicsResourceFlag_None, 
 		CharString_createRefCStrConst("Shader binding table"),
 		&shaderBindings,
@@ -1316,7 +1316,7 @@ Error GraphicsDevice_createPipelinesRaytracingInternalExt(
 	));
 
 	for (U64 i = 0; i < pipelines->length; ++i) {
-		_gotoIfError(clean, DeviceBufferRef_inc(sbt));
+		gotoIfError(clean, DeviceBufferRef_inc(sbt));
 		Pipeline_info(PipelineRef_ptr(pipelines->ptr[i]), PipelineRaytracingInfo)->shaderBindingTable = sbt;
 	}
 

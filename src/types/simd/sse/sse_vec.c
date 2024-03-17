@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -32,24 +32,24 @@ F32x2 F32x2_fromI32x2(I32x2 a) { return (F32x2) { .v = { (F32) I32x2_y(a), (F32)
 I32x4 I32x4_add(I32x4 a, I32x4 b) { return _mm_add_epi32(a, b); }
 I32x4 I32x4_addI64x2(I32x4 a, I32x4 b) { return _mm_add_epi64(a, b); }
 F32x4 F32x4_add(F32x4 a, F32x4 b) { return _mm_add_ps(a, b); }
-I32x2 I32x2_add(I32x2 a, I32x2 b) _NONE_OP2I(a.v[i] + b.v[i])
-F32x2 F32x2_add(F32x2 a, F32x2 b) _NONE_OP2F(a.v[i] + b.v[i])
+I32x2 I32x2_add(I32x2 a, I32x2 b) NONE_OP2I(a.v[i] + b.v[i])
+F32x2 F32x2_add(F32x2 a, F32x2 b) NONE_OP2F(a.v[i] + b.v[i])
 
 I32x4 I32x4_sub(I32x4 a, I32x4 b) { return _mm_sub_epi32(a, b); }
 F32x4 F32x4_sub(F32x4 a, F32x4 b) { return _mm_sub_ps(a, b); }
-I32x2 I32x2_sub(I32x2 a, I32x2 b) _NONE_OP2I(a.v[i] - b.v[i])
-F32x2 F32x2_sub(F32x2 a, F32x2 b) _NONE_OP2F(a.v[i] - b.v[i])
+I32x2 I32x2_sub(I32x2 a, I32x2 b) NONE_OP2I(a.v[i] - b.v[i])
+F32x2 F32x2_sub(F32x2 a, F32x2 b) NONE_OP2F(a.v[i] - b.v[i])
 
 I32x4 I32x4_mul(I32x4 a, I32x4 b) { return _mm_mullo_epi32(a, b); }
 I32x4 I32x4_mulU32x2AsU64x2(I32x4 a, I32x4 b) { return _mm_mul_epu32(a, b); }
 F32x4 F32x4_mul(F32x4 a, F32x4 b) { return _mm_mul_ps(a, b); }
-I32x2 I32x2_mul(I32x2 a, I32x2 b) _NONE_OP2I(a.v[i] * b.v[i])
-F32x2 F32x2_mul(F32x2 a, F32x2 b) _NONE_OP2F(a.v[i] * b.v[i])
+I32x2 I32x2_mul(I32x2 a, I32x2 b) NONE_OP2I(a.v[i] * b.v[i])
+F32x2 F32x2_mul(F32x2 a, F32x2 b) NONE_OP2F(a.v[i] * b.v[i])
 
 I32x4 I32x4_div(I32x4 a, I32x4 b) { return _mm_div_epi32(a, b); }
 F32x4 F32x4_div(F32x4 a, F32x4 b) { return _mm_div_ps(a, b); }
-I32x2 I32x2_div(I32x2 a, I32x2 b) _NONE_OP2I(a.v[i] / b.v[i])
-F32x2 F32x2_div(F32x2 a, F32x2 b) _NONE_OP2F(a.v[i] / b.v[i])
+I32x2 I32x2_div(I32x2 a, I32x2 b) NONE_OP2I(a.v[i] / b.v[i])
+F32x2 F32x2_div(F32x2 a, F32x2 b) NONE_OP2F(a.v[i] / b.v[i])
 
 //Swizzle
 
@@ -124,47 +124,47 @@ F32x4 F32x4_negateRecastiInternal(F32x4 a) { return F32x4_negate(F32x4_recastI32
 
 I32x4 I32x4_eq(I32x4 a, I32x4 b)  { return I32x4_negate(_mm_cmpeq_epi32(a, b)); }
 F32x4 F32x4_eq(F32x4 a, F32x4 b)  { return F32x4_negateRecastiInternal(_mm_cmpeq_ps(a, b)); }
-I32x2 I32x2_eq(I32x2 a, I32x2 b) _NONE_OP2I(a.v[i] == b.v[i])
-F32x2 F32x2_eq(F32x2 a, F32x2 b) _NONE_OP2F((F32)(a.v[i] == b.v[i]))
+I32x2 I32x2_eq(I32x2 a, I32x2 b) NONE_OP2I(a.v[i] == b.v[i])
+F32x2 F32x2_eq(F32x2 a, F32x2 b) NONE_OP2F((F32)(a.v[i] == b.v[i]))
 
 I32x4 I32x4_neq(I32x4 a, I32x4 b) { return I32x4_add(I32x4_one(), _mm_cmpeq_epi32(a, b)); }
 F32x4 F32x4_neq(F32x4 a, F32x4 b) { return F32x4_negateRecastiInternal(_mm_cmpneq_ps(a, b)); }
-I32x2 I32x2_neq(I32x2 a, I32x2 b) _NONE_OP2I(a.v[i] != b.v[i])
-F32x2 F32x2_neq(F32x2 a, F32x2 b) _NONE_OP2F((F32)(a.v[i] != b.v[i]))
+I32x2 I32x2_neq(I32x2 a, I32x2 b) NONE_OP2I(a.v[i] != b.v[i])
+F32x2 F32x2_neq(F32x2 a, F32x2 b) NONE_OP2F((F32)(a.v[i] != b.v[i]))
 
 I32x4 I32x4_geq(I32x4 a, I32x4 b) { return I32x4_add(I32x4_one(), _mm_cmplt_epi32(a, b)); }
 F32x4 F32x4_geq(F32x4 a, F32x4 b) { return F32x4_negateRecastiInternal(_mm_cmpge_ps(a, b)); }
-I32x2 I32x2_geq(I32x2 a, I32x2 b) _NONE_OP2I(a.v[i] >= b.v[i])
-F32x2 F32x2_geq(F32x2 a, F32x2 b) _NONE_OP2F((F32)(a.v[i] >= b.v[i]))
+I32x2 I32x2_geq(I32x2 a, I32x2 b) NONE_OP2I(a.v[i] >= b.v[i])
+F32x2 F32x2_geq(F32x2 a, F32x2 b) NONE_OP2F((F32)(a.v[i] >= b.v[i]))
 
 I32x4 I32x4_gt(I32x4 a, I32x4 b)  { return I32x4_negate(_mm_cmpgt_epi32(a, b)); }
 F32x4 F32x4_gt(F32x4 a, F32x4 b)  { return F32x4_negateRecastiInternal(_mm_cmpgt_ps(a, b)); }
-I32x2 I32x2_gt(I32x2 a, I32x2 b) _NONE_OP2I(a.v[i] > b.v[i])
-F32x2 F32x2_gt(F32x2 a, F32x2 b) _NONE_OP2F((F32)(a.v[i] > b.v[i]))
+I32x2 I32x2_gt(I32x2 a, I32x2 b) NONE_OP2I(a.v[i] > b.v[i])
+F32x2 F32x2_gt(F32x2 a, F32x2 b) NONE_OP2F((F32)(a.v[i] > b.v[i]))
 
 I32x4 I32x4_leq(I32x4 a, I32x4 b) { return I32x4_add(I32x4_one(), _mm_cmpgt_epi32(a, b)); }
 F32x4 F32x4_leq(F32x4 a, F32x4 b) { return F32x4_negateRecastiInternal(_mm_cmple_ps(a, b)); }
-I32x2 I32x2_leq(I32x2 a, I32x2 b) _NONE_OP2I(a.v[i] <= b.v[i])
-F32x2 F32x2_leq(F32x2 a, F32x2 b) _NONE_OP2F((F32)(a.v[i] <= b.v[i]))
+I32x2 I32x2_leq(I32x2 a, I32x2 b) NONE_OP2I(a.v[i] <= b.v[i])
+F32x2 F32x2_leq(F32x2 a, F32x2 b) NONE_OP2F((F32)(a.v[i] <= b.v[i]))
 
 I32x4 I32x4_lt(I32x4 a, I32x4 b)  { return I32x4_negate(_mm_cmplt_epi32(a, b)); }
 F32x4 F32x4_lt(F32x4 a, F32x4 b)  { return F32x4_negateRecastiInternal(_mm_cmplt_ps(a, b)); }
-I32x2 I32x2_lt(I32x2 a, I32x2 b) _NONE_OP2I(a.v[i] < b.v[i])
-F32x2 F32x2_lt(F32x2 a, F32x2 b) _NONE_OP2F((F32)(a.v[i] < b.v[i]))
+I32x2 I32x2_lt(I32x2 a, I32x2 b) NONE_OP2I(a.v[i] < b.v[i])
+F32x2 F32x2_lt(F32x2 a, F32x2 b) NONE_OP2F((F32)(a.v[i] < b.v[i]))
 
 //Bitwise
 
 I32x4 I32x4_or(I32x4 a, I32x4 b) { return _mm_or_si128(a, b); }
-I32x2 I32x2_or(I32x2 a, I32x2 b)  _NONE_OP2I(a.v[i] | b.v[i])
+I32x2 I32x2_or(I32x2 a, I32x2 b)  NONE_OP2I(a.v[i] | b.v[i])
 
 I32x4 I32x4_and(I32x4 a, I32x4 b) { return _mm_and_si128(a, b); }
-I32x2 I32x2_and(I32x2 a, I32x2 b) _NONE_OP2I(a.v[i] & b.v[i])
+I32x2 I32x2_and(I32x2 a, I32x2 b) NONE_OP2I(a.v[i] & b.v[i])
 
 I32x4 I32x4_xor(I32x4 a, I32x4 b) { return _mm_xor_si128(a, b); }
-I32x2 I32x2_xor(I32x2 a, I32x2 b) _NONE_OP2I(a.v[i] ^ b.v[i])
+I32x2 I32x2_xor(I32x2 a, I32x2 b) NONE_OP2I(a.v[i] ^ b.v[i])
 
 I32x4 I32x4_not(I32x4 a) { return _mm_xor_si128(a, I32x4_xxxx4((I32)U32_MAX)); }
-I32x2 I32x2_not(I32x2 a) _NONE_OP2I(~a.v[i])
+I32x2 I32x2_not(I32x2 a) NONE_OP2I(~a.v[i])
 
 //Min/max
 
@@ -277,9 +277,9 @@ F32 F32x2_dot(F32x2 a, F32x2 b) { return F32x4_dot2(F32x4_fromF32x2(a), F32x4_fr
 I32x4 I32x4_lshByte(I32x4 a, U8 bytes) {
 	switch (bytes) {
 		case 0:		return a;
-		_expand8(1, _mm_slli_si128, a);
-		_expand4(9, _mm_slli_si128, a);
-		_expand2(13, _mm_slli_si128, a);
+		FUNC_EXPAND8(1, _mm_slli_si128, a);
+		FUNC_EXPAND4(9, _mm_slli_si128, a);
+		FUNC_EXPAND2(13, _mm_slli_si128, a);
 		case 15:	return _mm_slli_si128(a, 15);
 		default:	return I32x4_zero();
 	}
@@ -288,9 +288,9 @@ I32x4 I32x4_lshByte(I32x4 a, U8 bytes) {
 I32x4 I32x4_rshByte(I32x4 a, U8 bytes) {
 	switch (bytes) {
 		case 0:		return a;
-		_expand8(1, _mm_srli_si128, a);
-		_expand4(9, _mm_srli_si128, a);
-		_expand2(13, _mm_srli_si128, a);
+		FUNC_EXPAND8(1, _mm_srli_si128, a);
+		FUNC_EXPAND4(9, _mm_srli_si128, a);
+		FUNC_EXPAND2(13, _mm_srli_si128, a);
 		case 15:	return _mm_srli_si128(a, 15);
 		default:	return I32x4_zero();
 	}
@@ -299,10 +299,10 @@ I32x4 I32x4_rshByte(I32x4 a, U8 bytes) {
 I32x4 I32x4_lsh32(I32x4 a, U8 bits) {
 	switch (bits) {
 		case 0:		return a;
-		_expand16(1, _mm_slli_epi32, a);
-		_expand8(17, _mm_slli_epi32, a);
-		_expand4(25, _mm_slli_epi32, a);
-		_expand2(29, _mm_slli_epi32, a);
+		FUNC_EXPAND16(1, _mm_slli_epi32, a);
+		FUNC_EXPAND8(17, _mm_slli_epi32, a);
+		FUNC_EXPAND4(25, _mm_slli_epi32, a);
+		FUNC_EXPAND2(29, _mm_slli_epi32, a);
 		case 31:	return _mm_slli_epi32(a, 31);
 		default:	return I32x4_zero();
 	}
@@ -311,10 +311,10 @@ I32x4 I32x4_lsh32(I32x4 a, U8 bits) {
 I32x4 I32x4_rsh32(I32x4 a, U8 bits) {
 	switch (bits) {
 		case 0:		return a;
-		_expand16(1, _mm_srli_epi32, a);
-		_expand8(17, _mm_srli_epi32, a);
-		_expand4(25, _mm_srli_epi32, a);
-		_expand2(29, _mm_srli_epi32, a);
+		FUNC_EXPAND16(1, _mm_srli_epi32, a);
+		FUNC_EXPAND8(17, _mm_srli_epi32, a);
+		FUNC_EXPAND4(25, _mm_srli_epi32, a);
+		FUNC_EXPAND2(29, _mm_srli_epi32, a);
 		case 31:	return _mm_srli_epi32(a, 31);
 		default:	return I32x4_zero();
 	}
@@ -323,11 +323,11 @@ I32x4 I32x4_rsh32(I32x4 a, U8 bits) {
 I32x4 I32x4_lsh64(I32x4 a, U8 bits) {
 	switch (bits) {
 		case 0:		return a;
-		_expand32(1, _mm_slli_epi64, a);
-		_expand16(33, _mm_slli_epi64, a);
-		_expand8(49, _mm_slli_epi64, a);
-		_expand4(57, _mm_slli_epi64, a);
-		_expand2(61, _mm_slli_epi64, a);
+		FUNC_EXPAND32(1, _mm_slli_epi64, a);
+		FUNC_EXPAND16(33, _mm_slli_epi64, a);
+		FUNC_EXPAND8(49, _mm_slli_epi64, a);
+		FUNC_EXPAND4(57, _mm_slli_epi64, a);
+		FUNC_EXPAND2(61, _mm_slli_epi64, a);
 		case 63:	return _mm_slli_epi64(a, 63);
 		default:	return I32x4_zero();
 	}
@@ -336,11 +336,11 @@ I32x4 I32x4_lsh64(I32x4 a, U8 bits) {
 I32x4 I32x4_rsh64(I32x4 a, U8 bits) {
 	switch (bits) {
 		case 0:		return a;
-		_expand32(1, _mm_srli_epi64, a);
-		_expand16(33, _mm_srli_epi64, a);
-		_expand8(49, _mm_srli_epi64, a);
-		_expand4(57, _mm_srli_epi64, a);
-		_expand2(61, _mm_srli_epi64, a);
+		FUNC_EXPAND32(1, _mm_srli_epi64, a);
+		FUNC_EXPAND16(33, _mm_srli_epi64, a);
+		FUNC_EXPAND8(49, _mm_srli_epi64, a);
+		FUNC_EXPAND4(57, _mm_srli_epi64, a);
+		FUNC_EXPAND2(61, _mm_srli_epi64, a);
 		case 63:	return _mm_srli_epi64(a, 63);
 		default:	return I32x4_zero();
 	}

@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -263,7 +263,7 @@ Error GraphicsDeviceRef_createTLAS(GraphicsDeviceRef *dev, TLAS tlas, CharString
 
 	//Allocate refPtr
 
-	_gotoIfError(clean, RefPtr_createx(
+	gotoIfError(clean, RefPtr_createx(
 		(U32) (sizeof(TLAS) + TLASExt_size),
 		(ObjectFreeFunc) TLAS_free,
 		(ETypeId) EGraphicsTypeId_TLASExt,
@@ -275,7 +275,7 @@ Error GraphicsDeviceRef_createTLAS(GraphicsDeviceRef *dev, TLAS tlas, CharString
 	TLAS *tlasPtr = TLASRef_ptr(*tlasRef);
 
 	if(tlas.base.parent)
-		_gotoIfError(clean, TLASRef_inc(tlas.base.parent));
+		gotoIfError(clean, TLASRef_inc(tlas.base.parent));
 
 	*tlasPtr = tlas;
 	tlasPtr->base.lock = Lock_create();
@@ -283,13 +283,13 @@ Error GraphicsDeviceRef_createTLAS(GraphicsDeviceRef *dev, TLAS tlas, CharString
 
 	if (tlas.base.asConstructionType == ETLASConstructionType_Serialized) {
 		tlasPtr->cpuData = Buffer_createNull();
-		_gotoIfError(clean, Buffer_createCopyx(tlas.cpuData, &tlasPtr->cpuData));
+		gotoIfError(clean, Buffer_createCopyx(tlas.cpuData, &tlasPtr->cpuData));
 	}
 	else {
 
 		if (tlas.useDeviceMemory) {
 			tlasPtr->deviceData = (DeviceData) { 0 };
-			_gotoIfError(clean, DeviceBufferRef_inc(tlas.deviceData.buffer));
+			gotoIfError(clean, DeviceBufferRef_inc(tlas.deviceData.buffer));
 			tlasPtr->deviceData = tlas.deviceData;
 		}
 
@@ -299,12 +299,12 @@ Error GraphicsDeviceRef_createTLAS(GraphicsDeviceRef *dev, TLAS tlas, CharString
 
 			if (tlas.base.isMotionBlurExt) {
 				tlasPtr->cpuInstancesMotion = (ListTLASInstanceMotion) { 0 };
-				_gotoIfError(clean, ListTLASInstanceMotion_createCopyx(tlas.cpuInstancesMotion, &tlasPtr->cpuInstancesMotion));
+				gotoIfError(clean, ListTLASInstanceMotion_createCopyx(tlas.cpuInstancesMotion, &tlasPtr->cpuInstancesMotion));
 			}
 
 			else {
 				tlasPtr->cpuInstancesStatic = (ListTLASInstanceStatic) { 0 };
-				_gotoIfError(clean, ListTLASInstanceStatic_createCopyx(tlas.cpuInstancesStatic, &tlasPtr->cpuInstancesStatic));
+				gotoIfError(clean, ListTLASInstanceStatic_createCopyx(tlas.cpuInstancesStatic, &tlasPtr->cpuInstancesStatic));
 			}
 
 			//Add refs to BLASes
@@ -347,10 +347,10 @@ Error GraphicsDeviceRef_createTLAS(GraphicsDeviceRef *dev, TLAS tlas, CharString
 		}
 	}
 
-	_gotoIfError(clean, GraphicsDeviceRef_inc(dev));
+	gotoIfError(clean, GraphicsDeviceRef_inc(dev));
 	tlasPtr->base.device = dev;
 
-	_gotoIfError(clean, CharString_createCopyx(name, &tlasPtr->base.name));
+	gotoIfError(clean, CharString_createCopyx(name, &tlasPtr->base.name));
 
 	//Push for the graphics impl to process next submit,
 	//If it's GPU generated, the user is expected to manually call buildTLASExt to ensure it's enqueued at the right time
@@ -360,9 +360,9 @@ Error GraphicsDeviceRef_createTLAS(GraphicsDeviceRef *dev, TLAS tlas, CharString
 		acq0 = Lock_lock(&device->lock, U64_MAX);
 
 		if(acq0 < ELockAcquire_Success)
-			_gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_createTLAS()::dev couldn't be locked"));
+			gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_createTLAS()::dev couldn't be locked"));
 
-		_gotoIfError(clean, ListWeakRefPtr_pushBackx(&device->pendingTlases, *tlasRef));
+		gotoIfError(clean, ListWeakRefPtr_pushBackx(&device->pendingTlases, *tlasRef));
 
 		if(acq0 == ELockAcquire_Acquired) {
 			Lock_unlock(&device->lock);
@@ -375,7 +375,7 @@ Error GraphicsDeviceRef_createTLAS(GraphicsDeviceRef *dev, TLAS tlas, CharString
 	acq1 = Lock_lock(&device->descriptorLock, U64_MAX);
 
 	if(acq1 < ELockAcquire_Success)
-		_gotoIfError(clean, Error_invalidState(
+		gotoIfError(clean, Error_invalidState(
 			0, "GraphicsDeviceRef_createTLAS() couldn't acquire descriptor lock"
 		));
 
@@ -384,7 +384,7 @@ Error GraphicsDeviceRef_createTLAS(GraphicsDeviceRef *dev, TLAS tlas, CharString
 	tlasPtr->handle = GraphicsDeviceRef_allocateDescriptor(dev, EDescriptorType_TLASExt);
 
 	if(tlasPtr->handle == U32_MAX)
-		_gotoIfError(clean, Error_outOfMemory(0, "GraphicsDeviceRef_createTLAS() couldn't allocate AS descriptor"));
+		gotoIfError(clean, Error_outOfMemory(0, "GraphicsDeviceRef_createTLAS() couldn't allocate AS descriptor"));
 
 clean:
 

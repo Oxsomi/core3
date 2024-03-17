@@ -152,7 +152,7 @@ Raytracing requires VK_KHR_acceleration_structure, but also requires either VK_K
 - VK_KHR_acceleration_structure:
   - maxGeometryCount, maxInstanceCount >= U24_MAX (16777215).
   - maxPerStageDescriptorAccelerationStructures, maxPerStageDescriptorUpdateAfterBindAccelerationStructures, maxDescriptorSetAccelerationStructures, maxDescriptorSetUpdateAfterBindAccelerationStructures of >= 16.
-  - maxPrimitiveCount of >= 0.5Gi.
+  - maxPrimitiveCount of >= 0.5Gi - 1.
 - VK_KHR_ray_tracing_pipeline:
   - maxRayDispatchInvocationCount >= 1 Gi.
   - maxRayHitAttributeSize >= 32.

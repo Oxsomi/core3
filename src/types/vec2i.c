@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -57,8 +57,8 @@ I32x2 I32x2_two() { return I32x2_xx2(2); }
 I32x2 I32x2_negOne() { return I32x2_xx2(-1); }
 I32x2 I32x2_negTwo() { return I32x2_xx2(-2); }
 
-Bool I32x2_all(I32x2 b) { return I32x2_reduce(I32x2_neq(b, I32x2_zero())) == 2; }
-Bool I32x2_any(I32x2 b) { return I32x2_reduce(I32x2_neq(b, I32x2_zero())); }
+Bool I32x2_all(I32x2 a) { return I32x2_reduce(I32x2_neq(a, I32x2_zero())) == 2; }
+Bool I32x2_any(I32x2 a) { return I32x2_reduce(I32x2_neq(a, I32x2_zero())); }
 
 I32x2 I32x2_load1(const I32 *arr) { return arr ? I32x2_create1(*arr) : I32x2_zero(); }
 I32x2 I32x2_load2(const I32 *arr) { return arr ? I32x2_create2(*arr, arr[1]) : I32x2_zero(); }

@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -55,7 +55,7 @@ Error SwapchainRef_resize(SwapchainRef *swapchainRef) {
 	ELockAcquire acq = Lock_lock(&device->lock, U64_MAX);
 
 	if(acq < ELockAcquire_Success)
-		_gotoIfError(clean, Error_invalidState(0, "Swapchain_resize() can't be called while recording commands"));
+		gotoIfError(clean, Error_invalidState(0, "Swapchain_resize() can't be called while recording commands"));
 
 	Bool any = false;
 
@@ -69,7 +69,7 @@ Error SwapchainRef_resize(SwapchainRef *swapchainRef) {
 		Lock_unlock(&device->lock);
 
 	if (any)
-		_gotoIfError(clean, Error_invalidState(
+		gotoIfError(clean, Error_invalidState(
 			0, "Swapchain_resize() can't be called on a Swapchain that's in flight. Use GraphicsDeviceRef_wait in onResize"
 		));
 
@@ -86,7 +86,7 @@ Error SwapchainRef_resize(SwapchainRef *swapchainRef) {
 		case EWindowFormat_RGBA16f:		textureFormatId = ETextureFormatId_RGBA16f;		break;
 		case EWindowFormat_RGBA32f:		textureFormatId = ETextureFormatId_RGBA32f;		break;
 		default:
-			_gotoIfError(clean, Error_invalidState(1, "Swapchain_resize() window format is unsupported"));
+			gotoIfError(clean, Error_invalidState(1, "Swapchain_resize() window format is unsupported"));
 	}
 
 	if(
@@ -97,8 +97,8 @@ Error SwapchainRef_resize(SwapchainRef *swapchainRef) {
 
 	//Otherwise, we properly resize
 
-	_gotoIfError(clean, GraphicsDeviceRef_createSwapchainExt(swapchain->base.resource.device, swapchainRef));
-	_gotoIfError(clean, UnifiedTexture_createExt(swapchainRef, swapchain->info.window->title));		//Re-create views
+	gotoIfError(clean, GraphicsDeviceRef_createSwapchainExt(swapchain->base.resource.device, swapchainRef));
+	gotoIfError(clean, UnifiedTexture_createExt(swapchainRef, swapchain->info.window->title));		//Re-create views
 	++swapchain->versionId;
 
 	swapchain->base.textureFormatId = (U8) textureFormatId;
@@ -142,12 +142,12 @@ Error GraphicsDeviceRef_createSwapchain(GraphicsDeviceRef *dev, SwapchainInfo in
 		case EWindowFormat_RGBA16f:		formatId = ETextureFormatId_RGBA16f;	break;
 		case EWindowFormat_RGBA32f:		formatId = ETextureFormatId_RGBA32f;	break;
 		default:
-			_gotoIfError(clean, Error_invalidState(1, "Swapchain_resize() window format is unsupported"));
+			gotoIfError(clean, Error_invalidState(1, "Swapchain_resize() window format is unsupported"));
 	}
 
 	Swapchain *swapchain = SwapchainRef_ptr(*scRef);
 
-	_gotoIfError(clean, GraphicsDeviceRef_inc(dev));
+	gotoIfError(clean, GraphicsDeviceRef_inc(dev));
 
 	swapchain->info = info;
 	swapchain->base = (UnifiedTexture) {
@@ -165,8 +165,8 @@ Error GraphicsDeviceRef_createSwapchain(GraphicsDeviceRef *dev, SwapchainInfo in
 		.images = 3		//Triple buffering
 	};
 
-	_gotoIfError(clean, GraphicsDeviceRef_createSwapchainExt(dev, *scRef));
-	_gotoIfError(clean, UnifiedTexture_create(*scRef, info.window->title));
+	gotoIfError(clean, GraphicsDeviceRef_createSwapchainExt(dev, *scRef));
+	gotoIfError(clean, UnifiedTexture_create(*scRef, info.window->title));
 	swapchain->lock = Lock_create();
 
 clean:

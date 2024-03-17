@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -110,12 +110,12 @@ void AESEncryptionContext_expandKey(const U32 *key, I32x4 k[15], EBufferEncrypti
 
 	k[0] = I32x4_load4((const I32*)key);
 
-	if(encryptionType == EBufferEncryptionType_AES256GCM)
+	if(encryptionType == EBufferEncryptionType_Aes256Gcm)
 		k[1] = I32x4_load4((const I32*)key + 4);
 
 	//Only use AESEncryptionContext_expandKey1 for AES128,
 
-	if(encryptionType == EBufferEncryptionType_AES128GCM) {
+	if(encryptionType == EBufferEncryptionType_Aes128Gcm) {
 
 		I32x4 im1 = k[0];
 
@@ -145,7 +145,7 @@ I32x4 AESEncryptionContext_blockHash(I32x4 block, const I32x4 k[15], EBufferEncr
 
 	block = I32x4_xor(block, k[0]);
 
-	U8 rounds = type == EBufferEncryptionType_AES128GCM ? 10 : 14;
+	U8 rounds = type == EBufferEncryptionType_Aes128Gcm ? 10 : 14;
 
 	for(U8 i = 1; i < rounds; ++i)
 		block = AES_encodeBlock(block, k[i], false);
@@ -295,8 +295,8 @@ void AESEncryptionContext_fetchAndUpdateTag(AESEncryptionContext *ctx, const I32
 
 U64 EBufferEncryptionType_getAdditionalData(EBufferEncryptionType type) {
 	switch (type) {
-		case EBufferEncryptionType_AES128GCM:
-		case EBufferEncryptionType_AES256GCM:	return 16 + 12;
+		case EBufferEncryptionType_Aes128Gcm:
+		case EBufferEncryptionType_Aes256Gcm:	return 16 + 12;
 		default:								return 0;
 	}
 }
@@ -335,7 +335,7 @@ Error AESEncryptionContext_encrypt(
 
 	if(flags & EBufferEncryptionFlags_GenerateKey) {
 
-		U8 len = encryptionType == EBufferEncryptionType_AES128GCM ? 4 : 8;
+		U8 len = encryptionType == EBufferEncryptionType_Aes128Gcm ? 4 : 8;
 
 		if(!Buffer_csprng(Buffer_createRef(realKey, sizeof(U32) * len)))
 			return Error_invalidState(1, "AESEncryptionContext_encrypt() couldn't generate key");

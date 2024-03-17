@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -113,7 +113,7 @@ Error GraphicsDeviceRef_createSampler(GraphicsDeviceRef *dev, SamplerInfo info, 
 
 	ELockAcquire acq = ELockAcquire_Invalid;
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(dev);
-	_gotoIfError(clean, GraphicsDeviceRef_inc(dev));
+	gotoIfError(clean, GraphicsDeviceRef_inc(dev));
 
 	Sampler *samp = SamplerRef_ptr(*sampler);
 
@@ -122,16 +122,16 @@ Error GraphicsDeviceRef_createSampler(GraphicsDeviceRef *dev, SamplerInfo info, 
 	acq = Lock_lock(&device->descriptorLock, U64_MAX);
 
 	if(acq < ELockAcquire_Success)
-		_gotoIfError(clean, Error_invalidState(
+		gotoIfError(clean, Error_invalidState(
 			0, "GraphicsDeviceRef_createSampler() couldn't acquire descriptor lock"
 		));
 
 	samp->samplerLocation = GraphicsDeviceRef_allocateDescriptor(dev, EDescriptorType_Sampler);
 
 	if(samp->samplerLocation == U32_MAX)
-		_gotoIfError(clean, Error_outOfMemory(0, "GraphicsDeviceRef_createSampler() couldn't allocate Sampler descriptor"));
+		gotoIfError(clean, Error_outOfMemory(0, "GraphicsDeviceRef_createSampler() couldn't allocate Sampler descriptor"));
 
-	_gotoIfError(clean, GraphicsDeviceRef_createSamplerExt(dev, samp, name));
+	gotoIfError(clean, GraphicsDeviceRef_createSamplerExt(dev, samp, name));
 
 clean:
 

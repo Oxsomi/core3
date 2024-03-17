@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -24,6 +24,7 @@
 #include "types/buffer.h"
 #include "types/allocator.h"
 #include "types/error.h"
+#include "types/math.h"
 
 TListImpl(SubResourceData);
 

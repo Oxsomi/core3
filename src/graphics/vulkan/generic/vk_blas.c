@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -99,7 +99,7 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 	}
 
 	if(primitives >> 32)
-		_gotoIfError(clean, Error_outOfBounds(
+		gotoIfError(clean, Error_outOfBounds(
 			0, primitives, U32_MAX, "BLASRef_flush() only primitive count of <U32_MAX is supported"
 		));
 
@@ -133,7 +133,7 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 			.maxVertex = (U32) vertexCount
 		};
 
-		_gotoIfError(clean, VkDeviceBuffer_transition(
+		gotoIfError(clean, VkDeviceBuffer_transition(
 			DeviceBuffer_ext(DeviceBufferRef_ptr(blas->positionBuffer.buffer), Vk),
 			VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
 			VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR,
@@ -148,7 +148,7 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 			tri->indexType = blas->indexFormatId == ETextureFormatId_R32u ? VK_INDEX_TYPE_UINT32 : VK_INDEX_TYPE_UINT16;
 			tri->indexData = getVkLocation(blas->indexBuffer, 0);
 
-			_gotoIfError(clean, VkDeviceBuffer_transition(
+			gotoIfError(clean, VkDeviceBuffer_transition(
 				DeviceBuffer_ext(DeviceBufferRef_ptr(blas->indexBuffer.buffer), Vk),
 				VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
 				VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR,
@@ -169,7 +169,7 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 			.stride = blas->aabbStride
 		};
 
-		_gotoIfError(clean, VkDeviceBuffer_transition(
+		gotoIfError(clean, VkDeviceBuffer_transition(
 			DeviceBuffer_ext(DeviceBufferRef_ptr(blas->aabbBuffer.buffer), Vk),
 			VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
 			VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR,
@@ -222,7 +222,7 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 
 	//Allocate scratch and final buffer
 
-	_gotoIfError(clean, GraphicsDeviceRef_createBuffer(
+	gotoIfError(clean, GraphicsDeviceRef_createBuffer(
 		deviceRef,
 		EDeviceBufferUsage_ASExt,
 		EGraphicsResourceFlag_None,
@@ -231,11 +231,11 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 		&blas->base.asBuffer
 	));
 
-	_gotoIfError(clean, CharString_formatx(
+	gotoIfError(clean, CharString_formatx(
 		&tmp, "%.*s scratch buffer", CharString_length(blas->base.name), blas->base.name.ptr
 	));
 
-	_gotoIfError(clean, GraphicsDeviceRef_createBuffer(
+	gotoIfError(clean, GraphicsDeviceRef_createBuffer(
 		deviceRef,
 		EDeviceBufferUsage_ScratchExt,
 		EGraphicsResourceFlag_None,
@@ -250,7 +250,7 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 		.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR
 	};
 
-	_gotoIfError(clean, vkCheck(instanceExt->createAccelerationStructure(
+	gotoIfError(clean, vkCheck(instanceExt->createAccelerationStructure(
 		deviceExt->device, &createInfo, NULL, &BLAS_ext(BLASRef_ptr(pending), Vk)->as
 	)));
 
@@ -268,7 +268,7 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 	if(blas->base.flags & ERTASBuildFlags_IsUpdate)
 		buildInfo.mode = VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR;
 
-	_gotoIfError(clean, VkDeviceBuffer_transition(
+	gotoIfError(clean, VkDeviceBuffer_transition(
 		DeviceBuffer_ext(DeviceBufferRef_ptr(blas->base.asBuffer), Vk),
 		VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
 		VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR,
@@ -278,7 +278,7 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 		&dep
 	));
 
-	_gotoIfError(clean, VkDeviceBuffer_transition(
+	gotoIfError(clean, VkDeviceBuffer_transition(
 		DeviceBuffer_ext(DeviceBufferRef_ptr(tempScratch), Vk),
 		VK_PIPELINE_STAGE_2_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
 		VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR,
@@ -310,13 +310,13 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 
 	device->pendingBytes += primitives;
 
-	_gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, pending));
+	gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, pending));
 	RefPtr_inc(pending);
 
 	//We mark scratch buffer as delete, we do this by pushing it as a current flight resource
 	//And losing the reference from our object
 
-	_gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, tempScratch));
+	gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, tempScratch));
 	tempScratch = NULL;
 
 	//Ensure we don't exceed a maximum amount of time spent on the GPU

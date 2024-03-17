@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -30,7 +30,7 @@ Bool CLI_info(ParsedArgs args) {
 
 	Log_debugLnx(
 
-		"OxC3 (Oxsomi core 3), a general framework and toolset for cross platform applications.\n"
+		"OxC3 (Oxsomi core 3), a general framework and toolset for cross-platform applications.\n"
 		"Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)"
 		"%s",
 

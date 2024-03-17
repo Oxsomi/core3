@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -333,7 +333,7 @@ Error UnifiedTexture_create(TextureRef *ref, CharString name) {
 		acq = Lock_lock(&device->descriptorLock, U64_MAX);
 
 		if(acq < ELockAcquire_Success)
-			_gotoIfError(clean, Error_invalidState(0, "UnifiedTexture_create() couldn't acquire descriptor lock"));
+			gotoIfError(clean, Error_invalidState(0, "UnifiedTexture_create() couldn't acquire descriptor lock"));
 
 		//Create images
 
@@ -349,7 +349,7 @@ Error UnifiedTexture_create(TextureRef *ref, CharString name) {
 				);
 
 				if(locationRead == U32_MAX)
-					_gotoIfError(clean, Error_outOfMemory(0, "UnifiedTexture_create() couldn't allocate texture descriptor"));
+					gotoIfError(clean, Error_outOfMemory(0, "UnifiedTexture_create() couldn't allocate texture descriptor"));
 
 				img->readHandle = locationRead;
 			}
@@ -360,7 +360,7 @@ Error UnifiedTexture_create(TextureRef *ref, CharString name) {
 				U32 locationWrite = GraphicsDeviceRef_allocateDescriptor(texture.resource.device, descType);
 
 				if(locationWrite == U32_MAX)
-					_gotoIfError(clean, Error_outOfMemory(0, "UnifiedTexture_create() couldn't allocate image descriptor"));
+					gotoIfError(clean, Error_outOfMemory(0, "UnifiedTexture_create() couldn't allocate image descriptor"));
 
 				img->writeHandle = locationWrite;
 			}
@@ -372,7 +372,7 @@ Error UnifiedTexture_create(TextureRef *ref, CharString name) {
 		acq = ELockAcquire_Invalid;
 	}
 
-	_gotoIfError(clean, UnifiedTexture_createExt(ref, name));
+	gotoIfError(clean, UnifiedTexture_createExt(ref, name));
 
 clean:
 

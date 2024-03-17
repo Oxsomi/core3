@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -99,7 +99,7 @@ Error GraphicsDeviceRef_createSamplerExt(GraphicsDeviceRef *dev, Sampler *sample
 		.borderColor = mapVkBorderColor(sinfo.borderColor)
 	};
 
-	_gotoIfError(clean, vkCheck(vkCreateSampler(deviceExt->device, &samplerInfo, NULL, samplerExt)));
+	gotoIfError(clean, vkCheck(vkCreateSampler(deviceExt->device, &samplerInfo, NULL, samplerExt)));
 
 	if (CharString_length(name)) {
 
@@ -114,7 +114,7 @@ Error GraphicsDeviceRef_createSamplerExt(GraphicsDeviceRef *dev, Sampler *sample
 					.objectHandle = (U64) *samplerExt
 				};
 
-				_gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)));
+				gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)));
 			}
 
 		#endif

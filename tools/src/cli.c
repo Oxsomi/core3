@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -167,7 +167,7 @@ Bool CLI_helpOperation(ParsedArgs args) {
 	CharStringList split = (CharStringList) { 0 };
 
 	if(args.parameters & EOperationHasParameter_Input)
-		_gotoIfError(clean, CharString_splitSensitivex(*args.args.ptr, ':', &split));
+		gotoIfError(clean, CharString_splitSensitivex(*args.args.ptr, ':', &split));
 
 	if(split.length > 0)
 		for (EOperationCategory cat = EOperationCategory_Start; cat < EOperationCategory_End; ++cat) {
@@ -298,7 +298,7 @@ Bool CLI_execute(CharStringList arglist) {
 	ParsedArgs args = (ParsedArgs) { .operation = operation };
 
 	Error err = Error_none();
-	_gotoIfError(clean, ListCharString_reservex(&args.args, 16));
+	gotoIfError(clean, ListCharString_reservex(&args.args, 16));
 
 	//Grab all flags
 
@@ -370,7 +370,7 @@ Bool CLI_execute(CharStringList arglist) {
 
 					//Store param for parsing later
 
-					_gotoIfError(clean, ListCharString_pushBackx(&args.args, arglist.ptr[j + 1]));
+					gotoIfError(clean, ListCharString_pushBackx(&args.args, arglist.ptr[j + 1]));
 				}
 
 				++j;			//Skip next argument

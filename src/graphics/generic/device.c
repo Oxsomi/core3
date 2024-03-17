@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -179,7 +179,7 @@ Error GraphicsDeviceRef_create(
 	//Create RefPtr
 
 	Error err = Error_none();
-	_gotoIfError(clean, RefPtr_createx(
+	gotoIfError(clean, RefPtr_createx(
 		(U32)(sizeof(GraphicsDevice) + GraphicsDeviceExt_size),
 		(ObjectFreeFunc) GraphicsDevice_free,
 		(ETypeId) EGraphicsTypeId_GraphicsDevice,
@@ -188,16 +188,16 @@ Error GraphicsDeviceRef_create(
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(*deviceRef);
 
-	_gotoIfError(clean, ListWeakRefPtr_reservex(&device->pendingResources, 128));
+	gotoIfError(clean, ListWeakRefPtr_reservex(&device->pendingResources, 128));
 
 	device->info = *info;
 
-	_gotoIfError(clean, GraphicsInstanceRef_inc(instanceRef));
+	gotoIfError(clean, GraphicsInstanceRef_inc(instanceRef));
 	device->instance = instanceRef;
 	//Create mem alloc, set info/instance/pending resources
 
 	device->allocator = (DeviceMemoryAllocator) { .device = device };
-	_gotoIfError(clean, ListDeviceMemoryBlock_reservex(&device->allocator.blocks, 16));
+	gotoIfError(clean, ListDeviceMemoryBlock_reservex(&device->allocator.blocks, 16));
 
 	device->allocator.lock = Lock_create();
 	device->lock = Lock_create();
@@ -205,32 +205,32 @@ Error GraphicsDeviceRef_create(
 	//Create in flight resource refs
 
 	for(U64 i = 0; i < sizeof(device->resourcesInFlight) / sizeof(device->resourcesInFlight[0]); ++i)
-		_gotoIfError(clean, ListRefPtr_reservex(&device->resourcesInFlight[i], 64));
+		gotoIfError(clean, ListRefPtr_reservex(&device->resourcesInFlight[i], 64));
 
 	//Create descriptor type free list
 
 	device->descriptorLock = Lock_create();
 
 	for(U64 i = 0; i < EDescriptorType_ResourceCount; ++i)
-		_gotoIfError(clean, Buffer_createEmptyBytesx((descriptorTypeCount[i] + 7) >> 3, &device->freeList[i]));
+		gotoIfError(clean, Buffer_createEmptyBytesx((descriptorTypeCount[i] + 7) >> 3, &device->freeList[i]));
 
 	//Reserve sampler 0 because we want to be able to use read/write handle 0 as invalid.
 
 	Lock_lock(&device->descriptorLock, U64_MAX);
 	if(GraphicsDeviceRef_allocateDescriptor(*deviceRef, EDescriptorType_Texture2D) != 0)
-		_gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_create() couldn't reserve null descriptor (sampler 0)"));
+		gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_create() couldn't reserve null descriptor (sampler 0)"));
 
 	Lock_unlock(&device->descriptorLock);
 
 	//Allocate temp storage for descriptor tracking
 
 	#ifndef NDEBUG
-		_gotoIfError(clean, ListDescriptorStackTrace_reservex(&device->descriptorStackTraces, 16));
+		gotoIfError(clean, ListDescriptorStackTrace_reservex(&device->descriptorStackTraces, 16));
 	#endif
 
 	//Create extended device
 
-	_gotoIfError(clean, GraphicsDevice_initExt(GraphicsInstanceRef_ptr(instanceRef), info, verbose, deviceRef));
+	gotoIfError(clean, GraphicsDevice_initExt(GraphicsInstanceRef_ptr(instanceRef), info, verbose, deviceRef));
 
 	//Create constant buffer and staging buffer / allocators
 
@@ -241,11 +241,11 @@ Error GraphicsDeviceRef_create(
 	//If a lot of these larger allocations are found it will resize the staging buffer to try to encompass it too.
 
 	U64 stagingSize = 64 * MIBI;
-	_gotoIfError(clean, GraphicsDeviceRef_resizeStagingBuffer(*deviceRef, stagingSize));
+	gotoIfError(clean, GraphicsDeviceRef_resizeStagingBuffer(*deviceRef, stagingSize));
 
 	//Allocate UBO
 
-	_gotoIfError(clean, GraphicsDeviceRef_createBuffer(
+	gotoIfError(clean, GraphicsDeviceRef_createBuffer(
 		*deviceRef,
 		EDeviceBufferUsage_None,
 		EGraphicsResourceFlag_InternalWeakDeviceRef | EGraphicsResourceFlag_CPUAllocatedBit,
@@ -318,7 +318,7 @@ Bool GraphicsDeviceRef_removePending(GraphicsDeviceRef *deviceRef, RefPtr *resou
 	}
 
 	Error err = Error_none();
-	_gotoIfError(clean, ListWeakRefPtr_erase(pendingList, found));
+	gotoIfError(clean, ListWeakRefPtr_erase(pendingList, found));
 
 	success = true;
 
@@ -361,12 +361,12 @@ Error GraphicsDeviceRef_handleNextFrame(GraphicsDeviceRef *deviceRef, void *comm
 		RefPtr_dec(inFlight->ptrNonConst + i);
 
 	Error err = Error_none();
-	_gotoIfError(clean, ListRefPtr_clear(inFlight));
+	gotoIfError(clean, ListRefPtr_clear(inFlight));
 
 	//Release all allocations of buffer that was in flight
 
 	if(!AllocationBuffer_freeAll(&device->stagingAllocations[device->submitId % 3]))
-		_gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_handleNextFrame() AllocationBuffer_freeAll failed"));
+		gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_handleNextFrame() AllocationBuffer_freeAll failed"));
 
 	//Update buffer data
 
@@ -379,21 +379,21 @@ Error GraphicsDeviceRef_handleNextFrame(GraphicsDeviceRef *deviceRef, void *comm
 		switch(type) {
 
 			case EGraphicsTypeId_DeviceBuffer:
-				_gotoIfError(clean, DeviceBufferRef_flush(commandBuffer, deviceRef, pending));
+				gotoIfError(clean, DeviceBufferRef_flush(commandBuffer, deviceRef, pending));
 				break;
 
 			case EGraphicsTypeId_DeviceTexture:
-				_gotoIfError(clean, DeviceTextureRef_flush(commandBuffer, deviceRef, pending));
+				gotoIfError(clean, DeviceTextureRef_flush(commandBuffer, deviceRef, pending));
 				break;
 
 			default:
-				_gotoIfError(clean, Error_unsupportedOperation(
+				gotoIfError(clean, Error_unsupportedOperation(
 					5, "GraphicsDeviceRef_handleNextFrame() unsupported pending graphics object"
 				));
 		}
 	}
 
-	_gotoIfError(clean, ListWeakRefPtr_clear(&device->pendingResources));
+	gotoIfError(clean, ListWeakRefPtr_clear(&device->pendingResources));
 
 	//Update BLASes
 
@@ -403,14 +403,14 @@ Error GraphicsDeviceRef_handleNextFrame(GraphicsDeviceRef *deviceRef, void *comm
 		EGraphicsTypeId type = (EGraphicsTypeId) pending->typeId;
 
 		if(type != EGraphicsTypeId_BLASExt)
-			_gotoIfError(clean, Error_unsupportedOperation(
+			gotoIfError(clean, Error_unsupportedOperation(
 				6, "GraphicsDeviceRef_handleNextFrame() unsupported pending BLAS type"
 			));
 
-		_gotoIfError(clean, BLASRef_flush(commandBuffer, deviceRef, pending));
+		gotoIfError(clean, BLASRef_flush(commandBuffer, deviceRef, pending));
 	}
 
-	_gotoIfError(clean, ListWeakRefPtr_clear(&device->pendingBlases));
+	gotoIfError(clean, ListWeakRefPtr_clear(&device->pendingBlases));
 
 	//Update TLASes
 
@@ -420,14 +420,14 @@ Error GraphicsDeviceRef_handleNextFrame(GraphicsDeviceRef *deviceRef, void *comm
 		EGraphicsTypeId type = (EGraphicsTypeId) pending->typeId;
 
 		if(type != EGraphicsTypeId_TLASExt)
-			_gotoIfError(clean, Error_unsupportedOperation(
+			gotoIfError(clean, Error_unsupportedOperation(
 				6, "GraphicsDeviceRef_handleNextFrame() unsupported pending TLAS type"
 			));
 
-		_gotoIfError(clean, TLASRef_flush(commandBuffer, deviceRef, pending));
+		gotoIfError(clean, TLASRef_flush(commandBuffer, deviceRef, pending));
 	}
 
-	_gotoIfError(clean, ListWeakRefPtr_clear(&device->pendingTlases));
+	gotoIfError(clean, ListWeakRefPtr_clear(&device->pendingTlases));
 
 clean:
 	return err;
@@ -454,7 +454,7 @@ Error GraphicsDeviceRef_resizeStagingBuffer(GraphicsDeviceRef *deviceRef, U64 ne
 		DeviceBufferRef_dec(&device->staging);
 	}
 
-	_gotoIfError(clean, GraphicsDeviceRef_createBuffer(
+	gotoIfError(clean, GraphicsDeviceRef_createBuffer(
 		deviceRef,
 		EDeviceBufferUsage_None,
 		EGraphicsResourceFlag_InternalWeakDeviceRef | EGraphicsResourceFlag_CPUAllocatedBit,
@@ -466,7 +466,7 @@ Error GraphicsDeviceRef_resizeStagingBuffer(GraphicsDeviceRef *deviceRef, U64 ne
 	Buffer stagingBuffer = Buffer_createRef(staging->resource.mappedMemoryExt, newSize);
 
 	for(U64 i = 0; i < sizeof(device->stagingAllocations) / sizeof(device->stagingAllocations[0]); ++i)
-		_gotoIfError(clean, AllocationBuffer_createRefFromRegionx(
+		gotoIfError(clean, AllocationBuffer_createRefFromRegionx(
 			stagingBuffer, newSize / 3 * i, newSize / 3, &device->stagingAllocations[i]
 		));
 
@@ -508,7 +508,7 @@ Error GraphicsDeviceRef_submitCommands(
 		return Error_invalidState(0, "GraphicsDeviceRef_submitCommands() couldn't acquire device lock");
 
 	if(acq == ELockAcquire_Acquired)
-		_gotoIfError(clean, ListLockPtr_pushBackx(&device->currentLocks, lockPtr));
+		gotoIfError(clean, ListLockPtr_pushBackx(&device->currentLocks, lockPtr));
 
 	lockPtr = NULL;
 
@@ -519,12 +519,12 @@ Error GraphicsDeviceRef_submitCommands(
 		CommandListRef *cmdRef = commandLists.ptr[i];
 
 		if(!cmdRef || cmdRef->typeId != (ETypeId) EGraphicsTypeId_CommandList)
-			_gotoIfError(clean, Error_nullPointer(1, "GraphicsDeviceRef_submitCommands()::commandLists[i] is required"));
+			gotoIfError(clean, Error_nullPointer(1, "GraphicsDeviceRef_submitCommands()::commandLists[i] is required"));
 
 		CommandList *cmd = CommandListRef_ptr(cmdRef);
 
 		if(cmd->device != deviceRef)
-			_gotoIfError(clean, Error_unsupportedOperation(
+			gotoIfError(clean, Error_unsupportedOperation(
 				0, "GraphicsDeviceRef_submitCommands()::commandLists[i]'s device and the current device are different"
 			));
 
@@ -533,18 +533,18 @@ Error GraphicsDeviceRef_submitCommands(
 
 		if(acq < ELockAcquire_Success) {
 			lockPtr = NULL;
-			_gotoIfError(clean, Error_invalidState(
+			gotoIfError(clean, Error_invalidState(
 				1, "GraphicsDeviceRef_submitCommands()::commandLists[i] couldn't be acquired"
 			));
 		}
 
 		if(acq == ELockAcquire_Acquired)
-			_gotoIfError(clean, ListLockPtr_pushBackx(&device->currentLocks, lockPtr));
+			gotoIfError(clean, ListLockPtr_pushBackx(&device->currentLocks, lockPtr));
 
 		lockPtr = NULL;
 
 		if(cmd->state != ECommandListState_Closed)
-			_gotoIfError(clean, Error_invalidParameter(
+			gotoIfError(clean, Error_invalidParameter(
 				1, (U32)i, "GraphicsDeviceRef_submitCommands()::commandLists[i] wasn't closed properly"
 			));
 	}
@@ -555,17 +555,17 @@ Error GraphicsDeviceRef_submitCommands(
 
 		for(U64 j = 0; j < i; ++j)
 			if(swapchainRef == swapchains.ptr[j])
-				_gotoIfError(clean, Error_invalidParameter(
+				gotoIfError(clean, Error_invalidParameter(
 					2, 2, "GraphicsDeviceRef_submitCommands()::swapchains[i] is duplicated"
 				));
 
 		if(!swapchainRef || swapchainRef->typeId != (ETypeId) EGraphicsTypeId_Swapchain)
-			_gotoIfError(clean, Error_nullPointer(2, "GraphicsDeviceRef_submitCommands()::swapchains[i] is required"));
+			gotoIfError(clean, Error_nullPointer(2, "GraphicsDeviceRef_submitCommands()::swapchains[i] is required"));
 
 		Swapchain *swapchaini = SwapchainRef_ptr(swapchainRef);
 
 		if(swapchaini->base.resource.device != deviceRef)
-			_gotoIfError(clean, Error_unsupportedOperation(
+			gotoIfError(clean, Error_unsupportedOperation(
 				1, "GraphicsDeviceRef_submitCommands()::swapchains[i]'s device and the current device are different"
 			));
 
@@ -576,13 +576,13 @@ Error GraphicsDeviceRef_submitCommands(
 
 			lockPtr = NULL;
 
-			_gotoIfError(clean, Error_invalidState(
+			gotoIfError(clean, Error_invalidState(
 				2, "GraphicsDeviceRef_submitCommands()::swapchains[i] couldn't acquire lock"
 			));
 		}
 
 		if(acq == ELockAcquire_Acquired)
-			_gotoIfError(clean, ListLockPtr_pushBackx(&device->currentLocks, lockPtr));
+			gotoIfError(clean, ListLockPtr_pushBackx(&device->currentLocks, lockPtr));
 
 		lockPtr = NULL;
 
@@ -598,7 +598,7 @@ Error GraphicsDeviceRef_submitCommands(
 				DeviceResourceVersion vK = cmd->activeSwapchains.ptr[k];
 
 				if(vK.resource == swapchainRef && vK.version != swapchaini->versionId)
-					_gotoIfError(clean, Error_invalidState(
+					gotoIfError(clean, Error_invalidState(
 						0, "GraphicsDeviceRef_submitCommands()::swapchains[i] has outdated commands in submitted command list"
 					));
 			}
@@ -625,7 +625,7 @@ Error GraphicsDeviceRef_submitCommands(
 				break;
 
 			default:
-				_gotoIfError(clean, Error_unimplemented(
+				gotoIfError(clean, Error_unimplemented(
 					0, "GraphicsDeviceRef_submitCommands() pendingResources contains unsupported type"
 				));
 		}
@@ -637,11 +637,11 @@ Error GraphicsDeviceRef_submitCommands(
 
 		if(acq < ELockAcquire_Success) {
 			lockPtr = NULL;
-			_gotoIfError(clean, Error_invalidState(2, "GraphicsDeviceRef_submitCommands() couldn't acquire resource"));
+			gotoIfError(clean, Error_invalidState(2, "GraphicsDeviceRef_submitCommands() couldn't acquire resource"));
 		}
 
 		if(acq == ELockAcquire_Acquired)
-			_gotoIfError(clean, ListLockPtr_pushBackx(&device->currentLocks, lockPtr));
+			gotoIfError(clean, ListLockPtr_pushBackx(&device->currentLocks, lockPtr));
 
 		lockPtr = NULL;
 	}
@@ -669,7 +669,7 @@ Error GraphicsDeviceRef_submitCommands(
 	//Submit impl should also set the swapchains and process all command lists and swapchains.
 	//This is not present here because the API impl is the one in charge of how it is threaded.
 
-	_gotoIfError(clean, GraphicsDevice_submitCommandsImpl(deviceRef, commandLists, swapchains));
+	gotoIfError(clean, GraphicsDevice_submitCommandsImpl(deviceRef, commandLists, swapchains));
 
 	//Add resources from command lists to resources in flight
 
@@ -687,7 +687,7 @@ Error GraphicsDeviceRef_submitCommands(
 			if(ListRefPtr_contains(*currentFlight, ptr, 0, NULL))
 				continue;
 
-			_gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, ptr));
+			gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, ptr));
 			RefPtr_inc(ptr);
 		}
 	}
@@ -728,7 +728,7 @@ Error GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef) {
 	if(acq < ELockAcquire_Success)
 		return Error_invalidOperation(0, "GraphicsDeviceRef_wait() device's lock couldn't be acquired");
 
-	_gotoIfError(clean, GraphicsDeviceRef_waitExt(deviceRef));
+	gotoIfError(clean, GraphicsDeviceRef_waitExt(deviceRef));
 
 	for (U64 i = 0; i < sizeof(device->resourcesInFlight) / sizeof(device->resourcesInFlight[0]); ++i) {
 
@@ -741,12 +741,12 @@ Error GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef) {
 		for (U64 j = 0; j < inFlight->length; ++j)
 			RefPtr_dec(inFlight->ptrNonConst + j);
 
-		_gotoIfError(clean, ListRefPtr_clear(inFlight));
+		gotoIfError(clean, ListRefPtr_clear(inFlight));
 
 		//Release all allocations of buffer that was in flight
 
 		if(!AllocationBuffer_freeAll(&device->stagingAllocations[i]))
-			_gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_wait() couldn't AllocationBuffer_freeAll"));
+			gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_wait() couldn't AllocationBuffer_freeAll"));
 	}
 
 clean:

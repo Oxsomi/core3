@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -101,8 +101,8 @@ Error BMP_write(Buffer buf, BMPInfo info, Allocator allocator, Buffer *result) {
 
 	Buffer fileAppend = Buffer_createRefFromBuffer(file, false);
 
-	_gotoIfError(clean, Buffer_append(&fileAppend, &header, sizeof(header)));
-	_gotoIfError(clean, Buffer_append(&fileAppend, &infoHeader, sizeof(infoHeader)));
+	gotoIfError(clean, Buffer_append(&fileAppend, &header, sizeof(header)));
+	gotoIfError(clean, Buffer_append(&fileAppend, &infoHeader, sizeof(infoHeader)));
 
 	if (pixelStride == 3) {		//Copy without alpha, since buffer lengths aren't the same
 
@@ -142,7 +142,7 @@ Error BMP_write(Buffer buf, BMPInfo info, Allocator allocator, Buffer *result) {
 	//Buffer lengths are the same, we can efficiently copy
 
 	else if(!info.isFlipped)
-		_gotoIfError(clean, Buffer_appendBuffer(&fileAppend, buf))
+		gotoIfError(clean, Buffer_appendBuffer(&fileAppend, buf))
 
 	else for (U64 j = (U64)info.h - 1, k = 0; j != U64_MAX; --j, ++k)
 		Buffer_copy(
@@ -173,7 +173,7 @@ Error BMP_read(Buffer buf, BMPInfo *info, Allocator allocator, Buffer *result) {
 
 	Error err = Error_none();
 	BMPHeader header;
-	_gotoIfError(clean, Buffer_consume(&buf, &header, sizeof(header)));
+	gotoIfError(clean, Buffer_consume(&buf, &header, sizeof(header)));
 
 	if(
 		header.fileType != BMP_MAGIC ||
@@ -181,19 +181,19 @@ Error BMP_read(Buffer buf, BMPInfo *info, Allocator allocator, Buffer *result) {
 		header.fileSize != ogLength ||
 		header.reserved
 	)
-		_gotoIfError(clean, Error_invalidParameter(0, 0, "BMP_read()::buf didn't contain valid header"));
+		gotoIfError(clean, Error_invalidParameter(0, 0, "BMP_read()::buf didn't contain valid header"));
 
 	U64 len = header.fileSize;
 
 	if(header.offsetData >= len)
-		_gotoIfError(clean, Error_invalidParameter(0, 0, "BMP_read()::buf was out of bounds"));
+		gotoIfError(clean, Error_invalidParameter(0, 0, "BMP_read()::buf was out of bounds"));
 
 	len -= header.offsetData;
 
 	//Validate info header
 
 	BMPInfoHeader bmpInfo;
-	_gotoIfError(clean, Buffer_consume(&buf, &bmpInfo, sizeof(bmpInfo)));
+	gotoIfError(clean, Buffer_consume(&buf, &bmpInfo, sizeof(bmpInfo)));
 
 	if(
 		bmpInfo.planes != 1 ||
@@ -205,7 +205,7 @@ Error BMP_read(Buffer buf, BMPInfo *info, Allocator allocator, Buffer *result) {
 		bmpInfo.xPixPerM < 0 ||
 		bmpInfo.yPixPerM < 0
 	)
-		_gotoIfError(clean, Error_invalidParameter(0, 0, "BMP_read()::buf didn't contain valid header"));
+		gotoIfError(clean, Error_invalidParameter(0, 0, "BMP_read()::buf didn't contain valid header"));
 
 	info->isFlipped = bmpInfo.height > 0;
 	info->xPixPerM = bmpInfo.xPixPerM;
@@ -220,7 +220,7 @@ Error BMP_read(Buffer buf, BMPInfo *info, Allocator allocator, Buffer *result) {
 		(bmpInfo.compression != 3 && bmpInfo.compression) ||
 		(bmpInfo.compressedSize != len && bmpInfo.compressedSize)
 	)
-		_gotoIfError(clean, Error_invalidParameter(
+		gotoIfError(clean, Error_invalidParameter(
 			0, 0, "BMP_read()::buf contained unsupported format (only RGBA8/BGRA8 supported)"
 		));
 
@@ -231,7 +231,7 @@ Error BMP_read(Buffer buf, BMPInfo *info, Allocator allocator, Buffer *result) {
 	U64 stride = (info->w * pixelStride + 3) &~ 3;		//Every line needs to be 4-byte aligned
 
 	if(len != info->h * stride)
-		_gotoIfError(clean, Error_invalidParameter(0, 0, "BMP_read() BMP has an image limit of 2GiB"));
+		gotoIfError(clean, Error_invalidParameter(0, 0, "BMP_read() BMP has an image limit of 2GiB"));
 
 	//If it's not flipped, we don't need to do anything
 
@@ -246,7 +246,7 @@ Error BMP_read(Buffer buf, BMPInfo *info, Allocator allocator, Buffer *result) {
 
 	//Otherwise we need to flip it manually and allocate a new buffer
 
-	_gotoIfError(clean, Buffer_createOneBits((U64)info->w * info->h * 32, allocator, result));
+	gotoIfError(clean, Buffer_createOneBits((U64)info->w * info->h * 32, allocator, result));
 
 	for (
 		U64 j = info->isFlipped ? info->h - 1 : 0, k = 0;

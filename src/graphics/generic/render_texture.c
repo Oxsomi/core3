@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -64,7 +64,7 @@ Error GraphicsDeviceRef_createRenderTexture(
 	if(err.genericError)
 		return err;
 
-	_gotoIfError(clean, GraphicsDeviceRef_inc(deviceRef));
+	gotoIfError(clean, GraphicsDeviceRef_inc(deviceRef));
 
 	*RenderTextureRef_ptr(*renderTextureRef) = (UnifiedTexture) {
 		.resource = (GraphicsResource) {
@@ -82,7 +82,7 @@ Error GraphicsDeviceRef_createRenderTexture(
 		.images = 1
 	};
 
-	_gotoIfError(clean, UnifiedTexture_create(*renderTextureRef, name));
+	gotoIfError(clean, UnifiedTexture_create(*renderTextureRef, name));
 
 clean:
 

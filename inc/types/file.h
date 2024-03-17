@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -46,9 +46,6 @@ typedef struct FileInfo {
 } FileInfo;
 
 typedef Error (*FileCallback)(FileInfo, void*);
-
-typedef struct Allocator Allocator;
-typedef struct CharString CharString;
 
 Error File_resolve(
 	CharString loc,

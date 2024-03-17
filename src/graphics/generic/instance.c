@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -96,7 +96,7 @@ Error GraphicsInstance_getPreferredDevice(
 	}
 
 	if(!hasAny)
-		_gotoIfError(clean, Error_notFound(0, 0, "GraphicsInstance_getPreferredDevice() no supported queried devices"));
+		gotoIfError(clean, Error_notFound(0, 0, "GraphicsInstance_getPreferredDevice() no supported queried devices"));
 
 	U64 picked = hasDedicated ? preferredDedicated : preferredNonDedicated;
 
@@ -126,7 +126,7 @@ Error GraphicsInstance_create(GraphicsApplicationInfo info, Bool isVerbose, Grap
 	GraphicsInstance *instance = GraphicsInstanceRef_ptr(*instanceRef);
 
 	*instance = (GraphicsInstance) { .application = info };
-	_gotoIfError(clean, GraphicsInstance_createExt(info, isVerbose, instanceRef));
+	gotoIfError(clean, GraphicsInstance_createExt(info, isVerbose, instanceRef));
 
 clean:
 

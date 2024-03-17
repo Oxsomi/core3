@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -79,5 +79,4 @@ U32 TilemapTransform_y(TilemapTransform transform) { return (U32)(transform >> 2
 U8 TilemapTransform_layerId(TilemapTransform transform) { return (U8)(transform >> 48) & 0x7F; }
 U8 TilemapTransform_paletteId(TilemapTransform transform) { return (U8)(transform >> 55) & 0xF; }
 EMirrored TilemapTransform_mirrored(TilemapTransform transform) { return (EMirrored)((U8)(transform >> 59) & 0x3); }
-ERotated TilemapTransform_rotated(TilemapTransform transform) { return (ERotated)((U8)(transform >> 61) & 0x3); }
 Bool TilemapTransform_isValid(TilemapTransform transform) { return transform >> 63; }

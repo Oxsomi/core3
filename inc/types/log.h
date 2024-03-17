@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -55,7 +55,7 @@ void Log_printCapturedStackTrace(Allocator alloc, const StackTrace stackTrace, E
 void Log_printStackTrace(Allocator alloc, U8 skip, ELogLevel lvl, ELogOptions options);
 
 //IMPORTANT:
-//NEVER! Supply user generated content into format. Instead use "%.*s".
+//NEVER! Supply user generated content into format. Instead, use "%.*s".
 //When displaying strings, use "%.*s", (int) args.length, arg.ptr instead of args.ptr, because strings aren't null terminated.
 //(Only exception is if the strings are safely generated from code and are determined to be null terminated, then use %s)
 

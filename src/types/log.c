@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -27,13 +27,13 @@
 #include <stdlib.h>
 
 void Log_printCapturedStackTrace(Allocator alloc, const StackTrace stackTrace, ELogLevel lvl, ELogOptions options) {
-	Log_printCapturedStackTraceCustom(alloc, (const void**) stackTrace, _STACKTRACE_SIZE, lvl, options);
+	Log_printCapturedStackTraceCustom(alloc, (const void**) stackTrace, STACKTRACE_SIZE, lvl, options);
 }
 
 void Log_printStackTrace(Allocator alloc, U8 skip, ELogLevel lvl, ELogOptions options) {
 
 	StackTrace stackTrace;
-	Log_captureStackTrace(alloc, stackTrace, _STACKTRACE_SIZE, skip);
+	Log_captureStackTrace(alloc, stackTrace, STACKTRACE_SIZE, skip);
 
 	Log_printCapturedStackTrace(alloc, stackTrace, lvl, options);
 }

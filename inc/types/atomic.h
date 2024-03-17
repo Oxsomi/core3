@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -25,12 +25,14 @@
 #if _PLATFORM_TYPE != PLATFORM_WINDOWS
 	#include <stdatomic.h>
 #else
-	#define _Atomic(T) T
+	#define Atomic(T) T
 #endif
 
 typedef struct AtomicI64 {
-	volatile _Atomic(I64) atomic;		//Don't manually touch
+	volatile Atomic(I64) atomic;		//Don't manually touch
 } AtomicI64;
+
+#undef Atomic
 
 //Bitwise
 

@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -57,7 +57,7 @@ I32x2 I32x2_clamp(I32x2 a, I32x2 mi, I32x2 ma);
 //Boolean / bitwise
 
 Bool I32x2_all(I32x2 a);
-Bool I32x2_any(I32x2 b);
+Bool I32x2_any(I32x2 a);
 
 impl I32x2 I32x2_eq(I32x2 a, I32x2 b);
 impl I32x2 I32x2_neq(I32x2 a, I32x2 b);

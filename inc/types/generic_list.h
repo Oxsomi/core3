@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -21,10 +21,8 @@
 #pragma once
 #include "types.h"
 
-typedef struct Buffer Buffer;
 typedef struct Allocator Allocator;
 typedef struct Error Error;
-typedef enum EStringCase EStringCase;
 
 #define TListDefinition(T, Name) typedef T Name##_Type; typedef struct Name {											\
 																														\
@@ -36,7 +34,7 @@ typedef enum EStringCase EStringCase;
 	U64 length;																											\
 	U64 capacityAndRefInfo;																								\
 																														\
-} Name;
+} Name
 
 TListDefinition(U64, ListU64);		//Used by _find and _eraseAllIndices
 TListDefinition(void, ListVoid);

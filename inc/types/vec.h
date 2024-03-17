@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -19,14 +19,13 @@
 */
 
 #pragma once
-#include "types/math.h"
 #include "types/platform_types.h"
 #include <stdalign.h>
 
 //Helper function to insert a simple non SIMD operation
 //Useful if there's no SIMD function that's faster than native
 
-#define _NONE_OP_SELF_T(T, N, ...) {        \
+#define NONE_OP_SELF_T(T, N, ...) {        \
                                             \
 	T res = (T) { 0 };                      \
 	                                        \
@@ -36,22 +35,22 @@
 	return res;                             \
 }
 
-#define _NONE_OP4I(...) _NONE_OP_SELF_T(I32x4, 4, __VA_ARGS__)
-#define _NONE_OP4F(...) _NONE_OP_SELF_T(F32x4, 4, __VA_ARGS__)
-#define _NONE_OP2I(...) _NONE_OP_SELF_T(I32x2, 2, __VA_ARGS__)
-#define _NONE_OP2F(...) _NONE_OP_SELF_T(F32x2, 2, __VA_ARGS__)
+#define NONE_OP4I(...) NONE_OP_SELF_T(I32x4, 4, __VA_ARGS__)
+#define NONE_OP4F(...) NONE_OP_SELF_T(F32x4, 4, __VA_ARGS__)
+#define NONE_OP2I(...) NONE_OP_SELF_T(I32x2, 2, __VA_ARGS__)
+#define NONE_OP2F(...) NONE_OP_SELF_T(F32x2, 2, __VA_ARGS__)
 
 //Helper function to expand switch case
 
-#define _expand2(offset, func, var)						\
+#define FUNC_EXPAND2(offset, func, var)						\
 		case offset:		return func(var, offset);		\
 		case offset + 1:	return func(var, offset + 1)
 
-#define _expand4(offset, func, var) _expand2(offset, func, var); _expand2(offset + 2, func, var)
-#define _expand8(offset, func, var) _expand4(offset, func, var); _expand4(offset + 4, func, var)
-#define _expand16(offset, func, var) _expand8(offset, func, var); _expand8(offset + 8, func, var)
-#define _expand32(offset, func, var) _expand16(offset, func, var); _expand16(offset + 16, func, var)
-#define _expand64(offset, func, var) _expand32(offset, func, var); _expand32(offset + 32, func, var)
+#define FUNC_EXPAND4(offset, func, var) FUNC_EXPAND2(offset, func, var); FUNC_EXPAND2((offset) + 2, func, var)
+#define FUNC_EXPAND8(offset, func, var) FUNC_EXPAND4(offset, func, var); FUNC_EXPAND4((offset) + 4, func, var)
+#define FUNC_EXPAND16(offset, func, var) FUNC_EXPAND8(offset, func, var); FUNC_EXPAND8((offset) + 8, func, var)
+#define FUNC_EXPAND32(offset, func, var) FUNC_EXPAND16(offset, func, var); FUNC_EXPAND16((offset) + 16, func, var)
+#define FUNC_EXPAND64(offset, func, var) FUNC_EXPAND32(offset, func, var); FUNC_EXPAND32((offset) + 32, func, var)
 
 //
 
@@ -66,6 +65,7 @@
 	#include <smmintrin.h>
 	#include <emmintrin.h>
 	#include <nmmintrin.h>
+	#include <stdalign.h>
 
 	//vec3 and vec4 can be represented using 4-element vectors,
 	//These are a lot faster than just doing them manually.
@@ -81,17 +81,17 @@
 	//The only exceptions are expensive operations like trig operations, rounding and sqrt & rsqrt, etc..
 
 	typedef struct I32x2_t {
-		alignas(8) I32 v[2];
+		_Alignas(8) I32 v[2];
 	} I32x2;
 
 	typedef struct F32x2_t {
-		alignas(8) F32 v[2];
+		_Alignas(8) F32 v[2];
 	} F32x2;
 
 	//
 
-	#define _shufflei(a, x, y, z, w) _mm_shuffle_epi32(a, _MM_SHUFFLE(w, z, y, x))
-	#define _shufflef(a, x, y, z, w) _mm_shuffle_ps(a, a, _MM_SHUFFLE(w, z, y, x))
+	#define vecShufflei(a, x, y, z, w) _mm_shuffle_epi32(a, _MM_SHUFFLE(w, z, y, x))
+	#define vecShufflef(a, x, y, z, w) _mm_shuffle_ps(a, a, _MM_SHUFFLE(w, z, y, x))
 
 #else
 
@@ -111,8 +111,8 @@
 		alignas(8) F32 v[2];
 	} F32x2;
 
-	#define _shufflei(a, x, y, z, w) (I32x4){ { a.v[x], a.v[y], a.v[z], a.v[w] } }
-	#define _shufflef(a, x, y, z, w) (F32x4){ { a.v[x], a.v[y], a.v[z], a.v[w] } }
+	#define vecShufflei(a, x, y, z, w) (I32x4){ { a.v[x], a.v[y], a.v[z], a.v[w] } }
+	#define vecShufflef(a, x, y, z, w) (F32x4){ { a.v[x], a.v[y], a.v[z], a.v[w] } }
 
 #endif
 

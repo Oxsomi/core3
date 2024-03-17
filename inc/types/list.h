@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -120,9 +120,9 @@ Bool Name##_free(Name *l, Allocator allocator);															\
 																										\
 TListX(Name)
 
-#define TListNamed(T, Name) TListDefinition(T, Name); TListNamedBase(Name);
+#define TListNamed(T, Name) TListDefinition(T, Name); TListNamedBase(Name)
 #define TList(T) TListNamed(T, List##T)
-#define TListSort(T) TList(T);						Bool List##T##_sort(List##T l);
+#define TListSort(T) TList(T);						Bool List##T##_sort(List##T l)
 
 TListNamedBase(ListU64);
 TListSort(U8); TListSort(U16); TListSort(U32);

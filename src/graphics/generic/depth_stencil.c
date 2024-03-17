@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -59,7 +59,7 @@ Error GraphicsDeviceRef_createDepthStencil(
 	if(err.genericError)
 		return err;
 
-	_gotoIfError(clean, GraphicsDeviceRef_inc(deviceRef));
+	gotoIfError(clean, GraphicsDeviceRef_inc(deviceRef));
 
 	*DepthStencilRef_ptr(*depthStencilRef) = (UnifiedTexture) {
 		.resource = (GraphicsResource) {
@@ -77,7 +77,7 @@ Error GraphicsDeviceRef_createDepthStencil(
 		.images = 1
 	};
 
-	_gotoIfError(clean, UnifiedTexture_create(*depthStencilRef, name));
+	gotoIfError(clean, UnifiedTexture_create(*depthStencilRef, name));
 
 clean:
 

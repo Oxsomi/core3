@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -71,16 +71,16 @@ Buffer Buffer_createRefConst(const void *v, U64 length);
 
 //All these functions allocate, so Buffer_free them later
 
-Error Buffer_createCopy(Buffer buf, Allocator alloc, Buffer *output);
-Error Buffer_createZeroBits(U64 length, Allocator alloc, Buffer *output);
-Error Buffer_createOneBits(U64 length, Allocator alloc, Buffer *output);
+Error Buffer_createCopy(Buffer buf, Allocator alloc, Buffer *result);
+Error Buffer_createZeroBits(U64 length, Allocator alloc, Buffer *result);
+Error Buffer_createOneBits(U64 length, Allocator alloc, Buffer *result);
 
 Error Buffer_createBits(U64 length, Bool value, Allocator alloc, Buffer *result);
 
 Bool Buffer_free(Buffer *buf, Allocator alloc);
 Error Buffer_createEmptyBytes(U64 length, Allocator alloc, Buffer *output);
 
-Error Buffer_createUninitializedBytes(U64 length, Allocator alloc, Buffer *output);
+Error Buffer_createUninitializedBytes(U64 length, Allocator alloc, Buffer *result);
 Error Buffer_createSubset(Buffer buf, U64 offset, U64 length, Bool isConst, Buffer *output);
 
 //Writing data
@@ -94,30 +94,30 @@ Error Buffer_consume(Buffer *buf, void *v, U64 length);
 
 Error Buffer_combine(Buffer a, Buffer b, Allocator alloc, Buffer *output);
 
-#define _BUFFER_OP(T)						\
+#define BUFFER_OP(T)						\
 Error Buffer_append##T(Buffer *buf, T v);	\
-Error Buffer_consume##T(Buffer *buf, T *v);
+Error Buffer_consume##T(Buffer *buf, T *v)
 
-_BUFFER_OP(U64);
-_BUFFER_OP(U32);
-_BUFFER_OP(U16);
-_BUFFER_OP(U8);
+BUFFER_OP(U64);
+BUFFER_OP(U32);
+BUFFER_OP(U16);
+BUFFER_OP(U8);
 
-_BUFFER_OP(I64);
-_BUFFER_OP(I32);
-_BUFFER_OP(I16);
-_BUFFER_OP(I8);
+BUFFER_OP(I64);
+BUFFER_OP(I32);
+BUFFER_OP(I16);
+BUFFER_OP(I8);
 
-_BUFFER_OP(F64);
-_BUFFER_OP(F32);
+BUFFER_OP(F64);
+BUFFER_OP(F32);
 
-_BUFFER_OP(I32x2);
-_BUFFER_OP(F32x2);
-//_BUFFER_OP(F64x2);		TODO:
+BUFFER_OP(I32x2);
+BUFFER_OP(F32x2);
+//BUFFER_OP(F64x2);		TODO:
 
-_BUFFER_OP(I32x4);
-_BUFFER_OP(F32x4);
-//_BUFFER_OP(F64x4);		TODO:
+BUFFER_OP(I32x4);
+BUFFER_OP(F32x4);
+//BUFFER_OP(F64x4);		TODO:
 
 //UTF-8 helpers
 
@@ -128,19 +128,19 @@ typedef struct UnicodeCodePointInfo {
 	UnicodeCodePoint index;
 } UnicodeCodePointInfo;
 
-Error Buffer_readAsUTF8(Buffer buf, U64 i, UnicodeCodePointInfo *codepoint);
-Error Buffer_writeAsUTF8(Buffer buf, U64 i, UnicodeCodePoint codepoint, U8 *bytes);
-Error Buffer_readAsUTF16(Buffer buf, U64 i, UnicodeCodePointInfo *codepoint);
-Error Buffer_writeAsUTF16(Buffer buf, U64 i, UnicodeCodePoint codepoint, U8 *bytes);
+Error Buffer_readAsUtf8(Buffer buf, U64 i, UnicodeCodePointInfo *codepoint);
+Error Buffer_writeAsUtf8(Buffer buf, U64 i, UnicodeCodePoint codepoint, U8 *bytes);
+Error Buffer_readAsUtf16(Buffer buf, U64 i, UnicodeCodePointInfo *codepoint);
+Error Buffer_writeAsUtf16(Buffer buf, U64 i, UnicodeCodePoint codepoint, U8 *bytes);
 
 //If the threshold (%) is met, it is identified as (mostly) unicode.
 //If isUTF16 is set, it will try to find 2-byte width encoding (UTF16),
 //otherwise it uses 1-byte width (UTF8).
 //Both UTF16 and UTF8 can be variable length per codepoint.
 
-Bool Buffer_isUnicode(Buffer buf, F32 threshold, Bool isUTF8);
-Bool Buffer_isUTF8(Buffer buf, F32 threshold);
-Bool Buffer_isUTF16(Buffer buf, F32 threshold);
+Bool Buffer_isUnicode(Buffer buf, F32 threshold, Bool isUtf16);
+Bool Buffer_isUtf8(Buffer buf, F32 threshold);
+Bool Buffer_isUtf16(Buffer buf, F32 threshold);
 
 Bool Buffer_isAscii(Buffer buf);
 
@@ -156,7 +156,7 @@ Bool Buffer_isAscii(Buffer buf);
 //
 //hash/sha256: data integrity (encryption checksum / compression) when dealing with adversaries
 //
-//encryption/aes256: If you wanna recover data that is essential (NOT PASSWORDS) but needs a key
+//encryption/aes256: If you want to recover data that is essential (NOT PASSWORDS) but needs a key
 //
 //For more info:
 //	https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html
@@ -170,8 +170,8 @@ void Buffer_sha256(Buffer buf, U32 output[8]);
 //Encryption
 
 typedef enum EBufferEncryptionType {
-	EBufferEncryptionType_AES256GCM,		//Additional data; IV (96 bits), TAG (128 bits)
-	EBufferEncryptionType_AES128GCM,		//^
+	EBufferEncryptionType_Aes256Gcm,		//Additional data; IV (96 bits), TAG (128 bits)
+	EBufferEncryptionType_Aes128Gcm,		//^
 	EBufferEncryptionType_Count
 } EBufferEncryptionType;
 
@@ -198,12 +198,12 @@ typedef enum EBufferEncryptionFlags {
 
 Error Buffer_encrypt(
 	Buffer target,					//"Plaintext" aka data to encrypt. Leave empty to authenticate with AES256GCM
-	Buffer additionalData,			//Non secret data. Data which can't be modified after enc w/o key
+	Buffer additionalData,			//Non-secret data. Data which can't be modified after enc w/o key
 	EBufferEncryptionType type,		//Only AES256GCM is currently supported
-	EBufferEncryptionFlags flags,	//Whether or not to use supplied keys or generate new ones
+	EBufferEncryptionFlags flags,	//Whether to use supplied keys or generate new ones
 	U32 *key,						//Secret key; used to en/decrypt (AES256: U32[8], AES128: U32[4])
 	I32x4 *iv,						//Iv should be random 12 bytes. Can be generated if flag is set
-	I32x4 *tag						//Tag should be non zero if encryption type supports it.
+	I32x4 *tag						//Tag should be non-zero if encryption type supports it.
 );
 
 //Decrypt functions decrypt ciphertext from target into target
@@ -234,7 +234,7 @@ typedef enum EBufferCompressionType {
 
 typedef enum EBufferCompressionHint {
 	EBufferCompressionHint_None,
-	EBufferCompressionHint_UTF8,
+	EBufferCompressionHint_Utf8,
 	EBufferCompressionHint_Font,
 	EBufferCompressionHint_Count
 } EBufferCompressionHint;

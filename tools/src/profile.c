@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -36,12 +36,12 @@ Bool CLI_profileData(ParsedArgs args, ProfileOperation op) {
 	Buffer dat = Buffer_createNull();
 	Error err = Error_none();
 
-	_gotoIfError(clean, Buffer_createUninitializedBytesx(bufferSize, &dat));
+	gotoIfError(clean, Buffer_createUninitializedBytesx(bufferSize, &dat));
 
 	if(!Buffer_csprng(dat))
-		_gotoIfError(clean, Error_invalidState(0, "CLI_profileData() Buffer_csprng failed"));
+		gotoIfError(clean, Error_invalidState(0, "CLI_profileData() Buffer_csprng failed"));
 
-	_gotoIfError(clean, op(args, dat));
+	gotoIfError(clean, op(args, dat));
 
 clean:
 
@@ -139,7 +139,7 @@ Error _CLI_profileCast(ParsedArgs args, Buffer buf) {
 	Error err = Error_none();
 
 	if(Buffer_length(buf) < GIBI)
-		_gotoIfError(clean, Error_invalidParameter(1, 0, "_CLI_profileCast() assumes buf to be >= 1 GIBI"));
+		gotoIfError(clean, Error_invalidParameter(1, 0, "_CLI_profileCast() assumes buf to be >= 1 GIBI"));
 
 	const U64 number = GIBI / sizeof(F64) / 32;
 	const C8 *iterationNames[] = { "Non denormalized", "(Un)Signed zero", "NaN", "Inf", "DeN" };
@@ -294,7 +294,7 @@ Error _CLI_profileEncryption(ParsedArgs args, Buffer buf, EBufferEncryptionType 
 		&tag
 	);
 
-	_gotoIfError(clean, err);
+	gotoIfError(clean, err);
 
 	Ns now = Time_now();
 
@@ -308,7 +308,7 @@ Error _CLI_profileEncryption(ParsedArgs args, Buffer buf, EBufferEncryptionType 
 
 	then = now;
 
-	_gotoIfError(clean, Buffer_decrypt(
+	gotoIfError(clean, Buffer_decrypt(
 		buf,
 		Buffer_createNull(),
 		encryptionType,
@@ -332,11 +332,11 @@ clean:
 }
 
 Error _CLI_profileAES256(ParsedArgs args, Buffer buf) {
-	return _CLI_profileEncryption(args, buf, EBufferEncryptionType_AES256GCM);
+	return _CLI_profileEncryption(args, buf, EBufferEncryptionType_Aes256Gcm);
 }
 
 Error _CLI_profileAES128(ParsedArgs args, Buffer buf) {
-	return _CLI_profileEncryption(args, buf, EBufferEncryptionType_AES128GCM);
+	return _CLI_profileEncryption(args, buf, EBufferEncryptionType_Aes128Gcm);
 }
 
 Bool CLI_profileAES256(ParsedArgs args) {

@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -163,7 +163,7 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 
 	instanceExt->getDeviceBufferMemoryRequirements(deviceExt->device, &bufferReq, &requirements);
 
-	_gotoIfError(clean, DeviceMemoryAllocator_allocate(
+	gotoIfError(clean, DeviceMemoryAllocator_allocate(
 		&device->allocator,
 		&requirements,
 		buf->resource.flags & EGraphicsResourceFlag_CPUAllocatedBit,
@@ -179,8 +179,8 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 
 	//Bind memory
 
-	_gotoIfError(clean, vkCheck(vkCreateBuffer(deviceExt->device, &bufferInfo, NULL, &bufExt->buffer)));
-	_gotoIfError(clean, vkCheck(vkBindBufferMemory(
+	gotoIfError(clean, vkCheck(vkCreateBuffer(deviceExt->device, &bufferInfo, NULL, &bufExt->buffer)));
+	gotoIfError(clean, vkCheck(vkBindBufferMemory(
 		deviceExt->device, bufExt->buffer, (VkDeviceMemory) block.ext, buf->resource.blockOffset
 	)));
 
@@ -197,7 +197,7 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 	buf->resource.deviceAddress = vkGetBufferDeviceAddress(deviceExt->device, &address);
 
 	if(!buf->resource.deviceAddress)
-		_gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_createBufferExt() Couldn't obtain GPU address"));
+		gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_createBufferExt() Couldn't obtain GPU address"));
 
 	//Fill relevant descriptor sets if shader accessible
 
@@ -250,7 +250,7 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 					.objectHandle = (U64) bufExt->buffer
 				};
 
-				_gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName)));
+				gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName)));
 			}
 		#endif
 	}
@@ -303,7 +303,7 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 		Bool incoherent = !(block.allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
 		if(incoherent) {
-			_gotoIfError(clean, ListVkMappedMemoryRange_resizex(&tempMappedMemRanges, buffer->pendingChanges.length + 1));
+			gotoIfError(clean, ListVkMappedMemoryRange_resizex(&tempMappedMemRanges, buffer->pendingChanges.length + 1));
 		}
 
 		for(U64 j = 0; j < buffer->pendingChanges.length; ++j) {
@@ -328,7 +328,7 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 		}
 
 		if(incoherent)
-			_gotoIfError(clean, vkCheck(vkFlushMappedMemoryRanges(
+			gotoIfError(clean, vkCheck(vkFlushMappedMemoryRanges(
 				deviceExt->device, (U32) tempMappedMemRanges.length, tempMappedMemRanges.ptr
 			)));
 	}
@@ -346,14 +346,14 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 
 		device->pendingBytes += allocRange;
 
-		_gotoIfError(clean, ListVkBufferCopy_resizex(&pendingCopies, buffer->pendingChanges.length));
+		gotoIfError(clean, ListVkBufferCopy_resizex(&pendingCopies, buffer->pendingChanges.length));
 
 		VkDependencyInfo dependency = (VkDependencyInfo) { .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO };
-		_gotoIfError(clean, ListVkBufferMemoryBarrier2_reservex(&tempBufferBarriers, 2 + buffer->pendingChanges.length));
+		gotoIfError(clean, ListVkBufferMemoryBarrier2_reservex(&tempBufferBarriers, 2 + buffer->pendingChanges.length));
 
 		if (allocRange >= 16 * MIBI) {		//Resource is too big, allocate dedicated staging resource
 
-			_gotoIfError(clean, GraphicsDeviceRef_createBuffer(
+			gotoIfError(clean, GraphicsDeviceRef_createBuffer(
 				deviceRef,
 				EDeviceBufferUsage_None, EGraphicsResourceFlag_InternalWeakDeviceRef | EGraphicsResourceFlag_CPUAllocatedBit,
 				CharString_createRefCStrConst("Dedicated staging buffer"),
@@ -381,7 +381,7 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 					Buffer_createRefConst(buffer->cpuData.ptr + bufferj.startRange, len)
 				);
 
-				_gotoIfError(clean, VkDeviceBuffer_transition(
+				gotoIfError(clean, VkDeviceBuffer_transition(
 					bufferExt,
 					VK_PIPELINE_STAGE_2_COPY_BIT,
 					VK_ACCESS_2_TRANSFER_WRITE_BIT,
@@ -413,7 +413,7 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 				vkFlushMappedMemoryRanges(deviceExt->device, 1, &memoryRange);
 			}
 
-			_gotoIfError(clean, VkDeviceBuffer_transition(
+			gotoIfError(clean, VkDeviceBuffer_transition(
 				stagingResourceExt,
 				VK_PIPELINE_STAGE_2_COPY_BIT,
 				VK_ACCESS_2_TRANSFER_READ_BIT,
@@ -437,7 +437,7 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 
 			//When staging resource is commited to current in flight then we can relinguish ownership.
 
-			_gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, tempStagingResource));
+			gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, tempStagingResource));
 			tempStagingResource = NULL;
 		}
 
@@ -445,7 +445,7 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 
 		else {
 
-			_gotoIfError(clean, ListVkBufferCopy_resizex(&pendingCopies, buffer->pendingChanges.length));
+			gotoIfError(clean, ListVkBufferCopy_resizex(&pendingCopies, buffer->pendingChanges.length));
 
 			AllocationBuffer *stagingBuffer = &device->stagingAllocations[device->submitId % 3];
 			DeviceBuffer *staging = DeviceBufferRef_ptr(device->staging);
@@ -455,7 +455,7 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 			Error temp = AllocationBuffer_allocateBlockx(stagingBuffer, allocRange, 4, (const U8**) &location);
 
 			if(temp.genericError && location == defaultLocation)		//Something else went wrong
-				_gotoIfError(clean, temp);
+				gotoIfError(clean, temp);
 
 			//We re-create the staging buffer to fit the new allocation.
 
@@ -466,8 +466,8 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 				//Allocate new staging buffer.
 
 				U64 newSize = prevSize * 2 + allocRange * 3;
-				_gotoIfError(clean, GraphicsDeviceRef_resizeStagingBuffer(deviceRef, newSize));
-				_gotoIfError(clean, AllocationBuffer_allocateBlockx(stagingBuffer, allocRange, 4, (const U8**) &location));
+				gotoIfError(clean, GraphicsDeviceRef_resizeStagingBuffer(deviceRef, newSize));
+				gotoIfError(clean, AllocationBuffer_allocateBlockx(stagingBuffer, allocRange, 4, (const U8**) &location));
 
 				staging = DeviceBufferRef_ptr(device->staging);
 				stagingExt = DeviceBuffer_ext(staging, Vk);
@@ -496,7 +496,7 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 					.size = len
 				};
 
-				_gotoIfError(clean, VkDeviceBuffer_transition(
+				gotoIfError(clean, VkDeviceBuffer_transition(
 					bufferExt,
 					VK_PIPELINE_STAGE_2_COPY_BIT,
 					VK_ACCESS_2_TRANSFER_WRITE_BIT,
@@ -524,7 +524,7 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 
 			if(!ListRefPtr_contains(*currentFlight, device->staging, 0, NULL)) {
 
-				_gotoIfError(clean, VkDeviceBuffer_transition(						//Ensure resource is transitioned
+				gotoIfError(clean, VkDeviceBuffer_transition(						//Ensure resource is transitioned
 					stagingExt,
 					VK_PIPELINE_STAGE_2_COPY_BIT,
 					VK_ACCESS_2_TRANSFER_READ_BIT,
@@ -536,7 +536,7 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 				));
 
 				RefPtr_inc(device->staging);
-				_gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, device->staging));		//Add to in flight
+				gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, device->staging));		//Add to in flight
 			}
 
 			if(dependency.bufferMemoryBarrierCount)
@@ -556,10 +556,10 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 		Buffer_freex(&buffer->cpuData);
 
 	buffer->isFirstFrame = buffer->isPending = buffer->isPendingFullCopy = false;
-	_gotoIfError(clean, ListDevicePendingRange_clear(&buffer->pendingChanges));
+	gotoIfError(clean, ListDevicePendingRange_clear(&buffer->pendingChanges));
 
 	if(RefPtr_inc(pending))
-		_gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, pending));
+		gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, pending));
 
 	if (device->pendingBytes >= device->flushThreshold)
 		VkGraphicsDevice_flush(deviceRef, commandBuffer);

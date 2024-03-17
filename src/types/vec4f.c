@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -18,6 +18,7 @@
 *  This is called dual licensing.
 */
 
+#include "types/math.h"
 #include "types/vec.h"
 
 F32x4 F32x4_complement(F32x4 a) { return F32x4_sub(F32x4_one(), a); }
@@ -41,78 +42,78 @@ F32 F32x4_len4(F32x4 v) { return F32_sqrt(F32x4_sqLen4(v)); }
 F32x4 F32x4_clamp(F32x4 a, F32x4 mi, F32x4 ma) { return F32x4_max(mi, F32x4_min(ma, a)); }
 F32x4 F32x4_saturate(F32x4 a) { return F32x4_clamp(a, F32x4_zero(), F32x4_one()); }
 
-F32 F32x4_satDot2(F32x4 X, F32x4 Y) { return F32_saturate(F32x4_dot2(X, Y)); }
-F32 F32x4_satDot3(F32x4 X, F32x4 Y) { return F32_saturate(F32x4_dot3(X, Y)); }
-F32 F32x4_satDot4(F32x4 X, F32x4 Y) { return F32_saturate(F32x4_dot4(X, Y)); }
+F32 F32x4_satDot2(F32x4 x, F32x4 y) { return F32_saturate(F32x4_dot2(x, y)); }
+F32 F32x4_satDot3(F32x4 x, F32x4 y) { return F32_saturate(F32x4_dot3(x, y)); }
+F32 F32x4_satDot4(F32x4 x, F32x4 y) { return F32_saturate(F32x4_dot4(x, y)); }
 
 F32x4 F32x4_fract(F32x4 v) { return F32x4_sub(v, F32x4_floor(v)); }
 F32x4 F32x4_mod(F32x4 v, F32x4 d) { return F32x4_mul(F32x4_fract(F32x4_div(v, d)), d); }
 
 //4D Swizzles
 
-#undef _F32x4_expand4
-#undef _F32x4_expand3
-#undef _F32x4_expand2
-#undef _F32x4_expand
+#undef F32x4_expand4
+#undef F32x4_expand3
+#undef F32x4_expand2
+#undef F32x4_expand
 
-#define _F32x4_expand4(xv, x0, yv, y0, zv, z0, wv, w0)							\
-F32x4 F32x4_##xv##yv##zv##wv(F32x4 a) { return _shufflef(a, x0, y0, z0, w0); }
+#define F32x4_expand4(xv, x0, yv, y0, zv, z0, wv, w0)							\
+F32x4 F32x4_##xv##yv##zv##wv(F32x4 a) { return vecShufflef(a, x0, y0, z0, w0); }
 
-#define _F32x4_expand3(...)												\
-_F32x4_expand4(__VA_ARGS__, x, 0); _F32x4_expand4(__VA_ARGS__, y, 1);	\
-_F32x4_expand4(__VA_ARGS__, z, 2); _F32x4_expand4(__VA_ARGS__, w, 3);
+#define F32x4_expand3(...)												\
+F32x4_expand4(__VA_ARGS__, x, 0); F32x4_expand4(__VA_ARGS__, y, 1);	\
+F32x4_expand4(__VA_ARGS__, z, 2); F32x4_expand4(__VA_ARGS__, w, 3);
 
-#define _F32x4_expand2(...)												\
-_F32x4_expand3(__VA_ARGS__, x, 0); _F32x4_expand3(__VA_ARGS__, y, 1);	\
-_F32x4_expand3(__VA_ARGS__, z, 2); _F32x4_expand3(__VA_ARGS__, w, 3);
+#define F32x4_expand2(...)												\
+F32x4_expand3(__VA_ARGS__, x, 0); F32x4_expand3(__VA_ARGS__, y, 1);	\
+F32x4_expand3(__VA_ARGS__, z, 2); F32x4_expand3(__VA_ARGS__, w, 3);
 
-#define _F32x4_expand(...)												\
-_F32x4_expand2(__VA_ARGS__, x, 0); _F32x4_expand2(__VA_ARGS__, y, 1);	\
-_F32x4_expand2(__VA_ARGS__, z, 2); _F32x4_expand2(__VA_ARGS__, w, 3);
+#define F32x4_expand(...)												\
+F32x4_expand2(__VA_ARGS__, x, 0); F32x4_expand2(__VA_ARGS__, y, 1);	\
+F32x4_expand2(__VA_ARGS__, z, 2); F32x4_expand2(__VA_ARGS__, w, 3);
 
-_F32x4_expand(x, 0);
-_F32x4_expand(y, 1);
-_F32x4_expand(z, 2);
-_F32x4_expand(w, 3);
+F32x4_expand(x, 0);
+F32x4_expand(y, 1);
+F32x4_expand(z, 2);
+F32x4_expand(w, 3);
 
 //3D swizzles
 
-#undef _F32x3_expand3
-#undef _F32x3_expand2
-#undef _F32x3_expand
+#undef F32x3_expand3
+#undef F32x3_expand2
+#undef F32x3_expand
 
-#define _F32x3_expand3(xv, yv, zv) F32x4 F32x4_##xv##yv##zv(F32x4 a) { return F32x4_trunc3(F32x4_##xv##yv##zv##x(a)); }
+#define F32x3_expand3(xv, yv, zv) F32x4 F32x4_##xv##yv##zv(F32x4 a) { return F32x4_trunc3(F32x4_##xv##yv##zv##x(a)); }
 
-#define _F32x3_expand2(...)										\
-_F32x3_expand3(__VA_ARGS__, x); _F32x3_expand3(__VA_ARGS__, y); \
-_F32x3_expand3(__VA_ARGS__, z); _F32x3_expand3(__VA_ARGS__, w);
+#define F32x3_expand2(...)										\
+F32x3_expand3(__VA_ARGS__, x); F32x3_expand3(__VA_ARGS__, y); \
+F32x3_expand3(__VA_ARGS__, z); F32x3_expand3(__VA_ARGS__, w);
 
-#define _F32x3_expand(...)										\
-_F32x3_expand2(__VA_ARGS__, x); _F32x3_expand2(__VA_ARGS__, y); \
-_F32x3_expand2(__VA_ARGS__, z); _F32x3_expand2(__VA_ARGS__, w);
+#define F32x3_expand(...)										\
+F32x3_expand2(__VA_ARGS__, x); F32x3_expand2(__VA_ARGS__, y); \
+F32x3_expand2(__VA_ARGS__, z); F32x3_expand2(__VA_ARGS__, w);
 
-_F32x3_expand(x);
-_F32x3_expand(y);
-_F32x3_expand(z);
-_F32x3_expand(w);
+F32x3_expand(x);
+F32x3_expand(y);
+F32x3_expand(z);
+F32x3_expand(w);
 
 //2D swizzles
 
-#undef _F32x2_expand2
-#undef _F32x2_expand
+#undef F32x2_expand2
+#undef F32x2_expand
 
-#define _F32x2_expand2(xv, yv)														\
+#define F32x2_expand2(xv, yv)														\
 F32x4 F32x4_##xv##yv##4(F32x4 a) { return F32x4_trunc2(F32x4_##xv##yv##xx(a)); }	\
 F32x2 F32x4_##xv##yv(F32x4 a) { return F32x2_fromF32x4(F32x4_##xv##yv##xx(a)); }
 
-#define _F32x2_expand(...)										\
-_F32x2_expand2(__VA_ARGS__, x); _F32x2_expand2(__VA_ARGS__, y); \
-_F32x2_expand2(__VA_ARGS__, z); _F32x2_expand2(__VA_ARGS__, w);
+#define F32x2_expand(...)										\
+F32x2_expand2(__VA_ARGS__, x); F32x2_expand2(__VA_ARGS__, y); \
+F32x2_expand2(__VA_ARGS__, z); F32x2_expand2(__VA_ARGS__, w);
 
-_F32x2_expand(x);
-_F32x2_expand(y);
-_F32x2_expand(z);
-_F32x2_expand(w);
+F32x2_expand(x);
+F32x2_expand(y);
+F32x2_expand(z);
+F32x2_expand(w);
 
 //Obtain sign (-1 if <0, otherwise 1)
 //(a < 0) * 2 + 1;
@@ -168,8 +169,8 @@ F32x4 F32x4_two() { return F32x4_xxxx4(2); }
 F32x4 F32x4_negOne() { return F32x4_xxxx4(-1); }
 F32x4 F32x4_negTwo() { return F32x4_xxxx4(-2); }
 
-Bool F32x4_all(F32x4 b) { return F32x4_reduce(F32x4_neq(b, F32x4_zero())) == 4; }
-Bool F32x4_any(F32x4 b) { return F32x4_reduce(F32x4_neq(b, F32x4_zero())); }
+Bool F32x4_all(F32x4 a) { return F32x4_reduce(F32x4_neq(a, F32x4_zero())) == 4; }
+Bool F32x4_any(F32x4 a) { return F32x4_reduce(F32x4_neq(a, F32x4_zero())); }
 
 F32x4 F32x4_load1(const F32 *arr) { return arr ? F32x4_create1(*arr) : F32x4_zero(); }
 F32x4 F32x4_load2(const F32 *arr) { return arr ? F32x4_create2(*arr, arr[1]) : F32x4_zero(); }
@@ -221,12 +222,12 @@ F32x4 F32x4_mul3x4(F32x4 v3, F32x4 v3x4[4]) {
 
 //https://registry.khronos.org/OpenGL-Refpages/gl4/html/reflect.xhtml
 
-F32x4 F32x4_reflect2(F32x4 I, F32x4 N) {
-	return F32x4_sub(I, F32x4_mul(N, F32x4_xxxx4(2 * F32x4_dot2(N, I))));
+F32x4 F32x4_reflect2(F32x4 i, F32x4 n) {
+	return F32x4_sub(i, F32x4_mul(n, F32x4_xxxx4(2 * F32x4_dot2(n, i))));
 }
 
-F32x4 F32x4_reflect3(F32x4 I, F32x4 N) {
-	return F32x4_sub(I, F32x4_mul(N, F32x4_xxxx4(2 * F32x4_dot3(N, I))));
+F32x4 F32x4_reflect3(F32x4 i, F32x4 n) {
+	return F32x4_sub(i, F32x4_mul(n, F32x4_xxxx4(2 * F32x4_dot3(n, i))));
 }
 
 Bool F32x4_eq4(F32x4 a, F32x4 b) { return F32x4_all(F32x4_eq(a, b)); }

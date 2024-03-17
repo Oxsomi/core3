@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -31,14 +31,14 @@ Bool U64_pack20x3u4(U64 *dst, U32 x, U32 y, U32 z, U8 u4);
 U32 U64_unpack20x3(U64 packed, U8 off);
 Bool U64_setPacked20x3(U64 *packed, U8 off, U32 v);
 
-#define _GET_BIT_OP(T)								\
+#define GET_BIT_OP(T)								\
 Bool T##_getBit(T packed, U8 off);					\
-Bool T##_setBit(T *packed, U8 off, Bool b);
+Bool T##_setBit(T *packed, U8 off, Bool b)
 
-_GET_BIT_OP(U64);
-_GET_BIT_OP(U32);
-_GET_BIT_OP(U16);
-_GET_BIT_OP(U8);
+GET_BIT_OP(U64);
+GET_BIT_OP(U32);
+GET_BIT_OP(U16);
+GET_BIT_OP(U8);
 
 //Compressing quaternions
 

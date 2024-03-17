@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -70,7 +70,7 @@ I64 Time_clocksElapsed(U64 prevClocks) { return Time_dns(prevClocks, Time_clocks
 DNs Time_elapsed(Ns prev) { return Time_dns(prev, Time_now()); }
 
 //ISO 8601 e.g. 2022-02-26T21:08:45.000000000Z
-//The standard functions strp don't work properly cross platform.
+//The standard functions strp don't work properly cross-platform.
 //This is not done via our CharString functions because format is called at important moments.
 //At these moments there might not be any space left on the heap to allocate or there might be corruption there,
 //as such, using string would be problematic. (This also includes error handling with logging and signals such as segfault).
@@ -99,7 +99,7 @@ void Time_format(Ns time, TimeFormat timeString, Bool isLocalTime) {
 	struct tm *t = isLocalTime ? localtime(&inSecs) : gmtime(&inSecs);
 
 	Buffer_copy(
-		Buffer_createRef(timeString, _SHORTSTRING_LEN),
+		Buffer_createRef(timeString, SHORTSTRING_LEN),
 		Buffer_createRefConst(FORMAT_STR, sizeof(FORMAT_STR))
 	);
 
@@ -122,7 +122,7 @@ Bool Time_parseFormat(Ns *time, TimeFormat format, Bool isLocalTime) {
 	if (!time)
 		return false;
 
-	U64 length = CharString_calcStrLen(format, _SHORTSTRING_LEN - 1);
+	U64 length = CharString_calcStrLen(format, SHORTSTRING_LEN - 1);
 
 	U64 curr = 0, currSep = 0, prevI = U64_MAX;
 

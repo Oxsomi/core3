@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -234,7 +234,7 @@ Error GraphicsDeviceRef_createBLAS(GraphicsDeviceRef *dev, BLAS blas, CharString
 
 	//Allocate refPtr
 
-	_gotoIfError(clean, RefPtr_createx(
+	gotoIfError(clean, RefPtr_createx(
 		(U32) (sizeof(BLAS) + BLASExt_size),
 		(ObjectFreeFunc) BLAS_free,
 		(ETypeId) EGraphicsTypeId_BLASExt,
@@ -246,7 +246,7 @@ Error GraphicsDeviceRef_createBLAS(GraphicsDeviceRef *dev, BLAS blas, CharString
 	BLAS *blasPtr = BLASRef_ptr(*blasRef);
 
 	if(blas.base.parent)
-		_gotoIfError(clean, BLASRef_inc(blas.base.parent));
+		gotoIfError(clean, BLASRef_inc(blas.base.parent));
 
 	*blasPtr = blas;
 	blasPtr->base.lock = Lock_create();
@@ -254,13 +254,13 @@ Error GraphicsDeviceRef_createBLAS(GraphicsDeviceRef *dev, BLAS blas, CharString
 
 	if (blas.base.asConstructionType == EBLASConstructionType_Serialized) {
 		blasPtr->cpuData = Buffer_createNull();
-		_gotoIfError(clean, Buffer_createCopyx(blas.cpuData, &blasPtr->cpuData));
+		gotoIfError(clean, Buffer_createCopyx(blas.cpuData, &blasPtr->cpuData));
 	}
 
 	else if (blas.base.asConstructionType == EBLASConstructionType_Procedural) {
 
 		blasPtr->aabbBuffer = (DeviceData) { 0 };
-		_gotoIfError(clean, DeviceBufferRef_inc(blas.aabbBuffer.buffer));
+		gotoIfError(clean, DeviceBufferRef_inc(blas.aabbBuffer.buffer));
 		blasPtr->aabbBuffer = blas.aabbBuffer;
 	}
 
@@ -269,17 +269,17 @@ Error GraphicsDeviceRef_createBLAS(GraphicsDeviceRef *dev, BLAS blas, CharString
 		blasPtr->indexBuffer = (DeviceData) { 0 };
 		blasPtr->positionBuffer = (DeviceData) { 0 };
 
-		_gotoIfError(clean, DeviceBufferRef_inc(blas.indexBuffer.buffer));
+		gotoIfError(clean, DeviceBufferRef_inc(blas.indexBuffer.buffer));
 		blasPtr->indexBuffer = blas.indexBuffer;
 
-		_gotoIfError(clean, DeviceBufferRef_inc(blas.positionBuffer.buffer));
+		gotoIfError(clean, DeviceBufferRef_inc(blas.positionBuffer.buffer));
 		blasPtr->positionBuffer = blas.positionBuffer;
 	}
 
-	_gotoIfError(clean, GraphicsDeviceRef_inc(dev));
+	gotoIfError(clean, GraphicsDeviceRef_inc(dev));
 	blasPtr->base.device = dev;
 
-	_gotoIfError(clean, CharString_createCopyx(name, &blasPtr->base.name));
+	gotoIfError(clean, CharString_createCopyx(name, &blasPtr->base.name));
 
 	//Push for the graphics impl to process next submit,
 	//If it's GPU generated, the user is expected to manually call buildBLASExt to ensure it's enqueued at the right time
@@ -289,9 +289,9 @@ Error GraphicsDeviceRef_createBLAS(GraphicsDeviceRef *dev, BLAS blas, CharString
 		acq = Lock_lock(&device->lock, U64_MAX);
 
 		if(acq < ELockAcquire_Success)
-			_gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_createBLAS()::dev couldn't be locked"));
+			gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_createBLAS()::dev couldn't be locked"));
 
-		_gotoIfError(clean, ListWeakRefPtr_pushBackx(&device->pendingBlases, *blasRef));
+		gotoIfError(clean, ListWeakRefPtr_pushBackx(&device->pendingBlases, *blasRef));
 	}
 
 clean:

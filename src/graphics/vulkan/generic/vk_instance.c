@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -29,6 +29,7 @@
 #include "types/platform_types.h"
 #include "types/error.h"
 #include "types/buffer.h"
+#include "types/math.h"
 
 VkBool32 onDebugReport(
 	VkDebugReportFlagsEXT flags,
@@ -71,7 +72,7 @@ VkBool32 onDebugReport(
 	PFN_vkVoidFunction v = vkGetInstanceProcAddr(instanceExt->instance, #function); 			\
 																								\
 	if(!v)																						\
-		_gotoIfError(clean, Error_nullPointer(0, "vkExtension() " #function " failed"));		\
+		gotoIfError(clean, Error_nullPointer(0, "vkExtension() " #function " failed"));		\
 																								\
 	*(void**)&result = (void*) v;																\
 }
@@ -99,18 +100,18 @@ Error GraphicsInstance_createExt(GraphicsApplicationInfo info, Bool isVerbose, G
 	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
 	Error err = Error_none();
 
-	_gotoIfError(clean, vkCheck(vkEnumerateInstanceLayerProperties(&layerCount, NULL)));
-	_gotoIfError(clean, vkCheck(vkEnumerateInstanceExtensionProperties(NULL, &extensionCount, NULL)));
+	gotoIfError(clean, vkCheck(vkEnumerateInstanceLayerProperties(&layerCount, NULL)));
+	gotoIfError(clean, vkCheck(vkEnumerateInstanceExtensionProperties(NULL, &extensionCount, NULL)));
 
-	_gotoIfError(clean, CharString_createCopyx(info.name, &title));
-	_gotoIfError(clean, ListVkExtensionProperties_createx(extensionCount, &extensions));
-	_gotoIfError(clean, ListVkLayerProperties_createx(layerCount, &layers));
+	gotoIfError(clean, CharString_createCopyx(info.name, &title));
+	gotoIfError(clean, ListVkExtensionProperties_createx(extensionCount, &extensions));
+	gotoIfError(clean, ListVkLayerProperties_createx(layerCount, &layers));
 
-	_gotoIfError(clean, ListConstC8_reservex(&enabledLayers, layerCount));
-	_gotoIfError(clean, ListConstC8_reservex(&enabledExtensions, extensionCount));
+	gotoIfError(clean, ListConstC8_reservex(&enabledLayers, layerCount));
+	gotoIfError(clean, ListConstC8_reservex(&enabledExtensions, extensionCount));
 
-	_gotoIfError(clean, vkCheck(vkEnumerateInstanceLayerProperties(&layerCount, layers.ptrNonConst)));
-	_gotoIfError(clean, vkCheck(vkEnumerateInstanceExtensionProperties(NULL, &extensionCount, extensions.ptrNonConst)));
+	gotoIfError(clean, vkCheck(vkEnumerateInstanceLayerProperties(&layerCount, layers.ptrNonConst)));
+	gotoIfError(clean, vkCheck(vkEnumerateInstanceExtensionProperties(NULL, &extensionCount, extensions.ptrNonConst)));
 
 	Bool supportsDebug[2] = { 0 };
 
@@ -161,27 +162,27 @@ Error GraphicsInstance_createExt(GraphicsApplicationInfo info, Bool isVerbose, G
 	#ifndef NDEBUG
 
 		if(supportsDebug[0])
-			_gotoIfError(clean, ListConstC8_pushBackx(&enabledExtensions, debugReport.ptr));
+			gotoIfError(clean, ListConstC8_pushBackx(&enabledExtensions, debugReport.ptr));
 
 		if(supportsDebug[1])
-			_gotoIfError(clean, ListConstC8_pushBackx(&enabledExtensions, debugUtils.ptr));
+			gotoIfError(clean, ListConstC8_pushBackx(&enabledExtensions, debugUtils.ptr));
 
 	#endif
 
 	//Force physical device properties and external memory
 
-	_gotoIfError(clean, ListConstC8_pushBackx(&enabledExtensions, "VK_KHR_get_physical_device_properties2"));
-	_gotoIfError(clean, ListConstC8_pushBackx(&enabledExtensions, "VK_KHR_external_memory_capabilities"));
+	gotoIfError(clean, ListConstC8_pushBackx(&enabledExtensions, "VK_KHR_get_physical_device_properties2"));
+	gotoIfError(clean, ListConstC8_pushBackx(&enabledExtensions, "VK_KHR_external_memory_capabilities"));
 
 	//Enable so we can use swapchain khr
 
-	_gotoIfError(clean, ListConstC8_pushBackx(&enabledExtensions, "VK_KHR_surface"));
-	_gotoIfError(clean, ListConstC8_pushBackx(&enabledExtensions, _VK_SURFACE_EXT));
+	gotoIfError(clean, ListConstC8_pushBackx(&enabledExtensions, "VK_KHR_surface"));
+	gotoIfError(clean, ListConstC8_pushBackx(&enabledExtensions, _VK_SURFACE_EXT));
 
 	if (supportsColorSpace)
-		_gotoIfError(clean, ListConstC8_pushBackx(&enabledExtensions, swapchainColorspace.ptr));
+		gotoIfError(clean, ListConstC8_pushBackx(&enabledExtensions, swapchainColorspace.ptr));
 
-	_gotoIfError(clean, VkGraphicsInstance_getLayers(&enabledLayers));
+	gotoIfError(clean, VkGraphicsInstance_getLayers(&enabledLayers));
 
 	VkApplicationInfo application = (VkApplicationInfo) {
 		.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
@@ -238,7 +239,7 @@ Error GraphicsInstance_createExt(GraphicsApplicationInfo info, Bool isVerbose, G
 
 	//Create instance
 
-	_gotoIfError(clean, vkCheck(vkCreateInstance(&instanceInfo, NULL, &instanceExt->instance)));
+	gotoIfError(clean, vkCheck(vkCreateInstance(&instanceInfo, NULL, &instanceExt->instance)));
 
 	//Load functions
 
@@ -306,7 +307,7 @@ Error GraphicsInstance_createExt(GraphicsApplicationInfo info, Bool isVerbose, G
 			.pfnCallback = (PFN_vkDebugReportCallbackEXT) onDebugReport
 		};
 
-		_gotoIfError(clean, vkCheck(instanceExt->debugCreateReportCallback(
+		gotoIfError(clean, vkCheck(instanceExt->debugCreateReportCallback(
 			instanceExt->instance, &callbackInfo, NULL, &instanceExt->debugReportCallback
 		)));
 
@@ -414,10 +415,10 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 	ListVkLayerProperties temp3 = (ListVkLayerProperties) { 0 };
 	ListVkExtensionProperties temp4 = (ListVkExtensionProperties) { 0 };
 
-	_gotoIfError(clean, ListVkPhysicalDevice_createx(deviceCount, &temp));
-	_gotoIfError(clean, ListGraphicsDeviceInfo_reservex(&temp2, deviceCount));
+	gotoIfError(clean, ListVkPhysicalDevice_createx(deviceCount, &temp));
+	gotoIfError(clean, ListGraphicsDeviceInfo_reservex(&temp2, deviceCount));
 
-	_gotoIfError(clean, vkCheck(vkEnumeratePhysicalDevices(graphicsExt->instance, &deviceCount, temp.ptrNonConst)));
+	gotoIfError(clean, vkCheck(vkEnumeratePhysicalDevices(graphicsExt->instance, &deviceCount, temp.ptrNonConst)));
 
 	for (U32 i = 0, j = 0; i < deviceCount; ++i) {
 
@@ -427,13 +428,13 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 
 		U32 layerCount = 0, extensionCount = 0;
 
-		_gotoIfError(clean, vkCheck(vkEnumerateDeviceLayerProperties(dev, &layerCount, NULL)));
-		_gotoIfError(clean, ListVkLayerProperties_resizex(&temp3, layerCount));
-		_gotoIfError(clean, vkCheck(vkEnumerateDeviceLayerProperties(dev, &layerCount, temp3.ptrNonConst)));
+		gotoIfError(clean, vkCheck(vkEnumerateDeviceLayerProperties(dev, &layerCount, NULL)));
+		gotoIfError(clean, ListVkLayerProperties_resizex(&temp3, layerCount));
+		gotoIfError(clean, vkCheck(vkEnumerateDeviceLayerProperties(dev, &layerCount, temp3.ptrNonConst)));
 
-		_gotoIfError(clean, vkCheck(vkEnumerateDeviceExtensionProperties(dev, NULL, &extensionCount, NULL)));
-		_gotoIfError(clean, ListVkExtensionProperties_resizex(&temp4, extensionCount));
-		_gotoIfError(clean, vkCheck(vkEnumerateDeviceExtensionProperties(dev, NULL, &extensionCount, temp4.ptrNonConst)));
+		gotoIfError(clean, vkCheck(vkEnumerateDeviceExtensionProperties(dev, NULL, &extensionCount, NULL)));
+		gotoIfError(clean, ListVkExtensionProperties_resizex(&temp4, extensionCount));
+		gotoIfError(clean, vkCheck(vkEnumerateDeviceExtensionProperties(dev, NULL, &extensionCount, temp4.ptrNonConst)));
 
 		//Log device for debugging
 
@@ -1379,7 +1380,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 
 		//Fully converted type
 
-		_gotoIfError(clean, ListGraphicsDeviceInfo_resize(&temp2, temp2.length + 1, (Allocator){ 0 }));
+		gotoIfError(clean, ListGraphicsDeviceInfo_resize(&temp2, temp2.length + 1, (Allocator){ 0 }));
 
 		GraphicsDeviceInfo *info = temp2.ptrNonConst + j;
 
@@ -1412,7 +1413,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 	}
 
 	if(!temp2.length)
-		_gotoIfError(clean, Error_unsupportedOperation(0, "GraphicsInstance_getDeviceInfos() no supported OxC3 device found"));
+		gotoIfError(clean, Error_unsupportedOperation(0, "GraphicsInstance_getDeviceInfos() no supported OxC3 device found"));
 
 	*result = temp2;
 

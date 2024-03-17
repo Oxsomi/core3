@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -25,7 +25,7 @@
 
 //For simplicity;
 //A string is ALWAYS ASCII (7-bit) and no null terminator.
-//The null terminator is ommitted for speed and to allow references into an existing string.
+//The null terminator is omitted for speed and to allow references into an existing string.
 //The null terminator is only useful if it's created unsafely (which is only recommended for hardcoded strings).
 //
 //There are four types of strings:
@@ -40,11 +40,11 @@
 
 //Stack strings that are faster and easier to allocate
 
-#define _SHORTSTRING_LEN 32
-#define _LONGSTRING_LEN 64
+#define SHORTSTRING_LEN 32
+#define LONGSTRING_LEN 64
 
-typedef C8 ShortString[_SHORTSTRING_LEN];
-typedef C8 LongString[_LONGSTRING_LEN];
+typedef C8 ShortString[SHORTSTRING_LEN];
+typedef C8 LongString[LONGSTRING_LEN];
 
 //Heap string
 
@@ -87,15 +87,17 @@ C8 *CharString_begin(CharString str);
 C8 *CharString_end(CharString str);
 
 C8 *CharString_charAt(CharString str, U64 off);
-//TODO: U32 CharString_codepointAtByteConst(CharString str, U64 startByteOffset, U8 *length);		//Returns U32_MAX if it wasn't a valid UTF8 codepoint
-//TODO: U32 CharString_codepointAtConst(CharString str, U64 offset, U8 *length);					//Returns U32_MAX if it wasn't a valid UTF8 codepoint
+
+//Returns U32_MAX if it wasn't a valid UTF8 codepoint
+//TODO: U32 CharString_codepointAtByteConst(CharString str, U64 startByteOffset, U8 *length);
+//TODO: U32 CharString_codepointAtConst(CharString str, U64 offset, U8 *length);
 
 const C8 *CharString_beginConst(CharString str);
 const C8 *CharString_endConst(CharString str);
 
 const C8 *CharString_charAtConst(CharString str, U64 off);
 Bool CharString_isValidAscii(CharString str);
-//TODO: Bool CHarString_isValidUTF8(CharString str);
+//TODO: Bool CharString_isValidUTF8(CharString str);
 Bool CharString_isValidFileName(CharString str);		//TODO: Understand UTF8
 
 ECompareResult CharString_compare(CharString a, CharString b, EStringCase caseSensitive);
@@ -124,12 +126,12 @@ CharString CharString_createRefAutoConst(const C8 *ptr, U64 maxSize);		//Auto de
 CharString CharString_createRefCStrConst(const C8 *ptr);					//Only use this if string is created safely (\0)
 CharString CharString_createRefAuto(C8 *ptr, U64 maxSize);					//Auto detect end (up to maxSize chars)
 
-//hasNullAfterSize is true if the size given excludes the null terminator (e.g. ptr[size] == '\0').
+//isNullTerminated is true if the size given excludes the null terminator (e.g. ptr[size] == '\0').
 //In this case ptr[size] has to be the null terminator.
 //If this is false, it will automatically check if ptr contains a null terminator
 
-CharString CharString_createRefSizedConst(const C8 *ptr, U64 size, Bool hasNullAfterSize);
-CharString CharString_createRefSized(C8 *ptr, U64 size, Bool hasNullAfterSize);
+CharString CharString_createRefSizedConst(const C8 *ptr, U64 size, Bool isNullTerminated);
+CharString CharString_createRefSized(C8 *ptr, U64 size, Bool isNullTerminated);
 
 //
 
@@ -154,7 +156,8 @@ Error CharString_createDec(U64 v, U8 leadingZeros, Allocator allocator, CharStri
 Error CharString_createOct(U64 v, U8 leadingZeros, Allocator allocator, CharString *result);
 Error CharString_createBin(U64 v, U8 leadingZeros, Allocator allocator, CharString *result);
 
-Error CharString_createFromUTF16(const U16 *ptr, U64 limit, Allocator allocator, CharString *result);		//Windows interop. Converts UTF16 to UTF8
+//Windows interop. Converts UTF16 to UTF8
+Error CharString_createFromUTF16(const U16 *ptr, U64 limit, Allocator allocator, CharString *result);
 //TODO: Error CharString_setCodepointAt(CharString str, U64 index, U32 codepoint);
 
 Error CharString_split(
@@ -265,7 +268,8 @@ Error CharString_replaceLastStringInsensitive(CharString *s, CharString search, 
 
 //TODO: CharString_replaceCodepoint
 
-Error CharString_toUTF16(CharString s, Allocator allocator, ListU16 *arr);				//Windows interop. Converts UTF8 to UTF8
+//Windows interop. Converts UTF8 to UTF16
+Error CharString_toUtf16(CharString s, Allocator allocator, ListU16 *arr);
 
 //Simple checks (consts)
 

@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -49,7 +49,7 @@ Error RefPtr_create(U32 objectLength, Allocator alloc, ObjectFreeFunc free, ETyp
 Bool RefPtr_inc(RefPtr *ptr);
 Bool RefPtr_dec(RefPtr **ptr);	//Clears pointer if it's gone
 
-#define RefPtr_data(dat, T) (!dat ? NULL : (T*)(dat + 1))
+#define RefPtr_data(dat, T) (!(dat) ? NULL : (T*)((dat) + 1))
 
 //Signifies that the RefPtr will not need inc/dec, because the owner will manually ensure
 //that the ref is removed before it's important.

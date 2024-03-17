@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -44,37 +44,37 @@ Error File_foreach(CharString loc, FileCallback callback, void *userData, Bool i
 	HANDLE file = NULL;
 
 	if(!callback)
-		_gotoIfError(clean, Error_nullPointer(1, "File_foreach()::callback is required"));
+		gotoIfError(clean, Error_nullPointer(1, "File_foreach()::callback is required"));
 
 	if(!CharString_isValidFilePath(loc))
-		_gotoIfError(clean, Error_invalidParameter(0, 0, "File_foreach()::loc must be a valid file path"));
+		gotoIfError(clean, Error_invalidParameter(0, 0, "File_foreach()::loc must be a valid file path"));
 
 	Bool isVirtual = File_isVirtual(loc);
 
 	if(isVirtual) {
-		_gotoIfError(clean, File_foreachVirtual(loc, callback, userData, isRecursive));
+		gotoIfError(clean, File_foreachVirtual(loc, callback, userData, isRecursive));
 		return Error_none();
 	}
 
-	_gotoIfError(clean, File_resolvex(loc, &isVirtual, 0, &resolved));
+	gotoIfError(clean, File_resolvex(loc, &isVirtual, 0, &resolved));
 
 	if(isVirtual)
-		_gotoIfError(clean, Error_invalidOperation(0, "File_foreach()::loc can't resolve to virtual here"));
+		gotoIfError(clean, Error_invalidOperation(0, "File_foreach()::loc can't resolve to virtual here"));
 
 	//Append /*
 
-	_gotoIfError(clean, CharString_appendx(&resolved, '/'));
+	gotoIfError(clean, CharString_appendx(&resolved, '/'));
 
-	_gotoIfError(clean, CharString_createCopyx(resolved, &resolvedNoStar));
+	gotoIfError(clean, CharString_createCopyx(resolved, &resolvedNoStar));
 
-	_gotoIfError(clean, CharString_appendx(&resolved, '*'));
+	gotoIfError(clean, CharString_appendx(&resolved, '*'));
 
 	if(CharString_length(resolved) > MAX_PATH)
-		_gotoIfError(clean, Error_outOfBounds(
+		gotoIfError(clean, Error_outOfBounds(
 			0, CharString_length(resolved), MAX_PATH, "File_foreach()::loc file path is too big (>260 chars)"
 		));
 
-	_gotoIfError(clean, CharString_toUTF16x(resolved, &tmpWStr));
+	gotoIfError(clean, CharString_toUTF16x(resolved, &tmpWStr));
 
 	//Skip .
 
@@ -83,10 +83,10 @@ Error File_foreach(CharString loc, FileCallback callback, void *userData, Bool i
 	ListU16_freex(&tmpWStr);
 
 	if(file == INVALID_HANDLE_VALUE)
-		_gotoIfError(clean, Error_notFound(0, 0, "File_foreach()::loc couldn't be found"));
+		gotoIfError(clean, Error_notFound(0, 0, "File_foreach()::loc couldn't be found"));
 
 	if(!FindNextFileW(file, &dat))
-		_gotoIfError(clean, Error_notFound(0, 0, "File_foreach() FindNextFile failed (1)"));
+		gotoIfError(clean, Error_notFound(0, 0, "File_foreach() FindNextFile failed (1)"));
 
 	//Loop through real files (while instead of do while because we wanna skip ..)
 
@@ -108,9 +108,9 @@ Error File_foreach(CharString loc, FileCallback callback, void *userData, Bool i
 
 		//Grab local file name
 
-		_gotoIfError(clean, CharString_createCopyx(resolvedNoStar, &tmp));
-		_gotoIfError(clean, CharString_createFromUTF16x(dat.cFileName, MAX_PATH, &tmp2));
-		_gotoIfError(clean, CharString_appendStringx(&tmp, tmp2));
+		gotoIfError(clean, CharString_createCopyx(resolvedNoStar, &tmp));
+		gotoIfError(clean, CharString_createFromUTF16x(dat.cFileName, MAX_PATH, &tmp2));
+		gotoIfError(clean, CharString_appendStringx(&tmp, tmp2));
 		CharString_freex(&tmp2);
 
 		//Folder parsing
@@ -124,10 +124,10 @@ Error File_foreach(CharString loc, FileCallback callback, void *userData, Bool i
 				.type = EFileType_Folder
 			};
 
-			_gotoIfError(clean, callback(info, userData));
+			gotoIfError(clean, callback(info, userData));
 
 			if(isRecursive)
-				_gotoIfError(clean, File_foreach(info.path, callback, userData, true));
+				gotoIfError(clean, File_foreach(info.path, callback, userData, true));
 
 			CharString_freex(&tmp);
 			continue;
@@ -147,14 +147,14 @@ Error File_foreach(CharString loc, FileCallback callback, void *userData, Bool i
 			.fileSize = size.QuadPart
 		};
 
-		_gotoIfError(clean, callback(info, userData));
+		gotoIfError(clean, callback(info, userData));
 		CharString_freex(&tmp);
 	}
 
 	DWORD hr = GetLastError();
 
 	if(hr != ERROR_NO_MORE_FILES)
-		_gotoIfError(clean, Error_platformError(0, hr, "File_foreach() FindNextFile failed (2)"));
+		gotoIfError(clean, Error_platformError(0, hr, "File_foreach() FindNextFile failed (2)"));
 
 clean:
 
@@ -176,15 +176,15 @@ Error File_loadVirtualInternal(FileLoadVirtual *userData, CharString loc) {
 	Error err = Error_none();
 	ELockAcquire acq = ELockAcquire_Invalid;
 
-	_gotoIfError(clean, CharString_createCopyx(loc, &isChild));
+	gotoIfError(clean, CharString_createCopyx(loc, &isChild));
 
 	if(CharString_length(isChild))
-		_gotoIfError(clean, CharString_appendx(&isChild, '/'));		//Don't append to root
+		gotoIfError(clean, CharString_appendx(&isChild, '/'));		//Don't append to root
 
 	acq = Lock_lock(&Platform_instance.virtualSectionsLock, U64_MAX);
 
 	if(acq < ELockAcquire_Success)
-		_gotoIfError(clean, Error_invalidState(0, "File_loadVirtualInternal() couldn't lock virtualSectionsLock"));
+		gotoIfError(clean, Error_invalidState(0, "File_loadVirtualInternal() couldn't lock virtualSectionsLock"));
 
 	Bool foundAny = false;
 
@@ -208,23 +208,23 @@ Error File_loadVirtualInternal(FileLoadVirtual *userData, CharString loc) {
 				CAFile file = (CAFile) { 0 };
 				Buffer copy = Buffer_createNull();
 
-				_gotoIfError(clean0, CharString_toUTF16x(section->path, &tmp));
+				gotoIfError(clean0, CharString_toUTF16x(section->path, &tmp));
 				HRSRC data = FindResourceW(NULL, tmp.ptr, RT_RCDATA);
 				ListU16_freex(&tmp);
 
 				if(!data)
-					_gotoIfError(clean0, Error_notFound(0, 1, "File_loadVirtualInternal() FindResource failed"));
+					gotoIfError(clean0, Error_notFound(0, 1, "File_loadVirtualInternal() FindResource failed"));
 
 				U32 size = (U32) SizeofResource(NULL, data);
 				handle = LoadResource(NULL, data);
 
 				if(!handle)
-					_gotoIfError(clean0, Error_notFound(3, 1, "File_loadVirtualInternal() LoadResource failed"));
+					gotoIfError(clean0, Error_notFound(3, 1, "File_loadVirtualInternal() LoadResource failed"));
 
 				const U8 *dat = (const U8*) LockResource(handle);
-				_gotoIfError(clean0, Buffer_createCopyx(Buffer_createRefConst(dat, size), &copy));
+				gotoIfError(clean0, Buffer_createCopyx(Buffer_createRefConst(dat, size), &copy));
 
-				_gotoIfError(clean0, CAFile_readx(copy, userData->encryptionKey, &file));
+				gotoIfError(clean0, CAFile_readx(copy, userData->encryptionKey, &file));
 
 				section->loadedData = file.archive;
 				file.archive = (Archive) { 0 };

@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -50,9 +50,9 @@ Error packageFile(FileInfo file, CAFileRecursion *caFile) {
 	CharString copy = CharString_createNull();
 
 	if (entry.type == EFileType_File)
-		_gotoIfError(clean, File_read(file.path, 1 * SECOND, &entry.data));
+		gotoIfError(clean, File_read(file.path, 1 * SECOND, &entry.data));
 
-	_gotoIfError(clean, CharString_createCopyx(entry.path, &copy));
+	gotoIfError(clean, CharString_createCopyx(entry.path, &copy));
 
 	if (file.type == EFileType_File) {
 
@@ -62,10 +62,10 @@ Error packageFile(FileInfo file, CAFileRecursion *caFile) {
 
 		//
 
-		_gotoIfError(clean, Archive_addFilex(caFile->archive, copy, entry.data, 0))
+		gotoIfError(clean, Archive_addFilex(caFile->archive, copy, entry.data, 0))
 	}
 
-	else _gotoIfError(clean, Archive_addDirectoryx(caFile->archive, copy));
+	else gotoIfError(clean, Archive_addDirectoryx(caFile->archive, copy));
 
 	return Error_none();
 
@@ -154,20 +154,20 @@ Bool CLI_package(ParsedArgs args) {
 	Buffer res = Buffer_createNull();
 	Bool isVirtual = false;
 
-	_gotoIfError(clean, Archive_createx(&archive));
-	_gotoIfError(clean, File_resolvex(input, &isVirtual, 0, &resolved));
+	gotoIfError(clean, Archive_createx(&archive));
+	gotoIfError(clean, File_resolvex(input, &isVirtual, 0, &resolved));
 
 	if (isVirtual)
-		_gotoIfError(clean, Error_invalidOperation(0, "CLI_package() failed, file starts with //"));
+		gotoIfError(clean, Error_invalidOperation(0, "CLI_package() failed, file starts with //"));
 
-	_gotoIfError(clean, CharString_appendx(&resolved, '/'));
+	gotoIfError(clean, CharString_appendx(&resolved, '/'));
 
 	CAFileRecursion caFileRecursion = (CAFileRecursion) {
 		.archive = &archive,
 		.root = resolved
 	};
 
-	_gotoIfError(clean, File_foreach(
+	gotoIfError(clean, File_foreach(
 		caFileRecursion.root,
 		(FileCallback) packageFile,
 		&caFileRecursion,
@@ -176,13 +176,13 @@ Bool CLI_package(ParsedArgs args) {
 
 	//Convert to CAFile and write to file
 
-	_gotoIfError(clean, CAFile_create(settings, archive, &file));
+	gotoIfError(clean, CAFile_create(settings, archive, &file));
 	archive = (Archive) { 0 };	//Archive has been moved to CAFile
 
-	_gotoIfError(clean, CAFile_writex(file, &res));
+	gotoIfError(clean, CAFile_writex(file, &res));
 
-	_gotoIfError(clean, File_add(output, EFileType_File, 1 * SECOND));		//Ensure subdirs are created
-	_gotoIfError(clean, File_write(res, output, 1 * SECOND));
+	gotoIfError(clean, File_add(output, EFileType_File, 1 * SECOND));		//Ensure subdirs are created
+	gotoIfError(clean, File_write(res, output, 1 * SECOND));
 
 clean:
 

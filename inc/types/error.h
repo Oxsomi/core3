@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -22,7 +22,7 @@
 #include "types.h"
 #include "log.h"
 
-//TODO: Make errors extendible like TypeId
+//TODO: Make errors extendable like TypeId
 
 typedef enum EGenericError {
 	EGenericError_None,
@@ -58,7 +58,7 @@ extern const C8 *EGenericError_TO_STRING[];
 #ifdef NDEBUG
 	#define ERROR_STACKTRACE 1
 #else
-	#define ERROR_STACKTRACE _STACKTRACE_SIZE
+	#define ERROR_STACKTRACE STACKTRACE_SIZE
 #endif
 
 //
@@ -87,14 +87,14 @@ typedef struct Error {
 //Shortcut to handle cleanup on error, can be disabled to save CPU time
 
 #ifndef _DISABLE_ERRORS
-	#define _gotoIfError(x, ...) { err = __VA_ARGS__; if(err.genericError) goto x; }
+	#define gotoIfError(x, ...) { err = __VA_ARGS__; if(err.genericError) goto x; }
 #else
-	#define _gotoIfError(x, ...) { x; } /* suppress unused goto label */
+	#define gotoIfError(x, ...) { x; } /* suppress unused goto label */
 #endif
 
 impl void Error_fillStackTrace(Error *err);
 
-#define _Error_base(...) Error err = (Error) { __VA_ARGS__ }; Error_fillStackTrace(&err); return err
+#define Error_base(...) Error err = (Error) { __VA_ARGS__ }; Error_fillStackTrace(&err); return err
 
 Error Error_platformError(U32 subId, U64 platformError, const C8 *errorStr);
 Error Error_outOfMemory(U32 subId, const C8 *errorStr);

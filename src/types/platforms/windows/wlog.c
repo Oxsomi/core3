@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -81,7 +81,7 @@ void Log_printCapturedStackTraceCustom(
 	HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
 	SetConsoleTextAttribute(handle, COLORS[lvl]);
 
-	CapturedStackTrace captured[_STACKTRACE_SIZE] = { 0 };
+	CapturedStackTrace captured[STACKTRACE_SIZE] = { 0 };
 
 	U64 stackCount = 0;
 
@@ -95,7 +95,7 @@ void Log_printCapturedStackTraceCustom(
 	if(hasSymbols)
 		for (
 			U64 i = 0;
-			i < stackSize && i < _STACKTRACE_SIZE &&
+			i < stackSize && i < STACKTRACE_SIZE &&
 			stackTrace[i] && stackTrace[i] != (void*)0xCCCCCCCCCCCCCCCC;
 			++i, ++stackCount
 		) {
@@ -145,17 +145,17 @@ void Log_printCapturedStackTraceCustom(
 			Error err;
 
 			if(modulePath[0])
-				_gotoIfError(cleanup, CharString_createFromUTF16((const U16*) modulePath, MAX_PATH, alloc, &capture->mod));
+				gotoIfError(cleanup, CharString_createFromUTF16((const U16*) modulePath, MAX_PATH, alloc, &capture->mod));
 
 			if(CharString_length(capture->sym)) {
 				CharString tmp = CharString_createNull();
-				_gotoIfError(cleanup, CharString_createCopy(capture->sym, alloc, &tmp));
+				gotoIfError(cleanup, CharString_createCopy(capture->sym, alloc, &tmp));
 				capture->sym = tmp;
 			}
 
 			if(CharString_length(capture->fil)) {
 				CharString tmp = CharString_createNull();
-				_gotoIfError(cleanup, CharString_createCopy(capture->fil, alloc, &tmp));
+				gotoIfError(cleanup, CharString_createCopy(capture->fil, alloc, &tmp));
 				capture->fil = tmp;
 			}
 
@@ -265,7 +265,7 @@ void Log_log(Allocator alloc, ELogLevel lvl, ELogOptions options, CharString arg
 	Bool panic = false;
 
 	if (
-		CharString_toUTF16(arg, alloc, &copy).genericError ||
+		CharString_toUtf16(arg, alloc, &copy).genericError ||
 		(hasNewLine && ListU16_insert(&copy, copy.length - 1, (U16) L'\n', alloc).genericError)
 	) {
 

@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -25,6 +25,7 @@
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/ref_ptrx.h"
 #include "formats/texture.h"
+#include "types/math.h"
 #include "types/string.h"
 
 Error DeviceTextureRef_dec(DeviceTextureRef **texture) {
@@ -79,7 +80,7 @@ Error DeviceTextureRef_markDirty(DeviceTextureRef *tex, U16 x, U16 y, U16 z, U16
 		!(texture->base.resource.flags & EGraphicsResourceFlag_CPUBacked) &&
 		!(texture->isFirstFrame && !x && !y && !z && !w && !h && !l)
 	)
-		_gotoIfError(clean, Error_invalidOperation(
+		gotoIfError(clean, Error_invalidOperation(
 			2, "DeviceTextureRef_markDirty() can only be called on first frame for entire resource or if it's CPU backed"
 		));
 
@@ -118,7 +119,7 @@ Error DeviceTextureRef_markDirty(DeviceTextureRef *tex, U16 x, U16 y, U16 z, U16
 	Bool shouldPush = false;
 
 	if(fullRange) {
-		_gotoIfError(clean, ListDevicePendingRange_clear(&texture->pendingChanges));
+		gotoIfError(clean, ListDevicePendingRange_clear(&texture->pendingChanges));
 		texture->isPendingFullCopy = true;
 		shouldPush = true;
 	}
@@ -171,7 +172,7 @@ Error DeviceTextureRef_markDirty(DeviceTextureRef *tex, U16 x, U16 y, U16 z, U16
 							end[j] = (U16) U64_max(end[j], last.texture.endRange[j]);
 						}
 
-						_gotoIfError(clean, ListDevicePendingRange_erase(&texture->pendingChanges, lastMatch));
+						gotoIfError(clean, ListDevicePendingRange_erase(&texture->pendingChanges, lastMatch));
 					}
 
 					lastMatch = i;
@@ -187,7 +188,7 @@ Error DeviceTextureRef_markDirty(DeviceTextureRef *tex, U16 x, U16 y, U16 z, U16
 	if (shouldPush) {
 
 		if((texture->pendingChanges.length + 1) >> 32)
-			_gotoIfError(clean, Error_outOfBounds(
+			gotoIfError(clean, Error_outOfBounds(
 				0, U32_MAX, U32_MAX, "DeviceTextureRef_markDirty() texture pendingRanges is limited to U32_MAX"
 			));
 
@@ -197,7 +198,7 @@ Error DeviceTextureRef_markDirty(DeviceTextureRef *tex, U16 x, U16 y, U16 z, U16
 			.levelId = 0
 		}};
 
-		_gotoIfError(clean, ListDevicePendingRange_pushBackx(&texture->pendingChanges, change));
+		gotoIfError(clean, ListDevicePendingRange_pushBackx(&texture->pendingChanges, change));
 	}
 
 	//Tell the device that on next submit it should handle copies from
@@ -210,9 +211,9 @@ Error DeviceTextureRef_markDirty(DeviceTextureRef *tex, U16 x, U16 y, U16 z, U16
 	acq1 = Lock_lock(&device->lock, U64_MAX);
 
 	if(acq1 < ELockAcquire_Success)
-		_gotoIfError(clean, Error_invalidState(0, "DeviceTextureRef_markDirty() couldn't lock device"));
+		gotoIfError(clean, Error_invalidState(0, "DeviceTextureRef_markDirty() couldn't lock device"));
 
-	_gotoIfError(clean, ListWeakRefPtr_pushBackx(&device->pendingResources, tex));
+	gotoIfError(clean, ListWeakRefPtr_pushBackx(&device->pendingResources, tex));
 
 clean:
 
@@ -276,7 +277,7 @@ Error GraphicsDeviceRef_createTexture(
 		return err;
 
 	if(!(flag & EGraphicsResourceFlag_InternalWeakDeviceRef))
-		_gotoIfError(clean, GraphicsDeviceRef_inc(dev));
+		gotoIfError(clean, GraphicsDeviceRef_inc(dev));
 
 	DeviceTexture *texture = DeviceTextureRef_ptr(*tex);
 
@@ -300,10 +301,10 @@ Error GraphicsDeviceRef_createTexture(
 		.isFirstFrame = true
 	};
 
-	_gotoIfError(clean, UnifiedTexture_create(*tex, name));
+	gotoIfError(clean, UnifiedTexture_create(*tex, name));
 
 	if(Buffer_isRef(*dat)) {
-		_gotoIfError(clean, Buffer_createEmptyBytesx(texSize, &texture->cpuData));		//Temporary if not CPUBacked
+		gotoIfError(clean, Buffer_createEmptyBytesx(texSize, &texture->cpuData));		//Temporary if not CPUBacked
 		Buffer_copy(texture->cpuData, *dat);
 	}
 
@@ -312,13 +313,13 @@ Error GraphicsDeviceRef_createTexture(
 		*dat = Buffer_createNull();
 	}
 
-	_gotoIfError(clean, ListDevicePendingRange_reservex(
+	gotoIfError(clean, ListDevicePendingRange_reservex(
 		&texture->pendingChanges, flag & EGraphicsResourceFlag_CPUBacked ? 16 : 1
 	));
 
 	texture->lock = Lock_create();
 
-	_gotoIfError(clean, DeviceTextureRef_markDirty(*tex, 0, 0, 0, 0, 0, 0));
+	gotoIfError(clean, DeviceTextureRef_markDirty(*tex, 0, 0, 0, 0, 0, 0));
 
 clean:
 

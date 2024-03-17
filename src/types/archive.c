@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -167,10 +167,10 @@ Error Archive_addInternal(Archive *archive, ArchiveEntry entry, Bool successIfEx
 	//Resolve
 
 	Bool isVirtual = false;
-	_gotoIfError(clean, File_resolve(entry.path, &isVirtual, 128, CharString_createNull(), alloc, &resolved));
+	gotoIfError(clean, File_resolve(entry.path, &isVirtual, 128, CharString_createNull(), alloc, &resolved));
 
 	if (isVirtual)
-		_gotoIfError(clean, Error_unsupportedOperation(0, "Archive_addInternal()::entry.path was virtual (//)"));
+		gotoIfError(clean, Error_unsupportedOperation(0, "Archive_addInternal()::entry.path was virtual (//)"));
 
 	oldPath = entry.path;
 	entry.path = resolved;
@@ -178,9 +178,9 @@ Error Archive_addInternal(Archive *archive, ArchiveEntry entry, Bool successIfEx
 	//Try to find a parent or make one
 
 	if(!Archive_createOrFindParent(archive, entry.path, alloc))
-		_gotoIfError(clean, Error_notFound(0, 0, "Archive_addInternal()::entry.path parent couldn't be created"));
+		gotoIfError(clean, Error_notFound(0, 0, "Archive_addInternal()::entry.path parent couldn't be created"));
 
-	_gotoIfError(clean, ListArchiveEntry_pushBack(&archive->entries, entry, alloc));
+	gotoIfError(clean, ListArchiveEntry_pushBack(&archive->entries, entry, alloc));
 	resolved = CharString_createNull();
 
 	CharString_free(&oldPath, alloc);
@@ -230,7 +230,7 @@ Error Archive_removeInternal(Archive *archive, CharString path, Allocator alloc,
 		return Error_notFound(0, 1, "Archive_removeInternal()::path doesn't exist");
 
 	if(type != EFileType_Any && entry.type != type)
-		_gotoIfError(clean, Error_invalidOperation(0, "Archive_removeInternal()::type doesn't match file type"));
+		gotoIfError(clean, Error_invalidOperation(0, "Archive_removeInternal()::type doesn't match file type"));
 
 	//Remove children
 
@@ -238,7 +238,7 @@ Error Archive_removeInternal(Archive *archive, CharString path, Allocator alloc,
 
 		//Get myFolder/*
 
-		_gotoIfError(clean, CharString_append(&resolved, '/', alloc));
+		gotoIfError(clean, CharString_append(&resolved, '/', alloc));
 
 		//Remove
 
@@ -254,7 +254,7 @@ Error Archive_removeInternal(Archive *archive, CharString path, Allocator alloc,
 			Buffer_free(&entry.data, alloc);
 			CharString_free(&entry.path, alloc);
 
-			_gotoIfError(clean, ListArchiveEntry_popLocation(&archive->entries, j, NULL));
+			gotoIfError(clean, ListArchiveEntry_popLocation(&archive->entries, j, NULL));
 
 			//Ensure our *self* id still makes sense
 
@@ -268,7 +268,7 @@ Error Archive_removeInternal(Archive *archive, CharString path, Allocator alloc,
 	Buffer_free(&entry.data, alloc);
 	CharString_free(&entry.path, alloc);
 
-	_gotoIfError(clean, ListArchiveEntry_popLocation(&archive->entries, i, NULL));
+	gotoIfError(clean, ListArchiveEntry_popLocation(&archive->entries, i, NULL));
 
 clean:
 	CharString_free(&resolved, alloc);
@@ -310,7 +310,7 @@ Error Archive_rename(Archive *archive, CharString loc, CharString newFileName, A
 	CharString_cutAfterLastSensitive(*prevPath, '/', &subStr);
 	prevPath->lenAndNullTerminated = CharString_length(subStr);
 
-	_gotoIfError(clean, CharString_appendString(prevPath, newFileName, alloc));
+	gotoIfError(clean, CharString_appendString(prevPath, newFileName, alloc));
 
 clean:
 	CharString_free(&resolvedLoc, alloc);
@@ -335,18 +335,18 @@ Error Archive_move(Archive *archive, CharString loc, CharString directoryName, A
 	Error err = Error_none();
 
 	if (parent.type != EFileType_Folder)
-		_gotoIfError(clean, Error_invalidOperation(0, "Archive_move()::directoryName should resolve to folder file"));
+		gotoIfError(clean, Error_invalidOperation(0, "Archive_move()::directoryName should resolve to folder file"));
 
 	CharString *filePath = &archive->entries.ptrNonConst[i].path;
 
 	U64 v = CharString_findLastSensitive(*filePath, '/');
 
 	if (v != U64_MAX)
-		_gotoIfError(clean, CharString_popFrontCount(filePath, v + 1));
+		gotoIfError(clean, CharString_popFrontCount(filePath, v + 1));
 
 	if (CharString_length(directoryName)) {
-		_gotoIfError(clean, CharString_insert(filePath, '/', 0, alloc));
-		_gotoIfError(clean, CharString_insertString(filePath, directoryName, 0, alloc));
+		gotoIfError(clean, CharString_insert(filePath, '/', 0, alloc));
+		gotoIfError(clean, CharString_insertString(filePath, directoryName, 0, alloc));
 	}
 
 clean:
@@ -459,15 +459,15 @@ Error Archive_foreach(
 	Bool isVirtual = false;
 
 	Error err = File_resolve(loc, &isVirtual, 128, CharString_createNull(), alloc, &resolved);
-	_gotoIfError(clean, err);
+	gotoIfError(clean, err);
 
 	if(isVirtual)
-		_gotoIfError(clean, Error_invalidOperation(0, "Archive_foreach()::path can't start with start with // (virtual)"));
+		gotoIfError(clean, Error_invalidOperation(0, "Archive_foreach()::path can't start with start with // (virtual)"));
 
 	//Append / (replace last \0)
 
 	if(CharString_length(resolved))									//Ignore root
-		_gotoIfError(clean, CharString_append(&resolved, '/', alloc));
+		gotoIfError(clean, CharString_append(&resolved, '/', alloc));
 
 	U64 baseSlash = isRecursive ? 0 : CharString_countAllSensitive(resolved, '/');
 
@@ -502,7 +502,7 @@ Error Archive_foreach(
 			info.timestamp = cai.timestamp;
 		}
 
-		_gotoIfError(clean, callback(info, userData));
+		gotoIfError(clean, callback(info, userData));
 	}
 
 clean:
