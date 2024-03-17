@@ -51,7 +51,7 @@ _binding(12, 1) RWTexture2D<F32x4> _rwTextures2Df[65536];
 _binding(13, 1) RWTexture2D<I32x4> _rwTextures2Di[16384];
 _binding(14, 1) RWTexture2D<U32x4> _rwTextures2Du[16384];
 
-_binding(15, 1) RaytracingAccelerationStructure _tlasExt[8192];
+_binding(15, 1) RaytracingAccelerationStructure _tlasExt[16];
 
 _binding( 0, 2) cbuffer globals {	//Globals used during the entire frame for useful information such as frame id.
 

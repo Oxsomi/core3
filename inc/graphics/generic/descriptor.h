@@ -76,7 +76,7 @@ typedef enum EDescriptorTypeCount {
 	EDescriptorTypeCount_RWTexture2Di	= 16384,
 	EDescriptorTypeCount_RWTexture2Du	= 16384,
 	EDescriptorTypeCount_Sampler		= 2048,		//All samplers
-	EDescriptorTypeCount_TLASExt		= 8192,
+	EDescriptorTypeCount_TLASExt		= 16,
 
 	EDescriptorTypeCount_Textures		=
 		EDescriptorTypeCount_Texture2D + EDescriptorTypeCount_Texture3D + EDescriptorTypeCount_TextureCube,

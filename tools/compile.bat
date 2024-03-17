@@ -44,12 +44,13 @@ set extra=!extra! -fspv-target-env=vulkan1.2
 echo Compiling for %target% (%~1)
 echo Compiling SPIRV
 
-mkdir "%~dp1spirv" 2> NUL
-dxc "%~1" -T "%target%" -spirv -Zpc -O3 -Fo "%~dp1spirv/%~n1.!outEntry!" -HV 2021 -Qstrip_debug -I "%~dp0..\src\graphics\shaders" %extra% %entrypoint%
+mkdir "%cd%/compiled" 2> NUL
+mkdir "%cd%/compiled/spirv" 2> NUL
+dxc "%~1" -T "%target%" -spirv -Zpc -O3 -Fo "%cd%/compiled/spirv/%~n1.!outEntry!" -HV 2021 -Qstrip_debug -I "%~dp0..\src\graphics\shaders" %extra% %entrypoint%
 
 echo Compiling DXIL
 
-mkdir "%~dp1dxil" 2> NUL
-dxc "%~1" -T "%target%" -Zpc -O3 -Fo "%~dp1dxil/%~n1.!outEntry!" -HV 2021 -Qstrip_debug -I "%~dp0..\src\graphics\shaders" %entrypoint%
+mkdir "%cd%/compiled/dxil" 2> NUL
+dxc "%~1" -T "%target%" -Zpc -O3 -Fo "%cd%/compiled/dxil/%~n1.!outEntry!" -HV 2021 -Qstrip_debug -I "%~dp0..\src\graphics\shaders" %entrypoint%
 
 echo Success (%~n1.!outEntry!)

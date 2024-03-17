@@ -634,6 +634,8 @@ Error GraphicsDevice_initExt(
 
 	//Create shared layout since we use bindless
 
+	Bool hasRt = physicalDevice->capabilities.features & EGraphicsFeatures_Raytracing;
+
 	for (U32 i = 0; i < EDescriptorSetType_UniqueLayouts; ++i) {
 
 		VkDescriptorSetLayoutBinding bindings[EDescriptorType_ResourceCount - 1];
@@ -646,9 +648,15 @@ Error GraphicsDevice_initExt(
 				if(j == EDescriptorType_Sampler)
 					continue;
 
+				if(j == EDescriptorType_TLASExt && !hasRt)
+					continue;
+
 				U32 id = j;
 
 				if(j > EDescriptorType_Sampler)
+					--id;
+
+				if(j > EDescriptorType_TLASExt && !hasRt)
 					--id;
 
 				bindings[id] = (VkDescriptorSetLayoutBinding) {
@@ -665,7 +673,7 @@ Error GraphicsDevice_initExt(
 				};
 			}
 
-			bindingCount = EDescriptorType_ResourceCount - 1;
+			bindingCount = EDescriptorType_ResourceCount - 1 - !hasRt;
 		}
 
 		else {
@@ -739,7 +747,7 @@ Error GraphicsDevice_initExt(
 		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
 		.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
 		.maxSets = EDescriptorSetType_Count,
-		.poolSizeCount = sizeof(poolSizes) / sizeof(poolSizes[0]),
+		.poolSizeCount = sizeof(poolSizes) / sizeof(poolSizes[0]) - !hasRt,
 		.pPoolSizes = poolSizes
 	};
 

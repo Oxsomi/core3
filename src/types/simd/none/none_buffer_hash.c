@@ -21,6 +21,7 @@
 #include "types/allocator.h"
 #include "types/error.h"
 #include "types/buffer.h"
+#include "types/math.h"
 #include "types/vec.h"
 #include "types/platform_types.h"
 
