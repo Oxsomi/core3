@@ -211,7 +211,7 @@ void Error_print(Allocator alloc, Error err, ELogLevel logLevel, ELogOptions opt
 			CharString_length(platformErr), platformErr.ptr
 
 		).genericError
-		)
+	)
 		Log_log(alloc, logLevel, options, result);
 
 	CharString_free(&result, alloc);

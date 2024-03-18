@@ -86,7 +86,7 @@ typedef struct AESEncryptionContext {
 //https://link.springer.com/content/pdf/10.1007/978-3-642-03317-9_4.pdf
 //https://www.samiam.org/key-schedule.html
 
-I32x4 AESEncryptionContext_expandKeyN(I32x4 im1, I32x4 im2) {
+I32x4 AESEncryptionContext_expandKeyN(I32x4 im1, const I32x4 im2) {
 
 	I32x4 im4 = im1;
 
@@ -98,15 +98,15 @@ I32x4 AESEncryptionContext_expandKeyN(I32x4 im1, I32x4 im2) {
 	return I32x4_xor(im1, im2);
 }
 
-I32x4 AESEncryptionContext_expandKey1(I32x4 im1, I32x4 im2) {
+I32x4 AESEncryptionContext_expandKey1(const I32x4 im1, const I32x4 im2) {
 	return AESEncryptionContext_expandKeyN(im1, I32x4_wwww(im2));
 }
 
-I32x4 AESEncryptionContext_expandKey2(I32x4 im1, I32x4 im3) {
+I32x4 AESEncryptionContext_expandKey2(const I32x4 im1, const I32x4 im3) {
 	return AESEncryptionContext_expandKeyN(im3, I32x4_zzzz(AES_keyGenAssist(im1, 0)));
 }
 
-void AESEncryptionContext_expandKey(const U32 *key, I32x4 k[15], EBufferEncryptionType encryptionType) {
+void AESEncryptionContext_expandKey(const U32 *key, I32x4 k[15], const EBufferEncryptionType encryptionType) {
 
 	k[0] = I32x4_load4((const I32*)key);
 
@@ -141,11 +141,11 @@ void AESEncryptionContext_expandKey(const U32 *key, I32x4 k[15], EBufferEncrypti
 
 //Aes block encryption. Don't use this plainly, it's a part of the larger AES256-CTR algorithm
 
-I32x4 AESEncryptionContext_blockHash(I32x4 block, const I32x4 k[15], EBufferEncryptionType type) {
+I32x4 AESEncryptionContext_blockHash(I32x4 block, const I32x4 k[15], const EBufferEncryptionType type) {
 
 	block = I32x4_xor(block, k[0]);
 
-	U8 rounds = type == EBufferEncryptionType_Aes128Gcm ? 10 : 14;
+	const U8 rounds = type == EBufferEncryptionType_Aes128Gcm ? 10 : 14;
 
 	for(U8 i = 1; i < rounds; ++i)
 		block = AES_encodeBlock(block, k[i], false);
@@ -158,7 +158,7 @@ impl I32x4 AESEncryptionContext_ghash(I32x4 a, const I32x4 ghashLut[17]);
 
 //Safe fetch a block (even if <16 bytes are left)
 
-I32x4 AESEncryptionContext_fetchBlock(const I32x4 *dat, U64 leftOver) {
+I32x4 AESEncryptionContext_fetchBlock(const I32x4 *dat, const U64 leftOver) {
 
 	//Avoid out of bounds read, by simply filling additional data by zero
 
@@ -184,10 +184,10 @@ I32x4 AESEncryptionContext_fetchBlock(const I32x4 *dat, U64 leftOver) {
 I32x4 AESEncryptionContext_initTag(Buffer additionalData, const I32x4 ghashLut[17]) {
 
 	I32x4 tag = I32x4_zero();
-	U64 len = Buffer_length(additionalData);
+	const U64 len = Buffer_length(additionalData);
 
 	for (U64 i = 0, j = (len + 15) >> 4; i < j; ++i) {
-		I32x4 ADi = AESEncryptionContext_fetchBlock((const I32x4*)additionalData.ptr + i, len - (i << 4));
+		const I32x4 ADi = AESEncryptionContext_fetchBlock((const I32x4*)additionalData.ptr + i, len - (i << 4));
 		tag = AESEncryptionContext_ghash(I32x4_xor(tag, ADi), ghashLut);
 	}
 
@@ -196,9 +196,9 @@ I32x4 AESEncryptionContext_initTag(Buffer additionalData, const I32x4 ghashLut[1
 
 AESEncryptionContext AESEncryptionContext_create(
 	const U32 *realKey,
-	I32x4 iv,
-	Buffer additionalData,
-	EBufferEncryptionType encryptionType
+	const I32x4 iv,
+	const Buffer additionalData,
+	const EBufferEncryptionType encryptionType
 ) {
 
 	AESEncryptionContext ctx = (AESEncryptionContext) { .encryptionType = encryptionType };
@@ -225,7 +225,7 @@ AESEncryptionContext AESEncryptionContext_create(
 	return ctx;
 }
 
-void AESEncryptionContext_finish(AESEncryptionContext *ctx, Buffer additionalData, Buffer target) {
+void AESEncryptionContext_finish(AESEncryptionContext *ctx, const Buffer additionalData, const Buffer target) {
 
 	//Add length of inputs into the message too (lengths are in bits)
 
@@ -240,14 +240,14 @@ void AESEncryptionContext_finish(AESEncryptionContext *ctx, Buffer additionalDat
 	ctx->tag = I32x4_xor(ctx->tag, ctx->EKY0);
 }
 
-void AESEncryptionContext_updateTag(AESEncryptionContext *ctx, I32x4 CTi) {
+void AESEncryptionContext_updateTag(AESEncryptionContext *ctx, const I32x4 CTi) {
 	ctx->tag = AESEncryptionContext_ghash(I32x4_xor(CTi, ctx->tag), ctx->ghashLut);
 }
 
-void AESEncryptionContext_storeBlock(I32x4 *io, U64 leftOver, I32x4 *v) {
+void AESEncryptionContext_storeBlock(I32x4 *io, const U64 leftOver, I32x4 *v) {
 
 	//A special property of unaligned blocks is that the bytes that are added as padding
-	//shouldn't be stored and so they have to be zero-ed in CTi, otherwise the tag will mess up
+	//shouldn't be stored, and so they have to be zero-ed in CTi, otherwise the tag will mess up
 
 	if (leftOver < sizeof(I32x4)) {
 
@@ -267,9 +267,9 @@ void AESEncryptionContext_storeBlock(I32x4 *io, U64 leftOver, I32x4 *v) {
 void AESEncryptionContext_processBlock(
 	AESEncryptionContext *ctx,
 	I32x4 *io,
-	U64 leftOver,
-	U32 i,
-	Bool updateTag
+	const U64 leftOver,
+	const U32 i,
+	const Bool updateTag
 ) {
 
 	I32x4 v = AESEncryptionContext_fetchBlock(io, leftOver);
@@ -289,11 +289,11 @@ void AESEncryptionContext_processBlock(
 		AESEncryptionContext_updateTag(ctx, v);
 }
 
-void AESEncryptionContext_fetchAndUpdateTag(AESEncryptionContext *ctx, const I32x4 *data, U64 leftOver) {
+void AESEncryptionContext_fetchAndUpdateTag(AESEncryptionContext *ctx, const I32x4 *data, const U64 leftOver) {
 	AESEncryptionContext_updateTag(ctx, AESEncryptionContext_fetchBlock(data, leftOver));
 }
 
-U64 EBufferEncryptionType_getAdditionalData(EBufferEncryptionType type) {
+U64 EBufferEncryptionType_getAdditionalData(const EBufferEncryptionType type) {
 	switch (type) {
 		case EBufferEncryptionType_Aes128Gcm:
 		case EBufferEncryptionType_Aes256Gcm:	return 16 + 12;
@@ -302,13 +302,13 @@ U64 EBufferEncryptionType_getAdditionalData(EBufferEncryptionType type) {
 }
 
 Error AESEncryptionContext_encrypt(
-	Buffer target,
-	Buffer additionalData,
-	EBufferEncryptionFlags flags,
+	const Buffer target,
+	const Buffer additionalData,
+	const EBufferEncryptionFlags flags,
 	U32 *realKey,
 	I32x4 *ivPtr,
 	I32x4 *tag,
-	EBufferEncryptionType encryptionType
+	const EBufferEncryptionType encryptionType
 ) {
 
 	//Since we have a 12-byte IV, we have a 4-byte block counter.
@@ -335,7 +335,7 @@ Error AESEncryptionContext_encrypt(
 
 	if(flags & EBufferEncryptionFlags_GenerateKey) {
 
-		U8 len = encryptionType == EBufferEncryptionType_Aes128Gcm ? 4 : 8;
+		const U8 len = encryptionType == EBufferEncryptionType_Aes128Gcm ? 4 : 8;
 
 		if(!Buffer_csprng(Buffer_createRef(realKey, sizeof(U32) * len)))
 			return Error_invalidState(1, "AESEncryptionContext_encrypt() couldn't generate key");
@@ -348,9 +348,9 @@ Error AESEncryptionContext_encrypt(
 	//		For now, we're dealing with small enough files that spinning up threads would be slower
 	//		(Without a job system)
 
-	U64 targetLen = Buffer_length(target);
+	const U64 targetLen = Buffer_length(target);
 
-	U32 j = (U32)((targetLen + 15) >> 4);
+	const U32 j = (U32)((targetLen + 15) >> 4);
 
 	for (U32 i = 0; i < j; ++i)
 		AESEncryptionContext_processBlock(
@@ -397,17 +397,17 @@ Error Buffer_encrypt(
 }
 
 Error AESEncryptionContext_decrypt(
-	Buffer target,
-	Buffer additionalData,
+	const Buffer target,
+	const Buffer additionalData,
 	const U32 *realKey,
-	I32x4 tag,
-	I32x4 iv,
-	EBufferEncryptionType type
+	const I32x4 tag,
+	const I32x4 iv,
+	const EBufferEncryptionType type
 ) {
 
 	//Validate inputs
 
-	U64 targetLen = Buffer_length(target);
+	const U64 targetLen = Buffer_length(target);
 
 	//Since we have a 12-byte IV, we have a 4-byte block counter.
 	//This block counter runs out in (4Gi - 3) * sizeof(Block) aka ~4Gi * 16 = ~64GiB.
@@ -428,7 +428,7 @@ Error AESEncryptionContext_decrypt(
 	//Verify tegridy before we continue decryption. This does mean we're reading twice,
 	//but it's against the spec to start decrypting while still unsure if it's valid.
 
-	U32 j = (U32)((targetLen + 15) >> 4);
+	const U32 j = (U32)((targetLen + 15) >> 4);
 
 	for (U32 i = 0; i < j; ++i)
 		AESEncryptionContext_fetchAndUpdateTag(
@@ -444,8 +444,8 @@ Error AESEncryptionContext_decrypt(
 	if(I32x4_any(I32x4_neq(ctx.tag, tag)))
 		return Error_invalidState(0, "AESEncryptionContext_decrypt() GMAC tag is invalid");
 
-	//Decrypt blocks blocks
-	//TODO: We might wanna multithread this if we ever get big enough data
+	//Decrypt blocks
+	//TODO: We might wanna multi-thread this if we ever get big enough data
 	//		For now, we're dealing with small enough files that spinning up threads would be slower
 	//		(Without a job system)
 
@@ -465,7 +465,7 @@ Error Buffer_decrypt(
 	Buffer target,						//"Cyphertext" aka data to decrypt. Leave empty to verify with AES256GCM
 	Buffer additionalData,				//Data that was supplied to verify integrity of the data
 	EBufferEncryptionType type,			//Only AES256GCM is currently supported
-	const U32 *key,					//Secret key; used for encryption and decryption
+	const U32 *key,						//Secret key; used for encryption and decryption
 	I32x4 tag,							//Tag to verify integrity of encrypted data
 	I32x4 iv							//Iv is a 12-byte random number that was used to encrypt the data
 ) {

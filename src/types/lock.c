@@ -44,7 +44,7 @@ ELockAcquire Lock_lock(Lock *l, Ns maxTime) {
 
 	if (l && l->active) {
 
-		I64 tid = (I64) Thread_getId();
+		const I64 tid = (I64) Thread_getId();
 		I64 prevValue = AtomicI64_cmpStore(&l->lockedThreadId, 0, tid);
 
 		if(prevValue == tid)		//Already locked
@@ -55,7 +55,7 @@ ELockAcquire Lock_lock(Lock *l, Ns maxTime) {
 		//It's possible that within this time someone else is waiting for it and locked it before us.
 		//So we have to wait in a loop.
 
-		Ns time = maxTime == U64_MAX ? 0 : Time_now();
+		const Ns time = maxTime == U64_MAX ? 0 : Time_now();
 
 		while(prevValue != 0) {
 
@@ -75,7 +75,7 @@ ELockAcquire Lock_lock(Lock *l, Ns maxTime) {
 Bool Lock_unlock(Lock *l) {
 
 	if (l && l->active) {
-		U64 tid = Thread_getId();
+		const U64 tid = Thread_getId();
 		return (U32) AtomicI64_cmpStore(&l->lockedThreadId, tid, 0) == (I64) tid;
 	}
 

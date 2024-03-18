@@ -77,7 +77,7 @@ Bool U64_setPacked21x3(U64 *packed, U8 off, U32 v) {
 
 //U32 packing
 
-#define _GET_BIT_IMPL(T)							\
+#define GET_BIT_IMPL(T)								\
 													\
 Bool T##_getBit(T packed, U8 off) {					\
 													\
@@ -102,22 +102,22 @@ Bool T##_setBit(T *packed, U8 off, Bool b) {		\
 	return true;									\
 }
 
-_GET_BIT_IMPL(U64);
-_GET_BIT_IMPL(U32);
-_GET_BIT_IMPL(U16);
-_GET_BIT_IMPL(U8);
+GET_BIT_IMPL(U64);
+GET_BIT_IMPL(U32);
+GET_BIT_IMPL(U16);
+GET_BIT_IMPL(U8);
 
 //Compressing quaternions
 
 QuatF32 QuatF32_unpack(QuatS16 q) {
-	F32x4 v = F32x4_create4(q.arr[0], q.arr[1], q.arr[2], q.arr[3]);
+	const F32x4 v = F32x4_create4(q.arr[0], q.arr[1], q.arr[2], q.arr[3]);
 	return F32x4_div(v, F32x4_xxxx4(I16_MAX));
 }
 
 QuatS16 QuatF32_pack(QuatF32 q) {
 
 	q = QuatF32_normalize(q);
-	F32x4 asI16 = F32x4_mul(q, F32x4_xxxx4(I16_MAX));
+	const F32x4 asI16 = F32x4_mul(q, F32x4_xxxx4(I16_MAX));
 
 	return (QuatS16) {
 		{

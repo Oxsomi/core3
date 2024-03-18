@@ -36,7 +36,7 @@ Error RefPtr_create(U32 objectLength, Allocator alloc, ObjectFreeFunc free, ETyp
 		return Error_invalidParameter(3, 0, "RefPtr_create()::result isn't empty, might indicate memleak");
 
 	Buffer buf = Buffer_createNull();
-	Error err = Buffer_createEmptyBytes(sizeof(RefPtr) + objectLength, alloc, &buf);
+	const Error err = Buffer_createEmptyBytes(sizeof(RefPtr) + objectLength, alloc, &buf);
 
 	if(err.genericError)
 		return err;

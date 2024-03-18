@@ -32,8 +32,8 @@ U64 Thread_getId() { return GetCurrentThreadId(); }
 
 Bool Thread_sleep(Ns ns) {
 
-	LARGE_INTEGER ft = (LARGE_INTEGER) { .QuadPart = -(I64)((U64_min(ns, I64_MAX) + 99) / 100) };
-	HANDLE timer = CreateWaitableTimerW(NULL, TRUE, NULL);
+	const LARGE_INTEGER ft = (LARGE_INTEGER) { .QuadPart = -(I64)((U64_min(ns, I64_MAX) + 99) / 100) };
+	const HANDLE timer = CreateWaitableTimerW(NULL, TRUE, NULL);
 
 	if(!timer)
 		return false;
@@ -70,7 +70,7 @@ Error Thread_create(Allocator alloc, ThreadCallbackFunction callback, void *obje
 
 	Buffer buf = Buffer_createNull();
 
-	Error err = alloc.alloc(alloc.ptr, sizeof(Thread), &buf);
+	const Error err = alloc.alloc(alloc.ptr, sizeof(Thread), &buf);
 
 	if (err.genericError)
 		return err;

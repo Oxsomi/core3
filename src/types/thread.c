@@ -27,7 +27,7 @@ Bool Thread_free(Allocator alloc, Thread **thread) {
 	if(!thread || !*thread)
 		return true;
 
-	Bool freed = alloc.free(alloc.ptr, Buffer_createManagedPtr(*thread, sizeof(Thread)));
+	const Bool freed = alloc.free(alloc.ptr, Buffer_createManagedPtr(*thread, sizeof(Thread)));
 	*thread = NULL;
 	return freed;
 }
@@ -37,7 +37,7 @@ Error Thread_waitAndCleanup(Allocator alloc, Thread **thread) {
 	if(!thread || !*thread)
 		return Error_nullPointer(0, "Thread_waitAndCleanup()::thread and *thread are required");
 
-	Error err = Thread_wait(*thread);
+	const Error err = Thread_wait(*thread);
 
 	if(err.genericError == EGenericError_TimedOut)
 		return err;

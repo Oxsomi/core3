@@ -133,7 +133,7 @@ Error BufferLayoutStruct_create(BufferLayoutStructInfo info, U32 id, Allocator a
 
 	for(U16 i = 0; i < (U16) info.members.length; ++i) {
 
-		BufferLayoutMemberInfo m = info.members.ptr[i];
+		const BufferLayoutMemberInfo m = info.members.ptr[i];
 
 		if(!CharString_length(m.name) || CharString_length(m.name) > U8_MAX || !CharString_isValidAscii(m.name))
 			return Error_invalidParameter(
@@ -171,7 +171,7 @@ Error BufferLayoutStruct_create(BufferLayoutStructInfo info, U32 id, Allocator a
 
 		for(U64 j = 0; j < m.arraySizes.length; ++j) {
 
-			U32 leni = m.arraySizes.ptr[j];
+			const U32 leni = m.arraySizes.ptr[j];
 
 			//An array length of 0 is only allowed if there's one element
 
@@ -180,14 +180,14 @@ Error BufferLayoutStruct_create(BufferLayoutStructInfo info, U32 id, Allocator a
 					0, 1 + (((U32)j + 1) << 16), "BufferLayoutStruct_create()::info.members[i].arraySizes[j] is invalid"
 				);
 
-			U64 prevLen = totalLen;
+			const U64 prevLen = totalLen;
 			totalLen *= leni;
 
 			if(totalLen < prevLen)
 				return Error_overflow((((U32)j + 1) << 16), totalLen, prevLen, "BufferLayoutStruct_create() overflow");
 		}
 
-		U64 prevLen = totalLen;
+		const U64 prevLen = totalLen;
 		totalLen *= m.stride;
 
 		if(totalLen < prevLen || totalLen >> 48)
@@ -198,10 +198,10 @@ Error BufferLayoutStruct_create(BufferLayoutStructInfo info, U32 id, Allocator a
 		memberDataLen += CharString_length(m.name) + ListU32_bytes(m.arraySizes);
 	}
 
-	U64 len = BufferLayoutStruct_allocatedData(info, memberDataLen);
+	const U64 len = BufferLayoutStruct_allocatedData(info, memberDataLen);
 	Buffer allocated = Buffer_createNull();
 
-	Error err = Buffer_createUninitializedBytes(len, alloc, &allocated);
+	const Error err = Buffer_createUninitializedBytes(len, alloc, &allocated);
 
 	if(err.genericError)
 		return err;
@@ -233,7 +233,7 @@ Error BufferLayoutStruct_create(BufferLayoutStructInfo info, U32 id, Allocator a
 
 	for(U16 i = 0; i < (U16) info.members.length; ++i) {
 
-		BufferLayoutMemberInfo m = info.members.ptr[i];
+		const BufferLayoutMemberInfo m = info.members.ptr[i];
 
 		members[i] = (BufferLayoutMember) {
 
@@ -263,7 +263,7 @@ Bool BufferLayoutStruct_free(Allocator alloc, BufferLayoutStruct *layoutStruct) 
 	if(!layoutStruct || !layoutStruct->data.ptr)
 		return true;
 
-	Bool b = Buffer_free(&layoutStruct->data, alloc);
+	const Bool b = Buffer_free(&layoutStruct->data, alloc);
 	*layoutStruct = (BufferLayoutStruct) { 0 };
 
 	return b;
@@ -296,7 +296,7 @@ BufferLayoutMemberInfo BufferLayoutStruct_getMemberInfo(BufferLayoutStruct layou
 
 	for(U16 i = 0; i <= memberId; ++i) {
 
-		BufferLayoutMember member = members[i];
+		const BufferLayoutMember member = members[i];
 
 		if (i == memberId) {
 
@@ -307,7 +307,7 @@ BufferLayoutMemberInfo BufferLayoutStruct_getMemberInfo(BufferLayoutStruct layou
 
 			Buffer_offset(&tmp, member.arrayIndices * sizeof(U32));
 
-			CharString name = CharString_createRefSizedConst((const C8*)tmp.ptr, member.nameLength, false);
+			const CharString name = CharString_createRefSizedConst((const C8*)tmp.ptr, member.nameLength, false);
 			Buffer_offset(&tmp, member.nameLength * sizeof(C8));
 
 			return (BufferLayoutMemberInfo) {
@@ -350,7 +350,7 @@ Error BufferLayout_create(Allocator alloc, BufferLayout *layout) {
 	if(layout->structs.ptr)
 		return Error_invalidParameter(1, 0, "BufferLayout_create()::layout wasn't empty, could indicate memleak");
 
-	Error err = ListBufferLayoutStruct_reserve(&layout->structs, 128, alloc);
+	const Error err = ListBufferLayoutStruct_reserve(&layout->structs, 128, alloc);
 
 	if (err.genericError)
 		return err;
@@ -383,7 +383,7 @@ Error BufferLayout_createStruct(BufferLayout *layout, BufferLayoutStructInfo inf
 
 	for (U16 i = 0; i < (U16) info.members.length; ++i) {
 
-		BufferLayoutMemberInfo member = info.members.ptr[i];
+		const BufferLayoutMemberInfo member = info.members.ptr[i];
 
 		if(member.structId != U32_MAX && member.structId >= layout->structs.length)
 			return Error_outOfBounds(
@@ -399,7 +399,7 @@ Error BufferLayout_createStruct(BufferLayout *layout, BufferLayoutStructInfo inf
 
 	BufferLayoutStruct layoutStruct = (BufferLayoutStruct) { 0 };
 
-	Error err = Error_none();
+	Error err;
 
 	gotoIfError(clean, BufferLayoutStruct_create(info, (U32)layout->structs.length, alloc, &layoutStruct));
 	gotoIfError(clean, ListBufferLayoutStruct_pushBack(&layout->structs, layoutStruct, alloc));
@@ -435,12 +435,12 @@ Error BufferLayout_createInstance(BufferLayout layout, U64 count, Allocator allo
 		return Error_invalidParameter(3, 0, "BufferLayout_createInstance()::result isn't empty, might indicate memleak");
 
 	LayoutPathInfo info = (LayoutPathInfo) { 0 };
-	Error err = BufferLayout_resolveLayout(layout, CharString_createRefCStrConst("/"), &info, alloc);
+	const Error err = BufferLayout_resolveLayout(layout, CharString_createRefCStrConst("/"), &info, alloc);
 
 	if(err.genericError)
 		return err;
 
-	U64 bufLen = info.length * count;
+	const U64 bufLen = info.length * count;
 
 	if(bufLen < info.length)
 		return Error_overflow(0, bufLen, info.length, "BufferLayout_createInstance() overflow");
@@ -510,7 +510,7 @@ Error BufferLayout_resolveLayout(BufferLayout layout, CharString path, LayoutPat
 		if(!C8_isValidAscii(v))
 			gotoIfError(clean, Error_invalidParameter(1, 3, "BufferLayout_resolveLayout()::path contains non ascii char"));
 
-		//For the final character we append first so we can process the final access here.
+		//For the final character we append first, so we can process the final access here.
 
 		Bool isEnd = i == end - 1;
 
@@ -659,7 +659,7 @@ Error BufferLayout_resolve(
 		return Error_invalidParameter(3, 0, "BufferLayout_resolve()::location isn't empty, might indicate memleak");
 
 	LayoutPathInfo info = (LayoutPathInfo) { 0 };
-	Error err = BufferLayout_resolveLayout(layout, path, &info, alloc);
+	const Error err = BufferLayout_resolveLayout(layout, path, &info, alloc);
 
 	if(err.genericError)
 		return err;
@@ -688,7 +688,7 @@ Error BufferLayout_setData(
 		return Error_constData(0, 0, "BufferLayout_setData()::buffer must be writable");
 
 	Buffer buf = Buffer_createNull();
-	Error err = BufferLayout_resolve(buffer, layout, path, &buf, alloc);
+	const Error err = BufferLayout_resolve(buffer, layout, path, &buf, alloc);
 
 	if(err.genericError)
 		return err;
@@ -715,7 +715,7 @@ Error BufferLayout_getData(
 		return Error_invalidParameter(3, 0, "BufferLayout_getData()::currentData isn't empty, might indicate memleak");
 
 	Buffer buf = Buffer_createNull();
-	Error err = BufferLayout_resolve(buffer, layout, path, &buf, alloc);
+	const Error err = BufferLayout_resolve(buffer, layout, path, &buf, alloc);
 
 	if(err.genericError)
 		return err;
@@ -724,7 +724,7 @@ Error BufferLayout_getData(
 	return Error_none();
 }
 
-#define _BUFFER_LAYOUT_SGET_IMPL(T)																		\
+#define BUFFER_LAYOUT_SGET_IMPL(T)																		\
 																										\
 Error BufferLayout_set##T(																				\
 	Buffer buffer, 																						\
@@ -758,26 +758,26 @@ Error BufferLayout_get##T(																				\
 	return Error_none();																				\
 }
 
-#define _BUFFER_LAYOUT_XINT_SGET_IMPL(prefix, suffix)												\
-_BUFFER_LAYOUT_SGET_IMPL(prefix##8##suffix);														\
-_BUFFER_LAYOUT_SGET_IMPL(prefix##16##suffix);														\
-_BUFFER_LAYOUT_SGET_IMPL(prefix##32##suffix);														\
-_BUFFER_LAYOUT_SGET_IMPL(prefix##64##suffix);
+#define BUFFER_LAYOUT_XINT_SGET_IMPL(prefix, suffix)													\
+BUFFER_LAYOUT_SGET_IMPL(prefix##8##suffix);																\
+BUFFER_LAYOUT_SGET_IMPL(prefix##16##suffix);															\
+BUFFER_LAYOUT_SGET_IMPL(prefix##32##suffix);															\
+BUFFER_LAYOUT_SGET_IMPL(prefix##64##suffix);
 
-#define __BUFFER_LAYOUT_VEC_IMPL(prefix)															\
-_BUFFER_LAYOUT_SGET_IMPL(prefix##32##x2);															\
-_BUFFER_LAYOUT_SGET_IMPL(prefix##32##x4)
+#define BUFFER_LAYOUT_VEC_IMPL(prefix)																	\
+BUFFER_LAYOUT_SGET_IMPL(prefix##32##x2);																\
+BUFFER_LAYOUT_SGET_IMPL(prefix##32##x4)
 
 //Setters for C8, Bool and ints/uints
 
-_BUFFER_LAYOUT_SGET_IMPL(C8);
-_BUFFER_LAYOUT_SGET_IMPL(Bool);
+BUFFER_LAYOUT_SGET_IMPL(C8);
+BUFFER_LAYOUT_SGET_IMPL(Bool);
 
-_BUFFER_LAYOUT_XINT_SGET_IMPL(U, );
-_BUFFER_LAYOUT_XINT_SGET_IMPL(I, );
+BUFFER_LAYOUT_XINT_SGET_IMPL(U, );
+BUFFER_LAYOUT_XINT_SGET_IMPL(I, );
 
-_BUFFER_LAYOUT_SGET_IMPL(F32);
-_BUFFER_LAYOUT_SGET_IMPL(F64);
+BUFFER_LAYOUT_SGET_IMPL(F32);
+BUFFER_LAYOUT_SGET_IMPL(F64);
 
-__BUFFER_LAYOUT_VEC_IMPL(I);
-__BUFFER_LAYOUT_VEC_IMPL(F);
+BUFFER_LAYOUT_VEC_IMPL(I);
+BUFFER_LAYOUT_VEC_IMPL(F);

@@ -38,14 +38,14 @@ U32 Buffer_crc32c(Buffer buf) {
 
 	U64 crc = U32_MAX;
 
-	U64 bufLen = Buffer_length(buf);
+	const U64 bufLen = Buffer_length(buf);
 
 	if(!bufLen)
 		return (U32) crc ^ U32_MAX;
 
 	U64 len = bufLen;
 	U64 it = (U64)(void*)buf.ptr;
-	U64 align8 = U64_min(it + len, (it + 7) & ~7);
+	const U64 align8 = U64_min(it + len, (it + 7) & ~7);
 
 	while (it < align8) {
 		crc = CRC32C_TABLE[0][(U8)(crc ^ *(const U8*)it)] ^ (crc >> 8);
@@ -56,7 +56,7 @@ U32 Buffer_crc32c(Buffer buf) {
 	while (len >= sizeof(U64) * 2) {
 
 		crc ^= *(const U64*) it;
-		U64 next = *((const U64*) it + 1);
+		const U64 next = *((const U64*) it + 1);
 
 		U64 res = 0;
 

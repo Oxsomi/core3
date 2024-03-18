@@ -25,13 +25,12 @@
 #include "types/type_cast.h"
 #include "types/buffer_layout.h"
 #include "types/flp.h"
-#include "types/rand.h"
-#include "types/transform.h"
 #include "types/big_int.h"
 
 #include <stdlib.h>
-#include <stdio.h>
 #include <string.h>
+
+#include "types/quat.h"
 
 Error ourAlloc(void *allocator, U64 length, Buffer *output) {
 
@@ -541,6 +540,11 @@ int main() {
 	//Instantiate
 
 	gotoIfError(clean, BufferLayout_createInstance(bufferLayout, 1, alloc, &emp));
+
+	typedef struct Transform {
+		QuatF32 rot;
+		F32x4 pos, scale;
+	} Transform;
 
 	typedef struct Camera {
 

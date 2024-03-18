@@ -133,10 +133,10 @@ Bool CdfList_setProbability(CdfList *list, U64 i, F32 value, F32 *oldValue) {
 	if(!list || i >= list->totalElements || value < 0)
 		return false;
 
-	U64 j = CDFList_getLinearIndex(list, i);
+	const U64 j = CDFList_getLinearIndex(list, i);
 
 	CdfValue *f = list->cdf.ptrNonConst;
-	F32 v = f[j].self;
+	const F32 v = f[j].self;
 
 	if(v == value)
 		return true;
@@ -179,7 +179,7 @@ Bool CdfList_set(CdfList *list, U64 i, F32 value, Buffer element) {
 
 	if(GenericList_isConstRef(list->elements)) {
 
-		Bool b = CdfList_setElement(list, i, element);
+		const Bool b = CdfList_setElement(list, i, element);
 
 		if (!b) {
 			CdfList_setProbability(list, i, oldValue, NULL);
@@ -204,7 +204,7 @@ Error CdfList_pushIndex(CdfList *list, U64 i, F32 value, Buffer element, Allocat
 	if(Buffer_length(element) != list->elements.stride)
 		return Error_invalidParameter(3, 0, "CdfList_pushIndex()::element can't mismatch list->elements.stride");
 
-	Bool isLast = list->totalElements == i;
+	const Bool isLast = list->totalElements == i;
 
 	Error err = ListCdfValue_insert(&list->cdf, i, (CdfValue) { value, 0 }, allocator);
 
@@ -240,7 +240,7 @@ Error CdfList_popIndex(CdfList *list, U64 i, Buffer element) {
 		return Error_invalidParameter(2, 0, "CdfList_popIndex()::element can't mismatch list->elements.stride");
 
 	CdfValue prevProbability = (CdfValue) { 0 };
-	Bool isLast = (list->totalElements - 1) == i;
+	const Bool isLast = (list->totalElements - 1) == i;
 
 	Error err = ListCdfValue_popLocation(&list->cdf, i, &prevProbability);
 
@@ -307,12 +307,12 @@ Error CdfList_getRandomElementSecure(CdfList *list, CdfListElement *elementValue
 		);
 
 	U32 v;
-	Buffer b = Buffer_createRef(&v, sizeof(v));
+	const Buffer b = Buffer_createRef(&v, sizeof(v));
 
 	if(!Buffer_csprng(b))
 		return Error_invalidOperation(0, "");
 
-	F32 f = (v << 8 >> 8) / 16777215.f * list->total;
+	const F32 f = (v << 8 >> 8) / 16777215.f * list->total;
 	return CdfList_getElementAtOffset(list, f, elementValue);
 }
 
@@ -343,11 +343,11 @@ Error CdfList_getElementAtOffset(CdfList *list, F32 offset, CdfListElement *elem
 
 	U64 startRegion = 0, endRegion = list->totalElements;
 	U64 j = (startRegion + endRegion) / 2;
-	CdfValue *f = list->cdf.ptrNonConst;
+	const CdfValue *f = list->cdf.ptrNonConst;
 
 	for (U64 i = 0; i < 64; ++i) {
 
-		CdfValue curr = f[j];
+		const CdfValue curr = f[j];
 
 		if (offset >= curr.predecessors && offset < curr.predecessors + curr.self) {
 
@@ -365,7 +365,7 @@ Error CdfList_getElementAtOffset(CdfList *list, F32 offset, CdfListElement *elem
 		if (offset >= curr.predecessors + curr.self)
 			startRegion = j + 1;
 
-		U64 oldJ = j;
+		const U64 oldJ = j;
 		j = (startRegion + endRegion) / 2;
 
 		//Should never happen, it should always find a match before this

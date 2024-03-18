@@ -51,7 +51,7 @@ static const U32 SHA256_K[64] = {
 
 //Arm7's ror instruction aka Java's >>>; shift that maintains right side of the bits into left side
 
-U32 ror(U32 v, U32 amount) {
+U32 ror(const U32 v, U32 amount) {
 	amount &= 31;								//Avoid undefined behavior (<< 32 is undefined)
 	return amount ? ((v >> amount) | (v << (32 - amount))) : v;
 }
@@ -83,8 +83,8 @@ void Buffer_sha256Internal(Buffer buf, U32 *output) {
 
 			//Point to stack
 
-			U64 realLen = len;
-			U64 realPtr = ptr;
+			const U64 realLen = len;
+			const U64 realPtr = ptr;
 
 			ptr = (U64)(void*) block;
 			len = 64;
@@ -159,7 +159,7 @@ void Buffer_sha256Internal(Buffer buf, U32 *output) {
 
 		//Store state
 
-		I32x4 currState0 = state[0], currState1 = state[1];
+		const I32x4 currState0 = state[0], currState1 = state[1];
 
 		//Perform SHA256
 
@@ -184,43 +184,43 @@ void Buffer_sha256Internal(Buffer buf, U32 *output) {
 
 				else {
 
-					U32 wj1 = w[(j + 1) & 0xF], wj14 = w[(j + 14) & 0xF];
+					const U32 wj1 = w[(j + 1) & 0xF], wj14 = w[(j + 14) & 0xF];
 
-					U32 s0 = ror(wj1, 7) ^ ror(wj1, 18) ^ (wj1 >> 3);
-					U32 s1 = ror(wj14, 17) ^ ror(wj14, 19) ^ (wj14 >> 10);
+					const U32 s0 = ror(wj1, 7) ^ ror(wj1, 18) ^ (wj1 >> 3);
+					const U32 s1 = ror(wj14, 17) ^ ror(wj14, 19) ^ (wj14 >> 10);
 
 					w[j] += s0 + w[(j + 9) & 0xF] + s1;
 				}
 
 				//Calculate s1 and ch
 
-				U32 ah4 = (U32) I32x4_x(state[1]);
-				U32 ah5 = (U32) I32x4_y(state[1]);
-				U32 ah6 = (U32) I32x4_z(state[1]);
+				const U32 ah4 = (U32) I32x4_x(state[1]);
+				const U32 ah5 = (U32) I32x4_y(state[1]);
+				const U32 ah6 = (U32) I32x4_z(state[1]);
 
-				U32 s1 = ror(ah4, 6) ^ ror(ah4, 11) ^ ror(ah4, 25);
-				U32 ch = (ah4 & ah5) ^ (~ah4 & ah6);
+				const U32 s1 = ror(ah4, 6) ^ ror(ah4, 11) ^ ror(ah4, 25);
+				const U32 ch = (ah4 & ah5) ^ (~ah4 & ah6);
 
 				//Calculate temp1 and temp2
 
-				U32 ah0 = (U32) I32x4_x(state[0]);
-				U32 ah1 = (U32) I32x4_y(state[0]);
-				U32 ah2 = (U32) I32x4_z(state[0]);
+				const U32 ah0 = (U32) I32x4_x(state[0]);
+				const U32 ah1 = (U32) I32x4_y(state[0]);
+				const U32 ah2 = (U32) I32x4_z(state[0]);
 
-				U32 temp1 = (U32) I32x4_w(state[1]) + s1 + ch + SHA256_K[(i << 4) | j] + w[j];
-				U32 s0 = ror(ah0, 2) ^ ror(ah0, 13) ^ ror(ah0, 22);
-				U32 maj = (ah0 & ah1) ^ (ah0 & ah2) ^ (ah1 & ah2);
-				U32 temp2 = s0 + maj;
+				const U32 temp1 = (U32) I32x4_w(state[1]) + s1 + ch + SHA256_K[(i << 4) | j] + w[j];
+				const U32 s0 = ror(ah0, 2) ^ ror(ah0, 13) ^ ror(ah0, 22);
+				const U32 maj = (ah0 & ah1) ^ (ah0 & ah2) ^ (ah1 & ah2);
+				const U32 temp2 = s0 + maj;
 
 				//Swizzle
 
-				U32 state0w = I32x4_w(state[0]);
+				const U32 state0w = I32x4_w(state[0]);
 
 				state[0] = I32x4_xxyz(state[0]);
 				state[1] = I32x4_xxyz(state[1]);
 
-				I32x4_setX(&state[0], temp1 + temp2);
-				I32x4_setX(&state[1], state0w + temp1);
+				I32x4_setX(&state[0], (I32)(temp1 + temp2));
+				I32x4_setX(&state[1], (I32)(state0w + temp1));
 			}
 
 		//Combine two states

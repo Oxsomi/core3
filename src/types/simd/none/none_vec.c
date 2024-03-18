@@ -382,8 +382,8 @@ I32x4 I32x4_lshByte96(I32x4 a) {
 
 I32x4 I32x4_shuffleBytes(I32x4 a, I32x4 b) {
 
-	U8 *ua = (U8*)&a;
-	U8 *ub = (U8*)&b;
+	const U8 *ua = (U8*)&a;
+	const U8 *ub = (U8*)&b;
 	U8 uc[16];
 
 	for (U8 i = 0; i < 16; ++i) {

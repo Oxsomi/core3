@@ -53,7 +53,7 @@ U32 Buffer_crc32c(Buffer buf) {
 
 	U32 crc = U32_MAX;
 
-	U64 bufLen = Buffer_length(buf);
+	const U64 bufLen = Buffer_length(buf);
 
 	if(!bufLen)
 		return crc ^ U32_MAX;
@@ -61,7 +61,7 @@ U32 Buffer_crc32c(Buffer buf) {
 	U64 off = (U64)(void*)buf.ptr;
 
 	U64 len = bufLen;
-	U64 offNear8 = U64_min((U64)buf.ptr + bufLen, (off + 7) & ~7);
+	const U64 offNear8 = U64_min((U64)buf.ptr + bufLen, (off + 7) & ~7);
 
 	//Go to nearest 8 byte boundary
 

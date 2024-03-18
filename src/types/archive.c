@@ -66,7 +66,7 @@ Bool Archive_getPath(
 	Bool isVirtual = false;
 	CharString resolvedPath = CharString_createNull();
 
-	Error err = File_resolve(path, &isVirtual, 128, CharString_createNull(), alloc, &resolvedPath);
+	const Error err = File_resolve(path, &isVirtual, 128, CharString_createNull(), alloc, &resolvedPath);
 
 	if(err.genericError)
 		return false;
@@ -136,7 +136,7 @@ Bool Archive_createOrFindParent(Archive *archive, CharString path, Allocator all
 
 	//Try to add parent (returns true if already exists)
 
-	ArchiveEntry entry = (ArchiveEntry) {
+	const ArchiveEntry entry = (ArchiveEntry) {
 		.path = substr,
 		.type = EFileType_Folder
 	};
@@ -196,7 +196,7 @@ clean:
 
 Error Archive_addDirectory(Archive *archive, CharString path, Allocator alloc) {
 
-	ArchiveEntry entry = (ArchiveEntry) {
+	const ArchiveEntry entry = (ArchiveEntry) {
 		.path = path,
 		.type = EFileType_Folder
 	};
@@ -206,7 +206,7 @@ Error Archive_addDirectory(Archive *archive, CharString path, Allocator alloc) {
 
 Error Archive_addFile(Archive *archive, CharString path, Buffer data, Ns timestamp, Allocator alloc) {
 
-	ArchiveEntry entry = (ArchiveEntry) {
+	const ArchiveEntry entry = (ArchiveEntry) {
 		.path = path,
 		.type = EFileType_File,
 		.data = data,
@@ -244,7 +244,7 @@ Error Archive_removeInternal(Archive *archive, CharString path, Allocator alloc,
 
 		for (U64 j = archive->entries.length - 1; j != U64_MAX; --j) {
 
-			ArchiveEntry cai = archive->entries.ptr[i];
+			const ArchiveEntry cai = archive->entries.ptr[i];
 
 			if(!CharString_startsWithStringInsensitive(cai.path, resolved))
 				continue;
@@ -293,7 +293,7 @@ Error Archive_rename(Archive *archive, CharString loc, CharString newFileName, A
 		return Error_nullPointer(0, "Archive_rename()::archive is required");
 
 	CharString resolvedLoc = CharString_createNull();
-	Error err = Error_none();
+	Error err;
 
 	if (!CharString_isValidFileName(newFileName))
 		return Error_invalidParameter(1, 0, "Archive_rename()::newFileName isn't a valid filename");
@@ -339,7 +339,7 @@ Error Archive_move(Archive *archive, CharString loc, CharString directoryName, A
 
 	CharString *filePath = &archive->entries.ptrNonConst[i].path;
 
-	U64 v = CharString_findLastSensitive(*filePath, '/');
+	const U64 v = CharString_findLastSensitive(*filePath, '/');
 
 	if (v != U64_MAX)
 		gotoIfError(clean, CharString_popFrontCount(filePath, v + 1));
@@ -469,7 +469,7 @@ Error Archive_foreach(
 	if(CharString_length(resolved))									//Ignore root
 		gotoIfError(clean, CharString_append(&resolved, '/', alloc));
 
-	U64 baseSlash = isRecursive ? 0 : CharString_countAllSensitive(resolved, '/');
+	const U64 baseSlash = isRecursive ? 0 : CharString_countAllSensitive(resolved, '/');
 
 	//TODO: Have a map where it's easy to find child files/folders.
 	//		For now we'll have to loop over every file.
@@ -478,7 +478,7 @@ Error Archive_foreach(
 
 	for (U64 i = 0; i < archive.entries.length; ++i) {
 
-		ArchiveEntry cai = archive.entries.ptr[i];
+		const ArchiveEntry cai = archive.entries.ptr[i];
 
 		if(type != EFileType_Any && type != cai.type)
 			continue;

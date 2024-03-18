@@ -24,8 +24,6 @@
 #include "types/allocator.h"
 #include "types/time.h"
 
-#include <stdio.h>
-
 #include "types/math.h"
 
 //BigInt
@@ -34,13 +32,13 @@ BigInt BigInt_createNull() { return (BigInt) { .isRef = true, .isConst = true };
 
 Error BigInt_create(U16 bitCount, Allocator alloc, BigInt *big) {
 
-	U64 u64s = (bitCount + 63) >> 6;
+	const U64 u64s = (bitCount + 63) >> 6;
 
 	if(u64s >> 8)
 		return Error_outOfBounds(0, bitCount, (U64)U8_MAX << 6, "BigInt_create()::bitCount out of bounds");
 
 	Buffer buffer = Buffer_createNull();
-	Error err = Buffer_createEmptyBytes(u64s * sizeof(U64), alloc, &buffer);
+	const Error err = Buffer_createEmptyBytes(u64s * sizeof(U64), alloc, &buffer);
 
 	if(err.genericError)
 		return err;
@@ -94,11 +92,11 @@ Error BigInt_createFromBase2Type(CharString text, U16 bitCount, Allocator alloc,
 	if(!big)
 		return Error_nullPointer(3, "BigInt_createFromBase2Type()::big is required");
 
-	Bool prefix = CharString_startsWithStringInsensitive(text, CharString_createRefCStrConst(base2Types[type]));
-	U8 prefixChars = prefix * 2;
-	U8 countPerChar = base2Count[type];
+	const Bool prefix = CharString_startsWithStringInsensitive(text, CharString_createRefCStrConst(base2Types[type]));
+	const U8 prefixChars = prefix * 2;
+	const U8 countPerChar = base2Count[type];
 
-	U64 chars = CharString_length(text) - prefixChars;
+	const U64 chars = CharString_length(text) - prefixChars;
 
 	if(!chars)
 		return Error_invalidParameter(0, 0, "BigInt_createFromBase2Type()::text starts with 0[xbon] but doesn't have content");
@@ -158,7 +156,7 @@ Error BigInt_createFromBase2Type(CharString text, U16 bitCount, Allocator alloc,
 		}
 
 		if(v == U8_MAX)
-			gotoIfError(clean, Error_invalidParameter(0, 1, "BigInt_createFromBase2Type()::text contains invalid char"));
+			gotoIfError(clean, Error_invalidParameter(0, 1, "BigInt_createFromBase2Type()::text contains invalid char"))
 
 		switch (type) {
 
@@ -168,12 +166,12 @@ Error BigInt_createFromBase2Type(CharString text, U16 bitCount, Allocator alloc,
 			case EBase2Type_Nyto:
 			case EBase2Type_Oct: {
 
-				U64 lo = (U64)v << ((countPerChar * j) & 63);
+				const U64 lo = (U64)v << ((countPerChar * j) & 63);
 
 				((U64*)big->data)[k] |= lo;
 
 				if (((countPerChar * j) & ~63) != ((countPerChar * (j + 1)) & ~63)) {
-					U64 hi = (U64)v >> (64 - (countPerChar * j) & 63);
+					const U64 hi = (U64)v >> (64 - (countPerChar * j) & 63);
 					((U64*)big->data)[++k] |= hi;
 				}
 
@@ -223,7 +221,7 @@ Error BigInt_createFromString(CharString text, U16 bitCount, Allocator alloc, Bi
 
 	if (CharString_length(text) > 2) {
 
-		U16 start = *(const U16*) text.ptr;
+		const U16 start = *(const U16*) text.ptr;
 
 		switch(start) {
 
@@ -375,13 +373,13 @@ Bool BigInt_mul(BigInt *a, BigInt b, Allocator allocator) {
 		return BigInt_and(a, b);
 
 	BigInt temp = (BigInt) { 0 };
-	Error err = BigInt_create(BigInt_bitCount(*a), allocator, &temp);
+	const Error err = BigInt_create(BigInt_bitCount(*a), allocator, &temp);
 
 	if(err.genericError)
 		return false;
 
-	U32 digitsA = (U32)a->length * 2;
-	U32 digitsB = (U32)b.length * 2;
+	const U32 digitsA = (U32)a->length * 2;
+	const U32 digitsB = (U32)b.length * 2;
 
 	U32 *dst = (U32*) temp.data;
 	const U32 *aptr = (const U32*) a->data;
@@ -409,18 +407,18 @@ Bool BigInt_mul(BigInt *a, BigInt b, Allocator allocator) {
 		//
 		//If we use base as 2^32 we can essentially process per U32 and then use a U64 to catch the overflow.
 		//Truncating it is a simple U32 cast and/or shift.
-		//When 128 bit numbers are available (hardware accelerated) this could be extended the same way to speed it up.
+		//When 128-bit numbers are available (hardware accelerated) this could be extended the same way to speed it up.
 
-		U32 startX = (U32) U64_min(i, digitsA - 1);
-		U32 startRayT = i - startX;
-		U32 endRayT = (U32) U64_min(i, digitsB - 1) - startRayT;
+		const U32 startX = (U32) U64_min(i, digitsA - 1);
+		const U32 startRayT = i - startX;
+		const U32 endRayT = (U32) U64_min(i, digitsB - 1) - startRayT;
 
 		for (U32 t = startRayT; t <= endRayT; ++t) {
 
-			U64 x = i - t;
-			U64 y = t;
+			const U64 x = i - t;
+			const U64 y = t;
 
-			U64 prevMul = mul;
+			const U64 prevMul = mul;
 			mul += (U64) aptr[x] * bptr[y];
 
 			if(mul < prevMul && i + 2 < digitsA) {			//Overflow in our overflow.
@@ -437,7 +435,7 @@ Bool BigInt_mul(BigInt *a, BigInt b, Allocator allocator) {
 
 		if(i + 1 < digitsA) {
 
-			U64 prev = dst[i + 1];
+			const U64 prev = dst[i + 1];
 			dst[i + 1] += (U32) (mul >> 32);
 
 			if (dst[i + 1] < prev && i + 2 < digitsA) {		//Overflow in our overflow.
@@ -451,7 +449,7 @@ Bool BigInt_mul(BigInt *a, BigInt b, Allocator allocator) {
 		}
 	}
 
-	Bool res = BigInt_and(a, BigInt_createNull()) && BigInt_or(a, temp);
+	const Bool res = BigInt_and(a, BigInt_createNull()) && BigInt_or(a, temp);
 	BigInt_free(&temp, allocator);
 	return res;
 }
@@ -462,7 +460,7 @@ Bool BigInt_add(BigInt *a, BigInt b) {
 		return false;
 
 	Bool overflow = false;
-	U64 len = U64_min(a->length, b.length);
+	const U64 len = U64_min(a->length, b.length);
 
 	for(U64 i = 0; i < len; ++i) {
 
@@ -480,10 +478,10 @@ Bool BigInt_add(BigInt *a, BigInt b) {
 		overflow = nextOverflow;
 	}
 
-	U64 next = b.length;
+	const U64 next = b.length;
 
 	while(overflow && next < a->length) {
-		U64 prev = a->data[next];
+		const U64 prev = a->data[next];
 		overflow = (++((U64*)a->data)[next]) < prev;
 	}
 
@@ -496,7 +494,7 @@ Bool BigInt_sub(BigInt *a, BigInt b) {
 		return false;
 
 	Bool underflow = false;
-	U64 len = U64_min(a->length, b.length);
+	const U64 len = U64_min(a->length, b.length);
 
 	for(U64 i = 0; i < len; ++i) {
 
@@ -514,10 +512,10 @@ Bool BigInt_sub(BigInt *a, BigInt b) {
 		underflow = nextUnderflow;
 	}
 
-	U64 next = b.length;
+	const U64 next = b.length;
 
 	while(underflow && next < a->length) {
-		U64 prev = a->data[next];
+		const U64 prev = a->data[next];
 		underflow = (--((U64*)a->data)[next]) > prev;
 	}
 
@@ -551,7 +549,7 @@ Bool BigInt_and(BigInt *a, BigInt b) {
 	if(!a || a->isConst)
 		return false;
 
-	U64 j = U64_min(a->length, b.length);
+	const U64 j = U64_min(a->length, b.length);
 
 	for(U64 i = 0; i < j; ++i)
 		((U64*)a->data)[i] &= b.data[i];
@@ -589,7 +587,7 @@ Bool BigInt_lsh(BigInt *a, U16 bits) {
 		U64 right = i < (bits >> 6) ? 0 : a->data[i - (bits >> 6)];
 		U64 left = i <= (bits >> 6) ? 0 : a->data[i - (bits >> 6) - 1];
 
-		U64 shift = bits & 63;
+		const U64 shift = bits & 63;
 
 		right <<= shift;
 		left >>= 64 - shift;
@@ -616,7 +614,7 @@ Bool BigInt_rsh(BigInt *a, U16 bits) {
 		U64 left = i + (bits >> 6) > a->length - 1 ? 0 : a->data[i + (bits >> 6)];
 		U64 right = i + (bits >> 6) >= a->length - 1 ? 0 : a->data[i + (bits >> 6) + 1];
 
-		U64 shift = bits & 63;
+		const U64 shift = bits & 63;
 
 		right <<= 64 - shift;
 		left >>= shift;
@@ -629,12 +627,12 @@ Bool BigInt_rsh(BigInt *a, U16 bits) {
 
 ECompareResult BigInt_cmp(BigInt a, BigInt b) {
 
-	U64 biggestLen = U64_max(a.length, b.length);
+	const U64 biggestLen = U64_max(a.length, b.length);
 
 	for (U64 i = biggestLen - 1; i != U64_MAX; --i) {
 
-		U64 ai = i >= a.length ? 0 : a.data[i];
-		U64 bi = i >= b.length ? 0 : b.data[i];
+		const U64 ai = i >= a.length ? 0 : a.data[i];
+		const U64 bi = i >= b.length ? 0 : b.data[i];
 
 		if(ai > bi)
 			return ECompareResult_Gt;
@@ -676,7 +674,7 @@ Error BigInt_resize(BigInt *a, U8 newSize, Allocator alloc) {
 	}
 
 	BigInt temp = (BigInt) { 0 };
-	Error err = BigInt_create((U16)newSize << 6, alloc, &temp);
+	const Error err = BigInt_create((U16)newSize << 6, alloc, &temp);
 
 	if(err.genericError)
 		return err;
@@ -696,7 +694,7 @@ Bool BigInt_set(BigInt *a, BigInt b, Bool allowResize, Allocator alloc) {
 
 	if (allowResize && a->length != b.length) {
 
-		Error err = BigInt_resize(a, b.length, alloc);
+		const Error err = BigInt_resize(a, b.length, alloc);
 
 		if(err.genericError)
 			return false;
@@ -719,7 +717,7 @@ Error BigInt_createCopy(BigInt *a, Allocator alloc, BigInt *b) {
 	if(b->data)
 		return Error_invalidParameter(2, 0, "BigInt_createCopy()::b->data should be NULL to avoid memory leaks");
 
-	Error err = BigInt_create((U16)a->length << 6, alloc, b);
+	const Error err = BigInt_create((U16)a->length << 6, alloc, b);
 
 	if(err.genericError)
 		return err;
@@ -769,7 +767,7 @@ U16 BigInt_bitScan(BigInt ai) {
 		offset <<= 1;
 
 		offset |= (Bool)((const U8*)&a)[offset + 1];
-		U8 b = ((const U8*)&a)[offset];
+		const U8 b = ((const U8*)&a)[offset];
 		offset <<= 1;
 
 		offset |= (Bool)(b >> 4);
@@ -792,7 +790,7 @@ Error BigInt_isBase2(BigInt a, Allocator alloc, Bool *isBase2) {
 	if(!isBase2)
 		return Error_nullPointer(2, "BigInt_isBase2()->isBase2 is required");
 
-	U16 v = BigInt_bitScan(a);
+	const U16 v = BigInt_bitScan(a);
 
 	if(v == U16_MAX) {
 		*isBase2 = false;
@@ -818,8 +816,8 @@ clean:
 
 Error BigInt_base2(BigInt b, Allocator alloc, CharString *result, EBase2Type type, Bool leadingZeros) {
 
-	U8 countPerChar = base2Count[type];
-	U64 len = U64_max(3, (((U64)b.length * 64 + countPerChar - 1) / countPerChar) + 2);
+	const U8 countPerChar = base2Count[type];
+	const U64 len = U64_max(3, (((U64)b.length * 64 + countPerChar - 1) / countPerChar) + 2);
 	Error err = CharString_resize(result, len, '0', alloc);
 
 	if(err.genericError)
@@ -828,8 +826,8 @@ Error BigInt_base2(BigInt b, Allocator alloc, CharString *result, EBase2Type typ
 	((C8*)result->ptr)[1] = base2Types[type][1];
 
 	U64 firstLoc = len - 1;
-	U8 mask = (1 << countPerChar) - 1;
-	U64 i = len - 1;
+	const U8 mask = (1 << countPerChar) - 1;
+	const U64 i = len - 1;
 
 	for (U64 j = 0, k = 0; j < len - 2 && k < b.length; ++j) {
 
@@ -838,7 +836,7 @@ Error BigInt_base2(BigInt b, Allocator alloc, CharString *result, EBase2Type typ
 
 		if (((countPerChar * j) & ~63) != ((countPerChar * (j + 1)) & ~63)) {
 
-			U64 mask2 = ((U64)U64_MAX << (64 - (countPerChar * j) & 63)) & mask;
+			const U64 mask2 = ((U64)U64_MAX << (64 - (countPerChar * j) & 63)) & mask;
 
 			if(k + 1 < b.length)
 				v |= ((U64)((U64*)b.data)[k + 1] & mask2);
@@ -908,7 +906,7 @@ Error BigInt_toString(
 
 Bool U128_isBase2(U128 a) {
 
-	U8 v = U128_bitScan(a);
+	const U8 v = U128_bitScan(a);
 
 	if(v == U8_MAX)
 		return false;
@@ -965,7 +963,7 @@ U128 U128_createFromString(CharString text, Error *failed, Allocator alloc) {
 
 	if (CharString_length(text) > 2) {
 
-		U16 start = *(const U16*) text.ptr;
+		const U16 start = *(const U16*) text.ptr;
 
 		switch(start) {
 

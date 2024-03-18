@@ -71,8 +71,8 @@ I32x4 AES_keyGenAssist(I32x4 a, U8 i) {
 	U32 x1 = I32x4_y(a);
 	U32 x3 = I32x4_w(a);
 
-	U32 rcons[] = { 0x00, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1B, 0x36 };
-	U32 rcon = rcons[i];
+	const U32 rcons[] = { 0x00, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1B, 0x36 };
+	const U32 rcon = rcons[i];
 
 	x1 = AES_subWord(x1);
 	x3 = AES_subWord(x3);
@@ -102,7 +102,7 @@ U8x4x4 U8x4x4_transpose(const U8x4x4 *r) {
 
 I32x4 AES_shiftRows(I32x4 a) {
 
-	U8x4x4 *ap = (U8x4x4*) &a;
+	const U8x4x4 *ap = (U8x4x4*) &a;
 
 	U8x4x4 res = *ap;
 
@@ -195,7 +195,7 @@ void AESEncryptionContext_ghashPrepare(I32x4 H, I32x4 ghashLut[17]) {
 
 	for (U8 i = 4; i > 0; i >>= 1) {
 
-		I32x4 T = I32x4_create4(0, 0, 0, I32x4_x(H) & 1 ? 0xE1000000 : 0);
+		const I32x4 T = I32x4_create4(0, 0, 0, I32x4_x(H) & 1 ? 0xE1000000 : 0);
 		H = AESEncryptionContext_rsh(H, 1);
 		H = I32x4_xor(H, T);
 
@@ -225,8 +225,8 @@ I32x4 AESEncryptionContext_ghash(I32x4 aa, const I32x4 ghashLut[17]) {
 
 	for (U8 i = 30; i != U8_MAX; --i) {
 
-		U8 rem = (U8)I32x4_x(zlZh) & 0xF;
-		U8 ind = (((U8*)&aa)[i / 2] >> (4 * (1 - (i & 1)))) & 0xF;
+		const U8 rem = (U8)I32x4_x(zlZh) & 0xF;
+		const U8 ind = (((U8*)&aa)[i / 2] >> (4 * (1 - (i & 1)))) & 0xF;
 
 		zlZh = AESEncryptionContext_rsh(zlZh, 4);
 		zlZh = I32x4_xor(zlZh, I32x4_create4(0, 0, 0, (U32)GHASH_LAST4[rem] << 16));

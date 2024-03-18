@@ -57,7 +57,7 @@ void AESEncryptionContext_ghashPrepare(I32x4 H, I32x4 ghashLut[17]) {
 I32x4 AESEncryptionContext_ghash(I32x4 a, const I32x4 ghashLut[17]) {
 
 	a = I32x4_swapEndianness(a);
-	I32x4 b = ghashLut[0];
+	const I32x4 b = ghashLut[0];
 
 	I32x4 tmp[8];
 

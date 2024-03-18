@@ -66,9 +66,9 @@ I32x4 I32x4_swapEndianness(I32x4 v) {
 
 	swapped = I32x4_or(I32x4_lsh32(swapped, 16), I32x4_rsh32(swapped, 16));		//Swap low 16 with hi 16
 
-	I32x4 byteMask = I32x4_xxxx4(0x00FF00FF);
-	I32x4 lo = I32x4_and(swapped, byteMask);
-	I32x4 hi = I32x4_and(I32x4_rsh32(swapped, 8), byteMask);
+	const I32x4 byteMask = I32x4_xxxx4(0x00FF00FF);
+	const I32x4 lo = I32x4_and(swapped, byteMask);
+	const I32x4 hi = I32x4_and(I32x4_rsh32(swapped, 8), byteMask);
 
 	return I32x4_or(I32x4_lsh32(lo, 8), hi);
 }
@@ -178,7 +178,7 @@ I32x2_expand(w);
 
 I32x4 I32x4_lsh128(I32x4 a, U8 bits) {
 
-	I32x4 b = a;
+	const I32x4 b = a;
 	a = I32x4_lshByte(a, 8);
 
 	if (bits >= 64)
@@ -190,7 +190,7 @@ I32x4 I32x4_lsh128(I32x4 a, U8 bits) {
 
 I32x4 I32x4_rsh128(I32x4 a, U8 bits) {
 
-	I32x4 b = a;
+	const I32x4 b = a;
 	a = I32x4_rshByte(a, 8);
 
 	if (bits >= 64)

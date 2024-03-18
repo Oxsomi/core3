@@ -21,7 +21,6 @@
 #include "types/allocator.h"
 #include "types/error.h"
 #include "types/buffer.h"
-#include "types/type_cast.h"
 #include "types/math.h"
 #include "types/vec.h"
 
@@ -60,7 +59,7 @@ Bool Buffer_copy(Buffer dst, Buffer src) {
 	if(Buffer_isConstRef(dst))
 		return false;
 
-	U64 dstLen = Buffer_length(dst), srcLen = Buffer_length(src);
+	const U64 dstLen = Buffer_length(dst), srcLen = Buffer_length(src);
 
 	U64 *dstPtr = (U64*)dst.ptr, *dstEnd = dstPtr + (dstLen >> 3);
 	const U64 *srcPtr = (const U64*)src.ptr, *srcEnd = srcPtr + (srcLen >> 3);
@@ -103,18 +102,15 @@ Bool Buffer_revCopy(Buffer dst, Buffer src) {
 	if(Buffer_isConstRef(dst))
 		return false;
 
-	U64 dstLen = Buffer_length(dst), srcLen = Buffer_length(src);
+	const U64 dstLen = Buffer_length(dst), srcLen = Buffer_length(src);
 
 	U64 *dstPtr = (U64*)(dst.ptr + dstLen), *dstBeg = dstPtr - (dstLen >> 3);
 	const U64 *srcPtr = (const U64*)(src.ptr + srcLen), *srcBeg = srcPtr - (srcLen >> 3);
 
-	for(; dstPtr > dstBeg && srcPtr > srcBeg; ) {
+	while(dstPtr > dstBeg && srcPtr > srcBeg) {
 		--srcPtr; --dstPtr;
 		*dstPtr = *srcPtr;
 	}
-
-	dstBeg = (U64*) dstPtr;
-	srcBeg = (const U64*) srcPtr;
 
 	if((I64)dstPtr - 4 >= (I64)dst.ptr && (I64)srcPtr - 4 >= (I64)src.ptr ) {
 
@@ -230,7 +226,7 @@ Bool Buffer_eq(Buffer buf0, Buffer buf1) {
 	if (!buf0.ptr || !buf1.ptr)
 		return false;
 
-	U64 len0 = Buffer_length(buf0);
+	const U64 len0 = Buffer_length(buf0);
 
 	if(len0 != Buffer_length(buf1))
 		return false;
@@ -262,8 +258,8 @@ Error Buffer_setBitRange(Buffer dst, U64 dstOff, U64 bits) {
 	if(dstOff + bits > (Buffer_length(dst) << 3))
 		return Error_outOfBounds(1, dstOff + bits, Buffer_length(dst) << 3, "Buffer_setBitRange()::dstOff out of bounds");
 
-	U64 dstOff8 = (dstOff + 7) >> 3;
-	U64 bitEnd = dstOff + bits;
+	const U64 dstOff8 = (dstOff + 7) >> 3;
+	const U64 bitEnd = dstOff + bits;
 
 	//Bits, begin
 
@@ -272,15 +268,15 @@ Error Buffer_setBitRange(Buffer dst, U64 dstOff, U64 bits) {
 
 	//Bytes, until U64 aligned
 
-	U64 dstOff64 = (dstOff8 + 7) >> 3;
-	U64 bitEnd8 = bitEnd >> 3;
+	const U64 dstOff64 = (dstOff8 + 7) >> 3;
+	const U64 bitEnd8 = bitEnd >> 3;
 
 	for (U64 i = dstOff8; i < bitEnd8 && i < dstOff64 << 3; ++i)
 		((U8*)dst.ptr)[i] = U8_MAX;
 
 	//U64 aligned
 
-	U64 bitEnd64 = bitEnd8 >> 3;
+	const U64 bitEnd64 = bitEnd8 >> 3;
 
 	for(U64 i = dstOff64; i < bitEnd64; ++i)
 		*((U64*)dst.ptr + i) = U64_MAX;
@@ -312,8 +308,8 @@ Error Buffer_unsetBitRange(Buffer dst, U64 dstOff, U64 bits) {
 	if(dstOff + bits > (Buffer_length(dst) << 3))
 		return Error_outOfBounds(1, dstOff + bits, Buffer_length(dst) << 3, "Buffer_unsetBitRange()::dstOff out of bounds");
 
-	U64 dstOff8 = (dstOff + 7) >> 3;
-	U64 bitEnd = dstOff + bits;
+	const U64 dstOff8 = (dstOff + 7) >> 3;
+	const U64 bitEnd = dstOff + bits;
 
 	//Bits, begin
 
@@ -322,15 +318,15 @@ Error Buffer_unsetBitRange(Buffer dst, U64 dstOff, U64 bits) {
 
 	//Bytes, until U64 aligned
 
-	U64 dstOff64 = (dstOff8 + 7) >> 3;
-	U64 bitEnd8 = bitEnd >> 3;
+	const U64 dstOff64 = (dstOff8 + 7) >> 3;
+	const U64 bitEnd8 = bitEnd >> 3;
 
 	for (U64 i = dstOff8; i < bitEnd8 && i < dstOff64 << 3; ++i)
 		((U8*)dst.ptr)[i] = 0;
 
 	//U64 aligned
 
-	U64 bitEnd64 = bitEnd8 >> 3;
+	const U64 bitEnd64 = bitEnd8 >> 3;
 
 	for(U64 i = dstOff64; i < bitEnd64; ++i)
 		*((U64*)dst.ptr + i) = 0;
@@ -356,7 +352,7 @@ Error Buffer_setAllToInternal(Buffer buf, U64 b64, U8 b8) {
 	if(Buffer_isConstRef(buf))
 		return Error_constData(0, 0, "Buffer_setAllToInternal()::buf should be writable");
 
-	U64 l = Buffer_length(buf);
+	const U64 l = Buffer_length(buf);
 
 	for(U64 i = 0, j = l >> 3; i < j; ++i)
 		*((U64*)buf.ptr + i) = b64;
@@ -440,8 +436,8 @@ Error Buffer_createCopy(Buffer buf, Allocator alloc, Buffer *result) {
 		return Error_none();
 	}
 
-	U64 l = Buffer_length(buf);
-	Error e = Buffer_allocBitsInternal(l << 3, alloc, result);
+	const U64 l = Buffer_length(buf);
+	const Error e = Buffer_allocBitsInternal(l << 3, alloc, result);
 
 	if(e.genericError)
 		return e;
@@ -473,7 +469,7 @@ Bool Buffer_free(Buffer *buf, Allocator alloc) {
 	if(!alloc.free)
 		return false;
 
-	Bool success = alloc.free(alloc.ptr, *buf);
+	const Bool success = alloc.free(alloc.ptr, *buf);
 	*buf = Buffer_createNull();
 	return success;
 }
@@ -494,7 +490,7 @@ Error Buffer_offset(Buffer *buf, U64 length) {
 	if(!Buffer_isRef(*buf))								//Ensure we don't accidentally call this and leak memory
 		return Error_invalidOperation(0, "Buffer_offset() can only be called on a ref");
 
-	U64 bufLen = Buffer_length(*buf);
+	const U64 bufLen = Buffer_length(*buf);
 
 	if(length > bufLen)
 		return Error_outOfBounds(1, length, bufLen, "Buffer_offset()::length is out of bounds");
@@ -530,7 +526,7 @@ Error Buffer_appendBuffer(Buffer *buf, Buffer append) {
 
 	void *ptr = buf ? (U8*)buf->ptr : NULL;
 
-	Error e = Buffer_offset(buf, Buffer_length(append));
+	const Error e = Buffer_offset(buf, Buffer_length(append));
 
 	if(e.genericError)
 		return e;
@@ -550,7 +546,7 @@ Error Buffer_consume(Buffer *buf, void *v, U64 length) {
 
 	const void *ptr = buf ? buf->ptr : NULL;
 
-	Error e = Buffer_offset(buf, length);
+	const Error e = Buffer_offset(buf, length);
 
 	if(e.genericError)
 		return e;
@@ -581,7 +577,7 @@ Error Buffer_createSubset(
 	//Since our buffer was passed here, it's safe to make a ref (to ensure Buffer_offset doesn't fail)
 
 	buf = Buffer_createRefFromBuffer(buf, isConst);
-	Error e = Buffer_offset(&buf, offset);
+	const Error e = Buffer_offset(&buf, offset);
 
 	if(e.genericError)
 		return e;
@@ -596,12 +592,12 @@ Error Buffer_createSubset(
 
 Error Buffer_combine(Buffer a, Buffer b, Allocator alloc, Buffer *output) {
 
-	U64 alen = Buffer_length(a), blen = Buffer_length(b);
+	const U64 alen = Buffer_length(a), blen = Buffer_length(b);
 
 	if(alen + blen < alen)
 		return Error_overflow(0, alen + blen, alen, "Buffer_combine() overflow");
 
-	Error err = Buffer_createUninitializedBytes(alen + blen, alloc, output);
+	const Error err = Buffer_createUninitializedBytes(alen + blen, alloc, output);
 
 	if(err.genericError)
 		return err;
@@ -611,30 +607,30 @@ Error Buffer_combine(Buffer a, Buffer b, Allocator alloc, Buffer *output) {
 	return Error_none();
 }
 
-#define _BUFFER_IMPL(T)																		\
+#define BUFFER_IMPL(T)																		\
 Error Buffer_append##T(Buffer *buf, T v)	{ return Buffer_append(buf, &v, sizeof(v)); }	\
-Error Buffer_consume##T(Buffer *buf, T *v)  { return Buffer_consume(buf, v, sizeof(*v)); }
+Error Buffer_consume##T(Buffer *buf, T *v)	{ return Buffer_consume(buf, v, sizeof(*v)); }
 
-_BUFFER_IMPL(U64);
-_BUFFER_IMPL(U32);
-_BUFFER_IMPL(U16);
-_BUFFER_IMPL(U8);
+BUFFER_IMPL(U64);
+BUFFER_IMPL(U32);
+BUFFER_IMPL(U16);
+BUFFER_IMPL(U8);
 
-_BUFFER_IMPL(I64);
-_BUFFER_IMPL(I32);
-_BUFFER_IMPL(I16);
-_BUFFER_IMPL(I8);
+BUFFER_IMPL(I64);
+BUFFER_IMPL(I32);
+BUFFER_IMPL(I16);
+BUFFER_IMPL(I8);
 
-_BUFFER_IMPL(F64);
-_BUFFER_IMPL(F32);
+BUFFER_IMPL(F64);
+BUFFER_IMPL(F32);
 
-_BUFFER_IMPL(I32x2);
-_BUFFER_IMPL(F32x2);
-//_BUFFER_IMPL(F64x2);		TODO:
+BUFFER_IMPL(I32x2);
+BUFFER_IMPL(F32x2);
+//BUFFER_IMPL(F64x2);		TODO:
 
-_BUFFER_IMPL(I32x4);
-_BUFFER_IMPL(F32x4);
-//_BUFFER_IMPL(F64x4);		TODO:
+BUFFER_IMPL(I32x4);
+BUFFER_IMPL(F32x4);
+//BUFFER_IMPL(F64x4);		TODO:
 
 //UTF-8
 //https://en.wikipedia.org/wiki/UTF-8
@@ -649,7 +645,7 @@ Error Buffer_readAsUtf8(Buffer buf, U64 i, UnicodeCodePointInfo *codepoint) {
 
 	//Ascii
 
-	U8 v0 = buf.ptr[i++];
+	const U8 v0 = buf.ptr[i++];
 
 	if (!(v0 >> 7)) {
 
@@ -668,7 +664,7 @@ Error Buffer_readAsUtf8(Buffer buf, U64 i, UnicodeCodePointInfo *codepoint) {
 	if(i + 1 > Buffer_length(buf))
 		return Error_outOfBounds(1, i, Buffer_length(buf), "Buffer_readAsUtf8()::buf UTF8 ended unexpectedly");
 
-	U8 v1 = buf.ptr[i++];
+	const U8 v1 = buf.ptr[i++];
 
 	if(v1 < 0x80 || v1 >= 0xC0)
 		return Error_invalidParameter(0, 2, "Buffer_readAsUtf8()::buf[i + 1] had invalid encoding");
@@ -685,7 +681,7 @@ Error Buffer_readAsUtf8(Buffer buf, U64 i, UnicodeCodePointInfo *codepoint) {
 	if(i + 1 > Buffer_length(buf))
 		return Error_outOfBounds(2, i, Buffer_length(buf), "Buffer_readAsUtf8()::buf UTF8 ended unexpectedly");
 
-	U8 v2 = buf.ptr[i++];
+	const U8 v2 = buf.ptr[i++];
 
 	if(v2 < 0x80 || v2 >= 0xC0)
 		return Error_invalidParameter(0, 3, "Buffer_readAsUtf8()::buf[i + 2] had invalid encoding");
@@ -704,7 +700,7 @@ Error Buffer_readAsUtf8(Buffer buf, U64 i, UnicodeCodePointInfo *codepoint) {
 	if(i + 1 > Buffer_length(buf))
 		return Error_outOfBounds(3, i, Buffer_length(buf), "Buffer_readAsUtf8()::buf UTF8 ended unexpectedly");
 
-	U8 v3 = buf.ptr[i++];
+	const U8 v3 = buf.ptr[i++];
 
 	if(v3 < 0x80 || v3 >= 0xC0)
 		return Error_invalidParameter(0, 4, "Buffer_readAsUtf8()::buf[i + 3] had invalid encoding");
@@ -792,7 +788,7 @@ Error Buffer_readAsUtf16(Buffer buf, U64 i, UnicodeCodePointInfo *codepoint) {
 
 	//1 U16
 
-	U16 v0 = *(const U16*)(buf.ptr + i);
+	const U16 v0 = *(const U16*)(buf.ptr + i);
 	i += 2;
 
 	if (v0 <= 0xD7FF) {
@@ -812,8 +808,7 @@ Error Buffer_readAsUtf16(Buffer buf, U64 i, UnicodeCodePointInfo *codepoint) {
 	if(i + 2 > Buffer_length(buf))
 		return Error_outOfBounds(1, i, Buffer_length(buf), "Buffer_readAsUtf16()::buf UTF16 ended unexpectedly");
 
-	U16 v1 = *(const U16*)(buf.ptr + i);
-	i += 2;
+	const U16 v1 = *(const U16*)(buf.ptr + i);
 
 	if(v1 < 0xDC00 || (v1 - 0xDC00) >= (1 << 10))
 		return Error_invalidParameter(0, 2, "Buffer_readAsUtf16()::buf[i + 1] had invalid encoding");
@@ -861,9 +856,10 @@ Bool Buffer_isUnicode(Buffer buf, F32 threshold, Bool isUtf16) {
 
 	threshold = 1 - threshold;
 
-	U64 i = 0, minWidth = isUtf16 ? 2 : 1;
-	F32 counter = 0;
-	F32 invLen = 1.f / Buffer_length(buf);
+	U64 i = 0;
+	F64 counter = 0;
+	const F64 invLen = 1.0 / (F64)Buffer_length(buf);
+	const U64 minWidth = isUtf16 ? 2 : 1;
 
 	while (i + minWidth <= Buffer_length(buf)) {
 
@@ -893,13 +889,9 @@ Bool Buffer_isUtf16(Buffer buf, F32 threshold) { return Buffer_isUnicode(buf, th
 
 Bool Buffer_isAscii(Buffer buf) {
 
-	for (U64 i = 0; i < Buffer_length(buf); ++i) {
-
-		C8 c = (C8) buf.ptr[i];
-
-		if(!C8_isValidAscii(c))
+	for (U64 i = 0; i < Buffer_length(buf); ++i)
+		if(!C8_isValidAscii((C8) buf.ptr[i]))
 			return false;
-	}
 
 	return Buffer_length(buf);
 }

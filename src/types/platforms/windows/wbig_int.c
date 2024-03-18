@@ -29,8 +29,8 @@ U128 U128_createU64x2(U64 a, U64 b) {
 }
 
 U128 U128_mul64(U64 au, U64 bu) {
-	U64 hiProd = 0;
-	U64 loProd = _umul128(bu, au, &hiProd);
+	const U64 hiProd = 0;
+	const U64 loProd = _umul128(bu, au, &hiProd);
 	return U128_createU64x2(loProd, hiProd);
 }
 
@@ -44,7 +44,7 @@ U128 U128_not(U128 a) {  return I32x4_not(a); }
 Bool U128_eq(U128 a, U128 b) { return I32x4_eq4(a, b); }
 
 U128 U128_add64(U64 a, U64 b) {
-	U64 c = a + b;
+	const U64 c = a + b;
 	return I32x4_create4((U32)c, (U32)(c >> 32), c < a, 0);
 }
 
@@ -53,7 +53,7 @@ U128 U128_add(U128 av, U128 bv) {
 	const U64 *a = (const U64*)&av;
 	const U64 *b = (const U64*)&bv;
 
-	U64 lo = a[0] + b[0];
+	const U64 lo = a[0] + b[0];
 	U64 hi = lo < a[0];
 	hi += a[1] + b[1];
 
@@ -70,12 +70,12 @@ U128 U128_rsh(U128 a, U8 x) { return I32x4_rsh128(a, x); }
 U8 U128_bitScan(U128 a) {
 
 	unsigned long index = 0;
-	Bool hasFirstBit = _BitScanReverse64(&index, ((const U64*)&a)[1]);
+	const Bool hasFirstBit = _BitScanReverse64(&index, ((const U64*)&a)[1]);
 
 	if (hasFirstBit)
 		return (U8)index + 64;
 
-	Bool hasLastBit = _BitScanReverse64(&index, ((const U64*)&a)[0]);
+	const Bool hasLastBit = _BitScanReverse64(&index, ((const U64*)&a)[0]);
 	return hasLastBit ? (U8) index : U8_MAX;
 }
 

@@ -33,7 +33,7 @@ Bool Buffer_csprng(Buffer target) {
 	if(!Buffer_length(target) || Buffer_isConstRef(target))
 		return false;
 
-	NTSTATUS stat = BCryptGenRandom(
+	const NTSTATUS stat = BCryptGenRandom(
 		0,
 		(U8*)target.ptr,
 		(ULONG) Buffer_length(target),

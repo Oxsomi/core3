@@ -63,12 +63,12 @@ I32x4 I32x4_trunc2(I32x4 a) { return _movelh_epi32(a, I32x4_zero()); }
 F32x4 F32x4_trunc2(F32x4 a) { return _mm_movelh_ps(a, F32x4_zero()); }
 
 I32x4 I32x4_trunc3(I32x4 a) {
-	I32x4 z0 = I32x4_xzzz(_movelh_epi32(I32x4_zzzz(a), I32x4_zero()));
+	const I32x4 z0 = I32x4_xzzz(_movelh_epi32(I32x4_zzzz(a), I32x4_zero()));
 	return _movelh_epi32(a, z0);
 }
 
 F32x4 F32x4_trunc3(F32x4 a) {
-	F32x4 z0 = F32x4_xzzz(_mm_movelh_ps(F32x4_zzzz(a), F32x4_zero()));
+	const F32x4 z0 = F32x4_xzzz(_mm_movelh_ps(F32x4_zzzz(a), F32x4_zero()));
 	return _mm_movelh_ps(a, z0);
 }
 

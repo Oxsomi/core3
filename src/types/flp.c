@@ -101,9 +101,9 @@ U64 EFloatType_isZero(EFloatType type, U64 v) {
 
 U64 EFloatType_convertMantissa(EFloatType type1, U64 v, EFloatType type2, Bool *carry) {
 
-	U8 mbit1 = EFloatType_mantissaBits(type1);
-	U8 mbit2 = EFloatType_mantissaBits(type2);
-	U64 mantissa = EFloatType_mantissa(type1, v);
+	const U8 mbit1 = EFloatType_mantissaBits(type1);
+	const U8 mbit2 = EFloatType_mantissaBits(type2);
+	const U64 mantissa = EFloatType_mantissa(type1, v);
 
 	if (mbit1 == mbit2)
 		return mantissa;
@@ -111,16 +111,16 @@ U64 EFloatType_convertMantissa(EFloatType type1, U64 v, EFloatType type2, Bool *
 	if (mbit2 > mbit1)
 		return mantissa << (mbit2 - mbit1);
 
-	U64 shiftedMantissa = mantissa >> (mbit1 - mbit2);
-	U64 discardedMantissa = mantissa & (((U64)1 << (mbit1 - mbit2)) - 1);
-	U64 halfMantissa = (U64)1 << (mbit1 - mbit2 - 1);
+	const U64 shiftedMantissa = mantissa >> (mbit1 - mbit2);
+	const U64 discardedMantissa = mantissa & (((U64)1 << (mbit1 - mbit2)) - 1);
+	const U64 halfMantissa = (U64)1 << (mbit1 - mbit2 - 1);
 
 	U8 round = discardedMantissa > halfMantissa;	//Yes, rounding for some reason ignores 0.5 and only works >0.5
 
 	if (!EFloatType_isFinite(type1, v))				//Rounding is only for real numbers
 		round = 0;
 
-	U64 res = (shiftedMantissa + round) & EFloatType_mantissaMask(type2);
+	const U64 res = (shiftedMantissa + round) & EFloatType_mantissaMask(type2);
 
 	if (!res && round)
 		*carry = true;		//Increments exponent
@@ -136,11 +136,11 @@ U64 EFloatType_convertExponent(
 	Bool carry
 ) {
 
-	U8 ebit1 = EFloatType_exponentBits(type1);
-	U8 ebit2 = EFloatType_exponentBits(type2);
+	const U8 ebit1 = EFloatType_exponentBits(type1);
+	const U8 ebit2 = EFloatType_exponentBits(type2);
 
-	U8 mbit1 = EFloatType_mantissaBits(type1);
-	U8 mbit2 = EFloatType_mantissaBits(type2);
+	const U8 mbit1 = EFloatType_mantissaBits(type1);
+	const U8 mbit2 = EFloatType_mantissaBits(type2);
 
 	U64 exponent = EFloatType_exponent(type1, v);
 
@@ -198,9 +198,9 @@ U64 EFloatType_convertExponent(
 
 			for (U8 i = 0; i < 6; ++i) {
 
-				U8 bits = right - left;
-				U8 center = left + (bits >> 1);
-				U64 mask = (((U64)1 << (bits - (bits >> 1))) - 1) << center;
+				const U8 bits = right - left;
+				const U8 center = left + (bits >> 1);
+				const U64 mask = (((U64)1 << (bits - (bits >> 1))) - 1) << center;
 
 				//Left side
 
@@ -261,7 +261,7 @@ U64 EFloatType_convertExponent(
 		//We do this by simply moving around the prev exponent by our new exponent bits.
 		//The remaining bits is simply how much our mantissa has to be shifted to get the same value.
 
-		U64 missingBits = (U64)-cvt;
+		const U64 missingBits = (U64)-cvt;
 
 		if (missingBits > mbit2) {		//Collapse to zero
 			*convertedMantissa = 0;
@@ -275,12 +275,12 @@ U64 EFloatType_convertExponent(
 			return 0;
 		}
 
-		U64 mantissaDiscardShift = missingBits + (mbit1 - mbit2) + 1;
-		U64 mantissaDiscardMask = ((U64)1 << mantissaDiscardShift) - 1;
-		U64 mantissaDiscarded = m & mantissaDiscardMask;
-		U64 mantissaDiscardHalf = (U64)1 << (mantissaDiscardShift - 1);
+		const U64 mantissaDiscardShift = missingBits + (mbit1 - mbit2) + 1;
+		const U64 mantissaDiscardMask = ((U64)1 << mantissaDiscardShift) - 1;
+		const U64 mantissaDiscarded = m & mantissaDiscardMask;
+		const U64 mantissaDiscardHalf = (U64)1 << (mantissaDiscardShift - 1);
 
-		U64 round = mantissaDiscarded > mantissaDiscardHalf;
+		const U64 round = mantissaDiscarded > mantissaDiscardHalf;
 
 		m >>= mantissaDiscardShift;					//Correct to correct exponent
 		m |= (U64)1 << (mbit2 - missingBits - 1);	//Shift the 1.x into the DeN
@@ -321,17 +321,17 @@ U64 EFloatType_convert(EFloatType type, U64 v, EFloatType conversionType) {
 
 		if (type == EFloatType_F32 && conversionType == EFloatType_F64) {
 
-			U32 v32 = (U32)v;
-			F32 f32 = *(const F32*)&v32;
-			F64 f64 = (F64) f32;
+			const U32 v32 = (U32)v;
+			const F32 f32 = *(const F32*)&v32;
+			const F64 f64 = (F64) f32;
 
 			return *(const U64*)&f64;
 		}
 
 		if (type == EFloatType_F64 && conversionType == EFloatType_F32) {
 
-			F64 f64 = *(const F64*)&v;
-			F32 f32 = (F32) f64;
+			const F64 f64 = *(const F64*)&v;
+			const F32 f32 = (F32) f64;
 
 			return *(const U32*)&f32;
 		}
@@ -348,10 +348,10 @@ U64 EFloatType_convert(EFloatType type, U64 v, EFloatType conversionType) {
 					hasF16C = (cpuInfo[2] >> 29) & 1;
 				}
 
-				EFloatType targ = type == EFloatType_F16 ? conversionType : type;
+				const EFloatType targ = type == EFloatType_F16 ? conversionType : type;
 
-				Bool anyFloat = targ == EFloatType_F32;
-				Bool anyDouble = targ == EFloatType_F64;
+				const Bool anyFloat = targ == EFloatType_F32;
+				const Bool anyDouble = targ == EFloatType_F64;
 
 				if((anyFloat || anyDouble) && hasF16C >= 1) {
 
@@ -359,11 +359,11 @@ U64 EFloatType_convert(EFloatType type, U64 v, EFloatType conversionType) {
 
 					if (type == EFloatType_F16) {
 
-						I32x4 expandedi = I32x4_create1((I32)v);
-						F32 expanded = F32x4_x(_mm_cvtph_ps(expandedi));
+						const I32x4 expandedi = I32x4_create1((I32)v);
+						const F32 expanded = F32x4_x(_mm_cvtph_ps(expandedi));
 
 						if(anyDouble) {
-							F64 converted = (F64) expanded;
+							const F64 converted = (F64) expanded;
 							return *(const U64*)&converted;
 						}
 
@@ -373,8 +373,8 @@ U64 EFloatType_convert(EFloatType type, U64 v, EFloatType conversionType) {
 					//Truncation to F16
 
 					else {
-						F32 truncated = anyDouble ? (F32)*(const F64*)&v : *(const F32*)&v;
-						I32x4 converted = _mm_cvtps_ph(F32x4_create1(truncated), _MM_FROUND_CUR_DIRECTION);
+						const F32 truncated = anyDouble ? (F32)*(const F64*)&v : *(const F32*)&v;
+						const I32x4 converted = _mm_cvtps_ph(F32x4_create1(truncated), _MM_FROUND_CUR_DIRECTION);
 						return (F16) I32x4_x(converted);
 					}
 				}
@@ -386,14 +386,14 @@ U64 EFloatType_convert(EFloatType type, U64 v, EFloatType conversionType) {
 
 	#endif
 
-	U64 sign = EFloatType_sign(type, v) ? EFloatType_signMask(conversionType) : 0;
+	const U64 sign = EFloatType_sign(type, v) ? EFloatType_signMask(conversionType) : 0;
 
 	if (EFloatType_isZero(type, v))
 		return sign;
 
 	Bool carry = false;
 	U64 mantissa = EFloatType_convertMantissa(type, v, conversionType, &carry);
-	U64 exponent = EFloatType_convertExponent(type, v, conversionType, &mantissa, carry);
+	const U64 exponent = EFloatType_convertExponent(type, v, conversionType, &mantissa, carry);
 
 	return
 		sign |
@@ -401,10 +401,10 @@ U64 EFloatType_convert(EFloatType type, U64 v, EFloatType conversionType) {
 		(mantissa << EFloatType_mantissaShift(conversionType));
 }
 
-#undef _EFloatType_cast1
+#undef EFloatType_cast1
 #undef EFloatType_cast
 
-#define _EFloatType_cast1(a, b)										\
+#define EFloatType_cast1(a, b)										\
 a b##_cast##a(b v) {												\
 																	\
 	U64 v64;														\
@@ -422,14 +422,14 @@ a b##_cast##a(b v) {												\
 }
 
 #define EFloatType_cast(a)		\
-_EFloatType_cast1(F8, a);		\
-_EFloatType_cast1(F16, a);		\
-_EFloatType_cast1(F32, a);		\
-_EFloatType_cast1(F64, a);		\
-_EFloatType_cast1(BF16, a);		\
-_EFloatType_cast1(TF19, a);		\
-_EFloatType_cast1(PXR24, a);	\
-_EFloatType_cast1(FP24, a);
+EFloatType_cast1(F8, a);		\
+EFloatType_cast1(F16, a);		\
+EFloatType_cast1(F32, a);		\
+EFloatType_cast1(F64, a);		\
+EFloatType_cast1(BF16, a);		\
+EFloatType_cast1(TF19, a);		\
+EFloatType_cast1(PXR24, a);		\
+EFloatType_cast1(FP24, a);
 
 EFloatType_cast(F8);
 EFloatType_cast(F16);

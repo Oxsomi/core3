@@ -78,7 +78,7 @@ void Log_printCapturedStackTraceCustom(
 	if(lvl >= ELogLevel_Count)
 		return;
 
-	HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
+	const HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
 	SetConsoleTextAttribute(handle, COLORS[lvl]);
 
 	CapturedStackTrace captured[STACKTRACE_SIZE] = { 0 };
@@ -87,9 +87,9 @@ void Log_printCapturedStackTraceCustom(
 
 	//Obtain process
 
-	HANDLE process = GetCurrentProcess();
+	const HANDLE process = GetCurrentProcess();
 
-	Bool hasSymbols = SymInitialize(process, NULL, TRUE);
+	const Bool hasSymbols = SymInitialize(process, NULL, TRUE);
 	Bool anySymbol = false;
 
 	if(hasSymbols)
@@ -100,11 +100,11 @@ void Log_printCapturedStackTraceCustom(
 			++i, ++stackCount
 		) {
 
-			U64 addr = (U64) stackTrace[i];
+			const U64 addr = (U64) stackTrace[i];
 
 			//Get module name
 
-			U64 moduleBase = SymGetModuleBase(process, addr);
+			const U64 moduleBase = SymGetModuleBase(process, addr);
 
 			wchar_t modulePath[MAX_PATH + 1] = { 0 };
 			if (!moduleBase || !GetModuleFileNameW((HINSTANCE)moduleBase, modulePath, MAX_PATH))
@@ -217,30 +217,30 @@ void Log_printCapturedStackTraceCustom(
 
 void Log_log(Allocator alloc, ELogLevel lvl, ELogOptions options, CharString arg) {
 
-	Ns t = Time_now();
+	const Ns t = Time_now();
 
 	if(lvl >= ELogLevel_Count)
 		return;
 
-	U64 thread = Thread_getId();
+	const U64 thread = Thread_getId();
 	
 	//Remember old to ensure we can reset
 
 	CONSOLE_SCREEN_BUFFER_INFO info;
 	GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &info);
-	WORD oldColor = info.wAttributes;
+	const WORD oldColor = info.wAttributes;
 
 	//Prepare for message
 
-	HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
+	const HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
 	SetConsoleTextAttribute(handle, COLORS[lvl]);
 
 	//[<thread> <time>]: <hr\n><ourStuff> <\n if enabled>
 
-	Bool hasTimestamp = options & ELogOptions_Timestamp;
-	Bool hasThread = options & ELogOptions_Thread;
-	Bool hasNewLine = options & ELogOptions_NewLine;
-	Bool hasPrepend = hasTimestamp || hasThread;
+	const Bool hasTimestamp = options & ELogOptions_Timestamp;
+	const Bool hasThread = options & ELogOptions_Thread;
+	const Bool hasNewLine = options & ELogOptions_NewLine;
+	const Bool hasPrepend = hasTimestamp || hasThread;
 
 	if (hasPrepend)
 		printf("[");
@@ -259,7 +259,7 @@ void Log_log(Allocator alloc, ELogLevel lvl, ELogOptions options, CharString arg
 	if (hasPrepend)
 		printf("]: ");
 
-	Bool debugger = IsDebuggerPresent();
+	const Bool debugger = IsDebuggerPresent();
 
 	ListU16 copy = (ListU16) { 0 };
 	Bool panic = false;
