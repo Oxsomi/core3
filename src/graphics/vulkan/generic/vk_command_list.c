@@ -26,19 +26,15 @@
 #include "graphics/generic/pipeline.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/device_texture.h"
-#include "graphics/generic/depth_stencil.h"
-#include "graphics/generic/render_texture.h"
 #include "graphics/generic/tlas.h"
 #include "graphics/generic/blas.h"
 #include "graphics/vulkan/vulkan.h"
 #include "graphics/vulkan/vk_device.h"
 #include "graphics/vulkan/vk_instance.h"
-#include "graphics/vulkan/vk_swapchain.h"
 #include "graphics/vulkan/vk_buffer.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/errorx.h"
 #include "platforms/log.h"
-#include "formats/texture.h"
 #include "types/buffer.h"
 #include "types/error.h"
 
@@ -207,7 +203,7 @@ void CommandList_process(
 						.height = image.height,
 						.depth = image.length
 					}
-				}));
+				}))
 
 			next:
 
@@ -614,7 +610,9 @@ void CommandList_process(
 
 			if(op == ECommandOp_Dispatch) {
 				DispatchCmd dispatch = *(const DispatchCmd*)data;
-				vkCmdDispatch(buffer, dispatch.groups[0], dispatch.groups[1], dispatch.groups[2]);
+				vkCmdDispatch(
+					buffer, dispatch.groups[0], dispatch.groups[1], dispatch.groups[2]
+				);
 			}
 
 			else {
@@ -647,13 +645,13 @@ void CommandList_process(
 				.deviceAddress = getVkDeviceAddress((DeviceData) { 
 					.buffer = info.shaderBindingTable, .offset = info.sbtOffset 
 				}),
-				.size = raytracingShaderAlignment * info.groupCount,
+				.size = (U64)raytracingShaderAlignment * info.groupCount,
 				.stride = raytracingShaderAlignment
 			};
 
 			VkStridedDeviceAddressRegionKHR miss = (VkStridedDeviceAddressRegionKHR) {
 				.deviceAddress = hit.deviceAddress + hit.size,
-				.size = raytracingShaderAlignment * info.missCount,
+				.size = (U64)raytracingShaderAlignment * info.missCount,
 				.stride = raytracingShaderAlignment
 			};
 
@@ -665,7 +663,7 @@ void CommandList_process(
 
 			VkStridedDeviceAddressRegionKHR callable = (VkStridedDeviceAddressRegionKHR) {
 				.deviceAddress = raygen.deviceAddress + raygen.size * info.raygenCount,
-				.size = raytracingShaderAlignment * info.callableCount,
+				.size = (U64)raytracingShaderAlignment * info.callableCount,
 				.stride = raytracingShaderAlignment
 			};
 
@@ -772,7 +770,7 @@ void CommandList_process(
 								0, 0,
 								&deviceExt->bufferTransitions,
 								&dependency
-							));
+							))
 						}
 
 					gotoIfError(nextTransition, VkDeviceBuffer_transition(
@@ -783,7 +781,7 @@ void CommandList_process(
 						0, 0,
 						&deviceExt->bufferTransitions,
 						&dependency
-					));
+					))
 
 					continue;
 				}
@@ -803,7 +801,7 @@ void CommandList_process(
 						0, 0,
 						&deviceExt->bufferTransitions,
 						&dependency
-					));
+					))
 
 					continue;
 				}
@@ -924,7 +922,7 @@ void CommandList_process(
 
 						&deviceExt->imageTransitions,
 						&dependency
-					));
+					))
 				}
 
 				else {
@@ -941,7 +939,7 @@ void CommandList_process(
 						devBuffer->resource.size,
 						&deviceExt->bufferTransitions,
 						&dependency
-					));
+					))
 				}
 
 			nextTransition:
@@ -972,7 +970,10 @@ void CommandList_process(
 				.pMarkerName = (const char*) data + sizeof(F32x4),
 			};
 
-			Buffer_copy(Buffer_createRef(&markerInfo.color, sizeof(F32x4)), Buffer_createRefConst(data, sizeof(F32x4)));
+			Buffer_copy(
+				Buffer_createRef(&markerInfo.color, sizeof(F32x4)), 
+				Buffer_createRefConst(data, sizeof(F32x4))
+			);
 
 			if(op == ECommandOp_AddMarkerDebugExt)
 				instanceExt->cmdDebugMarkerInsert(buffer, &markerInfo);

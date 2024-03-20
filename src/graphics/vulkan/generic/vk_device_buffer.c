@@ -49,7 +49,7 @@ Error VkDeviceBuffer_transition(
 
 	//Handle buffer barrier
 
-	VkBufferMemoryBarrier2 bufferBarrier = (VkBufferMemoryBarrier2) {
+	const VkBufferMemoryBarrier2 bufferBarrier = (VkBufferMemoryBarrier2) {
 
 		.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
 
@@ -67,7 +67,7 @@ Error VkDeviceBuffer_transition(
 		.size = !size ? VK_WHOLE_SIZE : size
 	};
 
-	Error err = ListVkBufferMemoryBarrier2_pushBackx(bufferBarriers, bufferBarrier);
+	const Error err = ListVkBufferMemoryBarrier2_pushBackx(bufferBarriers, bufferBarrier);
 
 	if(err.genericError)
 		return err;
@@ -84,7 +84,7 @@ Error VkDeviceBuffer_transition(
 
 Bool DeviceBuffer_freeExt(DeviceBuffer *buffer) {
 
-	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(GraphicsDeviceRef_ptr(buffer->resource.device), Vk);
+	const VkGraphicsDevice *deviceExt = GraphicsDevice_ext(GraphicsDeviceRef_ptr(buffer->resource.device), Vk);
 	VkDeviceBuffer *bufferExt = DeviceBuffer_ext(buffer, Vk);
 
 	if(bufferExt->buffer) {
@@ -171,7 +171,7 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 		&buf->resource.blockOffset,
 		EResourceType_DeviceBuffer,
 		name
-	));
+	))
 
 	buf->resource.allocated = true;
 
@@ -179,10 +179,10 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 
 	//Bind memory
 
-	gotoIfError(clean, vkCheck(vkCreateBuffer(deviceExt->device, &bufferInfo, NULL, &bufExt->buffer)));
+	gotoIfError(clean, vkCheck(vkCreateBuffer(deviceExt->device, &bufferInfo, NULL, &bufExt->buffer)))
 	gotoIfError(clean, vkCheck(vkBindBufferMemory(
 		deviceExt->device, bufExt->buffer, (VkDeviceMemory) block.ext, buf->resource.blockOffset
-	)));
+	)))
 
 	if (block.mappedMemory)
 		buf->resource.mappedMemoryExt = block.mappedMemory + buf->resource.blockOffset;
@@ -197,7 +197,7 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 	buf->resource.deviceAddress = vkGetBufferDeviceAddress(deviceExt->device, &address);
 
 	if(!buf->resource.deviceAddress)
-		gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_createBufferExt() Couldn't obtain GPU address"));
+		gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_createBufferExt() Couldn't obtain GPU address"))
 
 	//Fill relevant descriptor sets if shader accessible
 
@@ -250,7 +250,7 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 					.objectHandle = (U64) bufExt->buffer
 				};
 
-				gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName)));
+				gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName)))
 			}
 		#endif
 	}
@@ -302,9 +302,8 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 		DeviceMemoryBlock block = device->allocator.blocks.ptr[buffer->resource.blockId];
 		Bool incoherent = !(block.allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
-		if(incoherent) {
-			gotoIfError(clean, ListVkMappedMemoryRange_resizex(&tempMappedMemRanges, buffer->pendingChanges.length + 1));
-		}
+		if(incoherent)
+			gotoIfError(clean, ListVkMappedMemoryRange_resizex(&tempMappedMemRanges, buffer->pendingChanges.length + 1))
 
 		for(U64 j = 0; j < buffer->pendingChanges.length; ++j) {
 
@@ -330,7 +329,7 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 		if(incoherent)
 			gotoIfError(clean, vkCheck(vkFlushMappedMemoryRanges(
 				deviceExt->device, (U32) tempMappedMemRanges.length, tempMappedMemRanges.ptr
-			)));
+			)))
 	}
 
 	else {
@@ -340,16 +339,16 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 		U64 allocRange = 0;
 
 		for(U64 j = 0; j < buffer->pendingChanges.length; ++j) {
-			BufferRange bufferj = buffer->pendingChanges.ptr[j].buffer;
+			const BufferRange bufferj = buffer->pendingChanges.ptr[j].buffer;
 			allocRange += bufferj.endRange - bufferj.startRange;
 		}
 
 		device->pendingBytes += allocRange;
 
-		gotoIfError(clean, ListVkBufferCopy_resizex(&pendingCopies, buffer->pendingChanges.length));
+		gotoIfError(clean, ListVkBufferCopy_resizex(&pendingCopies, buffer->pendingChanges.length))
 
 		VkDependencyInfo dependency = (VkDependencyInfo) { .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO };
-		gotoIfError(clean, ListVkBufferMemoryBarrier2_reservex(&tempBufferBarriers, 2 + buffer->pendingChanges.length));
+		gotoIfError(clean, ListVkBufferMemoryBarrier2_reservex(&tempBufferBarriers, 2 + buffer->pendingChanges.length))
 
 		if (allocRange >= 16 * MIBI) {		//Resource is too big, allocate dedicated staging resource
 
@@ -358,7 +357,7 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 				EDeviceBufferUsage_None, EGraphicsResourceFlag_InternalWeakDeviceRef | EGraphicsResourceFlag_CPUAllocatedBit,
 				CharString_createRefCStrConst("Dedicated staging buffer"),
 				allocRange, &tempStagingResource
-			));
+			))
 
 			DeviceBuffer *stagingResource = DeviceBufferRef_ptr(tempStagingResource);
 			VkDeviceBuffer *stagingResourceExt = DeviceBuffer_ext(stagingResource, Vk);
@@ -373,7 +372,7 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 
 			for(U64 j = 0; j < buffer->pendingChanges.length; ++j) {
 
-				BufferRange bufferj = buffer->pendingChanges.ptr[j].buffer;
+				const BufferRange bufferj = buffer->pendingChanges.ptr[j].buffer;
 				U64 len = bufferj.endRange - bufferj.startRange;
 
 				Buffer_copy(
@@ -390,7 +389,7 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 					len,
 					&tempBufferBarriers,
 					&dependency
-				));
+				))
 
 				pendingCopies.ptrNonConst[j] = (VkBufferCopy) {
 					.srcOffset = allocRange,
@@ -422,7 +421,7 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 				allocRange,
 				&tempBufferBarriers,
 				&dependency
-			));
+			))
 
 			if(dependency.bufferMemoryBarrierCount)
 				instanceExt->cmdPipelineBarrier2(commandBuffer, &dependency);
@@ -435,9 +434,9 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 				pendingCopies.ptr
 			);
 
-			//When staging resource is commited to current in flight then we can relinguish ownership.
+			//When staging resource is committed to current in flight then we can relinquish ownership.
 
-			gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, tempStagingResource));
+			gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, tempStagingResource))
 			tempStagingResource = NULL;
 		}
 
@@ -445,7 +444,7 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 
 		else {
 
-			gotoIfError(clean, ListVkBufferCopy_resizex(&pendingCopies, buffer->pendingChanges.length));
+			gotoIfError(clean, ListVkBufferCopy_resizex(&pendingCopies, buffer->pendingChanges.length))
 
 			AllocationBuffer *stagingBuffer = &device->stagingAllocations[device->submitId % 3];
 			DeviceBuffer *staging = DeviceBufferRef_ptr(device->staging);
@@ -455,7 +454,7 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 			Error temp = AllocationBuffer_allocateBlockx(stagingBuffer, allocRange, 4, (const U8**) &location);
 
 			if(temp.genericError && location == defaultLocation)		//Something else went wrong
-				gotoIfError(clean, temp);
+				gotoIfError(clean, temp)
 
 			//We re-create the staging buffer to fit the new allocation.
 
@@ -466,8 +465,8 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 				//Allocate new staging buffer.
 
 				U64 newSize = prevSize * 2 + allocRange * 3;
-				gotoIfError(clean, GraphicsDeviceRef_resizeStagingBuffer(deviceRef, newSize));
-				gotoIfError(clean, AllocationBuffer_allocateBlockx(stagingBuffer, allocRange, 4, (const U8**) &location));
+				gotoIfError(clean, GraphicsDeviceRef_resizeStagingBuffer(deviceRef, newSize))
+				gotoIfError(clean, AllocationBuffer_allocateBlockx(stagingBuffer, allocRange, 4, (const U8**) &location))
 
 				staging = DeviceBufferRef_ptr(device->staging);
 				stagingExt = DeviceBuffer_ext(staging, Vk);
@@ -482,7 +481,7 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 
 			for(U64 j = 0; j < buffer->pendingChanges.length; ++j) {
 
-				BufferRange bufferj = buffer->pendingChanges.ptr[j].buffer;
+				const BufferRange bufferj = buffer->pendingChanges.ptr[j].buffer;
 				U64 len = bufferj.endRange - bufferj.startRange;
 
 				Buffer_copy(
@@ -505,7 +504,7 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 					len,
 					&tempBufferBarriers,
 					&dependency
-				));
+				))
 
 				allocRange += len;
 			}
@@ -533,10 +532,10 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 					staging->resource.size / 3,
 					&tempBufferBarriers,
 					&dependency
-				));
+				))
 
 				RefPtr_inc(device->staging);
-				gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, device->staging));		//Add to in flight
+				gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, device->staging))		//Add to in flight
 			}
 
 			if(dependency.bufferMemoryBarrierCount)
@@ -556,10 +555,10 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 		Buffer_freex(&buffer->cpuData);
 
 	buffer->isFirstFrame = buffer->isPending = buffer->isPendingFullCopy = false;
-	gotoIfError(clean, ListDevicePendingRange_clear(&buffer->pendingChanges));
+	gotoIfError(clean, ListDevicePendingRange_clear(&buffer->pendingChanges))
 
 	if(RefPtr_inc(pending))
-		gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, pending));
+		gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, pending))
 
 	if (device->pendingBytes >= device->flushThreshold)
 		VkGraphicsDevice_flush(deviceRef, commandBuffer);

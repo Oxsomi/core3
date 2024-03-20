@@ -32,11 +32,6 @@ typedef struct VkUnifiedTexture {
 	VkImageLayout lastLayout;
 } VkUnifiedTexture;
 
-typedef struct CharString CharString;
-typedef struct GraphicsDevice GraphicsDevice;
-typedef struct Error Error;
-typedef enum ETextureFormat ETextureFormat;
-typedef enum EGraphicsDataTypes EGraphicsDataTypes;
 typedef enum ECompareOp ECompareOp;
 
 typedef struct VkBLAS {
@@ -56,6 +51,7 @@ TList(VkImageCopy);
 TList(VkBufferImageCopy);
 TList(VkImageMemoryBarrier2);
 TList(VkBufferMemoryBarrier2);
+TList(VkPipeline);
 
 Error vkCheck(VkResult result);
 
@@ -68,9 +64,7 @@ VkCompareOp mapVkCompareOp(ECompareOp op);
 VkDeviceAddress getVkDeviceAddress(DeviceData data);
 VkDeviceOrHostAddressConstKHR getVkLocation(DeviceData data, U64 localOffset);
 
-//Transitions entire resource rather than subresources
-
-typedef struct ListVkImageMemoryBarrier2 ListVkImageMemoryBarrier2;
+//Transitions entire resource rather than sub-resources
 
 Error VkUnifiedTexture_transition(
 	VkUnifiedTexture *image,

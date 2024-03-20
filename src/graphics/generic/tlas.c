@@ -98,9 +98,7 @@ Bool TLAS_getInstanceDataCpu(const TLAS *tlas, U64 i, TLASInstanceData *result) 
 		return false;
 
 	TLASInstanceData *data = NULL;
-	Bool b = TLAS_getInstanceDataCpuInternal(tlas, i, &data);
-
-	if(!b)
+	if(!TLAS_getInstanceDataCpuInternal(tlas, i, &data))
 		return false;
 
 	*result = *data;
@@ -148,7 +146,7 @@ Bool TLAS_free(TLAS *tlas, Allocator allocator) {
 	}
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(tlas->base.device);
-	ELockAcquire acq = Lock_lock(&device->descriptorLock, U64_MAX);
+	const ELockAcquire acq = Lock_lock(&device->descriptorLock, U64_MAX);
 
 	if (acq >= ELockAcquire_Success) {
 
@@ -175,30 +173,42 @@ Error GraphicsDeviceRef_createTLAS(GraphicsDeviceRef *dev, TLAS tlas, CharString
 		return Error_nullPointer(3, "GraphicsDeviceRef_createTLAS()::tlasRef is required");
 
 	if(*tlasRef)
-		return Error_invalidParameter(3, 0, "GraphicsDeviceRef_createTLAS()::*tlasRef not NULL, indicates memleak");
+		return Error_invalidParameter(
+			3, 0, "GraphicsDeviceRef_createTLAS()::*tlasRef not NULL, indicates memleak"
+		);
 
 	if(tlas.base.parent && tlas.base.parent->typeId != (ETypeId) EGraphicsTypeId_TLASExt)
 		return Error_invalidOperation(1, "GraphicsDeviceRef_createTLAS()::parent is invalid");
 
 	if(tlas.base.parent && TLASRef_ptr(tlas.base.parent)->base.device != dev)
-		return Error_invalidOperation(1, "GraphicsDeviceRef_createTLAS()::parent and TLAS device need to share device");
+		return Error_invalidOperation(
+			1, "GraphicsDeviceRef_createTLAS()::parent and TLAS device need to share device"
+		);
 
 	if(tlas.base.parent)
 		tlas.base.flags |= ERTASBuildFlags_IsUpdate;
 
 	else if(tlas.base.flags & ERTASBuildFlags_IsUpdate)
-		return Error_invalidOperation(7, "GraphicsDeviceRef_createTLAS()::parent is required if IsUpdate is present");
+		return Error_invalidOperation(
+			7, "GraphicsDeviceRef_createTLAS()::parent is required if IsUpdate is present"
+		);
 
 	if(!(tlas.base.flags & ERTASBuildFlags_AllowUpdate) && (tlas.base.flags & ERTASBuildFlags_IsUpdate))
-		return Error_invalidOperation(8, "GraphicsDeviceRef_createTLAS() is update is not possible if AllowUpdate is false");
+		return Error_invalidOperation(
+			8, "GraphicsDeviceRef_createTLAS() is update is not possible if AllowUpdate is false"
+		);
 
 	EGraphicsFeatures feat = GraphicsDeviceRef_ptr(dev)->info.capabilities.features;
 
 	if(!(feat & EGraphicsFeatures_Raytracing))
-		return Error_unsupportedOperation(0, "GraphicsDeviceRef_createTLAS() is unsupported without raytracing support");
+		return Error_unsupportedOperation(
+			0, "GraphicsDeviceRef_createTLAS() is unsupported without raytracing support"
+		);
 
 	if(tlas.base.isMotionBlurExt && !(feat & EGraphicsFeatures_RayMotionBlur))
-		return Error_unsupportedOperation(0, "GraphicsDeviceRef_createTLAS() uses motion blur, but it's unsupported");
+		return Error_unsupportedOperation(
+			0, "GraphicsDeviceRef_createTLAS() uses motion blur, but it's unsupported"
+		);
 
 	//Validate TLAS
 
@@ -228,7 +238,9 @@ Error GraphicsDeviceRef_createTLAS(GraphicsDeviceRef *dev, TLAS tlas, CharString
 
 				TLASInstanceData dat = (TLASInstanceData) { 0 };
 				if(!TLAS_getInstanceDataCpu(&tlas, i, &dat))
-					return Error_invalidOperation(11, "GraphicsDeviceRef_createTLAS() can't get instance data cpu");
+					return Error_invalidOperation(
+						11, "GraphicsDeviceRef_createTLAS() can't get instance data cpu"
+					);
 
 				if(dat.blasCpu) {
 
@@ -236,7 +248,9 @@ Error GraphicsDeviceRef_createTLAS(GraphicsDeviceRef *dev, TLAS tlas, CharString
 						return Error_invalidOperation(12, "GraphicsDeviceRef_createTLAS() invalid BLAS type");
 
 					if(BLASRef_ptr(dat.blasCpu)->base.device != dev)
-						return Error_invalidOperation(13, "GraphicsDeviceRef_createTLAS() BLAS device is incompatible");
+						return Error_invalidOperation(
+							13, "GraphicsDeviceRef_createTLAS() BLAS device is incompatible"
+						);
 				}
 
 				if(!(dat.instanceId24_mask8 >> 24))
@@ -268,14 +282,14 @@ Error GraphicsDeviceRef_createTLAS(GraphicsDeviceRef *dev, TLAS tlas, CharString
 		(ObjectFreeFunc) TLAS_free,
 		(ETypeId) EGraphicsTypeId_TLASExt,
 		tlasRef
-	));
+	))
 
 	//Fill ptr
 
 	TLAS *tlasPtr = TLASRef_ptr(*tlasRef);
 
 	if(tlas.base.parent)
-		gotoIfError(clean, TLASRef_inc(tlas.base.parent));
+		gotoIfError(clean, TLASRef_inc(tlas.base.parent))
 
 	*tlasPtr = tlas;
 	tlasPtr->base.lock = Lock_create();
@@ -283,13 +297,13 @@ Error GraphicsDeviceRef_createTLAS(GraphicsDeviceRef *dev, TLAS tlas, CharString
 
 	if (tlas.base.asConstructionType == ETLASConstructionType_Serialized) {
 		tlasPtr->cpuData = Buffer_createNull();
-		gotoIfError(clean, Buffer_createCopyx(tlas.cpuData, &tlasPtr->cpuData));
+		gotoIfError(clean, Buffer_createCopyx(tlas.cpuData, &tlasPtr->cpuData))
 	}
 	else {
 
 		if (tlas.useDeviceMemory) {
 			tlasPtr->deviceData = (DeviceData) { 0 };
-			gotoIfError(clean, DeviceBufferRef_inc(tlas.deviceData.buffer));
+			gotoIfError(clean, DeviceBufferRef_inc(tlas.deviceData.buffer))
 			tlasPtr->deviceData = tlas.deviceData;
 		}
 
@@ -299,12 +313,12 @@ Error GraphicsDeviceRef_createTLAS(GraphicsDeviceRef *dev, TLAS tlas, CharString
 
 			if (tlas.base.isMotionBlurExt) {
 				tlasPtr->cpuInstancesMotion = (ListTLASInstanceMotion) { 0 };
-				gotoIfError(clean, ListTLASInstanceMotion_createCopyx(tlas.cpuInstancesMotion, &tlasPtr->cpuInstancesMotion));
+				gotoIfError(clean, ListTLASInstanceMotion_createCopyx(tlas.cpuInstancesMotion, &tlasPtr->cpuInstancesMotion))
 			}
 
 			else {
 				tlasPtr->cpuInstancesStatic = (ListTLASInstanceStatic) { 0 };
-				gotoIfError(clean, ListTLASInstanceStatic_createCopyx(tlas.cpuInstancesStatic, &tlasPtr->cpuInstancesStatic));
+				gotoIfError(clean, ListTLASInstanceStatic_createCopyx(tlas.cpuInstancesStatic, &tlasPtr->cpuInstancesStatic))
 			}
 
 			//Add refs to BLASes
@@ -341,16 +355,17 @@ Error GraphicsDeviceRef_createTLAS(GraphicsDeviceRef *dev, TLAS tlas, CharString
 			}
 
 			if(invalidData)
-				return Error_invalidOperation(
-					15, "GraphicsDeviceRef_createTLAS() One of the BLASes couldn't be found or couldn't be increased"
-				);
+				gotoIfError(clean, Error_invalidOperation(
+					15, 
+					"GraphicsDeviceRef_createTLAS() One of the BLASes couldn't be found or couldn't be increased"
+				))
 		}
 	}
 
-	gotoIfError(clean, GraphicsDeviceRef_inc(dev));
+	gotoIfError(clean, GraphicsDeviceRef_inc(dev))
 	tlasPtr->base.device = dev;
 
-	gotoIfError(clean, CharString_createCopyx(name, &tlasPtr->base.name));
+	gotoIfError(clean, CharString_createCopyx(name, &tlasPtr->base.name))
 
 	//Push for the graphics impl to process next submit,
 	//If it's GPU generated, the user is expected to manually call buildTLASExt to ensure it's enqueued at the right time
@@ -360,9 +375,9 @@ Error GraphicsDeviceRef_createTLAS(GraphicsDeviceRef *dev, TLAS tlas, CharString
 		acq0 = Lock_lock(&device->lock, U64_MAX);
 
 		if(acq0 < ELockAcquire_Success)
-			gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_createTLAS()::dev couldn't be locked"));
+			gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_createTLAS()::dev couldn't be locked"))
 
-		gotoIfError(clean, ListWeakRefPtr_pushBackx(&device->pendingTlases, *tlasRef));
+		gotoIfError(clean, ListWeakRefPtr_pushBackx(&device->pendingTlases, *tlasRef))
 
 		if(acq0 == ELockAcquire_Acquired) {
 			Lock_unlock(&device->lock);
@@ -377,14 +392,14 @@ Error GraphicsDeviceRef_createTLAS(GraphicsDeviceRef *dev, TLAS tlas, CharString
 	if(acq1 < ELockAcquire_Success)
 		gotoIfError(clean, Error_invalidState(
 			0, "GraphicsDeviceRef_createTLAS() couldn't acquire descriptor lock"
-		));
+		))
 
 	//Create images
 
 	tlasPtr->handle = GraphicsDeviceRef_allocateDescriptor(dev, EDescriptorType_TLASExt);
 
 	if(tlasPtr->handle == U32_MAX)
-		gotoIfError(clean, Error_outOfMemory(0, "GraphicsDeviceRef_createTLAS() couldn't allocate AS descriptor"));
+		gotoIfError(clean, Error_outOfMemory(0, "GraphicsDeviceRef_createTLAS() couldn't allocate AS descriptor"))
 
 clean:
 
@@ -409,7 +424,7 @@ Error GraphicsDeviceRef_createTLASExt(
 	TLASRef **tlas
 ) {
 
-	TLAS tlasInfo = (TLAS) {
+	const TLAS tlasInfo = (TLAS) {
 		.base = (RTAS) {
 			.asConstructionType = (U8) ETLASConstructionType_Instances,
 			.flags = (U8) buildFlags,
@@ -430,7 +445,7 @@ Error GraphicsDeviceRef_createTLASMotionExt(
 	TLASRef **tlas
 ) {
 
-	TLAS tlasInfo = (TLAS) {
+	const TLAS tlasInfo = (TLAS) {
 		.base = (RTAS) {
 			.asConstructionType = (U8) ETLASConstructionType_Instances,
 			.flags = (U8) buildFlags,
@@ -452,7 +467,7 @@ Error GraphicsDeviceRef_createTLASDeviceExt(
 	TLASRef **tlas
 ) {
 
-	TLAS tlasInfo = (TLAS) {
+	const TLAS tlasInfo = (TLAS) {
 		.base = (RTAS) {
 			.asConstructionType = (U8) ETLASConstructionType_Instances,
 			.flags = (U8) buildFlags,

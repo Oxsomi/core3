@@ -34,13 +34,13 @@ const U64 TLASExt_size = sizeof(VkTLAS);
 
 Bool TLAS_freeExt(TLAS *tlas) {
 
-	GraphicsDevice *device = GraphicsDeviceRef_ptr(tlas->base.device);
-	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
+	const GraphicsDevice *device = GraphicsDeviceRef_ptr(tlas->base.device);
+	const VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 
-	GraphicsInstance *instance = GraphicsInstanceRef_ptr(device->instance);
-	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
+	const GraphicsInstance *instance = GraphicsInstanceRef_ptr(device->instance);
+	const VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
 
-	VkAccelerationStructureKHR as = TLAS_ext(tlas, Vk)->as;
+	const VkAccelerationStructureKHR as = TLAS_ext(tlas, Vk)->as;
 
 	if(as)
 		instanceExt->destroyAccelerationStructure(deviceExt->device, as, NULL);
@@ -84,7 +84,7 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 	if(instancesU64 >> 24)
 		gotoIfError(clean, Error_outOfBounds(
 			0, instancesU64, 1 << 24, "TLASRef_flush() only instance count of <U24_MAX is supported"
-		));
+		))
 
 	//Convert to Vulkan dependent version
 
@@ -107,7 +107,7 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 
 			gotoIfError(clean, CharString_formatx(
 				&tmp, "%.*s instances buffer", CharString_length(tlas->base.name), tlas->base.name.ptr
-			));
+			))
 
 			gotoIfError(clean, GraphicsDeviceRef_createBuffer(
 				deviceRef,
@@ -116,7 +116,7 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 				tmp,
 				stride * instancesU64,
 				&tempInstances
-			));
+			))
 
 			CharString_freex(&tmp);
 
@@ -157,7 +157,7 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 				0, 0,
 				&deviceExt->bufferTransitions,
 				&dep
-			));
+			))
 		}
 
 		else gotoIfError(clean, VkDeviceBuffer_transition(
@@ -168,7 +168,7 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 			0, 0,
 			&deviceExt->bufferTransitions,
 			&dep
-		));
+		))
 
 		geometry.geometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR;
 
@@ -230,11 +230,11 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 		tlas->base.name,
 		sizes.accelerationStructureSize,
 		&tlas->base.asBuffer
-	));
+	))
 
 	gotoIfError(clean, CharString_formatx(
 		&tmp, "%.*s scratch buffer", CharString_length(tlas->base.name), tlas->base.name.ptr
-	));
+	))
 
 	gotoIfError(clean, GraphicsDeviceRef_createBuffer(
 		deviceRef,
@@ -243,7 +243,7 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 		tmp,
 		tlas->base.flags & ERTASBuildFlags_IsUpdate ? sizes.updateScratchSize : sizes.buildScratchSize,
 		&tempScratch
-	));
+	))
 
 	CharString_freex(&tmp);
 
@@ -255,12 +255,12 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 
 	gotoIfError(clean, vkCheck(instanceExt->createAccelerationStructure(
 		deviceExt->device, &createInfo, NULL, &TLAS_ext(TLASRef_ptr(pending), Vk)->as
-	)));
+	)))
 
 	//Delete temporary resource as soon as possible (safely)
 
 	if(tempInstances) {
-		gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, tempInstances));
+		gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, tempInstances))
 		tempInstances = NULL;
 	}
 
@@ -286,7 +286,7 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 		0, 0,
 		&deviceExt->bufferTransitions,
 		&dep
-	));
+	))
 
 	gotoIfError(clean, VkDeviceBuffer_transition(
 		DeviceBuffer_ext(DeviceBufferRef_ptr(tempScratch), Vk),
@@ -296,7 +296,7 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 		0, 0,
 		&deviceExt->bufferTransitions,
 		&dep
-	));
+	))
 
 	if (dep.bufferMemoryBarrierCount)
 		instanceExt->cmdPipelineBarrier2(commandBuffer, &dep);
@@ -318,13 +318,13 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 
 	//Add as flight (keep alive extra)
 
-	gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, pending));
+	gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, pending))
 	RefPtr_inc(pending);
 
 	//We mark scratch buffer as delete, we do this by pushing it as a current flight resource
 	//And losing the reference from our object
 
-	gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, tempScratch));
+	gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, tempScratch))
 	tempScratch = NULL;
 
 	//Add as descriptor

@@ -98,6 +98,4 @@ typedef struct VkGraphicsInstance {
 
 } VkGraphicsInstance;
 
-typedef struct ListConstC8 ListConstC8;
-
 impl Error VkGraphicsInstance_getLayers(ListConstC8 *layers);

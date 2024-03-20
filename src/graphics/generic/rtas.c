@@ -49,7 +49,9 @@ Error RTAS_validateDeviceBuffer(DeviceData *bufPtr) {
 		return Error_invalidParameter(1, 0, "BLAS_validateDeviceBuffer()::buf is out of bounds");
 
 	if(!(buf->usage & EDeviceBufferUsage_ASReadExt))
-		return Error_invalidParameter(1, 0, "BLAS_validateDeviceBuffer()::buf usage ASReadExt is required for BLAS create");
+		return Error_invalidParameter(
+			1, 0, "BLAS_validateDeviceBuffer()::buf usage ASReadExt is required for BLAS create"
+		);
 
 	return Error_none();
 }

@@ -27,11 +27,13 @@
 #include "types/string.h"
 
 Error SamplerRef_dec(SamplerRef **sampler) {
-	return !RefPtr_dec(sampler) ? Error_invalidOperation(0, "SamplerRef_dec()::sampler is required") : Error_none();
+	return !RefPtr_dec(sampler) ? 
+		Error_invalidOperation(0, "SamplerRef_dec()::sampler is required") : Error_none();
 }
 
 Error SamplerRef_inc(SamplerRef *sampler) {
-	return !RefPtr_inc(sampler) ? Error_invalidOperation(0, "SamplerRef_inc()::sampler is required") : Error_none();
+	return !RefPtr_inc(sampler) ? 
+		Error_invalidOperation(0, "SamplerRef_inc()::sampler is required") : Error_none();
 }
 
 impl extern const U64 SamplerExt_size;
@@ -69,7 +71,9 @@ Error GraphicsDeviceRef_createSampler(GraphicsDeviceRef *dev, SamplerInfo info, 
 		return Error_nullPointer(0, "GraphicsDeviceRef_createSampler()::dev is required");
 
 	if(info.filter &~ ESamplerFilterMode_All)
-		return Error_invalidParameter(1, 0, "GraphicsDeviceRef_createSampler()::info.filter contains invalid bits");
+		return Error_invalidParameter(
+			1, 0, "GraphicsDeviceRef_createSampler()::info.filter contains invalid bits"
+		);
 
 	if(
 		info.addressU >= ESamplerAddressMode_Count ||
@@ -86,17 +90,23 @@ Error GraphicsDeviceRef_createSampler(GraphicsDeviceRef *dev, SamplerInfo info, 
 		);
 
 	if(info.borderColor >= ESamplerBorderColor_Count)
-		return Error_invalidParameter(1, 5, "GraphicsDeviceRef_createSampler()::info.borderColor is out of bounds");
+		return Error_invalidParameter(
+			1, 5, "GraphicsDeviceRef_createSampler()::info.borderColor is out of bounds"
+		);
 
 	if(info.comparisonFunction >= ECompareOp_Count)
-		return Error_invalidParameter(1, 6, "GraphicsDeviceRef_createSampler()::info.comparisonFunction is out of bounds");
+		return Error_invalidParameter(
+			1, 6, "GraphicsDeviceRef_createSampler()::info.comparisonFunction is out of bounds"
+		);
 
 	if(
 		!EFloatType_isFinite(EFloatType_F16, info.mipBias) ||
 		!EFloatType_isFinite(EFloatType_F16, info.minLod) ||
 		!EFloatType_isFinite(EFloatType_F16, info.maxLod)
 	)
-		return Error_invalidParameter(1, 8, "GraphicsDeviceRef_createSampler()::info.mipBias, minLod or maxLod is invalid");
+		return Error_invalidParameter(
+			1, 8, "GraphicsDeviceRef_createSampler()::info.mipBias, minLod or maxLod is invalid"
+		);
 
 	if(!info.maxLod)
 		info.maxLod = F32_castF16(65504.f);		//Set to F16 max
@@ -113,7 +123,7 @@ Error GraphicsDeviceRef_createSampler(GraphicsDeviceRef *dev, SamplerInfo info, 
 
 	ELockAcquire acq = ELockAcquire_Invalid;
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(dev);
-	gotoIfError(clean, GraphicsDeviceRef_inc(dev));
+	gotoIfError(clean, GraphicsDeviceRef_inc(dev))
 
 	Sampler *samp = SamplerRef_ptr(*sampler);
 
@@ -124,14 +134,14 @@ Error GraphicsDeviceRef_createSampler(GraphicsDeviceRef *dev, SamplerInfo info, 
 	if(acq < ELockAcquire_Success)
 		gotoIfError(clean, Error_invalidState(
 			0, "GraphicsDeviceRef_createSampler() couldn't acquire descriptor lock"
-		));
+		))
 
 	samp->samplerLocation = GraphicsDeviceRef_allocateDescriptor(dev, EDescriptorType_Sampler);
 
 	if(samp->samplerLocation == U32_MAX)
-		gotoIfError(clean, Error_outOfMemory(0, "GraphicsDeviceRef_createSampler() couldn't allocate Sampler descriptor"));
+		gotoIfError(clean, Error_outOfMemory(0, "GraphicsDeviceRef_createSampler() couldn't allocate Sampler descriptor"))
 
-	gotoIfError(clean, GraphicsDeviceRef_createSamplerExt(dev, samp, name));
+	gotoIfError(clean, GraphicsDeviceRef_createSamplerExt(dev, samp, name))
 
 clean:
 

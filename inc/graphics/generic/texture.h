@@ -22,14 +22,9 @@
 #include "resource.h"
 #include "types/vec.h"
 
-typedef enum ETextureFormat ETextureFormat;
-typedef enum ETextureFormatId ETextureFormatId;
 typedef enum EMSAASamples EMSAASamples;
-typedef enum EDepthStencilFormat EDepthStencilFormat;
-typedef enum ETextureType ETextureType;
 typedef enum EDescriptorType EDescriptorType;
 
-typedef struct RefPtr RefPtr;
 typedef struct CharString CharString;
 typedef RefPtr GraphicsDeviceRef;
 
@@ -82,7 +77,7 @@ U32 TextureRef_getCurrWriteHandle(TextureRef *tex, U32 subResource);
 Bool UnifiedTexture_free(TextureRef *textureRef);
 Error UnifiedTexture_create(TextureRef *ref, CharString name);
 
-//Internal (only use inside of GraphicsDeviceRef_submitCommands)
+//Internal (only use inside GraphicsDeviceRef_submitCommands)
 
 UnifiedTextureImage TextureRef_getCurrImage(TextureRef *tex, U32 subResource);
 

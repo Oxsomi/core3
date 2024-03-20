@@ -25,11 +25,13 @@
 #include "types/error.h"
 
 Error SwapchainRef_dec(SwapchainRef **swapchain) {
-	return !RefPtr_dec(swapchain) ? Error_invalidOperation(0, "SwapchainRef_dec()::swapchain is invalid") : Error_none();
+	return !RefPtr_dec(swapchain) ? 
+		Error_invalidOperation(0, "SwapchainRef_dec()::swapchain is invalid") : Error_none();
 }
 
 Error SwapchainRef_inc(SwapchainRef *swapchain) {
-	return !RefPtr_inc(swapchain) ? Error_invalidOperation(0, "SwapchainRef_inc()::swapchain is invalid") : Error_none();
+	return !RefPtr_inc(swapchain) ? 
+		Error_invalidOperation(0, "SwapchainRef_inc()::swapchain is invalid") : Error_none();
 }
 
 impl Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *dev, SwapchainRef *swapchain);
@@ -52,10 +54,10 @@ Error SwapchainRef_resize(SwapchainRef *swapchainRef) {
 	//Check if swapchain was in flight. If yes, warn that the user has to flush manually
 
 	Error err = Error_none();
-	ELockAcquire acq = Lock_lock(&device->lock, U64_MAX);
+	const ELockAcquire acq = Lock_lock(&device->lock, U64_MAX);
 
 	if(acq < ELockAcquire_Success)
-		gotoIfError(clean, Error_invalidState(0, "Swapchain_resize() can't be called while recording commands"));
+		gotoIfError(clean, Error_invalidState(0, "Swapchain_resize() can't be called while recording commands"))
 
 	Bool any = false;
 
@@ -71,7 +73,7 @@ Error SwapchainRef_resize(SwapchainRef *swapchainRef) {
 	if (any)
 		gotoIfError(clean, Error_invalidState(
 			0, "Swapchain_resize() can't be called on a Swapchain that's in flight. Use GraphicsDeviceRef_wait in onResize"
-		));
+		))
 
 	//Resize with same format and same size is a NOP
 
@@ -86,7 +88,7 @@ Error SwapchainRef_resize(SwapchainRef *swapchainRef) {
 		case EWindowFormat_RGBA16f:		textureFormatId = ETextureFormatId_RGBA16f;		break;
 		case EWindowFormat_RGBA32f:		textureFormatId = ETextureFormatId_RGBA32f;		break;
 		default:
-			gotoIfError(clean, Error_invalidState(1, "Swapchain_resize() window format is unsupported"));
+			gotoIfError(clean, Error_invalidState(1, "Swapchain_resize() window format is unsupported"))
 	}
 
 	if(
@@ -97,8 +99,8 @@ Error SwapchainRef_resize(SwapchainRef *swapchainRef) {
 
 	//Otherwise, we properly resize
 
-	gotoIfError(clean, GraphicsDeviceRef_createSwapchainExt(swapchain->base.resource.device, swapchainRef));
-	gotoIfError(clean, UnifiedTexture_createExt(swapchainRef, swapchain->info.window->title));		//Re-create views
+	gotoIfError(clean, GraphicsDeviceRef_createSwapchainExt(swapchain->base.resource.device, swapchainRef))
+	gotoIfError(clean, UnifiedTexture_createExt(swapchainRef, swapchain->info.window->title))		//Re-create views
 	++swapchain->versionId;
 
 	swapchain->base.textureFormatId = (U8) textureFormatId;
@@ -142,12 +144,12 @@ Error GraphicsDeviceRef_createSwapchain(GraphicsDeviceRef *dev, SwapchainInfo in
 		case EWindowFormat_RGBA16f:		formatId = ETextureFormatId_RGBA16f;	break;
 		case EWindowFormat_RGBA32f:		formatId = ETextureFormatId_RGBA32f;	break;
 		default:
-			gotoIfError(clean, Error_invalidState(1, "Swapchain_resize() window format is unsupported"));
+			gotoIfError(clean, Error_invalidState(1, "Swapchain_resize() window format is unsupported"))
 	}
 
 	Swapchain *swapchain = SwapchainRef_ptr(*scRef);
 
-	gotoIfError(clean, GraphicsDeviceRef_inc(dev));
+	gotoIfError(clean, GraphicsDeviceRef_inc(dev))
 
 	swapchain->info = info;
 	swapchain->base = (UnifiedTexture) {
@@ -165,8 +167,8 @@ Error GraphicsDeviceRef_createSwapchain(GraphicsDeviceRef *dev, SwapchainInfo in
 		.images = 3		//Triple buffering
 	};
 
-	gotoIfError(clean, GraphicsDeviceRef_createSwapchainExt(dev, *scRef));
-	gotoIfError(clean, UnifiedTexture_create(*scRef, info.window->title));
+	gotoIfError(clean, GraphicsDeviceRef_createSwapchainExt(dev, *scRef))
+	gotoIfError(clean, UnifiedTexture_create(*scRef, info.window->title))
 	swapchain->lock = Lock_create();
 
 clean:

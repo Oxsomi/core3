@@ -48,9 +48,6 @@ typedef struct GraphicsInstance {
 
 } GraphicsInstance;
 
-typedef struct GraphicsDeviceCapabilities GraphicsDeviceCapabilities;
-typedef struct GraphicsDeviceInfo GraphicsDeviceInfo;
-
 typedef RefPtr GraphicsInstanceRef;
 
 #define GraphicsInstance_ext(ptr, T) (!ptr ? NULL : (T##GraphicsInstance*)(ptr + 1))		//impl

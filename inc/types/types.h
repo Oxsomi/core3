@@ -222,3 +222,4 @@ C8 C8_createNyto(U8 v);
 typedef void *StackTrace[STACKTRACE_SIZE];
 
 typedef struct Error Error;
+typedef struct CharString CharString;

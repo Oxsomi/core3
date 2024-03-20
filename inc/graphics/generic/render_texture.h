@@ -24,10 +24,6 @@
 #include "texture.h"
 
 typedef RefPtr GraphicsDeviceRef;
-typedef struct Error Error;
-typedef struct CharString CharString;
-
-typedef enum EMSAASamples EMSAASamples;
 
 typedef UnifiedTexture RenderTexture;
 

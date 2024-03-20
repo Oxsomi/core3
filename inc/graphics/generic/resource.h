@@ -25,7 +25,6 @@
 #include "formats/texture.h"
 
 typedef struct RefPtr RefPtr;
-typedef struct Error Error;
 typedef RefPtr GraphicsDeviceRef;
 typedef RefPtr GraphicsResourceRef;			//UnifiedTexture or DeviceTexture. This isn't a RefPtr<GraphicsResource>
 

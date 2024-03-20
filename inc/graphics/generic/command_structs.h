@@ -20,7 +20,6 @@
 
 #pragma once
 #include "types/vec.h"
-#include "types/ref_ptr.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/resource.h"
 #include "graphics/generic/pipeline_structs.h"

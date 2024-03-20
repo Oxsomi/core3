@@ -22,7 +22,6 @@
 #include "device_buffer.h"
 
 typedef RefPtr GraphicsDeviceRef;
-typedef struct CharString CharString;
 
 typedef RefPtr RTASRef;		//BLASRef or TLASRef
 

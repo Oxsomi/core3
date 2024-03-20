@@ -20,11 +20,8 @@
 
 #pragma once
 #include "graphics/vulkan/vulkan.h"
-#include "graphics/generic/device_info.h"
 #include "graphics/generic/command_list.h"
-#include "types/lock.h"
 #include "types/list.h"
-#include "types/allocation_buffer.h"
 #include "types/vec.h"
 
 typedef RefPtr PipelineRef;

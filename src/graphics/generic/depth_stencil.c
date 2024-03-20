@@ -26,11 +26,13 @@
 #include "types/string.h"
 
 Error DepthStencilRef_dec(DepthStencilRef **depth) {
-	return !RefPtr_dec(depth) ? Error_invalidOperation(0, "DepthStencilRef_dec()::depth is invalid") : Error_none();
+	return !RefPtr_dec(depth) ? 
+		Error_invalidOperation(0, "DepthStencilRef_dec()::depth is invalid") : Error_none();
 }
 
 Error DepthStencilRef_inc(DepthStencilRef *depth) {
-	return !RefPtr_inc(depth) ? Error_invalidOperation(0, "DepthStencilRef_inc()::depth is invalid") : Error_none();
+	return !RefPtr_inc(depth) ? 
+		Error_invalidOperation(0, "DepthStencilRef_inc()::depth is invalid") : Error_none();
 }
 
 Bool GraphicsDevice_freeDepthStencil(DepthStencil *depthStencil, Allocator alloc) {
@@ -59,7 +61,7 @@ Error GraphicsDeviceRef_createDepthStencil(
 	if(err.genericError)
 		return err;
 
-	gotoIfError(clean, GraphicsDeviceRef_inc(deviceRef));
+	gotoIfError(clean, GraphicsDeviceRef_inc(deviceRef))
 
 	*DepthStencilRef_ptr(*depthStencilRef) = (UnifiedTexture) {
 		.resource = (GraphicsResource) {
@@ -77,7 +79,7 @@ Error GraphicsDeviceRef_createDepthStencil(
 		.images = 1
 	};
 
-	gotoIfError(clean, UnifiedTexture_create(*depthStencilRef, name));
+	gotoIfError(clean, UnifiedTexture_create(*depthStencilRef, name))
 
 clean:
 

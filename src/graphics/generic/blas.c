@@ -77,30 +77,42 @@ Error GraphicsDeviceRef_createBLAS(GraphicsDeviceRef *dev, BLAS blas, CharString
 		return Error_nullPointer(3, "GraphicsDeviceRef_createBLAS()::blasRef is required");
 
 	if(*blasRef)
-		return Error_invalidParameter(3, 0, "GraphicsDeviceRef_createBLAS()::*blasRef not NULL, indicates memleak");
+		return Error_invalidParameter(
+			3, 0, "GraphicsDeviceRef_createBLAS()::*blasRef not NULL, indicates memleak"
+		);
 
 	if(blas.base.parent && blas.base.parent->typeId != (ETypeId) EGraphicsTypeId_BLASExt)
 		return Error_invalidOperation(1, "GraphicsDeviceRef_createBLAS()::parent is invalid");
 
 	if(blas.base.parent && BLASRef_ptr(blas.base.parent)->base.device != dev)
-		return Error_invalidOperation(1, "GraphicsDeviceRef_createBLAS()::parent and BLAS device need to share device");
+		return Error_invalidOperation(
+			1, "GraphicsDeviceRef_createBLAS()::parent and BLAS device need to share device"
+		);
 
 	if(blas.base.parent)
 		blas.base.flags |= ERTASBuildFlags_IsUpdate;
 
 	else if(blas.base.flags & ERTASBuildFlags_IsUpdate)
-		return Error_invalidOperation(7, "GraphicsDeviceRef_createBLAS()::parent is required if IsUpdate is present");
+		return Error_invalidOperation(
+			7, "GraphicsDeviceRef_createBLAS()::parent is required if IsUpdate is present"
+		);
 
 	if(!(blas.base.flags & ERTASBuildFlags_AllowUpdate) && (blas.base.flags & ERTASBuildFlags_IsUpdate))
-		return Error_invalidOperation(7, "GraphicsDeviceRef_createBLAS() is update is not possible if AllowUpdate is false");
+		return Error_invalidOperation(
+			7, "GraphicsDeviceRef_createBLAS() is update is not possible if AllowUpdate is false"
+		);
 
 	EGraphicsFeatures feat = GraphicsDeviceRef_ptr(dev)->info.capabilities.features;
 
 	if(!(feat & EGraphicsFeatures_Raytracing))
-		return Error_unsupportedOperation(0, "GraphicsDeviceRef_createBLAS() is unsupported without raytracing support");
+		return Error_unsupportedOperation(
+			0, "GraphicsDeviceRef_createBLAS() is unsupported without raytracing support"
+		);
 
 	if(blas.base.isMotionBlurExt && !(feat & EGraphicsFeatures_RayMotionBlur))
-		return Error_unsupportedOperation(1, "GraphicsDeviceRef_createBLAS() uses motion blur, but it's unsupported");
+		return Error_unsupportedOperation(
+			1, "GraphicsDeviceRef_createBLAS() uses motion blur, but it's unsupported"
+		);
 
 	//Validate geometry BLAS
 
@@ -143,7 +155,8 @@ Error GraphicsDeviceRef_createBLAS(GraphicsDeviceRef *dev, BLAS blas, CharString
 
 				if(positionOffset + ETextureFormat_getSize(ETextureFormatId_unpack[positionFormat], 1, 1, 1) > stride)
 					return Error_unsupportedOperation(
-						1, "GraphicsDeviceRef_createBLAS()::positionOffset and/or positionFormat out of bounds (> stride)"
+						1, 
+						"GraphicsDeviceRef_createBLAS()::positionOffset and/or positionFormat out of bounds (> stride)"
 					);
 
 				if(blas.positionBuffer.len < stride || (blas.positionBuffer.len % stride))
@@ -171,7 +184,8 @@ Error GraphicsDeviceRef_createBLAS(GraphicsDeviceRef *dev, BLAS blas, CharString
 
 				if(blas.indexBuffer.buffer)
 					return Error_unsupportedOperation(
-						1, "GraphicsDeviceRef_createBLAS()::indexBuffer should be NULL if indexFormat is Undefined"
+						1, 
+						"GraphicsDeviceRef_createBLAS()::indexBuffer should be NULL if indexFormat is Undefined"
 					);
 
 				break;
@@ -183,7 +197,8 @@ Error GraphicsDeviceRef_createBLAS(GraphicsDeviceRef *dev, BLAS blas, CharString
 
 				if(!blas.indexBuffer.buffer || (blas.indexBuffer.len & (indexStride - 1)))
 					return Error_unsupportedOperation(
-						1, "GraphicsDeviceRef_createBLAS()::indexBuffer should be multiple of indexFormat and not NULL"
+						1, 
+						"GraphicsDeviceRef_createBLAS()::indexBuffer should be multiple of indexFormat and not NULL"
 					);
 
 				break;
@@ -203,7 +218,9 @@ Error GraphicsDeviceRef_createBLAS(GraphicsDeviceRef *dev, BLAS blas, CharString
 		U64 stride = blas.aabbStride;
 
 		if(!stride || stride & 7)
-			return Error_unsupportedOperation(1, "GraphicsDeviceRef_createBLAS()::stride must be >0 and divisible by 8");
+			return Error_unsupportedOperation(
+				1, "GraphicsDeviceRef_createBLAS()::stride must be >0 and divisible by 8"
+			);
 
 		if((U64)blas.aabbOffset + 24 > stride)
 			return Error_unsupportedOperation(
@@ -239,14 +256,14 @@ Error GraphicsDeviceRef_createBLAS(GraphicsDeviceRef *dev, BLAS blas, CharString
 		(ObjectFreeFunc) BLAS_free,
 		(ETypeId) EGraphicsTypeId_BLASExt,
 		blasRef
-	));
+	))
 
 	//Fill ptr
 
 	BLAS *blasPtr = BLASRef_ptr(*blasRef);
 
 	if(blas.base.parent)
-		gotoIfError(clean, BLASRef_inc(blas.base.parent));
+		gotoIfError(clean, BLASRef_inc(blas.base.parent))
 
 	*blasPtr = blas;
 	blasPtr->base.lock = Lock_create();
@@ -254,13 +271,13 @@ Error GraphicsDeviceRef_createBLAS(GraphicsDeviceRef *dev, BLAS blas, CharString
 
 	if (blas.base.asConstructionType == EBLASConstructionType_Serialized) {
 		blasPtr->cpuData = Buffer_createNull();
-		gotoIfError(clean, Buffer_createCopyx(blas.cpuData, &blasPtr->cpuData));
+		gotoIfError(clean, Buffer_createCopyx(blas.cpuData, &blasPtr->cpuData))
 	}
 
 	else if (blas.base.asConstructionType == EBLASConstructionType_Procedural) {
 
 		blasPtr->aabbBuffer = (DeviceData) { 0 };
-		gotoIfError(clean, DeviceBufferRef_inc(blas.aabbBuffer.buffer));
+		gotoIfError(clean, DeviceBufferRef_inc(blas.aabbBuffer.buffer))
 		blasPtr->aabbBuffer = blas.aabbBuffer;
 	}
 
@@ -269,17 +286,17 @@ Error GraphicsDeviceRef_createBLAS(GraphicsDeviceRef *dev, BLAS blas, CharString
 		blasPtr->indexBuffer = (DeviceData) { 0 };
 		blasPtr->positionBuffer = (DeviceData) { 0 };
 
-		gotoIfError(clean, DeviceBufferRef_inc(blas.indexBuffer.buffer));
+		gotoIfError(clean, DeviceBufferRef_inc(blas.indexBuffer.buffer))
 		blasPtr->indexBuffer = blas.indexBuffer;
 
-		gotoIfError(clean, DeviceBufferRef_inc(blas.positionBuffer.buffer));
+		gotoIfError(clean, DeviceBufferRef_inc(blas.positionBuffer.buffer))
 		blasPtr->positionBuffer = blas.positionBuffer;
 	}
 
-	gotoIfError(clean, GraphicsDeviceRef_inc(dev));
+	gotoIfError(clean, GraphicsDeviceRef_inc(dev))
 	blasPtr->base.device = dev;
 
-	gotoIfError(clean, CharString_createCopyx(name, &blasPtr->base.name));
+	gotoIfError(clean, CharString_createCopyx(name, &blasPtr->base.name))
 
 	//Push for the graphics impl to process next submit,
 	//If it's GPU generated, the user is expected to manually call buildBLASExt to ensure it's enqueued at the right time
@@ -289,9 +306,9 @@ Error GraphicsDeviceRef_createBLAS(GraphicsDeviceRef *dev, BLAS blas, CharString
 		acq = Lock_lock(&device->lock, U64_MAX);
 
 		if(acq < ELockAcquire_Success)
-			gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_createBLAS()::dev couldn't be locked"));
+			gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_createBLAS()::dev couldn't be locked"))
 
-		gotoIfError(clean, ListWeakRefPtr_pushBackx(&device->pendingBlases, *blasRef));
+		gotoIfError(clean, ListWeakRefPtr_pushBackx(&device->pendingBlases, *blasRef))
 	}
 
 clean:
@@ -319,7 +336,7 @@ Error GraphicsDeviceRef_createBLASExt(
 	CharString name,
 	BLASRef **blas
 ) {
-	BLAS blasInfo = (BLAS) {
+	const BLAS blasInfo = (BLAS) {
 		.base = (RTAS) {
 			.asConstructionType = (U8) EBLASConstructionType_Geometry,
 			.flags = (U8) buildFlags,
@@ -379,7 +396,7 @@ Error GraphicsDeviceRef_createBLASProceduralExt(
 	BLASRef **blas
 ) {
 
-	BLAS blasInfo = (BLAS) {
+	const BLAS blasInfo = (BLAS) {
 		.base = (RTAS) {
 			.asConstructionType = (U8) EBLASConstructionType_Procedural,
 			.flags = (U8) buildFlags,

@@ -77,17 +77,17 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 	//Since this function is called for both resize and init, it's possible our surface already exists.
 
 	if(!swapchainExt->surface)
-		gotoIfError(clean, VkSurface_create(device, window, &swapchainExt->surface));
+		gotoIfError(clean, VkSurface_create(device, window, &swapchainExt->surface))
 
 	VkBool32 support = false;
 
 	gotoIfError(clean, vkCheck(instance->getPhysicalDeviceSurfaceSupport(
 		(VkPhysicalDevice) device->info.ext,
 		deviceExt->queues[EVkCommandQueue_Graphics].queueId, swapchainExt->surface, &support
-	)));
+	)))
 
 	if(!support)
-		gotoIfError(clean, Error_unsupportedOperation(0, "GraphicsDeviceRef_createSwapchainExt() has no queue support"));
+		gotoIfError(clean, Error_unsupportedOperation(0, "GraphicsDeviceRef_createSwapchainExt() has no queue support"))
 
 	//It's possible that format has changed when calling Swapchain_resize.
 	//So we can't skip this.
@@ -96,16 +96,16 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 
 	gotoIfError(clean, vkCheck(instance->getPhysicalDeviceSurfaceFormats(
 		physicalDevice, swapchainExt->surface, &formatCount, NULL
-	)));
+	)))
 
 	if(!formatCount)
-		gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_createSwapchainExt() format isn't supported"));
+		gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_createSwapchainExt() format isn't supported"))
 
-	gotoIfError(clean, ListVkSurfaceFormatKHR_resizex(&surfaceFormats, formatCount));
+	gotoIfError(clean, ListVkSurfaceFormatKHR_resizex(&surfaceFormats, formatCount))
 
 	gotoIfError(clean, vkCheck(instance->getPhysicalDeviceSurfaceFormats(
 		physicalDevice, swapchainExt->surface, &formatCount, surfaceFormats.ptrNonConst
-	)));
+	)))
 
 	VkSurfaceFormatKHR searchFormat = (VkSurfaceFormatKHR) { 0 };
 
@@ -165,23 +165,23 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 	}
 
 	if(swapchainExt->format.format == VK_FORMAT_UNDEFINED)
-		gotoIfError(clean, Error_unsupportedOperation(0, "GraphicsDeviceRef_createSwapchainExt() invalid format"));
+		gotoIfError(clean, Error_unsupportedOperation(0, "GraphicsDeviceRef_createSwapchainExt() invalid format"))
 
 	VkSurfaceCapabilitiesKHR capabilities = (VkSurfaceCapabilitiesKHR) { 0 };
 
 	gotoIfError(clean, vkCheck(instance->getPhysicalDeviceSurfaceCapabilities(
 		physicalDevice, swapchainExt->surface, &capabilities
-	)));
+	)))
 
 	I32x2 size = I32x2_create2(capabilities.currentExtent.width, capabilities.currentExtent.height);
 
 	//Validate if it's compatible with the OxC3_platforms window
 
 	if(I32x2_neq2(window->size, size) || !capabilities.maxImageArrayLayers)
-		gotoIfError(clean, Error_invalidOperation(0, "GraphicsDeviceRef_createSwapchainExt() incompatible window size"));
+		gotoIfError(clean, Error_invalidOperation(0, "GraphicsDeviceRef_createSwapchainExt() incompatible window size"))
 
 	if(!(capabilities.supportedCompositeAlpha & VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR))
-		gotoIfError(clean, Error_invalidOperation(1, "GraphicsDeviceRef_createSwapchainExt() requires alpha opaque"));
+		gotoIfError(clean, Error_invalidOperation(1, "GraphicsDeviceRef_createSwapchainExt() requires alpha opaque"))
 
 	Bool isWritable = swapchain->base.resource.flags & EGraphicsResourceFlag_ShaderWrite;
 
@@ -193,17 +193,17 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 		VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
 	if((capabilities.supportedUsageFlags & requiredUsageFlags) != requiredUsageFlags)
-		gotoIfError(clean, Error_invalidOperation(2, "GraphicsDeviceRef_createSwapchainExt() doesn't have required flags"));
+		gotoIfError(clean, Error_invalidOperation(2, "GraphicsDeviceRef_createSwapchainExt() doesn't have required flags"))
 
 	if(!(capabilities.supportedCompositeAlpha & (VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR | VK_COMPOSITE_ALPHA_INHERIT_BIT_KHR)))
 		gotoIfError(clean, Error_invalidOperation(
 			3, "GraphicsDeviceRef_createSwapchainExt() doesn't have required composite alpha"
-		));
+		))
 
 	if(capabilities.minImageCount > 2 || capabilities.maxImageCount < 3)
 		gotoIfError(clean, Error_invalidOperation(
 			4, "GraphicsDeviceRef_createSwapchainExt() requires support for 2 and 3 images"
-		));
+		))
 
 	VkFlags anyRotate =
 		VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR |
@@ -217,7 +217,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 		if(window->monitors.length > 1)
 			gotoIfError(clean, Error_invalidOperation(
 				5, "GraphicsDeviceRef_createSwapchainExt() requiresManualComposite only allowed with 1 monitor"
-			));
+			))
 
 		MonitorOrientation current = EMonitorOrientation_Landscape;
 
@@ -231,7 +231,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 		MonitorOrientation target = window->monitors.ptr->orientation;
 
 		if(current != target)
-			gotoIfError(clean, Error_invalidOperation(6, "GraphicsDeviceRef_createSwapchainExt() invalid orientation"));
+			gotoIfError(clean, Error_invalidOperation(6, "GraphicsDeviceRef_createSwapchainExt() invalid orientation"))
 	}
 
 	//Get present mode
@@ -240,13 +240,13 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 
 	gotoIfError(clean, vkCheck(instance->getPhysicalDeviceSurfacePresentModes(
 		physicalDevice, swapchainExt->surface, &modes, NULL
-	)));
+	)))
 
-	gotoIfError(clean, ListVkPresentModeKHR_resizex(&presentModes, modes));
+	gotoIfError(clean, ListVkPresentModeKHR_resizex(&presentModes, modes))
 
 	gotoIfError(clean, vkCheck(instance->getPhysicalDeviceSurfacePresentModes(
 		physicalDevice, swapchainExt->surface, &modes, presentModes.ptrNonConst
-	)));
+	)))
 
 	Bool supports[ESwapchainPresentMode_Count - 1] = { 0 };
 
@@ -298,7 +298,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 	}
 
 	if(presentMode == (VkPresentModeKHR) -1)
-		gotoIfError(clean, Error_invalidOperation(7, "GraphicsDeviceRef_createSwapchainExt() unsupported present mode"));
+		gotoIfError(clean, Error_invalidOperation(7, "GraphicsDeviceRef_createSwapchainExt() unsupported present mode"))
 
 	//Turn it into a swapchain
 
@@ -327,7 +327,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 		.oldSwapchain = prevSwapchain
 	};
 
-	gotoIfError(clean, vkCheck(instance->createSwapchain(deviceExt->device, &swapchainInfo, NULL, &swapchainExt->swapchain)));
+	gotoIfError(clean, vkCheck(instance->createSwapchain(deviceExt->device, &swapchainInfo, NULL, &swapchainExt->swapchain)))
 
 	if(prevSwapchain)
 		instance->destroySwapchain(deviceExt->device, prevSwapchain, NULL);
@@ -335,10 +335,10 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 	//Acquire images
 
 	U32 imageCount = 0;
-	gotoIfError(clean, vkCheck(instance->getSwapchainImages(deviceExt->device, swapchainExt->swapchain, &imageCount, NULL)));
+	gotoIfError(clean, vkCheck(instance->getSwapchainImages(deviceExt->device, swapchainExt->swapchain, &imageCount, NULL)))
 
 	if(imageCount != swapchain->base.images)
-		gotoIfError(clean, Error_invalidState(1, "GraphicsDeviceRef_createSwapchainExt() imageCount doesn't match"));
+		gotoIfError(clean, Error_invalidState(1, "GraphicsDeviceRef_createSwapchainExt() imageCount doesn't match"))
 
 	//Only recreate semaphores if needed.
 
@@ -346,7 +346,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 
 	if(swapchainExt->semaphores.length != imageCount) {
 		ListVkSemaphore_freex(&swapchainExt->semaphores);
-		gotoIfError(clean, ListVkSemaphore_resizex(&swapchainExt->semaphores, imageCount));
+		gotoIfError(clean, ListVkSemaphore_resizex(&swapchainExt->semaphores, imageCount))
 		createSemaphores = true;
 	}
 
@@ -358,7 +358,7 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 
 	gotoIfError(clean, vkCheck(instance->getSwapchainImages(
 		deviceExt->device, swapchainExt->swapchain, &imageCount, vkImages
-	)));
+	)))
 
 	for(U8 i = 0; i < swapchain->base.images; ++i) {
 
@@ -381,22 +381,22 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 			VkSemaphoreCreateInfo semaphoreInfo = (VkSemaphoreCreateInfo) { .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
 			VkSemaphore *semaphore = swapchainExt->semaphores.ptrNonConst + i;
 
-			gotoIfError(clean, vkCheck(vkCreateSemaphore(deviceExt->device, &semaphoreInfo, NULL, semaphore)));
+			gotoIfError(clean, vkCheck(vkCreateSemaphore(deviceExt->device, &semaphoreInfo, NULL, semaphore)))
 
 			#ifndef NDEBUG
 				if(instance->debugSetName) {
 
 					CharString_freex(&temp);
-					gotoIfError(clean, CharString_formatx(&temp, "Swapchain semaphore %"PRIu64, (U64)i));
+					gotoIfError(clean, CharString_formatx(&temp, "Swapchain semaphore %"PRIu64, (U64)i))
 
-					VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
+					const VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
 						.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
 						.objectType = VK_OBJECT_TYPE_SEMAPHORE,
 						.objectHandle = (U64) *semaphore,
 						.pObjectName = temp.ptr
 					};
 
-					gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)));
+					gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)))
 				}
 			#endif
 		}
@@ -412,16 +412,16 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 			gotoIfError(clean, CharString_formatx(
 				&temp, "Swapchain image #%"PRIu32" (%.*s)",
 				(U32) i, CharString_length(window->title), window->title.ptr
-			));
+			))
 
-			VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
+			const VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
 				.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
 				.objectType = VK_OBJECT_TYPE_IMAGE,
 				.pObjectName = temp.ptr,
 				.objectHandle =  (U64) managedImage->image
 			};
 
-			gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)));
+			gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)))
 
 		#endif
 	}
@@ -434,16 +434,16 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 
 			gotoIfError(clean, CharString_formatx(
 				&temp, "Swapchain (%.*s)", CharString_length(window->title), window->title.ptr
-			));
+			))
 
-			VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
+			const VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
 				.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
 				.objectType = VK_OBJECT_TYPE_SWAPCHAIN_KHR,
 				.pObjectName = temp.ptr,
 				.objectHandle = (U64) swapchainExt->swapchain
 			};
 
-			gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)));
+			gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)))
 		}
 
 	#endif
@@ -463,12 +463,12 @@ Bool GraphicsDevice_freeSwapchainExt(Swapchain *swapchain, Allocator alloc) {
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(swapchain->base.resource.device);
 	VkSwapchain *swapchainExt = TextureRef_getImplExtT(VkSwapchain, swapchainRef);
 
-	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
-	VkGraphicsInstance *instance = GraphicsInstance_ext(GraphicsInstanceRef_ptr(device->instance), Vk);
+	const VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
+	const VkGraphicsInstance *instance = GraphicsInstance_ext(GraphicsInstanceRef_ptr(device->instance), Vk);
 
 	for(U8 i = 0; i < swapchain->base.images; ++i) {
 
-		VkSemaphore semaphore = swapchainExt->semaphores.ptr[i];
+		const VkSemaphore semaphore = swapchainExt->semaphores.ptr[i];
 
 		if(semaphore)
 			vkDestroySemaphore(deviceExt->device, semaphore, NULL);
@@ -503,7 +503,7 @@ Error VkUnifiedTexture_transition(
 
 	//Handle image barrier
 
-	VkImageMemoryBarrier2 imageBarrier = (VkImageMemoryBarrier2) {
+	const VkImageMemoryBarrier2 imageBarrier = (VkImageMemoryBarrier2) {
 
 		.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
 
@@ -523,7 +523,7 @@ Error VkUnifiedTexture_transition(
 		.subresourceRange = *range
 	};
 
-	Error err = ListVkImageMemoryBarrier2_pushBackx(imageBarriers, imageBarrier);
+	const Error err = ListVkImageMemoryBarrier2_pushBackx(imageBarriers, imageBarrier);
 
 	if(err.genericError)
 		return err;

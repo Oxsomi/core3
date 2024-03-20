@@ -25,7 +25,6 @@
 #include "texture.h"
 
 typedef RefPtr GraphicsDeviceRef;
-typedef struct Error Error;
 typedef struct Window Window;
 typedef enum EWindowFormat EWindowFormat;
 

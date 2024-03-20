@@ -23,10 +23,6 @@
 #include "pipeline_structs.h"
 #include "types/ref_ptr.h"
 
-typedef struct CharString CharString;
-typedef struct GraphicsDevice GraphicsDevice;
-typedef enum EPipelineType EPipelineType;
-
 TList(CommandOpInfo);
 TList(TransitionInternal);
 TList(AttachmentInfoInternal);

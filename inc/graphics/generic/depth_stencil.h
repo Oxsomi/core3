@@ -19,14 +19,11 @@
 */
 
 #pragma once
-#include "types/vec.h"
 #include "types/ref_ptr.h"
 #include "pipeline_structs.h"
 #include "texture.h"
 
 typedef RefPtr GraphicsDeviceRef;
-typedef struct Error Error;
-typedef struct CharString CharString;
 
 typedef UnifiedTexture DepthStencil;
 

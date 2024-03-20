@@ -28,11 +28,13 @@
 TListImpl(DevicePendingRange);
 
 Error DeviceBufferRef_dec(DeviceBufferRef **buffer) {
-	return !RefPtr_dec(buffer) ? Error_invalidOperation(0, "DeviceBufferRef_dec()::buffer is required") : Error_none();
+	return !RefPtr_dec(buffer) ? 
+		Error_invalidOperation(0, "DeviceBufferRef_dec()::buffer is required") : Error_none();
 }
 
 Error DeviceBufferRef_inc(DeviceBufferRef *buffer) {
-	return !RefPtr_inc(buffer) ? Error_invalidOperation(0, "DeviceBufferRef_inc()::buffer is required") : Error_none();
+	return !RefPtr_inc(buffer) ? 
+		Error_invalidOperation(0, "DeviceBufferRef_inc()::buffer is required") : Error_none();
 }
 
 Error DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count) {
@@ -46,7 +48,9 @@ Error DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count) {
 	//Check range
 
 	if(offset >= bufLen || offset + count > bufLen)
-		return Error_outOfBounds(1, offset + count, bufLen, "DeviceBufferRef_markDirty()::offset+count out of bounds");
+		return Error_outOfBounds(
+			1, offset + count, bufLen, "DeviceBufferRef_markDirty()::offset+count out of bounds"
+		);
 
 	ELockAcquire acq0 = Lock_lock(&buffer->lock, U64_MAX);
 
@@ -64,7 +68,7 @@ Error DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count) {
 	if(!(buffer->resource.flags & EGraphicsResourceFlag_CPUBacked) && !(buffer->isFirstFrame && !offset && !count))
 		gotoIfError(clean, Error_invalidOperation(
 			2, "DeviceBufferRef_markDirty() can only be called on first frame for entire resource or if it's CPU backed"
-		));
+		))
 
 	if(!count)
 		count = bufLen - offset;
@@ -79,7 +83,7 @@ Error DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count) {
 	Bool shouldPush = false;
 
 	if(fullRange) {
-		gotoIfError(clean, ListDevicePendingRange_clear(&buffer->pendingChanges));
+		gotoIfError(clean, ListDevicePendingRange_clear(&buffer->pendingChanges))
 		buffer->isPendingFullCopy = true;
 		shouldPush = true;
 	}
@@ -112,7 +116,7 @@ Error DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count) {
 						DevicePendingRange last = buffer->pendingChanges.ptr[lastMatch];
 						pending->buffer.startRange = U64_min(pending->buffer.startRange, last.buffer.startRange);
 						pending->buffer.endRange = U64_max(pending->buffer.endRange, last.buffer.endRange);
-						gotoIfError(clean, ListDevicePendingRange_erase(&buffer->pendingChanges, lastMatch));
+						gotoIfError(clean, ListDevicePendingRange_erase(&buffer->pendingChanges, lastMatch))
 					}
 
 					lastMatch = i;
@@ -130,10 +134,10 @@ Error DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count) {
 		if((buffer->pendingChanges.length + 1) >> 32)
 			gotoIfError(clean, Error_outOfBounds(
 				0, U32_MAX, U32_MAX, "DeviceBufferRef_markDirty() buffer pendingRanges is limited to U32_MAX"
-			));
+			))
 
 		DevicePendingRange change = (DevicePendingRange) { .buffer = { .startRange = offset, .endRange = offset + count } };
-		gotoIfError(clean, ListDevicePendingRange_pushBackx(&buffer->pendingChanges, change));
+		gotoIfError(clean, ListDevicePendingRange_pushBackx(&buffer->pendingChanges, change))
 	}
 
 	//Tell the device that on next submit it should handle copies from
@@ -146,9 +150,9 @@ Error DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count) {
 	acq1 = Lock_lock(&device->lock, U64_MAX);
 
 	if(acq1 < ELockAcquire_Success)
-		gotoIfError(clean, Error_invalidState(0, "DeviceBufferRef_markDirty() couldn't lock device"));
+		gotoIfError(clean, Error_invalidState(0, "DeviceBufferRef_markDirty() couldn't lock device"))
 
-	gotoIfError(clean, ListWeakRefPtr_pushBackx(&device->pendingResources, buf));
+	gotoIfError(clean, ListWeakRefPtr_pushBackx(&device->pendingResources, buf))
 
 clean:
 
@@ -176,11 +180,11 @@ Bool DeviceBuffer_free(DeviceBuffer *buffer, Allocator allocator) {
 	if (buffer->resource.flags & EGraphicsResourceFlag_ShaderRW) {
 
 		GraphicsDevice *device = GraphicsDeviceRef_ptr(buffer->resource.device);
-		ELockAcquire acq = Lock_lock(&device->descriptorLock, U64_MAX);
+		const ELockAcquire acq = Lock_lock(&device->descriptorLock, U64_MAX);
 
 		if(acq >= ELockAcquire_Success) {
 
-			U32 allocations[2] = { buffer->readHandle, buffer->writeHandle };
+			const U32 allocations[2] = { buffer->readHandle, buffer->writeHandle };
 			ListU32 allocationList = (ListU32) { 0 };
 			ListU32_createRefConst(allocations, 2, &allocationList);
 			GraphicsDeviceRef_freeDescriptors(buffer->resource.device, &allocationList);
@@ -220,26 +224,26 @@ Error GraphicsDeviceRef_createBufferIntern(
 	ELockAcquire acq = ELockAcquire_Invalid;
 
 	if(!dev || dev->typeId != EGraphicsTypeId_GraphicsDevice)
-		gotoIfError(clean, Error_nullPointer(0, "GraphicsDeviceRef_createBufferIntern()::dev is required"));
+		gotoIfError(clean, Error_nullPointer(0, "GraphicsDeviceRef_createBufferIntern()::dev is required"))
 
 	if((usage & EDeviceBufferUsage_ScratchExt) && (usage != EDeviceBufferUsage_ScratchExt))
-		gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_createBufferIntern() invalid scratch usage/flags"));
+		gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_createBufferIntern() invalid scratch usage/flags"))
 
 	if((usage & EDeviceBufferUsage_ASExt) && (resourceFlags || usage != EDeviceBufferUsage_ASExt))
-		gotoIfError(clean, Error_invalidState(1, "GraphicsDeviceRef_createBufferIntern() invalid AS usage/flags"));
+		gotoIfError(clean, Error_invalidState(1, "GraphicsDeviceRef_createBufferIntern() invalid AS usage/flags"))
 
 	if((usage & EDeviceBufferUsage_SBTExt) && (resourceFlags || usage != EDeviceBufferUsage_SBTExt))
-		gotoIfError(clean, Error_invalidState(1, "GraphicsDeviceRef_createBufferIntern() invalid SBT usage/flags"));
+		gotoIfError(clean, Error_invalidState(1, "GraphicsDeviceRef_createBufferIntern() invalid SBT usage/flags"))
 
 	Bool isRTBufferType = usage & (EDeviceBufferUsage_ASExt | EDeviceBufferUsage_ScratchExt | EDeviceBufferUsage_ASReadExt);
 
 	if (isRTBufferType && !(device->info.capabilities.features & EGraphicsFeatures_Raytracing))
 		gotoIfError(clean, Error_invalidState(
 			2, "GraphicsDeviceRef_createBufferIntern() AS or scratch buffer only allowed if raytracing feature is present"
-		));
+		))
 
 	if(!(resourceFlags & EGraphicsResourceFlag_InternalWeakDeviceRef))
-		gotoIfError(clean, GraphicsDeviceRef_inc(dev));
+		gotoIfError(clean, GraphicsDeviceRef_inc(dev))
 
 	DeviceBuffer *buf = DeviceBufferRef_ptr(*ref);
 
@@ -263,7 +267,7 @@ Error GraphicsDeviceRef_createBufferIntern(
 		if(acq < ELockAcquire_Success)
 			gotoIfError(clean, Error_invalidState(
 				0, "GraphicsDeviceRef_createBufferIntern() couldn't acquire descriptor lock"
-			));
+			))
 
 		//Create images
 
@@ -274,7 +278,7 @@ Error GraphicsDeviceRef_createBufferIntern(
 			if(buf->readHandle == U32_MAX)
 				gotoIfError(clean, Error_outOfMemory(
 					0, "GraphicsDeviceRef_createBufferIntern() couldn't allocate buffer descriptor"
-				));
+				))
 		}
 
 		if(buf->resource.flags & EGraphicsResourceFlag_ShaderWrite) {
@@ -284,7 +288,7 @@ Error GraphicsDeviceRef_createBufferIntern(
 			if(buf->writeHandle == U32_MAX)
 				gotoIfError(clean, Error_outOfMemory(
 					0, "GraphicsDeviceRef_createBufferIntern() couldn't allocate buffer descriptor"
-				));
+				))
 		}
 
 		if(acq == ELockAcquire_Acquired)
@@ -293,12 +297,12 @@ Error GraphicsDeviceRef_createBufferIntern(
 		acq = ELockAcquire_Invalid;
 	}
 
-	gotoIfError(clean, ListDevicePendingRange_reservex(&buf->pendingChanges, usage & EGraphicsResourceFlag_CPUBacked ? 16 : 1));
+	gotoIfError(clean, ListDevicePendingRange_reservex(&buf->pendingChanges, usage & EGraphicsResourceFlag_CPUBacked ? 16 : 1))
 
 	if(allocate)
-		gotoIfError(clean, Buffer_createEmptyBytesx(buf->resource.size, &buf->cpuData));		//Temporary if not CPUBacked
+		gotoIfError(clean, Buffer_createEmptyBytesx(buf->resource.size, &buf->cpuData))		//Temporary if not CPUBacked
 
-	gotoIfError(clean, GraphicsDeviceRef_createBufferExt(dev, buf, name));
+	gotoIfError(clean, GraphicsDeviceRef_createBufferExt(dev, buf, name))
 	buf->lock = Lock_create();
 
 clean:
@@ -337,7 +341,9 @@ Error GraphicsDeviceRef_createBufferData(
 	if(!dat)
 		return Error_nullPointer(4, "GraphicsDeviceRef_createBufferData()::dat is required");
 
-	Error err = GraphicsDeviceRef_createBufferIntern(dev, usage, flags, name, Buffer_length(*dat), Buffer_isRef(*dat), buf);
+	Error err = GraphicsDeviceRef_createBufferIntern(
+		dev, usage, flags, name, Buffer_length(*dat), Buffer_isRef(*dat), buf
+	);
 
 	if(err.genericError)
 		return err;
@@ -352,7 +358,7 @@ Error GraphicsDeviceRef_createBufferData(
 		*dat = Buffer_createNull();
 	}
 
-	gotoIfError(clean, DeviceBufferRef_markDirty(*buf, 0, 0));
+	gotoIfError(clean, DeviceBufferRef_markDirty(*buf, 0, 0))
 
 clean:
 

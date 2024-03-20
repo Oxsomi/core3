@@ -23,9 +23,6 @@
 #include "device_buffer.h"
 #include "texture.h"
 
-typedef enum ETextureFormatId ETextureFormatId;
-typedef enum ETextureType ETextureType;
-
 typedef RefPtr DeviceTextureRef;
 
 //DeviceTexture, UnifiedTexture (Resource, ...), UnifiedTextureImage_size[N], UnifiedTextureExt_size[N], TextureExt

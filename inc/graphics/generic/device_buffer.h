@@ -24,7 +24,6 @@
 #include "resource.h"
 
 typedef RefPtr GraphicsDeviceRef;
-typedef struct CharString CharString;
 
 typedef enum EDeviceBufferUsage {
 
@@ -77,8 +76,8 @@ Error DeviceBufferRef_dec(DeviceBufferRef **buffer);
 Error DeviceBufferRef_inc(DeviceBufferRef *buffer);
 
 //Create empty buffer or initialized with data.
-//Initializing to non zero isn't free due to copies.
-//	Initializing to non zero will move the buffer to created DeviceBuffer, unless it's a ref (then it will create a new one)
+//Initializing to non-zero isn't free due to copies.
+//	Initializing to non-zero will move the buffer to created DeviceBuffer, unless it's a ref (then it will create a new one)
 
 Error GraphicsDeviceRef_createBuffer(
 	GraphicsDeviceRef *dev,

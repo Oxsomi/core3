@@ -27,13 +27,13 @@
 #include "types/string.h"
 
 Error RenderTextureRef_dec(RenderTextureRef **renderTexture) {
-	return !RefPtr_dec(renderTexture) ? Error_invalidOperation(0, "RenderTextureRef_dec()::renderTexture is invalid") :
-	Error_none();
+	return !RefPtr_dec(renderTexture) ? 
+		Error_invalidOperation(0, "RenderTextureRef_dec()::renderTexture is invalid") : Error_none();
 }
 
 Error RenderTextureRef_inc(RenderTextureRef *renderTexture) {
-	return !RefPtr_inc(renderTexture) ? Error_invalidOperation(0, "RenderTextureRef_inc()::renderTexture is invalid") :
-	Error_none();
+	return !RefPtr_inc(renderTexture) ? 
+		Error_invalidOperation(0, "RenderTextureRef_inc()::renderTexture is invalid") : Error_none();
 }
 
 Bool GraphicsDevice_freeRenderTexture(RenderTexture *renderTexture, Allocator alloc) {
@@ -64,7 +64,7 @@ Error GraphicsDeviceRef_createRenderTexture(
 	if(err.genericError)
 		return err;
 
-	gotoIfError(clean, GraphicsDeviceRef_inc(deviceRef));
+	gotoIfError(clean, GraphicsDeviceRef_inc(deviceRef))
 
 	*RenderTextureRef_ptr(*renderTextureRef) = (UnifiedTexture) {
 		.resource = (GraphicsResource) {
@@ -82,7 +82,7 @@ Error GraphicsDeviceRef_createRenderTexture(
 		.images = 1
 	};
 
-	gotoIfError(clean, UnifiedTexture_create(*renderTextureRef, name));
+	gotoIfError(clean, UnifiedTexture_create(*renderTextureRef, name))
 
 clean:
 

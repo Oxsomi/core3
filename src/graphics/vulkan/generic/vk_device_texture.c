@@ -68,7 +68,7 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 
 		for(U64 j = 0; j < texture->pendingChanges.length; ++j) {
 
-			TextureRange texturej = texture->pendingChanges.ptr[j].texture;
+			const TextureRange texturej = texture->pendingChanges.ptr[j].texture;
 
 			U64 siz = ETextureFormat_getSize(
 				format, TextureRange_width(texturej), TextureRange_height(texturej), TextureRange_length(texturej)
@@ -82,10 +82,10 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 
 	device->pendingBytes += allocRange;
 
-	gotoIfError(clean, ListVkBufferImageCopy_resizex(&pendingCopies, texture->pendingChanges.length));
+	gotoIfError(clean, ListVkBufferImageCopy_resizex(&pendingCopies, texture->pendingChanges.length))
 
 	VkDependencyInfo dependency = (VkDependencyInfo) { .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO };
-	gotoIfError(clean, ListVkBufferMemoryBarrier2_reservex(&tempBufferBarriers, 2 + texture->pendingChanges.length));
+	gotoIfError(clean, ListVkBufferMemoryBarrier2_reservex(&tempBufferBarriers, 2 + texture->pendingChanges.length))
 
 	U8 alignmentX = 1, alignmentY = 1;
 	ETextureFormat_getAlignment(format, &alignmentX, &alignmentY);
@@ -99,7 +99,7 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 			EDeviceBufferUsage_None, EGraphicsResourceFlag_InternalWeakDeviceRef | EGraphicsResourceFlag_CPUAllocatedBit,
 			CharString_createRefCStrConst("Dedicated staging buffer"),
 			allocRange, &tempStagingResource
-		));
+		))
 
 		DeviceBuffer *stagingResource = DeviceBufferRef_ptr(tempStagingResource);
 		VkDeviceBuffer *stagingResourceExt = DeviceBuffer_ext(stagingResource, Vk);
@@ -114,20 +114,20 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 
 		for(U64 m = 0; m < texture->pendingChanges.length; ++m) {
 
-			TextureRange texturej = texture->pendingChanges.ptr[m].texture;
+			const TextureRange texturej = texture->pendingChanges.ptr[m].texture;
 
-			U16 x = texturej.startRange[0];
-			U16 y = texturej.startRange[1];
-			U16 z = texturej.startRange[2];
+			const U16 x = texturej.startRange[0];
+			const U16 y = texturej.startRange[1];
+			const U16 z = texturej.startRange[2];
 
-			U16 w = TextureRange_width(texturej);
-			U16 h = TextureRange_height(texturej);
-			U16 l = TextureRange_length(texturej);
+			const U16 w = TextureRange_width(texturej);
+			const U16 h = TextureRange_height(texturej);
+			const U16 l = TextureRange_length(texturej);
 
-			U32 rowOff = (U32) ETextureFormat_getSize(format, x, alignmentY, 1);
-			U32 rowLen = (U32) ETextureFormat_getSize(format, w, alignmentY, 1);
-			U64 len = ETextureFormat_getSize(format, w, h, l);
-			U64 start = (U64) rowLen * (y + z * h) + rowOff;
+			const U32 rowOff = (U32) ETextureFormat_getSize(format, x, alignmentY, 1);
+			const U32 rowLen = (U32) ETextureFormat_getSize(format, w, alignmentY, 1);
+			const U64 len = ETextureFormat_getSize(format, w, h, l);
+			const U64 start = (U64) rowLen * (y + z * h) + rowOff;
 
 			if(w == texture->base.width && h == texture->base.height)
 				Buffer_copy(
@@ -144,7 +144,7 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 					);
 
 				else for (U64 j = y; j < y + h; j += alignmentY) {
-					U64 yOff = (j - y) / alignmentY;
+					const U64 yOff = (j - y) / alignmentY;
 					Buffer_copy(
 						Buffer_createRef(location + allocRange + (U64)rowLen * (yOff + (k - z) * h), rowLen),
 						Buffer_createRefConst(texture->cpuData.ptr + start + (U64)rowLen * (yOff + (k - z) * h), rowLen)
@@ -166,7 +166,7 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 
 		if(incoherent) {
 
-			VkMappedMemoryRange memoryRange = (VkMappedMemoryRange) {
+			const VkMappedMemoryRange memoryRange = (VkMappedMemoryRange) {
 				.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
 				.memory = (VkDeviceMemory) block.ext,
 				.offset = stagingResource->resource.blockOffset,
@@ -185,7 +185,7 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 			allocRange,
 			&tempBufferBarriers,
 			&dependency
-		));
+		))
 
 		VkImageSubresourceRange range2 = (VkImageSubresourceRange) {		//TODO: Add range
 			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -202,7 +202,7 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 			&range2,
 			&tempImageBarriers,
 			&dependency
-		));
+		))
 
 		if(dependency.bufferMemoryBarrierCount || dependency.imageMemoryBarrierCount)
 			instanceExt->cmdPipelineBarrier2(commandBuffer, &dependency);
@@ -216,9 +216,9 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 			pendingCopies.ptr
 		);
 
-		//When staging resource is commited to current in flight then we can relinguish ownership.
+		//When staging resource is committed to current in flight then we can relinquish ownership.
 
-		gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, tempStagingResource));
+		gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, tempStagingResource))
 		tempStagingResource = NULL;
 	}
 
@@ -226,17 +226,19 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 
 	else {
 
-		gotoIfError(clean, ListVkBufferImageCopy_resizex(&pendingCopies, texture->pendingChanges.length));
+		gotoIfError(clean, ListVkBufferImageCopy_resizex(&pendingCopies, texture->pendingChanges.length))
 
 		AllocationBuffer *stagingBuffer = &device->stagingAllocations[device->submitId % 3];
 		DeviceBuffer *staging = DeviceBufferRef_ptr(device->staging);
 		VkDeviceBuffer *stagingExt = DeviceBuffer_ext(staging, Vk);
 
 		U8 *defaultLocation = (U8*) 1, *location = defaultLocation;
-		Error temp = AllocationBuffer_allocateBlockx(stagingBuffer, allocRange, compressed ? 16 : 4, (const U8**) &location);
+		Error temp = AllocationBuffer_allocateBlockx(
+			stagingBuffer, allocRange, compressed ? 16 : 4, (const U8**) &location
+		);
 
 		if(temp.genericError && location == defaultLocation)		//Something major went wrong
-			gotoIfError(clean, temp);
+			gotoIfError(clean, temp)
 
 		//We re-create the staging buffer to fit the new allocation.
 
@@ -247,8 +249,8 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 			//Allocate new staging buffer.
 
 			U64 newSize = prevSize * 2 + allocRange * 3;
-			gotoIfError(clean, GraphicsDeviceRef_resizeStagingBuffer(deviceRef, newSize));
-			gotoIfError(clean, AllocationBuffer_allocateBlockx(stagingBuffer, allocRange, 4, (const U8**) &location));
+			gotoIfError(clean, GraphicsDeviceRef_resizeStagingBuffer(deviceRef, newSize))
+			gotoIfError(clean, AllocationBuffer_allocateBlockx(stagingBuffer, allocRange, 4, (const U8**) &location))
 
 			staging = DeviceBufferRef_ptr(device->staging);
 			stagingExt = DeviceBuffer_ext(staging, Vk);
@@ -263,7 +265,7 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 
 		for(U64 m = 0; m < texture->pendingChanges.length; ++m) {
 
-			TextureRange texturej = texture->pendingChanges.ptr[m].texture;
+			const TextureRange texturej = texture->pendingChanges.ptr[m].texture;
 
 			U16 x = texturej.startRange[0];
 			U16 y = texturej.startRange[1];
@@ -337,10 +339,10 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 				staging->resource.size / 3,
 				&tempBufferBarriers,
 				&dependency
-			));
+			))
 
 			RefPtr_inc(device->staging);
-			gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, device->staging));		//Add to in flight
+			gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, device->staging))		//Add to in flight
 		}
 
 		VkImageSubresourceRange range2 = (VkImageSubresourceRange) {		//TODO: Add range
@@ -358,7 +360,7 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 			&range2,
 			&tempImageBarriers,
 			&dependency
-		));
+		))
 
 		if(dependency.bufferMemoryBarrierCount || dependency.imageMemoryBarrierCount)
 			instanceExt->cmdPipelineBarrier2(commandBuffer, &dependency);
@@ -377,10 +379,10 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 		Buffer_freex(&texture->cpuData);
 
 	texture->isFirstFrame = texture->isPending = texture->isPendingFullCopy = false;
-	gotoIfError(clean, ListDevicePendingRange_clear(&texture->pendingChanges));
+	gotoIfError(clean, ListDevicePendingRange_clear(&texture->pendingChanges))
 
 	if(RefPtr_inc(pending))
-		gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, pending));
+		gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, pending))
 
 	if (device->pendingBytes >= device->flushThreshold)
 		VkGraphicsDevice_flush(deviceRef, commandBuffer);

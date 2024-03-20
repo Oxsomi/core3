@@ -19,7 +19,7 @@
 */
 
 #pragma once
-#include "types/buffer.h"
+#include "types/types.h"
 
 typedef enum EPipelineType {
 	EPipelineType_Graphics,
@@ -54,6 +54,8 @@ typedef enum EPipelineStage {
 	EPipelineStage_Count
 
 } EPipelineStage;
+
+extern const C8 *EPipelineStage_names[];
 
 typedef enum ECullMode {
 	ECullMode_Back,

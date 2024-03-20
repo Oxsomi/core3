@@ -36,7 +36,7 @@ Error VkGraphicsInstance_getLayers(ListConstC8 *layers) {
 
 	#ifndef NDEBUG
 
-		Error err = ListConstC8_pushBackx(layers, vkValidation);
+		const Error err = ListConstC8_pushBackx(layers, vkValidation);
 
 		if(err.genericError)
 			return err;

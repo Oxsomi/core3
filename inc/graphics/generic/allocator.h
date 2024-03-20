@@ -25,7 +25,6 @@
 #include "types/lock.h"
 
 typedef struct GraphicsDevice GraphicsDevice;
-typedef struct CharString CharString;
 
 typedef enum EResourceType EResourceType;
 

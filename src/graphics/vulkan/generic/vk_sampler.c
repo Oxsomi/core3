@@ -29,8 +29,8 @@ const U64 SamplerExt_size = sizeof(VkSampler);
 
 Bool Sampler_freeExt(Sampler *sampler) {
 
-	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(GraphicsDeviceRef_ptr(sampler->device), Vk);
-	VkSampler *samplerExt = Sampler_ext(sampler, Vk);
+	const VkGraphicsDevice *deviceExt = GraphicsDevice_ext(GraphicsDeviceRef_ptr(sampler->device), Vk);
+	const VkSampler *samplerExt = Sampler_ext(sampler, Vk);
 
 	if(*samplerExt)
 		vkDestroySampler(deviceExt->device, *samplerExt, NULL);
@@ -61,17 +61,17 @@ Error GraphicsDeviceRef_createSamplerExt(GraphicsDeviceRef *dev, Sampler *sample
 
 	Error err = Error_none();
 
-	GraphicsDevice *device = GraphicsDeviceRef_ptr(dev);
-	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
+	const GraphicsDevice *device = GraphicsDeviceRef_ptr(dev);
+	const VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 
-	VkGraphicsInstance *instance = GraphicsInstance_ext(GraphicsInstanceRef_ptr(device->instance), Vk);
+	const VkGraphicsInstance *instance = GraphicsInstance_ext(GraphicsInstanceRef_ptr(device->instance), Vk);
 	(void)instance;
 
 	VkSampler *samplerExt = Sampler_ext(sampler, Vk);
 
-	SamplerInfo sinfo = sampler->info;
+	const SamplerInfo sinfo = sampler->info;
 
-	VkSamplerCreateInfo samplerInfo = (VkSamplerCreateInfo) {
+	const VkSamplerCreateInfo samplerInfo = (VkSamplerCreateInfo) {
 
 		.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
 
@@ -99,7 +99,7 @@ Error GraphicsDeviceRef_createSamplerExt(GraphicsDeviceRef *dev, Sampler *sample
 		.borderColor = mapVkBorderColor(sinfo.borderColor)
 	};
 
-	gotoIfError(clean, vkCheck(vkCreateSampler(deviceExt->device, &samplerInfo, NULL, samplerExt)));
+	gotoIfError(clean, vkCheck(vkCreateSampler(deviceExt->device, &samplerInfo, NULL, samplerExt)))
 
 	if (CharString_length(name)) {
 
@@ -107,14 +107,14 @@ Error GraphicsDeviceRef_createSamplerExt(GraphicsDeviceRef *dev, Sampler *sample
 
 			if(instance->debugSetName) {
 
-				VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
+				const VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
 					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
 					.objectType = VK_OBJECT_TYPE_SAMPLER,
 					.pObjectName = name.ptr,
 					.objectHandle = (U64) *samplerExt
 				};
 
-				gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)));
+				gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)))
 			}
 
 		#endif
@@ -122,9 +122,9 @@ Error GraphicsDeviceRef_createSamplerExt(GraphicsDeviceRef *dev, Sampler *sample
 
 	//Allocate descriptor
 
-	VkDescriptorImageInfo imageInfo = (VkDescriptorImageInfo) { .sampler = *samplerExt };
+	const VkDescriptorImageInfo imageInfo = (VkDescriptorImageInfo) { .sampler = *samplerExt };
 
-	VkWriteDescriptorSet descriptor = (VkWriteDescriptorSet) {
+	const VkWriteDescriptorSet descriptor = (VkWriteDescriptorSet) {
 		.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
 		.descriptorCount = 1,
 		.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,

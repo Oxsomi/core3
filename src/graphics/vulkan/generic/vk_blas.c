@@ -34,12 +34,12 @@ const U64 BLASExt_size = sizeof(VkBLAS);
 Bool BLAS_freeExt(BLAS *blas) {
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(blas->base.device);
-	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
+	const VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 
 	GraphicsInstance *instance = GraphicsInstanceRef_ptr(device->instance);
-	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
+	const VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
 
-	VkAccelerationStructureKHR as = BLAS_ext(blas, Vk)->as;
+	const VkAccelerationStructureKHR as = BLAS_ext(blas, Vk)->as;
 
 	if(as)
 		instanceExt->destroyAccelerationStructure(deviceExt->device, as, NULL);
@@ -101,7 +101,7 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 	if(primitives >> 32)
 		gotoIfError(clean, Error_outOfBounds(
 			0, primitives, U32_MAX, "BLASRef_flush() only primitive count of <U32_MAX is supported"
-		));
+		))
 
 	//Convert to Vulkan dependent version
 
@@ -141,7 +141,7 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 			0, 0,
 			&deviceExt->bufferTransitions,
 			&dep
-		));
+		))
 
 		if (blas->indexFormatId) {
 
@@ -156,7 +156,7 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 				0, 0,
 				&deviceExt->bufferTransitions,
 				&dep
-			));
+			))
 		}
 	}
 
@@ -177,7 +177,7 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 			0, 0,
 			&deviceExt->bufferTransitions,
 			&dep
-		));
+		))
 	}
 
 	VkBuildAccelerationStructureFlagsKHR flags = (VkBuildAccelerationStructureFlagsKHR) 0;
@@ -229,11 +229,11 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 		blas->base.name,
 		sizes.accelerationStructureSize,
 		&blas->base.asBuffer
-	));
+	))
 
 	gotoIfError(clean, CharString_formatx(
 		&tmp, "%.*s scratch buffer", CharString_length(blas->base.name), blas->base.name.ptr
-	));
+	))
 
 	gotoIfError(clean, GraphicsDeviceRef_createBuffer(
 		deviceRef,
@@ -242,7 +242,7 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 		tmp,
 		blas->base.flags & ERTASBuildFlags_IsUpdate ? sizes.updateScratchSize : sizes.buildScratchSize,
 		&tempScratch
-	));
+	))
 
 	VkAccelerationStructureCreateInfoKHR createInfo = (VkAccelerationStructureCreateInfoKHR) {
 		.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR,
@@ -252,7 +252,7 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 
 	gotoIfError(clean, vkCheck(instanceExt->createAccelerationStructure(
 		deviceExt->device, &createInfo, NULL, &BLAS_ext(BLASRef_ptr(pending), Vk)->as
-	)));
+	)))
 
 	//Queue build
 
@@ -276,7 +276,7 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 		0, 0,
 		&deviceExt->bufferTransitions,
 		&dep
-	));
+	))
 
 	gotoIfError(clean, VkDeviceBuffer_transition(
 		DeviceBuffer_ext(DeviceBufferRef_ptr(tempScratch), Vk),
@@ -286,7 +286,7 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 		0, 0,
 		&deviceExt->bufferTransitions,
 		&dep
-	));
+	))
 
 	if (dep.bufferMemoryBarrierCount)
 		instanceExt->cmdPipelineBarrier2(commandBuffer, &dep);
@@ -310,13 +310,13 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 
 	device->pendingBytes += primitives;
 
-	gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, pending));
+	gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, pending))
 	RefPtr_inc(pending);
 
 	//We mark scratch buffer as delete, we do this by pushing it as a current flight resource
 	//And losing the reference from our object
 
-	gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, tempScratch));
+	gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, tempScratch))
 	tempScratch = NULL;
 
 	//Ensure we don't exceed a maximum amount of time spent on the GPU

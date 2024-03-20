@@ -28,11 +28,13 @@
 TListImpl(GraphicsDeviceInfo);
 
 Error GraphicsInstanceRef_dec(GraphicsInstanceRef **inst) {
-	return !RefPtr_dec(inst) ? Error_invalidOperation(0, "GraphicsInstanceRef_dec()::inst is required") : Error_none();
+	return !RefPtr_dec(inst) ? 
+		Error_invalidOperation(0, "GraphicsInstanceRef_dec()::inst is required") : Error_none();
 }
 
 Error GraphicsInstanceRef_inc(GraphicsInstanceRef *inst) {
-	return !RefPtr_inc(inst) ? Error_invalidOperation(0, "GraphicsInstanceRef_inc()::inst is required") : Error_none();
+	return !RefPtr_inc(inst) ? 
+		Error_invalidOperation(0, "GraphicsInstanceRef_inc()::inst is required") : Error_none();
 }
 
 Error GraphicsInstance_getPreferredDevice(
@@ -48,7 +50,9 @@ Error GraphicsInstance_getPreferredDevice(
 		return Error_nullPointer(4, "GraphicsInstance_getPreferredDevice()::deviceInfo is required");
 
 	if(deviceInfo->ext)
-		return Error_invalidParameter(4, 0, "GraphicsInstance_getPreferredDevice()::*deviceInfo must be empty");
+		return Error_invalidParameter(
+			4, 0, "GraphicsInstance_getPreferredDevice()::*deviceInfo must be empty"
+		);
 
 	ListGraphicsDeviceInfo tmp = (ListGraphicsDeviceInfo) { 0 };
 	Error err = GraphicsInstance_getDeviceInfos(inst, verbose, &tmp);
@@ -63,7 +67,7 @@ Error GraphicsInstance_getPreferredDevice(
 
 	for (U64 i = 0; i < tmp.length; ++i) {
 
-		GraphicsDeviceInfo info = tmp.ptr[i];
+		const GraphicsDeviceInfo info = tmp.ptr[i];
 
 		//Check if vendor and device type are supported
 
@@ -96,10 +100,9 @@ Error GraphicsInstance_getPreferredDevice(
 	}
 
 	if(!hasAny)
-		gotoIfError(clean, Error_notFound(0, 0, "GraphicsInstance_getPreferredDevice() no supported queried devices"));
+		gotoIfError(clean, Error_notFound(0, 0, "GraphicsInstance_getPreferredDevice() no supported queried devices"))
 
-	U64 picked = hasDedicated ? preferredDedicated : preferredNonDedicated;
-
+	const U64 picked = hasDedicated ? preferredDedicated : preferredNonDedicated;
 	*deviceInfo = tmp.ptr[picked];
 
 clean:

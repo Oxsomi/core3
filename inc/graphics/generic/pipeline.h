@@ -51,7 +51,7 @@ typedef struct PipelineGraphicsInfo {
 	//One of these can be used but not together.
 
 	//If DirectRendering is on (used in between start render).
-	//Otherwise this is ignored.
+	//Otherwise, this is ignored.
 
 	U8 attachmentFormatsExt[8];				//ETextureFormatId
 

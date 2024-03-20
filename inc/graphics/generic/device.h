@@ -25,7 +25,6 @@
 #include "types/ref_ptr.h"
 #include "types/list.h"
 
-typedef struct Error Error;
 typedef RefPtr GraphicsInstanceRef;
 typedef RefPtr DeviceBufferRef;
 
@@ -115,7 +114,7 @@ Error GraphicsDeviceRef_create(
 	GraphicsDeviceRef **device
 );
 
-//Ensure there are no pending changes from non existent resources.
+//Ensure there are no pending changes from non-existent resources.
 Bool GraphicsDeviceRef_removePending(GraphicsDeviceRef *deviceRef, RefPtr *resource);
 
 typedef RefPtr CommandListRef;

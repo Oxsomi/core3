@@ -78,7 +78,6 @@ typedef struct SamplerInfo {
 
 typedef RefPtr GraphicsDeviceRef;
 typedef RefPtr SamplerRef;
-typedef struct CharString CharString;
 
 typedef struct Sampler {
 

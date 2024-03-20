@@ -28,7 +28,6 @@
 #include "platforms/ext/stringx.h"
 #include "platforms/log.h"
 #include "types/error.h"
-#include "types/buffer.h"
 #include "types/math.h"
 #include "types/string.h"
 
@@ -47,7 +46,7 @@ Error VkDeviceMemoryAllocator_findMemory(
 
 	//Find suitable memory type
 
-	VkMemoryPropertyFlags all = local | host | coherent;
+	const VkMemoryPropertyFlags all = local | host | coherent;
 
 	VkMemoryPropertyFlags properties[3] = {			//Contains local if force cpu sided is turned off
 		host | coherent,
@@ -112,12 +111,12 @@ Error VkDeviceMemoryAllocator_findMemory(
 		if(!((memoryBits >> i) & 1))
 			continue;
 
-		VkMemoryType type = deviceExt->memoryProperties.memoryTypes[i];
+		const VkMemoryType type = deviceExt->memoryProperties.memoryTypes[i];
 
 		if(type.heapIndex != heapIds[0] && type.heapIndex != heapIds[1])
 			continue;
 
-		VkMemoryPropertyFlags propFlag = type.propertyFlags;
+		const VkMemoryPropertyFlags propFlag = type.propertyFlags;
 
 		for(U32 j = 0; j < propertyId; ++j) {
 
@@ -213,7 +212,9 @@ Error DeviceMemoryAllocator_allocate(
 
 	U32 memoryId = 0;
 	VkMemoryPropertyFlags prop = 0;
-	Error err = VkDeviceMemoryAllocator_findMemory(deviceExt, cpuSided, memReq.memoryTypeBits, &memoryId, &prop, NULL);
+	Error err = VkDeviceMemoryAllocator_findMemory(
+		deviceExt, cpuSided, memReq.memoryTypeBits, &memoryId, &prop, NULL
+	);
 
 	if(err.genericError)
 		return err;
@@ -242,7 +243,7 @@ Error DeviceMemoryAllocator_allocate(
 	void *mappedMem = NULL;
 
 	if(prop & host)
-		gotoIfError(clean, vkCheck(vkMapMemory(deviceExt->device, mem, 0, alloc.allocationSize, 0, &mappedMem)));
+		gotoIfError(clean, vkCheck(vkMapMemory(deviceExt->device, mem, 0, alloc.allocationSize, 0, &mappedMem)))
 
 	//Initialize block
 
@@ -252,10 +253,10 @@ Error DeviceMemoryAllocator_allocate(
 		.isDedicated = isDedicated,
 		.mappedMemory = mappedMem,
 		.ext = mem,
-		.resourceType = resourceType
+		.resourceType = (U8) resourceType
 	};
 
-	gotoIfError(clean, AllocationBuffer_createx(alloc.allocationSize, true, &block.allocations));
+	gotoIfError(clean, AllocationBuffer_createx(alloc.allocationSize, true, &block.allocations))
 
 	#ifndef NDEBUG
 		Log_captureStackTracex(block.stackTrace, sizeof(block.stackTrace) / sizeof(void*), 1);
@@ -270,12 +271,12 @@ Error DeviceMemoryAllocator_allocate(
 			break;
 
 	const U8 *allocLoc = NULL;
-	gotoIfError(clean, AllocationBuffer_allocateBlockx(&block.allocations, memReq.size, memReq.alignment, &allocLoc));
+	gotoIfError(clean, AllocationBuffer_allocateBlockx(&block.allocations, memReq.size, memReq.alignment, &allocLoc))
 
 	if(i == allocator->blocks.length) {
 
 		if(i == U32_MAX)
-			gotoIfError(clean, Error_outOfBounds(0, i, U32_MAX, "DeviceMemoryAllocator_allocate() block out of bounds"));
+			gotoIfError(clean, Error_outOfBounds(0, i, U32_MAX, "DeviceMemoryAllocator_allocate() block out of bounds"))
 
 		gotoIfError(clean, ListDeviceMemoryBlock_pushBackx(&allocator->blocks, block))
 	}
@@ -300,7 +301,7 @@ Error DeviceMemoryAllocator_allocate(
 					prop & coherent ? "true" : "false",
 					prop & local ? "true" : "false",
 					objectName.ptr
-				));
+				))
 
 				VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
 					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
@@ -309,7 +310,7 @@ Error DeviceMemoryAllocator_allocate(
 					.objectHandle = (U64) mem
 				};
 
-				gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName)));
+				gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName)))
 				CharString_freex(&temp);
 			}
 
@@ -333,7 +334,7 @@ Bool DeviceMemoryAllocator_freeAllocationExt(GraphicsDevice *device, void *ext) 
 	if(!device || !ext)
 		return false;
 
-	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
+	const VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 	vkFreeMemory(deviceExt->device, (VkDeviceMemory) ext, NULL);
 	return true;
 }

@@ -19,7 +19,6 @@
 */
 
 #include "graphics/generic/device_info.h"
-#include "graphics/generic/texture.h"
 #include "graphics/generic/pipeline_structs.h"
 #include "platforms/log.h"
 #include "formats/texture.h"
@@ -48,11 +47,11 @@ void GraphicsDeviceInfo_print(const GraphicsDeviceInfo *deviceInfo, Bool printCa
 
 	if (printCapabilities) {
 
-		GraphicsDeviceCapabilities cap = deviceInfo->capabilities;
+		const GraphicsDeviceCapabilities cap = deviceInfo->capabilities;
 
 		//Features
 
-		U32 feat = cap.features;
+		const U32 feat = cap.features;
 
 		Log_debugLnx("\tFeatures:");
 
@@ -115,7 +114,7 @@ void GraphicsDeviceInfo_print(const GraphicsDeviceInfo *deviceInfo, Bool printCa
 
 		//Data types
 
-		U32 dat = cap.dataTypes;
+		const U32 dat = cap.dataTypes;
 
 		Log_debugLnx("\tData types:");
 
@@ -174,7 +173,7 @@ Bool GraphicsDeviceInfo_supportsFormat(const GraphicsDeviceInfo *deviceInfo, ETe
 	if(!deviceInfo)
 		return false;
 
-	ETextureCompressionAlgo algo = ETextureFormat_getCompressionAlgo(format);
+	const ETextureCompressionAlgo algo = ETextureFormat_getCompressionAlgo(format);
 
 	if(algo == ETextureCompressionAlgo_ASTC)
 		return deviceInfo->capabilities.dataTypes & EGraphicsDataTypes_ASTC;
@@ -196,7 +195,7 @@ Bool GraphicsDeviceInfo_supportsRenderTextureFormat(const GraphicsDeviceInfo *de
 
 Bool GraphicsDeviceInfo_supportsFormatVertexAttribute(ETextureFormat format) {
 
-	ETextureCompressionAlgo algo = ETextureFormat_getCompressionAlgo(format);
+	const ETextureCompressionAlgo algo = ETextureFormat_getCompressionAlgo(format);
 
 	if(algo != ETextureCompressionAlgo_None)
 		return false;
