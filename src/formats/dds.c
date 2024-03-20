@@ -460,13 +460,13 @@ Error DDS_write(ListSubResourceData buf, DDSInfo info, Allocator allocator, Buff
 	if(info.type >= ETextureType_Count || info.textureFormatId >= ETextureFormatId_Count)
 		return Error_invalidParameter(1, 1, "DDS_write()::info.type and textureFormatId have to be valid");
 
-	U32 biggestSize2 = (U32) U64_max(U64_max(info.w, info.h), info.l);
-	U32 mips = (U32) U64_max(1, (U64) F64_ceil(F64_log2((F64)biggestSize2)));
+	const U32 biggestSize2 = (U32) U64_max(U64_max(info.w, info.h), info.l);
+	const U32 mips = (U32) U64_max(1, (U64) F64_ceil(F64_log2((F64)biggestSize2)));
 
 	if(info.mips > mips)
 		return Error_invalidParameter(1, 0, "DDS_write()::info.mips out of bounds");
 
-	U64 totalSubResources = (U64)info.mips * info.l * info.layers;
+	const U64 totalSubResources = (U64)info.mips * info.l * info.layers;
 
 	if(totalSubResources != buf.length)
 		return Error_invalidParameter(0, 0, "DDS_write()::info's subresource count and buf.length mismatched");
@@ -480,13 +480,13 @@ Error DDS_write(ListSubResourceData buf, DDSInfo info, Allocator allocator, Buff
 	if(info.layers > 1 && info.type == ETextureType_3D)
 		return Error_invalidParameter(0, 0, "DDS_write()::info specifies layers of >1 but ETextureType_3D was used");
 
-	DXFormat format = ETextureFormatId_toDXFormat(info.textureFormatId);
+	const DXFormat format = ETextureFormatId_toDXFormat(info.textureFormatId);
 
 	if(!format)
 		return Error_invalidParameter(0, 0, "DDS_write()::info.textureFormatId isn't supported as a DDS texture");
 
-	ETextureFormat formatOxC = ETextureFormatId_unpack[info.textureFormatId];
-	Bool isCompressed = ETextureFormat_getIsCompressed(formatOxC);
+	const ETextureFormat formatOxC = ETextureFormatId_unpack[info.textureFormatId];
+	const Bool isCompressed = ETextureFormat_getIsCompressed(formatOxC);
 
 	//Calculate total size
 
@@ -529,11 +529,11 @@ Error DDS_write(ListSubResourceData buf, DDSInfo info, Allocator allocator, Buff
 
 		for (U32 j = 0; j < info.mips; ++j) {
 
-			U64 len = ETextureFormat_getSize(formatOxC, currW, currH, currL);
+			const U64 len = ETextureFormat_getSize(formatOxC, currW, currH, currL);
 
 			for (U32 k = 0; k < currL; ++k) {
 
-				SubResourceData dat = buf.ptr[l++];
+				const SubResourceData dat = buf.ptr[l++];
 
 				if(dat.layerId != i || dat.mipId != j || dat.z != k)
 					return Error_invalidParameter(0, 0, "DDS_write()::buf contained duplicate data");
@@ -556,12 +556,12 @@ Error DDS_write(ListSubResourceData buf, DDSInfo info, Allocator allocator, Buff
 	U8 alignY = 1;
 	ETextureFormat_getAlignment(formatOxC, NULL, &alignY);
 
-	U64 stride = ETextureFormat_getSize(formatOxC, info.w, alignY, 1);
+	const U64 stride = ETextureFormat_getSize(formatOxC, info.w, alignY, 1);
 
 	if(stride >> 32)
 		return Error_overflow(0, stride, U32_MAX, "DDS_write() pitch overflow");
 
-	Error err = Buffer_createUninitializedBytes(bufLen, allocator, result);
+	const Error err = Buffer_createUninitializedBytes(bufLen, allocator, result);
 
 	if(err.genericError)
 		return err;

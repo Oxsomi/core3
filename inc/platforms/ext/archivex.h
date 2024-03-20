@@ -21,9 +21,7 @@
 #pragma once
 #include "types/file.h"
 
-typedef struct Error Error;
 typedef struct Archive Archive;
-typedef struct CharString CharString;
 
 Error Archive_createx(Archive *archive);
 Bool Archive_freex(Archive *archive);

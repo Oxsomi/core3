@@ -19,15 +19,8 @@
 */
 
 #include "platforms/ext/listx_impl.h"
-#include "types/time.h"
-#include "types/buffer.h"
-#include "types/file.h"
 #include "platforms/ext/errorx.h"
 #include "platforms/ext/stringx.h"
-#include "platforms/ext/bufferx.h"
-#include "platforms/ext/formatx.h"
-#include "platforms/log.h"
-#include "formats/oiDL.h"
 #include "cli.h"
 
 const Bool Platform_useWorkingDirectory = true;

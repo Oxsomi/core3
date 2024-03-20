@@ -29,8 +29,8 @@ Bool ETextureFormat_getIsCompressed(ETextureFormat f) {
 }
 
 U64 ETextureFormat_getBits(ETextureFormat f) {
-	Bool isCompressed = ETextureFormat_getIsCompressed(f);
-	U64 length = ((f >> 27) & (isCompressed ? 7 : 0x1F)) + 1;
+	const Bool isCompressed = ETextureFormat_getIsCompressed(f);
+	const U64 length = ((f >> 27) & (isCompressed ? 7 : 0x1F)) + 1;
 	return length << (isCompressed ? 6 : 2);
 }
 

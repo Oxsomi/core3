@@ -64,7 +64,7 @@ Error Brotli_compress(
 			(U64_max(BROTLI_WINDOW_SIZE, maxInputBlockBits) + 7) >> 3,
 			allocator, &ringBuffer
 		)
-	);
+	)
 
 	//TODO: Literal cost mask?
 

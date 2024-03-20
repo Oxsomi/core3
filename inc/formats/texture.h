@@ -79,13 +79,13 @@ typedef enum ETextureCompressionAlgo {
 	ETextureCompressionAlgo_None			//Don't use in _ETextureFormatCompressed
 } ETextureCompressionAlgo;
 
-#define _ETextureFormat(primitive, redBits, greenBits, blueBits, alphaBits)												\
-((alphaBits >> 1) | ((blueBits >> 1) << 6) | ((greenBits >> 1) << 12) | ((redBits >> 1) << 18) | (primitive << 24) |	\
-(((redBits + greenBits + blueBits + alphaBits) >> 2) - 1) << 27)
+#define _ETextureFormat(primitive, redBits, greenBits, blueBits, alphaBits)											\
+((alphaBits >> 1) | ((blueBits >> 1) << 6) | ((greenBits >> 1) << 12) | ((redBits >> 1) << 18) |					\
+(primitive << 24) | (((redBits + greenBits + blueBits + alphaBits) >> 2) - 1) << 27)
 
-#define _ETextureFormatCompressed(algo, blockSizeBits, alignmentX, alignmentY, compType, hasRed, hasGreen, hasBlue, hasAlpha) \
-((hasAlpha ? 1 : 0) | ((hasBlue ? 1 : 0) << 6) | (compType << 9) | ((hasGreen ? 1 : 0) << 12) | (alignmentY << 15) |	\
- ((hasRed ? 1 : 0) << 18) | (alignmentX << 21) |																		\
+#define _ETextureFormatCompressed(algo, blockSizeBits, alignmentX, alignmentY, compType, hasR, hasG, hasB, hasA)	\
+((hasA ? 1 : 0) | ((hasB ? 1 : 0) << 6) | (compType << 9) | ((hasG ? 1 : 0) << 12) | (alignmentY << 15) |			\
+ ((hasR ? 1 : 0) << 18) | (alignmentX << 21) |																		\
  (ETexturePrimitive_Compressed << 24) | (((blockSizeBits >> 6) - 1) << 27) | (algo << 30))
 
 //Format of a texture; a bitflag of the properties of the format.

@@ -21,7 +21,6 @@
 #pragma once
 #include "types/types.h"
 
-typedef struct Error Error;
 typedef struct AllocationBuffer AllocationBuffer;
 
 Error Buffer_createCopyx(Buffer buf, Buffer *output);

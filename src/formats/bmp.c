@@ -54,35 +54,43 @@ Error BMP_write(Buffer buf, BMPInfo info, Allocator allocator, Buffer *result) {
 		return Error_nullPointer(5, "BMP_write()::result is required");
 
 	if(result->ptr)
-		return Error_invalidParameter(5, 0, "BMP_write()::result isn't empty, indicating possible memleak");
+		return Error_invalidParameter(
+			5, 0, "BMP_write()::result isn't empty, indicating possible memleak"
+		);
 
 	if(!info.w || !info.h)
 		return Error_invalidParameter(!info.w ? 1 : 2, 0, "BMP_write()::w and h are required");
 
 	if(info.xPixPerM < 0 || info.yPixPerM < 0)
-		return Error_invalidParameter(info.xPixPerM < 0 ? 5 : 6, 0, "BMP_write()::xPixPerM and yPixPerM have to be >0");
+		return Error_invalidParameter(
+			info.xPixPerM < 0 ? 5 : 6, 0, "BMP_write()::xPixPerM and yPixPerM have to be >0"
+		);
 
 	if((info.w >> 31) || (info.h >> 31))
-		return Error_invalidParameter((info.w >> 31) ? 1 : 2, 0, "BMP_write()::w and h can't exceed I32_MAX");
+		return Error_invalidParameter(
+			(info.w >> 31) ? 1 : 2, 0, "BMP_write()::w and h can't exceed I32_MAX"
+		);
 
 	if(info.textureFormatId != ETextureFormatId_BGRA8)
-		return Error_invalidParameter(1, 3, "BMP_write()::textureFormatId is only supported for BGRA8 currently");
+		return Error_invalidParameter(
+			1, 3, "BMP_write()::textureFormatId is only supported for BGRA8 currently"
+		);
 
-	U64 bufLen = Buffer_length(buf);
+	const U64 bufLen = Buffer_length(buf);
 
-	U64 pixelStride = info.discardAlpha ? 3 : 4;
-	U64 stride = (info.w * pixelStride + 3) &~ 3;		//Every line needs to be 4-byte aligned
+	const U64 pixelStride = info.discardAlpha ? 3 : 4;
+	const U64 stride = (info.w * pixelStride + 3) &~ 3;		//Every line needs to be 4-byte aligned
 
 	if(info.h * stride + reqHeadersSize > (U64)I32_MAX || bufLen != (U64)info.w * info.h * 4)
 		return Error_invalidParameter(0, 0, "BMP_write() BMP has an image limit of 2GiB");
 
-	BMPHeader header = (BMPHeader) {
+	const BMPHeader header = (BMPHeader) {
 		.fileType = BMP_MAGIC,
 		.fileSize = (U32)(info.h * stride + reqHeadersSize),
 		.offsetData = reqHeadersSize
 	};
 
-	BMPInfoHeader infoHeader = (BMPInfoHeader) {
+	const BMPInfoHeader infoHeader = (BMPInfoHeader) {
 		.headerSize = sizeof(BMPInfoHeader),
 		.width = (I32) info.w,
 		.height = (I32) info.h * (info.isFlipped ? 1 : -1),
@@ -101,8 +109,8 @@ Error BMP_write(Buffer buf, BMPInfo info, Allocator allocator, Buffer *result) {
 
 	Buffer fileAppend = Buffer_createRefFromBuffer(file, false);
 
-	gotoIfError(clean, Buffer_append(&fileAppend, &header, sizeof(header)));
-	gotoIfError(clean, Buffer_append(&fileAppend, &infoHeader, sizeof(infoHeader)));
+	gotoIfError(clean, Buffer_append(&fileAppend, &header, sizeof(header)))
+	gotoIfError(clean, Buffer_append(&fileAppend, &infoHeader, sizeof(infoHeader)))
 
 	if (pixelStride == 3) {		//Copy without alpha, since buffer lengths aren't the same
 
@@ -117,10 +125,10 @@ Error BMP_write(Buffer buf, BMPInfo info, Allocator allocator, Buffer *result) {
 			//Write two pixels at a time through a U64,
 			//We have to shift out the alpha though.
 
-			U64 srcOff = 0, dstOff = 0;
+			U64 dstOff = 0;
 
 			for (
-				;
+				U64 srcOff = 0;
 				srcOff + sizeof(U64) <= 4 * info.w && dstOff + sizeof(U64) <= stride;
 				srcOff += sizeof(U64), dstOff += 3 * 2
 			) {
@@ -173,7 +181,7 @@ Error BMP_read(Buffer buf, BMPInfo *info, Allocator allocator, Buffer *result) {
 
 	Error err = Error_none();
 	BMPHeader header;
-	gotoIfError(clean, Buffer_consume(&buf, &header, sizeof(header)));
+	gotoIfError(clean, Buffer_consume(&buf, &header, sizeof(header)))
 
 	if(
 		header.fileType != BMP_MAGIC ||
@@ -181,19 +189,19 @@ Error BMP_read(Buffer buf, BMPInfo *info, Allocator allocator, Buffer *result) {
 		header.fileSize != ogLength ||
 		header.reserved
 	)
-		gotoIfError(clean, Error_invalidParameter(0, 0, "BMP_read()::buf didn't contain valid header"));
+		gotoIfError(clean, Error_invalidParameter(0, 0, "BMP_read()::buf didn't contain valid header"))
 
 	U64 len = header.fileSize;
 
 	if(header.offsetData >= len)
-		gotoIfError(clean, Error_invalidParameter(0, 0, "BMP_read()::buf was out of bounds"));
+		gotoIfError(clean, Error_invalidParameter(0, 0, "BMP_read()::buf was out of bounds"))
 
 	len -= header.offsetData;
 
 	//Validate info header
 
 	BMPInfoHeader bmpInfo;
-	gotoIfError(clean, Buffer_consume(&buf, &bmpInfo, sizeof(bmpInfo)));
+	gotoIfError(clean, Buffer_consume(&buf, &bmpInfo, sizeof(bmpInfo)))
 
 	if(
 		bmpInfo.planes != 1 ||
@@ -205,7 +213,7 @@ Error BMP_read(Buffer buf, BMPInfo *info, Allocator allocator, Buffer *result) {
 		bmpInfo.xPixPerM < 0 ||
 		bmpInfo.yPixPerM < 0
 	)
-		gotoIfError(clean, Error_invalidParameter(0, 0, "BMP_read()::buf didn't contain valid header"));
+		gotoIfError(clean, Error_invalidParameter(0, 0, "BMP_read()::buf didn't contain valid header"))
 
 	info->isFlipped = bmpInfo.height > 0;
 	info->xPixPerM = bmpInfo.xPixPerM;
@@ -222,7 +230,7 @@ Error BMP_read(Buffer buf, BMPInfo *info, Allocator allocator, Buffer *result) {
 	)
 		gotoIfError(clean, Error_invalidParameter(
 			0, 0, "BMP_read()::buf contained unsupported format (only RGBA8/BGRA8 supported)"
-		));
+		))
 
 	info->w = (U32) bmpInfo.width;
 	info->h = (U32) bmpInfo.height;
@@ -231,7 +239,7 @@ Error BMP_read(Buffer buf, BMPInfo *info, Allocator allocator, Buffer *result) {
 	U64 stride = (info->w * pixelStride + 3) &~ 3;		//Every line needs to be 4-byte aligned
 
 	if(len != info->h * stride)
-		gotoIfError(clean, Error_invalidParameter(0, 0, "BMP_read() BMP has an image limit of 2GiB"));
+		gotoIfError(clean, Error_invalidParameter(0, 0, "BMP_read() BMP has an image limit of 2GiB"))
 
 	//If it's not flipped, we don't need to do anything
 
@@ -246,7 +254,7 @@ Error BMP_read(Buffer buf, BMPInfo *info, Allocator allocator, Buffer *result) {
 
 	//Otherwise we need to flip it manually and allocate a new buffer
 
-	gotoIfError(clean, Buffer_createOneBits((U64)info->w * info->h * 32, allocator, result));
+	gotoIfError(clean, Buffer_createOneBits((U64)info->w * info->h * 32, allocator, result))
 
 	for (
 		U64 j = info->isFlipped ? info->h - 1 : 0, k = 0;
@@ -265,11 +273,11 @@ Error BMP_read(Buffer buf, BMPInfo *info, Allocator allocator, Buffer *result) {
 			//Write two pixels at a time through a U64,
 			//We have to shift out the alpha though.
 
-			U64 dstOff = 0, srcOff = 0;
+			U64 srcOff = 0;
 
 			for (
-				;
-				dstOff + sizeof(U64) <= 4 * info->w && srcOff + sizeof(U64) <= stride;
+				U64 dstOff = 0;
+				dstOff + sizeof(U64) <= (U64)4 * info->w && srcOff + sizeof(U64) <= stride;
 				dstOff += sizeof(U64), srcOff += 3 * 2
 			) {
 

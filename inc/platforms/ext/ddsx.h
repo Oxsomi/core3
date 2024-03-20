@@ -21,7 +21,6 @@
 #pragma once
 #include "types/types.h"
 
-typedef struct Error Error;
 typedef struct DDSInfo DDSInfo;
 typedef struct ListSubResourceData ListSubResourceData;
 

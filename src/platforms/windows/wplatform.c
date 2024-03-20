@@ -22,11 +22,8 @@
 #include "platforms/platform.h"
 #include "platforms/log.h"
 #include "platforms/keyboard.h"
-#include "types/atomic.h"
 #include "types/string.h"
 #include "platforms/ext/stringx.h"
-#include "platforms/ext/bufferx.h"
-#include "platforms/ext/archivex.h"
 
 #define UNICODE
 #define WIN32_LEAN_AND_MEAN
@@ -45,7 +42,7 @@ CharString Error_formatPlatformError(Allocator alloc, Error err) {
 
 	wchar_t *lpBuffer = NULL;
 
-	DWORD f = FormatMessageW(
+	const DWORD f = FormatMessageW(
 
 		FORMAT_MESSAGE_ALLOCATE_BUFFER |
 		FORMAT_MESSAGE_FROM_SYSTEM,
@@ -81,12 +78,12 @@ void Platform_free(void *allocator, void *ptr, U64 length) { (void) allocator; (
 
 I32 main(I32 argc, const C8 *argv[]) {
 
-	Error err = Platform_create(argc, argv, GetModuleHandleW(NULL), NULL);
+	const Error err = Platform_create(argc, argv, GetModuleHandleW(NULL), NULL);
 
 	if(err.genericError)
 		return -1;
 
-	I32 res = Program_run();
+	const I32 res = Program_run();
 	Program_exit();
 	Platform_cleanup();
 
@@ -106,15 +103,14 @@ BOOL enumerateFiles(HMODULE mod, LPWSTR unused, LPWSTR name, EnumerateFiles *sec
 
 	CharString str = CharString_createNull();
 	Error err = CharString_createFromUTF16x((const U16*)name, U64_MAX, &str);
-	gotoIfError(clean, err);
+	gotoIfError(clean, err)
 
 	if(CharString_countAllSensitive(str, '/') != 1)
 		Log_warnLnx("Executable contained unrecognized RCDATA. Ignoring it...");
 
 	else {
-
-		VirtualSection section = (VirtualSection) { .path = str };
-		gotoIfError(clean, ListVirtualSection_pushBackx(sections->sections, section));
+		const VirtualSection section = (VirtualSection) { .path = str };
+		gotoIfError(clean, ListVirtualSection_pushBackx(sections->sections, section))
 	}
 
 clean:
@@ -142,18 +138,18 @@ Error Platform_initExt() {
 		//Init working dir
 
 		wchar_t buff[MAX_PATH + 1];
-		DWORD chars = GetCurrentDirectoryW(MAX_PATH + 1, buff);
+		const DWORD chars = GetCurrentDirectoryW(MAX_PATH + 1, buff);
 
 		if(!chars)
 			gotoIfError(clean, Error_platformError(
 				0, GetLastError(), "Platform_initExt() GetCurrentDirectory failed"
-			));
+			))
 
-		gotoIfError(clean, CharString_createFromUTF16x((const U16*)buff, chars, &Platform_instance.workingDirectory));
+		gotoIfError(clean, CharString_createFromUTF16x((const U16*)buff, chars, &Platform_instance.workingDirectory))
 
 		CharString_replaceAllSensitive(&Platform_instance.workingDirectory, '\\', '/');
 
-		gotoIfError(clean, CharString_appendx(&Platform_instance.workingDirectory, '/'));
+		gotoIfError(clean, CharString_appendx(&Platform_instance.workingDirectory, '/'))
 	}
 
 	//Init virtual files
@@ -170,7 +166,7 @@ Error Platform_initExt() {
 		//To counter this, enumerateFiles sets stride to 0 if the reason it returned false was because of the function.
 
 		if(files.b)
-			gotoIfError(clean, Error_invalidState(1, "Platform_initExt() EnumResourceNames failed"));
+			gotoIfError(clean, Error_invalidState(1, "Platform_initExt() EnumResourceNames failed"))
 	}
 
 clean:
@@ -347,6 +343,7 @@ CharString Keyboard_remap(EKey key) {
 	//Special keys that need some hackery with the scan codes
 	//https://www.setnode.com/blog/mapvirtualkey-getkeynametext-and-a-story-of-how-to/
 	switch (vkey) {
+
 		case VK_LEFT: case VK_UP: case VK_RIGHT: case VK_DOWN:
 		case VK_PRIOR: case VK_NEXT:
 		case VK_END: case VK_HOME:
@@ -354,6 +351,9 @@ CharString Keyboard_remap(EKey key) {
 		case VK_DIVIDE:
 		case VK_NUMLOCK:
 			scanCode |= 0x100;
+			break;
+
+		default:
 			break;
 	}
 

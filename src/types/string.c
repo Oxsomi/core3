@@ -737,18 +737,18 @@ Error CharString_createFromUTF16(const U16 *ptr, U64 limit, Allocator allocator,
 			break;
 
 		if(limit == U64_MAX) {
-			gotoIfError(clean, CharString_reserve(result, j + 5, allocator));
+			gotoIfError(clean, CharString_reserve(result, j + 5, allocator))
 			buf0 = CharString_allocatedBuffer(*result);
 		}
 
 		//Read as UTF16 encoding
 
-		gotoIfError(clean, Buffer_readAsUtf16(buf, i, &codepoint));
+		gotoIfError(clean, Buffer_readAsUtf16(buf, i, &codepoint))
 		i += codepoint.bytes;
 
 		//Write as UTF8 encoding
 
-		gotoIfError(clean, Buffer_writeAsUtf8(buf0, j, codepoint.index, &codepoint.bytes));
+		gotoIfError(clean, Buffer_writeAsUtf8(buf0, j, codepoint.index, &codepoint.bytes))
 		j += codepoint.bytes;
 		result->lenAndNullTerminated = j | ((U64)1 << 63);
 	}
@@ -1267,7 +1267,7 @@ Error CharString_replaceAllString(
 
 	const U64 diff = replacel - searchl;
 
-	gotoIfError(clean, CharString_resize(s, strl + diff * finds.length, ' ', allocator));
+	gotoIfError(clean, CharString_resize(s, strl + diff * finds.length, ' ', allocator))
 
 	//Move from right to left
 
@@ -1470,12 +1470,12 @@ Error CharString_toUtf16(CharString s, Allocator allocator, ListU16 *arr) {
 
 		//Read as UTF8 encoding
 
-		gotoIfError(clean, Buffer_readAsUtf8(buf, i, &codepoint));
+		gotoIfError(clean, Buffer_readAsUtf8(buf, i, &codepoint))
 		i += codepoint.bytes;
 
 		//Write as UTF16 encoding
 
-		gotoIfError(clean, Buffer_writeAsUtf16(buf0, j, codepoint.index, &codepoint.bytes));
+		gotoIfError(clean, Buffer_writeAsUtf16(buf0, j, codepoint.index, &codepoint.bytes))
 		j += codepoint.bytes;
 	}
 

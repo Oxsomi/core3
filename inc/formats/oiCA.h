@@ -22,8 +22,6 @@
 #include "oiXX.h"
 #include "types/archive.h"
 
-typedef enum EFileType EFileType;
-
 typedef enum ECASettingsFlags {
 	ECASettingsFlags_None				= 0,
 	ECASettingsFlags_IncludeDate		= 1 << 0,			//--date

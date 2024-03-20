@@ -21,9 +21,8 @@
 #include "platforms/keyboard.h"
 #include "platforms/input_device.h"
 #include "types/error.h"
-#include "types/string.h"
 
-#define _key(name)																						\
+#define KEY(name)																						\
 	if ((err = InputDevice_createButton(*result, EKey_##name, "EKey_" #name, &res)).genericError) {		\
 		InputDevice_free(result);																		\
 		return err;																						\
@@ -38,45 +37,45 @@ Error Keyboard_create(Keyboard *result) {
 
 	InputHandle res = 0;
 
-	_key(0); _key(1); _key(2); _key(3); _key(4); _key(5); _key(6); _key(7); _key(8); _key(9);
+	KEY(0); KEY(1); KEY(2); KEY(3); KEY(4); KEY(5); KEY(6); KEY(7); KEY(8); KEY(9);
 
-	_key(A); _key(B); _key(C); _key(D); _key(E); _key(F); _key(G); _key(H); _key(I); _key(J);
-	_key(K); _key(L); _key(M); _key(N); _key(O); _key(P); _key(Q); _key(R); _key(S); _key(T);
-	_key(U); _key(V); _key(W); _key(X); _key(Y); _key(Z);
+	KEY(A); KEY(B); KEY(C); KEY(D); KEY(E); KEY(F); KEY(G); KEY(H); KEY(I); KEY(J);
+	KEY(K); KEY(L); KEY(M); KEY(N); KEY(O); KEY(P); KEY(Q); KEY(R); KEY(S); KEY(T);
+	KEY(U); KEY(V); KEY(W); KEY(X); KEY(Y); KEY(Z);
 
-	_key(Backspace);	_key(Space);		_key(Tab);
+	KEY(Backspace);		KEY(Space);			KEY(Tab);
 
-	_key(LShift);		_key(LCtrl);		_key(LAlt);			_key(LMenu);
-	_key(RShift);		_key(RCtrl);		_key(RAlt);			_key(RMenu);
+	KEY(LShift);		KEY(LCtrl);			KEY(LAlt);			KEY(LMenu);
+	KEY(RShift);		KEY(RCtrl);			KEY(RAlt);			KEY(RMenu);
 
-	_key(Pause);		_key(Caps);			_key(Escape);		_key(PageUp);
-	_key(PageDown);		_key(End);			_key(Home);			_key(PrintScreen);
-	_key(Insert);		_key(Enter);		_key(Delete);		_key(NumLock);		_key(ScrollLock);
+	KEY(Pause);			KEY(Caps);			KEY(Escape);		KEY(PageUp);
+	KEY(PageDown);		KEY(End);			KEY(Home);			KEY(PrintScreen);
+	KEY(Insert);		KEY(Enter);			KEY(Delete);		KEY(NumLock);		KEY(ScrollLock);
 
-	_key(Select);		_key(Print);		_key(Execute);		_key(Back);			_key(Forward);
-	_key(Sleep);		_key(Refresh);		_key(Stop);			_key(Search);		_key(Favorites);
-	_key(Start);		_key(Mute);			_key(VolumeDown);	_key(VolumeUp);		_key(Skip);
-	_key(Previous);		_key(Clear);		_key(Zoom);			_key(Help);			_key(Apps);
+	KEY(Select);		KEY(Print);			KEY(Execute);		KEY(Back);			KEY(Forward);
+	KEY(Sleep);			KEY(Refresh);		KEY(Stop);			KEY(Search);		KEY(Favorites);
+	KEY(Start);			KEY(Mute);			KEY(VolumeDown);	KEY(VolumeUp);		KEY(Skip);
+	KEY(Previous);		KEY(Clear);			KEY(Zoom);			KEY(Help);			KEY(Apps);
 
-	_key(Left);			_key(Up);			_key(Right);		_key(Down);
+	KEY(Left);			KEY(Up);			KEY(Right);			KEY(Down);
 
-	_key(Numpad0);
-	_key(Numpad1);		_key(Numpad2);		_key(Numpad3);
-	_key(Numpad4);		_key(Numpad5);		_key(Numpad6);
-	_key(Numpad7);		_key(Numpad8);		_key(Numpad9);
+	KEY(Numpad0);
+	KEY(Numpad1);		KEY(Numpad2);		KEY(Numpad3);
+	KEY(Numpad4);		KEY(Numpad5);		KEY(Numpad6);
+	KEY(Numpad7);		KEY(Numpad8);		KEY(Numpad9);
 
-	_key(NumpadMul);	_key(NumpadAdd);	_key(NumpadDot);
-	_key(NumpadDiv);	_key(NumpadSub);
+	KEY(NumpadMul);		KEY(NumpadAdd);		KEY(NumpadDot);
+	KEY(NumpadDiv);		KEY(NumpadSub);
 
-	_key(F1);			_key(F2);			_key(F3);			_key(F4);			_key(F5);
-	_key(F6);			_key(F7);			_key(F8);			_key(F9);			_key(F10);
-	_key(F11);			_key(F12);
+	KEY(F1);			KEY(F2);			KEY(F3);			KEY(F4);			KEY(F5);
+	KEY(F6);			KEY(F7);			KEY(F8);			KEY(F9);			KEY(F10);
+	KEY(F11);			KEY(F12);
 
-	_key(Bar);			_key(Options);
+	KEY(Bar);			KEY(Options);
 
-	_key(Equals);		_key(Comma);		_key(Minus);		_key(Period);
-	_key(Slash);		_key(Backtick);		_key(Semicolon);	_key(LBracket);		_key(RBracket);
-	_key(Backslash);	_key(Quote);
+	KEY(Equals);		KEY(Comma);			KEY(Minus);			KEY(Period);
+	KEY(Slash);			KEY(Backtick);		KEY(Semicolon);		KEY(LBracket);		KEY(RBracket);
+	KEY(Backslash);		KEY(Quote);
 
 	return Error_none();
 }

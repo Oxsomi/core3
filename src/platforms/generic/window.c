@@ -21,10 +21,8 @@
 #include "platforms/ext/listx_impl.h"
 #include "platforms/window.h"
 #include "platforms/platform.h"
-#include "types/thread.h"
 #include "platforms/file.h"
 #include "types/string.h"
-#include "types/time.h"
 #include "formats/texture.h"
 #include "formats/bmp.h"
 #include "platforms/ext/bmpx.h"
@@ -79,8 +77,8 @@ Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 	Buffer old = w->cpuVisibleBuffer;
 	Buffer neo = old;
 
-	U64 linSizOld = ETextureFormat_getSize((ETextureFormat) w->format, I32x2_x(w->size), I32x2_y(w->size), 1);
-	U64 linSiz = ETextureFormat_getSize((ETextureFormat) w->format, I32x2_x(newSiz), I32x2_y(newSiz), 1);
+	const U64 linSizOld = ETextureFormat_getSize((ETextureFormat) w->format, I32x2_x(w->size), I32x2_y(w->size), 1);
+	const U64 linSiz = ETextureFormat_getSize((ETextureFormat) w->format, I32x2_x(newSiz), I32x2_y(newSiz), 1);
 
 	if(linSizOld * 5 < linSizOld)
 		return Error_overflow(2, linSizOld * 5, U64_MAX, "Window_resizeCPUBuffer() overflow");
@@ -89,13 +87,12 @@ Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 
 	Bool resize = false;
 
-	U64 oldLen = Buffer_length(old);
+	const U64 oldLen = Buffer_length(old);
 
 	if (linSiz >= oldLen) {
 
-		U64 toAllocate = linSiz * 5 / 4;
-
-		Error err = Buffer_createUninitializedBytesx(toAllocate, &neo);
+		const U64 toAllocate = linSiz * 5 / 4;
+		const Error err = Buffer_createUninitializedBytesx(toAllocate, &neo);
 
 		if(err.genericError)
 			return err;
@@ -107,9 +104,8 @@ Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 
 	else if (oldLen > linSiz * 3 / 2) {
 
-		U64 toAllocate = linSiz * 5 / 4;
-
-		Error err = Buffer_createUninitializedBytesx(toAllocate, &neo);
+		const U64 toAllocate = linSiz * 5 / 4;
+		const Error err = Buffer_createUninitializedBytesx(toAllocate, &neo);
 
 		if(err.genericError)
 			return err;
@@ -135,7 +131,9 @@ Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 
 			if(I32x2_y(newSiz) > I32x2_y(w->size)) {
 
-				Error err = Buffer_unsetAllBits(Buffer_createRef((U8*)neo.ptr + linSizOld, linSiz - linSizOld));
+				const Error err = Buffer_unsetAllBits(
+					Buffer_createRef((U8*)neo.ptr + linSizOld, linSiz - linSizOld)
+				);
 
 				//Revert to old size
 
@@ -153,8 +151,8 @@ Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 
 		else {
 
-			U64 rowSiz = linSiz / I32x2_y(newSiz);
-			U64 rowSizOld = linSizOld / I32x2_y(w->size);
+			const U64 rowSiz = linSiz / I32x2_y(newSiz);
+			const U64 rowSizOld = linSizOld / I32x2_y(w->size);
 
 			//Grab buffers for simple copies later
 
@@ -182,7 +180,7 @@ Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 
 			//First we ensure everything is copied to the right location
 
-			I32 smallY = (I32) U64_min(I32x2_y(newSiz), I32x2_y(w->size));
+			const I32 smallY = (I32) U64_min(I32x2_y(newSiz), I32x2_y(w->size));
 
 			//We're growing, so we want to copy from high to low
 			//This is because it ends up at a higher address than source and
@@ -195,7 +193,7 @@ Error Window_resizeCPUBuffer(Window *w, Bool copyData, I32x2 newSiz) {
 				dst.ptr += linSiz - rowSiz;
 				src.ptr += linSizOld - rowSizOld;
 
-				U64 sizDif = linSiz - linSizOld;
+				const U64 sizDif = linSiz - linSizOld;
 
 				for (I32 i = 0; i < smallY; ++i) {
 
@@ -267,7 +265,7 @@ Error Window_storeCPUBufferToDisk(const Window *w, CharString filePath, Ns maxTi
 	if (!w)
 		return Error_nullPointer(0, "Window_storeCPUBufferToDisk()::w is required");
 
-	Buffer buf = w->cpuVisibleBuffer;
+	const Buffer buf = w->cpuVisibleBuffer;
 
 	if(!Buffer_length(buf))
 		return Error_invalidOperation(

@@ -165,7 +165,7 @@ Error DLFile_createListx(DLSettings settings, ListBuffer *buffers, DLFile *dlFil
 }
 
 Error DLFile_createUTF8Listx(DLSettings settings, ListBuffer buffers, DLFile *dlFile) {
-	return DLFile_createUTF8List(settings, buffers, Platform_instance.alloc, dlFile);
+	return DLFile_createUtf8List(settings, buffers, Platform_instance.alloc, dlFile);
 }
 
 Error DLFile_createBufferListx(DLSettings settings, ListBuffer buffers, DLFile *dlFile) {
@@ -536,7 +536,7 @@ Error CharString_formatx(CharString *result, const C8 *format, ...) {
 
 	va_list arg1;
 	va_start(arg1, format);
-	Error err = CharString_formatVariadic(Platform_instance.alloc, result, format, arg1);
+	const Error err = CharString_formatVariadic(Platform_instance.alloc, result, format, arg1);
 	va_end(arg1);
 
 	return err;

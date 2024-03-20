@@ -22,7 +22,6 @@
 #include "types/error.h"
 #include "types/buffer.h"
 #include "platforms/input_device.h"
-#include "platforms/platform.h"
 #include "platforms/ext/bufferx.h"
 
 //Private helpers
@@ -105,7 +104,7 @@ BitRef InputDevice_getButtonValue(InputDevice dev, U16 localHandle, Bool isCurre
 	if(localHandle >= dev.buttons)
 		return (BitRef){ 0 };
 
-	U64 bitOff = ((U32)localHandle << 1) + isCurrent;
+	const U64 bitOff = ((U32)localHandle << 1) + isCurrent;
 	U8 *off = (U8*)dev.states.ptr + dev.axes * 2 * sizeof(F32) + (bitOff >> 3);
 
 	return (BitRef){ .ptr = off, .off = (bitOff & 7) };
@@ -130,8 +129,8 @@ Error InputDevice_create(U16 buttons, U16 axes, EInputDeviceType type, InputDevi
 		.type = type
 	};
 
-	U64 handles = sizeof(InputAxis) * axes + sizeof(InputButton) * buttons;
-	U64 states = sizeof(F32) * 2 * axes + (((U64)buttons * 2 + 7) >> 3);
+	const U64 handles = sizeof(InputAxis) * axes + sizeof(InputButton) * buttons;
+	const U64 states = sizeof(F32) * 2 * axes + (((U64)buttons * 2 + 7) >> 3);
 
 	Error err = Buffer_createEmptyBytesx(handles, &result->handles);
 
@@ -169,7 +168,7 @@ Error InputDevice_create(U16 buttons, U16 axes, EInputDeviceType type, InputDevi
 	if(!name)																					\
 		return Error_invalidParameter(2, 0, "InputDeviceCreate()::keyName is required");		\
 																								\
-	inputType->name = name;
+	inputType->name = name
 
 Error InputDevice_createButton(InputDevice d, U16 localHandle, const C8 *name, InputHandle *res) {
 	InputDeviceCreate(Button);
@@ -248,7 +247,7 @@ CharString InputDevice_getName(InputDevice d, InputHandle handle) {
 	if(d.type == EInputDeviceType_Undefined)
 		return CharString_createNull();
 
-	U16 localHandle = InputDevice_getLocalHandle(d, handle);
+	const U16 localHandle = InputDevice_getLocalHandle(d, handle);
 
 	if(InputDevice_isAxis(d, handle))
 		return CharString_createRefLongStringConst(InputDevice_getAxis(d, localHandle)->name);
@@ -261,7 +260,7 @@ InputHandle InputDevice_getHandle(InputDevice d, CharString name) {
 	if(d.type == EInputDeviceType_Undefined)
 		return InputDevice_invalidHandle();
 
-	//TODO: We probably wanna optimize this at some point like use a hashmap
+	//TODO: We probably want to optimize this at some point like use a hashmap
 
 	for(U16 i = 0; i < d.buttons; ++i)
 		if(CharString_equalsStringInsensitive(
@@ -290,7 +289,7 @@ Bool InputDevice_setCurrentState(InputDevice d, InputHandle handle, Bool v) {
 	if(d.type == EInputDeviceType_Undefined || !InputDevice_isButton(d, handle))
 		return false;
 
-	BitRef b = InputDevice_getButtonValue(d, InputDevice_getLocalHandle(d, handle), true);
+	const BitRef b = InputDevice_getButtonValue(d, InputDevice_getLocalHandle(d, handle), true);
 
 	BitRef_setTo(b, v);
 	return true;
@@ -317,7 +316,7 @@ void InputDevice_markUpdate(InputDevice d) {
 
 	for (U16 i = 0; i < d.buttons; ++i) {
 
-		BitRef old = InputDevice_getButtonValue(d, i, false);
+		const BitRef old = InputDevice_getButtonValue(d, i, false);
 		BitRef neo = old;
 		++neo.off;						//Allowed since we're always aligned
 

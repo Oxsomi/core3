@@ -66,10 +66,8 @@ AtomicI64 Allocator_memoryAllocationCount;
 AtomicI64 Allocator_memoryAllocationSize;
 
 typedef struct DebugAllocation {
-
 	U64 location, length;
 	StackTrace stack;
-
 } DebugAllocation;
 
 TList(DebugAllocation);
@@ -117,7 +115,7 @@ Error Platform_allocTracked(void *allocator, U64 length, Buffer *output) {
 	if(!ptr)
 		return Error_outOfMemory(0, "allocCallback() malloc failed");
 
-	Error err = Platform_onAllocate(ptr, length);
+	const Error err = Platform_onAllocate(ptr, length);
 
 	if (err.genericError) {
 		free(ptr);
@@ -132,7 +130,7 @@ Bool Platform_freeTracked(void *allocator, Buffer buf) {
 
 	(void) allocator;
 
-	Bool canFree = Platform_onFree((void*) buf.ptr, Buffer_length(buf));
+	const Bool canFree = Platform_onFree((void*) buf.ptr, Buffer_length(buf));
 
 	if(canFree)
 		Platform_free(allocator, (void*) buf.ptr, Buffer_length(buf));
@@ -155,12 +153,12 @@ Error Platform_onAllocate(void *ptr, U64 length) {
 
 		Log_captureStackTrace(Allocator_allocationsAllocator, captured.stack, STACKTRACE_SIZE, 1);
 
-		ELockAcquire acq = Lock_lock(&Allocator_lock, U64_MAX);
+		const ELockAcquire acq = Lock_lock(&Allocator_lock, U64_MAX);
 
 		if(acq < ELockAcquire_Success)
 			return Error_invalidState(0, "allocCallback() allocator lock failed to acquire");			//Should never happen
 
-		Error err = ListDebugAllocation_pushBack(&Allocator_allocations, captured, Allocator_allocationsAllocator);
+		const Error err = ListDebugAllocation_pushBack(&Allocator_allocations, captured, Allocator_allocationsAllocator);
 
 		if(acq == ELockAcquire_Acquired)
 			Lock_unlock(&Allocator_lock);
@@ -194,7 +192,7 @@ Bool Platform_onFree(void *ptr, U64 len) {
 
 		for (; i < Allocator_allocations.length; ++i) {
 
-			DebugAllocation *captured = &Allocator_allocations.ptrNonConst[i];
+			const DebugAllocation *captured = &Allocator_allocations.ptrNonConst[i];
 
 			if (captured->location == (U64)ptr) {
 
@@ -253,7 +251,7 @@ void Platform_printAllocations(U64 offset, U64 length, U64 minAllocationSize) {
 
 	#ifndef NDEBUG
 
-		ELockAcquire acq = Lock_lock(&Allocator_lock, U64_MAX);
+		const ELockAcquire acq = Lock_lock(&Allocator_lock, U64_MAX);
 
 		if(acq < ELockAcquire_Success)
 			return;
@@ -269,7 +267,7 @@ void Platform_printAllocations(U64 offset, U64 length, U64 minAllocationSize) {
 
 		for(U64 i = offset; i < offset + length && i < Allocator_allocations.length; ++i) {
 
-			DebugAllocation *captured = &Allocator_allocations.ptrNonConst[i];
+			const DebugAllocation *captured = &Allocator_allocations.ptrNonConst[i];
 
 			if(captured->length < minAllocationSize)
 				continue;
@@ -280,7 +278,9 @@ void Platform_printAllocations(U64 offset, U64 length, U64 minAllocationSize) {
 				i, captured->location, captured->length
 			);
 
-			Log_printCapturedStackTrace(Allocator_allocationsAllocator, captured->stack, ELogLevel_Debug, ELogOptions_Default);
+			Log_printCapturedStackTrace(
+				Allocator_allocationsAllocator, captured->stack, ELogLevel_Debug, ELogOptions_Default
+			);
 
 			capturedLength += captured->length;
 		}
@@ -295,8 +295,8 @@ void Platform_printAllocations(U64 offset, U64 length, U64 minAllocationSize) {
 
 void Allocator_reportLeaks() {
 
-	I64 memCount = AtomicI64_add(&Allocator_memoryAllocationCount, 0);
-	I64 memSize = AtomicI64_add(&Allocator_memoryAllocationSize, 0);
+	const I64 memCount = AtomicI64_add(&Allocator_memoryAllocationCount, 0);
+	const I64 memSize = AtomicI64_add(&Allocator_memoryAllocationSize, 0);
 
 	if (memCount || memSize) {
 
@@ -321,9 +321,11 @@ Error Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *alloca
 	U16 v = 1;
 
 	if(!*(U8*)&v)
-		return Error_unsupportedOperation(0, "Platform_create() failed, invalid endianness (only little endian supported)");
+		return Error_unsupportedOperation(
+			0, "Platform_create() failed, invalid endianness (only little endian supported)"
+		);
 
-	Bool isSupported = Platform_checkCPUSupport();
+	const Bool isSupported = Platform_checkCPUSupport();
 
 	if(!isSupported)
 		return Error_unsupportedOperation(
@@ -336,7 +338,9 @@ Error Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *alloca
 		return Error_invalidOperation(0, "Platform_create() failed, platform was already initialized");
 
 	if(!cmdArgc || !cmdArgs)
-		return Error_invalidParameter(!cmdArgc ? 0 : 1, 0, "Platform_create()::cmdArgc and cmdArgs are required");
+		return Error_invalidParameter(
+			!cmdArgc ? 0 : 1, 0, "Platform_create()::cmdArgc and cmdArgs are required"
+		);
 
 	#ifndef _NO_SIGNAL_HANDLING
 		signal(SIGABRT, sigFunc);
@@ -354,7 +358,7 @@ Error Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *alloca
 
 	#ifndef NDEBUG
 		{
-			Error err = ListDebugAllocation_reserve(&Allocator_allocations, 256, Allocator_allocationsAllocator);
+			const Error err = ListDebugAllocation_reserve(&Allocator_allocations, 256, Allocator_allocationsAllocator);
 
 			if(err.genericError)
 				return err;
@@ -374,7 +378,7 @@ Error Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *alloca
 		}
 	};
 
-	Error err = Error_none();
+	Error err;
 	CharString appDir = CharString_createNull();
 
 	Platform_instance.virtualSectionsLock = Lock_create();
@@ -402,7 +406,7 @@ Error Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *alloca
 
 		CharString_replaceAllSensitive(&appDir, '\\', '/');
 
-		U64 loc = CharString_findLastSensitive(appDir, '/');
+		const U64 loc = CharString_findLastSensitive(appDir, '/');
 		CharString basePath = CharString_createNull();
 
 		if (loc == CharString_length(appDir))

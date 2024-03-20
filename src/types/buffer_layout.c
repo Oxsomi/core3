@@ -394,15 +394,16 @@ Error BufferLayout_createStruct(BufferLayout *layout, BufferLayoutStructInfo inf
 
 	if(layout->structs.length + 1 >= U32_MAX)
 		return Error_outOfBounds(
-			3, layout->structs.length, U32_MAX, "BufferLayout_createStruct()::layout->structs.length is limited to U32_MAX"
+			3, layout->structs.length, U32_MAX, 
+			"BufferLayout_createStruct()::layout->structs.length is limited to U32_MAX"
 		);
 
 	BufferLayoutStruct layoutStruct = (BufferLayoutStruct) { 0 };
 
 	Error err;
 
-	gotoIfError(clean, BufferLayoutStruct_create(info, (U32)layout->structs.length, alloc, &layoutStruct));
-	gotoIfError(clean, ListBufferLayoutStruct_pushBack(&layout->structs, layoutStruct, alloc));
+	gotoIfError(clean, BufferLayoutStruct_create(info, (U32)layout->structs.length, alloc, &layoutStruct))
+	gotoIfError(clean, ListBufferLayoutStruct_pushBack(&layout->structs, layoutStruct, alloc))
 
 	*id = (U32)layout->structs.length - 1;
 
@@ -508,21 +509,21 @@ Error BufferLayout_resolveLayout(BufferLayout layout, CharString path, LayoutPat
 		C8 v = CharString_getAt(path, i);
 
 		if(!C8_isValidAscii(v))
-			gotoIfError(clean, Error_invalidParameter(1, 3, "BufferLayout_resolveLayout()::path contains non ascii char"));
+			gotoIfError(clean, Error_invalidParameter(1, 3, "BufferLayout_resolveLayout()::path contains non ascii char"))
 
 		//For the final character we append first, so we can process the final access here.
 
 		Bool isEnd = i == end - 1;
 
 		if(isEnd)
-			gotoIfError(clean, CharString_append(&copy, v, alloc));
+			gotoIfError(clean, CharString_append(&copy, v, alloc))
 
 		//Access member or array index
 
 		if (v == '/' || isEnd) {
 
 			if(!CharString_length(copy))
-				gotoIfError(clean, Error_invalidParameter(1, 1, "BufferLayout_resolveLayout() had missing member (//)"));
+				gotoIfError(clean, Error_invalidParameter(1, 1, "BufferLayout_resolveLayout() had missing member (//)"))
 
 			//Access struct member
 
@@ -531,7 +532,7 @@ Error BufferLayout_resolveLayout(BufferLayout layout, CharString path, LayoutPat
 				U16 memberId = BufferLayoutStruct_findMember(currentStruct, copy);
 
 				if(memberId == U16_MAX)
-					gotoIfError(clean, Error_invalidParameter(1, 2, "BufferLayout_resolveLayout()::path member not found"));
+					gotoIfError(clean, Error_invalidParameter(1, 2, "BufferLayout_resolveLayout()::path member not found"))
 
 				isInMember = true;
 				currentMember = BufferLayoutStruct_getMemberInfo(currentStruct, memberId);
@@ -560,7 +561,7 @@ Error BufferLayout_resolveLayout(BufferLayout layout, CharString path, LayoutPat
 					if(memberId == U16_MAX)
 						gotoIfError(clean, Error_invalidParameter(
 							1, 2, "BufferLayout_resolveLayout()::path member not found"
-						));
+						))
 
 					isInMember = true;
 					currentMember = BufferLayoutStruct_getMemberInfo(currentStruct, memberId);
@@ -577,14 +578,14 @@ Error BufferLayout_resolveLayout(BufferLayout layout, CharString path, LayoutPat
 					if(!CharString_parseU64(copy, &arrayOffset))
 						gotoIfError(clean, Error_invalidParameter(
 							1, 4, "BufferLayout_resolveLayout()::path expected U64 for array index"
-						));
+						))
 
 					U32 currentDim = currentMember.arraySizes.ptr[currentArrayDim];
 
 					if(arrayOffset >= currentDim)
 						gotoIfError(clean, Error_outOfBounds(
 							0, arrayOffset, currentDim, "BufferLayout_resolveLayout()::path array index out of bounds"
-						));
+						))
 
 					U64 arrayStride = currentMember.stride;
 
@@ -606,13 +607,13 @@ Error BufferLayout_resolveLayout(BufferLayout layout, CharString path, LayoutPat
 		if (v == '\\') {
 
 			if (CharString_getAt(path, i + 1) == '/') {
-				gotoIfError(clean, CharString_append(&copy, '/', alloc));
+				gotoIfError(clean, CharString_append(&copy, '/', alloc))
 				++i;
 				continue;
 			}
 
 			if (CharString_getAt(path, i + 1) == '\\') {
-				gotoIfError(clean, CharString_append(&copy, '\\', alloc));
+				gotoIfError(clean, CharString_append(&copy, '\\', alloc))
 				++i;
 				continue;
 			}
@@ -621,7 +622,7 @@ Error BufferLayout_resolveLayout(BufferLayout layout, CharString path, LayoutPat
 		//In any other case; including \n, \r, etc. we assume it was already correctly encoded.
 		//If you want \n just insert the character beforehand.
 
-		gotoIfError(clean, CharString_append(&copy, v, alloc));
+		gotoIfError(clean, CharString_append(&copy, v, alloc))
 	}
 
 	U64 arrayStride = currentMember.stride;

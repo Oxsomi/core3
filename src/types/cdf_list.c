@@ -49,7 +49,7 @@ Error CdfList_create(
 			gotoIfError(clean, ListCdfValue_reserve(&result->cdf, maxElements, allocator))
 
 		else {
-			gotoIfError(clean, ListCdfValue_resize(&result->cdf, maxElements, allocator));
+			gotoIfError(clean, ListCdfValue_resize(&result->cdf, maxElements, allocator))
 			result->totalElements = maxElements;
 		}
 	}
@@ -101,7 +101,7 @@ Error CdfList_createSubset(
 
 	result->flags |= ECdfListFlags_IsFinalized;
 
-	gotoIfError(clean, ListCdfValue_resize(&result->cdf, elementCount, allocator));
+	gotoIfError(clean, ListCdfValue_resize(&result->cdf, elementCount, allocator))
 	result->totalElements = elementCount;
 
 	return Error_none();

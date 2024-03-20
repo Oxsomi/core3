@@ -27,8 +27,8 @@
 
 Bool CLI_encryptDo(ParsedArgs args) {
 
-	Bool generateOutput = !(args.parameters & EOperationHasParameter_Output);
-	U64 generatedOutputIndex = 1;
+	const Bool generateOutput = !(args.parameters & EOperationHasParameter_Output);
+	const U64 generatedOutputIndex = 1;
 	CharString tmpString = CharString_createNull();
 	Bool b = false;
 	Error err = Error_none();
@@ -36,12 +36,12 @@ Bool CLI_encryptDo(ParsedArgs args) {
 	//Modify arguments so it can be passed to oiCA convert function.
 
 	if (generateOutput) {
-		gotoIfError(clean, CharString_createCopyx(*args.args.ptr, &tmpString));
-		gotoIfError(clean, CharString_appendStringx(&tmpString, CharString_createRefCStrConst(".oiCA")));
-		gotoIfError(clean, ListCharString_insertx(&args.args, generatedOutputIndex, tmpString));
+		gotoIfError(clean, CharString_createCopyx(*args.args.ptr, &tmpString))
+		gotoIfError(clean, CharString_appendStringx(&tmpString, CharString_createRefCStrConst(".oiCA")))
+		gotoIfError(clean, ListCharString_insertx(&args.args, generatedOutputIndex, tmpString))
 	}
 
-	ParsedArgs caArgs = (ParsedArgs) {
+	const ParsedArgs caArgs = (ParsedArgs) {
 		.operation = EOperation_FileTo,
 		.format = EFormat_oiCA,
 		.flags = EOperationFlags_Uncompressed,
@@ -68,7 +68,7 @@ clean:
 
 Bool CLI_encryptUndo(ParsedArgs args) {
 
-	ParsedArgs caArgs = (ParsedArgs) {
+	const ParsedArgs caArgs = (ParsedArgs) {
 		.operation = EOperation_FileFrom,
 		.format = EFormat_oiCA,
 		.parameters = args.parameters,

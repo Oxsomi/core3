@@ -23,8 +23,6 @@
 #include "types/string.h"
 #include "types/file.h"
 
-typedef struct Error Error;
-
 //There are two types of files; virtual and local.
 //Virtual are embedded into the binary, very nice for easy portable installation and harder to modify for avg users.
 //	Writable virtual files can only be in the //access directory.

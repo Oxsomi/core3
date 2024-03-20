@@ -145,17 +145,17 @@ void Log_printCapturedStackTraceCustom(
 			Error err;
 
 			if(modulePath[0])
-				gotoIfError(cleanup, CharString_createFromUTF16((const U16*) modulePath, MAX_PATH, alloc, &capture->mod));
+				gotoIfError(cleanup, CharString_createFromUTF16((const U16*) modulePath, MAX_PATH, alloc, &capture->mod))
 
 			if(CharString_length(capture->sym)) {
 				CharString tmp = CharString_createNull();
-				gotoIfError(cleanup, CharString_createCopy(capture->sym, alloc, &tmp));
+				gotoIfError(cleanup, CharString_createCopy(capture->sym, alloc, &tmp))
 				capture->sym = tmp;
 			}
 
 			if(CharString_length(capture->fil)) {
 				CharString tmp = CharString_createNull();
-				gotoIfError(cleanup, CharString_createCopy(capture->fil, alloc, &tmp));
+				gotoIfError(cleanup, CharString_createCopy(capture->fil, alloc, &tmp))
 				capture->fil = tmp;
 			}
 

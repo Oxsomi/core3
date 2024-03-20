@@ -22,11 +22,10 @@
 #include "types/file.h"
 #include "platforms/log.h"
 #include "platforms/ext/errorx.h"
-#include "platforms/ext/stringx.h"
 #include "platforms/file.h"
 #include "cli.h"
 
-Bool _CLI_convert(ParsedArgs args, Bool isTo) {
+Bool CLI_convert(ParsedArgs args, Bool isTo) {
 
 	Ns start = Time_now();
 
@@ -118,18 +117,18 @@ Bool _CLI_convert(ParsedArgs args, Bool isTo) {
 		case EFormat_oiDL:
 
 			if(isTo)
-				err = _CLI_convertToDL(args, inputArg, info, outputArg, encryptionKey);
+				err = CLI_convertToDL(args, inputArg, info, outputArg, encryptionKey);
 
-			else err = _CLI_convertFromDL(args, inputArg, info, outputArg, encryptionKey);
+			else err = CLI_convertFromDL(args, inputArg, info, outputArg, encryptionKey);
 
 			break;
 
 		case EFormat_oiCA:
 
 			if(isTo)
-				err = _CLI_convertToCA(args, inputArg, info, outputArg, encryptionKey);
+				err = CLI_convertToCA(args, inputArg, info, outputArg, encryptionKey);
 
-			else err = _CLI_convertFromCA(args, inputArg, info, outputArg, encryptionKey);
+			else err = CLI_convertFromCA(args, inputArg, info, outputArg, encryptionKey);
 
 			break;
 
@@ -151,9 +150,9 @@ Bool _CLI_convert(ParsedArgs args, Bool isTo) {
 }
 
 Bool CLI_convertTo(ParsedArgs args) {
-	return _CLI_convert(args, true);
+	return CLI_convert(args, true);
 }
 
 Bool CLI_convertFrom(ParsedArgs args) {
-	return _CLI_convert(args, false);
+	return CLI_convert(args, false);
 }

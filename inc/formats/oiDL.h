@@ -69,7 +69,7 @@ Bool DLFile_free(DLFile *dlFile, Allocator alloc);
 
 Error DLFile_createBufferList(DLSettings settings, ListBuffer buffers, Allocator alloc, DLFile *dlFile);
 Error DLFile_createAsciiList(DLSettings settings, ListCharString strings, Allocator alloc, DLFile *dlFile);
-Error DLFile_createUTF8List(DLSettings settings, ListBuffer strings, Allocator alloc, DLFile *dlFile);
+Error DLFile_createUtf8List(DLSettings settings, ListBuffer strings, Allocator alloc, DLFile *dlFile);
 
 //Determine what type of list is made with settings.dataType
 
@@ -88,7 +88,7 @@ Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result);
 Error DLFile_read(
 	Buffer file,
 	const U32 encryptionKey[8],
-	Bool isSubfile,					//Sets HideMagicNumber flag and allows leftover data after the oiDL
+	Bool isSubFile,					//Sets HideMagicNumber flag and allows leftover data after the oiDL
 	Allocator alloc,
 	DLFile *dlFile
 );

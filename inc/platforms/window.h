@@ -123,7 +123,7 @@ typedef struct WindowCallbacks {
 typedef enum EWindowType {
 
 	EWindowType_Physical,			//Native window of the underlying platform
-	EWindowType_Virtual,			//Non native window, such as headless rendering
+	EWindowType_Virtual,			//Non-native window, such as headless rendering
 	//EWindowType_ExtendedOpenXR,	//Extended physical window; for use with OpenXR
 
 	EWindowType_Count,

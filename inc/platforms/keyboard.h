@@ -21,7 +21,6 @@
 #pragma once
 #include "types/types.h"
 
-typedef struct Error Error;
 typedef struct InputDevice Keyboard;
 typedef struct CharString CharString;
 

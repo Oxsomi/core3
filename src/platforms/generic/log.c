@@ -56,26 +56,26 @@ void Log_logx(ELogLevel lvl, ELogOptions options, CharString arg) {
 	if(!err.genericError)												\
 		Log_log(alloc, lvl, opt, res);									\
 																		\
-	CharString_free(&res, alloc);
+	CharString_free(&res, alloc)
 
 //Default allocator. Sometimes they can't be safely used
 
 void Log_debugx(ELogOptions opt, const C8 *format, ...) {
-	Allocator alloc = Platform_instance.alloc;
+	const Allocator alloc = Platform_instance.alloc;
 	Log_level(ELogLevel_Debug);
 }
 
 void Log_performancex(ELogOptions opt, const C8 *format, ...) {
-	Allocator alloc = Platform_instance.alloc;
+	const Allocator alloc = Platform_instance.alloc;
 	Log_level(ELogLevel_Performance);
 }
 
 void Log_warnx(ELogOptions opt, const C8 *format, ...) {
-	Allocator alloc = Platform_instance.alloc;
+	const Allocator alloc = Platform_instance.alloc;
 	Log_level(ELogLevel_Warn);
 }
 
 void Log_errorx(ELogOptions opt, const C8 *format, ...) {
-	Allocator alloc = Platform_instance.alloc;
+	const Allocator alloc = Platform_instance.alloc;
 	Log_level(ELogLevel_Error);
 }

@@ -111,8 +111,8 @@ const C8 *EOperationFlags_names[] = {
 const C8 *EOperationFlags_descriptions[] = {
 	"Includes 256-bit hashes instead of 32-bit ones into file if applicable.",
 	"Keep the data uncompressed (default is compressed).",
-	"Indicates the input files should be threated as ASCII. If 1 file; splits by enter, otherwise 1 entry/file.",
-	"Indicates the input files should be threated as UTF8. If 1 file; splits by enter, otherwise 1 entry/file.",
+	"Indicates the input files should be treated as ASCII. If 1 file; splits by enter, otherwise 1 entry/file.",
+	"Indicates the input files should be treated as UTF8. If 1 file; splits by enter, otherwise 1 entry/file.",
 	"Includes full file timestamp (Ns)",
 	"Includes MS-DOS timestamp (YYYY-MM-dd HH-mm-ss (each two seconds))",
 	"If folder is selected, blocks recursive file searching. Can be handy if only the direct directory should be included.",
@@ -533,7 +533,7 @@ Error ParsedArgs_getArg(ParsedArgs args, EOperationHasParameter parameterId, Cha
 		if((args.parameters >> j) & 1)
 			++ourLoc;
 
-	Error err = ListCharString_get(args.args, ourLoc, arg);
+	const Error err = ListCharString_get(args.args, ourLoc, arg);
 
 	if(err.genericError)
 		return err;

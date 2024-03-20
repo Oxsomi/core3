@@ -50,9 +50,9 @@ Error packageFile(FileInfo file, CAFileRecursion *caFile) {
 	CharString copy = CharString_createNull();
 
 	if (entry.type == EFileType_File)
-		gotoIfError(clean, File_read(file.path, 1 * SECOND, &entry.data));
+		gotoIfError(clean, File_read(file.path, 1 * SECOND, &entry.data))
 
-	gotoIfError(clean, CharString_createCopyx(entry.path, &copy));
+	gotoIfError(clean, CharString_createCopyx(entry.path, &copy))
 
 	if (file.type == EFileType_File) {
 
@@ -60,12 +60,10 @@ Error packageFile(FileInfo file, CAFileRecursion *caFile) {
 		//We don't have a custom file yet, so for now
 		//this will just be identical to addFileToCAFile.
 
-		//
-
 		gotoIfError(clean, Archive_addFilex(caFile->archive, copy, entry.data, 0))
 	}
 
-	else gotoIfError(clean, Archive_addDirectoryx(caFile->archive, copy));
+	else gotoIfError(clean, Archive_addDirectoryx(caFile->archive, copy))
 
 	return Error_none();
 
@@ -154,13 +152,13 @@ Bool CLI_package(ParsedArgs args) {
 	Buffer res = Buffer_createNull();
 	Bool isVirtual = false;
 
-	gotoIfError(clean, Archive_createx(&archive));
-	gotoIfError(clean, File_resolvex(input, &isVirtual, 0, &resolved));
+	gotoIfError(clean, Archive_createx(&archive))
+	gotoIfError(clean, File_resolvex(input, &isVirtual, 0, &resolved))
 
 	if (isVirtual)
-		gotoIfError(clean, Error_invalidOperation(0, "CLI_package() failed, file starts with //"));
+		gotoIfError(clean, Error_invalidOperation(0, "CLI_package() failed, file starts with //"))
 
-	gotoIfError(clean, CharString_appendx(&resolved, '/'));
+	gotoIfError(clean, CharString_appendx(&resolved, '/'))
 
 	CAFileRecursion caFileRecursion = (CAFileRecursion) {
 		.archive = &archive,
@@ -172,17 +170,17 @@ Bool CLI_package(ParsedArgs args) {
 		(FileCallback) packageFile,
 		&caFileRecursion,
 		true
-	));
+	))
 
 	//Convert to CAFile and write to file
 
-	gotoIfError(clean, CAFile_create(settings, archive, &file));
+	gotoIfError(clean, CAFile_create(settings, archive, &file))
 	archive = (Archive) { 0 };	//Archive has been moved to CAFile
 
-	gotoIfError(clean, CAFile_writex(file, &res));
+	gotoIfError(clean, CAFile_writex(file, &res))
 
-	gotoIfError(clean, File_add(output, EFileType_File, 1 * SECOND));		//Ensure subdirs are created
-	gotoIfError(clean, File_write(res, output, 1 * SECOND));
+	gotoIfError(clean, File_add(output, EFileType_File, 1 * SECOND))		//Ensure subdirs are created
+	gotoIfError(clean, File_write(res, output, 1 * SECOND))
 
 clean:
 

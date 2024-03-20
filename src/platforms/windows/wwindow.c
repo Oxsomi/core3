@@ -27,7 +27,6 @@
 #include "platforms/input_device.h"
 #include "platforms/keyboard.h"
 #include "platforms/mouse.h"
-#include "platforms/monitor.h"
 #include "platforms/ext/errorx.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
@@ -64,15 +63,15 @@ Error WWindow_initSize(Window *w, I32x2 size) {
 		screen = GetDC(w->nativeHandle);
 
 		if(!screen)
-			gotoIfError(clean, Error_platformError(2, GetLastError(), "WWindow_initSize() GetDC failed"));
+			gotoIfError(clean, Error_platformError(2, GetLastError(), "WWindow_initSize() GetDC failed"))
 
 		//TODO: Support something other than RGBA8
 
-		BITMAPINFO bmi = (BITMAPINFO) {
+		const BITMAPINFO bmi = (BITMAPINFO) {
 			.bmiHeader = {
 				.biSize = sizeof(BITMAPINFOHEADER),
-				.biWidth = (DWORD) I32x2_x(size),
-				.biHeight = (DWORD) I32x2_y(size),
+				.biWidth = I32x2_x(size),
+				.biHeight = I32x2_y(size),
 				.biPlanes = 1,
 				.biBitCount = 32,
 				.biCompression = BI_RGB
@@ -82,10 +81,10 @@ Error WWindow_initSize(Window *w, I32x2 size) {
 		w->nativeData = CreateDIBSection(screen, &bmi, DIB_RGB_COLORS, (void**) &w->cpuVisibleBuffer.ptr, NULL, 0);
 
 		if(!screen)
-			gotoIfError(clean, Error_platformError(3, GetLastError(), "WWindow_initSize() CreateDIBSection failed"));
+			gotoIfError(clean, Error_platformError(3, GetLastError(), "WWindow_initSize() CreateDIBSection failed"))
 
 		//Manually set it to be a reference
-		//This makes it so we don't free it, because we don't own the memory
+		//This makes it, so we don't free it, because we don't own the memory
 
 		w->cpuVisibleBuffer.lengthAndRefBits = ((U64)bmi.bmiHeader.biWidth * bmi.bmiHeader.biHeight * 4) | ((U64)1 << 63);
 
@@ -249,11 +248,12 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 			if (!GetRawInputData((HRAWINPUT)lParam, RID_INPUT, (U8*) &raw, &rawSiz, sizeof(RAWINPUTHEADER))) {
 
 				Error_printx(
-					Error_platformError(0, GetLastError(), "WWindow_onCallback() GetRawInputData failed"),
+					Error_platformError(
+						0, GetLastError(), "WWindow_onCallback() GetRawInputData failed"
+					),
 					ELogLevel_Error, ELogOptions_Default
 				);
 
-				Log_errorx(ELogOptions_Default, "Couldn't get raw input");
 				break;
 			}
 
@@ -277,7 +277,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 				Bool isKeyDown = !(keyboardDat.Flags & 1);
 
-				//Ensure the key state is up to date
+				//Ensure the key state is up-to-date
 				//It's a shame we have to get the state, but we can't rely on our program to know the exact state
 				//Because locks can be toggled from a different program
 
@@ -550,23 +550,23 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 			if (!GetRawInputDeviceInfoW((HANDLE)lParam, RIDI_DEVICEINFO, &deviceInfo, &size)) {
 
 				Error_printx(
-					Error_platformError(0, GetLastError(), "WWindow_onCallback() GetRawInputDeviceInfo failed"),
+					Error_platformError(
+						0, GetLastError(), "WWindow_onCallback() GetRawInputDeviceInfo failed"
+					),
 					ELogLevel_Error, ELogOptions_Default
 				);
 
-				Log_errorx(ELogOptions_Default, "Invalid data in WM_INPUT_DEVICE_CHANGE");
 				break;
 			}
 
 			if(deviceInfo.dwType == RIM_TYPEHID)		//Irrelevant for us for now
 				break;
 
-			Error err;
-
 			Bool isAdded = wParam == GIDC_ARRIVAL;
 
 			if (isAdded) {
 
+				Error err;
 				Bool isKeyboard = deviceInfo.dwType == RIM_TYPEKEYBOARD;
 
 				//Create input device
@@ -761,7 +761,10 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 			Bool newState = w->flags & EWindowFlags_IsMinimized;
 
-			if ((I32x2_any(I32x2_leq(newSize, I32x2_zero())) || I32x2_eq2(w->size, newSize)) && prevState == newState)
+			if (
+				(I32x2_any(I32x2_leq(newSize, I32x2_zero())) || I32x2_eq2(w->size, newSize)) && 
+				prevState == newState
+			)
 				break;
 
 			w->size = newSize;
@@ -799,7 +802,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 Bool WindowManager_supportsFormat(const WindowManager *manager, EWindowFormat format) {
 
-	manager;
+	(void)manager;
 
 	//TODO: HDR support; ColorSpace
 	//	https://learn.microsoft.com/en-us/windows/win32/api/dxgi/nf-dxgi-idxgiswapchain-getcontainingoutput
@@ -813,7 +816,7 @@ Bool WindowManager_freePhysical(Window *w) {
 	if(w->nativeData)
 		DeleteObject((HGDIOBJ) w->nativeData);
 
-	HINSTANCE mainModule = Platform_instance.data;
+	const HINSTANCE mainModule = Platform_instance.data;
 
 	UnregisterClassW(L"OxC3: Oxsomi core 3", mainModule);
 
@@ -825,13 +828,17 @@ Bool WindowManager_freePhysical(Window *w) {
 
 Error Window_updatePhysicalTitle(const Window *w, CharString title) {
 
-	U64 titlel = CharString_length(title);
+	const U64 titlel = CharString_length(title);
 
 	if(!w || !I32x2_any(w->size) || !title.ptr || !titlel)
-		return Error_nullPointer(!w || !I32x2_any(w->size) ? 0 : 1, "Window_updatePhysicalTitle()::w and title are required");
+		return Error_nullPointer(
+			!w || !I32x2_any(w->size) ? 0 : 1, "Window_updatePhysicalTitle()::w and title are required"
+		);
 
 	if (titlel >= MAX_PATH)
-		return Error_outOfBounds(1, titlel, MAX_PATH, "Window_updatePhysicalTitle()::title must be less than 260 characters");
+		return Error_outOfBounds(
+			1, titlel, MAX_PATH, "Window_updatePhysicalTitle()::title must be less than 260 characters"
+		);
 
 	ListU16 name = (ListU16) { 0 };
 	Error err = CharString_toUTF16x(title, &name);
@@ -840,7 +847,7 @@ Error Window_updatePhysicalTitle(const Window *w, CharString title) {
 		return err;
 
 	if(!SetWindowTextW(w->nativeHandle, (const wchar_t*) name.ptr))
-		gotoIfError(clean, Error_platformError(0, GetLastError(), "Window_updatePhysicalTitle() SetWindowText failed"));
+		gotoIfError(clean, Error_platformError(0, GetLastError(), "Window_updatePhysicalTitle() SetWindowText failed"))
 
 clean:
 	ListU16_freex(&name);
@@ -857,7 +864,7 @@ Error Window_toggleFullScreen(Window *w) {
 
 	DWORD style = WS_VISIBLE;
 
-	Bool wasFullScreen = w->flags & EWindowFlags_IsFullscreen;
+	const Bool wasFullScreen = w->flags & EWindowFlags_IsFullscreen;
 
 	w->flags &= ~EWindowFlags_IsFullscreen;
 
@@ -866,7 +873,7 @@ Error Window_toggleFullScreen(Window *w) {
 		w->prevSize = w->size;
 	}
 
-	Bool isFullScreen = w->flags & EWindowFlags_IsFullscreen;
+	const Bool isFullScreen = w->flags & EWindowFlags_IsFullscreen;
 
 	if(!isFullScreen) {
 
@@ -909,15 +916,15 @@ Error Window_presentPhysical(const Window *w) {
 		return Error_invalidOperation(0, "Window_presentPhysical() can only be called if there's a CPU-sided buffer");
 
 	PAINTSTRUCT ps;
-	HDC hdcBmp = NULL, oldBmp = NULL;
+	HDC oldBmp = NULL;
 	U32 errId = 0;
 
-	HDC hdc = BeginPaint(w->nativeHandle, &ps);
+	const HDC hdc = BeginPaint(w->nativeHandle, &ps);
 
 	if(!hdc)
 		return Error_platformError(0, GetLastError(), "Window_presentPhysical() BeginPaint failed");
 
-	hdcBmp = CreateCompatibleDC(hdc);
+	const HDC hdcBmp = CreateCompatibleDC(hdc);
 
 	if(!hdcBmp) {
 		errId = 2;
@@ -938,7 +945,7 @@ Error Window_presentPhysical(const Window *w) {
 
 cleanup:
 
-	HRESULT res = GetLastError();
+	const HRESULT res = GetLastError();
 
 	if(oldBmp)
 		SelectObject(hdc, oldBmp);
@@ -954,14 +961,14 @@ impl Error WindowManager_createWindowPhysical(Window *w) {
 
 	//Create native window
 
-	WNDCLASSEXW wc = *(const WNDCLASSEXW*) w->owner->platformData.ptr;
-	HINSTANCE mainModule = Platform_instance.data;
+	const WNDCLASSEXW wc = *(const WNDCLASSEXW*) w->owner->platformData.ptr;
+	const HINSTANCE mainModule = Platform_instance.data;
 
 	Error err = Error_none();
 
 	DWORD style = WS_VISIBLE;
 
-	Bool isFullScreen = w->hint & EWindowHint_ForceFullscreen;
+	const Bool isFullScreen = w->hint & EWindowHint_ForceFullscreen;
 
 	if(!isFullScreen) {
 
@@ -973,10 +980,10 @@ impl Error WindowManager_createWindowPhysical(Window *w) {
 
 	else style |= WS_POPUP;
 
-	I32x2 maxSize = I32x2_create2(GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN));
+	const I32x2 maxSize = I32x2_create2(GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN));
 
 	I32x2 size = w->size;
-	I32x2 position = w->offset;
+	const I32x2 position = w->offset;
 
 	for (U8 i = 0; i < 2; ++i)
 		if (isFullScreen || (!I32x2_get(size, i) || I32x2_get(size, i) >= I32x2_get(maxSize, i)))
@@ -985,9 +992,9 @@ impl Error WindowManager_createWindowPhysical(Window *w) {
 	//Our strings are UTF8, but windows wants UTF16
 
 	ListU16 tmp = (ListU16) { 0 };
-	gotoIfError(clean, CharString_toUTF16x(w->title, &tmp));
+	gotoIfError(clean, CharString_toUTF16x(w->title, &tmp))
 
-	HWND nativeWindow = CreateWindowExW(
+	const HWND nativeWindow = CreateWindowExW(
 		WS_EX_APPWINDOW, wc.lpszClassName, (const wchar_t*) tmp.ptr, style,
 		I32x2_x(position), I32x2_y(position),
 		I32x2_x(size), I32x2_y(size),
@@ -995,8 +1002,8 @@ impl Error WindowManager_createWindowPhysical(Window *w) {
 	);
 
 	if(!nativeWindow) {
-		HRESULT hr = GetLastError();
-		gotoIfError(clean, Error_platformError(1, hr, "WindowManager_createWindowPhysical() CreateWindowEx failed"));
+		const HRESULT hr = GetLastError();
+		gotoIfError(clean, Error_platformError(1, hr, "WindowManager_createWindowPhysical() CreateWindowEx failed"))
 	}
 
 	//Get real size and position
@@ -1010,12 +1017,12 @@ impl Error WindowManager_createWindowPhysical(Window *w) {
 
 	//Alloc cpu visible buffer if needed
 
-	gotoIfError(clean, WWindow_initSize(w, w->size));
+	gotoIfError(clean, WWindow_initSize(w, w->size))
 
 	//Lock for when we are updating this window
 
-	gotoIfError(clean, ListInputDevice_reservex(&w->devices,  16));
-	gotoIfError(clean, ListMonitor_reservex(&w->monitors, 16));
+	gotoIfError(clean, ListInputDevice_reservex(&w->devices,  16))
+	gotoIfError(clean, ListMonitor_reservex(&w->monitors, 16))
 
 	w->nativeHandle = nativeWindow;
 
@@ -1030,7 +1037,7 @@ impl Error WindowManager_createWindowPhysical(Window *w) {
 	//Register for raw input of these types
 	//https://learn.microsoft.com/en-us/windows-hardware/drivers/hid/hid-usages#usage-page
 
-	RAWINPUTDEVICE registerDevices[2] = {
+	const RAWINPUTDEVICE registerDevices[2] = {
 		{									//Keyboard
 			.dwFlags = RIDEV_DEVNOTIFY,
 			.usUsagePage = 1,
@@ -1046,7 +1053,7 @@ impl Error WindowManager_createWindowPhysical(Window *w) {
 	};
 
 	if (!RegisterRawInputDevices(registerDevices, 2, sizeof(registerDevices[0])))
-		gotoIfError(clean, Error_invalidState(0, "Window_physicalLoop() RegisterRawInputDevices failed"));
+		gotoIfError(clean, Error_invalidState(0, "Window_physicalLoop() RegisterRawInputDevices failed"))
 
 clean:
 	ListU16_freex(&tmp);

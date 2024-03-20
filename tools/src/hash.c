@@ -43,7 +43,7 @@ Bool CLI_hash(ParsedArgs args, Bool isFile) {
 	if(!isFile)
 		buf = CharString_bufferConst(str);
 
-	else gotoIfError(clean, File_read(str, 1 * SECOND, &buf));
+	else gotoIfError(clean, File_read(str, 1 * SECOND, &buf))
 
 	switch(args.format) {
 
@@ -55,9 +55,9 @@ Bool CLI_hash(ParsedArgs args, Bool isFile) {
 			//Stringify
 
 			for (U8 i = 0; i < 8; ++i) {
-				gotoIfError(clean, CharString_createHexx(output[i], 8, &tmpi));
-				gotoIfError(clean, CharString_popFrontCount(&tmpi, 2));
-				gotoIfError(clean, CharString_appendStringx(&tmp, tmpi));
+				gotoIfError(clean, CharString_createHexx(output[i], 8, &tmpi))
+				gotoIfError(clean, CharString_popFrontCount(&tmpi, 2))
+				gotoIfError(clean, CharString_appendStringx(&tmp, tmpi))
 				CharString_freex(&tmpi);
 			}
 
@@ -65,9 +65,9 @@ Bool CLI_hash(ParsedArgs args, Bool isFile) {
 		}
 
 		case EFormat_CRC32C: {
-			U32 output = Buffer_crc32c(buf);
-			gotoIfError(clean, CharString_createHexx(output, 8, &tmp));
-			gotoIfError(clean, CharString_popFrontCount(&tmp, 2));
+			const U32 output = Buffer_crc32c(buf);
+			gotoIfError(clean, CharString_createHexx(output, 8, &tmp))
+			gotoIfError(clean, CharString_popFrontCount(&tmp, 2))
 			break;
 		}
 

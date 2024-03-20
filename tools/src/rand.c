@@ -189,16 +189,16 @@ Bool CLI_rand(ParsedArgs args) {
 	//Buffer
 
 	if(outputAsBase == 256)
-		gotoIfError(clean, Buffer_createUninitializedBytesx(n * bytesToGenerate, &outputFile));
+		gotoIfError(clean, Buffer_createUninitializedBytesx(n * bytesToGenerate, &outputFile))
 
 	Buffer outputFilePtr = Buffer_createRefFromBuffer(outputFile, false);
 
 	for (U64 i = 0; i < n; ++i) {
 
-		gotoIfError(clean, Buffer_createUninitializedBytesx(bytesToGenerate, &tmp));
+		gotoIfError(clean, Buffer_createUninitializedBytesx(bytesToGenerate, &tmp))
 
 		if(!Buffer_csprng(tmp))
-			gotoIfError(clean, Error_invalidOperation(0, "CLI_rand() Buffer_csprng failed"));
+			gotoIfError(clean, Error_invalidOperation(0, "CLI_rand() Buffer_csprng failed"))
 
 		if(outputAsBase == 256)
 			gotoIfError(clean, Buffer_appendBuffer(&outputFilePtr, tmp))
@@ -222,19 +222,19 @@ Bool CLI_rand(ParsedArgs args) {
 						switch (outputAsBase) {
 
 							case 16:
-								gotoIfError(clean, CharString_createHexx(v, 2, &tmpString));
+								gotoIfError(clean, CharString_createHexx(v, 2, &tmpString))
 								break;
 						}
 
-						gotoIfError(clean, CharString_popFrontCount(&tmpString, prefix));
-						gotoIfError(clean, CharString_appendStringx(&outputString, tmpString));
+						gotoIfError(clean, CharString_popFrontCount(&tmpString, prefix))
+						gotoIfError(clean, CharString_appendStringx(&outputString, tmpString))
 
 						if(args.operation != EOperation_RandKey || bytesToGenerate != 32)
 							if(j != (k - 1) && !((j + 1) & 15))
-								gotoIfError(clean, CharString_appendx(&outputString, ' '));
+								gotoIfError(clean, CharString_appendx(&outputString, ' '))
 
 						if(j != (k - 1) && !((j + 1) & 63))
-							gotoIfError(clean, CharString_appendStringx(&outputString, CharString_newLine()));
+							gotoIfError(clean, CharString_appendStringx(&outputString, CharString_newLine()))
 
 						CharString_freex(&tmpString);
 					}
@@ -264,7 +264,7 @@ Bool CLI_rand(ParsedArgs args) {
 								return false;
 							}
 
-							gotoIfError(clean, CharString_appendStringx(&options, str));
+							gotoIfError(clean, CharString_appendStringx(&options, str))
 
 							if(CharString_length(str))
 								pickAll = false;
@@ -302,14 +302,14 @@ Bool CLI_rand(ParsedArgs args) {
 
 								//Append
 
-								gotoIfError(clean, CharString_appendx(&options, c));
+								gotoIfError(clean, CharString_appendx(&options, c))
 							}
 					}
 
 					//Random number
 
 					else for(U8 j = 0; j < (U8) outputAsBase; ++j)
-						gotoIfError(clean, CharString_appendx(&options, C8_createNyto(j)));
+						gotoIfError(clean, CharString_appendx(&options, C8_createNyto(j)))
 
 					//Base10 is limited to 1 U64.
 					//We can immediately return this (as long as we clamp it)
@@ -321,16 +321,16 @@ Bool CLI_rand(ParsedArgs args) {
 						if(b != 64)
 							v &= ((U64)1 << b) - 1;
 
-						gotoIfError(clean, CharString_createDecx(v, false, &tmpString));
-						gotoIfError(clean, CharString_appendStringx(&outputString, tmpString));
+						gotoIfError(clean, CharString_createDecx(v, false, &tmpString))
+						gotoIfError(clean, CharString_appendStringx(&outputString, tmpString))
 						CharString_freex(&tmpString);
 					}
 
 					//We use a U64 per character, because if for example we generate 256 values (1 U8).
 					//Then subdivide it over 120, we'd be left with 26 values.
 					//This means that the first 26 characters would be picked 50% more often than others.
-					//To keep this to a minimum, we use a U64, because in the same scenario, the error rate is super small.
-					//We do this to avoid having to reroll the randomness.
+					//To keep this to a minimum, we use a U64, because in the same scenario, the error rate is tiny.
+					//We do this to avoid having to re-roll the randomness.
 
 					else for (U64 k = 0, j = Buffer_length(tmp); k < j; k += 8) {
 
@@ -348,7 +348,7 @@ Bool CLI_rand(ParsedArgs args) {
 
 						//
 
-						gotoIfError(clean, CharString_appendx(&outputString, options.ptr[v]));
+						gotoIfError(clean, CharString_appendx(&outputString, options.ptr[v]))
 					}
 
 					break;
@@ -356,7 +356,7 @@ Bool CLI_rand(ParsedArgs args) {
 			}
 
 			if(i != (n - 1) || !(args.parameters & EOperationHasParameter_Output))
-				gotoIfError(clean, CharString_appendStringx(&outputString, CharString_newLine()));
+				gotoIfError(clean, CharString_appendStringx(&outputString, CharString_newLine()))
 		}
 
 		Buffer_freex(&tmp);
@@ -377,7 +377,7 @@ Bool CLI_rand(ParsedArgs args) {
 		}
 
 		errorString = "Couldn't write to output file";
-		gotoIfError(clean, File_write(outputFile, outputPath, 1 * SECOND));
+		gotoIfError(clean, File_write(outputFile, outputPath, 1 * SECOND))
 	}
 
 	else {

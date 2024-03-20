@@ -21,7 +21,6 @@
 #pragma once
 #include "types/types.h"
 
-typedef struct Error Error;
 typedef struct BMPInfo BMPInfo;
 
 Error BMP_writex(Buffer buf, BMPInfo info, Buffer *result);

@@ -32,14 +32,14 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 
 Error WindowManager_createNative(WindowManager *w) {
 
-	Error err = Buffer_createEmptyBytesx(sizeof(WNDCLASSEXW), &w->platformData);
+	const Error err = Buffer_createEmptyBytesx(sizeof(WNDCLASSEXW), &w->platformData);
 
 	if (err.genericError)
 		return err;
 
 	WNDCLASSEXW *wc = (WNDCLASSEXW*) w->platformData.ptr;
 
-	HINSTANCE mainModule = Platform_instance.data;
+	const HINSTANCE mainModule = Platform_instance.data;
 
 	*wc = (WNDCLASSEXW) {
 
@@ -60,13 +60,15 @@ Error WindowManager_createNative(WindowManager *w) {
 	};
 
 	if (!RegisterClassExW(wc))
-		return Error_platformError(0, GetLastError(), "WindowManager_createNative() RegisterClassEx failed");
+		return Error_platformError(
+			0, GetLastError(), "WindowManager_createNative() RegisterClassEx failed"
+		);
 
 	return Error_none();
 }
 
 Bool WindowManager_freeNative(WindowManager *w) {
-	WNDCLASSEXW* wc = (WNDCLASSEXW*)w->platformData.ptr;
+	const WNDCLASSEXW* wc = (const WNDCLASSEXW*)w->platformData.ptr;
 	UnregisterClassW(wc->lpszClassName, wc->hInstance);
 	return true;
 }

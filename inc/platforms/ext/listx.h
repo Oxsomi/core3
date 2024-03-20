@@ -23,7 +23,6 @@
 
 //Include this file before including list.h so the x functions can be found
 
-typedef struct Error Error;
 typedef struct GenericList GenericList;
 typedef struct ListU64 ListU64;
 

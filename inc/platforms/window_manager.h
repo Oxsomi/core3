@@ -86,7 +86,7 @@ Error WindowManager_createWindow(
 	WindowCallbacks callbacks,
 	EWindowFormat format,
 	U64 extendedData,
-	Window **w
+	Window **result
 );
 
 Bool WindowManager_freeWindow(WindowManager *manager, Window **w);
