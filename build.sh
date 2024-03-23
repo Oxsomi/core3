@@ -14,7 +14,7 @@ echo -- Building tests...
 
 mkdir -p builds
 cd builds
-cmake -DCMAKE_BUILD_TYPE=$1 .. -DEnableSIMD=$2 -DForceFloatFallback=Off
+cmake -DCMAKE_BUILD_TYPE=$1 .. -DEnableSIMD=$2 -DForceFloatFallback=Off ${@:3}
 cmake --build . -j 8 --config $1
 cd ../
 

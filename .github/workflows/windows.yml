@@ -15,11 +15,11 @@ jobs:
       with:
         cache: true
     - name: build for fast check
-      run: D:\a\core3\core3\build.bat Release On
+      run: D:\a\core3\core3\build.bat Release On -DForceVulkan=On
     - name: build for SIMD fallback check
-      run: D:\a\core3\core3\build.bat Release Off
+      run: D:\a\core3\core3\build.bat Release Off -DForceVulkan=On
     - name: build for debug check
-      run: D:\a\core3\core3\build.bat Debug On
+      run: D:\a\core3\core3\build.bat Debug On -DForceVulkan=On
     - uses: actions/setup-ruby@v1
     - name: Send Webhook Notification
       if: always()

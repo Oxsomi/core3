@@ -26,15 +26,6 @@
 
 typedef RefPtr PipelineRef;
 
-enum EVkDeviceVendor {
-	EVkDeviceVendor_NV					= 0x10DE,
-	EVkDeviceVendor_AMD					= 0x1002,
-	EVkDeviceVendor_ARM					= 0x13B5,
-	EVkDeviceVendor_QCOM				= 0x5143,
-	EVkDeviceVendor_INTC				= 0x8086,
-	EVkDeviceVendor_IMGT				= 0x1010
-};
-
 //Special features that are only important for implementation, but we do want to be cached.
 
 typedef enum EVkGraphicsFeatures {

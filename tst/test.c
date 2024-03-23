@@ -26,6 +26,7 @@
 #include "types/buffer_layout.h"
 #include "types/flp.h"
 #include "types/big_int.h"
+#include "formats/oiBC/chimera.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -2280,6 +2281,131 @@ int main() {
 
 		CharString_free(&tmp, alloc);
 	}*/
+
+	//Test some basic chimera operations
+
+	Chimera chimera = (Chimera) {
+		.v4f = { F32x4_create4(1, 2, 3, 4) },
+		.f = { 2, 1, 3, 4, 1 }
+	};
+
+	chimera.v4f[4] = F32x4_create4(1, 2, 3, 4);
+
+	Log_debugLn(alloc, "Testing Chimera Fidi A: 0x00 - 0x1F");
+
+	for(U8 i = 0; i < 4; ++i) {
+
+		//add, sub
+
+		F32 expected = chimera.f[4] + chimera.f[i];
+		Chimera_stepFidiA(&chimera, EFidiA_add(i));
+
+		if(chimera.f[4] != expected)
+			gotoIfError(clean, Error_invalidState((U32)i, "EFidiA add test failed"))
+
+		expected = chimera.f[4] - chimera.f[i];
+		Chimera_stepFidiA(&chimera, EFidiA_sub(i));
+
+		if(chimera.f[4] != expected)
+			gotoIfError(clean, Error_invalidState((U32)i, "EFidiA sub test failed"))
+
+		//mul
+
+		expected = chimera.f[4] * chimera.f[i];
+		Chimera_stepFidiA(&chimera, EFidiA_mul(i));
+
+		if(chimera.f[4] != expected)
+			gotoIfError(clean, Error_invalidState((U32)i, "EFidiA mul test failed"))
+
+		//swap
+
+		expected = chimera.f[i];
+		F32 old = chimera.f[4];
+		Chimera_stepFidiA(&chimera, EFidiA_swap(i));
+
+		if(chimera.f[4] != expected || chimera.f[i] != old)
+			gotoIfError(clean, Error_invalidState((U32)i, "EFidiA swap test failed"))
+
+		//compare
+
+		ECompareResult expectedCmp = chimera.f[4] < chimera.f[i] ? ECompareResult_Lt : (
+			chimera.f[4] > chimera.f[i] ? ECompareResult_Gt : ECompareResult_Eq
+		);
+
+		Chimera_stepFidiA(&chimera, EFidiA_cmp(i));
+		if(expectedCmp != Chimera_getLastCompare(&chimera))
+			gotoIfError(clean, Error_invalidState((U32)i, "EFidiA cmp test failed"))
+
+		//load fN
+
+		Chimera_stepFidiA(&chimera, EFidiA_load(i));
+		if(chimera.f[i] != chimera.f[4])
+			gotoIfError(clean, Error_invalidState((U32)i, "EFidiA load test failed"))
+	}
+
+	{
+		F32 expected = 0;
+
+		//max
+
+		expected = F32_max(chimera.f[4], chimera.f[0]);
+		Chimera_stepFidiA(&chimera, EFidiA_max);
+		if(chimera.f[4] != expected)
+			gotoIfError(clean, Error_invalidState(0, "EFidiA max test failed"))
+
+		//div
+
+		expected = chimera.f[4] / chimera.f[0];
+		Chimera_stepFidiA(&chimera, EFidiA_div);
+		if(chimera.f[4] != expected)
+			gotoIfError(clean, Error_invalidState(0, "EFidiA div test failed"))
+
+		//mod
+
+		gotoIfError(clean, F32_mod(chimera.f[4], chimera.f[0], &expected))
+		Chimera_stepFidiA(&chimera, EFidiA_mod);
+		if(chimera.f[4] != expected)
+			gotoIfError(clean, Error_invalidState(0, "EFidiA mod test failed"))
+
+		//min
+
+		expected = F32_min(chimera.f[4], chimera.f[0]);
+		Chimera_stepFidiA(&chimera, EFidiA_min);
+		if(chimera.f[4] != expected)
+			gotoIfError(clean, Error_invalidState(0, "EFidiA min test failed"))
+
+		//isfinite
+
+		ECompareResult expectedCmp = F32_isValid(chimera.f[4]) ? ECompareResult_Gt : ECompareResult_Eq;
+
+		Chimera_stepFidiA(&chimera, EFidiA_isfinite);
+		if(expectedCmp != Chimera_getLastCompare(&chimera))
+			gotoIfError(clean, Error_invalidState(0, "EFidiA isfinite test failed"))
+
+		//isnan
+
+		expectedCmp = F32_isNaN(chimera.f[4]) ? ECompareResult_Gt : ECompareResult_Eq;
+
+		Chimera_stepFidiA(&chimera, EFidiA_isnan);
+		if(expectedCmp != Chimera_getLastCompare(&chimera))
+			gotoIfError(clean, Error_invalidState(0, "EFidiA isnan test failed"))
+
+		//any
+
+		expectedCmp = F32x4_any(chimera.vf[4]) ? ECompareResult_Gt : ECompareResult_Eq;
+
+		Chimera_stepFidiA(&chimera, EFidiA_anyFv);
+		if(expectedCmp != Chimera_getLastCompare(&chimera))
+			gotoIfError(clean, Error_invalidState(0, "EFidiA any test failed"))
+
+		//all
+
+		expectedCmp = F32x4_all(chimera.vf[4]) ? ECompareResult_Gt : ECompareResult_Eq;
+
+		Chimera_stepFidiA(&chimera, EFidiA_allFv);
+		if(expectedCmp != Chimera_getLastCompare(&chimera))
+			gotoIfError(clean, Error_invalidState(0, "EFidiA all test failed"))
+	}
 
 	//
 

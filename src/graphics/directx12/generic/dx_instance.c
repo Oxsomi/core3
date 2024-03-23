@@ -343,40 +343,6 @@ Bool GraphicsInstance_free(GraphicsInstance *inst, Allocator alloc) {
 	return true;
 }
 
-const C8 *reqExtensionsName[] = {
-	"VK_KHR_push_descriptor",
-	"VK_KHR_synchronization2",
-	"VK_KHR_maintenance4",
-	"VK_KHR_swapchain"
-};
-
-U64 reqExtensionsNameCount = sizeof(reqExtensionsName) / sizeof(reqExtensionsName[0]);
-
-const C8 *optExtensionsName[] = {
-
-	#ifndef NDEBUG
-		"VK_EXT_debug_marker",
-	#else
-		"",
-	#endif
-
-	"VK_KHR_performance_query",
-	"VK_KHR_ray_tracing_pipeline",
-	"VK_KHR_ray_query",
-	"VK_KHR_acceleration_structure",
-	"VK_NV_ray_tracing_motion_blur",
-	"VK_NV_ray_tracing_invocation_reorder",
-	"VK_EXT_mesh_shader",
-	"VK_KHR_fragment_shading_rate",
-	"VK_KHR_dynamic_rendering",
-	"VK_EXT_opacity_micromap",
-	"VK_NV_displacement_micromap",
-	"VK_EXT_shader_atomic_float",
-	"VK_KHR_deferred_host_operations"
-};
-
-U64 optExtensionsNameCount = sizeof(optExtensionsName) / sizeof(optExtensionsName[0]);
-
 #define getDeviceProperties(Condition, StructName, Name, StructType)			\
 	StructName Name = (StructName) { .sType = StructType };						\
 	if(Condition) {																\
@@ -862,15 +828,15 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 
 		//Vendor
 
-		EGraphicsVendorId vendor = EGraphicsVendorId_Unknown;
-
+		EGraphicsVendor vendor = EGraphicsVendor_Unknown;
+		
 		switch (properties.vendorID) {
-			case EGraphicsVendorPCIE_NV:		vendor = EGraphicsVendorId_NV;			break;
-			case EGraphicsVendorPCIE_AMD:		vendor = EGraphicsVendorId_AMD;			break;
-			case EGraphicsVendorPCIE_ARM:		vendor = EGraphicsVendorId_ARM;			break;
-			case EGraphicsVendorPCIE_QCOM:		vendor = EGraphicsVendorId_QCOM;		break;
-			case EGraphicsVendorPCIE_INTC:		vendor = EGraphicsVendorId_INTC;		break;
-			case EGraphicsVendorPCIE_IMGT:		vendor = EGraphicsVendorId_IMGT;		break;
+			case EGraphicsVendor_PCIE[EGraphicsVendor_NV]:		vendor = EGraphicsVendor_NV;			break;
+			case EGraphicsVendor_PCIE[EGraphicsVendor_AMD]:		vendor = EGraphicsVendor_AMD;			break;
+			case EGraphicsVendor_PCIE[EGraphicsVendor_ARM]:		vendor = EGraphicsVendor_ARM;			break;
+			case EGraphicsVendor_PCIE[EGraphicsVendor_QCOM]:	vendor = EGraphicsVendor_QCOM;			break;
+			case EGraphicsVendor_PCIE[EGraphicsVendor_INTC]:	vendor = EGraphicsVendor_INTC;			break;
+			case EGraphicsVendor_PCIE[EGraphicsVendor_IMGT]:	vendor = EGraphicsVendor_IMGT;			break;
 		}
 
 		//Capabilities
@@ -953,7 +919,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 		//Direct rendering
 
 		if (
-			(vendor == EGraphicsVendorId_NV || vendor == EGraphicsVendorId_AMD || vendor == EGraphicsVendorId_INTC) &&
+			(vendor == EGraphicsVendor_NV || vendor == EGraphicsVendor_AMD || vendor == EGraphicsVendor_INTC) &&
 			optExtensions[EOptExtensions_DynamicRendering] &&
 			dynamicRendering.dynamicRendering
 		)

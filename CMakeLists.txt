@@ -17,7 +17,7 @@
 # To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
 # This is called dual licensing.
 
-cmake_minimum_required(VERSION 3.13.0)
+cmake_minimum_required(VERSION 3.19.0)
 project(OxC3)
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
@@ -133,6 +133,10 @@ else()
 	set(_PLATFORM_TYPE PLATFORM_LINUX)
 endif()
 
+set(ForceUpdateDeps OFF CACHE BOOL "Force update dependencies")
+set(ARM OFF CACHE BOOL "Force ARM executable")											# //TODO:
+set(ForceVulkan OFF CACHE BOOL "Force Vulkan support (disable native API if available)")
+
 # Types
 
 file(GLOB_RECURSE typesHeaders "inc/types/*.h")
@@ -231,12 +235,17 @@ endif()
 
 # Graphics layer
 
-if(TRUE)
+if(WIN32 AND NOT ${ForceVulkan})
+	message("-- Enabling DirectX12 support...")
+	set(graphicsApi directx12)
+	set(_GRAPHICS_API EGraphicsApi_DirectX12)
+else()
 	message("-- Enabling Vulkan support...")
 	set(graphicsApi vulkan)
 	set(_GRAPHICS_API EGraphicsApi_Vulkan)
-	set_property(GLOBAL PROPERTY graphicsApi "${graphicsApi}")
 endif()
+
+set_property(GLOBAL PROPERTY graphicsApi "${graphicsApi}")
 
 message("-- Targeting graphics api: ${graphicsApi} on platform ${platform}")
 
@@ -302,7 +311,99 @@ if("${graphicsApi}" STREQUAL "vulkan")
 	target_link_libraries(OxC3_graphics PUBLIC ${VULKAN_LIB})
 
 elseif("${graphicsApi}" STREQUAL "directx12")
-	message(FATAL_ERROR "Graphics api not supported yet: DirectX12")
+
+	# Download warp, so more extensive GPUBV is available
+
+	if(${ForceUpdateDeps} OR (NOT EXISTS "${CMAKE_BINARY_DIR}/external/warp/"))
+
+		message("-- Downloading and unzipping Microsoft.Direct3D.WARP")
+
+		file(DOWNLOAD "https://www.nuget.org/api/v2/package/Microsoft.Direct3D.WARP/" "${CMAKE_BINARY_DIR}/external/warp.zip")
+		file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/external/warp/)
+
+		execute_process(
+			COMMAND ${CMAKE_COMMAND} -E tar xzf ${CMAKE_BINARY_DIR}/external/warp.zip
+			WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/external/warp/
+		)
+
+		file(REMOVE "${CMAKE_BINARY_DIR}/external/warp.zip")
+
+	endif()
+	
+	# Download the agility SDK so newer features are always available if the driver supports them
+	
+	if(${ForceUpdateDeps} OR (NOT EXISTS "${CMAKE_BINARY_DIR}/external/agility/"))
+
+		message("-- Downloading and unzipping Microsoft.Direct3D.D3D12")
+
+		file(DOWNLOAD "https://www.nuget.org/api/v2/package/Microsoft.Direct3D.D3D12/" "${CMAKE_BINARY_DIR}/external/agility.zip")
+		file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/external/agility/)
+
+		execute_process(
+			COMMAND ${CMAKE_COMMAND} -E tar xzf ${CMAKE_BINARY_DIR}/external/agility.zip
+			WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/external/agility/
+		)
+
+		file(REMOVE "${CMAKE_BINARY_DIR}/external/agility.zip")
+
+		write_file(
+				"${CMAKE_BINARY_DIR}/external/agility/version.c"
+				"#include <stdint.h>\n"
+				"#include \"d3d12.h\"\n"
+				"__declspec(dllexport) extern const uint32_t D3D12SDKVersion = D3D12_SDK_VERSION;\n"
+				"__declspec(dllexport) extern const char *D3D12SDKPath = \"./D3D12/\";"
+		)
+
+	endif()
+
+	# Add agility source files and includes as static lib
+	
+	file(GLOB_RECURSE agilityInclude "${CMAKE_BINARY_DIR}/external/agility/build/native/include")
+	file(GLOB_RECURSE agilitySrc "${CMAKE_BINARY_DIR}/external/agility/build/native/src")
+
+	add_library(
+		D3D12Agility
+		STATIC
+		${agilityInclude}
+		"${CMAKE_BINARY_DIR}/external/agility/version.c"
+		CMakeLists.txt
+	)
+
+	target_link_libraries(OxC3_graphics PUBLIC D3D12Agility)
+	target_include_directories(D3D12Agility PUBLIC "${CMAKE_BINARY_DIR}/external/agility/build/native/include")
+
+	# Add an interface to link to that copies to target directory 
+
+	if(NOT ${ARM})
+
+		add_custom_command(TARGET D3D12Agility POST_BUILD
+			COMMAND ${CMAKE_COMMAND} -E copy_if_different
+			"${CMAKE_BINARY_DIR}/external/warp/build/native/amd64/d3d10warp.dll"
+			"${CMAKE_BINARY_DIR}/bin/$<CONFIG>/"
+		)
+
+		add_custom_command(TARGET D3D12Agility POST_BUILD
+			COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin/$<CONFIG>/D3D12/"
+			COMMAND ${CMAKE_COMMAND} -E copy_if_different
+			"${CMAKE_BINARY_DIR}/external/agility/build/native/bin/x64/D3D12Core.dll"
+			"${CMAKE_BINARY_DIR}/external/agility/build/native/bin/x64/d3d12SDKLayers.dll"
+			"${CMAKE_BINARY_DIR}/bin/$<CONFIG>/D3D12/"
+		)
+
+	else()
+
+		message(WARNING "-- ARM doesn't support d3d10warp until the Direct3D.Warp package does")
+
+		add_custom_command(TARGET D3D12Agility POST_BUILD
+			COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin/$<CONFIG>/D3D12/"
+			COMMAND ${CMAKE_COMMAND} -E copy_if_different
+			"${CMAKE_BINARY_DIR}/external/agility/build/native/bin/arm64/D3D12Core.dll"
+			"${CMAKE_BINARY_DIR}/external/agility/build/native/bin/arm64/d3d12SDKLayers.dll"
+			"${CMAKE_BINARY_DIR}/bin/$<CONFIG>/D3D12/"
+		)
+
+	endif()
+
 elseif("${graphicsApi}" STREQUAL "metal")
 	message(FATAL_ERROR "Graphics api not supported yet: Metal")
 elseif("${graphicsApi}" STREQUAL "webgpu")
@@ -487,7 +588,7 @@ add_executable(
 	CMakeLists.txt
 )
 
-target_link_libraries(OxC3_test PUBLIC OxC3_types)
+target_link_libraries(OxC3_test PUBLIC OxC3_platforms)
 
 set_target_properties(OxC3_test PROPERTIES FOLDER Oxsomi/test)
 

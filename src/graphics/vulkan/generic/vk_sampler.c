@@ -85,7 +85,7 @@ Error GraphicsDeviceRef_createSamplerExt(GraphicsDeviceRef *dev, Sampler *sample
 		.addressModeV = mapVkAddressMode(sinfo.addressV),
 		.addressModeW = mapVkAddressMode(sinfo.addressW),
 
-		.mipLodBias = sinfo.mipBias,
+		.mipLodBias = F16_castF32(sinfo.mipBias),
 
 		.anisotropyEnable = (Bool) sinfo.aniso,
 		.maxAnisotropy = sinfo.aniso,

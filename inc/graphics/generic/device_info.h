@@ -32,16 +32,33 @@ typedef enum EGraphicsDeviceType {
 	EGraphicsDeviceType_Other
 } EGraphicsDeviceType;
 
-typedef enum EGraphicsVendor {
-	EGraphicsVendor_NV,
-	EGraphicsVendor_AMD,
-	EGraphicsVendor_ARM,
-	EGraphicsVendor_QCOM,
-	EGraphicsVendor_INTC,
-	EGraphicsVendor_IMGT,
-	EGraphicsVendor_APPL,
-	EGraphicsVendor_Unknown
-} EGraphicsVendor;
+typedef enum EGraphicsVendorId {
+	EGraphicsVendorId_NV,
+	EGraphicsVendorId_AMD,
+	EGraphicsVendorId_ARM,
+	EGraphicsVendorId_QCOM,
+	EGraphicsVendorId_INTC,
+	EGraphicsVendorId_IMGT,
+	EGraphicsVendorId_Unknown
+} EGraphicsVendorId;
+
+typedef enum EGraphicsVendorPCIE {
+	EGraphicsVendorPCIE_NV		= 0x10DE,
+	EGraphicsVendorPCIE_AMD		= 0x1002,
+	EGraphicsVendorPCIE_ARM		= 0x13B5,
+	EGraphicsVendorPCIE_QCOM	= 0x5143,
+	EGraphicsVendorPCIE_INTC	= 0x8086,
+	EGraphicsVendorPCIE_IMGT	= 0x1010
+} EGraphicsVendorPCIE;
+
+static const U16 EGraphicsVendor_PCIE[] = {		//The PCIE ids of the vendors, so they can be easily detected
+	EGraphicsVendorPCIE_NV,
+	EGraphicsVendorPCIE_AMD,
+	EGraphicsVendorPCIE_ARM,
+	EGraphicsVendorPCIE_QCOM,
+	EGraphicsVendorPCIE_INTC,
+	EGraphicsVendorPCIE_IMGT
+};
 
 typedef enum EGraphicsFeatures {
 
@@ -155,7 +172,7 @@ typedef struct GraphicsDeviceInfo {
 	C8 driverInfo[256];
 
 	EGraphicsDeviceType type;
-	EGraphicsVendor vendor;
+	EGraphicsVendorId vendor;
 
 	U32 id;
 	U32 padding;
