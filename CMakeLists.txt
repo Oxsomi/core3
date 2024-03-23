@@ -377,12 +377,11 @@ elseif("${graphicsApi}" STREQUAL "directx12")
 	if(NOT ${ARM})
 
 		add_custom_command(TARGET D3D12Agility POST_BUILD
+			COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin"
+			COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin/$<CONFIG>"
 			COMMAND ${CMAKE_COMMAND} -E copy_if_different
 			"${CMAKE_BINARY_DIR}/external/warp/build/native/amd64/d3d10warp.dll"
 			"${CMAKE_BINARY_DIR}/bin/$<CONFIG>/"
-		)
-
-		add_custom_command(TARGET D3D12Agility POST_BUILD
 			COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin/$<CONFIG>/D3D12/"
 			COMMAND ${CMAKE_COMMAND} -E copy_if_different
 			"${CMAKE_BINARY_DIR}/external/agility/build/native/bin/x64/D3D12Core.dll"

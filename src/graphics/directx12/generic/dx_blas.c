@@ -103,8 +103,6 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 	if(blas->base.flags & ERTASBuildFlags_IsUpdate)
 		flags |= D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PERFORM_UPDATE;
 
-	D3D12_RAYTRACING_GEOMETRY_FLAGS geometryFlags = D3D12_RAYTRACING_GEOMETRY_FLAG_NONE;
-
 	D3D12_RAYTRACING_GEOMETRY_DESC geometry = (D3D12_RAYTRACING_GEOMETRY_DESC) { 0 };
 
 	if(blas->base.flagsExt & EBLASFlag_DisableAnyHit)

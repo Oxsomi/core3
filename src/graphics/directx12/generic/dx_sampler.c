@@ -38,7 +38,7 @@ D3D12_TEXTURE_ADDRESS_MODE mapDxAddressMode(ESamplerAddressMode addressMode) {
 
 Error GraphicsDeviceRef_createSamplerExt(GraphicsDeviceRef *dev, Sampler *sampler, CharString name) {
 
-	Error err = Error_none();
+	(void)name;
 
 	const GraphicsDevice *device = GraphicsDeviceRef_ptr(dev);
 	const DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
@@ -112,6 +112,5 @@ Error GraphicsDeviceRef_createSamplerExt(GraphicsDeviceRef *dev, Sampler *sample
 		(D3D12_CPU_DESCRIPTOR_HANDLE) { .ptr = heap->cpuHandle.ptr + heap->cpuIncrement * id }
 	);
 
-clean:
-	return err;
+	return Error_none();
 }
