@@ -38,12 +38,12 @@ TListNamedImpl(ListSwapchainRef);
 TListImpl(DescriptorStackTrace);
 
 Error GraphicsDeviceRef_dec(GraphicsDeviceRef **device) {
-	return !RefPtr_dec(device) ? 
+	return !RefPtr_dec(device) ?
 		Error_invalidOperation(0, "GraphicsDeviceRef_dec()::device is invalid") : Error_none();
 }
 
 Error GraphicsDeviceRef_inc(GraphicsDeviceRef *device) {
-	return !RefPtr_inc(device) ? 
+	return !RefPtr_inc(device) ?
 		Error_invalidOperation(0, "GraphicsDeviceRef_inc()::device is invalid") : Error_none();
 }
 
@@ -110,7 +110,7 @@ Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 
 		#ifndef NDEBUG
 			Log_printCapturedStackTraceCustomx(
-				(const void**) block.stackTrace, sizeof(block.stackTrace) / sizeof(void*), 
+				(const void**) block.stackTrace, sizeof(block.stackTrace) / sizeof(void*),
 				ELogLevel_Warn, ELogOptions_NewLine
 			);
 		#endif
@@ -168,7 +168,7 @@ Error GraphicsDeviceRef_create(
 
 	if(!instanceRef || !info || !deviceRef)
 		return Error_nullPointer(
-			!instanceRef ? 0 : (!info ? 1 : 2), 
+			!instanceRef ? 0 : (!info ? 1 : 2),
 			"GraphicsDeviceRef_create()::instanceRef, info and deviceRef are required"
 		);
 

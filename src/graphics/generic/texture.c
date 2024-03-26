@@ -344,14 +344,9 @@ Error UnifiedTexture_create(TextureRef *ref, CharString name) {
 			2, "UnifiedTexture_create()::texturePtr->sampleCount MSAA8x is unsupported"
 		);
 
-	if(texture.sampleCount == EMSAASamples_x16Ext && !(device->info.capabilities.dataTypes & EGraphicsDataTypes_MSAA16x))
-		return Error_unsupportedOperation(
-			3, "UnifiedTexture_create()::texturePtr->sampleCount MSAA16x is unsupported"
-		);
-
 	if(texture.sampleCount && (texture.resource.flags & EGraphicsResourceFlag_ShaderRW))
 		return Error_unsupportedOperation(
-			4, 
+			4,
 			"UnifiedTexture_create()::texturePtr->sampleCount isn't allowed when ShaderRead or Write is enabled"
 		);
 

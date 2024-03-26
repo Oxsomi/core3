@@ -642,8 +642,8 @@ void CommandList_process(
 			PipelineRaytracingInfo info = *Pipeline_info(raytracingPipeline, PipelineRaytracingInfo);
 
 			VkStridedDeviceAddressRegionKHR hit = (VkStridedDeviceAddressRegionKHR) {
-				.deviceAddress = getVkDeviceAddress((DeviceData) { 
-					.buffer = info.shaderBindingTable, .offset = info.sbtOffset 
+				.deviceAddress = getVkDeviceAddress((DeviceData) {
+					.buffer = info.shaderBindingTable, .offset = info.sbtOffset
 				}),
 				.size = (U64)raytracingShaderAlignment * info.groupCount,
 				.stride = raytracingShaderAlignment
@@ -971,7 +971,7 @@ void CommandList_process(
 			};
 
 			Buffer_copy(
-				Buffer_createRef(&markerInfo.color, sizeof(F32x4)), 
+				Buffer_createRef(&markerInfo.color, sizeof(F32x4)),
 				Buffer_createRefConst(data, sizeof(F32x4))
 			);
 

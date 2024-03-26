@@ -45,12 +45,12 @@ TListImpl(PipelineStage);
 TListNamedImpl(ListPipelineRef);
 
 Error PipelineRef_dec(PipelineRef **pipeline) {
-	return !RefPtr_dec(pipeline) ? 
+	return !RefPtr_dec(pipeline) ?
 		Error_invalidOperation(0, "PipelineRef_dec():: pipeline invalid") : Error_none();
 }
 
 Error PipelineRef_inc(PipelineRef *pipeline) {
-	return !RefPtr_inc(pipeline) ? 
+	return !RefPtr_inc(pipeline) ?
 		Error_invalidOperation(0, "PipelineRef_inc()::pipeline invalid") : Error_none();
 }
 

@@ -27,12 +27,12 @@
 #include "types/string.h"
 
 Error RenderTextureRef_dec(RenderTextureRef **renderTexture) {
-	return !RefPtr_dec(renderTexture) ? 
+	return !RefPtr_dec(renderTexture) ?
 		Error_invalidOperation(0, "RenderTextureRef_dec()::renderTexture is invalid") : Error_none();
 }
 
 Error RenderTextureRef_inc(RenderTextureRef *renderTexture) {
-	return !RefPtr_inc(renderTexture) ? 
+	return !RefPtr_inc(renderTexture) ?
 		Error_invalidOperation(0, "RenderTextureRef_inc()::renderTexture is invalid") : Error_none();
 }
 

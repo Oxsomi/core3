@@ -203,7 +203,7 @@ Error CommandList_validateGraphicsPipeline(
 
 	if(info->msaa != boundSampleCount)
 		return Error_invalidState(
-			0, 
+			0,
 			"CommandList_validateGraphicsPipeline()::boundSampleCount is incompatible with pipeline MSAA setting"
 		);
 
@@ -243,7 +243,7 @@ Error CommandList_validateGraphicsPipeline(
 
 		if(info->msaa != tex.sampleCount)
 			return Error_invalidState(
-				i + 2, 
+				i + 2,
 				"CommandList_validateGraphicsPipeline()::images[i] has mismatching MSAA "
 				"between pipeline and RenderTarget"
 			);
@@ -1447,7 +1447,7 @@ Error CommandList_drawIndirectBase(
 
 	if(*bufferStride < minStride)
 		return Error_invalidParameter(
-			2, 1, 
+			2, 1,
 			"CommandList_drawIndirectBase()::*bufferStride should be 0 (auto), 16 (unindexed) or 32 (indexed)"
 		);
 
@@ -2024,7 +2024,7 @@ Error CommandList_markerDebugExt(CommandListRef *commandListRef, F32x4 color, Ch
 	Buffer_copy(buf, Buffer_createRefConst(&color, sizeof(color)));
 
 	Buffer_copy(
-		Buffer_createRef((U8*)buf.ptr + sizeof(color), CharString_length(name)), 
+		Buffer_createRef((U8*)buf.ptr + sizeof(color), CharString_length(name)),
 		CharString_bufferConst(name)
 	);
 

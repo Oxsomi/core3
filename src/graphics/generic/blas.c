@@ -155,7 +155,7 @@ Error GraphicsDeviceRef_createBLAS(GraphicsDeviceRef *dev, BLAS blas, CharString
 
 				if(positionOffset + ETextureFormat_getSize(ETextureFormatId_unpack[positionFormat], 1, 1, 1) > stride)
 					return Error_unsupportedOperation(
-						1, 
+						1,
 						"GraphicsDeviceRef_createBLAS()::positionOffset and/or positionFormat out of bounds (> stride)"
 					);
 
@@ -184,7 +184,7 @@ Error GraphicsDeviceRef_createBLAS(GraphicsDeviceRef *dev, BLAS blas, CharString
 
 				if(blas.indexBuffer.buffer)
 					return Error_unsupportedOperation(
-						1, 
+						1,
 						"GraphicsDeviceRef_createBLAS()::indexBuffer should be NULL if indexFormat is Undefined"
 					);
 
@@ -197,7 +197,7 @@ Error GraphicsDeviceRef_createBLAS(GraphicsDeviceRef *dev, BLAS blas, CharString
 
 				if(!blas.indexBuffer.buffer || (blas.indexBuffer.len & (indexStride - 1)))
 					return Error_unsupportedOperation(
-						1, 
+						1,
 						"GraphicsDeviceRef_createBLAS()::indexBuffer should be multiple of indexFormat and not NULL"
 					);
 

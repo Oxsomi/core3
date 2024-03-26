@@ -21,797 +21,284 @@
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/pipeline.h"
 #include "graphics/generic/device.h"
-#include "graphics/generic/instance.h"
 #include "graphics/generic/texture.h"
-#include "graphics/vulkan/vk_device.h"
-#include "graphics/vulkan/vk_instance.h"
+#include "graphics/directx12/dx_device.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
 #include "formats/texture.h"
 #include "types/string.h"
 #include "types/error.h"
 
-Error createShaderModule(
-	Buffer buf,
-	VkShaderModule *mod,
-	VkGraphicsDevice *device,
-	VkGraphicsInstance *instance,
-	CharString name,
-	EPipelineStage stage
-);
-
-VkCompareOp mapVkCompareOp(ECompareOp op) {
+D3D12_STENCIL_OP mapDxStencilOp(EStencilOp op) {
 	switch (op) {
-		case ECompareOp_Gt:						return VK_COMPARE_OP_GREATER;
-		case ECompareOp_Geq:					return VK_COMPARE_OP_GREATER_OR_EQUAL;
-		case ECompareOp_Eq:						return VK_COMPARE_OP_EQUAL;
-		case ECompareOp_Neq:					return VK_COMPARE_OP_NOT_EQUAL;
-		case ECompareOp_Leq:					return VK_COMPARE_OP_LESS_OR_EQUAL;
-		case ECompareOp_Lt:						return VK_COMPARE_OP_LESS;
-		case ECompareOp_Always:					return VK_COMPARE_OP_ALWAYS;
-		default:								return VK_COMPARE_OP_NEVER;
+		default:								return D3D12_STENCIL_OP_KEEP;
+		case EStencilOp_Zero:					return D3D12_STENCIL_OP_ZERO;
+		case EStencilOp_Replace:				return D3D12_STENCIL_OP_REPLACE;
+		case EStencilOp_IncClamp:				return D3D12_STENCIL_OP_INCR_SAT;
+		case EStencilOp_DecClamp:				return D3D12_STENCIL_OP_DECR_SAT;
+		case EStencilOp_Invert:					return D3D12_STENCIL_OP_INVERT;
+		case EStencilOp_IncWrap:				return D3D12_STENCIL_OP_INCR;
+		case EStencilOp_DecWrap:				return D3D12_STENCIL_OP_DECR;
 	}
 }
 
-VkStencilOp mapVkStencilOp(EStencilOp op) {
+D3D12_BLEND_OP mapDxBlendOp(EBlendOp op) {
 	switch (op) {
-		default:								return VK_STENCIL_OP_KEEP;
-		case EStencilOp_Zero:					return VK_STENCIL_OP_ZERO;
-		case EStencilOp_Replace:				return VK_STENCIL_OP_REPLACE;
-		case EStencilOp_IncClamp:				return VK_STENCIL_OP_INCREMENT_AND_CLAMP;
-		case EStencilOp_DecClamp:				return VK_STENCIL_OP_DECREMENT_AND_CLAMP;
-		case EStencilOp_Invert:					return VK_STENCIL_OP_INVERT;
-		case EStencilOp_IncWrap:				return VK_STENCIL_OP_INCREMENT_AND_WRAP;
-		case EStencilOp_DecWrap:				return VK_STENCIL_OP_DECREMENT_AND_WRAP;
+		default:								return D3D12_BLEND_OP_ADD;
+		case EBlendOp_Subtract:					return D3D12_BLEND_OP_SUBTRACT;
+		case EBlendOp_ReverseSubtract:			return D3D12_BLEND_OP_REV_SUBTRACT;
+		case EBlendOp_Min:						return D3D12_BLEND_OP_MIN;
+		case EBlendOp_Max:						return D3D12_BLEND_OP_MAX;
 	}
 }
 
-VkBlendOp mapVkBlendOp(EBlendOp op) {
-	switch (op) {
-		default:								return VK_BLEND_OP_ADD;
-		case EBlendOp_Subtract:					return VK_BLEND_OP_SUBTRACT;
-		case EBlendOp_ReverseSubtract:			return VK_BLEND_OP_REVERSE_SUBTRACT;
-		case EBlendOp_Min:						return VK_BLEND_OP_MIN;
-		case EBlendOp_Max:						return VK_BLEND_OP_MAX;
-	}
-}
-
-VkBlendFactor mapVkBlend(EBlend op) {
+D3D12_BLEND mapDxBlend(EBlend op) {
 
 	switch (op) {
 
-		default:								return VK_BLEND_FACTOR_ZERO;
-		case EBlend_One:						return VK_BLEND_FACTOR_ONE;
-		case EBlend_SrcColor:					return VK_BLEND_FACTOR_SRC_COLOR;
-		case EBlend_InvSrcColor:				return VK_BLEND_FACTOR_ONE_MINUS_SRC_COLOR;
-		case EBlend_DstColor:					return VK_BLEND_FACTOR_DST_COLOR;
-		case EBlend_InvDstColor:				return VK_BLEND_FACTOR_ONE_MINUS_DST_COLOR;
-		case EBlend_SrcAlpha:					return VK_BLEND_FACTOR_SRC_ALPHA;
-		case EBlend_InvSrcAlpha:				return VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-		case EBlend_DstAlpha:					return VK_BLEND_FACTOR_DST_ALPHA;
-		case EBlend_InvDstAlpha:				return VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
-		case EBlend_BlendFactor:				return VK_BLEND_FACTOR_CONSTANT_COLOR;
-		case EBlend_InvBlendFactor:				return VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_COLOR;
-		case EBlend_AlphaFactor:				return VK_BLEND_FACTOR_CONSTANT_ALPHA;
-		case EBlend_InvAlphaFactor:				return VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_ALPHA;
-		case EBlend_SrcAlphaSat:				return VK_BLEND_FACTOR_SRC_ALPHA_SATURATE;
+		default:								return D3D12_BLEND_ZERO;
+		case EBlend_One:						return D3D12_BLEND_ONE;
+		case EBlend_SrcColor:					return D3D12_BLEND_SRC_COLOR;
+		case EBlend_InvSrcColor:				return D3D12_BLEND_INV_SRC_COLOR;
+		case EBlend_DstColor:					return D3D12_BLEND_DEST_COLOR;
+		case EBlend_InvDstColor:				return D3D12_BLEND_INV_DEST_COLOR;
+		case EBlend_SrcAlpha:					return D3D12_BLEND_SRC_ALPHA;
+		case EBlend_InvSrcAlpha:				return D3D12_BLEND_INV_SRC_ALPHA;
+		case EBlend_DstAlpha:					return D3D12_BLEND_DEST_ALPHA;
+		case EBlend_InvDstAlpha:				return D3D12_BLEND_INV_DEST_ALPHA;
+		case EBlend_BlendFactor:				return D3D12_BLEND_BLEND_FACTOR;
+		case EBlend_InvBlendFactor:				return D3D12_BLEND_INV_BLEND_FACTOR;
+		case EBlend_AlphaFactor:				return D3D12_BLEND_ALPHA_FACTOR;
+		case EBlend_InvAlphaFactor:				return D3D12_BLEND_INV_ALPHA_FACTOR;
+		case EBlend_SrcAlphaSat:				return D3D12_BLEND_SRC_ALPHA_SAT;
 
-		case EBlend_Src1ColorExt:				return VK_BLEND_FACTOR_ZERO;
-		case EBlend_Src1AlphaExt:				return VK_BLEND_FACTOR_ZERO;
-		case EBlend_InvSrc1ColorExt:			return VK_BLEND_FACTOR_ZERO;
-		case EBlend_InvSrc1AlphaExt:			return VK_BLEND_FACTOR_ZERO;
+		case EBlend_Src1ColorExt:				return D3D12_BLEND_SRC1_COLOR;
+		case EBlend_Src1AlphaExt:				return D3D12_BLEND_SRC1_ALPHA;
+		case EBlend_InvSrc1ColorExt:			return D3D12_BLEND_INV_SRC1_COLOR;
+		case EBlend_InvSrc1AlphaExt:			return D3D12_BLEND_INV_SRC1_ALPHA;
 	}
 }
 
 Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListCharString names, ListPipelineRef *pipelines) {
 
-	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
-	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(GraphicsInstanceRef_ptr(device->instance), Vk);
-
-	typedef enum EPipelineStateType {
-
-		EPipelineStateType_MSAA,
-		EPipelineStateType_VertexInput,
-		EPipelineStateType_InputAssembly,
-		EPipelineStateType_Tessellation,
-		EPipelineStateType_Rasterizer,
-		EPipelineStateType_DepthStencil,
-		EPipelineStateType_BlendState,
-		EPipelineStateType_DirectRendering,
-		EPipelineStateType_PipelineCreateInfo,
-		EPipelineStateType_VkPipeline,
-
-		EPipelineStateType_PerPipelineStart = EPipelineStateType_MSAA,
-		EPipelineStateType_PerPipelineEnd = EPipelineStateType_VkPipeline,
-
-		//Multiple per pipeline. Needs to calculate size manually
-
-		EPipelineStateType_Stage,
-		EPipelineStateType_BlendAttachment,
-		EPipelineStateType_DirectRenderingAttachments,
-		EPipelineStateType_InputBuffers,
-		EPipelineStateType_InputAttributes,
-
-		EPipelineStateType_Count,
-
-		EPipelineStateType_PerPipelinePropertyStart = EPipelineStateType_Stage,
-		EPipelineStateType_PerPipelinePropertyEnd = EPipelineStateType_InputAttributes,
-
-		EPipelineStageType_PerPipelineCount =
-			EPipelineStateType_PerPipelinePropertyStart - EPipelineStateType_PerPipelineStart,
-
-		EPipelineStageType_PerPipelinePropertyCount =
-			EPipelineStateType_Count - EPipelineStateType_PerPipelinePropertyStart,
-
-	} EPipelineStateType;
-
-	EPipelineStateType type;
-	(void)type;
-
-	U64 counts[EPipelineStateType_Count] = { 0 };
+	const DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
+	ListU16 tmp = (ListU16) { 0 };
 	Error err = Error_none();
-	U64 total = 0;
-
-	counts[EPipelineStateType_PipelineCreateInfo] = pipelines->length;
-	counts[EPipelineStateType_VkPipeline] = pipelines->length;
-
-	for(U64 i = 0; i < pipelines->length; ++i) {
-
-		const PipelineGraphicsInfo *info = Pipeline_info(PipelineRef_ptr(pipelines->ptr[i]), PipelineGraphicsInfo);
-
-		//Count if available
-
-		if (info->msaa)
-			++counts[EPipelineStateType_MSAA];
-
-		if (info->topologyMode)
-			++counts[EPipelineStateType_InputAssembly];
-
-		if (info->patchControlPointsExt)
-			++counts[EPipelineStateType_Tessellation];
-
-		if(info->rasterizer.flags || info->rasterizer.cullMode)
-			++counts[EPipelineStateType_Rasterizer];
-
-		if(info->depthStencil.flags)
-			++counts[EPipelineStateType_DepthStencil];
-
-		++counts[EPipelineStateType_BlendState];
-		counts[EPipelineStateType_BlendAttachment] += info->attachmentCountExt;		//TODO: if renderPass
-
-		if(info->attachmentCountExt || info->depthFormatExt)
-			++counts[EPipelineStateType_DirectRendering];
-
-		//Count variable
-
-		counts[EPipelineStateType_Stage] += info->stageCount;
-
-		if(info->attachmentCountExt)
-			counts[EPipelineStateType_DirectRenderingAttachments] += info->attachmentCountExt;
-
-		Bool anyAttrib = false;
-
-		for(U64 j = 0; j < 16; ++j) {
-
-			if(info->vertexLayout.bufferStrides12_isInstance1[j] & 4095)
-				++counts[EPipelineStateType_InputBuffers];
-
-			if(info->vertexLayout.attributes[j].format) {
-				++counts[EPipelineStateType_InputAttributes];
-				anyAttrib = true;
-			}
-		}
-
-		if(anyAttrib)
-			++counts[EPipelineStateType_VertexInput];
-	}
-
-	//Create temp data to store these
-	//But not every part is properly filled.
-	//If the default values are used, it will use a default one instead to avoid having to re-create.
-
-	U64 strides[EPipelineStateType_Count] = {
-		sizeof(VkPipelineMultisampleStateCreateInfo),
-		sizeof(VkPipelineVertexInputStateCreateInfo),
-		sizeof(VkPipelineInputAssemblyStateCreateInfo),
-		sizeof(VkPipelineTessellationStateCreateInfo),
-		sizeof(VkPipelineRasterizationStateCreateInfo),
-		sizeof(VkPipelineDepthStencilStateCreateInfo),
-		sizeof(VkPipelineColorBlendStateCreateInfo),
-		sizeof(VkPipelineRenderingCreateInfo),
-		sizeof(VkGraphicsPipelineCreateInfo),
-		sizeof(VkPipeline),
-		sizeof(VkPipelineShaderStageCreateInfo),
-		sizeof(VkPipelineColorBlendAttachmentState),
-		sizeof(VkFormat),
-		sizeof(VkVertexInputBindingDescription),
-		sizeof(VkVertexInputAttributeDescription)
-	};
-
-	GenericList states[EPipelineStateType_Count] = { 0 };
-
-	for(U64 i = EPipelineStateType_PerPipelineStart; i < EPipelineStateType_Count; ++i) {
-		states[i] = GenericList_createEmpty(strides[i]);
-		gotoIfError(clean, GenericList_resizex(&states[i], counts[i]))
-	}
 
 	//TODO: Push constants
 
-	VkDynamicState dynamicStates[4] = {
-		VK_DYNAMIC_STATE_VIEWPORT,
-		VK_DYNAMIC_STATE_SCISSOR,
-		VK_DYNAMIC_STATE_STENCIL_REFERENCE,
-		VK_DYNAMIC_STATE_BLEND_CONSTANTS
-	};
+	for(U64 i = 0; i < pipelines->length; ++i) {
 
-	VkPipelineDynamicStateCreateInfo dynamicState = (VkPipelineDynamicStateCreateInfo) {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-		.dynamicStateCount = sizeof(dynamicStates) / sizeof(dynamicStates[0]),
-		.pDynamicStates = dynamicStates
-	};
+		D3D12_INPUT_ELEMENT_DESC elements[8];
 
-	VkPipelineViewportStateCreateInfo viewport = (VkPipelineViewportStateCreateInfo) {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-		.viewportCount = 1,
-		.scissorCount = 1
-	};
+		const Pipeline *pipeline = PipelineRef_ptr(pipelines->ptr[i]);
+		const PipelineGraphicsInfo *info = Pipeline_info(pipeline, PipelineGraphicsInfo);
 
-	VkPipelineMultisampleStateCreateInfo msaaState = (VkPipelineMultisampleStateCreateInfo) {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-		.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT
-	};
+		D3D12_GRAPHICS_PIPELINE_STATE_DESC graphics = (D3D12_GRAPHICS_PIPELINE_STATE_DESC) {
 
-	VkPipelineTessellationStateCreateInfo tessState = (VkPipelineTessellationStateCreateInfo) {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO
-	};
+			.pRootSignature = deviceExt->defaultLayout,
 
-	VkPipelineDepthStencilStateCreateInfo depthStencilState = (VkPipelineDepthStencilStateCreateInfo) {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-		.minDepthBounds = 1,
-		.maxDepthBounds = 0,
-		.depthCompareOp = VK_COMPARE_OP_ALWAYS
-	};
+			.BlendState = (D3D12_BLEND_DESC) { .IndependentBlendEnable = info->blendState.allowIndependentBlend },
 
-	VkPipelineRasterizationStateCreateInfo rasterState = (VkPipelineRasterizationStateCreateInfo) {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-		.cullMode = VK_CULL_MODE_BACK_BIT,
-		.lineWidth = 1
-	};
+			.RasterizerState = (D3D12_RASTERIZER_DESC) {
+				.FillMode = D3D12_FILL_MODE_SOLID,
+				.CullMode = D3D12_CULL_MODE_BACK,
+				.FrontCounterClockwise = info->rasterizer.flags & ERasterizerFlags_IsClockWise,
+				.MultisampleEnable = info->msaa,
+				.ForcedSampleCount = 1 << info->msaa
+			},
 
-	VkPipelineInputAssemblyStateCreateInfo inputAssembly = (VkPipelineInputAssemblyStateCreateInfo) {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-		.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST
-	};
+			.DepthStencilState = (D3D12_DEPTH_STENCIL_DESC) {
+				.DepthEnable = (Bool)(info->depthStencil.flags & EDepthStencilFlags_DepthTest),
+				.DepthWriteMask = (Bool)(info->depthStencil.flags & EDepthStencilFlags_DepthWrite),
+				.DepthFunc = mapDxCompareOp(info->depthStencil.depthCompare),
+				.StencilEnable = (Bool)(info->depthStencil.flags & EDepthStencilFlags_StencilTest),
+				.StencilReadMask = info->depthStencil.stencilReadMask,
+				.StencilReadMask = info->depthStencil.stencilWriteMask
+			},
 
-	VkPipelineVertexInputStateCreateInfo vertexInput = (VkPipelineVertexInputStateCreateInfo) {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO
-	};
+			.InputLayout = (D3D12_INPUT_LAYOUT_DESC ) { .pInputElementDescs = elements },
 
-	for(U64 i = EPipelineStateType_MSAA; i < EPipelineStateType_Count; ++i)
-		counts[i] = 0;
+			.NumRenderTargets = info->attachmentCountExt,
+			.DSVFormat = EDepthStencilFormat_toDXFormat(info->depthFormatExt),
 
-	for(; total < pipelines->length; ++total) {
-
-		const PipelineGraphicsInfo *info = Pipeline_info(PipelineRef_ptr(pipelines->ptr[total]), PipelineGraphicsInfo);
-
-		//Convert info struct to vulkan struct
-
-		VkGraphicsPipelineCreateInfo *currentInfo =
-			&((VkGraphicsPipelineCreateInfo*)states[EPipelineStateType_PipelineCreateInfo].ptr)[total];
-
-		*currentInfo = (VkGraphicsPipelineCreateInfo) {
-			.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-			//.pStages = stages,
-			.pVertexInputState = &vertexInput,
-			.pInputAssemblyState = &inputAssembly,
-			.pTessellationState = &tessState,
-			.pViewportState = &viewport,
-			.pRasterizationState = &rasterState,
-			.pMultisampleState = &msaaState,
-			.pDepthStencilState = &depthStencilState,
-			//.pColorBlendState = &blendState,
-			.pDynamicState = &dynamicState,
-			.layout = deviceExt->defaultLayout
+			.SampleDesc = (DXGI_SAMPLE_DESC) { .Count = 1 }
 		};
-
-		//Vertex input
-
-		Bool hasAttrib = false;
-
-		for(U32 j = 0; j < 16; ++j)
-			if(info->vertexLayout.attributes[j].format) {
-				hasAttrib = true;
-				break;
-			}
-
-		//Transform into description
-
-		if (hasAttrib) {
-
-			VkVertexInputBindingDescription *bindings =
-				&((VkVertexInputBindingDescription*)states[EPipelineStateType_InputBuffers].ptr)[
-					counts[EPipelineStateType_InputBuffers]
-				];
-
-			VkVertexInputAttributeDescription *attributes =
-				&((VkVertexInputAttributeDescription*)states[EPipelineStateType_InputAttributes].ptr)[
-					counts[EPipelineStateType_InputAttributes]
-				];
-
-			U32 bindingCount = 0;
-
-			for (U32 j = 0; j < 16; ++j) {
-
-				U16 bufferStrides12_isInstance1 = info->vertexLayout.bufferStrides12_isInstance1[j];
-				U16 stride = bufferStrides12_isInstance1 & 4095;
-
-				if(!stride)
-					continue;
-
-				bindings[bindingCount++] = (VkVertexInputBindingDescription) {
-					.binding = j,
-					.inputRate =
-						(bufferStrides12_isInstance1 >> 12) & 1 ? VK_VERTEX_INPUT_RATE_INSTANCE : VK_VERTEX_INPUT_RATE_VERTEX,
-					.stride = stride
-				};
-			}
-
-			counts[EPipelineStateType_InputBuffers] += bindingCount;
-
-			U32 attribCount = 0;
-
-			for (U32 j = 0; j < 16; ++j) {
-
-				VertexAttribute attrib = info->vertexLayout.attributes[j];
-
-				if(!attrib.format)
-					continue;
-
-				VkFormat formatExt =  mapVkFormat(ETextureFormatId_unpack[attrib.format]);
-
-				attributes[attribCount++] = (VkVertexInputAttributeDescription) {
-					.location = j,
-					.binding = attrib.bufferId4 & 0xF,
-					.format = formatExt,
-					.offset = attrib.offset11 & 2047
-				};
-			}
-
-			counts[EPipelineStateType_InputAttributes] += attribCount;
-
-			VkPipelineVertexInputStateCreateInfo *infoi =
-				&((VkPipelineVertexInputStateCreateInfo*)states[EPipelineStateType_VertexInput].ptr)[
-					counts[EPipelineStateType_VertexInput]++
-				];
-
-			*infoi = (VkPipelineVertexInputStateCreateInfo) {
-				.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-				.vertexBindingDescriptionCount = bindingCount,
-				.vertexAttributeDescriptionCount = attribCount,
-				.pVertexAttributeDescriptions = attributes,
-				.pVertexBindingDescriptions = bindings
-			};
-
-			currentInfo->pVertexInputState = infoi;
-		}
-
-		//IA
-
-		if (info->topologyMode) {
-
-			VkPrimitiveTopology topology = 0;
-
-			switch (info->topologyMode) {
-
-				default:								topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;		break;
-				case ETopologyMode_TriangleStrip:		topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP;	break;
-
-				case ETopologyMode_LineList:			topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;			break;
-				case ETopologyMode_LineStrip:			topology = VK_PRIMITIVE_TOPOLOGY_LINE_STRIP;		break;
-
-				case ETopologyMode_PointList:			topology = VK_PRIMITIVE_TOPOLOGY_POINT_LIST;		break;
-
-				case ETopologyMode_TriangleListAdj:
-					topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST_WITH_ADJACENCY;
-					break;
-
-				case ETopologyMode_TriangleStripAdj:
-					topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP_WITH_ADJACENCY;
-					break;
-
-				case ETopologyMode_LineListAdj:
-					topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST_WITH_ADJACENCY;
-					break;
-
-				case ETopologyMode_LineStripAdj:
-					topology = VK_PRIMITIVE_TOPOLOGY_LINE_STRIP_WITH_ADJACENCY;
-					break;
-			}
-
-			VkPipelineInputAssemblyStateCreateInfo *infoi =
-				&((VkPipelineInputAssemblyStateCreateInfo*)states[EPipelineStateType_InputAssembly].ptr)[
-					counts[EPipelineStateType_InputAssembly]++
-				];
-
-			*infoi = (VkPipelineInputAssemblyStateCreateInfo) {
-				.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-				.topology = topology
-			};
-
-			currentInfo->pInputAssemblyState = infoi;
-		}
 
 		//Rasterizer
 
-		if(info->rasterizer.flags || info->rasterizer.cullMode) {
+		if(info->rasterizer.flags & ERasterizerFlags_IsWireframeExt)
+			graphics.RasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
 
-			VkCullModeFlags cullMode = 0;
+		if(info->rasterizer.flags & ERasterizerFlags_EnableDepthBias) {
+			graphics.RasterizerState.DepthBias = info->rasterizer.depthBiasConstantFactor;
+			graphics.RasterizerState.SlopeScaledDepthBias = info->rasterizer.depthBiasSlopeFactor;
+		}
 
-			switch (info->rasterizer.cullMode) {
+		if(info->rasterizer.flags & ERasterizerFlags_EnableDepthClamp)
+			graphics.RasterizerState.DepthBiasClamp = info->rasterizer.depthBiasClamp;
 
-				case ECullMode_Back:	cullMode = VK_CULL_MODE_BACK_BIT;	break;
-				case ECullMode_Front:	cullMode = VK_CULL_MODE_FRONT_BIT;	break;
-				default:				cullMode = VK_CULL_MODE_NONE;		break;
-			}
-
-			VkFrontFace windingOrder =
-				info->rasterizer.flags & ERasterizerFlags_IsClockWise ? VK_FRONT_FACE_CLOCKWISE :
-				VK_FRONT_FACE_COUNTER_CLOCKWISE;
-
-			VkPolygonMode polygonMode =
-				info->rasterizer.flags & ERasterizerFlags_IsWireframeExt ? VK_POLYGON_MODE_LINE : VK_POLYGON_MODE_FILL;
-
-			VkPipelineRasterizationStateCreateInfo *infoi =
-				&((VkPipelineRasterizationStateCreateInfo*)states[EPipelineStateType_Rasterizer].ptr)[
-					counts[EPipelineStateType_Rasterizer]++
-				];
-
-			*infoi = (VkPipelineRasterizationStateCreateInfo) {
-				.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-				.cullMode = cullMode,
-				.frontFace = windingOrder,
-				.depthClampEnable = info->rasterizer.flags & ERasterizerFlags_EnableDepthClamp,
-				.polygonMode = polygonMode,
-				.depthBiasEnable = info->rasterizer.flags & ERasterizerFlags_EnableDepthBias,
-				.depthBiasConstantFactor = info->rasterizer.depthBiasConstantFactor,
-				.depthBiasClamp = info->rasterizer.depthBiasClamp,
-				.depthBiasSlopeFactor = info->rasterizer.depthBiasSlopeFactor,
-				.lineWidth = 1
-			};
-
-			currentInfo->pRasterizationState = infoi;
+		switch(info->rasterizer.cullMode) {
+			default:																							break;
+			case ECullMode_None:				graphics.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;		break;
+			case ECullMode_Front:				graphics.RasterizerState.CullMode = D3D12_CULL_MODE_FRONT;		break;
 		}
 
 		//Depth stencil
 
-		VkStencilOpState stencil = (VkStencilOpState) { 0 };
+		graphics.DepthStencilState.BackFace = (D3D12_DEPTH_STENCILOP_DESC) {
+			.StencilFailOp = mapDxStencilOp(info->depthStencil.stencilFail),
+			.StencilDepthFailOp = mapDxStencilOp(info->depthStencil.stencilDepthFail),
+			.StencilPassOp = mapDxStencilOp(info->depthStencil.stencilPass),
+			.StencilFunc = mapDxCompareOp(info->depthStencil.stencilCompare)
+		};
 
-		if (info->depthStencil.flags & EDepthStencilFlags_StencilTest) {
-
-			VkCompareOp stencilCompareOp = mapVkCompareOp(info->depthStencil.stencilCompare);
-
-			VkStencilOp failOp = mapVkStencilOp(info->depthStencil.stencilFail);
-			VkStencilOp passOp = mapVkStencilOp(info->depthStencil.stencilPass);
-			VkStencilOp depthFailOp = mapVkStencilOp(info->depthStencil.stencilDepthFail);
-
-			stencil = (VkStencilOpState) {
-				.failOp = failOp,
-				.passOp = passOp,
-				.depthFailOp = depthFailOp,
-				.compareOp = stencilCompareOp,
-				.compareMask = info->depthStencil.stencilReadMask,
-				.writeMask = info->depthStencil.stencilWriteMask
-			};
-		}
-
-		if(info->depthStencil.flags) {
-
-			VkCompareOp depthCompareOp = mapVkCompareOp(info->depthStencil.depthCompare);
-
-			VkPipelineDepthStencilStateCreateInfo *infoi =
-				&((VkPipelineDepthStencilStateCreateInfo*)states[EPipelineStateType_DepthStencil].ptr)[
-					counts[EPipelineStateType_DepthStencil]++
-				];
-
-			*infoi = (VkPipelineDepthStencilStateCreateInfo) {
-				.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-				.depthTestEnable = (Bool)(info->depthStencil.flags & EDepthStencilFlags_DepthTest),
-				.depthWriteEnable = (Bool)(info->depthStencil.flags & EDepthStencilFlags_DepthWriteBit),
-				.depthCompareOp = depthCompareOp,
-				.stencilTestEnable = (Bool)(info->depthStencil.flags & EDepthStencilFlags_StencilTest),
-				.front = stencil,
-				.back = stencil,
-				.minDepthBounds = 1,
-				.maxDepthBounds = 0
-			};
-
-			currentInfo->pDepthStencilState = infoi;
-		}
+		graphics.DepthStencilState.FrontFace = graphics.DepthStencilState.BackFace;
 
 		//Blend state
 
-		{
-			//TODO: Validate render target count with renderPass
+		for(U8 j = 0; j < 8; ++j) {
 
-			//Find attachments
+			U8 realJ =  info->blendState.allowIndependentBlend ? j : 0;
+			D3D12_RENDER_TARGET_BLEND_DESC *dst = &graphics.BlendState.RenderTarget[j];
+			BlendStateAttachment src = info->blendState.attachments[realJ];
 
-			VkPipelineColorBlendAttachmentState *attachments =
-				&((VkPipelineColorBlendAttachmentState*)states[EPipelineStateType_BlendAttachment].ptr)[
-					counts[EPipelineStateType_BlendAttachment]
-				];
+			if(!info->blendState.enable) {
 
-			for(U64 j = 0; j < info->attachmentCountExt; ++j) {
-
-				BlendStateAttachment attachment = info->blendState.attachments[j];
-
-				if (!info->blendState.enable) {
-
-					attachments[j] = (VkPipelineColorBlendAttachmentState) {
-						.blendEnable = false,
-						.colorWriteMask = (VkColorComponentFlags) EWriteMask_All
-					};
-
-					continue;
-				}
-
-				U64 index = info->blendState.allowIndependentBlend ? j : 0;
-
-				attachments[j] = (VkPipelineColorBlendAttachmentState) {
-					.blendEnable = (info->blendState.renderTargetMask >> index) & 1,
-					.colorWriteMask = (VkColorComponentFlags) info->blendState.writeMask[index]
+				*dst = (D3D12_RENDER_TARGET_BLEND_DESC) {
+					.RenderTargetWriteMask = info->blendState.writeMask[realJ]
 				};
 
-				attachments[j].colorBlendOp = mapVkBlendOp(attachment.blendOp);
-				attachments[j].alphaBlendOp = mapVkBlendOp(attachment.blendOpAlpha);
-
-				attachments[j].srcColorBlendFactor = mapVkBlend(attachment.srcBlend);
-				attachments[j].dstColorBlendFactor = mapVkBlend(attachment.dstBlend);
-
-				attachments[j].srcAlphaBlendFactor = mapVkBlend(attachment.srcBlendAlpha);
-				attachments[j].dstAlphaBlendFactor = mapVkBlend(attachment.dstBlendAlpha);
+				continue;
 			}
 
-			//Turn into blend state
+			*dst = (D3D12_RENDER_TARGET_BLEND_DESC) {
 
-			VkLogicOp logicOp = 0;
+				.BlendEnable			= (info->blendState.renderTargetMask >> realJ) & 1,
+				.LogicOpEnable			= (Bool)info->blendState.logicOpExt,
+				.RenderTargetWriteMask	= info->blendState.writeMask[realJ],
 
-			switch (info->blendState.logicOpExt) {
-				default:						break;
-				case ELogicOpExt_Clear:			logicOp = VK_LOGIC_OP_CLEAR;			break;
-				case ELogicOpExt_Set:			logicOp = VK_LOGIC_OP_SET;				break;
-				case ELogicOpExt_Copy:			logicOp = VK_LOGIC_OP_COPY;				break;
-				case ELogicOpExt_CopyInvert:	logicOp = VK_LOGIC_OP_COPY_INVERTED;	break;
-				case ELogicOpExt_None:			logicOp = VK_LOGIC_OP_NO_OP;			break;
-				case ELogicOpExt_Invert:		logicOp = VK_LOGIC_OP_INVERT;			break;
-				case ELogicOpExt_And:			logicOp = VK_LOGIC_OP_AND;				break;
-				case ELogicOpExt_Nand:			logicOp = VK_LOGIC_OP_NAND;				break;
-				case ELogicOpExt_Or:			logicOp = VK_LOGIC_OP_OR;				break;
-				case ELogicOpExt_Nor:			logicOp = VK_LOGIC_OP_NOR;				break;
-				case ELogicOpExt_Xor:			logicOp = VK_LOGIC_OP_XOR;				break;
-				case ELogicOpExt_Equiv:			logicOp = VK_LOGIC_OP_EQUIVALENT;		break;
-				case ELogicOpExt_AndReverse:	logicOp = VK_LOGIC_OP_AND_REVERSE;		break;
-				case ELogicOpExt_AndInvert:		logicOp = VK_LOGIC_OP_AND_INVERTED;		break;
-				case ELogicOpExt_OrReverse:		logicOp = VK_LOGIC_OP_OR_REVERSE;		break;
-				case ELogicOpExt_OrInvert:		logicOp = VK_LOGIC_OP_OR_INVERTED;		break;
+				.BlendOp				= mapDxBlendOp(src.blendOp),
+				.SrcBlend				= mapDxBlend(src.srcBlend),
+				.DestBlend				= mapDxBlend(src.dstBlend),
+
+				.BlendOpAlpha			= mapDxBlendOp(src.blendOpAlpha),
+				.SrcBlendAlpha			= mapDxBlend(src.srcBlendAlpha),
+				.DestBlendAlpha			= mapDxBlend(src.dstBlendAlpha)
+			};
+
+			switch(info->blendState.logicOpExt) {
+				case ELogicOpExt_Clear:			dst->LogicOp = D3D12_LOGIC_OP_CLEAR;			break;
+				case ELogicOpExt_Set:			dst->LogicOp = D3D12_LOGIC_OP_SET;				break;
+				case ELogicOpExt_Copy:			dst->LogicOp = D3D12_LOGIC_OP_COPY;				break;
+				case ELogicOpExt_CopyInvert:	dst->LogicOp = D3D12_LOGIC_OP_COPY_INVERTED;	break;
+				case ELogicOpExt_None:			dst->LogicOp = D3D12_LOGIC_OP_NOOP;				break;
+				case ELogicOpExt_Invert:		dst->LogicOp = D3D12_LOGIC_OP_INVERT;			break;
+				case ELogicOpExt_And:			dst->LogicOp = D3D12_LOGIC_OP_AND;				break;
+				case ELogicOpExt_Nand:			dst->LogicOp = D3D12_LOGIC_OP_NAND;				break;
+				case ELogicOpExt_Or:			dst->LogicOp = D3D12_LOGIC_OP_OR;				break;
+				case ELogicOpExt_Nor:			dst->LogicOp = D3D12_LOGIC_OP_NOR;				break;
+				case ELogicOpExt_Xor:			dst->LogicOp = D3D12_LOGIC_OP_XOR;				break;
+				case ELogicOpExt_Equiv:			dst->LogicOp = D3D12_LOGIC_OP_EQUIV;			break;
+				case ELogicOpExt_AndReverse:	dst->LogicOp = D3D12_LOGIC_OP_AND_REVERSE;		break;
+				case ELogicOpExt_AndInvert:		dst->LogicOp = D3D12_LOGIC_OP_AND_INVERTED;		break;
+				case ELogicOpExt_OrReverse:		dst->LogicOp = D3D12_LOGIC_OP_OR_REVERSE;		break;
+				case ELogicOpExt_OrInvert:		dst->LogicOp = D3D12_LOGIC_OP_OR_INVERTED;		break;
+				default:																		break;
 			}
-
-			VkPipelineColorBlendStateCreateInfo *infoi =
-				&((VkPipelineColorBlendStateCreateInfo*)states[EPipelineStateType_BlendState].ptr)[total];
-
-			*infoi = (VkPipelineColorBlendStateCreateInfo) {
-				.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-				.logicOpEnable = info->blendState.logicOpExt != ELogicOpExt_Off,
-				.logicOp = logicOp,
-				.attachmentCount = info->attachmentCountExt,
-				.pAttachments = attachments
-			};
-
-			currentInfo->pColorBlendState = infoi;
 		}
 
-		//Tessellation
+		//Init vertex + instance buffers
 
-		if (info->patchControlPointsExt) {
+		for(U8 j = 0; j < 16; ++j) {
 
-			VkPipelineTessellationStateCreateInfo *infoi =
-				&((VkPipelineTessellationStateCreateInfo*)states[EPipelineStateType_Tessellation].ptr)[
-					counts[EPipelineStateType_Tessellation]++
-				];
+			VertexAttribute attrib = info->vertexLayout.attributes[j];
 
-			*infoi = (VkPipelineTessellationStateCreateInfo) {
-				.sType = VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO,
-				.patchControlPoints = info->patchControlPointsExt
+			if(!attrib.format)
+				continue;
+
+			U32 k = graphics.InputLayout.NumElements++;
+			D3D12_INPUT_ELEMENT_DESC *desc = (D3D12_INPUT_ELEMENT_DESC*) &graphics.InputLayout.pInputElementDescs[k];
+			*desc = (D3D12_INPUT_ELEMENT_DESC) {
+				.SemanticName = "TEXCOORD",		//Everything is a texcoord
+				.SemanticIndex = j,
+				.Format = ETextureFormatId_toDXFormat(attrib.format),
+				.InputSlot = attrib.bufferId4 & 0xF,
+				.AlignedByteOffset = attrib.offset11 & 2047
 			};
 
-			currentInfo->pTessellationState = infoi;
-		}
-
-		//MSAA
-
-		if (info->msaa) {
-
-			VkPipelineMultisampleStateCreateInfo *infoi =
-				&((VkPipelineMultisampleStateCreateInfo*)states[EPipelineStateType_MSAA].ptr)[
-					counts[EPipelineStateType_MSAA]++
-				];
-
-			*infoi = (VkPipelineMultisampleStateCreateInfo) {
-				.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-				.rasterizationSamples = (VkSampleCountFlagBits)(1 << info->msaa),
-				.sampleShadingEnable = info->msaaMinSampleShading > 0,
-				.minSampleShading = info->msaaMinSampleShading
-			};
-
-			currentInfo->pMultisampleState = infoi;
-		}
-
-		//Direct rendering
-
-		if (!info->renderPass) {
-
-			VkFormat stencilFormat = 0, depthFormat = 0;
-
-			switch (info->depthFormatExt) {
-
-				case EDepthStencilFormat_D16:
-					depthFormat = VK_FORMAT_D16_UNORM;
-					break;
-
-				case EDepthStencilFormat_D32:
-					depthFormat = VK_FORMAT_D32_SFLOAT;
-					break;
-
-				case EDepthStencilFormat_D24S8Ext:
-					depthFormat = VK_FORMAT_D24_UNORM_S8_UINT;
-					stencilFormat = VK_FORMAT_S8_UINT;
-					break;
-
-				case EDepthStencilFormat_D32S8:
-					depthFormat = VK_FORMAT_D32_SFLOAT_S8_UINT;
-					stencilFormat = VK_FORMAT_S8_UINT;
-					break;
-
-				case EDepthStencilFormat_S8Ext:
-					stencilFormat = VK_FORMAT_S8_UINT;
-					break;
-
-				default:
-					break;
+			if(info->vertexLayout.bufferStrides12_isInstance1[desc->InputSlot] & (1 << 12)) {
+				desc->InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA;
+				desc->InstanceDataStepRate = 1;
 			}
-
-			VkFormat *formats =
-				&((VkFormat*)states[EPipelineStateType_DirectRenderingAttachments].ptr)[
-					counts[EPipelineStateType_DirectRenderingAttachments]
-				];
-
-			for(U64 j = 0; j < info->attachmentCountExt; ++j)
-				formats[j] = mapVkFormat(ETextureFormatId_unpack[info->attachmentFormatsExt[j]]);
-
-			VkPipelineRenderingCreateInfo *infoi =
-				&((VkPipelineRenderingCreateInfo*)states[EPipelineStateType_DirectRendering].ptr)[total];
-
-			*infoi = (VkPipelineRenderingCreateInfo) {
-				.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
-				.colorAttachmentCount = info->attachmentCountExt,
-				.pColorAttachmentFormats = formats,
-				.depthAttachmentFormat = depthFormat,
-				.stencilAttachmentFormat = stencilFormat
-			};
-
-			currentInfo->pNext = infoi;
 		}
 
-		//Stages
+		//Init topology
 
-		VkPipelineShaderStageCreateInfo *vkStages =
-			&((VkPipelineShaderStageCreateInfo*)states[EPipelineStateType_Stage].ptr)[
-				counts[EPipelineStateType_Stage]
-			];
+		switch(info->topologyMode) {
 
-		Pipeline *pipeline = PipelineRef_ptr(pipelines->ptr[total]);
+			case ETopologyMode_TriangleListAdj:
+			case ETopologyMode_TriangleStripAdj:
+			case ETopologyMode_TriangleStrip:
+			default:								graphics.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;	break;
 
-		for(U64 j = 0; j < info->stageCount; ++j) {
+			case ETopologyMode_LineListAdj:
+			case ETopologyMode_LineStripAdj:
+			case ETopologyMode_LineStrip:
+			case ETopologyMode_LineList:			graphics.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE;		break;
 
-			VkShaderStageFlagBits stageBit = 0;
+			case ETopologyMode_PointList:			graphics.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT;		break;
+		}
+
+		if(info->patchControlPointsExt)
+			graphics.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_PATCH;
+
+		//Init render targets
+
+		for(U64 j = 0; j < info->attachmentCountExt; ++j)
+			graphics.RTVFormats[j] = ETextureFormatId_toDXFormat(info->attachmentFormatsExt[i]);
+
+		//Init pipeline stages
+
+		for(U64 j = 0; j < pipeline->stages.length; ++j) {
+
 			PipelineStage stage = pipeline->stages.ptr[j];
 
-			switch (stage.stageType) {
-				default:							stageBit = VK_SHADER_STAGE_VERTEX_BIT;						break;
-				case EPipelineStage_Pixel:			stageBit = VK_SHADER_STAGE_FRAGMENT_BIT;					break;
-				case EPipelineStage_GeometryExt:	stageBit = VK_SHADER_STAGE_GEOMETRY_BIT;					break;
-				case EPipelineStage_Hull:			stageBit = VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT;		break;
-				case EPipelineStage_Domain:			stageBit = VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT;		break;
-			}
-
-			VkShaderModule module = NULL;
-
-			gotoIfError(clean, createShaderModule(
-				stage.binary,
-				&module,
-				deviceExt,
-				instanceExt,
-				!names.length ? CharString_createNull() : names.ptr[total],
-				stage.stageType
-			))
-
-			vkStages[j] = (VkPipelineShaderStageCreateInfo) {
-				.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-				.stage = stageBit,
-				.module = module,
-				.pName = "main"
+			D3D12_SHADER_BYTECODE bytecode = (D3D12_SHADER_BYTECODE) {
+				.pShaderBytecode = stage.binary.ptr,
+				.BytecodeLength = Buffer_length(stage.binary),
 			};
 
-			++currentInfo->stageCount;
+			switch(stage.stageType) {
+				default:							graphics.PS = bytecode;		break;
+				case EPipelineStage_Vertex:			graphics.VS = bytecode;		break;
+				case EPipelineStage_Domain:			graphics.DS = bytecode;		break;
+				case EPipelineStage_Hull:			graphics.HS = bytecode;		break;
+				case EPipelineStage_GeometryExt:	graphics.GS = bytecode;		break;
+			}
 		}
 
-		currentInfo->pStages = vkStages;
+		//Create
 
-		//Continue to next stages
+		ID3D12PipelineState **pipelinei = &Pipeline_ext(pipeline, Dx)->pso;
 
-		counts[EPipelineStateType_Stage] += info->stageCount;
-		counts[EPipelineStateType_BlendAttachment] += info->attachmentCountExt;					//TODO: !renderPass
-		counts[EPipelineStateType_DirectRenderingAttachments] += info->attachmentCountExt;
-	}
-
-	gotoIfError(clean, vkCheck(vkCreateGraphicsPipelines(
-		deviceExt->device,
-		NULL,
-		(U32) pipelines->length,
-		(const VkGraphicsPipelineCreateInfo*) states[EPipelineStateType_PipelineCreateInfo].ptr,
-		NULL,
-		(VkPipeline*) states[EPipelineStateType_VkPipeline].ptr
-	)))
-
-	//Create RefPtrs for OxC3 usage.
-
-	for (U64 i = 0; i < pipelines->length; ++i) {
+		gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreateGraphicsPipelineState(
+			deviceExt->device,
+			&graphics,
+			&IID_ID3D12PipelineState,
+			(void**) pipelinei
+		)))
 
 		#ifndef NDEBUG
-
-			if(instanceExt->debugSetName && names.length) {
-
-				VkDebugUtilsObjectNameInfoEXT debugName2 = (VkDebugUtilsObjectNameInfoEXT) {
-					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-					.objectType = VK_OBJECT_TYPE_PIPELINE,
-					.objectHandle = (U64) ((const VkPipeline*) states[EPipelineStateType_VkPipeline].ptr)[i],
-					.pObjectName = names.ptr[i].ptr
-				};
-
-				gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName2)))
+			if(names.length && CharString_length(names.ptr[i])) {
+				gotoIfError(clean, CharString_toUTF16x(names.ptr[i], &tmp))
+				gotoIfError(clean, dxCheck((*pipelinei)->lpVtbl->SetName(*pipelinei, (const wchar_t*) tmp.ptr)))
+				ListU16_freex(&tmp);
 			}
-
 		#endif
-
-		VkPipeline *pipelineExt = Pipeline_ext(PipelineRef_ptr(pipelines->ptr[i]), Vk);
-		*pipelineExt = ((VkPipeline*) states[EPipelineStateType_VkPipeline].ptr)[i];
-		((VkPipeline*) states[EPipelineStateType_VkPipeline].ptr)[i] = NULL;
 	}
-
-	GenericList_freex(&states[EPipelineStateType_VkPipeline]);
 
 clean:
-
-	for(U64 i = 0; i < states[EPipelineStateType_VkPipeline].length; ++i)
-		if(((VkPipeline*)states[EPipelineStateType_VkPipeline].ptr)[i])
-			vkDestroyPipeline(deviceExt->device, ((VkPipeline*)states[EPipelineStateType_VkPipeline].ptr)[i], NULL);
-
-	for (U64 i = 0; i < total; ++i) {
-
-		VkGraphicsPipelineCreateInfo *graphicsInfo =
-			&((VkGraphicsPipelineCreateInfo*) states[EPipelineStateType_PipelineCreateInfo].ptr)[i];
-
-		if(graphicsInfo->pStages)
-			for(U64 j = 0; j < graphicsInfo->stageCount; ++j) {
-
-				VkShaderModule mod = graphicsInfo->pStages[j].module;
-
-				if(mod)
-					vkDestroyShaderModule(deviceExt->device, mod, NULL);
-			}
-	}
-
-	for(U64 i = 0; i < sizeof(states) / sizeof(states[0]); ++i)
-		GenericList_freex(&states[i]);
-
+	ListU16_freex(&tmp);
 	return err;
 }

@@ -23,7 +23,6 @@
 #include "graphics/generic/device.h"
 #include "graphics/generic/texture.h"
 #include "platforms/ext/bufferx.h"
-#include "platforms/ext/stringx.h"
 #include "platforms/ext/ref_ptrx.h"
 
 impl Error GraphicsDevice_createPipelinesComputeExt(GraphicsDevice *device, ListCharString names, ListPipelineRef *pipelines);
@@ -65,7 +64,7 @@ Error GraphicsDeviceRef_createPipelinesCompute(
 
 	if(pipelines->ptr)
 		return Error_invalidParameter(
-			3, 0, 
+			3, 0,
 			"GraphicsDeviceRef_createPipelinesCompute()::pipelines->ptr is non zero, indicating a possible memleak"
 		);
 

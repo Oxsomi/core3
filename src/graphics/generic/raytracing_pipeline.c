@@ -64,7 +64,7 @@ Error GraphicsDeviceRef_createPipelineRaytracingExt(
 
 	if(!binaries->length || !stages.length || !infos.length)
 		return Error_invalidParameter(
-			1, 0, 
+			1, 0,
 			"GraphicsDeviceRef_createPipelinesRaytracing()::binaries, stages and infos should be of length > 0"
 		);
 
@@ -73,7 +73,7 @@ Error GraphicsDeviceRef_createPipelineRaytracingExt(
 			2, 0,
 			"GraphicsDeviceRef_createPipelinesRaytracing()::names should have the same length as infos"
 		);
-		
+
 	if(entrypoints && entrypoints->length != stages.length)
 		return Error_invalidParameter(
 			2, 0,
@@ -82,13 +82,13 @@ Error GraphicsDeviceRef_createPipelineRaytracingExt(
 
 	if(infos.length >> 32)
 		return Error_outOfBounds(
-			1, infos.length, U32_MAX, 
+			1, infos.length, U32_MAX,
 			"GraphicsDeviceRef_createPipelinesRaytracing()::infos.length should be less than U32_MAX"
 		);
 
 	if(pipelines->ptr)
 		return Error_invalidParameter(
-			3, 0, 
+			3, 0,
 			"GraphicsDeviceRef_createPipelinesRaytracing()::pipelines->ptr is non zero, indicating a possible memleak"
 		);
 
@@ -117,25 +117,25 @@ Error GraphicsDeviceRef_createPipelineRaytracingExt(
 
 		if(binaryCounter + info.binaryCount > binaries->length)
 			return Error_outOfBounds(
-				1, binaryCounter + info.binaryCount, binaries->length, 
+				1, binaryCounter + info.binaryCount, binaries->length,
 				"GraphicsDeviceRef_createPipelinesRaytracing()::binaries[i] out of bounds"
 			);
 
 		if(stageCounter + info.stageCount > stages.length)
 			return Error_outOfBounds(
-				1, stageCounter + info.stageCount, stages.length, 
+				1, stageCounter + info.stageCount, stages.length,
 				"GraphicsDeviceRef_createPipelinesRaytracing()::stages[i] out of bounds"
 			);
 
 		if(groupCounter + info.groupCount > groups.length)
 			return Error_outOfBounds(
-				1, groupCounter + info.groupCount, groups.length, 
+				1, groupCounter + info.groupCount, groups.length,
 				"GraphicsDeviceRef_createPipelinesRaytracing()::groups[i] out of bounds"
 			);
 
 		if(((U64)info.groupCount + info.stageCount) >> 32)
 			return Error_outOfBounds(
-				1, info.groupCount + info.stageCount, U32_MAX, 
+				1, info.groupCount + info.stageCount, U32_MAX,
 				"GraphicsDeviceRef_createPipelinesRaytracing()::stageCount + groupCount out of bounds"
 			);
 
@@ -167,7 +167,7 @@ Error GraphicsDeviceRef_createPipelineRaytracingExt(
 
 		if(info.binaries.ptr || info.groups.length)
 			return Error_invalidParameter(
-				1, 0, 
+				1, 0,
 				"GraphicsDeviceRef_createPipelinesRaytracing()::info[i].binaries and groups should be NULL"
 			);
 
@@ -179,20 +179,20 @@ Error GraphicsDeviceRef_createPipelineRaytracingExt(
 
 			if (Buffer_length(stage.binary))
 				return Error_invalidParameter(
-					1, 0, 
+					1, 0,
 					"GraphicsDeviceRef_createPipelinesRaytracing()::stages[i].shaderBinary "
 					"is not allowed for raytracing shaders"
 				);
 
 			if(
-				stage.binaryId == U32_MAX && stage.stageType == EPipelineStage_MissExt && 
+				stage.binaryId == U32_MAX && stage.stageType == EPipelineStage_MissExt &&
 				!(info.flags & EPipelineRaytracingFlags_NoNullMiss)
 			)
 				continue;
 
 			if(stage.binaryId == U32_MAX)
 				return Error_invalidParameter(
-					1, 0, 
+					1, 0,
 					"GraphicsDeviceRef_createPipelinesRaytracing()::info[i].binaryId is U32_MAX (unused) "
 					"but it's not allowed"
 				);
@@ -214,21 +214,21 @@ Error GraphicsDeviceRef_createPipelineRaytracingExt(
 
 			if(group.intersection != U32_MAX && (info.flags & EPipelineRaytracingFlags_SkipAABBs))
 				return Error_invalidParameter(
-					1, 0, 
+					1, 0,
 					"GraphicsDeviceRef_createPipelinesRaytracing()::groups[i].intersection is "
 					"disallowed if aabbs are skipped"
 				);
 
 			if(group.anyHit == U32_MAX && (info.flags & EPipelineRaytracingFlags_NoNullAnyHit))
 				return Error_invalidParameter(
-					1, 0, 
+					1, 0,
 					"GraphicsDeviceRef_createPipelinesRaytracing()::groups[i].anyHit is null, but "
 					"NoNullAnyHit is used"
 				);
 
 			if(group.closestHit == U32_MAX && (info.flags & EPipelineRaytracingFlags_NoNullClosestHit))
 				return Error_invalidParameter(
-					1, 0, 
+					1, 0,
 					"GraphicsDeviceRef_createPipelinesRaytracing()::groups[i].closestHit is null, but "
 					"NoNullClosestHit is used"
 				);
@@ -237,19 +237,19 @@ Error GraphicsDeviceRef_createPipelineRaytracingExt(
 
 			if(group.anyHit != U32_MAX && group.anyHit >= info.stageCount)
 				return Error_outOfBounds(
-					1, group.anyHit, info.stageCount, 
+					1, group.anyHit, info.stageCount,
 					"GraphicsDeviceRef_createPipelinesRaytracing()::stages[i].anyHit out of bounds"
 				);
 
 			if(group.closestHit != U32_MAX && group.closestHit >= info.stageCount)
 				return Error_outOfBounds(
-					1, group.closestHit, info.stageCount, 
+					1, group.closestHit, info.stageCount,
 					"GraphicsDeviceRef_createPipelinesRaytracing()::stages[i].closestHit out of bounds"
 				);
 
 			if(group.intersection != U32_MAX && group.intersection >= info.stageCount)
 				return Error_outOfBounds(
-					1, group.intersection, info.stageCount, 
+					1, group.intersection, info.stageCount,
 					"GraphicsDeviceRef_createPipelinesRaytracing()::stages[i].intersection out of bounds"
 				);
 
@@ -307,13 +307,13 @@ Error GraphicsDeviceRef_createPipelineRaytracingExt(
 
 	if(!(dev->info.capabilities.features & EGraphicsFeatures_RayPipeline))
 		return Error_invalidParameter(
-			1, 0, 
+			1, 0,
 			"GraphicsDeviceRef_createPipelinesRaytracing() can't be called if RayPipeline isn't supported"
 		);
 
 	if(anyMotionBlurExt && !(dev->info.capabilities.features & EGraphicsFeatures_RayMotionBlur))
 		return Error_invalidParameter(
-			1, 0, 
+			1, 0,
 			"GraphicsDeviceRef_createPipelinesRaytracing() can't enable motion blur if the feature isn't supported"
 		);
 
@@ -356,7 +356,7 @@ Error GraphicsDeviceRef_createPipelineRaytracingExt(
 
 			if(Buffer_isRef(*buf))
 				gotoIfError(clean, Buffer_createCopyx(*buf, &dstInfo->binaries.ptrNonConst[j]))
-				
+
 			else dstInfo->binaries.ptrNonConst[j] = *buf;
 
 			*buf = Buffer_createNull();		//Moved

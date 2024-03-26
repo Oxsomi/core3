@@ -78,7 +78,7 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 
 	if (tlas->useDeviceMemory)
 		instancesU64 = tlas->deviceData.len / stride;
-	
+
 	else instancesU64 = tlas->cpuInstancesStatic.length;		//Both static and motion length are at the same loc
 
 	if(instancesU64 >> 24)
@@ -100,7 +100,7 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 	if(tlas->base.asConstructionType == ETLASConstructionType_Instances) {
 
 		DeviceData instances = tlas->deviceData;
-		
+
 		//We have to temporarily allocate a device mem buffer
 
 		if (!tlas->useDeviceMemory) {
@@ -125,7 +125,7 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 			void *mem = DeviceBufferRef_ptr(tempInstances)->resource.mappedMemoryExt;
 
 			Buffer_copy(
-				Buffer_createRef(mem, stride * instancesU64), 
+				Buffer_createRef(mem, stride * instancesU64),
 				Buffer_createRefConst(tlas->cpuInstancesStatic.ptr, stride * instancesU64)	//static and motion are at same pos
 			);
 
@@ -142,8 +142,8 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 				const U64 *blasAddress = &dat->blasDeviceAddress;
 				U64 offset = (const U8*)blasAddress - (((const U8*)tlas->cpuInstancesStatic.ptr) + stride * i);
 
-				*(U64*)((U8*)mem + offset) = getVkDeviceAddress((DeviceData) { 
-					.buffer = BLASRef_ptr(dat->blasCpu)->base.asBuffer 
+				*(U64*)((U8*)mem + offset) = getVkDeviceAddress((DeviceData) {
+					.buffer = BLASRef_ptr(dat->blasCpu)->base.asBuffer
 				});
 			}
 

@@ -96,7 +96,7 @@ _gotoIfError(clean, GraphicsInstance_getPreferredDevice(
 
 ### Properties
 
-- name, driverName, driverInfo; All null-terminated UTF-8 strings giving information about the device and driver.
+- name, driverInfo; All null-terminated UTF-8 strings giving information about the device and driver.
 - type; what type this device is (dedicated GPU, integrated GPU, simulated GPU, CPU or other (unrecognized)).
 - vendor; what company designed the device (Nvidia (NV), AMD, ARM, Qualcomm (QCOM), Intel (INTC), Imagination Technologies (IMGT), Apple (APPL) or unknown).
 - id; number in the list of supported devices.
@@ -107,12 +107,13 @@ _gotoIfError(clean, GraphicsInstance_getPreferredDevice(
 
 #### Capabilities
 
-- features: DirectRendering, VariableRateShading, MultiDrawIndirectCount, MeshShader, GeometryShader, SubgroupArithmetic, SubgroupShuffle, Multiview, Raytracing, RayPipeline, RayQuery, RayMicromapOpacity, RayMicromapDisplacement, RayMotionBlur, RayReorder, LUID, DebugMarkers, Wireframe, LogicOp, DualSrcBlend.
+- features: DirectRendering, VariableRateShading, MultiDrawIndirectCount, MeshShader, GeometryShader, SubgroupArithmetic, SubgroupShuffle, Multiview, Raytracing, RayPipeline, RayQuery, RayMicromapOpacity, RayMicromapDisplacement, RayMotionBlur, RayReorder, LUID, DebugMarkers, Wireframe, LogicOp, DualSrcBlend, Workgraphs.
 - features2: reserved for future usage.
-- dataTypes: I64, F16, F64, AtomicI64, AtomicF32, AtomicF64, ASTC, BCn, MSAA2x, MSAA8x, MSAA16x, RGB32f, RGB32i, RGB32u, D24S8, S8.
-  - MSAA4x and MSAA1x (off) are supported by default.
-- featuresExt: API dependent features.
+- dataTypes: F64, I64, F16, I64, AtomicI64, AtomicF32, AtomicF64, ASTC, BCn, MSAA2x, MSAA8x, RGB32f, RGB32i, RGB32u, D24S8, S8.
+  - MSAA4 and MSAA1 (off) are supported by default.
+- featuresExt: API dependent features that aren't expected to be standardized in the same way.
   - Vulkan: PerformanceQuery.
+  - DirectX12: RTValidation (extra raytracing validation for NV cards; requires envar NV_ALLOW_RAYTRACING_VALIDATION=1 and reboot).
 
 ### Functions
 
@@ -1190,7 +1191,7 @@ There are two types of TLASes:
 - HW Static intersections (static geometry).
 - HW Motion blur intersections (static, matrix or transform motion).
 
-The latter can only be used with HW motion blur hardware, while the former is always available (if raytracing is available) and is simpler to construct. 
+The latter can only be used with HW motion blur hardware, while the former is always available (if raytracing is available) and is simpler to construct.
 
 A TLAS can be initialized through two different methods:
 
@@ -1292,7 +1293,7 @@ For GPU construction, the same can be done and has to follow the exact struct; e
 
 ##### TLASInstanceStatic + TLASInstanceMotion
 
-Both represent a single mesh instance. They both contain one instance data (TLAS_getInstanceDataCpu) while they contain 1 or 2 transforms. TLASInstanceMotion may contain two transforms if the type is not ETLASInstanceType_Static. Otherwise either transform or staticInst.transform contain a F32x4x3 transform matrix.  When the instance type is ETLASInstanceType_Matrix it contains two matrices (matrixInst.prev and matrixInst.next). 
+Both represent a single mesh instance. They both contain one instance data (TLAS_getInstanceDataCpu) while they contain 1 or 2 transforms. TLASInstanceMotion may contain two transforms if the type is not ETLASInstanceType_Static. Otherwise either transform or staticInst.transform contain a F32x4x3 transform matrix.  When the instance type is ETLASInstanceType_Matrix it contains two matrices (matrixInst.prev and matrixInst.next).
 
 When the type is ETLASInstanceType_SRT, srtInst.prev and next contain a special transform format;
 
@@ -1615,7 +1616,7 @@ startScope		//Transitions resources
 
     setRaytracingPipelineExt
     	dispatchRaysExt						//Keeps scope alive
-    
+
     startRenderExt
         setPrimitiveBuffers
         setViewport/Scissor

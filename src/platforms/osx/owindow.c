@@ -35,7 +35,7 @@
 #include "platforms/osx/objective_c.h"
 
 //Adaptation of
-// Official apple documentation 
+// Official apple documentation
 // And https://gist.github.com/hasenj/1bba3ca00af1a3c0b2035c9bd14a85ef
 // And https://github.com/CodaFi/C-Macs/blob/master/CMacs/CMacsTypes.h
 
@@ -841,7 +841,7 @@ Error Window_updatePhysicalTitle(const Window *w, CharString title) {
 	_gotoIfError(clean, err);
 
 	ObjC_sendVoidPtr(w->nativeHandle, selSetTitle()), wrapped);
-	
+
 clean:
 	CharString_freex(&copy);
 	return err;
@@ -859,7 +859,7 @@ Error Window_toggleFullScreen(Window *w) {
 
 	if(!wasFullScreen)
 		w->flags |= EWindowFlags_IsFullscreen;
-		
+
 	else w->flags &= ~EWindowFlags_IsFullscreen;
 
 	ObjC_sendId((id)w->nativeHandle, selToggleFullScreen(), NSApp);

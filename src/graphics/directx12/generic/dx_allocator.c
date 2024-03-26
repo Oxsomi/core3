@@ -20,8 +20,7 @@
 
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/allocator.h"
-#include "graphics/vulkan/vk_device.h"
-#include "graphics/vulkan/vk_instance.h"
+#include "graphics/directx12/dx_device.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
 #include "platforms/ext/bufferx.h"
@@ -31,6 +30,7 @@
 #include "types/math.h"
 #include "types/string.h"
 
+/*
 static const VkMemoryPropertyFlags host = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
 static const VkMemoryPropertyFlags coherent = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 static const VkMemoryPropertyFlags local = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
@@ -65,7 +65,7 @@ Error VkDeviceMemoryAllocator_findMemory(
 		VkMemoryHeap heap = deviceExt->memoryProperties.memoryHeaps[i];
 		heap.flags &= 1;														//OOB
 
-		if (heap.size > maxHeapSizes[heap.flags] && heap.size > 256 * MIBI) {	//Ignore 256MB to allow AMD APU to work.
+		if (heap.size > maxHeapSizes[heap.flags] && heap.size > 512 * MIBI) {	//Ignore 256MB to allow AMD APU to work.
 			maxHeapSizes[heap.flags] = heap.size;
 			heapIds[heap.flags] = i;
 		}
@@ -327,14 +327,19 @@ clean:
 	}
 
 	return err;
-}
+}*/
 
 Bool DeviceMemoryAllocator_freeAllocationExt(GraphicsDevice *device, void *ext) {
 
 	if(!device || !ext)
 		return false;
 
+	return true;
+}
+
+/*
 	const VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 	vkFreeMemory(deviceExt->device, (VkDeviceMemory) ext, NULL);
 	return true;
 }
+*/

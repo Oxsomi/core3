@@ -762,7 +762,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 			Bool newState = w->flags & EWindowFlags_IsMinimized;
 
 			if (
-				(I32x2_any(I32x2_leq(newSize, I32x2_zero())) || I32x2_eq2(w->size, newSize)) && 
+				(I32x2_any(I32x2_leq(newSize, I32x2_zero())) || I32x2_eq2(w->size, newSize)) &&
 				prevState == newState
 			)
 				break;

@@ -75,7 +75,7 @@ Because of this, a device needs the following requirements to be OxC3 compatible
   - VK_KHR_deferred_host_operations is required for raytracing. Otherwise all raytracing extensions will be forced off.
   - VK_KHR_multiview as Multiview.
   - VK_KHR_fragment_shading_rate as VariableRateShading
-- subgroupSize of 16 - 128.
+- subgroupSize of 4 - 128.
 - sampleRateShading of true.
 - subgroup operations of basic, vote, ballot are required. Available only in compute by default. arithmetic and shuffle are optional.
 - shaderSampledImageArrayDynamicIndexing, shaderStorageBufferArrayDynamicIndexing, shaderUniformBufferArrayDynamicIndexing, shaderStorageBufferArrayDynamicIndexing, descriptorIndexing turned on.
@@ -85,7 +85,7 @@ Because of this, a device needs the following requirements to be OxC3 compatible
 - maxColorAttachments and maxFragmentOutputAttachments of 8 or higher.
 - maxDescriptorSetInputAttachments, maxPerStageDescriptorInputAttachments of 7 or higher.
 - MSAA support of 1 and 4 or higher (framebufferColorSampleCounts, framebufferDepthSampleCounts, framebufferNoAttachmentsSampleCounts, framebufferStencilSampleCounts, sampledImageColorSampleCounts, sampledImageDepthSampleCounts, sampledImageIntegerSampleCounts, sampledImageStencilSampleCounts). Support for MSAA 2 is non default.
-  - MSAA2x, MSAA8x and MSAA16x graphics features are enabled if all of these support it.
+  - MSAA2x and MSAA8x graphics features are enabled if all of these support it.
 - maxComputeSharedMemorySize of 16KiB or higher.
 - maxComputeWorkGroupCount[N] of U16_MAX or higher.
 - maxComputeWorkGroupInvocations of 512 or higher.
@@ -161,7 +161,7 @@ Raytracing requires VK_KHR_acceleration_structure, but also requires either VK_K
   - shaderGroupHandleSize should be 32.
 - shaderGroupBaseAlignment should be 32 or 64.
   - rayTraversalPrimitiveCulling and rayTracingPipelineTraceRaysIndirect should be enabled.
-  
+
 - Motion blur:
   - Both indirect and normal rays are allowed to be traced if RayIndirect is on. Otherwise RayIndirect has to be turned off.
 
@@ -277,7 +277,18 @@ If raytracing is enabled, the following formats will be enabled for BLAS buildin
 ## List of DirectX12 requirements
 
 - DirectX12 Feature level 12_1.
+  - This also means the adapter should support DXGI_ADAPTER_FLAG3_SUPPORT_MONITORED_FENCES.
+  - DXGI feature PRESENT_ALLOW_TEARING.
+- The following features:
+  - Tiled resource tier 3.
+  - Conservative rasterization tier 2.
+  - Rasterizer-ordered views.
+  - waveSize of 4 to 128.
+  - Logical blend operations.
+  - OutputMergerLogicOp, TypedUAVLoadAdditionalFormats, ROVsSupported, ConservativeRasterizationTier >= tier3, HighestShaderModel of >= 6_5, WaveOps, Int64ShaderOps, EnhancedBarriersSupported, UnalignedBlockTexturesSupported.
+  - All standard ETextureFormat types have to be supported. Meaning float/snorm/unorm textures can be sampled and all texture formats have typed uav read/write. Non standard types include RGB32f/RGB32u/RGB32i which only requires usage as vertex attribute. All BCn formats have to be supported. BGRA8 doesn't need to be writable.
 - WDDM 2.7 and above.
+- More than 512 MiB of CPU + GPU visible memory (At least 1GB total).
 - GPU:
   - Nvidia Maxwell 2nd gen and above.
   - AMD GCN 5 and above.
@@ -288,13 +299,38 @@ If raytracing is enabled, the following formats will be enabled for BLAS buildin
 
 Since Vulkan is more fragmented, the features are more split up. However in DirectX, the features supported by default are the following:
 
-- EGraphicsFeatures_SubgroupArithmetic, EGraphicsFeatures_SubgroupShuffle. Wave intrinsics are all supported by default.
-- EGraphicsFeatures_GeometryShader, EGraphicsFeatures_MultiDrawIndirectCount, EGraphicsFeatures_SupportsLUID are enabled by default.
+- EGraphicsFeatures_SubgroupArithmetic, EGraphicsFeatures_SubgroupShuffle, EGraphicsFeatures_GeometryShader, EGraphicsFeatures_MultiDrawIndirectCount, EGraphicsFeatures_SupportsLUID, EGraphicsFeatures_LogicOp, EGraphicsFeatures_DualSrcBlend and EGraphicsFeatures_Wireframe are enabled by default.
 - EGraphicsFeatures_Raytracing, EGraphicsFeatures_RayPipeline, EGraphicsFeatures_RayQuery, EGraphicsFeatures_MeshShaders, EGraphicsFeatures_VariableRateShading are a part of DirectX12 Ultimate (Turing, RDNA2, Arc and up).
 - If EGraphicsFeatures_Raytracing is enabled, so is EGraphicsFeatures_RayPipeline. The other RT extensions are optional.
-- EDeviceDataTypes_BCn, EGraphicsDataTypes_I64, EGraphicsDataTypes_F64 are always set.
+- EGraphicsFeatures_DirectRendering is most often available, only not on QCOM chips.
+- EDeviceDataTypes_BCn, EGraphicsDataTypes_I64 are always set.
+- MSAA8x and MSAA2x are supported by default (on top of already supported MSAA 1 and 4).
+- AtomicInt64OnTypedResourceSupported, AtomicInt64OnGroupSharedSupported as EGraphicsDataTypes_AtomicI64.
 
-### List of Metal requirements
+#### Extensions in DirectX and NVAPI
+
+- NVAPI_D3D12_RAYTRACING_CAPS_TYPE_OPACITY_MICROMAP as EGraphicsFeatures_RayMicromapOpacity.
+- NVAPI_D3D12_RAYTRACING_CAPS_TYPE_DISPLACEMENT_MICROMAP as EGraphicsFeatures_RayMicromapDisplacement.
+- NVAPI_D3D12_RAYTRACING_CAPS_TYPE_THREAD_REORDERING as EGraphicsFeatures_RayReorder.
+- WorkGraphsTier as EGraphicsFeatures_Workgraphs.
+- MeshShaderTier as EGraphicsFeatures_MeshShader.
+- VariableShadingRateTier as EGraphicsFeatures_VariableRateShading.
+- RaytracingTier>1_0 as EGraphicsFeatures_Raytracing + EGraphicsFeatures_RayPipeline
+- RaytracingTier>1_1 as EGraphicsFeatures_RayQuery.
+- Native16BitShaderOpsSupported as EGraphicsDataTypes_F16 and EGraphicsDataTypes_I16.
+- DoublePrecisionFloatShaderOps as EGraphicsDataTypes_F64.
+- EGraphicsDataTypes_D24S8 on everything except AMD (AMD allocates D32S8 internally).
+- For format RGB32(u/i) to be enabled, it has to support render target.
+- For format RGB32f to be enabled, it has to support render target, blend, shader sample, msaa 4x and 8x.
+
+#### DirectX12 specific extensions
+
+There are specific extensions that are not relevant to other extensions, hence they've not been added to the standard extensions and have instead become API specific extensions.
+
+- GPUUploadHeapSupported as ReBAR.
+- D3D12_FEATURE_DATA_HARDWARE_COPY.Supported as CopyQueue.
+
+## List of Metal requirements
 
 - Metal 3 (Apple7 tier). Argument buffers tier 2.
 - Phone:
@@ -306,7 +342,7 @@ Since Vulkan is more fragmented, the features are more split up. However in Dire
 
 - EGraphicsFeatures_DirectRendering is never set.
 - EGraphicsDataTypes_ASTC is always set.
-- EGraphicsDataTypes_BCn can be set as well on Mac/MacBook.
+- EGraphicsDataTypes_BCn can be set as well on OS X.
 - EGraphicsDataTypes_AtomicF32, EGraphicsDataTypes_AtomicI64, EGraphicsDataTypes_F16, EGraphicsDataTypes_I64 are always set.
 
 ## TODO: List of WebGPU requirements

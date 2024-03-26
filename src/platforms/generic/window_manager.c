@@ -134,7 +134,7 @@ Error WindowManager_createWindow(
 
 	if(I32x2_any(I32x2_leq(size, I32x2_zero())))
 		return Error_outOfBounds(
-			1, (U64) (I64) I32x2_x(size), (U64) (I64) I32x2_y(size), 
+			1, (U64) (I64) I32x2_x(size), (U64) (I64) I32x2_y(size),
 			"WindowManager_createVirtual()::size[i] must be >0"
 		);
 
@@ -153,7 +153,7 @@ Error WindowManager_createWindow(
 
 		default:
 			return Error_invalidEnum(
-				3, (U64) format, 0, 
+				3, (U64) format, 0,
 				"WindowManager_createVirtual()::format must be one of BGRA8, BGR10A2, RGBA16f, RGBA32f"
 			);
 	}

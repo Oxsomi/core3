@@ -23,14 +23,19 @@
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
-#include "graphics/vulkan/vk_instance.h"
-#include "graphics/vulkan/vk_device.h"
-#include "graphics/vulkan/vk_buffer.h"
+#include "graphics/directx12/dx_device.h"
+#include "graphics/directx12/dx_buffer.h"
 #include "formats/texture.h"
 #include "types/ref_ptr.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/ext/bufferx.h"
 
+Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, DeviceTextureRef *pending) {
+	(void)commandBufferExt; (void)deviceRef; (void)pending;
+	return Error_unimplemented(0, "DeviceTextureRef_flush not implemented yet");
+}
+
+/*
 Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, DeviceTextureRef *pending) {
 
 	VkCommandBuffer commandBuffer = (VkCommandBuffer) commandBufferExt;
@@ -395,3 +400,4 @@ clean:
 	ListVkBufferImageCopy_freex(&pendingCopies);
 	return err;
 }
+*/

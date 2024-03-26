@@ -71,8 +71,8 @@ Bool TLAS_getInstanceDataCpuInternal(const TLAS *tlas, U64 i, TLASInstanceData *
 
 	if(
 		!result ||
-		tlas->useDeviceMemory || 
-		tlas->base.asConstructionType != ETLASConstructionType_Instances || 
+		tlas->useDeviceMemory ||
+		tlas->base.asConstructionType != ETLASConstructionType_Instances ||
 		i >= tlas->cpuInstancesMotion.length
 	)
 		return false;
@@ -255,7 +255,7 @@ Error GraphicsDeviceRef_createTLAS(GraphicsDeviceRef *dev, TLAS tlas, CharString
 
 				if(!(dat.instanceId24_mask8 >> 24))
 					return Error_invalidOperation(
-						14, 
+						14,
 						"GraphicsDeviceRef_createTLAS() BLAS mask is 0, this might be unintended. "
 						"Set blasCpu to NULL instead to explicitly hide the instance."
 					);
@@ -356,7 +356,7 @@ Error GraphicsDeviceRef_createTLAS(GraphicsDeviceRef *dev, TLAS tlas, CharString
 
 			if(invalidData)
 				gotoIfError(clean, Error_invalidOperation(
-					15, 
+					15,
 					"GraphicsDeviceRef_createTLAS() One of the BLASes couldn't be found or couldn't be increased"
 				))
 		}

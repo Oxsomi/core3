@@ -89,21 +89,21 @@ Error ObjC_wrapString(CharString original, CharString *copy, id *wrapped) {
 
 	if(!copy || !wrapped)
 	return Error_nullPointer(!copy ? 1 : 2, "ObjC_wrapString()::copy and wrapped are required");
-	
+
 	Error err = Error_none();
-	
+
 	const C8 *ptr = original.ptr;
-	
+
 	if(!CharString_isNullTerminated(original)) {
 		_gotoIfError(clean, CharString_createCopyx(original, copy));
 		ptr = copy->ptr;
 	}
-	
+
 	*wrapped = ObjC_sendVoidPtr(clsNSString(), selUTF8String(), ptr);
-	
+
 	if(!*wrapped)
 		_gotoIfError(clean, Error_invalidState(0, "ObjC_wrapString() failed to create NSString"));
-	
+
 clean:
 
 	if(err.genericError)

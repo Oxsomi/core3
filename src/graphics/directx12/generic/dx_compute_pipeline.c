@@ -21,117 +21,52 @@
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/pipeline.h"
 #include "graphics/generic/device.h"
-#include "graphics/generic/instance.h"
 #include "graphics/generic/texture.h"
-#include "graphics/vulkan/vk_device.h"
-#include "graphics/vulkan/vk_instance.h"
+#include "graphics/directx12/dx_device.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
-#include "formats/texture.h"
-#include "types/buffer.h"
 #include "types/string.h"
 #include "types/error.h"
 
-Error createShaderModule(
-	Buffer buf,
-	VkShaderModule *mod,
-	VkGraphicsDevice *device,
-	VkGraphicsInstance *instance,
-	CharString name,
-	EPipelineStage stage
-);
-
-TList(VkComputePipelineCreateInfo);
-TListImpl(VkComputePipelineCreateInfo);
-
 Error GraphicsDevice_createPipelinesComputeExt(GraphicsDevice *device, ListCharString names, ListPipelineRef *pipelines) {
 
-	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
-	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(GraphicsInstanceRef_ptr(device->instance), Vk);
-
-	ListVkComputePipelineCreateInfo pipelineInfos = (ListVkComputePipelineCreateInfo) { 0 };
-	ListVkPipeline pipelineHandles = (ListVkPipeline) { 0 };
-
-	Error err;
-	gotoIfError(clean, ListVkComputePipelineCreateInfo_resizex(&pipelineInfos, pipelines->length))
-	gotoIfError(clean, ListVkPipeline_resizex(&pipelineHandles, pipelines->length))
+	const DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
+	Error err = Error_none();
+	ListU16 tmp = (ListU16) { 0 };
 
 	//TODO: Push constants
 
 	for(U64 i = 0; i < pipelines->length; ++i) {
 
-		pipelineInfos.ptrNonConst[i] = (VkComputePipelineCreateInfo) {
-			.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
-			.stage = (VkPipelineShaderStageCreateInfo) {
-				.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-				.stage = VK_SHADER_STAGE_COMPUTE_BIT,
-				.pName = "main"
-			},
-			.layout = deviceExt->defaultLayout
-		};
-
 		const Pipeline *pipeline = PipelineRef_ptr(pipelines->ptr[i]);
 
-		gotoIfError(clean, createShaderModule(
-			pipeline->stages.ptr[0].binary,
-			&pipelineInfos.ptrNonConst[i].stage.module,
-			deviceExt,
-			instanceExt,
-			!names.length ? CharString_createNull() : names.ptr[i],
-			EPipelineStage_Compute
-		))
-	}
-
-	gotoIfError(clean, vkCheck(vkCreateComputePipelines(
-		deviceExt->device,
-		NULL,
-		(U32) pipelineInfos.length,
-		pipelineInfos.ptr,
-		NULL,
-		pipelineHandles.ptrNonConst
-	)))
-
-	for (U64 i = 0; i < pipelines->length; ++i) {
-
-		#ifndef NDEBUG
-
-			if(instanceExt->debugSetName && names.length) {
-
-				VkDebugUtilsObjectNameInfoEXT debugName2 = (VkDebugUtilsObjectNameInfoEXT) {
-					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-					.objectType = VK_OBJECT_TYPE_PIPELINE,
-					.objectHandle = (U64) pipelineHandles.ptr[i],
-					.pObjectName = names.ptr[i].ptr
-				};
-
-				gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName2)))
+		D3D12_COMPUTE_PIPELINE_STATE_DESC compute = (D3D12_COMPUTE_PIPELINE_STATE_DESC) {
+			.pRootSignature = deviceExt->defaultLayout,
+			.CS = (D3D12_SHADER_BYTECODE) {
+				.pShaderBytecode = pipeline->stages.ptr[0].binary.ptr,
+				.BytecodeLength = Buffer_length(pipeline->stages.ptr[0].binary),
 			}
+		};
 
+		ID3D12PipelineState **pipelinei = &Pipeline_ext(pipeline, Dx)->pso;
+
+		gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreateComputePipelineState(
+			deviceExt->device,
+			&compute,
+			&IID_ID3D12PipelineState,
+			(void**) pipelinei
+		)))
+		
+		#ifndef NDEBUG
+			if(names.length && CharString_length(names.ptr[i])) {
+				gotoIfError(clean, CharString_toUTF16x(names.ptr[i], &tmp))
+				gotoIfError(clean, dxCheck((*pipelinei)->lpVtbl->SetName(*pipelinei, (const wchar_t*) tmp.ptr)))
+				ListU16_freex(&tmp);
+			}
 		#endif
-
-		Pipeline *pipeline = PipelineRef_ptr(pipelines->ptr[i]);
-		*Pipeline_ext(pipeline, Vk) = pipelineHandles.ptr[i];
-		pipelineHandles.ptrNonConst[i] = NULL;
 	}
-
-	ListVkPipeline_freex(&pipelineHandles);
 
 clean:
-
-	for(U64 i = 0; i < pipelineHandles.length; ++i)
-		if(pipelineHandles.ptr[i])
-			vkDestroyPipeline(deviceExt->device, pipelineHandles.ptr[i], NULL);
-
-	ListVkPipeline_freex(&pipelineHandles);
-
-	for (U64 i = 0; i < pipelineInfos.length; ++i) {
-
-		const VkShaderModule mod = pipelineInfos.ptr[i].stage.module;
-
-		if(mod)
-			vkDestroyShaderModule(deviceExt->device, mod, NULL);
-	}
-
-	ListVkComputePipelineCreateInfo_freex(&pipelineInfos);
+	ListU16_freex(&tmp);
 	return err;
 }

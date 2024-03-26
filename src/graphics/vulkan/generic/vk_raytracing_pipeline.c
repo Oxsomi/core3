@@ -135,7 +135,7 @@ Error GraphicsDevice_createPipelinesRaytracingInternalExt(
 
 				.sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR,
 
-				.type = 
+				.type =
 					group.intersection == U32_MAX ? VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR :
 					VK_RAY_TRACING_SHADER_GROUP_TYPE_PROCEDURAL_HIT_GROUP_KHR,
 
@@ -344,6 +344,7 @@ Error GraphicsDevice_createPipelinesRaytracingInternalExt(
 			);
 		}
 
+		rtPipeline->sbtOffset = groupCounter * raytracingShaderAlignment;
 		groupCounter += groupCount;
 	}
 
@@ -354,7 +355,7 @@ Error GraphicsDevice_createPipelinesRaytracingInternalExt(
 	//Then we link the SBT per pipeline.
 
 	gotoIfError(clean, GraphicsDeviceRef_createBufferData(
-		deviceRef, EDeviceBufferUsage_SBTExt, EGraphicsResourceFlag_None, 
+		deviceRef, EDeviceBufferUsage_SBTExt, EGraphicsResourceFlag_None,
 		CharString_createRefCStrConst("Shader binding table"),
 		&shaderBindings,
 		&sbt

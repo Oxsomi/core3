@@ -80,7 +80,7 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 		gotoIfError(clean, Error_outOfBounds(
 			0, primitives, U32_MAX, "BLASRef_flush() only primitive count of <U32_MAX is supported"
 		))
-	
+
 	//Convert to DXR dependent version
 
 	D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAGS flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_NONE;
@@ -119,7 +119,7 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 
 		D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC *tri = &geometry.Triangles;
 		*tri = (D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC) {
-			.VertexFormat = mapDxFormat(ETextureFormatId_unpack[blas->positionFormatId]),
+			.VertexFormat = DXFormat_toTextureFormatId(ETextureFormatId_unpack[blas->positionFormatId]),
 			.VertexBuffer = (D3D12_GPU_VIRTUAL_ADDRESS_AND_STRIDE) {
 				.StartAddress = getDxLocation(blas->positionBuffer, blas->positionOffset),
 				.StrideInBytes = blas->positionBufferStride
@@ -138,7 +138,7 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 
 		if (blas->indexFormatId) {
 
-			tri->IndexFormat = mapDxFormat(ETextureFormatId_unpack[blas->indexFormatId]);
+			tri->IndexFormat = DXFormat_toTextureFormatId(ETextureFormatId_unpack[blas->indexFormatId]);
 			tri->IndexBuffer = getDxLocation(blas->indexBuffer, 0);
 
 			gotoIfError(clean, DxDeviceBuffer_transition(
@@ -181,7 +181,7 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 		.pGeometryDescs = &geometry
 	};
 
-	D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO sizes = 
+	D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO sizes =
 		(D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO) { 0 };
 
 	deviceExt->device->lpVtbl->GetRaytracingAccelerationStructurePrebuildInfo(

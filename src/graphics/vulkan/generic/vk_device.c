@@ -352,6 +352,7 @@ Error GraphicsDevice_initExt(
 			case EOptExtensions_RayMicromapDisplacement:	on = feat & EGraphicsFeatures_RayMicromapDisplacement;	break;
 			case EOptExtensions_AtomicF32:					on = types & EGraphicsDataTypes_AtomicF32;				break;
 			case EOptExtensions_DeferredHostOperations:		on = feat & EGraphicsFeatures_Raytracing;				break;
+			case EOptExtensions_RaytracingValidation:		on = feat & EGraphicsFeatures_RayValidation;			break;
 
 			default:
 				continue;
@@ -816,22 +817,15 @@ Error GraphicsDevice_initExt(
 	//Get memory properties
 
 	vkGetPhysicalDeviceMemoryProperties((VkPhysicalDevice) physicalDevice->ext, &deviceExt->memoryProperties);
-
 	//Determine when we need to flush.
 	//As a rule of thumb I decided for 20% occupied mem by just copies.
 	//Or if there's distinct shared mem available too it can allocate 10% more in that memory too
 	// (as long as it doesn't exceed 33%).
 	//Flush threshold is kept under 4 GiB to avoid TDRs because even if the mem is available it might be slow.
 
-	U64 cpuHeapSize = 0;
-	gotoIfError(clean, VkDeviceMemoryAllocator_findMemory(deviceExt, true, U32_MAX, NULL, NULL, &cpuHeapSize))
-
-	U64 gpuHeapSize = 0;
-	gotoIfError(clean, VkDeviceMemoryAllocator_findMemory(deviceExt, false, U32_MAX, NULL, NULL, &gpuHeapSize))
-
-	Bool isDistinct = gpuHeapSize >> 63;
-	gpuHeapSize &= (U64)I64_MAX;
-	cpuHeapSize &= (U64)I64_MAX;
+	Bool isDistinct = device->info.type == EGraphicsDeviceType_Dedicated;
+	U64 cpuHeapSize = device->info.capabilities.sharedMemory;
+	U64 gpuHeapSize = device->info.capabilities.dedicatedMemory;
 
 	device->flushThreshold = U64_min(
 		4 * GIBI,

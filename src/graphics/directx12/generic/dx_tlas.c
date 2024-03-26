@@ -60,7 +60,7 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 
 	if (tlas->useDeviceMemory)
 		instancesU64 = tlas->deviceData.len / stride;
-	
+
 	else instancesU64 = tlas->cpuInstancesStatic.length;
 
 	if(instancesU64 >> 24)
@@ -104,7 +104,7 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 	if(tlas->base.asConstructionType == ETLASConstructionType_Instances) {
 
 		DeviceData instances = tlas->deviceData;
-		
+
 		//We have to temporarily allocate a device mem buffer
 
 		if (!tlas->useDeviceMemory) {
@@ -129,7 +129,7 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 			void *mem = DeviceBufferRef_ptr(tempInstances)->resource.mappedMemoryExt;
 
 			Buffer_copy(
-				Buffer_createRef(mem, stride * instancesU64), 
+				Buffer_createRef(mem, stride * instancesU64),
 				Buffer_createRefConst(tlas->cpuInstancesStatic.ptr, stride * instancesU64)
 			);
 
@@ -146,8 +146,8 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 				const U64 *blasAddress = &dat->blasDeviceAddress;
 				U64 offset = (const U8*)blasAddress - (((const U8*)tlas->cpuInstancesStatic.ptr) + stride * i);
 
-				*(U64*)((U8*)mem + offset) = getDxDeviceAddress((DeviceData) { 
-					.buffer = BLASRef_ptr(dat->blasCpu)->base.asBuffer 
+				*(U64*)((U8*)mem + offset) = getDxDeviceAddress((DeviceData) {
+					.buffer = BLASRef_ptr(dat->blasCpu)->base.asBuffer
 				});
 			}
 
@@ -175,7 +175,7 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 		buildInfo.InstanceDescs = getDxLocation(instances, 0);
 	}
 
-	D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO sizes = 
+	D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO sizes =
 		(D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO) { 0 };
 
 	deviceExt->device->lpVtbl->GetRaytracingAccelerationStructurePrebuildInfo(
@@ -278,8 +278,8 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 
 	DxHeap *heap = deviceExt->heaps[EDescriptorHeapType_Resources];
 
-	U64 id = 
-		EDescriptorTypeCount_Textures + EDescriptorTypeCount_RWTextures + EDescriptorTypeCount_SSBO - 
+	U64 id =
+		EDescriptorTypeCount_Textures + EDescriptorTypeCount_RWTextures + EDescriptorTypeCount_SSBO -
 		EDescriptorTypeCount_TLASExt + ResourceHandle_getId(tlas->handle);
 
 	deviceExt->device->lpVtbl->CreateShaderResourceView(

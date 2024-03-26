@@ -114,7 +114,7 @@ Error CLI_convertToDL(ParsedArgs args, CharString input, FileInfo inputInfo, Cha
 		Log_errorLnx("oiDL doesn't support splitting by a character if it's not a string list.");
 
 		return Error_invalidParameter(
-			0, 1, 
+			0, 1,
 			"CLI_convertToDL() oiDL doesn't support splitting by a character if it's not a string list."
 		);
 	}

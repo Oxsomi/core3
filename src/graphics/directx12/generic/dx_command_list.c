@@ -18,6 +18,9 @@
 *  This is called dual licensing.
 */
 
+int translationUnitEmpty69 = 1;
+
+/*
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/command_list.h"
 #include "graphics/generic/device.h"
@@ -642,8 +645,8 @@ void CommandList_process(
 			PipelineRaytracingInfo info = *Pipeline_info(raytracingPipeline, PipelineRaytracingInfo);
 
 			VkStridedDeviceAddressRegionKHR hit = (VkStridedDeviceAddressRegionKHR) {
-				.deviceAddress = getVkDeviceAddress((DeviceData) { 
-					.buffer = info.shaderBindingTable, .offset = info.sbtOffset 
+				.deviceAddress = getVkDeviceAddress((DeviceData) {
+					.buffer = info.shaderBindingTable, .offset = info.sbtOffset
 				}),
 				.size = (U64)raytracingShaderAlignment * info.groupCount,
 				.stride = raytracingShaderAlignment
@@ -971,7 +974,7 @@ void CommandList_process(
 			};
 
 			Buffer_copy(
-				Buffer_createRef(&markerInfo.color, sizeof(F32x4)), 
+				Buffer_createRef(&markerInfo.color, sizeof(F32x4)),
 				Buffer_createRefConst(data, sizeof(F32x4))
 			);
 
@@ -995,3 +998,4 @@ void CommandList_process(
 			break;
 	}
 }
+*/

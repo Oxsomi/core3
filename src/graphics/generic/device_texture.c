@@ -29,12 +29,12 @@
 #include "types/string.h"
 
 Error DeviceTextureRef_dec(DeviceTextureRef **texture) {
-	return !RefPtr_dec(texture) ? 
+	return !RefPtr_dec(texture) ?
 		Error_invalidOperation(0, "DeviceTextureRef_dec()::texture is required") : Error_none();
 }
 
 Error DeviceTextureRef_inc(DeviceTextureRef *texture) {
-	return !RefPtr_inc(texture) ? 
+	return !RefPtr_inc(texture) ?
 		Error_invalidOperation(0, "DeviceTextureRef_inc()::texture is required") : Error_none();
 }
 

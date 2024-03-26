@@ -87,7 +87,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 
 	if(pipelines->ptr)
 		return Error_invalidParameter(
-			4, 0, 
+			4, 0,
 			"GraphicsDeviceRef_createPipelinesGraphics()::pipelines->ptr is non zero, indicating a possible memleak"
 		);
 
@@ -116,7 +116,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 
 		if(!info->renderPass && info->subPass)
 			return Error_invalidOperation(
-				1, 
+				1,
 				"GraphicsDeviceRef_createPipelinesGraphics()::infos[i].subPass is specified while renderPass is NULL"
 			);
 
@@ -132,10 +132,6 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 
 			case EMSAASamples_x8Ext:
 				dataTypeCheck = EGraphicsDataTypes_MSAA8x;
-				break;
-
-			case EMSAASamples_x16Ext:
-				dataTypeCheck = EGraphicsDataTypes_MSAA16x;
 				break;
 
 			default:
@@ -169,7 +165,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 
 			if((info->renderPass != NULL) == (info->attachmentCountExt || info->depthFormatExt))
 				return Error_invalidOperation(
-					4, 
+					4,
 					"GraphicsDeviceRef_createPipelinesGraphics()::infos[i] should pick either "
 					"directRendering or renderPass"
 				);
@@ -185,13 +181,13 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 
 			if(stage.stageType >= EPipelineStage_Count)
 				return Error_invalidOperation(
-					21, 
+					21,
 					"GraphicsDeviceRef_createPipelinesGraphics()::stages[j].stageType is invalid"
 				);
 
 			if((stageFlags >> stage.stageType) & 1)
 				return Error_alreadyDefined(
-					0, 
+					0,
 					"GraphicsDeviceRef_createPipelinesGraphics()::stages[j].stageType is duplicate for infos[i]"
 				);
 
@@ -250,7 +246,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 
 			if(attrib.format >= ETextureFormatId_Count)
 				return Error_invalidOperation(
-					8, 
+					8,
 					"GraphicsDeviceRef_createPipelinesGraphics()::infos[i].vertexLayout.attributes[j].format "
 					"is invalid"
 				);
@@ -288,7 +284,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 			)
 		)
 			return Error_unsupportedOperation(
-				5, 
+				5,
 				"GraphicsDeviceRef_createPipelinesGraphics()::infos[i] rasterizer uses depth bias "
 				"but depthBias is disabled"
 			);
@@ -298,7 +294,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 			!(device->info.capabilities.features & EGraphicsFeatures_Wireframe)
 		)
 			return Error_unsupportedOperation(
-				4, 
+				4,
 				"GraphicsDeviceRef_createPipelinesGraphics()::infos[i] requires wireframe extension, "
 				"which isn't supported"
 			);
@@ -314,14 +310,14 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 			)
 		)
 			return Error_unsupportedOperation(
-				6, 
+				6,
 				"GraphicsDeviceRef_createPipelinesGraphics()::infos[i] stencilTest is off, "
 				"but stencil params were set"
 			);
 
 		if(info->depthStencil.depthCompare && !(info->depthStencil.flags & EDepthStencilFlags_DepthTest))
 			return Error_unsupportedOperation(
-				7, 
+				7,
 				"GraphicsDeviceRef_createPipelinesGraphics()::infos[i] depthTest is off but depthCompare was set"
 			);
 
@@ -346,31 +342,31 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 
 		if(info->depthStencil.stencilCompare >= ECompareOp_Count)
 			return Error_invalidOperation(
-				12, 
+				12,
 				"GraphicsDeviceRef_createPipelinesGraphics()::infos[i].depthStencil.stencilCompare is out of bounds"
 			);
 
 		if(info->depthStencil.depthCompare >= ECompareOp_Count)
 			return Error_invalidOperation(
-				13, 
+				13,
 				"GraphicsDeviceRef_createPipelinesGraphics()::infos[i].depthStencil.depthCompare is out of bounds"
 			);
 
 		if(info->depthStencil.stencilFail >= EStencilOp_Count)
 			return Error_invalidOperation(
-				14, 
+				14,
 				"GraphicsDeviceRef_createPipelinesGraphics()::infos[i].depthStencil.stencilFail is out of bounds"
 			);
 
 		if(info->depthStencil.stencilPass >= EStencilOp_Count)
 			return Error_invalidOperation(
-				15, 
+				15,
 				"GraphicsDeviceRef_createPipelinesGraphics()::infos[i].depthStencil.stencilPass is out of bounds"
 			);
 
 		if(info->depthStencil.stencilDepthFail >= EStencilOp_Count)
 			return Error_invalidOperation(
-				16, 
+				16,
 				"GraphicsDeviceRef_createPipelinesGraphics()::infos[i].depthStencil.stencilDepthFail is out of bounds"
 			);
 
@@ -382,7 +378,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 
 			if(attachj.blendOp >= EBlendOp_Count)
 				return Error_invalidOperation(
-					17, 
+					17,
 					"GraphicsDeviceRef_createPipelinesGraphics()::infos[i].blendState.attachments[j].blendOp "
 					"out of bounds"
 				);
@@ -414,6 +410,12 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 				19, "GraphicsDeviceRef_createPipelinesGraphics()::infos[i].blendState.logicOpExt out of bounds"
 			);
 
+		if(info->blendState.renderTargetMask && info->blendState.logicOpExt)
+			return Error_invalidOperation(
+				23, 
+				"GraphicsDeviceRef_createPipelinesGraphics()::infos[i].blendState.logicOpExt can't be on if blending is used"
+			);
+
 		if(info->depthFormatExt >= EDepthStencilFormat_Count)
 			return Error_invalidOperation(
 				20, "GraphicsDeviceRef_createPipelinesGraphics()::infos[i].depthFormatExt out of bounds"
@@ -422,7 +424,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 		for(U32 j = 0; j < 8; ++j)
 			if(info->attachmentFormatsExt[j] >= ETextureFormatId_Count)
 				return Error_invalidOperation(
-					22, 
+					22,
 					"GraphicsDeviceRef_createPipelinesGraphics()::infos[i].attachmentFormatsExt[j] out of bounds"
 				);
 	}

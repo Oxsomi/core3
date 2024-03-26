@@ -223,7 +223,7 @@ void Log_log(Allocator alloc, ELogLevel lvl, ELogOptions options, CharString arg
 		return;
 
 	const U64 thread = Thread_getId();
-	
+
 	//Remember old to ensure we can reset
 
 	CONSOLE_SCREEN_BUFFER_INFO info;
@@ -288,7 +288,7 @@ void Log_log(Allocator alloc, ELogLevel lvl, ELogOptions options, CharString arg
 	}
 
 	ListU16_free(&copy, alloc);
-		
+
 	SetConsoleTextAttribute(GetStdHandle(STD_OUTPUT_HANDLE), oldColor);
 
 	if (debugger && lvl >= ELogLevel_Error)

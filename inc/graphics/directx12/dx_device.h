@@ -28,8 +28,6 @@ typedef RefPtr PipelineRef;
 
 //Special features that are only important for implementation, but we do want to be cached.
 
-typedef enum EDxGraphicsFeatures { } EDxGraphicsFeatures;
-
 typedef enum EDxCommandQueue {
 
 	EDxCommandQueue_Copy,					//Queue for dedicated host -> device copies
@@ -133,4 +131,4 @@ Error DxDeviceMemoryAllocator_findMemory(
 	U64 *size
 );
 
-Error DxGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, ID3D12GraphicsCommandList10 *commandBuffer);
+Error DxGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, DxCommandBuffer *commandBuffer);

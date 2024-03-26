@@ -21,34 +21,28 @@
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/pipeline.h"
 #include "graphics/generic/device.h"
-#include "graphics/generic/instance.h"
 #include "graphics/generic/texture.h"
-#include "graphics/vulkan/vk_device.h"
-#include "graphics/vulkan/vk_instance.h"
+#include "graphics/directx12/dx_device.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
 #include "types/buffer.h"
 #include "types/string.h"
 #include "types/error.h"
+#include "types/math.h"
 
-Error createShaderModule(
-	Buffer buf,
-	VkShaderModule *mod,
-	VkGraphicsDevice *device,
-	VkGraphicsInstance *instance,
-	CharString name,
-	EPipelineStage stage
-);
+TList(D3D12_STATE_SUBOBJECT);
+TList(D3D12_DXIL_LIBRARY_DESC);
+TList(D3D12_EXPORT_DESC);
+TList(D3D12_HIT_GROUP_DESC);
+TList(ListU16);
+TListNamed(wchar_t*, ListWCSTR);
 
-TList(VkRayTracingPipelineCreateInfoKHR);
-TList(VkShaderModule);
-TList(VkPipelineShaderStageCreateInfo);
-TList(VkRayTracingShaderGroupCreateInfoKHR);
-
-TListImpl(VkRayTracingPipelineCreateInfoKHR);
-TListImpl(VkShaderModule);
-TListImpl(VkPipelineShaderStageCreateInfo);
-TListImpl(VkRayTracingShaderGroupCreateInfoKHR);
+TListImpl(D3D12_STATE_SUBOBJECT);
+TListImpl(D3D12_DXIL_LIBRARY_DESC);
+TListImpl(D3D12_EXPORT_DESC);
+TListImpl(D3D12_HIT_GROUP_DESC);
+TListImpl(ListU16);
+TListNamedImpl(ListWCSTR);
 
 Error GraphicsDevice_createPipelinesRaytracingInternalExt(
 	GraphicsDeviceRef *deviceRef,
@@ -59,304 +53,282 @@ Error GraphicsDevice_createPipelinesRaytracingInternalExt(
 	U64 groupCounter
 ) {
 
+	(void)stageCounter;
+	(void)binaryCounter;
+
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
-	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
-	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(GraphicsInstanceRef_ptr(device->instance), Vk);
+	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
 
-	Error err = Error_none();
-	ListVkRayTracingPipelineCreateInfoKHR createInfos = (ListVkRayTracingPipelineCreateInfoKHR) { 0 };
-	ListVkPipeline pipelinesExt = (ListVkPipeline) { 0 };
-	ListVkShaderModule modules = (ListVkShaderModule) { 0 };
-	ListVkPipelineShaderStageCreateInfo stages = (ListVkPipelineShaderStageCreateInfo) { 0 };
-	ListVkRayTracingShaderGroupCreateInfoKHR groups = (ListVkRayTracingShaderGroupCreateInfoKHR) { 0 };
-	GenericList shaderHandles = (GenericList) { .stride = raytracingShaderIdSize };
-	Buffer shaderBindings = Buffer_createNull();
+	ListD3D12_STATE_SUBOBJECT stateObjects = (ListD3D12_STATE_SUBOBJECT) { 0 };
+	ListD3D12_DXIL_LIBRARY_DESC libraries = (ListD3D12_DXIL_LIBRARY_DESC) { 0 };
+	ListD3D12_HIT_GROUP_DESC hitGroups = (ListD3D12_HIT_GROUP_DESC) { 0 };
+	ListD3D12_EXPORT_DESC exportDescs = (ListD3D12_EXPORT_DESC) { 0 };
+	ListListU16 nameArr = (ListListU16) { 0 };
+	ListU32 binaryOffset = (ListU32) { 0 };
+	CharString tmp = CharString_createNull();
+	ListU16 tmp16 = (ListU16) { 0 };
+	Buffer shaderTable = Buffer_createNull();
 	DeviceBufferRef *sbt = NULL;
-	CharString temp = CharString_createNull();
-	CharString temp1 = CharString_createNull();
 
-	//Reserve mem
+	const wchar_t main[] = L"main";
+	ListU16 mainUtf16 = (ListU16) { 0 };
 
-	gotoIfError(clean, ListVkRayTracingPipelineCreateInfoKHR_resizex(&createInfos, pipelines->length))
-	gotoIfError(clean, ListVkPipeline_resizex(&pipelinesExt, pipelines->length))
-	gotoIfError(clean, ListVkShaderModule_resizex(&modules, binaryCounter))
-	gotoIfError(clean, ListVkPipelineShaderStageCreateInfo_resizex(&stages, stageCounter))
-	gotoIfError(clean, GenericList_resizex(&shaderHandles, stageCounter))
-	gotoIfError(clean, Buffer_createEmptyBytesx(stageCounter * raytracingShaderAlignment, &shaderBindings))
-	gotoIfError(clean, ListVkRayTracingShaderGroupCreateInfoKHR_resizex(&groups, groupCounter + stageCounter))
+	Error err = ListU16_createRefConst((const U16*)main, sizeof(main), &mainUtf16);
+
+	if(err.genericError)
+		return err;
+
+	gotoIfError(clean, Buffer_createEmptyBytesx(raytracingShaderAlignment * groupCounter, &shaderTable));
 
 	//Convert
 
-	binaryCounter = stageCounter = groupCounter = 0;
+	groupCounter = 0;
 
 	for(U64 i = 0; i < pipelines->length; ++i) {
 
 		Pipeline *pipeline = PipelineRef_ptr(pipelines->ptr[i]);
 		PipelineRaytracingInfo *rtPipeline = Pipeline_info(pipeline, PipelineRaytracingInfo);
+		
+		//Reserve mem
 
-		CharString name = CharString_createNull();
+		gotoIfError(clean, ListD3D12_HIT_GROUP_DESC_resizex(&hitGroups, rtPipeline->groupCount))
+		gotoIfError(clean, ListD3D12_DXIL_LIBRARY_DESC_resizex(&libraries, rtPipeline->binaryCount))
+		gotoIfError(clean, ListD3D12_EXPORT_DESC_resizex(&exportDescs, rtPipeline->stageCount))
+		gotoIfError(clean, ListD3D12_STATE_SUBOBJECT_resizex(&stateObjects, 3 + hitGroups.length + libraries.length))
+		gotoIfError(clean, ListU32_resizex(&binaryOffset, libraries.length))
 
-		if (names.length) {
+		U64 groupNameStart = rtPipeline->stageCount * 2;		//Only if group size > stageCount, otherwise reuses strings
+		U64 strings = groupNameStart + ((U64)I64_max(rtPipeline->groupCount - (I64)rtPipeline->stageCount, 0));
 
-			if(!CharString_isNullTerminated(names.ptr[i])) {
-				gotoIfError(clean, CharString_createCopyx(names.ptr[i], &temp1))
-				name = temp1;
-			}
+		for(U64 j = strings; j < nameArr.length; ++j)		//Stop memleaks
+			ListU16_freex(&nameArr.ptrNonConst[j]);
 
-			else name = names.ptr[i];
-		}
+		gotoIfError(clean, ListListU16_resizex(&nameArr, strings))
+
+		//Easy properties
+
+		U64 stateObjectOff = 0;
+
+		D3D12_RAYTRACING_PIPELINE_CONFIG1 config1 = (D3D12_RAYTRACING_PIPELINE_CONFIG1) {
+			.MaxTraceRecursionDepth = rtPipeline->maxRecursionDepth,
+			.Flags = (rtPipeline->flags & 3) << 8
+		};
+
+		stateObjects.ptrNonConst[stateObjectOff++] = (D3D12_STATE_SUBOBJECT) {
+			.Type = D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG1,
+			.pDesc = &config1
+		};
+
+		D3D12_RAYTRACING_SHADER_CONFIG sizes = (D3D12_RAYTRACING_SHADER_CONFIG) {
+			.MaxPayloadSizeInBytes = rtPipeline->maxPayloadSize,
+			.MaxAttributeSizeInBytes = rtPipeline->maxAttributeSize,
+		};
+
+		stateObjects.ptrNonConst[stateObjectOff++] = (D3D12_STATE_SUBOBJECT) {
+			.Type = D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG,
+			.pDesc = &sizes
+		};
+
+		D3D12_GLOBAL_ROOT_SIGNATURE rootSig = (D3D12_GLOBAL_ROOT_SIGNATURE) {
+			.pGlobalRootSignature =  deviceExt->defaultLayout
+		};
+
+		stateObjects.ptrNonConst[stateObjectOff++] = (D3D12_STATE_SUBOBJECT) {
+			.Type = D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE,
+			.pDesc = &rootSig
+		};
 
 		//Create binaries
 
-		for(U64 j = 0; j < rtPipeline->binaryCount; ++j) {
+		for(U32 j = 0; j < rtPipeline->binaryCount; ++j) {
 
-			if(names.length)
-				gotoIfError(clean, CharString_formatx(&temp, "%s binary %"PRIu64, name.ptr, j))
+			libraries.ptrNonConst[j] = (D3D12_DXIL_LIBRARY_DESC) {
+				.DXILLibrary = (D3D12_SHADER_BYTECODE) {
+					.pShaderBytecode = rtPipeline->binaries.ptr[j].ptr,
+					.BytecodeLength = Buffer_length(rtPipeline->binaries.ptr[j])
+				}
+			};
 
-			gotoIfError(clean, createShaderModule(
-				rtPipeline->binaries.ptr[j], &modules.ptrNonConst[binaryCounter + j],
-				deviceExt, instanceExt, name, EPipelineStage_RtStart
-			))
-
-			CharString_freex(&temp);
-		}
-
-		//Create stages
-
-		U64 startGroupCounter = groupCounter;
-
-		//Create groups
-
-		for (U64 j = 0; j < rtPipeline->groupCount; ++j) {
-
-			PipelineRaytracingGroup group = rtPipeline->groups.ptr[j];
-
-			groups.ptrNonConst[groupCounter + j] = (VkRayTracingShaderGroupCreateInfoKHR) {
-
-				.sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR,
-
-				.type = 
-					group.intersection == U32_MAX ? VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR :
-					VK_RAY_TRACING_SHADER_GROUP_TYPE_PROCEDURAL_HIT_GROUP_KHR,
-
-				.closestHitShader = group.closestHit,
-				.anyHitShader = group.anyHit,
-				.intersectionShader = group.intersection
+			stateObjects.ptrNonConst[stateObjectOff++] = (D3D12_STATE_SUBOBJECT) {
+				.Type = D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY,
+				.pDesc = &libraries.ptr[j]
 			};
 		}
 
-		groupCounter += rtPipeline->groupCount;
+		//Count exports and create export names
 
-		U64 stageStart = stageCounter;
+		for(U32 j = 0; j < rtPipeline->stageCount; ++j) {
 
-		for (U64 j = 0; j < rtPipeline->stageCount; ++j) {
+			gotoIfError(clean, CharString_formatx(&tmp, "#%"PRIu32, j))
+			gotoIfError(clean, CharString_toUTF16x(tmp, &nameArr.ptrNonConst[j * 2]));
+			tmp = CharString_createNull();		//Moved to nameArr
+
+			if(rtPipeline->entrypoints.length && CharString_length(rtPipeline->entrypoints.ptr[j]))
+				gotoIfError(clean, CharString_toUTF16x(rtPipeline->entrypoints.ptr[j], &nameArr.ptrNonConst[j * 2 + 1]))
+
+			else nameArr.ptrNonConst[j * 2 + 1] = mainUtf16;
+
+			++libraries.ptrNonConst[pipeline->stages.ptr[j].binaryId].NumExports;
 
 			PipelineStage *stage = &pipeline->stages.ptrNonConst[j];
 
-			VkShaderStageFlagBits shaderStage = 0;
-
-			switch (stage->stageType) {
-
-				default:								shaderStage = VK_SHADER_STAGE_ANY_HIT_BIT_KHR;			break;
-				case EPipelineStage_ClosestHitExt:		shaderStage = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;		break;
-				case EPipelineStage_IntersectionExt:	shaderStage = VK_SHADER_STAGE_INTERSECTION_BIT_KHR;		break;
-
-				case EPipelineStage_MissExt:
-					shaderStage = VK_SHADER_STAGE_MISS_BIT_KHR;
-					stage->localShaderId = rtPipeline->missCount;
-					stage->groupId = (U32)(groupCounter - startGroupCounter);
-					++rtPipeline->missCount;
-					break;
-
-				case EPipelineStage_RaygenExt:
-					shaderStage = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
-					stage->localShaderId = rtPipeline->raygenCount;
-					stage->groupId = (U32)(groupCounter - startGroupCounter);
-					++rtPipeline->raygenCount;
-					break;
-
-				case EPipelineStage_CallableExt:
-					shaderStage = VK_SHADER_STAGE_CALLABLE_BIT_KHR;
-					stage->localShaderId = rtPipeline->callableCount;
-					stage->groupId = (U32)(groupCounter - startGroupCounter);
-					++rtPipeline->callableCount;
-					break;
+			if(stage->stageType == EPipelineStage_MissExt) {
+				stage->localShaderId = rtPipeline->missCount;
+				stage->groupId = rtPipeline->missCount + rtPipeline->groupCount;				//Resolve later
+				++rtPipeline->missCount;
 			}
 
-			//Generic shader
+			else if(stage->stageType == EPipelineStage_RaygenExt) {
+				stage->localShaderId = rtPipeline->raygenCount;
+				stage->groupId = rtPipeline->raygenCount + rtPipeline->groupCount;			//Resolve later
+				++rtPipeline->raygenCount;
+			}
 
-			if (!(stage->stageType >= EPipelineStage_RtHitStart && stage->stageType <= EPipelineStage_RtHitEnd))
-				groups.ptrNonConst[groupCounter++] = (VkRayTracingShaderGroupCreateInfoKHR) {
-					.sType = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR,
-					.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR,
-					.generalShader = stage->binaryId == U32_MAX ? VK_SHADER_UNUSED_KHR : (U32) (stageCounter - stageStart),
-					.closestHitShader = VK_SHADER_UNUSED_KHR,
-					.anyHitShader = VK_SHADER_UNUSED_KHR,
-					.intersectionShader = VK_SHADER_UNUSED_KHR
-				};
+			else if(stage->stageType == EPipelineStage_CallableExt) {
+				stage->localShaderId = rtPipeline->callableCount;
+				stage->groupId = rtPipeline->callableCount + rtPipeline->groupCount;			//Resolve later
+				++rtPipeline->callableCount;
+			}
+		}
 
-			if(stage->binaryId == U32_MAX)		//Invalid shaders get skipped
-				continue;
+		//Resolve offsets so binaries export linearly
 
-			CharString entrypoint = !rtPipeline->entrypoints.ptr ? CharString_createNull() : rtPipeline->entrypoints.ptr[j];
+		U64 tempCounter = 0;
 
-			stages.ptrNonConst[stageCounter++] = (VkPipelineShaderStageCreateInfo) {
-				.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-				.stage = shaderStage,
-				.module = modules.ptrNonConst[binaryCounter + stage->binaryId],
-				.pName = entrypoint.ptr ? entrypoint.ptr : "main"
+		for(U64 j = 0; j < rtPipeline->binaryCount; ++j) {
+
+			D3D12_DXIL_LIBRARY_DESC *lib = &libraries.ptrNonConst[j];
+
+			lib->pExports = exportDescs.ptr + tempCounter;
+
+			tempCounter += lib->NumExports;
+			lib->NumExports = 0;		//Reset for next iteration
+		}
+
+		//Resolve stage exports
+
+		for(U32 j = 0; j < rtPipeline->stageCount; ++j) {
+
+			PipelineStage *stage = &pipeline->stages.ptrNonConst[j];
+			D3D12_DXIL_LIBRARY_DESC *lib = &libraries.ptrNonConst[stage->binaryId];
+			
+			((D3D12_EXPORT_DESC*)lib->pExports)[lib->NumExports] = (D3D12_EXPORT_DESC) {
+				.Name = (const wchar_t*) nameArr.ptrNonConst[j * 2].ptr,
+				.ExportToRename = (const wchar_t*) nameArr.ptrNonConst[j * 2 + 1].ptr
+			};
+
+			++lib->NumExports;
+
+			if(stage->stageType == EPipelineStage_RaygenExt) 
+				stage->groupId += rtPipeline->missCount;
+
+			else if(stage->stageType == EPipelineStage_CallableExt)
+				stage->groupId += rtPipeline->raygenCount;
+		}
+
+		//Resolve hit groups
+
+		for(U32 j = 0; j < rtPipeline->groupCount; ++j) {
+
+			const PipelineRaytracingGroup group = rtPipeline->groups.ptr[j];
+
+			ListU16 loc;
+
+			if(j >= rtPipeline->stageCount) {
+				gotoIfError(clean, CharString_formatx(&tmp, "#%"PRIu32, j))
+				gotoIfError(clean, CharString_toUTF16x(tmp, &nameArr.ptrNonConst[groupNameStart]));
+				tmp = CharString_createNull();		//Moved to nameArr
+				loc = nameArr.ptr[groupNameStart];
+			}
+
+			else loc = nameArr.ptr[j * 2];		//We already have a string by that name
+
+			hitGroups.ptrNonConst[j] = (D3D12_HIT_GROUP_DESC) {
+				.HitGroupExport = (const wchar_t*)loc.ptr,
+				.Type = D3D12_HIT_GROUP_TYPE_TRIANGLES
+			};
+
+			if(group.anyHit != U32_MAX)
+				hitGroups.ptrNonConst[j].AnyHitShaderImport = nameArr.ptr[group.anyHit * 2].ptr;
+
+			if(group.closestHit != U32_MAX)
+				hitGroups.ptrNonConst[j].ClosestHitShaderImport = nameArr.ptr[group.closestHit * 2].ptr;
+
+			if(group.intersection != U32_MAX) {
+				hitGroups.ptrNonConst[j].Type = D3D12_HIT_GROUP_TYPE_PROCEDURAL_PRIMITIVE;
+				hitGroups.ptrNonConst[j].IntersectionShaderImport = nameArr.ptr[group.intersection * 2].ptr;
+			}
+
+			stateObjects.ptrNonConst[stateObjectOff++] = (D3D12_STATE_SUBOBJECT) {
+				.Type = D3D12_STATE_SUBOBJECT_TYPE_HIT_GROUP,
+				.pDesc = &hitGroups.ptr[j]
 			};
 		}
 
-		//Init create info
+		//Create state object
 
-		VkPipelineCreateFlags flags = 0;
-
-		if(rtPipeline->flags & EPipelineRaytracingFlags_SkipAABBs)
-			flags |= VK_PIPELINE_CREATE_RAY_TRACING_SKIP_AABBS_BIT_KHR;
-
-		if(rtPipeline->flags & EPipelineRaytracingFlags_SkipTriangles)
-			flags |= VK_PIPELINE_CREATE_RAY_TRACING_SKIP_TRIANGLES_BIT_KHR;
-
-		if(rtPipeline->flags & EPipelineRaytracingFlags_AllowMotionBlurExt)
-			flags |= VK_PIPELINE_CREATE_RAY_TRACING_ALLOW_MOTION_BIT_NV;
-
-		if(rtPipeline->flags & EPipelineRaytracingFlags_NoNullAnyHit)
-			flags |= VK_PIPELINE_CREATE_RAY_TRACING_NO_NULL_ANY_HIT_SHADERS_BIT_KHR;
-
-		if(rtPipeline->flags & EPipelineRaytracingFlags_NoNullClosestHit)
-			flags |= VK_PIPELINE_CREATE_RAY_TRACING_NO_NULL_CLOSEST_HIT_SHADERS_BIT_KHR;
-
-		if(rtPipeline->flags & EPipelineRaytracingFlags_NoNullMiss)
-			flags |= VK_PIPELINE_CREATE_RAY_TRACING_NO_NULL_MISS_SHADERS_BIT_KHR;
-
-		if(rtPipeline->flags & EPipelineRaytracingFlags_NoNullIntersection)
-			flags |= VK_PIPELINE_CREATE_RAY_TRACING_NO_NULL_INTERSECTION_SHADERS_BIT_KHR;
-
-		createInfos.ptrNonConst[i] = (VkRayTracingPipelineCreateInfoKHR) {
-			.sType = VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR,
-			.flags = flags,
-			.stageCount = rtPipeline->stageCount,
-			.pStages = stages.ptr + stageStart,
-			.groupCount = (U32)(groupCounter - startGroupCounter),
-			.pGroups = groups.ptr + startGroupCounter,
-			.maxPipelineRayRecursionDepth = rtPipeline->maxRecursionDepth,
-			.layout = deviceExt->defaultLayout
+		D3D12_STATE_OBJECT_DESC stateObjectInfo = (D3D12_STATE_OBJECT_DESC) {
+			.Type = D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE,
+			.NumSubobjects = (U32) stateObjects.length,
+			.pSubobjects = stateObjects.ptr
 		};
 
-		//Continue
+		DxPipeline *dxPipeline = Pipeline_ext(pipeline, Dx);
+		ID3D12StateObject **stateObject = &dxPipeline->stateObject;
 
-		CharString_freex(&temp1);
-
-		binaryCounter += rtPipeline->binaryCount;
-	}
-
-	//Create vulkan pipelines
-
-	gotoIfError(clean, vkCheck(instanceExt->createRaytracingPipelines(
-		deviceExt->device,
-		NULL,						//deferredOperation
-		NULL,						//pipelineCache
-		(U32) pipelines->length,
-		createInfos.ptr,
-		NULL,						//allocator
-		pipelinesExt.ptrNonConst
-	)))
-
-	//Create RefPtrs for OxC3 usage.
-
-	groupCounter = 0;
-
-	for (U64 i = 0; i < pipelines->length; ++i) {
-
+		gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreateStateObject(
+			deviceExt->device,
+			&stateObjectInfo,
+			&IID_ID3D12StateObject,
+			(void**) stateObject
+		)))
+		
 		#ifndef NDEBUG
-
-			if(instanceExt->debugSetName && names.length) {
-
-				VkDebugUtilsObjectNameInfoEXT debugName2 = (VkDebugUtilsObjectNameInfoEXT) {
-					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-					.objectType = VK_OBJECT_TYPE_PIPELINE,
-					.objectHandle = (U64) pipelinesExt.ptr[i],
-					.pObjectName = names.ptr[i].ptr
-				};
-
-				gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName2)))
+			if(names.length && CharString_length(names.ptr[i])) {
+				gotoIfError(clean, CharString_toUTF16x(names.ptr[i], &tmp16))
+				gotoIfError(clean, dxCheck((*stateObject)->lpVtbl->SetName(*stateObject, (const wchar_t*) tmp16.ptr)))
+				ListU16_freex(&tmp16);
 			}
-
 		#endif
 
-		VkPipeline vkPipeline = pipelinesExt.ptrNonConst[i];
-		*Pipeline_ext(PipelineRef_ptr(pipelines->ptr[i]), Vk) = vkPipeline;
-		pipelinesExt.ptrNonConst[i] = NULL;
-
-		//Fetch all shader handles
-
-		PipelineRaytracingInfo *rtPipeline = Pipeline_info(PipelineRef_ptr(pipelines->ptr[i]), PipelineRaytracingInfo);
-
-		U32 groupCount = rtPipeline->missCount + rtPipeline->raygenCount + rtPipeline->callableCount + rtPipeline->groupCount;
-
-		gotoIfError(clean, vkCheck(instanceExt->getRayTracingShaderGroupHandles(
-			deviceExt->device,
-			vkPipeline,
-			0,
-			groupCount,
-			raytracingShaderIdSize * groupCount,
-			shaderHandles.ptrNonConst
+		gotoIfError(clean, dxCheck((*stateObject)->lpVtbl->QueryInterface(
+			*stateObject, &IID_ID3D12StateObjectProperties, (void**) &dxPipeline->stateObjectProps
 		)))
 
-		//Fix SBT alignment
+		//Resolve shader ids in SBT
 
-		Pipeline *pipeline = PipelineRef_ptr(pipelines->ptr[i]);
+		for(U32 j = 0; j < rtPipeline->stageCount; ++j) {
 
-		for(U64 j = 0; j < groupCount; ++j) {
-
-			//Remap raygen, miss and callable shaders to be next to eachother
-
-			U64 groupId = j;
-
-			if (j >= rtPipeline->groupCount)
-				for (U64 k = 0; k < rtPipeline->stageCount; ++k) {
-
-					PipelineStage stage = pipeline->stages.ptr[k];
-
-					if (stage.groupId != groupId)		//TODO: Better search
-						continue;
-
-					groupId = rtPipeline->groupCount;
-
-					if (stage.stageType != EPipelineStage_MissExt) {
-
-						groupId += rtPipeline->missCount;
-
-						if (stage.stageType != EPipelineStage_RaygenExt)
-							groupId += rtPipeline->raygenCount;
-					}
-
-					groupId += stage.localShaderId;
-					break;
-				}
-
-			Buffer_copy(
-				Buffer_createRef(
-					(U8*)shaderBindings.ptr + raytracingShaderAlignment * (groupCounter + groupId), raytracingShaderIdSize
-				),
-				Buffer_createRefConst((const U8*)shaderHandles.ptr + raytracingShaderIdSize * j, raytracingShaderIdSize)
+			const void *shaderId = dxPipeline->stateObjectProps->lpVtbl->GetShaderIdentifier(
+				dxPipeline->stateObjectProps,
+				(const wchar_t*) nameArr.ptrNonConst[j * 2].ptr
 			);
+			//raytracingShaderAlignment
+
+			Buffer dst = Buffer_createNull();
+			gotoIfError(clean, Buffer_createSubset(
+				shaderTable, 
+				(pipeline->stages.ptrNonConst[j].groupId + groupCounter) * raytracingShaderAlignment,
+				raytracingShaderIdSize,
+				false,
+				&dst
+			))
+
+			Buffer_copy(dst, Buffer_createRefConst(shaderId, raytracingShaderIdSize));
 		}
 
-		groupCounter += groupCount;
+		rtPipeline->sbtOffset = groupCounter * raytracingShaderAlignment;
+		groupCounter += rtPipeline->stageCount;
 	}
-
-	ListVkPipeline_freex(&pipelinesExt);
 
 	//Create one big SBT with all handles in it.
 	//The SBT has a stride of 64 as well (since that's expected).
 	//Then we link the SBT per pipeline.
 
 	gotoIfError(clean, GraphicsDeviceRef_createBufferData(
-		deviceRef, EDeviceBufferUsage_SBTExt, EGraphicsResourceFlag_None, 
+		deviceRef, EDeviceBufferUsage_SBTExt, EGraphicsResourceFlag_None,
 		CharString_createRefCStrConst("Shader binding table"),
-		&shaderBindings,
+		&shaderTable,
 		&sbt
 	))
 
@@ -367,24 +339,20 @@ Error GraphicsDevice_createPipelinesRaytracingInternalExt(
 
 clean:
 
-	for(U64 i = 0; i < pipelinesExt.length; ++i)
-		if(pipelinesExt.ptr[i])
-			vkDestroyPipeline(deviceExt->device, pipelinesExt.ptr[i], NULL);
-
-	ListVkRayTracingPipelineCreateInfoKHR_freex(&createInfos);
-	ListVkPipeline_freex(&pipelinesExt);
-	ListVkPipelineShaderStageCreateInfo_freex(&stages);
-	ListVkRayTracingShaderGroupCreateInfoKHR_freex(&groups);
-
-	for(U64 i = 0; i < modules.length; ++i)
-		vkDestroyShaderModule(deviceExt->device, modules.ptr[i], NULL);
-
-	ListVkShaderModule_freex(&modules);
-	CharString_freex(&temp);
-	CharString_freex(&temp1);
-	GenericList_freex(&shaderHandles);
-	Buffer_freex(&shaderBindings);
 	DeviceBufferRef_dec(&sbt);
 
+	Buffer_freex(&shaderTable);
+
+	for(U64 i = 0; i < nameArr.length; ++i)
+		ListU16_freex(&nameArr.ptrNonConst[i]);
+
+	ListListU16_freex(&nameArr);
+	ListU32_freex(&binaryOffset);
+	ListU16_freex(&tmp16);
+	CharString_freex(&tmp);
+	ListD3D12_STATE_SUBOBJECT_freex(&stateObjects);
+	ListD3D12_DXIL_LIBRARY_DESC_freex(&libraries);
+	ListD3D12_HIT_GROUP_DESC_freex(&hitGroups);
+	ListD3D12_EXPORT_DESC_freex(&exportDescs);
 	return err;
 }

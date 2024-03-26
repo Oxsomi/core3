@@ -22,9 +22,8 @@
 #include "graphics/generic/swapchain.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
-#include "graphics/vulkan/vk_swapchain.h"
-#include "graphics/vulkan/vk_instance.h"
-#include "graphics/vulkan/vk_device.h"
+#include "graphics/directx12/dx_swapchain.h"
+#include "graphics/directx12/dx_device.h"
 #include "platforms/window.h"
 #include "platforms/monitor.h"
 #include "platforms/platform.h"
@@ -32,15 +31,21 @@
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
 
-const U64 SwapchainExt_size = sizeof(VkSwapchain);
+const U64 SwapchainExt_size = sizeof(DxSwapchain);
 
+/*
 TList(VkSurfaceFormatKHR);
 TList(VkPresentModeKHR);
 
 TListImpl(VkSurfaceFormatKHR);
-TListImpl(VkPresentModeKHR);
+TListImpl(VkPresentModeKHR);*/
 
 Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, SwapchainRef *swapchainRef) {
+	(void)deviceRef;
+	(void)swapchainRef;
+	return Error_unimplemented(0, "GraphicsDeviceRef_createSwapchainExt() unimplemented");
+}
+/*
 
 	Swapchain *swapchain = SwapchainRef_ptr(swapchainRef);
 	SwapchainInfo *info = &swapchain->info;
@@ -453,11 +458,16 @@ clean:
 	ListVkSurfaceFormatKHR_freex(&surfaceFormats);
 	ListVkPresentModeKHR_freex(&presentModes);
 	return err;
-}
+}*/
 
 Bool GraphicsDevice_freeSwapchainExt(Swapchain *swapchain, Allocator alloc) {
 
 	(void)alloc;
+	(void)swapchain;
+
+	return false;
+}
+/*
 
 	SwapchainRef *swapchainRef = (RefPtr*) swapchain - 1;
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(swapchain->base.resource.device);
@@ -537,3 +547,4 @@ Error VkUnifiedTexture_transition(
 
 	return Error_none();
 }
+*/

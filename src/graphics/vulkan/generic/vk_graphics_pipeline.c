@@ -96,10 +96,10 @@ VkBlendFactor mapVkBlend(EBlend op) {
 		case EBlend_InvAlphaFactor:				return VK_BLEND_FACTOR_ONE_MINUS_CONSTANT_ALPHA;
 		case EBlend_SrcAlphaSat:				return VK_BLEND_FACTOR_SRC_ALPHA_SATURATE;
 
-		case EBlend_Src1ColorExt:				return VK_BLEND_FACTOR_ZERO;
-		case EBlend_Src1AlphaExt:				return VK_BLEND_FACTOR_ZERO;
-		case EBlend_InvSrc1ColorExt:			return VK_BLEND_FACTOR_ZERO;
-		case EBlend_InvSrc1AlphaExt:			return VK_BLEND_FACTOR_ZERO;
+		case EBlend_Src1ColorExt:				return VK_BLEND_FACTOR_SRC1_COLOR;
+		case EBlend_Src1AlphaExt:				return VK_BLEND_FACTOR_SRC1_ALPHA;
+		case EBlend_InvSrc1ColorExt:			return VK_BLEND_FACTOR_ONE_MINUS_SRC1_COLOR;
+		case EBlend_InvSrc1AlphaExt:			return VK_BLEND_FACTOR_ONE_MINUS_SRC1_ALPHA;
 	}
 }
 
@@ -473,7 +473,7 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListChar
 				.depthClampEnable = info->rasterizer.flags & ERasterizerFlags_EnableDepthClamp,
 				.polygonMode = polygonMode,
 				.depthBiasEnable = info->rasterizer.flags & ERasterizerFlags_EnableDepthBias,
-				.depthBiasConstantFactor = info->rasterizer.depthBiasConstantFactor,
+				.depthBiasConstantFactor = (F32) info->rasterizer.depthBiasConstantFactor,
 				.depthBiasClamp = info->rasterizer.depthBiasClamp,
 				.depthBiasSlopeFactor = info->rasterizer.depthBiasSlopeFactor,
 				.lineWidth = 1

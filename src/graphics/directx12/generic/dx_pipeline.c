@@ -20,96 +20,28 @@
 
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/pipeline.h"
-#include "graphics/generic/device.h"
 #include "graphics/generic/texture.h"
-#include "graphics/vulkan/vk_device.h"
-#include "graphics/vulkan/vk_instance.h"
+#include "graphics/directx12/dx_device.h"
 #include "platforms/ext/bufferx.h"
-#include "platforms/ext/stringx.h"
-#include "types/string.h"
-#include "types/error.h"
 
-Error createShaderModule(
-	Buffer buf,
-	VkShaderModule *mod,
-	VkGraphicsDevice *device,
-	VkGraphicsInstance *instance,
-	CharString name,
-	EPipelineStage stage
-) {
-
-	(void)instance;
-	(void)stage;
-
-	if(Buffer_length(buf) >> 32)
-		return Error_outOfBounds(
-			0, Buffer_length(buf), U32_MAX, "createShaderModule()::buf.length is limited to U32_MAX"
-		);
-
-	if(!Buffer_length(buf) || Buffer_length(buf) % sizeof(U32))
-		return Error_invalidParameter(
-			0, 0, "createShaderModule()::buf.length must be in U32s when SPIR-V is used"
-		);
-
-	VkShaderModuleCreateInfo info = (VkShaderModuleCreateInfo) {
-		.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-		.codeSize = (U32) Buffer_length(buf),
-		.pCode = (const U32*) buf.ptr
-	};
-
-	Error err = vkCheck(vkCreateShaderModule(device->device, &info, NULL, mod));
-	CharString temp = CharString_createNull();
-
-	if(err.genericError)
-		return err;
-
-	if(CharString_length(name)) {
-
-		#ifndef NDEBUG
-
-			if(instance->debugSetName && CharString_length(name)) {
-
-				const Bool isRt = stage >= EPipelineStage_RtStart && stage <= EPipelineStage_RtEnd;
-
-				gotoIfError(clean, CharString_formatx(
-					&temp, "Shader module (\"%.*s\": %s)",
-					CharString_length(name), name.ptr, isRt ? "Raytracing" : EPipelineStage_names[stage]
-				))
-
-				const VkDebugUtilsObjectNameInfoEXT debugName2 = (VkDebugUtilsObjectNameInfoEXT) {
-					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-					.objectType = VK_OBJECT_TYPE_SHADER_MODULE,
-					.objectHandle = (U64) *mod,
-					.pObjectName = temp.ptr
-				};
-
-				gotoIfError(clean, vkCheck(instance->debugSetName(device->device, &debugName2)))
-			}
-
-		#endif
-	}
-
-	goto clean;
-
-clean:
-
-	CharString_freex(&temp);
-
-	if (err.genericError)
-		vkDestroyShaderModule(device->device, *mod, NULL);
-
-	return err;
-}
-
-const U64 PipelineExt_size = sizeof(VkPipeline);
+const U64 PipelineExt_size = sizeof(DxPipeline);
 
 Bool Pipeline_freeExt(Pipeline *pipeline, Allocator allocator) {
 
 	(void)allocator;
 
-	const GraphicsDevice *device = GraphicsDeviceRef_ptr(pipeline->device);
-	const VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
+	if(!pipeline)
+		return true;
 
-	vkDestroyPipeline(deviceExt->device, *Pipeline_ext(pipeline, Vk), NULL);
+	const DxPipeline *dxPipeline = Pipeline_ext(pipeline, Dx);
+
+	if(!dxPipeline->pso)
+		return true;
+
+	if(pipeline->type == EPipelineType_RaytracingExt)
+		dxPipeline->stateObject->lpVtbl->Release(dxPipeline->stateObject);
+
+	else dxPipeline->pso->lpVtbl->Release(dxPipeline->pso);
+
 	return true;
 }

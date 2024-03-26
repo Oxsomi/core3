@@ -19,348 +19,134 @@
 */
 
 #include "platforms/ext/listx_impl.h"
-#include "graphics/vulkan/vk_instance.h"
-#include "graphics/vulkan/vk_device.h"
+#include "graphics/directx12/dx_device.h"
 #include "graphics/generic/instance.h"
 #include "graphics/generic/device_info.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
 #include "platforms/log.h"
-#include "types/platform_types.h"
 #include "types/error.h"
 #include "types/buffer.h"
-#include "types/math.h"
 
-VkBool32 onDebugReport(
-	VkDebugReportFlagsEXT flags,
-	VkDebugReportObjectTypeEXT objectType,
-	U64 object,
-	U64 location,
-	I32 messageCode,
-	const C8 *layerPrefix,
-	const C8 *message,
-	void *userData
-) {
+#include <dxgi1_6.h>
+#include <nvapi.h>
 
-	(void)messageCode;
-	(void)object;
-	(void)location;
-	(void)objectType;
-	(void)userData;
-	(void)layerPrefix;
+#include <d3d11.h>			//AMD AGS needs it...
+#include <amd_ags.h>
 
-	if (flags & VK_DEBUG_REPORT_ERROR_BIT_EXT)
-		Log_errorLnx("Error: %s", message);
+TListNamed(IDXGIAdapter4*, ListIDXGIAdapter4)
+TListNamedImpl(ListIDXGIAdapter4)
 
-	else if (flags & VK_DEBUG_REPORT_WARNING_BIT_EXT)
-		Log_warnLnx("Warning: %s", message);
+//Graphics instance doesn't really exist for DirectX12.
+//It's only used for defining SDK version and that we're using DirectX12.
+//The closest thing we can map is a DXGI factory that's used to query adapters
 
-	else if (flags & VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT)
-		Log_performanceLnx("Performance warning: %s", message);
+typedef enum EDxGraphicsInstanceFlags {
+	EDxGraphicsInstanceFlags_HasNVApi		= 1 << 0,
+	EDxGraphicsInstanceFlags_HasAMDAgs		= 1 << 1
+} EDxGraphicsInstanceFlags;
 
-	else Log_debugLnx("Debug: %s", message);
+typedef struct DxGraphicsInstance {
 
-	return VK_FALSE;
-}
+	IDXGIFactory6 *factory;
+	AGSContext *agsContext;
 
-#define vkExtensionNoCheck(function, result) {													\
-	*(void**)&result = (void*) vkGetInstanceProcAddr(instanceExt->instance, #function);			\
-}
+	CharString nvDriverVersion;
+	CharString amdDriverVersion;
 
-#define vkExtension(label, function, result) {													\
-																								\
-	PFN_vkVoidFunction v = vkGetInstanceProcAddr(instanceExt->instance, #function); 			\
-																								\
-	if(!v)																						\
-		gotoIfError(clean, Error_nullPointer(0, "vkExtension() " #function " failed"))			\
-																								\
-	*(void**)&result = (void*) v;																\
-}
+	AGSGPUInfo gpuInfo;
 
-Bool GraphicsInstance_free(GraphicsInstance *data, Allocator alloc);
+	U32 flags, padding;
 
-const U64 GraphicsInstanceExt_size = sizeof(VkGraphicsInstance);
+} DxGraphicsInstance;
 
-TList(VkExtensionProperties);
-TList(VkLayerProperties);
-TListImpl(VkExtensionProperties);
-TListImpl(VkLayerProperties);
-
-Error GraphicsInstance_createExt(GraphicsApplicationInfo info, Bool isVerbose, GraphicsInstanceRef **instanceRef) {
-
-	U32 layerCount = 0, extensionCount = 0;
-	CharString title = (CharString) { 0 };
-
-	ListVkExtensionProperties extensions = (ListVkExtensionProperties) { 0 };
-	ListVkLayerProperties layers = (ListVkLayerProperties) { 0 };
-
-	ListConstC8 enabledExtensions = (ListConstC8) { 0 }, enabledLayers = (ListConstC8) { 0 };
-
-	GraphicsInstance *instance = GraphicsInstanceRef_ptr(*instanceRef);
-	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
-	Error err = Error_none();
-
-	gotoIfError(clean, vkCheck(vkEnumerateInstanceLayerProperties(&layerCount, NULL)))
-	gotoIfError(clean, vkCheck(vkEnumerateInstanceExtensionProperties(NULL, &extensionCount, NULL)))
-
-	gotoIfError(clean, CharString_createCopyx(info.name, &title))
-	gotoIfError(clean, ListVkExtensionProperties_createx(extensionCount, &extensions))
-	gotoIfError(clean, ListVkLayerProperties_createx(layerCount, &layers))
-
-	gotoIfError(clean, ListConstC8_reservex(&enabledLayers, layerCount))
-	gotoIfError(clean, ListConstC8_reservex(&enabledExtensions, extensionCount))
-
-	gotoIfError(clean, vkCheck(vkEnumerateInstanceLayerProperties(&layerCount, layers.ptrNonConst)))
-	gotoIfError(clean, vkCheck(vkEnumerateInstanceExtensionProperties(NULL, &extensionCount, extensions.ptrNonConst)))
-
-	Bool supportsDebug[2] = { 0 };
-
-	#ifndef NDEBUG
-
-		CharString debugReport = CharString_createRefCStrConst("VK_EXT_debug_report");
-		CharString debugUtils = CharString_createRefCStrConst("VK_EXT_debug_utils");
-
-		if(isVerbose)
-			Log_debugLnx("Supported extensions:");
-
-	#endif
-
-	Bool supportsColorSpace = false;
-
-	CharString swapchainColorspace = CharString_createRefCStrConst("VK_EXT_swapchain_colorspace");
-
-	for(U64 i = 0; i < extensionCount; ++i) {
-
-		const C8 *name = extensions.ptr[i].extensionName;
-		CharString nameStr = CharString_createRefCStrConst(name);
-
-		if(CharString_equalsStringSensitive(nameStr, swapchainColorspace))
-			supportsColorSpace = true;
-
-		#ifndef NDEBUG
-
-			else if(CharString_equalsStringSensitive(nameStr, debugReport))
-				supportsDebug[0] = true;
-
-			else if(CharString_equalsStringSensitive(nameStr, debugUtils))
-				supportsDebug[1] = true;
-
-		#endif
-
-		if(isVerbose)
-			Log_debugLnx("\t%s", name);
-	}
-
-	if(isVerbose) {
-
-		Log_debugLnx("Supported layers:");
-
-		for(U64 i = 0; i < layerCount; ++i)
-			Log_debugLnx("\t%s", layers.ptr[i].layerName);
-	}
-
-	#ifndef NDEBUG
-
-		if(supportsDebug[0])
-			gotoIfError(clean, ListConstC8_pushBackx(&enabledExtensions, debugReport.ptr))
-
-		if(supportsDebug[1])
-			gotoIfError(clean, ListConstC8_pushBackx(&enabledExtensions, debugUtils.ptr))
-
-	#endif
-
-	//Force physical device properties and external memory
-
-	gotoIfError(clean, ListConstC8_pushBackx(&enabledExtensions, "VK_KHR_get_physical_device_properties2"))
-	gotoIfError(clean, ListConstC8_pushBackx(&enabledExtensions, "VK_KHR_external_memory_capabilities"))
-
-	//Enable so we can use swapchain khr
-
-	gotoIfError(clean, ListConstC8_pushBackx(&enabledExtensions, "VK_KHR_surface"))
-	gotoIfError(clean, ListConstC8_pushBackx(&enabledExtensions, _VK_SURFACE_EXT))
-
-	if (supportsColorSpace)
-		gotoIfError(clean, ListConstC8_pushBackx(&enabledExtensions, swapchainColorspace.ptr))
-
-	gotoIfError(clean, VkGraphicsInstance_getLayers(&enabledLayers))
-
-	VkApplicationInfo application = (VkApplicationInfo) {
-		.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
-		.pApplicationName = title.ptr,
-		.applicationVersion = info.version,
-		.pEngineName = "OxC3",
-		.engineVersion = VK_MAKE_VERSION(0, 2, 0),
-		.apiVersion = VK_MAKE_VERSION(1, 2, 0)
-	};
-
-	VkInstanceCreateInfo instanceInfo = (VkInstanceCreateInfo) {
-		.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
-		.pApplicationInfo = &application,
-		.enabledLayerCount = (U32) enabledLayers.length,
-		.ppEnabledLayerNames = enabledLayers.ptr,
-		.enabledExtensionCount = (U32) enabledExtensions.length,
-		.ppEnabledExtensionNames = enabledExtensions.ptr
-	};
-
-	#ifndef NDEBUG
-
-		//Maximum validation
-
-		VkValidationFeatureEnableEXT enables[] = { 
-			VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
-			VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT,
-			VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT,
-			VK_VALIDATION_FEATURE_ENABLE_SYNCHRONIZATION_VALIDATION_EXT
-		};
-
-		VkValidationFeaturesEXT features = (VkValidationFeaturesEXT) {
-			.sType = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT,
-			.enabledValidationFeatureCount = (U32) (sizeof(enables) / sizeof(enables[0])),
-			.pEnabledValidationFeatures = enables
-		};
-
-		instanceInfo.pNext = &features;
-
-	#endif
-
-	if(isVerbose) {
-
-		Log_debugLnx("Enabling layers:");
-
-		for(U64 i = 0; i < enabledLayers.length; ++i)
-			Log_debugLnx("\t%s", enabledLayers.ptr[i]);
-
-		Log_debugLnx("Enabling extensions:");
-
-		for(U64 i = 0; i < enabledExtensions.length; ++i)
-			Log_debugLnx("\t%s", enabledExtensions.ptr[i]);
-
-	}
-
-	//Create instance
-
-	gotoIfError(clean, vkCheck(vkCreateInstance(&instanceInfo, NULL, &instanceExt->instance)))
-
-	//Load functions
-
-	vkExtension(clean, vkGetDeviceBufferMemoryRequirementsKHR, instanceExt->getDeviceBufferMemoryRequirements)
-	vkExtension(clean, vkGetDeviceImageMemoryRequirementsKHR, instanceExt->getDeviceImageMemoryRequirements)
-
-	vkExtension(clean, vkGetPhysicalDeviceFeatures2KHR, instanceExt->getPhysicalDeviceFeatures2)
-	vkExtension(clean, vkGetPhysicalDeviceProperties2KHR, instanceExt->getPhysicalDeviceProperties2)
-
-	vkExtension(clean, vkCmdPipelineBarrier2KHR, instanceExt->cmdPipelineBarrier2)
-
-	vkExtension(clean, vkGetPhysicalDeviceSurfaceFormatsKHR, instanceExt->getPhysicalDeviceSurfaceFormats)
-	vkExtension(clean, vkGetPhysicalDeviceSurfaceCapabilitiesKHR, instanceExt->getPhysicalDeviceSurfaceCapabilities)
-	vkExtension(clean, vkGetPhysicalDeviceSurfacePresentModesKHR, instanceExt->getPhysicalDeviceSurfacePresentModes)
-	vkExtension(clean, vkGetSwapchainImagesKHR, instanceExt->getSwapchainImages)
-	vkExtension(clean, vkGetPhysicalDeviceSurfaceSupportKHR, instanceExt->getPhysicalDeviceSurfaceSupport)
-
-	if(supportsDebug[1]) {
-		vkExtension(clean, vkSetDebugUtilsObjectNameEXT, instanceExt->debugSetName)
-		vkExtension(clean, vkCmdDebugMarkerBeginEXT, instanceExt->cmdDebugMarkerBegin)
-		vkExtension(clean, vkCmdDebugMarkerEndEXT, instanceExt->cmdDebugMarkerEnd)
-		vkExtension(clean, vkCmdDebugMarkerInsertEXT, instanceExt->cmdDebugMarkerInsert)
-	}
-
-	if(supportsDebug[0]) {
-		vkExtension(clean, vkCreateDebugReportCallbackEXT, instanceExt->debugCreateReportCallback)
-		vkExtension(clean, vkDestroyDebugReportCallbackEXT, instanceExt->debugDestroyReportCallback)
-	}
-
-	vkExtension(clean, vkAcquireNextImageKHR, instanceExt->acquireNextImage)
-	vkExtension(clean, vkCreateSwapchainKHR, instanceExt->createSwapchain)
-	vkExtension(clean, vkDestroySurfaceKHR, instanceExt->destroySurface)
-	vkExtension(clean, vkDestroySwapchainKHR, instanceExt->destroySwapchain)
-
-	vkExtensionNoCheck(vkCmdBuildAccelerationStructuresKHR, instanceExt->cmdBuildAccelerationStructures)
-	vkExtensionNoCheck(vkCreateAccelerationStructureKHR, instanceExt->createAccelerationStructure)
-	vkExtensionNoCheck(vkCmdCopyAccelerationStructureKHR, instanceExt->copyAccelerationStructure)
-	vkExtensionNoCheck(vkDestroyAccelerationStructureKHR, instanceExt->destroyAccelerationStructure)
-	vkExtensionNoCheck(vkGetAccelerationStructureBuildSizesKHR, instanceExt->getAccelerationStructureBuildSizes)
-	vkExtensionNoCheck(vkGetDeviceAccelerationStructureCompatibilityKHR, instanceExt->getAccelerationStructureCompatibility)
-
-	vkExtensionNoCheck(vkCmdTraceRaysKHR, instanceExt->traceRays)
-	vkExtensionNoCheck(vkCmdTraceRaysIndirectKHR, instanceExt->traceRaysIndirect)
-	vkExtensionNoCheck(vkCreateRayTracingPipelinesKHR, instanceExt->createRaytracingPipelines)
-	vkExtensionNoCheck(vkGetRayTracingShaderGroupHandlesKHR, instanceExt->getRayTracingShaderGroupHandles)
-
-	vkExtensionNoCheck(vkCmdBeginRenderingKHR, instanceExt->cmdBeginRendering)
-	vkExtensionNoCheck(vkCmdEndRenderingKHR, instanceExt->cmdEndRendering)
-
-	//Add debug callback
-
-	#ifndef NDEBUG
-
-		VkDebugReportCallbackCreateInfoEXT callbackInfo = (VkDebugReportCallbackCreateInfoEXT) {
-
-			.sType = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT,
-
-			.flags =
-				VK_DEBUG_REPORT_DEBUG_BIT_EXT |
-				VK_DEBUG_REPORT_INFORMATION_BIT_EXT |
-				VK_DEBUG_REPORT_ERROR_BIT_EXT |
-				VK_DEBUG_REPORT_WARNING_BIT_EXT |
-				VK_DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT,
-
-			.pfnCallback = (PFN_vkDebugReportCallbackEXT) onDebugReport
-		};
-
-		gotoIfError(clean, vkCheck(instanceExt->debugCreateReportCallback(
-			instanceExt->instance, &callbackInfo, NULL, &instanceExt->debugReportCallback
-		)))
-
-	#endif
-
-	instance->api = EGraphicsApi_Vulkan;
-	instance->apiVersion = application.apiVersion;
-
-clean:
-
-	CharString_freex(&title);
-
-	ListConstC8_freex(&enabledLayers);
-	ListConstC8_freex(&enabledExtensions);
-
-	ListVkExtensionProperties_freex(&extensions);
-	ListVkLayerProperties_freex(&layers);
-
-	return err;
-}
-
-Bool GraphicsInstance_free(GraphicsInstance *inst, Allocator alloc) {
+Bool GraphicsInstance_free(GraphicsInstance *data, Allocator alloc) {
 
 	(void)alloc;
 
-	const VkGraphicsInstance *instanceExt = GraphicsInstance_ext(inst, Vk);
+	DxGraphicsInstance *instanceExt = GraphicsInstance_ext(data, Dx);
 
-	if(instanceExt->debugDestroyReportCallback)
-		instanceExt->debugDestroyReportCallback(instanceExt->instance, instanceExt->debugReportCallback, NULL);
+	if(!instanceExt)
+		return true;
 
-	vkDestroyInstance(instanceExt->instance, NULL);
+	if(instanceExt->flags & EDxGraphicsInstanceFlags_HasNVApi)
+		NvAPI_Unload();
+
+	if(instanceExt->flags & EDxGraphicsInstanceFlags_HasAMDAgs)
+		agsDeInitialize(instanceExt->agsContext);
+
+	CharString_freex(&instanceExt->nvDriverVersion);
+	CharString_freex(&instanceExt->amdDriverVersion);
+
+	if(instanceExt->factory)
+		instanceExt->factory->lpVtbl->Release(instanceExt->factory);
 
 	return true;
 }
 
-#define getDeviceProperties(Condition, StructName, Name, StructType)			\
-	StructName Name = (StructName) { .sType = StructType };						\
-	if(Condition) {																\
-		*propertiesNext = &Name;												\
-		propertiesNext = &Name.pNext;											\
+const U64 GraphicsInstanceExt_size = sizeof(DxGraphicsInstance);
+
+Error GraphicsInstance_createExt(GraphicsApplicationInfo info, Bool isVerbose, GraphicsInstanceRef **instanceRef) {
+
+	(void)isVerbose; (void)info;
+	GraphicsInstance *instance = GraphicsInstanceRef_ptr(*instanceRef);
+	DxGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Dx);
+
+	Error err = dxCheck(CreateDXGIFactory(&IID_IDXGIFactory6, (void**) &instanceExt->factory));
+
+	if(err.genericError)
+		return err;
+
+	//Check for NVApi
+
+	const NvAPI_Status status = NvAPI_Initialize();
+
+	if(status == NVAPI_OK) {
+
+		instanceExt->flags |= EDxGraphicsInstanceFlags_HasNVApi;
+
+		U32 driverVersion = 0;
+		NvAPI_ShortString shortString = { 0 };
+
+		if(NvAPI_SYS_GetDriverAndBranchVersion((NvU32*)&driverVersion, shortString) != NVAPI_OK) {
+			NvAPI_Unload();
+			instanceExt->flags &=~ EDxGraphicsInstanceFlags_HasNVApi;
+		}
+
+		else gotoIfError(clean, CharString_createCopyx(
+			CharString_createRefAutoConst(shortString, 64), &instanceExt->nvDriverVersion
+		))
 	}
 
-#define getDeviceFeatures(Condition, StructName, Name, StructType)				\
-	StructName Name = (StructName) { .sType = StructType };						\
-	if(Condition) {																\
-		*featuresNext = &Name;													\
-		featuresNext = &Name.pNext;												\
+	//Check for AMDAgs
+
+	const AGSConfiguration config = (AGSConfiguration) { 0 };
+
+	if(agsInitialize(AGS_CURRENT_VERSION, &config, &instanceExt->agsContext, &instanceExt->gpuInfo) == AGS_SUCCESS) {
+
+		instanceExt->flags |= EDxGraphicsInstanceFlags_HasAMDAgs;
+
+		gotoIfError(clean, CharString_createCopyx(
+			CharString_createRefCStrConst(instanceExt->gpuInfo.radeonSoftwareVersion), &instanceExt->amdDriverVersion
+		))
+
+		if(CharString_length(instanceExt->amdDriverVersion) >= 256) {
+			Log_warnLnx("GraphicsInstance_createExt() AMD AGS initialize failed, version string is too long");
+			agsDeInitialize(instanceExt->agsContext);
+			instanceExt->flags &=~ EDxGraphicsInstanceFlags_HasNVApi;
+		}
 	}
 
-TList(VkPhysicalDevice);
-TListImpl(VkPhysicalDevice);
+	instance->api = EGraphicsApi_DirectX12;
+	instance->apiVersion = D3D12_SDK_VERSION;
+
+clean:
+	return err;
+}
 
 Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbose, ListGraphicsDeviceInfo *result) {
+
+	(void)isVerbose;
 
 	if(!inst || !result)
 		return Error_nullPointer(!inst ? 0 : 2, "GraphicsInstance_getDeviceInfos()::inst and result are required");
@@ -370,1028 +156,446 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 			1, 0, "GraphicsInstance_getDeviceInfos()::result isn't empty, may indicate memleak"
 		);
 
-	VkGraphicsInstance *graphicsExt = GraphicsInstance_ext(inst, Vk);
+	const DxGraphicsInstance *instanceExt = GraphicsInstance_ext(inst, Dx);
+	ListIDXGIAdapter4 adapters = (ListIDXGIAdapter4) { 0 };
+	ListGraphicsDeviceInfo tempInfos = (ListGraphicsDeviceInfo) { 0 };
+	ID3D12Device5 *device = NULL;		//Temporary device, we need to know
+	CharString tmp = CharString_createNull();
 
-	U32 deviceCount = 0;
-	Error err = vkCheck(vkEnumeratePhysicalDevices(graphicsExt->instance, &deviceCount, NULL));
+	//Get all possible adapters
 
-	if(err.genericError)
-		return err;
+	Error err = Error_none();
 
-	ListVkPhysicalDevice temp = (ListVkPhysicalDevice) { 0 };
-	ListGraphicsDeviceInfo temp2 = (ListGraphicsDeviceInfo) { 0 };
-	ListVkLayerProperties temp3 = (ListVkLayerProperties) { 0 };
-	ListVkExtensionProperties temp4 = (ListVkExtensionProperties) { 0 };
+	{
+		HRESULT hr;
+		U32 adapterId = 0;
 
-	gotoIfError(clean, ListVkPhysicalDevice_createx(deviceCount, &temp))
-	gotoIfError(clean, ListGraphicsDeviceInfo_reservex(&temp2, deviceCount))
+		do {
 
-	gotoIfError(clean, vkCheck(vkEnumeratePhysicalDevices(graphicsExt->instance, &deviceCount, temp.ptrNonConst)))
-
-	for (U32 i = 0, j = 0; i < deviceCount; ++i) {
-
-		VkPhysicalDevice dev = temp.ptr[i];
-
-		//Get extensions and layers
-
-		U32 layerCount = 0, extensionCount = 0;
-
-		gotoIfError(clean, vkCheck(vkEnumerateDeviceLayerProperties(dev, &layerCount, NULL)))
-		gotoIfError(clean, ListVkLayerProperties_resizex(&temp3, layerCount))
-		gotoIfError(clean, vkCheck(vkEnumerateDeviceLayerProperties(dev, &layerCount, temp3.ptrNonConst)))
-
-		gotoIfError(clean, vkCheck(vkEnumerateDeviceExtensionProperties(dev, NULL, &extensionCount, NULL)))
-		gotoIfError(clean, ListVkExtensionProperties_resizex(&temp4, extensionCount))
-		gotoIfError(clean, vkCheck(vkEnumerateDeviceExtensionProperties(dev, NULL, &extensionCount, temp4.ptrNonConst)))
-
-		//Log device for debugging
-
-		if(isVerbose) {
-
-			Log_debugLnx("Supported device layers:");
-
-			for(U32 k = 0; k < layerCount; ++k)
-				Log_debugLnx("\t%s", temp3.ptr[k].layerName);
-
-			Log_debugLnx("Supported device extensions:");
-		}
-
-		//Check if all required extensions are present
-
-		Bool reqExtensions[sizeof(reqExtensionsName) / sizeof(reqExtensionsName[0])] = { 0 };
-		Bool optExtensions[sizeof(optExtensionsName) / sizeof(optExtensionsName[0])] = { 0 };
-
-		for(U64 k = 0; k < extensionCount; ++k) {
-
-			const C8 *name = temp4.ptr[k].extensionName;
-
-			if(isVerbose)
-				Log_debugLnx("\t%s", name);
-
-			//Check if required extension
-
-			Bool found = false;
-
-			for(U64 l = 0; l < sizeof(reqExtensions); ++l)
-				if (CharString_equalsStringSensitive(
-					CharString_createRefCStrConst(reqExtensionsName[l]),
-					CharString_createRefCStrConst(name)
-				)) {
-					reqExtensions[l] = true;
-					found = true;
-					break;
-				}
-
-			//Check if optional extension
-
-			if (!found)
-				for(U64 l = 0; l < sizeof(optExtensions); ++l)
-					if (CharString_equalsStringSensitive(
-						CharString_createRefCStrConst(optExtensionsName[l]),
-						CharString_createRefCStrConst(name)
-					)) {
-						optExtensions[l] = true;
-						break;
-					}
-		}
-
-		Bool supported = true;
-		U64 firstUnavailable = 0;
-
-		for(U64 k = 0; k < sizeof(reqExtensions); ++k)
-			if(!reqExtensions[k] && CharString_calcStrLen(reqExtensionsName[k], U64_MAX)) {
-				supported = false;
-				firstUnavailable = k;
-				break;
-			}
-
-		if (!supported) {
-
-			Log_debugLnx(
-				"Vulkan: Unsupported device %"PRIu32", one of the required extensions wasn't present (%s)",
-				i, reqExtensionsName[firstUnavailable]
+			gotoIfError(clean, ListIDXGIAdapter4_resizex(&adapters, adapters.length + 1))
+			hr = instanceExt->factory->lpVtbl->EnumAdapters1(
+				instanceExt->factory, adapterId, (void*)&adapters.ptrNonConst[adapterId]
 			);
 
+			if(FAILED(hr))
+				gotoIfError(clean, ListIDXGIAdapter4_resizex(&adapters, adapters.length - 1))
+
+			++adapterId;
+
+		} while(SUCCEEDED(hr));
+
+		if(hr != DXGI_ERROR_NOT_FOUND)
+			gotoIfError(clean, dxCheck(hr))
+	}
+
+	gotoIfError(clean, ListGraphicsDeviceInfo_reservex(&tempInfos, adapters.length))
+
+	//Get compatible adapters
+
+	for(U64 i = 0; i < adapters.length; ++i) {
+
+		DXGI_ADAPTER_DESC3 desc = (DXGI_ADAPTER_DESC3) { 0 };
+		gotoIfError(clean, dxCheck(adapters.ptr[i]->lpVtbl->GetDesc3(adapters.ptr[i], &desc)))
+
+		//Fences are required for D3D12
+
+		if(!(desc.Flags & DXGI_ADAPTER_FLAG3_SUPPORT_MONITORED_FENCES)) {
+			Log_debugLnx("DXGI: Unsupported device %"PRIu32", doesn't support D3D12 fences", i);
 			continue;
 		}
 
-		//Grab limits and features
+		U64 sharedMem = desc.SharedSystemMemory;
+		U64 dedicatedMem = desc.DedicatedVideoMemory;
 
-		//Build up list of properties
+		if(!dedicatedMem)
+			dedicatedMem = sharedMem;
 
-		VkPhysicalDeviceProperties2 properties2 = (VkPhysicalDeviceProperties2) {
-			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2
-		};
-
-		void **propertiesNext = &properties2.pNext;
-
-		getDeviceProperties(
-			true, VkPhysicalDeviceSubgroupProperties, subgroup, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_PROPERTIES
-		)
-
-		getDeviceProperties(
-			optExtensions[EOptExtensions_MeshShader],
-			VkPhysicalDeviceMeshShaderPropertiesEXT,
-			meshShaderProp,
-			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_PROPERTIES_EXT
-		)
-
-		getDeviceProperties(
-			true,
-			VkPhysicalDeviceMultiviewProperties,
-			multiViewProp,
-			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_PROPERTIES
-		)
-
-		getDeviceProperties(
-			optExtensions[EOptExtensions_VariableRateShading],
-			VkPhysicalDeviceFragmentShadingRatePropertiesKHR,
-			vrsProp,
-			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_PROPERTIES_KHR
-		)
-
-		getDeviceProperties(
-			optExtensions[EOptExtensions_RayAcceleration],
-			VkPhysicalDeviceAccelerationStructurePropertiesKHR,
-			rtasProp,
-			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_PROPERTIES_KHR
-		)
-
-		getDeviceProperties(
-			optExtensions[EOptExtensions_RayPipeline],
-			VkPhysicalDeviceRayTracingPipelinePropertiesKHR,
-			rtpProp,
-			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR
-		)
-
-		getDeviceProperties(
-			optExtensions[EOptExtensions_RayReorder],
-			VkPhysicalDeviceRayTracingInvocationReorderPropertiesNV,
-			rayReorderProp,
-			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_INVOCATION_REORDER_PROPERTIES_NV
-		)
-
-		getDeviceProperties(true, VkPhysicalDeviceIDProperties, id, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES)
-
-		getDeviceProperties(
-			true, VkPhysicalDeviceDriverProperties, driver, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES
-		)
-
-		graphicsExt->getPhysicalDeviceProperties2(dev, &properties2);
-
-		//Build up list of features
-
-		VkPhysicalDeviceFeatures2 features2 = (VkPhysicalDeviceFeatures2) {
-			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2
-		};
-
-		void **featuresNext = &features2.pNext;
-
-		getDeviceFeatures(
-			true,
-			VkPhysicalDeviceDescriptorIndexingFeatures,
-			descriptorIndexing,
-			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES
-		)
-
-		getDeviceFeatures(
-			optExtensions[EOptExtensions_DynamicRendering],
-			VkPhysicalDeviceDynamicRenderingFeatures,
-			dynamicRendering,
-			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES
-		)
-
-		getDeviceFeatures(
-			true,
-			VkPhysicalDeviceTimelineSemaphoreFeatures,
-			semaphore,
-			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES
-		)
-
-		getDeviceFeatures(
-			true,
-			VkPhysicalDeviceSynchronization2Features,
-			sync2,
-			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES
-		)
-
-		getDeviceFeatures(
-			optExtensions[EOptExtensions_MeshShader],
-			VkPhysicalDeviceMeshShaderFeaturesEXT,
-			meshShader,
-			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT
-		)
-
-		getDeviceFeatures(
-			true,
-			VkPhysicalDeviceMultiviewFeatures,
-			multiViewFeat,
-			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_FEATURES
-		)
-
-		getDeviceFeatures(
-			optExtensions[EOptExtensions_VariableRateShading],
-			VkPhysicalDeviceFragmentShadingRateFeaturesKHR,
-			vrsFeat,
-			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_FEATURES_KHR
-		)
-
-		getDeviceFeatures(
-			optExtensions[EOptExtensions_RayAcceleration],
-			VkPhysicalDeviceAccelerationStructureFeaturesKHR,
-			rtasFeat,
-			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR
-		)
-
-		getDeviceFeatures(
-			optExtensions[EOptExtensions_RayPipeline],
-			VkPhysicalDeviceRayTracingPipelineFeaturesKHR,
-			rtpFeat,
-			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR
-		)
-
-		getDeviceFeatures(
-			optExtensions[EOptExtensions_RayQuery],
-			VkPhysicalDeviceRayQueryFeaturesKHR,
-			rayQueryFeat,
-			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR
-		)
-
-		getDeviceFeatures(
-			optExtensions[EOptExtensions_RayMotionBlur],
-			VkPhysicalDeviceRayTracingMotionBlurFeaturesNV,
-			rayMotionBlurFeat,
-			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_MOTION_BLUR_FEATURES_NV
-		)
-
-		getDeviceFeatures(
-			optExtensions[EOptExtensions_RayReorder],
-			VkPhysicalDeviceRayTracingInvocationReorderFeaturesNV,
-			rayReorderFeat,
-			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_INVOCATION_REORDER_FEATURES_NV
-		)
-
-		getDeviceFeatures(
-			optExtensions[EOptExtensions_RayMicromapOpacity],
-			VkPhysicalDeviceOpacityMicromapFeaturesEXT,
-			rayOpacityMicroFeat,
-			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_OPACITY_MICROMAP_FEATURES_EXT
-		)
-
-		getDeviceFeatures(
-			optExtensions[EOptExtensions_RayMicromapDisplacement],
-			VkPhysicalDeviceDisplacementMicromapFeaturesNV,
-			rayDispMicroFeat,
-			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DISPLACEMENT_MICROMAP_FEATURES_NV
-		)
-
-		getDeviceFeatures(
-			true,
-			VkPhysicalDeviceShaderFloat16Int8Features,
-			float16,
-			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES
-		)
-
-		getDeviceFeatures(
-			true,
-			VkPhysicalDeviceShaderAtomicInt64Features,
-			atomics64,
-			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_INT64_FEATURES
-		)
-
-		getDeviceFeatures(
-			optExtensions[EOptExtensions_AtomicF32],
-			VkPhysicalDeviceShaderAtomicFloatFeaturesEXT,
-			atomicsF32,
-			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_FLOAT_FEATURES_EXT
-		)
-
-		getDeviceFeatures(
-			optExtensions[EOptExtensions_PerfQuery],
-			VkPhysicalDevicePerformanceQueryFeaturesKHR,
-			perfQuery,
-			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PERFORMANCE_QUERY_FEATURES_KHR
-		)
-
-		getDeviceFeatures(
-			true, VkPhysicalDeviceBufferDeviceAddressFeaturesKHR, deviceAddress,
-			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES_KHR
-		)
-
-		graphicsExt->getPhysicalDeviceFeatures2(dev, &features2);
-
-		//Query
-
-		VkPhysicalDeviceProperties properties = properties2.properties;
-		VkPhysicalDeviceFeatures features = features2.features;
-		VkPhysicalDeviceLimits limits = properties.limits;
-
-		if (limits.nonCoherentAtomSize > 256) {
-			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", nonCoherentAtomSize needs to be up to 256", i);
+		if(sharedMem < 512 * MIBI || dedicatedMem < 512 * MIBI) {
+			Log_debugLnx("DXGI: Unsupported device %"PRIu32", not enough system or video memory", i);
 			continue;
 		}
 
-		if(!deviceAddress.bufferDeviceAddress) {
-			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", bufferDeviceAddress has to be supported", i);
-			continue;
+		EGraphicsVendorId vendorId = EGraphicsVendorId_Unknown;
+
+		switch(desc.VendorId) {
+			case EGraphicsVendorPCIE_NV:	vendorId = EGraphicsVendorId_NV;	break;
+			case EGraphicsVendorPCIE_AMD:	vendorId = EGraphicsVendorId_AMD;	break;
+			case EGraphicsVendorPCIE_ARM:	vendorId = EGraphicsVendorId_ARM;	break;
+			case EGraphicsVendorPCIE_QCOM:	vendorId = EGraphicsVendorId_QCOM;	break;
+			case EGraphicsVendorPCIE_INTC:	vendorId = EGraphicsVendorId_INTC;	break;
+			case EGraphicsVendorPCIE_IMGT:	vendorId = EGraphicsVendorId_IMGT;	break;
+			case EGraphicsVendorPCIE_MSFT:	vendorId = EGraphicsVendorId_MSFT;	break;
 		}
 
-		//Ensure device is compatible first
+		//Grab properties
 
-		if(
-			!features.shaderInt16 ||
-			!features.shaderSampledImageArrayDynamicIndexing ||
-			!features.shaderStorageBufferArrayDynamicIndexing ||
-			!features.shaderUniformBufferArrayDynamicIndexing ||
-			!features.samplerAnisotropy ||
-			!features.drawIndirectFirstInstance ||
-			!features.independentBlend ||
-			!features.imageCubeArray ||
-			!features.fullDrawIndexUint32 ||
-			!features.depthClamp ||
-			!features.depthBiasClamp ||
-			!(features.textureCompressionBC || features.textureCompressionASTC_LDR) ||
-			!features.multiDrawIndirect ||
-			!features.sampleRateShading
-		) {
-			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", one of the required features wasn't enabled", i);
-			continue;
+		EGraphicsDeviceType type = EGraphicsDeviceType_CPU;
+
+		const U64 luid = *(const U64*) &desc.AdapterLuid;
+
+		//Create temporary device.
+		//Unfortunately, there's no other way to query features it seems.
+
+		HRESULT lastError = 0;
+
+		if(FAILED(lastError = D3D12CreateDevice(
+			(IUnknown*)adapters.ptr[i], D3D_FEATURE_LEVEL_12_1, &IID_ID3D12Device5, (void**) &device)
+		)) {
+			Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support feature level 12.1", i);
+			goto next;
 		}
 
-		VkSampleCountFlags requiredMSAA = VK_SAMPLE_COUNT_1_BIT | VK_SAMPLE_COUNT_4_BIT;
+		//Get capabilities
 
-		VkSampleCountFlags allMSAA =
-			limits.framebufferColorSampleCounts &
-			limits.framebufferDepthSampleCounts &
-			limits.framebufferNoAttachmentsSampleCounts &
-			limits.framebufferStencilSampleCounts &
-			limits.sampledImageColorSampleCounts &
-			limits.sampledImageDepthSampleCounts &
-			limits.sampledImageIntegerSampleCounts &
-			limits.sampledImageStencilSampleCounts;
+		GraphicsDeviceCapabilities caps = (GraphicsDeviceCapabilities) { 0 };
+		caps.sharedMemory = sharedMem;
+		caps.dedicatedMemory = dedicatedMem;
 
-		if (
-			limits.maxColorAttachments < 8 ||
-			limits.maxFragmentOutputAttachments < 8 ||
-			limits.maxDescriptorSetInputAttachments < 7 ||
-			limits.maxPerStageDescriptorInputAttachments < 7 ||
-			(allMSAA & requiredMSAA) != requiredMSAA ||
-			limits.maxComputeSharedMemorySize < 16 * KIBI ||
-			limits.maxComputeWorkGroupCount[0] < U16_MAX ||
-			limits.maxComputeWorkGroupCount[1] < U16_MAX ||
-			limits.maxComputeWorkGroupCount[2] < U16_MAX ||
-			limits.maxComputeWorkGroupSize[0] < 1024 ||
-			limits.maxComputeWorkGroupSize[1] < 1024 ||
-			limits.maxComputeWorkGroupSize[2] < 64 ||
-			limits.maxFragmentCombinedOutputResources < 16 ||
-			limits.maxFragmentInputComponents < 112 ||
-			limits.maxFramebufferWidth < 16 * KIBI ||
-			limits.maxFramebufferHeight < 16 * KIBI ||
-			limits.maxImageDimension1D < 16 * KIBI ||
-			limits.maxImageDimension2D < 16 * KIBI ||
-			limits.maxImageDimensionCube < 16 * KIBI ||
-			limits.maxViewportDimensions[0] < 16 * KIBI ||
-			limits.maxViewportDimensions[1] < 16 * KIBI ||
-			limits.maxFramebufferLayers < 256 ||
-			limits.maxImageDimension3D < 256 ||
-			limits.maxImageArrayLayers < 256 ||
-			limits.maxPushConstantsSize < 128 ||
-			limits.maxSamplerAllocationCount < 4000 ||
-			limits.maxSamplerAnisotropy < 16 ||
-			limits.maxStorageBufferRange < 250 * MEGA ||
-			limits.maxSamplerLodBias < 4 ||
-			limits.maxUniformBufferRange < 64 * KIBI ||
-			limits.maxVertexInputAttributeOffset < 2047 ||
-			limits.maxVertexInputAttributes < 16 ||
-			limits.maxVertexInputBindings < 16 ||
-			limits.maxVertexInputBindingStride < 2048 ||
-			limits.maxVertexOutputComponents < 124 ||
-			limits.maxMemoryAllocationCount < 4096 ||
-			limits.maxBoundDescriptorSets < 4 ||
-			limits.viewportBoundsRange[0] > -32768 ||
-			limits.viewportBoundsRange[1] < 32767
-		) {
-			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", one of the required limit wasn't sufficient", i);
-			continue;
-		}
+		caps.features |= 
+			EGraphicsFeatures_LUID | EGraphicsFeatures_MultiDrawIndirectCount |
+			EGraphicsFeatures_GeometryShader | EGraphicsFeatures_SubgroupArithmetic | EGraphicsFeatures_SubgroupShuffle |
+			EGraphicsFeatures_Wireframe | EGraphicsFeatures_LogicOp | EGraphicsFeatures_DualSrcBlend;
 
-		//Disable tesselation shaders if minimum isn't met
+		caps.dataTypes |=
+			EGraphicsDataTypes_I64 | EGraphicsDataTypes_BCn | EGraphicsDataTypes_MSAA2x | EGraphicsDataTypes_MSAA8x |
+			EGraphicsDataTypes_AtomicI64 | EGraphicsDataTypes_BCn;
 
-		if (
-			!features.tessellationShader || (
-				U64_min(
-					U64_min(
-						U64_min(
-							limits.maxTessellationControlPerVertexInputComponents,
-							limits.maxTessellationControlPerVertexOutputComponents
-						),
-						limits.maxTessellationEvaluationInputComponents
-					),
-					limits.maxTessellationEvaluationOutputComponents
-				) < 124 ||
-				limits.maxTessellationControlTotalOutputComponents < 4088 ||
-				limits.maxTessellationControlPerPatchOutputComponents < 120 ||
-				limits.maxTessellationGenerationLevel < 64 ||
-				limits.maxTessellationPatchSize < 32
-			)
-		) {
-			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", tesselation isn't supported but is required", i);
-			continue;
-		}
-
-		//Disable geometry shaders if minimum isn't met
-
-		if (
-			features.geometryShader && (
-				limits.maxGeometryInputComponents < 64 ||
-				limits.maxGeometryOutputComponents < 128 ||
-				limits.maxGeometryOutputVertices < 256 ||
-				limits.maxGeometryShaderInvocations < 32 ||
-				limits.maxGeometryTotalOutputComponents < 1024
-			)
-		)
-			features.geometryShader = false;
-
-		//Convert enums
-
-		//Device type
-
-		EGraphicsDeviceType type = EGraphicsDeviceType_Other;
-
-		switch (properties.deviceType) {
-			case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:		type = EGraphicsDeviceType_Dedicated;	break;
-			case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU:	type = EGraphicsDeviceType_Integrated;	break;
-			case VK_PHYSICAL_DEVICE_TYPE_CPU:				type = EGraphicsDeviceType_CPU;			break;
-			case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU:		type = EGraphicsDeviceType_Simulated;	break;
-			default:																				break;
-		}
-
-		//Vendor
-
-		EGraphicsVendor vendor = EGraphicsVendor_Unknown;
+		if(vendorId != EGraphicsVendorId_AMD)
+			caps.dataTypes |= EGraphicsDataTypes_D24S8;
 		
-		switch (properties.vendorID) {
-			case EGraphicsVendor_PCIE[EGraphicsVendor_NV]:		vendor = EGraphicsVendor_NV;			break;
-			case EGraphicsVendor_PCIE[EGraphicsVendor_AMD]:		vendor = EGraphicsVendor_AMD;			break;
-			case EGraphicsVendor_PCIE[EGraphicsVendor_ARM]:		vendor = EGraphicsVendor_ARM;			break;
-			case EGraphicsVendor_PCIE[EGraphicsVendor_QCOM]:	vendor = EGraphicsVendor_QCOM;			break;
-			case EGraphicsVendor_PCIE[EGraphicsVendor_INTC]:	vendor = EGraphicsVendor_INTC;			break;
-			case EGraphicsVendor_PCIE[EGraphicsVendor_IMGT]:	vendor = EGraphicsVendor_IMGT;			break;
-		}
-
-		//Capabilities
-
-		GraphicsDeviceCapabilities capabilities = (GraphicsDeviceCapabilities) { 0 };
-
-		//Query features
-
-		if(features.logicOp)
-			capabilities.features |= EGraphicsFeatures_LogicOp;
-
-		if(features.dualSrcBlend)
-			capabilities.features |= EGraphicsFeatures_DualSrcBlend;
-
-		if(features.fillModeNonSolid)
-			capabilities.features |= EGraphicsFeatures_Wireframe;
-
-		//Force enable synchronization and timeline semaphores
-
-		if (!semaphore.timelineSemaphore) {
-			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", Timeline semaphores unsupported!", i);
-			continue;
-		}
-
-		if (!sync2.synchronization2) {
-			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", Synchronization 2 unsupported!", i);
-			continue;
-		}
-
-		//Check if indexing is properly supported
-
-		VkPhysicalDeviceDescriptorIndexingFeatures target = (VkPhysicalDeviceDescriptorIndexingFeatures) {
-			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES,
-			.shaderUniformTexelBufferArrayDynamicIndexing = true,
-			.shaderStorageTexelBufferArrayDynamicIndexing = true,
-			.shaderUniformBufferArrayNonUniformIndexing = true,
-			.shaderSampledImageArrayNonUniformIndexing = true,
-			.shaderStorageBufferArrayNonUniformIndexing = true,
-			.shaderStorageImageArrayNonUniformIndexing = true,
-			.shaderUniformTexelBufferArrayNonUniformIndexing = true,
-			.shaderStorageTexelBufferArrayNonUniformIndexing = true,
-			.descriptorBindingSampledImageUpdateAfterBind = true,
-			.descriptorBindingStorageImageUpdateAfterBind = true,
-			.descriptorBindingStorageBufferUpdateAfterBind = true,
-			.descriptorBindingUniformTexelBufferUpdateAfterBind = true,
-			.descriptorBindingStorageTexelBufferUpdateAfterBind = true,
-			.descriptorBindingUpdateUnusedWhilePending = true,
-			.descriptorBindingPartiallyBound = true,
-			.descriptorBindingVariableDescriptorCount = true,
-			.runtimeDescriptorArray = true
-		};
-
-		Bool eq = false;
-
-		for(U32 q = 0; q < 4; ++q) {
-
-			target.shaderInputAttachmentArrayNonUniformIndexing = q & 1;
-			target.descriptorBindingUniformBufferUpdateAfterBind = q >> 1;
-
-			//We skip shaderInputAttachmentArrayDynamicIndexing as well by not starting there.
-
-			U64 sz = sizeof(target) - offsetof(
-				VkPhysicalDeviceDescriptorIndexingFeatures, shaderUniformTexelBufferArrayDynamicIndexing
-			);
-
-			eq = Buffer_eq(
-				Buffer_createRefConst(&target.shaderUniformTexelBufferArrayDynamicIndexing, sz),
-				Buffer_createRefConst(&descriptorIndexing.shaderUniformTexelBufferArrayDynamicIndexing, sz)
-			);
-
-			if(eq)
-				break;
-		}
-
-		if(!eq) {
-			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", descriptor indexing isn't properly supported.", i);
-			continue;
-		}
-
-		//Direct rendering
-
 		if (
-			(vendor == EGraphicsVendor_NV || vendor == EGraphicsVendor_AMD || vendor == EGraphicsVendor_INTC) &&
-			optExtensions[EOptExtensions_DynamicRendering] &&
-			dynamicRendering.dynamicRendering
+			vendorId == EGraphicsVendorId_NV || vendorId == EGraphicsVendorId_AMD || 
+			vendorId == EGraphicsVendorId_INTC || vendorId == EGraphicsVendorId_MSFT
 		)
-			capabilities.features |= EGraphicsFeatures_DirectRendering;
+			caps.features |= EGraphicsFeatures_DirectRendering;
 
-		//Shader types
+		D3D12_FEATURE_DATA_D3D12_OPTIONS options = (D3D12_FEATURE_DATA_D3D12_OPTIONS) { 0 };
+		D3D12_FEATURE_DATA_D3D12_OPTIONS1 options1 = (D3D12_FEATURE_DATA_D3D12_OPTIONS1) { 0 };
+		D3D12_FEATURE_DATA_D3D12_OPTIONS4 options4 = (D3D12_FEATURE_DATA_D3D12_OPTIONS4) { 0 };
+		D3D12_FEATURE_DATA_D3D12_OPTIONS5 options5 = (D3D12_FEATURE_DATA_D3D12_OPTIONS5) { 0 };
+		D3D12_FEATURE_DATA_D3D12_OPTIONS6 options6 = (D3D12_FEATURE_DATA_D3D12_OPTIONS6) { 0 };
+		D3D12_FEATURE_DATA_D3D12_OPTIONS7 options7 = (D3D12_FEATURE_DATA_D3D12_OPTIONS7) { 0 };
+		D3D12_FEATURE_DATA_D3D12_OPTIONS8 options8 = (D3D12_FEATURE_DATA_D3D12_OPTIONS8) { 0 };
+		D3D12_FEATURE_DATA_D3D12_OPTIONS9 options9 = (D3D12_FEATURE_DATA_D3D12_OPTIONS9) { 0 };
+		D3D12_FEATURE_DATA_D3D12_OPTIONS12 options12 = (D3D12_FEATURE_DATA_D3D12_OPTIONS12) { 0 };
 
-		if(features.geometryShader)
-			capabilities.features |= EGraphicsFeatures_GeometryShader;
-
-		//Multi draw
-
-		if(limits.maxDrawIndirectCount >= GIBI)
-			capabilities.features |= EGraphicsFeatures_MultiDrawIndirectCount;
-
-		//Subgroup operations
-
-		VkSubgroupFeatureFlags requiredSubOp =
-			VK_SUBGROUP_FEATURE_BASIC_BIT |
-			VK_SUBGROUP_FEATURE_VOTE_BIT |
-			VK_SUBGROUP_FEATURE_BALLOT_BIT;
-
-		if((subgroup.supportedOperations & requiredSubOp) != requiredSubOp) {
-			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", one of the required subgroup operations wasn't supported!", i);
-			continue;
-		}
-
-		if(subgroup.subgroupSize < 16 || subgroup.subgroupSize > 128) {
-			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", subgroup size is not in range 16-128!", i);
-			continue;
-		}
-
-		if(subgroup.supportedOperations & VK_SUBGROUP_FEATURE_ARITHMETIC_BIT)
-			capabilities.features |= EGraphicsFeatures_SubgroupArithmetic;
-
-		if(subgroup.supportedOperations & VK_SUBGROUP_FEATURE_SHUFFLE_BIT)
-			capabilities.features |= EGraphicsFeatures_SubgroupShuffle;
-
-		//Multi view
+		D3D12_FEATURE_DATA_SHADER_MODEL shaderOpt = (D3D12_FEATURE_DATA_SHADER_MODEL) { 0 };
+		D3D12_FEATURE_DATA_ARCHITECTURE1 arch = (D3D12_FEATURE_DATA_ARCHITECTURE1) { 0 };
 
 		if(
-			multiViewFeat.multiview &&
-			multiViewProp.maxMultiviewViewCount >= 6 && multiViewProp.maxMultiviewInstanceIndex >= 134217727
-		)
-			capabilities.features |= EGraphicsFeatures_Multiview;
-
-		//Multi view
-
-		if(
-			optExtensions[EOptExtensions_VariableRateShading] &&
-			vrsFeat.pipelineFragmentShadingRate &&
-			vrsFeat.attachmentFragmentShadingRate &&
-			vrsProp.maxFragmentSize.width >= 2 && vrsProp.maxFragmentSize.height >= 2 &&
-			vrsProp.maxFragmentShadingRateCoverageSamples >= 16 &&
-			vrsProp.maxFragmentShadingRateRasterizationSamples >= 4 &&
-			vrsProp.fragmentShadingRateWithSampleMask
-		)
-			capabilities.features |= EGraphicsFeatures_VariableRateShading;
-
-		//Mesh shaders
-
-		if(optExtensions[EOptExtensions_MeshShader] && !(
-			!meshShader.taskShader ||
-			meshShaderProp.maxMeshMultiviewViewCount < 4 ||
-			meshShaderProp.maxMeshOutputComponents < 127 ||
-			meshShaderProp.maxMeshOutputLayers < 8 ||
-			meshShaderProp.maxMeshOutputMemorySize < 32 * KIBI ||
-			meshShaderProp.maxMeshOutputPrimitives < 256 ||
-			meshShaderProp.maxMeshOutputVertices < 256 ||
-			meshShaderProp.maxMeshPayloadAndOutputMemorySize < 47 * KIBI ||
-			meshShaderProp.maxMeshPayloadAndSharedMemorySize < 28 * KIBI ||
-			meshShaderProp.maxMeshSharedMemorySize < 28 * KIBI ||
-			meshShaderProp.maxMeshWorkGroupCount[0] < U16_MAX ||
-			meshShaderProp.maxMeshWorkGroupCount[1] < U16_MAX ||
-			meshShaderProp.maxMeshWorkGroupCount[2] < U16_MAX ||
-			meshShaderProp.maxMeshWorkGroupInvocations < 128 ||
-			meshShaderProp.maxTaskWorkGroupInvocations < 128 ||
-			meshShaderProp.maxMeshWorkGroupSize[0] < 128 ||
-			meshShaderProp.maxMeshWorkGroupSize[1] < 128 ||
-			meshShaderProp.maxMeshWorkGroupSize[2] < 128 ||
-			meshShaderProp.maxTaskWorkGroupSize[0] < 128 ||
-			meshShaderProp.maxTaskWorkGroupSize[1] < 128 ||
-			meshShaderProp.maxTaskWorkGroupSize[2] < 128 ||
-			meshShaderProp.maxMeshWorkGroupTotalCount < 4 * MIBI ||
-			meshShaderProp.maxPreferredMeshWorkGroupInvocations < 32 ||
-			meshShaderProp.maxPreferredTaskWorkGroupInvocations < 32 ||
-			meshShaderProp.meshOutputPerPrimitiveGranularity < 32 ||
-			meshShaderProp.meshOutputPerVertexGranularity < 32 ||
-			meshShaderProp.maxTaskPayloadAndSharedMemorySize < 32 * KIBI ||
-			meshShaderProp.maxTaskPayloadSize < 16 * KIBI ||
-			meshShaderProp.maxTaskSharedMemorySize < 32 * KIBI ||
-			meshShaderProp.maxTaskWorkGroupTotalCount < 4 * MIBI ||
-			!meshShaderProp.prefersCompactPrimitiveOutput
-		))
-			capabilities.features |= EGraphicsFeatures_MeshShader;
-
-		//Raytracing
-
-		if(!optExtensions[EOptExtensions_DeferredHostOperations])
-			optExtensions[EOptExtensions_RayAcceleration] = false;
-
-		if(!rtasFeat.descriptorBindingAccelerationStructureUpdateAfterBind)
-			optExtensions[EOptExtensions_RayAcceleration] = false;
-
-		if(optExtensions[EOptExtensions_RayAcceleration]) {
-
-			//Disable raytracing if minimum limits aren't reached
-
-			if(rtasFeat.accelerationStructure) {
-
-				if(!(
-					U64_min(
-						U64_min(
-							U64_min(
-								rtasProp.maxPerStageDescriptorAccelerationStructures,
-								rtasProp.maxPerStageDescriptorUpdateAfterBindAccelerationStructures
-							),
-							rtasProp.maxDescriptorSetAccelerationStructures
-						),
-						rtasProp.maxDescriptorSetUpdateAfterBindAccelerationStructures
-					) >= 16 &&
-					U64_min(rtasProp.maxGeometryCount, rtasProp.maxInstanceCount) >= 16777215 &&
-					rtasProp.maxPrimitiveCount >= GIBI / 2 - 1
-				))
-					rtasFeat.accelerationStructure = false;
-			}
-
-			//Check if raytracing can be enabled
-
-			if (rtasFeat.accelerationStructure) {
-
-				//Query raytracing pipeline
-
-				if(optExtensions[EOptExtensions_RayPipeline]) {
-
-					if(
-						!rtpFeat.rayTracingPipeline || !rtpFeat.rayTraversalPrimitiveCulling || 
-						!rtpFeat.rayTracingPipelineTraceRaysIndirect
-					)
-						optExtensions[EOptExtensions_RayPipeline] = false;
-				}
-
-				//Query ray query
-
-				if(optExtensions[EOptExtensions_RayQuery] && !rayQueryFeat.rayQuery)
-					optExtensions[EOptExtensions_RayQuery] = false;
-
-				//Disable if invalid state
-
-				if (
-					optExtensions[EOptExtensions_RayPipeline] && (
-						rtpProp.maxRayDispatchInvocationCount < GIBI ||
-						rtpProp.maxRayHitAttributeSize < 32 ||
-						rtpProp.maxRayRecursionDepth < 1 ||
-						rtpProp.maxShaderGroupStride < 4096 ||
-						rtpProp.shaderGroupHandleSize != 32 ||
-						(rtpProp.shaderGroupBaseAlignment != 32 && rtpProp.shaderGroupBaseAlignment != 64)
-					)
-				) {
-					optExtensions[EOptExtensions_RayQuery] = false;
-					optExtensions[EOptExtensions_RayPipeline] = false;
-				}
-
-				//Enable extension
-
-				if(optExtensions[EOptExtensions_RayQuery])
-					capabilities.features |= EGraphicsFeatures_RayQuery;
-
-				if(optExtensions[EOptExtensions_RayPipeline])
-					capabilities.features |= EGraphicsFeatures_RayPipeline;
-
-				if(optExtensions[EOptExtensions_RayQuery] || optExtensions[EOptExtensions_RayPipeline]) {
-
-					capabilities.features |= EGraphicsFeatures_Raytracing;
-
-					if(rayMotionBlurFeat.rayTracingMotionBlur)
-						capabilities.features |= EGraphicsFeatures_RayMotionBlur;
-
-					//Indirect must allow motion blur too (if it's enabled)
-
-					if(
-						rayMotionBlurFeat.rayTracingMotionBlur &&
-						!rayMotionBlurFeat.rayTracingMotionBlurPipelineTraceRaysIndirect
-					)
-						capabilities.features &= ~EGraphicsFeatures_RayMotionBlur;
-
-					if(rayReorderFeat.rayTracingInvocationReorder && rayReorderProp.rayTracingInvocationReorderReorderingHint)
-						capabilities.features |= EGraphicsFeatures_RayReorder;
-
-					if(rayOpacityMicroFeat.micromap)
-						capabilities.features |= EGraphicsFeatures_RayMicromapOpacity;
-
-					if(rayDispMicroFeat.displacementMicromap)
-						capabilities.features |= EGraphicsFeatures_RayMicromapDisplacement;
-				}
-			}
-		}
-
-		//Variable rate shading
-
-		if(optExtensions[EOptExtensions_VariableRateShading]) {
-			//TODO:
-			//https://registry.khronos.org/vulkan/specs/1.3-extensions/man/html/VK_KHR_fragment_shading_rate.html
-			//EGraphicsFeatures_VariableRateShading		= 1 << 1,
-		}
-
-		//Get data types
-
-		if(float16.shaderFloat16)
-			capabilities.dataTypes |= EGraphicsDataTypes_F16;
-
-		if(features.shaderInt64)
-			capabilities.dataTypes |= EGraphicsDataTypes_I64;
-
-		if(features.shaderFloat64)
-			capabilities.dataTypes |= EGraphicsDataTypes_F64;
-
-		//Atomics
-
-		if(atomics64.shaderBufferInt64Atomics)
-			capabilities.dataTypes |= EGraphicsDataTypes_AtomicI64;
-
-		if(atomicsF32.shaderBufferFloat32AtomicAdd && atomicsF32.shaderBufferFloat32Atomics)
-			capabilities.dataTypes |= EGraphicsDataTypes_AtomicF32;
-
-		if(atomicsF32.shaderBufferFloat64AtomicAdd && atomicsF32.shaderBufferFloat64Atomics)
-			capabilities.dataTypes |= EGraphicsDataTypes_AtomicF64;
-
-		//Compression
-
-		if(features.textureCompressionASTC_LDR)
-			capabilities.dataTypes |= EGraphicsDataTypes_ASTC;
-
-		if(features.textureCompressionBC)
-			capabilities.dataTypes |= EGraphicsDataTypes_BCn;
-
-		//MSAA
-
-		if(allMSAA & VK_SAMPLE_COUNT_2_BIT)
-			capabilities.dataTypes |= EGraphicsDataTypes_MSAA2x;
-
-		if(allMSAA & VK_SAMPLE_COUNT_8_BIT)
-			capabilities.dataTypes |= EGraphicsDataTypes_MSAA8x;
-
-		if(allMSAA & VK_SAMPLE_COUNT_16_BIT)
-			capabilities.dataTypes |= EGraphicsDataTypes_MSAA16x;
-
-		//Enforce support for bindless
-
-		if(
-			limits.maxPerStageDescriptorSamplers < 2 * KIBI ||
-			limits.maxPerStageDescriptorUniformBuffers < 1 ||
-			limits.maxPerStageDescriptorStorageBuffers < 500 * KIBI - 1 ||
-			limits.maxPerStageDescriptorSampledImages < 250 * KIBI ||
-			limits.maxPerStageDescriptorStorageImages < 250 * KIBI ||
-			limits.maxPerStageResources < MEGA ||
-			limits.maxDescriptorSetSamplers < 2 * KIBI ||
-			limits.maxDescriptorSetUniformBuffers < 1 ||
-			limits.maxDescriptorSetStorageBuffers < 500 * KIBI - 1 ||
-			limits.maxDescriptorSetSampledImages < 250 * KIBI ||
-			limits.maxDescriptorSetStorageImages < 250 * KIBI
+			FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS, &options, sizeof(options))) ||
+			options.TiledResourcesTier < D3D12_TILED_RESOURCES_TIER_3 ||
+			!options.TypedUAVLoadAdditionalFormats ||
+			!options.OutputMergerLogicOp ||
+			!options.ROVsSupported ||
+			options.ConservativeRasterizationTier < D3D12_CONSERVATIVE_RASTERIZATION_TIER_2
 		) {
-			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", graphics binding tier not supported!", i);
-			continue;
+			Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support required D3D12_OPTIONS", i);
+			goto next;
 		}
 
-		//Enforce format support
-		//We don't enforce VK_FORMAT_FEATURE_VERTEX_BUFFER_BIT because the standard guarantees it.
+		if(options.DoublePrecisionFloatShaderOps)
+			caps.dataTypes |= EGraphicsDataTypes_F64;
+		
+		if(
+			FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS1, &options1, sizeof(options1))) ||
+			!options1.WaveOps || !options1.Int64ShaderOps
+		) {
+			Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support required D3D12_OPTIONS1", i);
+			goto next;
+		}
 
-		VkFormat toSupport[]  = {
+		if(options1.WaveLaneCountMin < 4 || options1.WaveLaneCountMax > 128) {
+			Log_debugLnx("D3D12: Unsupported device %"PRIu32", subgroup size is not in range 16-128!", i);
+			goto next;
+		}
 
-			//R8s, RG8s, RGBA8s
+		if(
+			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(
+				device, D3D12_FEATURE_D3D12_OPTIONS4, &options4, sizeof(options4)
+			)) &&
+			options4.Native16BitShaderOpsSupported
+		)
+			caps.dataTypes |= EGraphicsDataTypes_F16 | EGraphicsDataTypes_I16;
 
-			VK_FORMAT_R8_SNORM,
-			VK_FORMAT_R8G8_SNORM,
-			VK_FORMAT_R8G8B8A8_SNORM,
+		if(
+			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS5, &options5, sizeof(options5))) &&
+			options5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_0
+		) {
+			caps.features |= EGraphicsFeatures_RayPipeline | EGraphicsFeatures_Raytracing;
 
-			//R16, R16s
-			//RG16, RG16s
+			if(options5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_1)
+				caps.features |= EGraphicsFeatures_RayQuery;
+		}
 
-			VK_FORMAT_R16_SNORM,
-			VK_FORMAT_R16G16_SNORM,
+		if(
+			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS6, &options6, sizeof(options6))) &&
+			options6.VariableShadingRateTier >= D3D12_VARIABLE_SHADING_RATE_TIER_1
+		)
+			caps.features |= EGraphicsFeatures_VariableRateShading;
 
-			VK_FORMAT_R16_UNORM,
-			VK_FORMAT_R16G16_UNORM,
+		if(
+			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS7, &options7, sizeof(options7))) &&
+			options7.MeshShaderTier >= D3D12_MESH_SHADER_TIER_1
+		)
+			caps.features |= EGraphicsFeatures_MeshShader;
 
-			//RGBA16, RGBA16s
+		if(
+			FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS8, &options8, sizeof(options8))) ||
+			!options8.UnalignedBlockTexturesSupported
+		) {
+			Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support required D3D12_OPTIONS8", i);
+			goto next;
+		}
 
-			VK_FORMAT_R16G16B16A16_UNORM,
-			VK_FORMAT_R16G16B16A16_SNORM,
+		if(
+			FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS9, &options9, sizeof(options9))) ||
+			!options9.AtomicInt64OnTypedResourceSupported || 
+			!options9.AtomicInt64OnGroupSharedSupported
+		) {
+			Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support required D3D12_OPTIONS9", i);
+			goto next;
+		}
+		
+		if(
+			FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS12, &options12, sizeof(options12))) ||
+			!options12.EnhancedBarriersSupported
+		) {
+			Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support required D3D12_OPTIONS12", i);
+			goto next;
+		}
 
-			//BGRA8
+		shaderOpt.HighestShaderModel = D3D_SHADER_MODEL_6_5;		//Nice way of querying DirectX...
+		if(FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_SHADER_MODEL, &shaderOpt, sizeof(shaderOpt)))) {
+			Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support required shader model (6.5)", i);
+			goto next;
+		}
+		
+		if(FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_ARCHITECTURE1, &arch, sizeof(arch)))) {
+			Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support required D3D12_FEATURE_ARCHITECTURE1", i);
+			goto next;
+		}
 
-			VK_FORMAT_B8G8R8A8_UNORM,
+		if(!(desc.Flags & DXGI_ADAPTER_FLAG3_SOFTWARE)) 
+			type = !arch.UMA ? EGraphicsDeviceType_Dedicated : EGraphicsDeviceType_Integrated;
 
-			//D32S8, D32
+		ID3D12Device *device0 = NULL;
+		if(FAILED(device->lpVtbl->QueryInterface(device, &IID_ID3D12Device, (void**)&device0))) {
+			Log_debugLnx("D3D12: Unsupported device %"PRIu32", can't query version 0 device", i);
+			goto next;
+		}
 
-			VK_FORMAT_D32_SFLOAT_S8_UINT,
-			VK_FORMAT_D32_SFLOAT
+		//Validate formats
+
+		const U8 requiredUavTypedLoad[] = {
+
+			ETextureFormatId_R8s,
+			ETextureFormatId_RG8i, ETextureFormatId_RG8u, ETextureFormatId_RG8s, ETextureFormatId_RG8,
+
+			ETextureFormatId_R16, ETextureFormatId_R16s,
+
+			ETextureFormatId_RG16f, ETextureFormatId_RG16u,
+			ETextureFormatId_RG16i, ETextureFormatId_RG16, ETextureFormatId_RG16s,
+
+			ETextureFormatId_RGBA16, ETextureFormatId_RGBA16s,
+
+			ETextureFormatId_RG32f, ETextureFormatId_RG32i, ETextureFormatId_RG32u,
+
+			ETextureFormatId_BGR10A2
 		};
 
-		VkFormatFeatureFlags reqFormatDef =
-			VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT |
-			VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT |
-			VK_FORMAT_FEATURE_BLIT_DST_BIT |
-			VK_FORMAT_FEATURE_BLIT_SRC_BIT |
-			VK_FORMAT_FEATURE_TRANSFER_DST_BIT |
-			VK_FORMAT_FEATURE_TRANSFER_SRC_BIT;
+		for(U64 j = 0; j < sizeof(requiredUavTypedLoad); ++j) {
 
-		VkFormatFeatureFlags depthStencilDef =
-			VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT |
-			VK_FORMAT_FEATURE_BLIT_SRC_BIT |
-			VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT;
+			D3D12_FEATURE_DATA_FORMAT_SUPPORT format = (D3D12_FEATURE_DATA_FORMAT_SUPPORT) {
+				.Format = ETextureFormatId_toDXFormat(requiredUavTypedLoad[j])
+			};
 
-		VkFormatFeatureFlags reqFormatFeatFlags[] = {
+			D3D12_FORMAT_SUPPORT1 mask1 = D3D12_FORMAT_SUPPORT1_TYPED_UNORDERED_ACCESS_VIEW;
+			D3D12_FORMAT_SUPPORT2 mask2 = D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD | D3D12_FORMAT_SUPPORT2_UAV_TYPED_STORE;
 
-			//R8s, RG8s, RGBA8s
-			//R16, R16s
-			//RG16, RG16s
-			//RGBA16, RGBA16s
-
-			reqFormatDef, reqFormatDef, reqFormatDef,
-			reqFormatDef, reqFormatDef,
-			reqFormatDef, reqFormatDef,
-
-			reqFormatDef, reqFormatDef,
-
-			//BGRA8
-
-			VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT,
-
-			//D32S8, D32
-
-			depthStencilDef, depthStencilDef,
-		};
-
-		Bool unsupported = false;
-
-		for(U64 k = 0; k < sizeof(toSupport) / sizeof(VkFormat); ++k) {
-
-			VkFormatProperties formatInfo = (VkFormatProperties) { 0 };
-			vkGetPhysicalDeviceFormatProperties(dev, toSupport[k], &formatInfo);
-
-			VkFormatFeatureFlags reqk = reqFormatFeatFlags[k];
-
-			if((formatInfo.optimalTilingFeatures & reqk) != reqk) {
-				unsupported = true;
-				break;
+			if(
+				FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_FORMAT_SUPPORT, &format, sizeof(format))) || 
+				(format.Support2 & mask2) != mask2 || 
+				(format.Support1 & mask1) != mask1
+			) {
+				Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support required format (typed uav load)", i);
+				goto next;
 			}
 		}
 
-		if (unsupported) {
-			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", required texture format not supported!", i);
-			continue;
-		}
+		//Optional formats
 
-		//Get optional formats (RGB32u, RGB32i, RGB32f)
-
-		typedef struct OptionalFormat {
-
-			VkFormat format;
-
-			EGraphicsDataTypes optFormat;
-
-			VkFormatFeatureFlags flags;
-
-			Bool support;
-			U8 pad[3];
-
-		} OptionalFormat;
-
-		OptionalFormat optionalFormats[]  = {
-
-			(OptionalFormat) {
-				.format = VK_FORMAT_R32G32B32_SFLOAT,
-				.optFormat = EGraphicsDataTypes_RGB32f,
-				.flags = reqFormatDef
-			},
-
-			(OptionalFormat) {
-				.format = VK_FORMAT_R32G32B32_SINT,
-				.optFormat = EGraphicsDataTypes_RGB32i,
-				.flags = reqFormatDef
-			},
-
-			(OptionalFormat) {
-				.format = VK_FORMAT_R32G32B32_UINT,
-				.optFormat = EGraphicsDataTypes_RGB32u,
-				.flags = reqFormatDef
-			},
-
-			(OptionalFormat) {
-				.format = VK_FORMAT_D24_UNORM_S8_UINT,
-				.optFormat = EGraphicsDataTypes_D24S8,
-				.flags = depthStencilDef
-			},
-
-			(OptionalFormat) {
-				.format = VK_FORMAT_S8_UINT,
-				.optFormat = EGraphicsDataTypes_S8,
-				.flags = depthStencilDef
-			}
+		D3D12_FEATURE_DATA_FORMAT_SUPPORT format = (D3D12_FEATURE_DATA_FORMAT_SUPPORT) {
+			.Format = DXGI_FORMAT_R32G32B32_FLOAT
 		};
 
-		for(U64 k = 0; k < sizeof(optionalFormats) / sizeof(OptionalFormat); ++k) {
+		U32 mask1 = D3D12_FORMAT_SUPPORT1_RENDER_TARGET | D3D12_FORMAT_SUPPORT1_SHADER_SAMPLE | D3D12_FORMAT_SUPPORT1_BLENDABLE;
 
-			VkFormatProperties formatInfo = (VkFormatProperties) { 0 };
-			vkGetPhysicalDeviceFormatProperties(dev, optionalFormats[k].format, &formatInfo);
+		if(
+			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_FORMAT_SUPPORT, &format, sizeof(format))) && 
+			(format.Support1 & mask1) == mask1
+		)
+			caps.dataTypes |= EGraphicsDataTypes_RGB32f;
 
-			if((formatInfo.optimalTilingFeatures & optionalFormats[k].flags) == optionalFormats[k].flags)
-				capabilities.dataTypes |= optionalFormats[k].optFormat;
+		if(
+			(Bool)(format.Format = DXGI_FORMAT_R32G32B32_SINT) &&
+			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_FORMAT_SUPPORT, &format, sizeof(format))) && 
+			format.Support1 & D3D12_FORMAT_SUPPORT1_RENDER_TARGET
+		)
+			caps.dataTypes |= EGraphicsDataTypes_RGB32i;
+
+		if(
+			(Bool)(format.Format = DXGI_FORMAT_R32G32B32_UINT) &&
+			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_FORMAT_SUPPORT, &format, sizeof(format))) && 
+			format.Support1 & D3D12_FORMAT_SUPPORT1_RENDER_TARGET
+		)
+			caps.dataTypes |= EGraphicsDataTypes_RGB32u;
+
+		//Require 8x MSAA for RGBA32f and RGB32f
+
+		D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS msaa = (D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS) {
+			.Format = DXGI_FORMAT_R32G32B32A32_FLOAT,
+			.SampleCount = 8
+		};
+
+		if(
+			FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &msaa, sizeof(msaa))) || 
+			!msaa.NumQualityLevels
+		) {
+			Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support required MSAA flag for RGBA32f", i);
+			goto next;
 		}
 
-		//Grab LUID/UUID
-
-		if(id.deviceLUIDValid)
-			capabilities.features |= EGraphicsFeatures_LUID;
-
-		//API dependent stuff for the runtime
-
-		if(optExtensions[EOptExtensions_DebugMarker])
-			capabilities.features |= EGraphicsFeatures_DebugMarkers;
-
-		if(perfQuery.performanceCounterQueryPools)
-			capabilities.featuresExt |= EVkGraphicsFeatures_PerfQuery;
+		if(
+			(caps.dataTypes & EGraphicsDataTypes_RGB32f) &&
+			(Bool)(msaa.Format = DXGI_FORMAT_R32G32B32_FLOAT) && (
+				FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &msaa, sizeof(msaa))) || 
+				!msaa.NumQualityLevels
+			)
+		)
+			caps.dataTypes &= ~EGraphicsDataTypes_RGB32f;
 
 		//Fully converted type
 
-		gotoIfError(clean, ListGraphicsDeviceInfo_resize(&temp2, temp2.length + 1, (Allocator){ 0 }))
+		gotoIfError(clean, ListGraphicsDeviceInfo_resize(&tempInfos, tempInfos.length + 1, (Allocator){ 0 }))
 
-		GraphicsDeviceInfo *info = temp2.ptrNonConst + j;
+		GraphicsDeviceInfo *info = tempInfos.ptrNonConst + tempInfos.length - 1;
 
 		*info = (GraphicsDeviceInfo) {
 			.type = type,
-			.vendor = vendor,
+			.vendor = vendorId,
 			.id = i,
-			.capabilities = capabilities,
-			.luid = *(const U64*)id.deviceLUID,
-			.uuid = { ((const U64*)id.deviceUUID)[0], ((const U64*)id.deviceUUID)[1] },
-			.ext = dev
+			.capabilities = caps,
+			.luid = luid,
+			.uuid = { luid, 0 }
 		};
+
+		gotoIfError(clean, CharString_createFromUTF16x(desc.Description, 128, &tmp));
 
 		Buffer_copy(
 			Buffer_createRef(info->name, sizeof(info->name)),
-			Buffer_createRefConst(properties.deviceName, sizeof(properties.deviceName))
+			Buffer_createRefConst(tmp.ptr, CharString_length(tmp))
 		);
 
-		Buffer_copy(
-			Buffer_createRef(info->driverName, sizeof(info->driverName)),
-			Buffer_createRefConst(driver.driverName, sizeof(driver.driverName))
-		);
+		//Query driver version as string
 
-		Buffer_copy(
-			Buffer_createRef(info->driverInfo, sizeof(info->driverInfo)),
-			Buffer_createRefConst(driver.driverInfo, sizeof(driver.driverInfo))
-		);
+		if(vendorId == EGraphicsVendorId_AMD)
+			Buffer_copy(
+				Buffer_createRef(info->driverInfo, sizeof(info->driverInfo)),
+				CharString_bufferConst(instanceExt->amdDriverVersion)
+			);
 
-		++j;
+		else if(vendorId == EGraphicsVendorId_NV) {
+
+			Buffer_copy(
+				Buffer_createRef(info->driverInfo, sizeof(info->driverInfo)),
+				CharString_bufferConst(instanceExt->nvDriverVersion)
+			);
+
+			//Raytracing validation
+
+			NvAPI_Status status = NvAPI_D3D12_EnableRaytracingValidation(device, NVAPI_D3D12_RAYTRACING_VALIDATION_FLAG_NONE);
+
+			if(status != NVAPI_ACCESS_DENIED && status != NVAPI_OK)
+				Log_debugLnx("D3D12: NVAPI: Couldn't enable raytracing validation on device %"PRIu32"", i);
+
+			if(status == NVAPI_OK)
+				info->capabilities.features |= EGraphicsFeatures_RayValidation;
+
+			//SER (Shader execution reordering)
+
+			NVAPI_D3D12_RAYTRACING_THREAD_REORDERING_CAPS ser = (NVAPI_D3D12_RAYTRACING_THREAD_REORDERING_CAPS) { 0 };
+
+			status = NvAPI_D3D12_GetRaytracingCaps(
+				device0, NVAPI_D3D12_RAYTRACING_CAPS_TYPE_THREAD_REORDERING, &ser, sizeof(ser)
+			);
+
+			if(status != NVAPI_OK)
+				Log_debugLnx("D3D12: NVAPI: Couldn't query for SER on device %"PRIu32"", i);
+
+			else if(ser == NVAPI_D3D12_RAYTRACING_THREAD_REORDERING_CAP_STANDARD)
+				info->capabilities.features |= EGraphicsFeatures_RayReorder;
+
+			//Opacity micromaps
+
+			NVAPI_D3D12_RAYTRACING_OPACITY_MICROMAP_CAPS omm = (NVAPI_D3D12_RAYTRACING_OPACITY_MICROMAP_CAPS) { 0 };
+
+			status = NvAPI_D3D12_GetRaytracingCaps(
+				device0, NVAPI_D3D12_RAYTRACING_CAPS_TYPE_OPACITY_MICROMAP, &omm, sizeof(omm)
+			);
+
+			if(status != NVAPI_OK)
+				Log_debugLnx("D3D12: NVAPI: Couldn't query for OMM on device %"PRIu32"", i);
+
+			else if(omm == NVAPI_D3D12_RAYTRACING_OPACITY_MICROMAP_CAP_STANDARD)
+				info->capabilities.features |= EGraphicsFeatures_RayMicromapOpacity;
+
+			//Displacement micromaps
+
+			NVAPI_D3D12_RAYTRACING_DISPLACEMENT_MICROMAP_CAPS dmm = (NVAPI_D3D12_RAYTRACING_DISPLACEMENT_MICROMAP_CAPS) { 0 };
+
+			status = NvAPI_D3D12_GetRaytracingCaps(
+				device0, NVAPI_D3D12_RAYTRACING_CAPS_TYPE_DISPLACEMENT_MICROMAP, &dmm, sizeof(dmm)
+			);
+
+			if(status != NVAPI_OK)
+				Log_debugLnx("D3D12: NVAPI: Couldn't query for DMM on device %"PRIu32"", i);
+
+			else if(omm == NVAPI_D3D12_RAYTRACING_DISPLACEMENT_MICROMAP_CAP_STANDARD)
+				info->capabilities.features |= EGraphicsFeatures_RayMicromapDisplacement;
+		}
+
+		else {
+			//TODO: Intel, QCOM, etc.
+		}
+
+		//Release temporary device
+
+	next:
+
+		if(device)
+			device->lpVtbl->Release(device);
+
+		device = NULL;
 	}
 
-	if(!temp2.length)
+	if(!tempInfos.length)
 		gotoIfError(clean, Error_unsupportedOperation(0, "GraphicsInstance_getDeviceInfos() no supported OxC3 device found"))
 
-	*result = temp2;
+	*result = tempInfos;
 
 clean:
 
 	if(err.genericError)
-		ListGraphicsDeviceInfo_freex(&temp2);
+		ListGraphicsDeviceInfo_freex(&tempInfos);
 
-	ListVkPhysicalDevice_freex(&temp);
-	ListVkLayerProperties_freex(&temp3);
-	ListVkExtensionProperties_freex(&temp4);
+	if(device)
+		device->lpVtbl->Release(device);		//Release device. We might re-create, but we can't pass it around
+
+	for(U64 i = 0; i < adapters.length; ++i)
+		adapters.ptr[i]->lpVtbl->Release(adapters.ptr[i]);
+
+	CharString_freex(&tmp);
+	ListIDXGIAdapter4_freex(&adapters);
 	return err;
 }

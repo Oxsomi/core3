@@ -45,7 +45,7 @@ typedef enum EPipelineStage {
 	EPipelineStage_ClosestHitExt,
 	EPipelineStage_AnyHitExt,
 	EPipelineStage_IntersectionExt,
-	
+
 	EPipelineStage_RtStart = EPipelineStage_RaygenExt,
 	EPipelineStage_RtEnd = EPipelineStage_IntersectionExt,
 	EPipelineStage_RtHitStart = EPipelineStage_ClosestHitExt,
@@ -186,7 +186,6 @@ typedef enum EMSAASamples {
 	EMSAASamples_x2Ext,		//Query MSAA2x data types from device
 	EMSAASamples_x4,		//4x Always supported
 	EMSAASamples_x8Ext,		//Query MSAA8x data types from device
-	EMSAASamples_x16Ext,	//Query MSAA16x data types from device
 	EMSAASamples_Count
 } EMSAASamples;
 
@@ -227,7 +226,7 @@ typedef struct Rasterizer {
 	U16 cullMode;				//ECullMode
 	U16 flags;					//ERasterizerFlags
 	F32 depthBiasClamp;
-	F32 depthBiasConstantFactor;
+	I32 depthBiasConstantFactor;
 	F32 depthBiasSlopeFactor;
 
 } Rasterizer;

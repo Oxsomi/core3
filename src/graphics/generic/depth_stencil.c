@@ -26,12 +26,12 @@
 #include "types/string.h"
 
 Error DepthStencilRef_dec(DepthStencilRef **depth) {
-	return !RefPtr_dec(depth) ? 
+	return !RefPtr_dec(depth) ?
 		Error_invalidOperation(0, "DepthStencilRef_dec()::depth is invalid") : Error_none();
 }
 
 Error DepthStencilRef_inc(DepthStencilRef *depth) {
-	return !RefPtr_inc(depth) ? 
+	return !RefPtr_inc(depth) ?
 		Error_invalidOperation(0, "DepthStencilRef_inc()::depth is invalid") : Error_none();
 }
 

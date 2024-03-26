@@ -18,19 +18,23 @@
 *  This is called dual licensing.
 */
 
-#include "graphics/vulkan/vulkan.h"
-#include "graphics/vulkan/vk_device.h"
-#include "graphics/vulkan/vk_instance.h"
+int translationUnitEmpty8 = 0;
+
+#include "graphics/directx12/dx_device.h"
 #include "graphics/generic/texture.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
 #include "platforms/ext/stringx.h"
 #include "formats/texture.h"
 
-const U32 UnifiedTextureImageExt_size = sizeof(VkUnifiedTexture);
+const U32 UnifiedTextureImageExt_size = sizeof(DxUnifiedTexture);
 
 Bool UnifiedTexture_freeExt(TextureRef *textureRef) {
+	(void)textureRef;
+	return false;
+}
 
+/*
 	const UnifiedTexture utex = TextureRef_getUnifiedTexture(textureRef, NULL);
 	const VkGraphicsDevice *deviceExt = GraphicsDevice_ext(GraphicsDeviceRef_ptr(utex.resource.device), Vk);
 
@@ -49,8 +53,13 @@ Bool UnifiedTexture_freeExt(TextureRef *textureRef) {
 }
 
 UnifiedTexture *TextureRef_getUnifiedTextureIntern(TextureRef *tex, DeviceResourceVersion *version);
+*/
 
 Error UnifiedTexture_createExt(TextureRef *textureRef, CharString name) {
+	(void)textureRef; (void)name;
+	return Error_unimplemented(0, "UnifiedTexture_createExt() unimplemented");
+}
+/*
 
 	UnifiedTexture *texture = TextureRef_getUnifiedTextureIntern(textureRef, NULL);
 
@@ -247,3 +256,4 @@ clean:
 	CharString_freex(&temp);
 	return err;
 }
+*/

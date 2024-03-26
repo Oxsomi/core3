@@ -394,7 +394,7 @@ Error BufferLayout_createStruct(BufferLayout *layout, BufferLayoutStructInfo inf
 
 	if(layout->structs.length + 1 >= U32_MAX)
 		return Error_outOfBounds(
-			3, layout->structs.length, U32_MAX, 
+			3, layout->structs.length, U32_MAX,
 			"BufferLayout_createStruct()::layout->structs.length is limited to U32_MAX"
 		);
 

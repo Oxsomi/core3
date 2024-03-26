@@ -33,7 +33,7 @@ typedef struct GraphicsApplicationInfo {
 
 typedef enum EGraphicsApi {
 	EGraphicsApi_Vulkan,
-	//EGraphicsApi_DirectX12,
+	EGraphicsApi_DirectX12,
 	//EGraphicsApi_Metal,
 	//EGraphicsApi_WebGPU,
 	EGraphicsApi_Count

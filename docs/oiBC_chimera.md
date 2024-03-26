@@ -33,7 +33,7 @@ For the following types there exist these registers:
   - Constant offset (temporary): The offset that can be consumed by loadVar, jump/call, branch, swizzle.
     - sel offReg, x: selects the xth 2 bit pair with the cursor (e.g. 1 indexes bit 2 and 3).
     - set offReg[i], x: sets the 2 bits pointed to by the cursor.
-    - *These operations have to be chained, anything that precedes the first set/sel will be ignored by the runtime.* 
+    - *These operations have to be chained, anything that precedes the first set/sel will be ignored by the runtime.*
       - The runtime will transform it into a single instruction, so any operations that aren't set or sel before this register are ignored.
       - Each new chain resets the cursor and contents of the register.
     - Example: load constant 1
@@ -100,14 +100,14 @@ Functions are defined in a function table provided by the executable or library.
 //Optional names for functions (linear)
 optional oiDL format (UTF8 or Ascii)				//No magic for oiDL present
     A CharString entry per element
-    
+
 //0-8: FidiA, FidiB, Gida, Leon size types.
 U2 lengths[0-4] as EXXDataSizeType;
 
 optional EXXDataSizeType fidiA, fidiB, gida, leon;
 
 functionSizes[fidiA + fidiB + gida + leon]: U2[] represents EXXDataSizeType
-        
+
 //Almost EXXDataSizeType, except EXXDataSizeType_U64 is 'length not present'.
 optional U2 functionConstantSizes[fidiA + fidiB + gida + leon]
 
@@ -137,13 +137,13 @@ ConstantTable constants;
 
 foreach fidiA function:
 	U8 fidiA[functionSize[i]]
-        
+
 foreach fidiB function:
 	U8 fidiB[functionSize[i]]
-        
+
 foreach gida function:
 	U16 gida[functionSize[i]]
-        
+
 foreach leon function:
 	U32 leon[functionSize[i]]
 ```
@@ -171,28 +171,28 @@ class Sphere {
 };
 
 class Ray {
-    
+
     F32x3 pos;				//Require or error
     F32 minT = 0;
-    
+
     F32x3 dir;
     F32 maxT = 64992;
-        
+
     //Raytracing gems I: Chapter 7
     Bool intersect(Sphere sphere, ref F32 hitT) {
-        
+
         F32x3 dif = _pos - sphere.pos;
         F32 b = (-dif).dot(_dir);
-        
+
         F32x3 qc = dif + _dir * b;
         F32 D = sphere.radius2 - qc.sqDist();
-        
+
         if(D < 0)
             return false;
-        
+
         F32 q = b + b.sign() * D.sqrt();
         F32 c = dif.sqDist() - sphere.radius2;
-        
+
         F32 hitT1 = c / q, hitT2 = q;
         hitT = hitT1 < _minT ? hitT1 : hitT2;
         return hitT >= _minT && hitT < _maxT;
@@ -200,16 +200,16 @@ class Ray {
 };
 
 F32x3 traceRay(I32x2 id, I32x2 dims, F32x3 origin) {
-    
+
     F32x2 uv = (F32x2(id) + 0.5f) / dims;
-    
+
     Sphere sphere;
     Ray ray{ .pos = origin, .dir = F32x3(uv, -1).normalize() };
-    
+
     F32 hit;
     if(ray.intersect(sphere, ref hitT))
         return (ray.pos + ray.dir * hitT - sphere.pos).normalize() * 2 - 1;
-    
+
     return F32x3(0.25f, 0.5f, 1);
 }
 ```
@@ -218,41 +218,41 @@ F32x3 traceRay(I32x2 id, I32x2 dims, F32x3 origin) {
 
 ```c
 oiBC		//magicNumber (U32)
-    
+
 0000		//version (U16)
 00			//flag (U8): no names available
 00			//uncompressed & unencrypted
-    
+
 FC			//FidiA count is a U8, the rest is unavailable
-    
+
 02			//Two FidiA functions
-    
+
 00			//Constants and functions use 1 byte for length each
-    
+
 //Function table
-    
+
 1D			//Ray::intersect has 29 instructions
 00			//No constants (> 0 is a branch call)
-    
+
 17 			//traceRay has 23 instructions
 06			//6 constants
-    
+
 //Constant table
-    
+
 3C 00		//F16 1
 7B EF		//F16 ~65k
 40 00		//F16 2
 38 00		//F16 0.5
 34 00		//F16 0.25
 BC 00		//F16 -1
-    
+
 //Functions
-    
+
 //Sphere::intersects starts here
-    
+
 bank fv0, fv1		//Bank until ret
 bank f2, f0, f1		//Bank until ret or unbank
-    
+
 sub fv0, fv2 		//_pos - sphere.pos
 negate fv3, fv0		//-^
 dot3 fv3, fv1		//f0 = dot(-dif, _dir)
@@ -260,15 +260,15 @@ mul fv1, f0			//b * _dir
 add fv1, fv0		//qc = ^ + dif
 sqDist f1, fv1		//qc.sqDist()
 sub f1, f2			//sphere.radius2 - ^
-    
+
 bgeq 1				//>= 0 ? jump 1 instruction
 retz				//ret zero
-    
+
 sign f2, f0			//b.sign()
 sqrt f3, f1			//D.sqrt()
 mul f2, f3			//sign * sqrt
 add f0, f2			//q = b + ^
-    
+
 sqDist f1, fv0		//dif.sqDist()
 unbank f2			//unbank last float reg (sphere.radius2) into f2
 sub f1, f2			//c = sqDist - radius2
@@ -285,9 +285,9 @@ cmp f3, f2			//_minT - hitT
 beq 1
 retz
 retnz				//Return not zero (1)
-    
+
 //traceRay starts here
-    
+
 //traceRay, fi0, fi1 and fv0 contains id, dims and origin respectively
 cvtflp fv0, fi0		//F32x2(id)
 add fv1, #3			//^ + 0.5
@@ -295,7 +295,7 @@ cvtflp fv3, fi1		//F32x2(dims)
 div fv1, fv3		//loc / dims -> fv1
 setZ fv1, #5		//.z = -1
 normalize fv1		//ray dir
-    
+
 //Init sphere at fv2 and f0
 zero fv2			//origin: 0
 load f2, #0			//radius^2: 1
@@ -303,15 +303,15 @@ load f2, #0			//radius^2: 1
 //fv0 and fv1 contain the ray origin and direction. f0 and f1 minT, maxT
 zero f0				//minT: 0
 load f1, #1			//maxT: 65k
-    
+
 call #0				//call Sphere::intersects
-    
+
 bz 4				//Skip 4 if branch zero last result (e.g. if not intersects)
 setX fv0, #4		//0.25
 setY fv0, #3		//0.5
 setZ fv0, #0		//1
 ret
-    
+
 mul fv1, f0			//dir * t
 add fv0, fv1		//origin + dir * t
 sub fv0, fv2		//- sphere.pos

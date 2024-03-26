@@ -28,12 +28,12 @@
 TListImpl(GraphicsDeviceInfo);
 
 Error GraphicsInstanceRef_dec(GraphicsInstanceRef **inst) {
-	return !RefPtr_dec(inst) ? 
+	return !RefPtr_dec(inst) ?
 		Error_invalidOperation(0, "GraphicsInstanceRef_dec()::inst is required") : Error_none();
 }
 
 Error GraphicsInstanceRef_inc(GraphicsInstanceRef *inst) {
-	return !RefPtr_inc(inst) ? 
+	return !RefPtr_inc(inst) ?
 		Error_invalidOperation(0, "GraphicsInstanceRef_inc()::inst is required") : Error_none();
 }
 
@@ -49,7 +49,7 @@ Error GraphicsInstance_getPreferredDevice(
 	if(!deviceInfo)
 		return Error_nullPointer(4, "GraphicsInstance_getPreferredDevice()::deviceInfo is required");
 
-	if(deviceInfo->ext)
+	if(deviceInfo->driverInfo[0])
 		return Error_invalidParameter(
 			4, 0, "GraphicsInstance_getPreferredDevice()::*deviceInfo must be empty"
 		);
@@ -86,6 +86,12 @@ Error GraphicsInstance_getPreferredDevice(
 			continue;
 
 		if((info.capabilities.featuresExt & requiredCapabilities.featuresExt) != requiredCapabilities.featuresExt)
+			continue;
+
+		if(
+			info.capabilities.sharedMemory < requiredCapabilities.sharedMemory || 
+			info.capabilities.dedicatedMemory < requiredCapabilities.dedicatedMemory
+		)
 			continue;
 
 		if(info.type == EGraphicsDeviceType_Dedicated) {

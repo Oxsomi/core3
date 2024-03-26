@@ -318,6 +318,7 @@ elseif("${graphicsApi}" STREQUAL "directx12")
 
 		message("-- Downloading and unzipping Microsoft.Direct3D.WARP")
 
+		file(REMOVE_RECURSE "${CMAKE_BINARY_DIR}/external/warp/")
 		file(DOWNLOAD "https://www.nuget.org/api/v2/package/Microsoft.Direct3D.WARP/" "${CMAKE_BINARY_DIR}/external/warp.zip")
 		file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/external/warp/)
 
@@ -329,13 +330,14 @@ elseif("${graphicsApi}" STREQUAL "directx12")
 		file(REMOVE "${CMAKE_BINARY_DIR}/external/warp.zip")
 
 	endif()
-	
+
 	# Download the agility SDK so newer features are always available if the driver supports them
-	
+
 	if(${ForceUpdateDeps} OR (NOT EXISTS "${CMAKE_BINARY_DIR}/external/agility/"))
 
 		message("-- Downloading and unzipping Microsoft.Direct3D.D3D12")
-
+		
+		file(REMOVE_RECURSE "${CMAKE_BINARY_DIR}/external/agility/")
 		file(DOWNLOAD "https://www.nuget.org/api/v2/package/Microsoft.Direct3D.D3D12/" "${CMAKE_BINARY_DIR}/external/agility.zip")
 		file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/external/agility/)
 
@@ -347,17 +349,17 @@ elseif("${graphicsApi}" STREQUAL "directx12")
 		file(REMOVE "${CMAKE_BINARY_DIR}/external/agility.zip")
 
 		write_file(
-				"${CMAKE_BINARY_DIR}/external/agility/version.c"
-				"#include <stdint.h>\n"
-				"#include \"d3d12.h\"\n"
-				"__declspec(dllexport) extern const uint32_t D3D12SDKVersion = D3D12_SDK_VERSION;\n"
-				"__declspec(dllexport) extern const char *D3D12SDKPath = \"./D3D12/\";"
+			"${CMAKE_BINARY_DIR}/external/agility/version.c"
+			"#include <stdint.h>\n"
+			"#include \"d3d12.h\"\n"
+			"__declspec(dllexport) extern const uint32_t D3D12SDKVersion = D3D12_SDK_VERSION;\n"
+			"__declspec(dllexport) extern const char *D3D12SDKPath = \"./D3D12/\";"
 		)
 
 	endif()
 
 	# Add agility source files and includes as static lib
-	
+
 	file(GLOB_RECURSE agilityInclude "${CMAKE_BINARY_DIR}/external/agility/build/native/include")
 	file(GLOB_RECURSE agilitySrc "${CMAKE_BINARY_DIR}/external/agility/build/native/src")
 
@@ -369,10 +371,13 @@ elseif("${graphicsApi}" STREQUAL "directx12")
 		CMakeLists.txt
 	)
 
+	target_link_libraries(D3D12Agility PUBLIC dxgi dxguid d3d12)
 	target_link_libraries(OxC3_graphics PUBLIC D3D12Agility)
 	target_include_directories(D3D12Agility PUBLIC "${CMAKE_BINARY_DIR}/external/agility/build/native/include")
 
-	# Add an interface to link to that copies to target directory 
+	set_target_properties(D3D12Agility PROPERTIES FOLDER External/D3D12)
+
+	# Add an interface to link to that copies to target directory
 
 	if(NOT ${ARM})
 
@@ -402,6 +407,26 @@ elseif("${graphicsApi}" STREQUAL "directx12")
 		)
 
 	endif()
+
+	# AMD AGS and NVAPI are required because DirectX12 was apparently not good enough :/
+
+	# NVAPI, used for NV extensions and getting driver version
+
+	target_link_libraries(OxC3_graphics PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/external/nvapi/amd64/nvapi64.lib")
+	target_include_directories(OxC3_graphics PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/external/nvapi")
+
+	# AMD AGS, used to get driver version
+
+	target_link_libraries(OxC3_graphics PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/external/AGS_SDK/ags_lib/lib/amd_ags_x64.lib")
+	target_include_directories(OxC3_graphics PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/external/AGS_SDK/ags_lib/inc")
+
+	add_custom_command(TARGET OxC3_graphics POST_BUILD
+		COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin"
+		COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin/$<CONFIG>"
+		COMMAND ${CMAKE_COMMAND} -E copy_if_different
+		"${CMAKE_CURRENT_SOURCE_DIR}/external/AGS_SDK/ags_lib/lib/amd_ags_x64.dll"
+		"${CMAKE_BINARY_DIR}/bin/$<CONFIG>/"
+	)
 
 elseif("${graphicsApi}" STREQUAL "metal")
 	message(FATAL_ERROR "Graphics api not supported yet: Metal")

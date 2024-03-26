@@ -206,7 +206,7 @@ Error GraphicsInstance_createExt(GraphicsApplicationInfo info, Bool isVerbose, G
 
 		//Maximum validation
 
-		VkValidationFeatureEnableEXT enables[] = { 
+		VkValidationFeatureEnableEXT enables[] = {
 			VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT,
 			VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT,
 			VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT,
@@ -372,7 +372,8 @@ const C8 *optExtensionsName[] = {
 	"VK_EXT_opacity_micromap",
 	"VK_NV_displacement_micromap",
 	"VK_EXT_shader_atomic_float",
-	"VK_KHR_deferred_host_operations"
+	"VK_KHR_deferred_host_operations",
+	"VK_NV_ray_tracing_validation"
 };
 
 U64 optExtensionsNameCount = sizeof(optExtensionsName) / sizeof(optExtensionsName[0]);
@@ -614,6 +615,13 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 			VkPhysicalDeviceMeshShaderFeaturesEXT,
 			meshShader,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT
+		)
+
+		getDeviceFeatures(
+			optExtensions[EOptExtensions_RaytracingValidation],
+			VkPhysicalDeviceRayTracingValidationFeaturesNV,
+			rtValidation,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_VALIDATION_FEATURES_NV
 		)
 
 		getDeviceFeatures(
@@ -1052,6 +1060,9 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 
 		//Raytracing
 
+		if(rtValidation.rayTracingValidation)
+			capabilities.features |= EGraphicsFeatures_RayValidation;
+
 		if(!optExtensions[EOptExtensions_DeferredHostOperations])
 			optExtensions[EOptExtensions_RayAcceleration] = false;
 
@@ -1090,7 +1101,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 				if(optExtensions[EOptExtensions_RayPipeline]) {
 
 					if(
-						!rtpFeat.rayTracingPipeline || !rtpFeat.rayTraversalPrimitiveCulling || 
+						!rtpFeat.rayTracingPipeline || !rtpFeat.rayTraversalPrimitiveCulling ||
 						!rtpFeat.rayTracingPipelineTraceRaysIndirect
 					)
 						optExtensions[EOptExtensions_RayPipeline] = false;
@@ -1197,9 +1208,6 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 
 		if(allMSAA & VK_SAMPLE_COUNT_8_BIT)
 			capabilities.dataTypes |= EGraphicsDataTypes_MSAA8x;
-
-		if(allMSAA & VK_SAMPLE_COUNT_16_BIT)
-			capabilities.dataTypes |= EGraphicsDataTypes_MSAA16x;
 
 		//Enforce support for bindless
 
@@ -1310,6 +1318,27 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 			continue;
 		}
 
+		//Query for memory size
+		
+		VkGraphicsDevice fakeDevice = (VkGraphicsDevice) { 0 };
+		vkGetPhysicalDeviceMemoryProperties(dev, &fakeDevice.memoryProperties);
+		
+		U64 cpuHeapSize = 0;
+		gotoIfError(clean, VkDeviceMemoryAllocator_findMemory(&fakeDevice, true, U32_MAX, NULL, NULL, &cpuHeapSize))
+		cpuHeapSize &= (U64)I64_MAX;
+
+		U64 gpuHeapSize = 0;
+		gotoIfError(clean, VkDeviceMemoryAllocator_findMemory(&fakeDevice, false, U32_MAX, NULL, NULL, &gpuHeapSize))
+		gpuHeapSize &= (U64)I64_MAX;
+
+		if(cpuHeapSize < 512 * MIBI || gpuHeapSize < 512 * MIBI) {
+			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", not enough VRAM or RAM (requires 512MB each).", i);
+			continue;
+		}
+
+		capabilities.sharedMemory = cpuHeapSize;
+		capabilities.dedicatedMemory = gpuHeapSize;
+
 		//Get optional formats (RGB32u, RGB32i, RGB32f)
 
 		typedef struct OptionalFormat {
@@ -1380,6 +1409,8 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 		if(perfQuery.performanceCounterQueryPools)
 			capabilities.featuresExt |= EVkGraphicsFeatures_PerfQuery;
 
+		capabilities.dataTypes |= EGraphicsDataTypes_I16;
+
 		//Fully converted type
 
 		gotoIfError(clean, ListGraphicsDeviceInfo_resize(&temp2, temp2.length + 1, (Allocator){ 0 }))
@@ -1399,11 +1430,6 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 		Buffer_copy(
 			Buffer_createRef(info->name, sizeof(info->name)),
 			Buffer_createRefConst(properties.deviceName, sizeof(properties.deviceName))
-		);
-
-		Buffer_copy(
-			Buffer_createRef(info->driverName, sizeof(info->driverName)),
-			Buffer_createRefConst(driver.driverName, sizeof(driver.driverName))
 		);
 
 		Buffer_copy(

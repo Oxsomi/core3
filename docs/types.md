@@ -440,7 +440,7 @@ Make sure to avoid thread creation and try to use something similar to a job sys
 
 ## Atomic / AtomicI64
 
-AtomicI64 is a 64-bit int that can be accessed simultaneously from different threads. 
+AtomicI64 is a 64-bit int that can be accessed simultaneously from different threads.
 
 - Returns previous result before applying the operation:
   - I64 **AtomicI64_xor**(AtomicI64 *ptr, I64 value): Bitwise XOR (^).
@@ -466,30 +466,30 @@ ListU8 myList = (ListU8) { 0 };
 
 //Threading function
 Error myThread(U8 i) {
-    
+
     //Acquire lock; can return:
-    //Invalid (Lock uninitialized), 
-    //TimedOut (Time limit exceeded), 
+    //Invalid (Lock uninitialized),
+    //TimedOut (Time limit exceeded),
     //Acquired (This thread now owns the lock)
     //AlreadyLocked (Thread already owns lock, safe to continue)
     ELockAcquire acq = Lock_lock(&testLock, 1 * SECOND);
-    
+
     //Catch Invalid and TimedOut
     if(acq < ELockAcquire_Success)
         return Error_timedOut(0, "myThread() lock couldn't be acquired in 1s");
-    
+
     //Now we can safely append to the list
     Error err = Error_none();
     _gotoIfError(clean, ListU8_pushBackx(&myList, i));
-    
+
     //Always use _gotoIfError / clean label syntax to avoid leaking the lock.
 clean:
-    
-    //Only acquired locks should be unlocked. 
+
+    //Only acquired locks should be unlocked.
     //It's possible the calling function already acquired it.
     if(acq == ELockAcquire_Acquired)
    		Lock_unlock(&testLock);
-        
+
     return err;
 }
 ```
@@ -507,7 +507,7 @@ The following enums exist to allow logging:
 
 The following utility function exists:
 
-- void **Log_captureStackTrace**(Allocator alloc, void **stackTrace, U64 stackSize, U8 skip): Capture a `void*[stackSize]`  where each `void*` represents an address in the stack. 'skip' indicates how many previous stacks to skip; this might be because it's called in a helper function where it wants to point higher up in the stack. 
+- void **Log_captureStackTrace**(Allocator alloc, void **stackTrace, U64 stackSize, U8 skip): Capture a `void*[stackSize]`  where each `void*` represents an address in the stack. 'skip' indicates how many previous stacks to skip; this might be because it's called in a helper function where it wants to point higher up in the stack.
 
 The following functions print an output to the console (or whatever is relevant on the platform).
 
@@ -528,7 +528,7 @@ A RefPtr contains the following properties:
 
 - refCount: AtomicI64. When it reaches 0 it will destroy the data allocated for the RefPtr as well as calling the free function. To avoid this, increase the RefPtr using RefPtr_inc before "copying" it (e.g. adding a reference in a different library or to keep it alive). When done using it, make sure to use RefPtr_dec.
 - typeId: ETypeId. Can be any type defined by any library. The library has to follow the standard as specified in the type_id.h documentation.
-- length: U32. Defines how long the object is in memory. If the object is bigger than this, it should dynamically allocate through the free and alloc functions. 
+- length: U32. Defines how long the object is in memory. If the object is bigger than this, it should dynamically allocate through the free and alloc functions.
 - alloc: Allocator. Defines how the memory is freed/allocated.
 - free: ObjectFreeFunc; called before freeing the memory.
 

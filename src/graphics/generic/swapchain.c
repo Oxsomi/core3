@@ -25,12 +25,12 @@
 #include "types/error.h"
 
 Error SwapchainRef_dec(SwapchainRef **swapchain) {
-	return !RefPtr_dec(swapchain) ? 
+	return !RefPtr_dec(swapchain) ?
 		Error_invalidOperation(0, "SwapchainRef_dec()::swapchain is invalid") : Error_none();
 }
 
 Error SwapchainRef_inc(SwapchainRef *swapchain) {
-	return !RefPtr_inc(swapchain) ? 
+	return !RefPtr_inc(swapchain) ?
 		Error_invalidOperation(0, "SwapchainRef_inc()::swapchain is invalid") : Error_none();
 }
 

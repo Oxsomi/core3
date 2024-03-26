@@ -27,12 +27,12 @@
 #include "types/string.h"
 
 Error SamplerRef_dec(SamplerRef **sampler) {
-	return !RefPtr_dec(sampler) ? 
+	return !RefPtr_dec(sampler) ?
 		Error_invalidOperation(0, "SamplerRef_dec()::sampler is required") : Error_none();
 }
 
 Error SamplerRef_inc(SamplerRef *sampler) {
-	return !RefPtr_inc(sampler) ? 
+	return !RefPtr_inc(sampler) ?
 		Error_invalidOperation(0, "SamplerRef_inc()::sampler is required") : Error_none();
 }
 

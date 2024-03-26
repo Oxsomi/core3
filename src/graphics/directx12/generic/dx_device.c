@@ -19,10 +19,9 @@
 */
 
 #include "platforms/ext/listx_impl.h"
-#include "graphics/vulkan/vk_device.h"
-#include "graphics/vulkan/vk_instance.h"
-#include "graphics/vulkan/vk_swapchain.h"
-#include "graphics/vulkan/vk_buffer.h"
+#include "graphics/directx12/dx_device.h"
+#include "graphics/directx12/dx_swapchain.h"
+#include "graphics/directx12/dx_buffer.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
 #include "graphics/generic/swapchain.h"
@@ -34,6 +33,55 @@
 #include "types/math.h"
 #include "types/thread.h"
 
+/*
+
+//TODO: https://devblogs.microsoft.com/directx/d3d12-debug-layer-message-callback/
+//		https://microsoft.github.io/DirectX-Specs/d3d/MessageCallback.html
+
+void onDebugReport(
+	D3D12_MESSAGE_CATEGORY category, 
+	D3D12_MESSAGE_SEVERITY severity, 
+	D3D12_MESSAGE_ID id, 
+	LPCSTR description, 
+	void *context
+) {
+
+	(void) context;
+
+	const C8 *categoryStr = "Undefined";
+
+	switch(category) {
+		default:																					break;
+		case D3D12_MESSAGE_CATEGORY_APPLICATION_DEFINED:	categoryStr = "Application defined";	break;
+		case D3D12_MESSAGE_CATEGORY_MISCELLANEOUS:			categoryStr = "Misc";					break;
+		case D3D12_MESSAGE_CATEGORY_INITIALIZATION:			categoryStr = "Initialization";			break;
+		case D3D12_MESSAGE_CATEGORY_CLEANUP:				categoryStr = "Cleanup";				break;
+		case D3D12_MESSAGE_CATEGORY_COMPILATION:			categoryStr = "Compilation";			break;
+		case D3D12_MESSAGE_CATEGORY_STATE_CREATION:			categoryStr = "State creation";			break;
+		case D3D12_MESSAGE_CATEGORY_STATE_SETTING:			categoryStr = "State setting";			break;
+		case D3D12_MESSAGE_CATEGORY_STATE_GETTING:			categoryStr = "State getting";			break;
+		case D3D12_MESSAGE_CATEGORY_RESOURCE_MANIPULATION:	categoryStr = "Resource manipulation";	break;
+		case D3D12_MESSAGE_CATEGORY_EXECUTION:				categoryStr = "Execution";				break;
+		case D3D12_MESSAGE_CATEGORY_SHADER:					categoryStr = "Shader";					break;
+	}
+
+	switch(severity) {
+
+		case D3D12_MESSAGE_SEVERITY_CORRUPTION:
+		case D3D12_MESSAGE_SEVERITY_ERROR:
+			Log_errorLnx("Error %"PRIu32" (%s): %s", id, categoryStr, description);
+			break;
+
+		case D3D12_MESSAGE_SEVERITY_WARNING:
+			Log_warnLnx("Warning %"PRIu32" (%s): %s", id, categoryStr, description);
+			break;
+
+		default:
+			Log_debugLnx("Debug %"PRIu32" (%s): %s", id, categoryStr, description);
+			break;
+	}
+}
+
 TListImpl(DxCommandAllocator);
 TListNamedImpl(ID3D12Fence*, ListID3D12Fence);
 
@@ -44,8 +92,6 @@ TListNamedImpl(ID3D12Fence*, ListID3D12Fence);
 		*currPNext = &tmp##T;			\
 		currPNext = &tmp##T.pNext;		\
 	}
-
-const U64 GraphicsDeviceExt_size = sizeof(VkGraphicsDevice);
 
 //Convert command into API dependent instructions
 impl void CommandList_process(
@@ -59,7 +105,9 @@ impl void CommandList_process(
 TList(VkDeviceQueueCreateInfo);
 TList(VkQueueFamilyProperties);
 TListImpl(VkDeviceQueueCreateInfo);
-TListImpl(VkQueueFamilyProperties);
+TListImpl(VkQueueFamilyProperties);*/
+
+const U64 GraphicsDeviceExt_size = sizeof(DxGraphicsDevice);
 
 Error GraphicsDevice_initExt(
 	const GraphicsInstance *instance,
@@ -67,7 +115,14 @@ Error GraphicsDevice_initExt(
 	Bool verbose,
 	GraphicsDeviceRef **deviceRef
 ) {
+	(void)instance;
+	(void)physicalDevice;
+	(void)verbose;
+	(void)deviceRef;
+	return Error_unimplemented(0, "GraphicsDevice_initExt() not implemented yet");
+}
 
+/*
 	const VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
 	(void)instanceExt;
 
@@ -853,9 +908,13 @@ clean:
 	ListVkDeviceQueueCreateInfo_freex(&queues);
 	ListVkQueueFamilyProperties_freex(&queueFamilies);
 	return err;
-}
+}*/
 
 void GraphicsDevice_postInit(GraphicsDevice *device) {
+	(void)device;
+}
+
+/*
 
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 
@@ -895,12 +954,16 @@ void GraphicsDevice_postInit(GraphicsDevice *device) {
 	uboDescriptor[2].dstSet = deviceExt->sets[EDescriptorSetType_CBuffer2];
 
 	vkUpdateDescriptorSets(deviceExt->device, 3, uboDescriptor, 0, NULL);
-}
+}*/
 
 Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext) {
 
 	if(!instance || !ext)
 		return instance;
+
+	return false;
+}
+/*
 
 	VkGraphicsDevice *deviceExt = (VkGraphicsDevice*)ext;
 
@@ -964,9 +1027,13 @@ Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext) {
 	return true;
 }
 
-//Executing commands
+//Executing commands */
 
 Error GraphicsDeviceRef_waitExt(GraphicsDeviceRef *deviceRef) {
+	(void)deviceRef;
+	return Error_unimplemented(0, "GraphicsDeviceRef_waitExt() unimplemented");
+}
+	/*
 	return vkCheck(vkDeviceWaitIdle(GraphicsDevice_ext(GraphicsDeviceRef_ptr(deviceRef), Vk)->device));
 }
 
@@ -984,14 +1051,18 @@ VkCommandAllocator *VkGraphicsDevice_getCommandAllocator(
 	return device->commandPools.ptrNonConst + id;
 }
 
-UnifiedTexture *TextureRef_getUnifiedTextureIntern(TextureRef *tex, DeviceResourceVersion *version);
+UnifiedTexture *TextureRef_getUnifiedTextureIntern(TextureRef *tex, DeviceResourceVersion *version);*/
 
 Error GraphicsDevice_submitCommandsImpl(
 	GraphicsDeviceRef *deviceRef,
 	ListCommandListRef commandLists,
 	ListSwapchainRef swapchains
 ) {
+	(void)deviceRef; (void)commandLists; (void)swapchains;
+	return Error_unimplemented(0, "GraphicsDevice_submitCommandsImpl() is unimplemented");
+}
 
+/*
 	//Unpack ext
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
@@ -1406,9 +1477,13 @@ clean:
 	CharString_freex(&temp);
 
 	return err;
-}
+}*/
 
-Error VkGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, VkCommandBuffer commandBuffer) {
+Error DxGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, DxCommandBuffer *commandBuffer) {
+	(void)deviceRef; (void)commandBuffer;
+	return Error_none();
+}
+/*
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
@@ -1467,3 +1542,4 @@ Error VkGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, VkCommandBuffer comma
 clean:
 	return err;
 }
+*/

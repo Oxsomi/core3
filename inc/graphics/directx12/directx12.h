@@ -32,6 +32,16 @@ typedef struct DxUnifiedTexture {
 
 typedef enum ECompareOp ECompareOp;
 
+typedef union DxPipeline {
+
+	struct {
+		ID3D12StateObject *stateObject;					//For anything else (RTPSO, workgraphs, etc.)
+		ID3D12StateObjectProperties *stateObjectProps;
+	};
+
+	ID3D12PipelineState *pso;			//For graphics & compute shaders
+} DxPipeline;
+
 typedef struct DxBLAS {
 	U8 padding;				//The concept of a BLAS resource doesn't exist in DX12; it's just a buffer.
 } DxBLAS;
@@ -39,6 +49,10 @@ typedef struct DxBLAS {
 typedef struct DxTLAS {
 	U8 padding;				//The concept of a TLAS resource doesn't exist in DX12; it's just a buffer.
 } DxTLAS;
+
+typedef enum EDxGraphicsFeatures {
+	EDxGraphicsFeatures_RTValidation	= 1 << 0		//NV specific extra raytracing validation
+} EDxGraphicsFeatures;
 
 static const U32 raytracingShaderIdSize = 32;
 static const U32 raytracingShaderAlignment = 64;
@@ -48,10 +62,6 @@ TList(D3D12_BUFFER_BARRIER);
 TList(ID3D12PipelineState);
 
 Error dxCheck(HRESULT result);
-
-//Pass types as non-NULL to allow validating if the texture format is supported.
-//Sometimes you don't want this, for example when serializing.
-DXFormat mapDxFormat(ETextureFormat format);
 
 D3D12_COMPARISON_FUNC mapDxCompareOp(ECompareOp op);
 

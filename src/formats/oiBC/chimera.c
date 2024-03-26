@@ -45,8 +45,8 @@ void Chimera_stepFidiA(Chimera *chim, const EFidiA op) {
 
 	//NaN for invalid operations (all exponent bits are set, and first mantissa bit)
 
-	const U32 NaNu = 
-		(((U32)EFloatType_exponentMask(EFloatType_F32) << 1) | 1) << 
+	const U32 NaNu =
+		(((U32)EFloatType_exponentMask(EFloatType_F32) << 1) | 1) <<
 		((U32)EFloatType_exponentShift(EFloatType_F32) - 1);
 
 	const F32 NaN = *(const F32*)&NaNu;
@@ -113,11 +113,11 @@ void Chimera_stepFidiA(Chimera *chim, const EFidiA op) {
 		case EFidiA_isfinite:
 			Chimera_cmp(chim, F32_isValid(chim->f[4]));
 			return;
-				
+
 		case EFidiA_isnan:
 			Chimera_cmp(chim, F32_isNaN(chim->f[4]));
 			return;
-				
+
 		case EFidiA_anyFv:
 			Chimera_cmp(chim, F32x4_any(chim->vf[4]));
 			return;

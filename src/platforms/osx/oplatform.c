@@ -75,14 +75,14 @@ Error Platform_initUnixExt() {
 	}
 
 	Log_debugLnx("Complete get functions!");
-	
+
 	//Create auto release pool
-	
+
 	id pool = class_createInstance(clsNSAutoreleasePool(), 0);
 
 	if(!pool)
 		return Error_invalidState(0, "Platform_initUnixExt() failed to create auto release pool");
-		
+
 	if(!ObjC_sendId(pool, selInit()))
 		return Error_invalidState(0, "Platform_initUnixExt() failed to init auto release pool");
 

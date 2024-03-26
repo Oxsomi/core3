@@ -91,7 +91,7 @@ typedef enum EDescriptorTypeCount {
 
 	EDescriptorTypeCount_RWTextures		= EDescriptorTypeCount_RWTextures2D + EDescriptorTypeCount_RWTextures3D,
 
-	EDescriptorTypeCount_SSBO			= 
+	EDescriptorTypeCount_SSBO			=
 		EDescriptorTypeCount_Buffer + EDescriptorTypeCount_RWBuffer + EDescriptorTypeCount_TLASExt
 
 } EDescriptorTypeCount;

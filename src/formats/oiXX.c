@@ -36,7 +36,7 @@ Error Buffer_consumeSizeType(Buffer *buf, EXXDataSizeType type, U64 *result) {
 		case EXXDataSizeType_U64:		return Buffer_consume(buf, result, 8);
 		default:
 			return Error_invalidEnum(
-				1, (U64)type, (U64)EXXDataSizeType_U64, 
+				1, (U64)type, (U64)EXXDataSizeType_U64,
 				"Buffer_consumeSizeType()::type out of bounds"
 			);
 	}

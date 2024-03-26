@@ -26,14 +26,16 @@
 
 void GraphicsDeviceInfo_print(const GraphicsDeviceInfo *deviceInfo, Bool printCapabilities) {
 
-	if(!deviceInfo || !deviceInfo->ext)
+	if(!deviceInfo || !deviceInfo->driverInfo[0])
 		return;
 
 	Log_debugLnx(
-		"%s (%s %s):\n\t%s %"PRIu32"\n\tLUID %016"PRIu64"x\n\tUUID %016"PRIu64"x%016"PRIu64"x",
+		"%s (%s): %"PRIu64" bytes shared memory, %"PRIu64" bytes dedicated memory\n\t"
+		"%s %"PRIu32"\n\tLUID %016"PRIu64"x\n\tUUID %016"PRIu64"x%016"PRIu64"x",
 		deviceInfo->name,
-		deviceInfo->driverName,
 		deviceInfo->driverInfo,
+		deviceInfo->capabilities.sharedMemory,
+		deviceInfo->capabilities.dedicatedMemory,
 		(deviceInfo->type == EGraphicsDeviceType_CPU ? "CPU" : (
 			deviceInfo->type == EGraphicsDeviceType_Dedicated ? "dGPU" : (
 				deviceInfo->type == EGraphicsDeviceType_Integrated ? "iGPU" : "Simulated GPU"
@@ -100,6 +102,9 @@ void GraphicsDeviceInfo_print(const GraphicsDeviceInfo *deviceInfo, Bool printCa
 		if(feat & EGraphicsFeatures_RayReorder)
 			Log_debugLnx("\t\tRay reorder");
 
+		if(feat & EGraphicsFeatures_RayValidation)
+			Log_debugLnx("\t\tRay validation");
+
 		if(feat & EGraphicsFeatures_DebugMarkers)
 			Log_debugLnx("\t\tDebug markers");
 
@@ -112,11 +117,17 @@ void GraphicsDeviceInfo_print(const GraphicsDeviceInfo *deviceInfo, Bool printCa
 		if(feat & EGraphicsFeatures_DualSrcBlend)
 			Log_debugLnx("\t\tDual src blend (blend state)");
 
+		if(feat & EGraphicsFeatures_Workgraphs)
+			Log_debugLnx("\t\tWork graphs");
+
 		//Data types
 
 		const U32 dat = cap.dataTypes;
 
 		Log_debugLnx("\tData types:");
+
+		if(dat & EGraphicsDataTypes_F64)
+			Log_debugLnx("\t\t64-bit floats");
 
 		if(dat & EGraphicsDataTypes_I64)
 			Log_debugLnx("\t\t64-bit integers");
@@ -124,8 +135,8 @@ void GraphicsDeviceInfo_print(const GraphicsDeviceInfo *deviceInfo, Bool printCa
 		if(dat & EGraphicsDataTypes_F16)
 			Log_debugLnx("\t\t16-bit floats");
 
-		if(dat & EGraphicsDataTypes_F64)
-			Log_debugLnx("\t\t64-bit floats");
+		if(dat & EGraphicsDataTypes_I16)
+			Log_debugLnx("\t\t16-bit ints");
 
 		if(dat & EGraphicsDataTypes_AtomicI64)
 			Log_debugLnx("\t\t64-bit integer atomics (buffer)");
@@ -147,9 +158,6 @@ void GraphicsDeviceInfo_print(const GraphicsDeviceInfo *deviceInfo, Bool printCa
 
 		if(dat & EGraphicsDataTypes_MSAA8x)
 			Log_debugLnx("\t\tMSAA 8x");
-
-		if(dat & EGraphicsDataTypes_MSAA16x)
-			Log_debugLnx("\t\tMSAA 16x");
 
 		if(dat & EGraphicsDataTypes_S8)
 			Log_debugLnx("\t\tEDepthStencilFormat_S8");

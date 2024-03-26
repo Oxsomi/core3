@@ -22,15 +22,27 @@
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/device.h"
 #include "graphics/generic/instance.h"
-#include "graphics/vulkan/vulkan.h"
-#include "graphics/vulkan/vk_buffer.h"
-#include "graphics/vulkan/vk_device.h"
-#include "graphics/vulkan/vk_instance.h"
+#include "graphics/directx12/dx_buffer.h"
+#include "graphics/directx12/dx_device.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/log.h"
 
-U64 DeviceBufferExt_size = sizeof(VkDeviceBuffer);
+U64 DeviceBufferExt_size = sizeof(DxDeviceBuffer);
 
+Error DxDeviceBuffer_transition(
+	DxDeviceBuffer *buffer,
+	D3D12_BARRIER_SYNC sync,
+	D3D12_BARRIER_ACCESS access,
+	U64 offset,
+	U64 size,
+	ListD3D12_BUFFER_BARRIER *bufferBarriers,
+	D3D12_BARRIER_GROUP *dependency
+) {
+	(void) buffer; (void)sync; (void)access; (void)offset; (void)size; (void)bufferBarriers; (void)dependency;
+	return Error_unimplemented(0, "DxDeviceBuffer_transition() unimplemented");
+}
+
+/*
 Error VkDeviceBuffer_transition(
 	VkDeviceBuffer *buffer,
 	VkPipelineStageFlags2 stage,
@@ -80,10 +92,14 @@ Error VkDeviceBuffer_transition(
 
 	return Error_none();
 }
-
+*/
 
 Bool DeviceBuffer_freeExt(DeviceBuffer *buffer) {
+	(void) buffer;
+	return false;
+}
 
+/*
 	const VkGraphicsDevice *deviceExt = GraphicsDevice_ext(GraphicsDeviceRef_ptr(buffer->resource.device), Vk);
 	VkDeviceBuffer *bufferExt = DeviceBuffer_ext(buffer, Vk);
 
@@ -93,11 +109,17 @@ Bool DeviceBuffer_freeExt(DeviceBuffer *buffer) {
 	}
 
 	return true;
-}
+}*/
 
 Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *buf, CharString name) {
 
+	(void)dev;
+	(void)buf;
 	(void)name;
+
+	return Error_unimplemented(0, "GraphicsDeviceRef_createBufferExt() unimplemented");
+}
+/*
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(dev);
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
@@ -257,10 +279,14 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 
 clean:
 	return err;
-}
+}*/
 
 Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, DeviceBufferRef *pending) {
+	(void) commandBufferExt; (void) deviceRef; (void) pending;
+	return Error_unimplemented(0, "DeviceBufferRef_flush() unimplemented");
+}
 
+/*
 	VkCommandBuffer commandBuffer = (VkCommandBuffer) commandBufferExt;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
@@ -570,3 +596,4 @@ clean:
 	ListVkBufferCopy_freex(&pendingCopies);
 	return err;
 }
+*/
