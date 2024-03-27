@@ -63,30 +63,25 @@ Error createShaderModule(
 	if(err.genericError)
 		return err;
 
-	if(CharString_length(name)) {
+	const GraphicsDevice *baseDevice = (const GraphicsDevice*)device - 1;
 
-		#ifndef NDEBUG
+	if((baseDevice->flags & EGraphicsDeviceFlags_IsDebug) && CharString_length(name) && instance->debugSetName) {
 
-			if(instance->debugSetName && CharString_length(name)) {
+		const Bool isRt = stage >= EPipelineStage_RtStart && stage <= EPipelineStage_RtEnd;
 
-				const Bool isRt = stage >= EPipelineStage_RtStart && stage <= EPipelineStage_RtEnd;
+		gotoIfError(clean, CharString_formatx(
+			&temp, "Shader module (\"%.*s\": %s)",
+			CharString_length(name), name.ptr, isRt ? "Raytracing" : EPipelineStage_names[stage]
+		))
 
-				gotoIfError(clean, CharString_formatx(
-					&temp, "Shader module (\"%.*s\": %s)",
-					CharString_length(name), name.ptr, isRt ? "Raytracing" : EPipelineStage_names[stage]
-				))
+		const VkDebugUtilsObjectNameInfoEXT debugName2 = (VkDebugUtilsObjectNameInfoEXT) {
+			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+			.objectType = VK_OBJECT_TYPE_SHADER_MODULE,
+			.objectHandle = (U64) *mod,
+			.pObjectName = temp.ptr
+		};
 
-				const VkDebugUtilsObjectNameInfoEXT debugName2 = (VkDebugUtilsObjectNameInfoEXT) {
-					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-					.objectType = VK_OBJECT_TYPE_SHADER_MODULE,
-					.objectHandle = (U64) *mod,
-					.pObjectName = temp.ptr
-				};
-
-				gotoIfError(clean, vkCheck(instance->debugSetName(device->device, &debugName2)))
-			}
-
-		#endif
+		gotoIfError(clean, vkCheck(instance->debugSetName(device->device, &debugName2)))
 	}
 
 	goto clean;

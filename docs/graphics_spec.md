@@ -197,7 +197,7 @@ Requires task shaders to be present.
 
 #### Multiview
 
-The following are required for multiview: maxMultiviewInstanceIndex >=134217727 and maxMultiviewViewCount >=6 as well as multiview=true.
+The following are required for multiview: maxMultiviewInstanceIndex >=134217727 and maxMultiviewViewCount >=4 as well as multiview=true.
 
 #### VariableRateShading
 
@@ -299,7 +299,7 @@ If raytracing is enabled, the following formats will be enabled for BLAS buildin
 
 Since Vulkan is more fragmented, the features are more split up. However in DirectX, the features supported by default are the following:
 
-- EGraphicsFeatures_SubgroupArithmetic, EGraphicsFeatures_SubgroupShuffle, EGraphicsFeatures_GeometryShader, EGraphicsFeatures_MultiDrawIndirectCount, EGraphicsFeatures_SupportsLUID, EGraphicsFeatures_LogicOp, EGraphicsFeatures_DualSrcBlend and EGraphicsFeatures_Wireframe are enabled by default.
+- EGraphicsFeatures_SubgroupArithmetic, EGraphicsFeatures_SubgroupShuffle, EGraphicsFeatures_GeometryShader, EGraphicsFeatures_MultiDrawIndirectCount, EGraphicsFeatures_SupportsLUID, EGraphicsFeatures_LogicOp, EGraphicsFeatures_DualSrcBlend and EGraphicsFeatures_Wireframe, EGraphicsFeatures_Multiview, EGraphicsFeatures_DebugMarkers are enabled by default.
 - EGraphicsFeatures_Raytracing, EGraphicsFeatures_RayPipeline, EGraphicsFeatures_RayQuery, EGraphicsFeatures_MeshShaders, EGraphicsFeatures_VariableRateShading are a part of DirectX12 Ultimate (Turing, RDNA2, Arc and up).
 - If EGraphicsFeatures_Raytracing is enabled, so is EGraphicsFeatures_RayPipeline. The other RT extensions are optional.
 - EGraphicsFeatures_DirectRendering is most often available, only not on QCOM chips.

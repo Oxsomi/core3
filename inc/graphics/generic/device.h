@@ -49,6 +49,14 @@ typedef struct DescriptorStackTrace {
 TListNamed(Lock*, ListLockPtr);
 TList(DescriptorStackTrace);
 
+typedef enum EGraphicsDeviceFlags {
+	EGraphicsDeviceFlags_None			= 0,
+	EGraphicsDeviceFlags_IsVerbose		= 1 << 0,	//Device creation is verbose
+	EGraphicsDeviceFlags_IsDebug		= 1 << 1,	//Debug features such as API/RT validation, debug marker/names
+	EGraphicsDeviceFlags_DisableRt		= 1 << 2,	//Don't allow raytracing to be enabled (might reduce driver overhead)
+	EGraphicsDeviceFlags_DisableDebug	= 1 << 3	//Force disable debugging even on debug mode. NDEBUG is leading otherwise
+} EGraphicsDeviceFlags;
+
 typedef struct GraphicsDevice {
 
 	GraphicsInstanceRef *instance;
@@ -56,6 +64,9 @@ typedef struct GraphicsDevice {
 	GraphicsDeviceInfo info;
 
 	U64 submitId;
+
+	EGraphicsDeviceFlags flags;
+	U32 padding;
 
 	Ns lastSubmit;
 
@@ -110,7 +121,7 @@ Error GraphicsDeviceRef_inc(GraphicsDeviceRef *device);
 Error GraphicsDeviceRef_create(
 	GraphicsInstanceRef *instanceRef,
 	const GraphicsDeviceInfo *info,
-	Bool verbose,
+	EGraphicsDeviceFlags flags,
 	GraphicsDeviceRef **device
 );
 

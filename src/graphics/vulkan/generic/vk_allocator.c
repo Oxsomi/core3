@@ -258,9 +258,8 @@ Error DeviceMemoryAllocator_allocate(
 
 	gotoIfError(clean, AllocationBuffer_createx(alloc.allocationSize, true, &block.allocations))
 
-	#ifndef NDEBUG
+	if(allocator->device->flags & EGraphicsDeviceFlags_IsDebug)
 		Log_captureStackTracex(block.stackTrace, sizeof(block.stackTrace) / sizeof(void*), 1);
-	#endif
 
 	//Find a spot in the blocks list
 
@@ -286,35 +285,31 @@ Error DeviceMemoryAllocator_allocate(
 	*blockId = (U32) i;
 	*blockOffset = (U64) allocLoc;
 
-	if(CharString_length(objectName)) {
+	if(
+		(allocator->device->flags & EGraphicsDeviceFlags_IsDebug) && 
+		CharString_length(objectName) && instanceExt->debugSetName
+	) {
 
-		#ifndef NDEBUG
+		gotoIfError(clean, CharString_formatx(
+			&temp,
+			isDedicated ? "Memory block %"PRIu32" (host: %s, coherent: %s, device: %s): %s" :
+			"Memory block %"PRIu32" (host: %s, coherent: %s, device: %s)",
+			(U32) i,
+			prop & host ? "true" : "false",
+			prop & coherent ? "true" : "false",
+			prop & local ? "true" : "false",
+			objectName.ptr
+		))
 
-			if(instanceExt->debugSetName) {
+		VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
+			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+			.objectType = VK_OBJECT_TYPE_DEVICE_MEMORY,
+			.pObjectName = temp.ptr,
+			.objectHandle = (U64) mem
+		};
 
-				gotoIfError(clean, CharString_formatx(
-					&temp,
-					isDedicated ? "Memory block %"PRIu32" (host: %s, coherent: %s, device: %s): %s" :
-					"Memory block %"PRIu32" (host: %s, coherent: %s, device: %s)",
-					(U32) i,
-					prop & host ? "true" : "false",
-					prop & coherent ? "true" : "false",
-					prop & local ? "true" : "false",
-					objectName.ptr
-				))
-
-				VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
-					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-					.objectType = VK_OBJECT_TYPE_DEVICE_MEMORY,
-					.pObjectName = temp.ptr,
-					.objectHandle = (U64) mem
-				};
-
-				gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName)))
-				CharString_freex(&temp);
-			}
-
-		#endif
+		gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName)))
+		CharString_freex(&temp);
 	}
 
 clean:

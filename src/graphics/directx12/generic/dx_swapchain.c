@@ -388,27 +388,25 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 
 			gotoIfError(clean, vkCheck(vkCreateSemaphore(deviceExt->device, &semaphoreInfo, NULL, semaphore)))
 
-			#ifndef NDEBUG
-				if(instance->debugSetName) {
+			if((device->flags & EGraphicsDeviceFlags_IsDebug) && instance->debugSetName) {
 
-					CharString_freex(&temp);
-					gotoIfError(clean, CharString_formatx(&temp, "Swapchain semaphore %"PRIu64, (U64)i))
+				CharString_freex(&temp);
+				gotoIfError(clean, CharString_formatx(&temp, "Swapchain semaphore %"PRIu64, (U64)i))
 
-					const VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
-						.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-						.objectType = VK_OBJECT_TYPE_SEMAPHORE,
-						.objectHandle = (U64) *semaphore,
-						.pObjectName = temp.ptr
-					};
+				const VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
+					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+					.objectType = VK_OBJECT_TYPE_SEMAPHORE,
+					.objectHandle = (U64) *semaphore,
+					.pObjectName = temp.ptr
+				};
 
-					gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)))
-				}
-			#endif
+				gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)))
+			}
 		}
 
 		//Image views
 
-		#ifndef NDEBUG
+		if(device->flags & EGraphicsDeviceFlags_IsDebug)
 
 			VkUnifiedTexture *managedImage = TextureRef_getImgExtT(swapchainRef, Vk, 0, i);
 
@@ -428,30 +426,26 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 
 			gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)))
 
-		#endif
+		}
 	}
 
-	#ifndef NDEBUG
+	if((device->flags & EGraphicsDeviceFlags_IsDebug) && instance->debugSetName) {
 
-		if(instance->debugSetName) {
+		CharString_freex(&temp);
 
-			CharString_freex(&temp);
+		gotoIfError(clean, CharString_formatx(
+			&temp, "Swapchain (%.*s)", CharString_length(window->title), window->title.ptr
+		))
 
-			gotoIfError(clean, CharString_formatx(
-				&temp, "Swapchain (%.*s)", CharString_length(window->title), window->title.ptr
-			))
+		const VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
+			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+			.objectType = VK_OBJECT_TYPE_SWAPCHAIN_KHR,
+			.pObjectName = temp.ptr,
+			.objectHandle = (U64) swapchainExt->swapchain
+		};
 
-			const VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
-				.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-				.objectType = VK_OBJECT_TYPE_SWAPCHAIN_KHR,
-				.pObjectName = temp.ptr,
-				.objectHandle = (U64) swapchainExt->swapchain
-			};
-
-			gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)))
-		}
-
-	#endif
+		gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)))
+	}
 
 clean:
 	CharString_freex(&temp);

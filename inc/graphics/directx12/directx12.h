@@ -50,9 +50,7 @@ typedef struct DxTLAS {
 	U8 padding;				//The concept of a TLAS resource doesn't exist in DX12; it's just a buffer.
 } DxTLAS;
 
-typedef enum EDxGraphicsFeatures {
-	EDxGraphicsFeatures_RTValidation	= 1 << 0		//NV specific extra raytracing validation
-} EDxGraphicsFeatures;
+typedef enum EDxGraphicsFeatures { } EDxGraphicsFeatures;
 
 static const U32 raytracingShaderIdSize = 32;
 static const U32 raytracingShaderAlignment = 64;

@@ -68,7 +68,6 @@ TListImpl(VkQueueFamilyProperties);
 Error GraphicsDevice_initExt(
 	const GraphicsInstance *instance,
 	const GraphicsDeviceInfo *physicalDevice,
-	Bool verbose,
 	GraphicsDeviceRef **deviceRef
 ) {
 
@@ -472,7 +471,7 @@ Error GraphicsDevice_initExt(
 		.pQueueCreateInfos = queues.ptr
 	};
 
-	if (verbose) {
+	if (device->flags & EGraphicsDeviceFlags_IsVerbose) {
 
 		Log_debugLnx("Enabling extensions:");
 
@@ -501,20 +500,16 @@ Error GraphicsDevice_initExt(
 	graphicsQueueExt->resolvedQueueId = resolvedId++;
 	graphicsQueueExt->type = EVkCommandQueue_Graphics;
 
-	#ifndef NDEBUG
+	VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
+		.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+		.objectType = VK_OBJECT_TYPE_QUEUE
+	};
 
-		VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
-			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-			.objectType = VK_OBJECT_TYPE_QUEUE
-		};
-
-		if(instanceExt->debugSetName) {
-			debugName.pObjectName = "Graphics queue";
-			debugName.objectHandle = (U64) graphicsQueueExt->queue;
-			gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName)))
-		}
-
-	#endif
+	if(device->flags & EGraphicsDeviceFlags_IsDebug && instanceExt->debugSetName) {
+		debugName.pObjectName = "Graphics queue";
+		debugName.objectHandle = (U64) graphicsQueueExt->queue;
+		gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName)))
+	}
 
 	//Compute
 
@@ -532,13 +527,11 @@ Error GraphicsDevice_initExt(
 			&computeQueueExt->queue
 		);
 
-		#ifndef NDEBUG
-			if(instanceExt->debugSetName) {
-				debugName.pObjectName = "Compute queue";
-				debugName.objectHandle = (U64) computeQueueExt->queue;
-				gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName)))
-			}
-		#endif
+		if((device->flags & EGraphicsDeviceFlags_IsDebug) && instanceExt->debugSetName) {
+			debugName.pObjectName = "Compute queue";
+			debugName.objectHandle = (U64) computeQueueExt->queue;
+			gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName)))
+		}
 
 		deviceExt->uniqueQueues[resolvedId] = computeQueueId;
 		computeQueueExt->resolvedQueueId = resolvedId++;
@@ -564,13 +557,11 @@ Error GraphicsDevice_initExt(
 			&copyQueueExt->queue
 		);
 
-		#ifndef NDEBUG
-			if(instanceExt->debugSetName) {
-				debugName.pObjectName = "Copy queue";
-				debugName.objectHandle = (U64) copyQueueExt->queue;
-				gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName)))
-			}
-		#endif
+		if((device->flags & EGraphicsDeviceFlags_IsDebug) && instanceExt->debugSetName) {
+			debugName.pObjectName = "Copy queue";
+			debugName.objectHandle = (U64) copyQueueExt->queue;
+			gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName)))
+		}
 
 		deviceExt->uniqueQueues[resolvedId] = copyQueueId;
 		copyQueueExt->resolvedQueueId = resolvedId++;
@@ -595,25 +586,21 @@ Error GraphicsDevice_initExt(
 
 		gotoIfError(clean, vkCheck(vkCreateSemaphore(deviceExt->device, &semaphoreInfo, NULL, semaphore)))
 
-		#ifndef NDEBUG
+		if((device->flags & EGraphicsDeviceFlags_IsDebug) && instanceExt->debugSetName) {
 
-			if(instanceExt->debugSetName) {
+			gotoIfError(clean, CharString_formatx(&tempStr, "Queue submit semaphore %"PRIu64, k))
 
-				gotoIfError(clean, CharString_formatx(&tempStr, "Queue submit semaphore %"PRIu64, k))
+			VkDebugUtilsObjectNameInfoEXT debugName2 = (VkDebugUtilsObjectNameInfoEXT) {
+				.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+				.objectType = VK_OBJECT_TYPE_SEMAPHORE,
+				.objectHandle = (U64) *semaphore,
+				.pObjectName = tempStr.ptr,
+			};
 
-				VkDebugUtilsObjectNameInfoEXT debugName2 = (VkDebugUtilsObjectNameInfoEXT) {
-					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-					.objectType = VK_OBJECT_TYPE_SEMAPHORE,
-					.objectHandle = (U64) *semaphore,
-					.pObjectName = tempStr.ptr,
-				};
+			gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName2)))
 
-				gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName2)))
-
-				CharString_freex(&tempStr);
-			}
-
-		#endif
+			CharString_freex(&tempStr);
+		}
 	}
 
 	//Create timeline semaphore
@@ -769,7 +756,7 @@ Error GraphicsDevice_initExt(
 
 	gotoIfError(clean, vkCheck(vkAllocateDescriptorSets(deviceExt->device, &setInfo, deviceExt->sets)))
 
-	#ifndef NDEBUG
+	if((device->flags & EGraphicsDeviceFlags_IsDebug) && instanceExt->debugSetName) {
 
 		static const C8 *debugNames[] = {
 			"Samplers",
@@ -779,40 +766,38 @@ Error GraphicsDevice_initExt(
 			"Global frame cbuffer (2)"
 		};
 
-		if(instanceExt->debugSetName)
-			for (U32 i = 0; i < EDescriptorSetType_Count; ++i) {
+		for (U32 i = 0; i < EDescriptorSetType_Count; ++i) {
 
-				CharString_freex(&tempStr);
+			CharString_freex(&tempStr);
 
-				gotoIfError(clean, CharString_formatx(&tempStr, "Descriptor set (%"PRIu32": %s)", i, debugNames[i]))
+			gotoIfError(clean, CharString_formatx(&tempStr, "Descriptor set (%"PRIu32": %s)", i, debugNames[i]))
 
-				VkDebugUtilsObjectNameInfoEXT debugName2 = (VkDebugUtilsObjectNameInfoEXT) {
+			VkDebugUtilsObjectNameInfoEXT debugName2 = (VkDebugUtilsObjectNameInfoEXT) {
+				.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+				.objectType = VK_OBJECT_TYPE_DESCRIPTOR_SET,
+				.objectHandle = (U64) deviceExt->sets[i],
+				.pObjectName = tempStr.ptr,
+			};
+
+			gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName2)))
+
+			CharString_freex(&tempStr);
+
+			gotoIfError(clean, CharString_formatx(&tempStr, "Descriptor set layout (%"PRIu32": %s)", i, debugNames[i]))
+
+			if(i < EDescriptorSetType_UniqueLayouts) {
+
+				debugName2 = (VkDebugUtilsObjectNameInfoEXT) {
 					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-					.objectType = VK_OBJECT_TYPE_DESCRIPTOR_SET,
-					.objectHandle = (U64) deviceExt->sets[i],
+					.objectType = VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT,
+					.objectHandle = (U64) deviceExt->setLayouts[i],
 					.pObjectName = tempStr.ptr,
 				};
 
 				gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName2)))
-
-				CharString_freex(&tempStr);
-
-				gotoIfError(clean, CharString_formatx(&tempStr, "Descriptor set layout (%"PRIu32": %s)", i, debugNames[i]))
-
-				if(i < EDescriptorSetType_UniqueLayouts) {
-
-					debugName2 = (VkDebugUtilsObjectNameInfoEXT) {
-						.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-						.objectType = VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT,
-						.objectHandle = (U64) deviceExt->setLayouts[i],
-						.pObjectName = tempStr.ptr,
-					};
-
-					gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName2)))
-				}
 			}
-
-	#endif
+		}
+	}
 
 	//Get memory properties
 
@@ -1142,33 +1127,29 @@ Error GraphicsDevice_submitCommandsImpl(
 
 			gotoIfError(clean, vkCheck(vkCreateCommandPool(deviceExt->device, &poolInfo, NULL, &allocator->pool)))
 
-			#ifndef NDEBUG
+			if((device->flags & EGraphicsDeviceFlags_IsDebug) && instanceExt->debugSetName) {
 
-				if(instanceExt->debugSetName) {
+				gotoIfError(clean, CharString_formatx(
+					&temp,
+					"%s command pool (thread: %"PRIu32", frame id: %"PRIu32")",
+					queue.type == EVkCommandQueue_Graphics ? "Graphics" : (
+						queue.type == EVkCommandQueue_Compute ? "Compute" : "Copy"
+					),
+					threadId,
+					device->submitId % 3
+				))
 
-					gotoIfError(clean, CharString_formatx(
-						&temp,
-						"%s command pool (thread: %"PRIu32", frame id: %"PRIu32")",
-						queue.type == EVkCommandQueue_Graphics ? "Graphics" : (
-							queue.type == EVkCommandQueue_Compute ? "Compute" : "Copy"
-						),
-						threadId,
-						device->submitId % 3
-					))
+				VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
+					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+					.objectType = VK_OBJECT_TYPE_COMMAND_POOL,
+					.pObjectName = temp.ptr,
+					.objectHandle = (U64) allocator->pool
+				};
 
-					VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
-						.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-						.objectType = VK_OBJECT_TYPE_COMMAND_POOL,
-						.pObjectName = temp.ptr,
-						.objectHandle = (U64) allocator->pool
-					};
+				gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName)))
 
-					gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName)))
-
-					CharString_freex(&temp);
-				}
-
-			#endif
+				CharString_freex(&temp);
+			}
 		}
 
 		else gotoIfError(clean, vkCheck(vkResetCommandPool(
@@ -1188,33 +1169,29 @@ Error GraphicsDevice_submitCommandsImpl(
 
 			gotoIfError(clean, vkCheck(vkAllocateCommandBuffers(deviceExt->device, &bufferInfo, &allocator->cmd)))
 
-			#ifndef NDEBUG
+			if((device->flags & EGraphicsDeviceFlags_IsDebug) && instanceExt->debugSetName) {
 
-				if(instanceExt->debugSetName) {
+				gotoIfError(clean, CharString_formatx(
+					&temp,
+					"%s command buffer (thread: %"PRIu32", frame id: %"PRIu32")",
+					queue.type == EVkCommandQueue_Graphics ? "Graphics" : (
+						queue.type == EVkCommandQueue_Compute ? "Compute" : "Copy"
+					),
+					threadId,
+					device->submitId % 3
+				))
 
-					gotoIfError(clean, CharString_formatx(
-						&temp,
-						"%s command buffer (thread: %"PRIu32", frame id: %"PRIu32")",
-						queue.type == EVkCommandQueue_Graphics ? "Graphics" : (
-							queue.type == EVkCommandQueue_Compute ? "Compute" : "Copy"
-						),
-						threadId,
-						device->submitId % 3
-					))
+				VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
+					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+					.objectType = VK_OBJECT_TYPE_COMMAND_BUFFER,
+					.pObjectName = temp.ptr,
+					.objectHandle = (U64) allocator->cmd
+				};
 
-					VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
-						.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-						.objectType = VK_OBJECT_TYPE_COMMAND_BUFFER,
-						.pObjectName = temp.ptr,
-						.objectHandle = (U64) allocator->cmd
-					};
+				gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName)))
 
-					gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName)))
-
-					CharString_freex(&temp);
-				}
-
-			#endif
+				CharString_freex(&temp);
+			}
 		}
 
 		//Start buffer

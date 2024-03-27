@@ -269,21 +269,17 @@ Error GraphicsDevice_createPipelinesRaytracingInternalExt(
 
 	for (U64 i = 0; i < pipelines->length; ++i) {
 
-		#ifndef NDEBUG
+		if((device->flags & EGraphicsDeviceFlags_IsDebug) && instanceExt->debugSetName && names.length) {
 
-			if(instanceExt->debugSetName && names.length) {
+			VkDebugUtilsObjectNameInfoEXT debugName2 = (VkDebugUtilsObjectNameInfoEXT) {
+				.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+				.objectType = VK_OBJECT_TYPE_PIPELINE,
+				.objectHandle = (U64) pipelinesExt.ptr[i],
+				.pObjectName = names.ptr[i].ptr
+			};
 
-				VkDebugUtilsObjectNameInfoEXT debugName2 = (VkDebugUtilsObjectNameInfoEXT) {
-					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-					.objectType = VK_OBJECT_TYPE_PIPELINE,
-					.objectHandle = (U64) pipelinesExt.ptr[i],
-					.pObjectName = names.ptr[i].ptr
-				};
-
-				gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName2)))
-			}
-
-		#endif
+			gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName2)))
+		}
 
 		VkPipeline vkPipeline = pipelinesExt.ptrNonConst[i];
 		*Pipeline_ext(PipelineRef_ptr(pipelines->ptr[i]), Vk) = vkPipeline;

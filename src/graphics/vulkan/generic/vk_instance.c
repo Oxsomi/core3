@@ -86,7 +86,7 @@ TList(VkLayerProperties);
 TListImpl(VkExtensionProperties);
 TListImpl(VkLayerProperties);
 
-Error GraphicsInstance_createExt(GraphicsApplicationInfo info, Bool isVerbose, GraphicsInstanceRef **instanceRef) {
+Error GraphicsInstance_createExt(GraphicsApplicationInfo info, GraphicsInstanceRef **instanceRef) {
 
 	U32 layerCount = 0, extensionCount = 0;
 	CharString title = (CharString) { 0 };
@@ -115,15 +115,11 @@ Error GraphicsInstance_createExt(GraphicsApplicationInfo info, Bool isVerbose, G
 
 	Bool supportsDebug[2] = { 0 };
 
-	#ifndef NDEBUG
+	CharString debugReport = CharString_createRefCStrConst("VK_EXT_debug_report");
+	CharString debugUtils = CharString_createRefCStrConst("VK_EXT_debug_utils");
 
-		CharString debugReport = CharString_createRefCStrConst("VK_EXT_debug_report");
-		CharString debugUtils = CharString_createRefCStrConst("VK_EXT_debug_utils");
-
-		if(isVerbose)
-			Log_debugLnx("Supported extensions:");
-
-	#endif
+	if(instance->flags & EGraphicsInstanceFlags_IsVerbose)
+		Log_debugLnx("Supported extensions:");
 
 	Bool supportsColorSpace = false;
 
@@ -137,21 +133,20 @@ Error GraphicsInstance_createExt(GraphicsApplicationInfo info, Bool isVerbose, G
 		if(CharString_equalsStringSensitive(nameStr, swapchainColorspace))
 			supportsColorSpace = true;
 
-		#ifndef NDEBUG
+		else if(instance->flags & EGraphicsInstanceFlags_IsDebug) {
 
-			else if(CharString_equalsStringSensitive(nameStr, debugReport))
+			if(CharString_equalsStringSensitive(nameStr, debugReport))
 				supportsDebug[0] = true;
 
 			else if(CharString_equalsStringSensitive(nameStr, debugUtils))
 				supportsDebug[1] = true;
+		}
 
-		#endif
-
-		if(isVerbose)
+		if(instance->flags & EGraphicsInstanceFlags_IsVerbose)
 			Log_debugLnx("\t%s", name);
 	}
 
-	if(isVerbose) {
+	if(instance->flags & EGraphicsInstanceFlags_IsVerbose) {
 
 		Log_debugLnx("Supported layers:");
 
@@ -159,15 +154,11 @@ Error GraphicsInstance_createExt(GraphicsApplicationInfo info, Bool isVerbose, G
 			Log_debugLnx("\t%s", layers.ptr[i].layerName);
 	}
 
-	#ifndef NDEBUG
+	if(supportsDebug[0])
+		gotoIfError(clean, ListConstC8_pushBackx(&enabledExtensions, debugReport.ptr))
 
-		if(supportsDebug[0])
-			gotoIfError(clean, ListConstC8_pushBackx(&enabledExtensions, debugReport.ptr))
-
-		if(supportsDebug[1])
-			gotoIfError(clean, ListConstC8_pushBackx(&enabledExtensions, debugUtils.ptr))
-
-	#endif
+	if(supportsDebug[1])
+		gotoIfError(clean, ListConstC8_pushBackx(&enabledExtensions, debugUtils.ptr))
 
 	//Force physical device properties and external memory
 
@@ -182,7 +173,7 @@ Error GraphicsInstance_createExt(GraphicsApplicationInfo info, Bool isVerbose, G
 	if (supportsColorSpace)
 		gotoIfError(clean, ListConstC8_pushBackx(&enabledExtensions, swapchainColorspace.ptr))
 
-	gotoIfError(clean, VkGraphicsInstance_getLayers(&enabledLayers))
+	gotoIfError(clean, VkGraphicsInstance_getLayers(instance->flags & EGraphicsInstanceFlags_IsDebug, &enabledLayers))
 
 	VkApplicationInfo application = (VkApplicationInfo) {
 		.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
@@ -202,7 +193,7 @@ Error GraphicsInstance_createExt(GraphicsApplicationInfo info, Bool isVerbose, G
 		.ppEnabledExtensionNames = enabledExtensions.ptr
 	};
 
-	#ifndef NDEBUG
+	if(instance->flags & EGraphicsInstanceFlags_IsDebug) {
 
 		//Maximum validation
 
@@ -220,10 +211,9 @@ Error GraphicsInstance_createExt(GraphicsApplicationInfo info, Bool isVerbose, G
 		};
 
 		instanceInfo.pNext = &features;
+	}
 
-	#endif
-
-	if(isVerbose) {
+	if(instance->flags & EGraphicsInstanceFlags_IsVerbose) {
 
 		Log_debugLnx("Enabling layers:");
 
@@ -291,7 +281,7 @@ Error GraphicsInstance_createExt(GraphicsApplicationInfo info, Bool isVerbose, G
 
 	//Add debug callback
 
-	#ifndef NDEBUG
+	if(instance->flags & EGraphicsInstanceFlags_IsDebug) {
 
 		VkDebugReportCallbackCreateInfoEXT callbackInfo = (VkDebugReportCallbackCreateInfoEXT) {
 
@@ -310,8 +300,7 @@ Error GraphicsInstance_createExt(GraphicsApplicationInfo info, Bool isVerbose, G
 		gotoIfError(clean, vkCheck(instanceExt->debugCreateReportCallback(
 			instanceExt->instance, &callbackInfo, NULL, &instanceExt->debugReportCallback
 		)))
-
-	#endif
+	}
 
 	instance->api = EGraphicsApi_Vulkan;
 	instance->apiVersion = application.apiVersion;
@@ -353,13 +342,7 @@ const C8 *reqExtensionsName[] = {
 U64 reqExtensionsNameCount = sizeof(reqExtensionsName) / sizeof(reqExtensionsName[0]);
 
 const C8 *optExtensionsName[] = {
-
-	#ifndef NDEBUG
-		"VK_EXT_debug_marker",
-	#else
-		"",
-	#endif
-
+	"VK_EXT_debug_marker",
 	"VK_KHR_performance_query",
 	"VK_KHR_ray_tracing_pipeline",
 	"VK_KHR_ray_query",
@@ -395,7 +378,7 @@ U64 optExtensionsNameCount = sizeof(optExtensionsName) / sizeof(optExtensionsNam
 TList(VkPhysicalDevice);
 TListImpl(VkPhysicalDevice);
 
-Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbose, ListGraphicsDeviceInfo *result) {
+Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphicsDeviceInfo *result) {
 
 	if(!inst || !result)
 		return Error_nullPointer(!inst ? 0 : 2, "GraphicsInstance_getDeviceInfos()::inst and result are required");
@@ -441,7 +424,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 
 		//Log device for debugging
 
-		if(isVerbose) {
+		if(inst->flags & EGraphicsInstanceFlags_IsVerbose) {
 
 			Log_debugLnx("Supported device layers:");
 
@@ -460,7 +443,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 
 			const C8 *name = temp4.ptr[k].extensionName;
 
-			if(isVerbose)
+			if(inst->flags & EGraphicsInstanceFlags_IsVerbose)
 				Log_debugLnx("\t%s", name);
 
 			//Check if required extension

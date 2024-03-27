@@ -250,7 +250,8 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 	VkAccelerationStructureCreateInfoKHR createInfo = (VkAccelerationStructureCreateInfoKHR) {
 		.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR,
 		.buffer = DeviceBuffer_ext(DeviceBufferRef_ptr(tlas->base.asBuffer), Vk)->buffer,
-		.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR
+		.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR,
+		.size = sizes.accelerationStructureSize
 	};
 
 	gotoIfError(clean, vkCheck(instanceExt->createAccelerationStructure(

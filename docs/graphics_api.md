@@ -35,7 +35,7 @@ _gotoIfError(clean, GraphicsInstance_create(
 	    .name = CharString_createConstRefCStr("Rt core test"),
     	.version = GraphicsApplicationInfo_Version(0, 2, 0)
 	},
-    false /* isVerbose; extra logging about the instance properties */,
+    EGraphicsInstanceFlags_None,
     &instance
 ));
 ```
@@ -85,12 +85,12 @@ GraphicsInstance's getPreferredDevice can be used to query if there's any graphi
 GraphicsDeviceInfo deviceInfo = (GraphicsDeviceInfo) { 0 };
 
 _gotoIfError(clean, GraphicsInstance_getPreferredDevice(
-    GraphicsInstanceRef_ptr(instance),		//See "Graphics instance"
-    (GraphicsDeviceCapabilities) { 0 },		//No required features or data types
-    GraphicsInstance_vendorMaskAll,			//All vendors supported
-    GraphicsInstance_deviceTypeAll,			//All device types supported
-    false, /* isVerbose; extra logging about the device properties */
-    &deviceInfo
+  GraphicsInstanceRef_ptr(instance),		//See "Graphics instance"
+  (GraphicsDeviceCapabilities) { 0 },		//No required features or data types
+  GraphicsInstance_vendorMaskAll,			  //All vendors supported
+  GraphicsInstance_deviceTypeAll,			  //All device types supported
+  EGraphicsDeviceFlags_None,            //Disallow debugging, raytracing and/or enable verbose device picking
+  &deviceInfo
 ));
 ```
 

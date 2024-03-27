@@ -52,7 +52,6 @@ impl extern const U64 GraphicsDeviceExt_size;
 impl Error GraphicsDevice_initExt(
 	const GraphicsInstance *instance,
 	const GraphicsDeviceInfo *deviceInfo,
-	Bool verbose,
 	GraphicsDeviceRef **deviceRef
 );
 
@@ -108,12 +107,11 @@ Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 
 		Log_warnLnx("%"PRIu64": %"PRIu64" bytes", i, leaked);
 
-		#ifndef NDEBUG
+		if(device->flags & EGraphicsDeviceFlags_IsDebug)
 			Log_printCapturedStackTraceCustomx(
 				(const void**) block.stackTrace, sizeof(block.stackTrace) / sizeof(void*),
 				ELogLevel_Warn, ELogOptions_NewLine
 			);
-		#endif
 	}
 
 	ListDeviceMemoryBlock_freex(&device->allocator.blocks);
@@ -126,7 +124,7 @@ Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 
 	Lock_free(&device->descriptorLock);
 
-	#ifndef NDEBUG
+	if(device->flags & EGraphicsDeviceFlags_IsDebug) {
 
 		//TODO: HashMap
 
@@ -151,8 +149,7 @@ Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 		}
 
 		ListDescriptorStackTrace_freex(stack);
-
-	#endif
+	}
 
 	GraphicsInstanceRef_dec(&device->instance);
 
@@ -162,7 +159,7 @@ Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 Error GraphicsDeviceRef_create(
 	GraphicsInstanceRef *instanceRef,
 	const GraphicsDeviceInfo *info,
-	Bool verbose,
+	EGraphicsDeviceFlags flags,
 	GraphicsDeviceRef **deviceRef
 ) {
 
@@ -197,6 +194,30 @@ Error GraphicsDeviceRef_create(
 	gotoIfError(clean, ListWeakRefPtr_reservex(&device->pendingResources, 128))
 
 	device->info = *info;
+	device->flags = flags;
+
+	if(device->flags & EGraphicsDeviceFlags_DisableRt)
+		device->info.capabilities.features &=~ (
+			EGraphicsFeatures_Raytracing				|
+			EGraphicsFeatures_RayPipeline				|
+			EGraphicsFeatures_RayQuery					|
+			EGraphicsFeatures_RayMicromapOpacity		|
+			EGraphicsFeatures_RayMicromapDisplacement	|
+			EGraphicsFeatures_RayMotionBlur				|
+			EGraphicsFeatures_RayReorder				|
+			EGraphicsFeatures_RayValidation
+		);
+
+	#ifndef NDEBUG
+		if(!(device->flags & EGraphicsDeviceFlags_DisableDebug))
+			device->flags |= EGraphicsDeviceFlags_IsDebug;
+	#endif
+
+	if(!(device->flags & EGraphicsDeviceFlags_IsDebug))
+		device->info.capabilities.features &=~ (
+			EGraphicsFeatures_DebugMarkers |
+			EGraphicsFeatures_RayValidation
+		);
 
 	gotoIfError(clean, GraphicsInstanceRef_inc(instanceRef))
 	device->instance = instanceRef;
@@ -230,13 +251,12 @@ Error GraphicsDeviceRef_create(
 
 	//Allocate temp storage for descriptor tracking
 
-	#ifndef NDEBUG
+	if(device->flags & EGraphicsDeviceFlags_IsDebug)
 		gotoIfError(clean, ListDescriptorStackTrace_reservex(&device->descriptorStackTraces, 16))
-	#endif
 
 	//Create extended device
 
-	gotoIfError(clean, GraphicsDevice_initExt(GraphicsInstanceRef_ptr(instanceRef), info, verbose, deviceRef))
+	gotoIfError(clean, GraphicsDevice_initExt(GraphicsInstanceRef_ptr(instanceRef), info, deviceRef))
 
 	//Create constant buffer and staging buffer / allocators
 
@@ -800,7 +820,7 @@ U32 GraphicsDeviceRef_allocateDescriptor(GraphicsDeviceRef *deviceRef, EDescript
 
 			const U32 resourceId = i | (extendedType << 13) | (descType << 17);
 
-			#ifndef NDEBUG
+			if(device->flags & EGraphicsDeviceFlags_IsDebug) {
 
 				DescriptorStackTrace stackTrace = (DescriptorStackTrace) {  .resourceId = resourceId };
 				Log_captureStackTracex(stackTrace.stackTrace, sizeof(stackTrace.stackTrace) / sizeof(void*), 1);
@@ -810,8 +830,7 @@ U32 GraphicsDeviceRef_allocateDescriptor(GraphicsDeviceRef *deviceRef, EDescript
 
 				if(resourceId && ListDescriptorStackTrace_pushBackx(&device->descriptorStackTraces, stackTrace).genericError)
 					return U32_MAX;
-
-			#endif
+			}
 
 			Buffer_setBit(buf, i);
 			return resourceId;
@@ -848,8 +867,8 @@ Bool GraphicsDeviceRef_freeDescriptors(GraphicsDeviceRef *deviceRef, ListU32 *al
 
 			success &= !Buffer_resetBit(device->freeList[type], realId).genericError;
 
-			#ifndef NDEBUG
-
+			if(device->flags & EGraphicsDeviceFlags_IsDebug) {
+				
 				//TODO: HashMap
 
 				ListDescriptorStackTrace *stack = &device->descriptorStackTraces;
@@ -859,8 +878,7 @@ Bool GraphicsDeviceRef_freeDescriptors(GraphicsDeviceRef *deviceRef, ListU32 *al
 						ListDescriptorStackTrace_erase(stack, j);
 						break;
 					}
-
-			#endif
+			}
 		}
 	}
 

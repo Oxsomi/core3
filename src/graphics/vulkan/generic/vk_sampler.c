@@ -101,23 +101,16 @@ Error GraphicsDeviceRef_createSamplerExt(GraphicsDeviceRef *dev, Sampler *sample
 
 	gotoIfError(clean, vkCheck(vkCreateSampler(deviceExt->device, &samplerInfo, NULL, samplerExt)))
 
-	if (CharString_length(name)) {
+	if((device->flags & EGraphicsDeviceFlags_IsDebug) && CharString_length(name) && instance->debugSetName) {
 
-		#ifndef NDEBUG
+		const VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
+			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+			.objectType = VK_OBJECT_TYPE_SAMPLER,
+			.pObjectName = name.ptr,
+			.objectHandle = (U64) *samplerExt
+		};
 
-			if(instance->debugSetName) {
-
-				const VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
-					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-					.objectType = VK_OBJECT_TYPE_SAMPLER,
-					.pObjectName = name.ptr,
-					.objectHandle = (U64) *samplerExt
-				};
-
-				gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)))
-			}
-
-		#endif
+		gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)))
 	}
 
 	//Allocate descriptor

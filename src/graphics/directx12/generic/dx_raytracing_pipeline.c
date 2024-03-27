@@ -282,14 +282,12 @@ Error GraphicsDevice_createPipelinesRaytracingInternalExt(
 			&IID_ID3D12StateObject,
 			(void**) stateObject
 		)))
-		
-		#ifndef NDEBUG
-			if(names.length && CharString_length(names.ptr[i])) {
-				gotoIfError(clean, CharString_toUTF16x(names.ptr[i], &tmp16))
-				gotoIfError(clean, dxCheck((*stateObject)->lpVtbl->SetName(*stateObject, (const wchar_t*) tmp16.ptr)))
-				ListU16_freex(&tmp16);
-			}
-		#endif
+
+		if((device->flags & EGraphicsDeviceFlags_IsDebug) && names.length && CharString_length(names.ptr[i])) {
+			gotoIfError(clean, CharString_toUTF16x(names.ptr[i], &tmp16))
+			gotoIfError(clean, dxCheck((*stateObject)->lpVtbl->SetName(*stateObject, (const wchar_t*) tmp16.ptr)))
+			ListU16_freex(&tmp16);
+		}
 
 		gotoIfError(clean, dxCheck((*stateObject)->lpVtbl->QueryInterface(
 			*stateObject, &IID_ID3D12StateObjectProperties, (void**) &dxPipeline->stateObjectProps

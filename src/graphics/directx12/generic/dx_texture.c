@@ -220,35 +220,31 @@ Error UnifiedTexture_createExt(TextureRef *textureRef, CharString name) {
 			vkUpdateDescriptorSets(deviceExt->device, counter, writeDescriptorSet, 0, NULL);
 		}
 
-		if (CharString_length(name)) {
-			#ifndef NDEBUG
-				if(instance->debugSetName && CharString_length(name)) {
+		if((device->flags & EGraphicsDeviceFlags_IsDebug) && CharString_length(name) && instance->debugSetName && CharString_length(name)) {
 
-					gotoIfError(clean, CharString_formatx(
-						&temp, "%.*s view (#%"PRIu32")", CharString_length(name), name.ptr, (U32)i
-					))
+			gotoIfError(clean, CharString_formatx(
+				&temp, "%.*s view (#%"PRIu32")", CharString_length(name), name.ptr, (U32)i
+			))
 
-					VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
-						.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-						.objectType = VK_OBJECT_TYPE_IMAGE_VIEW,
-						.pObjectName = temp.ptr,
-						.objectHandle =  (U64) managedImageExt->view
-					};
+			VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
+				.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+				.objectType = VK_OBJECT_TYPE_IMAGE_VIEW,
+				.pObjectName = temp.ptr,
+				.objectHandle =  (U64) managedImageExt->view
+			};
 
-					gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)))
+			gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)))
 
-					CharString_freex(&temp);
+			CharString_freex(&temp);
 
-					debugName = (VkDebugUtilsObjectNameInfoEXT) {
-						.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-						.objectType = VK_OBJECT_TYPE_IMAGE,
-						.pObjectName = name.ptr,
-						.objectHandle =  (U64) managedImageExt->image
-					};
+			debugName = (VkDebugUtilsObjectNameInfoEXT) {
+				.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+				.objectType = VK_OBJECT_TYPE_IMAGE,
+				.pObjectName = name.ptr,
+				.objectHandle =  (U64) managedImageExt->image
+			};
 
-					gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)))
-				}
-			#endif
+			gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)))
 		}
 	}
 

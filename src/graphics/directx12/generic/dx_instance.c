@@ -86,9 +86,9 @@ Bool GraphicsInstance_free(GraphicsInstance *data, Allocator alloc) {
 
 const U64 GraphicsInstanceExt_size = sizeof(DxGraphicsInstance);
 
-Error GraphicsInstance_createExt(GraphicsApplicationInfo info, Bool isVerbose, GraphicsInstanceRef **instanceRef) {
+Error GraphicsInstance_createExt(GraphicsApplicationInfo info, GraphicsInstanceRef **instanceRef) {
 
-	(void)isVerbose; (void)info;
+	(void)info;
 	GraphicsInstance *instance = GraphicsInstanceRef_ptr(*instanceRef);
 	DxGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Dx);
 
@@ -113,8 +113,8 @@ Error GraphicsInstance_createExt(GraphicsApplicationInfo info, Bool isVerbose, G
 			instanceExt->flags &=~ EDxGraphicsInstanceFlags_HasNVApi;
 		}
 
-		else gotoIfError(clean, CharString_createCopyx(
-			CharString_createRefAutoConst(shortString, 64), &instanceExt->nvDriverVersion
+		else gotoIfError(clean, CharString_formatx(
+			&instanceExt->nvDriverVersion, "%"PRIu32".%"PRIu32, driverVersion / 100, driverVersion % 100
 		))
 	}
 
@@ -144,9 +144,7 @@ clean:
 	return err;
 }
 
-Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbose, ListGraphicsDeviceInfo *result) {
-
-	(void)isVerbose;
+Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphicsDeviceInfo *result) {
 
 	if(!inst || !result)
 		return Error_nullPointer(!inst ? 0 : 2, "GraphicsInstance_getDeviceInfos()::inst and result are required");
@@ -252,9 +250,9 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbo
 		caps.dedicatedMemory = dedicatedMem;
 
 		caps.features |= 
-			EGraphicsFeatures_LUID | EGraphicsFeatures_MultiDrawIndirectCount |
+			EGraphicsFeatures_LUID | EGraphicsFeatures_MultiDrawIndirectCount | EGraphicsFeatures_DebugMarkers |
 			EGraphicsFeatures_GeometryShader | EGraphicsFeatures_SubgroupArithmetic | EGraphicsFeatures_SubgroupShuffle |
-			EGraphicsFeatures_Wireframe | EGraphicsFeatures_LogicOp | EGraphicsFeatures_DualSrcBlend;
+			EGraphicsFeatures_Wireframe | EGraphicsFeatures_LogicOp | EGraphicsFeatures_DualSrcBlend | EGraphicsFeatures_Multiview;
 
 		caps.dataTypes |=
 			EGraphicsDataTypes_I64 | EGraphicsDataTypes_BCn | EGraphicsDataTypes_MSAA2x | EGraphicsDataTypes_MSAA8x |

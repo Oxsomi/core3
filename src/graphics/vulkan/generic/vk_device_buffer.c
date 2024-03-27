@@ -239,20 +239,16 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 		vkUpdateDescriptorSets(deviceExt->device, counter, descriptors, 0, NULL);
 	}
 
-	if (CharString_length(name)) {
-		#ifndef NDEBUG
-			if(instanceExt->debugSetName) {
+	if((device->flags & EGraphicsDeviceFlags_IsDebug) && CharString_length(name) && instanceExt->debugSetName) {
 
-				VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
-					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-					.objectType = VK_OBJECT_TYPE_BUFFER,
-					.pObjectName = name.ptr,
-					.objectHandle = (U64) bufExt->buffer
-				};
+		VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
+			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+			.objectType = VK_OBJECT_TYPE_BUFFER,
+			.pObjectName = name.ptr,
+			.objectHandle = (U64) bufExt->buffer
+		};
 
-				gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName)))
-			}
-		#endif
+		gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName)))
 	}
 
 clean:

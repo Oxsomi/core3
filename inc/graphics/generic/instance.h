@@ -39,12 +39,22 @@ typedef enum EGraphicsApi {
 	EGraphicsApi_Count
 } EGraphicsApi;
 
+typedef enum EGraphicsInstanceFlags {
+	EGraphicsInstanceFlags_None				= 0,
+	EGraphicsInstanceFlags_IsDebug			= 1 << 0,
+	EGraphicsInstanceFlags_IsVerbose		= 1 << 1,
+	EGraphicsInstanceFlags_DisableDebug		= 1 << 2
+} EGraphicsInstanceFlags;
+
 typedef struct GraphicsInstance {
 
 	GraphicsApplicationInfo application;
 
 	EGraphicsApi api;
 	U32 apiVersion;
+
+	EGraphicsInstanceFlags flags;
+	U32 padding;
 
 } GraphicsInstance;
 
@@ -56,11 +66,11 @@ typedef RefPtr GraphicsInstanceRef;
 Error GraphicsInstanceRef_dec(GraphicsInstanceRef **inst);
 Error GraphicsInstanceRef_inc(GraphicsInstanceRef *inst);
 
-Error GraphicsInstance_create(GraphicsApplicationInfo info, Bool isVerbose, GraphicsInstanceRef **inst);
+Error GraphicsInstance_create(GraphicsApplicationInfo info, EGraphicsInstanceFlags flags, GraphicsInstanceRef **inst);
 
 TList(GraphicsDeviceInfo);
 
-impl Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbose, ListGraphicsDeviceInfo *infos);
+impl Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphicsDeviceInfo *infos);
 
 static const U64 GraphicsInstance_vendorMaskAll = 0xFFFFFFFFFFFFFFFF;
 static const U64 GraphicsInstance_deviceTypeAll = 0xFFFFFFFFFFFFFFFF;
@@ -70,6 +80,5 @@ Error GraphicsInstance_getPreferredDevice(
 	GraphicsDeviceCapabilities requiredCapabilities,
 	U64 vendorMask,
 	U64 deviceTypeMask,
-	Bool verbose,
 	GraphicsDeviceInfo *deviceInfo
 );

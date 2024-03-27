@@ -30,11 +30,11 @@ const C8 *vkApiDump = "VK_LAYER_LUNARG_api_dump";
 
 //#define _GRAPHICS_VERBOSE_DEBUGGING
 
-Error VkGraphicsInstance_getLayers(ListConstC8 *layers) {
+Error VkGraphicsInstance_getLayers(Bool isDebug, ListConstC8 *layers) {
 
 	(void) layers;
 
-	#ifndef NDEBUG
+	if(isDebug) {
 
 		const Error err = ListConstC8_pushBackx(layers, vkValidation);
 
@@ -46,8 +46,7 @@ Error VkGraphicsInstance_getLayers(ListConstC8 *layers) {
 		#else
 			return Error_none();
 		#endif
+	}
 
-	#else
-		return Error_none();
-	#endif
+	return Error_none();
 }

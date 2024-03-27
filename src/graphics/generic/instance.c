@@ -42,7 +42,6 @@ Error GraphicsInstance_getPreferredDevice(
 	GraphicsDeviceCapabilities requiredCapabilities,
 	U64 vendorMask,
 	U64 deviceTypeMask,
-	Bool verbose,
 	GraphicsDeviceInfo *deviceInfo
 ) {
 
@@ -55,7 +54,7 @@ Error GraphicsInstance_getPreferredDevice(
 		);
 
 	ListGraphicsDeviceInfo tmp = (ListGraphicsDeviceInfo) { 0 };
-	Error err = GraphicsInstance_getDeviceInfos(inst, verbose, &tmp);
+	Error err = GraphicsInstance_getDeviceInfos(inst, &tmp);
 
 	if(err.genericError)
 		return err;
@@ -116,11 +115,11 @@ clean:
 	return err;
 }
 
-impl Error GraphicsInstance_createExt(GraphicsApplicationInfo info, Bool isVerbose, GraphicsInstanceRef **instanceRef);
+impl Error GraphicsInstance_createExt(GraphicsApplicationInfo info, GraphicsInstanceRef **instanceRef);
 impl Bool GraphicsInstance_free(GraphicsInstance *inst, Allocator alloc);
 impl extern const U64 GraphicsInstanceExt_size;
 
-Error GraphicsInstance_create(GraphicsApplicationInfo info, Bool isVerbose, GraphicsInstanceRef **instanceRef) {
+Error GraphicsInstance_create(GraphicsApplicationInfo info, EGraphicsInstanceFlags flags, GraphicsInstanceRef **instanceRef) {
 
 	Error err = RefPtr_createx(
 		(U32)(sizeof(GraphicsInstance) + GraphicsInstanceExt_size),
@@ -134,8 +133,14 @@ Error GraphicsInstance_create(GraphicsApplicationInfo info, Bool isVerbose, Grap
 
 	GraphicsInstance *instance = GraphicsInstanceRef_ptr(*instanceRef);
 
-	*instance = (GraphicsInstance) { .application = info };
-	gotoIfError(clean, GraphicsInstance_createExt(info, isVerbose, instanceRef));
+	*instance = (GraphicsInstance) { .application = info, .flags = flags };
+
+	#ifndef NDEBUG
+		if(!(flags & EGraphicsInstanceFlags_DisableDebug))
+			instance->flags |= EGraphicsInstanceFlags_IsDebug;
+	#endif
+
+	gotoIfError(clean, GraphicsInstance_createExt(info, instanceRef));
 
 clean:
 

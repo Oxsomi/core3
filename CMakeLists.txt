@@ -358,34 +358,74 @@ elseif("${graphicsApi}" STREQUAL "directx12")
 
 	endif()
 
+	# Download WinPixEventRuntime for debug markers
+
+	if(${ForceUpdateDeps} OR (NOT EXISTS "${CMAKE_BINARY_DIR}/external/win_pix_runtime/"))
+
+		message("-- Downloading and unzipping Microsoft WinPixRuntime")
+
+		file(REMOVE_RECURSE "${CMAKE_BINARY_DIR}/external/win_pix_runtime/")
+		file(DOWNLOAD "https://www.nuget.org/api/v2/package/WinPixEventRuntime/" "${CMAKE_BINARY_DIR}/external/win_pix_runtime.zip")
+		file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/external/win_pix_runtime/)
+
+		execute_process(
+			COMMAND ${CMAKE_COMMAND} -E tar xzf ${CMAKE_BINARY_DIR}/external/win_pix_runtime.zip
+			WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/external/win_pix_runtime/
+		)
+
+		file(REMOVE "${CMAKE_BINARY_DIR}/external/win_pix_runtime.zip")
+
+	endif()
+
 	# Add agility source files and includes as static lib
 
 	file(GLOB_RECURSE agilityInclude "${CMAKE_BINARY_DIR}/external/agility/build/native/include")
 	file(GLOB_RECURSE agilitySrc "${CMAKE_BINARY_DIR}/external/agility/build/native/src")
 
 	add_library(
-		D3D12Agility
+		DirectX12
 		STATIC
 		${agilityInclude}
 		"${CMAKE_BINARY_DIR}/external/agility/version.c"
 		CMakeLists.txt
 	)
 
-	target_link_libraries(D3D12Agility PUBLIC dxgi dxguid d3d12)
-	target_link_libraries(OxC3_graphics PUBLIC D3D12Agility)
-	target_include_directories(D3D12Agility PUBLIC "${CMAKE_BINARY_DIR}/external/agility/build/native/include")
+	target_link_libraries(DirectX12 PUBLIC dxgi dxguid d3d12)
+	target_link_libraries(OxC3_graphics PUBLIC DirectX12)
+	target_include_directories(DirectX12 PUBLIC "${CMAKE_BINARY_DIR}/external/agility/build/native/include")
 
-	set_target_properties(D3D12Agility PROPERTIES FOLDER External/D3D12)
+	set_target_properties(DirectX12 PROPERTIES FOLDER External/D3D12)
+
+	# WinPixRuntime for debug markers
+
+	target_include_directories(DirectX12 PUBLIC "${CMAKE_BINARY_DIR}/external/win_pix_runtime/Include")
 
 	# Add an interface to link to that copies to target directory
 
 	if(NOT ${ARM})
 
-		add_custom_command(TARGET D3D12Agility POST_BUILD
+		target_link_libraries(DirectX12 PUBLIC "${CMAKE_BINARY_DIR}/external/win_pix_runtime/bin/x64/WinPixEventRuntime.lib")
+
+		# AMD AGS and NVAPI are required because DirectX12 was apparently not good enough :/
+		# These are not supported for ARM, so don't include them there
+
+		# NVAPI, used for NV extensions and getting driver version
+
+		target_link_libraries(DirectX12 PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/external/nvapi/amd64/nvapi64.lib")
+		target_include_directories(DirectX12 PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/external/nvapi")
+
+		# AMD AGS, used to get driver version
+
+		target_link_libraries(DirectX12 PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/external/AGS_SDK/ags_lib/lib/amd_ags_x64.lib")
+		target_include_directories(DirectX12 PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/external/AGS_SDK/ags_lib/inc")
+
+		add_custom_command(TARGET DirectX12 POST_BUILD
 			COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin"
 			COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin/$<CONFIG>"
 			COMMAND ${CMAKE_COMMAND} -E copy_if_different
 			"${CMAKE_BINARY_DIR}/external/warp/build/native/amd64/d3d10warp.dll"
+			"${CMAKE_BINARY_DIR}/external/win_pix_runtime/bin/x64/WinPixEventRuntime.dll"
+			"${CMAKE_CURRENT_SOURCE_DIR}/external/AGS_SDK/ags_lib/lib/amd_ags_x64.dll"
 			"${CMAKE_BINARY_DIR}/bin/$<CONFIG>/"
 			COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin/$<CONFIG>/D3D12/"
 			COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -396,9 +436,16 @@ elseif("${graphicsApi}" STREQUAL "directx12")
 
 	else()
 
-		message(WARNING "-- ARM doesn't support d3d10warp until the Direct3D.Warp package does")
+		message(WARNING "-- ARM doesn't support d3d10warp or NVAPI, AMDAGS until the Direct3D.Warp package does and NVAPI/AMD AGS GitHub repo does")
 
-		add_custom_command(TARGET D3D12Agility POST_BUILD
+		target_link_libraries(DirectX12 PUBLIC "${CMAKE_BINARY_DIR}/external/win_pix_runtime/bin/ARM64/WinPixEventRuntime.lib")
+
+		add_custom_command(TARGET DirectX12 POST_BUILD
+			COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin"
+			COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin/$<CONFIG>"
+			COMMAND ${CMAKE_COMMAND} -E copy_if_different
+			"${CMAKE_BINARY_DIR}/external/win_pix_runtime/bin/ARM64/WinPixEventRuntime.dll"
+			"${CMAKE_BINARY_DIR}/bin/$<CONFIG>/"
 			COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin/$<CONFIG>/D3D12/"
 			COMMAND ${CMAKE_COMMAND} -E copy_if_different
 			"${CMAKE_BINARY_DIR}/external/agility/build/native/bin/arm64/D3D12Core.dll"
@@ -407,26 +454,6 @@ elseif("${graphicsApi}" STREQUAL "directx12")
 		)
 
 	endif()
-
-	# AMD AGS and NVAPI are required because DirectX12 was apparently not good enough :/
-
-	# NVAPI, used for NV extensions and getting driver version
-
-	target_link_libraries(OxC3_graphics PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/external/nvapi/amd64/nvapi64.lib")
-	target_include_directories(OxC3_graphics PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/external/nvapi")
-
-	# AMD AGS, used to get driver version
-
-	target_link_libraries(OxC3_graphics PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/external/AGS_SDK/ags_lib/lib/amd_ags_x64.lib")
-	target_include_directories(OxC3_graphics PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/external/AGS_SDK/ags_lib/inc")
-
-	add_custom_command(TARGET OxC3_graphics POST_BUILD
-		COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin"
-		COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin/$<CONFIG>"
-		COMMAND ${CMAKE_COMMAND} -E copy_if_different
-		"${CMAKE_CURRENT_SOURCE_DIR}/external/AGS_SDK/ags_lib/lib/amd_ags_x64.dll"
-		"${CMAKE_BINARY_DIR}/bin/$<CONFIG>/"
-	)
 
 elseif("${graphicsApi}" STREQUAL "metal")
 	message(FATAL_ERROR "Graphics api not supported yet: Metal")

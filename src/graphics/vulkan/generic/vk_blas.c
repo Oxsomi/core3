@@ -247,7 +247,8 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 	VkAccelerationStructureCreateInfoKHR createInfo = (VkAccelerationStructureCreateInfoKHR) {
 		.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR,
 		.buffer = DeviceBuffer_ext(DeviceBufferRef_ptr(blas->base.asBuffer), Vk)->buffer,
-		.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR
+		.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR,
+		.size = sizes.accelerationStructureSize
 	};
 
 	gotoIfError(clean, vkCheck(instanceExt->createAccelerationStructure(
