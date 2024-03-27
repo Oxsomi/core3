@@ -27,17 +27,18 @@
 
 void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *deviceInfo, Bool printCapabilities) {
 
-	if(!deviceInfo || !deviceInfo->driverInfo[0])
+	if(!deviceInfo || !deviceInfo->name[0])
 		return;
 
 	Log_debugLnx(
-		"%s: %s (%s): %"PRIu64" bytes shared memory, %"PRIu64" bytes dedicated memory\n\t"
+		"%s: %s (%s): %"PRIu64" bytes shared memory, %"PRIu64" bytes %s memory\n\t"
 		"%s %"PRIu32"\n\tLUID %016"PRIu64"x\n\tUUID %016"PRIu64"x%016"PRIu64"x",
 		api == EGraphicsApi_DirectX12 ? "D3D12" : (api == EGraphicsApi_Vulkan ? "Vulkan" : "Unknown"),
 		deviceInfo->name,
 		deviceInfo->driverInfo,
 		deviceInfo->capabilities.sharedMemory,
 		deviceInfo->capabilities.dedicatedMemory,
+		deviceInfo->type != EGraphicsDeviceType_Dedicated ? "total" : "dedicated",
 		(deviceInfo->type == EGraphicsDeviceType_CPU ? "CPU" : (
 			deviceInfo->type == EGraphicsDeviceType_Dedicated ? "dGPU" : (
 				deviceInfo->type == EGraphicsDeviceType_Integrated ? "iGPU" : "Simulated GPU"
