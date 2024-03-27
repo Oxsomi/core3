@@ -28,10 +28,6 @@ typedef RefPtr PipelineRef;
 
 //Special features that are only important for implementation, but we do want to be cached.
 
-typedef enum EVkGraphicsFeatures {
-	EVkGraphicsFeatures_PerfQuery		= 1 << 0
-} EVkGraphicsFeatures;
-
 typedef enum EVkCommandQueue {
 
 	EVkCommandQueue_Copy,					//Queue for dedicated host -> device copies

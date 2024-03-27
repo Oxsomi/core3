@@ -63,6 +63,22 @@ static const U16 EGraphicsVendor_PCIE[] = {		//The PCIE ids of the vendors, so t
 	EGraphicsVendorPCIE_MSFT
 };
 
+//If api type is DirectX12
+
+typedef enum EDxGraphicsFeatures {
+	EDxGraphicsFeatures_WriteBufferImmediate	= 1 << 0,
+	EDxGraphicsFeatures_ReBAR					= 1 << 1,
+	EDxGraphicsFeatures_HardwareCopyQueue		= 1 << 2
+} EDxGraphicsFeatures;
+
+//If api type is Vulkan
+
+typedef enum EVkGraphicsFeatures {
+	EVkGraphicsFeatures_PerfQuery				= 1 << 0
+} EVkGraphicsFeatures;
+
+//Generic graphics features
+
 typedef enum EGraphicsFeatures {
 
 	EGraphicsFeatures_None						= 0,
@@ -194,7 +210,9 @@ typedef struct GraphicsDeviceInfo {
 
 } GraphicsDeviceInfo;
 
-void GraphicsDeviceInfo_print(const GraphicsDeviceInfo *deviceInfo, Bool printCapabilities);
+typedef enum EGraphicsApi EGraphicsApi;
+
+void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *deviceInfo, Bool printCapabilities);
 
 //If a texture and render texture can be created with the format.
 Bool GraphicsDeviceInfo_supportsFormat(const GraphicsDeviceInfo *deviceInfo, ETextureFormat format);

@@ -267,101 +267,120 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphics
 		)
 			caps.features |= EGraphicsFeatures_DirectRendering;
 
-		D3D12_FEATURE_DATA_D3D12_OPTIONS options = (D3D12_FEATURE_DATA_D3D12_OPTIONS) { 0 };
-		D3D12_FEATURE_DATA_D3D12_OPTIONS1 options1 = (D3D12_FEATURE_DATA_D3D12_OPTIONS1) { 0 };
-		D3D12_FEATURE_DATA_D3D12_OPTIONS4 options4 = (D3D12_FEATURE_DATA_D3D12_OPTIONS4) { 0 };
-		D3D12_FEATURE_DATA_D3D12_OPTIONS5 options5 = (D3D12_FEATURE_DATA_D3D12_OPTIONS5) { 0 };
-		D3D12_FEATURE_DATA_D3D12_OPTIONS6 options6 = (D3D12_FEATURE_DATA_D3D12_OPTIONS6) { 0 };
-		D3D12_FEATURE_DATA_D3D12_OPTIONS7 options7 = (D3D12_FEATURE_DATA_D3D12_OPTIONS7) { 0 };
-		D3D12_FEATURE_DATA_D3D12_OPTIONS8 options8 = (D3D12_FEATURE_DATA_D3D12_OPTIONS8) { 0 };
-		D3D12_FEATURE_DATA_D3D12_OPTIONS9 options9 = (D3D12_FEATURE_DATA_D3D12_OPTIONS9) { 0 };
-		D3D12_FEATURE_DATA_D3D12_OPTIONS12 options12 = (D3D12_FEATURE_DATA_D3D12_OPTIONS12) { 0 };
+		D3D12_FEATURE_DATA_D3D12_OPTIONS opt0 = (D3D12_FEATURE_DATA_D3D12_OPTIONS) { 0 };
+		D3D12_FEATURE_DATA_D3D12_OPTIONS1 opt1 = (D3D12_FEATURE_DATA_D3D12_OPTIONS1) { 0 };
+		D3D12_FEATURE_DATA_D3D12_OPTIONS3 opt3 = (D3D12_FEATURE_DATA_D3D12_OPTIONS3) { 0 };
+		D3D12_FEATURE_DATA_D3D12_OPTIONS4 opt4 = (D3D12_FEATURE_DATA_D3D12_OPTIONS4) { 0 };
+		D3D12_FEATURE_DATA_D3D12_OPTIONS5 opt5 = (D3D12_FEATURE_DATA_D3D12_OPTIONS5) { 0 };
+		D3D12_FEATURE_DATA_D3D12_OPTIONS6 opt6 = (D3D12_FEATURE_DATA_D3D12_OPTIONS6) { 0 };
+		D3D12_FEATURE_DATA_D3D12_OPTIONS7 opt7 = (D3D12_FEATURE_DATA_D3D12_OPTIONS7) { 0 };
+		D3D12_FEATURE_DATA_D3D12_OPTIONS8 opt8 = (D3D12_FEATURE_DATA_D3D12_OPTIONS8) { 0 };
+		D3D12_FEATURE_DATA_D3D12_OPTIONS9 opt9 = (D3D12_FEATURE_DATA_D3D12_OPTIONS9) { 0 };
+		D3D12_FEATURE_DATA_D3D12_OPTIONS12 opt12 = (D3D12_FEATURE_DATA_D3D12_OPTIONS12) { 0 };
+		D3D12_FEATURE_DATA_D3D12_OPTIONS16 opt16 = (D3D12_FEATURE_DATA_D3D12_OPTIONS16) { 0 };
 
 		D3D12_FEATURE_DATA_SHADER_MODEL shaderOpt = (D3D12_FEATURE_DATA_SHADER_MODEL) { 0 };
 		D3D12_FEATURE_DATA_ARCHITECTURE1 arch = (D3D12_FEATURE_DATA_ARCHITECTURE1) { 0 };
+		D3D12_FEATURE_DATA_HARDWARE_COPY hwCopy = (D3D12_FEATURE_DATA_HARDWARE_COPY) { 0 };
 
 		if(
-			FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS, &options, sizeof(options))) ||
-			options.TiledResourcesTier < D3D12_TILED_RESOURCES_TIER_3 ||
-			!options.TypedUAVLoadAdditionalFormats ||
-			!options.OutputMergerLogicOp ||
-			!options.ROVsSupported ||
-			options.ConservativeRasterizationTier < D3D12_CONSERVATIVE_RASTERIZATION_TIER_2
+			FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS, &opt0, sizeof(opt0))) ||
+			opt0.TiledResourcesTier < D3D12_TILED_RESOURCES_TIER_3 ||
+			!opt0.TypedUAVLoadAdditionalFormats ||
+			!opt0.OutputMergerLogicOp ||
+			!opt0.ROVsSupported ||
+			opt0.ConservativeRasterizationTier < D3D12_CONSERVATIVE_RASTERIZATION_TIER_2
 		) {
 			Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support required D3D12_OPTIONS", i);
 			goto next;
 		}
 
-		if(options.DoublePrecisionFloatShaderOps)
+		if(opt0.DoublePrecisionFloatShaderOps)
 			caps.dataTypes |= EGraphicsDataTypes_F64;
 		
 		if(
-			FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS1, &options1, sizeof(options1))) ||
-			!options1.WaveOps || !options1.Int64ShaderOps
+			FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS1, &opt1, sizeof(opt1))) ||
+			!opt1.WaveOps || !opt1.Int64ShaderOps
 		) {
 			Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support required D3D12_OPTIONS1", i);
 			goto next;
 		}
 
-		if(options1.WaveLaneCountMin < 4 || options1.WaveLaneCountMax > 128) {
+		if(opt1.WaveLaneCountMin < 4 || opt1.WaveLaneCountMax > 128) {
 			Log_debugLnx("D3D12: Unsupported device %"PRIu32", subgroup size is not in range 16-128!", i);
 			goto next;
 		}
 
 		if(
-			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(
-				device, D3D12_FEATURE_D3D12_OPTIONS4, &options4, sizeof(options4)
-			)) &&
-			options4.Native16BitShaderOpsSupported
+			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS3, &opt3, sizeof(opt3))) &&
+			opt3.WriteBufferImmediateSupportFlags
+		)
+			caps.featuresExt |= EDxGraphicsFeatures_WriteBufferImmediate;
+
+		if(
+			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS4, &opt4, sizeof(opt4))) &&
+			opt4.Native16BitShaderOpsSupported
 		)
 			caps.dataTypes |= EGraphicsDataTypes_F16 | EGraphicsDataTypes_I16;
 
 		if(
-			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS5, &options5, sizeof(options5))) &&
-			options5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_0
+			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS5, &opt5, sizeof(opt5))) &&
+			opt5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_0
 		) {
 			caps.features |= EGraphicsFeatures_RayPipeline | EGraphicsFeatures_Raytracing;
 
-			if(options5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_1)
+			if(opt5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_1)
 				caps.features |= EGraphicsFeatures_RayQuery;
 		}
 
 		if(
-			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS6, &options6, sizeof(options6))) &&
-			options6.VariableShadingRateTier >= D3D12_VARIABLE_SHADING_RATE_TIER_1
+			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS6, &opt6, sizeof(opt6))) &&
+			opt6.VariableShadingRateTier >= D3D12_VARIABLE_SHADING_RATE_TIER_1
 		)
 			caps.features |= EGraphicsFeatures_VariableRateShading;
 
 		if(
-			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS7, &options7, sizeof(options7))) &&
-			options7.MeshShaderTier >= D3D12_MESH_SHADER_TIER_1
+			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS7, &opt7, sizeof(opt7))) &&
+			opt7.MeshShaderTier >= D3D12_MESH_SHADER_TIER_1
 		)
 			caps.features |= EGraphicsFeatures_MeshShader;
 
 		if(
-			FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS8, &options8, sizeof(options8))) ||
-			!options8.UnalignedBlockTexturesSupported
+			FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS8, &opt8, sizeof(opt8))) ||
+			!opt8.UnalignedBlockTexturesSupported
 		) {
 			Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support required D3D12_OPTIONS8", i);
 			goto next;
 		}
 
 		if(
-			FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS9, &options9, sizeof(options9))) ||
-			!options9.AtomicInt64OnTypedResourceSupported || 
-			!options9.AtomicInt64OnGroupSharedSupported
+			FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS9, &opt9, sizeof(opt9))) ||
+			!opt9.AtomicInt64OnTypedResourceSupported || 
+			!opt9.AtomicInt64OnGroupSharedSupported
 		) {
 			Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support required D3D12_OPTIONS9", i);
 			goto next;
 		}
 		
 		if(
-			FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS12, &options12, sizeof(options12))) ||
-			!options12.EnhancedBarriersSupported
+			FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS12, &opt12, sizeof(opt12))) ||
+			!opt12.EnhancedBarriersSupported
 		) {
 			Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support required D3D12_OPTIONS12", i);
 			goto next;
 		}
+		
+		if(
+			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS16, &opt16, sizeof(opt16))) &&
+			opt16.GPUUploadHeapSupported
+		)
+			caps.featuresExt |= EDxGraphicsFeatures_ReBAR;
+		
+		if(
+			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_HARDWARE_COPY, &hwCopy, sizeof(hwCopy))) &&
+			hwCopy.Supported
+		)
+			caps.featuresExt |= EDxGraphicsFeatures_HardwareCopyQueue;
 
 		shaderOpt.HighestShaderModel = D3D_SHADER_MODEL_6_5;		//Nice way of querying DirectX...
 		if(FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_SHADER_MODEL, &shaderOpt, sizeof(shaderOpt)))) {
