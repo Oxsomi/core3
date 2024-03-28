@@ -202,17 +202,6 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphics
 			continue;
 		}
 
-		U64 sharedMem = desc.SharedSystemMemory;
-		U64 dedicatedMem = desc.DedicatedVideoMemory;
-
-		if(!dedicatedMem)
-			dedicatedMem = sharedMem;
-
-		if(sharedMem < 512 * MIBI || dedicatedMem < 512 * MIBI) {
-			Log_debugLnx("DXGI: Unsupported device %"PRIu32", not enough system or video memory", i);
-			continue;
-		}
-
 		EGraphicsVendorId vendorId = EGraphicsVendorId_Unknown;
 
 		switch(desc.VendorId) {
@@ -246,8 +235,6 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphics
 		//Get capabilities
 
 		GraphicsDeviceCapabilities caps = (GraphicsDeviceCapabilities) { 0 };
-		caps.sharedMemory = sharedMem;
-		caps.dedicatedMemory = dedicatedMem;
 
 		caps.features |= 
 			EGraphicsFeatures_LUID | EGraphicsFeatures_MultiDrawIndirectCount | EGraphicsFeatures_DebugMarkers |
@@ -395,6 +382,20 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphics
 
 		if(!(desc.Flags & DXGI_ADAPTER_FLAG3_SOFTWARE)) 
 			type = !arch.UMA ? EGraphicsDeviceType_Dedicated : EGraphicsDeviceType_Integrated;
+
+		U64 sharedMem = desc.SharedSystemMemory;
+		U64 dedicatedMem = desc.DedicatedVideoMemory;
+
+		if (type != EGraphicsDeviceType_Dedicated)
+			dedicatedMem = sharedMem;
+
+		if (sharedMem < 512 * MIBI || dedicatedMem < 512 * MIBI) {
+			Log_debugLnx("DXGI: Unsupported device %"PRIu32", not enough system or video memory", i);
+			goto next;
+		}
+
+		caps.sharedMemory = sharedMem;
+		caps.dedicatedMemory = dedicatedMem;
 
 		ID3D12Device *device0 = NULL;
 		if(FAILED(device->lpVtbl->QueryInterface(device, &IID_ID3D12Device, (void**)&device0))) {

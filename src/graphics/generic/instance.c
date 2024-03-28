@@ -48,7 +48,7 @@ Error GraphicsInstance_getPreferredDevice(
 	if(!deviceInfo)
 		return Error_nullPointer(4, "GraphicsInstance_getPreferredDevice()::deviceInfo is required");
 
-	if(deviceInfo->driverInfo[0])
+	if(deviceInfo->name[0])
 		return Error_invalidParameter(
 			4, 0, "GraphicsInstance_getPreferredDevice()::*deviceInfo must be empty"
 		);
