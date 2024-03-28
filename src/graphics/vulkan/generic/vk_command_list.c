@@ -539,7 +539,7 @@ void CommandList_process(
 				else vkCmdDraw(
 					buffer,
 					draw.count, draw.instanceCount,
-					draw.indexOffset, draw.vertexOffset
+					draw.vertexOffset, draw.instanceOffset
 				);
 			}
 
@@ -906,7 +906,7 @@ void CommandList_process(
 					VkUnifiedTexture *imageExt = TextureRef_getCurrImgExtT(transition.resource, Vk, 0);
 
 					VkImageSubresourceRange range = (VkImageSubresourceRange) {		//TODO:
-						.aspectMask = isDepthStencil ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT,
+						.aspectMask = isDepthStencil ? VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT : VK_IMAGE_ASPECT_COLOR_BIT,
 						.levelCount = 1,
 						.layerCount = 1
 					};

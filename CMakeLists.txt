@@ -358,25 +358,6 @@ elseif("${graphicsApi}" STREQUAL "directx12")
 
 	endif()
 
-	# Download WinPixEventRuntime for debug markers
-
-	if(${ForceUpdateDeps} OR (NOT EXISTS "${CMAKE_BINARY_DIR}/external/win_pix_runtime/"))
-
-		message("-- Downloading and unzipping Microsoft WinPixRuntime")
-
-		file(REMOVE_RECURSE "${CMAKE_BINARY_DIR}/external/win_pix_runtime/")
-		file(DOWNLOAD "https://www.nuget.org/api/v2/package/WinPixEventRuntime/" "${CMAKE_BINARY_DIR}/external/win_pix_runtime.zip")
-		file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/external/win_pix_runtime/)
-
-		execute_process(
-			COMMAND ${CMAKE_COMMAND} -E tar xzf ${CMAKE_BINARY_DIR}/external/win_pix_runtime.zip
-			WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/external/win_pix_runtime/
-		)
-
-		file(REMOVE "${CMAKE_BINARY_DIR}/external/win_pix_runtime.zip")
-
-	endif()
-
 	# Add agility source files and includes as static lib
 
 	file(GLOB_RECURSE agilityInclude "${CMAKE_BINARY_DIR}/external/agility/build/native/include")
@@ -396,15 +377,9 @@ elseif("${graphicsApi}" STREQUAL "directx12")
 
 	set_target_properties(DirectX12 PROPERTIES FOLDER External/D3D12)
 
-	# WinPixRuntime for debug markers
-
-	target_include_directories(DirectX12 PUBLIC "${CMAKE_BINARY_DIR}/external/win_pix_runtime/Include")
-
 	# Add an interface to link to that copies to target directory
 
 	if(NOT ${ARM})
-
-		target_link_libraries(DirectX12 PUBLIC "${CMAKE_BINARY_DIR}/external/win_pix_runtime/bin/x64/WinPixEventRuntime.lib")
 
 		# AMD AGS and NVAPI are required because DirectX12 was apparently not good enough :/
 		# These are not supported for ARM, so don't include them there
@@ -424,7 +399,6 @@ elseif("${graphicsApi}" STREQUAL "directx12")
 			COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin/$<CONFIG>"
 			COMMAND ${CMAKE_COMMAND} -E copy_if_different
 			"${CMAKE_BINARY_DIR}/external/warp/build/native/amd64/d3d10warp.dll"
-			"${CMAKE_BINARY_DIR}/external/win_pix_runtime/bin/x64/WinPixEventRuntime.dll"
 			"${CMAKE_CURRENT_SOURCE_DIR}/external/AGS_SDK/ags_lib/lib/amd_ags_x64.dll"
 			"${CMAKE_BINARY_DIR}/bin/$<CONFIG>/"
 			COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin/$<CONFIG>/D3D12/"
@@ -443,9 +417,6 @@ elseif("${graphicsApi}" STREQUAL "directx12")
 		add_custom_command(TARGET DirectX12 POST_BUILD
 			COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin"
 			COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin/$<CONFIG>"
-			COMMAND ${CMAKE_COMMAND} -E copy_if_different
-			"${CMAKE_BINARY_DIR}/external/win_pix_runtime/bin/ARM64/WinPixEventRuntime.dll"
-			"${CMAKE_BINARY_DIR}/bin/$<CONFIG>/"
 			COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin/$<CONFIG>/D3D12/"
 			COMMAND ${CMAKE_COMMAND} -E copy_if_different
 			"${CMAKE_BINARY_DIR}/external/agility/build/native/bin/arm64/D3D12Core.dll"

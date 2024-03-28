@@ -103,7 +103,7 @@ typedef struct DxGraphicsDevice {
 typedef struct DxCommandBufferState {
 
 	RefPtr *tempPipelines[EPipelineType_Count];		//Pipelines that were set via command, but not bound yet
-	RefPtr *pipelines[EPipelineType_Count];			//Currently bound pipelines
+	RefPtr *pipeline;
 
 	F32x4 blendConstants, tempBlendConstants;
 

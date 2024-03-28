@@ -1892,7 +1892,10 @@ Error CommandListRef_startRenderExt(
 		TransitionInternal *state = NULL;
 		if(CommandListRef_isBound(commandList, transition.resource, transition.range, &state)) {
 
-			if(state->type != transition.type)
+			//Depth stencil is allowed to transition twice as Depth & Stencil.
+			//However, you're not allowed to use an RTV twice.
+
+			if(i < colors.length || state->type != transition.type)
 				gotoIfError(clean, Error_invalidOperation(
 					4, "CommandListRef_startRenderExt()::colors[i] or depthStencil was already transitioned!"
 				))

@@ -18,9 +18,6 @@
 *  This is called dual licensing.
 */
 
-int translationUnitEmpty69 = 1;
-
-/*
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/command_list.h"
 #include "graphics/generic/device.h"
@@ -31,29 +28,15 @@ int translationUnitEmpty69 = 1;
 #include "graphics/generic/device_texture.h"
 #include "graphics/generic/tlas.h"
 #include "graphics/generic/blas.h"
-#include "graphics/vulkan/vulkan.h"
-#include "graphics/vulkan/vk_device.h"
-#include "graphics/vulkan/vk_instance.h"
-#include "graphics/vulkan/vk_buffer.h"
+#include "graphics/directx12/dx_device.h"
+#include "graphics/directx12/dx_buffer.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/errorx.h"
 #include "platforms/log.h"
 #include "types/buffer.h"
 #include "types/error.h"
 
-void addResolveImage(AttachmentInfoInternal attachment, VkRenderingAttachmentInfoKHR *result) {
-
-	VkUnifiedTexture *imageExt = TextureRef_getCurrImgExtT(attachment.resolveImage, Vk, 0);
-
-	switch (attachment.resolveMode) {
-		default:						result->resolveMode = VK_RESOLVE_MODE_AVERAGE_BIT;	break;
-		case EMSAAResolveMode_Min:		result->resolveMode = VK_RESOLVE_MODE_MIN_BIT;		break;
-		case EMSAAResolveMode_Max:		result->resolveMode = VK_RESOLVE_MODE_MAX_BIT;		break;
-	}
-
-	result->resolveImageView = imageExt->view;
-	result->resolveImageLayout = imageExt->lastLayout;
-}
+#include "types/math.h"
 
 void CommandList_process(
 	CommandList *commandList,
@@ -63,13 +46,20 @@ void CommandList_process(
 	void *commandListExt
 ) {
 
-	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
+	(void) commandList;
 
-	GraphicsInstance *instance = GraphicsInstanceRef_ptr(device->instance);
-	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
+	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
 
-	VkCommandBufferState *temp = (VkCommandBufferState*) commandListExt;
-	VkCommandBuffer buffer = temp->buffer;
+	(void) deviceExt;
+
+	DxCommandBufferState *temp = (DxCommandBufferState*) commandListExt;
+	DxCommandBuffer *buffer = temp->buffer;
+
+	ID3D12GraphicsCommandList *graphicsCmd = NULL;
+	if(FAILED(buffer->lpVtbl->QueryInterface(buffer, &IID_ID3D12GraphicsCommandList, (void**) &graphicsCmd))) {
+		Log_errorLnx("Invalid graphics command list");
+		return;
+	}
 
 	switch (op) {
 
@@ -81,25 +71,21 @@ void CommandList_process(
 			I32x2 size = ((const I32x2*) data)[1];
 
 			if((op - ECommandOp_SetViewport + 1) & 1)
-				temp->tempViewport = (VkViewport) {
-					.x = (F32) I32x2_x(offset),
-					.y = (F32) I32x2_y(offset),
-					.width = (F32) I32x2_x(size),
-					.height = (F32) I32x2_y(size),
-					.minDepth = 1,
-					.maxDepth = 0
+				temp->tempViewport = (D3D12_VIEWPORT) {
+					.TopLeftX = (F32) I32x2_x(offset),
+					.TopLeftY = (F32) I32x2_y(offset),
+					.Width = (F32) I32x2_x(size),
+					.Height = (F32) I32x2_y(size),
+					.MinDepth = 1,
+					.MaxDepth = 0
 				};
 
 			if ((op - ECommandOp_SetViewport + 1) & 2)
-				temp->tempScissor = (VkRect2D) {
-					.offset = (VkOffset2D) {
-						.x = I32x2_x(offset),
-						.y = I32x2_y(offset),
-					},
-					.extent = (VkExtent2D) {
-						.width = I32x2_x(size),
-						.height = I32x2_y(size),
-					}
+				temp->tempScissor = (D3D12_RECT) {
+					.left = I32x2_x(offset),
+					.top = I32x2_y(offset),
+					.right = I32x2_x(offset) + I32x2_x(size),
+					.bottom = I32x2_x(offset) + I32x2_y(size)
 				};
 
 			break;
@@ -390,8 +376,7 @@ void CommandList_process(
 			break;
 		}
 
-		case ECommandOp_EndRenderingExt:
-			instanceExt->cmdEndRendering(buffer);
+		case ECommandOp_EndRenderingExt:		//No-Op, D3D12 has no such concept
 			break;
 
 		//Draws
@@ -419,47 +404,46 @@ void CommandList_process(
 			//Bind viewport and scissor
 
 			Bool eq = Buffer_eq(
-				Buffer_createRefConst(&temp->boundViewport, sizeof(VkViewport)),
-				Buffer_createRefConst(&temp->tempViewport, sizeof(VkViewport))
+				Buffer_createRefConst(&temp->boundViewport, sizeof(D3D12_VIEWPORT)),
+				Buffer_createRefConst(&temp->tempViewport, sizeof(D3D12_VIEWPORT))
 			);
 
 			if(!eq) {
 				temp->boundViewport = temp->tempViewport;
-				vkCmdSetViewport(buffer, 0, 1, &temp->boundViewport);
+				buffer->lpVtbl->RSSetViewports(buffer, 1, &temp->boundViewport);
 			}
 
 			eq = Buffer_eq(
-				Buffer_createRefConst(&temp->boundScissor, sizeof(VkRect2D)),
-				Buffer_createRefConst(&temp->tempScissor, sizeof(VkRect2D))
+				Buffer_createRefConst(&temp->boundScissor, sizeof(D3D12_RECT)),
+				Buffer_createRefConst(&temp->tempScissor, sizeof(D3D12_RECT))
 			);
 
 			if(!eq) {
 				temp->boundScissor = temp->tempScissor;
-				vkCmdSetScissor(buffer, 0, 1, &temp->boundScissor);
+				buffer->lpVtbl->RSSetScissorRects(buffer, 1, &temp->boundScissor);
 			}
 
 			//Bind blend constants and/or stencil ref
 
 			if (F32x4_neq4(temp->tempBlendConstants, temp->blendConstants)) {
 				temp->blendConstants = temp->tempBlendConstants;
-				vkCmdSetBlendConstants(buffer, (const float*) &temp->blendConstants);
+				buffer->lpVtbl->OMSetBlendFactor(buffer, (const float*) &temp->blendConstants);
 			}
 
 			if (temp->tempStencilRef != temp->stencilRef) {
 				temp->stencilRef = temp->tempStencilRef;
-				vkCmdSetStencilReference(buffer, VK_STENCIL_FACE_FRONT_AND_BACK, temp->stencilRef);
+				buffer->lpVtbl->OMSetStencilRef(buffer, temp->stencilRef);
 			}
 
 			//Bind pipeline
 
-			if(temp->pipelines[EPipelineType_Graphics] != temp->tempPipelines[EPipelineType_Graphics]) {
+			if(temp->pipeline != temp->tempPipelines[EPipelineType_Graphics]) {
 
-				temp->pipelines[EPipelineType_Graphics] = temp->tempPipelines[EPipelineType_Graphics];
+				temp->pipeline = temp->tempPipelines[EPipelineType_Graphics];
 
-				vkCmdBindPipeline(
+				buffer->lpVtbl->SetPipelineState(
 					temp->buffer,
-					VK_PIPELINE_BIND_POINT_GRAPHICS,
-					*Pipeline_ext(PipelineRef_ptr(temp->pipelines[EPipelineType_Graphics]), Vk)
+					Pipeline_ext(PipelineRef_ptr(temp->pipeline), Dx)->pso
 				);
 			}
 
@@ -476,19 +460,21 @@ void CommandList_process(
 				temp->boundBuffers.indexBuffer = temp->tempBoundBuffers.indexBuffer;
 				temp->boundBuffers.isIndex32Bit = temp->tempBoundBuffers.isIndex32Bit;
 
-				vkCmdBindIndexBuffer(
-					temp->buffer,
-					DeviceBuffer_ext(DeviceBufferRef_ptr(temp->boundBuffers.indexBuffer), Vk)->buffer,
-					0,
-					temp->boundBuffers.isIndex32Bit ? VK_INDEX_TYPE_UINT32 : VK_INDEX_TYPE_UINT16
-				);
+				DeviceBuffer *indexBuffer = DeviceBufferRef_ptr(temp->boundBuffers.indexBuffer);
+
+				D3D12_INDEX_BUFFER_VIEW ibo = (D3D12_INDEX_BUFFER_VIEW) {
+					.BufferLocation = getDxDeviceAddress((DeviceData) { .buffer = temp->boundBuffers.indexBuffer }),
+					.SizeInBytes = indexBuffer->resource.size,
+					.Format = temp->boundBuffers.isIndex32Bit ? DXGI_FORMAT_R32_UINT : DXGI_FORMAT_R16_UINT
+				};
+
+				buffer->lpVtbl->IASetIndexBuffer(temp->buffer, &ibo);
 			}
 
 			//Bind vertex buffers
 
 			{
-				VkBuffer vertexBuffers[16] = { 0 };
-				VkDeviceSize vertexBufferOffsets[16] = { 0 };
+				D3D12_VERTEX_BUFFER_VIEW vertexBuffers[16] = { 0 };
 
 				U32 start = 16, end = 0;
 
@@ -512,16 +498,25 @@ void CommandList_process(
 						temp->boundBuffers.vertexBuffers[i] = bufferRef;
 					}
 
-					vertexBuffers[i] = DeviceBuffer_ext(DeviceBufferRef_ptr(bufferRef), Vk)->buffer;
+					PipelineGraphicsInfo *graphicsShader = Pipeline_info(
+						PipelineRef_ptr(temp->tempPipelines[EPipelineType_Graphics]), PipelineGraphicsInfo
+					);
+
+					DeviceBuffer *buf = DeviceBufferRef_ptr(bufferRef);
+
+					vertexBuffers[i] = (D3D12_VERTEX_BUFFER_VIEW) {
+						.BufferLocation = DeviceBuffer_ext(buf, Dx)->buffer,
+						.SizeInBytes = buf->resource.size,
+						.StrideInBytes = graphicsShader->vertexLayout.bufferStrides12_isInstance1[i] & 4095
+					};
 				}
 
 				if(end > start)
-					vkCmdBindVertexBuffers(
+					buffer->lpVtbl->IASetVertexBuffers(
 						temp->buffer,
 						start,
 						end - start,
-						&(vertexBuffers)[start],
-						&(vertexBufferOffsets)[start]
+						&(vertexBuffers)[start]
 					);
 			}
 
@@ -532,17 +527,17 @@ void CommandList_process(
 				DrawCmd draw = *(const DrawCmd*)data;
 
 				if(draw.isIndexed)
-					vkCmdDrawIndexed(
+					buffer->lpVtbl->DrawIndexedInstanced(
 						buffer,
 						draw.count, draw.instanceCount,
 						draw.indexOffset, draw.vertexOffset,
 						draw.instanceOffset
 					);
 
-				else vkCmdDraw(
+				else buffer->lpVtbl->DrawInstanced(
 					buffer,
 					draw.count, draw.instanceCount,
-					draw.indexOffset, draw.vertexOffset
+					draw.vertexOffset, draw.indexOffset
 				);
 			}
 
@@ -551,24 +546,24 @@ void CommandList_process(
 			else {
 
 				DrawIndirectCmd drawIndirect = *(const DrawIndirectCmd*)data;
-				VkDeviceBuffer *bufferExt = DeviceBuffer_ext(DeviceBufferRef_ptr(drawIndirect.buffer), Vk);
+				DxDeviceBuffer *bufferExt = DeviceBuffer_ext(DeviceBufferRef_ptr(drawIndirect.buffer), Dx);
 
 				//Indirect draw count
 
 				if (drawIndirect.countBufferExt) {
 
 					DeviceBuffer *counterBuffer = DeviceBufferRef_ptr(drawIndirect.countBufferExt);
-					VkDeviceBuffer *counterExt = DeviceBuffer_ext(counterBuffer, Vk);
+					DxDeviceBuffer *counterExt = DeviceBuffer_ext(counterBuffer, Dx);
 
 					if(drawIndirect.isIndexed)
-						vkCmdDrawIndexedIndirectCount(
+						buffer->lpVtbl->DrawIndexedIndirectCount(
 							buffer,
 							bufferExt->buffer, drawIndirect.bufferOffset,
 							counterExt->buffer, drawIndirect.countOffsetExt,
 							drawIndirect.drawCalls, drawIndirect.bufferStride
 						);
 
-					else vkCmdDrawIndirectCount(
+					else buffer->lpVtbl->DrawIndirectCount(
 						buffer,
 						bufferExt->buffer, drawIndirect.bufferOffset,
 						counterExt->buffer, drawIndirect.countOffsetExt,
@@ -581,13 +576,13 @@ void CommandList_process(
 				else {
 
 					if(drawIndirect.isIndexed)
-						vkCmdDrawIndexedIndirect(
+						buffer->lpVtbl->DrawIndexedIndirect(
 							buffer,
 							bufferExt->buffer, drawIndirect.bufferOffset,
 							drawIndirect.drawCalls, drawIndirect.bufferStride
 						);
 
-					else vkCmdDrawIndirect(
+					else buffer->lpVtbl->DrawIndirect(
 						buffer, bufferExt->buffer, drawIndirect.bufferOffset,
 						drawIndirect.drawCalls, drawIndirect.bufferStride
 					);
@@ -600,28 +595,28 @@ void CommandList_process(
 		case ECommandOp_DispatchIndirect:
 		case ECommandOp_Dispatch:
 
-			if(temp->pipelines[EPipelineType_Compute] != temp->tempPipelines[EPipelineType_Compute]) {
+			if(temp->pipeline != temp->tempPipelines[EPipelineType_Compute]) {
 
-				temp->pipelines[EPipelineType_Compute] = temp->tempPipelines[EPipelineType_Compute];
+				temp->pipeline = temp->tempPipelines[EPipelineType_Compute];
 
-				vkCmdBindPipeline(
+				buffer->lpVtbl->SetPipelineState(
 					temp->buffer,
-					VK_PIPELINE_BIND_POINT_COMPUTE,
-					*Pipeline_ext(PipelineRef_ptr(temp->pipelines[EPipelineType_Compute]), Vk)
+					Pipeline_ext(PipelineRef_ptr(temp->pipeline), Dx)->pso
 				);
 			}
 
 			if(op == ECommandOp_Dispatch) {
 				DispatchCmd dispatch = *(const DispatchCmd*)data;
-				vkCmdDispatch(
-					buffer, dispatch.groups[0], dispatch.groups[1], dispatch.groups[2]
+				buffer->lpVtbl->Dispatch(
+					buffer, 
+					dispatch.groups[0], dispatch.groups[1], dispatch.groups[2]
 				);
 			}
 
 			else {
 				DispatchIndirectCmd dispatch = *(const DispatchIndirectCmd*)data;
-				VkDeviceBuffer *bufferExt = DeviceBuffer_ext(DeviceBufferRef_ptr(dispatch.buffer), Vk);
-				vkCmdDispatchIndirect(buffer, bufferExt->buffer, dispatch.offset);
+				DxDeviceBuffer *bufferExt = DeviceBuffer_ext(DeviceBufferRef_ptr(dispatch.buffer), Dx);
+				buffer->lpVtbl->DispatchIndirect(buffer, bufferExt->buffer, dispatch.offset);
 			}
 
 			break;
@@ -631,59 +626,69 @@ void CommandList_process(
 
 			Pipeline *raytracingPipeline = PipelineRef_ptr(temp->tempPipelines[EPipelineType_RaytracingExt]);
 
-			if(temp->pipelines[EPipelineType_RaytracingExt] != temp->tempPipelines[EPipelineType_RaytracingExt]) {
+			if(temp->pipeline != temp->tempPipelines[EPipelineType_RaytracingExt]) {
 
-				temp->pipelines[EPipelineType_RaytracingExt] = temp->tempPipelines[EPipelineType_RaytracingExt];
+				temp->pipeline = temp->tempPipelines[EPipelineType_RaytracingExt];
 
-				vkCmdBindPipeline(
+				buffer->lpVtbl->SetPipelineState1(
 					temp->buffer,
-					VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,
-					*Pipeline_ext(raytracingPipeline, Vk)
+					Pipeline_ext(raytracingPipeline, Dx)->stateObject
 				);
 			}
 
 			PipelineRaytracingInfo info = *Pipeline_info(raytracingPipeline, PipelineRaytracingInfo);
 
-			VkStridedDeviceAddressRegionKHR hit = (VkStridedDeviceAddressRegionKHR) {
-				.deviceAddress = getVkDeviceAddress((DeviceData) {
+			D3D12_GPU_VIRTUAL_ADDRESS_RANGE_AND_STRIDE hit = (D3D12_GPU_VIRTUAL_ADDRESS_RANGE_AND_STRIDE) {
+				.StartAddress = getDxDeviceAddress((DeviceData) {
 					.buffer = info.shaderBindingTable, .offset = info.sbtOffset
 				}),
-				.size = (U64)raytracingShaderAlignment * info.groupCount,
-				.stride = raytracingShaderAlignment
+				.SizeInBytes = (U64)raytracingShaderAlignment * info.groupCount,
+				.StrideInBytes = raytracingShaderAlignment
 			};
 
-			VkStridedDeviceAddressRegionKHR miss = (VkStridedDeviceAddressRegionKHR) {
-				.deviceAddress = hit.deviceAddress + hit.size,
-				.size = (U64)raytracingShaderAlignment * info.missCount,
-				.stride = raytracingShaderAlignment
+			D3D12_GPU_VIRTUAL_ADDRESS_RANGE_AND_STRIDE miss = (D3D12_GPU_VIRTUAL_ADDRESS_RANGE_AND_STRIDE) {
+				.StartAddress = hit.StartAddress + hit.SizeInBytes,
+				.SizeInBytes = (U64)raytracingShaderAlignment * info.missCount,
+				.StrideInBytes = raytracingShaderAlignment
 			};
 
-			VkStridedDeviceAddressRegionKHR raygen = (VkStridedDeviceAddressRegionKHR) {
-				.deviceAddress = miss.deviceAddress + miss.size,
-				.size = raytracingShaderAlignment,
-				.stride = raytracingShaderAlignment
+			D3D12_GPU_VIRTUAL_ADDRESS_RANGE raygen = (D3D12_GPU_VIRTUAL_ADDRESS_RANGE) {
+				.StartAddress = miss.StartAddress + miss.SizeInBytes,
+				.SizeInBytes = raytracingShaderAlignment
 			};
 
-			VkStridedDeviceAddressRegionKHR callable = (VkStridedDeviceAddressRegionKHR) {
-				.deviceAddress = raygen.deviceAddress + raygen.size * info.raygenCount,
-				.size = (U64)raytracingShaderAlignment * info.callableCount,
-				.stride = raytracingShaderAlignment
+			D3D12_GPU_VIRTUAL_ADDRESS_RANGE_AND_STRIDE callable = (D3D12_GPU_VIRTUAL_ADDRESS_RANGE_AND_STRIDE) {
+				.StartAddress = raygen.StartAddress + raygen.SizeInBytes * info.raygenCount,
+				.SizeInBytes = (U64)raytracingShaderAlignment * info.callableCount,
+				.StrideInBytes = raytracingShaderAlignment
 			};
 
 			if(op == ECommandOp_DispatchRaysExt) {
+
 				DispatchRaysExt dispatch = *(const DispatchRaysExt*)data;
-				raygen.deviceAddress += raygen.stride * dispatch.raygenId;
-				instanceExt->traceRays(
-					buffer,
-					&raygen, &miss, &hit, &callable,
-					dispatch.x, dispatch.y, dispatch.z
-				);
+				raygen.StartAddress += raytracingShaderAlignment * dispatch.raygenId;
+
+				D3D12_DISPATCH_RAYS_DESC dispatchRays = (D3D12_DISPATCH_RAYS_DESC) {
+					.RayGenerationShaderRecord = raygen,
+					.MissShaderTable = miss,
+					.HitGroupTable = hit,
+					.CallableShaderTable = callable,
+					.Width = dispatch.x,
+					.Height = dispatch.y,
+					.Depth = dispatch.z
+				};
+
+				buffer->lpVtbl->DispatchRays(buffer, &dispatchRays);
 			}
 
 			else {
+
+				//TODO: Copy to buffer that we already include addresses in, we don't want to expose that level of control.
+
 				DispatchRaysIndirectExt dispatch = *(const DispatchRaysIndirectExt*)data;
-				raygen.deviceAddress += raygen.stride * dispatch.raygenId;
-				instanceExt->traceRaysIndirect(
+				raygen.SizeInBytes += raytracingShaderAlignment * dispatch.raygenId;
+
+				buffer->lpVtbl->DispatchRaysIndirect(
 					buffer,
 					&raygen, &miss, &hit, &callable,
 					DeviceBufferRef_ptr(dispatch.buffer)->resource.deviceAddress + dispatch.offset
@@ -695,12 +700,7 @@ void CommandList_process(
 
 		case ECommandOp_StartScope: {
 
-			VkDependencyInfo dependency = (VkDependencyInfo) {
-				.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-				.dependencyFlags = 0
-			};
-
-			U32 graphicsQueueId = deviceExt->queues[EVkCommandQueue_Graphics].queueId;
+			D3D12_BARRIER_GROUP dep[2] = { 0 };		//image, buffer
 
 			CommandScope scope = commandList->activeScopes.ptr[temp->scopeCounter];
 			++temp->scopeCounter;
@@ -714,30 +714,25 @@ void CommandList_process(
 				if(transition.type == ETransitionType_KeepAlive)		//TODO: Residency management
 					continue;
 
-				VkPipelineStageFlags2 pipelineStage = 0;
+				D3D12_BARRIER_SYNC pipelineStage = 0;
 
 				switch (transition.stage) {
 
 					default:																						break;
-					case EPipelineStage_Compute:		pipelineStage = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;		break;
-					case EPipelineStage_Vertex:			pipelineStage = VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT;		break;
-					case EPipelineStage_Pixel:			pipelineStage = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;	break;
-					case EPipelineStage_GeometryExt:	pipelineStage = VK_PIPELINE_STAGE_2_GEOMETRY_SHADER_BIT;	break;
+					case EPipelineStage_Compute:		pipelineStage = D3D12_BARRIER_SYNC_COMPUTE_SHADING;			break;
+					case EPipelineStage_Vertex:			pipelineStage = D3D12_BARRIER_SYNC_VERTEX_SHADING;			break;
+					case EPipelineStage_Pixel:			pipelineStage = D3D12_BARRIER_SYNC_PIXEL_SHADING;			break;
+					case EPipelineStage_GeometryExt:	pipelineStage = D3D12_BARRIER_SYNC_NON_PIXEL_SHADING;		break;
 
-					case EPipelineStage_Hull:
-						pipelineStage = VK_PIPELINE_STAGE_2_TESSELLATION_CONTROL_SHADER_BIT;
-						break;
-
-					case EPipelineStage_Domain:
-						pipelineStage = VK_PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER_BIT;
-						break;
+					case EPipelineStage_Hull:			pipelineStage = D3D12_BARRIER_SYNC_NON_PIXEL_SHADING;		break;
+					case EPipelineStage_Domain:			pipelineStage = D3D12_BARRIER_SYNC_NON_PIXEL_SHADING;		break;
 
 					case EPipelineStage_RaygenExt:
 					case EPipelineStage_CallableExt:
 					case EPipelineStage_MissExt:
 					case EPipelineStage_ClosestHitExt:
 					case EPipelineStage_AnyHitExt:
-						pipelineStage = VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR;
+						pipelineStage = D3D12_BARRIER_SYNC_RAYTRACING;
 						break;
 				}
 
@@ -765,25 +760,23 @@ void CommandList_process(
 							if (!blas->base.isCompleted)
 								continue;
 
-							gotoIfError(nextTransition, VkDeviceBuffer_transition(
-								DeviceBuffer_ext(DeviceBufferRef_ptr(blas->base.asBuffer), Vk),
+							gotoIfError(nextTransition, DxDeviceBuffer_transition(
+								DeviceBuffer_ext(DeviceBufferRef_ptr(blas->base.asBuffer), Dx),
 								pipelineStage,
-								VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR,
-								graphicsQueueId,
+								D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_READ,
 								0, 0,
 								&deviceExt->bufferTransitions,
-								&dependency
+								&dep[1]
 							))
 						}
 
-					gotoIfError(nextTransition, VkDeviceBuffer_transition(
-						DeviceBuffer_ext(DeviceBufferRef_ptr(tlas->base.asBuffer), Vk),
+					gotoIfError(nextTransition, DxDeviceBuffer_transition(
+						DeviceBuffer_ext(DeviceBufferRef_ptr(tlas->base.asBuffer), Dx),
 						pipelineStage,
-						VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR,
-						graphicsQueueId,
+						D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_READ,
 						0, 0,
 						&deviceExt->bufferTransitions,
-						&dependency
+						&dep[1]
 					))
 
 					continue;
@@ -796,14 +789,13 @@ void CommandList_process(
 					if (!blas->base.isCompleted)
 						continue;
 
-					gotoIfError(nextTransition, VkDeviceBuffer_transition(
-						DeviceBuffer_ext(DeviceBufferRef_ptr(blas->base.asBuffer), Vk),
+					gotoIfError(nextTransition, DxDeviceBuffer_transition(
+						DeviceBuffer_ext(DeviceBufferRef_ptr(blas->base.asBuffer), Dx),
 						pipelineStage,
-						VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR,
-						graphicsQueueId,
+						D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_READ,
 						0, 0,
 						&deviceExt->bufferTransitions,
-						&dependency
+						&dep[1]
 					))
 
 					continue;
@@ -815,87 +807,74 @@ void CommandList_process(
 				Bool isDepthStencil = TextureRef_isDepthStencil(transition.resource);
 				Bool isShaderRead = transition.type == ETransitionType_ShaderRead;
 
-				VkImageLayout layout = VK_IMAGE_LAYOUT_GENERAL;
-				VkAccessFlags2 access = 0;
+				D3D12_BARRIER_LAYOUT layout = D3D12_BARRIER_LAYOUT_UNORDERED_ACCESS;
+				D3D12_BARRIER_ACCESS access = 0;
 
-				if(isImage) {
-					access = isShaderRead ? VK_ACCESS_2_SHADER_SAMPLED_READ_BIT : VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
-					layout = isShaderRead ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_GENERAL;
-				}
+				access = isShaderRead ? D3D12_BARRIER_ACCESS_SHADER_RESOURCE : D3D12_BARRIER_ACCESS_UNORDERED_ACCESS;
 
-				if (!isImage)
-					access =
-						transition.type == ETransitionType_ShaderRead ? VK_ACCESS_2_SHADER_STORAGE_READ_BIT :
-						VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
+				if(isImage)
+					layout = isShaderRead ? D3D12_BARRIER_LAYOUT_SHADER_RESOURCE : D3D12_BARRIER_LAYOUT_UNORDERED_ACCESS;
 
 				if(!pipelineStage)
 					switch ((ETransitionType) transition.type) {
 
 						case ETransitionType_RenderTargetRead:
 
-							pipelineStage =
-								isDepthStencil ? VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT :
-								VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+							pipelineStage = 
+								isDepthStencil ? D3D12_BARRIER_SYNC_DEPTH_STENCIL : D3D12_BARRIER_SYNC_PIXEL_SHADING;
 
 							access =
-								isDepthStencil ? VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT :
-								VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT;
+								isDepthStencil ? D3D12_BARRIER_ACCESS_DEPTH_STENCIL_READ : D3D12_BARRIER_ACCESS_RENDER_TARGET;
 
 							layout =
-								isDepthStencil ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL :
-								VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;
+								isDepthStencil ? D3D12_BARRIER_LAYOUT_DEPTH_STENCIL_READ : D3D12_BARRIER_LAYOUT_RENDER_TARGET;
 
 							break;
 
 						case ETransitionType_RenderTargetWrite:
 
-							pipelineStage =
-								isDepthStencil ? VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT :
-								VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+							pipelineStage = 
+								isDepthStencil ? D3D12_BARRIER_SYNC_DEPTH_STENCIL : D3D12_BARRIER_SYNC_PIXEL_SHADING;
 
 							access =
-								isDepthStencil ? VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
-								VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT :
-								VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT |
-								VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
+								isDepthStencil ? D3D12_BARRIER_ACCESS_DEPTH_STENCIL_WRITE : D3D12_BARRIER_ACCESS_RENDER_TARGET;
 
 							layout =
-								isDepthStencil ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL :
-								VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;
+								isDepthStencil ? D3D12_BARRIER_LAYOUT_DEPTH_STENCIL_WRITE : D3D12_BARRIER_LAYOUT_RENDER_TARGET;
 
 							break;
 
 						case ETransitionType_Clear:
-							pipelineStage = VK_PIPELINE_STAGE_2_CLEAR_BIT;
-							access = VK_ACCESS_2_TRANSFER_WRITE_BIT;
-							layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+							pipelineStage = D3D12_BARRIER_SYNC_CLEAR_UNORDERED_ACCESS_VIEW;
+							access = D3D12_BARRIER_ACCESS_UNORDERED_ACCESS;
+							layout = D3D12_BARRIER_SYNC_RENDER_TARGET;
 							break;
 
 						case ETransitionType_CopyRead:
-							pipelineStage =  VK_PIPELINE_STAGE_2_COPY_BIT;
-							access = VK_ACCESS_2_TRANSFER_READ_BIT;
-							layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+							pipelineStage =  D3D12_BARRIER_SYNC_COPY;
+							access = D3D12_BARRIER_ACCESS_COPY_SOURCE;
+							layout = D3D12_BARRIER_LAYOUT_COMMON;
 							break;
 
 						case ETransitionType_CopyWrite:
-							pipelineStage =  VK_PIPELINE_STAGE_2_COPY_BIT;
-							access = VK_ACCESS_2_TRANSFER_WRITE_BIT;
-							layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+							pipelineStage =  D3D12_BARRIER_SYNC_COPY;
+							access = D3D12_BARRIER_ACCESS_COPY_DEST;
+							layout = D3D12_BARRIER_LAYOUT_COMMON;
 							break;
 
 						case ETransitionType_Indirect:
-							pipelineStage = VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT;
-							access = VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT;
+							pipelineStage = D3D12_BARRIER_SYNC_EXECUTE_INDIRECT;
+							access = D3D12_BARRIER_ACCESS_INDIRECT_ARGUMENT;
 							break;
 
 						case ETransitionType_Index:
-							pipelineStage = VK_PIPELINE_STAGE_2_INDEX_INPUT_BIT;
-							access = VK_ACCESS_2_INDEX_READ_BIT;
+							pipelineStage = D3D12_BARRIER_SYNC_INDEX_INPUT;
+							access = D3D12_BARRIER_ACCESS_INDEX_BUFFER;
 							break;
 
 						case ETransitionType_Vertex:
-							pipelineStage = VK_PIPELINE_STAGE_2_VERTEX_ATTRIBUTE_INPUT_BIT;
-							access = VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT;
+							pipelineStage = D3D12_BARRIER_SYNC_INDEX_INPUT;
+							access = D3D12_BARRIER_ACCESS_VERTEX_BUFFER;
 							break;
 
 						default:
@@ -906,42 +885,43 @@ void CommandList_process(
 
 				if(isImage) {
 
-					VkUnifiedTexture *imageExt = TextureRef_getCurrImgExtT(transition.resource, Vk, 0);
+					UnifiedTexture unif = TextureRef_getUnifiedTexture(transition.resource, NULL);
+					DxUnifiedTexture *imageExt = TextureRef_getCurrImgExtT(transition.resource, Dx, 0);
 
-					VkImageSubresourceRange range = (VkImageSubresourceRange) {		//TODO:
-						.aspectMask = isDepthStencil ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT,
-						.levelCount = 1,
-						.layerCount = 1
+					D3D12_BARRIER_SUBRESOURCE_RANGE range = (D3D12_BARRIER_SUBRESOURCE_RANGE) {		//TODO:
+						.NumMipLevels = 1,
+						.NumArraySlices = 1,
+						.NumPlanes = 1
 					};
 
-					gotoIfError(nextTransition, VkUnifiedTexture_transition(
+					if(isDepthStencil && unif.depthFormat >= EDepthStencilFormat_StencilStart)
+						++range.NumPlanes;
+
+					gotoIfError(nextTransition, DxUnifiedTexture_transition(
 
 						imageExt,
 						pipelineStage,
 						access,
 						layout,
-						graphicsQueueId,
 						&range,
 
 						&deviceExt->imageTransitions,
-						&dependency
+						&dep[0]
 					))
 				}
 
 				else {
 
 					DeviceBuffer *devBuffer = DeviceBufferRef_ptr(transition.resource);
-					VkDeviceBuffer *bufferExt = DeviceBuffer_ext(devBuffer, Vk);
 
-					gotoIfError(nextTransition, VkDeviceBuffer_transition(
-						bufferExt,
+					gotoIfError(nextTransition, DxDeviceBuffer_transition(
+						DeviceBuffer_ext(devBuffer, Dx),
 						pipelineStage,
 						access,
-						graphicsQueueId,
 						0,						//TODO: range
 						devBuffer->resource.size,
 						&deviceExt->bufferTransitions,
-						&dependency
+						&dep[1]
 					))
 				}
 
@@ -951,37 +931,50 @@ void CommandList_process(
 					Error_printx(err, ELogLevel_Error, ELogOptions_Default);
 			}
 
-			if(dependency.imageMemoryBarrierCount || dependency.bufferMemoryBarrierCount)
-				instanceExt->cmdPipelineBarrier2(buffer, &dependency);
+			if(dep[0].NumBarriers || dep[1].NumBarriers)
+				buffer->lpVtbl->Barrier(
+					buffer, 
+					dep[0].NumBarriers || dep[1].NumBarriers,
+					dep[0].NumBarriers ? &dep[0] : dep[1]
+				);
 
-			ListVkBufferMemoryBarrier2_clear(&deviceExt->bufferTransitions);
-			ListVkImageMemoryBarrier2_clear(&deviceExt->imageTransitions);
+			ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions);
+			ListD3D12_TEXTURE_BARRIER_clear(&deviceExt->imageTransitions);
 			break;
 		}
 
 		//Debug markers
+		//We're not going to include and port pix to C for this...
 
 		case ECommandOp_EndRegionDebugExt:
-			instanceExt->cmdDebugMarkerEnd(buffer);
+			graphicsCmd->lpVtbl->EndEvent(graphicsCmd);
 			break;
 
 		case ECommandOp_AddMarkerDebugExt:
 		case ECommandOp_StartRegionDebugExt: {
 
-			VkDebugMarkerMarkerInfoEXT markerInfo = (VkDebugMarkerMarkerInfoEXT) {
-				.sType = VK_STRUCTURE_TYPE_DEBUG_MARKER_MARKER_INFO_EXT,
-				.pMarkerName = (const char*) data + sizeof(F32x4),
-			};
+			const F32x4 colf = F32x4_round(F32x4_mul(F32x4_saturate(F32x4_load4((F32*)data)), F32x4_xxxx4(255)));
+			const I32x4 v = I32x4_mul(I32x4_fromF32x4(colf), I32x4_create4(1 << 16, 1 << 8, 1, 0));
+
+			const I32x2 reduc2 = I32x2_or(I32x4_xy(v), I32x4_zw(v));
+			const I32 reduc = I32x2_x(reduc2) | I32x2_y(reduc2);
+
+			U64 encoded[64];
+			encoded[0] = (op == ECommandOp_AddMarkerDebugExt ? 0x017 : 0x001) << 10;
+			encoded[1] = 0xFF000000 | (*(const U32*)&reduc);
+
+			const U32 strLen = (U32) CharString_calcStrLen((const C8*)data + sizeof(I32x4), sizeof(encoded) - 16);
+			const U32 len = U32_min((U32) sizeof(encoded), 16 + strLen);
 
 			Buffer_copy(
-				Buffer_createRef(&markerInfo.color, sizeof(F32x4)),
-				Buffer_createRefConst(data, sizeof(F32x4))
+				Buffer_createRef((C8*)encoded + 16, sizeof(encoded) - 16),
+				Buffer_createRefConst((const C8*)data + sizeof(I32x4), strLen)
 			);
 
 			if(op == ECommandOp_AddMarkerDebugExt)
-				instanceExt->cmdDebugMarkerInsert(buffer, &markerInfo);
+				graphicsCmd->lpVtbl->SetMarker(graphicsCmd, 2, encoded, len);
 
-			else instanceExt->cmdDebugMarkerBegin(buffer, &markerInfo);
+			else graphicsCmd->lpVtbl->BeginEvent(graphicsCmd, 2, encoded, len);
 
 			break;
 		}
@@ -998,4 +991,3 @@ void CommandList_process(
 			break;
 	}
 }
-*/
