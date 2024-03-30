@@ -294,7 +294,7 @@ void CommandList_process(
 
 			if (startRender->flags & EStartRenderFlags_Depth) {
 
-				VkUnifiedTexture *depthExt = TextureRef_getCurrImgExtT(startRender->depth, Vk, 0);
+				VkUnifiedTexture *depthExt = TextureRef_getCurrImgExtT(startRender->depthStencil, Vk, 0);
 
 				Bool unusedAfterRender = startRender->flags & EStartRenderFlags_DepthUnusedAfterRender;
 
@@ -317,11 +317,11 @@ void CommandList_process(
 					}
 				};
 
-				if(startRender->resolveDepth) {
+				if(startRender->resolveDepthStencil) {
 
 					AttachmentInfoInternal tmp = (AttachmentInfoInternal) {
-						.resolveImage = startRender->resolveDepth,
-						.resolveMode = startRender->resolveDepthMode
+						.resolveImage = startRender->resolveDepthStencil,
+						.resolveMode = startRender->resolveDepthStencilMode
 					};
 
 					addResolveImage(tmp, &depthAttachment);
@@ -330,7 +330,7 @@ void CommandList_process(
 
 			if (startRender->flags & EStartRenderFlags_Stencil) {
 
-				VkUnifiedTexture *stencilExt = TextureRef_getCurrImgExtT(startRender->stencil, Vk, 0);
+				VkUnifiedTexture *stencilExt = TextureRef_getCurrImgExtT(startRender->depthStencil, Vk, 0);
 
 				Bool unusedAfterRender = startRender->flags & EStartRenderFlags_StencilUnusedAfterRender;
 
@@ -353,11 +353,11 @@ void CommandList_process(
 					}
 				};
 
-				if(startRender->resolveStencil) {
+				if(startRender->resolveDepthStencil) {
 
 					AttachmentInfoInternal tmp = (AttachmentInfoInternal) {
-						.resolveImage = startRender->resolveStencil,
-						.resolveMode = startRender->resolveStencilMode
+						.resolveImage = startRender->resolveDepthStencil,
+						.resolveMode = startRender->resolveDepthStencilMode
 					};
 
 					addResolveImage(tmp, &stencilAttachment);
@@ -562,14 +562,14 @@ void CommandList_process(
 							buffer,
 							bufferExt->buffer, drawIndirect.bufferOffset,
 							counterExt->buffer, drawIndirect.countOffsetExt,
-							drawIndirect.drawCalls, drawIndirect.bufferStride
+							drawIndirect.drawCalls, sizeof(DrawCallIndexed)
 						);
 
 					else vkCmdDrawIndirectCount(
 						buffer,
 						bufferExt->buffer, drawIndirect.bufferOffset,
 						counterExt->buffer, drawIndirect.countOffsetExt,
-						drawIndirect.drawCalls, drawIndirect.bufferStride
+						drawIndirect.drawCalls, sizeof(DrawCallUnindexed)
 					);
 				}
 
@@ -581,12 +581,12 @@ void CommandList_process(
 						vkCmdDrawIndexedIndirect(
 							buffer,
 							bufferExt->buffer, drawIndirect.bufferOffset,
-							drawIndirect.drawCalls, drawIndirect.bufferStride
+							drawIndirect.drawCalls, sizeof(DrawCallIndexed)
 						);
 
 					else vkCmdDrawIndirect(
 						buffer, bufferExt->buffer, drawIndirect.bufferOffset,
-						drawIndirect.drawCalls, drawIndirect.bufferStride
+						drawIndirect.drawCalls, sizeof(DrawCallUnindexed)
 					);
 				}
 			}
@@ -844,6 +844,7 @@ void CommandList_process(
 
 							break;
 
+						case ETransitionType_ResolveTargetWrite:		//No distinction in Vulkan
 						case ETransitionType_RenderTargetWrite:
 
 							pipelineStage =

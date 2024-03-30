@@ -1426,12 +1426,11 @@ Error CommandList_drawIndirectBase(
 	CommandList *commandList,
 	DeviceBufferRef *buffer,
 	U64 bufferOffset,
-	U32 *bufferStride,
 	U32 drawCalls,
 	Bool indexed
 ) {
 
-	const U32 minStride = (U32)(indexed ? sizeof(DrawCallIndexed) : sizeof(DrawCallUnindexed));
+	const U32 bufferStride = (U32)(indexed ? sizeof(DrawCallIndexed) : sizeof(DrawCallUnindexed));
 	const DeviceBuffer *buf = DeviceBufferRef_ptr(buffer);
 
 	if(!buf)
@@ -1442,22 +1441,13 @@ Error CommandList_drawIndirectBase(
 			2, 0, "CommandList_drawIndirectBase()::offset has to be 16-byte aligned"
 		);
 
-	if(!*bufferStride)
-		*bufferStride = minStride;
-
-	if(*bufferStride < minStride)
-		return Error_invalidParameter(
-			2, 1,
-			"CommandList_drawIndirectBase()::*bufferStride should be 0 (auto), 16 (unindexed) or 32 (indexed)"
-		);
-
 	if (!drawCalls)
 		return Error_invalidParameter(
 			2, 2, "CommandList_drawIndirectBase() shouldn't be submitted if drawCalls is 0"
 		);
 
 	const Error err = CommandListRef_checkDispatchBuffer(
-		commandList->device, buffer, bufferOffset, (U64)*bufferStride * drawCalls
+		commandList->device, buffer, bufferOffset, (U64)bufferStride * drawCalls
 	);
 
 	if(err.genericError)
@@ -1465,7 +1455,7 @@ Error CommandList_drawIndirectBase(
 
 	const BufferRange range = (BufferRange) {
 		.startRange = bufferOffset,
-		.endRange = bufferOffset + *bufferStride * drawCalls
+		.endRange = bufferOffset + bufferStride * drawCalls
 	};
 
 	return CommandListRef_transitionBuffer(commandList, buffer, range, ETransitionType_Indirect);
@@ -1475,20 +1465,18 @@ Error CommandListRef_drawIndirect(
 	CommandListRef *commandListRef,
 	DeviceBufferRef *buffer,
 	U64 bufferOffset,
-	U32 bufferStride,
 	U32 drawCalls,
 	Bool indexed
 ) {
 
 	CommandListRef_validateScope(commandListRef, clean)
 
-	gotoIfError(clean, CommandList_drawIndirectBase(commandList, buffer, bufferOffset, &bufferStride, drawCalls, indexed))
+	gotoIfError(clean, CommandList_drawIndirectBase(commandList, buffer, bufferOffset, drawCalls, indexed))
 
 	DrawIndirectCmd draw = (DrawIndirectCmd) {
 		.buffer = buffer,
 		.bufferOffset = bufferOffset,
 		.drawCalls = drawCalls,
-		.bufferStride = bufferStride,
 		.isIndexed = indexed
 	};
 
@@ -1510,7 +1498,6 @@ Error CommandListRef_drawIndirectCountExt(
 	CommandListRef *commandListRef,
 	DeviceBufferRef *buffer,
 	U64 bufferOffset,
-	U32 bufferStride,
 	DeviceBufferRef *countBuffer,
 	U64 countOffset,
 	U32 maxDrawCalls,
@@ -1520,7 +1507,7 @@ Error CommandListRef_drawIndirectCountExt(
 	CommandListRef_validateScope(commandListRef, clean)
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(commandList->device);
-	gotoIfError(clean, CommandList_drawIndirectBase(commandList, buffer, bufferOffset, &bufferStride, maxDrawCalls, indexed))
+	gotoIfError(clean, CommandList_drawIndirectBase(commandList, buffer, bufferOffset, maxDrawCalls, indexed))
 
 	if(!(device->info.capabilities.features & EGraphicsFeatures_MultiDrawIndirectCount))
 		gotoIfError(clean, Error_unsupportedOperation(
@@ -1542,7 +1529,6 @@ Error CommandListRef_drawIndirectCountExt(
 		.bufferOffset = bufferOffset,
 		.countOffsetExt = countOffset,
 		.drawCalls = maxDrawCalls,
-		.bufferStride = bufferStride,
 		.isIndexed = indexed
 	};
 
@@ -1567,8 +1553,7 @@ Error CommandListRef_startRenderExt(
 	I32x2 offset,
 	I32x2 size,
 	ListAttachmentInfo colors,
-	AttachmentInfo depth,
-	AttachmentInfo stencil
+	DepthStencilAttachmentInfo depthStencil
 ) {
 
 	Buffer command = Buffer_createNull();
@@ -1583,7 +1568,7 @@ Error CommandListRef_startRenderExt(
 			0, "CommandListRef_startRenderExt() requires directRendering extension, which was missing!"
 		))
 
-	if(!colors.length && !depth.image && !stencil.image)
+	if(!colors.length && !depthStencil.image)
 		gotoIfError(clean, Error_invalidOperation(
 			1, "CommandListRef_startRenderExt() requires DepthStencil and/or colors"
 		))
@@ -1596,16 +1581,25 @@ Error CommandListRef_startRenderExt(
 	U8 counter = 0;
 	EMSAASamples sampleCount = 0;
 
-	for (U64 i = 0; i < colors.length + !!depth.image + !!stencil.image; ++i) {
+	for (U64 i = 0; i < colors.length + !!depthStencil.image; ++i) {
 
-		Bool isDepth = i == colors.length && depth.image;
-		AttachmentInfo info = i < colors.length ? colors.ptr[i] : (isDepth ? depth : stencil);
+		Bool isDepthStencil = i == colors.length;
+		AttachmentInfo info;
+
+		if(isDepthStencil)
+			info = (AttachmentInfo) {
+				.range = depthStencil.range,
+				.image = depthStencil.image,
+				.resolveImage = depthStencil.resolveImage,
+				.resolveRange = depthStencil.resolveImageRange
+			};
+
+		else info = colors.ptr[i];
 
 		if(!info.image)
 			continue;
 
 		++counter;
-		Bool isStencil = i >= colors.length && !isDepth;
 
 		DeviceResourceVersion version;
 		UnifiedTexture texture = TextureRef_getUnifiedTexture(info.image, &version);
@@ -1654,19 +1648,9 @@ Error CommandListRef_startRenderExt(
 				3, "CommandListRef_startRenderExt() image dimensions are incompatible with others"
 			))
 
-		if(TextureRef_isDepthStencil(info.image) != (isDepth || isStencil))
+		if(TextureRef_isDepthStencil(info.image) != isDepthStencil)
 			gotoIfError(clean, Error_invalidOperation(
 				3, "CommandListRef_startRenderExt() image had mismatching image types (Color/Depth)"
-			))
-
-		if (isDepth && texture.depthFormat == EDepthStencilFormat_S8Ext)
-			gotoIfError(clean, Error_invalidOperation(
-				3, "CommandListRef_startRenderExt()::depth has format S8, which is not usable for depth attachment"
-			))
-
-		if (isStencil && texture.depthFormat < EDepthStencilFormat_StencilStart)
-			gotoIfError(clean, Error_invalidOperation(
-				3, "CommandListRef_startRenderExt()::stencil has format D16/D32, which is unusable for stencil attachment"
 			))
 
 		//Validate MSAA
@@ -1691,6 +1675,14 @@ Error CommandListRef_startRenderExt(
 
 		if(info.resolveImage) {
 
+			//TODO: Properly validate this
+
+			if(info.resolveRange.levelId >= 1 || info.resolveRange.layerId >= 1)
+				gotoIfError(clean, Error_outOfBounds(
+					4, info.resolveRange.levelId >= 1 ? info.resolveRange.levelId : info.resolveRange.layerId, 1,
+					"CommandListRef_startRenderExt() image range.levelId or layerId is invalid"
+				))
+
 			if(!texture.sampleCount)
 				gotoIfError(clean, Error_invalidOperation(
 					3, "CommandListRef_startRenderExt() image had resolveImage, while MSAA was off"
@@ -1705,22 +1697,7 @@ Error CommandListRef_startRenderExt(
 			UnifiedTexture resolveTexture = TextureRef_getUnifiedTexture(info.resolveImage, &resolveVersion);
 
 			if (texture.depthFormat) {
-
-				EDepthStencilFormat resolveDF = resolveTexture.depthFormat;
-				EDepthStencilFormat texDF = texture.depthFormat;
-
-				if(isStencil && resolveDF < EDepthStencilFormat_StencilStart)
-					gotoIfError(clean, Error_invalidOperation(
-						3, "CommandListRef_startRenderExt() MSAA resolve image of stencil image needs stencil buffer"
-					))
-
-				Bool resolveImageIsCompatible =
-					(resolveDF == texDF) || (
-						(resolveDF == EDepthStencilFormat_D32S8 || resolveDF == EDepthStencilFormat_D32) &&
-						(texDF == EDepthStencilFormat_D32S8 || texDF == EDepthStencilFormat_D32)
-					);
-
-				if(isDepth && !resolveImageIsCompatible)
+				if(texture.depthFormat != resolveTexture.depthFormat)
 					gotoIfError(clean, Error_invalidOperation(
 						3, "CommandListRef_startRenderExt() MSAA resolve image of depth buffer needs compatible depth format"
 					))
@@ -1759,34 +1736,17 @@ Error CommandListRef_startRenderExt(
 			2, "CommandListRef_startRenderExt() can't already have a render started!"
 		))
 
-	if(stencil.color.coloru[0] >> 8)
-		gotoIfError(clean, Error_invalidOperation(
-			5, "CommandListRef_startRenderExt()::stencil clear color should be 0-255 (0-0xFF)"
-		))
-
-	if(!stencil.image && I32x4_any(I32x4_load4(stencil.color.colori)))
+	if(!depthStencil.image && depthStencil.clearStencil)
 		gotoIfError(clean, Error_invalidOperation(
 			5, "CommandListRef_startRenderExt()::stencil clear value can't be non zero if there's no stencil bound"
 		))
 
-	if(depth.color.colorf[0] < 0 || depth.color.colorf[0] > 1)
-		gotoIfError(clean, Error_invalidOperation(
-			4, "CommandListRef_startRenderExt()::depth clear color should be 0-1"
-		))
+	if(depthStencil.clearDepth < 0 || depthStencil.clearDepth > 1)
+		gotoIfError(clean, Error_invalidOperation(4, "CommandListRef_startRenderExt()::depth clear should be 0-1"))
 
-	if(!depth.image && F32x4_any(F32x4_load4(depth.color.colorf)))
+	if(!depthStencil.image && depthStencil.clearDepth)
 		gotoIfError(clean, Error_invalidOperation(
 			4, "CommandListRef_startRenderExt()::depth clear value can't be non zero if there's no depth buffer bound"
-		))
-
-	if(F32x4_any(F32x4_yzw(F32x4_load4(depth.color.colorf))))
-		gotoIfError(clean, Error_invalidOperation(
-			4, "CommandListRef_startRenderExt()::depth clear value can only contain info in the first float"
-		))
-
-	if(I32x4_any(I32x4_yzw(I32x4_load4(stencil.color.colori))))
-		gotoIfError(clean, Error_invalidOperation(
-			5, "CommandListRef_startRenderExt()::stencil clear value can only contain info in the first uint8"
 		))
 
 	StartRenderCmdExt *startRender = (StartRenderCmdExt*)command.ptr;
@@ -1794,63 +1754,69 @@ Error CommandListRef_startRenderExt(
 	*startRender = (StartRenderCmdExt) {
 		.offset = offset,
 		.size = size,
-		.resolveDepthMode = depth.resolveMode,
-		.resolveStencilMode = stencil.resolveMode,
+		.resolveDepthStencilMode = depthStencil.depthStencilResolve,
 		.colorCount = (U8) colors.length,
-		.clearStencil = (U8) stencil.color.coloru[0],
-		.clearDepth = depth.color.colorf[0],
-		.depthRange = depth.range,
-		.stencilRange = stencil.range,
-		.depth = depth.image,
-		.stencil = stencil.image,
-		.resolveDepth = depth.resolveImage,
-		.resolveStencil = stencil.resolveImage
+		.clearStencil = (U8) depthStencil.clearStencil,
+		.clearDepth = depthStencil.clearDepth,
+		.depthStencilRange = depthStencil.range,
+		.depthStencil = depthStencil.image,
+		.resolveDepthStencil = depthStencil.resolveImage,
+		.resolveDepthStencilRange = depthStencil.resolveImageRange
 	};
 
-	if(depth.image)
+	UnifiedTexture depthStencilImg = TextureRef_getUnifiedTexture(depthStencil.image, NULL);
+
+	if(depthStencilImg.depthFormat != EDepthStencilFormat_S8Ext)
 		startRender->flags |= EStartRenderFlags_Depth;
 
-	if(depth.load == ELoadAttachmentType_Clear)
+	if(depthStencil.depthLoad == ELoadAttachmentType_Clear)
 		startRender->flags |= EStartRenderFlags_ClearDepth;
 
-	else if(depth.load == ELoadAttachmentType_Preserve)
+	else if(depthStencil.depthLoad == ELoadAttachmentType_Preserve)
 		startRender->flags |= EStartRenderFlags_PreserveDepth;
 
-	if(depth.unusedAfterRender)
+	if(depthStencil.depthUnusedAfterRender)
 		startRender->flags |= EStartRenderFlags_DepthUnusedAfterRender;
 
-	if(stencil.image)
+	if(depthStencil.depthReadOnly)
+		startRender->flags |= EStartRenderFlags_DepthReadOnly;
+
+	if(depthStencilImg.depthFormat >= EDepthStencilFormat_StencilStart)
 		startRender->flags |= EStartRenderFlags_Stencil;
 
-	if(stencil.load == ELoadAttachmentType_Clear)
+	if(depthStencil.stencilLoad == ELoadAttachmentType_Clear)
 		startRender->flags |= EStartRenderFlags_ClearStencil;
 
-	else if(stencil.load == ELoadAttachmentType_Preserve)
+	else if(depthStencil.stencilLoad == ELoadAttachmentType_Preserve)
 		startRender->flags |= EStartRenderFlags_PreserveStencil;
 
-	if(stencil.unusedAfterRender)
+	if(depthStencil.stencilUnusedAfterRender)
 		startRender->flags |= EStartRenderFlags_StencilUnusedAfterRender;
 
-	if(!stencil.image && (
-		startRender->flags & EStartRenderFlags_StencilFlags || stencil.range.layerId || stencil.range.levelId
-	))
-		gotoIfError(clean, Error_invalidOperation(
-			5, "CommandListRef_startRenderExt()::stencil had values set, but didn't have a valid image"
-		))
+	if(depthStencil.stencilReadOnly)
+		startRender->flags |= EStartRenderFlags_StencilReadOnly;
 
-	if(!depth.image && (
-		startRender->flags & EStartRenderFlags_DepthFlags || depth.range.layerId || depth.range.levelId
-	))
+	if(!depthStencil.image && (depthStencil.range.layerId || depthStencil.range.levelId || startRender->flags))
 		gotoIfError(clean, Error_invalidOperation(
-			4, "CommandListRef_startRenderExt()::depth had values set, but didn't have a valid image"
+			5, "CommandListRef_startRenderExt()::depthStencil had values set, but didn't have a valid image"
 		))
 
 	AttachmentInfoInternal *attachments = (AttachmentInfoInternal*)(startRender + 1);
 	counter = 0;
 
-	for (U64 i = 0; i < colors.length + !!depth.image + !!stencil.image; ++i) {
+	for (U64 i = 0; i < colors.length + !!depthStencil.image; ++i) {
+	
+		AttachmentInfo info;
 
-		AttachmentInfo info = i == colors.length && depth.image ? depth : (i >= colors.length ? stencil : colors.ptr[i]);
+		if(i == colors.length)
+			info = (AttachmentInfo) {
+				.range = depthStencil.range,
+				.image = depthStencil.image,
+				.resolveImage = depthStencil.resolveImage,
+				.resolveRange = depthStencil.resolveImageRange
+			};
+
+		else info = colors.ptr[i];
 
 		if (!info.image)
 			continue;
@@ -1909,7 +1875,7 @@ Error CommandListRef_startRenderExt(
 
 			transition.resource = info.resolveImage;
 			transition.range = (ResourceRange) { 0 };				//TODO: Range for resolveImage
-			transition.type = ETransitionType_RenderTargetWrite;
+			transition.type = ETransitionType_ResolveTargetWrite;
 
 			if(CommandListRef_isBound(commandList, transition.resource, transition.range, &state)) {
 
@@ -1934,38 +1900,15 @@ Error CommandListRef_startRenderExt(
 	commandList->currentSize = size;
 	commandList->boundImageCount = (U8) colors.length;
 
-	for (U8 i = 0; i < commandList->boundImageCount; ++i) {
-		AttachmentInfo info = colors.ptr[i];
-		commandList->boundImages[i] = (ImageAndRange) { .image = info.image, .range = info.range };
-	}
+	for (U8 i = 0; i < commandList->boundImageCount; ++i)
+		commandList->boundImages[i] = (ImageAndRange) { .image = colors.ptr[i].image, .range = colors.ptr[i].range };
 
 	//Combine stencil and depth back to one format
 
 	EDepthStencilFormat depthFormat = EDepthStencilFormat_None;
 
-	if(depth.image)
-		switch (TextureRef_getUnifiedTexture(depth.image, NULL).depthFormat) {
-
-			//If stencil is missing, we try to make the format stencil-less to indicate we won't need to write.
-
-			case EDepthStencilFormat_D16:
-				depthFormat = EDepthStencilFormat_D16;
-				break;
-
-			case EDepthStencilFormat_D32:
-			case EDepthStencilFormat_D32S8:
-				depthFormat = stencil.image ? EDepthStencilFormat_D32S8 : EDepthStencilFormat_D32;
-				break;
-
-			//D24S8 can't be made stencil-less
-
-			case EDepthStencilFormat_D24S8Ext:
-				depthFormat = EDepthStencilFormat_D24S8Ext;
-				break;
-		}
-
-	if(!depth.image && stencil.image)
-		depthFormat = EDepthStencilFormat_S8Ext;
+	if(depthStencil.image)
+		depthFormat = TextureRef_getUnifiedTexture(depthStencil.image, NULL).depthFormat;
 
 	commandList->boundDepthFormat = depthFormat;
 	commandList->boundSampleCount = sampleCount;

@@ -888,6 +888,10 @@ Error GraphicsDevice_initExt(
 	gotoIfError(clean, ListVkImageMemoryBarrier2_reservex(&deviceExt->imageTransitions, 16))
 	gotoIfError(clean, ListVkImageCopy_reservex(&deviceExt->imageCopyRanges, 8))
 
+	//Create command signatures for ExecuteIndirect
+
+	create commandSigs
+
 clean:
 
 	if(err.genericError)
@@ -1002,6 +1006,8 @@ Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext) {
 
 	ListVkCommandAllocator_freex(&deviceExt->commandPools);
 	ListVkSemaphore_freex(&deviceExt->submitSemaphores);
+
+	free ID3D12CommandSignature *commandSigs[EExecuteIndirectCommand_Count];
 
 	//Free temp storage
 

@@ -109,7 +109,6 @@ Error CommandListRef_drawIndirect(
 	CommandListRef *commandList,
 	DeviceBufferRef *buffer,
 	U64 bufferOffset,
-	U32 bufferStride,
 	U32 drawCalls,
 	Bool indexed
 );
@@ -118,7 +117,6 @@ Error CommandListRef_drawIndirectCountExt(
 	CommandListRef *commandList,
 	DeviceBufferRef *buffer,
 	U64 bufferOffset,
-	U32 bufferStride,
 	DeviceBufferRef *countBuffer,
 	U64 countOffset,
 	U32 maxDrawCalls,
@@ -148,8 +146,7 @@ Error CommandListRef_startRenderExt(
 	I32x2 offset,
 	I32x2 size,
 	ListAttachmentInfo colors,
-	AttachmentInfo depth,
-	AttachmentInfo stencil
+	DepthStencilAttachmentInfo depthStencil
 );
 
 Error CommandListRef_endRenderExt(CommandListRef *commandList);

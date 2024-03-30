@@ -79,6 +79,16 @@ typedef struct DxHeap {
 
 } DxHeap;
 
+typedef enum EExecuteIndirectCommand {
+	EExecuteIndirectCommand_Dispatch,
+	EExecuteIndirectCommand_DispatchRays,
+	EExecuteIndirectCommand_DrawIndexedCount,
+	EExecuteIndirectCommand_DrawCount,
+	EExecuteIndirectCommand_DrawIndexed,
+	EExecuteIndirectCommand_Draw,
+	EExecuteIndirectCommand_Count
+} EExecuteIndirectCommand;
+
 typedef struct DxGraphicsDevice {
 
 	ID3D12Device5 *device;
@@ -89,6 +99,8 @@ typedef struct DxGraphicsDevice {
 
 	ListID3D12Fence submitSemaphores;
 	ListID3D12Fence commitSemaphore;
+
+	ID3D12CommandSignature *commandSigs[EExecuteIndirectCommand_Count];
 
 	DxHeap *heaps[EDescriptorHeapType_Count];
 	ID3D12RootSignature *defaultLayout;								//Default layout if push constants aren't present
@@ -105,10 +117,14 @@ typedef struct DxCommandBufferState {
 	RefPtr *tempPipelines[EPipelineType_Count];		//Pipelines that were set via command, but not bound yet
 	RefPtr *pipeline;
 
+	ImageAndRange boundTargets[9];					//All 8 RTVs and DSV
+	ImageAndRange resolveTargets[9];				//Dst MSAA targets
+
 	F32x4 blendConstants, tempBlendConstants;
 
 	U8 stencilRef, tempStencilRef;
-	U16 padding;
+	U8 tempPrimitiveTopology;
+	U8 padding;
 
 	U32 scopeCounter;
 

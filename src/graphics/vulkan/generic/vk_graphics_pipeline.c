@@ -167,7 +167,7 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListChar
 		if (info->topologyMode)
 			++counts[EPipelineStateType_InputAssembly];
 
-		if (info->patchControlPointsExt)
+		if (info->patchControlPoints)
 			++counts[EPipelineStateType_Tessellation];
 
 		if(info->rasterizer.flags || info->rasterizer.cullMode)
@@ -611,7 +611,7 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListChar
 
 		//Tessellation
 
-		if (info->patchControlPointsExt) {
+		if (info->patchControlPoints) {
 
 			VkPipelineTessellationStateCreateInfo *infoi =
 				&((VkPipelineTessellationStateCreateInfo*)states[EPipelineStateType_Tessellation].ptr)[
@@ -620,7 +620,7 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListChar
 
 			*infoi = (VkPipelineTessellationStateCreateInfo) {
 				.sType = VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO,
-				.patchControlPoints = info->patchControlPointsExt
+				.patchControlPoints = info->patchControlPoints
 			};
 
 			currentInfo->pTessellationState = infoi;

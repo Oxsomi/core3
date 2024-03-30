@@ -7,7 +7,7 @@ The core pillars of the abstraction of this graphics library are the following:
 - Simplify usage for these APIs, as they're too verbose.
   - But don't oversimplify them to the point of being useless.
   - This does mean features not deemed important enough might not be included in the main specification. Though a branch could maintain support if needed.
-- Force modern minimum specs to avoid having to build too many diverging renderers to deal with limitations of older devices.
+- Force modern minimum specs to avoid having to build too many diverging renderers to deal with limitations of old devices.
 - Allow modern usage of these APIs such as raytracing and bindless.
 - Support various systems such as Android, Apple, Windows and Linux (console should be kept in mind, though not officially supported).
 
@@ -17,7 +17,7 @@ OxC3 graphics works in a similar way as DirectX's ref counting system; everythin
 
 ### Obtaining the real object
 
-RefPtr doesn't contain the object itself, but it does contain information about the type and length of the constructed type. RefPtr contains this object after the data of the RefPtr itself. RefPtr_data can be used to obtain the data pointed to by the RefPtr. This is generally also a macro from the specialized RefPtr (e.g. `GraphicsInstanceRef_ptr`). It also generally contains the extended object after the common object. For example GraphicsInstance has `GraphicsInstance_ext` which can get the API-specific data of the GraphicsInstance. This is should only be used internally, as there is no public interface of this extended data that won't randomly change.
+RefPtr doesn't contain the object itself, but it does contain information about the type and length of the constructed type. RefPtr contains this object after the data of the RefPtr itself. RefPtr_data can be used to obtain the data pointed to by the RefPtr. This is generally also a macro from the specialized RefPtr (e.g. `GraphicsInstanceRef_ptr`). It also generally contains the extended object after the common object. For example GraphicsInstance has `GraphicsInstance_ext` which can get the API-specific data of the GraphicsInstance. This should only be used internally, as there is no public interface of this extended data that won't randomly change.
 
 In the case of multiple inheritance, the data pointed to can be linked however the creator of the object sees fit. For example: The first data could be a UnifiedTexture, then a UnifiedTextureImage * 3, then a UnifiedTextureImageExt * 3 and then a SwapchainExt.
 
@@ -46,7 +46,7 @@ Once this instance is acquired, it can be used to query devices and to detect wh
 
 - application: The name and version of the application.
 - api: Which api is ran by the runtime: Vulkan, DirectX12, Metal3 or WebGPU.
-- apiVersion: What version of the graphics api is being ran (e.g. Vulkan 1.2, DirectX 12_2, Metal 3, etc.).
+- apiVersion: What version of the graphics api is being ran (e.g. Vulkan 1.2, DirectX SDK version, Metal 3, etc.).
 
 ### (Member) Functions
 
@@ -87,9 +87,9 @@ GraphicsDeviceInfo deviceInfo = (GraphicsDeviceInfo) { 0 };
 _gotoIfError(clean, GraphicsInstance_getPreferredDevice(
   GraphicsInstanceRef_ptr(instance),		//See "Graphics instance"
   (GraphicsDeviceCapabilities) { 0 },		//No required features or data types
-  GraphicsInstance_vendorMaskAll,			  //All vendors supported
-  GraphicsInstance_deviceTypeAll,			  //All device types supported
-  EGraphicsDeviceFlags_None,            //Disallow debugging, raytracing and/or enable verbose device picking
+  GraphicsInstance_vendorMaskAll,			//All vendors supported
+  GraphicsInstance_deviceTypeAll,			//All device types supported
+  EGraphicsDeviceFlags_None,        		//Disallow debug, RT and/or verbose logging
   &deviceInfo
 ));
 ```
@@ -98,19 +98,19 @@ _gotoIfError(clean, GraphicsInstance_getPreferredDevice(
 
 - name, driverInfo; All null-terminated UTF-8 strings giving information about the device and driver.
 - type; what type this device is (dedicated GPU, integrated GPU, simulated GPU, CPU or other (unrecognized)).
-- vendor; what company designed the device (Nvidia (NV), AMD, ARM, Qualcomm (QCOM), Intel (INTC), Imagination Technologies (IMGT), Apple (APPL) or unknown).
+- vendor; what company designed the device (Nvidia (NV), AMD, ARM, Qualcomm (QCOM), Intel (INTC), Imagination Technologies (IMGT), Microsoft (MSFT) or unknown).
 - id; number in the list of supported devices.
 - luid; ID to identify this device primarily on Windows devices. This would allow sharing a resource between other APIs for interop (not supported yet). This is optional to support; check capabilities.features & LUID.
 - uuid; unique id to identify the device. In APIs that don't support this natively, the other identifier (luid) will be used here instead. For example DirectX12 would use the luid here and clear the other U64.
-- ext; extended physical device representation for the current API.
-- capabilities; what data types, features and api dependent features are enabled. See capabilities section.
+- ext; extended physical device representation for the current API. Can be NULL if LUID is used to share this.
+- capabilities; what data types, features and api dependent features are enabled. See capabilities section. This also includes dedicated and shared memory.
 
 #### Capabilities
 
 - features: DirectRendering, VariableRateShading, MultiDrawIndirectCount, MeshShader, GeometryShader, SubgroupArithmetic, SubgroupShuffle, Multiview, Raytracing, RayPipeline, RayQuery, RayMicromapOpacity, RayMicromapDisplacement, RayMotionBlur, RayReorder, RayValidation, LUID, DebugMarkers, Wireframe, LogicOp, DualSrcBlend, Workgraphs.
   - RayValidation: extra raytracing validation for NV cards; requires envar NV_ALLOW_RAYTRACING_VALIDATION=1 and reboot.
 - features2: reserved for future usage.
-- dataTypes: F64, I64, F16, I64, AtomicI64, AtomicF32, AtomicF64, ASTC, BCn, MSAA2x, MSAA8x, RGB32f, RGB32i, RGB32u, D24S8, S8.
+- dataTypes: F64, I64, F16, I16, AtomicI64, AtomicF32, AtomicF64, ASTC, BCn, MSAA2x, MSAA8x, RGB32f, RGB32i, RGB32u, D24S8, S8.
   - MSAA4 and MSAA1 (off) are supported by default.
 - featuresExt: API dependent features that aren't expected to be standardized in the same way.
   - Vulkan: PerformanceQuery.
@@ -316,6 +316,37 @@ _gotoIfError(clean, GraphicsDeviceRef_create(
   );
   ```
 
+- ```c 
+  Error createTLASExt(
+  	ERTASBuildFlags buildFlags,
+  	TLASRef *parent,					//If specified, indicates refit
+  	ListTLASInstanceStatic instances,
+  	CharString name,
+  	TLASRef **tlas
+  );
+  ```
+
+- ```c
+  Error createTLASMotionExt(
+  	ERTASBuildFlags buildFlags,
+  	TLASRef *parent,					//If specified, indicates refit
+  	ListTLASInstanceMotion instances,
+  	CharString name,
+  	TLASRef **tlas
+  );
+  ```
+
+- ```c
+  Error createTLASDeviceExt(
+  	ERTASBuildFlags buildFlags,
+  	Bool isMotionBlurExt,				//Requires extension
+  	TLASRef *parent,					//If specified, indicates refit
+  	DeviceData instancesDevice,			//Instances on the GPU, correctly sized
+  	CharString name,
+  	TLASRef **tlas
+  );
+  ```
+
 ### Obtained
 
 - Through GraphicsDeviceRef_create; see overview.
@@ -375,12 +406,14 @@ For more info on commands check out the "Commands" section.
 - data; The current recorded commands.
 - commandOps; The opcodes for which commands are recorded.
 - transitions; list of transitions issued in the command list. Scopes point into this to execute transitions.
+- lock; for allowing multiple threads to open the same command list (has to be closed by one thread first).
 - activeScopes; list of scopes that weren't collapsed (scope command id & scope id, what transitions it did and how many commands it contains & the length of the sub command buffer).
-- computePipeline/graphicsPipeline; currently bound pipeline.
+- pipeline; currently bound pipelines.
 - boundImages/boundImageCount/boundDepthFormat/boundSampleCount; currently bound images in the renderpass and/or render targets (DirectRendering). As well as the sample count that it was bound with.
 - tempStateFlags; AnyScissor, AnyViewport, HasModifyOp, HasScope, InvalidState. Used for validation and optimization.
 - debugRegionStack; used for validating debug regions.
 - lastCommandId, next, lastTransition; locations at the start of a scope for command id, buffer location and transition offset. Used for the next scope description.
+- lastScopeId, lastOffset; used for resetting to the end of last scope in case the current scope is invalidated.
 - currentSize; size of the current renderpass.
 - pendingTransitions; list of transitions waiting for the current scope. Get pushed into transitions if the scope is visible.
 - activeSwapchains; what swapchains are used in the command list including their versionId, to ensure the command list can't be re-submitted once the swapchains were resized.
@@ -426,10 +459,10 @@ Resource handles are what is passed to the GPU to access the GraphicsResources, 
 Between those types, there are also further subdivisions:
 
 - Sampler
-- ShaderRead: Texture2D, TextureCube, Texture3D, Buffer
+- ShaderRead: Texture2D, TextureCube, Texture3D, Buffer, TLAS
 - ShaderWrite: RWBuffer, RWTexture(2/3)D(s/f/i/u/)
 
-With resource handles, it is assumed that both U32_MAX and 0 indicate an invalid descriptor. The bottom 20 bits are the local id, while the 4 bits higher represent this EDescriptorType. Higher bits aren't currently used for anything to try and keep it possible to represent this resource handle as a float without losing any precision. It could be possible that the top 2 bits of the local id might get used by something else in the future, since they are currently inaccessible.
+With resource handles, it is assumed that both U32_MAX and 0 indicate an invalid descriptor. The bottom 17 bits are the local id, while the 4 bits higher represent this EDescriptorType. Higher bits aren't currently used for anything to try and keep it possible to represent this resource handle as a float without losing any precision. If the EDescriptorType bits are all 1, then the top 4 bits of the localId represent the extended descriptor type (e.g. 1111 0001 would be EDescriptorTypeCount_TLASExt (16)) while 1111 0000 (15) would be sampler). Short ids are for Sampler and TLASExt descriptor types and they only allow use of 13 bit local ids; about 8192 ids. Of these, not even all are accessible (only 16 TLASes are accessible and 2048 samplers). For long ids, they have a maximum of 131072 (though the minimum used for one long id resource is 8192).
 
 ### Marking dirty (markDirty)
 
@@ -517,7 +550,7 @@ allowCompute in this case allows the swapchain to be used for compute shaders. I
 
 The present mode is how the device handles it when an image is already being presented. Some may introduce tearing while others may drop frames. The application should be given control over these modes, as some applications may want the latency improvements at the cost of tearing.
 
-- Mailbox: While an image is presenting, it will drop the oldest queued image and continue rendering and queuing the next frame. This ensures you're not bound to your refresh rate, so the performance is better but lots of frames are rendered that may be discarded. This present mode is generally ideal for games and other interactive 3D applications, though some very low latency games might not want to use this. This mode is the default on most platforms.
+- Mailbox: While an image is presenting, it will drop the oldest queued image and continue rendering and queuing the next frame into it. This ensures you're not bound to your refresh rate, so the performance is better but lots of frames are rendered that may be discarded. This present mode is generally ideal for games and other interactive 3D applications, though some very low latency games might not want to use this. This mode is the default on most platforms (if available).
 - Fifo: While an image is presenting, it will just wait. This means no frames are dropped, but it does mean that the performance is lower. This is ideal for low power devices or if your application doesn't need constant updates. This is the default on mobile.
 - FifoRelaxed: If the vsync interval is missed, it will try to skip frame(s) to catch up. Other than that it will behave similar to Fifo (it tries to keep up with the refresh rate of the screen).
 - Immediate: Render over the current image anyways, this is ideal if you want the best low latency available but will introduce tearing. A good application might be shooting games or other games that require the lowest latency.
@@ -541,7 +574,7 @@ By default the swapchain will use triple buffering to ensure best performance. E
   resize();
   ```
 
-  - Updates the swapchain with the current information from OxC3 platforms. Both format and size are queried again to ensure it really needs to resize. After this, all recorded command lists will still be valid, but the API implementation will likely re-record their command lists if it was already re-using them.
+  - Updates the swapchain with the current information from OxC3 platforms. Both format and size are queried again to ensure it really needs to resize. After this, all recorded command lists that include it will be invalidated.
 
 ### Used functions and obtained
 
@@ -552,7 +585,7 @@ By default the swapchain will use triple buffering to ensure best performance. E
 
 ### Summary
 
-A sampler is a standalone object that will be used to describe how a texture is sampled. These are not combined samplers because it is possible that one texture is used as two different usages (e.g. one for anisotropy and one for linear) and logically it doesn't make sense that it's linked to the texture rather than a standalone object. This object is given space in the bindless descriptor arrays just like shader visible buffers, depth stencils, render textures, swapchains and depth stencils. However, there are only 2047 sampler slots available, so use them sparingly.
+A sampler is a standalone object that will be used to describe how a texture is sampled. These are not combined samplers because it is possible that one texture is used as two different usages (e.g. one for anisotropy and one for linear) and logically it doesn't make sense that it's linked to the texture rather than a standalone object. This object is given space in the bindless descriptor arrays just like shader visible buffers, depth stencils, render textures, swapchains and depth stencils.
 
 Once on the GPU, the sampler resource index can be passed to the GPU and the sampler array can be accessed. Then this sampler can be used to sample any resource that's required.
 
@@ -566,7 +599,7 @@ If the sampler is used on the GPU, it should be passed as a transition; stage is
 ### Properties
 
 - device: ref to the device that owns it.
-- samplerLocation: resource index into the bindless array that specifies where the sampler is located. It does contain additional info in the upper 12 bits, so only the low 20 bits store the index (samplerUniform(resourceId) and sampler(resourceId) can be used to do this automatically). Note: samplerId 0 is reserved because EDescriptorType_Sampler is 0, which means that id 0 is resource location 0. 0 is the default initialization value, so that's automatically reserved by the device to avoid any future issues.
+- samplerLocation: resource index into the bindless array that specifies where the sampler is located. It does contain additional info in the upper 8 bits, so only the low 13 bits store the index (samplerUniform(resourceId) and sampler(resourceId) can be used to do this automatically). 
 - info: used to create the sampler and stores information about the sampler.
   - filter: determining how the sampler filters the input image. A bitset of three properties: Mag, Min and Mip. If the respective bit is true it represents linear filtering rather than nearest filtering. This means there's 7 combinations ranging from nearest min/mag/mip all the way to linear min/mag/mip.
   - addressU, addressV, addressW: determining how out of bounds access for each texture is treated: Repeat, MirrorRepeat, ClampToEdge, ClampToBorder. ClampToBorder uses the borderColor to be filtered.
@@ -616,7 +649,7 @@ _gotoIfError(clean, GraphicsDeviceRef_createTexture(
 ### Used functions and obtained
 
 - Obtained through GraphicsDeviceRef's createTexture.
-- Can be copied to (markDirty(x, y, z, w, h, l)) and read back (pullRegion).
+- Can be copied to (markDirty(x, y, z, w, h, l)) and read back (pullRegion(x, y, z, w, h, l)).
 - Can be used in shaders (if EGraphicsResourceFlag_ShaderRead is on) by passing the readLocation to the shader and using texture2DUniform() or texture2D() in the shader. Can be written (if EGraphicsResourceFlag_ShaderWrite is on) by using the respective rwTexture slot (see GraphicsResource/Resource handles). Can also be used when copying images.
 
 ## DepthStencil
@@ -767,12 +800,12 @@ The graphics pipeline has the following properties:
 - msaa: multi sample count.
   - Optional if no special msaa settings are needed. Defaults to 1.
   - 1 and 4 are always supported (though 4 is slower and needs special care).
-  - 2, 8 and 16 aren't always supported, so make sure to query it and/or fallback to 1 or 4 if not present. EGraphicsDataTypes of the device capabilities lists this.
+  - 2 and 8 aren't always supported, so make sure to query it and/or fallback to 1 or 4 if not present. EGraphicsDataTypes of the device capabilities lists this.
   - See Features/MSAA for more info.
 - topologyMode: type of mesh topology.
   - Defaults to TriangleList if not specified.
   - TriangleList, TriangleStrip, LineList, LineStrip, PointList, TriangleListAdj, TriangleStripAdj, LineListAdj, LineStripAdj.
-- patchControlPointsExt: optional feature TessellationShader. Defines the number of tessellation points.
+- patchControlPoints: Defines the number of tessellation points (max 32).
 - stageCount: how many shader stages are available.
 - Using DirectRendering:
   - If DirectRendering is enabled, a simpler way of creating can be used to aid porting and simplify development for desktop.
@@ -786,7 +819,7 @@ The graphics pipeline has the following properties:
 
 #### PipelineStages
 
-A pipeline stage is simply a Buffer and an EPipelineStage. The Buffer is in the format declared in "Shader binary types" and EPipelineStage can be Vertex, Pixel, Compute, GeometryExt, HullExt or DomainExt. Hull and domain are enabled by the TessellationShader feature and GeometryExt by the GeometryShader feature.
+A pipeline stage is simply a Buffer and an EPipelineStage. The Buffer is in the format declared in "Shader binary types" and EPipelineStage can be Vertex, Pixel, Compute, GeometryExt, HullExt or DomainExt. GeometryExt is enabled by the GeometryShader feature.
 
 ### PipelineRaytracingInfo
 
@@ -869,7 +902,7 @@ _gotoIfError(clean, ListPipelineStage_createRefConst(stage, sizeof(stage) / size
 //Define all pipelines.
 //These pipelines require the graphics feature DirectRendering and will error otherwise!
 //Otherwise .attachmentCountExt, .attachmentFormatsExt and/or .depthStencilFormat
-//  need to be replaced with .renderPass and/or .subPass.
+//  need to be replaced with .renderPass = renderPass and/or .subPass = subPassId.
 
 PipelineGraphicsInfo info[1] = {
     (PipelineGraphicsInfo) {
@@ -885,15 +918,15 @@ PipelineGraphicsInfo info[1] = {
 ListPipelineGraphicsInfo infos = (ListPipelineGraphicsInfo) { 0 };
 _gotoIfError(clean, ListPipelineGraphicsInfo_createConstRef(info, sizeof(info) / sizeof(info[0]), &infos));
 _gotoIfError(clean, GraphicsDeviceRef_createPipelinesGraphics(
-    device, &stageInfos, &infos, &graphicsShaders
+    device, &stageInfos, &infos, ListCharString_createNull(), &graphicsShaders
 ));
 
 tempShaders[0] = tempShaders[1] = Buffer_createNull();
 ```
 
-Create pipelines will take ownership of the buffers referenced in stages and it will therefore free the list (if unmanaged). If the buffers are managed memory (e.g. created with Buffer_create functions that use the allocator) then the Pipeline object will safely delete it. This is why the tempShader is set to null after (the list is a ref, so doesn't need to be). In clean, this temp buffer gets deleted, just in case the createPipelines fails. Using virtual files for this is recommend, as they'll already be present in memory and our ref will be available for the lifetime of our app. If it's a ref that doesn't always stay active, be sure to manually copy the buffers to avoid referencing deleted memory.
+Create pipelines will take ownership of the buffers referenced in stages and it will therefore free the list (if unmanaged). If the buffers are managed memory (e.g. created with Buffer_create functions that use the allocator) then the Pipeline object will safely delete it. This is why the tempShader is set to null after (the list is a ref, so doesn't need to be). In clean, this temp buffer gets deleted, just in case the createPipelines fails. Using virtual files for this is recommend, as they'll already be present in memory and our ref will be available for the lifetime of our app. If it's a ref then the implementation will copy to avoid unsafe behavior.
 
-It is recommended to generate all pipelines that are needed in this one call at startup, to avoid stuttering at runtime.
+It is recommended to generate all pipelines that are needed in this one call at startup, to avoid stuttering at runtime. This can be done from a different thread as well, though the implementation is free to delay the wait for finalization (real driver compiles) until it's first use in a command list (e.g. it starts compilation in async).
 
 ### Raytracing example
 
@@ -917,7 +950,9 @@ CharString entrypointArr[] = {
 //Define a hit group
 
 PipelineRaytracingGroup hitArr[] = {
-    (PipelineRaytracingGroup) { .closestHit = 0, .anyHit = U32_MAX, .intersection = U32_MAX }
+    (PipelineRaytracingGroup) { 
+        .closestHit = 0, .anyHit = U32_MAX, .intersection = U32_MAX
+    }
 };
 
 //Define the pipeline that links these together as one.
@@ -984,6 +1019,11 @@ In OxC3 graphics, either the application or the OxC3 baker is responsible for co
 - Metal: MSL (UTF8 text).
 - WebGPU: WGSL (UTF8 text).
 
+With the following limitations:
+
+- The resources require bindless to function, so shaders should use this as well. When using resources, resources.hlsl has to be included (the compiler automatically includes it). This file can be found in src/graphics/shaders. 
+  - types.hlsl also defines all HLSL types as OxC3 types, to ensure it could be cross compiled to GLSL in the future (since GLSL has some features that HLSL might not support, such as HW RT motion blur). Using these predefined types are fully optional if HLSL is the final target (Vulkan + D3D12), though it is recommended to use them to avoid getting stuck to one shading language.
+
 The OxC3 baker will (if used) convert HLSL to SPIR-V, DXIL, MSL or WGSL depending on which API is currently used. It can provide this as a pre-baked binary too (.oiCS Oxsomi Compiled Shader). The pre-baked binary contains all 4 formats to ensure it can be loaded on any platform. But the baker will only include the one relevant to the current API to prevent bloating.
 
 When using the baker, the binaries can simply be loaded using the oiCS helper functions and passed to the pipeline creation, as they will only contain one binary.
@@ -1015,13 +1055,13 @@ _gotoIfError(clean, GraphicsDeviceRef_createBufferData(
 
 - resource: the GraphicsResource it inherits from.
 - usage:
-  - Vertex (use as vertex buffer)
-  - Index (use as index buffer)
-  - Indirect (use for indirect draw calls)
+  - Vertex (use as vertex buffer).
+  - Index (use as index buffer).
+  - Indirect (use for indirect draw calls).
   - Raytracing related:
-    - ScratchExt (used internally for scratch buffers for raytracing)
-    - ASExt (used internally for creation of acceleration structures)
-    - ReadASExt (If the acceleration structure needs to be able to read the vertex/index buffer)
+    - ScratchExt (used internally for scratch buffers for raytracing).
+    - ASExt (used internally for creation of acceleration structures).
+    - ReadASExt (If the acceleration structure needs to be able to read the vertex/index buffer).
     - SBTExt (used internally for shader binding table creation).
 - isPending(FullCopy): Information about if any data is pending for the next submit and if the entire resource is pending.
 - isFirstFrame: If the resource was already uploaded before.
@@ -1046,7 +1086,7 @@ _gotoIfError(clean, GraphicsDeviceRef_createBufferData(
 
 MSAA can be enabled by making sure all pipelines for MSAA targets have PipelineGraphicsInfo::msaa set to something that's not EMSAASamples_Off. This setting needs to match 1:1 with the MSAA setting passed to render target(s) and depth stencil(s). PipelineGraphicsInfo::msaaMinSampleShading can be set to a non zero value to indicate [sample shading](https://registry.khronos.org/vulkan/specs/1.3-extensions/html/vkspec.html#primsrast-sampleshading) should be turned on and to what value (an MSAA feature to make texture detail anti alias better).
 
-If MSAA is enabled for the current target, a resolve image can be passed in the attachmentInfo.resolveImage passed to startRenderExt. This can directly resolve the MSAA texture to a render target, swapchain or depth stencil. attachmentInfo.resolveMode can be used to change it from averaging all samples to EMSAAResolveMode_Min/Max.
+If MSAA is enabled for the current target, a resolve image can be passed in the attachmentInfo.resolveImage and resolveRange passed to startRenderExt. This can directly resolve the MSAA texture to a render target, swapchain or depth stencil. attachmentInfo.resolveMode can be used to change it from averaging all samples to EMSAAResolveMode_Min/Max.
 
 ### Raytracing
 
@@ -1068,7 +1108,7 @@ Device data is a subarea of a buffer; it contains the reference to the buffer re
 Contains the following properties:
 
 - device: the device that the AS was created on. An AS is only compatible with other ASes that are from the same device.
-- isMotionBlurExt: relevant for BLAS or TLAS; BLAS it means it contains the previous data of the geometry while TLAS means it contains previous data of all instances (so it can be motion blurred). This is the NV specific extension for Ampere and up.
+- isMotionBlurExt: relevant for BLAS or TLAS; BLAS it means it contains the previous data of the geometry while TLAS means it contains previous data of all instances (so it can be motion blurred). This is the NV specific extension for Ampere and up (unless anyone else supports it).
 - isCompleted: this is set when the BLAS has been signaled as fully built. For example when buildBLASExt has been called or when the first submitCommands has been triggered since it has been queued.
 - flagsExt: BLAS or TLAS specific flags (currently only used for BLAS).
 - asConstructionType: the BLAS or TLAS specific construction type.
@@ -1477,7 +1517,7 @@ Same as draw except the device reads the parameters of the draw from a DeviceBuf
 
 - buffer: a buffer with the DrawCallUnindexed or DrawCallIndexed struct(s) depending on the 'indexed' boolean. Buffer needs to enable Indirect usage to be usable by indirect draws.
 - bufferOffset: offset into the draw call buffer. Align to 16-byte (unaligned is disallowed).
-- bufferStride: stride of the draw call buffer. If 0 it will be defaulted to tightly packed (16 or 32 byte depending on if it's indexed or not). Has to be bigger or equal to the current draw call struct size.
+- (implied) bufferStride: 16 or 32 byte depending on if it's indexed or not.
 - drawCalls: how many draw calls are expected to be filled in this buffer. A draw can also set the draw parameters to zero to disable it (instanceCount / index / vertexCount), though for that purpose drawIndirectCountExt is recommended. Make sure the buffer has `U8[bufferStride][maxDrawCalls]` allocated at bufferOffset.
 - indexed: if the draw calls are indexed or not. The device can't combine non indexed and indexed draw calls, so if you want to combine them you need to do this as two separate steps.
   - If not indexed; the buffer takes a DrawCallUnindexed struct: U32 vertexCount, instanceCount, vertexOffset, instanceOffset.
@@ -1491,7 +1531,7 @@ Same as drawIndirect, except it adds a DeviceBuffer counter which specifies how 
 
 - drawCalls now represents 'maxDrawCalls' which limits how many draw calls might be issued by the device.
 - countBuffer now represents a U32 in the DeviceBuffer at the offset. Make sure to align 4-byte to satisfy alignment requirements.
-- Requires drawIndirectCount extension.
+- Requires MultiDrawIndirectCount extension.
 
 drawIndirect transitions the input buffer to IndirectDraw. This means that the buffer can't also be bound as a Vertex/Index buffer or be used in the shader as a read/write buffer in the same scope. Buffer needs to enable Indirect usage to be usable by indirect draws.
 
@@ -1545,7 +1585,7 @@ The same syntax as startRegionDebugExt can be used for addMarkerDebugExt. Except
 
 ### DirectRendering feature
 
-DirectRendering allows rendering without render passes (default behavior in DirectX). This makes development for desktop a lot easier since AMD, Intel and NVIDIA aren't using tiled based deferred rendering (TBDR). However, all other vendors (such as Qualcomm, ARM, Apple, Imgtec) do use TBDR (mostly mobile architectures). The user is allowed to decide that this is a limitation they accept and can use this feature to greatly simplify the difficulty of the graphics layer (especially porting from existing apps). The user can also set up two different render engines; one that can deal with direct rendering and one that can't. The latter is targeted at mobile (lower hardware tier) and the former is for desktop/console. The two commands that are related to this feature are: startRenderExt and endRenderExt. They require the feature to be present and will return an error (and won't be inserted into the command list) otherwise.
+DirectRendering allows rendering without render passes (default behavior in DirectX). This makes development for desktop a lot easier since MSFT (Warp), AMD, Intel and NVIDIA aren't using tiled based deferred rendering (TBDR). However, all other vendors (such as Qualcomm, ARM, Imgtec) do use TBDR (mostly mobile architectures). The user is allowed to decide that this is a limitation they accept and can use this feature to greatly simplify the difficulty of the graphics layer (especially porting from existing apps). The user can also set up two different render engines; one that can deal with direct rendering and one that can't. The latter is targeted at mobile (lower hardware tier) and the former is for desktop/console. The two commands that are related to this feature are: startRenderExt and endRenderExt. They require the feature to be present and will return an error (and won't be inserted into the command list) otherwise.
 
 Even if mobile chips do support this feature, it is automatically disabled to prevent the developer from accidentally enabling it causing performance issues.
 
@@ -1567,12 +1607,11 @@ ListAttachmentInfo colors = (ListAttachmentInfo) { 0 };
 _gotoIfError(clean, ListAttachmentInfo_createRefConst(attachmentInfo, 1, &colors));
 
 _gotoIfError(clean, CommandListRef_startRenderExt(
-    commandList, 				//See "Command list"
-    I32x2_zero(), 				//No offset
-    I32x2_zero(), 				//Use attachment's size
+    commandList, 							//See "Command list"
+    I32x2_zero(), 							//No offset
+    I32x2_zero(), 							//Use attachment's size
     colors,
-    (AttachmentInfo) { 0 },		//No depth attachment
-    (AttachmentInfo) { 0 }		//No stencil attachment
+    (DepthStencilAttachmentInfo) { 0 }		//No depth stencil attachment
 ));
 
 //Draw calls here
@@ -1634,13 +1673,13 @@ startScope		//Transitions resources
     endScope
 ```
 
-Because a scope hoists the transitions of operations such as clearImages, copyImages, drawIndirect(Count), setPrimitiveBuffers it is impossible to use the same subresource in the same scope for different usages (be it copy/shader write/read). If this is the case then a separate scope is needed.
+Because a scope hoists the transitions of operations such as clearImages, copyImages, drawIndirect(Count), setPrimitiveBuffers it is impossible to use the same (sub)resource in the same scope for different usages (be it copy/shader write/read). If this is the case then a separate scope is needed.
 
 All startRenderExts in a scope should be ended and all startRegionDebugExts as well. Since a scope should be self contained.
 
 #### Transitions
 
-Because the API requires bindless to function, it has certain limits. One of these limits/benefits is that a shader is now able to access all write buffers/textures and read buffers/textures. This would mean that everything is accessible by all shaders; making automatic transitions impossible. To fix this; the user will only have to manually do transitions for draw/dispatch calls. For other usages the current scope will handle the transition for you (though this disallows usages of the same subresource for different purposes). Here you specify the (sub)resource and in which shader stage it is first used and if it's a write (or if any subsequent shaders could write to it). Then the runtime will automatically transition only when it's needed.
+Because the API requires bindless to function, it has certain limits. One of these limits/benefits is that a shader is now able to access all write buffers/textures and read buffers/textures. This would mean that everything is accessible by all shaders; making automatic transitions impossible. To fix this; the user will only have to manually do transitions for draw/dispatch(rays) calls. For other usages the current scope will handle the transition for you (though this disallows usages of the same subresource for different purposes in one scope). Here you specify the (sub)resource and in which shader stage it is first used and if it's a write (or if any subsequent shaders could write to it). Then the runtime will automatically transition only when it's needed.
 
 Even though Metal doesn't need transitions, they're still required to allow DirectX and Vulkan support. More importantly; transitions allow OxC3 to know which resources are required for the command list to be executed. It uses this to keep the resources alive until the command list was executed on the device.
 

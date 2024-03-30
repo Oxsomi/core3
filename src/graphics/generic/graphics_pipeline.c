@@ -335,6 +335,12 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 				10, "GraphicsDeviceRef_createPipelinesGraphics()::infos[i].topologyMode is out of bounds"
 			);
 
+		if(info->patchControlPoints > 32)
+			return Error_invalidOperation(
+				24, 
+				"GraphicsDeviceRef_createPipelinesGraphics()::infos[i].pathControlPoints is out of bounds (max 32)"
+			);
+
 		if(info->rasterizer.cullMode >= ECullMode_Count)
 			return Error_invalidOperation(
 				11, "GraphicsDeviceRef_createPipelinesGraphics()::infos[i].rasterizer.cullMode is out of bounds"

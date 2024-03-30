@@ -38,6 +38,122 @@
 
 #include "types/math.h"
 
+//RTVs and DSVs are temporary in DirectX.
+
+D3D12_CPU_DESCRIPTOR_HANDLE createTempRTV(
+	const DxGraphicsDevice *deviceExt, 
+	const U64 relativeLoc,
+	const D3D12_CPU_DESCRIPTOR_HANDLE start,
+	const DxHeap *heap,
+	RefPtr *image
+) {
+
+	ID3D12Resource *resource = NULL;
+	D3D12_RENDER_TARGET_VIEW_DESC rtv;
+
+	if(!image)
+		rtv = (D3D12_RENDER_TARGET_VIEW_DESC) {
+			.Format = DXGI_FORMAT_R8G8B8A8_UNORM,
+			.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D
+		};
+
+	else {
+
+		const UnifiedTexture tex = TextureRef_getUnifiedTexture(image, NULL);
+		const DxUnifiedTexture *imageExt = TextureRef_getCurrImgExtT(image, Dx, 0);
+
+		resource = imageExt->image;
+
+		rtv = (D3D12_RENDER_TARGET_VIEW_DESC) {
+			.Format = ETextureFormatId_toDXFormat(tex.textureFormatId)
+		};
+
+		switch(tex.type) {
+
+			default:
+				rtv.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
+				rtv.Texture2D = (D3D12_TEX2D_RTV) { 0 };						//No mip and plane slice
+				break;
+
+			case ETextureType_Cube:
+				rtv.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2DARRAY;
+				rtv.Texture2DArray = (D3D12_TEX2D_ARRAY_RTV) { .ArraySize = 6 };		//No mip, array off and plane slice
+				break;
+
+			case ETextureType_3D:
+				rtv.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE3D;
+				rtv.Texture3D = (D3D12_TEX3D_RTV) { .WSize = tex.length };				//No mip and array offset
+				break;
+		}
+	}
+
+	const D3D12_CPU_DESCRIPTOR_HANDLE location = (D3D12_CPU_DESCRIPTOR_HANDLE) {
+		.ptr = start.ptr + relativeLoc * heap->cpuIncrement
+	};
+
+	deviceExt->device->lpVtbl->CreateRenderTargetView(deviceExt->device, resource, &rtv, location);
+	return location;
+}
+
+D3D12_CPU_DESCRIPTOR_HANDLE createTempDSV(
+	const DxGraphicsDevice *deviceExt, 
+	const U64 relativeLoc,
+	const D3D12_CPU_DESCRIPTOR_HANDLE start,
+	EStartRenderFlags flags,
+	const DxHeap *heap,
+	RefPtr *image
+) {
+
+	ID3D12Resource *resource = NULL;
+	D3D12_DEPTH_STENCIL_VIEW_DESC dsv;
+
+	if(!image)
+		dsv = (D3D12_DEPTH_STENCIL_VIEW_DESC) {
+			.Format = DXGI_FORMAT_R8G8B8A8_UNORM,
+			.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D
+		};
+
+	else {
+
+		const UnifiedTexture tex = TextureRef_getUnifiedTexture(image, NULL);
+		const DxUnifiedTexture *imageExt = TextureRef_getCurrImgExtT(image, Dx, 0);
+
+		resource = imageExt->image;
+
+		dsv = (D3D12_DEPTH_STENCIL_VIEW_DESC) {
+			.Format = EDepthStencilFormat_toDXFormat(tex.depthFormat),
+			.Flags = 
+				(flags & EStartRenderFlags_DepthReadOnly ? D3D12_DSV_FLAG_READ_ONLY_DEPTH : 0) |
+				(flags & EStartRenderFlags_StencilReadOnly ? D3D12_DSV_FLAG_READ_ONLY_STENCIL : 0)
+		};
+
+		switch(tex.type) {
+
+			default:
+				dsv.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+				dsv.Texture2D = (D3D12_TEX2D_DSV) { 0 };							//No mip
+				break;
+
+			case ETextureType_Cube:
+				dsv.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
+				dsv.Texture2DArray = (D3D12_TEX2D_ARRAY_DSV) { .ArraySize = 6 };			//No mip or array off
+				break;
+
+			case ETextureType_3D:
+				dsv.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
+				dsv.Texture2DArray = (D3D12_TEX2D_ARRAY_DSV) { .ArraySize = tex.length };	//No mip and array offset
+				break;
+		}
+	}
+
+	const D3D12_CPU_DESCRIPTOR_HANDLE location = (D3D12_CPU_DESCRIPTOR_HANDLE) {
+		.ptr = start.ptr + relativeLoc * heap->cpuIncrement
+	};
+
+	deviceExt->device->lpVtbl->CreateDepthStencilView(deviceExt->device, resource, &dsv, location);
+	return location;
+}
+
 void CommandList_process(
 	CommandList *commandList,
 	GraphicsDevice *device,
@@ -57,7 +173,7 @@ void CommandList_process(
 
 	ID3D12GraphicsCommandList *graphicsCmd = NULL;
 	if(FAILED(buffer->lpVtbl->QueryInterface(buffer, &IID_ID3D12GraphicsCommandList, (void**) &graphicsCmd))) {
-		Log_errorLnx("Invalid graphics command list");
+		Log_errorLnx(u8"Invalid graphics command list");
 		return;
 	}
 
@@ -110,25 +226,23 @@ void CommandList_process(
 
 			U32 imageClearCount = *(const U32*) data;
 
-			for(U64 i = 0; i < imageClearCount; ++i) {
+			//Prepare attachments
+
+			DxHeap *heap = deviceExt->heaps[EDescriptorHeapType_RTV];
+
+			D3D12_CPU_DESCRIPTOR_HANDLE cpuDesc = (D3D12_CPU_DESCRIPTOR_HANDLE) {
+				heap->cpuHandle.ptr + heap->cpuIncrement * 8		//Offset in case we have RTVs bound
+			};
+
+			for (U8 i = 0; i < imageClearCount; ++i) {
 
 				ClearImageCmd image = ((const ClearImageCmd*) (data + sizeof(U32)))[i];
-				VkUnifiedTexture *imageExt = TextureRef_getCurrImgExtT(image.image, Vk, 0);
+				RefPtr *active = image.image;
 
-				VkImageSubresourceRange range = (VkImageSubresourceRange) {
-					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-					.levelCount = 1,
-					.layerCount = 1
-				};
+				//Reuse the same descriptor, it's useless.
 
-				vkCmdClearColorImage(
-					buffer,
-					imageExt->image,
-					imageExt->lastLayout,
-					(const VkClearColorValue*) &image.color,
-					1,
-					&range
-				);
+				D3D12_CPU_DESCRIPTOR_HANDLE curr = createTempRTV(deviceExt, 0, cpuDesc, heap, active);
+				buffer->lpVtbl->ClearRenderTargetView(buffer, curr, image.color.colorf, 0, NULL);
 			}
 
 			break;
@@ -139,20 +253,23 @@ void CommandList_process(
 			CopyImageCmd copyImage = *(const CopyImageCmd*) data;
 			const CopyImageRegion *copyImageRegions = (const CopyImageRegion*) (data + sizeof(copyImage));
 
-			VkImageAspectFlags aspectFlags = VK_IMAGE_ASPECT_COLOR_BIT;
-
 			UnifiedTexture src = TextureRef_getUnifiedTexture(copyImage.src, NULL);
+			U8 planes = 1;
+			U8 planeOffset = 0;
 
 			if(src.depthFormat) {
 
 				if(copyImage.copyType == ECopyType_DepthOnly)
-					aspectFlags = VK_IMAGE_ASPECT_DEPTH_BIT;
+					planeOffset = 0;
 
 				else if(copyImage.copyType == ECopyType_StencilOnly)
-					aspectFlags = VK_IMAGE_ASPECT_STENCIL_BIT;
+					planeOffset = 1;
 
-				else aspectFlags = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+				else planes = 2;
 			}
+
+			DxUnifiedTexture *srcExt = TextureRef_getCurrImgExtT(copyImage.src, Dx, 0);
+			DxUnifiedTexture *dstExt = TextureRef_getCurrImgExtT(copyImage.dst, Dx, 0);
 
 			for(U64 i = 0; i < copyImage.regionCount; ++i) {
 
@@ -167,55 +284,41 @@ void CommandList_process(
 				if(!image.length)
 					image.length = src.length - image.srcZ;
 
-				VkImageSubresourceLayers subResource = (VkImageSubresourceLayers) {
-					.aspectMask = aspectFlags,
-					.layerCount = 1
+				D3D12_BOX srcBox = (D3D12_BOX) {
+					.left   = image.srcX,
+					.top    = image.srcY,
+					.front  = image.srcZ,
+					.right  = image.srcX + image.width,
+					.bottom	= image.srcY + image.height,
+					.back	= image.srcZ + image.length
 				};
 
-				Error err = Error_none();
+				for(U8 j = planeOffset; j < planeOffset + planes; ++j) {
 
-				gotoIfError(next, ListVkImageCopy_pushBackx(&deviceExt->imageCopyRanges, (VkImageCopy) {
-					.srcSubresource = subResource,
-					.srcOffset = (VkOffset3D) {
-						.x = (I32) image.srcX,
-						.y = (I32) image.srcY,
-						.z = (I32) image.srcZ
-					},
-					.dstSubresource = subResource,
-					.dstOffset = (VkOffset3D) {
-						.x = (I32) image.dstX,
-						.y = (I32) image.dstY,
-						.z = (I32) image.dstZ
-					},
-					.extent = (VkExtent3D) {
-						.width = image.width,
-						.height = image.height,
-						.depth = image.length
-					}
-				}))
+					D3D12_TEXTURE_COPY_LOCATION srcLocation = (D3D12_TEXTURE_COPY_LOCATION) {
+						.pResource = srcExt->image,
+						.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
+						.SubresourceIndex = j
+					};
 
-			next:
+					D3D12_TEXTURE_COPY_LOCATION dstLocation = (D3D12_TEXTURE_COPY_LOCATION) {
+						.pResource = dstExt->image,
+						.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
+						.SubresourceIndex = j
+					};
 
-				if(err.genericError) {
-					Error_printx(err, ELogLevel_Error, ELogOptions_Default);
-					break;
+					buffer->lpVtbl->CopyTextureRegion(
+						buffer,
+						&dstLocation,
+						image.dstX,
+						image.dstY,
+						image.dstZ,
+						&srcLocation,
+						&srcBox
+					);
 				}
 			}
 
-			VkUnifiedTexture *srcExt = TextureRef_getCurrImgExtT(copyImage.src, Vk, 0);
-			VkUnifiedTexture *dstExt = TextureRef_getCurrImgExtT(copyImage.dst, Vk, 0);
-
-			vkCmdCopyImage(
-				buffer,
-				srcExt->image,
-				srcExt->lastLayout,
-				dstExt->image,
-				dstExt->lastLayout,
-				copyImage.regionCount,
-				deviceExt->imageCopyRanges.ptr
-			);
-
-			ListVkImageCopy_clear(&deviceExt->imageCopyRanges);
 			break;
 		}
 
@@ -228,156 +331,167 @@ void CommandList_process(
 
 			//Prepare attachments
 
-			VkRenderingAttachmentInfoKHR attachmentsExt[8] = { 0 };
-			U8 j = U8_MAX;
+			DxHeap *heap = deviceExt->heaps[EDescriptorHeapType_RTV];
+
+			D3D12_CPU_DESCRIPTOR_HANDLE cpuDesc = heap->cpuHandle;
+			U8 j = 0;
+
+			D3D12_RECT rect = (D3D12_RECT) {
+				.left = I32x2_x(startRender->offset),
+				.top = I32x2_y(startRender->offset),
+				.right = I32x2_x(startRender->offset) + I32x2_x(startRender->size),
+				.bottom = I32x2_y(startRender->offset) + I32x2_y(startRender->size)
+			};
 
 			for (U8 i = 0; i < startRender->colorCount; ++i) {
 
-				if(!((startRender->activeMask >> i) & 1)) {
-
-					attachmentsExt[i] = (VkRenderingAttachmentInfoKHR) {
-						.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR,
-						.imageView = NULL,
-						.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-						.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE
-					};
-
-					continue;
-				}
-
-				++j;
-
 				const AttachmentInfoInternal *attachmentsj = &attachments[j];
+				RefPtr *active = NULL;
 
-				VkUnifiedTexture *imageExt = TextureRef_getCurrImgExtT(attachmentsj->image, Vk, 0);
-				VkAttachmentLoadOp loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+				if((startRender->activeMask >> i) & 1) {
 
-				if((startRender->clearMask >> i) & 1)
-					loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+					active = attachmentsj->image;
 
-				else if((startRender->preserveMask >> i) & 1)
-					loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-
-				attachmentsExt[i] = (VkRenderingAttachmentInfoKHR) {
-
-					.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-					.imageView = imageExt->view,
-					.imageLayout = imageExt->lastLayout,
-					.loadOp = loadOp,
-
-					.storeOp =
-						!((startRender->unusedAfterRenderMask >> i) & 1) ? VK_ATTACHMENT_STORE_OP_STORE:
-						VK_ATTACHMENT_STORE_OP_DONT_CARE,
-
-					.clearValue = *(const VkClearValue*) &attachmentsj->color
-				};
-
-				if(attachmentsj->resolveImage)
-					addResolveImage(*attachmentsj, &attachmentsExt[i]);
-			}
-
-			//Send begin render command
-
-			VkRenderingAttachmentInfoKHR depthAttachment;
-			VkRenderingAttachmentInfoKHR stencilAttachment;
-
-			if (startRender->flags & EStartRenderFlags_Depth) {
-
-				VkUnifiedTexture *depthExt = TextureRef_getCurrImgExtT(startRender->depth, Vk, 0);
-
-				Bool unusedAfterRender = startRender->flags & EStartRenderFlags_DepthUnusedAfterRender;
-
-				VkAttachmentLoadOp loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-
-				if(startRender->flags & EStartRenderFlags_ClearDepth)
-					loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-
-				else if(startRender->flags & EStartRenderFlags_PreserveDepth)
-					loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-
-				depthAttachment = (VkRenderingAttachmentInfoKHR) {
-					.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-					.imageView = depthExt->view,
-					.imageLayout = depthExt->lastLayout,
-					.loadOp = loadOp,
-					.storeOp = unusedAfterRender ? VK_ATTACHMENT_STORE_OP_DONT_CARE : VK_ATTACHMENT_STORE_OP_STORE,
-					.clearValue = (VkClearValue) {
-						.depthStencil = (VkClearDepthStencilValue) { .depth = startRender->clearDepth }
+					if(attachmentsj->resolveImage) {
+						temp->boundTargets[i] = (ImageAndRange) { .range = attachmentsj->range, .image = active };
+						temp->resolveTargets[i] = (ImageAndRange) {
+							.range = attachmentsj->resolveRange,
+							.image = attachmentsj->resolveImage
+						};
 					}
-				};
-
-				if(startRender->resolveDepth) {
-
-					AttachmentInfoInternal tmp = (AttachmentInfoInternal) {
-						.resolveImage = startRender->resolveDepth,
-						.resolveMode = startRender->resolveDepthMode
-					};
-
-					addResolveImage(tmp, &depthAttachment);
 				}
+
+				D3D12_CPU_DESCRIPTOR_HANDLE curr = createTempRTV(deviceExt, i, cpuDesc, heap, active);
+
+				if(((startRender->clearMask & startRender->activeMask) >> i) & 1)
+					buffer->lpVtbl->ClearRenderTargetView(buffer, curr, attachmentsj->color.colorf, 1, &rect);
+
+				if(active)
+					++j;
 			}
 
-			if (startRender->flags & EStartRenderFlags_Stencil) {
+			for (U8 i = startRender->colorCount; i < 9; ++i)
+				temp->boundTargets[i] = temp->resolveTargets[i] = (ImageAndRange) { 0 };
 
-				VkUnifiedTexture *stencilExt = TextureRef_getCurrImgExtT(startRender->stencil, Vk, 0);
+			DxHeap *dsvHeap = deviceExt->heaps[EDescriptorHeapType_RTV];
+			D3D12_CPU_DESCRIPTOR_HANDLE dsv = createTempDSV(
+				deviceExt, 0, cpuDesc, startRender->flags, dsvHeap, startRender->depthStencil
+			);
 
-				Bool unusedAfterRender = startRender->flags & EStartRenderFlags_StencilUnusedAfterRender;
+			if(startRender->flags & EStartRenderFlags_ClearDepthStencil)
+				buffer->lpVtbl->ClearDepthStencilView(
+					buffer, dsv, 
+					(startRender->clearMask & EStartRenderFlags_ClearDepth ? D3D12_CLEAR_FLAG_DEPTH : 0) |
+					(startRender->clearMask & EStartRenderFlags_ClearStencil ? D3D12_CLEAR_FLAG_STENCIL : 0),
+					startRender->clearDepth, startRender->clearStencil, 
+					1, &rect
+				);
 
-				VkAttachmentLoadOp loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+			if(startRender->resolveDepthStencil) {
 
-				if(startRender->flags & EStartRenderFlags_ClearStencil)
-					loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-
-				else if(startRender->flags & EStartRenderFlags_PreserveStencil)
-					loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-
-				stencilAttachment = (VkRenderingAttachmentInfoKHR) {
-					.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-					.imageView = stencilExt->view,
-					.imageLayout = stencilExt->lastLayout,
-					.loadOp = loadOp,
-					.storeOp = unusedAfterRender ? VK_ATTACHMENT_STORE_OP_DONT_CARE : VK_ATTACHMENT_STORE_OP_STORE,
-					.clearValue = (VkClearValue) {
-						.depthStencil = (VkClearDepthStencilValue) { .stencil = startRender->clearStencil }
-					}
+				temp->boundTargets[8] = (ImageAndRange) {
+					.range = startRender->depthStencilRange,
+					.image = startRender->depthStencil
 				};
 
-				if(startRender->resolveStencil) {
-
-					AttachmentInfoInternal tmp = (AttachmentInfoInternal) {
-						.resolveImage = startRender->resolveStencil,
-						.resolveMode = startRender->resolveStencilMode
-					};
-
-					addResolveImage(tmp, &stencilAttachment);
-				}
+				temp->resolveTargets[8] = (ImageAndRange) {
+					.range = startRender->resolveDepthStencilRange,
+					.image = startRender->resolveDepthStencil
+				};
 			}
 
-			VkRenderingInfoKHR renderInfo = (VkRenderingInfoKHR) {
-				.sType = VK_STRUCTURE_TYPE_RENDERING_INFO_KHR,
-				.renderArea = (VkRect2D) {
-					.offset = (VkOffset2D) {
-						.x = I32x2_x(startRender->offset),
-						.y = I32x2_y(startRender->offset)
-					},
-					.extent = (VkExtent2D) {
-						.width = I32x2_x(startRender->size),
-						.height = I32x2_y(startRender->size)
-					}
-				},
-				.layerCount = 1,
-				.colorAttachmentCount = startRender->colorCount,
-				.pColorAttachments = attachmentsExt,
-				.pDepthAttachment = startRender->flags & EStartRenderFlags_Depth ? &depthAttachment : NULL,
-				.pStencilAttachment = startRender->flags & EStartRenderFlags_Stencil ? &stencilAttachment : NULL
-			};
+			buffer->lpVtbl->OMSetRenderTargets(
+				buffer, j, 
+				&cpuDesc, true,
+				&dsv
+			);
 
-			instanceExt->cmdBeginRendering(buffer, &renderInfo);
 			break;
 		}
 
-		case ECommandOp_EndRenderingExt:		//No-Op, D3D12 has no such concept
+		//No-Op, except for MSAA resolving
+
+		case ECommandOp_EndRenderingExt: {
+
+			D3D12_BARRIER_GROUP deps = { 0 };		//image, buffer
+
+			//All DSVs and RTVs to the correct state
+
+			for(U8 i = 0; i < 9; ++i) {
+
+				ImageAndRange input = temp->boundTargets[i];
+
+				if(!input.image)		//Only there if it's really required
+					continue;
+
+				const UnifiedTexture utex = TextureRef_getUnifiedTexture(input.image, NULL);
+				DxUnifiedTexture *imageExt = TextureRef_getCurrImgExtT(input.image, Dx, 0);
+
+				D3D12_BARRIER_SUBRESOURCE_RANGE range = (D3D12_BARRIER_SUBRESOURCE_RANGE) {
+					.NumMipLevels = 1,
+					.NumArraySlices = 1,
+					.NumPlanes = 1
+				};
+
+				if (i == 8) {		//Depth stencil
+
+					if(utex.depthFormat != EDepthStencilFormat_S8Ext)				//Take both planes (depth & stencil)
+						++range.NumPlanes;
+
+					else if(utex.depthFormat >= EDepthStencilFormat_StencilStart)	//Take only the stencil plane
+						++range.FirstPlane;
+				}
+
+				//Only transition source, because dest was already transitioned in startScope
+
+				Error err = DxUnifiedTexture_transition(
+					imageExt,
+					D3D12_BARRIER_SYNC_RESOLVE,
+					D3D12_BARRIER_ACCESS_RESOLVE_SOURCE,
+					D3D12_BARRIER_LAYOUT_RESOLVE_SOURCE,
+					&range,
+					&deviceExt->imageTransitions,
+					&deps
+				);
+
+				Error_printx(err, ELogLevel_Error, ELogOptions_Default);
+			}
+
+			if(deps.NumBarriers)
+				buffer->lpVtbl->Barrier(buffer, 1, &deps);
+
+			ListD3D12_TEXTURE_BARRIER_clear(&deviceExt->imageTransitions);
+
+			if(deps.NumBarriers)
+				for(U8 i = 0; i < 9; ++i) {
+
+					ImageAndRange input = temp->boundTargets[i];
+					ImageAndRange output = temp->resolveTargets[i];
+
+					if(!input.image)		//Only there if it's really required
+						continue;
+
+					const DxUnifiedTexture *imageExt = TextureRef_getCurrImgExtT(input.image, Dx, 0);
+					const DxUnifiedTexture *resolveExt = TextureRef_getCurrImgExtT(output.image, Dx, 0);
+					const UnifiedTexture utex = TextureRef_getUnifiedTexture(input.image, NULL);
+
+					DXGI_FORMAT format = 0;
+
+					if(utex.depthFormat)
+						format = EDepthStencilFormat_toDXFormat(utex.depthFormat);
+
+					else format = ETextureFormatId_toDXFormat(utex.textureFormatId);
+
+					buffer->lpVtbl->ResolveSubresource(
+						buffer, 
+						imageExt->image, 0, 
+						resolveExt->image, 0,
+						format
+					);
+				}
+
 			break;
+		}
 
 		//Draws
 
@@ -435,6 +549,7 @@ void CommandList_process(
 				buffer->lpVtbl->OMSetStencilRef(buffer, temp->stencilRef);
 			}
 
+
 			//Bind pipeline
 
 			if(temp->pipeline != temp->tempPipelines[EPipelineType_Graphics]) {
@@ -445,6 +560,34 @@ void CommandList_process(
 					temp->buffer,
 					Pipeline_ext(PipelineRef_ptr(temp->pipeline), Dx)->pso
 				);
+			}
+
+			PipelineGraphicsInfo *graphicsShader = Pipeline_info(PipelineRef_ptr(temp->pipeline), PipelineGraphicsInfo);
+			D3D12_PRIMITIVE_TOPOLOGY topology = 0;
+
+			if(graphicsShader->patchControlPoints)
+				topology = D3D_PRIMITIVE_TOPOLOGY_1_CONTROL_POINT_PATCHLIST + graphicsShader->patchControlPoints - 1;
+
+			else switch(graphicsShader->topologyMode) {
+
+				default:								topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;			break;
+				case ETopologyMode_TriangleStrip:		topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;		break;
+
+				case ETopologyMode_LineList:			topology = D3D_PRIMITIVE_TOPOLOGY_LINELIST;				break;
+				case ETopologyMode_LineStrip:			topology = D3D_PRIMITIVE_TOPOLOGY_LINESTRIP;			break;
+
+				case ETopologyMode_PointList:			topology = D3D_PRIMITIVE_TOPOLOGY_POINTLIST;			break;
+
+				case ETopologyMode_TriangleListAdj:		topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST_ADJ;		break;
+				case ETopologyMode_TriangleStripAdj:	topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP_ADJ;	break;
+
+				case ETopologyMode_LineListAdj:			topology = D3D_PRIMITIVE_TOPOLOGY_LINELIST_ADJ;			break;
+				case ETopologyMode_LineStripAdj:		topology = D3D_PRIMITIVE_TOPOLOGY_LINESTRIP_ADJ;		break;
+			}
+
+			if (temp->tempPrimitiveTopology != topology) {
+				buffer->lpVtbl->IASetPrimitiveTopology(buffer, topology);
+				temp->tempPrimitiveTopology = (U8) topology;
 			}
 
 			//Bind index buffer
@@ -464,7 +607,7 @@ void CommandList_process(
 
 				D3D12_INDEX_BUFFER_VIEW ibo = (D3D12_INDEX_BUFFER_VIEW) {
 					.BufferLocation = getDxDeviceAddress((DeviceData) { .buffer = temp->boundBuffers.indexBuffer }),
-					.SizeInBytes = indexBuffer->resource.size,
+					.SizeInBytes = (U32) indexBuffer->resource.size,
 					.Format = temp->boundBuffers.isIndex32Bit ? DXGI_FORMAT_R32_UINT : DXGI_FORMAT_R16_UINT
 				};
 
@@ -498,15 +641,11 @@ void CommandList_process(
 						temp->boundBuffers.vertexBuffers[i] = bufferRef;
 					}
 
-					PipelineGraphicsInfo *graphicsShader = Pipeline_info(
-						PipelineRef_ptr(temp->tempPipelines[EPipelineType_Graphics]), PipelineGraphicsInfo
-					);
-
 					DeviceBuffer *buf = DeviceBufferRef_ptr(bufferRef);
 
 					vertexBuffers[i] = (D3D12_VERTEX_BUFFER_VIEW) {
-						.BufferLocation = DeviceBuffer_ext(buf, Dx)->buffer,
-						.SizeInBytes = buf->resource.size,
+						.BufferLocation = getDxDeviceAddress((DeviceData) { .buffer = bufferRef }),
+						.SizeInBytes = (U32) buf->resource.size,
 						.StrideInBytes = graphicsShader->vertexLayout.bufferStrides12_isInstance1[i] & 4095
 					};
 				}
@@ -530,7 +669,7 @@ void CommandList_process(
 					buffer->lpVtbl->DrawIndexedInstanced(
 						buffer,
 						draw.count, draw.instanceCount,
-						draw.indexOffset, draw.vertexOffset,
+						draw.indexOffset, (I32)draw.vertexOffset,
 						draw.instanceOffset
 					);
 
@@ -555,19 +694,15 @@ void CommandList_process(
 					DeviceBuffer *counterBuffer = DeviceBufferRef_ptr(drawIndirect.countBufferExt);
 					DxDeviceBuffer *counterExt = DeviceBuffer_ext(counterBuffer, Dx);
 
-					if(drawIndirect.isIndexed)
-						buffer->lpVtbl->DrawIndexedIndirectCount(
-							buffer,
-							bufferExt->buffer, drawIndirect.bufferOffset,
-							counterExt->buffer, drawIndirect.countOffsetExt,
-							drawIndirect.drawCalls, drawIndirect.bufferStride
-						);
+					EExecuteIndirectCommand cmd = 
+						drawIndirect.isIndexed ? EExecuteIndirectCommand_DrawIndexedCount : EExecuteIndirectCommand_DrawCount;
 
-					else buffer->lpVtbl->DrawIndirectCount(
+					buffer->lpVtbl->ExecuteIndirect(
 						buffer,
+						deviceExt->commandSigs[cmd],
+						drawIndirect.drawCalls,
 						bufferExt->buffer, drawIndirect.bufferOffset,
-						counterExt->buffer, drawIndirect.countOffsetExt,
-						drawIndirect.drawCalls, drawIndirect.bufferStride
+						counterExt->buffer, drawIndirect.countOffsetExt
 					);
 				}
 
@@ -575,16 +710,15 @@ void CommandList_process(
 
 				else {
 
-					if(drawIndirect.isIndexed)
-						buffer->lpVtbl->DrawIndexedIndirect(
-							buffer,
-							bufferExt->buffer, drawIndirect.bufferOffset,
-							drawIndirect.drawCalls, drawIndirect.bufferStride
-						);
+					EExecuteIndirectCommand cmd = 
+						drawIndirect.isIndexed ? EExecuteIndirectCommand_DrawIndexed : EExecuteIndirectCommand_Draw;
 
-					else buffer->lpVtbl->DrawIndirect(
-						buffer, bufferExt->buffer, drawIndirect.bufferOffset,
-						drawIndirect.drawCalls, drawIndirect.bufferStride
+					buffer->lpVtbl->ExecuteIndirect(
+						buffer,
+						deviceExt->commandSigs[cmd],
+						drawIndirect.drawCalls,
+						bufferExt->buffer, drawIndirect.bufferOffset,
+						NULL, 0
 					);
 				}
 			}
@@ -614,9 +748,19 @@ void CommandList_process(
 			}
 
 			else {
+
 				DispatchIndirectCmd dispatch = *(const DispatchIndirectCmd*)data;
 				DxDeviceBuffer *bufferExt = DeviceBuffer_ext(DeviceBufferRef_ptr(dispatch.buffer), Dx);
-				buffer->lpVtbl->DispatchIndirect(buffer, bufferExt->buffer, dispatch.offset);
+
+				ID3D12CommandSignature *dispatchIndirect = deviceExt->commandSigs[EExecuteIndirectCommand_Dispatch];
+
+				buffer->lpVtbl->ExecuteIndirect(
+					buffer,
+					dispatchIndirect,
+					1,
+					bufferExt->buffer, dispatch.offset,
+					NULL, 0
+				);
 			}
 
 			break;
@@ -681,19 +825,27 @@ void CommandList_process(
 				buffer->lpVtbl->DispatchRays(buffer, &dispatchRays);
 			}
 
-			else {
-
-				//TODO: Copy to buffer that we already include addresses in, we don't want to expose that level of control.
+			/*else {
 
 				DispatchRaysIndirectExt dispatch = *(const DispatchRaysIndirectExt*)data;
 				raygen.SizeInBytes += raytracingShaderAlignment * dispatch.raygenId;
 
-				buffer->lpVtbl->DispatchRaysIndirect(
+				DxDeviceBuffer *bufferExt = DeviceBuffer_ext(DeviceBufferRef_ptr(dispatch.buffer), Dx);
+
+				ID3D12CommandSignature *dispatchIndirect = deviceExt->commandSigs[EExecuteIndirectCommand_DispatchRays];
+
+				//TODO: Copy to intermediate buffer bufferExt->buffer, because we don't allow dynamic SBT
+				//https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html#d3d12_dispatch_rays_desc
+				//&raygen, &miss, &hit, &callable,
+
+				buffer->lpVtbl->ExecuteIndirect(
 					buffer,
-					&raygen, &miss, &hit, &callable,
-					DeviceBufferRef_ptr(dispatch.buffer)->resource.deviceAddress + dispatch.offset
+					dispatchIndirect,
+					1,
+					bufferExt->buffer, dispatch.offset,
+					NULL, 0
 				);
-			}
+			}*/
 
 			break;
 		}
@@ -722,10 +874,10 @@ void CommandList_process(
 					case EPipelineStage_Compute:		pipelineStage = D3D12_BARRIER_SYNC_COMPUTE_SHADING;			break;
 					case EPipelineStage_Vertex:			pipelineStage = D3D12_BARRIER_SYNC_VERTEX_SHADING;			break;
 					case EPipelineStage_Pixel:			pipelineStage = D3D12_BARRIER_SYNC_PIXEL_SHADING;			break;
-					case EPipelineStage_GeometryExt:	pipelineStage = D3D12_BARRIER_SYNC_NON_PIXEL_SHADING;		break;
 
+					case EPipelineStage_GeometryExt:
+					case EPipelineStage_Domain:
 					case EPipelineStage_Hull:			pipelineStage = D3D12_BARRIER_SYNC_NON_PIXEL_SHADING;		break;
-					case EPipelineStage_Domain:			pipelineStage = D3D12_BARRIER_SYNC_NON_PIXEL_SHADING;		break;
 
 					case EPipelineStage_RaygenExt:
 					case EPipelineStage_CallableExt:
@@ -844,10 +996,16 @@ void CommandList_process(
 
 							break;
 
+						case ETransitionType_ResolveTargetWrite:
+							pipelineStage = D3D12_BARRIER_SYNC_RESOLVE;
+							access = D3D12_BARRIER_ACCESS_RESOLVE_DEST;
+							layout = D3D12_BARRIER_LAYOUT_RESOLVE_DEST;
+							break;
+
 						case ETransitionType_Clear:
-							pipelineStage = D3D12_BARRIER_SYNC_CLEAR_UNORDERED_ACCESS_VIEW;
-							access = D3D12_BARRIER_ACCESS_UNORDERED_ACCESS;
-							layout = D3D12_BARRIER_SYNC_RENDER_TARGET;
+							pipelineStage = D3D12_BARRIER_SYNC_RENDER_TARGET;
+							access = D3D12_BARRIER_ACCESS_RENDER_TARGET;
+							layout = D3D12_BARRIER_LAYOUT_RENDER_TARGET;
 							break;
 
 						case ETransitionType_CopyRead:
@@ -935,7 +1093,7 @@ void CommandList_process(
 				buffer->lpVtbl->Barrier(
 					buffer, 
 					dep[0].NumBarriers || dep[1].NumBarriers,
-					dep[0].NumBarriers ? &dep[0] : dep[1]
+					dep[0].NumBarriers ? &dep[0] : &dep[1]
 				);
 
 			ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions);

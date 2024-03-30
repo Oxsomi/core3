@@ -17,7 +17,7 @@
 # To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
 # This is called dual licensing.
 
-cmake_minimum_required(VERSION 3.19.0)
+cmake_minimum_required(VERSION 3.21.0)
 project(OxC3)
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
