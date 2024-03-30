@@ -226,7 +226,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphics
 		HRESULT lastError = 0;
 
 		if(FAILED(lastError = D3D12CreateDevice(
-			(IUnknown*)adapters.ptr[i], D3D_FEATURE_LEVEL_12_0, &IID_ID3D12Device5, (void**) &device)
+			(IUnknown*)adapters.ptr[i], D3D_FEATURE_LEVEL_12_1, &IID_ID3D12Device5, (void**) &device)
 		)) {
 			Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support feature level 12.1", i);
 			goto next;

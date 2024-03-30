@@ -276,7 +276,7 @@ If raytracing is enabled, the following formats will be enabled for BLAS buildin
 
 ## List of DirectX12 requirements
 
-- DirectX12 Feature level 12_0.
+- DirectX12 Feature level 12_1.
   - This also means the adapter should support DXGI_ADAPTER_FLAG3_SUPPORT_MONITORED_FENCES.
   - DXGI feature PRESENT_ALLOW_TEARING.
 - The following features:
