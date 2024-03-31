@@ -26,6 +26,7 @@
 #include "graphics/directx12/dx_device.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/log.h"
+#include "platforms/ext/stringx.h"
 
 U64 DeviceBufferExt_size = sizeof(DxDeviceBuffer);
 
@@ -38,156 +39,109 @@ Error DxDeviceBuffer_transition(
 	ListD3D12_BUFFER_BARRIER *bufferBarriers,
 	D3D12_BARRIER_GROUP *dependency
 ) {
-	(void) buffer; (void)sync; (void)access; (void)offset; (void)size; (void)bufferBarriers; (void)dependency;
-	return Error_unimplemented(0, "DxDeviceBuffer_transition() unimplemented");
-}
 
-/*
-Error VkDeviceBuffer_transition(
-	VkDeviceBuffer *buffer,
-	VkPipelineStageFlags2 stage,
-	VkAccessFlagBits2 access,
-	U32 graphicsQueueId,
-	U64 offset,
-	U64 size,
-	ListVkBufferMemoryBarrier2 *bufferBarriers,
-	VkDependencyInfo *dependency
-) {
+	//Avoid duplicate barriers except in one case:
+	//D3D12 has the concept of UAVBarriers, which always need to be inserted in-between two compute calls.
+	//Otherwise, it's not synchronized correctly.
 
-	//No-op
-
-	if(buffer->lastStage == stage && buffer->lastAccess == access)
+	if(buffer->lastSync == sync && buffer->lastAccess == access && access != D3D12_BARRIER_ACCESS_UNORDERED_ACCESS)
 		return Error_none();
 
 	//Handle buffer barrier
 
-	const VkBufferMemoryBarrier2 bufferBarrier = (VkBufferMemoryBarrier2) {
-
-		.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
-
-		.srcStageMask = buffer->lastStage,
-		.srcAccessMask = buffer->lastAccess,
-
-		.dstStageMask = stage,
-		.dstAccessMask = access,
-
-		.srcQueueFamilyIndex = graphicsQueueId,
-		.dstQueueFamilyIndex = graphicsQueueId,
-
-		.buffer = buffer->buffer,
-		.offset = offset,
-		.size = !size ? VK_WHOLE_SIZE : size
+	const D3D12_BUFFER_BARRIER bufferBarrier = (D3D12_BUFFER_BARRIER) {
+		.SyncBefore = buffer->lastSync,
+		.SyncAfter = sync,
+		.AccessBefore = buffer->lastAccess,
+		.AccessAfter = access,
+		.pResource = buffer->buffer,
+		.Offset = offset,
+		.Size = !size ? UINT64_MAX : size
 	};
 
-	const Error err = ListVkBufferMemoryBarrier2_pushBackx(bufferBarriers, bufferBarrier);
+	const Error err = ListD3D12_BUFFER_BARRIER_pushBackx(bufferBarriers, bufferBarrier);
 
 	if(err.genericError)
 		return err;
 
-	buffer->lastStage = bufferBarrier.dstStageMask;
-	buffer->lastAccess = bufferBarrier.dstAccessMask;
+	buffer->lastSync = bufferBarrier.SyncAfter;
+	buffer->lastAccess = bufferBarrier.AccessAfter;
 
-	dependency->pBufferMemoryBarriers = bufferBarriers->ptr;
-	dependency->bufferMemoryBarrierCount = (U32) bufferBarriers->length;
+	dependency->pBufferBarriers = bufferBarriers->ptr;
+	dependency->NumBarriers = (U32) bufferBarriers->length;
 
 	return Error_none();
 }
-*/
+
 
 Bool DeviceBuffer_freeExt(DeviceBuffer *buffer) {
-	(void) buffer;
-	return false;
-}
 
-/*
-	const VkGraphicsDevice *deviceExt = GraphicsDevice_ext(GraphicsDeviceRef_ptr(buffer->resource.device), Vk);
-	VkDeviceBuffer *bufferExt = DeviceBuffer_ext(buffer, Vk);
+	DxDeviceBuffer *bufferExt = DeviceBuffer_ext(buffer, Dx);
 
 	if(bufferExt->buffer) {
-		vkDestroyBuffer(deviceExt->device, bufferExt->buffer, NULL);
+		bufferExt->buffer->lpVtbl->Release(bufferExt->buffer);
 		bufferExt->buffer = NULL;
 	}
 
 	return true;
-}*/
+}
 
 Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *buf, CharString name) {
 
-	(void)dev;
-	(void)buf;
-	(void)name;
-
-	return Error_unimplemented(0, "GraphicsDeviceRef_createBufferExt() unimplemented");
-}
-/*
-
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(dev);
-	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
+	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
 
-	GraphicsInstance *instance = GraphicsInstanceRef_ptr(device->instance);
-	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
+	DxDeviceBuffer *bufExt = DeviceBuffer_ext(buf, Dx);
+	ListU16 name16 = (ListU16) { 0 };
 
-	VkDeviceBuffer *bufExt = DeviceBuffer_ext(buf, Vk);
+	//Query about alignment and size
 
-	VkBufferUsageFlags usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+	D3D12_RESOURCE_DESC resourceDesc = (D3D12_RESOURCE_DESC) {
+		.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER,
+		.Alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT,
+		.Width = buf->resource.size,
+		.Height = 1,
+		.DepthOrArraySize = 1,
+		.MipLevels = 1,
+		.Format = DXGI_FORMAT_UNKNOWN,
+		.SampleDesc = (DXGI_SAMPLE_DESC) { .Count = 1, .Quality = 0},
+		.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR
+	};
 
-	if(buf->resource.flags & EGraphicsResourceFlag_ShaderRW)
-		usage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+	if(buf->resource.flags & EGraphicsResourceFlag_ShaderWrite)
+		resourceDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 
-	if(buf->usage & EDeviceBufferUsage_Vertex)
-		usage |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-
-	if(buf->usage & EDeviceBufferUsage_Index)
-		usage |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
-
-	if(buf->usage & EDeviceBufferUsage_Indirect)
-		usage |= VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
-
-	if(buf->usage & EDeviceBufferUsage_ScratchExt)
-		usage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+	if(!(buf->resource.flags & EGraphicsResourceFlag_ShaderRead))
+		resourceDesc.Flags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
 
 	if(buf->usage & EDeviceBufferUsage_ASExt)
-		usage |= VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR;
+		resourceDesc.Flags |= D3D12_RESOURCE_FLAG_RAYTRACING_ACCELERATION_STRUCTURE;
 
-	if(buf->usage & EDeviceBufferUsage_ASReadExt)
-		usage |= VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
 
-	if(buf->usage & EDeviceBufferUsage_SBTExt)
-		usage |= VK_BUFFER_USAGE_SHADER_BINDING_TABLE_BIT_KHR;
+	D3D12_RESOURCE_ALLOCATION_INFO allocInfo = (D3D12_RESOURCE_ALLOCATION_INFO) { 0 };
+	D3D12_RESOURCE_ALLOCATION_INFO *res = deviceExt->device->lpVtbl->GetResourceAllocationInfo(
+		deviceExt->device, &allocInfo, 0, 1, &resourceDesc
+	);
 
-	if(buf->resource.flags & EGraphicsResourceFlag_CPUAllocatedBit)		//Only for internal usage
-		usage |= VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+	Error err;
 
-	usage |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+	if(!res)
+		gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_createBufferExt() couldn't query allocInfo"))
 
-	VkBufferCreateInfo bufferInfo = (VkBufferCreateInfo) {
-		.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-		.size = buf->resource.size,
-		.usage = usage,
-		.sharingMode = VK_SHARING_MODE_EXCLUSIVE
+	if(buf->resource.size / 4 != (U32)(buf->resource.size / 4))
+		gotoIfError(clean, Error_invalidState(1, "GraphicsDeviceRef_createBufferExt() out of bounds"))
+
+	//Allocate memory
+
+	DxBlockRequirements req = (DxBlockRequirements) {
+		.flags = EDxBlockFlags_None,
+		.alignment = (U32) allocInfo.Alignment,
+		.length = allocInfo.SizeInBytes
 	};
-
-	Error err = Error_none();
-
-	VkDeviceBufferMemoryRequirementsKHR bufferReq = (VkDeviceBufferMemoryRequirementsKHR) {
-		.sType = VK_STRUCTURE_TYPE_DEVICE_BUFFER_MEMORY_REQUIREMENTS_KHR,
-		.pCreateInfo = &bufferInfo
-	};
-
-	VkMemoryDedicatedRequirements dedicatedReq = {
-		.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_REQUIREMENTS
-	};
-
-	VkMemoryRequirements2 requirements = (VkMemoryRequirements2) {
-		.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2,
-		.pNext = &dedicatedReq
-	};
-
-	instanceExt->getDeviceBufferMemoryRequirements(deviceExt->device, &bufferReq, &requirements);
 
 	gotoIfError(clean, DeviceMemoryAllocator_allocate(
 		&device->allocator,
-		&requirements,
+		&req,
 		buf->resource.flags & EGraphicsResourceFlag_CPUAllocatedBit,
 		&buf->resource.blockId,
 		&buf->resource.blockOffset,
@@ -201,22 +155,25 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 
 	//Bind memory
 
-	gotoIfError(clean, vkCheck(vkCreateBuffer(deviceExt->device, &bufferInfo, NULL, &bufExt->buffer)))
-	gotoIfError(clean, vkCheck(vkBindBufferMemory(
-		deviceExt->device, bufExt->buffer, (VkDeviceMemory) block.ext, buf->resource.blockOffset
+	gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreatePlacedResource(
+		deviceExt->device,
+		block.ext,
+		buf->resource.blockOffset,
+		&resourceDesc,
+		D3D12_RESOURCE_STATE_COPY_DEST,
+		NULL,
+		&IID_ID3D12Resource,
+		(void**)&bufExt->buffer
 	)))
 
-	if (block.mappedMemory)
-		buf->resource.mappedMemoryExt = block.mappedMemory + buf->resource.blockOffset;
+	if ((block.allocationTypeExt & 1) || (device->info.capabilities.featuresExt & EDxGraphicsFeatures_ReBAR))
+		gotoIfError(clean, dxCheck(bufExt->buffer->lpVtbl->Map(
+			bufExt->buffer, 0, NULL, (void**) &buf->resource.mappedMemoryExt
+		)))
 
 	//Grab GPU location
 
-	VkBufferDeviceAddressInfo address = (VkBufferDeviceAddressInfo) {
-		.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
-		.buffer = bufExt->buffer
-	};
-
-	buf->resource.deviceAddress = vkGetBufferDeviceAddress(deviceExt->device, &address);
+	buf->resource.deviceAddress = bufExt->buffer->lpVtbl->GetGPUVirtualAddress(bufExt->buffer);
 
 	if(!buf->resource.deviceAddress)
 		gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_createBufferExt() Couldn't obtain GPU address"))
@@ -227,83 +184,91 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 
 	if(flags & EGraphicsResourceFlag_ShaderRW || (buf->usage & EDeviceBufferUsage_ASExt)) {
 
+		const DxHeap *heap = deviceExt->heaps[EDescriptorHeapType_Resources];
+
 		//Create readonly buffer
 
-		VkDescriptorBufferInfo bufferDesc = (VkDescriptorBufferInfo) { .buffer = bufExt->buffer, .range = buf->resource.size };
+		if ((flags & EGraphicsResourceFlag_ShaderRead) || (buf->usage & EDeviceBufferUsage_ASExt)) {
 
-		VkWriteDescriptorSet descriptors[2] = {
-			(VkWriteDescriptorSet) {
-				.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-				.dstBinding = 0,
-				.descriptorCount = 1,
-				.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-				.pBufferInfo = &bufferDesc
+			D3D12_SHADER_RESOURCE_VIEW_DESC srv = (D3D12_SHADER_RESOURCE_VIEW_DESC) {
+				.Format = DXGI_FORMAT_R32_TYPELESS,
+				.ViewDimension = D3D12_SRV_DIMENSION_BUFFER,
+				.Shader4ComponentMapping =  D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
+				.Buffer = (D3D12_BUFFER_SRV) {
+					.NumElements = (U32)(buf->resource.size / 4),
+					.Flags = D3D12_BUFFER_SRV_FLAG_RAW
+				}
+			};
+
+			if(buf->usage & EDeviceBufferUsage_ASExt) {
+				srv.ViewDimension = D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE;
+				srv.RaytracingAccelerationStructure = (D3D12_RAYTRACING_ACCELERATION_STRUCTURE_SRV) {
+					.Location = buf->resource.deviceAddress
+				};
 			}
-		};
 
-		U32 counter = 0;
+			U64 offset = EDescriptorTypeOffsets_Buffer + ResourceHandle_getId(buf->readHandle);
 
-		if (flags & EGraphicsResourceFlag_ShaderRead) {
-			descriptors[counter].dstBinding = EDescriptorType_Buffer;
-			descriptors[counter].dstArrayElement = ResourceHandle_getId(buf->readHandle);
-			descriptors[counter].dstSet = deviceExt->sets[EDescriptorSetType_Resources];
-			++counter;
+			deviceExt->device->lpVtbl->CreateShaderResourceView(
+				deviceExt->device,
+				bufExt->buffer,
+				&srv,
+				(D3D12_CPU_DESCRIPTOR_HANDLE) { .ptr = heap->cpuHandle.ptr + heap->cpuIncrement * offset }
+			);
 		}
+
+		//Create writable buffer
 
 		if (flags & EGraphicsResourceFlag_ShaderWrite) {
-			descriptors[counter] = descriptors[0];
-			descriptors[counter].dstBinding = EDescriptorType_RWBuffer;
-			descriptors[counter].dstArrayElement = ResourceHandle_getId(buf->writeHandle);
-			descriptors[counter].dstSet = deviceExt->sets[EDescriptorSetType_Resources];
-			++counter;
-		}
 
-		vkUpdateDescriptorSets(deviceExt->device, counter, descriptors, 0, NULL);
+			D3D12_UNORDERED_ACCESS_VIEW_DESC uav = (D3D12_UNORDERED_ACCESS_VIEW_DESC) {
+				.Format = DXGI_FORMAT_R32_TYPELESS,
+				.ViewDimension = D3D12_UAV_DIMENSION_BUFFER,
+				.Buffer = (D3D12_BUFFER_UAV) {
+					.NumElements = (U32)(buf->resource.size / 4),
+					.Flags = D3D12_BUFFER_UAV_FLAG_RAW
+				}
+			};
+
+			U64 offset = EDescriptorTypeOffsets_RWBuffer + ResourceHandle_getId(buf->readHandle);
+
+			deviceExt->device->lpVtbl->CreateUnorderedAccessView(
+				deviceExt->device,
+				bufExt->buffer,
+				NULL,
+				&uav,
+				(D3D12_CPU_DESCRIPTOR_HANDLE) { .ptr = heap->cpuHandle.ptr + heap->cpuIncrement * offset }
+			);
+		}
 	}
 
-	if((device->flags & EGraphicsDeviceFlags_IsDebug) && CharString_length(name) && instanceExt->debugSetName) {
-
-		VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
-			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-			.objectType = VK_OBJECT_TYPE_BUFFER,
-			.pObjectName = name.ptr,
-			.objectHandle = (U64) bufExt->buffer
-		};
-
-		gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName)))
+	if((device->flags & EGraphicsDeviceFlags_IsDebug) && CharString_length(name)) {
+		gotoIfError(clean, CharString_toUtf16x(name, &name16))
+		gotoIfError(clean, dxCheck(bufExt->buffer->lpVtbl->SetName(bufExt->buffer, name16.ptr)))
 	}
 
 clean:
+	ListU16_freex(&name16);
 	return err;
-}*/
-
-Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, DeviceBufferRef *pending) {
-	(void) commandBufferExt; (void) deviceRef; (void) pending;
-	return Error_unimplemented(0, "DeviceBufferRef_flush() unimplemented");
 }
 
-/*
-	VkCommandBuffer commandBuffer = (VkCommandBuffer) commandBufferExt;
+Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, DeviceBufferRef *pending) {
+
+	DxCommandBuffer *commandBuffer = (DxCommandBuffer*) commandBufferExt;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
-	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
-
-	GraphicsInstance *instance = GraphicsInstanceRef_ptr(device->instance);
-	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
-
-	U32 graphicsQueueId = deviceExt->queues[EVkCommandQueue_Graphics].queueId;
+	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
 
 	DeviceBuffer *buffer = DeviceBufferRef_ptr(pending);
-	VkDeviceBuffer *bufferExt = DeviceBuffer_ext(buffer, Vk);
+	DxDeviceBuffer *bufferExt = DeviceBuffer_ext(buffer, Dx);
 
 	Error err = Error_none();
-	ListVkMappedMemoryRange tempMappedMemRanges = { 0 };
-	ListVkBufferMemoryBarrier2 tempBufferBarriers = { 0 };
 
 	Bool isInFlight = false;
 	ListRefPtr *currentFlight = &device->resourcesInFlight[device->submitId % 3];
 	DeviceBufferRef *tempStagingResource = NULL;
-	ListVkBufferCopy pendingCopies = { 0 };
+
+	gotoIfError(clean, ListD3D12_BUFFER_BARRIER_reservex(&deviceExt->bufferTransitions, 2))
 
 	for(U64 j = 0; j < sizeof(device->resourcesInFlight) / sizeof(device->resourcesInFlight[0]); ++j) {
 
@@ -319,14 +284,7 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 			break;
 	}
 
-	if(!isInFlight && buffer->resource.mappedMemoryExt) {
-
-		DeviceMemoryBlock block = device->allocator.blocks.ptr[buffer->resource.blockId];
-		Bool incoherent = !(block.allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-
-		if(incoherent)
-			gotoIfError(clean, ListVkMappedMemoryRange_resizex(&tempMappedMemRanges, buffer->pendingChanges.length + 1))
-
+	if(!isInFlight && buffer->resource.mappedMemoryExt)
 		for(U64 j = 0; j < buffer->pendingChanges.length; ++j) {
 
 			DevicePendingRange range = buffer->pendingChanges.ptr[j];
@@ -338,21 +296,7 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 			Buffer src = Buffer_createRefConst(buffer->cpuData.ptr + start, len);
 
 			Buffer_copy(dst, src);
-
-			if(incoherent)
-				tempMappedMemRanges.ptrNonConst[j] = (VkMappedMemoryRange) {
-					.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
-					.memory = (VkDeviceMemory) block.ext,
-					.offset = start + buffer->resource.blockOffset,
-					.size = len
-				};
 		}
-
-		if(incoherent)
-			gotoIfError(clean, vkCheck(vkFlushMappedMemoryRanges(
-				deviceExt->device, (U32) tempMappedMemRanges.length, tempMappedMemRanges.ptr
-			)))
-	}
 
 	else {
 
@@ -367,10 +311,7 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 
 		device->pendingBytes += allocRange;
 
-		gotoIfError(clean, ListVkBufferCopy_resizex(&pendingCopies, buffer->pendingChanges.length))
-
-		VkDependencyInfo dependency = (VkDependencyInfo) { .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO };
-		gotoIfError(clean, ListVkBufferMemoryBarrier2_reservex(&tempBufferBarriers, 2 + buffer->pendingChanges.length))
+		D3D12_BARRIER_GROUP dependency = (D3D12_BARRIER_GROUP) { .Type = D3D12_BARRIER_TYPE_BUFFER };
 
 		if (allocRange >= 16 * MIBI) {		//Resource is too big, allocate dedicated staging resource
 
@@ -382,11 +323,8 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 			))
 
 			DeviceBuffer *stagingResource = DeviceBufferRef_ptr(tempStagingResource);
-			VkDeviceBuffer *stagingResourceExt = DeviceBuffer_ext(stagingResource, Vk);
+			DxDeviceBuffer *stagingResourceExt = DeviceBuffer_ext(stagingResource, Dx);
 			U8 *location = stagingResource->resource.mappedMemoryExt;
-
-			DeviceMemoryBlock block = device->allocator.blocks.ptr[stagingResource->resource.blockId];
-			Bool incoherent = !(block.allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
 			//Copy into our buffer
 
@@ -402,59 +340,42 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 					Buffer_createRefConst(buffer->cpuData.ptr + bufferj.startRange, len)
 				);
 
-				gotoIfError(clean, VkDeviceBuffer_transition(
-					bufferExt,
-					VK_PIPELINE_STAGE_2_COPY_BIT,
-					VK_ACCESS_2_TRANSFER_WRITE_BIT,
-					graphicsQueueId,
-					bufferj.startRange,
-					len,
-					&tempBufferBarriers,
+				gotoIfError(clean, DxDeviceBuffer_transition(
+					stagingResourceExt,
+					D3D12_BARRIER_SYNC_COPY,
+					D3D12_BARRIER_ACCESS_COPY_SOURCE,
+					0,
+					allocRange,
+					&deviceExt->bufferTransitions,
 					&dependency
 				))
 
-				pendingCopies.ptrNonConst[j] = (VkBufferCopy) {
-					.srcOffset = allocRange,
-					.dstOffset = bufferj.startRange,
-					.size = len
-				};
+				gotoIfError(clean, DxDeviceBuffer_transition(
+					bufferExt,
+					D3D12_BARRIER_SYNC_COPY,
+					D3D12_BARRIER_ACCESS_COPY_DEST,
+					bufferj.startRange,
+					len,
+					&deviceExt->bufferTransitions,
+					&dependency
+				))
+
+				if(dependency.NumBarriers) {
+					commandBuffer->lpVtbl->Barrier(commandBuffer, 1, &dependency);
+					ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions);
+				}
+
+				commandBuffer->lpVtbl->CopyBufferRegion(
+					commandBuffer,
+					bufferExt->buffer,
+					bufferj.startRange,
+					stagingResourceExt->buffer,
+					allocRange,
+					len
+				);
 
 				allocRange += len;
 			}
-
-			if(incoherent) {
-
-				VkMappedMemoryRange memoryRange = (VkMappedMemoryRange) {
-					.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
-					.memory = (VkDeviceMemory) block.ext,
-					.offset = stagingResource->resource.blockOffset,
-					.size = allocRange
-				};
-
-				vkFlushMappedMemoryRanges(deviceExt->device, 1, &memoryRange);
-			}
-
-			gotoIfError(clean, VkDeviceBuffer_transition(
-				stagingResourceExt,
-				VK_PIPELINE_STAGE_2_COPY_BIT,
-				VK_ACCESS_2_TRANSFER_READ_BIT,
-				graphicsQueueId,
-				0,
-				allocRange,
-				&tempBufferBarriers,
-				&dependency
-			))
-
-			if(dependency.bufferMemoryBarrierCount)
-				instanceExt->cmdPipelineBarrier2(commandBuffer, &dependency);
-
-			vkCmdCopyBuffer(
-				commandBuffer,
-				stagingResourceExt->buffer,
-				bufferExt->buffer,
-				(U32) pendingCopies.length,
-				pendingCopies.ptr
-			);
 
 			//When staging resource is committed to current in flight then we can relinquish ownership.
 
@@ -466,11 +387,9 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 
 		else {
 
-			gotoIfError(clean, ListVkBufferCopy_resizex(&pendingCopies, buffer->pendingChanges.length))
-
 			AllocationBuffer *stagingBuffer = &device->stagingAllocations[device->submitId % 3];
 			DeviceBuffer *staging = DeviceBufferRef_ptr(device->staging);
-			VkDeviceBuffer *stagingExt = DeviceBuffer_ext(staging, Vk);
+			DxDeviceBuffer *stagingExt = DeviceBuffer_ext(staging, Dx);
 
 			U8 *defaultLocation = (U8*) 1, *location = defaultLocation;
 			Error temp = AllocationBuffer_allocateBlockx(stagingBuffer, allocRange, 4, (const U8**) &location);
@@ -491,11 +410,8 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 				gotoIfError(clean, AllocationBuffer_allocateBlockx(stagingBuffer, allocRange, 4, (const U8**) &location))
 
 				staging = DeviceBufferRef_ptr(device->staging);
-				stagingExt = DeviceBuffer_ext(staging, Vk);
+				stagingExt = DeviceBuffer_ext(staging, Dx);
 			}
-
-			DeviceMemoryBlock block = device->allocator.blocks.ptr[staging->resource.blockId];
-			Bool incoherent = !(block.allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
 			//Copy into our buffer
 
@@ -511,65 +427,48 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 					Buffer_createRefConst(buffer->cpuData.ptr + bufferj.startRange, len)
 				);
 
-				pendingCopies.ptrNonConst[j] = (VkBufferCopy) {
-					.srcOffset = allocRange + (location - stagingBuffer->buffer.ptr),
-					.dstOffset = bufferj.startRange,
-					.size = len
-				};
-
-				gotoIfError(clean, VkDeviceBuffer_transition(
+				gotoIfError(clean, DxDeviceBuffer_transition(
 					bufferExt,
-					VK_PIPELINE_STAGE_2_COPY_BIT,
-					VK_ACCESS_2_TRANSFER_WRITE_BIT,
-					graphicsQueueId,
+					D3D12_BARRIER_SYNC_COPY,
+					D3D12_BARRIER_ACCESS_COPY_DEST,
 					bufferj.startRange,
 					len,
-					&tempBufferBarriers,
+					&deviceExt->bufferTransitions,
 					&dependency
 				))
+
+				if(!ListRefPtr_contains(*currentFlight, device->staging, 0, NULL)) {
+
+					gotoIfError(clean, DxDeviceBuffer_transition(						//Ensure resource is transitioned
+						stagingExt,
+						D3D12_BARRIER_SYNC_COPY,
+						D3D12_BARRIER_ACCESS_COPY_SOURCE,
+						(device->submitId % 3) * (staging->resource.size / 3),
+						staging->resource.size / 3,
+						&deviceExt->bufferTransitions,
+						&dependency
+					))
+
+					RefPtr_inc(device->staging);
+					gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, device->staging))		//Add to in flight
+				}
+
+				if(dependency.NumBarriers) {
+					commandBuffer->lpVtbl->Barrier(commandBuffer, 1, &dependency);
+					ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions);
+				}
+
+				commandBuffer->lpVtbl->CopyBufferRegion(
+					commandBuffer,
+					bufferExt->buffer,
+					bufferj.startRange,
+					stagingExt->buffer,
+					allocRange + (location - stagingBuffer->buffer.ptr),
+					len
+				);
 
 				allocRange += len;
 			}
-
-			if (incoherent) {
-
-				VkMappedMemoryRange memoryRange = (VkMappedMemoryRange) {
-					.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
-					.memory = (VkDeviceMemory) block.ext,
-					.offset = location - block.mappedMemory,
-					.size = allocRange
-				};
-
-				vkFlushMappedMemoryRanges(deviceExt->device, 1, &memoryRange);
-			}
-
-			if(!ListRefPtr_contains(*currentFlight, device->staging, 0, NULL)) {
-
-				gotoIfError(clean, VkDeviceBuffer_transition(						//Ensure resource is transitioned
-					stagingExt,
-					VK_PIPELINE_STAGE_2_COPY_BIT,
-					VK_ACCESS_2_TRANSFER_READ_BIT,
-					graphicsQueueId,
-					(device->submitId % 3) * (staging->resource.size / 3),
-					staging->resource.size / 3,
-					&tempBufferBarriers,
-					&dependency
-				))
-
-				RefPtr_inc(device->staging);
-				gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, device->staging))		//Add to in flight
-			}
-
-			if(dependency.bufferMemoryBarrierCount)
-				instanceExt->cmdPipelineBarrier2(commandBuffer, &dependency);
-
-			vkCmdCopyBuffer(
-				commandBuffer,
-				stagingExt->buffer,
-				bufferExt->buffer,
-				(U32) buffer->pendingChanges.length,
-				pendingCopies.ptr
-			);
 		}
 	}
 
@@ -583,13 +482,10 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 		gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, pending))
 
 	if (device->pendingBytes >= device->flushThreshold)
-		VkGraphicsDevice_flush(deviceRef, commandBuffer);
+		gotoIfError(clean, DxGraphicsDevice_flush(deviceRef, commandBuffer))
 
 clean:
+	ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions);
 	DeviceBufferRef_dec(&tempStagingResource);
-	ListVkMappedMemoryRange_freex(&tempMappedMemRanges);
-	ListVkBufferMemoryBarrier2_freex(&tempBufferBarriers);
-	ListVkBufferCopy_freex(&pendingCopies);
 	return err;
 }
-*/

@@ -323,7 +323,7 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 	//Ensure we don't exceed a maximum amount of time spent on the GPU
 
 	if (device->pendingPrimitives >= device->flushThresholdPrimitives)
-		VkGraphicsDevice_flush(deviceRef, commandBuffer);
+		gotoIfError(clean, VkGraphicsDevice_flush(deviceRef, commandBuffer))
 
 	blas->base.isCompleted = true;
 

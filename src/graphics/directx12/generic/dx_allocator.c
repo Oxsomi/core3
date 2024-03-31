@@ -30,116 +30,6 @@
 #include "types/math.h"
 #include "types/string.h"
 
-/*
-static const VkMemoryPropertyFlags host = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
-static const VkMemoryPropertyFlags coherent = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
-static const VkMemoryPropertyFlags local = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-
-Error VkDeviceMemoryAllocator_findMemory(
-	VkGraphicsDevice *deviceExt,
-	Bool cpuSided,
-	U32 memoryBits,
-	U32 *outMemoryId,
-	VkMemoryPropertyFlags *outPropertyFlags,
-	U64 *size
-) {
-
-	//Find suitable memory type
-
-	const VkMemoryPropertyFlags all = local | host | coherent;
-
-	VkMemoryPropertyFlags properties[3] = {			//Contains local if force cpu sided is turned off
-		host | coherent,
-		host,
-		0
-	};
-
-	U32 memoryId = U32_MAX;
-	U32 propertyId = 2;
-
-	U64 maxHeapSizes[2] = { 0 };
-	U32 heapIds[2] = { 0 };
-
-	for (U32 i = 0; i < deviceExt->memoryProperties.memoryHeapCount; ++i) {
-
-		VkMemoryHeap heap = deviceExt->memoryProperties.memoryHeaps[i];
-		heap.flags &= 1;														//OOB
-
-		if (heap.size > maxHeapSizes[heap.flags] && heap.size > 512 * MIBI) {	//Ignore 256MB to allow AMD APU to work.
-			maxHeapSizes[heap.flags] = heap.size;
-			heapIds[heap.flags] = i;
-		}
-	}
-
-	Bool distinct = true;
-	Bool hasLocal = true;
-
- 	if (!maxHeapSizes[0]) {						//If there's only local heaps then we know we're on mobile. Use local heap.
-		maxHeapSizes[0] = maxHeapSizes[1];
-		heapIds[0] = heapIds[1];
-		distinct = false;
-	}
-
-	else if (!maxHeapSizes[1]) {				//If there's only host heaps then we know we're on AMD APU. Use host heap.
-		maxHeapSizes[1] = maxHeapSizes[0];
-		heapIds[1] = heapIds[0];
-		distinct = false;
-		hasLocal = false;
-	}
-
-	if (!cpuSided) {
-
-		if(hasLocal)
-			for (U32 i = 0; i < 3; ++i)
-				properties[i] |= local;
-
-		++propertyId;
-	}
-
-	if (!maxHeapSizes[0] || !maxHeapSizes[1])
-		return Error_notFound(0, 0, "VkDeviceMemoryAllocator_findMemory() failed, no heaps found");
-
-	if (size) {
-		*size = (cpuSided ? maxHeapSizes[0] : maxHeapSizes[1]) | ((U64)distinct << 63);
-		return Error_none();
-	}
-
-	//Allocate from the heaps we selected
-
-	for (U32 i = 0; i < deviceExt->memoryProperties.memoryTypeCount; ++i) {
-
-		if(!((memoryBits >> i) & 1))
-			continue;
-
-		const VkMemoryType type = deviceExt->memoryProperties.memoryTypes[i];
-
-		if(type.heapIndex != heapIds[0] && type.heapIndex != heapIds[1])
-			continue;
-
-		const VkMemoryPropertyFlags propFlag = type.propertyFlags;
-
-		for(U32 j = 0; j < propertyId; ++j) {
-
-			if ((propFlag & all) == properties[j]) {
-				propertyId = j;
-				memoryId = i;
-				break;
-			}
-		}
-
-		if(!propertyId)
-			break;
-	}
-
-	if (memoryId == U32_MAX)
-		return Error_notFound(1, 0, "VkDeviceMemoryAllocator_findMemory() found no suitable memoryId");
-
-	*outMemoryId = memoryId;
-	*outPropertyFlags = properties[propertyId];
-
-	return Error_none();
-}
-
 Error DeviceMemoryAllocator_allocate(
 	DeviceMemoryAllocator *allocator,
 	void *requirementsExt,
@@ -158,21 +48,16 @@ Error DeviceMemoryAllocator_allocate(
 			"DeviceMemoryAllocator_allocate()::allocator, requirementsExt, blockId and blockOffset are required"
 		);
 
-	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(allocator->device, Vk);
-	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(GraphicsInstanceRef_ptr(allocator->device->instance), Vk);
+	GraphicsDevice *device = allocator->device;
+	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
+	Bool hasReBAR = device->info.capabilities.featuresExt & EDxGraphicsFeatures_ReBAR;
+	Bool isGpu = device->info.type == EGraphicsDeviceType_Dedicated;
 
-	(void)instanceExt;
+	if(!isGpu)				//Force shared allocations if not dedicated
+		cpuSided = false;
 
-	VkMemoryRequirements2 req = *(VkMemoryRequirements2*) requirementsExt;
-	VkMemoryRequirements memReq = req.memoryRequirements;
-	VkMemoryDedicatedRequirements dedicated = *(VkMemoryDedicatedRequirements*) req.pNext;
-
-	//When block count hits 1999 that means there were at least 2000 memory objects (+1 UBO)
-	//After that, the allocator should be more conservative for dedicating separate memory blocks.
-	//Most devices only support up to 4000 memory objects.
-
-	Bool isDedicated = dedicated.requiresDedicatedAllocation;
-	isDedicated |= dedicated.prefersDedicatedAllocation && allocator->blocks.length < 2000;
+	DxBlockRequirements req = *(DxBlockRequirements*) requirementsExt;
+	Bool isDedicated = req.flags & EDxBlockFlags_IsDedicated;
 
 	//Find an existing allocation
 
@@ -185,19 +70,14 @@ Error DeviceMemoryAllocator_allocate(
 			if(
 				!block->ext ||
 				block->isDedicated ||
-				(block->typeExt & memReq.memoryTypeBits) != memReq.memoryTypeBits ||
-				(Bool)(block->allocationTypeExt & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) != !cpuSided ||
+				(Bool)(block->allocationTypeExt & 1) != !cpuSided ||
+				block->typeExt != req.alignment ||						//Alignment is baked into heap
 				block->resourceType != resourceType
 			)
 				continue;
 
-			U64 tempAlignment = memReq.alignment;
-
-			if(!(block->allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT))		//Adhere to memory requirements
-				tempAlignment = U64_max(256, tempAlignment);
-
 			const U8 *alloc = NULL;
-			Error err = AllocationBuffer_allocateBlockx(&block->allocations, memReq.size, tempAlignment, &alloc);
+			const Error err = AllocationBuffer_allocateBlockx(&block->allocations, req.length, req.alignment, &alloc);
 
 			if(err.genericError)
 				continue;
@@ -210,53 +90,65 @@ Error DeviceMemoryAllocator_allocate(
 
 	//Allocate memory
 
-	U32 memoryId = 0;
-	VkMemoryPropertyFlags prop = 0;
-	Error err = VkDeviceMemoryAllocator_findMemory(
-		deviceExt, cpuSided, memReq.memoryTypeBits, &memoryId, &prop, NULL
-	);
+	U64 realBlockSize = (U64_max(blockSize, req.length * 2) + blockSize - 1) / blockSize * blockSize;
+
+	if(isDedicated)
+		realBlockSize = req.length;
+
+	DeviceMemoryBlock block = (DeviceMemoryBlock) { 0 };
+	CharString temp = CharString_createNull();
+	ListU16 temp16 = (ListU16) { 0 };
+
+	D3D12_HEAP_DESC heapDesc = (D3D12_HEAP_DESC) {
+		.SizeInBytes = realBlockSize,
+		.Properties = (D3D12_HEAP_PROPERTIES) {
+			.Type = cpuSided ? D3D12_HEAP_TYPE_UPLOAD : (hasReBAR ? D3D12_HEAP_TYPE_GPU_UPLOAD : D3D12_HEAP_TYPE_DEFAULT),
+			.CPUPageProperty = cpuSided ? D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE : D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE,
+			.MemoryPoolPreference = cpuSided ? D3D12_MEMORY_POOL_L0 : D3D12_MEMORY_POOL_L1
+		},
+		.Alignment = req.alignment,
+	};
+
+	switch(resourceType) {
+
+		case EResourceType_DeviceTexture:
+			heapDesc.Flags |= D3D12_HEAP_FLAG_ALLOW_ONLY_NON_RT_DS_TEXTURES;
+			break;
+
+		case EResourceType_RenderTargetOrDepthStencil:
+			heapDesc.Flags |= D3D12_HEAP_FLAG_ALLOW_ONLY_RT_DS_TEXTURES;
+			break;
+
+	case EResourceType_DeviceBuffer:
+
+			heapDesc.Flags |= 
+				D3D12_HEAP_FLAG_ALLOW_ONLY_BUFFERS | (!cpuSided || !isGpu ? D3D12_HEAP_FLAG_ALLOW_SHADER_ATOMICS : 0);
+
+			break;
+	}
+
+	if(cpuSided)
+		heapDesc.Flags |= D3D12_HEAP_FLAG_SHARED;
+
+	ID3D12Heap *heap = NULL;
+	Error err = dxCheck(deviceExt->device->lpVtbl->CreateHeap(
+		deviceExt->device, &heapDesc, &IID_ID3D12Heap, (void**) &heap
+	));
 
 	if(err.genericError)
 		return err;
 
-	U64 realBlockSize = (U64_max(blockSize, memReq.size * 2) + blockSize - 1) / blockSize * blockSize;
-
-	VkMemoryAllocateFlagsInfo allocNext = (VkMemoryAllocateFlagsInfo) {
-		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO,
-		.flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT
-	};
-
-	VkMemoryAllocateInfo alloc = (VkMemoryAllocateInfo) {
-		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-		.pNext = resourceType == EResourceType_DeviceBuffer ? &allocNext : NULL,
-		.allocationSize = isDedicated ? memReq.size : realBlockSize,
-		.memoryTypeIndex = memoryId
-	};
-
-	VkDeviceMemory mem = NULL;
-	DeviceMemoryBlock block = (DeviceMemoryBlock) { 0 };
-	CharString temp = CharString_createNull();
-
-	if((err = vkCheck(vkAllocateMemory(deviceExt->device, &alloc, NULL, &mem))).genericError)
-		return err;
-
-	void *mappedMem = NULL;
-
-	if(prop & host)
-		gotoIfError(clean, vkCheck(vkMapMemory(deviceExt->device, mem, 0, alloc.allocationSize, 0, &mappedMem)))
-
 	//Initialize block
 
 	block = (DeviceMemoryBlock) {
-		.typeExt = memReq.memoryTypeBits,
-		.allocationTypeExt = (U16) prop,
+		.typeExt = req.alignment,			//Only place things with the same alignment in this block
+		.allocationTypeExt = !cpuSided,		//Don't share dedicated and non dedicated allocations
 		.isDedicated = isDedicated,
-		.mappedMemory = mappedMem,
-		.ext = mem,
+		.ext = heap,
 		.resourceType = (U8) resourceType
 	};
 
-	gotoIfError(clean, AllocationBuffer_createx(alloc.allocationSize, true, &block.allocations))
+	gotoIfError(clean, AllocationBuffer_createx(realBlockSize, true, &block.allocations))
 
 	if(device->flags & EGraphicsDeviceFlags_IsDebug)
 		Log_captureStackTracex(block.stackTrace, sizeof(block.stackTrace) / sizeof(void*), 1);
@@ -270,7 +162,7 @@ Error DeviceMemoryAllocator_allocate(
 			break;
 
 	const U8 *allocLoc = NULL;
-	gotoIfError(clean, AllocationBuffer_allocateBlockx(&block.allocations, memReq.size, memReq.alignment, &allocLoc))
+	gotoIfError(clean, AllocationBuffer_allocateBlockx(&block.allocations, req.length, req.alignment, &allocLoc))
 
 	if(i == allocator->blocks.length) {
 
@@ -285,53 +177,43 @@ Error DeviceMemoryAllocator_allocate(
 	*blockId = (U32) i;
 	*blockOffset = (U64) allocLoc;
 
-	if(CharString_length(objectName) && (device->flags & EGraphicsDeviceFlags_IsDebug) && instanceExt->debugSetName) {
+	if(CharString_length(objectName) && (device->flags & EGraphicsDeviceFlags_IsDebug)) {
 
 		gotoIfError(clean, CharString_formatx(
 			&temp,
 			isDedicated ? "Memory block %"PRIu32" (host: %s, coherent: %s, device: %s): %s" :
-			"Memory block %"PRIu32" (host: %s, coherent: %s, device: %s)",
+			"Memory block %"PRIu32" (host: %s, device: %s)",
 			(U32) i,
-			prop & host ? "true" : "false",
-			prop & coherent ? "true" : "false",
-			prop & local ? "true" : "false",
+			cpuSided ? "true" : "false",
+			hasReBAR || !cpuSided ? "true" : "false",
 			objectName.ptr
 		))
 
-		VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
-			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-			.objectType = VK_OBJECT_TYPE_DEVICE_MEMORY,
-			.pObjectName = temp.ptr,
-			.objectHandle = (U64) mem
-		};
-
-		gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName)))
+		gotoIfError(clean, CharString_toUtf16x(temp, &temp16));
+		gotoIfError(clean, dxCheck(heap->lpVtbl->SetName(heap, temp16.ptr)))
 		CharString_freex(&temp);
 	}
 
 clean:
 
+	ListU16_freex(&temp16);
 	CharString_freex(&temp);
 
 	if(err.genericError) {
 		AllocationBuffer_freex(&block.allocations);
-		vkFreeMemory(deviceExt->device, mem, NULL);
+		heap->lpVtbl->Release(heap);
 	}
 
 	return err;
-}*/
+}
 
 Bool DeviceMemoryAllocator_freeAllocationExt(GraphicsDevice *device, void *ext) {
 
-	if(!device || !ext)
+	(void)device;
+
+	if(!ext)
 		return false;
 
+	((ID3D12Heap*)ext)->lpVtbl->Release((ID3D12Heap*)ext);
 	return true;
 }
-
-/*
-	const VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
-	vkFreeMemory(deviceExt->device, (VkDeviceMemory) ext, NULL);
-	return true;
-}
-*/

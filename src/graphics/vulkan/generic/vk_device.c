@@ -943,6 +943,9 @@ Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext) {
 	ListVkBufferMemoryBarrier2_freex(&deviceExt->bufferTransitions);
 	ListVkImageMemoryBarrier2_freex(&deviceExt->imageTransitions);
 	ListVkImageCopy_freex(&deviceExt->imageCopyRanges);
+	ListVkMappedMemoryRange_freex(&deviceExt->mappedMemoryRange);
+	ListVkBufferImageCopy_freex(&deviceExt->bufferImageCopyRanges);
+	ListVkBufferCopy_freex(&deviceExt->bufferCopies);
 
 	return true;
 }

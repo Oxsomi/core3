@@ -111,7 +111,7 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 	if(blas->base.flagsExt & EBLASFlag_AvoidDuplicateAnyHit)
 		geometry.Flags |= D3D12_RAYTRACING_GEOMETRY_FLAG_NO_DUPLICATE_ANYHIT_INVOCATION;
 
-	D3D12_BARRIER_GROUP dep = (D3D12_BARRIER_GROUP) { 0 };
+	D3D12_BARRIER_GROUP dep = (D3D12_BARRIER_GROUP) { .Type = D3D12_BARRIER_TYPE_BUFFER };
 
 	if(blas->base.asConstructionType == EBLASConstructionType_Geometry) {
 
@@ -269,7 +269,7 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 	//Ensure we don't exceed a maximum amount of time spent on the GPU
 
 	if (device->pendingPrimitives >= device->flushThresholdPrimitives)
-		DxGraphicsDevice_flush(deviceRef, commandBuffer);
+		gotoIfError(clean, DxGraphicsDevice_flush(deviceRef, commandBuffer))
 
 	blas->base.isCompleted = true;
 

@@ -113,6 +113,9 @@ typedef struct VkGraphicsDevice {
 	ListVkBufferMemoryBarrier2 bufferTransitions;
 	ListVkImageMemoryBarrier2 imageTransitions;
 	ListVkImageCopy imageCopyRanges;
+	ListVkBufferImageCopy bufferImageCopyRanges;
+	ListVkMappedMemoryRange mappedMemoryRange;
+	ListVkBufferCopy bufferCopies;
 
 } VkGraphicsDevice;
 

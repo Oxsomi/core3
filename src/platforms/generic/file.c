@@ -77,7 +77,7 @@
 
 		ListU16 utf8 = (ListU16) { 0 };
 
-		if (CharString_toUTF16x(str, &utf8).genericError)
+		if (CharString_toUtf16x(str, &utf8).genericError)
 			return -1;
 
 		const I32 res = RemoveDirectoryW((const wchar_t*)utf8.ptr) ? 0 : -1;

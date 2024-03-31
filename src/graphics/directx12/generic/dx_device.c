@@ -1293,6 +1293,8 @@ Error GraphicsDevice_submitCommandsImpl(
 		gotoIfError(clean, GraphicsDeviceRef_handleNextFrame(deviceRef, commandBuffer))
 
 		VkCommandBufferState state = (VkCommandBufferState) { .buffer = commandBuffer };
+		state.tempPrimitiveTopology = U8_MAX;
+		state.tempStencilRef = 0;
 
 		//Ensure ubo and staging buffer are the correct states
 

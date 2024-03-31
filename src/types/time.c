@@ -236,6 +236,9 @@ Ns Time_date(U16 year, U8 month, U8 day, U8 hour, U8 minute, U8 second, U32 ns, 
 		.tm_hour = hour, .tm_min = minute, .tm_sec = second
 	};
 
+	if(isLocalTime)
+		tm.tm_isdst = -1;		//Lookup if daylight savings time is active
+
 	const time_t ts = isLocalTime ? mktime(&tm) : timegm(&tm);
 
 	if (ts == (time_t)-1 || (U64)ts * SECOND + ns < (U64)ts)

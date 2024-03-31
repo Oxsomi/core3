@@ -413,7 +413,7 @@ void CommandList_process(
 
 		case ECommandOp_EndRenderingExt: {
 
-			D3D12_BARRIER_GROUP deps = { 0 };		//image, buffer
+			D3D12_BARRIER_GROUP deps = { .Type = D3D12_BARRIER_TYPE_TEXTURE };
 
 			//All DSVs and RTVs to the correct state
 
@@ -852,7 +852,10 @@ void CommandList_process(
 
 		case ECommandOp_StartScope: {
 
-			D3D12_BARRIER_GROUP dep[2] = { 0 };		//image, buffer
+			D3D12_BARRIER_GROUP dep[2] = {
+				(D3D12_BARRIER_GROUP) { .Type = D3D12_BARRIER_TYPE_TEXTURE },
+				(D3D12_BARRIER_GROUP) { .Type = D3D12_BARRIER_TYPE_BUFFER }
+			};
 
 			CommandScope scope = commandList->activeScopes.ptr[temp->scopeCounter];
 			++temp->scopeCounter;

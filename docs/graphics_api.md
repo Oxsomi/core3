@@ -11,6 +11,14 @@ The core pillars of the abstraction of this graphics library are the following:
 - Allow modern usage of these APIs such as raytracing and bindless.
 - Support various systems such as Android, Apple, Windows and Linux (console should be kept in mind, though not officially supported).
 
+## Getting started
+
+Before getting started, there needs to be a header file included in the main entrypoint. Not including this will result in linker errors. This is to prevent the user from running without the Agility SDK, which requires certain symbols to be injected into the main executable. This header file should only be included into the main exe/apk, it should not be linked into a dynamic or static lib!
+
+```c
+#include "graphics/generic/application.h" //Enables proper OxC3 graphics support
+```
+
 ## Ref counting
 
 OxC3 graphics works in a similar way as DirectX's ref counting system; everything is ref counted. This allows you to just call `RefPtr_dec` on the RefPtr to ensure it's properly released. If the command list is still in flight, it will maintain this resource until it's out of flight. It also allows you to safely share resources between user libraries without worrying about resource deletion. When sharing a resource, you simply increment the refptr by using `RefPtr_inc` and when the library is done using it can decrement it again. This concept was added in OxC3 platforms, but widely used in the graphics library.

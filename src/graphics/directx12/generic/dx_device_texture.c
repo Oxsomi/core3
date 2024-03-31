@@ -53,7 +53,6 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 
 	Error err = Error_none();
 	ListVkMappedMemoryRange tempMappedMemRanges = { 0 };
-	ListVkBufferMemoryBarrier2 tempBufferBarriers = { 0 };
 	ListVkImageMemoryBarrier2 tempImageBarriers = { 0 };
 
 	ListRefPtr *currentFlight = &device->resourcesInFlight[device->submitId % 3];
@@ -90,7 +89,7 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 	gotoIfError(clean, ListVkBufferImageCopy_resizex(&pendingCopies, texture->pendingChanges.length))
 
 	VkDependencyInfo dependency = (VkDependencyInfo) { .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO };
-	gotoIfError(clean, ListVkBufferMemoryBarrier2_reservex(&tempBufferBarriers, 2 + texture->pendingChanges.length))
+	gotoIfError(clean, ListVkBufferMemoryBarrier2_reservex(&deviceExt->bufferTransitions, 2 + texture->pendingChanges.length))
 
 	U8 alignmentX = 1, alignmentY = 1;
 	ETextureFormat_getAlignment(format, &alignmentX, &alignmentY);
@@ -188,7 +187,7 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 			graphicsQueueId,
 			0,
 			allocRange,
-			&tempBufferBarriers,
+			&deviceExt->bufferTransitions,
 			&dependency
 		))
 
@@ -342,7 +341,7 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 				graphicsQueueId,
 				(device->submitId % 3) * (staging->resource.size / 3),
 				staging->resource.size / 3,
-				&tempBufferBarriers,
+				&deviceExt->bufferTransitions,
 				&dependency
 			))
 
@@ -390,12 +389,12 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 		gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, pending))
 
 	if (device->pendingBytes >= device->flushThreshold)
-		VkGraphicsDevice_flush(deviceRef, commandBuffer);
+		gotoIfError(clean, VkGraphicsDevice_flush(deviceRef, commandBuffer))
 
 clean:
 	DeviceBufferRef_dec(&tempStagingResource);
 	ListVkMappedMemoryRange_freex(&tempMappedMemRanges);
-	ListVkBufferMemoryBarrier2_freex(&tempBufferBarriers);
+	ListVkBufferMemoryBarrier2_clear(&deviceExt->bufferTransitions);
 	ListVkImageMemoryBarrier2_freex(&tempImageBarriers);
 	ListVkBufferImageCopy_freex(&pendingCopies);
 	return err;

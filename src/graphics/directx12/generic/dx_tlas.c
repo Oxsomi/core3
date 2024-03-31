@@ -99,7 +99,7 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 		.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY
 	};
 
-	D3D12_BARRIER_GROUP dep = (D3D12_BARRIER_GROUP) { 0 };
+	D3D12_BARRIER_GROUP dep = (D3D12_BARRIER_GROUP) { .Type = D3D12_BARRIER_TYPE_BUFFER };
 
 	if(tlas->base.asConstructionType == ETLASConstructionType_Instances) {
 

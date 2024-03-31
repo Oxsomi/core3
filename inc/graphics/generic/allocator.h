@@ -38,7 +38,7 @@ typedef struct DeviceMemoryBlock {
 	U8 resourceType;				//EResourceType
 	U16 allocationTypeExt;			//Allocation type flags (e.g. host visible)
 
-	U8 *mappedMemory;
+	U8 *mappedMemoryExt;			//Not always available, can be done on a resource basis
 
 	void *ext;						//Extended data
 

@@ -1113,7 +1113,12 @@ Error CommandListRef_setRaytracingPipeline(CommandListRef *commandList, Pipeline
 	return CommandListRef_setPipeline(commandList, pipeline, EPipelineType_RaytracingExt);
 }
 
-Error CommandListRef_validateBufferDesc(GraphicsDeviceRef *device, DeviceBufferRef *buffer, EDeviceBufferUsage usage) {
+Error CommandListRef_validateBufferDesc(
+	GraphicsDeviceRef *device, 
+	DeviceBufferRef *buffer, 
+	EDeviceBufferUsage usage,
+	U64 maxSize
+) {
 
 	if(!buffer)
 		return Error_none();
@@ -1133,6 +1138,12 @@ Error CommandListRef_validateBufferDesc(GraphicsDeviceRef *device, DeviceBufferR
 			2, "CommandListRef_validateBufferDesc()::buffer is missing required usage flag"
 		);
 
+	if(buf->resource.size > maxSize)
+		return Error_outOfBounds(
+			1, buf->resource.size, maxSize, 
+			"CommandListRef_validateBufferDesc()::buffer is bigger than max limit"
+		);
+
 	return Error_none();
 }
 
@@ -1148,13 +1159,15 @@ Error CommandListRef_setPrimitiveBuffers(CommandListRef *commandListRef, SetPrim
 	//Validate index and vertex buffers
 
 	GraphicsDeviceRef *device = commandList->device;
-	gotoIfError(clean, CommandListRef_validateBufferDesc(device, buffers.indexBuffer, EDeviceBufferUsage_Index))
+	gotoIfError(clean, CommandListRef_validateBufferDesc(device, buffers.indexBuffer, EDeviceBufferUsage_Index, U32_MAX))
 
 	if(err.genericError)
 		return err;
 
 	for(U8 i = 0; i < 8; ++i)
-		gotoIfError(clean, CommandListRef_validateBufferDesc(device, buffers.vertexBuffers[i], EDeviceBufferUsage_Vertex))
+		gotoIfError(clean, CommandListRef_validateBufferDesc(
+			device, buffers.vertexBuffers[i], EDeviceBufferUsage_Vertex, U32_MAX
+		))
 
 	//Transition
 
@@ -1222,6 +1235,11 @@ Error CommandListRef_draw(CommandListRef *commandListRef, DrawCmd draw) {
 
 	if(!draw.count || !draw.instanceCount)		//No-op
 		return Error_none();
+
+	if(draw.vertexOffset >> 31)
+		return Error_outOfBounds(
+			1, draw.vertexOffset, (U32)I32_MAX, "CommandListRef_draw() vertexOffset out of bounds"
+		);
 
 	return CommandListRef_drawBase(commandListRef, Buffer_createRefConst(&draw, sizeof(draw)), ECommandOp_Draw);
 }
@@ -1591,7 +1609,8 @@ Error CommandListRef_startRenderExt(
 				.range = depthStencil.range,
 				.image = depthStencil.image,
 				.resolveImage = depthStencil.resolveImage,
-				.resolveRange = depthStencil.resolveImageRange
+				.resolveRange = depthStencil.resolveImageRange,
+				.resolveMode = depthStencil.depthStencilResolve
 			};
 
 		else info = colors.ptr[i];
@@ -1615,6 +1634,11 @@ Error CommandListRef_startRenderExt(
 			gotoIfError(clean, Error_outOfBounds(
 				4, info.range.levelId >= 1 ? info.range.levelId : info.range.layerId, 1,
 				"CommandListRef_startRenderExt() image range.levelId or layerId is invalid"
+			))
+
+		if(info.readOnly && info.load == ELoadAttachmentType_Clear)
+			gotoIfError(clean, Error_unsupportedOperation(
+				7, "CommandListRef_startRenderExt() render target is set as clear but also read only"
 			))
 
 		//Check generic properties like devices
@@ -1795,6 +1819,16 @@ Error CommandListRef_startRenderExt(
 
 	if(depthStencil.stencilReadOnly)
 		startRender->flags |= EStartRenderFlags_StencilReadOnly;
+
+	if(depthStencil.stencilReadOnly && depthStencil.stencilLoad == ELoadAttachmentType_Clear)
+		gotoIfError(clean, Error_invalidOperation(
+			6, "CommandListRef_startRenderExt()::stencil was set to clear but was readonly"
+		))
+
+	if(depthStencil.depthReadOnly && depthStencil.depthLoad == ELoadAttachmentType_Clear)
+		gotoIfError(clean, Error_invalidOperation(
+			6, "CommandListRef_startRenderExt()::depth was set to clear but was readonly"
+		))
 
 	if(!depthStencil.image && (depthStencil.range.layerId || depthStencil.range.levelId || startRender->flags))
 		gotoIfError(clean, Error_invalidOperation(

@@ -841,7 +841,7 @@ Error Window_updatePhysicalTitle(const Window *w, CharString title) {
 		);
 
 	ListU16 name = (ListU16) { 0 };
-	Error err = CharString_toUTF16x(title, &name);
+	Error err = CharString_toUtf16x(title, &name);
 
 	if (err.genericError)
 		return err;
@@ -992,7 +992,7 @@ impl Error WindowManager_createWindowPhysical(Window *w) {
 	//Our strings are UTF8, but windows wants UTF16
 
 	ListU16 tmp = (ListU16) { 0 };
-	gotoIfError(clean, CharString_toUTF16x(w->title, &tmp))
+	gotoIfError(clean, CharString_toUtf16x(w->title, &tmp))
 
 	const HWND nativeWindow = CreateWindowExW(
 		WS_EX_APPWINDOW, wc.lpszClassName, (const wchar_t*) tmp.ptr, style,

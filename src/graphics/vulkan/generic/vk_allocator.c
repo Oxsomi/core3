@@ -251,7 +251,7 @@ Error DeviceMemoryAllocator_allocate(
 		.typeExt = memReq.memoryTypeBits,
 		.allocationTypeExt = (U16) prop,
 		.isDedicated = isDedicated,
-		.mappedMemory = mappedMem,
+		.mappedMemoryExt = mappedMem,
 		.ext = mem,
 		.resourceType = (U8) resourceType
 	};

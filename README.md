@@ -154,6 +154,8 @@ The graphics API is built around modern APIs. So it won't be supporting OpenGL, 
 
 For the graphics minimum spec check the [minimum spec](graphics_spec.md).
 
+To use the graphics API, make sure that all entrypoints that use it link to it properly by including it: `#include "graphics/generic/application.h"`. This must be done in the real executable and not the DLL or lib/so file, or else not all graphics features might be activated (required for proper D3D12 support: Agility SDK).
+
 ## Contributions
 
 To contribute to this repository, you agree to the [contribution guidelines](FOR_CONTRIBUTORS.md). Before merging a PR as an external party, you have to sign a contributor license agreement.

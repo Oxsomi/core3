@@ -333,7 +333,7 @@ Error CharString_createFromUTF16x(const U16 *ptr, U64 max, CharString *result) {
 	return CharString_createFromUTF16(ptr, max, Platform_instance.alloc, result);
 }
 
-Error CharString_toUTF16x(CharString s, ListU16 *arr) {
+Error CharString_toUtf16x(CharString s, ListU16 *arr) {
 	return CharString_toUtf16(s, Platform_instance.alloc, arr);
 }
 

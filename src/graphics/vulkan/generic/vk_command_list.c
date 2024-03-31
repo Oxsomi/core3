@@ -904,13 +904,23 @@ void CommandList_process(
 
 				if(isImage) {
 
+					const UnifiedTexture utex = TextureRef_getUnifiedTexture(transition.resource, NULL);
 					VkUnifiedTexture *imageExt = TextureRef_getCurrImgExtT(transition.resource, Vk, 0);
 
 					VkImageSubresourceRange range = (VkImageSubresourceRange) {		//TODO:
-						.aspectMask = isDepthStencil ? VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT : VK_IMAGE_ASPECT_COLOR_BIT,
+						.aspectMask = isDepthStencil ? 0 : VK_IMAGE_ASPECT_COLOR_BIT,
 						.levelCount = 1,
 						.layerCount = 1
 					};
+
+					if(isDepthStencil) {
+
+						if(utex.depthFormat >= EDepthStencilFormat_StencilStart)
+							range.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
+
+						if(utex.depthFormat != EDepthStencilFormat_S8Ext)
+							range.aspectMask |= VK_IMAGE_ASPECT_DEPTH_BIT;
+					}
 
 					gotoIfError(nextTransition, VkUnifiedTexture_transition(
 

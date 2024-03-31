@@ -30,6 +30,46 @@ typedef struct DxUnifiedTexture {
 	D3D12_BARRIER_LAYOUT lastLayout;
 } DxUnifiedTexture;
 
+typedef enum EDxBlockFlags {
+	EDxBlockFlags_None				= 0,
+	EDxBlockFlags_IsDedicated		= 1 << 0
+} EDxBlockFlags;
+
+enum EDescriptorTypeOffsets {
+
+	EDescriptorTypeOffsets_Texture2D		= 0,
+	EDescriptorTypeOffsets_TextureCube		= EDescriptorTypeOffsets_Texture2D + EDescriptorTypeCount_Texture2D,
+	EDescriptorTypeOffsets_Texture3D		= EDescriptorTypeOffsets_TextureCube + EDescriptorTypeCount_TextureCube,
+	EDescriptorTypeOffsets_Buffer			= EDescriptorTypeOffsets_Texture3D + EDescriptorTypeCount_Texture3D,
+	EDescriptorTypeOffsets_TLASExt			= EDescriptorTypeOffsets_Buffer + EDescriptorTypeCount_Buffer,
+
+	EDescriptorTypeOffsets_RWBuffer			= EDescriptorTypeOffsets_TLASExt + EDescriptorTypeCount_TLASExt,
+	EDescriptorTypeOffsets_RWTexture3D		= EDescriptorTypeOffsets_RWBuffer + EDescriptorTypeCount_RWBuffer,
+	EDescriptorTypeOffsets_RWTexture3Ds		= EDescriptorTypeOffsets_RWTexture3D + EDescriptorTypeCount_RWTexture3D,
+	EDescriptorTypeOffsets_RWTexture3Df		= EDescriptorTypeOffsets_RWTexture3Ds + EDescriptorTypeCount_RWTexture3Ds,
+	EDescriptorTypeOffsets_RWTexture3Di		= EDescriptorTypeOffsets_RWTexture3Df + EDescriptorTypeCount_RWTexture3Df,
+	EDescriptorTypeOffsets_RWTexture3Du		= EDescriptorTypeOffsets_RWTexture3Di + EDescriptorTypeCount_RWTexture3Di,
+	EDescriptorTypeOffsets_RWTexture2D		= EDescriptorTypeOffsets_RWTexture3Du + EDescriptorTypeCount_RWTexture3Du,
+	EDescriptorTypeOffsets_RWTexture2Ds		= EDescriptorTypeOffsets_RWTexture2D + EDescriptorTypeCount_RWTexture2D,
+	EDescriptorTypeOffsets_RWTexture2Df		= EDescriptorTypeOffsets_RWTexture2Ds + EDescriptorTypeCount_RWTexture2Ds,
+	EDescriptorTypeOffsets_RWTexture2Di		= EDescriptorTypeOffsets_RWTexture2Df + EDescriptorTypeCount_RWTexture2Df,
+	EDescriptorTypeOffsets_RWTexture2Du		= EDescriptorTypeOffsets_RWTexture2Di + EDescriptorTypeCount_RWTexture2Di,
+
+	EDescriptorTypeOffsets_Count			= EDescriptorTypeOffsets_RWTexture2Du + EDescriptorTypeCount_RWTexture2Du,
+
+	EDescriptorTypeOffsets_Sampler			= 0
+
+} EDescriptorTypeOffsets;
+
+typedef struct DxBlockRequirements {
+
+	EDxBlockFlags flags;
+	U32 alignment;
+
+	U64 length;
+
+} DxBlockRequirements;
+
 typedef enum ECompareOp ECompareOp;
 
 typedef union DxPipeline {
@@ -39,7 +79,8 @@ typedef union DxPipeline {
 		ID3D12StateObjectProperties *stateObjectProps;
 	};
 
-	ID3D12PipelineState *pso;			//For graphics & compute shaders
+	ID3D12PipelineState *pso;							//For graphics & compute shaders
+
 } DxPipeline;
 
 typedef struct DxBLAS {

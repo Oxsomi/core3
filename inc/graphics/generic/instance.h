@@ -31,13 +31,18 @@ typedef struct GraphicsApplicationInfo {
 	U32 version, padding;
 } GraphicsApplicationInfo;
 
+#define GRAPHICS_API_VULKAN 0
+#define GRAPHICS_API_D3D12 1
+
 typedef enum EGraphicsApi {
-	EGraphicsApi_Vulkan,
-	EGraphicsApi_DirectX12,
+	EGraphicsApi_Vulkan			= GRAPHICS_API_VULKAN,
+	EGraphicsApi_DirectX12		= GRAPHICS_API_D3D12,
 	//EGraphicsApi_Metal,
 	//EGraphicsApi_WebGPU,
 	EGraphicsApi_Count
 } EGraphicsApi;
+
+user_impl extern const U32 GraphicsInstance_verificationVersion;		//Set by "graphics/generic/application.h"
 
 typedef enum EGraphicsInstanceFlags {
 	EGraphicsInstanceFlags_None				= 0,
@@ -54,7 +59,7 @@ typedef struct GraphicsInstance {
 	U32 apiVersion;
 
 	EGraphicsInstanceFlags flags;
-	U32 padding;
+	U32 verificationVersion;
 
 } GraphicsInstance;
 

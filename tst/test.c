@@ -114,7 +114,7 @@ int main() {
 
 	Time_format(now, nowStr, true);
 
-	if (!(Time_parseFormat(&now2, nowStr, true))  || now2 != now) {
+	if (!(Time_parseFormat(&now2, nowStr, true)) || now2 != now) {
 		Log_errorLn(alloc, "Failed unit test: Time_parseFormat or Time_format (local time) is broken");
 		return 2;
 	}

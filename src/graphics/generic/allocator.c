@@ -45,7 +45,7 @@ Bool DeviceMemoryAllocator_freeAllocation(DeviceMemoryAllocator *allocator, U32 
 		AllocationBuffer_freex(&block->allocations);
 		DeviceMemoryAllocator_freeAllocationExt(allocator->device, block->ext);
 		block->ext = NULL;
-		block->mappedMemory = NULL;
+		block->mappedMemoryExt = NULL;
 	}
 
 	if(blockId + 1 == allocator->blocks.length)

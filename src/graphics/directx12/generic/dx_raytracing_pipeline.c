@@ -160,11 +160,11 @@ Error GraphicsDevice_createPipelinesRaytracingInternalExt(
 		for(U32 j = 0; j < rtPipeline->stageCount; ++j) {
 
 			gotoIfError(clean, CharString_formatx(&tmp, "#%"PRIu32, j))
-			gotoIfError(clean, CharString_toUTF16x(tmp, &nameArr.ptrNonConst[j * 2]));
+			gotoIfError(clean, CharString_toUtf16x(tmp, &nameArr.ptrNonConst[j * 2]));
 			tmp = CharString_createNull();		//Moved to nameArr
 
 			if(rtPipeline->entrypoints.length && CharString_length(rtPipeline->entrypoints.ptr[j]))
-				gotoIfError(clean, CharString_toUTF16x(rtPipeline->entrypoints.ptr[j], &nameArr.ptrNonConst[j * 2 + 1]))
+				gotoIfError(clean, CharString_toUtf16x(rtPipeline->entrypoints.ptr[j], &nameArr.ptrNonConst[j * 2 + 1]))
 
 			else nameArr.ptrNonConst[j * 2 + 1] = mainUtf16;
 
@@ -236,7 +236,7 @@ Error GraphicsDevice_createPipelinesRaytracingInternalExt(
 
 			if(j >= rtPipeline->stageCount) {
 				gotoIfError(clean, CharString_formatx(&tmp, "#%"PRIu32, j))
-				gotoIfError(clean, CharString_toUTF16x(tmp, &nameArr.ptrNonConst[groupNameStart]));
+				gotoIfError(clean, CharString_toUtf16x(tmp, &nameArr.ptrNonConst[groupNameStart]));
 				tmp = CharString_createNull();		//Moved to nameArr
 				loc = nameArr.ptr[groupNameStart];
 			}
@@ -284,7 +284,7 @@ Error GraphicsDevice_createPipelinesRaytracingInternalExt(
 		)))
 
 		if((device->flags & EGraphicsDeviceFlags_IsDebug) && names.length && CharString_length(names.ptr[i])) {
-			gotoIfError(clean, CharString_toUTF16x(names.ptr[i], &tmp16))
+			gotoIfError(clean, CharString_toUtf16x(names.ptr[i], &tmp16))
 			gotoIfError(clean, dxCheck((*stateObject)->lpVtbl->SetName(*stateObject, (const wchar_t*) tmp16.ptr)))
 			ListU16_freex(&tmp16);
 		}
