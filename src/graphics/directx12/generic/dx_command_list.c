@@ -44,7 +44,7 @@ D3D12_CPU_DESCRIPTOR_HANDLE createTempRTV(
 	const DxGraphicsDevice *deviceExt, 
 	const U64 relativeLoc,
 	const D3D12_CPU_DESCRIPTOR_HANDLE start,
-	const DxHeap *heap,
+	const DxHeap heap,
 	RefPtr *image
 ) {
 
@@ -88,7 +88,7 @@ D3D12_CPU_DESCRIPTOR_HANDLE createTempRTV(
 	}
 
 	const D3D12_CPU_DESCRIPTOR_HANDLE location = (D3D12_CPU_DESCRIPTOR_HANDLE) {
-		.ptr = start.ptr + relativeLoc * heap->cpuIncrement
+		.ptr = start.ptr + relativeLoc * heap.cpuIncrement
 	};
 
 	deviceExt->device->lpVtbl->CreateRenderTargetView(deviceExt->device, resource, &rtv, location);
@@ -100,7 +100,7 @@ D3D12_CPU_DESCRIPTOR_HANDLE createTempDSV(
 	const U64 relativeLoc,
 	const D3D12_CPU_DESCRIPTOR_HANDLE start,
 	EStartRenderFlags flags,
-	const DxHeap *heap,
+	const DxHeap heap,
 	RefPtr *image
 ) {
 
@@ -147,7 +147,7 @@ D3D12_CPU_DESCRIPTOR_HANDLE createTempDSV(
 	}
 
 	const D3D12_CPU_DESCRIPTOR_HANDLE location = (D3D12_CPU_DESCRIPTOR_HANDLE) {
-		.ptr = start.ptr + relativeLoc * heap->cpuIncrement
+		.ptr = start.ptr + relativeLoc * heap.cpuIncrement
 	};
 
 	deviceExt->device->lpVtbl->CreateDepthStencilView(deviceExt->device, resource, &dsv, location);
@@ -228,11 +228,9 @@ void CommandList_process(
 
 			//Prepare attachments
 
-			DxHeap *heap = deviceExt->heaps[EDescriptorHeapType_RTV];
+			DxHeap heap = deviceExt->heaps[EDescriptorHeapType_RTV];
 
-			D3D12_CPU_DESCRIPTOR_HANDLE cpuDesc = (D3D12_CPU_DESCRIPTOR_HANDLE) {
-				heap->cpuHandle.ptr + heap->cpuIncrement * 8		//Offset in case we have RTVs bound
-			};
+			D3D12_CPU_DESCRIPTOR_HANDLE cpuDesc = (D3D12_CPU_DESCRIPTOR_HANDLE) { .ptr = heap.cpuHandle.ptr };
 
 			for (U8 i = 0; i < imageClearCount; ++i) {
 
@@ -331,9 +329,9 @@ void CommandList_process(
 
 			//Prepare attachments
 
-			DxHeap *heap = deviceExt->heaps[EDescriptorHeapType_RTV];
+			DxHeap heap = deviceExt->heaps[EDescriptorHeapType_RTV];
 
-			D3D12_CPU_DESCRIPTOR_HANDLE cpuDesc = heap->cpuHandle;
+			D3D12_CPU_DESCRIPTOR_HANDLE cpuDesc = heap.cpuHandle;
 			U8 j = 0;
 
 			D3D12_RECT rect = (D3D12_RECT) {
@@ -373,7 +371,7 @@ void CommandList_process(
 			for (U8 i = startRender->colorCount; i < 9; ++i)
 				temp->boundTargets[i] = temp->resolveTargets[i] = (ImageAndRange) { 0 };
 
-			DxHeap *dsvHeap = deviceExt->heaps[EDescriptorHeapType_RTV];
+			DxHeap dsvHeap = deviceExt->heaps[EDescriptorHeapType_DSV];
 			D3D12_CPU_DESCRIPTOR_HANDLE dsv = createTempDSV(
 				deviceExt, 0, cpuDesc, startRender->flags, dsvHeap, startRender->depthStencil
 			);
@@ -695,7 +693,7 @@ void CommandList_process(
 					DxDeviceBuffer *counterExt = DeviceBuffer_ext(counterBuffer, Dx);
 
 					EExecuteIndirectCommand cmd = 
-						drawIndirect.isIndexed ? EExecuteIndirectCommand_DrawIndexedCount : EExecuteIndirectCommand_DrawCount;
+						drawIndirect.isIndexed ? EExecuteIndirectCommand_DrawIndexed : EExecuteIndirectCommand_Draw;
 
 					buffer->lpVtbl->ExecuteIndirect(
 						buffer,

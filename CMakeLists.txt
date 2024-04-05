@@ -281,6 +281,27 @@ set_target_properties(OxC3_graphics PROPERTIES FOLDER Oxsomi)
 
 target_link_libraries(OxC3_graphics PUBLIC OxC3_platforms)
 
+# Download DXC, otherwise we can't use latest features and DXIL code will be unsigned
+
+if(${ForceUpdateDeps} OR (NOT EXISTS "${CMAKE_BINARY_DIR}/external/dxc/"))
+
+	message("-- Downloading and unzipping Microsoft.Direct3D.DXC")
+
+	file(REMOVE_RECURSE "${CMAKE_BINARY_DIR}/external/dxc/")
+	file(DOWNLOAD "https://www.nuget.org/api/v2/package/Microsoft.Direct3D.DXC/" "${CMAKE_BINARY_DIR}/external/dxc.zip")
+	file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/external/dxc/)
+
+	execute_process(
+		COMMAND ${CMAKE_COMMAND} -E tar xzf ${CMAKE_BINARY_DIR}/external/dxc.zip
+		WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/external/dxc/
+	)
+
+	file(REMOVE "${CMAKE_BINARY_DIR}/external/dxc.zip")
+
+endif()
+
+# Vulkan setup
+
 if("${graphicsApi}" STREQUAL "vulkan")
 
 	if(DEFINED ENV{VULKAN_SDK})
@@ -309,6 +330,8 @@ if("${graphicsApi}" STREQUAL "vulkan")
 	endif()
 
 	target_link_libraries(OxC3_graphics PUBLIC ${VULKAN_LIB})
+
+# DirectX setup
 
 elseif("${graphicsApi}" STREQUAL "directx12")
 

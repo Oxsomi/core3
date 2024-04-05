@@ -240,14 +240,20 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListChar
 			case ETopologyMode_TriangleListAdj:
 			case ETopologyMode_TriangleStripAdj:
 			case ETopologyMode_TriangleStrip:
-			default:								graphics.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;	break;
+			default:
+				graphics.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+				break;
 
 			case ETopologyMode_LineListAdj:
 			case ETopologyMode_LineStripAdj:
 			case ETopologyMode_LineStrip:
-			case ETopologyMode_LineList:			graphics.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE;		break;
+			case ETopologyMode_LineList:
+				graphics.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE;
+				break;
 
-			case ETopologyMode_PointList:			graphics.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT;		break;
+			case ETopologyMode_PointList:
+				graphics.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT;
+				break;
 		}
 
 		if(info->patchControlPoints)

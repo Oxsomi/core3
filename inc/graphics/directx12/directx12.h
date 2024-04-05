@@ -19,6 +19,8 @@
 */
 
 #pragma once
+#include <dxgi1_6.h>
+
 #include "types/list.h"
 #include "graphics/generic/device_buffer.h"
 #include "d3d12.h"
@@ -30,12 +32,38 @@ typedef struct DxUnifiedTexture {
 	D3D12_BARRIER_LAYOUT lastLayout;
 } DxUnifiedTexture;
 
+//Graphics instance doesn't really exist for DirectX12.
+//It's only used for defining SDK version and that we're using DirectX12.
+//The closest thing we can map is a DXGI factory that's used to query adapters
+
+typedef enum EDxGraphicsInstanceFlags {
+	EDxGraphicsInstanceFlags_HasNVApi		= 1 << 0,
+	EDxGraphicsInstanceFlags_HasAMDAgs		= 1 << 1
+} EDxGraphicsInstanceFlags;
+
+typedef struct AGSContext AGSContext;
+
+typedef struct DxGraphicsInstance {
+
+	IDXGIFactory6 *factory;
+
+	ID3D12Debug1 *debug1;
+
+	AGSContext *agsContext;
+
+	CharString nvDriverVersion;
+	CharString amdDriverVersion;
+
+	U32 flags, padding;
+
+} DxGraphicsInstance;
+
 typedef enum EDxBlockFlags {
 	EDxBlockFlags_None				= 0,
 	EDxBlockFlags_IsDedicated		= 1 << 0
 } EDxBlockFlags;
 
-enum EDescriptorTypeOffsets {
+typedef enum EDescriptorTypeOffsets {
 
 	EDescriptorTypeOffsets_Texture2D		= 0,
 	EDescriptorTypeOffsets_TextureCube		= EDescriptorTypeOffsets_Texture2D + EDescriptorTypeCount_Texture2D,
@@ -55,11 +83,24 @@ enum EDescriptorTypeOffsets {
 	EDescriptorTypeOffsets_RWTexture2Di		= EDescriptorTypeOffsets_RWTexture2Df + EDescriptorTypeCount_RWTexture2Df,
 	EDescriptorTypeOffsets_RWTexture2Du		= EDescriptorTypeOffsets_RWTexture2Di + EDescriptorTypeCount_RWTexture2Di,
 
-	EDescriptorTypeOffsets_Count			= EDescriptorTypeOffsets_RWTexture2Du + EDescriptorTypeCount_RWTexture2Du,
+	//Add one to the resource count to add an extension slot for NV
+	EDescriptorTypeOffsets_ResourceCount	= EDescriptorTypeOffsets_RWTexture2Du + EDescriptorTypeCount_RWTexture2Du + 1,
 
-	EDescriptorTypeOffsets_Sampler			= 0
+	EDescriptorTypeOffsets_Sampler			= 0,
+	EDescriptorTypeOffsets_SamplerCount		= EDescriptorTypeCount_Sampler,
+
+	EDescriptorTypeOffsets_RTVCount			= 8,								//No more than 8 RTVs can be active at a time
+	EDescriptorTypeOffsets_DSVCount			= 1,								//No more than 1 DSV can be active at a time
+
+	EDescriptorTypeOffsets_SRVStart			= EDescriptorTypeOffsets_Texture2D,
+	EDescriptorTypeOffsets_SRVEnd			= EDescriptorTypeOffsets_RWBuffer,
+
+	EDescriptorTypeOffsets_UAVStart			= EDescriptorTypeOffsets_RWBuffer,
+	EDescriptorTypeOffsets_UAVEnd			= EDescriptorTypeOffsets_ResourceCount,
 
 } EDescriptorTypeOffsets;
+
+EDescriptorTypeOffsets EDescriptorTypeOffsets_values[EDescriptorType_ResourceCount];
 
 typedef struct DxBlockRequirements {
 

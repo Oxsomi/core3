@@ -27,74 +27,54 @@
 #include "graphics/directx12/dx_buffer.h"
 #include "formats/texture.h"
 #include "types/ref_ptr.h"
-#include "platforms/ext/stringx.h"
 #include "platforms/ext/bufferx.h"
 
 Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, DeviceTextureRef *pending) {
-	(void)commandBufferExt; (void)deviceRef; (void)pending;
-	return Error_unimplemented(0, "DeviceTextureRef_flush not implemented yet");
-}
 
-/*
-Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, DeviceTextureRef *pending) {
-
-	VkCommandBuffer commandBuffer = (VkCommandBuffer) commandBufferExt;
+	DxCommandBuffer *commandBuffer = (DxCommandBuffer*) commandBufferExt;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
-	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
-
-	GraphicsInstance *instance = GraphicsInstanceRef_ptr(device->instance);
-	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
-
-	U32 graphicsQueueId = deviceExt->queues[EVkCommandQueue_Graphics].queueId;
+	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
 
 	DeviceTexture *texture = DeviceTextureRef_ptr(pending);
-	VkUnifiedTexture *textureExt = TextureRef_getCurrImgExtT(pending, Vk, 0);
+	DxUnifiedTexture *textureExt = TextureRef_getCurrImgExtT(pending, Dx, 0);
 
 	Error err = Error_none();
-	ListVkMappedMemoryRange tempMappedMemRanges = { 0 };
-	ListVkImageMemoryBarrier2 tempImageBarriers = { 0 };
 
 	ListRefPtr *currentFlight = &device->resourcesInFlight[device->submitId % 3];
 	DeviceBufferRef *tempStagingResource = NULL;
-	ListVkBufferImageCopy pendingCopies = { 0 };
 
 	ETextureFormat format = ETextureFormatId_unpack[texture->base.textureFormatId];
 	Bool compressed = ETextureFormat_getIsCompressed(format);
+
+	DXGI_FORMAT dxFormat = ETextureFormatId_toDXFormat(texture->base.textureFormatId);
 
 	//TODO: Copy queue
 
 	U64 allocRange = 0;
 
-	if(!texture->isPendingFullCopy) {
-
-		//Calculate allocation range
-
-		for(U64 j = 0; j < texture->pendingChanges.length; ++j) {
-
-			const TextureRange texturej = texture->pendingChanges.ptr[j].texture;
-
-			U64 siz = ETextureFormat_getSize(
-				format, TextureRange_width(texturej), TextureRange_height(texturej), TextureRange_length(texturej)
-			);
-
-			allocRange += siz;
-		}
-	}
-
-	else allocRange = texture->base.resource.size;
-
-	device->pendingBytes += allocRange;
-
-	gotoIfError(clean, ListVkBufferImageCopy_resizex(&pendingCopies, texture->pendingChanges.length))
-
-	VkDependencyInfo dependency = (VkDependencyInfo) { .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO };
-	gotoIfError(clean, ListVkBufferMemoryBarrier2_reservex(&deviceExt->bufferTransitions, 2 + texture->pendingChanges.length))
-
 	U8 alignmentX = 1, alignmentY = 1;
 	ETextureFormat_getAlignment(format, &alignmentX, &alignmentY);
 
-	VkImageSubresourceLayers range = (VkImageSubresourceLayers) { .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT };
+	//Calculate allocation range.
+	//We need to align to the row pitch
+
+	for(U64 j = 0; j < texture->pendingChanges.length; ++j) {
+
+		const TextureRange texturej = texture->pendingChanges.ptr[j].texture;
+
+		U64 siz = ETextureFormat_getSize(format, TextureRange_width(texturej), alignmentY, 1);
+		siz = (siz + D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1) &~ (D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1);
+
+		siz *= (TextureRange_height(texturej) / alignmentY) * TextureRange_length(texturej);
+
+		allocRange += siz;
+	}
+
+	device->pendingBytes += allocRange;
+
+	D3D12_BARRIER_GROUP bufDep = (D3D12_BARRIER_GROUP) { .Type = D3D12_BARRIER_TYPE_BUFFER };
+	D3D12_BARRIER_GROUP imgDep = (D3D12_BARRIER_GROUP) { .Type = D3D12_BARRIER_TYPE_TEXTURE };
 
 	if (allocRange >= 16 * MIBI) {		//Resource is too big, allocate dedicated staging resource
 
@@ -106,11 +86,8 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 		))
 
 		DeviceBuffer *stagingResource = DeviceBufferRef_ptr(tempStagingResource);
-		VkDeviceBuffer *stagingResourceExt = DeviceBuffer_ext(stagingResource, Vk);
+		DxDeviceBuffer *stagingResourceExt = DeviceBuffer_ext(stagingResource, Dx);
 		U8 *location = stagingResource->resource.mappedMemoryExt;
-
-		DeviceMemoryBlock block = device->allocator.blocks.ptr[stagingResource->resource.blockId];
-		Bool incoherent = !(block.allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
 		//Copy into our buffer
 
@@ -128,12 +105,17 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 			const U16 h = TextureRange_height(texturej);
 			const U16 l = TextureRange_length(texturej);
 
-			const U32 rowOff = (U32) ETextureFormat_getSize(format, x, alignmentY, 1);
-			const U32 rowLen = (U32) ETextureFormat_getSize(format, w, alignmentY, 1);
+			U64 rowLen = ETextureFormat_getSize(format, w, alignmentY, 1);
+			U64 rowLenUnalign = rowLen;
+
+			rowLen = (rowLen + D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1) &~ (D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1);
+
+			const U64 rowOff = ETextureFormat_getSize(format, x, alignmentY, 1);
+
 			const U64 len = ETextureFormat_getSize(format, w, h, l);
 			const U64 start = (U64) rowLen * (y + z * h) + rowOff;
 
-			if(w == texture->base.width && h == texture->base.height)
+			if(w == texture->base.width && h == texture->base.height && rowLenUnalign == rowLen)
 				Buffer_copy(
 					Buffer_createRef(location + allocRange, rowLen * h * l),
 					Buffer_createRefConst(texture->cpuData.ptr + start, rowLen * h * l)
@@ -141,84 +123,102 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 
 			else for(U64 k = z; k < z + l; ++k) {
 
-				if(w == texture->base.width)
+				if(w == texture->base.width && rowLenUnalign == rowLen)
 					Buffer_copy(
-						Buffer_createRef(location + allocRange + (U64)rowLen * (k - z) * h, rowLen * h),
-						Buffer_createRefConst(texture->cpuData.ptr + start + (U64)rowLen * (k - z) * h, rowLen * h)
+						Buffer_createRef(location + allocRange + rowLen * (k - z) * h, rowLen * h),
+						Buffer_createRefConst(texture->cpuData.ptr + start + rowLen * (k - z) * h, rowLen * h)
 					);
 
 				else for (U64 j = y; j < y + h; j += alignmentY) {
 					const U64 yOff = (j - y) / alignmentY;
 					Buffer_copy(
-						Buffer_createRef(location + allocRange + (U64)rowLen * (yOff + (k - z) * h), rowLen),
-						Buffer_createRefConst(texture->cpuData.ptr + start + (U64)rowLen * (yOff + (k - z) * h), rowLen)
+						Buffer_createRef(location + allocRange + rowLen * (yOff + (k - z) * h), rowLen),
+						Buffer_createRefConst(texture->cpuData.ptr + start + rowLen * (yOff + (k - z) * h), rowLen)
 					);
 				}
 			}
 
-			range.layerCount = l;
+			gotoIfError(clean, DxDeviceBuffer_transition(
+				stagingResourceExt,
+				D3D12_BARRIER_SYNC_COPY,
+				D3D12_BARRIER_ACCESS_COPY_SOURCE,
+				0,
+				allocRange,
+				&deviceExt->bufferTransitions,
+				&bufDep
+			))
 
-			pendingCopies.ptrNonConst[m] = (VkBufferImageCopy) {
-				.bufferOffset = allocRange,
-				.imageSubresource = range,
-				.imageOffset = (VkOffset3D) { .x = x, .y = y, .z = z },
-				.imageExtent = (VkExtent3D) { .width = w, .height = h, .depth = l }
+			D3D12_BARRIER_SUBRESOURCE_RANGE range2 = (D3D12_BARRIER_SUBRESOURCE_RANGE) {
+				.NumMipLevels = 1,
+				.NumArraySlices = 1,
+				.NumPlanes = 1
 			};
+
+			gotoIfError(clean, DxUnifiedTexture_transition(
+				textureExt,
+				D3D12_BARRIER_SYNC_COPY,
+				D3D12_BARRIER_ACCESS_COPY_DEST,
+				D3D12_BARRIER_LAYOUT_COPY_DEST,
+				&range2,
+				&deviceExt->imageTransitions,
+				&imgDep
+			))
+
+			if(bufDep.NumBarriers || imgDep.NumBarriers) {
+
+				D3D12_BARRIER_GROUP barriers[2];
+				barriers[0] = bufDep;
+				barriers[!!bufDep.NumBarriers] = imgDep;
+
+				commandBuffer->lpVtbl->Barrier(
+					commandBuffer,
+					!!bufDep.NumBarriers + !!imgDep.NumBarriers,
+					barriers
+				);
+
+				ListD3D12_TEXTURE_BARRIER_clear(&deviceExt->imageTransitions);
+				ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions);
+			}
+
+			D3D12_TEXTURE_COPY_LOCATION dst = (D3D12_TEXTURE_COPY_LOCATION) {
+				.pResource = textureExt->image,
+				.SubresourceIndex = l + z
+			};
+
+			D3D12_TEXTURE_COPY_LOCATION src = (D3D12_TEXTURE_COPY_LOCATION) {
+				.pResource = stagingResourceExt->buffer,
+				.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
+				.PlacedFootprint = (D3D12_PLACED_SUBRESOURCE_FOOTPRINT) {
+					.Offset = allocRange,
+					.Footprint = (D3D12_SUBRESOURCE_FOOTPRINT) {
+						.Format = dxFormat,
+						.Width = w,
+						.Height = h,
+						.Depth = l,
+						.RowPitch = (U32) rowLen
+					}
+				}
+			};
+
+			D3D12_BOX srcBox = (D3D12_BOX) {
+				.left		= x,
+				.top		= y,
+				.front		= z,
+				.right		= x + w,
+				.bottom		= y + h,
+				.back		= z + l
+			};
+
+			commandBuffer->lpVtbl->CopyTextureRegion(
+				commandBuffer,
+				&dst,
+				x, y, z,
+				&src,
+				&srcBox
+			);
 
 			allocRange += len;
 		}
-
-		if(incoherent) {
-
-			const VkMappedMemoryRange memoryRange = (VkMappedMemoryRange) {
-				.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
-				.memory = (VkDeviceMemory) block.ext,
-				.offset = stagingResource->resource.blockOffset,
-				.size = allocRange
-			};
-
-			vkFlushMappedMemoryRanges(deviceExt->device, 1, &memoryRange);
-		}
-
-		gotoIfError(clean, VkDeviceBuffer_transition(
-			stagingResourceExt,
-			VK_PIPELINE_STAGE_2_COPY_BIT,
-			VK_ACCESS_2_TRANSFER_READ_BIT,
-			graphicsQueueId,
-			0,
-			allocRange,
-			&deviceExt->bufferTransitions,
-			&dependency
-		))
-
-		VkImageSubresourceRange range2 = (VkImageSubresourceRange) {		//TODO: Add range
-			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-			.levelCount = 1,
-			.layerCount = 1
-		};
-
-		gotoIfError(clean, VkUnifiedTexture_transition(
-			textureExt,
-			VK_PIPELINE_STAGE_2_COPY_BIT,
-			VK_ACCESS_2_TRANSFER_WRITE_BIT,
-			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-			graphicsQueueId,
-			&range2,
-			&tempImageBarriers,
-			&dependency
-		))
-
-		if(dependency.bufferMemoryBarrierCount || dependency.imageMemoryBarrierCount)
-			instanceExt->cmdPipelineBarrier2(commandBuffer, &dependency);
-
-		vkCmdCopyBufferToImage(
-			commandBuffer,
-			stagingResourceExt->buffer,
-			textureExt->image,
-			textureExt->lastLayout,
-			(U32) pendingCopies.length,
-			pendingCopies.ptr
-		);
 
 		//When staging resource is committed to current in flight then we can relinquish ownership.
 
@@ -230,11 +230,9 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 
 	else {
 
-		gotoIfError(clean, ListVkBufferImageCopy_resizex(&pendingCopies, texture->pendingChanges.length))
-
 		AllocationBuffer *stagingBuffer = &device->stagingAllocations[device->submitId % 3];
 		DeviceBuffer *staging = DeviceBufferRef_ptr(device->staging);
-		VkDeviceBuffer *stagingExt = DeviceBuffer_ext(staging, Vk);
+		DxDeviceBuffer *stagingExt = DeviceBuffer_ext(staging, Dx);
 
 		U8 *defaultLocation = (U8*) 1, *location = defaultLocation;
 		Error temp = AllocationBuffer_allocateBlockx(
@@ -257,11 +255,8 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 			gotoIfError(clean, AllocationBuffer_allocateBlockx(stagingBuffer, allocRange, 4, (const U8**) &location))
 
 			staging = DeviceBufferRef_ptr(device->staging);
-			stagingExt = DeviceBuffer_ext(staging, Vk);
+			stagingExt = DeviceBuffer_ext(staging, Dx);
 		}
-
-		DeviceMemoryBlock block = device->allocator.blocks.ptr[staging->resource.blockId];
-		Bool incoherent = !(block.allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
 		//Copy into our buffer
 
@@ -279,13 +274,17 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 			U16 h = TextureRange_height(texturej);
 			U16 l = TextureRange_length(texturej);
 
-			U32 rowLen = (U32) ETextureFormat_getSize(format, w, alignmentY, 1);
-			U32 rowOff = (U32) ETextureFormat_getSize(format, x, alignmentY, 1);
+			U64 rowLen = ETextureFormat_getSize(format, w, alignmentY, 1);
+			U64 rowLenUnalign = rowLen;
+
+			rowLen = (rowLen + D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1) &~ (D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1);
+
+			U64 rowOff = ETextureFormat_getSize(format, x, alignmentY, 1);
 			U64 len = ETextureFormat_getSize(format, w, h, l);
 			U64 h2 = h / alignmentY;
-			U64 start = (U64) rowLen * (y + z * h2) + rowOff;
+			U64 start = rowLen * (y + z * h2) + rowOff;
 
-			if(w == texture->base.width && h == texture->base.height)
+			if(w == texture->base.width && h == texture->base.height && rowLenUnalign == rowLen)
 				Buffer_copy(
 					Buffer_createRef(location + allocRange, rowLen * h2 * l),
 					Buffer_createRefConst(texture->cpuData.ptr + start, rowLen * h2 * l)
@@ -293,90 +292,108 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 
 			else for(U64 k = z; k < z + l; ++k) {
 
-				if(w == texture->base.width)
+				if(w == texture->base.width && rowLenUnalign == rowLen)
 					Buffer_copy(
-						Buffer_createRef(location + allocRange + (U64)rowLen * (k - z) * h2, rowLen * h2),
-						Buffer_createRefConst(texture->cpuData.ptr + start + (U64)rowLen * (k - z) * h2, rowLen * h2)
+						Buffer_createRef(location + allocRange + rowLen * (k - z) * h2, rowLen * h2),
+						Buffer_createRefConst(texture->cpuData.ptr + start + rowLen * (k - z) * h2, rowLen * h2)
 					);
 
 				else for (U64 j = y; j < y + h; j += alignmentY) {
 					U64 yOff = (j - y) / alignmentY;
 					Buffer_copy(
-						Buffer_createRef(location + allocRange + (U64)rowLen * (yOff + (k - z) * h2), rowLen),
-						Buffer_createRefConst(texture->cpuData.ptr + start + (U64)rowLen * (yOff + (k - z) * h2), rowLen)
+						Buffer_createRef(location + allocRange + rowLen * (yOff + (k - z) * h2), rowLen),
+						Buffer_createRefConst(texture->cpuData.ptr + start + rowLen * (yOff + (k - z) * h2), rowLen)
 					);
 				}
 			}
+			
+			if(!ListRefPtr_contains(*currentFlight, device->staging, 0, NULL)) {
 
-			range.layerCount = l;
+				gotoIfError(clean, DxDeviceBuffer_transition(						//Ensure resource is transitioned
+					stagingExt,
+					D3D12_BARRIER_SYNC_COPY,
+					D3D12_BARRIER_ACCESS_COPY_SOURCE,
+					(device->submitId % 3) * (staging->resource.size / 3),
+					staging->resource.size / 3,
+					&deviceExt->bufferTransitions,
+					&bufDep
+				))
 
-			pendingCopies.ptrNonConst[m] = (VkBufferImageCopy) {
-				.bufferOffset = allocRange + (location - stagingBuffer->buffer.ptr),
-				.imageSubresource = range,
-				.imageOffset = (VkOffset3D) { .x = x, .y = y, .z = z },
-				.imageExtent = (VkExtent3D) { .width = w, .height = h, .depth = l }
+				RefPtr_inc(device->staging);
+				gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, device->staging))		//Add to in flight
+			}
+
+			D3D12_BARRIER_SUBRESOURCE_RANGE range2 = (D3D12_BARRIER_SUBRESOURCE_RANGE) {
+				.NumMipLevels = 1,
+				.NumArraySlices = 1,
+				.NumPlanes = 1
 			};
+
+			gotoIfError(clean, DxUnifiedTexture_transition(
+				textureExt,
+				D3D12_BARRIER_SYNC_COPY,
+				D3D12_BARRIER_ACCESS_COPY_DEST,
+				D3D12_BARRIER_LAYOUT_COPY_DEST,
+				&range2,
+				&deviceExt->imageTransitions,
+				&imgDep
+			))
+			
+			if(bufDep.NumBarriers || imgDep.NumBarriers) {
+
+				D3D12_BARRIER_GROUP barriers[2];
+				barriers[0] = bufDep;
+				barriers[!!bufDep.NumBarriers] = imgDep;
+
+				commandBuffer->lpVtbl->Barrier(
+					commandBuffer,
+					!!bufDep.NumBarriers + !!imgDep.NumBarriers,
+					barriers
+				);
+
+				ListD3D12_TEXTURE_BARRIER_clear(&deviceExt->imageTransitions);
+				ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions);
+			}
+
+			D3D12_TEXTURE_COPY_LOCATION dst = (D3D12_TEXTURE_COPY_LOCATION) {
+				.pResource = textureExt->image,
+				.SubresourceIndex = l + z
+			};
+
+			D3D12_TEXTURE_COPY_LOCATION src = (D3D12_TEXTURE_COPY_LOCATION) {
+				.pResource = stagingExt->buffer,
+				.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
+				.PlacedFootprint = (D3D12_PLACED_SUBRESOURCE_FOOTPRINT) {
+					.Offset = allocRange + (U64)defaultLocation,
+					.Footprint = (D3D12_SUBRESOURCE_FOOTPRINT) {
+						.Format = dxFormat,
+						.Width = w,
+						.Height = h,
+						.Depth = l,
+						.RowPitch = (U32) rowLen
+					}
+				}
+			};
+
+			D3D12_BOX srcBox = (D3D12_BOX) {
+				.left		= x,
+				.top		= y,
+				.front		= z,
+				.right		= x + w,
+				.bottom		= y + h,
+				.back		= z + l
+			};
+
+			commandBuffer->lpVtbl->CopyTextureRegion(
+				commandBuffer,
+				&dst,
+				x, y, z,
+				&src,
+				&srcBox
+			);
 
 			allocRange += len;
 		}
-
-		if (incoherent) {
-
-			VkMappedMemoryRange memoryRange = (VkMappedMemoryRange) {
-				.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
-				.memory = (VkDeviceMemory) block.ext,
-				.offset = location - block.mappedMemory,
-				.size = allocRange
-			};
-
-			vkFlushMappedMemoryRanges(deviceExt->device, 1, &memoryRange);
-		}
-
-		if(!ListRefPtr_contains(*currentFlight, device->staging, 0, NULL)) {
-
-			gotoIfError(clean, VkDeviceBuffer_transition(						//Ensure resource is transitioned
-				stagingExt,
-				VK_PIPELINE_STAGE_2_COPY_BIT,
-				VK_ACCESS_2_TRANSFER_READ_BIT,
-				graphicsQueueId,
-				(device->submitId % 3) * (staging->resource.size / 3),
-				staging->resource.size / 3,
-				&deviceExt->bufferTransitions,
-				&dependency
-			))
-
-			RefPtr_inc(device->staging);
-			gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, device->staging))		//Add to in flight
-		}
-
-		VkImageSubresourceRange range2 = (VkImageSubresourceRange) {		//TODO: Add range
-			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-			.levelCount = 1,
-			.layerCount = 1
-		};
-
-		gotoIfError(clean, VkUnifiedTexture_transition(
-			textureExt,
-			VK_PIPELINE_STAGE_2_COPY_BIT,
-			VK_ACCESS_2_TRANSFER_WRITE_BIT,
-			VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-			graphicsQueueId,
-			&range2,
-			&tempImageBarriers,
-			&dependency
-		))
-
-		if(dependency.bufferMemoryBarrierCount || dependency.imageMemoryBarrierCount)
-			instanceExt->cmdPipelineBarrier2(commandBuffer, &dependency);
-
-		vkCmdCopyBufferToImage(
-			commandBuffer,
-			stagingExt->buffer,
-			textureExt->image,
-			textureExt->lastLayout,
-			(U32) pendingCopies.length,
-			pendingCopies.ptr
-		);
 	}
 
 	if(!(texture->base.resource.flags & EGraphicsResourceFlag_CPUBacked))
@@ -389,14 +406,11 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 		gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, pending))
 
 	if (device->pendingBytes >= device->flushThreshold)
-		gotoIfError(clean, VkGraphicsDevice_flush(deviceRef, commandBuffer))
+		gotoIfError(clean, DxGraphicsDevice_flush(deviceRef, commandBuffer))
 
 clean:
 	DeviceBufferRef_dec(&tempStagingResource);
-	ListVkMappedMemoryRange_freex(&tempMappedMemRanges);
-	ListVkBufferMemoryBarrier2_clear(&deviceExt->bufferTransitions);
-	ListVkImageMemoryBarrier2_freex(&tempImageBarriers);
-	ListVkBufferImageCopy_freex(&pendingCopies);
+	ListD3D12_TEXTURE_BARRIER_clear(&deviceExt->imageTransitions);
+	ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions);
 	return err;
 }
-*/

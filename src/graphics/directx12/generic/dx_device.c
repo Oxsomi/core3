@@ -19,6 +19,7 @@
 */
 
 #include "platforms/ext/listx_impl.h"
+#include "graphics/directx12/directx12.h"
 #include "graphics/directx12/dx_device.h"
 #include "graphics/directx12/dx_swapchain.h"
 #include "graphics/directx12/dx_buffer.h"
@@ -33,10 +34,7 @@
 #include "types/math.h"
 #include "types/thread.h"
 
-/*
-
-//TODO: https://devblogs.microsoft.com/directx/d3d12-debug-layer-message-callback/
-//		https://microsoft.github.io/DirectX-Specs/d3d/MessageCallback.html
+#include <nvapi.h>
 
 void onDebugReport(
 	D3D12_MESSAGE_CATEGORY category, 
@@ -82,16 +80,30 @@ void onDebugReport(
 	}
 }
 
-TListImpl(DxCommandAllocator);
-TListNamedImpl(ID3D12Fence*, ListID3D12Fence);
+void onDebugReportNv(
+	void *pUserData, 
+	NVAPI_D3D12_RAYTRACING_VALIDATION_MESSAGE_SEVERITY severity, 
+	const char *messageCode, 
+	const char *message, 
+	const char *messageDetails
+) {
 
-#define vkBindNext(T, condition, ...)	\
-	T tmp##T = __VA_ARGS__;				\
-										\
-	if(condition) {						\
-		*currPNext = &tmp##T;			\
-		currPNext = &tmp##T.pNext;		\
+	(void)pUserData;
+	
+	switch(severity) {
+
+		case NVAPI_D3D12_RAYTRACING_VALIDATION_MESSAGE_SEVERITY_ERROR:
+			Log_errorLnx("NVAPI D3D12 Error %s (%s): %s", messageCode, message, messageDetails);
+			break;
+
+		default:
+			Log_warnLnx("NVAPI D3D12 Warning %s (%s): %s", messageCode, message, messageDetails);
+			break;
 	}
+}
+
+TListImpl(DxCommandAllocator);
+TListNamedImpl(ListID3D12Fence);
 
 //Convert command into API dependent instructions
 impl void CommandList_process(
@@ -102,11 +114,6 @@ impl void CommandList_process(
 	void *commandListExt
 );
 
-TList(VkDeviceQueueCreateInfo);
-TList(VkQueueFamilyProperties);
-TListImpl(VkDeviceQueueCreateInfo);
-TListImpl(VkQueueFamilyProperties);*/
-
 const U64 GraphicsDeviceExt_size = sizeof(DxGraphicsDevice);
 
 Error GraphicsDevice_initExt(
@@ -114,749 +121,322 @@ Error GraphicsDevice_initExt(
 	const GraphicsDeviceInfo *physicalDevice,
 	GraphicsDeviceRef **deviceRef
 ) {
-	(void)instance;
-	(void)physicalDevice;
-	(void)deviceRef;
-	return Error_unimplemented(0, "GraphicsDevice_initExt() not implemented yet");
-}
-
-/*
-	const VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
-	(void)instanceExt;
-
-	EGraphicsFeatures feat = physicalDevice->capabilities.features;
-	EGraphicsFeatures featEx = physicalDevice->capabilities.featuresExt;
-	EGraphicsDataTypes types = physicalDevice->capabilities.dataTypes;
-
-	VkPhysicalDeviceFeatures features = (VkPhysicalDeviceFeatures) {
-
-		.fullDrawIndexUint32 = true,
-		.imageCubeArray = true,
-		.independentBlend = true,
-
-		.geometryShader = (Bool)(feat & EGraphicsFeatures_GeometryShader),
-		.tessellationShader = true,
-
-		.multiDrawIndirect = true,
-		.sampleRateShading = true,
-
-		.drawIndirectFirstInstance = true,
-		.depthClamp = true,
-		.depthBiasClamp = true,
-		.samplerAnisotropy = true,
-
-		.textureCompressionASTC_LDR = (Bool)(types & EGraphicsDataTypes_ASTC),
-		.textureCompressionBC = (Bool)(types & EGraphicsDataTypes_BCn),
-
-		.shaderUniformBufferArrayDynamicIndexing = true,
-		.shaderSampledImageArrayDynamicIndexing = true,
-		.shaderStorageBufferArrayDynamicIndexing = true,
-		.shaderStorageImageArrayDynamicIndexing = true,
-
-		.shaderFloat64 = (Bool)(types & EGraphicsDataTypes_F64),
-		.shaderInt64 = (Bool)(types & EGraphicsDataTypes_I64),
-		.shaderInt16 = true,
-
-		.fillModeNonSolid = (Bool)(feat & EGraphicsFeatures_Wireframe),
-		.logicOp = (Bool)(feat & EGraphicsFeatures_LogicOp),
-		.dualSrcBlend = (Bool)(feat & EGraphicsFeatures_DualSrcBlend)
-	};
-
-	VkPhysicalDeviceFeatures2 features2 = (VkPhysicalDeviceFeatures2) {
-		.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
-		.features = features
-	};
-
-	void **currPNext = &features2.pNext;
-
-	vkBindNext(
-		VkPhysicalDeviceDescriptorIndexingFeatures,
-		true,
-		{
-			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_INDEXING_FEATURES,
-			.shaderUniformTexelBufferArrayDynamicIndexing = true,
-			.shaderStorageTexelBufferArrayDynamicIndexing = true,
-			.shaderUniformBufferArrayNonUniformIndexing = true,
-			.shaderSampledImageArrayNonUniformIndexing = true,
-			.shaderStorageBufferArrayNonUniformIndexing = true,
-			.shaderStorageImageArrayNonUniformIndexing = true,
-			.shaderUniformTexelBufferArrayNonUniformIndexing = true,
-			.shaderStorageTexelBufferArrayNonUniformIndexing = true,
-			.descriptorBindingSampledImageUpdateAfterBind = true,
-			.descriptorBindingStorageImageUpdateAfterBind = true,
-			.descriptorBindingStorageBufferUpdateAfterBind = true,
-			.descriptorBindingUniformTexelBufferUpdateAfterBind = true,
-			.descriptorBindingStorageTexelBufferUpdateAfterBind = true,
-			.descriptorBindingUpdateUnusedWhilePending = true,
-			.descriptorBindingPartiallyBound = true,
-			.descriptorBindingVariableDescriptorCount = true,
-			.runtimeDescriptorArray = true
-		}
-	)
-
-	vkBindNext(
-		VkPhysicalDevicePerformanceQueryFeaturesKHR,
-		physicalDevice->capabilities.featuresExt & EVkGraphicsFeatures_PerfQuery,
-		(VkPhysicalDevicePerformanceQueryFeaturesKHR) {
-			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PERFORMANCE_QUERY_FEATURES_KHR,
-			.performanceCounterQueryPools = true
-		}
-	)
-
-	vkBindNext(
-		VkPhysicalDeviceBufferDeviceAddressFeaturesKHR,
-		true,
-		(VkPhysicalDeviceBufferDeviceAddressFeaturesKHR) {
-			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_BUFFER_DEVICE_ADDRESS_FEATURES_KHR,
-			.bufferDeviceAddress = true
-		}
-	)
-
-	vkBindNext(
-		VkPhysicalDeviceSynchronization2Features,
-		true,
-		(VkPhysicalDeviceSynchronization2Features) {
-			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES,
-			.synchronization2 = true
-		}
-	)
-
-	vkBindNext(
-		VkPhysicalDeviceTimelineSemaphoreFeatures,
-		true,
-		(VkPhysicalDeviceTimelineSemaphoreFeatures) {
-			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES,
-			.timelineSemaphore = true
-		}
-	)
-
-	vkBindNext(
-		VkPhysicalDeviceDynamicRenderingFeatures,
-		feat & EGraphicsFeatures_DirectRendering,
-		{
-			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES,
-			.dynamicRendering = true
-		}
-	)
-
-	vkBindNext(
-		VkPhysicalDeviceMeshShaderFeaturesEXT,
-		feat & EGraphicsFeatures_MeshShader,
-		{
-			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT,
-			.meshShader = true,
-			.taskShader = true
-		}
-	)
-
-	vkBindNext(
-		VkPhysicalDeviceMultiviewFeatures,
-		feat & EGraphicsFeatures_Multiview,
-		{
-			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MULTIVIEW_FEATURES,
-			.multiview = true
-		}
-	)
-
-	vkBindNext(
-		VkPhysicalDeviceFragmentShadingRateFeaturesKHR,
-		feat & EGraphicsFeatures_VariableRateShading,
-		{
-			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_FEATURES_KHR,
-			.pipelineFragmentShadingRate = true,
-			.attachmentFragmentShadingRate = true
-		}
-	)
-
-	vkBindNext(
-		VkPhysicalDeviceAccelerationStructureFeaturesKHR,
-		feat & EGraphicsFeatures_Raytracing,
-		{
-			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR,
-			.accelerationStructure = true,
-			.descriptorBindingAccelerationStructureUpdateAfterBind = true
-		}
-	)
-
-	vkBindNext(
-		VkPhysicalDeviceRayQueryFeaturesKHR,
-		feat & EGraphicsFeatures_RayQuery,
-		{
-			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR,
-			.rayQuery = true
-		}
-	)
-
-	vkBindNext(
-		VkPhysicalDeviceRayTracingPipelineFeaturesKHR,
-		feat & EGraphicsFeatures_RayPipeline,
-		{
-			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR,
-			.rayTracingPipeline = true,
-			.rayTraversalPrimitiveCulling = true,
-			.rayTracingPipelineTraceRaysIndirect = true
-		}
-	)
-
-	vkBindNext(
-		VkPhysicalDeviceRayTracingMotionBlurFeaturesNV,
-		feat & EGraphicsFeatures_RayMotionBlur,
-		{
-			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_MOTION_BLUR_FEATURES_NV,
-			.rayTracingMotionBlur = true,
-			.rayTracingMotionBlurPipelineTraceRaysIndirect = true
-		}
-	)
-
-	vkBindNext(
-		VkPhysicalDeviceRayTracingInvocationReorderFeaturesNV,
-		feat & EGraphicsFeatures_RayReorder,
-		{
-			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_INVOCATION_REORDER_FEATURES_NV,
-			.rayTracingInvocationReorder = true
-		}
-	)
-
-	vkBindNext(
-		VkPhysicalDeviceOpacityMicromapFeaturesEXT,
-		feat & EGraphicsFeatures_RayMicromapOpacity,
-		{
-			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_OPACITY_MICROMAP_FEATURES_EXT,
-			.micromap = true
-		}
-	)
-
-	vkBindNext(
-		VkPhysicalDeviceDisplacementMicromapFeaturesNV,
-		feat & EGraphicsFeatures_RayMicromapDisplacement,
-		{
-			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DISPLACEMENT_MICROMAP_FEATURES_NV,
-			.displacementMicromap = true
-		}
-	)
-
-	vkBindNext(
-		VkPhysicalDeviceShaderAtomicInt64Features,
-		types & EGraphicsDataTypes_AtomicI64,
-		{
-			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_INT64_FEATURES_KHR,
-			.shaderBufferInt64Atomics = true
-		}
-	)
-
-	vkBindNext(
-		VkPhysicalDeviceShaderAtomicFloatFeaturesEXT,
-		types & (EGraphicsDataTypes_AtomicF32 | EGraphicsDataTypes_AtomicF64),
-		{
-			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_FLOAT_FEATURES_EXT,
-			.shaderBufferFloat32AtomicAdd = (Bool)(types & EGraphicsDataTypes_AtomicF32),
-			.shaderBufferFloat32Atomics = (Bool)(types & EGraphicsDataTypes_AtomicF32),
-			.shaderBufferFloat64AtomicAdd = (Bool)(types & EGraphicsDataTypes_AtomicF64),
-			.shaderBufferFloat64Atomics = (Bool)(types & EGraphicsDataTypes_AtomicF64)
-		}
-	)
-
-	vkBindNext(
-		VkPhysicalDeviceShaderFloat16Int8Features,
-		types & EGraphicsDataTypes_F16,
-		{
-			.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES_KHR,
-			.shaderFloat16 = true
-		}
-	)
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(*deviceRef);
-	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
-
-	ListConstC8 extensions = (ListConstC8) { 0 };
-	ListVkDeviceQueueCreateInfo queues = (ListVkDeviceQueueCreateInfo) { 0 };
-	ListVkQueueFamilyProperties queueFamilies = (ListVkQueueFamilyProperties) { 0 };
-	CharString tempStr = CharString_createNull();
-
+	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
 	Error err = Error_none();
-	gotoIfError(clean, ListConstC8_reservex(&extensions, 32))
-	gotoIfError(clean, ListVkDeviceQueueCreateInfo_reservex(&queues, EVkCommandQueue_Count))
-
-	for(U64 i = 0; i < reqExtensionsNameCount; ++i)
-		gotoIfError(clean, ListConstC8_pushBackx(&extensions, reqExtensionsName[i]))
-
-	for (U64 i = 0; i < optExtensionsNameCount; ++i) {
-
-		const C8 *ptr = optExtensionsName[i];
-		Bool on = false;
-
-		switch (i) {
-
-			case EOptExtensions_DebugMarker:				on = feat & EGraphicsFeatures_DebugMarkers;				break;
-			case EOptExtensions_PerfQuery:					on = featEx & EVkGraphicsFeatures_PerfQuery;			break;
-			case EOptExtensions_RayPipeline:				on = feat & EGraphicsFeatures_RayPipeline;				break;
-			case EOptExtensions_RayQuery:					on = feat & EGraphicsFeatures_RayQuery;					break;
-			case EOptExtensions_RayAcceleration:			on = feat & EGraphicsFeatures_Raytracing;				break;
-			case EOptExtensions_RayMotionBlur:				on = feat & EGraphicsFeatures_RayMotionBlur;			break;
-			case EOptExtensions_RayReorder:					on = feat & EGraphicsFeatures_RayReorder;				break;
-			case EOptExtensions_MeshShader:					on = feat & EGraphicsFeatures_MeshShader;				break;
-			case EOptExtensions_VariableRateShading:		on = feat & EGraphicsFeatures_VariableRateShading;		break;
-			case EOptExtensions_DynamicRendering:			on = feat & EGraphicsFeatures_DirectRendering;			break;
-			case EOptExtensions_RayMicromapOpacity:			on = feat & EGraphicsFeatures_RayMicromapOpacity;		break;
-			case EOptExtensions_RayMicromapDisplacement:	on = feat & EGraphicsFeatures_RayMicromapDisplacement;	break;
-			case EOptExtensions_AtomicF32:					on = types & EGraphicsDataTypes_AtomicF32;				break;
-			case EOptExtensions_DeferredHostOperations:		on = feat & EGraphicsFeatures_Raytracing;				break;
-
-			default:
-				continue;
-
-			//TODO:
-			//case EOptExtensions_VariableRateShading:		on = feat & EGraphicsFeatures_Raytracing;				break;
-		}
-
-		if(on)
-			gotoIfError(clean, ListConstC8_pushBackx(&extensions, ptr))
-	}
-
-	VkPhysicalDevice physicalDeviceExt = (VkPhysicalDevice) physicalDevice->ext;
-
-	//Get queues
-
-	U32 familyCount = 0;
-	vkGetPhysicalDeviceQueueFamilyProperties(physicalDeviceExt, &familyCount, NULL);
-
-	if(!familyCount)
-		gotoIfError(clean, Error_invalidOperation(0, "GraphicsDevice_initExt() no supported queues"))
-
-	gotoIfError(clean, ListVkQueueFamilyProperties_resizex(&queueFamilies, familyCount))
-	vkGetPhysicalDeviceQueueFamilyProperties(physicalDeviceExt, &familyCount, queueFamilies.ptrNonConst);
-
-	//Assign queues to deviceExt (don't have to be unique)
-
-	//Find queues
-
-	U32 copyQueueId = U32_MAX;
-	U32 computeQueueId = U32_MAX;
-	U32 graphicsQueueId = U32_MAX;
-
-	U32 fallbackCopyQueueId = U32_MAX;
-	U32 fallbackComputeQueueId = U32_MAX;
-
-	VkQueueFlags importantFlags = VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT;
-
-	for (U32 i = 0; i < familyCount; ++i) {
-
-		VkQueueFamilyProperties q = queueFamilies.ptr[i];
-
-		if(!q.queueCount)
-			continue;
-
-		if(copyQueueId == U32_MAX) {
-
-			if((q.queueFlags & importantFlags) == VK_QUEUE_TRANSFER_BIT)
-				copyQueueId = i;
-
-			if(q.queueFlags & VK_QUEUE_TRANSFER_BIT)
-				fallbackCopyQueueId = i;
-		}
-
-		if(computeQueueId == U32_MAX) {
-
-			if(((q.queueFlags & importantFlags) &~ VK_QUEUE_TRANSFER_BIT) == VK_QUEUE_COMPUTE_BIT)
-				computeQueueId = i;
-
-			if(q.queueFlags & VK_QUEUE_COMPUTE_BIT)
-				fallbackComputeQueueId = i;
-		}
-
-		if(graphicsQueueId == U32_MAX && q.queueFlags & VK_QUEUE_GRAPHICS_BIT)
-			graphicsQueueId = i;
-
-		if(graphicsQueueId != U32_MAX && computeQueueId != U32_MAX && copyQueueId != U32_MAX)
-			break;
-	}
-
-	//If there's no dedicated queue, we should use the one that supports it.
-
-	if(computeQueueId == U32_MAX)
-		computeQueueId = fallbackComputeQueueId;
-
-	if(copyQueueId == U32_MAX)
-		copyQueueId = fallbackCopyQueueId;
-
-	//Ensure we have all queues. Should be impossible, but still.
-
-	if(copyQueueId == U32_MAX || computeQueueId == U32_MAX || graphicsQueueId == U32_MAX)
-		gotoIfError(clean, Error_invalidOperation(1, "GraphicsDevice_initExt() doesn't have copy, comp or gfx queue"))
-
-	//Assign queues to queues (deviceInfo)
-
-	F32 prio = 1;
-
-	VkDeviceQueueCreateInfo graphicsQueue = (VkDeviceQueueCreateInfo){
-		.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
-		.queueFamilyIndex = graphicsQueueId,
-		.queueCount = 1,
-		.pQueuePriorities = &prio
-	};
-
-	gotoIfError(clean, ListVkDeviceQueueCreateInfo_pushBackx(&queues, graphicsQueue))
-
-	VkDeviceQueueCreateInfo copyQueue = graphicsQueue;
-	copyQueue.queueFamilyIndex = copyQueueId;
-
-	if(copyQueueId != graphicsQueueId)
-		gotoIfError(clean, ListVkDeviceQueueCreateInfo_pushBackx(&queues, copyQueue))
-
-	VkDeviceQueueCreateInfo computeQueue = graphicsQueue;
-	computeQueue.queueFamilyIndex = computeQueueId;
-
-	if(computeQueueId != graphicsQueueId && computeQueueId != copyQueueId)
-		gotoIfError(clean, ListVkDeviceQueueCreateInfo_pushBackx(&queues, computeQueue))
+	ID3DBlob *errBlob = NULL, *rootSigBlob = NULL;
 
 	//Create device
 
-	VkDeviceCreateInfo deviceInfo = (VkDeviceCreateInfo) {
-		.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-		.pNext = &features2,
-		.enabledExtensionCount = (U32) extensions.length,
-		.ppEnabledExtensionNames = extensions.ptr,
-		.queueCreateInfoCount = (U32) queues.length,
-		.pQueueCreateInfos = queues.ptr
-	};
+	const DxGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Dx);
 
-	if (verbose) {
+	gotoIfError(clean, dxCheck(instanceExt->factory->lpVtbl->EnumAdapterByLuid(
+		instanceExt->factory, *(const LUID*)&physicalDevice->luid,
+		&IID_IDXGIAdapter4, (void**)&deviceExt->adapter4
+	)))
 
-		Log_debugLnx("Enabling extensions:");
+	gotoIfError(clean, dxCheck(D3D12CreateDevice(
+		(IUnknown*)deviceExt->adapter4, D3D_FEATURE_LEVEL_12_1, 
+		&IID_ID3D12Device5, (void**) &deviceExt->device
+	)))
 
-		for(U32 i = 0; i < (U32) extensions.length; ++i)
-			Log_debugLnx("\t%s", extensions.ptr[i]);
-	}
-
-	gotoIfError(clean, vkCheck(vkCreateDevice(physicalDeviceExt, &deviceInfo, NULL, &deviceExt->device)))
-
-	//Get queues
-
-	//Graphics
-
-	VkCommandQueue *graphicsQueueExt = &deviceExt->queues[EVkCommandQueue_Graphics];
-
-	U32 resolvedId = 0;
-
-	vkGetDeviceQueue(
-		deviceExt->device,
-		graphicsQueueExt->queueId = graphicsQueueId,
-		0,
-		&graphicsQueueExt->queue
-	);
-
-	deviceExt->uniqueQueues[resolvedId] = graphicsQueueId;
-	graphicsQueueExt->resolvedQueueId = resolvedId++;
-	graphicsQueueExt->type = EVkCommandQueue_Graphics;
+	Bool isNv = device->info.vendor == EGraphicsVendorId_NV;
 
 	if(device->flags & EGraphicsDeviceFlags_IsDebug) {
 
-		VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
-			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-			.objectType = VK_OBJECT_TYPE_QUEUE
-		};
-
-		if(instanceExt->debugSetName) {
-			debugName.pObjectName = "Graphics queue";
-			debugName.objectHandle = (U64) graphicsQueueExt->queue;
-			gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName)))
-		}
-
-	}
-
-	//Compute
-
-	VkCommandQueue *computeQueueExt = &deviceExt->queues[EVkCommandQueue_Compute];
-
-	if(computeQueueId == graphicsQueueId)
-		*computeQueueExt = *graphicsQueueExt;
-
-	else {
-
-		vkGetDeviceQueue(
+		gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->QueryInterface(
 			deviceExt->device,
-			computeQueueExt->queueId = computeQueueId,
-			0,
-			&computeQueueExt->queue
-		);
+			&IID_ID3D12DebugDevice, (void**) &deviceExt->debugDevice
+		)))
 
-		if((device->flags & EGraphicsDeviceFlags_IsDebug) && instanceExt->debugSetName) {
-			debugName.pObjectName = "Compute queue";
-			debugName.objectHandle = (U64) computeQueueExt->queue;
-			gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName)))
-		}
-
-		deviceExt->uniqueQueues[resolvedId] = computeQueueId;
-		computeQueueExt->resolvedQueueId = resolvedId++;
-		computeQueueExt->type = EVkCommandQueue_Compute;
-	}
-
-	//Copy
-
-	VkCommandQueue *copyQueueExt = &deviceExt->queues[EVkCommandQueue_Copy];
-
-	if(copyQueueId == graphicsQueueId)
-		*copyQueueExt = *graphicsQueueExt;
-
-	else if(copyQueueId == computeQueueId)
-		*copyQueueExt = *computeQueueExt;
-
-	else {
-
-		vkGetDeviceQueue(
+		if(SUCCEEDED(deviceExt->device->lpVtbl->QueryInterface(
 			deviceExt->device,
-			copyQueueExt->queueId = copyQueueId,
-			0,
-			&copyQueueExt->queue
-		);
+			&IID_ID3D12InfoQueue1, (void**) &deviceExt->infoQueue1
+		)))
+			gotoIfError(clean, dxCheck(deviceExt->infoQueue1->lpVtbl->RegisterMessageCallback(
+				deviceExt->infoQueue1,
+				onDebugReport,
+				D3D12_MESSAGE_CALLBACK_FLAG_NONE,
+				NULL,
+				NULL
+			)))
 
-		if((device->flags & EGraphicsDeviceFlags_IsDebug) && instanceExt->debugSetName) {
-			debugName.pObjectName = "Copy queue";
-			debugName.objectHandle = (U64) copyQueueExt->queue;
-			gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName)))
+		//Nv specific initialization
+
+		if(isNv) {
+
+			//Enable RT validation
+
+			if(device->info.capabilities.features & EGraphicsFeatures_RayValidation) {
+
+				NvAPI_D3D12_EnableRaytracingValidation(deviceExt->device, NVAPI_D3D12_RAYTRACING_VALIDATION_FLAG_NONE);
+
+				void *handle = NULL;
+				NvAPI_Status status = NvAPI_D3D12_RegisterRaytracingValidationMessageCallback(
+					deviceExt->device, onDebugReportNv, NULL, &handle
+				);
+
+				if(status != NVAPI_OK)
+					gotoIfError(clean, Error_invalidState(
+						0, "NvAPI_D3D12_RegisterRaytracingValidationMessageCallback couldn't be called"
+					))
+			}
 		}
-
-		deviceExt->uniqueQueues[resolvedId] = copyQueueId;
-		copyQueueExt->resolvedQueueId = resolvedId++;
-		copyQueueExt->type = EVkCommandQueue_Copy;
 	}
+
+	//Enable NV extensions
+
+	static const U32 nvExtSlot = 99999;		//space and u slot
+
+	if(isNv) {
+
+		NvAPI_Status status = NvAPI_D3D12_SetNvShaderExtnSlotSpace((IUnknown*)deviceExt->device, nvExtSlot, nvExtSlot);
+
+		if(status != NVAPI_OK)
+			gotoIfError(clean, Error_invalidState(0, "NvAPI_D3D12_SetNvShaderExtnSlotSpace couldn't be called"))
+	}
+
+	//Get queues
+
+	deviceExt->queues[EDxCommandQueue_Copy] = (DxCommandQueue) {
+		.type = EDxCommandQueue_Copy,
+		.resolvedQueueId = 0
+	};
+
+	D3D12_COMMAND_QUEUE_DESC queueInfo = (D3D12_COMMAND_QUEUE_DESC) {
+		.Type = D3D12_COMMAND_LIST_TYPE_COPY
+	};
+
+	gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreateCommandQueue(
+		deviceExt->device,
+		&queueInfo,
+		&IID_ID3D12CommandQueue, (void**) &deviceExt->queues[EDxCommandQueue_Copy].queue
+	)))
+
+	deviceExt->queues[EDxCommandQueue_Compute] = (DxCommandQueue) {
+		.type = EDxCommandQueue_Compute,
+		.resolvedQueueId = 1
+	};
+
+	queueInfo.Type = D3D12_COMMAND_LIST_TYPE_COMPUTE;
+
+	gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreateCommandQueue(
+		deviceExt->device,
+		&queueInfo,
+		&IID_ID3D12CommandQueue, (void**) &deviceExt->queues[EDxCommandQueue_Compute].queue
+	)))
+
+	deviceExt->queues[EDxCommandQueue_Graphics] = (DxCommandQueue) {
+		.type = EDxCommandQueue_Graphics,
+		.resolvedQueueId = 2
+	};
+
+	queueInfo.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+
+	gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreateCommandQueue(
+		deviceExt->device,
+		&queueInfo,
+		&IID_ID3D12CommandQueue, (void**) &deviceExt->queues[EDxCommandQueue_Graphics].queue
+	)))
 
 	//Create command recorder per queue per thread per backbuffer.
 	//We only allow triple buffering, so allocate for triple buffers.
 	//These will be initialized JIT because we don't know what thread will be accessing them.
 
 	U64 threads = Platform_instance.threads;
-	gotoIfError(clean, ListVkCommandAllocator_resizex(&deviceExt->commandPools, 3 * threads * resolvedId))
+	gotoIfError(clean, ListDxCommandAllocator_resizex(&deviceExt->commandPools, 3 * threads * 3))
 
-	//Semaphores
+	//Create fence
 
-	gotoIfError(clean, ListVkSemaphore_resizex(&deviceExt->submitSemaphores, 3))
+	gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreateFence(
+		deviceExt->device, 0, D3D12_FENCE_FLAG_NONE, &IID_ID3D12Fence, (void**) & deviceExt->commitSemaphore
+	)))
 
-	for (U64 k = 0; k < 3; ++k) {
+	//Create root signature
 
-		VkSemaphoreCreateInfo semaphoreInfo = (VkSemaphoreCreateInfo) { .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
-		VkSemaphore *semaphore = deviceExt->submitSemaphores.ptrNonConst + k;
+	D3D12_DESCRIPTOR_RANGE descRanges[] = {
 
-		gotoIfError(clean, vkCheck(vkCreateSemaphore(deviceExt->device, &semaphoreInfo, NULL, semaphore)))
+		(D3D12_DESCRIPTOR_RANGE) {
+			.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
+			.NumDescriptors = EDescriptorTypeOffsets_SRVEnd - EDescriptorTypeOffsets_SRVStart,
+			.OffsetInDescriptorsFromTableStart = EDescriptorTypeOffsets_SRVStart
+		},
 
-		if((device->flags & EGraphicsDeviceFlags_IsDebug) && instanceExt->debugSetName) {
+		(D3D12_DESCRIPTOR_RANGE) {
+			.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV,
+			.NumDescriptors = EDescriptorTypeOffsets_UAVEnd - EDescriptorTypeOffsets_UAVStart,
+			.OffsetInDescriptorsFromTableStart = EDescriptorTypeOffsets_UAVStart
+		},
 
-			gotoIfError(clean, CharString_formatx(&tempStr, "Queue submit semaphore %"PRIu64, k))
+		//Unused register, but nv wants it
 
-			VkDebugUtilsObjectNameInfoEXT debugName2 = (VkDebugUtilsObjectNameInfoEXT) {
-				.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-				.objectType = VK_OBJECT_TYPE_SEMAPHORE,
-				.objectHandle = (U64) *semaphore,
-				.pObjectName = tempStr.ptr,
+		(D3D12_DESCRIPTOR_RANGE) {
+			.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV,
+			.BaseShaderRegister = nvExtSlot,
+			.RegisterSpace = nvExtSlot,
+			.NumDescriptors = 1,
+			.OffsetInDescriptorsFromTableStart = EDescriptorTypeOffsets_UAVEnd
+		}
+	};
+
+	D3D12_DESCRIPTOR_RANGE samplerRange = (D3D12_DESCRIPTOR_RANGE) {
+		.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER,
+		.NumDescriptors = EDescriptorTypeOffsets_SamplerCount,
+		.OffsetInDescriptorsFromTableStart = EDescriptorTypeOffsets_Sampler
+	};
+
+	D3D12_ROOT_PARAMETER rootParam[] = {
+
+		//All other SRV/UAVs are bound through a descriptor table
+
+		(D3D12_ROOT_PARAMETER) {
+			.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
+			.DescriptorTable = (D3D12_ROOT_DESCRIPTOR_TABLE) {
+				.NumDescriptorRanges = (U32)(sizeof(descRanges) / sizeof(descRanges[0])),
+				.pDescriptorRanges = descRanges
+			}
+		},
+
+		//Samplers are bound through another descriptor table
+
+		(D3D12_ROOT_PARAMETER) {
+			.ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
+			.DescriptorTable = (D3D12_ROOT_DESCRIPTOR_TABLE) {
+				.NumDescriptorRanges = 1,
+				.pDescriptorRanges = &samplerRange
+			}
+		},
+
+		//CBV at b0, space0
+
+		(D3D12_ROOT_PARAMETER) {
+			.ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV,
+			.Descriptor = (D3D12_ROOT_DESCRIPTOR) { 0 }
+		}
+	};
+
+	D3D12_VERSIONED_ROOT_SIGNATURE_DESC rootSig = (D3D12_VERSIONED_ROOT_SIGNATURE_DESC) {
+		.Version = D3D_ROOT_SIGNATURE_VERSION_1,
+		.Desc_1_0 = (D3D12_ROOT_SIGNATURE_DESC) {
+			.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT,
+			.NumParameters = (U32)(sizeof(rootParam) / sizeof(rootParam[0])),
+			.pParameters = rootParam
+		}
+	};
+
+	err = dxCheck(D3D12SerializeVersionedRootSignature(&rootSig, &rootSigBlob, &errBlob));
+
+	if(err.genericError) {
+
+		if(errBlob)
+			Log_errorLnx("D3D12: Create root signature failed: %s", (const C8*) errBlob->lpVtbl->GetBufferPointer(errBlob));
+
+		goto clean;
+	}
+
+	gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreateRootSignature(
+		deviceExt->device,
+		0, rootSigBlob->lpVtbl->GetBufferPointer(rootSigBlob), rootSigBlob->lpVtbl->GetBufferSize(rootSigBlob),
+		&IID_ID3D12RootSignature, (void**) &deviceExt->defaultLayout
+	)))
+
+	//Create samplers
+
+	D3D12_DESCRIPTOR_HEAP_DESC heapDesc = (D3D12_DESCRIPTOR_HEAP_DESC) {
+		.Type = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
+		.NumDescriptors = EDescriptorTypeOffsets_SamplerCount,
+		.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE
+	};
+
+	gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreateDescriptorHeap(
+		deviceExt->device,
+		&heapDesc,
+		&IID_ID3D12DescriptorHeap,
+		(void**) &deviceExt->heaps[EDescriptorHeapType_Sampler].heap
+	)))
+
+	//Create resources
+
+	heapDesc = (D3D12_DESCRIPTOR_HEAP_DESC) {
+		.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+		.NumDescriptors = EDescriptorTypeOffsets_ResourceCount,
+		.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE
+	};
+
+	gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreateDescriptorHeap(
+		deviceExt->device,
+		&heapDesc,
+		&IID_ID3D12DescriptorHeap,
+		(void**) &deviceExt->heaps[EDescriptorHeapType_Resources].heap
+	)))
+
+	//Create DSVs
+
+	heapDesc = (D3D12_DESCRIPTOR_HEAP_DESC) {
+		.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV,
+		.NumDescriptors = EDescriptorTypeOffsets_DSVCount
+	};
+
+	gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreateDescriptorHeap(
+		deviceExt->device,
+		&heapDesc,
+		&IID_ID3D12DescriptorHeap,
+		(void**) &deviceExt->heaps[EDescriptorHeapType_DSV].heap
+	)))
+
+	//Create RTVs
+
+	heapDesc = (D3D12_DESCRIPTOR_HEAP_DESC) {
+		.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
+		.NumDescriptors = EDescriptorTypeOffsets_RTVCount
+	};
+
+	gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreateDescriptorHeap(
+		deviceExt->device,
+		&heapDesc,
+		&IID_ID3D12DescriptorHeap,
+		(void**) &deviceExt->heaps[EDescriptorHeapType_RTV].heap
+	)))
+
+	for (U32 i = 0; i < EDescriptorHeapType_Count; ++i) {
+
+		DxHeap *heap = &deviceExt->heaps[i];
+
+		if(device->flags & EGraphicsDeviceFlags_IsDebug) {
+
+			static const wchar_t *debugNames[] = {
+				L"Descriptor heap (0: Samplers)",
+				L"Descriptor heap (1: Resources)",
+				L"Descriptor heap (2: DSV)",
+				L"Descriptor heap (3: RTV)"
 			};
 
-			gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName2)))
-
-			CharString_freex(&tempStr);
-		}
-	}
-
-	//Create timeline semaphore
-
-	VkSemaphoreTypeCreateInfo timelineInfo = (VkSemaphoreTypeCreateInfo) {
-		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO,
-		.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE
-	};
-
-	VkSemaphoreCreateInfo semaphoreInfo = (VkSemaphoreCreateInfo) {
-		.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO,
-		.pNext = &timelineInfo
-	};
-
-	gotoIfError(clean, vkCheck(vkCreateSemaphore(deviceExt->device, &semaphoreInfo, NULL, &deviceExt->commitSemaphore)))
-
-	deviceExt->resolvedQueues = resolvedId;
-
-	//Create shared layout since we use bindless
-
-	Bool hasRt = physicalDevice->capabilities.features & EGraphicsFeatures_Raytracing;
-
-	for (U32 i = 0; i < EDescriptorSetType_UniqueLayouts; ++i) {
-
-		VkDescriptorSetLayoutBinding bindings[EDescriptorType_ResourceCount - 1];
-		U8 bindingCount = 0;
-
-		if (i == EDescriptorSetType_Resources) {
-
-			for(U32 j = EDescriptorType_Texture2D; j < EDescriptorType_ResourceCount; ++j) {
-
-				if(j == EDescriptorType_Sampler)
-					continue;
-
-				if(j == EDescriptorType_TLASExt && !hasRt)
-					continue;
-
-				U32 id = j;
-
-				if(j > EDescriptorType_Sampler)
-					--id;
-
-				if(j > EDescriptorType_TLASExt && !hasRt)
-					--id;
-
-				bindings[id] = (VkDescriptorSetLayoutBinding) {
-					.binding = id,
-					.stageFlags = VK_SHADER_STAGE_ALL,
-					.descriptorCount = descriptorTypeCount[j],
-					.descriptorType =
-						j == EDescriptorType_TLASExt ? VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR : (
-							j < EDescriptorType_Buffer ? VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE : (
-								j <= EDescriptorType_RWBuffer ? VK_DESCRIPTOR_TYPE_STORAGE_BUFFER :
-								VK_DESCRIPTOR_TYPE_STORAGE_IMAGE
-							)
-						)
-				};
-			}
-
-			bindingCount = EDescriptorType_ResourceCount - 1 - !hasRt;
+			gotoIfError(clean, dxCheck(heap->heap->lpVtbl->SetName(heap->heap, debugNames[i])))
 		}
 
-		else {
+		D3D12_DESCRIPTOR_HEAP_TYPE type;
 
-			Bool isSampler = i == EDescriptorSetType_Sampler;
-
-			bindings[0] = (VkDescriptorSetLayoutBinding) {
-				.stageFlags = VK_SHADER_STAGE_ALL,
-				.descriptorCount = isSampler ? EDescriptorTypeCount_Sampler : 1,
-				.descriptorType = isSampler ? VK_DESCRIPTOR_TYPE_SAMPLER : VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER
-			};
-
-			bindingCount = 1;
+		switch(i) {
+			case EDescriptorHeapType_Sampler:	type = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;		break;
+			default:							type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;	break;
+			case EDescriptorHeapType_DSV:		type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;			break;
+			case EDescriptorHeapType_RTV:		type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;			break;
 		}
 
-		//One binding per set.
+		heap->cpuIncrement = deviceExt->device->lpVtbl->GetDescriptorHandleIncrementSize(deviceExt->device, type);
 
-		VkDescriptorBindingFlags flags[EDescriptorType_ResourceCount - 1] = {
-			VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT |
-			VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT |
-			VK_DESCRIPTOR_BINDING_UPDATE_UNUSED_WHILE_PENDING_BIT
-		};
+		if(!heap->heap->lpVtbl->GetCPUDescriptorHandleForHeapStart(heap->heap, &heap->cpuHandle))
+			gotoIfError(clean, Error_nullPointer(0, "D3D12: GetCPUDescriptorHandleForHeapStart() returned NULL"))
 
-		for(U32 j = 1; j < EDescriptorType_ResourceCount - 1; ++j)
-			flags[j] = flags[0];
+		if(i >= EDescriptorHeapType_DSV)		//No GPU descriptor handle offsets
+			continue;
 
-		if (i >= EDescriptorSetType_CBuffer0 && i <= EDescriptorSetType_CBuffer2)	//We don't touch CBuffer after bind
-			flags[0] &=~ VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
+		heap->gpuIncrement = heap->cpuIncrement;
 
-		VkDescriptorSetLayoutBindingFlagsCreateInfo partiallyBound = (VkDescriptorSetLayoutBindingFlagsCreateInfo) {
-			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO,
-			.bindingCount = bindingCount,
-			.pBindingFlags = flags
-		};
-
-		VkDescriptorSetLayoutCreateInfo setInfo = (VkDescriptorSetLayoutCreateInfo) {
-			.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-			.pNext = &partiallyBound,
-			.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT,
-			.bindingCount = bindingCount,
-			.pBindings = bindings
-		};
-
-		gotoIfError(clean, vkCheck(vkCreateDescriptorSetLayout(
-			deviceExt->device, &setInfo, NULL, &deviceExt->setLayouts[i]
-		)))
+		if(!heap->heap->lpVtbl->GetGPUDescriptorHandleForHeapStart(heap->heap, &heap->gpuHandle))
+			gotoIfError(clean, Error_nullPointer(0, "D3D12: GetGPUDescriptorHandleForHeapStart() returned NULL"))
 	}
-
-	VkPipelineLayoutCreateInfo layoutInfo = (VkPipelineLayoutCreateInfo) {
-		.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-		.setLayoutCount = EDescriptorSetType_UniqueLayouts,
-		.pSetLayouts = deviceExt->setLayouts
-	};
-
-	gotoIfError(clean, vkCheck(vkCreatePipelineLayout(deviceExt->device, &layoutInfo, NULL, &deviceExt->defaultLayout)))
-
-	//We only need one pool and 1 descriptor set per EDescriptorType since we use bindless.
-	//Every resource is automatically allocated into their respective descriptor set.
-	//Last descriptor set (cbuffer) is triple buffered to allow swapping part of the UBO
-
-	VkDescriptorPoolSize poolSizes[] = {
-		(VkDescriptorPoolSize) { VK_DESCRIPTOR_TYPE_SAMPLER, EDescriptorTypeCount_Sampler },
-		(VkDescriptorPoolSize) { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, EDescriptorTypeCount_RWTextures },
-		(VkDescriptorPoolSize) { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, EDescriptorTypeCount_Textures },
-		(VkDescriptorPoolSize) { VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, EDescriptorTypeCount_SSBO },
-		(VkDescriptorPoolSize) { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 3 },
-		(VkDescriptorPoolSize) { VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, EDescriptorTypeCount_TLASExt }
-	};
-
-	VkDescriptorPoolCreateInfo poolInfo = (VkDescriptorPoolCreateInfo) {
-		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-		.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT,
-		.maxSets = EDescriptorHeapType_Count,
-		.poolSizeCount = sizeof(poolSizes) / sizeof(poolSizes[0]) - !hasRt,
-		.pPoolSizes = poolSizes
-	};
-
-	gotoIfError(clean, vkCheck(vkCreateDescriptorPool(deviceExt->device, &poolInfo, NULL, &deviceExt->descriptorPool)))
-
-	//Last layout repeat 3x (that's the CBuffer which needs 3 different versions)
-
-	VkDescriptorSetLayout setLayouts[EDescriptorHeapType_Count];
-
-	for(U64 i = 0; i < EDescriptorHeapType_Count; ++i)
-		setLayouts[i] = deviceExt->setLayouts[U64_min(i, EDescriptorSetType_UniqueLayouts - 1)];
-
-	VkDescriptorSetAllocateInfo setInfo = (VkDescriptorSetAllocateInfo) {
-		.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-		.descriptorPool = deviceExt->descriptorPool,
-		.descriptorSetCount = EDescriptorHeapType_Count,
-		.pSetLayouts = setLayouts
-	};
-
-	gotoIfError(clean, vkCheck(vkAllocateDescriptorSets(deviceExt->device, &setInfo, deviceExt->sets)))
-
-	if(device->flags & EGraphicsDeviceFlags_IsDebug) {
-
-		static const C8 *debugNames[] = {
-			"Samplers",
-			"Resources",
-			"Global frame cbuffer (0)",
-			"Global frame cbuffer (1)",
-			"Global frame cbuffer (2)"
-		};
-
-		if(instanceExt->debugSetName)
-			for (U32 i = 0; i < EDescriptorHeapType_Count; ++i) {
-
-				CharString_freex(&tempStr);
-
-				gotoIfError(clean, CharString_formatx(&tempStr, "Descriptor set (%"PRIu32": %s)", i, debugNames[i]))
-
-				VkDebugUtilsObjectNameInfoEXT debugName2 = (VkDebugUtilsObjectNameInfoEXT) {
-					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-					.objectType = VK_OBJECT_TYPE_DESCRIPTOR_SET,
-					.objectHandle = (U64) deviceExt->sets[i],
-					.pObjectName = tempStr.ptr,
-				};
-
-				gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName2)))
-
-				CharString_freex(&tempStr);
-
-				gotoIfError(clean, CharString_formatx(&tempStr, "Descriptor set layout (%"PRIu32": %s)", i, debugNames[i]))
-
-				if(i < EDescriptorSetType_UniqueLayouts) {
-
-					debugName2 = (VkDebugUtilsObjectNameInfoEXT) {
-						.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-						.objectType = VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT,
-						.objectHandle = (U64) deviceExt->setLayouts[i],
-						.pObjectName = tempStr.ptr,
-					};
-
-					gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName2)))
-				}
-			}
-
-	}
-
-	//Get memory properties
-
-	vkGetPhysicalDeviceMemoryProperties((VkPhysicalDevice) physicalDevice->ext, &deviceExt->memoryProperties);
 
 	//Determine when we need to flush.
 	//As a rule of thumb I decided for 20% occupied mem by just copies.
@@ -864,15 +444,9 @@ Error GraphicsDevice_initExt(
 	// (as long as it doesn't exceed 33%).
 	//Flush threshold is kept under 4 GiB to avoid TDRs because even if the mem is available it might be slow.
 
-	U64 cpuHeapSize = 0;
-	gotoIfError(clean, VkDeviceMemoryAllocator_findMemory(deviceExt, true, U32_MAX, NULL, NULL, &cpuHeapSize))
-
-	U64 gpuHeapSize = 0;
-	gotoIfError(clean, VkDeviceMemoryAllocator_findMemory(deviceExt, false, U32_MAX, NULL, NULL, &gpuHeapSize))
-
-	Bool isDistinct = gpuHeapSize >> 63;
-	gpuHeapSize &= (U64)I64_MAX;
-	cpuHeapSize &= (U64)I64_MAX;
+	const Bool isDistinct = device->info.type == EGraphicsDeviceType_Dedicated;
+	const U64 cpuHeapSize = device->info.capabilities.sharedMemory;
+	const U64 gpuHeapSize = device->info.capabilities.dedicatedMemory;
 
 	device->flushThreshold = U64_min(
 		4 * GIBI,
@@ -884,141 +458,117 @@ Error GraphicsDevice_initExt(
 
 	//Allocate temp storage for transitions
 
-	gotoIfError(clean, ListVkBufferMemoryBarrier2_reservex(&deviceExt->bufferTransitions, 17))
-	gotoIfError(clean, ListVkImageMemoryBarrier2_reservex(&deviceExt->imageTransitions, 16))
-	gotoIfError(clean, ListVkImageCopy_reservex(&deviceExt->imageCopyRanges, 8))
+	gotoIfError(clean, ListD3D12_BUFFER_BARRIER_reservex(&deviceExt->bufferTransitions, 17))
+	gotoIfError(clean, ListD3D12_TEXTURE_BARRIER_reservex(&deviceExt->imageTransitions, 16))
 
 	//Create command signatures for ExecuteIndirect
 
-	create commandSigs
+	D3D12_INDIRECT_ARGUMENT_DESC sigDesc[] = {
+		(D3D12_INDIRECT_ARGUMENT_DESC) { .Type = D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH },
+		(D3D12_INDIRECT_ARGUMENT_DESC) { .Type = D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH_RAYS },
+		(D3D12_INDIRECT_ARGUMENT_DESC) { .Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED },
+		(D3D12_INDIRECT_ARGUMENT_DESC) { .Type = D3D12_INDIRECT_ARGUMENT_TYPE_DRAW }
+	};
+
+	D3D12_COMMAND_SIGNATURE_DESC signatures[] = {
+		(D3D12_COMMAND_SIGNATURE_DESC) { .ByteStride = sizeof(DispatchIndirectCmd), .pArgumentDescs = &sigDesc[0] },
+		(D3D12_COMMAND_SIGNATURE_DESC) { .ByteStride = sizeof(DX12DispatchRaysIndirect), .pArgumentDescs = &sigDesc[1] },
+		(D3D12_COMMAND_SIGNATURE_DESC) { .ByteStride = sizeof(DrawCallIndexed), .pArgumentDescs = &sigDesc[2] },
+		(D3D12_COMMAND_SIGNATURE_DESC) { .ByteStride = sizeof(DrawCallUnindexed), .pArgumentDescs = &sigDesc[3] }
+	};
+
+	for(U64 i = 0; i < EExecuteIndirectCommand_Count; ++i) {
+
+		signatures[i].NumArgumentDescs = 1;
+
+		gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreateCommandSignature(
+			deviceExt->device,
+			&signatures[i],
+			NULL,
+			&IID_ID3D12CommandSignature, (void**) &deviceExt->commandSigs[i]
+		)))
+	}
 
 clean:
+
+	if(errBlob)
+		errBlob->lpVtbl->Release(errBlob);
+
+	if(rootSigBlob)
+		rootSigBlob->lpVtbl->Release(rootSigBlob);
 
 	if(err.genericError)
 		GraphicsDeviceRef_dec(deviceRef);
 
-	CharString_freex(&tempStr);
-	ListConstC8_freex(&extensions);
-	ListVkDeviceQueueCreateInfo_freex(&queues);
-	ListVkQueueFamilyProperties_freex(&queueFamilies);
 	return err;
-}*/
-
-void GraphicsDevice_postInit(GraphicsDevice *device) {
-	(void)device;
 }
 
-/*
-
-	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
-
-	//Fill last 3 descriptor sets with UBO[i] to ensure we only modify things in flight.
-
-	VkDescriptorBufferInfo uboBufferInfo[3] = {
-		(VkDescriptorBufferInfo) {
-			.buffer = DeviceBuffer_ext(DeviceBufferRef_ptr(device->frameData), Vk)->buffer,
-			.range = sizeof(CBufferData)
-		}
-	};
-
-	uboBufferInfo[1] = uboBufferInfo[0];
-	uboBufferInfo[2] = uboBufferInfo[0];
-
-	uboBufferInfo[1].offset = uboBufferInfo[0].range * 1;
-	uboBufferInfo[2].offset = uboBufferInfo[0].range * 2;
-
-	VkWriteDescriptorSet uboDescriptor[3] = {
-		(VkWriteDescriptorSet) {
-			.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-			.dstSet = deviceExt->sets[EDescriptorSetType_CBuffer0],
-			.dstBinding = 0,
-			.dstArrayElement = 0,
-			.descriptorCount = 1,
-			.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-			.pBufferInfo = &uboBufferInfo[0]
-		}
-	};
-
-	uboDescriptor[1] = uboDescriptor[0];
-	uboDescriptor[2] = uboDescriptor[0];
-
-	uboDescriptor[1].pBufferInfo = &uboBufferInfo[1];
-	uboDescriptor[1].dstSet = deviceExt->sets[EDescriptorSetType_CBuffer1];
-	uboDescriptor[2].pBufferInfo = &uboBufferInfo[2];
-	uboDescriptor[2].dstSet = deviceExt->sets[EDescriptorSetType_CBuffer2];
-
-	vkUpdateDescriptorSets(deviceExt->device, 3, uboDescriptor, 0, NULL);
-}*/
+void GraphicsDevice_postInit(GraphicsDevice *device) {		//No-op in DX12, CBV can be made/bound at runtime :)
+	(void)device;
+}
 
 Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext) {
 
 	if(!instance || !ext)
 		return instance;
 
-	return false;
-}
-/*
-
-	VkGraphicsDevice *deviceExt = (VkGraphicsDevice*)ext;
+	DxGraphicsDevice *deviceExt = (DxGraphicsDevice*)ext;
 
 	if(deviceExt->device) {
 
 		for(U64 i = 0; i < deviceExt->commandPools.length; ++i) {
 
-			const VkCommandAllocator alloc = deviceExt->commandPools.ptr[i];
+			const DxCommandAllocator alloc = deviceExt->commandPools.ptr[i];
 
 			if(alloc.cmd)
-				vkFreeCommandBuffers(deviceExt->device, alloc.pool, 1, &alloc.cmd);
+				alloc.cmd->lpVtbl->Release(alloc.cmd);
 
 			if(alloc.pool)
-				vkDestroyCommandPool(deviceExt->device, alloc.pool, NULL);
+				alloc.pool->lpVtbl->Release(alloc.pool);
 		}
 
-		for(U64 i = 0; i < deviceExt->submitSemaphores.length; ++i) {
+		if(deviceExt->commitSemaphore)
+			deviceExt->commitSemaphore->lpVtbl->Release(deviceExt->commitSemaphore);
 
-			const VkSemaphore semaphore = deviceExt->submitSemaphores.ptr[i];
+		for(U64 i = 0; i < EExecuteIndirectCommand_Count; ++i)
+			if(deviceExt->commandSigs[i])
+				deviceExt->commandSigs[i]->lpVtbl->Release(deviceExt->commandSigs[i]);
 
-			if(semaphore)
-				vkDestroySemaphore(deviceExt->device, semaphore, NULL);
-		}
-
-		if(deviceExt->commitSemaphore) {
-			vkDestroySemaphore(deviceExt->device, deviceExt->commitSemaphore, NULL);
-			deviceExt->commitSemaphore = NULL;
-		}
-
-		for(U32 i = 0; i < EDescriptorSetType_UniqueLayouts; ++i) {
-
-			const VkDescriptorSetLayout layout = deviceExt->setLayouts[i];
-
-			if(layout)
-				vkDestroyDescriptorSetLayout(deviceExt->device, layout, NULL);
-		}
-
-		if(deviceExt->descriptorPool)
-			vkDestroyDescriptorPool(deviceExt->device, deviceExt->descriptorPool, NULL);
+		for(U64 i = 0; i < EDescriptorHeapType_Count; ++i)
+			if(deviceExt->heaps[i].heap)
+				deviceExt->heaps[i].heap->lpVtbl->Release(deviceExt->heaps[i].heap);
 
 		if(deviceExt->defaultLayout)
-			vkDestroyPipelineLayout(deviceExt->device, deviceExt->defaultLayout, NULL);
+			deviceExt->defaultLayout->lpVtbl->Release(deviceExt->defaultLayout);
 
-		vkDestroyDevice(deviceExt->device, NULL);
+		for(U64 i = 0; i < EDxCommandQueue_Count; ++i)
+			if(deviceExt->queues[i].queue)
+				deviceExt->queues[i].queue->lpVtbl->Release(deviceExt->queues[i].queue);
+
+		deviceExt->device->lpVtbl->Release(deviceExt->device);
 	}
 
-	ListVkCommandAllocator_freex(&deviceExt->commandPools);
-	ListVkSemaphore_freex(&deviceExt->submitSemaphores);
+	if(deviceExt->adapter4)
+		deviceExt->adapter4->lpVtbl->Release(deviceExt->adapter4);
 
-	free ID3D12CommandSignature *commandSigs[EExecuteIndirectCommand_Count];
+	if(deviceExt->debugDevice) {
+
+		//Validate exit for leaks
+
+		deviceExt->debugDevice->lpVtbl->ReportLiveDeviceObjects(deviceExt->debugDevice, D3D12_RLDO_SUMMARY);
+
+		deviceExt->debugDevice->lpVtbl->Release(deviceExt->debugDevice);
+	}
+
+	if(deviceExt->infoQueue1)
+		deviceExt->infoQueue1->lpVtbl->Release(deviceExt->infoQueue1);
+
+	ListDxCommandAllocator_freex(&deviceExt->commandPools);
 
 	//Free temp storage
 
-	ListVkPipelineStageFlags_freex(&deviceExt->waitStages);
-	ListVkSemaphore_freex(&deviceExt->waitSemaphores);
-	ListVkResult_freex(&deviceExt->results);
-	ListU32_freex(&deviceExt->swapchainIndices);
-	ListVkSwapchainKHR_freex(&deviceExt->swapchainHandles);
-	ListVkBufferMemoryBarrier2_freex(&deviceExt->bufferTransitions);
-	ListVkImageMemoryBarrier2_freex(&deviceExt->imageTransitions);
-	ListVkImageCopy_freex(&deviceExt->imageCopyRanges);
+	ListD3D12_BUFFER_BARRIER_freex(&deviceExt->bufferTransitions);
+	ListD3D12_TEXTURE_BARRIER_freex(&deviceExt->imageTransitions);
 
 	return true;
 }
@@ -1026,28 +576,42 @@ Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext) {
 //Executing commands */
 
 Error GraphicsDeviceRef_waitExt(GraphicsDeviceRef *deviceRef) {
-	(void)deviceRef;
-	return Error_unimplemented(0, "GraphicsDeviceRef_waitExt() unimplemented");
-}
-	/*
-	return vkCheck(vkDeviceWaitIdle(GraphicsDevice_ext(GraphicsDeviceRef_ptr(deviceRef), Vk)->device));
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+	const DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
+
+	const HANDLE eventHandle = CreateEventExW(NULL, NULL, 0, EVENT_ALL_ACCESS);
+	Error err;
+
+	gotoIfError(clean, dxCheck(deviceExt->commitSemaphore->lpVtbl->SetEventOnCompletion(
+		deviceExt->commitSemaphore, device->submitId, eventHandle
+	)))
+
+	WaitForSingleObject(eventHandle, INFINITE);
+
+clean:
+	CloseHandle(eventHandle);
+	return err;
 }
 
-VkCommandAllocator *VkGraphicsDevice_getCommandAllocator(
-	VkGraphicsDevice *device, U32 resolvedQueueId, U64 threadId, U8 backBufferId
+DxCommandAllocator *DxGraphicsDevice_getCommandAllocator(
+	const DxGraphicsDevice *device,
+	const U32 resolvedQueueId,
+	const U64 threadId,
+	const U8 backBufferId
 ) {
 
 	const U64 threadCount = Platform_instance.threads;
 
-	if(!device || resolvedQueueId >= device->resolvedQueues || threadId >= threadCount || backBufferId >= 3)
+	if(!device || resolvedQueueId >= 3 || threadId >= threadCount || backBufferId >= 3)
 		return NULL;
 
-	const U64 id = resolvedQueueId + (backBufferId * threadCount + threadId) * device->resolvedQueues;
+	const U64 id = resolvedQueueId + (backBufferId * threadCount + threadId) * 3;
 
 	return device->commandPools.ptrNonConst + id;
 }
 
-UnifiedTexture *TextureRef_getUnifiedTextureIntern(TextureRef *tex, DeviceResourceVersion *version);*/
+UnifiedTexture *TextureRef_getUnifiedTextureIntern(TextureRef *tex, DeviceResourceVersion *version);
 
 Error GraphicsDevice_submitCommandsImpl(
 	GraphicsDeviceRef *deviceRef,
@@ -1470,40 +1034,39 @@ clean:
 }*/
 
 Error DxGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, DxCommandBuffer *commandBuffer) {
-	(void)deviceRef; (void)commandBuffer;
-	return Error_none();
-}
-/*
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
-	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
+	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
 
 	//End current command list
 
+	HANDLE eventHandle = NULL;
 	Error err;
-	gotoIfError(clean, vkCheck(vkEndCommandBuffer(commandBuffer)))
+	gotoIfError(clean, dxCheck(commandBuffer->lpVtbl->Close(commandBuffer)))
 
 	//Submit only the copy command list
 
-	const U64 waitValue = device->submitId - 1;
+	ID3D12CommandList *commandList = NULL;
+	gotoIfError(clean, dxCheck(commandBuffer->lpVtbl->QueryInterface(
+		commandBuffer, &IID_ID3D12CommandList, (void**) &commandList
+	)))
 
-	const VkTimelineSemaphoreSubmitInfo timelineInfo = (VkTimelineSemaphoreSubmitInfo) {
-		.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO,
-		.waitSemaphoreValueCount = device->submitId > 0,
-		.pWaitSemaphoreValues = device->submitId > 0 ? &waitValue : NULL,
-	};
+	if(device->submitId) {		//Ensure GPU is complete, so we don't override anything
 
-	const VkSubmitInfo submitInfo = (VkSubmitInfo) {
-		.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-		.pNext = &timelineInfo,
-		.waitSemaphoreCount = timelineInfo.waitSemaphoreValueCount,
-		.pWaitSemaphores = (VkSemaphore*) &deviceExt->commitSemaphore,
-		.pCommandBuffers = &commandBuffer,
-		.commandBufferCount = 1
-	};
+		eventHandle = CreateEventExW(NULL, NULL, 0, EVENT_ALL_ACCESS);
 
-	const VkCommandQueue queue = deviceExt->queues[EVkCommandQueue_Graphics];
-	gotoIfError(clean, vkCheck(vkQueueSubmit(queue.queue, 1, &submitInfo, VK_NULL_HANDLE)))
+		gotoIfError(clean, dxCheck(deviceExt->commitSemaphore->lpVtbl->SetEventOnCompletion(
+			deviceExt->commitSemaphore, device->submitId - 1, eventHandle
+		)))
+
+		WaitForSingleObject(eventHandle, INFINITE);
+		CloseHandle(eventHandle);
+		eventHandle = NULL;
+	}
+
+	const DxCommandQueue queue = deviceExt->queues[EDxCommandQueue_Graphics];
+	queue.queue->lpVtbl->ExecuteCommandLists(queue.queue, 1, &commandList);
+	gotoIfError(clean, dxCheck(queue.queue->lpVtbl->Signal(queue.queue, deviceExt->commitSemaphore, device->submitId)))
 
 	//Wait for the device
 
@@ -1513,23 +1076,16 @@ Error DxGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, DxCommandBuffer *comm
 
 	const U32 threadId = 0;
 
-	const VkCommandAllocator *allocator = VkGraphicsDevice_getCommandAllocator(
+	const DxCommandAllocator *allocator = DxGraphicsDevice_getCommandAllocator(
 		deviceExt, queue.resolvedQueueId, threadId, (U8)(device->submitId % 3)
 	);
 
-	gotoIfError(clean, vkCheck(vkResetCommandPool(
-		deviceExt->device, allocator->pool, VK_COMMAND_POOL_RESET_RELEASE_RESOURCES_BIT
-	)))
-
-	//Re-open
-
-	const VkCommandBufferBeginInfo beginInfo = (VkCommandBufferBeginInfo) {
-		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO
-	};
-
-	gotoIfError(clean, vkCheck(vkBeginCommandBuffer(commandBuffer, &beginInfo)))
+	gotoIfError(clean, dxCheck(commandBuffer->lpVtbl->Reset(commandBuffer, allocator->pool, NULL)))
 
 clean:
+
+	if(eventHandle)
+		CloseHandle(eventHandle);
+
 	return err;
 }
-*/

@@ -73,7 +73,6 @@ Error DxDeviceBuffer_transition(
 	return Error_none();
 }
 
-
 Bool DeviceBuffer_freeExt(DeviceBuffer *buffer) {
 
 	DxDeviceBuffer *bufferExt = DeviceBuffer_ext(buffer, Dx);
@@ -104,7 +103,7 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 		.DepthOrArraySize = 1,
 		.MipLevels = 1,
 		.Format = DXGI_FORMAT_UNKNOWN,
-		.SampleDesc = (DXGI_SAMPLE_DESC) { .Count = 1, .Quality = 0},
+		.SampleDesc = (DXGI_SAMPLE_DESC) { .Count = 1, .Quality = 0 },
 		.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR
 	};
 
@@ -116,7 +115,6 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 
 	if(buf->usage & EDeviceBufferUsage_ASExt)
 		resourceDesc.Flags |= D3D12_RESOURCE_FLAG_RAYTRACING_ACCELERATION_STRUCTURE;
-
 
 	D3D12_RESOURCE_ALLOCATION_INFO allocInfo = (D3D12_RESOURCE_ALLOCATION_INFO) { 0 };
 	D3D12_RESOURCE_ALLOCATION_INFO *res = deviceExt->device->lpVtbl->GetResourceAllocationInfo(
@@ -166,7 +164,7 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 		(void**)&bufExt->buffer
 	)))
 
-	if ((block.allocationTypeExt & 1) || (device->info.capabilities.featuresExt & EDxGraphicsFeatures_ReBAR))
+	if (!(block.allocationTypeExt & 1) || (device->info.capabilities.featuresExt & EDxGraphicsFeatures_ReBAR))
 		gotoIfError(clean, dxCheck(bufExt->buffer->lpVtbl->Map(
 			bufExt->buffer, 0, NULL, (void**) &buf->resource.mappedMemoryExt
 		)))
@@ -184,7 +182,7 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 
 	if(flags & EGraphicsResourceFlag_ShaderRW || (buf->usage & EDeviceBufferUsage_ASExt)) {
 
-		const DxHeap *heap = deviceExt->heaps[EDescriptorHeapType_Resources];
+		const DxHeap heap = deviceExt->heaps[EDescriptorHeapType_Resources];
 
 		//Create readonly buffer
 
@@ -200,20 +198,25 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 				}
 			};
 
+			U64 offset = EDescriptorTypeOffsets_Buffer;
+
 			if(buf->usage & EDeviceBufferUsage_ASExt) {
+
 				srv.ViewDimension = D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE;
 				srv.RaytracingAccelerationStructure = (D3D12_RAYTRACING_ACCELERATION_STRUCTURE_SRV) {
 					.Location = buf->resource.deviceAddress
 				};
+
+				offset = EDescriptorTypeOffsets_TLASExt;
 			}
 
-			U64 offset = EDescriptorTypeOffsets_Buffer + ResourceHandle_getId(buf->readHandle);
+			offset += ResourceHandle_getId(buf->readHandle);
 
 			deviceExt->device->lpVtbl->CreateShaderResourceView(
 				deviceExt->device,
 				bufExt->buffer,
 				&srv,
-				(D3D12_CPU_DESCRIPTOR_HANDLE) { .ptr = heap->cpuHandle.ptr + heap->cpuIncrement * offset }
+				(D3D12_CPU_DESCRIPTOR_HANDLE) { .ptr = heap.cpuHandle.ptr + heap.cpuIncrement * offset }
 			);
 		}
 
@@ -237,7 +240,7 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 				bufExt->buffer,
 				NULL,
 				&uav,
-				(D3D12_CPU_DESCRIPTOR_HANDLE) { .ptr = heap->cpuHandle.ptr + heap->cpuIncrement * offset }
+				(D3D12_CPU_DESCRIPTOR_HANDLE) { .ptr = heap.cpuHandle.ptr + heap.cpuIncrement * offset }
 			);
 		}
 	}

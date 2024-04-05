@@ -21,6 +21,15 @@
 #pragma once
 #include "types.hlsl"
 
+#ifndef __spirv__
+
+	#define NV_SHADER_EXTN_SLOT u99999
+	#define NV_SHADER_EXTN_REGISTER_SPACE space99999
+
+	#include "../../../external/nvapi/nvHLSLExtns.h"
+
+#endif
+
 static const U32 ResourceId_mask = (1 << 17) - 1;
 static const U32 ShortResourceId_mask = (1 << 13) - 1;		//Only for Samplers, AS and other short resource ids
 static const U32 U32_MAX = 0xFFFFFFFF;

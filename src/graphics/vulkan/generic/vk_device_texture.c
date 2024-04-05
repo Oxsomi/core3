@@ -120,10 +120,10 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 			const U16 h = TextureRange_height(texturej);
 			const U16 l = TextureRange_length(texturej);
 
-			const U32 rowOff = (U32) ETextureFormat_getSize(format, x, alignmentY, 1);
-			const U32 rowLen = (U32) ETextureFormat_getSize(format, w, alignmentY, 1);
+			const U64 rowOff = ETextureFormat_getSize(format, x, alignmentY, 1);
+			const U64 rowLen = ETextureFormat_getSize(format, w, alignmentY, 1);
 			const U64 len = ETextureFormat_getSize(format, w, h, l);
-			const U64 start = (U64) rowLen * (y + z * h) + rowOff;
+			const U64 start = rowLen * (y + z * h) + rowOff;
 
 			if(w == texture->base.width && h == texture->base.height)
 				Buffer_copy(
@@ -271,11 +271,11 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 			U16 h = TextureRange_height(texturej);
 			U16 l = TextureRange_length(texturej);
 
-			U32 rowLen = (U32) ETextureFormat_getSize(format, w, alignmentY, 1);
-			U32 rowOff = (U32) ETextureFormat_getSize(format, x, alignmentY, 1);
+			U64 rowLen = ETextureFormat_getSize(format, w, alignmentY, 1);
+			U64 rowOff = ETextureFormat_getSize(format, x, alignmentY, 1);
 			U64 len = ETextureFormat_getSize(format, w, h, l);
 			U64 h2 = h / alignmentY;
-			U64 start = (U64) rowLen * (y + z * h2) + rowOff;
+			U64 start = rowLen * (y + z * h2) + rowOff;
 
 			if(w == texture->base.width && h == texture->base.height)
 				Buffer_copy(

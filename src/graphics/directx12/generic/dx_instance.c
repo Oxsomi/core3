@@ -37,29 +37,6 @@
 TListNamed(IDXGIAdapter4*, ListIDXGIAdapter4)
 TListNamedImpl(ListIDXGIAdapter4)
 
-//Graphics instance doesn't really exist for DirectX12.
-//It's only used for defining SDK version and that we're using DirectX12.
-//The closest thing we can map is a DXGI factory that's used to query adapters
-
-typedef enum EDxGraphicsInstanceFlags {
-	EDxGraphicsInstanceFlags_HasNVApi		= 1 << 0,
-	EDxGraphicsInstanceFlags_HasAMDAgs		= 1 << 1
-} EDxGraphicsInstanceFlags;
-
-typedef struct DxGraphicsInstance {
-
-	IDXGIFactory6 *factory;
-	AGSContext *agsContext;
-
-	CharString nvDriverVersion;
-	CharString amdDriverVersion;
-
-	AGSGPUInfo gpuInfo;
-
-	U32 flags, padding;
-
-} DxGraphicsInstance;
-
 Bool GraphicsInstance_free(GraphicsInstance *data, Allocator alloc) {
 
 	(void)alloc;
@@ -68,6 +45,9 @@ Bool GraphicsInstance_free(GraphicsInstance *data, Allocator alloc) {
 
 	if(!instanceExt)
 		return true;
+
+	if(instanceExt->debug1)
+		instanceExt->debug1->lpVtbl->Release(instanceExt->debug1);
 
 	if(instanceExt->flags & EDxGraphicsInstanceFlags_HasNVApi)
 		NvAPI_Unload();
@@ -97,6 +77,12 @@ Error GraphicsInstance_createExt(GraphicsApplicationInfo info, GraphicsInstanceR
 	if(err.genericError)
 		return err;
 
+	if(instance->flags & EGraphicsInstanceFlags_IsDebug) {
+		gotoIfError(clean, dxCheck(D3D12GetDebugInterface(&IID_ID3D12Debug1, (void**) &instanceExt->debug1)))
+		instanceExt->debug1->lpVtbl->EnableDebugLayer(instanceExt->debug1);
+		instanceExt->debug1->lpVtbl->SetEnableGPUBasedValidation(instanceExt->debug1, true);
+	}
+
 	//Check for NVApi
 
 	const NvAPI_Status status = NvAPI_Initialize();
@@ -122,12 +108,13 @@ Error GraphicsInstance_createExt(GraphicsApplicationInfo info, GraphicsInstanceR
 
 	const AGSConfiguration config = (AGSConfiguration) { 0 };
 
-	if(agsInitialize(AGS_CURRENT_VERSION, &config, &instanceExt->agsContext, &instanceExt->gpuInfo) == AGS_SUCCESS) {
+	AGSGPUInfo gpuInfo;
+	if(agsInitialize(AGS_CURRENT_VERSION, &config, &instanceExt->agsContext, &gpuInfo) == AGS_SUCCESS) {
 
 		instanceExt->flags |= EDxGraphicsInstanceFlags_HasAMDAgs;
 
 		gotoIfError(clean, CharString_createCopyx(
-			CharString_createRefCStrConst(instanceExt->gpuInfo.radeonSoftwareVersion), &instanceExt->amdDriverVersion
+			CharString_createRefCStrConst(gpuInfo.radeonSoftwareVersion), &instanceExt->amdDriverVersion
 		))
 
 		if(CharString_length(instanceExt->amdDriverVersion) >= 256) {
@@ -172,7 +159,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphics
 
 			gotoIfError(clean, ListIDXGIAdapter4_resizex(&adapters, adapters.length + 1))
 			hr = instanceExt->factory->lpVtbl->EnumAdapters1(
-				instanceExt->factory, adapterId, (void*)&adapters.ptrNonConst[adapterId]
+				instanceExt->factory, adapterId, (IDXGIAdapter1**)&adapters.ptrNonConst[adapterId]
 			);
 
 			if(FAILED(hr))

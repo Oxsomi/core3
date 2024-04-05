@@ -102,9 +102,7 @@ Error DeviceMemoryAllocator_allocate(
 	D3D12_HEAP_DESC heapDesc = (D3D12_HEAP_DESC) {
 		.SizeInBytes = realBlockSize,
 		.Properties = (D3D12_HEAP_PROPERTIES) {
-			.Type = cpuSided ? D3D12_HEAP_TYPE_UPLOAD : (hasReBAR ? D3D12_HEAP_TYPE_GPU_UPLOAD : D3D12_HEAP_TYPE_DEFAULT),
-			.CPUPageProperty = cpuSided ? D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE : D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE,
-			.MemoryPoolPreference = cpuSided ? D3D12_MEMORY_POOL_L0 : D3D12_MEMORY_POOL_L1
+			.Type = cpuSided ? D3D12_HEAP_TYPE_UPLOAD : (hasReBAR ? D3D12_HEAP_TYPE_GPU_UPLOAD : D3D12_HEAP_TYPE_DEFAULT)
 		},
 		.Alignment = req.alignment,
 	};
@@ -126,9 +124,6 @@ Error DeviceMemoryAllocator_allocate(
 
 			break;
 	}
-
-	if(cpuSided)
-		heapDesc.Flags |= D3D12_HEAP_FLAG_SHARED;
 
 	ID3D12Heap *heap = NULL;
 	Error err = dxCheck(deviceExt->device->lpVtbl->CreateHeap(

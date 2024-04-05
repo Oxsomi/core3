@@ -41,12 +41,17 @@ typedef enum EDxCommandQueue {
 
 } EDxCommandQueue;
 
+typedef struct DX12DispatchRaysIndirect {		//Intermediate, this one is created from a more sparse version
+	D3D12_DISPATCH_RAYS_DESC desc;
+	U32 padding[5];
+} DX12DispatchRaysIndirect;
+
 typedef struct DxCommandQueue {
 
 	ID3D12CommandQueue *queue;
 
 	EDxCommandQueue type;
-	U32 pad;
+	U32 resolvedQueueId;
 
 } DxCommandQueue;
 
@@ -82,8 +87,6 @@ typedef struct DxHeap {
 typedef enum EExecuteIndirectCommand {
 	EExecuteIndirectCommand_Dispatch,
 	EExecuteIndirectCommand_DispatchRays,
-	EExecuteIndirectCommand_DrawIndexedCount,
-	EExecuteIndirectCommand_DrawCount,
 	EExecuteIndirectCommand_DrawIndexed,
 	EExecuteIndirectCommand_Draw,
 	EExecuteIndirectCommand_Count
@@ -92,18 +95,22 @@ typedef enum EExecuteIndirectCommand {
 typedef struct DxGraphicsDevice {
 
 	ID3D12Device5 *device;
+	ID3D12DebugDevice *debugDevice;
+	ID3D12InfoQueue1 *infoQueue1;
+
 	DxCommandQueue queues[EDxCommandQueue_Count];		//Don't have to be unique queues! Indexed by EVkCommandQueue
 
 	//3D as 1D flat List: resolvedQueueId + (backBufferId * threadCount + threadId) * resolvedQueues
 	ListDxCommandAllocator commandPools;
 
-	ListID3D12Fence submitSemaphores;
-	ListID3D12Fence commitSemaphore;
+	ID3D12Fence *commitSemaphore;
 
 	ID3D12CommandSignature *commandSigs[EExecuteIndirectCommand_Count];
 
-	DxHeap *heaps[EDescriptorHeapType_Count];
+	DxHeap heaps[EDescriptorHeapType_Count];
 	ID3D12RootSignature *defaultLayout;								//Default layout if push constants aren't present
+
+	IDXGIAdapter4 *adapter4;
 
 	//Temporary storage for submit time stuff
 

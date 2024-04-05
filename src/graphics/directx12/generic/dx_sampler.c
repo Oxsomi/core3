@@ -74,8 +74,8 @@ Error GraphicsDeviceRef_createSamplerExt(GraphicsDeviceRef *dev, Sampler *sample
 
 	const U32 one = 1;
 
-	switch(sinfo.borderColor)
-	{
+	switch(sinfo.borderColor) {
+
 		case ESamplerBorderColor_OpaqueBlackFloat:
 			samplerView.BorderColor[3] = 1.f;
 			break;
@@ -103,13 +103,13 @@ Error GraphicsDeviceRef_createSamplerExt(GraphicsDeviceRef *dev, Sampler *sample
 		samplerView.Filter |= 0x80;		//Signal we want comparison sampler
 	}
 
-	const DxHeap *heap = deviceExt->heaps[EDescriptorHeapType_Sampler];
+	const DxHeap heap = deviceExt->heaps[EDescriptorHeapType_Sampler];
 	const U64 id = ResourceHandle_getId(sampler->samplerLocation);
 
 	deviceExt->device->lpVtbl->CreateSampler(
 		deviceExt->device,
 		&samplerView,
-		(D3D12_CPU_DESCRIPTOR_HANDLE) { .ptr = heap->cpuHandle.ptr + heap->cpuIncrement * id }
+		(D3D12_CPU_DESCRIPTOR_HANDLE) { .ptr = heap.cpuHandle.ptr + heap.cpuIncrement * id }
 	);
 
 	return Error_none();

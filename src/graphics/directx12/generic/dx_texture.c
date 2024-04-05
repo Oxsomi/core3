@@ -18,8 +18,7 @@
 *  This is called dual licensing.
 */
 
-int translationUnitEmpty8 = 0;
-
+#include "platforms/ext/listx.h"
 #include "graphics/directx12/dx_device.h"
 #include "graphics/generic/texture.h"
 #include "graphics/generic/device.h"
@@ -30,108 +29,94 @@ int translationUnitEmpty8 = 0;
 const U32 UnifiedTextureImageExt_size = sizeof(DxUnifiedTexture);
 
 Bool UnifiedTexture_freeExt(TextureRef *textureRef) {
-	(void)textureRef;
-	return false;
-}
 
-/*
 	const UnifiedTexture utex = TextureRef_getUnifiedTexture(textureRef, NULL);
-	const VkGraphicsDevice *deviceExt = GraphicsDevice_ext(GraphicsDeviceRef_ptr(utex.resource.device), Vk);
 
 	for(U8 i = 0; i < utex.images; ++i) {
 
-		const VkUnifiedTexture *image = TextureRef_getImgExtT(textureRef, Vk, 0, i);
-
-		if(image->view)
-			vkDestroyImageView(deviceExt->device, image->view, NULL);
+		const DxUnifiedTexture *image = TextureRef_getImgExtT(textureRef, Dx, 0, i);
 
 		if(image->image && utex.resource.type != EResourceType_Swapchain)
-			vkDestroyImage(deviceExt->device, image->image, NULL);
+			image->image->lpVtbl->Release(image->image);
 	}
 
 	return true;
 }
 
 UnifiedTexture *TextureRef_getUnifiedTextureIntern(TextureRef *tex, DeviceResourceVersion *version);
-*/
 
 Error UnifiedTexture_createExt(TextureRef *textureRef, CharString name) {
-	(void)textureRef; (void)name;
-	return Error_unimplemented(0, "UnifiedTexture_createExt() unimplemented");
-}
-/*
 
 	UnifiedTexture *texture = TextureRef_getUnifiedTextureIntern(textureRef, NULL);
 
 	//Prepare temporary free-ables and extended data.
 
 	Error err = Error_none();
-	CharString temp = CharString_createNull();
+	ListU16 temp16 = (ListU16) { 0 };
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(texture->resource.device);
-	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
-	VkGraphicsInstance *instance = GraphicsInstance_ext(GraphicsInstanceRef_ptr(device->instance), Vk);
+	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
 
-	VkFormat vkFormat = VK_FORMAT_UNDEFINED;
+	DXGI_FORMAT dxFormat = DXGI_FORMAT_UNKNOWN;
 
-	switch(texture->depthFormat) {
-		case EDepthStencilFormat_D16:		vkFormat = VK_FORMAT_D16_UNORM;					break;
-		case EDepthStencilFormat_D32:		vkFormat = VK_FORMAT_D32_SFLOAT;				break;
-		case EDepthStencilFormat_D24S8Ext:	vkFormat = VK_FORMAT_D24_UNORM_S8_UINT;			break;
-		case EDepthStencilFormat_D32S8:		vkFormat = VK_FORMAT_D32_SFLOAT_S8_UINT;		break;
-		case EDepthStencilFormat_S8Ext:		vkFormat = VK_FORMAT_S8_UINT;					break;
-	}
+	if(texture->depthFormat)
+		dxFormat = EDepthStencilFormat_toDXFormat(texture->depthFormat);
 
-	if(!vkFormat)
-		vkFormat = mapVkFormat(ETextureFormatId_unpack[texture->textureFormatId]);
+	else dxFormat = ETextureFormatId_toDXFormat(texture->textureFormatId);
 
 	Bool isDeviceTexture = texture->resource.type == EResourceType_DeviceTexture;
 
-	VkImageCreateInfo imageInfo = (VkImageCreateInfo) {
+	//Query about alignment and size
 
-		.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-		.imageType = texture->type == ETextureType_2D ? VK_IMAGE_TYPE_2D : VK_IMAGE_TYPE_3D,
-		.format = vkFormat,
-		.extent = (VkExtent3D) { .width = texture->width, .height = texture->height, .depth = texture->length },
-		.mipLevels = texture->levels,
-		.arrayLayers = 1,
-		.samples = (VkSampleCountFlagBits) (1 << texture->sampleCount),
-		.tiling = VK_IMAGE_TILING_OPTIMAL,
+	D3D12_RESOURCE_DESC resourceDesc = (D3D12_RESOURCE_DESC) {
 
-		.usage =
-			(texture->depthFormat ? VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT : 0) |
-			(texture->textureFormatId && !isDeviceTexture ? VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT : 0) |
-			VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
-			VK_IMAGE_USAGE_TRANSFER_DST_BIT |
-			(texture->resource.flags & EGraphicsResourceFlag_ShaderRead ? VK_IMAGE_USAGE_SAMPLED_BIT : 0) |
-			(texture->resource.flags & EGraphicsResourceFlag_ShaderWrite ? VK_IMAGE_USAGE_STORAGE_BIT : 0),
+		.Dimension = 
+			texture->type == ETextureType_3D ? D3D12_RESOURCE_DIMENSION_TEXTURE3D : D3D12_RESOURCE_DIMENSION_TEXTURE2D,
 
-		.sharingMode = VK_SHARING_MODE_EXCLUSIVE
+		.Alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT,
+		.Width = texture->width,
+		.Height = texture->height,
+		.DepthOrArraySize = texture->length,
+		.MipLevels = texture->levels,
+		.Format = dxFormat,
+		.SampleDesc = (DXGI_SAMPLE_DESC) { .Count = 1, .Quality = 0 }
 	};
+
+	if(!isDeviceTexture) {
+
+		if(texture->depthFormat)
+			resourceDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+
+		else resourceDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+	}
+
+	if(texture->resource.flags & EGraphicsResourceFlag_ShaderWrite)
+		resourceDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+
+	if(!(texture->resource.flags & EGraphicsResourceFlag_ShaderRead))
+		resourceDesc.Flags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
 
 	//Allocate memory
 
 	if(texture->resource.type != EResourceType_Swapchain) {
 
-		VkDeviceImageMemoryRequirementsKHR imageReq = (VkDeviceImageMemoryRequirementsKHR) {
-			.sType = VK_STRUCTURE_TYPE_DEVICE_IMAGE_MEMORY_REQUIREMENTS_KHR,
-			.pCreateInfo = &imageInfo
-		};
+		D3D12_RESOURCE_ALLOCATION_INFO allocInfo = (D3D12_RESOURCE_ALLOCATION_INFO) { 0 };
+		D3D12_RESOURCE_ALLOCATION_INFO *res = deviceExt->device->lpVtbl->GetResourceAllocationInfo(
+			deviceExt->device, &allocInfo, 0, 1, &resourceDesc
+		);
 
-		VkMemoryDedicatedRequirements dedicatedReq = {
-			.sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_REQUIREMENTS
-		};
+		if(!res)
+			gotoIfError(clean, Error_invalidState(0, "UnifiedTexture_createExt() couldn't query allocInfo"))
 
-		VkMemoryRequirements2 requirements = (VkMemoryRequirements2) {
-			.sType = VK_STRUCTURE_TYPE_MEMORY_REQUIREMENTS_2,
-			.pNext = &dedicatedReq
+		DxBlockRequirements req = (DxBlockRequirements) {
+			.flags = !isDeviceTexture ? EDxBlockFlags_IsDedicated : EDxBlockFlags_None,
+			.alignment = (U32) allocInfo.Alignment,
+			.length = allocInfo.SizeInBytes
 		};
-
-		instance->getDeviceImageMemoryRequirements(deviceExt->device, &imageReq, &requirements);
 
 		gotoIfError(clean, DeviceMemoryAllocator_allocate(
 			&device->allocator,
-			&requirements,
+			&req,
 			texture->resource.flags & EGraphicsResourceFlag_CPUAllocatedBit,
 			&texture->resource.blockId,
 			&texture->resource.blockOffset,
@@ -145,111 +130,160 @@ Error UnifiedTexture_createExt(TextureRef *textureRef, CharString name) {
 
 		//TODO: versioned image
 
-		VkUnifiedTexture *managedImageExt = TextureRef_getImgExtT(textureRef, Vk, 0, 0);
-		gotoIfError(clean, vkCheck(vkCreateImage(deviceExt->device, &imageInfo, NULL, &managedImageExt->image)))
+		DxUnifiedTexture *managedImageExt = TextureRef_getImgExtT(textureRef, Dx, 0, 0);
 
-		gotoIfError(clean, vkCheck(vkBindImageMemory(
-			deviceExt->device, managedImageExt->image, (VkDeviceMemory) block.ext, texture->resource.blockOffset
+		gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreatePlacedResource(
+			deviceExt->device,
+			block.ext,
+			texture->resource.blockOffset,
+			&resourceDesc,
+			D3D12_RESOURCE_STATE_COPY_DEST,
+			NULL,
+			&IID_ID3D12Resource,
+			(void**)&managedImageExt->image
 		)))
 	}
 
 	//Image views
 
+	const DxHeap heap = deviceExt->heaps[EDescriptorHeapType_Resources];
+
 	for(U8 i = 0; i < texture->images; ++i) {
 
-		VkUnifiedTexture *managedImageExt = TextureRef_getImgExtT(textureRef, Vk, 0, i);
+		DxUnifiedTexture *managedImageExt = TextureRef_getImgExtT(textureRef, Dx, 0, i);
 		UnifiedTextureImage managedImage = TextureRef_getImage(textureRef, 0, i);
 
-		VkImageViewCreateInfo viewCreate = (VkImageViewCreateInfo) {
-			.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-			.image = managedImageExt->image,
-			.viewType = texture->type == ETextureType_2D ? VK_IMAGE_VIEW_TYPE_2D : VK_IMAGE_VIEW_TYPE_3D,
-			.format = vkFormat,
-			.subresourceRange = (VkImageSubresourceRange) {
-				.aspectMask = texture->depthFormat ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT,
-				.layerCount = texture->length,
-				.levelCount = texture->levels
-		}
-		};
-
-		gotoIfError(clean, vkCheck(vkCreateImageView(deviceExt->device, &viewCreate, NULL, &managedImageExt->view)))
-
-		if(texture->resource.flags & EGraphicsResourceFlag_ShaderRW) {
-
-			VkDescriptorImageInfo descriptorImageInfos[2] = {
-				(VkDescriptorImageInfo) {
-					.imageView = managedImageExt->view,
-					.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-				},
-				(VkDescriptorImageInfo) {
-					.imageView = managedImageExt->view,
-					.imageLayout = VK_IMAGE_LAYOUT_GENERAL
-				}
+		if (texture->resource.flags & EGraphicsResourceFlag_ShaderRead) {
+			
+			D3D12_SHADER_RESOURCE_VIEW_DESC srv = (D3D12_SHADER_RESOURCE_VIEW_DESC) {
+				.Format = dxFormat,
+				.Shader4ComponentMapping =  D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING
 			};
 
-			VkWriteDescriptorSet writeDescriptorSet[2] = {
-				(VkWriteDescriptorSet) {
-					.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-					.dstSet = deviceExt->sets[EDescriptorSetType_Resources],
-					.descriptorCount = 1
-				}
-			};
+			U64 offset = ResourceHandle_getId(managedImage.readHandle);
 
-			U32 counter = 0;
+			switch(texture->type) {
 
-			if (texture->resource.flags & EGraphicsResourceFlag_ShaderRead) {
-				writeDescriptorSet[0].dstBinding = EDescriptorType_Texture2D;
-				writeDescriptorSet[0].dstArrayElement = ResourceHandle_getId(managedImage.readHandle);
-				writeDescriptorSet[0].descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-				writeDescriptorSet[0].pImageInfo = &descriptorImageInfos[0];
-				++counter;
+				case ETextureType_3D:
+					offset += EDescriptorTypeOffsets_Texture3D;
+					srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE3D;
+					srv.Texture3D = (D3D12_TEX3D_SRV) { .MipLevels = texture->levels };
+					break;
+
+				case ETextureType_Cube:
+					offset += EDescriptorTypeOffsets_TextureCube;
+					srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
+					srv.TextureCube = (D3D12_TEXCUBE_SRV) { .MipLevels = texture->levels };
+					break;
+
+				default:
+					offset += EDescriptorTypeOffsets_Texture2D;
+					srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+					srv.Texture2D = (D3D12_TEX2D_SRV) { .MipLevels = texture->levels };
+					break;
 			}
 
-			if (texture->resource.flags & EGraphicsResourceFlag_ShaderWrite) {
-
-				if(counter)
-					writeDescriptorSet[1] = writeDescriptorSet[0];
-
-				writeDescriptorSet[counter].dstBinding = UnifiedTexture_getWriteDescriptorType(*texture);
-				writeDescriptorSet[counter].dstArrayElement = ResourceHandle_getId(managedImage.writeHandle);
-				writeDescriptorSet[counter].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-				writeDescriptorSet[counter].pImageInfo = &descriptorImageInfos[1];
-				++counter;
-			}
-
-			vkUpdateDescriptorSets(deviceExt->device, counter, writeDescriptorSet, 0, NULL);
+			deviceExt->device->lpVtbl->CreateShaderResourceView(
+				deviceExt->device,
+				managedImageExt->image,
+				&srv,
+				(D3D12_CPU_DESCRIPTOR_HANDLE) { .ptr = heap.cpuHandle.ptr + heap.cpuIncrement * offset }
+			);
 		}
 
-		if((device->flags & EGraphicsDeviceFlags_IsDebug) && CharString_length(name) && instance->debugSetName && CharString_length(name)) {
+		if (texture->resource.flags & EGraphicsResourceFlag_ShaderWrite) {
 
-			gotoIfError(clean, CharString_formatx(
-				&temp, "%.*s view (#%"PRIu32")", CharString_length(name), name.ptr, (U32)i
-			))
+			D3D12_UNORDERED_ACCESS_VIEW_DESC uav = (D3D12_UNORDERED_ACCESS_VIEW_DESC) { .Format = dxFormat };
 
-			VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
-				.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-				.objectType = VK_OBJECT_TYPE_IMAGE_VIEW,
-				.pObjectName = temp.ptr,
-				.objectHandle =  (U64) managedImageExt->view
-			};
+			U64 offset = ResourceHandle_getId(managedImage.writeHandle);
+			offset += EDescriptorTypeOffsets_values[UnifiedTexture_getWriteDescriptorType(*texture)];
 
-			gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)))
+			switch(texture->type) {
 
-			CharString_freex(&temp);
+				case ETextureType_3D:
+					uav.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE3D;
+					uav.Texture3D = (D3D12_TEX3D_UAV) { .WSize = texture->length };
+					break;
 
-			debugName = (VkDebugUtilsObjectNameInfoEXT) {
-				.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-				.objectType = VK_OBJECT_TYPE_IMAGE,
-				.pObjectName = name.ptr,
-				.objectHandle =  (U64) managedImageExt->image
-			};
+				case ETextureType_Cube:
+					uav.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2DARRAY;
+					uav.Texture2DArray = (D3D12_TEX2D_ARRAY_UAV) { .ArraySize = texture->length };
+					break;
 
-			gotoIfError(clean, vkCheck(instance->debugSetName(deviceExt->device, &debugName)))
+				default:
+					uav.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+					uav.Texture2D = (D3D12_TEX2D_UAV) { 0 };
+					break;
+			}
+
+			deviceExt->device->lpVtbl->CreateUnorderedAccessView(
+				deviceExt->device,
+				managedImageExt->image,
+				NULL,
+				&uav,
+				(D3D12_CPU_DESCRIPTOR_HANDLE) { .ptr = heap.cpuHandle.ptr + heap.cpuIncrement * offset }
+			);
+		}
+
+		if((device->flags & EGraphicsDeviceFlags_IsDebug) && CharString_length(name)) {
+			gotoIfError(clean, CharString_toUtf16x(name, &temp16))
+			gotoIfError(clean, dxCheck(managedImageExt->image->lpVtbl->SetName(managedImageExt->image, temp16.ptr)))
+			ListU16_freex(&temp16);
 		}
 	}
 
 clean:
-	CharString_freex(&temp);
+	ListU16_freex(&temp16);
 	return err;
 }
-*/
+
+Error DxUnifiedTexture_transition(
+	DxUnifiedTexture *image,
+	D3D12_BARRIER_SYNC sync,
+	D3D12_BARRIER_ACCESS access,
+	D3D12_BARRIER_LAYOUT layout,
+	const D3D12_BARRIER_SUBRESOURCE_RANGE *range,
+	ListD3D12_TEXTURE_BARRIER *imageBarriers,
+	D3D12_BARRIER_GROUP *dependency
+) {
+
+	//No-op. Though if the state is already UAV then we always have to issue a barrier (UAV barrier)
+
+	if(
+		image->lastSync == sync && image->lastAccess == access && image->lastLayout == layout && 
+		access != D3D12_BARRIER_ACCESS_UNORDERED_ACCESS
+	)
+		return Error_none();
+
+	//Handle image barrier
+
+	const D3D12_TEXTURE_BARRIER imageBarrier = (D3D12_TEXTURE_BARRIER) {
+
+		.SyncBefore = image->lastSync,
+		.SyncAfter = sync,
+
+		.AccessBefore = image->lastAccess,
+		.AccessAfter = access,
+
+		.LayoutBefore = image->lastLayout,
+		.LayoutAfter = layout,
+
+		.pResource = image->image,
+
+		.Subresources = *range
+	};
+
+	const Error err = ListD3D12_TEXTURE_BARRIER_pushBackx(imageBarriers, imageBarrier);
+
+	if(err.genericError)
+		return err;
+
+	image->lastLayout = imageBarrier.LayoutAfter;
+	image->lastSync = imageBarrier.SyncAfter;
+	image->lastAccess = imageBarrier.AccessAfter;
+
+	dependency->pTextureBarriers = imageBarriers->ptr;
+	dependency->NumBarriers = (U32) imageBarriers->length;
+
+	return Error_none();
+}

@@ -276,7 +276,7 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 		}
 	};
 
-	DxHeap *heap = deviceExt->heaps[EDescriptorHeapType_Resources];
+	const DxHeap heap = deviceExt->heaps[EDescriptorHeapType_Resources];
 
 	U64 id =
 		EDescriptorTypeCount_Textures + EDescriptorTypeCount_RWTextures + EDescriptorTypeCount_SSBO -
@@ -286,7 +286,7 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 		deviceExt->device,
 		DeviceBuffer_ext(DeviceBufferRef_ptr(tlas->base.asBuffer), Dx)->buffer,
 		&resourceView,
-		(D3D12_CPU_DESCRIPTOR_HANDLE) { .ptr = heap->cpuHandle.ptr + heap->cpuIncrement * id }
+		(D3D12_CPU_DESCRIPTOR_HANDLE) { .ptr = heap.cpuHandle.ptr + heap.cpuIncrement * id }
 	);
 
 	tlas->base.isCompleted = true;
