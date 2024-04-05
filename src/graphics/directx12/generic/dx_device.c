@@ -153,14 +153,18 @@ Error GraphicsDevice_initExt(
 		if(SUCCEEDED(deviceExt->device->lpVtbl->QueryInterface(
 			deviceExt->device,
 			&IID_ID3D12InfoQueue1, (void**) &deviceExt->infoQueue1
-		)))
+		))) {
+
+			DWORD callbackCookie = 0;
+
 			gotoIfError(clean, dxCheck(deviceExt->infoQueue1->lpVtbl->RegisterMessageCallback(
 				deviceExt->infoQueue1,
 				onDebugReport,
 				D3D12_MESSAGE_CALLBACK_FLAG_NONE,
 				NULL,
-				NULL
+				&callbackCookie
 			)))
+		}
 
 		//Nv specific initialization
 
