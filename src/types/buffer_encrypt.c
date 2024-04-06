@@ -158,7 +158,7 @@ impl I32x4 AESEncryptionContext_ghash(I32x4 a, const I32x4 ghashLut[17]);
 
 //Safe fetch a block (even if <16 bytes are left)
 
-I32x4 AESEncryptionContext_fetchBlock(const I32x4 *dat, const U64 leftOver) {
+I32x4 AESEncryptionContext_fetchBlock(const I32 *dat, const U64 leftOver) {
 
 	//Avoid out of bounds read, by simply filling additional data by zero
 
@@ -173,7 +173,7 @@ I32x4 AESEncryptionContext_fetchBlock(const I32x4 *dat, const U64 leftOver) {
 		return v;
 	}
 
-	return I32x4_load4((const I32*)dat);
+	return I32x4_load4(dat);
 }
 
 //Hash in the additional data
@@ -187,7 +187,11 @@ I32x4 AESEncryptionContext_initTag(Buffer additionalData, const I32x4 ghashLut[1
 	const U64 len = Buffer_length(additionalData);
 
 	for (U64 i = 0, j = (len + 15) >> 4; i < j; ++i) {
-		const I32x4 ADi = AESEncryptionContext_fetchBlock((const I32x4*)additionalData.ptr + i, len - (i << 4));
+
+		const I32x4 ADi = AESEncryptionContext_fetchBlock(
+			(const I32*)additionalData.ptr + ((U64)i << 2), len - (i << 4)
+		);
+
 		tag = AESEncryptionContext_ghash(I32x4_xor(tag, ADi), ghashLut);
 	}
 
@@ -244,7 +248,7 @@ void AESEncryptionContext_updateTag(AESEncryptionContext *ctx, const I32x4 CTi) 
 	ctx->tag = AESEncryptionContext_ghash(I32x4_xor(CTi, ctx->tag), ctx->ghashLut);
 }
 
-void AESEncryptionContext_storeBlock(I32x4 *io, const U64 leftOver, I32x4 *v) {
+void AESEncryptionContext_storeBlock(I32 *io, const U64 leftOver, const I32 *v) {
 
 	//A special property of unaligned blocks is that the bytes that are added as padding
 	//shouldn't be stored, and so they have to be zero-ed in CTi, otherwise the tag will mess up
@@ -259,14 +263,15 @@ void AESEncryptionContext_storeBlock(I32x4 *io, const U64 leftOver, I32x4 *v) {
 		);
 	}
 
-	//Aligned blocks
+	//Full blocks
 
-	else *io = *v;
+	else for(U64 i = 0; i < 4; ++i)
+		io[i] = v[i];
 }
 
 void AESEncryptionContext_processBlock(
 	AESEncryptionContext *ctx,
-	I32x4 *io,
+	I32 *io,
 	const U64 leftOver,
 	const U32 i,
 	const Bool updateTag
@@ -281,7 +286,7 @@ void AESEncryptionContext_processBlock(
 
 	v = I32x4_xor(v, AESEncryptionContext_blockHash(ivi, ctx->key, ctx->encryptionType));
 
-	AESEncryptionContext_storeBlock(io, leftOver, &v);
+	AESEncryptionContext_storeBlock(io, leftOver, (const I32*) &v);
 
 	//Continue tag
 
@@ -289,7 +294,7 @@ void AESEncryptionContext_processBlock(
 		AESEncryptionContext_updateTag(ctx, v);
 }
 
-void AESEncryptionContext_fetchAndUpdateTag(AESEncryptionContext *ctx, const I32x4 *data, const U64 leftOver) {
+void AESEncryptionContext_fetchAndUpdateTag(AESEncryptionContext *ctx, const I32 *data, const U64 leftOver) {
 	AESEncryptionContext_updateTag(ctx, AESEncryptionContext_fetchBlock(data, leftOver));
 }
 
@@ -355,7 +360,7 @@ Error AESEncryptionContext_encrypt(
 	for (U32 i = 0; i < j; ++i)
 		AESEncryptionContext_processBlock(
 			&ctx,
-			(I32x4*)target.ptr + i,
+			(I32*)target.ptr + ((U64)i << 2),
 			targetLen - ((U64)i << 4),
 			i,
 			true
@@ -383,11 +388,14 @@ Error Buffer_encrypt(
 		return Error_constData(0, 0, "Buffer_encrypt()::target must be writable");
 
 	if(type >= EBufferEncryptionType_Count)
-		return Error_invalidEnum(2, (U64)type, (U64)EBufferEncryptionType_Count, "Buffer_encrypt()::type out of bounds");
+		return Error_invalidEnum(
+			2, (U64)type, (U64)EBufferEncryptionType_Count, "Buffer_encrypt()::type out of bounds"
+		);
 
 	if(flags & EBufferEncryptionFlags_Invalid)
 		return Error_invalidEnum(
-			3, (U64)flags, ((U64)1 << EBufferEncryptionFlags_Count) - 1, "Buffer_encrypt()::flags are invalid"
+			3, (U64)flags, ((U64)1 << EBufferEncryptionFlags_Count) - 1, 
+			"Buffer_encrypt()::flags are invalid"
 		);
 
 	if(!key || !iv || !tag)
@@ -433,7 +441,7 @@ Error AESEncryptionContext_decrypt(
 	for (U32 i = 0; i < j; ++i)
 		AESEncryptionContext_fetchAndUpdateTag(
 			&ctx,
-			(const I32x4*)target.ptr + i,
+			(const I32*)target.ptr + ((U64)i << 2),
 			targetLen - ((U64)i << 4)
 		);
 
@@ -452,7 +460,7 @@ Error AESEncryptionContext_decrypt(
 	for (U32 i = 0; i < j; ++i)
 		AESEncryptionContext_processBlock(
 			&ctx,
-			(I32x4*)target.ptr + i,
+			(I32*)target.ptr + ((U64)i << 2),
 			targetLen - ((U64)i << 4),
 			i,
 			false

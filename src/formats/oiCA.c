@@ -549,6 +549,9 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 
 		Buffer realHeader = Buffer_createRefConst(outputBuffer.ptr, realHeaderSizeExEnc);
 
+		I32x4 iv = I32x4_zero();		//Outputs
+		I32x4 tag = I32x4_zero();
+
 		gotoIfError(clean, Buffer_encrypt(
 
 			toEncrypt,
@@ -559,9 +562,15 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 			EBufferEncryptionFlags_GenerateIv | (b ? EBufferEncryptionFlags_GenerateKey : EBufferEncryptionFlags_None),
 			b ? NULL : caFile.settings.encryptionKey,
 
-			(I32x4*)headerIt,
-			(I32x4*)((U8*)headerIt + 12)
+			&iv,
+			&tag
 		))
+
+		for(U64 i = 0; i < 3; ++i)
+			((I32*)headerIt)[i] = ((const I32*)&iv)[i];
+
+		for(U64 i = 0; i < 4; ++i)
+			((I32*)headerIt)[3 + i] = ((const I32*)&tag)[i];
 	}
 
 	//Prepend header and hash
@@ -664,7 +673,7 @@ Error CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFi
 		U64 headerLen = filePtr.ptr - file.ptr;
 
 		gotoIfError(clean, Buffer_consume(&filePtr, &iv, 12))
-		gotoIfError(clean, Buffer_consumeI32x4(&filePtr, &tag))
+		gotoIfError(clean, Buffer_consume(&filePtr, &tag, 16))
 
 		gotoIfError(clean, Buffer_decrypt(
 			filePtr,
