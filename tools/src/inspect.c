@@ -507,7 +507,7 @@ Bool CLI_showFile(ParsedArgs args, Buffer b, U64 start, U64 length, Bool isAscii
 
 		//Show what offset is being displayed
 
-		Log_debugLnx("Showing offset %"PRIu64"X with size %"PRIu64, start, length);
+		Log_debugLnx("Showing offset #%"PRIx64" with size %"PRIu64, start, length);
 		Log_debugLnx(isAscii ? "File contents: (ascii)" : "File contents: (binary)");
 
 		//Ascii can be directly output to log
@@ -839,7 +839,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 			U64 end = start + length;
 
 			Log_debugLnx(
-				"Showing offset %"PRIu64"X with count %"PRIu64" in selected folder (File contains %"PRIu64" entries)",
+				"Showing offset #%"PRIx64" with count %"PRIu64" in selected folder (File contains %"PRIu64" entries)",
 				start, length, file.archive.entries.length
 			);
 

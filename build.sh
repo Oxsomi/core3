@@ -16,8 +16,14 @@ mkdir -p builds
 cd builds
 cmake -DCMAKE_BUILD_TYPE=$1 .. -DEnableSIMD=$2 -DForceFloatFallback=Off ${@:3}
 cmake --build . -j 8 --config $1
-cd ../
 
 # Run unit test
 
-./builds/bin/OxC3_test
+cd ../
+
+currPath=`dirname "$0"`
+currPath=`( cd "$currPath" && pwd )`
+
+cd builds/bin
+./OxC3_test.exe
+$currPath/tools/test.sh

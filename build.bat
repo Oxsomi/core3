@@ -39,4 +39,8 @@ cd ../
 
 rem Run unit test
 
-builds\bin\%1\OxC3_test.exe
+cd builds\bin\%1
+.\OxC3_test.exe
+%~dp0\tools\test.bat
+cd ../../../
+
