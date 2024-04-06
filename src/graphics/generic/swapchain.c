@@ -119,7 +119,7 @@ Bool GraphicsDevice_freeSwapchain(Swapchain *swapchain, Allocator alloc) {
 	return success;
 }
 
-Error GraphicsDeviceRef_createSwapchain(GraphicsDeviceRef *dev, SwapchainInfo info, Bool allowWrite, SwapchainRef **scRef) {
+Error GraphicsDeviceRef_createSwapchain(GraphicsDeviceRef *dev, SwapchainInfo info, Bool allowWriteExt, SwapchainRef **scRef) {
 
 	if(!info.window || !info.window->nativeHandle)
 		return Error_nullPointer(
@@ -155,7 +155,7 @@ Error GraphicsDeviceRef_createSwapchain(GraphicsDeviceRef *dev, SwapchainInfo in
 	swapchain->base = (UnifiedTexture) {
 		.resource = (GraphicsResource) {
 			.device = dev,
-			.flags = allowWrite ? EGraphicsResourceFlag_ShaderRW : EGraphicsResourceFlag_ShaderRead,
+			.flags = allowWriteExt ? EGraphicsResourceFlag_ShaderRW : EGraphicsResourceFlag_ShaderRead,
 			.type = (U8) EResourceType_Swapchain
 		},
 		.textureFormatId = (U8) formatId,
@@ -166,6 +166,20 @@ Error GraphicsDeviceRef_createSwapchain(GraphicsDeviceRef *dev, SwapchainInfo in
 		.levels = 1,
 		.images = 3		//Triple buffering
 	};
+	
+	if(!swapchain->info.presentModePriorities[0]) {
+
+		#if _PLATFORM_TYPE != PLATFORM_ANDROID
+			swapchain->info.presentModePriorities[0] = ESwapchainPresentMode_Mailbox;			//Priority is to be low latency
+			swapchain->info.presentModePriorities[1] = ESwapchainPresentMode_Immediate;
+			swapchain->info.presentModePriorities[2] = ESwapchainPresentMode_Fifo;
+			swapchain->info.presentModePriorities[3] = ESwapchainPresentMode_FifoRelaxed;
+		#else
+			swapchain->info.presentModePriorities[0] = ESwapchainPresentMode_Fifo;				//Priority is to conserve power
+			swapchain->info.presentModePriorities[1] = ESwapchainPresentMode_FifoRelaxed;
+			swapchain->info.presentModePriorities[2] = ESwapchainPresentMode_Immediate;
+		#endif
+	}
 
 	gotoIfError(clean, GraphicsDeviceRef_createSwapchainExt(dev, *scRef))
 	gotoIfError(clean, UnifiedTexture_create(*scRef, info.window->title))

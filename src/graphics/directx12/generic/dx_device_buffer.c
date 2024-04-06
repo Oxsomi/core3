@@ -44,7 +44,13 @@ Error DxDeviceBuffer_transition(
 	//D3D12 has the concept of UAVBarriers, which always need to be inserted in-between two compute calls.
 	//Otherwise, it's not synchronized correctly.
 
-	if(buffer->lastSync == sync && buffer->lastAccess == access && access != D3D12_BARRIER_ACCESS_UNORDERED_ACCESS)
+	if(
+		buffer->lastSync == sync && buffer->lastAccess == access && 
+		access != D3D12_BARRIER_ACCESS_UNORDERED_ACCESS && 
+		access != D3D12_BARRIER_ACCESS_STREAM_OUTPUT &&
+		access != D3D12_BARRIER_ACCESS_COPY_DEST &&
+		access != D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_WRITE
+	)
 		return Error_none();
 
 	//Handle buffer barrier

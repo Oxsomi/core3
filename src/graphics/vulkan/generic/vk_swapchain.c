@@ -45,20 +45,6 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 	Swapchain *swapchain = SwapchainRef_ptr(swapchainRef);
 	SwapchainInfo *info = &swapchain->info;
 
-	if(!info->presentModePriorities[0]) {
-
-		#if _PLATFORM_TYPE != PLATFORM_ANDROID
-			info->presentModePriorities[0] = ESwapchainPresentMode_Mailbox;			//Priority is to be low latency
-			info->presentModePriorities[1] = ESwapchainPresentMode_Immediate;
-			info->presentModePriorities[2] = ESwapchainPresentMode_Fifo;
-			info->presentModePriorities[3] = ESwapchainPresentMode_FifoRelaxed;
-		#else
-			info->presentModePriorities[0] = ESwapchainPresentMode_Fifo;			//Priority is to conserve power
-			info->presentModePriorities[1] = ESwapchainPresentMode_FifoRelaxed;
-			info->presentModePriorities[2] = ESwapchainPresentMode_Immediate;
-		#endif
-	}
-
 	//Prepare temporary free-ables and extended data.
 
 	Error err = Error_none();

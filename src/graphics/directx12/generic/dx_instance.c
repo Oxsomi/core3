@@ -72,7 +72,12 @@ Error GraphicsInstance_createExt(GraphicsApplicationInfo info, GraphicsInstanceR
 	GraphicsInstance *instance = GraphicsInstanceRef_ptr(*instanceRef);
 	DxGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Dx);
 
-	Error err = dxCheck(CreateDXGIFactory(&IID_IDXGIFactory6, (void**) &instanceExt->factory));
+	U32 flags = 0;
+
+	if(instance->flags & EGraphicsInstanceFlags_IsDebug)
+		flags |= DXGI_CREATE_FACTORY_DEBUG;
+
+	Error err = dxCheck(CreateDXGIFactory2(flags, &IID_IDXGIFactory6, (void**) &instanceExt->factory));
 
 	if(err.genericError)
 		return err;
@@ -252,6 +257,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphics
 		D3D12_FEATURE_DATA_D3D12_OPTIONS9 opt9 = (D3D12_FEATURE_DATA_D3D12_OPTIONS9) { 0 };
 		D3D12_FEATURE_DATA_D3D12_OPTIONS12 opt12 = (D3D12_FEATURE_DATA_D3D12_OPTIONS12) { 0 };
 		D3D12_FEATURE_DATA_D3D12_OPTIONS16 opt16 = (D3D12_FEATURE_DATA_D3D12_OPTIONS16) { 0 };
+		D3D12_FEATURE_DATA_D3D12_OPTIONS21 opt21 = (D3D12_FEATURE_DATA_D3D12_OPTIONS21) { 0 };
 
 		D3D12_FEATURE_DATA_SHADER_MODEL shaderOpt = (D3D12_FEATURE_DATA_SHADER_MODEL) { 0 };
 		D3D12_FEATURE_DATA_ARCHITECTURE1 arch = (D3D12_FEATURE_DATA_ARCHITECTURE1) { 0 };
@@ -343,6 +349,12 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphics
 			Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support required D3D12_OPTIONS12", i);
 			goto next;
 		}
+
+		if(
+			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS21, &opt21, sizeof(opt21))) &&
+			opt21.WorkGraphsTier >= D3D12_WORK_GRAPHS_TIER_1_0
+		)
+			caps.features |= EGraphicsFeatures_Workgraphs;
 
 		if(
 			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS16, &opt16, sizeof(opt16))) &&

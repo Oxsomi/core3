@@ -122,11 +122,12 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 
 			//Directly copy the data is allowed, because it's not in flight and it's on the CPU
 
-			void *mem = DeviceBufferRef_ptr(tempInstances)->resource.mappedMemoryExt;
+			DeviceBuffer *tempInstanceBuf = DeviceBufferRef_ptr(tempInstances);
+			void *mem = tempInstanceBuf->resource.mappedMemoryExt;
 
 			Buffer_copy(
 				Buffer_createRef(mem, stride * instancesU64),
-				Buffer_createRefConst(tlas->cpuInstancesStatic.ptr, stride * instancesU64)	//static and motion are at same pos
+				Buffer_createRefConst(tlas->cpuInstancesStatic.ptr, stride * instancesU64)	//static, motion same pos
 			);
 
 			//We have to transform the CPU-sided buffer to a GPU buffer address
@@ -145,6 +146,21 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 				*(U64*)((U8*)mem + offset) = getVkDeviceAddress((DeviceData) {
 					.buffer = BLASRef_ptr(dat->blasCpu)->base.asBuffer
 				});
+			}
+
+			DeviceMemoryBlock block = device->allocator.blocks.ptr[tempInstanceBuf->resource.blockId];
+			Bool incoherent = !(block.allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+			if(incoherent) {
+
+				VkMappedMemoryRange mappedRange = (VkMappedMemoryRange) {
+					.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
+					.memory = (VkDeviceMemory) block.ext,
+					.offset = tempInstanceBuf->resource.blockOffset,
+					.size = stride * instancesU64
+				};
+
+				gotoIfError(clean, vkCheck(vkFlushMappedMemoryRanges(deviceExt->device, 1, &mappedRange)))
 			}
 
 			instances = (DeviceData) { .buffer = tempInstances, .len = stride * instancesU64 };

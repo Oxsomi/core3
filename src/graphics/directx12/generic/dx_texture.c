@@ -247,11 +247,17 @@ Error DxUnifiedTexture_transition(
 	D3D12_BARRIER_GROUP *dependency
 ) {
 
-	//No-op. Though if the state is already UAV then we always have to issue a barrier (UAV barrier)
+	//Avoid duplicate barriers except in one case:
+	//D3D12 has the concept of UAVBarriers, which always need to be inserted in-between two compute calls.
+	//Otherwise, it's not synchronized correctly.
 
 	if(
-		image->lastSync == sync && image->lastAccess == access && image->lastLayout == layout &&
-		access != D3D12_BARRIER_ACCESS_UNORDERED_ACCESS
+		image->lastSync == sync && image->lastAccess == access && 
+		access != D3D12_BARRIER_ACCESS_UNORDERED_ACCESS && 
+		access != D3D12_BARRIER_ACCESS_DEPTH_STENCIL_WRITE &&
+		access != D3D12_BARRIER_ACCESS_RENDER_TARGET &&
+		access != D3D12_BARRIER_ACCESS_COPY_DEST &&
+		access != D3D12_BARRIER_ACCESS_RESOLVE_DEST
 	)
 		return Error_none();
 

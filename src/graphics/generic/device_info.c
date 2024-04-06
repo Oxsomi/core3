@@ -32,7 +32,7 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 
 	Log_debugLnx(
 		"%s: %s (%s): %"PRIu64" bytes shared memory, %"PRIu64" bytes %s memory\n\t"
-		"%s %"PRIu32"\n\tLUID %016"PRIu64"x\n\tUUID %016"PRIu64"x%016"PRIu64"x",
+		"%s %"PRIu32"\n\tLUID %016"PRIx64"\n\tUUID %016"PRIx64"%016"PRIx64,
 		api == EGraphicsApi_DirectX12 ? "D3D12" : (api == EGraphicsApi_Vulkan ? "Vulkan" : "Unknown"),
 		deviceInfo->name,
 		deviceInfo->driverInfo,
@@ -122,6 +122,9 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 
 		if(feat & EGraphicsFeatures_Workgraphs)
 			Log_debugLnx("\t\tWork graphs");
+
+		if(feat & EGraphicsFeatures_SwapchainCompute)
+			Log_debugLnx("\t\tSwapchain compute");
 
 		//Data types
 

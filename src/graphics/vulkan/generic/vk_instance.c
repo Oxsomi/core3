@@ -1165,6 +1165,10 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphics
 		if(features.shaderFloat64)
 			capabilities.dataTypes |= EGraphicsDataTypes_F64;
 
+		//Vulkan always supports compute to swapchain
+
+		capabilities.features |= EGraphicsFeatures_SwapchainCompute;
+
 		//Atomics
 
 		if(atomics64.shaderBufferInt64Atomics)

@@ -42,9 +42,17 @@ Error VkDeviceBuffer_transition(
 	VkDependencyInfo *dependency
 ) {
 
-	//No-op
+	//Avoid duplicate barriers except in one case:
+	//Barriers for write->write, which always need to be inserted in-between two calls.
+	//Otherwise, it's not synchronized correctly.
 
-	if(buffer->lastStage == stage && buffer->lastAccess == access)
+	if(
+		buffer->lastStage == stage && buffer->lastAccess == access &&
+		access != VK_ACCESS_2_SHADER_WRITE_BIT &&
+		access != VK_ACCESS_2_TRANSFER_WRITE_BIT &&
+		access != VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT &&
+		access != VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR
+	)
 		return Error_none();
 
 	//Handle buffer barrier
@@ -296,7 +304,9 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 		Bool incoherent = !(block.allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
 		if(incoherent)
-			gotoIfError(clean, ListVkMappedMemoryRange_resizex(&deviceExt->mappedMemoryRange, buffer->pendingChanges.length + 1))
+			gotoIfError(clean, ListVkMappedMemoryRange_resizex(
+				&deviceExt->mappedMemoryRange, buffer->pendingChanges.length + 1
+			))
 
 		for(U64 j = 0; j < buffer->pendingChanges.length; ++j) {
 

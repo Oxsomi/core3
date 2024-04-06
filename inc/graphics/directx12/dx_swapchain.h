@@ -19,8 +19,8 @@
 */
 
 #pragma once
-#include "dxgi.h"
+#include <dxgi1_2.h>
 
 typedef struct DxSwapchain {
-	IDXGISwapChain *swapchain;
+	IDXGISwapChain1 *swapchain;
 } DxSwapchain;

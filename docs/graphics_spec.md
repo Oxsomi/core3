@@ -36,6 +36,7 @@ Because of this, a device needs the following requirements to be OxC3 compatible
 - Required instance extensions:
   - VK_KHR_get_physical_device_properties2
   - VK_KHR_external_memory_capabilities
+  - EGraphicsFeatures_SwapchainCompute is always supported
 - Supported instance extensions (optional):
   - Debug build only:
     - VK_EXT_debug_report

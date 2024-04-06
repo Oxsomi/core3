@@ -115,7 +115,7 @@ _gotoIfError(clean, GraphicsInstance_getPreferredDevice(
 
 #### Capabilities
 
-- features: DirectRendering, VariableRateShading, MultiDrawIndirectCount, MeshShader, GeometryShader, SubgroupArithmetic, SubgroupShuffle, Multiview, Raytracing, RayPipeline, RayQuery, RayMicromapOpacity, RayMicromapDisplacement, RayMotionBlur, RayReorder, RayValidation, LUID, DebugMarkers, Wireframe, LogicOp, DualSrcBlend, Workgraphs.
+- features: DirectRendering, VariableRateShading, MultiDrawIndirectCount, MeshShader, GeometryShader, SubgroupArithmetic, SubgroupShuffle, Multiview, Raytracing, RayPipeline, RayQuery, RayMicromapOpacity, RayMicromapDisplacement, RayMotionBlur, RayReorder, RayValidation, LUID, DebugMarkers, Wireframe, LogicOp, DualSrcBlend, Workgraphs, SwapchainCompute.
   - RayValidation: extra raytracing validation for NV cards; requires envar NV_ALLOW_RAYTRACING_VALIDATION=1 and reboot.
 - features2: reserved for future usage.
 - dataTypes: F64, I64, F16, I16, AtomicI64, AtomicF32, AtomicF64, ASTC, BCn, MSAA2x, MSAA8x, RGB32f, RGB32i, RGB32u, D24S8, S8.
@@ -202,9 +202,11 @@ _gotoIfError(clean, GraphicsDeviceRef_create(
   - Waits for all currently queued commands on the device.
 
 - ```c
-  Error createSwapchain(SwapchainInfo info, SwapchainRef **swapchain);
+  Error createSwapchain(SwapchainInfo info, Bool allowWrite, SwapchainRef **swapchain);
   ```
 
+  - Be aware that allowWrite doesn't work for all APIs and all devices. Compute to the swapchain is optional.
+  
 - ```c
   Error createCommandList(
   	U64 commandListLen,
@@ -242,6 +244,7 @@ _gotoIfError(clean, GraphicsDeviceRef_create(
       DeviceBufferRef **ref
   );
   ```
+  
 - ```c
     Error createBufferData(
     	EDeviceBufferUsage usage,
@@ -281,6 +284,7 @@ _gotoIfError(clean, GraphicsDeviceRef_create(
         DepthStencilRef **ref
     );
   ```
+  
 - ```c
   Error createBLASExt(
   	ERTASBuildFlags buildFlags,
@@ -540,7 +544,7 @@ SwapchainRef *swapchain = NULL;
 _gotoIfError(clean, GraphicsDeviceRef_createSwapchain(
     device, 		//See "Graphics device"
     (SwapchainInfo) { .window = w },
-    true,			//allowCompute
+    false,			//allowComputeExt
     &swapchain
 ));
 
@@ -552,16 +556,16 @@ if(!(w->flags & EWindowFlags_IsVirtual))
 
 info.presentModePriorities are the requests for what type of swapchains are desired by the application. Keeping this empty means [ mailbox, immediate, fifo, fifoRelaxed ]. On Android mailbox is unsupported because it may introduce another swapchain image, the rest is driver dependent if it's supported and the default is changed to [ fifo, fifoRelaxed, immediate] to conserve power. Immediate is always supported, so make sure to always request immediate as well otherwise createSwapchain may fail (depending on device + driver). For more info see Swapchain/Present mode.
 
-allowCompute in this case allows the swapchain to be used for compute shaders. If this is not required, please try to avoid it. It might reduce or remove compression for the swapchain depending on the underlying hardware and to avoid allocating a write descriptor for it.
+allowComputeExt in this case allows the swapchain to be used for compute shaders. If this is not required, please try to avoid it, since it's not always supported by all APIs and devices (Query for it through capabilities). It might reduce or remove compression for the swapchain depending on the underlying hardware and to avoid allocating a write descriptor for it.
 
 ### Present mode
 
 The present mode is how the device handles it when an image is already being presented. Some may introduce tearing while others may drop frames. The application should be given control over these modes, as some applications may want the latency improvements at the cost of tearing.
 
-- Mailbox: While an image is presenting, it will drop the oldest queued image and continue rendering and queuing the next frame into it. This ensures you're not bound to your refresh rate, so the performance is better but lots of frames are rendered that may be discarded. This present mode is generally ideal for games and other interactive 3D applications, though some very low latency games might not want to use this. This mode is the default on most platforms (if available).
+- Mailbox: While an image is presenting, it will drop the oldest queued image and continue rendering and queuing the next frame into it. This ensures you're not bound to your refresh rate, so the performance is better but lots of frames are rendered that may be discarded. This present mode is generally ideal for games and other interactive 3D applications, though some very low latency games might not want to use this. This mode is the default on most platforms on Vulkan (if available) and unsupported on D3D12.
 - Fifo: While an image is presenting, it will just wait. This means no frames are dropped, but it does mean that the performance is lower. This is ideal for low power devices or if your application doesn't need constant updates. This is the default on mobile.
-- FifoRelaxed: If the vsync interval is missed, it will try to skip frame(s) to catch up. Other than that it will behave similar to Fifo (it tries to keep up with the refresh rate of the screen).
-- Immediate: Render over the current image anyways, this is ideal if you want the best low latency available but will introduce tearing. A good application might be shooting games or other games that require the lowest latency.
+- FifoRelaxed: If the vsync interval is missed, it will try to skip frame(s) to catch up. Other than that it will behave similar to Fifo (it tries to keep up with the refresh rate of the screen). Unsupported on D3D12.
+- Immediate: Render over the current image anyways, this is ideal if you want the best low latency available but will introduce tearing. A good application might be shooting games or other games that require the lowest latency. This is the default on D3D12.
 
 By default the swapchain will use triple buffering to ensure best performance. Even mobile benefits from this, so it was decided not to expose this setting to simplify the backend.
 

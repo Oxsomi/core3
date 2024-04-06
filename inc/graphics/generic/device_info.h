@@ -127,7 +127,8 @@ typedef enum EGraphicsFeatures {
 	EGraphicsFeatures_LogicOp					= 1 << 19,
 	EGraphicsFeatures_DualSrcBlend				= 1 << 20,
 
-	EGraphicsFeatures_Workgraphs				= 1 << 21
+	EGraphicsFeatures_Workgraphs				= 1 << 21,
+	EGraphicsFeatures_SwapchainCompute			= 1 << 22		//isComputeExt in createSwapchain is supported
 
 } EGraphicsFeatures;
 

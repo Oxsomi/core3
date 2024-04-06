@@ -176,7 +176,7 @@ Error DeviceMemoryAllocator_allocate(
 
 		gotoIfError(clean, CharString_formatx(
 			&temp,
-			isDedicated ? "Memory block %"PRIu32" (host: %s, coherent: %s, device: %s): %s" :
+			isDedicated ? "Memory block %"PRIu32" (host: %s, device: %s): %s" :
 			"Memory block %"PRIu32" (host: %s, device: %s)",
 			(U32) i,
 			cpuSided ? "true" : "false",

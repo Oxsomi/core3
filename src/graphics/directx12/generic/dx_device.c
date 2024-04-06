@@ -754,12 +754,12 @@ Error GraphicsDevice_submitCommandsImpl(
 			SwapchainRef *swapchainRef = swapchains.ptr[i];
 			Swapchain *swapchain = SwapchainRef_ptr(swapchainRef);
 
-			Bool allowCompute = swapchain->base.resource.flags & EGraphicsResourceFlag_ShaderWrite;
+			Bool allowComputeExt = swapchain->base.resource.flags & EGraphicsResourceFlag_ShaderWrite;
 
 			UnifiedTextureImage managedImage = TextureRef_getCurrImage(swapchainRef, 0);
 
 			data->swapchains[i * 2 + 0] = managedImage.readHandle;
-			data->swapchains[i * 2 + 1] = allowCompute ? managedImage.writeHandle : 0;
+			data->swapchains[i * 2 + 1] = allowComputeExt ? managedImage.writeHandle : 0;
 		}
 
 		DeviceMemoryBlock block = device->allocator.blocks.ptr[frameData->resource.blockId];

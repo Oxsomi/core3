@@ -166,7 +166,7 @@ DXFormat ETextureFormatId_toDXFormat(ETextureFormatId format) {
 		case ETextureFormatId_BC5:			return 83;
 		case ETextureFormatId_BC5s:			return 84;
 
-		case ETextureFormatId_BGRA8:		return 91;
+		case ETextureFormatId_BGRA8:		return 87;
 
 		case ETextureFormatId_BC6H:			return 95;
 
