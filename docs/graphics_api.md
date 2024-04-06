@@ -324,7 +324,7 @@ _gotoIfError(clean, GraphicsDeviceRef_create(
   );
   ```
 
-- ```c 
+- ```c
   Error createTLASExt(
   	ERTASBuildFlags buildFlags,
   	TLASRef *parent,					//If specified, indicates refit
@@ -607,7 +607,7 @@ If the sampler is used on the GPU, it should be passed as a transition; stage is
 ### Properties
 
 - device: ref to the device that owns it.
-- samplerLocation: resource index into the bindless array that specifies where the sampler is located. It does contain additional info in the upper 8 bits, so only the low 13 bits store the index (samplerUniform(resourceId) and sampler(resourceId) can be used to do this automatically). 
+- samplerLocation: resource index into the bindless array that specifies where the sampler is located. It does contain additional info in the upper 8 bits, so only the low 13 bits store the index (samplerUniform(resourceId) and sampler(resourceId) can be used to do this automatically).
 - info: used to create the sampler and stores information about the sampler.
   - filter: determining how the sampler filters the input image. A bitset of three properties: Mag, Min and Mip. If the respective bit is true it represents linear filtering rather than nearest filtering. This means there's 7 combinations ranging from nearest min/mag/mip all the way to linear min/mag/mip.
   - addressU, addressV, addressW: determining how out of bounds access for each texture is treated: Repeat, MirrorRepeat, ClampToEdge, ClampToBorder. ClampToBorder uses the borderColor to be filtered.
@@ -958,7 +958,7 @@ CharString entrypointArr[] = {
 //Define a hit group
 
 PipelineRaytracingGroup hitArr[] = {
-    (PipelineRaytracingGroup) { 
+    (PipelineRaytracingGroup) {
         .closestHit = 0, .anyHit = U32_MAX, .intersection = U32_MAX
     }
 };
@@ -1029,7 +1029,7 @@ In OxC3 graphics, either the application or the OxC3 baker is responsible for co
 
 With the following limitations:
 
-- The resources require bindless to function, so shaders should use this as well. When using resources, resources.hlsl has to be included (the compiler automatically includes it). This file can be found in src/graphics/shaders. 
+- The resources require bindless to function, so shaders should use this as well. When using resources, resources.hlsl has to be included (the compiler automatically includes it). This file can be found in src/graphics/shaders.
   - types.hlsl also defines all HLSL types as OxC3 types, to ensure it could be cross compiled to GLSL in the future (since GLSL has some features that HLSL might not support, such as HW RT motion blur). Using these predefined types are fully optional if HLSL is the final target (Vulkan + D3D12), though it is recommended to use them to avoid getting stuck to one shading language.
 
 The OxC3 baker will (if used) convert HLSL to SPIR-V, DXIL, MSL or WGSL depending on which API is currently used. It can provide this as a pre-baked binary too (.oiCS Oxsomi Compiled Shader). The pre-baked binary contains all 4 formats to ensure it can be loaded on any platform. But the baker will only include the one relevant to the current API to prevent bloating.

@@ -286,7 +286,7 @@ Error DeviceMemoryAllocator_allocate(
 	*blockOffset = (U64) allocLoc;
 
 	if(
-		(allocator->device->flags & EGraphicsDeviceFlags_IsDebug) && 
+		(allocator->device->flags & EGraphicsDeviceFlags_IsDebug) &&
 		CharString_length(objectName) && instanceExt->debugSetName
 	) {
 

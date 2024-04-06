@@ -104,8 +104,7 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListChar
 				.FillMode = D3D12_FILL_MODE_SOLID,
 				.CullMode = D3D12_CULL_MODE_BACK,
 				.FrontCounterClockwise = info->rasterizer.flags & ERasterizerFlags_IsClockWise,
-				.MultisampleEnable = info->msaa,
-				.ForcedSampleCount = 1 << info->msaa
+				.MultisampleEnable = (Bool) info->msaa
 			},
 
 			.DepthStencilState = (D3D12_DEPTH_STENCIL_DESC) {
@@ -118,6 +117,8 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListChar
 			},
 
 			.InputLayout = (D3D12_INPUT_LAYOUT_DESC ) { .pInputElementDescs = elements },
+
+			.SampleMask = U32_MAX,
 
 			.NumRenderTargets = info->attachmentCountExt,
 			.DSVFormat = EDepthStencilFormat_toDXFormat(info->depthFormatExt),
@@ -262,7 +263,7 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListChar
 		//Init render targets
 
 		for(U64 j = 0; j < info->attachmentCountExt; ++j)
-			graphics.RTVFormats[j] = ETextureFormatId_toDXFormat(info->attachmentFormatsExt[i]);
+			graphics.RTVFormats[j] = ETextureFormatId_toDXFormat(info->attachmentFormatsExt[j]);
 
 		//Init pipeline stages
 

@@ -1114,8 +1114,8 @@ Error CommandListRef_setRaytracingPipeline(CommandListRef *commandList, Pipeline
 }
 
 Error CommandListRef_validateBufferDesc(
-	GraphicsDeviceRef *device, 
-	DeviceBufferRef *buffer, 
+	GraphicsDeviceRef *device,
+	DeviceBufferRef *buffer,
 	EDeviceBufferUsage usage,
 	U64 maxSize
 ) {
@@ -1140,7 +1140,7 @@ Error CommandListRef_validateBufferDesc(
 
 	if(buf->resource.size > maxSize)
 		return Error_outOfBounds(
-			1, buf->resource.size, maxSize, 
+			1, buf->resource.size, maxSize,
 			"CommandListRef_validateBufferDesc()::buffer is bigger than max limit"
 		);
 
@@ -1839,7 +1839,7 @@ Error CommandListRef_startRenderExt(
 	counter = 0;
 
 	for (U64 i = 0; i < colors.length + !!depthStencil.image; ++i) {
-	
+
 		AttachmentInfo info;
 
 		if(i == colors.length)

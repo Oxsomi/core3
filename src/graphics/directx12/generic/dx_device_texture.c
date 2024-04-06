@@ -306,7 +306,7 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 					);
 				}
 			}
-			
+
 			if(!ListRefPtr_contains(*currentFlight, device->staging, 0, NULL)) {
 
 				gotoIfError(clean, DxDeviceBuffer_transition(						//Ensure resource is transitioned
@@ -338,7 +338,7 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 				&deviceExt->imageTransitions,
 				&imgDep
 			))
-			
+
 			if(bufDep.NumBarriers || imgDep.NumBarriers) {
 
 				D3D12_BARRIER_GROUP barriers[2];

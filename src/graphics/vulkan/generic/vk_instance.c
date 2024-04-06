@@ -1302,10 +1302,10 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphics
 		}
 
 		//Query for memory size
-		
+
 		VkGraphicsDevice fakeDevice = (VkGraphicsDevice) { 0 };
 		vkGetPhysicalDeviceMemoryProperties(dev, &fakeDevice.memoryProperties);
-		
+
 		U64 cpuHeapSize = 0;
 		gotoIfError(clean, VkDeviceMemoryAllocator_findMemory(&fakeDevice, true, U32_MAX, NULL, NULL, &cpuHeapSize))
 		cpuHeapSize &= (U64)I64_MAX;

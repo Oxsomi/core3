@@ -78,7 +78,7 @@ Error GraphicsDevice_createPipelinesRaytracingInternalExt(
 	if(err.genericError)
 		return err;
 
-	gotoIfError(clean, Buffer_createEmptyBytesx(raytracingShaderAlignment * groupCounter, &shaderTable));
+	gotoIfError(clean, Buffer_createEmptyBytesx(raytracingShaderAlignment * stageCounter, &shaderTable));
 
 	//Convert
 
@@ -88,7 +88,7 @@ Error GraphicsDevice_createPipelinesRaytracingInternalExt(
 
 		Pipeline *pipeline = PipelineRef_ptr(pipelines->ptr[i]);
 		PipelineRaytracingInfo *rtPipeline = Pipeline_info(pipeline, PipelineRaytracingInfo);
-		
+
 		//Reserve mem
 
 		gotoIfError(clean, ListD3D12_HIT_GROUP_DESC_resizex(&hitGroups, rtPipeline->groupCount))
@@ -98,7 +98,7 @@ Error GraphicsDevice_createPipelinesRaytracingInternalExt(
 		gotoIfError(clean, ListU32_resizex(&binaryOffset, libraries.length))
 
 		U64 groupNameStart = rtPipeline->stageCount * 2;		//Only if group size > stageCount, otherwise reuses strings
-		U64 strings = groupNameStart + ((U64)I64_max(rtPipeline->groupCount - (I64)rtPipeline->stageCount, 0));
+		U64 strings = groupNameStart + (I64)rtPipeline->stageCount;
 
 		for(U64 j = strings; j < nameArr.length; ++j)		//Stop memleaks
 			ListU16_freex(&nameArr.ptrNonConst[j]);
@@ -211,7 +211,7 @@ Error GraphicsDevice_createPipelinesRaytracingInternalExt(
 
 			PipelineStage *stage = &pipeline->stages.ptrNonConst[j];
 			D3D12_DXIL_LIBRARY_DESC *lib = &libraries.ptrNonConst[stage->binaryId];
-			
+
 			((D3D12_EXPORT_DESC*)lib->pExports)[lib->NumExports] = (D3D12_EXPORT_DESC) {
 				.Name = (const wchar_t*) nameArr.ptrNonConst[j * 2].ptr,
 				.ExportToRename = (const wchar_t*) nameArr.ptrNonConst[j * 2 + 1].ptr
@@ -219,7 +219,7 @@ Error GraphicsDevice_createPipelinesRaytracingInternalExt(
 
 			++lib->NumExports;
 
-			if(stage->stageType == EPipelineStage_RaygenExt) 
+			if(stage->stageType == EPipelineStage_RaygenExt)
 				stage->groupId += rtPipeline->missCount;
 
 			else if(stage->stageType == EPipelineStage_CallableExt)
@@ -234,14 +234,10 @@ Error GraphicsDevice_createPipelinesRaytracingInternalExt(
 
 			ListU16 loc;
 
-			if(j >= rtPipeline->stageCount) {
-				gotoIfError(clean, CharString_formatx(&tmp, "#%"PRIu32, j))
-				gotoIfError(clean, CharString_toUtf16x(tmp, &nameArr.ptrNonConst[groupNameStart]));
-				tmp = CharString_createNull();		//Moved to nameArr
-				loc = nameArr.ptr[groupNameStart];
-			}
-
-			else loc = nameArr.ptr[j * 2];		//We already have a string by that name
+			gotoIfError(clean, CharString_formatx(&tmp, "H%"PRIu32, j))
+			gotoIfError(clean, CharString_toUtf16x(tmp, &nameArr.ptrNonConst[groupNameStart + j]));
+			tmp = CharString_createNull();		//Moved to nameArr
+			loc = nameArr.ptr[groupNameStart + j];
 
 			hitGroups.ptrNonConst[j] = (D3D12_HIT_GROUP_DESC) {
 				.HitGroupExport = (const wchar_t*)loc.ptr,
@@ -293,20 +289,49 @@ Error GraphicsDevice_createPipelinesRaytracingInternalExt(
 			*stateObject, &IID_ID3D12StateObjectProperties, (void**) &dxPipeline->stateObjectProps
 		)))
 
-		//Resolve shader ids in SBT
+		//Resolve shader ids in SBT (individual shaders: raygen, callable and miss)
 
 		for(U32 j = 0; j < rtPipeline->stageCount; ++j) {
+
+			PipelineStage stage = pipeline->stages.ptrNonConst[j];
+
+			//Skip all hit group individual shaders, these don't go in the SBT.
+			//We need the actual hit groups
+
+			if(stage.stageType >= EPipelineStage_RtHitStart && stage.stageType <= EPipelineStage_RtHitEnd)
+				continue;
 
 			const void *shaderId = dxPipeline->stateObjectProps->lpVtbl->GetShaderIdentifier(
 				dxPipeline->stateObjectProps,
 				(const wchar_t*) nameArr.ptrNonConst[j * 2].ptr
 			);
+
+			Buffer dst = Buffer_createNull();
+			gotoIfError(clean, Buffer_createSubset(
+				shaderTable,
+				(stage.groupId + groupCounter) * raytracingShaderAlignment,
+				raytracingShaderIdSize,
+				false,
+				&dst
+			))
+
+			Buffer_copy(dst, Buffer_createRefConst(shaderId, raytracingShaderIdSize));
+		}
+
+		//Insert individual hit groups
+
+		for(U32 j = 0; j < rtPipeline->groupCount; ++j) {
+
+			const void *shaderId = dxPipeline->stateObjectProps->lpVtbl->GetShaderIdentifier(
+				dxPipeline->stateObjectProps,
+				(const wchar_t*) nameArr.ptrNonConst[groupNameStart + j].ptr
+			);
 			//raytracingShaderAlignment
 
 			Buffer dst = Buffer_createNull();
 			gotoIfError(clean, Buffer_createSubset(
-				shaderTable, 
-				(pipeline->stages.ptrNonConst[j].groupId + groupCounter) * raytracingShaderAlignment,
+				shaderTable,
+				(j + groupCounter) * raytracingShaderAlignment,
 				raytracingShaderIdSize,
 				false,
 				&dst

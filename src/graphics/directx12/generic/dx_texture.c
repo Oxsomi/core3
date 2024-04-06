@@ -70,7 +70,7 @@ Error UnifiedTexture_createExt(TextureRef *textureRef, CharString name) {
 
 	D3D12_RESOURCE_DESC resourceDesc = (D3D12_RESOURCE_DESC) {
 
-		.Dimension = 
+		.Dimension =
 			texture->type == ETextureType_3D ? D3D12_RESOURCE_DIMENSION_TEXTURE3D : D3D12_RESOURCE_DIMENSION_TEXTURE2D,
 
 		.Alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT,
@@ -154,7 +154,7 @@ Error UnifiedTexture_createExt(TextureRef *textureRef, CharString name) {
 		UnifiedTextureImage managedImage = TextureRef_getImage(textureRef, 0, i);
 
 		if (texture->resource.flags & EGraphicsResourceFlag_ShaderRead) {
-			
+
 			D3D12_SHADER_RESOURCE_VIEW_DESC srv = (D3D12_SHADER_RESOURCE_VIEW_DESC) {
 				.Format = dxFormat,
 				.Shader4ComponentMapping =  D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING
@@ -250,7 +250,7 @@ Error DxUnifiedTexture_transition(
 	//No-op. Though if the state is already UAV then we always have to issue a barrier (UAV barrier)
 
 	if(
-		image->lastSync == sync && image->lastAccess == access && image->lastLayout == layout && 
+		image->lastSync == sync && image->lastAccess == access && image->lastLayout == layout &&
 		access != D3D12_BARRIER_ACCESS_UNORDERED_ACCESS
 	)
 		return Error_none();

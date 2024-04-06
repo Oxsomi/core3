@@ -41,7 +41,7 @@
 //RTVs and DSVs are temporary in DirectX.
 
 D3D12_CPU_DESCRIPTOR_HANDLE createTempRTV(
-	const DxGraphicsDevice *deviceExt, 
+	const DxGraphicsDevice *deviceExt,
 	const U64 relativeLoc,
 	const D3D12_CPU_DESCRIPTOR_HANDLE start,
 	const DxHeap heap,
@@ -96,7 +96,7 @@ D3D12_CPU_DESCRIPTOR_HANDLE createTempRTV(
 }
 
 D3D12_CPU_DESCRIPTOR_HANDLE createTempDSV(
-	const DxGraphicsDevice *deviceExt, 
+	const DxGraphicsDevice *deviceExt,
 	const U64 relativeLoc,
 	const D3D12_CPU_DESCRIPTOR_HANDLE start,
 	EStartRenderFlags flags,
@@ -122,7 +122,7 @@ D3D12_CPU_DESCRIPTOR_HANDLE createTempDSV(
 
 		dsv = (D3D12_DEPTH_STENCIL_VIEW_DESC) {
 			.Format = EDepthStencilFormat_toDXFormat(tex.depthFormat),
-			.Flags = 
+			.Flags =
 				(flags & EStartRenderFlags_DepthReadOnly ? D3D12_DSV_FLAG_READ_ONLY_DEPTH : 0) |
 				(flags & EStartRenderFlags_StencilReadOnly ? D3D12_DSV_FLAG_READ_ONLY_STENCIL : 0)
 		};
@@ -378,10 +378,10 @@ void CommandList_process(
 
 			if(startRender->flags & EStartRenderFlags_ClearDepthStencil)
 				buffer->lpVtbl->ClearDepthStencilView(
-					buffer, dsv, 
+					buffer, dsv,
 					(startRender->clearMask & EStartRenderFlags_ClearDepth ? D3D12_CLEAR_FLAG_DEPTH : 0) |
 					(startRender->clearMask & EStartRenderFlags_ClearStencil ? D3D12_CLEAR_FLAG_STENCIL : 0),
-					startRender->clearDepth, startRender->clearStencil, 
+					startRender->clearDepth, startRender->clearStencil,
 					1, &rect
 				);
 
@@ -399,7 +399,7 @@ void CommandList_process(
 			}
 
 			buffer->lpVtbl->OMSetRenderTargets(
-				buffer, j, 
+				buffer, j,
 				&cpuDesc, true,
 				&dsv
 			);
@@ -481,8 +481,8 @@ void CommandList_process(
 					else format = ETextureFormatId_toDXFormat(utex.textureFormatId);
 
 					buffer->lpVtbl->ResolveSubresource(
-						buffer, 
-						imageExt->image, 0, 
+						buffer,
+						imageExt->image, 0,
 						resolveExt->image, 0,
 						format
 					);
@@ -692,7 +692,7 @@ void CommandList_process(
 					DeviceBuffer *counterBuffer = DeviceBufferRef_ptr(drawIndirect.countBufferExt);
 					DxDeviceBuffer *counterExt = DeviceBuffer_ext(counterBuffer, Dx);
 
-					EExecuteIndirectCommand cmd = 
+					EExecuteIndirectCommand cmd =
 						drawIndirect.isIndexed ? EExecuteIndirectCommand_DrawIndexed : EExecuteIndirectCommand_Draw;
 
 					buffer->lpVtbl->ExecuteIndirect(
@@ -708,7 +708,7 @@ void CommandList_process(
 
 				else {
 
-					EExecuteIndirectCommand cmd = 
+					EExecuteIndirectCommand cmd =
 						drawIndirect.isIndexed ? EExecuteIndirectCommand_DrawIndexed : EExecuteIndirectCommand_Draw;
 
 					buffer->lpVtbl->ExecuteIndirect(
@@ -740,7 +740,7 @@ void CommandList_process(
 			if(op == ECommandOp_Dispatch) {
 				DispatchCmd dispatch = *(const DispatchCmd*)data;
 				buffer->lpVtbl->Dispatch(
-					buffer, 
+					buffer,
 					dispatch.groups[0], dispatch.groups[1], dispatch.groups[2]
 				);
 			}
@@ -973,7 +973,7 @@ void CommandList_process(
 
 						case ETransitionType_RenderTargetRead:
 
-							pipelineStage = 
+							pipelineStage =
 								isDepthStencil ? D3D12_BARRIER_SYNC_DEPTH_STENCIL : D3D12_BARRIER_SYNC_PIXEL_SHADING;
 
 							access =
@@ -986,7 +986,7 @@ void CommandList_process(
 
 						case ETransitionType_RenderTargetWrite:
 
-							pipelineStage = 
+							pipelineStage =
 								isDepthStencil ? D3D12_BARRIER_SYNC_DEPTH_STENCIL : D3D12_BARRIER_SYNC_PIXEL_SHADING;
 
 							access =
@@ -1092,7 +1092,7 @@ void CommandList_process(
 
 			if(dep[0].NumBarriers || dep[1].NumBarriers)
 				buffer->lpVtbl->Barrier(
-					buffer, 
+					buffer,
 					dep[0].NumBarriers || dep[1].NumBarriers,
 					dep[0].NumBarriers ? &dep[0] : &dep[1]
 				);

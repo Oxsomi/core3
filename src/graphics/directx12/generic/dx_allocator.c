@@ -119,7 +119,7 @@ Error DeviceMemoryAllocator_allocate(
 
 	case EResourceType_DeviceBuffer:
 
-			heapDesc.Flags |= 
+			heapDesc.Flags |=
 				D3D12_HEAP_FLAG_ALLOW_ONLY_BUFFERS | (!cpuSided || !isGpu ? D3D12_HEAP_FLAG_ALLOW_SHADER_ATOMICS : 0);
 
 			break;

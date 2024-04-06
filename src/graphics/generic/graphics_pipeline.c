@@ -337,7 +337,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 
 		if(info->patchControlPoints > 32)
 			return Error_invalidOperation(
-				24, 
+				24,
 				"GraphicsDeviceRef_createPipelinesGraphics()::infos[i].pathControlPoints is out of bounds (max 32)"
 			);
 
@@ -418,7 +418,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 
 		if(info->blendState.renderTargetMask && info->blendState.logicOpExt)
 			return Error_invalidOperation(
-				23, 
+				23,
 				"GraphicsDeviceRef_createPipelinesGraphics()::infos[i].blendState.logicOpExt can't be on if blending is used"
 			);
 

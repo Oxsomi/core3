@@ -56,7 +56,7 @@ Error GraphicsDevice_createPipelinesComputeExt(GraphicsDevice *device, ListCharS
 			&IID_ID3D12PipelineState,
 			(void**) pipelinei
 		)))
-		
+
 		if((device->flags & EGraphicsDeviceFlags_IsDebug) && names.length && CharString_length(names.ptr[i])) {
 			gotoIfError(clean, CharString_toUtf16x(names.ptr[i], &tmp))
 			gotoIfError(clean, dxCheck((*pipelinei)->lpVtbl->SetName(*pipelinei, (const wchar_t*) tmp.ptr)))

@@ -868,7 +868,7 @@ Bool GraphicsDeviceRef_freeDescriptors(GraphicsDeviceRef *deviceRef, ListU32 *al
 			success &= !Buffer_resetBit(device->freeList[type], realId).genericError;
 
 			if(device->flags & EGraphicsDeviceFlags_IsDebug) {
-				
+
 				//TODO: HashMap
 
 				ListDescriptorStackTrace *stack = &device->descriptorStackTraces;

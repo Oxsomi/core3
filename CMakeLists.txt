@@ -359,7 +359,7 @@ elseif("${graphicsApi}" STREQUAL "directx12")
 	if(${ForceUpdateDeps} OR (NOT EXISTS "${CMAKE_BINARY_DIR}/external/agility/"))
 
 		message("-- Downloading and unzipping Microsoft.Direct3D.D3D12")
-		
+
 		file(REMOVE_RECURSE "${CMAKE_BINARY_DIR}/external/agility/")
 		file(DOWNLOAD "https://www.nuget.org/api/v2/package/Microsoft.Direct3D.D3D12/" "${CMAKE_BINARY_DIR}/external/agility.zip")
 		file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/external/agility/)

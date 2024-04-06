@@ -223,7 +223,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphics
 
 		GraphicsDeviceCapabilities caps = (GraphicsDeviceCapabilities) { 0 };
 
-		caps.features |= 
+		caps.features |=
 			EGraphicsFeatures_LUID | EGraphicsFeatures_MultiDrawIndirectCount | EGraphicsFeatures_DebugMarkers |
 			EGraphicsFeatures_GeometryShader | EGraphicsFeatures_SubgroupArithmetic | EGraphicsFeatures_SubgroupShuffle |
 			EGraphicsFeatures_Wireframe | EGraphicsFeatures_LogicOp | EGraphicsFeatures_DualSrcBlend | EGraphicsFeatures_Multiview;
@@ -234,9 +234,9 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphics
 
 		if(vendorId != EGraphicsVendorId_AMD)
 			caps.dataTypes |= EGraphicsDataTypes_D24S8;
-		
+
 		if (
-			vendorId == EGraphicsVendorId_NV || vendorId == EGraphicsVendorId_AMD || 
+			vendorId == EGraphicsVendorId_NV || vendorId == EGraphicsVendorId_AMD ||
 			vendorId == EGraphicsVendorId_INTC || vendorId == EGraphicsVendorId_MSFT
 		)
 			caps.features |= EGraphicsFeatures_DirectRendering;
@@ -271,7 +271,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphics
 
 		if(opt0.DoublePrecisionFloatShaderOps)
 			caps.dataTypes |= EGraphicsDataTypes_F64;
-		
+
 		if(
 			FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS1, &opt1, sizeof(opt1))) ||
 			!opt1.WaveOps || !opt1.Int64ShaderOps
@@ -329,13 +329,13 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphics
 
 		if(
 			FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS9, &opt9, sizeof(opt9))) ||
-			!opt9.AtomicInt64OnTypedResourceSupported || 
+			!opt9.AtomicInt64OnTypedResourceSupported ||
 			!opt9.AtomicInt64OnGroupSharedSupported
 		) {
 			Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support required D3D12_OPTIONS9", i);
 			goto next;
 		}
-		
+
 		if(
 			FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS12, &opt12, sizeof(opt12))) ||
 			!opt12.EnhancedBarriersSupported
@@ -343,13 +343,13 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphics
 			Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support required D3D12_OPTIONS12", i);
 			goto next;
 		}
-		
+
 		if(
 			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS16, &opt16, sizeof(opt16))) &&
 			opt16.GPUUploadHeapSupported
 		)
 			caps.featuresExt |= EDxGraphicsFeatures_ReBAR;
-		
+
 		if(
 			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_HARDWARE_COPY, &hwCopy, sizeof(hwCopy))) &&
 			hwCopy.Supported
@@ -361,13 +361,13 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphics
 			Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support required shader model (6.5)", i);
 			goto next;
 		}
-		
+
 		if(FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_ARCHITECTURE1, &arch, sizeof(arch)))) {
 			Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support required D3D12_FEATURE_ARCHITECTURE1", i);
 			goto next;
 		}
 
-		if(!(desc.Flags & DXGI_ADAPTER_FLAG3_SOFTWARE)) 
+		if(!(desc.Flags & DXGI_ADAPTER_FLAG3_SOFTWARE))
 			type = !arch.UMA ? EGraphicsDeviceType_Dedicated : EGraphicsDeviceType_Integrated;
 
 		U64 sharedMem = desc.SharedSystemMemory;
@@ -419,8 +419,8 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphics
 			D3D12_FORMAT_SUPPORT2 mask2 = D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD | D3D12_FORMAT_SUPPORT2_UAV_TYPED_STORE;
 
 			if(
-				FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_FORMAT_SUPPORT, &format, sizeof(format))) || 
-				(format.Support2 & mask2) != mask2 || 
+				FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_FORMAT_SUPPORT, &format, sizeof(format))) ||
+				(format.Support2 & mask2) != mask2 ||
 				(format.Support1 & mask1) != mask1
 			) {
 				Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support required format (typed uav load)", i);
@@ -437,21 +437,21 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphics
 		U32 mask1 = D3D12_FORMAT_SUPPORT1_RENDER_TARGET | D3D12_FORMAT_SUPPORT1_SHADER_SAMPLE | D3D12_FORMAT_SUPPORT1_BLENDABLE;
 
 		if(
-			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_FORMAT_SUPPORT, &format, sizeof(format))) && 
+			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_FORMAT_SUPPORT, &format, sizeof(format))) &&
 			(format.Support1 & mask1) == mask1
 		)
 			caps.dataTypes |= EGraphicsDataTypes_RGB32f;
 
 		if(
 			(Bool)(format.Format = DXGI_FORMAT_R32G32B32_SINT) &&
-			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_FORMAT_SUPPORT, &format, sizeof(format))) && 
+			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_FORMAT_SUPPORT, &format, sizeof(format))) &&
 			format.Support1 & D3D12_FORMAT_SUPPORT1_RENDER_TARGET
 		)
 			caps.dataTypes |= EGraphicsDataTypes_RGB32i;
 
 		if(
 			(Bool)(format.Format = DXGI_FORMAT_R32G32B32_UINT) &&
-			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_FORMAT_SUPPORT, &format, sizeof(format))) && 
+			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_FORMAT_SUPPORT, &format, sizeof(format))) &&
 			format.Support1 & D3D12_FORMAT_SUPPORT1_RENDER_TARGET
 		)
 			caps.dataTypes |= EGraphicsDataTypes_RGB32u;
@@ -464,7 +464,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphics
 		};
 
 		if(
-			FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &msaa, sizeof(msaa))) || 
+			FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &msaa, sizeof(msaa))) ||
 			!msaa.NumQualityLevels
 		) {
 			Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support required MSAA flag for RGBA32f", i);
@@ -474,7 +474,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphics
 		if(
 			(caps.dataTypes & EGraphicsDataTypes_RGB32f) &&
 			(Bool)(msaa.Format = DXGI_FORMAT_R32G32B32_FLOAT) && (
-				FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &msaa, sizeof(msaa))) || 
+				FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &msaa, sizeof(msaa))) ||
 				!msaa.NumQualityLevels
 			)
 		)

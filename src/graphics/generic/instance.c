@@ -88,7 +88,7 @@ Error GraphicsInstance_getPreferredDevice(
 			continue;
 
 		if(
-			info.capabilities.sharedMemory < requiredCapabilities.sharedMemory || 
+			info.capabilities.sharedMemory < requiredCapabilities.sharedMemory ||
 			info.capabilities.dedicatedMemory < requiredCapabilities.dedicatedMemory
 		)
 			continue;

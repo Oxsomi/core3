@@ -88,6 +88,7 @@ Bool CLI_rand(ParsedArgs args) {
 	CharString outputString = CharString_createNull();
 	const C8 *errorString = NULL;
 	CharString tmpString = CharString_createNull();
+	CharString options = CharString_createNull();
 	Error err = Error_none();
 
 	//Generate data
@@ -246,8 +247,6 @@ Bool CLI_rand(ParsedArgs args) {
 
 					//Build up all options
 
-					CharString options = CharString_createNull();
-
 					//Random char
 
 					if(args.operation == EOperation_RandChar) {
@@ -395,6 +394,7 @@ clean:
 		else Error_printx(err, ELogLevel_Error, ELogOptions_NewLine);
 	}
 
+	CharString_freex(&options);
 	Buffer_freex(&tmp);
 	Buffer_freex(&outputFile);
 	CharString_freex(&outputString);

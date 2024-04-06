@@ -37,10 +37,10 @@
 #include <nvapi.h>
 
 void onDebugReport(
-	D3D12_MESSAGE_CATEGORY category, 
-	D3D12_MESSAGE_SEVERITY severity, 
-	D3D12_MESSAGE_ID id, 
-	LPCSTR description, 
+	D3D12_MESSAGE_CATEGORY category,
+	D3D12_MESSAGE_SEVERITY severity,
+	D3D12_MESSAGE_ID id,
+	LPCSTR description,
 	void *context
 ) {
 
@@ -81,15 +81,15 @@ void onDebugReport(
 }
 
 void onDebugReportNv(
-	void *pUserData, 
-	NVAPI_D3D12_RAYTRACING_VALIDATION_MESSAGE_SEVERITY severity, 
-	const char *messageCode, 
-	const char *message, 
+	void *pUserData,
+	NVAPI_D3D12_RAYTRACING_VALIDATION_MESSAGE_SEVERITY severity,
+	const char *messageCode,
+	const char *message,
 	const char *messageDetails
 ) {
 
 	(void)pUserData;
-	
+
 	switch(severity) {
 
 		case NVAPI_D3D12_RAYTRACING_VALIDATION_MESSAGE_SEVERITY_ERROR:
@@ -137,7 +137,7 @@ Error GraphicsDevice_initExt(
 	)))
 
 	gotoIfError(clean, dxCheck(D3D12CreateDevice(
-		(IUnknown*)deviceExt->adapter4, D3D_FEATURE_LEVEL_12_1, 
+		(IUnknown*)deviceExt->adapter4, D3D_FEATURE_LEVEL_12_1,
 		&IID_ID3D12Device5, (void**) &deviceExt->device
 	)))
 
@@ -149,6 +149,39 @@ Error GraphicsDevice_initExt(
 			deviceExt->device,
 			&IID_ID3D12DebugDevice, (void**) &deviceExt->debugDevice
 		)))
+
+		//Get infoQueue0 to disable some bogus validation messages
+
+		if(SUCCEEDED(deviceExt->device->lpVtbl->QueryInterface(
+			deviceExt->device,
+			&IID_ID3D12InfoQueue, (void**) &deviceExt->infoQueue0
+		))) {
+
+			gotoIfError(clean, dxCheck(deviceExt->infoQueue0->lpVtbl->SetBreakOnSeverity(
+				deviceExt->infoQueue0, D3D12_MESSAGE_SEVERITY_CORRUPTION, true
+			)))
+
+			gotoIfError(clean, dxCheck(deviceExt->infoQueue0->lpVtbl->SetBreakOnSeverity(
+				deviceExt->infoQueue0, D3D12_MESSAGE_SEVERITY_ERROR, true
+			)))
+
+			D3D12_MESSAGE_ID hide[] = {
+				D3D12_MESSAGE_ID_CREATEDEVICE_DEBUG_LAYER_STARTUP_OPTIONS
+			};
+
+			D3D12_INFO_QUEUE_FILTER filter = (D3D12_INFO_QUEUE_FILTER) {
+				.DenyList = (D3D12_INFO_QUEUE_FILTER_DESC) {
+					.NumIDs = (U32)(sizeof(hide) / sizeof(hide[0])),
+					.pIDList = hide
+				}
+			};
+
+			gotoIfError(clean, dxCheck(deviceExt->infoQueue0->lpVtbl->AddStorageFilterEntries(
+				deviceExt->infoQueue0, &filter
+			)))
+		}
+
+		//Get info queue 1 for validation errors in the console on Win11
 
 		if(SUCCEEDED(deviceExt->device->lpVtbl->QueryInterface(
 			deviceExt->device,
@@ -563,6 +596,9 @@ Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext) {
 
 		deviceExt->debugDevice->lpVtbl->Release(deviceExt->debugDevice);
 	}
+
+	if(deviceExt->infoQueue0)
+		deviceExt->infoQueue0->lpVtbl->Release(deviceExt->infoQueue0);
 
 	if(deviceExt->infoQueue1)
 		deviceExt->infoQueue1->lpVtbl->Release(deviceExt->infoQueue1);

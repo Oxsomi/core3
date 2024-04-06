@@ -51,6 +51,6 @@ dxc "%~1" -T "%target%" -spirv -Zpc -O3 -Fo "%cd%/compiled/spirv/%~n1.!outEntry!
 echo Compiling DXIL
 
 mkdir "%cd%/compiled/dxil" 2> NUL
-dxc "%~1" -T "%target%" -Zpc -O3 -Fo "%cd%/compiled/dxil/%~n1.!outEntry!" -HV 2021 -Qstrip_debug -I "%~dp0..\src\graphics\shaders" %entrypoint%
+dxc "%~1" -T "%target%" -Zpc -O3 -Fo "%cd%/compiled/dxil/%~n1.!outEntry!" -HV 2021 -auto-binding-space 0 -Qstrip_debug -I "%~dp0..\src\graphics\shaders" %entrypoint%
 
 echo Success (%~n1.!outEntry!)

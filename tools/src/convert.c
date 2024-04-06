@@ -35,21 +35,16 @@ Bool CLI_convert(ParsedArgs args, Bool isTo) {
 	U64 offset = 0;
 
 	CharString inputArg = CharString_createNull();
-	Error err = ListCharString_get(args.args, offset++, &inputArg);
+	FileInfo info = (FileInfo) { 0 };
 
-	if (err.genericError) {
-		Error_printx(err, ELogLevel_Error, ELogOptions_Default);
-		return false;
-	}
+	Error err;
+	gotoIfError(clean, ListCharString_get(args.args, offset++, &inputArg))
 
 	//Check if output is valid
 
 	CharString outputArg = CharString_createNull();
 
-	if ((err = ListCharString_get(args.args, offset++, &outputArg)).genericError) {
-		Error_printx(err, ELogLevel_Error, ELogOptions_Default);
-		return false;
-	}
+	gotoIfError(clean, ListCharString_get(args.args, offset++, &outputArg))
 
 	//TODO: Support multiple files
 
@@ -57,22 +52,13 @@ Bool CLI_convert(ParsedArgs args, Bool isTo) {
 
 	//Check if input file and file type are valid
 
-	FileInfo info = (FileInfo) { 0 };
+	gotoIfError(clean, File_getInfo(inputArg, &info))
 
-	if ((err = File_getInfo(inputArg, &info)).genericError) {
-		Error_printx(err, ELogLevel_Error, ELogOptions_Default);
-		return false;
-	}
+	if (!(f.flags & EFormatFlags_SupportFiles) && info.type == EFileType_File)
+		gotoIfError(clean, Error_invalidState(0, "CLI_convert() Invalid file passed to convertTo. Only accepting folders."))
 
-	if (!(f.flags & EFormatFlags_SupportFiles) && info.type == EFileType_File) {
-		Log_errorLnx("Invalid file passed to convertTo. Only accepting folders.");
-		return false;
-	}
-
-	if (!(f.flags & EFormatFlags_SupportFolders) && info.type == EFileType_Folder) {
-		Log_errorLnx("Invalid file passed to convertTo. Only accepting files.");
-		return false;
-	}
+	if (!(f.flags & EFormatFlags_SupportFolders) && info.type == EFileType_Folder)
+		gotoIfError(clean, Error_invalidState(1, "CLI_convert() Invalid file passed to convertTo. Only accepting files."))
 
 	//Parse encryption key
 
@@ -86,17 +72,17 @@ Bool CLI_convert(ParsedArgs args, Bool isTo) {
 		if (
 			(ParsedArgs_getArg(args, EOperationHasParameter_AESShift, &key)).genericError ||
 			!CharString_isHex(key)
-		) {
-			Log_errorLnx("Invalid parameter sent to -aes. Expecting key in hex (32 bytes)");
-			return false;
-		}
+		)
+			gotoIfError(clean, Error_invalidState(
+				2, "CLI_convert() Invalid parameter sent to -aes. Expecting key in hex (32 bytes)"
+			))
 
 		U64 off = CharString_startsWithStringInsensitive(key, CharString_createRefCStrConst("0x")) ? 2 : 0;
 
-		if (CharString_length(key) - off != 64) {
-			Log_errorLnx("Invalid parameter sent to -aes. Expecting key in hex (32 bytes)");
-			return false;
-		}
+		if (CharString_length(key) - off != 64)
+			gotoIfError(clean, Error_invalidState(
+				3, "CLI_convert() Invalid parameter sent to -aes. Expecting key in hex (32 bytes)"
+			))
 
 		for (U64 i = off; i + 1 < CharString_length(key); ++i) {
 
@@ -117,36 +103,37 @@ Bool CLI_convert(ParsedArgs args, Bool isTo) {
 		case EFormat_oiDL:
 
 			if(isTo)
-				err = CLI_convertToDL(args, inputArg, info, outputArg, encryptionKey);
+				gotoIfError(clean, CLI_convertToDL(args, inputArg, info, outputArg, encryptionKey))
 
-			else err = CLI_convertFromDL(args, inputArg, info, outputArg, encryptionKey);
+			else gotoIfError(clean, CLI_convertFromDL(args, inputArg, info, outputArg, encryptionKey))
 
 			break;
 
 		case EFormat_oiCA:
 
 			if(isTo)
-				err = CLI_convertToCA(args, inputArg, info, outputArg, encryptionKey);
+				gotoIfError(clean, CLI_convertToCA(args, inputArg, info, outputArg, encryptionKey))
 
-			else err = CLI_convertFromCA(args, inputArg, info, outputArg, encryptionKey);
+			else gotoIfError(clean, CLI_convertFromCA(args, inputArg, info, outputArg, encryptionKey))
 
 			break;
 
 		default:
-			Log_debugLnx("Unsupported format");
-			return false;
-	}
-
-	if (err.genericError) {
-		Log_errorLnx("File conversion failed!");
-		Error_printx(err, ELogLevel_Error, ELogOptions_NewLine);
-		return false;
+			gotoIfError(clean, Error_invalidOperation(0, "CLI_convert() Unsupported format"))
 	}
 
 	//Tell CLI users
 
 	Log_debugLnx("Converted file oiXX format in %"PRIu64"ms", (Time_now() - start + MS - 1) / MS);
-	return true;
+
+clean:
+
+	if (err.genericError)
+		Log_errorLnx("File conversion failed!");
+
+	FileInfo_freex(&info);
+	Error_printx(err, ELogLevel_Error, ELogOptions_NewLine);
+	return !err.genericError;
 }
 
 Bool CLI_convertTo(ParsedArgs args) {

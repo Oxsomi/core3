@@ -40,6 +40,6 @@ Error VkGraphicsInstance_getLayers(Bool isDebug, ListConstC8 *layers) {
 			return Error_none();
 		#endif
 	}
-	
+
 	return Error_none();
 }
