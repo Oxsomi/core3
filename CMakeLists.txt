@@ -394,7 +394,7 @@ elseif("${graphicsApi}" STREQUAL "directx12")
 		CMakeLists.txt
 	)
 
-	target_link_libraries(DirectX12 PUBLIC dxgi dxguid d3d12)
+	target_link_libraries(DirectX12 PUBLIC dxgi d3d12)
 	target_link_libraries(OxC3_graphics PUBLIC DirectX12)
 	target_include_directories(DirectX12 PUBLIC "${CMAKE_BINARY_DIR}/external/agility/build/native/include")
 

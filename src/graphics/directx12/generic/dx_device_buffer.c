@@ -34,8 +34,6 @@ Error DxDeviceBuffer_transition(
 	DxDeviceBuffer *buffer,
 	D3D12_BARRIER_SYNC sync,
 	D3D12_BARRIER_ACCESS access,
-	U64 offset,
-	U64 size,
 	ListD3D12_BUFFER_BARRIER *bufferBarriers,
 	D3D12_BARRIER_GROUP *dependency
 ) {
@@ -61,8 +59,7 @@ Error DxDeviceBuffer_transition(
 		.AccessBefore = buffer->lastAccess,
 		.AccessAfter = access,
 		.pResource = buffer->buffer,
-		.Offset = offset,
-		.Size = !size ? UINT64_MAX : size
+		.Size = UINT64_MAX			//Sized barrier not allowed
 	};
 
 	const Error err = ListD3D12_BUFFER_BARRIER_pushBackx(bufferBarriers, bufferBarrier);
@@ -119,7 +116,9 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 	if(!(buf->resource.flags & EGraphicsResourceFlag_ShaderRead))
 		resourceDesc.Flags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
 
-	if(buf->usage & EDeviceBufferUsage_ASExt)
+	U64 rtFlag = EDeviceBufferUsage_ASExt | EDeviceBufferUsage_ASReadExt | EDeviceBufferUsage_ScratchExt;
+
+	if(buf->usage & rtFlag)
 		resourceDesc.Flags |= D3D12_RESOURCE_FLAG_RAYTRACING_ACCELERATION_STRUCTURE;
 
 	D3D12_RESOURCE_ALLOCATION_INFO allocInfo = (D3D12_RESOURCE_ALLOCATION_INFO) { 0 };
@@ -186,13 +185,13 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 
 	EGraphicsResourceFlag flags = buf->resource.flags;
 
-	if(flags & EGraphicsResourceFlag_ShaderRW || (buf->usage & EDeviceBufferUsage_ASExt)) {
+	if(flags & EGraphicsResourceFlag_ShaderRW) {
 
 		const DxHeap heap = deviceExt->heaps[EDescriptorHeapType_Resources];
 
 		//Create readonly buffer
 
-		if ((flags & EGraphicsResourceFlag_ShaderRead) || (buf->usage & EDeviceBufferUsage_ASExt)) {
+		if (flags & EGraphicsResourceFlag_ShaderRead) {
 
 			D3D12_SHADER_RESOURCE_VIEW_DESC srv = (D3D12_SHADER_RESOURCE_VIEW_DESC) {
 				.Format = DXGI_FORMAT_R32_TYPELESS,
@@ -204,19 +203,7 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 				}
 			};
 
-			U64 offset = EDescriptorTypeOffsets_Buffer;
-
-			if(buf->usage & EDeviceBufferUsage_ASExt) {
-
-				srv.ViewDimension = D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE;
-				srv.RaytracingAccelerationStructure = (D3D12_RAYTRACING_ACCELERATION_STRUCTURE_SRV) {
-					.Location = buf->resource.deviceAddress
-				};
-
-				offset = EDescriptorTypeOffsets_TLASExt;
-			}
-
-			offset += ResourceHandle_getId(buf->readHandle);
+			U64 offset = EDescriptorTypeOffsets_Buffer + ResourceHandle_getId(buf->readHandle);
 
 			deviceExt->device->lpVtbl->CreateShaderResourceView(
 				deviceExt->device,
@@ -255,6 +242,8 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 		gotoIfError(clean, CharString_toUtf16x(name, &name16))
 		gotoIfError(clean, dxCheck(bufExt->buffer->lpVtbl->SetName(bufExt->buffer, name16.ptr)))
 	}
+
+	bufExt->lastAccess = D3D12_BARRIER_ACCESS_NO_ACCESS;
 
 clean:
 	ListU16_freex(&name16);
@@ -353,8 +342,6 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 					stagingResourceExt,
 					D3D12_BARRIER_SYNC_COPY,
 					D3D12_BARRIER_ACCESS_COPY_SOURCE,
-					0,
-					allocRange,
 					&deviceExt->bufferTransitions,
 					&dependency
 				))
@@ -363,8 +350,6 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 					bufferExt,
 					D3D12_BARRIER_SYNC_COPY,
 					D3D12_BARRIER_ACCESS_COPY_DEST,
-					bufferj.startRange,
-					len,
 					&deviceExt->bufferTransitions,
 					&dependency
 				))
@@ -440,8 +425,6 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 					bufferExt,
 					D3D12_BARRIER_SYNC_COPY,
 					D3D12_BARRIER_ACCESS_COPY_DEST,
-					bufferj.startRange,
-					len,
 					&deviceExt->bufferTransitions,
 					&dependency
 				))
@@ -452,8 +435,6 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 						stagingExt,
 						D3D12_BARRIER_SYNC_COPY,
 						D3D12_BARRIER_ACCESS_COPY_SOURCE,
-						(device->submitId % 3) * (staging->resource.size / 3),
-						staging->resource.size / 3,
 						&deviceExt->bufferTransitions,
 						&dependency
 					))

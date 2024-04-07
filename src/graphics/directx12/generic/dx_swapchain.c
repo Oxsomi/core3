@@ -128,18 +128,11 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 
 	//Acquire images
 
-	for(U8 i = 0; i < swapchain->base.images; ++i) {
-
-		DxUnifiedTexture *managedImage = TextureRef_getImgExtT(swapchainRef, Dx, 0, i);
-		managedImage->lastAccess = 0;
-		managedImage->lastLayout = 0;
-		managedImage->lastLayout = 0;
-
+	for(U8 i = 0; i < swapchain->base.images; ++i)
 		gotoIfError(clean, dxCheck(swapchainExt->swapchain->lpVtbl->GetBuffer(
 			swapchainExt->swapchain, i,
-			&IID_ID3D12Resource, (void**) &managedImage->image
+			&IID_ID3D12Resource, (void**) &TextureRef_getImgExtT(swapchainRef, Dx, 0, i)->image
 		)))
-	}
 
 clean:
 	return err;

@@ -372,15 +372,16 @@ void CommandList_process(
 				temp->boundTargets[i] = temp->resolveTargets[i] = (ImageAndRange) { 0 };
 
 			DxHeap dsvHeap = deviceExt->heaps[EDescriptorHeapType_DSV];
+			D3D12_CPU_DESCRIPTOR_HANDLE dsvCpuDesc = dsvHeap.cpuHandle;
 			D3D12_CPU_DESCRIPTOR_HANDLE dsv = createTempDSV(
-				deviceExt, 0, cpuDesc, startRender->flags, dsvHeap, startRender->depthStencil
+				deviceExt, 0, dsvCpuDesc, startRender->flags, dsvHeap, startRender->depthStencil
 			);
 
 			if(startRender->flags & EStartRenderFlags_ClearDepthStencil)
 				buffer->lpVtbl->ClearDepthStencilView(
 					buffer, dsv,
-					(startRender->clearMask & EStartRenderFlags_ClearDepth ? D3D12_CLEAR_FLAG_DEPTH : 0) |
-					(startRender->clearMask & EStartRenderFlags_ClearStencil ? D3D12_CLEAR_FLAG_STENCIL : 0),
+					(startRender->flags & EStartRenderFlags_ClearDepth ? D3D12_CLEAR_FLAG_DEPTH : 0) |
+					(startRender->flags & EStartRenderFlags_ClearStencil ? D3D12_CLEAR_FLAG_STENCIL : 0),
 					startRender->clearDepth, startRender->clearStencil,
 					1, &rect
 				);
@@ -805,6 +806,15 @@ void CommandList_process(
 				.StrideInBytes = raytracingShaderAlignment
 			};
 
+			if(!info.groupCount)
+				hit = (D3D12_GPU_VIRTUAL_ADDRESS_RANGE_AND_STRIDE) { 0 };
+
+			if(!info.missCount)
+				miss = (D3D12_GPU_VIRTUAL_ADDRESS_RANGE_AND_STRIDE) { 0 };
+
+			if(!info.callableCount)
+				callable = (D3D12_GPU_VIRTUAL_ADDRESS_RANGE_AND_STRIDE) { 0 };
+
 			if(op == ECommandOp_DispatchRaysExt) {
 
 				DispatchRaysExt dispatch = *(const DispatchRaysExt*)data;
@@ -917,7 +927,6 @@ void CommandList_process(
 								DeviceBuffer_ext(DeviceBufferRef_ptr(blas->base.asBuffer), Dx),
 								pipelineStage,
 								D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_READ,
-								0, 0,
 								&deviceExt->bufferTransitions,
 								&dep[1]
 							))
@@ -927,7 +936,6 @@ void CommandList_process(
 						DeviceBuffer_ext(DeviceBufferRef_ptr(tlas->base.asBuffer), Dx),
 						pipelineStage,
 						D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_READ,
-						0, 0,
 						&deviceExt->bufferTransitions,
 						&dep[1]
 					))
@@ -946,7 +954,6 @@ void CommandList_process(
 						DeviceBuffer_ext(DeviceBufferRef_ptr(blas->base.asBuffer), Dx),
 						pipelineStage,
 						D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_READ,
-						0, 0,
 						&deviceExt->bufferTransitions,
 						&dep[1]
 					))
@@ -974,7 +981,7 @@ void CommandList_process(
 						case ETransitionType_RenderTargetRead:
 
 							pipelineStage =
-								isDepthStencil ? D3D12_BARRIER_SYNC_DEPTH_STENCIL : D3D12_BARRIER_SYNC_PIXEL_SHADING;
+								isDepthStencil ? D3D12_BARRIER_SYNC_DEPTH_STENCIL : D3D12_BARRIER_SYNC_RENDER_TARGET;
 
 							access =
 								isDepthStencil ? D3D12_BARRIER_ACCESS_DEPTH_STENCIL_READ : D3D12_BARRIER_ACCESS_RENDER_TARGET;
@@ -987,7 +994,7 @@ void CommandList_process(
 						case ETransitionType_RenderTargetWrite:
 
 							pipelineStage =
-								isDepthStencil ? D3D12_BARRIER_SYNC_DEPTH_STENCIL : D3D12_BARRIER_SYNC_PIXEL_SHADING;
+								isDepthStencil ? D3D12_BARRIER_SYNC_DEPTH_STENCIL : D3D12_BARRIER_SYNC_RENDER_TARGET;
 
 							access =
 								isDepthStencil ? D3D12_BARRIER_ACCESS_DEPTH_STENCIL_WRITE : D3D12_BARRIER_ACCESS_RENDER_TARGET;
@@ -1032,7 +1039,7 @@ void CommandList_process(
 							break;
 
 						case ETransitionType_Vertex:
-							pipelineStage = D3D12_BARRIER_SYNC_INDEX_INPUT;
+							pipelineStage = D3D12_BARRIER_SYNC_VERTEX_SHADING;
 							access = D3D12_BARRIER_ACCESS_VERTEX_BUFFER;
 							break;
 
@@ -1077,8 +1084,6 @@ void CommandList_process(
 						DeviceBuffer_ext(devBuffer, Dx),
 						pipelineStage,
 						access,
-						0,						//TODO: range
-						devBuffer->resource.size,
 						&deviceExt->bufferTransitions,
 						&dep[1]
 					))
@@ -1093,7 +1098,7 @@ void CommandList_process(
 			if(dep[0].NumBarriers || dep[1].NumBarriers)
 				buffer->lpVtbl->Barrier(
 					buffer,
-					dep[0].NumBarriers || dep[1].NumBarriers,
+					!!dep[0].NumBarriers + !!dep[1].NumBarriers,
 					dep[0].NumBarriers ? &dep[0] : &dep[1]
 				);
 

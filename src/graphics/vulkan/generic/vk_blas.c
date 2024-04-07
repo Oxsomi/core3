@@ -309,7 +309,7 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 
 	//Add as flight and ensure flushes are done if too many ASes are queued this frame
 
-	device->pendingBytes += primitives;
+	device->pendingPrimitives += primitives;
 
 	gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, pending))
 	RefPtr_inc(pending);

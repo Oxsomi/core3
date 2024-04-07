@@ -157,7 +157,6 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 				DeviceBuffer_ext(DeviceBufferRef_ptr(tempInstances), Dx),
 				D3D12_BARRIER_SYNC_BUILD_RAYTRACING_ACCELERATION_STRUCTURE,
 				D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_READ,
-				0, 0,
 				&deviceExt->bufferTransitions,
 				&dep
 			))
@@ -167,7 +166,6 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 			DeviceBuffer_ext(DeviceBufferRef_ptr(tlas->deviceData.buffer), Dx),
 			D3D12_BARRIER_SYNC_BUILD_RAYTRACING_ACCELERATION_STRUCTURE,
 			D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_READ,
-			0, 0,
 			&deviceExt->bufferTransitions,
 			&dep
 		))
@@ -223,7 +221,6 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 		DeviceBuffer_ext(DeviceBufferRef_ptr(tlas->base.asBuffer), Dx),
 		D3D12_BARRIER_SYNC_BUILD_RAYTRACING_ACCELERATION_STRUCTURE,
 		D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_WRITE,
-		0, 0,
 		&deviceExt->bufferTransitions,
 		&dep
 	))
@@ -232,7 +229,6 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 		DeviceBuffer_ext(DeviceBufferRef_ptr(tempScratch), Dx),
 		D3D12_BARRIER_SYNC_BUILD_RAYTRACING_ACCELERATION_STRUCTURE,
 		D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_WRITE,
-		0, 0,
 		&deviceExt->bufferTransitions,
 		&dep
 	))
@@ -271,6 +267,7 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 
 	D3D12_SHADER_RESOURCE_VIEW_DESC resourceView = (D3D12_SHADER_RESOURCE_VIEW_DESC) {
 		.ViewDimension = D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE,
+		.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
 		.RaytracingAccelerationStructure = (D3D12_RAYTRACING_ACCELERATION_STRUCTURE_SRV) {
 			.Location = dstAS
 		}
@@ -278,13 +275,11 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 
 	const DxHeap heap = deviceExt->heaps[EDescriptorHeapType_Resources];
 
-	U64 id =
-		EDescriptorTypeCount_Textures + EDescriptorTypeCount_RWTextures + EDescriptorTypeCount_SSBO -
-		EDescriptorTypeCount_TLASExt + ResourceHandle_getId(tlas->handle);
+	U64 id = EDescriptorTypeOffsets_TLASExt + ResourceHandle_getId(tlas->handle);
 
 	deviceExt->device->lpVtbl->CreateShaderResourceView(
 		deviceExt->device,
-		DeviceBuffer_ext(DeviceBufferRef_ptr(tlas->base.asBuffer), Dx)->buffer,
+		NULL,
 		&resourceView,
 		(D3D12_CPU_DESCRIPTOR_HANDLE) { .ptr = heap.cpuHandle.ptr + heap.cpuIncrement * id }
 	);

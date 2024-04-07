@@ -1267,11 +1267,7 @@ Error GraphicsDevice_submitCommandsImpl(
 			const U8 *ptr = commandList->data.ptr;
 
 			for (U64 j = 0; j < commandList->commandOps.length; ++j) {
-
 				CommandOpInfo info = commandList->commandOps.ptr[j];
-
-				//Extra debugging if an error happens while processing the command
-
 				CommandList_process(commandList, device, info.op, ptr, &state);
 				ptr += info.opSize;
 			}

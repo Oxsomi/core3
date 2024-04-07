@@ -132,13 +132,15 @@ Error UnifiedTexture_createExt(TextureRef *textureRef, CharString name) {
 
 		DxUnifiedTexture *managedImageExt = TextureRef_getImgExtT(textureRef, Dx, 0, 0);
 
+		D3D12_CLEAR_VALUE clearValue = (D3D12_CLEAR_VALUE) { .Format = dxFormat };
+
 		gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreatePlacedResource(
 			deviceExt->device,
 			block.ext,
 			texture->resource.blockOffset,
 			&resourceDesc,
 			D3D12_RESOURCE_STATE_COPY_DEST,
-			NULL,
+			texture->resource.type == EResourceType_DeviceTexture ? NULL : &clearValue,
 			&IID_ID3D12Resource,
 			(void**)&managedImageExt->image
 		)))
@@ -152,6 +154,8 @@ Error UnifiedTexture_createExt(TextureRef *textureRef, CharString name) {
 
 		DxUnifiedTexture *managedImageExt = TextureRef_getImgExtT(textureRef, Dx, 0, i);
 		UnifiedTextureImage managedImage = TextureRef_getImage(textureRef, 0, i);
+
+		managedImageExt->lastAccess = D3D12_BARRIER_ACCESS_NO_ACCESS;
 
 		if (texture->resource.flags & EGraphicsResourceFlag_ShaderRead) {
 

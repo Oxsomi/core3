@@ -31,8 +31,6 @@ Error DxDeviceBuffer_transition(
 	DxDeviceBuffer *buffer,
 	D3D12_BARRIER_SYNC sync,
 	D3D12_BARRIER_ACCESS access,
-	U64 offset,
-	U64 size,
 	ListD3D12_BUFFER_BARRIER *bufferBarriers,
 	D3D12_BARRIER_GROUP *dependency
 );

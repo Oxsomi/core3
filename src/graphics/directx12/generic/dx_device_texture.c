@@ -112,7 +112,7 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 
 			const U64 rowOff = ETextureFormat_getSize(format, x, alignmentY, 1);
 
-			const U64 len = ETextureFormat_getSize(format, w, h, l);
+			const U64 len = rowLen * (TextureRange_height(texturej) / alignmentY) * TextureRange_length(texturej);
 			const U64 start = (U64) rowLen * (y + z * h) + rowOff;
 
 			if(w == texture->base.width && h == texture->base.height && rowLenUnalign == rowLen)
@@ -133,17 +133,20 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 					const U64 yOff = (j - y) / alignmentY;
 					Buffer_copy(
 						Buffer_createRef(location + allocRange + rowLen * (yOff + (k - z) * h), rowLen),
-						Buffer_createRefConst(texture->cpuData.ptr + start + rowLen * (yOff + (k - z) * h), rowLen)
+						Buffer_createRefConst(
+							texture->cpuData.ptr + start + rowLenUnalign * (yOff + (k - z) * h), rowLenUnalign
+						)
 					);
 				}
 			}
+
+			U64 allocRangeStart = allocRange;
+			allocRange += len;
 
 			gotoIfError(clean, DxDeviceBuffer_transition(
 				stagingResourceExt,
 				D3D12_BARRIER_SYNC_COPY,
 				D3D12_BARRIER_ACCESS_COPY_SOURCE,
-				0,
-				allocRange,
 				&deviceExt->bufferTransitions,
 				&bufDep
 			))
@@ -182,14 +185,14 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 
 			D3D12_TEXTURE_COPY_LOCATION dst = (D3D12_TEXTURE_COPY_LOCATION) {
 				.pResource = textureExt->image,
-				.SubresourceIndex = l + z
+				.SubresourceIndex = z
 			};
 
 			D3D12_TEXTURE_COPY_LOCATION src = (D3D12_TEXTURE_COPY_LOCATION) {
 				.pResource = stagingResourceExt->buffer,
 				.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
 				.PlacedFootprint = (D3D12_PLACED_SUBRESOURCE_FOOTPRINT) {
-					.Offset = allocRange,
+					.Offset = allocRangeStart,
 					.Footprint = (D3D12_SUBRESOURCE_FOOTPRINT) {
 						.Format = dxFormat,
 						.Width = w,
@@ -214,10 +217,8 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 				&dst,
 				x, y, z,
 				&src,
-				&srcBox
+				texture->isPendingFullCopy ? NULL : &srcBox		//Unaligned textures have a GPUBV bug in SDK version 613
 			);
-
-			allocRange += len;
 		}
 
 		//When staging resource is committed to current in flight then we can relinquish ownership.
@@ -266,23 +267,23 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 
 			const TextureRange texturej = texture->pendingChanges.ptr[m].texture;
 
-			U16 x = texturej.startRange[0];
-			U16 y = texturej.startRange[1];
-			U16 z = texturej.startRange[2];
+			const U16 x = texturej.startRange[0];
+			const U16 y = texturej.startRange[1];
+			const U16 z = texturej.startRange[2];
 
-			U16 w = TextureRange_width(texturej);
-			U16 h = TextureRange_height(texturej);
-			U16 l = TextureRange_length(texturej);
+			const U16 w = TextureRange_width(texturej);
+			const U16 h = TextureRange_height(texturej);
+			const U16 l = TextureRange_length(texturej);
 
 			U64 rowLen = ETextureFormat_getSize(format, w, alignmentY, 1);
-			U64 rowLenUnalign = rowLen;
+			const U64 rowLenUnalign = rowLen;
 
 			rowLen = (rowLen + D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1) &~ (D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1);
 
 			U64 rowOff = ETextureFormat_getSize(format, x, alignmentY, 1);
-			U64 len = ETextureFormat_getSize(format, w, h, l);
-			U64 h2 = h / alignmentY;
-			U64 start = rowLen * (y + z * h2) + rowOff;
+			const U64 len = rowLen * (TextureRange_height(texturej) / alignmentY) * TextureRange_length(texturej);
+			const U64 h2 = h / alignmentY;
+			const U64 start = rowLen * (y + z * h2) + rowOff;
 
 			if(w == texture->base.width && h == texture->base.height && rowLenUnalign == rowLen)
 				Buffer_copy(
@@ -302,7 +303,9 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 					U64 yOff = (j - y) / alignmentY;
 					Buffer_copy(
 						Buffer_createRef(location + allocRange + rowLen * (yOff + (k - z) * h2), rowLen),
-						Buffer_createRefConst(texture->cpuData.ptr + start + rowLen * (yOff + (k - z) * h2), rowLen)
+						Buffer_createRefConst(
+							texture->cpuData.ptr + start + rowLenUnalign * (yOff + (k - z) * h2), rowLenUnalign
+						)
 					);
 				}
 			}
@@ -313,8 +316,6 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 					stagingExt,
 					D3D12_BARRIER_SYNC_COPY,
 					D3D12_BARRIER_ACCESS_COPY_SOURCE,
-					(device->submitId % 3) * (staging->resource.size / 3),
-					staging->resource.size / 3,
 					&deviceExt->bufferTransitions,
 					&bufDep
 				))
@@ -355,16 +356,19 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 				ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions);
 			}
 
+			U64 allocRangeStart = allocRange;
+			allocRange += len;
+
 			D3D12_TEXTURE_COPY_LOCATION dst = (D3D12_TEXTURE_COPY_LOCATION) {
 				.pResource = textureExt->image,
-				.SubresourceIndex = l + z
+				.SubresourceIndex = z
 			};
 
 			D3D12_TEXTURE_COPY_LOCATION src = (D3D12_TEXTURE_COPY_LOCATION) {
 				.pResource = stagingExt->buffer,
 				.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
 				.PlacedFootprint = (D3D12_PLACED_SUBRESOURCE_FOOTPRINT) {
-					.Offset = allocRange + (U64)defaultLocation,
+					.Offset = allocRangeStart + (U64)(location - stagingBuffer->buffer.ptr),
 					.Footprint = (D3D12_SUBRESOURCE_FOOTPRINT) {
 						.Format = dxFormat,
 						.Width = w,
@@ -389,10 +393,8 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 				&dst,
 				x, y, z,
 				&src,
-				&srcBox
+				texture->isPendingFullCopy ? NULL : &srcBox		//Unaligned textures have a GPUBV bug in SDK version 613
 			);
-
-			allocRange += len;
 		}
 	}
 

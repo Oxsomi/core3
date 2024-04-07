@@ -18,6 +18,8 @@
 *  This is called dual licensing.
 */
 
+#define INITGUID
+#include <guiddef.h>
 #include "platforms/ext/listx_impl.h"
 #include "graphics/directx12/directx12.h"
 #include "graphics/directx12/dx_device.h"
@@ -658,89 +660,37 @@ Error GraphicsDevice_submitCommandsImpl(
 	ListCommandListRef commandLists,
 	ListSwapchainRef swapchains
 ) {
-	(void)deviceRef; (void)commandLists; (void)swapchains;
-	return Error_unimplemented(0, "GraphicsDevice_submitCommandsImpl() is unimplemented");
-}
-
-/*
 	//Unpack ext
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
-	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
+	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
 
-	GraphicsInstance *instance = GraphicsInstanceRef_ptr(device->instance);
-	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
-
-	CharString temp = CharString_createNull();
 	Error err = Error_none();
-
-	//Reserve temp storage
-
-	gotoIfError(clean, ListVkSwapchainKHR_clear(&deviceExt->swapchainHandles))
-	gotoIfError(clean, ListVkSwapchainKHR_reservex(&deviceExt->swapchainHandles, swapchains.length))
-
-	gotoIfError(clean, ListU32_clear(&deviceExt->swapchainIndices))
-	gotoIfError(clean, ListU32_reservex(&deviceExt->swapchainIndices, swapchains.length))
-
-	gotoIfError(clean, ListVkResult_clear(&deviceExt->results))
-	gotoIfError(clean, ListVkResult_reservex(&deviceExt->results, swapchains.length))
-
-	gotoIfError(clean, ListVkSemaphore_clear(&deviceExt->waitSemaphores))
-	gotoIfError(clean, ListVkSemaphore_reservex(&deviceExt->waitSemaphores, swapchains.length + 1))
-
-	gotoIfError(clean, ListVkPipelineStageFlags_clear(&deviceExt->waitStages))
-	gotoIfError(clean, ListVkPipelineStageFlags_reservex(&deviceExt->waitStages, swapchains.length + 1))
+	HANDLE eventHandle = NULL;
+	CharString temp = CharString_createNull();
+	ListU16 temp16 = (ListU16) { 0 };
 
 	//Wait for previous frame semaphore
 
 	if (device->submitId >= 3) {
 
-		U64 value = device->submitId - 3 + 1;
+		eventHandle = CreateEventExW(NULL, NULL, 0, EVENT_ALL_ACCESS);
 
-		VkSemaphoreWaitInfo waitInfo = (VkSemaphoreWaitInfo) {
-			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
-			.pSemaphores = &deviceExt->commitSemaphore,
-			.semaphoreCount = 1,
-			.pValues = &value
-		};
-
-		gotoIfError(clean, vkCheck(vkWaitSemaphores(deviceExt->device, &waitInfo, U64_MAX)))
-	}
-
-	//Acquire swapchain images
-
-	for(U64 i = 0; i < swapchains.length; ++i) {
-
-		Swapchain *swapchain = SwapchainRef_ptr(swapchains.ptr[i]);
-		VkSwapchain *swapchainExt = TextureRef_getImplExtT(VkSwapchain, swapchains.ptr[i]);
-
-		VkSemaphore semaphore = swapchainExt->semaphores.ptr[device->submitId % swapchainExt->semaphores.length];
-
-		UnifiedTexture *unifiedTexture = TextureRef_getUnifiedTextureIntern(swapchains.ptr[i], NULL);
-		U32 currImg = 0;
-
-		gotoIfError(clean, vkCheck(instanceExt->acquireNextImage(
-			deviceExt->device,
-			swapchainExt->swapchain,
-			U64_MAX,
-			semaphore,
-			VK_NULL_HANDLE,
-			&currImg
+		gotoIfError(clean, dxCheck(deviceExt->commitSemaphore->lpVtbl->SetEventOnCompletion(
+			deviceExt->commitSemaphore, device->submitId - 3 + 1, eventHandle
 		)))
 
-		unifiedTexture->currentImageId = (U8) currImg;
+		WaitForSingleObject(eventHandle, INFINITE);
+		CloseHandle(eventHandle);
+		eventHandle = NULL;
+	}
 
-		deviceExt->swapchainHandles.ptrNonConst[i] = swapchainExt->swapchain;
-		deviceExt->swapchainIndices.ptrNonConst[i] = unifiedTexture->currentImageId;
+	//Acquire swapchain images in D3D12 is just a simple sequential id.
+	//No mailbox, so no problem.
 
-		VkPipelineStageFlagBits pipelineStage =
-			(swapchain->base.resource.flags & EGraphicsResourceFlag_ShaderWrite ? VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT : 0) |
-			VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
-			VK_PIPELINE_STAGE_TRANSFER_BIT |
-			VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-
-		gotoIfError(clean, ListVkSemaphore_pushBackx(&deviceExt->waitSemaphores, semaphore))
-		gotoIfError(clean, ListVkPipelineStageFlags_pushBackx(&deviceExt->waitStages, pipelineStage))
+	for(U64 i = 0; i < swapchains.length; ++i) {
+		UnifiedTexture *unifiedTexture = TextureRef_getUnifiedTextureIntern(swapchains.ptr[i], NULL);
+		unifiedTexture->currentImageId = device->submitId % 3;
 	}
 
 	//Prepare per frame cbuffer
@@ -761,29 +711,13 @@ Error GraphicsDevice_submitCommandsImpl(
 			data->swapchains[i * 2 + 0] = managedImage.readHandle;
 			data->swapchains[i * 2 + 1] = allowComputeExt ? managedImage.writeHandle : 0;
 		}
-
-		DeviceMemoryBlock block = device->allocator.blocks.ptr[frameData->resource.blockId];
-		Bool incoherent = !(block.allocationTypeExt & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-
-		if (incoherent) {
-
-			VkMappedMemoryRange range = (VkMappedMemoryRange){
-				.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
-				.memory = (VkDeviceMemory)block.ext,
-				.offset = frameData->resource.blockOffset + (device->submitId % 3) * sizeof(CBufferData),
-				.size = sizeof(CBufferData)
-			};
-
-			gotoIfError(clean, vkCheck(vkFlushMappedMemoryRanges(deviceExt->device, 1, &range)))
-		}
 	}
 
 	//Record command list
 
-	VkCommandBuffer commandBuffer = NULL;
+	DxCommandBuffer *commandBuffer = NULL;
 
-	VkCommandQueue queue = deviceExt->queues[EVkCommandQueue_Graphics];
-	U32 graphicsQueueId = queue.queueId;
+	DxCommandQueue queue = deviceExt->queues[EDxCommandQueue_Graphics];
 
 	ListRefPtr *currentFlight = &device->resourcesInFlight[device->submitId % 3];
 
@@ -791,7 +725,7 @@ Error GraphicsDevice_submitCommandsImpl(
 
 		U32 threadId = 0;
 
-		VkCommandAllocator *allocator = VkGraphicsDevice_getCommandAllocator(
+		DxCommandAllocator *allocator = DxGraphicsDevice_getCommandAllocator(
 			deviceExt, queue.resolvedQueueId, threadId, (U8)(device->submitId % 3)
 		);
 
@@ -807,78 +741,66 @@ Error GraphicsDevice_submitCommandsImpl(
 
 			//TODO: Multi thread command recording
 
-			VkCommandPoolCreateInfo poolInfo = (VkCommandPoolCreateInfo) {
-				.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-				.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
-				.queueFamilyIndex = queue.queueId
-			};
+			gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreateCommandAllocator(
+				deviceExt->device,
+				D3D12_COMMAND_LIST_TYPE_DIRECT,
+				&IID_ID3D12CommandAllocator,
+				(void**) &allocator->pool
+			)))
 
-			gotoIfError(clean, vkCheck(vkCreateCommandPool(deviceExt->device, &poolInfo, NULL, &allocator->pool)))
-
-			if((device->flags & EGraphicsDeviceFlags_IsDebug) && instanceExt->debugSetName) {
+			if(device->flags & EGraphicsDeviceFlags_IsDebug) {
 
 				gotoIfError(clean, CharString_formatx(
 					&temp,
 					"%s command pool (thread: %"PRIu32", frame id: %"PRIu32")",
-					queue.type == EVkCommandQueue_Graphics ? "Graphics" : (
-						queue.type == EVkCommandQueue_Compute ? "Compute" : "Copy"
+					queue.type == EDxCommandQueue_Graphics ? "Graphics" : (
+						queue.type == EDxCommandQueue_Compute ? "Compute" : "Copy"
 					),
 					threadId,
 					device->submitId % 3
 				))
 
-				VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
-					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-					.objectType = VK_OBJECT_TYPE_COMMAND_POOL,
-					.pObjectName = temp.ptr,
-					.objectHandle = (U64) allocator->pool
-				};
-
-				gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName)))
-
 				CharString_freex(&temp);
+
+				gotoIfError(clean, CharString_toUtf16x(temp, &temp16))
+				gotoIfError(clean, dxCheck(allocator->pool->lpVtbl->SetName(allocator->pool, temp16.ptr)))
+				CharString_freex(&temp);
+				ListU16_freex(&temp16);
 			}
 		}
 
-		else gotoIfError(clean, vkCheck(vkResetCommandPool(
-			deviceExt->device, allocator->pool, VK_COMMAND_POOL_RESET_RELEASE_RESOURCES_BIT
-		)))
-
 		//Allocate command buffer if not present yet
 
-		if (!allocator->cmd) {
+		Bool isNew = !allocator->cmd;
 
-			VkCommandBufferAllocateInfo bufferInfo = (VkCommandBufferAllocateInfo) {
-				.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-				.commandPool = allocator->pool,
-				.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-				.commandBufferCount = 1
-			};
+		if (isNew) {
 
-			gotoIfError(clean, vkCheck(vkAllocateCommandBuffers(deviceExt->device, &bufferInfo, &allocator->cmd)))
+			gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreateCommandList(
+				deviceExt->device,
+				0,
+				D3D12_COMMAND_LIST_TYPE_DIRECT,
+				allocator->pool,
+				NULL,
+				&IID_ID3D12GraphicsCommandList10,
+				(void**) &allocator->cmd
+			)))
 
-			if((device->flags & EGraphicsDeviceFlags_IsDebug) && instanceExt->debugSetName) {
+			if(device->flags & EGraphicsDeviceFlags_IsDebug) {
 
 				gotoIfError(clean, CharString_formatx(
 					&temp,
 					"%s command buffer (thread: %"PRIu32", frame id: %"PRIu32")",
-					queue.type == EVkCommandQueue_Graphics ? "Graphics" : (
-						queue.type == EVkCommandQueue_Compute ? "Compute" : "Copy"
+					queue.type == EDxCommandQueue_Graphics ? "Graphics" : (
+						queue.type == EDxCommandQueue_Compute ? "Compute" : "Copy"
 					),
 					threadId,
 					device->submitId % 3
 				))
 
-				VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
-					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-					.objectType = VK_OBJECT_TYPE_COMMAND_BUFFER,
-					.pObjectName = temp.ptr,
-					.objectHandle = (U64) allocator->cmd
-				};
-
-				gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName)))
-
+				gotoIfError(clean, CharString_toUtf16x(temp, &temp16))
+				gotoIfError(clean, dxCheck(allocator->cmd->lpVtbl->SetName(allocator->cmd, temp16.ptr)))
 				CharString_freex(&temp);
+				ListU16_freex(&temp16);
 			}
 		}
 
@@ -886,64 +808,58 @@ Error GraphicsDevice_submitCommandsImpl(
 
 		commandBuffer = allocator->cmd;
 
-		VkCommandBufferBeginInfo beginInfo = (VkCommandBufferBeginInfo) {
-			.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO
-		};
-
-		gotoIfError(clean, vkCheck(vkBeginCommandBuffer(commandBuffer, &beginInfo)))
+		if(!isNew)
+			gotoIfError(clean, dxCheck(commandBuffer->lpVtbl->Reset(commandBuffer, allocator->pool, NULL)))
 
 		//Start copies
 
 		gotoIfError(clean, GraphicsDeviceRef_handleNextFrame(deviceRef, commandBuffer))
 
-		VkCommandBufferState state = (VkCommandBufferState) { .buffer = commandBuffer };
+		DxCommandBufferState state = (DxCommandBufferState) { .buffer = commandBuffer };
 		state.tempPrimitiveTopology = U8_MAX;
 		state.tempStencilRef = 0;
 
 		//Ensure ubo and staging buffer are the correct states
 
-		VkDependencyInfo dependency = (VkDependencyInfo) { .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO };
+		D3D12_BARRIER_GROUP dependency = (D3D12_BARRIER_GROUP) { .Type = D3D12_BARRIER_TYPE_BUFFER };
 
-		VkDeviceBuffer *uboExt = DeviceBuffer_ext(DeviceBufferRef_ptr(device->frameData), Vk);
+		DxDeviceBuffer *uboExt = DeviceBuffer_ext(DeviceBufferRef_ptr(device->frameData), Dx);
 
-		gotoIfError(clean, VkDeviceBuffer_transition(
+		gotoIfError(clean, DxDeviceBuffer_transition(
 			uboExt,
-			VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT,
-			VK_ACCESS_2_UNIFORM_READ_BIT,
-			graphicsQueueId,
-			(device->submitId % 3) * sizeof(CBufferData),
-			sizeof(CBufferData),
+			D3D12_BARRIER_SYNC_VERTEX_SHADING,
+			D3D12_BARRIER_ACCESS_CONSTANT_BUFFER,
 			&deviceExt->bufferTransitions,
 			&dependency
 		))
 
-		if(dependency.bufferMemoryBarrierCount)
-			instanceExt->cmdPipelineBarrier2(commandBuffer, &dependency);
+		if(dependency.NumBarriers)
+			commandBuffer->lpVtbl->Barrier(commandBuffer, 1, &dependency);
 
-		ListVkBufferMemoryBarrier2_clear(&deviceExt->bufferTransitions);
+		ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions);
 
-		//Bind pipeline layout and descriptors since they stay the same for the entire frame.
-		//For every bind point
+		//Bind descriptor heaps, root signature and descriptor tables since they stay the same for the entire frame.
+		//For every bind point.
 
-		VkDescriptorSet sets[EDescriptorSetType_UniqueLayouts];
+		ID3D12DescriptorHeap *descriptorHeaps[] = {
+			deviceExt->heaps[EDescriptorHeapType_Resources].heap,
+			deviceExt->heaps[EDescriptorHeapType_Sampler].heap
+		};
 
-		for(U32 i = 0; i < EDescriptorSetType_UniqueLayouts; ++i)
-			sets[i] =
-				i != EDescriptorSetType_CBuffer0 ? deviceExt->sets[i] :
-				deviceExt->sets[EDescriptorSetType_CBuffer0 + (device->submitId % 3)];
+		D3D12_GPU_DESCRIPTOR_HANDLE descriptorTable[] = {
+			deviceExt->heaps[EDescriptorHeapType_Resources].gpuHandle,
+			deviceExt->heaps[EDescriptorHeapType_Sampler].gpuHandle
+		};
 
-		U64 bindingCount = device->info.capabilities.features & EGraphicsFeatures_RayPipeline ? 3 : 2;
+		commandBuffer->lpVtbl->SetDescriptorHeaps(commandBuffer, 2, descriptorHeaps);
 
-		for(U64 i = 0; i < bindingCount; ++i)
-			vkCmdBindDescriptorSets(
-				commandBuffer,
-				i == 0 ? VK_PIPELINE_BIND_POINT_COMPUTE : (
-					i == 1 ? VK_PIPELINE_BIND_POINT_GRAPHICS : VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR
-				),
-				deviceExt->defaultLayout,
-				0, EDescriptorSetType_UniqueLayouts, sets,
-				0, NULL
-			);
+		commandBuffer->lpVtbl->SetComputeRootSignature(commandBuffer, deviceExt->defaultLayout);
+		commandBuffer->lpVtbl->SetGraphicsRootSignature(commandBuffer, deviceExt->defaultLayout);
+
+		for(U32 i = 0; i < 2; ++i) {
+			commandBuffer->lpVtbl->SetComputeRootDescriptorTable(commandBuffer, i, descriptorTable[i]);
+			commandBuffer->lpVtbl->SetGraphicsRootDescriptorTable(commandBuffer, i, descriptorTable[i]);
+		}
 
 		//Record commands
 
@@ -954,11 +870,7 @@ Error GraphicsDevice_submitCommandsImpl(
 			const U8 *ptr = commandList->data.ptr;
 
 			for (U64 j = 0; j < commandList->commandOps.length; ++j) {
-
 				CommandOpInfo info = commandList->commandOps.ptr[j];
-
-				//Extra debugging if an error happens while processing the command
-
 				CommandList_process(commandList, device, info.op, ptr, &state);
 				ptr += info.opSize;
 			}
@@ -968,28 +880,24 @@ Error GraphicsDevice_submitCommandsImpl(
 
 		//Combine transitions into one call.
 
-		dependency = (VkDependencyInfo) {
-			.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
-			.dependencyFlags = 0
-		};
+		dependency = (D3D12_BARRIER_GROUP) { .Type = D3D12_BARRIER_TYPE_TEXTURE };
 
 		for (U64 i = 0; i < swapchains.length; ++i) {
 
 			SwapchainRef *swapchainRef = swapchains.ptr[i];
-			VkUnifiedTexture *imageExt = TextureRef_getCurrImgExtT(swapchainRef, Vk, 0);
+			DxUnifiedTexture *imageExt = TextureRef_getCurrImgExtT(swapchainRef, Dx, 0);
 
-			VkImageSubresourceRange range = (VkImageSubresourceRange) {
-				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-				.levelCount = 1,
-				.layerCount = 1
+			D3D12_BARRIER_SUBRESOURCE_RANGE range = (D3D12_BARRIER_SUBRESOURCE_RANGE) {
+				.NumMipLevels = 1,
+				.NumArraySlices = 1,
+				.NumPlanes = 1
 			};
 
-			gotoIfError(clean, VkUnifiedTexture_transition(
+			gotoIfError(clean, DxUnifiedTexture_transition(
 				imageExt,
-				VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
-				0,
-				VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-				graphicsQueueId,
+				D3D12_BARRIER_SYNC_RENDER_TARGET,
+				D3D12_BARRIER_ACCESS_COMMON,
+				D3D12_BARRIER_LAYOUT_PRESENT,
 				&range,
 				&deviceExt->imageTransitions,
 				&dependency
@@ -999,79 +907,53 @@ Error GraphicsDevice_submitCommandsImpl(
 				gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, swapchainRef))
 		}
 
-		if(dependency.imageMemoryBarrierCount)
-			instanceExt->cmdPipelineBarrier2(commandBuffer, &dependency);
+		if(dependency.NumBarriers)
+			commandBuffer->lpVtbl->Barrier(commandBuffer, 1, &dependency);
 
-		ListVkImageMemoryBarrier2_clear(&deviceExt->imageTransitions);
+		ListD3D12_TEXTURE_BARRIER_clear(&deviceExt->imageTransitions);
 
 		//End buffer
 
-		gotoIfError(clean, vkCheck(vkEndCommandBuffer(commandBuffer)))
+		gotoIfError(clean, dxCheck(commandBuffer->lpVtbl->Close(commandBuffer)))
 	}
 
 	//Submit queue
 	//TODO: Multiple queues
 
-	U64 waitValue = device->submitId - 3 + 1;
+	ID3D12CommandList *commandList = NULL;
+	gotoIfError(clean, dxCheck(commandBuffer->lpVtbl->QueryInterface(
+		commandBuffer, &IID_ID3D12CommandList, (void**) &commandList
+	)))
 
-	VkSemaphore signalSemaphores[2] = {
-		deviceExt->commitSemaphore,
-		deviceExt->submitSemaphores.ptr[device->submitId % 3]
-	};
-
-	U64 signalValues[2] = { device->submitId + 1, 1 };
-
-	VkTimelineSemaphoreSubmitInfo timelineInfo = (VkTimelineSemaphoreSubmitInfo) {
-		.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO,
-		.waitSemaphoreValueCount = device->submitId >= 3,
-		.pWaitSemaphoreValues = device->submitId >= 3 ? &waitValue : NULL,
-		.signalSemaphoreValueCount = swapchains.length ? 2 : 1,
-		.pSignalSemaphoreValues = signalValues
-	};
-
-	VkSubmitInfo submitInfo = (VkSubmitInfo) {
-		.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-		.pNext = &timelineInfo,
-		.waitSemaphoreCount = (U32) deviceExt->waitSemaphores.length,
-		.pWaitSemaphores = deviceExt->waitSemaphores.ptr,
-		.signalSemaphoreCount = swapchains.length ? 2 : 1,
-		.pSignalSemaphores = signalSemaphores,
-		.pCommandBuffers = &commandBuffer,
-		.commandBufferCount = commandBuffer ? 1 : 0,
-		.pWaitDstStageMask = deviceExt->waitStages.ptr
-	};
-
-	gotoIfError(clean, vkCheck(vkQueueSubmit(queue.queue, 1, &submitInfo, VK_NULL_HANDLE)))
+	queue.queue->lpVtbl->ExecuteCommandLists(queue.queue, 1, &commandList);
+	gotoIfError(clean, dxCheck(queue.queue->lpVtbl->Signal(queue.queue, deviceExt->commitSemaphore, device->submitId)))
 
 	//Presents
 
-	if(swapchains.length) {
+	for(U64 i = 0; i < swapchains.length; ++i) {
 
-		VkPresentInfoKHR presentInfo = (VkPresentInfoKHR) {
-			.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
-			.waitSemaphoreCount = 1,
-			.pWaitSemaphores = deviceExt->submitSemaphores.ptr + device->submitId % 3,
-			.swapchainCount = (U32) swapchains.length,
-			.pSwapchains = deviceExt->swapchainHandles.ptr,
-			.pImageIndices = deviceExt->swapchainIndices.ptr,
-			.pResults = deviceExt->results.ptrNonConst
-		};
+		Swapchain *swapchain = SwapchainRef_ptr(swapchains.ptr[i]);
+		DxSwapchain *swapchainExt = TextureRef_getImplExtT(DxSwapchain, swapchains.ptr[i]);
 
-		gotoIfError(clean, vkCheck(vkQueuePresentKHR(queue.queue, &presentInfo)))
+		Bool allowTearing = swapchain->presentMode == ESwapchainPresentMode_Immediate;
 
-		for(U64 i = 0; i < deviceExt->results.length; ++i)
-			gotoIfError(clean, vkCheck(deviceExt->results.ptr[i]))
+		gotoIfError(clean, dxCheck(swapchainExt->swapchain->lpVtbl->Present1(
+			swapchainExt->swapchain,
+			allowTearing ? 0 : 1,
+			allowTearing ? DXGI_PRESENT_ALLOW_TEARING : 0,
+			NULL
+		)))
 	}
 
 clean:
 
-	ListVkImageCopy_clear(&deviceExt->imageCopyRanges);
-	ListVkBufferMemoryBarrier2_clear(&deviceExt->bufferTransitions);
-	ListVkImageMemoryBarrier2_clear(&deviceExt->imageTransitions);
-	CharString_freex(&temp);
+	if(eventHandle)
+		CloseHandle(eventHandle);
 
+	ListU16_freex(&temp16);
+	CharString_freex(&temp);
 	return err;
-}*/
+}
 
 Error DxGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, DxCommandBuffer *commandBuffer) {
 
