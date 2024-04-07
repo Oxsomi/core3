@@ -165,11 +165,7 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListChar
 			BlendStateAttachment src = info->blendState.attachments[realJ];
 
 			if(!info->blendState.enable) {
-
-				*dst = (D3D12_RENDER_TARGET_BLEND_DESC) {
-					.RenderTargetWriteMask = EWriteMask_All
-				};
-
+				*dst = (D3D12_RENDER_TARGET_BLEND_DESC) { .RenderTargetWriteMask = EWriteMask_All };
 				continue;
 			}
 
