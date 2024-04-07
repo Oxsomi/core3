@@ -1117,8 +1117,8 @@ void CommandList_process(
 			const I32x2 reduc2 = I32x2_or(I32x4_xy(v), I32x4_zw(v));
 			const I32 reduc = I32x2_x(reduc2) | I32x2_y(reduc2);
 
-			U64 encoded[64];
-			encoded[0] = (op == ECommandOp_AddMarkerDebugExt ? 0x017 : 0x001) << 10;
+			U64 encoded[62] = { 0 };
+			encoded[0] = (op == ECommandOp_AddMarkerDebugExt ? 0x018 : 0x002) << 10;
 			encoded[1] = 0xFF000000 | (*(const U32*)&reduc);
 
 			const U32 strLen = (U32) CharString_calcStrLen((const C8*)data + sizeof(I32x4), sizeof(encoded) - 16);
