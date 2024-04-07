@@ -283,7 +283,7 @@ Error GraphicsDeviceRef_createBufferIntern(
 
 		if(buf->resource.flags & EGraphicsResourceFlag_ShaderWrite) {
 
-			buf->writeHandle = GraphicsDeviceRef_allocateDescriptor(dev, EDescriptorType_Buffer);
+			buf->writeHandle = GraphicsDeviceRef_allocateDescriptor(dev, EDescriptorType_RWBuffer);
 
 			if(buf->writeHandle == U32_MAX)
 				gotoIfError(clean, Error_outOfMemory(

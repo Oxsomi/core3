@@ -171,12 +171,6 @@ void CommandList_process(
 	DxCommandBufferState *temp = (DxCommandBufferState*) commandListExt;
 	DxCommandBuffer *buffer = temp->buffer;
 
-	ID3D12GraphicsCommandList *graphicsCmd = NULL;
-	if(FAILED(buffer->lpVtbl->QueryInterface(buffer, &IID_ID3D12GraphicsCommandList, (void**) &graphicsCmd))) {
-		Log_errorLnx(u8"Invalid graphics command list");
-		return;
-	}
-
 	switch (op) {
 
 		case ECommandOp_SetViewport:
@@ -1111,7 +1105,7 @@ void CommandList_process(
 		//We're not going to include and port pix to C for this...
 
 		case ECommandOp_EndRegionDebugExt:
-			graphicsCmd->lpVtbl->EndEvent(graphicsCmd);
+			buffer->lpVtbl->EndEvent(buffer);
 			break;
 
 		case ECommandOp_AddMarkerDebugExt:
@@ -1136,9 +1130,9 @@ void CommandList_process(
 			);
 
 			if(op == ECommandOp_AddMarkerDebugExt)
-				graphicsCmd->lpVtbl->SetMarker(graphicsCmd, 2, encoded, len);
+				buffer->lpVtbl->SetMarker(buffer, 2, encoded, len);
 
-			else graphicsCmd->lpVtbl->BeginEvent(graphicsCmd, 2, encoded, len);
+			else buffer->lpVtbl->BeginEvent(buffer, 2, encoded, len);
 
 			break;
 		}

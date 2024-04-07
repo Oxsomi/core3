@@ -140,7 +140,7 @@ Error GraphicsDevice_initExt(
 
 	gotoIfError(clean, dxCheck(D3D12CreateDevice(
 		(IUnknown*)deviceExt->adapter4, D3D_FEATURE_LEVEL_12_1,
-		&IID_ID3D12Device5, (void**) &deviceExt->device
+		&IID_ID3D12Device10, (void**) &deviceExt->device
 	)))
 
 	Bool isNv = device->info.vendor == EGraphicsVendorId_NV;
@@ -209,11 +209,13 @@ Error GraphicsDevice_initExt(
 
 			if(device->info.capabilities.features & EGraphicsFeatures_RayValidation) {
 
-				NvAPI_D3D12_EnableRaytracingValidation(deviceExt->device, NVAPI_D3D12_RAYTRACING_VALIDATION_FLAG_NONE);
+				NvAPI_D3D12_EnableRaytracingValidation(
+					(ID3D12Device5*)deviceExt->device, NVAPI_D3D12_RAYTRACING_VALIDATION_FLAG_NONE
+				);
 
 				void *handle = NULL;
 				NvAPI_Status status = NvAPI_D3D12_RegisterRaytracingValidationMessageCallback(
-					deviceExt->device, onDebugReportNv, NULL, &handle
+					(ID3D12Device5*)deviceExt->device, onDebugReportNv, NULL, &handle
 				);
 
 				if(status != NVAPI_OK)
@@ -294,19 +296,7 @@ Error GraphicsDevice_initExt(
 
 	//Create root signature
 
-	D3D12_DESCRIPTOR_RANGE descRanges[] = {
-
-		(D3D12_DESCRIPTOR_RANGE) {
-			.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
-			.NumDescriptors = EDescriptorTypeOffsets_SRVEnd - EDescriptorTypeOffsets_SRVStart,
-			.OffsetInDescriptorsFromTableStart = EDescriptorTypeOffsets_SRVStart
-		},
-
-		(D3D12_DESCRIPTOR_RANGE) {
-			.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV,
-			.NumDescriptors = EDescriptorTypeOffsets_UAVEnd - EDescriptorTypeOffsets_UAVStart,
-			.OffsetInDescriptorsFromTableStart = EDescriptorTypeOffsets_UAVStart
-		},
+	D3D12_DESCRIPTOR_RANGE descRanges[17] = {
 
 		//Unused register, but nv wants it
 
@@ -318,6 +308,20 @@ Error GraphicsDevice_initExt(
 			.OffsetInDescriptorsFromTableStart = EDescriptorTypeOffsets_UAVEnd
 		}
 	};
+
+	for(U32 i = 0; i < 16; ++i) {
+
+		EDescriptorType type = i == 15 ? EDescriptorType_TLASExt : i;
+		U32 offset = EDescriptorTypeOffsets_values[type];
+		Bool isSrv = offset >= EDescriptorTypeOffsets_SRVStart && offset < EDescriptorTypeOffsets_SRVEnd;
+		
+		descRanges[i + 1] = (D3D12_DESCRIPTOR_RANGE) {
+			.RangeType = isSrv ? D3D12_DESCRIPTOR_RANGE_TYPE_SRV : D3D12_DESCRIPTOR_RANGE_TYPE_UAV,
+			.NumDescriptors = descriptorTypeCount[type],
+			.OffsetInDescriptorsFromTableStart = offset,
+			.RegisterSpace = i
+		};
+	}
 
 	D3D12_DESCRIPTOR_RANGE samplerRange = (D3D12_DESCRIPTOR_RANGE) {
 		.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER,
@@ -861,6 +865,12 @@ Error GraphicsDevice_submitCommandsImpl(
 			commandBuffer->lpVtbl->SetGraphicsRootDescriptorTable(commandBuffer, i, descriptorTable[i]);
 		}
 
+		DeviceBuffer *frameData = DeviceBufferRef_ptr(device->frameData);
+		D3D12_GPU_VIRTUAL_ADDRESS cbvLoc = frameData->resource.deviceAddress + (device->submitId % 3) * sizeof(CBufferData);
+
+		commandBuffer->lpVtbl->SetComputeRootConstantBufferView(commandBuffer, 2, cbvLoc);
+		commandBuffer->lpVtbl->SetGraphicsRootConstantBufferView(commandBuffer, 2, cbvLoc);
+
 		//Record commands
 
 		for (U64 i = 0; i < commandLists.length; ++i) {
@@ -937,11 +947,13 @@ Error GraphicsDevice_submitCommandsImpl(
 
 		Bool allowTearing = swapchain->presentMode == ESwapchainPresentMode_Immediate;
 
+		DXGI_PRESENT_PARAMETERS regions = (DXGI_PRESENT_PARAMETERS) { 0 };
+
 		gotoIfError(clean, dxCheck(swapchainExt->swapchain->lpVtbl->Present1(
 			swapchainExt->swapchain,
 			allowTearing ? 0 : 1,
 			allowTearing ? DXGI_PRESENT_ALLOW_TEARING : 0,
-			NULL
+			&regions
 		)))
 	}
 
@@ -968,11 +980,6 @@ Error DxGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, DxCommandBuffer *comm
 
 	//Submit only the copy command list
 
-	ID3D12CommandList *commandList = NULL;
-	gotoIfError(clean, dxCheck(commandBuffer->lpVtbl->QueryInterface(
-		commandBuffer, &IID_ID3D12CommandList, (void**) &commandList
-	)))
-
 	if(device->submitId) {		//Ensure GPU is complete, so we don't override anything
 
 		eventHandle = CreateEventExW(NULL, NULL, 0, EVENT_ALL_ACCESS);
@@ -987,7 +994,7 @@ Error DxGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, DxCommandBuffer *comm
 	}
 
 	const DxCommandQueue queue = deviceExt->queues[EDxCommandQueue_Graphics];
-	queue.queue->lpVtbl->ExecuteCommandLists(queue.queue, 1, &commandList);
+	queue.queue->lpVtbl->ExecuteCommandLists(queue.queue, 1, (ID3D12CommandList**) &commandBuffer);
 	gotoIfError(clean, dxCheck(queue.queue->lpVtbl->Signal(queue.queue, deviceExt->commitSemaphore, device->submitId)))
 
 	//Wait for the device

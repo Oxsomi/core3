@@ -667,6 +667,15 @@ void CommandList_process(
 				.stride = raytracingShaderAlignment
 			};
 
+			if(!info.groupCount)
+				hit = (VkStridedDeviceAddressRegionKHR) { 0 };
+
+			if(!info.missCount)
+				miss = (VkStridedDeviceAddressRegionKHR) { 0 };
+
+			if(!info.callableCount)
+				callable = (VkStridedDeviceAddressRegionKHR) { 0 };
+
 			if(op == ECommandOp_DispatchRaysExt) {
 				DispatchRaysExt dispatch = *(const DispatchRaysExt*)data;
 				raygen.deviceAddress += raygen.stride * dispatch.raygenId;

@@ -119,12 +119,23 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 		swapchain->presentMode = isFifo ? ESwapchainPresentMode_Fifo : ESwapchainPresentMode_Immediate;
 	}
 
-	else gotoIfError(clean, dxCheck(swapchainExt->swapchain->lpVtbl->ResizeBuffers(
-		swapchainExt->swapchain,
-		3,
-		0, 0, DXGI_FORMAT_UNKNOWN,		//Update to current w/h and keep format
-		flags
-	)))
+	else {
+
+		for(U8 i = 0; i < swapchain->base.images; ++i) {
+
+			ID3D12Resource *img = TextureRef_getImgExtT(swapchainRef, Dx, 0, i)->image;
+
+			if(img)
+				img->lpVtbl->Release(img);
+		}
+
+		gotoIfError(clean, dxCheck(swapchainExt->swapchain->lpVtbl->ResizeBuffers(
+			swapchainExt->swapchain,
+			3,
+			0, 0, DXGI_FORMAT_UNKNOWN,		//Update to current w/h and keep format
+			flags
+		)))
+	}
 
 	//Acquire images
 

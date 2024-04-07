@@ -149,7 +149,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphics
 	const DxGraphicsInstance *instanceExt = GraphicsInstance_ext(inst, Dx);
 	ListIDXGIAdapter4 adapters = (ListIDXGIAdapter4) { 0 };
 	ListGraphicsDeviceInfo tempInfos = (ListGraphicsDeviceInfo) { 0 };
-	ID3D12Device5 *device = NULL;		//Temporary device, we need to know
+	ID3D12Device10 *device = NULL;		//Temporary device, we need to know
 	CharString tmp = CharString_createNull();
 
 	//Get all possible adapters
@@ -218,7 +218,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphics
 		HRESULT lastError = 0;
 
 		if(FAILED(lastError = D3D12CreateDevice(
-			(IUnknown*)adapters.ptr[i], D3D_FEATURE_LEVEL_12_1, &IID_ID3D12Device5, (void**) &device)
+			(IUnknown*)adapters.ptr[i], D3D_FEATURE_LEVEL_12_1, &IID_ID3D12Device10, (void**) &device)
 		)) {
 			Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support feature level 12.1", i);
 			goto next;
@@ -396,12 +396,6 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphics
 		caps.sharedMemory = sharedMem;
 		caps.dedicatedMemory = dedicatedMem;
 
-		ID3D12Device *device0 = NULL;
-		if(FAILED(device->lpVtbl->QueryInterface(device, &IID_ID3D12Device, (void**)&device0))) {
-			Log_debugLnx("D3D12: Unsupported device %"PRIu32", can't query version 0 device", i);
-			goto next;
-		}
-
 		//Validate formats
 
 		const U8 requiredUavTypedLoad[] = {
@@ -531,7 +525,9 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphics
 
 			//Raytracing validation
 
-			NvAPI_Status status = NvAPI_D3D12_EnableRaytracingValidation(device, NVAPI_D3D12_RAYTRACING_VALIDATION_FLAG_NONE);
+			NvAPI_Status status = NvAPI_D3D12_EnableRaytracingValidation(
+				(ID3D12Device5*)device, NVAPI_D3D12_RAYTRACING_VALIDATION_FLAG_NONE
+			);
 
 			if(status != NVAPI_ACCESS_DENIED && status != NVAPI_OK)
 				Log_debugLnx("D3D12: NVAPI: Couldn't enable raytracing validation on device %"PRIu32"", i);
@@ -544,7 +540,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphics
 			NVAPI_D3D12_RAYTRACING_THREAD_REORDERING_CAPS ser = (NVAPI_D3D12_RAYTRACING_THREAD_REORDERING_CAPS) { 0 };
 
 			status = NvAPI_D3D12_GetRaytracingCaps(
-				device0, NVAPI_D3D12_RAYTRACING_CAPS_TYPE_THREAD_REORDERING, &ser, sizeof(ser)
+				(ID3D12Device*)device, NVAPI_D3D12_RAYTRACING_CAPS_TYPE_THREAD_REORDERING, &ser, sizeof(ser)
 			);
 
 			if(status != NVAPI_OK)
@@ -558,7 +554,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphics
 			NVAPI_D3D12_RAYTRACING_OPACITY_MICROMAP_CAPS omm = (NVAPI_D3D12_RAYTRACING_OPACITY_MICROMAP_CAPS) { 0 };
 
 			status = NvAPI_D3D12_GetRaytracingCaps(
-				device0, NVAPI_D3D12_RAYTRACING_CAPS_TYPE_OPACITY_MICROMAP, &omm, sizeof(omm)
+				(ID3D12Device*)device, NVAPI_D3D12_RAYTRACING_CAPS_TYPE_OPACITY_MICROMAP, &omm, sizeof(omm)
 			);
 
 			if(status != NVAPI_OK)
@@ -572,7 +568,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphics
 			NVAPI_D3D12_RAYTRACING_DISPLACEMENT_MICROMAP_CAPS dmm = (NVAPI_D3D12_RAYTRACING_DISPLACEMENT_MICROMAP_CAPS) { 0 };
 
 			status = NvAPI_D3D12_GetRaytracingCaps(
-				device0, NVAPI_D3D12_RAYTRACING_CAPS_TYPE_DISPLACEMENT_MICROMAP, &dmm, sizeof(dmm)
+				(ID3D12Device*)device, NVAPI_D3D12_RAYTRACING_CAPS_TYPE_DISPLACEMENT_MICROMAP, &dmm, sizeof(dmm)
 			);
 
 			if(status != NVAPI_OK)

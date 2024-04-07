@@ -98,7 +98,7 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 
 	//Query about alignment and size
 
-	D3D12_RESOURCE_DESC resourceDesc = (D3D12_RESOURCE_DESC) {
+	D3D12_RESOURCE_DESC1 resourceDesc = (D3D12_RESOURCE_DESC1) {
 		.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER,
 		.Alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT,
 		.Width = buf->resource.size,
@@ -121,9 +121,10 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 	if(buf->usage & rtFlag)
 		resourceDesc.Flags |= D3D12_RESOURCE_FLAG_RAYTRACING_ACCELERATION_STRUCTURE;
 
-	D3D12_RESOURCE_ALLOCATION_INFO allocInfo = (D3D12_RESOURCE_ALLOCATION_INFO) { 0 };
-	D3D12_RESOURCE_ALLOCATION_INFO *res = deviceExt->device->lpVtbl->GetResourceAllocationInfo(
-		deviceExt->device, &allocInfo, 0, 1, &resourceDesc
+	D3D12_RESOURCE_ALLOCATION_INFO1 allocInfo = (D3D12_RESOURCE_ALLOCATION_INFO1) { 0 };
+	D3D12_RESOURCE_ALLOCATION_INFO retVal = (D3D12_RESOURCE_ALLOCATION_INFO) { 0 };
+	D3D12_RESOURCE_ALLOCATION_INFO *res = deviceExt->device->lpVtbl->GetResourceAllocationInfo2(
+		deviceExt->device, &retVal, 0, 1, &resourceDesc, &allocInfo
 	);
 
 	Error err;
@@ -158,13 +159,14 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 
 	//Bind memory
 
-	gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreatePlacedResource(
+	gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreatePlacedResource2(
 		deviceExt->device,
 		block.ext,
 		buf->resource.blockOffset,
 		&resourceDesc,
-		D3D12_RESOURCE_STATE_COPY_DEST,
+		D3D12_BARRIER_LAYOUT_UNDEFINED,
 		NULL,
+		0, NULL,
 		&IID_ID3D12Resource,
 		(void**)&bufExt->buffer
 	)))
@@ -226,7 +228,7 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 				}
 			};
 
-			U64 offset = EDescriptorTypeOffsets_RWBuffer + ResourceHandle_getId(buf->readHandle);
+			U64 offset = EDescriptorTypeOffsets_RWBuffer + ResourceHandle_getId(buf->writeHandle);
 
 			deviceExt->device->lpVtbl->CreateUnorderedAccessView(
 				deviceExt->device,

@@ -35,34 +35,36 @@ static const U32 ShortResourceId_mask = (1 << 13) - 1;		//Only for Samplers, AS 
 static const U32 U32_MAX = 0xFFFFFFFF;
 
 #ifdef __spirv__
-	#define _binding(a, b) [[vk::binding(a, b)]]
+    #define _binding(a, b, ...) [[vk::binding(a, b)]] __VA_ARGS__
+	#define _vkBinding(a, b) [[vk::binding(a, b)]]
 #else
-	#define _binding(a, b)
+    #define _binding(a, b, ...) __VA_ARGS__ : register(space##a)
+	#define _vkBinding(a, b)
 #endif
 
-_binding( 0, 0) SamplerState _samplers[2048];
+_binding( 0, 0, SamplerState _samplers[2048]);
 
-_binding( 0, 1) Texture2D _textures2D[131072];
-_binding( 1, 1) TextureCube _textureCubes[32768];
-_binding( 2, 1) Texture3D _textures3D[32768];
+_binding( 0, 1, Texture2D _textures2D[131072]);
+_binding( 1, 1, TextureCube _textureCubes[32768]);
+_binding( 2, 1, Texture3D _textures3D[32768]);
 
-_binding( 3, 1) ByteAddressBuffer _buffer[131072];
-_binding( 4, 1) RWByteAddressBuffer _rwBuffer[131072];
+_binding( 3, 1, ByteAddressBuffer _buffer[131072]);
+_binding( 4, 1, RWByteAddressBuffer _rwBuffer[131072]);
 
-_binding( 5, 1) RWTexture3D<unorm F32x4> _rwTextures3D[8192];
-_binding( 6, 1) RWTexture3D<snorm F32x4> _rwTextures3Ds[8192];
-_binding( 7, 1) RWTexture3D<F32x4> _rwTextures3Df[32768];
-_binding( 8, 1) RWTexture3D<I32x4> _rwTextures3Di[8192];
-_binding( 9, 1) RWTexture3D<U32x4> _rwTextures3Du[8192];
-_binding(10, 1) RWTexture2D<unorm F32x4> _rwTextures2D[65536];
-_binding(11, 1) RWTexture2D<snorm F32x4> _rwTextures2Ds[8192];
-_binding(12, 1) RWTexture2D<F32x4> _rwTextures2Df[65536];
-_binding(13, 1) RWTexture2D<I32x4> _rwTextures2Di[16384];
-_binding(14, 1) RWTexture2D<U32x4> _rwTextures2Du[16384];
+_binding( 5, 1, RWTexture3D<unorm F32x4> _rwTextures3D[8192]);
+_binding( 6, 1, RWTexture3D<snorm F32x4> _rwTextures3Ds[8192]);
+_binding( 7, 1, RWTexture3D<F32x4> _rwTextures3Df[32768]);
+_binding( 8, 1, RWTexture3D<I32x4> _rwTextures3Di[8192]);
+_binding( 9, 1, RWTexture3D<U32x4> _rwTextures3Du[8192]);
+_binding(10, 1, RWTexture2D<unorm F32x4> _rwTextures2D[65536]);
+_binding(11, 1, RWTexture2D<snorm F32x4> _rwTextures2Ds[8192]);
+_binding(12, 1, RWTexture2D<F32x4> _rwTextures2Df[65536]);
+_binding(13, 1, RWTexture2D<I32x4> _rwTextures2Di[16384]);
+_binding(14, 1, RWTexture2D<U32x4> _rwTextures2Du[16384]);
 
-_binding(15, 1) RaytracingAccelerationStructure _tlasExt[16];
+_binding(15, 1, RaytracingAccelerationStructure _tlasExt[16]);
 
-_binding( 0, 2) cbuffer globals {	//Globals used during the entire frame for useful information such as frame id.
+_vkBinding( 0, 2) cbuffer globals {	//Globals used during the entire frame for useful information such as frame id.
 
 	U32 _frameId;					//Can loop back to 0 after U32_MAX!
 	F32 _time;						//Time since launch of app

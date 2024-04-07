@@ -94,7 +94,7 @@ typedef enum EExecuteIndirectCommand {
 
 typedef struct DxGraphicsDevice {
 
-	ID3D12Device5 *device;
+	ID3D12Device10 *device;
 	ID3D12DebugDevice *debugDevice;
 	ID3D12InfoQueue1 *infoQueue1;
 	ID3D12InfoQueue1 *infoQueue0;

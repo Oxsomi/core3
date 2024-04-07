@@ -68,7 +68,7 @@ Error UnifiedTexture_createExt(TextureRef *textureRef, CharString name) {
 
 	//Query about alignment and size
 
-	D3D12_RESOURCE_DESC resourceDesc = (D3D12_RESOURCE_DESC) {
+	D3D12_RESOURCE_DESC1 resourceDesc = (D3D12_RESOURCE_DESC1) {
 
 		.Dimension =
 			texture->type == ETextureType_3D ? D3D12_RESOURCE_DIMENSION_TEXTURE3D : D3D12_RESOURCE_DIMENSION_TEXTURE2D,
@@ -100,9 +100,10 @@ Error UnifiedTexture_createExt(TextureRef *textureRef, CharString name) {
 
 	if(texture->resource.type != EResourceType_Swapchain) {
 
-		D3D12_RESOURCE_ALLOCATION_INFO allocInfo = (D3D12_RESOURCE_ALLOCATION_INFO) { 0 };
-		D3D12_RESOURCE_ALLOCATION_INFO *res = deviceExt->device->lpVtbl->GetResourceAllocationInfo(
-			deviceExt->device, &allocInfo, 0, 1, &resourceDesc
+		D3D12_RESOURCE_ALLOCATION_INFO1 allocInfo = (D3D12_RESOURCE_ALLOCATION_INFO1) { 0 };
+		D3D12_RESOURCE_ALLOCATION_INFO retVal = (D3D12_RESOURCE_ALLOCATION_INFO) { 0 };
+		D3D12_RESOURCE_ALLOCATION_INFO *res = deviceExt->device->lpVtbl->GetResourceAllocationInfo2(
+			deviceExt->device, &retVal, 0, 1, &resourceDesc, &allocInfo
 		);
 
 		if(!res)
@@ -134,13 +135,14 @@ Error UnifiedTexture_createExt(TextureRef *textureRef, CharString name) {
 
 		D3D12_CLEAR_VALUE clearValue = (D3D12_CLEAR_VALUE) { .Format = dxFormat };
 
-		gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreatePlacedResource(
+		gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreatePlacedResource2(
 			deviceExt->device,
 			block.ext,
 			texture->resource.blockOffset,
 			&resourceDesc,
-			D3D12_RESOURCE_STATE_COPY_DEST,
+			D3D12_BARRIER_LAYOUT_COMMON,
 			texture->resource.type == EResourceType_DeviceTexture ? NULL : &clearValue,
+			0, NULL,
 			&IID_ID3D12Resource,
 			(void**)&managedImageExt->image
 		)))
