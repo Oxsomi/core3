@@ -27,6 +27,7 @@
 #include "platforms/log.h"
 #include "types/error.h"
 #include "types/buffer.h"
+#include "types/math.h"
 
 #include <dxgi1_6.h>
 #include <nvapi.h>
@@ -579,7 +580,39 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphics
 		}
 
 		else {
-			//TODO: Intel, QCOM, etc.
+
+			LARGE_INTEGER version;
+
+			if(SUCCEEDED(adapters.ptr[i]->lpVtbl->CheckInterfaceSupport(adapters.ptr[i], &IID_IDXGIDevice, &version))) {
+
+				U16 maj = (U16)(version.QuadPart >> 16);
+
+				U64 k = 0;
+				U64 digits = maj < 10 ? 1 : (maj < 100 ? 2 : (maj < 1000 ? 3 : (maj < 10000 ? 4 : 5)));
+
+				for (U64 j = 0; j < digits; ++j) {
+					info->driverInfo[digits - 1 - j] = '0' + maj % 10;
+					maj /= 10;
+				}
+
+				U16 min = (U16)version.QuadPart;
+				info->driverInfo[digits] = '.';
+				k += digits + 1;
+				digits = min < 10 ? 1 : (min < 100 ? 2 : (min < 1000 ? 3 : (min < 10000 ? 4 : 5)));
+
+				if(vendorId == EGraphicsVendorId_INTC)		//INTC is xxx.yyyy most likely. For safety only minor digits > 4
+					digits = U64_max(4, digits);
+
+				for (U16 j = 0; j < digits; ++j) {
+					info->driverInfo[k + digits - 1 - j] = '0' + min % 10;
+					min /= 10;
+				}
+			}
+
+			else {
+				Log_debugLnx("D3D12: Couldn't driver version for device %"PRIu32"", i);
+				goto next;
+			}
 		}
 
 		//Release temporary device
