@@ -236,7 +236,7 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphics
 
 		caps.dataTypes |=
 			EGraphicsDataTypes_I64 | EGraphicsDataTypes_BCn | EGraphicsDataTypes_MSAA2x | EGraphicsDataTypes_MSAA8x |
-			EGraphicsDataTypes_AtomicI64 | EGraphicsDataTypes_BCn;
+			EGraphicsDataTypes_BCn;
 
 		if(vendorId != EGraphicsVendorId_AMD)
 			caps.dataTypes |= EGraphicsDataTypes_D24S8;
@@ -334,14 +334,11 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphics
 			goto next;
 		}
 
-		if(
-			FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS9, &opt9, sizeof(opt9))) ||
-			!opt9.AtomicInt64OnTypedResourceSupported ||
-			!opt9.AtomicInt64OnGroupSharedSupported
-		) {
-			Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support required D3D12_OPTIONS9", i);
-			goto next;
-		}
+		if (
+			SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS9, &opt9, sizeof(opt9))) &&
+			opt9.AtomicInt64OnTypedResourceSupported && opt9.AtomicInt64OnGroupSharedSupported
+		)
+			caps.dataTypes |= EGraphicsDataTypes_AtomicI64;
 
 		if(
 			FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS12, &opt12, sizeof(opt12))) ||
