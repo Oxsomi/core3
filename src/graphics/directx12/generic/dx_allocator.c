@@ -52,9 +52,10 @@ Error DeviceMemoryAllocator_allocate(
 	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
 	Bool hasReBAR = device->info.capabilities.featuresExt & EDxGraphicsFeatures_ReBAR;
 	Bool isGpu = device->info.type == EGraphicsDeviceType_Dedicated;
+	Bool forceCpuSided = cpuSided;
 
 	if(!isGpu)				//Force shared allocations if not dedicated
-		cpuSided = false;
+		cpuSided = true;
 
 	DxBlockRequirements req = *(DxBlockRequirements*) requirementsExt;
 	Bool isDedicated = req.flags & EDxBlockFlags_IsDedicated;
@@ -102,10 +103,16 @@ Error DeviceMemoryAllocator_allocate(
 	D3D12_HEAP_DESC heapDesc = (D3D12_HEAP_DESC) {
 		.SizeInBytes = realBlockSize,
 		.Properties = (D3D12_HEAP_PROPERTIES) {
-			.Type = cpuSided ? D3D12_HEAP_TYPE_UPLOAD : (hasReBAR ? D3D12_HEAP_TYPE_GPU_UPLOAD : D3D12_HEAP_TYPE_DEFAULT)
+			.Type = forceCpuSided ? D3D12_HEAP_TYPE_UPLOAD : (hasReBAR ? D3D12_HEAP_TYPE_GPU_UPLOAD : D3D12_HEAP_TYPE_DEFAULT)
 		},
 		.Alignment = req.alignment,
 	};
+
+	if (!isGpu) {
+		heapDesc.Properties.Type = D3D12_HEAP_TYPE_CUSTOM;
+		heapDesc.Properties.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_WRITE_BACK;
+		heapDesc.Properties.MemoryPoolPreference = D3D12_MEMORY_POOL_L0;
+	}
 
 	switch(resourceType) {
 

@@ -8,6 +8,8 @@ jobs:
     runs-on: windows-2022
     steps:
     - uses: actions/checkout@v1
+      with:
+        submodules: 'true'
     - name: build for fast check
       run: D:\a\core3\core3\build.bat Release On -DForceVulkan=Off
     - name: build for debug check

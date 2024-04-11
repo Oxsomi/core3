@@ -306,7 +306,6 @@ Since Vulkan is more fragmented, the features are more split up. However in Dire
 - EGraphicsFeatures_DirectRendering is most often available, only not on QCOM chips.
 - EDeviceDataTypes_BCn, EGraphicsDataTypes_I64 are always set.
 - MSAA8x and MSAA2x are supported by default (on top of already supported MSAA 1 and 4).
-- AtomicInt64OnTypedResourceSupported, AtomicInt64OnGroupSharedSupported as EGraphicsDataTypes_AtomicI64.
 
 #### Extensions in DirectX and NVAPI
 
@@ -323,6 +322,7 @@ Since Vulkan is more fragmented, the features are more split up. However in Dire
 - EGraphicsDataTypes_D24S8 on everything except AMD (AMD allocates D32S8 internally).
 - For format RGB32(u/i) to be enabled, it has to support render target.
 - For format RGB32f to be enabled, it has to support render target, blend, shader sample, msaa 4x and 8x.
+- AtomicInt64OnTypedResourceSupported, AtomicInt64OnGroupSharedSupported as EGraphicsDataTypes_AtomicI64.
 
 #### DirectX12 specific extensions
 

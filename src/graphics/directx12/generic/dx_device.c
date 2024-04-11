@@ -971,6 +971,19 @@ Error GraphicsDevice_submitCommandsImpl(
 
 clean:
 
+	//Regardless of device removal, we'll ask NV to report anything fishy to us.
+	//It's technically possible that a TDR/Device removal is caused during setup time,
+	//but it's very unlikely. As we do the bulk of D3D12 calls and all RT calls in submitCommands.
+	//Otherwise we'd have to guard every dxCheck, which might not even have a device (could happen on an instance).
+
+	if(device->info.capabilities.features & EGraphicsFeatures_RayValidation) {
+
+		NvAPI_Status status = NvAPI_D3D12_FlushRaytracingValidationMessages((ID3D12Device5*)deviceExt->device);
+
+		if(status != NVAPI_OK)
+			gotoIfError(clean, Error_invalidState(0, "GraphicsDevice_submitCommandsImpl() flush RT val msgs failed"));
+	}
+
 	if(eventHandle)
 		CloseHandle(eventHandle);
 

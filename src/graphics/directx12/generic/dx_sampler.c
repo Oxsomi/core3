@@ -69,7 +69,7 @@ Error GraphicsDeviceRef_createSamplerExt(GraphicsDeviceRef *dev, Sampler *sample
 		.MipLODBias = F16_castF32(sinfo.mipBias),
 		.MaxAnisotropy = sinfo.aniso,
 		.MinLOD = F16_castF32(sinfo.minLod),
-		.MinLOD = F16_castF32(sinfo.maxLod)
+		.MaxLOD = F16_castF32(sinfo.maxLod)
 	};
 
 	const U32 one = 1;

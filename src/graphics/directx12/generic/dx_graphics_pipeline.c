@@ -103,7 +103,7 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListChar
 			.RasterizerState = (D3D12_RASTERIZER_DESC) {
 				.FillMode = D3D12_FILL_MODE_SOLID,
 				.CullMode = D3D12_CULL_MODE_BACK,
-				.FrontCounterClockwise = info->rasterizer.flags & ERasterizerFlags_IsClockWise,
+				.FrontCounterClockwise = !(info->rasterizer.flags & ERasterizerFlags_IsClockWise),
 				.MultisampleEnable = (Bool) info->msaa
 			},
 
@@ -165,11 +165,7 @@ Error GraphicsDevice_createPipelinesGraphicsExt(GraphicsDevice *device, ListChar
 			BlendStateAttachment src = info->blendState.attachments[realJ];
 
 			if(!info->blendState.enable) {
-
-				*dst = (D3D12_RENDER_TARGET_BLEND_DESC) {
-					.RenderTargetWriteMask = info->blendState.writeMask[realJ]
-				};
-
+				*dst = (D3D12_RENDER_TARGET_BLEND_DESC) { .RenderTargetWriteMask = EWriteMask_All };
 				continue;
 			}
 
