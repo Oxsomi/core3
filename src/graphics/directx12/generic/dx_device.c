@@ -168,7 +168,8 @@ Error GraphicsDevice_initExt(
 			)))
 
 			D3D12_MESSAGE_ID hide[] = {
-				D3D12_MESSAGE_ID_CREATEDEVICE_DEBUG_LAYER_STARTUP_OPTIONS
+				D3D12_MESSAGE_ID_CREATEDEVICE_DEBUG_LAYER_STARTUP_OPTIONS,
+				D3D12_MESSAGE_ID_CLEARRENDERTARGETVIEW_MISMATCHINGCLEARVALUE
 			};
 
 			D3D12_INFO_QUEUE_FILTER filter = (D3D12_INFO_QUEUE_FILTER) {
@@ -291,7 +292,7 @@ Error GraphicsDevice_initExt(
 	//Create fence
 
 	gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreateFence(
-		deviceExt->device, 0, D3D12_FENCE_FLAG_NONE, &IID_ID3D12Fence, (void**) & deviceExt->commitSemaphore
+		deviceExt->device, 0, D3D12_FENCE_FLAG_NONE, &IID_ID3D12Fence, (void**) &deviceExt->commitSemaphore
 	)))
 
 	//Create root signature
@@ -522,6 +523,9 @@ Error GraphicsDevice_initExt(
 
 	for(U64 i = 0; i < EExecuteIndirectCommand_Count; ++i) {
 
+		if (i == EExecuteIndirectCommand_DispatchRays && !(device->info.capabilities.features & EGraphicsFeatures_RayPipeline))
+			continue;
+
 		signatures[i].NumArgumentDescs = 1;
 
 		gotoIfError(clean, dxCheck(deviceExt->device->lpVtbl->CreateCommandSignature(
@@ -594,20 +598,22 @@ Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext) {
 	if(deviceExt->adapter4)
 		deviceExt->adapter4->lpVtbl->Release(deviceExt->adapter4);
 
-	if(deviceExt->debugDevice) {
-
-		//Validate exit for leaks
-
-		deviceExt->debugDevice->lpVtbl->ReportLiveDeviceObjects(deviceExt->debugDevice, D3D12_RLDO_SUMMARY);
-
-		deviceExt->debugDevice->lpVtbl->Release(deviceExt->debugDevice);
-	}
-
 	if(deviceExt->infoQueue0)
 		deviceExt->infoQueue0->lpVtbl->Release(deviceExt->infoQueue0);
 
 	if(deviceExt->infoQueue1)
 		deviceExt->infoQueue1->lpVtbl->Release(deviceExt->infoQueue1);
+
+	if(deviceExt->debugDevice) {
+
+		//Validate exit for leaks
+
+		deviceExt->debugDevice->lpVtbl->ReportLiveDeviceObjects(
+			deviceExt->debugDevice, D3D12_RLDO_DETAIL | D3D12_RLDO_IGNORE_INTERNAL
+		);
+
+		deviceExt->debugDevice->lpVtbl->Release(deviceExt->debugDevice);
+	}
 
 	ListDxCommandAllocator_freex(&deviceExt->commandPools);
 
@@ -619,18 +625,23 @@ Bool GraphicsDevice_freeExt(const GraphicsInstance *instance, void *ext) {
 	return true;
 }
 
-//Executing commands */
+//Executing commands
 
 Error GraphicsDeviceRef_waitExt(GraphicsDeviceRef *deviceRef) {
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	const DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
 
-	const HANDLE eventHandle = CreateEventExW(NULL, NULL, 0, EVENT_ALL_ACCESS);
+	U64 completedValue = deviceExt->commitSemaphore->lpVtbl->GetCompletedValue(deviceExt->commitSemaphore);
+
+	if (completedValue >= deviceExt->fenceId)
+		return Error_none();
+
+	const HANDLE eventHandle = CreateEventEx(NULL, NULL, 0, EVENT_ALL_ACCESS);
 	Error err;
 
 	gotoIfError(clean, dxCheck(deviceExt->commitSemaphore->lpVtbl->SetEventOnCompletion(
-		deviceExt->commitSemaphore, device->submitId, eventHandle
+		deviceExt->commitSemaphore, deviceExt->fenceId, eventHandle
 	)))
 
 	WaitForSingleObject(eventHandle, INFINITE);
@@ -664,6 +675,7 @@ Error GraphicsDevice_submitCommandsImpl(
 	ListCommandListRef commandLists,
 	ListSwapchainRef swapchains
 ) {
+
 	//Unpack ext
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
@@ -676,12 +688,14 @@ Error GraphicsDevice_submitCommandsImpl(
 
 	//Wait for previous frame semaphore
 
-	if (device->submitId >= 3) {
+	++deviceExt->fenceId;
+
+	if (deviceExt->fenceId > 3) {
 
 		eventHandle = CreateEventExW(NULL, NULL, 0, EVENT_ALL_ACCESS);
 
 		gotoIfError(clean, dxCheck(deviceExt->commitSemaphore->lpVtbl->SetEventOnCompletion(
-			deviceExt->commitSemaphore, device->submitId - 3 + 1, eventHandle
+			deviceExt->commitSemaphore, deviceExt->fenceId - 3, eventHandle
 		)))
 
 		WaitForSingleObject(eventHandle, INFINITE);
@@ -694,14 +708,14 @@ Error GraphicsDevice_submitCommandsImpl(
 
 	for(U64 i = 0; i < swapchains.length; ++i) {
 		UnifiedTexture *unifiedTexture = TextureRef_getUnifiedTextureIntern(swapchains.ptr[i], NULL);
-		unifiedTexture->currentImageId = device->submitId % 3;
+		unifiedTexture->currentImageId = (device->submitId - 1) % 3;
 	}
 
 	//Prepare per frame cbuffer
 
 	{
 		DeviceBuffer *frameData = DeviceBufferRef_ptr(device->frameData);
-		CBufferData *data = (CBufferData*)frameData->resource.mappedMemoryExt + (device->submitId % 3);
+		CBufferData *data = (CBufferData*)frameData->resource.mappedMemoryExt + (device->submitId - 1) % 3;
 
 		for (U32 i = 0; i < data->swapchainCount; ++i) {
 
@@ -723,14 +737,14 @@ Error GraphicsDevice_submitCommandsImpl(
 
 	DxCommandQueue queue = deviceExt->queues[EDxCommandQueue_Graphics];
 
-	ListRefPtr *currentFlight = &device->resourcesInFlight[device->submitId % 3];
+	ListRefPtr *currentFlight = &device->resourcesInFlight[(device->submitId - 1) % 3];
 
 	if (commandLists.length) {
 
 		U32 threadId = 0;
 
 		DxCommandAllocator *allocator = DxGraphicsDevice_getCommandAllocator(
-			deviceExt, queue.resolvedQueueId, threadId, (U8)(device->submitId % 3)
+			deviceExt, queue.resolvedQueueId, threadId, (device->submitId - 1) % 3
 		);
 
 		if(!allocator)
@@ -761,12 +775,11 @@ Error GraphicsDevice_submitCommandsImpl(
 						queue.type == EDxCommandQueue_Compute ? "Compute" : "Copy"
 					),
 					threadId,
-					device->submitId % 3
+					(device->submitId - 1) % 3
 				))
 
-				CharString_freex(&temp);
-
 				gotoIfError(clean, CharString_toUtf16x(temp, &temp16))
+
 				gotoIfError(clean, dxCheck(allocator->pool->lpVtbl->SetName(allocator->pool, temp16.ptr)))
 				CharString_freex(&temp);
 				ListU16_freex(&temp16);
@@ -798,7 +811,7 @@ Error GraphicsDevice_submitCommandsImpl(
 						queue.type == EDxCommandQueue_Compute ? "Compute" : "Copy"
 					),
 					threadId,
-					device->submitId % 3
+					(device->submitId - 1) % 3
 				))
 
 				gotoIfError(clean, CharString_toUtf16x(temp, &temp16))
@@ -866,7 +879,8 @@ Error GraphicsDevice_submitCommandsImpl(
 		}
 
 		DeviceBuffer *frameData = DeviceBufferRef_ptr(device->frameData);
-		D3D12_GPU_VIRTUAL_ADDRESS cbvLoc = frameData->resource.deviceAddress + (device->submitId % 3) * sizeof(CBufferData);
+		D3D12_GPU_VIRTUAL_ADDRESS cbvLoc = 
+			frameData->resource.deviceAddress + ((device->submitId - 1) % 3) * sizeof(CBufferData);
 
 		commandBuffer->lpVtbl->SetComputeRootConstantBufferView(commandBuffer, 2, cbvLoc);
 		commandBuffer->lpVtbl->SetGraphicsRootConstantBufferView(commandBuffer, 2, cbvLoc);
@@ -930,13 +944,7 @@ Error GraphicsDevice_submitCommandsImpl(
 	//Submit queue
 	//TODO: Multiple queues
 
-	ID3D12CommandList *commandList = NULL;
-	gotoIfError(clean, dxCheck(commandBuffer->lpVtbl->QueryInterface(
-		commandBuffer, &IID_ID3D12CommandList, (void**) &commandList
-	)))
-
-	queue.queue->lpVtbl->ExecuteCommandLists(queue.queue, 1, &commandList);
-	gotoIfError(clean, dxCheck(queue.queue->lpVtbl->Signal(queue.queue, deviceExt->commitSemaphore, device->submitId)))
+	queue.queue->lpVtbl->ExecuteCommandLists(queue.queue, 1, (ID3D12CommandList**) &commandBuffer);
 
 	//Presents
 
@@ -956,6 +964,10 @@ Error GraphicsDevice_submitCommandsImpl(
 			&regions
 		)))
 	}
+
+	//Fence value after present
+
+	gotoIfError(clean, dxCheck(queue.queue->lpVtbl->Signal(queue.queue, deviceExt->commitSemaphore, deviceExt->fenceId)))
 
 clean:
 
@@ -980,12 +992,12 @@ Error DxGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, DxCommandBuffer *comm
 
 	//Submit only the copy command list
 
-	if(device->submitId) {		//Ensure GPU is complete, so we don't override anything
+	if(deviceExt->fenceId) {		//Ensure GPU is complete, so we don't override anything
 
 		eventHandle = CreateEventExW(NULL, NULL, 0, EVENT_ALL_ACCESS);
 
 		gotoIfError(clean, dxCheck(deviceExt->commitSemaphore->lpVtbl->SetEventOnCompletion(
-			deviceExt->commitSemaphore, device->submitId - 1, eventHandle
+			deviceExt->commitSemaphore, deviceExt->fenceId, eventHandle
 		)))
 
 		WaitForSingleObject(eventHandle, INFINITE);
@@ -993,9 +1005,10 @@ Error DxGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, DxCommandBuffer *comm
 		eventHandle = NULL;
 	}
 
+	++deviceExt->fenceId;
 	const DxCommandQueue queue = deviceExt->queues[EDxCommandQueue_Graphics];
 	queue.queue->lpVtbl->ExecuteCommandLists(queue.queue, 1, (ID3D12CommandList**) &commandBuffer);
-	gotoIfError(clean, dxCheck(queue.queue->lpVtbl->Signal(queue.queue, deviceExt->commitSemaphore, device->submitId)))
+	gotoIfError(clean, dxCheck(queue.queue->lpVtbl->Signal(queue.queue, deviceExt->commitSemaphore, deviceExt->fenceId)))
 
 	//Wait for the device
 
@@ -1006,7 +1019,7 @@ Error DxGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, DxCommandBuffer *comm
 	const U32 threadId = 0;
 
 	const DxCommandAllocator *allocator = DxGraphicsDevice_getCommandAllocator(
-		deviceExt, queue.resolvedQueueId, threadId, (U8)(device->submitId % 3)
+		deviceExt, queue.resolvedQueueId, threadId, (U8)((device->submitId - 1) % 3)
 	);
 
 	gotoIfError(clean, dxCheck(commandBuffer->lpVtbl->Reset(commandBuffer, allocator->pool, NULL)))

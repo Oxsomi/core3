@@ -281,7 +281,7 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 	Error err = Error_none();
 
 	Bool isInFlight = false;
-	ListRefPtr *currentFlight = &device->resourcesInFlight[device->submitId % 3];
+	ListRefPtr *currentFlight = &device->resourcesInFlight[(device->submitId - 1) % 3];
 	DeviceBufferRef *tempStagingResource = NULL;
 
 	for(U64 j = 0; j < sizeof(device->resourcesInFlight) / sizeof(device->resourcesInFlight[0]); ++j) {
@@ -449,7 +449,7 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 
 			gotoIfError(clean, ListVkBufferCopy_resizex(&deviceExt->bufferCopies, buffer->pendingChanges.length))
 
-			AllocationBuffer *stagingBuffer = &device->stagingAllocations[device->submitId % 3];
+			AllocationBuffer *stagingBuffer = &device->stagingAllocations[(device->submitId - 1) % 3];
 			DeviceBuffer *staging = DeviceBufferRef_ptr(device->staging);
 			VkDeviceBuffer *stagingExt = DeviceBuffer_ext(staging, Vk);
 
@@ -531,7 +531,7 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 					VK_PIPELINE_STAGE_2_COPY_BIT,
 					VK_ACCESS_2_TRANSFER_READ_BIT,
 					graphicsQueueId,
-					(device->submitId % 3) * (staging->resource.size / 3),
+					((device->submitId - 1) % 3) * (staging->resource.size / 3),
 					staging->resource.size / 3,
 					&deviceExt->bufferTransitions,
 					&dependency

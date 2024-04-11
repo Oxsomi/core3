@@ -41,7 +41,7 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 
 	Error err = Error_none();
 
-	ListRefPtr *currentFlight = &device->resourcesInFlight[device->submitId % 3];
+	ListRefPtr *currentFlight = &device->resourcesInFlight[(device->submitId - 1) % 3];
 	DeviceBufferRef *tempStagingResource = NULL;
 
 	ETextureFormat format = ETextureFormatId_unpack[texture->base.textureFormatId];
@@ -231,7 +231,7 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 
 	else {
 
-		AllocationBuffer *stagingBuffer = &device->stagingAllocations[device->submitId % 3];
+		AllocationBuffer *stagingBuffer = &device->stagingAllocations[(device->submitId - 1) % 3];
 		DeviceBuffer *staging = DeviceBufferRef_ptr(device->staging);
 		DxDeviceBuffer *stagingExt = DeviceBuffer_ext(staging, Dx);
 

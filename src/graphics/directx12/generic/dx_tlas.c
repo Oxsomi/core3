@@ -42,7 +42,7 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
 
-	ListRefPtr *currentFlight = &device->resourcesInFlight[device->submitId % 3];
+	ListRefPtr *currentFlight = &device->resourcesInFlight[(device->submitId - 1) % 3];
 
 	DeviceBufferRef *tempInstances = NULL;		//CPU visible buffer allocated only for staging
 	DeviceBufferRef *tempScratch = NULL;		//Scratch buffer

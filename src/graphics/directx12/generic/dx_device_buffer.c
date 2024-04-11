@@ -265,7 +265,7 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 	Error err = Error_none();
 
 	Bool isInFlight = false;
-	ListRefPtr *currentFlight = &device->resourcesInFlight[device->submitId % 3];
+	ListRefPtr *currentFlight = &device->resourcesInFlight[(device->submitId - 1) % 3];
 	DeviceBufferRef *tempStagingResource = NULL;
 
 	gotoIfError(clean, ListD3D12_BUFFER_BARRIER_reservex(&deviceExt->bufferTransitions, 2))
@@ -383,7 +383,7 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 
 		else {
 
-			AllocationBuffer *stagingBuffer = &device->stagingAllocations[device->submitId % 3];
+			AllocationBuffer *stagingBuffer = &device->stagingAllocations[(device->submitId - 1) % 3];
 			DeviceBuffer *staging = DeviceBufferRef_ptr(device->staging);
 			DxDeviceBuffer *stagingExt = DeviceBuffer_ext(staging, Dx);
 

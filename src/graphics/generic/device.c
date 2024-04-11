@@ -383,7 +383,7 @@ Error GraphicsDeviceRef_handleNextFrame(GraphicsDeviceRef *deviceRef, void *comm
 	//This might cause resource deletions because we might be the last one releasing them.
 	//For example temporary staging resources are released this way.
 
-	ListRefPtr *inFlight = &device->resourcesInFlight[device->submitId % 3];
+	ListRefPtr *inFlight = &device->resourcesInFlight[(device->submitId - 1) % 3];
 
 	for (U64 i = 0; i < inFlight->length; ++i)
 		RefPtr_dec(inFlight->ptrNonConst + i);
@@ -393,7 +393,7 @@ Error GraphicsDeviceRef_handleNextFrame(GraphicsDeviceRef *deviceRef, void *comm
 
 	//Release all allocations of buffer that was in flight
 
-	if(!AllocationBuffer_freeAll(&device->stagingAllocations[device->submitId % 3]))
+	if(!AllocationBuffer_freeAll(&device->stagingAllocations[(device->submitId - 1) % 3]))
 		gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_handleNextFrame() AllocationBuffer_freeAll failed"))
 
 	//Update buffer data
@@ -680,10 +680,15 @@ Error GraphicsDeviceRef_submitCommands(
 		lockPtr = NULL;
 	}
 
+	//We start counting from 1, since implementation might set fence to 0 as init.
+	//We don't want a possible deadlock there.
+
+	++device->submitId;
+
 	//Set app data
 
 	DeviceBuffer *frameData = DeviceBufferRef_ptr(device->frameData);
-	CBufferData *data = (CBufferData*) frameData->resource.mappedMemoryExt + (device->submitId % 3);
+	CBufferData *data = (CBufferData*) frameData->resource.mappedMemoryExt + ((device->submitId - 1) % 3);
 	Ns now = Time_now();
 
 	*data = (CBufferData) {
@@ -707,7 +712,7 @@ Error GraphicsDeviceRef_submitCommands(
 
 	//Add resources from command lists to resources in flight
 
-	ListRefPtr *currentFlight = &device->resourcesInFlight[device->submitId % 3];
+	ListRefPtr *currentFlight = &device->resourcesInFlight[(device->submitId - 1) % 3];
 
 	for (U64 j = 0; j < commandLists.length; ++j) {
 
@@ -728,7 +733,6 @@ Error GraphicsDeviceRef_submitCommands(
 
 	//Ensure our next fence value is used
 
-	++device->submitId;
 	device->lastSubmit = Time_now();
 
 	if(!device->firstSubmit)
