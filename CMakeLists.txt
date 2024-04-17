@@ -531,8 +531,8 @@ macro(add_virtual_files)
 
 	string(TOUPPER ${_ARGS_TARGET} ANGRY_TARGET)
 
-	if(ANGRY_TARGET MATCHES "access" OR ANGRY_TARGET MATCHES "function")
-		message(FATAL_ERROR "add_virtual_files: 'TARGET' can't be 'access' or 'function'.")
+	if(ANGRY_TARGET MATCHES "ACCESS" OR ANGRY_TARGET MATCHES "FUNCTION" OR ANGRY_TARGET MATCHES "NETWORK")
+		message(FATAL_ERROR "add_virtual_files: 'TARGET' can't be 'access' or 'function' or 'network'.")
 	endif()
 
 	# Add processed file as a file

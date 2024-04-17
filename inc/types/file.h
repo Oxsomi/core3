@@ -36,13 +36,11 @@ typedef enum EFileAccess {
 } EFileAccess;
 
 typedef struct FileInfo {
-
 	EFileType type;
 	EFileAccess access;
 	Ns timestamp;		//In units that the file system supports. Normally that unit is seconds.
 	CharString path;
 	U64 fileSize;
-
 } FileInfo;
 
 typedef Error (*FileCallback)(FileInfo, void*);

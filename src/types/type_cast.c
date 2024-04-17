@@ -22,8 +22,15 @@
 
 //Conversions
 
+U64 F32_fromBits(F32 v) {
+	U32 u = *(const U32*)&v;
+	return u;
+}
+
+U64 F64_fromBits(F64 v) { return *(const U64*) &v; }
+
 #define FLP_FROMBITS(T, TInt)																			\
-Error T##_fromBits(U64 v, T *res) {																		\
+Error T##_from##T##Bits(U64 v, T *res) {																\
 																										\
 	if(!res)																							\
 		return Error_nullPointer(1, #T "_fromBits()::res is required");									\
@@ -157,7 +164,7 @@ Error F32_fromDouble(F64 v, F32 *res) CastTo(F32)
 
 Error F64_fromInt(I64 v, F64 *res)    CastTo(F64)
 Error F64_fromUInt(U64 v, F64 *res)   CastTo(F64)
-Error F32_fromFloat(F32 v, F64 *res)  CastTo(F64)
+Error F64_fromFloat(F32 v, F64 *res)  CastTo(F64)
 
 //Endianness, because sometimes it's needed
 

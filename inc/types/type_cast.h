@@ -24,8 +24,11 @@
 
 //Conversions
 
-Error F32_fromBits(U64 v, F32 *res);
-Error F64_fromBits(U64 v, F64 *res);
+U64 F32_fromBits(F32 v);
+U64 F64_fromBits(F64 v);
+
+Error U64_fromF32Bits(F32 v, U64 *res);
+Error U64_fromF64Bits(F64 v, U64 *res);
 
 Error I8_fromUInt(U64 v, I8 *res);
 Error I8_fromInt(I64 v, I8 *res);
@@ -82,4 +85,4 @@ Error F32_fromDouble(F64 v, F32 *res);
 
 Error F64_fromInt(I64 v, F64 *res);
 Error F64_fromUInt(U64 v, F64 *res);
-Error F32_fromFloat(F32 v, F64 *res);
+Error F64_fromFloat(F32 v, F64 *res);

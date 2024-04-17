@@ -25,7 +25,7 @@
 
 //There are two types of files; virtual and local.
 //Virtual are embedded into the binary, very nice for easy portable installation and harder to modify for avg users.
-//	Writable virtual files can only be in the //access directory.
+//	Writable virtual files can only be in the //access, //function or //network directory.
 //	These are just links to existing local files, but are made accessible by the platform for access by the app.
 //	As much, naming a folder in the root "access" is disallowed for virtual files.
 //Local are in the current working directory.
@@ -72,18 +72,23 @@ typedef struct FileLoadVirtual {
 	const U32 *encryptionKey;
 } FileLoadVirtual;
 
-Error File_removeVirtual(CharString loc, Ns maxTimeout);						//Can only operate on //access
-Error File_addVirtual(CharString loc, EFileType type, Ns maxTimeout);			//Can only operate on folders in //access
+//Can only operate on //access, //function, //network
+
+Error File_removeVirtual(CharString loc, Ns maxTimeout);
+Error File_addVirtual(CharString loc, EFileType type, Ns maxTimeout);
 Error File_renameVirtual(CharString loc, CharString newFileName, Ns maxTimeout);
 Error File_moveVirtual(CharString loc, CharString directoryName, Ns maxTimeout);
 
 Error File_writeVirtual(Buffer buf, CharString loc, Ns maxTimeout);
+
+//Works on almost all virtual files
+
 Error File_readVirtual(CharString loc, Buffer *output, Ns maxTimeout);
 
 Error File_getInfoVirtual(CharString loc, FileInfo *info);
 Error File_foreachVirtual(CharString loc, FileCallback callback, void *userData, Bool isRecursive);
 Error File_queryFileObjectCountVirtual(CharString loc, EFileType type, Bool isRecursive, U64 *res);		//Inc files only
-Error File_queryFileObjectCountAllVirtual(CharString loc, Bool isRecursive, U64 *res);						//Inc folders + files
+Error File_queryFileObjectCountAllVirtual(CharString loc, Bool isRecursive, U64 *res);					//Inc folders + files
 
 Error File_loadVirtual(CharString loc, const U32 encryptionKey[8]);		//Load a virtual section
 Bool File_isVirtualLoaded(CharString loc);		//Check if a virtual section is loaded

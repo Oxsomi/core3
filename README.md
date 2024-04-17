@@ -126,7 +126,8 @@ When a virtual file system is loaded, it can be accessed the same way as a norma
 
 The same limitations as with a normal file system apply here; the file names have to be windows compatible and section/library names are even stricter (Nytodecimal only; 0-9A-Za-z$_). These are case insensitive and will likely be transformed to a different casing depending on platform.
 
-The only reserved library names besides the windows ones (NUL, COM, etc.) are: access, function. So `//access/...` is reserved for future access to directories and files outside of the working directory and app directory (access has to be allowed through selecting for example from the Windows file explorer). `//function/...` is reserved for future functionality to allow custom functionality to emulate for example old file formats; the fully resolved path would be passed to a user function to allow custom behavior.
+The only reserved library names besides the windows ones (NUL, COM, etc.) are: access, function, network. So `//access/...` is reserved for future access to directories and files outside of the working directory and app directory (access has to be allowed through selecting for example from the Windows file explorer). `//function/...` is reserved for future functionality to allow custom functionality to emulate for example old file formats (or loading a zip in memory); the fully resolved path would be passed to a user function to allow custom behavior.
+`//network/..` is reserved for future use to enable the usage of Windows like `\\resolveName` with custom permissions.
 
 ### Usage in CMake
 

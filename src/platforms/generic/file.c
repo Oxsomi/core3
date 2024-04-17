@@ -713,6 +713,7 @@ Error File_virtualOp(CharString loc, Ns maxTimeout, VirtualFileFunc f, void *use
 
 	const CharString access = CharString_createRefCStrConst("//access/");
 	const CharString function = CharString_createRefCStrConst("//function/");
+	const CharString network = CharString_createRefCStrConst("//network/");
 
 	if (CharString_startsWithStringInsensitive(loc, access)) {
 		//TODO: Allow //access folder
@@ -724,9 +725,16 @@ Error File_virtualOp(CharString loc, Ns maxTimeout, VirtualFileFunc f, void *use
 		return Error_unimplemented(1, "File_virtualOp()::loc //function/ not supported yet");
 	}
 
+	if (CharString_startsWithStringInsensitive(loc, network)) {
+		//TODO: Allow //network folder (access to \\ on windows)
+		return Error_unimplemented(1, "File_virtualOp()::loc //network/ not supported yet");
+	}
+
 	err =
 		isWrite ? Error_constData(
-			1, 0, "File_virtualOp()::isWrite is disallowed when acting on virtual files (except //access/* or //function/*"
+			1, 0, 
+			"File_virtualOp()::isWrite is disallowed when acting on virtual files "
+			"(except //access/*, //network/* or //function/*)"
 		) : (
 			!f ? Error_unimplemented(2, "File_virtualOp()::f is required") : f(userData, resolved)
 		);
