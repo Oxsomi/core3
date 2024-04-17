@@ -50,3 +50,10 @@ Error BigInt_octx(BigInt b, CharString *result, Bool leadingZeros);
 Error BigInt_binx(BigInt b, CharString *result, Bool leadingZeros);
 Error BigInt_nytox(BigInt b, CharString *result, Bool leadingZeros);
 Error BigInt_toStringx(BigInt b, CharString *result, EIntegerEncoding encoding, Bool leadingZeros);
+
+Error U128_hexx(U128 b, CharString *result, Bool leadingZeros);
+Error U128_octx(U128 b, CharString *result, Bool leadingZeros);
+//Error U128_decx(BigInt b, CharString *result, Bool leadingZeros);
+Error U128_binx(U128 b, CharString *result, Bool leadingZeros);
+Error U128_nytox(U128 b, CharString *result, Bool leadingZeros);
+Error U128_toStringx(U128 b, CharString *result, EIntegerEncoding encoding, Bool leadingZeros);

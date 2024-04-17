@@ -314,6 +314,28 @@ Error BigInt_toStringx(BigInt b, CharString *result, EIntegerEncoding encoding, 
 	return BigInt_toString(b, Platform_instance.alloc, result, encoding, leadingZeros);
 }
 
+//Error U128_decx(U128 b, CharString *result, Bool leadingZeros);
+
+Error U128_hexx(U128 b, CharString *result, Bool leadingZeros) {
+	return U128_hex(b, Platform_instance.alloc, result, leadingZeros);
+}
+
+Error U128_octx(U128 b, CharString *result, Bool leadingZeros) {
+	return U128_oct(b, Platform_instance.alloc, result, leadingZeros);
+}
+
+Error U128_binx(U128 b, CharString *result, Bool leadingZeros) {
+	return U128_bin(b, Platform_instance.alloc, result, leadingZeros);
+}
+
+Error U128_nytox(U128 b, CharString *result, Bool leadingZeros) {
+	return U128_nyto(b, Platform_instance.alloc, result, leadingZeros);
+}
+
+Error U128_toStringx(U128 b, CharString *result, EIntegerEncoding encoding, Bool leadingZeros) {
+	return U128_toString(b, Platform_instance.alloc, result, encoding, leadingZeros);
+}
+
 //Error BigInt_decx(BigInt b, CharString *result, Bool leadingZeros);
 
 //CharString

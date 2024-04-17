@@ -11,7 +11,7 @@ OxC3 types contains a lot of very basic types; it's the STL of OxC3. All these t
   - (**unsupported**): SIMD_NEON: Indicates the usage of ARM NEON intrinsics.
 - **_ARCH** is what type of architecture is used
   - *types/types.h* defines these, while _ARCH is a compile define.
-  - **ARCH_NONE**: Unknown architecture; likely abstracted away from assembly level.
+  - **ARCH_NONE**: Unknown architecture; likely abstracted away from regular assembly level.
   - **ARCH_X64**: X86_64 architecture.
   - (**unsupported**): ARCH_ARM.
 - **_PLATFORM_TYPE** is what kind of platform is running
@@ -142,7 +142,42 @@ C8 has some useful helper functions:
 - C8 **C8_createHex**(U8): Converts the hex (0-15) to a char or returns C8_MAX if invalid.
 - C8 **C8_createNyto**(U8): Converts the nytodecimal (0-63) to a char or returns C8_MAX if invalid.
 
-## TODO: BigInt and U128 (types/big_int.h)
+## BigInt and U128 (types/big_int.h)
+
+BigInt is an unsigned integer that can perform anywhere from 64 to 16320 bit operations. U128 is specifically optimized for 2 U64s working together as one (or anything else the hardware might support), while BigInt is several U64s. BigInt is less optimal than U128 due to having a variable width. 
+
+Both types have the following helper functions:
+
+- **createFrom**(Hex/Dec/Oct/Bin/Nyto/String): Create a BigInt or U128 from a string.
+  - BigInt: text, bitCount, (optional with x functions) allocator, BigInt*. Where bitCount is 0 to automatically determine bitCount, U16_MAX to indicate that the BigInt was already allocated with the right bitCount and anything else to force the bigInt to be allocated with the respective bitCount. text is then decoded with the respective bit encoding to use it in other BigInt operations. Since this allocates memory, it needs to free it afterwards.
+  - U128: text, Error*. Where on error it returns 0. If the error pointer is given, it will also return the exact error.
+- **hex**/**oct**/**bin**/**nyto**/**toString**: Convert to string with the current encoding.
+  - (optional with x functions) allocator, CharString *result, Bool leadingZeros. If leadingZeros is true, it will print the whole BigInt/U128 including leading zeros (e.g. 0x0001 instead of 0x1). toString also specifies the encoding type (Hex, Bin, Oct, Nyto). Decimal is currently unsupported until the div/mod functions are available.
+- Copying behavior on operations that return BigInt or U128: BigInt performs on the provided BigInt (a) and stores it in a. While U128 returns it in a temporary variable since that doesn't require an additional allocation.
+- **xor**(a, b), **or**(a, b), **and**(a, b), and, **not**(a): Perform the bitwise operation on all elements.
+- **lsh**(a, b), **rsh**(a, b): Shift the entire bitset to the left or right with the referenced bit count.
+- **mul**(a, b), **add**(a, b), **sub**(a, b): Arithmetic operations.
+- **cmp**(a, b): Returns an ECompareResult (Lt, Eq, Gt).
+- **eq**(a, b), **neq**(a, b), **lt**(a, b), **leq**(a, b), **gt**(a, b), **geq**(a, b): Compare operations.
+- **min**(a, b), **max**(a, b), **clamp**(a, b): Clamp operations. For BigInt, these all perform on pointers. It returns a BigInt* of the element that's relevant instead of modifying anything.
+- U8 **bitScan** & Bool **isBase2**: Scan for the first available bit and either return it or use it to check if there's anything active below. This is effectively a quick log2 (which only returns the int portion).
+
+U128 specific functions:
+
+- **mul64**(a, b)/**add64**(a, b): Multiply or add two 64-bit uints into a 128-bit uint. This is quicker than normal mul/add, since it doesn't have to handle the upper 64 bits. And there might even be a OS or HW function that performs this quicker.
+- **zero**/**one**: Function returning constants.
+- **create**/**createU64x2**: Create from 16 U8s or 2 U64s.
+
+BigInt specific functions:
+
+- **byteCount**/**bitCount**: get size of the buffer that holds the BigInt.
+- **buffer**/**bufferConst**: get the buffer that holds the BigInt.
+- **trunc()**/**resize(newSize)**: Resize the BigInt to the specified size or to the first occurrence of non zero U64 (No-op if there are only 0s).
+- create: BigInt might allocate memory which has to be freed later on.
+  - **createNull**: BigInt with no allocation.
+  - **createRef**/**createRefConst**: Turn a U64[] into a BigInt reference.
+  - **createCopy**: Copy the BigInt into a new allocation.
+  - **free**.
 
 ## TODO: CharString (types/string.h)
 
@@ -222,9 +257,42 @@ If all bits are on, it represents undefined.
 
 Other types can be made but are external or are part of a different standard library.
 
-## TODO: math.h
+## math.h
 
-## TODO: pack.h
+Contains some constants and functions:
+
+- Floats, ints, uints:
+  - **min**(a, b), **max**(a, b), **clamp**(v, mi, ma).
+- Floats only:
+  - Constants: **E**, **PI**, **RAD_TO_DEG**, **DEG_TO_RAD**.
+  - Returns Error when out of float:
+    - **pow2**, **pow3**, **pow4**, **pow5**, **exp10**, **exp2**, **pow**, **expe**.
+  - Returns the same float type:
+    - **saturate**, **lerp**, **abs**, **sqrt**, **log10**, **loge**, **log2**, **asin**, **sin**, **cos**, **acos**, **tan**, **atan**, **atan2**, **round**, **ceil**, **floor**, **fract**, **sign**, **signInc**, **mod**.
+  - To check if a float is valid: **isNaN**, **isInf**, **isValid** (!isNaN && !isInf).
+- Ints/Uints only:
+  - **pow2**, **pow3**, **pow4**, **pow5**, **exp10**, **exp2**.
+- Ints only:
+  - **abs**.
+
+## pack.h
+
+Is used to switch between packed and unpacked types:
+
+- Quaternion:
+  - QuatF32 **QuatS16_unpack**() & QuatS16 **QuatF32_pack**(). Convert to and from QuatS16 type; which is twice as efficient as F32 by packing it as a 16-bit snorm (-32768 -> 32767 = -1 -> 1).
+- UInt:
+  - Manipulating individual bits: 
+    - Bool **getBit**(T, U8 off): gets bit at off, returns false if out of bounds.
+    - Bool **setBit**(T*, U8 off): sets bit[off], false if out of bounds or if NULL.
+  - Converting between U21x3:
+    - U64 **U64_pack21x3**(U32 x, y, z) packs the xyz bits into one U64. If one of them is out of bounds, it will return U64_MAX.
+    - U32 **U64_unpack21x3**(U64, U8 off) where off is 0, 1 or 2. If offset is invalid, will return U32_MAX.
+    - Bool **U64_setPacked21x3**(U64*, U8 off, U32 v) updates element v (0, 1 or 2) to v (lower 21 bits). If ptr, v or off is invalid, will return false.
+  - Converting between U20x3u4:
+    - Bool **U64_pack20x3u4**(U64*, U32 x, y, z, U8 w) packs the xyzw bits into one U64. If one of them is out of bounds or NULL, it will return false.
+    - U32 **U64_unpack20x3u4**(U64, U8 off) where off is 0, 1, 2 or 3. If offset is invalid, will return U32_MAX.
+    - Bool **U64_setPacked20x3u4**(U64*, U8 off, U32 v) where off is 0, 1, 2 or 3. If offset or v are out of bounds or ptr is NULL, will return false.
 
 ## TODO: type_cast.h
 
