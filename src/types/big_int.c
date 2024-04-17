@@ -62,16 +62,16 @@ Error BigInt_createRef(U64 *ptr, U64 ptrCount, BigInt *big) {
 	return Error_none();
 }
 
-Error BigInt_createConstRef(const U64 *ptr, U64 ptrCount, BigInt *big) {
+Error BigInt_createRefConst(const U64 *ptr, U64 ptrCount, BigInt *big) {
 
 	if(!big)
-		return Error_nullPointer(2, "BigInt_createConstRef()::big is required");
+		return Error_nullPointer(2, "BigInt_createRefConst()::big is required");
 
 	if(big->data)
-		return Error_invalidParameter(2, 0, "BigInt_createConstRef()::big->data is required");
+		return Error_invalidParameter(2, 0, "BigInt_createRefConst()::big->data is required");
 
 	if(ptrCount >> 8)
-		return Error_outOfBounds(1, 0, U8_MAX, "BigInt_createConstRef()::ptrCount is more than the BigInt limit (256 U64s)");
+		return Error_outOfBounds(1, 0, U8_MAX, "BigInt_createRefConst()::ptrCount is more than the BigInt limit (256 U64s)");
 
 	*big = (BigInt) { .data = ptr, .isConst = true, .isRef = true, .length = (U8) ptrCount };
 	return Error_none();
@@ -927,8 +927,13 @@ U128 U128_createFromBase2(CharString text, Error *failed, EBase2Type type) {
 
 clean:
 
-	if(failed && err.genericError)
-		*failed = err;
+	if (err.genericError) {
+
+		result = U128_zero();
+
+		if (failed)
+			*failed = err;
+	}
 
 	return result;
 }
@@ -1011,3 +1016,48 @@ Bool U128_geq(U128 a, U128 b) { return U128_cmp(a, b) >= ECompareResult_Eq; }
 U128 U128_min(U128 a, U128 b) { return U128_leq(a, b) ? a : b; }
 U128 U128_max(U128 a, U128 b) { return U128_geq(a, b) ? a : b; }
 U128 U128_clamp(U128 a, U128 mi, U128 ma) { return U128_max(U128_min(a, ma), mi); }
+
+Error U128_base2(U128 a, Allocator alloc, CharString *result, EBase2Type type, Bool leadingZeros) {
+
+	BigInt b = BigInt_createNull();
+	Error err = BigInt_createRefConst(&a, 2, &b);
+
+	if(err.genericError)
+		return err;
+
+	return BigInt_base2(b, alloc, result, type, leadingZeros);
+}
+
+Error U128_hex(U128 a, Allocator alloc, CharString *result, Bool leadingZeros) {
+	return U128_base2(a, alloc, result, EBase2Type_Hex, leadingZeros);
+}
+
+Error U128_oct(U128 a, Allocator alloc, CharString *result, Bool leadingZeros) {
+	return U128_base2(a, alloc, result, EBase2Type_Oct, leadingZeros);
+}
+
+Error U128_bin(U128 a, Allocator alloc, CharString *result, Bool leadingZeros) {
+	return U128_base2(a, alloc, result, EBase2Type_Bin, leadingZeros);
+}
+
+Error U128_nyto(U128 a, Allocator alloc, CharString *result, Bool leadingZeros) {
+	return U128_base2(a, alloc, result, EBase2Type_Nyto, leadingZeros);
+}
+
+//Error U128_dec(U128 a, Allocator allocator, CharString *result, Bool leadingZeros);
+
+Error U128_toString(
+	U128 a,
+	Allocator allocator,
+	CharString *result,
+	EIntegerEncoding encoding,
+	Bool leadingZeros
+) {
+	switch (encoding) {
+		case EIntegerEncoding_Bin:		return U128_bin(a, allocator, result, leadingZeros);
+		case EIntegerEncoding_Oct:		return U128_oct(a, allocator, result, leadingZeros);
+		case EIntegerEncoding_Hex:		return U128_hex(a, allocator, result, leadingZeros);
+		case EIntegerEncoding_Nyto:		return U128_nyto(a, allocator, result, leadingZeros);
+		default:						return Error_invalidParameter(3, 0, "U128_toString()::encoding is invalid");
+	}
+}

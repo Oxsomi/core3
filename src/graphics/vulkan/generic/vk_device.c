@@ -1008,9 +1008,9 @@ Error GraphicsDevice_submitCommandsImpl(
 
 	//Wait for previous frame semaphore
 
-	if (device->submitId >= 3) {
+	if (device->submitId > 3) {
 
-		U64 value = device->submitId - 3 + 1;
+		U64 value = device->submitId - 3;
 
 		VkSemaphoreWaitInfo waitInfo = (VkSemaphoreWaitInfo) {
 			.sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
@@ -1029,7 +1029,7 @@ Error GraphicsDevice_submitCommandsImpl(
 		Swapchain *swapchain = SwapchainRef_ptr(swapchains.ptr[i]);
 		VkSwapchain *swapchainExt = TextureRef_getImplExtT(VkSwapchain, swapchains.ptr[i]);
 
-		VkSemaphore semaphore = swapchainExt->semaphores.ptr[device->submitId % swapchainExt->semaphores.length];
+		VkSemaphore semaphore = swapchainExt->semaphores.ptr[(device->submitId - 1) % swapchainExt->semaphores.length];
 
 		UnifiedTexture *unifiedTexture = TextureRef_getUnifiedTextureIntern(swapchains.ptr[i], NULL);
 		U32 currImg = 0;
@@ -1062,7 +1062,7 @@ Error GraphicsDevice_submitCommandsImpl(
 
 	{
 		DeviceBuffer *frameData = DeviceBufferRef_ptr(device->frameData);
-		CBufferData *data = (CBufferData*)frameData->resource.mappedMemoryExt + (device->submitId % 3);
+		CBufferData *data = (CBufferData*)frameData->resource.mappedMemoryExt + ((device->submitId - 1) % 3);
 
 		for (U32 i = 0; i < data->swapchainCount; ++i) {
 
@@ -1085,7 +1085,7 @@ Error GraphicsDevice_submitCommandsImpl(
 			VkMappedMemoryRange range = (VkMappedMemoryRange){
 				.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE,
 				.memory = (VkDeviceMemory)block.ext,
-				.offset = frameData->resource.blockOffset + (device->submitId % 3) * sizeof(CBufferData),
+				.offset = frameData->resource.blockOffset + ((device->submitId - 1) % 3) * sizeof(CBufferData),
 				.size = sizeof(CBufferData)
 			};
 
@@ -1100,14 +1100,14 @@ Error GraphicsDevice_submitCommandsImpl(
 	VkCommandQueue queue = deviceExt->queues[EVkCommandQueue_Graphics];
 	U32 graphicsQueueId = queue.queueId;
 
-	ListRefPtr *currentFlight = &device->resourcesInFlight[device->submitId % 3];
+	ListRefPtr *currentFlight = &device->resourcesInFlight[(device->submitId - 1) % 3];
 
 	if (commandLists.length) {
 
 		U32 threadId = 0;
 
 		VkCommandAllocator *allocator = VkGraphicsDevice_getCommandAllocator(
-			deviceExt, queue.resolvedQueueId, threadId, (U8)(device->submitId % 3)
+			deviceExt, queue.resolvedQueueId, threadId, (U8)((device->submitId - 1) % 3)
 		);
 
 		if(!allocator)
@@ -1139,7 +1139,7 @@ Error GraphicsDevice_submitCommandsImpl(
 						queue.type == EVkCommandQueue_Compute ? "Compute" : "Copy"
 					),
 					threadId,
-					device->submitId % 3
+					(device->submitId - 1) % 3
 				))
 
 				VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
@@ -1181,7 +1181,7 @@ Error GraphicsDevice_submitCommandsImpl(
 						queue.type == EVkCommandQueue_Compute ? "Compute" : "Copy"
 					),
 					threadId,
-					device->submitId % 3
+					(device->submitId - 1) % 3
 				))
 
 				VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
@@ -1224,7 +1224,7 @@ Error GraphicsDevice_submitCommandsImpl(
 			VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT,
 			VK_ACCESS_2_UNIFORM_READ_BIT,
 			graphicsQueueId,
-			(device->submitId % 3) * sizeof(CBufferData),
+			((device->submitId - 1) % 3) * sizeof(CBufferData),
 			sizeof(CBufferData),
 			&deviceExt->bufferTransitions,
 			&dependency
@@ -1243,7 +1243,7 @@ Error GraphicsDevice_submitCommandsImpl(
 		for(U32 i = 0; i < EDescriptorSetType_UniqueLayouts; ++i)
 			sets[i] =
 				i != EDescriptorSetType_CBuffer0 ? deviceExt->sets[i] :
-				deviceExt->sets[EDescriptorSetType_CBuffer0 + (device->submitId % 3)];
+				deviceExt->sets[EDescriptorSetType_CBuffer0 + ((device->submitId - 1) % 3)];
 
 		U64 bindingCount = device->info.capabilities.features & EGraphicsFeatures_RayPipeline ? 3 : 2;
 
@@ -1321,19 +1321,19 @@ Error GraphicsDevice_submitCommandsImpl(
 	//Submit queue
 	//TODO: Multiple queues
 
-	U64 waitValue = device->submitId - 3 + 1;
+	U64 waitValue = device->submitId - 3;
 
 	VkSemaphore signalSemaphores[2] = {
 		deviceExt->commitSemaphore,
-		deviceExt->submitSemaphores.ptr[device->submitId % 3]
+		deviceExt->submitSemaphores.ptr[(device->submitId - 1) % 3]
 	};
 
-	U64 signalValues[2] = { device->submitId + 1, 1 };
+	U64 signalValues[2] = { device->submitId, 1 };
 
 	VkTimelineSemaphoreSubmitInfo timelineInfo = (VkTimelineSemaphoreSubmitInfo) {
 		.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO,
-		.waitSemaphoreValueCount = device->submitId >= 3,
-		.pWaitSemaphoreValues = device->submitId >= 3 ? &waitValue : NULL,
+		.waitSemaphoreValueCount = device->submitId > 3,
+		.pWaitSemaphoreValues = device->submitId > 3 ? &waitValue : NULL,
 		.signalSemaphoreValueCount = swapchains.length ? 2 : 1,
 		.pSignalSemaphoreValues = signalValues
 	};
@@ -1359,7 +1359,7 @@ Error GraphicsDevice_submitCommandsImpl(
 		VkPresentInfoKHR presentInfo = (VkPresentInfoKHR) {
 			.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
 			.waitSemaphoreCount = 1,
-			.pWaitSemaphores = deviceExt->submitSemaphores.ptr + device->submitId % 3,
+			.pWaitSemaphores = deviceExt->submitSemaphores.ptr + (device->submitId - 1) % 3,
 			.swapchainCount = (U32) swapchains.length,
 			.pSwapchains = deviceExt->swapchainHandles.ptr,
 			.pImageIndices = deviceExt->swapchainIndices.ptr,
@@ -1394,7 +1394,7 @@ Error VkGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, VkCommandBuffer comma
 
 	//Submit only the copy command list
 
-	const U64 waitValue = device->submitId - 1;
+	const U64 waitValue = device->submitId;
 
 	const VkTimelineSemaphoreSubmitInfo timelineInfo = (VkTimelineSemaphoreSubmitInfo) {
 		.sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO,
@@ -1423,7 +1423,7 @@ Error VkGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, VkCommandBuffer comma
 	const U32 threadId = 0;
 
 	const VkCommandAllocator *allocator = VkGraphicsDevice_getCommandAllocator(
-		deviceExt, queue.resolvedQueueId, threadId, (U8)(device->submitId % 3)
+		deviceExt, queue.resolvedQueueId, threadId, (U8)((device->submitId - 1) % 3)
 	);
 
 	gotoIfError(clean, vkCheck(vkResetCommandPool(

@@ -123,7 +123,12 @@ Error GraphicsDeviceRef_createSwapchainExt(GraphicsDeviceRef *deviceRef, Swapcha
 
 		for(U8 i = 0; i < swapchain->base.images; ++i) {
 
-			ID3D12Resource *img = TextureRef_getImgExtT(swapchainRef, Dx, 0, i)->image;
+			DxUnifiedTexture *managedImage = TextureRef_getImgExtT(swapchainRef, Dx, 0, i);
+			managedImage->lastAccess = D3D12_BARRIER_ACCESS_NO_ACCESS;
+			managedImage->lastLayout = D3D12_BARRIER_LAYOUT_COMMON;
+			managedImage->lastSync = D3D12_BARRIER_SYNC_NONE;
+
+			ID3D12Resource *img = managedImage->image;
 
 			if(img)
 				img->lpVtbl->Release(img);
@@ -155,6 +160,14 @@ Bool GraphicsDevice_freeSwapchainExt(Swapchain *swapchain, Allocator alloc) {
 
 	SwapchainRef *swapchainRef = (RefPtr*) swapchain - 1;
 	DxSwapchain *swapchainExt = TextureRef_getImplExtT(DxSwapchain, swapchainRef);
+
+	for(U8 i = 0; i < swapchain->base.images; ++i) {
+
+		ID3D12Resource *img = TextureRef_getImgExtT(swapchainRef, Dx, 0, i)->image;
+
+		if(img)
+			img->lpVtbl->Release(img);
+	}
 
 	if(swapchainExt->swapchain)
 		swapchainExt->swapchain->lpVtbl->Release(swapchainExt->swapchain);

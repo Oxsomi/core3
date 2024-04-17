@@ -118,6 +118,8 @@ typedef struct DxGraphicsDevice {
 	ListD3D12_BUFFER_BARRIER bufferTransitions;
 	ListD3D12_TEXTURE_BARRIER imageTransitions;
 
+	U64 fenceId;
+
 } DxGraphicsDevice;
 
 typedef struct DxCommandBufferState {

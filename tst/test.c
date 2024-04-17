@@ -1878,8 +1878,8 @@ int main() {
 				gotoIfError(clean, Error_invalidState((U32)i, "U128_cmp failed"))
 
 			BigInt aBig = (BigInt) { 0 }, bBig = (BigInt) { 0 };
-			gotoIfError(clean, BigInt_createConstRef((const U64*)&compares[i - 1], 2, &aBig))
-			gotoIfError(clean, BigInt_createConstRef((const U64*)&compares[i], 2, &bBig))
+			gotoIfError(clean, BigInt_createRefConst((const U64*)&compares[i - 1], 2, &aBig))
+			gotoIfError(clean, BigInt_createRefConst((const U64*)&compares[i], 2, &bBig))
 
 			if(
 				BigInt_cmp(aBig, bBig) != ECompareResult_Lt ||
@@ -1931,7 +1931,7 @@ int main() {
 	for(U64 i = 0; i < sizeof(stringified) / sizeof(stringified[0]); ++i) {
 
 		gotoIfError(clean, BigInt_createFromString(CharString_createRefCStrConst(stringified[i]), 128, alloc, &aBig))
-		gotoIfError(clean, BigInt_createConstRef(&mulParams[i][0], 2, &bBig))
+		gotoIfError(clean, BigInt_createRefConst(&mulParams[i][0], 2, &bBig))
 
 		if(BigInt_neq(aBig, bBig))
 			gotoIfError(clean, Error_invalidState((U32)i, "BigInt_createFromString failed"))
@@ -1944,7 +1944,7 @@ int main() {
 
 	for(U64 i = 0; i < sizeof(stringified) / sizeof(stringified[0]) && i < EIntegerEncoding_Count; ++i) {
 
-		gotoIfError(clean, BigInt_createConstRef(&mulParams[i][0], 2, &bBig))
+		gotoIfError(clean, BigInt_createRefConst(&mulParams[i][0], 2, &bBig))
 		gotoIfError(clean, BigInt_toString(bBig, alloc, &tmp, (EIntegerEncoding)i, false))
 
 		CharString ref = CharString_createRefCStrConst(stringified[i]);
@@ -1964,8 +1964,8 @@ int main() {
 
 		U64 temp[4] = { mulParams[i][0], 0, mulParams[i][1], 0 };
 		gotoIfError(clean, BigInt_createRef(&temp[0], 2, &aBig))
-		gotoIfError(clean, BigInt_createConstRef(&temp[2], 2, &bBig))
-		gotoIfError(clean, BigInt_createConstRef((const U64*) &mulResult[i][0], 2, &cBig))
+		gotoIfError(clean, BigInt_createRefConst(&temp[2], 2, &bBig))
+		gotoIfError(clean, BigInt_createRefConst((const U64*) &mulResult[i][0], 2, &cBig))
 
 		if(!BigInt_mul(&aBig, bBig, alloc) || BigInt_neq(aBig, cBig))
 			gotoIfError(clean, Error_invalidOperation((U32)i, "BigInt_mul failed"))
@@ -1979,8 +1979,8 @@ int main() {
 
 		U64 temp[2] = { mulParams[i][0], mulParams[i][1] };
 		gotoIfError(clean, BigInt_createRef(&temp[0], 2, &aBig))
-		gotoIfError(clean, BigInt_createConstRef(&mulResult[i][0], 2, &bBig))
-		gotoIfError(clean, BigInt_createConstRef(&addResult[i][0], 2, &cBig))
+		gotoIfError(clean, BigInt_createRefConst(&mulResult[i][0], 2, &bBig))
+		gotoIfError(clean, BigInt_createRefConst(&addResult[i][0], 2, &cBig))
 
 		if(!BigInt_add(&aBig, bBig) || BigInt_neq(aBig, cBig))
 			gotoIfError(clean, Error_invalidOperation((U32)i, "BigInt_add failed"))
@@ -1994,8 +1994,8 @@ int main() {
 
 		U64 temp[2] = { addResult[i][0], addResult[i][1] };
 		gotoIfError(clean, BigInt_createRef(&temp[0], 2, &cBig))
-		gotoIfError(clean, BigInt_createConstRef(&mulParams[i][0], 2, &aBig))
-		gotoIfError(clean, BigInt_createConstRef(&mulResult[i][0], 2, &bBig))
+		gotoIfError(clean, BigInt_createRefConst(&mulParams[i][0], 2, &aBig))
+		gotoIfError(clean, BigInt_createRefConst(&mulResult[i][0], 2, &bBig))
 
 		if(!BigInt_sub(&cBig, bBig) || BigInt_neq(aBig, cBig))
 			gotoIfError(clean, Error_invalidOperation((U32)i, "BigInt_sub failed when solving c - b = a"))
@@ -2149,7 +2149,7 @@ int main() {
 
 		U64 temp[2] = { mulParams[1][0], mulParams[1][1] };
 		gotoIfError(clean, BigInt_createRef(&temp[0], 2, &aBig))
-		gotoIfError(clean, BigInt_createConstRef(&lshResult[i][0], 2, &bBig))
+		gotoIfError(clean, BigInt_createRefConst(&lshResult[i][0], 2, &bBig))
 
 		if(!BigInt_lsh(&aBig, (U16)(i + 1)) || BigInt_neq(aBig, bBig))
 			gotoIfError(clean, Error_invalidOperation((U32)i, "BigInt_lsh failed"))
@@ -2163,7 +2163,7 @@ int main() {
 
 		U64 temp[2] = { mulParams[1][0], mulParams[1][1] };
 		gotoIfError(clean, BigInt_createRef(&temp[0], 2, &aBig))
-		gotoIfError(clean, BigInt_createConstRef(&rshResult[i][0], 2, &bBig))
+		gotoIfError(clean, BigInt_createRefConst(&rshResult[i][0], 2, &bBig))
 
 		if(!BigInt_rsh(&aBig, (U16)(i + 1)) || BigInt_neq(aBig, bBig))
 			gotoIfError(clean, Error_invalidOperation((U32)i, "BigInt_rsh failed"))
@@ -2174,7 +2174,7 @@ int main() {
 	for (U64 i = 0; i < sizeof(rshResult) / sizeof(rshResult[0]); ++i) {
 
 		aBig = (BigInt){ 0 };
-		gotoIfError(clean, BigInt_createConstRef(&rshResult[i][0], 2, &aBig))
+		gotoIfError(clean, BigInt_createRefConst(&rshResult[i][0], 2, &aBig))
 
 		U16 off = BigInt_bitScan(aBig);
 
