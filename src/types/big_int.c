@@ -1020,7 +1020,7 @@ U128 U128_clamp(U128 a, U128 mi, U128 ma) { return U128_max(U128_min(a, ma), mi)
 Error U128_base2(U128 a, Allocator alloc, CharString *result, EBase2Type type, Bool leadingZeros) {
 
 	BigInt b = BigInt_createNull();
-	Error err = BigInt_createRefConst(&a, 2, &b);
+	Error err = BigInt_createRefConst((const U64*) &a, 2, &b);
 
 	if(err.genericError)
 		return err;
