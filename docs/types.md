@@ -355,7 +355,21 @@ unimplemented
 stderr
 ```
 
-## TODO: Quaternion (types/quat.h)
+## Quaternion (types/quat.h)
+
+A Quaternion is a vector (4) of floats (doubles also supported in the future) that represents an orientation which can easily be interpolated. It has the following functions:
+
+- **create**(x, y, z, w) and **identity**() create a quaternion.
+- **eq**(a, b), **neq**(a, b) compare the two quaternions (exactly).
+- **x**(), **y**(), **z**(), **w**(), **get**(i) gets the element of the quaternion.
+- **setX**(T), **setY**(T), **setZ**(T), **setW**(T), **set**(i, T) sets the element of the quaternion.
+- **lerp**(b, T perc) lerp quaternion from current to b using perc (0-1).
+- **angleAxis**(axis, angle), **fromEuler(**pitchYawRollDeg) create quaternion from angle(s).
+- **toEuler**() get back euler angles from quaternion (pitchYawRollDeg).
+- **mul**(b) multiply quaternion (self) by b.
+- **targetDirection**(target) look at target from origin (self).
+- **applyToNormal**(Tx4 normal) apply quaternion to normalized direction.
+- **conj**(), **normalize**(), **inverse**() Quaternion operations to undo multiplication and create a normalized quaternion.
 
 ## TODO: Buffer (types/buffer.h)
 

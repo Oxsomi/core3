@@ -24,8 +24,8 @@
 #include "platforms/file.h"
 #include "types/string.h"
 #include "formats/texture.h"
-#include "formats/bmp.h"
-#include "platforms/ext/bmpx.h"
+#include "formats/dds.h"
+#include "platforms/ext/ddsx.h"
 #include "platforms/ext/bufferx.h"
 #include "types/math.h"
 
@@ -265,27 +265,38 @@ Error Window_storeCPUBufferToDisk(const Window *w, CharString filePath, Ns maxTi
 	if (!w)
 		return Error_nullPointer(0, "Window_storeCPUBufferToDisk()::w is required");
 
-	const Buffer buf = w->cpuVisibleBuffer;
-
-	if(!Buffer_length(buf))
+	if(!Buffer_length(w->cpuVisibleBuffer))
 		return Error_invalidOperation(
 			0, "Window_storeCPUBufferToDisk()::w must be a virtual window or have EWindowHint_ProvideCPUBuffer"
 		);
 
-	if(w->format != EWindowFormat_BGRA8)
-		return Error_unsupportedOperation(
-			0, "Window_storeCPUBufferToDisk() is only supported for BGRA8 for now"		//TODO: Add support for other formats
-		);
-
 	Buffer file = Buffer_createNull();
 
-	Error err = BMP_writex(
-		buf,
-		(BMPInfo) { .w = (U32) I32x2_x(w->size), .h = (U32) I32x2_y(w->size) },
-		&file
-	);
+	DDSInfo info = (DDSInfo) {
 
-	if(err.genericError)
+		.w = (U32) I32x2_x(w->size),
+		.h = (U32) I32x2_y(w->size),
+
+		.l = 1, .mips = 1, .layers = 1,
+
+		.type = ETextureType_2D
+	};
+
+	switch (w->format) {
+		default:						info.textureFormatId = ETextureFormatId_BGRA8;		break;
+		case EWindowFormat_BGR10A2:		info.textureFormatId = ETextureFormatId_BGR10A2;	break;
+		case EWindowFormat_RGBA16f:		info.textureFormatId = ETextureFormatId_RGBA16f;	break;
+		case EWindowFormat_RGBA32f:		info.textureFormatId = ETextureFormatId_RGBA32f;	break;
+	}
+
+	SubResourceData subResource = (SubResourceData) { .data = w->cpuVisibleBuffer };
+	ListSubResourceData buf = (ListSubResourceData) { 0 };
+	Error err = ListSubResourceData_createRefConst(&subResource, 1, &buf);
+
+	if (err.genericError)
+		return err;
+
+	if ((err = DDS_writex(buf, info, &file)).genericError)
 		return err;
 
 	err = File_write(file, filePath, maxTimeout);
