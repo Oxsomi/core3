@@ -32,6 +32,8 @@
 #define MICROSOFT_WINDOWS_WINBASE_H_DEFINE_INTERLOCKED_CPLUSPLUS_OVERLOADS 0
 #include <Windows.h>
 
+Error File_foreachVirtual(CharString loc, FileCallback callback, void *userData, Bool isRecursive);
+
 Error File_foreach(CharString loc, FileCallback callback, void *userData, Bool isRecursive) {
 
 	CharString resolved = CharString_createNull();
@@ -168,7 +170,7 @@ clean:
 	return err;
 }
 
-Error File_loadVirtualInternal(FileLoadVirtual *userData, CharString loc) {
+Error File_loadVirtualInternal1(FileLoadVirtual *userData, CharString loc, Bool allowLoad) {
 
 	CharString isChild = CharString_createNull();
 	ListU16 tmp = (ListU16) { 0 };
@@ -183,7 +185,7 @@ Error File_loadVirtualInternal(FileLoadVirtual *userData, CharString loc) {
 	acq = Lock_lock(&Platform_instance.virtualSectionsLock, U64_MAX);
 
 	if(acq < ELockAcquire_Success)
-		gotoIfError(clean, Error_invalidState(0, "File_loadVirtualInternal() couldn't lock virtualSectionsLock"))
+		gotoIfError(clean, Error_invalidState(0, "File_loadVirtualInternal1() couldn't lock virtualSectionsLock"))
 
 	Bool foundAny = false;
 
@@ -203,6 +205,9 @@ Error File_loadVirtualInternal(FileLoadVirtual *userData, CharString loc) {
 
 			if (!section->loaded) {
 
+				if (!allowLoad)
+					gotoIfError(clean, Error_notFound(0, 0, "File_loadVirtualInternal1() was queried but none was found"));
+
 				HGLOBAL handle = NULL;
 				CAFile file = (CAFile) { 0 };
 				Buffer copy = Buffer_createNull();
@@ -212,13 +217,13 @@ Error File_loadVirtualInternal(FileLoadVirtual *userData, CharString loc) {
 				ListU16_freex(&tmp);
 
 				if(!data)
-					gotoIfError(clean0, Error_notFound(0, 1, "File_loadVirtualInternal() FindResource failed"))
+					gotoIfError(clean0, Error_notFound(0, 1, "File_loadVirtualInternal1() FindResource failed"))
 
 				U32 size = (U32) SizeofResource(NULL, data);
 				handle = LoadResource(NULL, data);
 
 				if(!handle)
-					gotoIfError(clean0, Error_notFound(3, 1, "File_loadVirtualInternal() LoadResource failed"))
+					gotoIfError(clean0, Error_notFound(3, 1, "File_loadVirtualInternal1() LoadResource failed"))
 
 				const U8 *dat = (const U8*) LockResource(handle);
 				gotoIfError(clean0, Buffer_createCopyx(Buffer_createRefConst(dat, size), &copy))
@@ -246,14 +251,14 @@ Error File_loadVirtualInternal(FileLoadVirtual *userData, CharString loc) {
 		//Otherwise we want to use error to determine if it's present or not
 
 		else err = section->loaded ? Error_none() :
-			Error_notFound(1, 1, "File_loadVirtualInternal()::loc not found (1)");
+			Error_notFound(1, 1, "File_loadVirtualInternal1()::loc not found (1)");
 
 		if(err.genericError)
 			goto clean;
 	}
 
 	if(!foundAny)
-		err = Error_notFound(2, 1, "File_loadVirtualInternal()::loc not found (2)");
+		err = Error_notFound(2, 1, "File_loadVirtualInternal1()::loc not found (2)");
 
 clean:
 

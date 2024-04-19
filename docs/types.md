@@ -1,4 +1,4 @@
-# OxC3 types (id: 0x1C30)
+#  OxC3 types (id: 0x1C30)
 
 OxC3 types contains a lot of very basic types; it's the STL of OxC3. All these types are used throughout the entirety of OxC3.
 
@@ -483,9 +483,9 @@ After the CDFList is finalized, it can be used in one of the following functions
 - Error **CDFList_getRandomElementFast**(CDFList *list, CDFListElement *elementValue, U32 *seed): Sample a random element from the list using a seed. (This is not cryptographically secure).
 - Error **CDFList_getRandomElementSecure**(CDFList *list, CDFListElement *elementValue): Sample a cryptographically secure random element from the list. This isn't fast, so it should only be used when necessary.
 
-## Basic file util (types/file.h)
+## Files
 
-File util for resolving file paths and handling FileInfo freeing. Other more advanced file operations are handled by OxC3 platform's platforms/file.h. This only exists because formats such as oiCA and Archive use these functions.
+Basic file util (types/file.h) for resolving file paths and handling FileInfo freeing. Other more advanced file operations are handled by OxC3 platform's platforms/file.h. This only exists because formats such as oiCA and Archive use these functions.
 
 - Error **File_resolve**(CharString loc, Bool *isVirtual, U64 maxFilePathLimit, CharString absoluteDir, Allocator alloc, CharString *result)
   - Prefix of `//` indicates a virtual file path. This is a special OxC3 layout (called OxC3 paths) that indicates special use. `//access` will index into files that were provided access to (through a file picker window for example) and `//function` represents a virtual file system that is managed by a custom manager (such as a temporarily loaded zip file in memory). `//network` is reserved to simulate Windows `\\` in the future.

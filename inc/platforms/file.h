@@ -64,31 +64,13 @@ Bool File_hasType(CharString loc, EFileType type);
 Bool File_hasFile(CharString loc);
 Bool File_hasFolder(CharString loc);
 
-Error File_write(Buffer buf, CharString loc, Ns maxTimeout);		//Read when a file is available (up to maxTimeout)
-Error File_read(CharString loc, Ns maxTimeout, Buffer *output);		//Write when a file is available (up to maxTimeout)
+Error File_write(Buffer buf, CharString loc, Ns maxTimeout);		//Write when a file is available (up to maxTimeout)
+Error File_read(CharString loc, Ns maxTimeout, Buffer *output);		//Read when a file is available (up to maxTimeout)
 
 typedef struct FileLoadVirtual {
 	Bool doLoad;
 	const U32 *encryptionKey;
 } FileLoadVirtual;
-
-//Can only operate on //access, //function, //network
-
-Error File_removeVirtual(CharString loc, Ns maxTimeout);
-Error File_addVirtual(CharString loc, EFileType type, Ns maxTimeout);
-Error File_renameVirtual(CharString loc, CharString newFileName, Ns maxTimeout);
-Error File_moveVirtual(CharString loc, CharString directoryName, Ns maxTimeout);
-
-Error File_writeVirtual(Buffer buf, CharString loc, Ns maxTimeout);
-
-//Works on almost all virtual files
-
-Error File_readVirtual(CharString loc, Buffer *output, Ns maxTimeout);
-
-Error File_getInfoVirtual(CharString loc, FileInfo *info);
-Error File_foreachVirtual(CharString loc, FileCallback callback, void *userData, Bool isRecursive);
-Error File_queryFileObjectCountVirtual(CharString loc, EFileType type, Bool isRecursive, U64 *res);		//Inc files only
-Error File_queryFileObjectCountAllVirtual(CharString loc, Bool isRecursive, U64 *res);					//Inc folders + files
 
 Error File_loadVirtual(CharString loc, const U32 encryptionKey[8]);		//Load a virtual section
 Bool File_isVirtualLoaded(CharString loc);		//Check if a virtual section is loaded

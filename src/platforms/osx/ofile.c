@@ -22,7 +22,7 @@
 #include "types/string.h"
 #include "platforms/file.h"
 
-Error File_loadVirtualInternal(FileLoadVirtual *userData, CharString loc) {
+Error File_loadVirtualInternal1(FileLoadVirtual *userData, CharString loc, Bool allowLoad) {
 	(void)userData;
 	(void)loc;
 	return Error_unimplemented(0, "File_loadVirtualInternal() not implemented in OSX yet");		//TODO:

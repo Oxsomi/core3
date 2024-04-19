@@ -1,11 +1,11 @@
 # OxC3 (Oxsomi core 3 0.2)
 | Platforms | Vulkan/MoltenVK support                                      | Native API support                                           |
 | --------- | ------------------------------------------------------------ | ------------------------------------------------------------ |
-| Windows   | ![example workflow](https://github.com/Oxsomi/core3/actions/workflows/windows.yml/badge.svg) | **![example workflow](https://github.com/Oxsomi/core3/actions/workflows/windows_d3d12.yml/badge.svg)** |
-| Mac OS X  | ![example workflow](https://github.com/Oxsomi/core3/actions/workflows/osx.yml/badge.svg) | **Unimplemented**                                            |
-| Linux     | **Unimplemented**                                            | N/A                                                          |
-| Android   | **Unimplemented**                                            | N/A                                                          |
-| iOS       | **Unimplemented**                                            | **Unimplemented**                                            |
+| Windows   | **Vulkan**: ![example workflow](https://github.com/Oxsomi/core3/actions/workflows/windows.yml/badge.svg) | **D3D12**: ![example workflow](https://github.com/Oxsomi/core3/actions/workflows/windows_d3d12.yml/badge.svg) |
+| Mac OS X  | **MolenVK**: ![example workflow](https://github.com/Oxsomi/core3/actions/workflows/osx.yml/badge.svg) | **Metal**: **Unimplemented**                                 |
+| Linux     | **Vulkan**: **Unimplemented**                                | N/A                                                          |
+| Android   | **Vulkan**: **Unimplemented**                                | N/A                                                          |
+| iOS       | **MoltenVK**: **Unimplemented**                              | **Metal**: **Unimplemented**                                 |
 
 OxC3 (0xC3 or Oxsomi core 3) is the successor to O(x)somi core v2 and v1. Specifically it combines the ostlc (standard template library), owc (window core) and ogc (graphics core). Focused more on being minimal abstraction compared to the predecessors by using C17 instead of C++20. Written so it can be wrapped with other languages (bindings) or even a VM in the future. Could also provide a C++20 layer for easier usage, such as operator overloads.
 
@@ -16,7 +16,7 @@ OxC3 (0xC3 or Oxsomi core 3) is the successor to O(x)somi core v2 and v1. Specif
   - 128-bit and bigger unsigned ints (U128 and BigInt).
   - AllocationBuffer for managing block allocations.
   - Buffer manipulation such as compares, copies, bit manipulation,
-    - Encryption (aes256gcm), hashing (sha256, crc32c), cryptographically secure PRNG (CSPRNG).
+    - Encryption (aes256gcm), hashing (sha256, crc32c), cryptographically secure random (CSPRNG).
     - Buffer layouts for manipulating buffers using struct metadata and a path.
   - GenericList, CharString, TList (Makes Lists such as ListCharString, ListU32, etc.) and CDFList.
   - Error type including stacktrace option.
@@ -26,18 +26,19 @@ OxC3 (0xC3 or Oxsomi core 3) is the successor to O(x)somi core v2 and v1. Specif
   - Log for colored and proper cross platform logging.
   - For more info check the [documentation](docs/types.md).
 - OxC3_formats: deps(OxC3_types)
-  - A library for reading/writing files. Currently only for BMP and oiCA/oiDL (proprietary zip-style formats).
+  - A library for reading/writing files. Currently only for BMP, DDS and oiCA/oiDL (proprietary zip-style formats).
   - For more info check the [documentation](docs/formats.md).
 - OxC3_platforms: deps(OxC3_types, OxC3_formats)
   - For everything that's platform dependent (excluding some exceptions for OxC3_types).
   - Helpers for default allocator to simplify OxC3_types functions that require allocators.
   - File manipulation (in working or app dir only) such as read, write, move, rename, delete, create, info, foreach, checking.
   - Virtual file system; for accessing files included into the exe, apk, etc. Which are built through CMake.
-  - Input devices: multiple mice and keyboards (all accessible individually).
+  - Input devices: multiple mice and keyboards.
   - Window for physical (OS-backed) and virtual (in memory) windows.
+  - Allocator that detects memory leaks, free without alloc (or double free) and allocation stacktraces.
   - For more info check the [documentation](docs/platforms.md).
 - OxC3_graphics: deps(OxC3_platforms)
-  - Abstraction layer possible to port to newer graphics APIs such as D3D12, Vulkan, Metal and WebGPU. Vulkan and Metal would be the first important things supported.
+  - Abstraction layer possible to port to newer graphics APIs such as D3D12, Vulkan, Metal and WebGPU. Currently, only Vulkan and D3D12 are supported.
   - For more info check the [documentation](docs/graphics_api.md).
 - OxC3: deps(OxC3_platforms)
   - Command line tool that exposes useful functions from OxC3.
@@ -62,6 +63,7 @@ One of the useful things about C is that files are incredibly easy to compile an
 
 - Windows.
 - A 64-bit CPU.
+  - Currently only x64 (AMD64) is supported. Though ARM could be supported too, by turning off SIMD (**not recommended for production builds!!**).
   - Even though SSE4.2+ is recommended, this can be explicitly turned off. SSE can only be turned off if relax float is turned off; this is because normal floats (without SSE) aren't always IEEE754 compliant. SIMD option requires SSE4.2/SSE4.1/SSE2/SSE/SSE3/SSSE3, AES, PCLMULQDQ, BMI1 and RDRAND extensions.
   - Recommended CPUs are AMD Zen, Intel Rocket lake (Gen 11) and up. This is because SHA256 is natively supported on them. These CPUs are faster and more secure. Minimum requirements for SSE build is Intel Broadwell+ (Gen 6+) and AMD Zen+ (1xxx+). **The SSE-less build doesn't have any security guarantees for encryption, as these are software based instead of hardware based. Making them less secure, since no time and effort was put into preventing cache timing attacks.** SSE-less build only exists for emulation purposes or for debugging, it's also notoriously slow since it doesn't use any intrinsics (SHA, AES, CRC, SIMD, etc.). The SSE-less build is also meant for easily porting to a new system without having to support the entire SIMD there first, before finally supporting SIMD after the base has been ported.
 
@@ -94,63 +96,6 @@ Currently the Mac build doesn't support SSE or NEON. So SIMD mode has to be forc
 ### Other platforms
 
 Other platforms like Android and iOS are coming in the future.
-
-## Virtual file system
-
-OxC3 supports a virtual file system that allows baking/preprocessing of external file formats to our own, as well as embedding these files into the exe/apk directly. The executable embeds sections, which can be loaded individually and support dependencies. For example;
-
-```
-myLibrary
-	shaders
-	fonts
-	textures
-myOtherLibrary
-	shaders
-	fonts
-	textures
-```
-
-The example above shows the sections that are supported for our example executable. To access these resources from our application we have to load either the root or the specific sections:
-
-```c
-_gotoIfError(clean, File_loadVirtual("//myLibrary/fonts", NULL));	//Load section.
-_gotoIfError(clean, File_loadVirtual("//myLibrary", NULL));			//Load myLibrary.
-_gotoIfError(clean, File_loadVirtual("//.", NULL));					//Load everything.
-```
-
-These files are decompressed and unencrypted (if they were) and kept in memory, so they can be quickly accessed. They can then be unloaded if they're deemed unimportant.
-
-The example layout above is only useful if the dependencies have very little resources. The moment you have lots of resources (or little RAM) then you probably want to split them up based on how they're accessed. For example; if assets are only used in a certain level then consider splitting up the file structure per level to ensure little RAM is wasted on it. Another example could be splitting up assets based on level environment, so if only all forest environment levels use a certain tree, then it's wasteful to load that for every level. The levels would then reference dependencies to sections and these sections would then be loaded.
-
-When a virtual file system is loaded, it can be accessed the same way as a normal file is loaded. The exception being that write access isn't allowed anymore. The only limitation is that files need both a library and a section folder `//myLibrary/fonts/*` rather than `//myLibrary/*` and the section has to be loaded. To ensure it is loaded, a File_loadVirtual can be called or File_isVirtualLoaded can be called.
-
-The same limitations as with a normal file system apply here; the file names have to be windows compatible and section/library names are even stricter (Nytodecimal only; 0-9A-Za-z$_). These are case insensitive and will likely be transformed to a different casing depending on platform.
-
-The only reserved library names besides the windows ones (NUL, COM, etc.) are: access, function, network. So `//access/...` is reserved for future access to directories and files outside of the working directory and app directory (access has to be allowed through selecting for example from the Windows file explorer). `//function/...` is reserved for future functionality to allow custom functionality to emulate for example old file formats (or loading a zip in memory); the fully resolved path would be passed to a user function to allow custom behavior.
-`//network/..` is reserved for future use to enable the usage of Windows like `\\resolveName` with custom permissions.
-
-### Usage in CMake
-
-to add the virtual files to your project, you can use the following:
-
-```cmake
-
-add_virtual_files(TARGET myProject NAME mySection ROOT ${CMAKE_CURRENT_SOURCE_DIR}/res/mySectionFolder SELF ${CMAKE_CURRENT_SOURCE_DIR})
-configure_icon(myProject "${CMAKE_CURRENT_SOURCE_DIR}/res/logo.ico")
-configure_virtual_files(myProject)
-```
-
-Virtual files are then linked into the project.
-
-To add a dependency, use the following:
-
-```cmake
-add_virtual_dependencies(TARGET myProject DEPENDENCIES myDep)
-```
-
-This should be done before the configure_virtual_files and ensures the files for the dependency are present in this project. A dependency itself can't include an icon or use configure_virtual_files; as this is reserved for executables only.
-
-*Note: Dependencies can't be overlapping. So if B and C both include A then including B and C in D won't work.*
 
 ## Graphics
 

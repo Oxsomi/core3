@@ -82,4 +82,4 @@ impl void Platform_free(void *allocator, void *ptr, U64 length);
 
 //Debugging to see where allocations came from and how many are active
 
-impl void Platform_printAllocations(U64 offset, U64 length, U64 minAllocationSize);
+void Platform_printAllocations(U64 offset, U64 length, U64 minAllocationSize);

@@ -87,6 +87,27 @@
 
 #endif
 
+//Private file functions
+
+//Can only operate on //access, //function, //network
+
+Error File_removeVirtual(CharString loc, Ns maxTimeout);
+Error File_addVirtual(CharString loc, EFileType type, Ns maxTimeout);
+Error File_renameVirtual(CharString loc, CharString newFileName, Ns maxTimeout);
+Error File_moveVirtual(CharString loc, CharString directoryName, Ns maxTimeout);
+
+Error File_writeVirtual(Buffer buf, CharString loc, Ns maxTimeout);
+
+//Works on almost all virtual files
+
+Error File_readVirtual(CharString loc, Buffer *output, Ns maxTimeout);
+
+Error File_getInfoVirtual(CharString loc, FileInfo *info);
+Error File_foreachVirtual(CharString loc, FileCallback callback, void *userData, Bool isRecursive);
+Error File_queryFileObjectCountVirtual(CharString loc, EFileType type, Bool isRecursive, U64 *res);		//Inc files only
+Error File_queryFileObjectCountAllVirtual(CharString loc, Bool isRecursive, U64 *res);					//Inc folders + files
+
+
 //Both Linux and Windows require folder to be empty before removing.
 //So we do it manually.
 
@@ -1182,7 +1203,11 @@ clean:
 	return err;
 }
 
-impl Error File_loadVirtualInternal(FileLoadVirtual *userData, CharString loc);
+impl Error File_loadVirtualInternal1(FileLoadVirtual *userData, CharString loc, Bool allowLoad);
+
+Error File_loadVirtualInternal(FileLoadVirtual *userData, CharString loc) {
+	return File_loadVirtualInternal1(userData, loc, true);
+}
 
 Error File_unloadVirtualInternal(void *userData, CharString loc) {
 
@@ -1227,7 +1252,7 @@ clean:
 
 Bool File_isVirtualLoaded(CharString loc) {
 	FileLoadVirtual virt = (FileLoadVirtual) { 0 };
-	return !File_loadVirtualInternal(&virt, loc).genericError;
+	return !File_loadVirtualInternal1(&virt, loc, false).genericError;
 }
 
 Error File_loadVirtual(CharString loc, const U32 encryptionKey[8]) {

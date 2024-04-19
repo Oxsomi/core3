@@ -2,9 +2,114 @@
 
 OxC3 platforms contains mostly platform related things such as window creation, input handling, file input and extended functions (simplified allocator).
 
-## TODO: File
+## Platform
 
-### TODO: Virtual files
+The platform file is used to interface with platform dependent instructions. Most are internal functions and should not be called directly, though there are some useful functions here:
+
+- **printAllocations**(U64 offset, U64 length, U64 minAllocationSize): Print allocations at [offset, offset + length> where allocationSize >= minAllocationSize. This can be useful to determine what allocations are currently active and is used as the final step on exit to list all leaked allocations.
+- Bool **checkCPUSupport**(): Check if the CPU is capable of running OxC3. This can't be true when OxC3 is ran through the default C/C++ build process (as the main function(s) already check for it). Though it might be possible this has to be called in other languages, such as a C# or Java application, where the main is not owned by OxC3. If this returns false, then running any functions that use any SIMD instructions will have undefined behavior. It could also be useful for an existing application such as when calling via JNI (Java on Android) to know if it should show an error message or not run OxC3 (and rather have a fallback).
+- I32 **Program_run**(): *<u>User defined function</u>* that is called by the OxC3 runtime when ready. This is only relevant for C/C++ applications where OxC3 takes over the main entrypoint.
+- void **Program_exit**(): <u>User defined function</u> that is called by the OxC3 runtime when exiting. This is only relevant for C/C++ applications where OxC3 takes over the main entrypoint.
+- const Bool **Platform_useWorkingDirectory**: <u>User defined value</u> that determines if the application uses the directory of the app (false) or the directory where the executable is executed (true). The latter is useful for command line tools.
+- **onAllocate**`(void *allocator, U64)`/**onFree**`(void *allocator,void*,)`: Callbacks to let the platform allocator know where allocations are. This is recommended to call even for internal allocators, as it makes tracking them a lot easier (and avoiding memleaks).
+
+The rest are all internal function calls done automatically in C/C++ by the main function such as:
+
+- **initExt**(), **cleanExt**(): Init/clean platform data.
+- **create**()/**cleanup**(): Create or free the platform.
+- **allocate**`(void *allocator, U64)`/**free**`(void *allocator, void*, U64)`: Allocate or free using the platform allocator (not advised to be called directly).
+
+## File
+
+File contains file utils for modifying the file system. There are two types of file systems:
+
+- Virtual file system: Files that don't really exist in the place they are shown. These could be files loaded in memory, linked from another location or calls that can be filled via function calls (such as retrieving data in some sort of way). The virtual file system is always available.
+  - //access is reserved to represent folders or files that are opened using the file explorer. In the future this function would return //access/0 for example for the file or folder opened there.
+  - //network/x is reserved to represent the Windows file path `\\x` since virtual files replace it implicitly (backslash is replaced by forward slash). This would then access the network by name. This would have to be a separate location to clarify it is doing network operations, which are optional to support from the app's perspective.
+  - //function is reserved to represent user loaded file systems. For example, mounting a zip file to memory and then allowing access to it through regular file system functions. 
+  - Other file names are files that are embedded somewhere in the executable. This could be in the root apk (or an extended apk), the exe, the so file, etc. The file table for this is represented in oiCA file format.
+- Physical file system: Files that really exist in the current working or app directory. The user app has to define `const Bool Platform_useWorkingDirectory = false;` to use an app directory and true for a working directory. App directories are generally used for installation purposes and in this case it is next to the executable. A working directory is used for scripts that use the files in that directory (such as build scripts). The physical file system isn't always available, for example in Web. 
+
+### Functions
+
+The following functions are available to interact with the file system:
+
+- Error **getInfo**(CharString loc, FileInfo*): Get FileInfo that represents the file at loc. For more details on FileInfo, see [OxC3 types Files](types.md#Files).
+- Error **foreach**`(CharString loc, FileCallback callback, void *userData, Bool isRecursive)`: Loop through the folder at loc, if there is no folder at loc it will error. FileCallback is called for each file it finds. If the FileCallback `Error(FileInfo, void*)` returns an Error it will stop searching for more files. If isRecursive is false, it will only index the root of the folder. 
+- Error **remove**(CharString loc, Ns maxTimeout): Remove file and children.
+- Error **add**(CharString loc, EFileType type, Ns maxTimeout): Add file with type (e.g. folder or file).
+- Error **rename**(CharString loc, CharString newFileName, Ns maxTimeout): Rename the file/folder at loc to newFileName. Where newFileName is the name itself, without a path (so it can't move it to another path).
+- Error **move**(CharString loc, CharString directoryName, Ns maxTimeout): Move file/folder from loc to directoryName (full path). It isn't possible to both rename and move in one operation.
+- Error **queryFileObjectCount**(CharString loc, EFileType type, Bool isRecursive, U64 *res): Count all file objects of type. If type is EFileType_Any it will count both files and folders in the directory. If isRecursive is false, it will only count direct children of the folder at loc.
+- Error **queryFileObjectCountAll**(CharString loc, Bool isRecursive, U64 *res): Shortcut for queryFileObjectCount with EFileType_Any.
+- Error **queryFileCount**(CharString loc, Bool isRecursive, U64 *res): Shortcut for queryFileObjectCount with EFileType_File.
+- Error **queryFolderCount**(CharString loc, Bool isRecursive, U64 *res): Shortcut for queryFileObjectCount with EFileType_Folder.
+- Bool **has**(CharString loc): Check if there's any file or folder at loc.
+- Bool **hasType**(CharString loc, EFileType type): Check if there's any file object at loc that matches the type (file or folder).
+- Bool **hasFile**(CharString loc): Shortcut for hasType EFileType_File.
+- Bool **hasFolder**(CharString loc): Shortcut for hasType EFileType_File.
+- Error **write**(Buffer buf, CharString loc, Ns maxTimeout): Write a buffer to a file if the file can be locked in maxTimeout ns.
+- Error **read**(CharString loc, Ns maxTimeout, Buffer *output): Read a file to buffer if the file can be locked in maxTimeout ns.
+- Error **loadVirtual**(CharString loc, const U32 encryptionKey[8]): Load a virtual section with an encryptionKey. Pass encryptionKey as NULL if there's no key needed.
+  - When an encryptionKey is shared (or isn't required), a whole section can be loaded by calling loadVirtual on `//` or `//myLibrary`. Otherwise, every section needs to be loaded individually via `//myLibrary/mySection`. Only if the section is loaded, can the files in it be accessed. `//myLibrary/mySection/*` will then index into the oiCA folder attached into the executable and loaded into memory (decompressed/decrypted).
+- Error **unloadVirtual**(CharString loc): Unload the section(s) at loc. Can unload all by using `//` or a certain library through `//library` as well as an individual section via `//library/section`. 
+- Bool **isVirtualLoaded**(CharString loc): Check if a virtual section is loaded.
+
+### Virtual file system
+
+OxC3 supports a virtual file system that allows baking/preprocessing of external file formats to our own, as well as embedding these files into the exe/apk directly. The executable embeds sections, which can be loaded individually and support dependencies. For example;
+
+```
+myLibrary
+	shaders
+	fonts
+	textures
+myOtherLibrary
+	shaders
+	fonts
+	textures
+```
+
+The example above shows the sections that are supported for our example executable. To access these resources from our application we have to load either the root or the specific sections:
+
+```c
+_gotoIfError(clean, File_loadVirtual("//myLibrary/fonts", NULL));	//Load section.
+_gotoIfError(clean, File_loadVirtual("//myLibrary", NULL));			//Load myLibrary.
+_gotoIfError(clean, File_loadVirtual("//.", NULL));					//Load everything.
+```
+
+These files are decompressed and unencrypted (if they were) and kept in memory, so they can be quickly accessed. They can then be unloaded if they're deemed unimportant.
+
+The example layout above is only useful if the dependencies have very little resources. The moment you have lots of resources (or little RAM) then you probably want to split them up based on how they're accessed. For example; if assets are only used in a certain level then consider splitting up the file structure per level to ensure little RAM is wasted on it. Another example could be splitting up assets based on level environment, so if only all forest environment levels use a certain tree, then it's wasteful to load that for every level. The levels would then reference dependencies to sections and these sections would then be loaded.
+
+When a virtual file system is loaded, it can be accessed the same way as a normal file is loaded. The exception being that write access isn't allowed anymore. The only limitation is that files need both a library and a section folder `//myLibrary/fonts/*` rather than `//myLibrary/*` and the section has to be loaded. To ensure it is loaded, a File_loadVirtual can be called or File_isVirtualLoaded can be called.
+
+The same limitations as with a normal file system apply here; the file names have to be windows compatible and section/library names are even stricter (Nytodecimal only; 0-9A-Za-z$_). These are case insensitive and will likely be transformed to a different casing depending on platform.
+
+The only reserved library names besides the windows ones (NUL, COM, etc.) are: access, function, network. So `//access/...` is reserved for future access to directories and files outside of the working directory and app directory (access has to be allowed through selecting for example from the Windows file explorer). `//function/...` is reserved for future functionality to allow custom functionality to emulate for example old file formats (or loading a zip in memory); the fully resolved path would be passed to a user function to allow custom behavior.
+`//network/..` is reserved for future use to enable the usage of Windows like `\\resolveName` with custom permissions.
+
+#### Usage in CMake
+
+to add the virtual files to your project, you can use the following:
+
+```cmake
+add_virtual_files(TARGET myProject NAME mySection ROOT ${CMAKE_CURRENT_SOURCE_DIR}/res/mySectionFolder SELF ${CMAKE_CURRENT_SOURCE_DIR})
+configure_icon(myProject "${CMAKE_CURRENT_SOURCE_DIR}/res/logo.ico")
+configure_virtual_files(myProject)
+```
+
+Virtual files are then linked into the project.
+
+To add a dependency, use the following:
+
+```cmake
+add_virtual_dependencies(TARGET myProject DEPENDENCIES myDep)
+```
+
+This should be done before the configure_virtual_files and ensures the files for the dependency are present in this project. A dependency itself can't include an icon or use configure_virtual_files; as this is reserved for executables only.
+
+*Note: Dependencies can't be overlapping. So if B and C both include A then including B and C in D won't work.*
 
 ## InputDevice
 
