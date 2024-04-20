@@ -392,7 +392,27 @@ An allocator is a struct that contains the following:
 - FreeFunc: `Bool free(T *ptr, Buffer buf)` where T can be the opaque object type if the function is properly cast.
   - Importantly: Validate if ptr is as expected (if it's not ignored), ensure the length and position of buf is valid before freeing.
 
-## TODO: AllocationBuffer (types/allocation_buffer.h)
+## AllocationBuffer (types/allocation_buffer.h)
+
+An allocation buffer is a physical or virtual representation of allocation units and allocations in it. Generally used to allocate memory, be it GPU or CPU memory. As such, the units represented in the AllocationBuffer aren't necessarily bytes and the buffer is not necessarily mappable to CPU memory. 
+
+An AllocationBuffer is managed through the following:
+
+- Error **create**(U64 size, Bool isVirtual, Allocator alloc, AllocationBuffer *allocationBuffer): Create an address range with the size. If isVirtual is true, the AllocationBuffer's internal buffer will be NULL but will have a size. This is to signal that the range is not directly accessible on the CPU (might represent GPU memory or something else).
+- Error **createRefFromRegion**(Buffer origin, U64 offset, size, Allocator alloc, AllocationBuffer *allocationBuffer): Create a reference into pre-allocated memory.
+- Bool **free**(Allocator alloc): Free the data of the buffer and allocation information.
+
+After this AllocationBuffer is created, allocations can be managed through the following functions:
+
+- Bool **freeBlock**(const U8 *ptr): Free the block located at ptr. Be aware: Passing NULL here is completely valid if it's a virtual address range that has an allocation there. This is because the range is then mapped to [ 0, size > since it doesn't represent any memory. For virtual ranges, this is just an offset as a pointer.
+- Bool **freeAll**(): Free all blocks, but keep the memory itself alive.
+- Error **allocateBlock**(U64 size, alignment, Allocator alloc, const U8 **result): Allocate a block with size and alignment into the current AllocationBuffer. result isn't touched if an error occurred, though it is explicitly set to NULL when there's no more memory in this allocation buffer (and outOfMemory error is returned). Please default to NULL if required, or if it's important to know what kind of allocation failure happened, default the pointer to for example 0x1 and detect if it was modified. If the default pointer was modified, then it indicates out of memory, otherwise a different error occurred. This can be useful to fallback on other allocation strategies (for example, allocating additional space in a separate AllocationBuffer). This function can be used for both virtual and physical memory, though for physical memory the data would be undefined (it's not zeroed), it is recommended to use allocateAndFillBlock for that use case instead.
+- Error **allocateAndFillBlock**(Buffer data, U64 alignment, Allocator alloc, U8 **result): Allocate block with alignment and fill with the data provided (with that same size). This is only available for physical allocations and is the recommended function for physical memory to avoid not correctly initializing the provided data.
+
+It has the members:
+
+- **buffer**: Where the Buffer's pointer doesn't necessarily mean CPU visible memory. This indicates that the unit is also not defined (when NULL), it might represent bytes or something entirely different. If the pointer is not NULL, it represents CPU memory.
+- **allocations**: List of AllocationBufferBlock, where each block has a U64 start, end and alignment.
 
 ## Archive (types/archive.h)
 
@@ -439,7 +459,49 @@ It can be queried through the following:
   - Error **Archive_queryFileEntryCount**(Archive archive, CharString loc, Bool isRecursive, U64 *res,  Allocator alloc)
 - Error **Archive_foreach**(Archive archive, CharString loc, FileCallback callback, void *userData, Bool isRecursive, EFileType type, Allocator alloc): loop over the children of the entry and the entry itself. FileCallback will be called when something is encountered, it can return Error if it should stop searching and takes FileInfo and a void *userData.
 
-## TODO: BufferLayout (types/buffer_layout.h)
+## BufferLayout (types/buffer_layout.h)
+
+A BufferLayout is the layout of the buffer. It doesn't necessarily have to be CPU memory, though when used with the setters, getters and resolve, it will be required. BufferLayout is the generic way of representing data types and how they're laid out, as such, at one point this layout could also represent JSON files.
+
+Consider the following JSON file:
+
+```json
+{
+    "myMember0": 1234, 		//U32
+    "myMember1": 1234.0,	//F64
+    "myMember2": '1',		//C8
+    "myMember3": true,		//Bool
+    "myMember4": {
+        "a": true
+    }
+}
+```
+
+Would represent a tightly packed struct of U32, F64, C8, Bool and a struct with a Bool. It doesn't follow any alignment rules that normal C structs would.
+
+Most behave similar to a C struct, except that dynamically sized arrays exist. These don't allocate any memory in the current struct, but instead have a separate allocation.
+
+As expected, this would generate 6 members; one that's part of myMember4 and the other 5 are part of the root struct. A BufferLayout is a DAG, which means structs always have to have their members defined before they are defined and they can't nest themselves or anything defined after (no recursion).
+
+**Note: Some JSON features aren't properly supported in the current BufferLayout. This is because the JSON format is very complex and not strongly typed, while this format is strongly typed. For example, a field could be either a Bool or a U32, which is not allowed here.** 
+
+### BufferLayoutMember
+
+**BufferLayoutMember** contains the following info (header):
+
+- **typeId** or **structId**. If offsetHiAndIsStruct >> 15 (**isStruct**()), this will include a struct id that represents this member (**getStructId**()). Otherwise, this member is best represented with an ETypeId (**getTypeId**()), which can be matrices, vectors, floats, ints, etc. Currently, only POD type ids are supported here. It'd be invalid to use extended type ids or non pod types.
+- **offset**: U64 stored in both offsetLo and offsetHiAndIsStruct, acquired through **getOffset**(). Represents the offset in the struct it's in. Since this offset is explicitly referenced, it is possible to use a union here.
+- **arrayIndices**: Up to 255 dimensional arrays, though less dimensional should be used when possible due to better performance (less lookups). Mostly useful as 1D, 2D or 3D arrays. Can be 0 if it's not an array. 
+- **nameLength**: How long the name of the member is (up to 255).
+- **stride**: Stride between array elements (up to 4GiB).
+
+That member also contains other data that is allocated with this header. When unpacked, this member expands to **BufferLayoutMemberInfo**:
+
+- **name**: CharString for the struct member name.
+- **arraySizes**: ListU32 where each entry is another dimension. If one of the U32s is 0 it will become a dynamically sized array, so memory is allocated for it dynamically.
+- **typeId**: ETypeId_Undefined if it's a struct, otherwise the same as BufferLayoutMember.
+- **structId**: U32_MAX if it's <u>not</u> a struct, otherwise the same as BufferLayoutMember.
+- **offset, stride:** Same as BufferLayoutMember.
 
 ## CDFList (types/cdf_list.h)
 

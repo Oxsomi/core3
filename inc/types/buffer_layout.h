@@ -110,10 +110,8 @@ typedef struct BufferLayoutStruct {
 } BufferLayoutStruct;
 
 typedef struct BufferLayoutStructInfo {
-
 	CharString name;
 	ListBufferLayoutMemberInfo members;
-
 } BufferLayoutStructInfo;
 
 TList(BufferLayoutStruct);
@@ -126,11 +124,8 @@ BufferLayoutMemberInfo BufferLayoutStruct_getMemberInfo(BufferLayoutStruct layou
 //Buffer layout
 
 typedef struct BufferLayout {
-
 	ListBufferLayoutStruct structs;
-
 	U32 rootStructIndex;
-
 } BufferLayout;
 
 Error BufferLayout_create(Allocator alloc, BufferLayout *layout);
