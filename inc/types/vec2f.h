@@ -134,7 +134,7 @@ F32x2 F32x2_mul2x3(F32x2 v2, F32x2 v2x3[3]);
 
 //Cast from vec2 to vec4
 
-F32x4 F32x2_create2_4(F32x2 a, F32x2 b);
+F32x4 F32x4_create2_2(F32x2 a, F32x2 b);
 
 F32x4 F32x4_create2_1_1(F32x2 a, F32 b, F32 c);
 F32x4 F32x4_create1_2_1(F32 a, F32x2 b, F32 c);

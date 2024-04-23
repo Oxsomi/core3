@@ -435,7 +435,7 @@ Error BufferLayout_createInstance(BufferLayout layout, U64 count, Allocator allo
 	if(result->ptr)
 		return Error_invalidParameter(3, 0, "BufferLayout_createInstance()::result isn't empty, might indicate memleak");
 
-	LayoutPathInfo info = (LayoutPathInfo) { 0 };
+	BufferLayoutPathInfo info = (BufferLayoutPathInfo) { 0 };
 	const Error err = BufferLayout_resolveLayout(layout, CharString_createRefCStrConst("/"), &info, alloc);
 
 	if(err.genericError)
@@ -449,7 +449,7 @@ Error BufferLayout_createInstance(BufferLayout layout, U64 count, Allocator allo
 	return Buffer_createEmptyBytes(bufLen, alloc, result);
 }
 
-Error BufferLayout_resolveLayout(BufferLayout layout, CharString path, LayoutPathInfo *info, Allocator alloc) {
+Error BufferLayout_resolveLayout(BufferLayout layout, CharString path, BufferLayoutPathInfo *info, Allocator alloc) {
 
 	if(!layout.structs.ptr)
 		return Error_nullPointer(0, "BufferLayout_resolveLayout()::layout is empty");
@@ -482,7 +482,7 @@ Error BufferLayout_resolveLayout(BufferLayout layout, CharString path, LayoutPat
 			totalLength = U64_max(arrayStride + m.offset, totalLength);
 		}
 
-		*info = (LayoutPathInfo) {
+		*info = (BufferLayoutPathInfo) {
 			.length = totalLength,
 			.structId = layout.rootStructIndex,
 			.typeId = ETypeId_Undefined
@@ -630,7 +630,7 @@ Error BufferLayout_resolveLayout(BufferLayout layout, CharString path, LayoutPat
 	for (U64 i = (U64)currentArrayDim; i < currentMember.arraySizes.length; ++i)
 		arrayStride *= currentMember.arraySizes.ptr[i];
 
-	*info = (LayoutPathInfo) {
+	*info = (BufferLayoutPathInfo) {
 		.offset = currentOffset,
 		.length = arrayStride,
 		.typeId = currentMember.typeId,
@@ -659,7 +659,7 @@ Error BufferLayout_resolve(
 	if(location->ptr)
 		return Error_invalidParameter(3, 0, "BufferLayout_resolve()::location isn't empty, might indicate memleak");
 
-	LayoutPathInfo info = (LayoutPathInfo) { 0 };
+	BufferLayoutPathInfo info = (BufferLayoutPathInfo) { 0 };
 	const Error err = BufferLayout_resolveLayout(layout, path, &info, alloc);
 
 	if(err.genericError)

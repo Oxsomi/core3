@@ -308,7 +308,95 @@ Helpers for casting while avoiding overflow/underflow or generating NaNs:
   - Error **F32_fromBits**(U64, F32*): Casts raw U64 bits to F32, returns Error if it created NaN or Inf.
   - Error **F64_fromBits**(U64, F64*): Casts raw U64 bits to F64, returns Error if it created NaN or Inf.
 
-## TODO: Vectors (types/vec.h)
+## Vectors (types/vec.h)
+
+There are currently 4 vector types supported:
+
+- I32x2 (ivec2 / int2).
+- F32x2 (vec2 / float2).
+- I32x4 (ivec4 / int4).
+- F32x4 (vec4 / float4).
+- All with either 2 or 4 elements and aligned to 8 and 16 byte boundaries respectively. Reading from misaligned boundaries is unsupported (though it could be done explicitly via load1/load2/etc.).
+
+The operations supported are as follows:
+
+- All vectors:
+
+  - **zero**(), **one**(), **two**(), **negTwo**(), **negOne**(): Constants.
+  - **add**(b), **sub**(b), **mul**(b), **div**(b): +-*/ respectively.
+  - **eq**(b), **neq**(b), **lt**(b), **gt**(b), **geq**(b), **leq**(b): Element-wise ==, !=, <, >, >=, <=.
+  - **all**(), **any**(): Check if all or any are non zero.
+  - **complement**(): 1 - self.
+  - **negate**(): -self.
+  - **pow2**(): self * self.
+  - **reduce**(): Sum of all components.
+  - **sign**(): Elementwise -1 if <0, otherwise 1.
+  - **abs**(): Absolute value (<0 ? -self : self).
+  - **mod**(d): self % d.
+  - **min**(b), **max**(b), **clamp**(mi, ma): Ensure self is in bounds. Min picks the smallest between self and b, max picks the biggest and clamp does both.
+  - **eqN**(b), **neqN**(b): All components are equal or not equal. Where N is 2 or 4 depending on vector type.
+  - **xx2**(T x) or **xxxx4**(T x): Creates a vector with x as all components. Depending on if it's a 2D or 4D vector.
+  - **createN**(...): Create a vector with N elements set to the values passed. All other elements are 0 (if present). For 4-element vectors that would be create1-4 while 2-element vectors only have 1-2. E.g. create3(x, y, z).
+  - **loadN**(...): createN but operating on memory. This is not the same as force casting the address, as alignment requirements might not be satisfied (though this one can be misaligned).
+  - *Swizzles*; foreach element: letter[i]. Example: **xyzw**() for 4 element vectors and **xy**() for 2 element vectors. **wzyx**() would reverse the vector's elements (x = w, y = z, z = y, w = x).
+  - *Element access*: letter[i], **set**(i, t) to set element at i or **get**(i) to get the element at i. For example: **x**() to get x or get(0) to get 0 (x).
+  - *Casting*: Same element type are always castable (e.g. I32x2 to I32x4 and vice versa) and same vector size are always castable (e.g. I32x2 to F32x2). However, F32x4 to I32x2 for example would require two casts (F32x4 -> I32x4 -> I32x2). Casting a smaller vector size to bigger (I32x2 -> I32x4) would null out all other elements. This can be done via **fromT**() e.g. **F32x4_fromI32x4(**a).
+  - *Bit casting*: Different element type but same vector bit size are always bit castable. E.g. I32x2 to F32x2 (vice versa) and I32x4 to F32x4 (vice versa). Through **bitsT**(a) e.g. **F32x2_bitsI32x2**(a). This will reinterpret the raw bits from int to float or vice versa.
+- 4-element vectors:
+  - Swizzles with only 2 components are possible and will truncate to a vec2. Example: xy() will become a vec2 while xyzw() stays a vec4.
+  - **trunc2**(), **trunc3**(): Truncate everything except the first 2 or 3 elements.
+  - **create2_2**(Tx2 a, Tx2 b): Vector of a.x, a.y, b.x, b.y.
+  - **create2_1_1**(Tx2 a, T b, T c): Vector of a.x, a.y, b, c.
+  - **create1_2_1**(T a, Tx2 b, T c): Vector of a, b.x, b.y, c.
+  - **create1_1_2**(T a, T b, Tx2 c): Vector of a, b, c.x, c.y.
+  - **create2_1**(Tx2 a, T b): Vector of a.x, a.y, b.
+  - **create1_2**(T a, Tx2 b): Vector of a, b.x, b.y.
+- Int vectors:
+
+  - **or**(b), **and**(b), **xor**(b): |&^ respectively.
+  - **not**(): ~self.
+  - **swapEndianness**(): Swap elements from endianness (e.g. big to little or little to big).
+  - lsh: Left shift (<<) and rsh: Right shift (>>):
+    - **(lr)sh32**(U8): Shifts N bits left or right.
+- Float vectors:
+
+  - **inverse**(): 1 / self.
+  - **ceil**(), **floor**(), **round**(): Round float up, down or to closest value.
+  - **pow**(e): self^e.
+  - **fract**(): Fraction.
+  - **acos**(), **cos**(), **asin**(v), **sin**(), **atan**(), **tan**(): Trig functions.
+  -  **atan2**(x): Atan2 between self (y) and x.
+  - **loge**(), **log10**(), **log2**(), **exp**(), **exp10**(), **exp2**(): Log and exponent functions.
+  - **lerp**(b, perc): Lerp self to b (b when perc=1, a when perc=0).
+  - **saturate**(): Clamp a between 0 and 1.
+  - **sqrt**(), **rsqrt**(): Square root and 1 / squareRoot.
+  - **dotN**(b), **satDotN**(b): Dot product between self and b with N elements. For 2D vectors N=2 is implied (so N is not specified) and for 4D can be 2, 3 or 4. satDot is the saturated dot product.
+  - **sqLenN**(), **lenN**(), **normalizeN**(): Get the squared length, length or normalize the vector. For 2D vectors N=2 is implied (so N is not specified) and for 4D can be 2, 3 or 4.
+  - **reflectN**(n): Reflect self around n. For 2D vectors N=2 is implied (so N is not specified) and for 4D can be 2, 3 or 4.
+- I32x4:
+  - lsh: Left shift (<<) and rsh: Right shift (>>):
+    - **(lr)sh64**(U8): Reinterprets as a U64x2 and shifts N bits left or right.
+    - **(lr)sh128**(U8): Reinterprets as a U128 and shifts N bits left or right.
+    - **(lr)shByte**(U8): Reinterprets as U128 and shift 8 bits left or right N times.
+  - **addI64x2**(b): Reinterprets as I64x2 and adds together into a I64x2.
+  - **mulU32x2AsU64x2**(b): Reinterprets as U32x2 and results into a U64x2 after multiplication (keeps overflow).
+  - **createFromU64x2**(U64, U64): Create I32x4 by reinterpreting two U64s.
+  - **blend**(b, U8 xyzw): Select a or b depending on xyzw. If xyzw & 1, it will pick b.x for ret.x, if xyzw & 2, it will pick b.y for ret.y, etc. Otherwise it will pick self[i].
+  - **combineRightShift**(b, U8 v): Combine self and b into one vector (e.g. b,a as an 8D vector), then shift with v elements to the right and truncate to a 4D vector.
+    - v = 0: b, v = 4: a, v >= 7: 0.
+    - v = 1: self.w, b.x, b.y, b.z.
+    - v = 2: self.z, self.w, b.x, b.y.
+    - etc.
+  - **shuffleBytes**(I32x4 b): Reinterpret as I8x16 and shuffle bytes in a using the I8x16 selector in b. E.g. for 16: ret8[i] = b8[i] >> 7 ? 0 : self8[b8[i] & 0xF];
+- F32x4:
+  - **srgba8Unpack**(U32) and **rgb8Unpack**(U32): Unpack an 8-bit unorm rgb(a) into a vector. srgba8 preserves alpha and does gamma correction, while rgb8 discards alpha.
+  - U32 **srgba8Pack**() and U32 **rgb8Pack**(): Pack into an 8-bit unorm rgb(a) from a vector. srgba8 preserves alpha and does gamma correction, while rgb8 discards alpha.
+  - **cross3**(F32x4 b): Cross self with b.
+  - **mul3x3**(F32x4 v3x3[3]): Multiply self (as F32x3) by a 3x3 matrix (orientation only).
+  - **mul3x4**(F32x4 v3x4[4]): Multiply self (as F32x3) by a 3x4 matrix (orientation and translation).
+- F32x2:
+  - **mul2x2**(F32x2 v2x2[2]): Multiply self by a 2x2 matrix (orientation only).
+  - **mul2x3**(F32x2 v2x3[3]): Multiply self by a 2x3 matrix (orientation and translation).
 
 ## Error (types/error.h)
 
@@ -489,11 +577,13 @@ As expected, this would generate 6 members; one that's part of myMember4 and the
 
 **BufferLayoutMember** contains the following info (header):
 
-- **typeId** or **structId**. If offsetHiAndIsStruct >> 15 (**isStruct**()), this will include a struct id that represents this member (**getStructId**()). Otherwise, this member is best represented with an ETypeId (**getTypeId**()), which can be matrices, vectors, floats, ints, etc. Currently, only POD type ids are supported here. It'd be invalid to use extended type ids or non pod types.
+- **typeId** or **structId**. If offsetHiAndIsStruct >> 15 (**isStruct**()), this will include a struct id that represents this member (**getStructId**()). Otherwise, this member is represented with an ETypeId (**getTypeId**()), which can be matrices, vectors, floats, ints, etc. Currently, only POD type ids are supported here. It'd be invalid to use extended type ids or non pod types.
 - **offset**: U64 stored in both offsetLo and offsetHiAndIsStruct, acquired through **getOffset**(). Represents the offset in the struct it's in. Since this offset is explicitly referenced, it is possible to use a union here.
 - **arrayIndices**: Up to 255 dimensional arrays, though less dimensional should be used when possible due to better performance (less lookups). Mostly useful as 1D, 2D or 3D arrays. Can be 0 if it's not an array. 
 - **nameLength**: How long the name of the member is (up to 255).
 - **stride**: Stride between array elements (up to 4GiB).
+
+### BufferLayoutMemberInfo
 
 That member also contains other data that is allocated with this header. When unpacked, this member expands to **BufferLayoutMemberInfo**:
 
@@ -502,6 +592,80 @@ That member also contains other data that is allocated with this header. When un
 - **typeId**: ETypeId_Undefined if it's a struct, otherwise the same as BufferLayoutMember.
 - **structId**: U32_MAX if it's <u>not</u> a struct, otherwise the same as BufferLayoutMember.
 - **offset, stride:** Same as BufferLayoutMember.
+
+The reason this is not just the same as BufferLayoutMember, is because that is used for storage, while this is for ease of use.
+
+It can be created through the following:
+
+- **create**(ETypeId typeId, CharString name, U64 offset, U32 stride): Creates a member as a POD type (such as matrix, vector, float, int, Bool, etc.).
+  - **createArray** can be used to turn it into an array. With ListU32 arraySizes passed after the name.
+- **createStruct**(U32 structId, CharString name, U64 offset, U32 stride): Creates member as a struct type.
+  - **createStructArray** can be used to turn it into an array. With ListU32 arraySizes passed after the name.
+
+### BufferLayoutStruct
+
+BufferLayoutStruct is the packed version of BufferLayoutStructInfo and it contains the actual data for the members that are stored in it. It has the following properties:
+
+- **id**: Used to refer to this struct by other structs.
+- **memberCount**: Only up to 65535 other members are allowed in a struct.
+- **nameLength**: Name of the struct up to 255 characters.
+- **data**: The data of the structName, BufferLayoutMember[memberCount] and then (U32 arrayIndices[member.arrayIndices], C8 name[member.nameLength])[memberCount].
+
+The following helper functions can access the data:
+
+- **getName**(), **getMember**(memberId), **getMemberInfo**(memberId): Get name, member and member info. The member info is a bit more complicated, so getMember should be used whenever possible.
+
+#### BufferLayoutStructInfo
+
+A BufferLayoutStruct can be unpacked into a BufferLayoutStructInfo. It then has a **name** and **members** (List of BufferLayoutMemberInfo).
+
+### BufferLayoutPathInfo
+
+BufferLayouts use paths to resolve a CharString to a Buffer. This buffer is either part of the main buffer or is an additional allocation for the dynamically allocated arrays. These paths are quite similar to file paths, except for the following:
+
+- Most characters are allowed, unlike file paths.
+- Backwards paths aren't supported. `..` is a member called `..` and `.` is a member called `.`.
+- Backslash `\` isn't the same as slash `/`. Slash is a separator, backslash is an escape.
+- `\/` is used to escape slashes and `\\` is used to escape backslashes.
+- Paths are case sensitive.
+- `a/0` could mean either a's member named 0 or the 0th index of a (e.g. no concept of a[0] vs a/0). 
+- Leading slashes are ignored, so `/a/0` and `a/0` are the same.
+- Empty member names are invalid, so `//` is invalid.
+- Array indices can be given by either:
+  - Hex (0x[0-9A-Fa-f]+)
+  - Octal (0o[0-7]+)
+  - Binary (0b[0-1]+)
+  - Decimal ([0-9]+)
+  - Nytodecimal (0n[0-9A-Za-z_$]+)
+  - E.g. `a/0` and `a/0x0` are the same.
+
+This concept is resolved by BufferLayout_resolveLayout as the following parameters:
+
+- **offset**, **length**: Information about the buffer.
+- **typeId**, **structId**: Type information.
+- **leftoverArray**: Information about how long the array it references is.
+
+### BufferLayout
+
+Is a List of BufferLayoutStruct (structs) and a U32 rootStructIndex. The root struct index points to the struct that the BufferLayout can instantiate. A BufferLayout is managed through the following:
+
+- Error **create**(Allocator, BufferLayout*): Create an empty buffer layout.
+- Bool **free**(Allocator, BufferLayout*): Free the buffer layout (structs).
+- Error **createStruct**(BufferLayoutStructInfo, Allocator, U32 *id): Creates & packs a new BufferLayoutStruct and returns the id.
+- Error **assignRootStruct**(U32 id): Make the specified struct the root of the buffer layout. This means that the buffer layout can be instantiated into real data.
+
+When a BufferLayout is fully qualified (e.g. it has a root struct), it can be initiated through:
+
+- Error **createInstance**(U64 count, Allocator, Buffer*): Allocates a buffer of the specified amount.
+
+To resolve a path to a location, the resolve function or setters/getters can be used:
+
+- Error **resolve**(Buffer instance, BufferLayout, CharString path, Buffer *output, Allocator): Resolve the BufferLayout instantiated as Buffer into the output.
+- Error **resolveLayout**(BufferLayout layout, CharString path, BufferLayoutPathInfo *info, Allocator alloc): Resolve layout as BufferLayoutPathInfo, which already has additional info about where it is located. This should be cached when possible, to skip parsing the path.
+- Error **setData**(Buffer instance, BufferLayout, CharString path, Buffer data, Allocator): Set the data to the data passed with a buffer copy.
+- Error **getData**(Buffer instance, BufferLayout, CharString path, Buffer *currentData, Allocator): Get the data pointed to by path. This does not copy.
+- Error **setT**(Buffer, BufferLayout, CharString path, T t, Allocator): Set the path to t, where T is one of the predefined types such as (U/I)(8/16/32/64), C8, Bool, F32, F64, (F/I)32x(2/4). 
+- Error **getT**(Buffer, BufferLayout, CharString path, T *t, Allocator): Copy resolved buffer location into t. See setT.
 
 ## CDFList (types/cdf_list.h)
 

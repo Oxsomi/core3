@@ -157,16 +157,16 @@ Error BufferLayout_createInstance(BufferLayout layout, U64 count, Allocator allo
 //Array indices can be given by either hex (0x[0-9A-Fa-f]+), octal (0o[0-7]+),
 //binary 0b[0-1]+, decimal ([0-9]+) or Nytodecimal (0n[0-9A-Za-z_$]+).
 
-typedef struct LayoutPathInfo {
+typedef struct BufferLayoutPathInfo {
 
 	U64 offset, length;
 	ETypeId typeId;
 	U32 structId;
 	ListU32 leftoverArray;		//How long the remainder of array is
 
-} LayoutPathInfo;
+} BufferLayoutPathInfo;
 
-Error BufferLayout_resolveLayout(BufferLayout layout, CharString path, LayoutPathInfo *info, Allocator alloc);
+Error BufferLayout_resolveLayout(BufferLayout layout, CharString path, BufferLayoutPathInfo *info, Allocator alloc);
 
 Error BufferLayout_resolve(
 	Buffer buffer,

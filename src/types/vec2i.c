@@ -67,6 +67,9 @@ I32x2 I32x2_swapEndianness(I32x2 v) {
 	return I32x2_create2(I32_swapEndianness(I32x2_x(v)), I32_swapEndianness(I32x2_y(v)));
 }
 
+I32x2 I32x2_lsh32(I32x2 a, U8 bits) { return I32x2_create2(I32x2_x(a) << bits, I32x2_y(a) << bits); }
+I32x2 I32x2_rsh32(I32x2 a, U8 bits) { return I32x2_create2(I32x2_x(a) >> bits, I32x2_y(a) >> bits); }
+
 void I32x2_setX(I32x2 *a, I32 v) { if(a) *a = I32x2_create2(v, I32x2_y(*a)); }
 void I32x2_setY(I32x2 *a, I32 v) { if(a) *a = I32x2_create2(I32x2_x(*a), v); }
 

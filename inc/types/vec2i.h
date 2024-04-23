@@ -115,3 +115,6 @@ I32x4 I32x4_create1_1_2(I32 a, I32 b, I32x2 c);
 
 I32x4 I32x4_create2_1(I32x2 a, I32 b);
 I32x4 I32x4_create1_2(I32 a, I32x2 b);
+
+I32x2 I32x2_lsh32(I32x2 a, U8 bits);		//Left shifting each I32 individually per bit
+I32x2 I32x2_rsh32(I32x2 a, U8 bits);		//Right shifting each I32 individually per bit

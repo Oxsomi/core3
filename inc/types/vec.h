@@ -25,7 +25,7 @@
 //Helper function to insert a simple non SIMD operation
 //Useful if there's no SIMD function that's faster than native
 
-#define NONE_OP_SELF_T(T, N, ...) {        \
+#define NONE_OP_SELF_T(T, N, ...) {			\
                                             \
 	T res = (T) { 0 };                      \
 	                                        \
