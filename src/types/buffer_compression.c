@@ -42,7 +42,7 @@ Error Brotli_compress(
 	if(quality != 11)
 		return Error_invalidParameter(2, 0, 0);
 
-	Bool isUTF8 = Buffer_isUtf8(target, 0.75);
+	Bool isUTF8 = Buffer_isUTF8(target, 0.75);
 
 	//Setup constants
 

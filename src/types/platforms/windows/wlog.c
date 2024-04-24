@@ -265,7 +265,7 @@ void Log_log(Allocator alloc, ELogLevel lvl, ELogOptions options, CharString arg
 	Bool panic = false;
 
 	if (
-		CharString_toUtf16(arg, alloc, &copy).genericError ||
+		CharString_toUTF16(arg, alloc, &copy).genericError ||
 		(hasNewLine && ListU16_insert(&copy, copy.length - 1, (U16) L'\n', alloc).genericError)
 	) {
 

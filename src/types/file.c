@@ -56,7 +56,7 @@ Error File_resolve(
 	if(result->ptr)
 		return Error_invalidOperation(0, "File_resolve()::result is not NULL, this might indicate a memleak");
 
-	CharStringList res = (CharStringList) { 0 };
+	ListCharString res = (ListCharString) { 0 };
 	Error err = Error_none();
 
 	if(!CharString_isValidFilePath(loc))
@@ -110,13 +110,13 @@ Error File_resolve(
 
 	gotoIfError(clean, CharString_splitSensitive(*result, '/', alloc, &res))
 
-	U64 realSplitLen = res.length;		//We have to reset this before deallocating the CharStringList!
+	U64 realSplitLen = res.length;
 
 	CharString back = CharString_createRefCStrConst("..");
 
 	for (U64 i = 0; i < res.length; ++i) {
 
-		//We pop from CharStringList since it doesn't change anything
+		//We pop from ListCharString since it doesn't change anything
 		//Starting with a / is valid with local files, so don't remove it. (not with virtual files)
 		//Having multiple // after each other means empty file this is invalid.
 		//So both empty file and . resolve to nothing
@@ -129,14 +129,14 @@ Error File_resolve(
 			//Move to left
 
 			for (U64 k = res.length - 1; k > i; --k)
-				res.ptr[k - 1] = res.ptr[k];			//This is OK, we're dealing with refs from split
+				res.ptrNonConst[k - 1] = res.ptr[k];			//This is OK, we're dealing with refs from split
 
 			--i;			//Ensure we keep track of the removed element
 			--res.length;
 			continue;
 		}
 
-		//In this case, we have to pop CharStringList[j], so that's only possible if that's still there
+		//In this case, we have to pop ListCharString[j], so that's only possible if that's still there
 
 		if (CharString_equalsStringSensitive(res.ptr[i], back)) {
 
@@ -148,9 +148,9 @@ Error File_resolve(
 			}
 
 			for (U64 k = res.length - 1; k > i + 1; --k)
-				res.ptr[k - 2] = res.ptr[k];			//This is OK, we're dealing with refs from split
+				res.ptrNonConst[k - 2] = res.ptr[k];			//This is OK, we're dealing with refs from split
 
-			i -= 2;										//Ensure we keep track of the removed element
+			i -= 2;												//Ensure we keep track of the removed element
 			res.length -= 2;
 			continue;
 		}
@@ -188,16 +188,16 @@ Error File_resolve(
 
 	CharString tmp = CharString_createNull();
 
-	if ((err = CharStringList_concat(res, '/', alloc, &tmp)).genericError) {
+	if ((err = ListCharString_concat(res, '/', alloc, &tmp)).genericError) {
 		res.length = realSplitLen;
-		CharStringList_free(&res, alloc);
+		ListCharString_free(&res, alloc);
 	}
 
 	CharString_free(result, alloc);		//This can't be done before concat, because the string is still in use.
 	*result = tmp;
 
 	res.length = realSplitLen;
-	CharStringList_free(&res, alloc);
+	ListCharString_free(&res, alloc);
 
 	//Check if we're an absolute or relative path
 
@@ -249,7 +249,7 @@ Error File_resolve(
 	return Error_none();
 
 clean:
-	CharStringList_free(&res, alloc);
+	ListCharString_free(&res, alloc);
 	CharString_free(result, alloc);
 	return err;
 }

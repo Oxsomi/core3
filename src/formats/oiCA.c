@@ -557,7 +557,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 			toEncrypt,
 			realHeader,
 
-			EBufferEncryptionType_Aes256Gcm,
+			EBufferEncryptionType_AES256GCM,
 
 			EBufferEncryptionFlags_GenerateIv | (b ? EBufferEncryptionFlags_GenerateKey : EBufferEncryptionFlags_None),
 			b ? NULL : caFile.settings.encryptionKey,
@@ -678,7 +678,7 @@ Error CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFi
 		gotoIfError(clean, Buffer_decrypt(
 			filePtr,
 			Buffer_createRefConst(file.ptr, headerLen),
-			EBufferEncryptionType_Aes256Gcm,
+			EBufferEncryptionType_AES256GCM,
 			encryptionKey,
 			tag,
 			iv

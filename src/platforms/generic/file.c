@@ -77,7 +77,7 @@
 
 		ListU16 utf8 = (ListU16) { 0 };
 
-		if (CharString_toUtf16x(str, &utf8).genericError)
+		if (CharString_toUTF16x(str, &utf8).genericError)
 			return -1;
 
 		const I32 res = RemoveDirectoryW((const wchar_t*)utf8.ptr) ? 0 : -1;
@@ -321,7 +321,7 @@ clean:
 Error File_add(CharString loc, EFileType type, Ns maxTimeout) {
 
 	CharString resolved = CharString_createNull();
-	CharStringList str = (CharStringList) { 0 };
+	ListCharString str = (ListCharString) { 0 };
 	FileInfo info = (FileInfo) { 0 };
 	Error err = Error_none();
 
@@ -402,7 +402,7 @@ Error File_add(CharString loc, EFileType type, Ns maxTimeout) {
 				CharString_setAt(resolved, CharString_length(parent) + 1, prev);
 		}
 
-		CharStringList_freex(&str);
+		ListCharString_freex(&str);
 	}
 
 	//Create folder
@@ -418,7 +418,7 @@ Error File_add(CharString loc, EFileType type, Ns maxTimeout) {
 clean:
 	FileInfo_freex(&info);
 	CharString_freex(&resolved);
-	CharStringList_freex(&str);
+	ListCharString_freex(&str);
 	return err;
 }
 
@@ -753,7 +753,7 @@ Error File_virtualOp(CharString loc, Ns maxTimeout, VirtualFileFunc f, void *use
 
 	err =
 		isWrite ? Error_constData(
-			1, 0, 
+			1, 0,
 			"File_virtualOp()::isWrite is disallowed when acting on virtual files "
 			"(except //access/*, //network/* or //function/*)"
 		) : (

@@ -26,16 +26,16 @@ File contains file utils for modifying the file system. There are two types of f
 - Virtual file system: Files that don't really exist in the place they are shown. These could be files loaded in memory, linked from another location or calls that can be filled via function calls (such as retrieving data in some sort of way). The virtual file system is always available.
   - //access is reserved to represent folders or files that are opened using the file explorer. In the future this function would return //access/0 for example for the file or folder opened there.
   - //network/x is reserved to represent the Windows file path `\\x` since virtual files replace it implicitly (backslash is replaced by forward slash). This would then access the network by name. This would have to be a separate location to clarify it is doing network operations, which are optional to support from the app's perspective.
-  - //function is reserved to represent user loaded file systems. For example, mounting a zip file to memory and then allowing access to it through regular file system functions. 
+  - //function is reserved to represent user loaded file systems. For example, mounting a zip file to memory and then allowing access to it through regular file system functions.
   - Other file names are files that are embedded somewhere in the executable. This could be in the root apk (or an extended apk), the exe, the so file, etc. The file table for this is represented in oiCA file format.
-- Physical file system: Files that really exist in the current working or app directory. The user app has to define `const Bool Platform_useWorkingDirectory = false;` to use an app directory and true for a working directory. App directories are generally used for installation purposes and in this case it is next to the executable. A working directory is used for scripts that use the files in that directory (such as build scripts). The physical file system isn't always available, for example in Web. 
+- Physical file system: Files that really exist in the current working or app directory. The user app has to define `const Bool Platform_useWorkingDirectory = false;` to use an app directory and true for a working directory. App directories are generally used for installation purposes and in this case it is next to the executable. A working directory is used for scripts that use the files in that directory (such as build scripts). The physical file system isn't always available, for example in Web.
 
 ### Functions
 
 The following functions are available to interact with the file system:
 
 - Error **getInfo**(CharString loc, FileInfo*): Get FileInfo that represents the file at loc. For more details on FileInfo, see [OxC3 types Files](types.md#Files).
-- Error **foreach**`(CharString loc, FileCallback callback, void *userData, Bool isRecursive)`: Loop through the folder at loc, if there is no folder at loc it will error. FileCallback is called for each file it finds. If the FileCallback `Error(FileInfo, void*)` returns an Error it will stop searching for more files. If isRecursive is false, it will only index the root of the folder. 
+- Error **foreach**`(CharString loc, FileCallback callback, void *userData, Bool isRecursive)`: Loop through the folder at loc, if there is no folder at loc it will error. FileCallback is called for each file it finds. If the FileCallback `Error(FileInfo, void*)` returns an Error it will stop searching for more files. If isRecursive is false, it will only index the root of the folder.
 - Error **remove**(CharString loc, Ns maxTimeout): Remove file and children.
 - Error **add**(CharString loc, EFileType type, Ns maxTimeout): Add file with type (e.g. folder or file).
 - Error **rename**(CharString loc, CharString newFileName, Ns maxTimeout): Rename the file/folder at loc to newFileName. Where newFileName is the name itself, without a path (so it can't move it to another path).
@@ -52,7 +52,7 @@ The following functions are available to interact with the file system:
 - Error **read**(CharString loc, Ns maxTimeout, Buffer *output): Read a file to buffer if the file can be locked in maxTimeout ns.
 - Error **loadVirtual**(CharString loc, const U32 encryptionKey[8]): Load a virtual section with an encryptionKey. Pass encryptionKey as NULL if there's no key needed.
   - When an encryptionKey is shared (or isn't required), a whole section can be loaded by calling loadVirtual on `//` or `//myLibrary`. Otherwise, every section needs to be loaded individually via `//myLibrary/mySection`. Only if the section is loaded, can the files in it be accessed. `//myLibrary/mySection/*` will then index into the oiCA folder attached into the executable and loaded into memory (decompressed/decrypted).
-- Error **unloadVirtual**(CharString loc): Unload the section(s) at loc. Can unload all by using `//` or a certain library through `//library` as well as an individual section via `//library/section`. 
+- Error **unloadVirtual**(CharString loc): Unload the section(s) at loc. Can unload all by using `//` or a certain library through `//library` as well as an individual section via `//library/section`.
 - Bool **isVirtualLoaded**(CharString loc): Check if a virtual section is loaded.
 
 ### Virtual file system
@@ -237,7 +237,7 @@ To create a Window, first a WindowManager has to be created. This is a single th
 | Linux    | Yes                     | Yes              |
 | Web      | **No**                  | Yes              |
 
-As a recommendation, try to keep only one WindowManager and one physical window unless only desktop is targeted. Keep 1 WindowManager per thread max. New window creation is only supported on desktop, on other platforms it is only possible to fill existing windows (e.g. the current app window or currently existing canvas windows). 
+As a recommendation, try to keep only one WindowManager and one physical window unless only desktop is targeted. Keep 1 WindowManager per thread max. New window creation is only supported on desktop, on other platforms it is only possible to fill existing windows (e.g. the current app window or currently existing canvas windows).
 
 Available functions:
 
@@ -247,7 +247,7 @@ Available functions:
   - void **onDraw**(WindowManager*) called after drawing and updating all windows and after manager update.
   - void **onUpdate**(WindowManager*, F64) called before onDraw (manager) and after updating/drawing all windows.
   - After use, call free() on it.
-- **isAccessible**() if the WindowManager is accessible by the current calling thread. 
+- **isAccessible**() if the WindowManager is accessible by the current calling thread.
 - Bool **supportsFormat**(EWindowFormat format) where EWindowFormat is one of BGRA8 (always supported), BGR10A2, RGBA16f, RGBA32f (rarely supported).
 - Error **wait**() wait for all current windows to exit. If they are physical windows, this means the user (or program) has to close them. If they are virtual windows then the program has to close them explicitly (for example after finishing the renders).
 - **createWindow** and **freeWindow** are specified in Window.
@@ -256,7 +256,7 @@ Members:
 
 - U64 **owningThread**; the thread that owns the WindowManager is the only one allowed to interact with it.
 - All of these members are illegal to read if the owningThread is not the same as the current calling thread id:
-  - U32 **isActive**; value that is set to WindowManager_magic to indicate it's active. 
+  - U32 **isActive**; value that is set to WindowManager_magic to indicate it's active.
   - ListWindowPtr **windows**; the currently active windows.
   - WindowManagerCallbacks **callbacks**; the callbacks as mentioned in the create function.
   - Buffer **extendedData**; user data that can be initialized in create with the size provided in the create function.
@@ -280,7 +280,7 @@ A window has to be managed on the same thread as a WindowManager, through the fo
   - EWindowHint must be one of the following flags:
     - AllowFullscreen (0), DisableResize (1), ForceFullscreen (2), AllowBackgroundUpdates (3), ProvideCPUBuffer (4).
     - Where default is: AllowFullscreen.
-  - title must not exceed 260 C8s. 
+  - title must not exceed 260 C8s.
   - EWindowFormat is one of BGRA8 (always supported), BGR10A2, RGBA16f, RGBA32f (rarely supported).
   - extendedDataSize is the size for the buffer that will get allocated to represent the window.
   - WindowCallbacks define the window callbacks. The following are available:
@@ -323,7 +323,7 @@ It has the following properties:
 - **devices**: List of InputDevice that are registered to the Window.
 - **monitors**: List of Monitor that the Window is visible on.
 - **extendedData**: User data initialized by onCreate (though the buffer is already allocated by the create function).
-- **buffer**: Temporary window data that will be used only for a super short period. For example, WM_CHAR could send two messages that correspond with one UTF16 character. This buffer will be used to store it for a short period of time. 
+- **buffer**: Temporary window data that will be used only for a super short period. For example, WM_CHAR could send two messages that correspond with one UTF16 character. This buffer will be used to store it for a short period of time.
 
 ### Monitor (TODO: OxC3 0.3)
 

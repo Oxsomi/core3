@@ -32,16 +32,16 @@ Error CharString_createDecx(U64 v, U8 leadingZeros, CharString *result);
 Error CharString_createOctx(U64 v, U8 leadingZeros, CharString *result);
 Error CharString_createBinx(U64 v, U8 leadingZeros, CharString *result);
 Error CharString_createFromUTF16x(const U16 *ptr, U64 max, CharString *result);
-Error CharString_toUtf16x(CharString s, ListU16 *arr);
+Error CharString_toUTF16x(CharString s, ListU16 *arr);
 
-Error CharString_splitx(CharString s, C8 c, EStringCase casing, CharStringList *result);
-Error CharString_splitStringx(CharString s, CharString other, EStringCase casing, CharStringList *result);
-Error CharString_splitLinex(CharString s, CharStringList *result);
+Error CharString_splitx(CharString s, C8 c, EStringCase casing, ListCharString *result);
+Error CharString_splitStringx(CharString s, CharString other, EStringCase casing, ListCharString *result);
+Error CharString_splitLinex(CharString s, ListCharString *result);
 
-Error CharString_splitSensitivex(CharString s, C8 c, CharStringList *result);
-Error CharString_splitStringSensitivex(CharString s, CharString other, CharStringList *result);
-Error CharString_splitInsensitivex(CharString s, C8 c, CharStringList *result);
-Error CharString_splitStringInsensitivex(CharString s, CharString other, CharStringList *result);
+Error CharString_splitSensitivex(CharString s, C8 c, ListCharString *result);
+Error CharString_splitStringSensitivex(CharString s, CharString other, ListCharString *result);
+Error CharString_splitInsensitivex(CharString s, C8 c, ListCharString *result);
+Error CharString_splitStringInsensitivex(CharString s, CharString other, ListCharString *result);
 
 Error CharString_resizex(CharString *str, U64 length, C8 defaultChar);
 Error CharString_reservex(CharString *str, U64 length);
@@ -88,18 +88,13 @@ Error CharString_findAllStringSensitivex(CharString s, CharString other, ListU64
 Error CharString_findAllInsensitivex(CharString s, C8 c, ListU64 *result);
 Error CharString_findAllStringInsensitivex(CharString s, CharString other, ListU64 *result);
 
-Bool CharStringList_freex(CharStringList *arr);
+Bool ListCharString_freeUnderlyingx(ListCharString *arr);
+Error ListCharString_createCopyUnderlyingx(ListCharString toCopy, ListCharString *arr);
 
-Error CharStringList_createx(U64 length, CharStringList *result);
-Error CharStringList_createCopyx(CharStringList toCopy, CharStringList *arr);
+Error ListCharString_combinex(ListCharString arr, CharString *result);
 
-Error CharStringList_setx(CharStringList arr, U64 i, CharString str);
-Error CharStringList_unsetx(CharStringList arr, U64 i);
-
-Error CharStringList_combinex(CharStringList arr, CharString *result);
-
-Error CharStringList_concatx(CharStringList arr, C8 between, CharString *result);
-Error CharStringList_concatStringx(CharStringList arr, CharString between, CharString *result);
+Error ListCharString_concatx(ListCharString arr, C8 between, CharString *result);
+Error ListCharString_concatStringx(ListCharString arr, CharString between, CharString *result);
 
 Error CharString_formatx(CharString *result, const C8 *format, ...);
 Error CharString_formatVariadicx(CharString *result, const C8 *format, va_list args);

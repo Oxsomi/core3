@@ -87,17 +87,15 @@ Bool DLFile_free(DLFile *dlFile, Allocator alloc) {
 	if(!dlFile || !DLFile_isAllocated(*dlFile))
 		return true;
 
-	for (U64 i = 0; i < DLFile_entryCount(*dlFile); ++i)
+	if (dlFile->settings.dataType != EDLDataType_Ascii) {
 
-		if(dlFile->settings.dataType == EDLDataType_Ascii)
-			CharString_free(&dlFile->entryStrings.ptrNonConst[i], alloc);
+		for (U64 i = 0; i < DLFile_entryCount(*dlFile); ++i)
+			Buffer_free(&dlFile->entryBuffers.ptrNonConst[i], alloc);
 
-		else Buffer_free(&dlFile->entryBuffers.ptrNonConst[i], alloc);
-
-	if(dlFile->settings.dataType != EDLDataType_Ascii)
 		ListBuffer_free(&dlFile->entryBuffers, alloc);
+	}
 
-	else ListCharString_free(&dlFile->entryStrings, alloc);
+	else ListCharString_freeUnderlying(&dlFile->entryStrings, alloc);
 
 	*dlFile = (DLFile) { 0 };
 	return true;
@@ -206,21 +204,21 @@ Error DLFile_addEntryUTF8(DLFile *dlFile, Buffer entryBuf, Allocator alloc) {
 	if(dlFile->settings.dataType != EDLDataType_UTF8)
 		return Error_invalidOperation(0, "DLFile_addEntryUTF8() is unsupported if type isn't UTF8");
 
-	if(!Buffer_isUtf8(entryBuf, 1))
+	if(!Buffer_isUTF8(entryBuf, 1))
 		return Error_invalidParameter(1, 0, "DLFile_addEntryAscii()::entryBuf isn't valid UTF8");
 
 	return ListBuffer_pushBack(&dlFile->entryBuffers, entryBuf, alloc);
 }
 
-Error DLFile_createUtf8List(DLSettings settings, ListBuffer buffers, Allocator alloc, DLFile *dlFile) {
+Error DLFile_createUTF8List(DLSettings settings, ListBuffer buffers, Allocator alloc, DLFile *dlFile) {
 
 	if(settings.dataType != EDLDataType_UTF8)
-		return Error_invalidOperation(0, "DLFile_createUtf8List() is unsupported if settings.type isn't UTF8");
+		return Error_invalidOperation(0, "DLFile_createUTF8List() is unsupported if settings.type isn't UTF8");
 
 	for(U64 i = 0; i < buffers.length; ++i)
-		if(!Buffer_isUtf8(buffers.ptr[i], 1))
+		if(!Buffer_isUTF8(buffers.ptr[i], 1))
 			return Error_invalidParameter(
-				1, (U32)i, "DLFile_createUtf8List()::buffers[i] isn't valid UTF8"
+				1, (U32)i, "DLFile_createUTF8List()::buffers[i] isn't valid UTF8"
 			);
 
 	const Error err = DLFile_createIntern(settings, alloc, buffers.length, dlFile);
@@ -241,7 +239,7 @@ Error DLFile_createList(DLSettings settings, ListBuffer *buffers, Allocator allo
 
 	switch (settings.dataType) {
 		case EDLDataType_Ascii:			gotoIfError(clean, DLFile_createAsciiListIntern(settings, buffers, alloc, dlFile))
-		case EDLDataType_UTF8:			gotoIfError(clean, DLFile_createUtf8List(settings, *buffers, alloc, dlFile))
+		case EDLDataType_UTF8:			gotoIfError(clean, DLFile_createUTF8List(settings, *buffers, alloc, dlFile))
 		default:						gotoIfError(clean, DLFile_createBufferList(settings, *buffers, alloc, dlFile))
 	}
 
@@ -468,7 +466,7 @@ Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result) {
 			compressedOutput,
 			Buffer_createRefConst(uncompressedData.ptr, headerSize - sizeof(I32x4) - 12),
 
-			EBufferEncryptionType_Aes256Gcm,
+			EBufferEncryptionType_AES256GCM,
 			EBufferEncryptionFlags_GenerateIv | (b ? EBufferEncryptionFlags_GenerateKey : EBufferEncryptionFlags_None),
 
 			dlFile.settings.encryptionKey,
@@ -664,7 +662,7 @@ Error DLFile_read(
 		gotoIfError(clean, Buffer_decrypt(
 			Buffer_createRef((U8*)file.ptr, dataSize),
 			Buffer_createRefConst(entireFile.ptr, headerExEnc.ptr - entireFile.ptr),
-			EBufferEncryptionType_Aes256Gcm,
+			EBufferEncryptionType_AES256GCM,
 			encryptionKey,
 			tag,
 			iv

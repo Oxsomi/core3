@@ -114,37 +114,66 @@ Nytodecimal is a base64-like encoding that is easy to decode/encode and quite co
 C8 has some useful helper functions:
 
 - C8 **C8_toLower**(C8): Transforms char to lowercase.
+
 - C8 **C8_toUpper**(C8): Transforms char to uppercase.
+
 - C8 **C8_transform**(C8, EStringTransform): Transforms the character (upper, lower or no modification).
+
 - Bool **C8_isBin**(C8): Checks if the char is binary (0-1).
+
 - Bool **C8_isOct**(C8): Checks if the char is octal (0-7).
+
 - Bool **C8_isDec**(C8): Checks if the char is decimal (0-9).
+
 - Bool **C8_isHex**(C8): Checks if the char is hex (0-9A-Fa-f).
+
 - Bool **C8_isNyto**(C8): Checks if the char is nytodecimal (0-9A-Za-z_$).
+
 - Bool **C8_isAlpha**(C8): Checks if the char is alpha (A-Za-z).
+
 - Bool **C8_isAlphaNumeric**(C8): Checks if the char is alphanumeric (0-9A-Za-z).
+
 - Bool **C8_isUpperCase**(C8): Checks if the char is uppercase (A-Z).
+
 - Bool **C8_isLowerCase**(C8): Checks if the char is lowercase (a-z).
+
 - Bool **C8_isUpperCaseHex**(C8): Checks if the char is uppercase hex (A-F).
+
 - Bool **C8_isLowerCaseHex**(C8): Checks if the char is lowercase hex (a-f).
+
 - Bool **C8_isWhitespace**(C8): Checks if the char is whitespace (space, tab, CR, LF).
+
 - Bool **C8_isNewLine**(C8): Checks if the char is a newline (CR, LF).
-- Bool **C8_isValidAscii**(C8): Checks if the char is valid ascii (>= 0x20 && < 0x7F).
+
+- Bool **C8_isValidAscii**(C8): Checks if the char is valid ascii (>= 0x20 && < 0x7F or \t,
+
+  \n or \r).
+
 - Bool **C8_isValidFileName**(C8): Checks if the char is valid for use in a file name (valid ascii and not: <>:"|?*/\\).
+
 - U8 **C8_bin**(C8): Converts the char to binary (0-1) or returns U8_MAX if invalid.
+
 - U8 **C8_oct**(C8): Converts the char to octal (0-7) or returns U8_MAX if invalid.
+
 - U8 **C8_dec**(C8): Converts the char to decimal (0-9) or returns U8_MAX if invalid.
+
 - U8 **C8_hex**(C8): Converts the char to hex (0-15) or returns U8_MAX if invalid.
+
 - U8 **C8_nyto**(C8): Converts the char to nytodecimal (0-63) or returns U8_MAX if invalid.
+
 - C8 **C8_createBin**(U8): Converts the binary (0-1) to a char or returns C8_MAX if invalid.
+
 - C8 **C8_createOct**(U8): Converts the octal (0-7) to a char or returns C8_MAX if invalid.
+
 - C8 **C8_createDec**(U8): Converts the decimal (0-9) to a char or returns C8_MAX if invalid.
+
 - C8 **C8_createHex**(U8): Converts the hex (0-15) to a char or returns C8_MAX if invalid.
+
 - C8 **C8_createNyto**(U8): Converts the nytodecimal (0-63) to a char or returns C8_MAX if invalid.
 
 ## BigInt and U128 (types/big_int.h)
 
-BigInt is an unsigned integer that can perform anywhere from 64 to 16320 bit operations. U128 is specifically optimized for 2 U64s working together as one (or anything else the hardware might support), while BigInt is several U64s. BigInt is less optimal than U128 due to having a variable width. 
+BigInt is an unsigned integer that can perform anywhere from 64 to 16320 bit operations. U128 is specifically optimized for 2 U64s working together as one (or anything else the hardware might support), while BigInt is several U64s. BigInt is less optimal than U128 due to having a variable width.
 
 Both types have the following helper functions:
 
@@ -179,7 +208,31 @@ BigInt specific functions:
   - **createCopy**: Copy the BigInt into a new allocation.
   - **free**.
 
-## TODO: CharString (types/string.h)
+## CharString (types/string.h)
+
+CharString itself contains three possible types of strings:
+
+- **Managed strings**: These are allocated on the heap (free space) and freeing them will free the underlying memory. These are null terminated by default.
+- **Ref strings**: These contain a reference to existing memory. As such, this is not necessarily null terminated. It can be a ref to an offset in a buffer or a different string. These strings don't allow any operations that resize the string itself. This type of string requires the lifetime to be shorter than the referenced string.
+  - **Const ref strings**: The same as above, except all write operations are disallowed.
+
+There are also two more strings that can be used when dynamic allocation is not available or would be very annoying:
+
+- **ShortString**: String of up to 31 characters with 1 null terminator (32 C8s). When using this with CharString functions, a ref CharString should be created with the same (or shorter) lifetime.
+- **LongString**: Same as above, except 63 characters (64 C8s).
+
+### ListCharString
+
+This file also defines **ListCharString** and **ListConstC8** (const C8*). The second requires null terminated strings and should rarely be used except to interface with other APIs that require it.
+
+- ListCharString has **sort**(EStringCase) and **sortSensitive**()/**sortInsensitive**() to sort all of the strings.
+- *Note: ListCharString doesn't do any string copies under the hood; this helps perf but is a very important consideration. When popping parameters / resizing, it needs explicit freeing or memory is leaked!*
+  - Use **freeUnderlying** to free all underlying strings and **createCopyUnderlying** to copy all underlying strings from another ListCharString. *Other List functions currently don't support this functionality yet, but in the future, the 'Underlying'-suffixed functions will be used for it.*
+  - **combine**`(Allocator, CharString*)`, **concat**`(C8, Allocator, CharString*)` and **concatString**`(CharString, Allocator, CharString*)` can be used to combine the ListCharString into a single CharString. For concat, the C8 or CharString is inserted in between each entry.
+
+### TODO: Functions
+
+A CharString itself has the following functions:
 
 ## Float casts (types/flp.h)
 
@@ -282,7 +335,7 @@ Is used to switch between packed and unpacked types:
 - Quaternion:
   - QuatF32 **QuatS16_unpack**() & QuatS16 **QuatF32_pack**(). Convert to and from QuatS16 type; which is twice as efficient as F32 by packing it as a 16-bit snorm (-32768 -> 32767 = -1 -> 1).
 - UInt:
-  - Manipulating individual bits: 
+  - Manipulating individual bits:
     - Bool **getBit**(T, U8 off): gets bit at off, returns false if out of bounds.
     - Bool **setBit**(T*, U8 off): sets bit[off], false if out of bounds or if NULL.
   - Converting between U21x3:
@@ -459,14 +512,98 @@ A Quaternion is a vector (4) of floats (doubles also supported in the future) th
 - **applyToNormal**(Tx4 normal) apply quaternion to normalized direction.
 - **conj**(), **normalize**(), **inverse**() Quaternion operations to undo multiplication and create a normalized quaternion.
 
-## TODO: Buffer (types/buffer.h)
+## Buffer (types/buffer.h)
 
-- Buffer_length
-- Buffer_isRef
-- Buffer_isConstRef
-- Buffer_createManagedPtr
-- Buffer_createRefFromBuffer
--
+A Buffer is a pointer and length, as well as two bits (is ref and is const). When a Buffer is marked as const, it may not be modified. When a buffer is a ref, it won't be freed. Otherwise, a buffer is managed memory and will be freed.
+
+### BitRef
+
+A BitRef is a U8* and (bit) offset + isConst. It provides the following functions to manipulate it:
+
+- Only accessible if not const:
+  - **set**(), **reset**(): Set or reset the Bool value (set = 1, reset = 0).
+  - **setTo**(Bool): Sets Bool value.
+- **get**(): Gets Bool value.
+
+BitRef should only be used if there's no other way to manipulate the bits. BitRef is slow since it only works on one bit at a time. It has to be initialized manually through setting offset to the bit and the U8* to start + byteOffset.
+
+### General functions
+
+- **length**(): Gets length of buffer.
+- **isRef**(): When a buffer is a ref, it may not be freed (Buffer_free already validates this).
+- **isConstRef**(): Buffer data may not be modified.
+- **createManagedPtr**(void*, U64): Create managed memory buffer (will be freed if Buffer_free is called).
+- **createRefFromBuffer**(Buffer, Bool isConst): Make a managed memory buffer a ref or const ref instead. This is useful when a function may not modify it later on for example.
+- Buffer **createNull**(): No contents buffer.
+- Buffer **createRef**(void *v, U64 length): Create mutable ref to data with length.
+- Buffer **createRefConst**(const void *v, U64 length): Create immutable ref to data with length.
+- Allocating / freeing a buffer:
+  - Bool **free**(Allocator alloc): Free buffer (No-op if on a ref).
+  - Error **createCopy**(Buffer buf, Allocator alloc, Buffer *result): Create a copy of an existing buffer.
+  - Error **createZeroBits**(U64 length, Allocator alloc, Buffer *result): Create N zero bits.
+  - Error **createOneBits**(U64 length, Allocator alloc, Buffer *result): Create N one bits.
+  - Error **createBits**(U64 length, Bool value, Allocator alloc, Buffer *result): Create N bits (initial state undefined).
+  - Error **createEmptyBytes**(U64 length, Allocator alloc, Buffer *output): Create N bytes of 0.
+  - Error **createUninitializedBytes**(U64 length, Allocator alloc, Buffer *result): Create N bytes (initial state undefined).
+  - Error **createSubset**(Buffer buf, U64 offset, U64 length, Bool isConst, Buffer *output): Create a (const) ref to an existing buffer at offset for length bytes.
+- Error **getBit**(U64 offset, Bool *output): Get the bit at offset (in bits) into output.
+- Bool **copy/revCopy**(Buffer src): Copy src into self. revCopy copies backwards, which is useful if ranges overlap.
+- Error **setBit/resetBit**(U64 offset): (Re)set bit at offset (in bits).
+- Error **setBitTo**(U64 offset, Bool value): Set bit at offset (in bits) to value.
+- Error **bitwiseOr**(Buffer b): Or (|=) self with b.
+- Error **bitwiseAnd**(Buffer b): And (&=) self with b.
+- Error **bitwiseXor**(Buffer b): Xor (^=) self with b.
+- Error **bitwiseNot**(): ~self.
+- Error **unsetBitRange/setBitRange**(U64 dstOff, U64 bits): (Un)set all bits in range.
+- Error **unsetAllBits/setAllBits**(): (Un)set all bits.
+- Error **setAllBitsTo**(Bool isOn): Set all bits to value.
+- Bool **eq**(Buffer buf1): Compare to buffer (returns if the same).
+- Bool **neq**(Buffer buf1): !eq(buf1).
+- Error **offset**(U64 length): Offset current buffer with length.
+- Error **append**(const void *v, U64 length): Append v[length] to the buffer and offset by length.
+- Error **appendBuffer**(Buffer append): Same as append, but for Buffer.
+- Error **consume**(void *v, U64 length): Consume current buffer into v[length] and offset by length.
+- Error **combine**(Buffer b, Allocator alloc, Buffer *output): Combine a and b into one Buffer.
+- Error **appendT**(T): Where T is a basic POD type such as I32x2, I32, Bool, etc. Same as append, but with the size of T and contents of t.
+- Error **consumeT**(T*): ^ but consume.
+- Unicode helpers:
+  - Bool **isUnicode**(F32 threshold, Bool isUTF16): Check if the input is valid UTF16 or UTF8. Threshold of 0 means the entire file has to be valid, while 0.5 would mean 50%.
+  - Bool **isUTF8**(F32 threshold): isUnicode with isUTF16 = false.
+  - Bool **isUTF16**(F32 threshold): isUnicode with isUTF16 = true\.
+  - Bool **isAscii**(): If the whole file is valid ASCII (C8_isValidAscii).
+  - **UnicodeCodePoint** is a U32 in range [ 0, 0x10FFFF ] of unicode codepoints.
+  - **UnicodeCodePointInfo** contains the UnicodeCodePoint as well as the char and byte count.
+  - Error **readAsUTF8/readAsUTF16**(U64 i, UnicodeCodePointInfo *codepoint): Tries to read a UTF8 or UTF16 codepoint, returns an Error if invalid.
+  - Error **writeAsUTF8/writeAsUTF16**(U64 i, UnicodeCodePoint codepoint, U8 *bytes): Write a UTF8 or UTF16 codepoint and return the byte count. Returns Error if invalid codepoint.
+
+### Cryptography & Hashing
+
+The following functions exist for crytography or hashing purposes:
+
+- **crc32**(): Returns the U32 (CRC32 Castagnoli) hash of the Buffer. This is not for cryptography purposes, but only for quick validation (not really caring much about someone being able to force hash collisions).
+- **sha256**(U32 output[8]): Returns a 256-bit (SHA256) hash of the Buffer. This hash type should be used for big data where it can't be easily bruteforced. As such, passwords are a very bad candidate and should use something like Argon2id instead.
+- **csprng**(): Fill the buffer with bytes from a Cryptographically Secure Psuedo-Random Number Generator (CSPRNG). This is useful for things like key generation, as these need true random rather than something predictable.
+- **Encryption**/**decryption**:
+  - Types (EBufferEncryptionType):
+    - **AES256GCM** is supported and should be the default encryption of all files. AES256 in Galois Counter Mode is the safest and fastest encryption algorithm in modern CPUs (with dedicated instructions). It can also easily be multi threaded by adding the hash of all blocks in sequence after encryption to produce the final "tag" (encryption checksum).
+    - **AES128GCM** is also supported for legacy reasons **ONLY**, should only be used when 256 can't be used (e.g. old encoding scheme). This is because it's not quantum resistant (reduces it from 2^128 to 2^64 difficulty to be cracked in seconds with a 128 qubit quantum computer), while 256 has resistance.
+    - **getAdditionalData**() can be used to check how much data the algorithm needs to store. In the case of AES that's 28 bytes (12 byte IV + 16 byte tag / checksum).
+  - Error **encrypt**(Buffer additionalData, EBufferEncryptionType, EBufferEncryptionFlags, U32 *key, I32x4 *iv, I32x4 *tag)
+    - Encrypts the current data ("plaintext") into the current buffer as cyphertext. If the current buffer is empty, it is still completely valid (for aes) to still call encrypt as a way to authenticate additionalData with the referenced key.
+      - Authentication should store the key and iv until encryption is done to ensure it doesn't re-generate a mismatching one.
+    - Flags: GenerateKey (0), GenerateIv (1). Will use CSPRNG to generate the key and/or IV if the flags are set. Otherwise it will use supplied keys/ivs and assumes the user has properly generated them.
+      - Be careful about the following if iv and key are manually generated:
+        - Don't reuse iv if supplied.
+        - Don't use the key too often (e.g. use only <2^16 times for good measure).
+        - Don't discard iv or key if any of them are generated.
+        - Don't discard tag or cut off too many bytes.
+    - Secret key is a `U32[4]` for AES128GCM and `U32[8]` for AES256GCM.
+    - Secret key, iv and tag are required to be valid pointers. Key will be filled if GenerateKey is true, iv will be filled if GenerateIv is true. Tag will be filled as a checksum and as mentioned before, the tag can't be reduced too many bytes (otherwise it'll be easy to generate collisions).
+    - There's a limit enforced for 4Gi - 3 AES blocks (16 bytes each or about 63 GiB). This is to ensure the IV doesn't run out of options, which would cause degradation of the encryption quality. As a fix, multiple keys can be generated for different regions of the file and decrypted separately. Very important: All different regions need their tag and iv to be authenticated one more time, otherwise a region could be replaced by an attacker.
+  - Error **decrypt**(Buffer additionalData, EBufferEncryptionType, const U32 *key, I32x4 tag, I32x4 iv)
+    - The iv, key and tag should be passed to match the ones from the encrypt function.
+    - The key is the same size as mentioned in 'encrypt' and the best practices from it still apply too.
+    - Unauthorized error is returned if the tag doesn't match the one generated from encrypt and in that case, no plaintext is generated. On error, it should not continue, as the cyphertext has been tampered with.
 
 ## TODO: GenericList and TList (types/list.h)
 
@@ -482,7 +619,7 @@ An allocator is a struct that contains the following:
 
 ## AllocationBuffer (types/allocation_buffer.h)
 
-An allocation buffer is a physical or virtual representation of allocation units and allocations in it. Generally used to allocate memory, be it GPU or CPU memory. As such, the units represented in the AllocationBuffer aren't necessarily bytes and the buffer is not necessarily mappable to CPU memory. 
+An allocation buffer is a physical or virtual representation of allocation units and allocations in it. Generally used to allocate memory, be it GPU or CPU memory. As such, the units represented in the AllocationBuffer aren't necessarily bytes and the buffer is not necessarily mappable to CPU memory.
 
 An AllocationBuffer is managed through the following:
 
@@ -571,7 +708,7 @@ Most behave similar to a C struct, except that dynamically sized arrays exist. T
 
 As expected, this would generate 6 members; one that's part of myMember4 and the other 5 are part of the root struct. A BufferLayout is a DAG, which means structs always have to have their members defined before they are defined and they can't nest themselves or anything defined after (no recursion).
 
-**Note: Some JSON features aren't properly supported in the current BufferLayout. This is because the JSON format is very complex and not strongly typed, while this format is strongly typed. For example, a field could be either a Bool or a U32, which is not allowed here.** 
+**Note: Some JSON features aren't properly supported in the current BufferLayout. This is because the JSON format is very complex and not strongly typed, while this format is strongly typed. For example, a field could be either a Bool or a U32, which is not allowed here.**
 
 ### BufferLayoutMember
 
@@ -579,7 +716,7 @@ As expected, this would generate 6 members; one that's part of myMember4 and the
 
 - **typeId** or **structId**. If offsetHiAndIsStruct >> 15 (**isStruct**()), this will include a struct id that represents this member (**getStructId**()). Otherwise, this member is represented with an ETypeId (**getTypeId**()), which can be matrices, vectors, floats, ints, etc. Currently, only POD type ids are supported here. It'd be invalid to use extended type ids or non pod types.
 - **offset**: U64 stored in both offsetLo and offsetHiAndIsStruct, acquired through **getOffset**(). Represents the offset in the struct it's in. Since this offset is explicitly referenced, it is possible to use a union here.
-- **arrayIndices**: Up to 255 dimensional arrays, though less dimensional should be used when possible due to better performance (less lookups). Mostly useful as 1D, 2D or 3D arrays. Can be 0 if it's not an array. 
+- **arrayIndices**: Up to 255 dimensional arrays, though less dimensional should be used when possible due to better performance (less lookups). Mostly useful as 1D, 2D or 3D arrays. Can be 0 if it's not an array.
 - **nameLength**: How long the name of the member is (up to 255).
 - **stride**: Stride between array elements (up to 4GiB).
 
@@ -628,7 +765,7 @@ BufferLayouts use paths to resolve a CharString to a Buffer. This buffer is eith
 - Backslash `\` isn't the same as slash `/`. Slash is a separator, backslash is an escape.
 - `\/` is used to escape slashes and `\\` is used to escape backslashes.
 - Paths are case sensitive.
-- `a/0` could mean either a's member named 0 or the 0th index of a (e.g. no concept of a[0] vs a/0). 
+- `a/0` could mean either a's member named 0 or the 0th index of a (e.g. no concept of a[0] vs a/0).
 - Leading slashes are ignored, so `/a/0` and `a/0` are the same.
 - Empty member names are invalid, so `//` is invalid.
 - Array indices can be given by either:
@@ -664,7 +801,7 @@ To resolve a path to a location, the resolve function or setters/getters can be 
 - Error **resolveLayout**(BufferLayout layout, CharString path, BufferLayoutPathInfo *info, Allocator alloc): Resolve layout as BufferLayoutPathInfo, which already has additional info about where it is located. This should be cached when possible, to skip parsing the path.
 - Error **setData**(Buffer instance, BufferLayout, CharString path, Buffer data, Allocator): Set the data to the data passed with a buffer copy.
 - Error **getData**(Buffer instance, BufferLayout, CharString path, Buffer *currentData, Allocator): Get the data pointed to by path. This does not copy.
-- Error **setT**(Buffer, BufferLayout, CharString path, T t, Allocator): Set the path to t, where T is one of the predefined types such as (U/I)(8/16/32/64), C8, Bool, F32, F64, (F/I)32x(2/4). 
+- Error **setT**(Buffer, BufferLayout, CharString path, T t, Allocator): Set the path to t, where T is one of the predefined types such as (U/I)(8/16/32/64), C8, Bool, F32, F64, (F/I)32x(2/4).
 - Error **getT**(Buffer, BufferLayout, CharString path, T *t, Allocator): Copy resolved buffer location into t. See setT.
 
 ## CDFList (types/cdf_list.h)

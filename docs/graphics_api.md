@@ -206,7 +206,7 @@ _gotoIfError(clean, GraphicsDeviceRef_create(
   ```
 
   - Be aware that allowWrite doesn't work for all APIs and all devices. Compute to the swapchain is optional.
-  
+
 - ```c
   Error createCommandList(
   	U64 commandListLen,
@@ -244,7 +244,7 @@ _gotoIfError(clean, GraphicsDeviceRef_create(
       DeviceBufferRef **ref
   );
   ```
-  
+
 - ```c
     Error createBufferData(
     	EDeviceBufferUsage usage,
@@ -284,7 +284,7 @@ _gotoIfError(clean, GraphicsDeviceRef_create(
         DepthStencilRef **ref
     );
   ```
-  
+
 - ```c
   Error createBLASExt(
   	ERTASBuildFlags buildFlags,

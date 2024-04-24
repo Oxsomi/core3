@@ -21,7 +21,6 @@
 #pragma once
 #include "operations.h"
 
-typedef struct CharStringList CharStringList;
 typedef struct FileInfo FileInfo;
 
 void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f);
@@ -59,4 +58,4 @@ Bool CLI_inspectData(ParsedArgs args);
 
 Bool CLI_package(ParsedArgs args);
 
-Bool CLI_execute(CharStringList argList);
+Bool CLI_execute(ListCharString argList);

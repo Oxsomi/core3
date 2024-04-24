@@ -219,7 +219,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 				//Now it's time to translate this from UTF16
 
 				UnicodeCodePointInfo codepoint = (UnicodeCodePointInfo) { 0 };
-				if (!Buffer_readAsUtf16(buf, 0, &codepoint).genericError)
+				if (!Buffer_readAsUTF16(buf, 0, &codepoint).genericError)
 					typed = codepoint.index;
 			}
 
@@ -228,7 +228,7 @@ LRESULT CALLBACK WWindow_onCallback(HWND hwnd, UINT message, WPARAM wParam, LPAR
 				//Translate to UTF8
 
 				U8 bytes = 0;
-				Error err = Buffer_writeAsUtf8(buf, 0, typed, &bytes);
+				Error err = Buffer_writeAsUTF8(buf, 0, typed, &bytes);
 				((C8*)buf.ptr)[bytes] = '\0';
 
 				if(!err.genericError)
@@ -841,7 +841,7 @@ Error Window_updatePhysicalTitle(const Window *w, CharString title) {
 		);
 
 	ListU16 name = (ListU16) { 0 };
-	Error err = CharString_toUtf16x(title, &name);
+	Error err = CharString_toUTF16x(title, &name);
 
 	if (err.genericError)
 		return err;
@@ -992,7 +992,7 @@ impl Error WindowManager_createWindowPhysical(Window *w) {
 	//Our strings are UTF8, but windows wants UTF16
 
 	ListU16 tmp = (ListU16) { 0 };
-	gotoIfError(clean, CharString_toUtf16x(w->title, &tmp))
+	gotoIfError(clean, CharString_toUTF16x(w->title, &tmp))
 
 	const HWND nativeWindow = CreateWindowExW(
 		WS_EX_APPWINDOW, wc.lpszClassName, (const wchar_t*) tmp.ptr, style,

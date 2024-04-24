@@ -743,12 +743,12 @@ Error CharString_createFromUTF16(const U16 *ptr, U64 limit, Allocator allocator,
 
 		//Read as UTF16 encoding
 
-		gotoIfError(clean, Buffer_readAsUtf16(buf, i, &codepoint))
+		gotoIfError(clean, Buffer_readAsUTF16(buf, i, &codepoint))
 		i += codepoint.bytes;
 
 		//Write as UTF8 encoding
 
-		gotoIfError(clean, Buffer_writeAsUtf8(buf0, j, codepoint.index, &codepoint.bytes))
+		gotoIfError(clean, Buffer_writeAsUTF8(buf0, j, codepoint.index, &codepoint.bytes))
 		j += codepoint.bytes;
 		result->lenAndNullTerminated = j | ((U64)1 << 63);
 	}
@@ -768,12 +768,12 @@ Error CharString_split(
 	C8 c,
 	EStringCase casing,
 	Allocator allocator,
-	CharStringList *result
+	ListCharString *result
 ) {
 
 	const U64 length = CharString_countAll(s, c, casing);
 
-	const Error err = CharStringList_create(length + 1, allocator, result);
+	const Error err = ListCharString_create(length + 1, allocator, result);
 
 	if (err.genericError)
 		return err;
@@ -784,13 +784,13 @@ Error CharString_split(
 
 		const Bool b = CharString_isNullTerminated(s);
 
-		result->ptr[0] = CharString_isConstRef(s) ? CharString_createRefSizedConst(s.ptr, strl, b) :
+		result->ptrNonConst[0] = CharString_isConstRef(s) ? CharString_createRefSizedConst(s.ptr, strl, b) :
 			CharString_createRefSized((C8*)s.ptr, strl, b);
 
 		return Error_none();
 	}
 
-	const CharStringList str = *result;
+	const ListCharString str = *result;
 
 	c = C8_transform(c, (EStringTransform) casing);
 
@@ -799,7 +799,7 @@ Error CharString_split(
 	for (U64 i = 0; i < strl; ++i)
 		if (C8_transform(s.ptr[i], (EStringTransform) casing) == c) {
 
-			str.ptr[count++] =
+			str.ptrNonConst[count++] =
 				CharString_isConstRef(s) ? CharString_createRefSizedConst(s.ptr + last, i - last, false) :
 				CharString_createRefSized((C8*)s.ptr + last, i - last, false);
 
@@ -808,7 +808,7 @@ Error CharString_split(
 
 	const Bool b = CharString_isNullTerminated(s);
 
-	str.ptr[count++] =
+	str.ptrNonConst[count++] =
 		CharString_isConstRef(s) ? CharString_createRefSizedConst(s.ptr + last, strl - last, b) :
 		CharString_createRefSized((C8*)s.ptr + last, strl - last, b);
 
@@ -820,12 +820,12 @@ Error CharString_splitString(
 	CharString other,
 	EStringCase casing,
 	Allocator allocator,
-	CharStringList *result
+	ListCharString *result
 ) {
 
 	const U64 length = CharString_countAllString(s, other, casing);
 
-	const Error err = CharStringList_create(length + 1, allocator, result);
+	const Error err = ListCharString_create(length + 1, allocator, result);
 
 	if (err.genericError)
 		return err;
@@ -835,13 +835,13 @@ Error CharString_splitString(
 
 	if (!length) {
 
-		*result->ptr = CharString_isConstRef(s) ? CharString_createRefSizedConst(s.ptr, strl, b) :
+		*result->ptrNonConst = CharString_isConstRef(s) ? CharString_createRefSizedConst(s.ptr, strl, b) :
 			CharString_createRefSized((C8*)s.ptr, strl, b);
 
 		return Error_none();
 	}
 
-	const CharStringList str = *result;
+	const ListCharString str = *result;
 
 	U64 count = 0, last = 0;
 
@@ -860,7 +860,7 @@ Error CharString_splitString(
 
 		if (match) {
 
-			str.ptr[count++] =
+			str.ptrNonConst[count++] =
 				CharString_isConstRef(s) ? CharString_createRefSizedConst(s.ptr + last, i - last, false) :
 				CharString_createRefSized((C8*)s.ptr + last, i - last, false);
 
@@ -869,14 +869,14 @@ Error CharString_splitString(
 		}
 	}
 
-	str.ptr[count++] =
+	str.ptrNonConst[count++] =
 		CharString_isConstRef(s) ? CharString_createRefSizedConst(s.ptr + last, strl - last, b) :
 		CharString_createRefSized((C8*)s.ptr + last, strl - last, b);
 
 	return Error_none();
 }
 
-Error CharString_splitLine(CharString s, Allocator alloc, CharStringList *result) {
+Error CharString_splitLine(CharString s, Allocator alloc, ListCharString *result) {
 
 	if(!result)
 		return Error_nullPointer(2, "CharString_splitLine()::result is invalid");
@@ -908,7 +908,7 @@ Error CharString_splitLine(CharString s, Allocator alloc, CharStringList *result
 	if(lastLineEnd != strl)
 		++v;
 
-	const Error err = CharStringList_create(v, alloc, result);
+	const Error err = ListCharString_create(v, alloc, result);
 
 	if (err.genericError)
 		return err;
@@ -936,7 +936,7 @@ Error CharString_splitLine(CharString s, Allocator alloc, CharStringList *result
 		if(!isLineEnd)
 			continue;
 
-		result->ptr[v++] = CharString_isConstRef(s) ?
+		result->ptrNonConst[v++] = CharString_isConstRef(s) ?
 			CharString_createRefSizedConst(s.ptr + lastLineEnd, iOld - lastLineEnd, false) :
 			CharString_createRefSized((C8*)s.ptr + lastLineEnd, iOld - lastLineEnd, false);
 
@@ -944,26 +944,26 @@ Error CharString_splitLine(CharString s, Allocator alloc, CharStringList *result
 	}
 
 	if(lastLineEnd != strl)
-		result->ptr[v++] = CharString_isConstRef(s) ?
+		result->ptrNonConst[v++] = CharString_isConstRef(s) ?
 			CharString_createRefSizedConst(s.ptr + lastLineEnd, strl - lastLineEnd, CharString_isNullTerminated(s)) :
 			CharString_createRefSized((C8*)s.ptr + lastLineEnd, strl - lastLineEnd, CharString_isNullTerminated(s));
 
 	return Error_none();
 }
 
-Error CharString_splitSensitive(CharString s, C8 c, Allocator allocator, CharStringList *result) {
+Error CharString_splitSensitive(CharString s, C8 c, Allocator allocator, ListCharString *result) {
 	return CharString_split(s, c, EStringCase_Sensitive, allocator, result);
 }
 
-Error CharString_splitInsensitive(CharString s, C8 c, Allocator allocator, CharStringList *result) {
+Error CharString_splitInsensitive(CharString s, C8 c, Allocator allocator, ListCharString *result) {
 	return CharString_split(s, c, EStringCase_Insensitive, allocator, result);
 }
 
-Error CharString_splitStringSensitive(CharString s, CharString other, Allocator allocator, CharStringList *result) {
+Error CharString_splitStringSensitive(CharString s, CharString other, Allocator allocator, ListCharString *result) {
 	return CharString_splitString(s, other, EStringCase_Sensitive, allocator, result);
 }
 
-Error CharString_splitStringInsensitive(CharString s, CharString other, Allocator allocator, CharStringList *result) {
+Error CharString_splitStringInsensitive(CharString s, CharString other, Allocator allocator, ListCharString *result) {
 	return CharString_splitString(s, other, EStringCase_Insensitive, allocator, result);
 }
 
@@ -1452,7 +1452,7 @@ Error CharString_replaceLastStringInsensitive(CharString *s, CharString search, 
 	return CharString_replaceLastString(s, search, replace, EStringCase_Insensitive, allocator);
 }
 
-Error CharString_toUtf16(CharString s, Allocator allocator, ListU16 *arr) {
+Error CharString_toUTF16(CharString s, Allocator allocator, ListU16 *arr) {
 
 	const U64 len = CharString_length(s);
 	Error err = ListU16_reserve(arr, len + 1, allocator);
@@ -1470,12 +1470,12 @@ Error CharString_toUtf16(CharString s, Allocator allocator, ListU16 *arr) {
 
 		//Read as UTF8 encoding
 
-		gotoIfError(clean, Buffer_readAsUtf8(buf, i, &codepoint))
+		gotoIfError(clean, Buffer_readAsUTF8(buf, i, &codepoint))
 		i += codepoint.bytes;
 
 		//Write as UTF16 encoding
 
-		gotoIfError(clean, Buffer_writeAsUtf16(buf0, j, codepoint.index, &codepoint.bytes))
+		gotoIfError(clean, Buffer_writeAsUTF16(buf0, j, codepoint.index, &codepoint.bytes))
 		j += codepoint.bytes;
 	}
 
@@ -2506,95 +2506,41 @@ CharString CharString_trim(CharString s) {
 		CharString_createRefSized((C8*)s.ptr + first, last - first, isNullTerm);
 }
 
-//CharStringList
+Bool ListCharString_freeUnderlying(ListCharString *arr, Allocator alloc) {
 
-Error CharStringList_create(U64 length, Allocator alloc, CharStringList *result) {
-
-	if (!result)
-		return Error_nullPointer(2, "CharStringList_create()::result is required");
-
-	if (result->ptr)
-		return Error_invalidOperation(0, "CharStringList_create()::result isn't empty, might indicate memleak");
-
-	CharStringList sl = (CharStringList) { .length = length };
-
-	Buffer b = Buffer_createNull();
-	const Error err = alloc.alloc(alloc.ptr, length * sizeof(CharString), &b);
-
-	sl.ptr = (CharString*) b.ptr;
-
-	if(err.genericError)
-		return err;
-
-	for(U64 i = 0; i < sl.length; ++i)
-		sl.ptr[i] = CharString_createNull();
-
-	*result = sl;
-	return Error_none();
-}
-
-Bool CharStringList_free(CharStringList *arr, Allocator alloc) {
-
-	if(!arr || !arr->length)
+	if(!arr || !arr->length || ListCharString_isRef(*arr))
 		return true;
 
 	Bool freed = true;
 
 	for(U64 i = 0; i < arr->length; ++i) {
-		CharString *str = arr->ptr + i;
+		CharString *str = arr->ptrNonConst + i;
 		freed &= CharString_free(str, alloc);
 	}
 
-	freed &= alloc.free(alloc.ptr, Buffer_createManagedPtr(
-		arr->ptr,
-		sizeof(CharString) * arr->length
-	));
-
-	*arr = (CharStringList) { 0 };
-	return freed;
+	return ListCharString_free(arr, alloc);
 }
 
-Error CharStringList_createCopy(CharStringList toCopy, Allocator alloc, CharStringList *arr) {
+Error ListCharString_createCopyUnderlying(ListCharString toCopy, Allocator alloc, ListCharString *arr) {
 
 	if(!toCopy.length)
-		return Error_nullPointer(0, "CharStringList_createCopy()::toCopy.length can't be 0");
+		return Error_nullPointer(0, "ListCharString_createCopyUnderlying()::toCopy.length can't be 0");
 
-	Error err = CharStringList_create(toCopy.length, alloc, arr);
+	Error err = ListCharString_create(toCopy.length, alloc, arr);
 
 	if (err.genericError)
 		return err;
 
 	for (U64 i = 0; i < toCopy.length; ++i) {
 
-		err = CharString_createCopy(toCopy.ptr[i], alloc, arr->ptr + i);
+		err = CharString_createCopy(toCopy.ptr[i], alloc, arr->ptrNonConst + i);
 
 		if (err.genericError) {
-			CharStringList_free(arr, alloc);
+			ListCharString_freeUnderlying(arr, alloc);
 			return err;
 		}
 	}
 
-	return Error_none();
-}
-
-Error CharStringList_unset(CharStringList arr, U64 i, Allocator alloc) {
-
-	if(i >= arr.length)
-		return Error_outOfBounds(1, i, arr.length, "CharStringList_unset()::i out of bounds");
-
-	CharString *pstr = arr.ptr + i;
-	CharString_free(pstr, alloc);
-	return Error_none();
-}
-
-Error CharStringList_set(CharStringList arr, U64 i, CharString str, Allocator alloc) {
-
-	const Error err = CharStringList_unset(arr, i, alloc);
-
-	if(err.genericError)
-		return err;
-
-	arr.ptr[i] = str;
 	return Error_none();
 }
 
@@ -2661,7 +2607,7 @@ CharString CharString_getBasePath(CharString *str) {
 	return res;
 }
 
-Error CharStringList_concat(CharStringList arr, C8 between, Allocator alloc, CharString *result) {
+Error ListCharString_concat(ListCharString arr, C8 between, Allocator alloc, CharString *result) {
 
 	U64 length = 0;
 
@@ -2688,7 +2634,7 @@ Error CharStringList_concat(CharStringList arr, C8 between, Allocator alloc, Cha
 	return Error_none();
 }
 
-Error CharStringList_concatString(CharStringList arr, CharString between, Allocator alloc, CharString *result) {
+Error ListCharString_concatString(ListCharString arr, CharString between, Allocator alloc, CharString *result) {
 
 	U64 length = 0;
 
@@ -2716,8 +2662,8 @@ Error CharStringList_concatString(CharStringList arr, CharString between, Alloca
 	return Error_none();
 }
 
-Error CharStringList_combine(CharStringList arr, Allocator alloc, CharString *result) {
-	return CharStringList_concatString(arr, CharString_createNull(), alloc, result);
+Error ListCharString_combine(ListCharString arr, Allocator alloc, CharString *result) {
+	return ListCharString_concatString(arr, CharString_createNull(), alloc, result);
 }
 
 U64 CharString_find(CharString s, C8 c, EStringCase caseSensitive, Bool isFirst) {

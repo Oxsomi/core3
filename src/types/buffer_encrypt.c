@@ -110,12 +110,12 @@ void AESEncryptionContext_expandKey(const U32 *key, I32x4 k[15], const EBufferEn
 
 	k[0] = I32x4_load4((const I32*)key);
 
-	if(encryptionType == EBufferEncryptionType_Aes256Gcm)
+	if(encryptionType == EBufferEncryptionType_AES256GCM)
 		k[1] = I32x4_load4((const I32*)key + 4);
 
 	//Only use AESEncryptionContext_expandKey1 for AES128,
 
-	if(encryptionType == EBufferEncryptionType_Aes128Gcm) {
+	if(encryptionType == EBufferEncryptionType_AES128GCM) {
 
 		I32x4 im1 = k[0];
 
@@ -139,13 +139,13 @@ void AESEncryptionContext_expandKey(const U32 *key, I32x4 k[15], const EBufferEn
 	}
 }
 
-//Aes block encryption. Don't use this plainly, it's a part of the larger AES256-CTR algorithm
+//AES block encryption. Don't use this plainly, it's a part of the larger AES256-CTR algorithm
 
 I32x4 AESEncryptionContext_blockHash(I32x4 block, const I32x4 k[15], const EBufferEncryptionType type) {
 
 	block = I32x4_xor(block, k[0]);
 
-	const U8 rounds = type == EBufferEncryptionType_Aes128Gcm ? 10 : 14;
+	const U8 rounds = type == EBufferEncryptionType_AES128GCM ? 10 : 14;
 
 	for(U8 i = 1; i < rounds; ++i)
 		block = AES_encodeBlock(block, k[i], false);
@@ -300,8 +300,8 @@ void AESEncryptionContext_fetchAndUpdateTag(AESEncryptionContext *ctx, const I32
 
 U64 EBufferEncryptionType_getAdditionalData(const EBufferEncryptionType type) {
 	switch (type) {
-		case EBufferEncryptionType_Aes128Gcm:
-		case EBufferEncryptionType_Aes256Gcm:	return 16 + 12;
+		case EBufferEncryptionType_AES128GCM:
+		case EBufferEncryptionType_AES256GCM:	return 16 + 12;
 		default:								return 0;
 	}
 }
@@ -340,7 +340,7 @@ Error AESEncryptionContext_encrypt(
 
 	if(flags & EBufferEncryptionFlags_GenerateKey) {
 
-		const U8 len = encryptionType == EBufferEncryptionType_Aes128Gcm ? 4 : 8;
+		const U8 len = encryptionType == EBufferEncryptionType_AES128GCM ? 4 : 8;
 
 		if(!Buffer_csprng(Buffer_createRef(realKey, sizeof(U32) * len)))
 			return Error_invalidState(1, "AESEncryptionContext_encrypt() couldn't generate key");
@@ -394,7 +394,7 @@ Error Buffer_encrypt(
 
 	if(flags & EBufferEncryptionFlags_Invalid)
 		return Error_invalidEnum(
-			3, (U64)flags, ((U64)1 << EBufferEncryptionFlags_Count) - 1, 
+			3, (U64)flags, ((U64)1 << EBufferEncryptionFlags_Count) - 1,
 			"Buffer_encrypt()::flags are invalid"
 		);
 

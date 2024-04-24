@@ -383,17 +383,17 @@ Error Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *alloca
 
 	Platform_instance.virtualSectionsLock = Lock_create();
 
-	CharStringList sl = (CharStringList) { 0 };
+	ListCharString sl = (ListCharString) { 0 };
 
 	if(cmdArgc > 1) {
 
-		gotoIfError(clean, CharStringList_createx(cmdArgc - 1, &sl));
+		gotoIfError(clean, ListCharString_createx(cmdArgc - 1, &sl));
 
 		//If we're passed invalid cmdArg this could be a problem
 		//But that'd happen anyways
 
 		for(int i = 1; i < cmdArgc; ++i)
-			sl.ptr[i - 1] = CharString_createRefCStrConst(cmdArgs[i]);
+			sl.ptrNonConst[i - 1] = CharString_createRefCStrConst(cmdArgs[i]);
 	}
 
 	Platform_instance.args = sl;
@@ -438,7 +438,7 @@ void Platform_cleanup() {
 		return;
 
 	CharString_freex(&Platform_instance.workingDirectory);
-	CharStringList_freex(&Platform_instance.args);
+	ListCharString_freex(&Platform_instance.args);
 
 	//Properly clean virtual files
 

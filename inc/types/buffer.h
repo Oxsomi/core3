@@ -25,7 +25,8 @@ typedef struct Buffer Buffer;
 typedef struct Allocator Allocator;
 
 typedef struct BitRef {
-	U8 *ptr, off, isConst;
+	U8 *ptr;
+	U8 off, isConst, padding[6];
 } BitRef;
 
 Bool BitRef_get(BitRef b);
@@ -128,19 +129,19 @@ typedef struct UnicodeCodePointInfo {
 	UnicodeCodePoint index;
 } UnicodeCodePointInfo;
 
-Error Buffer_readAsUtf8(Buffer buf, U64 i, UnicodeCodePointInfo *codepoint);
-Error Buffer_writeAsUtf8(Buffer buf, U64 i, UnicodeCodePoint codepoint, U8 *bytes);
-Error Buffer_readAsUtf16(Buffer buf, U64 i, UnicodeCodePointInfo *codepoint);
-Error Buffer_writeAsUtf16(Buffer buf, U64 i, UnicodeCodePoint codepoint, U8 *bytes);
+Error Buffer_readAsUTF8(Buffer buf, U64 i, UnicodeCodePointInfo *codepoint);
+Error Buffer_writeAsUTF8(Buffer buf, U64 i, UnicodeCodePoint codepoint, U8 *bytes);
+Error Buffer_readAsUTF16(Buffer buf, U64 i, UnicodeCodePointInfo *codepoint);
+Error Buffer_writeAsUTF16(Buffer buf, U64 i, UnicodeCodePoint codepoint, U8 *bytes);
 
 //If the threshold (%) is met, it is identified as (mostly) unicode.
 //If isUTF16 is set, it will try to find 2-byte width encoding (UTF16),
 //otherwise it uses 1-byte width (UTF8).
 //Both UTF16 and UTF8 can be variable length per codepoint.
 
-Bool Buffer_isUnicode(Buffer buf, F32 threshold, Bool isUtf16);
-Bool Buffer_isUtf8(Buffer buf, F32 threshold);
-Bool Buffer_isUtf16(Buffer buf, F32 threshold);
+Bool Buffer_isUnicode(Buffer buf, F32 threshold, Bool isUTF16);
+Bool Buffer_isUTF8(Buffer buf, F32 threshold);
+Bool Buffer_isUTF16(Buffer buf, F32 threshold);
 
 Bool Buffer_isAscii(Buffer buf);
 
@@ -170,8 +171,8 @@ void Buffer_sha256(Buffer buf, U32 output[8]);
 //Encryption
 
 typedef enum EBufferEncryptionType {
-	EBufferEncryptionType_Aes256Gcm,		//Additional data; IV (96 bits), TAG (128 bits)
-	EBufferEncryptionType_Aes128Gcm,		//^
+	EBufferEncryptionType_AES256GCM,		//Additional data; IV (96 bits), TAG (128 bits)
+	EBufferEncryptionType_AES128GCM,		//^
 	EBufferEncryptionType_Count
 } EBufferEncryptionType;
 
@@ -192,14 +193,14 @@ typedef enum EBufferEncryptionFlags {
 //Encrypt function encrypts target into target
 //Be careful about the following if iv and key are manually generated:
 //- Don't reuse iv if supplied
-//- Don't use the key too often (e.g. >2^32 times)
+//- Don't use the key too often (e.g. >2^16 times for good measure)
 //- Don't discard iv or key if any of them are generated
 //- Don't discard tag or cut off too many bytes
 
 Error Buffer_encrypt(
-	Buffer target,					//"Plaintext" aka data to encrypt. Leave empty to authenticate with AES256GCM
+	Buffer target,					//"Plaintext" aka data to encrypt. Leave empty to authenticate with AES
 	Buffer additionalData,			//Non-secret data. Data which can't be modified after enc w/o key
-	EBufferEncryptionType type,		//Only AES256GCM is currently supported
+	EBufferEncryptionType type,		//Only AES is currently supported
 	EBufferEncryptionFlags flags,	//Whether to use supplied keys or generate new ones
 	U32 *key,						//Secret key; used to en/decrypt (AES256: U32[8], AES128: U32[4])
 	I32x4 *iv,						//Iv should be random 12 bytes. Can be generated if flag is set
@@ -225,6 +226,7 @@ Error Buffer_decrypt(
 
 Bool Buffer_csprng(Buffer target);
 
+/*
 //Compression
 
 typedef enum EBufferCompressionType {
@@ -234,12 +236,12 @@ typedef enum EBufferCompressionType {
 
 typedef enum EBufferCompressionHint {
 	EBufferCompressionHint_None,
-	EBufferCompressionHint_Utf8,
+	EBufferCompressionHint_UTF8,
 	EBufferCompressionHint_Font,
 	EBufferCompressionHint_Count
 } EBufferCompressionHint;
 
-/*Error Buffer_compress(
+Error Buffer_compress(
 	Buffer target,
 	EBufferCompressionType type,
 	EBufferCompressionHint hint,

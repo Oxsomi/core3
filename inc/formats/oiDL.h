@@ -69,7 +69,7 @@ Bool DLFile_free(DLFile *dlFile, Allocator alloc);
 
 Error DLFile_createBufferList(DLSettings settings, ListBuffer buffers, Allocator alloc, DLFile *dlFile);
 Error DLFile_createAsciiList(DLSettings settings, ListCharString strings, Allocator alloc, DLFile *dlFile);
-Error DLFile_createUtf8List(DLSettings settings, ListBuffer strings, Allocator alloc, DLFile *dlFile);
+Error DLFile_createUTF8List(DLSettings settings, ListBuffer strings, Allocator alloc, DLFile *dlFile);
 
 //Determine what type of list is made with settings.dataType
 

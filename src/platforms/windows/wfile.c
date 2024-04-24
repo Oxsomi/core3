@@ -75,7 +75,7 @@ Error File_foreach(CharString loc, FileCallback callback, void *userData, Bool i
 			0, CharString_length(resolved), MAX_PATH, "File_foreach()::loc file path is too big (>260 chars)"
 		))
 
-	gotoIfError(clean, CharString_toUtf16x(resolved, &tmpWStr))
+	gotoIfError(clean, CharString_toUTF16x(resolved, &tmpWStr))
 
 	//Skip .
 
@@ -212,7 +212,7 @@ Error File_loadVirtualInternal1(FileLoadVirtual *userData, CharString loc, Bool 
 				CAFile file = (CAFile) { 0 };
 				Buffer copy = Buffer_createNull();
 
-				gotoIfError(clean0, CharString_toUtf16x(section->path, &tmp))
+				gotoIfError(clean0, CharString_toUTF16x(section->path, &tmp))
 				HRSRC data = FindResourceW(NULL, tmp.ptr, RT_RCDATA);
 				ListU16_freex(&tmp);
 

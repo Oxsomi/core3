@@ -330,11 +330,11 @@ clean:
 }
 
 Error CLI_profileAES256Impl(ParsedArgs args, Buffer buf) {
-	return CLI_profileEncryptionImpl(args, buf, EBufferEncryptionType_Aes256Gcm);
+	return CLI_profileEncryptionImpl(args, buf, EBufferEncryptionType_AES256GCM);
 }
 
 Error CLI_profileAES128Impl(ParsedArgs args, Buffer buf) {
-	return CLI_profileEncryptionImpl(args, buf, EBufferEncryptionType_Aes128Gcm);
+	return CLI_profileEncryptionImpl(args, buf, EBufferEncryptionType_AES128GCM);
 }
 
 Bool CLI_profileAES256(ParsedArgs args) {

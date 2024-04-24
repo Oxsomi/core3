@@ -43,8 +43,8 @@ Error DxDeviceBuffer_transition(
 	//Otherwise, it's not synchronized correctly.
 
 	if(
-		buffer->lastSync == sync && buffer->lastAccess == access && 
-		access != D3D12_BARRIER_ACCESS_UNORDERED_ACCESS && 
+		buffer->lastSync == sync && buffer->lastAccess == access &&
+		access != D3D12_BARRIER_ACCESS_UNORDERED_ACCESS &&
 		access != D3D12_BARRIER_ACCESS_STREAM_OUTPUT &&
 		access != D3D12_BARRIER_ACCESS_COPY_DEST &&
 		access != D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_WRITE
@@ -241,7 +241,7 @@ Error GraphicsDeviceRef_createBufferExt(GraphicsDeviceRef *dev, DeviceBuffer *bu
 	}
 
 	if((device->flags & EGraphicsDeviceFlags_IsDebug) && CharString_length(name)) {
-		gotoIfError(clean, CharString_toUtf16x(name, &name16))
+		gotoIfError(clean, CharString_toUTF16x(name, &name16))
 		gotoIfError(clean, dxCheck(bufExt->buffer->lpVtbl->SetName(bufExt->buffer, name16.ptr)))
 	}
 

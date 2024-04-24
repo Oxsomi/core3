@@ -883,11 +883,8 @@ Bool CLI_inspectData(ParsedArgs args) {
 			if(madeFile)
 				File_remove(out, 1 * SECOND);
 
-			for(U64 i = 0; i < strings.length; ++i)
-				CharString_freex(strings.ptrNonConst + i);
-
 			CAFile_freex(&file);
-			ListCharString_freex(&strings);
+			ListCharString_freeUnderlyingx(&strings);
 			CharString_freex(&tmp);
 
 			if(err.genericError)

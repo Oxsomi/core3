@@ -258,8 +258,8 @@ Error DxUnifiedTexture_transition(
 	//Otherwise, it's not synchronized correctly.
 
 	if(
-		image->lastSync == sync && image->lastAccess == access && 
-		access != D3D12_BARRIER_ACCESS_UNORDERED_ACCESS && 
+		image->lastSync == sync && image->lastAccess == access &&
+		access != D3D12_BARRIER_ACCESS_UNORDERED_ACCESS &&
 		access != D3D12_BARRIER_ACCESS_DEPTH_STENCIL_WRITE &&
 		access != D3D12_BARRIER_ACCESS_RENDER_TARGET &&
 		access != D3D12_BARRIER_ACCESS_COPY_DEST &&

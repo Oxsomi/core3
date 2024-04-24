@@ -162,7 +162,7 @@ void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f) {
 Bool CLI_helpOperation(ParsedArgs args) {
 
 	Error err = Error_none();
-	CharStringList split = (CharStringList) { 0 };
+	ListCharString split = (ListCharString) { 0 };
 
 	if(args.parameters & EOperationHasParameter_Input)
 		gotoIfError(clean, CharString_splitSensitivex(*args.args.ptr, ':', &split))
@@ -229,11 +229,11 @@ Bool CLI_helpOperation(ParsedArgs args) {
 	CLI_showHelp(EOperationCategory_Invalid, EOperation_Invalid, EFormat_Invalid);
 
 clean:
-	CharStringList_freex(&split);
+	ListCharString_freex(&split);
 	return !err.genericError;
 }
 
-Bool CLI_execute(CharStringList argList) {
+Bool CLI_execute(ListCharString argList) {
 
 	//Show help
 

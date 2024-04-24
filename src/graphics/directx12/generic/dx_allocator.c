@@ -191,7 +191,7 @@ Error DeviceMemoryAllocator_allocate(
 			objectName.ptr
 		))
 
-		gotoIfError(clean, CharString_toUtf16x(temp, &temp16));
+		gotoIfError(clean, CharString_toUTF16x(temp, &temp16));
 		gotoIfError(clean, dxCheck(heap->lpVtbl->SetName(heap, temp16.ptr)))
 		CharString_freex(&temp);
 	}

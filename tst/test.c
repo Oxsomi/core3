@@ -1008,7 +1008,7 @@ int main() {
 			gotoIfError(clean, Buffer_encrypt(
 				CharString_buffer(tmp),
 				CharString_bufferConst(additionalData[i]),
-				EBufferEncryptionType_Aes256Gcm,
+				EBufferEncryptionType_AES256GCM,
 				EBufferEncryptionFlags_None,
 				(U32*) testKeys[i].ptr,
 				&iv,
@@ -1046,7 +1046,7 @@ int main() {
 			gotoIfError(clean, Buffer_decrypt(
 				CharString_buffer(tmp),
 				CharString_bufferConst(additionalData[i]),
-				EBufferEncryptionType_Aes256Gcm,
+				EBufferEncryptionType_AES256GCM,
 				(const U32*) testKeys[i].ptr,
 				tag,
 				iv
@@ -1323,7 +1323,7 @@ int main() {
 			gotoIfError(clean, Buffer_encrypt(
 				CharString_buffer(tmp),
 				CharString_bufferConst(additionalData[i]),
-				EBufferEncryptionType_Aes128Gcm,
+				EBufferEncryptionType_AES128GCM,
 				EBufferEncryptionFlags_None,
 				(U32*) testKeys[i].ptr,
 				&iv,
@@ -1361,7 +1361,7 @@ int main() {
 			gotoIfError(clean, Buffer_decrypt(
 				CharString_buffer(tmp),
 				CharString_bufferConst(additionalData[i]),
-				EBufferEncryptionType_Aes128Gcm,
+				EBufferEncryptionType_AES128GCM,
 				(const U32*) testKeys[i].ptr,
 				tag,
 				iv

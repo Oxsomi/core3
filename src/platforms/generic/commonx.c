@@ -165,7 +165,7 @@ Error DLFile_createListx(DLSettings settings, ListBuffer *buffers, DLFile *dlFil
 }
 
 Error DLFile_createUTF8Listx(DLSettings settings, ListBuffer buffers, DLFile *dlFile) {
-	return DLFile_createUtf8List(settings, buffers, Platform_instance.alloc, dlFile);
+	return DLFile_createUTF8List(settings, buffers, Platform_instance.alloc, dlFile);
 }
 
 Error DLFile_createBufferListx(DLSettings settings, ListBuffer buffers, DLFile *dlFile) {
@@ -341,7 +341,7 @@ Error U128_toStringx(U128 b, CharString *result, EIntegerEncoding encoding, Bool
 //CharString
 
 Bool CharString_freex(CharString *str) { return CharString_free(str, Platform_instance.alloc); }
-Bool CharStringList_freex(CharStringList *arr) { return CharStringList_free(arr, Platform_instance.alloc); }
+Bool ListCharString_freeUnderlyingx(ListCharString *arr) { return ListCharString_freeUnderlying(arr, Platform_instance.alloc); }
 
 Error CharString_createx(C8 c, U64 size, CharString *result) {
 	return CharString_create(c, size, Platform_instance.alloc, result);
@@ -355,8 +355,8 @@ Error CharString_createFromUTF16x(const U16 *ptr, U64 max, CharString *result) {
 	return CharString_createFromUTF16(ptr, max, Platform_instance.alloc, result);
 }
 
-Error CharString_toUtf16x(CharString s, ListU16 *arr) {
-	return CharString_toUtf16(s, Platform_instance.alloc, arr);
+Error CharString_toUTF16x(CharString s, ListU16 *arr) {
+	return CharString_toUTF16(s, Platform_instance.alloc, arr);
 }
 
 Error CharString_createNytox(U64 v, U8 leadingZeros, CharString *result) {
@@ -379,31 +379,31 @@ Error CharString_createBinx(U64 v, U8 leadingZeros, CharString *result) {
 	return CharString_createBin(v, leadingZeros, Platform_instance.alloc, result);
 }
 
-Error CharString_splitx(CharString s, C8 c,  EStringCase casing,  CharStringList *result) {
+Error CharString_splitx(CharString s, C8 c,  EStringCase casing,  ListCharString *result) {
 	return CharString_split(s, c, casing, Platform_instance.alloc, result);
 }
 
-Error CharString_splitStringx(CharString s, CharString other, EStringCase casing, CharStringList *result) {
+Error CharString_splitStringx(CharString s, CharString other, EStringCase casing, ListCharString *result) {
 	return CharString_splitString(s, other, casing, Platform_instance.alloc, result);
 }
 
-Error CharString_splitSensitivex(CharString s, C8 c, CharStringList *result) {
+Error CharString_splitSensitivex(CharString s, C8 c, ListCharString *result) {
 	return CharString_splitSensitive(s, c, Platform_instance.alloc, result);
 }
 
-Error CharString_splitInsensitivex(CharString s, C8 c, CharStringList *result) {
+Error CharString_splitInsensitivex(CharString s, C8 c, ListCharString *result) {
 	return CharString_splitInsensitive(s, c, Platform_instance.alloc, result);
 }
 
-Error CharString_splitStringSensitivex(CharString s, CharString other, CharStringList *result) {
+Error CharString_splitStringSensitivex(CharString s, CharString other, ListCharString *result) {
 	return CharString_splitStringSensitive(s, other, Platform_instance.alloc, result);
 }
 
-Error CharString_splitStringInsensitivex(CharString s, CharString other, CharStringList *result) {
+Error CharString_splitStringInsensitivex(CharString s, CharString other, ListCharString *result) {
 	return CharString_splitStringInsensitive(s, other, Platform_instance.alloc, result);
 }
 
-Error CharString_splitLinex(CharString s, CharStringList *result) {
+Error CharString_splitLinex(CharString s, ListCharString *result) {
 	return CharString_splitLine(s, Platform_instance.alloc, result);
 }
 
@@ -517,32 +517,20 @@ Error CharString_findAllStringInsensitivex(CharString s, CharString other, ListU
 	return CharString_findAllStringInsensitive(s, other, Platform_instance.alloc, result);
 }
 
-Error CharStringList_createx(U64 length, CharStringList *result) {
-	return CharStringList_create(length, Platform_instance.alloc, result);
+Error ListCharString_createCopyUnderlyingx(ListCharString toCopy, ListCharString *arr) {
+	return ListCharString_createCopyUnderlying(toCopy, Platform_instance.alloc, arr);
 }
 
-Error CharStringList_createCopyx(CharStringList toCopy, CharStringList *arr) {
-	return CharStringList_createCopy(toCopy, Platform_instance.alloc, arr);
+Error ListCharString_combinex(ListCharString arr, CharString *result) {
+	return ListCharString_combine(arr, Platform_instance.alloc, result);
 }
 
-Error CharStringList_setx(CharStringList arr, U64 i, CharString str) {
-	return CharStringList_set(arr, i, str, Platform_instance.alloc);
+Error ListCharString_concatx(ListCharString arr, C8 between, CharString *result) {
+	return ListCharString_concat(arr, between, Platform_instance.alloc, result);
 }
 
-Error CharStringList_unsetx(CharStringList arr, U64 i) {
-	return CharStringList_unset(arr, i, Platform_instance.alloc);
-}
-
-Error CharStringList_combinex(CharStringList arr, CharString *result) {
-	return CharStringList_combine(arr, Platform_instance.alloc, result);
-}
-
-Error CharStringList_concatx(CharStringList arr, C8 between, CharString *result) {
-	return CharStringList_concat(arr, between, Platform_instance.alloc, result);
-}
-
-Error CharStringList_concatStringx(CharStringList arr, CharString between, CharString *result) {
-	return CharStringList_concatString(arr, between, Platform_instance.alloc, result);
+Error ListCharString_concatStringx(ListCharString arr, CharString between, CharString *result) {
+	return ListCharString_concatString(arr, between, Platform_instance.alloc, result);
 }
 
 //Format string

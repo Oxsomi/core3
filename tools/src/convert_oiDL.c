@@ -124,7 +124,7 @@ Error CLI_convertToDL(ParsedArgs args, CharString input, FileInfo inputInfo, Cha
 	ListCharString sortedPaths = { 0 };
 
 	Error err = Error_none();
-	CharStringList split = (CharStringList) { 0 };
+	ListCharString split = (ListCharString) { 0 };
 	DLFile file = (DLFile) { 0 };
 	Buffer fileBuf = Buffer_createNull();
 	Buffer buf = Buffer_createNull();
@@ -278,23 +278,18 @@ clean:
 	if(err.genericError)
 		Error_printx(err, ELogLevel_Error, ELogOptions_Default);
 
-	for(U64 i = 0; i < paths.length; ++i) {
-		CharString str = paths.ptr[i];
-		CharString_freex(&str);
-	}
-
 	for(U64 i = 0; i < buffers.length; ++i) {
 		Buffer bufi = buffers.ptr[i];
 		Buffer_freex(&bufi);
 	}
 
 	DLFile_freex(&file);
-	CharStringList_freex(&split);
+	ListCharString_freex(&split);
 	Buffer_freex(&res);
 	Buffer_freex(&buf);
 	Buffer_freex(&fileBuf);
 	ListBuffer_freex(&buffers);
-	ListCharString_freex(&paths);
+	ListCharString_freeUnderlyingx(&paths);
 	ListCharString_freex(&sortedPaths);
 
 	return err;

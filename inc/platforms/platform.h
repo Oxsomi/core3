@@ -40,7 +40,7 @@ typedef struct Platform {
 
 	EPlatform platformType;
 
-	CharStringList args;
+	ListCharString args;
 	CharString workingDirectory;		//Contains a trailing slash to make file stuff easier
 
 	Allocator alloc;

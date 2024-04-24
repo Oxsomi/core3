@@ -315,7 +315,7 @@ Error GraphicsDevice_initExt(
 		EDescriptorType type = i == 15 ? EDescriptorType_TLASExt : i;
 		U32 offset = EDescriptorTypeOffsets_values[type];
 		Bool isSrv = offset >= EDescriptorTypeOffsets_SRVStart && offset < EDescriptorTypeOffsets_SRVEnd;
-		
+
 		descRanges[i + 1] = (D3D12_DESCRIPTOR_RANGE) {
 			.RangeType = isSrv ? D3D12_DESCRIPTOR_RANGE_TYPE_SRV : D3D12_DESCRIPTOR_RANGE_TYPE_UAV,
 			.NumDescriptors = descriptorTypeCount[type],
@@ -778,7 +778,7 @@ Error GraphicsDevice_submitCommandsImpl(
 					(device->submitId - 1) % 3
 				))
 
-				gotoIfError(clean, CharString_toUtf16x(temp, &temp16))
+				gotoIfError(clean, CharString_toUTF16x(temp, &temp16))
 
 				gotoIfError(clean, dxCheck(allocator->pool->lpVtbl->SetName(allocator->pool, temp16.ptr)))
 				CharString_freex(&temp);
@@ -814,7 +814,7 @@ Error GraphicsDevice_submitCommandsImpl(
 					(device->submitId - 1) % 3
 				))
 
-				gotoIfError(clean, CharString_toUtf16x(temp, &temp16))
+				gotoIfError(clean, CharString_toUTF16x(temp, &temp16))
 				gotoIfError(clean, dxCheck(allocator->cmd->lpVtbl->SetName(allocator->cmd, temp16.ptr)))
 				CharString_freex(&temp);
 				ListU16_freex(&temp16);
@@ -879,7 +879,7 @@ Error GraphicsDevice_submitCommandsImpl(
 		}
 
 		DeviceBuffer *frameData = DeviceBufferRef_ptr(device->frameData);
-		D3D12_GPU_VIRTUAL_ADDRESS cbvLoc = 
+		D3D12_GPU_VIRTUAL_ADDRESS cbvLoc =
 			frameData->resource.deviceAddress + ((device->submitId - 1) % 3) * sizeof(CBufferData);
 
 		commandBuffer->lpVtbl->SetComputeRootConstantBufferView(commandBuffer, 2, cbvLoc);

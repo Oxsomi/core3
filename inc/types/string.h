@@ -23,10 +23,9 @@
 
 #include <stdarg.h>
 
-//For simplicity;
-//A string is ALWAYS ASCII (7-bit) and no null terminator.
-//The null terminator is omitted for speed and to allow references into an existing string.
-//The null terminator is only useful if it's created unsafely (which is only recommended for hardcoded strings).
+//Since a CharString can be a ref to existing memory, it doesn't necessarily have a null terminator.
+//The null terminator is omitted for speed and to allow references into an existing string or data.
+//The null terminator is automatically added on copy.
 //
 //There are four types of strings:
 //
@@ -61,12 +60,7 @@ Bool ListCharString_sort(ListCharString list, EStringCase stringCase);
 Bool ListCharString_sortSensitive(ListCharString list);
 Bool ListCharString_sortInsensitive(ListCharString list);
 
-typedef struct CharStringList {
-	U64 length;
-	CharString *ptr;
-} CharStringList;
-
-//Simple helper functions (inlines)
+//Simple helper functions
 
 Bool CharString_isConstRef(CharString str);
 Bool CharString_isRef(CharString str);
@@ -165,7 +159,7 @@ Error CharString_split(
 	C8 c,
 	EStringCase casing,
 	Allocator allocator,
-	CharStringList *result
+	ListCharString *result
 );
 
 Error CharString_splitString(
@@ -173,17 +167,17 @@ Error CharString_splitString(
 	CharString other,
 	EStringCase casing,
 	Allocator allocator,
-	CharStringList *result
+	ListCharString *result
 );
 
-Error CharString_splitSensitive(CharString s, C8 c, Allocator allocator, CharStringList *result);
-Error CharString_splitInsensitive(CharString s, C8 c, Allocator allocator, CharStringList *result);
-Error CharString_splitStringSensitive(CharString s, CharString other, Allocator allocator, CharStringList *result);
-Error CharString_splitStringInsensitive(CharString s, CharString other, Allocator allocator, CharStringList *result);
+Error CharString_splitSensitive(CharString s, C8 c, Allocator allocator, ListCharString *result);
+Error CharString_splitInsensitive(CharString s, C8 c, Allocator allocator, ListCharString *result);
+Error CharString_splitStringSensitive(CharString s, CharString other, Allocator allocator, ListCharString *result);
+Error CharString_splitStringInsensitive(CharString s, CharString other, Allocator allocator, ListCharString *result);
 
 //TODO: CharString_splitCodepoint
 
-Error CharString_splitLine(CharString s, Allocator alloc, CharStringList *result);
+Error CharString_splitLine(CharString s, Allocator alloc, ListCharString *result);
 
 //This will operate on this string, so it will need a heap allocated string
 
@@ -269,7 +263,7 @@ Error CharString_replaceLastStringInsensitive(CharString *s, CharString search, 
 //TODO: CharString_replaceCodepoint
 
 //Windows interop. Converts UTF8 to UTF16
-Error CharString_toUtf16(CharString s, Allocator allocator, ListU16 *arr);
+Error CharString_toUTF16(CharString s, Allocator allocator, ListU16 *arr);
 
 //Simple checks (consts)
 
@@ -555,29 +549,20 @@ CharString CharString_getBasePath(CharString *str);		//Formats on string first t
 
 //TODO: Regex
 
-//CharString list
-//To return from string operations
-//These strings will be a ref into existing string to prevent copies, use CharStringList_createCopy to move them to the heap.
-//Because they contain mixed strings, the functions still need allocators to free heap strings.
-//This is different than List<CharString> because that one won't enforce string allocation properly.
+//List of CharString with additional functionality to allow something like std::vector<std::string>
+//This handles copies, but should only be used when managed strings are used.
+//For a list of ref strings, the normal functionality should be used and makes everything a lot easier.
 
-Error CharStringList_create(U64 length, Allocator alloc, CharStringList *result);
-Bool CharStringList_free(CharStringList *arr, Allocator alloc);
+Bool ListCharString_freeUnderlying(ListCharString *arr, Allocator alloc);
 
-Error CharStringList_createCopy(CharStringList toCopy, Allocator alloc, CharStringList *arr);
-
-//Store the string directly into CharStringList (no copy)
-//The allocator is used to free strings if they are heap allocated
-
-Error CharStringList_set(CharStringList arr, U64 i, CharString str, Allocator alloc);
-Error CharStringList_unset(CharStringList arr, U64 i, Allocator alloc);
+Error ListCharString_createCopyUnderlying(ListCharString toCopy, Allocator alloc, ListCharString *arr);
 
 //Combining all strings into one
 
-Error CharStringList_combine(CharStringList arr, Allocator alloc, CharString *result);
+Error ListCharString_combine(ListCharString arr, Allocator alloc, CharString *result);
 
-Error CharStringList_concat(CharStringList arr, C8 between, Allocator alloc, CharString *result);
-Error CharStringList_concatString(CharStringList arr, CharString between, Allocator alloc, CharString *result);
+Error ListCharString_concat(ListCharString arr, C8 between, Allocator alloc, CharString *result);
+Error ListCharString_concatString(ListCharString arr, CharString between, Allocator alloc, CharString *result);
 
 //Formatting
 

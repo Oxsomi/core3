@@ -166,7 +166,7 @@ Error GraphicsDeviceRef_createSwapchain(GraphicsDeviceRef *dev, SwapchainInfo in
 		.levels = 1,
 		.images = 3		//Triple buffering
 	};
-	
+
 	if(!swapchain->info.presentModePriorities[0]) {
 
 		#if _PLATFORM_TYPE != PLATFORM_ANDROID
