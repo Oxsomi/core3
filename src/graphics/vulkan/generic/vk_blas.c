@@ -49,7 +49,7 @@ Bool BLAS_freeExt(BLAS *blas) {
 
 Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRef *pending) {
 
-	VkCommandBuffer commandBuffer = (VkCommandBuffer) commandBufferExt;
+	VkCommandBufferState *commandBuffer = (VkCommandBufferState*) commandBufferExt;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
@@ -290,7 +290,7 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 	))
 
 	if (dep.bufferMemoryBarrierCount)
-		instanceExt->cmdPipelineBarrier2(commandBuffer, &dep);
+		instanceExt->cmdPipelineBarrier2(commandBuffer->buffer, &dep);
 
 	ListVkBufferMemoryBarrier2_clear(&deviceExt->bufferTransitions);
 
@@ -301,7 +301,7 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 	const VkAccelerationStructureBuildRangeInfoKHR *buildRangeInfoPtr = &buildRangeInfo;
 
 	instanceExt->cmdBuildAccelerationStructures(
-		commandBuffer,
+		commandBuffer->buffer,
 		1,
 		&buildInfo,
 		&buildRangeInfoPtr

@@ -254,7 +254,7 @@ clean:
 
 Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, DeviceBufferRef *pending) {
 
-	DxCommandBuffer *commandBuffer = (DxCommandBuffer*) commandBufferExt;
+	DxCommandBufferState *commandBuffer = (DxCommandBufferState*) commandBufferExt;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
@@ -357,12 +357,12 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 				))
 
 				if(dependency.NumBarriers) {
-					commandBuffer->lpVtbl->Barrier(commandBuffer, 1, &dependency);
+					commandBuffer->buffer->lpVtbl->Barrier(commandBuffer->buffer, 1, &dependency);
 					ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions);
 				}
 
-				commandBuffer->lpVtbl->CopyBufferRegion(
-					commandBuffer,
+				commandBuffer->buffer->lpVtbl->CopyBufferRegion(
+					commandBuffer->buffer,
 					bufferExt->buffer,
 					bufferj.startRange,
 					stagingResourceExt->buffer,
@@ -446,12 +446,12 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 				}
 
 				if(dependency.NumBarriers) {
-					commandBuffer->lpVtbl->Barrier(commandBuffer, 1, &dependency);
+					commandBuffer->buffer->lpVtbl->Barrier(commandBuffer->buffer, 1, &dependency);
 					ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions);
 				}
 
-				commandBuffer->lpVtbl->CopyBufferRegion(
-					commandBuffer,
+				commandBuffer->buffer->lpVtbl->CopyBufferRegion(
+					commandBuffer->buffer,
 					bufferExt->buffer,
 					bufferj.startRange,
 					stagingExt->buffer,

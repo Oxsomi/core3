@@ -71,9 +71,9 @@ Error GraphicsDevice_createPipelinesRaytracingInternalExt(
 	DeviceBufferRef *sbt = NULL;
 
 	const wchar_t main[] = L"main";
-	ListU16 mainUtf16 = (ListU16) { 0 };
+	ListU16 mainUTF16 = (ListU16) { 0 };
 
-	Error err = ListU16_createRefConst((const U16*)main, sizeof(main), &mainUtf16);
+	Error err = ListU16_createRefConst((const U16*)main, sizeof(main), &mainUTF16);
 
 	if(err.genericError)
 		return err;
@@ -160,13 +160,13 @@ Error GraphicsDevice_createPipelinesRaytracingInternalExt(
 		for(U32 j = 0; j < rtPipeline->stageCount; ++j) {
 
 			gotoIfError(clean, CharString_formatx(&tmp, "#%"PRIu32, j))
-			gotoIfError(clean, CharString_toUtf16x(tmp, &nameArr.ptrNonConst[j * 2]));
+			gotoIfError(clean, CharString_toUTF16x(tmp, &nameArr.ptrNonConst[j * 2]));
 			tmp = CharString_createNull();		//Moved to nameArr
 
 			if(rtPipeline->entrypoints.length && CharString_length(rtPipeline->entrypoints.ptr[j]))
-				gotoIfError(clean, CharString_toUtf16x(rtPipeline->entrypoints.ptr[j], &nameArr.ptrNonConst[j * 2 + 1]))
+				gotoIfError(clean, CharString_toUTF16x(rtPipeline->entrypoints.ptr[j], &nameArr.ptrNonConst[j * 2 + 1]))
 
-			else nameArr.ptrNonConst[j * 2 + 1] = mainUtf16;
+			else nameArr.ptrNonConst[j * 2 + 1] = mainUTF16;
 
 			++libraries.ptrNonConst[pipeline->stages.ptr[j].binaryId].NumExports;
 
@@ -235,7 +235,7 @@ Error GraphicsDevice_createPipelinesRaytracingInternalExt(
 			ListU16 loc;
 
 			gotoIfError(clean, CharString_formatx(&tmp, "H%"PRIu32, j))
-			gotoIfError(clean, CharString_toUtf16x(tmp, &nameArr.ptrNonConst[groupNameStart + j]));
+			gotoIfError(clean, CharString_toUTF16x(tmp, &nameArr.ptrNonConst[groupNameStart + j]));
 			tmp = CharString_createNull();		//Moved to nameArr
 			loc = nameArr.ptr[groupNameStart + j];
 
@@ -280,7 +280,7 @@ Error GraphicsDevice_createPipelinesRaytracingInternalExt(
 		)))
 
 		if((device->flags & EGraphicsDeviceFlags_IsDebug) && names.length && CharString_length(names.ptr[i])) {
-			gotoIfError(clean, CharString_toUtf16x(names.ptr[i], &tmp16))
+			gotoIfError(clean, CharString_toUTF16x(names.ptr[i], &tmp16))
 			gotoIfError(clean, dxCheck((*stateObject)->lpVtbl->SetName(*stateObject, (const wchar_t*) tmp16.ptr)))
 			ListU16_freex(&tmp16);
 		}

@@ -54,7 +54,7 @@ const U64 GraphicsDeviceExt_size = sizeof(VkGraphicsDevice);
 //Convert command into API dependent instructions
 impl void CommandList_process(
 	CommandList *commandList,
-	GraphicsDevice *device,
+	GraphicsDeviceRef *deviceRef,
 	ECommandOp op,
 	const U8 *data,
 	void *commandListExt
@@ -1209,9 +1209,8 @@ Error GraphicsDevice_submitCommandsImpl(
 
 		//Start copies
 
-		gotoIfError(clean, GraphicsDeviceRef_handleNextFrame(deviceRef, commandBuffer))
-
 		VkCommandBufferState state = (VkCommandBufferState) { .buffer = commandBuffer };
+		gotoIfError(clean, GraphicsDeviceRef_handleNextFrame(deviceRef, &state))
 
 		//Ensure ubo and staging buffer are the correct states
 
@@ -1268,7 +1267,7 @@ Error GraphicsDevice_submitCommandsImpl(
 
 			for (U64 j = 0; j < commandList->commandOps.length; ++j) {
 				CommandOpInfo info = commandList->commandOps.ptr[j];
-				CommandList_process(commandList, device, info.op, ptr, &state);
+				CommandList_process(commandList, deviceRef, info.op, ptr, &state);
 				ptr += info.opSize;
 			}
 		}
@@ -1382,7 +1381,7 @@ clean:
 	return err;
 }
 
-Error VkGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, VkCommandBuffer commandBuffer) {
+Error VkGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, VkCommandBufferState *commandBuffer) {
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
@@ -1390,7 +1389,7 @@ Error VkGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, VkCommandBuffer comma
 	//End current command list
 
 	Error err;
-	gotoIfError(clean, vkCheck(vkEndCommandBuffer(commandBuffer)))
+	gotoIfError(clean, vkCheck(vkEndCommandBuffer(commandBuffer->buffer)))
 
 	//Submit only the copy command list
 
@@ -1407,7 +1406,7 @@ Error VkGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, VkCommandBuffer comma
 		.pNext = &timelineInfo,
 		.waitSemaphoreCount = timelineInfo.waitSemaphoreValueCount,
 		.pWaitSemaphores = (VkSemaphore*) &deviceExt->commitSemaphore,
-		.pCommandBuffers = &commandBuffer,
+		.pCommandBuffers = &commandBuffer->buffer,
 		.commandBufferCount = 1
 	};
 
@@ -1436,7 +1435,18 @@ Error VkGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, VkCommandBuffer comma
 		.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO
 	};
 
-	gotoIfError(clean, vkCheck(vkBeginCommandBuffer(commandBuffer, &beginInfo)))
+	gotoIfError(clean, vkCheck(vkBeginCommandBuffer(commandBuffer->buffer, &beginInfo)))
+
+	//Reset temporary variables to avoid invalid caching behavior
+
+	for (U64 i = 0; i < EPipelineType_Count; ++i)
+		commandBuffer->pipelines[i] = NULL;
+
+	commandBuffer->boundScissor = (VkRect2D) { 0 };
+	commandBuffer->boundViewport = (VkViewport) { 0 };
+	commandBuffer->boundBuffers = (SetPrimitiveBuffersCmd) { 0 };
+	commandBuffer->stencilRef = 0;
+	commandBuffer->blendConstants = F32x4_zero();
 
 clean:
 	return err;

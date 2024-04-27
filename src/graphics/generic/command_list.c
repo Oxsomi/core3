@@ -1564,6 +1564,66 @@ clean:
 	return err;
 }
 
+//Feature RaytracingExt
+
+Error CommandListRef_updateRTASExt(CommandListRef *commandListRef, RTASRef *rtas, Bool isBLAS) {
+
+	CommandListRef_validateScope(commandListRef, clean)
+
+	if(!I32x2_all(I32x2_eq(commandList->currentSize, I32x2_zero())))
+		gotoIfError(clean, Error_invalidOperation(
+			0, "CommandListRef_updateRTASExt() is disallowed during render calls, as flushing might cause invalid render state"
+		))
+
+	if(!rtas || rtas->typeId != (ETypeId)(isBLAS ? EGraphicsTypeId_BLASExt : EGraphicsTypeId_TLASExt))
+		gotoIfError(clean, Error_unsupportedOperation(0, "CommandListRef_updateRTASExt() requires BLAS or TLAS"))
+		
+	TransitionInternal *oldState = NULL;
+	if(CommandListRef_isBound(commandList, rtas, (ResourceRange) { 0 }, &oldState)) {
+
+		if(oldState->type != ETransitionType_UpdateRTAS)
+			gotoIfError(clean, Error_invalidOperation(
+				4, "CommandListRef_updateRTASExt()::buffer was already transitioned in scope!"
+			))
+	}
+
+	else {
+
+		const TransitionInternal transition = (TransitionInternal) {
+			.resource = rtas,
+			.range = (ResourceRange) { 0 },
+			.stage = EPipelineStage_Count,
+			.type = ETransitionType_UpdateRTAS
+		};
+
+		gotoIfError(clean, ListTransitionInternal_pushBackx(&commandList->pendingTransitions, transition))
+	}
+
+	gotoIfError(clean, CommandList_append(
+		commandList, 
+		isBLAS ? ECommandOp_UpdateBLASExt : ECommandOp_UpdateTLASExt, 
+		Buffer_createRefConst(&rtas, sizeof(rtas)),
+		0
+	))
+
+	commandList->tempStateFlags |= ECommandStateFlags_HasModifyOp;
+
+clean:
+
+	if(err.genericError)
+		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
+
+	return err;
+}
+
+Error CommandListRef_updateTLASExt(CommandListRef *commandList, TLASRef *tlas) {
+	return CommandListRef_updateRTASExt(commandList, tlas, false);
+}
+
+Error CommandListRef_updateBLASExt(CommandListRef *commandList, BLASRef *blas) {
+	return CommandListRef_updateRTASExt(commandList, blas, true);
+}
+
 //Dynamic rendering
 
 Error CommandListRef_startRenderExt(

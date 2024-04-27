@@ -265,7 +265,7 @@ clean:
 
 Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, DeviceBufferRef *pending) {
 
-	VkCommandBuffer commandBuffer = (VkCommandBuffer) commandBufferExt;
+	VkCommandBufferState *commandBuffer = (VkCommandBufferState*) commandBufferExt;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
@@ -427,10 +427,10 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 			))
 
 			if(dependency.bufferMemoryBarrierCount)
-				instanceExt->cmdPipelineBarrier2(commandBuffer, &dependency);
+				instanceExt->cmdPipelineBarrier2(commandBuffer->buffer, &dependency);
 
 			vkCmdCopyBuffer(
-				commandBuffer,
+				commandBuffer->buffer,
 				stagingResourceExt->buffer,
 				bufferExt->buffer,
 				(U32) deviceExt->bufferCopies.length,
@@ -542,10 +542,10 @@ Error DeviceBufferRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef
 			}
 
 			if(dependency.bufferMemoryBarrierCount)
-				instanceExt->cmdPipelineBarrier2(commandBuffer, &dependency);
+				instanceExt->cmdPipelineBarrier2(commandBuffer->buffer, &dependency);
 
 			vkCmdCopyBuffer(
-				commandBuffer,
+				commandBuffer->buffer,
 				stagingExt->buffer,
 				bufferExt->buffer,
 				(U32) buffer->pendingChanges.length,

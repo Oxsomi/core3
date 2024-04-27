@@ -34,7 +34,7 @@ Bool BLAS_freeExt(BLAS *blas) { (void)blas; return true; }
 
 Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRef *pending) {
 
-	DxCommandBuffer *commandBuffer = (DxCommandBuffer*) commandBufferExt;
+	DxCommandBufferState *commandBuffer = (DxCommandBufferState*) commandBufferExt;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
@@ -230,7 +230,7 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 		&dep
 	))
 
-	commandBuffer->lpVtbl->Barrier(commandBuffer, 1, &dep);
+	commandBuffer->buffer->lpVtbl->Barrier(commandBuffer->buffer, 1, &dep);
 
 	ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions);
 
@@ -247,7 +247,7 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 		buildAs.DestAccelerationStructureData = DeviceBufferRef_ptr(parent->base.asBuffer)->resource.deviceAddress;
 	}
 
-	commandBuffer->lpVtbl->BuildRaytracingAccelerationStructure(commandBuffer, &buildAs, 0, NULL);
+	commandBuffer->buffer->lpVtbl->BuildRaytracingAccelerationStructure(commandBuffer->buffer, &buildAs, 0, NULL);
 
 	//Add as flight and ensure flushes are done if too many ASes are queued this frame
 

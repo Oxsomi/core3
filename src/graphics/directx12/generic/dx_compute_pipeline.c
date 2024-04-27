@@ -58,7 +58,7 @@ Error GraphicsDevice_createPipelinesComputeExt(GraphicsDevice *device, ListCharS
 		)))
 
 		if((device->flags & EGraphicsDeviceFlags_IsDebug) && names.length && CharString_length(names.ptr[i])) {
-			gotoIfError(clean, CharString_toUtf16x(names.ptr[i], &tmp))
+			gotoIfError(clean, CharString_toUTF16x(names.ptr[i], &tmp))
 			gotoIfError(clean, dxCheck((*pipelinei)->lpVtbl->SetName(*pipelinei, (const wchar_t*) tmp.ptr)))
 			ListU16_freex(&tmp);
 		}

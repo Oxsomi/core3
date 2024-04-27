@@ -31,7 +31,7 @@
 
 Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, DeviceTextureRef *pending) {
 
-	DxCommandBuffer *commandBuffer = (DxCommandBuffer*) commandBufferExt;
+	DxCommandBufferState *commandBuffer = (DxCommandBufferState*) commandBufferExt;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
@@ -173,8 +173,8 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 				barriers[0] = bufDep;
 				barriers[!!bufDep.NumBarriers] = imgDep;
 
-				commandBuffer->lpVtbl->Barrier(
-					commandBuffer,
+				commandBuffer->buffer->lpVtbl->Barrier(
+					commandBuffer->buffer,
 					!!bufDep.NumBarriers + !!imgDep.NumBarriers,
 					barriers
 				);
@@ -212,8 +212,8 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 				.back		= z + l
 			};
 
-			commandBuffer->lpVtbl->CopyTextureRegion(
-				commandBuffer,
+			commandBuffer->buffer->lpVtbl->CopyTextureRegion(
+				commandBuffer->buffer,
 				&dst,
 				x, y, z,
 				&src,
@@ -346,8 +346,8 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 				barriers[0] = bufDep;
 				barriers[!!bufDep.NumBarriers] = imgDep;
 
-				commandBuffer->lpVtbl->Barrier(
-					commandBuffer,
+				commandBuffer->buffer->lpVtbl->Barrier(
+					commandBuffer->buffer,
 					!!bufDep.NumBarriers + !!imgDep.NumBarriers,
 					barriers
 				);
@@ -388,8 +388,8 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 				.back		= z + l
 			};
 
-			commandBuffer->lpVtbl->CopyTextureRegion(
-				commandBuffer,
+			commandBuffer->buffer->lpVtbl->CopyTextureRegion(
+				commandBuffer->buffer,
 				&dst,
 				x, y, z,
 				&src,

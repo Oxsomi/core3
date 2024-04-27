@@ -78,7 +78,9 @@ typedef enum ECommandOp {
 	//Raytracing
 
 	ECommandOp_DispatchRaysExt,
-	ECommandOp_SetRaytracingPipelineExt
+	ECommandOp_SetRaytracingPipelineExt,
+	ECommandOp_UpdateBLASExt,
+	ECommandOp_UpdateTLASExt
 
 } ECommandOp;
 
@@ -106,7 +108,8 @@ typedef enum ETransitionType {
 	ETransitionType_ResolveTargetWrite,
 	ETransitionType_CopyRead,
 	ETransitionType_CopyWrite,
-	ETransitionType_KeepAlive			//If the only reason of this transition is to keep a resource alive
+	ETransitionType_KeepAlive,			//If the only reason of this transition is to keep a resource alive
+	ETransitionType_UpdateRTAS
 } ETransitionType;
 
 typedef struct TransitionInternal {		//Transitions issued by a scope.

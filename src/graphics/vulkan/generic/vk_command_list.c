@@ -38,6 +38,9 @@
 #include "types/buffer.h"
 #include "types/error.h"
 
+impl Error BLASRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, BLASRef *pending);
+impl Error TLASRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, TLASRef *pending);
+
 void addResolveImage(AttachmentInfoInternal attachment, VkRenderingAttachmentInfoKHR *result) {
 
 	VkUnifiedTexture *imageExt = TextureRef_getCurrImgExtT(attachment.resolveImage, Vk, 0);
@@ -54,12 +57,13 @@ void addResolveImage(AttachmentInfoInternal attachment, VkRenderingAttachmentInf
 
 void CommandList_process(
 	CommandList *commandList,
-	GraphicsDevice *device,
+	GraphicsDeviceRef *deviceRef,
 	ECommandOp op,
 	const U8 *data,
 	void *commandListExt
 ) {
 
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 
 	GraphicsInstance *instance = GraphicsInstanceRef_ptr(device->instance);
@@ -622,6 +626,16 @@ void CommandList_process(
 			}
 
 			break;
+			
+		//JIT RTAS updates in case they are on the GPU (e.g. compute updates)
+
+		case ECommandOp_UpdateBLASExt:
+			BLASRef_flush(temp, deviceRef, *(BLASRef**)data);
+			break;
+
+		case ECommandOp_UpdateTLASExt:
+			TLASRef_flush(temp, deviceRef, *(TLASRef**)data);
+			break;
 
 		//case ECommandOp_DispatchRaysIndirect:
 		case ECommandOp_DispatchRaysExt: {
@@ -757,7 +771,7 @@ void CommandList_process(
 					if (!tlas->base.isCompleted)
 						continue;
 
-					if(!tlas->useDeviceMemory)
+					if(!tlas->useDeviceMemory && transition.type != ETransitionType_UpdateRTAS)
 						for (U64 j = 0; j < tlas->cpuInstancesStatic.length; ++j) {
 
 							TLASInstanceData dat = (TLASInstanceData) { 0 };
@@ -783,9 +797,13 @@ void CommandList_process(
 						}
 
 					gotoIfError(nextTransition, VkDeviceBuffer_transition(
+
 						DeviceBuffer_ext(DeviceBufferRef_ptr(tlas->base.asBuffer), Vk),
 						pipelineStage,
+
+						transition.type == ETransitionType_UpdateRTAS ? VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR : 
 						VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR,
+
 						graphicsQueueId,
 						0, 0,
 						&deviceExt->bufferTransitions,
@@ -803,9 +821,13 @@ void CommandList_process(
 						continue;
 
 					gotoIfError(nextTransition, VkDeviceBuffer_transition(
+
 						DeviceBuffer_ext(DeviceBufferRef_ptr(blas->base.asBuffer), Vk),
 						pipelineStage,
+
+						transition.type == ETransitionType_UpdateRTAS ? VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR : 
 						VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR,
+
 						graphicsQueueId,
 						0, 0,
 						&deviceExt->bufferTransitions,

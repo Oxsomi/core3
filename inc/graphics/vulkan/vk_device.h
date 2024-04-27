@@ -156,4 +156,4 @@ Error VkDeviceMemoryAllocator_findMemory(
 	U64 *size
 );
 
-Error VkGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, VkCommandBuffer commandBuffer);
+Error VkGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, VkCommandBufferState *commandBuffer);

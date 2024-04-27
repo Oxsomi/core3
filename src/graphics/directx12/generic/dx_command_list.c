@@ -38,6 +38,9 @@
 
 #include "types/math.h"
 
+impl Error BLASRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, BLASRef *pending);
+impl Error TLASRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, TLASRef *pending);
+
 //RTVs and DSVs are temporary in DirectX.
 
 D3D12_CPU_DESCRIPTOR_HANDLE createTempRTV(
@@ -156,7 +159,7 @@ D3D12_CPU_DESCRIPTOR_HANDLE createTempDSV(
 
 void CommandList_process(
 	CommandList *commandList,
-	GraphicsDevice *device,
+	GraphicsDeviceRef *deviceRef,
 	ECommandOp op,
 	const U8 *data,
 	void *commandListExt
@@ -164,6 +167,7 @@ void CommandList_process(
 
 	(void) commandList;
 
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
 
 	(void) deviceExt;
@@ -399,6 +403,7 @@ void CommandList_process(
 				&dsv
 			);
 
+			temp->inRender = true;
 			break;
 		}
 
@@ -483,6 +488,7 @@ void CommandList_process(
 					);
 				}
 
+			temp->inRender = false;
 			break;
 		}
 
@@ -578,9 +584,9 @@ void CommandList_process(
 				case ETopologyMode_LineStripAdj:		topology = D3D_PRIMITIVE_TOPOLOGY_LINESTRIP_ADJ;		break;
 			}
 
-			if (temp->tempPrimitiveTopology != topology) {
+			if (temp->boundPrimitiveTopology != topology) {
 				buffer->lpVtbl->IASetPrimitiveTopology(buffer, topology);
-				temp->tempPrimitiveTopology = (U8) topology;
+				temp->boundPrimitiveTopology = (U8) topology;
 			}
 
 			//Bind index buffer
@@ -758,6 +764,16 @@ void CommandList_process(
 
 			break;
 
+		//JIT RTAS updates in case they are on the GPU (e.g. compute updates)
+
+		case ECommandOp_UpdateBLASExt:
+			BLASRef_flush(temp, deviceRef, *(BLASRef**)data);
+			break;
+
+		case ECommandOp_UpdateTLASExt:
+			TLASRef_flush(temp, deviceRef, *(TLASRef**)data);
+			break;
+
 		//case ECommandOp_DispatchRaysIndirect:
 		case ECommandOp_DispatchRaysExt: {
 
@@ -903,7 +919,7 @@ void CommandList_process(
 					if (!tlas->base.isCompleted)
 						continue;
 
-					if(!tlas->useDeviceMemory)
+					if(!tlas->useDeviceMemory && transition.type != ETransitionType_UpdateRTAS)
 						for (U64 j = 0; j < tlas->cpuInstancesStatic.length; ++j) {
 
 							TLASInstanceData dat = (TLASInstanceData) { 0 };
@@ -927,9 +943,14 @@ void CommandList_process(
 						}
 
 					gotoIfError(nextTransition, DxDeviceBuffer_transition(
+
 						DeviceBuffer_ext(DeviceBufferRef_ptr(tlas->base.asBuffer), Dx),
 						pipelineStage,
+
+						transition.type == ETransitionType_UpdateRTAS ?
+						D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_WRITE : 
 						D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_READ,
+
 						&deviceExt->bufferTransitions,
 						&dep[1]
 					))
@@ -945,9 +966,14 @@ void CommandList_process(
 						continue;
 
 					gotoIfError(nextTransition, DxDeviceBuffer_transition(
+
 						DeviceBuffer_ext(DeviceBufferRef_ptr(blas->base.asBuffer), Dx),
 						pipelineStage,
+						
+						transition.type == ETransitionType_UpdateRTAS ?
+						D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_WRITE : 
 						D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_READ,
+						
 						&deviceExt->bufferTransitions,
 						&dep[1]
 					))

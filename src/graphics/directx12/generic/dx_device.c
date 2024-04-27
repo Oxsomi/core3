@@ -110,7 +110,7 @@ TListNamedImpl(ListID3D12Fence);
 //Convert command into API dependent instructions
 impl void CommandList_process(
 	CommandList *commandList,
-	GraphicsDevice *device,
+	GraphicsDeviceRef *deviceRef,
 	ECommandOp op,
 	const U8 *data,
 	void *commandListExt
@@ -830,11 +830,10 @@ Error GraphicsDevice_submitCommandsImpl(
 
 		//Start copies
 
-		gotoIfError(clean, GraphicsDeviceRef_handleNextFrame(deviceRef, commandBuffer))
-
 		DxCommandBufferState state = (DxCommandBufferState) { .buffer = commandBuffer };
-		state.tempPrimitiveTopology = U8_MAX;
-		state.tempStencilRef = 0;
+		state.boundPrimitiveTopology = U8_MAX;
+
+		gotoIfError(clean, GraphicsDeviceRef_handleNextFrame(deviceRef, &state))
 
 		//Ensure ubo and staging buffer are the correct states
 
@@ -895,7 +894,7 @@ Error GraphicsDevice_submitCommandsImpl(
 
 			for (U64 j = 0; j < commandList->commandOps.length; ++j) {
 				CommandOpInfo info = commandList->commandOps.ptr[j];
-				CommandList_process(commandList, device, info.op, ptr, &state);
+				CommandList_process(commandList, deviceRef, info.op, ptr, &state);
 				ptr += info.opSize;
 			}
 		}
@@ -992,7 +991,12 @@ clean:
 	return err;
 }
 
-Error DxGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, DxCommandBuffer *commandBuffer) {
+Error DxGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, DxCommandBufferState *commandBuffer) {
+
+	if(commandBuffer->inRender)
+		return Error_invalidState(
+			0, "DxGraphicsDevice_flush() can't flush while in render, because it can't efficiently be split up"
+		);
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
@@ -1001,7 +1005,7 @@ Error DxGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, DxCommandBuffer *comm
 
 	HANDLE eventHandle = NULL;
 	Error err;
-	gotoIfError(clean, dxCheck(commandBuffer->lpVtbl->Close(commandBuffer)))
+	gotoIfError(clean, dxCheck(commandBuffer->buffer->lpVtbl->Close(commandBuffer->buffer)))
 
 	//Submit only the copy command list
 
@@ -1020,7 +1024,7 @@ Error DxGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, DxCommandBuffer *comm
 
 	++deviceExt->fenceId;
 	const DxCommandQueue queue = deviceExt->queues[EDxCommandQueue_Graphics];
-	queue.queue->lpVtbl->ExecuteCommandLists(queue.queue, 1, (ID3D12CommandList**) &commandBuffer);
+	queue.queue->lpVtbl->ExecuteCommandLists(queue.queue, 1, (ID3D12CommandList**) &commandBuffer->buffer);
 	gotoIfError(clean, dxCheck(queue.queue->lpVtbl->Signal(queue.queue, deviceExt->commitSemaphore, deviceExt->fenceId)))
 
 	//Wait for the device
@@ -1035,7 +1039,15 @@ Error DxGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, DxCommandBuffer *comm
 		deviceExt, queue.resolvedQueueId, threadId, (U8)((device->submitId - 1) % 3)
 	);
 
-	gotoIfError(clean, dxCheck(commandBuffer->lpVtbl->Reset(commandBuffer, allocator->pool, NULL)))
+	gotoIfError(clean, dxCheck(commandBuffer->buffer->lpVtbl->Reset(commandBuffer->buffer, allocator->pool, NULL)))
+
+	commandBuffer->pipeline = NULL;
+	commandBuffer->boundScissor = (D3D12_RECT) { 0 };
+	commandBuffer->boundViewport = (D3D12_VIEWPORT) { 0 };
+	commandBuffer->boundBuffers = (SetPrimitiveBuffersCmd) { 0 };
+	commandBuffer->boundPrimitiveTopology = U8_MAX;
+	commandBuffer->stencilRef = 0;
+	commandBuffer->blendConstants = F32x4_zero();
 
 clean:
 

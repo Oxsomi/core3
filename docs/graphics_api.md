@@ -253,6 +253,7 @@ _gotoIfError(clean, GraphicsDeviceRef_create(
         Buffer *data,					//Can move data to device buffer (doesn't always)
         DeviceBufferRef **ref
     );
+    ```
   ```
 
 - ```c
@@ -1637,6 +1638,12 @@ Every startRender needs to match an endRender. During the render it's not allowe
 
 A graphics pipeline for use with DirectRendering needs to set the attachment count (and format(s)) or the depth stencil format. One that doesn't use direct rendering can't be used.
 
+### Raytracing feature
+
+#### updateTLASExt/updateBLASExt
+
+Are used to force update TLAS and BLAS respectively. This is useful when the TLAS/BLAS is entirely GPU generated with compute and thus, it needs to be issued on the GPU (not CPU). The CPU generated one only works if GPU buffers were filled previous frame or if the CPU does. For more complex scenarios, auto update should be turned off when BLAS/TLAS is generated and manual updates should be done.
+
 ### RayPipeline feature
 
 #### dispatchRaysExt
@@ -1665,6 +1672,10 @@ startScope		//Transitions resources
 	setGraphicsPipeline
     setComputePipeline
     	dispatch(Indirect)					//Keeps scope alive
+
+	//Update RTASes not allowed within startRenderExt
+	updateBLASExt							//Keeps scope alive
+	updateTLASExt							//Keeps scope alive
 
     setRaytracingPipelineExt
     	dispatchRaysExt						//Keeps scope alive

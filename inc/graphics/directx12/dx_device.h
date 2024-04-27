@@ -133,8 +133,8 @@ typedef struct DxCommandBufferState {
 	F32x4 blendConstants, tempBlendConstants;
 
 	U8 stencilRef, tempStencilRef;
-	U8 tempPrimitiveTopology;
-	U8 padding;
+	U8 boundPrimitiveTopology;
+	U8 inRender;
 
 	U32 scopeCounter;
 
@@ -149,4 +149,4 @@ typedef struct DxCommandBufferState {
 
 DxCommandAllocator *VkGraphicsDevice_getCommandAllocator(DxGraphicsDevice *device, U32 queueId, U64 threadId, U8 backBufferId);
 
-Error DxGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, DxCommandBuffer *commandBuffer);
+Error DxGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, DxCommandBufferState *commandBuffer);

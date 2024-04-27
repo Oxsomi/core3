@@ -137,6 +137,14 @@ Error CommandListRef_dispatch1DRaysExt(CommandListRef *commandList, U32 raygenLo
 Error CommandListRef_dispatch2DRaysExt(CommandListRef *commandList, U32 raygenLocalId, U32 raysX, U32 raysY);
 Error CommandListRef_dispatch3DRaysExt(CommandListRef *commandList, U32 raygenLocalId, U32 raysX, U32 raysY, U32 raysZ);
 
+//Raytracing feature
+
+typedef RefPtr TLASRef;
+typedef RefPtr BLASRef;
+
+Error CommandListRef_updateTLASExt(CommandListRef *commandList, TLASRef *tlas);
+Error CommandListRef_updateBLASExt(CommandListRef *commandList, BLASRef *blas);
+
 //DynamicRendering feature
 
 TList(AttachmentInfo);

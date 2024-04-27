@@ -232,7 +232,7 @@ Error UnifiedTexture_createExt(TextureRef *textureRef, CharString name) {
 		}
 
 		if((device->flags & EGraphicsDeviceFlags_IsDebug) && CharString_length(name)) {
-			gotoIfError(clean, CharString_toUtf16x(name, &temp16))
+			gotoIfError(clean, CharString_toUTF16x(name, &temp16))
 			gotoIfError(clean, dxCheck(managedImageExt->image->lpVtbl->SetName(managedImageExt->image, temp16.ptr)))
 			ListU16_freex(&temp16);
 		}

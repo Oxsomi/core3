@@ -33,7 +33,7 @@
 
 Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, DeviceTextureRef *pending) {
 
-	VkCommandBuffer commandBuffer = (VkCommandBuffer) commandBufferExt;
+	VkCommandBufferState *commandBuffer = (VkCommandBufferState*) commandBufferExt;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
@@ -201,10 +201,10 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 		))
 
 		if(dependency.bufferMemoryBarrierCount || dependency.imageMemoryBarrierCount)
-			instanceExt->cmdPipelineBarrier2(commandBuffer, &dependency);
+			instanceExt->cmdPipelineBarrier2(commandBuffer->buffer, &dependency);
 
 		vkCmdCopyBufferToImage(
-			commandBuffer,
+			commandBuffer->buffer,
 			stagingResourceExt->buffer,
 			textureExt->image,
 			textureExt->lastLayout,
@@ -359,10 +359,10 @@ Error DeviceTextureRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRe
 		))
 
 		if(dependency.bufferMemoryBarrierCount || dependency.imageMemoryBarrierCount)
-			instanceExt->cmdPipelineBarrier2(commandBuffer, &dependency);
+			instanceExt->cmdPipelineBarrier2(commandBuffer->buffer, &dependency);
 
 		vkCmdCopyBufferToImage(
-			commandBuffer,
+			commandBuffer->buffer,
 			stagingExt->buffer,
 			textureExt->image,
 			textureExt->lastLayout,
