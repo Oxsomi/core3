@@ -161,7 +161,7 @@ Error GraphicsDevice_createPipelinesRaytracingInternalExt(
 
 			gotoIfError(clean, CharString_formatx(&tmp, "#%"PRIu32, j))
 			gotoIfError(clean, CharString_toUTF16x(tmp, &nameArr.ptrNonConst[j * 2]));
-			tmp = CharString_createNull();		//Moved to nameArr
+			CharString_freex(&tmp);
 
 			if(rtPipeline->entrypoints.length && CharString_length(rtPipeline->entrypoints.ptr[j]))
 				gotoIfError(clean, CharString_toUTF16x(rtPipeline->entrypoints.ptr[j], &nameArr.ptrNonConst[j * 2 + 1]))
@@ -236,7 +236,7 @@ Error GraphicsDevice_createPipelinesRaytracingInternalExt(
 
 			gotoIfError(clean, CharString_formatx(&tmp, "H%"PRIu32, j))
 			gotoIfError(clean, CharString_toUTF16x(tmp, &nameArr.ptrNonConst[groupNameStart + j]));
-			tmp = CharString_createNull();		//Moved to nameArr
+			CharString_freex(&tmp);
 			loc = nameArr.ptr[groupNameStart + j];
 
 			hitGroups.ptrNonConst[j] = (D3D12_HIT_GROUP_DESC) {

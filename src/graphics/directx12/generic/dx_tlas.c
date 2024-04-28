@@ -37,7 +37,7 @@ Bool TLAS_getInstanceDataCpuInternal(const TLAS *tlas, U64 i, TLASInstanceData *
 
 Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRef *pending) {
 
-	DxCommandBuffer *commandBuffer = (DxCommandBuffer*) commandBufferExt;
+	DxCommandBufferState *commandBuffer = (DxCommandBufferState*) commandBufferExt;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
@@ -233,7 +233,7 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 		&dep
 	))
 
-	commandBuffer->lpVtbl->Barrier(commandBuffer, 1, &dep);
+	commandBuffer->buffer->lpVtbl->Barrier(commandBuffer->buffer, 1, &dep);
 
 	ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions);
 
@@ -250,7 +250,7 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 		buildAs.DestAccelerationStructureData = DeviceBufferRef_ptr(parent->base.asBuffer)->resource.deviceAddress;
 	}
 
-	commandBuffer->lpVtbl->BuildRaytracingAccelerationStructure(commandBuffer, &buildAs, 0, NULL);
+	commandBuffer->buffer->lpVtbl->BuildRaytracingAccelerationStructure(commandBuffer->buffer, &buildAs, 0, NULL);
 
 	//Add as flight (keep alive extra)
 

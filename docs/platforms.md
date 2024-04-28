@@ -325,7 +325,7 @@ It has the following properties:
 - **extendedData**: User data initialized by onCreate (though the buffer is already allocated by the create function).
 - **buffer**: Temporary window data that will be used only for a super short period. For example, WM_CHAR could send two messages that correspond with one UTF16 character. This buffer will be used to store it for a short period of time.
 
-### Monitor (TODO: OxC3 0.3)
+### Monitor
 
 Is a combination of the following properties:
 

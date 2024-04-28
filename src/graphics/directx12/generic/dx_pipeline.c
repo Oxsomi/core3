@@ -38,8 +38,13 @@ Bool Pipeline_freeExt(Pipeline *pipeline, Allocator allocator) {
 	if(!dxPipeline->pso)
 		return true;
 
-	if(pipeline->type == EPipelineType_RaytracingExt)
+	if(pipeline->type == EPipelineType_RaytracingExt) {
+
+		if(dxPipeline->stateObjectProps)
+			dxPipeline->stateObjectProps->lpVtbl->Release(dxPipeline->stateObjectProps);
+
 		dxPipeline->stateObject->lpVtbl->Release(dxPipeline->stateObject);
+	}
 
 	else dxPipeline->pso->lpVtbl->Release(dxPipeline->pso);
 

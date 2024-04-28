@@ -52,7 +52,7 @@ Bool TLAS_getInstanceDataCpuInternal(const TLAS *tlas, U64 i, TLASInstanceData *
 
 Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRef *pending) {
 
-	VkCommandBuffer commandBuffer = (VkCommandBuffer) commandBufferExt;
+	VkCommandBufferState *commandBuffer = (VkCommandBufferState*) commandBufferExt;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
@@ -316,7 +316,7 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 	))
 
 	if (dep.bufferMemoryBarrierCount)
-		instanceExt->cmdPipelineBarrier2(commandBuffer, &dep);
+		instanceExt->cmdPipelineBarrier2(commandBuffer->buffer, &dep);
 
 	ListVkBufferMemoryBarrier2_clear(&deviceExt->bufferTransitions);
 
@@ -327,7 +327,7 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 	const VkAccelerationStructureBuildRangeInfoKHR *buildRangeInfoPtr = &buildRangeInfo;
 
 	instanceExt->cmdBuildAccelerationStructures(
-		commandBuffer,
+		commandBuffer->buffer,
 		1,
 		&buildInfo,
 		&buildRangeInfoPtr

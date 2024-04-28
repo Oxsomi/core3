@@ -2,7 +2,7 @@
 | Platforms | Vulkan/MoltenVK support                                      | Native API support                                           |
 | --------- | ------------------------------------------------------------ | ------------------------------------------------------------ |
 | Windows   | **Vulkan**: ![example workflow](https://github.com/Oxsomi/core3/actions/workflows/windows.yml/badge.svg) | **D3D12**: ![example workflow](https://github.com/Oxsomi/core3/actions/workflows/windows_d3d12.yml/badge.svg) |
-| Mac OS X  | **MolenVK**: ![example workflow](https://github.com/Oxsomi/core3/actions/workflows/osx.yml/badge.svg) | **Metal**: **Unimplemented**                                 |
+| Mac OS X  | **MolenVK**: **Unimplemented**                               | **Metal**: **Unimplemented**                                 |
 | Linux     | **Vulkan**: **Unimplemented**                                | N/A                                                          |
 | Android   | **Vulkan**: **Unimplemented**                                | N/A                                                          |
 | iOS       | **MoltenVK**: **Unimplemented**                              | **Metal**: **Unimplemented**                                 |
