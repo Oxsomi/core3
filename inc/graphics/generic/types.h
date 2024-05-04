@@ -21,6 +21,10 @@
 #pragma once
 #include "types/type_id.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 //ETypeId but for graphics objects.
 
 typedef enum EGraphicsTypeId {
@@ -51,3 +55,7 @@ typedef enum EGraphicsTypeId {
 } EGraphicsTypeId;
 
 extern EGraphicsTypeId EGraphicsTypeId_all[EGraphicsTypeId_Count];
+
+#ifdef __cplusplus
+	}
+#endif

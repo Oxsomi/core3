@@ -21,6 +21,10 @@
 #pragma once
 #include "atomic.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef struct Lock {
 
 	AtomicI64 lockedThreadId;
@@ -55,3 +59,7 @@ ELockAcquire Lock_lock(Lock *l, Ns maxTime);
 Bool Lock_unlock(Lock *l);
 
 Bool Lock_isLockedForThread(Lock *l);
+
+#ifdef __cplusplus
+	}
+#endif

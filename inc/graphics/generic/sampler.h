@@ -23,6 +23,10 @@
 #include "types/flp.h"
 #include "types/ref_ptr.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef enum ESamplerFilterMode {
 
 	ESamplerFilterMode_Nearest,
@@ -98,3 +102,7 @@ Error SamplerRef_dec(SamplerRef **buffer);
 Error SamplerRef_inc(SamplerRef *buffer);
 
 Error GraphicsDeviceRef_createSampler(GraphicsDeviceRef *dev, SamplerInfo info, CharString name, SamplerRef **sampler);
+
+#ifdef __cplusplus
+	}
+#endif

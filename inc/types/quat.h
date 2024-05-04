@@ -21,6 +21,10 @@
 #pragma once
 #include "vec.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 #define QUAT_FUNC(T)											\
 																\
 typedef T##x4 Quat##T;											\
@@ -69,3 +73,7 @@ Quat##T Quat##T##_slerp(Quat##T a, Quat##T b, T perc)			\
 
 QUAT_FUNC(F32);
 //QUAT_FUNC(F64);		TODO:
+
+#ifdef __cplusplus
+	}
+#endif

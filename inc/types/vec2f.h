@@ -20,6 +20,10 @@
 
 #pragma once
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 //TODO: Error checking
 
 impl F32x2 F32x2_zero();
@@ -142,3 +146,7 @@ F32x4 F32x4_create1_1_2(F32 a, F32 b, F32x2 c);
 
 F32x4 F32x4_create2_1(F32x2 a, F32 b);
 F32x4 F32x4_create1_2(F32 a, F32x2 b);
+
+#ifdef __cplusplus
+	}
+#endif

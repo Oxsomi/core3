@@ -24,7 +24,7 @@
 #include "types/error.h"
 #include "types/math.h"
 
-static const U8 DLHeader_V1_0  = 0;
+static const U8 DLHeader_V1_0 = 0;
 
 //Helper functions to create it
 
@@ -514,7 +514,7 @@ Error DLFile_read(
 		return Error_nullPointer(2, "DLFile_read()::dlFile is required");
 
 	if(DLFile_isAllocated(*dlFile))
-		return Error_invalidOperation(0, "DLFile_read()::dlFile is empty, might indicate memleak");
+		return Error_invalidOperation(0, "DLFile_read()::dlFile isn't empty, might indicate memleak");
 
 	Buffer entireFile = file;
 

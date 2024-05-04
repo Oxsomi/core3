@@ -21,6 +21,10 @@
 #pragma once
 #include "types/types.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef struct CharString CharString;
 
 typedef struct CASettings CASettings;
@@ -55,3 +59,7 @@ Error DLFile_addEntryUTF8x(DLFile *dlFile, Buffer entry);
 
 Error DLFile_writex(DLFile dlFile, Buffer *result);
 Error DLFile_readx(Buffer file, const U32 encryptionKey[8], Bool allowLeftOverData, DLFile *dlFile);
+
+#ifdef __cplusplus
+	}
+#endif

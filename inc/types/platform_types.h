@@ -31,6 +31,14 @@
 #define PLATFORM_IOS 5
 #define PLATFORM_OSX 6
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef U32 EPlatform;
 
 void Platform_getCPUId(int leaf, U32 result[4]);
+
+#ifdef __cplusplus
+	}
+#endif

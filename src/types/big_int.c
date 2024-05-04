@@ -92,7 +92,7 @@ Error BigInt_createFromBase2Type(CharString text, U16 bitCount, Allocator alloc,
 	if(!big)
 		return Error_nullPointer(3, "BigInt_createFromBase2Type()::big is required");
 
-	const Bool prefix = CharString_startsWithStringInsensitive(text, CharString_createRefCStrConst(base2Types[type]));
+	const Bool prefix = CharString_startsWithStringInsensitive(text, CharString_createRefCStrConst(base2Types[type]), 0);
 	const U8 prefixChars = prefix * 2;
 	const U8 countPerChar = base2Count[type];
 

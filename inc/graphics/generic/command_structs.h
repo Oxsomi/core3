@@ -24,6 +24,10 @@
 #include "graphics/generic/resource.h"
 #include "graphics/generic/pipeline_structs.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef RefPtr GraphicsDeviceRef;
 typedef RefPtr PipelineRef;
 typedef RefPtr DepthStencilRef;
@@ -109,7 +113,8 @@ typedef enum ETransitionType {
 	ETransitionType_CopyRead,
 	ETransitionType_CopyWrite,
 	ETransitionType_KeepAlive,			//If the only reason of this transition is to keep a resource alive
-	ETransitionType_UpdateRTAS
+	ETransitionType_UpdateRTAS,
+	ETransitionType_ReadRTAS			//Read from RTAS
 } ETransitionType;
 
 typedef struct TransitionInternal {		//Transitions issued by a scope.
@@ -405,3 +410,7 @@ typedef struct Dispatch { U32 x, y, z, pad; } Dispatch;
 
 typedef struct DispatchRaysExt { U32 x, y, z, raygenId; } DispatchRaysExt;		//raygenId can't be set if on GPU
 typedef struct DispatchRaysIndirectExt { DeviceBufferRef *buffer; U64 offset; U32 raygenId; } DispatchRaysIndirectExt;
+
+#ifdef __cplusplus
+	}
+#endif

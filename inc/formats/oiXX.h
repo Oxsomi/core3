@@ -21,6 +21,10 @@
 #pragma once
 #include "types/string.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef enum EXXCompressionType {
 	EXXCompressionType_None,							//--uncompressed
 	EXXCompressionType_Brotli11,						//(default)
@@ -49,3 +53,7 @@ U64 Buffer_forceReadSizeType(const U8 *ptr, EXXDataSizeType type);
 U64 Buffer_forceWriteSizeType(U8 *ptr, EXXDataSizeType type, U64 result);
 
 EXXDataSizeType EXXDataSizeType_getRequiredType(U64 v);
+
+#ifdef __cplusplus
+	}
+#endif

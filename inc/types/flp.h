@@ -24,6 +24,10 @@
 #define EFloatType_make(exponentBits, mantissaBits, bytes)			\
 	(((bytes) << 16) | ((exponentBits) << 8) | ((mantissaBits) << 0))
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef enum EFloatType {
 
 	EFloatType_F8			= EFloatType_make( 4,   3,  1),
@@ -93,3 +97,7 @@ EFloatType_cast(BF16);
 EFloatType_cast(TF19);
 EFloatType_cast(PXR24);
 EFloatType_cast(FP24);
+
+#ifdef __cplusplus
+	}
+#endif

@@ -19,7 +19,11 @@
 */
 
 #pragma once
-#include "types/allocator.h"
+#include "types/list.h"
+
+#ifdef __cplusplus
+	extern "C" {
+#endif
 
 typedef void (*ThreadCallbackFunction)(void*);
 
@@ -27,6 +31,8 @@ typedef struct Thread {
 	ThreadCallbackFunction callback;
 	void *nativeHandle, *objectHandle;
 } Thread;
+
+TListNamed(Thread*, ListThread);
 
 impl U64 Thread_getId();					//Current thread id
 
@@ -37,3 +43,7 @@ Bool Thread_free(Allocator alloc, Thread **thread);
 
 impl Error Thread_wait(Thread *thread);
 Error Thread_waitAndCleanup(Allocator alloc, Thread **thread);
+
+#ifdef __cplusplus
+	}
+#endif

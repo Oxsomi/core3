@@ -28,6 +28,10 @@ set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
 
+set(CMAKE_CXX_STANDARD 20)				# We need some C++ to interface with DXC, but we wrap it using C
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
@@ -233,6 +237,25 @@ if(APPLE)
 	target_link_libraries(OxC3_platforms PUBLIC "-framework CoreFoundation" "-framework ApplicationServices" "-framework AppKit")
 endif()
 
+# Download DXC, otherwise we can't use latest features and DXIL code will be unsigned
+
+if(${ForceUpdateDeps} OR (NOT EXISTS "${CMAKE_BINARY_DIR}/external/dxc/"))
+
+	message("-- Downloading and unzipping Microsoft.Direct3D.DXC")
+
+	file(REMOVE_RECURSE "${CMAKE_BINARY_DIR}/external/dxc/")
+	file(DOWNLOAD "https://www.nuget.org/api/v2/package/Microsoft.Direct3D.DXC/" "${CMAKE_BINARY_DIR}/external/dxc.zip")
+	file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/external/dxc/)
+
+	execute_process(
+		COMMAND ${CMAKE_COMMAND} -E tar xzf ${CMAKE_BINARY_DIR}/external/dxc.zip
+		WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/external/dxc/
+	)
+
+	file(REMOVE "${CMAKE_BINARY_DIR}/external/dxc.zip")
+
+endif()
+
 # Graphics layer
 
 if(WIN32 AND NOT ${ForceVulkan})
@@ -280,25 +303,6 @@ target_compile_definitions(OxC3_graphics PUBLIC -D_GRAPHICS_API=${_GRAPHICS_API}
 set_target_properties(OxC3_graphics PROPERTIES FOLDER Oxsomi)
 
 target_link_libraries(OxC3_graphics PUBLIC OxC3_platforms)
-
-# Download DXC, otherwise we can't use latest features and DXIL code will be unsigned
-
-if(${ForceUpdateDeps} OR (NOT EXISTS "${CMAKE_BINARY_DIR}/external/dxc/"))
-
-	message("-- Downloading and unzipping Microsoft.Direct3D.DXC")
-
-	file(REMOVE_RECURSE "${CMAKE_BINARY_DIR}/external/dxc/")
-	file(DOWNLOAD "https://www.nuget.org/api/v2/package/Microsoft.Direct3D.DXC/" "${CMAKE_BINARY_DIR}/external/dxc.zip")
-	file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/external/dxc/)
-
-	execute_process(
-		COMMAND ${CMAKE_COMMAND} -E tar xzf ${CMAKE_BINARY_DIR}/external/dxc.zip
-		WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/external/dxc/
-	)
-
-	file(REMOVE "${CMAKE_BINARY_DIR}/external/dxc.zip")
-
-endif()
 
 # Vulkan setup
 
@@ -637,6 +641,57 @@ target_link_libraries(OxC3_test PUBLIC OxC3_platforms)
 
 set_target_properties(OxC3_test PROPERTIES FOLDER Oxsomi/test)
 
+# Shader compiler, useful for baker and runtime if required by the app (though should only be used for editor applications)
+
+file(GLOB_RECURSE compilerHeaders "inc/shader_compiler/*.h")
+file(GLOB_RECURSE compilerSources "src/shader_compiler/*.c" "src/shader_compiler/*.cpp")	# Some CPP to interface with DXC
+
+add_library(
+	OxC3_shader_compiler
+	STATIC
+	${compilerHeaders}
+	${compilerSources}
+	CMakeLists.txt
+)
+
+set_target_properties(OxC3_shader_compiler PROPERTIES FOLDER Oxsomi)
+target_link_libraries(OxC3_shader_compiler PUBLIC OxC3_platforms)
+
+target_include_directories(OxC3_shader_compiler PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/external/nvapi")
+target_include_directories(OxC3_shader_compiler PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/external/DirectX-Headers/include")
+
+# Add DXC
+
+if(NOT ${ARM})
+
+	target_link_libraries(OxC3_shader_compiler PUBLIC "${CMAKE_BINARY_DIR}/external/dxc/build/native/lib/x64/dxcompiler.lib")
+	
+	add_custom_command(TARGET OxC3_shader_compiler POST_BUILD
+		COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin"
+		COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin/$<CONFIG>"
+		COMMAND ${CMAKE_COMMAND} -E copy_if_different
+		"${CMAKE_BINARY_DIR}/external/dxc/build/native/bin/x64/dxcompiler.dll"
+		"${CMAKE_BINARY_DIR}/external/dxc/build/native/bin/x64/dxil.dll"
+		"${CMAKE_BINARY_DIR}/bin/$<CONFIG>/"
+	)
+
+else()
+
+	target_link_libraries(OxC3_shader_compiler PUBLIC "${CMAKE_BINARY_DIR}/external/dxc/build/native/lib/arm64/dxcompiler.lib")
+	
+	add_custom_command(TARGET OxC3_shader_compiler POST_BUILD
+		COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin"
+		COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin/$<CONFIG>"
+		COMMAND ${CMAKE_COMMAND} -E copy_if_different
+		"${CMAKE_BINARY_DIR}/external/dxc/build/native/bin/arm64/dxcompiler.dll"
+		"${CMAKE_BINARY_DIR}/external/dxc/build/native/bin/arm64/dxil.dll"
+		"${CMAKE_BINARY_DIR}/bin/$<CONFIG>/"
+	)
+
+endif()
+
+target_include_directories(OxC3_shader_compiler PUBLIC "${CMAKE_BINARY_DIR}/external/dxc/build/native/include")
+
 # OxC3 tool
 
 file(GLOB_RECURSE headers "tools/inc/*.h")
@@ -651,7 +706,7 @@ add_executable(
 
 set_target_properties(OxC3 PROPERTIES FOLDER Oxsomi)
 
-target_link_libraries(OxC3 PUBLIC OxC3_platforms)
+target_link_libraries(OxC3 PUBLIC OxC3_shader_compiler)
 target_include_directories(OxC3 PUBLIC tools/inc)
 
 configure_icon(OxC3 "${CMAKE_CURRENT_SOURCE_DIR}/res/logo.ico")

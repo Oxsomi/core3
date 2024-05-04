@@ -22,6 +22,10 @@
 #include "types/list.h"
 #include "oiXX.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef enum EBCSettingsFlags {
 	EBCSettingsFlags_None				= 0,
 	EBCSettingsFlags_UseSHA256			= 1 << 0,
@@ -108,3 +112,7 @@ typedef struct BCHeader {
 } BCHeader;
 
 #define BCHeader_MAGIC 0x4342696F
+
+#ifdef __cplusplus
+	}
+#endif

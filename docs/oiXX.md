@@ -6,7 +6,6 @@ The oiXX standard is a standard of how Oxsomi file formats are structured.
 
 The file formats should always:
 
-- Support the possibility of compression + encryption.
 - Be as small as possible, provided this doesn't harm usability.
 - Be simple to understand and read/write in code.
 - Be secure. An example of how not to do this is file formats that search through the data for magic numbers. As sometimes data is included in between there that might be mistaken for the magic number that means the next section. Not only is this slow, it's also insecure. A better way is to just use an offset that points directly to it and can easily be verified if it's correct.
@@ -14,7 +13,7 @@ The file formats should always:
 - Start with a U32 magicNumber. This is the 4-character indicator of the file format. This should always start with oi if it adheres to this standard and must not conflict with any other formats. The last 2 characters don't have to be ASCII, so this gives a theoretical limit of 64Ki file formats, though more logically 36^2 (~1300).
 - Continue with a version id (could be any type, as long as it's deemed sufficient in the long run (U8 would be okay for mostly static data types)), which uses % N= minor, / N= major (starting from 1.0). Where N is 10 (U8), 100 (U16) or 1000 (U32+). If this version would run out, an extended header should include the next type that stores higher majors.
 - Continue with a flags, which contains any important flags for reading the file back. If space runs out, extended header should be used. A U8 is only deemed sufficient if the format rarely changes. It is illegal to check for unused flags to determine if the file is valid; doing so could break backwards compatibility for new versions.
-- Then should be the compression and/or encryption type. This is generally a 4-bit pair (compressionType << 4) | encryptionType.
+- (If supported): Then should be the compression and/or encryption type. This is generally a 4-bit pair (compressionType << 4) | encryptionType.
 - Then would be the extension header. Generally this is used to allow adding new attributes as an extension, while allowing backwards compatibility. For example oiCA might use this to support custom file attributes that are optional for others to read. The layout is (U32 magicNumber, U16 extendedDataHeader, `<per file type extension>`). If magicNumber < 0x1FFFFFFF it indicates a version extension header. This means the version is deemed optional and can still be read by older versions. If the version breaks existing functionality, it should update the version id. In this case, the extended versions should be made core parts of the new version.
 - The rest of the header is dependent on the file type. Though it is required to ensure it pads correctly. This means that the header itself conforms to the following alignment:
   - 16-bit elements such as U16, I16 should be aligned to 2-byte boundaries.
@@ -25,6 +24,10 @@ The file formats should always:
 - Any platform dependent info such as size_t or void* *SHOULD NOT* be serialized alongside the data. This should rather be a defined type, instead of a platform dependent one. For example a small enum that determines what size it could be (1,2,4,8) in the header. This is called a EXXDataSizeType and is referenced how long this is for certain fields in the header. For example, an oiCA entry size could be 1 byte and the entry count could be 2 bytes.
 - Alongside the compressed data (if enabled), it should contain a hash. The hash can either be CRC32C or SHA256 (set by the flag). SHA256 should only be used if security is important but likely not if encryption is used, since that already has a tag that is safe enough to rely on (especially since the header is validated too). This hash has to be calculated over the *ENTIRE* uncompressed contents. This hash is over the uncompressed data + header, not the encrypted data, since the encryption algorithm needs to know the hash before it encrypts. This hash should be calculated with the hash in header initialized as 0. Encryption doesn't require a SHA or CRC checksum unlike compression; where the compression could be done on corrupt file for example; the reason being that the encryption itself uses a tag which is generated using the header.
 - Target 64-bit systems and beyond. Assume that 64-bit sizes for buffers are available. The implementation can choose not to support it, but that's up to the app to implement as they want.
+
+The file format should:
+
+- Support the possibility of compression + encryption. Unless the file is determined to rarely or never be a standalone file (always a part of a different oi file, such as oiCA or oiDL). An example is oiSH, which is always packaged into an oiCA first (which already supports compression and/or encryption).
 
 ## Order of encryption / compression
 

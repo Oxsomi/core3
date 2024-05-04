@@ -21,6 +21,10 @@
 #pragma once
 #include "list.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 //A cdf (Cumulative Distribution Function) is essentially an efficient way to map a probability to an element or index.
 //It allows appending or dealing with an entire cdf manually (with threading).
 //A cdf can also be standalone, meaning there's no underlying struct it points too.
@@ -109,3 +113,7 @@ typedef struct CdfListElement {
 Error CdfList_getRandomElementSecure(CdfList *list, CdfListElement *elementValue);
 Error CdfList_getRandomElementFast(CdfList *list, CdfListElement *elementValue, U32 *seed);
 Error CdfList_getElementAtOffset(CdfList *list, F32 offset, CdfListElement *elementValue);
+
+#ifdef __cplusplus
+	}
+#endif

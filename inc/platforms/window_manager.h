@@ -22,6 +22,10 @@
 #include "types/list.h"
 #include "types/vec.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef struct Window Window;
 
 TListNamed(Window*, ListWindowPtr);
@@ -90,3 +94,7 @@ Error WindowManager_createWindow(
 );
 
 Bool WindowManager_freeWindow(WindowManager *manager, Window **w);
+
+#ifdef __cplusplus
+	}
+#endif

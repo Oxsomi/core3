@@ -24,6 +24,10 @@
 #include "types/vec.h"
 #include "formats/texture.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef struct RefPtr RefPtr;
 typedef RefPtr GraphicsDeviceRef;
 typedef RefPtr GraphicsResourceRef;			//UnifiedTexture or DeviceTexture. This isn't a RefPtr<GraphicsResource>
@@ -125,3 +129,7 @@ typedef struct GraphicsResource {
 } GraphicsResource;
 
 Bool GraphicsResource_free(GraphicsResource *resource, RefPtr *resourceRef);
+
+#ifdef __cplusplus
+	}
+#endif

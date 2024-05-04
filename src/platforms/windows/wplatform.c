@@ -105,7 +105,7 @@ BOOL enumerateFiles(HMODULE mod, LPWSTR unused, LPWSTR name, EnumerateFiles *sec
 	Error err = CharString_createFromUTF16x((const U16*)name, U64_MAX, &str);
 	gotoIfError(clean, err)
 
-	if(CharString_countAllSensitive(str, '/') != 1)
+	if(CharString_countAllSensitive(str, '/', 0) != 1)
 		Log_warnLnx("Executable contained unrecognized RCDATA. Ignoring it...");
 
 	else {
@@ -147,7 +147,7 @@ Error Platform_initExt() {
 
 		gotoIfError(clean, CharString_createFromUTF16x((const U16*)buff, chars, &Platform_instance.workingDirectory))
 
-		CharString_replaceAllSensitive(&Platform_instance.workingDirectory, '\\', '/');
+		CharString_replaceAllSensitive(&Platform_instance.workingDirectory, '\\', '/', 0);
 
 		gotoIfError(clean, CharString_appendx(&Platform_instance.workingDirectory, '/'))
 	}

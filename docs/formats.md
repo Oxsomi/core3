@@ -5,6 +5,7 @@ OxC3 formats contains only the following:
 - rgba8 bmp writing.
 - [oiCA](oiCA.md) file format for zip-like files.
 - [oiDL](oiDL.md) file format for lists of data such as strings or specific file types (e.g. an array of sprites that have a similar meaning such as particle effects).
+- [oiSH](oiSH.md) file format for a single compiled shader binary/text file which is ready for use in a graphics API that supports the binary/text type.
 - [oiXX](oiXX.md) basic definitions for allowing providing a base for custom OxC3 file formats (such as oiCA and oiDL).
 - Texture formats for providing information about what type of data a CPU-sided texture buffer contains.
 

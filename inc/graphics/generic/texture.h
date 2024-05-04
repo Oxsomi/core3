@@ -22,6 +22,10 @@
 #include "resource.h"
 #include "types/vec.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef enum EMSAASamples EMSAASamples;
 typedef enum EDescriptorType EDescriptorType;
 
@@ -93,3 +97,7 @@ impl extern const U32 UnifiedTextureImageExt_size;
 void *TextureRef_getCurrImgExt(TextureRef *ref, U32 subResource);
 #define TextureRef_getCurrImgExtT(t, prefix, subResource) \
 	((prefix##UnifiedTexture*) TextureRef_getCurrImgExt(t, subResource))
+
+#ifdef __cplusplus
+	}
+#endif

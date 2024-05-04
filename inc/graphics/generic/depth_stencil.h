@@ -23,6 +23,10 @@
 #include "pipeline_structs.h"
 #include "texture.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef RefPtr GraphicsDeviceRef;
 
 typedef UnifiedTexture DepthStencil;
@@ -44,3 +48,7 @@ Error GraphicsDeviceRef_createDepthStencil(
 	CharString name,
 	DepthStencilRef **depthStencil
 );
+
+#ifdef __cplusplus
+	}
+#endif

@@ -21,6 +21,10 @@
 #pragma once
 #include "types/types.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef enum ELogLevel ELogLevel;
 typedef enum ELogOptions ELogOptions;
 typedef struct CharString CharString;
@@ -29,3 +33,7 @@ typedef struct Error Error;
 void Error_printx(Error err, ELogLevel logLevel, ELogOptions options);
 
 CharString Error_formatPlatformErrorx(Error err);
+
+#ifdef __cplusplus
+	}
+#endif

@@ -21,6 +21,10 @@
 #pragma once
 #include "types/big_int.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 Error BigInt_createx(U16 bitCount, BigInt *big);
 Error BigInt_createCopyx(BigInt *a, BigInt *b);
 
@@ -57,3 +61,7 @@ Error U128_octx(U128 b, CharString *result, Bool leadingZeros);
 Error U128_binx(U128 b, CharString *result, Bool leadingZeros);
 Error U128_nytox(U128 b, CharString *result, Bool leadingZeros);
 Error U128_toStringx(U128 b, CharString *result, EIntegerEncoding encoding, Bool leadingZeros);
+
+#ifdef __cplusplus
+	}
+#endif

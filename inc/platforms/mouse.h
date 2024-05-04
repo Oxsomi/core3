@@ -21,6 +21,10 @@
 #pragma once
 #include "types/types.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef struct Error Error;
 typedef struct InputDevice Mouse;
 
@@ -59,3 +63,7 @@ typedef enum EMouseFlag {
 } EMouseFlag;
 
 Error Mouse_create(Mouse *result);
+
+#ifdef __cplusplus
+	}
+#endif

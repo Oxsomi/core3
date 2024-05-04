@@ -21,6 +21,10 @@
 #pragma once
 #include "types/types.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 //Include this file before including list.h so the x functions can be found
 
 typedef struct GenericList GenericList;
@@ -73,3 +77,7 @@ Error Name##_pushBackx(Name *l, Name##_Type t);											\
 Error Name##_pushFrontx(Name *l, Name##_Type t);										\
 																						\
 Bool Name##_freex(Name *l);
+
+#ifdef __cplusplus
+	}
+#endif

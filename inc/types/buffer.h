@@ -21,6 +21,10 @@
 #pragma once
 #include "types/vec.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef struct Buffer Buffer;
 typedef struct Allocator Allocator;
 
@@ -255,3 +259,7 @@ Error Buffer_decompress(
 	Allocator allocator,
 	Buffer *output
 );*/
+
+#ifdef __cplusplus
+	}
+#endif

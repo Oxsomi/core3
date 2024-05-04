@@ -30,26 +30,20 @@
 
 const U64 BLASExt_size = sizeof(DxBLAS);
 
-Bool BLAS_freeExt(BLAS *blas) { (void)blas; return true; }
+Bool BLAS_freeExt(BLAS *blas) { (void) blas; return true; }		//No-op
 
-Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRef *pending) {
-
-	DxCommandBufferState *commandBuffer = (DxCommandBufferState*) commandBufferExt;
-
-	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+Error BLAS_initExt(BLAS *blas) {
+	
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(blas->base.device);
 	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
 
-	DeviceBufferRef *tempScratch = NULL;
-
-	ListRefPtr *currentFlight = &device->resourcesInFlight[(device->submitId - 1) % 3];
-
-	BLAS *blas = BLASRef_ptr(pending);
+	DxBLAS *blasExt = BLAS_ext(blas, Dx);
 
 	Error err = Error_none();
 	CharString tmp = CharString_createNull();
 
 	if(blas->base.asConstructionType == EBLASConstructionType_Serialized)
-		return Error_unsupportedOperation(0, "BLASRef_flush()::serialized not supported yet");		//TODO:
+		gotoIfError(clean, Error_unsupportedOperation(0, "BLASRef_flush()::serialized not supported yet"))		//TODO:
 
 	U64 primitives = 0;
 	EBLASConstructionType type = (EBLASConstructionType) blas->base.asConstructionType;
@@ -65,10 +59,10 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 		default: {
 
 			vertexCount = blas->positionBuffer.len / blas->positionBufferStride;
-			U8 stride = blas->indexFormatId == ETextureFormatId_R32u ? 4 : 2;
+			U8 stride = blas->indexFormatId == ETextureFormatId_R32u ? 12 : 6;
 
 			if(blas->indexFormatId != ETextureFormatId_Undefined)
-				primitives = blas->indexBuffer.len / stride / 3;
+				primitives = blas->indexBuffer.len / stride;
 
 			else primitives = vertexCount / 3;
 
@@ -80,6 +74,8 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 		gotoIfError(clean, Error_outOfBounds(
 			0, primitives, U32_MAX, "BLASRef_flush() only primitive count of <U32_MAX is supported"
 		))
+
+	blasExt->primitives = (U32) primitives;
 
 	//Convert to DXR dependent version
 
@@ -103,21 +99,20 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 	if(blas->base.flags & ERTASBuildFlags_IsUpdate)
 		flags |= D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PERFORM_UPDATE;
 
-	D3D12_RAYTRACING_GEOMETRY_DESC geometry = (D3D12_RAYTRACING_GEOMETRY_DESC) { 0 };
+	D3D12_RAYTRACING_GEOMETRY_DESC *geometry = &blasExt->geometry;
+	*geometry = (D3D12_RAYTRACING_GEOMETRY_DESC) { 0 };
 
 	if(blas->base.flagsExt & EBLASFlag_DisableAnyHit)
-		geometry.Flags |= D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
+		geometry->Flags |= D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
 
 	if(blas->base.flagsExt & EBLASFlag_AvoidDuplicateAnyHit)
-		geometry.Flags |= D3D12_RAYTRACING_GEOMETRY_FLAG_NO_DUPLICATE_ANYHIT_INVOCATION;
-
-	D3D12_BARRIER_GROUP dep = (D3D12_BARRIER_GROUP) { .Type = D3D12_BARRIER_TYPE_BUFFER };
+		geometry->Flags |= D3D12_RAYTRACING_GEOMETRY_FLAG_NO_DUPLICATE_ANYHIT_INVOCATION;
 
 	if(blas->base.asConstructionType == EBLASConstructionType_Geometry) {
 
-		geometry.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
+		geometry->Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
 
-		D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC *tri = &geometry.Triangles;
+		D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC *tri = &geometry->Triangles;
 		*tri = (D3D12_RAYTRACING_GEOMETRY_TRIANGLES_DESC) {
 			.VertexFormat = ETextureFormatId_toDXFormat(blas->positionFormatId),
 			.VertexBuffer = (D3D12_GPU_VIRTUAL_ADDRESS_AND_STRIDE) {
@@ -127,56 +122,30 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 			.VertexCount = (U32) vertexCount
 		};
 
-		gotoIfError(clean, DxDeviceBuffer_transition(
-			DeviceBuffer_ext(DeviceBufferRef_ptr(blas->positionBuffer.buffer), Dx),
-			D3D12_BARRIER_SYNC_BUILD_RAYTRACING_ACCELERATION_STRUCTURE,
-			D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_READ,
-			&deviceExt->bufferTransitions,
-			&dep
-		))
-
 		if (blas->indexFormatId) {
-
 			tri->IndexFormat = ETextureFormatId_toDXFormat(blas->indexFormatId);
 			tri->IndexBuffer = getDxLocation(blas->indexBuffer, 0);
 			tri->IndexCount = (U32)(blas->indexBuffer.len / (blas->indexFormatId == ETextureFormat_R32u ? 4 : 2));
-
-			gotoIfError(clean, DxDeviceBuffer_transition(
-				DeviceBuffer_ext(DeviceBufferRef_ptr(blas->indexBuffer.buffer), Dx),
-				D3D12_BARRIER_SYNC_BUILD_RAYTRACING_ACCELERATION_STRUCTURE,
-				D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_READ,
-				&deviceExt->bufferTransitions,
-				&dep
-			))
 		}
 	}
 
 	else {
-
-		geometry.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_PROCEDURAL_PRIMITIVE_AABBS;
-		geometry.AABBs = (D3D12_RAYTRACING_GEOMETRY_AABBS_DESC) {
+		geometry->Type = D3D12_RAYTRACING_GEOMETRY_TYPE_PROCEDURAL_PRIMITIVE_AABBS;
+		geometry->AABBs = (D3D12_RAYTRACING_GEOMETRY_AABBS_DESC) {
 			.AABBs = (D3D12_GPU_VIRTUAL_ADDRESS_AND_STRIDE) {
 				.StartAddress = getDxLocation(blas->aabbBuffer, blas->aabbOffset),
 				.StrideInBytes = blas->aabbStride
 			},
 			.AABBCount = (U32) primitives
 		};
-
-		gotoIfError(clean, DxDeviceBuffer_transition(
-			DeviceBuffer_ext(DeviceBufferRef_ptr(blas->aabbBuffer.buffer), Dx),
-			D3D12_BARRIER_SYNC_BUILD_RAYTRACING_ACCELERATION_STRUCTURE,
-			D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_READ,
-			&deviceExt->bufferTransitions,
-			&dep
-		))
 	}
 
-	D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS buildInfo = (D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS) {
+	blasExt->inputs = (D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS) {
 		.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL,
 		.Flags = flags,
 		.NumDescs = (U32) 1,
 		.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY,
-		.pGeometryDescs = &geometry
+		.pGeometryDescs = geometry
 	};
 
 	D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO sizes =
@@ -184,14 +153,14 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 
 	deviceExt->device->lpVtbl->GetRaytracingAccelerationStructurePrebuildInfo(
 		deviceExt->device,
-		&buildInfo,
+		&blasExt->inputs,
 		&sizes
 	);
 
 	//Allocate scratch and final buffer
 
 	gotoIfError(clean, GraphicsDeviceRef_createBuffer(
-		deviceRef,
+		blas->base.device,
 		EDeviceBufferUsage_ASExt,
 		EGraphicsResourceFlag_None,
 		blas->base.name,
@@ -204,42 +173,40 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 	))
 
 	gotoIfError(clean, GraphicsDeviceRef_createBuffer(
-		deviceRef,
+		blas->base.device,
 		EDeviceBufferUsage_ScratchExt,
 		EGraphicsResourceFlag_None,
 		tmp,
 		blas->base.flags & ERTASBuildFlags_IsUpdate ? sizes.UpdateScratchDataSizeInBytes : sizes.ScratchDataSizeInBytes,
-		&tempScratch
+		&blas->base.tempScratchBuffer
 	))
 
-	//Queue build
+clean:
+	CharString_freex(&tmp);
+	return err;
+}
 
-	gotoIfError(clean, DxDeviceBuffer_transition(
-		DeviceBuffer_ext(DeviceBufferRef_ptr(blas->base.asBuffer), Dx),
-		D3D12_BARRIER_SYNC_BUILD_RAYTRACING_ACCELERATION_STRUCTURE,
-		D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_WRITE,
-		&deviceExt->bufferTransitions,
-		&dep
-	))
+Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRef *pending) {
 
-	gotoIfError(clean, DxDeviceBuffer_transition(
-		DeviceBuffer_ext(DeviceBufferRef_ptr(tempScratch), Dx),
-		D3D12_BARRIER_SYNC_BUILD_RAYTRACING_ACCELERATION_STRUCTURE,
-		D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_WRITE,
-		&deviceExt->bufferTransitions,
-		&dep
-	))
+	DxCommandBufferState *commandBuffer = (DxCommandBufferState*) commandBufferExt;
 
-	commandBuffer->buffer->lpVtbl->Barrier(commandBuffer->buffer, 1, &dep);
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 
-	ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions);
+	ListRefPtr *currentFlight = &device->resourcesInFlight[(device->submitId - 1) % 3];
+
+	BLAS *blas = BLASRef_ptr(pending);
+	DxBLAS *blasExt = BLAS_ext(blas, Dx);
+	Error err = Error_none();
+
+	if(blas->base.isCompleted && !(blas->base.flags & ERTASBuildFlags_AllowUpdate))		//Done
+		return Error_none();
 
 	D3D12_GPU_VIRTUAL_ADDRESS dstAS = DeviceBufferRef_ptr(blas->base.asBuffer)->resource.deviceAddress;
 
 	D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC buildAs = (D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC) {
 		.DestAccelerationStructureData = dstAS,
-		.Inputs = buildInfo,
-		.ScratchAccelerationStructureData = DeviceBufferRef_ptr(tempScratch)->resource.deviceAddress
+		.Inputs = blasExt->inputs,
+		.ScratchAccelerationStructureData = DeviceBufferRef_ptr(blas->base.tempScratchBuffer)->resource.deviceAddress
 	};
 
 	if(blas->base.parent) {
@@ -251,7 +218,7 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 
 	//Add as flight and ensure flushes are done if too many ASes are queued this frame
 
-	device->pendingPrimitives += primitives;
+	device->pendingPrimitives += blasExt->primitives;
 
 	gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, pending))
 	RefPtr_inc(pending);
@@ -259,8 +226,10 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 	//We mark scratch buffer as delete, we do this by pushing it as a current flight resource
 	//And losing the reference from our object
 
-	gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, tempScratch))
-	tempScratch = NULL;
+	if(!(blas->base.flags & ERTASBuildFlags_AllowUpdate)) {
+		gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, blas->base.tempScratchBuffer))
+		blas->base.tempScratchBuffer = NULL;
+	}
 
 	//Ensure we don't exceed a maximum amount of time spent on the GPU
 
@@ -270,7 +239,5 @@ Error BLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, BLASRe
 	blas->base.isCompleted = true;
 
 clean:
-	DeviceBufferRef_dec(&tempScratch);
-	CharString_freex(&tmp);
 	return err;
 }

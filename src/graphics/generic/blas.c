@@ -36,20 +36,19 @@ Error BLASRef_inc(BLASRef *blas) {
 
 impl extern const U64 BLASExt_size;
 impl Bool BLAS_freeExt(BLAS *blas);
+impl Error BLAS_initExt(BLAS *blas);
 
 Bool BLAS_free(BLAS *blas, Allocator allocator) {
 
 	(void)allocator;
 
-	RefPtr *refPtr = (RefPtr*)((const U8*)blas - sizeof(RefPtr));
-
 	Lock_free(&blas->base.lock);
 
-	Bool success = GraphicsDeviceRef_removePending(blas->base.device, refPtr);
-	success &= BLAS_freeExt(blas);
+	Bool success = BLAS_freeExt(blas);
 	success &= CharString_freex(&blas->base.name);
 
 	success &= !DeviceBufferRef_dec(&blas->base.asBuffer).genericError;
+	success &= !DeviceBufferRef_dec(&blas->base.tempScratchBuffer).genericError;
 
 	if(blas->base.asConstructionType == EBLASConstructionType_Serialized)
 		success &= Buffer_freex(&blas->cpuData);
@@ -245,9 +244,7 @@ Error GraphicsDeviceRef_createBLAS(GraphicsDeviceRef *dev, BLAS blas, CharString
 			1, "GraphicsDeviceRef_createBLAS()::cpuData should be valid if serialized construction is used"
 		);
 
-	GraphicsDevice *device = GraphicsDeviceRef_ptr(dev);
 	Error err = Error_none();
-	ELockAcquire acq = ELockAcquire_Invalid;
 
 	//Allocate refPtr
 
@@ -297,24 +294,9 @@ Error GraphicsDeviceRef_createBLAS(GraphicsDeviceRef *dev, BLAS blas, CharString
 	blasPtr->base.device = dev;
 
 	gotoIfError(clean, CharString_createCopyx(name, &blasPtr->base.name))
-
-	//Push for the graphics impl to process next submit,
-	//If it's GPU generated, the user is expected to manually call buildBLASExt to ensure it's enqueued at the right time
-
-	if (!(blas.base.flags & ERTASBuildFlags_DisableAutomaticUpdate)) {
-
-		acq = Lock_lock(&device->lock, U64_MAX);
-
-		if(acq < ELockAcquire_Success)
-			gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_createBLAS()::dev couldn't be locked"))
-
-		gotoIfError(clean, ListWeakRefPtr_pushBackx(&device->pendingBlases, *blasRef))
-	}
+	gotoIfError(clean, BLAS_initExt(blasPtr))
 
 clean:
-
-	if(acq == ELockAcquire_Acquired)
-		Lock_unlock(&device->lock);
 
 	if(err.genericError)
 		BLASRef_dec(blasRef);

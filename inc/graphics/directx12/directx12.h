@@ -25,6 +25,10 @@
 #include "graphics/generic/device_buffer.h"
 #include "d3d12.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef struct DxUnifiedTexture {
 	ID3D12Resource *image;
 	D3D12_BARRIER_SYNC lastSync;
@@ -125,11 +129,13 @@ typedef union DxPipeline {
 } DxPipeline;
 
 typedef struct DxBLAS {
-	U8 padding;				//The concept of a BLAS resource doesn't exist in DX12; it's just a buffer.
+	D3D12_RAYTRACING_GEOMETRY_DESC geometry;
+	D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs;
+	U32 padding, primitives;
 } DxBLAS;
 
 typedef struct DxTLAS {
-	U8 padding;				//The concept of a TLAS resource doesn't exist in DX12; it's just a buffer.
+	D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs;
 } DxTLAS;
 
 static const U32 raytracingShaderIdSize = 32;
@@ -157,3 +163,7 @@ Error DxUnifiedTexture_transition(
 	ListD3D12_TEXTURE_BARRIER *imageBarriers,
 	D3D12_BARRIER_GROUP *dependency
 );
+
+#ifdef __cplusplus
+	}
+#endif

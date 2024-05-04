@@ -23,6 +23,10 @@
 #include "types/string.h"
 #include "types/file.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 //There are two types of files; virtual and local.
 //Virtual are embedded into the binary, very nice for easy portable installation and harder to modify for avg users.
 //	Writable virtual files can only be in the //access, //function or //network directory.
@@ -77,3 +81,7 @@ Bool File_isVirtualLoaded(CharString loc);		//Check if a virtual section is load
 Error File_unloadVirtual(CharString loc);		//Unload a virtual section
 
 //TODO: make it more like a DirectStorage-like api
+
+#ifdef __cplusplus
+	}
+#endif

@@ -21,6 +21,10 @@
 #pragma once
 #include "types.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef struct Allocator Allocator;
 typedef struct Error Error;
 
@@ -203,3 +207,7 @@ Bool GenericList_free(GenericList *result, Allocator allocator);
 	Name##_fromList(list, l); /* can't error */																			\
 	return Error_none();																								\
 }
+
+#ifdef __cplusplus
+	}
+#endif

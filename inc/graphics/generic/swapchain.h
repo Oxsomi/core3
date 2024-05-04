@@ -24,6 +24,10 @@
 #include "types/lock.h"
 #include "texture.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef RefPtr GraphicsDeviceRef;
 typedef struct Window Window;
 typedef enum EWindowFormat EWindowFormat;
@@ -85,3 +89,7 @@ Error SwapchainRef_inc(SwapchainRef *swapchain);
 
 Error GraphicsDeviceRef_createSwapchain(GraphicsDeviceRef *device, SwapchainInfo info, Bool allowComputeExt, SwapchainRef **ref);
 Error SwapchainRef_resize(SwapchainRef *swapchain);
+
+#ifdef __cplusplus
+	}
+#endif

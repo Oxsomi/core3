@@ -22,6 +22,10 @@
 #include "types/types.h"
 #include "types/string.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef enum EInputState {
 
 	EInputState_Up,
@@ -162,3 +166,7 @@ Bool InputDevice_setFlag(InputDevice *d, U8 flag);
 Bool InputDevice_resetFlag(InputDevice *d, U8 flag);
 
 Bool InputDevice_setFlagTo(InputDevice *d, U8 flag, Bool value);
+
+#ifdef __cplusplus
+	}
+#endif

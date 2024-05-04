@@ -246,7 +246,7 @@ Error Archive_removeInternal(Archive *archive, CharString path, Allocator alloc,
 
 			const ArchiveEntry cai = archive->entries.ptr[i];
 
-			if(!CharString_startsWithStringInsensitive(cai.path, resolved))
+			if(!CharString_startsWithStringInsensitive(cai.path, resolved, 0))
 				continue;
 
 			//Free and remove from array
@@ -339,7 +339,7 @@ Error Archive_move(Archive *archive, CharString loc, CharString directoryName, A
 
 	CharString *filePath = &archive->entries.ptrNonConst[i].path;
 
-	const U64 v = CharString_findLastSensitive(*filePath, '/');
+	const U64 v = CharString_findLastSensitive(*filePath, '/', 0);
 
 	if (v != U64_MAX)
 		gotoIfError(clean, CharString_popFrontCount(filePath, v + 1))
@@ -469,7 +469,7 @@ Error Archive_foreach(
 	if(CharString_length(resolved))									//Ignore root
 		gotoIfError(clean, CharString_append(&resolved, '/', alloc))
 
-	const U64 baseSlash = isRecursive ? 0 : CharString_countAllSensitive(resolved, '/');
+	const U64 baseSlash = isRecursive ? 0 : CharString_countAllSensitive(resolved, '/', 0);
 
 	//TODO: Have a map where it's easy to find child files/folders.
 	//		For now we'll have to loop over every file.
@@ -483,12 +483,12 @@ Error Archive_foreach(
 		if(type != EFileType_Any && type != cai.type)
 			continue;
 
-		if(!CharString_startsWithStringInsensitive(cai.path, resolved))
+		if(!CharString_startsWithStringInsensitive(cai.path, resolved, 0))
 			continue;
 
 		//It contains at least one sub dir
 
-		if(!isRecursive && baseSlash != CharString_countAllSensitive(cai.path, '/'))
+		if(!isRecursive && baseSlash != CharString_countAllSensitive(cai.path, '/', 0))
 			continue;
 
 		FileInfo info = (FileInfo) {

@@ -761,68 +761,20 @@ void CommandList_process(
 						break;
 				}
 
-				//TLAS, if it's on the CPU we already know the BLASes,
-				//If it's on the GPU then we have to rely on manual BLAS transitions
+				//If it's on the GPU then we have to rely on manual RTAS transitions
 
-				if (transition.resource->typeId == (ETypeId)EGraphicsTypeId_TLASExt) {
+				Bool isTLAS = transition.resource->typeId == (ETypeId)EGraphicsTypeId_TLASExt;
 
-					TLAS *tlas = TLASRef_ptr(transition.resource);
+				if (isTLAS || transition.resource->typeId == (ETypeId)EGraphicsTypeId_BLASExt) {
 
-					if (!tlas->base.isCompleted)
-						continue;
+					RTAS rtas = isTLAS ? TLASRef_ptr(transition.resource)->base : BLASRef_ptr(transition.resource)->base;
 
-					if(!tlas->useDeviceMemory && transition.type != ETransitionType_UpdateRTAS)
-						for (U64 j = 0; j < tlas->cpuInstancesStatic.length; ++j) {
-
-							TLASInstanceData dat = (TLASInstanceData) { 0 };
-							TLAS_getInstanceDataCpu(tlas, j, &dat);
-
-							if (!dat.blasCpu)
-								continue;
-
-							BLAS *blas = BLASRef_ptr(dat.blasCpu);
-
-							if (!blas->base.isCompleted)
-								continue;
-
-							gotoIfError(nextTransition, VkDeviceBuffer_transition(
-								DeviceBuffer_ext(DeviceBufferRef_ptr(blas->base.asBuffer), Vk),
-								pipelineStage,
-								VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR,
-								graphicsQueueId,
-								0, 0,
-								&deviceExt->bufferTransitions,
-								&dependency
-							))
-						}
-
-					gotoIfError(nextTransition, VkDeviceBuffer_transition(
-
-						DeviceBuffer_ext(DeviceBufferRef_ptr(tlas->base.asBuffer), Vk),
-						pipelineStage,
-
-						transition.type == ETransitionType_UpdateRTAS ? VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR : 
-						VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR,
-
-						graphicsQueueId,
-						0, 0,
-						&deviceExt->bufferTransitions,
-						&dependency
-					))
-
-					continue;
-				}
-
-				if (transition.resource->typeId == (ETypeId)EGraphicsTypeId_BLASExt) {
-
-					BLAS *blas = BLASRef_ptr(transition.resource);
-
-					if (!blas->base.isCompleted)
+					if (!rtas.isCompleted)
 						continue;
 
 					gotoIfError(nextTransition, VkDeviceBuffer_transition(
 
-						DeviceBuffer_ext(DeviceBufferRef_ptr(blas->base.asBuffer), Vk),
+						DeviceBuffer_ext(DeviceBufferRef_ptr(rtas.asBuffer), Vk),
 						pipelineStage,
 
 						transition.type == ETransitionType_UpdateRTAS ? VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR : 

@@ -25,6 +25,10 @@
 #include "types/ref_ptr.h"
 #include "pipeline_structs.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef RefPtr GraphicsDeviceRef;
 typedef RefPtr DeviceBufferRef;
 
@@ -193,3 +197,7 @@ Error GraphicsDeviceRef_createPipelineRaytracingExt(
 	ListCharString names,					//Temporary names for debugging. Can be empty, else match infos->length
 	ListPipelineRef *pipelines
 );
+
+#ifdef __cplusplus
+	}
+#endif

@@ -21,6 +21,10 @@
 #pragma once
 #include "command_structs.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 Error CommandListRef_clear(CommandListRef *commandList);
 Error CommandListRef_begin(CommandListRef *commandList, Bool doClear, U64 lockTimeout);
 Error CommandListRef_end(CommandListRef *commandList);
@@ -164,3 +168,7 @@ Error CommandListRef_endRenderExt(CommandListRef *commandList);
 Error CommandListRef_addMarkerDebugExt(CommandListRef *commandList, F32x4 color, CharString name);
 Error CommandListRef_startRegionDebugExt(CommandListRef *commandList, F32x4 color, CharString name);
 Error CommandListRef_endRegionDebugExt(CommandListRef *commandList);
+
+#ifdef __cplusplus
+	}
+#endif

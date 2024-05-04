@@ -22,6 +22,10 @@
 #include "types/vec.h"
 #include "types/platform_types.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef struct Allocator Allocator;
 typedef struct CharString CharString;
 
@@ -208,3 +212,7 @@ Error U128_toString(
 	EIntegerEncoding encoding,
 	Bool leadingZeros
 );
+
+#ifdef __cplusplus
+	}
+#endif

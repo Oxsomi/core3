@@ -23,6 +23,10 @@
 #include "types/string.h"
 #include "types/log.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 void Log_captureStackTracex(void **stackTrace, U64 stackSize, U8 skip);
 void Log_printCapturedStackTraceCustomx(const void **stackTrace, U64 stackSize, ELogLevel lvl, ELogOptions options);
 void Log_logx(ELogLevel lvl, ELogOptions options, CharString arg);
@@ -43,3 +47,7 @@ void Log_errorx(ELogOptions options, const C8 *format, ...);
 #define Log_performanceLnx(...)			Log_performancex(ELogOptions_NewLine, __VA_ARGS__)
 #define Log_warnLnx(...)				Log_warnx(ELogOptions_NewLine, __VA_ARGS__)
 #define Log_errorLnx(...)				Log_errorx(ELogOptions_NewLine, __VA_ARGS__)
+
+#ifdef __cplusplus
+	}
+#endif

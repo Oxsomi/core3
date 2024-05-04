@@ -92,7 +92,7 @@ Bool CLI_package(ParsedArgs args) {
 			return false;
 		}
 
-		U64 off = CharString_startsWithStringInsensitive(key, CharString_createRefCStrConst("0x")) ? 2 : 0;
+		U64 off = CharString_startsWithStringInsensitive(key, CharString_createRefCStrConst("0x"), 0) ? 2 : 0;
 
 		if (CharString_length(key) - off != 64) {
 			Log_errorLnx("Invalid parameter sent to -aes. Expecting key in hex (32 bytes)");
@@ -154,9 +154,6 @@ Bool CLI_package(ParsedArgs args) {
 
 	gotoIfError(clean, Archive_createx(&archive))
 	gotoIfError(clean, File_resolvex(input, &isVirtual, 0, &resolved))
-
-	if (isVirtual)
-		gotoIfError(clean, Error_invalidOperation(0, "CLI_package() failed, file starts with //"))
 
 	gotoIfError(clean, CharString_appendx(&resolved, '/'))
 

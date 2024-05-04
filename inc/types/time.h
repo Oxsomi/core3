@@ -21,6 +21,10 @@
 #pragma once
 #include "string.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef ShortString TimeFormat;
 
 Ns Time_now();
@@ -39,3 +43,7 @@ I64 Time_clocksElapsed(U64 prevClocks);
 
 void Time_format(Ns time, TimeFormat timeString, Bool isLocalTime);
 Bool Time_parseFormat(Ns *time, TimeFormat format, Bool isLocalTime);
+
+#ifdef __cplusplus
+	}
+#endif

@@ -21,6 +21,10 @@
 #pragma once
 #include "graphics/directx12/directx12.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef struct DxDeviceBuffer {
 	ID3D12Resource *buffer;
 	D3D12_BARRIER_SYNC lastSync;
@@ -34,3 +38,7 @@ Error DxDeviceBuffer_transition(
 	ListD3D12_BUFFER_BARRIER *bufferBarriers,
 	D3D12_BARRIER_GROUP *dependency
 );
+
+#ifdef __cplusplus
+	}
+#endif

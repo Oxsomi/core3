@@ -6,6 +6,8 @@ The OxC3 tool is intended to handle all operations required for Oxsomi core3. Th
 - Generating random numbers or keys.
 - Conversions between file formats.
 - Packaging a project.
+- Compiling shaders.
+- **TODO**: Show GPU/graphics device info.
 - Inspecting a file (printing the header and other important information).
 - Encryption.
 - **TODO**: Compression.
@@ -123,6 +125,33 @@ These are left out by default, because often, file timestamps aren't very import
 `OxC3 package -i myFolder -o myFolder.oiCA` is used to package a folder into Oxsomi formats. This means that it will standardize all files it detects and converts them to our standard file. For example a .fbx file could be automatically converted to a scene and/or model file, a texture could be converted to a standardized image file, etc. This is basically a baking process to ensure all shaders, textures, models and other resources are the correct format for target architectures. -aes argument is allowed to encrypt the modules.
 
 These are generally attached to the exe, apk or other executable file to ensure these resources can be found and aren't as easily accidentally modified on disk, as well as making them more portable. See the README.
+
+## Compiling shaders
+
+`OxC3 compile shaders` is used to compile text shaders to application ready shaders. This could mean preprocessing text shaders to inline all includes for graphics APIs/platforms that take text only or compiling to an actual binary (DXIL or SPIRV). 
+
+When operating on a folder, it will attempt to find `.hlsl` files and then processes them in parallel into the output folder.
+
+`-t` can be used to limit thread count. Such as `-t 0` = default , `-t 50%` = 50% of all threads, `-t 4` = 4 threads. Default behavior is: If total input length >=64KiB with at least 8 files or if at least 16 files are present, then all cores will be used for threading.
+
+`-m` is the mode the output is in. For preprocessor, if this mode is multiple then it will output a .spv.hlsl and .dxil.hlsl for example (instead of just one .hlsl). The following modes are supported: `spv` and `dxil`. To use spv and dxil, you can use `dxil,spv` or `all` (will include others in the future).
+
+`//myFile.hlsl` specifies builtin shaders, such as `//types.hlsl` and `//resources.hlsl` which are bindings to be compatible with OxC3. This can also access NV specific HLSL extensions when DXIL is used as a target.
+
+### Preprocess
+
+The `--preprocess` flag can be used to preprocess a file with defines and/or includes into one without. Useful if custom parsing is needed or it has to be provided to an engine/framework/graphics API that doesn't support includes or defines or is located elsewhere (like remote).
+
+`OxC3 compile shaders -f HLSL -m spv --preprocess -i a.hlsl -o a.preprocessed.hlsl`
+
+## TODO: Show GPU/graphics device info
+
+
+It can also be used to print GPU info regarding devices that support OxC3 and what their features are. It uses the currently active graphics API (be it DirectX12 or Vulkan).
+
+`OxC3 graphics devices` will show all devices.
+
+And it can also show the specific GPU using `OxC3 graphics devices -e 0` which will show the device entry at 0. If `-n` is specified, you can extend the number of elements from 1 to any count.
 
 ## File inspect
 

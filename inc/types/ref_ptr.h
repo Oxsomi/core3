@@ -25,6 +25,10 @@
 #include "types/type_id.h"
 #include "types/atomic.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef Bool (*ObjectFreeFunc)(void *ptr, Allocator allocator);
 
 typedef enum ETypeId ETypeId;
@@ -56,3 +60,7 @@ Bool RefPtr_dec(RefPtr **ptr);	//Clears pointer if it's gone
 typedef RefPtr WeakRefPtr;
 
 TListNamed(WeakRefPtr*, ListWeakRefPtr);
+
+#ifdef __cplusplus
+	}
+#endif

@@ -23,6 +23,10 @@
 #include "types/string.h"
 #include "types/vec.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 //Buffer layout member
 
 typedef struct BufferLayoutMember {
@@ -237,3 +241,7 @@ BUFFER_LAYOUT_SGET(F64);
 
 BUFFER_LAYOUT_VEC_SGET(I);
 BUFFER_LAYOUT_VEC_SGET(F);
+
+#ifdef __cplusplus
+	}
+#endif

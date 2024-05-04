@@ -23,6 +23,10 @@
 
 #include <stdarg.h>
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 //Since a CharString can be a ref to existing memory, it doesn't necessarily have a null terminator.
 //The null terminator is omitted for speed and to allow references into an existing string or data.
 //The null terminator is automatically added on copy.
@@ -206,7 +210,8 @@ Error CharString_replaceAllString(
 	CharString search,
 	CharString replace,
 	EStringCase caseSensitive,
-	Allocator allocator
+	Allocator allocator,
+	U64 off
 );
 
 Error CharString_replaceString(
@@ -215,7 +220,8 @@ Error CharString_replaceString(
 	CharString replace,
 	EStringCase caseSensitive,
 	Allocator allocator,
-	Bool isFirst
+	Bool isFirst,
+	U64 off
 );
 
 Error CharString_replaceFirstString(
@@ -223,7 +229,8 @@ Error CharString_replaceFirstString(
 	CharString search,
 	CharString replace,
 	EStringCase caseSensitive,
-	Allocator allocator
+	Allocator allocator,
+	U64 off
 );
 
 Error CharString_replaceLastString(
@@ -231,34 +238,42 @@ Error CharString_replaceLastString(
 	CharString search,
 	CharString replace,
 	EStringCase caseSensitive,
-	Allocator allocator
+	Allocator allocator,
+	U64 off
 );
 
-Error CharString_replaceAllStringSensitive(CharString *s, CharString search, CharString replace, Allocator allocator);
+Error CharString_replaceAllStringSensitive(CharString *s, CharString search, CharString replace, Allocator allocator, U64 off);
 
 Error CharString_replaceStringSensitive(
 	CharString *s,
 	CharString search,
 	CharString replace,
 	Allocator allocator,
-	Bool isFirst
+	Bool isFirst,
+	U64 off
 );
 
-Error CharString_replaceFirstStringSensitive(CharString *s, CharString search, CharString replace, Allocator allocator);
-Error CharString_replaceLastStringSensitive(CharString *s, CharString search, CharString replace, Allocator allocator);
+Error CharString_replaceFirstStringSensitive(CharString *s, CharString search, CharString replace, Allocator allocator, U64 off);
+Error CharString_replaceLastStringSensitive(CharString *s, CharString search, CharString replace, Allocator allocator, U64 off);
 
-Error CharString_replaceAllStringInsensitive(CharString *s, CharString search, CharString replace, Allocator allocator);
+Error CharString_replaceAllStringInsensitive(CharString *s, CharString search, CharString replace, Allocator allocator, U64 off);
 
 Error CharString_replaceStringInsensitive(
 	CharString *s,
 	CharString search,
 	CharString replace,
 	Allocator allocator,
-	Bool isFirst
+	Bool isFirst,
+	U64 off
 );
 
-Error CharString_replaceFirstStringInsensitive(CharString *s, CharString search, CharString replace, Allocator allocator);
-Error CharString_replaceLastStringInsensitive(CharString *s, CharString search, CharString replace, Allocator allocator);
+Error CharString_replaceFirstStringInsensitive(
+	CharString *s, CharString search, CharString replace, Allocator allocator, U64 off
+);
+
+Error CharString_replaceLastStringInsensitive(
+	CharString *s, CharString search, CharString replace, Allocator allocator, U64 off
+);
 
 //TODO: CharString_replaceCodepoint
 
@@ -267,70 +282,77 @@ Error CharString_toUTF16(CharString s, Allocator allocator, ListU16 *arr);
 
 //Simple checks (consts)
 
-Bool CharString_startsWith(CharString str, C8 c, EStringCase caseSensitive);
-Bool CharString_startsWithString(CharString str, CharString other, EStringCase caseSensitive);
+Bool CharString_startsWith(CharString str, C8 c, EStringCase caseSensitive, U64 off);
+Bool CharString_startsWithString(CharString str, CharString other, EStringCase caseSensitive, U64 off);
 
-Bool CharString_endsWith(CharString str, C8 c, EStringCase caseSensitive);
-Bool CharString_endsWithString(CharString str, CharString other, EStringCase caseSensitive);
+Bool CharString_endsWith(CharString str, C8 c, EStringCase caseSensitive, U64 off);
+Bool CharString_endsWithString(CharString str, CharString other, EStringCase caseSensitive, U64 off);
 
-U64 CharString_countAll(CharString s, C8 c, EStringCase caseSensitive);
-U64 CharString_countAllString(CharString s, CharString other, EStringCase caseSensitive);
+U64 CharString_countAll(CharString s, C8 c, EStringCase caseSensitive, U64 off);
+U64 CharString_countAllString(CharString s, CharString other, EStringCase caseSensitive, U64 off);
 
-Bool CharString_startsWithSensitive(CharString str, C8 c);
-Bool CharString_startsWithStringSensitive(CharString str, CharString other);
+Bool CharString_startsWithSensitive(CharString str, C8 c, U64 off);
+Bool CharString_startsWithStringSensitive(CharString str, CharString other, U64 off);
 
-Bool CharString_endsWithSensitive(CharString str, C8 c);
-Bool CharString_endsWithStringSensitive(CharString str, CharString other);
+Bool CharString_endsWithSensitive(CharString str, C8 c, U64 off);
+Bool CharString_endsWithStringSensitive(CharString str, CharString other, U64 off);
 
-U64 CharString_countAllSensitive(CharString s, C8 c);
-U64 CharString_countAllStringSensitive(CharString s, CharString other);
+U64 CharString_countAllSensitive(CharString s, C8 c, U64 off);
+U64 CharString_countAllStringSensitive(CharString s, CharString other, U64 off);
 
-Bool CharString_startsWithInsensitive(CharString str, C8 c);
-Bool CharString_startsWithStringInsensitive(CharString str, CharString other);
+Bool CharString_startsWithInsensitive(CharString str, C8 c, U64 off);
+Bool CharString_startsWithStringInsensitive(CharString str, CharString other, U64 off);
 
-Bool CharString_endsWithInsensitive(CharString str, C8 c);
-Bool CharString_endsWithStringInsensitive(CharString str, CharString other);
+Bool CharString_endsWithInsensitive(CharString str, C8 c, U64 off);
+Bool CharString_endsWithStringInsensitive(CharString str, CharString other, U64 off);
 
-U64 CharString_countAllInsensitive(CharString s, C8 c);
-U64 CharString_countAllStringInsensitive(CharString s, CharString other);
+U64 CharString_countAllInsensitive(CharString s, C8 c, U64 off);
+U64 CharString_countAllStringInsensitive(CharString s, CharString other, U64 off);
 
 //TODO: CharString_countCodepoint/endsWithCodepoint/startsWithCodepoint
 
-Error CharString_findAll(CharString s, C8 c, Allocator alloc, EStringCase caseSensitive, ListU64 *result);
-Error CharString_findAllString(CharString s, CharString other, Allocator alloc, EStringCase caseSensitive, ListU64 *result);
+Error CharString_findAll(CharString s, C8 c, Allocator alloc, EStringCase caseSensitive, U64 off, ListU64 *result);
+Error CharString_findAllString(
+	CharString s,
+	CharString other,
+	Allocator alloc,
+	EStringCase caseSensitive,
+	U64 off,
+	ListU64 *result
+);
 
-U64 CharString_findFirst(CharString s, C8 c, EStringCase caseSensitive);
-U64 CharString_findLast(CharString s, C8 c, EStringCase caseSensitive);
+U64 CharString_findFirst(CharString s, C8 c, EStringCase caseSensitive, U64 off);
+U64 CharString_findLast(CharString s, C8 c, EStringCase caseSensitive, U64 off);
 
-U64 CharString_find(CharString s, C8 c, EStringCase caseSensitive, Bool isFirst);
+U64 CharString_find(CharString s, C8 c, EStringCase caseSensitive, Bool isFirst, U64 off);
 
-U64 CharString_findFirstString(CharString s, CharString other, EStringCase caseSensitive);
-U64 CharString_findLastString(CharString s, CharString other, EStringCase caseSensitive);
-U64 CharString_findString(CharString s, CharString other, EStringCase caseSensitive, Bool isFirst);
+U64 CharString_findFirstString(CharString s, CharString other, EStringCase caseSensitive, U64 off);
+U64 CharString_findLastString(CharString s, CharString other, EStringCase caseSensitive, U64 off);
+U64 CharString_findString(CharString s, CharString other, EStringCase caseSensitive, Bool isFirst, U64 off);
 
-Error CharString_findAllSensitive(CharString s, C8 c, Allocator alloc, ListU64 *result);
-Error CharString_findAllInsensitive(CharString s, C8 c, Allocator alloc, ListU64 *result);
+Error CharString_findAllSensitive(CharString s, C8 c, U64 off, Allocator alloc, ListU64 *result);
+Error CharString_findAllInsensitive(CharString s, C8 c, U64 off, Allocator alloc, ListU64 *result);
 
-Error CharString_findAllStringSensitive(CharString s, CharString other, Allocator alloc, ListU64 *result);
-Error CharString_findAllStringInsensitive(CharString s, CharString other, Allocator alloc, ListU64 *result);
+Error CharString_findAllStringSensitive(CharString s, CharString other, U64 off, Allocator alloc, ListU64 *result);
+Error CharString_findAllStringInsensitive(CharString s, CharString other, U64 off, Allocator alloc, ListU64 *result);
 
-U64 CharString_findFirstSensitive(CharString s, C8 c);
-U64 CharString_findFirstInsensitive(CharString s, C8 c);
+U64 CharString_findFirstSensitive(CharString s, C8 c, U64 off);
+U64 CharString_findFirstInsensitive(CharString s, C8 c, U64 off);
 
-U64 CharString_findLastSensitive(CharString s, C8 c);
-U64 CharString_findLastInsensitive(CharString s, C8 c);
+U64 CharString_findLastSensitive(CharString s, C8 c, U64 off);
+U64 CharString_findLastInsensitive(CharString s, C8 c, U64 off);
 
-U64 CharString_findSensitive(CharString s, C8 c, Bool isFirst);
-U64 CharString_findInsensitive(CharString s, C8 c, Bool isFirst);
+U64 CharString_findSensitive(CharString s, C8 c, Bool isFirst, U64 off);
+U64 CharString_findInsensitive(CharString s, C8 c, Bool isFirst, U64 off);
 
-U64 CharString_findFirstStringSensitive(CharString s, CharString other);
-U64 CharString_findFirstStringInsensitive(CharString s, CharString other);
+U64 CharString_findFirstStringSensitive(CharString s, CharString other, U64 off);
+U64 CharString_findFirstStringInsensitive(CharString s, CharString other, U64 off);
 
-U64 CharString_findLastStringSensitive(CharString s, CharString other);
-U64 CharString_findLastStringInsensitive(CharString s, CharString other);
+U64 CharString_findLastStringSensitive(CharString s, CharString other, U64 off);
+U64 CharString_findLastStringInsensitive(CharString s, CharString other, U64 off);
 
-U64 CharString_findStringSensitive(CharString s, CharString other, Bool isFirst);
-U64 CharString_findStringInsensitive(CharString s, CharString other, Bool isFirst);
+U64 CharString_findStringSensitive(CharString s, CharString other, Bool isFirst, U64 off);
+U64 CharString_findStringInsensitive(CharString s, CharString other, Bool isFirst, U64 off);
 
 Bool CharString_contains(CharString str, C8 c, EStringCase caseSensitive);
 Bool CharString_containsString(CharString str, CharString other, EStringCase caseSensitive);
@@ -471,65 +493,65 @@ Error CharString_eraseAt(CharString *s, U64 i);
 Error CharString_popFront(CharString *s);
 Error CharString_popEnd(CharString *s);
 
-Bool CharString_eraseAll(CharString *s, C8 c, EStringCase caseSensitive);
-Bool CharString_eraseAllString(CharString *s, CharString other, EStringCase caseSensitive);
+Bool CharString_eraseAll(CharString *s, C8 c, EStringCase caseSensitive, U64 off);
+Bool CharString_eraseAllString(CharString *s, CharString other, EStringCase caseSensitive, U64 off);
 
-Bool CharString_erase(CharString *s, C8 c, EStringCase caseSensitive, Bool isFirst);
+Bool CharString_erase(CharString *s, C8 c, EStringCase caseSensitive, Bool isFirst, U64 off);
 
-Bool CharString_eraseFirst(CharString *s, C8 c, EStringCase caseSensitive);
-Bool CharString_eraseLast(CharString *s, C8 c, EStringCase caseSensitive);
+Bool CharString_eraseFirst(CharString *s, C8 c, EStringCase caseSensitive, U64 off);
+Bool CharString_eraseLast(CharString *s, C8 c, EStringCase caseSensitive, U64 off);
 
-Bool CharString_eraseString(CharString *s, CharString other, EStringCase caseSensitive, Bool isFirst);
+Bool CharString_eraseString(CharString *s, CharString other, EStringCase caseSensitive, Bool isFirst, U64 off);
 
-Bool CharString_eraseFirstString(CharString *s, CharString other, EStringCase caseSensitive);
-Bool CharString_eraseLastString(CharString *s, CharString other, EStringCase caseSensitive);
+Bool CharString_eraseFirstString(CharString *s, CharString other, EStringCase caseSensitive, U64 off);
+Bool CharString_eraseLastString(CharString *s, CharString other, EStringCase caseSensitive, U64 off);
 
 //Duplicates of erase to simplify casing
 
-Bool CharString_eraseAllSensitive(CharString *s, C8 c);
-Bool CharString_eraseAllStringSensitive(CharString *s, CharString other);
+Bool CharString_eraseAllSensitive(CharString *s, C8 c, U64 off);
+Bool CharString_eraseAllStringSensitive(CharString *s, CharString other, U64 off);
 
-Bool CharString_eraseSensitive(CharString *s, C8 c, Bool isFirst);
+Bool CharString_eraseSensitive(CharString *s, C8 c, Bool isFirst, U64 off);
 
-Bool CharString_eraseFirstSensitive(CharString *s, C8 c);
-Bool CharString_eraseLastSensitive(CharString *s, C8 c);
+Bool CharString_eraseFirstSensitive(CharString *s, C8 c, U64 off);
+Bool CharString_eraseLastSensitive(CharString *s, C8 c, U64 off);
 
-Bool CharString_eraseStringSensitive(CharString *s, CharString other, Bool isFirst);
+Bool CharString_eraseStringSensitive(CharString *s, CharString other, Bool isFirst, U64 off);
 
-Bool CharString_eraseFirstStringSensitive(CharString *s, CharString other);
-Bool CharString_eraseLastStringSensitive(CharString *s, CharString other);
+Bool CharString_eraseFirstStringSensitive(CharString *s, CharString other, U64 off);
+Bool CharString_eraseLastStringSensitive(CharString *s, CharString other, U64 off);
 
-Bool CharString_eraseAllInsensitive(CharString *s, C8 c);
-Bool CharString_eraseAllStringInsensitive(CharString *s, CharString other);
+Bool CharString_eraseAllInsensitive(CharString *s, C8 c, U64 off);
+Bool CharString_eraseAllStringInsensitive(CharString *s, CharString other, U64 off);
 
-Bool CharString_eraseInsensitive(CharString *s, C8 c, Bool isFirst);
+Bool CharString_eraseInsensitive(CharString *s, C8 c, Bool isFirst, U64 off);
 
-Bool CharString_eraseFirstInsensitive(CharString *s, C8 c);
-Bool CharString_eraseLastInsensitive(CharString *s, C8 c);
+Bool CharString_eraseFirstInsensitive(CharString *s, C8 c, U64 off);
+Bool CharString_eraseLastInsensitive(CharString *s, C8 c, U64 off);
 
-Bool CharString_eraseStringInsensitive(CharString *s, CharString other, Bool isFirst);
+Bool CharString_eraseStringInsensitive(CharString *s, CharString other, Bool isFirst, U64 off);
 
-Bool CharString_eraseFirstStringInsensitive(CharString *s, CharString other);
-Bool CharString_eraseLastStringInsensitive(CharString *s, CharString other);
+Bool CharString_eraseFirstStringInsensitive(CharString *s, CharString other, U64 off);
+Bool CharString_eraseLastStringInsensitive(CharString *s, CharString other, U64 off);
 
 //TODO: CharString_eraseCodepoint
 
 //Replace
 
-Bool CharString_replaceAll(CharString *s, C8 c, C8 v, EStringCase caseSensitive);
-Bool CharString_replace(CharString *s, C8 c, C8 v, EStringCase caseSensitive, Bool isFirst);
-Bool CharString_replaceFirst(CharString *s, C8 c, C8 v, EStringCase caseSensitive);
-Bool CharString_replaceLast(CharString *s, C8 c, C8 v, EStringCase caseSensitive);
+Bool CharString_replaceAll(CharString *s, C8 c, C8 v, EStringCase caseSensitive, U64 off);
+Bool CharString_replace(CharString *s, C8 c, C8 v, EStringCase caseSensitive, Bool isFirst, U64 off);
+Bool CharString_replaceFirst(CharString *s, C8 c, C8 v, EStringCase caseSensitive, U64 off);
+Bool CharString_replaceLast(CharString *s, C8 c, C8 v, EStringCase caseSensitive, U64 off);
 
-Bool CharString_replaceAllSensitive(CharString *s, C8 c, C8 v);
-Bool CharString_replaceSensitive(CharString *s, C8 c, C8 v, Bool isFirst);
-Bool CharString_replaceFirstSensitive(CharString *s, C8 c, C8 v);
-Bool CharString_replaceLastSensitive(CharString *s, C8 c, C8 v);
+Bool CharString_replaceAllSensitive(CharString *s, C8 c, C8 v, U64 off);
+Bool CharString_replaceSensitive(CharString *s, C8 c, C8 v, Bool isFirst, U64 off);
+Bool CharString_replaceFirstSensitive(CharString *s, C8 c, C8 v, U64 off);
+Bool CharString_replaceLastSensitive(CharString *s, C8 c, C8 v, U64 off);
 
-Bool CharString_replaceAllInsensitive(CharString *s, C8 c, C8 v);
-Bool CharString_replaceInsensitive(CharString *s, C8 c, C8 v, Bool isFirst);
-Bool CharString_replaceFirstInsensitive(CharString *s, C8 c, C8 v);
-Bool CharString_replaceLastInsensitive(CharString *s, C8 c, C8 v);
+Bool CharString_replaceAllInsensitive(CharString *s, C8 c, C8 v, U64 off);
+Bool CharString_replaceInsensitive(CharString *s, C8 c, C8 v, Bool isFirst, U64 off);
+Bool CharString_replaceFirstInsensitive(CharString *s, C8 c, C8 v, U64 off);
+Bool CharString_replaceLastInsensitive(CharString *s, C8 c, C8 v, U64 off);
 
 //TODO: CharString_replaceCodepoint
 
@@ -568,3 +590,7 @@ Error ListCharString_concatString(ListCharString arr, CharString between, Alloca
 
 Error CharString_formatVariadic(Allocator alloc, CharString *result, const C8 *format, va_list args);
 Error CharString_format(Allocator alloc, CharString *result, const C8 *format, ...);
+
+#ifdef __cplusplus
+	}
+#endif

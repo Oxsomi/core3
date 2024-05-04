@@ -21,6 +21,10 @@
 #pragma once
 #include "types/vec.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 //Monitor
 
 typedef enum EMonitorOrientation {
@@ -44,3 +48,7 @@ typedef struct Monitor {
 	F32 gamma, contrast, refreshRate;
 
 } Monitor;
+
+#ifdef __cplusplus
+	}
+#endif

@@ -195,7 +195,7 @@ Error File_loadVirtualInternal1(FileLoadVirtual *userData, CharString loc, Bool 
 
 		if(
 			!CharString_equalsStringInsensitive(loc, section->path) &&
-			!CharString_startsWithStringInsensitive(section->path, isChild)
+			!CharString_startsWithStringInsensitive(section->path, isChild, 0)
 		)
 			continue;
 

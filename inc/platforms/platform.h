@@ -25,6 +25,10 @@
 #include "types/platform_types.h"
 #include "types/lock.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef struct VirtualSection {
 
 	CharString path;
@@ -83,3 +87,7 @@ impl void Platform_free(void *allocator, void *ptr, U64 length);
 //Debugging to see where allocations came from and how many are active
 
 void Platform_printAllocations(U64 offset, U64 length, U64 minAllocationSize);
+
+#ifdef __cplusplus
+	}
+#endif

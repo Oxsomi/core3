@@ -23,6 +23,10 @@
 #include "types/list.h"
 #include "formats/texture.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef struct Allocator Allocator;
 typedef struct Error Error;
 typedef enum EDepthStencilFormat EDepthStencilFormat;
@@ -48,3 +52,7 @@ Error DDS_write(ListSubResourceData buf, DDSInfo info, Allocator allocator, Buff
 Error DDS_read(Buffer buf, DDSInfo *info, Allocator allocator, ListSubResourceData *result);
 
 Bool ListSubResourceData_freeAll(ListSubResourceData *buf, Allocator allocator);
+
+#ifdef __cplusplus
+	}
+#endif

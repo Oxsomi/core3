@@ -21,9 +21,17 @@
 #pragma once
 #include "types/types.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef struct DDSInfo DDSInfo;
 typedef struct ListSubResourceData ListSubResourceData;
 
 Error DDS_writex(ListSubResourceData buf, DDSInfo info, Buffer *result);
 Error DDS_readx(Buffer buf, DDSInfo *info, ListSubResourceData *result);
 Bool ListSubResourceData_freeAllx(ListSubResourceData *buf);
+
+#ifdef __cplusplus
+	}
+#endif

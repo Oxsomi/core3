@@ -23,6 +23,10 @@
 #include "types/ref_ptr.h"
 #include "device_info.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 //In line with vulkan standard.
 #define GraphicsApplicationInfo_Version(major, minor, patch)	((major) << 22) | ((minor) << 12) | (patch)
 
@@ -87,3 +91,7 @@ Error GraphicsInstance_getPreferredDevice(
 	U64 deviceTypeMask,
 	GraphicsDeviceInfo *deviceInfo
 );
+
+#ifdef __cplusplus
+	}
+#endif

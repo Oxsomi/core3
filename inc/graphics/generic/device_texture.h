@@ -23,6 +23,10 @@
 #include "device_buffer.h"
 #include "texture.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef RefPtr DeviceTextureRef;
 
 //DeviceTexture, UnifiedTexture (Resource, ...), UnifiedTextureImage_size[N], UnifiedTextureExt_size[N], TextureExt
@@ -67,3 +71,7 @@ Error GraphicsDeviceRef_createTexture(
 //Only possible if texture has a backed CPU texture.
 
 Error DeviceTextureRef_markDirty(DeviceTextureRef *texture, U16 x, U16 y, U16 z, U16 w, U16 h, U16 l);
+
+#ifdef __cplusplus
+	}
+#endif

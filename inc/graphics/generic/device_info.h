@@ -21,6 +21,10 @@
 #pragma once
 #include "graphics/generic/types.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef enum ETextureFormat ETextureFormat;
 typedef enum EDepthStencilFormat EDepthStencilFormat;
 
@@ -225,3 +229,7 @@ Bool GraphicsDeviceInfo_supportsRenderTextureFormat(const GraphicsDeviceInfo *de
 Bool GraphicsDeviceInfo_supportsFormatVertexAttribute(ETextureFormat format);
 
 Bool GraphicsDeviceInfo_supportsDepthStencilFormat(const GraphicsDeviceInfo *deviceInfo, EDepthStencilFormat format);
+
+#ifdef __cplusplus
+	}
+#endif

@@ -18,9 +18,12 @@
 *  This is called dual licensing.
 */
 
+#include "types/list_impl.h"
 #include "types/thread.h"
 #include "types/error.h"
 #include "types/buffer.h"
+
+TListNamedImpl(ListThread);
 
 Bool Thread_free(Allocator alloc, Thread **thread) {
 

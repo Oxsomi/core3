@@ -22,6 +22,10 @@
 #include "types.h"
 #include "log.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 //TODO: Make errors extendable like TypeId
 
 typedef enum EGenericError {
@@ -123,3 +127,7 @@ Error Error_none();
 
 impl CharString Error_formatPlatformError(Allocator alloc, Error err);
 void Error_print(Allocator alloc, Error err, ELogLevel logLevel, ELogOptions options);
+
+#ifdef __cplusplus
+	}
+#endif

@@ -21,6 +21,10 @@
 #pragma once
 #include "types/types.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef enum EDepthStencilFormat {
 
 	EDepthStencilFormat_None,
@@ -521,3 +525,7 @@ DXFormat ETextureFormatId_toDXFormat(ETextureFormatId format);
 
 EDepthStencilFormat DXFormat_toDepthStencilFormat(DXFormat format);
 DXFormat EDepthStencilFormat_toDXFormat(EDepthStencilFormat format);
+
+#ifdef __cplusplus
+	}
+#endif

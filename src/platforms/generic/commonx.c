@@ -29,6 +29,7 @@
 #include "formats/dds.h"
 #include "formats/oiCA.h"
 #include "formats/oiDL.h"
+#include "formats/oiSH.h"
 #include "types/buffer.h"
 #include "types/allocation_buffer.h"
 #include "types/error.h"
@@ -59,6 +60,9 @@ TListXImpl(SubResourceData);
 
 TListXBaseImpl(ListRefPtr);
 TListXBaseImpl(ListWeakRefPtr);
+
+TListXImpl(SHEntry);
+TListXBaseImpl(ListThread);
 
 //Contains small helper functions that don't require their own .c file
 
@@ -439,8 +443,8 @@ Error CharString_insertStringx(CharString *s, CharString other, U64 i) {
 	return CharString_insertString(s, other, i, Platform_instance.alloc);
 }
 
-Error CharString_replaceAllStringx(CharString *s, CharString search, CharString replace, EStringCase caseSensitive) {
-	return CharString_replaceAllString(s, search, replace, caseSensitive, Platform_instance.alloc);
+Error CharString_replaceAllStringx(CharString *s, CharString search, CharString replace, EStringCase caseSensitive, U64 off) {
+	return CharString_replaceAllString(s, search, replace, caseSensitive, Platform_instance.alloc, off);
 }
 
 Error CharString_replaceStringx(
@@ -448,73 +452,78 @@ Error CharString_replaceStringx(
 	CharString search,
 	CharString replace,
 	EStringCase caseSensitive,
-	Bool isFirst
+	Bool isFirst,
+	U64 off
 ) {
-	return CharString_replaceString(s, search, replace, caseSensitive, Platform_instance.alloc, isFirst);
+	return CharString_replaceString(s, search, replace, caseSensitive, Platform_instance.alloc, isFirst, off);
 }
 
-Error CharString_replaceFirstStringx(CharString *s, CharString search, CharString replace, EStringCase caseSensitive) {
-	return CharString_replaceStringx(s, search, replace, caseSensitive, true);
+Error CharString_replaceFirstStringx(
+	CharString *s, CharString search, CharString replace, EStringCase caseSensitive, U64 off
+) {
+	return CharString_replaceStringx(s, search, replace, caseSensitive, true, off);
 }
 
-Error CharString_replaceLastStringx(CharString *s, CharString search, CharString replace, EStringCase caseSensitive) {
-	return CharString_replaceStringx(s, search, replace, caseSensitive, false);
+Error CharString_replaceLastStringx(
+	CharString *s, CharString search, CharString replace, EStringCase caseSensitive, U64 off
+) {
+	return CharString_replaceStringx(s, search, replace, caseSensitive, false, off);
 }
 
-Error CharString_replaceAllStringSensitivex(CharString *s, CharString search, CharString replace) {
-	return CharString_replaceAllStringSensitive(s, search, replace, Platform_instance.alloc);
+Error CharString_replaceAllStringSensitivex(CharString *s, CharString search, CharString replace, U64 off) {
+	return CharString_replaceAllStringSensitive(s, search, replace, Platform_instance.alloc, off);
 }
 
-Error CharString_replaceAllStringInsensitivex(CharString *s, CharString search, CharString replace) {
-	return CharString_replaceAllStringInsensitive(s, search, replace, Platform_instance.alloc);
+Error CharString_replaceAllStringInsensitivex(CharString *s, CharString search, CharString replace, U64 off) {
+	return CharString_replaceAllStringInsensitive(s, search, replace, Platform_instance.alloc, off);
 }
 
-Error CharString_replaceStringSensitivex(CharString *s, CharString search, CharString replace, Bool isFirst) {
-	return CharString_replaceStringSensitive(s, search, replace, Platform_instance.alloc, isFirst);
+Error CharString_replaceStringSensitivex(CharString *s, CharString search, CharString replace, Bool isFirst, U64 off) {
+	return CharString_replaceStringSensitive(s, search, replace, Platform_instance.alloc, isFirst, off);
 }
 
-Error CharString_replaceStringInsensitivex(CharString *s, CharString search, CharString replace, Bool isFirst) {
-	return CharString_replaceStringInsensitive(s, search, replace, Platform_instance.alloc, isFirst);
+Error CharString_replaceStringInsensitivex(CharString *s, CharString search, CharString replace, Bool isFirst, U64 off) {
+	return CharString_replaceStringInsensitive(s, search, replace, Platform_instance.alloc, isFirst, off);
 }
 
-Error CharString_replaceFirstStringSensitivex(CharString *s, CharString search, CharString replace) {
-	return CharString_replaceFirstStringSensitive(s, search, replace, Platform_instance.alloc);
+Error CharString_replaceFirstStringSensitivex(CharString *s, CharString search, CharString replace, U64 off) {
+	return CharString_replaceFirstStringSensitive(s, search, replace, Platform_instance.alloc, off);
 }
 
-Error CharString_replaceFirstStringInsensitivex(CharString *s, CharString search, CharString replace) {
-	return CharString_replaceFirstStringInsensitive(s, search, replace, Platform_instance.alloc);
+Error CharString_replaceFirstStringInsensitivex(CharString *s, CharString search, CharString replace, U64 off) {
+	return CharString_replaceFirstStringInsensitive(s, search, replace, Platform_instance.alloc, off);
 }
 
-Error CharString_replaceLastStringSensitivex(CharString *s, CharString search, CharString replace) {
-	return CharString_replaceLastStringSensitive(s, search, replace, Platform_instance.alloc);
+Error CharString_replaceLastStringSensitivex(CharString *s, CharString search, CharString replace, U64 off) {
+	return CharString_replaceLastStringSensitive(s, search, replace, Platform_instance.alloc, off);
 }
 
-Error CharString_replaceLastStringInsensitivex(CharString *s, CharString search, CharString replace) {
-	return CharString_replaceLastStringInsensitive(s, search, replace, Platform_instance.alloc);
+Error CharString_replaceLastStringInsensitivex(CharString *s, CharString search, CharString replace, U64 off) {
+	return CharString_replaceLastStringInsensitive(s, search, replace, Platform_instance.alloc, off);
 }
 
-Error CharString_findAllx(CharString s, C8 c, EStringCase caseSensitive, ListU64 *result) {
-	return CharString_findAll(s, c, Platform_instance.alloc, caseSensitive, result);
+Error CharString_findAllx(CharString s, C8 c, EStringCase caseSensitive, ListU64 *result, U64 off) {
+	return CharString_findAll(s, c, Platform_instance.alloc, caseSensitive, off, result);
 }
 
-Error CharString_findAllStringx(CharString s, CharString other, EStringCase caseSensitive, ListU64 *result) {
-	return CharString_findAllString(s, other, Platform_instance.alloc, caseSensitive, result);
+Error CharString_findAllStringx(CharString s, CharString other, EStringCase caseSensitive, ListU64 *result, U64 off) {
+	return CharString_findAllString(s, other, Platform_instance.alloc, caseSensitive, off, result);
 }
 
-Error CharString_findAllSensitivex(CharString s, C8 c, ListU64 *result) {
-	return CharString_findAllSensitive(s, c, Platform_instance.alloc, result);
+Error CharString_findAllSensitivex(CharString s, C8 c, U64 off, ListU64 *result) {
+	return CharString_findAllSensitive(s, c, off, Platform_instance.alloc, result);
 }
 
-Error CharString_findAllInsensitivex(CharString s, C8 c, ListU64 *result) {
-	return CharString_findAllInsensitive(s, c, Platform_instance.alloc, result);
+Error CharString_findAllInsensitivex(CharString s, C8 c, U64 off, ListU64 *result) {
+	return CharString_findAllInsensitive(s, c, off, Platform_instance.alloc, result);
 }
 
-Error CharString_findAllStringSensitivex(CharString s, CharString other, ListU64 *result) {
-	return CharString_findAllStringSensitive(s, other, Platform_instance.alloc, result);
+Error CharString_findAllStringSensitivex(CharString s, CharString other, U64 off, ListU64 *result) {
+	return CharString_findAllStringSensitive(s, other, off, Platform_instance.alloc, result);
 }
 
-Error CharString_findAllStringInsensitivex(CharString s, CharString other, ListU64 *result) {
-	return CharString_findAllStringInsensitive(s, other, Platform_instance.alloc, result);
+Error CharString_findAllStringInsensitivex(CharString s, CharString other, U64 off, ListU64 *result) {
+	return CharString_findAllStringInsensitive(s, other, off, Platform_instance.alloc, result);
 }
 
 Error ListCharString_createCopyUnderlyingx(ListCharString toCopy, ListCharString *arr) {

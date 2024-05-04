@@ -20,6 +20,10 @@
 
 #pragma once
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 //TODO: Error checking
 
 F32x4 F32x4_bitsI32x4(I32x4 a);
@@ -123,19 +127,19 @@ I32x4 I32x4_swapEndianness(I32x4 v);
 
 //4D swizzles
 
-#define I32x4_expand4(xv, yv, zv, wv) I32x4 I32x4_##xv##yv##zv##wv(I32x4 a);
+#define I32x4_expand4(xv, yv, zv, wv) I32x4 I32x4_##xv##yv##zv##wv(I32x4 a)
 
-#define I32x4_expand3(...)											\
-I32x4_expand4(__VA_ARGS__, x); I32x4_expand4(__VA_ARGS__, y);		\
-I32x4_expand4(__VA_ARGS__, z); I32x4_expand4(__VA_ARGS__, w);
+#define I32x4_expand3(a, b, c)							\
+I32x4_expand4(a, b, c, x); I32x4_expand4(a, b, c, y);	\
+I32x4_expand4(a, b, c, z); I32x4_expand4(a, b, c, w)
 
-#define I32x4_expand2(...)											\
-I32x4_expand3(__VA_ARGS__, x); I32x4_expand3(__VA_ARGS__, y);		\
-I32x4_expand3(__VA_ARGS__, z); I32x4_expand3(__VA_ARGS__, w);
+#define I32x4_expand2(a, b)								\
+I32x4_expand3(a, b, x); I32x4_expand3(a, b, y);			\
+I32x4_expand3(a, b, z); I32x4_expand3(a, b, w)
 
-#define I32x4_expand(...)											\
-I32x4_expand2(__VA_ARGS__, x); I32x4_expand2(__VA_ARGS__, y);		\
-I32x4_expand2(__VA_ARGS__, z); I32x4_expand2(__VA_ARGS__, w);
+#define I32x4_expand(a)									\
+I32x4_expand2(a, x); I32x4_expand2(a, y);				\
+I32x4_expand2(a, z); I32x4_expand2(a, w)
 
 I32x4_expand(x);
 I32x4_expand(y);
@@ -149,9 +153,9 @@ impl I32x4 I32x4_trunc3(I32x4 a);
 
 #define I32x2_expand2(xv, yv) I32x4 I32x4_##xv##yv##4(I32x4 a); I32x2 I32x4_##xv##yv(I32x4 a);
 
-#define I32x2_expand(...)											\
-I32x2_expand2(__VA_ARGS__, x); I32x2_expand2(__VA_ARGS__, y);		\
-I32x2_expand2(__VA_ARGS__, z); I32x2_expand2(__VA_ARGS__, w);
+#define I32x2_expand(a)									\
+I32x2_expand2(a, x); I32x2_expand2(a, y);				\
+I32x2_expand2(a, z); I32x2_expand2(a, w);
 
 I32x2_expand(x);
 I32x2_expand(y);
@@ -162,13 +166,13 @@ I32x2_expand(w);
 
 #define I32x3_expand3(xv, yv, zv) I32x4 I32x4_##xv##yv##zv(I32x4 a);
 
-#define I32x3_expand2(...)											\
-I32x3_expand3(__VA_ARGS__, x); I32x3_expand3(__VA_ARGS__, y);		\
-I32x3_expand3(__VA_ARGS__, z); I32x3_expand3(__VA_ARGS__, w);
+#define I32x3_expand2(a, b)							\
+I32x3_expand3(a, b, x); I32x3_expand3(a, b, y);		\
+I32x3_expand3(a, b, z); I32x3_expand3(a, b, w);
 
-#define I32x3_expand(...)											\
-I32x3_expand2(__VA_ARGS__, x); I32x3_expand2(__VA_ARGS__, y);		\
-I32x3_expand2(__VA_ARGS__, z); I32x3_expand2(__VA_ARGS__, w);
+#define I32x3_expand(a)								\
+I32x3_expand2(a, x); I32x3_expand2(a, y);			\
+I32x3_expand2(a, z); I32x3_expand2(a, w);
 
 I32x3_expand(x);
 I32x3_expand(y);
@@ -178,3 +182,7 @@ I32x3_expand(w);
 //Shuffling bytes
 
 I32x4 I32x4_shuffleBytes(I32x4 a, I32x4 b);		//Shuffle bytes around. Useful for changing endianness for example
+
+#ifdef __cplusplus
+	}
+#endif

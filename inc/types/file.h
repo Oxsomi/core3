@@ -21,6 +21,10 @@
 #pragma once
 #include "types/string.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef enum EFileType {
 	EFileType_Folder,
 	EFileType_File,
@@ -57,3 +61,7 @@ Error File_resolve(
 Bool File_isVirtual(CharString loc);
 
 Bool FileInfo_free(FileInfo *info, Allocator alloc);
+
+#ifdef __cplusplus
+	}
+#endif

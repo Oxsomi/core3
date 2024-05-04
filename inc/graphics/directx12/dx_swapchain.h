@@ -21,6 +21,14 @@
 #pragma once
 #include <dxgi1_2.h>
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef struct DxSwapchain {
 	IDXGISwapChain1 *swapchain;
 } DxSwapchain;
+
+#ifdef __cplusplus
+	}
+#endif

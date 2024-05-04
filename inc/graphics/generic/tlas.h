@@ -23,6 +23,10 @@
 #include "device_buffer.h"
 #include "types/quat.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef RefPtr BLASRef;
 
 typedef enum ETLASInstanceFlag {
@@ -146,6 +150,8 @@ typedef struct TLAS {
 
 	U32 handle;
 
+	DeviceBufferRef *tempInstanceBuffer;		//If cpuInstanceMotion or cpuInstancesStatic, temp upload heap
+
 	union {
 
 		//If useDeviceMemory
@@ -207,3 +213,7 @@ Error GraphicsDeviceRef_createTLASDeviceExt(
 );
 
 //Error GraphicsDeviceRef_createTLASFromCacheExt(GraphicsDeviceRef *dev, Buffer cache, CharString name, TLASRef **tlas);
+
+#ifdef __cplusplus
+	}
+#endif

@@ -23,6 +23,10 @@
 #include "pipeline_structs.h"
 #include "types/ref_ptr.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 TList(CommandOpInfo);
 TList(TransitionInternal);
 TList(AttachmentInfoInternal);
@@ -90,3 +94,7 @@ Error GraphicsDeviceRef_createCommandList(
 	Bool allowResize,
 	CommandListRef **commandList
 );
+
+#ifdef __cplusplus
+	}
+#endif

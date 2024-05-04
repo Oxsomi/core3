@@ -699,7 +699,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 			return false;
 		}
 
-		U64 off = CharString_startsWithStringInsensitive(key, CharString_createRefCStrConst("0x")) ? 2 : 0;
+		U64 off = CharString_startsWithStringInsensitive(key, CharString_createRefCStrConst("0x"), 0) ? 2 : 0;
 
 		if (CharString_length(key) - off != 64) {
 			Log_errorLnx("Invalid parameter sent to -aes. Expecting key in hex (32 bytes)");
@@ -771,7 +771,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 					if (e.type == EFileType_Folder) {
 
-						baseCount = CharString_countAllSensitive(e.path, '/') + 1;
+						baseCount = CharString_countAllSensitive(e.path, '/', 0) + 1;
 
 						gotoIfError(cleanCa, Archive_foreachx(
 							file.archive,
@@ -846,7 +846,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 			for(U64 i = start; i < end && i < strings.length; ++i) {
 
 				CharString pathi = strings.ptr[i];
-				U64 parentCount = CharString_countAllSensitive(pathi, '/');
+				U64 parentCount = CharString_countAllSensitive(pathi, '/', 0);
 
 				U64 v = Archive_getIndexx(file.archive, pathi);
 

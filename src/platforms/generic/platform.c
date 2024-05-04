@@ -404,9 +404,9 @@ Error Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *alloca
 
 		gotoIfError(clean, CharString_createCopyx(CharString_createRefCStrConst(cmdArgs[0]), &appDir));
 
-		CharString_replaceAllSensitive(&appDir, '\\', '/');
+		CharString_replaceAllSensitive(&appDir, '\\', '/', 0);
 
-		const U64 loc = CharString_findLastSensitive(appDir, '/');
+		const U64 loc = CharString_findLastSensitive(appDir, '/', 0);
 		CharString basePath = CharString_createNull();
 
 		if (loc == CharString_length(appDir))
@@ -416,7 +416,7 @@ Error Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *alloca
 
 		gotoIfError(clean, CharString_createCopyx(basePath, &Platform_instance.workingDirectory));
 
-		if(!CharString_endsWithSensitive(basePath, '/'))
+		if(!CharString_endsWithSensitive(basePath, '/', 0))
 			gotoIfError(clean, CharString_appendx(&Platform_instance.workingDirectory, '/'));
 	}
 

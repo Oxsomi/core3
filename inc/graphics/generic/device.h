@@ -25,6 +25,10 @@
 #include "types/ref_ptr.h"
 #include "types/list.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef RefPtr GraphicsInstanceRef;
 typedef RefPtr DeviceBufferRef;
 
@@ -73,8 +77,6 @@ typedef struct GraphicsDevice {
 	Ns firstSubmit;								//Start of time
 
 	ListWeakRefPtr pendingResources;			//Resources pending copy from CPU to device next submit
-	ListWeakRefPtr pendingBlases;				//Post pending resources copy
-	ListWeakRefPtr pendingTlases;				//Post pending blas create
 
 	ListRefPtr resourcesInFlight[3];			//Resources in flight, TODO: HashMap
 
@@ -157,3 +159,7 @@ Error GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef);
 
 Error GraphicsDeviceRef_handleNextFrame(GraphicsDeviceRef *deviceRef, void *commandBuffer);
 Error GraphicsDeviceRef_resizeStagingBuffer(GraphicsDeviceRef *deviceRef, U64 newSize);
+
+#ifdef __cplusplus
+	}
+#endif

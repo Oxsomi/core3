@@ -21,6 +21,10 @@
 #pragma once
 #include "types/types.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef struct Allocator Allocator;
 typedef struct Error Error;
 
@@ -39,3 +43,7 @@ typedef struct BMPInfo {
 
 Error BMP_write(Buffer buf, BMPInfo info, Allocator allocator, Buffer *result);
 Error BMP_read(Buffer buf, BMPInfo *info, Allocator allocator, Buffer *result);
+
+#ifdef __cplusplus
+	}
+#endif

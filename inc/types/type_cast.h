@@ -22,6 +22,10 @@
 #include "types/math.h"
 #include "error.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 //Conversions
 
 U64 F32_fromBits(F32 v);
@@ -86,3 +90,7 @@ Error F32_fromDouble(F64 v, F32 *res);
 Error F64_fromInt(I64 v, F64 *res);
 Error F64_fromUInt(U64 v, F64 *res);
 Error F64_fromFloat(F32 v, F64 *res);
+
+#ifdef __cplusplus
+	}
+#endif

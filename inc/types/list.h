@@ -27,6 +27,10 @@
 	#define TListX(Name)
 #endif
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 //TList is a simple wrapper around GenericList to make it easier and safer to use.
 //GenericList doesn't care about the type (only the stride), TList does care about type too.
 //GenericList[] can be useful when handling lots of arrays of different types (though it adds a U64 for the stride each).
@@ -130,3 +134,7 @@ TListSort(I8); TListSort(I16); TListSort(I32); TListSort(I64);
 TListSort(F32); TListSort(F64);
 
 TList(Buffer);
+
+#ifdef __cplusplus
+	}
+#endif

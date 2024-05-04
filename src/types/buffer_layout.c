@@ -460,8 +460,8 @@ Error BufferLayout_resolveLayout(BufferLayout layout, CharString path, BufferLay
 	if(CharString_equalsStringSensitive(path, CharString_createRefCStrConst("//")))
 		return Error_invalidParameter(1, 0, "BufferLayout_resolveLayout()::path is invalid");
 
-	U64 start = CharString_startsWithSensitive(path, '/');
-	U64 end = CharString_length(path) - CharString_endsWithSensitive(path, '/');
+	U64 start = CharString_startsWithSensitive(path, '/', 0);
+	U64 end = CharString_length(path) - CharString_endsWithSensitive(path, '/', 0);
 
 	U32 currentStructId = layout.rootStructIndex;
 	BufferLayoutStruct currentStruct = layout.structs.ptr[currentStructId];

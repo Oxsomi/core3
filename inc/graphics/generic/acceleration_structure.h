@@ -21,6 +21,10 @@
 #pragma once
 #include "device_buffer.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef RefPtr GraphicsDeviceRef;
 
 typedef RefPtr RTASRef;		//BLASRef or TLASRef
@@ -36,9 +40,8 @@ typedef enum ERTASBuildFlags {
 	ERTASBuildFlags_MinimizeMemory			= 1 << 4,		//Ensure both scratch and output mem is reduced (slower builds)
 
 	ERTASBuildFlags_IsUpdate				= 1 << 5,		//If the current update is a refit (requires parent AS to be set)
-	ERTASBuildFlags_DisableAutomaticUpdate	= 1 << 6,		//For dynamic meshes that are GPU generated
 
-	ERTASBuildFlags_Count					= 7,
+	ERTASBuildFlags_Count					= 6,
 
 	ERTASBuildFlags_DefaultTLAS				= ERTASBuildFlags_FastBuild,
 	ERTASBuildFlags_DefaultBLAS				= ERTASBuildFlags_FastTrace | ERTASBuildFlags_AllowCompaction
@@ -61,6 +64,7 @@ typedef struct RTAS {
 	RTASRef *parent;						//Only if Updated / this is a refit
 
 	DeviceBufferRef *asBuffer;				//The acceleration structure as a buffer
+	DeviceBufferRef *tempScratchBuffer;		//Not required, but might include scratch buffer for temp build memory
 
 	CharString name;						//Debug name
 
@@ -70,3 +74,6 @@ typedef struct RTAS {
 
 Error RTAS_validateDeviceBuffer(DeviceData *bufPtr);		//Check if buffer is accessible by RTAS (BLAS/TLAS)
 
+#ifdef __cplusplus
+	}
+#endif

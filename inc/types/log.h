@@ -21,6 +21,10 @@
 #pragma once
 #include "types/string.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef struct Error Error;
 
 typedef enum ELogLevel {
@@ -68,3 +72,7 @@ void Log_error(Allocator alloc, ELogOptions options, const C8 *format, ...);
 #define Log_performanceLn(alloc, ...)	Log_performance(alloc, ELogOptions_NewLine, __VA_ARGS__)
 #define Log_warnLn(alloc, ...)			Log_warn(alloc, ELogOptions_NewLine, __VA_ARGS__)
 #define Log_errorLn(alloc, ...)			Log_error(alloc, ELogOptions_NewLine, __VA_ARGS__)
+
+#ifdef __cplusplus
+	}
+#endif

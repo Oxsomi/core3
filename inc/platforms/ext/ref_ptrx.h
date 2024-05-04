@@ -21,4 +21,12 @@
 #pragma once
 #include "types/ref_ptr.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 Error RefPtr_createx(U32 objectLength, ObjectFreeFunc free, ETypeId type, RefPtr **result);
+
+#ifdef __cplusplus
+	}
+#endif

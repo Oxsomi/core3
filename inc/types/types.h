@@ -49,6 +49,10 @@
 
 #define user_impl
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 //Types
 
 typedef int8_t  I8;
@@ -223,3 +227,7 @@ typedef void *StackTrace[STACKTRACE_SIZE];
 
 typedef struct Error Error;
 typedef struct CharString CharString;
+
+#ifdef __cplusplus
+	}
+#endif

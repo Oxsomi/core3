@@ -1,3 +1,4 @@
+R"(
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
@@ -19,14 +20,14 @@
 */
 
 #pragma once
-#include "types.hlsl"
+#include "//types.hlsl"
 
 #ifndef __spirv__
 
 	#define NV_SHADER_EXTN_SLOT u99999
 	#define NV_SHADER_EXTN_REGISTER_SPACE space99999
 
-	#include "../../../external/nvapi/nvHLSLExtns.h"
+	#include "//nvHLSLExtns.h"
 
 #endif
 
@@ -193,3 +194,4 @@ F32x3 getAppData3f(uint offset) { return asfloat(getAppData3u(offset)); }
 U32x3 getAppData3uUnaligned(uint offset) { return getAppData4uUnaligned(offset).xyz; }
 I32x3 getAppData3iUnaligned(uint offset) { return (I32x3) getAppData3uUnaligned(offset); }
 F32x3 getAppData3fUnaligned(uint offset) { return asfloat(getAppData3uUnaligned(offset)); }
+)"

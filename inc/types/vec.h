@@ -67,6 +67,10 @@
 	#include <nmmintrin.h>
 	#include <stdalign.h>
 
+	#ifdef __cplusplus
+		extern "C" {
+	#endif
+
 	//vec3 and vec4 can be represented using 4-element vectors,
 	//These are a lot faster than just doing them manually.
 
@@ -81,11 +85,11 @@
 	//The only exceptions are expensive operations like trig operations, rounding and sqrt & rsqrt, etc..
 
 	typedef struct I32x2_t {
-		_Alignas(8) I32 v[2];
+		alignas(8) I32 v[2];
 	} I32x2;
 
 	typedef struct F32x2_t {
-		_Alignas(8) F32 v[2];
+		alignas(8) F32 v[2];
 	} F32x2;
 
 	//
@@ -93,7 +97,15 @@
 	#define vecShufflei(a, x, y, z, w) _mm_shuffle_epi32(a, _MM_SHUFFLE(w, z, y, x))
 	#define vecShufflef(a, x, y, z, w) _mm_shuffle_ps(a, a, _MM_SHUFFLE(w, z, y, x))
 
+	#ifdef __cplusplus
+		}
+	#endif
+
 #else
+
+	#ifdef __cplusplus
+		extern "C" {
+	#endif
 
 	typedef struct I32x4_t {
 		alignas(16) I32 v[4];
@@ -114,9 +126,14 @@
 	#define vecShufflei(a, x, y, z, w) (I32x4){ { a.v[x], a.v[y], a.v[z], a.v[w] } }
 	#define vecShufflef(a, x, y, z, w) (F32x4){ { a.v[x], a.v[y], a.v[z], a.v[w] } }
 
+	#ifdef __cplusplus
+		}
+	#endif
+
 #endif
 
 #include "vec4i.h"
 #include "vec4f.h"
 #include "vec2i.h"
 #include "vec2f.h"
+

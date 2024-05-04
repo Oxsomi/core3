@@ -21,6 +21,14 @@
 #pragma once
 #include "types/thread.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 Error Thread_createx(ThreadCallbackFunction callback, void *objectHandle, Thread **thread);
 Bool Thread_freex(Thread **thread);
 Error Thread_waitAndCleanupx(Thread **thread);
+
+#ifdef __cplusplus
+	}
+#endif

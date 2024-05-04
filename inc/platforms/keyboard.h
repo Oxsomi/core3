@@ -21,6 +21,10 @@
 #pragma once
 #include "types/types.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef struct InputDevice Keyboard;
 typedef struct CharString CharString;
 
@@ -94,3 +98,7 @@ Error Keyboard_create(Keyboard *result);
 //If there's no remap available it will return an empty string.
 //Make sure to free this.
 impl CharString Keyboard_remap(EKey key);
+
+#ifdef __cplusplus
+	}
+#endif

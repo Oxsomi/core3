@@ -107,20 +107,20 @@ Bool TLAS_getInstanceDataCpu(const TLAS *tlas, U64 i, TLASInstanceData *result) 
 
 impl extern const U64 TLASExt_size;
 impl Bool TLAS_freeExt(TLAS *tlas);
+impl Error TLAS_initExt(TLAS *tlas);
 
 Bool TLAS_free(TLAS *tlas, Allocator allocator) {
 
 	(void)allocator;
 
-	RefPtr *refPtr = (RefPtr*)((const U8*)tlas - sizeof(RefPtr));
-
 	Lock_free(&tlas->base.lock);
 
-	Bool success = GraphicsDeviceRef_removePending(tlas->base.device, refPtr);
-	success &= TLAS_freeExt(tlas);
+	Bool success = TLAS_freeExt(tlas);
 	success &= CharString_freex(&tlas->base.name);
 
 	success &= !DeviceBufferRef_dec(&tlas->base.asBuffer).genericError;
+	success &= !DeviceBufferRef_dec(&tlas->base.tempScratchBuffer).genericError;
+	success &= !DeviceBufferRef_dec(&tlas->tempInstanceBuffer).genericError;
 
 	if(tlas->base.asConstructionType == ETLASConstructionType_Serialized)
 		success &= Buffer_freex(&tlas->cpuData);
@@ -273,7 +273,6 @@ Error GraphicsDeviceRef_createTLAS(GraphicsDeviceRef *dev, TLAS tlas, CharString
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(dev);
 	Error err = Error_none();
 	ELockAcquire acq0 = ELockAcquire_Invalid;
-	ELockAcquire acq1 = ELockAcquire_Invalid;
 
 	//Allocate refPtr
 
@@ -367,29 +366,11 @@ Error GraphicsDeviceRef_createTLAS(GraphicsDeviceRef *dev, TLAS tlas, CharString
 
 	gotoIfError(clean, CharString_createCopyx(name, &tlasPtr->base.name))
 
-	//Push for the graphics impl to process next submit,
-	//If it's GPU generated, the user is expected to manually call buildTLASExt to ensure it's enqueued at the right time
-
-	if (!(tlas.base.flags & ERTASBuildFlags_DisableAutomaticUpdate)) {
-
-		acq0 = Lock_lock(&device->lock, U64_MAX);
-
-		if(acq0 < ELockAcquire_Success)
-			gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_createTLAS()::dev couldn't be locked"))
-
-		gotoIfError(clean, ListWeakRefPtr_pushBackx(&device->pendingTlases, *tlasRef))
-
-		if(acq0 == ELockAcquire_Acquired) {
-			Lock_unlock(&device->lock);
-			acq0 = ELockAcquire_Invalid;
-		}
-	}
-
 	//Reserve TLAS in array
 
-	acq1 = Lock_lock(&device->descriptorLock, U64_MAX);
+	acq0 = Lock_lock(&device->descriptorLock, U64_MAX);
 
-	if(acq1 < ELockAcquire_Success)
+	if(acq0 < ELockAcquire_Success)
 		gotoIfError(clean, Error_invalidState(
 			0, "GraphicsDeviceRef_createTLAS() couldn't acquire descriptor lock"
 		))
@@ -401,13 +382,12 @@ Error GraphicsDeviceRef_createTLAS(GraphicsDeviceRef *dev, TLAS tlas, CharString
 	if(tlasPtr->handle == U32_MAX)
 		gotoIfError(clean, Error_outOfMemory(0, "GraphicsDeviceRef_createTLAS() couldn't allocate AS descriptor"))
 
+	gotoIfError(clean, TLAS_initExt(tlasPtr));
+
 clean:
 
-	if(acq1 == ELockAcquire_Acquired)
-		Lock_unlock(&device->descriptorLock);
-
 	if(acq0 == ELockAcquire_Acquired)
-		Lock_unlock(&device->lock);
+		Lock_unlock(&device->descriptorLock);
 
 	if(err.genericError)
 		TLASRef_dec(tlasRef);

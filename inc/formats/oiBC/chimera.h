@@ -23,6 +23,10 @@
 #include "types/flp.h"
 #include "types/vec.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef struct Chimera {
 
 	union {
@@ -63,3 +67,7 @@ typedef struct Chimera {
 
 void Chimera_stepFidiA(Chimera *chim, const EFidiA op);
 ECompareResult Chimera_getLastCompare(const Chimera *chim);
+
+#ifdef __cplusplus
+	}
+#endif

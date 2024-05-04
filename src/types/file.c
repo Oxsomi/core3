@@ -86,7 +86,7 @@ Error File_resolve(
 
 	//Backslash is replaced with forward slash for easy windows compatibility
 
-	if (!CharString_replaceAllSensitive(result, '\\', '/'))
+	if (!CharString_replaceAllSensitive(result, '\\', '/', 0))
 		gotoIfError(clean, Error_invalidOperation(1, "File_resolve() can't replaceAll"))
 
 	//On Windows, it's possible to change drive but keep same relative path. We don't support it.
@@ -205,7 +205,7 @@ Error File_resolve(
 
 	#ifdef _WIN32	//Starts with [A-Z]:/ if absolute. If it starts with / it's unsupported!
 
-		if (CharString_startsWithSensitive(*result, '/'))
+		if (CharString_startsWithSensitive(*result, '/', 0))
 			gotoIfError(clean, Error_unsupportedOperation(
 				4, "File_resolve()::loc contained Unix path (/absolute), which is unsupported on Windows"
 			))
@@ -213,7 +213,7 @@ Error File_resolve(
 		isAbsolute = CharString_length(*result) >= 2 && result->ptr[1] == ':';
 
 	#else			//Starts with / if absolute
-		isAbsolute = CharString_startsWithSensitive(*result, '/');
+		isAbsolute = CharString_startsWithSensitive(*result, '/', 0);
 	#endif
 
 	//Our path has to be made relative to our working directory.
@@ -221,7 +221,7 @@ Error File_resolve(
 
 	if (isAbsolute) {
 
-		if(!CharString_length(absoluteDir) || !CharString_startsWithStringInsensitive(*result, absoluteDir))
+		if(!CharString_length(absoluteDir) || !CharString_startsWithStringInsensitive(*result, absoluteDir, 0))
 			gotoIfError(clean, Error_unauthorized(
 				0, "File_resolve()::loc tried to escape working directory, which is unsupported for security reasons"
 			))

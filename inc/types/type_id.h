@@ -21,6 +21,10 @@
 #pragma once
 #include "types.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef enum EDataType {
 
 	EDataType_UInt			= 0b000,
@@ -170,3 +174,7 @@ U8 ETypeId_getElements(ETypeId id);
 U64 ETypeId_getBytes(ETypeId id);
 U16 ETypeId_getLibraryId(ETypeId id);
 U16 ETypeId_getLibraryTypeId(ETypeId id);
+
+#ifdef __cplusplus
+	}
+#endif

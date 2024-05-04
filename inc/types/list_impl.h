@@ -24,6 +24,10 @@
 #include "allocator.h"
 #include "error.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 //Helpers for creating the "template" functions of a TList
 
 #ifndef TListXBaseImpl
@@ -276,3 +280,7 @@ TListXBaseImpl(Name)
 #define TListSortImpl(T) TListNamedBaseImpl(List##T); Bool List##T##_sort(List##T l) {									\
 	return GenericList_sort##T(List##T##_toList(l));																	\
 }
+
+#ifdef __cplusplus
+	}
+#endif

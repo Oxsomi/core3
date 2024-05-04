@@ -23,6 +23,10 @@
 #include "types/ref_ptr.h"
 #include "texture.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef RefPtr GraphicsDeviceRef;
 
 typedef UnifiedTexture RenderTexture;
@@ -46,3 +50,7 @@ Error GraphicsDeviceRef_createRenderTexture(
 	CharString name,
 	RenderTextureRef **renderTexture
 );
+
+#ifdef __cplusplus
+	}
+#endif

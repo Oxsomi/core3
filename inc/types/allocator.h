@@ -21,6 +21,10 @@
 #pragma once
 #include "types.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef Error (*AllocFunc)(void *allocator, U64 length, Buffer *output);
 
 //Free should only return if it successfully freed.
@@ -34,3 +38,7 @@ typedef struct Allocator {
 	AllocFunc alloc;
 	FreeFunc free;
 } Allocator;
+
+#ifdef __cplusplus
+	}
+#endif

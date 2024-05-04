@@ -22,6 +22,10 @@
 #include "oiXX.h"
 #include "types/list.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef enum EDLDataType {
 	EDLDataType_Data,									//(default, Buffer)
 	EDLDataType_Ascii,									//--ascii (CharString)
@@ -139,3 +143,7 @@ typedef struct DLExtraInfo {
 } DLExtraInfo;
 
 #define DLHeader_MAGIC 0x4C44696F
+
+#ifdef __cplusplus
+	}
+#endif

@@ -21,6 +21,10 @@
 #pragma once
 #include "types/types.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 //reg is a 2-bit register.
 
 #define FidiA_unwrapReg(T, prefix)						\
@@ -119,3 +123,7 @@ typedef enum EFidiA {						//U8
 	EFidiA_expandx40(, anyFv, allFv, g),
 	EFidiA_expandx40(v, or, and, s)
 } EFidiA;
+
+#ifdef __cplusplus
+	}
+#endif

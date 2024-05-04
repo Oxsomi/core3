@@ -21,6 +21,10 @@
 #pragma once
 #include "types/types.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef enum EPipelineType {
 	EPipelineType_Graphics,
 	EPipelineType_Compute,
@@ -281,3 +285,7 @@ typedef struct VertexBindingLayout {
 	VertexAttribute attributes[16];
 
 } VertexBindingLayout;
+
+#ifdef __cplusplus
+	}
+#endif

@@ -32,28 +32,20 @@
 const U64 TLASExt_size = sizeof(DxTLAS);
 
 Bool TLAS_freeExt(TLAS *tlas) { (void)tlas; return true; }		//No-op
-
 Bool TLAS_getInstanceDataCpuInternal(const TLAS *tlas, U64 i, TLASInstanceData **result);
 
-Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRef *pending) {
+Error TLAS_initExt(TLAS *tlas) {
 
-	DxCommandBufferState *commandBuffer = (DxCommandBufferState*) commandBufferExt;
-
-	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(tlas->base.device);
 	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
 
-	ListRefPtr *currentFlight = &device->resourcesInFlight[(device->submitId - 1) % 3];
-
-	DeviceBufferRef *tempInstances = NULL;		//CPU visible buffer allocated only for staging
-	DeviceBufferRef *tempScratch = NULL;		//Scratch buffer
-
-	TLAS *tlas = TLASRef_ptr(pending);
+	DxTLAS *tlasExt = TLAS_ext(tlas, Dx);
 
 	Error err = Error_none();
 	CharString tmp = CharString_createNull();
 
 	if(tlas->base.asConstructionType == ETLASConstructionType_Serialized)
-		return Error_unsupportedOperation(0, "TLASRef_flush()::serialized not supported yet");		//TODO:
+		gotoIfError(clean, Error_unsupportedOperation(0, "TLASRef_flush()::serialized not supported yet"))		//TODO:
 
 	U64 instancesU64 = 0;
 	U64 stride = sizeof(TLASInstanceStatic);
@@ -92,14 +84,12 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 
 	//Get build size to allocate scratch and final buffer
 
-	D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS buildInfo = (D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS) {
+	tlasExt->inputs = (D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS) {
 		.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL,
 		.Flags = flags,
 		.NumDescs = (U32) instancesU64,
 		.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY
 	};
-
-	D3D12_BARRIER_GROUP dep = (D3D12_BARRIER_GROUP) { .Type = D3D12_BARRIER_TYPE_BUFFER };
 
 	if(tlas->base.asConstructionType == ETLASConstructionType_Instances) {
 
@@ -114,26 +104,28 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 			))
 
 			gotoIfError(clean, GraphicsDeviceRef_createBuffer(
-				deviceRef,
+				tlas->base.device,
 				EDeviceBufferUsage_ASReadExt,
-				EGraphicsResourceFlag_CPUAllocatedBit,
+				EGraphicsResourceFlag_CPUAllocated,
 				tmp,
 				stride * instancesU64,
-				&tempInstances
+				&tlas->tempInstanceBuffer
 			))
 
 			CharString_freex(&tmp);
 
-			//Directly copy the data is allowed, because it's not in flight and it's on the CPU
-
-			void *mem = DeviceBufferRef_ptr(tempInstances)->resource.mappedMemoryExt;
-
+			Buffer cpuDat = DeviceBufferRef_ptr(tlas->tempInstanceBuffer)->cpuData;
 			Buffer_copy(
-				Buffer_createRef(mem, stride * instancesU64),
-				Buffer_createRefConst(tlas->cpuInstancesStatic.ptr, stride * instancesU64)
+
+				cpuDat,
+
+				tlas->base.isMotionBlurExt ? ListTLASInstanceMotion_bufferConst(tlas->cpuInstancesMotion) :
+				ListTLASInstanceStatic_bufferConst(tlas->cpuInstancesStatic)
 			);
 
 			//We have to transform the CPU-sided buffer to a GPU buffer address
+
+			U8 *mem = (U8*) cpuDat.ptr;
 
 			for (U64 i = 0; i < instancesU64; ++i) {
 
@@ -143,34 +135,14 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 				if(!dat->blasCpu)
 					continue;
 
-				const U64 *blasAddress = &dat->blasDeviceAddress;
-				U64 offset = (const U8*)blasAddress - (((const U8*)tlas->cpuInstancesStatic.ptr) + stride * i);
-
-				*(U64*)((U8*)mem + offset) = getDxDeviceAddress((DeviceData) {
-					.buffer = BLASRef_ptr(dat->blasCpu)->base.asBuffer
-				});
+				U64 off = (const U8*)&dat->blasDeviceAddress - (const U8*)tlas->cpuInstancesStatic.ptr;
+				*(U64*)(mem + off) = getDxDeviceAddress((DeviceData) { .buffer = BLASRef_ptr(dat->blasCpu)->base.asBuffer });
 			}
 
-			instances = (DeviceData) { .buffer = tempInstances, .len = stride * instancesU64 };
-
-			gotoIfError(clean, DxDeviceBuffer_transition(
-				DeviceBuffer_ext(DeviceBufferRef_ptr(tempInstances), Dx),
-				D3D12_BARRIER_SYNC_BUILD_RAYTRACING_ACCELERATION_STRUCTURE,
-				D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_READ,
-				&deviceExt->bufferTransitions,
-				&dep
-			))
+			instances = (DeviceData) { .buffer = tlas->tempInstanceBuffer, .len = stride * instancesU64 };
 		}
 
-		else gotoIfError(clean, DxDeviceBuffer_transition(
-			DeviceBuffer_ext(DeviceBufferRef_ptr(tlas->deviceData.buffer), Dx),
-			D3D12_BARRIER_SYNC_BUILD_RAYTRACING_ACCELERATION_STRUCTURE,
-			D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_READ,
-			&deviceExt->bufferTransitions,
-			&dep
-		))
-
-		buildInfo.InstanceDescs = getDxLocation(instances, 0);
+		tlasExt->inputs.InstanceDescs = getDxLocation(instances, 0);
 	}
 
 	D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO sizes =
@@ -178,14 +150,14 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 
 	deviceExt->device->lpVtbl->GetRaytracingAccelerationStructurePrebuildInfo(
 		deviceExt->device,
-		&buildInfo,
+		&tlasExt->inputs,
 		&sizes
 	);
 
 	//Allocate scratch and final buffer
 
 	gotoIfError(clean, GraphicsDeviceRef_createBuffer(
-		deviceRef,
+		tlas->base.device,
 		EDeviceBufferUsage_ASExt,
 		EGraphicsResourceFlag_None,
 		tlas->base.name,
@@ -198,73 +170,17 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 	))
 
 	gotoIfError(clean, GraphicsDeviceRef_createBuffer(
-		deviceRef,
+		tlas->base.device,
 		EDeviceBufferUsage_ScratchExt,
 		EGraphicsResourceFlag_None,
 		tmp,
 		tlas->base.flags & ERTASBuildFlags_IsUpdate ? sizes.UpdateScratchDataSizeInBytes : sizes.ScratchDataSizeInBytes,
-		&tempScratch
+		&tlas->base.tempScratchBuffer
 	))
-
-	CharString_freex(&tmp);
-
-	//Delete temporary resource as soon as possible (safely)
-
-	if(tempInstances) {
-		gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, tempInstances))
-		tempInstances = NULL;
-	}
-
-	//Queue build
-
-	gotoIfError(clean, DxDeviceBuffer_transition(
-		DeviceBuffer_ext(DeviceBufferRef_ptr(tlas->base.asBuffer), Dx),
-		D3D12_BARRIER_SYNC_BUILD_RAYTRACING_ACCELERATION_STRUCTURE,
-		D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_WRITE,
-		&deviceExt->bufferTransitions,
-		&dep
-	))
-
-	gotoIfError(clean, DxDeviceBuffer_transition(
-		DeviceBuffer_ext(DeviceBufferRef_ptr(tempScratch), Dx),
-		D3D12_BARRIER_SYNC_BUILD_RAYTRACING_ACCELERATION_STRUCTURE,
-		D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_WRITE,
-		&deviceExt->bufferTransitions,
-		&dep
-	))
-
-	commandBuffer->buffer->lpVtbl->Barrier(commandBuffer->buffer, 1, &dep);
-
-	ListD3D12_BUFFER_BARRIER_clear(&deviceExt->bufferTransitions);
-
-	D3D12_GPU_VIRTUAL_ADDRESS dstAS = DeviceBufferRef_ptr(tlas->base.asBuffer)->resource.deviceAddress;
-
-	D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC buildAs = (D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC) {
-		.DestAccelerationStructureData = dstAS,
-		.Inputs = buildInfo,
-		.ScratchAccelerationStructureData = DeviceBufferRef_ptr(tempScratch)->resource.deviceAddress
-	};
-
-	if(tlas->base.parent) {
-		TLAS *parent = TLASRef_ptr(tlas->base.parent);
-		buildAs.DestAccelerationStructureData = DeviceBufferRef_ptr(parent->base.asBuffer)->resource.deviceAddress;
-	}
-
-	commandBuffer->buffer->lpVtbl->BuildRaytracingAccelerationStructure(commandBuffer->buffer, &buildAs, 0, NULL);
-
-	//Add as flight (keep alive extra)
-
-	gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, pending))
-	RefPtr_inc(pending);
-
-	//We mark scratch buffer as delete, we do this by pushing it as a current flight resource
-	//And losing the reference from our object
-
-	gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, tempScratch))
-	tempScratch = NULL;
 
 	//Add as descriptor
 
+	D3D12_GPU_VIRTUAL_ADDRESS dstAS = DeviceBufferRef_ptr(tlas->base.asBuffer)->resource.deviceAddress;
 	D3D12_SHADER_RESOURCE_VIEW_DESC resourceView = (D3D12_SHADER_RESOURCE_VIEW_DESC) {
 		.ViewDimension = D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE,
 		.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING,
@@ -284,11 +200,63 @@ Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRe
 		(D3D12_CPU_DESCRIPTOR_HANDLE) { .ptr = heap.cpuHandle.ptr + heap.cpuIncrement * id }
 	);
 
+clean:
+	CharString_freex(&tmp);
+	return err;
+}
+
+Error TLASRef_flush(void *commandBufferExt, GraphicsDeviceRef *deviceRef, TLASRef *pending) {
+
+	DxCommandBufferState *commandBuffer = (DxCommandBufferState*) commandBufferExt;
+
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
+
+	ListRefPtr *currentFlight = &device->resourcesInFlight[(device->submitId - 1) % 3];
+
+	TLAS *tlas = TLASRef_ptr(pending);
+	DxTLAS *tlasExt = TLAS_ext(tlas, Dx);
+
+	if(tlas->base.isCompleted && !(tlas->base.flags & ERTASBuildFlags_AllowUpdate))		//Done
+		return Error_none();
+
+	D3D12_GPU_VIRTUAL_ADDRESS dstAS = DeviceBufferRef_ptr(tlas->base.asBuffer)->resource.deviceAddress;
+
+	D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC buildAs = (D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC) {
+		.DestAccelerationStructureData = dstAS,
+		.Inputs = tlasExt->inputs,
+		.ScratchAccelerationStructureData = DeviceBufferRef_ptr(tlas->base.tempScratchBuffer)->resource.deviceAddress
+	};
+
+	if(tlas->base.parent) {
+		TLAS *parent = TLASRef_ptr(tlas->base.parent);
+		buildAs.DestAccelerationStructureData = DeviceBufferRef_ptr(parent->base.asBuffer)->resource.deviceAddress;
+	}
+
+	commandBuffer->buffer->lpVtbl->BuildRaytracingAccelerationStructure(commandBuffer->buffer, &buildAs, 0, NULL);
+
+	//Add as flight (keep alive extra)
+
+	Error err = Error_none();
+	gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, pending))
+	RefPtr_inc(pending);
+
+	//We mark scratch buffer as delete, we do this by pushing it as a current flight resource
+	//And losing the reference from our object
+	//We do the same thing on the tempInstances, since it's CPU mem only
+
+	if(!(tlas->base.flags & ERTASBuildFlags_AllowUpdate)) {
+
+		gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, tlas->base.tempScratchBuffer))
+		tlas->base.tempScratchBuffer = NULL;
+
+		if(tlas->tempInstanceBuffer) {
+			gotoIfError(clean, ListRefPtr_pushBackx(currentFlight, tlas->tempInstanceBuffer))
+			tlas->tempInstanceBuffer = NULL;
+		}
+	}
+
 	tlas->base.isCompleted = true;
 
 clean:
-	CharString_freex(&tmp);
-	DeviceBufferRef_dec(&tempInstances);
-	DeviceBufferRef_dec(&tempScratch);
 	return err;
 }

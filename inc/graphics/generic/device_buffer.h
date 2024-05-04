@@ -23,6 +23,10 @@
 #include "device.h"
 #include "resource.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef RefPtr GraphicsDeviceRef;
 
 typedef enum EDeviceBufferUsage {
@@ -104,3 +108,7 @@ Error GraphicsDeviceRef_createBufferData(
 //Only possible if buffer has a backed CPU buffer.
 
 Error DeviceBufferRef_markDirty(DeviceBufferRef *buffer, U64 offset, U64 count);
+
+#ifdef __cplusplus
+	}
+#endif

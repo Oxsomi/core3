@@ -21,6 +21,10 @@
 #pragma once
 #include "types/string.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 //Parameters
 
 typedef enum EOperationHasParameter {
@@ -42,6 +46,9 @@ typedef enum EOperationHasParameter {
 
 	EOperationHasParameter_EntryShift,
 	EOperationHasParameter_StartOffsetShift,
+
+	EOperationHasParameter_CompileModeShift,
+	EOperationHasParameter_ThreadCountShift,
 
 	EOperationHasParameter_Count,
 
@@ -65,7 +72,10 @@ typedef enum EOperationHasParameter {
 	EOperationHasParameter_Bit			= 1 << EOperationHasParameter_BitShift,
 
 	EOperationHasParameter_Entry		= 1 << EOperationHasParameter_EntryShift,
-	EOperationHasParameter_StartOffset	= 1 << EOperationHasParameter_StartOffsetShift
+	EOperationHasParameter_StartOffset	= 1 << EOperationHasParameter_StartOffsetShift,
+
+	EOperationHasParameter_CompileMode	= 1 << EOperationHasParameter_CompileModeShift,
+	EOperationHasParameter_ThreadCount	= 1 << EOperationHasParameter_ThreadCountShift
 
 } EOperationHasParameter;
 
@@ -123,7 +133,12 @@ typedef enum EOperationFlags {
 	EOperationFlags_RandNum =
 		EOperationFlags_Oct | EOperationFlags_Bin | EOperationFlags_Hex | EOperationFlags_Nyto,
 
-	EOperationFlags_Count			= 17
+	//Compilation
+
+	EOperationFlags_Debug			= 1 << 17,
+	EOperationFlags_Preprocess		= 1 << 18,
+
+	EOperationFlags_Count			= 19
 
 } EOperationFlags;
 
@@ -153,6 +168,9 @@ typedef enum EOperation {
 
 	EOperation_Package,
 
+	EOperation_CompileShader,
+	//EOperation_CompileChimera,
+
 	EOperation_InfoLicense,
 	EOperation_InfoAbout,
 
@@ -175,6 +193,7 @@ typedef enum EOperation {
 typedef enum EOperationCategory {
 	EOperationCategory_Invalid,
 	EOperationCategory_File,
+	EOperationCategory_Compile,
 	EOperationCategory_Hash,
 	EOperationCategory_Rand,
 	EOperationCategory_Info,
@@ -188,11 +207,17 @@ extern const C8 *EOperationCategory_names[];
 extern const C8 *EOperationCategory_description[];
 
 typedef enum EFormat {
+
 	EFormat_oiCA,
 	EFormat_oiDL,
+
 	EFormat_SHA256,
 	EFormat_CRC32C,
+
+	EFormat_HLSL,
+
 	EFormat_Invalid
+
 } EFormat;
 
 typedef struct ParsedArgs {
@@ -240,3 +265,8 @@ extern Operation Operation_values[EOperation_Invalid];
 extern Format Format_values[EFormat_Invalid];
 
 void Operations_init();
+
+#ifdef __cplusplus
+	}
+#endif
+

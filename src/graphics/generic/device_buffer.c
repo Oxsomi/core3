@@ -299,11 +299,14 @@ Error GraphicsDeviceRef_createBufferIntern(
 
 	gotoIfError(clean, ListDevicePendingRange_reservex(&buf->pendingChanges, usage & EGraphicsResourceFlag_CPUBacked ? 16 : 1))
 
-	if(allocate)
+	buf->lock = Lock_create();
+
+	if(allocate) {
 		gotoIfError(clean, Buffer_createEmptyBytesx(buf->resource.size, &buf->cpuData))		//Temporary if not CPUBacked
+		gotoIfError(clean, DeviceBufferRef_markDirty(*ref, 0, 0))
+	}
 
 	gotoIfError(clean, GraphicsDeviceRef_createBufferExt(dev, buf, name))
-	buf->lock = Lock_create();
 
 clean:
 
@@ -325,7 +328,7 @@ Error GraphicsDeviceRef_createBuffer(
 	DeviceBufferRef **buf
 ) {
 	return GraphicsDeviceRef_createBufferIntern(
-		dev, usage, resourceFlags, name, len, usage & EGraphicsResourceFlag_CPUBacked, buf
+		dev, usage, resourceFlags, name, len, resourceFlags & EGraphicsResourceFlag_CPUBacked, buf
 	);
 }
 
@@ -358,12 +361,5 @@ Error GraphicsDeviceRef_createBufferData(
 		*dat = Buffer_createNull();
 	}
 
-	gotoIfError(clean, DeviceBufferRef_markDirty(*buf, 0, 0))
-
-clean:
-
-	if(err.genericError)
-		DeviceBufferRef_dec(buf);
-
-	return err;
+	return Error_none();
 }

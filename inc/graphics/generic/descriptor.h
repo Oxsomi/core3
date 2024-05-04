@@ -22,6 +22,10 @@
 #include "types/list.h"
 #include "types/vec.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 //The only thing defined is that the resource handle must be accessible on the device
 //	using the allocated handle for the dedicated purpose.
 //For example, device.allocateDescriptor(Texture2D) would do the following across APIs:
@@ -135,3 +139,7 @@ I32x4 ResourceHandle_unpack3(U64 v);
 EDescriptorType ResourceHandle_getType(U32 handle);
 U32 ResourceHandle_getId(U32 handle);
 Bool ResourceHandle_isValid(U32 handle);
+
+#ifdef __cplusplus
+	}
+#endif

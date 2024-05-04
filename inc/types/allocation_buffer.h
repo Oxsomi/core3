@@ -21,6 +21,10 @@
 #pragma once
 #include "types/list.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 //An allocation buffer functions mostly like a ring buffer, but it falls back to a
 //normal block buffer if it can't allocate in O(1) (e.g. space at back or front is unavailable).
 //This means it can be used for both purposes.
@@ -69,3 +73,7 @@ Error AllocationBuffer_allocateAndFillBlock(
 	Allocator alloc,
 	U8 **result
 );
+
+#ifdef __cplusplus
+	}
+#endif

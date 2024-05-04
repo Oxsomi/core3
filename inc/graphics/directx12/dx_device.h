@@ -24,6 +24,10 @@
 #include "types/list.h"
 #include "types/vec.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef RefPtr PipelineRef;
 
 //Special features that are only important for implementation, but we do want to be cached.
@@ -150,3 +154,7 @@ typedef struct DxCommandBufferState {
 DxCommandAllocator *VkGraphicsDevice_getCommandAllocator(DxGraphicsDevice *device, U32 queueId, U64 threadId, U8 backBufferId);
 
 Error DxGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, DxCommandBufferState *commandBuffer);
+
+#ifdef __cplusplus
+	}
+#endif

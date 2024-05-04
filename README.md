@@ -117,3 +117,30 @@ This repository is available under two licenses:
 - Commercial license.
 
 Any company not wanting to adhere to the LGPL3 license can contact us as contact@osomi.net.
+
+## Deployables
+
+For a full OxC3 build (including all projects), a build typically contains the following on Windows (x64):
+
+```
+D3D12:
+	D3D12/D3D12Core.dll
+	D3D12/d3d12SDKLayers.dll
+	amd_ags_x64.dll
+	d3d10warp.dll
+	dxcompiler.dll
+	dxil.dll
+	OxC3.exe
+	...
+	
+Vulkan:
+	dxcompiler.dll
+	dxil.dll
+	OxC3.exe
+	...
+```
+
+To ship OxC3 or anything that uses OxC3_shader_compiler it requires only dxcompiler.dll and dxil.dll. For graphics: d3d10warp.dll is optional and should only be used for testing. The other D3D12/*.dll and amd_ags_x64.dll are required when OxC3 graphics is used with DirectX12 (recommended if OxC3 is used).
+
+OxC3 is optional and doesn't have to be distributed with the application, though it provides nice functionality such as shader compilation.
+

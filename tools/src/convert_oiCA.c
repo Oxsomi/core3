@@ -236,7 +236,7 @@ Error CLI_convertFromCA(ParsedArgs args, CharString input, FileInfo inputInfo, C
 
 		gotoIfError(clean, CharString_createCopyx(output, &outputPath))
 
-		if(!CharString_endsWithSensitive(outputPath, '/'))
+		if(!CharString_endsWithSensitive(outputPath, '/', 0))
 			gotoIfError(clean, CharString_appendx(&outputPath, '/'))
 
 		//Write archive to disk

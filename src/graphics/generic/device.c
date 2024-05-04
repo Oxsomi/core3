@@ -79,8 +79,6 @@ Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 	Lock_free(&device->lock);
 	Lock_free(&device->allocator.lock);
 	ListWeakRefPtr_freex(&device->pendingResources);
-	ListWeakRefPtr_freex(&device->pendingBlases);
-	ListWeakRefPtr_freex(&device->pendingTlases);
 
 	for(U64 i = 0; i < sizeof(device->stagingAllocations) / sizeof(device->stagingAllocations[0]); ++i)
 		AllocationBuffer_freex(&device->stagingAllocations[i]);
@@ -313,16 +311,6 @@ Bool GraphicsDeviceRef_removePending(GraphicsDeviceRef *deviceRef, RefPtr *resou
 			pendingList = &device->pendingResources;
 			break;
 
-		case EGraphicsTypeId_BLASExt:
-			supported = BLASRef_ptr(resource)->base.device == deviceRef;
-			pendingList = &device->pendingBlases;
-			break;
-
-		case EGraphicsTypeId_TLASExt:
-			supported = TLASRef_ptr(resource)->base.device == deviceRef;
-			pendingList = &device->pendingTlases;
-			break;
-
 		default:
 			return false;
 	}
@@ -364,8 +352,6 @@ impl Error GraphicsDevice_submitCommandsImpl(
 
 impl Error DeviceBufferRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceBufferRef *pending);
 impl Error DeviceTextureRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, DeviceTextureRef *pending);
-impl Error BLASRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, BLASRef *pending);
-impl Error TLASRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, TLASRef *pending);
 
 Error GraphicsDeviceRef_handleNextFrame(GraphicsDeviceRef *deviceRef, void *commandBuffer) {
 
@@ -422,40 +408,6 @@ Error GraphicsDeviceRef_handleNextFrame(GraphicsDeviceRef *deviceRef, void *comm
 	}
 
 	gotoIfError(clean, ListWeakRefPtr_clear(&device->pendingResources))
-
-	//Update BLASes
-
-	for(U64 i = 0; i < device->pendingBlases.length; ++i) {
-
-		RefPtr *pending = device->pendingBlases.ptr[i];
-		EGraphicsTypeId type = (EGraphicsTypeId) pending->typeId;
-
-		if(type != EGraphicsTypeId_BLASExt)
-			gotoIfError(clean, Error_unsupportedOperation(
-				6, "GraphicsDeviceRef_handleNextFrame() unsupported pending BLAS type"
-			))
-
-		gotoIfError(clean, BLASRef_flush(commandBuffer, deviceRef, pending))
-	}
-
-	gotoIfError(clean, ListWeakRefPtr_clear(&device->pendingBlases))
-
-	//Update TLASes
-
-	for(U64 i = 0; i < device->pendingTlases.length; ++i) {
-
-		RefPtr *pending = device->pendingTlases.ptr[i];
-		EGraphicsTypeId type = (EGraphicsTypeId) pending->typeId;
-
-		if(type != EGraphicsTypeId_TLASExt)
-			gotoIfError(clean, Error_unsupportedOperation(
-				6, "GraphicsDeviceRef_handleNextFrame() unsupported pending TLAS type"
-			))
-
-		gotoIfError(clean, TLASRef_flush(commandBuffer, deviceRef, pending))
-	}
-
-	gotoIfError(clean, ListWeakRefPtr_clear(&device->pendingTlases))
 
 clean:
 	return err;

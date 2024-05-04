@@ -28,6 +28,10 @@
 	#define _Atomic(T) T
 #endif
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef struct AtomicI64 {
 	volatile _Atomic(I64) atomic;		//Don't manually touch
 } AtomicI64;
@@ -52,3 +56,7 @@ impl I64 AtomicI64_sub(AtomicI64 *ptr, I64 value);		//I64 = I64_MIN becomes NO-O
 
 impl I64 AtomicI64_inc(AtomicI64 *ptr);
 impl I64 AtomicI64_dec(AtomicI64 *ptr);
+
+#ifdef __cplusplus
+	}
+#endif

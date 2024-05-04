@@ -21,6 +21,10 @@
 #pragma once
 #include "types/quat.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 //U64 packing
 
 U64 U64_pack21x3(U32 x, U32 y, U32 z);
@@ -48,3 +52,7 @@ typedef struct QuatS16 {
 
 QuatF32 QuatS16_unpack(QuatS16 q);
 QuatS16 QuatF32_pack(QuatF32 q);
+
+#ifdef __cplusplus
+	}
+#endif

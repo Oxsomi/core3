@@ -898,7 +898,9 @@ void CommandList_process(
 
 					case EPipelineStage_GeometryExt:
 					case EPipelineStage_Domain:
-					case EPipelineStage_Hull:			pipelineStage = D3D12_BARRIER_SYNC_NON_PIXEL_SHADING;		break;
+					case EPipelineStage_Hull:
+						pipelineStage = D3D12_BARRIER_SYNC_NON_PIXEL_SHADING;
+						break;
 
 					case EPipelineStage_RaygenExt:
 					case EPipelineStage_CallableExt:
@@ -909,71 +911,27 @@ void CommandList_process(
 						break;
 				}
 
-				//TLAS, if it's on the CPU we already know the BLASes,
-				//If it's on the GPU then we have to rely on manual BLAS transitions
+				if(transition.type == ETransitionType_ReadRTAS || transition.type == ETransitionType_UpdateRTAS)
+					pipelineStage = D3D12_BARRIER_SYNC_BUILD_RAYTRACING_ACCELERATION_STRUCTURE;
 
-				if (transition.resource->typeId == (ETypeId)EGraphicsTypeId_TLASExt) {
+				//If it's on the GPU then we have to rely on manual RTAS transitions
 
-					TLAS *tlas = TLASRef_ptr(transition.resource);
+				Bool isTLAS = transition.resource->typeId == (ETypeId)EGraphicsTypeId_TLASExt;
 
-					if (!tlas->base.isCompleted)
-						continue;
+				if (isTLAS || transition.resource->typeId == (ETypeId)EGraphicsTypeId_BLASExt) {
 
-					if(!tlas->useDeviceMemory && transition.type != ETransitionType_UpdateRTAS)
-						for (U64 j = 0; j < tlas->cpuInstancesStatic.length; ++j) {
-
-							TLASInstanceData dat = (TLASInstanceData) { 0 };
-							TLAS_getInstanceDataCpu(tlas, j, &dat);
-
-							if (!dat.blasCpu)
-								continue;
-
-							BLAS *blas = BLASRef_ptr(dat.blasCpu);
-
-							if (!blas->base.isCompleted)
-								continue;
-
-							gotoIfError(nextTransition, DxDeviceBuffer_transition(
-								DeviceBuffer_ext(DeviceBufferRef_ptr(blas->base.asBuffer), Dx),
-								pipelineStage,
-								D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_READ,
-								&deviceExt->bufferTransitions,
-								&dep[1]
-							))
-						}
+					RTAS rtas = isTLAS ? TLASRef_ptr(transition.resource)->base : BLASRef_ptr(transition.resource)->base;
 
 					gotoIfError(nextTransition, DxDeviceBuffer_transition(
 
-						DeviceBuffer_ext(DeviceBufferRef_ptr(tlas->base.asBuffer), Dx),
+						DeviceBuffer_ext(DeviceBufferRef_ptr(rtas.asBuffer), Dx),
+
 						pipelineStage,
 
 						transition.type == ETransitionType_UpdateRTAS ?
-						D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_WRITE : 
-						D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_READ,
+							D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_WRITE : 
+							D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_READ,
 
-						&deviceExt->bufferTransitions,
-						&dep[1]
-					))
-
-					continue;
-				}
-
-				if (transition.resource->typeId == (ETypeId)EGraphicsTypeId_BLASExt) {
-
-					BLAS *blas = BLASRef_ptr(transition.resource);
-
-					if (!blas->base.isCompleted)
-						continue;
-
-					gotoIfError(nextTransition, DxDeviceBuffer_transition(
-
-						DeviceBuffer_ext(DeviceBufferRef_ptr(blas->base.asBuffer), Dx),
-						pipelineStage,
-						
-						transition.type == ETransitionType_UpdateRTAS ?
-						D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_WRITE : 
-						D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_READ,
-						
 						&deviceExt->bufferTransitions,
 						&dep[1]
 					))
@@ -991,6 +949,9 @@ void CommandList_process(
 				D3D12_BARRIER_ACCESS access = 0;
 
 				access = isShaderRead ? D3D12_BARRIER_ACCESS_SHADER_RESOURCE : D3D12_BARRIER_ACCESS_UNORDERED_ACCESS;
+
+				if(transition.type == ETransitionType_ReadRTAS)
+					access = D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_READ;
 
 				if(isImage)
 					layout = isShaderRead ? D3D12_BARRIER_LAYOUT_SHADER_RESOURCE : D3D12_BARRIER_LAYOUT_UNORDERED_ACCESS;

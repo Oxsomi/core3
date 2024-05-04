@@ -24,6 +24,10 @@
 #include "types/allocation_buffer.h"
 #include "types/lock.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef struct GraphicsDevice GraphicsDevice;
 
 typedef enum EResourceType EResourceType;
@@ -73,3 +77,7 @@ impl Error DeviceMemoryAllocator_allocate(
 
 //Locks automatically
 Bool DeviceMemoryAllocator_freeAllocation(DeviceMemoryAllocator *allocator, U32 blockId, U64 blockOffset);
+
+#ifdef __cplusplus
+	}
+#endif

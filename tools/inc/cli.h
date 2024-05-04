@@ -21,6 +21,10 @@
 #pragma once
 #include "operations.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef struct FileInfo FileInfo;
 
 void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f);
@@ -58,4 +62,10 @@ Bool CLI_inspectData(ParsedArgs args);
 
 Bool CLI_package(ParsedArgs args);
 
+Bool CLI_compileShader(ParsedArgs args);
+
 Bool CLI_execute(ListCharString argList);
+
+#ifdef __cplusplus
+	}
+#endif

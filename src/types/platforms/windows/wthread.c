@@ -22,6 +22,7 @@
 #include "types/error.h"
 #include "types/buffer.h"
 #include "types/math.h"
+#include "types/allocator.h"
 
 #define UNICODE
 #define WIN32_LEAN_AND_MEAN

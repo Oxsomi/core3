@@ -104,7 +104,7 @@ Because of this, a device needs the following requirements to be OxC3 compatible
 - maxVertexInputAttributes, maxVertexInputBindings of 16 or higher.
 - maxVertexInputBindingStride of 2048 or higher.
 - maxVertexOutputComponents of 124 or higher.
-- maxComputeWorkGroupSize[0,1] of 1024 or higher. and maxComputeWorkGroupSize[2] of 64 or higher.
+- maxComputeWorkGroupSize[0,1] of 512 or higher. and maxComputeWorkGroupSize[2] of 64 or higher.
 - maxMemoryAllocationCount of 4096 or higher.
 - maxBoundDescriptorSets of 4 or higher.
 - maxPerStageDescriptorSamplers of 2Ki or higher.

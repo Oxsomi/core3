@@ -21,6 +21,10 @@
 #pragma once
 #include "types/file.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef struct Archive Archive;
 
 Error Archive_createx(Archive *archive);
@@ -61,3 +65,7 @@ Error Archive_foreachx(
 	Bool isRecursive,
 	EFileType type
 );
+
+#ifdef __cplusplus
+	}
+#endif

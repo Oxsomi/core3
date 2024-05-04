@@ -359,7 +359,7 @@ Error File_add(CharString loc, EFileType type, Ns maxTimeout) {
 
 	if(CharString_containsSensitive(resolved, '/')) {
 
-		if(!CharString_eraseFirstStringInsensitive(&resolved, Platform_instance.workingDirectory))
+		if(!CharString_eraseFirstStringInsensitive(&resolved, Platform_instance.workingDirectory, 0))
 			gotoIfError(clean, Error_unauthorized(0, "File_add() escaped working directory. This is not supported."))
 
 		gotoIfError(clean, CharString_splitSensitivex(resolved, '/', &str))
@@ -736,17 +736,17 @@ Error File_virtualOp(CharString loc, Ns maxTimeout, VirtualFileFunc f, void *use
 	const CharString function = CharString_createRefCStrConst("//function/");
 	const CharString network = CharString_createRefCStrConst("//network/");
 
-	if (CharString_startsWithStringInsensitive(loc, access)) {
+	if (CharString_startsWithStringInsensitive(loc, access, 0)) {
 		//TODO: Allow //access folder
 		return Error_unimplemented(0, "File_virtualOp()::loc //access/ not supported yet");
 	}
 
-	if (CharString_startsWithStringInsensitive(loc, function)) {
+	if (CharString_startsWithStringInsensitive(loc, function, 0)) {
 		//TODO: Allow //function folder (user callbacks)
 		return Error_unimplemented(1, "File_virtualOp()::loc //function/ not supported yet");
 	}
 
-	if (CharString_startsWithStringInsensitive(loc, network)) {
+	if (CharString_startsWithStringInsensitive(loc, network, 0)) {
 		//TODO: Allow //network folder (access to \\ on windows)
 		return Error_unimplemented(1, "File_virtualOp()::loc //network/ not supported yet");
 	}
@@ -829,7 +829,7 @@ Error File_resolveVirtual(CharString loc, CharString *subPath, const VirtualSect
 
 		//Parent folder.
 
-		if(CharString_startsWithStringInsensitive(sectioni->path, copy2))
+		if(CharString_startsWithStringInsensitive(sectioni->path, copy2, 0))
 			goto clean;
 
 		//Check if the section includes the referenced file/folder
@@ -838,7 +838,7 @@ Error File_resolveVirtual(CharString loc, CharString *subPath, const VirtualSect
 		gotoIfError(clean, CharString_createCopyx(sectioni->path, &copy1))
 		gotoIfError(clean, CharString_appendx(&copy1, '/'))
 
-		if(CharString_startsWithStringInsensitive(copy, copy1)) {
+		if(CharString_startsWithStringInsensitive(copy, copy1, 0)) {
 			CharString_cut(copy, CharString_length(copy1), 0, subPath);
 			*section = sectioni;
 			goto clean;
@@ -1021,7 +1021,7 @@ Error File_foreachVirtualInternal(ForeachFile *userData, CharString resolved) {
 	if(acq < ELockAcquire_Success)
 		gotoIfError(clean, Error_invalidState(0, "File_unloadVirtualInternal() couldn't lock virtualSectionsLock"))
 
-	U64 baseCount = CharString_countAllSensitive(copy, '/');
+	U64 baseCount = CharString_countAllSensitive(copy, '/', 0);
 
 	for (U64 i = 0; i < Platform_instance.virtualSections.length; ++i) {
 
@@ -1037,9 +1037,9 @@ Error File_foreachVirtualInternal(ForeachFile *userData, CharString resolved) {
 		gotoIfError(clean, CharString_appendx(&copy2, '/'))
 
 		if(
-			!CharString_startsWithStringSensitive(copy1, copy) &&
+			!CharString_startsWithStringSensitive(copy1, copy, 0) &&
 			!CharString_equalsStringSensitive(copy1, resolved) &&
-			!CharString_startsWithStringSensitive(copy, copy2)
+			!CharString_startsWithStringSensitive(copy, copy2, 0)
 		)
 			continue;
 
@@ -1082,8 +1082,8 @@ Error File_foreachVirtualInternal(ForeachFile *userData, CharString resolved) {
 		//All folders
 
 		if (
-			(!userData->isRecursive && baseCount == CharString_countAllSensitive(section->path, '/')) ||
-			(userData->isRecursive && baseCount <= CharString_countAllSensitive(section->path, '/'))
+			(!userData->isRecursive && baseCount == CharString_countAllSensitive(section->path, '/', 0)) ||
+			(userData->isRecursive && baseCount <= CharString_countAllSensitive(section->path, '/', 0))
 		) {
 
 			CharString_freex(&copy3);
@@ -1233,7 +1233,7 @@ Error File_unloadVirtualInternal(void *userData, CharString loc) {
 
 		if(
 			!CharString_equalsStringInsensitive(loc, section->path) &&
-			!CharString_startsWithStringInsensitive(section->path, isChild)
+			!CharString_startsWithStringInsensitive(section->path, isChild, 0)
 		)
 			continue;
 

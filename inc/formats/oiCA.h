@@ -22,6 +22,10 @@
 #include "oiXX.h"
 #include "types/archive.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef enum ECASettingsFlags {
 	ECASettingsFlags_None				= 0,
 	ECASettingsFlags_IncludeDate		= 1 << 0,			//--date
@@ -144,3 +148,7 @@ typedef U8 CADirectorySmall;	//0xFF for root directory, else id of parent direct
 //CADirectory is referred to as the type that fits folders (<=254 = Small else Large).
 
 #define CAHeader_MAGIC 0x4143696F
+
+#ifdef __cplusplus
+	}
+#endif

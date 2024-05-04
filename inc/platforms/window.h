@@ -25,6 +25,10 @@
 #include "platforms/input_device.h"
 #include "platforms/monitor.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 //There are three types of windows;
 //Physical windows, virtual windows and extended.
 //
@@ -198,3 +202,7 @@ Bool Window_isFullScreen(const Window *w);
 Bool Window_doesAllowFullScreen(const Window *w);
 
 Bool Window_terminate(Window *w);
+
+#ifdef __cplusplus
+	}
+#endif

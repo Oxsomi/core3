@@ -21,6 +21,10 @@
 #pragma once
 #include "types/types.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef struct Error Error;
 
 #define FLP_CONSTS(T)							\
@@ -125,3 +129,7 @@ T T##_signInc(T v)
 
 FLP_OP(F32);
 FLP_OP(F64);
+
+#ifdef __cplusplus
+	}
+#endif

@@ -22,6 +22,10 @@
 #include "acceleration_structure.h"
 #include "device_buffer.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef enum EBLASFlag {
 	EBLASFlag_None					= 0,
 	EBLASFlag_AvoidDuplicateAnyHit	= 1 << 0,		//Don't run the same anyHit twice on the same triangle/AABB
@@ -58,7 +62,7 @@ typedef struct BLAS {
 			DeviceData indexBuffer;						//Only if indexFormatId
 		};
 
-		//If EBLASConstructionType_AABB
+		//If EBLASConstructionType_Procedural
 		struct {
 			U32 aabbStride, aabbOffset;
 			DeviceData aabbBuffer;
@@ -137,3 +141,7 @@ Error GraphicsDeviceRef_createBLASProceduralExt(
 //Creating BLAS from cache
 //TODO:
 //Error GraphicsDeviceRef_createBLASFromCacheExt(GraphicsDeviceRef *dev, Buffer cache, CharString name, BLASRef **blas);
+
+#ifdef __cplusplus
+	}
+#endif

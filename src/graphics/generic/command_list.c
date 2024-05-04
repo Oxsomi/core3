@@ -366,7 +366,8 @@ Error CommandListRef_transitionBuffer(
 	CommandList *commandList,
 	DeviceBufferRef *buffer,
 	BufferRange range,
-	ETransitionType type
+	ETransitionType type,
+	EPipelineStage stage
 ) {
 
 	if(!buffer)
@@ -380,13 +381,147 @@ Error CommandListRef_transitionBuffer(
 				4, "CommandListRef_transitionBuffer()::buffer was already transitioned in scope!"
 			);
 
+		oldState->stage = (EPipelineStage) U64_min(oldState->stage, stage);
 		return Error_none();
 	}
 
 	const TransitionInternal transition = (TransitionInternal) {
 		.resource = buffer,
 		.range = (ResourceRange) { .buffer = range },
-		.stage = EPipelineStage_Count,
+		.stage = stage,
+		.type = type
+	};
+
+	return ListTransitionInternal_pushBackx(&commandList->pendingTransitions, transition);
+}
+
+Error CommandListRef_transitionRTAS(
+	CommandList *commandList,
+	RTASRef *rtasPtr,
+	ETransitionType type,
+	EPipelineStage stage
+) {
+
+	if(!rtasPtr)
+		return Error_none();
+
+	Bool isTLAS = rtasPtr->typeId == (ETypeId) EGraphicsTypeId_TLASExt;
+	RTAS rtas = isTLAS ? TLASRef_ptr(rtasPtr)->base : BLASRef_ptr(rtasPtr)->base;
+	Error err = Error_none();
+
+	if(rtas.tempScratchBuffer)
+		gotoIfError(clean, CommandListRef_transitionBuffer(
+			commandList, rtas.tempScratchBuffer, (BufferRange) { 0 }, ETransitionType_ReadRTAS, EPipelineStage_Count
+		))
+
+	if(isTLAS) {
+		
+		TLAS *tlas = TLASRef_ptr(rtasPtr);
+
+		if(!tlas->useDeviceMemory)
+			gotoIfError(clean, CommandListRef_transitionBuffer(
+				commandList, tlas->tempInstanceBuffer, (BufferRange) { 0 },
+				ETransitionType_ReadRTAS, EPipelineStage_Count
+			))
+
+		else gotoIfError(clean, CommandListRef_transitionBuffer(
+			commandList, 
+			tlas->deviceData.buffer, 
+			(BufferRange) { 
+				.startRange = tlas->deviceData.offset, 
+				.endRange = tlas->deviceData.offset + tlas->deviceData.len
+			},
+			ETransitionType_ReadRTAS, EPipelineStage_Count
+		))
+	}
+
+	else {
+
+		BLAS *blas = BLASRef_ptr(rtasPtr);
+
+		if(blas->base.asConstructionType == EBLASConstructionType_Procedural)
+			gotoIfError(clean, CommandListRef_transitionBuffer(
+				commandList,
+				blas->aabbBuffer.buffer,
+				(BufferRange) {
+					.startRange = blas->aabbBuffer.offset + blas->aabbOffset,
+					.endRange = blas->aabbBuffer.offset + blas->aabbBuffer.len
+				},
+				ETransitionType_ReadRTAS, EPipelineStage_Count
+			))
+
+		else {
+
+			gotoIfError(clean, CommandListRef_transitionBuffer(
+				commandList,
+				blas->indexBuffer.buffer,
+				(BufferRange) {
+					.startRange = blas->indexBuffer.offset,
+					.endRange = blas->indexBuffer.offset + blas->indexBuffer.len
+				},
+				ETransitionType_ReadRTAS, EPipelineStage_Count
+			))
+
+			gotoIfError(clean, CommandListRef_transitionBuffer(
+				commandList,
+				blas->positionBuffer.buffer,
+				(BufferRange) {
+					.startRange = blas->positionBuffer.offset + blas->positionOffset, 
+					.endRange = blas->indexBuffer.offset + blas->indexBuffer.len
+				},
+				ETransitionType_ReadRTAS, EPipelineStage_Count
+			))
+		}
+	}
+
+	TransitionInternal *oldState = NULL;
+	if(CommandListRef_isBound(commandList, rtasPtr, (ResourceRange) { 0 }, &oldState)) {
+
+		if(oldState->type != type)
+			return Error_invalidOperation(
+				4, "CommandListRef_transitionRTAS()::rtas was already transitioned in scope!"
+			);
+
+		oldState->stage = (EPipelineStage) U64_min(oldState->stage, stage);
+		return Error_none();
+	}
+
+	const TransitionInternal transition = (TransitionInternal) { .resource = rtasPtr, .stage = stage, .type = type };
+	gotoIfError(clean, ListTransitionInternal_pushBackx(&commandList->pendingTransitions, transition))
+
+clean:
+	return err;
+}
+
+Error CommandListRef_transitionImage(
+	CommandList *commandList,
+	TextureRef *image,
+	ImageRange range,
+	ETransitionType type,
+	EPipelineStage stage
+) {
+
+	if(!image)
+		return Error_none();
+
+	TransitionInternal *oldState = NULL;
+	if(CommandListRef_isBound(commandList, image, (ResourceRange) { .image = range }, &oldState)) {
+
+		if(oldState->type != type)
+			return Error_invalidOperation(
+				4, "CommandListRef_transitionImage()::image was already transitioned in scope!"
+			);
+
+		//To combine shader transitions we just take the highest up shader stage it's used
+
+		oldState->stage = (EPipelineStage) U64_min(oldState->stage, stage);
+		return Error_none();
+	}
+
+	const TransitionInternal transition = (TransitionInternal) {
+		.resource = image,
+		.range = (ResourceRange) { .image = range },
+		.stage = stage,
 		.type = type
 	};
 
@@ -535,25 +670,9 @@ Error CommandListRef_clearImages(CommandListRef *commandListRef, ListClearImageC
 
 		//Add transition
 
-		TransitionInternal *found = NULL;
-		if(CommandListRef_isBound(commandList, clearImage.image, (ResourceRange) { .image = clearImage.range }, &found)) {
-
-			if(found->type != ETransitionType_Clear)
-				gotoIfError(clean, Error_invalidOperation(
-					0, "CommandListRef_clearImages()::clearImages[i].image is already transitioned"
-				))
-
-			continue;
-		}
-
-		TransitionInternal transition = (TransitionInternal) {
-			.resource = clearImage.image,
-			.range = (ResourceRange) { .image = clearImage.range },
-			.stage = EPipelineStage_Count,
-			.type = ETransitionType_Clear
-		};
-
-		gotoIfError(clean, ListTransitionInternal_pushBackx(&commandList->pendingTransitions, transition))
+		gotoIfError(clean, CommandListRef_transitionImage(
+			commandList, clearImage.image, clearImage.range, ETransitionType_Clear, EPipelineStage_Count
+		))
 	}
 
 	//Copy buffer
@@ -717,29 +836,10 @@ Error CommandListRef_copyImageRegions(
 	ETransitionType types[2] = { ETransitionType_CopyRead, ETransitionType_CopyWrite };
 	RefPtr *ptrs[2] = { srcRef, dstRef };
 
-	for(U64 i = 0; i < 2; ++i) {
-
-		TransitionInternal *found = NULL;
-		if(CommandListRef_isBound(commandList, ptrs[i], (ResourceRange) { 0 }, &found)) {
-
-			if(found->type != types[i])
-				gotoIfError(clean, Error_invalidOperation(
-					0, "CommandListRef_clearImages()::src is already transitioned in the same scope"
-				))
-		}
-
-		else {
-
-			TransitionInternal transition = (TransitionInternal) {
-				.resource = ptrs[i],
-				.range = (ResourceRange) { 0 },
-				.stage = EPipelineStage_Count,
-				.type = types[i]
-			};
-
-			gotoIfError(clean, ListTransitionInternal_pushBackx(&commandList->pendingTransitions, transition))
-		}
-	}
+	for(U64 i = 0; i < 2; ++i)
+		gotoIfError(clean, CommandListRef_transitionImage(
+			commandList, ptrs[i], (ImageRange) { 0 }, types[i], EPipelineStage_Count
+		))
 
 	//Copy buffer
 
@@ -870,10 +970,29 @@ Error CommandListRef_startScope(
 		else if(isSampler)
 			resource = (GraphicsResource) { .device = SamplerRef_ptr(res)->device };		//Only device is required here
 
-		else if (res->typeId == EGraphicsTypeId_TLASExt)									//Get device and mark as readonly
+		else if (res->typeId == EGraphicsTypeId_TLASExt) {									//Get device and mark as readonly
+
+			TLAS *tlas = TLASRef_ptr(res);
+
+			if(!tlas->useDeviceMemory)
+				for (U64 j = 0; j < tlas->cpuInstancesStatic.length; ++j) {
+
+					TLASInstanceData dat = (TLASInstanceData) { 0 };
+					TLAS_getInstanceDataCpu(tlas, j, &dat);
+
+					if (!dat.blasCpu)
+						continue;
+
+					gotoIfError(clean, CommandListRef_transitionRTAS(
+						commandList, dat.blasCpu, 
+						transition.isWrite ? ETransitionType_ShaderWrite : ETransitionType_ShaderRead, transition.stage
+					))
+				}
+
 			resource = (GraphicsResource) {
 				.device = TLASRef_ptr(res)->base.device, .flags = EGraphicsResourceFlag_ShaderRead
 			};
+		}
 
 		else if (res->typeId == EGraphicsTypeId_BLASExt)									//Get device and mark as readonly
 			resource = (GraphicsResource) {
@@ -1172,12 +1291,12 @@ Error CommandListRef_setPrimitiveBuffers(CommandListRef *commandListRef, SetPrim
 	//Transition
 
 	gotoIfError(clean, CommandListRef_transitionBuffer(
-		commandList, buffers.indexBuffer, (BufferRange) { 0 }, ETransitionType_Index
+		commandList, buffers.indexBuffer, (BufferRange) { 0 }, ETransitionType_Index, EPipelineStage_Count
 	))
 
 	for(U8 i = 0; i < 8; ++i)
 		gotoIfError(clean, CommandListRef_transitionBuffer(
-			commandList, buffers.vertexBuffers[i], (BufferRange) { 0 }, ETransitionType_Vertex
+			commandList, buffers.vertexBuffers[i], (BufferRange) { 0 }, ETransitionType_Vertex, EPipelineStage_Count
 		))
 
 	//Issue command
@@ -1422,7 +1541,9 @@ Error CommandListRef_dispatchIndirect(CommandListRef *commandListRef, DeviceBuff
 	gotoIfError(clean, CommandListRef_checkDispatchBuffer(device, buffer, offset, sizeof(U32) * 4))
 
 	const BufferRange range = (BufferRange) { .startRange = offset, .endRange = offset + sizeof(U32) * 4 };
-	gotoIfError(clean, CommandListRef_transitionBuffer(commandList, buffer, range, ETransitionType_Indirect))
+	gotoIfError(clean, CommandListRef_transitionBuffer(
+		commandList, buffer, range, ETransitionType_Indirect, EPipelineStage_Count
+	))
 
 	const DispatchIndirectCmd dispatch = (DispatchIndirectCmd) { .buffer = buffer, .offset = offset };
 
@@ -1476,7 +1597,7 @@ Error CommandList_drawIndirectBase(
 		.endRange = bufferOffset + bufferStride * drawCalls
 	};
 
-	return CommandListRef_transitionBuffer(commandList, buffer, range, ETransitionType_Indirect);
+	return CommandListRef_transitionBuffer(commandList, buffer, range, ETransitionType_Indirect, EPipelineStage_Count);
 }
 
 Error CommandListRef_drawIndirect(
@@ -1539,7 +1660,9 @@ Error CommandListRef_drawIndirectCountExt(
 		.endRange = countOffset + sizeof(U32)
 	};
 
-	gotoIfError(clean, CommandListRef_transitionBuffer(commandList, countBuffer, range, ETransitionType_Indirect))
+	gotoIfError(clean, CommandListRef_transitionBuffer(
+		commandList, countBuffer, range, ETransitionType_Indirect, EPipelineStage_Count
+	))
 
 	DrawIndirectCmd draw = (DrawIndirectCmd) {
 		.buffer = buffer,
@@ -1577,26 +1700,30 @@ Error CommandListRef_updateRTASExt(CommandListRef *commandListRef, RTASRef *rtas
 
 	if(!rtas || rtas->typeId != (ETypeId)(isBLAS ? EGraphicsTypeId_BLASExt : EGraphicsTypeId_TLASExt))
 		gotoIfError(clean, Error_unsupportedOperation(0, "CommandListRef_updateRTASExt() requires BLAS or TLAS"))
-		
-	TransitionInternal *oldState = NULL;
-	if(CommandListRef_isBound(commandList, rtas, (ResourceRange) { 0 }, &oldState)) {
 
-		if(oldState->type != ETransitionType_UpdateRTAS)
-			gotoIfError(clean, Error_invalidOperation(
-				4, "CommandListRef_updateRTASExt()::buffer was already transitioned in scope!"
-			))
-	}
+	gotoIfError(clean, CommandListRef_transitionRTAS(
+		commandList, rtas, 
+		ETransitionType_UpdateRTAS, EPipelineStage_Count
+	))
 
-	else {
+	if (!isBLAS) {
 
-		const TransitionInternal transition = (TransitionInternal) {
-			.resource = rtas,
-			.range = (ResourceRange) { 0 },
-			.stage = EPipelineStage_Count,
-			.type = ETransitionType_UpdateRTAS
-		};
+		TLAS *tlas = TLASRef_ptr(rtas);
 
-		gotoIfError(clean, ListTransitionInternal_pushBackx(&commandList->pendingTransitions, transition))
+		if(!tlas->useDeviceMemory)
+			for (U64 j = 0; j < tlas->cpuInstancesStatic.length; ++j) {
+
+				TLASInstanceData dat = (TLASInstanceData) { 0 };
+				TLAS_getInstanceDataCpu(tlas, j, &dat);
+
+				if (!dat.blasCpu)
+					continue;
+
+				gotoIfError(clean, CommandListRef_transitionRTAS(
+					commandList, dat.blasCpu, 
+					ETransitionType_ReadRTAS, EPipelineStage_Count
+				))
+			}
 	}
 
 	gotoIfError(clean, CommandList_append(

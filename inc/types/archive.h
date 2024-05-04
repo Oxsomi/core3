@@ -23,6 +23,10 @@
 #include "types/string.h"
 #include "types/file.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef enum EFileType EFileType;
 
 typedef struct ArchiveEntry {
@@ -98,3 +102,7 @@ Error Archive_foreach(
 	EFileType type,
 	Allocator alloc
 );
+
+#ifdef __cplusplus
+	}
+#endif

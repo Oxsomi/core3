@@ -22,6 +22,10 @@
 #include "platforms/platform.h"
 #include "types/string.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 Bool CharString_freex(CharString *str);
 
 Error CharString_createx(C8 c, U64 size, CharString *result);
@@ -54,39 +58,40 @@ Error CharString_prependStringx(CharString *s, CharString other);
 Error CharString_insertx(CharString *s, C8 c, U64 i);
 Error CharString_insertStringx(CharString *s, CharString other, U64 i);
 
-Error CharString_replaceAllStringx(CharString *s, CharString search, CharString replace, EStringCase caseSensitive);
+Error CharString_replaceAllStringx(CharString *s, CharString search, CharString replace, EStringCase caseSensitive, U64 off);
 
 Error CharString_replaceStringx(
 	CharString *s,
 	CharString search,
 	CharString replace,
 	EStringCase caseSensitive,
-	Bool isFirst
+	Bool isFirst,
+	U64 off
 );
 
-Error CharString_replaceFirstStringx(CharString *s, CharString search, CharString replace, EStringCase caseSensitive);
-Error CharString_replaceLastStringx(CharString *s, CharString search, CharString replace, EStringCase caseSensitive);
+Error CharString_replaceFirstStringx(CharString *s, CharString search, CharString replace, EStringCase caseSensitive, U64 off);
+Error CharString_replaceLastStringx(CharString *s, CharString search, CharString replace, EStringCase caseSensitive, U64 off);
 
-Error CharString_replaceAllStringSensitivex(CharString *s, CharString search, CharString replace);
-Error CharString_replaceStringSensitivex(CharString *s, CharString search, CharString replace, Bool isFirst);
+Error CharString_replaceAllStringSensitivex(CharString *s, CharString search, CharString replace, U64 off);
+Error CharString_replaceStringSensitivex(CharString *s, CharString search, CharString replace, Bool isFirst, U64 off);
 
-Error CharString_replaceFirstStringSensitivex(CharString *s, CharString search, CharString replace);
-Error CharString_replaceLastStringSensitivex(CharString *s, CharString search, CharString replace);
+Error CharString_replaceFirstStringSensitivex(CharString *s, CharString search, CharString replace, U64 off);
+Error CharString_replaceLastStringSensitivex(CharString *s, CharString search, CharString replace, U64 off);
 
-Error CharString_replaceAllStringInsensitivex(CharString *s, CharString search, CharString replace);
-Error CharString_replaceStringInsensitivex(CharString *s, CharString search, CharString replace, Bool isFirst);
+Error CharString_replaceAllStringInsensitivex(CharString *s, CharString search, CharString replace, U64 off);
+Error CharString_replaceStringInsensitivex(CharString *s, CharString search, CharString replace, Bool isFirst, U64 off);
 
-Error CharString_replaceFirstStringInsensitivex(CharString *s, CharString search, CharString replace);
-Error CharString_replaceLastStringInsensitivex(CharString *s, CharString search, CharString replace);
+Error CharString_replaceFirstStringInsensitivex(CharString *s, CharString search, CharString replace, U64 off);
+Error CharString_replaceLastStringInsensitivex(CharString *s, CharString search, CharString replace, U64 off);
 
-Error CharString_findAllx(CharString s, C8 c, EStringCase caseSensitive, ListU64 *result);
-Error CharString_findAllStringx(CharString s, CharString other, EStringCase caseSensitive, ListU64 *result);
+Error CharString_findAllx(CharString s, C8 c, EStringCase caseSensitive, ListU64 *result, U64 off);
+Error CharString_findAllStringx(CharString s, CharString other, EStringCase caseSensitive, ListU64 *result, U64 off);
 
-Error CharString_findAllSensitivex(CharString s, C8 c, ListU64 *result);
-Error CharString_findAllStringSensitivex(CharString s, CharString other, ListU64 *result);
+Error CharString_findAllSensitivex(CharString s, C8 c, U64 off, ListU64 *result);
+Error CharString_findAllStringSensitivex(CharString s, CharString other, U64 off, ListU64 *result);
 
-Error CharString_findAllInsensitivex(CharString s, C8 c, ListU64 *result);
-Error CharString_findAllStringInsensitivex(CharString s, CharString other, ListU64 *result);
+Error CharString_findAllInsensitivex(CharString s, C8 c, U64 off, ListU64 *result);
+Error CharString_findAllStringInsensitivex(CharString s, CharString other, U64 off, ListU64 *result);
 
 Bool ListCharString_freeUnderlyingx(ListCharString *arr);
 Error ListCharString_createCopyUnderlyingx(ListCharString toCopy, ListCharString *arr);
@@ -98,3 +103,7 @@ Error ListCharString_concatStringx(ListCharString arr, CharString between, CharS
 
 Error CharString_formatx(CharString *result, const C8 *format, ...);
 Error CharString_formatVariadicx(CharString *result, const C8 *format, va_list args);
+
+#ifdef __cplusplus
+	}
+#endif
