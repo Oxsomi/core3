@@ -1,16 +1,16 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -22,7 +22,9 @@
 #include "oiXX.h"
 #include "types/archive.h"
 
-typedef enum EFileType EFileType;
+#ifdef __cplusplus
+	extern "C" {
+#endif
 
 typedef enum ECASettingsFlags {
 	ECASettingsFlags_None				= 0,
@@ -64,32 +66,32 @@ typedef enum ECAFlags {
 
    	//Whether SHA256 (1) or CRC32C (0) is used as hash
     //(Only if compression is on)
-    
-	ECAFlags_UseSHA256					= 1 << 0,		
+
+	ECAFlags_UseSHA256					= 1 << 0,
 
 	//See ECAFileObject
 
 	ECAFlags_FilesHaveDate				= 1 << 1,
 	ECAFlags_FilesHaveExtendedDate		= 1 << 2,
-    
+
     //Indicates EXXDataSizeType. E.g. (EXXDataSizeType)((b0 << 1) | b1)
     //This indicates the type the biggest file size uses
-    
+
 	ECAFlags_FileSizeType_Shift			= 3,
 	ECAFlags_FileSizeType_Mask			= 3,
 
 	ECAFlags_FileSizeType_MaskShifted	= ECAFlags_FileSizeType_Mask << ECAFlags_FileSizeType_Shift,
 
     //Chunk size of AES for multi threading. 0 = none, 1 = 10MiB, 2 = 100MiB, 3 = 500MiB
-        
+
     ECAFlags_UseAESChunksA				= 1 << 5,
     ECAFlags_UseAESChunksB				= 1 << 6,
-    
+
     ECAFlags_HasExtendedData			= 1 << 7,		//CAExtraInfo
-    
+
     //Indicates EXXDataSizeType. E.g. (EXXDataSizeType)((b0 << 1) | b1)
     //This indicates the type the type for compression type if available.
-    
+
 	ECAFlags_CompressedSizeType_Shift		= 8,
 	ECAFlags_CompressedSizeType_Mask		= 3,
 
@@ -107,7 +109,7 @@ typedef enum ECAFlags {
 	ECAFlags_AESChunkMask				= ECAFlags_UseAESChunksA | ECAFlags_UseAESChunksB,
 	ECAFlags_AESChunkShift				= 5,
 
-	ECAFlags_NonFlagTypes				= 
+	ECAFlags_NonFlagTypes				=
 		ECAFlags_FileSizeType_MaskShifted | ECAFlags_AESChunkMask | ECAFlags_CompressedSizeType_MaskShifted
 
 } ECAFlags;
@@ -132,7 +134,7 @@ typedef struct CAExtraInfo {
 	U16 headerExtensionSize;		//To skip extended data size.
 
 	U8 directoryExtensionSize;		//To skip directory extended data.
-	U8 fileExtensionSize;			//To skip file extended data	
+	U8 fileExtensionSize;			//To skip file extended data
 
 } CAExtraInfo;
 
@@ -146,3 +148,7 @@ typedef U8 CADirectorySmall;	//0xFF for root directory, else id of parent direct
 //CADirectory is referred to as the type that fits folders (<=254 = Small else Large).
 
 #define CAHeader_MAGIC 0x4143696F
+
+#ifdef __cplusplus
+	}
+#endif

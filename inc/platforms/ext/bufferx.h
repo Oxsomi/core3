@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -21,7 +21,10 @@
 #pragma once
 #include "types/types.h"
 
-typedef struct Error Error;
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef struct AllocationBuffer AllocationBuffer;
 
 Error Buffer_createCopyx(Buffer buf, Buffer *output);
@@ -38,3 +41,7 @@ Bool AllocationBuffer_freex(AllocationBuffer *allocationBuffer);
 Error AllocationBuffer_createRefFromRegionx(Buffer origin, U64 offset, U64 size, AllocationBuffer *allocationBuffer);
 Error AllocationBuffer_allocateBlockx(AllocationBuffer *allocationBuffer, U64 size, U64 alignment, const U8 **result);
 Error AllocationBuffer_allocateAndFillBlockx(AllocationBuffer *allocationBuffer, Buffer data, U64 alignment, U8 **result);
+
+#ifdef __cplusplus
+	}
+#endif

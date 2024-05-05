@@ -1,16 +1,16 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -21,6 +21,10 @@
 #pragma once
 #include "oiXX.h"
 #include "types/list.h"
+
+#ifdef __cplusplus
+	extern "C" {
+#endif
 
 typedef enum EDLDataType {
 	EDLDataType_Data,									//(default, Buffer)
@@ -86,10 +90,10 @@ Error DLFile_addEntryUTF8(DLFile *dlFile, Buffer entry, Allocator alloc);
 Error DLFile_write(DLFile dlFile, Allocator alloc, Buffer *result);
 
 Error DLFile_read(
-	Buffer file, 
+	Buffer file,
 	const U32 encryptionKey[8],
-	Bool isSubfile,					//Sets HideMagicNumber flag and allows leftover data after the oiDL
-	Allocator alloc, 
+	Bool isSubFile,					//Sets HideMagicNumber flag and allows leftover data after the oiDL
+	Allocator alloc,
 	DLFile *dlFile
 );
 
@@ -105,9 +109,9 @@ typedef enum EDLFlags {
 
 	EDLFlags_IsString				= 1 << 1,		//If true; must be a valid string (!UTF8 ? Ascii : UTF8)
 	EDLFlags_UTF8					= 1 << 2,		//ASCII (if off), otherwise UTF-8
-        
+
     //Chunk size of AES for multi threading. 0 = none, 1 = 10MiB, 2 = 50MiB, 3 = 100MiB
-        
+
 	EDLFlags_UseAESChunksA			= 1 << 3,
 	EDLFlags_UseAESChunksB			= 1 << 4,
 
@@ -139,3 +143,7 @@ typedef struct DLExtraInfo {
 } DLExtraInfo;
 
 #define DLHeader_MAGIC 0x4C44696F
+
+#ifdef __cplusplus
+	}
+#endif

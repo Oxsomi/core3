@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -21,7 +21,11 @@
 #pragma once
 #include "types/types.h"
 #include "types/flp.h"
-#include "platforms/ref_ptr.h"
+#include "types/ref_ptr.h"
+
+#ifdef __cplusplus
+	extern "C" {
+#endif
 
 typedef enum ESamplerFilterMode {
 
@@ -46,26 +50,20 @@ typedef enum ESamplerFilterMode {
 } ESamplerFilterMode;
 
 typedef enum ESamplerAddressMode {
-
 	ESamplerAddressMode_Repeat,
 	ESamplerAddressMode_MirrorRepeat,
 	ESamplerAddressMode_ClampToEdge,
 	ESamplerAddressMode_ClampToBorder,
-
 	ESamplerAddressMode_Count
-
 } ESamplerAddressMode;
 
 typedef enum ESamplerBorderColor {
-
 	ESamplerBorderColor_TransparentBlack,		//0.xxxx
 	ESamplerBorderColor_OpaqueBlackFloat,		//0.xxx, 1.f
 	ESamplerBorderColor_OpaqueBlackInt,			//0.xxx, 1
 	ESamplerBorderColor_OpaqueWhiteFloat,		//1.f.xxxx
 	ESamplerBorderColor_OpaqueWhiteInt,			//1.xxxx
-
 	ESamplerBorderColor_Count
-
 } ESamplerBorderColor;
 
 typedef struct SamplerInfo {
@@ -84,16 +82,16 @@ typedef struct SamplerInfo {
 
 typedef RefPtr GraphicsDeviceRef;
 typedef RefPtr SamplerRef;
-typedef struct CharString CharString;
 
 typedef struct Sampler {
 
 	GraphicsDeviceRef *device;
 
 	U32 samplerLocation;
-	U32 padding;
+	U32 pad0;
 
 	SamplerInfo info;
+	U16 pad1;
 
 } Sampler;
 
@@ -104,3 +102,7 @@ Error SamplerRef_dec(SamplerRef **buffer);
 Error SamplerRef_inc(SamplerRef *buffer);
 
 Error GraphicsDeviceRef_createSampler(GraphicsDeviceRef *dev, SamplerInfo info, CharString name, SamplerRef **sampler);
+
+#ifdef __cplusplus
+	}
+#endif

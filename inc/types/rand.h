@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -21,7 +21,11 @@
 #pragma once
 #include "vec.h"
 
-//These are Psuedo RNG (PRNG), don't use these for critical uses!
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
+//These are Pseudo RNG (PRNG), don't use these for critical uses!
 //More info:
 //	https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html#secure-random-number-generation
 
@@ -31,3 +35,7 @@ U32 Random_seed(U32 val0, U32 val1);
 F32 Random_sample(U32 *seed);
 F32x2 Random_sample2(U32 *seed);
 F32x4 Random_sample4(U32 *seed);
+
+#ifdef __cplusplus
+	}
+#endif

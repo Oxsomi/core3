@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -20,33 +20,30 @@
 
 #pragma once
 #include "types/list.h"
+#include "graphics/generic/device_buffer.h"
 #define VK_ENABLE_BETA_EXTENSIONS
 #include <vulkan/vulkan.h>
 
-typedef struct VkManagedImage {
-
+typedef struct VkUnifiedTexture {
 	VkImage image;
 	VkImageView view;
-
 	VkPipelineStageFlagBits2 lastStage;
 	VkAccessFlagBits2 lastAccess;
-
 	VkImageLayout lastLayout;
-	U32 readHandle;
+} VkUnifiedTexture;
 
-	U32 writeHandle;
-	U32 blockId;			//If specifically allocated, indicates which block this is present in
-
-	U64 blockOffset;
-
-} VkManagedImage;
-
-typedef struct CharString CharString;
-typedef struct GraphicsDevice GraphicsDevice;
-typedef struct Error Error;
-typedef enum ETextureFormat ETextureFormat;
-typedef enum EGraphicsDataTypes EGraphicsDataTypes;
 typedef enum ECompareOp ECompareOp;
+
+typedef struct VkBLAS {
+	VkAccelerationStructureKHR as;
+} VkBLAS;
+
+typedef struct VkTLAS {
+	VkAccelerationStructureKHR as;
+} VkTLAS;
+
+static const U32 raytracingShaderIdSize = 32;
+static const U32 raytracingShaderAlignment = 64;
 
 TList(VkMappedMemoryRange);
 TList(VkBufferCopy);
@@ -54,6 +51,7 @@ TList(VkImageCopy);
 TList(VkBufferImageCopy);
 TList(VkImageMemoryBarrier2);
 TList(VkBufferMemoryBarrier2);
+TList(VkPipeline);
 
 Error vkCheck(VkResult result);
 
@@ -63,12 +61,13 @@ VkFormat mapVkFormat(ETextureFormat format);
 
 VkCompareOp mapVkCompareOp(ECompareOp op);
 
-//Transitions entire resource rather than subresources
+VkDeviceAddress getVkDeviceAddress(DeviceData data);
+VkDeviceOrHostAddressConstKHR getVkLocation(DeviceData data, U64 localOffset);
 
-typedef struct ListVkImageMemoryBarrier2 ListVkImageMemoryBarrier2;
+//Transitions entire resource rather than sub-resources
 
-Error VkManagedImage_transition(
-	VkManagedImage *image,
+Error VkUnifiedTexture_transition(
+	VkUnifiedTexture *image,
 	VkPipelineStageFlags2 stage,
 	VkAccessFlagBits2 access,
 	VkImageLayout layout,

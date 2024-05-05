@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -21,15 +21,10 @@
 #pragma once
 #include "graphics/vulkan/vulkan.h"
 
-typedef struct ListVkBufferMemoryBarrier2 ListVkBufferMemoryBarrier2;
-
 typedef struct VkDeviceBuffer {
-
 	VkBuffer buffer;
-
 	VkPipelineStageFlagBits2 lastStage;
 	VkAccessFlagBits2 lastAccess;
-
 } VkDeviceBuffer;
 
 Error VkDeviceBuffer_transition(

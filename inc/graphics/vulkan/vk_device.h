@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -20,31 +20,13 @@
 
 #pragma once
 #include "graphics/vulkan/vulkan.h"
-#include "graphics/generic/device_info.h"
 #include "graphics/generic/command_list.h"
-#include "platforms/lock.h"
 #include "types/list.h"
-#include "types/allocation_buffer.h"
 #include "types/vec.h"
 
 typedef RefPtr PipelineRef;
 
-enum EVkDeviceVendor {
-	EVkDeviceVendor_NV					= 0x10DE,
-	EVkDeviceVendor_AMD					= 0x1002,
-	EVkDeviceVendor_ARM					= 0x13B5,
-	EVkDeviceVendor_QCOM				= 0x5143,
-	EVkDeviceVendor_INTC				= 0x8086,
-	EVkDeviceVendor_IMGT				= 0x1010
-};
-
 //Special features that are only important for implementation, but we do want to be cached.
-
-typedef enum EVkGraphicsFeatures {
-
-	EVkGraphicsFeatures_PerfQuery		= 1 << 0
-
-} EVkGraphicsFeatures;
 
 typedef enum EVkCommandQueue {
 
@@ -71,31 +53,6 @@ typedef struct VkCommandQueue {
 
 } VkCommandQueue;
 
-typedef enum EDescriptorType {
-
-	EDescriptorType_Sampler,
-
-	EDescriptorType_Texture2D,
-	EDescriptorType_TextureCube,
-	EDescriptorType_Texture3D,
-	EDescriptorType_Buffer,
-
-	EDescriptorType_RWBuffer,
-	EDescriptorType_RWTexture3D,
-	EDescriptorType_RWTexture3Ds,
-	EDescriptorType_RWTexture3Df,
-	EDescriptorType_RWTexture3Di,
-	EDescriptorType_RWTexture3Du,
-	EDescriptorType_RWTexture2D,
-	EDescriptorType_RWTexture2Ds,
-	EDescriptorType_RWTexture2Df,
-	EDescriptorType_RWTexture2Di,
-	EDescriptorType_RWTexture2Du,
-
-	EDescriptorType_ResourceCount		//Count of totally accessible resources (without cbuffer)
-
-} EDescriptorType;
-
 typedef enum EDescriptorSetType {
 
 	EDescriptorSetType_Sampler,
@@ -109,74 +66,10 @@ typedef enum EDescriptorSetType {
 
 } EDescriptorSetType;
 
-typedef enum EDescriptorTypeCount {
-
-	EDescriptorTypeCount_Sampler		= 2048,		//All samplers
-
-	EDescriptorTypeCount_Texture2D		= 184464,	//~74% of textures (2D)
-	EDescriptorTypeCount_TextureCube	= 32768,	//~13% of textures (Cube)
-	EDescriptorTypeCount_Texture3D		= 32768,	//~13% of textures (3D)
-	EDescriptorTypeCount_Buffer			= 249999,	//All buffers (readonly)
-	EDescriptorTypeCount_RWBuffer		= 250000,	//All buffers (RW)
-	EDescriptorTypeCount_RWTexture3D	= 6553,		//10% of 64Ki (3D + Cube) for RW 3D unorm
-	EDescriptorTypeCount_RWTexture3Ds	= 4809,		//~7.3% of 64Ki (Remainder) (3D + Cube) for RW 3D snorm
-	EDescriptorTypeCount_RWTexture3Df	= 43690,	//66% of 64Ki (3D + Cube) for RW 3D float
-	EDescriptorTypeCount_RWTexture3Di	= 5242,		//8% of 64Ki (3D + Cube) for RW 3D int
-	EDescriptorTypeCount_RWTexture3Du	= 5242,		//8% of 64Ki (3D + Cube) for RW 3D uint
-	EDescriptorTypeCount_RWTexture2D	= 92232,	//50% of 250K - 64Ki (2D) for 2D unorm
-	EDescriptorTypeCount_RWTexture2Ds	= 9224,		//5% of 250K - 64Ki (2D) for 2D snorm
-	EDescriptorTypeCount_RWTexture2Df	= 61488,	//33% of 250K - 64Ki (2D) for 2D float
-	EDescriptorTypeCount_RWTexture2Di	= 10760,	//5.8% of 250K - 64Ki (2D) for 2D int
-	EDescriptorTypeCount_RWTexture2Du	= 10760,	//5.8% of 250K - 64Ki (2D) for 2D uint
-
-	EDescriptorTypeCount_Textures		=
-		EDescriptorTypeCount_Texture2D + EDescriptorTypeCount_Texture3D + EDescriptorTypeCount_TextureCube,
-
-	EDescriptorTypeCount_RWTextures2D	=
-		EDescriptorTypeCount_RWTexture2D  + EDescriptorTypeCount_RWTexture2Ds +	EDescriptorTypeCount_RWTexture2Df +
-		EDescriptorTypeCount_RWTexture2Du + EDescriptorTypeCount_RWTexture2Di,
-
-	EDescriptorTypeCount_RWTextures3D	=
-		EDescriptorTypeCount_RWTexture3D  + EDescriptorTypeCount_RWTexture3Ds +	EDescriptorTypeCount_RWTexture3Df +
-		EDescriptorTypeCount_RWTexture3Du + EDescriptorTypeCount_RWTexture3Di,
-
-	EDescriptorTypeCount_RWTextures		= EDescriptorTypeCount_RWTextures2D + EDescriptorTypeCount_RWTextures3D,
-
-	EDescriptorTypeCount_SSBO			= EDescriptorTypeCount_Buffer + EDescriptorTypeCount_RWBuffer
-
-} EDescriptorTypeCount;
-
-static const U32 descriptorTypeCount[] = {
-	EDescriptorTypeCount_Sampler,
-	EDescriptorTypeCount_Texture2D,
-	EDescriptorTypeCount_TextureCube,
-	EDescriptorTypeCount_Texture3D,
-	EDescriptorTypeCount_Buffer,
-	EDescriptorTypeCount_RWBuffer,
-	EDescriptorTypeCount_RWTexture3D,
-	EDescriptorTypeCount_RWTexture3Ds,
-	EDescriptorTypeCount_RWTexture3Df,
-	EDescriptorTypeCount_RWTexture3Di,
-	EDescriptorTypeCount_RWTexture3Du,
-	EDescriptorTypeCount_RWTexture2D,
-	EDescriptorTypeCount_RWTexture2Ds,
-	EDescriptorTypeCount_RWTexture2Df,
-	EDescriptorTypeCount_RWTexture2Di,
-	EDescriptorTypeCount_RWTexture2Du
-};
-
 typedef struct VkCommandAllocator {
 	VkCommandPool pool;
 	VkCommandBuffer cmd;
 } VkCommandAllocator;
-
-typedef struct DescriptorStackTrace {
-
-	U32 resourceId, padding;
-
-	void *stackTrace[8];
-
-} DescriptorStackTrace;
 
 TList(VkCommandAllocator);
 TList(VkSemaphore);
@@ -184,7 +77,6 @@ TList(VkResult);
 TList(VkSwapchainKHR);
 TList(VkPipelineStageFlags);
 TList(VkWriteDescriptorSet);
-TList(DescriptorStackTrace);
 
 typedef struct VkGraphicsDevice {
 
@@ -211,12 +103,6 @@ typedef struct VkGraphicsDevice {
 
 	VkPhysicalDeviceMemoryProperties memoryProperties;
 
-	//Used for allocating descriptors
-
-	Lock descriptorLock;
-	Buffer freeList[EDescriptorType_ResourceCount];
-	ListDescriptorStackTrace descriptorStackTraces;
-
 	//Temporary storage for submit time stuff
 
 	ListVkSemaphore waitSemaphores;
@@ -227,6 +113,9 @@ typedef struct VkGraphicsDevice {
 	ListVkBufferMemoryBarrier2 bufferTransitions;
 	ListVkImageMemoryBarrier2 imageTransitions;
 	ListVkImageCopy imageCopyRanges;
+	ListVkBufferImageCopy bufferImageCopyRanges;
+	ListVkMappedMemoryRange mappedMemoryRange;
+	ListVkBufferCopy bufferCopies;
 
 } VkGraphicsDevice;
 
@@ -254,7 +143,7 @@ typedef struct VkCommandBufferState {
 VkCommandAllocator *VkGraphicsDevice_getCommandAllocator(
 	VkGraphicsDevice *device,
 	U32 resolvedQueueId,
-	U32 threadId,
+	U64 threadId,
 	U8 backBufferId
 );
 
@@ -267,9 +156,4 @@ Error VkDeviceMemoryAllocator_findMemory(
 	U64 *size
 );
 
-//Lower 20 bit: id
-//4 bit higher: descriptor type
-U32 VkGraphicsDevice_allocateDescriptor(VkGraphicsDevice *deviceExt, EDescriptorType type);
-Bool VkGraphicsDevice_freeAllocations(VkGraphicsDevice *deviceExt, ListU32 *allocations);
-
-Error VkGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, VkCommandBuffer commandBuffer);
+Error VkGraphicsDevice_flush(GraphicsDeviceRef *deviceRef, VkCommandBufferState *commandBuffer);

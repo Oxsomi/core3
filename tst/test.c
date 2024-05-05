@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -25,17 +25,17 @@
 #include "types/type_cast.h"
 #include "types/buffer_layout.h"
 #include "types/flp.h"
-#include "types/rand.h"
-#include "types/transform.h"
 #include "types/big_int.h"
+#include "formats/oiBC/chimera.h"
 
 #include <stdlib.h>
-#include <stdio.h>
 #include <string.h>
+
+#include "types/quat.h"
 
 Error ourAlloc(void *allocator, U64 length, Buffer *output) {
 
-	allocator;
+	(void)allocator;
 
 	if(!output)
 		return Error_nullPointer(2, "ourAlloc()::output is required");
@@ -50,7 +50,7 @@ Error ourAlloc(void *allocator, U64 length, Buffer *output) {
 }
 
 Bool ourFree(void *allocator, Buffer buf) {
-	allocator;
+	(void)allocator;
 	free((U8*)buf.ptr);
 	return true;
 }
@@ -62,37 +62,43 @@ void Error_fillStackTrace(Error *err) {
 		err->stackTrace[0] = NULL;
 }
 
-CharString Error_formatPlatformError(Error err) {
-	err;
+CharString Error_formatPlatformError(Allocator alloc, Error err) {
+	(void)alloc; (void)err;
 	return CharString_createNull();
 }
 
 const Bool Platform_useWorkingDirectory = false;
 
-//#define _STRICT_VALIDATION
+//#define STRICT_VALIDATION
 
-#ifdef _STRICT_VALIDATION
-	#define _EXTRA_CHECKS 4
+#ifdef STRICT_VALIDATION
+	#define EXTRA_CHECKS 4
 #else
-	#define _EXTRA_CHECKS 0
+	#define EXTRA_CHECKS 0
 #endif
 
 //
 
 int main() {
 
+	Allocator alloc = (Allocator) {
+		.alloc = ourAlloc,
+		.free = ourFree,
+		.ptr = NULL
+	};
+
 	//Fail for big endian systems, because we don't support them.
 
 	U16 v = 1;
 
 	if(!*(U8*)&v) {
-		printf("Failed unit test: Unsupported endianness (only supporting little endian architectures)");
+		Log_errorLn(alloc, "Failed unit test: Unsupported endianness (only supporting little endian architectures)");
 		return -1;
 	}
 
 	//Test timer
 
-	printf("Testing Time\n");
+	Log_debugLn(alloc, "Testing Time");
 
 	Ns now = Time_now();
 	TimeFormat nowStr;
@@ -102,22 +108,16 @@ int main() {
 	Ns now2 = 0;
 
 	if (!(Time_parseFormat(&now2, nowStr, false)) || now2 != now) {
-		printf("Failed unit test: Time_parseFormat or Time_format is broken\n");
+		Log_errorLn(alloc, "Failed unit test: Time_parseFormat or Time_format is broken");
 		return 1;
 	}
 
 	Time_format(now, nowStr, true);
 
-	if (!(Time_parseFormat(&now2, nowStr, true))  || now2 != now) {
-		printf("Failed unit test: Time_parseFormat or Time_format (local time) is broken\n");
+	if (!(Time_parseFormat(&now2, nowStr, true)) || now2 != now) {
+		Log_errorLn(alloc, "Failed unit test: Time_parseFormat or Time_format (local time) is broken");
 		return 2;
 	}
-
-	Allocator alloc = (Allocator) {
-		.alloc = ourAlloc,
-		.free = ourFree,
-		.ptr = NULL
-	};
 
 	Buffer emp = Buffer_createNull(), full = Buffer_createNull();
 	Buffer outputEncrypted = Buffer_createNull(), outputDecrypted = Buffer_createNull();
@@ -125,22 +125,22 @@ int main() {
 	CharString tmp = CharString_createNull();
 	BufferLayout bufferLayout = (BufferLayout) { 0 };
 
-	CharString inputs[19 + _EXTRA_CHECKS] = { 0 };
+	CharString inputs[19 + EXTRA_CHECKS] = { 0 };
 
 	//Test Buffer
 
-	printf("Testing Buffer\n");
+	Log_debugLn(alloc, "Testing Buffer");
 
-	_gotoIfError(clean, Buffer_createZeroBits(256, alloc, &emp));
-	_gotoIfError(clean, Buffer_createOneBits(256, alloc, &full));
+	gotoIfError(clean, Buffer_createZeroBits(256, alloc, &emp))
+	gotoIfError(clean, Buffer_createOneBits(256, alloc, &full))
 
 	if (Buffer_eq(emp, full))
-		_gotoIfError(clean, Error_invalidOperation(0, "Buffer_eq test failed"));
+		gotoIfError(clean, Error_invalidOperation(0, "Buffer_eq test failed"))
 
 	Buffer_bitwiseNot(emp);
 
 	if (!Buffer_eq(emp, full))
-		_gotoIfError(clean, Error_invalidOperation(1, "!Buffer_eq test failed"));
+		gotoIfError(clean, Error_invalidOperation(1, "!Buffer_eq test failed"))
 
 	Buffer_bitwiseNot(emp);
 
@@ -150,7 +150,7 @@ int main() {
 	Buffer_bitwiseNot(emp);
 
 	if (Buffer_neq(emp, full))
-		_gotoIfError(clean, Error_invalidOperation(2, "Buffer_neq test failed"));
+		gotoIfError(clean, Error_invalidOperation(2, "Buffer_neq test failed"))
 
 	Buffer_free(&emp, alloc);
 	Buffer_free(&full, alloc);
@@ -166,7 +166,7 @@ int main() {
 	//Test string to number functions
 
 	{
-		printf("Testing number to CharString conversions\n");
+		Log_debugLn(alloc, "Testing number to CharString conversions");
 
 		CharString resultsStr[] = {
 			CharString_createRefCStrConst("0x1234"),
@@ -193,43 +193,43 @@ int main() {
 		//TODO: Perhaps make a generic create that can pick any of them
 
 		CharString tmpStr = CharString_createNull();
-		_gotoIfError(clean, CharString_createHex(resultsU64[0], 0, alloc, &tmpStr));
+		gotoIfError(clean, CharString_createHex(resultsU64[0], 0, alloc, &tmpStr))
 
 		if (!CharString_equalsStringSensitive(resultsStr[0], tmpStr)) {
 			CharString_free(&tmpStr, alloc);
-			_gotoIfError(clean, Error_invalidState(0, "CharString_createHex test failed"));
+			gotoIfError(clean, Error_invalidState(0, "CharString_createHex test failed"))
 		}
 
 		CharString_free(&tmpStr, alloc);
-		_gotoIfError(clean, CharString_createBin(resultsU64[1], 0, alloc, &tmpStr));
+		gotoIfError(clean, CharString_createBin(resultsU64[1], 0, alloc, &tmpStr))
 
 		if (!CharString_equalsStringSensitive(resultsStr[1], tmpStr)) {
 			CharString_free(&tmpStr, alloc);
-			_gotoIfError(clean, Error_invalidState(1, "CharString_createBin test failed"));
+			gotoIfError(clean, Error_invalidState(1, "CharString_createBin test failed"))
 		}
 
 		CharString_free(&tmpStr, alloc);
-		_gotoIfError(clean, CharString_createOct(resultsU64[2], 0, alloc, &tmpStr));
+		gotoIfError(clean, CharString_createOct(resultsU64[2], 0, alloc, &tmpStr))
 
 		if (!CharString_equalsStringSensitive(resultsStr[2], tmpStr)) {
 			CharString_free(&tmpStr, alloc);
-			_gotoIfError(clean, Error_invalidState(2, "CharString_createOct test failed"));
+			gotoIfError(clean, Error_invalidState(2, "CharString_createOct test failed"))
 		}
 
 		CharString_free(&tmpStr, alloc);
-		_gotoIfError(clean, CharString_createNyto(resultsU64[3], 0, alloc, &tmpStr));
+		gotoIfError(clean, CharString_createNyto(resultsU64[3], 0, alloc, &tmpStr))
 
 		if (!CharString_equalsStringSensitive(resultsStr[3], tmpStr)) {
 			CharString_free(&tmpStr, alloc);
-			_gotoIfError(clean, Error_invalidState(3, "CharString_createNyto test failed"));
+			gotoIfError(clean, Error_invalidState(3, "CharString_createNyto test failed"))
 		}
 
 		CharString_free(&tmpStr, alloc);
-		_gotoIfError(clean, CharString_createDec(resultsU64[4], 0, alloc, &tmpStr));
+		gotoIfError(clean, CharString_createDec(resultsU64[4], 0, alloc, &tmpStr))
 
 		if (!CharString_equalsStringSensitive(resultsStr[4], tmpStr)) {
 			CharString_free(&tmpStr, alloc);
-			_gotoIfError(clean, Error_invalidState(4, "CharString_createDec test failed"));
+			gotoIfError(clean, Error_invalidState(4, "CharString_createDec test failed"))
 		}
 
 		//Conversion from string to number
@@ -245,20 +245,19 @@ int main() {
 		success &= CharString_parseDec(resultsStr[4], tmpRes + 4);
 
 		if(!success)
-			_gotoIfError(clean, Error_invalidState(5, "CharString_parseHex/Bin/Oct/Nyto/Dec returned error(s)"));
+			gotoIfError(clean, Error_invalidState(5, "CharString_parseHex/Bin/Oct/Nyto/Dec returned error(s)"))
 
 		for(U64 i = 0; i < sizeof(resultsStr) / sizeof(resultsStr[0]); ++i)
 			success &= tmpRes[i] == resultsU64[i];
 
 		if(!success)
-			_gotoIfError(clean, Error_invalidState(6, "CharString_parseHex/Bin/Oct/Nyto/Dec test failed"));
-
+			gotoIfError(clean, Error_invalidState(6, "CharString_parseHex/Bin/Oct/Nyto/Dec test failed"))
 	}
 
 	//Test CRC32C function
 	//https://stackoverflow.com/questions/20963944/test-vectors-for-crc32c
 
-	printf("Testing Buffer CRC32C\n");
+	Log_debugLn(alloc, "Testing Buffer CRC32C");
 
 	typedef struct TestCRC32C {
 		const C8 *str;
@@ -286,7 +285,7 @@ int main() {
 		U32 ours = Buffer_crc32c(buf);
 
 		if(groundTruth != ours)
-			_gotoIfError(clean, Error_invalidOperation(3, "CRC32C test failed"));
+			gotoIfError(clean, Error_invalidOperation(3, "CRC32C test failed"))
 	}
 
 	//Test SHA256 function
@@ -294,10 +293,10 @@ int main() {
 	//https://www.dlitz.net/crypto/shad256-test-vectors/
 	//https://github.com/amosnier/sha-2/blob/master/test.c
 
-	printf("Testing Buffer SHA256\n");
+	Log_debugLn(alloc, "Testing Buffer SHA256");
 
 	static const U32 resultHashes[][8] = {
-		{ 0xE3B0C442, 0x98FC1C14, 0x9AFBF4C8, 0x996FB924, 0x27AE41E4, 0x649B934C, 0xA495991B, 0x7852B855 },	
+		{ 0xE3B0C442, 0x98FC1C14, 0x9AFBF4C8, 0x996FB924, 0x27AE41E4, 0x649B934C, 0xA495991B, 0x7852B855 },
 		{ 0xBA7816BF, 0x8F01CFEA, 0x414140DE, 0x5DAE2223, 0xB00361A3, 0x96177A9C, 0xB410FF61, 0xF20015AD },
 		{ 0xCDC76E5C, 0x9914FB92, 0x81A1C7E2, 0x84D73E67, 0xF1809A48, 0xA497200E, 0x046D39CC, 0xC7112CD0 },
 		{ 0x067C5312, 0x69735CA7, 0xF541FDAC, 0xA8F0DC76, 0x305D3CAD, 0xA140F893, 0x72A410FE, 0x5EFF6E4D },
@@ -324,9 +323,11 @@ int main() {
 
 	inputs[1] = CharString_createRefCStrConst("abc");
 
-	_gotoIfError(clean, CharString_create('a', MEGA, alloc, inputs + 2));
+	gotoIfError(clean, CharString_create('a', MEGA, alloc, inputs + 2))
 
-	inputs[3] = CharString_createRefSizedConst("\xde\x18\x89\x41\xa3\x37\x5d\x3a\x8a\x06\x1e\x67\x57\x6e\x92\x6d", 16, true);
+	inputs[3] = CharString_createRefSizedConst(
+		"\xde\x18\x89\x41\xa3\x37\x5d\x3a\x8a\x06\x1e\x67\x57\x6e\x92\x6d", 16, true
+	);
 
 	inputs[4] = CharString_createRefSizedConst(
 		"\xDE\x18\x89\x41\xA3\x37\x5D\x3A\x8A\x06\x1E\x67\x57\x6E\x92\x6D\xC7\x1A\x7F\xA3\xF0"
@@ -362,15 +363,15 @@ int main() {
 	inputs[17] = CharString_createRefSizedConst((const C8*)data8, 1000, false);
 	inputs[18] = CharString_createRefSizedConst((const C8*)data9, 1005, false);
 
-	//More extreme checks. Don't wanna run this every time.
+	//More extreme checks. Don't want to run this every time.
 
-	#if _EXTRA_CHECKS
+	#if EXTRA_CHECKS
 
-		_gotoIfError(clean, CharString_create('\x5A', 536'870'912, alloc, inputs + 20));
-		_gotoIfError(clean, CharString_create('\0', 1'090'519'040, alloc, inputs + 21));
-		_gotoIfError(clean, CharString_create('\x42', 1'610'612'798, alloc, inputs + 22));
+		gotoIfError(clean, CharString_create('\x5A', 536870912, alloc, inputs + 20))
+		gotoIfError(clean, CharString_create('\0', 1090519040, alloc, inputs + 21))
+		gotoIfError(clean, CharString_create('\x42', 1610612798, alloc, inputs + 22))
 
-		inputs[19] = CharString_createRefSizedConst(inputs[21].ptr, 1'000'000, true);
+		inputs[19] = CharString_createRefSizedConst(inputs[21].ptr, 1000000, true);
 
 	#endif
 
@@ -380,21 +381,21 @@ int main() {
 
 		U32 result[8];
 		Buffer_sha256(CharString_bufferConst(inputs[i]), result);
-	
+
 		Bool b = Buffer_eq(Buffer_createRefConst(result, 32), Buffer_createRefConst(resultHashes[i], 32));
-	
+
 		if(!b)
-			_gotoIfError(clean, Error_invalidOperation(4, "Buffer_sha256 test failed"));
+			gotoIfError(clean, Error_invalidOperation(4, "Buffer_sha256 test failed"))
 	}
 
 	for(U64 i = 0; i < sizeof(inputs) / sizeof(inputs[0]); ++i)
 		CharString_free(&inputs[i], alloc);
 
 	//Test buffer layouts
-	
+
 	//Test 1: Camera[10]
 
-	_gotoIfError(clean, BufferLayout_create(alloc, &bufferLayout));
+	gotoIfError(clean, BufferLayout_create(alloc, &bufferLayout))
 
 	//Transform
 
@@ -428,14 +429,14 @@ int main() {
 		}
 	};
 
-	_gotoIfError(clean, ListBufferLayoutMemberInfo_createRefConst(
+	gotoIfError(clean, ListBufferLayoutMemberInfo_createRefConst(
 		transformMembers,
 		sizeof(transformMembers) / sizeof(transformMembers[0]),
 		&transformStructInfo.members
-	));
+	))
 
 	U32 transformStruct;
-	_gotoIfError(clean, BufferLayout_createStruct(&bufferLayout, transformStructInfo, alloc, &transformStruct));
+	gotoIfError(clean, BufferLayout_createStruct(&bufferLayout, transformStructInfo, alloc, &transformStruct))
 
 	//
 
@@ -501,14 +502,14 @@ int main() {
 		}
 	};
 
-	_gotoIfError(clean, ListBufferLayoutMemberInfo_createRefConst(
+	gotoIfError(clean, ListBufferLayoutMemberInfo_createRefConst(
 		cameraMembers,
 		sizeof(cameraMembers) / sizeof(cameraMembers[0]),
 		&cameraStructInfo.members
-	));
+	))
 
 	U32 cameraStruct;
-	_gotoIfError(clean, BufferLayout_createStruct(&bufferLayout, cameraStructInfo, alloc, &cameraStruct));
+	gotoIfError(clean, BufferLayout_createStruct(&bufferLayout, cameraStructInfo, alloc, &cameraStruct))
 
 	//Camera[10]
 
@@ -525,22 +526,27 @@ int main() {
 	};
 
 	U32 cameraArrayLen = 10;
-	_gotoIfError(clean, ListU32_createRefConst(&cameraArrayLen, 1, &cameraStructArrayMembers[0].arraySizes));
+	gotoIfError(clean, ListU32_createRefConst(&cameraArrayLen, 1, &cameraStructArrayMembers[0].arraySizes))
 
-	_gotoIfError(clean, ListBufferLayoutMemberInfo_createRefConst(
+	gotoIfError(clean, ListBufferLayoutMemberInfo_createRefConst(
 		cameraStructArrayMembers,
 		sizeof(cameraStructArrayMembers) / sizeof(cameraStructArrayMembers[0]),
 		&cameraStructArrayInfo.members
-	));
+	))
 
 	U32 cameraStructArray;
-	_gotoIfError(clean, BufferLayout_createStruct(&bufferLayout, cameraStructArrayInfo, alloc, &cameraStructArray));
+	gotoIfError(clean, BufferLayout_createStruct(&bufferLayout, cameraStructArrayInfo, alloc, &cameraStructArray))
 
-	_gotoIfError(clean, BufferLayout_assignRootStruct(&bufferLayout, cameraStructArray));
+	gotoIfError(clean, BufferLayout_assignRootStruct(&bufferLayout, cameraStructArray))
 
 	//Instantiate
 
-	_gotoIfError(clean, BufferLayout_createInstance(bufferLayout, 1, alloc, &emp));
+	gotoIfError(clean, BufferLayout_createInstance(bufferLayout, 1, alloc, &emp))
+
+	typedef struct Transform {
+		QuatF32 rot;
+		F32x4 pos, scale;
+	} Transform;
 
 	typedef struct Camera {
 
@@ -553,70 +559,70 @@ int main() {
 	} Camera;
 
 	if (Buffer_length(emp) != sizeof(Camera) * 10)
-		_gotoIfError(clean, Error_invalidState(0, "BufferLayout_createInstance was invalid"));
+		gotoIfError(clean, Error_invalidState(0, "BufferLayout_createInstance was invalid"))
 
 	//Test simple behavior
 
 	F32x4 p0 = F32x4_create4(1, 2, 3, 4);
 
-	_gotoIfError(clean, BufferLayout_setF32x4(
+	gotoIfError(clean, BufferLayout_setF32x4(
 		emp, bufferLayout,
 		CharString_createRefCStrConst("arr/0/p0"),
 		p0,
 		alloc
-	));
+	))
 
 	if(F32x4_neq4(((const Camera*)emp.ptr)[0].p0, p0))
-		_gotoIfError(clean, Error_invalidState(1, "BufferLayout_setF32x4 arr/0/p0 didn't work"));
+		gotoIfError(clean, Error_invalidState(1, "BufferLayout_setF32x4 arr/0/p0 didn't work"))
 
-	_gotoIfError(clean, BufferLayout_setF32x4(
+	gotoIfError(clean, BufferLayout_setF32x4(
 		emp, bufferLayout,
 		CharString_createRefCStrConst("arr/1/p0"),
 		p0,
 		alloc
-	));
+	))
 
 	if(F32x4_neq4(((const Camera*)emp.ptr)[1].p0, p0))
-		_gotoIfError(clean, Error_invalidState(2, "BufferLayout_setF32x4 arr/1/p0 didn't work"));
+		gotoIfError(clean, Error_invalidState(2, "BufferLayout_setF32x4 arr/1/p0 didn't work"))
 
-	_gotoIfError(clean, BufferLayout_setF32x4(
+	gotoIfError(clean, BufferLayout_setF32x4(
 		emp, bufferLayout,
 		CharString_createRefCStrConst("arr/1/transform/scale"),
 		p0,
 		alloc
-	));
+	))
 
 	if(F32x4_neq4(((const Camera*)emp.ptr)[1].transform.scale, p0))
-		_gotoIfError(clean, Error_invalidState(3, "BufferLayout_setF32x4 arr/1/transform/scale didn't work"));
+		gotoIfError(clean, Error_invalidState(3, "BufferLayout_setF32x4 arr/1/transform/scale didn't work"))
 
 	F32 fovRadTest = 23;
 
-	_gotoIfError(clean, BufferLayout_setF32(
+	gotoIfError(clean, BufferLayout_setF32(
 		emp, bufferLayout,
 		CharString_createRefCStrConst("arr/1/fovRad"),
 		fovRadTest,
 		alloc
-	));
+	))
 
 	if(((const Camera*)emp.ptr)[1].fovRad != fovRadTest)
-		_gotoIfError(clean, Error_invalidState(4, "BufferLayout_setF32 arr/1/fovRad didn't work"));
+		gotoIfError(clean, Error_invalidState(4, "BufferLayout_setF32 arr/1/fovRad didn't work"))
 
 	//Test big endian conversions
 
-	printf("Testing endianness swapping\n");
+	Log_debugLn(alloc, "Testing endianness swapping");
 
 	U16 be16 = U16_swapEndianness(0x1234);
 	U32 be32 = U32_swapEndianness(0x12345678);
 	U64 be64 = U64_swapEndianness(0x123456789ABCDEF0);
 
 	if(be16 != 0x3412)
-		_gotoIfError(clean, Error_invalidState(5, "Little endian to big failed on U16"));
+		gotoIfError(clean, Error_invalidState(5, "Little endian to big failed on U16"))
 
 	if(be32 != 0x78563412)
-		_gotoIfError(clean, Error_invalidState(6, "Little endian to big failed on U32"));
+		gotoIfError(clean, Error_invalidState(6, "Little endian to big failed on U32"))
 
 	if(be64 != 0xF0DEBC9A78563412)
-		_gotoIfError(clean, Error_invalidState(7, "Little endian to big failed on U64"));
+		gotoIfError(clean, Error_invalidState(7, "Little endian to big failed on U64"))
 
 	//Test encryption
 
@@ -627,7 +633,7 @@ int main() {
 	//				2.1.2, 2.2.2, 2.3.2, 2.4.2, 2.5.2, 2.6.2, 2.7.2, 2.8.2
 
 	{
-		printf("Testing Buffer encrypt/decrypt (AES256)\n");
+		Log_debugLn(alloc, "Testing Buffer encrypt/decrypt (AES256)");
 
 		CharString testKeys[] = {
 
@@ -993,13 +999,13 @@ int main() {
 
 			//Copy into tmp variable to be able to modify it instead of using const mem
 
-			_gotoIfError(clean, CharString_createCopy(testPlainText[i], alloc, &tmp));
+			gotoIfError(clean, CharString_createCopy(testPlainText[i], alloc, &tmp))
 
 			//Encrypt plain text
 
 			I32x4 tag = I32x4_zero();
 
-			_gotoIfError(clean, Buffer_encrypt(
+			gotoIfError(clean, Buffer_encrypt(
 				CharString_buffer(tmp),
 				CharString_bufferConst(additionalData[i]),
 				EBufferEncryptionType_AES256GCM,
@@ -1007,12 +1013,12 @@ int main() {
 				(U32*) testKeys[i].ptr,
 				&iv,
 				&tag
-			));
+			))
 
 			//Check size
 
 			if(CharString_length(tmp) + 16 != CharString_length(results[i]))
-				_gotoIfError(clean, Error_invalidState(3, "Buffer_encrypt returned invalid size"));
+				gotoIfError(clean, Error_invalidState(3, "Buffer_encrypt returned invalid size"))
 
 			//Check tag (intermediate copy because otherwise Release will crash because of unaligned memory)
 
@@ -1023,7 +1029,7 @@ int main() {
 			);
 
 			if(I32x4_any(I32x4_neq(tag, tmpTag)))
-				_gotoIfError(clean, Error_invalidState(1, "Buffer_encrypt GMAC/Tag was invalid"));
+				gotoIfError(clean, Error_invalidState(1, "Buffer_encrypt GMAC/Tag was invalid"))
 
 			//Check result
 
@@ -1033,18 +1039,18 @@ int main() {
 			);
 
 			if(!b)
-				_gotoIfError(clean, Error_invalidState(2, "Buffer_encrypt cyphertext was invalid"));
+				gotoIfError(clean, Error_invalidState(2, "Buffer_encrypt cyphertext was invalid"))
 
 			//Decrypt the encrypted string and verify if it decrypts to the same thing
 
-			_gotoIfError(clean, Buffer_decrypt(
+			gotoIfError(clean, Buffer_decrypt(
 				CharString_buffer(tmp),
 				CharString_bufferConst(additionalData[i]),
 				EBufferEncryptionType_AES256GCM,
 				(const U32*) testKeys[i].ptr,
 				tag,
 				iv
-			));
+			))
 
 			//Check result
 
@@ -1054,14 +1060,14 @@ int main() {
 			);
 
 			if(!b)
-				_gotoIfError(clean, Error_invalidState(4, "Buffer_decrypt failed"));
+				gotoIfError(clean, Error_invalidState(4, "Buffer_decrypt failed"))
 
 			CharString_free(&tmp, alloc);
 		}
 	}
-	
+
 	{
-		printf("Testing Buffer encrypt/decrypt (AES128)\n");
+		Log_debugLn(alloc, "Testing Buffer encrypt/decrypt (AES128)");
 
 		CharString testKeys[] = {
 			CharString_createRefSizedConst("\xAD\x7A\x2B\xD0\x3E\xAC\x83\x5A\x6F\x62\x0F\xDC\xB5\x06\xB3\x45", 16, true),
@@ -1308,13 +1314,13 @@ int main() {
 
 			//Copy into tmp variable to be able to modify it instead of using const mem
 
-			_gotoIfError(clean, CharString_createCopy(testPlainText[i], alloc, &tmp));
+			gotoIfError(clean, CharString_createCopy(testPlainText[i], alloc, &tmp))
 
 			//Encrypt plain text
 
 			I32x4 tag = I32x4_zero();
 
-			_gotoIfError(clean, Buffer_encrypt(
+			gotoIfError(clean, Buffer_encrypt(
 				CharString_buffer(tmp),
 				CharString_bufferConst(additionalData[i]),
 				EBufferEncryptionType_AES128GCM,
@@ -1322,12 +1328,12 @@ int main() {
 				(U32*) testKeys[i].ptr,
 				&iv,
 				&tag
-			));
+			))
 
 			//Check size
 
 			if(CharString_length(tmp) + 16 != CharString_length(results[i]))
-				_gotoIfError(clean, Error_invalidState(3, "Buffer_encrypt returned invalid size"));
+				gotoIfError(clean, Error_invalidState(3, "Buffer_encrypt returned invalid size"))
 
 			//Check tag (intermediate copy because otherwise Release will crash because of unaligned memory)
 
@@ -1338,7 +1344,7 @@ int main() {
 			);
 
 			if(I32x4_any(I32x4_neq(tag, tmpTag)))
-				_gotoIfError(clean, Error_invalidState(1, "Buffer_encrypt GMAC/Tag was invalid"));
+				gotoIfError(clean, Error_invalidState(1, "Buffer_encrypt GMAC/Tag was invalid"))
 
 			//Check result
 
@@ -1348,18 +1354,18 @@ int main() {
 			);
 
 			if(!b)
-				_gotoIfError(clean, Error_invalidState(2, "Buffer_encrypt cyphertext was invalid"));
+				gotoIfError(clean, Error_invalidState(2, "Buffer_encrypt cyphertext was invalid"))
 
 			//Decrypt the encrypted string and verify if it decrypts to the same thing
 
-			_gotoIfError(clean, Buffer_decrypt(
+			gotoIfError(clean, Buffer_decrypt(
 				CharString_buffer(tmp),
 				CharString_bufferConst(additionalData[i]),
 				EBufferEncryptionType_AES128GCM,
 				(const U32*) testKeys[i].ptr,
 				tag,
 				iv
-			));
+			))
 
 			//Check result
 
@@ -1369,7 +1375,7 @@ int main() {
 			);
 
 			if(!b)
-				_gotoIfError(clean, Error_invalidState(4, "Buffer_decrypt failed"));
+				gotoIfError(clean, Error_invalidState(4, "Buffer_decrypt failed"))
 
 			CharString_free(&tmp, alloc);
 		}
@@ -1377,7 +1383,7 @@ int main() {
 
 	//Check for floating point conversions
 
-	printf("Testing software floating point expansion casts...\n");
+	Log_debugLn(alloc, "Testing software floating point expansion casts...");
 
 	{
 		static const U32 expansionTests[] = {
@@ -1409,14 +1415,14 @@ int main() {
 				if(j)
 					*(U32*)&fi |= 1 << 31;
 
-				F64 doubTarg = fi;
-				U64 doubTarg64 = *(const U64*)&doubTarg;
+				const F64 doubTarg = fi;
+				const U64 doubTarg64 = *(const U64*)&doubTarg;
 
-				F64 doubEmu = F32_castF64(fi);
-				U64 doubEmu64  = *(const U64*)&doubEmu;
+				const F64 doubEmu = F32_castF64(fi);
+				const U64 doubEmu64  = *(const U64*)&doubEmu;
 
 				if (doubEmu64 != doubTarg64)
-					_gotoIfError(clean, Error_invalidState((U32)((i << 1) | j), "F32_castF64 returned invalid data"));
+					gotoIfError(clean, Error_invalidState((U32)((i << 1) | j), "F32_castF64 returned invalid data"))
 			}
 		}
 
@@ -1425,10 +1431,10 @@ int main() {
 		U64 N = 1024;
 
 		Buffer_free(&emp, alloc);
-		_gotoIfError(clean, Buffer_createEmptyBytes(N * sizeof(U32), alloc, &emp));
+		gotoIfError(clean, Buffer_createEmptyBytes(N * sizeof(U32), alloc, &emp))
 
 		if (!Buffer_csprng(emp))
-			_gotoIfError(clean, Error_invalidState(0, "Buffer_csprng failed"));
+			gotoIfError(clean, Error_invalidState(0, "Buffer_csprng failed"))
 
 		const U32 *rptr = (const U32*) emp.ptr;
 
@@ -1460,7 +1466,7 @@ int main() {
 				U64 doubEmu64 = *(const U64*)&doubEmu;
 
 				if (doubEmu64 != doubTarg64)
-					_gotoIfError(clean, Error_invalidState((U32)i, "F32_castF64 returned invalid data for random data"));
+					gotoIfError(clean, Error_invalidState((U32)i, "F32_castF64 returned invalid data for random data"))
 			}
 		}
 
@@ -1532,7 +1538,7 @@ int main() {
 			0x3FF3AC0000000000,		//1.2294921875
 			0x3FEFFC0000000000		//0.99951171875
 		};
-		
+
 		for (U64 i = 0; i < sizeof(halfs) / sizeof(halfs[0]); ++i) {
 
 			for(U64 j = 0; j < 2; ++j) {
@@ -1542,30 +1548,30 @@ int main() {
 				if(j)
 					*(U16*)&fh |= 1 << 15;
 
-				F32 floatEmu = F16_castF32(fh);
-				U32 floatEmu32  = *(const U32*)&floatEmu;
+				const F32 floatEmu = F16_castF32(fh);
+				const U32 floatEmu32  = *(const U32*)&floatEmu;
 				U32 floatTarg32 = expectedResultsF32[i];
 
 				if(j)
 					*(U32*)&floatTarg32 |= 1 << 31;
 
 				if (floatEmu32 != floatTarg32)
-					_gotoIfError(clean, Error_invalidState((U32)(((i << 1) | j) << 1), "F16_castF32 was invalid"));
+					gotoIfError(clean, Error_invalidState((U32)(((i << 1) | j) << 1), "F16_castF32 was invalid"))
 
-				F64 doubEmu = F16_castF64(fh);
-				U64 doubEmu64  = *(const U64*)&doubEmu;
-				U64 doubTarg64 = expectedResultsF64[i];
+				const F64 doubEmu = F16_castF64(fh);
+				const U64 doubEmu64  = *(const U64*)&doubEmu;
+				const U64 doubTarg64 = expectedResultsF64[i];
 
 				if(j)
 					*(U64*)&doubTarg64 |= (U64)1 << 63;
 
 				if (doubEmu64 != doubTarg64)
-					_gotoIfError(clean, Error_invalidState((U32)(((i << 1) | j) << 1) | 1, "F16_castF64 was invalid"));
+					gotoIfError(clean, Error_invalidState((U32)(((i << 1) | j) << 1) | 1, "F16_castF64 was invalid"))
 			}
 		}
 	}
 
-	printf("Testing software floating point truncation casts...\n");
+	Log_debugLn(alloc, "Testing software floating point truncation casts...");
 
 	{
 		static const U64 truncTests[] = {
@@ -1637,7 +1643,7 @@ int main() {
 			0x47D2CED32A16A1B1,		//1e38
 			0x48078287F49C4A1D,		//1e39
 			0x483D6329F1C35CA5,		//1e40
-	
+
 			0x366244CE242C5561,		//1e-46
 			0x3696D601AD376AB9,		//1e-45
 			0x37A16C262777579C,		//1e-40
@@ -1661,14 +1667,14 @@ int main() {
 				if(j)
 					*(U64*)&fd |= (U64)1 << 63;
 
-				F32 floatTarg = (F32) fd;
-				U32 floatTarg32 = *(const U32*)&floatTarg;
+				const F32 floatTarg = (F32) fd;
+				const U32 floatTarg32 = *(const U32*)&floatTarg;
 
-				F32 floatEmu = F64_castF32(fd);
-				U32 floatEmu32 = *(const U32*)&floatEmu;
+				const F32 floatEmu = F64_castF32(fd);
+				const U32 floatEmu32 = *(const U32*)&floatEmu;
 
 				if (floatEmu32 != floatTarg32)
-					_gotoIfError(clean, Error_invalidState((U32)((i << 1) | j), "F64_castF32 was invalid"));
+					gotoIfError(clean, Error_invalidState((U32)((i << 1) | j), "F64_castF32 was invalid"))
 			}
 		}
 
@@ -1677,10 +1683,10 @@ int main() {
 		U64 N = 1024;
 
 		Buffer_free(&emp, alloc);
-		_gotoIfError(clean, Buffer_createEmptyBytes(N * sizeof(U64), alloc, &emp));
+		gotoIfError(clean, Buffer_createEmptyBytes(N * sizeof(U64), alloc, &emp))
 
 		if (!Buffer_csprng(emp))
-			_gotoIfError(clean, Error_invalidState(0, "Buffer_csprng failed (2)"));
+			gotoIfError(clean, Error_invalidState(0, "Buffer_csprng failed (2)"))
 
 		const U64 *rptr = (const U64*) emp.ptr;
 
@@ -1705,14 +1711,14 @@ int main() {
 
 				F64 fd = *(const F64*)&rv;
 
-				F32 floatTarg = (F32) fd;
-				U32 floatTarg32 = *(const U32*)&floatTarg;
+				const F32 floatTarg = (F32) fd;
+				const U32 floatTarg32 = *(const U32*)&floatTarg;
 
-				F32 floatEmu = F64_castF32(fd);
-				U32 floatEmu32 = *(const U32*)&floatEmu;
+				const F32 floatEmu = F64_castF32(fd);
+				const U32 floatEmu32 = *(const U32*)&floatEmu;
 
 				if (floatEmu32 != floatTarg32)
-					_gotoIfError(clean, Error_invalidState((U32)i, "F64_castF32 failed with random data"));
+					gotoIfError(clean, Error_invalidState((U32)i, "F64_castF32 failed with random data"))
 			}
 		}
 
@@ -1829,7 +1835,7 @@ int main() {
 				F16 halfEmu = F32_castF16(floatTarg);
 
 				if (halfEmu != fh)
-					_gotoIfError(clean, Error_invalidState((U32)(((i << 1) | j) << 1), "F32_castF16 failed"));
+					gotoIfError(clean, Error_invalidState((U32)(((i << 1) | j) << 1), "F32_castF16 failed"))
 
 				F64 doubTarg = ((const F64*)inputDoubles)[i];
 
@@ -1839,7 +1845,7 @@ int main() {
 				halfEmu = F64_castF16(doubTarg);
 
 				if (halfEmu != fh)
-					_gotoIfError(clean, Error_invalidState((U32)(((i << 1) | j) << 1) | 1, "F64_castF16 failed"));
+					gotoIfError(clean, Error_invalidState((U32)(((i << 1) | j) << 1) | 1, "F64_castF16 failed"))
 			}
 		}
 	}
@@ -1847,7 +1853,7 @@ int main() {
 	//U128 compare
 
 	{
-		printf("Comparing U128 to U128 as BigInt and U128\n");
+		Log_debugLn(alloc, "Comparing U128 to U128 as BigInt and U128");
 
 		U128 compares[] = {
 			U128_createU64x2(0x0000000000000000, 0x0000000000000000),
@@ -1869,17 +1875,17 @@ int main() {
 				U128_cmp(compares[i - 1], compares[i]) != ECompareResult_Lt ||
 				U128_cmp(compares[i], compares[i - 1]) != ECompareResult_Gt
 			)
-				_gotoIfError(clean, Error_invalidState((U32)i, "U128_cmp failed"));
+				gotoIfError(clean, Error_invalidState((U32)i, "U128_cmp failed"))
 
 			BigInt aBig = (BigInt) { 0 }, bBig = (BigInt) { 0 };
-			_gotoIfError(clean, BigInt_createConstRef((const U64*)&compares[i - 1], 2, &aBig));
-			_gotoIfError(clean, BigInt_createConstRef((const U64*)&compares[i], 2, &bBig));
+			gotoIfError(clean, BigInt_createRefConst((const U64*)&compares[i - 1], 2, &aBig))
+			gotoIfError(clean, BigInt_createRefConst((const U64*)&compares[i], 2, &bBig))
 
 			if(
 				BigInt_cmp(aBig, bBig) != ECompareResult_Lt ||
 				BigInt_cmp(bBig, aBig) != ECompareResult_Gt
 			)
-				_gotoIfError(clean, Error_invalidState((U32)i, "BigInt_cmp failed"));
+				gotoIfError(clean, Error_invalidState((U32)i, "BigInt_cmp failed"))
 		}
 	}
 
@@ -1911,8 +1917,8 @@ int main() {
 
 	const C8 *stringified[] = {
 		"0xFEDCBA98765432100123456789ABCDEF",
-		"0b1111111111111111111111111111111111111111111111111111111111111111"
-		  "1111111111111111111111111111111111111111111111111111111111111111",
+		("0b1111111111111111111111111111111111111111111111111111111111111111"
+		  "1111111111111111111111111111111111111111111111111111111111111111"),
 		"0o3410507636447263053360252722732077575555417",
 		"0n2i0_jD8bUksGJNeskm821$",
 		"274506787720133886812119851071477940366"
@@ -1920,85 +1926,85 @@ int main() {
 
 	BigInt aBig = (BigInt) { 0 }, bBig = (BigInt) { 0 }, cBig = (BigInt) { 0 };
 
-	printf("Testing big int create from hex/bin/oct/dec\n");
+	Log_debugLn(alloc, "Testing big int create from hex/bin/oct/dec");
 
 	for(U64 i = 0; i < sizeof(stringified) / sizeof(stringified[0]); ++i) {
 
-		_gotoIfError(clean, BigInt_createFromString(CharString_createRefCStrConst(stringified[i]), 128, alloc, &aBig));
-		_gotoIfError(clean, BigInt_createConstRef(&mulParams[i][0], 2, &bBig));
+		gotoIfError(clean, BigInt_createFromString(CharString_createRefCStrConst(stringified[i]), 128, alloc, &aBig))
+		gotoIfError(clean, BigInt_createRefConst(&mulParams[i][0], 2, &bBig))
 
 		if(BigInt_neq(aBig, bBig))
-			_gotoIfError(clean, Error_invalidState((U32)i, "BigInt_createFromString failed"));
+			gotoIfError(clean, Error_invalidState((U32)i, "BigInt_createFromString failed"))
 
 		BigInt_free(&aBig, alloc);
 		bBig = (BigInt) { 0 };
 	}
 
-	printf("Testing big int to hex/bin/oct\n");
+	Log_debugLn(alloc, "Testing big int to hex/bin/oct");
 
 	for(U64 i = 0; i < sizeof(stringified) / sizeof(stringified[0]) && i < EIntegerEncoding_Count; ++i) {
 
-		_gotoIfError(clean, BigInt_createConstRef(&mulParams[i][0], 2, &bBig));
-		_gotoIfError(clean, BigInt_toString(bBig, alloc, &tmp, (EIntegerEncoding)i, false));
+		gotoIfError(clean, BigInt_createRefConst(&mulParams[i][0], 2, &bBig))
+		gotoIfError(clean, BigInt_toString(bBig, alloc, &tmp, (EIntegerEncoding)i, false))
 
 		CharString ref = CharString_createRefCStrConst(stringified[i]);
 
 		if(!CharString_equalsStringSensitive(ref, tmp))
-			_gotoIfError(clean, Error_invalidState((U32)i, "BigInt_toString failed"));
+			gotoIfError(clean, Error_invalidState((U32)i, "BigInt_toString failed"))
 
 		CharString_free(&tmp, alloc);
 		bBig = (BigInt) { 0 };
 	}
 
-	printf("Testing big int mul\n");
+	Log_debugLn(alloc, "Testing big int mul");
 
 	for(U64 i = 0; i < sizeof(mulParams) / sizeof(mulParams[0]); ++i) {
 
 		aBig = bBig = cBig = (BigInt) { 0 };
 
 		U64 temp[4] = { mulParams[i][0], 0, mulParams[i][1], 0 };
-		_gotoIfError(clean, BigInt_createRef(&temp[0], 2, &aBig));
-		_gotoIfError(clean, BigInt_createConstRef(&temp[2], 2, &bBig));
-		_gotoIfError(clean, BigInt_createConstRef((const U64*) &mulResult[i][0], 2, &cBig));
+		gotoIfError(clean, BigInt_createRef(&temp[0], 2, &aBig))
+		gotoIfError(clean, BigInt_createRefConst(&temp[2], 2, &bBig))
+		gotoIfError(clean, BigInt_createRefConst((const U64*) &mulResult[i][0], 2, &cBig))
 
 		if(!BigInt_mul(&aBig, bBig, alloc) || BigInt_neq(aBig, cBig))
-			_gotoIfError(clean, Error_invalidOperation((U32)i, "BigInt_mul failed"));
+			gotoIfError(clean, Error_invalidOperation((U32)i, "BigInt_mul failed"))
 	}
 
-	printf("Testing big int add\n");
+	Log_debugLn(alloc, "Testing big int add");
 
 	for(U64 i = 0; i < sizeof(mulParams) / sizeof(mulParams[0]); ++i) {
 
 		aBig = bBig = cBig = (BigInt) { 0 };
 
 		U64 temp[2] = { mulParams[i][0], mulParams[i][1] };
-		_gotoIfError(clean, BigInt_createRef(&temp[0], 2, &aBig));
-		_gotoIfError(clean, BigInt_createConstRef(&mulResult[i][0], 2, &bBig));
-		_gotoIfError(clean, BigInt_createConstRef(&addResult[i][0], 2, &cBig));
+		gotoIfError(clean, BigInt_createRef(&temp[0], 2, &aBig))
+		gotoIfError(clean, BigInt_createRefConst(&mulResult[i][0], 2, &bBig))
+		gotoIfError(clean, BigInt_createRefConst(&addResult[i][0], 2, &cBig))
 
 		if(!BigInt_add(&aBig, bBig) || BigInt_neq(aBig, cBig))
-			_gotoIfError(clean, Error_invalidOperation((U32)i, "BigInt_add failed"));
+			gotoIfError(clean, Error_invalidOperation((U32)i, "BigInt_add failed"))
 	}
 
-	printf("Testing big int sub\n");
+	Log_debugLn(alloc, "Testing big int sub");
 
 	for(U64 i = 0; i < sizeof(mulParams) / sizeof(mulParams[0]); ++i) {
 
 		aBig = bBig = cBig = (BigInt) { 0 };
 
 		U64 temp[2] = { addResult[i][0], addResult[i][1] };
-		_gotoIfError(clean, BigInt_createRef(&temp[0], 2, &cBig));
-		_gotoIfError(clean, BigInt_createConstRef(&mulParams[i][0], 2, &aBig));
-		_gotoIfError(clean, BigInt_createConstRef(&mulResult[i][0], 2, &bBig));
+		gotoIfError(clean, BigInt_createRef(&temp[0], 2, &cBig))
+		gotoIfError(clean, BigInt_createRefConst(&mulParams[i][0], 2, &aBig))
+		gotoIfError(clean, BigInt_createRefConst(&mulResult[i][0], 2, &bBig))
 
 		if(!BigInt_sub(&cBig, bBig) || BigInt_neq(aBig, cBig))
-			_gotoIfError(clean, Error_invalidOperation((U32)i, "BigInt_sub failed when solving c - b = a"));
+			gotoIfError(clean, Error_invalidOperation((U32)i, "BigInt_sub failed when solving c - b = a"))
 
 		temp[0] = addResult[i][0];
 		temp[1] = addResult[i][1];
 
 		if(!BigInt_sub(&cBig, aBig) || BigInt_neq(bBig, cBig))
-			_gotoIfError(clean, Error_invalidOperation((U32)i, "BigInt_sub failed when solving c - a = b"));
+			gotoIfError(clean, Error_invalidOperation((U32)i, "BigInt_sub failed when solving c - a = b"))
 	}
 
 	const U64 lshResult[][2] = {
@@ -2067,7 +2073,7 @@ int main() {
 		{ 0x0000000000000000, 0xE000000000000000 },	{ 0x0000000000000000, 0xC000000000000000 },
 		{ 0x0000000000000000, 0x8000000000000000 }
 	};
-		
+
 	const U64 rshResult[][2] = {
 		{ 0xFFFFFFFFFFFFFFFF, 0x7FFFFFFFFFFFFFFF },	{ 0xFFFFFFFFFFFFFFFF, 0x3FFFFFFFFFFFFFFF },
 		{ 0xFFFFFFFFFFFFFFFF, 0x1FFFFFFFFFFFFFFF },	{ 0xFFFFFFFFFFFFFFFF, 0x0FFFFFFFFFFFFFFF },
@@ -2135,50 +2141,50 @@ int main() {
 		{ 0x0000000000000001, 0x0000000000000000 }
 	};
 
-	printf("Testing big int lsh\n");
+	Log_debugLn(alloc, "Testing big int lsh");
 
 	for (U64 i = 0; i < sizeof(lshResult) / sizeof(lshResult[0]); ++i) {
 
 		aBig = bBig = (BigInt){ 0 };
 
 		U64 temp[2] = { mulParams[1][0], mulParams[1][1] };
-		_gotoIfError(clean, BigInt_createRef(&temp[0], 2, &aBig));
-		_gotoIfError(clean, BigInt_createConstRef(&lshResult[i][0], 2, &bBig));
+		gotoIfError(clean, BigInt_createRef(&temp[0], 2, &aBig))
+		gotoIfError(clean, BigInt_createRefConst(&lshResult[i][0], 2, &bBig))
 
 		if(!BigInt_lsh(&aBig, (U16)(i + 1)) || BigInt_neq(aBig, bBig))
-			_gotoIfError(clean, Error_invalidOperation((U32)i, "BigInt_lsh failed"));
+			gotoIfError(clean, Error_invalidOperation((U32)i, "BigInt_lsh failed"))
 	}
 
-	printf("Testing big int rsh\n");
+	Log_debugLn(alloc, "Testing big int rsh");
 
 	for (U64 i = 0; i < sizeof(rshResult) / sizeof(rshResult[0]); ++i) {
 
 		aBig = bBig = (BigInt){ 0 };
 
 		U64 temp[2] = { mulParams[1][0], mulParams[1][1] };
-		_gotoIfError(clean, BigInt_createRef(&temp[0], 2, &aBig));
-		_gotoIfError(clean, BigInt_createConstRef(&rshResult[i][0], 2, &bBig));
+		gotoIfError(clean, BigInt_createRef(&temp[0], 2, &aBig))
+		gotoIfError(clean, BigInt_createRefConst(&rshResult[i][0], 2, &bBig))
 
 		if(!BigInt_rsh(&aBig, (U16)(i + 1)) || BigInt_neq(aBig, bBig))
-			_gotoIfError(clean, Error_invalidOperation((U32)i, "BigInt_rsh failed"));
+			gotoIfError(clean, Error_invalidOperation((U32)i, "BigInt_rsh failed"))
 	}
 
-	printf("Testing big int bitScan\n");
+	Log_debugLn(alloc, "Testing big int bitScan");
 
 	for (U64 i = 0; i < sizeof(rshResult) / sizeof(rshResult[0]); ++i) {
 
 		aBig = (BigInt){ 0 };
-		_gotoIfError(clean, BigInt_createConstRef(&rshResult[i][0], 2, &aBig));
-		
+		gotoIfError(clean, BigInt_createRefConst(&rshResult[i][0], 2, &aBig))
+
 		U16 off = BigInt_bitScan(aBig);
 
 		if(off != (U16)(sizeof(rshResult) / sizeof(rshResult[0]) - 1 - i))
-			_gotoIfError(clean, Error_invalidOperation((U32)i, "BigInt_bitScan failed"));
+			gotoIfError(clean, Error_invalidOperation((U32)i, "BigInt_bitScan failed"))
 	}
 
 	//U128 unit test
 
-	printf("Testing U64 x U64 = U128 (optimized)\n");
+	Log_debugLn(alloc, "Testing U64 x U64 = U128 (optimized)");
 
 	for(U64 i = 0; i < sizeof(mulParams) / sizeof(mulParams[0]); ++i) {
 
@@ -2186,10 +2192,10 @@ int main() {
 		U128 mulReal = U128_mul64(mulParams[i][0], mulParams[i][1]);
 
 		if (U128_neq(mulRes, mulReal))
-			_gotoIfError(clean, Error_invalidOperation((U32)i, "U128_mul64 failed"));
+			gotoIfError(clean, Error_invalidOperation((U32)i, "U128_mul64 failed"))
 	}
 
-	printf("Testing U128 + U128 = U128 (optimized)\n");
+	Log_debugLn(alloc, "Testing U128 + U128 = U128 (optimized)");
 
 	for(U64 i = 0; i < sizeof(mulParams) / sizeof(mulParams[0]); ++i) {
 
@@ -2198,10 +2204,10 @@ int main() {
 		U128 c = U128_create((const U8*) addResult[i]);
 
 		if(U128_neq(U128_add(a, b), c))
-			_gotoIfError(clean, Error_invalidOperation((U32)i, "U128_add failed"));
+			gotoIfError(clean, Error_invalidOperation((U32)i, "U128_add failed"))
 	}
 
-	printf("Testing U128 - U128 = U128 (optimized)\n");
+	Log_debugLn(alloc, "Testing U128 - U128 = U128 (optimized)");
 
 	for(U64 i = 0; i < sizeof(mulParams) / sizeof(mulParams[0]); ++i) {
 
@@ -2210,10 +2216,10 @@ int main() {
 		U128 b = U128_create((const U8*) mulResult[i]);
 
 		if(U128_neq(U128_sub(c, b), a) || U128_neq(U128_sub(c, a), b))
-			_gotoIfError(clean, Error_invalidOperation((U32)i, "U128_sub failed"));
+			gotoIfError(clean, Error_invalidOperation((U32)i, "U128_sub failed"))
 	}
 
-	printf("Testing U128 lsh (optimized)\n");
+	Log_debugLn(alloc, "Testing U128 lsh (optimized)");
 
 	for (U64 i = 0; i < sizeof(lshResult) / sizeof(lshResult[0]); ++i) {
 
@@ -2222,10 +2228,10 @@ int main() {
 		U128 c = U128_lsh(a, (U8)(1 + i));
 
 		if(U128_neq(c, b))
-			_gotoIfError(clean, Error_invalidOperation((U32)i, "U128_lsh failed"));
+			gotoIfError(clean, Error_invalidOperation((U32)i, "U128_lsh failed"))
 	}
 
-	printf("Testing U128 rsh (optimized)\n");
+	Log_debugLn(alloc, "Testing U128 rsh (optimized)");
 
 	for (U64 i = 0; i < sizeof(rshResult) / sizeof(rshResult[0]); ++i) {
 
@@ -2234,10 +2240,10 @@ int main() {
 		U128 c = U128_rsh(a, (U8)(1 + i));
 
 		if(U128_neq(c, b))
-			_gotoIfError(clean, Error_invalidOperation((U32)i, "U128_rsh failed"));
+			gotoIfError(clean, Error_invalidOperation((U32)i, "U128_rsh failed"))
 	}
 
-	printf("Testing U128 bitScan\n");
+	Log_debugLn(alloc, "Testing U128 bitScan");
 
 	for (U64 i = 0; i < sizeof(rshResult) / sizeof(rshResult[0]); ++i) {
 
@@ -2245,52 +2251,177 @@ int main() {
 		U16 off = U128_bitScan(a);
 
 		if(off != (U16)(sizeof(rshResult) / sizeof(rshResult[0]) - 1 - i))
-			_gotoIfError(clean, Error_invalidOperation((U32)i, "U128_bitScan failed"));
+			gotoIfError(clean, Error_invalidOperation((U32)i, "U128_bitScan failed"))
 	}
 
-	printf("Testing U128 create from hex/bin/oct/dec/nyto\n");
+	Log_debugLn(alloc, "Testing U128 create from hex/bin/oct/dec/nyto");
 
 	for(U64 i = 0; i < sizeof(stringified) / sizeof(stringified[0]); ++i) {
 
 		U128 vi = U128_createFromString(CharString_createRefCStrConst(stringified[i]), &err, alloc);
 		U128 realVi = U128_create((const U8*) &mulParams[i][0]);
 
-		_gotoIfError(clean, err);
+		gotoIfError(clean, err)
 
 		if(U128_neq(vi, realVi))
-			_gotoIfError(clean, Error_invalidState((U32)i, "U128_createFromString failed"));
+			gotoIfError(clean, Error_invalidState((U32)i, "U128_createFromString failed"))
 	}
 
-	/*printf("Testing U128 to hex/bin/oct/dec/nyto\n");
+	/*Log_debugLn(alloc, "Testing U128 to hex/bin/oct/dec/nyto");
 
 	for(U64 i = 0; i < sizeof(stringified) / sizeof(stringified[0]) && i < EIntegerEncoding_Count; ++i) {
 
 		U128 realVi = U128_create((const U8*) &mulParams[i][0]);
-		_gotoIfError(clean, U128_toString(realVi, alloc, &tmp, (EIntegerEncoding)i, false));
+		gotoIfError(clean, U128_toString(realVi, alloc, &tmp, (EIntegerEncoding)i, false))
 
 		CharString ref = CharString_createRefCStrConst(stringified[i]);
 
 		if(!CharString_equalsStringSensitive(ref, tmp))
-			_gotoIfError(clean, Error_invalidState((U32)i, "U128_toString failed"));
+			gotoIfError(clean, Error_invalidState((U32)i, "U128_toString failed"))
 
 		CharString_free(&tmp, alloc);
 	}*/
+
+	//Test some basic chimera operations
+
+	Chimera chimera = (Chimera) {
+		.v4f = { F32x4_create4(1, 2, 3, 4) },
+		.f = { 2, 1, 3, 4, 1 }
+	};
+
+	chimera.v4f[4] = F32x4_create4(1, 2, 3, 4);
+
+	Log_debugLn(alloc, "Testing Chimera Fidi A: 0x00 - 0x1F");
+
+	for(U8 i = 0; i < 4; ++i) {
+
+		//add, sub
+
+		F32 expected = chimera.f[4] + chimera.f[i];
+		Chimera_stepFidiA(&chimera, EFidiA_add(i));
+
+		if(chimera.f[4] != expected)
+			gotoIfError(clean, Error_invalidState((U32)i, "EFidiA add test failed"))
+
+		expected = chimera.f[4] - chimera.f[i];
+		Chimera_stepFidiA(&chimera, EFidiA_sub(i));
+
+		if(chimera.f[4] != expected)
+			gotoIfError(clean, Error_invalidState((U32)i, "EFidiA sub test failed"))
+
+		//mul
+
+		expected = chimera.f[4] * chimera.f[i];
+		Chimera_stepFidiA(&chimera, EFidiA_mul(i));
+
+		if(chimera.f[4] != expected)
+			gotoIfError(clean, Error_invalidState((U32)i, "EFidiA mul test failed"))
+
+		//swap
+
+		expected = chimera.f[i];
+		F32 old = chimera.f[4];
+		Chimera_stepFidiA(&chimera, EFidiA_swap(i));
+
+		if(chimera.f[4] != expected || chimera.f[i] != old)
+			gotoIfError(clean, Error_invalidState((U32)i, "EFidiA swap test failed"))
+
+		//compare
+
+		ECompareResult expectedCmp = chimera.f[4] < chimera.f[i] ? ECompareResult_Lt : (
+			chimera.f[4] > chimera.f[i] ? ECompareResult_Gt : ECompareResult_Eq
+		);
+
+		Chimera_stepFidiA(&chimera, EFidiA_cmp(i));
+		if(expectedCmp != Chimera_getLastCompare(&chimera))
+			gotoIfError(clean, Error_invalidState((U32)i, "EFidiA cmp test failed"))
+
+		//load fN
+
+		Chimera_stepFidiA(&chimera, EFidiA_load(i));
+		if(chimera.f[i] != chimera.f[4])
+			gotoIfError(clean, Error_invalidState((U32)i, "EFidiA load test failed"))
+	}
+
+	{
+		F32 expected = 0;
+
+		//max
+
+		expected = F32_max(chimera.f[4], chimera.f[0]);
+		Chimera_stepFidiA(&chimera, EFidiA_max);
+		if(chimera.f[4] != expected)
+			gotoIfError(clean, Error_invalidState(0, "EFidiA max test failed"))
+
+		//div
+
+		expected = chimera.f[4] / chimera.f[0];
+		Chimera_stepFidiA(&chimera, EFidiA_div);
+		if(chimera.f[4] != expected)
+			gotoIfError(clean, Error_invalidState(0, "EFidiA div test failed"))
+
+		//mod
+
+		gotoIfError(clean, F32_mod(chimera.f[4], chimera.f[0], &expected))
+		Chimera_stepFidiA(&chimera, EFidiA_mod);
+		if(chimera.f[4] != expected)
+			gotoIfError(clean, Error_invalidState(0, "EFidiA mod test failed"))
+
+		//min
+
+		expected = F32_min(chimera.f[4], chimera.f[0]);
+		Chimera_stepFidiA(&chimera, EFidiA_min);
+		if(chimera.f[4] != expected)
+			gotoIfError(clean, Error_invalidState(0, "EFidiA min test failed"))
+
+		//isfinite
+
+		ECompareResult expectedCmp = F32_isValid(chimera.f[4]) ? ECompareResult_Gt : ECompareResult_Eq;
+
+		Chimera_stepFidiA(&chimera, EFidiA_isfinite);
+		if(expectedCmp != Chimera_getLastCompare(&chimera))
+			gotoIfError(clean, Error_invalidState(0, "EFidiA isfinite test failed"))
+
+		//isnan
+
+		expectedCmp = F32_isNaN(chimera.f[4]) ? ECompareResult_Gt : ECompareResult_Eq;
+
+		Chimera_stepFidiA(&chimera, EFidiA_isnan);
+		if(expectedCmp != Chimera_getLastCompare(&chimera))
+			gotoIfError(clean, Error_invalidState(0, "EFidiA isnan test failed"))
+
+		//any
+
+		expectedCmp = F32x4_any(chimera.vf[4]) ? ECompareResult_Gt : ECompareResult_Eq;
+
+		Chimera_stepFidiA(&chimera, EFidiA_anyFv);
+		if(expectedCmp != Chimera_getLastCompare(&chimera))
+			gotoIfError(clean, Error_invalidState(0, "EFidiA any test failed"))
+
+		//all
+
+		expectedCmp = F32x4_all(chimera.vf[4]) ? ECompareResult_Gt : ECompareResult_Eq;
+
+		Chimera_stepFidiA(&chimera, EFidiA_allFv);
+		if(expectedCmp != Chimera_getLastCompare(&chimera))
+			gotoIfError(clean, Error_invalidState(0, "EFidiA all test failed"))
+	}
 
 	//
 
 	F64 dt = (Time_now() - now) / (F64)SECOND;
 
-	printf("Successful unit test! After %fs\n", dt);
+	Log_debugLn(alloc, "Successful unit test! After %fs", dt);
 	return 0;
 
 clean:
 
-	printf("Failed unit test (%s)... Freeing\n", err.errorStr);
+	Log_errorLn(alloc, "Failed unit test (%s)... Freeing", err.errorStr);
 
 	BufferLayout_free(alloc, &bufferLayout);
 
 	CharString_free(&tmp, alloc);
-	
+
 	for(U64 j = 0; j < sizeof(inputs) / sizeof(inputs[0]); ++j)
 		CharString_free(&inputs[j], alloc);
 
@@ -2301,7 +2432,7 @@ clean:
 
 	F64 dt2 = (Time_now() - now) / (F64)SECOND;
 
-	printf("Failed unit test... After %fs\n", dt2);
+	Log_errorLn(alloc, "Failed unit test... After %fs", dt2);
 
 	return (int) err.genericError;
 }

@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -26,36 +26,27 @@
 #include "graphics/generic/pipeline.h"
 #include "graphics/generic/device_buffer.h"
 #include "graphics/generic/device_texture.h"
-#include "graphics/generic/depth_stencil.h"
-#include "graphics/generic/render_texture.h"
+#include "graphics/generic/tlas.h"
+#include "graphics/generic/blas.h"
 #include "graphics/vulkan/vulkan.h"
 #include "graphics/vulkan/vk_device.h"
 #include "graphics/vulkan/vk_instance.h"
-#include "graphics/vulkan/vk_swapchain.h"
 #include "graphics/vulkan/vk_buffer.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/errorx.h"
 #include "platforms/log.h"
-#include "formats/texture.h"
 #include "types/buffer.h"
 #include "types/error.h"
 
+impl Error BLASRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, BLASRef *pending);
+impl Error TLASRef_flush(void *commandBuffer, GraphicsDeviceRef *deviceRef, TLASRef *pending);
+
 void addResolveImage(AttachmentInfoInternal attachment, VkRenderingAttachmentInfoKHR *result) {
 
-	VkManagedImage *imageExt = NULL;
-
-	if(attachment.resolveImage->typeId == EGraphicsTypeId_Swapchain) {
-		VkSwapchain *swapchain = Swapchain_ext(SwapchainRef_ptr(attachment.resolveImage), Vk);
-		imageExt = &swapchain->images.ptrNonConst[swapchain->currentIndex];
-	}
-
-	else if(attachment.resolveImage->typeId == EGraphicsTypeId_DepthStencil)
-		imageExt = (VkManagedImage*) DepthStencil_ext(DepthStencilRef_ptr(attachment.resolveImage), );
-
-	else imageExt = (VkManagedImage*) RenderTexture_ext(RenderTextureRef_ptr(attachment.resolveImage), );
+	VkUnifiedTexture *imageExt = TextureRef_getCurrImgExtT(attachment.resolveImage, Vk, 0);
 
 	switch (attachment.resolveMode) {
-		case EMSAAResolveMode_Average:	result->resolveMode = VK_RESOLVE_MODE_AVERAGE_BIT;	break;
+		default:						result->resolveMode = VK_RESOLVE_MODE_AVERAGE_BIT;	break;
 		case EMSAAResolveMode_Min:		result->resolveMode = VK_RESOLVE_MODE_MIN_BIT;		break;
 		case EMSAAResolveMode_Max:		result->resolveMode = VK_RESOLVE_MODE_MAX_BIT;		break;
 	}
@@ -66,12 +57,13 @@ void addResolveImage(AttachmentInfoInternal attachment, VkRenderingAttachmentInf
 
 void CommandList_process(
 	CommandList *commandList,
-	GraphicsDevice *device,
+	GraphicsDeviceRef *deviceRef,
 	ECommandOp op,
 	const U8 *data,
 	void *commandListExt
 ) {
 
+	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 
 	GraphicsInstance *instance = GraphicsInstanceRef_ptr(device->instance);
@@ -81,7 +73,7 @@ void CommandList_process(
 	VkCommandBuffer buffer = temp->buffer;
 
 	switch (op) {
-	
+
 		case ECommandOp_SetViewport:
 		case ECommandOp_SetScissor:
 		case ECommandOp_SetViewportAndScissor: {
@@ -135,23 +127,8 @@ void CommandList_process(
 
 			for(U64 i = 0; i < imageClearCount; ++i) {
 
-				//Get image
-
 				ClearImageCmd image = ((const ClearImageCmd*) (data + sizeof(U32)))[i];
-
-				VkManagedImage *imageExt = NULL;
-
-				if(image.image->typeId == EGraphicsTypeId_Swapchain) {
-
-					Swapchain *swapchain = SwapchainRef_ptr(image.image);
-					VkSwapchain *swapchainExt = Swapchain_ext(swapchain, Vk);
-
-					imageExt = &swapchainExt->images.ptrNonConst[swapchainExt->currentIndex];
-				}
-
-				else imageExt = (VkManagedImage*) RenderTexture_ext(RenderTextureRef_ptr(image.image), );
-
-				//Clear
+				VkUnifiedTexture *imageExt = TextureRef_getCurrImgExtT(image.image, Vk, 0);
 
 				VkImageSubresourceRange range = (VkImageSubresourceRange) {
 					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -179,36 +156,31 @@ void CommandList_process(
 
 			VkImageAspectFlags aspectFlags = VK_IMAGE_ASPECT_COLOR_BIT;
 
-			I32x4 srcSize = I32x4_zero();
+			UnifiedTexture src = TextureRef_getUnifiedTexture(copyImage.src, NULL);
 
-			if(copyImage.src->typeId == EGraphicsTypeId_DepthStencil) {
-				aspectFlags = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
-				srcSize = I32x4_fromI32x2(DepthStencilRef_ptr(copyImage.src)->size);
+			if(src.depthFormat) {
+
+				if(copyImage.copyType == ECopyType_DepthOnly)
+					aspectFlags = VK_IMAGE_ASPECT_DEPTH_BIT;
+
+				else if(copyImage.copyType == ECopyType_StencilOnly)
+					aspectFlags = VK_IMAGE_ASPECT_STENCIL_BIT;
+
+				else aspectFlags = VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
 			}
-
-			else if(copyImage.src->typeId == EGraphicsTypeId_Swapchain)
-				srcSize = I32x4_fromI32x2(SwapchainRef_ptr(copyImage.src)->size);
-
-			else srcSize = RenderTextureRef_ptr(copyImage.src)->size;		//TODO: DeviceTexture
-
-			if(copyImage.copyType == ECopyType_DepthOnly)
-				aspectFlags = VK_IMAGE_ASPECT_DEPTH_BIT;
-
-			else if(copyImage.copyType == ECopyType_StencilOnly)
-				aspectFlags = VK_IMAGE_ASPECT_STENCIL_BIT;
 
 			for(U64 i = 0; i < copyImage.regionCount; ++i) {
 
 				CopyImageRegion image = copyImageRegions[i];
 
 				if(!image.width)
-					image.width = (U32)I32x4_x(srcSize) - image.srcX;
+					image.width = src.width - image.srcX;
 
 				if(!image.height)
-					image.height = (U32)I32x4_y(srcSize) - image.srcY;
+					image.height = src.height - image.srcY;
 
 				if(!image.length)
-					image.length = (U32)U64_max((U32)I32x4_z(srcSize), 1) - image.srcZ;
+					image.length = src.length - image.srcZ;
 
 				VkImageSubresourceLayers subResource = (VkImageSubresourceLayers) {
 					.aspectMask = aspectFlags,
@@ -217,7 +189,7 @@ void CommandList_process(
 
 				Error err = Error_none();
 
-				_gotoIfError(next, ListVkImageCopy_pushBackx(&deviceExt->imageCopyRanges, (VkImageCopy) {
+				gotoIfError(next, ListVkImageCopy_pushBackx(&deviceExt->imageCopyRanges, (VkImageCopy) {
 					.srcSubresource = subResource,
 					.srcOffset = (VkOffset3D) {
 						.x = (I32) image.srcX,
@@ -235,7 +207,7 @@ void CommandList_process(
 						.height = image.height,
 						.depth = image.length
 					}
-				}));
+				}))
 
 			next:
 
@@ -245,29 +217,8 @@ void CommandList_process(
 				}
 			}
 
-			VkManagedImage *srcExt = NULL;
-
-			if(copyImage.src->typeId == EGraphicsTypeId_Swapchain) {
-				VkSwapchain *swapchainExt = Swapchain_ext(SwapchainRef_ptr(copyImage.src), Vk);
-				srcExt = &swapchainExt->images.ptrNonConst[swapchainExt->currentIndex];
-			}
-
-			else if(copyImage.src->typeId == EGraphicsTypeId_DepthStencil)
-				srcExt = (VkManagedImage*) DepthStencil_ext(DepthStencilRef_ptr(copyImage.src), );
-
-			else srcExt = (VkManagedImage*) RenderTexture_ext(RenderTextureRef_ptr(copyImage.src), );
-
-			VkManagedImage *dstExt = NULL;
-
-			if(copyImage.dst->typeId == EGraphicsTypeId_Swapchain) {
-				VkSwapchain *swapchainExt = Swapchain_ext(SwapchainRef_ptr(copyImage.dst), Vk);
-				dstExt = &swapchainExt->images.ptrNonConst[swapchainExt->currentIndex];
-			}
-
-			else if(copyImage.src->typeId == EGraphicsTypeId_DepthStencil)
-				dstExt = (VkManagedImage*) DepthStencil_ext(DepthStencilRef_ptr(copyImage.dst), );
-
-			else dstExt = (VkManagedImage*) RenderTexture_ext(RenderTextureRef_ptr(copyImage.dst), );
+			VkUnifiedTexture *srcExt = TextureRef_getCurrImgExtT(copyImage.src, Vk, 0);
+			VkUnifiedTexture *dstExt = TextureRef_getCurrImgExtT(copyImage.dst, Vk, 0);
 
 			vkCmdCopyImage(
 				buffer,
@@ -313,18 +264,7 @@ void CommandList_process(
 
 				const AttachmentInfoInternal *attachmentsj = &attachments[j];
 
-				VkManagedImage *imageExt = NULL;
-
-				if(attachmentsj->image->typeId == EGraphicsTypeId_Swapchain) {
-
-					Swapchain *swapchain = SwapchainRef_ptr(attachmentsj->image);
-					VkSwapchain *swapchainExt = Swapchain_ext(swapchain, Vk);
-
-					imageExt = &swapchainExt->images.ptrNonConst[swapchainExt->currentIndex];
-				}
-
-				else imageExt = (VkManagedImage*) RenderTexture_ext(RenderTextureRef_ptr(attachmentsj->image), );
-
+				VkUnifiedTexture *imageExt = TextureRef_getCurrImgExtT(attachmentsj->image, Vk, 0);
 				VkAttachmentLoadOp loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 
 				if((startRender->clearMask >> i) & 1)
@@ -358,8 +298,7 @@ void CommandList_process(
 
 			if (startRender->flags & EStartRenderFlags_Depth) {
 
-				DepthStencil *depth = DepthStencilRef_ptr(startRender->depth);
-				VkManagedImage *depthExt = (VkManagedImage*) DepthStencil_ext(depth, );
+				VkUnifiedTexture *depthExt = TextureRef_getCurrImgExtT(startRender->depthStencil, Vk, 0);
 
 				Bool unusedAfterRender = startRender->flags & EStartRenderFlags_DepthUnusedAfterRender;
 
@@ -370,21 +309,23 @@ void CommandList_process(
 
 				else if(startRender->flags & EStartRenderFlags_PreserveDepth)
 					loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-				
+
 				depthAttachment = (VkRenderingAttachmentInfoKHR) {
 					.sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
 					.imageView = depthExt->view,
 					.imageLayout = depthExt->lastLayout,
 					.loadOp = loadOp,
 					.storeOp = unusedAfterRender ? VK_ATTACHMENT_STORE_OP_DONT_CARE : VK_ATTACHMENT_STORE_OP_STORE,
-					.clearValue = (VkClearColorValue) { .float32 = { startRender->clearDepth } }
+					.clearValue = (VkClearValue) {
+						.depthStencil = (VkClearDepthStencilValue) { .depth = startRender->clearDepth }
+					}
 				};
 
-				if(startRender->resolveDepth) {
+				if(startRender->resolveDepthStencil) {
 
 					AttachmentInfoInternal tmp = (AttachmentInfoInternal) {
-						.resolveImage = startRender->resolveDepth,
-						.resolveMode = startRender->resolveDepthMode
+						.resolveImage = startRender->resolveDepthStencil,
+						.resolveMode = startRender->resolveDepthStencilMode
 					};
 
 					addResolveImage(tmp, &depthAttachment);
@@ -393,8 +334,7 @@ void CommandList_process(
 
 			if (startRender->flags & EStartRenderFlags_Stencil) {
 
-				DepthStencil *stencil = DepthStencilRef_ptr(startRender->stencil);
-				VkManagedImage *stencilExt = (VkManagedImage*) DepthStencil_ext(stencil, );
+				VkUnifiedTexture *stencilExt = TextureRef_getCurrImgExtT(startRender->depthStencil, Vk, 0);
 
 				Bool unusedAfterRender = startRender->flags & EStartRenderFlags_StencilUnusedAfterRender;
 
@@ -412,14 +352,16 @@ void CommandList_process(
 					.imageLayout = stencilExt->lastLayout,
 					.loadOp = loadOp,
 					.storeOp = unusedAfterRender ? VK_ATTACHMENT_STORE_OP_DONT_CARE : VK_ATTACHMENT_STORE_OP_STORE,
-					.clearValue = (VkClearColorValue) { .uint32 = { startRender->clearStencil } }
+					.clearValue = (VkClearValue) {
+						.depthStencil = (VkClearDepthStencilValue) { .stencil = startRender->clearStencil }
+					}
 				};
 
-				if(startRender->resolveStencil) {
+				if(startRender->resolveDepthStencil) {
 
 					AttachmentInfoInternal tmp = (AttachmentInfoInternal) {
-						.resolveImage = startRender->resolveStencil,
-						.resolveMode = startRender->resolveStencilMode
+						.resolveImage = startRender->resolveDepthStencil,
+						.resolveMode = startRender->resolveDepthStencilMode
 					};
 
 					addResolveImage(tmp, &stencilAttachment);
@@ -463,13 +405,17 @@ void CommandList_process(
 			temp->tempPipelines[EPipelineType_Compute] = *(PipelineRef* const*) data;
 			break;
 
+		case ECommandOp_SetRaytracingPipelineExt:
+			temp->tempPipelines[EPipelineType_RaytracingExt] = *(PipelineRef* const*) data;
+			break;
+
 		case ECommandOp_SetPrimitiveBuffers:
 			temp->tempBoundBuffers = *(const SetPrimitiveBuffersCmd*) data;
 			break;
 
 		case ECommandOp_DrawIndirect:
 		case ECommandOp_DrawIndirectCount:
-		case ECommandOp_Draw:
+		case ECommandOp_Draw: {
 
 			//Bind viewport and scissor
 
@@ -597,7 +543,7 @@ void CommandList_process(
 				else vkCmdDraw(
 					buffer,
 					draw.count, draw.instanceCount,
-					draw.indexOffset, draw.vertexOffset
+					draw.vertexOffset, draw.instanceOffset
 				);
 			}
 
@@ -620,14 +566,14 @@ void CommandList_process(
 							buffer,
 							bufferExt->buffer, drawIndirect.bufferOffset,
 							counterExt->buffer, drawIndirect.countOffsetExt,
-							drawIndirect.drawCalls, drawIndirect.bufferStride
+							drawIndirect.drawCalls, sizeof(DrawCallIndexed)
 						);
 
 					else vkCmdDrawIndirectCount(
 						buffer,
 						bufferExt->buffer, drawIndirect.bufferOffset,
 						counterExt->buffer, drawIndirect.countOffsetExt,
-						drawIndirect.drawCalls, drawIndirect.bufferStride
+						drawIndirect.drawCalls, sizeof(DrawCallUnindexed)
 					);
 				}
 
@@ -639,17 +585,18 @@ void CommandList_process(
 						vkCmdDrawIndexedIndirect(
 							buffer,
 							bufferExt->buffer, drawIndirect.bufferOffset,
-							drawIndirect.drawCalls, drawIndirect.bufferStride
+							drawIndirect.drawCalls, sizeof(DrawCallIndexed)
 						);
 
 					else vkCmdDrawIndirect(
 						buffer, bufferExt->buffer, drawIndirect.bufferOffset,
-						drawIndirect.drawCalls, drawIndirect.bufferStride
+						drawIndirect.drawCalls, sizeof(DrawCallUnindexed)
 					);
 				}
 			}
 
 			break;
+		}
 
 		case ECommandOp_DispatchIndirect:
 		case ECommandOp_Dispatch:
@@ -667,7 +614,9 @@ void CommandList_process(
 
 			if(op == ECommandOp_Dispatch) {
 				DispatchCmd dispatch = *(const DispatchCmd*)data;
-				vkCmdDispatch(buffer, dispatch.groups[0], dispatch.groups[1], dispatch.groups[2]);
+				vkCmdDispatch(
+					buffer, dispatch.groups[0], dispatch.groups[1], dispatch.groups[2]
+				);
 			}
 
 			else {
@@ -677,6 +626,92 @@ void CommandList_process(
 			}
 
 			break;
+			
+		//JIT RTAS updates in case they are on the GPU (e.g. compute updates)
+
+		case ECommandOp_UpdateBLASExt:
+			BLASRef_flush(temp, deviceRef, *(BLASRef**)data);
+			break;
+
+		case ECommandOp_UpdateTLASExt:
+			TLASRef_flush(temp, deviceRef, *(TLASRef**)data);
+			break;
+
+		//case ECommandOp_DispatchRaysIndirect:
+		case ECommandOp_DispatchRaysExt: {
+
+			Pipeline *raytracingPipeline = PipelineRef_ptr(temp->tempPipelines[EPipelineType_RaytracingExt]);
+
+			if(temp->pipelines[EPipelineType_RaytracingExt] != temp->tempPipelines[EPipelineType_RaytracingExt]) {
+
+				temp->pipelines[EPipelineType_RaytracingExt] = temp->tempPipelines[EPipelineType_RaytracingExt];
+
+				vkCmdBindPipeline(
+					temp->buffer,
+					VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,
+					*Pipeline_ext(raytracingPipeline, Vk)
+				);
+			}
+
+			PipelineRaytracingInfo info = *Pipeline_info(raytracingPipeline, PipelineRaytracingInfo);
+
+			VkStridedDeviceAddressRegionKHR hit = (VkStridedDeviceAddressRegionKHR) {
+				.deviceAddress = getVkDeviceAddress((DeviceData) {
+					.buffer = info.shaderBindingTable, .offset = info.sbtOffset
+				}),
+				.size = (U64)raytracingShaderAlignment * info.groupCount,
+				.stride = raytracingShaderAlignment
+			};
+
+			VkStridedDeviceAddressRegionKHR miss = (VkStridedDeviceAddressRegionKHR) {
+				.deviceAddress = hit.deviceAddress + hit.size,
+				.size = (U64)raytracingShaderAlignment * info.missCount,
+				.stride = raytracingShaderAlignment
+			};
+
+			VkStridedDeviceAddressRegionKHR raygen = (VkStridedDeviceAddressRegionKHR) {
+				.deviceAddress = miss.deviceAddress + miss.size,
+				.size = raytracingShaderAlignment,
+				.stride = raytracingShaderAlignment
+			};
+
+			VkStridedDeviceAddressRegionKHR callable = (VkStridedDeviceAddressRegionKHR) {
+				.deviceAddress = raygen.deviceAddress + raygen.size * info.raygenCount,
+				.size = (U64)raytracingShaderAlignment * info.callableCount,
+				.stride = raytracingShaderAlignment
+			};
+
+			if(!info.groupCount)
+				hit = (VkStridedDeviceAddressRegionKHR) { 0 };
+
+			if(!info.missCount)
+				miss = (VkStridedDeviceAddressRegionKHR) { 0 };
+
+			if(!info.callableCount)
+				callable = (VkStridedDeviceAddressRegionKHR) { 0 };
+
+			if(op == ECommandOp_DispatchRaysExt) {
+				DispatchRaysExt dispatch = *(const DispatchRaysExt*)data;
+				raygen.deviceAddress += raygen.stride * dispatch.raygenId;
+				instanceExt->traceRays(
+					buffer,
+					&raygen, &miss, &hit, &callable,
+					dispatch.x, dispatch.y, dispatch.z
+				);
+			}
+
+			else {
+				DispatchRaysIndirectExt dispatch = *(const DispatchRaysIndirectExt*)data;
+				raygen.deviceAddress += raygen.stride * dispatch.raygenId;
+				instanceExt->traceRaysIndirect(
+					buffer,
+					&raygen, &miss, &hit, &callable,
+					DeviceBufferRef_ptr(dispatch.buffer)->resource.deviceAddress + dispatch.offset
+				);
+			}
+
+			break;
+		}
 
 		case ECommandOp_StartScope: {
 
@@ -696,13 +731,68 @@ void CommandList_process(
 
 				TransitionInternal transition = commandList->transitions.ptr[i];
 
+				if(transition.type == ETransitionType_KeepAlive)		//TODO: Residency management
+					continue;
+
+				VkPipelineStageFlags2 pipelineStage = 0;
+
+				switch (transition.stage) {
+
+					default:																						break;
+					case EPipelineStage_Compute:		pipelineStage = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;		break;
+					case EPipelineStage_Vertex:			pipelineStage = VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT;		break;
+					case EPipelineStage_Pixel:			pipelineStage = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;	break;
+					case EPipelineStage_GeometryExt:	pipelineStage = VK_PIPELINE_STAGE_2_GEOMETRY_SHADER_BIT;	break;
+
+					case EPipelineStage_Hull:
+						pipelineStage = VK_PIPELINE_STAGE_2_TESSELLATION_CONTROL_SHADER_BIT;
+						break;
+
+					case EPipelineStage_Domain:
+						pipelineStage = VK_PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER_BIT;
+						break;
+
+					case EPipelineStage_RaygenExt:
+					case EPipelineStage_CallableExt:
+					case EPipelineStage_MissExt:
+					case EPipelineStage_ClosestHitExt:
+					case EPipelineStage_AnyHitExt:
+						pipelineStage = VK_PIPELINE_STAGE_2_RAY_TRACING_SHADER_BIT_KHR;
+						break;
+				}
+
+				//If it's on the GPU then we have to rely on manual RTAS transitions
+
+				Bool isTLAS = transition.resource->typeId == (ETypeId)EGraphicsTypeId_TLASExt;
+
+				if (isTLAS || transition.resource->typeId == (ETypeId)EGraphicsTypeId_BLASExt) {
+
+					RTAS rtas = isTLAS ? TLASRef_ptr(transition.resource)->base : BLASRef_ptr(transition.resource)->base;
+
+					if (!rtas.isCompleted)
+						continue;
+
+					gotoIfError(nextTransition, VkDeviceBuffer_transition(
+
+						DeviceBuffer_ext(DeviceBufferRef_ptr(rtas.asBuffer), Vk),
+						pipelineStage,
+
+						transition.type == ETransitionType_UpdateRTAS ? VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR : 
+						VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR,
+
+						graphicsQueueId,
+						0, 0,
+						&deviceExt->bufferTransitions,
+						&dependency
+					))
+
+					continue;
+				}
+
 				//Grab transition type
-				
-				Bool isSwapchain = transition.resource->typeId == EGraphicsTypeId_Swapchain;
-				Bool isRenderTexture = transition.resource->typeId == EGraphicsTypeId_RenderTexture;
-				Bool isDepthStencil = transition.resource->typeId == EGraphicsTypeId_DepthStencil;
-				Bool isDeviceTexture = transition.resource->typeId == EGraphicsTypeId_DeviceTexture;
-				Bool isImage = isSwapchain || isRenderTexture || isDepthStencil || isDeviceTexture;
+
+				Bool isImage = TextureRef_isTexture(transition.resource);
+				Bool isDepthStencil = TextureRef_isDepthStencil(transition.resource);
 				Bool isShaderRead = transition.type == ETransitionType_ShaderRead;
 
 				VkImageLayout layout = VK_IMAGE_LAYOUT_GENERAL;
@@ -718,124 +808,104 @@ void CommandList_process(
 						transition.type == ETransitionType_ShaderRead ? VK_ACCESS_2_SHADER_STORAGE_READ_BIT :
 						VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT;
 
-				VkPipelineStageFlags2 pipelineStage = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT;
+				if(!pipelineStage)
+					switch ((ETransitionType) transition.type) {
 
-				switch (transition.stage) {
+						case ETransitionType_RenderTargetRead:
 
-					case EPipelineStage_Compute:		break;
-					case EPipelineStage_Vertex:			pipelineStage = VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT;		break;
-					case EPipelineStage_Pixel:			pipelineStage = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;	break;
-					case EPipelineStage_GeometryExt:	pipelineStage = VK_PIPELINE_STAGE_2_GEOMETRY_SHADER_BIT;	break;
+							pipelineStage =
+								isDepthStencil ? VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT :
+								VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
 
-					case EPipelineStage_HullExt:		
-						pipelineStage = VK_PIPELINE_STAGE_2_TESSELLATION_CONTROL_SHADER_BIT;
-						break;
+							access =
+								isDepthStencil ? VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT :
+								VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT;
 
-					case EPipelineStage_DomainExt:
-						pipelineStage = VK_PIPELINE_STAGE_2_TESSELLATION_EVALUATION_SHADER_BIT;
-						break;
+							layout =
+								isDepthStencil ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL :
+								VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;
 
-					default:		//Indicates special usage
+							break;
 
-						switch ((ETransitionType) transition.type) {
+						case ETransitionType_ResolveTargetWrite:		//No distinction in Vulkan
+						case ETransitionType_RenderTargetWrite:
 
-							case ETransitionType_RenderTargetRead:
+							pipelineStage =
+								isDepthStencil ? VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT :
+								VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
 
-								pipelineStage =
-									isDepthStencil ? VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT :
-									VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+							access =
+								isDepthStencil ? VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
+								VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT :
+								VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT |
+								VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
 
-								access =
-									isDepthStencil ? VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT :
-									VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT;
+							layout =
+								isDepthStencil ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL :
+								VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;
 
-								layout =
-									isDepthStencil ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL :
-									VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;
+							break;
 
-								break;
+						case ETransitionType_Clear:
+							pipelineStage = VK_PIPELINE_STAGE_2_CLEAR_BIT;
+							access = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+							layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+							break;
 
-							case ETransitionType_RenderTargetWrite:
+						case ETransitionType_CopyRead:
+							pipelineStage =  VK_PIPELINE_STAGE_2_COPY_BIT;
+							access = VK_ACCESS_2_TRANSFER_READ_BIT;
+							layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+							break;
 
-								pipelineStage =
-									isDepthStencil ? VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT :
-									VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
+						case ETransitionType_CopyWrite:
+							pipelineStage =  VK_PIPELINE_STAGE_2_COPY_BIT;
+							access = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+							layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+							break;
 
-								access =
-									isDepthStencil ? VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
-									VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT :
-									VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT |
-									VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT;
+						case ETransitionType_Indirect:
+							pipelineStage = VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT;
+							access = VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT;
+							break;
 
-								layout =
-									isDepthStencil ? VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL :
-									VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL;
+						case ETransitionType_Index:
+							pipelineStage = VK_PIPELINE_STAGE_2_INDEX_INPUT_BIT;
+							access = VK_ACCESS_2_INDEX_READ_BIT;
+							break;
 
-								break;
+						case ETransitionType_Vertex:
+							pipelineStage = VK_PIPELINE_STAGE_2_VERTEX_ATTRIBUTE_INPUT_BIT;
+							access = VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT;
+							break;
 
-							case ETransitionType_Clear:
-								pipelineStage = VK_PIPELINE_STAGE_2_CLEAR_BIT;
-								access = VK_ACCESS_2_TRANSFER_WRITE_BIT;
-								layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-								break;
-
-							case ETransitionType_CopyRead:
-								pipelineStage =  VK_PIPELINE_STAGE_2_COPY_BIT;
-								access = VK_ACCESS_2_TRANSFER_READ_BIT;
-								layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-								break;
-
-							case ETransitionType_CopyWrite:
-								pipelineStage =  VK_PIPELINE_STAGE_2_COPY_BIT;
-								access = VK_ACCESS_2_TRANSFER_WRITE_BIT;
-								layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-								break;
-
-							case ETransitionType_Indirect:
-								pipelineStage = VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT;
-								access = VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT;
-								break;
-
-							case ETransitionType_Index:
-								pipelineStage = VK_PIPELINE_STAGE_2_INDEX_INPUT_BIT;
-								access = VK_ACCESS_2_INDEX_READ_BIT;
-								break;
-
-							case ETransitionType_Vertex:
-								pipelineStage = VK_PIPELINE_STAGE_2_VERTEX_ATTRIBUTE_INPUT_BIT;
-								access = VK_ACCESS_2_VERTEX_ATTRIBUTE_READ_BIT;
-								break;
-						}
-
-						break;
-				}
+						default:
+							break;
+					}
 
 				//Transition resource
 
 				if(isImage) {
 
-					VkManagedImage *imageExt = NULL;
-
-					if(isSwapchain) {
-						VkSwapchain *swapchainExt = Swapchain_ext(SwapchainRef_ptr(transition.resource), Vk);
-						imageExt = &swapchainExt->images.ptrNonConst[swapchainExt->currentIndex];
-					}
-
-					else if(isRenderTexture)
-						imageExt = (VkManagedImage*) RenderTexture_ext(RenderTextureRef_ptr(transition.resource), );
-
-					else if(isDeviceTexture)
-						imageExt = (VkManagedImage*) DeviceTexture_ext(DeviceTextureRef_ptr(transition.resource), );
-
-					else imageExt = (VkManagedImage*) DepthStencil_ext(DepthStencilRef_ptr(transition.resource), );
+					const UnifiedTexture utex = TextureRef_getUnifiedTexture(transition.resource, NULL);
+					VkUnifiedTexture *imageExt = TextureRef_getCurrImgExtT(transition.resource, Vk, 0);
 
 					VkImageSubresourceRange range = (VkImageSubresourceRange) {		//TODO:
-						.aspectMask = isDepthStencil ? VK_IMAGE_ASPECT_DEPTH_BIT : VK_IMAGE_ASPECT_COLOR_BIT,
+						.aspectMask = isDepthStencil ? 0 : VK_IMAGE_ASPECT_COLOR_BIT,
 						.levelCount = 1,
 						.layerCount = 1
 					};
 
-					_gotoIfError(nextTransition, VkManagedImage_transition(
+					if(isDepthStencil) {
+
+						if(utex.depthFormat >= EDepthStencilFormat_StencilStart)
+							range.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
+
+						if(utex.depthFormat != EDepthStencilFormat_S8Ext)
+							range.aspectMask |= VK_IMAGE_ASPECT_DEPTH_BIT;
+					}
+
+					gotoIfError(nextTransition, VkUnifiedTexture_transition(
 
 						imageExt,
 						pipelineStage,
@@ -846,7 +916,7 @@ void CommandList_process(
 
 						&deviceExt->imageTransitions,
 						&dependency
-					));
+					))
 				}
 
 				else {
@@ -854,20 +924,20 @@ void CommandList_process(
 					DeviceBuffer *devBuffer = DeviceBufferRef_ptr(transition.resource);
 					VkDeviceBuffer *bufferExt = DeviceBuffer_ext(devBuffer, Vk);
 
-					_gotoIfError(nextTransition, VkDeviceBuffer_transition(
+					gotoIfError(nextTransition, VkDeviceBuffer_transition(
 						bufferExt,
 						pipelineStage,
 						access,
 						graphicsQueueId,
 						0,						//TODO: range
-						devBuffer->length,
+						devBuffer->resource.size,
 						&deviceExt->bufferTransitions,
 						&dependency
-					));
+					))
 				}
 
 			nextTransition:
-				
+
 				if(err.genericError)
 					Error_printx(err, ELogLevel_Error, ELogOptions_Default);
 			}
@@ -894,11 +964,14 @@ void CommandList_process(
 				.pMarkerName = (const char*) data + sizeof(F32x4),
 			};
 
-			Buffer_copy(Buffer_createRef(&markerInfo.color, sizeof(F32x4)), Buffer_createRefConst(data, sizeof(F32x4)));
-			
+			Buffer_copy(
+				Buffer_createRef(&markerInfo.color, sizeof(F32x4)),
+				Buffer_createRefConst(data, sizeof(F32x4))
+			);
+
 			if(op == ECommandOp_AddMarkerDebugExt)
 				instanceExt->cmdDebugMarkerInsert(buffer, &markerInfo);
-			
+
 			else instanceExt->cmdDebugMarkerBegin(buffer, &markerInfo);
 
 			break;

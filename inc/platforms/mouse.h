@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -20,6 +20,10 @@
 
 #pragma once
 #include "types/types.h"
+
+#ifdef __cplusplus
+	extern "C" {
+#endif
 
 typedef struct Error Error;
 typedef struct InputDevice Mouse;
@@ -59,3 +63,7 @@ typedef enum EMouseFlag {
 } EMouseFlag;
 
 Error Mouse_create(Mouse *result);
+
+#ifdef __cplusplus
+	}
+#endif

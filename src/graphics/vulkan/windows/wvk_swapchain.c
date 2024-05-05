@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -36,7 +36,7 @@ Error VkSurface_create(GraphicsDevice *device, const Window *window, VkSurfaceKH
 	GraphicsInstance *instance = GraphicsInstanceRef_ptr(device->instance);
 	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(instance, Vk);
 
-	VkWin32SurfaceCreateInfoKHR surfaceInfo = (VkWin32SurfaceCreateInfoKHR) {
+	const VkWin32SurfaceCreateInfoKHR surfaceInfo = (VkWin32SurfaceCreateInfoKHR) {
 		.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
 		.hwnd = window->nativeHandle,
 		.hinstance = Platform_instance.data

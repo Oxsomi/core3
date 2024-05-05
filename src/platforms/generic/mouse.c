@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -21,24 +21,21 @@
 #include "platforms/mouse.h"
 #include "platforms/input_device.h"
 #include "types/error.h"
-#include "types/string.h"
 
-#define _button(name)																				\
-	if ((err = InputDevice_createButton(															\
-		*result, EMouseButton_##name  - EMouseButton_Begin, 										\
-		CharString_createRefCStrConst("EMouseButton_" #name), &res									\
-	)).genericError) {																				\
-		InputDevice_free(result);																	\
-		return err;																					\
+#define BUTTON(name)																					\
+	if ((err = InputDevice_createButton(																\
+		*result, EMouseButton_##name  - EMouseButton_Begin, "EMouseButton_" #name, &res					\
+	)).genericError) {																					\
+		InputDevice_free(result);																		\
+		return err;																						\
 	}
 
-#define _axis(name, resetOnUnfocus)																	\
-	if ((err = InputDevice_createAxis(																\
-		*result, EMouseAxis_##name - EMouseAxis_Begin, 												\
-		CharString_createRefCStrConst("EMouseAxis_" #name), 0, resetOnUnfocus, &res					\
-	)).genericError) {																				\
-		InputDevice_free(result);																	\
-		return err;																					\
+#define AXIS(name, resetOnUnfocus)																		\
+	if ((err = InputDevice_createAxis(																	\
+		*result, EMouseAxis_##name - EMouseAxis_Begin, "EMouseAxis_" #name, 0, resetOnUnfocus, &res		\
+	)).genericError) {																					\
+		InputDevice_free(result);																		\
+		return err;																						\
 	}
 
 Error Mouse_create(Mouse *result) {
@@ -52,11 +49,11 @@ Error Mouse_create(Mouse *result) {
 
 	InputHandle res = 0;
 
-	_button(Left); _button(Middle); _button(Right);
-	_button(Back); _button(Forward);
+	BUTTON(Left);				BUTTON(Middle);			BUTTON(Right);
+	BUTTON(Back);				BUTTON(Forward);
 
-	_axis(X, false); _axis(Y, false);
-	_axis(ScrollWheel_X, true); _axis(ScrollWheel_Y, true);
+	AXIS(X, false);				AXIS(Y, false);
+	AXIS(ScrollWheel_X, true);	AXIS(ScrollWheel_Y, true);
 
 	return Error_none();
 }

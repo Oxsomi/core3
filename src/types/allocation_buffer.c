@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -35,7 +35,7 @@ Error AllocationBuffer_create(U64 size, Bool isVirtual, Allocator alloc, Allocat
 	if(size >> 48 && !isVirtual)
 		return Error_invalidParameter(0, 0, "AllocationBuffer_create()::size is out of bounds (should be max 48-bit)");
 
-	Error err = Error_none();
+	Error err;
 
 	if(!isVirtual) {
 
@@ -46,7 +46,7 @@ Error AllocationBuffer_create(U64 size, Bool isVirtual, Allocator alloc, Allocat
 	}
 
 	else allocationBuffer->buffer = (Buffer) { .lengthAndRefBits = ((U64)3 << 62) | size };
-		
+
 	if ((err = ListAllocationBufferBlock_reserve(&allocationBuffer->allocations, 16, alloc)).genericError) {
 		Buffer_free(&allocationBuffer->buffer, alloc);		//Ignores if !ptr
 		*allocationBuffer = (AllocationBuffer) { 0 };
@@ -96,37 +96,37 @@ Bool AllocationBuffer_free(AllocationBuffer *allocationBuffer, Allocator alloc) 
 	return success;
 }
 
-inline U64 AllocationBufferBlock_getStart(AllocationBufferBlock block) {
+U64 AllocationBufferBlock_getStart(AllocationBufferBlock block) {
 	return block.start << 1 >> 1;
 }
 
-inline U64 AllocationBufferBlock_size(AllocationBufferBlock block) {
+U64 AllocationBufferBlock_size(AllocationBufferBlock block) {
 	return block.end - AllocationBufferBlock_getStart(block);
 }
 
-inline U64 AllocationBufferBlock_isFree(AllocationBufferBlock block) {
+U64 AllocationBufferBlock_isFree(AllocationBufferBlock block) {
 	return block.start >> 63;
 }
 
-inline U64 AllocationBufferBlock_getCenter(AllocationBufferBlock block) {
+U64 AllocationBufferBlock_getCenter(AllocationBufferBlock block) {
 	return (AllocationBufferBlock_getStart(block) + block.end) >> 1;
 }
 
-inline U64 AllocationBufferBlock_alignTo(U64 a, U64 alignment) {
+U64 AllocationBufferBlock_alignTo(U64 a, U64 alignment) {
 	return alignment ? (a + alignment - 1) / alignment * alignment : a;
 }
 
-inline U64 AllocationBufferBlock_alignToBackwards(U64 a, U64 alignment) {
+U64 AllocationBufferBlock_alignToBackwards(U64 a, U64 alignment) {
 	return alignment ? a / alignment * alignment : a;
 }
 
-inline U64 AllocationBufferBlock_getAligned(AllocationBufferBlock block) {
+U64 AllocationBufferBlock_getAligned(AllocationBufferBlock block) {
 	return AllocationBufferBlock_alignTo(AllocationBufferBlock_getStart(block), block.alignment);
 }
 
-inline Bool AllocationBufferBlock_isSame(AllocationBufferBlock block, const U8 *start, const U8 *ptr) {
-	U64 blockStart = AllocationBufferBlock_getStart(block);
-	U64 aligned = AllocationBufferBlock_getAligned(block);
+Bool AllocationBufferBlock_isSame(AllocationBufferBlock block, const U8 *start, const U8 *ptr) {
+	const U64 blockStart = AllocationBufferBlock_getStart(block);
+	const U64 aligned = AllocationBufferBlock_getAligned(block);
 	return ptr == start + blockStart || ptr == start + aligned;
 }
 
@@ -144,8 +144,8 @@ Error AllocationBuffer_allocateAndFillBlock(
 			"AllocationBuffer_allocateAndFillBlock()::allocationBuffer is NULL"
 		);
 
-	U8 *defaultPtr = (U8*)1, *ptr = defaultPtr;
-	Error err = AllocationBuffer_allocateBlock(allocationBuffer, Buffer_length(data), alignment, alloc, &ptr);
+	const U8 *defaultPtr = (U8*)1, *ptr = defaultPtr;
+	const Error err = AllocationBuffer_allocateBlock(allocationBuffer, Buffer_length(data), alignment, alloc, &ptr);
 
 	if (err.genericError && ptr != defaultPtr) {	//Touch pointer so it can be checked if blocks are all gone or not.
 		*result = NULL;
@@ -155,8 +155,8 @@ Error AllocationBuffer_allocateAndFillBlock(
 	if(err.genericError)
 		return err;
 
-	Buffer_copy(Buffer_createRef(ptr, Buffer_length(data)), data);
-	*result = ptr;
+	Buffer_copy(Buffer_createRef((U8*)ptr, Buffer_length(data)), data);
+	*result = (U8*)ptr;
 	return Error_none();
 }
 
@@ -183,7 +183,7 @@ Error AllocationBuffer_allocateBlock(
 			"AllocationBuffer_allocateBlock()::size or alignment is out of bounds (should be max 48-bit)"
 		);
 
-	U64 len = Buffer_length(allocationBuffer->buffer);
+	const U64 len = Buffer_length(allocationBuffer->buffer);
 
 	if(size > len || alignment > len) {
 		*result = NULL;
@@ -197,8 +197,8 @@ Error AllocationBuffer_allocateBlock(
 
 	if (ListAllocationBufferBlock_empty(allocationBuffer->allocations)) {
 
-		AllocationBufferBlock v = (AllocationBufferBlock) { .end = size, .alignment = alignment };
-		Error err = ListAllocationBufferBlock_pushBack(&allocationBuffer->allocations, v, alloc);
+		const AllocationBufferBlock v = (AllocationBufferBlock) { .end = size, .alignment = alignment };
+		const Error err = ListAllocationBufferBlock_pushBack(&allocationBuffer->allocations, v, alloc);
 
 		if(err.genericError)
 			return err;
@@ -209,16 +209,16 @@ Error AllocationBuffer_allocateBlock(
 
 	//Grab area behind last allocation to see if there's still space
 
-	AllocationBufferBlock last = *ListAllocationBufferBlock_last(allocationBuffer->allocations);
-	U64 lastAlign = AllocationBufferBlock_alignTo(last.end, alignment);
+	const AllocationBufferBlock last = *ListAllocationBufferBlock_last(allocationBuffer->allocations);
+	const U64 lastAlign = AllocationBufferBlock_alignTo(last.end, alignment);
 
 	if (lastAlign + size <= len) {
 
-		AllocationBufferBlock v = (AllocationBufferBlock) {
+		const AllocationBufferBlock v = (AllocationBufferBlock) {
 			.start = last.end, .end = lastAlign + size, .alignment = alignment
 		};
 
-		Error err = ListAllocationBufferBlock_pushBack(&allocationBuffer->allocations, v, alloc);
+		const Error err = ListAllocationBufferBlock_pushBack(&allocationBuffer->allocations, v, alloc);
 
 		if(err.genericError)
 			return err;
@@ -229,17 +229,17 @@ Error AllocationBuffer_allocateBlock(
 
 	//Grab area before first allocation to see if there's still space
 
-	AllocationBufferBlock first = *allocationBuffer->allocations.ptr;
+	const AllocationBufferBlock first = *allocationBuffer->allocations.ptr;
 
 	if (size <= AllocationBufferBlock_getStart(first)) {
 
-		AllocationBufferBlock v = (AllocationBufferBlock) {
+		const AllocationBufferBlock v = (AllocationBufferBlock) {
 			.start = AllocationBufferBlock_alignToBackwards(AllocationBufferBlock_getStart(first) - size, alignment),
 			.end = AllocationBufferBlock_getStart(first),
 			.alignment = alignment
 		};
 
-		Error err = ListAllocationBufferBlock_pushFront(&allocationBuffer->allocations, v, alloc);
+		const Error err = ListAllocationBufferBlock_pushFront(&allocationBuffer->allocations, v, alloc);
 
 		if(err.genericError)
 			return err;
@@ -268,7 +268,7 @@ Error AllocationBuffer_allocateBlock(
 				continue;
 
 			//We only split if >33% is left over.
-			//Otherwise we scoop up the entire block.
+			//Otherwise, we scoop up the entire block.
 			//This is to avoid tiny areas left over, causing the ring buffer portion to become slower.
 
 			if (size * 4 / 3 >= AllocationBufferBlock_size(v)) {
@@ -286,14 +286,14 @@ Error AllocationBuffer_allocateBlock(
 
 				if(aligned + size != v.end) {
 
-					AllocationBufferBlock empty = (AllocationBufferBlock) {
+					const AllocationBufferBlock empty = (AllocationBufferBlock) {
 						.start = aligned + size,
 						.end = v.end,
 						.alignment = 1
 					};
 
-					Error err = ListAllocationBufferBlock_insert(&allocationBuffer->allocations, i + 1, empty, alloc);
-						
+					const Error err = ListAllocationBufferBlock_insert(&allocationBuffer->allocations, i + 1, empty, alloc);
+
 					if(err.genericError)
 						return err;
 				}
@@ -316,19 +316,19 @@ Error AllocationBuffer_allocateBlock(
 
 				//Try to split near the front
 
-				AllocationBufferBlock empty = (AllocationBufferBlock) {
+				const AllocationBufferBlock empty = (AllocationBufferBlock) {
 					.start = AllocationBufferBlock_getStart(v),
 					.end = aligned,
 					.alignment = 1
 				};
 
-				Error err = ListAllocationBufferBlock_insert(&allocationBuffer->allocations, i, empty, alloc);
-				
+				const Error err = ListAllocationBufferBlock_insert(&allocationBuffer->allocations, i, empty, alloc);
+
 				if(err.genericError)
 					return err;
 			}
 
-			Bool spaceLeft = aligned != AllocationBufferBlock_getStart(v);
+			const Bool spaceLeft = aligned != AllocationBufferBlock_getStart(v);
 
 			v.start = aligned;
 			v.end = aligned + size;

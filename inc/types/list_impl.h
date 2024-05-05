@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -23,6 +23,10 @@
 #include "buffer.h"
 #include "allocator.h"
 #include "error.h"
+
+#ifdef __cplusplus
+	extern "C" {
+#endif
 
 //Helpers for creating the "template" functions of a TList
 
@@ -97,6 +101,10 @@ Error Name##_create(U64 length, Allocator alloc, Name *result) {														\
 																														\
 Error Name##_createCopy(Name l, Allocator alloc, Name *result) {														\
 	TListWrapCtor(Name, Error err = GenericList_createCopy(Name##_toList(l), alloc, &list));							\
+}																														\
+																														\
+Error Name##_createCopySubset(Name l, U64 off, U64 len, Allocator alloc, Name *result) {								\
+	TListWrapCtor(Name, Error err = GenericList_createCopySubset(Name##_toList(l), off, len, alloc, &list));			\
 }																														\
 																														\
 Error Name##_createRepeated(U64 length, Name##_Type data, Allocator alloc, Name *result) {								\
@@ -272,3 +280,7 @@ TListXBaseImpl(Name)
 #define TListSortImpl(T) TListNamedBaseImpl(List##T); Bool List##T##_sort(List##T l) {									\
 	return GenericList_sort##T(List##T##_toList(l));																	\
 }
+
+#ifdef __cplusplus
+	}
+#endif

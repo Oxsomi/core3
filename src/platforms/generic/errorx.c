@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -24,16 +24,12 @@
 #include "platforms/log.h"
 #include "platforms/platform.h"
 
-#include <stdlib.h>
-#include <errno.h>
-#include <string.h>
-
 void Error_fillStackTrace(Error *err) {
 
 	//Skip Error_fillStackTrace (skip=1), Error_x (skip=2)
 
 	if(err)
-		Log_captureStackTrace(err->stackTrace, ERROR_STACKTRACE, 2);
+		Log_captureStackTracex(err->stackTrace, ERROR_STACKTRACE, 2);
 }
 
 void Error_printx(Error err, ELogLevel logLevel, ELogOptions options) {
@@ -42,45 +38,4 @@ void Error_printx(Error err, ELogLevel logLevel, ELogOptions options) {
 
 CharString Error_formatPlatformErrorx(Error err) {
 	return Error_formatPlatformError(Platform_instance.alloc, err);
-}
-
-void Error_print(Allocator alloc, Error err, ELogLevel logLevel, ELogOptions options) {
-
-	if(!err.genericError)
-		return;
-
-	CharString result = CharString_createNull();
-	CharString platformErr = Error_formatPlatformError(alloc, err);
-
-	if(err.genericError == EGenericError_Stderr)
-		platformErr = CharString_createRefCStrConst(strerror((int)err.paramValue0));
-
-	Log_printCapturedStackTraceCustom(alloc, err.stackTrace, ERROR_STACKTRACE, ELogLevel_Error, options);
-
-	if(
-		!CharString_format(
-
-			alloc,
-			&result,
-
-			"%s (%s)\nsub id: %X, param id: %u, param0: %08X, param1: %08X.\nPlatform/std error: %.*s.",
-
-			err.errorStr,
-			EGenericError_TO_STRING[err.genericError],
-
-			err.errorSubId,
-			err.paramId,
-			err.paramValue0,
-			err.paramValue1,
-			CharString_length(platformErr), platformErr.ptr
-
-		).genericError
-	)
-		Log_log(alloc, logLevel == ELogLevel_Fatal ? ELogLevel_Error : logLevel, options, result);
-
-	CharString_free(&result, alloc);
-	CharString_free(&platformErr, alloc);
-
-	if(logLevel == ELogLevel_Fatal)
-		exit(1);
 }

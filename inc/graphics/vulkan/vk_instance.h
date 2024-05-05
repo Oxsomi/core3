@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -27,9 +27,6 @@ extern U64 reqExtensionsNameCount;
 typedef enum EOptExtensions {
 
 	EOptExtensions_DebugMarker,
-	EOptExtensions_F16,
-	EOptExtensions_MultiDrawIndirectCount,
-	EOptExtensions_AtomicI64,
 	EOptExtensions_PerfQuery,
 	EOptExtensions_RayPipeline,
 	EOptExtensions_RayQuery,
@@ -37,12 +34,13 @@ typedef enum EOptExtensions {
 	EOptExtensions_RayMotionBlur,
 	EOptExtensions_RayReorder,
 	EOptExtensions_MeshShader,
+	EOptExtensions_VariableRateShading,
 	EOptExtensions_DynamicRendering,
 	EOptExtensions_RayMicromapOpacity,
 	EOptExtensions_RayMicromapDisplacement,
-	EOptExtensions_VariableRateShading,
 	EOptExtensions_AtomicF32,
-	EOptExtensions_DeferredHostOperations
+	EOptExtensions_DeferredHostOperations,
+	EOptExtensions_RaytracingValidation
 
 } EOptExtensions;
 
@@ -50,7 +48,7 @@ extern const C8 *optExtensionsName[];
 extern U64 optExtensionsNameCount;
 
 typedef struct VkGraphicsInstance {
-	
+
 	VkInstance instance;
 	VkDebugReportCallbackEXT debugReportCallback;
 
@@ -85,10 +83,8 @@ typedef struct VkGraphicsInstance {
 	PFN_vkDestroySurfaceKHR destroySurface;
 	PFN_vkDestroySwapchainKHR destroySwapchain;
 
-	PFN_vkCmdDrawIndexedIndirectCountKHR cmdDrawIndexedIndirectCount;
-	PFN_vkCmdDrawIndirectCountKHR cmdDrawIndirectCount;
-
-	PFN_vkBuildAccelerationStructuresKHR buildAccelerationStructures;
+	PFN_vkCmdBuildAccelerationStructuresKHR cmdBuildAccelerationStructures;
+	PFN_vkCreateAccelerationStructureKHR createAccelerationStructure;
 	PFN_vkCmdCopyAccelerationStructureKHR copyAccelerationStructure;
 	PFN_vkDestroyAccelerationStructureKHR destroyAccelerationStructure;
 	PFN_vkGetAccelerationStructureBuildSizesKHR getAccelerationStructureBuildSizes;
@@ -97,11 +93,10 @@ typedef struct VkGraphicsInstance {
 	PFN_vkCmdTraceRaysKHR traceRays;
 	PFN_vkCmdTraceRaysIndirectKHR traceRaysIndirect;
 	PFN_vkCreateRayTracingPipelinesKHR createRaytracingPipelines;
+	PFN_vkGetRayTracingShaderGroupHandlesKHR getRayTracingShaderGroupHandles;
 
 	PFN_vkCmdPipelineBarrier2KHR cmdPipelineBarrier2;
 
 } VkGraphicsInstance;
 
-typedef struct ListConstC8 ListConstC8;
-
-impl Error VkGraphicsInstance_getLayers(ListConstC8 *layers);
+impl Error VkGraphicsInstance_getLayers(Bool isDebug, ListConstC8 *layers);

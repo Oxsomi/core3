@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -23,11 +23,13 @@
 #include "types/string.h"
 #include "types/file.h"
 
-typedef struct Error Error;
+#ifdef __cplusplus
+	extern "C" {
+#endif
 
 //There are two types of files; virtual and local.
 //Virtual are embedded into the binary, very nice for easy portable installation and harder to modify for avg users.
-//	Writable virtual files can only be in the //access directory.
+//	Writable virtual files can only be in the //access, //function or //network directory.
 //	These are just links to existing local files, but are made accessible by the platform for access by the app.
 //	As much, naming a folder in the root "access" is disallowed for virtual files.
 //Local are in the current working directory.
@@ -66,24 +68,20 @@ Bool File_hasType(CharString loc, EFileType type);
 Bool File_hasFile(CharString loc);
 Bool File_hasFolder(CharString loc);
 
-Error File_write(Buffer buf, CharString loc, Ns maxTimeout);		//Read when a file is available (up to maxTimeout)
-Error File_read(CharString loc, Ns maxTimeout, Buffer *output);		//Write when a file is available (up to maxTimeout)
+Error File_write(Buffer buf, CharString loc, Ns maxTimeout);		//Write when a file is available (up to maxTimeout)
+Error File_read(CharString loc, Ns maxTimeout, Buffer *output);		//Read when a file is available (up to maxTimeout)
 
-impl Error File_removeVirtual(CharString loc, Ns maxTimeout);						//Can only operate on //access
-impl Error File_addVirtual(CharString loc, EFileType type, Ns maxTimeout);			//Can only operate on folders in //access
-impl Error File_renameVirtual(CharString loc, CharString newFileName, Ns maxTimeout);
-impl Error File_moveVirtual(CharString loc, CharString directoryName, Ns maxTimeout);
+typedef struct FileLoadVirtual {
+	Bool doLoad;
+	const U32 *encryptionKey;
+} FileLoadVirtual;
 
-impl Error File_writeVirtual(Buffer buf, CharString loc, Ns maxTimeout);
-impl Error File_readVirtual(CharString loc, Buffer *output, Ns maxTimeout);
-
-impl Error File_getInfoVirtual(CharString loc, FileInfo *info);
-impl Error File_foreachVirtual(CharString loc, FileCallback callback, void *userData, Bool isRecursive);
-impl Error File_queryFileObjectCountVirtual(CharString loc, EFileType type, Bool isRecursive, U64 *res);		//Inc files only
-impl Error File_queryFileObjectCountAllVirtual(CharString loc, Bool isRecursive, U64 *res);						//Inc folders + files
-
-impl Error File_loadVirtual(CharString loc, const U32 encryptionKey[8]);		//Load a virtual section
-impl Bool File_isVirtualLoaded(CharString loc);		//Check if a virtual section is loaded
-impl Error File_unloadVirtual(CharString loc);		//Unload a virtual section
+Error File_loadVirtual(CharString loc, const U32 encryptionKey[8]);		//Load a virtual section
+Bool File_isVirtualLoaded(CharString loc);		//Check if a virtual section is loaded
+Error File_unloadVirtual(CharString loc);		//Unload a virtual section
 
 //TODO: make it more like a DirectStorage-like api
+
+#ifdef __cplusplus
+	}
+#endif

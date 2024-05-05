@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -23,7 +23,7 @@
 
 #include <math.h>
 
-#define _XINT_OP_IMPL(T)												\
+#define XINT_OP_IMPL(T)													\
 T T##_min(T v0, T v1) { return v0 <= v1 ? v0 : v1; }					\
 T T##_max(T v0, T v1) { return v0 >= v1 ? v0 : v1; }					\
 T T##_clamp(T v, T mi, T ma) { return T##_max(mi, T##_min(ma, v)); }
@@ -32,29 +32,29 @@ const U64 U64_EXP10[] = {
 	1,
 	10,
 	100,
-	1'000,
-	10'000,
-	100'000,
-	1'000'000,
-	10'000'000,
-	100'000'000,
-	1'000'000'000,
-	10'000'000'000,
-	100'000'000'000,
-	1'000'000'000'000,
-	10'000'000'000'000,
-	100'000'000'000'000,
-	1'000'000'000'000'000,
-	10'000'000'000'000'000,
-	100'000'000'000'000'000,
-	1'000'000'000'000'000'000,
-	10'000'000'000'000'000'000
+	1000,
+	10000,
+	100000,
+	1000000,
+	10000000,
+	100000000,
+	1000000000,
+	10000000000,
+	100000000000,
+	1000000000000,
+	10000000000000,
+	100000000000000,
+	1000000000000000,
+	10000000000000000,
+	100000000000000000,
+	1000000000000000000,
+	UINT64_C(10000000000000000000)
 };
 
 //UInts
 
-#define _UINT_OP_IMPL(T)												\
-_XINT_OP_IMPL(T);														\
+#define UINT_OP_IMPL(T)													\
+XINT_OP_IMPL(T);														\
 																		\
 T T##_pow2(T v) {														\
 	if(!v) return 0;													\
@@ -97,61 +97,61 @@ T T##_exp2(T v) {														\
 	return (T)1 << v;													\
 }
 
-_UINT_OP_IMPL(U64);
-_UINT_OP_IMPL(U32);
-_UINT_OP_IMPL(U16);
-_UINT_OP_IMPL(U8);
+UINT_OP_IMPL(U64);
+UINT_OP_IMPL(U32);
+UINT_OP_IMPL(U16);
+UINT_OP_IMPL(U8);
 
 //TODO: Properly check Ixx_pow
 
-#define _INT_OP_IMPL(T)												\
-_XINT_OP_IMPL(T);													\
-																	\
-T T##_abs(T v) { return v < 0 ? -v : v; }							\
-																	\
-T T##_pow2(T v) { 													\
-	T res = v * v; 													\
-	return res < T##_abs(v) ? T##_MAX : res;						\
-}																	\
-																	\
-T T##_pow3(T v) { 													\
-	T res = v * v * v; 												\
-	return res < T##_abs(v) ? T##_MAX : res;						\
-}																	\
-																	\
-T T##_pow4(T v) { 													\
-	T res = v * v; res *= res;										\
-	return res < T##_abs(v) ? T##_MAX : res;						\
-}																	\
-																	\
-T T##_pow5(T v) { 													\
-	T res = v * v; res *= res * v;									\
-	return res < T##_abs(v) ? T##_MAX : res;						\
-}																	\
-																	\
-T T##_exp10(T v) {													\
-																	\
-	if(v < 0 || v >= sizeof(U64_EXP10) / sizeof(U64_EXP10[0]) - 1)	\
-		return T##_MAX;												\
-																	\
-	I64 r = (I64) U64_EXP10[v];										\
-	return r < 0 || r >= (I64) T##_MAX ? T##_MAX : (T)r;			\
-}																	\
-																	\
-T T##_exp2(T v) {													\
-																	\
-	if(v >= sizeof(T) * 8)											\
-		return T##_MAX;												\
-																	\
-	return (T)1 << v;												\
+#define INT_OP_IMPL(T)																		\
+XINT_OP_IMPL(T);																			\
+																							\
+T T##_abs(T v) { return v < 0 ? -v : v; }													\
+																							\
+T T##_pow2(T v) { 																			\
+	T res = v * v; 																			\
+	return res < T##_abs(v) ? T##_MAX : res;												\
+}																							\
+																							\
+T T##_pow3(T v) { 																			\
+	T res = v * v * v; 																		\
+	return res < T##_abs(v) ? T##_MAX : res;												\
+}																							\
+																							\
+T T##_pow4(T v) { 																			\
+	T res = v * v; res *= res;																\
+	return res < T##_abs(v) ? T##_MAX : res;												\
+}																							\
+																							\
+T T##_pow5(T v) { 																			\
+	T res = v * v; res *= res * v;															\
+	return res < T##_abs(v) ? T##_MAX : res;												\
+}																							\
+																							\
+T T##_exp10(T v) {																			\
+																							\
+	if(v < 0 || v >= (T)(sizeof(U64_EXP10) / sizeof(U64_EXP10[0]) - 1))						\
+		return T##_MAX;																		\
+																							\
+	I64 r = (I64) U64_EXP10[v];																\
+	return r < 0 || r >= (I64) T##_MAX ? T##_MAX : (T)r;									\
+}																							\
+																							\
+T T##_exp2(T v) {																			\
+																							\
+	if(v >= (T)(sizeof(T) * 8))																\
+		return T##_MAX;																		\
+																							\
+	return (T)1 << v;																		\
 }
 
-_INT_OP_IMPL(I64);
-_INT_OP_IMPL(I32);
-_INT_OP_IMPL(I16);
-_INT_OP_IMPL(I8);
+INT_OP_IMPL(I64);
+INT_OP_IMPL(I32);
+INT_OP_IMPL(I16);
+INT_OP_IMPL(I8);
 
-#define _FLP_OP_IMPL(T, TInt, suffix)														\
+#define FLP_OP_IMPL(T, TInt, suffix)														\
 T T##_min(T v0, T v1) { return v0 <= v1 ? v0 : v1; }										\
 T T##_max(T v0, T v1) { return v0 >= v1 ? v0 : v1; }										\
 T T##_clamp(T v, T mi, T ma) { return T##_max(mi, T##_min(ma, v)); }						\
@@ -270,5 +270,5 @@ Error T##_expe(T v, T *res) { return T##_pow(T##_E, v, res); }								\
 Error T##_exp2(T v, T *res) { return T##_pow(2, v, res); }									\
 Error T##_exp10(T v, T *res) { return T##_pow(10, v, res); }
 
-_FLP_OP_IMPL(F32, U32, f);
-_FLP_OP_IMPL(F64, U64, );
+FLP_OP_IMPL(F32, U32, f);
+FLP_OP_IMPL(F64, U64, );

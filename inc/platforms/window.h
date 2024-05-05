@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -24,6 +24,10 @@
 #include "formats/texture.h"
 #include "platforms/input_device.h"
 #include "platforms/monitor.h"
+
+#ifdef __cplusplus
+	extern "C" {
+#endif
 
 //There are three types of windows;
 //Physical windows, virtual windows and extended.
@@ -107,6 +111,7 @@ typedef void (*WindowUpdateCallback)(Window*, F64);
 typedef void (*WindowDeviceCallback)(Window*, InputDevice*);
 typedef void (*WindowDeviceButtonCallback)(Window*, InputDevice*, InputHandle, Bool);
 typedef void (*WindowDeviceAxisCallback)(Window*, InputDevice*, InputHandle, F32);
+typedef void (*WindowTypeCallback)(Window*, CharString);
 
 typedef struct WindowCallbacks {
 	WindowCallback onCreate, onDestroy, onDraw, onResize, onWindowMove, onMonitorChange, onUpdateFocus;
@@ -114,6 +119,7 @@ typedef struct WindowCallbacks {
 	WindowDeviceCallback onDeviceAdd, onDeviceRemove;
 	WindowDeviceButtonCallback onDeviceButton;
 	WindowDeviceAxisCallback onDeviceAxis;
+	WindowTypeCallback onTypeChar;
 } WindowCallbacks;
 
 //Window itself
@@ -121,7 +127,7 @@ typedef struct WindowCallbacks {
 typedef enum EWindowType {
 
 	EWindowType_Physical,			//Native window of the underlying platform
-	EWindowType_Virtual,			//Non native window, such as headless rendering
+	EWindowType_Virtual,			//Non-native window, such as headless rendering
 	//EWindowType_ExtendedOpenXR,	//Extended physical window; for use with OpenXR
 
 	EWindowType_Count,
@@ -168,6 +174,10 @@ typedef struct Window {
 
 	Buffer extendedData;
 
+	//Temporary data such as input buffer
+
+	U8 buffer[96];
+
 } Window;
 
 //Implementation dependent aka physical windows
@@ -192,3 +202,7 @@ Bool Window_isFullScreen(const Window *w);
 Bool Window_doesAllowFullScreen(const Window *w);
 
 Bool Window_terminate(Window *w);
+
+#ifdef __cplusplus
+	}
+#endif

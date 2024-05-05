@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -21,6 +21,10 @@
 #pragma once
 #include "types/string.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef enum EFileType {
 	EFileType_Folder,
 	EFileType_File,
@@ -36,19 +40,14 @@ typedef enum EFileAccess {
 } EFileAccess;
 
 typedef struct FileInfo {
-
 	EFileType type;
 	EFileAccess access;
 	Ns timestamp;		//In units that the file system supports. Normally that unit is seconds.
 	CharString path;
 	U64 fileSize;
-
 } FileInfo;
 
 typedef Error (*FileCallback)(FileInfo, void*);
-
-typedef struct Allocator Allocator;
-typedef struct CharString CharString;
 
 Error File_resolve(
 	CharString loc,
@@ -62,3 +61,7 @@ Error File_resolve(
 Bool File_isVirtual(CharString loc);
 
 Bool FileInfo_free(FileInfo *info, Allocator alloc);
+
+#ifdef __cplusplus
+	}
+#endif

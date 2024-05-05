@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -42,7 +42,7 @@ Error Brotli_compress(
 	if(quality != 11)
 		return Error_invalidParameter(2, 0, 0);
 
-	Bool isUTF8 = Buffer_isUTF8(target, 0.75);	
+	Bool isUTF8 = Buffer_isUTF8(target, 0.75);
 
 	//Setup constants
 
@@ -50,7 +50,7 @@ Error Brotli_compress(
 
 	if(quality >= 9 && BROTLI_WINDOW_SIZE > maxInputBlockBits)
 		maxInputBlockBits = (U8) U64_min(BROTLI_WINDOW_SIZE, 21);
-	
+
 	U64 maxBackwardDistance = ((U64)1 << BROTLI_WINDOW_SIZE) - 16;
 
 	//Allocate requirements
@@ -58,13 +58,13 @@ Error Brotli_compress(
 	Error err = Error_none();
 	AllocationBuffer ringBuffer = (AllocationBuffer) { 0 };
 
-	_gotoIfError(
+	gotoIfError(
 		clean,
 		AllocationBuffer_create(
 			(U64_max(BROTLI_WINDOW_SIZE, maxInputBlockBits) + 7) >> 3,
 			allocator, &ringBuffer
 		)
-	);
+	)
 
 	//TODO: Literal cost mask?
 
@@ -99,10 +99,10 @@ Error Buffer_compress(
 
 	if(!Buffer_length(target))
 		return Error_nullPointer(0, 0);
-	
+
 	if(type >= EBufferCompressionType_Count)
 		return Error_invalidEnum(1, 0, (U64)type, (U64)EBufferCompressionType_Count);
-	
+
 	if(hint >= EBufferCompressionHint_Count)
 		return Error_invalidEnum(2, 0, (U64)hint, (U64)EBufferCompressionHint_Count);
 

@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -45,17 +45,30 @@ U32 U64_unpack21x3(U64 packed, U8 off) {
 	return (U32)((packed >> (21 * off)) & ((1 << 21) - 1));
 }
 
-U32 U64_unpack20x3(U64 packed, U8 off) {
+U32 U64_unpack20x3u4(U64 packed, U8 off) {
 
-	if (off >= 3)
+	if (off > 3)
 		return U32_MAX;									//Returns U32_MAX on invalid
+
+	if (off == 3)
+		return packed >> 60;
 
 	return (U32)((packed >> (20 * off)) & ((1 << 20) - 1));
 }
 
-Bool U64_setPacked20x3(U64 *packed, U8 off, U32 v) {
+Bool U64_setPacked20x3u4(U64 *packed, U8 off, U32 v) {
 
-	if (v >> 20 || off >= 3 || !packed)
+	if (off == 3) {
+
+		if(!packed || v >> 4)
+			return false;
+
+		*packed &= ~((U64)0xF << 60);
+		*packed |= (U64)v << 60;
+		return true;
+	}
+
+	if (v >> 20 || off > 3 || !packed)
 		return false;
 
 	off *= 20;
@@ -77,7 +90,7 @@ Bool U64_setPacked21x3(U64 *packed, U8 off, U32 v) {
 
 //U32 packing
 
-#define _GET_BIT_IMPL(T)							\
+#define GET_BIT_IMPL(T)								\
 													\
 Bool T##_getBit(T packed, U8 off) {					\
 													\
@@ -102,22 +115,22 @@ Bool T##_setBit(T *packed, U8 off, Bool b) {		\
 	return true;									\
 }
 
-_GET_BIT_IMPL(U64);
-_GET_BIT_IMPL(U32);
-_GET_BIT_IMPL(U16);
-_GET_BIT_IMPL(U8);
+GET_BIT_IMPL(U64);
+GET_BIT_IMPL(U32);
+GET_BIT_IMPL(U16);
+GET_BIT_IMPL(U8);
 
 //Compressing quaternions
 
-QuatF32 QuatF32_unpack(QuatS16 q) {
-	F32x4 v = F32x4_create4(q.arr[0], q.arr[1], q.arr[2], q.arr[3]);
+QuatF32 QuatS16_unpack(QuatS16 q) {
+	const F32x4 v = F32x4_create4(q.arr[0], q.arr[1], q.arr[2], q.arr[3]);
 	return F32x4_div(v, F32x4_xxxx4(I16_MAX));
 }
 
 QuatS16 QuatF32_pack(QuatF32 q) {
 
 	q = QuatF32_normalize(q);
-	F32x4 asI16 = F32x4_mul(q, F32x4_xxxx4(I16_MAX));
+	const F32x4 asI16 = F32x4_mul(q, F32x4_xxxx4(I16_MAX));
 
 	return (QuatS16) {
 		{

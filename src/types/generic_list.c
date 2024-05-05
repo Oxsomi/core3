@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -140,7 +140,7 @@ Error GenericList_create(U64 length, U64 stride, Allocator allocator, GenericLis
 		return Error_overflow(0, length * stride, U64_MAX, "GenericList_create() overflow");
 
 	Buffer buf = Buffer_createNull();
-	Error err = Buffer_createEmptyBytes(length * stride, allocator, &buf);
+	const Error err = Buffer_createEmptyBytes(length * stride, allocator, &buf);
 
 	if(err.genericError)
 		return err;
@@ -235,13 +235,24 @@ Error GenericList_createCopy(GenericList list, Allocator allocator, GenericList 
 		return Error_none();
 	}
 
-	Error err = GenericList_create(list.length, list.stride, allocator, result);
+	const Error err = GenericList_create(list.length, list.stride, allocator, result);
 
 	if(err.genericError)
 		return err;
 
 	Buffer_copy(GenericList_buffer(*result), GenericList_bufferConst(list));
 	return Error_none();
+}
+
+Error GenericList_createCopySubset(GenericList list, U64 off, U64 len, Allocator allocator, GenericList *result) {
+
+	GenericList tmp = (GenericList) { 0 };
+	const Error err = GenericList_createSubset(list, off, len, &tmp);
+
+	if(err.genericError)
+		return err;
+
+	return GenericList_createCopy(tmp, allocator, result);
 }
 
 Error GenericList_createSubset(GenericList list, U64 index, U64 length, GenericList *result) {
@@ -271,10 +282,10 @@ Error GenericList_createSubsetReverse(
 	Allocator allocator,
 	GenericList *result
 ) {
-	
+
 	if(!result || !length)
 		return Error_nullPointer(4, "GenericList_createSubsetReverse()::result and length are required");
-	
+
 	if(result->ptr)
 		return Error_invalidOperation(0, "GenericList_createSubsetReverse()::result wasn't empty, might indicate memleak");
 
@@ -309,7 +320,7 @@ Error GenericList_createSubsetReverse(
 	return Error_none();
 }
 
-Error GenericList_createRef(U8 *ptr, U64 length, U64 stride, GenericList *result) {
+Error GenericList_createRef(void *ptr, U64 length, U64 stride, GenericList *result) {
 
 	if(!ptr || !result)
 		return Error_nullPointer(!ptr ? 0 : 3, "GenericList_createRef()::ptr and result are required");
@@ -324,7 +335,7 @@ Error GenericList_createRef(U8 *ptr, U64 length, U64 stride, GenericList *result
 		return Error_overflow(1, length * stride, U64_MAX, "GenericList_createRef() overflow");
 
 	*result = (GenericList) {
-		.ptr = ptr,
+		.ptr = (U8*) ptr,
 		.length = length,
 		.stride = stride
 	};
@@ -332,7 +343,7 @@ Error GenericList_createRef(U8 *ptr, U64 length, U64 stride, GenericList *result
 	return Error_none();
 }
 
-Error GenericList_createRefConst(const U8 *ptr, U64 length, U64 stride, GenericList *result) {
+Error GenericList_createRefConst(const void *ptr, U64 length, U64 stride, GenericList *result) {
 
 	if(!ptr || !result)
 		return Error_nullPointer(!ptr ? 0 : 3, "GenericList_createConstRef()::ptr and result are required");
@@ -347,7 +358,7 @@ Error GenericList_createRefConst(const U8 *ptr, U64 length, U64 stride, GenericL
 		return Error_overflow(1, length * stride, U64_MAX, "GenericList_createConstRef() overflow");
 
 	*result = (GenericList) {
-		.ptr = (U8*) ptr,
+		.ptr = (const U8*) ptr,
 		.length = length,
 		.stride = stride,
 		.capacityAndRefInfo = U64_MAX
@@ -364,7 +375,7 @@ Error GenericList_set(GenericList list, U64 index, Buffer buf) {
 	if(index >= list.length)
 		return Error_outOfBounds(1, index, list.length, "GenericList_set()::index is out of bounds");
 
-	U64 bufLen = Buffer_length(buf);
+	const U64 bufLen = Buffer_length(buf);
 
 	if(bufLen && bufLen != list.stride)
 		return Error_invalidOperation(0, "GenericList_set()::buf.length incompatible with list");
@@ -490,7 +501,7 @@ Error GenericList_shrinkToFit(GenericList *list, Allocator allocator) {
 		return Error_none();
 
 	GenericList copy = GenericList_createEmpty(list->stride);
-	Error err = GenericList_createCopy(*list, allocator, &copy);
+	const Error err = GenericList_createCopy(*list, allocator, &copy);
 
 	if(err.genericError)
 		return err;
@@ -541,8 +552,8 @@ Error GenericList_eraseAllIndices(GenericList *list, ListU64 indices) {
 		if(!curr)
 			curr = *ptr;
 
-		U64 me = *ptr + 1;
-		U64 neighbor = ptr + 1 != end ? *(ptr + 1) : list->length;
+		const U64 me = *ptr + 1;
+		const U64 neighbor = ptr + 1 != end ? *(ptr + 1) : list->length;
 
 		if(me == neighbor)
 			continue;
@@ -563,7 +574,7 @@ Error GenericList_eraseAllIndices(GenericList *list, ListU64 indices) {
 //Uses about 8KB of cache on stack to hopefully sort quite quickly.
 //Does mean that this can only be used for lists < 8KB.
 
-inline Bool GenericList_insertionSort8K(GenericList list, CompareFunction func) {
+Bool GenericList_insertionSort8K(GenericList list, CompareFunction func) {
 
 	//for U8[8192] -> U64[1024]. Fits neatly into cache.
 	//For bigger objects, qsort should probably be used.
@@ -626,7 +637,7 @@ TGenericList_sorts(TGenericList_tsort);
 //Expect F32 sorting to be at least 2x to 5x slower (and F64 even slower).
 //(Profiled on a 3900x)
 
-inline U64 GenericList_qpartition(GenericList list, U64 begin, U64 last, CompareFunction f) {
+U64 GenericList_qpartition(GenericList list, U64 begin, U64 last, CompareFunction f) {
 
 	U8 tmp[1024 * 2];		//We only support 1024 stride lists. We don't want to allocate
 
@@ -664,14 +675,14 @@ inline U64 GenericList_qpartition(GenericList list, U64 begin, U64 last, Compare
 	}
 }
 
-inline Bool GenericList_qsortRecurse(GenericList list, U64 begin, U64 end, CompareFunction f) {
+Bool GenericList_qsortRecurse(GenericList list, U64 begin, U64 end, CompareFunction f) {
 
 	if(begin >> 63 || end >> 63)
 		return false;
 
 	while(begin < end && end != U64_MAX) {
 
-		U64 pivot = GenericList_qpartition(list, begin, end, f);
+		const U64 pivot = GenericList_qpartition(list, begin, end, f);
 
 		if (pivot == U64_MAX)		//Does return a modified array, but it's not fully sorted
 			return false;
@@ -689,7 +700,7 @@ inline Bool GenericList_qsortRecurse(GenericList list, U64 begin, U64 end, Compa
 	return true;
 }
 
-inline Bool GenericList_qsort(GenericList list, CompareFunction f) {
+Bool GenericList_qsort(GenericList list, CompareFunction f) {
 	return GenericList_qsortRecurse(list, 0, list.length - 1, f);
 }
 
@@ -710,7 +721,10 @@ Bool GenericList_sortCustom(GenericList list, CompareFunction f) {
 	return GenericList_qsort(list, f);
 }
 
-#define TGenericList_sort(T) Bool GenericList_sort##T(GenericList l) { return GenericList_sortCustom(l, sort##T); }
+#define TGenericList_sort(T) Bool GenericList_sort##T(GenericList l) { 	\
+	return GenericList_sortCustom(l, (CompareFunction) sort##T); 		\
+}
+
 TGenericList_sorts(TGenericList_sort);
 
 ECompareResult GenericList_compareString(const CharString *a, const CharString *b) {
@@ -740,7 +754,7 @@ Error GenericList_eraseFirst(GenericList *list, Buffer buf, U64 offset, EqualsFu
 	if(!list)
 		return Error_nullPointer(0, "GenericList_eraseFirst()::list is required");
 
-	U64 ind = GenericList_findFirst(*list, buf, offset, eq);
+	const U64 ind = GenericList_findFirst(*list, buf, offset, eq);
 	return ind == U64_MAX ? Error_none() : GenericList_erase(list, ind);
 }
 
@@ -749,7 +763,7 @@ Error GenericList_eraseLast(GenericList *list, Buffer buf, U64 offset, EqualsFun
 	if(!list)
 		return Error_nullPointer(0, "GenericList_eraseLast()::list is required");
 
-	U64 ind = GenericList_findLast(*list, buf, offset, eq);
+	const U64 ind = GenericList_findLast(*list, buf, offset, eq);
 	return ind == U64_MAX ? Error_none() : GenericList_erase(list, ind);
 }
 
@@ -757,7 +771,7 @@ Error GenericList_eraseAll(GenericList *list, Buffer buf, Allocator allocator, E
 
 	if(!list)
 		return Error_nullPointer(0, "GenericList_eraseAll()::list is required");
-	
+
 	ListU64 indices = (ListU64) { 0 };
 	Error err = GenericList_find(*list, buf, eq, allocator, &indices);
 
@@ -806,7 +820,7 @@ Error GenericList_insert(GenericList *list, U64 index, Buffer buf, Allocator all
 
 	if (index == list->length) {		//Push back
 
-		Error err = GenericList_resize(list, list->length + 1, allocator);
+		const Error err = GenericList_resize(list, list->length + 1, allocator);
 
 		if(err.genericError)
 			return err;
@@ -822,8 +836,8 @@ Error GenericList_insert(GenericList *list, U64 index, Buffer buf, Allocator all
 	if(index >= list->length)
 		return Error_outOfBounds(1, index, list->length, "GenericList_insert()::index out of bounds");
 
-	U64 prevSize = list->length;
-	Error err = GenericList_resize(list, list->length + 1, allocator);
+	const U64 prevSize = list->length;
+	const Error err = GenericList_resize(list, list->length + 1, allocator);
 
 	if(err.genericError)
 		return err;
@@ -863,8 +877,8 @@ Error GenericList_pushAll(GenericList *list, GenericList other, Allocator alloca
 	if(list->length + other.length < list->length)
 		return Error_overflow(0, list->length + other.length, U64_MAX, "GenericList_pushAll() overflow");
 
-	U64 oldSize = GenericList_bytes(*list);
-	Error err = GenericList_resize(list, list->length + other.length, allocator);
+	const U64 oldSize = GenericList_bytes(*list);
+	const Error err = GenericList_resize(list, list->length + other.length, allocator);
 
 	if(err.genericError)
 		return err;
@@ -894,13 +908,13 @@ Error GenericList_swap(GenericList l, U64 i, U64 j) {
 	U64 off = 0;
 
 	for (; off + 7 < l.stride; off += 8) {
-		U64 t = *(const U64*)(iptr + off);
+		const U64 t = *(const U64*)(iptr + off);
 		*(U64*)(iptr + off) = *(const U64*)(jptr + off);
 		*(U64*)(jptr + off) = t;
 	}
 
 	for (; off < l.stride; ++off) {
-		U8 t = iptr[off];
+		const U8 t = iptr[off];
 		iptr[off] = jptr[off];
 		jptr[off] = t;
 	}
@@ -949,8 +963,8 @@ Error GenericList_insertAll(GenericList *list, GenericList other, U64 offset, Al
 	if(offset >= list->length)
 		return Error_outOfBounds(2, offset, list->length, "GenericList_insertAll()::offset out of bounds");
 
-	U64 prevSize = list->length;
-	Error err = GenericList_resize(list, list->length + other.length, allocator);
+	const U64 prevSize = list->length;
+	const Error err = GenericList_resize(list, list->length + other.length, allocator);
 
 	if(err.genericError)
 		return err;
@@ -991,7 +1005,7 @@ Error GenericList_reserve(GenericList *list, U64 capacity, Allocator allocator) 
 		return Error_none();
 
 	Buffer buffer = Buffer_createNull();
-	Error err = Buffer_createUninitializedBytes(capacity * list->stride, allocator, &buffer);
+	const Error err = Buffer_createUninitializedBytes(capacity * list->stride, allocator, &buffer);
 
 	if(err.genericError)
 		return err;
@@ -1029,7 +1043,7 @@ Error GenericList_resize(GenericList *list, U64 size, Allocator allocator) {
 	if(size * 3 / 3 != size)
 		return Error_overflow(1, size * 3, U64_MAX, "GenericList_resize() overflow");
 
-	Error err = GenericList_reserve(list, size * 3 / 2, allocator);
+	const Error err = GenericList_reserve(list, size * 3 / 2, allocator);
 
 	if(err.genericError)
 		return err;
@@ -1050,11 +1064,11 @@ Error GenericList_pushBack(GenericList *list, Buffer buf, Allocator allocator) {
 	if(GenericList_isRef(*list) && list->ptr)
 		return Error_constData(0, 0, "GenericList_pushBack()::list needs to be managed memory");
 
-	Error err = GenericList_resize(list, list->length + 1, allocator);
+	const Error err = GenericList_resize(list, list->length + 1, allocator);
 
 	if(err.genericError)
 		return err;
-	
+
 	return GenericList_set(*list, list->length - 1, buf);
 }
 
@@ -1078,7 +1092,7 @@ Error GenericList_popLocation(GenericList *list, U64 index, Buffer buf) {
 		return Error_constData(0, 0, "GenericList_popLocation()::list needs to be managed memory");
 
 	Buffer result = Buffer_createNull();
-	Error err = GenericList_get(*list, index, &result);
+	const Error err = GenericList_get(*list, index, &result);
 
 	if(err.genericError)
 		return err;

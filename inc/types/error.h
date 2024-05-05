@@ -1,16 +1,16 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -20,11 +20,13 @@
 
 #pragma once
 #include "types.h"
+#include "log.h"
 
-#define _STACKTRACE_SIZE 32
-typedef void *StackTrace[_STACKTRACE_SIZE];
+#ifdef __cplusplus
+	extern "C" {
+#endif
 
-//TODO: Make errors extendible like TypeId
+//TODO: Make errors extendable like TypeId
 
 typedef enum EGenericError {
 	EGenericError_None,
@@ -60,7 +62,7 @@ extern const C8 *EGenericError_TO_STRING[];
 #ifdef NDEBUG
 	#define ERROR_STACKTRACE 1
 #else
-	#define ERROR_STACKTRACE _STACKTRACE_SIZE
+	#define ERROR_STACKTRACE STACKTRACE_SIZE
 #endif
 
 //
@@ -89,14 +91,14 @@ typedef struct Error {
 //Shortcut to handle cleanup on error, can be disabled to save CPU time
 
 #ifndef _DISABLE_ERRORS
-	#define _gotoIfError(x, ...) { err = __VA_ARGS__; if(err.genericError) goto x; }
+	#define gotoIfError(x, ...) { err = __VA_ARGS__; if(err.genericError) goto x; }
 #else
-	#define _gotoIfError(x, ...) { x; } /* suppress unused goto label */
+	#define gotoIfError(x, ...) { x; } /* suppress unused goto label */
 #endif
 
 impl void Error_fillStackTrace(Error *err);
 
-#define _Error_base(...) Error err = (Error) { __VA_ARGS__ }; Error_fillStackTrace(&err); return err
+#define Error_base(...) Error err = (Error) { __VA_ARGS__ }; Error_fillStackTrace(&err); return err
 
 Error Error_platformError(U32 subId, U64 platformError, const C8 *errorStr);
 Error Error_outOfMemory(U32 subId, const C8 *errorStr);
@@ -122,3 +124,10 @@ Error Error_timedOut(U32 subId, U64 limit, const C8 *errorStr);
 Error Error_constData(U32 paramId, U32 subId, const C8 *errorStr);
 Error Error_stderr(U32 subId, const C8 *errorStr);
 Error Error_none();
+
+impl CharString Error_formatPlatformError(Allocator alloc, Error err);
+void Error_print(Allocator alloc, Error err, ELogLevel logLevel, ELogOptions options);
+
+#ifdef __cplusplus
+	}
+#endif

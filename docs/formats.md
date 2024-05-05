@@ -5,6 +5,7 @@ OxC3 formats contains only the following:
 - rgba8 bmp writing.
 - [oiCA](oiCA.md) file format for zip-like files.
 - [oiDL](oiDL.md) file format for lists of data such as strings or specific file types (e.g. an array of sprites that have a similar meaning such as particle effects).
+- [oiSH](oiSH.md) file format for a single compiled shader binary/text file which is ready for use in a graphics API that supports the binary/text type.
 - [oiXX](oiXX.md) basic definitions for allowing providing a base for custom OxC3 file formats (such as oiCA and oiDL).
 - Texture formats for providing information about what type of data a CPU-sided texture buffer contains.
 
@@ -30,6 +31,31 @@ Where BMPInfo has the following properties:
 - Bool **discardAlpha**: if the image saves alpha or not (BGR8 is not supported in texture formats, so it's converted at runtime).
 - U8 **textureFormatId**: ETextureFormatId_BGRA8 is currently the only one supported.
 - I32 **xPixPerM**, **yPixPerM**: preferred display size in pixels per meter. Setting this to 0 is allowed as it might be ignored by the displayer.
+
+## DDS
+
+DDS support is also very basic, it restricts usage to the following:
+
+- Video textures aren't supported (e.g. YUV textures).
+- Exotic packed textures aren't supported (e.g. RGB9E5).
+- Legacy formats aren't supported (e.g. D3DFMT formats that aren't present anymore in DXGI_FORMAT). This includes luminance textures.
+- Compression textures for very uncommon formats aren't supported (BC1, BC2, BC3). Though of course normal DXT formats such as BC4-BC7 are supported.
+- Depth stencils aren't supported.
+
+Usage via:
+
+- Error **DDS_write**(ListSubResourceData data, DDSInfo info, Allocator allocator, Buffer *result)
+  - Important note: the order of "*data*" (ListSubResource) is allowed to be re-sorted by the function as seen fit, though it won't touch the buffers pointed to.
+- Error **DDS_read**(Buffer buf, DDSInfo *info, Allocator allocator, ListSubResourceData *result)
+  - *ListSubResourceData* contains the sub resource information alongside the offset / buffer of where it's located. When this is allocated (using read) it should be freed using **ListSubResourceData_freeAll**. Though the DDS reader rarely allocates new memory for the subresource and instead references the loaded buffer.
+
+Where DDSInfo has the following properties:
+
+- U32 **w**, **h**, **l**: dimensions (width, height, length).
+- U32 **mips**: mip maps of the texture that were loaded; can't exceed ceil(log2(max(w, h, l))) > 1.
+- U32 **layers**: layered image, e.g. a cube texture has 6.
+- ETextureFormatId **textureFormatId**: specifies the loaded texture format (loading depth stencil formats isn't supported currently).
+- ETextureType **type**: specifies the type of texture that was loaded. A 1D texture is reinterpreted as a ETextureType_2D with height 1, as this isn't natively supported and has very little real-life use cases.
 
 ## oiXX
 
@@ -61,7 +87,7 @@ Where *CASettings* contains the following:
 - EXXCompressionType **compressionType**
 - EXXEncryptionType **encryptionType**
   - If not None, the U32 **encryptionKey**[8] must be present (non 0s). Otherwise, the encryptionKey can be left empty (all 0s).
-- ECASettingsFlags **flags**: 
+- ECASettingsFlags **flags**:
   - Date info (present if any of &3 (bottom 2 bits)):
     - IncludeDate (1: short date; U32)
     - IncludeFullDate (2: OxC3 date; U64)
@@ -143,8 +169,8 @@ To make usage simpler, the following helper functions have been added:
 - U8 **ETextureFormat_getChannels**(ETextureFormat f)
 - ETextureCompressionType **ETextureFormat_getCompressionType**(ETextureFormat f): UNorm, SNorm, Float or sRGB.
 - ETextureCompressionAlgo **ETextureFormat_getCompressionAlgo**(ETextureFormat f): ASTC or BCn.
-- Bool **ETextureFormat_getAlignment**(ETextureFormat f, U8 *x, U8 *y): unpack x and y alignment (both are required), will return false when one of them isn't supplied or if the format doesn't use compression.
-- U64 **ETextureFormat_getSize**(ETextureFormat f, U32 w, U32 h): calculate the size in bytes of the texture, respecting alignment. Returns U64_MAX if alignment is incorrect.
+- Bool **ETextureFormat_getAlignment**(ETextureFormat f, U8 *x, U8 *y): unpack x and y alignment (both are optional), will return false if the format doesn't use compression.
+- U64 **ETextureFormat_getSize**(ETextureFormat f, U32 w, U32 h): calculate the size in bytes of the texture, respecting alignment. If the size isn't aligned it will add padding to respect the alignment.
 
 The following formats are present:
 
@@ -155,6 +181,8 @@ The following formats are present:
   - SInt formats: R(G(BA))(8/16/32)i
   - UInt formats: R(G(BA))(8/16/32)u
   - Float formats: R(G(BA))(16/32)f
+- Usable only as vertex attribute formats, unless otherwise specified by the device by enabling it:
+  - RGB32(f/u/i)
 - Compressed formats:
   - BCn:
     - UNorm: BC(4/5/7)

@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -54,6 +54,10 @@ Error Name##_createRepeatedx(U64 length, Name##_Type t, Name *result) {									
 																														\
 Error Name##_createCopyx(Name l, Name *result) {																		\
 	TListWrapCtorx(Name, Error err = GenericList_createCopyx(Name##_toList(l), &list));									\
+}																														\
+																														\
+Error Name##_createCopySubsetx(Name l, U64 off, U64 len, Name *result) {												\
+	TListWrapCtorx(Name, Error err = GenericList_createCopySubsetx(Name##_toList(l), off, len, &list));					\
 }																														\
 																														\
 Error Name##_createSubsetReversex(Name l, U64 index, U64 length, Name *result) {										\

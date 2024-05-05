@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -26,25 +26,26 @@
 #include "types/allocator.h"
 #include "types/error.h"
 #include "types/buffer.h"
+#include "types/math.h"
 
 static const U8 CAHeader_V1_0  = 0;
 
 //Helper functions
 
-inline Ns CAFile_loadDate(U16 time, U16 date) {
+Ns CAFile_loadDate(U16 time, U16 date) {
 	return Time_date(
 		1980 + (date >> 9), 1 + ((date >> 5) & 0xF), date & 0x1F,
 		time >> 11, (time >> 5) & 0x3F, (time & 0x1F) << 1, 0, false
 	);
 }
 
-inline Bool CAFile_storeDate(Ns ns, U16 *time, U16 *date) {
+Bool CAFile_storeDate(Ns ns, U16 *time, U16 *date) {
 
 	if(!time || !date)
 		return false;
 
 	U16 year; U8 month, day, hour, minute, second;
-	Bool b = Time_getDate(ns, &year, &month, &day, &hour, &minute, &second, NULL, false);
+	const Bool b = Time_getDate(ns, &year, &month, &day, &hour, &minute, &second, NULL, false);
 
 	if(!b || year < 1980 || year > (1980 + 0x7F))
 		return false;
@@ -89,15 +90,15 @@ Bool CAFile_free(CAFile *caFile, Allocator alloc) {
 	if(!caFile || !caFile->archive.entries.ptr)
 		return true;
 
-	Bool b = Archive_free(&caFile->archive, alloc);
+	const Bool b = Archive_free(&caFile->archive, alloc);
 	*caFile = (CAFile) { 0 };
 	return b;
 }
 
 ECompareResult sortParentCountAndFileNames(CharString *a, CharString *b) {
 
-	U64 foldersA = CharString_countAllSensitive(*a, '/');
-	U64 foldersB = CharString_countAllSensitive(*b, '/');
+	const U64 foldersA = CharString_countAllSensitive(*a, '/', 0);
+	const U64 foldersB = CharString_countAllSensitive(*b, '/', 0);
 
 	//We wanna sort on folder count first
 	//This ensures the root dirs are always at [0,N] and their children at [N, N+M], etc.
@@ -123,13 +124,13 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 	Buffer outputBuffer = Buffer_createNull();
 
 	if(!result)
-		_gotoIfError(clean, Error_nullPointer(2, "CAFile_write()::result is required"));
+		gotoIfError(clean, Error_nullPointer(2, "CAFile_write()::result is required"))
 
 	if(result->ptr)
-		_gotoIfError(clean, Error_invalidParameter(2, 0, "CAFile_write()::result isn't empty, might indicate memleak"));
+		gotoIfError(clean, Error_invalidParameter(2, 0, "CAFile_write()::result isn't empty, might indicate memleak"))
 
-	_gotoIfError(clean, ListCharString_reserve(&directories, 128, alloc));
-	_gotoIfError(clean, ListCharString_reserve(&files, 128, alloc));
+	gotoIfError(clean, ListCharString_reserve(&directories, 128, alloc))
+	gotoIfError(clean, ListCharString_reserve(&files, 128, alloc))
 
 	//Validate CAFile and calculate files and folders
 
@@ -163,27 +164,27 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 
 		if (entry.type == EFileType_Folder) {
 
-			_gotoIfError(clean, ListCharString_pushBack(&directories, entry.path, alloc));
+			gotoIfError(clean, ListCharString_pushBack(&directories, entry.path, alloc))
 
 			if(directories.length >= U16_MAX)
-				_gotoIfError(clean, Error_outOfBounds(
+				gotoIfError(clean, Error_outOfBounds(
 					0, 0xFFFF, U16_MAX - 1, "CAFile_write() directories are limited to U16_MAX"
-				));
+				))
 
 			continue;
 		}
 
 		//Push back file names and calculate output buffer
 
-		_gotoIfError(clean, ListCharString_pushBack(&files, entry.path, alloc));
+		gotoIfError(clean, ListCharString_pushBack(&files, entry.path, alloc))
 
 		if(files.length >= U32_MAX)
-			_gotoIfError(clean, Error_outOfBounds(0, files.length, U32_MAX, "CAFile_write() files are limited to U32_MAX"));
-		
+			gotoIfError(clean, Error_outOfBounds(0, files.length, U32_MAX, "CAFile_write() files are limited to U32_MAX"))
+
 		if(outputSize + Buffer_length(entry.data) < outputSize)
-			_gotoIfError(clean, Error_overflow(
+			gotoIfError(clean, Error_overflow(
 				0, outputSize + Buffer_length(entry.data), outputSize, "CAFile_write() overflow"
-			));
+			))
 
 		outputSize += Buffer_length(entry.data);
 		biggestFileSize = U64_max(biggestFileSize, Buffer_length(entry.data));
@@ -210,7 +211,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 	U64 fileObjLen = dirRefSize * directories.length + baseFileHeader * files.length;
 
 	if(outputSize + fileObjLen < outputSize)
-		_gotoIfError(clean, Error_overflow(0, outputSize + fileObjLen, outputSize, "CAFile_write() overflow (2)"));
+		gotoIfError(clean, Error_overflow(0, outputSize + fileObjLen, outputSize, "CAFile_write() overflow (2)"))
 
 	outputSize += fileObjLen;
 
@@ -224,13 +225,13 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 		!ListCharString_sortCustom(directories, (CompareFunction) sortParentCountAndFileNames) ||
 		!ListCharString_sortCustom(files, (CompareFunction) sortParentCountAndFileNames)
 	)
-		_gotoIfError(clean, Error_invalidOperation(0, "CAFile_write() couldn't sort files and/or directories"));
+		gotoIfError(clean, Error_invalidOperation(0, "CAFile_write() couldn't sort files and/or directories"))
 
 	//Allocate and generate DLFile
 
 	DLSettings dlSettings = (DLSettings) { .dataType = EDLDataType_Ascii };
 
-	_gotoIfError(clean, DLFile_create(dlSettings, alloc, &dlFile));
+	gotoIfError(clean, DLFile_create(dlSettings, alloc, &dlFile))
 
 	for(U64 i = 0; i < directories.length; ++i) {
 
@@ -240,7 +241,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 		if(!CharString_cutBeforeLastSensitive(dir, '/', &dirName))
 			dirName = CharString_createRefSizedConst(dir.ptr, CharString_length(dir), CharString_isNullTerminated(dir));
 
-		_gotoIfError(clean, DLFile_addEntryAscii(&dlFile, dirName, alloc));
+		gotoIfError(clean, DLFile_addEntryAscii(&dlFile, dirName, alloc))
 	}
 
 	for(U64 i = 0; i < files.length; ++i) {
@@ -251,14 +252,14 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 		if(!CharString_cutBeforeLastSensitive(file, '/', &fileName))
 			fileName = CharString_createRefSizedConst(file.ptr, CharString_length(file), CharString_isNullTerminated(file));
 
-		_gotoIfError(clean, DLFile_addEntryAscii(&dlFile, fileName, alloc));
+		gotoIfError(clean, DLFile_addEntryAscii(&dlFile, fileName, alloc))
 	}
 
 	//Complete DLFile as buffer
 
 	dlFile.settings.flags |= EDLSettingsFlags_HideMagicNumber;				//Small optimization
 
-	_gotoIfError(clean, DLFile_write(dlFile, alloc, &dlFileBuffer));
+	gotoIfError(clean, DLFile_write(dlFile, alloc, &dlFileBuffer))
 
 	DLFile_free(&dlFile, alloc);
 
@@ -269,20 +270,20 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 	//U8[sum(file[i].data)]
 
 	if (outputSize + Buffer_length(dlFileBuffer) < outputSize)
-		_gotoIfError(clean, Error_overflow(
+		gotoIfError(clean, Error_overflow(
 			0, outputSize + Buffer_length(dlFileBuffer), outputSize, "CAFile_write() overflow (3)"
-		));
+		))
 
 	outputSize += Buffer_length(dlFileBuffer);
 
 	if (outputSize + realHeaderSize < outputSize)
-		_gotoIfError(clean, Error_overflow(
+		gotoIfError(clean, Error_overflow(
 			0, outputSize + realHeaderSize, outputSize, "CAFile_write() overflow (4)"
-		));
+		))
 
 	outputSize += realHeaderSize;		//Reserve space for header (even though this won't be compressed)
 
-	_gotoIfError(clean, Buffer_createUninitializedBytes(outputSize, alloc, &outputBuffer));
+	gotoIfError(clean, Buffer_createUninitializedBytes(outputSize, alloc, &outputBuffer))
 
 	//Append DLFile
 
@@ -290,7 +291,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 		(U8*)outputBuffer.ptr + realHeaderSize, Buffer_length(outputBuffer) - realHeaderSize
 	);
 
-	_gotoIfError(clean, Buffer_appendBuffer(&outputBufferIt, dlFileBuffer));
+	gotoIfError(clean, Buffer_appendBuffer(&outputBufferIt, dlFileBuffer))
 
 	Buffer_free(&dlFileBuffer, alloc);
 
@@ -301,7 +302,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 	for (U16 i = 0; i < (U16) directories.length; ++i) {
 
 		CharString dir = directories.ptr[i];
-		U64 it = CharString_findLastSensitive(dir, '/');
+		U64 it = CharString_findLastSensitive(dir, '/', 0);
 
 		U16 parent = U16_MAX;
 
@@ -311,7 +312,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 
 			//We need to find the real parent.
 			//Since we're sorted alphabetically, we are able to look back from our current directory
-			//If we encounter something that doesn't start with our basepath/ then we know we are missing this dir
+			//If we encounter something that doesn't start with our basePath/ then we know we are missing this dir
 			//And this means we somehow messed with the input data
 
 			CharString baseDir = CharString_createNull(), realParentDir = CharString_createNull();
@@ -320,7 +321,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 				!CharString_cut(dir, 0, it, &realParentDir) ||
 				!CharString_cut(dir, 0, it + 1, &baseDir)
 			)
-				_gotoIfError(clean, Error_invalidOperation(0, "CAFile_write() couldn't split directory name"));
+				gotoIfError(clean, Error_invalidOperation(0, "CAFile_write() couldn't split directory name"))
 
 			for(U64 j = i - 1; j != U64_MAX; --j)
 
@@ -330,7 +331,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 				}
 
 			if(parent == U16_MAX)
-				_gotoIfError(clean, Error_invalidState(0, "CAFile_write() couldn't find parent directory of folder"));
+				gotoIfError(clean, Error_invalidState(0, "CAFile_write() couldn't find parent directory of folder"))
 		}
 
 		//Add directory
@@ -349,7 +350,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 	for (U32 i = 0; i < (U32) files.length; ++i) {
 
 		CharString file = files.ptr[i];
-		U64 it = CharString_findLastSensitive(file, '/');
+		U64 it = CharString_findLastSensitive(file, '/', 0);
 
 		U16 parent = U16_MAX;
 
@@ -359,7 +360,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 
 			//We need to find the real parent.
 			//Since we're sorted alphabetically, we are able to look back from our current directory
-			//If we encounter something that doesn't start with our basepath then we know we are missing this dir
+			//If we encounter something that doesn't start with our basePath then we know we are missing this dir
 			//And this means we somehow messed with the input data
 
 			CharString baseDir = CharString_createNull(), realParentDir = CharString_createNull();
@@ -368,8 +369,8 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 				!CharString_cut(file, 0, it, &realParentDir) ||
 				!CharString_cut(file, 0, it + 1, &baseDir)
 			)
-				_gotoIfError(clean, Error_invalidOperation(0, "CAFile_write() couldn't split file name"));
-			
+				gotoIfError(clean, Error_invalidOperation(0, "CAFile_write() couldn't split file name"))
+
 			for(U64 j = directories.length - 1; j != U64_MAX; --j)
 
 				if (CharString_equalsStringInsensitive(directories.ptr[j], realParentDir)) {
@@ -378,7 +379,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 				}
 
 			if(parent == U16_MAX)
-				_gotoIfError(clean, Error_invalidState(1, "CAFile_write() couldn't find parent directory of file"));
+				gotoIfError(clean, Error_invalidState(1, "CAFile_write() couldn't find parent directory of file"))
 		}
 
 		//Find corresponding file with name
@@ -392,7 +393,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 			}
 
 		if (!entry)
-			_gotoIfError(clean, Error_invalidState(2, "CAFile_write() couldn't find entry by path"));
+			gotoIfError(clean, Error_invalidState(2, "CAFile_write() couldn't find entry by path"))
 
 		//Add file
 
@@ -418,9 +419,9 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 			else {
 
 				if (!CAFile_storeDate(entry->timestamp, (U16*)filePtr + 1, (U16*)filePtr))
-					_gotoIfError(clean, Error_invalidState(
+					gotoIfError(clean, Error_invalidState(
 						1, "CAFile_write() couldn't store file date, please use full date"
-					));
+					))
 
 				filePtr += sizeof(U16) * 2;
 			}
@@ -520,7 +521,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 			Buffer_length(outputBuffer) - realHeaderSize
 		);
 
-		_gotoIfError(clean, Buffer_compress(toCompress, BufferCompressionType_Brotli11, alloc, &compressedOutput));
+		gotoIfError(clean, Buffer_compress(toCompress, BufferCompressionType_Brotli11, alloc, &compressedOutput))
 
 		Buffer_free(&outputBuffer, alloc);
 	}*/
@@ -548,7 +549,10 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 
 		Buffer realHeader = Buffer_createRefConst(outputBuffer.ptr, realHeaderSizeExEnc);
 
-		_gotoIfError(clean, Buffer_encrypt(
+		I32x4 iv = I32x4_zero();		//Outputs
+		I32x4 tag = I32x4_zero();
+
+		gotoIfError(clean, Buffer_encrypt(
 
 			toEncrypt,
 			realHeader,
@@ -558,9 +562,15 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 			EBufferEncryptionFlags_GenerateIv | (b ? EBufferEncryptionFlags_GenerateKey : EBufferEncryptionFlags_None),
 			b ? NULL : caFile.settings.encryptionKey,
 
-			(I32x4*)headerIt,
-			(I32x4*)((U8*)headerIt + 12)
-		));
+			&iv,
+			&tag
+		))
+
+		for(U64 i = 0; i < 3; ++i)
+			((I32*)headerIt)[i] = ((const I32*)&iv)[i];
+
+		for(U64 i = 0; i < 4; ++i)
+			((I32*)headerIt)[3 + i] = ((const I32*)&tag)[i];
 	}
 
 	//Prepend header and hash
@@ -586,7 +596,9 @@ Error CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFi
 		return Error_invalidParameter(2, 0, "CAFile_read()::caFile isn't empty, could indicate memleak");
 
 	if (Buffer_length(file) < sizeof(CAHeader))
-		return Error_outOfBounds(0, sizeof(CAHeader), Buffer_length(file), "CAFile_read()::file doesn't contain header");
+		return Error_outOfBounds(
+			0, sizeof(CAHeader), Buffer_length(file), "CAFile_read()::file doesn't contain header"
+		);
 
 	Buffer filePtr = Buffer_createRefFromBuffer(file, Buffer_isConstRef(file));
 
@@ -596,60 +608,60 @@ Error CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFi
 	Archive archive = (Archive) { 0 };
 	CharString tmpPath = CharString_createNull();
 
-	_gotoIfError(clean, Archive_create(alloc, &archive));
+	gotoIfError(clean, Archive_create(alloc, &archive))
 
 	//Validate header
 
 	CAHeader header;
-	_gotoIfError(clean, Buffer_consume(&filePtr, &header, sizeof(header)));
+	gotoIfError(clean, Buffer_consume(&filePtr, &header, sizeof(header)))
 
 	if(header.magicNumber != CAHeader_MAGIC)
-		_gotoIfError(clean, Error_invalidParameter(0, 0, "CAFile_read()::file contained invalid header"));
+		gotoIfError(clean, Error_invalidParameter(0, 0, "CAFile_read()::file contained invalid header"))
 
 	if(header.version != CAHeader_V1_0)
-		_gotoIfError(clean, Error_invalidParameter(0, 1, "CAFile_read()::file header doesn't have correct version"));
+		gotoIfError(clean, Error_invalidParameter(0, 1, "CAFile_read()::file header doesn't have correct version"))
 
 	if(header.flags & (ECAFlags_UseAESChunksA | ECAFlags_UseAESChunksB))		//TODO: AES chunks
-		_gotoIfError(clean, Error_unsupportedOperation(0, "CAFile_read() AES chunks not supported yet"));
+		gotoIfError(clean, Error_unsupportedOperation(0, "CAFile_read() AES chunks not supported yet"))
 
 	if(header.type >> 4)								//TODO: Compression
-		_gotoIfError(clean, Error_unsupportedOperation(1, "CAFile_read() decompression not supported yet"));
+		gotoIfError(clean, Error_unsupportedOperation(1, "CAFile_read() decompression not supported yet"))
 
 	if(header.flags & ECAFlags_UseSHA256)				//TODO: SHA256
-		_gotoIfError(clean, Error_unsupportedOperation(3, "CAFile_read() SHA256 not supported yet"));
+		gotoIfError(clean, Error_unsupportedOperation(3, "CAFile_read() SHA256 not supported yet"))
 
 	if((header.type & 0xF) >= EXXEncryptionType_Count)
-		_gotoIfError(clean, Error_invalidParameter(0, 4, "CAFile_read() encryption type unsupported"));
+		gotoIfError(clean, Error_invalidParameter(0, 4, "CAFile_read() encryption type unsupported"))
 
 	//Ensure encryption key isn't provided if we're not encrypting
 
 	if(encryptionKey && !(header.type & 0xF))
-		_gotoIfError(clean, Error_invalidOperation(3, "CAFile_read() encryption key provided but encryption isn't used"));
+		gotoIfError(clean, Error_invalidOperation(3, "CAFile_read() encryption key provided but encryption isn't used"))
 
 	if(!encryptionKey && (header.type & 0xF))
-		_gotoIfError(clean, Error_unauthorized(0, "CAFile_read() encryption key is required if encryption is used"));
+		gotoIfError(clean, Error_unauthorized(0, "CAFile_read() encryption key is required if encryption is used"))
 
 	//Validate file and dir count
 
 	U32 fileCount = 0;
-	_gotoIfError(clean, Buffer_consume(&filePtr, &fileCount, header.flags & ECAFlags_FilesCountLong ? 4 : 2));
+	gotoIfError(clean, Buffer_consume(&filePtr, &fileCount, header.flags & ECAFlags_FilesCountLong ? 4 : 2))
 
 	U16 dirCount = 0;
-	_gotoIfError(clean, Buffer_consume(&filePtr, &dirCount, header.flags & ECAFlags_DirectoriesCountLong ? 2 : 1));
+	gotoIfError(clean, Buffer_consume(&filePtr, &dirCount, header.flags & ECAFlags_DirectoriesCountLong ? 2 : 1))
 
 	if(dirCount >= (header.flags & ECAFlags_DirectoriesCountLong ? U16_MAX : U8_MAX))
-		_gotoIfError(clean, Error_invalidParameter(0, 7, "CAFile_read() directory count can't be the max bit value"));
+		gotoIfError(clean, Error_invalidParameter(0, 7, "CAFile_read() directory count can't be the max bit value"))
 
 	if(fileCount >= (header.flags & ECAFlags_FilesCountLong ? U32_MAX : U16_MAX))
-		_gotoIfError(clean, Error_invalidParameter(0, 8, "CAFile_read() file count can't be the max bit value"));
+		gotoIfError(clean, Error_invalidParameter(0, 8, "CAFile_read() file count can't be the max bit value"))
 
 	//Validate extended data
 
 	CAExtraInfo extra = (CAExtraInfo) { 0 };
 
 	if(header.flags & ECAFlags_HasExtendedData) {
-		_gotoIfError(clean, Buffer_consume(&filePtr, &extra, sizeof(extra)));
-		_gotoIfError(clean, Buffer_consume(&filePtr, NULL, extra.headerExtensionSize));
+		gotoIfError(clean, Buffer_consume(&filePtr, &extra, sizeof(extra)))
+		gotoIfError(clean, Buffer_consume(&filePtr, NULL, extra.headerExtensionSize))
 	}
 
 	//Check for encryption
@@ -660,21 +672,21 @@ Error CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFi
 
 		U64 headerLen = filePtr.ptr - file.ptr;
 
-		_gotoIfError(clean, Buffer_consume(&filePtr, &iv, 12));
-		_gotoIfError(clean, Buffer_consumeI32x4(&filePtr, &tag));
+		gotoIfError(clean, Buffer_consume(&filePtr, &iv, 12))
+		gotoIfError(clean, Buffer_consume(&filePtr, &tag, 16))
 
-		_gotoIfError(clean, Buffer_decrypt(
+		gotoIfError(clean, Buffer_decrypt(
 			filePtr,
 			Buffer_createRefConst(file.ptr, headerLen),
 			EBufferEncryptionType_AES256GCM,
 			encryptionKey,
 			tag,
 			iv
-		));
+		))
 	}
 
-	_gotoIfError(clean, DLFile_read(filePtr, NULL, true, alloc, &fileNames));
-	_gotoIfError(clean, Buffer_consume(&filePtr, NULL, fileNames.readLength));
+	gotoIfError(clean, DLFile_read(filePtr, NULL, true, alloc, &fileNames))
+	gotoIfError(clean, Buffer_consume(&filePtr, NULL, fileNames.readLength))
 
 	//Validate DLFile
 	//File name validation is done when the entries are inserted into the Archive
@@ -685,12 +697,12 @@ Error CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFi
 		fileNames.settings.encryptionType ||
 		fileNames.settings.flags
 	)
-		_gotoIfError(clean, Error_invalidOperation(
+		gotoIfError(clean, Error_invalidOperation(
 			0, "CAFile_read() embedded oiDL needs to be ascii without compression/encryption or flags"
-		));
+		))
 
 	if(DLFile_entryCount(fileNames) != (U64)fileCount + dirCount)
-		_gotoIfError(clean, Error_invalidState(0, "CAFile_read() embedded oiDL has mismatching name count with file count"));
+		gotoIfError(clean, Error_invalidState(0, "CAFile_read() embedded oiDL has mismatching name count with file count"))
 
 	//Ensure we have enough allocated for all files and directories
 
@@ -710,9 +722,9 @@ Error CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFi
 	U64 folderSize = (U64)dirCount * folderStride;
 
 	if (Buffer_length(filePtr) < fileSize + folderSize)
-		_gotoIfError(clean, Error_outOfBounds(
+		gotoIfError(clean, Error_outOfBounds(
 			0, fileSize + folderSize, Buffer_length(filePtr), "CAFile_read() files out of bounds"
-		));
+		))
 
 	//Now we can add dir to the archive
 
@@ -723,24 +735,24 @@ Error CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFi
 		CharString name = fileNames.entryStrings.ptr[i];
 
 		if(!CharString_isValidFileName(name))
-			_gotoIfError(clean, Error_invalidParameter(0, 0, "CAFile_read() directory has invalid name"));
-		
-		_gotoIfError(clean, CharString_createCopy(name, alloc, &tmpPath));
+			gotoIfError(clean, Error_invalidParameter(0, 0, "CAFile_read() directory has invalid name"))
+
+		gotoIfError(clean, CharString_createCopy(name, alloc, &tmpPath))
 
 		U16 parent = dirStride == 2 ? *(const U16*)diri : *diri;
 
 		if (parent != rootDir) {
 
 			if (parent >= i)
-				_gotoIfError(clean, Error_invalidOperation(1, "CAFile_read() parent directory index of folder out of bounds"));
+				gotoIfError(clean, Error_invalidOperation(1, "CAFile_read() parent directory index of folder out of bounds"))
 
 			CharString parentName = archive.entries.ptr[parent].path;
 
-			_gotoIfError(clean, CharString_insert(&tmpPath, '/', 0, alloc));
-			_gotoIfError(clean, CharString_insertString(&tmpPath, parentName, 0, alloc));
+			gotoIfError(clean, CharString_insert(&tmpPath, '/', 0, alloc))
+			gotoIfError(clean, CharString_insertString(&tmpPath, parentName, 0, alloc))
 		}
 
-		_gotoIfError(clean, Archive_addDirectory(&archive, tmpPath, alloc));
+		gotoIfError(clean, Archive_addDirectory(&archive, tmpPath, alloc))
 
 		tmpPath = CharString_createNull();
 	}
@@ -748,7 +760,7 @@ Error CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFi
 	//Add file
 
 	const U8 *fileIt = filePtr.ptr + folderSize;
-	_gotoIfError(clean, Buffer_offset(&filePtr, fileSize + folderSize));
+	gotoIfError(clean, Buffer_offset(&filePtr, fileSize + folderSize))
 
 	for (U64 i = 0; i < fileCount; ++i) {
 
@@ -757,9 +769,9 @@ Error CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFi
 		CharString name = fileNames.entryStrings.ptr[(U64)i + dirCount];
 
 		if(!CharString_isValidFileName(name))
-			_gotoIfError(clean, Error_invalidParameter(0, 1, "CAFile_read() file has invalid name"));
+			gotoIfError(clean, Error_invalidParameter(0, 1, "CAFile_read() file has invalid name"))
 
-		_gotoIfError(clean, CharString_createCopy(name, alloc, &tmpPath));
+		gotoIfError(clean, CharString_createCopy(name, alloc, &tmpPath))
 
 		//Load parent
 
@@ -769,12 +781,12 @@ Error CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFi
 		if (parent != rootDir) {
 
 			if (parent >= dirCount)
-				_gotoIfError(clean, Error_invalidOperation(2, "CAFile_read() parent directory index of file out of bounds"));
+				gotoIfError(clean, Error_invalidOperation(2, "CAFile_read() parent directory index of file out of bounds"))
 
 			CharString parentName = archive.entries.ptr[parent].path;
 
-			_gotoIfError(clean, CharString_insert(&tmpPath, '/', 0, alloc));
-			_gotoIfError(clean, CharString_insertString(&tmpPath, parentName, 0, alloc));
+			gotoIfError(clean, CharString_insert(&tmpPath, '/', 0, alloc))
+			gotoIfError(clean, CharString_insertString(&tmpPath, parentName, 0, alloc))
 		}
 
 		//Load timestamp
@@ -802,24 +814,24 @@ Error CAFile_read(Buffer file, const U32 encryptionKey[8], Allocator alloc, CAFi
 		//This introduces a copy because Archive needs a separate alloc per file
 
 		U64 bufferSize = Buffer_forceReadSizeType(filei, sizeType);
-		
-		_gotoIfError(clean, Buffer_createUninitializedBytes(bufferSize, alloc, &tmpData));
+
+		gotoIfError(clean, Buffer_createUninitializedBytes(bufferSize, alloc, &tmpData))
 
 		const U8 *dataPtr = filePtr.ptr;
-		_gotoIfError(clean, Buffer_offset(&filePtr, bufferSize));
+		gotoIfError(clean, Buffer_offset(&filePtr, bufferSize))
 
 		Buffer_copy(tmpData, Buffer_createRefConst(dataPtr, bufferSize));
 
 		//Move path and data to file
 
-		_gotoIfError(clean, Archive_addFile(&archive, tmpPath, tmpData, timestamp, alloc));
+		gotoIfError(clean, Archive_addFile(&archive, tmpPath, tmpData, timestamp, alloc))
 
 		tmpPath = CharString_createNull();
 		tmpData = Buffer_createNull();
 	}
 
 	if(Buffer_length(filePtr))
-		return Error_invalidState(0, "CAFile_read() had leftover data after oiCA, this is illegal");
+		gotoIfError(clean, Error_invalidState(0, "CAFile_read() had leftover data after oiCA, this is illegal"))
 
 	caFile->archive = archive;
 	archive = (Archive) { 0 };

@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -36,19 +36,19 @@ const U64 GIBI			= 1 << 30;
 const U64 TIBI			= (U64)1 << 40;
 const U64 PEBI			= (U64)1 << 50;
 
-const U64 KILO			= 1'000;
-const U64 MEGA			= 1'000'000;
-const U64 GIGA			= 1'000'000'000;
-const U64 TERA			= 1'000'000'000'000;
-const U64 PETA			= 1'000'000'000'000'000;
+const U64 KILO			= 1000;
+const U64 MEGA			= 1000000;
+const U64 GIGA			= 1000000000;
+const U64 TERA			= 1000000000000;
+const U64 PETA			= 1000000000000000;
 
-const Ns MU				= 1'000;
-const Ns MS				= 1'000'000;
-const Ns SECOND			= 1'000'000'000;
-const Ns MIN			= 60'000'000'000;
-const Ns HOUR			= 3'600'000'000'000;
-const Ns DAY			= 86'400'000'000'000;
-const Ns WEEK			= 604'800'000'000'000;
+const Ns MU				= 1000;
+const Ns MS				= 1000000;
+const Ns SECOND			= 1000000000;
+const Ns MIN			= 60000000000;
+const Ns HOUR			= 3600000000000;
+const Ns DAY			= 86400000000000;
+const Ns WEEK			= 604800000000000;
 
 const U8 U8_MIN			= 0;
 const U16 U16_MIN		= 0;

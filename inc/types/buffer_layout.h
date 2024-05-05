@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -22,6 +22,10 @@
 #include "types/type_id.h"
 #include "types/string.h"
 #include "types/vec.h"
+
+#ifdef __cplusplus
+	extern "C" {
+#endif
 
 //Buffer layout member
 
@@ -110,10 +114,8 @@ typedef struct BufferLayoutStruct {
 } BufferLayoutStruct;
 
 typedef struct BufferLayoutStructInfo {
-
 	CharString name;
 	ListBufferLayoutMemberInfo members;
-
 } BufferLayoutStructInfo;
 
 TList(BufferLayoutStruct);
@@ -126,11 +128,8 @@ BufferLayoutMemberInfo BufferLayoutStruct_getMemberInfo(BufferLayoutStruct layou
 //Buffer layout
 
 typedef struct BufferLayout {
-
 	ListBufferLayoutStruct structs;
-
 	U32 rootStructIndex;
-
 } BufferLayout;
 
 Error BufferLayout_create(Allocator alloc, BufferLayout *layout);
@@ -149,7 +148,7 @@ Error BufferLayout_createInstance(BufferLayout layout, U64 count, Allocator allo
 //Resolving a path to a layout id
 //A BufferLayout path uses the following rules:
 //No backwards paths unlike file paths (So x/./ would be referring to x's member called . not x!).
-//Case sensitive.
+//Case-sensitive.
 //Backslash is treated as a normal character unless a slash or backslash is next to it. In that case:
 //\/ is treated as a normal slash as part of the member name.
 //\\ is treated as a normal backslash; e.g. \\/ would evaluate to \/ in the member name.
@@ -162,16 +161,16 @@ Error BufferLayout_createInstance(BufferLayout layout, U64 count, Allocator allo
 //Array indices can be given by either hex (0x[0-9A-Fa-f]+), octal (0o[0-7]+),
 //binary 0b[0-1]+, decimal ([0-9]+) or Nytodecimal (0n[0-9A-Za-z_$]+).
 
-typedef struct LayoutPathInfo {
+typedef struct BufferLayoutPathInfo {
 
 	U64 offset, length;
 	ETypeId typeId;
 	U32 structId;
 	ListU32 leftoverArray;		//How long the remainder of array is
 
-} LayoutPathInfo;
+} BufferLayoutPathInfo;
 
-Error BufferLayout_resolveLayout(BufferLayout layout, CharString path, LayoutPathInfo *info, Allocator alloc);
+Error BufferLayout_resolveLayout(BufferLayout layout, CharString path, BufferLayoutPathInfo *info, Allocator alloc);
 
 Error BufferLayout_resolve(
 	Buffer buffer,
@@ -201,7 +200,7 @@ Error BufferLayout_getData(
 
 //Auto generated getters and setters
 
-#define _BUFFER_LAYOUT_SGET(T)																		\
+#define BUFFER_LAYOUT_SGET(T)																		\
 																									\
 Error BufferLayout_set##T(																			\
 	Buffer buffer, 																					\
@@ -217,28 +216,32 @@ Error BufferLayout_get##T(																			\
 	CharString path, 																				\
 	T *t, 																							\
 	Allocator alloc																					\
-);
+)
 
-#define _BUFFER_LAYOUT_XINT_SGET(prefix, suffix)													\
-_BUFFER_LAYOUT_SGET(prefix##8##suffix);																\
-_BUFFER_LAYOUT_SGET(prefix##16##suffix);															\
-_BUFFER_LAYOUT_SGET(prefix##32##suffix);															\
-_BUFFER_LAYOUT_SGET(prefix##64##suffix);
+#define BUFFER_LAYOUT_XINT_SGET(prefix, suffix)														\
+BUFFER_LAYOUT_SGET(prefix##8##suffix);																\
+BUFFER_LAYOUT_SGET(prefix##16##suffix);																\
+BUFFER_LAYOUT_SGET(prefix##32##suffix);																\
+BUFFER_LAYOUT_SGET(prefix##64##suffix)
 
-#define _BUFFER_LAYOUT_VEC_SGET(prefix)																\
-_BUFFER_LAYOUT_SGET(prefix##32##x2);																\
-_BUFFER_LAYOUT_SGET(prefix##32##x4)
+#define BUFFER_LAYOUT_VEC_SGET(prefix)																\
+BUFFER_LAYOUT_SGET(prefix##32##x2);																	\
+BUFFER_LAYOUT_SGET(prefix##32##x4)
 
 //Setters for C8, Bool and ints/uints
 
-_BUFFER_LAYOUT_SGET(C8);
-_BUFFER_LAYOUT_SGET(Bool);
+BUFFER_LAYOUT_SGET(C8);
+BUFFER_LAYOUT_SGET(Bool);
 
-_BUFFER_LAYOUT_XINT_SGET(U, );
-_BUFFER_LAYOUT_XINT_SGET(I, );
+BUFFER_LAYOUT_XINT_SGET(U, );
+BUFFER_LAYOUT_XINT_SGET(I, );
 
-_BUFFER_LAYOUT_SGET(F32);
-_BUFFER_LAYOUT_SGET(F64);
+BUFFER_LAYOUT_SGET(F32);
+BUFFER_LAYOUT_SGET(F64);
 
-_BUFFER_LAYOUT_VEC_SGET(I);
-_BUFFER_LAYOUT_VEC_SGET(F);
+BUFFER_LAYOUT_VEC_SGET(I);
+BUFFER_LAYOUT_VEC_SGET(F);
+
+#ifdef __cplusplus
+	}
+#endif

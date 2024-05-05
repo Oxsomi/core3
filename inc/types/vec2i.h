@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -19,6 +19,10 @@
 */
 
 #pragma once
+
+#ifdef __cplusplus
+	extern "C" {
+#endif
 
 //TODO: Error checking
 
@@ -57,7 +61,7 @@ I32x2 I32x2_clamp(I32x2 a, I32x2 mi, I32x2 ma);
 //Boolean / bitwise
 
 Bool I32x2_all(I32x2 a);
-Bool I32x2_any(I32x2 b);
+Bool I32x2_any(I32x2 a);
 
 impl I32x2 I32x2_eq(I32x2 a, I32x2 b);
 impl I32x2 I32x2_neq(I32x2 a, I32x2 b);
@@ -115,3 +119,10 @@ I32x4 I32x4_create1_1_2(I32 a, I32 b, I32x2 c);
 
 I32x4 I32x4_create2_1(I32x2 a, I32 b);
 I32x4 I32x4_create1_2(I32 a, I32x2 b);
+
+I32x2 I32x2_lsh32(I32x2 a, U8 bits);		//Left shifting each I32 individually per bit
+I32x2 I32x2_rsh32(I32x2 a, U8 bits);		//Right shifting each I32 individually per bit
+
+#ifdef __cplusplus
+	}
+#endif

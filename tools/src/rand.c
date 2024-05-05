@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -88,6 +88,7 @@ Bool CLI_rand(ParsedArgs args) {
 	CharString outputString = CharString_createNull();
 	const C8 *errorString = NULL;
 	CharString tmpString = CharString_createNull();
+	CharString options = CharString_createNull();
 	Error err = Error_none();
 
 	//Generate data
@@ -134,7 +135,7 @@ Bool CLI_rand(ParsedArgs args) {
 				Log_errorLnx("Invalid argument. Can only pick one base.");
 				return false;
 			}
-			
+
 			bytesToGenerate *= 8;		//Better probability distribution
 			break;
 		}
@@ -189,48 +190,52 @@ Bool CLI_rand(ParsedArgs args) {
 	//Buffer
 
 	if(outputAsBase == 256)
-		_gotoIfError(clean, Buffer_createUninitializedBytesx(n * bytesToGenerate, &outputFile));
+		gotoIfError(clean, Buffer_createUninitializedBytesx(n * bytesToGenerate, &outputFile))
 
 	Buffer outputFilePtr = Buffer_createRefFromBuffer(outputFile, false);
 
 	for (U64 i = 0; i < n; ++i) {
 
-		_gotoIfError(clean, Buffer_createUninitializedBytesx(bytesToGenerate, &tmp));
+		gotoIfError(clean, Buffer_createUninitializedBytesx(bytesToGenerate, &tmp))
 
 		if(!Buffer_csprng(tmp))
-			_gotoIfError(clean, Error_invalidOperation(0, "CLI_rand() Buffer_csprng failed"));
+			gotoIfError(clean, Error_invalidOperation(0, "CLI_rand() Buffer_csprng failed"))
 
 		if(outputAsBase == 256)
-			_gotoIfError(clean, Buffer_appendBuffer(&outputFilePtr, tmp))
+			gotoIfError(clean, Buffer_appendBuffer(&outputFilePtr, tmp))
 
 		else {
 
 			switch (args.operation) {
 
+				default:
+					Log_errorLnx("Invalid operation.");
+					return false;
+
 				case EOperation_RandKey:
 				case EOperation_RandData:
 
 					for(U64 j = 0, k = Buffer_length(tmp); j < k; ++j) {
-			
+
 						U8 v = tmp.ptr[j];
 						U8 prefix = 2;
 
 						switch (outputAsBase) {
 
 							case 16:
-								_gotoIfError(clean, CharString_createHexx(v, 2, &tmpString));
+								gotoIfError(clean, CharString_createHexx(v, 2, &tmpString))
 								break;
 						}
 
-						_gotoIfError(clean, CharString_popFrontCount(&tmpString, prefix));
-						_gotoIfError(clean, CharString_appendStringx(&outputString, tmpString));
+						gotoIfError(clean, CharString_popFrontCount(&tmpString, prefix))
+						gotoIfError(clean, CharString_appendStringx(&outputString, tmpString))
 
 						if(args.operation != EOperation_RandKey || bytesToGenerate != 32)
 							if(j != (k - 1) && !((j + 1) & 15))
-								_gotoIfError(clean, CharString_appendx(&outputString, ' '));
+								gotoIfError(clean, CharString_appendx(&outputString, ' '))
 
 						if(j != (k - 1) && !((j + 1) & 63))
-							_gotoIfError(clean, CharString_appendStringx(&outputString, CharString_newLine()));
+							gotoIfError(clean, CharString_appendStringx(&outputString, CharString_newLine()))
 
 						CharString_freex(&tmpString);
 					}
@@ -242,8 +247,6 @@ Bool CLI_rand(ParsedArgs args) {
 
 					//Build up all options
 
-					CharString options = CharString_createNull();
-
 					//Random char
 
 					if(args.operation == EOperation_RandChar) {
@@ -252,7 +255,7 @@ Bool CLI_rand(ParsedArgs args) {
 						Bool pickAll = !anyCharFlags;
 
 						if (args.parameters & EOperationHasParameter_Character) {
-					
+
 							CharString str = CharString_createNull();
 
 							if (ParsedArgs_getArg(args, EOperationHasParameter_CharacterShift, &str).genericError) {
@@ -260,7 +263,7 @@ Bool CLI_rand(ParsedArgs args) {
 								return false;
 							}
 
-							_gotoIfError(clean, CharString_appendStringx(&options, str));
+							gotoIfError(clean, CharString_appendStringx(&options, str))
 
 							if(CharString_length(str))
 								pickAll = false;
@@ -291,42 +294,42 @@ Bool CLI_rand(ParsedArgs args) {
 
 									if(C8_isDec(c) && !(args.flags & (EOperationFlags_Number | EOperationFlags_Alphanumeric)))
 										continue;
-								
+
 									if(!C8_isAlphaNumeric(c) && !(args.flags & EOperationFlags_Symbols))
 										continue;
 								}
 
 								//Append
 
-								_gotoIfError(clean, CharString_appendx(&options, c));
+								gotoIfError(clean, CharString_appendx(&options, c))
 							}
 					}
 
 					//Random number
 
 					else for(U8 j = 0; j < (U8) outputAsBase; ++j)
-						_gotoIfError(clean, CharString_appendx(&options, C8_createNyto(j)));
+						gotoIfError(clean, CharString_appendx(&options, C8_createNyto(j)))
 
 					//Base10 is limited to 1 U64.
 					//We can immediately return this (as long as we clamp it)
 
 					if (outputAsBase == 10) {
-						
+
 						U64 v = *(const U64*)tmp.ptr;
 
 						if(b != 64)
 							v &= ((U64)1 << b) - 1;
 
-						_gotoIfError(clean, CharString_createDecx(v, false, &tmpString));
-						_gotoIfError(clean, CharString_appendStringx(&outputString, tmpString));
+						gotoIfError(clean, CharString_createDecx(v, false, &tmpString))
+						gotoIfError(clean, CharString_appendStringx(&outputString, tmpString))
 						CharString_freex(&tmpString);
 					}
 
 					//We use a U64 per character, because if for example we generate 256 values (1 U8).
 					//Then subdivide it over 120, we'd be left with 26 values.
 					//This means that the first 26 characters would be picked 50% more often than others.
-					//To keep this to a minimum, we use a U64, because in the same scenario, the error rate is super small.
-					//We do this to avoid having to reroll the randomness.
+					//To keep this to a minimum, we use a U64, because in the same scenario, the error rate is tiny.
+					//We do this to avoid having to re-roll the randomness.
 
 					else for (U64 k = 0, j = Buffer_length(tmp); k < j; k += 8) {
 
@@ -334,7 +337,7 @@ Bool CLI_rand(ParsedArgs args) {
 						v %= CharString_length(options);
 
 						//Ensure we stay within our bit limit
-						
+
 						if(!k && b)
 							switch (outputAsBase) {
 								case 8:		if(b % 3) v &= (1 << (b % 3)) - 1;		break;
@@ -344,7 +347,7 @@ Bool CLI_rand(ParsedArgs args) {
 
 						//
 
-						_gotoIfError(clean, CharString_appendx(&outputString, options.ptr[v]));
+						gotoIfError(clean, CharString_appendx(&outputString, options.ptr[v]))
 					}
 
 					break;
@@ -352,7 +355,7 @@ Bool CLI_rand(ParsedArgs args) {
 			}
 
 			if(i != (n - 1) || !(args.parameters & EOperationHasParameter_Output))
-				_gotoIfError(clean, CharString_appendStringx(&outputString, CharString_newLine()));
+				gotoIfError(clean, CharString_appendStringx(&outputString, CharString_newLine()))
 		}
 
 		Buffer_freex(&tmp);
@@ -366,14 +369,14 @@ Bool CLI_rand(ParsedArgs args) {
 	if (args.parameters & EOperationHasParameter_Output) {
 
 		CharString outputPath = CharString_createNull();
-		
+
 		if (ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &outputPath).genericError) {
 			Log_errorLnx("Invalid argument -o <string>, file path expected.");
 			return false;
 		}
 
 		errorString = "Couldn't write to output file";
-		_gotoIfError(clean, File_write(outputFile, outputPath, 1 * SECOND));
+		gotoIfError(clean, File_write(outputFile, outputPath, 1 * SECOND))
 	}
 
 	else {
@@ -391,6 +394,7 @@ clean:
 		else Error_printx(err, ELogLevel_Error, ELogOptions_NewLine);
 	}
 
+	CharString_freex(&options);
 	Buffer_freex(&tmp);
 	Buffer_freex(&outputFile);
 	CharString_freex(&outputString);

@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -27,8 +27,8 @@
 
 Bool CLI_encryptDo(ParsedArgs args) {
 
-	Bool generateOutput = !(args.parameters & EOperationHasParameter_Output);
-	U64 generatedOutputIndex = 1;
+	const Bool generateOutput = !(args.parameters & EOperationHasParameter_Output);
+	const U64 generatedOutputIndex = 1;
 	CharString tmpString = CharString_createNull();
 	Bool b = false;
 	Error err = Error_none();
@@ -36,19 +36,19 @@ Bool CLI_encryptDo(ParsedArgs args) {
 	//Modify arguments so it can be passed to oiCA convert function.
 
 	if (generateOutput) {
-		_gotoIfError(clean, CharString_createCopyx(*args.args.ptr, &tmpString));
-		_gotoIfError(clean, CharString_appendStringx(&tmpString, CharString_createRefCStrConst(".oiCA")));
-		_gotoIfError(clean, ListCharString_insertx(&args.args, generatedOutputIndex, tmpString));
+		gotoIfError(clean, CharString_createCopyx(*args.args.ptr, &tmpString))
+		gotoIfError(clean, CharString_appendStringx(&tmpString, CharString_createRefCStrConst(".oiCA")))
+		gotoIfError(clean, ListCharString_insertx(&args.args, generatedOutputIndex, tmpString))
 	}
 
-	ParsedArgs caArgs = (ParsedArgs) {
+	const ParsedArgs caArgs = (ParsedArgs) {
 		.operation = EOperation_FileTo,
 		.format = EFormat_oiCA,
 		.flags = EOperationFlags_Uncompressed,
 		.parameters = args.parameters | EOperationHasParameter_Output,
 		.args = args.args
 	};
-	
+
 	b = CLI_convertTo(caArgs);
 
 clean:
@@ -68,7 +68,7 @@ clean:
 
 Bool CLI_encryptUndo(ParsedArgs args) {
 
-	ParsedArgs caArgs = (ParsedArgs) {
+	const ParsedArgs caArgs = (ParsedArgs) {
 		.operation = EOperation_FileFrom,
 		.format = EFormat_oiCA,
 		.parameters = args.parameters,

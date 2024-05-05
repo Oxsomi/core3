@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -21,8 +21,15 @@
 #pragma once
 #include "types/types.h"
 
-typedef struct Error Error;
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef struct BMPInfo BMPInfo;
 
 Error BMP_writex(Buffer buf, BMPInfo info, Buffer *result);
 Error BMP_readx(Buffer buf, BMPInfo *info, Buffer *result);
+
+#ifdef __cplusplus
+	}
+#endif

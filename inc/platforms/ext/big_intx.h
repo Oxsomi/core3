@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -20,6 +20,10 @@
 
 #pragma once
 #include "types/big_int.h"
+
+#ifdef __cplusplus
+	extern "C" {
+#endif
 
 Error BigInt_createx(U16 bitCount, BigInt *big);
 Error BigInt_createCopyx(BigInt *a, BigInt *b);
@@ -50,3 +54,14 @@ Error BigInt_octx(BigInt b, CharString *result, Bool leadingZeros);
 Error BigInt_binx(BigInt b, CharString *result, Bool leadingZeros);
 Error BigInt_nytox(BigInt b, CharString *result, Bool leadingZeros);
 Error BigInt_toStringx(BigInt b, CharString *result, EIntegerEncoding encoding, Bool leadingZeros);
+
+Error U128_hexx(U128 b, CharString *result, Bool leadingZeros);
+Error U128_octx(U128 b, CharString *result, Bool leadingZeros);
+//Error U128_decx(BigInt b, CharString *result, Bool leadingZeros);
+Error U128_binx(U128 b, CharString *result, Bool leadingZeros);
+Error U128_nytox(U128 b, CharString *result, Bool leadingZeros);
+Error U128_toStringx(U128 b, CharString *result, EIntegerEncoding encoding, Bool leadingZeros);
+
+#ifdef __cplusplus
+	}
+#endif

@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -19,10 +19,8 @@
 */
 
 #include "platforms/ext/listx_impl.h"
-#include "types/buffer.h"
 #include "types/string.h"
 #include "types/error.h"
-#include "platforms/platform.h"
 #include "platforms/log.h"
 #include "platforms/ext/errorx.h"
 #include "platforms/ext/stringx.h"
@@ -30,9 +28,9 @@
 
 void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f) {
 
-	Bool invalidOp = op == EOperation_Invalid;
-	Bool invalidCat = category == EOperationCategory_Invalid;
-	Bool invalidF = f == EFormat_Invalid;
+	const Bool invalidOp = op == EOperation_Invalid;
+	const Bool invalidCat = category == EOperationCategory_Invalid;
+	const Bool invalidF = f == EFormat_Invalid;
 
 	//Show all categories
 
@@ -57,7 +55,7 @@ void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f) {
 
 		for(U64 i = 0; i < EOperation_Invalid; ++i) {
 
-			Operation opVal = Operation_values[i];
+			const Operation opVal = Operation_values[i];
 
 			if(opVal.category != category)
 				continue;
@@ -76,7 +74,7 @@ void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f) {
 
 	//Show all options for that operation
 
-	Operation opVal = Operation_values[op];
+	const Operation opVal = Operation_values[op];
 
 	if (invalidF && !opVal.isFormatLess) {
 
@@ -117,7 +115,7 @@ void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f) {
 		opVal.isFormatLess ? "" : Format_values[f].name
 	);
 
-	Format format = (Format) { 0 };
+	Format format;
 
 	if(!opVal.isFormatLess)
 		format = Format_values[f];
@@ -164,15 +162,15 @@ void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f) {
 Bool CLI_helpOperation(ParsedArgs args) {
 
 	Error err = Error_none();
-	CharStringList split = (CharStringList) { 0 };
+	ListCharString split = (ListCharString) { 0 };
 
 	if(args.parameters & EOperationHasParameter_Input)
-		_gotoIfError(clean, CharString_splitSensitivex(*args.args.ptr, ':', &split));
+		gotoIfError(clean, CharString_splitSensitivex(*args.args.ptr, ':', &split))
 
 	if(split.length > 0)
 		for (EOperationCategory cat = EOperationCategory_Start; cat < EOperationCategory_End; ++cat) {
 
-			CharString catStr = CharString_createRefCStrConst(EOperationCategory_names[cat - 1]);
+			const CharString catStr = CharString_createRefCStrConst(EOperationCategory_names[cat - 1]);
 
 			if(CharString_equalsStringInsensitive(split.ptr[0], catStr)) {
 
@@ -231,22 +229,22 @@ Bool CLI_helpOperation(ParsedArgs args) {
 	CLI_showHelp(EOperationCategory_Invalid, EOperation_Invalid, EFormat_Invalid);
 
 clean:
-	CharStringList_freex(&split);
+	ListCharString_freex(&split);
 	return !err.genericError;
 }
 
-Bool CLI_execute(CharStringList arglist) {
+Bool CLI_execute(ListCharString argList) {
 
 	//Show help
 
-	if (arglist.length < 1) {
+	if (argList.length < 1) {
 		CLI_showHelp(EOperationCategory_Invalid, EOperation_Invalid, EFormat_Invalid);
 		return false;
 	}
 
 	//Grab category
 
-	CharString arg0 = arglist.ptr[0];
+	CharString arg0 = argList.ptr[0];
 
 	EOperationCategory category = EOperationCategory_Invalid;
 
@@ -267,14 +265,14 @@ Bool CLI_execute(CharStringList arglist) {
 
 	//Show help
 
-	if (arglist.length < 2) {
+	if (argList.length < 2) {
 		CLI_showHelp(category, EOperation_Invalid, EFormat_Invalid);
 		return false;
 	}
 
 	//Grab operation
 
-	CharString arg1 = arglist.ptr[1];
+	CharString arg1 = argList.ptr[1];
 
 	EOperation operation = EOperation_Invalid;
 
@@ -298,17 +296,19 @@ Bool CLI_execute(CharStringList arglist) {
 	ParsedArgs args = (ParsedArgs) { .operation = operation };
 
 	Error err = Error_none();
-	_gotoIfError(clean, ListCharString_reservex(&args.args, 16));
+	gotoIfError(clean, ListCharString_reservex(&args.args, 16))
 
 	//Grab all flags
 
 	for(U64 i = 0; i < EOperationFlags_Count; ++i)
-		for(U64 j = 2; j < arglist.length; ++j)
+		for(U64 j = 2; j < argList.length; ++j)
 
-			if (CharString_equalsStringInsensitive(arglist.ptr[j], CharString_createRefCStrConst(EOperationFlags_names[i]))) {
+			if (CharString_equalsStringInsensitive(
+				argList.ptr[j], CharString_createRefCStrConst(EOperationFlags_names[i])
+			)) {
 
 				if ((args.flags >> i) & 1) {
-					Log_errorLnx("Duplicate flag: %.*s.", CharString_length(arglist.ptr[j]), arglist.ptr[j].ptr);
+					Log_errorLnx("Duplicate flag: %.*s.", CharString_length(argList.ptr[j]), argList.ptr[j].ptr);
 					goto clean;
 				}
 
@@ -321,9 +321,9 @@ Bool CLI_execute(CharStringList arglist) {
 	args.format = EFormat_Invalid;
 
 	for(U64 i = 0; i < EOperationHasParameter_Count; ++i)
-		for(U64 j = 2; j < arglist.length; ++j)
+		for(U64 j = 2; j < argList.length; ++j)
 			if (CharString_equalsStringInsensitive(
-				arglist.ptr[j], CharString_createRefCStrConst(EOperationHasParameter_names[i])
+				argList.ptr[j], CharString_createRefCStrConst(EOperationHasParameter_names[i])
 			)) {
 
 				EOperationHasParameter param = (EOperationHasParameter)(1 << i);
@@ -331,12 +331,12 @@ Bool CLI_execute(CharStringList arglist) {
 				//Check neighbor and save as list entry
 
 				if (
-					j + 1 >= arglist.length ||
-					CharString_getAt(arglist.ptr[j + 1], 0) == '-'
+					j + 1 >= argList.length ||
+					CharString_getAt(argList.ptr[j + 1], 0) == '-'
 				) {
 
 					Log_errorLnx(
-						"Parameter is missing argument: %.*s.", CharString_length(arglist.ptr[j]), arglist.ptr[j].ptr
+						"Parameter is missing argument: %.*s.", CharString_length(argList.ptr[j]), argList.ptr[j].ptr
 					);
 
 					goto clean;
@@ -350,7 +350,7 @@ Bool CLI_execute(CharStringList arglist) {
 
 						for (U64 k = 0; k < EFormat_Invalid; ++k)
 							if (CharString_equalsStringInsensitive(
-								arglist.ptr[j + 1], CharString_createRefCStrConst(Format_values[k].name)
+								argList.ptr[j + 1], CharString_createRefCStrConst(Format_values[k].name)
 							)) {
 								args.format = (EFormat) k;
 								break;
@@ -362,7 +362,7 @@ Bool CLI_execute(CharStringList arglist) {
 					//Mark as present
 
 					if (args.parameters & param) {
-						Log_errorLnx("Duplicate parameter: %.*s.", CharString_length(arglist.ptr[j]), arglist.ptr[j].ptr);
+						Log_errorLnx("Duplicate parameter: %.*s.", CharString_length(argList.ptr[j]), argList.ptr[j].ptr);
 						goto clean;
 					}
 
@@ -370,7 +370,7 @@ Bool CLI_execute(CharStringList arglist) {
 
 					//Store param for parsing later
 
-					_gotoIfError(clean, ListCharString_pushBackx(&args.args, arglist.ptr[j + 1]));
+					gotoIfError(clean, ListCharString_pushBackx(&args.args, argList.ptr[j + 1]))
 				}
 
 				++j;			//Skip next argument
@@ -401,24 +401,24 @@ Bool CLI_execute(CharStringList arglist) {
 
 	//Find invalid flags or parameters that couldn't be matched
 
-	for (U64 j = 2; j < arglist.length; ++j) {
+	for (U64 j = 2; j < argList.length; ++j) {
 
-		if (CharString_getAt(arglist.ptr[j], 0) == '-') {
+		if (CharString_getAt(argList.ptr[j], 0) == '-') {
 
 			//Check for parameters
 
-			if (CharString_getAt(arglist.ptr[j], 1) != '-') {
+			if (CharString_getAt(argList.ptr[j], 1) != '-') {
 
 				U64 i = 0;
 
 				for (; i < EOperationHasParameter_Count; ++i)
 					if (CharString_equalsStringInsensitive(
-						arglist.ptr[j], CharString_createRefCStrConst(EOperationHasParameter_names[i])
+						argList.ptr[j], CharString_createRefCStrConst(EOperationHasParameter_names[i])
 					))
 						break;
 
 				if(i == EOperationHasParameter_Count) {
-					Log_errorLnx("Invalid parameter is present: %.*s.", CharString_length(arglist.ptr[j]), arglist.ptr[j].ptr);
+					Log_errorLnx("Invalid parameter is present: %.*s.", CharString_length(argList.ptr[j]), argList.ptr[j].ptr);
 					CLI_showHelp(category, operation, args.format);
 					goto clean;
 				}
@@ -433,12 +433,12 @@ Bool CLI_execute(CharStringList arglist) {
 
 			for (; i < EOperationFlags_Count; ++i)
 				if (CharString_equalsStringInsensitive(
-					arglist.ptr[j], CharString_createRefCStrConst(EOperationFlags_names[i])
+					argList.ptr[j], CharString_createRefCStrConst(EOperationFlags_names[i])
 				))
 					break;
 
 			if(i == EOperationFlags_Count) {
-				Log_errorLnx("Invalid flag is present: %.*s.", CharString_length(arglist.ptr[j]), arglist.ptr[j].ptr);
+				Log_errorLnx("Invalid flag is present: %.*s.", CharString_length(argList.ptr[j]), argList.ptr[j].ptr);
 				CLI_showHelp(category, operation, args.format);
 				goto clean;
 			}
@@ -446,7 +446,7 @@ Bool CLI_execute(CharStringList arglist) {
 			continue;
 		}
 
-		Log_errorLnx("Invalid argument is present: %.*s", CharString_length(arglist.ptr[j]), arglist.ptr[j].ptr);
+		Log_errorLnx("Invalid argument is present: %.*s", CharString_length(argList.ptr[j]), argList.ptr[j].ptr);
 		CLI_showHelp(category, operation, args.format);
 		goto clean;
 	}

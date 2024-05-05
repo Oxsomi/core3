@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -22,7 +22,6 @@
 #include "types/buffer.h"
 #include "types/error.h"
 #include "types/string.h"
-#include "types/time.h"
 #include "formats/oiCA.h"
 #include "formats/oiDL.h"
 #include "platforms/ext/formatx.h"
@@ -33,6 +32,7 @@
 #include "platforms/file.h"
 #include "platforms/log.h"
 #include "cli.h"
+#include "types/math.h"
 
 typedef struct VersionString {
 	C8 v[5];		//XX.Y
@@ -42,8 +42,8 @@ VersionString VersionCharString_get(U8 version) {
 
 	VersionString res = (VersionString) { 0 };
 
-	U8 major = 1 + version / 10;
-	U8 minor = version % 10;
+	const U8 major = 1 + version / 10;
+	const U8 minor = version % 10;
 	U8 off = 0;
 
 	if (major / 10)
@@ -87,7 +87,7 @@ void XXFile_printVersion(U8 v) {
 Bool CLI_inspectHeader(ParsedArgs args) {
 
 	Buffer buf = Buffer_createNull();
-	Error err = Error_none();
+	Error err;
 	Bool success = false;
 
 	CharString path = CharString_createNull();
@@ -111,8 +111,12 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 	U64 reqLen = 0;
 
 	switch (*(const U32*)buf.ptr) {
+
 		case CAHeader_MAGIC:	reqLen = sizeof(CAHeader);					break;
 		case DLHeader_MAGIC:	reqLen = sizeof(DLHeader) + sizeof(U32);	break;
+		default:
+			Log_errorLnx("File wasn't recognized.");
+			goto clean;
 	}
 
 	if (Buffer_length(buf) < reqLen) {
@@ -125,8 +129,8 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 		//oiCA header
 
 		case CAHeader_MAGIC: {
-			
-			CAHeader caHeader = *(const CAHeader*)buf.ptr;
+
+			const CAHeader caHeader = *(const CAHeader*)buf.ptr;
 
 			Log_debugLnx("Detected oiCA file with following info:");
 
@@ -154,10 +158,10 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 
 			//File and directory count
 
-			U64 fileCountPtr = reqLen;
+			const U64 fileCountPtr = reqLen;
 			reqLen += caHeader.flags & ECAFlags_FilesCountLong ? sizeof(U32) : sizeof(U16);
 
-			U64 dirCountPtr = reqLen;
+			const U64 dirCountPtr = reqLen;
 			reqLen += caHeader.flags & ECAFlags_DirectoriesCountLong ? sizeof(U16) : sizeof(U8);
 
 			if (Buffer_length(buf) < reqLen) {
@@ -167,22 +171,22 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 
 			//Entry count
 
-			U64 fileCount = Buffer_forceReadSizeType(
+			const U64 fileCount = Buffer_forceReadSizeType(
 				buf.ptr + fileCountPtr,
 				caHeader.flags & ECAFlags_FilesCountLong ? EXXDataSizeType_U32 : EXXDataSizeType_U16
 			);
 
-			U64 dirCount = Buffer_forceReadSizeType(
+			const U64 dirCount = Buffer_forceReadSizeType(
 				buf.ptr + dirCountPtr,
 				caHeader.flags & ECAFlags_DirectoriesCountLong ? EXXDataSizeType_U16 : EXXDataSizeType_U8
 			);
 
-			Log_debugLnx("Directory count: %u", dirCount);
-			Log_debugLnx("File count: %u", fileCount);
+			Log_debugLnx("Directory count: %"PRIu64, dirCount);
+			Log_debugLnx("File count: %"PRIu64, fileCount);
 
 			//AES chunking
 
-			U32 aesChunking = caHeader.flags & ECAFlags_AESChunkMask;
+			const U32 aesChunking = caHeader.flags & ECAFlags_AESChunkMask;
 
 			if (aesChunking) {
 
@@ -206,7 +210,7 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 
 			if (caHeader.flags & ECAFlags_HasExtendedData) {
 
-				U64 oldPtr = reqLen;
+				const U64 oldPtr = reqLen;
 				reqLen += sizeof(CAExtraInfo);
 
 				if (Buffer_length(buf) < reqLen) {
@@ -214,12 +218,12 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 					goto clean;
 				}
 
-				CAExtraInfo extraInfo = *(const CAExtraInfo*)(buf.ptr + oldPtr);
+				const CAExtraInfo extraInfo = *(const CAExtraInfo*)(buf.ptr + oldPtr);
 
 				Log_debugLnx("Extended magic number: %08X", extraInfo.extendedMagicNumber);
-				Log_debugLnx("Extended header size: %u", extraInfo.headerExtensionSize);
-				Log_debugLnx("Extended per directory size: %u", extraInfo.directoryExtensionSize);
-				Log_debugLnx("Extended per file size: %u", extraInfo.fileExtensionSize);
+				Log_debugLnx("Extended header size: %"PRIu32, (U32)extraInfo.headerExtensionSize);
+				Log_debugLnx("Extended per directory size: %"PRIu32, (U32)extraInfo.directoryExtensionSize);
+				Log_debugLnx("Extended per file size: %"PRIu32, (U32)extraInfo.fileExtensionSize);
 			}
 
 			//Flags
@@ -259,16 +263,16 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 		//oiDL header
 
 		case DLHeader_MAGIC: {
-		
-			DLHeader dlHeader = *(const DLHeader*)(buf.ptr + sizeof(U32));
+
+			const DLHeader dlHeader = *(const DLHeader*)(buf.ptr + sizeof(U32));
 
 			Log_debugLnx("Detected oiDL file with following info:");
 
 			XXFile_printVersion(dlHeader.version);
-			
+
 			//AES chunking
 
-			U32 aesChunking = dlHeader.flags & EDLFlags_AESChunkMask;
+			const U32 aesChunking = dlHeader.flags & EDLFlags_AESChunkMask;
 
 			if (aesChunking) {
 
@@ -313,18 +317,18 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 
 			//Entry count
 
-			U64 entryCount = Buffer_forceReadSizeType(
+			const U64 entryCount = Buffer_forceReadSizeType(
 				buf.ptr + sizeof(U32) + sizeof(DLHeader),
 				(EXXDataSizeType)(dlHeader.sizeTypes & 3)
 			);
 
-			Log_debugLnx("Entry count: %u", entryCount);
+			Log_debugLnx("Entry count: %"PRIu64, entryCount);
 
 			//Extended data
 
 			if (dlHeader.flags & EDLFlags_HasExtendedData) {
 
-				U64 oldPtr = reqLen;
+				const U64 oldPtr = reqLen;
 				reqLen += sizeof(DLExtraInfo);
 
 				if (Buffer_length(buf) < reqLen) {
@@ -332,11 +336,11 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 					goto clean;
 				}
 
-				DLExtraInfo extraInfo = *(const DLExtraInfo*)(buf.ptr + oldPtr);
+				const DLExtraInfo extraInfo = *(const DLExtraInfo*)(buf.ptr + oldPtr);
 
 				Log_debugLnx("Extended magic number: %08X", extraInfo.extendedMagicNumber);
-				Log_debugLnx("Extended header size: %u", extraInfo.extendedHeader);
-				Log_debugLnx("Extended per entry size: %u", extraInfo.perEntryExtendedData);
+				Log_debugLnx("Extended header size: %"PRIu32, (U32)extraInfo.extendedHeader);
+				Log_debugLnx("Extended per entry size: %"PRIu32, (U32)extraInfo.perEntryExtendedData);
 			}
 
 			//Flags
@@ -391,10 +395,10 @@ clean:
 Error collectArchiveEntries(FileInfo info, ListCharString *arg) {
 
 	CharString tmp = CharString_createNull();
-	Error err = Error_none();
+	Error err;
 
-	_gotoIfError(clean, CharString_createCopyx(info.path, &tmp));
-	_gotoIfError(clean, ListCharString_pushBackx(arg, tmp));
+	gotoIfError(clean, CharString_createCopyx(info.path, &tmp))
+	gotoIfError(clean, ListCharString_pushBackx(arg, tmp))
 
 	tmp = CharString_createNull();		//Belongs to list now
 
@@ -416,21 +420,21 @@ Error writeToDisk(FileInfo info, OutputFolderToDisk *output) {
 	Error err = Error_none();
 	CharString tmp = CharString_createNull();
 
-	U64 start = CharString_length(output->base) == 1 && output->base.ptr[0] == '.' ? 0 : CharString_length(output->base);
+	const U64 start = CharString_length(output->base) == 1 && output->base.ptr[0] == '.' ? 0 : CharString_length(output->base);
 
 	if(!CharString_cut(info.path, start, 0, &subDir))
-		_gotoIfError(clean, Error_invalidOperation(0, "writeToDisk()::info.path cut failed"));
+		gotoIfError(clean, Error_invalidOperation(0, "writeToDisk()::info.path cut failed"))
 
-	_gotoIfError(clean, CharString_createCopyx(output->output, &tmp));
-	_gotoIfError(clean, CharString_appendStringx(&tmp, subDir));
+	gotoIfError(clean, CharString_createCopyx(output->output, &tmp))
+	gotoIfError(clean, CharString_appendStringx(&tmp, subDir))
 
 	if (info.type == EFileType_File) {
 		Buffer data = Buffer_createNull();
-		_gotoIfError(clean, Archive_getFileDataConstx(output->sourceArchive, info.path, &data));
-		_gotoIfError(clean, File_write(data, tmp, 1 * SECOND));
+		gotoIfError(clean, Archive_getFileDataConstx(output->sourceArchive, info.path, &data))
+		gotoIfError(clean, File_write(data, tmp, 1 * SECOND))
 	}
 
-	else _gotoIfError(clean, File_add(tmp, EFileType_Folder, 1 * SECOND));
+	else gotoIfError(clean, File_add(tmp, EFileType_Folder, 1 * SECOND))
 
 clean:
 	CharString_freex(&tmp);
@@ -473,7 +477,7 @@ Bool CLI_showFile(ParsedArgs args, Buffer b, U64 start, U64 length, Bool isAscii
 		}
 
 		Buffer subBuffer = Buffer_createRefConst(b.ptr + start, length);
-		_gotoIfError(clean, File_write(subBuffer, out, 1 * SECOND));
+		gotoIfError(clean, File_write(subBuffer, out, 1 * SECOND))
 	}
 
 	//More info about a single entry
@@ -485,7 +489,7 @@ Bool CLI_showFile(ParsedArgs args, Buffer b, U64 start, U64 length, Bool isAscii
 			goto clean;
 		}
 
-		Log_debugLnx("Section has %u bytes.", Buffer_length(b));
+		Log_debugLnx("Section has %"PRIu64" bytes.", Buffer_length(b));
 
 		//Get length
 
@@ -503,7 +507,7 @@ Bool CLI_showFile(ParsedArgs args, Buffer b, U64 start, U64 length, Bool isAscii
 
 		//Show what offset is being displayed
 
-		Log_debugLnx("Showing offset %X with size %u", start, length);
+		Log_debugLnx("Showing offset #%"PRIx64" with size %"PRIu64, start, length);
 		Log_debugLnx(isAscii ? "File contents: (ascii)" : "File contents: (binary)");
 
 		//Ascii can be directly output to log
@@ -520,13 +524,13 @@ Bool CLI_showFile(ParsedArgs args, Buffer b, U64 start, U64 length, Bool isAscii
 
 			for (U64 i = start, j = i + length, k = 0; i < j; ++i, ++k) {
 
-				_gotoIfError(clean, CharString_createHexx(b.ptr[i], 2, &tmp1));
-				_gotoIfError(clean, CharString_popFrontCount(&tmp1, 2));
-				_gotoIfError(clean, CharString_appendStringx(&tmp, tmp1));
-				_gotoIfError(clean, CharString_appendx(&tmp, ' '));
+				gotoIfError(clean, CharString_createHexx(b.ptr[i], 2, &tmp1))
+				gotoIfError(clean, CharString_popFrontCount(&tmp1, 2))
+				gotoIfError(clean, CharString_appendStringx(&tmp, tmp1))
+				gotoIfError(clean, CharString_appendx(&tmp, ' '))
 
 				if(!((k + 1) & 31))
-					_gotoIfError(clean, CharString_appendStringx(&tmp, CharString_newLine()));
+					gotoIfError(clean, CharString_appendStringx(&tmp, CharString_newLine()))
 
 				CharString_freex(&tmp1);
 			}
@@ -548,13 +552,14 @@ clean:
 
 Bool CLI_storeFileOrFolder(ParsedArgs args, ArchiveEntry e, Archive a, Bool *madeFile, U64 start, U64 len) {
 
-	Error err = Error_none();
 	CharString tmp = CharString_createNull();
 	Bool success = false;
 
 	//Save folder
 
 	if (e.type == EFileType_Folder) {
+
+		Error err;
 
 		if(start || (len && len != a.entries.length))
 			Log_warnLnx("Folder output to disk ignores offset and/or count.");
@@ -566,11 +571,11 @@ Bool CLI_storeFileOrFolder(ParsedArgs args, ArchiveEntry e, Archive a, Bool *mad
 			goto clean;
 		}
 
-		_gotoIfError(clean, File_add(out, EFileType_Folder, 1 * SECOND));
+		gotoIfError(clean, File_add(out, EFileType_Folder, 1 * SECOND))
 		*madeFile = true;
 
-		_gotoIfError(clean, CharString_createCopyx(out, &tmp));
-		_gotoIfError(clean, CharString_appendx(&tmp, '/'));
+		gotoIfError(clean, CharString_createCopyx(out, &tmp))
+		gotoIfError(clean, CharString_appendx(&tmp, '/'))
 
 		OutputFolderToDisk output = (OutputFolderToDisk) {
 			.base = e.path,
@@ -578,14 +583,14 @@ Bool CLI_storeFileOrFolder(ParsedArgs args, ArchiveEntry e, Archive a, Bool *mad
 			.sourceArchive = a
 		};
 
-		_gotoIfError(clean, Archive_foreachx(
+		gotoIfError(clean, Archive_foreachx(
 			a,
 			e.path,
 			(FileCallback) writeToDisk,
 			&output,
 			true,
 			EFileType_Any
-		));
+		))
 
 		CharString_freex(&tmp);
 		madeFile = false;			//We successfully wrote, so keep it from deleting the folder
@@ -694,7 +699,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 			return false;
 		}
 
-		U64 off = CharString_startsWithStringInsensitive(key, CharString_createRefCStrConst("0x")) ? 2 : 0;
+		U64 off = CharString_startsWithStringInsensitive(key, CharString_createRefCStrConst("0x"), 0) ? 2 : 0;
 
 		if (CharString_length(key) - off != 64) {
 			Log_errorLnx("Invalid parameter sent to -aes. Expecting key in hex (32 bytes)");
@@ -718,7 +723,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 		//oiCA header
 
 		case CAHeader_MAGIC: {
-		
+
 			CAFile file = (CAFile) { 0 };
 			ListCharString strings = { 0 };
 			U64 baseCount = 0;
@@ -726,7 +731,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 			Bool madeFile = false;
 			CharString out = CharString_createNull();
 
-			_gotoIfError(cleanCa, CAFile_readx(buf, encryptionKey, &file));
+			gotoIfError(cleanCa, CAFile_readx(buf, encryptionKey, &file))
 
 			//Specific entry was requested
 
@@ -744,7 +749,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 					}
 
 					if (index >= file.archive.entries.length) {
-						Log_errorLnx("Index out of bounds, max is %u.", file.archive.entries.length);
+						Log_errorLnx("Index out of bounds, max is %"PRIu64".", file.archive.entries.length);
 						goto cleanCa;
 					}
 				}
@@ -766,16 +771,16 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 					if (e.type == EFileType_Folder) {
 
-						baseCount = CharString_countAllSensitive(e.path, '/') + 1;
+						baseCount = CharString_countAllSensitive(e.path, '/', 0) + 1;
 
-						_gotoIfError(cleanCa, Archive_foreachx(
+						gotoIfError(cleanCa, Archive_foreachx(
 							file.archive,
 							e.path,
 							(FileCallback) collectArchiveEntries,
 							&strings,
 							true,
 							EFileType_Any
-						));
+						))
 					}
 
 					//Print the subsection of the file
@@ -783,7 +788,9 @@ Bool CLI_inspectData(ParsedArgs args) {
 					else {
 
 						Bool isAscii = CharString_isValidAscii(
-							CharString_createRefSizedConst((const C8*) e.data.ptr, Buffer_length(e.data), false)
+							CharString_createRefSizedConst(
+								(const C8*) e.data.ptr, Buffer_length(e.data), false
+							)
 						);
 
 						Log_debugLnx("%.*s", CharString_length(e.path), e.path.ptr);
@@ -809,20 +816,20 @@ Bool CLI_inspectData(ParsedArgs args) {
 					goto cleanCa;
 				}
 
-				_gotoIfError(cleanCa, Archive_foreachx(
+				gotoIfError(cleanCa, Archive_foreachx(
 					file.archive,
 					CharString_createRefCStrConst("."),
 					(FileCallback) collectArchiveEntries,
 					&strings,
 					true,
 					EFileType_Any
-				));
+				))
 			}
 
 			//Sort to ensure the subdirectories are correct
 
 			if(!ListCharString_sortInsensitive(strings))
-				_gotoIfError(cleanCa, Error_invalidOperation(0, "CLI_inspectData() sort strings (oiCA) failed"));
+				gotoIfError(cleanCa, Error_invalidOperation(0, "CLI_inspectData() sort strings (oiCA) failed"))
 
 			//Process all and print
 
@@ -832,14 +839,14 @@ Bool CLI_inspectData(ParsedArgs args) {
 			U64 end = start + length;
 
 			Log_debugLnx(
-				"Showing offset %X with count %u in selected folder (File contains %u entries)",
+				"Showing offset #%"PRIx64" with count %"PRIu64" in selected folder (File contains %"PRIu64" entries)",
 				start, length, file.archive.entries.length
 			);
 
 			for(U64 i = start; i < end && i < strings.length; ++i) {
 
 				CharString pathi = strings.ptr[i];
-				U64 parentCount = CharString_countAllSensitive(pathi, '/');
+				U64 parentCount = CharString_countAllSensitive(pathi, '/', 0);
 
 				U64 v = Archive_getIndexx(file.archive, pathi);
 
@@ -847,20 +854,20 @@ Bool CLI_inspectData(ParsedArgs args) {
 				//001:   child (indented by 2)
 
 				if(v == U64_MAX)
-					_gotoIfError(cleanCa, Error_notFound(0, 0, "CLI_inspectData() couldn't find archive entry (oiCA)"));
+					gotoIfError(cleanCa, Error_notFound(0, 0, "CLI_inspectData() couldn't find archive entry (oiCA)"))
 
-				_gotoIfError(cleanCa, CharString_createDecx(v, 3, &tmp));
- 				_gotoIfError(cleanCa, CharString_createx(' ', 2 * (parentCount - baseCount), &tmp1));
-				_gotoIfError(cleanCa, CharString_appendx(&tmp, ':'));
-				_gotoIfError(cleanCa, CharString_appendx(&tmp, ' '));
-				_gotoIfError(cleanCa, CharString_appendStringx(&tmp, tmp1));
+				gotoIfError(cleanCa, CharString_createDecx(v, 3, &tmp))
+ 				gotoIfError(cleanCa, CharString_createx(' ', 2 * (parentCount - baseCount), &tmp1))
+				gotoIfError(cleanCa, CharString_appendx(&tmp, ':'))
+				gotoIfError(cleanCa, CharString_appendx(&tmp, ' '))
+				gotoIfError(cleanCa, CharString_appendStringx(&tmp, tmp1))
 				CharString_freex(&tmp1);
 
 				CharString sub = CharString_createNull();
 				if(!CharString_cutBeforeLastSensitive(pathi, '/', &sub))
 					sub = CharString_createRefSizedConst(pathi.ptr, CharString_length(pathi), false);
 
-				_gotoIfError(cleanCa, CharString_appendStringx(&tmp, sub));
+				gotoIfError(cleanCa, CharString_appendStringx(&tmp, sub))
 
 				//Log and free temp
 
@@ -876,11 +883,8 @@ Bool CLI_inspectData(ParsedArgs args) {
 			if(madeFile)
 				File_remove(out, 1 * SECOND);
 
-			for(U64 i = 0; i < strings.length; ++i)
-				CharString_freex(strings.ptrNonConst + i);
-
 			CAFile_freex(&file);
-			ListCharString_freex(&strings);
+			ListCharString_freeUnderlyingx(&strings);
 			CharString_freex(&tmp);
 
 			if(err.genericError)
@@ -894,7 +898,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 		case DLHeader_MAGIC: {
 
 			DLFile file = (DLFile) { 0 };
-			_gotoIfError(cleanDl, DLFile_readx(buf, encryptionKey, false, &file));
+			gotoIfError(cleanDl, DLFile_readx(buf, encryptionKey, false, &file))
 
 			U64 end = 0;
 
@@ -918,7 +922,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 				}
 
 				if (entryI >= DLFile_entryCount(file)) {
-					Log_errorLnx("Index out of bounds, max is %u", DLFile_entryCount(file));
+					Log_errorLnx("Index out of bounds, max is %"PRIu64, DLFile_entryCount(file));
 					goto cleanDl;
 				}
 
@@ -941,13 +945,13 @@ Bool CLI_inspectData(ParsedArgs args) {
 						file.settings.dataType == EDLDataType_Ascii ? CharString_length(file.entryStrings.ptr[i]) :
 						Buffer_length(file.entryBuffers.ptr[i]);
 
-					_gotoIfError(cleanDl, CharString_createDecx(i, 3, &tmp));
-					_gotoIfError(cleanDl, CharString_appendStringx(&tmp, CharString_createRefCStrConst(": length = ")));
+					gotoIfError(cleanDl, CharString_createDecx(i, 3, &tmp))
+					gotoIfError(cleanDl, CharString_appendStringx(&tmp, CharString_createRefCStrConst(": length = ")))
 
-					_gotoIfError(cleanDl, CharString_createDecx(entrySize, 0, &tmp1));
-					_gotoIfError(cleanDl, CharString_appendStringx(&tmp, tmp1));
+					gotoIfError(cleanDl, CharString_createDecx(entrySize, 0, &tmp1))
+					gotoIfError(cleanDl, CharString_appendStringx(&tmp, tmp1))
 
-					Log_debugLnx("%.*s", tmp);
+					Log_debugLnx("%s", tmp.ptr);
 					CharString_freex(&tmp);
 					CharString_freex(&tmp1);
 				}

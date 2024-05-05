@@ -1,0 +1,34 @@
+name: C/C++ CI
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    name: Windows build
+    runs-on: windows-2022
+    env:
+      VULKAN_SDK: C:\VulkanSDK\
+    steps:
+    - uses: actions/checkout@v1
+    - name: Install Vulkan SDK
+      uses: humbletim/install-vulkan-sdk@v1.1.1
+      with:
+        cache: true
+    - name: build for fast check
+      run: D:\a\core3\core3\build.bat Release On -DForceVulkan=On
+    - name: build for SIMD fallback check
+      run: D:\a\core3\core3\build.bat Release Off -DForceVulkan=On
+    - name: build for debug check
+      run: D:\a\core3\core3\build.bat Debug On -DForceVulkan=On
+    - uses: actions/setup-ruby@v1
+    - name: Send Webhook Notification
+      if: always()
+      env:
+        JOB_STATUS: ${{ job.status }}
+        WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+        HOOK_OS_NAME: ${{ runner.os }}
+        WORKFLOW_NAME: ${{ github.workflow }}
+      run: |
+        git clone https://github.com/DiscordHooks/github-actions-discord-webhook.git webhook
+        bash webhook/send.sh $JOB_STATUS $WEBHOOK_URL
+      shell: bash

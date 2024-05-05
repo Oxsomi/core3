@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -26,11 +26,11 @@
 
 Bool CLI_info(ParsedArgs args) {
 
-	args;
+	(void)args;
 
 	Log_debugLnx(
 
-		"OxC3 (Oxsomi core 3), a general framework and toolset for cross platform applications.\n"
+		"OxC3 (Oxsomi core 3), a general framework and toolset for cross-platform applications.\n"
 		"Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)"
 		"%s",
 
@@ -69,7 +69,9 @@ const C8 *EOperationHasParameter_names[] = {
 	"-c",
 	"-b",
 	"-e",
-	"-s"
+	"-s",
+	"-m",
+	"-t"
 };
 
 const C8 *EOperationHasParameter_descriptions[] = {
@@ -83,7 +85,9 @@ const C8 *EOperationHasParameter_descriptions[] = {
 	"Characters to include",
 	"Bit count",
 	"Entry index or path",
-	"Start offset"
+	"Start offset",
+	"Compile mode (spv, dxil or all; also allows multiple such as dxil,spv)",
+	"Thread count (0 = all, 50% = 50% of all threads, 4 = 4 threads)"
 };
 
 //Flags
@@ -105,14 +109,16 @@ const C8 *EOperationFlags_names[] = {
 	"--nyto",
 	"--hex",
 	"--bin",
-	"--oct"
+	"--oct",
+	"--debug",
+	"--preprocess"
 };
 
 const C8 *EOperationFlags_descriptions[] = {
 	"Includes 256-bit hashes instead of 32-bit ones into file if applicable.",
 	"Keep the data uncompressed (default is compressed).",
-	"Indicates the input files should be threated as ASCII. If 1 file; splits by enter, otherwise 1 entry/file.",
-	"Indicates the input files should be threated as UTF8. If 1 file; splits by enter, otherwise 1 entry/file.",
+	"Indicates the input files should be treated as ASCII. If 1 file; splits by enter, otherwise 1 entry/file.",
+	"Indicates the input files should be treated as UTF8. If 1 file; splits by enter, otherwise 1 entry/file.",
 	"Includes full file timestamp (Ns)",
 	"Includes MS-DOS timestamp (YYYY-MM-dd HH-mm-ss (each two seconds))",
 	"If folder is selected, blocks recursive file searching. Can be handy if only the direct directory should be included.",
@@ -125,13 +131,16 @@ const C8 *EOperationFlags_descriptions[] = {
 	"Encode using nytodecimal (0-9A-Za-z_$).",
 	"Encode using hexadecimal (0-9A-F).",
 	"Encode using binary (0-1).",
-	"Encode using octadecimal (0-7)."
+	"Encode using octadecimal (0-7).",
+	"Include more debug information.",
+	"Preprocess input into output."
 };
 
 //Operations
 
 const C8 *EOperationCategory_names[] = {
 	"file",
+	"compile",
 	"hash",
 	"rand",
 	"info",
@@ -141,6 +150,7 @@ const C8 *EOperationCategory_names[] = {
 
 const C8 *EOperationCategory_description[] = {
 	"File utilities such as file conversions, encryption, compression, etc.",
+	"Compile shaders or to intermediate binary (Chimera).",
 	"Converting a file or string to a hash.",
 	"Generating random data.",
 	"Information about the tool.",
@@ -309,7 +319,7 @@ void Operations_init() {
 		.optionalParameters =
 			EOperationHasParameter_Number | EOperationHasParameter_Length |
 			EOperationHasParameter_Output | EOperationHasParameter_Character,
-		
+
 		.operationFlags = EOperationFlags_RandChar
 	};
 
@@ -360,6 +370,26 @@ void Operations_init() {
 
 		.requiredParameters = EOperationHasParameter_Input | EOperationHasParameter_Output,
 		.optionalParameters = EOperationHasParameter_AES
+	};
+
+	//Compile shaders
+	
+	Format_values[EFormat_HLSL] = (Format) {
+		.name = "HLSL",
+		.desc = "High Level Shading Language; Microsoft's shading language for DirectX and Vulkan.",
+		.operationFlags = EOperationFlags_Debug | EOperationFlags_Preprocess,
+		.requiredParameters = 
+			EOperationHasParameter_Input | EOperationHasParameter_Output | EOperationHasParameter_CompileMode,
+		.optionalParameters = EOperationHasParameter_ThreadCount,
+		.flags = EFormatFlags_SupportFiles | EFormatFlags_SupportFolders,
+		.supportedCategories = { EOperationCategory_Compile }
+	};
+
+	Operation_values[EOperation_CompileShader] = (Operation) {
+		.category = EOperationCategory_Compile,
+		.name = "shaders",
+		.desc = "Compile shader from text to application ready format",
+		.func = &CLI_compileShader
 	};
 
 	//License for the tool
@@ -533,7 +563,7 @@ Error ParsedArgs_getArg(ParsedArgs args, EOperationHasParameter parameterId, Cha
 		if((args.parameters >> j) & 1)
 			++ourLoc;
 
-	Error err = ListCharString_get(args.args, ourLoc, arg);
+	const Error err = ListCharString_get(args.args, ourLoc, arg);
 
 	if(err.genericError)
 		return err;

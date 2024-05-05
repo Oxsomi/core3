@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -40,7 +40,7 @@ F32 Random_sample(U32 *seed) {
 
 	if(!seed)
 		return 0;
-	
+
 	*seed = (1664525 * *seed + 1013904223);
 	return (F32)(*seed & 0x00FFFFFF) / (F32)(0x01000000);
 }

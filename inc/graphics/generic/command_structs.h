@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -20,8 +20,13 @@
 
 #pragma once
 #include "types/vec.h"
-#include "platforms/ref_ptr.h"
 #include "graphics/generic/device.h"
+#include "graphics/generic/resource.h"
+#include "graphics/generic/pipeline_structs.h"
+
+#ifdef __cplusplus
+	extern "C" {
+#endif
 
 typedef RefPtr GraphicsDeviceRef;
 typedef RefPtr PipelineRef;
@@ -72,44 +77,30 @@ typedef enum ECommandOp {
 
 	ECommandOp_AddMarkerDebugExt,
 	ECommandOp_StartRegionDebugExt,
-	ECommandOp_EndRegionDebugExt
+	ECommandOp_EndRegionDebugExt,
+
+	//Raytracing
+
+	ECommandOp_DispatchRaysExt,
+	ECommandOp_SetRaytracingPipelineExt,
+	ECommandOp_UpdateBLASExt,
+	ECommandOp_UpdateTLASExt
 
 } ECommandOp;
 
 typedef enum ECommandListState {
-
 	ECommandListState_New,			//Never opened.
 	ECommandListState_Open,			//No end has been called yet.
 	ECommandListState_Closed,		//End has already been called (successfully).
 	ECommandListState_Invalid		//Something in the command list has gone wrong and it couldn't be closed.
-
 } ECommandListState;
 
 typedef struct CommandOpInfo {
-
 	ECommandOp op;
 	U32 opSize;
-
 } CommandOpInfo;
 
-typedef enum EPipelineStage EPipelineStage;
-
-typedef struct ImageRange {
-
-	U32 levelId;		//Set to U32_MAX to indicate all levels, otherwise indicates specific index.
-	U32 layerId;		//Set to U32_MAX to indicate all layers, otherwise indicates specific index.
-
-} ImageRange;
-
-typedef union ResourceRange {
-
-	BufferRange buffer;
-	ImageRange image;
-
-} ResourceRange;
-
 typedef enum ETransitionType {
-
 	ETransitionType_Clear,
 	ETransitionType_Vertex,
 	ETransitionType_Index,
@@ -118,27 +109,29 @@ typedef enum ETransitionType {
 	ETransitionType_ShaderWrite,
 	ETransitionType_RenderTargetRead,
 	ETransitionType_RenderTargetWrite,
+	ETransitionType_ResolveTargetWrite,
 	ETransitionType_CopyRead,
-	ETransitionType_CopyWrite
-
+	ETransitionType_CopyWrite,
+	ETransitionType_KeepAlive,			//If the only reason of this transition is to keep a resource alive
+	ETransitionType_UpdateRTAS,
+	ETransitionType_ReadRTAS			//Read from RTAS
 } ETransitionType;
 
 typedef struct TransitionInternal {		//Transitions issued by a scope.
 
-	RefPtr *resource;					//Swapchain, RenderTexture, DepthStencil, DeviceBuffer, DeviceTexture
+	RefPtr *resource;					//Swapchain, RenderTexture, DepthStencil, DeviceBuffer, DeviceTexture, Sampler
 
 	ResourceRange range;
 
 	EPipelineStage stage;				//First shader stage that will access this resource (if !type)
 
-	U8 padding[3];
-	U8 type;							//ETransitionType
+	ETransitionType type;
 
 } TransitionInternal;
 
 typedef struct Transition {
 
-	RefPtr *resource;					//Swapchain, RenderTexture, DepthStencil, DeviceBuffer, DeviceTexture
+	RefPtr *resource;					//Swapchain, RenderTexture, DepthStencil, DeviceBuffer, DeviceTexture, Sampler
 
 	ResourceRange range;
 
@@ -152,17 +145,13 @@ typedef struct Transition {
 //Dependencies are executed before itself; important for threading.
 
 typedef enum ECommandScopeDependencyType {
-
 	ECommandScopeDependencyType_Unconditional,	//If dependency is present, wait for it to finish, otherwise no-op.
 	ECommandScopeDependencyType_Conditional		//If dependency is hidden, give error and hide self.
-
 } ECommandScopeDependencyType;
 
 typedef struct CommandScopeDependency {
-
 	ECommandScopeDependencyType type;
 	U32 id;
-
 } CommandScopeDependency;
 
 typedef struct CommandScope {
@@ -180,31 +169,23 @@ typedef struct CommandScope {
 } CommandScope;
 
 typedef enum ECommandStateFlags {
-
 	ECommandStateFlags_AnyScissor		= 1 << 0,
 	ECommandStateFlags_AnyViewport		= 1 << 1,
 	ECommandStateFlags_HasModifyOp		= 1 << 2,		//If it has any op that modifies any resource (clear/copy/shader/etc.)
 	ECommandStateFlags_HasScope			= 1 << 3,		//If it's in a scope
 	ECommandStateFlags_InvalidState		= 1 << 4		//One of the commands in the scope was invalid; ignore scope.
-
 } ECommandStateFlags;
 
 typedef union ClearColor {
-
 	U32 coloru[4];
 	I32 colori[4];
 	F32 colorf[4];
-
 } ClearColor;
 
 typedef struct ClearImageCmd {
-
 	ClearColor color;
-
 	ImageRange range;
-
 	RefPtr *image;
-
 } ClearImageCmd;
 
 typedef struct SetPrimitiveBuffersCmd {
@@ -213,7 +194,7 @@ typedef struct SetPrimitiveBuffersCmd {
 	DeviceBufferRef *indexBuffer;
 
 	Bool isIndex32Bit;
-	U8 padding[3];
+	U8 padding[7];
 
 } SetPrimitiveBuffersCmd;
 
@@ -236,7 +217,7 @@ typedef struct DrawIndirectCmd {
 
 	U64 bufferOffset, countOffsetExt;
 
-	U32 drawCalls, bufferStride;
+	U32 drawCalls;
 
 	Bool isIndexed;
 	U8 pad[7];
@@ -247,27 +228,21 @@ typedef struct DispatchCmd { U32 groups[3]; } DispatchCmd;
 typedef struct DispatchIndirectCmd { DeviceBufferRef *buffer; U64 offset; } DispatchIndirectCmd;
 
 typedef enum ELoadAttachmentType {
-
 	ELoadAttachmentType_Any,			//Can preserve or clear depending on implementation. Result will be overwritten.
 	ELoadAttachmentType_Preserve,		//Keep the contents. Can have overhead because it has to load it (preserveMask).
 	ELoadAttachmentType_Clear			//Clears the contents at start.
-
 } ELoadAttachmentType;
 
 typedef struct ImageAndRange {
-
 	ImageRange range;
 	RefPtr *image;
-
 } ImageAndRange;
 
 typedef enum EMSAAResolveMode {
-
 	EMSAAResolveMode_Average,
 	EMSAAResolveMode_Min,
 	EMSAAResolveMode_Max,
 	EMSAAResolveMode_Count
-
 } EMSAAResolveMode;
 
 typedef struct AttachmentInfo {
@@ -284,17 +259,43 @@ typedef struct AttachmentInfo {
 
 	RefPtr *resolveImage;				//RenderTexture, DepthStencil or Swapchain. Null is allowed to disable resolving.
 
+	ImageRange resolveRange;			//Subresource. Multiple resources isn't allowed (layerId, levelId != U32_MAX)
+
 	ClearColor color;
 
 } AttachmentInfo;
+
+typedef struct DepthStencilAttachmentInfo {
+
+	ImageRange range;
+
+	RefPtr *image;
+
+	ImageRange resolveImageRange;
+
+	RefPtr *resolveImage;				//DepthStencil. Null is allowed to disable resolving.
+
+	U8 depthLoad, stencilLoad;			//ELoadAttachmentType
+	U8 depthStencilResolve, padding0;	//EMSAAResolveMode
+
+	F32 clearDepth;
+
+	U8 clearStencil;
+	U8 padding1[3];
+
+	Bool depthUnusedAfterRender, stencilUnusedAfterRender;
+	Bool depthReadOnly, stencilReadOnly;
+
+} DepthStencilAttachmentInfo;
 
 typedef struct AttachmentInfoInternal {
 
 	ImageRange range;					//Subresource. Multiple resources isn't allowed (layerId, levelId != U32_MAX)
 	RefPtr *image;						//Swapchain or RenderTexture. Null is allowed to disable it.
 
+	ImageRange resolveRange;			//Subresource. Multiple resources isn't allowed (layerId, levelId != U32_MAX)
 	RefPtr *resolveImage;				//RenderTexture, DepthStencil or Swapchain. Null is allowed to disable resolving.
-	
+
 	EMSAAResolveMode resolveMode;
 	U32 padding;
 
@@ -313,13 +314,18 @@ typedef enum EStartRenderFlags {
 	EStartRenderFlags_StencilUnusedAfterRender	= 1 << 6,		//Possibly discard after render (no need to keep result)
 	EStartRenderFlags_DepthUnusedAfterRender	= 1 << 7,		//^
 
+	EStartRenderFlags_StencilReadOnly			= 1 << 8,
+	EStartRenderFlags_DepthReadOnly				= 1 << 9,
+
 	EStartRenderFlags_DepthFlags		=
-		EStartRenderFlags_Depth | EStartRenderFlags_ClearDepth |
+		EStartRenderFlags_Depth | EStartRenderFlags_ClearDepth | EStartRenderFlags_DepthReadOnly |
 		EStartRenderFlags_PreserveDepth | EStartRenderFlags_StencilUnusedAfterRender,
 
 	EStartRenderFlags_StencilFlags		=
-		EStartRenderFlags_Stencil | EStartRenderFlags_ClearStencil |
-		EStartRenderFlags_PreserveStencil | EStartRenderFlags_StencilUnusedAfterRender
+		EStartRenderFlags_Stencil | EStartRenderFlags_ClearStencil | EStartRenderFlags_StencilReadOnly |
+		EStartRenderFlags_PreserveStencil | EStartRenderFlags_StencilUnusedAfterRender,
+
+	EStartRenderFlags_ClearDepthStencil = EStartRenderFlags_ClearDepth | EStartRenderFlags_ClearStencil
 
 } EStartRenderFlags;
 
@@ -327,8 +333,9 @@ typedef struct StartRenderCmdExt {
 
 	I32x2 offset, size;
 
-	U16 padding0;
-	U8 resolveDepthMode, resolveStencilMode;	//EMSAAResolveMode
+	EMSAAResolveMode resolveDepthStencilMode;
+
+	EStartRenderFlags flags;
 
 	U8 readOnlyMask;			//Mark which render targets are readonly
 	U8 preserveMask;			//Mark which render targets are preserved (ELoadAttachmentType) only if clearMask isn't set.
@@ -337,16 +344,17 @@ typedef struct StartRenderCmdExt {
 
 	U8 colorCount;				//Count of render targets (even inactive ones).
 	U8 activeMask;				//Which render targets are active.
-	U8 flags;					//EStartRenderFlags
 	U8 clearStencil;
+	U8 padding;
 
 	F32 clearDepth;
 
-	ImageRange depthRange, stencilRange;
+	ImageRange depthStencilRange;
+	ImageRange resolveDepthStencilRange;
 
-	DepthStencilRef *depth, *stencil;
+	DepthStencilRef *depthStencil;
 
-	DepthStencilRef *resolveDepth, *resolveStencil;
+	DepthStencilRef *resolveDepthStencil;
 
 	//AttachmentInfoInternal attachments[];		//[ active attachments go here ]
 
@@ -365,11 +373,9 @@ typedef struct CopyImageRegion {
 } CopyImageRegion;
 
 typedef enum ECopyType {
-
 	ECopyType_All,				//Color or DepthStencil
 	ECopyType_DepthOnly,		//DepthStencil: Stencil isn't copied and only depth has to be compatible
 	ECopyType_StencilOnly		//DepthStencil: Depth isn't copied and only stencil has to be compatible
-
 } ECopyType;
 
 typedef struct CopyImageCmd {
@@ -383,13 +389,11 @@ typedef struct CopyImageCmd {
 
 } CopyImageCmd;
 
-//GPU commands
+//Commands
 
 typedef struct DrawCallUnindexed {
-
 	U32 vertexCount, instanceCount;
 	U32 vertexOffset, instanceOffset;
-
 } DrawCallUnindexed;
 
 typedef struct DrawCallIndexed {
@@ -402,7 +406,11 @@ typedef struct DrawCallIndexed {
 
 } DrawCallIndexed;
 
-typedef struct Dispatch {
-	U32 x, y, z, pad;
-} Dispatch;
+typedef struct Dispatch { U32 x, y, z, pad; } Dispatch;
 
+typedef struct DispatchRaysExt { U32 x, y, z, raygenId; } DispatchRaysExt;		//raygenId can't be set if on GPU
+typedef struct DispatchRaysIndirectExt { DeviceBufferRef *buffer; U64 offset; U32 raygenId; } DispatchRaysIndirectExt;
+
+#ifdef __cplusplus
+	}
+#endif

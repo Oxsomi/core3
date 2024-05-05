@@ -1,16 +1,16 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -20,6 +20,10 @@
 
 #pragma once
 #include "types/string.h"
+
+#ifdef __cplusplus
+	extern "C" {
+#endif
 
 //Parameters
 
@@ -43,7 +47,10 @@ typedef enum EOperationHasParameter {
 	EOperationHasParameter_EntryShift,
 	EOperationHasParameter_StartOffsetShift,
 
-	EOperationHasParameter_Count,	
+	EOperationHasParameter_CompileModeShift,
+	EOperationHasParameter_ThreadCountShift,
+
+	EOperationHasParameter_Count,
 
 	EOperationHasParameter_Start		= EOperationHasParameter_FileFormatShift,
 
@@ -65,7 +72,10 @@ typedef enum EOperationHasParameter {
 	EOperationHasParameter_Bit			= 1 << EOperationHasParameter_BitShift,
 
 	EOperationHasParameter_Entry		= 1 << EOperationHasParameter_EntryShift,
-	EOperationHasParameter_StartOffset	= 1 << EOperationHasParameter_StartOffsetShift
+	EOperationHasParameter_StartOffset	= 1 << EOperationHasParameter_StartOffsetShift,
+
+	EOperationHasParameter_CompileMode	= 1 << EOperationHasParameter_CompileModeShift,
+	EOperationHasParameter_ThreadCount	= 1 << EOperationHasParameter_ThreadCountShift
 
 } EOperationHasParameter;
 
@@ -83,7 +93,7 @@ typedef enum EOperationFlags {
 	EOperationFlags_SHA256			= 1 << 0,
 	EOperationFlags_Uncompressed	= 1 << 1,
 
-	EOperationFlags_Default			= 
+	EOperationFlags_Default			=
 	EOperationFlags_SHA256 | EOperationFlags_Uncompressed,
 
 	//CharString flags
@@ -109,7 +119,7 @@ typedef enum EOperationFlags {
 	EOperationFlags_Lowercase		= 1 << 11,
 	EOperationFlags_Uppercase		= 1 << 12,
 
-	EOperationFlags_RandChar		= 
+	EOperationFlags_RandChar		=
 		EOperationFlags_Alpha | EOperationFlags_Alphanumeric | EOperationFlags_Number |
 		EOperationFlags_Symbols | EOperationFlags_Lowercase | EOperationFlags_Uppercase,
 
@@ -123,7 +133,12 @@ typedef enum EOperationFlags {
 	EOperationFlags_RandNum =
 		EOperationFlags_Oct | EOperationFlags_Bin | EOperationFlags_Hex | EOperationFlags_Nyto,
 
-	EOperationFlags_Count			= 17
+	//Compilation
+
+	EOperationFlags_Debug			= 1 << 17,
+	EOperationFlags_Preprocess		= 1 << 18,
+
+	EOperationFlags_Count			= 19
 
 } EOperationFlags;
 
@@ -153,6 +168,9 @@ typedef enum EOperation {
 
 	EOperation_Package,
 
+	EOperation_CompileShader,
+	//EOperation_CompileChimera,
+
 	EOperation_InfoLicense,
 	EOperation_InfoAbout,
 
@@ -175,6 +193,7 @@ typedef enum EOperation {
 typedef enum EOperationCategory {
 	EOperationCategory_Invalid,
 	EOperationCategory_File,
+	EOperationCategory_Compile,
 	EOperationCategory_Hash,
 	EOperationCategory_Rand,
 	EOperationCategory_Info,
@@ -188,11 +207,17 @@ extern const C8 *EOperationCategory_names[];
 extern const C8 *EOperationCategory_description[];
 
 typedef enum EFormat {
+
 	EFormat_oiCA,
 	EFormat_oiDL,
+
 	EFormat_SHA256,
 	EFormat_CRC32C,
+
+	EFormat_HLSL,
+
 	EFormat_Invalid
+
 } EFormat;
 
 typedef struct ParsedArgs {
@@ -240,3 +265,8 @@ extern Operation Operation_values[EOperation_Invalid];
 extern Format Format_values[EFormat_Invalid];
 
 void Operations_init();
+
+#ifdef __cplusplus
+	}
+#endif
+

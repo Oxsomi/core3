@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -20,8 +20,9 @@
 
 #include "types/quat.h"
 #include "types/error.h"
+#include "types/math.h"
 
-#define _QUAT_IMPL(T, suffix)																							\
+#define QUAT_IMPL(T, suffix)																							\
 																														\
 Quat##T Quat##T##_create(T x, T y, T z, T w) { return T##x4_create4(x, y, z, w); }										\
 																														\
@@ -223,5 +224,5 @@ Quat##T Quat##T##_slerp(Quat##T a, Quat##T b, T perc) {																	\
 	return T##x4_add(a, b);																								\
 }
 
-_QUAT_IMPL(F32, f);
+QUAT_IMPL(F32, f);
 //_QUAT_IMPL(F64, );

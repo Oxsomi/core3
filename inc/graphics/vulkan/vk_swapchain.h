@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -24,21 +24,11 @@
 typedef struct Window Window;
 typedef struct VkGraphicsInstance VkGraphicsInstance;
 
-TList(VkManagedImage);
-
 typedef struct VkSwapchain {
-
 	VkSurfaceKHR surface;			//Platform's surface implementation
 	VkSwapchainKHR swapchain;
-
 	ListVkSemaphore semaphores;
-	ListVkManagedImage images;
-
 	VkSurfaceFormatKHR format;
-
-	U32 currentIndex;				//Swapchain index
-	U32 padding;
-
 } VkSwapchain;
 
 impl Error VkSurface_create(GraphicsDevice *device, const Window *window, VkSurfaceKHR *surface);

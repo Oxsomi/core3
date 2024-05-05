@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -35,7 +35,10 @@ Error Buffer_consumeSizeType(Buffer *buf, EXXDataSizeType type, U64 *result) {
 		case EXXDataSizeType_U32:		return Buffer_consume(buf, result, 4);
 		case EXXDataSizeType_U64:		return Buffer_consume(buf, result, 8);
 		default:
-			return Error_invalidEnum(1, (U64)type, (U64)EXXDataSizeType_U64, "Buffer_consumeSizeType()::type out of bounds");
+			return Error_invalidEnum(
+				1, (U64)type, (U64)EXXDataSizeType_U64,
+				"Buffer_consumeSizeType()::type out of bounds"
+			);
 	}
 }
 

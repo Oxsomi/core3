@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -22,18 +22,15 @@
 #include "types/list.h"
 #include "types/error.h"
 #include "types/allocation_buffer.h"
-#include "platforms/lock.h"
+#include "types/lock.h"
+
+#ifdef __cplusplus
+	extern "C" {
+#endif
 
 typedef struct GraphicsDevice GraphicsDevice;
-typedef struct CharString CharString;
 
-typedef enum EResourceType {
-
-	EResourceType_DeviceTexture,							//Readonly texture
-	EResourceType_RenderTargetOrDepthStencil,		//Also depth stencil
-	EResourceType_Buffer							//Any buffer type
-
-} EResourceType;
+typedef enum EResourceType EResourceType;
 
 typedef struct DeviceMemoryBlock {
 
@@ -45,13 +42,11 @@ typedef struct DeviceMemoryBlock {
 	U8 resourceType;				//EResourceType
 	U16 allocationTypeExt;			//Allocation type flags (e.g. host visible)
 
-	U8 *mappedMemory;
+	U8 *mappedMemoryExt;			//Not always available, can be done on a resource basis
 
 	void *ext;						//Extended data
 
-	#ifndef NDEBUG
-		void *stackTrace[16];		//Tracking memleaks
-	#endif
+	void *stackTrace[16];			//Tracking memleaks if Debug flag is on
 
 } DeviceMemoryBlock;
 
@@ -67,7 +62,7 @@ typedef struct DeviceMemoryAllocator {
 
 } DeviceMemoryAllocator;
 
-static const U64 DeviceMemoryBlock_defaultSize = 268'435'456;		//256 * MIBI
+static const U64 DeviceMemoryBlock_defaultSize = 268435456;		//256 * MIBI
 
 //Needs explicit lock, because allocator is accessed after.
 impl Error DeviceMemoryAllocator_allocate(
@@ -82,3 +77,7 @@ impl Error DeviceMemoryAllocator_allocate(
 
 //Locks automatically
 Bool DeviceMemoryAllocator_freeAllocation(DeviceMemoryAllocator *allocator, U32 blockId, U64 blockOffset);
+
+#ifdef __cplusplus
+	}
+#endif

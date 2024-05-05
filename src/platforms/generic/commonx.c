@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -20,11 +20,16 @@
 
 #include "platforms/ext/listx_impl.h"
 #include "platforms/ext/bmpx.h"
+#include "platforms/ext/ddsx.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/formatx.h"
+#include "platforms/ext/threadx.h"
+#include "platforms/ext/ref_ptrx.h"
 #include "formats/bmp.h"
+#include "formats/dds.h"
 #include "formats/oiCA.h"
 #include "formats/oiDL.h"
+#include "formats/oiSH.h"
 #include "types/buffer.h"
 #include "types/allocation_buffer.h"
 #include "types/error.h"
@@ -44,12 +49,20 @@ TListXImpl(F32);	TListXImpl(F64);
 
 TListXImpl(Buffer);
 
-TListXImpl(CDFValue);
+TListXImpl(CdfValue);
 TListXImpl(ArchiveEntry);
 
 TListXImpl(BufferLayoutMemberInfo);
 TListXImpl(BufferLayoutStruct);
 TListXImpl(AllocationBufferBlock);
+
+TListXImpl(SubResourceData);
+
+TListXBaseImpl(ListRefPtr);
+TListXBaseImpl(ListWeakRefPtr);
+
+TListXImpl(SHEntry);
+TListXBaseImpl(ListThread);
 
 //Contains small helper functions that don't require their own .c file
 
@@ -61,6 +74,26 @@ Error BMP_writex(Buffer buf, BMPInfo info, Buffer *result) {
 
 Error BMP_readx(Buffer buf, BMPInfo *info, Buffer *result) {
 	return BMP_read(buf, info, Platform_instance.alloc, result);
+}
+
+//RefPtr
+
+Error RefPtr_createx(U32 objectLength, ObjectFreeFunc free, ETypeId type, RefPtr **result) {
+	return RefPtr_create(objectLength, Platform_instance.alloc, free, type, result);
+}
+
+//DDS
+
+Error DDS_writex(ListSubResourceData buf, DDSInfo info, Buffer *result) {
+	return DDS_write(buf, info, Platform_instance.alloc, result);
+}
+
+Error DDS_readx(Buffer buf, DDSInfo *info, ListSubResourceData *result) {
+	return DDS_read(buf, info, Platform_instance.alloc, result);
+}
+
+Bool ListSubResourceData_freeAllx(ListSubResourceData *buf) {
+	return ListSubResourceData_freeAll(buf, Platform_instance.alloc);
 }
 
 //Buffer
@@ -177,6 +210,10 @@ Error GenericList_createCopyx(GenericList list, GenericList *result) {
 	return GenericList_createCopy(list, Platform_instance.alloc, result);
 }
 
+Error GenericList_createCopySubsetx(GenericList list, U64 offset, U64 len, GenericList *result) {
+	return GenericList_createCopySubset(list, offset, len, Platform_instance.alloc, result);
+}
+
 Error GenericList_createSubsetReversex(GenericList list, U64 index, U64 length, GenericList *result) {
 	return GenericList_createSubsetReverse(list, index, length, Platform_instance.alloc, result);
 }
@@ -281,12 +318,34 @@ Error BigInt_toStringx(BigInt b, CharString *result, EIntegerEncoding encoding, 
 	return BigInt_toString(b, Platform_instance.alloc, result, encoding, leadingZeros);
 }
 
+//Error U128_decx(U128 b, CharString *result, Bool leadingZeros);
+
+Error U128_hexx(U128 b, CharString *result, Bool leadingZeros) {
+	return U128_hex(b, Platform_instance.alloc, result, leadingZeros);
+}
+
+Error U128_octx(U128 b, CharString *result, Bool leadingZeros) {
+	return U128_oct(b, Platform_instance.alloc, result, leadingZeros);
+}
+
+Error U128_binx(U128 b, CharString *result, Bool leadingZeros) {
+	return U128_bin(b, Platform_instance.alloc, result, leadingZeros);
+}
+
+Error U128_nytox(U128 b, CharString *result, Bool leadingZeros) {
+	return U128_nyto(b, Platform_instance.alloc, result, leadingZeros);
+}
+
+Error U128_toStringx(U128 b, CharString *result, EIntegerEncoding encoding, Bool leadingZeros) {
+	return U128_toString(b, Platform_instance.alloc, result, encoding, leadingZeros);
+}
+
 //Error BigInt_decx(BigInt b, CharString *result, Bool leadingZeros);
 
 //CharString
 
 Bool CharString_freex(CharString *str) { return CharString_free(str, Platform_instance.alloc); }
-Bool CharStringList_freex(CharStringList *arr) { return CharStringList_free(arr, Platform_instance.alloc); }
+Bool ListCharString_freeUnderlyingx(ListCharString *arr) { return ListCharString_freeUnderlying(arr, Platform_instance.alloc); }
 
 Error CharString_createx(C8 c, U64 size, CharString *result) {
 	return CharString_create(c, size, Platform_instance.alloc, result);
@@ -294,6 +353,14 @@ Error CharString_createx(C8 c, U64 size, CharString *result) {
 
 Error CharString_createCopyx(CharString str, CharString *result) {
 	return CharString_createCopy(str, Platform_instance.alloc, result);
+}
+
+Error CharString_createFromUTF16x(const U16 *ptr, U64 max, CharString *result) {
+	return CharString_createFromUTF16(ptr, max, Platform_instance.alloc, result);
+}
+
+Error CharString_toUTF16x(CharString s, ListU16 *arr) {
+	return CharString_toUTF16(s, Platform_instance.alloc, arr);
 }
 
 Error CharString_createNytox(U64 v, U8 leadingZeros, CharString *result) {
@@ -316,31 +383,31 @@ Error CharString_createBinx(U64 v, U8 leadingZeros, CharString *result) {
 	return CharString_createBin(v, leadingZeros, Platform_instance.alloc, result);
 }
 
-Error CharString_splitx(CharString s, C8 c,  EStringCase casing,  CharStringList *result) {
+Error CharString_splitx(CharString s, C8 c,  EStringCase casing,  ListCharString *result) {
 	return CharString_split(s, c, casing, Platform_instance.alloc, result);
 }
 
-Error CharString_splitStringx(CharString s, CharString other, EStringCase casing, CharStringList *result) {
+Error CharString_splitStringx(CharString s, CharString other, EStringCase casing, ListCharString *result) {
 	return CharString_splitString(s, other, casing, Platform_instance.alloc, result);
 }
 
-Error CharString_splitSensitivex(CharString s, C8 c, CharStringList *result) {
+Error CharString_splitSensitivex(CharString s, C8 c, ListCharString *result) {
 	return CharString_splitSensitive(s, c, Platform_instance.alloc, result);
 }
 
-Error CharString_splitInsensitivex(CharString s, C8 c, CharStringList *result) {
+Error CharString_splitInsensitivex(CharString s, C8 c, ListCharString *result) {
 	return CharString_splitInsensitive(s, c, Platform_instance.alloc, result);
 }
 
-Error CharString_splitStringSensitivex(CharString s, CharString other, CharStringList *result) {
+Error CharString_splitStringSensitivex(CharString s, CharString other, ListCharString *result) {
 	return CharString_splitStringSensitive(s, other, Platform_instance.alloc, result);
 }
 
-Error CharString_splitStringInsensitivex(CharString s, CharString other, CharStringList *result) {
+Error CharString_splitStringInsensitivex(CharString s, CharString other, ListCharString *result) {
 	return CharString_splitStringInsensitive(s, other, Platform_instance.alloc, result);
 }
 
-Error CharString_splitLinex(CharString s, CharStringList *result) {
+Error CharString_splitLinex(CharString s, ListCharString *result) {
 	return CharString_splitLine(s, Platform_instance.alloc, result);
 }
 
@@ -376,8 +443,8 @@ Error CharString_insertStringx(CharString *s, CharString other, U64 i) {
 	return CharString_insertString(s, other, i, Platform_instance.alloc);
 }
 
-Error CharString_replaceAllStringx(CharString *s, CharString search, CharString replace, EStringCase caseSensitive) {
-	return CharString_replaceAllString(s, search, replace, caseSensitive, Platform_instance.alloc);
+Error CharString_replaceAllStringx(CharString *s, CharString search, CharString replace, EStringCase caseSensitive, U64 off) {
+	return CharString_replaceAllString(s, search, replace, caseSensitive, Platform_instance.alloc, off);
 }
 
 Error CharString_replaceStringx(
@@ -385,101 +452,94 @@ Error CharString_replaceStringx(
 	CharString search,
 	CharString replace,
 	EStringCase caseSensitive,
-	Bool isFirst
+	Bool isFirst,
+	U64 off
 ) {
-	return CharString_replaceString(s, search, replace, caseSensitive, Platform_instance.alloc, isFirst);
+	return CharString_replaceString(s, search, replace, caseSensitive, Platform_instance.alloc, isFirst, off);
 }
 
-Error CharString_replaceFirstStringx(CharString *s, CharString search, CharString replace, EStringCase caseSensitive) {
-	return CharString_replaceStringx(s, search, replace, caseSensitive, true);
+Error CharString_replaceFirstStringx(
+	CharString *s, CharString search, CharString replace, EStringCase caseSensitive, U64 off
+) {
+	return CharString_replaceStringx(s, search, replace, caseSensitive, true, off);
 }
 
-Error CharString_replaceLastStringx(CharString *s, CharString search, CharString replace, EStringCase caseSensitive) {
-	return CharString_replaceStringx(s, search, replace, caseSensitive, false);
+Error CharString_replaceLastStringx(
+	CharString *s, CharString search, CharString replace, EStringCase caseSensitive, U64 off
+) {
+	return CharString_replaceStringx(s, search, replace, caseSensitive, false, off);
 }
 
-Error CharString_replaceAllStringSensitivex(CharString *s, CharString search, CharString replace) {
-	return CharString_replaceAllStringSensitive(s, search, replace, Platform_instance.alloc);
+Error CharString_replaceAllStringSensitivex(CharString *s, CharString search, CharString replace, U64 off) {
+	return CharString_replaceAllStringSensitive(s, search, replace, Platform_instance.alloc, off);
 }
 
-Error CharString_replaceAllStringInsensitivex(CharString *s, CharString search, CharString replace) {
-	return CharString_replaceAllStringInsensitive(s, search, replace, Platform_instance.alloc);
+Error CharString_replaceAllStringInsensitivex(CharString *s, CharString search, CharString replace, U64 off) {
+	return CharString_replaceAllStringInsensitive(s, search, replace, Platform_instance.alloc, off);
 }
 
-Error CharString_replaceStringSensitivex(CharString *s, CharString search, CharString replace, Bool isFirst) {
-	return CharString_replaceStringSensitive(s, search, replace, Platform_instance.alloc, isFirst);
+Error CharString_replaceStringSensitivex(CharString *s, CharString search, CharString replace, Bool isFirst, U64 off) {
+	return CharString_replaceStringSensitive(s, search, replace, Platform_instance.alloc, isFirst, off);
 }
 
-Error CharString_replaceStringInsensitivex(CharString *s, CharString search, CharString replace, Bool isFirst) {
-	return CharString_replaceStringInsensitive(s, search, replace, Platform_instance.alloc, isFirst);
+Error CharString_replaceStringInsensitivex(CharString *s, CharString search, CharString replace, Bool isFirst, U64 off) {
+	return CharString_replaceStringInsensitive(s, search, replace, Platform_instance.alloc, isFirst, off);
 }
 
-Error CharString_replaceFirstStringSensitivex(CharString *s, CharString search, CharString replace) {
-	return CharString_replaceFirstStringSensitive(s, search, replace, Platform_instance.alloc);
+Error CharString_replaceFirstStringSensitivex(CharString *s, CharString search, CharString replace, U64 off) {
+	return CharString_replaceFirstStringSensitive(s, search, replace, Platform_instance.alloc, off);
 }
 
-Error CharString_replaceFirstStringInsensitivex(CharString *s, CharString search, CharString replace) {
-	return CharString_replaceFirstStringInsensitive(s, search, replace, Platform_instance.alloc);
+Error CharString_replaceFirstStringInsensitivex(CharString *s, CharString search, CharString replace, U64 off) {
+	return CharString_replaceFirstStringInsensitive(s, search, replace, Platform_instance.alloc, off);
 }
 
-Error CharString_replaceLastStringSensitivex(CharString *s, CharString search, CharString replace) {
-	return CharString_replaceLastStringSensitive(s, search, replace, Platform_instance.alloc);
+Error CharString_replaceLastStringSensitivex(CharString *s, CharString search, CharString replace, U64 off) {
+	return CharString_replaceLastStringSensitive(s, search, replace, Platform_instance.alloc, off);
 }
 
-Error CharString_replaceLastStringInsensitivex(CharString *s, CharString search, CharString replace) {
-	return CharString_replaceLastStringInsensitive(s, search, replace, Platform_instance.alloc);
+Error CharString_replaceLastStringInsensitivex(CharString *s, CharString search, CharString replace, U64 off) {
+	return CharString_replaceLastStringInsensitive(s, search, replace, Platform_instance.alloc, off);
 }
 
-Error CharString_findAllx(CharString s, C8 c, EStringCase caseSensitive, ListU64 *result) {
-	return CharString_findAll(s, c, Platform_instance.alloc, caseSensitive, result);
+Error CharString_findAllx(CharString s, C8 c, EStringCase caseSensitive, ListU64 *result, U64 off) {
+	return CharString_findAll(s, c, Platform_instance.alloc, caseSensitive, off, result);
 }
 
-Error CharString_findAllStringx(CharString s, CharString other, EStringCase caseSensitive, ListU64 *result) {
-	return CharString_findAllString(s, other, Platform_instance.alloc, caseSensitive, result);
+Error CharString_findAllStringx(CharString s, CharString other, EStringCase caseSensitive, ListU64 *result, U64 off) {
+	return CharString_findAllString(s, other, Platform_instance.alloc, caseSensitive, off, result);
 }
 
-Error CharString_findAllSensitivex(CharString s, C8 c, ListU64 *result) {
-	return CharString_findAllSensitive(s, c, Platform_instance.alloc, result);
+Error CharString_findAllSensitivex(CharString s, C8 c, U64 off, ListU64 *result) {
+	return CharString_findAllSensitive(s, c, off, Platform_instance.alloc, result);
 }
 
-Error CharString_findAllInsensitivex(CharString s, C8 c, ListU64 *result) {
-	return CharString_findAllInsensitive(s, c, Platform_instance.alloc, result);
+Error CharString_findAllInsensitivex(CharString s, C8 c, U64 off, ListU64 *result) {
+	return CharString_findAllInsensitive(s, c, off, Platform_instance.alloc, result);
 }
 
-Error CharString_findAllStringSensitivex(CharString s, CharString other, ListU64 *result) {
-	return CharString_findAllStringSensitive(s, other, Platform_instance.alloc, result);
+Error CharString_findAllStringSensitivex(CharString s, CharString other, U64 off, ListU64 *result) {
+	return CharString_findAllStringSensitive(s, other, off, Platform_instance.alloc, result);
 }
 
-Error CharString_findAllStringInsensitivex(CharString s, CharString other, ListU64 *result) {
-	return CharString_findAllStringInsensitive(s, other, Platform_instance.alloc, result);
+Error CharString_findAllStringInsensitivex(CharString s, CharString other, U64 off, ListU64 *result) {
+	return CharString_findAllStringInsensitive(s, other, off, Platform_instance.alloc, result);
 }
 
-Error CharStringList_createx(U64 length, CharStringList *result) {
-	return CharStringList_create(length, Platform_instance.alloc, result);
+Error ListCharString_createCopyUnderlyingx(ListCharString toCopy, ListCharString *arr) {
+	return ListCharString_createCopyUnderlying(toCopy, Platform_instance.alloc, arr);
 }
 
-Error CharStringList_createCopyx(CharStringList toCopy, CharStringList *arr) {
-	return CharStringList_createCopy(toCopy, Platform_instance.alloc, arr);
+Error ListCharString_combinex(ListCharString arr, CharString *result) {
+	return ListCharString_combine(arr, Platform_instance.alloc, result);
 }
 
-Error CharStringList_setx(CharStringList arr, U64 i, CharString str) {
-	return CharStringList_set(arr, i, str, Platform_instance.alloc);
+Error ListCharString_concatx(ListCharString arr, C8 between, CharString *result) {
+	return ListCharString_concat(arr, between, Platform_instance.alloc, result);
 }
 
-Error CharStringList_unsetx(CharStringList arr, U64 i) {
-	return CharStringList_unset(arr, i, Platform_instance.alloc);
-}
-
-Error CharStringList_combinex(CharStringList arr, CharString *result) {
-	return CharStringList_combine(arr, Platform_instance.alloc, result);
-}
-
-Error CharStringList_concatx(CharStringList arr, C8 between, CharString *result) {
-	return CharStringList_concat(arr, between, Platform_instance.alloc, result);
-}
-
-Error CharStringList_concatStringx(CharStringList arr, CharString between, CharString *result) {
-	return CharStringList_concatString(arr, between, Platform_instance.alloc, result);
+Error ListCharString_concatStringx(ListCharString arr, CharString between, CharString *result) {
+	return ListCharString_concatString(arr, between, Platform_instance.alloc, result);
 }
 
 //Format string
@@ -495,7 +555,7 @@ Error CharString_formatx(CharString *result, const C8 *format, ...) {
 
 	va_list arg1;
 	va_start(arg1, format);
-	Error err = CharString_formatVariadic(Platform_instance.alloc, result, format, arg1);
+	const Error err = CharString_formatVariadic(Platform_instance.alloc, result, format, arg1);
 	va_end(arg1);
 
 	return err;
@@ -577,4 +637,18 @@ Error Archive_foreachx(
 	EFileType type
 ) {
 	return Archive_foreach(archive, loc, callback, userData, isRecursive, type, Platform_instance.alloc);
+}
+
+//Thread
+
+Error Thread_createx(ThreadCallbackFunction callback, void *objectHandle, Thread **thread) {
+	return Thread_create(Platform_instance.alloc, callback, objectHandle, thread);
+}
+
+Bool Thread_freex(Thread **thread) {
+	return Thread_free(Platform_instance.alloc, thread);
+}
+
+Error Thread_waitAndCleanupx(Thread **thread) {
+	return Thread_waitAndCleanup(Platform_instance.alloc, thread);
 }

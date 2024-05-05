@@ -1,16 +1,16 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
-*  
+*
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
 *  the Free Software Foundation, either version 3 of the License, or
 *  (at your option) any later version.
-*  
+*
 *  This program is distributed in the hope that it will be useful,
 *  but WITHOUT ANY WARRANTY; without even the implied warranty of
 *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 *  GNU General Public License for more details.
-*  
+*
 *  You should have received a copy of the GNU General Public License
 *  along with this program. If not, see https://github.com/Oxsomi/core3/blob/main/LICENSE.
 *  Be aware that GPL3 requires closed source products to be GPL3 too if released to the public.
@@ -21,7 +21,10 @@
 #pragma once
 #include "types/types.h"
 
-typedef struct Error Error;
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef struct CharString CharString;
 
 typedef struct CASettings CASettings;
@@ -36,7 +39,7 @@ typedef struct ListCharString ListCharString;
 //oiCA
 
 Bool CAFile_freex(CAFile *caFile);
- 
+
 Error CAFile_writex(CAFile caFile, Buffer *result);
 Error CAFile_readx(Buffer file, const U32 encryptionKey[8], CAFile *caFile);
 
@@ -56,3 +59,7 @@ Error DLFile_addEntryUTF8x(DLFile *dlFile, Buffer entry);
 
 Error DLFile_writex(DLFile dlFile, Buffer *result);
 Error DLFile_readx(Buffer file, const U32 encryptionKey[8], Bool allowLeftOverData, DLFile *dlFile);
+
+#ifdef __cplusplus
+	}
+#endif

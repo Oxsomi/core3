@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -19,14 +19,17 @@
 */
 
 #pragma once
-#include "types/buffer.h"
+#include "types/types.h"
+
+#ifdef __cplusplus
+	extern "C" {
+#endif
 
 typedef enum EPipelineType {
-
 	EPipelineType_Graphics,
 	EPipelineType_Compute,
+	EPipelineType_RaytracingExt,
 	EPipelineType_Count
-
 } EPipelineType;
 
 typedef enum EPipelineStage {
@@ -35,36 +38,44 @@ typedef enum EPipelineStage {
 	EPipelineStage_Pixel,
 	EPipelineStage_Compute,
 	EPipelineStage_GeometryExt,			//Query graphics feature GeometryShader
-	EPipelineStage_HullExt,				//Query graphics feature TessellationShader
-	EPipelineStage_DomainExt,			//^
+	EPipelineStage_Hull,
+	EPipelineStage_Domain,
 
-	EPipelineStage_RtStart,
-	EPipelineStage_RtEnd = EPipelineStage_RtStart,		//TODO:
+	//Query graphics feature RayPipeline
 
-	EPipelineStage_Count = EPipelineStage_RtStart
+	EPipelineStage_RaygenExt,
+	EPipelineStage_CallableExt,
+	EPipelineStage_MissExt,
+	EPipelineStage_ClosestHitExt,
+	EPipelineStage_AnyHitExt,
+	EPipelineStage_IntersectionExt,
+
+	EPipelineStage_RtStart = EPipelineStage_RaygenExt,
+	EPipelineStage_RtEnd = EPipelineStage_IntersectionExt,
+	EPipelineStage_RtHitStart = EPipelineStage_ClosestHitExt,
+	EPipelineStage_RtHitEnd = EPipelineStage_IntersectionExt,
+
+	EPipelineStage_Count
 
 } EPipelineStage;
 
-typedef enum ECullMode {
+extern const C8 *EPipelineStage_names[];
 
+typedef enum ECullMode {
 	ECullMode_Back,
 	ECullMode_None,
 	ECullMode_Front,
 	ECullMode_Count
-
 } ECullMode;
 
 typedef enum ERasterizerFlags {
-
 	ERasterizerFlags_IsClockWise			= 1 << 0,		//Winding order
 	ERasterizerFlags_IsWireframeExt			= 1 << 1,		//Fill mode (only available with wireframe extension)
 	ERasterizerFlags_EnableDepthClamp		= 1 << 2,
 	ERasterizerFlags_EnableDepthBias		= 1 << 3
-
 } ERasterizerFlags;
 
 typedef enum ECompareOp {
-
 	ECompareOp_Gt,
 	ECompareOp_Geq,
 	ECompareOp_Eq,
@@ -74,11 +85,9 @@ typedef enum ECompareOp {
 	ECompareOp_Always,
 	ECompareOp_Never,
 	ECompareOp_Count
-
 } ECompareOp;
 
 typedef enum EStencilOp {
-
 	EStencilOp_Keep,
 	EStencilOp_Zero,
 	EStencilOp_Replace,
@@ -88,7 +97,6 @@ typedef enum EStencilOp {
 	EStencilOp_IncWrap,
 	EStencilOp_DecWrap,
 	EStencilOp_Count
-
 } EStencilOp;
 
 typedef enum EDepthStencilFlags {
@@ -102,7 +110,6 @@ typedef enum EDepthStencilFlags {
 } EDepthStencilFlags;
 
 typedef enum ELogicOpExt {
-
 	ELogicOpExt_Off,
 	ELogicOpExt_Clear,
 	ELogicOpExt_Set,
@@ -121,7 +128,6 @@ typedef enum ELogicOpExt {
 	ELogicOpExt_OrReverse,
 	ELogicOpExt_OrInvert,
 	ELogicOpExt_Count
-
 } ELogicOpExt;
 
 typedef enum EBlend {
@@ -157,14 +163,12 @@ typedef enum EBlend {
 } EBlend;
 
 typedef enum EBlendOp {
-
 	EBlendOp_Add,
 	EBlendOp_Subtract,
 	EBlendOp_ReverseSubtract,
 	EBlendOp_Min,
 	EBlendOp_Max,
 	EBlendOp_Count
-
 } EBlendOp;
 
 typedef enum EWriteMask {
@@ -182,13 +186,11 @@ typedef enum EWriteMask {
 } EWriteMask;
 
 typedef enum EMSAASamples {
-
 	EMSAASamples_Off,		//Turn off MSAA ("x1")
 	EMSAASamples_x2Ext,		//Query MSAA2x data types from device
 	EMSAASamples_x4,		//4x Always supported
 	EMSAASamples_x8Ext,		//Query MSAA8x data types from device
-	EMSAASamples_x16Ext		//Query MSAA16x data types from device
-
+	EMSAASamples_Count
 } EMSAASamples;
 
 typedef enum ETopologyMode {
@@ -214,9 +216,12 @@ typedef enum ETopologyMode {
 typedef struct PipelineStage {
 
 	EPipelineStage stageType;
-	U32 padding;
+	U32 binaryId;				//For raytracing shaders, indicates the shader offset in the shader stages
 
-	Buffer shaderBinary;
+	Buffer binary;				//Binary for non raytracing shaders
+
+	U32 localShaderId;			//RT only, for example; raygen index, miss index or callable index
+	U32 groupId;				//RT only (for raygen, miss or callable); the group id that's represented
 
 } PipelineStage;
 
@@ -225,7 +230,7 @@ typedef struct Rasterizer {
 	U16 cullMode;				//ECullMode
 	U16 flags;					//ERasterizerFlags
 	F32 depthBiasClamp;
-	F32 depthBiasConstantFactor;
+	I32 depthBiasConstantFactor;
 	F32 depthBiasSlopeFactor;
 
 } Rasterizer;
@@ -281,17 +286,6 @@ typedef struct VertexBindingLayout {
 
 } VertexBindingLayout;
 
-typedef enum EDepthStencilFormat {
-
-	EDepthStencilFormat_None,
-	EDepthStencilFormat_D16,		//Prefer this if stencil isn't needed and precision is no concern
-	EDepthStencilFormat_D32,
-	EDepthStencilFormat_D24S8Ext,	//On AMD this is unsupported, use D32S8 instead.
-	EDepthStencilFormat_D32S8,
-	EDepthStencilFormat_S8Ext,
-
-	EDepthStencilFormat_Count,
-
-	EDepthStencilFormat_StencilStart = EDepthStencilFormat_D24S8Ext
-
-} EDepthStencilFormat;
+#ifdef __cplusplus
+	}
+#endif

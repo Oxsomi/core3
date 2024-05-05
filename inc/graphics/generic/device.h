@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -21,10 +21,14 @@
 #pragma once
 #include "graphics/generic/device_info.h"
 #include "graphics/generic/allocator.h"
-#include "platforms/ref_ptr.h"
+#include "graphics/generic/descriptor.h"
+#include "types/ref_ptr.h"
 #include "types/list.h"
 
-typedef struct Error Error;
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef RefPtr GraphicsInstanceRef;
 typedef RefPtr DeviceBufferRef;
 
@@ -41,30 +45,21 @@ typedef struct CBufferData {
 
 } CBufferData;
 
-typedef struct BufferRange {
-	U64 startRange;
-	U64 endRange;
-} BufferRange;
-
-typedef struct TextureRange {
-	U16 startRange[3];
-	U16 endRange[3];
-	U16 levelId;
-	U16 padding;
-} TextureRange;
-
-U16 TextureRange_width(TextureRange r);
-U16 TextureRange_height(TextureRange r);
-U16 TextureRange_length(TextureRange r);
-
-typedef union DevicePendingRange {
-
-	BufferRange buffer;
-	TextureRange texture;
-
-} DevicePendingRange;
+typedef struct DescriptorStackTrace {
+	U32 resourceId, padding;
+	void *stackTrace[8];
+} DescriptorStackTrace;
 
 TListNamed(Lock*, ListLockPtr);
+TList(DescriptorStackTrace);
+
+typedef enum EGraphicsDeviceFlags {
+	EGraphicsDeviceFlags_None			= 0,
+	EGraphicsDeviceFlags_IsVerbose		= 1 << 0,	//Device creation is verbose
+	EGraphicsDeviceFlags_IsDebug		= 1 << 1,	//Debug features such as API/RT validation, debug marker/names
+	EGraphicsDeviceFlags_DisableRt		= 1 << 2,	//Don't allow raytracing to be enabled (might reduce driver overhead)
+	EGraphicsDeviceFlags_DisableDebug	= 1 << 3	//Force disable debugging even on debug mode. NDEBUG is leading otherwise
+} EGraphicsDeviceFlags;
 
 typedef struct GraphicsDevice {
 
@@ -73,6 +68,9 @@ typedef struct GraphicsDevice {
 	GraphicsDeviceInfo info;
 
 	U64 submitId;
+
+	EGraphicsDeviceFlags flags;
+	U32 padding;
 
 	Ns lastSubmit;
 
@@ -103,6 +101,15 @@ typedef struct GraphicsDevice {
 
 	U64 flushThreshold;							//When the pending bytes are too much and the device should flush
 
+	U64 pendingPrimitives;						//For determining if it's time to flush because of BLAS creation
+	U64 flushThresholdPrimitives;				//When the pending primitives are too much and the device should flush
+
+	//Used for allocating descriptors
+
+	Lock descriptorLock;
+	Buffer freeList[EDescriptorType_ResourceCount];
+	ListDescriptorStackTrace descriptorStackTraces;
+
 } GraphicsDevice;
 
 typedef RefPtr GraphicsDeviceRef;
@@ -116,11 +123,11 @@ Error GraphicsDeviceRef_inc(GraphicsDeviceRef *device);
 Error GraphicsDeviceRef_create(
 	GraphicsInstanceRef *instanceRef,
 	const GraphicsDeviceInfo *info,
-	Bool verbose,
+	EGraphicsDeviceFlags flags,
 	GraphicsDeviceRef **device
 );
 
-//Ensure there are no pending changes from non existent resources.
+//Ensure there are no pending changes from non-existent resources.
 Bool GraphicsDeviceRef_removePending(GraphicsDeviceRef *deviceRef, RefPtr *resource);
 
 typedef RefPtr CommandListRef;
@@ -152,3 +159,7 @@ Error GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef);
 
 Error GraphicsDeviceRef_handleNextFrame(GraphicsDeviceRef *deviceRef, void *commandBuffer);
 Error GraphicsDeviceRef_resizeStagingBuffer(GraphicsDeviceRef *deviceRef, U64 newSize);
+
+#ifdef __cplusplus
+	}
+#endif

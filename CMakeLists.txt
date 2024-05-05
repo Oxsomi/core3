@@ -1,4 +1,4 @@
-# OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+# OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 # Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 #
 # This program is free software: you can redistribute it and/or modify
@@ -17,7 +17,7 @@
 # To prevent this a separate license will have to be requested at contact@osomi.net for a premium;
 # This is called dual licensing.
 
-cmake_minimum_required(VERSION 3.13.0)
+cmake_minimum_required(VERSION 3.21.0)
 project(OxC3)
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
@@ -27,6 +27,10 @@ set(CMAKE_SUPPRESS_REGENERATION true)
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS OFF)
+
+set(CMAKE_CXX_STANDARD 20)				# We need some C++ to interface with DXC, but we wrap it using C
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -69,7 +73,7 @@ else()
 	add_compile_options(-Wall -Wextra -Werror)
 
 	if(EnableSIMD)
-		add_compile_options(-mfpmath=sse -msse -msse2 -msse3 -mssse3 -msse4 -msse4.1 -msse4.2 -mrdrnd -msha -maes -mbmi1)
+		add_compile_options(-mfpmath=sse -msse -msse2 -msse3 -mssse3 -msse4 -msse4.1 -msse4.2 -mrdrnd -msha -maes -mbmi2 -mf16c)
 	elseif(NOT RelaxFloat)
 		add_compile_options(-mfpmath=sse -msse)
 	endif()
@@ -88,9 +92,11 @@ set(_ARCH "ARCH_X64")
 if(EnableSIMD)
 	message("-- Enabling SIMD (-DEnableSIMD=ON)")
 	set(_SIMD "SIMD_SSE")
+	set(simd sse)
 else()
 	message("-- Disabling SIMD (-DEnableSIMD=OFF)")
 	set(_SIMD "SIMD_NONE")
+	set(simd none)
 endif()
 
 if(RelaxFloat)
@@ -113,24 +119,55 @@ if(WIN32)
 	message("-- Enabling Windows support...")
 	set(platform windows)
 	set(_PLATFORM_TYPE PLATFORM_WINDOWS)
+elseif(IOS)
+	message("-- Enabling iOS support...")
+	set(platform ios)
+	set(_PLATFORM_TYPE PLATFORM_IOS)
+elseif(APPLE)
+	message("-- Enabling OS X support...")
+	set(platform osx)
+	set(_PLATFORM_TYPE PLATFORM_OSX)
+elseif(ANDROID)
+	message("-- Enabling Android support...")
+	set(platform android)
+	set(_PLATFORM_TYPE PLATFORM_ANDROID)
 else()
 	message("-- Enabling Linux support...")
 	set(platform linux)
 	set(_PLATFORM_TYPE PLATFORM_LINUX)
 endif()
 
+set(ForceUpdateDeps OFF CACHE BOOL "Force update dependencies")
+set(ARM OFF CACHE BOOL "Force ARM executable")											# //TODO:
+set(ForceVulkan OFF CACHE BOOL "Force Vulkan support (disable native API if available)")
+
 # Types
 
-file(GLOB_RECURSE typesHeaders "inc/file/*.h" "inc/math/*.h" "inc/types/*.h" "inc/cfg/*.h" "*.h.in")
-file(GLOB_RECURSE typesSources "src/file/*.c" "src/math/*.c" "src/types/*.c")
+file(GLOB_RECURSE typesHeaders "inc/types/*.h")
+file(GLOB typesSources "src/types/*.c")
+file(GLOB_RECURSE typesPlatformSources "src/types/platforms/${platform}/*.c")
+file(GLOB_RECURSE typesPlatformHeaders "inc/types/platforms/${platform}/*.h")
+file(GLOB_RECURSE typesSIMDSources "src/types/simd/${simd}/*.c")
+
+if(UNIX)
+	file(GLOB_RECURSE typesUnixSources "src/types/platforms/unix/*.c")
+	list(APPEND typesPlatformSources ${typesUnixSources})
+endif()
 
 add_library(
 	OxC3_types
 	STATIC
 	${typesHeaders}
 	${typesSources}
+	${typesPlatformSources}
+	${typesSIMDSources}
+	${typesPlatformHeaders}
 	CMakeLists.txt
 )
+
+source_group("Source Files (${platform})" FILES ${typesPlatformSources})
+source_group("Header Files (${platform})" FILES ${typesPlatformHeaders})
+source_group("Source Files (simd: ${simd})" FILES ${typesSIMDSources})
 
 set_target_properties(OxC3_types PROPERTIES FOLDER Oxsomi)
 
@@ -140,6 +177,8 @@ target_include_directories(OxC3_types PUBLIC inc)
 
 if(WIN32)
 	target_link_libraries(OxC3_types PUBLIC Bcrypt.lib)
+elseif(APPLE)
+	target_link_libraries(OxC3_types PUBLIC "-framework Security")
 endif()
 
 # Formats
@@ -163,34 +202,73 @@ target_link_libraries(OxC3_formats PUBLIC OxC3_types)
 
 message("-- Targeting platform: ${platform}")
 
-file(GLOB platformsHeaders "inc/platforms/*.h")
-file(GLOB_RECURSE platformsHeadersExt "inc/platforms/ext/*.h")
-file(GLOB_RECURSE platformsHeadersDependent "inc/platforms/ext/${platform}/*.h")
+file(GLOB platformsHeaders "inc/platforms/*.h" "inc/platforms/ext/*.h")
 
-file(GLOB_RECURSE platformsSources "src/platforms/${platform}/*.c" "src/platforms/generic/*.c")
+file(GLOB_RECURSE platformsPlatformSources "src/platforms/${platform}/*.c")
+file(GLOB_RECURSE platformsPlatformIncludes "inc/platforms/${platform}/*.h")
+file(GLOB_RECURSE platformsSources "src/platforms/generic/*.c")
+file(GLOB_RECURSE platformsSIMDSources "src/platforms/simd/${simd}/*.c")
+
+if(UNIX)
+	file(GLOB_RECURSE platformsUnixSources "src/platforms/unix/*.c")
+	list(APPEND platformsSources ${platformsUnixSources})
+endif()
 
 add_library(
 	OxC3_platforms
 	STATIC
 	${platformsHeaders}
-	${platformsHeadersExt}
-	${platformsHeadersDependent}
+	${platformsPlatformSources}
+	${platformsPlatformIncludes}
 	${platformsSources}
+	${platformsSIMDSources}
 	CMakeLists.txt
 )
+
+source_group("Source Files (${platform})" FILES ${platformsPlatformSources})
+source_group("Header Files (${platform})" FILES ${platformsPlatformIncludes})
+source_group("Source Files (simd: ${simd})" FILES ${platformsSIMDSources})
 
 set_target_properties(OxC3_platforms PROPERTIES FOLDER Oxsomi)
 
 target_link_libraries(OxC3_platforms PUBLIC OxC3_formats)
 
+if(APPLE)
+	target_link_libraries(OxC3_platforms PUBLIC "-framework CoreFoundation" "-framework ApplicationServices" "-framework AppKit")
+endif()
+
+# Download DXC, otherwise we can't use latest features and DXIL code will be unsigned
+
+if(${ForceUpdateDeps} OR (NOT EXISTS "${CMAKE_BINARY_DIR}/external/dxc/"))
+
+	message("-- Downloading and unzipping Microsoft.Direct3D.DXC")
+
+	file(REMOVE_RECURSE "${CMAKE_BINARY_DIR}/external/dxc/")
+	file(DOWNLOAD "https://www.nuget.org/api/v2/package/Microsoft.Direct3D.DXC/" "${CMAKE_BINARY_DIR}/external/dxc.zip")
+	file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/external/dxc/)
+
+	execute_process(
+		COMMAND ${CMAKE_COMMAND} -E tar xzf ${CMAKE_BINARY_DIR}/external/dxc.zip
+		WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/external/dxc/
+	)
+
+	file(REMOVE "${CMAKE_BINARY_DIR}/external/dxc.zip")
+
+endif()
+
 # Graphics layer
 
-if(TRUE)
+if(WIN32 AND NOT ${ForceVulkan})
+	message("-- Enabling DirectX12 support...")
+	set(graphicsApi directx12)
+	set(_GRAPHICS_API GRAPHICS_API_D3D12)
+else()
 	message("-- Enabling Vulkan support...")
 	set(graphicsApi vulkan)
-	set(_GRAPHICS_API EGraphicsApi_Vulkan)
-	set_property(GLOBAL PROPERTY graphicsApi "${graphicsApi}")
+	set(_GRAPHICS_API GRAPHICS_API_VULKAN)
 endif()
+
+set_property(GLOBAL PROPERTY graphicsApi "${graphicsApi}")
 
 message("-- Targeting graphics api: ${graphicsApi} on platform ${platform}")
 
@@ -226,35 +304,155 @@ set_target_properties(OxC3_graphics PROPERTIES FOLDER Oxsomi)
 
 target_link_libraries(OxC3_graphics PUBLIC OxC3_platforms)
 
+# Vulkan setup
+
 if("${graphicsApi}" STREQUAL "vulkan")
-	
+
+	if(DEFINED ENV{VULKAN_SDK})
+		include_directories(OxC3_graphics PUBLIC $ENV{VULKAN_SDK}/include)
+		target_link_directories(OxC3_graphics PUBLIC $ENV{VULKAN_SDK}/lib)
+	else()
+		message(FATAL_ERROR "-- Vulkan incompatible: Please download the latest Vulkan SDK so you can compile")
+	endif()
+
 	if(WIN32)
-		if(DEFINED ENV{VULKAN_SDK})
-
 			set(VULKAN_LIB vulkan-1)
-			
-			include_directories(OxC3_graphics PUBLIC $ENV{VULKAN_SDK}/Include)
-			target_link_directories(OxC3_graphics PUBLIC $ENV{VULKAN_SDK}/Lib)
-
-		else()
-			message(FATAL_ERROR "-- Vulkan incompatible: Please download the latest Vulkan SDK so you can compile")
-		endif()
 	else()
 		set(VULKAN_LIB vulkan)
 	endif()
-	
+
 	if("${platform}" STREQUAL "windows")
 		add_definitions(-D_VK_SURFACE_EXT="VK_KHR_win32_surface")
 	elseif("${platform}" STREQUAL "android")
 		add_definitions(-D_VK_SURFACE_EXT="VK_KHR_android_surface")
+	elseif("${platform}" STREQUAL "osx")
+		add_definitions(-D_VK_SURFACE_EXT="VK_MVK_macos_surface")
+	elseif("${platform}" STREQUAL "ios")
+		add_definitions(-D_VK_SURFACE_EXT="VK_MVK_ios_surface")
 	else()
 		message(FATAL_ERROR "Platform not supported for Vulkan yet: ${platform}")
 	endif()
 
 	target_link_libraries(OxC3_graphics PUBLIC ${VULKAN_LIB})
 
+# DirectX setup
+
 elseif("${graphicsApi}" STREQUAL "directx12")
-	message(FATAL_ERROR "Graphics api not supported yet: DirectX12")
+
+	# Download warp, so more extensive GPUBV is available
+
+	if(${ForceUpdateDeps} OR (NOT EXISTS "${CMAKE_BINARY_DIR}/external/warp/"))
+
+		message("-- Downloading and unzipping Microsoft.Direct3D.WARP")
+
+		file(REMOVE_RECURSE "${CMAKE_BINARY_DIR}/external/warp/")
+		file(DOWNLOAD "https://www.nuget.org/api/v2/package/Microsoft.Direct3D.WARP/" "${CMAKE_BINARY_DIR}/external/warp.zip")
+		file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/external/warp/)
+
+		execute_process(
+			COMMAND ${CMAKE_COMMAND} -E tar xzf ${CMAKE_BINARY_DIR}/external/warp.zip
+			WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/external/warp/
+		)
+
+		file(REMOVE "${CMAKE_BINARY_DIR}/external/warp.zip")
+
+	endif()
+
+	# Download the agility SDK so newer features are always available if the driver supports them
+
+	if(${ForceUpdateDeps} OR (NOT EXISTS "${CMAKE_BINARY_DIR}/external/agility/"))
+
+		message("-- Downloading and unzipping Microsoft.Direct3D.D3D12")
+
+		file(REMOVE_RECURSE "${CMAKE_BINARY_DIR}/external/agility/")
+		file(DOWNLOAD "https://www.nuget.org/api/v2/package/Microsoft.Direct3D.D3D12/" "${CMAKE_BINARY_DIR}/external/agility.zip")
+		file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/external/agility/)
+
+		execute_process(
+			COMMAND ${CMAKE_COMMAND} -E tar xzf ${CMAKE_BINARY_DIR}/external/agility.zip
+			WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/external/agility/
+		)
+
+		file(REMOVE "${CMAKE_BINARY_DIR}/external/agility.zip")
+
+		write_file(
+			"${CMAKE_BINARY_DIR}/external/agility/version.c"
+			"#include <stdint.h>\n"
+			"#include \"d3d12.h\"\n"
+			"__declspec(dllexport) extern const uint32_t D3D12SDKVersion = D3D12_SDK_VERSION;\n"
+			"__declspec(dllexport) extern const char *D3D12SDKPath = \"./D3D12/\";"
+		)
+
+	endif()
+
+	# Add agility source files and includes as static lib
+
+	file(GLOB_RECURSE agilityInclude "${CMAKE_BINARY_DIR}/external/agility/build/native/include")
+	file(GLOB_RECURSE agilitySrc "${CMAKE_BINARY_DIR}/external/agility/build/native/src")
+
+	add_library(
+		DirectX12
+		STATIC
+		${agilityInclude}
+		"${CMAKE_BINARY_DIR}/external/agility/version.c"
+		CMakeLists.txt
+	)
+
+	target_link_libraries(DirectX12 PUBLIC dxgi d3d12)
+	target_link_libraries(OxC3_graphics PUBLIC DirectX12)
+	target_include_directories(DirectX12 PUBLIC "${CMAKE_BINARY_DIR}/external/agility/build/native/include")
+
+	set_target_properties(DirectX12 PROPERTIES FOLDER External/D3D12)
+
+	# Add an interface to link to that copies to target directory
+
+	if(NOT ${ARM})
+
+		# AMD AGS and NVAPI are required because DirectX12 was apparently not good enough :/
+		# These are not supported for ARM, so don't include them there
+
+		# NVAPI, used for NV extensions and getting driver version
+
+		target_link_libraries(DirectX12 PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/external/nvapi/amd64/nvapi64.lib")
+		target_include_directories(DirectX12 PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/external/nvapi")
+
+		# AMD AGS, used to get driver version
+
+		target_link_libraries(DirectX12 PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/external/AGS_SDK/ags_lib/lib/amd_ags_x64.lib")
+		target_include_directories(DirectX12 PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/external/AGS_SDK/ags_lib/inc")
+
+		add_custom_command(TARGET DirectX12 POST_BUILD
+			COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin"
+			COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin/$<CONFIG>"
+			COMMAND ${CMAKE_COMMAND} -E copy_if_different
+			"${CMAKE_BINARY_DIR}/external/warp/build/native/amd64/d3d10warp.dll"
+			"${CMAKE_CURRENT_SOURCE_DIR}/external/AGS_SDK/ags_lib/lib/amd_ags_x64.dll"
+			"${CMAKE_BINARY_DIR}/bin/$<CONFIG>/"
+			COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin/$<CONFIG>/D3D12/"
+			COMMAND ${CMAKE_COMMAND} -E copy_if_different
+			"${CMAKE_BINARY_DIR}/external/agility/build/native/bin/x64/D3D12Core.dll"
+			"${CMAKE_BINARY_DIR}/external/agility/build/native/bin/x64/d3d12SDKLayers.dll"
+			"${CMAKE_BINARY_DIR}/bin/$<CONFIG>/D3D12/"
+		)
+
+	else()
+
+		message(WARNING "-- ARM doesn't support d3d10warp or NVAPI, AMDAGS until the Direct3D.Warp package does and NVAPI/AMD AGS GitHub repo does")
+
+		target_link_libraries(DirectX12 PUBLIC "${CMAKE_BINARY_DIR}/external/win_pix_runtime/bin/ARM64/WinPixEventRuntime.lib")
+
+		add_custom_command(TARGET DirectX12 POST_BUILD
+			COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin"
+			COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin/$<CONFIG>"
+			COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin/$<CONFIG>/D3D12/"
+			COMMAND ${CMAKE_COMMAND} -E copy_if_different
+			"${CMAKE_BINARY_DIR}/external/agility/build/native/bin/arm64/D3D12Core.dll"
+			"${CMAKE_BINARY_DIR}/external/agility/build/native/bin/arm64/d3d12SDKLayers.dll"
+			"${CMAKE_BINARY_DIR}/bin/$<CONFIG>/D3D12/"
+		)
+
+	endif()
+
 elseif("${graphicsApi}" STREQUAL "metal")
 	message(FATAL_ERROR "Graphics api not supported yet: Metal")
 elseif("${graphicsApi}" STREQUAL "webgpu")
@@ -310,35 +508,35 @@ macro(add_virtual_files)
 	if(NOT TARGET ${_ARGS_TARGET})
 		message(FATAL_ERROR "add_virtual_files: target ${_ARGS_TARGET} not present.")
 	endif()
-	
+
 	if(NOT _ARGS_ROOT)
 		message(FATAL_ERROR "add_virtual_files: 'ROOT' argument required.")
 	endif()
-	
+
 	if(NOT IS_DIRECTORY ${_ARGS_ROOT})
 		message(FATAL_ERROR "add_virtual_files: 'ROOT' folder not present.")
 	endif()
-	
+
 	if(NOT _ARGS_NAME)
 		message(FATAL_ERROR "add_virtual_files: 'NAME' argument required.")
 	endif()
-	
+
 	if(NOT _ARGS_SELF)
 		message(FATAL_ERROR "add_virtual_files: 'SELF' argument required.")
 	endif()
-	
+
 	if(NOT _ARGS_NAME MATCHES "^[0-9A-Za-z_\$]+$")
 		message(FATAL_ERROR "add_virtual_files: 'NAME' has to conform to alphanumeric (plus _ and $).")
 	endif()
-	
+
 	if(NOT _ARGS_TARGET MATCHES "^[0-9A-Za-z_\$]+$")
 		message(FATAL_ERROR "add_virtual_files: 'TARGET' has to conform to alphanumeric (plus _ and $).")
 	endif()
 
 	string(TOUPPER ${_ARGS_TARGET} ANGRY_TARGET)
-	
-	if(ANGRY_TARGET MATCHES "access" OR ANGRY_TARGET MATCHES "function")
-		message(FATAL_ERROR "add_virtual_files: 'TARGET' can't be 'access' or 'function'.")
+
+	if(ANGRY_TARGET MATCHES "ACCESS" OR ANGRY_TARGET MATCHES "FUNCTION" OR ANGRY_TARGET MATCHES "NETWORK")
+		message(FATAL_ERROR "add_virtual_files: 'TARGET' can't be 'access' or 'function' or 'network'.")
 	endif()
 
 	# Add processed file as a file
@@ -351,13 +549,15 @@ macro(add_virtual_files)
 			WORKING_DIRECTORY ${_ARGS_SELF}
 		)
 
+		# message("-- ${_ARGS_TARGET}_package_${_ARGS_NAME}: OxC3 file package -i \"${_ARGS_ROOT}\" -o \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA\" @ work dir ${_ARGS_SELF}")
+
 		set_target_properties(${_ARGS_TARGET}_package_${_ARGS_NAME} PROPERTIES FOLDER Oxsomi/package)
 
 		add_dependencies(${_ARGS_TARGET} ${_ARGS_TARGET}_package_${_ARGS_NAME} OxC3)
 
 		get_property(res TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST)
 		set_property(TARGET ${_ARGS_TARGET} PROPERTY RESOURCE_LIST ${_ARGS_TARGET}/${_ARGS_NAME}\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ RCDATA\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \"${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA\"\n${res})
-		
+
 	endif()
 
 endmacro()
@@ -382,13 +582,13 @@ macro(add_virtual_dependencies)
 	if(NOT TARGET ${_ARGS_TARGET})
 		message(FATAL_ERROR "add_virtual_dependencies: target \"${_ARGS_TARGET}\" not present.")
 	endif()
-	
+
 	if(NOT _ARGS_TARGET MATCHES "^[0-9A-Za-z_\$]+$")
 		message(FATAL_ERROR "add_virtual_dependencies: 'TARGET' has to conform to alphanumeric (plus _ and $).")
 	endif()
 
 	# Add dependencies
-	
+
 	if(_ARGS_DEPENDENCIES)
 		foreach(file ${_ARGS_DEPENDENCIES})
 
@@ -424,7 +624,7 @@ function(configure_virtual_files target)
 			target_sources(${target} PRIVATE "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${target}.rc")
 		endif()
 	endif()
-	
+
 endfunction()
 
 # Tests
@@ -437,9 +637,60 @@ add_executable(
 	CMakeLists.txt
 )
 
-target_link_libraries(OxC3_test PUBLIC OxC3_types)
+target_link_libraries(OxC3_test PUBLIC OxC3_platforms)
 
 set_target_properties(OxC3_test PROPERTIES FOLDER Oxsomi/test)
+
+# Shader compiler, useful for baker and runtime if required by the app (though should only be used for editor applications)
+
+file(GLOB_RECURSE compilerHeaders "inc/shader_compiler/*.h")
+file(GLOB_RECURSE compilerSources "src/shader_compiler/*.c" "src/shader_compiler/*.cpp")	# Some CPP to interface with DXC
+
+add_library(
+	OxC3_shader_compiler
+	STATIC
+	${compilerHeaders}
+	${compilerSources}
+	CMakeLists.txt
+)
+
+set_target_properties(OxC3_shader_compiler PROPERTIES FOLDER Oxsomi)
+target_link_libraries(OxC3_shader_compiler PUBLIC OxC3_platforms)
+
+target_include_directories(OxC3_shader_compiler PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/external/nvapi")
+target_include_directories(OxC3_shader_compiler PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/external/DirectX-Headers/include")
+
+# Add DXC
+
+if(NOT ${ARM})
+
+	target_link_libraries(OxC3_shader_compiler PUBLIC "${CMAKE_BINARY_DIR}/external/dxc/build/native/lib/x64/dxcompiler.lib")
+	
+	add_custom_command(TARGET OxC3_shader_compiler POST_BUILD
+		COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin"
+		COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin/$<CONFIG>"
+		COMMAND ${CMAKE_COMMAND} -E copy_if_different
+		"${CMAKE_BINARY_DIR}/external/dxc/build/native/bin/x64/dxcompiler.dll"
+		"${CMAKE_BINARY_DIR}/external/dxc/build/native/bin/x64/dxil.dll"
+		"${CMAKE_BINARY_DIR}/bin/$<CONFIG>/"
+	)
+
+else()
+
+	target_link_libraries(OxC3_shader_compiler PUBLIC "${CMAKE_BINARY_DIR}/external/dxc/build/native/lib/arm64/dxcompiler.lib")
+	
+	add_custom_command(TARGET OxC3_shader_compiler POST_BUILD
+		COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin"
+		COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin/$<CONFIG>"
+		COMMAND ${CMAKE_COMMAND} -E copy_if_different
+		"${CMAKE_BINARY_DIR}/external/dxc/build/native/bin/arm64/dxcompiler.dll"
+		"${CMAKE_BINARY_DIR}/external/dxc/build/native/bin/arm64/dxil.dll"
+		"${CMAKE_BINARY_DIR}/bin/$<CONFIG>/"
+	)
+
+endif()
+
+target_include_directories(OxC3_shader_compiler PUBLIC "${CMAKE_BINARY_DIR}/external/dxc/build/native/include")
 
 # OxC3 tool
 
@@ -455,7 +706,7 @@ add_executable(
 
 set_target_properties(OxC3 PROPERTIES FOLDER Oxsomi)
 
-target_link_libraries(OxC3 PUBLIC OxC3_platforms)
+target_link_libraries(OxC3 PUBLIC OxC3_shader_compiler)
 target_include_directories(OxC3 PUBLIC tools/inc)
 
 configure_icon(OxC3 "${CMAKE_CURRENT_SOURCE_DIR}/res/logo.ico")

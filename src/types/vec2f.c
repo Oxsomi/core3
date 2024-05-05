@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -18,6 +18,7 @@
 *  This is called dual licensing.
 */
 
+#include "types/math.h"
 #include "types/vec.h"
 
 F32x2 F32x2_one() { return F32x2_xx2(1); }
@@ -45,8 +46,8 @@ F32x2 F32x2_normalize(F32x2 v) { return F32x2_mul(v, F32x2_xx2(1 / F32x2_len(v))
 
 //https://registry.khronos.org/OpenGL-Refpages/gl4/html/reflect.xhtml
 
-F32x2 F32x2_reflect(F32x2 I, F32x2 N) {
-	return F32x2_sub(I, F32x2_mul(N, F32x2_xx2(2 * F32x2_dot(N, I))));
+F32x2 F32x2_reflect(F32x2 i, F32x2 n) {
+	return F32x2_sub(i, F32x2_mul(n, F32x2_xx2(2 * F32x2_dot(n, i))));
 }
 
 Bool F32x2_eq2(F32x2 a, F32x2 b) { return F32x2_all(F32x2_eq(a, b)); }
@@ -68,8 +69,8 @@ F32x2 F32x2_sign(F32x2 v) {
 
 F32x2 F32x2_abs(F32x2 v) { return F32x2_mul(F32x2_sign(v), v); }
 
-Bool F32x2_all(F32x2 b) { return F32x2_reduce(F32x2_neq(b, F32x2_zero())) == 4; }
-Bool F32x2_any(F32x2 b) { return F32x2_reduce(F32x2_neq(b, F32x2_zero())); }
+Bool F32x2_all(F32x2 a) { return F32x2_reduce(F32x2_neq(a, F32x2_zero())) == 4; }
+Bool F32x2_any(F32x2 a) { return F32x2_reduce(F32x2_neq(a, F32x2_zero())); }
 
 F32x2 F32x2_load1(const F32 *arr) { return arr ? F32x2_create1(*arr) : F32x2_zero(); }
 F32x2 F32x2_load2(const F32 *arr) { return arr ? F32x2_create2(*arr, arr[1]) : F32x2_zero(); }
@@ -112,7 +113,7 @@ F32x4 F32x4_fromF32x2(F32x2 a) { return F32x4_load2((const F32*) &a); }
 
 //Cast from vec2f to vec4
 
-F32x4 F32x2_create2_4(F32x2 a, F32x2 b) { return F32x4_create4(F32x2_x(a), F32x2_y(a), F32x2_x(b), F32x2_y(b)); }
+F32x4 F32x4_create2_2(F32x2 a, F32x2 b) { return F32x4_create4(F32x2_x(a), F32x2_y(a), F32x2_x(b), F32x2_y(b)); }
 
 F32x4 F32x4_create2_1_1(F32x2 a, F32 b, F32 c) { return F32x4_create4(F32x2_x(a), F32x2_y(a), b, c); }
 F32x4 F32x4_create1_2_1(F32 a, F32x2 b, F32 c) { return F32x4_create4(a, F32x2_x(b), F32x2_y(b), c); }

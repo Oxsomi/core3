@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -30,13 +30,13 @@ const C8 *vkApiDump = "VK_LAYER_LUNARG_api_dump";
 
 //#define _GRAPHICS_VERBOSE_DEBUGGING
 
-Error VkGraphicsInstance_getLayers(ListConstC8 *layers) {
+Error VkGraphicsInstance_getLayers(Bool isDebug, ListConstC8 *layers) {
 
-	layers;
+	(void) layers;
 
-	#ifndef NDEBUG
+	if(isDebug) {
 
-		Error err = ListConstC8_pushBackx(layers, vkValidation);
+		const Error err = ListConstC8_pushBackx(layers, vkValidation);
 
 		if(err.genericError)
 			return err;
@@ -46,8 +46,7 @@ Error VkGraphicsInstance_getLayers(ListConstC8 *layers) {
 		#else
 			return Error_none();
 		#endif
+	}
 
-	#else
-		return Error_none();
-	#endif
+	return Error_none();
 }

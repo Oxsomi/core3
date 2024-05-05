@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -28,7 +28,7 @@
 #include "platforms/ext/stringx.h"
 #include "platforms/log.h"
 #include "types/error.h"
-#include "types/buffer.h"
+#include "types/math.h"
 #include "types/string.h"
 
 static const VkMemoryPropertyFlags host = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
@@ -46,7 +46,7 @@ Error VkDeviceMemoryAllocator_findMemory(
 
 	//Find suitable memory type
 
-	VkMemoryPropertyFlags all = local | host | coherent;
+	const VkMemoryPropertyFlags all = local | host | coherent;
 
 	VkMemoryPropertyFlags properties[3] = {			//Contains local if force cpu sided is turned off
 		host | coherent,
@@ -111,12 +111,12 @@ Error VkDeviceMemoryAllocator_findMemory(
 		if(!((memoryBits >> i) & 1))
 			continue;
 
-		VkMemoryType type = deviceExt->memoryProperties.memoryTypes[i];
+		const VkMemoryType type = deviceExt->memoryProperties.memoryTypes[i];
 
 		if(type.heapIndex != heapIds[0] && type.heapIndex != heapIds[1])
 			continue;
 
-		VkMemoryPropertyFlags propFlag = type.propertyFlags;
+		const VkMemoryPropertyFlags propFlag = type.propertyFlags;
 
 		for(U32 j = 0; j < propertyId; ++j) {
 
@@ -161,7 +161,7 @@ Error DeviceMemoryAllocator_allocate(
 	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(allocator->device, Vk);
 	VkGraphicsInstance *instanceExt = GraphicsInstance_ext(GraphicsInstanceRef_ptr(allocator->device->instance), Vk);
 
-	instanceExt;
+	(void)instanceExt;
 
 	VkMemoryRequirements2 req = *(VkMemoryRequirements2*) requirementsExt;
 	VkMemoryRequirements memReq = req.memoryRequirements;
@@ -212,15 +212,23 @@ Error DeviceMemoryAllocator_allocate(
 
 	U32 memoryId = 0;
 	VkMemoryPropertyFlags prop = 0;
-	Error err = VkDeviceMemoryAllocator_findMemory(deviceExt, cpuSided, memReq.memoryTypeBits, &memoryId, &prop, NULL);
+	Error err = VkDeviceMemoryAllocator_findMemory(
+		deviceExt, cpuSided, memReq.memoryTypeBits, &memoryId, &prop, NULL
+	);
 
 	if(err.genericError)
 		return err;
-		
+
 	U64 realBlockSize = (U64_max(blockSize, memReq.size * 2) + blockSize - 1) / blockSize * blockSize;
+
+	VkMemoryAllocateFlagsInfo allocNext = (VkMemoryAllocateFlagsInfo) {
+		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO,
+		.flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT
+	};
 
 	VkMemoryAllocateInfo alloc = (VkMemoryAllocateInfo) {
 		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+		.pNext = resourceType == EResourceType_DeviceBuffer ? &allocNext : NULL,
 		.allocationSize = isDedicated ? memReq.size : realBlockSize,
 		.memoryTypeIndex = memoryId
 	};
@@ -235,7 +243,7 @@ Error DeviceMemoryAllocator_allocate(
 	void *mappedMem = NULL;
 
 	if(prop & host)
-		_gotoIfError(clean, vkCheck(vkMapMemory(deviceExt->device, mem, 0, alloc.allocationSize, 0, &mappedMem)));
+		gotoIfError(clean, vkCheck(vkMapMemory(deviceExt->device, mem, 0, alloc.allocationSize, 0, &mappedMem)))
 
 	//Initialize block
 
@@ -243,16 +251,15 @@ Error DeviceMemoryAllocator_allocate(
 		.typeExt = memReq.memoryTypeBits,
 		.allocationTypeExt = (U16) prop,
 		.isDedicated = isDedicated,
-		.mappedMemory = mappedMem,
+		.mappedMemoryExt = mappedMem,
 		.ext = mem,
-		.resourceType = resourceType
+		.resourceType = (U8) resourceType
 	};
 
-	_gotoIfError(clean, AllocationBuffer_createx(alloc.allocationSize, true, &block.allocations));
+	gotoIfError(clean, AllocationBuffer_createx(alloc.allocationSize, true, &block.allocations))
 
-	#ifndef NDEBUG
-		Log_captureStackTrace(block.stackTrace, sizeof(block.stackTrace) / sizeof(void*), 1);
-	#endif
+	if(allocator->device->flags & EGraphicsDeviceFlags_IsDebug)
+		Log_captureStackTracex(block.stackTrace, sizeof(block.stackTrace) / sizeof(void*), 1);
 
 	//Find a spot in the blocks list
 
@@ -263,14 +270,14 @@ Error DeviceMemoryAllocator_allocate(
 			break;
 
 	const U8 *allocLoc = NULL;
-	_gotoIfError(clean, AllocationBuffer_allocateBlockx(&block.allocations, memReq.size, memReq.alignment, &allocLoc));
+	gotoIfError(clean, AllocationBuffer_allocateBlockx(&block.allocations, memReq.size, memReq.alignment, &allocLoc))
 
 	if(i == allocator->blocks.length) {
-		
-		if(i == U32_MAX)
-			_gotoIfError(clean, Error_outOfBounds(0, i, U32_MAX, "DeviceMemoryAllocator_allocate() block out of bounds"));
 
-		_gotoIfError(clean, ListDeviceMemoryBlock_pushBackx(&allocator->blocks, block))
+		if(i == U32_MAX)
+			gotoIfError(clean, Error_outOfBounds(0, i, U32_MAX, "DeviceMemoryAllocator_allocate() block out of bounds"))
+
+		gotoIfError(clean, ListDeviceMemoryBlock_pushBackx(&allocator->blocks, block))
 	}
 
 	else allocator->blocks.ptrNonConst[i] = block;
@@ -278,35 +285,31 @@ Error DeviceMemoryAllocator_allocate(
 	*blockId = (U32) i;
 	*blockOffset = (U64) allocLoc;
 
-	if(CharString_length(objectName)) {
+	if(
+		(allocator->device->flags & EGraphicsDeviceFlags_IsDebug) &&
+		CharString_length(objectName) && instanceExt->debugSetName
+	) {
 
-		#ifndef NDEBUG
+		gotoIfError(clean, CharString_formatx(
+			&temp,
+			isDedicated ? "Memory block %"PRIu32" (host: %s, coherent: %s, device: %s): %s" :
+			"Memory block %"PRIu32" (host: %s, coherent: %s, device: %s)",
+			(U32) i,
+			prop & host ? "true" : "false",
+			prop & coherent ? "true" : "false",
+			prop & local ? "true" : "false",
+			objectName.ptr
+		))
 
-			if(instanceExt->debugSetName) {
+		VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
+			.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+			.objectType = VK_OBJECT_TYPE_DEVICE_MEMORY,
+			.pObjectName = temp.ptr,
+			.objectHandle = (U64) mem
+		};
 
-				_gotoIfError(clean, CharString_formatx(
-					&temp,
-					isDedicated ? "Memory block %u (host: %s, coherent: %s, device: %s): %s" :
-					"Memory block %u (host: %s, coherent: %s, device: %s)",
-					(U32) i,
-					prop & host ? "true" : "false",
-					prop & coherent ? "true" : "false",
-					prop & local ? "true" : "false",
-					objectName.ptr
-				));
-
-				VkDebugUtilsObjectNameInfoEXT debugName = (VkDebugUtilsObjectNameInfoEXT) {
-					.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
-					.objectType = VK_OBJECT_TYPE_DEVICE_MEMORY,
-					.pObjectName = temp.ptr,
-					.objectHandle = (U64) mem
-				};
-
-				_gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName)));
-				CharString_freex(&temp);
-			}
-
-		#endif
+		gotoIfError(clean, vkCheck(instanceExt->debugSetName(deviceExt->device, &debugName)))
+		CharString_freex(&temp);
 	}
 
 clean:
@@ -322,11 +325,11 @@ clean:
 }
 
 Bool DeviceMemoryAllocator_freeAllocationExt(GraphicsDevice *device, void *ext) {
-	
+
 	if(!device || !ext)
 		return false;
-		
-	VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
+
+	const VkGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Vk);
 	vkFreeMemory(deviceExt->device, (VkDeviceMemory) ext, NULL);
 	return true;
 }

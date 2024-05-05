@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -20,42 +20,30 @@
 
 #include "graphics/generic/depth_stencil.h"
 #include "graphics/generic/device.h"
+#include "platforms/ext/ref_ptrx.h"
+#include "formats/texture.h"
 #include "types/error.h"
 #include "types/string.h"
 
-Error DepthStencilRef_dec(DepthStencilRef **depthStencil) {
-	return !RefPtr_dec(depthStencil) ? Error_invalidOperation(0, "DepthStencilRef_dec()::depthStencil is invalid") :
-	Error_none();
+Error DepthStencilRef_dec(DepthStencilRef **depth) {
+	return !RefPtr_dec(depth) ?
+		Error_invalidOperation(0, "DepthStencilRef_dec()::depth is invalid") : Error_none();
 }
 
-Error DepthStencilRef_inc(DepthStencilRef *depthStencil) {
-	return !RefPtr_inc(depthStencil) ? Error_invalidOperation(0, "DepthStencilRef_inc()::depthStencil is invalid") :
-	Error_none();
+Error DepthStencilRef_inc(DepthStencilRef *depth) {
+	return !RefPtr_inc(depth) ?
+		Error_invalidOperation(0, "DepthStencilRef_inc()::depth is invalid") : Error_none();
 }
-
-impl Error GraphicsDeviceRef_createDepthStencilExt(
-	GraphicsDeviceRef *deviceRef,
-	I32x2 size,
-	EDepthStencilFormat format,
-	Bool allowShaderRead,
-	EMSAASamples msaa,
-	CharString name,
-	DepthStencil *depthStencil
-);
-
-impl Bool GraphicsDevice_freeDepthStencilExt(DepthStencil *data, Allocator alloc);
-
-impl extern const U64 DepthStencilExt_size;
 
 Bool GraphicsDevice_freeDepthStencil(DepthStencil *depthStencil, Allocator alloc) {
-	GraphicsDevice_freeDepthStencilExt(depthStencil, alloc);
-	GraphicsDeviceRef_dec(&depthStencil->device);
-	return true;
+	(void)alloc;
+	return UnifiedTexture_free((TextureRef*)((U8*)depthStencil - sizeof(RefPtr)));
 }
 
 Error GraphicsDeviceRef_createDepthStencil(
 	GraphicsDeviceRef *deviceRef,
-	I32x2 size,
+	U16 width,
+	U16 height,
 	EDepthStencilFormat format,
 	Bool allowShaderRead,
 	EMSAASamples msaa,
@@ -63,42 +51,35 @@ Error GraphicsDeviceRef_createDepthStencil(
 	DepthStencilRef **depthStencilRef
 ) {
 
-	if(!deviceRef || deviceRef->typeId != EGraphicsTypeId_GraphicsDevice)
-		return Error_nullPointer(0, "GraphicsDeviceRef_createDepthStencil()::deviceRef is required");
-
-	if(format <= EDepthStencilFormat_None || format >= EDepthStencilFormat_Count)
-		return Error_invalidParameter(2, 0, "GraphicsDeviceRef_createDepthStencil()::format is required");
-
-	if(I32x2_any(I32x2_gt(size, I32x2_xx2(16384))) || I32x2_any(I32x2_leq(size, I32x2_zero())))
-		return Error_invalidParameter(1, 0, "GraphicsDeviceRef_createDepthStencil()::size must be >0 and <=16384");
-
-	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
-	if(!GraphicsDeviceInfo_supportsDepthStencilFormat(&device->info, format))
-		return Error_unsupportedOperation(0, "GraphicsDeviceRef_createDepthStencil()::format is unsupported");
-
-	if(msaa == EMSAASamples_x2Ext && !(device->info.capabilities.dataTypes & EGraphicsDataTypes_MSAA2x))
-		return Error_unsupportedOperation(1, "GraphicsDeviceRef_createDepthStencil()::msaa MSAA2x is unsupported");
-
-	else if(msaa == EMSAASamples_x8Ext && !(device->info.capabilities.dataTypes & EGraphicsDataTypes_MSAA8x))
-		return Error_unsupportedOperation(1, "GraphicsDeviceRef_createDepthStencil()::msaa MSAA8x is unsupported");
-
-	else if(msaa == EMSAASamples_x16Ext && !(device->info.capabilities.dataTypes & EGraphicsDataTypes_MSAA16x))
-		return Error_unsupportedOperation(1, "GraphicsDeviceRef_createDepthStencil()::msaa MSAA16x is unsupported");
-
 	Error err = RefPtr_createx(
-		(U32)(sizeof(DepthStencil) + DepthStencilExt_size),
+		(U32)(sizeof(DepthStencil) + UnifiedTextureImageExt_size + sizeof(UnifiedTextureImage)),
 		(ObjectFreeFunc) GraphicsDevice_freeDepthStencil,
-		EGraphicsTypeId_DepthStencil,
+		(ETypeId) EGraphicsTypeId_DepthStencil,
 		depthStencilRef
 	);
 
 	if(err.genericError)
 		return err;
 
-	DepthStencil *depthStencil = DepthStencilRef_ptr(*depthStencilRef);
-	_gotoIfError(clean, GraphicsDeviceRef_createDepthStencilExt(
-		deviceRef, size, format, allowShaderRead, msaa, name, depthStencil
-	));
+	gotoIfError(clean, GraphicsDeviceRef_inc(deviceRef))
+
+	*DepthStencilRef_ptr(*depthStencilRef) = (UnifiedTexture) {
+		.resource = (GraphicsResource) {
+			.device = deviceRef,
+			.flags = allowShaderRead ? EGraphicsResourceFlag_ShaderRead : 0,
+			.type = (U8) EResourceType_RenderTargetOrDepthStencil
+		},
+		.sampleCount = (U8) msaa,
+		.depthFormat = (U8) format,
+		.type = ETextureType_2D,
+		.width = width,
+		.height = height,
+		.length = 1,
+		.levels = 1,
+		.images = 1
+	};
+
+	gotoIfError(clean, UnifiedTexture_create(*depthStencilRef, name))
 
 clean:
 

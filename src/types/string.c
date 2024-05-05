@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -47,6 +47,7 @@ Bool CharString_isConstRef(CharString str) { return str.capacityAndRefInfo == U6
 Bool CharString_isRef(CharString str) { return !str.capacityAndRefInfo || CharString_isConstRef(str); }
 U64  CharString_bytes(CharString str) { return str.lenAndNullTerminated << 1 >> 1; }
 U64  CharString_length(CharString str) { return CharString_bytes(str); }
+U64  CharString_capacity(CharString str) { return CharString_isRef(str) ? 0 : str.capacityAndRefInfo; }
 Bool CharString_isEmpty(CharString str) { return !CharString_bytes(str); }
 Bool CharString_isNullTerminated(CharString str) { return str.lenAndNullTerminated >> 63; }
 
@@ -56,6 +57,14 @@ Buffer CharString_buffer(CharString str) {
 
 Buffer CharString_bufferConst(CharString str) {
 	return Buffer_createRefConst(str.ptr, CharString_bytes(str));
+}
+
+Buffer CharString_allocatedBuffer(CharString str) {
+	return CharString_isRef(str) ? Buffer_createNull() : Buffer_createRef((U8*)str.ptr, CharString_capacity(str));
+}
+
+Buffer CharString_allocatedBufferConst(CharString str) {
+	return CharString_isRef(str) ? Buffer_createNull() : Buffer_createRefConst((const U8*)str.ptr, CharString_capacity(str));
 }
 
 //Iteration
@@ -74,41 +83,42 @@ const C8 *CharString_charAtConst(CharString str, U64 off) {
 	return off >= CharString_length(str) ? NULL : str.ptr + off;
 }
 
-Bool CharString_isValidAscii(CharString a) {
+Bool CharString_isValidAscii(CharString str) {
 
-	for(U64 i = 0; i < CharString_length(a); ++i)
-		if(!C8_isValidAscii(a.ptr[i]))
+	for(U64 i = 0; i < CharString_length(str); ++i)
+		if(!C8_isValidAscii(str.ptr[i]))
 			return false;
 
 	return true;
 }
 
 Bool CharString_isValidFileName(CharString str) {
-	
+
 	for(U64 i = 0; i < CharString_length(str); ++i)
 		if(!C8_isValidFileName(str.ptr[i]))
 			return false;
 
 	//Trailing or leading space is illegal
 
-	if(CharString_endsWithSensitive(str, ' '))
+	if(CharString_endsWithSensitive(str, ' ', 0))
 		return false;
 
-	if(CharString_startsWithSensitive(str, ' '))
+	if(CharString_startsWithSensitive(str, ' ', 0))
 		return false;
-	
+
 	//Validation to make sure we're not using weird legacy MS DOS keywords
 	//Because these will not be writable correctly!
 
-	U64 illegalStart = 0, strl = CharString_length(str);
+	U64 illegalStart = 0;
+	const U64 strl = CharString_length(str);
 
 	if (strl >= 3) {
 
 		if(
-			CharString_startsWithStringInsensitive(str, CharString_createRefCStrConst("CON")) ||
-			CharString_startsWithStringInsensitive(str, CharString_createRefCStrConst("AUX")) ||
-			CharString_startsWithStringInsensitive(str, CharString_createRefCStrConst("NUL")) ||
-			CharString_startsWithStringInsensitive(str, CharString_createRefCStrConst("PRN"))
+			CharString_startsWithStringInsensitive(str, CharString_createRefCStrConst("CON"), 0) ||
+			CharString_startsWithStringInsensitive(str, CharString_createRefCStrConst("AUX"), 0) ||
+			CharString_startsWithStringInsensitive(str, CharString_createRefCStrConst("NUL"), 0) ||
+			CharString_startsWithStringInsensitive(str, CharString_createRefCStrConst("PRN"), 0)
 		)
 			illegalStart = 3;
 
@@ -116,8 +126,8 @@ Bool CharString_isValidFileName(CharString str) {
 
 			if(
 				(
-					CharString_startsWithStringInsensitive(str, CharString_createRefCStrConst("COM")) ||
-					CharString_startsWithStringInsensitive(str, CharString_createRefCStrConst("LPT"))
+					CharString_startsWithStringInsensitive(str, CharString_createRefCStrConst("COM"), 0) ||
+					CharString_startsWithStringInsensitive(str, CharString_createRefCStrConst("LPT"), 0)
 				) &&
 				C8_isDec(str.ptr[3])
 			)
@@ -151,17 +161,17 @@ Bool CharString_isSupportedInFilePath(CharString str) {
 		));
 }
 
-//File_resolve but without validating if it'd be a valid (permissioned) path on disk.
+//File_resolve but without validating if it'd be a valid (permitted) path on disk.
 
 Bool CharString_isValidFilePath(CharString str) {
 
 	//myTest/ <-- or myTest\ to myTest
-		
+
 	str = CharString_createRefSizedConst(str.ptr, CharString_length(str), CharString_isNullTerminated(str));
 
 	if(CharString_getAt(str, CharString_length(str) - 1) == '/' || CharString_getAt(str, CharString_length(str) - 1) == '\\')
 		str.lenAndNullTerminated = CharString_length(str) - 1;
-		
+
 	//On Windows, it's possible to change drive but keep same relative path. We don't support it.
 	//e.g. C:myFolder/ (relative folder on C) instead of C:/myFolder/ (Absolute folder on C)
 	//We also obviously don't support 0:\ and such or A:/ on unix
@@ -226,7 +236,7 @@ Bool CharString_isValidFilePath(CharString str) {
 
 	for (U64 i = 0; i < strl; ++i) {
 
-		C8 c = str.ptr[i];
+		const C8 c = str.ptr[i];
 
 		//Push previous
 
@@ -235,7 +245,7 @@ Bool CharString_isValidFilePath(CharString str) {
 			if(!(i - prev))
 				return false;
 
-			CharString part = CharString_createRefSizedConst(str.ptr + prev, i - prev, false);
+			const CharString part = CharString_createRefSizedConst(str.ptr + prev, i - prev, false);
 
 			if(!CharString_isSupportedInFilePath(part))
 				return false;
@@ -246,7 +256,7 @@ Bool CharString_isValidFilePath(CharString str) {
 
 	//Validate ending
 
-	CharString part = CharString_createRefSizedConst(str.ptr + prev, strl - prev, CharString_isNullTerminated(str));
+	const CharString part = CharString_createRefSizedConst(str.ptr + prev, strl - prev, CharString_isNullTerminated(str));
 
 	if(!CharString_isSupportedInFilePath(part))
 		return false;
@@ -286,7 +296,7 @@ CharString CharString_createRefAutoConst(const C8 *ptr, U64 maxSize) {
 	if(!ptr)
 		return CharString_createNull();
 
-	U64 strl = CharString_calcStrLen(ptr, maxSize);
+	const U64 strl = CharString_calcStrLen(ptr, maxSize);
 
 	return (CharString) {
 		.lenAndNullTerminated = strl | ((U64)(strl != maxSize) << 63),
@@ -335,25 +345,25 @@ CharString CharString_createRefSized(C8 *ptr, U64 size, Bool isNullTerminated) {
 }
 
 CharString CharString_createRefShortStringConst(const ShortString str) {
-	return CharString_createRefAutoConst(str, _SHORTSTRING_LEN);
+	return CharString_createRefAutoConst(str, SHORTSTRING_LEN);
 }
 
 CharString CharString_createRefLongStringConst(const LongString str) {
-	return CharString_createRefAutoConst(str, _LONGSTRING_LEN);
+	return CharString_createRefAutoConst(str, LONGSTRING_LEN);
 }
 
 CharString CharString_createRefShortString(ShortString str) {
-	return CharString_createRefAuto(str, _SHORTSTRING_LEN);
+	return CharString_createRefAuto(str, SHORTSTRING_LEN);
 }
 
 CharString CharString_createRefLongString(LongString str) {
-	return CharString_createRefAuto(str, _LONGSTRING_LEN);
+	return CharString_createRefAuto(str, LONGSTRING_LEN);
 }
 
 //Simple checks (consts)
 
 Error CharString_offsetAsRef(CharString s, U64 off, CharString *result) {
-	
+
 	if (!result)
 		return Error_nullPointer(2, "CharString_offsetAsRef()::result is required");
 
@@ -362,7 +372,7 @@ Error CharString_offsetAsRef(CharString s, U64 off, CharString *result) {
 		return Error_none();
 	}
 
-	U64 strl = CharString_length(s);
+	const U64 strl = CharString_length(s);
 
 	if(off >= strl)
 		return Error_outOfBounds(1, off, strl, "CharString_offsetAsRef()::off is out of bounds");
@@ -393,7 +403,7 @@ Error CharString_offsetAsRef(CharString s, U64 off, CharString *result) {
 #define CharString_matchesPatternNum(testFunc, num) CharString_matchesPattern(	\
 	testFunc,																	\
 	CharString_startsWithStringInsensitive(										\
-		s, CharString_createRefCStrConst(num)									\
+		s, CharString_createRefCStrConst(num), 0								\
 	) ? CharString_calcStrLen(num, U64_MAX) : 0									\
 )
 
@@ -424,14 +434,14 @@ Bool CharString_isDec(CharString s) {
 Bool CharString_isSignedNumber(CharString s) {
 	CharString_matchesPattern(
 		C8_isDec,
-		CharString_startsWithSensitive(s, '-') || CharString_startsWithSensitive(s, '+')
+		CharString_startsWithSensitive(s, '-', 0) || CharString_startsWithSensitive(s, '+', 0)
 	);
 }
 
 Bool CharString_isUnsignedNumber(CharString s) {
 	CharString_matchesPattern(
 		C8_isDec,
-		CharString_startsWithSensitive(s, '+')
+		CharString_startsWithSensitive(s, '+', 0)
 	);
 }
 
@@ -529,20 +539,20 @@ Error CharString_create(C8 c, U64 size, Allocator alloc, CharString *result) {
 	}
 
 	Buffer b = Buffer_createNull();
-	Error err = alloc.alloc(alloc.ptr, size + 1, &b);
+	const Error err = alloc.alloc(alloc.ptr, size + 1, &b);
 
 	if (err.genericError)
 		return err;
 
-	U64 realSize = size;
+	const U64 realSize = size;
 
 	((C8*)b.ptr)[size] = '\0';
 
 	//Quick fill
 
-	U16 cc2 = ((U16)c << 8) | ((U16)c << 0);
-	U32 cc4 = ((U32)cc2 << 16) | cc2;
-	U64 cc8 = ((U64)cc4 << 32) | cc4;
+	const U16 cc2 = ((U16)c << 8) | ((U16)c << 0);
+	const U32 cc4 = ((U32)cc2 << 16) | cc2;
+	const U64 cc8 = ((U64)cc4 << 32) | cc4;
 
 	for (U64 i = 0; i < size >> 3; ++i)
 		*((U64*)b.ptr + i) = cc8;
@@ -579,7 +589,7 @@ Error CharString_createCopy(CharString str, Allocator alloc, CharString *result)
 	if (result->ptr)
 		return Error_invalidOperation(0, "CharString_createCopy()::result wasn't empty, might indicate a memleak");
 
-	U64 strl = CharString_length(str);
+	const U64 strl = CharString_length(str);
 
 	if (!strl) {
 		*result = CharString_createNull();
@@ -587,7 +597,7 @@ Error CharString_createCopy(CharString str, Allocator alloc, CharString *result)
 	}
 
 	Buffer b = Buffer_createNull();
-	Error err = alloc.alloc(alloc.ptr, strl + 1, &b);
+	const Error err = alloc.alloc(alloc.ptr, strl + 1, &b);
 
 	if (err.genericError)
 		return err;
@@ -706,34 +716,81 @@ Error CharString_createBin(U64 v, U8 leadingZeros, Allocator allocator, CharStri
 	CharString_createNum(64, Bin, "0b", (v >> i) & 1);
 }
 
+Error CharString_createFromUTF16(const U16 *ptr, U64 limit, Allocator allocator, CharString *result) {
+
+	Error err = CharString_reserve(result, limit == U64_MAX ? 16 : (limit * 4 + 1), allocator);
+
+	if (err.genericError)
+		return err;
+
+	UnicodeCodePointInfo codepoint = (UnicodeCodePointInfo) { 0 };
+	U64 j = 0;
+
+	const Buffer buf = Buffer_createRefConst(ptr, limit == U64_MAX ? ((U64)1 << 48) - 1 : limit * sizeof(U16));
+	Buffer buf0 = CharString_allocatedBuffer(*result);
+
+	for(U64 i = 0; i < limit * 2; ) {
+
+		U16 c = ptr[i / 2];
+
+		if (!c)
+			break;
+
+		if(limit == U64_MAX) {
+			gotoIfError(clean, CharString_reserve(result, j + 5, allocator))
+			buf0 = CharString_allocatedBuffer(*result);
+		}
+
+		//Read as UTF16 encoding
+
+		gotoIfError(clean, Buffer_readAsUTF16(buf, i, &codepoint))
+		i += codepoint.bytes;
+
+		//Write as UTF8 encoding
+
+		gotoIfError(clean, Buffer_writeAsUTF8(buf0, j, codepoint.index, &codepoint.bytes))
+		j += codepoint.bytes;
+		result->lenAndNullTerminated = j | ((U64)1 << 63);
+	}
+
+	((C8*)result->ptr)[j] = '\0';
+
+clean:
+
+	if(err.genericError)
+		CharString_free(result, allocator);
+
+	return err;
+}
+
 Error CharString_split(
 	CharString s,
 	C8 c,
 	EStringCase casing,
 	Allocator allocator,
-	CharStringList *result
+	ListCharString *result
 ) {
 
-	U64 length = CharString_countAll(s, c, casing);
+	const U64 length = CharString_countAll(s, c, casing, 0);
 
-	Error err = CharStringList_create(length + 1, allocator, result);
+	const Error err = ListCharString_create(length + 1, allocator, result);
 
 	if (err.genericError)
 		return err;
 
-	U64 strl = CharString_length(s);
+	const U64 strl = CharString_length(s);
 
 	if (!length) {
 
-		Bool b = CharString_isNullTerminated(s);
+		const Bool b = CharString_isNullTerminated(s);
 
-		result->ptr[0] = CharString_isConstRef(s) ? CharString_createRefSizedConst(s.ptr, strl, b) :
+		result->ptrNonConst[0] = CharString_isConstRef(s) ? CharString_createRefSizedConst(s.ptr, strl, b) :
 			CharString_createRefSized((C8*)s.ptr, strl, b);
 
 		return Error_none();
 	}
 
-	CharStringList str = *result;
+	const ListCharString str = *result;
 
 	c = C8_transform(c, (EStringTransform) casing);
 
@@ -742,16 +799,16 @@ Error CharString_split(
 	for (U64 i = 0; i < strl; ++i)
 		if (C8_transform(s.ptr[i], (EStringTransform) casing) == c) {
 
-			str.ptr[count++] =
+			str.ptrNonConst[count++] =
 				CharString_isConstRef(s) ? CharString_createRefSizedConst(s.ptr + last, i - last, false) :
 				CharString_createRefSized((C8*)s.ptr + last, i - last, false);
 
 			last = i + 1;
 		}
 
-	Bool b = CharString_isNullTerminated(s);
+	const Bool b = CharString_isNullTerminated(s);
 
-	str.ptr[count++] =
+	str.ptrNonConst[count++] =
 		CharString_isConstRef(s) ? CharString_createRefSizedConst(s.ptr + last, strl - last, b) :
 		CharString_createRefSized((C8*)s.ptr + last, strl - last, b);
 
@@ -763,28 +820,28 @@ Error CharString_splitString(
 	CharString other,
 	EStringCase casing,
 	Allocator allocator,
-	CharStringList *result
+	ListCharString *result
 ) {
 
-	U64 length = CharString_countAllString(s, other, casing);
+	const U64 length = CharString_countAllString(s, other, casing, 0);
 
-	Error err = CharStringList_create(length + 1, allocator, result);
+	const Error err = ListCharString_create(length + 1, allocator, result);
 
 	if (err.genericError)
 		return err;
 
-	Bool b = CharString_isNullTerminated(s);
-	U64 strl = CharString_length(s);
+	const Bool b = CharString_isNullTerminated(s);
+	const U64 strl = CharString_length(s);
 
 	if (!length) {
 
-		*result->ptr = CharString_isConstRef(s) ? CharString_createRefSizedConst(s.ptr, strl, b) :
+		*result->ptrNonConst = CharString_isConstRef(s) ? CharString_createRefSizedConst(s.ptr, strl, b) :
 			CharString_createRefSized((C8*)s.ptr, strl, b);
 
 		return Error_none();
 	}
 
-	CharStringList str = *result;
+	const ListCharString str = *result;
 
 	U64 count = 0, last = 0;
 
@@ -803,7 +860,7 @@ Error CharString_splitString(
 
 		if (match) {
 
-			str.ptr[count++] =
+			str.ptrNonConst[count++] =
 				CharString_isConstRef(s) ? CharString_createRefSizedConst(s.ptr + last, i - last, false) :
 				CharString_createRefSized((C8*)s.ptr + last, i - last, false);
 
@@ -812,14 +869,14 @@ Error CharString_splitString(
 		}
 	}
 
-	str.ptr[count++] =
+	str.ptrNonConst[count++] =
 		CharString_isConstRef(s) ? CharString_createRefSizedConst(s.ptr + last, strl - last, b) :
 		CharString_createRefSized((C8*)s.ptr + last, strl - last, b);
 
 	return Error_none();
 }
 
-Error CharString_splitLine(CharString s, Allocator alloc, CharStringList *result) {
+Error CharString_splitLine(CharString s, Allocator alloc, ListCharString *result) {
 
 	if(!result)
 		return Error_nullPointer(2, "CharString_splitLine()::result is invalid");
@@ -828,7 +885,7 @@ Error CharString_splitLine(CharString s, Allocator alloc, CharStringList *result
 		return Error_invalidParameter(2, 1, "CharString_splitLine()::result wasn't empty, might indicate memleak");
 
 	U64 v = 0, lastLineEnd = U64_MAX;
-	U64 strl = CharString_length(s);
+	const U64 strl = CharString_length(s);
 
 	for(U64 i = 0; i < strl; ++i)
 
@@ -851,7 +908,7 @@ Error CharString_splitLine(CharString s, Allocator alloc, CharStringList *result
 	if(lastLineEnd != strl)
 		++v;
 
-	Error err = CharStringList_create(v, alloc, result);
+	const Error err = ListCharString_create(v, alloc, result);
 
 	if (err.genericError)
 		return err;
@@ -863,7 +920,7 @@ Error CharString_splitLine(CharString s, Allocator alloc, CharStringList *result
 
 		Bool isLineEnd = false;
 
-		U64 iOld = i;
+		const U64 iOld = i;
 
 		if (s.ptr[i] == '\n')			//Unix line endings
 			isLineEnd = true;
@@ -879,7 +936,7 @@ Error CharString_splitLine(CharString s, Allocator alloc, CharStringList *result
 		if(!isLineEnd)
 			continue;
 
-		result->ptr[v++] = CharString_isConstRef(s) ?
+		result->ptrNonConst[v++] = CharString_isConstRef(s) ?
 			CharString_createRefSizedConst(s.ptr + lastLineEnd, iOld - lastLineEnd, false) :
 			CharString_createRefSized((C8*)s.ptr + lastLineEnd, iOld - lastLineEnd, false);
 
@@ -887,26 +944,26 @@ Error CharString_splitLine(CharString s, Allocator alloc, CharStringList *result
 	}
 
 	if(lastLineEnd != strl)
-		result->ptr[v++] = CharString_isConstRef(s) ?
+		result->ptrNonConst[v++] = CharString_isConstRef(s) ?
 			CharString_createRefSizedConst(s.ptr + lastLineEnd, strl - lastLineEnd, CharString_isNullTerminated(s)) :
 			CharString_createRefSized((C8*)s.ptr + lastLineEnd, strl - lastLineEnd, CharString_isNullTerminated(s));
 
 	return Error_none();
 }
 
-Error CharString_splitSensitive(CharString s, C8 c, Allocator allocator, CharStringList *result) {
+Error CharString_splitSensitive(CharString s, C8 c, Allocator allocator, ListCharString *result) {
 	return CharString_split(s, c, EStringCase_Sensitive, allocator, result);
 }
 
-Error CharString_splitInsensitive(CharString s, C8 c, Allocator allocator, CharStringList *result) {
+Error CharString_splitInsensitive(CharString s, C8 c, Allocator allocator, ListCharString *result) {
 	return CharString_split(s, c, EStringCase_Insensitive, allocator, result);
 }
 
-Error CharString_splitStringSensitive(CharString s, CharString other, Allocator allocator, CharStringList *result) {
+Error CharString_splitStringSensitive(CharString s, CharString other, Allocator allocator, ListCharString *result) {
 	return CharString_splitString(s, other, EStringCase_Sensitive, allocator, result);
 }
 
-Error CharString_splitStringInsensitive(CharString s, CharString other, Allocator allocator, CharStringList *result) {
+Error CharString_splitStringInsensitive(CharString s, CharString other, Allocator allocator, ListCharString *result) {
 	return CharString_splitString(s, other, EStringCase_Insensitive, allocator, result);
 }
 
@@ -953,7 +1010,7 @@ Error CharString_resize(CharString *str, U64 length, C8 defaultChar, Allocator a
 	if (!str)
 		return Error_nullPointer(0, "CharString_resize()::str is required");
 
-	U64 strl = CharString_length(*str);
+	const U64 strl = CharString_length(*str);
 
 	if (CharString_isRef(*str) && strl)
 		return Error_invalidOperation(0, "CharString_resize()::str needs to be managed memory");
@@ -971,7 +1028,7 @@ Error CharString_resize(CharString *str, U64 length, C8 defaultChar, Allocator a
 
 	if (length < strl) {
 
-		Bool b = CharString_isNullTerminated(*str);
+		const Bool b = CharString_isNullTerminated(*str);
 
 		str->lenAndNullTerminated = ((U64)b << 63) | length;
 
@@ -987,7 +1044,7 @@ Error CharString_resize(CharString *str, U64 length, C8 defaultChar, Allocator a
 
 		//Reserve 50% more to ensure we don't resize too many times
 
-		Error err = CharString_reserve(str, U64_max(64, length * 3 / 2) + 1, alloc);
+		const Error err = CharString_reserve(str, U64_max(64, length * 3 / 2) + 1, alloc);
 
 		if (err.genericError)
 			return err;
@@ -1018,7 +1075,7 @@ CharString CharString_newLine() { return CharString_createRefCStrConst("\n"); }
 
 Error CharString_appendString(CharString *s, CharString other, Allocator allocator) {
 
-	U64 otherl = CharString_length(other);
+	const U64 otherl = CharString_length(other);
 
 	if (!otherl)
 		return Error_none();
@@ -1028,12 +1085,12 @@ Error CharString_appendString(CharString *s, CharString other, Allocator allocat
 	if (!s)
 		return Error_nullPointer(0, "CharString_appendString()::s is required");
 
-	U64 oldLen = CharString_length(*s);
+	const U64 oldLen = CharString_length(*s);
 
 	if (CharString_isRef(*s) && oldLen)
 		return Error_invalidParameter(0, 0, "CharString_appendString()::s has to be managed memory");
 
-	Error err = CharString_resize(s, oldLen + otherl, other.ptr[0], allocator);
+	const Error err = CharString_resize(s, oldLen + otherl, other.ptr[0], allocator);
 
 	if (err.genericError)
 		return err;
@@ -1055,7 +1112,7 @@ Error CharString_insert(CharString *s, C8 c, U64 i, Allocator allocator) {
 	if (!s)
 		return Error_nullPointer(0, "CharString_insert()::s is required");
 
-	U64 strl = CharString_length(*s);
+	const U64 strl = CharString_length(*s);
 
 	if (CharString_isRef(*s) && strl)
 		return Error_invalidParameter(0, 0, "CharString_insert()::s should be managed memory");
@@ -1069,7 +1126,7 @@ Error CharString_insert(CharString *s, C8 c, U64 i, Allocator allocator) {
 	if(!c && i != strl)
 		return Error_invalidOperation(0, "CharString_insert()::c is 0, which isn't allowed if i != strl");
 
-	Error err = CharString_resize(s, strl + 1, c, allocator);
+	const Error err = CharString_resize(s, strl + 1, c, allocator);
 
 	if (err.genericError)
 		return err;
@@ -1096,17 +1153,17 @@ Error CharString_insertString(CharString *s, CharString other, U64 i, Allocator 
 	if (!s)
 		return Error_nullPointer(0, "CharString_insertString()::s is required");
 
-	U64 oldLen = CharString_length(*s);
+	const U64 oldLen = CharString_length(*s);
 
 	if (CharString_isRef(*s) && oldLen)
 		return Error_invalidParameter(0, 0, "CharString_insertString()::s should be managed memory");
 
-	U64 otherl = CharString_length(other);
+	const U64 otherl = CharString_length(other);
 
 	if (!otherl)
 		return Error_none();
 
-	Error err = CharString_resize(s, oldLen + otherl, ' ', allocator);
+	const Error err = CharString_resize(s, oldLen + otherl, ' ', allocator);
 
 	if (err.genericError)
 		return err;
@@ -1131,7 +1188,8 @@ Error CharString_replaceAllString(
 	CharString search,
 	CharString replace,
 	EStringCase caseSensitive,
-	Allocator allocator
+	Allocator allocator,
+	U64 off
 ) {
 
 	if (!s)
@@ -1141,7 +1199,7 @@ Error CharString_replaceAllString(
 		return Error_constData(0, 0, "CharString_replaceAllString()::s must be managed memory");
 
 	ListU64 finds = { 0 };
-	Error err = CharString_findAllString(*s, search, allocator, caseSensitive, &finds);
+	Error err = CharString_findAllString(*s, search, allocator, caseSensitive, off, &finds);
 
 	if(err.genericError)
 		return err;
@@ -1153,9 +1211,9 @@ Error CharString_replaceAllString(
 
 	const U64 *ptr = finds.ptr;
 
-	U64 searchl = CharString_length(search);
-	U64 replacel = CharString_length(replace);
-	U64 strl = CharString_length(*s);
+	const U64 searchl = CharString_length(search);
+	const U64 replacel = CharString_length(replace);
+	const U64 strl = CharString_length(*s);
 
 	if (searchl == replacel) {
 
@@ -1170,7 +1228,7 @@ Error CharString_replaceAllString(
 
 	if (searchl > replacel) {
 
-		U64 diff = searchl - replacel;
+		const U64 diff = searchl - replacel;
 
 		U64 iCurrent = ptr[0];
 
@@ -1208,9 +1266,9 @@ Error CharString_replaceAllString(
 
 	//Ensure the string is now the right size
 
-	U64 diff = replacel - searchl;
+	const U64 diff = replacel - searchl;
 
-	_gotoIfError(clean, CharString_resize(s, strl + diff * finds.length, ' ', allocator));
+	gotoIfError(clean, CharString_resize(s, strl + diff * finds.length, ' ', allocator))
 
 	//Move from right to left
 
@@ -1254,7 +1312,8 @@ Error CharString_replaceString(
 	CharString replace,
 	EStringCase caseSensitive,
 	Allocator allocator,
-	Bool isFirst
+	Bool isFirst,
+	U64 off
 ) {
 
 	if (!s)
@@ -1263,15 +1322,15 @@ Error CharString_replaceString(
 	if(CharString_isRef(*s))
 		return Error_constData(0, 0, "CharString_replaceString()::s must use managed memory");
 
-	U64 res = isFirst ? CharString_findFirstString(*s, search, caseSensitive) :
-		CharString_findLastString(*s, search, caseSensitive);
+	const U64 res = isFirst ? CharString_findFirstString(*s, search, caseSensitive, off) :
+		CharString_findLastString(*s, search, caseSensitive, off);
 
 	if (res == U64_MAX)
 		return Error_none();
 
-	U64 searchl = CharString_length(search);
-	U64 replacel = CharString_length(replace);
-	U64 strl = CharString_length(*s);
+	const U64 searchl = CharString_length(search);
+	const U64 replacel = CharString_length(replace);
+	const U64 strl = CharString_length(*s);
 
 	//Easy, early exit. Strings are same size.
 
@@ -1282,10 +1341,10 @@ Error CharString_replaceString(
 
 	//Replacement is smaller than our search
 	//So we can just move from left to right
-	
+
 	if (replacel < searchl) {
 
-		U64 diff = searchl - replacel;	//How much we have to shrink
+		const U64 diff = searchl - replacel;	//How much we have to shrink
 
 		//Copy our data over first
 
@@ -1300,7 +1359,7 @@ Error CharString_replaceString(
 
 		//Shrink the string; this is done after because we need to read the right of the string first
 
-		Error err = CharString_resize(s, strl - diff, ' ', allocator);
+		const Error err = CharString_resize(s, strl - diff, ' ', allocator);
 
 		if (err.genericError)
 			return err;
@@ -1311,9 +1370,9 @@ Error CharString_replaceString(
 	//Replacement is bigger than our search;
 	//We need to grow first and move from right to left
 
-	U64 diff = replacel - searchl;
+	const U64 diff = replacel - searchl;
 
-	Error err = CharString_resize(s, strl + diff, ' ', allocator);
+	const Error err = CharString_resize(s, strl + diff, ' ', allocator);
 
 	if (err.genericError)
 		return err;
@@ -1336,9 +1395,10 @@ Error CharString_replaceFirstString(
 	CharString search,
 	CharString replace,
 	EStringCase caseSensitive,
-	Allocator allocator
+	Allocator allocator,
+	U64 off
 ) {
-	return CharString_replaceString(s, search, replace, caseSensitive, allocator, true);
+	return CharString_replaceString(s, search, replace, caseSensitive, allocator, true, off);
 }
 
 Error CharString_replaceLastString(
@@ -1346,17 +1406,22 @@ Error CharString_replaceLastString(
 	CharString search,
 	CharString replace,
 	EStringCase caseSensitive,
-	Allocator allocator
+	Allocator allocator,
+	U64 off
 ) {
-	return CharString_replaceString(s, search, replace, caseSensitive, allocator, false);
+	return CharString_replaceString(s, search, replace, caseSensitive, allocator, false, off);
 }
 
-Error CharString_replaceAllStringSensitive(CharString *s, CharString search, CharString replace, Allocator allocator) {
-	return CharString_replaceAllString(s, search, replace, EStringCase_Sensitive, allocator);
+Error CharString_replaceAllStringSensitive(
+	CharString *s, CharString search, CharString replace, Allocator allocator, U64 off
+) {
+	return CharString_replaceAllString(s, search, replace, EStringCase_Sensitive, allocator, off);
 }
 
-Error CharString_replaceAllStringInsensitive(CharString *s, CharString search, CharString replace, Allocator allocator) {
-	return CharString_replaceAllString(s, search, replace, EStringCase_Insensitive, allocator);
+Error CharString_replaceAllStringInsensitive(
+	CharString *s, CharString search, CharString replace, Allocator allocator, U64 off
+) {
+	return CharString_replaceAllString(s, search, replace, EStringCase_Insensitive, allocator, off);
 }
 
 Error CharString_replaceStringSensitive(
@@ -1364,9 +1429,10 @@ Error CharString_replaceStringSensitive(
 	CharString search,
 	CharString replace,
 	Allocator allocator,
-	Bool isFirst
+	Bool isFirst,
+	U64 off
 ) {
-	return CharString_replaceString(s, search, replace, EStringCase_Sensitive, allocator, isFirst);
+	return CharString_replaceString(s, search, replace, EStringCase_Sensitive, allocator, isFirst, off);
 }
 
 Error CharString_replaceStringInsensitive(
@@ -1374,45 +1440,97 @@ Error CharString_replaceStringInsensitive(
 	CharString search,
 	CharString replace,
 	Allocator allocator,
-	Bool isFirst
+	Bool isFirst,
+	U64 off
 ) {
-	return CharString_replaceString(s, search, replace, EStringCase_Insensitive, allocator, isFirst);
+	return CharString_replaceString(s, search, replace, EStringCase_Insensitive, allocator, isFirst, off);
 }
 
-Error CharString_replaceFirstStringSensitive(CharString *s, CharString search, CharString replace, Allocator allocator) {
-	return CharString_replaceFirstString(s, search, replace, EStringCase_Sensitive, allocator);
+Error CharString_replaceFirstStringSensitive(
+	CharString *s, CharString search, CharString replace, Allocator allocator, U64 off
+) {
+	return CharString_replaceFirstString(s, search, replace, EStringCase_Sensitive, allocator, off);
 }
 
-Error CharString_replaceFirstStringInsensitive(CharString *s, CharString search, CharString replace, Allocator allocator) {
-	return CharString_replaceFirstString(s, search, replace, EStringCase_Insensitive, allocator);
+Error CharString_replaceFirstStringInsensitive(
+	CharString *s, CharString search, CharString replace, Allocator allocator, U64 off
+) {
+	return CharString_replaceFirstString(s, search, replace, EStringCase_Insensitive, allocator, off);
 }
 
-Error CharString_replaceLastStringSensitive(CharString *s, CharString search, CharString replace, Allocator allocator) {
-	return CharString_replaceLastString(s, search, replace, EStringCase_Sensitive, allocator);
+Error CharString_replaceLastStringSensitive(
+	CharString *s, CharString search, CharString replace, Allocator allocator, U64 off
+) {
+	return CharString_replaceLastString(s, search, replace, EStringCase_Sensitive, allocator, off);
 }
 
-Error CharString_replaceLastStringInsensitive(CharString *s, CharString search, CharString replace, Allocator allocator) {
-	return CharString_replaceLastString(s, search, replace, EStringCase_Insensitive, allocator);
+Error CharString_replaceLastStringInsensitive(
+	CharString *s, CharString search, CharString replace, Allocator allocator, U64 off
+) {
+	return CharString_replaceLastString(s, search, replace, EStringCase_Insensitive, allocator, off);
 }
 
-Bool CharString_startsWith(CharString str, C8 c, EStringCase caseSensitive) {
+Error CharString_toUTF16(CharString s, Allocator allocator, ListU16 *arr) {
+
+	const U64 len = CharString_length(s);
+	Error err = ListU16_reserve(arr, len + 1, allocator);
+
+	if (err.genericError)
+		return err;
+
+	const Buffer buf0 = ListU16_allocatedBuffer(*arr);
+	const Buffer buf = CharString_bufferConst(s);
+	UnicodeCodePointInfo codepoint = (UnicodeCodePointInfo) { 0 };
+
+	U64 j = 0;
+
+	for (U64 i = 0; i < len; ) {
+
+		//Read as UTF8 encoding
+
+		gotoIfError(clean, Buffer_readAsUTF8(buf, i, &codepoint))
+		i += codepoint.bytes;
+
+		//Write as UTF16 encoding
+
+		gotoIfError(clean, Buffer_writeAsUTF16(buf0, j, codepoint.index, &codepoint.bytes))
+		j += codepoint.bytes;
+	}
+
+	arr->ptrNonConst[j / 2] = 0;
+	arr->length = j / 2 + 1;
+
+clean:
+
+	if (err.genericError)
+		ListU16_free(arr, allocator);
+
+	return err;
+}
+
+Bool CharString_startsWith(CharString str, C8 c, EStringCase caseSensitive, U64 off) {
 	return
-		CharString_length(str) && str.ptr &&
-		C8_transform(*str.ptr, (EStringTransform) caseSensitive) ==
+		CharString_length(str) > off && str.ptr &&
+		C8_transform(str.ptr[off], (EStringTransform)caseSensitive) ==
 		C8_transform(c, (EStringTransform) caseSensitive);
 }
 
-Bool CharString_endsWith(CharString str, C8 c, EStringCase caseSensitive) {
+Bool CharString_endsWith(CharString str, C8 c, EStringCase caseSensitive, U64 off) {
 	return
-		CharString_length(str) && str.ptr &&
-		C8_transform(str.ptr[CharString_length(str) - 1], (EStringTransform) caseSensitive) ==
+		CharString_length(str) > off && str.ptr &&
+		C8_transform(str.ptr[CharString_length(str) - 1 - off], (EStringTransform) caseSensitive) ==
 		C8_transform(c, (EStringTransform) caseSensitive);
 }
 
-Bool CharString_startsWithString(CharString str, CharString other, EStringCase caseSensitive) {
+Bool CharString_startsWithString(CharString str, CharString other, EStringCase caseSensitive, U64 off) {
 
-	U64 otherl = CharString_length(other);
+	const U64 otherl = CharString_length(other);
 	U64 strl = CharString_length(str);
+
+	if(off > strl)
+		return false;
+
+	strl -= off;
 
 	if(!otherl)
 		return true;
@@ -1420,20 +1538,25 @@ Bool CharString_startsWithString(CharString str, CharString other, EStringCase c
 	if (otherl > strl)
 		return false;
 
-	for (U64 i = 0; i < otherl; ++i)
+	for (U64 i = off; i < off + otherl; ++i)
 		if (
 			C8_transform(str.ptr[i], (EStringTransform)caseSensitive) !=
-			C8_transform(other.ptr[i], (EStringTransform)caseSensitive)
+			C8_transform(other.ptr[i - off], (EStringTransform)caseSensitive)
 		)
 			return false;
 
 	return true;
 }
 
-Bool CharString_endsWithString(CharString str, CharString other, EStringCase caseSensitive) {
+Bool CharString_endsWithString(CharString str, CharString other, EStringCase caseSensitive, U64 off) {
 
-	U64 otherl = CharString_length(other);
+	const U64 otherl = CharString_length(other);
 	U64 strl = CharString_length(str);
+
+	if(off > strl)
+		return false;
+
+	strl -= off;
 
 	if(!otherl)
 		return true;
@@ -1451,37 +1574,37 @@ Bool CharString_endsWithString(CharString str, CharString other, EStringCase cas
 	return true;
 }
 
-U64 CharString_countAll(CharString s, C8 c, EStringCase caseSensitive) {
+U64 CharString_countAll(CharString s, C8 c, EStringCase caseSensitive, U64 off) {
 
 	c = C8_transform(c, (EStringTransform)caseSensitive);
 
 	U64 count = 0;
 
-	for (U64 i = 0; i < CharString_length(s); ++i)
+	for (U64 i = off; i < CharString_length(s); ++i)
 		if (C8_transform(s.ptr[i], (EStringTransform)caseSensitive) == c)
 			++count;
 
 	return count;
 }
 
-U64 CharString_countAllString(CharString s, CharString other, EStringCase casing) {
+U64 CharString_countAllString(CharString s, CharString other, EStringCase caseSensitive, U64 off) {
 
-	U64 otherl = CharString_length(other);
-	U64 strl = CharString_length(s);
+	const U64 otherl = CharString_length(other);
+	const U64 strl = CharString_length(s);
 
 	if(!otherl || strl < otherl)
 		return 0;
 
 	U64 j = 0;
 
-	for (U64 i = 0; i < strl; ++i) {
+	for (U64 i = off; i < strl; ++i) {
 
 		Bool match = true;
 
 		for (U64 l = i, k = 0; l < strl && k < otherl; ++l, ++k)
 			if (
-				C8_transform(s.ptr[l], (EStringTransform)casing) !=
-				C8_transform(other.ptr[k], (EStringTransform)casing)
+				C8_transform(s.ptr[l], (EStringTransform)caseSensitive) !=
+				C8_transform(other.ptr[k], (EStringTransform)caseSensitive)
 			) {
 				match = false;
 				break;
@@ -1496,37 +1619,52 @@ U64 CharString_countAllString(CharString s, CharString other, EStringCase casing
 	return j;
 }
 
-Bool CharString_startsWithSensitive(CharString str, C8 c) { return CharString_startsWith(str, c, EStringCase_Sensitive); }
-Bool CharString_startsWithInsensitive(CharString str, C8 c) { return CharString_startsWith(str, c, EStringCase_Insensitive); }
-
-Bool CharString_startsWithStringSensitive(CharString str, CharString s) {
-	return CharString_startsWithString(str, s, EStringCase_Sensitive);
+Bool CharString_startsWithSensitive(CharString str, C8 c, U64 off) {
+	return CharString_startsWith(str, c, EStringCase_Sensitive, off);
 }
 
-Bool CharString_startsWithStringInsensitive(CharString str, CharString s) {
-	return CharString_startsWithString(str, s, EStringCase_Insensitive);
+Bool CharString_startsWithInsensitive(CharString str, C8 c, U64 off) {
+	return CharString_startsWith(str, c, EStringCase_Insensitive, off);
 }
 
-Bool CharString_endsWithSensitive(CharString str, C8 c) { return CharString_endsWith(str, c, EStringCase_Sensitive); }
-Bool CharString_endsWithInsensitive(CharString str, C8 c) { return CharString_endsWith(str, c, EStringCase_Insensitive); }
-
-Bool CharString_endsWithStringSensitive(CharString str, CharString s) {
-	return CharString_endsWithString(str, s, EStringCase_Sensitive);
+Bool CharString_startsWithStringSensitive(CharString str, CharString other, U64 off) {
+	return CharString_startsWithString(str, other, EStringCase_Sensitive, off);
 }
 
-Bool CharString_endsWithStringInsensitive(CharString str, CharString s) {
-	return CharString_endsWithString(str, s, EStringCase_Insensitive);
+Bool CharString_startsWithStringInsensitive(CharString str, CharString other, U64 off) {
+	return CharString_startsWithString(str, other, EStringCase_Insensitive, off);
 }
 
-U64 CharString_countAllSensitive(CharString s, C8 c) { return CharString_countAll(s, c, EStringCase_Sensitive); }
-U64 CharString_countAllInsensitive(CharString s, C8 c) { return CharString_countAll(s, c, EStringCase_Insensitive); }
-
-U64 CharString_countAllStringSensitive(CharString str, CharString s) {
-	return CharString_countAllString(str, s, EStringCase_Sensitive);
+Bool CharString_endsWithSensitive(CharString str, C8 c, U64 off) {
+	return CharString_endsWith(str, c, EStringCase_Sensitive, off);
 }
 
-U64 CharString_countAllStringInsensitive(CharString str, CharString s) {
-	return CharString_countAllString(str, s, EStringCase_Insensitive);
+Bool CharString_endsWithInsensitive(CharString str, C8 c, U64 off) {
+	return CharString_endsWith(str, c, EStringCase_Insensitive, off);
+}
+
+Bool CharString_endsWithStringSensitive(CharString str, CharString other, U64 off) {
+	return CharString_endsWithString(str, other, EStringCase_Sensitive, off);
+}
+
+Bool CharString_endsWithStringInsensitive(CharString str, CharString other, U64 off) {
+	return CharString_endsWithString(str, other, EStringCase_Insensitive, off);
+}
+
+U64 CharString_countAllSensitive(CharString s, C8 c, U64 off) {
+	return CharString_countAll(s, c, EStringCase_Sensitive, off);
+}
+
+U64 CharString_countAllInsensitive(CharString s, C8 c, U64 off) {
+	return CharString_countAll(s, c, EStringCase_Insensitive, off);
+}
+
+U64 CharString_countAllStringSensitive(CharString str, CharString other, U64 off) {
+	return CharString_countAllString(str, other, EStringCase_Sensitive, off);
+}
+
+U64 CharString_countAllStringInsensitive(CharString str, CharString other, U64 off) {
+	return CharString_countAllString(str, other, EStringCase_Insensitive, off);
 }
 
 Error CharString_findAll(
@@ -1534,6 +1672,7 @@ Error CharString_findAll(
 	C8 c,
 	Allocator alloc,
 	EStringCase caseSensitive,
+	U64 off,
 	ListU64 *result
 ) {
 
@@ -1543,7 +1682,7 @@ Error CharString_findAll(
 	if(result->ptr)
 		return Error_invalidParameter(4, 0, "CharString_findAll()::result wasn't empty, might indicate memleak");
 
-	U64 strl = CharString_length(s);
+	const U64 strl = CharString_length(s);
 
 	ListU64 l = (ListU64) { 0 };
 	Error err = ListU64_reserve(&l, strl / 25 + 16, alloc);
@@ -1553,7 +1692,7 @@ Error CharString_findAll(
 
 	c = C8_transform(c, (EStringTransform) caseSensitive);
 
-	for (U64 i = 0; i < strl; ++i)
+	for (U64 i = off; i < strl; ++i)
 		if (c == C8_transform(s.ptr[i], (EStringTransform)caseSensitive))
 			if ((err = ListU64_pushBack(&l, i, alloc)).genericError) {
 				ListU64_free(&l, alloc);
@@ -1568,7 +1707,8 @@ Error CharString_findAllString(
 	CharString s,
 	CharString other,
 	Allocator alloc,
-	EStringCase casing,
+	EStringCase caseSensitive,
+	U64 off,
 	ListU64 *result
 ) {
 
@@ -1578,8 +1718,8 @@ Error CharString_findAllString(
 	if(result->ptr)
 		return Error_invalidParameter(4, 0, "CharString_findAllString()::result wasn't empty, might indicate memleak");
 
-	U64 otherl = CharString_length(other);
-	U64 strl = CharString_length(s);
+	const U64 otherl = CharString_length(other);
+	const U64 strl = CharString_length(s);
 
 	if(!otherl)
 		return Error_invalidParameter(1, 0, "CharString_findAllString()::other is empty");
@@ -1596,14 +1736,14 @@ Error CharString_findAllString(
 	if (err.genericError)
 		return err;
 
-	for (U64 i = 0; i < strl; ++i) {
+	for (U64 i = off; i < strl; ++i) {
 
 		Bool match = true;
 
 		for (U64 j = i, k = 0; j < strl && k < otherl; ++j, ++k)
 			if (
-				C8_transform(s.ptr[j], (EStringTransform)casing) !=
-				C8_transform(other.ptr[k], (EStringTransform)casing)
+				C8_transform(s.ptr[j], (EStringTransform)caseSensitive) !=
+				C8_transform(other.ptr[k], (EStringTransform)caseSensitive)
 			) {
 				match = false;
 				break;
@@ -1624,37 +1764,37 @@ Error CharString_findAllString(
 	return Error_none();
 }
 
-U64 CharString_findFirst(CharString s, C8 c, EStringCase caseSensitive) {
+U64 CharString_findFirst(CharString s, C8 c, EStringCase caseSensitive, U64 off) {
 
 	c = C8_transform(c, (EStringTransform)caseSensitive);
 
-	for (U64 i = 0; i < CharString_length(s); ++i)
+	for (U64 i = off; i < CharString_length(s); ++i)
 		if (C8_transform(s.ptr[i], (EStringTransform)caseSensitive) == c)
 			return i;
 
 	return U64_MAX;
 }
 
-U64 CharString_findLast(CharString s, C8 c, EStringCase caseSensitive) {
+U64 CharString_findLast(CharString s, C8 c, EStringCase caseSensitive, U64 off) {
 
 	c = C8_transform(c, (EStringTransform)caseSensitive);
 
-	for (U64 i = CharString_length(s) - 1; i != U64_MAX; --i)
+	for (U64 i = CharString_length(s) - 1; i != U64_MAX && i >= off; --i)
 		if (C8_transform(s.ptr[i], (EStringTransform)caseSensitive) == c)
 			return i;
 
 	return U64_MAX;
 }
 
-U64 CharString_findFirstString(CharString s, CharString other, EStringCase casing) {
+U64 CharString_findFirstString(CharString s, CharString other, EStringCase caseSensitive, U64 off) {
 
-	U64 otherl = CharString_length(other);
-	U64 strl = CharString_length(s);
+	const U64 otherl = CharString_length(other);
+	const U64 strl = CharString_length(s);
 
 	if(!otherl || strl < otherl)
 		return U64_MAX;
 
-	U64 i = 0;
+	U64 i = off;
 
 	for (; i < strl; ++i) {
 
@@ -1662,8 +1802,8 @@ U64 CharString_findFirstString(CharString s, CharString other, EStringCase casin
 
 		for (U64 j = i, k = 0; j < strl && k < otherl; ++j, ++k)
 			if (
-				C8_transform(s.ptr[j], (EStringTransform)casing) !=
-				C8_transform(other.ptr[k], (EStringTransform)casing)
+				C8_transform(s.ptr[j], (EStringTransform)caseSensitive) !=
+				C8_transform(other.ptr[k], (EStringTransform)caseSensitive)
 			) {
 				match = false;
 				break;
@@ -1673,34 +1813,36 @@ U64 CharString_findFirstString(CharString s, CharString other, EStringCase casin
 			break;
 	}
 
-	return i;
+	return i >= strl ? U64_MAX : i;
 }
 
-U64 CharString_findLastString(CharString s, CharString other, EStringCase casing) {
-	
-	U64 strl = CharString_length(s);
-	U64 otherl = CharString_length(other);
+U64 CharString_findLastString(CharString s, CharString other, EStringCase caseSensitive, U64 off) {
+
+	const U64 strl = CharString_length(s);
+	const U64 otherl = CharString_length(other);
 
 	if(!otherl || strl < otherl)
 		return U64_MAX;
 
 	U64 i = strl - 1;
 
-	for (; i != U64_MAX; --i) {
+	for (; i != U64_MAX && i >= off; --i) {
 
 		Bool match = true;
 
 		for (U64 j = i, k = otherl - 1; j != U64_MAX && k != U64_MAX; --j, --k)
 			if (
-				C8_transform(s.ptr[j], (EStringTransform)casing) !=
-				C8_transform(other.ptr[k], (EStringTransform)casing)
+				C8_transform(s.ptr[j], (EStringTransform)caseSensitive) !=
+				C8_transform(other.ptr[k], (EStringTransform)caseSensitive)
 			) {
 				match = false;
 				break;
 			}
 
-		if (match)
+		if (match) {
+			i -= otherl - 1;
 			break;
+		}
 	}
 
 	return i;
@@ -1708,8 +1850,8 @@ U64 CharString_findLastString(CharString s, CharString other, EStringCase casing
 
 Bool CharString_equalsString(CharString s, CharString other, EStringCase caseSensitive) {
 
-	U64 strl = CharString_length(s);
-	U64 otherl = CharString_length(other);
+	const U64 strl = CharString_length(s);
+	const U64 otherl = CharString_length(other);
 
 	if (strl != otherl)
 		return false;
@@ -1725,7 +1867,6 @@ Bool CharString_equalsString(CharString s, CharString other, EStringCase caseSen
 }
 
 Bool CharString_equals(CharString s, C8 c, EStringCase caseSensitive) {
-
 	return CharString_length(s) == 1 && s.ptr &&
 		C8_transform(s.ptr[0], (EStringTransform) caseSensitive) ==
 		C8_transform(c, (EStringTransform) caseSensitive);
@@ -1734,23 +1875,23 @@ Bool CharString_equals(CharString s, C8 c, EStringCase caseSensitive) {
 Bool CharString_equalsSensitive(CharString s, C8 c) { return CharString_equals(s, c, EStringCase_Sensitive); }
 Bool CharString_equalsInsensitive(CharString s, C8 c) { return CharString_equals(s, c, EStringCase_Insensitive); }
 
-Bool CharString_equalsStringSensitive(CharString s, CharString c) {
-	return CharString_equalsString(s, c, EStringCase_Sensitive);
+Bool CharString_equalsStringSensitive(CharString s, CharString other) {
+	return CharString_equalsString(s, other, EStringCase_Sensitive);
 }
 
-Bool CharString_equalsStringInsensitive(CharString s, CharString c) {
-	return CharString_equalsString(s, c, EStringCase_Insensitive);
+Bool CharString_equalsStringInsensitive(CharString s, CharString other) {
+	return CharString_equalsString(s, other, EStringCase_Insensitive);
 }
 
 Bool CharString_parseNyto(CharString s, U64 *result){
 
-	CharString prefix = CharString_createRefCStrConst("0n");
+	const CharString prefix = CharString_createRefCStrConst("0n");
 
-	Error err = CharString_offsetAsRef(
-		s, CharString_startsWithStringInsensitive(s, prefix) ? CharString_length(prefix) : 0, &s
+	const Error err = CharString_offsetAsRef(
+		s, CharString_startsWithStringInsensitive(s, prefix, 0) ? CharString_length(prefix) : 0, &s
 	);
 
-	U64 strl = CharString_length(s);
+	const U64 strl = CharString_length(s);
 
 	if (err.genericError)
 		return false;
@@ -1762,7 +1903,7 @@ Bool CharString_parseNyto(CharString s, U64 *result){
 
 	for (U64 i = strl - 1, j = 1; i != U64_MAX; --i, j <<= 6) {
 
-		U8 v = C8_nyto(s.ptr[i]);
+		const U8 v = C8_nyto(s.ptr[i]);
 
 		if (v == U8_MAX)
 			return false;
@@ -1778,15 +1919,15 @@ Bool CharString_parseNyto(CharString s, U64 *result){
 
 Bool CharString_parseHex(CharString s, U64 *result){
 
-	CharString prefix = CharString_createRefCStrConst("0x");
-	Error err = CharString_offsetAsRef(
-		s, CharString_startsWithStringInsensitive(s, prefix) ? CharString_length(prefix) : 0, &s
+	const CharString prefix = CharString_createRefCStrConst("0x");
+	const Error err = CharString_offsetAsRef(
+		s, CharString_startsWithStringInsensitive(s, prefix, 0) ? CharString_length(prefix) : 0, &s
 	);
 
 	if (err.genericError)
 		return false;
 
-	U64 strl = CharString_length(s);
+	const U64 strl = CharString_length(s);
 
 	if (!result || !s.ptr || strl > 16)
 		return false;
@@ -1795,7 +1936,7 @@ Bool CharString_parseHex(CharString s, U64 *result){
 
 	for (U64 i = strl - 1, j = 0; i != U64_MAX; --i, j += 4) {
 
-		U8 v = C8_hex(s.ptr[i]);
+		const U8 v = C8_hex(s.ptr[i]);
 
 		if (v == U8_MAX)
 			return false;
@@ -1808,7 +1949,7 @@ Bool CharString_parseHex(CharString s, U64 *result){
 
 Bool CharString_parseDec(CharString s, U64 *result) {
 
-	U64 strl = CharString_length(s);
+	const U64 strl = CharString_length(s);
 
 	if (!result || !s.ptr || strl > 20)
 		return false;
@@ -1817,7 +1958,7 @@ Bool CharString_parseDec(CharString s, U64 *result) {
 
 	for (U64 i = strl - 1, j = 1; i != U64_MAX; --i, j *= 10) {
 
-		U8 v = C8_dec(s.ptr[i]);
+		const U8 v = C8_dec(s.ptr[i]);
 
 		if (v == U8_MAX)
 			return false;
@@ -1833,14 +1974,14 @@ Bool CharString_parseDec(CharString s, U64 *result) {
 
 Bool CharString_parseDecSigned(CharString s, I64 *result) {
 
-	Bool neg = CharString_startsWithSensitive(s, '-');
+	const Bool neg = CharString_startsWithSensitive(s, '-', 0);
 
-	Error err = CharString_offsetAsRef(s, neg, &s);
+	const Error err = CharString_offsetAsRef(s, neg, &s);
 
 	if (err.genericError)
 		return false;
 
-	Bool b = CharString_parseDec(s, (U64*) result);
+	const Bool b = CharString_parseDec(s, (U64*) result);
 
 	if(!b)
 		return false;
@@ -1870,7 +2011,7 @@ Bool CharString_parseDouble(CharString s, F64 *result) {
 
 	Bool sign = false;
 
-	if (CharString_startsWithSensitive(s, '-')) {
+	if (CharString_startsWithSensitive(s, '-', 0)) {
 
 		sign = true;
 
@@ -1878,7 +2019,7 @@ Bool CharString_parseDouble(CharString s, F64 *result) {
 			return false;
 	}
 
-	else if (CharString_startsWithSensitive(s, '+')) {
+	else if (CharString_startsWithSensitive(s, '+', 0)) {
 
 		if (CharString_offsetAsRef(s, 1, &s).genericError)
 			return false;
@@ -1889,11 +2030,11 @@ Bool CharString_parseDouble(CharString s, F64 *result) {
 	F64 intPart = 0;
 
 	while(
-		!CharString_startsWithSensitive(s, '.') &&
-		!CharString_startsWithInsensitive(s, 'e')
+		!CharString_startsWithSensitive(s, '.', 0) &&
+		!CharString_startsWithInsensitive(s, 'e', 0)
 	) {
 
-		U8 v = C8_dec(s.ptr[0]);
+		const U8 v = C8_dec(s.ptr[0]);
 
 		if (v == U8_MAX)
 			return false;
@@ -1904,7 +2045,7 @@ Bool CharString_parseDouble(CharString s, F64 *result) {
 			return false;
 
 		if (CharString_offsetAsRef(s, 1, &s).genericError)
-			return false;
+			s = CharString_createNull();
 
 		if (!CharString_length(s)) {
 			*result = sign ? -intPart : intPart;
@@ -1915,16 +2056,16 @@ Bool CharString_parseDouble(CharString s, F64 *result) {
 	//Parse fraction
 
 	if (
-		CharString_startsWithSensitive(s, '.') &&
+		CharString_startsWithSensitive(s, '.', 0) &&
 		CharString_offsetAsRef(s, 1, &s).genericError
 	)
 		return false;
 
 	F64 fraction = 0, multiplier = 0.1;
 
-	while(!CharString_startsWithInsensitive(s, 'e')) {
+	while(!CharString_startsWithInsensitive(s, 'e', 0)) {
 
-		U8 v = C8_dec(s.ptr[0]);
+		const U8 v = C8_dec(s.ptr[0]);
 
 		if (v == U8_MAX)
 			return false;
@@ -1937,7 +2078,7 @@ Bool CharString_parseDouble(CharString s, F64 *result) {
 		multiplier *= 0.1;
 
 		if (CharString_offsetAsRef(s, 1, &s).genericError)
-			return false;
+			s = CharString_createNull();
 
 		if (!CharString_length(s)) {
 			*result = sign ? -(intPart + fraction) : intPart + fraction;
@@ -1952,7 +2093,7 @@ Bool CharString_parseDouble(CharString s, F64 *result) {
 
 	Bool esign = false;
 
-	if (CharString_startsWithSensitive(s, '-')) {
+	if (CharString_startsWithSensitive(s, '-', 0)) {
 
 		esign = true;
 
@@ -1960,7 +2101,7 @@ Bool CharString_parseDouble(CharString s, F64 *result) {
 			return false;
 	}
 
-	else if (CharString_startsWithSensitive(s, '+')) {
+	else if (CharString_startsWithSensitive(s, '+', 0)) {
 
 		if (CharString_offsetAsRef(s, 1, &s).genericError)
 			return false;
@@ -1972,7 +2113,7 @@ Bool CharString_parseDouble(CharString s, F64 *result) {
 
 	while(CharString_length(s)) {
 
-		U8 v = C8_dec(s.ptr[0]);
+		const U8 v = C8_dec(s.ptr[0]);
 
 		if (v == U8_MAX)
 			return false;
@@ -1986,12 +2127,12 @@ Bool CharString_parseDouble(CharString s, F64 *result) {
 			return false;
 	}
 
-	Error err = F64_exp10(esign ? -exponent : exponent, &exponent);
+	const Error err = F64_exp10(esign ? -exponent : exponent, &exponent);
 
 	if(err.genericError)
 		return false;
 
-	F64 res = (sign ? -(intPart + fraction) : intPart + fraction) * exponent;
+	const F64 res = (sign ? -(intPart + fraction) : intPart + fraction) * exponent;
 
 	if(!F64_isValid(res))
 		return false;
@@ -2015,9 +2156,9 @@ Bool CharString_parseFloat(CharString s, F32 *result) {
 
 Bool CharString_parseOct(CharString s, U64 *result) {
 
-	CharString prefix = CharString_createRefCStrConst("0o");
-	Error err = CharString_offsetAsRef(
-		s, CharString_startsWithStringInsensitive(s, prefix) ? CharString_length(prefix) : 0, &s
+	const CharString prefix = CharString_createRefCStrConst("0o");
+	const Error err = CharString_offsetAsRef(
+		s, CharString_startsWithStringInsensitive(s, prefix, 0) ? CharString_length(prefix) : 0, &s
 	);
 
 	if (err.genericError)
@@ -2046,10 +2187,10 @@ Bool CharString_parseOct(CharString s, U64 *result) {
 
 Bool CharString_parseBin(CharString s, U64 *result) {
 
-	CharString prefix = CharString_createRefCStrConst("0b");
-	Error err = CharString_offsetAsRef(
+	const CharString prefix = CharString_createRefCStrConst("0b");
+	const Error err = CharString_offsetAsRef(
 		s,
-		CharString_startsWithStringInsensitive(s, prefix) ?
+		CharString_startsWithStringInsensitive(s, prefix, 0) ?
 		CharString_length(prefix) : 0,
 		&s
 	);
@@ -2064,7 +2205,7 @@ Bool CharString_parseBin(CharString s, U64 *result) {
 
 	for (U64 i = CharString_length(s) - 1, j = 1; i != U64_MAX; --i, j <<= 1) {
 
-		U8 v = C8_bin(s.ptr[i]);
+		const U8 v = C8_bin(s.ptr[i]);
 
 		if (v == U8_MAX)
 			return false;
@@ -2078,7 +2219,7 @@ Bool CharString_parseBin(CharString s, U64 *result) {
 
 Bool CharString_parseU64(CharString s, U64 *result) {
 
-	if (CharString_startsWithSensitive(s, '0'))
+	if (CharString_startsWithSensitive(s, '0', 0))
 		switch (CharString_getAt(s, 1)) {
 			case 'B':	case 'b':	return CharString_parseBin(s, result);
 			case 'O':	case 'o':	return CharString_parseOct(s, result);
@@ -2094,7 +2235,7 @@ Bool CharString_cut(CharString s, U64 offset, U64 length, CharString *result) {
 	if(!result || result->ptr)
 		return false;
 
-	U64 strl = CharString_length(s);
+	const U64 strl = CharString_length(s);
 
 	if (!strl && !offset && !length) {
 		*result = CharString_createNull();
@@ -2115,7 +2256,7 @@ Bool CharString_cut(CharString s, U64 offset, U64 length, CharString *result) {
 		return false;
 	}
 
-	Bool isNullTerm = CharString_isNullTerminated(s) && offset + length == strl;
+	const Bool isNullTerm = CharString_isNullTerminated(s) && offset + length == strl;
 
 	*result = CharString_isConstRef(s) ? CharString_createRefSizedConst(s.ptr + offset, length, isNullTerm) :
 		CharString_createRefSized((C8*)s.ptr + offset, length, isNullTerm);
@@ -2131,7 +2272,7 @@ Bool CharString_cutAfter(
 	CharString *result
 ) {
 
-	U64 found = isFirst ? CharString_findFirst(s, c, caseSensitive) : CharString_findLast(s, c, caseSensitive);
+	const U64 found = isFirst ? CharString_findFirst(s, c, caseSensitive, 0) : CharString_findLast(s, c, caseSensitive, 0);
 
 	if (found == U64_MAX)
 		return false;
@@ -2147,8 +2288,8 @@ Bool CharString_cutAfterString(
 	CharString *result
 ) {
 
-	U64 found = isFirst ? CharString_findFirstString(s, other, caseSensitive) :
-		CharString_findLastString(s, other, caseSensitive);
+	const U64 found = isFirst ? CharString_findFirstString(s, other, caseSensitive, 0) :
+		CharString_findLastString(s, other, caseSensitive, 0);
 
 	if (found == U64_MAX)
 		return false;
@@ -2161,7 +2302,7 @@ Bool CharString_cutBefore(CharString s, C8 c, EStringCase caseSensitive, Bool is
 	if (!result)
 		return false;
 
-	U64 found = isFirst ? CharString_findFirst(s, c, caseSensitive) : CharString_findLast(s, c, caseSensitive);
+	U64 found = isFirst ? CharString_findFirst(s, c, caseSensitive, 0) : CharString_findLast(s, c, caseSensitive, 0);
 
 	if (found == U64_MAX)
 		return false;
@@ -2172,8 +2313,8 @@ Bool CharString_cutBefore(CharString s, C8 c, EStringCase caseSensitive, Bool is
 
 Bool CharString_cutBeforeString(CharString s, CharString other, EStringCase caseSensitive, Bool isFirst, CharString *result) {
 
-	U64 found = isFirst ? CharString_findFirstString(s, other, caseSensitive) :
-		CharString_findLastString(s, other, caseSensitive);
+	U64 found = isFirst ? CharString_findFirstString(s, other, caseSensitive, 0) :
+		CharString_findLastString(s, other, caseSensitive, 0);
 
 	if (found == U64_MAX)
 		return false;
@@ -2182,7 +2323,7 @@ Bool CharString_cutBeforeString(CharString s, CharString other, EStringCase case
 	return CharString_cut(s, found, 0, result);
 }
 
-Bool CharString_erase(CharString *s, C8 c, EStringCase caseSensitive, Bool isFirst) {
+Bool CharString_erase(CharString *s, C8 c, EStringCase caseSensitive, Bool isFirst, U64 off) {
 
 	if(!s || CharString_isRef(*s))
 		return false;
@@ -2191,12 +2332,12 @@ Bool CharString_erase(CharString *s, C8 c, EStringCase caseSensitive, Bool isFir
 
 	//Skipping first match
 
-	U64 find = CharString_find(*s, c, caseSensitive, isFirst);
+	const U64 find = CharString_find(*s, c, caseSensitive, isFirst, off);
 
 	if(find == U64_MAX)
 		return false;
 
-	U64 strl = CharString_length(*s);
+	const U64 strl = CharString_length(*s);
 
 	Buffer_copy(
 		Buffer_createRef((U8*)s->ptr + find, strl - find - 1),
@@ -2220,7 +2361,7 @@ Error CharString_eraseAtCount(CharString *s, U64 i, U64 count) {
 	if(CharString_isRef(*s))
 		return Error_constData(0, 0, "CharString_eraseAtCount()::s should be managed memory");
 
-	U64 strl = CharString_length(*s);
+	const U64 strl = CharString_length(*s);
 
 	if(i + count > strl)
 		return Error_outOfBounds(0, i + count, strl, "CharString_eraseAtCount()::i + count is out of bounds");
@@ -2230,24 +2371,24 @@ Error CharString_eraseAtCount(CharString *s, U64 i, U64 count) {
 		Buffer_createRefConst(s->ptr + i + count, strl - i - count)
 	);
 
-	U64 end = strl - count;
+	const U64 end = strl - count;
 	((C8*)s->ptr)[end] = '\0';
 	s->lenAndNullTerminated = end | ((U64)1 << 63);
 	return Error_none();
 }
 
-Bool CharString_eraseString(CharString *s, CharString other, EStringCase casing, Bool isFirst) {
+Bool CharString_eraseString(CharString *s, CharString other, EStringCase caseSensitive, Bool isFirst, U64 off) {
 
-	U64 otherl = CharString_length(other);
+	const U64 otherl = CharString_length(other);
 
 	if(!s || !otherl || CharString_isRef(*s))
 		return false;
 
-	U64 strl = CharString_length(*s);
+	const U64 strl = CharString_length(*s);
 
 	//Skipping first match
 
-	U64 find = CharString_findString(*s, other, casing, isFirst);
+	const U64 find = CharString_findString(*s, other, caseSensitive, isFirst, off);
 
 	if(find == U64_MAX)
 		return false;
@@ -2257,7 +2398,7 @@ Bool CharString_eraseString(CharString *s, CharString other, EStringCase casing,
 		Buffer_createRefConst(s->ptr + find + otherl, strl - find - otherl)
 	);
 
-	U64 end = strl - otherl;
+	const U64 end = strl - otherl;
 	((C8*)s->ptr)[end] = '\0';
 	s->lenAndNullTerminated = end | ((U64)1 << 63);
 	return true;
@@ -2265,37 +2406,37 @@ Bool CharString_eraseString(CharString *s, CharString other, EStringCase casing,
 
 //CharString's inline changes (no copy)
 
-Bool CharString_cutEnd(CharString s, U64 i, CharString *result) {
-	return CharString_cut(s, 0, i, result);
+Bool CharString_cutEnd(CharString s, U64 length, CharString *result) {
+	return CharString_cut(s, 0, length, result);
 }
 
-Bool CharString_cutBegin(CharString s, U64 i, CharString *result) {
+Bool CharString_cutBegin(CharString s, U64 off, CharString *result) {
 
-	if (i > CharString_length(s))
+	if (off > CharString_length(s))
 		return false;
 
-	return CharString_cut(s, i, 0, result);
+	return CharString_cut(s, off, 0, result);
 }
 
-Bool CharString_eraseAll(CharString *s, C8 c, EStringCase casing) {
+Bool CharString_eraseAll(CharString *s, C8 c, EStringCase caseSensitive, U64 off) {
 
 	if(!s || CharString_isRef(*s))
 		return false;
 
-	U64 strl = CharString_length(*s);
+	const U64 strl = CharString_length(*s);
 
-	c = C8_transform(c, (EStringTransform) casing);
+	c = C8_transform(c, (EStringTransform) caseSensitive);
 
-	U64 out = 0;
+	U64 out = off;
 
-	for (U64 i = 0; i < strl; ++i) {
+	for (U64 i = off; i < strl; ++i) {
 
-		if(C8_transform(s->ptr[i], (EStringTransform) casing) == c)
+		if(C8_transform(s->ptr[i], (EStringTransform) caseSensitive) == c)
 			continue;
 
 		((C8*)s->ptr)[out++] = s->ptr[i];
 	}
-	
+
 	if(out == strl)
 		return false;
 
@@ -2304,25 +2445,25 @@ Bool CharString_eraseAll(CharString *s, C8 c, EStringCase casing) {
 	return true;
 }
 
-Bool CharString_eraseAllString(CharString *s, CharString other, EStringCase casing) {
+Bool CharString_eraseAllString(CharString *s, CharString other, EStringCase caseSensitive, U64 off) {
 
-	U64 otherl = CharString_length(other);
+	const U64 otherl = CharString_length(other);
 
 	if(!s || !otherl || CharString_isRef(*s))
 		return false;
 
-	U64 strl = CharString_length(*s);
+	const U64 strl = CharString_length(*s);
 
-	U64 out = 0;
+	U64 out = off;
 
-	for (U64 i = 0; i < strl; ++i) {
+	for (U64 i = off; i < strl; ++i) {
 
 		Bool match = true;
 
 		for (U64 j = i, k = 0; j < strl && k < otherl; ++j, ++k)
 			if (
-				C8_transform(s->ptr[j], (EStringTransform) casing) !=
-				C8_transform(other.ptr[k], (EStringTransform) casing)
+				C8_transform(s->ptr[j], (EStringTransform) caseSensitive) !=
+				C8_transform(other.ptr[k], (EStringTransform) caseSensitive)
 			) {
 				match = false;
 				break;
@@ -2344,26 +2485,26 @@ Bool CharString_eraseAllString(CharString *s, CharString other, EStringCase casi
 	return true;
 }
 
-Bool CharString_replaceAll(CharString *s, C8 c, C8 v, EStringCase caseSensitive) {
+Bool CharString_replaceAll(CharString *s, C8 c, C8 v, EStringCase caseSensitive, U64 off) {
 
 	if (!s || CharString_isConstRef(*s))
 		return false;
 
 	c = C8_transform(c, (EStringTransform)caseSensitive);
 
-	for(U64 i = 0; i < CharString_length(*s); ++i)
+	for(U64 i = off; i < CharString_length(*s); ++i)
 		if(C8_transform(s->ptr[i], (EStringTransform)caseSensitive) == c)
 			((C8*)s->ptr)[i] = v;
 
 	return true;
 }
 
-Bool CharString_replace(CharString *s, C8 c, C8 v, EStringCase caseSensitive, Bool isFirst) {
+Bool CharString_replace(CharString *s, C8 c, C8 v, EStringCase caseSensitive, Bool isFirst, U64 off) {
 
 	if (!s || CharString_isRef(*s))
 		return false;
 
-	U64 i = isFirst ? CharString_findFirst(*s, c, caseSensitive) : CharString_findLast(*s, c, caseSensitive);
+	const U64 i = isFirst ? CharString_findFirst(*s, c, caseSensitive, off) : CharString_findLast(*s, c, caseSensitive, off);
 
 	if(i != U64_MAX)
 		((C8*)s->ptr)[i] = v;
@@ -2371,20 +2512,20 @@ Bool CharString_replace(CharString *s, C8 c, C8 v, EStringCase caseSensitive, Bo
 	return true;
 }
 
-Bool CharString_transform(CharString str, EStringTransform c) {
+Bool CharString_transform(CharString str, EStringTransform stringTransform) {
 
 	if(CharString_isConstRef(str))
 		return false;
 
 	for(U64 i = 0; i < CharString_length(str); ++i)
-		((C8*)str.ptr)[i] = C8_transform(str.ptr[i], c);
+		((C8*)str.ptr)[i] = C8_transform(str.ptr[i], stringTransform);
 
 	return true;
 }
 
 CharString CharString_trim(CharString s) {
 
-	U64 strl = CharString_length(s);
+	const U64 strl = CharString_length(s);
 	U64 first = strl;
 
 	for (U64 i = 0; i < strl; ++i)
@@ -2406,101 +2547,47 @@ CharString CharString_trim(CharString s) {
 
 	++last;		//We wanna include the last character that's non whitespace too
 
-	Bool isNullTerm = CharString_isNullTerminated(s) && last == strl;
-	
+	const Bool isNullTerm = CharString_isNullTerminated(s) && last == strl;
+
 	return CharString_isConstRef(s) ? CharString_createRefSizedConst(s.ptr + first, last - first, isNullTerm) :
 		CharString_createRefSized((C8*)s.ptr + first, last - first, isNullTerm);
 }
 
-//CharStringList
+Bool ListCharString_freeUnderlying(ListCharString *arr, Allocator alloc) {
 
-Error CharStringList_create(U64 length, Allocator alloc, CharStringList *arr) {
-
-	if (!arr)
-		return Error_nullPointer(2, "CharStringList_create()::arr is required");
-
-	if (arr->ptr)
-		return Error_invalidOperation(0, "CharStringList_create()::arr isn't empty, might indicate memleak");
-
-	CharStringList sl = (CharStringList) { .length = length };
-
-	Buffer b = Buffer_createNull();
-	Error err = alloc.alloc(alloc.ptr, length * sizeof(CharString), &b);
-
-	sl.ptr = (CharString*) b.ptr;
-
-	if(err.genericError)
-		return err;
-
-	for(U64 i = 0; i < sl.length; ++i)
-		sl.ptr[i] = CharString_createNull();
-
-	*arr = sl;
-	return Error_none();
-}
-
-Bool CharStringList_free(CharStringList *arr, Allocator alloc) {
-
-	if(!arr || !arr->length)
+	if(!arr || !arr->length || ListCharString_isRef(*arr))
 		return true;
 
 	Bool freed = true;
 
 	for(U64 i = 0; i < arr->length; ++i) {
-		CharString *str = arr->ptr + i;
+		CharString *str = arr->ptrNonConst + i;
 		freed &= CharString_free(str, alloc);
 	}
 
-	freed &= alloc.free(alloc.ptr, Buffer_createManagedPtr(
-		arr->ptr,
-		sizeof(CharString) * arr->length
-	));
-
-	*arr = (CharStringList) { 0 };
-	return freed;
+	return ListCharString_free(arr, alloc);
 }
 
-Error CharStringList_createCopy(CharStringList toCopy, Allocator alloc, CharStringList *arr) {
+Error ListCharString_createCopyUnderlying(ListCharString toCopy, Allocator alloc, ListCharString *arr) {
 
 	if(!toCopy.length)
-		return Error_nullPointer(0, "CharStringList_createCopy()::toCopy.length can't be 0");
+		return Error_nullPointer(0, "ListCharString_createCopyUnderlying()::toCopy.length can't be 0");
 
-	Error err = CharStringList_create(toCopy.length, alloc, arr);
+	Error err = ListCharString_create(toCopy.length, alloc, arr);
 
 	if (err.genericError)
 		return err;
 
 	for (U64 i = 0; i < toCopy.length; ++i) {
 
-		err = CharString_createCopy(toCopy.ptr[i], alloc, arr->ptr + i);
+		err = CharString_createCopy(toCopy.ptr[i], alloc, arr->ptrNonConst + i);
 
 		if (err.genericError) {
-			CharStringList_free(arr, alloc);
+			ListCharString_freeUnderlying(arr, alloc);
 			return err;
 		}
 	}
 
-	return Error_none();
-}
-
-Error CharStringList_unset(CharStringList arr, U64 i, Allocator alloc) {
-
-	if(i >= arr.length)
-		return Error_outOfBounds(1, i, arr.length, "CharStringList_unset()::i out of bounds");
-
-	CharString *pstr = arr.ptr + i;
-	CharString_free(pstr, alloc);
-	return Error_none();
-}
-
-Error CharStringList_set(CharStringList arr, U64 i, CharString str, Allocator alloc) {
-
-	Error err = CharStringList_unset(arr, i, alloc);
-
-	if(err.genericError)
-		return err;
-
-	arr.ptr[i] = str;
 	return Error_none();
 }
 
@@ -2567,7 +2654,7 @@ CharString CharString_getBasePath(CharString *str) {
 	return res;
 }
 
-Error CharStringList_concat(CharStringList arr, C8 between, Allocator alloc, CharString *result) {
+Error ListCharString_concat(ListCharString arr, C8 between, Allocator alloc, CharString *result) {
 
 	U64 length = 0;
 
@@ -2577,7 +2664,7 @@ Error CharStringList_concat(CharStringList arr, C8 between, Allocator alloc, Cha
 	if(arr.length > 1)
 		length += arr.length - 1;
 
-	Error err = CharString_create(' ', length, alloc, result);
+	const Error err = CharString_create(' ', length, alloc, result);
 
 	if(err.genericError)
 		return err;
@@ -2594,7 +2681,7 @@ Error CharStringList_concat(CharStringList arr, C8 between, Allocator alloc, Cha
 	return Error_none();
 }
 
-Error CharStringList_concatString(CharStringList arr, CharString between, Allocator alloc, CharString *result) {
+Error ListCharString_concatString(ListCharString arr, CharString between, Allocator alloc, CharString *result) {
 
 	U64 length = 0;
 
@@ -2604,7 +2691,7 @@ Error CharStringList_concatString(CharStringList arr, CharString between, Alloca
 	if(arr.length > 1)
 		length += (arr.length - 1) * CharString_length(between);
 
-	Error err = CharString_create(' ', length, alloc, result);
+	const Error err = CharString_create(' ', length, alloc, result);
 
 	if(err.genericError)
 		return err;
@@ -2622,79 +2709,89 @@ Error CharStringList_concatString(CharStringList arr, CharString between, Alloca
 	return Error_none();
 }
 
-Error CharStringList_combine(CharStringList arr, Allocator alloc, CharString *result) {
-	return CharStringList_concatString(arr, CharString_createNull(), alloc, result);
+Error ListCharString_combine(ListCharString arr, Allocator alloc, CharString *result) {
+	return ListCharString_concatString(arr, CharString_createNull(), alloc, result);
 }
 
-U64 CharString_find(CharString s, C8 c, EStringCase caseSensitive, Bool isFirst) {
-	return isFirst ? CharString_findFirst(s, c, caseSensitive) : CharString_findLast(s, c, caseSensitive);
+U64 CharString_find(CharString s, C8 c, EStringCase caseSensitive, Bool isFirst, U64 off) {
+	return isFirst ? CharString_findFirst(s, c, caseSensitive, off) : CharString_findLast(s, c, caseSensitive, off);
 }
 
-U64 CharString_findString(CharString s, CharString other, EStringCase caseSensitive, Bool isFirst) {
-	return isFirst ? CharString_findFirstString(s, other, caseSensitive) :
-		CharString_findLastString(s, other, caseSensitive);
+U64 CharString_findString(CharString s, CharString other, EStringCase caseSensitive, Bool isFirst, U64 off) {
+	return isFirst ? CharString_findFirstString(s, other, caseSensitive, off) :
+		CharString_findLastString(s, other, caseSensitive, off);
 }
 
-Error CharString_findAllSensitive(CharString s, C8 c, Allocator alloc, ListU64 *result) {
-	return CharString_findAll(s, c, alloc, EStringCase_Sensitive, result);
+Error CharString_findAllSensitive(CharString s, C8 c, U64 off, Allocator alloc, ListU64 *result) {
+	return CharString_findAll(s, c, alloc, EStringCase_Sensitive, off, result);
 }
 
-Error CharString_findAllInsensitive(CharString s, C8 c, Allocator alloc, ListU64 *result) {
-	return CharString_findAll(s, c, alloc, EStringCase_Insensitive, result);
+Error CharString_findAllInsensitive(CharString s, C8 c, U64 off, Allocator alloc, ListU64 *result) {
+	return CharString_findAll(s, c, alloc, EStringCase_Insensitive, off, result);
 }
 
-Error CharString_findAllStringSensitive(CharString s, CharString other, Allocator alloc, ListU64 *result) {
-	return CharString_findAllString(s, other, alloc, EStringCase_Sensitive, result);
+Error CharString_findAllStringSensitive(CharString s, CharString other, U64 off, Allocator alloc, ListU64 *result) {
+	return CharString_findAllString(s, other, alloc, EStringCase_Sensitive, off, result);
 }
 
-Error CharString_findAllStringInsensitive(CharString s, CharString other, Allocator alloc, ListU64 *result) {
-	return CharString_findAllString(s, other, alloc, EStringCase_Insensitive, result);
+Error CharString_findAllStringInsensitive(CharString s, CharString other, U64 off, Allocator alloc, ListU64 *result) {
+	return CharString_findAllString(s, other, alloc, EStringCase_Insensitive, off, result);
 }
 
-U64 CharString_findFirstSensitive(CharString s, C8 c) { return CharString_findFirst(s, c, EStringCase_Sensitive); }
-U64 CharString_findFirstInsensitive(CharString s, C8 c) { return CharString_findFirst(s, c, EStringCase_Insensitive); }
-
-U64 CharString_findLastSensitive(CharString s, C8 c) { return CharString_findLast(s, c, EStringCase_Sensitive); }
-U64 CharString_findLastInsensitive(CharString s, C8 c) { return CharString_findLast(s, c, EStringCase_Insensitive); }
-
-U64 CharString_findSensitive(CharString s, C8 c, Bool isFirst) {
-	return CharString_find(s, c, EStringCase_Sensitive, isFirst);
+U64 CharString_findFirstSensitive(CharString s, C8 c, U64 off) {
+	return CharString_findFirst(s, c, EStringCase_Sensitive, off);
 }
 
-U64 CharString_findInsensitive(CharString s, C8 c, Bool isFirst) {
-	return CharString_find(s, c, EStringCase_Insensitive, isFirst);
+U64 CharString_findFirstInsensitive(CharString s, C8 c, U64 off) {
+	return CharString_findFirst(s, c, EStringCase_Insensitive, off);
 }
 
-U64 CharString_findFirstStringSensitive(CharString s, CharString other) {
-	return CharString_findFirstString(s, other, EStringCase_Sensitive);
+U64 CharString_findLastSensitive(CharString s, C8 c, U64 off) {
+	return CharString_findLast(s, c, EStringCase_Sensitive, off);
 }
 
-U64 CharString_findFirstStringInsensitive(CharString s, CharString other) {
-	return CharString_findFirstString(s, other, EStringCase_Insensitive);
+U64 CharString_findLastInsensitive(CharString s, C8 c, U64 off) {
+	return CharString_findLast(s, c, EStringCase_Insensitive, off);
 }
 
-U64 CharString_findLastStringSensitive(CharString s, CharString other) {
-	return CharString_findLastString(s, other, EStringCase_Sensitive);
+U64 CharString_findSensitive(CharString s, C8 c, Bool isFirst, U64 off) {
+	return CharString_find(s, c, EStringCase_Sensitive, isFirst, off);
 }
 
-U64 CharString_findLastStringInsensitive(CharString s, CharString other) {
-	return CharString_findLastString(s, other, EStringCase_Insensitive);
+U64 CharString_findInsensitive(CharString s, C8 c, Bool isFirst, U64 off) {
+	return CharString_find(s, c, EStringCase_Insensitive, isFirst, off);
 }
 
-U64 CharString_findStringSensitive(CharString s, CharString other, Bool isFirst) {
-	return CharString_findString(s, other, EStringCase_Sensitive, isFirst);
+U64 CharString_findFirstStringSensitive(CharString s, CharString other, U64 off) {
+	return CharString_findFirstString(s, other, EStringCase_Sensitive, off);
 }
 
-U64 CharString_findStringInsensitive(CharString s, CharString other, Bool isFirst) {
-	return CharString_findString(s, other, EStringCase_Insensitive, isFirst);
+U64 CharString_findFirstStringInsensitive(CharString s, CharString other, U64 off) {
+	return CharString_findFirstString(s, other, EStringCase_Insensitive, off);
+}
+
+U64 CharString_findLastStringSensitive(CharString s, CharString other, U64 off) {
+	return CharString_findLastString(s, other, EStringCase_Sensitive, off);
+}
+
+U64 CharString_findLastStringInsensitive(CharString s, CharString other, U64 off) {
+	return CharString_findLastString(s, other, EStringCase_Insensitive, off);
+}
+
+U64 CharString_findStringSensitive(CharString s, CharString other, Bool isFirst, U64 off) {
+	return CharString_findString(s, other, EStringCase_Sensitive, isFirst, off);
+}
+
+U64 CharString_findStringInsensitive(CharString s, CharString other, Bool isFirst, U64 off) {
+	return CharString_findString(s, other, EStringCase_Insensitive, isFirst, off);
 }
 
 Bool CharString_contains(CharString str, C8 c, EStringCase caseSensitive) {
-	return CharString_findFirst(str, c, caseSensitive) != U64_MAX;
+	return CharString_findFirst(str, c, caseSensitive, 0) != U64_MAX;
 }
 
 Bool CharString_containsString(CharString str, CharString other, EStringCase caseSensitive) {
-	return CharString_findFirstString(str, other, caseSensitive) != U64_MAX;
+	return CharString_findFirstString(str, other, caseSensitive, 0) != U64_MAX;
 }
 
 Bool CharString_containsSensitive(CharString str, C8 c) { return CharString_contains(str, c, EStringCase_Sensitive); }
@@ -2847,109 +2944,124 @@ Error CharString_eraseAt(CharString *s, U64 i) { return CharString_eraseAtCount(
 Error CharString_popFront(CharString *s) { return CharString_eraseAt(s, 0); }
 Error CharString_popEnd(CharString *s) { return CharString_eraseAt(s, s ? CharString_length(*s) : 0); }
 
-Bool CharString_eraseFirst(CharString *s, C8 c, EStringCase caseSensitive) {
-	return CharString_erase(s, c, caseSensitive, true);
+Bool CharString_eraseFirst(CharString *s, C8 c, EStringCase caseSensitive, U64 off) {
+	return CharString_erase(s, c, caseSensitive, true, off);
 }
 
-Bool CharString_eraseLast(CharString *s, C8 c, EStringCase caseSensitive) {
-	return CharString_erase(s, c, caseSensitive, false);
+Bool CharString_eraseLast(CharString *s, C8 c, EStringCase caseSensitive, U64 off) {
+	return CharString_erase(s, c, caseSensitive, false, off);
 }
 
-Bool CharString_eraseFirstString(CharString *s, CharString other, EStringCase caseSensitive){
-	return CharString_eraseString(s, other, caseSensitive, true);
+Bool CharString_eraseFirstString(CharString *s, CharString other, EStringCase caseSensitive, U64 off){
+	return CharString_eraseString(s, other, caseSensitive, true, off);
 }
 
-Bool CharString_eraseLastString(CharString *s, CharString other, EStringCase caseSensitive) {
-	return CharString_eraseString(s, other, caseSensitive, false);
+Bool CharString_eraseLastString(CharString *s, CharString other, EStringCase caseSensitive, U64 off) {
+	return CharString_eraseString(s, other, caseSensitive, false, off);
 }
 
-Bool CharString_eraseAllSensitive(CharString *s, C8 c) { return CharString_eraseAll(s, c, EStringCase_Sensitive); }
-Bool CharString_eraseAllInsensitive(CharString *s, C8 c) { return CharString_eraseAll(s, c, EStringCase_Insensitive); }
-
-Bool CharString_eraseSensitive(CharString *s, C8 c, Bool isFirst) {
-	return CharString_erase(s, c, EStringCase_Sensitive, isFirst);
+Bool CharString_eraseAllSensitive(CharString *s, C8 c, U64 off) {
+	return CharString_eraseAll(s, c, EStringCase_Sensitive, off);
 }
 
-Bool CharString_eraseInsensitive(CharString *s, C8 c, Bool isFirst) {
-	return CharString_erase(s, c, EStringCase_Insensitive, isFirst);
+Bool CharString_eraseAllInsensitive(CharString *s, C8 c, U64 off) {
+	return CharString_eraseAll(s, c, EStringCase_Insensitive, off);
 }
 
-Bool CharString_eraseFirstSensitive(CharString *s, C8 c) { return CharString_eraseFirst(s, c, EStringCase_Sensitive); }
-Bool CharString_eraseFirstInsensitive(CharString *s, C8 c) { return CharString_eraseFirst(s, c, EStringCase_Insensitive); }
-
-Bool CharString_eraseLastSensitive(CharString *s, C8 c) { return CharString_eraseLast(s, c, EStringCase_Sensitive); }
-Bool CharString_eraseLastInsensitive(CharString *s, C8 c) { return CharString_eraseLast(s, c, EStringCase_Insensitive); }
-
-Bool CharString_eraseAllStringSensitive(CharString *s, CharString other) {
-	return CharString_eraseAllString(s, other, EStringCase_Sensitive);
+Bool CharString_eraseSensitive(CharString *s, C8 c, Bool isFirst, U64 off) {
+	return CharString_erase(s, c, EStringCase_Sensitive, isFirst, off);
 }
 
-Bool CharString_eraseAllStringInsensitive(CharString *s, CharString other) {
-	return CharString_eraseAllString(s, other, EStringCase_Insensitive);
+Bool CharString_eraseInsensitive(CharString *s, C8 c, Bool isFirst, U64 off) {
+	return CharString_erase(s, c, EStringCase_Insensitive, isFirst, off);
 }
 
-Bool CharString_eraseStringSensitive(CharString *s, CharString other, Bool isFirst) {
-	return CharString_eraseString(s, other, EStringCase_Sensitive, isFirst);
+Bool CharString_eraseFirstSensitive(CharString *s, C8 c, U64 off) {
+	return CharString_eraseFirst(s, c, EStringCase_Sensitive, off);
 }
 
-Bool CharString_eraseStringInsensitive(CharString *s, CharString other, Bool isFirst) {
-	return CharString_eraseString(s, other, EStringCase_Insensitive, isFirst);
+Bool CharString_eraseFirstInsensitive(CharString *s, C8 c, U64 off) {
+	return CharString_eraseFirst(s, c, EStringCase_Insensitive, off);
 }
 
-Bool CharString_eraseFirstStringSensitive(CharString *s, CharString other) {
-	return CharString_eraseFirstString(s, other, EStringCase_Sensitive);
+Bool CharString_eraseLastSensitive(CharString *s, C8 c, U64 off) {
+	return CharString_eraseLast(s, c, EStringCase_Sensitive, off);
 }
 
-Bool CharString_eraseFirstStringInsensitive(CharString *s, CharString other) {
-	return CharString_eraseFirstString(s, other, EStringCase_Insensitive);
+Bool CharString_eraseLastInsensitive(CharString *s, C8 c, U64 off) {
+	return CharString_eraseLast(s, c, EStringCase_Insensitive, off);
 }
 
-Bool CharString_eraseLastStringSensitive(CharString *s, CharString other) {
-	return CharString_eraseLastString(s, other, EStringCase_Sensitive);
+Bool CharString_eraseAllStringSensitive(CharString *s, CharString other, U64 off) {
+	return CharString_eraseAllString(s, other, EStringCase_Sensitive, off);
 }
 
-Bool CharString_eraseLastStringInsensitive(CharString *s, CharString other) {
-	return CharString_eraseLastString(s, other, EStringCase_Insensitive);
+Bool CharString_eraseAllStringInsensitive(CharString *s, CharString other, U64 off) {
+	return CharString_eraseAllString(s, other, EStringCase_Insensitive, off);
 }
 
-Bool CharString_replaceFirst(CharString *s, C8 c, C8 v, EStringCase caseSensitive) {
-	return CharString_replace(s, c, v, caseSensitive, true);
+Bool CharString_eraseStringSensitive(CharString *s, CharString other, Bool isFirst, U64 off) {
+	return CharString_eraseString(s, other, EStringCase_Sensitive, isFirst, off);
 }
 
-Bool CharString_replaceLast(CharString *s, C8 c, C8 v, EStringCase caseSensitive) {
-	return CharString_replace(s, c, v, caseSensitive, false);
+Bool CharString_eraseStringInsensitive(CharString *s, CharString other, Bool isFirst, U64 off) {
+	return CharString_eraseString(s, other, EStringCase_Insensitive, isFirst, off);
 }
 
-Bool CharString_replaceAllSensitive(CharString *s, C8 c, C8 v) {
-	return CharString_replaceAll(s, c, v, EStringCase_Sensitive);
+Bool CharString_eraseFirstStringSensitive(CharString *s, CharString other, U64 off) {
+	return CharString_eraseFirstString(s, other, EStringCase_Sensitive, off);
 }
 
-Bool CharString_replaceAllInsensitive(CharString *s, C8 c, C8 v) {
-	return CharString_replaceAll(s, c, v, EStringCase_Insensitive);
+Bool CharString_eraseFirstStringInsensitive(CharString *s, CharString other, U64 off) {
+	return CharString_eraseFirstString(s, other, EStringCase_Insensitive, off);
 }
 
-Bool CharString_replaceSensitive(CharString *s, C8 c, C8 v, Bool isFirst) {
-	return CharString_replace(s, c, v, EStringCase_Sensitive, isFirst);
+Bool CharString_eraseLastStringSensitive(CharString *s, CharString other, U64 off) {
+	return CharString_eraseLastString(s, other, EStringCase_Sensitive, off);
 }
 
-Bool CharString_replaceInsensitive(CharString *s, C8 c, C8 v, Bool isFirst) {
-	return CharString_replace(s, c, v, EStringCase_Insensitive, isFirst);
+Bool CharString_eraseLastStringInsensitive(CharString *s, CharString other, U64 off) {
+	return CharString_eraseLastString(s, other, EStringCase_Insensitive, off);
 }
 
-Bool CharString_replaceFirstSensitive(CharString *s, C8 c, C8 v) {
-	return CharString_replaceFirst(s, c, v, EStringCase_Sensitive);
+Bool CharString_replaceFirst(CharString *s, C8 c, C8 v, EStringCase caseSensitive, U64 off) {
+	return CharString_replace(s, c, v, caseSensitive, true, off);
 }
 
-Bool CharString_replaceFirstInsensitive(CharString *s, C8 c, C8 v) {
-	return CharString_replaceFirst(s, c, v, EStringCase_Insensitive);
+Bool CharString_replaceLast(CharString *s, C8 c, C8 v, EStringCase caseSensitive, U64 off) {
+	return CharString_replace(s, c, v, caseSensitive, false, off);
 }
 
-Bool CharString_replaceLastSensitive(CharString *s, C8 c, C8 v) {
-	return CharString_replaceLast(s, c, v, EStringCase_Sensitive);
+Bool CharString_replaceAllSensitive(CharString *s, C8 c, C8 v, U64 off) {
+	return CharString_replaceAll(s, c, v, EStringCase_Sensitive, off);
 }
 
-Bool CharString_replaceLastInsensitive(CharString *s, C8 c, C8 v) {
-	return CharString_replaceLast(s, c, v, EStringCase_Insensitive);
+Bool CharString_replaceAllInsensitive(CharString *s, C8 c, C8 v, U64 off) {
+	return CharString_replaceAll(s, c, v, EStringCase_Insensitive, off);
+}
+
+Bool CharString_replaceSensitive(CharString *s, C8 c, C8 v, Bool isFirst, U64 off) {
+	return CharString_replace(s, c, v, EStringCase_Sensitive, isFirst, off);
+}
+
+Bool CharString_replaceInsensitive(CharString *s, C8 c, C8 v, Bool isFirst, U64 off) {
+	return CharString_replace(s, c, v, EStringCase_Insensitive, isFirst, off);
+}
+
+Bool CharString_replaceFirstSensitive(CharString *s, C8 c, C8 v, U64 off) {
+	return CharString_replaceFirst(s, c, v, EStringCase_Sensitive, off);
+}
+
+Bool CharString_replaceFirstInsensitive(CharString *s, C8 c, C8 v, U64 off) {
+	return CharString_replaceFirst(s, c, v, EStringCase_Insensitive, off);
+}
+
+Bool CharString_replaceLastSensitive(CharString *s, C8 c, C8 v, U64 off) {
+	return CharString_replaceLast(s, c, v, EStringCase_Sensitive, off);
+}
+
+Bool CharString_replaceLastInsensitive(CharString *s, C8 c, C8 v, U64 off) {
+	return CharString_replaceLast(s, c, v, EStringCase_Insensitive, off);
 }
 
 Bool CharString_toLower(CharString str) { return CharString_transform(str, EStringTransform_Lower); }
@@ -2958,13 +3070,13 @@ Bool CharString_toUpper(CharString str) { return CharString_transform(str, EStri
 //Simple file utils
 
 Bool CharString_formatPath(CharString *str) {
-	return CharString_replaceAllSensitive(str, '\\', '/');
+	return CharString_replaceAllSensitive(str, '\\', '/', 0);
 }
 
 ECompareResult CharString_compare(CharString a, CharString b, EStringCase caseSensitive) {
 
-	U64 al = CharString_length(a);
-	U64 bl = CharString_length(b);
+	const U64 al = CharString_length(a);
+	const U64 bl = CharString_length(b);
 
 	//We want to sort on contents
 	//Provided it's the same level of parenting.
@@ -2972,8 +3084,8 @@ ECompareResult CharString_compare(CharString a, CharString b, EStringCase caseSe
 
 	for (U64 i = 0; i < al && i < bl; ++i) {
 
-		C8 ai = C8_transform(a.ptr[i], (EStringTransform) caseSensitive);
-		C8 bi = C8_transform(b.ptr[i], (EStringTransform) caseSensitive);
+		const C8 ai = C8_transform(a.ptr[i], (EStringTransform) caseSensitive);
+		const C8 bi = C8_transform(b.ptr[i], (EStringTransform) caseSensitive);
 
 		if (ai < bi)
 			return ECompareResult_Lt;
@@ -3007,7 +3119,14 @@ ECompareResult CharString_compareInsensitive(CharString a, CharString b) {
 #ifdef _WIN32
 	#define calcFormatLen _vscprintf
 #else
-	#define calcFormatLen vsnprintf
+	int calcFormatLen(const char * format, va_list pargs) {
+      int retval;
+      va_list argcopy;
+      va_copy(argcopy, pargs);
+      retval = vsnprintf(NULL, 0, format, argcopy);
+      va_end(argcopy);
+      return retval;
+   }
 #endif
 
 Error CharString_formatVariadic(Allocator alloc, CharString *result, const C8 *format, va_list args) {
@@ -3018,7 +3137,7 @@ Error CharString_formatVariadic(Allocator alloc, CharString *result, const C8 *f
 	va_list arg2;
 	va_copy(arg2, args);
 
-	int len = calcFormatLen(format, arg2);
+	const int len = calcFormatLen(format, arg2);
 
 	if(len < 0)
 		return Error_stderr(0, "CharString_formatVariadic() len can't be <0");
@@ -3031,7 +3150,7 @@ Error CharString_formatVariadic(Allocator alloc, CharString *result, const C8 *f
 		return Error_none();
 	}
 
-	Error err = CharString_create('\0', (U64) len, alloc, result);
+	const Error err = CharString_create('\0', (U64) len, alloc, result);
 
 	if(err.genericError)
 		return err;
@@ -3049,7 +3168,7 @@ Error CharString_format(Allocator alloc, CharString *result, const C8 *format, .
 
 	va_list arg1;
 	va_start(arg1, format);
-	Error err = CharString_formatVariadic(alloc, result, format, arg1);
+	const Error err = CharString_formatVariadic(alloc, result, format, arg1);
 	va_end(arg1);
 
 	return err;

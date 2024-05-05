@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -21,10 +21,12 @@
 #pragma once
 #include "types.h"
 
-typedef struct Buffer Buffer;
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef struct Allocator Allocator;
 typedef struct Error Error;
-typedef enum EStringCase EStringCase;
 
 #define TListDefinition(T, Name) typedef T Name##_Type; typedef struct Name {											\
 																														\
@@ -36,7 +38,7 @@ typedef enum EStringCase EStringCase;
 	U64 length;																											\
 	U64 capacityAndRefInfo;																								\
 																														\
-} Name;
+} Name
 
 TListDefinition(U64, ListU64);		//Used by _find and _eraseAllIndices
 TListDefinition(void, ListVoid);
@@ -97,6 +99,7 @@ Error GenericList_createSubset(GenericList list, U64 index, U64 length, GenericL
 
 Error GenericList_create(U64 length, U64 stride, Allocator allocator, GenericList *result);
 Error GenericList_createCopy(GenericList list, Allocator allocator, GenericList *result);
+Error GenericList_createCopySubset(GenericList list, U64 off, U64 len, Allocator allocator, GenericList *result);
 
 Error GenericList_createRepeated(
 	U64 length,
@@ -204,3 +207,7 @@ Bool GenericList_free(GenericList *result, Allocator allocator);
 	Name##_fromList(list, l); /* can't error */																			\
 	return Error_none();																								\
 }
+
+#ifdef __cplusplus
+	}
+#endif

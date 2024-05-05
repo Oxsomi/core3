@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -21,6 +21,10 @@
 #pragma once
 #include "types/list.h"
 #include "types/vec.h"
+
+#ifdef __cplusplus
+	extern "C" {
+#endif
 
 typedef struct Window Window;
 
@@ -46,8 +50,9 @@ typedef struct WindowManagerCallbacks {
 
 typedef struct WindowManager {
 
-	U32 owningThread;		//Only one thread can own a window manager at a time
+	U64 owningThread;		//Only one thread can own a window manager at a time
 	U32 isActive;			//WindowManager_magic if active
+	U32 padding;
 
 	ListWindowPtr windows;
 
@@ -85,7 +90,11 @@ Error WindowManager_createWindow(
 	WindowCallbacks callbacks,
 	EWindowFormat format,
 	U64 extendedData,
-	Window **w
+	Window **result
 );
 
 Bool WindowManager_freeWindow(WindowManager *manager, Window **w);
+
+#ifdef __cplusplus
+	}
+#endif

@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -50,7 +50,7 @@ Error addFileToDLFile(FileInfo file, ListCharString *names) {
 	return Error_none();
 }
 
-Error _CLI_convertToDL(ParsedArgs args, CharString input, FileInfo inputInfo, CharString output, U32 encryptionKey[8]) {
+Error CLI_convertToDL(ParsedArgs args, CharString input, FileInfo inputInfo, CharString output, U32 encryptionKey[8]) {
 
 	//TODO: EXXCompressionType_Brotli11
 
@@ -68,7 +68,9 @@ Error _CLI_convertToDL(ParsedArgs args, CharString input, FileInfo inputInfo, Ch
 
 	if ((args.flags & EOperationFlags_UTF8) && (args.flags & EOperationFlags_Ascii)) {
 		Log_errorLnx("oiDL can only pick UTF8 or Ascii, not both.");
-		return Error_invalidParameter(0, 0, "_CLI_convertToDL() oiDL can only pick UTF8 or Ascii, not both");
+		return Error_invalidParameter(
+			0, 0, "CLI_convertToDL() oiDL can only pick UTF8 or Ascii, not both"
+		);
 	}
 
 	if(args.flags & EOperationFlags_UTF8)
@@ -88,10 +90,12 @@ Error _CLI_convertToDL(ParsedArgs args, CharString input, FileInfo inputInfo, Ch
 	//Ensure encryption key isn't provided if we're not encrypting
 
 	if(encryptionKey && !settings.encryptionType)
-		return Error_invalidOperation(3, "_CLI_convertToDL() encryptionKey was provided but encryption wasn't used");
+		return Error_invalidOperation(
+			3, "CLI_convertToDL() encryptionKey was provided but encryption wasn't used"
+		);
 
 	if(!encryptionKey && settings.encryptionType)
-		return Error_unauthorized(0, "_CLI_convertToDL() encryptionKey was needed but not provided");
+		return Error_unauthorized(0, "CLI_convertToDL() encryptionKey was needed but not provided");
 
 	//Copying encryption key
 
@@ -110,7 +114,8 @@ Error _CLI_convertToDL(ParsedArgs args, CharString input, FileInfo inputInfo, Ch
 		Log_errorLnx("oiDL doesn't support splitting by a character if it's not a string list.");
 
 		return Error_invalidParameter(
-			0, 1, "_CLI_convertToDL() oiDL doesn't support splitting by a character if it's not a string list."
+			0, 1,
+			"CLI_convertToDL() oiDL doesn't support splitting by a character if it's not a string list."
 		);
 	}
 
@@ -119,7 +124,7 @@ Error _CLI_convertToDL(ParsedArgs args, CharString input, FileInfo inputInfo, Ch
 	ListCharString sortedPaths = { 0 };
 
 	Error err = Error_none();
-	CharStringList split = (CharStringList) { 0 };
+	ListCharString split = (ListCharString) { 0 };
 	DLFile file = (DLFile) { 0 };
 	Buffer fileBuf = Buffer_createNull();
 	Buffer buf = Buffer_createNull();
@@ -130,7 +135,7 @@ Error _CLI_convertToDL(ParsedArgs args, CharString input, FileInfo inputInfo, Ch
 
 	if (inputInfo.type == EFileType_File) {
 
-		_gotoIfError(clean, File_read(input, 1 * SECOND, &buf));
+		gotoIfError(clean, File_read(input, 1 * SECOND, &buf))
 
 		//Create oiDL from text file. Splitting by enter or custom string
 
@@ -143,30 +148,28 @@ Error _CLI_convertToDL(ParsedArgs args, CharString input, FileInfo inputInfo, Ch
 			if (args.parameters & EOperationHasParameter_SplitBy) {
 
 				CharString splitBy;
-				_gotoIfError(clean, ParsedArgs_getArg(args, EOperationHasParameter_SplitByShift, &splitBy));
-					
-				_gotoIfError(clean, CharString_splitStringSensitivex(str, splitBy, &split));
+				gotoIfError(clean, ParsedArgs_getArg(args, EOperationHasParameter_SplitByShift, &splitBy))
+				gotoIfError(clean, CharString_splitStringSensitivex(str, splitBy, &split))
 			}
 
-			else _gotoIfError(clean, CharString_splitLinex(str, &split));
+			else gotoIfError(clean, CharString_splitLinex(str, &split))
 
 			//Create DLFile and write it
 			//TODO: When split returns ListCharString, replace with DLFile_createAsciiList
 
-			_gotoIfError(clean, DLFile_createx(settings, &file));
-					
+			gotoIfError(clean, DLFile_createx(settings, &file))
+
 			for(U64 i = 0; i < split.length; ++i)
-				_gotoIfError(clean, DLFile_addEntryAsciix(&file, split.ptr[i]));
+				gotoIfError(clean, DLFile_addEntryAsciix(&file, split.ptr[i]))
 
-			_gotoIfError(clean, DLFile_writex(file, &res));
-
+			gotoIfError(clean, DLFile_writex(file, &res))
 			goto write;
 		}
 
 		//Add single file entry and create it as normal
 
 		Buffer ref = Buffer_createRefConst(&buf, sizeof(buf));
-		_gotoIfError(clean, ListBuffer_pushBackx(&buffers, ref));
+		gotoIfError(clean, ListBuffer_pushBackx(&buffers, ref))
 
 		buf = Buffer_createNull();		//Ensure we don't free twice.
 	}
@@ -175,12 +178,12 @@ Error _CLI_convertToDL(ParsedArgs args, CharString input, FileInfo inputInfo, Ch
 
 		//Merge folder's children
 
-		_gotoIfError(clean, ListBuffer_reservex(&buffers, 256));
+		gotoIfError(clean, ListBuffer_reservex(&buffers, 256))
 
-		_gotoIfError(clean, File_foreach(
+		gotoIfError(clean, File_foreach(
 			input, (FileCallback) addFileToDLFile, &paths,
 			!(args.flags & EOperationFlags_NonRecursive)
-		));
+		))
 
 		//Check if they're all following a linear file order
 
@@ -188,7 +191,7 @@ Error _CLI_convertToDL(ParsedArgs args, CharString input, FileInfo inputInfo, Ch
 
 		//To do this, we will create a list that can hold all paths in sorted order
 
-		_gotoIfError(clean, ListCharString_resizex(&sortedPaths, paths.length));
+		gotoIfError(clean, ListCharString_resizex(&sortedPaths, paths.length))
 
 		Bool allLinear = true;
 
@@ -220,7 +223,9 @@ Error _CLI_convertToDL(ParsedArgs args, CharString input, FileInfo inputInfo, Ch
 				break;
 			}
 
-			sortedPaths.ptrNonConst[dec] = CharString_createRefSizedConst(stri.ptr, CharString_length(stri), false);
+			sortedPaths.ptrNonConst[dec] = CharString_createRefSizedConst(
+				stri.ptr, CharString_length(stri), false
+			);
 		}
 
 		//Keep the sorting as is, since it's not linear
@@ -230,8 +235,8 @@ Error _CLI_convertToDL(ParsedArgs args, CharString input, FileInfo inputInfo, Ch
 			for (U64 i = 0; i < paths.length; ++i) {
 
 				CharString stri = paths.ptr[i];
-				_gotoIfError(clean, File_read(stri, 1 * SECOND, &fileBuf));
-				_gotoIfError(clean, ListBuffer_pushBackx(&buffers, fileBuf));
+				gotoIfError(clean, File_read(stri, 1 * SECOND, &fileBuf))
+				gotoIfError(clean, ListBuffer_pushBackx(&buffers, fileBuf))
 
 				fileBuf = Buffer_createNull();
 			}
@@ -243,8 +248,8 @@ Error _CLI_convertToDL(ParsedArgs args, CharString input, FileInfo inputInfo, Ch
 		else for (U64 i = 0; i < sortedPaths.length; ++i) {
 
 			CharString stri = sortedPaths.ptr[i];
-			_gotoIfError(clean, File_read(stri, 1 * SECOND, &fileBuf));
-			_gotoIfError(clean, ListBuffer_pushBackx(&buffers, fileBuf));
+			gotoIfError(clean, File_read(stri, 1 * SECOND, &fileBuf))
+			gotoIfError(clean, ListBuffer_pushBackx(&buffers, fileBuf))
 
 			fileBuf = Buffer_createNull();
 		}
@@ -258,25 +263,20 @@ Error _CLI_convertToDL(ParsedArgs args, CharString input, FileInfo inputInfo, Ch
 	//Now we're left with only data entries
 	//Create simple oiDL with all of them
 
-	_gotoIfError(clean, DLFile_createListx(settings, &buffers, &file));
+	gotoIfError(clean, DLFile_createListx(settings, &buffers, &file))
 
 	//Convert to binary
 
-	_gotoIfError(clean, DLFile_writex(file, &res));
+	gotoIfError(clean, DLFile_writex(file, &res))
 
 write:
 
-	_gotoIfError(clean, File_write(res, output, 1 * SECOND));
+	gotoIfError(clean, File_write(res, output, 1 * SECOND))
 
 clean:
 
 	if(err.genericError)
 		Error_printx(err, ELogLevel_Error, ELogOptions_Default);
-
-	for(U64 i = 0; i < paths.length; ++i) {
-		CharString str = paths.ptr[i];
-		CharString_freex(&str);
-	}
 
 	for(U64 i = 0; i < buffers.length; ++i) {
 		Buffer bufi = buffers.ptr[i];
@@ -284,24 +284,24 @@ clean:
 	}
 
 	DLFile_freex(&file);
-	CharStringList_freex(&split);
+	ListCharString_freex(&split);
 	Buffer_freex(&res);
 	Buffer_freex(&buf);
 	Buffer_freex(&fileBuf);
 	ListBuffer_freex(&buffers);
-	ListCharString_freex(&paths);
+	ListCharString_freeUnderlyingx(&paths);
 	ListCharString_freex(&sortedPaths);
 
 	return err;
 }
 
-Error _CLI_convertFromDL(ParsedArgs args, CharString input, FileInfo inputInfo, CharString output, U32 encryptionKey[8]) {
+Error CLI_convertFromDL(ParsedArgs args, CharString input, FileInfo inputInfo, CharString output, U32 encryptionKey[8]) {
 
 	//TODO: Batch multiple files
 
 	if (inputInfo.type != EFileType_File) {
 		Log_errorLnx("oiDL can only be converted from single file");
-		return Error_invalidOperation(0, "_CLI_convertFromDL() oiDL can only be converted from single file");
+		return Error_invalidOperation(0, "CLI_convertFromDL() oiDL can only be converted from single file");
 	}
 
 	//Read file
@@ -315,8 +315,8 @@ Error _CLI_convertFromDL(ParsedArgs args, CharString input, FileInfo inputInfo, 
 	DLFile file = (DLFile) { 0 };
 	Bool didMakeFile = false;
 
-	_gotoIfError(clean, File_read(input, 1 * SECOND, &buf));
-	_gotoIfError(clean, DLFile_readx(buf, encryptionKey, false, &file));
+	gotoIfError(clean, File_read(input, 1 * SECOND, &buf))
+	gotoIfError(clean, DLFile_readx(buf, encryptionKey, false, &file))
 
 	//Write file
 
@@ -324,12 +324,12 @@ Error _CLI_convertFromDL(ParsedArgs args, CharString input, FileInfo inputInfo, 
 	CharString txt = CharString_createRefCStrConst(".txt");
 
 	if(
-		(CharString_endsWithStringInsensitive(output, txt) || (args.parameters & EOperationHasParameter_SplitBy)) &&
+		(CharString_endsWithStringInsensitive(output, txt, 0) || (args.parameters & EOperationHasParameter_SplitBy)) &&
 		file.settings.dataType == EDLDataType_Ascii
 	)
 		type = EFileType_File;
 
-	_gotoIfError(clean, File_add(output, type, 1 * SECOND));
+	gotoIfError(clean, File_add(output, type, 1 * SECOND))
 	didMakeFile = true;
 
 	//Write it as a folder
@@ -338,10 +338,10 @@ Error _CLI_convertFromDL(ParsedArgs args, CharString input, FileInfo inputInfo, 
 
 		//Append / as base so it's easier to append per file later
 
-		_gotoIfError(clean, CharString_createCopyx(output, &outputBase));
+		gotoIfError(clean, CharString_createCopyx(output, &outputBase))
 
-		if(!CharString_endsWithSensitive(outputBase, '/'))
-			_gotoIfError(clean, CharString_appendx(&outputBase, '/'));
+		if(!CharString_endsWithSensitive(outputBase, '/', 0))
+			gotoIfError(clean, CharString_appendx(&outputBase, '/'))
 
 		CharString bin = CharString_createRefCStrConst(".bin");
 
@@ -349,13 +349,13 @@ Error _CLI_convertFromDL(ParsedArgs args, CharString input, FileInfo inputInfo, 
 
 			//File name "$base/$(i).+?(isBin ? ".bin" : ".txt")"
 
-			_gotoIfError(clean, CharString_createDecx(i, 0, &filePathi));
-			_gotoIfError(clean, CharString_insertStringx(&filePathi, outputBase, 0));
+			gotoIfError(clean, CharString_createDecx(i, 0, &filePathi))
+			gotoIfError(clean, CharString_insertStringx(&filePathi, outputBase, 0))
 
 			if(file.settings.dataType == EDLDataType_Data)
-				_gotoIfError(clean, CharString_appendStringx(&filePathi, bin))
+				gotoIfError(clean, CharString_appendStringx(&filePathi, bin))
 
-			else _gotoIfError(clean, CharString_appendStringx(&filePathi, txt));
+			else gotoIfError(clean, CharString_appendStringx(&filePathi, txt))
 
 			Buffer fileDat =
 				file.settings.dataType == EDLDataType_Ascii ? CharString_bufferConst(file.entryStrings.ptr[i]) :
@@ -363,7 +363,7 @@ Error _CLI_convertFromDL(ParsedArgs args, CharString input, FileInfo inputInfo, 
 
 			//
 
-			_gotoIfError(clean, File_write(fileDat, filePathi, 1 * SECOND));
+			gotoIfError(clean, File_write(fileDat, filePathi, 1 * SECOND))
 
 			CharString_freex(&filePathi);
 		}
@@ -374,11 +374,11 @@ Error _CLI_convertFromDL(ParsedArgs args, CharString input, FileInfo inputInfo, 
 
 	else {
 
-		_gotoIfError(clean, CharString_reservex(&concatFile, DLFile_entryCount(file) * 16));
+		gotoIfError(clean, CharString_reservex(&concatFile, DLFile_entryCount(file) * 16))
 
 		for (U64 i = 0; i < DLFile_entryCount(file); ++i) {
 
-			_gotoIfError(clean, CharString_appendStringx(&concatFile, file.entryStrings.ptr[i]));
+			gotoIfError(clean, CharString_appendStringx(&concatFile, file.entryStrings.ptr[i]))
 
 			if(i == DLFile_entryCount(file) - 1)
 				break;
@@ -386,18 +386,18 @@ Error _CLI_convertFromDL(ParsedArgs args, CharString input, FileInfo inputInfo, 
 			if(args.parameters & EOperationHasParameter_SplitBy) {
 
 				CharString split = CharString_createNull();
-				_gotoIfError(clean, ParsedArgs_getArg(args, EOperationHasParameter_SplitByShift, &split));
+				gotoIfError(clean, ParsedArgs_getArg(args, EOperationHasParameter_SplitByShift, &split))
 
-				_gotoIfError(clean, CharString_appendStringx(&concatFile, split));
+				gotoIfError(clean, CharString_appendStringx(&concatFile, split))
 			}
 
-			else _gotoIfError(clean, CharString_appendStringx(&concatFile, CharString_newLine()));
+			else gotoIfError(clean, CharString_appendStringx(&concatFile, CharString_newLine()))
 
 		}
 
 		Buffer fileDat = Buffer_createRefConst(concatFile.ptr, CharString_length(concatFile));
 
-		_gotoIfError(clean, File_write(fileDat, output, 1 * SECOND));
+		gotoIfError(clean, File_write(fileDat, output, 1 * SECOND))
 
 		CharString_freex(&concatFile);
 	}

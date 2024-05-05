@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -20,27 +20,40 @@
 
 #pragma once
 #include "types/string.h"
-#include "platforms/ref_ptr.h"
+#include "types/ref_ptr.h"
 #include "device_info.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 //In line with vulkan standard.
-#define GraphicsApplicationInfo_Version(major, minor, patch)	\
-	((major) << 22) | ((minor) << 12) | (patch)
+#define GraphicsApplicationInfo_Version(major, minor, patch)	((major) << 22) | ((minor) << 12) | (patch)
 
 typedef struct GraphicsApplicationInfo {
-
 	CharString name;
-
 	U32 version, padding;
-
 } GraphicsApplicationInfo;
 
+#define GRAPHICS_API_VULKAN 0
+#define GRAPHICS_API_D3D12 1
+
 typedef enum EGraphicsApi {
-	EGraphicsApi_Vulkan,
-	EGraphicsApi_DirectX12,
-	EGraphicsApi_Metal,
-	EGraphicsApi_WebGPU
+	EGraphicsApi_Vulkan			= GRAPHICS_API_VULKAN,
+	EGraphicsApi_DirectX12		= GRAPHICS_API_D3D12,
+	//EGraphicsApi_Metal,
+	//EGraphicsApi_WebGPU,
+	EGraphicsApi_Count
 } EGraphicsApi;
+
+user_impl extern const U32 GraphicsInstance_verificationVersion;		//Set by "graphics/generic/application.h"
+
+typedef enum EGraphicsInstanceFlags {
+	EGraphicsInstanceFlags_None				= 0,
+	EGraphicsInstanceFlags_IsDebug			= 1 << 0,
+	EGraphicsInstanceFlags_IsVerbose		= 1 << 1,
+	EGraphicsInstanceFlags_DisableDebug		= 1 << 2
+} EGraphicsInstanceFlags;
 
 typedef struct GraphicsInstance {
 
@@ -49,10 +62,10 @@ typedef struct GraphicsInstance {
 	EGraphicsApi api;
 	U32 apiVersion;
 
-} GraphicsInstance;
+	EGraphicsInstanceFlags flags;
+	U32 verificationVersion;
 
-typedef struct GraphicsDeviceCapabilities GraphicsDeviceCapabilities;
-typedef struct GraphicsDeviceInfo GraphicsDeviceInfo;
+} GraphicsInstance;
 
 typedef RefPtr GraphicsInstanceRef;
 
@@ -62,11 +75,11 @@ typedef RefPtr GraphicsInstanceRef;
 Error GraphicsInstanceRef_dec(GraphicsInstanceRef **inst);
 Error GraphicsInstanceRef_inc(GraphicsInstanceRef *inst);
 
-Error GraphicsInstance_create(GraphicsApplicationInfo info, Bool isVerbose, GraphicsInstanceRef **inst);
+Error GraphicsInstance_create(GraphicsApplicationInfo info, EGraphicsInstanceFlags flags, GraphicsInstanceRef **inst);
 
 TList(GraphicsDeviceInfo);
 
-impl Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, Bool isVerbose, ListGraphicsDeviceInfo *infos);
+impl Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphicsDeviceInfo *infos);
 
 static const U64 GraphicsInstance_vendorMaskAll = 0xFFFFFFFFFFFFFFFF;
 static const U64 GraphicsInstance_deviceTypeAll = 0xFFFFFFFFFFFFFFFF;
@@ -76,6 +89,9 @@ Error GraphicsInstance_getPreferredDevice(
 	GraphicsDeviceCapabilities requiredCapabilities,
 	U64 vendorMask,
 	U64 deviceTypeMask,
-	Bool verbose,
 	GraphicsDeviceInfo *deviceInfo
 );
+
+#ifdef __cplusplus
+	}
+#endif

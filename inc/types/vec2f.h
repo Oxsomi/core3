@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -19,6 +19,10 @@
 */
 
 #pragma once
+
+#ifdef __cplusplus
+	extern "C" {
+#endif
 
 //TODO: Error checking
 
@@ -65,7 +69,7 @@ impl F32x2 F32x2_round(F32x2 v);
 F32x2 F32x2_fract(F32x2 v);
 F32x2 F32x2_mod(F32x2 v, F32x2 d);
 
-F32x2 F32x2_reflect(F32x2 I, F32x2 N);
+F32x2 F32x2_reflect(F32x2 i, F32x2 n);
 impl F32 F32x2_dot(F32x2 a, F32x2 b);
 F32 F32x2_satDot(F32x2 a, F32x2 b);
 
@@ -88,7 +92,7 @@ impl F32 F32x2_reduce(F32x2 a);		//ax+ay
 //Boolean / bitwise
 
 Bool F32x2_all(F32x2 a);
-Bool F32x2_any(F32x2 b);
+Bool F32x2_any(F32x2 a);
 
 impl F32x2 F32x2_eq(F32x2 a, F32x2 b);
 impl F32x2 F32x2_neq(F32x2 a, F32x2 b);
@@ -132,9 +136,9 @@ impl F32x2 F32x2_yy(F32x2 a);
 F32x2 F32x2_mul2x2(F32x2 v2, F32x2 v2x2[2]);
 F32x2 F32x2_mul2x3(F32x2 v2, F32x2 v2x3[3]);
 
-//Cast from vec2f to vec4
+//Cast from vec2 to vec4
 
-F32x4 F32x2_create2_4(F32x2 a, F32x2 b);
+F32x4 F32x4_create2_2(F32x2 a, F32x2 b);
 
 F32x4 F32x4_create2_1_1(F32x2 a, F32 b, F32 c);
 F32x4 F32x4_create1_2_1(F32 a, F32x2 b, F32 c);
@@ -142,3 +146,7 @@ F32x4 F32x4_create1_1_2(F32 a, F32 b, F32x2 c);
 
 F32x4 F32x4_create2_1(F32x2 a, F32 b);
 F32x4 F32x4_create1_2(F32 a, F32x2 b);
+
+#ifdef __cplusplus
+	}
+#endif

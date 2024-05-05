@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -21,6 +21,10 @@
 #pragma once
 #include "types/list.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 //An allocation buffer functions mostly like a ring buffer, but it falls back to a
 //normal block buffer if it can't allocate in O(1) (e.g. space at back or front is unavailable).
 //This means it can be used for both purposes.
@@ -32,10 +36,8 @@ typedef struct AllocationBufferBlock {
 TList(AllocationBufferBlock);
 
 typedef struct AllocationBuffer {
-
 	Buffer buffer;							//Our data buffer
 	ListAllocationBufferBlock allocations;
-
 } AllocationBuffer;
 
 Error AllocationBuffer_create(U64 size, Bool isVirtual, Allocator alloc, AllocationBuffer *allocationBuffer);
@@ -49,12 +51,10 @@ Error AllocationBuffer_createRefFromRegion(
 );
 
 Bool AllocationBuffer_free(AllocationBuffer *allocationBuffer, Allocator alloc);
-
 Bool AllocationBuffer_freeBlock(AllocationBuffer *allocationBuffer, const U8 *ptr);
-
 Bool AllocationBuffer_freeAll(AllocationBuffer *allocationBuffer);						//Frees all blocks
 
-//If !allocationBuffer->buffer.ptr the pointer shouldn't be dereferenced, it's just for offset tracking.
+//If !allocationBuffer->buffer.ptr the pointer shouldn't be de-referenced, it's just for offset tracking.
 //Result doesn't get touched if validation of arguments failed or if out of memory is triggered by the list.
 //If there's no available blocks then it will set *result to NULL and return out of memory.
 
@@ -73,3 +73,7 @@ Error AllocationBuffer_allocateAndFillBlock(
 	Allocator alloc,
 	U8 **result
 );
+
+#ifdef __cplusplus
+	}
+#endif

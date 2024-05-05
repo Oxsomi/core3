@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -19,25 +19,30 @@
 */
 
 #pragma once
-#include "platforms/lock.h"
+#include "types/lock.h"
 #include "device.h"
+#include "resource.h"
+
+#ifdef __cplusplus
+	extern "C" {
+#endif
 
 typedef RefPtr GraphicsDeviceRef;
-typedef struct CharString CharString;
 
 typedef enum EDeviceBufferUsage {
 
-	EDeviceBufferUsage_ShaderRead			= 1 << 0,		//Allow for use as ByteAddressBuffer
-	EDeviceBufferUsage_ShaderWrite			= 1 << 1,		//Allow for use as RWByteAddressBuffer
-	EDeviceBufferUsage_Vertex				= 1 << 2,		//Allow for use as vertex buffer
-	EDeviceBufferUsage_Index				= 1 << 3,		//Allow for use as index buffer
-	EDeviceBufferUsage_Indirect				= 1 << 4,		//Allow for use in indirect draw/dispatch calls
-	EDeviceBufferUsage_CPUBacked			= 1 << 5,		//Keep a CPU side copy buffer for read/write operations
-	EDeviceBufferUsage_CPUAllocatedBit		= 1 << 6,		//Keep buffer entirely on CPU
+	EDeviceBufferUsage_None					= 0,
 
-	EDeviceBufferUsage_InternalWeakRef		= 1 << 7,		//Internal only, uses weak device ref
+	EDeviceBufferUsage_Vertex				= 1 << 0,		//Allow for use as vertex buffer
+	EDeviceBufferUsage_Index				= 1 << 1,		//Allow for use as index buffer
+	EDeviceBufferUsage_Indirect				= 1 << 2,		//Allow for use in indirect draw/dispatch calls
 
-	EDeviceBufferUsage_CPUAllocated		= EDeviceBufferUsage_CPUBacked | EDeviceBufferUsage_CPUAllocatedBit
+	//Raytracing types
+
+	EDeviceBufferUsage_ScratchExt			= 1 << 3,		//Allow for internal use as scratch buffer
+	EDeviceBufferUsage_ASExt				= 1 << 4,		//Allow for internal use as acceleration structure
+	EDeviceBufferUsage_ASReadExt			= 1 << 5,		//Allow buffer to be read by AS creation
+	EDeviceBufferUsage_SBTExt				= 1 << 6		//Allow for internal use as shader binding table
 
 } EDeviceBufferUsage;
 
@@ -45,28 +50,26 @@ typedef RefPtr DeviceBufferRef;
 
 TList(DevicePendingRange);
 
+typedef struct DeviceData {
+	DeviceBufferRef *buffer;
+	U64 offset, len;
+} DeviceData;
+
 typedef struct DeviceBuffer {
 
-	GraphicsDeviceRef *device;
+	GraphicsResource resource;
 
 	EDeviceBufferUsage usage;
 	Bool isPendingFullCopy, isPending, isFirstFrame;
 	U8 padding0;
 
-	U32 readHandle, writeHandle;			//Place in heap/descriptor set. 12 bits are reserved for type and/or version
-
-	U64 length;
-
 	Buffer cpuData;							//Null if not cpu backed & uploaded. If not cpu backed this will free post upload
 
 	ListDevicePendingRange pendingChanges;
 
-	void *mappedMemory;						//Mapped memory, only accessible through markDirty.
-
-	U64 blockOffset;
-	U32 blockId, padding1;
-
 	Lock lock;
+
+	U32 readHandle, writeHandle;
 
 } DeviceBuffer;
 
@@ -77,12 +80,13 @@ Error DeviceBufferRef_dec(DeviceBufferRef **buffer);
 Error DeviceBufferRef_inc(DeviceBufferRef *buffer);
 
 //Create empty buffer or initialized with data.
-//Initializing to non zero isn't free due to copies.
-//	Initializing to non zero will move the buffer to created DeviceBuffer. If it's a ref, it has to be kept active.
+//Initializing to non-zero isn't free due to copies.
+//	Initializing to non-zero will move the buffer to created DeviceBuffer, unless it's a ref (then it will create a new one)
 
 Error GraphicsDeviceRef_createBuffer(
 	GraphicsDeviceRef *dev,
 	EDeviceBufferUsage usage,
+	EGraphicsResourceFlag resourceFlags,
 	CharString name,
 	U64 len,
 	DeviceBufferRef **buf
@@ -91,6 +95,7 @@ Error GraphicsDeviceRef_createBuffer(
 Error GraphicsDeviceRef_createBufferData(
 	GraphicsDeviceRef *dev,
 	EDeviceBufferUsage usage,
+	EGraphicsResourceFlag resourceFlags,
 	CharString name,
 	Buffer *dat,
 	DeviceBufferRef **buf
@@ -103,3 +108,7 @@ Error GraphicsDeviceRef_createBufferData(
 //Only possible if buffer has a backed CPU buffer.
 
 Error DeviceBufferRef_markDirty(DeviceBufferRef *buffer, U64 offset, U64 count);
+
+#ifdef __cplusplus
+	}
+#endif

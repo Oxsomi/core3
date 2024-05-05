@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -20,9 +20,12 @@
 
 #pragma once
 #include "vec.h"
-#include "math.h"
 
-#define _QUAT_FUNC(T)											\
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
+#define QUAT_FUNC(T)											\
 																\
 typedef T##x4 Quat##T;											\
 																\
@@ -64,9 +67,13 @@ Quat##T Quat##T##_mul(Quat##T a, Quat##T b);					\
 Quat##T Quat##T##_targetDirection(T##x4 origin, T##x4 target);	\
 T##x4 Quat##T##_applyToNormal(Quat##T R, T##x4 P);				\
 																\
-Quat##T Quat##T##_slerp(Quat##T a, Quat##T b, T perc);			\
+Quat##T Quat##T##_slerp(Quat##T a, Quat##T b, T perc)			\
 																\
 /* Quat##T Quat##T##_fromLookRotation(T##x4 fwd, T##x4 up); */
 
-_QUAT_FUNC(F32);
-//_QUAT_FUNC(F64);		TODO:
+QUAT_FUNC(F32);
+//QUAT_FUNC(F64);		TODO:
+
+#ifdef __cplusplus
+	}
+#endif

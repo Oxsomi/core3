@@ -1,5 +1,4 @@
 @echo off
-cd builds\bin\Debug
 
 echo )OxC3
 OxC3
@@ -65,8 +64,6 @@ OxC3 file data -i mytest.tmp.txt.enc -aes CD00324F4CBAAE3467924E0578012F155A8F57
 del /F mytest.tmp.txt
 del /F mytest1.tmp.txt
 del /F mytest.tmp.txt.enc
-
-cd ../../../
 
 echo Test reached end. Please double check output to ensure everything is correct.
 goto :eof

@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -21,6 +21,25 @@
 #pragma once
 #include "types/types.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
+typedef enum EDepthStencilFormat {
+
+	EDepthStencilFormat_None,
+	EDepthStencilFormat_D16,		//Prefer this if stencil isn't needed and precision is no concern
+	EDepthStencilFormat_D32,
+	EDepthStencilFormat_D24S8Ext,	//On AMD this is unsupported, use D32S8 instead.
+	EDepthStencilFormat_D32S8,
+	EDepthStencilFormat_S8Ext,
+
+	EDepthStencilFormat_Count,
+
+	EDepthStencilFormat_StencilStart = EDepthStencilFormat_D24S8Ext
+
+} EDepthStencilFormat;
+
 typedef enum ETexturePrimitive {
 	ETexturePrimitive_Undefined,
 	ETexturePrimitive_UNorm,
@@ -33,12 +52,10 @@ typedef enum ETexturePrimitive {
 } ETexturePrimitive;
 
 typedef enum ETextureType {
-
 	ETextureType_2D,
 	ETextureType_3D,
 	ETextureType_Cube,
 	ETextureType_Count
-
 } ETextureType;
 
 typedef enum ETextureAlignment {
@@ -49,6 +66,8 @@ typedef enum ETextureAlignment {
 	ETextureAlignment_10,
 	ETextureAlignment_12
 } ETextureAlignment;
+
+static const U8 ETextureAlignment_toAlignment[] = { 4, 5, 6, 8, 10, 12 };
 
 typedef enum ETextureCompressionType {
 	ETextureCompressionType_UNorm,
@@ -64,13 +83,13 @@ typedef enum ETextureCompressionAlgo {
 	ETextureCompressionAlgo_None			//Don't use in _ETextureFormatCompressed
 } ETextureCompressionAlgo;
 
-#define _ETextureFormat(primitive, redBits, greenBits, blueBits, alphaBits)												\
-((alphaBits >> 1) | ((blueBits >> 1) << 6) | ((greenBits >> 1) << 12) | ((redBits >> 1) << 18) | (primitive << 24) |	\
-(((redBits + greenBits + blueBits + alphaBits) >> 2) - 1) << 27)
+#define _ETextureFormat(primitive, redBits, greenBits, blueBits, alphaBits)											\
+((alphaBits >> 1) | ((blueBits >> 1) << 6) | ((greenBits >> 1) << 12) | ((redBits >> 1) << 18) |					\
+(primitive << 24) | (((redBits + greenBits + blueBits + alphaBits) >> 2) - 1) << 27)
 
-#define _ETextureFormatCompressed(algo, blockSizeBits, alignmentX, alignmentY, compType, hasRed, hasGreen, hasBlue, hasAlpha) \
-((hasAlpha ? 1 : 0) | ((hasBlue ? 1 : 0) << 6) | (compType << 9) | ((hasGreen ? 1 : 0) << 12) | (alignmentY << 15) |	\
- ((hasRed ? 1 : 0) << 18) | (alignmentX << 21) |																		\
+#define _ETextureFormatCompressed(algo, blockSizeBits, alignmentX, alignmentY, compType, hasR, hasG, hasB, hasA)	\
+((hasA ? 1 : 0) | ((hasB ? 1 : 0) << 6) | (compType << 9) | ((hasG ? 1 : 0) << 12) | (alignmentY << 15) |			\
+ ((hasR ? 1 : 0) << 18) | (alignmentX << 21) |																		\
  (ETexturePrimitive_Compressed << 24) | (((blockSizeBits >> 6) - 1) << 27) | (algo << 30))
 
 //Format of a texture; a bitflag of the properties of the format.
@@ -382,9 +401,7 @@ ETextureCompressionAlgo ETextureFormat_getCompressionAlgo(ETextureFormat f);
 
 Bool ETextureFormat_getAlignment(ETextureFormat f, U8 *x, U8 *y);
 
-//Get texture's size in bytes
-//Returns U64_MAX if misaligned (compressed formats)
-
+//Get texture's size in bytes, if misaligned it will align to next block count
 U64 ETextureFormat_getSize(ETextureFormat f, U32 w, U32 h, U32 l);
 
 //Map ETextureFormat to simplified id for storing in a more compact manner
@@ -407,13 +424,12 @@ typedef enum ETextureFormatId {
 	ETextureFormatId_R16i,			ETextureFormatId_RG16i,		ETextureFormatId_RGBA16i,
 	ETextureFormatId_R16f,			ETextureFormatId_RG16f,		ETextureFormatId_RGBA16f,
 
-	ETextureFormatId_R32u,			ETextureFormatId_RG32u,		ETextureFormatId_RGBA32u,
-	ETextureFormatId_R32i,			ETextureFormatId_RG32i,		ETextureFormatId_RGBA32i,
-	ETextureFormatId_R32f,			ETextureFormatId_RG32f,		ETextureFormatId_RGBA32f,
+	ETextureFormatId_R32u,			ETextureFormatId_RG32u,		ETextureFormatId_RGB32u,	ETextureFormatId_RGBA32u,
+	ETextureFormatId_R32i,			ETextureFormatId_RG32i,		ETextureFormatId_RGB32i,	ETextureFormatId_RGBA32i,
+	ETextureFormatId_R32f,			ETextureFormatId_RG32f,		ETextureFormatId_RGB32f,	ETextureFormatId_RGBA32f,
 
 	//Special format
 
-	ETextureFormatId_RGB10A2,
 	ETextureFormatId_BGR10A2,
 
 	//BCn
@@ -453,20 +469,20 @@ static const ETextureFormat ETextureFormatId_unpack[] = {
 
 	//Standard formats
 
-	ETextureFormat_R8,			ETextureFormat_RG8,			ETextureFormat_RGBA8,		ETextureFormat_BGRA8,
-	ETextureFormat_R8s,			ETextureFormat_RG8s,		ETextureFormat_RGBA8s,
-	ETextureFormat_R8u,			ETextureFormat_RG8u,		ETextureFormat_RGBA8u,
-	ETextureFormat_R8i,			ETextureFormat_RG8i,		ETextureFormat_RGBA8i,
+	ETextureFormat_R8,				ETextureFormat_RG8,			ETextureFormat_RGBA8,		ETextureFormat_BGRA8,
+	ETextureFormat_R8s,				ETextureFormat_RG8s,		ETextureFormat_RGBA8s,
+	ETextureFormat_R8u,				ETextureFormat_RG8u,		ETextureFormat_RGBA8u,
+	ETextureFormat_R8i,				ETextureFormat_RG8i,		ETextureFormat_RGBA8i,
 
-	ETextureFormat_R16,			ETextureFormat_RG16,		ETextureFormat_RGBA16,
-	ETextureFormat_R16s,		ETextureFormat_RG16s,		ETextureFormat_RGBA16s,
-	ETextureFormat_R16u,		ETextureFormat_RG16u,		ETextureFormat_RGBA16u,
-	ETextureFormat_R16i,		ETextureFormat_RG16i,		ETextureFormat_RGBA16i,
-	ETextureFormat_R16f,		ETextureFormat_RG16f,		ETextureFormat_RGBA16f,
+	ETextureFormat_R16,				ETextureFormat_RG16,		ETextureFormat_RGBA16,
+	ETextureFormat_R16s,			ETextureFormat_RG16s,		ETextureFormat_RGBA16s,
+	ETextureFormat_R16u,			ETextureFormat_RG16u,		ETextureFormat_RGBA16u,
+	ETextureFormat_R16i,			ETextureFormat_RG16i,		ETextureFormat_RGBA16i,
+	ETextureFormat_R16f,			ETextureFormat_RG16f,		ETextureFormat_RGBA16f,
 
-	ETextureFormat_R32u,		ETextureFormat_RG32u,		ETextureFormat_RGBA32u,
-	ETextureFormat_R32i,		ETextureFormat_RG32i,		ETextureFormat_RGBA32i,
-	ETextureFormat_R32f,		ETextureFormat_RG32f,		ETextureFormat_RGBA32f,
+	ETextureFormat_R32u,			ETextureFormat_RG32u,		ETextureFormat_RGB32u,		ETextureFormat_RGBA32u,
+	ETextureFormat_R32i,			ETextureFormat_RG32i,		ETextureFormat_RGB32i,		ETextureFormat_RGBA32i,
+	ETextureFormat_R32f,			ETextureFormat_RG32f,		ETextureFormat_RGB32f,		ETextureFormat_RGBA32f,
 
 	//Special format
 
@@ -474,28 +490,42 @@ static const ETextureFormat ETextureFormatId_unpack[] = {
 
 	//BCn
 
-	ETextureFormat_BC4,			ETextureFormat_BC5,			ETextureFormat_BC6H,		ETextureFormat_BC7,
-	ETextureFormat_BC4s,		ETextureFormat_BC5s,									ETextureFormat_BC7_sRGB,
+	ETextureFormat_BC4,				ETextureFormat_BC5,			ETextureFormat_BC6H,		ETextureFormat_BC7,
+	ETextureFormat_BC4s,			ETextureFormat_BC5s,									ETextureFormat_BC7_sRGB,
 
 	//ASTC
 
-	ETextureFormat_ASTC_4x4,	ETextureFormat_ASTC_4x4_sRGB,
+	ETextureFormat_ASTC_4x4,		ETextureFormat_ASTC_4x4_sRGB,
 
-	ETextureFormat_ASTC_5x4,	ETextureFormat_ASTC_5x4_sRGB,
-	ETextureFormat_ASTC_5x5,	ETextureFormat_ASTC_5x5_sRGB,
+	ETextureFormat_ASTC_5x4,		ETextureFormat_ASTC_5x4_sRGB,
+	ETextureFormat_ASTC_5x5,		ETextureFormat_ASTC_5x5_sRGB,
 
-	ETextureFormat_ASTC_6x5,	ETextureFormat_ASTC_6x5_sRGB,
-	ETextureFormat_ASTC_6x6,	ETextureFormat_ASTC_6x6_sRGB,
+	ETextureFormat_ASTC_6x5,		ETextureFormat_ASTC_6x5_sRGB,
+	ETextureFormat_ASTC_6x6,		ETextureFormat_ASTC_6x6_sRGB,
 
-	ETextureFormat_ASTC_8x5,	ETextureFormat_ASTC_8x5_sRGB,
-	ETextureFormat_ASTC_8x6,	ETextureFormat_ASTC_8x6_sRGB,
-	ETextureFormat_ASTC_8x8,	ETextureFormat_ASTC_8x8_sRGB,
+	ETextureFormat_ASTC_8x5,		ETextureFormat_ASTC_8x5_sRGB,
+	ETextureFormat_ASTC_8x6,		ETextureFormat_ASTC_8x6_sRGB,
+	ETextureFormat_ASTC_8x8,		ETextureFormat_ASTC_8x8_sRGB,
 
-	ETextureFormat_ASTC_10x5,	ETextureFormat_ASTC_10x5_sRGB,
-	ETextureFormat_ASTC_10x6,	ETextureFormat_ASTC_10x6_sRGB,
-	ETextureFormat_ASTC_10x8,	ETextureFormat_ASTC_10x8_sRGB,
-	ETextureFormat_ASTC_10x10,	ETextureFormat_ASTC_10x10_sRGB,
+	ETextureFormat_ASTC_10x5,		ETextureFormat_ASTC_10x5_sRGB,
+	ETextureFormat_ASTC_10x6,		ETextureFormat_ASTC_10x6_sRGB,
+	ETextureFormat_ASTC_10x8,		ETextureFormat_ASTC_10x8_sRGB,
+	ETextureFormat_ASTC_10x10,		ETextureFormat_ASTC_10x10_sRGB,
 
-	ETextureFormat_ASTC_12x10,	ETextureFormat_ASTC_12x10_sRGB,
-	ETextureFormat_ASTC_12x12,	ETextureFormat_ASTC_12x12_sRGB
+	ETextureFormat_ASTC_12x10,		ETextureFormat_ASTC_12x10_sRGB,
+	ETextureFormat_ASTC_12x12,		ETextureFormat_ASTC_12x12_sRGB
 };
+
+//Mapping between DXGI_FORMAT and ETextureFormat
+
+typedef U32 DXFormat;			//DXGI_FORMAT
+
+ETextureFormatId DXFormat_toTextureFormatId(DXFormat format);
+DXFormat ETextureFormatId_toDXFormat(ETextureFormatId format);
+
+EDepthStencilFormat DXFormat_toDepthStencilFormat(DXFormat format);
+DXFormat EDepthStencilFormat_toDXFormat(EDepthStencilFormat format);
+
+#ifdef __cplusplus
+	}
+#endif

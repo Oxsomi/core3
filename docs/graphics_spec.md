@@ -1,6 +1,6 @@
 # Minimum spec
 
-OxC3 is not made for devices older than 3 years. OxC3's spec for newer versions would require more recent devices to ensure developers don't keep on having to deal with the backwards compatibility for devices that aren't relevant anymore. For example; phones get replaced approx every 3 years. So it's safe to take 2 years back if you assume a development time/rollout of a year (at the time of OxC3 0.2). 
+OxC3 is not made for devices older than 3 years. OxC3's spec for newer versions would require more recent devices to ensure developers don't keep on having to deal with the backwards compatibility for devices that aren't relevant anymore. For example; phones get replaced approx every 3 years. So it's safe to take 2 years back if you assume a development time/rollout of a year (at the time of OxC3 0.2).
 
 *Keep in mind that a minor or major version change can change this spec! It might be that there was an oversight and a device/api was released that disagreed with our minimum spec. If the device/api is important enough, we might change the future spec (but never in patch versions. Only in minor/major). Please check the changelog to verify.*
 
@@ -24,20 +24,19 @@ We're targeting the minimum specs of following systems in OxC3 0.2:
   - AMD 6600 XT.
   - Intel A750.
 
-Binding tier is high for all laptops and PCs excluding Apple devices. All Apple devices are binding tier low until they release proper devices.
-
-Just because these are the target minimum specs doesn't mean older hardware is unsupported. The hard requirements should be looked at instead to determine if the device is supported. ***These are just minimum feature targets, they aren't all tested.***
+*Just because these are the target minimum specs doesn't mean older hardware is unsupported*. The hard requirements should be looked at instead to determine if the device is supported. ***These are just minimum feature targets, they aren't all tested.***
 
 ## List of Vulkan requirements
 
 Because of this, a device needs the following requirements to be OxC3 compatible:
 
 - Vulkan 1.1 or higher.
-- Tessellation shaders and geometry shaders are optional.
+- Tessellation shaders are required, but geometry shaders are optional.
 - More than 512 MiB of CPU + GPU visible memory (At least 1GB total).
 - Required instance extensions:
   - VK_KHR_get_physical_device_properties2
   - VK_KHR_external_memory_capabilities
+  - EGraphicsFeatures_SwapchainCompute is always supported
 - Supported instance extensions (optional):
   - Debug build only:
     - VK_EXT_debug_report
@@ -45,21 +44,13 @@ Because of this, a device needs the following requirements to be OxC3 compatible
   - VK_KHR_surface (and the variant of the platform such as VK_KHR_win32_surface)
   - VK_EXT_swapchain_colorspace
 - Required device extensions:
-  - VK_KHR_get_physical_device_properties2
-  - VK_KHR_shader_draw_parameters
-  - VK_KHR_external_memory_capabilities
   - VK_KHR_push_descriptor
-  - VK_KHR_dedicated_allocation
-  - VK_KHR_bind_memory2
-  - VK_KHR_get_memory_requirements2
-  - VK_EXT_shader_subgroup_ballot
-  - VK_EXT_shader_subgroup_vote
-  - VK_EXT_descriptor_indexing with all features true except shaderInputAttachmentArrayDynamicIndexing, descriptorBindingUniformBufferUpdateAfterBind and shaderInputAttachmentArrayNonUniformIndexing.
+  - Descriptor indexing with all features true except shaderInputAttachmentArrayDynamicIndexing, descriptorBindingUniformBufferUpdateAfterBind and shaderInputAttachmentArrayNonUniformIndexing.
     - on: shaderUniformTexelBufferArrayDynamicIndexing, shaderStorageTexelBufferArrayDynamicIndexing, shaderUniformBufferArrayNonUniformIndexing, shaderSampledImageArrayNonUniformIndexing, shaderStorageBufferArrayNonUniformIndexing, shaderStorageImageArrayNonUniformIndexing, shaderUniformTexelBufferArrayNonUniformIndexing, shaderStorageTexelBufferArrayNonUniformIndexing, descriptorBindingSampledImageUpdateAfterBind, descriptorBindingStorageImageUpdateAfterBind, descriptorBindingStorageBufferUpdateAfterBind, descriptorBindingUniformTexelBufferUpdateAfterBind, descriptorBindingStorageTexelBufferUpdateAfterBind, descriptorBindingUpdateUnusedWhilePending, descriptorBindingPartiallyBound, descriptorBindingVariableDescriptorCount, runtimeDescriptorArray
-  - VK_KHR_driver_properties
   - VK_KHR_synchronization2
-  - VK_KHR_timeline_semaphore
-  - VK_KHR_swapchain as Swapchain
+  - Timeline semaphore with timelineSemaphore = true
+  - Buffer device address with bufferDeviceAddress = true
+  - VK_KHR_swapchain
     - Requires at least 1 image layer.
     - Requires ability to make 3 images.
     - Requires usage flags of transfer (src, dst), sampled, storage, color attachment bits.
@@ -83,7 +74,9 @@ Because of this, a device needs the following requirements to be OxC3 compatible
   - VK_NV_displacement_micromap as RayMicromapDisplacement
   - VK_KHR_dynamic_rendering as DirectRendering
   - VK_KHR_deferred_host_operations is required for raytracing. Otherwise all raytracing extensions will be forced off.
-- subgroupSize of 16 - 128.
+  - VK_KHR_multiview as Multiview.
+  - VK_KHR_fragment_shading_rate as VariableRateShading
+- subgroupSize of 4 - 128.
 - sampleRateShading of true.
 - subgroup operations of basic, vote, ballot are required. Available only in compute by default. arithmetic and shuffle are optional.
 - shaderSampledImageArrayDynamicIndexing, shaderStorageBufferArrayDynamicIndexing, shaderUniformBufferArrayDynamicIndexing, shaderStorageBufferArrayDynamicIndexing, descriptorIndexing turned on.
@@ -93,7 +86,7 @@ Because of this, a device needs the following requirements to be OxC3 compatible
 - maxColorAttachments and maxFragmentOutputAttachments of 8 or higher.
 - maxDescriptorSetInputAttachments, maxPerStageDescriptorInputAttachments of 7 or higher.
 - MSAA support of 1 and 4 or higher (framebufferColorSampleCounts, framebufferDepthSampleCounts, framebufferNoAttachmentsSampleCounts, framebufferStencilSampleCounts, sampledImageColorSampleCounts, sampledImageDepthSampleCounts, sampledImageIntegerSampleCounts, sampledImageStencilSampleCounts). Support for MSAA 2 is non default.
-  - MSAA2x, MSAA8x and MSAA16x graphics features are enabled if all of these support it.
+  - MSAA2x and MSAA8x graphics features are enabled if all of these support it.
 - maxComputeSharedMemorySize of 16KiB or higher.
 - maxComputeWorkGroupCount[N] of U16_MAX or higher.
 - maxComputeWorkGroupInvocations of 512 or higher.
@@ -111,24 +104,30 @@ Because of this, a device needs the following requirements to be OxC3 compatible
 - maxVertexInputAttributes, maxVertexInputBindings of 16 or higher.
 - maxVertexInputBindingStride of 2048 or higher.
 - maxVertexOutputComponents of 124 or higher.
-- maxComputeWorkGroupSize[0,1] of 1024 or higher. and maxComputeWorkGroupSize[2] of 64 or higher.
+- maxComputeWorkGroupSize[0,1] of 512 or higher. and maxComputeWorkGroupSize[2] of 64 or higher.
 - maxMemoryAllocationCount of 4096 or higher.
 - maxBoundDescriptorSets of 4 or higher.
 - maxPerStageDescriptorSamplers of 2Ki or higher.
 - maxPerStageDescriptorUniformBuffers of 1 or higher.
-- maxPerStageDescriptorStorageBuffers of 499'999 or higher.
+- maxPerStageDescriptorStorageBuffers of 499999 or higher.
 - maxPerStageDescriptorSampledImages of 250k or higher.
 - maxPerStageDescriptorStorageImages of 250k or higher.
 - maxPerStageResources of 1M or higher.
 - maxDescriptorSetSamplers of 2Ki or higher.
 - maxDescriptorSetUniformBuffers of 1 or higher.
-- maxDescriptorSetStorageBuffers of 499'999 or higher.
+- maxDescriptorSetStorageBuffers of 499999 or higher.
 - maxDescriptorSetSampledImages of 250k or higher.
 - maxDescriptorSetStorageImages of 250k or higher.
 - viewportBoundsRange[0] <= -32768.
 - viewportBoundsRange[1] >= 32767.
 - nonCoherentAtomSize of 0 -> 256 and has to be base2.
 - Requires UBO alignment of <=256.
+- Supported tesselation:
+  - maxTessellationControlPerVertexInputComponents, maxTessellationControlPerVertexOutputComponents, maxTessellationEvaluationInputComponents, maxTessellationEvaluationOutputComponents of 124 or higher.
+  - maxTessellationControlTotalOutputComponents of 4088 or higher.
+  - maxTessellationControlPerPatchOutputComponents of 120 or higher.
+  - maxTessellationGenerationLevel of 64 or higher.
+  - maxTessellationPatchSize of 32 or higher.
 
 ### Extensions
 
@@ -146,16 +145,6 @@ Geometry shaders aren't always supported. They're only supported if there's hard
 - maxGeometryShaderInvocations of >=32.
 - maxGeometryTotalOutputComponents of >=1024.
 
-#### Tessellation shader
-
-Tessellation shaders are mostly supported, but not always. It's also possible that the limits don't qualify it for enabling in OxC3. The limits require:
-
-- maxTessellationControlPerVertexInputComponents, maxTessellationControlPerVertexOutputComponents, maxTessellationEvaluationInputComponents, maxTessellationEvaluationOutputComponents of 124 or higher.
-- maxTessellationControlTotalOutputComponents of 4088 or higher.
-- maxTessellationControlPerPatchOutputComponents of 120 or higher.
-- maxTessellationGenerationLevel of 64 or higher.
-- maxTessellationPatchSize of 32 or higher.
-
 #### Raytracing
 
 Raytracing requires VK_KHR_acceleration_structure, but also requires either VK_KHR_ray_tracing_pipeline or VK_KHR_ray_query to be set.
@@ -164,20 +153,22 @@ Raytracing requires VK_KHR_acceleration_structure, but also requires either VK_K
 - VK_KHR_acceleration_structure:
   - maxGeometryCount, maxInstanceCount >= U24_MAX (16777215).
   - maxPerStageDescriptorAccelerationStructures, maxPerStageDescriptorUpdateAfterBindAccelerationStructures, maxDescriptorSetAccelerationStructures, maxDescriptorSetUpdateAfterBindAccelerationStructures of >= 16.
-  - maxPrimitiveCount of >= 0.5Gi.
+  - maxPrimitiveCount of >= 0.5Gi - 1.
 - VK_KHR_ray_tracing_pipeline:
   - maxRayDispatchInvocationCount >= 1 Gi.
   - maxRayHitAttributeSize >= 32.
   - maxRayRecursionDepth >= 1.
   - maxShaderGroupStride >= 4096.
-  - rayTraversalPrimitiveCulling should be enabled.
+  - shaderGroupHandleSize should be 32.
+- shaderGroupBaseAlignment should be 32 or 64.
+  - rayTraversalPrimitiveCulling and rayTracingPipelineTraceRaysIndirect should be enabled.
 
 - Motion blur:
   - Both indirect and normal rays are allowed to be traced if RayIndirect is on. Otherwise RayIndirect has to be turned off.
 
 #### Mesh shaders
 
-Requires task shaders to be present and multiviewMeshShader, primitiveFragmentShadingRateMeshShader to be available too.
+Requires task shaders to be present.
 
 - Limits of:
   - maxMeshMultiviewViewCount >= 4.
@@ -205,6 +196,20 @@ Requires task shaders to be present and multiviewMeshShader, primitiveFragmentSh
 - AtomicF32 means atomic exchange/read and atomic float add operations on a buffer. Images are optional.
 - AtomicF64 ^ except 64-bit.
 
+#### Multiview
+
+The following are required for multiview: maxMultiviewInstanceIndex >=134217727 and maxMultiviewViewCount >=4 as well as multiview=true.
+
+#### VariableRateShading
+
+Requires the pipelineFragmentShadingRate and attachmentFragmentShadingRate as well as the following properties:
+
+- maxFragmentSize >= [2,2]
+- maxFragmentSizeAspectRatio >= 2
+- maxFragmentShadingRateCoverageSamples >= 16
+- maxFragmentShadingRateRasterizationSamples >= 4
+- on: fragmentShadingRateWithSampleMask
+
 ### Formats
 
 A lossless format is defined as "supported" if it has the following flags in the format properties when using a tiled/non linear layout (check  "49.3. Required Format Support" of the Vulkan spec).
@@ -212,8 +217,6 @@ A lossless format is defined as "supported" if it has the following flags in the
 - VK_FORMAT_FEATURE_VERTEX_BUFFER_BIT.
 - VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT
 - VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT
-- VK_FORMAT_FEATURE_BLIT_DST_BIT
-- VK_FORMAT_FEATURE_BLIT_SRC_BIT
 - VK_FORMAT_FEATURE_TRANSFER_DST_BIT
 - VK_FORMAT_FEATURE_TRANSFER_SRC_BIT
 
@@ -274,8 +277,19 @@ If raytracing is enabled, the following formats will be enabled for BLAS buildin
 
 ## List of DirectX12 requirements
 
-- DirectX12 Feature level 12_1. 
+- DirectX12 Feature level 12_1.
+  - This also means the adapter should support DXGI_ADAPTER_FLAG3_SUPPORT_MONITORED_FENCES.
+  - DXGI feature PRESENT_ALLOW_TEARING.
+- The following features:
+  - Tiled resource tier 3.
+  - Conservative rasterization tier 2.
+  - Rasterizer-ordered views.
+  - waveSize of 4 to 128.
+  - Logical blend operations.
+  - OutputMergerLogicOp, TypedUAVLoadAdditionalFormats, ROVsSupported, ConservativeRasterizationTier >= tier3, HighestShaderModel of >= 6_5, WaveOps, Int64ShaderOps, EnhancedBarriersSupported, UnalignedBlockTexturesSupported.
+  - All standard ETextureFormat types have to be supported. Meaning float/snorm/unorm textures can be sampled and all texture formats have typed uav read/write. Non standard types include RGB32f/RGB32u/RGB32i which only requires usage as vertex attribute. All BCn formats have to be supported. BGRA8 doesn't need to be writable.
 - WDDM 2.7 and above.
+- More than 512 MiB of CPU + GPU visible memory (At least 1GB total).
 - GPU:
   - Nvidia Maxwell 2nd gen and above.
   - AMD GCN 5 and above.
@@ -286,13 +300,38 @@ If raytracing is enabled, the following formats will be enabled for BLAS buildin
 
 Since Vulkan is more fragmented, the features are more split up. However in DirectX, the features supported by default are the following:
 
-- EGraphicsFeatures_SubgroupArithmetic, EGraphicsFeatures_SubgroupShuffle. Wave intrinsics are all supported by default.
-- EGraphicsFeatures_GeometryShader, EGraphicsFeatures_TessellationShader and EGraphicsFeatures_MultiDrawIndirectCount, EGraphicsFeatures_SupportsSwapchain, EGraphicsFeatures_SupportsLUID are enabled by default.
+- EGraphicsFeatures_SubgroupArithmetic, EGraphicsFeatures_SubgroupShuffle, EGraphicsFeatures_GeometryShader, EGraphicsFeatures_MultiDrawIndirectCount, EGraphicsFeatures_SupportsLUID, EGraphicsFeatures_LogicOp, EGraphicsFeatures_DualSrcBlend and EGraphicsFeatures_Wireframe, EGraphicsFeatures_Multiview, EGraphicsFeatures_DebugMarkers are enabled by default.
 - EGraphicsFeatures_Raytracing, EGraphicsFeatures_RayPipeline, EGraphicsFeatures_RayQuery, EGraphicsFeatures_MeshShaders, EGraphicsFeatures_VariableRateShading are a part of DirectX12 Ultimate (Turing, RDNA2, Arc and up).
 - If EGraphicsFeatures_Raytracing is enabled, so is EGraphicsFeatures_RayPipeline. The other RT extensions are optional.
-- EDeviceDataTypes_BCn, EGraphicsDataTypes_I64, EGraphicsDataTypes_F64 are always set.
+- EGraphicsFeatures_DirectRendering is most often available, only not on QCOM chips.
+- EDeviceDataTypes_BCn, EGraphicsDataTypes_I64 are always set.
+- MSAA8x and MSAA2x are supported by default (on top of already supported MSAA 1 and 4).
 
-### List of Metal requirements
+#### Extensions in DirectX and NVAPI
+
+- NVAPI_D3D12_RAYTRACING_CAPS_TYPE_OPACITY_MICROMAP as EGraphicsFeatures_RayMicromapOpacity.
+- NVAPI_D3D12_RAYTRACING_CAPS_TYPE_DISPLACEMENT_MICROMAP as EGraphicsFeatures_RayMicromapDisplacement.
+- NVAPI_D3D12_RAYTRACING_CAPS_TYPE_THREAD_REORDERING as EGraphicsFeatures_RayReorder.
+- WorkGraphsTier as EGraphicsFeatures_Workgraphs.
+- MeshShaderTier as EGraphicsFeatures_MeshShader.
+- VariableShadingRateTier as EGraphicsFeatures_VariableRateShading.
+- RaytracingTier>1_0 as EGraphicsFeatures_Raytracing + EGraphicsFeatures_RayPipeline
+- RaytracingTier>1_1 as EGraphicsFeatures_RayQuery.
+- Native16BitShaderOpsSupported as EGraphicsDataTypes_F16 and EGraphicsDataTypes_I16.
+- DoublePrecisionFloatShaderOps as EGraphicsDataTypes_F64.
+- EGraphicsDataTypes_D24S8 on everything except AMD (AMD allocates D32S8 internally).
+- For format RGB32(u/i) to be enabled, it has to support render target.
+- For format RGB32f to be enabled, it has to support render target, blend, shader sample, msaa 4x and 8x.
+- AtomicInt64OnTypedResourceSupported, AtomicInt64OnGroupSharedSupported as EGraphicsDataTypes_AtomicI64.
+
+#### DirectX12 specific extensions
+
+There are specific extensions that are not relevant to other extensions, hence they've not been added to the standard extensions and have instead become API specific extensions.
+
+- GPUUploadHeapSupported as ReBAR.
+- D3D12_FEATURE_DATA_HARDWARE_COPY.Supported as CopyQueue.
+
+## List of Metal requirements
 
 - Metal 3 (Apple7 tier). Argument buffers tier 2.
 - Phone:
@@ -303,9 +342,8 @@ Since Vulkan is more fragmented, the features are more split up. However in Dire
 #### Default features in Metal
 
 - EGraphicsFeatures_DirectRendering is never set.
-- EGraphicsFeatures_TessellationShader is always set.
 - EGraphicsDataTypes_ASTC is always set.
-- EGraphicsDataTypes_BCn can be set as well on Mac/MacBook.
+- EGraphicsDataTypes_BCn can be set as well on OS X.
 - EGraphicsDataTypes_AtomicF32, EGraphicsDataTypes_AtomicI64, EGraphicsDataTypes_F16, EGraphicsDataTypes_I64 are always set.
 
 ## TODO: List of WebGPU requirements

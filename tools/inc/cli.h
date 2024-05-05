@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -21,15 +21,18 @@
 #pragma once
 #include "operations.h"
 
-typedef struct CharStringList CharStringList;
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef struct FileInfo FileInfo;
 
 void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f);
 
-Error _CLI_convertToDL(ParsedArgs args, CharString input, FileInfo inputInfo, CharString output, U32 encryptionKey[8]);
-Error _CLI_convertFromDL(ParsedArgs args, CharString input, FileInfo inputInfo, CharString output, U32 encryptionKey[8]);
-Error _CLI_convertToCA(ParsedArgs args, CharString input, FileInfo inputInfo, CharString output, U32 encryptionKey[8]);
-Error _CLI_convertFromCA(ParsedArgs args, CharString input, FileInfo inputInfo, CharString output, U32 encryptionKey[8]);
+Error CLI_convertToDL(ParsedArgs args, CharString input, FileInfo inputInfo, CharString output, U32 encryptionKey[8]);
+Error CLI_convertFromDL(ParsedArgs args, CharString input, FileInfo inputInfo, CharString output, U32 encryptionKey[8]);
+Error CLI_convertToCA(ParsedArgs args, CharString input, FileInfo inputInfo, CharString output, U32 encryptionKey[8]);
+Error CLI_convertFromCA(ParsedArgs args, CharString input, FileInfo inputInfo, CharString output, U32 encryptionKey[8]);
 
 Bool CLI_convertTo(ParsedArgs args);
 Bool CLI_convertFrom(ParsedArgs args);
@@ -59,4 +62,10 @@ Bool CLI_inspectData(ParsedArgs args);
 
 Bool CLI_package(ParsedArgs args);
 
-Bool CLI_execute(CharStringList arglist);
+Bool CLI_compileShader(ParsedArgs args);
+
+Bool CLI_execute(ListCharString argList);
+
+#ifdef __cplusplus
+	}
+#endif

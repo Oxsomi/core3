@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -27,6 +27,8 @@
 #ifdef _WIN32
 	#include <intrin.h>
 	#define timegm _mkgmtime
+	#define localtime_r(a, b) localtime_s(b, a)
+	#define gmtime_r(a, b) gmtime_s(b, a)
 #else
 	#include <x86intrin.h>
 #endif
@@ -45,7 +47,7 @@ DNs Time_dns(Ns timeStamp0, Ns timeStamp1) {
 
 	if (timeStamp0 > timeStamp1) {
 
-		Ns diff = timeStamp0 - timeStamp1;
+		const Ns diff = timeStamp0 - timeStamp1;
 
 		if (diff >> 63)
 			return I64_MAX;
@@ -53,7 +55,7 @@ DNs Time_dns(Ns timeStamp0, Ns timeStamp1) {
 		return -(DNs) diff;
 	}
 
-	Ns diff = timeStamp1 - timeStamp0;
+	const Ns diff = timeStamp1 - timeStamp0;
 
 	if (diff >> 63)
 		return I64_MAX;
@@ -70,7 +72,7 @@ I64 Time_clocksElapsed(U64 prevClocks) { return Time_dns(prevClocks, Time_clocks
 DNs Time_elapsed(Ns prev) { return Time_dns(prev, Time_now()); }
 
 //ISO 8601 e.g. 2022-02-26T21:08:45.000000000Z
-//The standard functions strp don't work properly cross platform.
+//The standard functions strp don't work properly cross-platform.
 //This is not done via our CharString functions because format is called at important moments.
 //At these moments there might not be any space left on the heap to allocate or there might be corruption there,
 //as such, using string would be problematic. (This also includes error handling with logging and signals such as segfault).
@@ -93,25 +95,32 @@ const U8 SIZES[] =		{ 4, 2, 2,  2,  2,  2, 9 };
 
 void Time_format(Ns time, TimeFormat timeString, Bool isLocalTime) {
 
-	time_t inSecs = (time_t)(time / SECOND);
-	Ns inNs = time % SECOND;
+	const time_t inSecs = (time_t)(time / SECOND);
+	const Ns inNs = time % SECOND;
 
-	struct tm *t = isLocalTime ? localtime(&inSecs) : gmtime(&inSecs);
+	struct tm t = (struct tm) { 0 };
+
+	Bool success = false;
+
+	if(isLocalTime)
+		success = !localtime_r(&inSecs, &t);
+
+	else success = !gmtime_r(&inSecs, &t);
 
 	Buffer_copy(
-		Buffer_createRef(timeString, _SHORTSTRING_LEN),
+		Buffer_createRef(timeString, SHORTSTRING_LEN),
 		Buffer_createRefConst(FORMAT_STR, sizeof(FORMAT_STR))
 	);
 
-	if(!t)
+	if(!success)
 		return;
 
-	setNum(timeString, OFFSETS[0], SIZES[0], (U64)t->tm_year + 1900);
-	setNum(timeString, OFFSETS[1], SIZES[1], (U64)t->tm_mon + 1);
-	setNum(timeString, OFFSETS[2], SIZES[2], (U64)t->tm_mday);
-	setNum(timeString, OFFSETS[3], SIZES[3], (U64)t->tm_hour);
-	setNum(timeString, OFFSETS[4], SIZES[4], (U64)t->tm_min);
-	setNum(timeString, OFFSETS[5], SIZES[5], (U64)t->tm_sec);
+	setNum(timeString, OFFSETS[0], SIZES[0], (U64)t.tm_year + 1900);
+	setNum(timeString, OFFSETS[1], SIZES[1], (U64)t.tm_mon + 1);
+	setNum(timeString, OFFSETS[2], SIZES[2], (U64)t.tm_mday);
+	setNum(timeString, OFFSETS[3], SIZES[3], (U64)t.tm_hour);
+	setNum(timeString, OFFSETS[4], SIZES[4], (U64)t.tm_min);
+	setNum(timeString, OFFSETS[5], SIZES[5], (U64)t.tm_sec);
 	setNum(timeString, OFFSETS[6], SIZES[6], inNs);
 }
 
@@ -122,7 +131,7 @@ Bool Time_parseFormat(Ns *time, TimeFormat format, Bool isLocalTime) {
 	if (!time)
 		return false;
 
-	U64 length = CharString_calcStrLen(format, _SHORTSTRING_LEN - 1);
+	const U64 length = CharString_calcStrLen(format, SHORTSTRING_LEN - 1);
 
 	U64 curr = 0, currSep = 0, prevI = U64_MAX;
 
@@ -132,7 +141,7 @@ Bool Time_parseFormat(Ns *time, TimeFormat format, Bool isLocalTime) {
 
 	for (U64 i = 0; i < length; ++i) {
 
-		C8 c = format[i];
+		const C8 c = format[i];
 
 		if (C8_isDec(c)) {
 
@@ -141,7 +150,7 @@ Bool Time_parseFormat(Ns *time, TimeFormat format, Bool isLocalTime) {
 
 			curr *= 10;
 
-			U64 prev = curr;
+			const U64 prev = curr;
 			curr += C8_dec(c);
 
 			if(curr < prev)
@@ -176,12 +185,12 @@ Bool Time_parseFormat(Ns *time, TimeFormat format, Bool isLocalTime) {
 
 			case 6: {	//Nanoseconds
 
-				int dif = (int)(i - prevI);
+				const int dif = (int)(i - prevI);
 
 				if(dif == 0)
 					return false;
 
-				U64 mul = U64_exp10(9 - dif);
+				const U64 mul = U64_exp10(9 - dif);
 
 				if(mul == U64_MAX)
 					return false;
@@ -202,7 +211,7 @@ Bool Time_parseFormat(Ns *time, TimeFormat format, Bool isLocalTime) {
 		prevI = i + 1;
 	}
 
-	Ns res = Time_date(year, month, day, hour, minute, second, ns, isLocalTime);
+	const Ns res = Time_date(year, month, day, hour, minute, second, ns, isLocalTime);
 
 	if (res == U64_MAX)
 		return false;
@@ -227,7 +236,10 @@ Ns Time_date(U16 year, U8 month, U8 day, U8 hour, U8 minute, U8 second, U32 ns, 
 		.tm_hour = hour, .tm_min = minute, .tm_sec = second
 	};
 
-	time_t ts = isLocalTime ? mktime(&tm) : timegm(&tm);
+	if(isLocalTime)
+		tm.tm_isdst = -1;		//Lookup if daylight savings time is active
+
+	const time_t ts = isLocalTime ? mktime(&tm) : timegm(&tm);
 
 	if (ts == (time_t)-1 || (U64)ts * SECOND + ns < (U64)ts)
 		return U64_MAX;
@@ -237,23 +249,30 @@ Ns Time_date(U16 year, U8 month, U8 day, U8 hour, U8 minute, U8 second, U32 ns, 
 
 Bool Time_getDate(Ns timestamp, U16 *year, U8 *month, U8 *day, U8 *hour, U8 *minute, U8 *second, U32 *ns, Bool isLocalTime) {
 
-	time_t inSecs = (time_t)(timestamp / SECOND);
+	const time_t inSecs = (time_t)(timestamp / SECOND);
 
-	struct tm *t = isLocalTime ? localtime(&inSecs) : gmtime(&inSecs);
+	struct tm t = (struct tm) { 0 };
 
-	if(!t)
+	Bool success = false;
+
+	if(isLocalTime)
+		success = !localtime_r(&inSecs, &t);
+
+	else success = !gmtime_r(&inSecs, &t);
+
+	if(!success)
 		return false;
 
-	if(t->tm_year > 1900 + U16_MAX)
+	if(t.tm_year > 1900 + U16_MAX)
 		return false;
 
 	if(ns)		*ns = (U32)(timestamp % SECOND);
-	if(year)	*year = (U16)(t->tm_year + 1900);
-	if(month)	*month = (U8)(t->tm_mon + 1);
-	if(day)		*day = (U8)t->tm_mday;
-	if(hour)	*hour = (U8)t->tm_hour;
-	if(minute)	*minute = (U8)t->tm_min;
-	if(second)	*second = (U8)t->tm_sec;
+	if(year)	*year = (U16)(t.tm_year + 1900);
+	if(month)	*month = (U8)(t.tm_mon + 1);
+	if(day)		*day = (U8)t.tm_mday;
+	if(hour)	*hour = (U8)t.tm_hour;
+	if(minute)	*minute = (U8)t.tm_min;
+	if(second)	*second = (U8)t.tm_sec;
 
 	return true;
 }

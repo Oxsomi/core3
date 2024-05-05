@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -22,16 +22,19 @@
 #include "graphics/generic/instance.h"
 #include "graphics/generic/device.h"
 #include "platforms/ext/bufferx.h"
+#include "platforms/ext/ref_ptrx.h"
 #include "types/error.h"
 
 TListImpl(GraphicsDeviceInfo);
 
 Error GraphicsInstanceRef_dec(GraphicsInstanceRef **inst) {
-	return !RefPtr_dec(inst) ? Error_invalidOperation(0, "GraphicsInstanceRef_dec()::inst is required") : Error_none();
+	return !RefPtr_dec(inst) ?
+		Error_invalidOperation(0, "GraphicsInstanceRef_dec()::inst is required") : Error_none();
 }
 
 Error GraphicsInstanceRef_inc(GraphicsInstanceRef *inst) {
-	return !RefPtr_inc(inst) ? Error_invalidOperation(0, "GraphicsInstanceRef_inc()::inst is required") : Error_none();
+	return !RefPtr_inc(inst) ?
+		Error_invalidOperation(0, "GraphicsInstanceRef_inc()::inst is required") : Error_none();
 }
 
 Error GraphicsInstance_getPreferredDevice(
@@ -39,18 +42,19 @@ Error GraphicsInstance_getPreferredDevice(
 	GraphicsDeviceCapabilities requiredCapabilities,
 	U64 vendorMask,
 	U64 deviceTypeMask,
-	Bool verbose,
 	GraphicsDeviceInfo *deviceInfo
 ) {
 
 	if(!deviceInfo)
 		return Error_nullPointer(4, "GraphicsInstance_getPreferredDevice()::deviceInfo is required");
 
-	if(deviceInfo->ext)
-		return Error_invalidParameter(4, 0, "GraphicsInstance_getPreferredDevice()::*deviceInfo must be empty");
+	if(deviceInfo->name[0])
+		return Error_invalidParameter(
+			4, 0, "GraphicsInstance_getPreferredDevice()::*deviceInfo must be empty"
+		);
 
 	ListGraphicsDeviceInfo tmp = (ListGraphicsDeviceInfo) { 0 };
-	Error err = GraphicsInstance_getDeviceInfos(inst, verbose, &tmp);
+	Error err = GraphicsInstance_getDeviceInfos(inst, &tmp);
 
 	if(err.genericError)
 		return err;
@@ -62,7 +66,7 @@ Error GraphicsInstance_getPreferredDevice(
 
 	for (U64 i = 0; i < tmp.length; ++i) {
 
-		GraphicsDeviceInfo info = tmp.ptr[i];
+		const GraphicsDeviceInfo info = tmp.ptr[i];
 
 		//Check if vendor and device type are supported
 
@@ -77,10 +81,17 @@ Error GraphicsInstance_getPreferredDevice(
 		if((info.capabilities.features & requiredCapabilities.features) != requiredCapabilities.features)
 			continue;
 
+		if((info.capabilities.features2 & requiredCapabilities.features2) != requiredCapabilities.features2)
+			continue;
+
 		if((info.capabilities.featuresExt & requiredCapabilities.featuresExt) != requiredCapabilities.featuresExt)
 			continue;
 
-		//Remember
+		if(
+			info.capabilities.sharedMemory < requiredCapabilities.sharedMemory ||
+			info.capabilities.dedicatedMemory < requiredCapabilities.dedicatedMemory
+		)
+			continue;
 
 		if(info.type == EGraphicsDeviceType_Dedicated) {
 			preferredDedicated = i;
@@ -94,10 +105,9 @@ Error GraphicsInstance_getPreferredDevice(
 	}
 
 	if(!hasAny)
-		_gotoIfError(clean, Error_notFound(0, 0, "GraphicsInstance_getPreferredDevice() no supported queried devices"));
+		gotoIfError(clean, Error_notFound(0, 0, "GraphicsInstance_getPreferredDevice() no supported queried devices"))
 
-	U64 picked = hasDedicated ? preferredDedicated : preferredNonDedicated;
-
+	const U64 picked = hasDedicated ? preferredDedicated : preferredNonDedicated;
 	*deviceInfo = tmp.ptr[picked];
 
 clean:
@@ -105,43 +115,39 @@ clean:
 	return err;
 }
 
-impl Error GraphicsInstance_createExt(
-	GraphicsApplicationInfo info,
-	Bool isVerbose,
-	GraphicsInstanceRef **instanceRef,
-	U32 *version
-);
-
+impl Error GraphicsInstance_createExt(GraphicsApplicationInfo info, GraphicsInstanceRef **instanceRef);
 impl Bool GraphicsInstance_free(GraphicsInstance *inst, Allocator alloc);
 impl extern const U64 GraphicsInstanceExt_size;
 
-Error GraphicsInstance_create(GraphicsApplicationInfo info, Bool isVerbose, GraphicsInstanceRef **instanceRef) {
+Error GraphicsInstance_create(GraphicsApplicationInfo info, EGraphicsInstanceFlags flags, GraphicsInstanceRef **instanceRef) {
 
 	Error err = RefPtr_createx(
 		(U32)(sizeof(GraphicsInstance) + GraphicsInstanceExt_size),
 		(ObjectFreeFunc) GraphicsInstance_free,
-		EGraphicsTypeId_GraphicsInstance,
+		(ETypeId) EGraphicsTypeId_GraphicsInstance,
 		instanceRef
 	);
 
 	if(err.genericError)
 		return err;
 
-	U32 version = 0;
-	_gotoIfError(clean, GraphicsInstance_createExt(info, isVerbose, instanceRef, &version));
-
 	GraphicsInstance *instance = GraphicsInstanceRef_ptr(*instanceRef);
 
-	*instance = (GraphicsInstance) {
-		.application = info,
-		.api = EGraphicsApi_Vulkan,
-		.apiVersion = version
-	};
+	*instance = (GraphicsInstance) { .application = info, .flags = flags };
 
-	goto success;
+	#ifndef NDEBUG
+		if(!(flags & EGraphicsInstanceFlags_DisableDebug))
+			instance->flags |= EGraphicsInstanceFlags_IsDebug;
+	#endif
+
+	gotoIfError(clean, GraphicsInstance_createExt(info, instanceRef));
+
+	instance->verificationVersion = GraphicsInstance_verificationVersion;
 
 clean:
-	GraphicsInstanceRef_dec(instanceRef);
-success:
+
+	if(err.genericError)
+		GraphicsInstanceRef_dec(instanceRef);
+
 	return err;
 }

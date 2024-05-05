@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -20,22 +20,25 @@
 
 #include "platforms/ext/listx_impl.h"
 #include "graphics/generic/command_list.h"
+#include "graphics/generic/commands.h"
 #include "graphics/generic/device.h"
-#include "graphics/generic/swapchain.h"
 #include "graphics/generic/device_buffer.h"
-#include "graphics/generic/device_texture.h"
 #include "graphics/generic/pipeline.h"
-#include "graphics/generic/depth_stencil.h"
-#include "graphics/generic/render_texture.h"
+#include "graphics/generic/texture.h"
+#include "graphics/generic/swapchain.h"
+#include "graphics/generic/sampler.h"
+#include "graphics/generic/tlas.h"
+#include "graphics/generic/blas.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/log.h"
+#include "platforms/ext/ref_ptrx.h"
 #include "types/string.h"
 #include "formats/texture.h"
+#include "types/math.h"
 
 TListImpl(CommandOpInfo);
 TListImpl(TransitionInternal);
 TListImpl(CommandScope);
-TListImpl(DeviceResourceVersion);
 TListImpl(Transition);
 TListImpl(CommandScopeDependency);
 TListImpl(ClearImageCmd);
@@ -63,7 +66,7 @@ Error CommandListRef_inc(CommandListRef *cmd) {
 		return Error_invalidOperation(0, "CommandListRef_validate() cmdlist isn't locked");						\
 																												\
 	if(commandList->state != ECommandListState_Open)															\
-		return Error_invalidOperation(1, "CommandListRef_validate() cmdlist isn't open");
+		return Error_invalidOperation(1, "CommandListRef_validate() cmdlist isn't open")
 
 #define CommandListRef_validateScope(v, label)																	\
 																												\
@@ -71,7 +74,7 @@ Error CommandListRef_inc(CommandListRef *cmd) {
 	Error err = Error_none();																					\
 																												\
 	if(!(commandList->tempStateFlags & ECommandStateFlags_HasScope))											\
-		_gotoIfError(label, Error_invalidOperation(0, "CommandListRef_validateScope() scope isn't open"));
+		gotoIfError(label, Error_invalidOperation(0, "CommandListRef_validateScope() scope isn't open"))
 
 Error CommandListRef_clear(CommandListRef *commandListRef) {
 
@@ -85,13 +88,13 @@ Error CommandListRef_clear(CommandListRef *commandListRef) {
 			RefPtr_dec(ptr);
 	}
 
-	Error err = Error_none();
-	_gotoIfError(clean, ListCommandOpInfo_clear(&commandList->commandOps));
-	_gotoIfError(clean, ListRefPtr_clear(&commandList->resources));
-	_gotoIfError(clean, ListTransitionInternal_clear(&commandList->transitions));
-	_gotoIfError(clean, ListCommandScope_clear(&commandList->activeScopes));
+	Error err;
+	gotoIfError(clean, ListCommandOpInfo_clear(&commandList->commandOps))
+	gotoIfError(clean, ListRefPtr_clear(&commandList->resources))
+	gotoIfError(clean, ListTransitionInternal_clear(&commandList->transitions))
+	gotoIfError(clean, ListCommandScope_clear(&commandList->activeScopes))
 
-	_gotoIfError(clean, ListDeviceResourceVersion_clear(&commandList->activeSwapchains));
+	gotoIfError(clean, ListDeviceResourceVersion_clear(&commandList->activeSwapchains))
 
 	commandList->next = 0;
 
@@ -109,31 +112,31 @@ Error CommandListRef_begin(CommandListRef *commandListRef, Bool doClear, U64 loc
 	if(Lock_lock(&commandList->lock, lockTimeout) != ELockAcquire_Acquired)
 		return Error_invalidOperation(0, "CommandListRef_begin() couldn't acquire lock");
 
-	Error err = Error_none();
+	Error err;
 
 	if(commandList->state == ECommandListState_Open)
-		_gotoIfError(clean, Error_invalidOperation(1, "CommandListRef_begin() can only be called on non open cmdlist"));
+		gotoIfError(clean, Error_invalidOperation(1, "CommandListRef_begin() can only be called on non open cmdlist"))
 
 	commandList->state = ECommandListState_Open;
-	_gotoIfError(clean, doClear ? CommandListRef_clear(commandListRef) : Error_none());
+	gotoIfError(clean, doClear ? CommandListRef_clear(commandListRef) : Error_none())
 
 	if (!doClear) {		//Reacquire swapchains to ensure versions are the same
 
 		for (U64 i = 0; i < commandList->activeSwapchains.length; ++i ) {
 
-			DeviceResourceVersion v = commandList->activeSwapchains.ptr[i];
+			const DeviceResourceVersion v = commandList->activeSwapchains.ptr[i];
 			Swapchain *swapchain = SwapchainRef_ptr(v.resource);
 
 			if(Lock_lock(&swapchain->lock, U64_MAX) != ELockAcquire_Acquired)
-				_gotoIfError(clean, Error_invalidOperation(0, "CommandListRef_begin() couldn't re-acquire swapchain locks"));
+				gotoIfError(clean, Error_invalidOperation(0, "CommandListRef_begin() couldn't re-acquire swapchain locks"))
 
-			U64 verId = swapchain->versionId;
+			const U64 verId = swapchain->versionId;
 			Lock_unlock(&swapchain->lock);
 
 			if(verId != v.version)
-				_gotoIfError(clean, Error_invalidOperation(
+				gotoIfError(clean, Error_invalidOperation(
 					1, "CommandListRef_begin() can't be called without clear if pre-recorded swapchain versionId changed"
-				));
+				))
 		}
 	}
 
@@ -157,18 +160,18 @@ Error CommandListRef_end(CommandListRef *commandListRef) {
 	Error err = Error_none();
 
 	if (commandList->tempStateFlags & ECommandStateFlags_HasScope)
-		_gotoIfError(clean, Error_invalidState(0, "CommandListRef_end() can't be called if a scope is open"));
+		gotoIfError(clean, Error_invalidState(0, "CommandListRef_end() can't be called if a scope is open"))
 
-	_gotoIfError(clean, ListRefPtr_reservex(&commandList->resources, commandList->transitions.length));
+	gotoIfError(clean, ListRefPtr_reservex(&commandList->resources, commandList->transitions.length))
 
 	for (U64 i = 0; i < commandList->transitions.length; ++i) {
 
-		TransitionInternal *transitions = &commandList->transitions.ptrNonConst[i];
+		const TransitionInternal *transitions = &commandList->transitions.ptrNonConst[i];
 
 		if(!ListRefPtr_contains(commandList->resources, transitions->resource, 0, NULL)) {				//TODO: hashSet
 
 			if(RefPtr_inc(transitions->resource))		//CommandList will keep resource alive.
-				_gotoIfError(clean, ListRefPtr_pushBackx(&commandList->resources, transitions->resource));
+				gotoIfError(clean, ListRefPtr_pushBackx(&commandList->resources, transitions->resource))
 		}
 	}
 
@@ -191,7 +194,7 @@ Error CommandList_validateGraphicsPipeline(
 	EMSAASamples boundSampleCount
 ) {
 
-	PipelineGraphicsInfo *info = (PipelineGraphicsInfo*)pipeline->extraInfo;
+	PipelineGraphicsInfo *info = Pipeline_info(pipeline, PipelineGraphicsInfo);
 
 	//Depth stencil state can be set to None to ignore writing to depth stencil
 
@@ -200,7 +203,8 @@ Error CommandList_validateGraphicsPipeline(
 
 	if(info->msaa != boundSampleCount)
 		return Error_invalidState(
-			0, "CommandList_validateGraphicsPipeline()::boundSampleCount is incompatible with pipeline MSAA setting"
+			0,
+			"CommandList_validateGraphicsPipeline()::boundSampleCount is incompatible with pipeline MSAA setting"
 		);
 
 	//Validate attachments
@@ -220,52 +224,47 @@ Error CommandList_validateGraphicsPipeline(
 		RefPtr *ref = images[i].image;
 
 		if (!ref)
-			return Error_nullPointer(1, "CommandList_validateGraphicsPipeline()::images[i] is required by pipeline");
+			return Error_nullPointer(
+				1, "CommandList_validateGraphicsPipeline()::images[i] is required by pipeline"
+			);
 
-		if (ref->typeId != EGraphicsTypeId_Swapchain && ref->typeId != EGraphicsTypeId_RenderTexture)
-			return Error_invalidParameter(1, i, "CommandList_validateGraphicsPipeline()::images[i] is invalid type");
+		if (!TextureRef_isRenderTargetWritable(ref))
+			return Error_invalidParameter(
+				1, i, "CommandList_validateGraphicsPipeline()::images[i] is invalid type"
+			);
 
-		if(ref->typeId == EGraphicsTypeId_Swapchain) {
+		DeviceResourceVersion v;
+		const UnifiedTexture tex = TextureRef_getUnifiedTexture(ref, &v);
 
-			Swapchain *swapchain = SwapchainRef_ptr(ref);
+		if(info->attachmentFormatsExt[i] != tex.textureFormatId)
+			return Error_invalidState(
+				i + 2, "CommandList_validateGraphicsPipeline()::images[i] is invalid format"
+			);
 
-			if (swapchain->format != ETextureFormatId_unpack[info->attachmentFormatsExt[i]])
-				return Error_invalidState(i + 2, "CommandList_validateGraphicsPipeline()::images[i] is invalid format");
-
-			if(info->msaa)
-				return Error_invalidState(
-					i + 2, "CommandList_validateGraphicsPipeline()::images[i] doesn't have MSAA but pipeline requires it"
-				);
-
-		} else {
-
-			RenderTexture *renderTexture = RenderTextureRef_ptr(ref);
-
-			if (renderTexture->format != ETextureFormatId_unpack[info->attachmentFormatsExt[i]])
-				return Error_invalidState(i + 2, "CommandList_validateGraphicsPipeline()::images[i] is invalid format");
-
-			if(info->msaa != renderTexture->msaa)
-				return Error_invalidState(
-					i + 2, "CommandList_validateGraphicsPipeline()::images[i] has mismatching MSAA between pipeline and RenderTarget"
-				);
-		}
+		if(info->msaa != tex.sampleCount)
+			return Error_invalidState(
+				i + 2,
+				"CommandList_validateGraphicsPipeline()::images[i] has mismatching MSAA "
+				"between pipeline and RenderTarget"
+			);
 	}
 
 	return Error_none();
 }
 
 Bool CommandListRef_imageRangeConflicts(RefPtr *image1, ImageRange range1, RefPtr *image2, ImageRange range2) {
-
-	range2; range1;		//TODO:
-
+	(void)range2; (void)range1;		//TODO:
 	return image1 == image2;
 }
 
 Bool CommandListRef_bufferRangeConflicts(RefPtr *buffer1, BufferRange range1, RefPtr *buffer2, BufferRange range2) {
-
-	range2; range1;		//TODO:
-
+	(void)range2; (void)range1;		//TODO:
 	return buffer1 == buffer2;
+}
+
+//TLAS, BLAS, etc.
+Bool CommandListRef_resourceConflicts(RefPtr *res1, RefPtr *res2) {
+	return res1 == res2;
 }
 
 Bool CommandListRef_isBound(CommandList *commandList, RefPtr *resource, ResourceRange range, TransitionInternal **found) {
@@ -275,24 +274,30 @@ Bool CommandListRef_isBound(CommandList *commandList, RefPtr *resource, Resource
 
 	for(U64 i = 0; i < commandList->pendingTransitions.length; ++i) {
 
-		TransitionInternal transition = commandList->pendingTransitions.ptr[i];
+		const TransitionInternal transition = commandList->pendingTransitions.ptr[i];
 
 		if(transition.resource->typeId != resource->typeId)
 			continue;
 
-		if(
-			resource->typeId == EGraphicsTypeId_Swapchain ||
-			resource->typeId == EGraphicsTypeId_DepthStencil ||
-			resource->typeId == EGraphicsTypeId_RenderTexture ||
-			resource->typeId == EGraphicsTypeId_DeviceTexture
-		) {
-			if(CommandListRef_imageRangeConflicts(resource, range.image, transition.resource, transition.range.image)) {
+		if(TextureRef_isTexture(resource)) {
+			if(CommandListRef_imageRangeConflicts(
+				resource, range.image, transition.resource, transition.range.image
+			)) {
 				if(found) *found = &commandList->pendingTransitions.ptrNonConst[i];
 				return true;
 			}
 		}
 
-		else if(CommandListRef_bufferRangeConflicts(resource, range.buffer, transition.resource, transition.range.buffer)) {
+		else if(resource->typeId == (ETypeId) EGraphicsTypeId_DeviceBuffer) {
+			if(CommandListRef_bufferRangeConflicts(
+				resource, range.buffer, transition.resource, transition.range.buffer
+			)) {
+				if(found) *found = &commandList->pendingTransitions.ptrNonConst[i];
+				return true;
+			}
+		}
+
+		else if(CommandListRef_resourceConflicts(resource, transition.resource)) {
 			if(found) *found = &commandList->pendingTransitions.ptrNonConst[i];
 			return true;
 		}
@@ -303,27 +308,27 @@ Bool CommandListRef_isBound(CommandList *commandList, RefPtr *resource, Resource
 
 Error CommandList_append(CommandList *commandList, ECommandOp op, Buffer buf, U32 extraSkipStacktrace) {
 
-	extraSkipStacktrace;
+	(void)extraSkipStacktrace;
 
-	U64 len = Buffer_length(buf);
+	const U64 len = Buffer_length(buf);
 	Bool didPush = false;
-	Error err = Error_none();
+	Error err;
 
 	if(len > U32_MAX)
-		_gotoIfError(clean, Error_outOfBounds(2, len, U32_MAX, "CommandList_append() singular command can't exceed 32-bit"));
+		gotoIfError(clean, Error_outOfBounds(2, len, U32_MAX, "CommandList_append() singular command can't exceed 32-bit"))
 
 	if((commandList->commandOps.length + 1) >> 32)
-		_gotoIfError(clean, Error_outOfBounds(0, U32_MAX, U32_MAX, "CommandList_append() command ops can't exceed 32-bit"));
+		gotoIfError(clean, Error_outOfBounds(0, U32_MAX, U32_MAX, "CommandList_append() command ops can't exceed 32-bit"))
 
 	if(commandList->next + len > Buffer_length(commandList->data)) {
 
 		if(!commandList->allowResize)
-			_gotoIfError(clean, Error_outOfMemory(0, "CommandList_append() out of bounds"));
+			gotoIfError(clean, Error_outOfMemory(0, "CommandList_append() out of bounds"))
 
 		//Resize buffer to allow allocation
 
 		Buffer resized = Buffer_createNull();
-		_gotoIfError(clean, Buffer_createEmptyBytesx(Buffer_length(commandList->data) * 2 + KIBI + len, &resized));
+		gotoIfError(clean, Buffer_createEmptyBytesx(Buffer_length(commandList->data) * 2 + KIBI + len, &resized))
 
 		Buffer_copy(resized, commandList->data);
 		Buffer_freex(&commandList->data);
@@ -331,12 +336,12 @@ Error CommandList_append(CommandList *commandList, ECommandOp op, Buffer buf, U3
 		commandList->data = resized;
 	}
 
-	CommandOpInfo info = (CommandOpInfo) {
+	const CommandOpInfo info = (CommandOpInfo) {
 		.op = op,
 		.opSize = (U32) len
 	};
 
-	_gotoIfError(clean, ListCommandOpInfo_pushBackx(&commandList->commandOps, info));
+	gotoIfError(clean, ListCommandOpInfo_pushBackx(&commandList->commandOps, info))
 	didPush = true;
 
 	if(len) {
@@ -361,7 +366,8 @@ Error CommandListRef_transitionBuffer(
 	CommandList *commandList,
 	DeviceBufferRef *buffer,
 	BufferRange range,
-	ETransitionType type
+	ETransitionType type,
+	EPipelineStage stage
 ) {
 
 	if(!buffer)
@@ -371,15 +377,151 @@ Error CommandListRef_transitionBuffer(
 	if(CommandListRef_isBound(commandList, buffer, (ResourceRange) { .buffer = range }, &oldState)) {
 
 		if(oldState->type != type)
-			return Error_invalidOperation(4, "CommandListRef_transitionBuffer()::buffer was already transitioned in scope!");
+			return Error_invalidOperation(
+				4, "CommandListRef_transitionBuffer()::buffer was already transitioned in scope!"
+			);
 
+		oldState->stage = (EPipelineStage) U64_min(oldState->stage, stage);
 		return Error_none();
 	}
 
-	TransitionInternal transition = (TransitionInternal) {
+	const TransitionInternal transition = (TransitionInternal) {
 		.resource = buffer,
 		.range = (ResourceRange) { .buffer = range },
-		.stage = EPipelineStage_Count,
+		.stage = stage,
+		.type = type
+	};
+
+	return ListTransitionInternal_pushBackx(&commandList->pendingTransitions, transition);
+}
+
+Error CommandListRef_transitionRTAS(
+	CommandList *commandList,
+	RTASRef *rtasPtr,
+	ETransitionType type,
+	EPipelineStage stage
+) {
+
+	if(!rtasPtr)
+		return Error_none();
+
+	Bool isTLAS = rtasPtr->typeId == (ETypeId) EGraphicsTypeId_TLASExt;
+	RTAS rtas = isTLAS ? TLASRef_ptr(rtasPtr)->base : BLASRef_ptr(rtasPtr)->base;
+	Error err = Error_none();
+
+	if(rtas.tempScratchBuffer)
+		gotoIfError(clean, CommandListRef_transitionBuffer(
+			commandList, rtas.tempScratchBuffer, (BufferRange) { 0 }, ETransitionType_ReadRTAS, EPipelineStage_Count
+		))
+
+	if(isTLAS) {
+		
+		TLAS *tlas = TLASRef_ptr(rtasPtr);
+
+		if(!tlas->useDeviceMemory)
+			gotoIfError(clean, CommandListRef_transitionBuffer(
+				commandList, tlas->tempInstanceBuffer, (BufferRange) { 0 },
+				ETransitionType_ReadRTAS, EPipelineStage_Count
+			))
+
+		else gotoIfError(clean, CommandListRef_transitionBuffer(
+			commandList, 
+			tlas->deviceData.buffer, 
+			(BufferRange) { 
+				.startRange = tlas->deviceData.offset, 
+				.endRange = tlas->deviceData.offset + tlas->deviceData.len
+			},
+			ETransitionType_ReadRTAS, EPipelineStage_Count
+		))
+	}
+
+	else {
+
+		BLAS *blas = BLASRef_ptr(rtasPtr);
+
+		if(blas->base.asConstructionType == EBLASConstructionType_Procedural)
+			gotoIfError(clean, CommandListRef_transitionBuffer(
+				commandList,
+				blas->aabbBuffer.buffer,
+				(BufferRange) {
+					.startRange = blas->aabbBuffer.offset + blas->aabbOffset,
+					.endRange = blas->aabbBuffer.offset + blas->aabbBuffer.len
+				},
+				ETransitionType_ReadRTAS, EPipelineStage_Count
+			))
+
+		else {
+
+			gotoIfError(clean, CommandListRef_transitionBuffer(
+				commandList,
+				blas->indexBuffer.buffer,
+				(BufferRange) {
+					.startRange = blas->indexBuffer.offset,
+					.endRange = blas->indexBuffer.offset + blas->indexBuffer.len
+				},
+				ETransitionType_ReadRTAS, EPipelineStage_Count
+			))
+
+			gotoIfError(clean, CommandListRef_transitionBuffer(
+				commandList,
+				blas->positionBuffer.buffer,
+				(BufferRange) {
+					.startRange = blas->positionBuffer.offset + blas->positionOffset, 
+					.endRange = blas->indexBuffer.offset + blas->indexBuffer.len
+				},
+				ETransitionType_ReadRTAS, EPipelineStage_Count
+			))
+		}
+	}
+
+	TransitionInternal *oldState = NULL;
+	if(CommandListRef_isBound(commandList, rtasPtr, (ResourceRange) { 0 }, &oldState)) {
+
+		if(oldState->type != type)
+			return Error_invalidOperation(
+				4, "CommandListRef_transitionRTAS()::rtas was already transitioned in scope!"
+			);
+
+		oldState->stage = (EPipelineStage) U64_min(oldState->stage, stage);
+		return Error_none();
+	}
+
+	const TransitionInternal transition = (TransitionInternal) { .resource = rtasPtr, .stage = stage, .type = type };
+	gotoIfError(clean, ListTransitionInternal_pushBackx(&commandList->pendingTransitions, transition))
+
+clean:
+	return err;
+}
+
+Error CommandListRef_transitionImage(
+	CommandList *commandList,
+	TextureRef *image,
+	ImageRange range,
+	ETransitionType type,
+	EPipelineStage stage
+) {
+
+	if(!image)
+		return Error_none();
+
+	TransitionInternal *oldState = NULL;
+	if(CommandListRef_isBound(commandList, image, (ResourceRange) { .image = range }, &oldState)) {
+
+		if(oldState->type != type)
+			return Error_invalidOperation(
+				4, "CommandListRef_transitionImage()::image was already transitioned in scope!"
+			);
+
+		//To combine shader transitions we just take the highest up shader stage it's used
+
+		oldState->stage = (EPipelineStage) U64_min(oldState->stage, stage);
+		return Error_none();
+	}
+
+	const TransitionInternal transition = (TransitionInternal) {
+		.resource = image,
+		.range = (ResourceRange) { .image = range },
+		.stage = stage,
 		.type = type
 	};
 
@@ -389,12 +531,12 @@ Error CommandListRef_transitionBuffer(
 //Standard commands
 
 Error CommandListRef_checkBounds(I32x2 offset, I32x2 size, I32 lowerBound1, I32 upperBound1) {
-	
+
 	if(I32x2_any(I32x2_leq(size, I32x2_zero())))
 		return Error_invalidParameter(1, 0, "CommandListRef_checkBounds()::size is <=0");
-	
-	I32x2 upperBound = I32x2_xx2(upperBound1);
-	I32x2 lowerBound = I32x2_xx2(lowerBound1);
+
+	const I32x2 upperBound = I32x2_xx2(upperBound1);
+	const I32x2 lowerBound = I32x2_xx2(lowerBound1);
 
 	if(I32x2_any(I32x2_gt(size, upperBound)))
 		return Error_invalidParameter(1, 0, "CommandListRef_checkBounds()::size > upperBound");
@@ -405,7 +547,7 @@ Error CommandListRef_checkBounds(I32x2 offset, I32x2 size, I32 lowerBound1, I32 
 	if(I32x2_any(I32x2_gt(offset, upperBound)))
 		return Error_invalidParameter(0, 1, "CommandListRef_checkBounds()::offset > upperBound");
 
-	I32x2 end = I32x2_add(offset, size);
+	const I32x2 end = I32x2_add(offset, size);
 
 	if(I32x2_any(I32x2_gt(end, upperBound)))
 	   return Error_invalidParameter(0, 2, "CommandListRef_checkBounds()::offset + size > upperBound");
@@ -415,21 +557,21 @@ Error CommandListRef_checkBounds(I32x2 offset, I32x2 size, I32 lowerBound1, I32 
 
 Error CommandListRef_setViewportCmd(CommandListRef *commandListRef, I32x2 offset, I32x2 size, ECommandOp op) {
 
-	CommandListRef_validateScope(commandListRef, clean);
+	CommandListRef_validateScope(commandListRef, clean)
 
 	if(I32x2_any(I32x2_eq(commandList->currentSize, I32x2_zero())))
-		_gotoIfError(clean, Error_invalidOperation(0, "CommandListRef_setViewportCmd() requires startRender(Pass/Ext)"));
+		gotoIfError(clean, Error_invalidOperation(0, "CommandListRef_setViewportCmd() requires startRender(Pass/Ext)"))
 
 	if(I32x2_any(I32x2_geq(offset, commandList->currentSize)))
-		_gotoIfError(clean, Error_invalidOperation(1, "CommandListRef_setViewportCmd() offset >= currentSize"));
+		gotoIfError(clean, Error_invalidOperation(1, "CommandListRef_setViewportCmd() offset >= currentSize"))
 
 	if(I32x2_eq2(size, I32x2_zero()))
 		size = I32x2_sub(commandList->currentSize, offset);
 
-	_gotoIfError(clean, CommandListRef_checkBounds(offset, size, -32'768, 32'767));
+	gotoIfError(clean, CommandListRef_checkBounds(offset, size, -32768, 32767))
 
 	I32x4 values = I32x4_create2_2(offset, size);
-	_gotoIfError(clean, CommandList_append(commandList, op, Buffer_createRefConst(&values, sizeof(values)), 1));
+	gotoIfError(clean, CommandList_append(commandList, op, Buffer_createRefConst(&values, sizeof(values)), 1))
 
 	if(op == ECommandOp_SetViewport || op == ECommandOp_SetViewportAndScissor)
 		commandList->tempStateFlags |= ECommandStateFlags_AnyViewport;
@@ -459,9 +601,8 @@ Error CommandListRef_setViewportAndScissor(CommandListRef *commandListRef, I32x2
 
 Error CommandListRef_setStencil(CommandListRef *commandListRef, U8 stencilValue) {
 
-	CommandListRef_validateScope(commandListRef, clean);
-
-	_gotoIfError(clean, CommandList_append(commandList, ECommandOp_SetStencil, Buffer_createRefConst(&stencilValue, 1), 0));
+	CommandListRef_validateScope(commandListRef, clean)
+	gotoIfError(clean, CommandList_append(commandList, ECommandOp_SetStencil, Buffer_createRefConst(&stencilValue, 1), 0))
 
 clean:
 
@@ -473,11 +614,11 @@ clean:
 
 Error CommandListRef_setBlendConstants(CommandListRef *commandListRef, F32x4 blendConstants) {
 
-	CommandListRef_validateScope(commandListRef, clean);
+	CommandListRef_validateScope(commandListRef, clean)
 
-	_gotoIfError(clean, CommandList_append(
+	gotoIfError(clean, CommandList_append(
 		commandList, ECommandOp_SetBlendConstants, Buffer_createRefConst(&blendConstants, sizeof(F32x4)), 0
-	));
+	))
 
 clean:
 
@@ -490,74 +631,53 @@ clean:
 Error CommandListRef_clearImages(CommandListRef *commandListRef, ListClearImageCmd clearImages) {
 
 	Buffer buf = Buffer_createNull();
-	CommandListRef_validateScope(commandListRef, clean);
+	CommandListRef_validateScope(commandListRef, clean)
 
 	if(!clearImages.length)
-		_gotoIfError(clean, Error_nullPointer(1, "CommandListRef_clearImages()::clearImages.length is 0"));
+		gotoIfError(clean, Error_nullPointer(1, "CommandListRef_clearImages()::clearImages.length is 0"))
 
 	if(clearImages.length > U32_MAX)
-		_gotoIfError(clean, Error_outOfBounds(
+		gotoIfError(clean, Error_outOfBounds(
 			1, clearImages.length, U32_MAX, "CommandListRef_clearImages()::clearImages.length > U32_MAX"
-		));
+		))
 
 	GraphicsDeviceRef *device = CommandListRef_ptr(commandList)->device;
 
 	for(U64 i = 0; i < clearImages.length; ++i) {
 
 		ClearImageCmd clearImage = clearImages.ptr[i];
-		RefPtr *image = clearImage.image;
+		UnifiedTexture tex = TextureRef_getUnifiedTexture(clearImage.image, NULL);
 
-		if(!image || (image->typeId != EGraphicsTypeId_Swapchain && image->typeId != EGraphicsTypeId_RenderTexture))
-			_gotoIfError(clean, Error_nullPointer(1, "CommandListRef_clearImages()::clearImages[i].image is invalid"));
+		if(!tex.resource.device || !TextureRef_isRenderTargetWritable(clearImage.image))
+			gotoIfError(clean, Error_nullPointer(1, "CommandListRef_clearImages()::clearImages[i].image is invalid"))
 
-		if(image->typeId == EGraphicsTypeId_Swapchain && SwapchainRef_ptr(image)->device != device)
-			_gotoIfError(clean, Error_unsupportedOperation(
+		if(tex.resource.device != device)
+			gotoIfError(clean, Error_unsupportedOperation(
 				0, "CommandListRef_clearImages()::clearImages[i].image belongs to other device"
 			))
-
-		else if(image->typeId == EGraphicsTypeId_RenderTexture && RenderTextureRef_ptr(image)->device != device)
-			_gotoIfError(clean, Error_unsupportedOperation(
-				0, "CommandListRef_clearImages()::clearImages[i].image belongs to other device"
-			));
 
 		//TODO: Properly support this
 
 		if (clearImage.range.layerId != U32_MAX && clearImage.range.layerId >= 1)
-			_gotoIfError(clean, Error_outOfBounds(
+			gotoIfError(clean, Error_outOfBounds(
 				1, clearImage.range.layerId, 1, "CommandListRef_clearImages()::clearImages[i].range.layerId is invalid"
-			));
+			))
 
 		if (clearImage.range.levelId != U32_MAX && clearImage.range.levelId >= 1)
-			_gotoIfError(clean, Error_outOfBounds(
+			gotoIfError(clean, Error_outOfBounds(
 				2, clearImage.range.levelId, 1, "CommandListRef_clearImages()::clearImages[i].range.levelId is invalid"
-			));
+			))
 
 		//Add transition
 
-		TransitionInternal *found = NULL;
-		if(CommandListRef_isBound(commandList, image, (ResourceRange) { .image = clearImage.range }, &found)) {
-
-			if(found->type != ETransitionType_Clear)
-				_gotoIfError(clean, Error_invalidOperation(
-					0, "CommandListRef_clearImages()::clearImages[i].image is already transitioned"
-				));
-
-			continue;
-		}
-
-		TransitionInternal transition = (TransitionInternal) {
-			.resource = image,
-			.range = (ResourceRange) { .image = clearImage.range },
-			.stage = EPipelineStage_Count,
-			.type = ETransitionType_Clear
-		};
-
-		_gotoIfError(clean, ListTransitionInternal_pushBackx(&commandList->pendingTransitions, transition));
+		gotoIfError(clean, CommandListRef_transitionImage(
+			commandList, clearImage.image, clearImage.range, ETransitionType_Clear, EPipelineStage_Count
+		))
 	}
 
 	//Copy buffer
-	
-	_gotoIfError(clean, Buffer_createEmptyBytesx(ListClearImageCmd_bytes(clearImages) + sizeof(U32), &buf));
+
+	gotoIfError(clean, Buffer_createEmptyBytesx(ListClearImageCmd_bytes(clearImages) + sizeof(U32), &buf))
 
 	*(U32*)buf.ptr = (U32) clearImages.length;
 	Buffer_copy(
@@ -565,7 +685,7 @@ Error CommandListRef_clearImages(CommandListRef *commandListRef, ListClearImageC
 		ListClearImageCmd_bufferConst(clearImages)
 	);
 
-	_gotoIfError(clean, CommandList_append(commandList, ECommandOp_ClearImages, buf, 0));
+	gotoIfError(clean, CommandList_append(commandList, ECommandOp_ClearImages, buf, 0))
 
 	commandList->tempStateFlags |= ECommandStateFlags_HasModifyOp;
 
@@ -580,157 +700,114 @@ clean:
 
 Error CommandListRef_copyImageRegions(
 	CommandListRef *commandListRef,
-	RefPtr *src,
-	RefPtr *dst,
+	RefPtr *srcRef,
+	RefPtr *dstRef,
 	ECopyType copyType,
 	ListCopyImageRegion regions
 ) {
 
 	Buffer buf = Buffer_createNull();
-	CommandListRef_validateScope(commandListRef, clean);
+	CommandListRef_validateScope(commandListRef, clean)
 
 	//Validate regions.length to be <0, U32_MAX]
 
 	if(!regions.length)
-		_gotoIfError(clean, Error_nullPointer(3, "CommandListRef_copyImage()::regions.length is 0"));
+		gotoIfError(clean, Error_nullPointer(3, "CommandListRef_copyImage()::regions.length is 0"))
 
 	if(regions.length > U32_MAX)
-		_gotoIfError(clean, Error_outOfBounds(
+		gotoIfError(clean, Error_outOfBounds(
 			4, regions.length, U32_MAX, "CommandListRef_copyImage()::regions.length > U32_MAX"
-		));
+		))
 
 	//Validate src and dst
 
-	if(!src || !dst)
-		_gotoIfError(clean, Error_outOfBounds(
-			!src ? 1 : 2, regions.length, U32_MAX, "CommandListRef_copyImage()::src and dst are required"
-		));
+	if(!srcRef || !dstRef)
+		gotoIfError(clean, Error_outOfBounds(
+			!srcRef ? 1 : 2, regions.length, U32_MAX, "CommandListRef_copyImage()::src and dst are required"
+		))
 
-	for (U64 i = 0; i < 2; ++i) {
-
-		RefPtr *ptr = i ? dst : src;
-
-		if(
-			ptr->typeId != EGraphicsTypeId_RenderTexture &&
-			ptr->typeId != EGraphicsTypeId_Swapchain &&
-			ptr->typeId != EGraphicsTypeId_DepthStencil
-			//ptr->typeId != EGraphicsTypeId_DeviceTexture		//TODO: Add DeviceTexture here
-		)
-			_gotoIfError(clean, Error_invalidParameter(
+	for (U64 i = 0; i < 2; ++i)
+		if(!TextureRef_isTexture(i ? dstRef : srcRef))
+			gotoIfError(clean, Error_invalidParameter(
 				i ? 1 : 2, 0,
 				"CommandListRef_copyImage()::src and dst should be a texture "
 				"(Swapchain, DepthStencil, RenderTexture, DeviceTexture)"
-			));
-	}
+			))
 
 	//Validate depth stencil
 
-	Bool isDepthStencil = dst->typeId == EGraphicsTypeId_DepthStencil;
+	Bool isDepthStencil = TextureRef_isDepthStencil(dstRef);
 
-	if(isDepthStencil != (src->typeId == EGraphicsTypeId_DepthStencil))
-		_gotoIfError(clean, Error_invalidParameter(
-			1, 0,
-			"CommandListRef_copyImage()::src and dst should be DepthStencil if one of them is to be compatible"
-		));
+	if(isDepthStencil != TextureRef_isDepthStencil(srcRef))
+		gotoIfError(clean, Error_invalidParameter(
+			1, 0, "CommandListRef_copyImage()::src and dst should be DepthStencil if one of them is to be compatible"
+		))
 
 	if(!isDepthStencil && copyType != ECopyType_All)
-		_gotoIfError(clean, Error_invalidParameter(
-			3, 0,
-			"CommandListRef_copyImage()::copyType should be ECopyType_All if DepthStencil isn't copied"
-		));
+		gotoIfError(clean, Error_invalidParameter(
+			3, 0, "CommandListRef_copyImage()::copyType should be ECopyType_All if DepthStencil isn't copied"
+		))
 
-	I32x4 srcLen = I32x4_zero();
-	I32x4 dstLen = I32x4_zero();
-	GraphicsDeviceRef *srcDevice = NULL;
-	GraphicsDeviceRef *dstDevice = NULL;
+	DeviceResourceVersion v;
+	UnifiedTexture src = TextureRef_getUnifiedTexture(srcRef, &v);
+	UnifiedTexture dst = TextureRef_getUnifiedTexture(dstRef, &v);
 
 	if (isDepthStencil) {
 
-		srcLen = I32x4_create2_1(DepthStencilRef_ptr(src)->size, 1);
-		dstLen = I32x4_create2_1(DepthStencilRef_ptr(dst)->size, 1);
-
-		srcDevice = DepthStencilRef_ptr(src)->device;
-		dstDevice = DepthStencilRef_ptr(dst)->device;
-
-		EDepthStencilFormat srcFormat = DepthStencilRef_ptr(src)->format;
-		EDepthStencilFormat dstFormat = DepthStencilRef_ptr(dst)->format;
+		EDepthStencilFormat srcFormat = src.depthFormat;
+		EDepthStencilFormat dstFormat = dst.depthFormat;
 
 		if(copyType == ECopyType_All && srcFormat != dstFormat)
-			_gotoIfError(clean, Error_invalidParameter(
+			gotoIfError(clean, Error_invalidParameter(
 				1, 1, "CommandListRef_copyImage()::src and dst don't match in depth stencil format"
-			));
+			))
 
 		if (
 			copyType == ECopyType_StencilOnly && (
 				srcFormat < EDepthStencilFormat_StencilStart || dstFormat < EDepthStencilFormat_StencilStart
 			)
 		)
-			_gotoIfError(clean, Error_invalidParameter(
+			gotoIfError(clean, Error_invalidParameter(
 				1, 2, "CommandListRef_copyImage()::src and dst both require stencil when using ECopyType_StencilOnly"
-			));
+			))
 
 		if (copyType == ECopyType_DepthOnly) {
 
 			Bool compatible = srcFormat == dstFormat;
-			
+
 			switch (srcFormat) {
-				case EDepthStencilFormat_D32: case EDepthStencilFormat_D32S8:
+
+				case EDepthStencilFormat_D32:
+				case EDepthStencilFormat_D32S8:
 					compatible = dstFormat == EDepthStencilFormat_D32S8 || dstFormat == EDepthStencilFormat_D32;
+					break;
+
+				default:
 					break;
 			}
 
 			if(!compatible)
-				_gotoIfError(clean, Error_invalidParameter(
+				gotoIfError(clean, Error_invalidParameter(
 					1, 3,
 					"CommandListRef_copyImage()::src and dst require the same depth format if ECopyType_DepthOnly is used "
 					"(D32/D32S8 is compatible with D32/D32S8)"
-				));
+				))
 		}
 	}
 
 	//Ensure both formats are the same
 
-	else {
-
-		ETextureFormat srcFormat = ETextureFormat_Undefined;
-		ETextureFormat dstFormat = ETextureFormat_Undefined;
-
-		if(src->typeId == EGraphicsTypeId_Swapchain) {
-			srcFormat = SwapchainRef_ptr(src)->format;
-			srcLen = I32x4_fromI32x2(SwapchainRef_ptr(src)->size);
-			srcDevice = SwapchainRef_ptr(src)->device;
-		}
-
-		else {
-			srcFormat = RenderTextureRef_ptr(src)->format;				//TODO: src DeviceTexture
-			srcLen = RenderTextureRef_ptr(src)->size;
-			srcDevice = RenderTextureRef_ptr(src)->device;
-		}
-
-		if(dst->typeId == EGraphicsTypeId_Swapchain) {
-			dstFormat = SwapchainRef_ptr(dst)->format;
-			dstLen = I32x4_fromI32x2(SwapchainRef_ptr(dst)->size);
-			dstDevice = SwapchainRef_ptr(dst)->device;
-		}
-
-		else {
-			dstFormat = RenderTextureRef_ptr(dst)->format;				//TODO: dst DeviceTexture
-			dstLen = RenderTextureRef_ptr(dst)->size;
-			dstDevice = RenderTextureRef_ptr(dst)->device;
-		}
-
-		if(srcFormat != dstFormat)
-			_gotoIfError(clean, Error_invalidParameter(
-				1, 5, "CommandListRef_copyImage()::src and dst require the same texture format"
-			));
-	}
+	else if(src.textureFormatId != dst.textureFormatId)
+		gotoIfError(clean, Error_invalidParameter(
+			1, 5, "CommandListRef_copyImage()::src and dst require the same texture format"
+		))
 
 	//Validate devices
 
-	if(srcDevice != commandList->device || dstDevice != commandList->device)
-		_gotoIfError(clean, Error_invalidParameter(
+	if(src.resource.device != commandList->device || dst.resource.device != commandList->device)
+		gotoIfError(clean, Error_invalidParameter(
 			1, 6, "CommandListRef_copyImage()::src and dst require the same device as the CommandList"
-		));
+		))
 
 	//Validate copy
 
@@ -741,9 +818,9 @@ Error CommandListRef_copyImageRegions(
 		//Validate levelId
 
 		if(clearImage.dstLevelId || clearImage.srcLevelId)		//TODO: Allow levels
-			_gotoIfError(clean, Error_invalidParameter(
+			gotoIfError(clean, Error_invalidParameter(
 				1, 6, "CommandListRef_copyImage()::regions[i].src/dstLevelId is out of bounds"
-			));
+			))
 	}
 
 	//TODO: Check if regions are out of bounds (be sure to keep in mind that w,h,l is 0 means src->w,h,l - src->offset
@@ -757,39 +834,20 @@ Error CommandListRef_copyImageRegions(
 	//Add transitions
 
 	ETransitionType types[2] = { ETransitionType_CopyRead, ETransitionType_CopyWrite };
-	RefPtr *ptrs[2] = { src, dst };
+	RefPtr *ptrs[2] = { srcRef, dstRef };
 
-	for(U64 i = 0; i < 2; ++i) {
-
-		TransitionInternal *found = NULL;
-		if(CommandListRef_isBound(commandList, ptrs[i], (ResourceRange) { 0 }, &found)) {
-
-			if(found->type != types[i])
-				_gotoIfError(clean, Error_invalidOperation(
-					0, "CommandListRef_clearImages()::src is already transitioned in the same scope"
-				));
-		}
-
-		else {
-
-			TransitionInternal transition = (TransitionInternal) {
-				.resource = ptrs[i],
-				.range = (ResourceRange) { 0 },
-				.stage = EPipelineStage_Count,
-				.type = types[i]
-			};
-
-			_gotoIfError(clean, ListTransitionInternal_pushBackx(&commandList->pendingTransitions, transition));
-		}
-	}
+	for(U64 i = 0; i < 2; ++i)
+		gotoIfError(clean, CommandListRef_transitionImage(
+			commandList, ptrs[i], (ImageRange) { 0 }, types[i], EPipelineStage_Count
+		))
 
 	//Copy buffer
-	
-	_gotoIfError(clean, Buffer_createEmptyBytesx(ListCopyImageRegion_bytes(regions) + sizeof(CopyImageCmd), &buf));
+
+	gotoIfError(clean, Buffer_createEmptyBytesx(ListCopyImageRegion_bytes(regions) + sizeof(CopyImageCmd), &buf))
 
 	*(CopyImageCmd*)buf.ptr = (CopyImageCmd) {
-		.src = src,
-		.dst = dst,
+		.src = srcRef,
+		.dst = dstRef,
 		.regionCount = (U32) regions.length,
 		.copyType = copyType
 	};
@@ -799,7 +857,7 @@ Error CommandListRef_copyImageRegions(
 		ListCopyImageRegion_bufferConst(regions)
 	);
 
-	_gotoIfError(clean, CommandList_append(commandList, ECommandOp_CopyImage, buf, 0));
+	gotoIfError(clean, CommandList_append(commandList, ECommandOp_CopyImage, buf, 0))
 
 	commandList->tempStateFlags |= ECommandStateFlags_HasModifyOp;
 
@@ -815,12 +873,12 @@ clean:
 Error CommandListRef_copyImage(
 	CommandListRef *commandListRef, RefPtr *src, RefPtr *dst, ECopyType copyType, CopyImageRegion region
 ) {
-	CommandListRef_validateScope(commandListRef, clean);
+	CommandListRef_validateScope(commandListRef, clean)
 
 	ListCopyImageRegion regions = (ListCopyImageRegion) { 0 };
-	_gotoIfError(clean, ListCopyImageRegion_createRefConst(&region, 1, &regions));
+	gotoIfError(clean, ListCopyImageRegion_createRefConst(&region, 1, &regions))
 
-	_gotoIfError(clean, CommandListRef_copyImageRegions(commandListRef, src, dst, copyType, regions));
+	gotoIfError(clean, CommandListRef_copyImageRegions(commandListRef, src, dst, copyType, regions))
 
 clean:
 
@@ -832,7 +890,7 @@ clean:
 
 Error CommandListRef_clearImageu(CommandListRef *commandListRef, const U32 coloru[4], ImageRange range, RefPtr *image) {
 
-	CommandListRef_validate(commandListRef);
+	CommandListRef_validateScope(commandListRef, clean)
 
 	ClearImageCmd clearImage = (ClearImageCmd) {
 		.image = image,
@@ -842,10 +900,9 @@ Error CommandListRef_clearImageu(CommandListRef *commandListRef, const U32 color
 	Buffer_copy(Buffer_createRef(&clearImage.color, sizeof(F32x4)), Buffer_createRefConst(coloru, sizeof(F32x4)));
 
 	ListClearImageCmd clearImages = (ListClearImageCmd) { 0 };
-	Error err = Error_none();
-	_gotoIfError(clean, ListClearImageCmd_createRefConst(&clearImage, 1, &clearImages));
+	gotoIfError(clean, ListClearImageCmd_createRefConst(&clearImage, 1, &clearImages))
 
-	_gotoIfError(clean, CommandListRef_clearImages(commandListRef, clearImages));
+	gotoIfError(clean, CommandListRef_clearImages(commandListRef, clearImages))
 
 clean:
 
@@ -879,17 +936,17 @@ Error CommandListRef_startScope(
 	Error err = Error_none();
 
 	if(transitions.length > U32_MAX)
-		_gotoIfError(clean, Error_outOfBounds(
+		gotoIfError(clean, Error_outOfBounds(
 			1, transitions.length, U32_MAX, "CommandListRef_startScope()::transitions.length > U32_MAX"
-		));
+		))
 
 	if(commandList->tempStateFlags & ECommandStateFlags_HasScope)		//No nested scopes
-		_gotoIfError(clean, Error_invalidOperation(
+		gotoIfError(clean, Error_invalidOperation(
 			0, "CommandListRef_startScope() scope is already present. Nested scopes are unsupported"
-		));
+		))
 
-	_gotoIfError(clean, ListTransitionInternal_clear(&commandList->pendingTransitions));
-	_gotoIfError(clean, ListTransitionInternal_reservex(&commandList->pendingTransitions, transitions.length));
+	gotoIfError(clean, ListTransitionInternal_clear(&commandList->pendingTransitions))
+	gotoIfError(clean, ListTransitionInternal_reservex(&commandList->pendingTransitions, transitions.length))
 
 	for(U64 i = 0; i < transitions.length; ++i) {
 
@@ -897,91 +954,91 @@ Error CommandListRef_startScope(
 		RefPtr *res = transition.resource;
 
 		if(!res)
-			_gotoIfError(clean, Error_nullPointer(1, "CommandListRef_startScope()::transitions[i].resource is NULL"));
+			gotoIfError(clean, Error_nullPointer(1, "CommandListRef_startScope()::transitions[i].resource is NULL"))
 
-		EGraphicsTypeId typeId = (EGraphicsTypeId) res->typeId;
+		UnifiedTexture tex = TextureRef_getUnifiedTexture(res, NULL);
+		Bool isSampler = res->typeId == EGraphicsTypeId_Sampler;
 
-		switch (typeId) {
+		GraphicsResource resource = tex.resource;
 
-			case EGraphicsTypeId_DeviceBuffer:
-			case EGraphicsTypeId_DepthStencil:
-			case EGraphicsTypeId_DeviceTexture:
-			case EGraphicsTypeId_RenderTexture:
-			case EGraphicsTypeId_Swapchain: {
+		if (tex.resource.device)
+			resource = tex.resource;
 
-				Bool allowShaderWrite = false, allowShaderRead = true;
-				GraphicsDeviceRef *objectDevice = NULL;
+		else if (res->typeId == EGraphicsTypeId_DeviceBuffer)
+			resource = DeviceBufferRef_ptr(res)->resource;
 
-				switch (typeId) {
+		else if(isSampler)
+			resource = (GraphicsResource) { .device = SamplerRef_ptr(res)->device };		//Only device is required here
 
-					case EGraphicsTypeId_Swapchain:
-						allowShaderWrite = SwapchainRef_ptr(res)->info.usage & ESwapchainUsage_ShaderWrite;
-						objectDevice = SwapchainRef_ptr(res)->device;
-						break;
+		else if (res->typeId == EGraphicsTypeId_TLASExt) {									//Get device and mark as readonly
 
-					case EGraphicsTypeId_DepthStencil:
-						allowShaderRead = DepthStencilRef_ptr(res)->allowShaderRead;
-						objectDevice = DepthStencilRef_ptr(res)->device;
-						break;
+			TLAS *tlas = TLASRef_ptr(res);
 
-					case EGraphicsTypeId_DeviceTexture:
-						allowShaderRead = DeviceTextureRef_ptr(res)->usage & EDeviceTextureUsage_ShaderRead;
-						objectDevice = DeviceTextureRef_ptr(res)->device;
-						break;
+			if(!tlas->useDeviceMemory)
+				for (U64 j = 0; j < tlas->cpuInstancesStatic.length; ++j) {
 
-					case EGraphicsTypeId_DeviceBuffer:
-						DeviceBuffer *devBuf = DeviceBufferRef_ptr(res);
-						allowShaderWrite = devBuf->usage & EDeviceBufferUsage_ShaderWrite;
-						allowShaderRead = devBuf->usage & EDeviceBufferUsage_ShaderRead;
-						objectDevice = devBuf->device;
-						break;
+					TLASInstanceData dat = (TLASInstanceData) { 0 };
+					TLAS_getInstanceDataCpu(tlas, j, &dat);
 
-					default:
-						RenderTexture *renderTexture = RenderTextureRef_ptr(res);
-						allowShaderWrite = renderTexture->usage & ERenderTextureUsage_ShaderWrite;
-						allowShaderRead = renderTexture->usage & ERenderTextureUsage_ShaderRead;
-						objectDevice = renderTexture->device;
-						break;
+					if (!dat.blasCpu)
+						continue;
+
+					gotoIfError(clean, CommandListRef_transitionRTAS(
+						commandList, dat.blasCpu, 
+						transition.isWrite ? ETransitionType_ShaderWrite : ETransitionType_ShaderRead, transition.stage
+					))
 				}
 
-				if (transition.isWrite && !allowShaderWrite)
-					_gotoIfError(clean, Error_constData(
-						0, 0, "CommandListRef_startScope()::transitions[i].resource should be writable"
-					));
-
-				if(!transition.isWrite && !allowShaderRead)
-					_gotoIfError(clean, Error_unsupportedOperation(
-						1, "CommandListRef_startScope()::transitions[i].resource should be readable"
-					));
-
-				if(objectDevice != device)
-					_gotoIfError(clean, Error_unsupportedOperation(
-						0, "CommandListRef_startScope()::transitions[i].resource's device is incompatible"
-					));
-
-				break;
-			}
-
-			default:
-				_gotoIfError(clean, Error_invalidParameter(
-					1, 0, "CommandListRef_startScope()::transitions[i].resource's type is unsupported"
-				));
+			resource = (GraphicsResource) {
+				.device = TLASRef_ptr(res)->base.device, .flags = EGraphicsResourceFlag_ShaderRead
+			};
 		}
 
-		TransitionInternal transitionDst = (TransitionInternal) {
-			.resource = res,
-			.range = transition.range,
-			.stage = transition.stage,
-			.type = transition.isWrite ? ETransitionType_ShaderWrite : ETransitionType_ShaderRead
-		};
+		else if (res->typeId == EGraphicsTypeId_BLASExt)									//Get device and mark as readonly
+			resource = (GraphicsResource) {
+				.device = BLASRef_ptr(res)->base.device, .flags = EGraphicsResourceFlag_ShaderRead
+			};
+
+		else gotoIfError(clean, Error_invalidParameter(
+			1, 0, "CommandListRef_startScope()::transitions[i].resource's type is unsupported"
+		))
+
+		TransitionInternal transitionDst;
+
+		if(!isSampler) {
+
+			if (transition.isWrite && !(resource.flags & EGraphicsResourceFlag_ShaderWrite))
+				gotoIfError(clean, Error_constData(
+					0, 0, "CommandListRef_startScope()::transitions[i].resource should be writable"
+				))
+
+			if(!transition.isWrite && !(resource.flags & EGraphicsResourceFlag_ShaderRead))
+				gotoIfError(clean, Error_unsupportedOperation(
+					1, "CommandListRef_startScope()::transitions[i].resource should be readable"
+				))
+
+			transitionDst = (TransitionInternal) {
+				.resource = res,
+				.range = transition.range,
+				.stage = transition.stage,
+				.type = transition.isWrite ? ETransitionType_ShaderWrite : ETransitionType_ShaderRead
+			};
+		}
+
+		else transitionDst = (TransitionInternal) { .resource = res, .type = ETransitionType_KeepAlive };
+
+		if(resource.device != device)
+			gotoIfError(clean, Error_unsupportedOperation(
+				0, "CommandListRef_startScope()::transitions[i].resource's device is incompatible"
+			))
 
 		TransitionInternal *found = NULL;
 		if(CommandListRef_isBound(commandList, res, transition.range, &found)) {
 
 			if(found->type != transitionDst.type)
-				_gotoIfError(clean, Error_invalidOperation(
+				gotoIfError(clean, Error_invalidOperation(
 					0, "CommandListRef_startScope()::transitions[i].resource is already transitioned"
-				));
+				))
 
 			//To combine shader transitions we just take the highest up shader stage it's used
 
@@ -989,7 +1046,7 @@ Error CommandListRef_startScope(
 			continue;
 		}
 
-		_gotoIfError(clean, ListTransitionInternal_pushBackx(&commandList->pendingTransitions, transitionDst));
+		gotoIfError(clean, ListTransitionInternal_pushBackx(&commandList->pendingTransitions, transitionDst))
 	}
 
 	//Scope has to be unique
@@ -999,7 +1056,7 @@ Error CommandListRef_startScope(
 		CommandScope scope = commandList->activeScopes.ptr[i];
 
 		if(scope.scopeId == id)
-			_gotoIfError(clean, Error_alreadyDefined(0, "CommandListRef_startScope()::id should be unique"));
+			gotoIfError(clean, Error_alreadyDefined(0, "CommandListRef_startScope()::id should be unique"))
 	}
 
 	//Find deps
@@ -1026,7 +1083,7 @@ Error CommandListRef_startScope(
 		if(found)
 			continue;
 
-		_gotoIfError(clean, Error_notFound(0, 0, "CommandListRef_startScope()::deps[j] not found"));
+		gotoIfError(clean, Error_notFound(0, 0, "CommandListRef_startScope()::deps[j] not found"))
 	}
 
 	//TODO: Append deps to array so runtime can use it (U32 only)
@@ -1035,7 +1092,7 @@ Error CommandListRef_startScope(
 	commandList->lastOffset = commandList->next;
 	commandList->lastScopeId = id;
 
-	_gotoIfError(clean, CommandList_append(commandList, ECommandOp_StartScope, Buffer_createNull(), 0));
+	gotoIfError(clean, CommandList_append(commandList, ECommandOp_StartScope, Buffer_createNull(), 0))
 
 	commandList->tempStateFlags |= ECommandStateFlags_HasScope;
 
@@ -1049,7 +1106,7 @@ clean:
 
 Error CommandListRef_endScope(CommandListRef *commandListRef) {
 
-	CommandListRef_validateScope(commandListRef, clean);
+	CommandListRef_validateScope(commandListRef, clean)
 
 	//Check if scope has to be hidden.
 
@@ -1059,36 +1116,36 @@ Error CommandListRef_endScope(CommandListRef *commandListRef) {
 	) {
 		//Pretend the last commands didn't happen
 
-		_gotoIfError(clean, ListCommandOpInfo_resize(&commandList->commandOps, commandList->lastCommandId, (Allocator) { 0 }));
+		gotoIfError(clean, ListCommandOpInfo_resize(&commandList->commandOps, commandList->lastCommandId, (Allocator) { 0 }))
 		commandList->next = commandList->lastOffset;
 
 		goto clean;
 	}
 
 	if(commandList->debugRegionStack)
-		_gotoIfError(clean, Error_invalidOperation(
+		gotoIfError(clean, Error_invalidOperation(
 			0, "CommandListRef_endScope() can't close scope while debugRegion is still active"
-		));
+		))
 
 	if(!I32x2_eq2(commandList->currentSize, I32x2_zero()))
-		_gotoIfError(clean, Error_invalidOperation(1, "CommandListRef_endScope() can't close scope while render is active"));
+		gotoIfError(clean, Error_invalidOperation(1, "CommandListRef_endScope() can't close scope while render is active"))
 
 	//Push command, transitions and scope
 
 	if((commandList->transitions.length + commandList->pendingTransitions.length) >> 32)
-		_gotoIfError(clean, Error_outOfBounds(
+		gotoIfError(clean, Error_outOfBounds(
 			0, commandList->transitions.length + commandList->pendingTransitions.length, U32_MAX,
 			"CommandListRef_endScope() transitionCount of command list can't exceed U32_MAX"
-		));
+		))
 
-	U32 commandOps = (U32)((commandList->commandOps.length + 1) - commandList->lastCommandId);
-	U64 commandLen = commandList->next - commandList->lastOffset;
-	U32 transitionOffset = (U32) commandList->transitions.length;
+	const U32 commandOps = (U32)((commandList->commandOps.length + 1) - commandList->lastCommandId);
+	const U64 commandLen = commandList->next - commandList->lastOffset;
+	const U32 transitionOffset = (U32) commandList->transitions.length;
 
-	_gotoIfError(clean, CommandList_append(commandList, ECommandOp_EndScope, Buffer_createNull(), 0));
-	_gotoIfError(clean, ListTransitionInternal_pushAllx(&commandList->transitions, commandList->pendingTransitions));
+	gotoIfError(clean, CommandList_append(commandList, ECommandOp_EndScope, Buffer_createNull(), 0))
+	gotoIfError(clean, ListTransitionInternal_pushAllx(&commandList->transitions, commandList->pendingTransitions))
 
-	CommandScope scope = (CommandScope) {
+	const CommandScope scope = (CommandScope) {
 		.commandBufferOffset = commandList->lastOffset,
 		.commandBufferLength = commandLen,
 		.commandOpOffset = commandList->lastCommandId,
@@ -1098,14 +1155,14 @@ Error CommandListRef_endScope(CommandListRef *commandListRef) {
 		.scopeId = commandList->lastScopeId
 	};
 
-	_gotoIfError(clean, ListCommandScope_pushBackx(&commandList->activeScopes, scope));
+	gotoIfError(clean, ListCommandScope_pushBackx(&commandList->activeScopes, scope))
 
 clean:
 
 	for(U64 i = 0; i < EPipelineType_Count; ++i)
 		commandList->pipeline[i] = NULL;
 
-	_gotoIfError(clean, ListTransitionInternal_clear(&commandList->pendingTransitions));
+	ListTransitionInternal_clear(&commandList->pendingTransitions);
 
 	commandList->tempStateFlags = 0;
 	commandList->debugRegionStack = 0;
@@ -1119,35 +1176,38 @@ clean:
 
 Error CommandListRef_setPipeline(CommandListRef *commandListRef, PipelineRef *pipelineRef, EPipelineType type) {
 
-	CommandListRef_validateScope(commandListRef, clean);
+	CommandListRef_validateScope(commandListRef, clean)
 
 	if (!pipelineRef || pipelineRef->typeId != EGraphicsTypeId_Pipeline)
-		_gotoIfError(clean, Error_nullPointer(1, "CommandListRef_setPipeline()::pipelineRef is required"));
+		gotoIfError(clean, Error_nullPointer(1, "CommandListRef_setPipeline()::pipelineRef is required"))
 
-	Pipeline *pipeline = PipelineRef_ptr(pipelineRef);
+	const Pipeline *pipeline = PipelineRef_ptr(pipelineRef);
 
 	if(pipeline->device != commandList->device)
-		_gotoIfError(clean, Error_unsupportedOperation(
+		gotoIfError(clean, Error_unsupportedOperation(
 			0, "CommandListRef_setPipeline()::pipelineRef is owned by different device"
-		));
+		))
 
 	if(pipeline->type != type)
-		_gotoIfError(clean, Error_unsupportedOperation(
+		gotoIfError(clean, Error_unsupportedOperation(
 			1, "CommandListRef_setPipeline()::pipeline's type is incompatible with type"
-		));
+		))
 
 	ECommandOp op = ECommandOp_SetComputePipeline;
 
 	if(type == EPipelineType_Graphics)
 		op = ECommandOp_SetGraphicsPipeline;
 
-	_gotoIfError(clean, CommandList_append(
+	else if(type == EPipelineType_RaytracingExt)
+		op = ECommandOp_SetRaytracingPipelineExt;
+
+	gotoIfError(clean, CommandList_append(
 		commandList, op, Buffer_createRefConst((const U8*) &pipelineRef, sizeof(pipelineRef)), 0
-	));
+	))
 
 	if(!ListRefPtr_contains(commandList->resources, pipelineRef, 0, NULL)) {						//TODO: hashSet
 		RefPtr_inc(pipelineRef);		//CommandList will keep resource alive.
-		_gotoIfError(clean, ListRefPtr_pushBackx(&commandList->resources, pipelineRef));
+		gotoIfError(clean, ListRefPtr_pushBackx(&commandList->resources, pipelineRef))
 	}
 
 	commandList->pipeline[type] = pipelineRef;
@@ -1168,7 +1228,16 @@ Error CommandListRef_setGraphicsPipeline(CommandListRef *commandList, PipelineRe
 	return CommandListRef_setPipeline(commandList, pipeline, EPipelineType_Graphics);
 }
 
-Error CommandListRef_validateBufferDesc(GraphicsDeviceRef *device, DeviceBufferRef *buffer, EDeviceBufferUsage usage) {
+Error CommandListRef_setRaytracingPipeline(CommandListRef *commandList, PipelineRef *pipeline) {
+	return CommandListRef_setPipeline(commandList, pipeline, EPipelineType_RaytracingExt);
+}
+
+Error CommandListRef_validateBufferDesc(
+	GraphicsDeviceRef *device,
+	DeviceBufferRef *buffer,
+	EDeviceBufferUsage usage,
+	U64 maxSize
+) {
 
 	if(!buffer)
 		return Error_none();
@@ -1176,53 +1245,65 @@ Error CommandListRef_validateBufferDesc(GraphicsDeviceRef *device, DeviceBufferR
 	if(buffer->typeId != EGraphicsTypeId_DeviceBuffer)
 		return Error_unsupportedOperation(0, "CommandListRef_validateBufferDesc()::buffer has invalid type");
 
-	if(DeviceBufferRef_ptr(buffer)->device != device)
-		return Error_unsupportedOperation(1, "CommandListRef_validateBufferDesc()::buffer is owned by different device");
+	if(DeviceBufferRef_ptr(buffer)->resource.device != device)
+		return Error_unsupportedOperation(
+			1, "CommandListRef_validateBufferDesc()::buffer is owned by different device"
+		);
 
 	DeviceBuffer *buf = DeviceBufferRef_ptr(buffer);
 
 	if((buf->usage & usage) != usage)
-		return Error_unsupportedOperation(2, "CommandListRef_validateBufferDesc()::buffer is missing required usage flag");
+		return Error_unsupportedOperation(
+			2, "CommandListRef_validateBufferDesc()::buffer is missing required usage flag"
+		);
+
+	if(buf->resource.size > maxSize)
+		return Error_outOfBounds(
+			1, buf->resource.size, maxSize,
+			"CommandListRef_validateBufferDesc()::buffer is bigger than max limit"
+		);
 
 	return Error_none();
 }
 
 Error CommandListRef_setPrimitiveBuffers(CommandListRef *commandListRef, SetPrimitiveBuffersCmd buffers) {
 
-	CommandListRef_validateScope(commandListRef, clean);
+	CommandListRef_validateScope(commandListRef, clean)
 
 	if(I32x2_any(I32x2_eq(commandList->currentSize, I32x2_zero())))
-		_gotoIfError(clean, Error_invalidOperation(
+		gotoIfError(clean, Error_invalidOperation(
 			0, "CommandListRef_setPrimitiveBuffers() is only available if render is started"
-		));
+		))
 
 	//Validate index and vertex buffers
 
 	GraphicsDeviceRef *device = commandList->device;
-	_gotoIfError(clean, CommandListRef_validateBufferDesc(device, buffers.indexBuffer, EDeviceBufferUsage_Index));
+	gotoIfError(clean, CommandListRef_validateBufferDesc(device, buffers.indexBuffer, EDeviceBufferUsage_Index, U32_MAX))
 
 	if(err.genericError)
 		return err;
 
 	for(U8 i = 0; i < 8; ++i)
-		_gotoIfError(clean, CommandListRef_validateBufferDesc(device, buffers.vertexBuffers[i], EDeviceBufferUsage_Vertex));
+		gotoIfError(clean, CommandListRef_validateBufferDesc(
+			device, buffers.vertexBuffers[i], EDeviceBufferUsage_Vertex, U32_MAX
+		))
 
 	//Transition
 
-	_gotoIfError(clean, CommandListRef_transitionBuffer(
-		commandList, buffers.indexBuffer, (BufferRange) { 0 }, ETransitionType_Index
-	));
+	gotoIfError(clean, CommandListRef_transitionBuffer(
+		commandList, buffers.indexBuffer, (BufferRange) { 0 }, ETransitionType_Index, EPipelineStage_Count
+	))
 
 	for(U8 i = 0; i < 8; ++i)
-		_gotoIfError(clean, CommandListRef_transitionBuffer(
-			commandList, buffers.vertexBuffers[i], (BufferRange) { 0 }, ETransitionType_Vertex
-		));
+		gotoIfError(clean, CommandListRef_transitionBuffer(
+			commandList, buffers.vertexBuffers[i], (BufferRange) { 0 }, ETransitionType_Vertex, EPipelineStage_Count
+		))
 
 	//Issue command
 
-	_gotoIfError(clean, CommandList_append(
+	gotoIfError(clean, CommandList_append(
 		commandList, ECommandOp_SetPrimitiveBuffers, Buffer_createRefConst((const U8*) &buffers, sizeof(buffers)), 0
-	));
+	))
 
 clean:
 
@@ -1234,30 +1315,30 @@ clean:
 
 Error CommandListRef_drawBase(CommandListRef *commandListRef, Buffer buf, ECommandOp op) {
 
-	CommandListRef_validateScope(commandListRef, clean);
+	CommandListRef_validateScope(commandListRef, clean)
 
 	if(I32x2_any(I32x2_eq(commandList->currentSize, I32x2_zero())))
-		_gotoIfError(clean, Error_invalidOperation(0, "CommandListRef_drawBase() is only available if render is started"));
+		gotoIfError(clean, Error_invalidOperation(0, "CommandListRef_drawBase() is only available if render is started"))
 
 	PipelineRef *pipelineRef = commandList->pipeline[EPipelineType_Graphics];
 
 	if (!pipelineRef)
-		_gotoIfError(clean, Error_invalidOperation(1, "CommandListRef_drawBase() requires bound graphics pipeline"));
+		gotoIfError(clean, Error_invalidOperation(1, "CommandListRef_drawBase() requires bound graphics pipeline"))
 
 	U32 flags = ECommandStateFlags_AnyScissor | ECommandStateFlags_AnyViewport;
 
 	if ((commandList->tempStateFlags & flags) != flags)
-		return Error_invalidOperation(2, "CommandListRef_drawBase() requires viewport and scissor");
+		gotoIfError(clean, Error_invalidOperation(2, "CommandListRef_drawBase() requires viewport and scissor"))
 
-	_gotoIfError(clean, CommandList_validateGraphicsPipeline(
+	gotoIfError(clean, CommandList_validateGraphicsPipeline(
 		PipelineRef_ptr(pipelineRef),
 		commandList->boundImages,
 		commandList->boundImageCount,
 		commandList->boundDepthFormat,
 		commandList->boundSampleCount
-	));
+	))
 
-	_gotoIfError(clean, CommandList_append(commandList, op, buf, 1));
+	gotoIfError(clean, CommandList_append(commandList, op, buf, 1))
 
 	commandList->tempStateFlags |= ECommandStateFlags_HasModifyOp;
 
@@ -1274,11 +1355,16 @@ Error CommandListRef_draw(CommandListRef *commandListRef, DrawCmd draw) {
 	if(!draw.count || !draw.instanceCount)		//No-op
 		return Error_none();
 
+	if(draw.vertexOffset >> 31)
+		return Error_outOfBounds(
+			1, draw.vertexOffset, (U32)I32_MAX, "CommandListRef_draw() vertexOffset out of bounds"
+		);
+
 	return CommandListRef_drawBase(commandListRef, Buffer_createRefConst(&draw, sizeof(draw)), ECommandOp_Draw);
 }
 
 Error CommandListRef_drawIndexed(CommandListRef *commandList, U32 indexCount, U32 instanceCount) {
-	DrawCmd draw = (DrawCmd) { .count = indexCount, .instanceCount = instanceCount, .isIndexed = true };
+	const DrawCmd draw = (DrawCmd) { .count = indexCount, .instanceCount = instanceCount, .isIndexed = true };
 	return CommandListRef_draw(commandList, draw);
 }
 
@@ -1288,9 +1374,11 @@ Error CommandListRef_drawIndexedAdv(
 	U32 indexOffset, U32 instanceOffset,
 	U32 vertexOffset
 ) {
-	DrawCmd draw = (DrawCmd) {
-		.count = indexCount, .instanceCount = instanceCount,
-		.indexOffset = indexOffset, .instanceOffset = instanceOffset,
+	const DrawCmd draw = (DrawCmd) {
+		.count = indexCount,
+		.instanceCount = instanceCount,
+		.indexOffset = indexOffset,
+		.instanceOffset = instanceOffset,
 		.vertexOffset = vertexOffset,
 		.isIndexed = true
 	};
@@ -1299,7 +1387,7 @@ Error CommandListRef_drawIndexedAdv(
 }
 
 Error CommandListRef_drawUnindexed(CommandListRef *commandList, U32 vertexCount, U32 instanceCount) {
-	DrawCmd draw = (DrawCmd) { .count = vertexCount, .instanceCount = instanceCount };
+	const DrawCmd draw = (DrawCmd) { .count = vertexCount, .instanceCount = instanceCount };
 	return CommandListRef_draw(commandList, draw);
 }
 
@@ -1308,9 +1396,11 @@ Error CommandListRef_drawUnindexedAdv(
 	U32 vertexCount, U32 instanceCount,
 	U32 vertexOffset, U32 instanceOffset
 ) {
-	DrawCmd draw = (DrawCmd) {
-		.count = vertexCount, .instanceCount = instanceCount,
-		.vertexOffset = vertexOffset, .instanceOffset = instanceOffset
+	const DrawCmd draw = (DrawCmd) {
+		.count = vertexCount,
+		.instanceCount = instanceCount,
+		.vertexOffset = vertexOffset,
+		.instanceOffset = instanceOffset
 	};
 
 	return CommandListRef_draw(commandList, draw);
@@ -1318,21 +1408,21 @@ Error CommandListRef_drawUnindexedAdv(
 
 Error CommandListRef_dispatch(CommandListRef *commandListRef, DispatchCmd dispatch) {
 
-	CommandListRef_validateScope(commandListRef, clean);
+	CommandListRef_validateScope(commandListRef, clean)
 
 	if (!commandList->pipeline[EPipelineType_Compute])
-		_gotoIfError(clean, Error_invalidOperation(1, "CommandListRef_dispatch() requires bound compute pipeline"));
+		gotoIfError(clean, Error_invalidOperation(1, "CommandListRef_dispatch() requires bound compute pipeline"))
 
-	U64 groupCountMax = U64_max(dispatch.groups[0], U64_max(dispatch.groups[1], dispatch.groups[2]));
+	const U64 groupCountMax = U64_max(dispatch.groups[0], U64_max(dispatch.groups[1], dispatch.groups[2]));
 
 	if(groupCountMax > U16_MAX)
-		_gotoIfError(clean, Error_outOfBounds(
+		gotoIfError(clean, Error_outOfBounds(
 			1, groupCountMax, U16_MAX, "CommandListRef_dispatch() groupCountMax out of bounds"
-		));
+		))
 
-	_gotoIfError(clean, CommandList_append(
+	gotoIfError(clean, CommandList_append(
 		commandList, ECommandOp_Dispatch, Buffer_createRefConst(&dispatch, sizeof(dispatch)), 0
-	));
+	))
 
 	commandList->tempStateFlags |= ECommandStateFlags_HasModifyOp;
 
@@ -1345,18 +1435,71 @@ clean:
 }
 
 Error CommandListRef_dispatch1D(CommandListRef *commandList, U32 groupsX) {
-	DispatchCmd dispatch = (DispatchCmd) { .groups = { groupsX, 1, 1 } };
+	const DispatchCmd dispatch = (DispatchCmd) { .groups = { groupsX, 1, 1 } };
 	return CommandListRef_dispatch(commandList, dispatch);
 }
 
 Error CommandListRef_dispatch2D(CommandListRef *commandList, U32 groupsX, U32 groupsY) {
-	DispatchCmd dispatch = (DispatchCmd) { .groups = { groupsX, groupsY, 1 } };
+	const DispatchCmd dispatch = (DispatchCmd) { .groups = { groupsX, groupsY, 1 } };
 	return CommandListRef_dispatch(commandList, dispatch);
 }
 
 Error CommandListRef_dispatch3D(CommandListRef *commandList, U32 groupsX, U32 groupsY, U32 groupsZ) {
-	DispatchCmd dispatch = (DispatchCmd) { .groups = { groupsX, groupsY, groupsZ } };
+	const DispatchCmd dispatch = (DispatchCmd) { .groups = { groupsX, groupsY, groupsZ } };
 	return CommandListRef_dispatch(commandList, dispatch);
+}
+
+//Dispatch rays
+
+Error CommandListRef_dispatchRaysExt(CommandListRef *commandListRef, DispatchRaysExt dispatch) {
+
+	CommandListRef_validateScope(commandListRef, clean)
+
+	PipelineRef *rayPipeline = commandList->pipeline[EPipelineType_RaytracingExt];
+
+	if (!rayPipeline)
+		gotoIfError(clean, Error_invalidOperation(1, "CommandListRef_dispatchRaysExt() requires bound raytracing pipeline"))
+
+	U64 total = dispatch.x * dispatch.y;
+
+	if(total < dispatch.x || total * dispatch.z < total)
+		gotoIfError(clean, Error_invalidOperation(1, "CommandListRef_dispatchRaysExt() overflow"))
+
+	total *= dispatch.z;
+
+	if(total > 1 * GIBI)
+		gotoIfError(clean, Error_invalidOperation(1, "CommandListRef_dispatchRaysExt() is limited to 1Gibi rays"))
+
+	if(!total)
+		gotoIfError(clean, Error_invalidOperation(1, "CommandListRef_dispatchRaysExt() can't be executed with 0 count"))
+
+	if(dispatch.raygenId >= Pipeline_info(PipelineRef_ptr(rayPipeline), PipelineRaytracingInfo)->raygenCount)
+		gotoIfError(clean, Error_invalidOperation(1, "CommandListRef_dispatchRaysExt() raygen index out of bounds"))
+
+	gotoIfError(clean, CommandList_append(
+		commandList, ECommandOp_DispatchRaysExt, Buffer_createRefConst(&dispatch, sizeof(dispatch)), 0
+	))
+
+	commandList->tempStateFlags |= ECommandStateFlags_HasModifyOp;
+
+clean:
+
+	if(err.genericError)
+		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
+
+	return err;
+}
+
+Error CommandListRef_dispatch1DRaysExt(CommandListRef *commandList, U32 raygenLocalId, U32 groupsX) {
+	return CommandListRef_dispatchRaysExt(commandList, (DispatchRaysExt) { groupsX, 1, 1, raygenLocalId });
+}
+
+Error CommandListRef_dispatch2DRaysExt(CommandListRef *commandList, U32 raygenLocalId, U32 groupsX, U32 groupsY) {
+	return CommandListRef_dispatchRaysExt(commandList, (DispatchRaysExt) { groupsX, groupsY, 1, raygenLocalId });
+}
+
+Error CommandListRef_dispatch3DRaysExt(CommandListRef *commandList, U32 raygenLocalId, U32 groupsX, U32 groupsY, U32 groupsZ) {
+	return CommandListRef_dispatchRaysExt(commandList, (DispatchRaysExt) { groupsX, groupsY, groupsZ, raygenLocalId });
 }
 
 //Indirect rendering
@@ -1366,14 +1509,14 @@ Error CommandListRef_checkDispatchBuffer(GraphicsDeviceRef *device, DeviceBuffer
 	if(!buffer || buffer->typeId != EGraphicsTypeId_DeviceBuffer)
 		return Error_nullPointer(1, "CommandListRef_checkDispatchBuffer()::buffer is required");
 
-	DeviceBuffer *buf = DeviceBufferRef_ptr(buffer);
+	const DeviceBuffer *buf = DeviceBufferRef_ptr(buffer);
 
-	if(buf->device != device)
+	if(buf->resource.device != device)
 		return Error_unsupportedOperation(3, "CommandListRef_checkDispatchBuffer()::buffer is owned by different device");
 
-	if(offset + siz > buf->length)
+	if(offset + siz > buf->resource.size)
 		return Error_outOfBounds(
-			1, offset + siz, buf->length, "CommandListRef_checkDispatchBuffer()::offset + size is out of bounds"
+			1, offset + siz, buf->resource.size, "CommandListRef_checkDispatchBuffer()::offset + size is out of bounds"
 		);
 
 	if(!(buf->usage & EDeviceBufferUsage_Indirect))
@@ -1388,22 +1531,25 @@ Error CommandListRef_dispatchIndirect(CommandListRef *commandListRef, DeviceBuff
 	GraphicsDeviceRef *device = commandList->device;
 
 	if (!commandList->pipeline[EPipelineType_Compute])
-		_gotoIfError(clean, Error_invalidOperation(1, "CommandListRef_dispatchIndirect() requires bound compute pipeline"));
+		gotoIfError(clean, Error_invalidOperation(1, "CommandListRef_dispatchIndirect() requires bound compute pipeline"))
 
 	if(offset & 15)
-		return Error_invalidParameter(2, 0, "CommandListRef_dispatchIndirect()::offset has to be 16-byte aligned");
+		gotoIfError(clean, Error_invalidParameter(
+			2, 0, "CommandListRef_dispatchIndirect()::offset has to be 16-byte aligned"
+		));
 
-	_gotoIfError(clean, CommandListRef_checkDispatchBuffer(device, buffer, offset, sizeof(U32) * 4));
+	gotoIfError(clean, CommandListRef_checkDispatchBuffer(device, buffer, offset, sizeof(U32) * 4))
 
-	BufferRange range = (BufferRange) { .startRange = offset, .endRange = offset + sizeof(U32) * 4 };
+	const BufferRange range = (BufferRange) { .startRange = offset, .endRange = offset + sizeof(U32) * 4 };
+	gotoIfError(clean, CommandListRef_transitionBuffer(
+		commandList, buffer, range, ETransitionType_Indirect, EPipelineStage_Count
+	))
 
-	_gotoIfError(clean, CommandListRef_transitionBuffer(commandList, buffer, range, ETransitionType_Indirect));
+	const DispatchIndirectCmd dispatch = (DispatchIndirectCmd) { .buffer = buffer, .offset = offset };
 
-	DispatchIndirectCmd dispatch = (DispatchIndirectCmd) { .buffer = buffer, .offset = offset };
-
-	_gotoIfError(clean, CommandList_append(
+	gotoIfError(clean, CommandList_append(
 		commandList, ECommandOp_DispatchIndirect, Buffer_createRefConst(&dispatch, sizeof(dispatch)), 0
-	));
+	))
 
 	commandList->tempStateFlags |= ECommandStateFlags_HasModifyOp;
 
@@ -1419,69 +1565,63 @@ Error CommandList_drawIndirectBase(
 	CommandList *commandList,
 	DeviceBufferRef *buffer,
 	U64 bufferOffset,
-	U32 *bufferStride,
 	U32 drawCalls,
 	Bool indexed
 ) {
 
-	U32 minStride = (U32)(indexed ? sizeof(DrawCallIndexed) : sizeof(DrawCallUnindexed));
-
-	DeviceBuffer *buf = DeviceBufferRef_ptr(buffer);
+	const U32 bufferStride = (U32)(indexed ? sizeof(DrawCallIndexed) : sizeof(DrawCallUnindexed));
+	const DeviceBuffer *buf = DeviceBufferRef_ptr(buffer);
 
 	if(!buf)
 		return Error_nullPointer(0, "CommandList_drawIndirectBase()::buffer is required");
 
 	if(bufferOffset & 15)
-		return Error_invalidParameter(2, 0, "CommandList_drawIndirectBase()::offset has to be 16-byte aligned");
-
-	if(!*bufferStride)
-		*bufferStride = minStride;
-
-	if(*bufferStride < minStride)
 		return Error_invalidParameter(
-			2, 1, "CommandList_drawIndirectBase()::*bufferStride should be 0 (auto), 16 (unindexed) or 32 (indexed)"
+			2, 0, "CommandList_drawIndirectBase()::offset has to be 16-byte aligned"
 		);
 
 	if (!drawCalls)
-		return Error_invalidParameter(2, 2, "CommandList_drawIndirectBase() shouldn't be submitted if drawCalls is 0");
+		return Error_invalidParameter(
+			2, 2, "CommandList_drawIndirectBase() shouldn't be submitted if drawCalls is 0"
+		);
 
-	Error err = CommandListRef_checkDispatchBuffer(commandList->device, buffer, bufferOffset, (U64)*bufferStride * drawCalls);
+	const Error err = CommandListRef_checkDispatchBuffer(
+		commandList->device, buffer, bufferOffset, (U64)bufferStride * drawCalls
+	);
 
 	if(err.genericError)
 		return err;
 
-	BufferRange range = (BufferRange) {
+	const BufferRange range = (BufferRange) {
 		.startRange = bufferOffset,
-		.endRange = bufferOffset + *bufferStride * drawCalls
+		.endRange = bufferOffset + bufferStride * drawCalls
 	};
 
-	return CommandListRef_transitionBuffer(commandList, buffer, range, ETransitionType_Indirect);
+	return CommandListRef_transitionBuffer(commandList, buffer, range, ETransitionType_Indirect, EPipelineStage_Count);
 }
 
 Error CommandListRef_drawIndirect(
 	CommandListRef *commandListRef,
 	DeviceBufferRef *buffer,
 	U64 bufferOffset,
-	U32 bufferStride,
 	U32 drawCalls,
 	Bool indexed
 ) {
 
-	CommandListRef_validateScope(commandListRef, clean);
+	CommandListRef_validateScope(commandListRef, clean)
 
-	_gotoIfError(clean, CommandList_drawIndirectBase(commandList, buffer, bufferOffset, &bufferStride, drawCalls, indexed));
+	gotoIfError(clean, CommandList_drawIndirectBase(commandList, buffer, bufferOffset, drawCalls, indexed))
 
 	DrawIndirectCmd draw = (DrawIndirectCmd) {
 		.buffer = buffer,
 		.bufferOffset = bufferOffset,
 		.drawCalls = drawCalls,
-		.bufferStride = bufferStride,
 		.isIndexed = indexed
 	};
 
-	_gotoIfError(clean, CommandListRef_drawBase(
+	gotoIfError(clean, CommandListRef_drawBase(
 		commandListRef, Buffer_createRefConst(&draw, sizeof(draw)), ECommandOp_DrawIndirect
-	));
+	))
 
 	commandList->tempStateFlags |= ECommandStateFlags_HasModifyOp;
 
@@ -1497,31 +1637,32 @@ Error CommandListRef_drawIndirectCountExt(
 	CommandListRef *commandListRef,
 	DeviceBufferRef *buffer,
 	U64 bufferOffset,
-	U32 bufferStride,
 	DeviceBufferRef *countBuffer,
 	U64 countOffset,
 	U32 maxDrawCalls,
 	Bool indexed
 ) {
 
-	CommandListRef_validateScope(commandListRef, clean);
+	CommandListRef_validateScope(commandListRef, clean)
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(commandList->device);
-	_gotoIfError(clean, CommandList_drawIndirectBase(commandList, buffer, bufferOffset, &bufferStride, maxDrawCalls, indexed));
+	gotoIfError(clean, CommandList_drawIndirectBase(commandList, buffer, bufferOffset, maxDrawCalls, indexed))
 
 	if(!(device->info.capabilities.features & EGraphicsFeatures_MultiDrawIndirectCount))
-		_gotoIfError(clean, Error_unsupportedOperation(
+		gotoIfError(clean, Error_unsupportedOperation(
 			0, "CommandListRef_drawIndirectCountExt() requires multiDrawIndirectCount extension, which was missing!"
-		));
+		))
 
-	_gotoIfError(clean, CommandListRef_checkDispatchBuffer(commandList->device, countBuffer, countOffset, sizeof(U32)));
+	gotoIfError(clean, CommandListRef_checkDispatchBuffer(commandList->device, countBuffer, countOffset, sizeof(U32)))
 
 	BufferRange range = (BufferRange) {
 		.startRange = countOffset,
 		.endRange = countOffset + sizeof(U32)
 	};
 
-	_gotoIfError(clean, CommandListRef_transitionBuffer(commandList, countBuffer, range, ETransitionType_Indirect));
+	gotoIfError(clean, CommandListRef_transitionBuffer(
+		commandList, countBuffer, range, ETransitionType_Indirect, EPipelineStage_Count
+	))
 
 	DrawIndirectCmd draw = (DrawIndirectCmd) {
 		.buffer = buffer,
@@ -1529,13 +1670,12 @@ Error CommandListRef_drawIndirectCountExt(
 		.bufferOffset = bufferOffset,
 		.countOffsetExt = countOffset,
 		.drawCalls = maxDrawCalls,
-		.bufferStride = bufferStride,
 		.isIndexed = indexed
 	};
 
-	_gotoIfError(clean, CommandListRef_drawBase(
+	gotoIfError(clean, CommandListRef_drawBase(
 		commandListRef, Buffer_createRefConst(&draw, sizeof(draw)), ECommandOp_DrawIndirectCount
-	));
+	))
 
 	commandList->tempStateFlags |= ECommandStateFlags_HasModifyOp;
 
@@ -1547,6 +1687,70 @@ clean:
 	return err;
 }
 
+//Feature RaytracingExt
+
+Error CommandListRef_updateRTASExt(CommandListRef *commandListRef, RTASRef *rtas, Bool isBLAS) {
+
+	CommandListRef_validateScope(commandListRef, clean)
+
+	if(!I32x2_all(I32x2_eq(commandList->currentSize, I32x2_zero())))
+		gotoIfError(clean, Error_invalidOperation(
+			0, "CommandListRef_updateRTASExt() is disallowed during render calls, as flushing might cause invalid render state"
+		))
+
+	if(!rtas || rtas->typeId != (ETypeId)(isBLAS ? EGraphicsTypeId_BLASExt : EGraphicsTypeId_TLASExt))
+		gotoIfError(clean, Error_unsupportedOperation(0, "CommandListRef_updateRTASExt() requires BLAS or TLAS"))
+
+	gotoIfError(clean, CommandListRef_transitionRTAS(
+		commandList, rtas, 
+		ETransitionType_UpdateRTAS, EPipelineStage_Count
+	))
+
+	if (!isBLAS) {
+
+		TLAS *tlas = TLASRef_ptr(rtas);
+
+		if(!tlas->useDeviceMemory)
+			for (U64 j = 0; j < tlas->cpuInstancesStatic.length; ++j) {
+
+				TLASInstanceData dat = (TLASInstanceData) { 0 };
+				TLAS_getInstanceDataCpu(tlas, j, &dat);
+
+				if (!dat.blasCpu)
+					continue;
+
+				gotoIfError(clean, CommandListRef_transitionRTAS(
+					commandList, dat.blasCpu, 
+					ETransitionType_ReadRTAS, EPipelineStage_Count
+				))
+			}
+	}
+
+	gotoIfError(clean, CommandList_append(
+		commandList, 
+		isBLAS ? ECommandOp_UpdateBLASExt : ECommandOp_UpdateTLASExt, 
+		Buffer_createRefConst(&rtas, sizeof(rtas)),
+		0
+	))
+
+	commandList->tempStateFlags |= ECommandStateFlags_HasModifyOp;
+
+clean:
+
+	if(err.genericError)
+		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
+
+	return err;
+}
+
+Error CommandListRef_updateTLASExt(CommandListRef *commandList, TLASRef *tlas) {
+	return CommandListRef_updateRTASExt(commandList, tlas, false);
+}
+
+Error CommandListRef_updateBLASExt(CommandListRef *commandList, BLASRef *blas) {
+	return CommandListRef_updateRTASExt(commandList, blas, true);
+}
+
 //Dynamic rendering
 
 Error CommandListRef_startRenderExt(
@@ -1554,570 +1758,378 @@ Error CommandListRef_startRenderExt(
 	I32x2 offset,
 	I32x2 size,
 	ListAttachmentInfo colors,
-	AttachmentInfo depth,
-	AttachmentInfo stencil
+	DepthStencilAttachmentInfo depthStencil
 ) {
 
 	Buffer command = Buffer_createNull();
-	U64 lockedId = 0;
 	Lock *toRelease = NULL;
 
-	CommandListRef_validateScope(commandListRef, clean);
+	CommandListRef_validateScope(commandListRef, clean)
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(commandList->device);
 
 	if(!(device->info.capabilities.features & EGraphicsFeatures_DirectRendering))
-		_gotoIfError(clean, Error_unsupportedOperation(
+		gotoIfError(clean, Error_unsupportedOperation(
 			0, "CommandListRef_startRenderExt() requires directRendering extension, which was missing!"
-		));
+		))
 
-	if(!colors.length && !depth.image && !stencil.image)
-		_gotoIfError(clean, Error_invalidOperation(
+	if(!colors.length && !depthStencil.image)
+		gotoIfError(clean, Error_invalidOperation(
 			1, "CommandListRef_startRenderExt() requires DepthStencil and/or colors"
-		));
+		))
 
 	if(colors.length > 8)
-		_gotoIfError(clean, Error_outOfBounds(3, colors.length, 8, "CommandListRef_startRenderExt()::colors has to be <=8"));
+		gotoIfError(clean, Error_outOfBounds(3, colors.length, 8, "CommandListRef_startRenderExt()::colors has to be <=8"))
 
-	if(depth.image && depth.image->typeId != EGraphicsTypeId_DepthStencil)
-		_gotoIfError(clean, Error_invalidOperation(
-			2, "CommandListRef_startRenderExt()::depth requires type DepthStencil"
-		));
-
-	if(stencil.image && stencil.image->typeId != EGraphicsTypeId_DepthStencil)
-		_gotoIfError(clean, Error_invalidOperation(
-			3, "CommandListRef_startRenderExt()::stencil requires type DepthStencil"
-		));
-		
 	I32x2 targetSize = size;
 	I32x2 firstSize = I32x2_zero();
 	U8 counter = 0;
 	EMSAASamples sampleCount = 0;
 
-	for (; lockedId < colors.length + !!depth.image + !!stencil.image; ++lockedId) {
+	for (U64 i = 0; i < colors.length + !!depthStencil.image; ++i) {
 
-		if (lockedId >= colors.length) {
+		Bool isDepthStencil = i == colors.length;
+		AttachmentInfo info;
 
-			Bool isDepth = lockedId == colors.length && depth.image;
-			AttachmentInfo info = isDepth ? depth : stencil;
+		if(isDepthStencil)
+			info = (AttachmentInfo) {
+				.range = depthStencil.range,
+				.image = depthStencil.image,
+				.resolveImage = depthStencil.resolveImage,
+				.resolveRange = depthStencil.resolveImageRange,
+				.resolveMode = depthStencil.depthStencilResolve
+			};
 
-			if(info.resolveMode >= EMSAAResolveMode_Count)
-				_gotoIfError(clean, Error_invalidOperation(
-					3, "CommandListRef_startRenderExt()::depth or stencil had invalid resolveMode"
-				));
+		else info = colors.ptr[i];
 
-			if(info.resolveMode && !info.resolveImage)
-				_gotoIfError(clean, Error_invalidOperation(
-					3, "CommandListRef_startRenderExt()::depth or stencil had resolveMode but no resolveImage"
-				));
+		if(!info.image)
+			continue;
 
-			if(info.resolveImage && info.resolveImage->typeId != EGraphicsTypeId_DepthStencil)
-				_gotoIfError(clean, Error_invalidOperation(
-					3, "CommandListRef_startRenderExt()::depth or stencil had invalid resolveImage"
-				));
+		++counter;
 
-			DepthStencil *depthStencil = DepthStencilRef_ptr(info.image);
+		DeviceResourceVersion version;
+		UnifiedTexture texture = TextureRef_getUnifiedTexture(info.image, &version);
 
-			if(!lockedId)
-				sampleCount = depthStencil->msaa;
+		//Swapchain needs to maintain version, so CommandList can be invalidated on resize
 
-			else if(sampleCount != depthStencil->msaa)
-				_gotoIfError(clean, Error_invalidOperation(
-					3, "CommandListRef_startRenderExt()::depth or stencil had mismatching MSAA setting between others"
-				));
-
-			if(!counter)
-				firstSize = depthStencil->size;
-
-			if (I32x2_any(I32x2_eq(size, I32x2_zero()))) {
-
-				if(I32x2_any(I32x2_geq(offset, depthStencil->size)))
-					_gotoIfError(clean, Error_invalidState(
-						0, "CommandListRef_startRenderExt()::colors[i].image offset was out of bounds"
-					));
-
-				targetSize = I32x2_sub(depthStencil->size, offset);
-			}
-
-			else if(I32x2_any(I32x2_lt(depthStencil->size, I32x2_add(targetSize, offset))))
-				_gotoIfError(clean, Error_invalidOperation(
-					4, "CommandListRef_startRenderExt()::depth/stencil.image dimensions are incompatible with others"
-				));
-
-			if(info.resolveImage && !depthStencil->msaa)
-				_gotoIfError(clean, Error_invalidOperation(
-					3, "CommandListRef_startRenderExt()::depth or stencil had resolveImage, while MSAA was off"
-				));
-
-			if (isDepth && depthStencil->format == EDepthStencilFormat_S8Ext)
-				_gotoIfError(clean, Error_invalidOperation(
-					3, "CommandListRef_startRenderExt()::depth has format S8, which is not usable for depth attachment"
-				));
-
-			if (!isDepth && depthStencil->format < EDepthStencilFormat_StencilStart)
-				_gotoIfError(clean, Error_invalidOperation(
-					3, "CommandListRef_startRenderExt()::stencil has format D16/D32, which is unusable for stencil attachment"
-				));
-
-			if(info.resolveImage) {
-
-				DepthStencil *resolveImage = DepthStencilRef_ptr(info.resolveImage);
-
-				if(I32x2_neq2(resolveImage->size, targetSize))
-					_gotoIfError(clean, Error_invalidOperation(
-						3, "CommandListRef_startRenderExt() size of MSAA resolve image of depth stencil is incompatible"
-					));
-
-				EDepthStencilFormat resolveImageDS = resolveImage->format;
-
-				if(!isDepth && resolveImageDS < EDepthStencilFormat_StencilStart)
-					_gotoIfError(clean, Error_invalidOperation(
-						3, "CommandListRef_startRenderExt() MSAA resolve image of stencil image needs stencil buffer"
-					));
-
-				Bool resolveImageIsCompatible =
-					(resolveImageDS == depthStencil->format) || (
-						(resolveImageDS == EDepthStencilFormat_D32S8 || resolveImageDS == EDepthStencilFormat_D32) &&
-						(depthStencil->format == EDepthStencilFormat_D32S8 || depthStencil->format == EDepthStencilFormat_D32)
-					);
-
-				if(isDepth && !resolveImageIsCompatible)
-					_gotoIfError(clean, Error_invalidOperation(
-						3, "CommandListRef_startRenderExt() MSAA resolve image of depth buffer needs compatible depth format"
-					));
-			}
-
-			//TODO: Properly validate this
-
-			if(info.range.levelId >= 1 || info.range.layerId >= 1)
-				_gotoIfError(clean, Error_outOfBounds(
-					4, info.range.levelId >= 1 ? info.range.levelId : info.range.layerId, 1,
-					"CommandListRef_startRenderExt()::depth/stencil.range.levelId or layerId is invalid"
-				));
-
-			if(depthStencil->device != commandList->device)
-				_gotoIfError(clean, Error_unsupportedOperation(
-					4, "CommandListRef_startRenderExt()::depth/stencil.image belongs to different device"
-				));
-
-			++counter;
-			break;
-		}
-
-		AttachmentInfo info = colors.ptr[lockedId];
-
-		if(info.resolveMode >= EMSAAResolveMode_Count)
-			_gotoIfError(clean, Error_invalidOperation(
-				3, "CommandListRef_startRenderExt() renderTexture had invalid resolveMode"
-			));
-
-		if(
-			info.resolveImage &&
-			info.resolveImage->typeId != EGraphicsTypeId_RenderTexture &&
-			info.resolveImage->typeId != EGraphicsTypeId_Swapchain
-		)
-			_gotoIfError(clean, Error_invalidOperation(
-				3, "CommandListRef_startRenderExt() renderTexture had invalid resolveImage"
-			));
-
-		ETextureFormat resolveFormat = ETextureFormat_Undefined;
-		I32x2 resolveRes = I32x2_zero();
-
-		if(info.resolveImage) {
-
-			if(info.resolveImage->typeId == EGraphicsTypeId_Swapchain) {
-				resolveFormat = SwapchainRef_ptr(info.resolveImage)->format;
-				resolveRes = SwapchainRef_ptr(info.resolveImage)->size;
-			}
-
-			else {
-				resolveFormat = RenderTextureRef_ptr(info.resolveImage)->format;
-				resolveRes = I32x2_fromI32x4(RenderTextureRef_ptr(info.resolveImage)->size);
-			}
-		}
-
-		if(info.resolveMode && !info.resolveImage)
-			_gotoIfError(clean, Error_invalidOperation(
-				3, "CommandListRef_startRenderExt() renderTexture had resolveMode but no resolveImage"
-			));
+		 if(version.resource && !ListDeviceResourceVersion_contains(commandList->activeSwapchains, version, 0, NULL))
+			gotoIfError(clean, ListDeviceResourceVersion_pushBackx(&commandList->activeSwapchains, version))
 
 		//TODO: Properly validate this
 
 		if(info.range.levelId >= 1 || info.range.layerId >= 1)
-			_gotoIfError(clean, Error_outOfBounds(
-				3, info.range.levelId >= 1 ? info.range.levelId : info.range.layerId, 1,
-				"CommandListRef_startRenderExt()::colors[i].range.levelId or layerId is invalid"
-			));
+			gotoIfError(clean, Error_outOfBounds(
+				4, info.range.levelId >= 1 ? info.range.levelId : info.range.layerId, 1,
+				"CommandListRef_startRenderExt() image range.levelId or layerId is invalid"
+			))
 
-		if (info.image) {
+		if(info.readOnly && info.load == ELoadAttachmentType_Clear)
+			gotoIfError(clean, Error_unsupportedOperation(
+				7, "CommandListRef_startRenderExt() render target is set as clear but also read only"
+			))
 
-			if(
-				info.image->typeId != (ETypeId)EGraphicsTypeId_Swapchain &&
-				info.image->typeId != (ETypeId)EGraphicsTypeId_RenderTexture
-			)
-				_gotoIfError(clean, Error_invalidParameter(
-					3, (U32)lockedId, "CommandListRef_startRenderExt()::colors[i].image is invalid"
-				));
+		//Check generic properties like devices
 
-			if (info.image->typeId == (ETypeId) EGraphicsTypeId_RenderTexture) {
+		if(texture.resource.device != commandList->device)
+			gotoIfError(clean, Error_unsupportedOperation(
+				4, "CommandListRef_startRenderExt() image belongs to different device"
+			))
 
-				RenderTexture *renderTexture = RenderTextureRef_ptr(info.image);
+		if(texture.type != ETextureType_2D)
+			gotoIfError(clean, Error_invalidParameter(
+				3, (U32)i, "CommandListRef_startRenderExt() image needs to be a 2D texture"
+			))
 
-				if(renderTexture->device != commandList->device)
-					_gotoIfError(clean, Error_unsupportedOperation(
-						3, "CommandListRef_startRenderExt()::colors[i].image belongs to different device"
-					));
+		I32x2 currSize = I32x2_create2(texture.width, texture.height);
 
-				if(!lockedId)
-					sampleCount = renderTexture->msaa;
+		if(counter == 1) {
 
-				else if(sampleCount != renderTexture->msaa)
-					_gotoIfError(clean, Error_invalidOperation(
-						3, "CommandListRef_startRenderExt() renderTexture had mismatching MSAA setting between others"
-					));
+			firstSize = currSize;
 
-				if(!counter)
-					firstSize = I32x2_fromI32x4(renderTexture->size);
+			if(I32x2_any(I32x2_geq(offset, firstSize)))
+				gotoIfError(clean, Error_invalidState(
+					0, "CommandListRef_startRenderExt() image offset was out of bounds"
+				))
 
-				if(I32x2_any(I32x2_eq(size, I32x2_zero()))) {
+			targetSize = I32x2_sub(firstSize, offset);
+		}
 
-					I32x2 siz = I32x2_fromI32x4(renderTexture->size);
+		else if(I32x2_any(I32x2_lt(currSize, I32x2_add(targetSize, offset))))
+			gotoIfError(clean, Error_invalidOperation(
+				3, "CommandListRef_startRenderExt() image dimensions are incompatible with others"
+			))
 
-					if(I32x2_any(I32x2_geq(offset, siz)))
-						_gotoIfError(clean, Error_invalidState(
-							0, "CommandListRef_startRenderExt()::colors[i].image offset was out of bounds"
-						));
+		if(TextureRef_isDepthStencil(info.image) != isDepthStencil)
+			gotoIfError(clean, Error_invalidOperation(
+				3, "CommandListRef_startRenderExt() image had mismatching image types (Color/Depth)"
+			))
 
-					targetSize = I32x2_sub(siz, offset);
-				}
+		//Validate MSAA
 
-				else if(I32x2_any(I32x2_lt(I32x2_fromI32x4(renderTexture->size), I32x2_add(targetSize, offset)))) {
-					++lockedId;
-					_gotoIfError(clean, Error_invalidOperation(
-						3, "CommandListRef_startRenderExt()::colors[i].image dimensions are incompatible with others"
-					));
-				}
+		if(info.resolveMode >= EMSAAResolveMode_Count)
+			gotoIfError(clean, Error_invalidOperation(
+				3, "CommandListRef_startRenderExt() image had invalid resolveMode"
+			))
 
-				if(info.resolveImage && I32x2_neq2(resolveRes, targetSize))
-					_gotoIfError(clean, Error_invalidOperation(
-						3, "CommandListRef_startRenderExt() size of MSAA resolve image of render target is incompatible"
-					));
+		if(info.resolveMode && !info.resolveImage)
+			gotoIfError(clean, Error_invalidOperation(
+				3, "CommandListRef_startRenderExt() image had resolveMode but no resolveImage"
+			))
 
-				if(info.resolveImage && resolveFormat != renderTexture->format)
-					_gotoIfError(clean, Error_invalidOperation(
-						3, "CommandListRef_startRenderExt() MSAA resolve image needs compatible format"
-					));
+		if(counter == 1)
+			sampleCount = texture.sampleCount;
 
-				if(info.resolveImage && !renderTexture->msaa)
-					_gotoIfError(clean, Error_invalidOperation(
-						3, "CommandListRef_startRenderExt() renderTexture had resolveImage, while MSAA was off"
-					));
+		else if(sampleCount != texture.sampleCount)
+			gotoIfError(clean, Error_invalidOperation(
+				3, "CommandListRef_startRenderExt() image had mismatching MSAA setting between others"
+			))
 
-				if(renderTexture->type != ETextureType_2D)
-					_gotoIfError(clean, Error_invalidParameter(
-						3, (U32)lockedId, "CommandListRef_startRenderExt()::colors[i].image needs to be a 2D texture"
-					));
+		if(info.resolveImage) {
 
-				++counter;
-				continue;
+			//TODO: Properly validate this
+
+			if(info.resolveRange.levelId >= 1 || info.resolveRange.layerId >= 1)
+				gotoIfError(clean, Error_outOfBounds(
+					4, info.resolveRange.levelId >= 1 ? info.resolveRange.levelId : info.resolveRange.layerId, 1,
+					"CommandListRef_startRenderExt() image range.levelId or layerId is invalid"
+				))
+
+			if(!texture.sampleCount)
+				gotoIfError(clean, Error_invalidOperation(
+					3, "CommandListRef_startRenderExt() image had resolveImage, while MSAA was off"
+				))
+
+			if(TextureRef_isDepthStencil(info.image) != TextureRef_isDepthStencil(info.resolveImage))
+				gotoIfError(clean, Error_invalidOperation(
+					3, "CommandListRef_startRenderExt() image had resolveImage which didn't match the same type (Color/Depth)"
+				))
+
+			DeviceResourceVersion resolveVersion;
+			UnifiedTexture resolveTexture = TextureRef_getUnifiedTexture(info.resolveImage, &resolveVersion);
+
+			if (texture.depthFormat) {
+				if(texture.depthFormat != resolveTexture.depthFormat)
+					gotoIfError(clean, Error_invalidOperation(
+						3, "CommandListRef_startRenderExt() MSAA resolve image of depth buffer needs compatible depth format"
+					))
 			}
 
-			Swapchain *swapchain = SwapchainRef_ptr(info.image);
+			else if(texture.textureFormatId != resolveTexture.textureFormatId)
+				gotoIfError(clean, Error_invalidOperation(
+					3, "CommandListRef_startRenderExt() image and resolveImage have mismatching formats"
+				))
 
-			if(!lockedId)
-				sampleCount = EMSAASamples_Off;
+			I32x2 resolveSize = I32x2_create2(resolveTexture.width, resolveTexture.height);
 
-			else if(sampleCount != EMSAASamples_Off)
-				_gotoIfError(clean, Error_invalidOperation(
-					3, "CommandListRef_startRenderExt() swapchain had mismatching MSAA setting between others"
-				));
-
-			if(info.resolveImage)
-				_gotoIfError(clean, Error_invalidOperation(
-					3, "CommandListRef_startRenderExt() renderTexture had resolveImage, while MSAA was off"
-				));
-
-			if(swapchain->device != commandList->device)
-				_gotoIfError(clean, Error_unsupportedOperation(
-					3, "CommandListRef_startRenderExt()::colors[i].image belongs to different device"
-				));
-
-			ELockAcquire acq = Lock_lock(&swapchain->lock, U64_MAX);
-
-			if(acq < ELockAcquire_Success)
-				_gotoIfError(clean, Error_invalidState(
-					0, "CommandListRef_startRenderExt()::colors[i].image couldn't be acquired"
-				));
-
-			if(!counter)
-				firstSize = swapchain->size;
-
-			if(I32x2_any(I32x2_eq(size, I32x2_zero()))) {
-
-				if(I32x2_any(I32x2_geq(offset, swapchain->size)))
-					_gotoIfError(clean, Error_invalidState(
-						0, "CommandListRef_startRenderExt()::colors[i].image offset was out of bounds"
-					));
-
-				targetSize = I32x2_sub(swapchain->size, offset);
-			}
-
-			else if(I32x2_any(I32x2_lt(swapchain->size, I32x2_add(targetSize, offset)))) {
-				++lockedId;
-				_gotoIfError(clean, Error_invalidOperation(
-					3, "CommandListRef_startRenderExt()::colors[i].image dimensions are incompatible with others"
-				));
-			}
-
-			if(info.resolveImage && I32x2_neq2(resolveRes, targetSize)) {
-				++lockedId;
-				_gotoIfError(clean, Error_invalidOperation(
-					3, "CommandListRef_startRenderExt() size of MSAA resolve image of render target is incompatible"
-				));
-			}
-
-			DeviceResourceVersion v = (DeviceResourceVersion) { .resource = info.image, .version = swapchain->versionId };
-
-			if(!ListDeviceResourceVersion_contains(commandList->activeSwapchains, v, 0, NULL)) {
-
-				if(acq == ELockAcquire_Acquired)
-					toRelease = &swapchain->lock;
-
-				_gotoIfError(clean, ListDeviceResourceVersion_pushBackx(&commandList->activeSwapchains, v));
-				toRelease = NULL;
-			}
-
-			if(acq == ELockAcquire_Acquired)
-				Lock_unlock(&swapchain->lock);
-
-			++counter;
-			continue;
+			if(I32x2_neq2(resolveSize, targetSize))
+				gotoIfError(clean, Error_invalidOperation(
+					3, "CommandListRef_startRenderExt() size of MSAA resolve image is incompatible"
+				))
 		}
 	}
 
 	if(!counter)
-		_gotoIfError(clean, Error_invalidParameter(
+		gotoIfError(clean, Error_invalidParameter(
 			3, 1, "CommandListRef_startRenderExt() didn't provide any render targets"
-		));
+		))
 
 	if(I32x2_any(I32x2_or(I32x2_leq(targetSize, I32x2_zero()), I32x2_leq(firstSize, I32x2_zero()))))
-		_gotoIfError(clean, Error_invalidOperation(5, "CommandListRef_startRenderExt() targetSize or firstSize is <=0"));
+		gotoIfError(clean, Error_invalidOperation(5, "CommandListRef_startRenderExt() targetSize or firstSize is <=0"))
 
 	if(I32x2_any(I32x2_eq(size, I32x2_zero())))
 		size = I32x2_sub(targetSize, offset);
 
-	_gotoIfError(clean, CommandListRef_checkBounds(offset, size, 0, 32'767));
-	_gotoIfError(clean, Buffer_createEmptyBytesx(sizeof(StartRenderCmdExt) + sizeof(AttachmentInfoInternal) * 16, &command));
+	gotoIfError(clean, CommandListRef_checkBounds(offset, size, 0, 32767))
+	gotoIfError(clean, Buffer_createEmptyBytesx(sizeof(StartRenderCmdExt) + sizeof(AttachmentInfoInternal) * 16, &command))
 
 	if(!I32x2_all(I32x2_eq(commandList->currentSize, I32x2_zero())))
-		_gotoIfError(clean, Error_invalidOperation(
+		gotoIfError(clean, Error_invalidOperation(
 			2, "CommandListRef_startRenderExt() can't already have a render started!"
-		));
+		))
 
-	if(stencil.color.coloru[0] >> 8)
-		_gotoIfError(clean, Error_invalidOperation(
-			5, "CommandListRef_startRenderExt()::stencil clear color should be 0-255 (0-0xFF)"
-		));
-
-	if(!stencil.image && I32x4_any(I32x4_load4(stencil.color.colori)))
-		_gotoIfError(clean, Error_invalidOperation(
+	if(!depthStencil.image && depthStencil.clearStencil)
+		gotoIfError(clean, Error_invalidOperation(
 			5, "CommandListRef_startRenderExt()::stencil clear value can't be non zero if there's no stencil bound"
-		));
+		))
 
-	if(depth.color.colorf[0] < 0 || depth.color.colorf[0] > 1)
-		_gotoIfError(clean, Error_invalidOperation(
-			4, "CommandListRef_startRenderExt()::depth clear color should be 0-1"
-		));
+	if(depthStencil.clearDepth < 0 || depthStencil.clearDepth > 1)
+		gotoIfError(clean, Error_invalidOperation(4, "CommandListRef_startRenderExt()::depth clear should be 0-1"))
 
-	if(!depth.image && F32x4_any(F32x4_load4(depth.color.colorf)))
-		_gotoIfError(clean, Error_invalidOperation(
+	if(!depthStencil.image && depthStencil.clearDepth)
+		gotoIfError(clean, Error_invalidOperation(
 			4, "CommandListRef_startRenderExt()::depth clear value can't be non zero if there's no depth buffer bound"
-		));
-
-	if(F32x4_any(F32x4_yzw(F32x4_load4(depth.color.colorf))))
-		_gotoIfError(clean, Error_invalidOperation(
-			4, "CommandListRef_startRenderExt()::depth clear value can only contain info in the first float"
-		));
-
-	if(I32x4_any(I32x4_yzw(I32x4_load4(stencil.color.colori))))
-		_gotoIfError(clean, Error_invalidOperation(
-			5, "CommandListRef_startRenderExt()::stencil clear value can only contain info in the first uint8"
-		));
+		))
 
 	StartRenderCmdExt *startRender = (StartRenderCmdExt*)command.ptr;
 
 	*startRender = (StartRenderCmdExt) {
 		.offset = offset,
 		.size = size,
-		.resolveDepthMode = depth.resolveMode,
-		.resolveStencilMode = stencil.resolveMode,
+		.resolveDepthStencilMode = depthStencil.depthStencilResolve,
 		.colorCount = (U8) colors.length,
-		.clearStencil = (U8) stencil.color.coloru[0],
-		.clearDepth = depth.color.colorf[0],
-		.depthRange = depth.range,
-		.stencilRange = stencil.range,
-		.depth = depth.image,
-		.stencil = stencil.image,
-		.resolveDepth = depth.resolveImage,
-		.resolveStencil = stencil.resolveImage
+		.clearStencil = (U8) depthStencil.clearStencil,
+		.clearDepth = depthStencil.clearDepth,
+		.depthStencilRange = depthStencil.range,
+		.depthStencil = depthStencil.image,
+		.resolveDepthStencil = depthStencil.resolveImage,
+		.resolveDepthStencilRange = depthStencil.resolveImageRange
 	};
 
-	if(depth.image)
+	UnifiedTexture depthStencilImg = TextureRef_getUnifiedTexture(depthStencil.image, NULL);
+
+	if(depthStencilImg.depthFormat != EDepthStencilFormat_S8Ext)
 		startRender->flags |= EStartRenderFlags_Depth;
 
-	if(depth.load == ELoadAttachmentType_Clear)
+	if(depthStencil.depthLoad == ELoadAttachmentType_Clear)
 		startRender->flags |= EStartRenderFlags_ClearDepth;
 
-	else if(depth.load == ELoadAttachmentType_Preserve)
+	else if(depthStencil.depthLoad == ELoadAttachmentType_Preserve)
 		startRender->flags |= EStartRenderFlags_PreserveDepth;
 
-	if(depth.unusedAfterRender)
+	if(depthStencil.depthUnusedAfterRender)
 		startRender->flags |= EStartRenderFlags_DepthUnusedAfterRender;
 
-	if(stencil.image)
+	if(depthStencil.depthReadOnly)
+		startRender->flags |= EStartRenderFlags_DepthReadOnly;
+
+	if(depthStencilImg.depthFormat >= EDepthStencilFormat_StencilStart)
 		startRender->flags |= EStartRenderFlags_Stencil;
 
-	if(stencil.load == ELoadAttachmentType_Clear)
+	if(depthStencil.stencilLoad == ELoadAttachmentType_Clear)
 		startRender->flags |= EStartRenderFlags_ClearStencil;
 
-	else if(stencil.load == ELoadAttachmentType_Preserve)
+	else if(depthStencil.stencilLoad == ELoadAttachmentType_Preserve)
 		startRender->flags |= EStartRenderFlags_PreserveStencil;
 
-	if(stencil.unusedAfterRender)
+	if(depthStencil.stencilUnusedAfterRender)
 		startRender->flags |= EStartRenderFlags_StencilUnusedAfterRender;
 
-	if(!stencil.image && (
-		startRender->flags & EStartRenderFlags_StencilFlags || stencil.range.layerId || stencil.range.levelId
-	))
-		_gotoIfError(clean, Error_invalidOperation(
-			5, "CommandListRef_startRenderExt()::stencil had values set, but didn't have a valid image"
-		));
+	if(depthStencil.stencilReadOnly)
+		startRender->flags |= EStartRenderFlags_StencilReadOnly;
 
-	if(!depth.image && (
-		startRender->flags & EStartRenderFlags_DepthFlags || depth.range.layerId || depth.range.levelId
-	))
-		_gotoIfError(clean, Error_invalidOperation(
-			4, "CommandListRef_startRenderExt()::depth had values set, but didn't have a valid image"
-		));
+	if(depthStencil.stencilReadOnly && depthStencil.stencilLoad == ELoadAttachmentType_Clear)
+		gotoIfError(clean, Error_invalidOperation(
+			6, "CommandListRef_startRenderExt()::stencil was set to clear but was readonly"
+		))
+
+	if(depthStencil.depthReadOnly && depthStencil.depthLoad == ELoadAttachmentType_Clear)
+		gotoIfError(clean, Error_invalidOperation(
+			6, "CommandListRef_startRenderExt()::depth was set to clear but was readonly"
+		))
+
+	if(!depthStencil.image && (depthStencil.range.layerId || depthStencil.range.levelId || startRender->flags))
+		gotoIfError(clean, Error_invalidOperation(
+			5, "CommandListRef_startRenderExt()::depthStencil had values set, but didn't have a valid image"
+		))
 
 	AttachmentInfoInternal *attachments = (AttachmentInfoInternal*)(startRender + 1);
 	counter = 0;
 
-	for (U64 i = 0; i < colors.length + !!depth.image + !!stencil.image; ++i) {
+	for (U64 i = 0; i < colors.length + !!depthStencil.image; ++i) {
 
-		AttachmentInfo info = i == colors.length && depth.image ? depth : (i >= colors.length ? stencil : colors.ptr[i]);
+		AttachmentInfo info;
 
-		if (info.image) {
-
-			if(i < colors.length) {
-			
-				startRender->activeMask |= (U8)1 << i;
-
-				if(info.unusedAfterRender)
-					startRender->unusedAfterRenderMask |= (U8)1 << i;
-
-				if(info.readOnly)
-					startRender->readOnlyMask |= (U8)1 << i;
-
-				if(info.load == ELoadAttachmentType_Clear)
-					startRender->clearMask |= (U8)1 << i;
-
-				else if(info.load == ELoadAttachmentType_Preserve)
-					startRender->preserveMask |= (U8)1 << i;
-
-				attachments[counter++] = (AttachmentInfoInternal) {
-					.color = info.color,
-					.image = info.image,
-					.range = info.range,
-					.resolveImage = info.resolveImage,
-					.resolveMode = info.resolveMode
-				};
-			}
-
-			//Transition image
-
-			TransitionInternal transition = (TransitionInternal) {
-				.resource = info.image,
-				.range = (ResourceRange) { .image = info.range },
-				.stage = EPipelineStage_Count,
-				.type = info.readOnly ? ETransitionType_RenderTargetRead : ETransitionType_RenderTargetWrite
+		if(i == colors.length)
+			info = (AttachmentInfo) {
+				.range = depthStencil.range,
+				.image = depthStencil.image,
+				.resolveImage = depthStencil.resolveImage,
+				.resolveRange = depthStencil.resolveImageRange
 			};
 
-			TransitionInternal *state = NULL;
+		else info = colors.ptr[i];
+
+		if (!info.image)
+			continue;
+
+		if(i < colors.length) {
+
+			startRender->activeMask |= (U8)1 << i;
+
+			if(info.unusedAfterRender)
+				startRender->unusedAfterRenderMask |= (U8)1 << i;
+
+			if(info.readOnly)
+				startRender->readOnlyMask |= (U8)1 << i;
+
+			if(info.load == ELoadAttachmentType_Clear)
+				startRender->clearMask |= (U8)1 << i;
+
+			else if(info.load == ELoadAttachmentType_Preserve)
+				startRender->preserveMask |= (U8)1 << i;
+
+			attachments[counter++] = (AttachmentInfoInternal) {
+				.color = info.color,
+				.image = info.image,
+				.range = info.range,
+				.resolveImage = info.resolveImage,
+				.resolveMode = info.resolveMode
+			};
+		}
+
+		//Transition image
+
+		TransitionInternal transition = (TransitionInternal) {
+			.resource = info.image,
+			.range = (ResourceRange) { .image = info.range },
+			.stage = EPipelineStage_Count,
+			.type = info.readOnly ? ETransitionType_RenderTargetRead : ETransitionType_RenderTargetWrite
+		};
+
+		TransitionInternal *state = NULL;
+		if(CommandListRef_isBound(commandList, transition.resource, transition.range, &state)) {
+
+			//Depth stencil is allowed to transition twice as Depth & Stencil.
+			//However, you're not allowed to use an RTV twice.
+
+			if(i < colors.length || state->type != transition.type)
+				gotoIfError(clean, Error_invalidOperation(
+					4, "CommandListRef_startRenderExt()::colors[i] or depthStencil was already transitioned!"
+				))
+		}
+
+		else gotoIfError(clean, ListTransitionInternal_pushBackx(&commandList->pendingTransitions, transition))
+
+		//Transition resolve image
+
+		if(info.resolveImage) {
+
+			transition.resource = info.resolveImage;
+			transition.range = (ResourceRange) { 0 };				//TODO: Range for resolveImage
+			transition.type = ETransitionType_ResolveTargetWrite;
+
 			if(CommandListRef_isBound(commandList, transition.resource, transition.range, &state)) {
 
 				if(state->type != transition.type)
-					_gotoIfError(clean, Error_invalidOperation(
-						4, "CommandListRef_startRenderExt()::colors[i] or depthStencil was already transitioned!"
-					));
+					gotoIfError(clean, Error_invalidOperation(
+						4,
+						"CommandListRef_startRenderExt()::colors[i] or depthStencil resolve target was already resolved"
+					))
 			}
 
-			else _gotoIfError(clean, ListTransitionInternal_pushBackx(&commandList->pendingTransitions, transition));
-
-			//Transition resolve image
-
-			if(info.resolveImage) {
-
-				transition.resource = info.resolveImage;
-				transition.range = (ResourceRange) { 0 };				//TODO: Range for resolveImage
-				transition.type = ETransitionType_RenderTargetWrite;
-
-				if(CommandListRef_isBound(commandList, transition.resource, transition.range, &state)) {
-
-					if(state->type != transition.type)
-						_gotoIfError(clean, Error_invalidOperation(
-							4,
-							"CommandListRef_startRenderExt()::colors[i] or depthStencil resolve target was already resolved"
-						));
-				}
-
-				else _gotoIfError(clean, ListTransitionInternal_pushBackx(&commandList->pendingTransitions, transition));
-			}
+			else gotoIfError(clean, ListTransitionInternal_pushBackx(&commandList->pendingTransitions, transition))
 		}
 	}
 
-	_gotoIfError(clean, CommandList_append(
+	gotoIfError(clean, CommandList_append(
 		commandList,
 		ECommandOp_StartRenderingExt,
 		Buffer_createRefConst(startRender, sizeof(StartRenderCmdExt) + sizeof(AttachmentInfoInternal) * counter),
 		0
-	));
+	))
 
 	commandList->currentSize = size;
 	commandList->boundImageCount = (U8) colors.length;
 
-	for (U8 i = 0; i < commandList->boundImageCount; ++i) {
-		AttachmentInfo info = colors.ptr[i];
-		commandList->boundImages[i] = (ImageAndRange) { .image = info.image, .range = info.range };
-	}
+	for (U8 i = 0; i < commandList->boundImageCount; ++i)
+		commandList->boundImages[i] = (ImageAndRange) { .image = colors.ptr[i].image, .range = colors.ptr[i].range };
 
 	//Combine stencil and depth back to one format
 
 	EDepthStencilFormat depthFormat = EDepthStencilFormat_None;
 
-	if(depth.image)
-		switch (DepthStencilRef_ptr(depth.image)->format) {
-
-			//If stencil is missing, we try to make the format stencil-less to indicate we won't need to write.
-
-			case EDepthStencilFormat_D16:
-				depthFormat = EDepthStencilFormat_D16;
-				break;
-
-			case EDepthStencilFormat_D32:
-			case EDepthStencilFormat_D32S8:
-				depthFormat = stencil.image ? EDepthStencilFormat_D32S8 : EDepthStencilFormat_D32;
-				break;
-
-			//D24S8 can't be made stencil-less
-
-			case EDepthStencilFormat_D24S8Ext:
-				depthFormat = EDepthStencilFormat_D24S8Ext;
-				break;
-		}
-
-	if(!depth.image && stencil.image)
-		depthFormat = EDepthStencilFormat_S8Ext;
+	if(depthStencil.image)
+		depthFormat = TextureRef_getUnifiedTexture(depthStencil.image, NULL).depthFormat;
 
 	commandList->boundDepthFormat = depthFormat;
 	commandList->boundSampleCount = sampleCount;
@@ -2136,20 +2148,20 @@ clean:
 
 Error CommandListRef_endRenderExt(CommandListRef *commandListRef) {
 
-	CommandListRef_validateScope(commandListRef, clean);
+	CommandListRef_validateScope(commandListRef, clean)
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(commandList->device);
 
 	if(!(device->info.capabilities.features & EGraphicsFeatures_DirectRendering))
-		_gotoIfError(clean, Error_unsupportedOperation(
+		gotoIfError(clean, Error_unsupportedOperation(
 			0, "CommandListRef_endRenderExt() requires directRendering extension, which was missing!"
-		));
+		))
 
 	if(I32x2_any(I32x2_eq(commandList->currentSize, I32x2_zero())))
-		_gotoIfError(clean, Error_invalidOperation(
+		gotoIfError(clean, Error_invalidOperation(
 			1, "CommandListRef_endRenderExt() requires startRenderExt to be called first"
-		));
+		))
 
-	_gotoIfError(clean, CommandList_append(commandList, ECommandOp_EndRenderingExt, Buffer_createNull(), 0));
+	gotoIfError(clean, CommandList_append(commandList, ECommandOp_EndRenderingExt, Buffer_createNull(), 0))
 
 	commandList->currentSize = I32x2_zero();
 	commandList->tempStateFlags &= ~(ECommandStateFlags_AnyScissor | ECommandStateFlags_AnyViewport);
@@ -2167,19 +2179,23 @@ clean:
 Error CommandList_markerDebugExt(CommandListRef *commandListRef, F32x4 color, CharString name, ECommandOp op) {
 
 	Buffer buf = Buffer_createNull();
-	CommandListRef_validateScope(commandListRef, clean);
+	CommandListRef_validateScope(commandListRef, clean)
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(commandList->device);
 
 	if(!(device->info.capabilities.features & EGraphicsFeatures_DebugMarkers))		//NO-OP
 		return Error_none();
 
-	_gotoIfError(clean, Buffer_createEmptyBytesx(sizeof(color) + CharString_length(name) + 1, &buf));
+	gotoIfError(clean, Buffer_createEmptyBytesx(sizeof(color) + CharString_length(name) + 1, &buf))
 
 	Buffer_copy(buf, Buffer_createRefConst(&color, sizeof(color)));
-	Buffer_copy(Buffer_createRef((U8*)buf.ptr + sizeof(color), CharString_length(name)), CharString_bufferConst(name));
 
-	_gotoIfError(clean, CommandList_append(commandList, op, buf, 1));
+	Buffer_copy(
+		Buffer_createRef((U8*)buf.ptr + sizeof(color), CharString_length(name)),
+		CharString_bufferConst(name)
+	);
+
+	gotoIfError(clean, CommandList_append(commandList, op, buf, 1))
 
 clean:
 
@@ -2196,17 +2212,17 @@ Error CommandListRef_addMarkerDebugExt(CommandListRef *commandListRef, F32x4 col
 
 Error CommandListRef_startRegionDebugExt(CommandListRef *commandListRef, F32x4 color, CharString name) {
 
-	CommandListRef_validateScope(commandListRef, clean);
+	CommandListRef_validateScope(commandListRef, clean)
 
 	if(!CharString_length(name))
-		_gotoIfError(clean, Error_nullPointer(2, "CommandListRef_startRegionDebugExt()::name is required"));
+		gotoIfError(clean, Error_nullPointer(2, "CommandListRef_startRegionDebugExt()::name is required"))
 
 	if(commandList && commandList->debugRegionStack == U8_MAX)
-		_gotoIfError(clean, Error_outOfBounds(
+		gotoIfError(clean, Error_outOfBounds(
 			0, U8_MAX, U8_MAX, "CommandListRef_startRegionDebugExt() can only have depth of 255."
-		));
+		))
 
-	_gotoIfError(clean, CommandList_markerDebugExt(commandListRef, color, name, ECommandOp_StartRegionDebugExt));
+	gotoIfError(clean, CommandList_markerDebugExt(commandListRef, color, name, ECommandOp_StartRegionDebugExt))
 
 	++commandList->debugRegionStack;
 
@@ -2220,7 +2236,7 @@ clean:
 
 Error CommandListRef_endRegionDebugExt(CommandListRef *commandListRef) {
 
-	CommandListRef_validateScope(commandListRef, clean);
+	CommandListRef_validateScope(commandListRef, clean)
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(commandList->device);
 
@@ -2228,9 +2244,9 @@ Error CommandListRef_endRegionDebugExt(CommandListRef *commandListRef) {
 		return Error_none();
 
 	if (!commandList->debugRegionStack)
-		_gotoIfError(clean, Error_invalidOperation(1, "CommandListRef_endRegionDebugExt() requires startRegion first."));
+		gotoIfError(clean, Error_invalidOperation(1, "CommandListRef_endRegionDebugExt() requires startRegion first."))
 
-	_gotoIfError(clean, CommandList_append(commandList, ECommandOp_EndRegionDebugExt, Buffer_createNull(), 0));
+	gotoIfError(clean, CommandList_append(commandList, ECommandOp_EndRegionDebugExt, Buffer_createNull(), 0))
 
 	--commandList->debugRegionStack;
 
@@ -2246,7 +2262,7 @@ clean:
 
 Bool CommandList_free(CommandList *cmd, Allocator alloc) {
 
-	alloc;
+	(void)alloc;
 
 	Lock_free(&cmd->lock);
 
@@ -2283,7 +2299,7 @@ Error GraphicsDeviceRef_createCommandList(
 	Error err = RefPtr_createx(
 		(U32) sizeof(CommandList),
 		(ObjectFreeFunc) CommandList_free,
-		EGraphicsTypeId_CommandList,
+		(ETypeId) EGraphicsTypeId_CommandList,
 		commandListRef
 	);
 
@@ -2292,13 +2308,13 @@ Error GraphicsDeviceRef_createCommandList(
 
 	CommandList *commandList = CommandListRef_ptr(*commandListRef);
 
-	_gotoIfError(clean, Buffer_createEmptyBytesx(commandListLen, &commandList->data));
+	gotoIfError(clean, Buffer_createEmptyBytesx(commandListLen, &commandList->data))
 
-	_gotoIfError(clean, ListCommandOpInfo_reservex(&commandList->commandOps, estimatedCommandCount));
-	_gotoIfError(clean, ListRefPtr_reservex(&commandList->resources, estimatedResources));
-	_gotoIfError(clean, ListCommandScope_reservex(&commandList->activeScopes, 16));
-	_gotoIfError(clean, ListTransitionInternal_reservex(&commandList->transitions, estimatedResources));
-	_gotoIfError(clean, ListTransitionInternal_reservex(&commandList->pendingTransitions, 32));
+	gotoIfError(clean, ListCommandOpInfo_reservex(&commandList->commandOps, estimatedCommandCount))
+	gotoIfError(clean, ListRefPtr_reservex(&commandList->resources, estimatedResources))
+	gotoIfError(clean, ListCommandScope_reservex(&commandList->activeScopes, 16))
+	gotoIfError(clean, ListTransitionInternal_reservex(&commandList->transitions, estimatedResources))
+	gotoIfError(clean, ListTransitionInternal_reservex(&commandList->pendingTransitions, 32))
 	commandList->lock = Lock_create();
 
 	GraphicsDeviceRef_inc(deviceRef);

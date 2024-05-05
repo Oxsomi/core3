@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -21,6 +21,13 @@
 #pragma once
 #include <stdint.h>
 #include <stdbool.h>
+#include <inttypes.h>
+
+//Null is apparently non-standard
+
+#ifndef NULL
+	#define NULL (void*)0
+#endif
 
 //Platform and arch stuff
 
@@ -41,6 +48,10 @@
 //A hint to show that the end user should define these
 
 #define user_impl
+
+#ifdef __cplusplus
+	extern "C" {
+#endif
 
 //Types
 
@@ -208,3 +219,15 @@ C8 C8_createNyto(U8 v);
 #define C8x2(x, y) ((((U16)y) << 8) | x)
 #define C8x4(x, y, z, w) ((((U32)C8x2(z, w)) << 16) | C8x2(x, y))
 #define C8x8(x, y, z, w, a, b, c, d) ((((U64)C8x4(a, b, c, d)) << 32) | C8x4(x, y, z, w))
+
+//Default stacktrace
+
+#define STACKTRACE_SIZE 32
+typedef void *StackTrace[STACKTRACE_SIZE];
+
+typedef struct Error Error;
+typedef struct CharString CharString;
+
+#ifdef __cplusplus
+	}
+#endif

@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -25,6 +25,10 @@
 
 #ifndef TListX
 	#define TListX(Name)
+#endif
+
+#ifdef __cplusplus
+	extern "C" {
 #endif
 
 //TList is a simple wrapper around GenericList to make it easier and safer to use.
@@ -75,6 +79,7 @@ Error Name##_createFromBuffer(Buffer buf, Name *result);												\
 Error Name##_createSubset(Name l, U64 index, U64 length, Name *result);									\
 Error Name##_create(U64 length, Allocator alloc, Name *result);											\
 Error Name##_createCopy(Name l, Allocator alloc, Name *result);											\
+Error Name##_createSubsetCopy(Name l, U64 off, U64 len, Allocator alloc, Name *result);					\
 Error Name##_createRepeated(U64 length, Name##_Type data, Allocator alloc, Name *result);				\
 Error Name##_createSubsetReverse(Name l, U64 index, U64 length, Allocator alloc, Name *result);			\
 Error Name##_createReverse(Name l, Allocator alloc, Name *result);										\
@@ -119,9 +124,9 @@ Bool Name##_free(Name *l, Allocator allocator);															\
 																										\
 TListX(Name)
 
-#define TListNamed(T, Name) TListDefinition(T, Name); TListNamedBase(Name);
+#define TListNamed(T, Name) TListDefinition(T, Name); TListNamedBase(Name)
 #define TList(T) TListNamed(T, List##T)
-#define TListSort(T) TList(T);						Bool List##T##_sort(List##T l);
+#define TListSort(T) TList(T);						Bool List##T##_sort(List##T l)
 
 TListNamedBase(ListU64);
 TListSort(U8); TListSort(U16); TListSort(U32);
@@ -129,3 +134,7 @@ TListSort(I8); TListSort(I16); TListSort(I32); TListSort(I64);
 TListSort(F32); TListSort(F64);
 
 TList(Buffer);
+
+#ifdef __cplusplus
+	}
+#endif

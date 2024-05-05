@@ -6,6 +6,8 @@ The OxC3 tool is intended to handle all operations required for Oxsomi core3. Th
 - Generating random numbers or keys.
 - Conversions between file formats.
 - Packaging a project.
+- Compiling shaders.
+- **TODO**: Show GPU/graphics device info.
 - Inspecting a file (printing the header and other important information).
 - Encryption.
 - **TODO**: Compression.
@@ -40,7 +42,7 @@ Generates random chars; 32 by default. `-l <charCount>` can be used to customize
 
 `OxC3 rand num`
 
-Is just shorthand for `OxC3 rand char -c <numberKeyset>`. If --hex is used, it'll use 0-9A-Z, if --nyto is used it'll use 0-9a-zA-Z_$, if --oct is used it'll use 0-7, if --bin is used it'll use 0-1. Decimal is the default (0-9). `-l <charCount>` can be used to set a limit by character count and `-b <bitCount>` can be used to limit how many bits the number can have (for decimal output this can only be used with 64-bit numbers and below). 
+Is just shorthand for `OxC3 rand char -c <numberKeyset>`. If --hex is used, it'll use 0-9A-Z, if --nyto is used it'll use 0-9a-zA-Z_$, if --oct is used it'll use 0-7, if --bin is used it'll use 0-1. Decimal is the default (0-9). `-l <charCount>` can be used to set a limit by character count and `-b <bitCount>` can be used to limit how many bits the number can have (for decimal output this can only be used with 64-bit numbers and below).
 
 `OxC3 rand data -l 16 -o myFile.bin`
 
@@ -56,7 +58,7 @@ Will convert the enter separated string in myDialog into a DL file (where each e
 
 `OxC3 file to -f oiDL -i myFolder -o myFolder.oiDL`
 
-This will package all files from myFolder into a nameless archive file. These files can be accessed by file id. 
+This will package all files from myFolder into a nameless archive file. These files can be accessed by file id.
 
 To unpackage this (losing the file names of course):
 
@@ -124,6 +126,33 @@ These are left out by default, because often, file timestamps aren't very import
 
 These are generally attached to the exe, apk or other executable file to ensure these resources can be found and aren't as easily accidentally modified on disk, as well as making them more portable. See the README.
 
+## Compiling shaders
+
+`OxC3 compile shaders` is used to compile text shaders to application ready shaders. This could mean preprocessing text shaders to inline all includes for graphics APIs/platforms that take text only or compiling to an actual binary (DXIL or SPIRV). 
+
+When operating on a folder, it will attempt to find `.hlsl` files and then processes them in parallel into the output folder.
+
+`-t` can be used to limit thread count. Such as `-t 0` = default , `-t 50%` = 50% of all threads, `-t 4` = 4 threads. Default behavior is: If total input length >=64KiB with at least 8 files or if at least 16 files are present, then all cores will be used for threading.
+
+`-m` is the mode the output is in. For preprocessor, if this mode is multiple then it will output a .spv.hlsl and .dxil.hlsl for example (instead of just one .hlsl). The following modes are supported: `spv` and `dxil`. To use spv and dxil, you can use `dxil,spv` or `all` (will include others in the future).
+
+`//myFile.hlsl` specifies builtin shaders, such as `//types.hlsl` and `//resources.hlsl` which are bindings to be compatible with OxC3. This can also access NV specific HLSL extensions when DXIL is used as a target.
+
+### Preprocess
+
+The `--preprocess` flag can be used to preprocess a file with defines and/or includes into one without. Useful if custom parsing is needed or it has to be provided to an engine/framework/graphics API that doesn't support includes or defines or is located elsewhere (like remote).
+
+`OxC3 compile shaders -f HLSL -m spv --preprocess -i a.hlsl -o a.preprocessed.hlsl`
+
+## TODO: Show GPU/graphics device info
+
+
+It can also be used to print GPU info regarding devices that support OxC3 and what their features are. It uses the currently active graphics API (be it DirectX12 or Vulkan).
+
+`OxC3 graphics devices` will show all devices.
+
+And it can also show the specific GPU using `OxC3 graphics devices -e 0` which will show the device entry at 0. If `-n` is specified, you can extend the number of elements from 1 to any count.
+
 ## File inspect
 
 Two operations constitute as file inspection: `file header` and `file data`.
@@ -136,13 +165,13 @@ Data allows you to actually inspect the data section of certain parts of the fil
 
 `file data -i test.oiCA` would tell about the file table for example. File data also needs to provide `-aes` if the source is encrypted. If entry is absent, it will provide a general view of the file.
 
-With `-e <offset or path>` a specific entry can be viewed. If an entry is specified, the `-o` can be used to extract that one entry into a single file (or folder). If this is not specified, it will show the file as either a hexdump or plain text (if it's ascii) or the folder's subdirectories. 
+With `-e <offset or path>` a specific entry can be viewed. If an entry is specified, the `-o` can be used to extract that one entry into a single file (or folder). If this is not specified, it will show the file as either a hexdump or plain text (if it's ascii) or the folder's subdirectories.
 
-`file data` also allows the `-l` specifier for how many entries are shown. Normally in the log it limits to 64 lines (so for data that'd mean 64 * 64 / 2 (hex) = 2KiB per view). The `-s` argument can be used to set an offset of what it should show. An example: we have an oiCA with 128 entries but want to show the last 32; `file data -i our.oiCA -s 96 -l 32`. For a file entry, it would specify the byte offset and length (length is defaulted to 2KiB). If `-o` is used, it will binary dump the entire remainder of the file if `-l` is not specified (the remainder is the entire file size if `-s` is not specified). 
+`file data` also allows the `-l` specifier for how many entries are shown. Normally in the log it limits to 64 lines (so for data that'd mean 64 * 64 / 2 (hex) = 2KiB per view). The `-s` argument can be used to set an offset of what it should show. An example: we have an oiCA with 128 entries but want to show the last 32; `file data -i our.oiCA -s 96 -l 32`. For a file entry, it would specify the byte offset and length (length is defaulted to 2KiB). If `-o` is used, it will binary dump the entire remainder of the file if `-l` is not specified (the remainder is the entire file size if `-s` is not specified).
 
 ## Encrypt
 
-`OxC3 file encr -f <encryptionType> -i <file> -k <key in hex> (optional: -o output)`  
+`OxC3 file encr -f <encryptionType> -i <file> -k <key in hex> (optional: -o output)`
 
 `OxC3 file decr -f <encryptionType> -i <file> -o <file> -k <key in hex> `
 

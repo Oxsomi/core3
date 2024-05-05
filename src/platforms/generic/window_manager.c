@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -22,11 +22,9 @@
 #include "platforms/window_manager.h"
 #include "platforms/window.h"
 #include "platforms/platform.h"
-#include "platforms/thread.h"
-#include "platforms/log.h"
+#include "types/thread.h"
 #include "platforms/input_device.h"
 #include "platforms/ext/bufferx.h"
-#include "platforms/ext/errorx.h"
 #include "platforms/ext/stringx.h"
 #include "types/time.h"
 #include "types/string.h"
@@ -120,21 +118,30 @@ Error WindowManager_createWindow(
 ) {
 
 	if(!result)
-		return Error_nullPointer(!result ? 4 : 2, "WindowManager_createVirtual()::result and callbacks.onDraw are required");
+		return Error_nullPointer(
+			!result ? 4 : 2, "WindowManager_createVirtual()::result and callbacks.onDraw are required"
+		);
 
 	if(!WindowManager_isAccessible(manager))
-		return Error_invalidOperation(0, "WindowManager_createVirtual() manager is NULL or inaccessible to current thread");
+		return Error_invalidOperation(
+			0, "WindowManager_createVirtual() manager is NULL or inaccessible to current thread"
+		);
 
 	if(*result)
-		return Error_invalidOperation(1, "WindowManager_createVirtual()::*result is not NULL, indicates possible memleak");
+		return Error_invalidOperation(
+			1, "WindowManager_createVirtual()::*result is not NULL, indicates possible memleak"
+		);
 
 	if(I32x2_any(I32x2_leq(size, I32x2_zero())))
 		return Error_outOfBounds(
-			1, (U64) (I64) I32x2_x(size), (U64) (I64) I32x2_y(size), "WindowManager_createVirtual()::size[i] must be >0"
+			1, (U64) (I64) I32x2_x(size), (U64) (I64) I32x2_y(size),
+			"WindowManager_createVirtual()::size[i] must be >0"
 		);
 
 	if(CharString_length(title) >= 260)
-		return Error_outOfBounds(7, 260, 260, "WindowManager_createWindow()::title can't exceed 260 chars");
+		return Error_outOfBounds(
+			7, 260, 260, "WindowManager_createWindow()::title can't exceed 260 chars"
+		);
 
 	switch (format) {
 
@@ -146,7 +153,8 @@ Error WindowManager_createWindow(
 
 		default:
 			return Error_invalidEnum(
-				3, (U64) format, 0, "WindowManager_createVirtual()::format must be one of BGRA8, BGR10A2, RGBA16f, RGBA32f"
+				3, (U64) format, 0,
+				"WindowManager_createVirtual()::format must be one of BGRA8, BGR10A2, RGBA16f, RGBA32f"
 			);
 	}
 
@@ -208,7 +216,7 @@ Error WindowManager_createWindow(
 		.hint = hint | (type == EWindowType_Virtual ? EWindowHint_ProvideCPUBuffer : 0),
 		.format = format,
 		.flags = (type == EWindowType_Virtual ? EWindowFlags_IsFocussed : 0),
-				
+
 		.offset = position,
 		.size = size,
 		.minSize = minSize,
@@ -237,16 +245,18 @@ Error WindowManager_createWindow(
 	return Error_none();
 }
 
-impl void Window_updateExt(Window *w);
+impl void WindowManager_updateExt();
 
 Error WindowManager_wait(WindowManager *manager) {
 
 	if(!WindowManager_isAccessible(manager))
-		return Error_invalidOperation(0, "WindowManager_wait() manager is NULL or inaccessible to current thread");
+		return Error_invalidOperation(
+			0, "WindowManager_wait() manager is NULL or inaccessible to current thread"
+		);
 
 	while(manager->windows.length) {
 
-		//Update all windows
+		//Update all windows first
 
 		for (U64 i = manager->windows.length - 1; i != U64_MAX; --i) {
 
@@ -254,32 +264,35 @@ Error WindowManager_wait(WindowManager *manager) {
 
 			//Update interface
 
-			Ns now = Time_now();
+			const Ns now = Time_now();
 
 			if (w->callbacks.onUpdate) {
-				F64 dt = w->lastUpdate ? (now - w->lastUpdate) / (F64)SECOND : 0;
+				const F64 dt = w->lastUpdate ? (now - w->lastUpdate) / (F64)SECOND : 0;
 				w->callbacks.onUpdate(w, dt);
 			}
 
 			w->lastUpdate = now;
 
-			if(w->type == EWindowType_Physical)
-				Window_updateExt(w);
-
-			else if(w->callbacks.onDraw)		//Virtual
+			if(w->type != EWindowType_Physical && w->callbacks.onDraw)		//Virtual
 				w->callbacks.onDraw(w);
 
-			if (w->flags & EWindowFlags_ShouldTerminate)
+			if (w->flags & EWindowFlags_ShouldTerminate)					//Just in case the window closed now
 				WindowManager_freeWindow(manager, &w);
 		}
 
-		Ns now = Time_now();
+		//Then run window manager update; this polls all events.
+
+		WindowManager_updateExt();
+
+		//Finally, we can notify manager that we're ready for draws/updates
+
+		const Ns now = Time_now();
 
 		if(manager->callbacks.onUpdate) {
-			F64 dt = manager->lastUpdate ? (now - manager->lastUpdate) / (F64)SECOND : 0;
+			const F64 dt = manager->lastUpdate ? (now - manager->lastUpdate) / (F64)SECOND : 0;
 			manager->callbacks.onUpdate(manager, dt);
 		}
-		
+
 		if(manager->callbacks.onDraw)
 			manager->callbacks.onDraw(manager);
 
@@ -296,7 +309,7 @@ Error WindowManager_adaptSizes(I32x2 *sizep, I32x2 *minSizep, I32x2 *maxSizep) {
 			!sizep ? 0 : (!minSizep ? 1 : 2), "WindowManager_adaptSizes() requires sizep, minSizep and maxSizep"
 		);
 
-	I32x2 size = *sizep;
+	const I32x2 size = *sizep;
 	I32x2 minSize = *minSizep;
 	I32x2 maxSize = *maxSizep;
 
@@ -312,7 +325,9 @@ Error WindowManager_adaptSizes(I32x2 *sizep, I32x2 *minSizep, I32x2 *maxSizep) {
 		minSize = EResolution_get(EResolution_360);
 
 	if(I32x2_any(I32x2_lt(minSize, EResolution_get(EResolution_SD))) || I32x2_any(I32x2_lt(minSize, I32x2_zero())))
-		return Error_invalidParameter(3, 0, "WindowManager_adaptSizes()::*minSizep should be >=240p (0 = 640x360, >=426x240)");
+		return Error_invalidParameter(
+			3, 0, "WindowManager_adaptSizes()::*minSizep should be >=240p (0 = 640x360, >=426x240)"
+		);
 
 	//Graphics APIs generally limit the resolution to 16Ki, so let's ensure the window can't get bigger than that
 
@@ -320,8 +335,10 @@ Error WindowManager_adaptSizes(I32x2 *sizep, I32x2 *minSizep, I32x2 *maxSizep) {
 		maxSize = I32x2_xx2(16384);
 
 	if(I32x2_any(I32x2_gt(maxSize, I32x2_xx2(16384))) || I32x2_any(I32x2_lt(maxSize, I32x2_zero())))
-		return Error_invalidParameter(4, 0, "WindowManager_adaptSizes()::*maxSizep should be >=0 && <16384");
-		
+		return Error_invalidParameter(
+			4, 0, "WindowManager_adaptSizes()::*maxSizep should be >=0 && <16384"
+		);
+
 	*minSizep = minSize;
 	*maxSizep = maxSize;
 	*sizep = I32x2_clamp(size, minSize, maxSize);

@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -31,17 +31,17 @@ typedef Error (*ProfileOperation)(ParsedArgs, Buffer);
 
 Bool CLI_profileData(ParsedArgs args, ProfileOperation op) {
 
-	U64 bufferSize = GIBI;
+	const U64 bufferSize = GIBI;
 
 	Buffer dat = Buffer_createNull();
-	Error err = Error_none();
+	Error err;
 
-	_gotoIfError(clean, Buffer_createUninitializedBytesx(bufferSize, &dat));
+	gotoIfError(clean, Buffer_createUninitializedBytesx(bufferSize, &dat))
 
 	if(!Buffer_csprng(dat))
-		_gotoIfError(clean, Error_invalidState(0, "CLI_profileData() Buffer_csprng failed"));
+		gotoIfError(clean, Error_invalidState(0, "CLI_profileData() Buffer_csprng failed"))
 
-	_gotoIfError(clean, op(args, dat));
+	gotoIfError(clean, op(args, dat))
 
 clean:
 
@@ -70,8 +70,8 @@ U64 _CLI_profileCastStep(U64 l, U64 k, U64 j, const U8 *ptr, U64 i) {
 		EFloatType_F16
 	};
 
-	EFloatType inputType = types[k];
-	EFloatType outputType = types[j];
+	const EFloatType inputType = types[k];
+	const EFloatType outputType = types[j];
 
 	//Grab value
 
@@ -82,12 +82,12 @@ U64 _CLI_profileCastStep(U64 l, U64 k, U64 j, const U8 *ptr, U64 i) {
 		case EFloatType_F64:
 			v = ((const U64*)ptr)[i];
 			break;
-			
+
 		case EFloatType_F32:
 			v = ((const U32*)ptr)[i];
 			break;
-			
-		case EFloatType_F16:
+
+		default:
 			v = ((const U16*)ptr)[i];
 			break;
 	}
@@ -135,11 +135,11 @@ U64 _CLI_profileCastStep(U64 l, U64 k, U64 j, const U8 *ptr, U64 i) {
 
 Error _CLI_profileCast(ParsedArgs args, Buffer buf) {
 
-	args;
+	(void)args;
 	Error err = Error_none();
 
 	if(Buffer_length(buf) < GIBI)
-		_gotoIfError(clean, Error_invalidParameter(1, 0, "_CLI_profileCast() assumes buf to be >= 1 GIBI"));
+		gotoIfError(clean, Error_invalidParameter(1, 0, "_CLI_profileCast() assumes buf to be >= 1 GIBI"))
 
 	const U64 number = GIBI / sizeof(F64) / 32;
 	const C8 *iterationNames[] = { "Non denormalized", "(Un)Signed zero", "NaN", "Inf", "DeN" };
@@ -147,13 +147,10 @@ Error _CLI_profileCast(ParsedArgs args, Buffer buf) {
 
 	const U64 itCount = sizeof(iterationNames) / sizeof(iterationNames[0]);
 	const U64 floatTypes = sizeof(floatTypeNames) / sizeof(floatTypeNames[0]);
-	
-	Ns thenOuter = Time_now();
+
+	const Ns thenOuter = Time_now();
 
 	for(U64 l = 0; l < itCount; ++l) {
-
-		int dbg1 = 0;
-		dbg1;
 
 		for(U64 k = 0; k < floatTypes; ++k)
 			for(U64 j = 0; j < floatTypes; ++j) {
@@ -161,16 +158,16 @@ Error _CLI_profileCast(ParsedArgs args, Buffer buf) {
 				if(j == k)		//No profile needed
 					continue;
 
-				Ns then = Time_now();
+				const Ns then = Time_now();
 				U64 temp = 0;
 
 				for (U64 i = 0; i < number; ++i)
 					temp += _CLI_profileCastStep(l, k, j, buf.ptr, i);
 
-				Ns now = Time_now();
+				const Ns now = Time_now();
 
 				Log_debugLnx(
-					"%s: %llux %s -> %s within %fs (%fns/op). (Operation hash: %llu)",
+					"%s: %"PRIu64"x %s -> %s within %fs (%fns/op). (Operation hash: %"PRIu64")",
 					iterationNames[l], number,
 					floatTypeNames[k], floatTypeNames[j],
 					(F64)(now - then) / SECOND,
@@ -178,16 +175,13 @@ Error _CLI_profileCast(ParsedArgs args, Buffer buf) {
 					temp
 				);
 			}
-
-		int dbg = 0;
-		dbg;
 	}
 
-	Ns nowOuter = Time_now();
-	U64 totalIt = itCount * floatTypes * (floatTypes - 1) * number;
+	const Ns nowOuter = Time_now();
+	const U64 totalIt = itCount * floatTypes * (floatTypes - 1) * number;
 
 	Log_debugLnx(
-		"Performed %llu casts within %fs. Avg time per cast %fns.",
+		"Performed %"PRIu64" casts within %fs. Avg time per cast %fns.",
 		totalIt,
 		(F64)(nowOuter - thenOuter) / SECOND,
 		(F64)(nowOuter - thenOuter) / totalIt
@@ -201,44 +195,42 @@ Bool CLI_profileCast(ParsedArgs args) {
 	return CLI_profileData(args, _CLI_profileCast);
 }
 
-Error _CLI_profileRNG(ParsedArgs args, Buffer buf) {
+Error CLI_profileRNGImpl(ParsedArgs args, Buffer buf) {
 
-	args;
+	(void)args;
 
-	Ns then = Time_now();
+	const Ns then = Time_now();
 
 	if(!Buffer_csprng(buf))
-		return Error_invalidState(0, "_CLI_profileRNG() Buffer_csprng failed");
+		return Error_invalidState(0, "CLI_profileRNGImpl() Buffer_csprng failed");
 
-	Ns now = Time_now();
+	const Ns now = Time_now();
 
 	Log_debugLnx(
-		"Profile RNG: %llu bytes within %fs (%fns/byte, %fbytes/sec).",
+		"Profile RNG: %"PRIu64" bytes within %fs (%fns/byte, %fbytes/sec).",
 		Buffer_length(buf),
 		(F64)(now - then) / SECOND,
 		(F64)(now - then) / Buffer_length(buf),
 		(F64)Buffer_length(buf) / (now - then) * SECOND
 	);
-	
+
 	return Error_none();
 }
 
 Bool CLI_profileRNG(ParsedArgs args) {
-	return CLI_profileData(args, _CLI_profileRNG);
+	return CLI_profileData(args, CLI_profileRNGImpl);
 }
 
-Error _CLI_profileCRC32C(ParsedArgs args, Buffer buf) {
+Error CLI_profileCRC32CImpl(ParsedArgs args, Buffer buf) {
 
-	args;
+	(void)args;
 
-	Ns then = Time_now();
-
-	U32 hash = Buffer_crc32c(buf);
-
-	Ns now = Time_now();
+	const Ns then = Time_now();
+	const U32 hash = Buffer_crc32c(buf);
+	const Ns now = Time_now();
 
 	Log_debugLnx(
-		"Profile CRC32C: %llu bytes within %fs (%fns/byte, %fbytes/sec). Random hash %u.",
+		"Profile CRC32C: %"PRIu64" bytes within %fs (%fns/byte, %fbytes/sec). Random hash %u.",
 		Buffer_length(buf),
 		(F64)(now - then) / SECOND,
 		(F64)(now - then) / Buffer_length(buf),
@@ -250,22 +242,22 @@ Error _CLI_profileCRC32C(ParsedArgs args, Buffer buf) {
 }
 
 Bool CLI_profileCRC32C(ParsedArgs args) {
-	return CLI_profileData(args, _CLI_profileCRC32C);
+	return CLI_profileData(args, CLI_profileCRC32CImpl);
 }
 
-Error _CLI_profileSHA256(ParsedArgs args, Buffer buf) {
+Error CLI_profileSHA256Impl(ParsedArgs args, Buffer buf) {
 
-	args;
+	(void)args;
 
-	Ns then = Time_now();
+	const Ns then = Time_now();
 
 	U32 hash[8];
 	Buffer_sha256(buf, hash);
 
-	Ns now = Time_now();
+	const Ns now = Time_now();
 
 	Log_debugLnx(
-		"Profile SHA256: %llu bytes within %fs (%fns/byte, %fbytes/sec). Random hash %08x%08x%08x%08x%08x%08x%08x%08x.",
+		"Profile SHA256: %"PRIu64" bytes within %fs (%fns/byte, %fbytes/sec). Random hash %08x%08x%08x%08x%08x%08x%08x%08x.",
 		Buffer_length(buf),
 		(F64)(now - then) / SECOND,
 		(F64)(now - then) / Buffer_length(buf),
@@ -278,12 +270,12 @@ Error _CLI_profileSHA256(ParsedArgs args, Buffer buf) {
 }
 
 Bool CLI_profileSHA256(ParsedArgs args) {
-	return CLI_profileData(args, _CLI_profileSHA256);
+	return CLI_profileData(args, CLI_profileSHA256Impl);
 }
 
-Error _CLI_profileEncryption(ParsedArgs args, Buffer buf, EBufferEncryptionType encryptionType) {
+Error CLI_profileEncryptionImpl(ParsedArgs args, Buffer buf, EBufferEncryptionType encryptionType) {
 
-	args;
+	(void)args;
 
 	Ns then = Time_now();
 
@@ -300,12 +292,12 @@ Error _CLI_profileEncryption(ParsedArgs args, Buffer buf, EBufferEncryptionType 
 		&tag
 	);
 
-	_gotoIfError(clean, err);
+	gotoIfError(clean, err)
 
 	Ns now = Time_now();
 
 	Log_debugLnx(
-		"Encrypt AES GCM: %llu bytes within %fs (%fns/byte, %fbytes/sec).",
+		"Encrypt AES GCM: %"PRIu64" bytes within %fs (%fns/byte, %fbytes/sec).",
 		Buffer_length(buf),
 		(F64)(now - then) / SECOND,
 		(F64)(now - then) / Buffer_length(buf),
@@ -314,19 +306,19 @@ Error _CLI_profileEncryption(ParsedArgs args, Buffer buf, EBufferEncryptionType 
 
 	then = now;
 
-	_gotoIfError(clean, Buffer_decrypt(
+	gotoIfError(clean, Buffer_decrypt(
 		buf,
 		Buffer_createNull(),
 		encryptionType,
 		key,
 		tag,
 		iv
-	));
+	))
 
 	now = Time_now();
 
 	Log_debugLnx(
-		"Decrypt AES GCM: %llu bytes within %fs (%fns/byte, %fbytes/sec).",
+		"Decrypt AES GCM: %"PRIu64" bytes within %fs (%fns/byte, %fbytes/sec).",
 		Buffer_length(buf),
 		(F64)(now - then) / SECOND,
 		(F64)(now - then) / Buffer_length(buf),
@@ -337,18 +329,18 @@ clean:
 	return err;
 }
 
-Error _CLI_profileAES256(ParsedArgs args, Buffer buf) {
-	return _CLI_profileEncryption(args, buf, EBufferEncryptionType_AES256GCM);
+Error CLI_profileAES256Impl(ParsedArgs args, Buffer buf) {
+	return CLI_profileEncryptionImpl(args, buf, EBufferEncryptionType_AES256GCM);
 }
 
-Error _CLI_profileAES128(ParsedArgs args, Buffer buf) {
-	return _CLI_profileEncryption(args, buf, EBufferEncryptionType_AES128GCM);
+Error CLI_profileAES128Impl(ParsedArgs args, Buffer buf) {
+	return CLI_profileEncryptionImpl(args, buf, EBufferEncryptionType_AES128GCM);
 }
 
 Bool CLI_profileAES256(ParsedArgs args) {
-	return CLI_profileData(args, _CLI_profileAES256);
+	return CLI_profileData(args, CLI_profileAES256Impl);
 }
 
 Bool CLI_profileAES128(ParsedArgs args) {
-	return CLI_profileData(args, _CLI_profileAES128);
+	return CLI_profileData(args, CLI_profileAES128Impl);
 }

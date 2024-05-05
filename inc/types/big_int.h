@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -22,6 +22,10 @@
 #include "types/vec.h"
 #include "types/platform_types.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef struct Allocator Allocator;
 typedef struct CharString CharString;
 
@@ -43,7 +47,7 @@ typedef struct BigInt {
 BigInt BigInt_createNull();
 Error BigInt_create(U16 bitCount, Allocator allocator, BigInt *big);			//Aligns bitCount to 64.
 Error BigInt_createRef(U64 *ptr, U64 ptrCount, BigInt *big);					//ref U64 ptr[ptrCount]
-Error BigInt_createConstRef(const U64 *ptr, U64 ptrCount, BigInt *big);			//const ref U64 ptr[ptrCount]
+Error BigInt_createRefConst(const U64 *ptr, U64 ptrCount, BigInt *big);			//const ref U64 ptr[ptrCount]
 Error BigInt_createCopy(BigInt *a, Allocator alloc, BigInt *b);
 
 Bool BigInt_free(BigInt *a, Allocator allocator);
@@ -64,8 +68,8 @@ Bool BigInt_mul(BigInt *a, BigInt b, Allocator allocator);						//Multiply on se
 Bool BigInt_add(BigInt *a, BigInt b);											//Add on self and keep bit count
 Bool BigInt_sub(BigInt *a, BigInt b);											//Subtract on self and keep bit count
 
-Bool BigInt_mod(BigInt *a, BigInt b);
-Bool BigInt_div(BigInt *a, BigInt b);
+//Bool BigInt_mod(BigInt *a, BigInt b);
+//Bool BigInt_div(BigInt *a, BigInt b);
 
 //Bitwise
 
@@ -120,7 +124,7 @@ typedef enum EIntegerEncoding {
 
 Error BigInt_hex(BigInt b, Allocator allocator, CharString *result, Bool leadingZeros);
 Error BigInt_oct(BigInt b, Allocator allocator, CharString *result, Bool leadingZeros);
-Error BigInt_dec(BigInt b, Allocator allocator, CharString *result, Bool leadingZeros);
+//Error BigInt_dec(BigInt b, Allocator allocator, CharString *result, Bool leadingZeros);
 Error BigInt_bin(BigInt b, Allocator allocator, CharString *result, Bool leadingZeros);
 Error BigInt_nyto(BigInt b, Allocator allocator, CharString *result, Bool leadingZeros);
 Error BigInt_toString(
@@ -133,8 +137,8 @@ Error BigInt_toString(
 
 //U128
 
-#if _PLATFORM_TYPE == PLATFORM_LINUX
-	typedef __uint128 U128;
+#if _PLATFORM_TYPE != PLATFORM_WINDOWS
+	typedef __uint128_t U128;
 #else
 	typedef I32x4 U128;
 #endif
@@ -183,8 +187,8 @@ U128 U128_clamp(U128 a, U128 mi, U128 ma);
 
 U128 U128_mul64(U64 a, U64 b);			//Multiply two 64-bit numbers to generate a 128-bit number
 U128 U128_add64(U64 a, U64 b);			//Add two 64-bit numbers but keep the overflow bit
-U128 U128_div(U128 a, U128 b);
-U128 U128_mod(U128 a, U128 b);
+//U128 U128_div(U128 a, U128 b);
+//U128 U128_mod(U128 a, U128 b);
 U128 U128_mul(U128 a, U128 b);
 U128 U128_add(U128 a, U128 b);
 U128 U128_sub(U128 a, U128 b);
@@ -193,3 +197,22 @@ U128 U128_sub(U128 a, U128 b);
 
 U8 U128_bitScan(U128 a);						//Find highest bit that was on. Returns U8_MAX if 0
 Bool U128_isBase2(U128 a);
+
+//Transform to string
+
+Error U128_hex(U128 a, Allocator allocator, CharString *result, Bool leadingZeros);
+Error U128_oct(U128 a, Allocator allocator, CharString *result, Bool leadingZeros);
+//Error U128_dec(BigInt a, Allocator allocator, CharString *result, Bool leadingZeros);
+Error U128_bin(U128 a, Allocator allocator, CharString *result, Bool leadingZeros);
+Error U128_nyto(U128 a, Allocator allocator, CharString *result, Bool leadingZeros);
+Error U128_toString(
+	U128 a,
+	Allocator allocator,
+	CharString *result,
+	EIntegerEncoding encoding,
+	Bool leadingZeros
+);
+
+#ifdef __cplusplus
+	}
+#endif

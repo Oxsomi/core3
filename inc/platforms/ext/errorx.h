@@ -1,4 +1,4 @@
-/* OxC3(Oxsomi core 3), a general framework and toolset for cross platform applications.
+/* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
 *  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
@@ -21,13 +21,19 @@
 #pragma once
 #include "types/types.h"
 
+#ifdef __cplusplus
+	extern "C" {
+#endif
+
 typedef enum ELogLevel ELogLevel;
 typedef enum ELogOptions ELogOptions;
 typedef struct CharString CharString;
 typedef struct Error Error;
 
-void Error_print(Allocator alloc, Error err, ELogLevel logLevel, ELogOptions options);
 void Error_printx(Error err, ELogLevel logLevel, ELogOptions options);
 
-impl CharString Error_formatPlatformError(Allocator alloc, Error err);
 CharString Error_formatPlatformErrorx(Error err);
+
+#ifdef __cplusplus
+	}
+#endif
