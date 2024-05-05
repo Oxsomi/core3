@@ -18,11 +18,10 @@
 *  This is called dual licensing.
 */
 
-#include "platforms/ext/listx_impl.h"
+#include "types/list_impl.h"
 #include "types/string.h"
-#include "platforms/ext/stringx.h"
-#include "core3_bindings/parser.h"
-#include "core3_bindings/lexer.h"
+#include "types/parser.h"
+#include "types/lexer.h"
 
 TListImpl(Token);
 TListImpl(Symbol);
@@ -91,14 +90,16 @@ Error Parser_eraseDefine(ListDefine *defines, ListUserDefine *userDefines, U64 i
 
 //Define without value
 
-Error Parser_addDefine(ListDefine *defines, U32 nameLexerTokenId) {
+Error Parser_addDefine(ListDefine *defines, U32 nameLexerTokenId, Allocator alloc) {
 	Define define = (Define) { .defineType = EDefineType_ValueEmpty, .nameTokenId = nameLexerTokenId };
-	return ListDefine_pushBackx(defines, define);
+	return ListDefine_pushBack(defines, define, alloc);
 }
 
 //Define with value
 
-Error Parser_addDefineWithValue(ListDefine *defines, U32 nameLexerTokenId, U32 childLexerTokenId, U16 valueTokenCount) {
+Error Parser_addDefineWithValue(
+	ListDefine *defines, U32 nameLexerTokenId, U32 childLexerTokenId, U16 valueTokenCount, Allocator alloc
+) {
 
 	Define define = (Define) { 
 		.defineType = EDefineType_ValueFull, 
@@ -107,7 +108,7 @@ Error Parser_addDefineWithValue(ListDefine *defines, U32 nameLexerTokenId, U32 c
 		.valueStartId = childLexerTokenId
 	};
 
-	return ListDefine_pushBackx(defines, define);
+	return ListDefine_pushBack(defines, define, alloc);
 }
 
 //Macro with(out) value
@@ -118,7 +119,8 @@ Error Parser_addMacro(
 	U32 childLexerTokenId, 
 	U8 childCount,
 	U32 valueLexerTokenId,
-	U16 valueTokenCount
+	U16 valueTokenCount,
+	Allocator alloc
 ) {
 
 	Define define = (Define) { 
@@ -130,7 +132,7 @@ Error Parser_addMacro(
 		.valueStartId = valueLexerTokenId
 	};
 
-	return ListDefine_pushBackx(defines, define);
+	return ListDefine_pushBack(defines, define, alloc);
 }
 
 //Parse token type
@@ -271,7 +273,8 @@ Error Parser_preprocessContents(
 	ListUserDefine userDefines, 
 	U64 tokenOffset, 
 	U64 totalTokenCount,
-	CharString *replaced
+	CharString *replaced,
+	Allocator alloc
 ) {
 
 	CharString temp = CharString_createNull();
@@ -294,41 +297,41 @@ Error Parser_preprocessContents(
 			case ELexerTokenType_Identifier: {
 
 				if(CharString_length(*replaced))
-					_gotoIfError(clean, CharString_appendx(replaced, ' '));
+					gotoIfError(clean, CharString_append(replaced, ' ', alloc))
 
 				//If keyword is "defined" then match defined(identifier)
 
 				if (CharString_equalsStringSensitive(lextStr, CharString_createRefCStrConst("defined"))) {
 
 					if(tokenCount < 3)
-						_gotoIfError(clean, Error_invalidState(2, "Parser_handleIfCondition() expected defined(identifier)"));
+						gotoIfError(clean, Error_invalidState(2, "Parser_handleIfCondition() expected defined(identifier)"))
 
 					lextStr = LexerToken_asString(lexer->tokens.ptr[tokenOffset], *lexer);
 
 					if(!CharString_equalsSensitive(lextStr, '('))
-						_gotoIfError(clean, Error_invalidState(
+						gotoIfError(clean, Error_invalidState(
 							3, "Parser_handleIfCondition() expected '(' in defined(identifier)"
-						));
+						))
 
 					LexerToken identifier = lexer->tokens.ptr[tokenOffset + 1];
 
 					if((identifier.offsetType >> 30) != ELexerTokenType_Identifier)
-						_gotoIfError(clean, Error_invalidState(
+						gotoIfError(clean, Error_invalidState(
 							4, "Parser_handleIfCondition() expected identifier in defined(identifier)"
-						));
+						))
 
 					lextStr = LexerToken_asString(lexer->tokens.ptr[tokenOffset + 2], *lexer);
 
 					if (!CharString_equalsSensitive(lextStr, ')'))
-						_gotoIfError(clean, Error_invalidState(
+						gotoIfError(clean, Error_invalidState(
 							5, "Parser_handleIfCondition() expected ')' in defined(identifier)"
-						));
+						))
 
 					lextStr = LexerToken_asString(identifier, *lexer);
 
 					U64 defineId = Parser_findDefine(defines, userDefines, lextStr, lexer);
 
-					_gotoIfError(clean, CharString_appendx(replaced, defineId != U64_MAX ? '1' : '0'));
+					gotoIfError(clean, CharString_append(replaced, defineId != U64_MAX ? '1' : '0', alloc))
 
 					i += 3;
 					break;
@@ -339,24 +342,24 @@ Error Parser_preprocessContents(
 				U64 defineId = Parser_findDefine(defines, userDefines, lextStr, lexer);
 
 				if (defineId == U64_MAX)
-					_gotoIfError(clean, Error_invalidState(6, "Parser_handleIfCondition() expected define as identifier"));
+					gotoIfError(clean, Error_invalidState(6, "Parser_handleIfCondition() expected define as identifier"))
 
 				if (defineId >= defines.length) {		//User defined (must be int)
 
 					UserDefine ud = userDefines.ptr[defineId - defines.length];
 
 					if(!CharString_length(ud.value))
-						_gotoIfError(clean, Error_invalidState(
+						gotoIfError(clean, Error_invalidState(
 							12, "Parser_handleIfCondition() expected value of user define"
-						));
+						))
 
 					U64 tmp = 0;
 					if(!CharString_parseU64(ud.value, &tmp) || (tmp >> 63))
-						_gotoIfError(clean, Error_invalidState(
+						gotoIfError(clean, Error_invalidState(
 							13, "Parser_handleIfCondition() expected user define as int (<I64_MAX)"
-						));
+						))
 
-					_gotoIfError(clean, CharString_appendStringx(replaced, ud.value));
+					gotoIfError(clean, CharString_appendString(replaced, ud.value, alloc))
 					break;
 				}
 
@@ -366,7 +369,7 @@ Error Parser_preprocessContents(
 
 				if (def.defineType & EDefineType_IsMacro) {
 					//TODO: Support macros
-					_gotoIfError(clean, Error_unimplemented(0, "Parser_handleIfCondition() #if value not supported yet"));
+					gotoIfError(clean, Error_unimplemented(0, "Parser_handleIfCondition() #if value not supported yet"))
 				}
 
 				//Regular define (visit define)
@@ -379,9 +382,11 @@ Error Parser_preprocessContents(
 					const C8 *tokenStart = LexerToken_getTokenStart(start, *lexer);
 					const C8 *tokenEnd = LexerToken_getTokenEnd(end, *lexer);
 
-					_gotoIfError(clean, CharString_appendStringx(replaced, CharString_createRefSizedConst(
-						tokenStart, tokenEnd - tokenStart, false
-					)));
+					gotoIfError(clean, CharString_appendString(
+						replaced,
+						CharString_createRefSizedConst(tokenStart, tokenEnd - tokenStart, false),
+						alloc
+					))
 				}
 
 				break;
@@ -390,9 +395,9 @@ Error Parser_preprocessContents(
 			//Unsupported in C
 
 			case ELexerTokenType_Double:
-				_gotoIfError(clean, Error_invalidState(
+				gotoIfError(clean, Error_invalidState(
 					7, "Parser_handleIfCondition() #if statements only accept integers and defines"
-				));
+				))
 
 			//Store value
 
@@ -400,34 +405,35 @@ Error Parser_preprocessContents(
 			
 				U64 tmp = 0;
 				if(!CharString_parseU64(lextStr, &tmp) || tmp >> 63)
-					_gotoIfError(clean, Error_invalidState(
+					gotoIfError(clean, Error_invalidState(
 						9, "Parser_handleIfCondition() #if statements expected integer (< I64_MAX)"
-					));
+					))
 
-				_gotoIfError(clean, CharString_appendStringx(replaced, lextStr));
+				gotoIfError(clean, CharString_appendString(replaced, lextStr, alloc))
 				break;
 
 			//Operators
 
 			case ELexerTokenType_Symbols: 
-				_gotoIfError(clean, CharString_appendStringx(replaced, lextStr));
+				gotoIfError(clean, CharString_appendString(replaced, lextStr, alloc))
 				break;
 		}
 	}
 
 clean:
-	CharString_freex(&temp);
+	CharString_free(&temp, alloc);
 	return err;
 }
 
 Error Parser_handleIfCondition(
-	PreprocessorIfStack *stack,
+	//PreprocessorIfStack *stack,
 	const Lexer *lexer,
 	ListDefine defines,
 	ListUserDefine userDefines,
 	U64 tokenOffset,
 	U64 tokenCount,
-	Bool *value
+	Bool *value,
+	Allocator alloc
 ) {
 
 	if(!tokenCount)
@@ -444,11 +450,11 @@ Error Parser_handleIfCondition(
 
 	do {
 
-		_gotoIfError(clean, Parser_preprocessContents(lexer, defines, userDefines, tokenOffset, tokenCount, &replaced));
+		gotoIfError(clean, Parser_preprocessContents(lexer, defines, userDefines, tokenOffset, tokenCount, &replaced, alloc))
 
-		Lexer_free(&tempLexer);
+		Lexer_free(&tempLexer, alloc);
 
-		_gotoIfError(clean, Lexer_create(replaced, &tempLexer));
+		gotoIfError(clean, Lexer_create(replaced, alloc, &tempLexer))
 
 		hasAnyIdentifier = false;
 
@@ -461,11 +467,11 @@ Error Parser_handleIfCondition(
 		++loopRecursions;
 
 		if(loopRecursions > 32)
-			_gotoIfError(clean, Error_invalidState(
+			gotoIfError(clean, Error_invalidState(
 				0, 
 				"Parser_handleIfCondition() tried to parse #if condition. "
 				"But it contained a keyword it didn't recognize. This possibly resulted in an infinite loop (>32 recursions)"
-			));
+			))
 	}
 	while(hasAnyIdentifier);		//Lexer is freed if there's no more work
 
@@ -473,10 +479,10 @@ Error Parser_handleIfCondition(
 	//Everything except tokens are cleared.
 	//Tokens can be modified to evaluate the expression
 
-	_gotoIfError(clean, Parser_create(&tempLexer, &tempParser, (ListUserDefine) { 0 }));
+	gotoIfError(clean, Parser_create(&tempLexer, &tempParser, (ListUserDefine) { 0 }, alloc))
 
-	_gotoIfError(clean, ListSymbol_clear(&tempParser.symbols));
-	_gotoIfError(clean, ListDefine_clear(&tempParser.defines));
+	gotoIfError(clean, ListSymbol_clear(&tempParser.symbols))
+	gotoIfError(clean, ListDefine_clear(&tempParser.defines))
 
 	//Then we have to scan for tokens in order of operator precedence and replace the affected tokens by a value
 
@@ -490,9 +496,9 @@ Error Parser_handleIfCondition(
 		if (tempParser.tokens.length == 1) {				//x
 
 			if(first != ETokenType_Integer)
-				_gotoIfError(clean, Error_invalidOperation(
+				gotoIfError(clean, Error_invalidOperation(
 					3, "Parser_handleIfCondition() couldn't parse #if statement correctly. Expected !x, -x, +x or ~x"
-				));
+				))
 
 			*value = firstToken->value;
 		}
@@ -503,9 +509,9 @@ Error Parser_handleIfCondition(
 			ETokenType second = secondToken->tokenType;
 
 			if(second != ETokenType_Integer)
-				_gotoIfError(clean, Error_invalidOperation(
+				gotoIfError(clean, Error_invalidOperation(
 					0, "Parser_handleIfCondition() couldn't parse #if statement correctly. Expected !x, -x, +x or ~x"
-				));
+				))
 
 			I64 result = secondToken->value;
 
@@ -517,9 +523,9 @@ Error Parser_handleIfCondition(
 				case ETokenType_Add:			result = +result;		break;
 
 				default:
-					_gotoIfError(clean, Error_invalidOperation(
+					gotoIfError(clean, Error_invalidOperation(
 						1, "Parser_handleIfCondition() couldn't parse #if statement correctly. Unsupported token type (!+-~)"
-					));
+					))
 			}
 
 			*value = result;
@@ -531,11 +537,11 @@ Error Parser_handleIfCondition(
 			ETokenType third = thirdToken->tokenType;
 
 			if(first != ETokenType_Integer || third != ETokenType_Integer)
-				_gotoIfError(clean, Error_invalidOperation(
+				gotoIfError(clean, Error_invalidOperation(
 					4, 
 					"Parser_handleIfCondition() couldn't parse #if statement correctly. "
 					"Expected integer operator integer"
-				));
+				))
 
 			I64 result = firstToken->value;
 			I64 thirdValue = thirdToken->value;
@@ -568,15 +574,15 @@ Error Parser_handleIfCondition(
 				case ETokenType_Neq:			result = result != thirdValue;								break;
 
 				default:
-					_gotoIfError(clean, Error_invalidOperation(
+					gotoIfError(clean, Error_invalidOperation(
 						4, 
 						"Parser_handleIfCondition() couldn't parse #if statement correctly. "
 						"Expected (a op b) where op is <=, >=, <, >, ==, !=, *, /, %, +, -, &&, ||, &, |, ^, << or >>"
-					));
+					))
 			}
 
 			if(nullCheck && !thirdValue)
-				_gotoIfError(clean, Error_unimplemented(
+				gotoIfError(clean, Error_unimplemented(
 					0, "Parser_handleIfCondition() #if statement contained division by zero"
 				))
 
@@ -584,20 +590,20 @@ Error Parser_handleIfCondition(
 		}
 
 		else {		//TODO: Complex expressions aren't supported yet
-			_gotoIfError(clean, Error_unimplemented(
+			gotoIfError(clean, Error_unimplemented(
 				0, "Parser_handleIfCondition() can't handle complex expressions yet (only operators with 1 or 2 integers"
 			))
 		}
 	}
 
-	else _gotoIfError(clean, Error_invalidOperation(
+	else gotoIfError(clean, Error_invalidOperation(
 		2, "Parser_handleIfCondition() couldn't parse #if statement correctly. Missing token"
-	));
+	))
 
 clean:
-	Parser_free(&tempParser);
-	Lexer_free(&tempLexer);
-	CharString_freex(&replaced);
+	Parser_free(&tempParser, alloc);
+	Lexer_free(&tempLexer, alloc);
+	CharString_free(&replaced, alloc);
 	return err;
 }
 
@@ -610,7 +616,7 @@ typedef struct ParserContext {
 	const Lexer *lexer;
 } ParserContext;
 
-Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTokenCount) {
+Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTokenCount, Allocator alloc) {
 
 	Error err = Error_none();
 	const Lexer *lexer = context->lexer;
@@ -627,19 +633,19 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 	if (lext.length >= 1 && lexer->source.ptr[lext.offsetType << 2 >> 2] == '#') {
 
 		if(lexerTokenCount < 2)
-			_gotoIfError(clean, Error_invalidParameter(0, 0, "ParserContext_visit() source was invalid. Expected #<token>"));
+			gotoIfError(clean, Error_invalidParameter(0, 0, "ParserContext_visit() source was invalid. Expected #<token>"))
 
 		if(lext.length != 1)
-			_gotoIfError(clean, Error_invalidParameter(
+			gotoIfError(clean, Error_invalidParameter(
 				0, 0, "ParserContext_visit() source was invalid. Expected # for preprocessor"
-			));
+			))
 
 		lext = lexer->tokens.ptr[lexerTokenId + 1];
 
 		if(lext.length < 2)
-			_gotoIfError(clean, Error_invalidParameter(
+			gotoIfError(clean, Error_invalidParameter(
 				0, 0, "ParserContext_visit() source was invalid. #<token> requires at least 2 chars"
-			));
+			))
 
 		CharString lextStr = LexerToken_asString(lext, *lexer);
 
@@ -659,17 +665,17 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 				CharString once = CharString_createRefCStrConst(pragmaOnce[1]);
 
 				if(!CharString_equalsStringSensitive(pragma, lextStr) || lexerTokenCount != 3)
-					_gotoIfError(clean, Error_invalidParameter(
+					gotoIfError(clean, Error_invalidParameter(
 						0, 0, "ParserContext_visit() source was invalid. Expected #pragma once if #pr is detected"
-					));
+					))
 
 				lext = lexer->tokens.ptr[lexerTokenId + 2];
 				lextStr = LexerToken_asString(lext, *lexer);
 
 				if(!CharString_equalsStringSensitive(once, lextStr))
-					_gotoIfError(clean, Error_invalidParameter(
+					gotoIfError(clean, Error_invalidParameter(
 						0, 0, "ParserContext_visit() source was invalid. Expected #pragma once if #pr is detected"
-					));
+					))
 
 				break;
 			}
@@ -680,9 +686,9 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 					goto clean;
 
 				if (!CharString_equalsStringSensitive(CharString_createRefCStrConst("include"), lextStr))
-					_gotoIfError(clean, Error_invalidParameter(
+					gotoIfError(clean, Error_invalidParameter(
 						0, 0, "ParserContext_visit() source was invalid. Expected #include if #in is detected"
-					));
+					))
 
 				//TODO:
 
@@ -694,32 +700,32 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 					goto clean;
 
 				if (!CharString_equalsStringSensitive(CharString_createRefCStrConst("define"), lextStr))
-					_gotoIfError(clean, Error_invalidParameter(
+					gotoIfError(clean, Error_invalidParameter(
 						0, 0, "ParserContext_visit() source was invalid. Expected #define if #de is detected"
-					));
+					))
 
 				if(lexerTokenCount < 3)
-					_gotoIfError(clean, Error_invalidParameter(
+					gotoIfError(clean, Error_invalidParameter(
 						0, 0, "ParserContext_visit() source was invalid. Expected #define <define>..."
-					));
+					))
 
 				lext = lexer->tokens.ptr[lexerTokenId + 2];
 				lextStr = LexerToken_asString(lext, *lexer);
 
 				U64 i = Parser_findDefine(context->defines, context->userDefines, lextStr, lexer);
-				_gotoIfError(clean, Parser_eraseDefine(&context->defines, &context->userDefines, i));
+				gotoIfError(clean, Parser_eraseDefine(&context->defines, &context->userDefines, i))
 
 				//"defined" is not allowed
 
 				if(CharString_equalsStringSensitive(lextStr, CharString_createRefCStrConst("defined")))
-					_gotoIfError(clean, Error_invalidParameter(
+					gotoIfError(clean, Error_invalidParameter(
 						0, 0, "ParserContext_visit() source was invalid. #define defined is illegal"
-					));
+					))
 
 				//Name only, no value (#define MY_VALUE)
 
 				if(lexerTokenCount == 3)
-					_gotoIfError(clean, Parser_addDefine(&context->defines, lexerTokenId + 2))
+					gotoIfError(clean, Parser_addDefine(&context->defines, lexerTokenId + 2, alloc))
 
 				//#define MY_VALUE(x, ...) ... or #define MY_VALUE 1 ...
 
@@ -737,9 +743,9 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 					if(isMacro) {
 
 						if (lexerTokenCount < 6)
-							_gotoIfError(clean, Error_invalidParameter(
+							gotoIfError(clean, Error_invalidParameter(
 								0, 0, "ParserContext_visit() source was invalid. Expected #define macro(...) ..."
-							));
+							))
 
 						//Require (a), (a, b, ...), (...), etc.
 
@@ -749,9 +755,9 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 						lextStr = LexerToken_asString(lext, *lexer);
 
 						if(!CharString_equalsSensitive(lextStr, '('))
-							_gotoIfError(clean, Error_invalidParameter(
+							gotoIfError(clean, Error_invalidParameter(
 								0, 0, "ParserContext_visit() source was invalid. Expected ( in #define macro(...)"
-							));
+							))
 
 						++j;
 
@@ -766,14 +772,14 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 							}
 
 							if((lext.offsetType >> 30) != ELexerTokenType_Identifier)
-								_gotoIfError(clean, Error_invalidParameter(
+								gotoIfError(clean, Error_invalidParameter(
 									0, 0, "ParserContext_visit() source was invalid. Expected identifier in macro"
-								));
+								))
 
 							if (lexerTokenCount <= j - lexerTokenId + 1)
-								_gotoIfError(clean, Error_invalidParameter(
+								gotoIfError(clean, Error_invalidParameter(
 									0, 0, "ParserContext_visit() source was invalid. Expected token in macro"
-								));
+								))
 
 							lext = lexer->tokens.ptr[j + 1];
 							lextStr = LexerToken_asString(lext, *lexer);
@@ -784,56 +790,65 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 							}
 
 							if(!CharString_equalsSensitive(lextStr, ','))
-								_gotoIfError(clean, Error_invalidParameter(
+								gotoIfError(clean, Error_invalidParameter(
 									0, 0, "ParserContext_visit() source was invalid. Expected , separator in macro"
-								));
+								))
 						}
 
 						lext = lexer->tokens.ptr[j];
 						lextStr = LexerToken_asString(lext, *lexer);
 
 						if(!CharString_equalsSensitive(lextStr, ')'))
-							_gotoIfError(clean, Error_invalidParameter(
+							gotoIfError(clean, Error_invalidParameter(
 								0, 0, "ParserContext_visit() source was invalid. Expected ) in #define macro(...)"
-							));
+							))
 
 						if(((j - (lexerTokenId + 3) + 1) >> 1) >> 8)
-							_gotoIfError(clean, Error_invalidParameter(
+							gotoIfError(clean, Error_invalidParameter(
 								0, 0, "ParserContext_visit() source was invalid. Too many macro children"
-							));
+							))
 
 						if((lexerTokenId + lexerTokenCount - (j + 1)) >> 16)
-							_gotoIfError(clean, Error_invalidParameter(
+							gotoIfError(clean, Error_invalidParameter(
 								0, 0, "ParserContext_visit() source was invalid. Too many value children"
-							));
+							))
 
-						_gotoIfError(clean, Parser_addMacro(
+						gotoIfError(clean, Parser_addMacro(
 							&context->defines, 
 							lexerTokenId + 2,									//Name
 							lexerTokenId + 3,									//Children
 							(U8)((j - (lexerTokenId + 3) + 1) >> 1),			//Child count
 							j + 1,												//Value start
-							(U16)(lexerTokenId + lexerTokenCount - (j + 1))		//Value count
-						));
+							(U16)(lexerTokenId + lexerTokenCount - (j + 1)),	//Value count
+							alloc
+						))
 					}
 
 					//Otherwise we have a value
 
-					else _gotoIfError(clean, Parser_addDefineWithValue(
-						&context->defines, lexerTokenId + 2, lexerTokenId + 3, lexerTokenCount - 3
-					));
+					else {
+
+						if((lexerTokenCount - 3) >> 16)
+							gotoIfError(clean, Error_invalidParameter(
+								0, 0, "ParserContext_visit() length of lexerToken is invalid; max of 64KiB"
+							))
+
+						gotoIfError(clean, Parser_addDefineWithValue(
+							&context->defines, lexerTokenId + 2, lexerTokenId + 3, (U16)(lexerTokenCount - 3), alloc
+						))
+					}
 
 				}
 
 				break;
 			}
 
-			case C8x2('i', 'f'):		//#if, #ifdef, #ifndef
+			case C8x2('i', 'f'): {		//#if, #ifdef, #ifndef
 
 				if(context->stack.stackIndex == 16)
-					_gotoIfError(clean, Error_invalidParameter(
+					gotoIfError(clean, Error_invalidParameter(
 						0, 0, "ParserContext_visit() source was invalid. #if stack can only be 16 deep"
-					));
+					))
 
 				++context->stack.stackIndex;
 
@@ -844,23 +859,23 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 					if(lext.length == 5 && !CharString_equalsStringSensitive(			//#ifdef
 						CharString_createRefCStrConst("ifdef"), lextStr
 					))
-						_gotoIfError(clean, Error_invalidParameter(
+						gotoIfError(clean, Error_invalidParameter(
 							0, 0, "ParserContext_visit() source was invalid. Expected #ifdef"
-						));
+						))
 
 					if(lext.length == 6 && !CharString_equalsStringSensitive(			//#ifndef
 						CharString_createRefCStrConst("ifndef"), lextStr
 					))
-						_gotoIfError(clean, Error_invalidParameter(
+						gotoIfError(clean, Error_invalidParameter(
 							0, 0, "ParserContext_visit() source was invalid. Expected #ifdef"
-						));
+						))
 
 					Bool isIfdef = lext.length == 5;
 
 					if(lexerTokenCount < 3)
-						_gotoIfError(clean, Error_invalidParameter(
+						gotoIfError(clean, Error_invalidParameter(
 							0, 0, "ParserContext_visit() source was invalid. Expected #if(n)def <define>"
-						));
+						))
 
 					lext = lexer->tokens.ptr[lexerTokenId + 2];
 					lextStr = LexerToken_asString(lext, *lexer);
@@ -881,18 +896,19 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 				}
 
 				else if(lext.length != 2)
-					_gotoIfError(clean, Error_invalidParameter(
+					gotoIfError(clean, Error_invalidParameter(
 						0, 0, "ParserContext_visit() source was invalid. Expected #if, #ifndef or #ifdef"
 					))
 
 				else {						//#if
 
 					Bool value = false;
-					_gotoIfError(clean, Parser_handleIfCondition(
-						&context->stack, lexer, context->defines, context->userDefines,
+					gotoIfError(clean, Parser_handleIfCondition(
+						/*&context->stack,*/ lexer, context->defines, context->userDefines,
 						lexerTokenId + 2, lexerTokenCount - 2,
-						&value
-					));
+						&value,
+						alloc
+					))
 
 					if (value) {
 						context->stack.hasProcessedIf |= mask;
@@ -906,18 +922,19 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 				}
 
 				break;
+			}
 
 			case C8x2('e', 'l'): {		//#else, #elif
 
 				if(lext.length != 4)
-					_gotoIfError(clean, Error_invalidParameter(
+					gotoIfError(clean, Error_invalidParameter(
 						0, 0, "ParserContext_visit() source was invalid. Expected #elif or #else"
-					));
+					))
 
 				if(!context->stack.stackIndex)
-					_gotoIfError(clean, Error_invalidParameter(
+					gotoIfError(clean, Error_invalidParameter(
 						0, 0, "ParserContext_visit() source was invalid. #else/#elif didn't have a matching #if/#ifdef/#ifndef"
-					));
+					))
 
 				U16 mask = (U16)(1 << (context->stack.stackIndex - 1));
 
@@ -940,11 +957,12 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 					//#elif only works if none of the predecessors have been processed yet
 
 					Bool value = false;
-					_gotoIfError(clean, Parser_handleIfCondition(
-						&context->stack, lexer, context->defines, context->userDefines,
+					gotoIfError(clean, Parser_handleIfCondition(
+						/*&context->stack,*/ lexer, context->defines, context->userDefines,
 						lexerTokenId + 2, lexerTokenCount - 2,
-						&value
-					));
+						&value,
+						alloc
+					))
 
 					if (!(context->stack.hasProcessedIf & mask) && value) {
 						context->stack.hasProcessedIf |= mask;
@@ -954,9 +972,9 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 					else context->stack.activeStack &=~ mask;		//Ensure we mark the scope as inactive
 				}
 
-				else _gotoIfError(clean, Error_invalidParameter(
+				else gotoIfError(clean, Error_invalidParameter(
 					0, 0, "ParserContext_visit() source was invalid. Expected #elif or #else"
-				));
+				))
 
 				break;
 			}
@@ -964,14 +982,14 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 			case C8x2('e', 'n'):		//#endif
 
 				if (!CharString_equalsStringSensitive(CharString_createRefCStrConst("endif"), lextStr))
-					_gotoIfError(clean, Error_invalidParameter(
+					gotoIfError(clean, Error_invalidParameter(
 						0, 0, "ParserContext_visit() source was invalid. Expected #endif if #en is detected"
-					));
+					))
 
 				if(!context->stack.stackIndex)
-					_gotoIfError(clean, Error_invalidParameter(
+					gotoIfError(clean, Error_invalidParameter(
 						0, 0, "ParserContext_visit() source was invalid. #endif didn't have a matching #if/#ifdef/#ifndef"
-					));
+					))
 
 				--context->stack.stackIndex;
 				break;
@@ -982,9 +1000,9 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 					goto clean;
 
 				if (!CharString_equalsStringSensitive(CharString_createRefCStrConst("error"), lextStr))
-					_gotoIfError(clean, Error_invalidParameter(
+					gotoIfError(clean, Error_invalidParameter(
 						0, 0, "ParserContext_visit() source was invalid. Expected #error if #er is detected"
-					));
+					))
 
 				const C8 *startPtr = lexer->source.ptr + (lext.offsetType << 2 >> 2);
 				lext = lexer->tokens.ptr[lexerTokenId + lexerTokenCount - 1];
@@ -994,7 +1012,7 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 				endPtr;		//TODO: Put this into the Error msg once it supports CharStrings instead of const C8*
 				startPtr;
 
-				_gotoIfError(clean, Error_invalidState(0, "ParserContext_visit() source triggered #error message"));
+				gotoIfError(clean, Error_invalidState(0, "ParserContext_visit() source triggered #error message"))
 
 				break;
 			}
@@ -1008,23 +1026,23 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 					!CharString_equalsStringSensitive(CharString_createRefCStrConst("undef"), lextStr) ||
 					lexerTokenCount != 3
 				)
-					_gotoIfError(clean, Error_invalidParameter(
+					gotoIfError(clean, Error_invalidParameter(
 						0, 0, "ParserContext_visit() source was invalid. Expected #undef <value> if #un is detected"
-					));
+					))
 
 				lext = lexer->tokens.ptr[lexerTokenId + 2];
 				lextStr = LexerToken_asString(lext, *lexer);
 
 				U64 i = Parser_findDefine(context->defines, context->userDefines, lextStr, lexer);
-				_gotoIfError(clean, Parser_eraseDefine(&context->defines, &context->userDefines, i));
+				gotoIfError(clean, Parser_eraseDefine(&context->defines, &context->userDefines, i))
 
 				break;
 
 			default:					//Unsupported preprocessor statement
 
-				_gotoIfError(clean, Error_unsupportedOperation(
+				gotoIfError(clean, Error_unsupportedOperation(
 					0, "ParserContext_visit() source was invalid. Expected preprocessor directive is unsupported"
-				));
+				))
 
 				break;
 		}
@@ -1039,12 +1057,12 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 
 		for(U32 i = 0; i < lexerTokenCount; ++i) {
 
-			LexerToken lext = lexer->tokens.ptr[lexerTokenId + i];
+			lext = lexer->tokens.ptr[lexerTokenId + i];
 			CharString lextStr = LexerToken_asString(lext, *lexer);
 			ELexerTokenType lextType = (ELexerTokenType)(lext.offsetType >> 30);
 
 			if(CharString_length(lextStr) >> 8)
-				_gotoIfError(clean, Error_invalidParameter(0, 0, "ParserContext_visit() token max size is 256"));
+				gotoIfError(clean, Error_invalidParameter(0, 0, "ParserContext_visit() token max size is 256"))
 
 			switch(lextType) {
 
@@ -1065,7 +1083,7 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 
 							//TODO: Support user define as identifier
 
-							_gotoIfError(clean, Error_unimplemented(0, "ParserContext_visit() user define is unsupported"));
+							gotoIfError(clean, Error_unimplemented(0, "ParserContext_visit() user define is unsupported"))
 						}
 
 						//Macro
@@ -1074,13 +1092,13 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 
 						if (def.defineType & EDefineType_IsMacro) {
 							//TODO: Support macros
-							_gotoIfError(clean, Error_unimplemented(1, "ParserContext_visit() macro is unsupported"));
+							gotoIfError(clean, Error_unimplemented(1, "ParserContext_visit() macro is unsupported"))
 						}
 
 						//Value
 
 						if(def.valueStartId != U32_MAX)
-							_gotoIfError(clean, ParserContext_visit(context, def.valueStartId, def.valueTokens));
+							gotoIfError(clean, ParserContext_visit(context, def.valueStartId, def.valueTokens, alloc))
 					}
 
 					//Otherwise it's probably a type of a keyword
@@ -1093,7 +1111,7 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 							.tokenSize = (U8) CharString_length(lextStr)
 						};
 
-						_gotoIfError(clean, ListToken_pushBackx(&context->tokens, tok));
+						gotoIfError(clean, ListToken_pushBack(&context->tokens, tok, alloc))
 					}
 
 					break;
@@ -1105,7 +1123,7 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 
 					F64 tmp = 0;
 					if(!CharString_parseDouble(lextStr, &tmp))
-						_gotoIfError(clean, Error_invalidOperation(
+						gotoIfError(clean, Error_invalidOperation(
 							2, "ParserContext_visit() expected double but couldn't parse it"
 						))
 
@@ -1116,7 +1134,7 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 						.tokenSize = (U8) CharString_length(lextStr)
 					};
 
-					_gotoIfError(clean, ListToken_pushBackx(&context->tokens, tok));
+					gotoIfError(clean, ListToken_pushBack(&context->tokens, tok, alloc))
 					break;
 				}
 
@@ -1124,7 +1142,7 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 
 					U64 tmp = 0;
 					if(!CharString_parseU64(lextStr, &tmp) || (tmp >> 63))
-						_gotoIfError(clean, Error_invalidOperation(
+						gotoIfError(clean, Error_invalidOperation(
 							3, "ParserContext_visit() expected integer, but couldn't parse it"
 						))
 
@@ -1135,7 +1153,7 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 						.tokenSize = (U8) CharString_length(lextStr)
 					};
 
-					_gotoIfError(clean, ListToken_pushBackx(&context->tokens, tok));
+					gotoIfError(clean, ListToken_pushBack(&context->tokens, tok, alloc))
 					break;
 				}
 
@@ -1152,7 +1170,7 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 						ETokenType tokenType = Parser_getTokenType(lextStr, &subTokenOffset);
 
 						if(tokenType == ETokenType_Count)
-							_gotoIfError(clean, Error_unsupportedOperation(1, "ParserContext_visit() invalid token"));
+							gotoIfError(clean, Error_unsupportedOperation(1, "ParserContext_visit() invalid token"))
 
 						Token tok = (Token) {
 							.naiveTokenId = lexerTokenId + i,
@@ -1161,7 +1179,7 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 							.tokenSize = (U8)(subTokenOffset - prev)
 						};
 
-						_gotoIfError(clean, ListToken_pushBackx(&context->tokens, tok));
+						gotoIfError(clean, ListToken_pushBack(&context->tokens, tok, alloc))
 					}
 			}
 		}
@@ -1171,7 +1189,7 @@ clean:
 	return err;
 }
 
-Error Parser_create(const Lexer *lexer, Parser *parser, ListUserDefine userDefinesOuter) {
+Error Parser_create(const Lexer *lexer, Parser *parser, ListUserDefine userDefinesOuter, Allocator alloc) {
 
 	if(!lexer || !parser)
 		return Error_nullPointer(!lexer ? 0 : 1, "Parser_create()::parser and lexer are required");
@@ -1187,10 +1205,10 @@ Error Parser_create(const Lexer *lexer, Parser *parser, ListUserDefine userDefin
 	Error err = Error_none();
 	ParserContext context = (ParserContext) { .lexer = lexer };
 
-	_gotoIfError(clean, ListSymbol_reservex(&context.symbols, 64));
-	_gotoIfError(clean, ListDefine_reservex(&context.defines, 64));
-	_gotoIfError(clean, ListToken_reservex(&context.tokens, lexer->tokens.length * 3 / 2));
-	_gotoIfError(clean, ListUserDefine_createCopyx(userDefinesOuter, &context.userDefines));
+	gotoIfError(clean, ListSymbol_reserve(&context.symbols, 64, alloc))
+	gotoIfError(clean, ListDefine_reserve(&context.defines, 64, alloc))
+	gotoIfError(clean, ListToken_reserve(&context.tokens, lexer->tokens.length * 3 / 2, alloc))
+	gotoIfError(clean, ListUserDefine_createCopy(userDefinesOuter, alloc, &context.userDefines))
 
 	for (U64 i = 0; i < lexer->expressions.length; ++i) {
 
@@ -1199,7 +1217,7 @@ Error Parser_create(const Lexer *lexer, Parser *parser, ListUserDefine userDefin
 		if(e.type == ELexerExpressionType_MultiLineComment || e.type == ELexerExpressionType_Comment)
 			continue;
 
-		_gotoIfError(clean, ParserContext_visit(&context, e.tokenOffset, e.tokenCount));
+		gotoIfError(clean, ParserContext_visit(&context, e.tokenOffset, e.tokenCount, alloc))
 	}
 
 	//TODO: Combine tokens into symbols
@@ -1207,9 +1225,9 @@ Error Parser_create(const Lexer *lexer, Parser *parser, ListUserDefine userDefin
 clean:
 
 	if(err.genericError) {
-		ListToken_freex(&context.tokens);
-		ListSymbol_freex(&context.symbols);
-		ListDefine_freex(&context.defines);
+		ListToken_free(&context.tokens, alloc);
+		ListSymbol_free(&context.symbols, alloc);
+		ListDefine_free(&context.defines, alloc);
 	}
 
 	else *parser = (Parser) { 
@@ -1219,17 +1237,17 @@ clean:
 		.lexer = lexer
 	};
 
-	ListUserDefine_freex(&context.userDefines);
+	ListUserDefine_free(&context.userDefines, alloc);
 	return err;
 }
 
-Bool Parser_free(Parser *parser) {
+Bool Parser_free(Parser *parser, Allocator alloc) {
 
 	if(!parser)
 		return true;
 
-	ListSymbol_freex(&parser->symbols);
-	ListToken_freex(&parser->tokens);
-	ListDefine_freex(&parser->defines);
+	ListSymbol_free(&parser->symbols, alloc);
+	ListToken_free(&parser->tokens, alloc);
+	ListDefine_free(&parser->defines, alloc);
 	return true;
 }

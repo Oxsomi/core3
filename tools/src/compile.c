@@ -32,6 +32,11 @@
 #include "shader_compiler/compiler.h"
 #include "cli.h"
 
+typedef enum ECompileType {
+	ECompileType_Preprocess,
+	ECompileType_Compile
+} ECompileType;
+
 typedef struct ShaderFileRecursion {
 
 	ListCharString *allShaders;
@@ -43,6 +48,8 @@ typedef struct ShaderFileRecursion {
 	U64 compileModeU64;
 	Bool hasMultipleModes;
 
+	ECompileType compileType;
+
 } ShaderFileRecursion;
 
 const C8 *fileSuffixes[] = {
@@ -50,7 +57,14 @@ const C8 *fileSuffixes[] = {
 	".dxil.hlsl"
 };
 
+const C8 *binarySuffixes[] = {
+	".spv",
+	".dxil"
+};
+
 Error registerFile(FileInfo file, ShaderFileRecursion *shaderFiles) {
+
+	Bool isPreprocess = shaderFiles->compileType == ECompileType_Preprocess;
 
 	Error err = Error_none();
 	CharString copy = CharString_createNull();
@@ -86,7 +100,7 @@ Error registerFile(FileInfo file, ShaderFileRecursion *shaderFiles) {
 
 			//Move output file to allOutputs, unless it needs to be renamed
 			
-			if(!shaderFiles->hasMultipleModes) {
+			if(!shaderFiles->hasMultipleModes && isPreprocess) {
 				gotoIfError(clean, ListCharString_pushBackx(shaderFiles->allOutputs, copy))
 				copy = CharString_createNull();
 			}
@@ -115,19 +129,23 @@ Error registerFile(FileInfo file, ShaderFileRecursion *shaderFiles) {
 				}
 
 				//Append .spv.hlsl and .dxil.hlsl at the end
-				
-				gotoIfError(clean, CharString_formatx(
-					&tempStr, "%.*s%s", 
-					(int)U64_min(
-						CharString_length(copy), 
-						CharString_findLastStringInsensitive(copy, CharString_createRefCStrConst(".hlsl"), 0)
-					),
-					copy.ptr,
-					fileSuffixes[i]
-				))
 
-				gotoIfError(clean, ListCharString_pushBackx(shaderFiles->allOutputs, tempStr))
-				tempStr = CharString_createNull();
+				if(shaderFiles->hasMultipleModes || !isPreprocess) {
+				
+					gotoIfError(clean, CharString_formatx(
+						&tempStr, "%.*s%s", 
+						(int)U64_min(
+							CharString_length(copy), 
+							CharString_findLastStringInsensitive(copy, CharString_createRefCStrConst(".hlsl"), 0)
+						),
+						copy.ptr,
+						isPreprocess ? fileSuffixes[i] : binarySuffixes[i]
+					))
+
+					gotoIfError(clean, ListCharString_pushBackx(shaderFiles->allOutputs, tempStr))
+					tempStr = CharString_createNull();
+				}
+
 				foundFirstMode = true;
 			}
 
@@ -150,6 +168,9 @@ Bool CLI_compileShaderSingle(
 	CharString outputPath
 ) {
 
+	Bool isPreprocess = args.flags & EOperationFlags_Preprocess;
+	//ECompileType compileType = isPreprocess ? ECompileType_Preprocess : ECompileType_Compile;
+
 	Bool isDebug = args.flags & EOperationFlags_Debug;
 
 	CompilerSettings settings = (CompilerSettings) {
@@ -160,8 +181,11 @@ Bool CLI_compileShaderSingle(
 		.outputType = binaryType,
 	};
 
+	//First we need to go from text with includes and defines to easy to parse text
+
 	Error err = Error_none();
 	CompileResult compileResult = (CompileResult) { 0 };
+	CharString tempStr = CharString_createNull();
 	gotoIfError(clean, Compiler_preprocessx(compiler, settings, &compileResult))
 
 	for(U64 i = 0; i < compileResult.compileErrors.length; ++i) {
@@ -174,11 +198,27 @@ Bool CLI_compileShaderSingle(
 		else Log_errorLnx("%s:%"PRIu32":%"PRIu8": %s", e.file.ptr, CompileError_lineId(e), e.lineOffset, e.error.ptr);
 	}
 
+	//Then, we need to parse the text for entrypoints and other misc info that will be important
+
+	if (compileResult.isSuccess && !isPreprocess) {
+
+		tempStr = compileResult.text;
+		compileResult.text = CharString_createNull();
+		CompileResult_freex(&compileResult);
+
+		settings.string = tempStr;
+
+		//gotoIfError(clean, Compiler_parse(compiler, settings, &compileResult))
+	}
+
+	//Write final compile result
+
 	if (compileResult.isSuccess)
 		gotoIfError(clean, File_write(CharString_bufferConst(compileResult.text), outputPath, 10 * MS))
 
 clean:
 	CompileResult_freex(&compileResult);
+	CharString_freex(&tempStr);
 	Error_printx(err, ELogLevel_Error, ELogOptions_Default);
 	return !err.genericError && compileResult.isSuccess;
 }
@@ -258,10 +298,8 @@ clean:
 
 Bool CLI_compileShader(ParsedArgs args) {
 
-	if (!(args.flags & EOperationFlags_Preprocess)) {		//TODO:
-		Log_errorLnx("Currently only supporting OxC3 compile shaders --preprocess");
-		return false;
-	}
+	Bool isPreprocess = args.flags & EOperationFlags_Preprocess;
+	ECompileType compileType = isPreprocess ? ECompileType_Preprocess : ECompileType_Compile;
 
 	//Get input
 
@@ -405,7 +443,8 @@ Bool CLI_compileShader(ParsedArgs args) {
 			.base = resolved,
 			.output = output,
 			.compileModeU64 = compileModeU64,
-			.hasMultipleModes = multipleModes
+			.hasMultipleModes = multipleModes,
+			.compileType = compileType
 		};
 
 		gotoIfError(clean, File_foreach(
@@ -421,7 +460,7 @@ Bool CLI_compileShader(ParsedArgs args) {
 		isFolder = true;
 	}
 
-	//We need to 
+	//We need to add multiple compile modes
 
 	else for(U8 i = 0; i < ESHBinaryType_Count; ++i) {
 
@@ -430,7 +469,7 @@ Bool CLI_compileShader(ParsedArgs args) {
 
 		//Replace output's .hlsl by .spv.hlsl or .dxil.hlsl
 
-		if (multipleModes)
+		if (multipleModes || !isPreprocess)
 			gotoIfError(clean, CharString_formatx(
 				&tempStr, "%.*s%s", 
 				(int)U64_min(
@@ -438,7 +477,7 @@ Bool CLI_compileShader(ParsedArgs args) {
 					CharString_findLastStringInsensitive(output, CharString_createRefCStrConst(".hlsl"), 0)
 				),
 				output.ptr,
-				fileSuffixes[i]
+				isPreprocess ? fileSuffixes[i] : binarySuffixes[i]
 			))
 
 		//Otherwise we can safely reuse output, since it's just a ref

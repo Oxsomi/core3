@@ -85,8 +85,8 @@ typedef struct Lexer {
 	ListLexerExpression expressions;
 } Lexer;
 
-Error Lexer_create(CharString source, Lexer *lexer);
-Bool Lexer_free(Lexer *lexer);
+Error Lexer_create(CharString source, Allocator alloc, Lexer *lexer);
+Bool Lexer_free(Lexer *lexer, Allocator alloc);
 
 #ifdef __cplusplus
 	}

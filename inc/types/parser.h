@@ -214,8 +214,8 @@ typedef struct UserDefine {		//Value can be empty/null to indicate present (but 
 
 TList(UserDefine);
 
-Error Parser_create(const Lexer *lexer, Parser *parser, ListUserDefine userDefine);
-Bool Parser_free(Parser *parser);
+Error Parser_create(const Lexer *lexer, Parser *parser, ListUserDefine userDefine, Allocator alloc);
+Bool Parser_free(Parser *parser, Allocator alloc);
 
 //Classify a token at str.ptr[*subTokenOffset]
 //Increment subTokenOffset by the length of the token

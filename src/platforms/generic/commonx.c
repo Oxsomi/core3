@@ -36,6 +36,8 @@
 #include "types/archive.h"
 #include "types/big_int.h"
 #include "types/cdf_list.h"
+#include "types/lexer.h"
+#include "types/parser.h"
 #include "types/buffer_layout.h"
 #include "platforms/platform.h"
 
@@ -63,6 +65,15 @@ TListXBaseImpl(ListWeakRefPtr);
 
 TListXImpl(SHEntry);
 TListXBaseImpl(ListThread);
+
+//Lexer and parser
+
+TListXImpl(Token);
+TListXImpl(Symbol);
+TListXImpl(Define);
+TListXImpl(UserDefine);
+TListXImpl(LexerToken);
+TListXImpl(LexerExpression);
 
 //Contains small helper functions that don't require their own .c file
 
@@ -94,6 +105,24 @@ Error DDS_readx(Buffer buf, DDSInfo *info, ListSubResourceData *result) {
 
 Bool ListSubResourceData_freeAllx(ListSubResourceData *buf) {
 	return ListSubResourceData_freeAll(buf, Platform_instance.alloc);
+}
+
+//Lexer and parser
+
+Error Lexer_createx(CharString str, Lexer *lexer) {
+	return Lexer_create(str, Platform_instance.alloc, lexer);
+}
+
+Bool Lexer_freex(Lexer *lexer) {
+	return Lexer_free(lexer, Platform_instance.alloc);
+}
+
+Error Parser_createx(const Lexer *lexer, Parser *parser, ListUserDefine userDefine) {
+	return Parser_create(lexer, parser, userDefine, Platform_instance.alloc);
+}
+
+Bool Parser_freex(Parser *parser) {
+	return Parser_free(parser, Platform_instance.alloc);
 }
 
 //Buffer

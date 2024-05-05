@@ -18,12 +18,8 @@
 *  This is called dual licensing.
 */
 
-#include "platforms/ext/listx_impl.h"
-#include "platforms/log.h"
-#include "platforms/ext/errorx.h"
-#include "platforms/ext/bufferx.h"
-#include "platforms/ext/stringx.h"
-#include "core3_bindings/lexer.h"
+#include "types/list_impl.h"
+#include "types/lexer.h"
 
 TListImpl(LexerToken);
 TListImpl(LexerExpression);
@@ -64,7 +60,8 @@ Error Lexer_endExpression(
 	U64 *lastTokenPtr, 
 	ListLexerExpression *expressions, 
 	U64 tokenCount, 
-	ELexerExpressionType *expressionType
+	ELexerExpressionType *expressionType,
+	Allocator alloc
 ) {
 
 	Error err = Error_none();
@@ -75,14 +72,14 @@ Error Lexer_endExpression(
 		return err;
 
 	if(lastToken >> 32)
-		_gotoIfError(clean, Error_outOfBounds(
+		gotoIfError(clean, Error_outOfBounds(
 			0, lastToken, U32_MAX, "Lexer_create() LexerExpression offset is limited to U32_MAX tokens"
-		));
+		))
 
 	if((tokenCount - lastToken) >> 16)
-		_gotoIfError(clean, Error_outOfBounds(
+		gotoIfError(clean, Error_outOfBounds(
 			0, tokenCount - lastToken, U16_MAX, "Lexer_create() LexerExpression is limited to U16_MAX tokens"
-		));
+		))
 
 	LexerExpression exp = (LexerExpression) { 
 		.type = *expressionType,
@@ -90,7 +87,7 @@ Error Lexer_endExpression(
 		.tokenCount = (U16) (tokenCount - lastToken)
 	};
 
-	_gotoIfError(clean, ListLexerExpression_pushBackx(expressions, exp));
+	gotoIfError(clean, ListLexerExpression_pushBack(expressions, exp, alloc))
 	*lastTokenPtr = tokenCount;
 	*expressionType = ELexerExpressionType_None;
 
@@ -98,7 +95,7 @@ clean:
 	return err;
 }
 
-Error Lexer_create(CharString str, Lexer *lexer) {
+Error Lexer_create(CharString str, Allocator alloc, Lexer *lexer) {
 	
 	if(!lexer)
 		return Error_nullPointer(!str.ptr ? 0 : 1, "Lexer_create()::str and lexer are required");
@@ -112,8 +109,8 @@ Error Lexer_create(CharString str, Lexer *lexer) {
 	Error err = Error_none();
 	ListLexerToken tokens = { 0 };
 	ListLexerExpression expressions = { 0 };
-	_gotoIfError(clean, ListLexerExpression_reservex(&expressions, 64 + CharString_length(str) / 64));
-	_gotoIfError(clean, ListLexerToken_reservex(&tokens, 64 + CharString_length(str) / 6));
+	gotoIfError(clean, ListLexerExpression_reserve(&expressions, 64 + CharString_length(str) / 64, alloc))
+	gotoIfError(clean, ListLexerToken_reserve(&tokens, 64 + CharString_length(str) / 6, alloc))
 
 	const C8 *prevIt = NULL;
 	C8 prev = 0;
@@ -128,7 +125,7 @@ Error Lexer_create(CharString str, Lexer *lexer) {
 		C8 c = CharString_getAt(str, i);
 
 		if(!C8_isValidAscii(c))
-			_gotoIfError(clean, Error_invalidParameter(0, 0, "Lexer_create()::str has to be ascii"));
+			gotoIfError(clean, Error_invalidParameter(0, 0, "Lexer_create()::str has to be ascii"))
 
 		C8 next = CharString_getAt(str, i + 1);
 		C8 prevTemp = prev;
@@ -149,7 +146,7 @@ Error Lexer_create(CharString str, Lexer *lexer) {
 			lastLineStart = i + multiChar + 1;
 
 			if (lineCounter >> 16)
-				_gotoIfError(clean, Error_outOfBounds(0, U16_MAX, U16_MAX, "Lexer_create() line count is limited to 64Ki"));
+				gotoIfError(clean, Error_outOfBounds(0, U16_MAX, U16_MAX, "Lexer_create() line count is limited to 64Ki"))
 		}
 
 		if (prevTemp != '\\' && C8_isNewLine(c)) {
@@ -168,7 +165,7 @@ Error Lexer_create(CharString str, Lexer *lexer) {
 		//Handle starting comment
 
 		if(c == '/' && next == '/' && expressionType != ELexerExpressionType_MultiLineComment) {
-			_gotoIfError(clean, Lexer_endExpression(&lastToken, &expressions, tokens.length, &expressionType));
+			gotoIfError(clean, Lexer_endExpression(&lastToken, &expressions, tokens.length, &expressionType, alloc))
 			expressionType = ELexerExpressionType_Comment;
 			multiChar = true;
 			endToken = true;
@@ -177,7 +174,7 @@ Error Lexer_create(CharString str, Lexer *lexer) {
 		//Handle starting multi line comment
 
 		if(c == '/' && next == '*' && !expressionType) {
-			_gotoIfError(clean, Lexer_endExpression(&lastToken, &expressions, tokens.length, &expressionType));
+			gotoIfError(clean, Lexer_endExpression(&lastToken, &expressions, tokens.length, &expressionType, alloc))
 			expressionType = ELexerExpressionType_MultiLineComment;
 			multiChar = true;
 			endToken = true;
@@ -199,8 +196,6 @@ Error Lexer_create(CharString str, Lexer *lexer) {
 			endExpression = true;
 
 		//First non whitespace char
-
-		ELexerTokenType current = ELexerTokenType_Count;
 
 		if(!C8_isWhitespace(c)) {
 
@@ -236,10 +231,10 @@ Error Lexer_create(CharString str, Lexer *lexer) {
 			U64 len = (str.ptr + i + 1 + multiChar) - prevIt;
 
 			if(len >> 8)
-				_gotoIfError(clean, Error_outOfBounds(0, 256, 256, "Lexer_create() tokens are limited to 256 C8s"));
+				gotoIfError(clean, Error_outOfBounds(0, 256, 256, "Lexer_create() tokens are limited to 256 C8s"))
 
 			if((i + 2  - lastLineStart) >> 7)
-				_gotoIfError(clean, Error_outOfBounds(0, 128, 128, "Lexer_create() lines are limited to 128 C8s"));
+				gotoIfError(clean, Error_outOfBounds(0, 128, 128, "Lexer_create() lines are limited to 128 C8s"))
 
 			LexerToken tok = (LexerToken) { 
 				.lineId = (U16) lineCounter, 
@@ -248,7 +243,7 @@ Error Lexer_create(CharString str, Lexer *lexer) {
 				.offsetType = (U32)((i + 1 + multiChar - len) | (tokenType << 30))
 			};
 
-			_gotoIfError(clean, ListLexerToken_pushBackx(&tokens, tok));
+			gotoIfError(clean, ListLexerToken_pushBack(&tokens, tok, alloc))
 			prevIt = NULL;
 			tokenType = ELexerTokenType_Count;
 		}
@@ -256,20 +251,20 @@ Error Lexer_create(CharString str, Lexer *lexer) {
 		//Push it as an expression
 
 		if (endExpression)
-			_gotoIfError(clean, Lexer_endExpression(&lastToken, &expressions, tokens.length, &expressionType));
+			gotoIfError(clean, Lexer_endExpression(&lastToken, &expressions, tokens.length, &expressionType, alloc))
 
 		if(multiChar)
 			++i;
 	}
 
 	if (lastToken != tokens.length)
-		_gotoIfError(clean, Lexer_endExpression(&lastToken, &expressions, tokens.length, &expressionType));
+		gotoIfError(clean, Lexer_endExpression(&lastToken, &expressions, tokens.length, &expressionType, alloc))
 
 clean:
 
 	if(err.genericError) {
-		ListLexerToken_freex(&tokens);
-		ListLexerExpression_freex(&expressions);
+		ListLexerToken_free(&tokens, alloc);
+		ListLexerExpression_free(&expressions, alloc);
 	}
 	else *lexer = (Lexer) { 
 		.source = CharString_createRefSizedConst(str.ptr, CharString_length(str), false),
@@ -280,12 +275,12 @@ clean:
 	return err;
 }
 
-Bool Lexer_free(Lexer *parser) {
+Bool Lexer_free(Lexer *lexer, Allocator alloc) {
 
-	if(!parser)
+	if(!lexer)
 		return true;
 
-	ListLexerExpression_freex(&parser->expressions);
-	ListLexerToken_freex(&parser->tokens);
+	ListLexerExpression_free(&lexer->expressions, alloc);
+	ListLexerToken_free(&lexer->tokens, alloc);
 	return true;
 }
