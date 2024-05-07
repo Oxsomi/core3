@@ -56,21 +56,44 @@ CharString LexerExpression_asString(LexerExpression e, Lexer p);
 //A LexerToken is defined as any subsequent characters that have a similar type.
 
 typedef enum ELexerTokenType {
+
 	ELexerTokenType_Identifier,		//[A-Za-z_$]+[0-9A-Za-z_$]*
-	ELexerTokenType_Integer,		//[0-9]
-	ELexerTokenType_Double,			//Approximately equal to: [0-9]*[.[0-9]*]?[[eE][-+]?[0-9]+]?
 	ELexerTokenType_Symbols,		//Any number of subsequent symbols
-	ELexerTokenType_Count
+
+	ELexerTokenType_Float,			//Approximately equal to: [0-9]*[.[0-9]*]?[[eE][-+]?[0-9]+]?f
+	ELexerTokenType_Double,			//Approximately equal to: [0-9]*[.[0-9]*]?[[eE][-+]?[0-9]+]?
+
+	ELexerTokenType_IntegerDec,		//[-+][1-9]+[0-9]*
+	ELexerTokenType_IntegerHex,		//0[xX][0-9A-Fa-f]+
+	ELexerTokenType_IntegerOctal,	//0[0-7]+ or 0[oO][0-7]+
+	ELexerTokenType_IntegerBinary,	//0[bB][0-1]+
+	ELexerTokenType_IntegerNyto,	//0[nN][0-9A-Za-z$_]+
+
+	ELexerTokenType_String,			//"anything" \" to escape quote and \\ to escape backslash
+
+	ELexerTokenType_Count,
+
+	ELexerTokenType_NumberStart		= ELexerTokenType_Float,
+	ELexerTokenType_NumberEnd		= ELexerTokenType_IntegerNyto,
+
+	ELexerTokenType_IntBegin		= ELexerTokenType_IntegerDec,
+	ELexerTokenType_IntEnd			= ELexerTokenType_IntegerNyto
+
 } ELexerTokenType;
+
+Bool ELexerTokenType_isNumber(ELexerTokenType tokenType);
 
 typedef struct LexerToken {
 
 	U16 lineId;
 	U8 charId, length;
 
-	U32 offsetType;			//upper 2 bits is type
+	U32 offsetType;			//upper 4 bits is type
 
 } LexerToken;
+
+U32 LexerToken_getOffset(LexerToken tok);
+ELexerTokenType LexerToken_getType(LexerToken tok);
 
 const C8 *LexerToken_getTokenStart(LexerToken tok, Lexer p);
 const C8 *LexerToken_getTokenEnd(LexerToken tok, Lexer p);
@@ -87,6 +110,8 @@ typedef struct Lexer {
 
 Error Lexer_create(CharString source, Allocator alloc, Lexer *lexer);
 Bool Lexer_free(Lexer *lexer, Allocator alloc);
+
+void Lexer_print(Lexer lexer, Allocator alloc);
 
 #ifdef __cplusplus
 	}

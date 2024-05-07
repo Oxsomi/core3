@@ -117,6 +117,10 @@ Bool Lexer_freex(Lexer *lexer) {
 	return Lexer_free(lexer, Platform_instance.alloc);
 }
 
+void Lexer_printx(Lexer lexer) {
+	Lexer_print(lexer, Platform_instance.alloc);
+}
+
 Error Parser_createx(const Lexer *lexer, Parser *parser, ListUserDefine userDefine) {
 	return Parser_create(lexer, parser, userDefine, Platform_instance.alloc);
 }

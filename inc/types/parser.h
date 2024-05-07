@@ -33,8 +33,10 @@ typedef struct Lexer Lexer;
 typedef enum ETokenType {
 
 	ETokenType_Identifier,				// [A-Za-z_$]+[0-9A-Za-z_$]*
-	ETokenType_Integer,					// [-+]?[0-9]+
+	ETokenType_Integer,					// [+]?[0-9]+
+	ETokenType_SignedInteger,			// -[0-9]+
 	ETokenType_Double,					// Approximately equal to: [-+]?[0-9]*[.[0-9]*]?[[eE][-+]?[0-9]+]?
+	ETokenType_Float,					// Approximately equal to: [-+]?[0-9]*[.[0-9]*]?[[eE][-+]?[0-9]+]?[fF]
 	ETokenType_String,					// "[0-9A-Za-z_\s$]*"
 
 	ETokenType_Inc,						// ++
@@ -91,10 +93,19 @@ typedef enum ETokenType {
 	ETokenType_CurlyBraceEnd,			// }
 
 	ETokenType_Colon,					// :
+	ETokenType_Colon2,					// ::
 	ETokenType_Semicolon,				// ;
 
 	ETokenType_Comma,					// ,
 	ETokenType_Period,					// .
+
+	ETokenType_Ternary,					// ?
+
+	ETokenType_SquareBracketStart2,		// [[
+	ETokenType_SquareBracketEnd2,		// ]]
+
+	ETokenType_Arrow,					// ->
+	ETokenType_Flagship,				// <=>
 
 	ETokenType_Count
 
@@ -102,7 +113,11 @@ typedef enum ETokenType {
 
 typedef struct Token {
 
-	I64 value;				//If tokenType = int this represents the int value, if token type is double (*(F64*)&value)
+	union {
+		I64 valuei;		//If token type is signed int
+		U64 valueu;		//If token type is int or string (if string; index of string literal)
+		F64 valuef;		//If token type is double
+	};
 
 	U32 naiveTokenId;
 
@@ -153,7 +168,7 @@ typedef struct Symbol {
 
 	U32 nameTokenId;
 
-	U32 typeTokenId;		//U32_MAX indicates void (only for enum and 
+	U32 typeTokenId;		//U32_MAX indicates void (only for enum and function)
 
 	U32 childStartTokenId;	//See Symbol::children
 
@@ -206,6 +221,7 @@ typedef struct Parser {
 	ListToken tokens;
 	ListSymbol symbols;
 	ListDefine defines;
+	ListCharString parsedLiterals;		//Need copies, because \" and \\ have to be parsed
 } Parser;
 
 typedef struct UserDefine {		//Value can be empty/null to indicate present (but no value)
@@ -216,6 +232,7 @@ TList(UserDefine);
 
 Error Parser_create(const Lexer *lexer, Parser *parser, ListUserDefine userDefine, Allocator alloc);
 Bool Parser_free(Parser *parser, Allocator alloc);
+void Parser_print(Parser parser, Allocator alloc);
 
 //Classify a token at str.ptr[*subTokenOffset]
 //Increment subTokenOffset by the length of the token

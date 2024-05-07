@@ -21,6 +21,9 @@
 #include "platforms/ext/listx_impl.h"
 #include "shader_compiler/compiler.h"
 #include "platforms/platform.h"
+#include "platforms/log.h"
+#include "types/parser.h"
+#include "types/lexer.h"
 
 TListImpl(Compiler);
 TListImpl(CompileError);
@@ -97,4 +100,33 @@ Bool Compiler_freex(Compiler *comp) {
 
 Error Compiler_preprocessx(Compiler comp, CompilerSettings settings, CompileResult *result) {
 	return Compiler_preprocess(comp, settings, Platform_instance.alloc, result);
+}
+
+Error Compiler_parsex(Compiler comp, CompilerSettings settings, CompileResult *result) {
+	return Compiler_parse(comp, settings, Platform_instance.alloc, result);
+}
+
+//Invoke parser
+
+Error Compiler_parse(Compiler comp, CompilerSettings settings, Allocator alloc, CompileResult *result) {
+
+	(void)comp;		//No need for a compiler, we do it ourselves
+
+	//Lex and parse the file
+
+	Lexer lexer = (Lexer) { 0 };
+	Parser parser = (Parser) { 0 };
+	Error err = Error_none();
+	gotoIfError(clean, Lexer_create(settings.string, alloc, &lexer))
+	//Lexer_print(lexer, alloc);
+
+	gotoIfError(clean, Parser_create(&lexer, &parser, (ListUserDefine) { 0 }, alloc))
+	Parser_print(parser, alloc);
+
+	(void)result;	//TODO:
+	
+clean:
+	Parser_free(&parser, alloc);
+	Lexer_free(&lexer, alloc);
+	return err;
 }

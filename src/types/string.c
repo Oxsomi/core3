@@ -516,7 +516,11 @@ Bool CharString_isFloat(CharString s) {
 				return false;
 	}
 
-	return true;
+	//It's just [-+]?[0-9]*[.]?[0-9]*[fF]
+	if (i == strl || (i + 1 == strl && (s.ptr[i] == 'f' || s.ptr[i] == 'F')))
+		return true;
+
+	return false;
 }
 
 Error CharString_create(C8 c, U64 size, Allocator alloc, CharString *result) {
@@ -2028,6 +2032,7 @@ Bool CharString_parseDouble(CharString s, F64 *result) {
 	//Parse integer part
 
 	F64 intPart = 0;
+	Bool hasDigit = false;
 
 	while(
 		!CharString_startsWithSensitive(s, '.', 0) &&
@@ -2036,9 +2041,17 @@ Bool CharString_parseDouble(CharString s, F64 *result) {
 
 		const U8 v = C8_dec(s.ptr[0]);
 
-		if (v == U8_MAX)
-			return false;
+		if (v == U8_MAX) {
 
+			if((s.ptr[0] == 'f' || s.ptr[0] == 'F') && hasDigit && CharString_length(s) == 1) {
+				*result = sign ? -intPart : intPart;
+				return true;
+			}
+
+			return false;
+		}
+
+		hasDigit = true;
 		intPart = intPart * 10 + v;
 
 		if(!F64_isValid(intPart))
@@ -2055,11 +2068,13 @@ Bool CharString_parseDouble(CharString s, F64 *result) {
 
 	//Parse fraction
 
-	if (
-		CharString_startsWithSensitive(s, '.', 0) &&
-		CharString_offsetAsRef(s, 1, &s).genericError
-	)
-		return false;
+	if (CharString_startsWithSensitive(s, '.', 0) && CharString_length(s) == 1) {
+		*result = sign ? -intPart : intPart;
+		return true;
+	}
+
+	if(CharString_startsWithSensitive(s, '.', 0))
+		CharString_offsetAsRef(s, 1, &s);
 
 	F64 fraction = 0, multiplier = 0.1;
 
@@ -2067,9 +2082,17 @@ Bool CharString_parseDouble(CharString s, F64 *result) {
 
 		const U8 v = C8_dec(s.ptr[0]);
 
-		if (v == U8_MAX)
-			return false;
+		if (v == U8_MAX) {
 
+			if((s.ptr[0] == 'f' || s.ptr[0] == 'F') && hasDigit && CharString_length(s) == 1)  {
+				*result = sign ? -(intPart + fraction) : intPart + fraction;
+				return F64_isValid(*result);
+			}
+
+			return false;
+		}
+
+		hasDigit = true;
 		fraction += v * multiplier;
 
 		if(!F64_isValid(fraction))
@@ -2088,8 +2111,17 @@ Bool CharString_parseDouble(CharString s, F64 *result) {
 
 	//Parse exponent sign
 
-	if (CharString_offsetAsRef(s, 1, &s).genericError)
+	Bool nextE = CharString_startsWithInsensitive(s, 'e', 0);
+
+	if (CharString_offsetAsRef(s, 1, &s).genericError) {
+
+		if (!nextE) {
+			*result = sign ? -(intPart + fraction) : intPart + fraction;
+			return true;
+		}
+
 		return false;
+	}
 
 	Bool esign = false;
 
@@ -2115,8 +2147,26 @@ Bool CharString_parseDouble(CharString s, F64 *result) {
 
 		const U8 v = C8_dec(s.ptr[0]);
 
-		if (v == U8_MAX)
+		if (v == U8_MAX) {
+
+			if(s.ptr[0] == 'f' || s.ptr[0] == 'F') {
+
+				const Error err = F64_exp10(esign ? -exponent : exponent, &exponent);
+
+				if(err.genericError)
+					return false;
+
+				const F64 res = (sign ? -(intPart + fraction) : intPart + fraction) * exponent;
+
+				if(!F64_isValid(res))
+					return false;
+
+				*result = res;
+				return hasDigit && CharString_length(s) == 1;
+			}
+
 			return false;
+		}
 
 		exponent = exponent * 10 + v;
 
@@ -2124,7 +2174,7 @@ Bool CharString_parseDouble(CharString s, F64 *result) {
 			return false;
 
 		if (CharString_offsetAsRef(s, 1, &s).genericError)
-			return false;
+			break;
 	}
 
 	const Error err = F64_exp10(esign ? -exponent : exponent, &exponent);
@@ -2221,8 +2271,17 @@ Bool CharString_parseU64(CharString s, U64 *result) {
 
 	if (CharString_startsWithSensitive(s, '0', 0))
 		switch (CharString_getAt(s, 1)) {
+
+			//0 prefix is also octal.
+			//For clarity, we even pass 08 and 09, so they can error.
+			//Otherwise it's inconsistent behavior
+
+			case '0':	case '1':	case '2':	case '3':	case '4':
+			case '5':	case '6':	case '7':	case '8':	case '9':
+			case 'O':	case 'o':
+				return CharString_parseOct(s, result);
+
 			case 'B':	case 'b':	return CharString_parseBin(s, result);
-			case 'O':	case 'o':	return CharString_parseOct(s, result);
 			case 'X':	case 'x':	return CharString_parseHex(s, result);
 			case 'N':	case 'n':	return CharString_parseNyto(s, result);
 		}
@@ -2555,7 +2614,7 @@ CharString CharString_trim(CharString s) {
 
 Bool ListCharString_freeUnderlying(ListCharString *arr, Allocator alloc) {
 
-	if(!arr || !arr->length || ListCharString_isRef(*arr))
+	if(!arr || !ListCharString_allocatedBytes(*arr) || ListCharString_isRef(*arr))
 		return true;
 
 	Bool freed = true;
@@ -2565,7 +2624,8 @@ Bool ListCharString_freeUnderlying(ListCharString *arr, Allocator alloc) {
 		freed &= CharString_free(str, alloc);
 	}
 
-	return ListCharString_free(arr, alloc);
+	freed &= ListCharString_free(arr, alloc);
+	return freed;
 }
 
 Error ListCharString_createCopyUnderlying(ListCharString toCopy, Allocator alloc, ListCharString *arr) {

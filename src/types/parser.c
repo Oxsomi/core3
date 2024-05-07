@@ -163,13 +163,23 @@ ETokenType Parser_getTokenType(CharString str, U64 *subTokenOffset) {
 			tokenType = ETokenType_Not;
 			break;
 
+		case '?':		// ~
+			count = 1;
+			tokenType = ETokenType_Ternary;
+			break;
+
 		case '+':		// +, ++, +=
 			tokenType = next == '=' ? ETokenType_AddAsg : (next == start ? ETokenType_Inc : ETokenType_Add);
 			count = tokenType == ETokenType_Add ? 1 : 2;
 			break;
 
-		case '-':		// -, --, -=
-			tokenType = next == '=' ? ETokenType_SubAsg : (next == start ? ETokenType_Dec : ETokenType_Sub);
+		case '-':		// -, ->, --, -=
+
+			tokenType = 
+				next == '=' ? ETokenType_SubAsg : (
+					next == start ? ETokenType_Dec : (next == '>' ? ETokenType_Arrow : ETokenType_Sub)
+				);
+
 			count = tokenType == ETokenType_Sub ? 1 : 2;
 			break;
 
@@ -208,14 +218,14 @@ ETokenType Parser_getTokenType(CharString str, U64 *subTokenOffset) {
 			tokenType = count == 2 ? ETokenType_XorAsg : ETokenType_Xor;
 			break;
 
-		case '<':		//<, <=, <<, <<=
+		case '<':		//<, <=, <<, <<=, <=>
 
-			count = 1 + (next == '=' || next == start) + (next == start && next2 == '=');
+			count = 1 + (next == '=' || next == start) + (next == start && next2 == '=') + (next2 == '>');
 			
 			switch (count) {
-				case 1:		tokenType = ETokenType_Lt;										break;
-				case 3:		tokenType = ETokenType_LshAsg;									break;
-				default:	tokenType = next == start ? ETokenType_Lsh : ETokenType_Leq;	break;
+				case 1:		tokenType = ETokenType_Lt;												break;
+				case 3:		tokenType = next2 == '>' ? ETokenType_Flagship : ETokenType_LshAsg;		break;
+				default:	tokenType = next == start ? ETokenType_Lsh : ETokenType_Leq;			break;
 			}
 
 			break;
@@ -234,16 +244,32 @@ ETokenType Parser_getTokenType(CharString str, U64 *subTokenOffset) {
 
 		//()[]{}:;,.
 
-		case ')':	count = 1;	tokenType = ETokenType_RoundParenthesisStart;	break;
-		case '(':	count = 1;	tokenType = ETokenType_RoundParenthesisEnd;		break;
-		case '[':	count = 1;	tokenType = ETokenType_SquareBracketStart;		break;
-		case ']':	count = 1;	tokenType = ETokenType_SquareBracketEnd;		break;
+		case '(':	count = 1;	tokenType = ETokenType_RoundParenthesisStart;	break;
+		case ')':	count = 1;	tokenType = ETokenType_RoundParenthesisEnd;		break;
 		case '{':	count = 1;	tokenType = ETokenType_CurlyBraceStart;			break;
 		case '}':	count = 1;	tokenType = ETokenType_CurlyBraceEnd;			break;
-		case ':':	count = 1;	tokenType = ETokenType_Colon;					break;
 		case ';':	count = 1;	tokenType = ETokenType_Semicolon;				break;
 		case ',':	count = 1;	tokenType = ETokenType_Comma;					break;
 		case '.':	count = 1;	tokenType = ETokenType_Period;					break;
+
+		//: and ::
+		//[ and [[
+		//] and ]]
+
+		case ':':
+			count = next == ':' ? 2 : 1;
+			tokenType = count == 2 ? ETokenType_Colon2 : ETokenType_Colon;
+			break;
+
+		case '[':
+			count = next == '[' ? 2 : 1;
+			tokenType = count == 2 ? ETokenType_SquareBracketStart2 : ETokenType_SquareBracketStart;
+			break;
+
+		case ']':
+			count = next == ']' ? 2 : 1;
+			tokenType = count == 2 ? ETokenType_SquareBracketEnd2 : ETokenType_SquareBracketEnd;
+			break;
 	}
 
 	*subTokenOffset += count;
@@ -290,7 +316,7 @@ Error Parser_preprocessContents(
 		++i;
 		U64 tokenCount = totalTokenCount - (i - tokenOffset);
 
-		switch(lext.offsetType >> 30) {
+		switch(LexerToken_getType(lext)) {
 
 			//Checking a define or defined()
 
@@ -315,7 +341,7 @@ Error Parser_preprocessContents(
 
 					LexerToken identifier = lexer->tokens.ptr[tokenOffset + 1];
 
-					if((identifier.offsetType >> 30) != ELexerTokenType_Identifier)
+					if(LexerToken_getType(identifier) != ELexerTokenType_Identifier)
 						gotoIfError(clean, Error_invalidState(
 							4, "Parser_handleIfCondition() expected identifier in defined(identifier)"
 						))
@@ -394,6 +420,7 @@ Error Parser_preprocessContents(
 
 			//Unsupported in C
 
+			case ELexerTokenType_Float:
 			case ELexerTokenType_Double:
 				gotoIfError(clean, Error_invalidState(
 					7, "Parser_handleIfCondition() #if statements only accept integers and defines"
@@ -401,7 +428,11 @@ Error Parser_preprocessContents(
 
 			//Store value
 
-			case ELexerTokenType_Integer:
+			case ELexerTokenType_IntegerBinary:
+			case ELexerTokenType_IntegerHex:
+			case ELexerTokenType_IntegerOctal:
+			case ELexerTokenType_IntegerDec:
+			case ELexerTokenType_IntegerNyto: {
 			
 				U64 tmp = 0;
 				if(!CharString_parseU64(lextStr, &tmp) || tmp >> 63)
@@ -411,6 +442,7 @@ Error Parser_preprocessContents(
 
 				gotoIfError(clean, CharString_appendString(replaced, lextStr, alloc))
 				break;
+			}
 
 			//Operators
 
@@ -459,7 +491,7 @@ Error Parser_handleIfCondition(
 		hasAnyIdentifier = false;
 
 		for(U64 i = 0; i < tempLexer.tokens.length; ++i)
-			if ((tempLexer.tokens.ptr[i].offsetType >> 30) == ETokenType_Identifier) {
+			if (LexerToken_getType(tempLexer.tokens.ptr[i]) == ETokenType_Identifier) {
 				hasAnyIdentifier = true;
 				break;
 			}
@@ -500,7 +532,7 @@ Error Parser_handleIfCondition(
 					3, "Parser_handleIfCondition() couldn't parse #if statement correctly. Expected !x, -x, +x or ~x"
 				))
 
-			*value = firstToken->value;
+			*value = firstToken->valuei;
 		}
 
 		else if(tempParser.tokens.length == 2) {			//!x, ~x, -x, +x
@@ -513,7 +545,7 @@ Error Parser_handleIfCondition(
 					0, "Parser_handleIfCondition() couldn't parse #if statement correctly. Expected !x, -x, +x or ~x"
 				))
 
-			I64 result = secondToken->value;
+			I64 result = secondToken->valuei;
 
 			switch (first) {
 
@@ -543,8 +575,8 @@ Error Parser_handleIfCondition(
 					"Expected integer operator integer"
 				))
 
-			I64 result = firstToken->value;
-			I64 thirdValue = thirdToken->value;
+			I64 result = firstToken->valuei;
+			I64 thirdValue = thirdToken->valuei;
 
 			Bool nullCheck = false;
 
@@ -608,18 +640,28 @@ clean:
 }
 
 typedef struct ParserContext {
+
 	ListUserDefine userDefines;
 	ListDefine defines;
 	ListSymbol symbols;
 	ListToken tokens;
+	ListCharString stringLiterals;
+
 	PreprocessorIfStack stack;
 	const Lexer *lexer;
+
+	//Information for handling errors
+
+	CharString currentFile;
+	U64 currentLine;
+
 } ParserContext;
 
 Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTokenCount, Allocator alloc) {
 
 	Error err = Error_none();
 	const Lexer *lexer = context->lexer;
+	CharString temp = CharString_createNull();		//For parsing strings
 
 	//Ensure all previous scopes are active
 
@@ -630,7 +672,7 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 
 	LexerToken lext = lexer->tokens.ptr[lexerTokenId];
 
-	if (lext.length >= 1 && lexer->source.ptr[lext.offsetType << 2 >> 2] == '#') {
+	if (lext.length >= 1 && lexer->source.ptr[LexerToken_getOffset(lext)] == '#') {
 
 		if(lexerTokenCount < 2)
 			gotoIfError(clean, Error_invalidParameter(0, 0, "ParserContext_visit() source was invalid. Expected #<token>"))
@@ -651,7 +693,7 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 
 		//Since C doesn't have switch(string), we'll have to make it ourselves
 
-		U16 v16 = *(const U16*) (lexer->source.ptr + (lext.offsetType << 2 >> 2));
+		U16 v16 = *(const U16*) (lexer->source.ptr + LexerToken_getOffset(lext));
 
 		switch (v16) {
 
@@ -737,7 +779,7 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 
 					if (lexerTokenCount >= 4) {
 						LexerToken tok = lexer->tokens.ptr[lexerTokenId + 3];
-						isMacro = tok.length == 1 && lexer->source.ptr[tok.offsetType << 2 >> 2] == '(';
+						isMacro = tok.length == 1 && lexer->source.ptr[LexerToken_getOffset(tok)] == '(';
 					}
 
 					if(isMacro) {
@@ -771,7 +813,7 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 								break;
 							}
 
-							if((lext.offsetType >> 30) != ELexerTokenType_Identifier)
+							if(LexerToken_getType(lext) != ELexerTokenType_Identifier)
 								gotoIfError(clean, Error_invalidParameter(
 									0, 0, "ParserContext_visit() source was invalid. Expected identifier in macro"
 								))
@@ -938,7 +980,7 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 
 				U16 mask = (U16)(1 << (context->stack.stackIndex - 1));
 
-				v16 = *(const U16*) (lexer->source.ptr + (lext.offsetType << 2 >> 2) + 2);
+				v16 = *(const U16*) (lexer->source.ptr + LexerToken_getOffset(lext) + 2);
 
 				if(v16 == C8x2('s', 'e')) {			//#else
 
@@ -1004,10 +1046,10 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 						0, 0, "ParserContext_visit() source was invalid. Expected #error if #er is detected"
 					))
 
-				const C8 *startPtr = lexer->source.ptr + (lext.offsetType << 2 >> 2);
+				const C8 *startPtr = lexer->source.ptr + LexerToken_getOffset(lext);
 				lext = lexer->tokens.ptr[lexerTokenId + lexerTokenCount - 1];
 
-				const C8 *endPtr = lexer->source.ptr + (lext.offsetType << 2 >> 2) + lext.length - 1;
+				const C8 *endPtr = lexer->source.ptr + LexerToken_getOffset(lext) + lext.length - 1;
 
 				endPtr;		//TODO: Put this into the Error msg once it supports CharStrings instead of const C8*
 				startPtr;
@@ -1038,6 +1080,81 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 
 				break;
 
+			case C8x2('l', 'i'):		//#line
+
+				if(!isPreprocessorScopeActive)
+					goto clean;
+
+				if (
+					!CharString_equalsStringSensitive(CharString_createRefCStrConst("line"), lextStr) ||
+					lexerTokenCount < 3
+				)
+					gotoIfError(clean, Error_invalidParameter(
+						0, 0, "ParserContext_visit() source was invalid. Expected #line when #li is encountered"
+					))
+
+				//#line N
+				
+				lext = lexer->tokens.ptr[lexerTokenId + 2];
+				lextStr = LexerToken_asString(lext, *lexer);
+
+				if(!CharString_parseU64(lextStr, &context->currentLine))
+					gotoIfError(clean, Error_invalidParameter(
+						0, 0, "ParserContext_visit() source was invalid. Expected #line N or #line 1 N \"file\""
+					))
+
+				//#line N "x"
+
+				if (lexerTokenCount > 3) {
+
+					lext = lexer->tokens.ptr[lexerTokenId + 3];
+
+					CharString_clear(&context->currentFile);
+
+					Bool isEscaped = false;
+					Bool prevSlash = false;
+					Bool leadingSlashSlash = false;
+
+					for (U64 k = LexerToken_getOffset(lext), j = k; j < k + lext.length; ++j) {
+
+						C8 cj = lexer->source.ptr[j];
+
+						if (cj == '\\') {
+
+							if(isEscaped) {
+								gotoIfError(clean, CharString_append(&context->currentFile, cj, alloc))
+								isEscaped = false;
+								continue;
+							}
+
+							isEscaped = true;
+							continue;
+						}
+
+						if(prevSlash && cj == '/') {						//Allow //
+							CharString_clear(&context->currentFile);
+							leadingSlashSlash = true;
+						}
+
+						prevSlash = cj == '/';
+
+						gotoIfError(clean, CharString_append(&context->currentFile, cj, alloc))
+						isEscaped = false;
+					}
+
+					if(isEscaped)
+						gotoIfError(clean, Error_invalidParameter(
+							0, 0, "ParserContext_visit() source was invalid. String can't end with an escaped quote!"
+						))
+
+					//Fix path
+
+					if(leadingSlashSlash)
+						gotoIfError(clean, CharString_insert(&context->currentFile, '/', 0, alloc))
+				}
+
+				break;
+
 			default:					//Unsupported preprocessor statement
 
 				gotoIfError(clean, Error_unsupportedOperation(
@@ -1059,7 +1176,7 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 
 			lext = lexer->tokens.ptr[lexerTokenId + i];
 			CharString lextStr = LexerToken_asString(lext, *lexer);
-			ELexerTokenType lextType = (ELexerTokenType)(lext.offsetType >> 30);
+			ELexerTokenType lextType = LexerToken_getType(lext);
 
 			if(CharString_length(lextStr) >> 8)
 				gotoIfError(clean, Error_invalidParameter(0, 0, "ParserContext_visit() token max size is 256"))
@@ -1118,7 +1235,8 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 				}
 
 				//Append entire lexer token
-
+				
+				case ELexerTokenType_Float:
 				case ELexerTokenType_Double: {
 
 					F64 tmp = 0;
@@ -1129,8 +1247,8 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 
 					Token tok = (Token) {
 						.naiveTokenId = lexerTokenId + i,
-						.tokenType = ETokenType_Double,
-						.value = (I64) (const U64*) &tmp,
+						.tokenType = lextType == ELexerTokenType_Float ? ETokenType_Float : ETokenType_Double,
+						.valuef = tmp,
 						.tokenSize = (U8) CharString_length(lextStr)
 					};
 
@@ -1138,7 +1256,21 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 					break;
 				}
 
-				case ELexerTokenType_Integer: {
+				case ELexerTokenType_IntegerHex:
+				case ELexerTokenType_IntegerBinary:
+				case ELexerTokenType_IntegerDec:
+				case ELexerTokenType_IntegerNyto:
+				case ELexerTokenType_IntegerOctal: {
+
+					C8 first = CharString_getAt(lextStr, 0);
+					Bool negate = first == '-';
+					Bool movedChar = false;
+
+					if (negate || first == '+') {
+						++lextStr.ptr;
+						--lextStr.lenAndNullTerminated;
+						movedChar = true;
+					}
 
 					U64 tmp = 0;
 					if(!CharString_parseU64(lextStr, &tmp) || (tmp >> 63))
@@ -1146,10 +1278,48 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 							3, "ParserContext_visit() expected integer, but couldn't parse it"
 						))
 
+					if(negate && (tmp >> 63))
+						gotoIfError(clean, Error_invalidOperation(
+							4, "ParserContext_visit() expected I64, but got U64 (too big)"
+						))
+
 					Token tok = (Token) {
 						.naiveTokenId = lexerTokenId + i,
-						.tokenType = ETokenType_Integer,
-						.value = (I64) tmp,
+						.tokenType = negate ? ETokenType_SignedInteger : ETokenType_Integer,
+						.valuei = ((I64) tmp) * (negate ? -1 : 1),
+						.tokenSize = (U8) CharString_length(lextStr) + movedChar
+					};
+
+					gotoIfError(clean, ListToken_pushBack(&context->tokens, tok, alloc))
+					break;
+				}
+
+				case ELexerTokenType_String: {
+
+					//Escaped strings need to be resolved
+
+					Bool isEscaped = false;
+
+					for (U64 j = 0; j < CharString_length(lextStr); ++j) {
+
+						C8 c = lextStr.ptr[j];
+
+						if (isEscaped || c != '\\') {
+							gotoIfError(clean, CharString_append(&temp, c, alloc))
+							isEscaped = false;
+							continue;
+						}
+
+						isEscaped = true;
+					}
+
+					gotoIfError(clean, ListCharString_pushBack(&context->stringLiterals, temp, alloc))
+					temp = CharString_createNull();
+
+					Token tok = (Token) {
+						.naiveTokenId = lexerTokenId + i,
+						.tokenType = ETokenType_String,
+						.valueu = context->stringLiterals.length - 1,
 						.tokenSize = (U8) CharString_length(lextStr)
 					};
 
@@ -1186,6 +1356,7 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 	}
 
 clean:
+	CharString_free(&temp, alloc);
 	return err;
 }
 
@@ -1207,6 +1378,7 @@ Error Parser_create(const Lexer *lexer, Parser *parser, ListUserDefine userDefin
 
 	gotoIfError(clean, ListSymbol_reserve(&context.symbols, 64, alloc))
 	gotoIfError(clean, ListDefine_reserve(&context.defines, 64, alloc))
+	gotoIfError(clean, ListCharString_reserve(&context.stringLiterals, 64, alloc))
 	gotoIfError(clean, ListToken_reserve(&context.tokens, lexer->tokens.length * 3 / 2, alloc))
 	gotoIfError(clean, ListUserDefine_createCopy(userDefinesOuter, alloc, &context.userDefines))
 
@@ -1228,15 +1400,18 @@ clean:
 		ListToken_free(&context.tokens, alloc);
 		ListSymbol_free(&context.symbols, alloc);
 		ListDefine_free(&context.defines, alloc);
+		ListCharString_freeUnderlying(&context.stringLiterals, alloc);
 	}
 
 	else *parser = (Parser) { 
 		.symbols = context.symbols, 
 		.tokens = context.tokens, 
 		.defines = context.defines,
+		.parsedLiterals = context.stringLiterals,
 		.lexer = lexer
 	};
 
+	CharString_free(&context.currentFile, alloc);
 	ListUserDefine_free(&context.userDefines, alloc);
 	return err;
 }
@@ -1249,5 +1424,140 @@ Bool Parser_free(Parser *parser, Allocator alloc) {
 	ListSymbol_free(&parser->symbols, alloc);
 	ListToken_free(&parser->tokens, alloc);
 	ListDefine_free(&parser->defines, alloc);
+	ListCharString_freeUnderlying(&parser->parsedLiterals, alloc);
 	return true;
+}
+
+void Parser_print(Parser parser, Allocator alloc) {
+
+	if(!parser.tokens.length)
+		Log_debugLn(alloc, "Parser: Empty");
+
+	else Log_debugLn(alloc, "Parser:");
+
+	//Fetch important data
+
+	for (U64 i = 0; i < parser.tokens.length; ++i) {
+
+		Token t = parser.tokens.ptr[i];
+
+		LexerToken lt = parser.lexer->tokens.ptr[t.naiveTokenId];
+		CharString tokenRaw = Token_asString(t, &parser);
+
+		const C8 *tokenType[] = {
+
+			"Identifier",
+			"Integer",
+			"Signed integer",
+			"Double",
+			"Float",
+			"String",
+
+			"Increment",
+			"Decrement",
+
+			"Bitwise not",
+			"Boolean not",
+
+			"Multiply",
+			"Divide",
+			"Modulo",
+			"Add",
+			"Subtract",
+
+			"Multiply assign",
+			"Divide assign",
+			"Modulo assign",
+			"Add assign",
+			"Subtract assign",
+
+			"Boolean and",
+			"Boolean or",
+
+			"Bitwise and",
+			"Bitwise or",
+			"Bitwise xor",
+
+			"Bitwise and assign",
+			"Bitwise or assign",
+			"Bitwise xor assign",
+
+			"Left shift",
+			"Right shift",
+
+			"Left shift assign",
+			"Right shift assign",
+
+			"Less than",
+			"Greater than",
+			"Less equal",
+			"Greater equal",
+
+			"Assign",
+			"Equals",
+			"Not equals",
+
+			"Round parenthesis start",
+			"Round parenthesis end",
+
+			"Square bracket start",
+			"Square bracket end",
+
+			"Curly brace start",
+			"Curly brace end",
+
+			"Colon",
+			"Double colon",
+			"Semicolon",
+
+			"Comma",
+			"Period",
+
+			"Ternary",
+
+			"Double square bracket start",
+			"Double square bracket end",
+
+			"Arrow",
+			"Flagship operator"
+		};
+
+		#define BASE_FORMAT "T%05"PRIu64"(%05"PRIu64",%03"PRIu64"[%03"PRIu64"]: L#%04"PRIu64":%03"PRIu64")\t% 32s: %.*s"
+		const C8 *formatS = BASE_FORMAT;
+		const C8 *formatD = BASE_FORMAT " (parsed as F64: %f)";
+		const C8 *formatF = BASE_FORMAT " (parsed as F32: %f)";
+		const C8 *formatI = BASE_FORMAT " (parsed as I64: %" PRIi64 ")";
+		const C8 *formatU = BASE_FORMAT " (parsed as U64: %" PRIu64 ")";
+
+		const C8 *format = t.tokenType == ETokenType_Double ? formatD : (
+			t.tokenType == ETokenType_Float ? formatF : (
+				t.tokenType == ETokenType_SignedInteger ? formatI : (
+					t.tokenType == ETokenType_Integer ? formatU : formatS
+				)
+			)
+		);
+
+		Log_debugLn(
+
+			alloc,
+
+			format, 
+
+			i, 
+
+			(U64)t.naiveTokenId, 
+			(U64)t.lexerTokenSubId, 
+			(U64)t.tokenSize, 
+
+			(U64)lt.lineId, 
+			(U64)(lt.charId + t.lexerTokenSubId),
+
+			tokenType[t.tokenType],
+			CharString_length(tokenRaw), 
+			tokenRaw.ptr,
+			t.valuef,
+			t.valuei,
+			t.valueu
+		);
+	}
 }

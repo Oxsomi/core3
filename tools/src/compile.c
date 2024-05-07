@@ -120,7 +120,7 @@ Error registerFile(FileInfo file, ShaderFileRecursion *shaderFiles) {
 				//Because we want to compile it with two different modes
 				//The first mode already added one
 
-				if(!foundFirstMode) {
+				if(foundFirstMode) {
 
 					CharString input = *ListCharString_last(*shaderFiles->allShaders);
 					input = CharString_createRefSizedConst(input.ptr, CharString_length(input), false);
@@ -208,7 +208,7 @@ Bool CLI_compileShaderSingle(
 
 		settings.string = tempStr;
 
-		//gotoIfError(clean, Compiler_parse(compiler, settings, &compileResult))
+		gotoIfError(clean, Compiler_parsex(compiler, settings, &compileResult))
 	}
 
 	//Write final compile result

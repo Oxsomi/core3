@@ -120,7 +120,7 @@ Bool Compiler_free(Compiler *comp, Allocator alloc);
 Error Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator alloc, CompileResult *result);
 
 //Manual tokenization for a preprocessed file, to obtain annotations (returns shEntries)
-Error Compiler_parse(Compiler comp, CompilerSettings settings, CompileResult *result);
+Error Compiler_parse(Compiler comp, CompilerSettings settings, Allocator alloc, CompileResult *result);
 
 typedef enum ECompileBinaryTypes {
 	ECompileBinaryTypes_Shader,			//Shader binary
@@ -139,7 +139,9 @@ Bool ListCompiler_freeUnderlyingx(ListCompiler *compilers);
 
 Error Compiler_createx(Compiler *comp);
 Bool Compiler_freex(Compiler *comp);
+
 Error Compiler_preprocessx(Compiler comp, CompilerSettings settings, CompileResult *result);
+Error Compiler_parsex(Compiler comp, CompilerSettings settings, CompileResult *result);
 
 #ifdef __cplusplus
 	}
