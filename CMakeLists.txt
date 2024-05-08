@@ -545,7 +545,7 @@ macro(add_virtual_files)
 
 		add_custom_target(
 			${_ARGS_TARGET}_package_${_ARGS_NAME}
-			COMMAND OxC3 file package -i "${_ARGS_ROOT}" -o "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA"
+			COMMAND OxC3 file package -input "${_ARGS_ROOT}" -output "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/packages/${_ARGS_TARGET}/${_ARGS_NAME}.oiCA"
 			WORKING_DIRECTORY ${_ARGS_SELF}
 		)
 
