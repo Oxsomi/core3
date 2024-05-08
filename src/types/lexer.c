@@ -24,6 +24,14 @@
 TListImpl(LexerToken);
 TListImpl(LexerExpression);
 
+U32 LexerToken_getLineId(LexerToken tok) {
+	return tok.lineId | ((U32)(tok.realLineIdAndLineIdExt >> 15) << 16);
+}
+
+U32 LexerToken_getOriginalLineId(LexerToken tok) {
+	return tok.realLineIdAndLineIdExt << 1 >> 1;
+}
+
 U32 LexerToken_getOffset(LexerToken tok) {
 	return tok.offsetType << 4 >> 4;
 }
@@ -131,6 +139,11 @@ Error Lexer_create(CharString str, Allocator alloc, Lexer *lexer) {
 	Error err = Error_none();
 	ListLexerToken tokens = { 0 };
 	ListLexerExpression expressions = { 0 };
+	ListCharString sourceLocations = { 0 };
+	CharString currentSource = CharString_createNull();
+	CharString tempSource = CharString_createNull();
+
+	gotoIfError(clean, ListCharString_reserve(&sourceLocations, 64, alloc))
 	gotoIfError(clean, ListLexerExpression_reserve(&expressions, 64 + CharString_length(str) / 64, alloc))
 	gotoIfError(clean, ListLexerToken_reserve(&tokens, 64 + CharString_length(str) / 6, alloc))
 
@@ -142,6 +155,9 @@ Error Lexer_create(CharString str, Allocator alloc, Lexer *lexer) {
 	U64 lineCounter = 1, lastLineStart = 0;
 	U64 lastToken = 0;
 	U64 lastLineId = U64_MAX;
+
+	U64 fileLineOffset = 0, fileLineStart = 0;
+	U64 fileId = U16_MAX;
 
 	for (U32 i = 0, k = (U32) CharString_length(str); i < k; ++i) {
 
@@ -209,17 +225,144 @@ Error Lexer_create(CharString str, Allocator alloc, Lexer *lexer) {
 		if(c == '\r' && next == '\n')		//Consume \r\n as one char
 			multiChar = true;
 
+		if (prevTemp != '\\' && C8_isNewLine(c))
+			endExpression = true;
+
 		if(C8_isNewLine(c)) {
+
+			//Handle #line, we simply consume the tokens and will never show them to the parser.
+			//Because, we need to know the real location of tokens too, we will just pass that info along.
+			//If we don't, the lexer can't give accurate error messages.
+			//# line 123 or # line 123 "test"
+
+			U64 tokenCount = tokens.length - lastToken;
+
+			if (
+				tokenCount && expressionType == ELexerExpressionType_Preprocessor && 
+				(tokenCount == 3 || tokenCount == 4)
+			) {
+
+				LexerToken preprocessorDirective = tokens.ptr[lastToken + 1];
+				Lexer fakeLexer = (Lexer) { .source = str };
+
+				if (CharString_equalsStringSensitive(
+					LexerToken_asString(preprocessorDirective, fakeLexer),
+					CharString_createRefCStrConst("line")
+				)) {
+
+					LexerToken lineId = tokens.ptr[lastToken + 2];
+
+					if(!(
+						LexerToken_getType(lineId) >= ELexerTokenType_IntBegin && 
+						LexerToken_getType(lineId) <= ELexerTokenType_IntEnd
+					))
+						gotoIfError(clean, Error_invalidState(1, "Lexer_create() #line expected uint (U64)"))
+
+					U64 lineIdi = 0;
+
+					if(!CharString_parseU64(LexerToken_asString(lineId, fakeLexer), &lineIdi))
+						gotoIfError(clean, Error_invalidState(2, "Lexer_create() #line couldn't parse U64"))
+
+					fileLineStart = lineCounter + 1;
+					fileLineOffset = lineIdi;
+
+					//# line 123 "testFile"
+					//           ^
+					
+					if(tokenCount == 4) {
+
+						LexerToken file = tokens.ptr[lastToken + 3];
+					
+						if(LexerToken_getType(file) != ELexerTokenType_String)
+							gotoIfError(clean, Error_invalidState(3, "Lexer_create() #line expected string next"))
+
+						//Parse string forreal
+						
+						CharString_clear(&tempSource);
+
+						Bool isEscaped = false;
+						Bool prevSlash = false;
+						Bool leadingSlashSlash = false;
+
+						for (U64 l = LexerToken_getOffset(file), j = l; j < l + file.length; ++j) {
+
+							C8 cj = str.ptr[j];
+
+							if (cj == '\\') {
+
+								if(isEscaped) {
+									gotoIfError(clean, CharString_append(&tempSource, cj, alloc))
+									isEscaped = false;
+									continue;
+								}
+
+								isEscaped = true;
+								continue;
+							}
+
+							if(prevSlash && cj == '/') {						//Allow //
+								CharString_clear(&tempSource);
+								leadingSlashSlash = true;
+							}
+
+							prevSlash = cj == '/';
+
+							gotoIfError(clean, CharString_append(&tempSource, cj, alloc))
+							isEscaped = false;
+						}
+
+						if(isEscaped)
+							gotoIfError(clean, Error_invalidParameter(
+								0, 0, "Lexer_create() source was invalid. String can't end with an escaped quote!"
+							))
+
+						//Fix path
+
+						if(leadingSlashSlash)
+							gotoIfError(clean, CharString_insert(&tempSource, '/', 0, alloc))
+
+						//Find string
+
+						U64 sourceLoc = 0;
+
+						for(; sourceLoc < sourceLocations.length; ++sourceLoc)
+							if (CharString_equalsStringInsensitive(sourceLocations.ptr[sourceLoc], tempSource))
+								break;
+
+						//Insert new
+
+						if(sourceLoc == sourceLocations.length) {
+
+							if(sourceLoc >> 16)
+								gotoIfError(clean, Error_invalidState(4, "Lexer_create() source count limited to U16_MAX"))
+
+							gotoIfError(clean, CharString_createCopy(tempSource, alloc, &currentSource))
+							gotoIfError(clean, ListCharString_pushBack(&sourceLocations, currentSource, alloc))
+							currentSource = CharString_createNull();		//Moved
+						}
+
+						//Ensure token after links to this string
+
+						fileId = sourceLoc;
+					}
+
+					gotoIfError(clean, ListLexerToken_resize(&tokens, lastToken, alloc))
+					endExpression = false;		//Pretend we didn't see that
+					prevIt = NULL;
+					tokenType = ELexerTokenType_Count;
+				}
+			}
+
+			//Increment line as normal, make sure we don't run out of line counter tho (17 bits)
 
 			++lineCounter;
 			lastLineStart = i + multiChar + 1;
 
-			if (lineCounter >> 16)
-				gotoIfError(clean, Error_outOfBounds(0, U16_MAX, U16_MAX, "Lexer_create() line count is limited to 64Ki"))
+			if (lineCounter >> 17)
+				gotoIfError(clean, Error_outOfBounds(
+					0, lineCounter, (1 << 17) - 1, "Lexer_create() line count is limited to 128Ki"
+				))
 		}
-
-		if (prevTemp != '\\' && C8_isNewLine(c))
-			endExpression = true;
 
 		//Preprocessor
 
@@ -354,7 +497,7 @@ Error Lexer_create(CharString str, Allocator alloc, Lexer *lexer) {
 
 						if(!isEnded) {
 
-							if (Lexer_isSymbol(next) && !containsDot) {			//Just 0
+							if ((Lexer_isSymbol(next) || next == C8_MAX || C8_isWhitespace(next)) && !containsDot) {	//0
 								isEnded = true;
 								tokenType = ELexerTokenType_IntegerDec;
 								++i;
@@ -601,19 +744,33 @@ Error Lexer_create(CharString str, Allocator alloc, Lexer *lexer) {
 			U64 off = i + endChar + multiChar - len;
 
 			if(len >> 8)
-				gotoIfError(clean, Error_outOfBounds(0, 256, 256, "Lexer_create() tokens are limited to 256 C8s"))
+				gotoIfError(clean, Error_outOfBounds(0, len, 256, "Lexer_create() tokens are limited to 256 C8s"))
 
 			if(off >> (32 - 4))
 				gotoIfError(clean, Error_outOfBounds(0, off, 1 << (32 - 4), "Lexer_create() offset out of bounds"))
 
-			if((i + 2  - lastLineStart) >> 7)
-				gotoIfError(clean, Error_outOfBounds(0, 128, 128, "Lexer_create() lines are limited to 128 C8s"))
+			U64 charId = i + 1 - len - lastLineStart;
+
+			if((charId + 1) >> 8)
+				gotoIfError(clean, Error_outOfBounds(0, charId + 1, 256, "Lexer_create() lines are limited to 256 C8s"))
+
+			U64 resolvedLineId = lineCounter - fileLineStart + fileLineOffset;
+
+			if(resolvedLineId >> 15)
+				gotoIfError(clean, Error_outOfBounds(
+					0, resolvedLineId, 1 << 15, "Lexer_create() source line id is out of bounds (32Ki)"
+				))
 
 			LexerToken tok = (LexerToken) { 
+
 				.lineId = (U16) lineCounter, 
-				.charId = (U8) (i + 1 - len - lastLineStart) + 1,
+				.charId = (U8) (charId + 1),
 				.length = (U8) len, 
-				.offsetType = (U32)(off | (tokenType << (32 - 4)))
+
+				.offsetType = (U32)(off | (tokenType << (32 - 4))),
+
+				.fileId = (U16)fileId,
+				.realLineIdAndLineIdExt = (U16)((lineCounter >> 16 << 15) | resolvedLineId)
 			};
 
 			gotoIfError(clean, ListLexerToken_pushBack(&tokens, tok, alloc))
@@ -638,13 +795,17 @@ clean:
 	if(err.genericError) {
 		ListLexerToken_free(&tokens, alloc);
 		ListLexerExpression_free(&expressions, alloc);
+		ListCharString_freeUnderlying(&sourceLocations, alloc);
 	}
 	else *lexer = (Lexer) { 
 		.source = CharString_createRefSizedConst(str.ptr, CharString_length(str), false),
 		.expressions = expressions, 
-		.tokens = tokens 
+		.tokens = tokens,
+		.sourceLocations = sourceLocations
 	};
 
+	CharString_free(&currentSource, alloc);
+	CharString_free(&tempSource, alloc);
 	return err;
 }
 
@@ -655,6 +816,7 @@ Bool Lexer_free(Lexer *lexer, Allocator alloc) {
 
 	ListLexerExpression_free(&lexer->expressions, alloc);
 	ListLexerToken_free(&lexer->tokens, alloc);
+	ListCharString_freeUnderlying(&lexer->sourceLocations, alloc);
 	return true;
 }
 
@@ -664,6 +826,8 @@ void Lexer_print(Lexer lexer, Allocator alloc) {
 		Log_debugLn(alloc, "Lexer: Empty");
 
 	else Log_debugLn(alloc, "Lexer:");
+
+	CharString nul = CharString_createRefCStrConst("null");
 	
 	for (U64 i = 0; i < lexer.tokens.length; ++i) {
 
@@ -683,20 +847,36 @@ void Lexer_print(Lexer lexer, Allocator alloc) {
 			"C8[]"
 		};
 
+		CharString mine = nul;
+
+		if(lt.fileId != U16_MAX)
+			mine = lexer.sourceLocations.ptr[lt.fileId];
+
+		U64 lastSlash = CharString_findLastSensitive(mine, '/', 0);
+
+		if(lastSlash == 1 && mine.ptr[0] == '/')		//Exception for //x
+			lastSlash = U64_MAX;
+
+		const C8 *format1 = "T%05"PRIu64"(L#%04"PRIu64": %03"PRIu64")\t% 16s: %.*s\t\t\t(%s L#%05"PRIu64")";
+		const C8 *format2 = "T%05"PRIu64"(L#%04"PRIu64": %03"PRIu64")\t% 16s: %.*s\t\t\t(.../%s L#%05"PRIu64")";
+
 		Log_debugLn(
 			
 			alloc,
 
-			"T%05"PRIu64"(L#%04"PRIu64": %03"PRIu64")\t% 16s: %.*s", 
+			lastSlash == U64_MAX ? format1 : format2, 
 
 			i, 
 
-			(U64)lt.lineId, 
+			(U64)LexerToken_getLineId(lt),
 			(U64)lt.charId,
 
 			tokenType[LexerToken_getType(lt)],
 			CharString_length(tokenRaw), 
-			tokenRaw.ptr
+			tokenRaw.ptr,
+
+			lastSlash == U64_MAX ? mine.ptr : mine.ptr + lastSlash,
+			(U64)LexerToken_getOriginalLineId(lt)
 		);
 	}
 }

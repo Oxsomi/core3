@@ -52,7 +52,7 @@ Bool CLI_convert(ParsedArgs args, Bool isTo) {
 
 	//Check if input file and file type are valid
 
-	gotoIfError(clean, File_getInfo(inputArg, &info))
+	gotoIfError(clean, File_getInfox(inputArg, &info))
 
 	if (!(f.flags & EFormatFlags_SupportFiles) && info.type == EFileType_File)
 		gotoIfError(clean, Error_invalidState(0, "CLI_convert() Invalid file passed to convertTo. Only accepting folders."))

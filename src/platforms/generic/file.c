@@ -164,7 +164,7 @@ Error File_resolvex(CharString loc, Bool *isVirtual, U64 maxFilePathLimit, CharS
 	);
 }
 
-Error File_getInfo(CharString loc, FileInfo *info) {
+Error File_getInfo(CharString loc, FileInfo *info, Allocator alloc) {
 
 	CharString resolved = CharString_createNull();
 	Error err;
@@ -185,7 +185,7 @@ Error File_getInfo(CharString loc, FileInfo *info) {
 		return Error_none();
 	}
 
-	gotoIfError(clean, File_resolvex(loc, &isVirtual, 0, &resolved))
+	gotoIfError(clean, File_resolve(loc, &isVirtual, 0, Platform_instance.workingDirectory, alloc, &resolved))
 
 	struct stat inf = (struct stat) { 0 };
 
@@ -216,8 +216,12 @@ Error File_getInfo(CharString loc, FileInfo *info) {
 	return Error_none();
 
 clean:
-	CharString_freex(&resolved);
+	CharString_free(&resolved, alloc);
 	return err;
+}
+
+Error File_getInfox(CharString loc, FileInfo *info) {
+	return File_getInfo(loc, info, Platform_instance.alloc);
 }
 
 Bool File_hasFile(CharString loc) { return File_hasType(loc, EFileType_File); }
@@ -337,7 +341,7 @@ Error File_add(CharString loc, EFileType type, Ns maxTimeout) {
 
 	gotoIfError(clean, File_resolvex(loc, &isVirtual, 0, &resolved))
 
-	err = File_getInfo(resolved, &info);
+	err = File_getInfox(resolved, &info);
 
 	if(err.genericError && err.genericError != EGenericError_NotFound)
 		gotoIfError(clean, err)
@@ -368,7 +372,7 @@ Error File_add(CharString loc, EFileType type, Ns maxTimeout) {
 
 			CharString parent = CharString_createRefSized((C8*)resolved.ptr, CharString_end(str.ptr[i]) - resolved.ptr, false);
 
-			err = File_getInfo(parent, &info);
+			err = File_getInfox(parent, &info);
 
 			if(err.genericError && err.genericError != EGenericError_NotFound)
 				gotoIfError(clean, err)
@@ -465,14 +469,14 @@ clean:
 
 Bool File_has(CharString loc) {
 	FileInfo info = (FileInfo) { 0 };
-	const Error err = File_getInfo(loc, &info);
+	const Error err = File_getInfox(loc, &info);
 	FileInfo_freex(&info);
 	return !err.genericError;
 }
 
 Bool File_hasType(CharString loc, EFileType type) {
 	FileInfo info = (FileInfo) { 0 };
-	const Error err = File_getInfo(loc, &info);
+	const Error err = File_getInfox(loc, &info);
 	const Bool sameType = info.type == type;
 	FileInfo_freex(&info);
 	return !err.genericError && sameType;

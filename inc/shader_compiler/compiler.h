@@ -54,7 +54,8 @@ typedef struct CompilerSettings {
 	ESHBinaryType outputType;
 
 	Bool debug;
-	U8 padding[7];
+	Bool infoAboutIncludes;		//Saves extra include info, useful for debugging includes or hot shader reload
+	U8 padding[6];
 
 } CompilerSettings;
 
@@ -82,6 +83,29 @@ U32 CompileError_lineId(CompileError err);
 
 TList(CompileError);
 
+Bool CompileError_free(CompileError *err, Allocator alloc);
+Bool ListCompileError_freeUnderlying(ListCompileError *compileErrors, Allocator alloc);
+
+typedef struct IncludeInfo {
+
+	U32 fileSize;
+	U32 crc32c;
+
+	Ns timestamp;
+
+	U64 counter;
+
+	CharString file;
+
+} IncludeInfo;
+
+TList(IncludeInfo);
+
+Bool IncludeInfo_free(IncludeInfo *info, Allocator alloc);
+Bool ListIncludeInfo_freeUnderlying(ListIncludeInfo *infos, Allocator alloc);
+
+Error ListIncludeInfo_stringify(ListIncludeInfo files, Allocator alloc, CharString *output);
+
 typedef enum ECompileResultType {
 	ECompileResultType_Text,
 	ECompileResultType_Binaries,
@@ -96,7 +120,8 @@ typedef struct CompileResult {
 	ECompileResultType type;
 
 	Bool isSuccess;
-	U8 padding[3];
+	Bool infoAboutIncludes;
+	U8 padding[2];
 
 	union {
 		CharString text;
@@ -104,7 +129,24 @@ typedef struct CompileResult {
 		ListSHEntry shEntries;
 	};
 
+	ListIncludeInfo includeInfo;
+
 } CompileResult;
+
+typedef struct IncludedFile {
+
+	IncludeInfo includeInfo;
+
+	U64 globalCounter;
+
+	CharString data;
+
+} IncludedFile;
+
+TList(IncludedFile);
+
+Bool IncludedFile_free(IncludedFile *file, Allocator alloc);
+Bool ListIncludedFile_freeUnderlying(ListIncludedFile *file, Allocator alloc);
 
 Bool CompileResult_free(CompileResult *result, Allocator alloc);
 
@@ -136,6 +178,16 @@ Error Compiler_compile(Compiler comp, CompilerSettings settings, ListSHEntry ent
 
 Bool CompileResult_freex(CompileResult *result);
 Bool ListCompiler_freeUnderlyingx(ListCompiler *compilers);
+
+Bool CompileError_freex(CompileError *err);
+Bool ListCompileError_freeUnderlyingx(ListCompileError *compileErrors);
+
+Bool IncludeInfo_freex(IncludeInfo *info);
+Bool ListIncludeInfo_freeUnderlyingx(ListIncludeInfo *infos);
+Error ListIncludeInfo_stringifyx(ListIncludeInfo files, CharString *tempStr);
+
+Bool IncludedFile_freex(IncludedFile *file);
+Bool ListIncludedFile_freeUnderlyingx(ListIncludedFile *file);
 
 Error Compiler_createx(Compiler *comp);
 Bool Compiler_freex(Compiler *comp);

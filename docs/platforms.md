@@ -34,7 +34,7 @@ File contains file utils for modifying the file system. There are two types of f
 
 The following functions are available to interact with the file system:
 
-- Error **getInfo**(CharString loc, FileInfo*): Get FileInfo that represents the file at loc. For more details on FileInfo, see [OxC3 types Files](types.md#Files).
+- Error **getInfo**(CharString loc, FileInfo*, Allocator): Get FileInfo that represents the file at loc. For more details on FileInfo, see [OxC3 types Files](types.md#Files).
 - Error **foreach**`(CharString loc, FileCallback callback, void *userData, Bool isRecursive)`: Loop through the folder at loc, if there is no folder at loc it will error. FileCallback is called for each file it finds. If the FileCallback `Error(FileInfo, void*)` returns an Error it will stop searching for more files. If isRecursive is false, it will only index the root of the folder.
 - Error **remove**(CharString loc, Ns maxTimeout): Remove file and children.
 - Error **add**(CharString loc, EFileType type, Ns maxTimeout): Add file with type (e.g. folder or file).

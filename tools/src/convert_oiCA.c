@@ -150,7 +150,7 @@ Error CLI_convertToCA(ParsedArgs args, CharString input, FileInfo inputInfo, Cha
 		if(!CharString_cutBeforeLastSensitive(resolved, '/', &subPath))
 			gotoIfError(clean, Error_invalidState(0, "CLI_convertToCA() cutBeforeLast failed"))
 
-		gotoIfError(clean, File_getInfo(resolved, &fileInfo))
+		gotoIfError(clean, File_getInfox(resolved, &fileInfo))
 		gotoIfError(clean, File_read(resolved, 1 * SECOND, &fileData))
 		gotoIfError(clean, CharString_createCopyx(subPath, &tmp))
 		gotoIfError(clean, Archive_addFilex(&archive, tmp, fileData, fileInfo.timestamp))

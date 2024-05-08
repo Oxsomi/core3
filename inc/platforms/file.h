@@ -43,7 +43,8 @@
 //
 //Backslashes are automatically resolved to forward slash
 
-Error File_getInfo(CharString loc, FileInfo *info);
+Error File_getInfo(CharString loc, FileInfo *info, Allocator alloc);
+Error File_getInfox(CharString loc, FileInfo *info);
 Error File_resolvex(CharString loc, Bool *isVirtual, U64 maxFilePathLimit, CharString *result);
 
 Bool FileInfo_freex(FileInfo *fileInfo);

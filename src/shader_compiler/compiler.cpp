@@ -68,24 +68,36 @@ typedef struct CompilerInterfaces {
 class IncludeHandler : public IDxcIncludeHandler {
 
 	IDxcUtils *utils;
-	ListCharString includedFiles{};
-	ListCharString includedData{};		//The data in the files
+	ListIncludedFile includedFiles{};
 	ListU64 isPresent{};
 	Allocator alloc;
+	U64 counter{};			//Unique file counter in the current file
 
 public:
 
-	IncludeHandler(IDxcUtils *utils, Allocator alloc): utils(utils), alloc(alloc) { }
+	inline IncludeHandler(IDxcUtils *utils, Allocator alloc): utils(utils), alloc(alloc) { }
 
 	//Useful so includes can be cached instead of re-fetched from file each time.
 	//This has to be called in between compiles to ensure the include handler knows it's the first time re-using.
-	void reset() {
+	inline void reset() {
+
+		counter = 0;
+
+		for (U64 i = 0; i < includedFiles.length; ++i)
+			includedFiles.ptrNonConst[i].includeInfo.counter = 0;
+
 		Buffer_unsetAllBits(ListU64_buffer(isPresent));
 	}
 
-	~IncludeHandler() {
-		ListCharString_freeUnderlying(&includedFiles, alloc);
-		ListCharString_freeUnderlying(&includedData, alloc);
+	inline U64 getCounter() const { return counter; }
+	inline ListIncludedFile getIncludedFiles() const { 
+		ListIncludedFile res = ListIncludedFile{};
+		ListIncludedFile_createRefConst(includedFiles.ptr, includedFiles.length, &res);
+		return res;
+	}
+
+	inline ~IncludeHandler() {
+		ListIncludedFile_freeUnderlying(&includedFiles, alloc);
 		ListU64_free(&isPresent, alloc);
 	}
 
@@ -102,6 +114,7 @@ public:
 		HRESULT hr = S_OK;
 		Buffer tempBuffer = Buffer_createNull();
 		CharString tempFile = CharString_createNull();
+		FileInfo fileInfo = FileInfo{};
 		Bool isVirtual = false;
 		Bool isBuiltin = false;
 		U64 i = 0;
@@ -120,8 +133,12 @@ public:
 			while(CharString_getAt(fileName, firstDoubleSlash) == '/')
 				++firstDoubleSlash;
 
-			if(!CharString_cut(fileName, firstDoubleSlash, 0, &resolved) || !CharString_length(resolved))
+			CharString tmp = CharString_createNull();
+
+			if(!CharString_cut(fileName, firstDoubleSlash, 0, &tmp) || !CharString_length(tmp))
 				gotoIfError(clean, Error_invalidState(0, "IncludeHandler::LoadSource expected source after //"))
+
+			gotoIfError(clean, CharString_createCopy(tmp, alloc, &resolved))
 		}
 
 		else gotoIfError(clean, File_resolve(
@@ -129,7 +146,7 @@ public:
 		))
 
 		for (; i < includedFiles.length; ++i)
-			if(CharString_equalsStringInsensitive(resolved, includedFiles.ptr[i]))
+			if(CharString_equalsStringInsensitive(resolved, includedFiles.ptr[i].includeInfo.file))
 				break;
 
 		//We already included it in an earlier run.
@@ -137,9 +154,58 @@ public:
 
 		if (i != includedFiles.length) {
 
+			//We need to validate the cache first
+			//It's possible the compiler exists so long that files on disk have been changed
+
+			Bool validCache = true;
+
+			if(!isBuiltin) {		//Builtins don't exist on disk, so they can't really be hot reloaded
+
+				gotoIfError(clean, File_getInfo(resolved, &fileInfo, alloc))
+
+				IncludeInfo prevInclude = includedFiles.ptr[i].includeInfo;
+
+				//When timestamp has changed, it might be dirty.
+				//When fileSize has, it definitely is dirty.
+
+				if (fileInfo.timestamp != prevInclude.timestamp || fileInfo.fileSize != prevInclude.fileSize) {
+
+					//Unfortunately peanut butter, we have to hash the whole file.
+					//Luckily, CRC32C is quite fast.
+
+					if (fileInfo.fileSize == prevInclude.fileSize) {
+
+						gotoIfError(clean, File_read(resolved, 1 * SECOND, &tempBuffer))
+
+						U32 crc32c = Buffer_crc32c(tempBuffer);
+
+						if(crc32c != prevInclude.crc32c)
+							validCache = false;
+
+						Buffer_free(&tempBuffer, alloc);
+					}
+
+					else validCache = false;
+				}
+
+				FileInfo_free(&fileInfo, alloc);
+			}
+
+			//Continue with the next if we don't have a valid cache
+
+			if(!validCache) {
+				
+				IncludedFile includedFile = IncludedFile{};
+				gotoIfError(clean, ListIncludedFile_popLocation(&includedFiles, i, &includedFile))
+
+				IncludedFile_free(&includedFile, alloc);
+
+				i = includedFiles.length;
+			}
+
 			//If we already included it in this file, then it should be a NO-OP
 
-			if((isPresent.ptr[i >> 6] >> (i & 63)) & 1)
+			else if((isPresent.ptr[i >> 6] >> (i & 63)) & 1)
 				hr = utils->CreateBlobFromPinned("", 0, DXC_CP_ACP, &encoding);
 
 			//Otherwise, we should fetch from our cache
@@ -147,20 +213,35 @@ public:
 			else {
 
 				hr = utils->CreateBlobFromPinned(
-					includedData.ptr[i].ptr, (U32) CharString_length(includedData.ptr[i]), DXC_CP_UTF8, &encoding
+					includedFiles.ptr[i].data.ptr, (U32) CharString_length(includedFiles.ptr[i].data), DXC_CP_UTF8, &encoding
 				);
 
 				isPresent.ptrNonConst[i >> 6] |= (U64)1 << (i & 63);
+				++counter;
+			}
+
+			//Keep track of count
+
+			if(validCache) {
+				++includedFiles.ptrNonConst[i].globalCounter;
+				++includedFiles.ptrNonConst[i].includeInfo.counter;
 			}
 		}
 
 		//File is new in cache, we should read it from file
 
-		else {
+		if(i == includedFiles.length) {
+
+			U32 crc32c = U32_MAX;
 
 			if(!isBuiltin) {
 
+				gotoIfError(clean, File_getInfo(resolved, &fileInfo, alloc))
 				gotoIfError(clean, File_read(resolved, 1 * SECOND, &tempBuffer))
+
+				crc32c = Buffer_crc32c(tempBuffer);
+				Ns timestamp = fileInfo.timestamp;
+				FileInfo_free(&fileInfo, alloc);
 
 				if(Buffer_length(tempBuffer) >> 32)
 					gotoIfError(clean, Error_outOfBounds(
@@ -168,8 +249,15 @@ public:
 						"IncludeHandler::LoadSource CreateBlobFromPinned requires 32-bit buffers max"
 					))
 
-				gotoIfError(clean, ListCharString_pushBack(&includedFiles, resolved, alloc))
-				resolved = CharString_createNull();
+				IncludedFile inc = IncludedFile{
+					.includeInfo = IncludeInfo{
+						.fileSize = (U32) Buffer_length(tempBuffer),
+						.crc32c = crc32c,
+						.timestamp = timestamp,
+						.counter = 1
+					},
+					.globalCounter = 1
+				};
 
 				//Move buffer to includedData
 
@@ -180,6 +268,13 @@ public:
 				))
 
 				Buffer_free(&tempBuffer, alloc);
+
+				inc.includeInfo.file = resolved;
+				inc.data = tempFile;
+
+				gotoIfError(clean, ListIncludedFile_pushBack(&includedFiles, inc, alloc))
+				resolved = CharString_createNull();
+				tempFile = CharString_createNull();
 
 			} else {
 
@@ -208,21 +303,34 @@ public:
 
 				else gotoIfError(clean, Error_notFound(0, 0, "IncludeHandler::LoadSource builtin file not found"))
 
-				gotoIfError(clean, ListCharString_pushBack(&includedFiles, resolved, alloc))
-				resolved = CharString_createNull();
-			}
+				crc32c = Buffer_crc32c(CharString_bufferConst(tempFile));
 
-			gotoIfError(clean, ListCharString_pushBack(&includedData, tempFile, alloc))
-			tempFile = CharString_createNull();
+				IncludedFile inc = IncludedFile{
+					.includeInfo = IncludeInfo{
+						.fileSize = (U32) CharString_length(tempFile),
+						.crc32c = crc32c,
+						.counter = 1
+					},
+					.globalCounter = 1
+				};
+
+				inc.includeInfo.file = resolved;
+				inc.data = tempFile;
+
+				gotoIfError(clean, ListIncludedFile_pushBack(&includedFiles, inc, alloc))
+				resolved = CharString_createNull();
+				tempFile = CharString_createNull();
+			}
 
 			if((i >> 6) >= isPresent.length)
 				gotoIfError(clean, ListU64_pushBack(&isPresent, 0, alloc))
 
 			hr = utils->CreateBlobFromPinned(
-				includedData.ptr[i].ptr, (U32) CharString_length(includedData.ptr[i]), DXC_CP_UTF8, &encoding
+				includedFiles.ptr[i].data.ptr, (U32) CharString_length(includedFiles.ptr[i].data), DXC_CP_UTF8, &encoding
 			);
 
 			isPresent.ptrNonConst[i >> 6] |= (U64)1 << (i & 63);
+			++counter;
 		}
 
 		if(hr)
@@ -239,6 +347,7 @@ public:
 		if(encoding)
 			encoding->Release();
 
+		FileInfo_free(&fileInfo, alloc);
 		CharString_free(&resolved, alloc);
 		CharString_free(&fileName, alloc);
 		CharString_free(&tempFile, alloc);
@@ -600,6 +709,26 @@ Error Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator al
 		if(error) {
 			error->Release();
 			error = NULL;
+		}
+
+		if (settings.infoAboutIncludes) {
+
+			gotoIfError(clean, ListIncludeInfo_resize(&result->includeInfo, interfaces->includeHandler->getCounter(), alloc))
+
+			ListIncludedFile files = interfaces->includeHandler->getIncludedFiles();
+
+			for(U64 i = 0, j = 0; i < files.length; ++i)
+				if (files.ptr[i].includeInfo.counter) {		//Exclude inactive includes
+
+					IncludeInfo copy = files.ptr[i].includeInfo;					
+					gotoIfError(clean, CharString_createCopy(copy.file, alloc, &tempStr))
+
+					copy.file = tempStr;
+					result->includeInfo.ptrNonConst[j] = copy;
+					tempStr = CharString_createNull();
+
+					++j;
+				}
 		}
 
 		if (hasErrors)

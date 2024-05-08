@@ -47,35 +47,37 @@ typedef enum EOperationHasParameter {
 	EOperationHasParameter_EntryShift,
 	EOperationHasParameter_StartOffsetShift,
 
-	EOperationHasParameter_CompileModeShift,
+	EOperationHasParameter_ShaderOutputModeShift,
 	EOperationHasParameter_ThreadCountShift,
+	EOperationHasParameter_ShaderCompileModeShift,
 
 	EOperationHasParameter_Count,
 
-	EOperationHasParameter_Start		= EOperationHasParameter_FileFormatShift,
+	EOperationHasParameter_Start				= EOperationHasParameter_FileFormatShift,
 
 	//As mask
 
-	EOperationHasParameter_None			= 0,
-	EOperationHasParameter_FileFormat	= 1 << EOperationHasParameter_FileFormatShift,
-	EOperationHasParameter_Input		= 1 << EOperationHasParameter_InputShift,
-	EOperationHasParameter_Output		= 1 << EOperationHasParameter_OutputShift,
-	EOperationHasParameter_AES			= 1 << EOperationHasParameter_AESShift,
+	EOperationHasParameter_None					= 0,
+	EOperationHasParameter_FileFormat			= 1 << EOperationHasParameter_FileFormatShift,
+	EOperationHasParameter_Input				= 1 << EOperationHasParameter_InputShift,
+	EOperationHasParameter_Output				= 1 << EOperationHasParameter_OutputShift,
+	EOperationHasParameter_AES					= 1 << EOperationHasParameter_AESShift,
 
-	EOperationHasParameter_SplitBy		= 1 << EOperationHasParameter_SplitByShift,
+	EOperationHasParameter_SplitBy				= 1 << EOperationHasParameter_SplitByShift,
 
-	EOperationHasParameter_Number		= 1 << EOperationHasParameter_NumberShift,
-	EOperationHasParameter_Length		= 1 << EOperationHasParameter_LengthShift,
+	EOperationHasParameter_Number				= 1 << EOperationHasParameter_NumberShift,
+	EOperationHasParameter_Length				= 1 << EOperationHasParameter_LengthShift,
 
-	EOperationHasParameter_Character	= 1 << EOperationHasParameter_CharacterShift,
+	EOperationHasParameter_Character			= 1 << EOperationHasParameter_CharacterShift,
 
-	EOperationHasParameter_Bit			= 1 << EOperationHasParameter_BitShift,
+	EOperationHasParameter_Bit					= 1 << EOperationHasParameter_BitShift,
 
-	EOperationHasParameter_Entry		= 1 << EOperationHasParameter_EntryShift,
-	EOperationHasParameter_StartOffset	= 1 << EOperationHasParameter_StartOffsetShift,
+	EOperationHasParameter_Entry				= 1 << EOperationHasParameter_EntryShift,
+	EOperationHasParameter_StartOffset			= 1 << EOperationHasParameter_StartOffsetShift,
 
-	EOperationHasParameter_CompileMode	= 1 << EOperationHasParameter_CompileModeShift,
-	EOperationHasParameter_ThreadCount	= 1 << EOperationHasParameter_ThreadCountShift
+	EOperationHasParameter_ShaderOutputMode		= 1 << EOperationHasParameter_ShaderOutputModeShift,
+	EOperationHasParameter_ThreadCount			= 1 << EOperationHasParameter_ThreadCountShift,
+	EOperationHasParameter_ShaderCompileMode	= 1 << EOperationHasParameter_ShaderCompileModeShift
 
 } EOperationHasParameter;
 
@@ -136,9 +138,8 @@ typedef enum EOperationFlags {
 	//Compilation
 
 	EOperationFlags_Debug			= 1 << 17,
-	EOperationFlags_Preprocess		= 1 << 18,
 
-	EOperationFlags_Count			= 19
+	EOperationFlags_Count			= 18
 
 } EOperationFlags;
 

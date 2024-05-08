@@ -24,9 +24,12 @@
 #include "platforms/log.h"
 #include "types/parser.h"
 #include "types/lexer.h"
+#include "types/time.h"
 
 TListImpl(Compiler);
 TListImpl(CompileError);
+TListImpl(IncludeInfo);
+TListImpl(IncludedFile);
 
 U32 CompileError_lineId(CompileError err) {
 	return err.lineId | ((U32)(err.typeLineId & (U8)I8_MAX) << 16);
@@ -43,6 +46,25 @@ Bool ListCompiler_freeUnderlying(ListCompiler *compilers, Allocator alloc) {
 	return ListCompiler_free(compilers, alloc);
 }
 
+Bool CompileError_free(CompileError *err, Allocator alloc) {
+
+	if(!err)
+		return true;
+
+	CharString_free(&err->file, alloc);
+	CharString_free(&err->error, alloc);
+	return true;
+}
+
+Bool IncludeInfo_free(IncludeInfo *info, Allocator alloc) {
+
+	if(!info)
+		return true;
+
+	CharString_free(&info->file, alloc);
+	return true;
+}
+
 Bool CompileResult_freex(CompileResult *result) {
 	return CompileResult_free(result, Platform_instance.alloc);
 }
@@ -51,18 +73,132 @@ Bool ListCompiler_freeUnderlyingx(ListCompiler *compilers) {
 	return ListCompiler_freeUnderlying(compilers, Platform_instance.alloc);
 }
 
+Bool ListCompileError_freeUnderlying(ListCompileError *compileErrors, Allocator alloc) {
+
+	if(!compileErrors)
+		return true;
+
+	for(U64 i = 0; i < compileErrors->length; ++i)
+		CompileError_free(&compileErrors->ptrNonConst[i], alloc);
+
+	return ListCompileError_free(compileErrors, alloc);
+}
+
+Bool ListIncludeInfo_freeUnderlying(ListIncludeInfo *includeInfos, Allocator alloc) {
+
+	if(!includeInfos)
+		return true;
+
+	for(U64 i = 0; i < includeInfos->length; ++i)
+		IncludeInfo_free(&includeInfos->ptrNonConst[i], alloc);
+
+	return ListIncludeInfo_free(includeInfos, alloc);
+}
+
+Bool CompileError_freex(CompileError *err) {
+	return CompileError_free(err, Platform_instance.alloc);
+}
+
+Bool ListCompileError_freeUnderlyingx(ListCompileError *compileErrors) {
+	return ListCompileError_freeUnderlying(compileErrors, Platform_instance.alloc);
+}
+
+Bool IncludeInfo_freex(IncludeInfo *info) {
+	return IncludeInfo_free(info, Platform_instance.alloc);
+}
+
+Bool ListIncludeInfo_freeUnderlyingx(ListIncludeInfo *infos) {
+	return ListIncludeInfo_freeUnderlying(infos, Platform_instance.alloc);
+}
+
+Error ListIncludeInfo_stringifyx(ListIncludeInfo files, CharString *tempStr) {
+	return ListIncludeInfo_stringify(files, Platform_instance.alloc, tempStr);
+}
+
+Bool IncludedFile_freex(IncludedFile *file) {
+	return IncludedFile_free(file, Platform_instance.alloc);
+}
+
+Bool ListIncludedFile_freeUnderlyingx(ListIncludedFile *file) {
+	return ListIncludedFile_freeUnderlying(file, Platform_instance.alloc);
+}
+
+Bool IncludedFile_free(IncludedFile *file, Allocator alloc) {
+
+	if(!file)
+		return true;
+
+	Bool success = CharString_free(&file->data, alloc);
+	success &= IncludeInfo_free(&file->includeInfo, alloc);
+	return success;
+}
+
+Bool ListIncludedFile_freeUnderlying(ListIncludedFile *file, Allocator alloc) {
+
+	if(!file)
+		return true;
+
+	for(U64 i = 0; i < file->length; ++i)
+		IncludedFile_free(&file->ptrNonConst[i], alloc);
+
+	return ListIncludedFile_free(file, alloc);
+}
+
+Error ListIncludeInfo_stringify(ListIncludeInfo files, Allocator alloc, CharString *tempStr) {
+	
+	CharString tempStr2 = CharString_createNull();
+	Error err = Error_none();
+
+	//Info about includes
+
+	gotoIfError(clean, CharString_createCopy(CharString_createRefCStrConst("Includes:\n"), alloc, tempStr))
+
+	for(U64 i = 0; i < files.length; ++i) {
+
+		IncludeInfo includeInfo = files.ptr[i];
+		TimeFormat format = { 0 };
+
+		if(includeInfo.timestamp)
+			Time_format(includeInfo.timestamp, format, true);
+
+		if(includeInfo.counter == 1)
+			gotoIfError(clean, CharString_format(
+				alloc, &tempStr2,
+				"%08"PRIx32" %05"PRIu32" %s%s%s\n",
+				includeInfo.crc32c, includeInfo.fileSize,
+				includeInfo.timestamp ? format : "", includeInfo.timestamp ? " " : "",
+				includeInfo.file.ptr
+			))
+
+		else gotoIfError(clean, CharString_format(
+			alloc, &tempStr2,
+			"%03"PRIu64" reference(s): %08"PRIx32" %05"PRIu32" %s%s%s\n",
+			includeInfo.counter,
+			includeInfo.crc32c, includeInfo.fileSize,
+			includeInfo.timestamp ? format : "", includeInfo.timestamp ? " " : "",
+			includeInfo.file.ptr
+		))
+
+		gotoIfError(clean, CharString_appendString(tempStr, tempStr2, alloc))
+		CharString_free(&tempStr2, alloc);
+	}
+
+clean:
+
+	if(err.genericError)
+		CharString_free(tempStr, alloc);
+
+	CharString_free(&tempStr2, alloc);
+	return err;
+}
+
 Bool CompileResult_free(CompileResult *result, Allocator alloc) {
 
 	if(!result)
 		return true;
 
-	for (U64 i = 0; i < result->compileErrors.length; ++i) {
-		CompileError err = result->compileErrors.ptr[i];
-		CharString_free(&err.file, alloc);
-		CharString_free(&err.error, alloc);
-	}
-
-	ListCompileError_free(&result->compileErrors, alloc);
+	ListCompileError_freeUnderlying(&result->compileErrors, alloc);
+	ListIncludeInfo_freeUnderlying(&result->includeInfo, alloc);
 
 	switch (result->type) {
 

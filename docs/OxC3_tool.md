@@ -14,55 +14,55 @@ The OxC3 tool is intended to handle all operations required for Oxsomi core3. Th
 
 And might include more functionality in the future.
 
-To get info about a certain category or operation you can type `-? or ?` or any unrecognized command after it. Example; `OxC3 ?` will show all categories. `OxC3 file ?` will show all file operations. `OxC3 file to ?` will show either all formats (if the operation supports formats) or all supported flags/arguments. If the operation supports formats then `OxC3 file to -f <format> ?` could be used.
+To get info about a certain category or operation you can type `-? or ?` or any unrecognized command after it. Example; `OxC3 ?` will show all categories. `OxC3 file ?` will show all file operations. `OxC3 file to ?` will show either all formats (if the operation supports formats) or all supported flags/arguments. If the operation supports formats then `OxC3 file to -format <format> ?` could be used.
 
 ## Calculating hashes
 
 A hash can be calculated as following:
 
-`OxC3 hash file -f SHA256 -i myDialog.txt`
+`OxC3 hash file -format SHA256 -input myDialog.txt`
 
 Where the format can either be `CRC32C` or `SHA256`.
 
 A hash from a string can be calculated like so:
 
-`OxC3 hash string -f CRC32C -i "This is my input string"`
+`OxC3 hash string -format CRC32C -input "This is my input string"`
 
 ## Random
 
-Random number generation is handy for multiple things. CSPRNG (cryptographically secure PRNG) is chosen by default. To generate multiple entries; use `-n <count>`. To output to a file use `-o <file>`.
+Random number generation is handy for multiple things. CSPRNG (cryptographically secure PRNG) is chosen by default. To generate multiple entries; use `-count <count>`. To output to a file use `-output <file>`.
 
 `OxC3 rand key`
 
-Generates a CSPRNG key that can be used for AES256 encryption. You can use `-l <lengthInBytes>` to customize byte count; defaulted to 32.
+Generates a CSPRNG key that can be used for AES256 encryption. You can use `-length <lengthInBytes>` to customize byte count; defaulted to 32.
 
 `OxC3 rand char`
 
-Generates random chars; 32 by default. `-l <charCount>` can be used to customize length. The included characters by default are viable ASCII characters (<0x20, 0x7F>). In the future --utf8 will be an option, but not for now (**TODO**:). `-c <chars>` can be used to pick between characters; ex. `-c 0123456789` will create a random number. This also allows picking the same character multiple times (e.g. -c011 will have 2x more chance to pick 1 instead of 0). Some helpful flags: --alpha (A-Za-z), --numbers (0-9), --alphanumeric (0-9A-Za-z), --lowercase (a-z), --uppercase (A-Z), --symbols (everything excluding alphanumeric that's ASCII). If either of these flags are specified, it'll not use the valid ascii range but rather combine it (so -c ABC --number would be ABC0123456789). E.g. --uppercase --number can be used to generate 0-9A-Z. If for example --alphanumeric --alpha is used, it will cancel out.
+Generates random chars; 32 by default. `-length <charCount>` can be used to customize length. The included characters by default are viable ASCII characters (<0x20, 0x7F>). In the future --utf8 will be an option, but not for now (**TODO**:). `-chars <chars>` can be used to pick between characters; ex. `-chars 0123456789` will create a random number. This also allows picking the same character multiple times (e.g. -chars 011 will have 2x more chance to pick 1 instead of 0). Some helpful flags: --alpha (A-Za-z), --numbers (0-9), --alphanumeric (0-9A-Za-z), --lowercase (a-z), --uppercase (A-Z), --symbols (everything excluding alphanumeric that's ASCII). If either of these flags are specified, it'll not use the valid ascii range but rather combine it (so -chars ABC --numbers would be ABC0123456789). E.g. --uppercase --numbers can be used to generate 0-9A-Z. If for example --alphanumeric --alpha is used, it will cancel out.
 
 `OxC3 rand num`
 
-Is just shorthand for `OxC3 rand char -c <numberKeyset>`. If --hex is used, it'll use 0-9A-Z, if --nyto is used it'll use 0-9a-zA-Z_$, if --oct is used it'll use 0-7, if --bin is used it'll use 0-1. Decimal is the default (0-9). `-l <charCount>` can be used to set a limit by character count and `-b <bitCount>` can be used to limit how many bits the number can have (for decimal output this can only be used with 64-bit numbers and below).
+Is just shorthand for `OxC3 rand char -chars <numberKeyset>`. If --hex is used, it'll use 0-9A-Z, if --nyto is used it'll use 0-9a-zA-Z_$, if --oct is used it'll use 0-7, if --bin is used it'll use 0-1. Decimal is the default (0-9). `-length <charCount>` can be used to set a limit by character count and `-bits <bitCount>` can be used to limit how many bits the number can have (for decimal output this can only be used with 64-bit numbers and below).
 
-`OxC3 rand data -l 16 -o myFile.bin`
+`OxC3 rand data -length 16 -output myFile.bin`
 
-Allows to output random bytes to the binary. Alias to `OxC3 rand key` but to a binary file. -l can be used to tweak number of bytes. -n will added multiple generations appended in the same file. Without -o it will output a hexdump.
+Allows to output random bytes to the binary. Alias to `OxC3 rand key` but to a binary file. -length can be used to tweak number of bytes. -count will added multiple generations appended in the same file. Without -output it will output a hexdump.
 
 ## Convert
 
 `OxC3 file` is the category that is used to convert between file formats. The keywords `from` and `to` can be used to convert between native and non native files. For example:
 
-`OxC3 file to -f oiDL -i myDialog.txt -o myDialog.oiDL --ascii`
+`OxC3 file to -format oiDL -input myDialog.txt -output myDialog.oiDL --ascii`
 
 Will convert the enter separated string in myDialog into a DL file (where each entry is a separate string). This can also combine multiple files into one DL file:
 
-`OxC3 file to -f oiDL -i myFolder -o myFolder.oiDL`
+`OxC3 file to -format oiDL -input myFolder -output myFolder.oiDL`
 
 This will package all files from myFolder into a nameless archive file. These files can be accessed by file id.
 
 To unpackage this (losing the file names of course):
 
-`OxC3 file from -f oiDL -i myFolder.oiDL -o myFolder`
+`OxC3 file from -format oiDL -input myFolder.oiDL -output myFolder`
 
 ### Common arguments
 
@@ -80,12 +80,12 @@ The following flags are commonly used in any format:
 
 The following parameters are commonly used in any format:
 
-- `-f <fileFormat>`: File format
+- `-format <fileFormat>`: File format
   - Specifies the file format that has to be converted from / to. It doesn't detect this from file because this allows you to supply .bin files or other custom extensions.
-- `-i <inputPath>`: Input file/folder (relative)
+- `-input <inputPath>`: Input file/folder (relative)
   - Specifies the input path. This is relative to the current working directory. You can provide an absolute path, but this will have to be located inside the current working directory. Otherwise you'll get an unauthorized error. Depending on the format, this can be either a file or a folder. Which will have to be one of the supported types. This format is detected based on the magic number or file extension (if magic number isn't applicable).
-- `-o <outputPath`>: Output file/folder (relative)
-  - See -i.
+- `-output <outputPath`>: Output file/folder (relative)
+  - See -input.
 - `-aes <key>`: Encryption key (32-byte hex)
   - A key should be generated using a good key generator. This key could for example be specified as: `0x00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000` in hex (64 characters). Can include spaces or tabs, as long as after that it's a valid hex number.
 
@@ -101,9 +101,9 @@ If these are absent; it'll use binary format by default. When either ascii or ut
 
 *Example usage:*
 
-`OxC3 file to -f oiDL -i myDialog0.txt -o myDialog.oiDL --ascii`
+`OxC3 file to -format oiDL -input myDialog0.txt -output myDialog.oiDL --ascii`
 
-`OxC3 file from -f oiDL -o myDialog1.txt -i myDialog.oiDL --ascii`
+`OxC3 file from -format oiDL -output myDialog1.txt -input myDialog.oiDL --ascii`
 
 ### oiCA format
 
@@ -118,11 +118,11 @@ These are left out by default, because often, file timestamps aren't very import
 
 *Example usage:*
 
-`OxC3 file to -f oiCA -i myFolder -o myFolder.oiCA --full-date`
+`OxC3 file to -format oiCA -input myFolder -output myFolder.oiCA --full-date`
 
 ## Packaging a project
 
-`OxC3 package -i myFolder -o myFolder.oiCA` is used to package a folder into Oxsomi formats. This means that it will standardize all files it detects and converts them to our standard file. For example a .fbx file could be automatically converted to a scene and/or model file, a texture could be converted to a standardized image file, etc. This is basically a baking process to ensure all shaders, textures, models and other resources are the correct format for target architectures. -aes argument is allowed to encrypt the modules.
+`OxC3 package -input myFolder -output myFolder.oiCA` is used to package a folder into Oxsomi formats. This means that it will standardize all files it detects and converts them to our standard file. For example a .fbx file could be automatically converted to a scene and/or model file, a texture could be converted to a standardized image file, etc. This is basically a baking process to ensure all shaders, textures, models and other resources are the correct format for target architectures. -aes argument is allowed to encrypt the modules.
 
 These are generally attached to the exe, apk or other executable file to ensure these resources can be found and aren't as easily accidentally modified on disk, as well as making them more portable. See the README.
 
@@ -132,17 +132,44 @@ These are generally attached to the exe, apk or other executable file to ensure 
 
 When operating on a folder, it will attempt to find `.hlsl` files and then processes them in parallel into the output folder.
 
-`-t` can be used to limit thread count. Such as `-t 0` = default , `-t 50%` = 50% of all threads, `-t 4` = 4 threads. Default behavior is: If total input length >=64KiB with at least 8 files or if at least 16 files are present, then all cores will be used for threading.
+`-threads` can be used to limit thread count. Such as `-threads 0` = default , `-threads 50%` = 50% of all threads, `-threads 4` = 4 threads. Default behavior is: If total input length >=64KiB with at least 8 files or if at least 16 files are present, then all cores will be used for threading.
 
-`-m` is the mode the output is in. For preprocessor, if this mode is multiple then it will output a .spv.hlsl and .dxil.hlsl for example (instead of just one .hlsl). The following modes are supported: `spv` and `dxil`. To use spv and dxil, you can use `dxil,spv` or `all` (will include others in the future).
+`-shader-output-mode` is the mode the output is in. If this mode is multiple then it will rename to .spv.hlsl and .dxil.hlsl for example (if preprocessing) or other types such as .spv and .dxil (compile) or .txt for includes. The following modes are supported: `spv` and `dxil`. To use spv and dxil, you can use `dxil,spv` or `all` (will include others in the future).
+
+`-shader-compile-mode` is the compile mode. Can be one of the following: `preprocess`, `includes`, `reflect` and `compile`. Each compile mode has their own info section.
 
 `//myFile.hlsl` specifies builtin shaders, such as `//types.hlsl` and `//resources.hlsl` which are bindings to be compatible with OxC3. This can also access NV specific HLSL extensions when DXIL is used as a target.
 
 ### Preprocess
 
-The `--preprocess` flag can be used to preprocess a file with defines and/or includes into one without. Useful if custom parsing is needed or it has to be provided to an engine/framework/graphics API that doesn't support includes or defines or is located elsewhere (like remote).
+The `-shader-compile-mode preprocess` will turn the .hlsl into an HLSL ready for parsing (without includes and defines) and is used internally automatically when other compile modes are used; the option to do it can still prove useful if there's another compiler or parser or if it's important that only a single shader file is shipped rather than multiple includes.
 
-`OxC3 compile shaders -f HLSL -m spv --preprocess -i a.hlsl -o a.preprocessed.hlsl`
+`OxC3 compile shaders -format HLSL -shader-output-mode spv -shader-compile-mode preprocess -input a.hlsl -output a.preprocessed.hlsl`
+
+### Includes
+
+The `-shader-compile-mode includes` will turn the .hlsl into an include tree and can be used to determine the heaviest include dependencies. Each include will have their own counter and either a file or a folder can be used to determine how many times an include is referenced by other includes or source files.
+
+`OxC3 compile shaders -format HLSL -shader-output-mode spv -shader-compile-mode includes -input a.hlsl -output a.preprocessed.hlsl`
+
+Will show something like this:
+
+```
+Includes:
+123 reference(s): <hash> <fileSize> <optional: timestamp> //types.hlsl
+<hash> <fileSize> <optional: timestamp> /shaders/mySimpleInclude.hlsl
+
+Sources:
+<hash> <fileSize> /shaders/mySimpleFile.comp.hlsl
+```
+
+This tool can be useful to determine if the includes should be re-examined because they might trigger to many recompiles on change for example. Timestamp is in `Time_format` (0000-00-00T00:00:00.000000000Z), hash is CRC32c and fileSize is in bytes.
+
+Reference count is optional if reference count is 1, since it's a common case for single include files (since #pragma once is almost always used).
+
+### TODO: Reflect
+
+### TODO: Compile
 
 ## TODO: Show GPU/graphics device info
 
@@ -151,7 +178,7 @@ It can also be used to print GPU info regarding devices that support OxC3 and wh
 
 `OxC3 graphics devices` will show all devices.
 
-And it can also show the specific GPU using `OxC3 graphics devices -e 0` which will show the device entry at 0. If `-n` is specified, you can extend the number of elements from 1 to any count.
+And it can also show the specific GPU using `OxC3 graphics devices -entry 0` which will show the device entry at 0. If `-count` is specified, you can extend the number of elements from 1 to any count.
 
 ## File inspect
 
@@ -161,27 +188,27 @@ Header is useful to know what the header says. It also allows to inspect the hea
 
 Data allows you to actually inspect the data section of certain parts of the file.
 
-`file header -i test.oiCA` would print the information about the file header.
+`file header -input test.oiCA` would print the information about the file header.
 
-`file data -i test.oiCA` would tell about the file table for example. File data also needs to provide `-aes` if the source is encrypted. If entry is absent, it will provide a general view of the file.
+`file data -input test.oiCA` would tell about the file table for example. File data also needs to provide `-aes` if the source is encrypted. If entry is absent, it will provide a general view of the file.
 
-With `-e <offset or path>` a specific entry can be viewed. If an entry is specified, the `-o` can be used to extract that one entry into a single file (or folder). If this is not specified, it will show the file as either a hexdump or plain text (if it's ascii) or the folder's subdirectories.
+With `-entry <offset or path>` a specific entry can be viewed. If an entry is specified, the `-output` can be used to extract that one entry into a single file (or folder). If this is not specified, it will show the file as either a hexdump or plain text (if it's ascii) or the folder's subdirectories.
 
-`file data` also allows the `-l` specifier for how many entries are shown. Normally in the log it limits to 64 lines (so for data that'd mean 64 * 64 / 2 (hex) = 2KiB per view). The `-s` argument can be used to set an offset of what it should show. An example: we have an oiCA with 128 entries but want to show the last 32; `file data -i our.oiCA -s 96 -l 32`. For a file entry, it would specify the byte offset and length (length is defaulted to 2KiB). If `-o` is used, it will binary dump the entire remainder of the file if `-l` is not specified (the remainder is the entire file size if `-s` is not specified).
+`file data` also allows the `-length` specifier for how many entries are shown. Normally in the log it limits to 64 lines (so for data that'd mean 64 * 64 / 2 (hex) = 2KiB per view). The `-start` argument can be used to set an offset of what it should show. An example: we have an oiCA with 128 entries but want to show the last 32; `file data -input our.oiCA -start 96 -length 32`. For a file entry, it would specify the byte offset and length (length is defaulted to 2KiB). If `-output` is used, it will binary dump the entire remainder of the file if `-length` is not specified (the remainder is the entire file size if `-start` is not specified).
 
 ## Encrypt
 
-`OxC3 file encr -f <encryptionType> -i <file> -k <key in hex> (optional: -o output)`
+`OxC3 file encr -format <encryptionType> -input <file> -aes <key in hex> (optional: -output output)`
 
-`OxC3 file decr -f <encryptionType> -i <file> -o <file> -k <key in hex> `
+`OxC3 file decr -format <encryptionType> -input <file> -output <file> -k <key in hex> `
 
 Generates an encrypted oiCA file. Works on files and folders. oiCA doesn't support AES128GCM, so AES256GCM is used by default.
 
 ## TODO: Compress
 
-`OxC3 file pack -f <file> (optional: --fast-compress, --k <key in hex>)`
+`OxC3 file pack -input <file> (optional: --fast-compress, --k <key in hex>)`
 
-`OxC3 file unpack -f <file> (optional: --k <key in hex>)`
+`OxC3 file unpack -input <file> (optional: --aes <key in hex>)`
 
 Generates a compressed oiCA file. Can be encrypted. Works on files and folders.
 
@@ -206,8 +233,8 @@ OxC3 info license
 OxC3 info about
 OxC3 help
 OxC3 help categories
-OxC3 help operations -i category
-OxC3 help operation -i category:operation
-OxC3 help format -i category:operation:format
+OxC3 help operations -input category
+OxC3 help operation -input category:operation
+OxC3 help format -input category:operation:format
 ```
 

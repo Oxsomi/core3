@@ -34,6 +34,7 @@
 
 typedef enum ECompileType {
 	ECompileType_Preprocess,
+	ECompileType_Includes,
 	ECompileType_Compile
 } ECompileType;
 
@@ -51,6 +52,8 @@ typedef struct ShaderFileRecursion {
 	ECompileType compileType;
 
 } ShaderFileRecursion;
+
+const C8 *includesFileSuffix = ".txt";		//Suffix when mode is "includes" (seeing all include info)
 
 const C8 *fileSuffixes[] = {
 	".spv.hlsl",
@@ -139,7 +142,10 @@ Error registerFile(FileInfo file, ShaderFileRecursion *shaderFiles) {
 							CharString_findLastStringInsensitive(copy, CharString_createRefCStrConst(".hlsl"), 0)
 						),
 						copy.ptr,
-						isPreprocess ? fileSuffixes[i] : binarySuffixes[i]
+						isPreprocess ? fileSuffixes[i] : (
+							shaderFiles->compileType == ECompileType_Includes ? includesFileSuffix :
+							binarySuffixes[i]
+						)
 					))
 
 					gotoIfError(clean, ListCharString_pushBackx(shaderFiles->allOutputs, tempStr))
@@ -165,11 +171,11 @@ Bool CLI_compileShaderSingle(
 	ParsedArgs args,
 	CharString inputPath,
 	CharString input,
-	CharString outputPath
+	CharString outputPath,
+	ECompileType compileType
 ) {
 
-	Bool isPreprocess = args.flags & EOperationFlags_Preprocess;
-	//ECompileType compileType = isPreprocess ? ECompileType_Preprocess : ECompileType_Compile;
+	Bool isPreprocess = compileType == ECompileType_Preprocess || compileType == ECompileType_Includes;
 
 	Bool isDebug = args.flags & EOperationFlags_Debug;
 
@@ -179,6 +185,7 @@ Bool CLI_compileShaderSingle(
 		.debug = isDebug,
 		.format = ECompilerFormat_HLSL,
 		.outputType = binaryType,
+		.infoAboutIncludes = compileType == ECompileType_Includes
 	};
 
 	//First we need to go from text with includes and defines to easy to parse text
@@ -186,6 +193,7 @@ Bool CLI_compileShaderSingle(
 	Error err = Error_none();
 	CompileResult compileResult = (CompileResult) { 0 };
 	CharString tempStr = CharString_createNull();
+	CharString tempStr2 = CharString_createNull();
 	gotoIfError(clean, Compiler_preprocessx(compiler, settings, &compileResult))
 
 	for(U64 i = 0; i < compileResult.compileErrors.length; ++i) {
@@ -213,12 +221,39 @@ Bool CLI_compileShaderSingle(
 
 	//Write final compile result
 
-	if (compileResult.isSuccess)
-		gotoIfError(clean, File_write(CharString_bufferConst(compileResult.text), outputPath, 10 * MS))
+	if (compileResult.isSuccess) {
+
+		CharString_freex(&tempStr);
+
+		//Output has to be created as a text file that explains info about the includes
+
+		if (compileType == ECompileType_Includes) {
+
+			gotoIfError(clean, ListIncludeInfo_stringifyx(compileResult.includeInfo, &tempStr))
+
+			//Info about the source file
+
+			gotoIfError(clean, CharString_formatx(
+				&tempStr2,
+				"\nSources:\n%08"PRIx32" %05"PRIu32" %s\n",
+				Buffer_crc32c(CharString_bufferConst(input)), (U32) CharString_length(input), inputPath.ptr
+			))
+
+			gotoIfError(clean, CharString_appendStringx(&tempStr, tempStr2))
+			CharString_freex(&tempStr2);
+
+			gotoIfError(clean, File_write(CharString_bufferConst(tempStr), outputPath, 10 * MS))
+		}
+
+		//Otherwise we can simply output preprocessed blob
+
+		else gotoIfError(clean, File_write(CharString_bufferConst(compileResult.text), outputPath, 10 * MS))
+	}
 
 clean:
 	CompileResult_freex(&compileResult);
 	CharString_freex(&tempStr);
+	CharString_freex(&tempStr2);
 	Error_printx(err, ELogLevel_Error, ELogOptions_Default);
 	return !err.genericError && compileResult.isSuccess;
 }
@@ -237,6 +272,8 @@ typedef struct CompilerJobScheduler {
 	U64 *counter;
 	U64 *threadCounter;
 	Bool *success;
+
+	ECompileType compileType;
 
 } CompilerJobScheduler;
 
@@ -283,7 +320,8 @@ void CLI_compileShaderJob(CompilerJobScheduler *job) {
 			job->args,
 			input,
 			job->inputData.ptr[ourJobId],
-			job->outputPaths.ptr[ourJobId]
+			job->outputPaths.ptr[ourJobId],
+			job->compileType
 		)) {
 			Log_errorLnx("Compile failed for file \"%.*s\"", (int)CharString_length(input), input.ptr);
 			err = Error_invalidState(1, "One of CLI_compileShaderJob() failed");
@@ -298,8 +336,7 @@ clean:
 
 Bool CLI_compileShader(ParsedArgs args) {
 
-	Bool isPreprocess = args.flags & EOperationFlags_Preprocess;
-	ECompileType compileType = isPreprocess ? ECompileType_Preprocess : ECompileType_Compile;
+	ECompileType compileType = ECompileType_Compile;
 
 	//Get input
 
@@ -414,6 +451,38 @@ Bool CLI_compileShader(ParsedArgs args) {
 		}
 	}
 
+	//
+
+	CharString compileTypeStr = (CharString) { 0 };
+
+	if ((err = ListCharString_get(args.args, offset++, &compileTypeStr)).genericError) {
+		Error_printx(err, ELogLevel_Error, ELogOptions_Default);
+		return false;
+	}
+
+	if (CharString_equalsStringInsensitive(compileTypeStr, CharString_createRefCStrConst("preprocess")))
+		compileType = ECompileType_Preprocess;
+
+	else if (CharString_equalsStringInsensitive(compileTypeStr, CharString_createRefCStrConst("includes")))
+		compileType = ECompileType_Includes;
+
+	else if (CharString_equalsStringInsensitive(compileTypeStr, CharString_createRefCStrConst("reflect"))) {
+		Log_errorLnx("Shader compiler \"reflect\" mode isn't supported yet");
+		return false;
+	}
+
+	else if (CharString_equalsStringInsensitive(compileTypeStr, CharString_createRefCStrConst("compile"))) {
+		Log_errorLnx("Shader compiler \"compile\" mode isn't supported yet");
+		return false;
+	}
+
+	else {
+		Log_errorLnx("Unknown shader compile mode passed %s", compileTypeStr.ptr);
+		return false;
+	}
+
+	//Process
+
 	ListCharString allFiles = (ListCharString) { 0 };
 	ListCharString allShaderText = (ListCharString) { 0 };
 	ListCharString allOutputs = (ListCharString) { 0 };
@@ -469,7 +538,7 @@ Bool CLI_compileShader(ParsedArgs args) {
 
 		//Replace output's .hlsl by .spv.hlsl or .dxil.hlsl
 
-		if (multipleModes || !isPreprocess)
+		if (multipleModes || compileType != ECompileType_Preprocess)
 			gotoIfError(clean, CharString_formatx(
 				&tempStr, "%.*s%s", 
 				(int)U64_min(
@@ -477,7 +546,9 @@ Bool CLI_compileShader(ParsedArgs args) {
 					CharString_findLastStringInsensitive(output, CharString_createRefCStrConst(".hlsl"), 0)
 				),
 				output.ptr,
-				isPreprocess ? fileSuffixes[i] : binarySuffixes[i]
+				compileType == ECompileType_Preprocess ? fileSuffixes[i] : (
+					compileType == ECompileType_Includes ? includesFileSuffix : binarySuffixes[i]
+				)
 			))
 
 		//Otherwise we can safely reuse output, since it's just a ref
@@ -572,7 +643,9 @@ Bool CLI_compileShader(ParsedArgs args) {
 			.lock = &lock,
 			.counter = &counter,
 			.threadCounter = &threadCounter,
-			.success = &success
+			.success = &success,
+
+			.compileType = compileType
 		};
 
 		for(U64 i = 0; i < threadCount; ++i) {
@@ -600,7 +673,8 @@ Bool CLI_compileShader(ParsedArgs args) {
 		for (U64 i = 0; i < allFiles.length; ++i)
 			if(!CLI_compileShaderSingle(
 				compiler, allCompileModes.ptr[i], args,
-				allFiles.ptr[i], allShaderText.ptr[i], allOutputs.ptr[i]
+				allFiles.ptr[i], allShaderText.ptr[i], allOutputs.ptr[i],
+				compileType
 			)) {
 				success = false;
 				Log_errorLnx("Compile failed for file \"%.*s\"", (int)CharString_length(allFiles.ptr[i]), allFiles.ptr[i].ptr);

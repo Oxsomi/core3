@@ -59,19 +59,20 @@ Bool CLI_info(ParsedArgs args) {
 //Parameters
 
 const C8 *EOperationHasParameter_names[] = {
-	"-f",
-	"-i",
-	"-o",
+	"-format",
+	"-input",
+	"-output",
 	"-aes",
 	"-split",
-	"-n",
-	"-l",
-	"-c",
-	"-b",
-	"-e",
-	"-s",
-	"-m",
-	"-t"
+	"-count",
+	"-length",
+	"-chars",
+	"-bits",
+	"-entry",
+	"-start",
+	"-shader-output-mode",
+	"-threads",
+	"-shader-compile-mode"
 };
 
 const C8 *EOperationHasParameter_descriptions[] = {
@@ -86,8 +87,9 @@ const C8 *EOperationHasParameter_descriptions[] = {
 	"Bit count",
 	"Entry index or path",
 	"Start offset",
-	"Compile mode (spv, dxil or all; also allows multiple such as dxil,spv)",
-	"Thread count (0 = all, 50% = 50% of all threads, 4 = 4 threads)"
+	"Shader output mode (spv, dxil or all; also allows multiple such as dxil,spv)",
+	"Thread count (0 = all, 50% = 50% of all threads, 4 = 4 threads)",
+	"Shader compile mode (preprocess, includes, reflect, compile)"
 };
 
 //Flags
@@ -110,8 +112,7 @@ const C8 *EOperationFlags_names[] = {
 	"--hex",
 	"--bin",
 	"--oct",
-	"--debug",
-	"--preprocess"
+	"--debug"
 };
 
 const C8 *EOperationFlags_descriptions[] = {
@@ -132,8 +133,7 @@ const C8 *EOperationFlags_descriptions[] = {
 	"Encode using hexadecimal (0-9A-F).",
 	"Encode using binary (0-1).",
 	"Encode using octadecimal (0-7).",
-	"Include more debug information.",
-	"Preprocess input into output."
+	"Include more debug information."
 };
 
 //Operations
@@ -375,11 +375,16 @@ void Operations_init() {
 	//Compile shaders
 	
 	Format_values[EFormat_HLSL] = (Format) {
+
 		.name = "HLSL",
 		.desc = "High Level Shading Language; Microsoft's shading language for DirectX and Vulkan.",
-		.operationFlags = EOperationFlags_Debug | EOperationFlags_Preprocess,
+
+		.operationFlags = EOperationFlags_Debug,
+
 		.requiredParameters = 
-			EOperationHasParameter_Input | EOperationHasParameter_Output | EOperationHasParameter_CompileMode,
+			EOperationHasParameter_Input | EOperationHasParameter_Output | EOperationHasParameter_ShaderOutputMode |
+			EOperationHasParameter_ShaderCompileMode,
+
 		.optionalParameters = EOperationHasParameter_ThreadCount,
 		.flags = EFormatFlags_SupportFiles | EFormatFlags_SupportFolders,
 		.supportedCategories = { EOperationCategory_Compile }

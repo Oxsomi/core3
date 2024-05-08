@@ -85,13 +85,18 @@ Bool ELexerTokenType_isNumber(ELexerTokenType tokenType);
 
 typedef struct LexerToken {
 
-	U16 lineId;
+	U16 lineId;						//Upper bits of realLineIdAndLineIdExt stores extended lineId just in case
 	U8 charId, length;
 
-	U32 offsetType;			//upper 4 bits is type
+	U32 offsetType;					//Upper 4 bits is type
+
+	U16 fileId;						//Index into sourceLocations representing file location. U16_MAX for none
+	U16 realLineIdAndLineIdExt;		//Line id in the source location, rather than the line id in the preprocessed file
 
 } LexerToken;
 
+U32 LexerToken_getLineId(LexerToken tok);			//Line id goes up to 128Ki, because it's on preprocessed input
+U32 LexerToken_getOriginalLineId(LexerToken tok);	//Original line id only goes up to 8k, because 
 U32 LexerToken_getOffset(LexerToken tok);
 ELexerTokenType LexerToken_getType(LexerToken tok);
 
@@ -106,6 +111,7 @@ typedef struct Lexer {
 	CharString source;						//Ref to source (source needs to be kept active)
 	ListLexerToken tokens;
 	ListLexerExpression expressions;
+	ListCharString sourceLocations;			//Used by tokens to reference their real location
 } Lexer;
 
 Error Lexer_create(CharString source, Allocator alloc, Lexer *lexer);
