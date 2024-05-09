@@ -25,6 +25,7 @@
 #include "types/buffer.h"
 #include "types/allocator.h"
 #include "types/file.h"
+#include "types/math.h"
 
 #include <wsl/winadapter.h>		//Avoid including Windows.h
 #include <dxcapi.h>
@@ -146,7 +147,7 @@ public:
 		))
 
 		for (; i < includedFiles.length; ++i)
-			if(CharString_equalsStringInsensitive(resolved, includedFiles.ptr[i].includeInfo.file))
+			if(CharString_equalsStringSensitive(resolved, includedFiles.ptr[i].includeInfo.file))
 				break;
 
 		//We already included it in an earlier run.
@@ -433,6 +434,62 @@ Bool Compiler_free(Compiler *comp, Allocator alloc) {
 
 	*comp = Compiler{};
 	return true;
+}
+
+Error Compiler_mergeIncludeInfo(Compiler *comp, Allocator alloc, ListIncludeInfo *infos) {
+
+	if(!comp || !infos)
+		return Error_nullPointer(!comp ? 0 : 2, "Compiler_mergeIncludeInfo()::comp and infos are required");
+
+	CompilerInterfaces *interfaces = (CompilerInterfaces*) comp->interfaces;
+
+	if(!interfaces->includeHandler)
+		return Error_nullPointer(!comp ? 0 : 2, "Compiler_mergeIncludeInfo()::comp->interfaces includeHandler is missing");
+
+	ListIncludedFile files = interfaces->includeHandler->getIncludedFiles();
+	CharString tmp = CharString_createNull();
+	Error err = Error_none();
+
+	for (U64 i = 0; i < files.length; ++i) {
+
+		IncludedFile info = files.ptr[i];
+		U64 j = 0;
+
+		//If the file isn't the same, we can't merge it.
+		//In this case, the file size, hash and others can differ.
+		//This means we might have duplicate entries by file name, but is required to accurately represent the state.
+
+		for(; j < infos->length; ++j)
+			if(
+				CharString_equalsStringSensitive(infos->ptr[j].file, info.includeInfo.file) &&
+				infos->ptr[j].crc32c == info.includeInfo.crc32c && infos->ptr[j].fileSize == info.includeInfo.fileSize
+			)
+				break;
+
+		//Add new entry
+
+		if(j == infos->length) {
+
+			gotoIfError(clean, CharString_createCopy(info.includeInfo.file, alloc, &tmp))
+
+			info.includeInfo.counter = info.globalCounter;
+			info.includeInfo.file = tmp;
+			gotoIfError(clean, ListIncludeInfo_pushBack(infos, info.includeInfo, alloc))
+			tmp = CharString_createNull();
+		}
+
+		//Merge counter.
+		//File timestamp can be safely merged to latest since our fileSize and crc32c are determined to match
+
+		else {
+			infos->ptrNonConst[j].counter += info.globalCounter;
+			infos->ptrNonConst[j].timestamp = U64_max(infos->ptrNonConst[j].timestamp, info.includeInfo.timestamp);
+		}
+	}
+
+clean:
+	CharString_free(&tmp, alloc);
+	return err;
 }
 
 Bool Compiler_filterWarning(CharString str) {

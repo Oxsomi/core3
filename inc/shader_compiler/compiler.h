@@ -101,7 +101,9 @@ typedef struct IncludeInfo {
 
 TList(IncludeInfo);
 
+ECompareResult IncludeInfo_compare(const IncludeInfo *a, const IncludeInfo *b);
 Bool IncludeInfo_free(IncludeInfo *info, Allocator alloc);
+
 Bool ListIncludeInfo_freeUnderlying(ListIncludeInfo *infos, Allocator alloc);
 
 Error ListIncludeInfo_stringify(ListIncludeInfo files, Allocator alloc, CharString *output);
@@ -155,6 +157,11 @@ Bool CompileResult_free(CompileResult *result, Allocator alloc);
 Error Compiler_create(Allocator alloc, Compiler *comp);
 Bool Compiler_free(Compiler *comp, Allocator alloc);
 
+//Append new entries to infos and increase counters.
+//This makes it possible to get a list of all includes.
+
+Error Compiler_mergeIncludeInfo(Compiler *comp, Allocator alloc, ListIncludeInfo *infos);
+
 //Process a file with includes and defines to one without (returns text)
 //Always CompileResult_free after.
 //On success returns result->success; otherwise the compile did happen but returned with errors.
@@ -194,6 +201,7 @@ Bool Compiler_freex(Compiler *comp);
 
 Error Compiler_preprocessx(Compiler comp, CompilerSettings settings, CompileResult *result);
 Error Compiler_parsex(Compiler comp, CompilerSettings settings, CompileResult *result);
+Error Compiler_mergeIncludeInfox(Compiler *comp, ListIncludeInfo *infos);
 
 #ifdef __cplusplus
 	}

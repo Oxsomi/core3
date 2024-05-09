@@ -148,7 +148,7 @@ The `-shader-compile-mode preprocess` will turn the .hlsl into an HLSL ready for
 
 ### Includes
 
-The `-shader-compile-mode includes` will turn the .hlsl into an include tree and can be used to determine the heaviest include dependencies. Each include will have their own counter and either a file or a folder can be used to determine how many times an include is referenced by other includes or source files.
+The `-shader-compile-mode includes` will turn the .hlsl into an include list and can be used to determine the heaviest include dependencies. Each include will have their own counter and either a file or a folder can be used to determine how many times an include is referenced by other includes or source files.
 
 `OxC3 compile shaders -format HLSL -shader-output-mode spv -shader-compile-mode includes -input a.hlsl -output a.preprocessed.hlsl`
 
@@ -166,6 +166,35 @@ Sources:
 This tool can be useful to determine if the includes should be re-examined because they might trigger to many recompiles on change for example. Timestamp is in `Time_format` (0000-00-00T00:00:00.000000000Z), hash is CRC32c and fileSize is in bytes.
 
 Reference count is optional if reference count is 1, since it's a common case for single include files (since #pragma once is almost always used).
+
+When toggled on a folder, it will make a .txt file per file that it processes, so individual files can be inspected. It also makes a root.txt file which contains a merged version that  is easier to read if it's about getting all of them in one place. Example:
+
+```
+Includes:
+022 reference(s): fe9ec6b9 10219 types.hlsl
+022 reference(s): cc0a2ce9 08839 resources.hlsl
+012 reference(s): bb15afc7 01860 2024-05-04T14:32:55.000000000Z D:/programming/repos/rt_core/res/shaders/resource_bindings.hlsl
+008 reference(s): c36476d2 87746 nvHLSLExtns.h
+008 reference(s): a78d6265 01329 2024-05-04T14:33:08.000000000Z D:/programming/repos/rt_core/res/shaders/ray_basics.hlsl
+008 reference(s): 32fdc427 10554 nvShaderExtnEnums.h
+008 reference(s): 10398840 29623 nvHLSLExtnsInternal.h
+004 reference(s): 916fbecd 03174 2024-05-04T14:33:14.000000000Z D:/programming/repos/rt_core/res/shaders/primitive.hlsl
+002 reference(s): 70055f36 01630 2024-05-04T21:10:48.000000000Z D:/programming/repos/rt_core/res/shaders/camera.hlsl
+002 reference(s): 4470bdfa 07490 2024-05-07T21:36:53.000000000Z D:/programming/repos/rt_core/res/shaders/atmosphere.hlsl
+
+Sources:
+4470bdfa 07490 D:/programming/repos/rt_core/res/shaders/atmosphere.hlsl
+70055f36 01630 D:/programming/repos/rt_core/res/shaders/camera.hlsl
+31e8a279 02363 D:/programming/repos/rt_core/res/shaders/depth_test.hlsl
+3acc8620 01888 D:/programming/repos/rt_core/res/shaders/graphics_test.hlsl
+bcc2bb61 01373 D:/programming/repos/rt_core/res/shaders/indirect_compute.hlsl
+0b762523 02790 D:/programming/repos/rt_core/res/shaders/indirect_prepare.hlsl
+916fbecd 03174 D:/programming/repos/rt_core/res/shaders/primitive.hlsl
+db3878c9 03860 D:/programming/repos/rt_core/res/shaders/raytracing_pipeline_test.hlsl
+aeb6a491 02528 D:/programming/repos/rt_core/res/shaders/raytracing_test.hlsl
+a78d6265 01329 D:/programming/repos/rt_core/res/shaders/ray_basics.hlsl
+bb15afc7 01860 D:/programming/repos/rt_core/res/shaders/resource_bindings.hlsl
+```
 
 ### TODO: Reflect
 

@@ -490,8 +490,11 @@ Bool CLI_compileShader(ParsedArgs args) {
 	ListThread threads = (ListThread) { 0 };
 	ListCompiler compilers = (ListCompiler) { 0 };
 	Compiler compiler = (Compiler) { 0 };
+	ListIncludeInfo includeInfo = (ListIncludeInfo) { 0 };
 	CharString resolved = CharString_createNull();
 	CharString tempStr = CharString_createNull();
+	CharString tempStr2 = CharString_createNull();
+	CharString tempStr3 = CharString_createNull();
 	Buffer temp = Buffer_createNull();
 	Bool isFolder = false;
 	Lock lock = (Lock) { 0 };
@@ -684,6 +687,56 @@ Bool CLI_compileShader(ParsedArgs args) {
 	if(!success)
 		gotoIfError(clean, Error_invalidState(0, "CLI_compileShader() compile failed"))
 
+	//Merge all include info into a root.txt file.
+
+	if (compileType == ECompileType_Includes && isFolder) {
+
+		if(compiler.interfaces[0])
+			gotoIfError(clean, Compiler_mergeIncludeInfox(&compiler, &includeInfo))
+
+		else for(U64 i = 0; i < compilers.length; ++i)
+			gotoIfError(clean, Compiler_mergeIncludeInfox(&compilers.ptrNonConst[i], &includeInfo))
+
+		//Sort IncludeInfo
+
+		ListIncludeInfo_sortCustom(includeInfo, (CompareFunction) IncludeInfo_compare);
+
+		//We won't be needing resolved, so we can safely apppend root.txt after it
+
+		gotoIfError(clean, CharString_createCopyx(output, &tempStr3))
+
+		if(!CharString_endsWithSensitive(output, '/', 0) && !CharString_endsWithSensitive(output, '\\', 0))
+			gotoIfError(clean, CharString_appendx(&tempStr3, '/'))
+
+		gotoIfError(clean, CharString_appendStringx(&tempStr3, CharString_createRefCStrConst("root.txt")))
+
+		//Make the string
+
+		gotoIfError(clean, ListIncludeInfo_stringifyx(includeInfo, &tempStr))
+
+		//Info about the source files
+
+		gotoIfError(clean, CharString_appendStringx(&tempStr, CharString_createRefCStrConst("\nSources:\n")))
+
+		for(U64 i = 0; i < allFiles.length; ++i) {
+
+			if(i && allFiles.ptr[i].ptr == allFiles.ptr[i - 1].ptr)		//Easy check, since we re-use string locations :)
+				continue;
+
+			gotoIfError(clean, CharString_formatx(
+				&tempStr2,
+				"%08"PRIx32" %05"PRIu32" %s\n",
+				Buffer_crc32c(CharString_bufferConst(allShaderText.ptr[i])), (U32)CharString_length(allShaderText.ptr[i]),
+				allFiles.ptr[i].ptr
+			))
+
+			gotoIfError(clean, CharString_appendStringx(&tempStr, tempStr2))
+			CharString_freex(&tempStr2);
+		}
+
+		gotoIfError(clean, File_write(CharString_bufferConst(tempStr), tempStr3, 10 * MS))
+	}
+
 clean:
 
 	F64 dt = (F64)(Time_now() - start) / SECOND;
@@ -699,10 +752,13 @@ clean:
 	ListThread_freex(&threads);
 	ListCompiler_freeUnderlyingx(&compilers);
 	Compiler_freex(&compiler);
+	ListIncludeInfo_freeUnderlyingx(&includeInfo);
 	Lock_unlock(&lock);
 	Buffer_freex(&temp);
 	CharString_freex(&resolved);
 	CharString_freex(&tempStr);
+	CharString_freex(&tempStr2);
+	CharString_freex(&tempStr3);
 	ListCharString_freeUnderlyingx(&allFiles);
 	ListCharString_freeUnderlyingx(&allShaderText);
 	ListCharString_freeUnderlyingx(&allOutputs);

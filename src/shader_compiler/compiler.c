@@ -56,6 +56,14 @@ Bool CompileError_free(CompileError *err, Allocator alloc) {
 	return true;
 }
 
+ECompareResult IncludeInfo_compare(const IncludeInfo *a, const IncludeInfo *b) {
+
+	if(!a)	return ECompareResult_Lt;
+	if(!b)	return ECompareResult_Gt;
+
+	return a->counter < b->counter || (a->counter == b->counter && a->crc32c < b->crc32c);
+}
+
 Bool IncludeInfo_free(IncludeInfo *info, Allocator alloc) {
 
 	if(!info)
@@ -240,6 +248,10 @@ Error Compiler_preprocessx(Compiler comp, CompilerSettings settings, CompileResu
 
 Error Compiler_parsex(Compiler comp, CompilerSettings settings, CompileResult *result) {
 	return Compiler_parse(comp, settings, Platform_instance.alloc, result);
+}
+
+Error Compiler_mergeIncludeInfox(Compiler *comp, ListIncludeInfo *infos) {
+	return Compiler_mergeIncludeInfo(comp, Platform_instance.alloc, infos);
 }
 
 //Invoke parser
