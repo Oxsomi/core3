@@ -144,15 +144,15 @@ When operating on a folder, it will attempt to find `.hlsl` files and then proce
 
 ### Preprocess
 
-The `-shader-compile-mode preprocess` will turn the .hlsl into an HLSL ready for parsing (without includes and defines) and is used internally automatically when other compile modes are used; the option to do it can still prove useful if there's another compiler or parser or if it's important that only a single shader file is shipped rather than multiple includes.
+The `-compile-type preprocess` will turn the .hlsl into an HLSL ready for parsing (without includes and defines) and is used internally automatically when other compile modes are used; the option to do it can still prove useful if there's another compiler or parser or if it's important that only a single shader file is shipped rather than multiple includes.
 
-`OxC3 compile shaders -format HLSL -shader-output-mode spv -shader-compile-mode preprocess -input a.hlsl -output a.preprocessed.hlsl`
+`OxC3 compile shaders -format HLSL -compile-output spv -compile-type preprocess -input a.hlsl -output a.preprocessed.hlsl`
 
 ### Includes
 
-The `-shader-compile-mode includes` will turn the .hlsl into an include list and can be used to determine the heaviest include dependencies. Each include will have their own counter and either a file or a folder can be used to determine how many times an include is referenced by other includes or source files.
+The `-compile-type includes` will turn the .hlsl into an include list and can be used to determine the heaviest include dependencies. Each include will have their own counter and either a file or a folder can be used to determine how many times an include is referenced by other includes or source files.
 
-`OxC3 compile shaders -format HLSL -shader-output-mode spv -shader-compile-mode includes -input a.hlsl -output a.preprocessed.hlsl`
+`OxC3 compile shaders -format HLSL -compile-output spv -compile-type includes -input a.hlsl -output a.preprocessed.hlsl`
 
 Will show something like this:
 

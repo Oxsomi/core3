@@ -520,9 +520,11 @@ Error Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator al
 
 	gotoIfError(clean, CharString_toUTF16(settings.path, alloc, &inputFile))
 
-	gotoIfError(clean, File_resolve(settings.includeDir, &isVirtual, 256, Platform_instance.workingDirectory, alloc, &tempStr2))
-	gotoIfError(clean, CharString_toUTF16(tempStr2, alloc, &includeDir))
-	CharString_free(&tempStr2, alloc);
+	if(settings.includeDir.ptr) {
+		gotoIfError(clean, File_resolve(settings.includeDir, &isVirtual, 256, Platform_instance.workingDirectory, alloc, &tempStr2))
+		gotoIfError(clean, CharString_toUTF16(tempStr2, alloc, &includeDir))
+		CharString_free(&tempStr2, alloc);
+	}
 
 	try {
 

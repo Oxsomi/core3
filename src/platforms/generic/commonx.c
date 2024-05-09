@@ -70,8 +70,6 @@ TListXBaseImpl(ListThread);
 
 TListXImpl(Token);
 TListXImpl(Symbol);
-TListXImpl(Define);
-TListXImpl(UserDefine);
 TListXImpl(LexerToken);
 TListXImpl(LexerExpression);
 
@@ -121,8 +119,8 @@ void Lexer_printx(Lexer lexer) {
 	Lexer_print(lexer, Platform_instance.alloc);
 }
 
-Error Parser_createx(const Lexer *lexer, Parser *parser, ListUserDefine userDefine) {
-	return Parser_create(lexer, parser, userDefine, Platform_instance.alloc);
+Error Parser_createx(const Lexer *lexer, Parser *parser) {
+	return Parser_create(lexer, parser, Platform_instance.alloc);
 }
 
 Bool Parser_freex(Parser *parser) {

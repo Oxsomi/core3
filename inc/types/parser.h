@@ -137,9 +137,14 @@ typedef enum ESymbolType {
 
 	ESymbolType_Function,
 	ESymbolType_Constant,
-	ESymbolType_Typedef,	//typedef T T2
-	ESymbolType_Struct,		//typedef struct ...
-	ESymbolType_Enum,		//typedef enum ...
+	ESymbolType_Variable,
+	ESymbolType_Typedef,		//typedef T T2
+	ESymbolType_Using,			//using T2 = T
+	ESymbolType_Struct,			//typedef struct ... or struct X {}
+	ESymbolType_Class,			//class X {}
+	ESymbolType_Enum,			//typedef enum ... or enum X {}
+	ESymbolType_EnumClass,		//enum class X : Y {} or enum class X {}
+	ESymbolType_Interface,		//interface X {}
 	ESymbolType_Count
 
 } ESymbolType;
@@ -156,9 +161,23 @@ typedef enum ESymbolFlag {
 	//For functions
 
 	ESymbolFlag_HasImpl			= 1 << 4,		//impl ...
-	ESymbolFlag_HasUserImpl		= 1 << 5		//user_impl ...
+	ESymbolFlag_HasUserImpl		= 1 << 5,		//user_impl ...
+
+	//Access
+
+	ESymbolFlag_IsStatic		= 1 << 6,
+
+	ESymbolFlag_IsPrivate		= 1 << 7,		//Maps to ESymbolAccess
+	ESymbolFlag_IsPublic		= 1 << 8
 
 } ESymbolFlag;
+
+typedef enum ESymbolAccess {
+	ESymbolAccess_Protected,
+	ESymbolAccess_Private,
+	ESymbolAccess_Public,
+	ESymbolAccess_Count
+} ESymbolAccess;
 
 typedef struct Symbol {
 
@@ -176,63 +195,28 @@ typedef struct Symbol {
 
 } Symbol;
 
-//A define can have four types; (value or macro)(empty, full). Macro is like a function that generates code.
-//The list of defines at the end of parsing the file will be stored; also including the defines of the includes (if present).
-//Standard includes get excluded from the define list, only libraries will have this property.
-
-typedef enum EDefineType {
-
-	EDefineType_ValueEmpty,		//The define will always evaluate to nothing, but it's present (#define X)
-	EDefineType_MacroEmpty,		//The macro will always evaluate to nothing, but it's present (#define X(y))
-
-	EDefineType_ValueFull,		//#define MY_VALUE 1
-	EDefineType_MacroFull,		//#define MY_VALUE(y) 1
-
-	EDefineType_Count,
-
-	EDefineType_IsMacro		= 1 << 0,
-	EDefineType_IsFull		= 1 << 1
-
-} EDefineType;
-
-typedef struct Define {
-
-	U8 defineType;			//EDefineType
-	U8 children;			//For macros defines 
-	U16 valueTokens;		//How many tokens the define's value contains
-
-	U32 nameTokenId;		//Lexer token id
-
-	U32 childStartTokenId;	//Lexer token id of the child start (skip a token in between; that's ,)
-
-	U32 valueStartId;		//Lexer token id
-
-} Define;
-
 //Parser takes the output from the lexer and splits it up in real tokens and handles preprocessor-specific things.
 //After the parser, the file's symbols can be obtained.
 
 TList(Token);
 TList(Symbol);
-TList(Define);
 
 typedef struct Parser {
 	const Lexer *lexer;
 	ListToken tokens;
 	ListSymbol symbols;
-	ListDefine defines;
 	ListCharString parsedLiterals;		//Need copies, because \" and \\ have to be parsed
 } Parser;
 
-typedef struct UserDefine {		//Value can be empty/null to indicate present (but no value)
-	CharString name, value;
-} UserDefine;
-
-TList(UserDefine);
-
-Error Parser_create(const Lexer *lexer, Parser *parser, ListUserDefine userDefine, Allocator alloc);
+Error Parser_create(const Lexer *lexer, Parser *parser, Allocator alloc);
 Bool Parser_free(Parser *parser, Allocator alloc);
-void Parser_print(Parser parser, Allocator alloc);
+void Parser_printTokens(Parser parser, Allocator alloc);
+void Parser_printSymbols(Parser parser, Allocator alloc);
+
+//The classification step can be done manually if the syntax is different than normal C++-like syntax.
+//C/C++, C#, HLSL and GLSL all share similar syntax, which means we can re-use this a lot.
+
+Error Parser_classify(Parser *parser, Allocator alloc);
 
 //Classify a token at str.ptr[*subTokenOffset]
 //Increment subTokenOffset by the length of the token

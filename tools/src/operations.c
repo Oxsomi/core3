@@ -70,9 +70,9 @@ const C8 *EOperationHasParameter_names[] = {
 	"-bits",
 	"-entry",
 	"-start",
-	"-shader-output-mode",
+	"-compile-output",
 	"-threads",
-	"-shader-compile-mode",
+	"-compile-type",
 	"-include-dir"
 };
 

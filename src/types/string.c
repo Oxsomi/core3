@@ -188,7 +188,7 @@ Bool CharString_isValidFilePath(CharString str) {
 
 		//Absolute
 
-		if(str.ptr[1] == ':') {
+		if(CharString_length(str) >= 2 && str.ptr[1] == ':') {
 			str.ptr += 3;
 			str.lenAndNullTerminated -= 3;
 			hasPrefix = true;

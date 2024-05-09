@@ -260,7 +260,7 @@ Error Compiler_parse(Compiler comp, CompilerSettings settings, Allocator alloc, 
 
 	(void)comp;		//No need for a compiler, we do it ourselves
 
-	//Lex and parse the file
+	//Lex & parse the file and afterwards, use it to classify all symbols
 
 	Lexer lexer = (Lexer) { 0 };
 	Parser parser = (Parser) { 0 };
@@ -268,8 +268,14 @@ Error Compiler_parse(Compiler comp, CompilerSettings settings, Allocator alloc, 
 	gotoIfError(clean, Lexer_create(settings.string, alloc, &lexer))
 	//Lexer_print(lexer, alloc);
 
-	gotoIfError(clean, Parser_create(&lexer, &parser, (ListUserDefine) { 0 }, alloc))
-	Parser_print(parser, alloc);
+	gotoIfError(clean, Parser_create(&lexer, &parser, alloc))
+	//Parser_printTokens(parser, alloc);
+
+	gotoIfError(clean, Parser_classify(&parser, alloc))
+	Parser_printSymbols(parser, alloc);
+
+	//After, we need to resolve the symbols into actual struct layouts.
+	//As well as return shEntries
 
 	(void)result;	//TODO:
 	

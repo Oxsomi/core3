@@ -63,7 +63,7 @@ void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f) {
 			Log_debugLnx(
 				"%s %s %s",
 				EOperationCategory_names[opVal.category - 1], opVal.name,
-				opVal.isFormatLess ? "" : "-f <format> ...{format dependent syntax}"
+				opVal.isFormatLess ? "" : "-format <format> ...{format dependent syntax}"
 			);
 
 			Log_debugx(ELogOptions_None, "%s\n\n", opVal.desc);
@@ -79,7 +79,7 @@ void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f) {
 	if (invalidF && !opVal.isFormatLess) {
 
 		Log_debugLnx(
-			"Please use syntax:\n%s %s -f <format> ...{format dependent syntax}",
+			"Please use syntax:\n%s %s -format <format> ...{format dependent syntax}",
 			EOperationCategory_names[category - 1],
 			opVal.name
 		);

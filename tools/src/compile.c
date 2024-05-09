@@ -35,6 +35,7 @@
 typedef enum ECompileType {
 	ECompileType_Preprocess,
 	ECompileType_Includes,
+	ECompileType_Reflect,
 	ECompileType_Compile
 } ECompileType;
 
@@ -63,6 +64,11 @@ const C8 *fileSuffixes[] = {
 const C8 *binarySuffixes[] = {
 	".spv",
 	".dxil"
+};
+
+const C8 *oiSHSuffixes[] = {
+	".spv.oiSH",
+	".dxil.oiSH"
 };
 
 Error registerFile(FileInfo file, ShaderFileRecursion *shaderFiles) {
@@ -143,8 +149,10 @@ Error registerFile(FileInfo file, ShaderFileRecursion *shaderFiles) {
 						),
 						copy.ptr,
 						isPreprocess ? fileSuffixes[i] : (
-							shaderFiles->compileType == ECompileType_Includes ? includesFileSuffix :
-							binarySuffixes[i]
+							shaderFiles->compileType == ECompileType_Includes ? includesFileSuffix : (
+								shaderFiles->compileType == ECompileType_Reflect ? oiSHSuffixes[i] :
+								binarySuffixes[i]
+							)
 						)
 					))
 
@@ -471,10 +479,8 @@ Bool CLI_compileShader(ParsedArgs args) {
 	else if (CharString_equalsStringInsensitive(compileTypeStr, CharString_createRefCStrConst("includes")))
 		compileType = ECompileType_Includes;
 
-	else if (CharString_equalsStringInsensitive(compileTypeStr, CharString_createRefCStrConst("reflect"))) {
-		Log_errorLnx("Shader compiler \"reflect\" mode isn't supported yet");
-		return false;
-	}
+	else if (CharString_equalsStringInsensitive(compileTypeStr, CharString_createRefCStrConst("reflect")))
+		compileType = ECompileType_Reflect;
 
 	else if (CharString_equalsStringInsensitive(compileTypeStr, CharString_createRefCStrConst("compile"))) {
 		Log_errorLnx("Shader compiler \"compile\" mode isn't supported yet");
@@ -561,14 +567,16 @@ Bool CLI_compileShader(ParsedArgs args) {
 
 		if (multipleModes || compileType != ECompileType_Preprocess)
 			gotoIfError(clean, CharString_formatx(
-				&tempStr, "%.*s%s", 
+				&tempStr, "%.*s%s",
 				(int)U64_min(
-					CharString_length(output), 
+					CharString_length(output),
 					CharString_findLastStringInsensitive(output, CharString_createRefCStrConst(".hlsl"), 0)
 				),
 				output.ptr,
 				compileType == ECompileType_Preprocess ? fileSuffixes[i] : (
-					compileType == ECompileType_Includes ? includesFileSuffix : binarySuffixes[i]
+					compileType == ECompileType_Includes ? includesFileSuffix : (
+						compileType == ECompileType_Reflect ? oiSHSuffixes[i] : binarySuffixes[i]
+					)
 				)
 			))
 

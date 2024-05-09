@@ -25,7 +25,10 @@
 	extern "C" {
 #endif
 
-Error Parser_createx(const Lexer *lexer, Parser *parser, ListUserDefine userDefine);
+typedef struct Lexer Lexer;
+typedef struct Parser Parser;
+
+Error Parser_createx(const Lexer *lexer, Parser *parser);
 Bool Parser_freex(Parser *parser);
 
 #ifdef __cplusplus

@@ -25,8 +25,6 @@
 
 TListImpl(Token);
 TListImpl(Symbol);
-TListImpl(Define);
-TListImpl(UserDefine);
 
 CharString Token_asString(Token t, const Parser *p) {
 
@@ -184,8 +182,6 @@ ETokenType Parser_getTokenType(CharString str, U64 *subTokenOffset) {
 
 typedef struct ParserContext {
 
-	ListUserDefine userDefines;
-	ListDefine defines;
 	ListSymbol symbols;
 	ListToken tokens;
 	ListCharString stringLiterals;
@@ -350,27 +346,16 @@ clean:
 	return err;
 }
 
-Error Parser_create(const Lexer *lexer, Parser *parser, ListUserDefine userDefinesOuter, Allocator alloc) {
+Error Parser_create(const Lexer *lexer, Parser *parser, Allocator alloc) {
 
 	if(!lexer || !parser)
 		return Error_nullPointer(!lexer ? 0 : 1, "Parser_create()::parser and lexer are required");
 
-	for (U64 i = 0; i < userDefinesOuter.length; ++i) {
-
-		UserDefine ud = userDefinesOuter.ptr[i];
-
-		if (!CharString_length(ud.name))
-			return Error_nullPointer(2, "Parser_create()::userDefines[i].name is required");
-	}
-
 	Error err = Error_none();
 	ParserContext context = (ParserContext) { .lexer = lexer };
 
-	gotoIfError(clean, ListSymbol_reserve(&context.symbols, 64, alloc))
-	gotoIfError(clean, ListDefine_reserve(&context.defines, 64, alloc))
 	gotoIfError(clean, ListCharString_reserve(&context.stringLiterals, 64, alloc))
 	gotoIfError(clean, ListToken_reserve(&context.tokens, lexer->tokens.length * 3 / 2, alloc))
-	gotoIfError(clean, ListUserDefine_createCopy(userDefinesOuter, alloc, &context.userDefines))
 
 	for (U64 i = 0; i < lexer->expressions.length; ++i) {
 
@@ -382,26 +367,588 @@ Error Parser_create(const Lexer *lexer, Parser *parser, ListUserDefine userDefin
 		gotoIfError(clean, ParserContext_visit(&context, e.tokenOffset, e.tokenCount, alloc))
 	}
 
-	//TODO: Combine tokens into symbols
-
 clean:
 
 	if(err.genericError) {
 		ListToken_free(&context.tokens, alloc);
-		ListSymbol_free(&context.symbols, alloc);
-		ListDefine_free(&context.defines, alloc);
 		ListCharString_freeUnderlying(&context.stringLiterals, alloc);
 	}
 
 	else *parser = (Parser) { 
-		.symbols = context.symbols, 
-		.tokens = context.tokens, 
-		.defines = context.defines,
+		.tokens = context.tokens,
 		.parsedLiterals = context.stringLiterals,
 		.lexer = lexer
 	};
 
-	ListUserDefine_free(&context.userDefines, alloc);
+	return err;
+}
+
+//Helpers for classification
+
+Error Parser_assert(Parser *parser, U64 *i, ETokenType type) {
+
+	if (*i >= parser->tokens.length)
+		return Error_outOfBounds(1, *i, parser->tokens.length, "Parser_assertAndSkip() out of bounds");
+
+	if (parser->tokens.ptr[*i].tokenType != type)
+		return Error_invalidParameter(1, 0, "Parser_assertAndSkip() unexpected token");
+
+	return Error_none();
+}
+
+Error Parser_assertAndSkip(Parser *parser, U64 *i, ETokenType type) {
+
+	Error err = Parser_assert(parser, i, type);
+
+	if (err.genericError)
+		return err;
+
+	++*i;
+	return Error_none();
+}
+
+Bool Parser_next(Parser *parser, U64 *i, ETokenType type) {
+	return *i < parser->tokens.length && parser->tokens.ptr[*i].tokenType == type;
+}
+
+Bool Parser_skipIfNext(Parser *parser, U64 *i, ETokenType type) {
+
+	if (Parser_next(parser, i, type)) {
+		++*i;
+		return true;
+	}
+
+	return false;
+}
+
+//Handling 
+
+//TODO: namespaces
+//TODO: operator overloading
+//TODO: Bitfields and semantics
+
+//gotoIfError(clean, Parser_classifyBody(parser, i, alloc))
+
+//Classifying anything (in global scope, structs or namespaces for example)
+//If it's not detected as processed, it means it might be an expression
+
+Error Parser_classifyBase(Parser* parser, U64 *i, Allocator alloc, Bool *processed);
+
+Error Parser_classifyClass(Parser *parser, U64 *i, Allocator alloc, U64 *classId);
+Error Parser_classifyStruct(Parser *parser, U64 *i, Allocator alloc, U64 *structId);
+Error Parser_classifyUnion(Parser *parser, U64 *i, Allocator alloc, U64 *unionId);
+Error Parser_classifyInterface(Parser *parser, U64 *i, Allocator alloc, U64 *interfaceId);
+Error Parser_classifyEnum(Parser *parser, U64 *i, Allocator alloc, U64 *enumId);
+
+//Classifying type
+
+Error Parser_classifyType(Parser *parser, U64 *i, Allocator alloc, U64 *typeId) {
+
+	Error err = Error_none();
+	gotoIfError(clean, Parser_assert(parser, i, ETokenType_Identifier))
+
+	Token tok = parser->tokens.ptr[*i];
+	CharString tokStr = Token_asString(tok, parser);
+	U64 len = tok.tokenSize;
+
+	Bool consumed = false;
+	U32 c8x4 = len < 4 ? 0 : *(const U32*)tokStr.ptr;
+
+	//struct
+	//union
+	//enum
+	//class
+	//interface
+	//^
+
+	*typeId = U64_MAX;
+
+	switch (c8x4) {
+
+		case C8x4('s', 't', 'r', 'u'):		//struct
+			
+			if (len == 6 && *(const U16*)&tokStr.ptr[4] == C8x2('c', 't')) {
+				consumed = true;
+				gotoIfError(clean, Parser_classifyStruct(parser, i, alloc, typeId))
+				break;
+			}
+
+			break;
+
+		case C8x4('u', 'n', 'i', 'o'):		//union
+
+			if (len == 5 && tokStr.ptr[4] == 'n') {
+				consumed = true;
+				gotoIfError(clean, Parser_classifyUnion(parser, i, alloc, typeId))
+				break;
+			}
+
+			break;
+
+		case C8x4('e', 'n', 'u', 'm'):		//enum
+
+			if (len == 4) {
+				consumed = true;
+				gotoIfError(clean, Parser_classifyEnum(parser, i, alloc, typeId))
+				break;
+			}
+
+			break;
+
+		case C8x4('c', 'l', 'a', 's'):		//class
+
+			if (len == 5 && tokStr.ptr[4] == 's') {
+				consumed = true;
+				gotoIfError(clean, Parser_classifyClass(parser, i, alloc, typeId))
+				break;
+			}
+
+			break;
+
+		case C8x4('i', 'n', 't', 'e'):		//interface
+
+			if (len == 9 && *(const U32*)&tokStr.ptr[4] == C8x4('r', 'f', 'a', 'c') && tokStr.ptr[8] == 'e') {
+				consumed = true;
+				gotoIfError(clean, Parser_classifyInterface(parser, i, alloc, typeId))
+				break;
+			}
+
+			break;
+	}
+
+	//T<>
+	//T
+	//^
+
+	if (!consumed) {
+
+		++*i;
+		CharString typedeffed = Token_asString(parser->tokens.ptr[*i], parser);
+		typedeffed;
+
+		if (Parser_next(parser, i, ETokenType_Lt))
+			gotoIfError(clean, Error_unimplemented(0, "Parser_classifyTypedef() can't handle templates yet"))		//TODO:
+	}
+
+clean:
+	return err;
+}
+
+//Classifying classes, structs, interfaces and unions
+
+typedef enum EClassType {
+	EClassType_Class,
+	EClassType_Struct,
+	EClassType_Interface,
+	EClassType_Union
+} EClassType;
+
+Error Parser_classifyClassBase(Parser *parser, U64 *i, Allocator alloc, U64 *classId, EClassType classType) {
+	
+	(void)classType; (void)classId;
+
+	Error err = Error_none();
+
+	//class T
+	//class {}
+	//class T {}
+	//struct T
+	//struct {}
+	//struct T {}
+	//interface T
+	//interface {}
+	//interface T {}
+	//^
+
+	++*i;
+
+	//class     T
+	//struct    T
+	//interface T
+	//          ^
+
+	Bool enteredOne = false;
+	CharString className = CharString_createNull();
+
+	if (Parser_next(parser, i, ETokenType_Identifier)) {
+		className = Token_asString(parser->tokens.ptr[*i], parser);
+		++*i;
+		enteredOne = true;
+	}
+
+	//class T     { }
+	//class       { }
+	//struct T    { }
+	//struct      { }
+	//interface T { }
+	//interface   { }
+	//            ^
+	
+	if (Parser_skipIfNext(parser, i, ETokenType_CurlyBraceStart)) {
+
+		enteredOne = true;
+		
+		//class T     { }
+		//class       { }
+		//struct T    { }
+		//struct      { }
+		//interface T { }
+		//interface   { }
+		//             ^
+
+		Bool processed = false;
+		gotoIfError(clean, Parser_classifyBase(parser, i, alloc, &processed))
+
+		if(!processed)
+			gotoIfError(clean, Error_invalidState(1, "Parser_classifyClassBase() invalid expression in type definition"))
+			
+		//class T     { }
+		//class       { }
+		//struct T    { }
+		//struct      { }
+		//interface T { }
+		//interface   { }
+		//              ^
+
+		gotoIfError(clean, Parser_assertAndSkip(parser, i, ETokenType_CurlyBraceEnd))
+	}
+
+	if(!enteredOne)
+		gotoIfError(clean, Error_invalidState(0, "Parser_classifyClassBase() can't define class without identifier or {}"))
+
+clean:
+	return err;
+}
+
+Error Parser_classifyFunctionOrVariable(Parser *parser, U64 *i, Allocator alloc, Bool *consumed) {
+	(void)parser; (void)i; (void)alloc; (void)consumed;
+	return Error_unimplemented(0, "Parser_classifyFunctionOrVariable() is not implemented yet");		//TODO:
+}
+
+Error Parser_classifyEnumBody(Parser *parser, U64 *i, Allocator alloc) {
+	(void)parser; (void)i; (void)alloc;
+	return Error_unimplemented(0, "Parser_classifyEnumBody() is not implemented yet");		//TODO:
+}
+
+Error Parser_classifyEnum(Parser *parser, U64 *i, Allocator alloc, U64 *enumId) {
+
+	(void)enumId;
+
+	Error err = Error_none();
+
+	//enum T
+	//enum
+	//^
+
+	++*i;
+
+	//enum T
+	//enum class
+	//     ^
+
+	Bool enteredOne = false;
+	CharString className = CharString_createNull();
+
+	Bool enumClass = false;
+
+	CharString enumTypeStr = CharString_createNull();
+	U64 enumType = U64_MAX;
+
+	if (Parser_next(parser, i, ETokenType_Identifier)) {
+
+		className = Token_asString(parser->tokens.ptr[*i], parser);
+		++*i;
+
+		//enum class
+		//     ^
+
+		if (
+			CharString_length(className) == 5 && 
+			*(const U32*)&className.ptr == C8x4('c', 'l', 'a', 's') && 
+			className.ptr[4] == 's'
+		) {
+
+			enumClass = true;
+
+			gotoIfError(clean, Parser_assert(parser, i, ETokenType_Identifier))
+			className = Token_asString(parser->tokens.ptr[*i], parser);
+			++*i;
+
+			//enum class T : U8
+			//             ^
+
+			if (Parser_skipIfNext(parser, i, ETokenType_Colon)) {
+
+				gotoIfError(clean, Parser_assert(parser, i, ETokenType_Identifier))
+				enumTypeStr = Token_asString(parser->tokens.ptr[*i], parser);
+				++*i;
+
+				(void)enumType;
+
+				//TODO: fetch enumType
+			}
+		}
+
+		enteredOne = true;
+	}
+
+	//enum T            { }
+	//enum              { }
+	//enum class T      { }
+	//enum class T : U8 { }
+	//                  ^
+	
+	if (Parser_skipIfNext(parser, i, ETokenType_CurlyBraceStart)) {
+
+		enteredOne = true;
+
+		//enum T            { }
+		//enum              { }
+		//enum class T      { }
+		//enum class T : U8 { }
+		//                   ^
+
+		gotoIfError(clean, Parser_classifyEnumBody(parser, i, alloc))
+
+		//enum T            { }
+		//enum              { }
+		//enum class T      { }
+		//enum class T : U8 { }
+		//                    ^
+
+		gotoIfError(clean, Parser_assertAndSkip(parser, i, ETokenType_CurlyBraceEnd))
+	}
+	
+	if(!enteredOne)
+		gotoIfError(clean, Error_invalidState(0, "Parser_classifyEnum() can't define enum without identifier or {}"))
+
+clean:
+	return err;
+}
+
+Error Parser_classifyClass(Parser *parser, U64 *i, Allocator alloc, U64 *classId) {
+	return Parser_classifyClassBase(parser, i, alloc, classId, EClassType_Class);
+}
+
+Error Parser_classifyStruct(Parser *parser, U64 *i, Allocator alloc, U64 *structId) {
+	return Parser_classifyClassBase(parser, i, alloc, structId, EClassType_Struct);
+}
+
+Error Parser_classifyUnion(Parser *parser, U64 *i, Allocator alloc, U64 *unionId) {
+	return Parser_classifyClassBase(parser, i, alloc, unionId, EClassType_Union);
+}
+
+Error Parser_classifyInterface(Parser *parser, U64 *i, Allocator alloc, U64 *interfaceId) {
+	return Parser_classifyClassBase(parser, i, alloc, interfaceId, EClassType_Interface);
+}
+
+Error Parser_classifyUsing(Parser *parser, U64 *i, Allocator alloc) {
+
+	Error err = Error_none();
+
+	//using T2 = T;
+	//^
+
+	++*i;
+
+	//using T2 = T;
+	//      ^
+
+	gotoIfError(clean, Parser_assert(parser, i, ETokenType_Identifier))
+	CharString typeName = Token_asString(parser->tokens.ptr[*i], parser);
+
+	typeName;
+
+	//using T2 = T;
+	//         ^
+
+	gotoIfError(clean, Parser_assertAndSkip(parser, i, ETokenType_Asg))
+
+	//using T2 = T;
+	//           ^
+		
+	U64 typeId;
+	gotoIfError(clean, Parser_classifyType(parser, i, alloc, &typeId))
+
+	//TODO: Insert symbol here
+
+clean:
+	return err;
+}
+
+Error Parser_classifyTypedef(Parser *parser, U64 *i, Allocator alloc) {
+
+	Error err = Error_none();
+
+	//typedef T<x, y> T2;
+	//^
+
+	++*i;
+
+	//typedef T<x, y> T2;
+	//        ^
+
+	U64 typeId;
+	gotoIfError(clean, Parser_classifyType(parser, i, alloc, &typeId))
+
+	//typedef struct {} T;
+	//typedef T2        T;
+	//                  ^
+
+	gotoIfError(clean, Parser_assert(parser, i, ETokenType_Identifier))
+	CharString typeName = Token_asString(parser->tokens.ptr[*i], parser);
+
+	typeName;
+
+	//typedef struct {} T;
+	//                   ^
+
+	gotoIfError(clean, Parser_assertAndSkip(parser, i, ETokenType_Semicolon))
+
+	//TODO: Insert symbol here
+
+clean:
+	return err;
+}
+
+Error Parser_classifyBase(Parser *parser, U64 *i, Allocator alloc, Bool *processed) {
+
+	Token tok = parser->tokens.ptr[*i];
+	CharString tokStr = Token_asString(tok, parser);
+	Error err = Error_none();
+	Bool consumed = false;
+
+	if (tok.tokenType == ETokenType_Identifier) {
+		
+		U64 len = tok.tokenSize;
+		U32 c8x4 = len < 4 ? 0 : *(const U32*)tokStr.ptr;
+
+		switch (c8x4) {
+
+			case C8x4('t', 'e', 'm', 'p'):		//template
+					
+				//TODO:
+				/*if (len == 8 && *(const U32*)&tokStr.ptr[4] == C8x4('l', 'a', 't', 'e')) {
+					consumed = true;
+					gotoIfError(clean, Parser_classifyTemplate(parser, &i, alloc))
+					gotoIfError(clean, Parser_assertAndSkip(parser, &i, ETokenType_Semicolon))
+					break;
+				}*/
+
+				break;
+
+			case C8x4('t', 'y', 'p', 'e'):		//typedef
+
+				if (len == 7 && *(const U16*)&tokStr.ptr[4] == C8x2('d', 'e') && tokStr.ptr[6] == 'f') {
+					gotoIfError(clean, Parser_classifyTypedef(parser, i, alloc))
+					break;
+				}
+
+				break;
+
+			case C8x4('u', 's', 'i' ,'n'):		//using
+
+				if (len == 5 && tokStr.ptr[4] == 'g') {
+					consumed = true;
+					gotoIfError(clean, Parser_classifyUsing(parser, i, alloc))
+					gotoIfError(clean, Parser_assertAndSkip(parser, i, ETokenType_Semicolon))
+					break;
+				}
+
+				break;
+
+			case C8x4('c', 'l', 'a', 's'):		//class
+
+				if (len == 5 && tokStr.ptr[4] == 's') {
+					consumed = true;
+					gotoIfError(clean, Parser_classifyClass(parser, i, alloc, NULL))
+					gotoIfError(clean, Parser_assertAndSkip(parser, i, ETokenType_Semicolon))
+					break;
+				}
+
+				break;
+
+			case C8x4('s', 't', 'r', 'u'):		//struct
+
+				if (len == 6 && *(const U16*)&tokStr.ptr[4] == C8x2('c', 't')) {
+					consumed = true;
+					gotoIfError(clean, Parser_classifyStruct(parser, i, alloc, NULL))
+					gotoIfError(clean, Parser_assertAndSkip(parser, i, ETokenType_Semicolon))
+					break;
+				}
+
+				break;
+
+			case C8x4('u', 'n', 'i', 'o'):		//union
+
+				if (len == 5 && tokStr.ptr[4] == 'n') {
+					consumed = true;
+					gotoIfError(clean, Parser_classifyUnion(parser, i, alloc, NULL))
+					gotoIfError(clean, Parser_assertAndSkip(parser, i, ETokenType_Semicolon))
+					break;
+				}
+
+				break;
+
+			case C8x4('e', 'n', 'u', 'm'):		//enum
+
+				if (len == 4) {
+					consumed = true;
+					gotoIfError(clean, Parser_classifyEnum(parser, i, alloc, NULL))
+					gotoIfError(clean, Parser_assertAndSkip(parser, i, ETokenType_Semicolon))
+					break;
+				}
+
+				break;
+
+			case C8x4('i', 'n', 't', 'e'):		//interface
+
+				if (len == 9 && *(const U32*)&tokStr.ptr[4] == C8x4('r', 'f', 'a', 'c') && tokStr.ptr[8] == 'e') {
+					consumed = true;
+					gotoIfError(clean, Parser_classifyInterface(parser, i, alloc, NULL))
+					gotoIfError(clean, Parser_assertAndSkip(parser, i, ETokenType_Semicolon))
+					break;
+				}
+
+				break;
+
+			default:
+				break;
+		}
+
+		//If it's not a reserved keyword, then it's probably a variable or function
+		//Or it's an annotation [likeThis]
+		//Or it's an expression, which we won't handle here.
+
+		if(!consumed)
+			gotoIfError(clean, Parser_classifyFunctionOrVariable(parser, i, alloc, &consumed))
+	}
+
+	*processed = consumed;
+clean:
+	return err;
+}
+
+Error Parser_classify(Parser *parser, Allocator alloc) {
+
+	if (!parser || !parser->lexer)
+		return Error_nullPointer(0, "Parser_classify()::parser is required");
+
+	//Classify tokens
+
+	Error err = Error_none();
+	gotoIfError(clean, ListSymbol_reserve(&parser->symbols, 64, alloc))
+
+	for (U64 i = 0; i < parser->tokens.length; ) {
+
+		Bool processed = false;
+		gotoIfError(clean, Parser_classifyBase(parser, &i, alloc, &processed))
+
+		if(!processed)
+			gotoIfError(clean, Error_invalidState(0, "Parser_classify() couldn't classify one of the symbols"))
+	}
+
+clean:
 	return err;
 }
 
@@ -412,12 +959,11 @@ Bool Parser_free(Parser *parser, Allocator alloc) {
 
 	ListSymbol_free(&parser->symbols, alloc);
 	ListToken_free(&parser->tokens, alloc);
-	ListDefine_free(&parser->defines, alloc);
 	ListCharString_freeUnderlying(&parser->parsedLiterals, alloc);
 	return true;
 }
 
-void Parser_print(Parser parser, Allocator alloc) {
+void Parser_printTokens(Parser parser, Allocator alloc) {
 
 	if(!parser.tokens.length)
 		Log_debugLn(alloc, "Parser: Empty");
@@ -549,4 +1095,9 @@ void Parser_print(Parser parser, Allocator alloc) {
 			t.valueu
 		);
 	}
+}
+
+void Parser_printSymbols(Parser parser, Allocator alloc) {
+	(void)parser;
+	Log_debugLn(alloc, "Print symbols not implemented yet");
 }
