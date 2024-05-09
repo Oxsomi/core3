@@ -72,7 +72,8 @@ const C8 *EOperationHasParameter_names[] = {
 	"-start",
 	"-shader-output-mode",
 	"-threads",
-	"-shader-compile-mode"
+	"-shader-compile-mode",
+	"-include-dir"
 };
 
 const C8 *EOperationHasParameter_descriptions[] = {
@@ -89,7 +90,8 @@ const C8 *EOperationHasParameter_descriptions[] = {
 	"Start offset",
 	"Shader output mode (spv, dxil or all; also allows multiple such as dxil,spv)",
 	"Thread count (0 = all, 50% = 50% of all threads, 4 = 4 threads)",
-	"Shader compile mode (preprocess, includes, reflect, compile)"
+	"Shader compile mode (preprocess, includes, reflect, compile)",
+	"Set extra include path"
 };
 
 //Flags
@@ -385,7 +387,7 @@ void Operations_init() {
 			EOperationHasParameter_Input | EOperationHasParameter_Output | EOperationHasParameter_ShaderOutputMode |
 			EOperationHasParameter_ShaderCompileMode,
 
-		.optionalParameters = EOperationHasParameter_ThreadCount,
+		.optionalParameters = EOperationHasParameter_ThreadCount | EOperationHasParameter_IncludeDir,
 		.flags = EFormatFlags_SupportFiles | EFormatFlags_SupportFolders,
 		.supportedCategories = { EOperationCategory_Compile }
 	};

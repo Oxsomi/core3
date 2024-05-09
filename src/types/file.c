@@ -180,8 +180,16 @@ Error File_resolve(
 	//If we have nothing left, we get current work/app directory
 
 	if(!res.length) {
+
 		res.length = realSplitLen;
-		goto clean;
+
+		CharString_free(result, alloc);		//Release temp result
+
+		gotoIfError(clean, CharString_createCopy(absoluteDir, alloc, result))
+		gotoIfError(clean, CharString_popEnd(result))							//Don't end with /
+
+		ListCharString_free(&res, alloc);
+		return Error_none();
 	}
 
 	//Re-assemble path now

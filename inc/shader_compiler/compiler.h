@@ -53,6 +53,8 @@ typedef struct CompilerSettings {
 	ECompilerFormat format;
 	ESHBinaryType outputType;
 
+	CharString includeDir;		//Optional extra includeDir to search for
+
 	Bool debug;
 	Bool infoAboutIncludes;		//Saves extra include info, useful for debugging includes or hot shader reload
 	U8 padding[6];

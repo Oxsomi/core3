@@ -50,6 +50,7 @@ typedef enum EOperationHasParameter {
 	EOperationHasParameter_ShaderOutputModeShift,
 	EOperationHasParameter_ThreadCountShift,
 	EOperationHasParameter_ShaderCompileModeShift,
+	EOperationHasParameter_IncludeDirShift,
 
 	EOperationHasParameter_Count,
 
@@ -77,7 +78,8 @@ typedef enum EOperationHasParameter {
 
 	EOperationHasParameter_ShaderOutputMode		= 1 << EOperationHasParameter_ShaderOutputModeShift,
 	EOperationHasParameter_ThreadCount			= 1 << EOperationHasParameter_ThreadCountShift,
-	EOperationHasParameter_ShaderCompileMode	= 1 << EOperationHasParameter_ShaderCompileModeShift
+	EOperationHasParameter_ShaderCompileMode	= 1 << EOperationHasParameter_ShaderCompileModeShift,
+	EOperationHasParameter_IncludeDir			= 1 << EOperationHasParameter_IncludeDirShift
 
 } EOperationHasParameter;
 

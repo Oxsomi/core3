@@ -513,11 +513,16 @@ Error Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator al
 	IDxcResult *dxcResult = NULL;
 	IDxcBlobUtf8 *error = NULL;
 	ListU16 inputFile = ListU16{};
-	Bool hasErrors = false;
+	ListU16 includeDir = ListU16{};
+	Bool hasErrors = false, isVirtual = false;
 	CharString tempStr = CharString_createNull();
 	CharString tempStr2 = CharString_createNull();
 
 	gotoIfError(clean, CharString_toUTF16(settings.path, alloc, &inputFile))
+
+	gotoIfError(clean, File_resolve(settings.includeDir, &isVirtual, 256, Platform_instance.workingDirectory, alloc, &tempStr2))
+	gotoIfError(clean, CharString_toUTF16(tempStr2, alloc, &includeDir))
+	CharString_free(&tempStr2, alloc);
 
 	try {
 
@@ -527,17 +532,24 @@ Error Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator al
 
 		const U16 args[][7] = {		//Preprocess
 			{ '-', 'P', '\0' },
-			{ '-', 's', 'p', 'i', 'r', 'v', '\0' }
+			{ '-', 's', 'p', 'i', 'r', 'v', '\0' },
+			{ '-', 'I', '\0' }
 		};
 
-		const U16 *argsPtr[] = {
+		U32 argCounter = 2;
+
+		const U16 *argsPtr[5] = {
 			args[0],
-			inputFile.ptr,
-			args[1]
+			inputFile.ptr
 		};
 
-		//Preprocess as -spirv or not, gives different results
-		U32 len = settings.outputType == ESHBinaryType_SPIRV ? 3 : 2;
+		if (settings.outputType == ESHBinaryType_SPIRV)		//-spirv
+			argsPtr[argCounter++] = args[1];
+
+		if (includeDir.length) {							//-I
+			argsPtr[argCounter++] = args[2];
+			argsPtr[argCounter++] = includeDir.ptr;
+		}
 
 		DxcBuffer buffer{
 			.Ptr = settings.string.ptr,
@@ -546,7 +558,7 @@ Error Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator al
 
 		HRESULT hr = interfaces->compiler->Compile(
 			&buffer,
-			(LPCWSTR*) argsPtr, len,
+			(LPCWSTR*) argsPtr, argCounter,
 			interfaces->includeHandler,
 			IID_PPV_ARGS(&dxcResult)
 		);
@@ -821,6 +833,7 @@ clean:
 		error->Release();
 
 	ListU16_free(&inputFile, alloc);
+	ListU16_free(&includeDir, alloc);
 	CharString_free(&tempStr, alloc);
 	CharString_free(&tempStr2, alloc);
 	return err;

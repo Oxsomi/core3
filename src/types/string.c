@@ -3002,7 +3002,7 @@ Error CharString_popFrontCount(CharString *s, U64 count) { return CharString_era
 
 Error CharString_eraseAt(CharString *s, U64 i) { return CharString_eraseAtCount(s, i, 1); }
 Error CharString_popFront(CharString *s) { return CharString_eraseAt(s, 0); }
-Error CharString_popEnd(CharString *s) { return CharString_eraseAt(s, s ? CharString_length(*s) : 0); }
+Error CharString_popEnd(CharString *s) { return CharString_eraseAt(s, s ? CharString_length(*s) - 1 : 0); }
 
 Bool CharString_eraseFirst(CharString *s, C8 c, EStringCase caseSensitive, U64 off) {
 	return CharString_erase(s, c, caseSensitive, true, off);

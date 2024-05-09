@@ -148,6 +148,7 @@ Error registerFile(FileInfo file, ShaderFileRecursion *shaderFiles) {
 						)
 					))
 
+					gotoIfError(clean, File_add(tempStr, EFileType_File, 1 * MS))
 					gotoIfError(clean, ListCharString_pushBackx(shaderFiles->allOutputs, tempStr))
 					tempStr = CharString_createNull();
 				}
@@ -172,7 +173,8 @@ Bool CLI_compileShaderSingle(
 	CharString inputPath,
 	CharString input,
 	CharString outputPath,
-	ECompileType compileType
+	ECompileType compileType,
+	CharString includeDir
 ) {
 
 	Bool isPreprocess = compileType == ECompileType_Preprocess || compileType == ECompileType_Includes;
@@ -185,7 +187,8 @@ Bool CLI_compileShaderSingle(
 		.debug = isDebug,
 		.format = ECompilerFormat_HLSL,
 		.outputType = binaryType,
-		.infoAboutIncludes = compileType == ECompileType_Includes
+		.infoAboutIncludes = compileType == ECompileType_Includes,
+		.includeDir = includeDir
 	};
 
 	//First we need to go from text with includes and defines to easy to parse text
@@ -274,6 +277,7 @@ typedef struct CompilerJobScheduler {
 	Bool *success;
 
 	ECompileType compileType;
+	CharString includeDir;
 
 } CompilerJobScheduler;
 
@@ -321,7 +325,8 @@ void CLI_compileShaderJob(CompilerJobScheduler *job) {
 			input,
 			job->inputData.ptr[ourJobId],
 			job->outputPaths.ptr[ourJobId],
-			job->compileType
+			job->compileType,
+			job->includeDir
 		)) {
 			Log_errorLnx("Compile failed for file \"%.*s\"", (int)CharString_length(input), input.ptr);
 			err = Error_invalidState(1, "One of CLI_compileShaderJob() failed");
@@ -451,7 +456,7 @@ Bool CLI_compileShader(ParsedArgs args) {
 		}
 	}
 
-	//
+	//Compile type
 
 	CharString compileTypeStr = (CharString) { 0 };
 
@@ -481,6 +486,15 @@ Bool CLI_compileShader(ParsedArgs args) {
 		return false;
 	}
 
+	//Additional includeDir
+
+	CharString includeDir = (CharString) { 0 };
+
+	if (args.parameters & EOperationHasParameter_IncludeDir && (err = ListCharString_get(args.args, offset++, &includeDir)).genericError) {
+		Error_printx(err, ELogLevel_Error, ELogOptions_Default);
+		return false;
+	}
+
 	//Process
 
 	ListCharString allFiles = (ListCharString) { 0 };
@@ -492,6 +506,7 @@ Bool CLI_compileShader(ParsedArgs args) {
 	Compiler compiler = (Compiler) { 0 };
 	ListIncludeInfo includeInfo = (ListIncludeInfo) { 0 };
 	CharString resolved = CharString_createNull();
+	CharString resolved2 = CharString_createNull();
 	CharString tempStr = CharString_createNull();
 	CharString tempStr2 = CharString_createNull();
 	CharString tempStr3 = CharString_createNull();
@@ -508,12 +523,15 @@ Bool CLI_compileShader(ParsedArgs args) {
 		gotoIfError(clean, File_resolvex(input, &isVirtual, 0, &resolved))
 		gotoIfError(clean, CharString_appendx(&resolved, '/'))
 
+		gotoIfError(clean, File_resolvex(output, &isVirtual, 0, &resolved2))
+		gotoIfError(clean, CharString_appendx(&resolved2, '/'))
+
 		ShaderFileRecursion shaderFileRecursion = (ShaderFileRecursion) {
 			.allShaders = &allFiles,
 			.allOutputs = &allOutputs,
 			.allModes = &allCompileModes,
 			.base = resolved,
-			.output = output,
+			.output = resolved2,
 			.compileModeU64 = compileModeU64,
 			.hasMultipleModes = multipleModes,
 			.compileType = compileType
@@ -528,7 +546,7 @@ Bool CLI_compileShader(ParsedArgs args) {
 
 		//Make sure we can have a folder at output
 
-		gotoIfError(clean, File_add(output, EFileType_Folder, 1 * SECOND))
+		gotoIfError(clean, File_add(resolved2, EFileType_Folder, 1 * SECOND))
 		isFolder = true;
 	}
 
@@ -648,7 +666,8 @@ Bool CLI_compileShader(ParsedArgs args) {
 			.threadCounter = &threadCounter,
 			.success = &success,
 
-			.compileType = compileType
+			.compileType = compileType,
+			.includeDir = includeDir
 		};
 
 		for(U64 i = 0; i < threadCount; ++i) {
@@ -677,7 +696,8 @@ Bool CLI_compileShader(ParsedArgs args) {
 			if(!CLI_compileShaderSingle(
 				compiler, allCompileModes.ptr[i], args,
 				allFiles.ptr[i], allShaderText.ptr[i], allOutputs.ptr[i],
-				compileType
+				compileType,
+				includeDir
 			)) {
 				success = false;
 				Log_errorLnx("Compile failed for file \"%.*s\"", (int)CharString_length(allFiles.ptr[i]), allFiles.ptr[i].ptr);
@@ -756,6 +776,7 @@ clean:
 	Lock_unlock(&lock);
 	Buffer_freex(&temp);
 	CharString_freex(&resolved);
+	CharString_freex(&resolved2);
 	CharString_freex(&tempStr);
 	CharString_freex(&tempStr2);
 	CharString_freex(&tempStr3);

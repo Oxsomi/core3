@@ -138,6 +138,8 @@ When operating on a folder, it will attempt to find `.hlsl` files and then proce
 
 `-shader-compile-mode` is the compile mode. Can be one of the following: `preprocess`, `includes`, `reflect` and `compile`. Each compile mode has their own info section.
 
+`-include-dir` can be used to add only a single include directory to search for includes (aside from relative includes).
+
 `//myFile.hlsl` specifies builtin shaders, such as `//types.hlsl` and `//resources.hlsl` which are bindings to be compatible with OxC3. This can also access NV specific HLSL extensions when DXIL is used as a target.
 
 ### Preprocess
