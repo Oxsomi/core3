@@ -186,7 +186,9 @@ Error File_resolve(
 		CharString_free(result, alloc);		//Release temp result
 
 		gotoIfError(clean, CharString_createCopy(absoluteDir, alloc, result))
-		gotoIfError(clean, CharString_popEnd(result))							//Don't end with /
+
+		if(CharString_length(absoluteDir))
+			gotoIfError(clean, CharString_popEnd(result))							//Don't end with /
 
 		ListCharString_free(&res, alloc);
 		return Error_none();
