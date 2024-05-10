@@ -396,6 +396,26 @@ Error Parser_assert(Parser *parser, U64 *i, ETokenType type) {
 	return Error_none();
 }
 
+Error Parser_assertSymbol(Parser *parser, U64 *i) {
+
+	if (*i >= parser->tokens.length)
+		return Error_outOfBounds(1, *i, parser->tokens.length, "Parser_assertAndSkip() out of bounds");
+	
+	switch (parser->tokens.ptr[*i].tokenType) {
+
+		case ETokenType_Identifier:
+		case ETokenType_Integer:
+		case ETokenType_SignedInteger:
+		case ETokenType_Double:
+		case ETokenType_Float:
+		case ETokenType_String:
+			return Error_invalidParameter(1, 0, "Parser_assertSymbol() unexpected token");
+
+		default:
+			return Error_none();
+	}
+}
+
 Error Parser_assertAndSkip(Parser *parser, U64 *i, ETokenType type) {
 
 	Error err = Parser_assert(parser, i, type);
@@ -421,18 +441,10 @@ Bool Parser_skipIfNext(Parser *parser, U64 *i, ETokenType type) {
 	return false;
 }
 
-//Handling 
-
-//TODO: namespaces
-//TODO: operator overloading
-//TODO: Bitfields and semantics
-
-//gotoIfError(clean, Parser_classifyBody(parser, i, alloc))
-
 //Classifying anything (in global scope, structs or namespaces for example)
 //If it's not detected as processed, it means it might be an expression
 
-Error Parser_classifyBase(Parser* parser, U64 *i, Allocator alloc, Bool *processed);
+Error Parser_classifyBase(Parser* parser, U64 *i, Allocator alloc);
 
 Error Parser_classifyClass(Parser *parser, U64 *i, Allocator alloc, U64 *classId);
 Error Parser_classifyStruct(Parser *parser, U64 *i, Allocator alloc, U64 *structId);
@@ -522,9 +534,9 @@ Error Parser_classifyType(Parser *parser, U64 *i, Allocator alloc, U64 *typeId) 
 
 	if (!consumed) {
 
-		++*i;
 		CharString typedeffed = Token_asString(parser->tokens.ptr[*i], parser);
 		typedeffed;
+		++*i;
 
 		if (Parser_next(parser, i, ETokenType_Lt))
 			gotoIfError(clean, Error_unimplemented(0, "Parser_classifyTypedef() can't handle templates yet"))		//TODO:
@@ -596,12 +608,9 @@ Error Parser_classifyClassBase(Parser *parser, U64 *i, Allocator alloc, U64 *cla
 		//interface   { }
 		//             ^
 
-		Bool processed = false;
-		gotoIfError(clean, Parser_classifyBase(parser, i, alloc, &processed))
+		while(!Parser_next(parser, i, ETokenType_CurlyBraceEnd))
+			gotoIfError(clean, Parser_classifyBase(parser, i, alloc))
 
-		if(!processed)
-			gotoIfError(clean, Error_invalidState(1, "Parser_classifyClassBase() invalid expression in type definition"))
-			
 		//class T     { }
 		//class       { }
 		//struct T    { }
@@ -620,9 +629,413 @@ clean:
 	return err;
 }
 
-Error Parser_classifyFunctionOrVariable(Parser *parser, U64 *i, Allocator alloc, Bool *consumed) {
-	(void)parser; (void)i; (void)alloc; (void)consumed;
-	return Error_unimplemented(0, "Parser_classifyFunctionOrVariable() is not implemented yet");		//TODO:
+Error Parser_classifyFunction(Parser *parser, U64 *i, Allocator alloc) {
+
+	Error err = Error_none();
+	
+	while (!Parser_next(parser, i, ETokenType_RoundParenthesisEnd)) {
+
+		//static F32 test(F32 a, F32 b);
+		//                ^      ^
+
+		U64 typeId;
+		gotoIfError(clean, Parser_classifyType(parser, i, alloc, &typeId))
+
+		//static F32 test(F32 a, F32 b);
+		//                    ^      ^
+
+		CharString paramStr = Token_asString(parser->tokens.ptr[*i], parser);
+		paramStr;
+		++*i;
+
+		//static F32 test(F32 a[3], F32 b[3][3]);
+		//                     ^         ^  ^
+
+		while (Parser_skipIfNext(parser, i, ETokenType_SquareBracketStart)) {
+
+			//static F32 test(F32 a[3], F32 b[3][3]);
+			//                      ^         ^  ^
+
+			gotoIfError(clean, Parser_assert(parser, i, ETokenType_Integer))
+			U64 paramArrayCount = parser->tokens.ptr[*i].valueu;
+			paramArrayCount;
+			++*i;
+
+			//static F32 test(F32 a[3], F32 b[3][3]);
+			//                       ^         ^  ^
+
+			gotoIfError(clean, Parser_assertAndSkip(parser, i, ETokenType_SquareBracketEnd))
+		}
+
+		//F32 a : A,
+		//      ^
+
+		if (Parser_skipIfNext(parser, i, ETokenType_Colon)) {
+
+			gotoIfError(clean, Parser_assert(parser, i, ETokenType_Identifier))
+
+			CharString variableSemanticStr = Token_asString(parser->tokens.ptr[*i], parser);
+			++*i;
+
+			variableSemanticStr;
+		}
+
+		//U32 a = 0xDEADBEEF,
+		//      ^
+
+		if(Parser_next(parser, i, ETokenType_Asg))
+			gotoIfError(clean, Error_unsupportedOperation(
+				0, "Parser_classifyFunctionOrVariable() default value isn't supported yet"		//TODO:
+			))
+
+		if(Parser_next(parser, i, ETokenType_RoundParenthesisEnd))
+			break;
+
+		//F32 a : A,
+		//         ^
+					
+		gotoIfError(clean, Parser_assertAndSkip(parser, i, ETokenType_Comma))
+	}
+
+	//static F32 test(F32 a, F32 b);
+	//                            ^
+
+	gotoIfError(clean, Parser_assertAndSkip(parser, i, ETokenType_RoundParenthesisEnd))
+			
+	//static F32 test(F32 a, F32 b);
+	//                             ^
+
+	if(Parser_skipIfNext(parser, i, ETokenType_Semicolon))
+		goto clean;
+
+	//static F32 test(F32 a, F32 b) {
+	//                              ^
+
+	gotoIfError(clean, Parser_assertAndSkip(parser, i, ETokenType_CurlyBraceStart))
+
+	//static F32 test(F32 a, F32 b) { }
+	//                               ^  (Skip everything in body for now)
+
+	U64 bracketCounter = 1;
+
+	for (; *i < parser->tokens.length; ++*i) {
+
+		if(Parser_next(parser, i, ETokenType_CurlyBraceStart))
+			++bracketCounter;
+
+		else if(Parser_next(parser, i, ETokenType_CurlyBraceEnd)) {
+
+			--bracketCounter;
+
+			if(!bracketCounter)
+				break;
+		}
+	}
+
+	//static F32 test(F32 a, F32 b) { }
+	//                                ^
+
+	gotoIfError(clean, Parser_assertAndSkip(parser, i, ETokenType_CurlyBraceEnd))
+
+clean:
+	return err;
+}
+
+Error Parser_classifyFunctionOrVariable(Parser *parser, U64 *i, Allocator alloc, ESymbolAccess *scopeAccess) {
+
+	//Detect all modifiers
+
+	ESymbolFlag flag = ESymbolFlag_None;
+	Error err = Error_none();
+
+	if(*scopeAccess == ESymbolAccess_Private)		flag |= ESymbolFlag_IsPrivate;
+	else if(*scopeAccess == ESymbolAccess_Public)	flag |= ESymbolFlag_IsPublic;
+
+	//extern static const F32 x[5], y, z, w;
+	//^      ^      ^
+
+	//static F32 test(F32 a, F32 b);
+	//^
+
+	while (*i < parser->tokens.length) {
+
+		Token tok = parser->tokens.ptr[*i];
+
+		if(tok.tokenType != ETokenType_Identifier)
+			break;
+
+		CharString tokStr = Token_asString(tok, parser);
+		U64 len = tok.tokenSize;
+		U32 c8x4 = len < 4 ? 0 : *(const U32*)tokStr.ptr;
+		Bool consumed = false;
+
+		switch (c8x4) {
+			
+			case C8x4('c', 'o', 'n', 's'):		//const, constexpr
+
+				if (len == 5 && tokStr.ptr[4] == 't') {
+					consumed = true;
+					flag |= ESymbolFlag_IsConst;
+				}
+
+				else if (len == 9 && *(const U32 *)&tokStr.ptr[4] == C8x4('t', 'e', 'x', 'p') && tokStr.ptr[8] == 'r') {
+					consumed = true;
+					flag |= ESymbolFlag_IsConstexpr;
+				}
+
+				break;
+
+			case C8x4('p', 'u', 'b', 'l'):		//public
+
+				if (len == 6 && *(const U16*)&tokStr.ptr[4] == C8x2('i', 'c')) {
+
+					U64 temp = *i + 1;
+
+					if(Parser_next(parser, &temp, ETokenType_Colon)) {
+						++*i;
+						*scopeAccess = ESymbolAccess_Public;
+					}
+
+					consumed = true;
+					flag &= ~ESymbolFlag_IsPrivate;
+					flag |= ESymbolFlag_IsPublic;
+				}
+
+				break;
+
+			case C8x4('p', 'r', 'i', 'v'):		//private
+
+				if (len == 7 && *(const U16*)&tokStr.ptr[4] == C8x2('a', 't') && tokStr.ptr[6] == 'e') {
+
+					U64 temp = *i + 1;
+
+					if(Parser_next(parser, &temp, ETokenType_Colon)) {
+						++*i;
+						*scopeAccess = ESymbolAccess_Private;
+					}
+
+					consumed = true;
+					flag &= ~ESymbolFlag_IsPublic;
+					flag |= ESymbolFlag_IsPrivate;
+				}
+
+				break;
+
+			case C8x4('p', 'r', 'o', 't'):		//protected
+
+				if (len == 9 && *(const U32*)&tokStr.ptr[4] == C8x4('e', 'c', 't', 'e') && tokStr.ptr[8] == 'd') {
+
+					U64 temp = *i + 1;
+
+					if(Parser_next(parser, &temp, ETokenType_Colon)) {
+						++*i;
+						*scopeAccess = ESymbolAccess_Protected;
+					}
+
+					consumed = true;
+					flag &= ~ESymbolFlag_Access;
+				}
+
+				break;
+
+			case C8x4('e', 'x', 't', 'e'):		//extern
+
+				if (len == 6 && *(const U16*)&tokStr.ptr[4] == C8x2('r', 'n')) {
+					consumed = true;
+					flag |= ESymbolFlag_IsExtern;
+				}
+
+				break;
+
+			case C8x4('s', 't', 'a', 't'):		//static
+
+				if (len == 6 && *(const U16*)&tokStr.ptr[4] == C8x2('i', 'c')) {
+					consumed = true;
+					flag |= ESymbolFlag_IsStatic;
+				}
+
+				break;
+
+			case C8x4('i', 'm', 'p', 'l'):		//impl
+
+				if (len == 4) {
+					consumed = true;
+					flag |= ESymbolFlag_HasImpl;
+				}
+
+				break;
+
+			case C8x4('u', 's', 'e', 'r'):		//user_impl
+
+				if (len == 9 && *(const U32*)&tokStr.ptr[4] == C8x4('_', 'i', 'm', 'p') && tokStr.ptr[8] == 'l') {
+					consumed = true;
+					flag |= ESymbolFlag_HasUserImpl;
+				}
+
+				break;
+		}
+
+		if(!consumed)
+			break;
+
+		++*i;
+	}
+
+	//extern static const F32 x[5], y, z, w;
+	//                    ^
+
+	//static F32 test(F32 a, F32 b);
+	//       ^
+
+	U64 typeId;
+	gotoIfError(clean, Parser_classifyType(parser, i, alloc, &typeId))
+
+	//extern static const F32 x[5], y, z, w;
+	//                        ^
+
+	//static F32 test(F32 a, F32 b);
+	//           ^
+
+	gotoIfError(clean, Parser_assert(parser, i, ETokenType_Identifier))
+
+	//Continue until we find the end
+	
+	while (*i < parser->tokens.length) {
+
+		Token tok = parser->tokens.ptr[*i];
+
+		if(tok.tokenType != ETokenType_Identifier)
+			break;
+
+		CharString nameStr = Token_asString(tok, parser);
+		nameStr;
+		++*i;
+
+		//F32 operator+(
+		//    ^
+
+		if(tok.tokenSize == 8 && *(const U64*)nameStr.ptr == C8x8('o', 'p', 'e', 'r', 'a', 't', 'o', 'r')) {
+
+			flag |= ESymbolFlag_IsOperator;
+
+			//F32 operator+(
+			//            ^
+
+			gotoIfError(clean, Parser_assertSymbol(parser, i))
+			ETokenType tokType = parser->tokens.ptr[*i].tokenType;
+			nameStr = Token_asString(parser->tokens.ptr[*i], parser);
+			++*i;
+
+			switch (tokType) {
+
+				case ETokenType_Period:
+
+				case ETokenType_Ternary:
+
+				case ETokenType_SquareBracketStart2:
+				case ETokenType_SquareBracketEnd2:
+
+				case ETokenType_RoundParenthesisEnd:
+				case ETokenType_SquareBracketEnd:
+
+				case ETokenType_CurlyBraceStart:
+				case ETokenType_CurlyBraceEnd:
+
+				case ETokenType_Colon:
+				case ETokenType_Colon2:
+				case ETokenType_Semicolon:
+					gotoIfError(clean, Error_invalidState(
+						0, 
+						"Parser_classifyFunctionOrVariable() operator is disallowed with one of the following: "
+						".?]){}:; or [[, ]], ::"
+					))
+			}
+
+			//F32 operator[](
+			//            ^
+			
+			//TODO: operator[] and operator() are called [ and ( due to quirks
+
+			if (tokType == ETokenType_SquareBracketStart || tokType == ETokenType_RoundParenthesisStart) {
+
+				ETokenType expected = 
+					tokType == ETokenType_SquareBracketStart ? ETokenType_SquareBracketEnd : ETokenType_RoundParenthesisEnd;
+
+				gotoIfError(clean, Parser_assertAndSkip(parser, i, expected))
+			}
+
+			//F32 operator()(
+			//              ^
+
+			gotoIfError(clean, Parser_assertAndSkip(parser, i, ETokenType_RoundParenthesisStart))
+		}
+
+		//static F32 test(F32 a, F32 b);
+		//               ^
+
+		if (Parser_skipIfNext(parser, i, ETokenType_RoundParenthesisStart)) {
+			gotoIfError(clean, Parser_classifyFunction(parser, i, alloc))
+			goto clean;
+		}
+
+		//TODO: (test)[5] is legal and ((test))[5] is as well and ((test)[5]), etc.
+
+		//extern static const F32 x[5], y[3][3], z, w;
+		//                         ^     ^  ^
+
+		while (Parser_skipIfNext(parser, i, ETokenType_SquareBracketStart)) {
+
+			//extern static const F32 x[5], y[3][3], z, w;
+			//                          ^     ^  ^
+
+			gotoIfError(clean, Parser_assert(parser, i, ETokenType_Integer))
+			U64 arrayCount = parser->tokens.ptr[*i].valueu;
+			arrayCount;
+			++*i;
+
+			//extern static const F32 x[5], y[3][3], z, w;
+			//                           ^     ^  ^
+
+			gotoIfError(clean, Parser_assertAndSkip(parser, i, ETokenType_SquareBracketEnd))
+		}
+
+		//F32 a : A;
+		//      ^
+
+		if (Parser_skipIfNext(parser, i, ETokenType_Colon)) {
+
+			gotoIfError(clean, Parser_assert(parser, i, ETokenType_Identifier))
+
+			CharString semanticStr = Token_asString(tok, parser);
+			++*i;
+
+			semanticStr;
+		}
+
+		//static constexpr U32 a = 0xDEADBEEF;
+		//                       ^
+
+		if(Parser_next(parser, i, ETokenType_Asg))
+			gotoIfError(clean, Error_unsupportedOperation(
+				0, "Parser_classifyFunctionOrVariable() assign isn't supported yet"		//TODO:
+			))
+
+		//extern static const F32 x[5], y[3][3], z, w;
+		//                            ^        ^  ^  ^
+
+		//extern static const F32 x[5], y[3][3], z, w;
+		//                                           ^
+
+		if(Parser_next(parser, i, ETokenType_Semicolon))
+			break;
+
+		gotoIfError(clean, Parser_assertAndSkip(parser, i, ETokenType_Comma))
+	}
+
+	gotoIfError(clean, Parser_assertAndSkip(parser, i, ETokenType_Semicolon))
+
+clean:
+	return err;
 }
 
 Error Parser_classifyEnumBody(Parser *parser, U64 *i, Allocator alloc) {
@@ -797,6 +1210,7 @@ Error Parser_classifyTypedef(Parser *parser, U64 *i, Allocator alloc) {
 
 	gotoIfError(clean, Parser_assert(parser, i, ETokenType_Identifier))
 	CharString typeName = Token_asString(parser->tokens.ptr[*i], parser);
+	++*i;
 
 	typeName;
 
@@ -811,7 +1225,7 @@ clean:
 	return err;
 }
 
-Error Parser_classifyBase(Parser *parser, U64 *i, Allocator alloc, Bool *processed) {
+Error Parser_classifyBase(Parser *parser, U64 *i, Allocator alloc) {
 
 	Token tok = parser->tokens.ptr[*i];
 	CharString tokStr = Token_asString(tok, parser);
@@ -840,6 +1254,7 @@ Error Parser_classifyBase(Parser *parser, U64 *i, Allocator alloc, Bool *process
 			case C8x4('t', 'y', 'p', 'e'):		//typedef
 
 				if (len == 7 && *(const U16*)&tokStr.ptr[4] == C8x2('d', 'e') && tokStr.ptr[6] == 'f') {
+					consumed = true;
 					gotoIfError(clean, Parser_classifyTypedef(parser, i, alloc))
 					break;
 				}
@@ -912,6 +1327,21 @@ Error Parser_classifyBase(Parser *parser, U64 *i, Allocator alloc, Bool *process
 
 				break;
 
+			case C8x4('n', 'a', 'm', 'e'):		//namespace
+
+				if (len == 9 && *(const U32*)&tokStr.ptr[4] == C8x4('s', 'p', 'a', 'c') && tokStr.ptr[8] == 'e') {
+
+					consumed = true;
+
+					++*i;
+					gotoIfError(clean, Parser_assertAndSkip(parser, i, ETokenType_CurlyBraceStart))
+					gotoIfError(clean, Parser_classifyBase(parser, i, alloc))
+					gotoIfError(clean, Parser_assertAndSkip(parser, i, ETokenType_CurlyBraceEnd))
+					break;
+				}
+
+				break;
+
 			default:
 				break;
 		}
@@ -920,11 +1350,12 @@ Error Parser_classifyBase(Parser *parser, U64 *i, Allocator alloc, Bool *process
 		//Or it's an annotation [likeThis]
 		//Or it's an expression, which we won't handle here.
 
-		if(!consumed)
-			gotoIfError(clean, Parser_classifyFunctionOrVariable(parser, i, alloc, &consumed))
+		if(!consumed) {
+			ESymbolAccess symbolAccess = ESymbolAccess_Protected;		//TODO:
+			gotoIfError(clean, Parser_classifyFunctionOrVariable(parser, i, alloc, &symbolAccess))
+		}
 	}
 
-	*processed = consumed;
 clean:
 	return err;
 }
@@ -939,14 +1370,8 @@ Error Parser_classify(Parser *parser, Allocator alloc) {
 	Error err = Error_none();
 	gotoIfError(clean, ListSymbol_reserve(&parser->symbols, 64, alloc))
 
-	for (U64 i = 0; i < parser->tokens.length; ) {
-
-		Bool processed = false;
-		gotoIfError(clean, Parser_classifyBase(parser, &i, alloc, &processed))
-
-		if(!processed)
-			gotoIfError(clean, Error_invalidState(0, "Parser_classify() couldn't classify one of the symbols"))
-	}
+	for (U64 i = 0; i < parser->tokens.length; )
+		gotoIfError(clean, Parser_classifyBase(parser, &i, alloc))
 
 clean:
 	return err;

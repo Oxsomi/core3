@@ -27,22 +27,6 @@
 	extern "C" {
 #endif
 
-//There are two types of files; virtual and local.
-//Virtual are embedded into the binary, very nice for easy portable installation and harder to modify for avg users.
-//	Writable virtual files can only be in the //access, //function or //network directory.
-//	These are just links to existing local files, but are made accessible by the platform for access by the app.
-//	As much, naming a folder in the root "access" is disallowed for virtual files.
-//Local are in the current working directory.
-//OxC3 doesn't support reading from other directories; this is to prevent unwanted access to other files.
-//Importing/exporting other files in other locations will have to be done through
-// the //access folder using the platform's explorer (TBD).
-//
-//Virtual files are prefixed with // even though that can be valid
-//E.g. //test.json refers to test.json embedded in the binary
-//	while test.json, ./test.json or .//test.json refers to test.json in the local file
-//
-//Backslashes are automatically resolved to forward slash
-
 Error File_getInfo(CharString loc, FileInfo *info, Allocator alloc);
 Error File_getInfox(CharString loc, FileInfo *info);
 Error File_resolvex(CharString loc, Bool *isVirtual, U64 maxFilePathLimit, CharString *result);

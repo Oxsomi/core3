@@ -151,24 +151,33 @@ typedef enum ESymbolType {
 
 typedef enum ESymbolFlag {
 
+	ESymbolFlag_None			= 0,
+
 	//For constants
 
-	ESymbolFlag_IsConst			= 1 << 0,		//const
-	ESymbolFlag_IsPtr			= 1 << 1,		//T*
-	ESymbolFlag_IsPtrRef		= 1 << 2,		//T**
-	ESymbolFlag_IsExtern		= 1 << 3,		//extern ...
+	ESymbolFlag_IsConst			= 1 << 0,		//const ...
+	ESymbolFlag_IsConstexpr		= 1 << 1,		//constexpr X
+	ESymbolFlag_IsExtern		= 1 << 2,		//extern ...
 
 	//For functions
 
-	ESymbolFlag_HasImpl			= 1 << 4,		//impl ...
-	ESymbolFlag_HasUserImpl		= 1 << 5,		//user_impl ...
+	ESymbolFlag_HasImpl			= 1 << 3,		//impl ...
+	ESymbolFlag_HasUserImpl		= 1 << 4,		//user_impl ...
 
 	//Access
 
-	ESymbolFlag_IsStatic		= 1 << 6,
+	ESymbolFlag_IsStatic		= 1 << 5,		//static ...
 
-	ESymbolFlag_IsPrivate		= 1 << 7,		//Maps to ESymbolAccess
-	ESymbolFlag_IsPublic		= 1 << 8
+	//Maps to ESymbolAccess, if !(Private | Public) then it's protected
+
+	ESymbolFlag_IsPrivate		= 1 << 6,		//private: X or private X
+	ESymbolFlag_IsPublic		= 1 << 7,		//public: X or public X
+
+	ESymbolFlag_Access			= ESymbolFlag_IsPrivate | ESymbolFlag_IsPublic,
+
+	//Function modifiers
+
+	ESymbolFlag_IsOperator		= 1 << 8
 
 } ESymbolFlag;
 
