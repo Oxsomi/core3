@@ -227,6 +227,30 @@ Error DLFile_readx(Buffer file, const U32 encryptionKey[8], Bool allowLeftOverDa
 	return DLFile_read(file, encryptionKey, allowLeftOverData, Platform_instance.alloc, dlFile);
 }
 
+Error SHFile_createx(ESHSettingsFlags flags, ESHExtension extension, SHFile *shFile) {
+	return SHFile_create(flags, extension, Platform_instance.alloc, shFile);
+}
+
+Bool SHFile_freex(SHFile *shFile) {
+	return SHFile_free(shFile, Platform_instance.alloc);
+}
+
+Error SHFile_addBinaryx(SHFile *shFile, ESHBinaryType type, Buffer *entry) {
+	return SHFile_addBinary(shFile, type, entry, Platform_instance.alloc);
+}
+
+Error SHFile_addEntrypointx(SHFile *shFile, SHEntry *entry) {
+	return SHFile_addEntrypoint(shFile, entry, Platform_instance.alloc);
+}
+
+Error SHFile_writex(SHFile shFile, Buffer *result) {
+	return SHFile_write(shFile, Platform_instance.alloc, result);
+}
+
+Error SHFile_readx(Buffer file, Bool isSubFile, SHFile *shFile) {
+	return SHFile_read(file, isSubFile, Platform_instance.alloc, shFile);
+}
+
 //List
 
 Error GenericList_createx(U64 length, U64 stride, GenericList *result) {

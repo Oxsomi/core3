@@ -437,13 +437,17 @@ Bool CLI_compileShader(ParsedArgs args) {
 			return false;
 		}
 
-		if(CharString_endsWithSensitive(thread, '%', 0)) {					//-t 50%
+		if(CharString_endsWithSensitive(thread, '%', 0)) {					//-threads 50%
 
 			CharString number = CharString_createRefSizedConst(thread.ptr, CharString_length(thread) - 1, false);
 			F64 num = 0;
 			
 			if (!CharString_parseDouble(number, &num) || num < 0 || num > 100) {
-				Log_errorLnx("Couldn't parse -t x%, where x is expected to be a F64 between (0-100)% or 0 -> threadCount - 1");
+
+				Log_errorLnx(
+					"Couldn't parse -threads x%, where x is expected to be a F64 between (0-100)% or 0 -> threadCount - 1"
+				);
+
 				return false;
 			}
 
@@ -451,11 +455,11 @@ Bool CLI_compileShader(ParsedArgs args) {
 			defaultThreadCount = num == 0;
 		}
 
-		else {			//-t x
+		else {			//-threads x
 
 			U64 num = 0;
 			if (!CharString_parseU64(thread, &num) || num > threadCount) {
-				Log_errorLnx("Couldn't parse -t x, where x is expected to be a F64 of (0-100)% or 0 -> threadCount - 1");
+				Log_errorLnx("Couldn't parse -threads x, where x is expected to be a F64 of (0-100)% or 0 -> threadCount - 1");
 				return false;
 			}
 

@@ -83,7 +83,7 @@ typedef enum ESHPipelineStage {
 	ESHPipelineStage_Compute,
 	ESHPipelineStage_GeometryExt,		//GeometryShader extension is required
 	ESHPipelineStage_Hull,
-	EPSHipelineStage_Domain,
+	ESHPipelineStage_Domain,
 
 	//MeshShader extension is required
 
@@ -120,7 +120,7 @@ typedef enum ESHVector {
 	ESHVector_N4
 } ESHVector;
 
-#define ESHType_create(prim, vec) (((prim) << 4) | (vec))
+#define ESHType_create(prim, vec) (((prim) << 2) | (vec))
 
 typedef enum ESHType {
 
@@ -140,6 +140,8 @@ typedef enum ESHType {
 	ESHType_U32x4	= ESHType_create(ESHPrimitive_UInt, ESHVector_N4)
 
 } ESHType;
+
+const C8 *ESHType_name(ESHType type);
 
 typedef struct SHEntry {
 
@@ -167,6 +169,8 @@ typedef struct SHEntry {
 
 TList(SHEntry);
 
+const C8 *SHEntry_stageName(SHEntry entry);
+
 typedef enum ESHPipelineType {
 	ESHPipelineType_Graphics,
 	ESHPipelineType_Compute,
@@ -184,9 +188,6 @@ typedef struct SHFile {
 
 	ESHSettingsFlags flags;
 	ESHExtension extensions;
-
-	ESHPipelineType type;
-	U32 padding;
 
 } SHFile;
 
@@ -210,12 +211,12 @@ typedef enum ESHFlags {
 	//What type of binaries it includes
 	//Must be one at least
 
-	ESHFlags_HasSPIRV				= 1 << 1,
-	ESHFlags_HasDXIL				= 1 << 2,
+	ESHFlags_HasSPIRV				= 1 << 0,
+	ESHFlags_HasDXIL				= 1 << 1,
 
 	//Reserved
-	//ESHFlags_HasMSL				= 1 << 3,
-	//ESHFlags_HasWGSL				= 1 << 4
+	//ESHFlags_HasMSL				= 1 << 2,
+	//ESHFlags_HasWGSL				= 1 << 3
 
 	ESHFlags_Invalid				= 0xFF << 2,
 
@@ -230,7 +231,7 @@ typedef struct SHHeader {
 	U8 version;					//major.minor (%10 = minor, /10 = major (+1 to get real major)) at least 1
 	U8 flags;					//ESHFlags
 	U8 sizeTypes;				//EXXDataSizeTypes: spirvType | (dxilType << 2) | (mslType << 4) | (wgslType << 6)
-	U8 padding;
+	U8 pipelineType;
 
 	ESHExtension extensions;
 

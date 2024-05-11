@@ -27,6 +27,50 @@ TListImpl(SHEntry);
 
 static const U8 SHHeader_V1_2 = 2;
 
+const C8 *SHEntry_stageNames[] = {
+
+	"vertex",
+	"pixel",
+	"compute",
+	"geometry",
+	"hull",
+	"domain",
+
+	"mesh",
+	"task",
+
+	"raygen",
+	"callable",
+	"miss",
+	"closest hit",
+	"any hit",
+	"intersection",
+};
+
+const C8 *SHEntry_stageName(SHEntry entry) {
+	return SHEntry_stageNames[entry.stage];
+}
+
+const C8 *ESHType_names[] = {
+	"", "", "", "",
+	"F32",
+	"F32x2",
+	"F32x3",
+	"F32x4",
+	"I32",
+	"I32x2",
+	"I32x3",
+	"I32x4",
+	"U32",
+	"U32x2",
+	"U32x3",
+	"U32x4"
+};
+
+const C8 *ESHType_name(ESHType type) {
+	return ESHType_names[type & 0xF];
+}
+
 //Helper functions to create it
 
 Error SHFile_create(ESHSettingsFlags flags, ESHExtension extension, Allocator alloc, SHFile *shFile) {
@@ -50,7 +94,6 @@ Error SHFile_create(ESHSettingsFlags flags, ESHExtension extension, Allocator al
 
 	shFile->flags = flags;
 	shFile->extensions = extension;
-	shFile->type = ESHPipelineType_Count;
 	return Error_none();
 }
 
@@ -112,22 +155,11 @@ Error SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, Allocator alloc) {
 	if(entry->stage >= ESHPipelineStage_Count)
 		return Error_invalidEnum(1, entry->stage, ESHPipelineStage_Count, "SHFile_addEntrypoint()::entry->stage invalid enum");
 
-	ESHPipelineType currType = entry->stage == ESHPipelineStage_Compute ? ESHPipelineType_Compute : (
+	ESHPipelineType pipelineType = entry->stage == ESHPipelineStage_Compute ? ESHPipelineType_Compute : (
 		entry->stage >= ESHPipelineStage_RtStartExt && entry->stage <= ESHPipelineStage_RtEndExt ? ESHPipelineType_Raytracing :
 		ESHPipelineType_Graphics
 	);
 
-	ESHPipelineType pipelineType = shFile->type;
-
-	if (pipelineType != ESHPipelineType_Count && pipelineType != currType)
-		return Error_invalidOperation(0, "SHFile_addEntrypoint() pipeline is incompatible");
-
-	if (pipelineType != ESHPipelineType_Count && pipelineType != ESHPipelineType_Raytracing)
-		return Error_invalidOperation(
-			1, "SHFile_addEntrypoint() can't add multiple entrypoints in a single SHFile if type isn't raytracing"
-		);
-
-	pipelineType = currType;
 	U16 groupXYZ = entry->groupX | entry->groupY | entry->groupZ;
 	U64 totalGroup = (U64)entry->groupX * entry->groupY * entry->groupZ;
 
@@ -197,9 +229,6 @@ Error SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, Allocator alloc) {
 	if(!Buffer_isAscii(CharString_bufferConst(entry->name)))
 		shFile->flags |= ESHSettingsFlags_IsUTF8;
 
-	if(shFile->entries.length == 1)
-		shFile->type = pipelineType;
-
 	*entry = (SHEntry) { 0 };
 
 clean:
@@ -252,17 +281,33 @@ Error SHFile_write(SHFile shFile, Allocator alloc, Buffer *result) {
 			gotoIfError(clean, DLFile_addEntryUTF8(&dlFile, CharString_bufferConst(entry), alloc))
 
 		else gotoIfError(clean, DLFile_addEntryAscii(&dlFile, entry, alloc))
+
+		switch(shFile.entries.ptr[i].stage) {
+
+			default:
+				headerSize += sizeof(U64) * 2;			//input, output
+				break;
+
+			case ESHPipelineStage_Compute:
+				headerSize += sizeof(U16) * 4;			//group x, y, z, pad
+				break;
+
+			case ESHPipelineStage_RaygenExt:
+			case ESHPipelineStage_CallableExt:
+				break;
+
+			case ESHPipelineStage_MissExt:
+			case ESHPipelineStage_ClosestHitExt:
+			case ESHPipelineStage_AnyHitExt:
+			case ESHPipelineStage_IntersectionExt:
+				headerSize += sizeof(U8) * 2 * shFile.entries.length;
+				break;
+		}
 	}
 
 	gotoIfError(clean, DLFile_write(dlFile, alloc, &dlFileBuf))
 
 	U64 len = headerSize + Buffer_length(dlFileBuf) + shFile.entries.length;
-
-	switch(shFile.type) {
-		case ESHPipelineType_Compute:		len += sizeof(U16) * 4;								break;	//group x, y, z, pad
-		case ESHPipelineType_Graphics:		len += sizeof(U64) * 2;								break;	//input, output
-		case ESHPipelineType_Raytracing:	len += sizeof(U8) * 2 * shFile.entries.length;		break;
-	}
 
 	U8 hasBinary = 0;
 	U8 sizes = 0;
@@ -312,14 +357,9 @@ Error SHFile_write(SHFile shFile, Allocator alloc, Buffer *result) {
 
 		SHEntry entry = shFile.entries.ptr[i];
 
-		switch(shFile.type) {
+		switch(entry.stage) {
 
-			case ESHPipelineType_Compute:
-				*(U64*)headerIt = entry.groupX | ((U64)entry.groupY << 16) | ((U64)entry.groupZ << 32);
-				headerIt += sizeof(U64);
-				break;
-
-			case ESHPipelineType_Graphics:
+			default:
 
 				*(U64*)headerIt = entry.inputsU64;
 				headerIt += sizeof(U64);
@@ -329,7 +369,19 @@ Error SHFile_write(SHFile shFile, Allocator alloc, Buffer *result) {
 
 				break;
 
-			case ESHPipelineType_Raytracing:
+			case ESHPipelineStage_Compute:
+				*(U64*)headerIt = entry.groupX | ((U64)entry.groupY << 16) | ((U64)entry.groupZ << 32);
+				headerIt += sizeof(U64);
+				break;
+
+			case ESHPipelineStage_RaygenExt:
+			case ESHPipelineStage_CallableExt:
+				break;
+
+			case ESHPipelineStage_MissExt:
+			case ESHPipelineStage_ClosestHitExt:
+			case ESHPipelineStage_AnyHitExt:
+			case ESHPipelineStage_IntersectionExt:
 				*headerIt++ = entry.intersectionSize;
 				*headerIt++ = entry.payloadSize;
 				break;
@@ -393,6 +445,7 @@ Error SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile) 
 		gotoIfError(clean, Error_unsupportedOperation(1, "SHFile_read() unsupported flags"))
 
 	gotoIfError(clean, DLFile_read(file, NULL, true, alloc, &dlFile))
+	gotoIfError(clean, Buffer_offset(&file, dlFile.readLength))
 
 	ESHSettingsFlags flags = ESHSettingsFlags_HideMagicNumber;
 
@@ -404,40 +457,70 @@ Error SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile) 
 	const U8 *mem = file.ptr;
 	gotoIfError(clean, Buffer_offset(&file, dlFile.entryStrings.length))
 
-	const U8 *nextMem = file.ptr;
-	U64 stride = shFile->type == ESHPipelineType_Compute ? sizeof(U64) : (
-		shFile->type == ESHPipelineType_Raytracing ? sizeof(U16) : sizeof(U64) * 2
-	);
-
-	gotoIfError(clean, Buffer_offset(&file, stride * dlFile.entryStrings.length))
+	const U8 *nextMem = file.ptr, *nextMemPrev = nextMem, *nextMemTemp;
 
 	for (U64 i = 0; i < dlFile.entryStrings.length; ++i) {
 
 		SHEntry entry = (SHEntry) { .stage = mem[i], .name = dlFile.entryStrings.ptr[i] };
 
-		switch (shFile->type) {
+		switch (entry.stage) {
 
-			case ESHPipelineType_Compute: {
-				U64 groups = ((const U64*)nextMem)[i];
+			case ESHPipelineStage_Compute: {
+
+				nextMemTemp = nextMem;
+				nextMem += sizeof(U64);
+
+				if(nextMem > file.ptr + Buffer_length(file))
+					gotoIfError(clean, Error_outOfBounds(
+						0, nextMem - file.ptr, Buffer_length(file), "SHFile_read() couldn't parse compute stage, out of bounds"
+					))
+
+				U64 groups = *(const U64*)nextMemTemp;
 				entry.groupX = (U16) groups;
 				entry.groupY = (U16) (groups >> 16);
 				entry.groupZ = (U16) (groups >> 32);
 				break;
 			}
 
-			case ESHPipelineType_Raytracing:
-				entry.intersectionSize = nextMem[i << 1];
-				entry.payloadSize = nextMem[(i << 1) | 1];
+			case ESHPipelineStage_RaygenExt:
+			case ESHPipelineStage_CallableExt:
+			case ESHPipelineStage_MissExt:
+			case ESHPipelineStage_ClosestHitExt:
+			case ESHPipelineStage_AnyHitExt:
+			case ESHPipelineStage_IntersectionExt:
+
+				nextMemTemp = nextMem;
+				nextMem += sizeof(U16);
+
+				if(nextMem > file.ptr + Buffer_length(file))
+					gotoIfError(clean, Error_outOfBounds(
+						0, nextMem - file.ptr, Buffer_length(file),
+						"SHFile_read() couldn't parse raytracing stage, out of bounds"
+					))
+
+				entry.intersectionSize = nextMemTemp[i << 1];
+				entry.payloadSize = nextMemTemp[(i << 1) | 1];
 				break;
 
-			case ESHPipelineType_Graphics:
-				entry.inputsU64 = ((const U64*)nextMem)[i << 1];
-				entry.outputsU64 = ((const U64*)nextMem)[(i << 1) | 1];
+			default:
+
+				nextMemTemp = nextMem;
+				nextMem += sizeof(U64) * 2;
+
+				if(nextMem > file.ptr + Buffer_length(file))
+					gotoIfError(clean, Error_outOfBounds(
+						0, nextMem - file.ptr, Buffer_length(file), "SHFile_read() couldn't parse graphics stage, out of bounds"
+					))
+
+				entry.inputsU64 = ((const U64*)nextMemTemp)[i << 1];
+				entry.outputsU64 = ((const U64*)nextMemTemp)[(i << 1) | 1];
 				break;
 		}
 
 		gotoIfError(clean, SHFile_addEntrypoint(shFile, &entry, alloc))
 	}
+
+	gotoIfError(clean, Buffer_offset(&file, nextMem - nextMemPrev))
 
 	U64 binarySize[ESHBinaryType_Count] = { 0 };
 

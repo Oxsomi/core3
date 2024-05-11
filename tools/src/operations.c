@@ -133,7 +133,7 @@ const C8 *EOperationFlags_descriptions[] = {
 	"Include upper alpha characters (A-Z).",
 	"Encode using nytodecimal (0-9A-Za-z_$).",
 	"Encode using hexadecimal (0-9A-F).",
-	"Encode using binary (0-1).",
+	"Binary mode.",
 	"Encode using octadecimal (0-7).",
 	"Include more debug information."
 };
@@ -249,6 +249,7 @@ void Operations_init() {
 		.func = &CLI_inspectData,
 
 		.isFormatLess = true,
+		.operationFlags = EOperationFlags_Bin,
 		.requiredParameters = EOperationHasParameter_Input,
 		.optionalParameters =
 			EOperationHasParameter_AES | EOperationHasParameter_Output |
@@ -518,7 +519,7 @@ void Operations_init() {
 		.category = EOperationCategory_Help,
 
 		.name = "operations",
-		.desc = "Help to see all operations in the category mentioned by -i.",
+		.desc = "Help to see all operations in the category mentioned by -input.",
 
 		.func = &CLI_helpOperation,
 
@@ -532,7 +533,7 @@ void Operations_init() {
 		.category = EOperationCategory_Help,
 
 		.name = "operation",
-		.desc = "Help to see all information about the operation mentioned by -i (category:operation or category).",
+		.desc = "Help to see all information about the operation mentioned by -input (category:operation or category).",
 
 		.func = &CLI_helpOperation,
 
@@ -546,7 +547,7 @@ void Operations_init() {
 		.category = EOperationCategory_Help,
 
 		.name = "format",
-		.desc = "Help to see all information about the format mentioned by -i (category:operation:format).",
+		.desc = "Help to see all information about the format mentioned by -input (category:operation:format).",
 
 		.func = &CLI_helpOperation,
 

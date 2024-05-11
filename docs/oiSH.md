@@ -143,16 +143,18 @@ SHFile {
     //Only allowed to be >1 if non graphics or compute
     U8 pipelineStages[stageNames.length];
     
-    for pipelineStages[i] is compute or workgraph:
-	    U16x4 groups[stageNames.length];
+    for pipelineStages[i]
     
-    for pipelineStages[i] is graphics:
-    	U4 inputs[16];					//Each element: [ ESHPrimitive, ESHVector ]
-    	U4 outputs[16];
+	    if compute or workgraph:
+		    U16x4 groups[stageNames.length];
     
-    for pipelineStages[i] is raytracing
-        U8 intersectionSize;
-   	 	U8 payloadSize
+	    if is graphics:
+    		U4 inputs[16];					//Each element: [ ESHPrimitive, ESHVector ]
+    		U4 outputs[16];
+    
+	    if miss,closestHit,anyHit or intersection
+    	    U8 intersectionSize;
+   	 		U8 payloadSize
 
     if has SPIRV:
 	    EXXDataSizeType<spirvType> spirvLength;

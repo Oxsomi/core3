@@ -131,7 +131,7 @@ typedef enum EOperationFlags {
 
 	EOperationFlags_Nyto			= 1 << 13,
 	EOperationFlags_Hex				= 1 << 14,
-	EOperationFlags_Bin				= 1 << 15,
+	EOperationFlags_Bin				= 1 << 15,		//This is also used by OxC3 file data (for oiSH)
 	EOperationFlags_Oct				= 1 << 16,
 
 	EOperationFlags_RandNum =

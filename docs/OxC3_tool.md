@@ -227,6 +227,8 @@ With `-entry <offset or path>` a specific entry can be viewed. If an entry is sp
 
 `file data` also allows the `-length` specifier for how many entries are shown. Normally in the log it limits to 64 lines (so for data that'd mean 64 * 64 / 2 (hex) = 2KiB per view). The `-start` argument can be used to set an offset of what it should show. An example: we have an oiCA with 128 entries but want to show the last 32; `file data -input our.oiCA -start 96 -length 32`. For a file entry, it would specify the byte offset and length (length is defaulted to 2KiB). If `-output` is used, it will binary dump the entire remainder of the file if `-length` is not specified (the remainder is the entire file size if `-start` is not specified).
 
+For oiSH files, it is possible to supply `--bin` can be used  to fetch the binary instead of the entrypoints. Since an oiSH file can have more than one binary embedded in it. Not supplying an entry will behave as usual; showing all binaries. Supplying an entry and --binary will show that specific entry. It has to use the index of the visible binaries (e.g. if SPV isn't available but DXIL is then 0 identifies DXIL).
+
 ## Encrypt
 
 `OxC3 file encr -format <encryptionType> -input <file> -aes <key in hex> (optional: -output output)`

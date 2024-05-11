@@ -60,7 +60,7 @@ Bool CLI_rand(ParsedArgs args) {
 			!CharString_parseU64(str, &l) ||
 			(l >> 32)
 		) {
-			Log_errorLnx("Invalid argument -l <string>, uint expected.");
+			Log_errorLnx("Invalid argument -length <string>, uint expected.");
 			return false;
 		}
 	}
@@ -76,7 +76,7 @@ Bool CLI_rand(ParsedArgs args) {
 			!CharString_parseU64(str, &b) ||
 			(b >> 16)
 		) {
-			Log_errorLnx("Invalid argument -b <string>, ushort expected.");
+			Log_errorLnx("Invalid argument -bits <string>, ushort expected.");
 			return false;
 		}
 	}
@@ -165,7 +165,7 @@ Bool CLI_rand(ParsedArgs args) {
 			default: {
 
 				if (b > 64) {
-					Log_errorLnx("Decimal numbers can only support up to 64 bit (if -b is set).");
+					Log_errorLnx("Decimal numbers can only support up to 64 bit (if -bits is set).");
 					return false;
 				}
 
@@ -259,7 +259,7 @@ Bool CLI_rand(ParsedArgs args) {
 							CharString str = CharString_createNull();
 
 							if (ParsedArgs_getArg(args, EOperationHasParameter_CharacterShift, &str).genericError) {
-								Log_errorLnx("Invalid argument -c <string>.");
+								Log_errorLnx("Invalid argument -chars <string>.");
 								return false;
 							}
 
@@ -371,7 +371,7 @@ Bool CLI_rand(ParsedArgs args) {
 		CharString outputPath = CharString_createNull();
 
 		if (ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &outputPath).genericError) {
-			Log_errorLnx("Invalid argument -o <string>, file path expected.");
+			Log_errorLnx("Invalid argument -output <string>, file path expected.");
 			return false;
 		}
 

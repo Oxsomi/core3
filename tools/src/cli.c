@@ -111,7 +111,7 @@ void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f) {
 		"Please use syntax:\n%s %s %s %s",
 		EOperationCategory_names[category - 1],
 		opVal.name,
-		opVal.isFormatLess ? "" : "-f",
+		opVal.isFormatLess ? "" : "-format",
 		opVal.isFormatLess ? "" : Format_values[f].name
 	);
 

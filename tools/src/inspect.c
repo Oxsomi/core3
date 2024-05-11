@@ -24,6 +24,7 @@
 #include "types/string.h"
 #include "formats/oiCA.h"
 #include "formats/oiDL.h"
+#include "formats/oiSH.h"
 #include "platforms/ext/formatx.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/stringx.h"
@@ -80,6 +81,13 @@ void XXFile_printVersion(U8 v) {
 	Log_debugLnx("Version: %s", str.v);
 }
 
+static const C8 *dataTypes[] = {
+	"U8 (8-bit number).",
+	"U16 (16-bit number)",
+	"U32 (32-bit number)",
+	"U64 (64-bit number)"
+};
+
 //Inspect header is a lightweight checker for the header.
 //To get a more detailed view you can use OxC3 file data instead.
 //Viewing the header doesn't require a key (if encrypted), but the data does.
@@ -94,7 +102,7 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 	CharString tmp = CharString_createNull();
 
 	if ((err = ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &path)).genericError) {
-		Log_errorLnx("Invalid argument -i <string>.");
+		Log_errorLnx("Invalid argument -input <string>.");
 		goto clean;
 	}
 
@@ -114,6 +122,7 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 
 		case CAHeader_MAGIC:	reqLen = sizeof(CAHeader);					break;
 		case DLHeader_MAGIC:	reqLen = sizeof(DLHeader) + sizeof(U32);	break;
+		case SHHeader_MAGIC:	reqLen = sizeof(SHHeader) + sizeof(U32);	break;
 		default:
 			Log_errorLnx("File wasn't recognized.");
 			goto clean;
@@ -126,6 +135,76 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 
 	switch (*(const U32*)buf.ptr) {
 
+		//oiSH header
+
+		case SHHeader_MAGIC: {
+		
+			const SHHeader shHeader = *(const SHHeader*)(buf.ptr + sizeof(U32));
+
+			Log_debugLnx("Detected oiSH file with following info:");
+
+			XXFile_printVersion(shHeader.version);
+
+			if(shHeader.flags & ESHFlags_HasSPIRV)
+				Log_debugLnx(
+					"Spirv size type uses %s.",
+					dataTypes[(shHeader.sizeTypes >> 0) & 3]
+				);
+
+			if(shHeader.flags & ESHFlags_HasDXIL)
+				Log_debugLnx(
+					"DXIL size type uses %s.",
+					dataTypes[(shHeader.sizeTypes >> 2) & 3]
+				);
+
+			if(shHeader.extensions)
+				Log_debugLnx("oiSH extensions:");
+
+			if(shHeader.extensions & ESHExtension_F64)
+				Log_debugLnx("\tF64");
+
+			if(shHeader.extensions & ESHExtension_I64)
+				Log_debugLnx("\tI64");
+
+			if(shHeader.extensions & ESHExtension_F16)
+				Log_debugLnx("\tF16");
+
+			if(shHeader.extensions & ESHExtension_I16)
+				Log_debugLnx("\tI16");
+
+			if(shHeader.extensions & ESHExtension_AtomicI64)
+				Log_debugLnx("\tAtomic I64");
+
+			if(shHeader.extensions & ESHExtension_AtomicF32)
+				Log_debugLnx("\tAtomic F32");
+
+			if(shHeader.extensions & ESHExtension_AtomicF64)
+				Log_debugLnx("\tAtomic F64");
+
+			if(shHeader.extensions & ESHExtension_SubgroupArithmetic)
+				Log_debugLnx("\tSubgroup arithmetic");
+
+			if(shHeader.extensions & ESHExtension_SubgroupShuffle)
+				Log_debugLnx("\tSubgroup shuffle");
+
+			if(shHeader.extensions & ESHExtension_RayQuery)
+				Log_debugLnx("\tRay query");
+
+			if(shHeader.extensions & ESHExtension_RayMicromapOpacity)
+				Log_debugLnx("\tRay micromap opacity");
+
+			if(shHeader.extensions & ESHExtension_RayMicromapDisplacement)
+				Log_debugLnx("\tRay micromap displacement");
+
+			if(shHeader.extensions & ESHExtension_RayMotionBlur)
+				Log_debugLnx("\tRay motion blur");
+
+			if(shHeader.extensions & ESHExtension_RayReorder)
+				Log_debugLnx("\tRay reorder");
+
+			break;
+		}
+
 		//oiCA header
 
 		case CAHeader_MAGIC: {
@@ -137,13 +216,6 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 			XXFile_printVersion(caHeader.version);
 
 			//File sizes
-
-			static const C8 *dataTypes[] = {
-				"U8 (8-bit number).",
-				"U16 (16-bit number)",
-				"U32 (32-bit number)",
-				"U64 (64-bit number)"
-			};
 
 			Log_debugLnx(
 				"Data size type uses %s.",
@@ -293,13 +365,6 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 			XXFile_printType(dlHeader.type);
 
 			//File sizes
-
-			static const C8 *dataTypes[] = {
-				"U8 (8-bit number).",
-				"U16 (16-bit number)",
-				"U32 (32-bit number)",
-				"U64 (64-bit number)"
-			};
 
 			Log_debugLnx("Entry count size type uses %s", dataTypes[dlHeader.sizeTypes & 3]);
 
@@ -472,7 +537,7 @@ Bool CLI_showFile(ParsedArgs args, Buffer b, U64 start, U64 length, Bool isAscii
 		CharString out = CharString_createNull();
 
 		if ((err = ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &out)).genericError) {
-			Log_errorLnx("Invalid argument -o <string>.");
+			Log_errorLnx("Invalid argument -output <string>.");
 			goto clean;
 		}
 
@@ -567,7 +632,7 @@ Bool CLI_storeFileOrFolder(ParsedArgs args, ArchiveEntry e, Archive a, Bool *mad
 		CharString out = CharString_createNull();
 
 		if ((err = ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &out)).genericError) {
-			Log_errorLnx("Invalid argument -o <string>.");
+			Log_errorLnx("Invalid argument -output <string>.");
 			goto clean;
 		}
 
@@ -612,6 +677,11 @@ clean:
 	return success;
 }
 
+static const C8 *shaderTypeNames[] = {
+	"SPV",
+	"DXIL"
+};
+
 //Handle inspection of individual data.
 //Also handles info about the file in general.
 
@@ -628,7 +698,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 	//Get file
 
 	if ((err = ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &path)).genericError) {
-		Log_errorLnx("Invalid argument -i <string>.");
+		Log_errorLnx("Invalid argument -input <string>.");
 		goto clean;
 	}
 
@@ -648,7 +718,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 	if (args.parameters & EOperationHasParameter_Entry)
 		if ((err = ParsedArgs_getArg(args, EOperationHasParameter_EntryShift, &entry)).genericError) {
-			Log_errorLnx("Invalid argument -e <string or uint>.");
+			Log_errorLnx("Invalid argument -entry <string or uint>.");
 			goto clean;
 		}
 
@@ -663,7 +733,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 			!CharString_parseU64(starts, &start) ||
 			(start >> 32)
 		) {
-			Log_errorLnx("Invalid argument -s <uint>.");
+			Log_errorLnx("Invalid argument -start <uint>.");
 			goto clean;
 		}
 
@@ -678,7 +748,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 			!CharString_parseU64(lengths, &length) ||
 			(length >> 32)
 		) {
-			Log_errorLnx("Invalid argument -l <uint>.");
+			Log_errorLnx("Invalid argument -length <uint>.");
 			goto clean;
 		}
 
@@ -718,6 +788,11 @@ Bool CLI_inspectData(ParsedArgs args) {
 		encryptionKey = encryptionKeyV;
 	}
 
+	if(args.flags & EOperationFlags_Bin && *(const U32*)buf.ptr != SHHeader_MAGIC) {
+		Log_errorLnx("--bin flag can only be used with an oiSH file");
+		return false;
+	}
+
 	switch (*(const U32*)buf.ptr) {
 
 		//oiCA header
@@ -744,7 +819,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 				if (index == U64_MAX) {
 
 					if (!CharString_parseU64(entry, &index)) {
-						Log_errorLnx("Invalid argument -e <uint> or <valid path> expected.");
+						Log_errorLnx("Invalid argument -entry <uint> or <valid path> expected.");
 						goto cleanCa;
 					}
 
@@ -917,7 +992,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 				U64 entryI = 0;
 
 				if (!CharString_parseU64(entry, &entryI)) {
-					Log_errorLnx("Invalid argument -e <uint> expected.");
+					Log_errorLnx("Invalid argument -entry <uint> expected.");
 					goto cleanDl;
 				}
 
@@ -962,6 +1037,180 @@ Bool CLI_inspectData(ParsedArgs args) {
 			CharString_freex(&tmp);
 			CharString_freex(&tmp1);
 			DLFile_freex(&file);
+
+			if(err.genericError)
+				goto clean;
+
+			break;
+		}
+
+		//oiSH header
+
+		case SHHeader_MAGIC: {
+
+			if(encryptionKey)
+				gotoIfError(clean, Error_invalidState(0, "CLI_inspectData() oiSH doesn't have aes support!"))
+
+			SHFile file = (SHFile) { 0 };
+			gotoIfError(cleanSh, SHFile_readx(buf, false, &file))
+
+			Bool hasDxil = file.binaries[ESHBinaryType_DXIL].ptr;
+			Bool hasSpirv = file.binaries[ESHBinaryType_SPIRV].ptr;
+			U32 binaryCount = (U32)hasDxil + hasSpirv;
+
+			Bool binaryMode = args.flags & EOperationFlags_Bin;
+
+			U64 count = binaryMode ? binaryCount : file.entries.length;
+
+			U64 end = 0;
+
+			if (!(args.parameters & EOperationHasParameter_Entry)) {
+
+				if(!length && start < count)
+					length = U64_min(64, count - start);
+
+				end = start + length;
+			}
+
+			if (args.parameters & EOperationHasParameter_Entry) {
+
+				//Grab entry
+
+				U64 entryI = 0;
+
+				if (!CharString_parseU64(entry, &entryI)) {
+					Log_errorLnx("Invalid argument -entry <uint> expected.");
+					goto cleanSh;
+				}
+
+				if (entryI >= count) {
+					Log_errorLnx("Index out of bounds, max is %"PRIu64, count);
+					goto cleanSh;
+				}
+
+				if(!binaryMode) {
+
+					SHEntry shEntry = file.entries.ptr[entryI];
+					const C8 *name = SHEntry_stageName(shEntry);
+
+					Log_debugLnx(
+						"Entry %"PRIu64" (%s): %.*s", entryI, name, (int) CharString_length(shEntry.name), shEntry.name.ptr
+					);
+				
+					switch(shEntry.stage) {
+
+						default:
+
+							if (shEntry.inputsU64) {
+
+								Log_debugLnx("\tInputs:");
+							
+								for (U8 i = 0; i < 16; ++i) {
+
+									ESHType type = (ESHType)(shEntry.inputs[i >> 1] >> ((i & 1) << 2)) & 0xF;
+
+									if(!type)
+										continue;
+
+									Log_debugLnx("\t\t%"PRIu8" %s", i, ESHType_name(type));
+								}
+							}
+
+							if (shEntry.outputsU64) {
+
+								Log_debugLnx("\tOutputs:");
+							
+								for (U8 i = 0; i < 16; ++i) {
+
+									ESHType type = (ESHType)(shEntry.outputs[i >> 1] >> ((i & 1) << 2)) & 0xF;
+
+									if(!type)
+										continue;
+
+									Log_debugLnx("\t\t%"PRIu8" %s", i, ESHType_name(type));
+								}
+							}
+
+							break;
+
+						case ESHPipelineStage_Compute:
+
+							Log_debugLnx(
+								"\tThread count: %"PRIu16", %"PRIu16", %"PRIu16,
+								shEntry.groupX, shEntry.groupY, shEntry.groupZ
+							);
+
+							break;
+
+						case ESHPipelineStage_RaygenExt:
+						case ESHPipelineStage_CallableExt:
+							break;
+
+						case ESHPipelineStage_MissExt:
+						case ESHPipelineStage_ClosestHitExt:
+						case ESHPipelineStage_AnyHitExt:
+						case ESHPipelineStage_IntersectionExt:
+							Log_debugLnx("\tPayload size: %"PRIu8, shEntry.payloadSize);
+							Log_debugLnx("\tIntersection size: %"PRIu8, shEntry.intersectionSize);
+							break;
+					}
+				}
+
+				else for (U64 j = 0, i = 0; j < ESHBinaryType_Count; ++j)
+
+					if(!Buffer_length(file.binaries[j]))
+						continue;
+
+					else if (entryI == i) {
+
+						if(!CLI_showFile(args, file.binaries[j], start, length, false))
+							goto cleanSh;
+
+						break;
+					}
+
+					else ++i;
+			}
+
+			else {
+
+				if (binaryMode) {
+				
+					Log_debugLnx("oiSH binaries:");
+
+					for (U64 j = 0, i = 0; j < ESHBinaryType_Count && i < end && i < count; ++j) {
+
+						if(!Buffer_length(file.binaries[j]))
+							continue;
+
+						if(i >= start)
+							Log_debugLnx(
+								"Binary %"PRIu64" (%s): length %"PRIu64, i, shaderTypeNames[j], Buffer_length(file.binaries[j])
+							);
+
+						++i;
+					}
+				}
+
+				else {
+
+					Log_debugLnx("oiSH entries:");
+
+					for (U64 i = start; i < end && i < count; ++i) {
+
+						SHEntry shEntry = file.entries.ptr[i];
+						const C8 *name = SHEntry_stageName(shEntry);
+					
+						Log_debugLnx(
+							"Entry %"PRIu64" (%s): %.*s", i, name, (int) CharString_length(shEntry.name), shEntry.name.ptr
+						);
+					}
+				}
+			}
+
+		cleanSh:
+
+			SHFile_freex(&file);
 
 			if(err.genericError)
 				goto clean;

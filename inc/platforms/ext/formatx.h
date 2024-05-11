@@ -34,6 +34,12 @@ typedef struct ArchiveEntry ArchiveEntry;
 typedef struct DLSettings DLSettings;
 typedef struct DLFile DLFile;
 
+typedef enum ESHSettingsFlags ESHSettingsFlags;
+typedef enum ESHExtension ESHExtension;
+typedef enum ESHBinaryType ESHBinaryType;
+typedef struct SHEntry SHEntry;
+typedef struct SHFile SHFile;
+
 typedef struct ListCharString ListCharString;
 
 //oiCA
@@ -59,6 +65,17 @@ Error DLFile_addEntryUTF8x(DLFile *dlFile, Buffer entry);
 
 Error DLFile_writex(DLFile dlFile, Buffer *result);
 Error DLFile_readx(Buffer file, const U32 encryptionKey[8], Bool allowLeftOverData, DLFile *dlFile);
+
+//oiSH
+
+Error SHFile_createx(ESHSettingsFlags flags, ESHExtension extension, SHFile *shFile);
+Bool SHFile_freex(SHFile *shFile);
+
+Error SHFile_addBinaryx(SHFile *shFile, ESHBinaryType type, Buffer *entry);		//Moves entry
+Error SHFile_addEntrypointx(SHFile *shFile, SHEntry *entry);					//Moves entry->name
+
+Error SHFile_writex(SHFile shFile, Buffer *result);
+Error SHFile_readx(Buffer file, Bool isSubFile, SHFile *shFile);
 
 #ifdef __cplusplus
 	}
