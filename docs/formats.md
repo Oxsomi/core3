@@ -93,6 +93,39 @@ Where *CASettings* contains the following:
     - IncludeFullDate (2: OxC3 date; U64)
   - UseSHA256 (4: if the hash should be CRC32C (off) or SHA256 (on))
 
+## oiSH
+
+[oiSH](oiSH.md) can be accessed through the following functions:
+
+- Error **SHFile_create**(ESHSettingsFlags flags, ESHExtension extensions, Allocator, SHFile *shFile): creates an SHFile with the respective flags and extensions.
+- Bool **SHFile_free**(SHFile *shFile, Allocator alloc)
+- Error **SHFile_write**(SHFile shFile, Allocator alloc, Buffer *result): serialize SHFile into a Buffer.
+- Error **SHFile_read**(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile): read SHFile from a Buffer.
+
+To add binaries and entrypoints to an SHFile:
+
+- Error **SHFile_addBinary**(SHFile *shFile, ESHBinaryType type, Buffer *entry, Allocator alloc): moves the data from Buffer into the SHFile (or copies if it's a reference). Only allowed if the binary type hasn't already been defined yet. Adds a binary that a graphics API could consume (if the API supports it).
+- Error **SHFile_addEntrypoint**(SHFile *shFile, SHEntry *entry, Allocator alloc): moves entry->name to SHFile's entry (or copies if reference). Adds an entrypoint into the binary to clarify what type of shaders are in the binary.
+
+ESHSettingsFlags include HideMagicNumber (if the oiSH is a subfile of another format) and IsUTF8 (if the embedded oiDL that holds the entrypoint names contains any UTF8 strings). 
+
+The binaries currently supported: SPIRV and DXIL. The one reading the file should pick the most efficient compilation path. Though it's possible the graphics API doesn't support one of them, so both should be included if the binary is used with different runtimes (ofc exclusively DXIL is allowed with a D3D12 and SPIRV with Vulkan).
+
+The extensions currently possible to signal: F64, I64, F16, I16, AtomicI64, AtomicF32, AtomicF64, SubgroupArithmetic, SubgroupShuffle, RayQuery, RayMicromapOpacity, RayMicromapDisplacement, RayMotionBlur, RayReorder. This is signaled for the entire binary.
+
+It includes the following stages: Vertex, Pixel, Compute, GeometryExt, Hull, Domain, MeshExt, TaskExt, RaygenExt, CallableExt, MissExt, ClosestHitExt, AnyHitExt, IntersectionExt.
+
+Each stage stores the type and the following info based on the stage:
+
+- Compute shaders store groupX, groupY and groupZ information, to simplify dispatching compute shaders into threads rather than groups. 
+- Miss, Intersection, AnyHit and ClosestHit shaders store intersectionSize and payloadSize.
+- Graphics shaders (anything that's not compute or raygen) store the following:
+  - `ESHType[2][8]` as `U4[2][8]` for input and output.
+    - What type of inputs and outputs are bound where.
+    - Supported types: F32, I32, U32 and (F32,I32,U32)(x2,x3,x4). 
+    - Useful for validation to see if shader stages are compatible.
+      - As well as for render target and vertex buffer validation.
+
 ## oiDL
 
 [oiDL](oiDL.md) can be created/destroyed through the following functions:
