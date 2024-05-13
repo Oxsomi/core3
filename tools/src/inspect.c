@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2024 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -138,7 +138,7 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 		//oiSH header
 
 		case SHHeader_MAGIC: {
-		
+
 			const SHHeader shHeader = *(const SHHeader*)(buf.ptr + sizeof(U32));
 
 			Log_debugLnx("Detected oiSH file with following info:");
@@ -1096,7 +1096,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 					Log_debugLnx(
 						"Entry %"PRIu64" (%s): %.*s", entryI, name, (int) CharString_length(shEntry.name), shEntry.name.ptr
 					);
-				
+
 					switch(shEntry.stage) {
 
 						default:
@@ -1104,7 +1104,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 							if (shEntry.inputsU64) {
 
 								Log_debugLnx("\tInputs:");
-							
+
 								for (U8 i = 0; i < 16; ++i) {
 
 									ESHType type = (ESHType)(shEntry.inputs[i >> 1] >> ((i & 1) << 2)) & 0xF;
@@ -1119,7 +1119,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 							if (shEntry.outputsU64) {
 
 								Log_debugLnx("\tOutputs:");
-							
+
 								for (U8 i = 0; i < 16; ++i) {
 
 									ESHType type = (ESHType)(shEntry.outputs[i >> 1] >> ((i & 1) << 2)) & 0xF;
@@ -1175,7 +1175,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 			else {
 
 				if (binaryMode) {
-				
+
 					Log_debugLnx("oiSH binaries:");
 
 					for (U64 j = 0, i = 0; j < ESHBinaryType_Count && i < end && i < count; ++j) {
@@ -1200,7 +1200,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 						SHEntry shEntry = file.entries.ptr[i];
 						const C8 *name = SHEntry_stageName(shEntry);
-					
+
 						Log_debugLnx(
 							"Entry %"PRIu64" (%s): %.*s", i, name, (int) CharString_length(shEntry.name), shEntry.name.ptr
 						);

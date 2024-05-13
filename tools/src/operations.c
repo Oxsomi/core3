@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2024 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -31,7 +31,7 @@ Bool CLI_info(ParsedArgs args) {
 	Log_debugLnx(
 
 		"OxC3 (Oxsomi core 3), a general framework and toolset for cross-platform applications.\n"
-		"Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)"
+		"Copyright (C) 2023 - 2024 Oxsomi / Nielsbishere (Niels Brunekreef)"
 		"%s",
 
 		args.operation != EOperation_InfoLicense ? "" :
@@ -143,6 +143,7 @@ const C8 *EOperationFlags_descriptions[] = {
 const C8 *EOperationCategory_names[] = {
 	"file",
 	"compile",
+	"graphics",
 	"hash",
 	"rand",
 	"info",
@@ -153,6 +154,7 @@ const C8 *EOperationCategory_names[] = {
 const C8 *EOperationCategory_description[] = {
 	"File utilities such as file conversions, encryption, compression, etc.",
 	"Compile shaders or to intermediate binary (Chimera).",
+	"Graphics operations such as showing devices.",
 	"Converting a file or string to a hash.",
 	"Generating random data.",
 	"Information about the tool.",
@@ -305,7 +307,7 @@ void Operations_init() {
 
 		.isFormatLess = true,
 
-		.optionalParameters = EOperationHasParameter_Number | EOperationHasParameter_Length | EOperationHasParameter_Output
+		.optionalParameters = EOperationHasParameter_Count | EOperationHasParameter_Length | EOperationHasParameter_Output
 	};
 
 	Operation_values[EOperation_RandChar] = (Operation) {
@@ -320,7 +322,7 @@ void Operations_init() {
 		.isFormatLess = true,
 
 		.optionalParameters =
-			EOperationHasParameter_Number | EOperationHasParameter_Length |
+			EOperationHasParameter_Count | EOperationHasParameter_Length |
 			EOperationHasParameter_Output | EOperationHasParameter_Character,
 
 		.operationFlags = EOperationFlags_RandChar
@@ -337,7 +339,7 @@ void Operations_init() {
 
 		.isFormatLess = true,
 
-		.optionalParameters = EOperationHasParameter_Number | EOperationHasParameter_Length | EOperationHasParameter_Output
+		.optionalParameters = EOperationHasParameter_Count | EOperationHasParameter_Length | EOperationHasParameter_Output
 	};
 
 	Operation_values[EOperation_RandNum] = (Operation) {
@@ -352,7 +354,7 @@ void Operations_init() {
 		.isFormatLess = true,
 
 		.optionalParameters =
-			EOperationHasParameter_Number | EOperationHasParameter_Length | EOperationHasParameter_Output |
+			EOperationHasParameter_Count | EOperationHasParameter_Length | EOperationHasParameter_Output |
 			EOperationHasParameter_Bit,
 
 		.operationFlags = EOperationFlags_RandNum
@@ -376,7 +378,7 @@ void Operations_init() {
 	};
 
 	//Compile shaders
-	
+
 	Format_values[EFormat_HLSL] = (Format) {
 
 		.name = "HLSL",
@@ -384,7 +386,7 @@ void Operations_init() {
 
 		.operationFlags = EOperationFlags_Debug,
 
-		.requiredParameters = 
+		.requiredParameters =
 			EOperationHasParameter_Input | EOperationHasParameter_Output | EOperationHasParameter_ShaderOutputMode |
 			EOperationHasParameter_ShaderCompileMode,
 
@@ -398,6 +400,22 @@ void Operations_init() {
 		.name = "shaders",
 		.desc = "Compile shader from text to application ready format",
 		.func = &CLI_compileShader
+	};
+
+	//List graphics devices
+
+	Operation_values[EOperation_GraphicsDevices] = (Operation) {
+
+		.category = EOperationCategory_Graphics,
+
+		.name = "devices",
+		.desc = "Shows graphics devices using the active graphics API.",
+
+		.func = &CLI_graphicsDevices,
+
+		.isFormatLess = true,
+
+		.optionalParameters = EOperationHasParameter_Entry | EOperationHasParameter_Count
 	};
 
 	//License for the tool

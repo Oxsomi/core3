@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2024 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -79,7 +79,7 @@ ETokenType Parser_getTokenType(CharString str, U64 *subTokenOffset) {
 
 		case '-':		// -, ->, --, -=
 
-			tokenType = 
+			tokenType =
 				next == '=' ? ETokenType_SubAsg : (
 					next == start ? ETokenType_Dec : (next == '>' ? ETokenType_Arrow : ETokenType_Sub)
 				);
@@ -125,7 +125,7 @@ ETokenType Parser_getTokenType(CharString str, U64 *subTokenOffset) {
 		case '<':		//<, <=, <<, <<=, <=>
 
 			count = 1 + (next == '=' || next == start) + (next == start && next2 == '=') + (next2 == '>');
-			
+
 			switch (count) {
 				case 1:		tokenType = ETokenType_Lt;												break;
 				case 3:		tokenType = next2 == '>' ? ETokenType_Flagship : ETokenType_LshAsg;		break;
@@ -137,7 +137,7 @@ ETokenType Parser_getTokenType(CharString str, U64 *subTokenOffset) {
 		case '>':		//>, >=, >>, >>=
 
 			count = 1 + (next == '=' || next == start) + (next == start && next2 == '=');
-			
+
 			switch (count) {
 				case 1:		tokenType = ETokenType_Gt;										break;
 				case 3:		tokenType = ETokenType_RshAsg;									break;
@@ -211,8 +211,8 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 
 			case ELexerTokenType_Identifier: {
 
-				Token tok = (Token) { 
-					.naiveTokenId = lexerTokenId + i, 
+				Token tok = (Token) {
+					.naiveTokenId = lexerTokenId + i,
 					.tokenType = ETokenType_Identifier,
 					.tokenSize = (U8) CharString_length(lextStr)
 				};
@@ -222,7 +222,7 @@ Error ParserContext_visit(ParserContext *context, U32 lexerTokenId, U32 lexerTok
 			}
 
 			//Append entire lexer token
-				
+
 			case ELexerTokenType_Float:
 			case ELexerTokenType_Double: {
 
@@ -374,7 +374,7 @@ clean:
 		ListCharString_freeUnderlying(&context.stringLiterals, alloc);
 	}
 
-	else *parser = (Parser) { 
+	else *parser = (Parser) {
 		.tokens = context.tokens,
 		.parsedLiterals = context.stringLiterals,
 		.lexer = lexer
@@ -400,7 +400,7 @@ Error Parser_assertSymbol(Parser *parser, U64 *i) {
 
 	if (*i >= parser->tokens.length)
 		return Error_outOfBounds(1, *i, parser->tokens.length, "Parser_assertAndSkip() out of bounds");
-	
+
 	switch (parser->tokens.ptr[*i].tokenType) {
 
 		case ETokenType_Identifier:
@@ -478,7 +478,7 @@ Error Parser_classifyType(Parser *parser, U64 *i, Allocator alloc, U64 *typeId) 
 	switch (c8x4) {
 
 		case C8x4('s', 't', 'r', 'u'):		//struct
-			
+
 			if (len == 6 && *(const U16*)&tokStr.ptr[4] == C8x2('c', 't')) {
 				consumed = true;
 				gotoIfError(clean, Parser_classifyStruct(parser, i, alloc, typeId))
@@ -556,7 +556,7 @@ typedef enum EClassType {
 } EClassType;
 
 Error Parser_classifyClassBase(Parser *parser, U64 *i, Allocator alloc, U64 *classId, EClassType classType) {
-	
+
 	(void)classType; (void)classId;
 
 	Error err = Error_none();
@@ -595,11 +595,11 @@ Error Parser_classifyClassBase(Parser *parser, U64 *i, Allocator alloc, U64 *cla
 	//interface T { }
 	//interface   { }
 	//            ^
-	
+
 	if (Parser_skipIfNext(parser, i, ETokenType_CurlyBraceStart)) {
 
 		enteredOne = true;
-		
+
 		//class T     { }
 		//class       { }
 		//struct T    { }
@@ -632,7 +632,7 @@ clean:
 Error Parser_classifyFunction(Parser *parser, U64 *i, Allocator alloc) {
 
 	Error err = Error_none();
-	
+
 	while (!Parser_next(parser, i, ETokenType_RoundParenthesisEnd)) {
 
 		//static F32 test(F32 a, F32 b);
@@ -693,7 +693,7 @@ Error Parser_classifyFunction(Parser *parser, U64 *i, Allocator alloc) {
 
 		//F32 a : A,
 		//         ^
-					
+
 		gotoIfError(clean, Parser_assertAndSkip(parser, i, ETokenType_Comma))
 	}
 
@@ -701,7 +701,7 @@ Error Parser_classifyFunction(Parser *parser, U64 *i, Allocator alloc) {
 	//                            ^
 
 	gotoIfError(clean, Parser_assertAndSkip(parser, i, ETokenType_RoundParenthesisEnd))
-			
+
 	//static F32 test(F32 a, F32 b);
 	//                             ^
 
@@ -770,7 +770,7 @@ Error Parser_classifyFunctionOrVariable(Parser *parser, U64 *i, Allocator alloc,
 		Bool consumed = false;
 
 		switch (c8x4) {
-			
+
 			case C8x4('c', 'o', 'n', 's'):		//const, constexpr
 
 				if (len == 5 && tokStr.ptr[4] == 't') {
@@ -899,7 +899,7 @@ Error Parser_classifyFunctionOrVariable(Parser *parser, U64 *i, Allocator alloc,
 	gotoIfError(clean, Parser_assert(parser, i, ETokenType_Identifier))
 
 	//Continue until we find the end
-	
+
 	while (*i < parser->tokens.length) {
 
 		Token tok = parser->tokens.ptr[*i];
@@ -945,7 +945,7 @@ Error Parser_classifyFunctionOrVariable(Parser *parser, U64 *i, Allocator alloc,
 				case ETokenType_Colon2:
 				case ETokenType_Semicolon:
 					gotoIfError(clean, Error_invalidState(
-						0, 
+						0,
 						"Parser_classifyFunctionOrVariable() operator is disallowed with one of the following: "
 						".?]){}:; or [[, ]], ::"
 					))
@@ -953,12 +953,12 @@ Error Parser_classifyFunctionOrVariable(Parser *parser, U64 *i, Allocator alloc,
 
 			//F32 operator[](
 			//            ^
-			
+
 			//TODO: operator[] and operator() are called [ and ( due to quirks
 
 			if (tokType == ETokenType_SquareBracketStart || tokType == ETokenType_RoundParenthesisStart) {
 
-				ETokenType expected = 
+				ETokenType expected =
 					tokType == ETokenType_SquareBracketStart ? ETokenType_SquareBracketEnd : ETokenType_RoundParenthesisEnd;
 
 				gotoIfError(clean, Parser_assertAndSkip(parser, i, expected))
@@ -1076,8 +1076,8 @@ Error Parser_classifyEnum(Parser *parser, U64 *i, Allocator alloc, U64 *enumId) 
 		//     ^
 
 		if (
-			CharString_length(className) == 5 && 
-			*(const U32*)&className.ptr == C8x4('c', 'l', 'a', 's') && 
+			CharString_length(className) == 5 &&
+			*(const U32*)&className.ptr == C8x4('c', 'l', 'a', 's') &&
 			className.ptr[4] == 's'
 		) {
 
@@ -1110,7 +1110,7 @@ Error Parser_classifyEnum(Parser *parser, U64 *i, Allocator alloc, U64 *enumId) 
 	//enum class T      { }
 	//enum class T : U8 { }
 	//                  ^
-	
+
 	if (Parser_skipIfNext(parser, i, ETokenType_CurlyBraceStart)) {
 
 		enteredOne = true;
@@ -1131,7 +1131,7 @@ Error Parser_classifyEnum(Parser *parser, U64 *i, Allocator alloc, U64 *enumId) 
 
 		gotoIfError(clean, Parser_assertAndSkip(parser, i, ETokenType_CurlyBraceEnd))
 	}
-	
+
 	if(!enteredOne)
 		gotoIfError(clean, Error_invalidState(0, "Parser_classifyEnum() can't define enum without identifier or {}"))
 
@@ -1179,7 +1179,7 @@ Error Parser_classifyUsing(Parser *parser, U64 *i, Allocator alloc) {
 
 	//using T2 = T;
 	//           ^
-		
+
 	U64 typeId;
 	gotoIfError(clean, Parser_classifyType(parser, i, alloc, &typeId))
 
@@ -1233,14 +1233,14 @@ Error Parser_classifyBase(Parser *parser, U64 *i, Allocator alloc) {
 	Bool consumed = false;
 
 	if (tok.tokenType == ETokenType_Identifier) {
-		
+
 		U64 len = tok.tokenSize;
 		U32 c8x4 = len < 4 ? 0 : *(const U32*)tokStr.ptr;
 
 		switch (c8x4) {
 
 			case C8x4('t', 'e', 'm', 'p'):		//template
-					
+
 				//TODO:
 				/*if (len == 8 && *(const U32*)&tokStr.ptr[4] == C8x4('l', 'a', 't', 'e')) {
 					consumed = true;
@@ -1501,19 +1501,19 @@ void Parser_printTokens(Parser parser, Allocator alloc) {
 
 			alloc,
 
-			format, 
+			format,
 
-			i, 
+			i,
 
-			(U64)t.naiveTokenId, 
-			(U64)t.lexerTokenSubId, 
-			(U64)t.tokenSize, 
+			(U64)t.naiveTokenId,
+			(U64)t.lexerTokenSubId,
+			(U64)t.tokenSize,
 
-			(U64)lt.lineId, 
+			(U64)lt.lineId,
 			(U64)(lt.charId + t.lexerTokenSubId),
 
 			tokenType[t.tokenType],
-			CharString_length(tokenRaw), 
+			CharString_length(tokenRaw),
 			tokenRaw.ptr,
 			t.valuef,
 			t.valuei,

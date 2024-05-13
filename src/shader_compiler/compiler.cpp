@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2024 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -91,7 +91,7 @@ public:
 	}
 
 	inline U64 getCounter() const { return counter; }
-	inline ListIncludedFile getIncludedFiles() const { 
+	inline ListIncludedFile getIncludedFiles() const {
 		ListIncludedFile res = ListIncludedFile{};
 		ListIncludedFile_createRefConst(includedFiles.ptr, includedFiles.length, &res);
 		return res;
@@ -195,7 +195,7 @@ public:
 			//Continue with the next if we don't have a valid cache
 
 			if(!validCache) {
-				
+
 				IncludedFile includedFile = IncludedFile{};
 				gotoIfError(clean, ListIncludedFile_popLocation(&includedFiles, i, &includedFile))
 
@@ -246,7 +246,7 @@ public:
 
 				if(Buffer_length(tempBuffer) >> 32)
 					gotoIfError(clean, Error_outOfBounds(
-						0, Buffer_length(tempBuffer), U32_MAX, 
+						0, Buffer_length(tempBuffer), U32_MAX,
 						"IncludeHandler::LoadSource CreateBlobFromPinned requires 32-bit buffers max"
 					))
 
@@ -410,7 +410,7 @@ clean:
 
 	if(err.genericError)
 		Compiler_free(comp, alloc);
-	
+
 	return err;
 }
 
@@ -698,7 +698,7 @@ Error Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator al
 				}
 
 				//Parse file
-			
+
 				if(firstColon == U64_MAX || !CharString_cut(errs, off, firstColon - off, &file))
 					gotoIfError(clean, Error_invalidState(1, "Compiler_preprocess() couldn't parse file from error"))
 
@@ -710,10 +710,10 @@ Error Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator al
 
 				if(nextColon == U64_MAX || !CharString_cut(errs, firstColon + 1, nextColon - (firstColon + 1), &tmp))
 					gotoIfError(clean, Error_invalidState(2, "Compiler_preprocess() couldn't parse lineId from error"))
-			
+
 				if(!CharString_parseDec(tmp, &lineId) || (lineId >> (16 + 7)))
 					gotoIfError(clean, Error_invalidState(3, "Compiler_preprocess() couldn't parse U23 lineId from error"))
-					
+
 				//Parse line offset
 
 				tmp = CharString_createNull();
@@ -722,7 +722,7 @@ Error Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator al
 
 				if(nextColon == U64_MAX || !CharString_cut(errs, off, nextColon - off, &tmp))
 					gotoIfError(clean, Error_invalidState(2, "Compiler_preprocess() couldn't parse lineOff from error"))
-			
+
 				if(!CharString_parseDec(tmp, &lineOff) || lineOff >> 8)
 					gotoIfError(clean, Error_invalidState(3, "Compiler_preprocess() couldn't parse U8 lineOff from error"))
 
@@ -743,7 +743,7 @@ Error Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator al
 					off += CharString_length(warning);
 				}
 
-				else gotoIfError(clean, Error_invalidState(4, "Compiler_preprocess() couldn't parse error type from error")) 
+				else gotoIfError(clean, Error_invalidState(4, "Compiler_preprocess() couldn't parse error type from error"))
 
 				prevOff = off;
 			}
@@ -755,7 +755,7 @@ Error Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator al
 				);
 
 				if(!Compiler_filterWarning(errorStr)) {
-			
+
 					gotoIfError(clean, CharString_createCopy(errorStr, alloc, &tempStr))
 					gotoIfError(clean, CharString_createCopy(file, alloc, &tempStr2))
 
@@ -791,7 +791,7 @@ Error Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator al
 			for(U64 i = 0, j = 0; i < files.length; ++i)
 				if (files.ptr[i].includeInfo.counter) {		//Exclude inactive includes
 
-					IncludeInfo copy = files.ptr[i].includeInfo;					
+					IncludeInfo copy = files.ptr[i].includeInfo;
 					gotoIfError(clean, CharString_createCopy(copy.file, alloc, &tempStr))
 
 					copy.file = tempStr;

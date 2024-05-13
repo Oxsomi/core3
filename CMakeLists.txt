@@ -1,5 +1,5 @@
 # OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-# Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
+# Copyright (C) 2023 - 2024 Oxsomi / Nielsbishere (Niels Brunekreef)
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -665,7 +665,7 @@ target_include_directories(OxC3_shader_compiler PUBLIC "${CMAKE_CURRENT_SOURCE_D
 if(NOT ${ARM})
 
 	target_link_libraries(OxC3_shader_compiler PUBLIC "${CMAKE_BINARY_DIR}/external/dxc/build/native/lib/x64/dxcompiler.lib")
-	
+
 	add_custom_command(TARGET OxC3_shader_compiler POST_BUILD
 		COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin"
 		COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin/$<CONFIG>"
@@ -678,7 +678,7 @@ if(NOT ${ARM})
 else()
 
 	target_link_libraries(OxC3_shader_compiler PUBLIC "${CMAKE_BINARY_DIR}/external/dxc/build/native/lib/arm64/dxcompiler.lib")
-	
+
 	add_custom_command(TARGET OxC3_shader_compiler POST_BUILD
 		COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin"
 		COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin/$<CONFIG>"
@@ -706,7 +706,7 @@ add_executable(
 
 set_target_properties(OxC3 PROPERTIES FOLDER Oxsomi)
 
-target_link_libraries(OxC3 PUBLIC OxC3_shader_compiler)
+target_link_libraries(OxC3 PUBLIC OxC3_shader_compiler OxC3_graphics)
 target_include_directories(OxC3 PUBLIC tools/inc)
 
 configure_icon(OxC3 "${CMAKE_CURRENT_SOURCE_DIR}/res/logo.ico")

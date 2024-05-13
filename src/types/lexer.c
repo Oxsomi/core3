@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2024 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -77,9 +77,9 @@ Bool ELexerTokenType_isNumber(ELexerTokenType tokenType) {
 }
 
 Error Lexer_endExpression(
-	U64 *lastTokenPtr, 
-	ListLexerExpression *expressions, 
-	U64 tokenCount, 
+	U64 *lastTokenPtr,
+	ListLexerExpression *expressions,
+	U64 tokenCount,
 	ELexerExpressionType *expressionType,
 	Allocator alloc
 ) {
@@ -101,7 +101,7 @@ Error Lexer_endExpression(
 			0, tokenCount - lastToken, U16_MAX, "Lexer_create() LexerExpression is limited to U16_MAX tokens"
 		))
 
-	LexerExpression exp = (LexerExpression) { 
+	LexerExpression exp = (LexerExpression) {
 		.type = *expressionType,
 		.tokenOffset = (U32) lastToken,
 		.tokenCount = (U16) (tokenCount - lastToken)
@@ -126,10 +126,10 @@ Bool Lexer_isSymbol(C8 c) {
 }
 
 Error Lexer_create(CharString str, Allocator alloc, Lexer *lexer) {
-	
+
 	if(!lexer)
 		return Error_nullPointer(!str.ptr ? 0 : 1, "Lexer_create()::str and lexer are required");
-	
+
 	if(lexer->tokens.ptr)
 		return Error_invalidParameter(1, 0, "Lexer_create()::lexer wasn't empty, might indicate memleak");
 
@@ -200,7 +200,7 @@ Error Lexer_create(CharString str, Allocator alloc, Lexer *lexer) {
 
 			if(isString && lastLineId != lineCounter)
 				gotoIfError(clean, Error_invalidState(0, "Lexer_create() String \"\" needs to be created on the same line"))
-				
+
 			//If we encounter a " in the middle of an expression
 			//Example: ("") then we have to break up the previous token and start anew
 
@@ -238,7 +238,7 @@ Error Lexer_create(CharString str, Allocator alloc, Lexer *lexer) {
 			U64 tokenCount = tokens.length - lastToken;
 
 			if (
-				tokenCount && expressionType == ELexerExpressionType_Preprocessor && 
+				tokenCount && expressionType == ELexerExpressionType_Preprocessor &&
 				(tokenCount == 3 || tokenCount == 4)
 			) {
 
@@ -253,7 +253,7 @@ Error Lexer_create(CharString str, Allocator alloc, Lexer *lexer) {
 					LexerToken lineId = tokens.ptr[lastToken + 2];
 
 					if(!(
-						LexerToken_getType(lineId) >= ELexerTokenType_IntBegin && 
+						LexerToken_getType(lineId) >= ELexerTokenType_IntBegin &&
 						LexerToken_getType(lineId) <= ELexerTokenType_IntEnd
 					))
 						gotoIfError(clean, Error_invalidState(1, "Lexer_create() #line expected uint (U64)"))
@@ -268,16 +268,16 @@ Error Lexer_create(CharString str, Allocator alloc, Lexer *lexer) {
 
 					//# line 123 "testFile"
 					//           ^
-					
+
 					if(tokenCount == 4) {
 
 						LexerToken file = tokens.ptr[lastToken + 3];
-					
+
 						if(LexerToken_getType(file) != ELexerTokenType_String)
 							gotoIfError(clean, Error_invalidState(3, "Lexer_create() #line expected string next"))
 
 						//Parse string forreal
-						
+
 						CharString_clear(&tempSource);
 
 						Bool isEscaped = false;
@@ -419,13 +419,13 @@ Error Lexer_create(CharString str, Allocator alloc, Lexer *lexer) {
 				//Numbers: 0x 0n 0o 0b .0f 1.3 etc.
 
 				if (
-					tokenType != ELexerTokenType_Identifier && 
+					tokenType != ELexerTokenType_Identifier &&
 					(C8_isDec(c) || c == '.' || c == '+' || c == '-') &&
 					(Lexer_isSymbol(prevTemp) || C8_isWhitespace(prevTemp) || !prevTemp)
 				) {
 
 					//Oops, we're still busy with a symbol.
-					//If next token 
+					//If next token
 
 					if (tokenType == ELexerTokenType_Symbols) {
 
@@ -535,7 +535,7 @@ Error Lexer_create(CharString str, Allocator alloc, Lexer *lexer) {
 
 						++i;
 					}
-					
+
 					//Parse number
 
 					if (!isEnded) {
@@ -655,10 +655,10 @@ Error Lexer_create(CharString str, Allocator alloc, Lexer *lexer) {
 									continue;
 
 								if (c2 == '.') {
-								
+
 									if(containsDot)
 										break;
-								
+
 									if(lastE + 1 == i)
 										gotoIfError(clean, Error_invalidState(0, "Lexer_create() invalid float \"e.\"?"))
 
@@ -670,7 +670,7 @@ Error Lexer_create(CharString str, Allocator alloc, Lexer *lexer) {
 								}
 
 								if (c2 == '-' || c2 == '+') {
-								
+
 									if(!containsE)
 										gotoIfError(clean, Error_invalidState(0, "Lexer_create() expected e- or e+ in float"))
 
@@ -724,7 +724,7 @@ Error Lexer_create(CharString str, Allocator alloc, Lexer *lexer) {
 
 				else --i;
 
-				ELexerTokenType nextType = 
+				ELexerTokenType nextType =
 						C8_isWhitespace(next) ? ELexerTokenType_Count : (
 							 Lexer_isSymbol(next) ? ELexerTokenType_Symbols : ELexerTokenType_Identifier
 						);
@@ -733,10 +733,10 @@ Error Lexer_create(CharString str, Allocator alloc, Lexer *lexer) {
 					endToken = true;
 			}
 
-			else if (prevIt) 
+			else if (prevIt)
 				endToken = true;
 		}
-		
+
 		if(endToken || (prevIt && endExpression)) {
 
 			U64 endChar = 1 - isString;
@@ -761,11 +761,11 @@ Error Lexer_create(CharString str, Allocator alloc, Lexer *lexer) {
 					0, resolvedLineId, 1 << 15, "Lexer_create() source line id is out of bounds (32Ki)"
 				))
 
-			LexerToken tok = (LexerToken) { 
+			LexerToken tok = (LexerToken) {
 
-				.lineId = (U16) lineCounter, 
+				.lineId = (U16) lineCounter,
 				.charId = (U8) (charId + 1),
-				.length = (U8) len, 
+				.length = (U8) len,
 
 				.offsetType = (U32)(off | (tokenType << (32 - 4))),
 
@@ -797,9 +797,9 @@ clean:
 		ListLexerExpression_free(&expressions, alloc);
 		ListCharString_freeUnderlying(&sourceLocations, alloc);
 	}
-	else *lexer = (Lexer) { 
+	else *lexer = (Lexer) {
 		.source = CharString_createRefSizedConst(str.ptr, CharString_length(str), false),
-		.expressions = expressions, 
+		.expressions = expressions,
 		.tokens = tokens,
 		.sourceLocations = sourceLocations
 	};
@@ -828,7 +828,7 @@ void Lexer_print(Lexer lexer, Allocator alloc) {
 	else Log_debugLn(alloc, "Lexer:");
 
 	CharString nul = CharString_createRefCStrConst("null");
-	
+
 	for (U64 i = 0; i < lexer.tokens.length; ++i) {
 
 		LexerToken lt = lexer.tokens.ptr[i];
@@ -861,18 +861,18 @@ void Lexer_print(Lexer lexer, Allocator alloc) {
 		const C8 *format2 = "T%05"PRIu64"(L#%04"PRIu64": %03"PRIu64")\t% 16s: %.*s\t\t\t(.../%s L#%05"PRIu64")";
 
 		Log_debugLn(
-			
+
 			alloc,
 
-			lastSlash == U64_MAX ? format1 : format2, 
+			lastSlash == U64_MAX ? format1 : format2,
 
-			i, 
+			i,
 
 			(U64)LexerToken_getLineId(lt),
 			(U64)lt.charId,
 
 			tokenType[LexerToken_getType(lt)],
-			CharString_length(tokenRaw), 
+			CharString_length(tokenRaw),
 			tokenRaw.ptr,
 
 			lastSlash == U64_MAX ? mine.ptr : mine.ptr + lastSlash,

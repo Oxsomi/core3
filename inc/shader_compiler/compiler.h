@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2024 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -70,7 +70,7 @@ typedef enum ECompileErrorType {
 typedef struct CompileError {
 
 	U32 compileIndex;		//Compile index. % ESHBinaryType_Count = binaryType, / ESHBinaryType = i of strings[i]
-	
+
 	U16 lineId;
 	U8 typeLineId;			//ECompileErrorType in the top bit and lineId upper 7 bits
 	U8 lineOffset;

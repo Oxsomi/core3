@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2024 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -35,12 +35,12 @@ Bool CLI_rand(ParsedArgs args) {
 
 	U64 n = 1;
 
-	if (args.parameters & EOperationHasParameter_Number) {
+	if (args.parameters & EOperationHasParameter_Count) {
 
 		CharString str = CharString_createNull();
 
 		if (
-			ParsedArgs_getArg(args, EOperationHasParameter_NumberShift, &str).genericError ||
+			ParsedArgs_getArg(args, EOperationHasParameter_CountShift, &str).genericError ||
 			!CharString_parseU64(str, &n) ||
 			(n >> 32)
 		) {

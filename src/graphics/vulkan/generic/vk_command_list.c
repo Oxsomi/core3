@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2024 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -626,7 +626,7 @@ void CommandList_process(
 			}
 
 			break;
-			
+
 		//JIT RTAS updates in case they are on the GPU (e.g. compute updates)
 
 		case ECommandOp_UpdateBLASExt:
@@ -777,7 +777,7 @@ void CommandList_process(
 						DeviceBuffer_ext(DeviceBufferRef_ptr(rtas.asBuffer), Vk),
 						pipelineStage,
 
-						transition.type == ETransitionType_UpdateRTAS ? VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR : 
+						transition.type == ETransitionType_UpdateRTAS ? VK_ACCESS_2_ACCELERATION_STRUCTURE_WRITE_BIT_KHR :
 						VK_ACCESS_2_ACCELERATION_STRUCTURE_READ_BIT_KHR,
 
 						graphicsQueueId,

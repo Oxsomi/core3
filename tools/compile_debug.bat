@@ -1,7 +1,7 @@
 @echo off
 setlocal enabledelayedexpansion
 
-rem IDxcCompiler3 
+rem IDxcCompiler3
 rem -Zi generate pdb but don't include, output as dbg/myFile.pdb -Fd
 rem -Qstrip_reflect output as dbg/myFile.ref -Fre
 rem DXC_OUT_REFLECTION, DXC_OUT_PDB
@@ -10,7 +10,7 @@ rem DXC_OUT_OBJECT
 rem DXC_OUT_HLSL
 rem DXC_OUT_SHADER_HASH, DXC_OUT_DISASSEMBLY, DXC_OUT_REMARKS, DXC_OUT_TIME_REPORT, DXC_OUT_TIME_TRACE for debugging
 
-rem DXC_ARG_WARNINGS_ARE_ERRORS 
+rem DXC_ARG_WARNINGS_ARE_ERRORS
 
 rem TODO: -enable-16bit-types
 

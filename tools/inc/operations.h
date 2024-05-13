@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2024 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -38,7 +38,7 @@ typedef enum EOperationHasParameter {
 
 	EOperationHasParameter_SplitByShift,
 
-	EOperationHasParameter_NumberShift,
+	EOperationHasParameter_CountShift,
 	EOperationHasParameter_LengthShift,
 	EOperationHasParameter_CharacterShift,
 
@@ -52,8 +52,6 @@ typedef enum EOperationHasParameter {
 	EOperationHasParameter_ShaderCompileModeShift,
 	EOperationHasParameter_IncludeDirShift,
 
-	EOperationHasParameter_Count,
-
 	EOperationHasParameter_Start				= EOperationHasParameter_FileFormatShift,
 
 	//As mask
@@ -66,7 +64,7 @@ typedef enum EOperationHasParameter {
 
 	EOperationHasParameter_SplitBy				= 1 << EOperationHasParameter_SplitByShift,
 
-	EOperationHasParameter_Number				= 1 << EOperationHasParameter_NumberShift,
+	EOperationHasParameter_Count				= 1 << EOperationHasParameter_CountShift,
 	EOperationHasParameter_Length				= 1 << EOperationHasParameter_LengthShift,
 
 	EOperationHasParameter_Character			= 1 << EOperationHasParameter_CharacterShift,
@@ -174,6 +172,8 @@ typedef enum EOperation {
 	EOperation_CompileShader,
 	//EOperation_CompileChimera,
 
+	EOperation_GraphicsDevices,
+
 	EOperation_InfoLicense,
 	EOperation_InfoAbout,
 
@@ -197,6 +197,7 @@ typedef enum EOperationCategory {
 	EOperationCategory_Invalid,
 	EOperationCategory_File,
 	EOperationCategory_Compile,
+	EOperationCategory_Graphics,
 	EOperationCategory_Hash,
 	EOperationCategory_Rand,
 	EOperationCategory_Info,

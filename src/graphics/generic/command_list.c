@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2024 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -415,7 +415,7 @@ Error CommandListRef_transitionRTAS(
 		))
 
 	if(isTLAS) {
-		
+
 		TLAS *tlas = TLASRef_ptr(rtasPtr);
 
 		if(!tlas->useDeviceMemory)
@@ -425,10 +425,10 @@ Error CommandListRef_transitionRTAS(
 			))
 
 		else gotoIfError(clean, CommandListRef_transitionBuffer(
-			commandList, 
-			tlas->deviceData.buffer, 
-			(BufferRange) { 
-				.startRange = tlas->deviceData.offset, 
+			commandList,
+			tlas->deviceData.buffer,
+			(BufferRange) {
+				.startRange = tlas->deviceData.offset,
 				.endRange = tlas->deviceData.offset + tlas->deviceData.len
 			},
 			ETransitionType_ReadRTAS, EPipelineStage_Count
@@ -466,7 +466,7 @@ Error CommandListRef_transitionRTAS(
 				commandList,
 				blas->positionBuffer.buffer,
 				(BufferRange) {
-					.startRange = blas->positionBuffer.offset + blas->positionOffset, 
+					.startRange = blas->positionBuffer.offset + blas->positionOffset,
 					.endRange = blas->indexBuffer.offset + blas->indexBuffer.len
 				},
 				ETransitionType_ReadRTAS, EPipelineStage_Count
@@ -984,7 +984,7 @@ Error CommandListRef_startScope(
 						continue;
 
 					gotoIfError(clean, CommandListRef_transitionRTAS(
-						commandList, dat.blasCpu, 
+						commandList, dat.blasCpu,
 						transition.isWrite ? ETransitionType_ShaderWrite : ETransitionType_ShaderRead, transition.stage
 					))
 				}
@@ -1702,7 +1702,7 @@ Error CommandListRef_updateRTASExt(CommandListRef *commandListRef, RTASRef *rtas
 		gotoIfError(clean, Error_unsupportedOperation(0, "CommandListRef_updateRTASExt() requires BLAS or TLAS"))
 
 	gotoIfError(clean, CommandListRef_transitionRTAS(
-		commandList, rtas, 
+		commandList, rtas,
 		ETransitionType_UpdateRTAS, EPipelineStage_Count
 	))
 
@@ -1720,15 +1720,15 @@ Error CommandListRef_updateRTASExt(CommandListRef *commandListRef, RTASRef *rtas
 					continue;
 
 				gotoIfError(clean, CommandListRef_transitionRTAS(
-					commandList, dat.blasCpu, 
+					commandList, dat.blasCpu,
 					ETransitionType_ReadRTAS, EPipelineStage_Count
 				))
 			}
 	}
 
 	gotoIfError(clean, CommandList_append(
-		commandList, 
-		isBLAS ? ECommandOp_UpdateBLASExt : ECommandOp_UpdateTLASExt, 
+		commandList,
+		isBLAS ? ECommandOp_UpdateBLASExt : ECommandOp_UpdateTLASExt,
 		Buffer_createRefConst(&rtas, sizeof(rtas)),
 		0
 	))

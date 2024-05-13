@@ -45,10 +45,12 @@ OxC3 (0xC3 or Oxsomi core 3) is the successor to O(x)somi core v2 and v1. Specif
   - File manipulation:
     - Conversions between oiCA/oiDL and raw files (zip-like).
     - Encryption/decryption.
-    - File inspection for oiCA/oiDL files.
+    - File inspection for oiCA/oiDL/oiSH files.
   - Hash tool for files and strings (supporting sha256, crc32c).
   - Random key, char, data and number generator.
   - Profile tool for testing speed of float casts, csprng, crc32c, sha256 and aes256 (encryption and decryption).
+  - Shader preprocessing and reflection (TBD).
+  - Iterating graphics devices (Vulkan or DirectX12).
   - For more info check the [documentation](docs/OxC3_tool.md).
 
 One of the useful things about C is that files are incredibly easy to compile and parse compared to C++; resulting in reduced build times and allowing easy parsing for reflection or even auto generated documentation for things like types, function signatures and errors a function might return.
@@ -91,17 +93,17 @@ This assumes you have VS2022 installed, if not, you can specify a different CMak
 build Release Off
 ```
 
-Currently the Mac build doesn't support SSE or NEON. So SIMD mode has to be forced to None.
+Currently the Mac build doesn't support SSE or NEON. So SIMD mode has to be forced to None. It also doesn't support anything above OxC3 platforms yet.
 
 ### Other platforms
 
-Other platforms like Android and iOS are coming in the future.
+Other platforms like Linux, Android and iOS are coming in the future.
 
 ## Graphics
 
 The graphics API is built around modern APIs. So it won't be supporting OpenGL, DirectX11-, old Metal/Vulkan versions or WebGL. To keep Vulkan, DirectX12 and Metal usable, it will keep on bumping the minimum specs every so often in a release.
 
-For the graphics minimum spec check the [minimum spec](graphics_spec.md).
+For the graphics minimum spec check the [minimum spec](graphics_spec.md). When unsure if a device is capable, please run `OxC3 graphics devices` to see if your device is supported.
 
 To use the graphics API, make sure that all entrypoints that use it link to it properly by including it: `#include "graphics/generic/application.h"`. This must be done in the real executable and not the DLL or lib/so file, or else not all graphics features might be activated (required for proper D3D12 support: Agility SDK).
 
@@ -132,7 +134,7 @@ D3D12:
 	dxil.dll
 	OxC3.exe
 	...
-	
+
 Vulkan:
 	dxcompiler.dll
 	dxil.dll
@@ -140,7 +142,7 @@ Vulkan:
 	...
 ```
 
-To ship OxC3 or anything that uses OxC3_shader_compiler it requires only dxcompiler.dll and dxil.dll. For graphics: d3d10warp.dll is optional and should only be used for testing. The other D3D12/*.dll and amd_ags_x64.dll are required when OxC3 graphics is used with DirectX12 (recommended if OxC3 is used).
+To ship OxC3 or anything that uses OxC3_shader_compiler it requires only dxcompiler.dll and dxil.dll. For graphics: d3d10warp.dll is optional and should only be used for testing. The other D3D12/*.dll and amd_ags_x64.dll are required when OxC3 graphics is used with DirectX12 (or if OxC3 is used).
 
-OxC3 is optional and doesn't have to be distributed with the application, though it provides nice functionality such as shader compilation.
+OxC3 is optional and doesn't have to be distributed with the application, though it provides nice functionality such as shader compilation, viewing graphics device capabilities and a few others.
 

@@ -36,11 +36,11 @@ typedef enum ESHFlags {
 
     ESHFlags_HasSPIRV				= 1 << 1,
     ESHFlags_HasDXIL				= 1 << 2,
-    
+
     //Reserved
     //ESHFlags_HasMSL				= 1 << 3,
     //ESHFlags_HasWGSL				= 1 << 4
-    
+
     ESHFlags_HasBinary				= ESHFlags_HasSPIRV | ESHFlags_HasDXIL,
     //ESHFlags_HasText				= ESHFlags_HasMSL | ESHFlags_HasWGSL
     ESHFlags_HasSource				= ESHFlags_HasBinary // | ESHFlags_HasText
@@ -48,31 +48,31 @@ typedef enum ESHFlags {
 } ESHFlags;
 
 typedef enum ESHExtension {
-    
+
     ESHExtension_None						= 0,
-    
+
     //These losely map to EGraphicsDataTypes in OxC3 graphics
-    
+
     ESHExtension_F64						= 1 << 0,
     ESHExtension_I64						= 1 << 1,
     ESHExtension_F16						= 1 << 2,
     ESHExtension_I16						= 1 << 3,
-    
+
     ESHExtension_AtomicI64					= 1 << 4,
     ESHExtension_AtomicF32					= 1 << 5,
     ESHExtension_AtomicF64					= 1 << 6,
-    
+
     //Some of them are present in EGraphicsFeatures in OxC3 graphics
-    
+
     ESHExtension_SubgroupArithmetic			= 1 << 7,
     ESHExtension_SubgroupShuffle			= 1 << 8,
-    
+
 	ESHExtension_RayQuery					= 1 << 9,
 	ESHExtension_RayMicromapOpacity			= 1 << 10,
 	ESHExtension_RayMicromapDisplacement	= 1 << 11,
 	ESHExtension_RayMotionBlur				= 1 << 12,
 	ESHExtension_RayReorder					= 1 << 13
-    
+
 } ESHExtension;
 
 typedef struct SHHeader {
@@ -83,7 +83,7 @@ typedef struct SHHeader {
 	U8 flags;					//ESHFlags
 	U8 sizeTypes;				//EXXDataSizeTypes: spirvType | (dxilType << 2) | (mslType << 4) | (wgslType << 6)
     U8 padding;
-    
+
     ESHExtension extensions;
 
 } SHHeader;
@@ -91,7 +91,7 @@ typedef struct SHHeader {
 //Loosely maps to EPipelineStage in OxC3 graphics
 
 typedef enum ESHPipelineStage {
-    
+
 	ESHPipelineStage_Vertex,
 	ESHPipelineStage_Pixel,
 	ESHPipelineStage_Compute,
@@ -107,12 +107,12 @@ typedef enum ESHPipelineStage {
 	ESHPipelineStage_ClosestHitExt,
 	ESHPipelineStage_AnyHitExt,
 	ESHPipelineStage_IntersectionExt,
-    
+
     //MeshShader extension is required
-    
+
 	ESHPipelineStage_MeshExt,
 	ESHPipelineStage_TaskExt
-    
+
 } ESHPipelineStage;
 
 typedef enum ESHPrimitive {
@@ -136,29 +136,29 @@ typedef enum ESHVector {
 SHFile {
 
     SHHeader header;
-    
+
     DLFile stageNames;			//No header, no encryption/compression (see oiDL.md)
-    
+
     //ESHPipelineStage.
     //Only allowed to be >1 if non graphics or compute
     U8 pipelineStages[stageNames.length];
-    
+
     for pipelineStages[i]
-    
+
 	    if compute or workgraph:
 		    U16x4 groups[stageNames.length];
-    
+
 	    if is graphics:
     		U4 inputs[16];					//Each element: [ ESHPrimitive, ESHVector ]
     		U4 outputs[16];
-    
+
 	    if miss,closestHit,anyHit or intersection
     	    U8 intersectionSize;
    	 		U8 payloadSize
 
     if has SPIRV:
 	    EXXDataSizeType<spirvType> spirvLength;
-    
+
     if has DXIL:
 	    EXXDataSizeType<dxilType> dxilLength;
 

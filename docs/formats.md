@@ -107,7 +107,7 @@ To add binaries and entrypoints to an SHFile:
 - Error **SHFile_addBinary**(SHFile *shFile, ESHBinaryType type, Buffer *entry, Allocator alloc): moves the data from Buffer into the SHFile (or copies if it's a reference). Only allowed if the binary type hasn't already been defined yet. Adds a binary that a graphics API could consume (if the API supports it).
 - Error **SHFile_addEntrypoint**(SHFile *shFile, SHEntry *entry, Allocator alloc): moves entry->name to SHFile's entry (or copies if reference). Adds an entrypoint into the binary to clarify what type of shaders are in the binary.
 
-ESHSettingsFlags include HideMagicNumber (if the oiSH is a subfile of another format) and IsUTF8 (if the embedded oiDL that holds the entrypoint names contains any UTF8 strings). 
+ESHSettingsFlags include HideMagicNumber (if the oiSH is a subfile of another format) and IsUTF8 (if the embedded oiDL that holds the entrypoint names contains any UTF8 strings).
 
 The binaries currently supported: SPIRV and DXIL. The one reading the file should pick the most efficient compilation path. Though it's possible the graphics API doesn't support one of them, so both should be included if the binary is used with different runtimes (ofc exclusively DXIL is allowed with a D3D12 and SPIRV with Vulkan).
 
@@ -117,12 +117,12 @@ It includes the following stages: Vertex, Pixel, Compute, GeometryExt, Hull, Dom
 
 Each stage stores the type and the following info based on the stage:
 
-- Compute shaders store groupX, groupY and groupZ information, to simplify dispatching compute shaders into threads rather than groups. 
+- Compute shaders store groupX, groupY and groupZ information, to simplify dispatching compute shaders into threads rather than groups.
 - Miss, Intersection, AnyHit and ClosestHit shaders store intersectionSize and payloadSize.
 - Graphics shaders (anything that's not compute or raygen) store the following:
   - `ESHType[2][8]` as `U4[2][8]` for input and output.
     - What type of inputs and outputs are bound where.
-    - Supported types: F32, I32, U32 and (F32,I32,U32)(x2,x3,x4). 
+    - Supported types: F32, I32, U32 and (F32,I32,U32)(x2,x3,x4).
     - Useful for validation to see if shader stages are compatible.
       - As well as for render target and vertex buffer validation.
 

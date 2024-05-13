@@ -1,5 +1,5 @@
 /* OxC3(Oxsomi core 3), a general framework and toolset for cross-platform applications.
-*  Copyright (C) 2023 Oxsomi / Nielsbishere (Niels Brunekreef)
+*  Copyright (C) 2023 - 2024 Oxsomi / Nielsbishere (Niels Brunekreef)
 *
 *  This program is free software: you can redistribute it and/or modify
 *  it under the terms of the GNU General Public License as published by
@@ -100,7 +100,7 @@ Error registerFile(FileInfo file, ShaderFileRecursion *shaderFiles) {
 				gotoIfError(clean, Error_invalidState(0, "registerFile() couldn't get subPath"))
 
 			//Copy subPath
-			
+
 			gotoIfError(clean, CharString_createCopyx(subPath, &copy))
 
 			//Move subPath into new folder
@@ -108,7 +108,7 @@ Error registerFile(FileInfo file, ShaderFileRecursion *shaderFiles) {
 			gotoIfError(clean, CharString_insertStringx(&copy, shaderFiles->output, 0))
 
 			//Move output file to allOutputs, unless it needs to be renamed
-			
+
 			if(!shaderFiles->hasMultipleModes && isPreprocess) {
 				gotoIfError(clean, ListCharString_pushBackx(shaderFiles->allOutputs, copy))
 				copy = CharString_createNull();
@@ -140,11 +140,11 @@ Error registerFile(FileInfo file, ShaderFileRecursion *shaderFiles) {
 				//Append .spv.hlsl and .dxil.hlsl at the end
 
 				if(shaderFiles->hasMultipleModes || !isPreprocess) {
-				
+
 					gotoIfError(clean, CharString_formatx(
-						&tempStr, "%.*s%s", 
+						&tempStr, "%.*s%s",
 						(int)U64_min(
-							CharString_length(copy), 
+							CharString_length(copy),
 							CharString_findLastStringInsensitive(copy, CharString_createRefCStrConst(".hlsl"), 0)
 						),
 						copy.ptr,
@@ -372,7 +372,7 @@ Bool CLI_compileShader(ParsedArgs args) {
 	}
 
 	//Grab modes
-	
+
 	U64 compileModeU64 = 0;
 	CharString compileMode = (CharString) { 0 };
 
@@ -441,7 +441,7 @@ Bool CLI_compileShader(ParsedArgs args) {
 
 			CharString number = CharString_createRefSizedConst(thread.ptr, CharString_length(thread) - 1, false);
 			F64 num = 0;
-			
+
 			if (!CharString_parseDouble(number, &num) || num < 0 || num > 100) {
 
 				Log_errorLnx(
@@ -589,9 +589,9 @@ Bool CLI_compileShader(ParsedArgs args) {
 		else tempStr = output;
 
 		//Register mode and input/output name
-		
+
 		gotoIfError(clean, ListCharString_pushBackx(&allFiles, input))
-		
+
 		gotoIfError(clean, ListCharString_pushBackx(&allOutputs, tempStr))		//Moved here
 		tempStr = CharString_createNull();
 
@@ -624,7 +624,7 @@ Bool CLI_compileShader(ParsedArgs args) {
 		}
 
 		//Otherwise grab from file
-		
+
 		gotoIfError(clean, File_read(allFiles.ptr[i], 10 * MS, &temp))
 
 		if(!Buffer_length(temp)) {

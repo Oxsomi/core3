@@ -128,7 +128,7 @@ These are generally attached to the exe, apk or other executable file to ensure 
 
 ## Compiling shaders
 
-`OxC3 compile shaders` is used to compile text shaders to application ready shaders. This could mean preprocessing text shaders to inline all includes for graphics APIs/platforms that take text only or compiling to an actual binary (DXIL or SPIRV). 
+`OxC3 compile shaders` is used to compile text shaders to application ready shaders. This could mean preprocessing text shaders to inline all includes for graphics APIs/platforms that take text only or compiling to an actual binary (DXIL or SPIRV).
 
 When operating on a folder, it will attempt to find `.hlsl` files and then processes them in parallel into the output folder.
 
@@ -202,14 +202,14 @@ bb15afc7 01860 D:/programming/repos/rt_core/res/shaders/resource_bindings.hlsl
 
 ### TODO: Compile
 
-## TODO: Show GPU/graphics device info
+## Show GPU/graphics device info
 
 
 It can also be used to print GPU info regarding devices that support OxC3 and what their features are. It uses the currently active graphics API (be it DirectX12 or Vulkan).
 
-`OxC3 graphics devices` will show all devices.
+`OxC3 graphics devices` will show all OxC3 compatible devices with minimal info (such as VRAM, LUID/UUID).
 
-And it can also show the specific GPU using `OxC3 graphics devices -entry 0` which will show the device entry at 0. If `-count` is specified, you can extend the number of elements from 1 to any count.
+`graphics devices -entry 0 -count 0` can be used to show detailed info about all OxC3 devices. Not mentioning `-count` with `-entry` is the same as `-count 1` (0 means 'remainder').
 
 ## File inspect
 
