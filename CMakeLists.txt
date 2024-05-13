@@ -42,6 +42,7 @@ endif()
 
 set(EnableSIMD ON CACHE BOOL "Enables SIMD")
 set(RelaxFloat OFF CACHE BOOL "Relax float (perf > accuracy)")
+set(CLIGraphics ON CACHE BOOL "Turn off/on OxC3 graphics CLI (might be unsupported on device)")
 
 # Use ${HideConsole} to add_executable to hide the console window
 
@@ -706,7 +707,13 @@ add_executable(
 
 set_target_properties(OxC3 PROPERTIES FOLDER Oxsomi)
 
-target_link_libraries(OxC3 PUBLIC OxC3_shader_compiler OxC3_graphics)
+target_link_libraries(OxC3 PUBLIC OxC3_shader_compiler)
+
+if(CLIGraphics)
+	target_link_libraries(OxC3 PUBLIC OxC3_graphics)
+	target_compile_definitions(OxC3 PUBLIC -DCLI_GRAPHICS)
+endif()
+
 target_include_directories(OxC3 PUBLIC tools/inc)
 
 configure_icon(OxC3 "${CMAKE_CURRENT_SOURCE_DIR}/res/logo.ico")

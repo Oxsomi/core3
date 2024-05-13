@@ -141,9 +141,14 @@ const C8 *EOperationFlags_descriptions[] = {
 //Operations
 
 const C8 *EOperationCategory_names[] = {
+
 	"file",
 	"compile",
-	"graphics",
+
+	#ifdef CLI_GRAPHICS
+		"graphics",
+	#endif
+
 	"hash",
 	"rand",
 	"info",
@@ -152,9 +157,14 @@ const C8 *EOperationCategory_names[] = {
 };
 
 const C8 *EOperationCategory_description[] = {
+
 	"File utilities such as file conversions, encryption, compression, etc.",
 	"Compile shaders or to intermediate binary (Chimera).",
-	"Graphics operations such as showing devices.",
+
+	#ifdef CLI_GRAPHICS
+		"Graphics operations such as showing devices.",
+	#endif
+
 	"Converting a file or string to a hash.",
 	"Generating random data.",
 	"Information about the tool.",
@@ -404,19 +414,23 @@ void Operations_init() {
 
 	//List graphics devices
 
-	Operation_values[EOperation_GraphicsDevices] = (Operation) {
+	#ifdef CLI_GRAPHICS
 
-		.category = EOperationCategory_Graphics,
+		Operation_values[EOperation_GraphicsDevices] = (Operation) {
 
-		.name = "devices",
-		.desc = "Shows graphics devices using the active graphics API.",
+			.category = EOperationCategory_Graphics,
 
-		.func = &CLI_graphicsDevices,
+			.name = "devices",
+			.desc = "Shows graphics devices using the active graphics API.",
 
-		.isFormatLess = true,
+			.func = &CLI_graphicsDevices,
 
-		.optionalParameters = EOperationHasParameter_Entry | EOperationHasParameter_Count
-	};
+			.isFormatLess = true,
+
+			.optionalParameters = EOperationHasParameter_Entry | EOperationHasParameter_Count
+		};
+
+	#endif
 
 	//License for the tool
 

@@ -26,73 +26,79 @@
 #include "graphics/generic/instance.h"
 #include "graphics/generic/device_info.h"
 
-Bool CLI_graphicsDevices(ParsedArgs args) {
+#ifdef CLI_GRAPHICS
 
-	Error err = Error_none();
-	GraphicsInstanceRef *instanceRef = NULL;
-	ListGraphicsDeviceInfo infos = (ListGraphicsDeviceInfo) { 0 };
+	Bool CLI_graphicsDevices(ParsedArgs args) {
 
-	gotoIfError(clean, GraphicsInstance_create(
-		(GraphicsApplicationInfo) {
-			.name = CharString_createRefCStrConst("OxC3 CLI"),
-			.version = GraphicsApplicationInfo_Version(0, 2, 0)
-		},
-		EGraphicsInstanceFlags_None,
-		&instanceRef
-	))
+		Error err = Error_none();
+		GraphicsInstanceRef *instanceRef = NULL;
+		ListGraphicsDeviceInfo infos = (ListGraphicsDeviceInfo) { 0 };
 
-	gotoIfError(clean, GraphicsInstance_getDeviceInfos(GraphicsInstanceRef_ptr(instanceRef), &infos))
+		gotoIfError(clean, GraphicsInstance_create(
+			(GraphicsApplicationInfo) {
+				.name = CharString_createRefCStrConst("OxC3 CLI"),
+				.version = GraphicsApplicationInfo_Version(0, 2, 0)
+			},
+			EGraphicsInstanceFlags_None,
+			&instanceRef
+		))
 
-	//If entry or length is there, we will print full info
+		gotoIfError(clean, GraphicsInstance_getDeviceInfos(GraphicsInstanceRef_ptr(instanceRef), &infos))
 
-	if (args.parameters & (EOperationHasParameter_Count | EOperationHasParameter_Entry)) {
+		//If entry or length is there, we will print full info
 
-		U64 count = 0;
-		U64 offset = 0;
+		if (args.parameters & (EOperationHasParameter_Count | EOperationHasParameter_Entry)) {
 
-		if (args.parameters & EOperationHasParameter_Count) {
+			U64 count = 0;
+			U64 offset = 0;
 
-			CharString arg = args.args.ptr[offset++];
+			if (args.parameters & EOperationHasParameter_Count) {
+
+				CharString arg = args.args.ptr[offset++];
 			
-			if(!CharString_parseU64(arg, &count))
-				gotoIfError(clean, Error_invalidParameter(0, 0, "CLI_graphicsDevices() expected count as U64"))
+				if(!CharString_parseU64(arg, &count))
+					gotoIfError(clean, Error_invalidParameter(0, 0, "CLI_graphicsDevices() expected count as U64"))
+			}
+
+			U64 entry = 0;
+
+			if (args.parameters & EOperationHasParameter_Entry) {
+
+				CharString arg = args.args.ptr[offset++];
+			
+				if(!CharString_parseU64(arg, &entry))
+					gotoIfError(clean, Error_invalidParameter(0, 0, "CLI_graphicsDevices() expected entry as U64"))
+
+				if (!(args.parameters & EOperationHasParameter_Count))
+					count = 1;
+			}
+
+			if(!count && entry < infos.length)
+				count = infos.length - entry;
+
+			Log_debugLnx("Graphics device matching ranges [ %"PRIu64", %"PRIu64" >", entry, entry + count);
+
+			for(U64 i = entry; i < infos.length && i < entry + count; ++i)
+				GraphicsDeviceInfo_print(GraphicsInstanceRef_ptr(instanceRef)->api, &infos.ptr[i], true);
 		}
 
-		U64 entry = 0;
+		//Otherwise, we will simply list the basic information of the devices
 
-		if (args.parameters & EOperationHasParameter_Entry) {
+		else {
 
-			CharString arg = args.args.ptr[offset++];
-			
-			if(!CharString_parseU64(arg, &entry))
-				gotoIfError(clean, Error_invalidParameter(0, 0, "CLI_graphicsDevices() expected entry as U64"))
+			Log_debugLnx("%"PRIu64" graphics devices:", infos.length);
 
-			if (!(args.parameters & EOperationHasParameter_Count))
-				count = 1;
+			for(U64 i = 0; i < infos.length; ++i)
+				GraphicsDeviceInfo_print(GraphicsInstanceRef_ptr(instanceRef)->api, &infos.ptr[i], false);
 		}
 
-		if(!count && entry < infos.length)
-			count = infos.length - entry;
-
-		Log_debugLnx("Graphics device matching ranges [ %"PRIu64", %"PRIu64" >", entry, entry + count);
-
-		for(U64 i = entry; i < infos.length && i < entry + count; ++i)
-			GraphicsDeviceInfo_print(GraphicsInstanceRef_ptr(instanceRef)->api, &infos.ptr[i], true);
+	clean:
+		ListGraphicsDeviceInfo_freex(&infos);
+		GraphicsInstanceRef_dec(&instanceRef);
+		Error_printx(err, ELogLevel_Error, ELogOptions_Default);
+		return !err.genericError;
 	}
 
-	//Otherwise, we will simply list the basic information of the devices
-
-	else {
-
-		Log_debugLnx("%"PRIu64" graphics devices:", infos.length);
-
-		for(U64 i = 0; i < infos.length; ++i)
-			GraphicsDeviceInfo_print(GraphicsInstanceRef_ptr(instanceRef)->api, &infos.ptr[i], false);
-	}
-
-clean:
-	ListGraphicsDeviceInfo_freex(&infos);
-	GraphicsInstanceRef_dec(&instanceRef);
-	Error_printx(err, ELogLevel_Error, ELogOptions_Default);
-	return !err.genericError;
-}
+#else 
+	Bool CLI_graphicsDevices(ParsedArgs args) { (void)args; return false; }
+#endif

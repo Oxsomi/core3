@@ -194,17 +194,24 @@ typedef enum EOperation {
 } EOperation;
 
 typedef enum EOperationCategory {
+
 	EOperationCategory_Invalid,
 	EOperationCategory_File,
 	EOperationCategory_Compile,
-	EOperationCategory_Graphics,
+
+	#ifdef CLI_GRAPHICS
+		EOperationCategory_Graphics,
+	#endif
+
 	EOperationCategory_Hash,
 	EOperationCategory_Rand,
 	EOperationCategory_Info,
 	EOperationCategory_Profile,
 	EOperationCategory_Help,
 	EOperationCategory_End,
+
 	EOperationCategory_Start = EOperationCategory_File
+
 } EOperationCategory;
 
 extern const C8 *EOperationCategory_names[];
