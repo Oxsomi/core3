@@ -22,6 +22,7 @@
 #include "types/string.h"
 #include "types/parser.h"
 #include "types/lexer.h"
+#include "types/big_int.h"
 
 TListImpl(Token);
 TListImpl(Symbol);
@@ -146,7 +147,7 @@ ETokenType Parser_getTokenType(CharString str, U64 *subTokenOffset) {
 
 			break;
 
-		//()[]{}:;,.
+		//(){}:;,.
 
 		case '(':	count = 1;	tokenType = ETokenType_RoundParenthesisStart;	break;
 		case ')':	count = 1;	tokenType = ETokenType_RoundParenthesisEnd;		break;
@@ -169,7 +170,7 @@ ETokenType Parser_getTokenType(CharString str, U64 *subTokenOffset) {
 			count = next == '[' ? 2 : 1;
 			tokenType = count == 2 ? ETokenType_SquareBracketStart2 : ETokenType_SquareBracketStart;
 			break;
-
+		
 		case ']':
 			count = next == ']' ? 2 : 1;
 			tokenType = count == 2 ? ETokenType_SquareBracketEnd2 : ETokenType_SquareBracketEnd;
@@ -431,6 +432,10 @@ Bool Parser_next(Parser *parser, U64 *i, ETokenType type) {
 	return *i < parser->tokens.length && parser->tokens.ptr[*i].tokenType == type;
 }
 
+Bool Parser_eof(Parser *parser, U64 *i) {
+	return *i >= parser->tokens.length;
+}
+
 Bool Parser_skipIfNext(Parser *parser, U64 *i, ETokenType type) {
 
 	if (Parser_next(parser, i, type)) {
@@ -629,6 +634,112 @@ clean:
 	return err;
 }
 
+Error Parser_classifyInitializer(Parser *parser, U64 *i, ETokenType endToken, ETokenType endToken2) {
+
+	Error err = Error_none();
+
+	//U32 a = 0xDEADBEEF,
+	//U32 b = (0x12 << 8) | 0x34,
+	//      ^
+
+	gotoIfError(clean, Parser_assertAndSkip(parser, i, ETokenType_Asg))
+
+	//U32 a = 0xDEADBEEF,
+	//U32 b = (0x12 << 8) | 0x34,
+	//        ^
+
+	if(Parser_next(parser, i, endToken) || Parser_eof(parser, i))
+		gotoIfError(clean, Error_invalidParameter(
+			0, 0, "Parser_classifyInitializer() default value expected"
+		))
+
+	typedef enum EBracketType {
+		EBracketType_Curly,
+		EBracketType_Square,
+		EBracketType_Round,
+		EBracketType_Count
+	} EBracketType;
+
+	U64 tokenCounter = 0;	//U2[32] of EBracketType
+	U8 bracketCounter = 0;
+
+	for (; !Parser_eof(parser, i); ++*i) {
+
+		EBracketType type = EBracketType_Count;
+		Bool isOpen = true;
+
+		//U32 a = 0xDEADBEEF,
+		//                  ^
+		//U32 b = (0x12 << 8) | 0x34,
+		//                          ^
+		//U32 c = 123;
+		//           ^
+
+		if(!bracketCounter && (Parser_next(parser, i, endToken) || Parser_next(parser, i, endToken2)))
+			goto clean;
+
+		//U32 b = (0x12 << 8) | 0x34,
+		//        ^         ^
+
+		switch (parser->tokens.ptr[*i].tokenType) {
+
+			case ETokenType_RoundParenthesisStart:	type = EBracketType_Round;		break;
+			case ETokenType_SquareBracketStart:		type = EBracketType_Square;		break;
+			case ETokenType_CurlyBraceStart:		type = EBracketType_Curly;		break;
+
+			case ETokenType_RoundParenthesisEnd:	type = EBracketType_Round;		isOpen = false;		break;
+			case ETokenType_SquareBracketEnd:		type = EBracketType_Square;		isOpen = false;		break;
+			case ETokenType_CurlyBraceEnd:			type = EBracketType_Curly;		isOpen = false;		break;
+		}
+
+		//Open and close bracket
+		//U32 b = (0x12 << 8) | 0x34,
+		//        ^         ^
+
+		if(type != EBracketType_Count) {
+
+			//Close bracket
+
+			if (!isOpen) {
+
+				if(!bracketCounter)
+					gotoIfError(clean, Error_invalidParameter(
+						0, 0, "Parser_classifyInitializer() found one of }]) but had no opening brackets before it"
+					))
+
+				EBracketType type2 = (tokenCounter >> ((bracketCounter - 1) << 1)) & 3;
+
+				if(type2 != type)
+					gotoIfError(clean, Error_invalidParameter(
+						0, 0, "Parser_classifyInitializer() found one of mismatching }]) with one of {[("
+					))
+
+				--bracketCounter;
+			}
+
+			//Open bracket
+
+			else {
+
+				if(bracketCounter >= 32)
+					gotoIfError(clean, Error_outOfBounds(
+						0, 32, 32, "Parser_classifyInitializer() only allows {[( of 32 levels deep, but it was exceeded"
+					))
+
+				tokenCounter &= ~((U64)3 << (bracketCounter << 1));
+				tokenCounter |= (U64)type << (bracketCounter << 1);
+
+				++bracketCounter;
+			}
+		}
+	}
+
+	gotoIfError(clean, Error_invalidParameter(0, 0, "Parser_classifyInitializer() didn't find end of statement"))
+
+clean:
+	return err;
+}
+
 Error Parser_classifyFunction(Parser *parser, U64 *i, Allocator alloc) {
 
 	Error err = Error_none();
@@ -684,9 +795,7 @@ Error Parser_classifyFunction(Parser *parser, U64 *i, Allocator alloc) {
 		//      ^
 
 		if(Parser_next(parser, i, ETokenType_Asg))
-			gotoIfError(clean, Error_unsupportedOperation(
-				0, "Parser_classifyFunctionOrVariable() default value isn't supported yet"		//TODO:
-			))
+			gotoIfError(clean, Parser_classifyInitializer(parser, i, ETokenType_Comma, ETokenType_RoundParenthesisEnd))
 
 		if(Parser_next(parser, i, ETokenType_RoundParenthesisEnd))
 			break;
@@ -769,7 +878,108 @@ Error Parser_classifyFunctionOrVariable(Parser *parser, U64 *i, Allocator alloc,
 		U32 c8x4 = len < 4 ? 0 : *(const U32*)tokStr.ptr;
 		Bool consumed = false;
 
-		switch (c8x4) {
+		if (len == 2 && *(const U16*)tokStr.ptr == C8x2('i', 'n')) {								//in
+			consumed = true;
+			flag |= ESymbolFlag_IsIn;
+		}
+
+		else if(len == 3 && *(const U16*)tokStr.ptr == C8x2('o', 'u') && tokStr.ptr[2] == 't') {	//out
+			consumed = true;
+			flag |= ESymbolFlag_IsOut;
+		}
+
+		else switch (c8x4) {
+
+			case C8x4('i', 'n', 'o', 'u'):		//inout
+
+				if (len == 5 && tokStr.ptr[4] == 't') {
+					consumed = true;
+					flag |= ESymbolFlag_IsIn | ESymbolFlag_IsOut;
+				}
+
+				break;
+
+			case C8x4('f', 'l', 'a', 't'):		//flat
+
+				if (len == 4) {
+					consumed = true;
+					flag |= ESymbolFlag_NoInterpolation;
+				}
+
+				break;
+
+			case C8x4('n', 'o', 'i', 'n'):		//nointerpolation
+
+				if(
+					len == 15 &&
+					*(const U64*)&tokStr.ptr[4] == C8x8('t', 'e', 'r', 'p', 'o', 'l', 'a', 't') &&
+					*(const U16*)&tokStr.ptr[12] == C8x2('i', 'o') &&
+					tokStr.ptr[14] == 'n'
+				) {
+					consumed = true;
+					flag |= ESymbolFlag_NoInterpolation;
+				}
+
+				break;
+
+			case C8x4('l', 'i', 'n', 'e'):		//linear
+
+				if (len == 6 && *(const U16*)&tokStr.ptr[4] == C8x2('a', 'r')) {
+					consumed = true;
+					flag |= ESymbolFlag_Linear;
+				}
+
+				break;
+
+			case C8x4('s', 'm', 'o', 'o'):		//smooth
+
+				if (len == 6 && *(const U16*)&tokStr.ptr[4] == C8x2('t', 'h')) {
+					consumed = true;
+					flag |= ESymbolFlag_Linear;
+				}
+
+				break;
+
+			case C8x4('s', 'a', 'm', 'p'):		//sample
+
+				if (len == 6 && *(const U16*)&tokStr.ptr[4] == C8x2('l', 'e')) {
+					consumed = true;
+					flag |= ESymbolFlag_Sample;
+				}
+
+				break;
+
+			case C8x4('c', 'e', 'n', 't'):		//centroid
+
+				if (len == 8 && *(const U32*)&tokStr.ptr[4] == C8x4('r', 'o', 'i', 'd')) {
+					consumed = true;
+					flag |= ESymbolFlag_Centroid;
+				}
+
+				break;
+
+			case C8x4('n', 'o', 'p', 'e'):		//noperspective
+
+				if(
+					len == 13 &&
+					*(const U64*)&tokStr.ptr[4] == C8x8('r', 's', 'p', 'e', 'c', 't', 'i', 'v') &&
+					tokStr.ptr[12] == 'e'
+				) {
+					consumed = true;
+					flag |= ESymbolFlag_NoPerspective;
+				}
+
+				break;
+
+			case C8x4('s', 'n', 'o', 'r'):		//snorm
+			case C8x4('u', 'n', 'o', 'r'):		//unorm
+
+				if (len == 5 && tokStr.ptr[4] == 'm') {
+					consumed = true;
+					flag |= (c8x4 == C8x4('s', 'n', 'o', 'r') ? ESymbolFlag_IsSnorm : ESymbolFlag_IsUnorm);
+				}
+
+				break;
 
 			case C8x4('c', 'o', 'n', 's'):		//const, constexpr
 
@@ -932,14 +1142,14 @@ Error Parser_classifyFunctionOrVariable(Parser *parser, U64 *i, Allocator alloc,
 
 				case ETokenType_Ternary:
 
-				case ETokenType_SquareBracketStart2:
-				case ETokenType_SquareBracketEnd2:
-
 				case ETokenType_RoundParenthesisEnd:
 				case ETokenType_SquareBracketEnd:
 
 				case ETokenType_CurlyBraceStart:
 				case ETokenType_CurlyBraceEnd:
+
+				case ETokenType_SquareBracketStart2:
+				case ETokenType_SquareBracketEnd2:
 
 				case ETokenType_Colon:
 				case ETokenType_Colon2:
@@ -1016,9 +1226,7 @@ Error Parser_classifyFunctionOrVariable(Parser *parser, U64 *i, Allocator alloc,
 		//                       ^
 
 		if(Parser_next(parser, i, ETokenType_Asg))
-			gotoIfError(clean, Error_unsupportedOperation(
-				0, "Parser_classifyFunctionOrVariable() assign isn't supported yet"		//TODO:
-			))
+			gotoIfError(clean, Parser_classifyInitializer(parser, i, ETokenType_Semicolon, ETokenType_Count))
 
 		//extern static const F32 x[5], y[3][3], z, w;
 		//                            ^        ^  ^  ^
@@ -1039,8 +1247,87 @@ clean:
 }
 
 Error Parser_classifyEnumBody(Parser *parser, U64 *i, Allocator alloc) {
-	(void)parser; (void)i; (void)alloc;
-	return Error_unimplemented(0, "Parser_classifyEnumBody() is not implemented yet");		//TODO:
+
+	(void) alloc;
+
+	Error err = Error_none();
+
+	//X = (1 << 3),
+	//^
+	//Y = 123,
+	//Z,
+	//W
+
+	while(!Parser_next(parser, i, ETokenType_CurlyBraceEnd)) {
+
+		//X = (1 << 3),
+		//Y = 123,
+		//Z,
+		//W
+		//^
+
+		gotoIfError(clean, Parser_assert(parser, i, ETokenType_Identifier))
+		CharString enumName = Token_asString(parser->tokens.ptr[*i], parser);
+		++*i;
+
+		(void) enumName;
+
+		//Z,
+		// ^
+
+		if(Parser_skipIfNext(parser, i, ETokenType_Comma))
+			continue;
+
+		//X = (1 << 3),
+		//Y = 123,
+		//  ^
+
+		Parser_assertAndSkip(parser, i, ETokenType_Eq);
+
+		//X = (1 << 3),
+		//Y = 123,
+		//    ^
+
+		U64 bracketCounter = 0;
+
+		for (; *i < parser->tokens.length; ++*i) {
+
+			//X = (1 << 3),
+			//    ^
+
+			if(Parser_next(parser, i, ETokenType_RoundParenthesisStart))
+				++bracketCounter;
+
+			//X = (1 << 3),
+			//           ^
+
+			else if(Parser_next(parser, i, ETokenType_RoundParenthesisEnd)) {
+
+				if(!bracketCounter)
+					gotoIfError(clean, Error_invalidState(
+						0, "Parser_classifyEnumBody() ')' is found, but isn't matched to '('"
+					))
+
+				--bracketCounter;
+			}
+
+			//X = (1 << 3),
+			//Y = 123     ,
+			//            ^
+
+			else if(Parser_next(parser, i, ETokenType_Comma) && !bracketCounter)
+				break;
+		}
+
+		//X = (1 << 3),
+		//Y = 123     ,
+		//            ^
+
+		gotoIfError(clean, Parser_assertAndSkip(parser, i, ETokenType_Comma))
+	}
+
+clean:
+	return err;
 }
 
 Error Parser_classifyEnum(Parser *parser, U64 *i, Allocator alloc, U64 *enumId) {
@@ -1095,6 +1382,9 @@ Error Parser_classifyEnum(Parser *parser, U64 *i, Allocator alloc, U64 *enumId) 
 				gotoIfError(clean, Parser_assert(parser, i, ETokenType_Identifier))
 				enumTypeStr = Token_asString(parser->tokens.ptr[*i], parser);
 				++*i;
+
+				if (Parser_next(parser, i, ETokenType_Lt))
+					gotoIfError(clean, Error_unimplemented(0, "Parser_classifyEnum() can't handle templates yet"))		//TODO:
 
 				(void)enumType;
 
@@ -1232,6 +1522,8 @@ Error Parser_classifyBase(Parser *parser, U64 *i, Allocator alloc) {
 	Error err = Error_none();
 	Bool consumed = false;
 
+	//Most expressions
+
 	if (tok.tokenType == ETokenType_Identifier) {
 
 		U64 len = tok.tokenSize;
@@ -1356,6 +1648,60 @@ Error Parser_classifyBase(Parser *parser, U64 *i, Allocator alloc) {
 		}
 	}
 
+	//Annotations
+
+	else {
+
+		//[shader("test")]
+		//^
+
+		if (Parser_skipIfNext(parser, i, ETokenType_SquareBracketStart)) {
+
+			//[shader("test")]
+			// ^
+
+			U64 counter = 1;
+
+			for (; *i < parser->tokens.length; ++*i) {
+
+				switch (parser->tokens.ptr[*i].tokenType) {
+					case ETokenType_SquareBracketStart:	++counter;	break;
+					case ETokenType_SquareBracketEnd:	--counter;	break;
+				}
+
+				if(!counter)
+					break;
+			}
+
+			//[shader("test")]
+			//               ^
+
+			gotoIfError(clean, Parser_assertAndSkip(parser, i, ETokenType_SquareBracketEnd))
+		}
+
+		//[[vk::binding(1, 0)]]
+		//^
+
+		else if (Parser_skipIfNext(parser, i, ETokenType_SquareBracketStart2)) {
+
+			//[[vk::binding(1, 0)]]
+			//  ^
+
+			for (; *i < parser->tokens.length; ++*i)
+				if (Parser_next(parser, i, ETokenType_SquareBracketEnd2))
+					break;
+
+			//[[vk::binding(1, 0)]]
+			//                   ^
+
+			gotoIfError(clean, Parser_assertAndSkip(parser, i, ETokenType_SquareBracketEnd2))
+		}
+
+		//Unrecognized
+
+		else gotoIfError(clean, Error_invalidParameter(0, 0, "Parser_classify() couldn't classify element"))
+	}
+
 clean:
 	return err;
 }
@@ -1370,7 +1716,9 @@ Error Parser_classify(Parser *parser, Allocator alloc) {
 	Error err = Error_none();
 	gotoIfError(clean, ListSymbol_reserve(&parser->symbols, 64, alloc))
 
-	for (U64 i = 0; i < parser->tokens.length; )
+	U64 i = 0;
+
+	for (; i < parser->tokens.length; )
 		gotoIfError(clean, Parser_classifyBase(parser, &i, alloc))
 
 clean:

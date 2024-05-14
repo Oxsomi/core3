@@ -153,7 +153,7 @@ Bool ListIncludedFile_freeUnderlying(ListIncludedFile *file, Allocator alloc) {
 }
 
 Error ListIncludeInfo_stringify(ListIncludeInfo files, Allocator alloc, CharString *tempStr) {
-	
+
 	CharString tempStr2 = CharString_createNull();
 	Error err = Error_none();
 
@@ -214,7 +214,7 @@ Bool CompileResult_free(CompileResult *result, Allocator alloc) {
 			CharString_free(&result->text, alloc);
 			break;
 
-		case ECompileResultType_Binaries:	
+		case ECompileResultType_Binaries:
 
 			for(U64 i = 0; i < result->binaries.length; ++i)
 				Buffer_free(&result->binaries.ptrNonConst[i], alloc);
@@ -278,7 +278,7 @@ Error Compiler_parse(Compiler comp, CompilerSettings settings, Allocator alloc, 
 	//As well as return shEntries
 
 	(void)result;	//TODO:
-	
+
 clean:
 	Parser_free(&parser, alloc);
 	Lexer_free(&lexer, alloc);

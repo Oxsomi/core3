@@ -33,7 +33,7 @@ const U64 BLASExt_size = sizeof(DxBLAS);
 Bool BLAS_freeExt(BLAS *blas) { (void) blas; return true; }		//No-op
 
 Error BLAS_initExt(BLAS *blas) {
-	
+
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(blas->base.device);
 	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
 

@@ -533,7 +533,7 @@ Error SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile) 
 	}
 
 	for (U8 i = 0; i < ESHBinaryType_Count; ++i) {
-		
+
 		if(!binarySize[i])
 			continue;
 
@@ -551,7 +551,7 @@ Error SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile) 
 	else shFile->readLength = Buffer_length(entireFile);
 
 clean:
-	
+
 	if(err.genericError)
 		SHFile_free(shFile, alloc);
 

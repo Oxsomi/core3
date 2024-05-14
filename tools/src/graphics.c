@@ -55,7 +55,7 @@
 			if (args.parameters & EOperationHasParameter_Count) {
 
 				CharString arg = args.args.ptr[offset++];
-			
+
 				if(!CharString_parseU64(arg, &count))
 					gotoIfError(clean, Error_invalidParameter(0, 0, "CLI_graphicsDevices() expected count as U64"))
 			}
@@ -65,7 +65,7 @@
 			if (args.parameters & EOperationHasParameter_Entry) {
 
 				CharString arg = args.args.ptr[offset++];
-			
+
 				if(!CharString_parseU64(arg, &entry))
 					gotoIfError(clean, Error_invalidParameter(0, 0, "CLI_graphicsDevices() expected entry as U64"))
 
@@ -99,6 +99,6 @@
 		return !err.genericError;
 	}
 
-#else 
+#else
 	Bool CLI_graphicsDevices(ParsedArgs args) { (void)args; return false; }
 #endif

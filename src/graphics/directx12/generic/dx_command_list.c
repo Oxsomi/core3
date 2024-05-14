@@ -929,7 +929,7 @@ void CommandList_process(
 						pipelineStage,
 
 						transition.type == ETransitionType_UpdateRTAS ?
-							D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_WRITE : 
+							D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_WRITE :
 							D3D12_BARRIER_ACCESS_RAYTRACING_ACCELERATION_STRUCTURE_READ,
 
 						&deviceExt->bufferTransitions,

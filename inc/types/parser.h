@@ -151,33 +151,47 @@ typedef enum ESymbolType {
 
 typedef enum ESymbolFlag {
 
-	ESymbolFlag_None			= 0,
+	ESymbolFlag_None				= 0,
 
 	//For constants
 
-	ESymbolFlag_IsConst			= 1 << 0,		//const ...
-	ESymbolFlag_IsConstexpr		= 1 << 1,		//constexpr X
-	ESymbolFlag_IsExtern		= 1 << 2,		//extern ...
+	ESymbolFlag_IsConst				= 1 << 0,		//const ...
+	ESymbolFlag_IsConstexpr			= 1 << 1,		//constexpr X
+	ESymbolFlag_IsExtern			= 1 << 2,		//extern ...
 
 	//For functions
 
-	ESymbolFlag_HasImpl			= 1 << 3,		//impl ...
-	ESymbolFlag_HasUserImpl		= 1 << 4,		//user_impl ...
+	ESymbolFlag_HasImpl				= 1 << 3,		//impl ...
+	ESymbolFlag_HasUserImpl			= 1 << 4,		//user_impl ...
 
 	//Access
 
-	ESymbolFlag_IsStatic		= 1 << 5,		//static ...
+	ESymbolFlag_IsStatic			= 1 << 5,		//static ...
 
 	//Maps to ESymbolAccess, if !(Private | Public) then it's protected
 
-	ESymbolFlag_IsPrivate		= 1 << 6,		//private: X or private X
-	ESymbolFlag_IsPublic		= 1 << 7,		//public: X or public X
+	ESymbolFlag_IsPrivate			= 1 << 6,		//private: X or private X
+	ESymbolFlag_IsPublic			= 1 << 7,		//public: X or public X
 
-	ESymbolFlag_Access			= ESymbolFlag_IsPrivate | ESymbolFlag_IsPublic,
+	ESymbolFlag_Access				= ESymbolFlag_IsPrivate | ESymbolFlag_IsPublic,
 
 	//Function modifiers
 
-	ESymbolFlag_IsOperator		= 1 << 8
+	ESymbolFlag_IsOperator			= 1 << 8,
+
+	//HLSL/GLSL modifiers
+
+	ESymbolFlag_IsUnorm				= 1 << 9,
+	ESymbolFlag_IsSnorm				= 1 << 10,
+
+	ESymbolFlag_Sample				= 1 << 11,
+	ESymbolFlag_NoInterpolation		= 1 << 12,		//flat in GLSL
+	ESymbolFlag_NoPerspective		= 1 << 13,
+	ESymbolFlag_Centroid			= 1 << 14,
+	ESymbolFlag_Linear				= 1 << 15,		//smooth in GLSL
+
+	ESymbolFlag_IsOut				= 1 << 16,		//out or inout
+	ESymbolFlag_IsIn				= 1 << 17		//in or inout (in is not automatically set, though it is implied if !out)
 
 } ESymbolFlag;
 
@@ -190,9 +204,11 @@ typedef enum ESymbolAccess {
 
 typedef struct Symbol {
 
-	U16 symbolFlag;			//ESymbolFlag
+	U32 symbolFlag;			//ESymbolFlag
+
+	U16 children;			//For example enum values, struct members or function parameters
 	U8 symbolType;			//ESymbolType
-	U8 children;			//For example enum values, struct members or function parameters
+	U8 padding;
 
 	U32 nameTokenId;
 
