@@ -144,8 +144,8 @@ Error Lexer_create(CharString str, Allocator alloc, Lexer *lexer) {
 	CharString tempSource = CharString_createNull();
 
 	gotoIfError(clean, ListCharString_reserve(&sourceLocations, 64, alloc))
-	gotoIfError(clean, ListLexerExpression_reserve(&expressions, 64 + CharString_length(str) / 64, alloc))
-	gotoIfError(clean, ListLexerToken_reserve(&tokens, 64 + CharString_length(str) / 6, alloc))
+	gotoIfError(clean, ListLexerExpression_reserve(&expressions, 64 + CharString_length(str) / 32, alloc))
+	gotoIfError(clean, ListLexerToken_reserve(&tokens, 64 + CharString_length(str) / 3, alloc))
 
 	const C8 *prevIt = NULL;
 	C8 prev = 0;

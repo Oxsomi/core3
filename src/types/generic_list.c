@@ -804,6 +804,42 @@ Error GenericList_erase(GenericList *list, U64 index) {
 	return Error_none();
 }
 
+Error GenericList_resizeInternal(GenericList *list, U64 size, Allocator allocator, Bool doClear) {
+
+	if(!list)
+		return Error_nullPointer(0, "GenericList_resizeInternal()::list is required");
+
+	if(GenericList_isRef(*list) && list->length)
+		return Error_constData(0, 0, "GenericList_resizeInternal()::list has to be managed memory");
+
+	if (size <= list->capacityAndRefInfo) {
+
+		if(doClear)
+			Buffer_unsetAllBits(
+				Buffer_createRef((U8*)list->ptr + list->stride * list->length, (size - list->length) * list->stride)
+			);
+
+		list->length = size;
+		return Error_none();
+	}
+
+	if(size * 3 / 3 != size)
+		return Error_overflow(1, size * 3, U64_MAX, "GenericList_resizeInternal() overflow");
+
+	const Error err = GenericList_reserve(list, size * 3 / 2, allocator);
+
+	if(err.genericError)
+		return err;
+
+	if(doClear)
+		Buffer_unsetAllBits(
+			Buffer_createRef((U8*)list->ptr + list->stride * list->length, (size * 3 / 2 - list->length) * list->stride)
+		);
+
+	list->length = size;
+	return Error_none();
+}
+
 Error GenericList_insert(GenericList *list, U64 index, Buffer buf, Allocator allocator) {
 
 	if(!list)
@@ -820,7 +856,7 @@ Error GenericList_insert(GenericList *list, U64 index, Buffer buf, Allocator all
 
 	if (index == list->length) {		//Push back
 
-		const Error err = GenericList_resize(list, list->length + 1, allocator);
+		const Error err = GenericList_resizeInternal(list, list->length + 1, allocator, false);
 
 		if(err.genericError)
 			return err;
@@ -837,7 +873,7 @@ Error GenericList_insert(GenericList *list, U64 index, Buffer buf, Allocator all
 		return Error_outOfBounds(1, index, list->length, "GenericList_insert()::index out of bounds");
 
 	const U64 prevSize = list->length;
-	const Error err = GenericList_resize(list, list->length + 1, allocator);
+	const Error err = GenericList_resizeInternal(list, list->length + 1, allocator, false);
 
 	if(err.genericError)
 		return err;
@@ -878,7 +914,7 @@ Error GenericList_pushAll(GenericList *list, GenericList other, Allocator alloca
 		return Error_overflow(0, list->length + other.length, U64_MAX, "GenericList_pushAll() overflow");
 
 	const U64 oldSize = GenericList_bytes(*list);
-	const Error err = GenericList_resize(list, list->length + other.length, allocator);
+	const Error err = GenericList_resizeInternal(list, list->length + other.length, allocator, false);
 
 	if(err.genericError)
 		return err;
@@ -964,7 +1000,7 @@ Error GenericList_insertAll(GenericList *list, GenericList other, U64 offset, Al
 		return Error_outOfBounds(2, offset, list->length, "GenericList_insertAll()::offset out of bounds");
 
 	const U64 prevSize = list->length;
-	const Error err = GenericList_resize(list, list->length + other.length, allocator);
+	const Error err = GenericList_resizeInternal(list, list->length + other.length, allocator, false);
 
 	if(err.genericError)
 		return err;
@@ -1023,37 +1059,7 @@ Error GenericList_reserve(GenericList *list, U64 capacity, Allocator allocator) 
 }
 
 Error GenericList_resize(GenericList *list, U64 size, Allocator allocator) {
-
-	if(!list)
-		return Error_nullPointer(0, "GenericList_resize()::list is required");
-
-	if(GenericList_isRef(*list) && list->length)
-		return Error_constData(0, 0, "GenericList_resize()::list has to be managed memory");
-
-	if (size <= list->capacityAndRefInfo) {
-
-		Buffer_unsetAllBits(
-			Buffer_createRef((U8*)list->ptr + list->stride * list->length, (size - list->length) * list->stride)
-		);
-
-		list->length = size;
-		return Error_none();
-	}
-
-	if(size * 3 / 3 != size)
-		return Error_overflow(1, size * 3, U64_MAX, "GenericList_resize() overflow");
-
-	const Error err = GenericList_reserve(list, size * 3 / 2, allocator);
-
-	if(err.genericError)
-		return err;
-
-	Buffer_unsetAllBits(
-		Buffer_createRef((U8*)list->ptr + list->stride * list->length, (size * 3 / 2 - list->length) * list->stride)
-	);
-
-	list->length = size;
-	return Error_none();
+	return GenericList_resizeInternal(list, size, allocator, true);
 }
 
 Error GenericList_pushBack(GenericList *list, Buffer buf, Allocator allocator) {
@@ -1064,7 +1070,7 @@ Error GenericList_pushBack(GenericList *list, Buffer buf, Allocator allocator) {
 	if(GenericList_isRef(*list) && list->ptr)
 		return Error_constData(0, 0, "GenericList_pushBack()::list needs to be managed memory");
 
-	const Error err = GenericList_resize(list, list->length + 1, allocator);
+	const Error err = GenericList_resizeInternal(list, list->length + 1, allocator, false);
 
 	if(err.genericError)
 		return err;
