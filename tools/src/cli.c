@@ -130,7 +130,7 @@ void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f) {
 
 		Log_debugx(ELogOptions_None, "With the following parameters:\n\n");
 
-		for(U64 i = EOperationHasParameter_InputShift; i < EOperationHasParameter_Count; ++i)
+		for(U64 i = EOperationHasParameter_InputShift; i < EOperationHasParameter_CountEnum; ++i)
 
 			if (((format.requiredParameters | format.optionalParameters) >> i) & 1)
 				Log_debugLnx(
@@ -320,7 +320,7 @@ Bool CLI_execute(ListCharString argList) {
 
 	args.format = EFormat_Invalid;
 
-	for(U64 i = 0; i < EOperationHasParameter_Count; ++i)
+	for(U64 i = 0; i < EOperationHasParameter_CountEnum; ++i)
 		for(U64 j = 2; j < argList.length; ++j)
 			if (CharString_equalsStringInsensitive(
 				argList.ptr[j], CharString_createRefCStrConst(EOperationHasParameter_names[i])
@@ -411,13 +411,13 @@ Bool CLI_execute(ListCharString argList) {
 
 				U64 i = 0;
 
-				for (; i < EOperationHasParameter_Count; ++i)
+				for (; i < EOperationHasParameter_CountEnum; ++i)
 					if (CharString_equalsStringInsensitive(
 						argList.ptr[j], CharString_createRefCStrConst(EOperationHasParameter_names[i])
 					))
 						break;
 
-				if(i == EOperationHasParameter_Count) {
+				if(i == EOperationHasParameter_CountEnum) {
 					Log_errorLnx("Invalid parameter is present: %.*s.", CharString_length(argList.ptr[j]), argList.ptr[j].ptr);
 					CLI_showHelp(category, operation, args.format);
 					goto clean;

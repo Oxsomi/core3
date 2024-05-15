@@ -52,6 +52,8 @@ typedef enum EOperationHasParameter {
 	EOperationHasParameter_ShaderCompileModeShift,
 	EOperationHasParameter_IncludeDirShift,
 
+	EOperationHasParameter_CountEnum,			//How many enums there are
+
 	EOperationHasParameter_Start				= EOperationHasParameter_FileFormatShift,
 
 	//As mask
@@ -64,7 +66,7 @@ typedef enum EOperationHasParameter {
 
 	EOperationHasParameter_SplitBy				= 1 << EOperationHasParameter_SplitByShift,
 
-	EOperationHasParameter_Count				= 1 << EOperationHasParameter_CountShift,
+	EOperationHasParameter_CountArg				= 1 << EOperationHasParameter_CountShift,		//--count
 	EOperationHasParameter_Length				= 1 << EOperationHasParameter_LengthShift,
 
 	EOperationHasParameter_Character			= 1 << EOperationHasParameter_CharacterShift,

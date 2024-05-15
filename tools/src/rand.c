@@ -35,7 +35,7 @@ Bool CLI_rand(ParsedArgs args) {
 
 	U64 n = 1;
 
-	if (args.parameters & EOperationHasParameter_Count) {
+	if (args.parameters & EOperationHasParameter_CountArg) {
 
 		CharString str = CharString_createNull();
 

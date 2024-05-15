@@ -317,7 +317,7 @@ void Operations_init() {
 
 		.isFormatLess = true,
 
-		.optionalParameters = EOperationHasParameter_Count | EOperationHasParameter_Length | EOperationHasParameter_Output
+		.optionalParameters = EOperationHasParameter_CountArg | EOperationHasParameter_Length | EOperationHasParameter_Output
 	};
 
 	Operation_values[EOperation_RandChar] = (Operation) {
@@ -332,7 +332,7 @@ void Operations_init() {
 		.isFormatLess = true,
 
 		.optionalParameters =
-			EOperationHasParameter_Count | EOperationHasParameter_Length |
+			EOperationHasParameter_CountArg | EOperationHasParameter_Length |
 			EOperationHasParameter_Output | EOperationHasParameter_Character,
 
 		.operationFlags = EOperationFlags_RandChar
@@ -349,7 +349,7 @@ void Operations_init() {
 
 		.isFormatLess = true,
 
-		.optionalParameters = EOperationHasParameter_Count | EOperationHasParameter_Length | EOperationHasParameter_Output
+		.optionalParameters = EOperationHasParameter_CountArg | EOperationHasParameter_Length | EOperationHasParameter_Output
 	};
 
 	Operation_values[EOperation_RandNum] = (Operation) {
@@ -364,7 +364,7 @@ void Operations_init() {
 		.isFormatLess = true,
 
 		.optionalParameters =
-			EOperationHasParameter_Count | EOperationHasParameter_Length | EOperationHasParameter_Output |
+			EOperationHasParameter_CountArg | EOperationHasParameter_Length | EOperationHasParameter_Output |
 			EOperationHasParameter_Bit,
 
 		.operationFlags = EOperationFlags_RandNum
@@ -427,7 +427,7 @@ void Operations_init() {
 
 			.isFormatLess = true,
 
-			.optionalParameters = EOperationHasParameter_Entry | EOperationHasParameter_Count
+			.optionalParameters = EOperationHasParameter_Entry | EOperationHasParameter_CountArg
 		};
 
 	#endif

@@ -47,12 +47,12 @@
 
 		//If entry or length is there, we will print full info
 
-		if (args.parameters & (EOperationHasParameter_Count | EOperationHasParameter_Entry)) {
+		if (args.parameters & (EOperationHasParameter_CountArg | EOperationHasParameter_Entry)) {
 
 			U64 count = 0;
 			U64 offset = 0;
 
-			if (args.parameters & EOperationHasParameter_Count) {
+			if (args.parameters & EOperationHasParameter_CountArg) {
 
 				CharString arg = args.args.ptr[offset++];
 
@@ -69,7 +69,7 @@
 				if(!CharString_parseU64(arg, &entry))
 					gotoIfError(clean, Error_invalidParameter(0, 0, "CLI_graphicsDevices() expected entry as U64"))
 
-				if (!(args.parameters & EOperationHasParameter_Count))
+				if (!(args.parameters & EOperationHasParameter_CountArg))
 					count = 1;
 			}
 
