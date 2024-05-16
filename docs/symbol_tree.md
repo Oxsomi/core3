@@ -22,24 +22,16 @@ namespace T2 {
 }
 ```
 
-To represent this without wasting too much space on symbols, we support four different formats to represent a symbol trail as a U32. This is called a **SymbolId**:
+Each symbol has a trail that represents on how to get there, this trail is a U64 split up as follows:
 
-```C
-U2 formatId;	//Indicates which format is to be used.
-
-//2-layer format, for namespaces with classes or functions of classes.
-//Level 1 of (1 << 10) - 1 (all 1s) indicates we don't have a 2nd level.
-U20 level0; U10 level1;
-
-//3-layer format such as members of structs in namespaces.
-U14 level0; U10 level1; U6 level2;
-
-//3-layer format, generally for class members in namespaces
-U10 levels[3];
-
-//4 to 5 layer format, weird stuff such as nested templates.
-//Max value in level4 (0xF) means no level 4.
-U8 level0; U8 level1; U5 level2; U5 level3; U4 level4;
+```c
+U64 layer0 : 17;	//Generally things such as C/HLSL/GLSL symbols, can be a lot
+U64 layer1 : 15;	//When namespaces are used, less common, but still common
+U64 layer2 : 12;	//Double namespaces		
+U64 layer3 : 9;		//Deeply nested templates
+U64 layer4 : 4;
+U64 layer5 : 4;
+U64 layer6 : 3;
 ```
 
-Each symbol is append only, so the parent symbol will create a new symbol at the end and that will be the local id. All other symbols next to it are moved by a spot and thus the global id (into the symbol array) isn't stable but can be calculated by traversing the symbol map.
+This means that we only support up to 7 levels of recursion of symbols and each level gets less symbols it can link to.
