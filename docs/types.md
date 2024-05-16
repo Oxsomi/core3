@@ -496,6 +496,23 @@ unimplemented
 stderr
 ```
 
+### Using errors (correctly)
+
+Since Error is more than just a single value, we want to avoid returning this for every function, as an Error might be quite large on debug mode (it includes stacktrace). As such, the new way of handling errors is just returning a Bool success and having an optional Error*. The error might be allocated somewhere completely different to avoid duplicate allocation from multiple functions.
+
+ `retError(label, constructError)` can be used to exit the function & clean up correctly as well as set the error if available. For example: `retError(clean, Error_nullPointer(9, "Symbol_create()::symbol is required"))`. 
+
+```c
+Error oldFunction();			//Call with gotoIfError2 or gotoIfError
+Bool newFunction(Error *err);	//Call with gotoIfError3
+```
+
+For the oldFunction, gotoIfError should be used only when you're in an old function as well (one that only returns an Error and not success and optional error).
+
+Errors have been made optional since a long time can be spent in moving them around, filling them up and other stuff that might not be relevant in Release mode, though it is very useful to have these available at debug time. 
+
+In the file that uses the new errors (gotoIfError2, gotoIfError3 and retError) there has to be an Error* called e_rr and a Bool called s_uccess defaulted to true. These are named weirdly to avoid name collisions.
+
 ## Quaternion (types/quat.h)
 
 A Quaternion is a vector (4) of floats (doubles also supported in the future) that represents an orientation which can easily be interpolated. It has the following functions:

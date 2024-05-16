@@ -28,8 +28,8 @@
 typedef struct Lexer Lexer;
 typedef struct Parser Parser;
 
-Error Parser_createx(const Lexer *lexer, Parser *parser);
-Bool Parser_freex(Parser *parser);
+Bool Parser_createx(const Lexer *lexer, Parser *parser, Error *e_rr);
+void Parser_freex(Parser *parser);
 
 #ifdef __cplusplus
 	}

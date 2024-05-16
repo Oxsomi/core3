@@ -107,24 +107,24 @@ Bool ListSubResourceData_freeAllx(ListSubResourceData *buf) {
 
 //Lexer and parser
 
-Error Lexer_createx(CharString str, Lexer *lexer) {
-	return Lexer_create(str, Platform_instance.alloc, lexer);
+Bool Lexer_createx(CharString str, Lexer *lexer, Error *e_rr) {
+	return Lexer_create(str, Platform_instance.alloc, lexer, e_rr);
 }
 
-Bool Lexer_freex(Lexer *lexer) {
-	return Lexer_free(lexer, Platform_instance.alloc);
+void Lexer_freex(Lexer *lexer) {
+	Lexer_free(lexer, Platform_instance.alloc);
 }
 
 void Lexer_printx(Lexer lexer) {
 	Lexer_print(lexer, Platform_instance.alloc);
 }
 
-Error Parser_createx(const Lexer *lexer, Parser *parser) {
-	return Parser_create(lexer, parser, Platform_instance.alloc);
+Bool Parser_createx(const Lexer *lexer, Parser *parser, Error *e_rr) {
+	return Parser_create(lexer, parser, Platform_instance.alloc, e_rr);
 }
 
-Bool Parser_freex(Parser *parser) {
-	return Parser_free(parser, Platform_instance.alloc);
+void Parser_freex(Parser *parser) {
+	Parser_free(parser, Platform_instance.alloc);
 }
 
 //Buffer

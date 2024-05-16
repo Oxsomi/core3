@@ -42,7 +42,7 @@ typedef struct Compiler {
 
 TList(Compiler);
 
-Bool ListCompiler_freeUnderlying(ListCompiler *compilers, Allocator alloc);
+void ListCompiler_freeUnderlying(ListCompiler *compilers, Allocator alloc);
 
 typedef struct CompilerSettings {
 
@@ -85,8 +85,8 @@ U32 CompileError_lineId(CompileError err);
 
 TList(CompileError);
 
-Bool CompileError_free(CompileError *err, Allocator alloc);
-Bool ListCompileError_freeUnderlying(ListCompileError *compileErrors, Allocator alloc);
+void CompileError_free(CompileError *err, Allocator alloc);
+void ListCompileError_freeUnderlying(ListCompileError *compileErrors, Allocator alloc);
 
 typedef struct IncludeInfo {
 
@@ -104,11 +104,11 @@ typedef struct IncludeInfo {
 TList(IncludeInfo);
 
 ECompareResult IncludeInfo_compare(const IncludeInfo *a, const IncludeInfo *b);
-Bool IncludeInfo_free(IncludeInfo *info, Allocator alloc);
+void IncludeInfo_free(IncludeInfo *info, Allocator alloc);
 
-Bool ListIncludeInfo_freeUnderlying(ListIncludeInfo *infos, Allocator alloc);
+void ListIncludeInfo_freeUnderlying(ListIncludeInfo *infos, Allocator alloc);
 
-Error ListIncludeInfo_stringify(ListIncludeInfo files, Allocator alloc, CharString *output);
+Bool ListIncludeInfo_stringify(ListIncludeInfo files, Allocator alloc, CharString *output, Error *e_rr);
 
 typedef enum ECompileResultType {
 	ECompileResultType_Text,
@@ -149,29 +149,29 @@ typedef struct IncludedFile {
 
 TList(IncludedFile);
 
-Bool IncludedFile_free(IncludedFile *file, Allocator alloc);
-Bool ListIncludedFile_freeUnderlying(ListIncludedFile *file, Allocator alloc);
+void IncludedFile_free(IncludedFile *file, Allocator alloc);
+void ListIncludedFile_freeUnderlying(ListIncludedFile *file, Allocator alloc);
 
-Bool CompileResult_free(CompileResult *result, Allocator alloc);
+void CompileResult_free(CompileResult *result, Allocator alloc);
 
 //A separate Compiler should be created per thread
 
-Error Compiler_create(Allocator alloc, Compiler *comp);
-Bool Compiler_free(Compiler *comp, Allocator alloc);
+Bool Compiler_create(Allocator alloc, Compiler *comp, Error *e_rr);
+void Compiler_free(Compiler *comp, Allocator alloc);
 
 //Append new entries to infos and increase counters.
 //This makes it possible to get a list of all includes.
 
-Error Compiler_mergeIncludeInfo(Compiler *comp, Allocator alloc, ListIncludeInfo *infos);
+Bool Compiler_mergeIncludeInfo(Compiler *comp, Allocator alloc, ListIncludeInfo *infos, Error *e_rr);
 
 //Process a file with includes and defines to one without (returns text)
 //Always CompileResult_free after.
 //On success returns result->success; otherwise the compile did happen but returned with errors.
 //result->compileErrors.length can still be non zero if warnings are present.
-Error Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator alloc, CompileResult *result);
+Bool Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator alloc, CompileResult *result, Error *e_rr);
 
 //Manual tokenization for a preprocessed file, to obtain annotations (returns shEntries)
-Error Compiler_parse(Compiler comp, CompilerSettings settings, Allocator alloc, CompileResult *result);
+Bool Compiler_parse(Compiler comp, CompilerSettings settings, Allocator alloc, CompileResult *result, Error *e_rr);
 
 typedef enum ECompileBinaryTypes {
 	ECompileBinaryTypes_Shader,			//Shader binary
@@ -181,29 +181,36 @@ typedef enum ECompileBinaryTypes {
 } ECompileBinaryTypes;
 
 //Compile preprocessed file's entry (entry of U64_MAX indicates all, for RT entrypoints) (returns binaries)
-Error Compiler_compile(Compiler comp, CompilerSettings settings, ListSHEntry entries, U64 entry, CompileResult *result);
+Bool Compiler_compile(
+	Compiler comp,
+	CompilerSettings settings,
+	ListSHEntry entries,
+	U64 entry,
+	CompileResult *result,
+	Error *e_rr
+);
 
 //Extended functions for basic allocators
 
-Bool CompileResult_freex(CompileResult *result);
-Bool ListCompiler_freeUnderlyingx(ListCompiler *compilers);
+void CompileResult_freex(CompileResult *result);
+void ListCompiler_freeUnderlyingx(ListCompiler *compilers);
 
-Bool CompileError_freex(CompileError *err);
-Bool ListCompileError_freeUnderlyingx(ListCompileError *compileErrors);
+void CompileError_freex(CompileError *err);
+void ListCompileError_freeUnderlyingx(ListCompileError *compileErrors);
 
-Bool IncludeInfo_freex(IncludeInfo *info);
-Bool ListIncludeInfo_freeUnderlyingx(ListIncludeInfo *infos);
-Error ListIncludeInfo_stringifyx(ListIncludeInfo files, CharString *tempStr);
+void IncludeInfo_freex(IncludeInfo *info);
+void ListIncludeInfo_freeUnderlyingx(ListIncludeInfo *infos);
+Bool ListIncludeInfo_stringifyx(ListIncludeInfo files, CharString *tempStr, Error *e_rr);
 
-Bool IncludedFile_freex(IncludedFile *file);
-Bool ListIncludedFile_freeUnderlyingx(ListIncludedFile *file);
+void IncludedFile_freex(IncludedFile *file);
+void ListIncludedFile_freeUnderlyingx(ListIncludedFile *file);
 
-Error Compiler_createx(Compiler *comp);
-Bool Compiler_freex(Compiler *comp);
+Bool Compiler_createx(Compiler *comp, Error *e_rr);
+void Compiler_freex(Compiler *comp);
 
-Error Compiler_preprocessx(Compiler comp, CompilerSettings settings, CompileResult *result);
-Error Compiler_parsex(Compiler comp, CompilerSettings settings, CompileResult *result);
-Error Compiler_mergeIncludeInfox(Compiler *comp, ListIncludeInfo *infos);
+Bool Compiler_preprocessx(Compiler comp, CompilerSettings settings, CompileResult *result, Error *e_rr);
+Bool Compiler_parsex(Compiler comp, CompilerSettings settings, CompileResult *result, Error *e_rr);
+Bool Compiler_mergeIncludeInfox(Compiler *comp, ListIncludeInfo *infos, Error *e_rr);
 
 #ifdef __cplusplus
 	}

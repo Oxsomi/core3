@@ -35,25 +35,24 @@ U32 CompileError_lineId(CompileError err) {
 	return err.lineId | ((U32)(err.typeLineId & (U8)I8_MAX) << 16);
 }
 
-Bool ListCompiler_freeUnderlying(ListCompiler *compilers, Allocator alloc) {
+void ListCompiler_freeUnderlying(ListCompiler *compilers, Allocator alloc) {
 
 	if(!compilers)
-		return true;
+		return;
 
 	for(U64 i = 0; i < compilers->length; ++i)
 		Compiler_free(&compilers->ptrNonConst[i], alloc);
 
-	return ListCompiler_free(compilers, alloc);
+	ListCompiler_free(compilers, alloc);
 }
 
-Bool CompileError_free(CompileError *err, Allocator alloc) {
+void CompileError_free(CompileError *err, Allocator alloc) {
 
 	if(!err)
-		return true;
+		return;
 
 	CharString_free(&err->file, alloc);
 	CharString_free(&err->error, alloc);
-	return true;
 }
 
 ECompareResult IncludeInfo_compare(const IncludeInfo *a, const IncludeInfo *b) {
@@ -64,102 +63,100 @@ ECompareResult IncludeInfo_compare(const IncludeInfo *a, const IncludeInfo *b) {
 	return a->counter < b->counter || (a->counter == b->counter && a->crc32c < b->crc32c);
 }
 
-Bool IncludeInfo_free(IncludeInfo *info, Allocator alloc) {
+void IncludeInfo_free(IncludeInfo *info, Allocator alloc) {
 
 	if(!info)
-		return true;
+		return;
 
 	CharString_free(&info->file, alloc);
-	return true;
 }
 
-Bool CompileResult_freex(CompileResult *result) {
-	return CompileResult_free(result, Platform_instance.alloc);
+void CompileResult_freex(CompileResult *result) {
+	CompileResult_free(result, Platform_instance.alloc);
 }
 
-Bool ListCompiler_freeUnderlyingx(ListCompiler *compilers) {
-	return ListCompiler_freeUnderlying(compilers, Platform_instance.alloc);
+void ListCompiler_freeUnderlyingx(ListCompiler *compilers) {
+	ListCompiler_freeUnderlying(compilers, Platform_instance.alloc);
 }
 
-Bool ListCompileError_freeUnderlying(ListCompileError *compileErrors, Allocator alloc) {
+void ListCompileError_freeUnderlying(ListCompileError *compileErrors, Allocator alloc) {
 
 	if(!compileErrors)
-		return true;
+		return;
 
 	for(U64 i = 0; i < compileErrors->length; ++i)
 		CompileError_free(&compileErrors->ptrNonConst[i], alloc);
 
-	return ListCompileError_free(compileErrors, alloc);
+	ListCompileError_free(compileErrors, alloc);
 }
 
-Bool ListIncludeInfo_freeUnderlying(ListIncludeInfo *includeInfos, Allocator alloc) {
+void ListIncludeInfo_freeUnderlying(ListIncludeInfo *includeInfos, Allocator alloc) {
 
 	if(!includeInfos)
-		return true;
+		return;
 
 	for(U64 i = 0; i < includeInfos->length; ++i)
 		IncludeInfo_free(&includeInfos->ptrNonConst[i], alloc);
 
-	return ListIncludeInfo_free(includeInfos, alloc);
+	ListIncludeInfo_free(includeInfos, alloc);
 }
 
-Bool CompileError_freex(CompileError *err) {
-	return CompileError_free(err, Platform_instance.alloc);
+void CompileError_freex(CompileError *err) {
+	CompileError_free(err, Platform_instance.alloc);
 }
 
-Bool ListCompileError_freeUnderlyingx(ListCompileError *compileErrors) {
-	return ListCompileError_freeUnderlying(compileErrors, Platform_instance.alloc);
+void ListCompileError_freeUnderlyingx(ListCompileError *compileErrors) {
+	ListCompileError_freeUnderlying(compileErrors, Platform_instance.alloc);
 }
 
-Bool IncludeInfo_freex(IncludeInfo *info) {
-	return IncludeInfo_free(info, Platform_instance.alloc);
+void IncludeInfo_freex(IncludeInfo *info) {
+	IncludeInfo_free(info, Platform_instance.alloc);
 }
 
-Bool ListIncludeInfo_freeUnderlyingx(ListIncludeInfo *infos) {
-	return ListIncludeInfo_freeUnderlying(infos, Platform_instance.alloc);
+void ListIncludeInfo_freeUnderlyingx(ListIncludeInfo *infos) {
+	ListIncludeInfo_freeUnderlying(infos, Platform_instance.alloc);
 }
 
-Error ListIncludeInfo_stringifyx(ListIncludeInfo files, CharString *tempStr) {
-	return ListIncludeInfo_stringify(files, Platform_instance.alloc, tempStr);
+Bool ListIncludeInfo_stringifyx(ListIncludeInfo files, CharString *tempStr, Error *e_rr) {
+	return ListIncludeInfo_stringify(files, Platform_instance.alloc, tempStr, e_rr);
 }
 
-Bool IncludedFile_freex(IncludedFile *file) {
-	return IncludedFile_free(file, Platform_instance.alloc);
+void IncludedFile_freex(IncludedFile *file) {
+	IncludedFile_free(file, Platform_instance.alloc);
 }
 
-Bool ListIncludedFile_freeUnderlyingx(ListIncludedFile *file) {
-	return ListIncludedFile_freeUnderlying(file, Platform_instance.alloc);
+void ListIncludedFile_freeUnderlyingx(ListIncludedFile *file) {
+	ListIncludedFile_freeUnderlying(file, Platform_instance.alloc);
 }
 
-Bool IncludedFile_free(IncludedFile *file, Allocator alloc) {
+void IncludedFile_free(IncludedFile *file, Allocator alloc) {
 
 	if(!file)
-		return true;
+		return;
 
-	Bool success = CharString_free(&file->data, alloc);
-	success &= IncludeInfo_free(&file->includeInfo, alloc);
-	return success;
+	CharString_free(&file->data, alloc);
+	IncludeInfo_free(&file->includeInfo, alloc);
 }
 
-Bool ListIncludedFile_freeUnderlying(ListIncludedFile *file, Allocator alloc) {
+void ListIncludedFile_freeUnderlying(ListIncludedFile *file, Allocator alloc) {
 
 	if(!file)
-		return true;
+		return;
 
 	for(U64 i = 0; i < file->length; ++i)
 		IncludedFile_free(&file->ptrNonConst[i], alloc);
 
-	return ListIncludedFile_free(file, alloc);
+	ListIncludedFile_free(file, alloc);
 }
 
-Error ListIncludeInfo_stringify(ListIncludeInfo files, Allocator alloc, CharString *tempStr) {
+Bool ListIncludeInfo_stringify(ListIncludeInfo files, Allocator alloc, CharString *tempStr, Error *e_rr) {
 
 	CharString tempStr2 = CharString_createNull();
-	Error err = Error_none();
+	Bool s_uccess = true;
 
 	//Info about includes
 
-	gotoIfError(clean, CharString_createCopy(CharString_createRefCStrConst("Includes:\n"), alloc, tempStr))
+	gotoIfError2(clean, CharString_createCopy(CharString_createRefCStrConst("Includes:\n"), alloc, tempStr))
 
 	for(U64 i = 0; i < files.length; ++i) {
 
@@ -170,7 +167,7 @@ Error ListIncludeInfo_stringify(ListIncludeInfo files, Allocator alloc, CharStri
 			Time_format(includeInfo.timestamp, format, true);
 
 		if(includeInfo.counter == 1)
-			gotoIfError(clean, CharString_format(
+			gotoIfError2(clean, CharString_format(
 				alloc, &tempStr2,
 				"%08"PRIx32" %05"PRIu32" %s%s%s\n",
 				includeInfo.crc32c, includeInfo.fileSize,
@@ -178,7 +175,7 @@ Error ListIncludeInfo_stringify(ListIncludeInfo files, Allocator alloc, CharStri
 				includeInfo.file.ptr
 			))
 
-		else gotoIfError(clean, CharString_format(
+		else gotoIfError2(clean, CharString_format(
 			alloc, &tempStr2,
 			"%03"PRIu64" reference(s): %08"PRIx32" %05"PRIu32" %s%s%s\n",
 			includeInfo.counter,
@@ -187,23 +184,23 @@ Error ListIncludeInfo_stringify(ListIncludeInfo files, Allocator alloc, CharStri
 			includeInfo.file.ptr
 		))
 
-		gotoIfError(clean, CharString_appendString(tempStr, tempStr2, alloc))
+		gotoIfError2(clean, CharString_appendString(tempStr, tempStr2, alloc))
 		CharString_free(&tempStr2, alloc);
 	}
 
 clean:
 
-	if(err.genericError)
+	if(!s_uccess)
 		CharString_free(tempStr, alloc);
 
 	CharString_free(&tempStr2, alloc);
-	return err;
+	return s_uccess;
 }
 
-Bool CompileResult_free(CompileResult *result, Allocator alloc) {
+void CompileResult_free(CompileResult *result, Allocator alloc) {
 
 	if(!result)
-		return true;
+		return;
 
 	ListCompileError_freeUnderlying(&result->compileErrors, alloc);
 	ListIncludeInfo_freeUnderlying(&result->includeInfo, alloc);
@@ -230,33 +227,31 @@ Bool CompileResult_free(CompileResult *result, Allocator alloc) {
 			ListSHEntry_free(&result->shEntries, alloc);
 			break;
 	}
-
-	return true;
 }
 
-Error Compiler_createx(Compiler *comp) {
-	return Compiler_create(Platform_instance.alloc, comp);
+Bool Compiler_createx(Compiler *comp, Error *e_rr) {
+	return Compiler_create(Platform_instance.alloc, comp, e_rr);
 }
 
-Bool Compiler_freex(Compiler *comp) {
-	return Compiler_free(comp, Platform_instance.alloc);
+void Compiler_freex(Compiler *comp) {
+	Compiler_free(comp, Platform_instance.alloc);
 }
 
-Error Compiler_preprocessx(Compiler comp, CompilerSettings settings, CompileResult *result) {
-	return Compiler_preprocess(comp, settings, Platform_instance.alloc, result);
+Bool Compiler_preprocessx(Compiler comp, CompilerSettings settings, CompileResult *result, Error *e_rr) {
+	return Compiler_preprocess(comp, settings, Platform_instance.alloc, result, e_rr);
 }
 
-Error Compiler_parsex(Compiler comp, CompilerSettings settings, CompileResult *result) {
-	return Compiler_parse(comp, settings, Platform_instance.alloc, result);
+Bool Compiler_parsex(Compiler comp, CompilerSettings settings, CompileResult *result, Error *e_rr) {
+	return Compiler_parse(comp, settings, Platform_instance.alloc, result, e_rr);
 }
 
-Error Compiler_mergeIncludeInfox(Compiler *comp, ListIncludeInfo *infos) {
-	return Compiler_mergeIncludeInfo(comp, Platform_instance.alloc, infos);
+Bool Compiler_mergeIncludeInfox(Compiler *comp, ListIncludeInfo *infos, Error *e_rr) {
+	return Compiler_mergeIncludeInfo(comp, Platform_instance.alloc, infos, e_rr);
 }
 
 //Invoke parser
 
-Error Compiler_parse(Compiler comp, CompilerSettings settings, Allocator alloc, CompileResult *result) {
+Bool Compiler_parse(Compiler comp, CompilerSettings settings, Allocator alloc, CompileResult *result, Error *e_rr) {
 
 	(void)comp;		//No need for a compiler, we do it ourselves
 
@@ -264,14 +259,15 @@ Error Compiler_parse(Compiler comp, CompilerSettings settings, Allocator alloc, 
 
 	Lexer lexer = (Lexer) { 0 };
 	Parser parser = (Parser) { 0 };
-	Error err = Error_none();
-	gotoIfError(clean, Lexer_create(settings.string, alloc, &lexer))
+	Bool s_uccess = true;
+
+	gotoIfError3(clean, Lexer_create(settings.string, alloc, &lexer, e_rr))
 	//Lexer_print(lexer, alloc);
 
-	gotoIfError(clean, Parser_create(&lexer, &parser, alloc))
+	gotoIfError3(clean, Parser_create(&lexer, &parser, alloc, e_rr))
 	//Parser_printTokens(parser, alloc);
 
-	gotoIfError(clean, Parser_classify(&parser, alloc))
+	gotoIfError3(clean, Parser_classify(&parser, alloc, e_rr))
 	Parser_printSymbols(parser, alloc);
 
 	//After, we need to resolve the symbols into actual struct layouts.
@@ -282,5 +278,5 @@ Error Compiler_parse(Compiler comp, CompilerSettings settings, Allocator alloc, 
 clean:
 	Parser_free(&parser, alloc);
 	Lexer_free(&lexer, alloc);
-	return err;
+	return s_uccess;
 }

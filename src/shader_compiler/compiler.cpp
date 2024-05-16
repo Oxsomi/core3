@@ -111,7 +111,9 @@ public:
 		CharString resolved = CharString_createNull();
 		IDxcBlobEncoding *encoding = NULL;
 
-		Error err = Error_none();
+		Error *e_rr = NULL;
+		Bool s_uccess = true;
+
 		HRESULT hr = S_OK;
 		Buffer tempBuffer = Buffer_createNull();
 		CharString tempFile = CharString_createNull();
@@ -121,7 +123,7 @@ public:
 		U64 i = 0;
 		U64 firstDoubleSlash = U64_MAX;
 
-		gotoIfError(clean, CharString_createFromUTF16((const U16*)fileNameStr, U64_MAX, alloc, &fileName))
+		gotoIfError2(clean, CharString_createFromUTF16((const U16*)fileNameStr, U64_MAX, alloc, &fileName))
 
 		//Little hack to handle builtin shaders, by using "virtual files" //myTest.hlsl
 
@@ -137,12 +139,12 @@ public:
 			CharString tmp = CharString_createNull();
 
 			if(!CharString_cut(fileName, firstDoubleSlash, 0, &tmp) || !CharString_length(tmp))
-				gotoIfError(clean, Error_invalidState(0, "IncludeHandler::LoadSource expected source after //"))
+				retError(clean, Error_invalidState(0, "IncludeHandler::LoadSource expected source after //"))
 
-			gotoIfError(clean, CharString_createCopy(tmp, alloc, &resolved))
+			gotoIfError2(clean, CharString_createCopy(tmp, alloc, &resolved))
 		}
 
-		else gotoIfError(clean, File_resolve(
+		else gotoIfError2(clean, File_resolve(
 			fileName, &isVirtual, MAX_PATH, Platform_instance.workingDirectory, alloc, &resolved
 		))
 
@@ -162,7 +164,7 @@ public:
 
 			if(!isBuiltin) {		//Builtins don't exist on disk, so they can't really be hot reloaded
 
-				gotoIfError(clean, File_getInfo(resolved, &fileInfo, alloc))
+				gotoIfError2(clean, File_getInfo(resolved, &fileInfo, alloc))
 
 				IncludeInfo prevInclude = includedFiles.ptr[i].includeInfo;
 
@@ -176,7 +178,7 @@ public:
 
 					if (fileInfo.fileSize == prevInclude.fileSize) {
 
-						gotoIfError(clean, File_read(resolved, 1 * SECOND, &tempBuffer))
+						gotoIfError2(clean, File_read(resolved, 1 * SECOND, &tempBuffer))
 
 						U32 crc32c = Buffer_crc32c(tempBuffer);
 
@@ -197,7 +199,7 @@ public:
 			if(!validCache) {
 
 				IncludedFile includedFile = IncludedFile{};
-				gotoIfError(clean, ListIncludedFile_popLocation(&includedFiles, i, &includedFile))
+				gotoIfError2(clean, ListIncludedFile_popLocation(&includedFiles, i, &includedFile))
 
 				IncludedFile_free(&includedFile, alloc);
 
@@ -237,15 +239,15 @@ public:
 
 			if(!isBuiltin) {
 
-				gotoIfError(clean, File_getInfo(resolved, &fileInfo, alloc))
-				gotoIfError(clean, File_read(resolved, 1 * SECOND, &tempBuffer))
+				gotoIfError2(clean, File_getInfo(resolved, &fileInfo, alloc))
+				gotoIfError2(clean, File_read(resolved, 1 * SECOND, &tempBuffer))
 
 				crc32c = Buffer_crc32c(tempBuffer);
 				Ns timestamp = fileInfo.timestamp;
 				FileInfo_free(&fileInfo, alloc);
 
 				if(Buffer_length(tempBuffer) >> 32)
-					gotoIfError(clean, Error_outOfBounds(
+					retError(clean, Error_outOfBounds(
 						0, Buffer_length(tempBuffer), U32_MAX,
 						"IncludeHandler::LoadSource CreateBlobFromPinned requires 32-bit buffers max"
 					))
@@ -262,7 +264,7 @@ public:
 
 				//Move buffer to includedData
 
-				gotoIfError(clean, CharString_createCopy(
+				gotoIfError2(clean, CharString_createCopy(
 					CharString_createRefSizedConst((const C8*)tempBuffer.ptr, Buffer_length(tempBuffer), false),
 					alloc,
 					&tempFile
@@ -273,7 +275,7 @@ public:
 				inc.includeInfo.file = resolved;
 				inc.data = tempFile;
 
-				gotoIfError(clean, ListIncludedFile_pushBack(&includedFiles, inc, alloc))
+				gotoIfError2(clean, ListIncludedFile_pushBack(&includedFiles, inc, alloc))
 				resolved = CharString_createNull();
 				tempFile = CharString_createNull();
 
@@ -296,13 +298,13 @@ public:
 					//Because of the C limit of 64KiB per string constant, we need two string constants and merge them
 
 					CharString tmp = CharString_createRefCStrConst(nvHLSLExtns);
-					gotoIfError(clean, CharString_createCopy(tmp, alloc, &tempFile))
+					gotoIfError2(clean, CharString_createCopy(tmp, alloc, &tempFile))
 
 					tmp = CharString_createRefCStrConst(nvHLSLExtns2);
-					gotoIfError(clean, CharString_appendString(&tempFile, tmp, alloc))
+					gotoIfError2(clean, CharString_appendString(&tempFile, tmp, alloc))
 				}
 
-				else gotoIfError(clean, Error_notFound(0, 0, "IncludeHandler::LoadSource builtin file not found"))
+				else retError(clean, Error_notFound(0, 0, "IncludeHandler::LoadSource builtin file not found"))
 
 				crc32c = Buffer_crc32c(CharString_bufferConst(tempFile));
 
@@ -318,13 +320,13 @@ public:
 				inc.includeInfo.file = resolved;
 				inc.data = tempFile;
 
-				gotoIfError(clean, ListIncludedFile_pushBack(&includedFiles, inc, alloc))
+				gotoIfError2(clean, ListIncludedFile_pushBack(&includedFiles, inc, alloc))
 				resolved = CharString_createNull();
 				tempFile = CharString_createNull();
 			}
 
 			if((i >> 6) >= isPresent.length)
-				gotoIfError(clean, ListU64_pushBack(&isPresent, 0, alloc))
+				gotoIfError2(clean, ListU64_pushBack(&isPresent, 0, alloc))
 
 			hr = utils->CreateBlobFromPinned(
 				includedFiles.ptr[i].data.ptr, (U32) CharString_length(includedFiles.ptr[i].data), DXC_CP_UTF8, &encoding
@@ -342,7 +344,7 @@ public:
 
 	clean:
 
-		if(SUCCEEDED(hr) && err.genericError)
+		if(SUCCEEDED(hr) && !s_uccess)
 			hr = E_FAIL;
 
 		if(encoding)
@@ -364,17 +366,18 @@ public:
 	ULONG STDMETHODCALLTYPE Release() override { return 0; }
 };
 
-Error Compiler_create(Allocator alloc, Compiler *comp) {
+Bool Compiler_create(Allocator alloc, Compiler *comp, Error *e_rr) {
+
+	Bool s_uccess = true;
+	CompilerInterfaces *interfaces = NULL;
 
 	if(!comp)
-		return Error_nullPointer(1, "Compiler_create()::comp is required");
+		retError(clean, Error_nullPointer(1, "Compiler_create()::comp is required"))
 
-	CompilerInterfaces *interfaces = (CompilerInterfaces*) comp->interfaces;
+	interfaces = (CompilerInterfaces*) comp->interfaces;
 
 	if(interfaces->utils)
-		return Error_alreadyDefined(1, "Compiler_create()::comp must be empty");
-
-	Error err = Error_none();
+		retError(clean, Error_alreadyDefined(1, "Compiler_create()::comp must be empty"))
 
 	try {
 
@@ -389,7 +392,7 @@ Error Compiler_create(Allocator alloc, Compiler *comp) {
 		HRESULT hr = DxcCreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(&interfaces->utils));
 
 		if(FAILED(hr))
-			gotoIfError(clean, Error_invalidState(0, "Compiler_create() IDxcUtils couldn't be created. Missing DLL?"))
+			retError(clean, Error_invalidState(0, "Compiler_create() IDxcUtils couldn't be created. Missing DLL?"))
 
 		//Create include handler
 
@@ -400,26 +403,26 @@ Error Compiler_create(Allocator alloc, Compiler *comp) {
 		hr = DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(&interfaces->compiler));
 
 		if(FAILED(hr))
-			gotoIfError(clean, Error_invalidState(2, "Compiler_create() IDxcCompiler3 couldn't be created"))
+			retError(clean, Error_invalidState(2, "Compiler_create() IDxcCompiler3 couldn't be created"))
 
 	} catch (std::exception) {
-		gotoIfError(clean, Error_invalidState(1, "Compiler_create() raised an internal exception"))
+		retError(clean, Error_invalidState(1, "Compiler_create() raised an internal exception"))
 	}
 
 clean:
 
-	if(err.genericError)
+	if(!s_uccess)
 		Compiler_free(comp, alloc);
 
-	return err;
+	return s_uccess;
 }
 
-Bool Compiler_free(Compiler *comp, Allocator alloc) {
+void Compiler_free(Compiler *comp, Allocator alloc) {
 
 	(void)alloc;
 
 	if(!comp)
-		return true;
+		return;
 
 	CompilerInterfaces *interfaces = (CompilerInterfaces*) comp->interfaces;
 
@@ -433,22 +436,25 @@ Bool Compiler_free(Compiler *comp, Allocator alloc) {
 		delete interfaces->includeHandler;
 
 	*comp = Compiler{};
-	return true;
 }
 
-Error Compiler_mergeIncludeInfo(Compiler *comp, Allocator alloc, ListIncludeInfo *infos) {
+Bool Compiler_mergeIncludeInfo(Compiler *comp, Allocator alloc, ListIncludeInfo *infos, Error *e_rr) {
 
-	if(!comp || !infos)
-		return Error_nullPointer(!comp ? 0 : 2, "Compiler_mergeIncludeInfo()::comp and infos are required");
-
-	CompilerInterfaces *interfaces = (CompilerInterfaces*) comp->interfaces;
-
-	if(!interfaces->includeHandler)
-		return Error_nullPointer(!comp ? 0 : 2, "Compiler_mergeIncludeInfo()::comp->interfaces includeHandler is missing");
+	Bool s_uccess = true;
+	CompilerInterfaces *interfaces = NULL;
 
 	ListIncludedFile files = interfaces->includeHandler->getIncludedFiles();
 	CharString tmp = CharString_createNull();
-	Error err = Error_none();
+
+	if(!comp || !infos)
+		retError(clean, Error_nullPointer(!comp ? 0 : 2, "Compiler_mergeIncludeInfo()::comp and infos are required"))
+
+	interfaces = (CompilerInterfaces*) comp->interfaces;
+
+	if(!interfaces->includeHandler)
+		retError(clean, Error_nullPointer(
+			!comp ? 0 : 2, "Compiler_mergeIncludeInfo()::comp->interfaces includeHandler is missing"
+		))
 
 	for (U64 i = 0; i < files.length; ++i) {
 
@@ -470,11 +476,11 @@ Error Compiler_mergeIncludeInfo(Compiler *comp, Allocator alloc, ListIncludeInfo
 
 		if(j == infos->length) {
 
-			gotoIfError(clean, CharString_createCopy(info.includeInfo.file, alloc, &tmp))
+			gotoIfError2(clean, CharString_createCopy(info.includeInfo.file, alloc, &tmp))
 
 			info.includeInfo.counter = info.globalCounter;
 			info.includeInfo.file = tmp;
-			gotoIfError(clean, ListIncludeInfo_pushBack(infos, info.includeInfo, alloc))
+			gotoIfError2(clean, ListIncludeInfo_pushBack(infos, info.includeInfo, alloc))
 			tmp = CharString_createNull();
 		}
 
@@ -489,27 +495,18 @@ Error Compiler_mergeIncludeInfo(Compiler *comp, Allocator alloc, ListIncludeInfo
 
 clean:
 	CharString_free(&tmp, alloc);
-	return err;
+	return s_uccess;
 }
 
 Bool Compiler_filterWarning(CharString str) {
 	return CharString_startsWithStringSensitive(str, CharString_createRefCStrConst("#pragma once in main file\n"), 0);
 }
 
-Error Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator alloc, CompileResult *result) {
+Bool Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator alloc, CompileResult *result, Error *e_rr) {
 
 	CompilerInterfaces *interfaces = (CompilerInterfaces*) comp.interfaces;
 
-	if(!interfaces->utils || !result)
-		return Error_alreadyDefined(!interfaces->utils ? 0 : 2, "Compiler_preprocess()::comp is required");
-
-	if(!CharString_length(settings.string))
-		return Error_invalidParameter(1, 0, "Compiler_preprocess()::settings.string is required");
-
-	if(settings.outputType >= ESHBinaryType_Count || settings.format >= ECompilerFormat_Count)
-		return Error_invalidParameter(1, 0, "Compiler_preprocess()::settings contains invalid format or outputType");
-
-	Error err = Error_none();
+	Bool s_uccess = true;
 	IDxcResult *dxcResult = NULL;
 	IDxcBlobUtf8 *error = NULL;
 	ListU16 inputFile = ListU16{};
@@ -518,11 +515,24 @@ Error Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator al
 	CharString tempStr = CharString_createNull();
 	CharString tempStr2 = CharString_createNull();
 
-	gotoIfError(clean, CharString_toUTF16(settings.path, alloc, &inputFile))
+	if(!interfaces->utils || !result)
+		retError(clean, Error_alreadyDefined(!interfaces->utils ? 0 : 2, "Compiler_preprocess()::comp is required"))
+
+	if(!CharString_length(settings.string))
+		retError(clean, Error_invalidParameter(1, 0, "Compiler_preprocess()::settings.string is required"))
+
+	if(settings.outputType >= ESHBinaryType_Count || settings.format >= ECompilerFormat_Count)
+		retError(clean, Error_invalidParameter(1, 0, "Compiler_preprocess()::settings contains invalid format or outputType"))
+
+	gotoIfError2(clean, CharString_toUTF16(settings.path, alloc, &inputFile))
 
 	if(settings.includeDir.ptr) {
-		gotoIfError(clean, File_resolve(settings.includeDir, &isVirtual, 256, Platform_instance.workingDirectory, alloc, &tempStr2))
-		gotoIfError(clean, CharString_toUTF16(tempStr2, alloc, &includeDir))
+
+		gotoIfError2(clean, File_resolve(
+			settings.includeDir, &isVirtual, 256, Platform_instance.workingDirectory, alloc, &tempStr2
+		))
+
+		gotoIfError2(clean, CharString_toUTF16(tempStr2, alloc, &includeDir))
 		CharString_free(&tempStr2, alloc);
 	}
 
@@ -566,12 +576,12 @@ Error Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator al
 		);
 
 		if(FAILED(hr))
-			gotoIfError(clean, Error_invalidState(0, "Compiler_preprocess() \"Compile\" failed"))
+			retError(clean, Error_invalidState(0, "Compiler_preprocess() \"Compile\" failed"))
 
 		hr = dxcResult->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(&error), NULL);
 
 		if(FAILED(hr))
-			gotoIfError(clean, Error_invalidState(1, "Compiler_preprocess() fetch errors failed"))
+			retError(clean, Error_invalidState(1, "Compiler_preprocess() fetch errors failed"))
 
 		if(error && error->GetStringLength()) {
 
@@ -671,14 +681,14 @@ Error Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator al
 							break;
 
 					if(i == U64_MAX)
-						gotoIfError(clean, Error_invalidState(1, "Compiler_preprocess() couldn't parse error"))
+						retError(clean, Error_invalidState(1, "Compiler_preprocess() couldn't parse error"))
 
 					CharString errorStr = CharString_createRefSizedConst(errs.ptr + prevOff, i - prevOff, false);
 
 					if(!Compiler_filterWarning(errorStr)) {
 
-						gotoIfError(clean, CharString_createCopy(errorStr, alloc, &tempStr))
-						gotoIfError(clean, CharString_createCopy(file, alloc, &tempStr2))
+						gotoIfError2(clean, CharString_createCopy(errorStr, alloc, &tempStr))
+						gotoIfError2(clean, CharString_createCopy(file, alloc, &tempStr2))
 
 						CompileError cerr = CompileError{
 							.lineId = (U16) lineId,
@@ -688,7 +698,7 @@ Error Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator al
 							.file = tempStr2
 						};
 
-						gotoIfError(clean, ListCompileError_pushBack(&result->compileErrors, cerr, alloc))
+						gotoIfError2(clean, ListCompileError_pushBack(&result->compileErrors, cerr, alloc))
 
 						tempStr = CharString_createNull();
 						tempStr2 = CharString_createNull();
@@ -700,7 +710,7 @@ Error Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator al
 				//Parse file
 
 				if(firstColon == U64_MAX || !CharString_cut(errs, off, firstColon - off, &file))
-					gotoIfError(clean, Error_invalidState(1, "Compiler_preprocess() couldn't parse file from error"))
+					retError(clean, Error_invalidState(1, "Compiler_preprocess() couldn't parse file from error"))
 
 				//Parse line
 
@@ -709,10 +719,10 @@ Error Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator al
 				CharString tmp = CharString_createNull();
 
 				if(nextColon == U64_MAX || !CharString_cut(errs, firstColon + 1, nextColon - (firstColon + 1), &tmp))
-					gotoIfError(clean, Error_invalidState(2, "Compiler_preprocess() couldn't parse lineId from error"))
+					retError(clean, Error_invalidState(2, "Compiler_preprocess() couldn't parse lineId from error"))
 
 				if(!CharString_parseDec(tmp, &lineId) || (lineId >> (16 + 7)))
-					gotoIfError(clean, Error_invalidState(3, "Compiler_preprocess() couldn't parse U23 lineId from error"))
+					retError(clean, Error_invalidState(3, "Compiler_preprocess() couldn't parse U23 lineId from error"))
 
 				//Parse line offset
 
@@ -721,10 +731,10 @@ Error Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator al
 				nextColon = CharString_findFirstSensitive(errs, ':', off);
 
 				if(nextColon == U64_MAX || !CharString_cut(errs, off, nextColon - off, &tmp))
-					gotoIfError(clean, Error_invalidState(2, "Compiler_preprocess() couldn't parse lineOff from error"))
+					retError(clean, Error_invalidState(2, "Compiler_preprocess() couldn't parse lineOff from error"))
 
 				if(!CharString_parseDec(tmp, &lineOff) || lineOff >> 8)
-					gotoIfError(clean, Error_invalidState(3, "Compiler_preprocess() couldn't parse U8 lineOff from error"))
+					retError(clean, Error_invalidState(3, "Compiler_preprocess() couldn't parse U8 lineOff from error"))
 
 				off = nextColon + 1;
 
@@ -743,7 +753,7 @@ Error Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator al
 					off += CharString_length(warning);
 				}
 
-				else gotoIfError(clean, Error_invalidState(4, "Compiler_preprocess() couldn't parse error type from error"))
+				else retError(clean, Error_invalidState(4, "Compiler_preprocess() couldn't parse error type from error"))
 
 				prevOff = off;
 			}
@@ -756,8 +766,8 @@ Error Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator al
 
 				if(!Compiler_filterWarning(errorStr)) {
 
-					gotoIfError(clean, CharString_createCopy(errorStr, alloc, &tempStr))
-					gotoIfError(clean, CharString_createCopy(file, alloc, &tempStr2))
+					gotoIfError2(clean, CharString_createCopy(errorStr, alloc, &tempStr))
+					gotoIfError2(clean, CharString_createCopy(file, alloc, &tempStr2))
 
 					CompileError cerr = CompileError{
 						.lineId = (U16) lineId,
@@ -767,7 +777,7 @@ Error Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator al
 						.file = tempStr2
 					};
 
-					gotoIfError(clean, ListCompileError_pushBack(&result->compileErrors, cerr, alloc))
+					gotoIfError2(clean, ListCompileError_pushBack(&result->compileErrors, cerr, alloc))
 
 					tempStr = CharString_createNull();
 					tempStr2 = CharString_createNull();
@@ -784,7 +794,7 @@ Error Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator al
 
 		if (settings.infoAboutIncludes) {
 
-			gotoIfError(clean, ListIncludeInfo_resize(&result->includeInfo, interfaces->includeHandler->getCounter(), alloc))
+			gotoIfError2(clean, ListIncludeInfo_resize(&result->includeInfo, interfaces->includeHandler->getCounter(), alloc))
 
 			ListIncludedFile files = interfaces->includeHandler->getIncludedFiles();
 
@@ -792,7 +802,7 @@ Error Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator al
 				if (files.ptr[i].includeInfo.counter) {		//Exclude inactive includes
 
 					IncludeInfo copy = files.ptr[i].includeInfo;
-					gotoIfError(clean, CharString_createCopy(copy.file, alloc, &tempStr))
+					gotoIfError2(clean, CharString_createCopy(copy.file, alloc, &tempStr))
 
 					copy.file = tempStr;
 					result->includeInfo.ptrNonConst[j] = copy;
@@ -808,9 +818,9 @@ Error Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator al
 		hr = dxcResult->GetOutput(DXC_OUT_HLSL, IID_PPV_ARGS(&error), NULL);
 
 		if(FAILED(hr))
-			gotoIfError(clean, Error_invalidState(2, "Compiler_preprocess() fetch hlsl failed"))
+			retError(clean, Error_invalidState(2, "Compiler_preprocess() fetch hlsl failed"))
 
-		gotoIfError(clean, CharString_createCopy(
+		gotoIfError2(clean, CharString_createCopy(
 			CharString_createRefSizedConst(error->GetStringPointer(), error->GetBufferSize(), false),
 			alloc,
 			&result->text
@@ -820,12 +830,12 @@ Error Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator al
 		result->isSuccess = true;
 
 	} catch (std::exception) {
-		gotoIfError(clean, Error_invalidState(1, "Compiler_preprocess() raised an internal exception"))
+		retError(clean, Error_invalidState(1, "Compiler_preprocess() raised an internal exception"))
 	}
 
 clean:
 
-	if(err.genericError)
+	if(!s_uccess)
 		CompileResult_free(result, alloc);
 
 	if(dxcResult)
@@ -838,7 +848,7 @@ clean:
 	ListU16_free(&includeDir, alloc);
 	CharString_free(&tempStr, alloc);
 	CharString_free(&tempStr2, alloc);
-	return err;
+	return s_uccess;
 }
 
 //TODO: Real compile, check for [extension(I16, F16)] one of the two indicates we need to enable 16-bit types

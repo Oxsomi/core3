@@ -88,13 +88,36 @@ typedef struct Error {
 
 } Error;
 
-//Shortcut to handle cleanup on error, can be disabled to save CPU time
+//Legacy error handling, don't use anymore
 
-#ifndef _DISABLE_ERRORS
-	#define gotoIfError(x, ...) { err = __VA_ARGS__; if(err.genericError) goto x; }
-#else
-	#define gotoIfError(x, ...) { x; } /* suppress unused goto label */
-#endif
+#define gotoIfError(x, ...) { err = __VA_ARGS__; if(err.genericError) goto x; }
+
+//Migration error handling, building towards returning Bool success and optional Error.
+//Interop with functions that return Error.
+
+#define gotoIfError2(x, ...) {		\
+	Error tempErr = __VA_ARGS__;	\
+	if(tempErr.genericError) {		\
+		s_uccess = false;			\
+		if(e_rr) *e_rr = tempErr;	\
+		goto x;						\
+	}								\
+}
+
+//Functions with new error handling; returning Bool and optional error.
+
+#define gotoIfError3(x, ...) {		\
+	if(!(__VA_ARGS__)) {			\
+		s_uccess = false;			\
+		goto x;						\
+	}								\
+}
+
+#define retError(x, ...) {			\
+	if(e_rr) *e_rr = __VA_ARGS__;	\
+	s_uccess = false;				\
+	goto x;							\
+}
 
 impl void Error_fillStackTrace(Error *err);
 

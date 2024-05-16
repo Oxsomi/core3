@@ -145,7 +145,8 @@ typedef enum ESymbolType {
 	ESymbolType_Enum,			//typedef enum ... or enum X {}
 	ESymbolType_EnumClass,		//enum class X : Y {} or enum class X {}
 	ESymbolType_Interface,		//interface X {}
-	ESymbolType_Count
+	ESymbolType_Annotation,		//[[vk::binding(0, 0)]] or [shader("vertex")] for example
+	ESymbolType_Count			//Keep <=32 due to packing
 
 } ESymbolType;
 
@@ -191,7 +192,9 @@ typedef enum ESymbolFlag {
 	ESymbolFlag_Linear				= 1 << 15,		//smooth in GLSL
 
 	ESymbolFlag_IsOut				= 1 << 16,		//out or inout
-	ESymbolFlag_IsIn				= 1 << 17		//in or inout (in is not automatically set, though it is implied if !out)
+	ESymbolFlag_IsIn				= 1 << 17,		//in or inout (in is not automatically set, though it is implied if !out)
+
+	ESymbolFlag_Count				= 18,			//Keep less than 19 due to packing
 
 } ESymbolFlag;
 
@@ -204,21 +207,35 @@ typedef enum ESymbolAccess {
 
 typedef struct Symbol {
 
-	U32 symbolFlag;			//ESymbolFlag
+	U32 symbolFlagTypeAnnotations;
 
-	U16 children;			//For example enum values, struct members or function parameters
-	U8 symbolType;			//ESymbolType
-	U8 padding;
+	U32 name;			//If first bit is set, is a resolved name. Otherwise tokenId
 
-	U32 nameTokenId;
+	U32 baseType;		//SymbolId to base type
 
-	U32 typeTokenId;		//U32_MAX indicates void (only for enum and function)
+	U32 parent;			//See SymbolId
 
-	U32 childStartTokenId;	//See Symbol::children
-
-	U32 bodyStartTokenId;	//U32_MAX for enum & struct & typedef
+	U32 localIdChildren;
 
 } Symbol;
+
+Bool Symbol_create(
+	ESymbolType type, ESymbolFlag flags, U8 annotations,
+	U32 name,
+	U32 baseType,
+	U32 parent,
+	U32 localId,		//U20
+	U16 children,		//U10
+	Error *e_rr,
+	Symbol *symbol
+);
+
+U32 Symbol_getLocalId(Symbol s);
+U32 Symbol_getChildren(Symbol s);
+
+ESymbolType Symbol_getType(Symbol s);
+ESymbolFlag Symbol_getFlags(Symbol s);
+U8 Symbol_getAnnotations(Symbol s);
 
 //Parser takes the output from the lexer and splits it up in real tokens and handles preprocessor-specific things.
 //After the parser, the file's symbols can be obtained.
@@ -233,15 +250,15 @@ typedef struct Parser {
 	ListCharString parsedLiterals;		//Need copies, because \" and \\ have to be parsed
 } Parser;
 
-Error Parser_create(const Lexer *lexer, Parser *parser, Allocator alloc);
-Bool Parser_free(Parser *parser, Allocator alloc);
+Bool Parser_create(const Lexer *lexer, Parser *parser, Allocator alloc, Error *e_rr);
+void Parser_free(Parser *parser, Allocator alloc);
 void Parser_printTokens(Parser parser, Allocator alloc);
 void Parser_printSymbols(Parser parser, Allocator alloc);
 
 //The classification step can be done manually if the syntax is different than normal C++-like syntax.
 //C/C++, C#, HLSL and GLSL all share similar syntax, which means we can re-use this a lot.
 
-Error Parser_classify(Parser *parser, Allocator alloc);
+Bool Parser_classify(Parser *parser, Allocator alloc, Error *e_rr);
 
 //Classify a token at str.ptr[*subTokenOffset]
 //Increment subTokenOffset by the length of the token

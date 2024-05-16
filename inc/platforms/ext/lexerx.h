@@ -25,8 +25,11 @@
 	extern "C" {
 #endif
 
-Error Lexer_create(CharString str, Allocator alloc, Lexer *lexer);
-Bool Lexer_freex(Lexer *lexer);
+typedef struct Allocator Allocator;
+typedef struct Lexer Lexer;
+
+Bool Lexer_create(CharString str, Allocator alloc, Lexer *lexer, Error *e_rr);
+void Lexer_freex(Lexer *lexer);
 void Lexer_print(Lexer lexer);
 
 #ifdef __cplusplus

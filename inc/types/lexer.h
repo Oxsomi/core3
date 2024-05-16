@@ -114,8 +114,8 @@ typedef struct Lexer {
 	ListCharString sourceLocations;			//Used by tokens to reference their real location
 } Lexer;
 
-Error Lexer_create(CharString source, Allocator alloc, Lexer *lexer);
-Bool Lexer_free(Lexer *lexer, Allocator alloc);
+Bool Lexer_create(CharString source, Allocator alloc, Lexer *lexer, Error *e_rr);
+void Lexer_free(Lexer *lexer, Allocator alloc);
 
 void Lexer_print(Lexer lexer, Allocator alloc);
 

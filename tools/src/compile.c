@@ -201,11 +201,13 @@ Bool CLI_compileShaderSingle(
 
 	//First we need to go from text with includes and defines to easy to parse text
 
-	Error err = Error_none();
+	Error errTemp = Error_none(), *e_rr = &errTemp;
+	Bool s_uccess = true;
+
 	CompileResult compileResult = (CompileResult) { 0 };
 	CharString tempStr = CharString_createNull();
 	CharString tempStr2 = CharString_createNull();
-	gotoIfError(clean, Compiler_preprocessx(compiler, settings, &compileResult))
+	gotoIfError3(clean, Compiler_preprocessx(compiler, settings, &compileResult, e_rr))
 
 	for(U64 i = 0; i < compileResult.compileErrors.length; ++i) {
 
@@ -227,7 +229,7 @@ Bool CLI_compileShaderSingle(
 
 		settings.string = tempStr;
 
-		gotoIfError(clean, Compiler_parsex(compiler, settings, &compileResult))
+		gotoIfError3(clean, Compiler_parsex(compiler, settings, &compileResult, e_rr))
 	}
 
 	//Write final compile result
@@ -240,33 +242,33 @@ Bool CLI_compileShaderSingle(
 
 		if (compileType == ECompileType_Includes) {
 
-			gotoIfError(clean, ListIncludeInfo_stringifyx(compileResult.includeInfo, &tempStr))
+			gotoIfError3(clean, ListIncludeInfo_stringifyx(compileResult.includeInfo, &tempStr, e_rr))
 
 			//Info about the source file
 
-			gotoIfError(clean, CharString_formatx(
+			gotoIfError2(clean, CharString_formatx(
 				&tempStr2,
 				"\nSources:\n%08"PRIx32" %05"PRIu32" %s\n",
 				Buffer_crc32c(CharString_bufferConst(input)), (U32) CharString_length(input), inputPath.ptr
 			))
 
-			gotoIfError(clean, CharString_appendStringx(&tempStr, tempStr2))
+			gotoIfError2(clean, CharString_appendStringx(&tempStr, tempStr2))
 			CharString_freex(&tempStr2);
 
-			gotoIfError(clean, File_write(CharString_bufferConst(tempStr), outputPath, 10 * MS))
+			gotoIfError2(clean, File_write(CharString_bufferConst(tempStr), outputPath, 10 * MS))
 		}
 
 		//Otherwise we can simply output preprocessed blob
 
-		else gotoIfError(clean, File_write(CharString_bufferConst(compileResult.text), outputPath, 10 * MS))
+		else gotoIfError2(clean, File_write(CharString_bufferConst(compileResult.text), outputPath, 10 * MS))
 	}
 
 clean:
 	CompileResult_freex(&compileResult);
 	CharString_freex(&tempStr);
 	CharString_freex(&tempStr2);
-	Error_printx(err, ELogLevel_Error, ELogOptions_Default);
-	return !err.genericError && compileResult.isSuccess;
+	Error_printx(errTemp, ELogLevel_Error, ELogOptions_Default);
+	return s_uccess && compileResult.isSuccess;
 }
 
 typedef struct CompilerJobScheduler {
@@ -294,7 +296,8 @@ void CLI_compileShaderJob(CompilerJobScheduler *job) {
 	if(!job)
 		return;
 
-	Error err = Error_none();
+	Bool s_uccess = true;
+
 	ELockAcquire acq = ELockAcquire_Invalid;
 	U64 threadCounter = U64_MAX;
 
@@ -305,10 +308,10 @@ void CLI_compileShaderJob(CompilerJobScheduler *job) {
 		 acq = Lock_lock(job->lock, U64_MAX);
 
 		if(acq < ELockAcquire_Success)
-			gotoIfError(clean, Error_invalidState(0, "CLI_compileShaderJob() couldn't lock"))
+			return;
 
 		if(*job->counter == job->inputData.length) {
-			*job->success &= !err.genericError;
+			*job->success &= s_uccess;
 			break;
 		}
 
@@ -337,11 +340,9 @@ void CLI_compileShaderJob(CompilerJobScheduler *job) {
 			job->includeDir
 		)) {
 			Log_errorLnx("Compile failed for file \"%.*s\"", (int)CharString_length(input), input.ptr);
-			err = Error_invalidState(1, "One of CLI_compileShaderJob() failed");
+			s_uccess = false;
 		}
 	}
-
-clean:
 
 	if(acq == ELockAcquire_Acquired)
 		Lock_unlock(job->lock);
@@ -354,38 +355,43 @@ Bool CLI_compileShader(ParsedArgs args) {
 	//Get input
 
 	U64 offset = 0;
+
 	CharString input = (CharString) { 0 };
-	Error err = ListCharString_get(args.args, offset++, &input);
-
-	if (err.genericError) {
-		Error_printx(err, ELogLevel_Error, ELogOptions_Default);
-		return false;
-	}
-
-	//Check if output is valid
-
 	CharString output = (CharString) { 0 };
-
-	if ((err = ListCharString_get(args.args, offset++, &output)).genericError) {
-		Error_printx(err, ELogLevel_Error, ELogOptions_Default);
-		return false;
-	}
-
-	//Grab modes
 
 	U64 compileModeU64 = 0;
 	CharString compileMode = (CharString) { 0 };
 
-	if ((err = ListCharString_get(args.args, offset++, &compileMode)).genericError) {
-		Error_printx(err, ELogLevel_Error, ELogOptions_Default);
-		return false;
-	}
-
 	ListCharString splits = (ListCharString) { 0 };
-	if((err = CharString_splitSensitivex(compileMode, ',', &splits)).genericError) {
-		Log_errorLnx("Couldn't parse -m x, where x is spv, dxil or all (or for example spv,dxil)");
-		return false;
-	}
+
+	ListCharString allFiles = (ListCharString) { 0 };
+	ListCharString allShaderText = (ListCharString) { 0 };
+	ListCharString allOutputs = (ListCharString) { 0 };
+	ListU8 allCompileModes = (ListU8) { 0 };
+	ListThread threads = (ListThread) { 0 };
+	ListCompiler compilers = (ListCompiler) { 0 };
+	Compiler compiler = (Compiler) { 0 };
+	ListIncludeInfo includeInfo = (ListIncludeInfo) { 0 };
+	CharString resolved = CharString_createNull();
+	CharString resolved2 = CharString_createNull();
+	CharString tempStr = CharString_createNull();
+	CharString tempStr2 = CharString_createNull();
+	CharString tempStr3 = CharString_createNull();
+	Buffer temp = Buffer_createNull();
+	Bool isFolder = false;
+	Lock lock = (Lock) { 0 };
+	Ns start = Time_now();
+
+	Error errTemp = Error_none(), *e_rr = &errTemp;
+	Bool s_uccess = true;
+
+	gotoIfError2(clean, ListCharString_get(args.args, offset++, &input))
+	gotoIfError2(clean, ListCharString_get(args.args, offset++, &output))
+	gotoIfError2(clean, ListCharString_get(args.args, offset++, &compileMode))
+
+	//Grab modes
+
+	gotoIfError2(clean, CharString_splitSensitivex(compileMode, ',', &splits));
 
 	CharString modes[] = {
 		CharString_createRefCStrConst("spv"),
@@ -415,9 +421,9 @@ Bool CLI_compileShader(ParsedArgs args) {
 			}
 
 		if(!match) {
-			ListCharString_freex(&splits);
 			Log_errorLnx("Couldn't parse -m x, where x is spv, dxil or all (or for example spv,dxil)");
-			return false;
+			s_uccess = false;
+			goto clean;
 		}
 	}
 
@@ -432,10 +438,7 @@ Bool CLI_compileShader(ParsedArgs args) {
 
 		CharString thread = (CharString) { 0 };
 
-		if ((err = ListCharString_get(args.args, offset++, &thread)).genericError) {
-			Error_printx(err, ELogLevel_Error, ELogOptions_Default);
-			return false;
-		}
+		gotoIfError2(clean, ListCharString_get(args.args, offset++, &thread))
 
 		if(CharString_endsWithSensitive(thread, '%', 0)) {					//-threads 50%
 
@@ -443,12 +446,9 @@ Bool CLI_compileShader(ParsedArgs args) {
 			F64 num = 0;
 
 			if (!CharString_parseDouble(number, &num) || num < 0 || num > 100) {
-
-				Log_errorLnx(
-					"Couldn't parse -threads x%, where x is expected to be a F64 between (0-100)% or 0 -> threadCount - 1"
-				);
-
-				return false;
+				Log_errorLnx("Couldn't parse -threads x%, x is expected to be a F64 between (0-100)% or 0 -> threadCount - 1");
+				s_uccess = false;
+				goto clean;
 			}
 
 			threadCount = (U32) F64_max(1, threadCount * num / 100);
@@ -460,7 +460,8 @@ Bool CLI_compileShader(ParsedArgs args) {
 			U64 num = 0;
 			if (!CharString_parseU64(thread, &num) || num > threadCount) {
 				Log_errorLnx("Couldn't parse -threads x, where x is expected to be a F64 of (0-100)% or 0 -> threadCount - 1");
-				return false;
+				s_uccess = false;
+				goto clean;
 			}
 
 			threadCount = (U32)num == 0 ? threadCount : (U32)num;
@@ -472,10 +473,7 @@ Bool CLI_compileShader(ParsedArgs args) {
 
 	CharString compileTypeStr = (CharString) { 0 };
 
-	if ((err = ListCharString_get(args.args, offset++, &compileTypeStr)).genericError) {
-		Error_printx(err, ELogLevel_Error, ELogOptions_Default);
-		return false;
-	}
+	gotoIfError2(clean, ListCharString_get(args.args, offset++, &compileTypeStr));
 
 	if (CharString_equalsStringInsensitive(compileTypeStr, CharString_createRefCStrConst("preprocess")))
 		compileType = ECompileType_Preprocess;
@@ -488,53 +486,33 @@ Bool CLI_compileShader(ParsedArgs args) {
 
 	else if (CharString_equalsStringInsensitive(compileTypeStr, CharString_createRefCStrConst("compile"))) {
 		Log_errorLnx("Shader compiler \"compile\" mode isn't supported yet");
-		return false;
+		s_uccess = false;
+		goto clean;
 	}
 
 	else {
 		Log_errorLnx("Unknown shader compile mode passed %s", compileTypeStr.ptr);
-		return false;
+		s_uccess = false;
+		goto clean;
 	}
 
 	//Additional includeDir
 
 	CharString includeDir = (CharString) { 0 };
 
-	if (args.parameters & EOperationHasParameter_IncludeDir && (err = ListCharString_get(args.args, offset++, &includeDir)).genericError) {
-		Error_printx(err, ELogLevel_Error, ELogOptions_Default);
-		return false;
-	}
-
-	//Process
-
-	ListCharString allFiles = (ListCharString) { 0 };
-	ListCharString allShaderText = (ListCharString) { 0 };
-	ListCharString allOutputs = (ListCharString) { 0 };
-	ListU8 allCompileModes = (ListU8) { 0 };
-	ListThread threads = (ListThread) { 0 };
-	ListCompiler compilers = (ListCompiler) { 0 };
-	Compiler compiler = (Compiler) { 0 };
-	ListIncludeInfo includeInfo = (ListIncludeInfo) { 0 };
-	CharString resolved = CharString_createNull();
-	CharString resolved2 = CharString_createNull();
-	CharString tempStr = CharString_createNull();
-	CharString tempStr2 = CharString_createNull();
-	CharString tempStr3 = CharString_createNull();
-	Buffer temp = Buffer_createNull();
-	Bool isFolder = false;
-	Lock lock = (Lock) { 0 };
-	Ns start = Time_now();
+	if (args.parameters & EOperationHasParameter_IncludeDir)
+		gotoIfError2(clean, ListCharString_get(args.args, offset++, &includeDir));
 
 	//Get all shaders
 
 	if (File_hasFolder(input)) {
 
 		Bool isVirtual;
-		gotoIfError(clean, File_resolvex(input, &isVirtual, 0, &resolved))
-		gotoIfError(clean, CharString_appendx(&resolved, '/'))
+		gotoIfError2(clean, File_resolvex(input, &isVirtual, 0, &resolved))
+		gotoIfError2(clean, CharString_appendx(&resolved, '/'))
 
-		gotoIfError(clean, File_resolvex(output, &isVirtual, 0, &resolved2))
-		gotoIfError(clean, CharString_appendx(&resolved2, '/'))
+		gotoIfError2(clean, File_resolvex(output, &isVirtual, 0, &resolved2))
+		gotoIfError2(clean, CharString_appendx(&resolved2, '/'))
 
 		ShaderFileRecursion shaderFileRecursion = (ShaderFileRecursion) {
 			.allShaders = &allFiles,
@@ -547,7 +525,7 @@ Bool CLI_compileShader(ParsedArgs args) {
 			.compileType = compileType
 		};
 
-		gotoIfError(clean, File_foreach(
+		gotoIfError2(clean, File_foreach(
 			input,
 			(FileCallback) registerFile,
 			&shaderFileRecursion,
@@ -556,7 +534,7 @@ Bool CLI_compileShader(ParsedArgs args) {
 
 		//Make sure we can have a folder at output
 
-		gotoIfError(clean, File_add(resolved2, EFileType_Folder, 1 * SECOND))
+		gotoIfError2(clean, File_add(resolved2, EFileType_Folder, 1 * SECOND))
 		isFolder = true;
 	}
 
@@ -570,7 +548,7 @@ Bool CLI_compileShader(ParsedArgs args) {
 		//Replace output's .hlsl by .spv.hlsl or .dxil.hlsl
 
 		if (multipleModes || compileType != ECompileType_Preprocess)
-			gotoIfError(clean, CharString_formatx(
+			gotoIfError2(clean, CharString_formatx(
 				&tempStr, "%.*s%s",
 				(int)U64_min(
 					CharString_length(output),
@@ -590,12 +568,12 @@ Bool CLI_compileShader(ParsedArgs args) {
 
 		//Register mode and input/output name
 
-		gotoIfError(clean, ListCharString_pushBackx(&allFiles, input))
+		gotoIfError2(clean, ListCharString_pushBackx(&allFiles, input))
 
-		gotoIfError(clean, ListCharString_pushBackx(&allOutputs, tempStr))		//Moved here
+		gotoIfError2(clean, ListCharString_pushBackx(&allOutputs, tempStr))		//Moved here
 		tempStr = CharString_createNull();
 
-		gotoIfError(clean, ListU8_pushBackx(&allCompileModes, i))
+		gotoIfError2(clean, ListU8_pushBackx(&allCompileModes, i))
 	}
 
 	//Only continue if there are any files and then fetch all files
@@ -617,7 +595,7 @@ Bool CLI_compileShader(ParsedArgs args) {
 			CharString shader = *ListCharString_last(allShaderText);
 			shader = CharString_createRefSizedConst(shader.ptr, CharString_length(shader), false);
 
-			gotoIfError(clean, ListCharString_pushBackx(&allShaderText, shader))
+			gotoIfError2(clean, ListCharString_pushBackx(&allShaderText, shader))
 			totalLen += CharString_length(shader);
 
 			continue;
@@ -625,18 +603,18 @@ Bool CLI_compileShader(ParsedArgs args) {
 
 		//Otherwise grab from file
 
-		gotoIfError(clean, File_read(allFiles.ptr[i], 10 * MS, &temp))
+		gotoIfError2(clean, File_read(allFiles.ptr[i], 10 * MS, &temp))
 
 		if(!Buffer_length(temp)) {
-			gotoIfError(clean, ListCharString_pushBackx(&allShaderText, CharString_createNull()))
+			gotoIfError2(clean, ListCharString_pushBackx(&allShaderText, CharString_createNull()))
 			continue;
 		}
 
-		gotoIfError(clean, CharString_createCopyx(
+		gotoIfError2(clean, CharString_createCopyx(
 			CharString_createRefSizedConst((const C8*)temp.ptr, Buffer_length(temp), false), &tempStr
 		))
 
-		gotoIfError(clean, ListCharString_pushBackx(&allShaderText, tempStr))
+		gotoIfError2(clean, ListCharString_pushBackx(&allShaderText, tempStr))
 		tempStr = CharString_createNull();
 
 		totalLen += Buffer_length(temp);
@@ -646,8 +624,6 @@ Bool CLI_compileShader(ParsedArgs args) {
 	}
 
 	//Spin up threads if it's worth it
-
-	Bool success = true;
 
 	if (
 		//Default thread count behavior; 64KiB or more (with 8+ files) or 16+ files
@@ -661,8 +637,8 @@ Bool CLI_compileShader(ParsedArgs args) {
 		U64 counter = 0;
 		U64 threadCounter = 0;
 
-		gotoIfError(clean, ListThread_resizex(&threads, threadCount))
-		gotoIfError(clean, ListCompiler_resizex(&compilers, threadCount))
+		gotoIfError2(clean, ListThread_resizex(&threads, threadCount))
+		gotoIfError2(clean, ListCompiler_resizex(&compilers, threadCount))
 
 		CompilerJobScheduler jobScheduler = (CompilerJobScheduler) {
 
@@ -676,7 +652,7 @@ Bool CLI_compileShader(ParsedArgs args) {
 			.lock = &lock,
 			.counter = &counter,
 			.threadCounter = &threadCounter,
-			.success = &success,
+			.success = &s_uccess,
 
 			.compileType = compileType,
 			.includeDir = includeDir
@@ -684,25 +660,22 @@ Bool CLI_compileShader(ParsedArgs args) {
 
 		for(U64 i = 0; i < threadCount; ++i) {
 
-			gotoIfError(clean, Compiler_createx(&compilers.ptrNonConst[i]))
+			gotoIfError3(clean, Compiler_createx(&compilers.ptrNonConst[i], e_rr))
 
-			gotoIfError(clean, Thread_createx(
+			gotoIfError2(clean, Thread_createx(
 				(ThreadCallbackFunction) CLI_compileShaderJob, &jobScheduler, &threads.ptrNonConst[i]
 			))
 		}
 
-		Bool success2 = true;
-
 		for(U64 i = 0; i < threadCount; ++i)
-			success2 &= !Thread_waitAndCleanupx(&threads.ptrNonConst[i]).genericError;
+			Thread_waitAndCleanupx(&threads.ptrNonConst[i]);
 
 		ListThread_freex(&threads);
-		success &= success2;
 	}
 
 	else {
 
-		gotoIfError(clean, Compiler_createx(&compiler))
+		gotoIfError3(clean, Compiler_createx(&compiler, e_rr))
 
 		for (U64 i = 0; i < allFiles.length; ++i)
 			if(!CLI_compileShaderSingle(
@@ -711,23 +684,23 @@ Bool CLI_compileShader(ParsedArgs args) {
 				compileType,
 				includeDir
 			)) {
-				success = false;
+				s_uccess = false;
 				Log_errorLnx("Compile failed for file \"%.*s\"", (int)CharString_length(allFiles.ptr[i]), allFiles.ptr[i].ptr);
 			}
 	}
 
-	if(!success)
-		gotoIfError(clean, Error_invalidState(0, "CLI_compileShader() compile failed"))
+	if(!s_uccess)
+		goto clean;
 
 	//Merge all include info into a root.txt file.
 
 	if (compileType == ECompileType_Includes && isFolder) {
 
 		if(compiler.interfaces[0])
-			gotoIfError(clean, Compiler_mergeIncludeInfox(&compiler, &includeInfo))
+			gotoIfError3(clean, Compiler_mergeIncludeInfox(&compiler, &includeInfo, e_rr))
 
 		else for(U64 i = 0; i < compilers.length; ++i)
-			gotoIfError(clean, Compiler_mergeIncludeInfox(&compilers.ptrNonConst[i], &includeInfo))
+			gotoIfError3(clean, Compiler_mergeIncludeInfox(&compilers.ptrNonConst[i], &includeInfo, e_rr))
 
 		//Sort IncludeInfo
 
@@ -735,45 +708,45 @@ Bool CLI_compileShader(ParsedArgs args) {
 
 		//We won't be needing resolved, so we can safely apppend root.txt after it
 
-		gotoIfError(clean, CharString_createCopyx(output, &tempStr3))
+		gotoIfError2(clean, CharString_createCopyx(output, &tempStr3))
 
 		if(!CharString_endsWithSensitive(output, '/', 0) && !CharString_endsWithSensitive(output, '\\', 0))
-			gotoIfError(clean, CharString_appendx(&tempStr3, '/'))
+			gotoIfError2(clean, CharString_appendx(&tempStr3, '/'))
 
-		gotoIfError(clean, CharString_appendStringx(&tempStr3, CharString_createRefCStrConst("root.txt")))
+		gotoIfError2(clean, CharString_appendStringx(&tempStr3, CharString_createRefCStrConst("root.txt")))
 
 		//Make the string
 
-		gotoIfError(clean, ListIncludeInfo_stringifyx(includeInfo, &tempStr))
+		gotoIfError3(clean, ListIncludeInfo_stringifyx(includeInfo, &tempStr, e_rr))
 
 		//Info about the source files
 
-		gotoIfError(clean, CharString_appendStringx(&tempStr, CharString_createRefCStrConst("\nSources:\n")))
+		gotoIfError2(clean, CharString_appendStringx(&tempStr, CharString_createRefCStrConst("\nSources:\n")))
 
 		for(U64 i = 0; i < allFiles.length; ++i) {
 
 			if(i && allFiles.ptr[i].ptr == allFiles.ptr[i - 1].ptr)		//Easy check, since we re-use string locations :)
 				continue;
 
-			gotoIfError(clean, CharString_formatx(
+			gotoIfError2(clean, CharString_formatx(
 				&tempStr2,
 				"%08"PRIx32" %05"PRIu32" %s\n",
 				Buffer_crc32c(CharString_bufferConst(allShaderText.ptr[i])), (U32)CharString_length(allShaderText.ptr[i]),
 				allFiles.ptr[i].ptr
 			))
 
-			gotoIfError(clean, CharString_appendStringx(&tempStr, tempStr2))
+			gotoIfError2(clean, CharString_appendStringx(&tempStr, tempStr2))
 			CharString_freex(&tempStr2);
 		}
 
-		gotoIfError(clean, File_write(CharString_bufferConst(tempStr), tempStr3, 10 * MS))
+		gotoIfError2(clean, File_write(CharString_bufferConst(tempStr), tempStr3, 10 * MS))
 	}
 
 clean:
 
 	F64 dt = (F64)(Time_now() - start) / SECOND;
 
-	if(!err.genericError)
+	if(s_uccess)
 		Log_debugLnx("-- Compile %.*s success in %fs", (int)CharString_length(input), input.ptr, dt);
 
 	else Log_errorLnx("-- Compile %.*s failed in %fs!", (int)CharString_length(input), input.ptr);
@@ -796,5 +769,7 @@ clean:
 	ListCharString_freeUnderlyingx(&allShaderText);
 	ListCharString_freeUnderlyingx(&allOutputs);
 	ListU8_freex(&allCompileModes);
-	return !err.genericError;
+
+	Error_printx(errTemp, ELogLevel_Error, ELogOptions_Default);
+	return s_uccess;
 }

@@ -125,27 +125,28 @@ Bool Lexer_isSymbol(C8 c) {
 	return symbolRange0 || symbolRange1 || symbolRange2 || symbolRange3;
 }
 
-Error Lexer_create(CharString str, Allocator alloc, Lexer *lexer) {
+Bool Lexer_create(CharString str, Allocator alloc, Lexer *lexer, Error *e_rr) {
 
-	if(!lexer)
-		return Error_nullPointer(!str.ptr ? 0 : 1, "Lexer_create()::str and lexer are required");
+	Bool s_uccess = true;
 
-	if(lexer->tokens.ptr)
-		return Error_invalidParameter(1, 0, "Lexer_create()::lexer wasn't empty, might indicate memleak");
-
-	if(CharString_length(str) >> 28)
-		return Error_outOfBounds(0, CharString_length(str), 1 << 28, "Lexer_create()::str is limited to 256MiB");
-
-	Error err = Error_none();
 	ListLexerToken tokens = { 0 };
 	ListLexerExpression expressions = { 0 };
 	ListCharString sourceLocations = { 0 };
 	CharString currentSource = CharString_createNull();
 	CharString tempSource = CharString_createNull();
 
-	gotoIfError(clean, ListCharString_reserve(&sourceLocations, 64, alloc))
-	gotoIfError(clean, ListLexerExpression_reserve(&expressions, 64 + CharString_length(str) / 32, alloc))
-	gotoIfError(clean, ListLexerToken_reserve(&tokens, 64 + CharString_length(str) / 3, alloc))
+	if(!lexer)
+		retError(clean, Error_nullPointer(!str.ptr ? 0 : 1, "Lexer_create()::str and lexer are required"))
+
+	if(lexer->tokens.ptr)
+		retError(clean, Error_invalidParameter(1, 0, "Lexer_create()::lexer wasn't empty, might indicate memleak"))
+
+	if(CharString_length(str) >> 28)
+		retError(clean, Error_outOfBounds(0, CharString_length(str), 1 << 28, "Lexer_create()::str is limited to 256MiB"))
+
+	gotoIfError2(clean, ListCharString_reserve(&sourceLocations, 64, alloc))
+	gotoIfError2(clean, ListLexerExpression_reserve(&expressions, 64 + CharString_length(str) / 32, alloc))
+	gotoIfError2(clean, ListLexerToken_reserve(&tokens, 64 + CharString_length(str) / 3, alloc))
 
 	const C8 *prevIt = NULL;
 	C8 prev = 0;
@@ -161,7 +162,7 @@ Error Lexer_create(CharString str, Allocator alloc, Lexer *lexer) {
 
 	for (U32 i = 0, k = (U32) CharString_length(str); i < k; ++i) {
 
-		C8 c = CharString_getAt(str, i);
+		C8 c = str.ptr[i];
 
 		C8 next = CharString_getAt(str, i + 1);
 		C8 prevTemp = prev;
@@ -199,7 +200,7 @@ Error Lexer_create(CharString str, Allocator alloc, Lexer *lexer) {
 		if(c == '"') {
 
 			if(isString && lastLineId != lineCounter)
-				gotoIfError(clean, Error_invalidState(0, "Lexer_create() String \"\" needs to be created on the same line"))
+				retError(clean, Error_invalidState(0, "Lexer_create() String \"\" needs to be created on the same line"))
 
 			//If we encounter a " in the middle of an expression
 			//Example: ("") then we have to break up the previous token and start anew
@@ -256,12 +257,12 @@ Error Lexer_create(CharString str, Allocator alloc, Lexer *lexer) {
 						LexerToken_getType(lineId) >= ELexerTokenType_IntBegin &&
 						LexerToken_getType(lineId) <= ELexerTokenType_IntEnd
 					))
-						gotoIfError(clean, Error_invalidState(1, "Lexer_create() #line expected uint (U64)"))
+						retError(clean, Error_invalidState(1, "Lexer_create() #line expected uint (U64)"))
 
 					U64 lineIdi = 0;
 
 					if(!CharString_parseU64(LexerToken_asString(lineId, fakeLexer), &lineIdi))
-						gotoIfError(clean, Error_invalidState(2, "Lexer_create() #line couldn't parse U64"))
+						retError(clean, Error_invalidState(2, "Lexer_create() #line couldn't parse U64"))
 
 					fileLineStart = lineCounter + 1;
 					fileLineOffset = lineIdi;
@@ -274,7 +275,7 @@ Error Lexer_create(CharString str, Allocator alloc, Lexer *lexer) {
 						LexerToken file = tokens.ptr[lastToken + 3];
 
 						if(LexerToken_getType(file) != ELexerTokenType_String)
-							gotoIfError(clean, Error_invalidState(3, "Lexer_create() #line expected string next"))
+							retError(clean, Error_invalidState(3, "Lexer_create() #line expected string next"))
 
 						//Parse string forreal
 
@@ -291,7 +292,7 @@ Error Lexer_create(CharString str, Allocator alloc, Lexer *lexer) {
 							if (cj == '\\') {
 
 								if(isEscaped) {
-									gotoIfError(clean, CharString_append(&tempSource, cj, alloc))
+									gotoIfError2(clean, CharString_append(&tempSource, cj, alloc))
 									isEscaped = false;
 									continue;
 								}
@@ -307,19 +308,19 @@ Error Lexer_create(CharString str, Allocator alloc, Lexer *lexer) {
 
 							prevSlash = cj == '/';
 
-							gotoIfError(clean, CharString_append(&tempSource, cj, alloc))
+							gotoIfError2(clean, CharString_append(&tempSource, cj, alloc))
 							isEscaped = false;
 						}
 
 						if(isEscaped)
-							gotoIfError(clean, Error_invalidParameter(
+							retError(clean, Error_invalidParameter(
 								0, 0, "Lexer_create() source was invalid. String can't end with an escaped quote!"
 							))
 
 						//Fix path
 
 						if(leadingSlashSlash)
-							gotoIfError(clean, CharString_insert(&tempSource, '/', 0, alloc))
+							gotoIfError2(clean, CharString_insert(&tempSource, '/', 0, alloc))
 
 						//Find string
 
@@ -334,10 +335,10 @@ Error Lexer_create(CharString str, Allocator alloc, Lexer *lexer) {
 						if(sourceLoc == sourceLocations.length) {
 
 							if(sourceLoc >> 16)
-								gotoIfError(clean, Error_invalidState(4, "Lexer_create() source count limited to U16_MAX"))
+								retError(clean, Error_invalidState(4, "Lexer_create() source count limited to U16_MAX"))
 
-							gotoIfError(clean, CharString_createCopy(tempSource, alloc, &currentSource))
-							gotoIfError(clean, ListCharString_pushBack(&sourceLocations, currentSource, alloc))
+							gotoIfError2(clean, CharString_createCopy(tempSource, alloc, &currentSource))
+							gotoIfError2(clean, ListCharString_pushBack(&sourceLocations, currentSource, alloc))
 							currentSource = CharString_createNull();		//Moved
 						}
 
@@ -346,7 +347,7 @@ Error Lexer_create(CharString str, Allocator alloc, Lexer *lexer) {
 						fileId = sourceLoc;
 					}
 
-					gotoIfError(clean, ListLexerToken_resize(&tokens, lastToken, alloc))
+					gotoIfError2(clean, ListLexerToken_resize(&tokens, lastToken, alloc))
 					endExpression = false;		//Pretend we didn't see that
 					prevIt = NULL;
 					tokenType = ELexerTokenType_Count;
@@ -359,7 +360,7 @@ Error Lexer_create(CharString str, Allocator alloc, Lexer *lexer) {
 			lastLineStart = i + multiChar + 1;
 
 			if (lineCounter >> 17)
-				gotoIfError(clean, Error_outOfBounds(
+				retError(clean, Error_outOfBounds(
 					0, lineCounter, (1 << 17) - 1, "Lexer_create() line count is limited to 128Ki"
 				))
 		}
@@ -374,7 +375,7 @@ Error Lexer_create(CharString str, Allocator alloc, Lexer *lexer) {
 		//Handle starting comment
 
 		if(c == '/' && next == '/' && expressionType != ELexerExpressionType_MultiLineComment) {
-			gotoIfError(clean, Lexer_endExpression(&lastToken, &expressions, tokens.length, &expressionType, alloc))
+			gotoIfError2(clean, Lexer_endExpression(&lastToken, &expressions, tokens.length, &expressionType, alloc))
 			expressionType = ELexerExpressionType_Comment;
 			multiChar = true;
 			endToken = true;
@@ -383,7 +384,7 @@ Error Lexer_create(CharString str, Allocator alloc, Lexer *lexer) {
 		//Handle starting multi line comment
 
 		if(c == '/' && next == '*' && !expressionType) {
-			gotoIfError(clean, Lexer_endExpression(&lastToken, &expressions, tokens.length, &expressionType, alloc))
+			gotoIfError2(clean, Lexer_endExpression(&lastToken, &expressions, tokens.length, &expressionType, alloc))
 			expressionType = ELexerExpressionType_MultiLineComment;
 			multiChar = true;
 			endToken = true;
@@ -551,7 +552,7 @@ Error Lexer_create(CharString str, Allocator alloc, Lexer *lexer) {
 							case ELexerTokenType_IntegerDec:
 
 								if(i == k && requiredNext)
-									gotoIfError(clean, Error_invalidState(0, "Lexer_create() expected next integer"))
+									retError(clean, Error_invalidState(0, "Lexer_create() expected next integer"))
 
 								for (; i < k; ++i) {
 
@@ -634,7 +635,7 @@ Error Lexer_create(CharString str, Allocator alloc, Lexer *lexer) {
 									if(!(tokenType >= ELexerTokenType_IntBegin && tokenType <= ELexerTokenType_IntEnd))
 										break;
 
-									gotoIfError(clean, Error_invalidState(0, "Lexer_create() invalid character in number"))
+									retError(clean, Error_invalidState(0, "Lexer_create() invalid character in number"))
 								}
 
 								break;
@@ -660,7 +661,7 @@ Error Lexer_create(CharString str, Allocator alloc, Lexer *lexer) {
 										break;
 
 									if(lastE + 1 == i)
-										gotoIfError(clean, Error_invalidState(0, "Lexer_create() invalid float \"e.\"?"))
+										retError(clean, Error_invalidState(0, "Lexer_create() invalid float \"e.\"?"))
 
 									if(containsE)		//1e0.xxxx can terminate a float for example
 										break;
@@ -672,7 +673,7 @@ Error Lexer_create(CharString str, Allocator alloc, Lexer *lexer) {
 								if (c2 == '-' || c2 == '+') {
 
 									if(!containsE)
-										gotoIfError(clean, Error_invalidState(0, "Lexer_create() expected e- or e+ in float"))
+										retError(clean, Error_invalidState(0, "Lexer_create() expected e- or e+ in float"))
 
 									if(lastE + 1 != i)		//Otherwise, - or + can terminate a float
 										break;
@@ -689,7 +690,7 @@ Error Lexer_create(CharString str, Allocator alloc, Lexer *lexer) {
 								if (c2 == 'e' || c2 == 'E') {
 
 									if(containsE)
-										gotoIfError(clean, Error_invalidState(0, "Lexer_create() contains two e's in float"))
+										retError(clean, Error_invalidState(0, "Lexer_create() contains two e's in float"))
 
 									containsE = true;
 									lastE = i;
@@ -744,20 +745,20 @@ Error Lexer_create(CharString str, Allocator alloc, Lexer *lexer) {
 			U64 off = i + endChar + multiChar - len;
 
 			if(len >> 8)
-				gotoIfError(clean, Error_outOfBounds(0, len, 256, "Lexer_create() tokens are limited to 256 C8s"))
+				retError(clean, Error_outOfBounds(0, len, 256, "Lexer_create() tokens are limited to 256 C8s"))
 
 			if(off >> (32 - 4))
-				gotoIfError(clean, Error_outOfBounds(0, off, 1 << (32 - 4), "Lexer_create() offset out of bounds"))
+				retError(clean, Error_outOfBounds(0, off, 1 << (32 - 4), "Lexer_create() offset out of bounds"))
 
 			U64 charId = i + 1 - len - lastLineStart;
 
 			if((charId + 1) >> 8)
-				gotoIfError(clean, Error_outOfBounds(0, charId + 1, 256, "Lexer_create() lines are limited to 256 C8s"))
+				retError(clean, Error_outOfBounds(0, charId + 1, 256, "Lexer_create() lines are limited to 256 C8s"))
 
 			U64 resolvedLineId = lineCounter - fileLineStart + fileLineOffset;
 
 			if(resolvedLineId >> 15)
-				gotoIfError(clean, Error_outOfBounds(
+				retError(clean, Error_outOfBounds(
 					0, resolvedLineId, 1 << 15, "Lexer_create() source line id is out of bounds (32Ki)"
 				))
 
@@ -773,7 +774,7 @@ Error Lexer_create(CharString str, Allocator alloc, Lexer *lexer) {
 				.realLineIdAndLineIdExt = (U16)((lineCounter >> 16 << 15) | resolvedLineId)
 			};
 
-			gotoIfError(clean, ListLexerToken_pushBack(&tokens, tok, alloc))
+			gotoIfError2(clean, ListLexerToken_pushBack(&tokens, tok, alloc))
 			prevIt = NULL;
 			tokenType = ELexerTokenType_Count;
 		}
@@ -781,18 +782,18 @@ Error Lexer_create(CharString str, Allocator alloc, Lexer *lexer) {
 		//Push it as an expression
 
 		if (endExpression)
-			gotoIfError(clean, Lexer_endExpression(&lastToken, &expressions, tokens.length, &expressionType, alloc))
+			gotoIfError2(clean, Lexer_endExpression(&lastToken, &expressions, tokens.length, &expressionType, alloc))
 
 		if(multiChar)
 			++i;
 	}
 
 	if (lastToken != tokens.length)
-		gotoIfError(clean, Lexer_endExpression(&lastToken, &expressions, tokens.length, &expressionType, alloc))
+		gotoIfError2(clean, Lexer_endExpression(&lastToken, &expressions, tokens.length, &expressionType, alloc))
 
 clean:
 
-	if(err.genericError) {
+	if(!s_uccess) {
 		ListLexerToken_free(&tokens, alloc);
 		ListLexerExpression_free(&expressions, alloc);
 		ListCharString_freeUnderlying(&sourceLocations, alloc);
@@ -806,18 +807,17 @@ clean:
 
 	CharString_free(&currentSource, alloc);
 	CharString_free(&tempSource, alloc);
-	return err;
+	return s_uccess;
 }
 
-Bool Lexer_free(Lexer *lexer, Allocator alloc) {
+void Lexer_free(Lexer *lexer, Allocator alloc) {
 
 	if(!lexer)
-		return true;
+		return;
 
 	ListLexerExpression_free(&lexer->expressions, alloc);
 	ListLexerToken_free(&lexer->tokens, alloc);
 	ListCharString_freeUnderlying(&lexer->sourceLocations, alloc);
-	return true;
 }
 
 void Lexer_print(Lexer lexer, Allocator alloc) {
