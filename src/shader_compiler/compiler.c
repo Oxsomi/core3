@@ -268,7 +268,7 @@ Bool Compiler_parse(Compiler comp, CompilerSettings settings, Allocator alloc, C
 	//Parser_printTokens(parser, alloc);
 
 	gotoIfError3(clean, Parser_classify(&parser, alloc, e_rr))
-	Parser_printSymbols(parser, alloc);
+	Parser_printSymbols(parser, U32_MAX, true, alloc);
 
 	//After, we need to resolve the symbols into actual struct layouts.
 	//As well as return shEntries

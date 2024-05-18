@@ -369,7 +369,11 @@ void Parser_free(Parser *parser, Allocator alloc) {
 
 	ListSymbol_free(&parser->symbols, alloc);
 	ListToken_free(&parser->tokens, alloc);
+
 	ListCharString_freeUnderlying(&parser->parsedLiterals, alloc);
+	ListCharString_freeUnderlying(&parser->symbolNames, alloc);
+
+	ListU32_free(&parser->symbolMapping, alloc);
 }
 
 void Parser_printTokens(Parser parser, Allocator alloc) {
@@ -506,23 +510,117 @@ void Parser_printTokens(Parser parser, Allocator alloc) {
 	}
 }
 
-void Parser_printSymbols(Parser parser, Allocator alloc) {
-	(void)parser;
-	Log_debugLn(alloc, "Print symbols not implemented yet");
+static const C8 *ESymbolType_names[ESymbolType_Count] = {
+	"Namespace",
+	"Template",
+	"Function",
+	"Variable",
+	"Parameter",
+	"Typedef",
+	"Struct",
+	"Class",
+	"Interface",
+	"Union",
+	"Enum",
+	"EnumValue",
+	"Annotation"
+};
+
+void Parser_printSymbol(Parser parser, Symbol sym, U32 recursion, Allocator alloc) {
+	
+	const C8 *symbolType = ESymbolType_names[sym.symbolType];
+
+	CharString name = sym.name == U32_MAX ? CharString_createRefCStrConst("(unnamed)") : parser.symbolNames.ptr[sym.name];
+
+	CharString tmp = CharString_createNull();
+	if(CharString_create('\t', recursion, alloc, &tmp).genericError)
+		return;
+
+	Token tok = parser.tokens.ptr[sym.tokenId];
+	LexerToken ltok = parser.lexer->tokens.ptr[tok.naiveTokenId];
+
+	if(sym.symbolType == ESymbolType_Annotation || sym.symbolType == ESymbolType_Template) {
+
+		Token endTok = parser.tokens.ptr[sym.tokenId + sym.tokenCount];
+		LexerToken ltokEnd = parser.lexer->tokens.ptr[endTok.naiveTokenId];
+
+		U64 start = LexerToken_getOffset(ltok) + tok.lexerTokenSubId;
+		U64 end = LexerToken_getOffset(ltokEnd) + endTok.lexerTokenSubId + endTok.tokenSize;
+
+		name = CharString_createRefSizedConst(
+			parser.lexer->source.ptr + start,
+			end - start,
+			false
+		);
+	}
+
+	CharString fileName =
+		ltok.fileId == U16_MAX ? CharString_createRefCStrConst("source file") :
+		parser.lexer->sourceLocations.ptr[ltok.fileId];
+
+	Log_debugLn(
+		alloc, "%s%s %.*s at line %.*s:%"PRIu64":%"PRIu64,
+		!tmp.ptr ? "" : tmp.ptr, symbolType, (int)CharString_length(name), name.ptr,
+		(int) CharString_length(fileName), fileName.ptr,
+		(U64)LexerToken_getOriginalLineId(ltok), (U64)(ltok.charId + tok.lexerTokenSubId)
+	);
+
+	CharString_free(&tmp, alloc);
+}
+
+void Parser_printSymbolsRecursive(Parser parser, U32 recursion, U32 parent, Bool recursive, Allocator alloc);
+
+U32 Parser_printAll(Parser parser, U32 recursion, U32 i, Bool recursive, Allocator alloc) {
+
+	Symbol sym = parser.symbols.ptr[i];
+	Parser_printSymbol(parser, sym, recursion, alloc);
+
+	U32 skip = (U32)sym.annotations + (Bool) (sym.flags & ESymbolFlag_HasTemplate);
+
+	for (U16 k = 0; k < skip; ++k)
+		Parser_printSymbol(parser, parser.symbols.ptr[i + 1 + k], recursion + 1, alloc);
+
+	if(recursive && sym.child != U32_MAX) {
+
+		U32 child = parser.symbolMapping.ptr[sym.child];	//Child start
+
+		for (U32 j = child; j < child + sym.childCount; ++j)
+			Parser_printSymbolsRecursive(parser, recursion + 1, j, true, alloc);
+	}
+
+	return skip;
+}
+
+void Parser_printSymbolsRecursive(Parser parser, U32 recursion, U32 parent, Bool recursive, Allocator alloc) {
+
+	//Traverse symbol tree
+
+	if(parent == U32_MAX)
+		for (U32 i = 0; i < parser.rootSymbols; ) {
+			U32 skip = Parser_printAll(parser, recursion, i, recursive, alloc);
+			i += 1 + skip;		//Skip to next child
+		}
+
+	else Parser_printAll(parser, recursion, parent, recursive, alloc);
+}
+
+void Parser_printSymbols(Parser parser, U32 parent, Bool recursive, Allocator alloc) {
+
+	if(parent != U32_MAX) {		//Resolve
+
+		if(parent >= parser.symbolMapping.length)
+			return;
+
+		parent = parser.symbolMapping.ptr[parent];
+	}
+
+	Parser_printSymbolsRecursive(parser, 0, parent, recursive, alloc);
 }
 
 Bool Symbol_create(
-
 	ESymbolType type,
 	ESymbolFlag flags,
-	U8 annotations,
-
-	U32 name,
-	U32 baseType,
-	U32 parent,
-	U32 localId,		//U20
-	U16 children,		//U10
-
+	U32 tokenId,
 	Error *e_rr,
 	Symbol *symbol
 ) {
@@ -532,49 +630,210 @@ Bool Symbol_create(
 	if(!symbol)
 		retError(clean, Error_nullPointer(9, "Symbol_create()::symbol is required"))
 
-	if(annotations >> 5)
-		retError(clean, Error_outOfBounds(2, annotations, (1 << 5) - 1, "Symbol_create()::annotations out of bounds"))
-
-	if(type >> 5)
-		retError(clean, Error_outOfBounds(2, type, (1 << 5) - 1, "Symbol_create()::type out of bounds"))
-
-	if(children >> 10)
-		retError(clean, Error_outOfBounds(1, children, (1 << 10) - 1, "Symbol_create()::children out of bounds"))
-
-	if(flags >> 20)
-		retError(clean, Error_outOfBounds(1, flags, (1 << 20) - 1, "Symbol_create()::flags out of bounds"))
-
-	if(localId >> 20)
-		retError(clean, Error_outOfBounds(1, localId, (1 << 20) - 1, "Symbol_create()::localId out of bounds"))
+	if(type >> 8)
+		retError(clean, Error_outOfBounds(2, type, U8_MAX, "Symbol_create()::type out of bounds"))
 
 	*symbol = (Symbol) {
-		.symbolFlagTypeAnnotations = type | (flags << 5) | ((U32)annotations << 25),
-		.name = name,
-		.baseType = baseType,
-		.parent = parent,
-		.localIdChildren = localId | ((U32)children << 20)
+
+		.parent = U32_MAX,
+		.child = U32_MAX,
+		.name = U32_MAX,
+
+		.tokenId = tokenId,
+		.tokenCount = 0,
+
+		.flags = flags,
+
+		.symbolType = (U8) type
 	};
 
 clean:
 	return s_uccess;
 }
 
-U32 Symbol_getLocalId(Symbol s) {
-	return s.localIdChildren & ((1 << 20) - 1);
+Bool Parser_registerSymbol(Parser *parser, Symbol s, U32 parent, Allocator alloc, U32 *symbolId, Error *e_rr) {
+
+	Bool s_uccess = true;
+	U32 pushedId = U32_MAX;
+
+	if(!parser)
+		retError(clean, Error_nullPointer(0, "Parser_registerSymbol()::parser is required"))
+
+	if(!symbolId)
+		retError(clean, Error_nullPointer(4, "Parser_registerSymbol()::symbolId is required"))
+
+	//Find spot from parent
+
+	U32 resolvedId;
+
+	if (parent == U32_MAX)
+		resolvedId = parser->rootSymbols;
+
+	//Register in parent
+
+	else {
+
+		if(parent >= parser->symbolMapping.length)
+			retError(clean, Error_outOfBounds(
+				1, parent, parser->symbolMapping.length, "Parser_registerSymbol()::parent is out of bounds"
+			))
+
+		Symbol parentSymbol = parser->symbols.ptr[parser->symbolMapping.ptr[parent]];
+
+		if (parentSymbol.child == U32_MAX)
+			resolvedId = (U32) parser->symbolMapping.length;
+
+		else resolvedId = parser->symbolMapping.ptr[parentSymbol.child] + parentSymbol.childCount;
+	}
+
+	//Count all annotations of same parent that aren't parented to a symbol yet and parent them
+
+	U8 annotations = 0;
+
+	if(s.symbolType != ESymbolType_Annotation) {
+
+		for (U32 i = resolvedId - 1; i != U32_MAX; --i) {
+
+			Symbol symbol = parser->symbols.ptr[i];
+
+			if(
+				(symbol.symbolType != ESymbolType_Annotation && symbol.symbolType != ESymbolType_Template) ||
+				(symbol.flags & ESymbolFlag_IsParented) ||
+				(symbol.parent != parent)
+			)
+				break;
+
+			if (symbol.symbolType == ESymbolType_Template) {
+				s.flags |= ESymbolFlag_HasTemplate;
+				break;
+			}
+
+			if(annotations == U8_MAX)
+				retError(clean, Error_outOfBounds(
+					1, U8_MAX, U8_MAX, "Parser_registerSymbol() only supporting up to 256 annotations!"
+				))
+
+			++annotations;
+		}
+
+		//Set resolvedId to before the annotations.
+		//This is to be able to easily loop over variables and functions only.
+		//If annotations and templates are in-between, then we'd make that more annoying.
+		//Instead, it can use Symbol_symbolLength(s) to skip over anything that's not important.
+
+		U32 total = (U32)annotations + (Bool)(s.flags & ESymbolFlag_HasTemplate);
+
+		resolvedId -= total;
+
+		//Flag all annotations as consumed, before we append the symbol at resolvedId (in front of the annotations)
+
+		for(U32 i = 0; i < total; ++i)
+			parser->symbols.ptrNonConst[resolvedId + i].flags |= ESymbolFlag_IsParented;
+	}
+
+	s.annotations = annotations;
+
+	//Push into symbol array
+
+	if(parser->symbols.length >= U32_MAX - 1)
+		retError(clean, Error_outOfBounds(
+			1, U32_MAX, U32_MAX, "Parser_registerSymbol()::parser->symbols is out of bounds"
+		))
+
+	gotoIfError2(clean, ListSymbol_insert(&parser->symbols, resolvedId, s, alloc))
+	pushedId = resolvedId;
+
+	//Append symbol id and return that id
+
+	gotoIfError2(clean, ListU32_pushBack(&parser->symbolMapping, resolvedId, alloc))
+	*symbolId = (U32)(parser->symbolMapping.length - 1);
+
+	//Register in parent
+
+	if(parent == U32_MAX)
+		++parser->rootSymbols;
+
+	else {
+
+		Symbol *parentSym = &parser->symbols.ptrNonConst[parser->symbolMapping.ptr[parent]];
+
+		if(parentSym->child == U32_MAX)		//Redirect parent to point to first child
+			parentSym->child = *symbolId;
+
+		++parentSym->childCount;
+	}
+
+	//Fix symbol references that are at >=resolvedId.
+	//Only if there are any symbols after
+
+	if(resolvedId != parser->symbols.length - 1) {
+
+		U32 dontTouch = *symbolId;
+
+		for(U32 i = 0; i < (U32) parser->symbolMapping.length; ++i) {
+
+			if(i == dontTouch)
+				continue;
+
+			U32 *curr = &parser->symbolMapping.ptrNonConst[i];
+
+			if(*curr >= resolvedId)
+				++*curr;
+		}
+	}
+
+clean:
+
+	if(!s_uccess && pushedId != U32_MAX)
+		ListSymbol_erase(&parser->symbols, pushedId);
+
+	return s_uccess;
 }
 
-U32 Symbol_getChildren(Symbol s) {
-	return s.localIdChildren >> 20;
-}
+Bool Parser_setSymbolName(Parser *parser, U32 symbolId, CharString *name, Allocator alloc, Error *e_rr) {
+	
+	Bool s_uccess = true, push = false;
 
-ESymbolType Symbol_getType(Symbol s) {
-	return (ESymbolType) (s.symbolFlagTypeAnnotations & 31);
-}
+	if(!parser)
+		retError(clean, Error_nullPointer(0, "Parser_setSymbolName()::parser is required"))
 
-ESymbolFlag Symbol_getFlags(Symbol s) {
-	return (s.symbolFlagTypeAnnotations >> 5) & ((1 << 20) - 1);
-}
+	if(!name)
+		retError(clean, Error_nullPointer(2, "Parser_setSymbolName()::name is required"))
 
-U8 Symbol_getAnnotations(Symbol s) {
-	return s.symbolFlagTypeAnnotations >> 25;
+	if(symbolId >= parser->symbolMapping.length)
+		retError(clean, Error_outOfBounds(
+			1, symbolId, parser->symbolMapping.length, "Parser_setSymbolName()::symbolId is out of bounds"
+		))
+
+	if(parser->symbolNames.length == U32_MAX - 1)
+		retError(clean, Error_outOfBounds(
+			0, parser->symbolNames.length, U32_MAX - 1, "Parser_setSymbolName()::parser->symbolNames is out of bounds"
+		))
+
+	//Move to symbolNames
+
+	gotoIfError2(clean, ListCharString_pushBack(&parser->symbolNames, *name, alloc))
+	*name = CharString_createNull();
+	push = true;								//We pushed new, another error would have to pop
+
+	//Erase old
+
+	U32 resolvedSymbolId = parser->symbolMapping.ptr[symbolId];
+	U32 *nameId = &parser->symbols.ptrNonConst[resolvedSymbolId].name, prevName = *nameId;
+
+	if(prevName != U32_MAX) {
+		CharString_free(&parser->symbolNames.ptrNonConst[prevName], alloc);
+		gotoIfError2(clean, ListCharString_erase(&parser->symbolNames, prevName))
+	}
+
+	//Update symbol
+
+	*nameId = (U32)(parser->symbolNames.length - 1);
+
+clean:
+
+	if(!s_uccess && push)
+		ListCharString_popBack(&parser->symbolNames, NULL);
+
+	return s_uccess;
 }

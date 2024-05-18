@@ -134,67 +134,89 @@ CharString Token_asString(Token t, const Parser *p);
 //A symbol is a function, constant or typedef.
 
 typedef enum ESymbolType {
-
+	ESymbolType_Namespace,
+	ESymbolType_Template,
 	ESymbolType_Function,
-	ESymbolType_Constant,
 	ESymbolType_Variable,
-	ESymbolType_Typedef,		//typedef T T2
-	ESymbolType_Using,			//using T2 = T
+	ESymbolType_Parameter,
+	ESymbolType_Typedef,		//typedef T T2 or using T2 = T
 	ESymbolType_Struct,			//typedef struct ... or struct X {}
-	ESymbolType_Class,			//class X {}
-	ESymbolType_Enum,			//typedef enum ... or enum X {}
-	ESymbolType_EnumClass,		//enum class X : Y {} or enum class X {}
-	ESymbolType_Interface,		//interface X {}
+	ESymbolType_Class,			//typedef class ... or class X {}
+	ESymbolType_Interface,		//typedef interface ... or interface X {}
+	ESymbolType_Union,			//typedef union ... or union X {}
+	ESymbolType_Enum,			//typedef enum ... or enum X {} or enum class
+	ESymbolType_EnumValue,
 	ESymbolType_Annotation,		//[[vk::binding(0, 0)]] or [shader("vertex")] for example
-	ESymbolType_Count			//Keep <=32 due to packing
-
+	ESymbolType_Count			//Keep <=256 due to packing
 } ESymbolType;
+
+static const C8 *ESymbolType_names[ESymbolType_Count];
 
 typedef enum ESymbolFlag {
 
-	ESymbolFlag_None				= 0,
+	ESymbolFlag_None							= 0,
 
-	//For constants
+	//For ESymbolType_Function, Object or Variable
 
-	ESymbolFlag_IsConst				= 1 << 0,		//const ...
-	ESymbolFlag_IsConstexpr			= 1 << 1,		//constexpr X
-	ESymbolFlag_IsExtern			= 1 << 2,		//extern ...
+	ESymbolFlag_HasTemplate						= 1 << 0,		//Consume previous template<> symbol
 
-	//For functions
-
-	ESymbolFlag_HasImpl				= 1 << 3,		//impl ...
-	ESymbolFlag_HasUserImpl			= 1 << 4,		//user_impl ...
-
-	//Access
-
-	ESymbolFlag_IsStatic			= 1 << 5,		//static ...
-
+	//If not Typedef
 	//Maps to ESymbolAccess, if !(Private | Public) then it's protected
 
-	ESymbolFlag_IsPrivate			= 1 << 6,		//private: X or private X
-	ESymbolFlag_IsPublic			= 1 << 7,		//public: X or public X
+	ESymbolFlag_IsPrivate						= 1 << 1,		//private: X or private X
+	ESymbolFlag_IsPublic						= 1 << 2,		//public: X or public X
 
-	ESymbolFlag_Access				= ESymbolFlag_IsPrivate | ESymbolFlag_IsPublic,
+	ESymbolFlag_Access							= ESymbolFlag_IsPrivate | ESymbolFlag_IsPublic,
+
+	//For ESymbolType_Function or Variable
+
+	ESymbolFlagFuncVar_IsConst					= 1 << 3,		//const ...
+	ESymbolFlagFuncVar_IsConstexpr				= 1 << 4,		//constexpr X
+
+	ESymbolFlagFuncVar_HasImpl					= 1 << 5,		//impl ...
+	ESymbolFlagFuncVar_HasUserImpl				= 1 << 6,		//user_impl ...
+	ESymbolFlagFuncVar_IsStatic					= 1 << 7,		//static ...
+	ESymbolFlagFuncVar_IsExtern					= 1 << 8,		//extern ...
 
 	//Function modifiers
 
-	ESymbolFlag_IsOperator			= 1 << 8,
+	ESymbolFlagFunc_IsOperator					= 1 << 9,
+
+	//Enum modifiers
+
+	ESymbolFlagEnum_IsClass						= 1 << 10,
+
+	//Annotation modifiers
+
+	ESymbolFlagAnnotation_IsDoubleBracket		= 1 << 11,
+
+	//For both annotation and templates when it's been consumed into a function, variable, class, etc.
+
+	ESymbolFlag_IsParented	= 1 << 12,			//When an variable, annotation or template has been "consumed"
+
+	//Typedef modifiers
+
+	ESymbolFlagTypedef_IsUsing					= 1 << 13,
 
 	//HLSL/GLSL modifiers
 
-	ESymbolFlag_IsUnorm				= 1 << 9,
-	ESymbolFlag_IsSnorm				= 1 << 10,
+	//If ESymbolType_Type
 
-	ESymbolFlag_Sample				= 1 << 11,
-	ESymbolFlag_NoInterpolation		= 1 << 12,		//flat in GLSL
-	ESymbolFlag_NoPerspective		= 1 << 13,
-	ESymbolFlag_Centroid			= 1 << 14,
-	ESymbolFlag_Linear				= 1 << 15,		//smooth in GLSL
+	ESymbolFlagType_IsUnorm						= 1 << 14,
+	ESymbolFlagType_IsSnorm						= 1 << 15,
 
-	ESymbolFlag_IsOut				= 1 << 16,		//out or inout
-	ESymbolFlag_IsIn				= 1 << 17,		//in or inout (in is not automatically set, though it is implied if !out)
+	//If ESymbolType_Variable
 
-	ESymbolFlag_Count				= 18,			//Keep less than 19 due to packing
+	ESymbolFlagVar_IsOut						= 1 << 16,		//out or inout
+	ESymbolFlagVar_IsIn							= 1 << 17,		//in or inout (in not automatically set, though implied if !out)
+
+	ESymbolFlagVar_Sample						= 1 << 18,
+	ESymbolFlagVar_NoInterpolation				= 1 << 19,		//flat in GLSL
+	ESymbolFlagVar_NoPerspective				= 1 << 20,
+	ESymbolFlagVar_Centroid						= 1 << 21,
+	ESymbolFlagVar_Linear						= 1 << 22,		//smooth in GLSL
+
+	ESymbolFlag_Count							= 23			//Keep less than 32
 
 } ESymbolFlag;
 
@@ -207,35 +229,30 @@ typedef enum ESymbolAccess {
 
 typedef struct Symbol {
 
-	U32 symbolFlagTypeAnnotations;
+	U32 parent, child;
+	U32 name;
 
-	U32 name;			//If first bit is set, is a resolved name. Otherwise tokenId
+	ESymbolFlag flags;
 
-	U32 baseType;		//SymbolId to base type
+	U16 tokenCount;
+	U8 symbolType;			//ESymbolType
+	U8 annotations;			//How many annotations are after this symbol
 
-	U32 parent;			//See SymbolId
+	U32 childCount;
 
-	U32 localIdChildren;
+	U32 tokenId;			//Where the symbol is defined
+
+	U32 padding;
 
 } Symbol;
 
 Bool Symbol_create(
-	ESymbolType type, ESymbolFlag flags, U8 annotations,
-	U32 name,
-	U32 baseType,
-	U32 parent,
-	U32 localId,		//U20
-	U16 children,		//U10
+	ESymbolType type,
+	ESymbolFlag flags,
+	U32 tokenId,
 	Error *e_rr,
 	Symbol *symbol
 );
-
-U32 Symbol_getLocalId(Symbol s);
-U32 Symbol_getChildren(Symbol s);
-
-ESymbolType Symbol_getType(Symbol s);
-ESymbolFlag Symbol_getFlags(Symbol s);
-U8 Symbol_getAnnotations(Symbol s);
 
 //Parser takes the output from the lexer and splits it up in real tokens and handles preprocessor-specific things.
 //After the parser, the file's symbols can be obtained.
@@ -244,16 +261,32 @@ TList(Token);
 TList(Symbol);
 
 typedef struct Parser {
+
 	const Lexer *lexer;
 	ListToken tokens;
-	ListSymbol symbols;
+
 	ListCharString parsedLiterals;		//Need copies, because \" and \\ have to be parsed
+
+	ListCharString symbolNames;
+
+	ListSymbol symbols;
+	ListU32 symbolMapping;				//Maps global id to local id to allow moving around
+	U32 rootSymbols;					//Root symbols that are located at the start of symbols.ptr
+
 } Parser;
 
 Bool Parser_create(const Lexer *lexer, Parser *parser, Allocator alloc, Error *e_rr);
 void Parser_free(Parser *parser, Allocator alloc);
 void Parser_printTokens(Parser parser, Allocator alloc);
-void Parser_printSymbols(Parser parser, Allocator alloc);
+void Parser_printSymbols(Parser parser, U32 parent, Bool recursive, Allocator alloc);
+
+//Registering a symbol with parent U32_MAX indicates it's a root symbol.
+//A root symbol doesn't belong to any other symbol (e.g. it's in the "global namespace").
+
+Bool Parser_registerSymbol(Parser *parser, Symbol s, U32 parent, Allocator alloc, U32 *symbolId, Error *e_rr);
+
+//Moves name, unless it's a ref. Make sure the ref is still valid throughout the lifetime of parser.
+Bool Parser_setSymbolName(Parser *parser, U32 symbolId, CharString *name, Allocator alloc, Error *e_rr);
 
 //The classification step can be done manually if the syntax is different than normal C++-like syntax.
 //C/C++, C#, HLSL and GLSL all share similar syntax, which means we can re-use this a lot.
