@@ -234,7 +234,7 @@ typedef struct Symbol {
 
 	ESymbolFlag flags;
 
-	U16 tokenCount;
+	U16 tokenCount;			//Count to last token (tokenCount + 1 = length of tokens that represent the symbol)
 	U8 symbolType;			//ESymbolType
 	U8 annotations;			//How many annotations are after this symbol
 
@@ -242,7 +242,7 @@ typedef struct Symbol {
 
 	U32 tokenId;			//Where the symbol is defined
 
-	U32 padding;
+	U32 symbolId;			//Mapping back to the real id in the symbolMappings
 
 } Symbol;
 
@@ -253,6 +253,10 @@ Bool Symbol_create(
 	Error *e_rr,
 	Symbol *symbol
 );
+
+//How long the symbol is including decorators.
+//Templates and annotations are located after the Symbol, so this tells how many of those have to be skipped.
+U32 Symbol_size(Symbol s);
 
 //Parser takes the output from the lexer and splits it up in real tokens and handles preprocessor-specific things.
 //After the parser, the file's symbols can be obtained.

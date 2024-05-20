@@ -27,9 +27,6 @@
 	extern "C" {
 #endif
 
-//In line with vulkan standard.
-#define GraphicsApplicationInfo_Version(major, minor, patch)	((major) << 22) | ((minor) << 12) | (patch)
-
 typedef struct GraphicsApplicationInfo {
 	CharString name;
 	U32 version, padding;

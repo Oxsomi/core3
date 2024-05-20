@@ -202,6 +202,45 @@ bb15afc7 01860 D:/programming/repos/rt_core/res/shaders/resource_bindings.hlsl
 
 ### TODO: Compile
 
+### Built-in defines
+
+The following defines are set by OxC3 during compilation:
+
+- `__OXC3` to indicate that OxC3 is compiling or parsing the shader.
+- `__OXC3_MAJOR`, `__OXC3_MINOR` and `__OXC3_PATCH` to indicate OxC3 version. For 0.2.0 these would be 0, 2 and 0 respectively.
+- `__OXC3_VERSION` same layout as `OXC3_MAKE_VERSION` aka (major << 22) | (minor << 12) | patch.
+- `__OXC3_EXT_<X>` foreach extension that's enabled by the current compilation. For example: `__OXC3_EXT_F16`, `__OXC3_EXT_F64`, `__OXC3_EXT_RAYQUERY`, etc.
+
+### Entrypoint annotations
+
+Each entrypoint can have annotations on top of the ones used by DXC. The ones introduced in OxC3's pre-processor are the following:
+
+- [stage("vertex")] similar to DXC's [shader("vertex")] but instead of implying a library compilation (for use in StateObjects), it signals a standalone compilation for this entrypoint. Essentially allowing pixel and vertex shaders to be compiled and packaged as a single oiSH file.
+  - Defining stages is only allowed for stages that have to be separately compiled. For raytracing shaders and workgraphs, the shader annotation should still be used.
+  - Type must be one of vertex, pixel, compute, geometry, hull, domain, mesh, task.
+  - Do keep in mind that each stage needs a full compile. It might be beneficial to bundle them as a single lib using the "shader" type, when this feature becomes available with workgraphs.
+  - If not defined, the compiler will ignore the functions if they don't have either a `stage` or `shader` annotation.
+- [vendor("NV", "AMD", "QCOM")] which vendors are allowed to run this entrypoint. There could be a reason to restrict this, for example when NV specific instructions are used (specifically together with DXIL). Must be one of: NV, AMD, ARM, QCOM, INTC, IMGT, MSFT. If not defined, will assume all vendors are applicable. Multiple annotations for vendor will get merged. So `[vendor("NV", "AMD")]` is the same as two separate annotations with NV and AMD.
+- [extension("I16", "F16")] which extensions to enable. For example I16 or F16 will enable 16-bit types for that entrypoint. 
+  - Do keep in mind that extensions might introduce another recompile for entrypoints that don't have the same extensions. For example with raytracing shaders. In their case, it will introduce two compiles if one entrypoint doesn't support 16-bit ints and another does.
+  - `__OXC3_EXT_<X>` can be used to see which extension is enabled. For example `__OXC3_EXT_ATOMICI64`.
+  - Extension must be one of F64, I64, F16, I16, AtomicI64, AtomicF32, AtomicF64, SubgroupArithmetic, SubgroupShuffle, RayQuery, RayMicromapOpacity, RayMicromapDisplacement, RayMotionBlur, RayReorder.
+    - **Note**: RayReorder is currently only available for raygeneration shaders.
+    - **Note**: I16 and F16 are currently interchangeable, since they both enable 16-bit types. But please use both when it's relevant, just in case that changes.
+    - **Note**: Multiple extension annotations will indicate there will be a separate compile with each. For example: `[extension()]` and `[extension("I16", "F16")]` in front of the same function will indicate the function will be compiled with 16-bit types on and off. 16-bit off would for example run on <=Pascal (GTX 10xx). This will allow the same entrypoint to be ran with different functionality. This could aid for example in unpacking vertex/texture data with native support (rather than manual f16tof32).
+      - Another good example could be RayReorder, which could give substantial boosts in path tracing workloads. Lovelace would need `[extension("RayReorder")]` while the rest such as non NV and Pascal, Turing, Ampere would need `[extension()]`. This will force a recompile.
+- [uniform("X" = "F32x3(1, 0, 0)", "Y" = "F32x3(0, 1, 0)")] Introduces one subtype of the stage that has the defines `$X` and `$Y` set to the relevant values of `(F32x3(1, 0, 0))` and `(F32x3(0, 1, 0))`.
+  - This attribute can be used multiple times to compile the same entrypoint with different defines. It will try to bundle compiles wherever possible (try to keep defines similar).
+  - Only defining the uniform but no assign will just see it as a define that can be checked with #ifdef. 
+  - Uniform name must not indicate symbols or spaces.
+  
+- [model(6.8)]
+  - Which shader model to use. If this annotation is present multiple times, it indicates multiple compiles with different shader models.
+  - If not defined, will use latest.
+  - `__SHADER_TARGET_MAJOR` and `__SHADER_TARGET_MINOR` can be used to distinguish which one is being compiled. 
+
+**NOTE**: Since multiple models, uniforms and extensions can cause multiple compiles, be very careful that you don't use too many of these decorations (2 different sets of uniforms + 2 different extensions + 2 models = 2^3 or 8 compiles). Even though the compiler will do everything in parallel, it will still be slower to do multiple configurations that will never be used. So keep duplicate annotations in check wherever possible. The compiler will also try to combine compiles if it notices that they can be shared (for example with lib compiles where one compile might expose multiple entrypoints).
+
 ## Show GPU/graphics device info
 
 

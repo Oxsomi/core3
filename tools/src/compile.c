@@ -260,7 +260,8 @@ Bool CLI_compileShaderSingle(
 
 		//Otherwise we can simply output preprocessed blob
 
-		else gotoIfError2(clean, File_write(CharString_bufferConst(compileResult.text), outputPath, 10 * MS))
+		else if(compileResult.type == ECompileResultType_Text)
+			gotoIfError2(clean, File_write(CharString_bufferConst(compileResult.text), outputPath, 10 * MS))
 	}
 
 clean:

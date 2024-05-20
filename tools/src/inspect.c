@@ -1144,6 +1144,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 						case ESHPipelineStage_RaygenExt:
 						case ESHPipelineStage_CallableExt:
+						case ESHPipelineStage_WorkgraphExt:
 							break;
 
 						case ESHPipelineStage_MissExt:

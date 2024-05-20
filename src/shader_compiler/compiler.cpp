@@ -18,6 +18,7 @@
 *  This is called dual licensing.
 */
 
+#include "platforms/ext/listx_impl.h"
 #include "shader_compiler/compiler.h"
 #include "platforms/file.h"
 #include "platforms/platform.h"
@@ -511,9 +512,11 @@ Bool Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator all
 	IDxcBlobUtf8 *error = NULL;
 	ListU16 inputFile = ListU16{};
 	ListU16 includeDir = ListU16{};
+	ListU16 tempWStr = ListU16{};
 	Bool hasErrors = false, isVirtual = false;
 	CharString tempStr = CharString_createNull();
 	CharString tempStr2 = CharString_createNull();
+	ListListU16 strings = ListListU16{};
 
 	if(!interfaces->utils || !result)
 		retError(clean, Error_alreadyDefined(!interfaces->utils ? 0 : 2, "Compiler_preprocess()::comp is required"))
@@ -542,17 +545,21 @@ Bool Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator all
 
 		result->isSuccess = false;
 
-		const U16 args[][7] = {		//Preprocess
-			{ '-', 'P', '\0' },
-			{ '-', 's', 'p', 'i', 'r', 'v', '\0' },
-			{ '-', 'I', '\0' }
+		const U16 args[][9] = {
+			{ '-', 'P', '\0' },									//Preprocess
+			{ '-', 's', 'p', 'i', 'r', 'v', '\0' },				//-spirv (enable spirv generation)
+			{ '-', 'I', '\0' },									//-I (include dir)
+			{ '-', 'D', '_', '_', 'O', 'X', 'C', '3', '\0' }	//-D__OXC3 to indicate we're compiling from OxC3
 		};
 
-		U32 argCounter = 2;
+		U32 argCounter = 3;
 
-		const U16 *argsPtr[5] = {
+		const U16 *argsPtr[10] = {
+
 			args[0],
-			inputFile.ptr
+			inputFile.ptr,
+
+			args[3]
 		};
 
 		if (settings.outputType == ESHBinaryType_SPIRV)		//-spirv
@@ -562,6 +569,36 @@ Bool Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator all
 			argsPtr[argCounter++] = args[2];
 			argsPtr[argCounter++] = includeDir.ptr;
 		}
+
+		//Format major, minor, patch and version
+
+		const C8 *formats[] = {
+			"-D__OXC3_MAJOR=%" PRIu64,
+			"-D__OXC3_MINOR=%" PRIu64,
+			"-D__OXC3_PATCH=%" PRIu64,
+			"-D__OXC3_VERSION=%" PRIu64,
+		};
+
+		const U64 formatInts[] = {
+			OXC3_MAJOR,
+			OXC3_MINOR,
+			OXC3_PATCH,
+			OXC3_VERSION
+		};
+
+		for(U64 i = 0; i < sizeof(formats) / sizeof(formats[0]); ++i) {
+
+			gotoIfError2(clean, CharString_format(alloc, &tempStr2, formats[i], formatInts[i]))
+		
+			gotoIfError2(clean, CharString_toUTF16(tempStr2, alloc, &tempWStr))
+			CharString_free(&tempStr2, alloc);
+
+			gotoIfError2(clean, ListListU16_pushBack(&strings, tempWStr, alloc))
+			argsPtr[argCounter++] = tempWStr.ptr;
+			tempWStr = ListU16{};
+		}
+
+		//Compile
 
 		DxcBuffer buffer{
 			.Ptr = settings.string.ptr,
@@ -844,8 +881,10 @@ clean:
 	if(error)
 		error->Release();
 
+	ListListU16_freeUnderlying(&strings, alloc);
 	ListU16_free(&inputFile, alloc);
 	ListU16_free(&includeDir, alloc);
+	ListU16_free(&tempWStr, alloc);
 	CharString_free(&tempStr, alloc);
 	CharString_free(&tempStr2, alloc);
 	return s_uccess;

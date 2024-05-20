@@ -113,7 +113,7 @@ Bool ListIncludeInfo_stringify(ListIncludeInfo files, Allocator alloc, CharStrin
 typedef enum ECompileResultType {
 	ECompileResultType_Text,
 	ECompileResultType_Binaries,
-	ECompileResultType_SHEntries,
+	ECompileResultType_SHEntryRuntime,
 	ECompileResultType_Count
 } ECompileResultType;
 
@@ -130,7 +130,7 @@ typedef struct CompileResult {
 	union {
 		CharString text;
 		ListBuffer binaries;
-		ListSHEntry shEntries;
+		ListSHEntryRuntime shEntriesRuntime;
 	};
 
 	ListIncludeInfo includeInfo;
@@ -148,11 +148,14 @@ typedef struct IncludedFile {
 } IncludedFile;
 
 TList(IncludedFile);
+TList(ListU16);
 
 void IncludedFile_free(IncludedFile *file, Allocator alloc);
 void ListIncludedFile_freeUnderlying(ListIncludedFile *file, Allocator alloc);
 
 void CompileResult_free(CompileResult *result, Allocator alloc);
+
+void ListListU16_freeUnderlying(ListListU16 *list, Allocator alloc);
 
 //A separate Compiler should be created per thread
 
@@ -184,7 +187,7 @@ typedef enum ECompileBinaryTypes {
 Bool Compiler_compile(
 	Compiler comp,
 	CompilerSettings settings,
-	ListSHEntry entries,
+	ListSHEntryRuntime entriesRuntime,
 	U64 entry,
 	CompileResult *result,
 	Error *e_rr
@@ -197,6 +200,8 @@ void ListCompiler_freeUnderlyingx(ListCompiler *compilers);
 
 void CompileError_freex(CompileError *err);
 void ListCompileError_freeUnderlyingx(ListCompileError *compileErrors);
+
+void ListListU16_freeUnderlyingx(ListListU16 *list);
 
 void IncludeInfo_freex(IncludeInfo *info);
 void ListIncludeInfo_freeUnderlyingx(ListIncludeInfo *infos);

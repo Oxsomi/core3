@@ -76,6 +76,17 @@ typedef enum ESHExtension {
 
 } ESHExtension;
 
+typedef enum ESHVendor {
+	ESHVendor_NV,
+	ESHVendor_AMD,
+	ESHVendor_ARM,
+	ESHVendor_QCOM,
+	ESHVendor_INTC,
+	ESHVendor_IMGT,
+	ESHVendor_MSFT,
+	ESHVendor_Count
+} ESHVendor;
+
 typedef enum ESHPipelineStage {
 
 	ESHPipelineStage_Vertex,
@@ -89,6 +100,10 @@ typedef enum ESHPipelineStage {
 
 	ESHPipelineStage_MeshExt,
 	ESHPipelineStage_TaskExt,
+
+	//WorkGraph extension is required
+
+	ESHPipelineStage_WorkgraphExt,
 
 	//RayPipeline extension is required
 
@@ -143,6 +158,8 @@ typedef enum ESHType {
 
 const C8 *ESHType_name(ESHType type);
 
+//Serialized SHEntry (in oiSH file)
+
 typedef struct SHEntry {
 
 	CharString name;
@@ -167,7 +184,31 @@ typedef struct SHEntry {
 
 } SHEntry;
 
+//Runtime SHEntry with some extra information that is used to decide how to compile
+
+typedef struct SHEntryRuntime {
+
+	SHEntry entry;
+
+	U16 vendorMask;
+	U8 padding;
+	Bool isShaderAnnotation;		//Switches [shader("string")] and [stage("string")], the first indicates StateObject
+
+	ESHExtension extensions;		//Explicitly enabled extensions
+
+	ListU16 shaderVersions;			//U16: U8 major, minor;		If not defined will default.
+
+	ListCharString uniforms;
+	ListCharString uniformValues;
+	ListU8 uniformsPerCompilation;	//How many uniforms are relevant for each compilation
+
+} SHEntryRuntime;
+
 TList(SHEntry);
+TList(SHEntryRuntime);
+
+void SHEntryRuntime_free(SHEntryRuntime *entry, Allocator alloc);
+void ListSHEntryRuntime_freeUnderlying(ListSHEntryRuntime *entry, Allocator alloc);
 
 const C8 *SHEntry_stageName(SHEntry entry);
 

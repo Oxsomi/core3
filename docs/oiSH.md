@@ -99,6 +99,15 @@ typedef enum ESHPipelineStage {
 	ESHPipelineStage_Hull,
 	EPSHipelineStage_Domain,
 
+    //MeshShader extension is required
+
+	ESHPipelineStage_MeshExt,
+	ESHPipelineStage_TaskExt,
+
+	//WorkGraph extension is required
+
+	ESHPipelineStage_WorkgraphExt,
+
 	//RayPipeline extension is required
 
 	ESHPipelineStage_RaygenExt,
@@ -106,12 +115,7 @@ typedef enum ESHPipelineStage {
 	ESHPipelineStage_MissExt,
 	ESHPipelineStage_ClosestHitExt,
 	ESHPipelineStage_AnyHitExt,
-	ESHPipelineStage_IntersectionExt,
-
-    //MeshShader extension is required
-
-	ESHPipelineStage_MeshExt,
-	ESHPipelineStage_TaskExt
+	ESHPipelineStage_IntersectionExt
 
 } ESHPipelineStage;
 

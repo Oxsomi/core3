@@ -37,7 +37,7 @@
 		gotoIfError(clean, GraphicsInstance_create(
 			(GraphicsApplicationInfo) {
 				.name = CharString_createRefCStrConst("OxC3 CLI"),
-				.version = GraphicsApplicationInfo_Version(0, 2, 0)
+				.version = OXC3_MAKE_VERSION(OXC3_MAJOR, OXC3_MINOR, OXC3_PATCH)
 			},
 			EGraphicsInstanceFlags_None,
 			&instanceRef

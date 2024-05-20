@@ -41,7 +41,7 @@ GraphicsInstanceRef *instance = NULL;
 _gotoIfError(clean, GraphicsInstance_create(
 	(GraphicsApplicationInfo) {
 	    .name = CharString_createConstRefCStr("Rt core test"),
-    	.version = GraphicsApplicationInfo_Version(0, 2, 0)
+    	.version = OXC3_MAKE_VERSION(0, 2, 0)
 	},
     EGraphicsInstanceFlags_None,
     &instance
@@ -256,6 +256,8 @@ _gotoIfError(clean, GraphicsDeviceRef_create(
     ```
   ```
 
+    ```
+    
 - ```c
   Error createSampler(SamplerInfo info, CharString name, SamplerRef **ref));
   ```

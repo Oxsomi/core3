@@ -64,6 +64,8 @@ TListXBaseImpl(ListRefPtr);
 TListXBaseImpl(ListWeakRefPtr);
 
 TListXImpl(SHEntry);
+TListXImpl(SHEntryRuntime);
+
 TListXBaseImpl(ListThread);
 
 //Lexer and parser
@@ -249,6 +251,14 @@ Error SHFile_writex(SHFile shFile, Buffer *result) {
 
 Error SHFile_readx(Buffer file, Bool isSubFile, SHFile *shFile) {
 	return SHFile_read(file, isSubFile, Platform_instance.alloc, shFile);
+}
+
+void SHEntryRuntime_freex(SHEntryRuntime *entry) {
+	SHEntryRuntime_free(entry, Platform_instance.alloc);
+}
+
+void ListSHEntryRuntime_freeUnderlyingx(ListSHEntryRuntime *entry) {
+	ListSHEntryRuntime_freeUnderlying(entry, Platform_instance.alloc);
 }
 
 //List

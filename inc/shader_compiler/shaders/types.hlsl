@@ -21,7 +21,7 @@ R"(
 
 #pragma once
 
-#ifdef _ENABLE_F16
+#ifdef __OXC3_EXT_F16
 
     typedef float16_t F16;
     typedef float16_t2 F16x2;
@@ -44,7 +44,7 @@ R"(
 
 #endif
 
-#ifdef _ENABLE_IU16
+#ifdef __OXC3_EXT_I16
 
     typedef int16_t I16;
     typedef int16_t2 I16x2;
@@ -86,7 +86,7 @@ R"(
 
 #endif
 
-#ifdef _ENABLE_F64
+#ifdef __OXC3_EXT_F64
 
     typedef double F64;
     typedef double2 F64x2;

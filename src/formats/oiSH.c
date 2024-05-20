@@ -24,6 +24,7 @@
 #include "types/math.h"
 
 TListImpl(SHEntry);
+TListImpl(SHEntryRuntime);
 
 static const U8 SHHeader_V1_2 = 2;
 
@@ -39,11 +40,13 @@ const C8 *SHEntry_stageNames[] = {
 	"mesh",
 	"task",
 
-	"raygen",
+	"node",
+
+	"raygeneration",
 	"callable",
 	"miss",
-	"closest hit",
-	"any hit",
+	"closesthit",
+	"anyhit",
 	"intersection",
 };
 
@@ -294,6 +297,7 @@ Error SHFile_write(SHFile shFile, Allocator alloc, Buffer *result) {
 
 			case ESHPipelineStage_RaygenExt:
 			case ESHPipelineStage_CallableExt:
+			case ESHPipelineStage_WorkgraphExt:
 				break;
 
 			case ESHPipelineStage_MissExt:
@@ -376,6 +380,7 @@ Error SHFile_write(SHFile shFile, Allocator alloc, Buffer *result) {
 
 			case ESHPipelineStage_RaygenExt:
 			case ESHPipelineStage_CallableExt:
+			case ESHPipelineStage_WorkgraphExt:
 				break;
 
 			case ESHPipelineStage_MissExt:
@@ -484,6 +489,9 @@ Error SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile) 
 
 			case ESHPipelineStage_RaygenExt:
 			case ESHPipelineStage_CallableExt:
+			case ESHPipelineStage_WorkgraphExt:
+				break;
+				
 			case ESHPipelineStage_MissExt:
 			case ESHPipelineStage_ClosestHitExt:
 			case ESHPipelineStage_AnyHitExt:
@@ -557,4 +565,29 @@ clean:
 
 	DLFile_free(&dlFile, alloc);
 	return err;
+}
+
+//Free SHEntryRuntime, which contains information used only while parsing
+
+void SHEntryRuntime_free(SHEntryRuntime *entry, Allocator alloc) {
+	
+	if(!entry)
+		return;
+
+	CharString_free(&entry->entry.name, alloc);
+	ListU16_free(&entry->shaderVersions, alloc);
+	ListU8_free(&entry->uniformsPerCompilation, alloc);
+	ListCharString_freeUnderlying(&entry->uniforms, alloc);
+	ListCharString_freeUnderlying(&entry->uniformValues, alloc);
+}
+
+void ListSHEntryRuntime_freeUnderlying(ListSHEntryRuntime *entry, Allocator alloc) {
+
+	if(!entry)
+		return;
+
+	for(U64 i = 0; i < entry->length; ++i)
+		SHEntryRuntime_free(&entry->ptrNonConst[i], alloc);
+
+	ListSHEntryRuntime_free(entry, alloc);
 }

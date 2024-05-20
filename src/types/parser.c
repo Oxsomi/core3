@@ -575,7 +575,7 @@ U32 Parser_printAll(Parser parser, U32 recursion, U32 i, Bool recursive, Allocat
 	Symbol sym = parser.symbols.ptr[i];
 	Parser_printSymbol(parser, sym, recursion, alloc);
 
-	U32 skip = (U32)sym.annotations + (Bool) (sym.flags & ESymbolFlag_HasTemplate);
+	U32 skip = Symbol_size(sym) - 1;
 
 	for (U16 k = 0; k < skip; ++k)
 		Parser_printSymbol(parser, parser.symbols.ptr[i + 1 + k], recursion + 1, alloc);
@@ -588,7 +588,7 @@ U32 Parser_printAll(Parser parser, U32 recursion, U32 i, Bool recursive, Allocat
 			Parser_printSymbolsRecursive(parser, recursion + 1, j, true, alloc);
 	}
 
-	return skip;
+	return skip + 1;
 }
 
 void Parser_printSymbolsRecursive(Parser parser, U32 recursion, U32 parent, Bool recursive, Allocator alloc) {
@@ -596,10 +596,8 @@ void Parser_printSymbolsRecursive(Parser parser, U32 recursion, U32 parent, Bool
 	//Traverse symbol tree
 
 	if(parent == U32_MAX)
-		for (U32 i = 0; i < parser.rootSymbols; ) {
-			U32 skip = Parser_printAll(parser, recursion, i, recursive, alloc);
-			i += 1 + skip;		//Skip to next child
-		}
+		for (U32 i = 0; i < parser.rootSymbols; )
+			i += Parser_printAll(parser, recursion, i, recursive, alloc);
 
 	else Parser_printAll(parser, recursion, parent, recursive, alloc);
 }
@@ -649,6 +647,10 @@ Bool Symbol_create(
 
 clean:
 	return s_uccess;
+}
+
+U32 Symbol_size(Symbol s) {
+	return (U32)s.annotations + (Bool)(s.flags & ESymbolFlag_HasTemplate) + 1;
 }
 
 Bool Parser_registerSymbol(Parser *parser, Symbol s, U32 parent, Allocator alloc, U32 *symbolId, Error *e_rr) {
@@ -740,13 +742,14 @@ Bool Parser_registerSymbol(Parser *parser, Symbol s, U32 parent, Allocator alloc
 			1, U32_MAX, U32_MAX, "Parser_registerSymbol()::parser->symbols is out of bounds"
 		))
 
+	s.symbolId = (U32) parser->symbolMapping.length;
 	gotoIfError2(clean, ListSymbol_insert(&parser->symbols, resolvedId, s, alloc))
 	pushedId = resolvedId;
 
 	//Append symbol id and return that id
 
 	gotoIfError2(clean, ListU32_pushBack(&parser->symbolMapping, resolvedId, alloc))
-	*symbolId = (U32)(parser->symbolMapping.length - 1);
+	*symbolId = s.symbolId;
 
 	//Register in parent
 

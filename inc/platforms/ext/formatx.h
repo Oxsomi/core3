@@ -38,9 +38,11 @@ typedef enum ESHSettingsFlags ESHSettingsFlags;
 typedef enum ESHExtension ESHExtension;
 typedef enum ESHBinaryType ESHBinaryType;
 typedef struct SHEntry SHEntry;
+typedef struct SHEntryRuntime SHEntryRuntime;
 typedef struct SHFile SHFile;
 
 typedef struct ListCharString ListCharString;
+typedef struct ListSHEntryRuntime ListSHEntryRuntime;
 
 //oiCA
 
@@ -76,6 +78,9 @@ Error SHFile_addEntrypointx(SHFile *shFile, SHEntry *entry);					//Moves entry->
 
 Error SHFile_writex(SHFile shFile, Buffer *result);
 Error SHFile_readx(Buffer file, Bool isSubFile, SHFile *shFile);
+
+void SHEntryRuntime_freex(SHEntryRuntime *entry);
+void ListSHEntryRuntime_freeUnderlyingx(ListSHEntryRuntime *entry);
 
 #ifdef __cplusplus
 	}

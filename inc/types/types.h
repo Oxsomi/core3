@@ -228,6 +228,15 @@ typedef void *StackTrace[STACKTRACE_SIZE];
 typedef struct Error Error;
 typedef struct CharString CharString;
 
+//Version
+
+#define OXC3_MAKE_VERSION(major, minor, patch)	((major) << 22) | ((minor) << 12) | (patch)
+
+#define OXC3_MAJOR 0
+#define OXC3_MINOR 2
+#define OXC3_PATCH 0
+#define OXC3_VERSION (OXC3_MAKE_VERSION(OXC3_MAJOR, OXC3_MINOR, OXC3_PATCH))
+
 #ifdef __cplusplus
 	}
 #endif
