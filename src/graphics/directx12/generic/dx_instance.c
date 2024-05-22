@@ -340,6 +340,9 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphics
 		)
 			caps.dataTypes |= EGraphicsDataTypes_AtomicI64;
 
+		if(opt9.DerivativesInMeshAndAmplificationShadersSupported)
+			caps.features |= EGraphicsFeatures_MeshTaskTexDeriv;
+
 		if(
 			FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_D3D12_OPTIONS12, &opt12, sizeof(opt12))) ||
 			!opt12.EnhancedBarriersSupported
@@ -371,6 +374,16 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphics
 			Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support required shader model (6.5)", i);
 			goto next;
 		}
+
+		shaderOpt.HighestShaderModel = D3D_SHADER_MODEL_6_6;
+		if(SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_SHADER_MODEL, &shaderOpt, sizeof(shaderOpt)))) {
+			caps.featuresExt |= EDxGraphicsFeatures_WaveSize | EDxGraphicsFeatures_PAQ;
+			caps.features |= EGraphicsFeatures_ComputeDeriv;
+		}
+
+		shaderOpt.HighestShaderModel = D3D_SHADER_MODEL_6_8;
+		if(SUCCEEDED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_SHADER_MODEL, &shaderOpt, sizeof(shaderOpt))))
+			caps.featuresExt |= EDxGraphicsFeatures_WaveSizeMinMax;
 
 		if(FAILED(device->lpVtbl->CheckFeatureSupport(device, D3D12_FEATURE_ARCHITECTURE1, &arch, sizeof(arch)))) {
 			Log_debugLnx("D3D12: Unsupported device %"PRIu32", doesn't support required D3D12_FEATURE_ARCHITECTURE1", i);

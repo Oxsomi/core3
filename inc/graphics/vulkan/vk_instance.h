@@ -40,7 +40,8 @@ typedef enum EOptExtensions {
 	EOptExtensions_RayMicromapDisplacement,
 	EOptExtensions_AtomicF32,
 	EOptExtensions_DeferredHostOperations,
-	EOptExtensions_RaytracingValidation
+	EOptExtensions_RaytracingValidation,
+	EOptExtensions_ComputeDeriv
 
 } EOptExtensions;
 

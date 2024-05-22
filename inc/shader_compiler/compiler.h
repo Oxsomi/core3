@@ -173,6 +173,12 @@ Bool Compiler_mergeIncludeInfo(Compiler *comp, Allocator alloc, ListIncludeInfo 
 //result->compileErrors.length can still be non zero if warnings are present.
 Bool Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator alloc, CompileResult *result, Error *e_rr);
 
+//Determine what minimum shader version is required
+U16 Compiler_minFeatureSetStage(ESHPipelineStage stage, U16 waveSize);
+U16 Compiler_minFeatureSetExtension(ESHExtension ext);
+
+Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *errors, Bool *hasErrors, Error *e_rr);
+
 //Manual tokenization for a preprocessed file, to obtain annotations (returns shEntries)
 Bool Compiler_parse(Compiler comp, CompilerSettings settings, Allocator alloc, CompileResult *result, Error *e_rr);
 
@@ -183,12 +189,11 @@ typedef enum ECompileBinaryTypes {
 	ECompileBinaryTypes_Count
 } ECompileBinaryTypes;
 
-//Compile preprocessed file's entry (entry of U64_MAX indicates all, for RT entrypoints) (returns binaries)
+//Compile preprocessed file's entry
 Bool Compiler_compile(
 	Compiler comp,
 	CompilerSettings settings,
-	ListSHEntryRuntime entriesRuntime,
-	U64 entry,
+	SHBinaryInfo toCompile,
 	CompileResult *result,
 	Error *e_rr
 );

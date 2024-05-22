@@ -356,7 +356,8 @@ const C8 *optExtensionsName[] = {
 	"VK_NV_displacement_micromap",
 	"VK_EXT_shader_atomic_float",
 	"VK_KHR_deferred_host_operations",
-	"VK_NV_ray_tracing_validation"
+	"VK_NV_ray_tracing_validation",
+	"VK_NV_compute_shader_derivatives"
 };
 
 U64 optExtensionsNameCount = sizeof(optExtensionsName) / sizeof(optExtensionsName[0]);
@@ -605,6 +606,13 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphics
 			VkPhysicalDeviceRayTracingValidationFeaturesNV,
 			rtValidation,
 			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_VALIDATION_FEATURES_NV
+		)
+
+		getDeviceFeatures(
+			optExtensions[EOptExtensions_ComputeDeriv],
+			VkPhysicalDeviceComputeShaderDerivativesFeaturesNV ,
+			computeDeriv,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COMPUTE_SHADER_DERIVATIVES_FEATURES_NV
 		)
 
 		getDeviceFeatures(
@@ -1045,6 +1053,9 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphics
 
 		if(rtValidation.rayTracingValidation)
 			capabilities.features |= EGraphicsFeatures_RayValidation;
+
+		if(computeDeriv.computeDerivativeGroupLinear)
+			capabilities.features |= EGraphicsFeatures_ComputeDeriv;
 
 		if(!optExtensions[EOptExtensions_DeferredHostOperations])
 			optExtensions[EOptExtensions_RayAcceleration] = false;

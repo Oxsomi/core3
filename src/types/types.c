@@ -82,6 +82,20 @@ Bool C8_isNyto(C8 c) { return C8_isDec(c) || C8_isUpperCase(c) || C8_isLowerCase
 Bool C8_isAlphaNumeric(C8 c) { return C8_isDec(c) || C8_isUpperCase(c) || C8_isLowerCase(c); }
 Bool C8_isAlpha(C8 c) { return C8_isUpperCase(c) || C8_isLowerCase(c); }
 
+Bool C8_isSymbol(C8 c) {
+
+	Bool symbolRange0 = c > ' ' && c < '0';		//~"#%&'()*+,-./$
+	Bool symbolRange1 = c > '9' && c < 'A';		//:;<=>?@
+	Bool symbolRange2 = c > 'Z' && c < 'a';		//[\]^`_
+	Bool symbolRange3 = c > 'z' && c < 0x7F;	//{|}~
+
+	return symbolRange0 || symbolRange1 || symbolRange2 || symbolRange3;
+}
+
+Bool C8_isLexerSymbol(C8 c) {
+	return C8_isSymbol(c) && c != '$' && c != '_';
+}
+
 Bool C8_isValidAscii(C8 c) { return (c >= 0x20 && c < 0x7F) || c == '\t' || c == '\n' || c == '\r'; }
 
 Bool C8_isValidFileName(C8 c) {

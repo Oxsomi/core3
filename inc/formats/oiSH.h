@@ -54,25 +54,29 @@ typedef enum ESHExtension {
 
 	ESHExtension_F64						= 1 << 0,
 	ESHExtension_I64						= 1 << 1,
-	ESHExtension_F16						= 1 << 2,
-	ESHExtension_I16						= 1 << 3,
+	ESHExtension_16BitTypes					= 1 << 2,		//I16, F16
 
-	ESHExtension_AtomicI64					= 1 << 4,
-	ESHExtension_AtomicF32					= 1 << 5,
-	ESHExtension_AtomicF64					= 1 << 6,
+	ESHExtension_AtomicI64					= 1 << 3,
+	ESHExtension_AtomicF32					= 1 << 4,
+	ESHExtension_AtomicF64					= 1 << 5,
 
 	//Some of them are present in EGraphicsFeatures in OxC3 graphics
 
-	ESHExtension_SubgroupArithmetic			= 1 << 7,
-	ESHExtension_SubgroupShuffle			= 1 << 8,
+	ESHExtension_SubgroupArithmetic			= 1 << 6,
+	ESHExtension_SubgroupShuffle			= 1 << 7,
 
-	ESHExtension_RayQuery					= 1 << 9,
-	ESHExtension_RayMicromapOpacity			= 1 << 10,
-	ESHExtension_RayMicromapDisplacement	= 1 << 11,
-	ESHExtension_RayMotionBlur				= 1 << 12,
-	ESHExtension_RayReorder					= 1 << 13,
+	ESHExtension_RayQuery					= 1 << 8,
+	ESHExtension_RayMicromapOpacity			= 1 << 9,
+	ESHExtension_RayMicromapDisplacement	= 1 << 10,
+	ESHExtension_RayMotionBlur				= 1 << 11,
+	ESHExtension_RayReorder					= 1 << 12,
 
-	ESHExtension_Count						= 14
+	ESHExtension_Multiview					= 1 << 13,
+	ESHExtension_ComputeDeriv				= 1 << 14,
+
+	ESHExtension_PAQ						= 1 << 15,		//Payload access qualifiers
+
+	ESHExtension_Count						= 16
 
 } ESHExtension;
 
@@ -164,7 +168,9 @@ typedef struct SHEntry {
 
 	CharString name;
 
-	ESHPipelineStage stage;
+	U16 stage;			//ESHPipelineStage
+	U16 waveSize;		//U4[3] recommendedSize, minSize, maxSize: each U4 is in range [0, 9]. 0 = 0, 1 = 1, 3 = 8, etc.
+
 	U16 groupX, groupY;
 
 	U16 groupZ;
@@ -182,6 +188,11 @@ typedef struct SHEntry {
 		U64 outputsU64;
 	};
 
+	U16 vendorMask;
+	U16 padding0;
+
+	U32 padding1;
+
 } SHEntry;
 
 //Runtime SHEntry with some extra information that is used to decide how to compile
@@ -190,22 +201,35 @@ typedef struct SHEntryRuntime {
 
 	SHEntry entry;
 
-	U16 vendorMask;
-	U8 padding;
-	Bool isShaderAnnotation;		//Switches [shader("string")] and [stage("string")], the first indicates StateObject
+	Bool isShaderAnnotation;			//Switches [shader("string")] and [stage("string")], the first indicates StateObject
+	U8 padding[7];
 
-	ESHExtension extensions;		//Explicitly enabled extensions
+	ListU32 extensions;					//Explicitly enabled extensions (ESHExtension[])
 
-	ListU16 shaderVersions;			//U16: U8 major, minor;		If not defined will default.
+	ListU16 shaderVersions;				//U16: U8 major, minor;		If not defined will default.
 
 	ListCharString uniforms;
 	ListCharString uniformValues;
-	ListU8 uniformsPerCompilation;	//How many uniforms are relevant for each compilation
+	ListU8 uniformsPerCompilation;		//How many uniforms are relevant for each compilation
 
 } SHEntryRuntime;
 
+typedef struct SHBinaryInfo {
+
+	U32 extensions;
+	U16 shaderVersion;
+	U8 uniforms;
+	U8 padding;
+
+	CharString *uniformNames, *uniformValues;
+
+} SHBinaryInfo;
+
 TList(SHEntry);
 TList(SHEntryRuntime);
+
+void SHEntry_print(SHEntry entry, Allocator alloc);
+void SHEntryRuntime_print(SHEntryRuntime entry, Allocator alloc);
 
 void SHEntryRuntime_free(SHEntryRuntime *entry, Allocator alloc);
 void ListSHEntryRuntime_freeUnderlying(ListSHEntryRuntime *entry, Allocator alloc);
@@ -216,6 +240,7 @@ typedef enum ESHPipelineType {
 	ESHPipelineType_Graphics,
 	ESHPipelineType_Compute,
 	ESHPipelineType_Raytracing,
+	ESHPipelineType_Workgraph,
 	ESHPipelineType_Count
 } ESHPipelineType;
 
@@ -230,9 +255,11 @@ typedef struct SHFile {
 	ESHSettingsFlags flags;
 	ESHExtension extensions;
 
+	U32 compilerVersion;		//OxC3 compiler version
+
 } SHFile;
 
-Error SHFile_create(ESHSettingsFlags flags, ESHExtension extension, Allocator alloc, SHFile *shFile);
+Error SHFile_create(ESHSettingsFlags flags, ESHExtension extension, U32 shaderVersion, Allocator alloc, SHFile *shFile);
 Bool SHFile_free(SHFile *shFile, Allocator alloc);
 
 Error SHFile_addBinary(SHFile *shFile, ESHBinaryType type, Buffer *entry, Allocator alloc);		//Moves entry
@@ -275,6 +302,8 @@ typedef struct SHHeader {
 	U8 pipelineType;
 
 	ESHExtension extensions;
+
+	U32 compilerVersion;
 
 } SHHeader;
 

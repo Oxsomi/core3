@@ -70,7 +70,7 @@ Error DLFile_readx(Buffer file, const U32 encryptionKey[8], Bool allowLeftOverDa
 
 //oiSH
 
-Error SHFile_createx(ESHSettingsFlags flags, ESHExtension extension, SHFile *shFile);
+Error SHFile_createx(ESHSettingsFlags flags, ESHExtension extension, U32 compilerVersion, SHFile *shFile);
 Bool SHFile_freex(SHFile *shFile);
 
 Error SHFile_addBinaryx(SHFile *shFile, ESHBinaryType type, Buffer *entry);		//Moves entry
@@ -78,6 +78,9 @@ Error SHFile_addEntrypointx(SHFile *shFile, SHEntry *entry);					//Moves entry->
 
 Error SHFile_writex(SHFile shFile, Buffer *result);
 Error SHFile_readx(Buffer file, Bool isSubFile, SHFile *shFile);
+
+void SHEntry_printx(SHEntry entry);
+void SHEntryRuntime_printx(SHEntryRuntime entry);
 
 void SHEntryRuntime_freex(SHEntryRuntime *entry);
 void ListSHEntryRuntime_freeUnderlyingx(ListSHEntryRuntime *entry);

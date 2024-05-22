@@ -115,16 +115,6 @@ clean:
 	return err;
 }
 
-Bool Lexer_isSymbol(C8 c) {
-
-	Bool symbolRange0 = c > ' ' && c < '0' && c != '$';		//~"#%&'()*+,-./
-	Bool symbolRange1 = c > '9' && c < 'A';					//:;<=>?@
-	Bool symbolRange2 = c > 'Z' && c < 'a' && c != '_';		//[\]^`
-	Bool symbolRange3 = c > 'z' && c < 0x7F;				//{|}~
-
-	return symbolRange0 || symbolRange1 || symbolRange2 || symbolRange3;
-}
-
 Bool Lexer_create(CharString str, Allocator alloc, Lexer *lexer, Error *e_rr) {
 
 	Bool s_uccess = true;
@@ -422,7 +412,7 @@ Bool Lexer_create(CharString str, Allocator alloc, Lexer *lexer, Error *e_rr) {
 				if (
 					tokenType != ELexerTokenType_Identifier &&
 					(C8_isDec(c) || c == '.' || c == '+' || c == '-') &&
-					(Lexer_isSymbol(prevTemp) || C8_isWhitespace(prevTemp) || !prevTemp)
+					(C8_isLexerSymbol(prevTemp) || C8_isWhitespace(prevTemp) || !prevTemp)
 				) {
 
 					//Oops, we're still busy with a symbol.
@@ -498,7 +488,7 @@ Bool Lexer_create(CharString str, Allocator alloc, Lexer *lexer, Error *e_rr) {
 
 						if(!isEnded) {
 
-							if ((Lexer_isSymbol(next) || next == C8_MAX || C8_isWhitespace(next)) && !containsDot) {	//0
+							if ((C8_isLexerSymbol(next) || next == C8_MAX || C8_isWhitespace(next)) && !containsDot) {	//0
 								isEnded = true;
 								tokenType = ELexerTokenType_IntegerDec;
 								++i;
@@ -610,7 +600,7 @@ Bool Lexer_create(CharString str, Allocator alloc, Lexer *lexer, Error *e_rr) {
 
 													if(!(
 														c3 == 'e' || c3 == 'E' || c3 == 'f' || c3 == 'F' || C8_isDec(c3) ||
-														Lexer_isSymbol(c3)
+														C8_isLexerSymbol(c3)
 													))
 														break;
 												}
@@ -629,7 +619,7 @@ Bool Lexer_create(CharString str, Allocator alloc, Lexer *lexer, Error *e_rr) {
 									if(success)
 										continue;
 
-									if(Lexer_isSymbol(c2) || C8_isWhitespace(c2))
+									if(C8_isLexerSymbol(c2) || C8_isWhitespace(c2))
 										break;
 
 									if(!(tokenType >= ELexerTokenType_IntBegin && tokenType <= ELexerTokenType_IntEnd))
@@ -697,7 +687,7 @@ Bool Lexer_create(CharString str, Allocator alloc, Lexer *lexer, Error *e_rr) {
 									continue;
 								}
 
-								if(Lexer_isSymbol(c2) || C8_isWhitespace(c2))
+								if(C8_isLexerSymbol(c2) || C8_isWhitespace(c2))
 									break;
 
 								if(c == '.') {				//Misclassification using a .xxx for example
@@ -721,13 +711,13 @@ Bool Lexer_create(CharString str, Allocator alloc, Lexer *lexer, Error *e_rr) {
 			classification:
 
 				if(!(tokenType >= ELexerTokenType_NumberStart && tokenType <= ELexerTokenType_NumberEnd))
-					tokenType = Lexer_isSymbol(c) ? ELexerTokenType_Symbols : ELexerTokenType_Identifier;
+					tokenType = C8_isLexerSymbol(c) ? ELexerTokenType_Symbols : ELexerTokenType_Identifier;
 
 				else --i;
 
 				ELexerTokenType nextType =
 						C8_isWhitespace(next) ? ELexerTokenType_Count : (
-							 Lexer_isSymbol(next) ? ELexerTokenType_Symbols : ELexerTokenType_Identifier
+							 C8_isLexerSymbol(next) ? ELexerTokenType_Symbols : ELexerTokenType_Identifier
 						);
 
 				if(nextType != tokenType)

@@ -145,6 +145,13 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 
 			XXFile_printVersion(shHeader.version);
 
+			Log_debugLnx(
+				"Compiler version: %"PRIu32".%"PRIu32".%"PRIu32,
+				OXC3_GET_MAJOR(shHeader.compilerVersion),
+				OXC3_GET_MINOR(shHeader.compilerVersion),
+				OXC3_GET_PATCH(shHeader.compilerVersion)
+			);
+
 			if(shHeader.flags & ESHFlags_HasSPIRV)
 				Log_debugLnx(
 					"Spirv size type uses %s.",
@@ -166,11 +173,8 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 			if(shHeader.extensions & ESHExtension_I64)
 				Log_debugLnx("\tI64");
 
-			if(shHeader.extensions & ESHExtension_F16)
-				Log_debugLnx("\tF16");
-
-			if(shHeader.extensions & ESHExtension_I16)
-				Log_debugLnx("\tI16");
+			if(shHeader.extensions & ESHExtension_16BitTypes)
+				Log_debugLnx("\tF16 and I16");
 
 			if(shHeader.extensions & ESHExtension_AtomicI64)
 				Log_debugLnx("\tAtomic I64");
@@ -201,6 +205,15 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 
 			if(shHeader.extensions & ESHExtension_RayReorder)
 				Log_debugLnx("\tRay reorder");
+
+			if(shHeader.extensions & ESHExtension_Multiview)
+				Log_debugLnx("\tMultiview");
+
+			if(shHeader.extensions & ESHExtension_ComputeDeriv)
+				Log_debugLnx("\tCompute derivatives");
+
+			if(shHeader.extensions & ESHExtension_PAQ)
+				Log_debugLnx("\tPAQ");
 
 			break;
 		}
@@ -1088,74 +1101,8 @@ Bool CLI_inspectData(ParsedArgs args) {
 					goto cleanSh;
 				}
 
-				if(!binaryMode) {
-
-					SHEntry shEntry = file.entries.ptr[entryI];
-					const C8 *name = SHEntry_stageName(shEntry);
-
-					Log_debugLnx(
-						"Entry %"PRIu64" (%s): %.*s", entryI, name, (int) CharString_length(shEntry.name), shEntry.name.ptr
-					);
-
-					switch(shEntry.stage) {
-
-						default:
-
-							if (shEntry.inputsU64) {
-
-								Log_debugLnx("\tInputs:");
-
-								for (U8 i = 0; i < 16; ++i) {
-
-									ESHType type = (ESHType)(shEntry.inputs[i >> 1] >> ((i & 1) << 2)) & 0xF;
-
-									if(!type)
-										continue;
-
-									Log_debugLnx("\t\t%"PRIu8" %s", i, ESHType_name(type));
-								}
-							}
-
-							if (shEntry.outputsU64) {
-
-								Log_debugLnx("\tOutputs:");
-
-								for (U8 i = 0; i < 16; ++i) {
-
-									ESHType type = (ESHType)(shEntry.outputs[i >> 1] >> ((i & 1) << 2)) & 0xF;
-
-									if(!type)
-										continue;
-
-									Log_debugLnx("\t\t%"PRIu8" %s", i, ESHType_name(type));
-								}
-							}
-
-							break;
-
-						case ESHPipelineStage_Compute:
-
-							Log_debugLnx(
-								"\tThread count: %"PRIu16", %"PRIu16", %"PRIu16,
-								shEntry.groupX, shEntry.groupY, shEntry.groupZ
-							);
-
-							break;
-
-						case ESHPipelineStage_RaygenExt:
-						case ESHPipelineStage_CallableExt:
-						case ESHPipelineStage_WorkgraphExt:
-							break;
-
-						case ESHPipelineStage_MissExt:
-						case ESHPipelineStage_ClosestHitExt:
-						case ESHPipelineStage_AnyHitExt:
-						case ESHPipelineStage_IntersectionExt:
-							Log_debugLnx("\tPayload size: %"PRIu8, shEntry.payloadSize);
-							Log_debugLnx("\tIntersection size: %"PRIu8, shEntry.intersectionSize);
-							break;
-					}
-				}
+				if(!binaryMode)
+					SHEntry_printx(file.entries.ptr[entryI]);
 
 				else for (U64 j = 0, i = 0; j < ESHBinaryType_Count; ++j)
 

@@ -196,6 +196,9 @@ Bool C8_isNyto(C8 c);
 Bool C8_isAlphaNumeric(C8 c);
 Bool C8_isAlpha(C8 c);
 
+Bool C8_isSymbol(C8 c);			//~"#%&'()*+,-./$:;<=>?@[\]^`_{|}~
+Bool C8_isLexerSymbol(C8 c);	//isSymbol but excluding $_
+
 Bool C8_isValidAscii(C8 c);
 Bool C8_isValidFileName(C8 c);
 
@@ -231,6 +234,10 @@ typedef struct CharString CharString;
 //Version
 
 #define OXC3_MAKE_VERSION(major, minor, patch)	((major) << 22) | ((minor) << 12) | (patch)
+
+#define OXC3_GET_MAJOR(v) (v >> 22)
+#define OXC3_GET_MINOR(v) (v << 10 >> 22)
+#define OXC3_GET_PATCH(v) (v << 20 >> 20)
 
 #define OXC3_MAJOR 0
 #define OXC3_MINOR 2

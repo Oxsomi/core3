@@ -76,6 +76,7 @@ Because of this, a device needs the following requirements to be OxC3 compatible
   - VK_KHR_deferred_host_operations is required for raytracing. Otherwise all raytracing extensions will be forced off.
   - VK_KHR_multiview as Multiview.
   - VK_KHR_fragment_shading_rate as VariableRateShading
+  - VK_NV_compute_shader_derivatives as ComputeDeriv as long as computeDerivativeGroupLinear is true.
 - subgroupSize of 4 - 128.
 - sampleRateShading of true.
 - subgroup operations of basic, vote, ballot are required. Available only in compute by default. arithmetic and shuffle are optional.
@@ -323,6 +324,9 @@ Since Vulkan is more fragmented, the features are more split up. However in Dire
 - For format RGB32(u/i) to be enabled, it has to support render target.
 - For format RGB32f to be enabled, it has to support render target, blend, shader sample, msaa 4x and 8x.
 - AtomicInt64OnTypedResourceSupported, AtomicInt64OnGroupSharedSupported as EGraphicsDataTypes_AtomicI64.
+- ShaderModel 6.6 support as WaveSize, PAQ and ComputeDeriv.
+- ShaderModel 6.8 support as WaveSizeMinMax.
+- DerivativesInMeshAndAmplificationShadersSupported as MeshTaskTexDeriv.
 
 #### DirectX12 specific extensions
 

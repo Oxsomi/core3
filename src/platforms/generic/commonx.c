@@ -229,8 +229,8 @@ Error DLFile_readx(Buffer file, const U32 encryptionKey[8], Bool allowLeftOverDa
 	return DLFile_read(file, encryptionKey, allowLeftOverData, Platform_instance.alloc, dlFile);
 }
 
-Error SHFile_createx(ESHSettingsFlags flags, ESHExtension extension, SHFile *shFile) {
-	return SHFile_create(flags, extension, Platform_instance.alloc, shFile);
+Error SHFile_createx(ESHSettingsFlags flags, ESHExtension extension, U32 compilerVersion, SHFile *shFile) {
+	return SHFile_create(flags, extension, compilerVersion, Platform_instance.alloc, shFile);
 }
 
 Bool SHFile_freex(SHFile *shFile) {
@@ -252,6 +252,9 @@ Error SHFile_writex(SHFile shFile, Buffer *result) {
 Error SHFile_readx(Buffer file, Bool isSubFile, SHFile *shFile) {
 	return SHFile_read(file, isSubFile, Platform_instance.alloc, shFile);
 }
+
+void SHEntry_printx(SHEntry entry) { SHEntry_print(entry, Platform_instance.alloc); }
+void SHEntryRuntime_printx(SHEntryRuntime entry) { SHEntryRuntime_print(entry, Platform_instance.alloc); }
 
 void SHEntryRuntime_freex(SHEntryRuntime *entry) {
 	SHEntryRuntime_free(entry, Platform_instance.alloc);

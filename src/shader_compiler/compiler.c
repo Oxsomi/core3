@@ -22,6 +22,7 @@
 #include "shader_compiler/compiler.h"
 #include "platforms/platform.h"
 #include "platforms/log.h"
+#include "platforms/ext/formatx.h"
 #include "types/parser.h"
 #include "types/lexer.h"
 #include "types/time.h"
@@ -240,6 +241,8 @@ void CompileResult_free(CompileResult *result, Allocator alloc) {
 			ListSHEntryRuntime_freeUnderlying(&result->shEntriesRuntime, alloc);
 			break;
 	}
+
+	*result = (CompileResult) { 0 };
 }
 
 Bool Compiler_createx(Compiler *comp, Error *e_rr) {
@@ -260,6 +263,222 @@ Bool Compiler_parsex(Compiler comp, CompilerSettings settings, CompileResult *re
 
 Bool Compiler_mergeIncludeInfox(Compiler *comp, ListIncludeInfo *infos, Error *e_rr) {
 	return Compiler_mergeIncludeInfo(comp, Platform_instance.alloc, infos, e_rr);
+}
+
+Bool Compiler_filterWarning(CharString str) {
+	return CharString_startsWithStringSensitive(str, CharString_createRefCStrConst("#pragma once in main file\n"), 0);
+}
+
+Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *errors, Bool *hasErrors, Error *e_rr) {
+
+	Bool s_uccess = true;
+	U64 off = 0;
+
+	CharString tempStr = CharString_createNull();
+	CharString tempStr2 = CharString_createNull();
+
+	CharString warning = CharString_createRefCStrConst(" warning: ");
+	CharString errStr = CharString_createRefCStrConst(" error: ");
+	CharString fatalErrStr = CharString_createRefCStrConst(" fatal error: ");
+
+	U64 prevOff = U64_MAX;
+
+	CharString file = CharString_createNull();
+	U64 lineId = 0;
+	U64 lineOff = 0;
+	Bool isError = false;
+
+	while(off < CharString_length(errs)) {
+
+		//Find start of next error
+
+		U64 firstColon = CharString_findFirstSensitive(errs, ':', off);
+		U64 errorEnd = firstColon;
+
+		//On Windows, D:/test.hlsl:10:10: warning: x is valid ofc, so we should skip that
+
+		if(!off || C8_isNewLine(CharString_getAt(errs, firstColon - 2)))
+			errorEnd = firstColon = CharString_findFirstSensitive(errs, ':', firstColon + 1);
+
+		if(firstColon == U64_MAX)
+			break;
+
+		//Sometimes our line starts with "In file included from ", which makes me angry
+
+		{
+			U64 i = firstColon;
+
+			for(; i != U64_MAX && !C8_isNewLine(CharString_getAt(errs, i)); --i)
+				;
+
+			++i;
+
+			CharString lameString = CharString_createRefCStrConst("In file included from ");
+
+			if (CharString_startsWithStringSensitive(errs, lameString, i)) {
+
+				//Find error start
+
+				while(i != U64_MAX && C8_isNewLine(CharString_getAt(errs, i--)));
+
+				++i;
+
+				if(!off)
+					errorEnd = i;
+
+				Bool hasNewLine = false;
+
+				while (true) {
+
+					C8 next = CharString_getAt(errs, ++firstColon);
+
+					if(next == C8_MAX)
+						break;
+
+					//Find first non newline once we have encountered the first newline
+
+					Bool isNewLine = C8_isNewLine(next);
+
+					if(hasNewLine && !isNewLine)
+						break;
+
+					hasNewLine = isNewLine;
+				}
+
+				//Reset colon to be correct
+
+				off = firstColon;
+				continue;
+			}
+		}
+
+		//We ended with no more errors
+
+		if(firstColon >= CharString_length(errs))
+			break;
+
+		//In case we are still parsing an error, we have to traverse our : to the first whitespace character.
+		//As the start of the file name is the end of our error.
+		//We can then finalize the error and push it.
+
+		if (prevOff != U64_MAX) {
+
+			U64 i = errorEnd;
+
+			for(; i != U64_MAX; --i)
+				if(C8_isWhitespace(errs.ptr[i]))
+					break;
+
+			if(i == U64_MAX)
+				retError(clean, Error_invalidState(1, "Compiler_preprocess() couldn't parse error"))
+
+			CharString errorStr = CharString_createRefSizedConst(errs.ptr + prevOff, i - prevOff, false);
+
+			if(!Compiler_filterWarning(errorStr)) {
+
+				gotoIfError2(clean, CharString_createCopy(errorStr, alloc, &tempStr))
+				gotoIfError2(clean, CharString_createCopy(file, alloc, &tempStr2))
+
+				CompileError cerr = (CompileError) {
+					.lineId = (U16) lineId,
+					.typeLineId = (U8) ((lineId >> 16) | ((U8)isError << 7)),
+					.lineOffset = (U8) lineOff,
+					.error = tempStr,
+					.file = tempStr2
+				};
+
+				gotoIfError2(clean, ListCompileError_pushBack(errors, cerr, alloc))
+
+				tempStr = CharString_createNull();
+				tempStr2 = CharString_createNull();
+			}
+
+			file = CharString_createNull();
+		}
+
+		//Parse file
+
+		if(firstColon == U64_MAX || !CharString_cut(errs, off, firstColon - off, &file))
+			retError(clean, Error_invalidState(1, "Compiler_preprocess() couldn't parse file from error"))
+
+		//Parse line
+
+		U64 nextColon = CharString_findFirstSensitive(errs, ':', firstColon + 1);
+
+		CharString tmp = CharString_createNull();
+
+		if(nextColon == U64_MAX || !CharString_cut(errs, firstColon + 1, nextColon - (firstColon + 1), &tmp))
+			retError(clean, Error_invalidState(2, "Compiler_preprocess() couldn't parse lineId from error"))
+
+		if(!CharString_parseDec(tmp, &lineId) || (lineId >> (16 + 7)))
+			retError(clean, Error_invalidState(3, "Compiler_preprocess() couldn't parse U23 lineId from error"))
+
+		//Parse line offset
+
+		tmp = CharString_createNull();
+		off = nextColon + 1;
+		nextColon = CharString_findFirstSensitive(errs, ':', off);
+
+		if(nextColon == U64_MAX || !CharString_cut(errs, off, nextColon - off, &tmp))
+			retError(clean, Error_invalidState(2, "Compiler_preprocess() couldn't parse lineOff from error"))
+
+		if(!CharString_parseDec(tmp, &lineOff) || lineOff >> 8)
+			retError(clean, Error_invalidState(3, "Compiler_preprocess() couldn't parse U8 lineOff from error"))
+
+		off = nextColon + 1;
+
+		//Parse warning type
+
+		Bool isFatalError = CharString_startsWithStringInsensitive(errs, fatalErrStr, off);
+
+		if(CharString_startsWithStringInsensitive(errs, errStr, off) || isFatalError) {
+			isError = true;
+			*hasErrors = true;
+			off += isFatalError ? CharString_length(fatalErrStr) : CharString_length(errStr);
+		}
+
+		else if(CharString_startsWithStringInsensitive(errs, warning, off)) {
+			isError = false;
+			off += CharString_length(warning);
+		}
+
+		else retError(clean, Error_invalidState(4, "Compiler_preprocess() couldn't parse error type from error"))
+
+		prevOff = off;
+	}
+
+	if (prevOff != U64_MAX) {
+
+		CharString errorStr = CharString_createRefSizedConst(
+			errs.ptr + prevOff, CharString_length(errs) - prevOff, false
+		);
+
+		if(!Compiler_filterWarning(errorStr)) {
+
+			gotoIfError2(clean, CharString_createCopy(errorStr, alloc, &tempStr))
+			gotoIfError2(clean, CharString_createCopy(file, alloc, &tempStr2))
+
+			CompileError cerr = (CompileError) {
+				.lineId = (U16) lineId,
+				.typeLineId = (U8) ((lineId >> 16) | ((U8)isError << 7)),
+				.lineOffset = (U8) lineOff,
+				.error = tempStr,
+				.file = tempStr2
+			};
+
+			gotoIfError2(clean, ListCompileError_pushBack(errors, cerr, alloc))
+
+			tempStr = CharString_createNull();
+			tempStr2 = CharString_createNull();
+		}
+
+		file = CharString_createNull();
+	}
+
+clean:
+	CharString_free(&tempStr, alloc);
+	CharString_free(&tempStr2, alloc);
+	return s_uccess;
 }
 
 //Invoke parser
@@ -415,12 +634,39 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 			if(stageNameLen == 3 && extensionName.ptr[2] == '4')	return ESHExtension_I64;
 			break;
 
-		case C8x2('F', '1'):	//F16
-			if(stageNameLen == 3 && extensionName.ptr[2] == '6')	return ESHExtension_F16;
+		case C8x2('P', 'A'):	//PAQ
+			if(stageNameLen == 3 && extensionName.ptr[2] == 'Q')	return ESHExtension_PAQ;
 			break;
 
-		case C8x2('I', '1'):	//I16
-			if(stageNameLen == 3 && extensionName.ptr[2] == '6')	return ESHExtension_I16;
+		case C8x2('1', '6'):	//16BitTypes
+
+			if(
+				stageNameLen == 10 &&
+				*(const U64*)&extensionName.ptr[2] == C8x8('B', 'i', 't', 'T', 'y', 'p', 'e', 's')
+			)
+				return ESHExtension_16BitTypes;
+
+			break;
+
+		case C8x2('M', 'u'):	//Multiview
+
+			if(
+				stageNameLen == 9 &&
+				*(const U64*)&extensionName.ptr[1] == C8x8('u', 'l', 't', 'i', 'v', 'i', 'e', 'w')
+			)
+				return ESHExtension_Multiview;
+
+			break;
+
+		case C8x2('C', 'o'):	//ComputeDeriv
+
+			if(
+				stageNameLen == 12 &&
+				*(const U64*)&extensionName.ptr[ 2] == C8x8('m', 'p', 'u', 't', 'e', 'D', 'e', 'r') &&
+				*(const U16*)&extensionName.ptr[10] == C8x2('i', 'v')
+			)
+				return ESHExtension_ComputeDeriv;
+
 			break;
 
 		case C8x2('A', 't'):	//AtomicI64, AtomicF32, AtomicF64
@@ -501,7 +747,7 @@ ESHExtension Compiler_parseExtension(CharString extensionName) {
 	return 1 << ESHExtension_Count;
 }
 
-Bool Compiler_registerExtension(ESHExtension *extensions, U32 tokenId, Parser parser, Error *e_rr) {
+Bool Compiler_registerExtension(U32 *extensions, U32 tokenId, Parser parser, Error *e_rr) {
 
 	Bool s_uccess = true;
 
@@ -521,6 +767,19 @@ Bool Compiler_registerExtension(ESHExtension *extensions, U32 tokenId, Parser pa
 		))
 
 	*extensions |= extension;
+
+clean:
+	return s_uccess;
+}
+
+Bool Compiler_registerExtensions(ListU32 *extensionsRegistered, U32 extensions, Allocator alloc, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	if(ListU32_contains(*extensionsRegistered, extensions, 0, NULL))
+		retError(clean, Error_alreadyDefined(0, "Compiler_registerExtensions() extensions already defined"))
+
+	gotoIfError2(clean, ListU32_pushBack(extensionsRegistered, extensions, alloc));
 
 clean:
 	return s_uccess;
@@ -553,7 +812,7 @@ clean:
 
 #define DXC_SHADER_MODEL(maj, min) ((U16)((min) | ((maj) << 8)))
 
-Bool Compiler_registerModel(ListU16 *vendors, U32 tokenId, Parser parser, Error *e_rr) {
+Bool Compiler_registerModel(ListU16 *vendors, U32 tokenId, Parser parser, Allocator alloc, Error *e_rr) {
 
 	Bool s_uccess = true;
 
@@ -578,7 +837,7 @@ Bool Compiler_registerModel(ListU16 *vendors, U32 tokenId, Parser parser, Error 
 			0, 1, "Compiler_parse() model version was referenced multiple times"
 		))
 
-	gotoIfError2(clean, ListU16_pushBackx(vendors, version))
+	gotoIfError2(clean, ListU16_pushBack(vendors, version, alloc))
 
 clean:
 	return s_uccess;
@@ -603,6 +862,10 @@ Bool Compiler_registerUniform(
 	++*tokenCounter;
 
 	U64 inserted = U64_MAX;
+
+	for(U64 i = 0; i < CharString_length(uniformName); ++i)
+		if(C8_isSymbol(uniformName.ptr[i]) || C8_isWhitespace(uniformName.ptr[i]))
+			retError(clean, Error_alreadyDefined(0, "Compiler_registerUniform() can't contain symbols or whitespace"))
 
 	U16 currentUniforms = 0;
 
@@ -670,6 +933,38 @@ clean:
 	return s_uccess;
 }
 
+U16 Compiler_minFeatureSetStage(ESHPipelineStage stage, U16 waveSize) {
+
+	U16 minVersion = DXC_SHADER_MODEL(6, 5);
+
+	if(stage == ESHPipelineStage_WorkgraphExt)
+		minVersion = DXC_SHADER_MODEL(6, 8);
+
+	if(waveSize & 0xF)
+		minVersion = DXC_SHADER_MODEL(6, 6);
+
+	if(waveSize >> 4)
+		minVersion = DXC_SHADER_MODEL(6, 8);
+
+	return minVersion;
+}
+
+U16 Compiler_minFeatureSetExtension(ESHExtension ext) {
+
+	U16 minVersion = DXC_SHADER_MODEL(6, 5);
+
+	if(ext & ESHExtension_AtomicI64)
+		minVersion = U16_max(DXC_SHADER_MODEL(6, 6), minVersion);
+
+	if(ext & ESHExtension_ComputeDeriv)
+		minVersion = U16_max(DXC_SHADER_MODEL(6, 6), minVersion);
+
+	if(ext & ESHExtension_PAQ)
+		minVersion = U16_max(DXC_SHADER_MODEL(6, 6), minVersion);
+
+	return minVersion;
+}
+
 Bool Compiler_parse(Compiler comp, CompilerSettings settings, Allocator alloc, CompileResult *result, Error *e_rr) {
 
 	(void)comp;		//No need for a compiler, we do it ourselves
@@ -691,7 +986,7 @@ Bool Compiler_parse(Compiler comp, CompilerSettings settings, Allocator alloc, C
 
 	result->type = ECompileResultType_SHEntryRuntime;
 
-	gotoIfError2(clean, ListSHEntryRuntime_reservex(&result->shEntriesRuntime, parser.rootSymbols))
+	gotoIfError2(clean, ListSHEntryRuntime_reserve(&result->shEntriesRuntime, parser.rootSymbols, alloc))
 
 	//Now we can find all entrypoints and return it into a ListSHEntryRuntime.
 	//An entrypoint is defined as a stage with an annotation being shader("shaderType") or stage("stageType").
@@ -735,7 +1030,7 @@ Bool Compiler_parse(Compiler comp, CompilerSettings settings, Allocator alloc, C
 						case C8x4('s', 't', 'a', 'g'):		//stage()
 
 							//[stage("vertex")]
-							//      ^
+							// ^
 							if (tokLen == 5 && tokStr.ptr[4] == 'e') {
 
 								if(runtimeEntry.entry.stage != ESHPipelineStage_Count)
@@ -749,7 +1044,7 @@ Bool Compiler_parse(Compiler comp, CompilerSettings settings, Allocator alloc, C
 									))
 
 								//[stage("vertex")]
-								//      ^
+								// ^
 
 								if(
 									parser.tokens.ptr[symj.tokenId + 1].tokenType != ETokenType_RoundParenthesisStart ||
@@ -790,7 +1085,7 @@ Bool Compiler_parse(Compiler comp, CompilerSettings settings, Allocator alloc, C
 						case C8x4('s', 'h', 'a', 'd'):		//shader()
 
 							//[shader("vertex")]
-							//      ^
+							// ^
 							if (tokLen == 6 && *(const U16*)&tokStr.ptr[4] == C8x2('e', 'r')) {
 
 								if(runtimeEntry.entry.stage != ESHPipelineStage_Count)
@@ -804,7 +1099,7 @@ Bool Compiler_parse(Compiler comp, CompilerSettings settings, Allocator alloc, C
 									))
 
 								//[shader("vertex")]
-								//       ^
+								// ^
 
 								if(
 									parser.tokens.ptr[symj.tokenId + 1].tokenType != ETokenType_RoundParenthesisStart ||
@@ -836,16 +1131,150 @@ Bool Compiler_parse(Compiler comp, CompilerSettings settings, Allocator alloc, C
 
 							break;
 
-						case C8x4('m', 'o', 'd', 'e'):		//model()
+						case C8x4('n', 'u', 'm', 't'):		//numthreads(X, Y, Z)
 
-							//[model(6.8, 6.4)]
-							//      ^
-							if (tokLen == 5 && tokStr.ptr[4] == 'l') {
+							//[numthreads(X, Y, Z)]
+							// ^
+							if (
+								tokLen == 10 &&
+								*(const U64*)&tokStr.ptr[2] == C8x8('m', 't', 'h', 'r', 'e', 'a', 'd', 's')
+							) {
 							
-								if(symj.tokenCount + 1 < 4)
+								if(symj.tokenCount + 1 != 8)
 									retError(clean, Error_invalidParameter(
 										0, 0,
-										"Compiler_parse() model annotation expected model(double, ...)"
+										"Compiler_parse() numthreads annotation expected numthreads(uint16, uint16, uint16)"
+									))
+
+								//[numthreads(X, Y, Z)]
+								// ^
+
+								if(
+									parser.tokens.ptr[symj.tokenId + 1].tokenType != ETokenType_RoundParenthesisStart ||
+									parser.tokens.ptr[symj.tokenId + 2].tokenType != ETokenType_Integer  ||
+									parser.tokens.ptr[symj.tokenId + 3].tokenType != ETokenType_Comma    ||
+									parser.tokens.ptr[symj.tokenId + 4].tokenType != ETokenType_Integer  ||
+									parser.tokens.ptr[symj.tokenId + 5].tokenType != ETokenType_Comma    ||
+									parser.tokens.ptr[symj.tokenId + 6].tokenType != ETokenType_Integer  ||
+									parser.tokens.ptr[symj.tokenId + 7].tokenType != ETokenType_RoundParenthesisEnd
+								)
+									retError(clean, Error_invalidParameter(
+										0, 1,
+										"Compiler_parse() numthreads annotation expected numthreads(uint16, uint16, uint16)"
+									))
+
+								for(U8 k = 0; k < 3; ++k)
+									if((parser.tokens.ptr[symj.tokenId + 2 + (k << 1)].valueu >> 16))
+										retError(clean, Error_invalidParameter(
+											0, 1,
+											"Compiler_parse() numthreads annotation expected numthreads(uint16, uint16, uint16)"
+										))
+
+								runtimeEntry.entry.groupX = (U16) parser.tokens.ptr[symj.tokenId + 2].valueu;
+								runtimeEntry.entry.groupY = (U16) parser.tokens.ptr[symj.tokenId + 4].valueu;
+								runtimeEntry.entry.groupZ = (U16) parser.tokens.ptr[symj.tokenId + 6].valueu;
+
+								U16 groupX = runtimeEntry.entry.groupX;
+								U16 groupY = runtimeEntry.entry.groupY;
+								U16 groupZ = runtimeEntry.entry.groupZ;
+
+								U64 totalGroup = (U64)groupX * groupY * groupZ;
+
+								if(!totalGroup || totalGroup > 512)
+									retError(clean, Error_invalidOperation(
+										0, "Compiler_parse() numthreads total group count must be in range [1, 512]"
+									))
+
+								if(U16_max(groupX, groupY) > 512)
+									retError(clean, Error_invalidOperation(
+										1, "Compiler_parse() numthreads x or y dimension can't exceed 512"
+									))
+
+								if(groupZ > 64)
+									retError(clean, Error_invalidOperation(
+										2, "Compiler_parse() numthreads z dimension can't exceed 64"
+									))
+
+							}
+
+							break;
+
+						case C8x4('W', 'a', 'v', 'e'):		//WaveSize(forced), WaveSize(min, max) or WaveSize(min, max, recom)
+
+							//[WaveSize(...)]
+							// ^
+							if (tokLen == 8 && *(const U32*)&tokStr.ptr[4] == C8x4('S', 'i', 'z', 'e')) {
+							
+								if(symj.tokenCount + 1 != 4 && symj.tokenCount + 1 != 6 && symj.tokenCount + 1 != 8)
+									retError(clean, Error_invalidParameter(
+										0, 0,
+										"Compiler_parse() WaveSize annotation expected WaveSize(forced), WaveSize(min, max) "
+										" or WaveSize(min, max, recommended)"
+									))
+
+								//[WaveSize(X, Y, Z)]
+								// ^
+
+								U64 end = symj.tokenId + symj.tokenCount;
+
+								if(
+									parser.tokens.ptr[symj.tokenId + 1].tokenType != ETokenType_RoundParenthesisStart ||
+									parser.tokens.ptr[symj.tokenId + 2].tokenType != ETokenType_Integer  ||
+									parser.tokens.ptr[end].tokenType != ETokenType_RoundParenthesisEnd
+								)
+									retError(clean, Error_invalidParameter(
+										0, 1,
+										"Compiler_parse() WaveSize annotation expected WaveSize(uint8)"
+									))
+
+								//4-128
+
+								for (U8 k = 0; k < symj.tokenCount >> 1; ++k) {
+
+									Token intToken = parser.tokens.ptr[symj.tokenId + (k << 1) + 2];
+
+									if (k && (
+										parser.tokens.ptr[symj.tokenId + (k << 1) + 1].tokenType != ETokenType_Comma ||
+										intToken.tokenType != ETokenType_Integer
+									))
+										retError(clean, Error_invalidParameter(
+											0, 1,
+											"Compiler_parse() WaveSize annotation expected WaveSize(uint8, ...)"
+										))
+
+									if(intToken.valueu < 4 || intToken.valueu > 128)
+										retError(clean, Error_invalidParameter(
+											0, 1,
+											"Compiler_parse() WaveSize annotation expected int in range [4, 128]"
+										))
+
+									F32 v = F32_log2((F32)intToken.valueu);
+
+									if(v != (I32)v)
+										retError(clean, Error_invalidParameter(
+											0, 1,
+											"Compiler_parse() WaveSize annotation expected base2 int in range [4, 128]"
+										))
+
+									if(symj.tokenCount + 1 == 4)
+										runtimeEntry.entry.waveSize = (U8)v + 1;
+
+									else runtimeEntry.entry.waveSize |= ((U16)v + 1) << ((k + 1) << 2);
+								}
+							}
+
+							break;
+
+						case C8x4('m', 'o', 'd', 'e'):		//model()
+
+							//[model(6.8)]
+							// ^
+							if (tokLen == 5 && tokStr.ptr[4] == 'l') {
+							
+								if(symj.tokenCount + 1 != 4)
+									retError(clean, Error_invalidParameter(
+										0, 0,
+										"Compiler_parse() model annotation expected model(double)"
 									))
 
 								U32 tokenEnd = symj.tokenId + symj.tokenCount;
@@ -864,30 +1293,8 @@ Bool Compiler_parse(Compiler comp, CompilerSettings settings, Allocator alloc, C
 									))
 
 								gotoIfError3(clean, Compiler_registerModel(
-									&runtimeEntry.shaderVersions, symj.tokenId + 2, parser, e_rr
+									&runtimeEntry.shaderVersions, symj.tokenId + 2, parser, alloc, e_rr
 								))
-
-								//[model(6.8, 6.3)]
-								//          ^
-
-								for (U32 k = symj.tokenId + 3; k < tokenEnd; ++k) {
-								
-									if(parser.tokens.ptr[k].tokenType != ETokenType_Comma)
-										retError(clean, Error_invalidParameter(
-											0, 3,
-											"Compiler_parse() model annotation expected comma in model(double, ...)"
-										))
-								
-									if(k + 1 >= tokenEnd || parser.tokens.ptr[k + 1].tokenType != ETokenType_Double)
-										retError(clean, Error_invalidParameter(
-											0, 4,
-											"Compiler_parse() extension annotation expected double in model(double, ...)"
-										))
-										
-									gotoIfError3(clean, Compiler_registerModel(
-										&runtimeEntry.shaderVersions, k + 1, parser, e_rr
-									))
-								}
 							}
 
 							break;
@@ -895,7 +1302,7 @@ Bool Compiler_parse(Compiler comp, CompilerSettings settings, Allocator alloc, C
 						case C8x4('v', 'e', 'n', 'd'):		//vendor()
 
 							//[vendor("NV", "AMD")]
-							//      ^
+							// ^
 							if (tokLen == 6 && *(const U16*)&tokStr.ptr[4] == C8x2('o', 'r')) {
 							
 								if(symj.tokenCount + 1 < 4)
@@ -920,7 +1327,7 @@ Bool Compiler_parse(Compiler comp, CompilerSettings settings, Allocator alloc, C
 									))
 
 								gotoIfError3(clean, Compiler_registerVendor(
-									&runtimeEntry.vendorMask, symj.tokenId + 2, parser, e_rr
+									&runtimeEntry.entry.vendorMask, symj.tokenId + 2, parser, e_rr
 								))
 
 								//[vendor("AMD", "NV")]
@@ -941,7 +1348,7 @@ Bool Compiler_parse(Compiler comp, CompilerSettings settings, Allocator alloc, C
 										))
 
 									gotoIfError3(clean, Compiler_registerVendor(
-										&runtimeEntry.vendorMask, k + 1, parser, e_rr
+										&runtimeEntry.entry.vendorMask, k + 1, parser, e_rr
 									))
 								}
 							}
@@ -1017,15 +1424,34 @@ Bool Compiler_parse(Compiler comp, CompilerSettings settings, Allocator alloc, C
 								*(const U64*)&tokStr.ptr[1] == C8x8('x', 't', 'e', 'n', 's', 'i', 'o', 'n')
 							) {
 
-								if(symj.tokenCount + 1 < 4)
+								if(symj.tokenCount + 1 < 3)
 									retError(clean, Error_invalidParameter(
 										0, 0,
-										"Compiler_parse() extension annotation expected extension(string, ...)"
+										"Compiler_parse() extension annotation expected extension() or extension(string, ...)"
 									))
+
+								//[extension()]
+								// ^
+								//Indicates an entrypoint without extensions
+
+								if (symj.tokenCount + 1 == 3) {
+
+									if(
+										parser.tokens.ptr[symj.tokenId + 1].tokenType != ETokenType_RoundParenthesisStart ||
+										parser.tokens.ptr[symj.tokenId + 2].tokenType != ETokenType_RoundParenthesisEnd
+									)
+										retError(clean, Error_invalidParameter(
+											0, 1,
+											"Compiler_parse() extension annotation expected extension()"
+										))
+
+									gotoIfError3(clean, Compiler_registerExtensions(&runtimeEntry.extensions, 0, alloc, e_rr))
+									break;
+								}
 
 								U32 tokenEnd = symj.tokenId + symj.tokenCount;
 
-								//[extension("I16")]
+								//[extension("16BitTypes")]
 								//           ^
 
 								if(
@@ -1038,12 +1464,14 @@ Bool Compiler_parse(Compiler comp, CompilerSettings settings, Allocator alloc, C
 										"Compiler_parse() extension annotation expected extension(string, ...)"
 									))
 
+								U32 extensions = 0;
+
 								gotoIfError3(clean, Compiler_registerExtension(
-									&runtimeEntry.extensions, symj.tokenId + 2, parser, e_rr
+									&extensions, symj.tokenId + 2, parser, e_rr
 								))
 
-								//[extension("I16", "F16")]
-								//                ^
+								//[extension("16BitTypes", "RayQuery")]
+								//                       ^
 
 								for (U32 k = symj.tokenId + 3; k < tokenEnd; ++k) {
 								
@@ -1060,9 +1488,13 @@ Bool Compiler_parse(Compiler comp, CompilerSettings settings, Allocator alloc, C
 										))
 
 									gotoIfError3(clean, Compiler_registerExtension(
-										&runtimeEntry.extensions, k + 1, parser, e_rr
+										&extensions, k + 1, parser, e_rr
 									))
 								}
+
+								gotoIfError3(clean, Compiler_registerExtensions(
+									&runtimeEntry.extensions, extensions, alloc, e_rr
+								))
 							}
 
 							break;
@@ -1079,12 +1511,99 @@ Bool Compiler_parse(Compiler comp, CompilerSettings settings, Allocator alloc, C
 
 			else {
 
-				//If we don't have any model version, we try the latest
+				U16 minVersion = Compiler_minFeatureSetStage(runtimeEntry.entry.stage, runtimeEntry.entry.waveSize);
 
-				if(!runtimeEntry.shaderVersions.length)
-					gotoIfError2(clean, ListU16_pushBackx(&runtimeEntry.shaderVersions, DXC_SHADER_MODEL(6, 8)))
+				//Ensure all shader versions are compatible with minimum featureset
 
-				gotoIfError2(clean, ListSHEntryRuntime_pushBackx(&result->shEntriesRuntime, runtimeEntry));
+				for (U64 j = 0; j < runtimeEntry.shaderVersions.length; ++j)
+					if(runtimeEntry.shaderVersions.ptr[j] < minVersion)
+						retError(clean, Error_invalidState(
+							0,
+							"Compiler_parse() one of the shader models was incompatible with minimum shader featureset "
+							"of WaveSize or stage"
+						))
+
+				//Find a shader version that has the requirements.
+				//If there's no model available, then it should be ok.
+
+				Bool isRt =
+					runtimeEntry.entry.stage >= ESHPipelineStage_RtStartExt &&
+					runtimeEntry.entry.stage <= ESHPipelineStage_RtEndExt;
+
+				for (U64 j = 0; j < runtimeEntry.extensions.length; ++j) {
+
+					if(
+						runtimeEntry.entry.stage != ESHPipelineStage_RaygenExt && 
+						(runtimeEntry.extensions.ptr[j] & ESHExtension_RayReorder)
+					)
+						retError(clean, Error_invalidState(
+							0,
+							"Compiler_parse() one of the non raygen stages uses RayReorder, which isn't supported"
+						))
+
+					if(!isRt && (runtimeEntry.extensions.ptr[j] & ESHExtension_PAQ))
+						retError(clean, Error_invalidState(
+							0,
+							"Compiler_parse() one of the non raytracing stages uses PAQ, which isn't supported"
+						))
+						
+					if(
+						runtimeEntry.entry.stage != ESHPipelineStage_Compute &&
+						runtimeEntry.entry.stage != ESHPipelineStage_MeshExt &&
+						runtimeEntry.entry.stage != ESHPipelineStage_TaskExt &&
+						(runtimeEntry.extensions.ptr[j] & ESHExtension_ComputeDeriv)
+					)
+						retError(clean, Error_invalidState(
+							0,
+							"Compiler_parse() one of the non compute/mesh/task stages uses ComputeDeriv, which isn't supported"
+						))
+
+					if(!runtimeEntry.shaderVersions.length)
+						continue;
+
+					U16 reqVersion = Compiler_minFeatureSetExtension(runtimeEntry.extensions.ptr[j]);
+
+					Bool containsValidVersion = false;
+
+					for (U64 k = 0; k < runtimeEntry.shaderVersions.length; ++k)
+						if (runtimeEntry.shaderVersions.ptr[k] >= reqVersion) {
+							containsValidVersion = true;
+							break;
+						}
+
+					if(!containsValidVersion)
+						retError(clean, Error_invalidState(
+							0, "Compiler_parse() one of the shader extensions was incompatible with all shader models"
+						))
+				}
+
+				//Validate groups with stage
+
+				Bool hasGroup   = runtimeEntry.entry.groupX | runtimeEntry.entry.groupY | runtimeEntry.entry.groupZ;
+				Bool hasntGroup = !runtimeEntry.entry.groupX || !runtimeEntry.entry.groupY || !runtimeEntry.entry.groupZ;
+
+				Bool isCompute =
+					runtimeEntry.entry.stage == ESHPipelineStage_Compute ||
+					runtimeEntry.entry.stage == ESHPipelineStage_WorkgraphExt;
+
+				if(hasntGroup && isCompute)
+					retError(clean, Error_invalidState(
+						0,
+						"Compiler_parse() found a compute/workgraph entrypoint without numthreads annotation or thread count 0"
+					))
+
+				if(hasGroup && !isCompute)
+					retError(clean, Error_invalidState(
+						0, "Compiler_parse() found a non compute/workgraph entrypoint with a numthreads annotation"
+					))
+
+				if(!runtimeEntry.entry.vendorMask)
+					runtimeEntry.entry.vendorMask = U16_MAX;
+
+				//Ready for push
+
+				SHEntryRuntime_print(runtimeEntry, alloc);
+				gotoIfError2(clean, ListSHEntryRuntime_pushBack(&result->shEntriesRuntime, runtimeEntry, alloc));
 				runtimeEntry = (SHEntryRuntime) { 0 };
 			}
 		}
@@ -1097,7 +1616,7 @@ Bool Compiler_parse(Compiler comp, CompilerSettings settings, Allocator alloc, C
 clean:
 
 	if(!s_uccess && result)
-		CompileResult_freex(result);
+		CompileResult_free(result, alloc);
 
 	SHEntryRuntime_free(&runtimeEntry, alloc);
 	Parser_free(&parser, alloc);

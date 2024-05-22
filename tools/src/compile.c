@@ -265,11 +265,12 @@ Bool CLI_compileShaderSingle(
 	}
 
 clean:
+	s_uccess &= compileResult.isSuccess;
 	CompileResult_freex(&compileResult);
 	CharString_freex(&tempStr);
 	CharString_freex(&tempStr2);
 	Error_printx(errTemp, ELogLevel_Error, ELogOptions_Default);
-	return s_uccess && compileResult.isSuccess;
+	return s_uccess;
 }
 
 typedef struct CompilerJobScheduler {

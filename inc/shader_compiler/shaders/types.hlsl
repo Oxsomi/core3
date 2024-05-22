@@ -21,12 +21,12 @@ R"(
 
 #pragma once
 
-#ifdef __OXC3_EXT_F16
+#ifdef __OXC3_EXT_16BITTYPES
 
-    typedef float16_t F16;
-    typedef float16_t2 F16x2;
-    typedef float16_t3 F16x3;
-    typedef float16_t4 F16x4;
+	typedef float16_t F16;
+	typedef float16_t2 F16x2;
+	typedef float16_t3 F16x3;
+	typedef float16_t4 F16x4;
 
 	//Float16 matrices
 
@@ -42,19 +42,15 @@ R"(
 	typedef float16_t3x2 F16x3x2;
 	typedef float16_t2x2 F16x2x2;
 
-#endif
-
-#ifdef __OXC3_EXT_I16
-
-    typedef int16_t I16;
-    typedef int16_t2 I16x2;
-    typedef int16_t3 I16x3;
-    typedef int16_t4 I16x4;
-
-    typedef uint16_t U16;
-    typedef uint16_t2 U16x2;
-    typedef uint16_t3 U16x3;
-    typedef uint16_t4 U16x4;
+	typedef int16_t I16;
+	typedef int16_t2 I16x2;
+	typedef int16_t3 I16x3;
+	typedef int16_t4 I16x4;
+	
+	typedef uint16_t U16;
+	typedef uint16_t2 U16x2;
+	typedef uint16_t3 U16x3;
+	typedef uint16_t4 U16x4;
 
 	//Int16 matrices
 
@@ -88,10 +84,10 @@ R"(
 
 #ifdef __OXC3_EXT_F64
 
-    typedef double F64;
-    typedef double2 F64x2;
-    typedef double3 F64x3;
-    typedef double4 F64x4;
+	typedef double F64;
+	typedef double2 F64x2;
+	typedef double3 F64x3;
+	typedef double4 F64x4;
 
 	//Float64 matrices
 
@@ -222,7 +218,6 @@ struct IndirectDrawIndexed {
 struct IndirectDispatch {
 	U32 x, y, z, pad;
 };
-
 
 //F32x4x4 helpers such as transforms, perspective, etc.
 //https://github.com/Oxsomi/core2/blob/master/include/types/mat.hpp

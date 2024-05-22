@@ -126,6 +126,12 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 		if(feat & EGraphicsFeatures_SwapchainCompute)
 			Log_debugLnx("\t\tSwapchain compute");
 
+		if(feat & EGraphicsFeatures_ComputeDeriv)
+			Log_debugLnx("\t\tCompute shader texture derivatives");
+
+		if(feat & EGraphicsFeatures_MeshTaskTexDeriv)
+			Log_debugLnx("\t\tMesh/task shader texture derivatives");
+
 		//Data types
 
 		const U32 dat = cap.dataTypes;
@@ -192,6 +198,15 @@ void GraphicsDeviceInfo_print(EGraphicsApi api, const GraphicsDeviceInfo *device
 
 			if(cap.featuresExt & EDxGraphicsFeatures_HardwareCopyQueue)
 				Log_debugLnx("\t\tD3D12 Hardware copy queue");
+
+			if(cap.featuresExt & EDxGraphicsFeatures_WaveSize)
+				Log_debugLnx("\t\tD3D12 WaveSize");
+
+			if(cap.featuresExt & EDxGraphicsFeatures_WaveSizeMinMax)
+				Log_debugLnx("\t\tD3D12 WaveSize (min/max)");
+
+			if(cap.featuresExt & EDxGraphicsFeatures_PAQ)
+				Log_debugLnx("\t\tD3D12 PAQ (Payload Access Qualifiers)");
 		}
 
 		else if(api == EGraphicsApi_Vulkan) {

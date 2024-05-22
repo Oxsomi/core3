@@ -51,27 +51,31 @@ typedef enum ESHExtension {
 
     ESHExtension_None						= 0,
 
-    //These losely map to EGraphicsDataTypes in OxC3 graphics
+	//These losely map to EGraphicsDataTypes in OxC3 graphics
 
-    ESHExtension_F64						= 1 << 0,
-    ESHExtension_I64						= 1 << 1,
-    ESHExtension_F16						= 1 << 2,
-    ESHExtension_I16						= 1 << 3,
+	ESHExtension_F64						= 1 << 0,
+	ESHExtension_I64						= 1 << 1,
+	ESHExtension_16BitTypes					= 1 << 2,		//I16, F16
 
-    ESHExtension_AtomicI64					= 1 << 4,
-    ESHExtension_AtomicF32					= 1 << 5,
-    ESHExtension_AtomicF64					= 1 << 6,
+	ESHExtension_AtomicI64					= 1 << 3,
+	ESHExtension_AtomicF32					= 1 << 4,
+	ESHExtension_AtomicF64					= 1 << 5,
 
-    //Some of them are present in EGraphicsFeatures in OxC3 graphics
+	//Some of them are present in EGraphicsFeatures in OxC3 graphics
 
-    ESHExtension_SubgroupArithmetic			= 1 << 7,
-    ESHExtension_SubgroupShuffle			= 1 << 8,
+	ESHExtension_SubgroupArithmetic			= 1 << 6,
+	ESHExtension_SubgroupShuffle			= 1 << 7,
 
-	ESHExtension_RayQuery					= 1 << 9,
-	ESHExtension_RayMicromapOpacity			= 1 << 10,
-	ESHExtension_RayMicromapDisplacement	= 1 << 11,
-	ESHExtension_RayMotionBlur				= 1 << 12,
-	ESHExtension_RayReorder					= 1 << 13
+	ESHExtension_RayQuery					= 1 << 8,
+	ESHExtension_RayMicromapOpacity			= 1 << 9,
+	ESHExtension_RayMicromapDisplacement	= 1 << 10,
+	ESHExtension_RayMotionBlur				= 1 << 11,
+	ESHExtension_RayReorder					= 1 << 12,
+
+	ESHExtension_Multiview					= 1 << 13,
+	ESHExtension_ComputeDeriv				= 1 << 14,
+
+	ESHExtension_PAQ						= 1 << 15,		//Payload access qualifiers
 
 } ESHExtension;
 
@@ -85,8 +89,22 @@ typedef struct SHHeader {
     U8 padding;
 
     ESHExtension extensions;
+    
+    U32 compilerVersion;
 
 } SHHeader;
+
+//Maps to EGraphicsVendorId
+typedef enum ESHVendor {
+	ESHVendor_NV,
+	ESHVendor_AMD,
+	ESHVendor_ARM,
+	ESHVendor_QCOM,
+	ESHVendor_INTC,
+	ESHVendor_IMGT,
+	ESHVendor_MSFT,
+	ESHVendor_Count
+} ESHVendor;
 
 //Loosely maps to EPipelineStage in OxC3 graphics
 
@@ -146,11 +164,16 @@ SHFile {
     //ESHPipelineStage.
     //Only allowed to be >1 if non graphics or compute
     U8 pipelineStages[stageNames.length];
+    
+    //Bitset of ESHVendor
+    U16 vendors[stageNames.length];
 
     for pipelineStages[i]
 
 	    if compute or workgraph:
 		    U16x4 groups[stageNames.length];
+               	groups.w = waveSize: U4[4] required, min, max, recommended
+                    Where the U4: 0 = None, 3-8 = 4-128 (log2), else invalid
 
 	    if is graphics:
     		U4 inputs[16];					//Each element: [ ESHPrimitive, ESHVector ]

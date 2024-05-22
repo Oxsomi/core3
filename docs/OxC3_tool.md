@@ -221,13 +221,12 @@ Each entrypoint can have annotations on top of the ones used by DXC. The ones in
   - Do keep in mind that each stage needs a full compile. It might be beneficial to bundle them as a single lib using the "shader" type, when this feature becomes available with workgraphs.
   - If not defined, the compiler will ignore the functions if they don't have either a `stage` or `shader` annotation.
 - [vendor("NV", "AMD", "QCOM")] which vendors are allowed to run this entrypoint. There could be a reason to restrict this, for example when NV specific instructions are used (specifically together with DXIL). Must be one of: NV, AMD, ARM, QCOM, INTC, IMGT, MSFT. If not defined, will assume all vendors are applicable. Multiple annotations for vendor will get merged. So `[vendor("NV", "AMD")]` is the same as two separate annotations with NV and AMD.
-- [extension("I16", "F16")] which extensions to enable. For example I16 or F16 will enable 16-bit types for that entrypoint. 
+- [extension("16BitTypes")] which extensions to enable. For example 16BitTypes will enable 16-bit types for that entrypoint. 
   - Do keep in mind that extensions might introduce another recompile for entrypoints that don't have the same extensions. For example with raytracing shaders. In their case, it will introduce two compiles if one entrypoint doesn't support 16-bit ints and another does.
   - `__OXC3_EXT_<X>` can be used to see which extension is enabled. For example `__OXC3_EXT_ATOMICI64`.
-  - Extension must be one of F64, I64, F16, I16, AtomicI64, AtomicF32, AtomicF64, SubgroupArithmetic, SubgroupShuffle, RayQuery, RayMicromapOpacity, RayMicromapDisplacement, RayMotionBlur, RayReorder.
+  - Extension must be one of F64, I64, 16BitTypes, AtomicI64, AtomicF32, AtomicF64, SubgroupArithmetic, SubgroupShuffle, RayQuery, RayMicromapOpacity, RayMicromapDisplacement, RayMotionBlur, RayReorder, Multiview, ComputeDeriv, PAQ.
     - **Note**: RayReorder is currently only available for raygeneration shaders.
-    - **Note**: I16 and F16 are currently interchangeable, since they both enable 16-bit types. But please use both when it's relevant, just in case that changes.
-    - **Note**: Multiple extension annotations will indicate there will be a separate compile with each. For example: `[extension()]` and `[extension("I16", "F16")]` in front of the same function will indicate the function will be compiled with 16-bit types on and off. 16-bit off would for example run on <=Pascal (GTX 10xx). This will allow the same entrypoint to be ran with different functionality. This could aid for example in unpacking vertex/texture data with native support (rather than manual f16tof32).
+    - **Note**: Multiple extension annotations will indicate there will be a separate compile with each. For example: `[extension()]` and `[extension("16BitTypes")]` in front of the same function will indicate the function will be compiled with 16-bit types on and off. 16-bit off would for example run on <=Pascal (GTX 10xx). This will allow the same entrypoint to be ran with different functionality. This could aid for example in unpacking vertex/texture data with native support (rather than manual f16tof32).
       - Another good example could be RayReorder, which could give substantial boosts in path tracing workloads. Lovelace would need `[extension("RayReorder")]` while the rest such as non NV and Pascal, Turing, Ampere would need `[extension()]`. This will force a recompile.
 - [uniform("X" = "F32x3(1, 0, 0)", "Y" = "F32x3(0, 1, 0)")] Introduces one subtype of the stage that has the defines `$X` and `$Y` set to the relevant values of `(F32x3(1, 0, 0))` and `(F32x3(0, 1, 0))`.
   - This attribute can be used multiple times to compile the same entrypoint with different defines. It will try to bundle compiles wherever possible (try to keep defines similar).
@@ -236,7 +235,17 @@ Each entrypoint can have annotations on top of the ones used by DXC. The ones in
   
 - [model(6.8)]
   - Which shader model to use. If this annotation is present multiple times, it indicates multiple compiles with different shader models.
-  - If not defined, will use latest.
+    - Minimum must be 6.5+ since that's the minimum OxC3 supports.
+    - Workgraphs require SM6.8.
+    - AtomicI64 requires SM6.6.
+    - ComputeDeriv requires SM6.6.
+    - WaveSize requires SM6.6.
+    - WaveSize with 2 or 3 arguments (min, max, recommended) requires SM6.8.
+    - PAQ (Payload Access Qualifiers) requires SM6.6.
+    - Stage type always has to be compatible with specified models.
+    - If extensions are defined, one of the pair of extensions/models has to be compatible with the minimum requirement. If this is the case, that one is used as fallback.
+      - Example: [model(6.2)] and [model(6.0)] is possible with [extensions("16BitTypes")] only if there's another [extensions()] available. Otherwise it knows that model 6.0 can't be compatible with I16 and F16. In this case, there would only be 3 binaries: 6.0 16-bit off, 6.2 16-bit off, 6.2 16-bit on. Without model specified, it would determine minimum featureset for those extensions and push them. So specifying the two extensions separately (without models) will just make two binaries (6.0 16-bit off, 6.2 16-bit on).
+  - If not defined, will use minimum for the detected feature set.
   - `__SHADER_TARGET_MAJOR` and `__SHADER_TARGET_MINOR` can be used to distinguish which one is being compiled. 
 
 **NOTE**: Since multiple models, uniforms and extensions can cause multiple compiles, be very careful that you don't use too many of these decorations (2 different sets of uniforms + 2 different extensions + 2 models = 2^3 or 8 compiles). Even though the compiler will do everything in parallel, it will still be slower to do multiple configurations that will never be used. So keep duplicate annotations in check wherever possible. The compiler will also try to combine compiles if it notices that they can be shared (for example with lib compiles where one compile might expose multiple entrypoints).

@@ -72,7 +72,10 @@ static const U16 EGraphicsVendor_PCIE[] = {		//The PCIE ids of the vendors, so t
 typedef enum EDxGraphicsFeatures {
 	EDxGraphicsFeatures_WriteBufferImmediate	= 1 << 0,
 	EDxGraphicsFeatures_ReBAR					= 1 << 1,
-	EDxGraphicsFeatures_HardwareCopyQueue		= 1 << 2
+	EDxGraphicsFeatures_HardwareCopyQueue		= 1 << 2,
+	EDxGraphicsFeatures_WaveSize				= 1 << 3,
+	EDxGraphicsFeatures_WaveSizeMinMax			= 1 << 4,
+	EDxGraphicsFeatures_PAQ						= 1 << 5
 } EDxGraphicsFeatures;
 
 //If api type is Vulkan
@@ -101,7 +104,7 @@ typedef enum EGraphicsFeatures {
 	EGraphicsFeatures_MeshShader				= 1 << 3,		//Mesh and task shaders
 	EGraphicsFeatures_GeometryShader			= 1 << 4,
 
-	EGraphicsFeatures_SubgroupArithmetic		= 1 << 5,
+	EGraphicsFeatures_SubgroupArithmetic		= 1 << 5,		//Non prefix arithmetic operations
 	EGraphicsFeatures_SubgroupShuffle			= 1 << 6,
 
 	EGraphicsFeatures_Multiview					= 1 << 7,
@@ -132,7 +135,10 @@ typedef enum EGraphicsFeatures {
 	EGraphicsFeatures_DualSrcBlend				= 1 << 20,
 
 	EGraphicsFeatures_Workgraphs				= 1 << 21,
-	EGraphicsFeatures_SwapchainCompute			= 1 << 22		//isComputeExt in createSwapchain is supported
+	EGraphicsFeatures_SwapchainCompute			= 1 << 22,		//isComputeExt in createSwapchain is supported
+
+	EGraphicsFeatures_ComputeDeriv				= 1 << 23,		//Compute derivatives (ddx/ddy)
+	EGraphicsFeatures_MeshTaskTexDeriv			= 1 << 24		//Compute derivatives in mesh/task shaders
 
 } EGraphicsFeatures;
 

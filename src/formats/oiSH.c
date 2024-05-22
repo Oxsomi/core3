@@ -76,7 +76,7 @@ const C8 *ESHType_name(ESHType type) {
 
 //Helper functions to create it
 
-Error SHFile_create(ESHSettingsFlags flags, ESHExtension extension, Allocator alloc, SHFile *shFile) {
+Error SHFile_create(ESHSettingsFlags flags, ESHExtension extension, U32 shaderVersion, Allocator alloc, SHFile *shFile) {
 
 	if(!shFile)
 		return Error_nullPointer(0, "SHFile_create()::shFile is required");
@@ -97,6 +97,7 @@ Error SHFile_create(ESHSettingsFlags flags, ESHExtension extension, Allocator al
 
 	shFile->flags = flags;
 	shFile->extensions = extension;
+	shFile->compilerVersion = shaderVersion;
 	return Error_none();
 }
 
@@ -158,18 +159,22 @@ Error SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, Allocator alloc) {
 	if(entry->stage >= ESHPipelineStage_Count)
 		return Error_invalidEnum(1, entry->stage, ESHPipelineStage_Count, "SHFile_addEntrypoint()::entry->stage invalid enum");
 
+	if(!entry->vendorMask)
+		return Error_invalidOperation(2, "SHFile_addEntrypoint() vendor mask can't be empty");
+
 	ESHPipelineType pipelineType = entry->stage == ESHPipelineStage_Compute ? ESHPipelineType_Compute : (
-		entry->stage >= ESHPipelineStage_RtStartExt && entry->stage <= ESHPipelineStage_RtEndExt ? ESHPipelineType_Raytracing :
-		ESHPipelineType_Graphics
+		entry->stage >= ESHPipelineStage_RtStartExt && entry->stage <= ESHPipelineStage_RtEndExt ? ESHPipelineType_Raytracing : (
+			entry->stage == ESHPipelineStage_WorkgraphExt ? ESHPipelineType_Workgraph : ESHPipelineType_Graphics
+		)
 	);
 
 	U16 groupXYZ = entry->groupX | entry->groupY | entry->groupZ;
 	U64 totalGroup = (U64)entry->groupX * entry->groupY * entry->groupZ;
 
-	if(pipelineType != ESHPipelineType_Compute && groupXYZ)
+	if(pipelineType != ESHPipelineType_Compute && pipelineType != ESHPipelineType_Workgraph && groupXYZ)
 		return Error_invalidOperation(2, "SHFile_addEntrypoint() can't have group size for non compute");
 
-	if(pipelineType == ESHPipelineType_Compute && !groupXYZ)
+	if((pipelineType == ESHPipelineType_Compute || pipelineType == ESHPipelineType_Workgraph) && !totalGroup)
 		return Error_invalidOperation(2, "SHFile_addEntrypoint() needs group size for compute");
 
 	if(totalGroup > 512)
@@ -292,12 +297,12 @@ Error SHFile_write(SHFile shFile, Allocator alloc, Buffer *result) {
 				break;
 
 			case ESHPipelineStage_Compute:
+			case ESHPipelineStage_WorkgraphExt:
 				headerSize += sizeof(U16) * 4;			//group x, y, z, pad
 				break;
 
 			case ESHPipelineStage_RaygenExt:
 			case ESHPipelineStage_CallableExt:
-			case ESHPipelineStage_WorkgraphExt:
 				break;
 
 			case ESHPipelineStage_MissExt:
@@ -311,7 +316,7 @@ Error SHFile_write(SHFile shFile, Allocator alloc, Buffer *result) {
 
 	gotoIfError(clean, DLFile_write(dlFile, alloc, &dlFileBuf))
 
-	U64 len = headerSize + Buffer_length(dlFileBuf) + shFile.entries.length;
+	U64 len = headerSize + Buffer_length(dlFileBuf) + shFile.entries.length * (sizeof(U8) + sizeof(U16));
 
 	U8 hasBinary = 0;
 	U8 sizes = 0;
@@ -344,7 +349,8 @@ Error SHFile_write(SHFile shFile, Allocator alloc, Buffer *result) {
 		.flags = hasBinary,
 		.sizeTypes = sizes,
 
-		.extensions = shFile.extensions
+		.extensions = shFile.extensions,
+		.compilerVersion = shFile.compilerVersion
 	};
 
 	headerIt += sizeof(DLHeader);
@@ -352,10 +358,14 @@ Error SHFile_write(SHFile shFile, Allocator alloc, Buffer *result) {
 	Buffer_copy(Buffer_createRef(headerIt, Buffer_length(dlFileBuf)), dlFileBuf);
 	headerIt += Buffer_length(dlFileBuf);
 
-	for (U64 i = 0; i < shFile.entries.length; ++i)
-		headerIt[i] = (U8) shFile.entries.ptr[i].stage;
+	U16 *vendors = (U16*)(headerIt + shFile.entries.length);
 
-	headerIt += shFile.entries.length;
+	for (U64 i = 0; i < shFile.entries.length; ++i) {
+		headerIt[i] = (U8) shFile.entries.ptr[i].stage;
+		vendors[i] = shFile.entries.ptr[i].vendorMask;
+	}
+
+	headerIt += shFile.entries.length * (sizeof(U8) + sizeof(U16));
 
 	for (U64 i = 0; i < shFile.entries.length; ++i) {
 
@@ -373,14 +383,17 @@ Error SHFile_write(SHFile shFile, Allocator alloc, Buffer *result) {
 
 				break;
 
+			case ESHPipelineStage_WorkgraphExt:
 			case ESHPipelineStage_Compute:
-				*(U64*)headerIt = entry.groupX | ((U64)entry.groupY << 16) | ((U64)entry.groupZ << 32);
+
+				*(U64*)headerIt = 
+					entry.groupX | ((U64)entry.groupY << 16) | ((U64)entry.groupZ << 32) | ((U64)entry.waveSize << 48);
+
 				headerIt += sizeof(U64);
 				break;
 
 			case ESHPipelineStage_RaygenExt:
 			case ESHPipelineStage_CallableExt:
-			case ESHPipelineStage_WorkgraphExt:
 				break;
 
 			case ESHPipelineStage_MissExt:
@@ -457,19 +470,25 @@ Error SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile) 
 	if(dlFile.settings.dataType == EDLDataType_UTF8)
 		flags |= ESHSettingsFlags_IsUTF8;
 
-	gotoIfError(clean, SHFile_create(flags, header.extensions, alloc, shFile))
+	gotoIfError(clean, SHFile_create(flags, header.extensions, header.compilerVersion, alloc, shFile))
 
-	const U8 *mem = file.ptr;
-	gotoIfError(clean, Buffer_offset(&file, dlFile.entryStrings.length))
+	const U8 *stages = file.ptr;
+	const U16 *vendors = (U16*)(file.ptr + dlFile.entryStrings.length);
+	gotoIfError(clean, Buffer_offset(&file, dlFile.entryStrings.length * (sizeof(U16) + sizeof(U8))))
 
 	const U8 *nextMem = file.ptr, *nextMemPrev = nextMem, *nextMemTemp;
 
 	for (U64 i = 0; i < dlFile.entryStrings.length; ++i) {
 
-		SHEntry entry = (SHEntry) { .stage = mem[i], .name = dlFile.entryStrings.ptr[i] };
+		SHEntry entry = (SHEntry) {
+			.stage = stages[i],
+			.name = dlFile.entryStrings.ptr[i],
+			.vendorMask = vendors[i]
+		};
 
 		switch (entry.stage) {
 
+			case ESHPipelineStage_WorkgraphExt:
 			case ESHPipelineStage_Compute: {
 
 				nextMemTemp = nextMem;
@@ -484,12 +503,21 @@ Error SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile) 
 				entry.groupX = (U16) groups;
 				entry.groupY = (U16) (groups >> 16);
 				entry.groupZ = (U16) (groups >> 32);
+				entry.waveSize = (U16) (groups >> 48);
+
+				for (U8 j = 0; j < 4; ++j) {
+
+					U8 curr = (entry.waveSize >> (j << 2)) & 0xF;
+
+					if(curr == 1 || curr == 2 || curr > 8)
+						gotoIfError(clean, Error_invalidParameter(0, 0, "SHFile_read() entry.waveSize contained invalid data"))
+				}
+
 				break;
 			}
 
 			case ESHPipelineStage_RaygenExt:
 			case ESHPipelineStage_CallableExt:
-			case ESHPipelineStage_WorkgraphExt:
 				break;
 				
 			case ESHPipelineStage_MissExt:
@@ -567,6 +595,193 @@ clean:
 	return err;
 }
 
+static const C8 *vendors[] = {
+	"NV",
+	"AMD",
+	"ARM",
+	"QCOM",
+	"INTC",
+	"IMGT",
+	"MSFT"
+};
+
+void SHEntry_print(SHEntry shEntry, Allocator alloc) {
+
+	const C8 *name = SHEntry_stageName(shEntry);
+
+	Log_debugLn(alloc, "Entry (%s): %.*s", name, (int) CharString_length(shEntry.name), shEntry.name.ptr);
+
+	if(shEntry.vendorMask == U16_MAX)
+		Log_debugLn(alloc, "\t[vendor()] //(any vendor)");
+
+	else for(U64 i = 0; i < ESHVendor_Count; ++i)
+		if((shEntry.vendorMask >> i) & 1)
+			Log_debugLn(alloc, "\t[vendor(\"%s\")]", vendors[i]);
+
+	switch(shEntry.stage) {
+
+		default:
+
+			if (shEntry.inputsU64) {
+
+				Log_debugLn(alloc, "\tInputs:");
+
+				for (U8 i = 0; i < 16; ++i) {
+
+					ESHType type = (ESHType)(shEntry.inputs[i >> 1] >> ((i & 1) << 2)) & 0xF;
+
+					if(!type)
+						continue;
+
+					Log_debugLn(alloc, "\t\t%"PRIu8" %s", i, ESHType_name(type));
+				}
+			}
+
+			if (shEntry.outputsU64) {
+
+				Log_debugLn(alloc, "\tOutputs:");
+
+				for (U8 i = 0; i < 16; ++i) {
+
+					ESHType type = (ESHType)(shEntry.outputs[i >> 1] >> ((i & 1) << 2)) & 0xF;
+
+					if(!type)
+						continue;
+
+					Log_debugLn(alloc, "\t\t%"PRIu8" %s", i, ESHType_name(type));
+				}
+			}
+
+			break;
+
+		case ESHPipelineStage_Compute:
+		case ESHPipelineStage_WorkgraphExt:
+
+			Log_debugLn(
+				alloc,
+				"\tThread count: %"PRIu16", %"PRIu16", %"PRIu16,
+				shEntry.groupX, shEntry.groupY, shEntry.groupZ
+			);
+
+			for (U8 j = 0; j < 4; ++j) {
+
+				const C8 *formats[] = {
+					"\tWaveSize.required: %"PRIu8,
+					"\tWaveSize.min: %"PRIu8,
+					"\tWaveSize.max: %"PRIu8,
+					"\tWaveSize.recommended: %"PRIu8,
+				};
+
+				U8 curr = (shEntry.waveSize >> (j << 2)) & 0xF;
+
+				if(curr)
+					Log_debugLn(alloc, formats[j], curr);
+			}
+
+			break;
+
+		case ESHPipelineStage_RaygenExt:
+		case ESHPipelineStage_CallableExt:
+			break;
+
+		case ESHPipelineStage_MissExt:
+		case ESHPipelineStage_ClosestHitExt:
+		case ESHPipelineStage_AnyHitExt:
+		case ESHPipelineStage_IntersectionExt:
+			Log_debugLn(alloc, "\tPayload size: %"PRIu8, shEntry.payloadSize);
+			Log_debugLn(alloc, "\tIntersection size: %"PRIu8, shEntry.intersectionSize);
+			break;
+	}
+}
+
+static const C8 *extensions[] = {
+	"F64",
+	"I64",
+	"16BitTypes",
+	"AtomicI64",
+	"AtomicF32",
+	"AtomicF64",
+	"SubgroupArithmetic",
+	"SubgroupShuffle",
+	"RayQuery",
+	"RayMicromapOpacity",
+	"RayMicromapDisplacement",
+	"RayMotionBlur",
+	"RayReorder",
+	"Multiview",
+	"ComputeDeriv",
+	"PAQ"
+};
+
+void SHEntryRuntime_print(SHEntryRuntime entry, Allocator alloc) {
+
+	SHEntry_print(entry.entry, alloc);
+
+	for(U64 i = 0; i < entry.shaderVersions.length; ++i) {
+		U16 shaderVersion = entry.shaderVersions.ptr[i];
+		Log_debugLn(alloc, "\t[model(%"PRIu8".%"PRIu8")]", (U8)(shaderVersion >> 8), (U8) shaderVersion);
+	}
+
+	for (U64 i = 0; i < entry.extensions.length; ++i) {
+
+		ESHExtension exts = entry.extensions.ptr[i];
+
+		if(!exts) {
+			Log_debugLn(alloc, "\t[extension()]");
+			continue;
+		}
+
+		Log_debug(alloc, ELogOptions_None, "\t[extension(");
+
+		Bool prev = false;
+
+		for(U64 j = 0; j < ESHExtension_Count; ++j)
+			if((exts >> j) & 1) {
+				Log_debug(alloc, ELogOptions_None, "%s\"%s\"", prev ? ", " : "", extensions[j]);
+				prev = true;
+			}
+
+		Log_debug(alloc, ELogOptions_NewLine, ")]");
+	}
+
+	for (U64 i = 0, k = 0; i < entry.uniformsPerCompilation.length; ++i) {
+
+		U8 uniforms = entry.uniformsPerCompilation.ptr[i];
+
+		if(!uniforms) {
+			Log_debugLn(alloc, "\t[uniform()]");
+			continue;
+		}
+
+		Log_debug(alloc, ELogOptions_None, "\t[uniform(");
+
+		Bool prev = false;
+
+		for(U64 j = 0; j < uniforms; ++j) {
+
+			CharString name = entry.uniforms.ptr[j + k];
+			CharString value = entry.uniformValues.ptr[j + k];
+
+			Log_debug(
+				alloc, ELogOptions_None, 
+				CharString_length(value) ? "%s\"%.*s\" = \"%.*s\"" : "%s\"%.*s\"",
+				prev ? ", " : "",
+				(int)CharString_length(name), name.ptr,
+				(int)CharString_length(value), value.ptr
+			);
+
+			prev = true;
+		}
+
+		Log_debug(alloc, ELogOptions_NewLine, ")]");
+
+		k += uniforms;
+	}
+
+	const C8 *name = SHEntry_stageName(entry.entry);
+	Log_debugLn(alloc, entry.isShaderAnnotation ? "\t[shader(\"%s\")]" : "\t[stage(\"%s\")]", name);
+}
+
 //Free SHEntryRuntime, which contains information used only while parsing
 
 void SHEntryRuntime_free(SHEntryRuntime *entry, Allocator alloc) {
@@ -576,6 +791,7 @@ void SHEntryRuntime_free(SHEntryRuntime *entry, Allocator alloc) {
 
 	CharString_free(&entry->entry.name, alloc);
 	ListU16_free(&entry->shaderVersions, alloc);
+	ListU32_free(&entry->extensions, alloc);
 	ListU8_free(&entry->uniformsPerCompilation, alloc);
 	ListCharString_freeUnderlying(&entry->uniforms, alloc);
 	ListCharString_freeUnderlying(&entry->uniformValues, alloc);
