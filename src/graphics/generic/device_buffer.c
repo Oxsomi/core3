@@ -39,7 +39,7 @@ Error DeviceBufferRef_inc(DeviceBufferRef *buffer) {
 
 Error DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count) {
 
-	if(!buf || buf->typeId != EGraphicsTypeId_DeviceBuffer)
+	if(!buf || buf->typeId != (ETypeId) EGraphicsTypeId_DeviceBuffer)
 		return Error_nullPointer(0, "DeviceBufferRef_markDirty()::buf is required");
 
 	DeviceBuffer *buffer = DeviceBufferRef_ptr(buf);
@@ -223,7 +223,7 @@ Error GraphicsDeviceRef_createBufferIntern(
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(dev);
 	ELockAcquire acq = ELockAcquire_Invalid;
 
-	if(!dev || dev->typeId != EGraphicsTypeId_GraphicsDevice)
+	if(!dev || dev->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
 		gotoIfError(clean, Error_nullPointer(0, "GraphicsDeviceRef_createBufferIntern()::dev is required"))
 
 	if((usage & EDeviceBufferUsage_ScratchExt) && (usage != EDeviceBufferUsage_ScratchExt))

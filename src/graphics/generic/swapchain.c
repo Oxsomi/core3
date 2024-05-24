@@ -42,7 +42,7 @@ impl Error UnifiedTexture_createExt(TextureRef *textureRef, CharString name);		/
 
 Error SwapchainRef_resize(SwapchainRef *swapchainRef) {
 
-	if(!swapchainRef || swapchainRef->typeId != EGraphicsTypeId_Swapchain)
+	if(!swapchainRef || swapchainRef->typeId != (ETypeId) EGraphicsTypeId_Swapchain)
 		return Error_nullPointer(0, "Swapchain_resize()::swapchain is required");
 
 	Swapchain *swapchain = SwapchainRef_ptr(swapchainRef);

@@ -66,7 +66,7 @@ Error WWindow_initSize(Window *w, I32x2 size) {
 		screen = GetDC(w->nativeHandle);
 
 		if(!screen)
-			_gotoIfError(clean, Error_platformError(2, GetLastError(), "WWindow_initSize() GetDC failed"));
+			gotoIfError(clean, Error_platformError(2, GetLastError(), "WWindow_initSize() GetDC failed"));
 
 		//TODO: Support something other than RGBA8
 
@@ -84,7 +84,7 @@ Error WWindow_initSize(Window *w, I32x2 size) {
 		w->nativeData = CreateDIBSection(screen, &bmi, DIB_RGB_COLORS, (void**) &w->cpuVisibleBuffer.ptr, NULL, 0);
 
 		if(!screen)
-			_gotoIfError(clean, Error_platformError(3, GetLastError(), "WWindow_initSize() CreateDIBSection failed"));
+			gotoIfError(clean, Error_platformError(3, GetLastError(), "WWindow_initSize() CreateDIBSection failed"));
 
 		//Manually set it to be a reference
 		//This makes it so we don't free it, because we don't own the memory
@@ -838,7 +838,7 @@ Error Window_updatePhysicalTitle(const Window *w, CharString title) {
 	CharString copy = CharString_createNull();
 	id wrapped;
 	Error err = ObjC_wrapString(title, &copy, &wrapped);
-	_gotoIfError(clean, err);
+	gotoIfError(clean, err);
 
 	ObjC_sendVoidPtr(w->nativeHandle, selSetTitle()), wrapped);
 
@@ -949,7 +949,7 @@ Error WindowManager_createWindowPhysical(Window *w) {
 
 	if(!nativeWindow) {
 		HRESULT hr = GetLastError();
-		_gotoIfError(clean, Error_platformError(1, hr, "WindowManager_createWindowPhysical() CreateWindowEx failed"));
+		gotoIfError(clean, Error_platformError(1, hr, "WindowManager_createWindowPhysical() CreateWindowEx failed"));
 	}
 
 	//Get real size and position
@@ -963,21 +963,21 @@ Error WindowManager_createWindowPhysical(Window *w) {
 
 	//Alloc cpu visible buffer if needed
 
-	_gotoIfError(clean, OWindow_initSize(w, w->size));
+	gotoIfError(clean, OWindow_initSize(w, w->size));
 
 	//Reserve monitors and input device(s)
 
-	_gotoIfError(clean, ListInputDevice_reservex(&w->devices,  16));
-	_gotoIfError(clean, ListMonitor_reservex(&w->monitors, 16));
+	gotoIfError(clean, ListInputDevice_reservex(&w->devices,  16));
+	gotoIfError(clean, ListMonitor_reservex(&w->monitors, 16));
 
 	w->nativeHandle = nativeWindow;
 
 	//Toggle full screen & set title
 
 	if(w->hint & EWindowHint_ForceFullscreen)
-		_gotoIfError(clean, Window_toggleFullScreen(w));
+		gotoIfError(clean, Window_toggleFullScreen(w));
 
-	_gotoIfError(clean, Window_updatePhysicalTitle(w, w->title));
+	gotoIfError(clean, Window_updatePhysicalTitle(w, w->title));
 
 	//Bind our window
 

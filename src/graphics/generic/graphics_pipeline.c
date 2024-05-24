@@ -64,7 +64,7 @@ Error GraphicsDeviceRef_createPipelinesGraphics(
 			"GraphicsDeviceRef_createPipelinesGraphics()::deviceRef, stages, infos and pipelines are required"
 		);
 
-	if(deviceRef->typeId != EGraphicsTypeId_GraphicsDevice)
+	if(deviceRef->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
 		return Error_invalidParameter(
 			0, 0, "GraphicsDeviceRef_createPipelinesGraphics()::deviceRef is an invalid type"
 		);

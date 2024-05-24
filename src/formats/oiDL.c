@@ -238,9 +238,9 @@ Error DLFile_createList(DLSettings settings, ListBuffer *buffers, Allocator allo
 	Error err = Error_none();
 
 	switch (settings.dataType) {
-		case EDLDataType_Ascii:			gotoIfError(clean, DLFile_createAsciiListIntern(settings, buffers, alloc, dlFile))
-		case EDLDataType_UTF8:			gotoIfError(clean, DLFile_createUTF8List(settings, *buffers, alloc, dlFile))
-		default:						gotoIfError(clean, DLFile_createBufferList(settings, *buffers, alloc, dlFile))
+		case EDLDataType_Ascii:			gotoIfError(clean, DLFile_createAsciiListIntern(settings, buffers, alloc, dlFile))	break;
+		case EDLDataType_UTF8:			gotoIfError(clean, DLFile_createUTF8List(settings, *buffers, alloc, dlFile))		break;
+		default:						gotoIfError(clean, DLFile_createBufferList(settings, *buffers, alloc, dlFile))		break;
 	}
 
 clean:

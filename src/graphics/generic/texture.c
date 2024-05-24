@@ -36,7 +36,9 @@ UnifiedTexture *TextureRef_getUnifiedTextureIntern(TextureRef *tex, DeviceResour
 	if(version)
 		*version = (DeviceResourceVersion) { 0 };
 
-	switch (tex ? tex->typeId : ETypeId_Undefined) {
+	EGraphicsTypeId graphicsTypeId = (EGraphicsTypeId)(tex ? tex->typeId : ETypeId_Undefined);
+
+	switch (graphicsTypeId) {
 
 		default:								return NULL;
 		case EGraphicsTypeId_DeviceTexture:		return &DeviceTextureRef_ptr(tex)->base;
@@ -184,10 +186,10 @@ U32 TextureRef_getCurrWriteHandle(TextureRef *tex, U32 subResource) {
 }
 
 Bool TextureRef_isTexture(RefPtr *tex) { return TextureRef_getUnifiedTexture(tex, NULL).resource.device; }
-Bool TextureRef_isDepthStencil(TextureRef *tex) { return tex && tex->typeId == EGraphicsTypeId_DepthStencil; }
+Bool TextureRef_isDepthStencil(TextureRef *tex) { return tex && tex->typeId == (ETypeId) EGraphicsTypeId_DepthStencil; }
 
 Bool TextureRef_isRenderTargetWritable(TextureRef *tex) {
-	return tex && (tex->typeId == EGraphicsTypeId_RenderTexture || tex->typeId == EGraphicsTypeId_Swapchain);
+	return tex && (tex->typeId == (ETypeId) EGraphicsTypeId_RenderTexture || tex->typeId == (ETypeId) EGraphicsTypeId_Swapchain);
 }
 
 impl Bool UnifiedTexture_freeExt(TextureRef *textureRef);

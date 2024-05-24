@@ -92,7 +92,7 @@ To handle cleanup code, use the following:
 ```c
 	... //Init default structs and pointers to NULL or empty struct. Init Error err = Error_none()
 
-	_gotoIfError(fail, myFunctionThatReturnsError(x, &myResult));
+	gotoIfError(fail, myFunctionThatReturnsError(x, &myResult));
 
 	... //Other code
 

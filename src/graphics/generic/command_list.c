@@ -957,20 +957,20 @@ Error CommandListRef_startScope(
 			gotoIfError(clean, Error_nullPointer(1, "CommandListRef_startScope()::transitions[i].resource is NULL"))
 
 		UnifiedTexture tex = TextureRef_getUnifiedTexture(res, NULL);
-		Bool isSampler = res->typeId == EGraphicsTypeId_Sampler;
+		Bool isSampler = res->typeId == (ETypeId) EGraphicsTypeId_Sampler;
 
 		GraphicsResource resource = tex.resource;
 
 		if (tex.resource.device)
 			resource = tex.resource;
 
-		else if (res->typeId == EGraphicsTypeId_DeviceBuffer)
+		else if (res->typeId == (ETypeId) EGraphicsTypeId_DeviceBuffer)
 			resource = DeviceBufferRef_ptr(res)->resource;
 
 		else if(isSampler)
 			resource = (GraphicsResource) { .device = SamplerRef_ptr(res)->device };		//Only device is required here
 
-		else if (res->typeId == EGraphicsTypeId_TLASExt) {									//Get device and mark as readonly
+		else if (res->typeId == (ETypeId) EGraphicsTypeId_TLASExt) {						//Get device and mark as readonly
 
 			TLAS *tlas = TLASRef_ptr(res);
 
@@ -994,7 +994,7 @@ Error CommandListRef_startScope(
 			};
 		}
 
-		else if (res->typeId == EGraphicsTypeId_BLASExt)									//Get device and mark as readonly
+		else if (res->typeId == (ETypeId) EGraphicsTypeId_BLASExt)							//Get device and mark as readonly
 			resource = (GraphicsResource) {
 				.device = BLASRef_ptr(res)->base.device, .flags = EGraphicsResourceFlag_ShaderRead
 			};
@@ -1178,7 +1178,7 @@ Error CommandListRef_setPipeline(CommandListRef *commandListRef, PipelineRef *pi
 
 	CommandListRef_validateScope(commandListRef, clean)
 
-	if (!pipelineRef || pipelineRef->typeId != EGraphicsTypeId_Pipeline)
+	if (!pipelineRef || pipelineRef->typeId != (ETypeId) EGraphicsTypeId_Pipeline)
 		gotoIfError(clean, Error_nullPointer(1, "CommandListRef_setPipeline()::pipelineRef is required"))
 
 	const Pipeline *pipeline = PipelineRef_ptr(pipelineRef);
@@ -1242,7 +1242,7 @@ Error CommandListRef_validateBufferDesc(
 	if(!buffer)
 		return Error_none();
 
-	if(buffer->typeId != EGraphicsTypeId_DeviceBuffer)
+	if(buffer->typeId != (ETypeId) EGraphicsTypeId_DeviceBuffer)
 		return Error_unsupportedOperation(0, "CommandListRef_validateBufferDesc()::buffer has invalid type");
 
 	if(DeviceBufferRef_ptr(buffer)->resource.device != device)
@@ -1506,7 +1506,7 @@ Error CommandListRef_dispatch3DRaysExt(CommandListRef *commandList, U32 raygenLo
 
 Error CommandListRef_checkDispatchBuffer(GraphicsDeviceRef *device, DeviceBufferRef *buffer, U64 offset, U64 siz) {
 
-	if(!buffer || buffer->typeId != EGraphicsTypeId_DeviceBuffer)
+	if(!buffer || buffer->typeId != (ETypeId) EGraphicsTypeId_DeviceBuffer)
 		return Error_nullPointer(1, "CommandListRef_checkDispatchBuffer()::buffer is required");
 
 	const DeviceBuffer *buf = DeviceBufferRef_ptr(buffer);

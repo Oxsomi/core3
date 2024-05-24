@@ -56,7 +56,7 @@
 
 #if _SIMD == SIMD_NEON
 
-	#error Compiling NEON isn't supported
+	#error Compiling NEON isnt supported
 
 #elif _SIMD == SIMD_SSE
 

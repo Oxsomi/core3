@@ -57,7 +57,7 @@ Error GraphicsDeviceRef_createPipelineRaytracingExt(
 			"GraphicsDeviceRef_createPipelinesRaytracing()::device, binaries, entrypoints and pipelines are required"
 		);
 
-	if(device->typeId != EGraphicsTypeId_GraphicsDevice)
+	if(device->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
 		return Error_invalidParameter(
 			0, 0, "GraphicsDeviceRef_createPipelinesRaytracing()::deviceRef is an invalid type"
 		);

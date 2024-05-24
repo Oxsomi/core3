@@ -58,8 +58,9 @@ One of the useful things about C is that files are incredibly easy to compile an
 ## Requirements
 
 - CMake >=3.13.
-- Vulkan SDK (latest preferred, but at least 1.3.226).
+- (Optional on Windows): Vulkan SDK (latest preferred, but at least 1.3.226).
 - (Optional): Git or any tool that can work with GitHub.
+- C++ and C compiler such as MSVC or g++/gcc. C++ is only used for some dependencies that can't use C such as DXC.
 
 ## Running requirements
 
@@ -94,6 +95,14 @@ build Release Off
 ```
 
 Currently the Mac build doesn't support SSE or NEON. So SIMD mode has to be forced to None. It also doesn't support anything above OxC3 platforms yet.
+
+### Linux
+
+```c
+build Release Off
+```
+
+Currently the Linux build doesn't support SSE or NEON. So SIMD mode has to be forced to None. It also doesn't support anything above OxC3 platforms yet.
 
 ### Other platforms
 

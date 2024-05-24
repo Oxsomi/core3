@@ -40,7 +40,7 @@ Error GraphicsDeviceRef_createPipelinesCompute(
 			"GraphicsDeviceRef_createPipelinesCompute()::deviceRef, shaderBinaries and pipelines are required"
 		);
 
-	if(deviceRef->typeId != EGraphicsTypeId_GraphicsDevice)
+	if(deviceRef->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
 		return Error_invalidParameter(
 			0, 0, "GraphicsDeviceRef_createPipelinesCompute()::deviceRef is an invalid type"
 		);

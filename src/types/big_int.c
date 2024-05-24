@@ -123,7 +123,7 @@ Error BigInt_createFromBase2Type(CharString text, U16 bitCount, Allocator alloc,
 			return Error_invalidParameter(1, 0, "BigInt_createFromBase2Type()::bitCount is out of bounds (>16320)");
 	}
 
-	if(chars * countPerChar > ((bitCount + countPerChar - 1) / countPerChar * countPerChar))
+	if(chars * countPerChar > (((U32)bitCount + countPerChar - 1) / countPerChar * countPerChar))
 		return Error_outOfBounds(
 			0, chars * countPerChar, bitCount, "BigInt_createFromBase2Type()::text would overflow BigInt bitCount"
 		);
@@ -171,7 +171,7 @@ Error BigInt_createFromBase2Type(CharString text, U16 bitCount, Allocator alloc,
 				((U64*)big->data)[k] |= lo;
 
 				if (((countPerChar * j) & ~63) != ((countPerChar * (j + 1)) & ~63)) {
-					const U64 hi = (U64)v >> (64 - (countPerChar * j) & 63);
+					const U64 hi = (U64)v >> (64 - ((countPerChar * j) & 63));
 					((U64*)big->data)[++k] |= hi;
 				}
 
@@ -613,8 +613,8 @@ Bool BigInt_rsh(BigInt *a, U16 bits) {
 
 	for(U64 i = 0; i < a->length; ++i) {
 
-		U64 left = i + (bits >> 6) > a->length - 1 ? 0 : a->data[i + (bits >> 6)];
-		U64 right = i + (bits >> 6) >= a->length - 1 ? 0 : a->data[i + (bits >> 6) + 1];
+		U64 left = i + (bits >> 6) > (U64)(a->length - 1) ? 0 : a->data[i + (bits >> 6)];
+		U64 right = i + (bits >> 6) >= (U64)(a->length - 1) ? 0 : a->data[i + (bits >> 6) + 1];
 
 		const U64 shift = bits & 63;
 
@@ -838,7 +838,7 @@ Error BigInt_base2(BigInt b, Allocator alloc, CharString *result, EBase2Type typ
 
 		if (((countPerChar * j) & ~63) != ((countPerChar * (j + 1)) & ~63)) {
 
-			const U64 mask2 = ((U64)U64_MAX << (64 - (countPerChar * j) & 63)) & mask;
+			const U64 mask2 = ((U64)U64_MAX << (64 - ((countPerChar * j) & 63))) & mask;
 
 			if(k + 1 < b.length)
 				v |= ((U64)((U64*)b.data)[k + 1] & mask2);

@@ -72,7 +72,7 @@ Error File_resolve(
 	if (*isVirtual)
 		gotoIfError(clean, CharString_popFrontCount(result, 2))
 
-	//Network drives are a thing on windows and allow starting a path with \\
+	//Network drives are a thing on windows and allow starting a path with "\\"
 	//We shouldn't be supporting this.
 	//The reason; you can access servers from an app with a file read instead of a https read,
 	//which can obfuscate the application's true intentions.

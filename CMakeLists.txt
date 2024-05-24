@@ -180,6 +180,9 @@ if(WIN32)
 	target_link_libraries(OxC3_types PUBLIC Bcrypt.lib)
 elseif(APPLE)
 	target_link_libraries(OxC3_types PUBLIC "-framework Security")
+else()
+	target_link_libraries(OxC3_types PUBLIC libm)
+	target_compile_definitions(OxC3_types PUBLIC -D_POSIX_C_SOURCE=200809L -D_DEFAULT_SOURCE)
 endif()
 
 # Formats
@@ -313,7 +316,7 @@ if("${graphicsApi}" STREQUAL "vulkan")
 		include_directories(OxC3_graphics PUBLIC $ENV{VULKAN_SDK}/include)
 		target_link_directories(OxC3_graphics PUBLIC $ENV{VULKAN_SDK}/lib)
 	else()
-		message(FATAL_ERROR "-- Vulkan incompatible: Please download the latest Vulkan SDK so you can compile")
+		find_package(Vulkan REQUIRED)
 	endif()
 
 	if(WIN32)
@@ -330,6 +333,8 @@ if("${graphicsApi}" STREQUAL "vulkan")
 		add_definitions(-D_VK_SURFACE_EXT="VK_MVK_macos_surface")
 	elseif("${platform}" STREQUAL "ios")
 		add_definitions(-D_VK_SURFACE_EXT="VK_MVK_ios_surface")
+	elseif("${platform}" STREQUAL "linux")
+		add_definitions(-D_VK_SURFACE_EXT="VK_KHR_wayland_surface")
 	else()
 		message(FATAL_ERROR "Platform not supported for Vulkan yet: ${platform}")
 	endif()
@@ -660,6 +665,11 @@ target_link_libraries(OxC3_shader_compiler PUBLIC OxC3_platforms)
 
 target_include_directories(OxC3_shader_compiler PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/external/nvapi")
 target_include_directories(OxC3_shader_compiler PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/external/DirectX-Headers/include")
+
+if(NOT WIN32) 
+	target_include_directories(OxC3_shader_compiler PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/external/DirectX-Headers/include/wsl")
+	target_include_directories(OxC3_shader_compiler PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/external/DirectX-Headers/include/wsl/stubs")
+endif()
 
 # Add DXC
 
