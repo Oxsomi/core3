@@ -43,6 +43,10 @@ endif()
 set(EnableSIMD ON CACHE BOOL "Enables SIMD")
 set(RelaxFloat OFF CACHE BOOL "Relax float (perf > accuracy)")
 set(CLIGraphics ON CACHE BOOL "Turn off/on OxC3 graphics CLI (might be unsupported on device)")
+set(EnableShaderCompiler OFF CACHE BOOL "Turn off/on shader compiler + OxC3 compile shaders CLI (increases compile time)")
+
+set(EnableTests ON CACHE BOOL "Turn off/on OxC3 tests")
+set(EnableOxC3CLI OFF CACHE BOOL "Turn on/off OxC3 CLI")
 
 # Use ${HideConsole} to add_executable to hide the console window
 
@@ -89,6 +93,32 @@ endif()
 
 message("-- Enabling x64 specific optimizations such as CRC32C, AES256 and SHA256 (optional) instructions")
 set(_ARCH "ARCH_X64")
+
+if(EnableOxC3CLI)
+
+	message("-- Enabling OxC3 CLI (-DEnableOxC3CLI=On)")
+
+	if(CLIGraphics)
+		message("-- Enabling OxC3 graphics CLI (-DCLIGraphics=On)")
+	else()
+		message("-- Disabling OxC3 graphics CLI (-DCLIGraphics=Off)")
+	endif()
+
+else()
+	message("-- Disabling OxC3 CLI (-DEnableOxC3CLI=Off)")
+endif()
+
+if(EnableTests)
+	message("-- Enabling OxC3 unit tests (-DEnableTests=On)")
+else()
+	message("-- Disabling OxC3 unit tests (-DEnableTests=Off)")
+endif()
+
+if(EnableShaderCompiler)
+	message("-- Enabling OxC3 compile shaders (-DEnableShaderCompiler=On)")
+else()
+	message("-- Disabling OxC3 compile shaders (-DEnableShaderCompiler=Off)")
+endif()
 
 if(EnableSIMD)
 	message("-- Enabling SIMD (-DEnableSIMD=ON)")
@@ -236,25 +266,6 @@ target_link_libraries(OxC3_platforms PUBLIC OxC3_formats)
 
 if(APPLE)
 	target_link_libraries(OxC3_platforms PUBLIC "-framework CoreFoundation" "-framework ApplicationServices" "-framework AppKit")
-endif()
-
-# Download DXC, otherwise we can't use latest features and DXIL code will be unsigned
-
-if(${ForceUpdateDeps} OR (NOT EXISTS "${CMAKE_BINARY_DIR}/external/dxc/"))
-
-	message("-- Downloading and unzipping Microsoft.Direct3D.DXC")
-
-	file(REMOVE_RECURSE "${CMAKE_BINARY_DIR}/external/dxc/")
-	file(DOWNLOAD "https://www.nuget.org/api/v2/package/Microsoft.Direct3D.DXC/" "${CMAKE_BINARY_DIR}/external/dxc.zip")
-	file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/external/dxc/)
-
-	execute_process(
-		COMMAND ${CMAKE_COMMAND} -E tar xzf ${CMAKE_BINARY_DIR}/external/dxc.zip
-		WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/external/dxc/
-	)
-
-	file(REMOVE "${CMAKE_BINARY_DIR}/external/dxc.zip")
-
 endif()
 
 # Graphics layer
@@ -426,7 +437,7 @@ elseif("${graphicsApi}" STREQUAL "directx12")
 			COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin"
 			COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin/$<CONFIG>"
 			COMMAND ${CMAKE_COMMAND} -E copy_if_different
-			"${CMAKE_BINARY_DIR}/external/warp/build/native/amd64/d3d10warp.dll"
+			"${CMAKE_BINARY_DIR}/external/warp/build/native/bin/x64/d3d10warp.dll"
 			"${CMAKE_CURRENT_SOURCE_DIR}/external/AGS_SDK/ags_lib/lib/amd_ags_x64.dll"
 			"${CMAKE_BINARY_DIR}/bin/$<CONFIG>/"
 			COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin/$<CONFIG>/D3D12/"
@@ -630,91 +641,110 @@ endfunction()
 
 # Tests
 
-file(GLOB_RECURSE tests "tst/*.c")
+if(EnableTests)
 
-add_executable(
-	OxC3_test
-	${tests}
-	CMakeLists.txt
-)
+	file(GLOB_RECURSE tests "tst/*.c")
 
-target_link_libraries(OxC3_test PUBLIC OxC3_platforms)
+	add_executable(
+		OxC3_test
+		${tests}
+		CMakeLists.txt
+	)
 
-set_target_properties(OxC3_test PROPERTIES FOLDER Oxsomi/test)
+	target_link_libraries(OxC3_test PUBLIC OxC3_platforms)
+
+	set_target_properties(OxC3_test PROPERTIES FOLDER Oxsomi/test)
+
+endif()
 
 # Shader compiler, useful for baker and runtime if required by the app (though should only be used for editor applications)
 
-file(GLOB_RECURSE compilerHeaders "inc/shader_compiler/*.h")
-file(GLOB_RECURSE compilerSources "src/shader_compiler/*.c" "src/shader_compiler/*.cpp")	# Some CPP to interface with DXC
+if(EnableShaderCompiler)
 
-add_library(
-	OxC3_shader_compiler
-	STATIC
-	${compilerHeaders}
-	${compilerSources}
-	CMakeLists.txt
-)
+	# Configure DXC
 
-set_target_properties(OxC3_shader_compiler PROPERTIES FOLDER Oxsomi)
-target_link_libraries(OxC3_shader_compiler PUBLIC OxC3_platforms)
+	set(CLANG_BUILD_EXAMPLES OFF CACHE BOOL "")
+	set(CLANG_CL OFF CACHE BOOL "")
+	set(LLVM_INCLUDE_TESTS OFF CACHE BOOL "")
+	set(CLANG_INCLUDE_TESTS OFF CACHE BOOL "")
+	set(LLVM_DEFAULT_TARGET_TRIPLE "dxil-ms-dx" CACHE STRING "")
+	set(LLVM_ENABLE_RTTI ON CACHE BOOL "")
+	set(LLVM_ENABLE_EH ON CACHE BOOL "")
+	set(LLVM_APPEND_VC_REV ON CACHE BOOL "")
+	set(LLVM_OPTIMIZED_TABLEGEN OFF CACHE BOOL "")
+	set(LIBCLANG_BUILD_STATIC ON CACHE BOOL "")
+	set(LLVM_INCLUDE_DOCS OFF CACHE BOOL "")
+	set(LLVM_INCLUDE_EXAMPLES OFF CACHE BOOL "")
+	set(LLVM_TARGETS_TO_BUILD "None" CACHE STRING "")
+	set(HLSL_INCLUDE_TESTS OFF CACHE BOOL "")
+	set(CLANG_ENABLE_STATIC_ANALYZER OFF CACHE BOOL "")
+	set(CLANG_ENABLE_ARCMT OFF CACHE BOOL "")
+	set(SPIRV_BUILD_TESTS OFF CACHE BOOL "")
+	set(ENABLE_SPIRV_CODEGEN ON CACHE BOOL "")
+	set(HLSL_BUILD_DXILCONV OFF CACHE BOOL "")
+	set(HLSL_ENABLE_FIXED_VER OFF CACHE BOOL "")
+	set(HLSL_OFFICIAL_BUILD OFF CACHE BOOL "")
+	set(HLSL_OPTIONAL_PROJS_IN_DEFAULT OFF CACHE BOOL "")
+	
+	set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE BOOL "")
+	set(LLVM_ENABLE_TERMINFO OFF CACHE BOOL "")
+	set(DXC_USE_LIT ON CACHE BOOL "")
+	set(LLVM_ENABLE_ASSERTIONS ON CACHE BOOL "")
+	set(LLVM_LIT_ARGS "-v" CACHE STRING "")
+	set(ENABLE_DXC_STATIC_LINKING ON CACHE BOOL "")
 
-target_include_directories(OxC3_shader_compiler PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/external/nvapi")
-target_include_directories(OxC3_shader_compiler PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/external/DirectX-Headers/include")
+	add_subdirectory(external/DirectXShaderCompiler)
 
-# Add DXC
+	# Our parser
 
-if(NOT ${ARM})
+	file(GLOB_RECURSE compilerHeaders "inc/shader_compiler/*.h")
+	file(GLOB_RECURSE compilerSources "src/shader_compiler/*.c" "src/shader_compiler/*.cpp")	# Some CPP to interface with DXC
 
-	target_link_libraries(OxC3_shader_compiler PUBLIC "${CMAKE_BINARY_DIR}/external/dxc/build/native/lib/x64/dxcompiler.lib")
-
-	add_custom_command(TARGET OxC3_shader_compiler POST_BUILD
-		COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin"
-		COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin/$<CONFIG>"
-		COMMAND ${CMAKE_COMMAND} -E copy_if_different
-		"${CMAKE_BINARY_DIR}/external/dxc/build/native/bin/x64/dxcompiler.dll"
-		"${CMAKE_BINARY_DIR}/external/dxc/build/native/bin/x64/dxil.dll"
-		"${CMAKE_BINARY_DIR}/bin/$<CONFIG>/"
+	add_library(
+		OxC3_shader_compiler
+		STATIC
+		${compilerHeaders}
+		${compilerSources}
+		CMakeLists.txt
 	)
 
-else()
+	set_target_properties(OxC3_shader_compiler PROPERTIES FOLDER Oxsomi)
+	target_link_libraries(OxC3_shader_compiler PUBLIC OxC3_platforms dxcompiler)
 
-	target_link_libraries(OxC3_shader_compiler PUBLIC "${CMAKE_BINARY_DIR}/external/dxc/build/native/lib/arm64/dxcompiler.lib")
-
-	add_custom_command(TARGET OxC3_shader_compiler POST_BUILD
-		COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin"
-		COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin/$<CONFIG>"
-		COMMAND ${CMAKE_COMMAND} -E copy_if_different
-		"${CMAKE_BINARY_DIR}/external/dxc/build/native/bin/arm64/dxcompiler.dll"
-		"${CMAKE_BINARY_DIR}/external/dxc/build/native/bin/arm64/dxil.dll"
-		"${CMAKE_BINARY_DIR}/bin/$<CONFIG>/"
-	)
+	target_include_directories(OxC3_shader_compiler PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/external/nvapi")
+	target_include_directories(OxC3_shader_compiler PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/external/DirectXShaderCompiler/include")
 
 endif()
-
-target_include_directories(OxC3_shader_compiler PUBLIC "${CMAKE_BINARY_DIR}/external/dxc/build/native/include")
 
 # OxC3 tool
 
-file(GLOB_RECURSE headers "tools/inc/*.h")
-file(GLOB_RECURSE sources "tools/src/*.c")
+if(EnableOxC3CLI)
 
-add_executable(
-	OxC3
-	${headers}
-	${sources}
-	CMakeLists.txt
-)
+	file(GLOB_RECURSE headers "tools/inc/*.h")
+	file(GLOB_RECURSE sources "tools/src/*.c")
 
-set_target_properties(OxC3 PROPERTIES FOLDER Oxsomi)
+	add_executable(
+		OxC3
+		${headers}
+		${sources}
+		CMakeLists.txt
+	)
 
-target_link_libraries(OxC3 PUBLIC OxC3_shader_compiler)
+	set_target_properties(OxC3 PROPERTIES FOLDER Oxsomi)
 
-if(CLIGraphics)
-	target_link_libraries(OxC3 PUBLIC OxC3_graphics)
-	target_compile_definitions(OxC3 PUBLIC -DCLI_GRAPHICS)
+	if(CLIGraphics)
+		target_link_libraries(OxC3 PUBLIC OxC3_graphics)
+		target_compile_definitions(OxC3 PUBLIC -DCLI_GRAPHICS)
+	endif()
+
+	if(EnableShaderCompiler)
+		target_link_libraries(OxC3 PUBLIC OxC3_shader_compiler)
+		target_compile_definitions(OxC3 PUBLIC -DCLI_SHADER_COMPILER)
+	endif()
+
+	target_include_directories(OxC3 PUBLIC tools/inc)
+
+	configure_icon(OxC3 "${CMAKE_CURRENT_SOURCE_DIR}/res/logo.ico")
+	configure_virtual_files(OxC3)
+
 endif()
-
-target_include_directories(OxC3 PUBLIC tools/inc)
-
-configure_icon(OxC3 "${CMAKE_CURRENT_SOURCE_DIR}/res/logo.ico")
-configure_virtual_files(OxC3)

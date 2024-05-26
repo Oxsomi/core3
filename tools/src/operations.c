@@ -143,7 +143,10 @@ const C8 *EOperationFlags_descriptions[] = {
 const C8 *EOperationCategory_names[] = {
 
 	"file",
-	"compile",
+
+	#ifdef CLI_SHADER_COMPILER
+		"compile",
+	#endif
 
 	#ifdef CLI_GRAPHICS
 		"graphics",
@@ -159,7 +162,10 @@ const C8 *EOperationCategory_names[] = {
 const C8 *EOperationCategory_description[] = {
 
 	"File utilities such as file conversions, encryption, compression, etc.",
-	"Compile shaders or to intermediate binary (Chimera).",
+
+	#ifdef CLI_SHADER_COMPILER
+		"Compile shaders or to intermediate binary (Chimera).",
+	#endif
 
 	#ifdef CLI_GRAPHICS
 		"Graphics operations such as showing devices.",
@@ -389,28 +395,32 @@ void Operations_init() {
 
 	//Compile shaders
 
-	Format_values[EFormat_HLSL] = (Format) {
+	#ifdef CLI_SHADER_COMPILER
 
-		.name = "HLSL",
-		.desc = "High Level Shading Language; Microsoft's shading language for DirectX and Vulkan.",
+		Format_values[EFormat_HLSL] = (Format) {
 
-		.operationFlags = EOperationFlags_Debug,
+			.name = "HLSL",
+			.desc = "High Level Shading Language; Microsoft's shading language for DirectX and Vulkan.",
 
-		.requiredParameters =
-			EOperationHasParameter_Input | EOperationHasParameter_Output | EOperationHasParameter_ShaderOutputMode |
-			EOperationHasParameter_ShaderCompileMode,
+			.operationFlags = EOperationFlags_Debug,
 
-		.optionalParameters = EOperationHasParameter_ThreadCount | EOperationHasParameter_IncludeDir,
-		.flags = EFormatFlags_SupportFiles | EFormatFlags_SupportFolders,
-		.supportedCategories = { EOperationCategory_Compile }
-	};
+			.requiredParameters =
+				EOperationHasParameter_Input | EOperationHasParameter_Output | EOperationHasParameter_ShaderOutputMode |
+				EOperationHasParameter_ShaderCompileMode,
 
-	Operation_values[EOperation_CompileShader] = (Operation) {
-		.category = EOperationCategory_Compile,
-		.name = "shaders",
-		.desc = "Compile shader from text to application ready format",
-		.func = &CLI_compileShader
-	};
+			.optionalParameters = EOperationHasParameter_ThreadCount | EOperationHasParameter_IncludeDir,
+			.flags = EFormatFlags_SupportFiles | EFormatFlags_SupportFolders,
+			.supportedCategories = { EOperationCategory_Compile }
+		};
+
+		Operation_values[EOperation_CompileShader] = (Operation) {
+			.category = EOperationCategory_Compile,
+			.name = "shaders",
+			.desc = "Compile shader from text to application ready format",
+			.func = &CLI_compileShader
+		};
+
+	#endif
 
 	//List graphics devices
 

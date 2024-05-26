@@ -59,7 +59,7 @@ One of the useful things about C is that files are incredibly easy to compile an
 
 - CMake >=3.13.
 - Vulkan SDK (latest preferred, but at least 1.3.226).
-- (Optional): Git or any tool that can work with GitHub.
+- (Required on Windows for Git Bash, otherwise optional): Git or any tool that can work with GitHub.
 
 ## Running requirements
 

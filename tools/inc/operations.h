@@ -171,7 +171,10 @@ typedef enum EOperation {
 
 	EOperation_Package,
 
-	EOperation_CompileShader,
+	#ifdef CLI_SHADER_COMPILER
+		EOperation_CompileShader,
+	#endif
+
 	//EOperation_CompileChimera,
 
 	EOperation_GraphicsDevices,
@@ -199,7 +202,10 @@ typedef enum EOperationCategory {
 
 	EOperationCategory_Invalid,
 	EOperationCategory_File,
-	EOperationCategory_Compile,
+
+	#ifdef CLI_SHADER_COMPILER
+		EOperationCategory_Compile,
+	#endif
 
 	#ifdef CLI_GRAPHICS
 		EOperationCategory_Graphics,

@@ -229,12 +229,8 @@ void CompileResult_free(CompileResult *result, Allocator alloc) {
 			CharString_free(&result->text, alloc);
 			break;
 
-		case ECompileResultType_Binaries:
-
-			for(U64 i = 0; i < result->binaries.length; ++i)
-				Buffer_free(&result->binaries.ptrNonConst[i], alloc);
-
-			ListBuffer_free(&result->binaries, alloc);
+		case ECompileResultType_Binary:
+			Buffer_free(&result->binary, alloc);
 			break;
 
 		case ECompileResultType_SHEntryRuntime:

@@ -50,6 +50,12 @@ ELockAcquire Lock_lock(Lock *l, Ns maxTime) {
 		if(prevValue == tid)		//Already locked
 			return ELockAcquire_AlreadyLocked;
 
+		if(prevValue == 0)
+			return ELockAcquire_Acquired;
+
+		if(maxTime == 0)
+			return ELockAcquire_TimedOut;
+
 		//If the previous result was not 0 then it means someone already locked this.
 		//We have to wait for it and attempt to lock it again.
 		//It's possible that within this time someone else is waiting for it and locked it before us.

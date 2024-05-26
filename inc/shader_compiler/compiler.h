@@ -162,6 +162,10 @@ void ListListU16_freeUnderlying(ListListU16 *list, Allocator alloc);
 Bool Compiler_create(Allocator alloc, Compiler *comp, Error *e_rr);
 void Compiler_free(Compiler *comp, Allocator alloc);
 
+//Call this on shutdown for a clean exit
+
+void Compiler_shutdown();
+
 //Append new entries to infos and increase counters.
 //This makes it possible to get a list of all includes.
 

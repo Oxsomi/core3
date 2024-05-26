@@ -47,7 +47,7 @@ echo \)./OxC3 file encr -input mytest.tmp.txt -output mytest.tmp.txt.enc -aes CD
 echo \)./OxC3 file decr -output mytest1.tmp.txt -input mytest.tmp.txt.enc -aes CD00324F4CBAAE3467924E0578012F155A8F573AA066652DDDB8C2E1F76AF7FE
 ./OxC3 file decr -output mytest1.tmp.txt -input mytest.tmp.txt.enc -aes CD00324F4CBAAE3467924E0578012F155A8F573AA066652DDDB8C2E1F76AF7FE
 
-if ! [ cmp -s "mytest.tmp.txt" "mytest1.tmp.txt" ] ; then
+if ! cmp -s "mytest.tmp.txt" "mytest1.tmp.txt" ; then
 	echo Failed encryption test!
 	rm mytest.tmp.txt
 	rm mytest1.tmp.txt

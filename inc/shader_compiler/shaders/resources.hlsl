@@ -20,7 +20,7 @@ R"(
 */
 
 #pragma once
-#include "//types.hlsl"
+#include "@types.hlsl"
 
 //We only include nv extensions if DXIL compilation and ray: reorder, motion blur, micromap opacity / displacement is required
 //This saves us from parsing, preprocessing and compiling useless stuff.
@@ -33,7 +33,7 @@ R"(
 	#define NV_SHADER_EXTN_SLOT u99999
 	#define NV_SHADER_EXTN_REGISTER_SPACE space99999
 
-	#include "//nvHLSLExtns.h"
+	#include "@nvHLSLExtns.h"
 
 #endif
 

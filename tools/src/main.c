@@ -24,6 +24,10 @@
 #include "graphics/generic/application.h"
 #include "cli.h"
 
+#ifdef CLI_SHADER_COMPILER
+	#include "shader_compiler/compiler.h"
+#endif
+
 const Bool Platform_useWorkingDirectory = true;
 
 I32 Program_run() {
@@ -36,4 +40,8 @@ I32 Program_run() {
 	return 0;
 }
 
-void Program_exit() { }
+void Program_exit() {
+	#ifdef CLI_SHADER_COMPILER
+		Compiler_shutdown();
+	#endif
+}

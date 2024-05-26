@@ -28,8 +28,15 @@
 #include "types/file.h"
 #include "types/math.h"
 
-#include <wsl/winadapter.h>		//Avoid including Windows.h
-#include <dxcapi.h>
+#ifdef _WIN32
+	#define UNICODE
+	#define WIN32_LEAN_AND_MEAN
+	#include <Windows.h>
+	#include <Unknwn.h>
+#endif
+
+#define ENABLE_DXC_STATIC_LINKING
+#include <dxc/dxcapi.h>
 #include <exception>
 
 const C8 *resources =
@@ -122,24 +129,20 @@ public:
 		Bool isVirtual = false;
 		Bool isBuiltin = false;
 		U64 i = 0;
-		U64 firstDoubleSlash = U64_MAX;
+		U64 lastAt = U64_MAX;
 
 		gotoIfError2(clean, CharString_createFromUTF16((const U16*)fileNameStr, U64_MAX, alloc, &fileName))
 
 		//Little hack to handle builtin shaders, by using "virtual files" //myTest.hlsl
 
-		firstDoubleSlash = CharString_findFirstStringSensitive(fileName, CharString_createRefCStrConst("//"), 0);
-		isBuiltin = firstDoubleSlash != U64_MAX;
+		lastAt = CharString_findLastStringSensitive(fileName, CharString_createRefCStrConst("@"), 0);
+		isBuiltin = lastAt != U64_MAX;
 
 		if (isBuiltin) {
 
-			//Find first non double slash
-			while(CharString_getAt(fileName, firstDoubleSlash) == '/')
-				++firstDoubleSlash;
-
 			CharString tmp = CharString_createNull();
 
-			if(!CharString_cut(fileName, firstDoubleSlash, 0, &tmp) || !CharString_length(tmp))
+			if(!CharString_cut(fileName, lastAt + 1, 0, &tmp) || !CharString_length(tmp))
 				retError(clean, Error_invalidState(0, "IncludeHandler::LoadSource expected source after //"))
 
 			gotoIfError2(clean, CharString_createCopy(tmp, alloc, &resolved))
@@ -367,10 +370,48 @@ public:
 	ULONG STDMETHODCALLTYPE Release() override { return 0; }
 };
 
+Lock lockThread = Lock{ .active = true };
+Bool hasInitialized;
+
+Bool Compiler_setup(Error *e_rr) {
+
+	Bool s_uccess = true;
+	ELockAcquire acq = Lock_lock(&lockThread, 0);
+
+	if (acq >= ELockAcquire_Success) {		//First to lock is first to initialize
+
+		if(!hasInitialized) {
+
+			HRESULT hr = DxcInitialize();
+
+			if(FAILED(hr))
+				retError(clean, Error_invalidState(0, "Compiler_setup() couldn't initialize DXC"));
+
+			hasInitialized = true;
+		}
+	}
+
+	//Wait for thread to finish, since the first thread is the only one that can initialize
+
+	else acq = Lock_lock(&lockThread, U64_MAX);
+
+	if(!hasInitialized)
+		retError(clean, Error_invalidState(0, "Compiler_setup() one of the other threads couldn't initialize DXC"))
+
+clean:
+
+	if(acq == ELockAcquire_Acquired)
+		Lock_unlock(&lockThread);
+
+	return s_uccess;
+}
+
 Bool Compiler_create(Allocator alloc, Compiler *comp, Error *e_rr) {
 
 	Bool s_uccess = true;
 	CompilerInterfaces *interfaces = NULL;
+
+	gotoIfError3(clean, Compiler_setup(e_rr))
 
 	if(!comp)
 		retError(clean, Error_nullPointer(1, "Compiler_create()::comp is required"))
@@ -497,6 +538,10 @@ Bool Compiler_mergeIncludeInfo(Compiler *comp, Allocator alloc, ListIncludeInfo 
 clean:
 	CharString_free(&tmp, alloc);
 	return s_uccess;
+}
+
+void Compiler_shutdown() {
+	DxcShutdown(true);
 }
 
 Bool Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator alloc, CompileResult *result, Error *e_rr) {
