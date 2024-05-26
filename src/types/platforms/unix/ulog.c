@@ -23,6 +23,7 @@
 #include "types/time.h"
 #include "types/buffer.h"
 #include "types/error.h"
+#include "types/allocator.h"
 
 #include <execinfo.h>
 #include <stdio.h>

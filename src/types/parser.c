@@ -510,7 +510,7 @@ void Parser_printTokens(Parser parser, Allocator alloc) {
 	}
 }
 
-static const C8 *ESymbolType_names[ESymbolType_Count] = {
+const C8 *ESymbolType_names[ESymbolType_Count] = {
 	"Namespace",
 	"Template",
 	"Function",

@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 usage() {
 	echo Usage: build [Build type: Debug/Release] [Enable SIMD: On/Off]

@@ -98,7 +98,7 @@ Error Thread_wait(Thread *thread) {
 	if(!thread)
 		return Error_nullPointer(0, "Thread_wait()::thread is required");
 
-	if(pthread_join(thread->nativeHandle, NULL))
+	if(pthread_join((pthread_t)thread->nativeHandle, NULL))
 		return Error_timedOut(0, U64_MAX, "Thread_wait() couldn't wait on thread");
 
 	return Error_none();

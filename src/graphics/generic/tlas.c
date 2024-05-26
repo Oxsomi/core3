@@ -166,7 +166,7 @@ Error GraphicsDeviceRef_createTLAS(GraphicsDeviceRef *dev, TLAS tlas, CharString
 
 	//Validate
 
-	if(!dev || dev->typeId != EGraphicsTypeId_GraphicsDevice)
+	if(!dev || dev->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
 		return Error_nullPointer(0, "GraphicsDeviceRef_createTLAS()::dev is required");
 
 	if(!tlasRef)

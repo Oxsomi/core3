@@ -533,6 +533,9 @@ Bool Lexer_create(CharString str, Allocator alloc, Lexer *lexer, Error *e_rr) {
 
 						switch (tokenType) {
 
+							default:
+								break;
+
 							//Find end of number
 
 							case ELexerTokenType_IntegerBinary:
@@ -551,7 +554,7 @@ Bool Lexer_create(CharString str, Allocator alloc, Lexer *lexer, Error *e_rr) {
 
 									switch(tokenType) {
 
-										case ELexerTokenType_IntegerHex:		success = C8_isHex(c2);		break;
+										default:								success = C8_isHex(c2);		break;
 										case ELexerTokenType_IntegerBinary:		success = C8_isBin(c2);		break;
 										case ELexerTokenType_IntegerNyto:		success = C8_isNyto(c2);	break;
 

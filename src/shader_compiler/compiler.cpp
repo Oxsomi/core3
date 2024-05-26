@@ -447,7 +447,7 @@ Bool Compiler_create(Allocator alloc, Compiler *comp, Error *e_rr) {
 		if(FAILED(hr))
 			retError(clean, Error_invalidState(2, "Compiler_create() IDxcCompiler3 couldn't be created"))
 
-	} catch (std::exception) {
+	} catch (std::exception&) {
 		retError(clean, Error_invalidState(1, "Compiler_create() raised an internal exception"))
 	}
 
@@ -708,7 +708,7 @@ Bool Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator all
 		result->type = ECompileResultType_Text;
 		result->isSuccess = true;
 
-	} catch (std::exception) {
+	} catch (std::exception&) {
 		retError(clean, Error_invalidState(1, "Compiler_preprocess() raised an internal exception"))
 	}
 

@@ -150,7 +150,7 @@ typedef enum ESymbolType {
 	ESymbolType_Count			//Keep <=256 due to packing
 } ESymbolType;
 
-static const C8 *ESymbolType_names[ESymbolType_Count];
+extern const C8 *ESymbolType_names[ESymbolType_Count];
 
 typedef enum ESymbolFlag {
 

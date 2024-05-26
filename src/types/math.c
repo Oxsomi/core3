@@ -91,7 +91,7 @@ T T##_exp10(T v) {														\
 																		\
 T T##_exp2(T v) {														\
 																		\
-	if(v < 0 || v >= sizeof(T) * 8 - 1)									\
+	if(v >= sizeof(T) * 8 - 1)											\
 		return T##_MAX;													\
 																		\
 	return (T)1 << v;													\
@@ -140,7 +140,7 @@ T T##_exp10(T v) {																			\
 																							\
 T T##_exp2(T v) {																			\
 																							\
-	if(v >= (T)(sizeof(T) * 8))																\
+	if(v < 0 || v >= (T)(sizeof(T) * 8))													\
 		return T##_MAX;																		\
 																							\
 	return (T)1 << v;																		\

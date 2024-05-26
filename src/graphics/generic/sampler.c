@@ -67,7 +67,7 @@ Bool Sampler_free(Sampler *sampler, Allocator allocator) {
 }
 Error GraphicsDeviceRef_createSampler(GraphicsDeviceRef *dev, SamplerInfo info, CharString name, SamplerRef **sampler) {
 
-	if(!dev || dev->typeId != EGraphicsTypeId_GraphicsDevice)
+	if(!dev || dev->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
 		return Error_nullPointer(0, "GraphicsDeviceRef_createSampler()::dev is required");
 
 	if(info.filter &~ ESamplerFilterMode_All)

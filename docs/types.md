@@ -970,9 +970,9 @@ Error myThread(U8 i) {
 
     //Now we can safely append to the list
     Error err = Error_none();
-    _gotoIfError(clean, ListU8_pushBackx(&myList, i));
+    gotoIfError(clean, ListU8_pushBackx(&myList, i));
 
-    //Always use _gotoIfError / clean label syntax to avoid leaking the lock.
+    //Always use gotoIfError / clean label syntax to avoid leaking the lock.
 clean:
 
     //Only acquired locks should be unlocked.

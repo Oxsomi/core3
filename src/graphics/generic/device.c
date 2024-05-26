@@ -167,7 +167,7 @@ Error GraphicsDeviceRef_create(
 			"GraphicsDeviceRef_create()::instanceRef, info and deviceRef are required"
 		);
 
-	if(instanceRef->typeId != EGraphicsTypeId_GraphicsInstance)
+	if(instanceRef->typeId != (ETypeId) EGraphicsTypeId_GraphicsInstance)
 		return Error_invalidParameter(
 			0, 0, "GraphicsDeviceRef_create()::instanceRef was an invalid type"
 		);
@@ -289,7 +289,7 @@ clean:
 
 Bool GraphicsDeviceRef_removePending(GraphicsDeviceRef *deviceRef, RefPtr *resource) {
 
-	if(!deviceRef || deviceRef->typeId != EGraphicsTypeId_GraphicsDevice)
+	if(!deviceRef || deviceRef->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
 		return false;
 
 	Bool supported = false;
@@ -748,7 +748,7 @@ clean:
 
 U32 GraphicsDeviceRef_allocateDescriptor(GraphicsDeviceRef *deviceRef, EDescriptorType type) {
 
-	if(!deviceRef || deviceRef->typeId != EGraphicsTypeId_GraphicsDevice || type >= EDescriptorType_ResourceCount)
+	if(!deviceRef || deviceRef->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice || type >= EDescriptorType_ResourceCount)
 		return U32_MAX;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
@@ -798,7 +798,7 @@ U32 GraphicsDeviceRef_allocateDescriptor(GraphicsDeviceRef *deviceRef, EDescript
 
 Bool GraphicsDeviceRef_freeDescriptors(GraphicsDeviceRef *deviceRef, ListU32 *allocations) {
 
-	if(!deviceRef || deviceRef->typeId != EGraphicsTypeId_GraphicsDevice)
+	if(!deviceRef || deviceRef->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
 		return U32_MAX;
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);

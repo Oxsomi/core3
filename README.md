@@ -58,8 +58,9 @@ One of the useful things about C is that files are incredibly easy to compile an
 ## Requirements
 
 - CMake >=3.13.
-- Vulkan SDK (latest preferred, but at least 1.3.226).
+- (Optional on Windows): Vulkan SDK (latest preferred, but at least 1.3.226).
 - (Required on Windows for Git Bash, otherwise optional): Git or any tool that can work with GitHub.
+- C++ and C compiler such as MSVC or g++/gcc. C++ is only used for some dependencies that can't use C such as DXC.
 
 ## Running requirements
 
@@ -94,6 +95,14 @@ build Release Off
 ```
 
 Currently the Mac build doesn't support SSE or NEON. So SIMD mode has to be forced to None. It also doesn't support anything above OxC3 platforms yet.
+
+### Linux
+
+```c
+build Release Off
+```
+
+Currently the Linux build doesn't support SSE or NEON. So SIMD mode has to be forced to None. It also doesn't support anything above OxC3 platforms yet.
 
 ### Other platforms
 
@@ -130,19 +139,15 @@ D3D12:
 	D3D12/d3d12SDKLayers.dll
 	amd_ags_x64.dll
 	d3d10warp.dll
-	dxcompiler.dll
-	dxil.dll
 	OxC3.exe
 	...
 
 Vulkan:
-	dxcompiler.dll
-	dxil.dll
 	OxC3.exe
 	...
 ```
 
-To ship OxC3 or anything that uses OxC3_shader_compiler it requires only dxcompiler.dll and dxil.dll. For graphics: d3d10warp.dll is optional and should only be used for testing. The other D3D12/*.dll and amd_ags_x64.dll are required when OxC3 graphics is used with DirectX12 (or if OxC3 is used).
+To ship anything that uses OxC3_shader_compiler it doesn't require any additional binaries (DXC is linked statically). For graphics: d3d10warp.dll is optional and should only be used for testing. The other D3D12/*.dll and amd_ags_x64.dll are required when OxC3 graphics is used with DirectX12 (or if OxC3 is used).
 
 OxC3 is optional and doesn't have to be distributed with the application, though it provides nice functionality such as shader compilation, viewing graphics device capabilities and a few others.
 

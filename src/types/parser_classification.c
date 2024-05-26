@@ -275,7 +275,7 @@ Bool Parser_classifyType(Parser *parser, U32 *i, U32 parent, Allocator alloc, Er
 	if (!consumed) {
 
 		CharString typedeffed = Token_asString(parser->tokens.ptr[*i], parser);
-		typedeffed;
+		(void) typedeffed;
 		++*i;
 
 		//T<F32, F32>
@@ -428,7 +428,7 @@ Bool Parser_classifyInitializer(Parser *parser, U32 *i, ETokenType endToken, ETo
 	//        ^
 
 	if(Parser_next(parser, i, endToken) || Parser_eof(parser, i))
-		retError(clean, Error_invalidParameter(0, 0, "Parser_classifyInitializer() default value expected"), e_rr)
+		retError(clean, Error_invalidParameter(0, 0, "Parser_classifyInitializer() default value expected"))
 
 	typedef enum EBracketType {
 		EBracketType_Curly,
@@ -482,14 +482,14 @@ Bool Parser_classifyInitializer(Parser *parser, U32 *i, ETokenType endToken, ETo
 				if(!bracketCounter)
 					retError(clean, Error_invalidParameter(
 						0, 0, "Parser_classifyInitializer() found one of }]) but had no opening brackets before it"
-					), e_rr)
+					))
 
 				EBracketType type2 = (tokenCounter >> ((bracketCounter - 1) << 1)) & 3;
 
 				if(type2 != type)
 					retError(clean, Error_invalidParameter(
 						0, 0, "Parser_classifyInitializer() found one of mismatching }]) with one of {[("
-					), e_rr)
+					))
 
 				--bracketCounter;
 			}
@@ -501,7 +501,7 @@ Bool Parser_classifyInitializer(Parser *parser, U32 *i, ETokenType endToken, ETo
 				if(bracketCounter >= 32)
 					retError(clean, Error_outOfBounds(
 						0, 32, 32, "Parser_classifyInitializer() only allows {[( of 32 levels deep, but it was exceeded"
-					), e_rr)
+					))
 
 				tokenCounter &= ~((U64)3 << (bracketCounter << 1));
 				tokenCounter |= (U64)type << (bracketCounter << 1);
@@ -963,6 +963,9 @@ Bool Parser_classifyFunctionOrVariable(Parser *parser, U32 *i, U32 parent, Alloc
 
 			switch (tokType) {
 
+				default:
+					break;
+
 				case ETokenType_Period:
 
 				case ETokenType_Ternary:
@@ -1293,7 +1296,7 @@ Bool Parser_classifyEnum(Parser *parser, U32 *i, U32 parent, Allocator alloc, Er
 
 	ESymbolFlag flags = ESymbolFlag_None;
 
-	CharString enumTypeStr = CharString_createNull();
+	//CharString enumTypeStr = CharString_createNull();
 	U64 enumType = U64_MAX;
 
 	if (Parser_next(parser, i, ETokenType_Identifier)) {
@@ -1322,7 +1325,7 @@ Bool Parser_classifyEnum(Parser *parser, U32 *i, U32 parent, Allocator alloc, Er
 			if (Parser_skipIfNext(parser, i, ETokenType_Colon)) {
 
 				gotoIfError3(clean, Parser_assert(parser, i, ETokenType_Identifier, e_rr))
-				enumTypeStr = Token_asString(parser->tokens.ptr[*i], parser);
+				//enumTypeStr = Token_asString(parser->tokens.ptr[*i], parser);
 				++*i;
 
 				if (Parser_next(parser, i, ETokenType_Lt))

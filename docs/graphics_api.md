@@ -38,7 +38,7 @@ The graphics instance is the way you can query physical devices from D3D12, Vulk
 ```c
 GraphicsInstanceRef *instance = NULL;
 
-_gotoIfError(clean, GraphicsInstance_create(
+gotoIfError(clean, GraphicsInstance_create(
 	(GraphicsApplicationInfo) {
 	    .name = CharString_createConstRefCStr("Rt core test"),
     	.version = OXC3_MAKE_VERSION(0, 2, 0)
@@ -92,7 +92,7 @@ GraphicsInstance's getPreferredDevice can be used to query if there's any graphi
 ```c
 GraphicsDeviceInfo deviceInfo = (GraphicsDeviceInfo) { 0 };
 
-_gotoIfError(clean, GraphicsInstance_getPreferredDevice(
+gotoIfError(clean, GraphicsInstance_getPreferredDevice(
   GraphicsInstanceRef_ptr(instance),		//See "Graphics instance"
   (GraphicsDeviceCapabilities) { 0 },		//No required features or data types
   GraphicsInstance_vendorMaskAll,			//All vendors supported
@@ -161,7 +161,7 @@ The graphics device is the logical device that is used to create objects and exe
 
 ```c
 GraphicsDeviceRef *device = NULL;
-_gotoIfError(clean, GraphicsDeviceRef_create(
+gotoIfError(clean, GraphicsDeviceRef_create(
     instance, 		//See "Graphics instance"
     &deviceInfo, 	//See "Graphics device info"
     false, /* isVerbose; extra logging about the device properties */
@@ -374,7 +374,7 @@ A command list in OxC3 is a virtual command list. The commands get recorded in a
 
 ```c
 CommandListRef *commandList = NULL;
-_gotoIfError(clean, GraphicsDeviceRef_createCommandList(
+gotoIfError(clean, GraphicsDeviceRef_createCommandList(
     device, 	//See "Graphics device"
     2 * KIBI, 	//Max command buffer size
     64, 		//Estimated command count (can auto resize)
@@ -387,15 +387,15 @@ _gotoIfError(clean, GraphicsDeviceRef_createCommandList(
 #### Recording a command list
 
 ```c
-_gotoIfError(clean, CommandListRef_begin(commandList, true /* clear previous */, U64_MAX /* long long timeout */));
+gotoIfError(clean, CommandListRef_begin(commandList, true /* clear previous */, U64_MAX /* long long timeout */));
 
-_gotoIfError(clean, CommandListRef_startScope(commandList, (ListTransition) { 0 }, 0, (ListCommandScopeDependency) { 0 }));
-_gotoIfError(clean, CommandListRef_clearImagef(
+gotoIfError(clean, CommandListRef_startScope(commandList, (ListTransition) { 0 }, 0, (ListCommandScopeDependency) { 0 }));
+gotoIfError(clean, CommandListRef_clearImagef(
     commandList, F32x4_create4(1, 0, 0, 1), (ImageRange){ 0 }, swapchain
 ));
-_gotoIfError(clean, CommandListRef_endScope(commandList));
+gotoIfError(clean, CommandListRef_endScope(commandList));
 
-_gotoIfError(clean, CommandListRef_end(commandList));
+gotoIfError(clean, CommandListRef_end(commandList));
 ```
 
 Every frame, this can be passed onto the submit commands call:
@@ -404,10 +404,10 @@ Every frame, this can be passed onto the submit commands call:
 ListCommandListRef commandLists = (ListCommandListRef) { 0 };
 ListSwapchainRef swapchains = (ListSwapchainRef) { 0 };
 
-_gotoIfError(clean, ListCommandListRef_createRefConst(commandList, 1, &commandLists));
-_gotoIfError(clean, ListSwapchainRef_createRefConst(swapchain, 1, &swapchains));
+gotoIfError(clean, ListCommandListRef_createRefConst(commandList, 1, &commandLists));
+gotoIfError(clean, ListSwapchainRef_createRefConst(swapchain, 1, &swapchains));
 
-_gotoIfError(clean, GraphicsDeviceRef_submitCommands(device, commandLists, swapchains, -1, 0));
+gotoIfError(clean, GraphicsDeviceRef_submitCommands(device, commandLists, swapchains, -1, 0));
 ```
 
 For more info on commands check out the "Commands" section.
@@ -544,7 +544,7 @@ A swapchain is the interface between the platform Window and the API-dependent w
 //onCreate
 
 SwapchainRef *swapchain = NULL;
-_gotoIfError(clean, GraphicsDeviceRef_createSwapchain(
+gotoIfError(clean, GraphicsDeviceRef_createSwapchain(
     device, 		//See "Graphics device"
     (SwapchainInfo) { .window = w },
     false,			//allowComputeExt
@@ -606,7 +606,7 @@ Once on the GPU, the sampler resource index can be passed to the GPU and the sam
 
 ```c
 SamplerInfo nearestSampler = (SamplerInfo) { .filter = ESamplerFilterMode_Nearest };
-_gotoIfError(clean, GraphicsDeviceRef_createSampler(device, nearestSampler, samplerName, &nearest));
+gotoIfError(clean, GraphicsDeviceRef_createSampler(device, nearestSampler, samplerName, &nearest));
 ```
 
 If the sampler is used on the GPU, it should be passed as a transition; stage is unused so can be safely ignored. The most important part here is that the transition keeps the Sampler alive while the command list is in flight. The graphics implementation is also allowed to manage eviction behind the scenes if it is determined that the resource has not been in flight for too long and it might be hogging space.
@@ -639,7 +639,7 @@ If the sampler is used on the GPU, it should be passed as a transition; stage is
 A DeviceTexture is a texture that can be sent from the CPU to the device. It's essentially a UnifiedTexture that is allowed to be uploaded / downloaded from the device.
 
 ```c
-_gotoIfError(clean, GraphicsDeviceRef_createTexture(
+gotoIfError(clean, GraphicsDeviceRef_createTexture(
     twm->device,
     ETextureType_2D,
     ETextureFormatId_BGRA8,
@@ -676,7 +676,7 @@ A DepthStencil is an object that holds the depth and stencil buffers as a 2D ima
 The depth stencil is quite straight forward; it has up to 3 stencil enabled formats (D24S8Ext, D32S8, S8Ext) that can be used to provide a stencil attachment to startRenderExt and 2 non stencil enabled formats (D16, D32). D24S8Ext is optional, but is important for NV and Intel GPUs since it packs the depth and stencil into 32-bits. D24S8Ext and S8Ext support can be queried through the GraphicsDeviceInfo's capabilities. Whenever possible please use D16 or D32 since it doesn't waste any space for a stencil buffer if it isn't needed. D16 should only be used if depth precision isn't a great priority (performance and memory usage is prioritized). D16 can be used on mobile to save space and time. If allowShaderRead is on, the depth stencil can be accessed through shader logic by passing the resource handle to the GPU.
 
 ```c
-_gotoIfError(clean, GraphicsDeviceRef_createDepthStencil(
+gotoIfError(clean, GraphicsDeviceRef_createDepthStencil(
     twm->device,
     width, height, EDepthStencilFormat_D16, false /* allow shader access */,
     EMSAASamples_Off,
@@ -706,7 +706,7 @@ Some formats are optional such as RGB32f, RGB32i and RGB32u. These have to be qu
 A RenderTexture itself can currently only be 2D, but will be possible to be 3D or a TextureCube in the future. Currently no mip levels are supported and 2DArray and TextureCubeArray won't be supported (since array of textures should be sufficient).
 
 ```c
-_gotoIfError(clean, GraphicsDeviceRef_createRenderTexture(
+gotoIfError(clean, GraphicsDeviceRef_createRenderTexture(
 	twm->device,
 	ETextureType_2D, 				//2D is only supported currently
     width, height, 1, 				//x, y, z
@@ -883,9 +883,9 @@ CharString nameArr[] = {
 };
 
 ListBuffer computeBinaries = (ListBuffer) { 0 };
-_gotoIfError(clean, ListBuffer_createRefConst(tempShader, 1, &computeBinaries));
-_gotoIfError(clean, ListCharString_createConstRefConst(nameArr, 1, &names));
-_gotoIfError(clean, GraphicsDeviceRef_createPipelinesCompute(device, &computeBinaries, names, &computeShaders));
+gotoIfError(clean, ListBuffer_createRefConst(tempShader, 1, &computeBinaries));
+gotoIfError(clean, ListCharString_createConstRefConst(nameArr, 1, &names));
+gotoIfError(clean, GraphicsDeviceRef_createPipelinesCompute(device, &computeBinaries, names, &computeShaders));
 
 tempShader = Buffer_createNull();
 ```
@@ -912,7 +912,7 @@ PipelineStage stage[2] = {
 };
 
 ListPipelineStage stageInfos = (ListPipelineStage) { 0 };
-_gotoIfError(clean, ListPipelineStage_createRefConst(stage, sizeof(stage) / sizeof(stage[0]), &stageInfos));
+gotoIfError(clean, ListPipelineStage_createRefConst(stage, sizeof(stage) / sizeof(stage[0]), &stageInfos));
 
 //Define all pipelines.
 //These pipelines require the graphics feature DirectRendering and will error otherwise!
@@ -931,8 +931,8 @@ PipelineGraphicsInfo info[1] = {
 //Make sure to release them after to avoid freeing twice!
 
 ListPipelineGraphicsInfo infos = (ListPipelineGraphicsInfo) { 0 };
-_gotoIfError(clean, ListPipelineGraphicsInfo_createConstRef(info, sizeof(info) / sizeof(info[0]), &infos));
-_gotoIfError(clean, GraphicsDeviceRef_createPipelinesGraphics(
+gotoIfError(clean, ListPipelineGraphicsInfo_createConstRef(info, sizeof(info) / sizeof(info[0]), &infos));
+gotoIfError(clean, GraphicsDeviceRef_createPipelinesGraphics(
     device, &stageInfos, &infos, ListCharString_createNull(), &graphicsShaders
 ));
 
@@ -1005,18 +1005,18 @@ ListCharString entrypoints = (ListCharString) { 0 };
 ListPipelineRaytracingGroup hitGroups = (ListPipelineRaytracingGroup) { 0 };
 ListPipelineRaytracingInfo infos = (ListPipelineRaytracingInfo) { 0 };
 
-_gotoIfError(clean, ListBuffer_createRefConst(tempBuffers, count, &binaries));
-_gotoIfError(clean, ListCharString_createRefConst(nameArr, count, &names));
-_gotoIfError(clean, ListPipelineRaytracingInfo_createRefConst(infoArr, count, &infos));
+gotoIfError(clean, ListBuffer_createRefConst(tempBuffers, count, &binaries));
+gotoIfError(clean, ListCharString_createRefConst(nameArr, count, &names));
+gotoIfError(clean, ListPipelineRaytracingInfo_createRefConst(infoArr, count, &infos));
 
-_gotoIfError(clean, ListPipelineStage_createRefConst(stageArr, entrypointCount, &stages));
-_gotoIfError(clean, ListCharString_createRefConst(entrypointArr, entrypointCount, &entrypoints));
+gotoIfError(clean, ListPipelineStage_createRefConst(stageArr, entrypointCount, &stages));
+gotoIfError(clean, ListCharString_createRefConst(entrypointArr, entrypointCount, &entrypoints));
 
-_gotoIfError(clean, ListPipelineRaytracingGroup_createRefConst(hitArr, hitCount, &hitGroups));
+gotoIfError(clean, ListPipelineRaytracingGroup_createRefConst(hitArr, hitCount, &hitGroups));
 
 //Finalize into pipeline
 
-_gotoIfError(clean, GraphicsDeviceRef_createPipelineRaytracingExt(
+gotoIfError(clean, GraphicsDeviceRef_createPipelineRaytracingExt(
     twm->device, stages, &binaries, hitGroups, infos, &entrypoints, names, &raytracingShaders
 ));
 
@@ -1061,7 +1061,7 @@ VertexPosBuffer vertexPos[] = {
 
 Buffer vertexData = Buffer_createConstRef(vertexPos, sizeof(vertexPos));
 CharString name = CharString_createConstRefCStr("Vertex position buffer");
-_gotoIfError(clean, GraphicsDeviceRef_createBufferData(
+gotoIfError(clean, GraphicsDeviceRef_createBufferData(
     device, EDeviceBufferUsage_Vertex, name, &vertexData, &vertexBuffers[0]
 ));
 ```
@@ -1153,7 +1153,7 @@ The latter can only be used through intersection shaders, while the former has w
 ##### Example: Triangle geometry
 
 ```c
-_gotoIfError(clean, GraphicsDeviceRef_createBLASExt(
+gotoIfError(clean, GraphicsDeviceRef_createBLASExt(
 	twm->device,
 	ERTASBuildFlags_DefaultBLAS,			//Fast trace & allow compaction
 	EBLASFlag_DisableAnyHit,				//No transparency needed, optimize for opaque
@@ -1195,13 +1195,13 @@ F32 aabbBuffer[] = {
 
 Buffer aabbData = Buffer_createRefConst(aabbBuffer, sizeof(aabbBuffer));
 name = CharString_createRefCStrConst("AABB buffer");
-_gotoIfError(clean, GraphicsDeviceRef_createBufferData(
+gotoIfError(clean, GraphicsDeviceRef_createBufferData(
 	twm->device,
     EDeviceBufferUsage_ASReadExt, EGraphicsResourceFlag_None,
     name, &aabbData, &twm->aabbs
 ));
 
-_gotoIfError(clean, GraphicsDeviceRef_createBLASProceduralExt(
+gotoIfError(clean, GraphicsDeviceRef_createBLASProceduralExt(
 	twm->device,
 	ERTASBuildFlags_DefaultBLAS,
 	EBLASFlag_DisableAnyHit,
@@ -1273,11 +1273,11 @@ TLASInstanceStatic instances[1] = {
 };
 
 ListTLASInstanceStatic instanceList = (ListTLASInstanceStatic) { 0 };
-_gotoIfError(clean, ListTLASInstanceStatic_createRefConst(
+gotoIfError(clean, ListTLASInstanceStatic_createRefConst(
     instances, sizeof(instances) / sizeof(instances[0]), &instanceList
 ));
 
-_gotoIfError(clean, GraphicsDeviceRef_createTLASExt(
+gotoIfError(clean, GraphicsDeviceRef_createTLASExt(
     twm->device,
     ERTASBuildFlags_DefaultTLAS,
     NULL,
@@ -1316,11 +1316,11 @@ TLASInstanceMotion instances[1] = {
 };
 
 ListTLASInstanceMotion instanceList = (ListTLASInstanceMotion) { 0 };
-_gotoIfError(clean, ListTLASInstanceMotion_createRefConst(
+gotoIfError(clean, ListTLASInstanceMotion_createRefConst(
     instances, sizeof(instances) / sizeof(instances[0]), &instanceList
 ));
 
-_gotoIfError(clean, GraphicsDeviceRef_createTLASMotionExt(
+gotoIfError(clean, GraphicsDeviceRef_createTLASMotionExt(
     twm->device,
     ERTASBuildFlags_DefaultTLAS,
     NULL,
@@ -1402,7 +1402,7 @@ To make sure a command list is ready for recording and submission it needs begin
 setViewport and setScissor are used to set viewport and scissor rects respectively. However, since in a lot of cases they are set at the same time, there's also a command that does both at once "setViewportAndScissor".
 
 ```c
-_gotoIfError(clean, CommandListRef_setViewportAndScissor(
+gotoIfError(clean, CommandListRef_setViewportAndScissor(
 	commandList,
     I32x2_create2(0, 0),	//Offset
     I32x2_create2(0, 0)		//Size
@@ -1418,13 +1418,13 @@ Since this is relative to a render target, it has to be called after binding one
 The stencil reference can be set using the setStencil command.
 
 ```c
-_gotoIfError(clean, CommandListRef_setStencil(commandList, 0xFF));
+gotoIfError(clean, CommandListRef_setStencil(commandList, 0xFF));
 ```
 
 And the blend constants can be set like so:
 
 ```c
-_gotoIfError(clean, CommandListRef_setBlendConstants(
+gotoIfError(clean, CommandListRef_setBlendConstants(
     commandList, F32x4_create4(1, 0, 0, 1)
 ));
 ```
@@ -1434,7 +1434,7 @@ _gotoIfError(clean, CommandListRef_setBlendConstants(
 clearImagef/clearImageu/clearImagei and clearImages are actually the same command. They allow clearing one or multiple images. clearImages should be used whenever possible because it can batch clear commands in a better way. However, it is possible that only one image needs to be cleared and in that case clearImage(f/u/i) are perfectly fine. The f, u and i suffix are to allow clearing uint, int and float targets. In clearImages these are handled manually. The format should match the format of the underlying images. The images passed here are automatically transitioned to the correct state.
 
 ```c
-_gotoIfError(clean, CommandListRef_clearImagef(
+gotoIfError(clean, CommandListRef_clearImagef(
     commandList, 				//See "Command list"
     F32x4_create4(1, 0, 0, 1), 	//Clear red
     (ImageRange){ 0 }, 			//Clear layer and level 0
@@ -1453,7 +1453,7 @@ Clear image can currently only be called on a Swapchain or RenderTexture object.
 copyImage and copyImageRegions are actually the same command. They allow copying either one or multiple regions from the same image to another, as long as the two have the same format.
 
 ```c
-_gotoIfError(clean, CommandListRef_copyImage(
+gotoIfError(clean, CommandListRef_copyImage(
     commandList,
     tw->swapchain, 				//src (Swapchain, DepthStencil, RenderTexture)
     tw->renderTextureBackup, 	//dst (^)
@@ -1477,9 +1477,9 @@ Copy image (ranges) can currently only be called on a Swapchain, DepthStencil or
 The set pipeline command does one of the following; bind a graphics pipeline, raytracing pipeline or a compute pipeline. These pipelines are the only bind points and they're maintained separately. So a bind pipeline of a graphics shader and one of a compute shader don't interfere. This is used before a draw, dispatch or dispatchRaysExt to ensure the shader is used.
 
 ```c
-_gotoIfError(clean, CommandListRef_setComputePipeline(commandList, compPipeline));
-_gotoIfError(clean, CommandListRef_setGraphicsPipeline(commandList, gfxPipeline));
-_gotoIfError(clean, CommandListRef_setRaytracingPipeline(commandList, rtPipeline));
+gotoIfError(clean, CommandListRef_setComputePipeline(commandList, compPipeline));
+gotoIfError(clean, CommandListRef_setGraphicsPipeline(commandList, gfxPipeline));
+gotoIfError(clean, CommandListRef_setRaytracingPipeline(commandList, rtPipeline));
 ```
 
 ### draw
@@ -1490,13 +1490,13 @@ The draw command will simply draw the currently bound primitive buffer (optional
 //Non indexed draw call
 //Can also specify instanceOffset and vertexOffset if drawUnindexedAdv is used
 
-_gotoIfError(clean, CommandListRef_drawUnindexed(commandList, 3, 1));
+gotoIfError(clean, CommandListRef_drawUnindexed(commandList, 3, 1));
 
 //Indexed draw call
 //Can also specify instanceOffset, indexOffset and vertexOffset
 //if drawIndexedAdv is used
 
-_gotoIfError(clean, CommandListRef_drawIndexed(commandList, 3, 1));
+gotoIfError(clean, CommandListRef_drawIndexed(commandList, 3, 1));
 ```
 
 When issuing the draw, the state needs to be valid: a render has to be started (render pass or direct rendering), a primitive buffer needs to be bound if relevant, graphics pipeline has to be bound, viewport & scissor has to be set and all relevant transitions need to be done.
@@ -1561,7 +1561,7 @@ SetPrimitiveBuffersCmd primitiveBuffers = (SetPrimitiveBuffersCmd) {
     .isIndex32Bit = false
 };
 
-_gotoIfError(clean, CommandListRef_setPrimitiveBuffers(commandList, primitiveBuffers));
+gotoIfError(clean, CommandListRef_setPrimitiveBuffers(commandList, primitiveBuffers));
 ```
 
 ### dispatch
@@ -1569,7 +1569,7 @@ _gotoIfError(clean, CommandListRef_setPrimitiveBuffers(commandList, primitiveBuf
 Dispatch has some of the same requirements as draw calls as it needs a correct state of the resources and needs a compute pipeline bound as well. However, it doesn't need to be in an active render (render pass or direct rendering) and it also doesn't use the viewport/scissor. This makes compute one of the easiest to handle, though transitions are just as important as with graphics shaders (resources need to be transitioned through a scope).
 
 ```c
-_gotoIfError(clean, CommandListRef_dispatch2D(commandList, tilesX, tilesY));
+gotoIfError(clean, CommandListRef_dispatch2D(commandList, tilesX, tilesY));
 ```
 
 dispatch2D, dispatch1D and dispatch3D are the easiest implementations. You dispatch in groups, so it has to be aligned to the thread count of the compute shader. This command is also generalized with the dispatch command which takes in a `Dispatch` struct.
@@ -1585,7 +1585,7 @@ dispatchIndirect transitions the input buffer to IndirectDraw. This means that t
 The DebugMarkers feature adds three commands: addMarkerDebugExt, startRegionDebugExt and endRegionDebugExt. If the DebugMarkers feature isn't present, these are safely ignored and won't be inserted into the virtual command list. This can be used to provide extra debugging info to tools such as RenderDoc, NSight, Pix, etc. to show where important events such as render calls happened and what they represented. A debug region or debug marker has a color and a name. A debug region is like a stack; you can only end the current region and push another region. Every region you start has to be ended in the same scope that is submitted.
 
 ```c
-_gotoIfError(clean, CommandListRef_startRegionDebugExt(
+gotoIfError(clean, CommandListRef_startRegionDebugExt(
     commandList, 							//See "Command list"
     F32x4_create4(1, 0, 0, 1), 				//Marker color
     CharString_createConstRefCStr("Test")	//Marker name
@@ -1593,7 +1593,7 @@ _gotoIfError(clean, CommandListRef_startRegionDebugExt(
 
 //Insert operation that needs to be in the debug region
 
-_gotoIfError(clean, CommandListRef_endRegionDebugExt(commandList));
+gotoIfError(clean, CommandListRef_endRegionDebugExt(commandList));
 ```
 
 The same syntax as startRegionDebugExt can be used for addMarkerDebugExt. Except a marker doesn't need any end, it's just 1 event on the timeline. Every end region needs to correspond with a start region and vice versa.
@@ -1619,9 +1619,9 @@ AttachmentInfo attachmentInfo = (AttachmentInfo) {
 };
 
 ListAttachmentInfo colors = (ListAttachmentInfo) { 0 };
-_gotoIfError(clean, ListAttachmentInfo_createRefConst(attachmentInfo, 1, &colors));
+gotoIfError(clean, ListAttachmentInfo_createRefConst(attachmentInfo, 1, &colors));
 
-_gotoIfError(clean, CommandListRef_startRenderExt(
+gotoIfError(clean, CommandListRef_startRenderExt(
     commandList, 							//See "Command list"
     I32x2_zero(), 							//No offset
     I32x2_zero(), 							//Use attachment's size
@@ -1631,7 +1631,7 @@ _gotoIfError(clean, CommandListRef_startRenderExt(
 
 //Draw calls here
 
-_gotoIfError(clean, CommandListRef_endRenderExt(commandList));
+gotoIfError(clean, CommandListRef_endRenderExt(commandList));
 ```
 
 *Keep in mind that during the scope, you can't transition the resources passed into the attachments of the active render call. They're not allowed to be used as a read (SRV) or write textures (UAV); they're only allowed to be output attachments (RTV). Doing otherwise will cause the command list to give an error and remove the current scope.*
@@ -1653,7 +1653,7 @@ Are used to force update TLAS and BLAS respectively. This is useful when the TLA
 dispatchRays has some of the same requirements as dispatch as it needs a correct state of the resources and needs a raytracing pipeline bound as well. It is similar to compute as it doesn't need to be in an active render (render pass or direct rendering) and it also doesn't use the viewport/scissor. Though transitions are just as important as with compute shaders (resources need to be transitioned through a scope).
 
 ```c
-_gotoIfError(clean, CommandListRef_dispatch2DRaysExt(commandList, rtId, width, height));
+gotoIfError(clean, CommandListRef_dispatch2DRaysExt(commandList, rtId, width, height));
 ```
 
 dispatch2DRaysExt, dispatch1DRaysExt and dispatch3DRaysExt are the easiest implementations. This command is also generalized with the dispatchRaysExt command which takes in a `DispatchRaysExt` struct. rtId is the raygen shader id, this is relevant since multiple raygen shaders can be linked into a single raygen pipeline. Each raygen shader has an id that can be passed here to execute it.
@@ -1727,11 +1727,11 @@ Transition transitions[] = {
 };
 
 ListTransition transitionArr = (ListTransition) { 0 };
-_gotoIfError(clean, ListTransition_createRefConst(&transitionArr, 1, transitions));
+gotoIfError(clean, ListTransition_createRefConst(&transitionArr, 1, transitions));
 
-_gotoIfError(clean, CommandListRef_startScope(commandList, transitionArr, 0 /* id */, (ListCommandScopeDependency) { 0 } /* deps */));
+gotoIfError(clean, CommandListRef_startScope(commandList, transitionArr, 0 /* id */, (ListCommandScopeDependency) { 0 } /* deps */));
 //TODO: Bind compute shader(s) and dispatch
-_gotoIfError(clean, CommandListRef_endScope(commandList));
+gotoIfError(clean, CommandListRef_endScope(commandList));
 ```
 
 Transitions can currently only be called on a Swapchain, DeviceTexture, RenderTexture, DepthStencil, Sampler or DeviceBuffer object.

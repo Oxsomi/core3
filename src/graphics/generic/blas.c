@@ -69,7 +69,7 @@ Error GraphicsDeviceRef_createBLAS(GraphicsDeviceRef *dev, BLAS blas, CharString
 
 	//Validate
 
-	if(!dev || dev->typeId != EGraphicsTypeId_GraphicsDevice)
+	if(!dev || dev->typeId != (ETypeId) EGraphicsTypeId_GraphicsDevice)
 		return Error_nullPointer(0, "GraphicsDeviceRef_createBLAS()::dev is required");
 
 	if(!blasRef)

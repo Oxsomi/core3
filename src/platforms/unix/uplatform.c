@@ -55,13 +55,13 @@ Error Platform_initExt() {
 		#define PATH_MAX 256
 		C8 cwd[PATH_MAX + 1];
 		if (!getcwd(cwd, sizeof(cwd)))
-			_gotoIfError(clean, Error_stderr(errno, "Platform_initExt() getcwd failed"));
+			gotoIfError(clean, Error_stderr(errno, "Platform_initExt() getcwd failed"))
 
-		_gotoIfError(clean, CharString_createCopyx(CharString_createRefCStrConst(cwd), &Platform_instance.workingDirectory));
-		_gotoIfError(clean, CharString_appendx(&Platform_instance.workingDirectory, '/'));
+		gotoIfError(clean, CharString_createCopyx(CharString_createRefCStrConst(cwd), &Platform_instance.workingDirectory))
+		gotoIfError(clean, CharString_appendx(&Platform_instance.workingDirectory, '/'))
 	}
 
-	_gotoIfError(clean, Platform_initUnixExt());
+	gotoIfError(clean, Platform_initUnixExt())
 
 clean:
 	return err;

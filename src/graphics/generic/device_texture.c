@@ -48,7 +48,7 @@ U16 alignUp(U16 x, U16 alignment) {
 
 Error DeviceTextureRef_markDirty(DeviceTextureRef *tex, U16 x, U16 y, U16 z, U16 w, U16 h, U16 l) {
 
-	if(!tex || tex->typeId != EGraphicsTypeId_DeviceTexture)
+	if(!tex || tex->typeId != (ETypeId) EGraphicsTypeId_DeviceTexture)
 		return Error_nullPointer(0, "DeviceTextureRef_markDirty()::tex is required");
 
 	DeviceTexture *texture = DeviceTextureRef_ptr(tex);

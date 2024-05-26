@@ -23,7 +23,12 @@
 #include "types/platform_types.h"
 
 #if _PLATFORM_TYPE != PLATFORM_WINDOWS
-	#include <stdatomic.h>
+	#ifndef __cplusplus
+		#include <stdatomic.h>
+	#else
+		#include <atomic>
+		#define _Atomic(X) std::atomic< X >
+	#endif
 #else
 	#define _Atomic(T) T
 #endif
