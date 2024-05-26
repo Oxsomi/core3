@@ -10,6 +10,8 @@ jobs:
       VULKAN_SDK: C:\VulkanSDK\
     steps:
     - uses: actions/checkout@v1
+      with:
+        submodules: 'true'
     - name: Install Vulkan SDK
       uses: humbletim/install-vulkan-sdk@v1.1.1
       with:
