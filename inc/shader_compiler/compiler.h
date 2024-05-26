@@ -112,7 +112,7 @@ Bool ListIncludeInfo_stringify(ListIncludeInfo files, Allocator alloc, CharStrin
 
 typedef enum ECompileResultType {
 	ECompileResultType_Text,
-	ECompileResultType_Binaries,
+	ECompileResultType_Binary,
 	ECompileResultType_SHEntryRuntime,
 	ECompileResultType_Count
 } ECompileResultType;
@@ -129,7 +129,7 @@ typedef struct CompileResult {
 
 	union {
 		CharString text;
-		ListBuffer binaries;
+		Buffer binary;
 		ListSHEntryRuntime shEntriesRuntime;
 	};
 
@@ -194,6 +194,7 @@ Bool Compiler_compile(
 	Compiler comp,
 	CompilerSettings settings,
 	SHBinaryInfo toCompile,
+	Allocator alloc,
 	CompileResult *result,
 	Error *e_rr
 );

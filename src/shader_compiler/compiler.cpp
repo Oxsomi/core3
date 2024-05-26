@@ -687,4 +687,278 @@ clean:
 	return s_uccess;
 }
 
+Bool Compiler_compile(
+	Compiler comp,
+	CompilerSettings settings,
+	SHBinaryInfo toCompile,
+	Allocator alloc,
+	CompileResult *result,
+	Error *e_rr
+) {
+
+	CompilerInterfaces *interfaces = (CompilerInterfaces*) comp.interfaces;
+
+	Bool s_uccess = true;
+	IDxcResult *dxcResult = NULL;
+	IDxcBlobUtf8 *error = NULL;
+	IDxcBlob *resultBlob = NULL;
+	ListU16 inputFile = ListU16{};
+	ListU16 includeDir = ListU16{};
+	ListU16 tempWStr = ListU16{};
+	Bool hasErrors = false, isVirtual = false;
+	CharString tempStr = CharString_createNull();
+	CharString tempStr2 = CharString_createNull();
+	ListListU16 strings = ListListU16{};
+
+	if(!interfaces->utils || !result)
+		retError(clean, Error_alreadyDefined(!interfaces->utils ? 0 : 2, "Compiler_compile()::comp is required"))
+
+	if(!CharString_length(settings.string))
+		retError(clean, Error_invalidParameter(1, 0, "Compiler_compile()::settings.string is required"))
+
+	if(settings.outputType >= ESHBinaryType_Count || settings.format >= ECompilerFormat_Count)
+		retError(clean, Error_invalidParameter(1, 0, "Compiler_compile()::settings contains invalid format or outputType"))
+
+	gotoIfError2(clean, CharString_toUTF16(settings.path, alloc, &inputFile))
+
+	if(settings.includeDir.ptr) {
+
+		gotoIfError2(clean, File_resolve(
+			settings.includeDir, &isVirtual, 256, Platform_instance.workingDirectory, alloc, &tempStr2
+		))
+
+		gotoIfError2(clean, CharString_toUTF16(tempStr2, alloc, &includeDir))
+		CharString_free(&tempStr2, alloc);
+	}
+
+	try {
+
+		interfaces->includeHandler->reset();
+
+		result->isSuccess = false;
+
+		const U16 args[][27] = {
+
+			{ '-', 'P', '\0' },									//Preprocess
+			{ '-', 's', 'p', 'i', 'r', 'v', '\0' },				//-spirv (enable spirv generation)
+			{ '-', 'I', '\0' },									//-I (include dir)
+			{ '-', 'D', '_', '_', 'O', 'X', 'C', '3', '\0' },	//-D__OXC3 to indicate we're compiling from OxC3
+
+			//-auto-binding-space 0
+
+			{ '-', 'a', 'u', 't', 'o', '-', 'b', 'i', 'n', 'd', 'i', 'n', 'g', '-', 's', 'p', 'a', 'c', 'e', '\0' },
+			{ '0', '\0' },
+
+			//-enable-payload-qualifiers
+
+			{
+				'-', 'e', 'n', 'a', 'b', 'l', 'e', '-', 
+				'p', 'a', 'y', 'l', 'o', 'a', 'd', '-', 
+				'q', 'u', 'a', 'l', 'i', 'f', 'i', 'e', 'r', 's', '\0'
+			},
+
+			//-Zpc, -Qstrip_debug, -Qstrip_reflect
+
+			{ '-', 'Z', 'p', 'c', '\0' },
+			{ '-', 'Q', 's', 't', 'r', 'i', 'p', '_', 'd', 'e', 'b', 'u', 'g', '\0' },
+			{ '-', 'Q', 's', 't', 'r', 'i', 'p', '_', 'r', 'e', 'f', 'l', 'e', 'c', 't', '\0'},
+
+			//-Od or -O3
+
+			{ '-', 'O', 'd', '\0' },
+			{ '-', 'O', '3', '\0' },
+
+			//-Zi for debug
+
+			{ '-', 'Z', 'i', '\0' },
+
+			//-enable-16bit-types
+
+			{ '-', 'e', 'n', 'a', 'b', 'l', 'e', '-', '1', '6', 'b', 'i', 't', '-', 't', 'y', 'p', 'e', 's', '\0' },
+
+			//spirv flags;
+			//-fvk-use-dx-layout, -fspv-target-env=vulkan1.2, -fvk-invert-y, -fvk-use-dx-position-w
+			//-fspv-entrypoint-name=main
+
+			{ '-', 'f', 'v', 'k', '-', 'u', 's', 'e', '-', 'd', 'x', '-', 'l', 'a', 'y', 'o', 'u', 't', '\0' },
+
+			{ 
+				'-', 'f', 's', 'p', 'v', '-', 't', 'a', 'r', 'g', 'e', 't', '-', 'e', 'n', 'v', '=',
+				'v', 'u', 'l', 'k', 'a', 'n', '1', '.', '2', '\0'
+			},
+
+			{ '-', 'f', 'v', 'k', '-', 'i', 'n', 'v', 'e', 'r', 't', '-', 'y', '\0' },
+
+			{ 
+				'-', 'f', 'v', 'k', '-', 'u', 's', 'e', '-', 
+				'd', 'x', '-', 'p', 'o', 's', 'i', 't', 'i', 'o', 'n', '-', 'w', '\0'
+			},
+
+			{ 
+				'-', 'f', 's', 'p', 'v', '-', 'e', 'n', 't', 'r', 'y', 'p', 'o', 'i', 'n', 't', '-', 'n', 'a', 'm', 'e', '=',
+				'm', 'a', 'i', 'n', '\0'
+			}
+		};
+
+		U32 argCounter = 7;
+
+		const U16 *argsPtr[22] = {
+
+			args[0],
+			inputFile.ptr,
+
+			args[3],
+			args[7],
+
+			args[8],
+			args[9],
+
+			settings.debug ? args[10] : args[11]
+		};
+
+		if(settings.debug)
+			argsPtr[argCounter++] = args[12];					//-Zi
+
+		if(toCompile.extensions & ESHExtension_16BitTypes)
+			argsPtr[argCounter++] = args[13];					//-enable-16bit-types
+
+		if (settings.outputType == ESHBinaryType_SPIRV) {
+
+			argsPtr[argCounter++] = args[1];					//-spirv
+			argsPtr[argCounter++] = args[14];					//-fvk-use-dx-layout
+			argsPtr[argCounter++] = args[15];					//-fspv-target-env=vulkan1.2
+
+			if(
+				toCompile.stageType == ESHPipelineStage_Vertex ||
+				toCompile.stageType == ESHPipelineStage_Domain ||
+				toCompile.stageType == ESHPipelineStage_GeometryExt
+			)
+				argsPtr[argCounter++] = args[16];				//-fvk-invert-y
+
+			else if(toCompile.stageType == ESHPipelineStage_Pixel)
+				argsPtr[argCounter++] = args[17];				//-fvk-use-dx-position-w
+
+			if(!toCompile.hasShaderAnnotation)
+				argsPtr[argCounter++] = args[18];				//-fspv-entrypoint-name=main
+		}
+
+		else {
+
+			argsPtr[argCounter++] = args[4];					//-auto-binding-space
+			argsPtr[argCounter++] = args[5];					//0
+
+			if(toCompile.extensions & ESHExtension_PAQ)
+				argsPtr[argCounter++] = args[6];				//-enable-payload-qualifiers
+		}
+
+		if (includeDir.length) {								//-I
+			argsPtr[argCounter++] = args[2];
+			argsPtr[argCounter++] = includeDir.ptr;
+		}
+
+		//TODO: -E <entrypointName> -T <target>
+
+		//TODO: __OXC3_EXT_<X> foreach extension
+
+		//Format major, minor, patch and version
+
+		const C8 *formats[] = {
+			"-D__OXC3_MAJOR=%" PRIu64,
+			"-D__OXC3_MINOR=%" PRIu64,
+			"-D__OXC3_PATCH=%" PRIu64,
+			"-D__OXC3_VERSION=%" PRIu64,
+		};
+
+		const U64 formatInts[] = {
+			OXC3_MAJOR,
+			OXC3_MINOR,
+			OXC3_PATCH,
+			OXC3_VERSION
+		};
+
+		for(U64 i = 0; i < sizeof(formats) / sizeof(formats[0]); ++i) {
+
+			gotoIfError2(clean, CharString_format(alloc, &tempStr2, formats[i], formatInts[i]))
+		
+			gotoIfError2(clean, CharString_toUTF16(tempStr2, alloc, &tempWStr))
+			CharString_free(&tempStr2, alloc);
+
+			gotoIfError2(clean, ListListU16_pushBack(&strings, tempWStr, alloc))
+			argsPtr[argCounter++] = tempWStr.ptr;
+			tempWStr = ListU16{};
+		}
+
+		//Compile
+
+		DxcBuffer buffer{
+			.Ptr = settings.string.ptr,
+			.Size = CharString_length(settings.string)
+		};
+
+		HRESULT hr = interfaces->compiler->Compile(
+			&buffer,
+			(LPCWSTR*) argsPtr, argCounter,
+			interfaces->includeHandler,
+			IID_PPV_ARGS(&dxcResult)
+		);
+
+		if(FAILED(hr))
+			retError(clean, Error_invalidState(0, "Compiler_compile() \"Compile\" failed"))
+
+		hr = dxcResult->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(&error), NULL);
+
+		if(FAILED(hr))
+			retError(clean, Error_invalidState(1, "Compiler_compile() fetch errors failed"))
+
+		if(error && error->GetStringLength()) {
+			CharString errs = CharString_createRefSizedConst(error->GetStringPointer(), error->GetStringLength(), false);
+			gotoIfError3(clean, Compiler_parseErrors(errs, alloc, &result->compileErrors, &hasErrors, e_rr))
+		}
+
+		if(error) {
+			error->Release();
+			error = NULL;
+		}
+
+		if (hasErrors)
+			goto clean;
+
+		hr = dxcResult->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(&resultBlob), NULL);
+
+		if(FAILED(hr))
+			retError(clean, Error_invalidState(2, "Compiler_compile() fetch hlsl failed"))
+
+		gotoIfError2(clean, Buffer_createCopy(
+			Buffer_createRefConst(error->GetBufferPointer(), error->GetBufferSize()),
+			alloc,
+			&result->binary
+		))
+
+		result->type = ECompileResultType_Binary;
+		result->isSuccess = true;
+
+	} catch (std::exception) {
+		retError(clean, Error_invalidState(1, "Compiler_compile() raised an internal exception"))
+	}
+
+clean:
+
+	if(!s_uccess)
+		CompileResult_free(result, alloc);
+
+	if(dxcResult)
+		dxcResult->Release();
+
+	if(error)
+		error->Release();
+
+	ListListU16_freeUnderlying(&strings, alloc);
+	ListU16_free(&inputFile, alloc);
+	ListU16_free(&includeDir, alloc);
+	ListU16_free(&tempWStr, alloc);
+	CharString_free(&tempStr, alloc);
+	CharString_free(&tempStr2, alloc);
+	return s_uccess;
+}
+
 //TODO: Real compile, check for [extension(I16, F16)] one of the two indicates we need to enable 16-bit types

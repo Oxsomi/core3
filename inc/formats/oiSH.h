@@ -216,10 +216,15 @@ typedef struct SHEntryRuntime {
 
 typedef struct SHBinaryInfo {
 
-	U32 extensions;
+	CharString entrypoint;		//If it's not a lib, this defines the entrypoint to compile with
+
+	ESHExtension extensions;
 	U16 shaderVersion;
 	U8 uniforms;
-	U8 padding;
+	U8 stageType;				//ESHPipelineStage
+
+	Bool hasShaderAnnotation;	//If [shader("")] is used rather than [stage("")]
+	U8 padding[7];
 
 	CharString *uniformNames, *uniformValues;
 
