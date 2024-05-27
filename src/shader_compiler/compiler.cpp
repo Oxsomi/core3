@@ -543,7 +543,24 @@ clean:
 }
 
 void Compiler_shutdown() {
-	DxcShutdown(true);
+
+	ELockAcquire acq = Lock_lock(&lockThread, U64_MAX);
+
+	if(acq < ELockAcquire_Success)
+		return;
+
+	if(!hasInitialized)
+		goto clean;
+
+	try {
+		DxcShutdown(true);
+	} catch(std::exception&){}
+
+	hasInitialized = false;
+
+clean:
+	if(acq == ELockAcquire_Acquired)
+		Lock_unlock(&lockThread);
 }
 
 Bool Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator alloc, CompileResult *result, Error *e_rr) {
