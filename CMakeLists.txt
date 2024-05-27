@@ -21,16 +21,15 @@ cmake_minimum_required(VERSION 3.21.0)
 project(OxC3)
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
-set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
-set(CMAKE_SUPPRESS_REGENERATION true)
+set(CMAKE_SUPPRESS_REGENERATION TRUE)
 
 set(CMAKE_C_STANDARD 17)
-set(CMAKE_C_STANDARD_REQUIRED ON)
-set(CMAKE_C_EXTENSIONS OFF)
+set(CMAKE_C_STANDARD_REQUIRED OFF)
+set(CMAKE_C_EXTENSIONS ON)
 
-set(CMAKE_CXX_STANDARD 20)				# We need some C++ to interface with DXC, but we wrap it using C
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_CXX_STANDARD 17)				# We need some C++ to interface with DXC, but we wrap it using C
+set(CMAKE_CXX_STANDARD_REQUIRED OFF)
+set(CMAKE_CXX_EXTENSIONS ON)
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
@@ -48,20 +47,14 @@ set(EnableShaderCompiler OFF CACHE BOOL "Turn off/on shader compiler + OxC3 comp
 set(EnableTests ON CACHE BOOL "Turn off/on OxC3 tests")
 set(EnableOxC3CLI OFF CACHE BOOL "Turn on/off OxC3 CLI")
 
-# Use ${HideConsole} to add_executable to hide the console window
-
-if(MSVC)
-	set(HideConsole "WIN32")
-else()
-	set(HideConsole "")
-endif()
+# Set general compile options
 
 # Even though EnableSIMD can be turned off, it won't be truly off
 # This is because we want to maintain proper IEEE754 compliance, which we can't do without SSE
 
 if(MSVC)
 
-	add_compile_options(/W4 /WX /MD /MP /GR /D_CRT_SECURE_NO_WARNINGS /Gy)
+	add_compile_options(/MD /MP /GR /D_CRT_SECURE_NO_WARNINGS /Gy)
 
 	if(EnableSIMD)
 		add_compile_options(/d2archSSE42)		# Require SSE4.2
@@ -75,8 +68,6 @@ if(MSVC)
 
 else()
 
-	add_compile_options(-Wall -Wextra -Werror)
-
 	if(EnableSIMD)
 		add_compile_options(-mfpmath=sse -msse -msse2 -msse3 -mssse3 -msse4 -msse4.1 -msse4.2 -mrdrnd -msha -maes -mbmi2 -mf16c)
 	elseif(NOT RelaxFloat)
@@ -89,10 +80,76 @@ else()
 		add_compile_options(-fno-unsafe-math-optimizations)
 	endif()
 
+	# Link time optimization seems to be very slow on linux?
+	# add_compile_options(-flto -fno-fat-lto-objects)
+
+endif()
+
+if(EnableShaderCompiler)
+
+	# Configure DXC
+
+	set(CLANG_BUILD_EXAMPLES OFF CACHE BOOL "")
+	set(CLANG_CL OFF CACHE BOOL "")
+	set(LLVM_INCLUDE_TESTS OFF CACHE BOOL "")
+	set(CLANG_INCLUDE_TESTS OFF CACHE BOOL "")
+	set(LLVM_DEFAULT_TARGET_TRIPLE "dxil-ms-dx" CACHE STRING "")
+	set(LLVM_ENABLE_RTTI ON CACHE BOOL "")
+	set(LLVM_ENABLE_EH ON CACHE BOOL "")
+	set(LLVM_APPEND_VC_REV ON CACHE BOOL "")
+	set(LLVM_OPTIMIZED_TABLEGEN OFF CACHE BOOL "")
+	set(LIBCLANG_BUILD_STATIC ON CACHE BOOL "")
+	set(LLVM_INCLUDE_DOCS OFF CACHE BOOL "")
+	set(LLVM_INCLUDE_EXAMPLES OFF CACHE BOOL "")
+	set(LLVM_TARGETS_TO_BUILD "None" CACHE STRING "")
+	set(HLSL_INCLUDE_TESTS OFF CACHE BOOL "")
+	set(CLANG_ENABLE_STATIC_ANALYZER OFF CACHE BOOL "")
+	set(CLANG_ENABLE_ARCMT OFF CACHE BOOL "")
+	set(SPIRV_BUILD_TESTS OFF CACHE BOOL "")
+	set(ENABLE_SPIRV_CODEGEN ON CACHE BOOL "")
+	set(HLSL_BUILD_DXILCONV OFF CACHE BOOL "")
+	set(HLSL_ENABLE_FIXED_VER OFF CACHE BOOL "")
+	set(HLSL_OFFICIAL_BUILD OFF CACHE BOOL "")
+	set(HLSL_OPTIONAL_PROJS_IN_DEFAULT OFF CACHE BOOL "")
+	
+	set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE BOOL "")
+	set(LLVM_ENABLE_TERMINFO OFF CACHE BOOL "")
+	set(DXC_USE_LIT ON CACHE BOOL "")
+	set(LLVM_ENABLE_ASSERTIONS ON CACHE BOOL "")
+	set(LLVM_LIT_ARGS "-v" CACHE STRING "")
+	set(ENABLE_DXC_STATIC_LINKING ON CACHE BOOL "")
+	set(BUILD_SHARED_LIBS OFF CACHE BOOL "")
+
+	if(NOT MSVC)
+		add_compile_options(-w)		# Remove all those pesky warnings since we can't fix them anyways
+	endif()
+
+	add_subdirectory(external/DirectXShaderCompiler)
+
+endif()
+
+# Use ${HideConsole} to add_executable to hide the console window
+
+if(MSVC)
+	set(HideConsole "WIN32")
+else()
+	set(HideConsole "")
+endif()
+
+# Errors as warnings and maximum warnings should only be used for OxC3 stuff, as DXC won't be able to handle it
+
+if(MSVC)
+	add_compile_options(/W4 /WX)
+else()
+	add_compile_options(-Wall -Wextra -Werror)
 endif()
 
 message("-- Enabling x64 specific optimizations such as CRC32C, AES256 and SHA256 (optional) instructions")
 set(_ARCH "ARCH_X64")
+
+if(ARM)
+	set(_ARCH "ARCH_ARM")
+endif()
 
 if(EnableOxC3CLI)
 
@@ -211,8 +268,7 @@ if(WIN32)
 elseif(APPLE)
 	target_link_libraries(OxC3_types PUBLIC "-framework Security")
 else()
-	target_link_libraries(OxC3_types PUBLIC libm)
-	target_compile_definitions(OxC3_types PUBLIC -D_POSIX_C_SOURCE=200809L -D_DEFAULT_SOURCE)
+	target_link_libraries(OxC3_types PUBLIC m)
 endif()
 
 # Formats
@@ -665,40 +721,6 @@ endif()
 # Shader compiler, useful for baker and runtime if required by the app (though should only be used for editor applications)
 
 if(EnableShaderCompiler)
-
-	# Configure DXC
-
-	set(CLANG_BUILD_EXAMPLES OFF CACHE BOOL "")
-	set(CLANG_CL OFF CACHE BOOL "")
-	set(LLVM_INCLUDE_TESTS OFF CACHE BOOL "")
-	set(CLANG_INCLUDE_TESTS OFF CACHE BOOL "")
-	set(LLVM_DEFAULT_TARGET_TRIPLE "dxil-ms-dx" CACHE STRING "")
-	set(LLVM_ENABLE_RTTI ON CACHE BOOL "")
-	set(LLVM_ENABLE_EH ON CACHE BOOL "")
-	set(LLVM_APPEND_VC_REV ON CACHE BOOL "")
-	set(LLVM_OPTIMIZED_TABLEGEN OFF CACHE BOOL "")
-	set(LIBCLANG_BUILD_STATIC ON CACHE BOOL "")
-	set(LLVM_INCLUDE_DOCS OFF CACHE BOOL "")
-	set(LLVM_INCLUDE_EXAMPLES OFF CACHE BOOL "")
-	set(LLVM_TARGETS_TO_BUILD "None" CACHE STRING "")
-	set(HLSL_INCLUDE_TESTS OFF CACHE BOOL "")
-	set(CLANG_ENABLE_STATIC_ANALYZER OFF CACHE BOOL "")
-	set(CLANG_ENABLE_ARCMT OFF CACHE BOOL "")
-	set(SPIRV_BUILD_TESTS OFF CACHE BOOL "")
-	set(ENABLE_SPIRV_CODEGEN ON CACHE BOOL "")
-	set(HLSL_BUILD_DXILCONV OFF CACHE BOOL "")
-	set(HLSL_ENABLE_FIXED_VER OFF CACHE BOOL "")
-	set(HLSL_OFFICIAL_BUILD OFF CACHE BOOL "")
-	set(HLSL_OPTIONAL_PROJS_IN_DEFAULT OFF CACHE BOOL "")
-	
-	set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE BOOL "")
-	set(LLVM_ENABLE_TERMINFO OFF CACHE BOOL "")
-	set(DXC_USE_LIT ON CACHE BOOL "")
-	set(LLVM_ENABLE_ASSERTIONS ON CACHE BOOL "")
-	set(LLVM_LIT_ARGS "-v" CACHE STRING "")
-	set(ENABLE_DXC_STATIC_LINKING ON CACHE BOOL "")
-
-	add_subdirectory(external/DirectXShaderCompiler)
 
 	# Our parser
 

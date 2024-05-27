@@ -105,7 +105,7 @@ public:
 		return res;
 	}
 
-	inline ~IncludeHandler() {
+	virtual ~IncludeHandler() {
 		ListIncludedFile_freeUnderlying(&includedFiles, alloc);
 		ListU64_free(&isPresent, alloc);
 	}
@@ -149,7 +149,7 @@ public:
 		}
 
 		else gotoIfError2(clean, File_resolve(
-			fileName, &isVirtual, MAX_PATH, Platform_instance.workingDirectory, alloc, &resolved
+			fileName, &isVirtual, 256, Platform_instance.workingDirectory, alloc, &resolved
 		))
 
 		for (; i < includedFiles.length; ++i)
@@ -256,15 +256,16 @@ public:
 						"IncludeHandler::LoadSource CreateBlobFromPinned requires 32-bit buffers max"
 					))
 
-				IncludedFile inc = IncludedFile{
-					.includeInfo = IncludeInfo{
-						.fileSize = (U32) Buffer_length(tempBuffer),
-						.crc32c = crc32c,
-						.timestamp = timestamp,
-						.counter = 1
-					},
-					.globalCounter = 1
+				IncludedFile inc = IncludedFile{};
+				inc.includeInfo = IncludeInfo{
+					.fileSize = (U32) Buffer_length(tempBuffer),
+					.crc32c = crc32c,
+					.timestamp = timestamp,
+					.counter = 1,
+					.file = CharString_createNull()
 				};
+
+				inc.globalCounter = 1;
 
 				//Move buffer to includedData
 
@@ -312,16 +313,17 @@ public:
 
 				crc32c = Buffer_crc32c(CharString_bufferConst(tempFile));
 
-				IncludedFile inc = IncludedFile{
-					.includeInfo = IncludeInfo{
-						.fileSize = (U32) CharString_length(tempFile),
-						.crc32c = crc32c,
-						.counter = 1
-					},
-					.globalCounter = 1
+				IncludedFile inc = IncludedFile{};
+
+				inc.includeInfo = IncludeInfo{
+					.fileSize = (U32) CharString_length(tempFile),
+					.crc32c = crc32c,
+					.timestamp = 0,
+					.counter = 1,
+					.file = resolved
 				};
 
-				inc.includeInfo.file = resolved;
+				inc.globalCounter = 1;
 				inc.data = tempFile;
 
 				gotoIfError2(clean, ListIncludedFile_pushBack(&includedFiles, inc, alloc))
@@ -362,7 +364,7 @@ public:
 		return hr;
 	}
 
-	HRESULT STDMETHODCALLTYPE QueryInterface(REFIID, _COM_Outptr_ void __RPC_FAR* __RPC_FAR*) override {
+	HRESULT STDMETHODCALLTYPE QueryInterface(REFIID, _COM_Outptr_ void**) override {
 		return E_NOINTERFACE;
 	}
 
@@ -370,7 +372,7 @@ public:
 	ULONG STDMETHODCALLTYPE Release() override { return 0; }
 };
 
-Lock lockThread = Lock{ .active = true };
+Lock lockThread = Lock{ .lockedThreadId = 0, .active = true, .pad = { 0 } };
 Bool hasInitialized;
 
 Bool Compiler_setup(Error *e_rr) {
@@ -643,7 +645,8 @@ Bool Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator all
 
 		DxcBuffer buffer{
 			.Ptr = settings.string.ptr,
-			.Size = CharString_length(settings.string)
+			.Size = CharString_length(settings.string),
+			.Encoding = 0
 		};
 
 		HRESULT hr = interfaces->compiler->Compile(
@@ -937,7 +940,8 @@ Bool Compiler_compile(
 
 		DxcBuffer buffer{
 			.Ptr = settings.string.ptr,
-			.Size = CharString_length(settings.string)
+			.Size = CharString_length(settings.string),
+			.Encoding = 0
 		};
 
 		HRESULT hr = interfaces->compiler->Compile(
@@ -982,7 +986,7 @@ Bool Compiler_compile(
 		result->type = ECompileResultType_Binary;
 		result->isSuccess = true;
 
-	} catch (std::exception) {
+	} catch (std::exception&) {
 		retError(clean, Error_invalidState(1, "Compiler_compile() raised an internal exception"))
 	}
 
