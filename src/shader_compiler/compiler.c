@@ -284,6 +284,19 @@ Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *er
 	U64 lineOff = 0;
 	Bool isError = false;
 
+	//Internal compiler error can't be parsed the same way
+	//If this happens, bad stuff is happening
+
+	CharString internalCompileErrorRef = CharString_createRefCStrConst("Internal Compiler error: ");
+
+	if (CharString_equalsStringSensitive(errs, internalCompileErrorRef)) {
+		CompileError cerr = (CompileError) { .error = internalCompileErrorRef };
+		gotoIfError2(clean, ListCompileError_pushBack(errors, cerr, alloc))
+		return true;
+	}
+
+	//Regular parsing
+
 	while(off < CharString_length(errs)) {
 
 		//Find start of next error
