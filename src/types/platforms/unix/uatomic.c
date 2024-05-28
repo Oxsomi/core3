@@ -58,9 +58,9 @@ I64 AtomicI64_sub(AtomicI64 *ptr, I64 value) {
 }
 
 I64 AtomicI64_inc(AtomicI64 *ptr) {
-	return AtomicI64_add(ptr, 1);
+	return AtomicI64_add(ptr, 1) + 1;	//add returns old value, so correct for inc
 }
 
 I64 AtomicI64_dec(AtomicI64 *ptr) {
-	return AtomicI64_sub(ptr, 1);
+	return AtomicI64_sub(ptr, 1) - 1;	//sub returns old value, so correct for dec
 }
