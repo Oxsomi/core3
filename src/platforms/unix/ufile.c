@@ -27,6 +27,7 @@
 #include "platforms/ext/formatx.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/archivex.h"
+#include "platforms/log.h"
 
 #include <dirent.h>
 #include <stdio.h>
@@ -38,6 +39,7 @@ Error File_foreachVirtual(CharString loc, FileCallback callback, void *userData,
 Error File_foreach(CharString loc, FileCallback callback, void *userData, Bool isRecursive) {
 
 	CharString resolved = CharString_createNull();
+	CharString resolvedChild = CharString_createNull();
 	Error err = Error_none();
 	DIR *d = NULL;
 
@@ -68,11 +70,25 @@ Error File_foreach(CharString loc, FileCallback callback, void *userData, Bool i
 
 	while ((dir = readdir(d)) != NULL) {
 
+		CharString dirName = CharString_createRefCStrConst(dir->d_name);
+		U64 dirLen = CharString_length(dirName);
+
+		//. or ..
+
+		if((dirLen == 1 || dirLen == 2) && dirName.ptr[0] == '.') {
+			if(dirLen == 1 || dirName.ptr[1] == '.')
+				continue;
+		}
+
+		gotoIfError(clean, CharString_createCopyx(resolved, &resolvedChild));
+		gotoIfError(clean, CharString_appendx(&resolvedChild, '/'))
+		gotoIfError(clean, CharString_appendStringx(&resolvedChild, dirName))
+
 		struct stat s = (struct stat) { 0 };
-		if(stat(dir->d_name, &s))
+		if(stat(resolvedChild.ptr, &s))
 			gotoIfError(clean, Error_stderr(errno, "File_foreach() failed to query file properties"));
 
-		CharString tmp = CharString_createRefCStrConst(dir->d_name);
+		CharString tmp = CharString_createRefSizedConst(resolvedChild.ptr, CharString_length(resolvedChild), true);
 
 		//Folder parsing
 
@@ -90,6 +106,7 @@ Error File_foreach(CharString loc, FileCallback callback, void *userData, Bool i
 			if(isRecursive)
 				gotoIfError(clean, File_foreach(info.path, callback, userData, true));
 
+			CharString_freex(&resolvedChild);
 			continue;
 		}
 
@@ -104,9 +121,12 @@ Error File_foreach(CharString loc, FileCallback callback, void *userData, Bool i
 		};
 
 		gotoIfError(clean, callback(info, userData));
+		CharString_freex(&resolvedChild);
 	}
 
 clean:
 	closedir(d);
+	CharString_freex(&resolvedChild);
+	CharString_freex(&resolved);
 	return err;
 }

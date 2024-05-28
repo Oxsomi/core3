@@ -45,7 +45,8 @@ I64 AtomicI64_store(AtomicI64 *ptr, I64 value) {
 }
 
 I64 AtomicI64_cmpStore(AtomicI64 *ptr, I64 compare, I64 value) {
-	return atomic_compare_exchange_strong(&ptr->atomic, &compare, value);
+	atomic_compare_exchange_strong(&ptr->atomic, &compare, value);
+	return compare;
 }
 
 I64 AtomicI64_sub(AtomicI64 *ptr, I64 value) {

@@ -91,7 +91,7 @@
 			for(U64 i = 0; i < infos.length; ++i)
 				GraphicsDeviceInfo_print(GraphicsInstanceRef_ptr(instanceRef)->api, &infos.ptr[i], false);
 		}
-
+		
 	clean:
 		ListGraphicsDeviceInfo_freex(&infos);
 		GraphicsInstanceRef_dec(&instanceRef);

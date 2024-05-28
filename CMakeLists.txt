@@ -85,65 +85,6 @@ else()
 
 endif()
 
-if(EnableShaderCompiler)
-
-	# Configure DXC
-
-	set(CLANG_BUILD_EXAMPLES OFF CACHE BOOL "")
-	set(CLANG_CL OFF CACHE BOOL "")
-	set(LLVM_INCLUDE_TESTS OFF CACHE BOOL "")
-	set(CLANG_INCLUDE_TESTS OFF CACHE BOOL "")
-	set(LLVM_DEFAULT_TARGET_TRIPLE "dxil-ms-dx" CACHE STRING "")
-	set(LLVM_ENABLE_RTTI ON CACHE BOOL "")
-	set(LLVM_ENABLE_EH ON CACHE BOOL "")
-	set(LLVM_APPEND_VC_REV ON CACHE BOOL "")
-	set(LLVM_OPTIMIZED_TABLEGEN OFF CACHE BOOL "")
-	set(LIBCLANG_BUILD_STATIC ON CACHE BOOL "")
-	set(LLVM_INCLUDE_DOCS OFF CACHE BOOL "")
-	set(LLVM_INCLUDE_EXAMPLES OFF CACHE BOOL "")
-	set(LLVM_TARGETS_TO_BUILD "None" CACHE STRING "")
-	set(HLSL_INCLUDE_TESTS OFF CACHE BOOL "")
-	set(CLANG_ENABLE_STATIC_ANALYZER OFF CACHE BOOL "")
-	set(CLANG_ENABLE_ARCMT OFF CACHE BOOL "")
-	set(SPIRV_BUILD_TESTS OFF CACHE BOOL "")
-	set(ENABLE_SPIRV_CODEGEN ON CACHE BOOL "")
-	set(HLSL_BUILD_DXILCONV OFF CACHE BOOL "")
-	set(HLSL_ENABLE_FIXED_VER OFF CACHE BOOL "")
-	set(HLSL_OFFICIAL_BUILD OFF CACHE BOOL "")
-	set(HLSL_OPTIONAL_PROJS_IN_DEFAULT OFF CACHE BOOL "")
-	
-	set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE BOOL "")
-	set(LLVM_ENABLE_TERMINFO OFF CACHE BOOL "")
-	set(DXC_USE_LIT ON CACHE BOOL "")
-	set(LLVM_ENABLE_ASSERTIONS ON CACHE BOOL "")
-	set(LLVM_LIT_ARGS "-v" CACHE STRING "")
-	set(ENABLE_DXC_STATIC_LINKING ON CACHE BOOL "")
-	set(BUILD_SHARED_LIBS OFF CACHE BOOL "")
-
-	if(NOT MSVC)
-		add_compile_options(-w)		# Remove all those pesky warnings since we can't fix them anyways
-	endif()
-
-	add_subdirectory(external/DirectXShaderCompiler)
-
-endif()
-
-# Use ${HideConsole} to add_executable to hide the console window
-
-if(MSVC)
-	set(HideConsole "WIN32")
-else()
-	set(HideConsole "")
-endif()
-
-# Errors as warnings and maximum warnings should only be used for OxC3 stuff, as DXC won't be able to handle it
-
-if(MSVC)
-	add_compile_options(/W4 /WX)
-else()
-	add_compile_options(-Wall -Wextra -Werror)
-endif()
-
 message("-- Enabling x64 specific optimizations such as CRC32C, AES256 and SHA256 (optional) instructions")
 set(_ARCH "ARCH_X64")
 
@@ -223,6 +164,73 @@ else()
 	message("-- Enabling Linux support...")
 	set(platform linux)
 	set(_PLATFORM_TYPE PLATFORM_LINUX)
+endif()
+
+# Enable symbols
+
+if("${platform}" STREQUAL "linux")
+	if (CMAKE_BUILD_TYPE STREQUAL "Debug" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
+		set(CMAKE_ENABLE_EXPORTS ON)
+	endif()
+endif()
+
+if(EnableShaderCompiler)
+
+	# Configure DXC
+
+	set(CLANG_BUILD_EXAMPLES OFF CACHE BOOL "")
+	set(CLANG_CL OFF CACHE BOOL "")
+	set(LLVM_INCLUDE_TESTS OFF CACHE BOOL "")
+	set(CLANG_INCLUDE_TESTS OFF CACHE BOOL "")
+	set(LLVM_DEFAULT_TARGET_TRIPLE "dxil-ms-dx" CACHE STRING "")
+	set(LLVM_ENABLE_RTTI ON CACHE BOOL "")
+	set(LLVM_ENABLE_EH ON CACHE BOOL "")
+	set(LLVM_APPEND_VC_REV ON CACHE BOOL "")
+	set(LLVM_OPTIMIZED_TABLEGEN OFF CACHE BOOL "")
+	set(LIBCLANG_BUILD_STATIC ON CACHE BOOL "")
+	set(LLVM_INCLUDE_DOCS OFF CACHE BOOL "")
+	set(LLVM_INCLUDE_EXAMPLES OFF CACHE BOOL "")
+	set(LLVM_TARGETS_TO_BUILD "None" CACHE STRING "")
+	set(HLSL_INCLUDE_TESTS OFF CACHE BOOL "")
+	set(CLANG_ENABLE_STATIC_ANALYZER OFF CACHE BOOL "")
+	set(CLANG_ENABLE_ARCMT OFF CACHE BOOL "")
+	set(SPIRV_BUILD_TESTS OFF CACHE BOOL "")
+	set(ENABLE_SPIRV_CODEGEN ON CACHE BOOL "")
+	set(HLSL_BUILD_DXILCONV OFF CACHE BOOL "")
+	set(HLSL_ENABLE_FIXED_VER OFF CACHE BOOL "")
+	set(HLSL_OFFICIAL_BUILD OFF CACHE BOOL "")
+	set(HLSL_OPTIONAL_PROJS_IN_DEFAULT OFF CACHE BOOL "")
+	
+	set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE BOOL "")
+	set(LLVM_ENABLE_TERMINFO OFF CACHE BOOL "")
+	set(DXC_USE_LIT ON CACHE BOOL "")
+	set(LLVM_ENABLE_ASSERTIONS ON CACHE BOOL "")
+	set(LLVM_LIT_ARGS "-v" CACHE STRING "")
+	set(ENABLE_DXC_STATIC_LINKING ON CACHE BOOL "")
+	set(BUILD_SHARED_LIBS OFF CACHE BOOL "")
+
+	if(NOT MSVC)
+		add_compile_options(-w)		# Remove all those pesky warnings since we can't fix them anyways
+	endif()
+
+	add_subdirectory(external/DirectXShaderCompiler)
+
+endif()
+
+# Use ${HideConsole} to add_executable to hide the console window
+
+if(MSVC)
+	set(HideConsole "WIN32")
+else()
+	set(HideConsole "")
+endif()
+
+# Errors as warnings and maximum warnings should only be used for OxC3 stuff, as DXC won't be able to handle it
+
+if(MSVC)
+	add_compile_options(/W4 /WX)
+else()
+	add_compile_options(-Wall -Wextra -Werror)
 endif()
 
 set(ForceUpdateDeps OFF CACHE BOOL "Force update dependencies")

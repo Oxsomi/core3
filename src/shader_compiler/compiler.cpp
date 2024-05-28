@@ -22,6 +22,7 @@
 #include "shader_compiler/compiler.h"
 #include "platforms/file.h"
 #include "platforms/platform.h"
+#include "platforms/log.h"
 #include "types/error.h"
 #include "types/buffer.h"
 #include "types/allocator.h"
