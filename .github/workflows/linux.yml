@@ -1,0 +1,34 @@
+name: C/C++ CI
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    name: Linux build
+    runs-on: ubuntu-latest
+    env:
+      VULKAN_SDK: C:\VulkanSDK\
+    steps:
+    - uses: actions/checkout@v1
+      with:
+        submodules: recursive
+    - name: Install Vulkan SDK
+      uses: humbletim/install-vulkan-sdk@v1.1.1
+      with:
+        cache: true
+    - name: Release but no SIMD, not supported yet
+      run: sh D:\a\core3\core3\build.sh Release Off -DCLIGraphics=Off
+    - name: Debug but no SIMD, not supported yet
+      run: sh D:\a\core3\core3\build.sh Debug Off -DCLIGraphics=Off
+    - uses: actions/setup-ruby@v1
+    - name: Send Webhook Notification
+      if: always()
+      env:
+        JOB_STATUS: ${{ job.status }}
+        WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+        HOOK_OS_NAME: ${{ runner.os }}
+        WORKFLOW_NAME: ${{ github.workflow }}
+      run: |
+        git clone https://github.com/DiscordHooks/github-actions-discord-webhook.git webhook
+        bash webhook/send.sh $JOB_STATUS $WEBHOOK_URL
+      shell: bash
