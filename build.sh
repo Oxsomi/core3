@@ -21,17 +21,22 @@ cd "$currPath/builds"
 cmake -DCMAKE_BUILD_TYPE=$1 .. -DEnableSIMD=$2 -DForceFloatFallback=Off -DEnableTests=On -DEnableOxC3CLI=On -DEnableShaderCompiler=On ${@:3}
 cmake --build . --parallel $(($(nproc) - 1)) --config $1
 
+if [ ! -f "$currPath/builds/bin/$1" ]; then
+	binDir="$currPath/builds/bin"
+else
+	binDir="$currPath/builds/bin/$1" # Windows/MSVC uses bin/$1 (Debug, Release, etc.)
+fi
+
 # Run unit test
 
 cd "$prevPath"
 
 mkdir -p builds/local
-cp -a "$currPath/builds/bin/$1/." builds/local
-echo $currPath/builds/bin/$1
+cp -a "$binDir/." builds/local
 
 mkdir -p builds/local
 cd builds/local
-./OxC3_test.exe
+./OxC3_test
 $currPath/tools/test.sh
 cd ../../
 

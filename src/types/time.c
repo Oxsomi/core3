@@ -27,8 +27,8 @@
 #ifdef _WIN32
 	#include <intrin.h>
 	#define timegm _mkgmtime
-	#define localtime_r(a, b) localtime_s(b, a)
-	#define gmtime_r(a, b) gmtime_s(b, a)
+	#define localtime_r(a, b) (!localtime_s(b, a))
+	#define gmtime_r(a, b) (!gmtime_s(b, a))
 #else
 	#include <x86intrin.h>
 #endif
@@ -103,9 +103,9 @@ void Time_format(Ns time, TimeFormat timeString, Bool isLocalTime) {
 	Bool success = false;
 
 	if(isLocalTime)
-		success = !localtime_r(&inSecs, &t);
+		success = (Bool) localtime_r(&inSecs, &t);
 
-	else success = !gmtime_r(&inSecs, &t);
+	else success = (Bool) gmtime_r(&inSecs, &t);
 
 	Buffer_copy(
 		Buffer_createRef(timeString, SHORTSTRING_LEN),

@@ -109,6 +109,7 @@ int main() {
 
 	if (!(Time_parseFormat(&now2, nowStr, false)) || now2 != now) {
 		Log_errorLn(alloc, "Failed unit test: Time_parseFormat or Time_format is broken");
+		Log_errorLn(alloc, "%s was parsed but retrieved timestamps %"PRIu64" and %"PRIu64, nowStr, now, now2);
 		return 1;
 	}
 
