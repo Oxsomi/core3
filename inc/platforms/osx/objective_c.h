@@ -37,8 +37,8 @@ typedef enum EObjCClass {
 	EObjCClass_Count
 } EObjCClass;
 
-static const C8 *EObjCClass_names[(int)EObjCClass_Count];
-static Class EObjCClass_obj[(int)EObjCClass_Count];
+extern const C8 *EObjCClass_names[(int)EObjCClass_Count];
+extern Class EObjCClass_obj[(int)EObjCClass_Count];
 
 Class clsNSString();
 Class clsNSAutoreleasePool();
@@ -61,8 +61,8 @@ typedef enum EObjCFunc {
 	EObjCFunc_Count
 } EObjCFunc;
 
-static const C8 *EObjCFunc_names[(int)EObjCFunc_Count];
-static SEL EObjCFunc_obj[(int)EObjCFunc_Count];
+extern const C8 *EObjCFunc_names[(int)EObjCFunc_Count];
+extern SEL EObjCFunc_obj[(int)EObjCFunc_Count];
 
 SEL selUTF8String();
 SEL selSetTitle();

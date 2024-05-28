@@ -25,5 +25,6 @@
 Error File_loadVirtualInternal1(FileLoadVirtual *userData, CharString loc, Bool allowLoad) {
 	(void)userData;
 	(void)loc;
+	(void)allowLoad;
 	return Error_unimplemented(0, "File_loadVirtualInternal() not implemented in OSX yet");		//TODO:
 }

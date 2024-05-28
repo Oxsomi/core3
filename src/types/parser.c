@@ -301,7 +301,7 @@ Bool Parser_visit(Parser *parser, U32 lexerTokenId, U32 lexerTokenCount, Allocat
 			//Symbols need to be split into multiple tokens, because someone can use &=~ for example
 			//(two operators in one lexer token)
 
-			default:
+			default: {
 
 				U64 subTokenOffset = 0;
 
@@ -322,6 +322,7 @@ Bool Parser_visit(Parser *parser, U32 lexerTokenId, U32 lexerTokenCount, Allocat
 
 					gotoIfError2(clean, ListToken_pushBack(&parser->tokens, tok, alloc))
 				}
+			}
 		}
 	}
 

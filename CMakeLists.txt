@@ -80,6 +80,8 @@ else()
 		add_compile_options(-fno-unsafe-math-optimizations)
 	endif()
 
+	add_compile_options(-fms-extensions)	# Needed by DXC for uuids
+
 	# Link time optimization seems to be very slow on linux?
 	# add_compile_options(-flto -fno-fat-lto-objects)
 
@@ -384,10 +386,11 @@ if("${graphicsApi}" STREQUAL "vulkan")
 		target_link_directories(OxC3_graphics PUBLIC $ENV{VULKAN_SDK}/lib)
 	else()
 		find_package(Vulkan REQUIRED)
+		include_directories(OxC3_graphics PUBLIC /usr/local/include)
 	endif()
 
 	if(WIN32)
-			set(VULKAN_LIB vulkan-1)
+		set(VULKAN_LIB vulkan-1)
 	else()
 		set(VULKAN_LIB vulkan)
 	endif()
@@ -739,7 +742,7 @@ if(EnableShaderCompiler)
 	target_link_libraries(OxC3_shader_compiler PUBLIC OxC3_platforms dxcompiler)
 
 	target_include_directories(OxC3_shader_compiler PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/external/nvapi")
-	target_include_directories(OxC3_shader_compiler PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/external/DirectXShaderCompiler/include")
+	target_include_directories(OxC3_shader_compiler PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/external")
 
 endif()
 

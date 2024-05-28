@@ -71,7 +71,7 @@ Error Platform_initUnixExt() {
 		if(!sel)
 			return Error_invalidState(0, "Platform_initUnixExt() couldn't get SEL / function");
 
-		EObjCFunc_obj[i] = c;
+		EObjCFunc_obj[i] = sel;
 	}
 
 	Log_debugLnx("Complete get functions!");
@@ -104,7 +104,7 @@ Error Platform_initUnixExt() {
 
 	//Instantiate application with our delegate
 
-	ObjC_sendId(clsNSApplication(), selSharedApplication());
+	ObjC_sendId((id)clsNSApplication(), selSharedApplication());
 
 	if(!NSApp)
 		return Error_invalidState(0, "Platform_initUnixExt() failed to create NSApplication");

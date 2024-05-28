@@ -36,7 +36,7 @@
 #endif
 
 #define ENABLE_DXC_STATIC_LINKING
-#include <dxc/dxcapi.h>
+#include <DirectXShaderCompiler/include/dxc/dxcapi.h>
 #include <exception>
 
 const C8 *resources =
