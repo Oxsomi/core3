@@ -155,6 +155,13 @@ Error File_resolve(
 			continue;
 		}
 
+		//If we start with /, it's still valid for non Windows systems.
+
+		#ifndef _WIN32
+			if(!i && CharString_isEmpty(res.ptr[i]))
+				continue;
+		#endif
+
 		//Validate file name
 
 		if (!CharString_isValidFileName(res.ptr[i])) {

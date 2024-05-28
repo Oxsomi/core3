@@ -28,17 +28,22 @@ fi
 
 cmake --build . --parallel $threads --config $1
 
+if [ ! -f "$currPath/builds/bin/$1" ]; then
+	binDir="$currPath/builds/bin"
+else
+	binDir="$currPath/builds/bin/$1" # Windows/MSVC uses bin/$1 (Debug, Release, etc.)
+fi
+
 # Run unit test
 
 cd "$prevPath"
 
 mkdir -p builds/local
-cp -a "$currPath/builds/bin/$1/." builds/local
-echo $currPath/builds/bin/$1
+cp -a "$binDir/." builds/local
 
 mkdir -p builds/local
 cd builds/local
-./OxC3_test.exe
+./OxC3_test
 $currPath/tools/test.sh
 cd ../../
 
