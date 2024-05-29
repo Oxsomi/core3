@@ -47,7 +47,16 @@
 
 #define TListNamedBaseImpl(Name) 																						\
 																														\
-GenericList Name##_toList(Name t) { return ListVoid_toList(*(const ListVoid*)&t, sizeof(Name##_Type)); }				\
+GenericList Name##_toList(Name t) {																						\
+	return ListVoid_toList(																								\
+		(ListVoid) { 																									\
+			.ptr = (const void*) t.ptr,																					\
+			.length = t.length,																							\
+			.capacityAndRefInfo = t.capacityAndRefInfo																	\
+		},																												\
+		sizeof(Name##_Type)																								\
+	);																													\
+}																														\
 																														\
 Error Name##_fromList(GenericList list, Name *result) { 																\
 	return ListVoid_fromList(list, sizeof(Name##_Type), (ListVoid*)result); 											\

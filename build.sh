@@ -38,14 +38,18 @@ fi
 
 cd "$prevPath"
 
-tree -d $VULKAN_SDK
-
 mkdir -p builds/local
 cp -a "$binDir/." builds/local
 
+if [ "$(expr substr $(uname -s) 1 10)" == "MINGW64_NT" ]; then
+	executableName=./OxC3_test.exe
+else 
+	executableName=./OxC3_test
+fi
+
 mkdir -p builds/local
 cd builds/local
-./OxC3_test
+$executableName
 $currPath/tools/test.sh
 cd ../../
 
