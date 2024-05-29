@@ -165,8 +165,10 @@ Error T##_mod(T v, T mod, T *res) { 														\
 	if(!res)																				\
 		return Error_nullPointer(1, #T "_mod()::res is required");							\
 																							\
+	const void *vptr = &v;																	\
+																							\
 	if(!mod)																				\
-		return Error_divideByZero(0, *(const TInt*) &v, 0, #T "_mod() division by zero");	\
+		return Error_divideByZero(0, *(const TInt*) vptr, 0, #T "_mod() division by zero");	\
 																							\
 	T r = fmod##suffix(v, mod); 															\
 																							\
