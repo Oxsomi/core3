@@ -49,7 +49,6 @@ fi
 
 mkdir -p builds/local
 cd builds/local
-echo $PWD and $binDir
 $executableName
 $currPath/tools/test.sh
 cd ../../

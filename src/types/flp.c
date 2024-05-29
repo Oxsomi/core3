@@ -319,21 +319,22 @@ U64 EFloatType_convert(EFloatType type, U64 v, EFloatType conversionType) {
 
 		//Hardware support
 
+		const void *vptr = &v;
+
 		if (type == EFloatType_F32 && conversionType == EFloatType_F64) {
 
-			const U32 v32 = (U32)v;
-			const F32 f32 = *(const F32*)&v32;
+			const F32 f32 = *(const F32*)vptr;
 			const F64 f64 = (F64) f32;
 
-			return *(const U64*)&f64;
+			const void *f64v = &f64;
+			return *(const U64*)f64v;
 		}
 
 		if (type == EFloatType_F64 && conversionType == EFloatType_F32) {
-
-			const F64 f64 = *(const F64*)&v;
+			const F64 f64 = *(const F64*)vptr;
 			const F32 f32 = (F32) f64;
-
-			return *(const U32*)&f32;
+			const void *f32v = &f32;
+			return *(const U32*)f32v;
 		}
 
 		#if _SIMD == SIMD_SSE
@@ -419,7 +420,8 @@ a b##_cast##a(b v) {												\
 																	\
 	v64 = EFloatType_convert(EFloatType_##b, v64, EFloatType_##a);	\
 																	\
-	return *(const a*)&v64;											\
+	vptr = &v64;													\
+	return *(const a*)vptr;											\
 }
 
 #define EFloatType_cast(a)		\
