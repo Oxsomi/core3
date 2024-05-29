@@ -120,11 +120,14 @@ F32x4 F32x4_create1(F32 x) { return F32x4_create4(x, 0, 0, 0); }
 I32x2 I32x2_create1(I32 x) { return I32x2_create2(x, 0); }
 F32x2 F32x2_create1(F32 x) { return F32x2_create2(x, 0); }
 
-I32x4 I32x4_createFromU64x2(U64 i0, U64 i1) {
+typedef union I32x4_U64x2 {
 	I32x4 v;
-	((U64*)&v)[0] = i0;
-	((U64*)&v)[1] = i1;
-	return v;
+	U64 v2[2];
+} I32x4_U64x2;
+
+I32x4 I32x4_createFromU64x2(U64 i0, U64 i1) {
+	I32x4_U64x2 v = (I32x4_U64x2) { .v2 = { i0, i1 } };
+	return v.v;
 }
 
 I32x4 I32x4_xxxx4(I32 x) { return I32x4_create4(x, x, x, x); }
