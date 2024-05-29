@@ -522,7 +522,7 @@ Error GenericList_eraseAllIndices(GenericList *list, ListU64 indices) {
 	if(!indices.length || !list->length)
 		return Error_none();
 
-	if(!GenericList_sortU64(ListVoid_toList(*(const ListVoid*)&indices, sizeof(U64))))
+	if(!GenericList_sortU64(ListU64_toList(indices)))
 		return Error_invalidParameter(1, 0, "GenericList_eraseAllIndices()::indices sort failed");
 
 	//Ensure none of them reference out of bounds or are duplicate
