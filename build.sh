@@ -18,7 +18,7 @@ prevPath=$PWD
 
 mkdir -p $currPath/builds
 cd "$currPath/builds"
-cmake -DCMAKE_BUILD_TYPE=$1 .. -DEnableSIMD=$2 -DForceFloatFallback=Off -DEnableTests=On -DEnableOxC3CLI=On -DEnableShaderCompiler=On $(eval x=\$$(($#-3)))
+cmake -DCMAKE_BUILD_TYPE=$1 .. -DEnableSIMD=$2 -DForceFloatFallback=Off -DEnableTests=On -DEnableOxC3CLI=On -DEnableShaderCompiler=On $(eval x=\$$(($#-2)))
 
 if [ "$(uname)" == "Darwin" ]; then
 	threads=$(($(sysctl -n hw.logicalcpu) - 1))
