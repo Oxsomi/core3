@@ -244,11 +244,17 @@ if(EnableShaderCompiler)
 		endif()
 	endif()
 
+	set(backupFlagsCpp ${CMAKE_CXX_FLAGS})
+	set(backupFlagsC ${CMAKE_C_FLAGS})
+
 	if(NOT MSVC)
 		add_compile_options(-w)		# Remove all those pesky warnings since we can't fix them anyways
 	endif()
 
 	add_subdirectory(external/DirectXShaderCompiler)
+
+	set(CMAKE_CXX_FLAGS ${backupFlagsCpp})
+	set(CMAKE_C_FLAGS ${backupFlagsC})
 
 endif()
 
