@@ -223,6 +223,12 @@ if(EnableShaderCompiler)
 	set(LLVM_LIT_ARGS "-v" CACHE STRING "")
 	set(ENABLE_DXC_STATIC_LINKING ON CACHE BOOL "")
 	set(BUILD_SHARED_LIBS OFF CACHE BOOL "")
+	
+	if(ARM)
+		set(DLLVM_TARGETS_TO_BUILD "AArch64" CACHE STRING "")
+	else()
+		set(DLLVM_TARGETS_TO_BUILD "AMDGPU" CACHE STRING "")
+	endif()
 
 	if(NOT MSVC)
 		add_compile_options(-w)		# Remove all those pesky warnings since we can't fix them anyways
