@@ -165,6 +165,15 @@ Error GraphicsInstance_createExt(GraphicsApplicationInfo info, GraphicsInstanceR
 	gotoIfError(clean, ListConstC8_pushBackx(&enabledExtensions, "VK_KHR_get_physical_device_properties2"))
 	gotoIfError(clean, ListConstC8_pushBackx(&enabledExtensions, "VK_KHR_external_memory_capabilities"))
 
+	//MoltenVK requires us to enable portability enumeration
+
+	Bool isMoltenVk = false;
+
+	#if _PLATFORM_TYPE == PLATFORM_OSX || _PLATFORM_TYPE == PLATFORM_IOS
+		gotoIfError(clean, ListConstC8_pushBackx(&enabledExtensions, "VK_KHR_portability_enumeration"))
+		isMoltenVk = true;
+	#endif
+
 	//Enable so we can use swapchain khr
 
 	gotoIfError(clean, ListConstC8_pushBackx(&enabledExtensions, "VK_KHR_surface"))
@@ -192,6 +201,9 @@ Error GraphicsInstance_createExt(GraphicsApplicationInfo info, GraphicsInstanceR
 		.enabledExtensionCount = (U32) enabledExtensions.length,
 		.ppEnabledExtensionNames = enabledExtensions.ptr
 	};
+
+	if(isMoltenVk)
+		instanceInfo.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
 
 	if(instance->flags & EGraphicsInstanceFlags_IsDebug) {
 

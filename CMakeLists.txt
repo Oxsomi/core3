@@ -421,20 +421,26 @@ target_link_libraries(OxC3_graphics PUBLIC OxC3_platforms)
 
 if("${graphicsApi}" STREQUAL "vulkan")
 
-	if(DEFINED ENV{VULKAN_SDK})
-		include_directories(OxC3_graphics PUBLIC $ENV{VULKAN_SDK}/include)
-		target_link_directories(OxC3_graphics PUBLIC $ENV{VULKAN_SDK}/lib)
-	else()
+	if(NOT DEFINED ENV{VULKAN_SDK})
+
 		find_package(Vulkan REQUIRED)
+
+		if(WIN32 OR APPLE)
+			message(FATAL_ERROR "Apple and Windows need VULKAN_SDK to be set")
+		endif()
+
 	endif()
 
 	if(WIN32)
-		set(VULKAN_LIB vulkan-1)
-	else if("${platform}" STREQUAL "osx")
-		include_directories(OxC3_graphics PUBLIC /usr/local/include)
-		set(VULKAN_LIB "-framework vulkan")
+		include_directories(OxC3_graphics PUBLIC $ENV{VULKAN_SDK}/include)
+		target_link_directories(OxC3_graphics PUBLIC $ENV{VULKAN_SDK}/lib)
+		target_link_libraries(OxC3_graphics PUBLIC vulkan-1)
+	elseif("${platform}" STREQUAL "osx")
+		include_directories(OxC3_graphics PUBLIC $ENV{VULKAN_SDK}/macOS/include)
+		target_link_directories(OxC3_graphics PUBLIC $ENV{VULKAN_SDK}/macOS/lib)
+		target_link_libraries(OxC3_graphics PUBLIC vulkan)
 	else()
-		set(VULKAN_LIB vulkan)
+		target_link_libraries(OxC3_graphics PUBLIC vulkan)
 	endif()
 
 	if("${platform}" STREQUAL "windows")
@@ -450,8 +456,6 @@ if("${graphicsApi}" STREQUAL "vulkan")
 	else()
 		message(FATAL_ERROR "Platform not supported for Vulkan yet: ${platform}")
 	endif()
-
-	target_link_libraries(OxC3_graphics PUBLIC ${VULKAN_LIB})
 
 # DirectX setup
 

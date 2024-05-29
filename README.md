@@ -59,7 +59,7 @@ One of the useful things about C is that files are incredibly easy to compile an
 
 - CMake >=3.13.
 - (Optional on Windows): Vulkan SDK (latest preferred, but at least 1.3.226).
-- If using Vulkan SDK on OSX, make sure to set envar MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS to 1. This can be done in the ~/.bash_profile file by doing export MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS=1
+- If using Vulkan SDK on OSX, make sure to set envar MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS to 1. This can be done in the ~/.bash_profile file by doing export MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS=1, also set VULKAN_SDK to the right directory there.
 - (Required on Windows for Git Bash, otherwise optional): Git or any tool that can work with GitHub.
 - C++ and C compiler such as MSVC or g++/gcc. C++ is only used for some dependencies that can't use C such as DXC.
 

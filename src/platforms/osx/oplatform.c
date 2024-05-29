@@ -44,7 +44,14 @@ Bool Platform_signalReady(AppDelegate *self, SEL cmd, id notif) {
 
 //Initialize all ObjectiveC classes and functions
 
+Class EObjCClass_obj[(int)EObjCClass_Count];
+SEL EObjCFunc_obj[(int)EObjCFunc_Count];
+
 Error Platform_initUnixExt() {
+
+	return Error_none();
+
+	//TODO:
 
 	Log_debugLnx("Start!");
 
