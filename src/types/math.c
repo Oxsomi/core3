@@ -210,8 +210,10 @@ Error T##_pow2(T v, T *res) { 																\
 		return Error_nullPointer(1, #T "_pow2()::res is required");							\
 																							\
 	*res = v * v; 																			\
+																							\
+	const void *rPtr = res, *vPtr = &v;														\
 	return !T##_isValid(*res) ? Error_overflow(												\
-		0, *(const TInt*)&v, *(const TInt*)res, #T "_pow2() generated an inf"				\
+		0, *(const TInt*)vPtr, *(const TInt*)rPtr, #T "_pow2() generated an inf"			\
 	) : Error_none();																		\
 }																							\
 																							\
@@ -221,8 +223,10 @@ Error T##_pow3(T v, T *res) { 																\
 		return Error_nullPointer(1, #T "_pow3()::res is required");							\
 																							\
 	*res = v * v * v;																		\
+																							\
+	const void *rPtr = res, *vPtr = &v;														\
 	return !T##_isValid(*res) ? Error_overflow(												\
-		0, *(const TInt*)&v, *(const TInt*)res, #T "_pow3() generated an inf"				\
+		0, *(const TInt*)vPtr, *(const TInt*)rPtr, #T "_pow3() generated an inf"			\
 	) : Error_none();																		\
 }																							\
 																							\
@@ -234,8 +238,9 @@ Error T##_pow4(T v, T *res) { 																\
 	*res = v * v;																			\
 	*res *= *res;																			\
 																							\
+	const void *rPtr = res, *vPtr = &v;														\
 	return !T##_isValid(*res) ? Error_overflow(												\
-		0, *(const TInt*)&v, *(const TInt*)res, #T "_pow4() generated an inf"				\
+		0, *(const TInt*)vPtr, *(const TInt*)rPtr, #T "_pow4() generated an inf"			\
 	) : Error_none();																		\
 }																							\
 																							\
@@ -248,18 +253,20 @@ Error T##_pow5(T v, T *res) { 																\
 	*res *= *res; 																			\
 	*res *= v;																				\
 																							\
+	const void *rPtr = res, *vPtr = &v;														\
 	return !T##_isValid(*res) ? Error_overflow(												\
-		0, *(const TInt*)&v, *(const TInt*)res, #T "_pow5() generated an inf"				\
+		0,*(const TInt*)vPtr, *(const TInt*)rPtr, #T "_pow5() generated an inf"				\
 	) : Error_none();																		\
 }																							\
 																							\
 Error T##_pow(T v, T exp, T *res) { 														\
 																							\
 	T r = pow##suffix(v, exp); 																\
+	const void *rPtr = &r, *vPtr = &v;														\
 																							\
 	if(!T##_isValid(r))																		\
 		return Error_overflow(																\
-			0, *(const TInt*)&v, *(const TInt*)res, #T "_pow() generated an inf"			\
+			0, *(const TInt*)vPtr, *(const TInt*)rPtr, #T "_pow() generated an inf"			\
 		);																					\
 																							\
 	*res = r;																				\
