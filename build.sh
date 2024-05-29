@@ -16,6 +16,10 @@ currPath=`dirname "$0"`
 currPath=`( cd "$currPath" && pwd )`
 prevPath=$PWD
 
+if [ "$(uname)" == "Darwin" ]; then
+	find $VULKAN_SDK		# Debug vulkan sdk layout
+fi
+
 mkdir -p $currPath/builds
 cd "$currPath/builds"
 cmake -DCMAKE_BUILD_TYPE=$1 .. -DEnableSIMD=$2 -DForceFloatFallback=Off -DEnableTests=On -DEnableOxC3CLI=On -DEnableShaderCompiler=On ${@:3}

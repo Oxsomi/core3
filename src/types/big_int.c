@@ -756,20 +756,27 @@ Buffer BigInt_buffer(BigInt b) { return Buffer_createRefConst(b.data, BigInt_byt
 U16 BigInt_byteCount(BigInt b) { return (U16)(b.length * sizeof(U64)); }
 U16 BigInt_bitCount(BigInt b) { return BigInt_byteCount(b) * 8; }
 
+typedef union BitScanOpt {
+	U64 a64;
+	U32 a32[2];
+	U16 a16[4];
+	U8 a8[8];
+} BitScanOpt;
+
 U16 BigInt_bitScan(BigInt ai) {
 
 	for (U64 i = ai.length - 1; i != U64_MAX; --i) {
 
-		U64 a = ai.data[i];
+		BitScanOpt a = (BitScanOpt) { .a64 = ai.data[i] };
 
-		U64 offset = (Bool)((const U32*)&a)[1];
+		U64 offset = (Bool) a.a32[1];
 		offset <<= 1;
 
-		offset |= (Bool)((const U16*)&a)[offset + 1];
+		offset |= (Bool) a.a16[offset + 1];
 		offset <<= 1;
 
-		offset |= (Bool)((const U8*)&a)[offset + 1];
-		const U8 b = ((const U8*)&a)[offset];
+		offset |= (Bool) a.a8[offset + 1];
+		const U8 b = a.a8[offset];
 		offset <<= 1;
 
 		offset |= (Bool)(b >> 4);
@@ -780,7 +787,7 @@ U16 BigInt_bitScan(BigInt ai) {
 
 		offset |= (Bool)((b >> ((offset & 6) + 1)) & 1);
 
-		if((a >> offset) & 1)
+		if((a.a64 >> offset) & 1)
 			return (U16)(i * 64 + offset);
 	}
 

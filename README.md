@@ -1,11 +1,11 @@
 # OxC3 (Oxsomi core 3 0.2)
-| Platforms | Vulkan/MoltenVK support                                      | Native API support                                           |
-| --------- | ------------------------------------------------------------ | ------------------------------------------------------------ |
-| Windows   | **Vulkan**: ![example workflow](https://github.com/Oxsomi/core3/actions/workflows/windows.yml/badge.svg) | **D3D12**: ![example workflow](https://github.com/Oxsomi/core3/actions/workflows/windows_d3d12.yml/badge.svg) |
-| Mac OS X  | **MolenVK**: **Unimplemented**                               | **Metal**: **Unimplemented**                                 |
-| Linux     | **Vulkan**: **Unimplemented**                                | N/A                                                          |
-| Android   | **Vulkan**: **Unimplemented**                                | N/A                                                          |
-| iOS       | **MoltenVK**: **Unimplemented**                              | **Metal**: **Unimplemented**                                 |
+| Platforms | x64 -> Vulkan                                                | x64 -> Native API                                            | ARM -> Vulkan | ARM -> Native API      |
+| --------- | ------------------------------------------------------------ | ------------------------------------------------------------ | ------------- | ---------------------- |
+| Windows   | ![example workflow](https://github.com/Oxsomi/core3/actions/workflows/windows.yml/badge.svg) | **D3D12**: ![example workflow](https://github.com/Oxsomi/core3/actions/workflows/windows_d3d12.yml/badge.svg) | **Failing**   | **D3D12**: **Failing** |
+| Mac OS X  | ![example workflow](https://github.com/Oxsomi/core3/actions/workflows/osx.yml/badge.svg) | **Metal**: **TBD**                                           | **Failing**   | **Metal**: **TBD**     |
+| Linux     | ![example workflow](https://github.com/Oxsomi/core3/actions/workflows/linux.yml/badge.svg) | N/A                                                          | **Failing**   | N/A                    |
+| Android   | **TBD**                                                      | N/A                                                          | **TBD**       | N/A                    |
+| iOS       | **TBD**                                                      | **Metal**: **TBD**                                           | **TBD**       | **Metal**: **TBD**     |
 
 OxC3 (0xC3 or Oxsomi core 3) is the successor to O(x)somi core v2 and v1. Specifically it combines the ostlc (standard template library), owc (window core) and ogc (graphics core). Focused more on being minimal abstraction compared to the predecessors by using C17 instead of C++20. Written so it can be wrapped with other languages (bindings) or even a VM in the future. Could also provide a C++20 layer for easier usage, such as operator overloads.
 
