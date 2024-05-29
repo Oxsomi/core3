@@ -21,8 +21,17 @@
 #include "types/vec.h"
 #include "types/type_cast.h"
 
-F32x4 F32x4_bitsI32x4(I32x4 a) { return *(const F32x4*) &a; }	//Convert raw bits to data type
-I32x4 I32x4_bitsF32x4(F32x4 a) { return *(const I32x4*) &a; }	//Convert raw bits to data type
+//Convert raw bits to data type
+
+F32x4 F32x4_bitsI32x4(I32x4 a) {
+	const void *aptr = &a;
+	return *(const F32x4*) aptr;
+}
+
+I32x4 I32x4_bitsF32x4(F32x4 a) {
+	const void *aptr = &a;
+	return *(const I32x4*) aptr;
+}
 
 //Obtain sign (-1 if <0, otherwise 1)
 //(a < 0) * 2 + 1;
