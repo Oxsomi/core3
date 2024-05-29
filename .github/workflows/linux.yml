@@ -15,9 +15,9 @@ jobs:
       with:
         cache: true
     - name: Release but no SIMD, not supported yet
-      run: sh /home/runner/work/core3/core3/build.sh Release Off -DCLIGraphics=Off
+      run: bash /home/runner/work/core3/core3/build.sh Release Off -DCLIGraphics=Off
     - name: Debug but no SIMD, not supported yet
-      run: sh /home/runner/work/core3/core3/build.sh Debug Off -DCLIGraphics=Off
+      run: bash /home/runner/work/core3/core3/build.sh Debug Off -DCLIGraphics=Off
     - uses: actions/setup-ruby@v1
     - name: Send Webhook Notification
       if: always()

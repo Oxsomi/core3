@@ -11,9 +11,9 @@ jobs:
       with:
         submodules: recursive
     - name: build for fast check
-      run: sh D:\a\core3\core3\build.sh Release On -DForceVulkan=Off -DCLIGraphics=Off
+      run: bash D:\a\core3\core3\build.sh Release On -DForceVulkan=Off -DCLIGraphics=Off
     - name: build for debug check
-      run: sh D:\a\core3\core3\build.sh Debug On -DForceVulkan=Off -DCLIGraphics=Off
+      run: bash D:\a\core3\core3\build.sh Debug On -DForceVulkan=Off -DCLIGraphics=Off
     - uses: actions/setup-ruby@v1
     - name: Send Webhook Notification
       if: always()
