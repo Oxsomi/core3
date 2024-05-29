@@ -242,7 +242,7 @@ void AESEncryptionContext_finish(AESEncryptionContext *ctx, const Buffer additio
 	lengths.arr[0] = U64_swapEndianness(Buffer_length(additionalData) << 3);
 	lengths.arr[1] = U64_swapEndianness(Buffer_length(target) << 3);
 
-	ctx->tag = AESEncryptionContext_ghash(I32x4_xor(ctx->tag, lengths), ctx->ghashLut);
+	ctx->tag = AESEncryptionContext_ghash(I32x4_xor(ctx->tag, lengths.vec), ctx->ghashLut);
 
 	//Finish up by adding the iv into the key (this is already has blockId 1 in it)
 
