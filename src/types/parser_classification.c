@@ -268,6 +268,9 @@ Bool Parser_classifyType(Parser *parser, U32 *i, U32 parent, Allocator alloc, Er
 			break;
 	}
 
+	(void) modifiers;
+	(void) typeModifiers;
+
 	//T<F32, F32>
 	//T
 	//^

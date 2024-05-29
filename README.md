@@ -61,13 +61,13 @@ One of the useful things about C is that files are incredibly easy to compile an
 - (Optional on Windows): Vulkan SDK (latest preferred, but at least 1.3.226).
 - If using Vulkan SDK on OSX, make sure to set envar MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS to 1. This can be done in the ~/.bash_profile file by doing export MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS=1, also set VULKAN_SDK to the right directory there.
 - (Required on Windows for Git Bash, otherwise optional): Git or any tool that can work with GitHub.
-- C++ and C compiler such as MSVC or g++/gcc. C++ is only used for some dependencies that can't use C such as DXC.
+- C++ and C compiler such as MSVC, clang or g++/gcc. C++ is only used for some dependencies that can't use C such as DXC.
 
 ## Running requirements
 
 - Windows.
 - A 64-bit CPU.
-  - Currently only x64 (AMD64) is supported. Though ARM could be supported too, by turning off SIMD (**not recommended for production builds!!**).
+  - Currently only x64 (AMD64) is supported. Though ARM could be supported too, by turning off shader compilation and SIMD (**not recommended for production builds!!**). The shader compiler currently is the only thing that doesn't support ARM if SIMD is turned off.
   - Even though SSE4.2+ is recommended, this can be explicitly turned off. SSE can only be turned off if relax float is turned off; this is because normal floats (without SSE) aren't always IEEE754 compliant. SIMD option requires SSE4.2/SSE4.1/SSE2/SSE/SSE3/SSSE3, AES, PCLMULQDQ, BMI1 and RDRAND extensions.
   - Recommended CPUs are AMD Zen, Intel Rocket lake (Gen 11) and up. This is because SHA256 is natively supported on them. These CPUs are faster and more secure. Minimum requirements for SSE build is Intel Broadwell+ (Gen 6+) and AMD Zen+ (1xxx+). **The SSE-less build doesn't have any security guarantees for encryption, as these are software based instead of hardware based. Making them less secure, since no time and effort was put into preventing cache timing attacks.** SSE-less build only exists for emulation purposes or for debugging, it's also notoriously slow since it doesn't use any intrinsics (SHA, AES, CRC, SIMD, etc.). The SSE-less build is also meant for easily porting to a new system without having to support the entire SIMD there first, before finally supporting SIMD after the base has been ported.
 
@@ -139,7 +139,7 @@ D3D12:
 	D3D12/D3D12Core.dll
 	D3D12/d3d12SDKLayers.dll
 	amd_ags_x64.dll
-	d3d10warp.dll
+	(debug only) d3d10warp.dll
 	OxC3.exe
 	...
 

@@ -38,6 +38,8 @@ fi
 
 cd "$prevPath"
 
+tree -d $VULKAN_SDK
+
 mkdir -p builds/local
 cp -a "$binDir/." builds/local
 
