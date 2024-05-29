@@ -28,7 +28,7 @@ fi
 
 cmake --build . --parallel $threads --config $1
 
-if [ ! -f "$currPath/builds/bin/$1" ]; then
+if [ ! -d "$currPath/builds/bin/$1" ]; then
 	binDir="$currPath/builds/bin"
 else
 	binDir="$currPath/builds/bin/$1" # Windows/MSVC uses bin/$1 (Debug, Release, etc.)

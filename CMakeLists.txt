@@ -434,7 +434,7 @@ if("${graphicsApi}" STREQUAL "vulkan")
 		target_link_libraries(OxC3_graphics PUBLIC vulkan-1)
 	elseif("${platform}" STREQUAL "osx")
 
-		if(exists "$ENV{VULKAN_SDK}/macOS/include")
+		if(EXISTS "$ENV{VULKAN_SDK}/macOS/include")
 			include_directories(OxC3_graphics PUBLIC $ENV{VULKAN_SDK}/macOS/include)
 			target_link_directories(OxC3_graphics PUBLIC $ENV{VULKAN_SDK}/macOS/lib)
 		else()
