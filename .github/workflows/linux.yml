@@ -6,8 +6,6 @@ jobs:
   build:
     name: Linux build
     runs-on: ubuntu-latest
-    env:
-      VULKAN_SDK: C:\VulkanSDK\
     steps:
     - uses: actions/checkout@v1
       with:
@@ -17,9 +15,9 @@ jobs:
       with:
         cache: true
     - name: Release but no SIMD, not supported yet
-      run: sh D:\a\core3\core3\build.sh Release Off -DCLIGraphics=Off
+      run: sh D:/a/core3/core3/build.sh Release Off -DCLIGraphics=Off
     - name: Debug but no SIMD, not supported yet
-      run: sh D:\a\core3\core3\build.sh Debug Off -DCLIGraphics=Off
+      run: sh D:/a/core3/core3/build.sh Debug Off -DCLIGraphics=Off
     - uses: actions/setup-ruby@v1
     - name: Send Webhook Notification
       if: always()
