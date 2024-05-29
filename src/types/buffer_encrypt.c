@@ -229,13 +229,18 @@ AESEncryptionContext AESEncryptionContext_create(
 	return ctx;
 }
 
+typedef union AESEncryptionContextLengths {
+	I32x4 vec;
+	U64 arr[2];
+} AESEncryptionContextLengths;
+
 void AESEncryptionContext_finish(AESEncryptionContext *ctx, const Buffer additionalData, const Buffer target) {
 
 	//Add length of inputs into the message too (lengths are in bits)
 
-	I32x4 lengths = I32x4_zero();
-	*(U64*)&lengths = U64_swapEndianness(Buffer_length(additionalData) << 3);
-	*((U64*)&lengths + 1) = U64_swapEndianness(Buffer_length(target) << 3);
+	AESEncryptionContextLengths lengths = (AESEncryptionContextLengths) { 0 };
+	lengths.arr[0] = U64_swapEndianness(Buffer_length(additionalData) << 3);
+	lengths.arr[1] = U64_swapEndianness(Buffer_length(target) << 3);
 
 	ctx->tag = AESEncryptionContext_ghash(I32x4_xor(ctx->tag, lengths), ctx->ghashLut);
 

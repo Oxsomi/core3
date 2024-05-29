@@ -6,7 +6,7 @@ else
 fi
 
 echo \)./OxC3
-./OxC3
+$executableName
 
 # Test rand
 
