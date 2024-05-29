@@ -52,12 +52,28 @@ set(EnableOxC3CLI OFF CACHE BOOL "Turn on/off OxC3 CLI")
 # Even though EnableSIMD can be turned off, it won't be truly off
 # This is because we want to maintain proper IEEE754 compliance, which we can't do without SSE
 
+if(${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm") 
+	set(_ARCH "ARCH_ARM")
+	message("-- Enabling ARM specific optimizations")
+	message(WARNING "-- ARM NEON isn't natively supported. Falling back to non SIMD for testing purposes, PLEASE don't ship like this")
+	set(EnableSIMD OFF)
+	set(ARM ON)
+else()
+	message("-- Enabling x64 specific optimizations")
+	set(_ARCH "ARCH_X64")
+	set(ARM OFF)
+endif()
+
 if(MSVC)
 
 	add_compile_options(/MD /MP /GR /D_CRT_SECURE_NO_WARNINGS /Gy)
 
 	if(EnableSIMD)
-		add_compile_options(/d2archSSE42)		# Require SSE4.2
+		if("${_ARCH}" STREQUAL "ARCH_ARM")
+			add_compile_options(/arch:ARMv7VE)		# Enable ARM arch
+		else()
+			add_compile_options(/d2archSSE42)		# Require SSE4.2
+		endif()
 	endif()
 
 	if(RelaxFloat)
@@ -68,10 +84,14 @@ if(MSVC)
 
 else()
 
-	if(EnableSIMD)
-		add_compile_options(-mfpmath=sse -msse -msse2 -msse3 -mssse3 -msse4 -msse4.1 -msse4.2 -mrdrnd -msha -maes -mbmi2 -mf16c)
-	elseif(NOT RelaxFloat)
-		add_compile_options(-mfpmath=sse -msse)
+	if("${_ARCH}" STREQUAL "ARCH_X64")
+		if(EnableSIMD)
+			add_compile_options(-mfpmath=sse -msse -msse2 -msse3 -mssse3 -msse4 -msse4.1 -msse4.2 -mrdrnd -msha -maes -mbmi2 -mf16c)
+		elseif(NOT RelaxFloat)
+			add_compile_options(-mfpmath=sse -msse)
+		endif()
+	else()
+		add_compile_options(-mfpu=neon -march=armv8-a+crc+simd+crypto)		# We enable neon, but we don't use it in vectors yet
 	endif()
 
 	if(RelaxFloat)
@@ -85,13 +105,6 @@ else()
 	# Link time optimization seems to be very slow on linux?
 	# add_compile_options(-flto -fno-fat-lto-objects)
 
-endif()
-
-message("-- Enabling x64 specific optimizations such as CRC32C, AES256 and SHA256 (optional) instructions")
-set(_ARCH "ARCH_X64")
-
-if(ARM)
-	set(_ARCH "ARCH_ARM")
 endif()
 
 if(EnableOxC3CLI)
@@ -210,6 +223,26 @@ if(EnableShaderCompiler)
 	set(LLVM_LIT_ARGS "-v" CACHE STRING "")
 	set(ENABLE_DXC_STATIC_LINKING ON CACHE BOOL "")
 	set(BUILD_SHARED_LIBS OFF CACHE BOOL "")
+	
+	if(ARM)
+		set(LLVM_TARGETS_TO_BUILD "AArch64" CACHE STRING "")
+	else()
+		set(LLVM_TARGETS_TO_BUILD "AMDGPU" CACHE STRING "")
+	endif()
+	
+	if("${platform}" STREQUAL "osx")
+		if(ARM)
+			set(LLVM_HOST_TRIPLE "aarch64-apple-darwin" CACHE STRING "")
+		else()
+			set(LLVM_HOST_TRIPLE "x86_64-apple-darwin" CACHE STRING "")
+		endif()
+	elseif("${platform}" STREQUAL "linux")
+		if(ARM)
+			set(LLVM_HOST_TRIPLE "aarch64-linux-gnu" CACHE STRING "")
+		else()
+			set(LLVM_HOST_TRIPLE "x86_64-linux-gnu" CACHE STRING "")
+		endif()
+	endif()
 
 	if(NOT MSVC)
 		add_compile_options(-w)		# Remove all those pesky warnings since we can't fix them anyways
@@ -236,7 +269,6 @@ else()
 endif()
 
 set(ForceUpdateDeps OFF CACHE BOOL "Force update dependencies")
-set(ARM OFF CACHE BOOL "Force ARM executable")											# //TODO:
 set(ForceVulkan OFF CACHE BOOL "Force Vulkan support (disable native API if available)")
 
 # Types

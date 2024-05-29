@@ -4,16 +4,20 @@ on: [push, pull_request]
 
 jobs:
   build:
-    name: Windows build
-    runs-on: windows-2022
+    name: OSX build
+    runs-on: macos-latest
     steps:
     - uses: actions/checkout@v1
       with:
         submodules: recursive
-    - name: build for fast check
-      run: bash D:\a\core3\core3\build.sh Release On -DForceVulkan=Off -DCLIGraphics=Off
-    - name: build for debug check
-      run: bash D:\a\core3\core3\build.sh Debug On -DForceVulkan=Off -DCLIGraphics=Off
+    - name: Install Vulkan SDK
+      uses: humbletim/install-vulkan-sdk@v1.1.1
+      with:
+        cache: true
+    - name: Release but no SIMD, not supported yet
+      run: bash /Users/runner/work/core3/core3/build.sh Release Off -DCLIGraphics=Off
+    - name: Debug but no SIMD, not supported yet
+      run: bash /Users/runner/work/core3/core3/build.sh Debug Off -DCLIGraphics=Off
     - uses: actions/setup-ruby@v1
     - name: Send Webhook Notification
       if: always()
