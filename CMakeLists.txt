@@ -92,7 +92,7 @@ else()
 		endif()
 	else()
 		add_compile_options(-mfpu=neon -march=armv8-a+crc+simd+crypto)		# We enable neon, but we don't use it in vectors yet
-	else()
+	endif()
 	
 	endif()
 
