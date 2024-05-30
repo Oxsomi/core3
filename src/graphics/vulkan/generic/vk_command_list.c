@@ -284,7 +284,16 @@ void CommandList_process(
 						!((startRender->unusedAfterRenderMask >> i) & 1) ? VK_ATTACHMENT_STORE_OP_STORE:
 						VK_ATTACHMENT_STORE_OP_DONT_CARE,
 
-					.clearValue = *(const VkClearValue*) &attachmentsj->color
+					.clearValue = (VkClearValue) {
+						.color = (VkClearColorValue) {
+							.float32 = {
+								attachmentsj->color.colorf[0],
+								attachmentsj->color.colorf[1],
+								attachmentsj->color.colorf[2],
+								attachmentsj->color.colorf[3]
+							}
+						}	
+					}
 				};
 
 				if(attachmentsj->resolveImage)
