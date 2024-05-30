@@ -49,7 +49,8 @@ void Chimera_stepFidiA(Chimera *chim, const EFidiA op) {
 		(((U32)EFloatType_exponentMask(EFloatType_F32) << 1) | 1) <<
 		((U32)EFloatType_exponentShift(EFloatType_F32) - 1);
 
-	const F32 NaN = *(const F32*)&NaNu;
+	const void *NaNuptr = &NaNu;
+	const F32 NaN = *(const F32*) NaNuptr;
 	const U8 reg = op & 3;					//Doesn't always operate on this register though
 
 	//Simple float and vector operations
