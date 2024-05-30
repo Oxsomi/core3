@@ -100,7 +100,7 @@ U8x4x4 U8x4x4_transpose(const U8x4x4 *r) {
 	return t;
 }
 
-typedef struct I32x4_U8x4x4 {
+typedef union I32x4_U8x4x4 {
 	I32x4 v;
 	U8x4x4 v4x4;
 } I32x4_U8x4x4;
