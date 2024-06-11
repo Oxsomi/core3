@@ -71,6 +71,9 @@ Bool DLFile_isAllocated(DLFile file);
 Error DLFile_create(DLSettings settings, Allocator alloc, DLFile *dlFile);
 Bool DLFile_free(DLFile *dlFile, Allocator alloc);
 
+U64 DLFile_find(DLFile dlFile, U64 start, U64 end, CharString string);
+CharString DLFile_stringAt(DLFile dlFile, U64 i, Bool *success);
+
 Error DLFile_createBufferList(DLSettings settings, ListBuffer buffers, Allocator alloc, DLFile *dlFile);
 Error DLFile_createAsciiList(DLSettings settings, ListCharString strings, Allocator alloc, DLFile *dlFile);
 Error DLFile_createUTF8List(DLSettings settings, ListBuffer strings, Allocator alloc, DLFile *dlFile);

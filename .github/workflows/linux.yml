@@ -14,10 +14,13 @@ jobs:
       uses: humbletim/install-vulkan-sdk@v1.1.1
       with:
         cache: true
+    - name: Install Conan
+      id: conan
+      uses: turtlebrowser/get-conan@main
     - name: Release but no SIMD, not supported yet
-      run: bash /home/runner/work/core3/core3/build.sh Release Off -DCLIGraphics=Off
+      run: conan create . -o enableSIMD=False -o cliGraphics=False -s build_type=Release
     - name: Debug but no SIMD, not supported yet
-      run: bash /home/runner/work/core3/core3/build.sh Debug Off -DCLIGraphics=Off
+      run: conan create . -o enableSIMD=False -o cliGraphics=False -s build_type=Debug
     - uses: actions/setup-ruby@v1
     - name: Send Webhook Notification
       if: always()

@@ -610,17 +610,22 @@ Bool Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator all
 			{ '-', 'P', '\0' },									//Preprocess
 			{ '-', 's', 'p', 'i', 'r', 'v', '\0' },				//-spirv (enable spirv generation)
 			{ '-', 'I', '\0' },									//-I (include dir)
-			{ '-', 'D', '_', '_', 'O', 'X', 'C', '3', '\0' }	//-D__OXC3 to indicate we're compiling from OxC3
+			{ '-', 'D', '_', '_', 'O', 'X', 'C', '3', '\0' },	//-D__OXC3 to indicate we're compiling from OxC3
+			{ '-', 'H', 'V', '\0' },							//-HV 202x (force new HLSL version)
+			{ '2', '0', '2', 'x', '\0' }
 		};
 
-		U32 argCounter = 3;
+		U32 argCounter = 5;
 
-		const U16 *argsPtr[10] = {
+		const U16 *argsPtr[12] = {
 
 			args[0],
 			inputFile.ptr,
 
-			args[3]
+			args[3],
+
+			args[4],
+			args[5]
 		};
 
 		if (settings.outputType == ESHBinaryType_SPIRV)		//-spirv
@@ -803,9 +808,14 @@ Bool Compiler_compile(
 
 		result->isSuccess = false;
 
+		if(toCompile.stageType == ESHPipelineStage_WorkgraphExt && settings.outputType == ESHBinaryType_SPIRV)
+			retError(clean, Error_invalidState(
+				0, "Compiler_compile() was called on a workgraph with spirv. Workgraphs are currently only supported for DXIL"
+			))
+
 		const U16 args[][27] = {
 
-			{ '-', 'P', '\0' },									//Preprocess
+			{ '\0' },											//Placeholder
 			{ '-', 's', 'p', 'i', 'r', 'v', '\0' },				//-spirv (enable spirv generation)
 			{ '-', 'I', '\0' },									//-I (include dir)
 			{ '-', 'D', '_', '_', 'O', 'X', 'C', '3', '\0' },	//-D__OXC3 to indicate we're compiling from OxC3
@@ -863,23 +873,38 @@ Bool Compiler_compile(
 			{ 
 				'-', 'f', 's', 'p', 'v', '-', 'e', 'n', 't', 'r', 'y', 'p', 'o', 'i', 'n', 't', '-', 'n', 'a', 'm', 'e', '=',
 				'm', 'a', 'i', 'n', '\0'
-			}
+			},
+
+			//-HV 202x (force new HLSL version)
+
+			{ '-', 'H', 'V', '\0' },
+			{ '2', '0', '2', 'x', '\0' },
+
+			//-E and -T
+
+			{ '-', 'E', '\0' },
+			{ '-', 'T', '\0' }
 		};
 
-		U32 argCounter = 7;
+		U32 argCounter = 8;
 
-		const U16 *argsPtr[22] = {
+		const U16 *argsPtr[24] = {
 
-			args[0],
-			inputFile.ptr,
+			inputFile.ptr,		//Relative to input file for includes
 
-			args[3],
+			args[3],			//-D__OXC3
+
+			//-Zpc, -Qstrip_debug, -Qstrip_reflect
+
 			args[7],
 
 			args[8],
 			args[9],
 
-			settings.debug ? args[10] : args[11]
+			settings.debug ? args[10] : args[11],		//-Od or -O3
+
+			args[19],		//-HV 202x
+			args[20]
 		};
 
 		if(settings.debug)
@@ -922,7 +947,46 @@ Bool Compiler_compile(
 			argsPtr[argCounter++] = includeDir.ptr;
 		}
 
-		//TODO: -E <entrypointName> -T <target>
+		//-E <entrypointName>
+
+		if (!toCompile.hasShaderAnnotation) {
+		
+			argsPtr[argCounter++] = args[21];
+
+			gotoIfError2(clean, CharString_toUTF16(toCompile.entrypoint, alloc, &tempWStr))
+			gotoIfError2(clean, ListListU16_pushBack(&strings, tempWStr, alloc))
+			argsPtr[argCounter++] = tempWStr.ptr;
+			tempWStr = ListU16{};
+		}
+
+		//-T <target>
+		
+		argsPtr[argCounter++] = args[22];
+
+		const C8 *targetPrefix = "lib";
+
+		switch (toCompile.stageType) {
+			default:													break;
+			case ESHPipelineStage_Vertex:		targetPrefix = "vs";	break;
+			case ESHPipelineStage_Pixel:		targetPrefix = "ps";	break;
+			case ESHPipelineStage_Compute:		targetPrefix = "cs";	break;
+			case ESHPipelineStage_GeometryExt:	targetPrefix = "gs";	break;
+			case ESHPipelineStage_Hull:			targetPrefix = "hs";	break;
+			case ESHPipelineStage_Domain:		targetPrefix = "ds";	break;
+			case ESHPipelineStage_MeshExt:		targetPrefix = "ms";	break;
+			case ESHPipelineStage_TaskExt:		targetPrefix = "as";	break;
+		}
+
+		U32 minor = (U8)toCompile.shaderVersion;
+		U32 major = toCompile.shaderVersion >> 8;
+
+		gotoIfError2(clean, CharString_format(alloc, &tempStr2, "%s_%" PRIu32 "_%" PRIu32, targetPrefix, major, minor))
+		gotoIfError2(clean, CharString_toUTF16(toCompile.entrypoint, alloc, &tempWStr))
+		CharString_free(&tempStr2, alloc);
+
+		gotoIfError2(clean, ListListU16_pushBack(&strings, tempWStr, alloc))
+		argsPtr[argCounter++] = tempWStr.ptr;
+		tempWStr = ListU16{};
 
 		//TODO: __OXC3_EXT_<X> foreach extension
 

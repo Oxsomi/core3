@@ -101,6 +101,40 @@ Bool DLFile_free(DLFile *dlFile, Allocator alloc) {
 	return true;
 }
 
+CharString DLFile_stringAt(DLFile dlFile, U64 i, Bool *success) {
+
+	if(dlFile.settings.dataType == EDLDataType_Data || i >= dlFile.entryStrings.length) {
+
+		if(success)
+			*success = false;
+
+		return CharString_createNull();
+	}
+
+	if(success)
+		*success = true;
+
+	if(dlFile.settings.dataType == EDLDataType_Ascii)
+		return dlFile.entryStrings.ptr[i];
+
+	Buffer buf = dlFile.entryBuffers.ptr[i];
+	return CharString_createRefSizedConst((const C8*) buf.ptr, Buffer_length(buf), false);
+}
+
+Bool DLFile_entryEqualsString(DLFile dlFile, U64 i, CharString str) {
+	Bool success = false;
+	return CharString_equalsStringSensitive(DLFile_stringAt(dlFile, i, &success), str) && success;
+}
+
+U64 DLFile_find(DLFile dlFile, U64 start, U64 end, CharString str) {
+
+	for (U64 j = start; j < dlFile.entryBuffers.length && j < end; ++j)
+		if (DLFile_entryEqualsString(dlFile, j, str))
+			return j;
+
+	return U64_MAX;
+}
+
 //Writing
 
 Error DLFile_addEntry(DLFile *dlFile, Buffer entryBuf, Allocator alloc) {

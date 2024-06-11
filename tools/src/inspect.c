@@ -152,68 +152,17 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 				OXC3_GET_PATCH(shHeader.compilerVersion)
 			);
 
-			if(shHeader.flags & ESHFlags_HasSPIRV)
-				Log_debugLnx(
-					"Spirv size type uses %s.",
-					dataTypes[(shHeader.sizeTypes >> 0) & 3]
-				);
+			Log_debugLnx(
+				"Spirv size type uses %s (if present).",
+				dataTypes[(shHeader.sizeTypes >> 0) & 3]
+			);
 
-			if(shHeader.flags & ESHFlags_HasDXIL)
-				Log_debugLnx(
-					"DXIL size type uses %s.",
-					dataTypes[(shHeader.sizeTypes >> 2) & 3]
-				);
+			Log_debugLnx(
+				"DXIL size type uses %s (if present).",
+				dataTypes[(shHeader.sizeTypes >> 2) & 3]
+			);
 
-			if(shHeader.extensions)
-				Log_debugLnx("oiSH extensions:");
-
-			if(shHeader.extensions & ESHExtension_F64)
-				Log_debugLnx("\tF64");
-
-			if(shHeader.extensions & ESHExtension_I64)
-				Log_debugLnx("\tI64");
-
-			if(shHeader.extensions & ESHExtension_16BitTypes)
-				Log_debugLnx("\tF16 and I16");
-
-			if(shHeader.extensions & ESHExtension_AtomicI64)
-				Log_debugLnx("\tAtomic I64");
-
-			if(shHeader.extensions & ESHExtension_AtomicF32)
-				Log_debugLnx("\tAtomic F32");
-
-			if(shHeader.extensions & ESHExtension_AtomicF64)
-				Log_debugLnx("\tAtomic F64");
-
-			if(shHeader.extensions & ESHExtension_SubgroupArithmetic)
-				Log_debugLnx("\tSubgroup arithmetic");
-
-			if(shHeader.extensions & ESHExtension_SubgroupShuffle)
-				Log_debugLnx("\tSubgroup shuffle");
-
-			if(shHeader.extensions & ESHExtension_RayQuery)
-				Log_debugLnx("\tRay query");
-
-			if(shHeader.extensions & ESHExtension_RayMicromapOpacity)
-				Log_debugLnx("\tRay micromap opacity");
-
-			if(shHeader.extensions & ESHExtension_RayMicromapDisplacement)
-				Log_debugLnx("\tRay micromap displacement");
-
-			if(shHeader.extensions & ESHExtension_RayMotionBlur)
-				Log_debugLnx("\tRay motion blur");
-
-			if(shHeader.extensions & ESHExtension_RayReorder)
-				Log_debugLnx("\tRay reorder");
-
-			if(shHeader.extensions & ESHExtension_Multiview)
-				Log_debugLnx("\tMultiview");
-
-			if(shHeader.extensions & ESHExtension_ComputeDeriv)
-				Log_debugLnx("\tCompute derivatives");
-
-			if(shHeader.extensions & ESHExtension_PAQ)
-				Log_debugLnx("\tPAQ");
+			Log_debugLnx("With %"PRIu16" binaries and %"PRIu16" stages", shHeader.binaryCount, shHeader.stageCount);
 
 			break;
 		}

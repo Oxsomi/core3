@@ -1322,6 +1322,12 @@ Bool Compiler_parse(Compiler comp, CompilerSettings settings, Allocator alloc, C
 
 								U32 tokenEnd = symj.tokenId + symj.tokenCount;
 
+								if(runtimeEntry.vendorMask)
+									retError(clean, Error_invalidParameter(
+										0, 0,
+										"Compiler_parse() vendor annotation can only be present once"
+									))
+
 								//[vendor("NV")]
 								//       ^
 
@@ -1336,7 +1342,7 @@ Bool Compiler_parse(Compiler comp, CompilerSettings settings, Allocator alloc, C
 									))
 
 								gotoIfError3(clean, Compiler_registerVendor(
-									&runtimeEntry.entry.vendorMask, symj.tokenId + 2, parser, e_rr
+									&runtimeEntry.vendorMask, symj.tokenId + 2, parser, e_rr
 								))
 
 								//[vendor("AMD", "NV")]
@@ -1357,7 +1363,7 @@ Bool Compiler_parse(Compiler comp, CompilerSettings settings, Allocator alloc, C
 										))
 
 									gotoIfError3(clean, Compiler_registerVendor(
-										&runtimeEntry.entry.vendorMask, k + 1, parser, e_rr
+										&runtimeEntry.vendorMask, k + 1, parser, e_rr
 									))
 								}
 							}
@@ -1606,10 +1612,20 @@ Bool Compiler_parse(Compiler comp, CompilerSettings settings, Allocator alloc, C
 						0, "Compiler_parse() found a non compute/workgraph entrypoint with a numthreads annotation"
 					))
 
-				if(!runtimeEntry.entry.vendorMask)
-					runtimeEntry.entry.vendorMask = U16_MAX;
+				if(!runtimeEntry.vendorMask)
+					runtimeEntry.vendorMask = U16_MAX;
 
 				//Ready for push
+
+				if(result->shEntriesRuntime.length + 1 >= U16_MAX)
+					retError(clean, Error_invalidState(
+						0, "Compiler_parse() found way too many SHEntries. Found U16_MAX!"
+					))
+
+				if(SHEntryRuntime_getCombinations(runtimeEntry) + 1 >= U16_MAX)
+					retError(clean, Error_invalidState(
+						0, "Compiler_parse() found way too runtimeEntry combinations. Found U16_MAX!"
+					))
 
 				SHEntryRuntime_print(runtimeEntry, alloc);
 				gotoIfError2(clean, ListSHEntryRuntime_pushBack(&result->shEntriesRuntime, runtimeEntry, alloc));

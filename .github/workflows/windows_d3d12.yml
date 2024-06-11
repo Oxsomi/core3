@@ -10,10 +10,15 @@ jobs:
     - uses: actions/checkout@v1
       with:
         submodules: recursive
+    - name: Install Conan
+      id: conan
+      uses: turtlebrowser/get-conan@main
     - name: build for fast check
-      run: bash D:\a\core3\core3\build.sh Release On -DForceVulkan=Off -DCLIGraphics=Off
-    - name: build for debug check
-      run: bash D:\a\core3\core3\build.sh Debug On -DForceVulkan=Off -DCLIGraphics=Off
+      run: conan create . -o cliGraphics=False -o enableSIMD=True -s build_type=Release
+    - name: build for SIMD fallback check
+      run: conan create . -o cliGraphics=False -o enableSIMD=False -s build_type=Release
+    - name: build for fast check
+      run: conan create . -o cliGraphics=False -o enableSIMD=True -s build_type=Debug
     - uses: actions/setup-ruby@v1
     - name: Send Webhook Notification
       if: always()

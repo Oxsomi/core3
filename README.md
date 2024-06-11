@@ -62,10 +62,12 @@ One of the useful things about C is that files are incredibly easy to compile an
 - If using Vulkan SDK on OSX, make sure to set envar MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS to 1. This can be done in the ~/.bash_profile file by doing export MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS=1, also set VULKAN_SDK to the right directory there.
 - (Required on Windows for Git Bash, otherwise optional): Git or any tool that can work with GitHub.
 - C++ and C compiler such as MSVC, clang or g++/gcc. C++ is only used for some dependencies that can't use C such as DXC.
+- Conan to avoid huge build times due to DXC/LLVM/SPIRV.
 
 ## Running requirements
 
-- Windows.
+- Windows (full support).
+- Linux / OS X (**partial** support: no virtual files, nor window support, DXC currently broken).
 - A 64-bit CPU.
   - Currently only x64 (AMD64) is supported. Though ARM could be supported too, by turning off shader compilation and SIMD (**not recommended for production builds!!**). The shader compiler currently is the only thing that doesn't support ARM if SIMD is turned off.
   - Even though SSE4.2+ is recommended, this can be explicitly turned off. SSE can only be turned off if relax float is turned off; this is because normal floats (without SSE) aren't always IEEE754 compliant. SIMD option requires SSE4.2/SSE4.1/SSE2/SSE/SSE3/SSSE3, AES, PCLMULQDQ, BMI1 and RDRAND extensions.
