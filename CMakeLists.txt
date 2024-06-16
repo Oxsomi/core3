@@ -23,6 +23,8 @@ project(OxC3)
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 set(CMAKE_SUPPRESS_REGENERATION TRUE)
 
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded")
+
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED OFF)
 set(CMAKE_C_EXTENSIONS ON)
@@ -66,7 +68,7 @@ endif()
 
 if(MSVC)
 
-	add_compile_options(/MD /MP /GR /D_CRT_SECURE_NO_WARNINGS /Gy)
+	add_compile_options(/MP /GR /D_CRT_SECURE_NO_WARNINGS /Gy)
 
 	if(EnableSIMD)
 		if("${_ARCH}" STREQUAL "ARCH_ARM")

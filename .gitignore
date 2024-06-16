@@ -51,6 +51,8 @@ CMakeFiles/*
 *.cmd
 .tmp_versions/
 builds/*
+build/*
+CMakeUserPresets.json
 tools/builds/*
 tools/CMakeFiles/*
 *.vcxproj

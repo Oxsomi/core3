@@ -45,7 +45,7 @@ Error File_resolve(
 	CharString *result
 ) {
 
-	loc = CharString_createRefSizedConst(loc.ptr, CharString_length(loc), CharString_isNullTerminated(loc));
+	loc = CharString_createRefStrConst(loc);
 
 	if(CharString_getAt(loc, CharString_length(loc) - 1) == '/')			//myTest/ <--
 		loc.lenAndNullTerminated = CharString_length(loc) - 1;				//unset null terminated

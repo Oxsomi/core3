@@ -79,30 +79,28 @@ One of the useful things about C is that files are incredibly easy to compile an
 git clone --recurse-submodules -j8 https://github.com/Oxsomi/core3
 ```
 
-Or just download the repo from GitHub.
-
 ## Building OxC3
 
 ### Windows
 
 ```batch
-build.sh Release On
+conan install .
 ```
 
-This assumes you have VS2022 installed, if not, you can specify a different CMake generator by editing build.bat.
+The Windows implementation supports SSE.
 
 ### Mac OS X
 
 ```c
-build.sh Release Off
+conan install . -o enableSIMD=False
 ```
 
-Currently the Mac build doesn't support SSE or NEON. So SIMD mode has to be forced to None. It also doesn't support anything above OxC3 platforms yet.
+Currently the Mac implementation doesn't support SSE or NEON. So SIMD mode has to be forced to None. It also doesn't support anything above OxC3 platforms yet.
 
 ### Linux
 
 ```c
-build.sh Release Off
+conan install . -o enableSIMD=False
 ```
 
 Currently the Linux build doesn't support SSE or NEON. So SIMD mode has to be forced to None. It also doesn't support anything above OxC3 platforms yet.
@@ -110,6 +108,17 @@ Currently the Linux build doesn't support SSE or NEON. So SIMD mode has to be fo
 ### Other platforms
 
 Other platforms like Linux, Android and iOS are coming in the future.
+
+### Building locally / not packaged
+
+For building locally, the following commands should be ran:
+
+```c
+conan install .
+conan build .
+```
+
+Where conan build is done with the respective options (see Windows, OSX, Linux, etc.)
 
 ## Graphics
 

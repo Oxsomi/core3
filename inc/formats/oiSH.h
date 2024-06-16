@@ -25,6 +25,8 @@
 	extern "C" {
 #endif
 
+#define OISH_SHADER_MODEL(maj, min) ((U16)((min) | ((maj) << 8)))
+
 typedef enum ESHSettingsFlags {
 	ESHSettingsFlags_None				= 0,
 	ESHSettingsFlags_HideMagicNumber	= 1 << 0,		//Only valid if the oiSH can be 100% confidently detected otherwise
@@ -45,6 +47,8 @@ typedef enum ESHBinaryType {
 	ESHBinaryType_Count
 
 } ESHBinaryType;
+
+extern const C8 *ESHBinaryType_names[ESHBinaryType_Count];
 
 typedef enum ESHExtension {
 
@@ -161,6 +165,7 @@ typedef enum ESHType {
 } ESHType;
 
 const C8 *ESHType_name(ESHType type);
+const C8 *ESHPipelineStage_getStagePrefix(ESHPipelineStage stage);
 
 //Deserialized SHEntry (in oiSH file)
 //Though SHEntry on disk is more compact, with only the relevant data.
@@ -210,13 +215,28 @@ typedef struct SHEntryRuntime {
 
 	ListU16 shaderVersions;				//U16: U8 major, minor;		If not defined will default.
 
-	ListCharString uniforms;
-	ListCharString uniformValues;
+	ListCharString uniformNameValues;	//[uniformName, uniformValue][]
 	ListU8 uniformsPerCompilation;		//How many uniforms are relevant for each compilation
 
 } SHEntryRuntime;
 
+typedef struct SHBinaryIdentifier SHBinaryIdentifier;
+typedef struct SHBinaryInfo SHBinaryInfo;
+
 U32 SHEntryRuntime_getCombinations(SHEntryRuntime runtime);
+
+Bool SHEntryRuntime_asBinaryInfo(
+	SHEntryRuntime runtime,
+	U16 combinationId,
+	ESHBinaryType binaryType,
+	Buffer buf,
+	SHBinaryInfo *binaryInfo,
+	Error *e_rr
+);
+
+Bool SHEntryRuntime_asBinaryIdentifier(
+	SHEntryRuntime runtime, U16 combinationId, SHBinaryIdentifier *binaryIdentifier, Error *e_rr
+);
 
 typedef struct SHBinaryIdentifier {
 
@@ -225,8 +245,7 @@ typedef struct SHBinaryIdentifier {
 
 	ESHExtension extensions;
 	U16 shaderVersion;			//U8 maj, minor
-	U8 stageType;				//ESHPipelineStage
-	Bool hasShaderAnnotation;	//If [shader("")] is used rather than [stage("")]
+	U16 stageType;				//ESHPipelineStage
 
 } SHBinaryIdentifier;
 
@@ -235,7 +254,8 @@ typedef struct SHBinaryInfo {
 	SHBinaryIdentifier identifier;
 
 	U16 vendorMask;
-	U16 padding[3];
+	Bool hasShaderAnnotation;	//If [shader("")] is used rather than [stage("")]
+	U8 padding[5];
 
 	Buffer binaries[ESHBinaryType_Count];
 
@@ -243,12 +263,18 @@ typedef struct SHBinaryInfo {
 
 TList(SHEntry);
 TList(SHEntryRuntime);
+TList(SHBinaryIdentifier);
 TList(SHBinaryInfo);
+
+Bool SHBinaryIdentifier_equals(SHBinaryIdentifier a, SHBinaryIdentifier b);
 
 void SHEntry_print(SHEntry entry, Allocator alloc);
 void SHBinaryInfo_print(SHBinaryInfo binary, Allocator alloc);
 void SHEntryRuntime_print(SHEntryRuntime entry, Allocator alloc);
 
+void SHBinaryIdentifier_free(SHBinaryIdentifier *identifier, Allocator alloc);
+void SHBinaryInfo_free(SHBinaryInfo *info, Allocator alloc);
+void SHEntry_free(SHEntry *entry, Allocator alloc);
 void SHEntryRuntime_free(SHEntryRuntime *entry, Allocator alloc);
 void ListSHEntryRuntime_freeUnderlying(ListSHEntryRuntime *entry, Allocator alloc);
 
@@ -269,18 +295,17 @@ typedef struct SHFile {
 
 } SHFile;
 
-Error SHFile_create(ESHSettingsFlags flags, U32 compilerVersion, U32 sourceHash, Allocator alloc, SHFile *shFile);
-Bool SHFile_free(SHFile *shFile, Allocator alloc);
+Bool SHFile_create(ESHSettingsFlags flags, U32 compilerVersion, U32 sourceHash, Allocator alloc, SHFile *shFile, Error *e_rr);
+void SHFile_free(SHFile *shFile, Allocator alloc);
 
-Error SHFile_addBinary(
+Bool SHFile_addBinaries(
 	SHFile *shFile,
-	SHBinaryIdentifier *identifier,		//Moves identifier if new, otherwise frees.
-	ESHBinaryType type,
-	Buffer *entry,						//Moves entry
-	Allocator alloc
+	SHBinaryInfo *binaries,				//Moves binaries
+	Allocator alloc,
+	Error *e_rr
 );
 
-Error SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, Allocator alloc);		//Moves entry->name and binaryIds
+Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, Allocator alloc, Error *e_rr);	//Moves entry->name and binaryIds
 
 Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr);
 Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, Error *e_rr);

@@ -4,7 +4,7 @@
 
 **NOTE: oiSH (1.2) is the successor of the original oiSH (0.1) from ocore. This isn't the same format anymore. oiSH (0.1) lacked a lot of important features and is deprecated.**
 
-oSH is a single shader represented in a single or multiple binary/text format(s). The only definition is that the shader type must match one of the following:
+oSH is a single shader represented in a single or multiple binary/text format(s). The only definition is that the shader type must match one (or multiple) of the following:
 
 - SPIRV
 - DXIL
@@ -186,14 +186,28 @@ SHFile {
     SHHeader header;
 
     //No header, no encryption/compression/SHA256 (see oiDL.md)
-    //strings[i < stageCount] contains entrypoint names.
-    //strings[i >= stageCount] contains uniform values and names.
+    //strings[len - stageCount, len] contains entrypoint names.
+    //strings[..., len - stageCount] contains uniform values and names.
     DLFile strings;
 
-    EntryInfoFixedSize pipelineStages[stageCount];
     BinaryInfoFixedSize binaryInfos[binaryCount];
+    EntryInfoFixedSize pipelineStages[stageCount];
 
-    for pipelineStages[i]
+    for i < binaryCount:
+    
+    	U16 uniformNames[binaryInfos[i].uniformCount];	//offset to strings[0]
+    	U16 uniformValues[binaryInfos[i].uniformCount];	//^ [uniformCount]
+    
+        if binary[i] has SPIRV:
+            EXXDataSizeType<spirvType> spirvLength;
+
+        if binary[i] has DXIL:
+            EXXDataSizeType<dxilType> dxilLength;
+
+        foreach binary with [ spirvLength, dxilLength ]:
+            U8[binary.size] data;
+    
+    for pipelineStages[i]	//Entrypoint name is stored at [strings.len - stageCount]
 
 	    if compute or workgraph:
 		    U16x4 groups;
@@ -215,20 +229,6 @@ SHFile {
    	 		U8 payloadSize;
     
     	U16 binaryIds[pipelineStages[i].binaryCount];
-
-    for i < binaryCount:
-    
-    	U16 uniformNames[binaryInfos[i].uniformCount];	//offset to strings[stageCount]
-    	U16 uniformValues[binaryInfos[i].uniformCount];	//^ [stageCount + uniforms]
-    
-        if binary[i] has SPIRV:
-            EXXDataSizeType<spirvType> spirvLength;
-
-        if binary[i] has DXIL:
-            EXXDataSizeType<dxilType> dxilLength;
-
-        foreach binary with [ spirvLength, dxilLength ]:
-            U8[binary.size] data;
 }
 ```
 
@@ -242,5 +242,5 @@ The magic number in the header can only be absent if embedded in another file. A
 
 1.2: Basic format specification. Added support for various extensions, stages and binary types. Maps closer to real binary formats.
 
-1.2(.1): No major bump, because no oiSH files exist in the wild yet. Made extensions per stage, made file format more efficient, now allowing multiple binaries to exist allowing 1 compile for all entries even for non lib formats. Added uniforms.
+1.2(.1): No major bump, because no oiSH files exist in the wild yet. Made extensions per stage, made file format more efficient, now allowing multiple binaries to exist allowing 1 compile for all entries even for non lib formats. Added uniforms. Also swapped binaries and stages.
 

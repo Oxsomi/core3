@@ -271,7 +271,8 @@ void Operations_init() {
 		.requiredParameters = EOperationHasParameter_Input,
 		.optionalParameters =
 			EOperationHasParameter_AES | EOperationHasParameter_Output |
-			EOperationHasParameter_Entry | EOperationHasParameter_StartOffset | EOperationHasParameter_Length
+			EOperationHasParameter_Entry | EOperationHasParameter_StartOffset | EOperationHasParameter_Length |
+			EOperationHasParameter_ShaderOutputMode
 	};
 
 	//Hash category

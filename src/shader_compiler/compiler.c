@@ -253,6 +253,16 @@ Bool Compiler_preprocessx(Compiler comp, CompilerSettings settings, CompileResul
 	return Compiler_preprocess(comp, settings, Platform_instance.alloc, result, e_rr);
 }
 
+Bool Compiler_compilex(
+	Compiler comp,
+	CompilerSettings settings,
+	SHBinaryIdentifier toCompile,
+	CompileResult *result,
+	Error *e_rr
+) {
+	return Compiler_compile(comp, settings, toCompile, Platform_instance.alloc, result, e_rr);
+}
+
 Bool Compiler_parsex(Compiler comp, CompilerSettings settings, CompileResult *result, Error *e_rr) {
 	return Compiler_parse(comp, settings, Platform_instance.alloc, result, e_rr);
 }
@@ -262,7 +272,9 @@ Bool Compiler_mergeIncludeInfox(Compiler *comp, ListIncludeInfo *infos, Error *e
 }
 
 Bool Compiler_filterWarning(CharString str) {
-	return CharString_startsWithStringSensitive(str, CharString_createRefCStrConst("#pragma once in main file\n"), 0);
+	return 
+		CharString_startsWithStringSensitive(str, CharString_createRefCStrConst("#pragma once in main file\n"), 0) ||
+		CharString_containsStringSensitive(str, CharString_createRefCStrConst("-Wunknown-attributes"));
 }
 
 Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *errors, Bool *hasErrors, Error *e_rr) {
@@ -819,8 +831,6 @@ clean:
 	return s_uccess;
 }
 
-#define DXC_SHADER_MODEL(maj, min) ((U16)((min) | ((maj) << 8)))
-
 Bool Compiler_registerModel(ListU16 *vendors, U32 tokenId, Parser parser, Allocator alloc, Error *e_rr) {
 
 	Bool s_uccess = true;
@@ -839,7 +849,7 @@ Bool Compiler_registerModel(ListU16 *vendors, U32 tokenId, Parser parser, Alloca
 			0, 1, "Compiler_parse() model version is too high, only supported up to 6.8"
 		))
 
-	U16 version = DXC_SHADER_MODEL(6, (U16)F64_round((modelVersion - 6) / 0.1));
+	U16 version = OISH_SHADER_MODEL(6, (U16)F64_round((modelVersion - 6) / 0.1));
 
 	if(ListU16_contains(*vendors, version, 0, NULL))
 		retError(clean, Error_invalidParameter(
@@ -886,21 +896,18 @@ Bool Compiler_registerUniform(
 	//Scan last strings for the same uniform
 
 	for(
-		U64 i = runtimeEntry->uniforms.length - 1;
-		i != runtimeEntry->uniforms.length - currentUniforms - 1;
+		U64 i = (runtimeEntry->uniformNameValues.length >> 1) - 1;
+		i != (runtimeEntry->uniformNameValues.length >> 1) - currentUniforms - 1;
 		--i
 	)
-		if (CharString_equalsStringSensitive(uniformName, runtimeEntry->uniforms.ptr[i]))
+		if (CharString_equalsStringSensitive(uniformName, runtimeEntry->uniformNameValues.ptr[i << 1]))
 			retError(clean, Error_alreadyDefined(0, "Compiler_registerUniform() already contains uniform"))
 
 	//Insert uniformName
 
-	uniformName = CharString_createRefSizedConst(
-		uniformName.ptr, CharString_length(uniformName), CharString_isNullTerminated(uniformName)
-	);
-
-	gotoIfError2(clean, ListCharString_pushBack(&runtimeEntry->uniforms, uniformName, alloc))
-	inserted = runtimeEntry->uniforms.length - 1;
+	uniformName = CharString_createRefStrConst(uniformName);
+	gotoIfError2(clean, ListCharString_pushBack(&runtimeEntry->uniformNameValues, uniformName, alloc))
+	inserted = runtimeEntry->uniformsPerCompilation.length - 1;
 
 	//If next token is equals then uniformValue
 
@@ -923,53 +930,51 @@ Bool Compiler_registerUniform(
 			uniformValue = parser.parsedLiterals.ptr[parser.tokens.ptr[*tokenCounter].valueu];
 			++*tokenCounter;
 
-			uniformValue = CharString_createRefSizedConst(
-				uniformValue.ptr, CharString_length(uniformValue), CharString_isNullTerminated(uniformValue)
-			);
+			uniformValue = CharString_createRefStrConst(uniformValue);
 		}
 	}
 
 	//Insert uniformValue
 
-	gotoIfError2(clean, ListCharString_pushBack(&runtimeEntry->uniformValues, uniformValue, alloc))
+	gotoIfError2(clean, ListCharString_pushBack(&runtimeEntry->uniformNameValues, uniformValue, alloc))
 	++*ListU8_last(runtimeEntry->uniformsPerCompilation);
 
 clean:
 
 	if(!s_uccess && inserted != U64_MAX)
-		ListCharString_erase(&runtimeEntry->uniforms, inserted);
+		ListCharString_erase(&runtimeEntry->uniformNameValues, inserted);
 
 	return s_uccess;
 }
 
 U16 Compiler_minFeatureSetStage(ESHPipelineStage stage, U16 waveSize) {
 
-	U16 minVersion = DXC_SHADER_MODEL(6, 5);
+	U16 minVersion = OISH_SHADER_MODEL(6, 5);
 
 	if(stage == ESHPipelineStage_WorkgraphExt)
-		minVersion = DXC_SHADER_MODEL(6, 8);
+		minVersion = OISH_SHADER_MODEL(6, 8);
 
 	if(waveSize & 0xF)
-		minVersion = DXC_SHADER_MODEL(6, 6);
+		minVersion = OISH_SHADER_MODEL(6, 6);
 
 	if(waveSize >> 4)
-		minVersion = DXC_SHADER_MODEL(6, 8);
+		minVersion = OISH_SHADER_MODEL(6, 8);
 
 	return minVersion;
 }
 
 U16 Compiler_minFeatureSetExtension(ESHExtension ext) {
 
-	U16 minVersion = DXC_SHADER_MODEL(6, 5);
+	U16 minVersion = OISH_SHADER_MODEL(6, 5);
 
 	if(ext & ESHExtension_AtomicI64)
-		minVersion = U16_max(DXC_SHADER_MODEL(6, 6), minVersion);
+		minVersion = U16_max(OISH_SHADER_MODEL(6, 6), minVersion);
 
 	if(ext & ESHExtension_ComputeDeriv)
-		minVersion = U16_max(DXC_SHADER_MODEL(6, 6), minVersion);
+		minVersion = U16_max(OISH_SHADER_MODEL(6, 6), minVersion);
 
 	if(ext & ESHExtension_PAQ)
-		minVersion = U16_max(DXC_SHADER_MODEL(6, 6), minVersion);
+		minVersion = U16_max(OISH_SHADER_MODEL(6, 6), minVersion);
 
 	return minVersion;
 }
@@ -1017,7 +1022,7 @@ Bool Compiler_parse(Compiler comp, CompilerSettings settings, Allocator alloc, C
 				Symbol symj = parser.symbols.ptr[j];
 				Token tok = parser.tokens.ptr[symj.tokenId];
 
-				//[uniform()]
+				//[uniforms()]
 				//[extension()]
 				//[vendor()]
 				//[model()]
@@ -1081,11 +1086,7 @@ Bool Compiler_parse(Compiler comp, CompilerSettings settings, Allocator alloc, C
 
 								runtimeEntry.entry.stage = stage;
 
-								CharString name = parser.symbolNames.ptr[sym.name];
-								name = CharString_createRefSizedConst(
-									name.ptr, CharString_length(name), CharString_isNullTerminated(name)
-								);
-
+								CharString name = CharString_createRefStrConst(parser.symbolNames.ptr[sym.name]);
 								runtimeEntry.entry.name = name;
 							}
 
@@ -1370,12 +1371,12 @@ Bool Compiler_parse(Compiler comp, CompilerSettings settings, Allocator alloc, C
 
 							break;
 
-						case C8x4('u', 'n', 'i', 'f'):		//uniform()
+						case C8x4('u', 'n', 'i', 'f'):		//uniforms()
 
-							//[uniform("X", "Y", "Z")]
-							//[uniform("X" = "123", "Y" = "ABC")]
+							//[uniforms("X", "Y", "Z")]
+							//[uniforms("X" = "123", "Y" = "ABC")]
 							// ^
-							if (tokLen == 7 && *(const U32*)&tokStr.ptr[3] == C8x4('f', 'o', 'r', 'm')) {
+							if (tokLen == 8 && *(const U32*)&tokStr.ptr[4] == C8x4('o', 'r', 'm', 's')) {
 
 								if(symj.tokenCount + 1 < 4)
 									retError(clean, Error_invalidParameter(
@@ -1385,8 +1386,8 @@ Bool Compiler_parse(Compiler comp, CompilerSettings settings, Allocator alloc, C
 
 								U32 tokenEnd = symj.tokenId + symj.tokenCount;
 
-								//[uniform("X")]
-								//        ^
+								//[uniforms("X")]
+								//         ^
 
 								if(
 									parser.tokens.ptr[symj.tokenId + 1].tokenType != ETokenType_RoundParenthesisStart ||
@@ -1404,8 +1405,8 @@ Bool Compiler_parse(Compiler comp, CompilerSettings settings, Allocator alloc, C
 									&runtimeEntry, &tokenCounter, tokenEnd, true, parser, alloc, e_rr
 								))
 
-								//[uniform("X", "Y")]
-								//            ^
+								//[uniforms("X", "Y")]
+								//             ^
 
 								for (U32 k = tokenCounter; k < tokenEnd; ) {
 								

@@ -68,15 +68,11 @@ class oxc3(ConanFile):
 
 	def source(self):
 		git = Git(self)
-		print(self.conan_data)
-		git.clone(url=self.conan_data["sources"][self.version]["url"])
-		git.folder = os.path.join(self.source_folder, "core3")
-		git.checkout(self.conan_data["sources"][self.version]["checkout"])
 		git.run("submodule update --init --recursive")
 
 	def build(self):
 		cmake = CMake(self)
-		cmake.configure(build_script_folder="core3")
+		cmake.configure()
 		cmake.build()
 
 	def requirements(self):
@@ -84,7 +80,7 @@ class oxc3(ConanFile):
 
 	def package(self):
 		cmake = CMake(self)
-		cmake.build(target="install-distribution")
+		cmake.build(target="OxC3")
 		copy(self, "*.lib", "lib", "../../p/lib")
 		copy(self, "*.a", "lib", "../../p/lib")
 		copy(self, "*.lib", "lib/Release", "../../p/lib")

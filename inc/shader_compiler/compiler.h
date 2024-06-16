@@ -197,7 +197,7 @@ typedef enum ECompileBinaryTypes {
 Bool Compiler_compile(
 	Compiler comp,
 	CompilerSettings settings,
-	SHBinaryInfo toCompile,
+	SHBinaryIdentifier toCompile,
 	Allocator alloc,
 	CompileResult *result,
 	Error *e_rr
@@ -226,6 +226,14 @@ void Compiler_freex(Compiler *comp);
 Bool Compiler_preprocessx(Compiler comp, CompilerSettings settings, CompileResult *result, Error *e_rr);
 Bool Compiler_parsex(Compiler comp, CompilerSettings settings, CompileResult *result, Error *e_rr);
 Bool Compiler_mergeIncludeInfox(Compiler *comp, ListIncludeInfo *infos, Error *e_rr);
+
+Bool Compiler_compilex(
+	Compiler comp,
+	CompilerSettings settings,
+	SHBinaryIdentifier toCompile,
+	CompileResult *result,
+	Error *e_rr
+);
 
 #ifdef __cplusplus
 	}

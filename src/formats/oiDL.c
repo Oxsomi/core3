@@ -743,9 +743,7 @@ Error DLFile_read(
 			case EDLDataType_UTF8:	err = DLFile_addEntryUTF8(dlFile, buf, alloc);	break;
 
 			default:
-				err = DLFile_addEntryAscii(dlFile, CharString_createRefSizedConst(
-					(const C8*)ptr, entryLen, false
-				), alloc);
+				err = DLFile_addEntryAscii(dlFile, CharString_createRefSizedConst((const C8*)ptr, entryLen, false), alloc);
 				break;
 		}
 

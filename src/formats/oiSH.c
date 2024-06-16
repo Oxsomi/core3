@@ -29,8 +29,14 @@
 TListImpl(SHEntry);
 TListImpl(SHEntryRuntime);
 TListImpl(SHBinaryInfo);
+TListImpl(SHBinaryIdentifier);
 
 static const U8 SHHeader_V1_2 = 2;
+
+const C8 *ESHBinaryType_names[ESHBinaryType_Count] = {
+	"SPV",
+	"DXIL"
+};
 
 const C8 *SHEntry_stageNames[] = {
 
@@ -78,34 +84,61 @@ const C8 *ESHType_name(ESHType type) {
 	return ESHType_names[type & 0xF];
 }
 
+const C8 *ESHPipelineStage_getStagePrefix(ESHPipelineStage stage) {
+	
+	const C8 *targetPrefix = "lib";
+
+	switch (stage) {
+		default:													break;
+		case ESHPipelineStage_Vertex:		targetPrefix = "vs";	break;
+		case ESHPipelineStage_Pixel:		targetPrefix = "ps";	break;
+		case ESHPipelineStage_Compute:		targetPrefix = "cs";	break;
+		case ESHPipelineStage_GeometryExt:	targetPrefix = "gs";	break;
+		case ESHPipelineStage_Hull:			targetPrefix = "hs";	break;
+		case ESHPipelineStage_Domain:		targetPrefix = "ds";	break;
+		case ESHPipelineStage_MeshExt:		targetPrefix = "ms";	break;
+		case ESHPipelineStage_TaskExt:		targetPrefix = "as";	break;
+	}
+
+	return targetPrefix;
+}
+
 //Helper functions to create it
 
-Error SHFile_create(ESHSettingsFlags flags, U32 compilerVersion, U32 sourceHash, Allocator alloc, SHFile *shFile) {
+Bool SHFile_create(
+	ESHSettingsFlags flags,
+	U32 compilerVersion,
+	U32 sourceHash,
+	Allocator alloc,
+	SHFile *shFile,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
 
 	if(!shFile)
-		return Error_nullPointer(0, "SHFile_create()::shFile is required");
+		retError(clean, Error_nullPointer(0, "SHFile_create()::shFile is required"))
 
 	if(shFile->entries.ptr)
-		return Error_invalidOperation(0, "SHFile_create()::shFile isn't empty, might indicate memleak");
+		retError(clean, Error_invalidOperation(0, "SHFile_create()::shFile isn't empty, might indicate memleak"))
 
 	if(flags & ESHSettingsFlags_Invalid)
-		return Error_invalidParameter(0, 3, "SHFile_create()::flags contained unsupported flag");
+		retError(clean, Error_invalidParameter(0, 3, "SHFile_create()::flags contained unsupported flag"))
 
-	Error err = ListSHEntry_reserve(&shFile->entries, 16, alloc);
-
-	if(err.genericError)
-		return err;
+	gotoIfError2(clean, ListSHEntry_reserve(&shFile->entries, 16, alloc))
 
 	shFile->flags = flags;
 	shFile->compilerVersion = compilerVersion;
 	shFile->sourceHash = sourceHash;
-	return Error_none();
+
+clean:
+	return s_uccess;
 }
 
-Bool SHFile_free(SHFile *shFile, Allocator alloc) {
+void SHFile_free(SHFile *shFile, Allocator alloc) {
 
 	if(!shFile || !shFile->entries.ptr)
-		return true;
+		return;
 
 	for(U64 i = 0; i < shFile->entries.length; ++i) {
 		SHEntry *entry = &shFile->entries.ptrNonConst[i];
@@ -128,116 +161,284 @@ Bool SHFile_free(SHFile *shFile, Allocator alloc) {
 	ListSHBinaryInfo_free(&shFile->binaries, alloc);
 
 	*shFile = (SHFile) { 0 };
-	return true;
+}
 
 //Writing
 
-Error SHFile_addBinary(
-	SHFile *shFile,
-	SHBinaryIdentifier *identifier,
-	ESHBinaryType type,
-	Buffer *entry,
-	Allocator alloc
-) {
+Bool SHFile_addBinaries(SHFile *shFile, SHBinaryInfo *binaries, Allocator alloc, Error *e_rr) {
 
-	if(!shFile || !entry || !Buffer_length(*entry))
-		return Error_nullPointer(!shFile ? 0 : 2, "SHFile_addBinary()::shFile, *entry and entry are required");
+	Bool s_uccess = true;
+	SHBinaryInfo info = (SHBinaryInfo) { 0 };
 
-	if(type >= ESHBinaryType_Count)
-		return Error_invalidEnum(1, (U64)type, (U64)ESHBinaryType_Count, "SHFile_addBinary()::type is invalid");
+	//Validate everything
 
-	if(type == ESHBinaryType_SPIRV && Buffer_length(*entry) & 3)
-		return Error_invalidParameter(2, 0, "SHFile_addBinary()::*entry needs to be U32[] for SPIRV");
+	if(!shFile || !binaries)
+		retError(clean, Error_nullPointer(!shFile ? 0 : 2, "SHFile_addBinary()::shFile and *binaries are required"))
 
-	validate unique uniforms
+	Bool containsBinary = false;
 
-	if(add)
-		if(shFile->binaries.length + 1 >= U16_MAX)
-			return Error_outOfBounds(0, U16_MAX, U16_MAX, "SHFile_addBinary() requires binaries to not exceed U16_MAX");
+	for(U8 i = 0; i < ESHBinaryType_Count; ++i)
+		if(Buffer_length(binaries->binaries[i])) {
+			containsBinary = true;
+			break;
+		}
 
-	Buffer *result = &shFile->binaries[type];
-	Error err = Error_none();
+	if(!containsBinary)
+		retError(clean, Error_nullPointer(
+			!shFile ? 0 : 2, "SHFile_addBinary() at least one of binaries->binaries[i] is required"
+		))
 
-	if(result->ptr)
-		return Error_alreadyDefined(0, "SHFile_addBinary() can't call on already defined binary type");
+	if(!binaries->vendorMask)
+		retError(clean, Error_nullPointer(!shFile ? 0 : 2, "SHFile_addBinary()::binaries->vendorMask is required"))
 
-	if(Buffer_isRef(*entry))
-		gotoIfError(clean, Buffer_createCopy(*entry, alloc, result))
+	if(binaries->vendorMask >> ESHVendor_Count)
+		retError(clean, Error_invalidParameter(2, 0, "SHFile_addBinary()::binaries->vendorMask out of bounds"))
 
-	else *result = *entry;
+	if(binaries->identifier.extensions >> ESHExtension_Count)
+		retError(clean, Error_invalidParameter(2, 0, "SHFile_addBinary()::binaries->identifier.extensions out of bounds"))
 
-	*entry = Buffer_createNull();
+	if(binaries->identifier.stageType >= ESHPipelineStage_Count)
+		retError(clean, Error_invalidParameter(2, 0, "SHFile_addBinary()::binaries->identifier.stageType out of bounds"))
 
-	if(!Buffer_isAscii(CharString_bufferConst(entry->name)))
+	if(binaries->identifier.uniforms.length & 1)
+		retError(clean, Error_invalidParameter(
+			2, 0, "SHFile_addBinary()::binaries->identifier.uniforms needs [uniformName,uniformValue][]"
+		))
+
+	if((binaries->identifier.uniforms.length >> 1) >= U8_MAX)
+		retError(clean, Error_invalidParameter(
+			2, 0, "SHFile_addBinary()::binaries->identifier.uniforms needs to be <=[uniformName,uniformValue][255]"
+		))
+
+	if(binaries->hasShaderAnnotation && (binaries->identifier.stageType || CharString_length(binaries->identifier.entrypoint)))
+		retError(clean, Error_invalidParameter(
+			2, 0, "SHFile_addBinary()::binaries->identifier.stageType or entrypoint is only available to [stage()] annotation"
+		))
+
+	if(!binaries->hasShaderAnnotation && !CharString_length(binaries->identifier.entrypoint))
+		retError(clean, Error_invalidParameter(
+			2, 0, "SHFile_addBinary()::binaries->identifier.entrypoint is required for [stage()] annotation"
+		))
+
+	if(
+		binaries->identifier.shaderVersion < OISH_SHADER_MODEL(6, 3) ||
+		binaries->identifier.shaderVersion > OISH_SHADER_MODEL(6, 8)
+	)
+		retError(clean, Error_invalidParameter(
+			2, 0, "SHFile_addBinary()::binaries->identifier.shaderVersion is unsupported must be 6.3 -> 6.8"
+		))
+
+	if(Buffer_length(binaries->binaries[ESHBinaryType_SPIRV]) & 3)
+		retError(clean, Error_invalidParameter(2, 0, "SHFile_addBinary()::binaries->binaries[SPIRV] needs to be a U32[]"))
+
+	for(U64 i = 0; i < shFile->binaries.length; ++i)
+		if(SHBinaryIdentifier_equals(shFile->binaries.ptr[i].identifier, binaries->identifier))
+			retError(clean, Error_alreadyDefined(0, "SHFile_addBinary() binary identifier was already defined"))
+
+	if(shFile->binaries.length + 1 >= U16_MAX)
+		retError(clean, Error_outOfBounds(0, U16_MAX, U16_MAX, "SHFile_addBinary() requires binaries to not exceed U16_MAX"))
+
+	//Validate unique uniforms
+
+	Bool isUTF8 = false;
+
+	if(!Buffer_isAscii(CharString_bufferConst(binaries->identifier.entrypoint)))
+		isUTF8 = true;
+
+	for (U64 i = 0; i < binaries->identifier.uniforms.length; ++i) {
+
+		if(!Buffer_isAscii(CharString_bufferConst(binaries->identifier.uniforms.ptr[i])))
+			isUTF8 = true;
+
+		if(i && !(i & 1))
+			for(U64 j = 0; j < (i >> 1); ++j)
+				if(CharString_equalsStringSensitive(
+					binaries->identifier.uniforms.ptr[i], 
+					binaries->identifier.uniforms.ptr[j << 1]
+				))
+					retError(clean, Error_alreadyDefined(0, "SHFile_addBinary() uniform already defined"))
+	}
+
+	//Start copying
+
+	void *dstU64 = &info.identifier.extensions;
+	const void *srcU64 = &info.identifier.extensions;
+
+	*(U64*)dstU64 = *(const U64*) srcU64;
+
+	//Copy buffers
+
+	for(U8 i = 0; i < ESHBinaryType_Count; ++i) {
+
+		Buffer *entry = &binaries->binaries[i];
+		Buffer *result = &info.binaries[i];
+
+		if(Buffer_isRef(*entry))
+			gotoIfError2(clean, Buffer_createCopy(*entry, alloc, result))
+
+		else *result = *entry;
+
+		*entry = Buffer_createNull();
+	}
+
+	//Copy entrypoint
+
+	if(CharString_isRef(binaries->identifier.entrypoint))
+		gotoIfError2(clean, CharString_createCopy(binaries->identifier.entrypoint, alloc, &info.identifier.entrypoint))
+
+	else info.identifier.entrypoint = binaries->identifier.entrypoint;
+
+	binaries->identifier.entrypoint = CharString_createNull();
+
+	//Copy uniforms
+
+	if(ListCharString_isRef(binaries->identifier.uniforms))
+		gotoIfError2(clean, ListCharString_createCopyUnderlying(
+			binaries->identifier.uniforms, alloc, &info.identifier.uniforms
+		))
+
+	else {
+
+		info.identifier.uniforms = binaries->identifier.uniforms;
+		binaries->identifier.uniforms = (ListCharString) { 0 };
+
+		for (U64 i = 0; i < info.identifier.uniforms.length; ++i) {
+
+			CharString *uniform = &info.identifier.uniforms.ptrNonConst[i], uniformOld = *uniform;
+
+			if(!CharString_isRef(uniformOld))		//It's already moved
+				continue;
+
+			*uniform = CharString_createNull();
+			gotoIfError2(clean, CharString_createCopy(uniformOld, alloc, uniform))		//Allocate real data
+		}
+	}
+
+	//Finalize
+
+	if(isUTF8)
 		shFile->flags |= ESHSettingsFlags_IsUTF8;
 
+	gotoIfError2(clean, ListSHBinaryInfo_pushBack(&shFile->binaries, info, alloc))
+	*binaries = info = (SHBinaryInfo) { 0 };
+
 clean:
-	return err;
+	SHBinaryInfo_free(&info, alloc);
+	return s_uccess;
 }
 
-Error SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, Allocator alloc) {
+typedef enum ESHPipelineType {
+	ESHPipelineType_Compute,
+	ESHPipelineType_Graphics,
+	ESHPipelineType_Raytracing
+} ESHPipelineType;
+
+Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, Allocator alloc, Error *e_rr) {
+
+	Bool s_uccess = true;
+
+	CharString copy = CharString_createNull();
+	CharString oldName = copy;
+
+	ListU16 copyBinaryIds = (ListU16) { 0 };
+	ListU16 oldBinaryIds = copyBinaryIds;
 
 	if (!shFile || !shFile->entries.ptr || !entry)
-		return Error_nullPointer(!shFile ? 0 : 1, "SHFile_addEntrypoint()::shFile and entry are required");
+		retError(clean, Error_nullPointer(!shFile ? 0 : 1, "SHFile_addEntrypoint()::shFile and entry are required"))
 
 	if(shFile->entries.length + 1 >= U16_MAX)
-		return Error_outOfBounds(0, U16_MAX, U16_MAX, "SHFile_addEntrypoint() requires entries to not exceed U16_MAX");
+		retError(clean, Error_outOfBounds(
+			0, U16_MAX, U16_MAX, "SHFile_addEntrypoint() requires entries to not exceed U16_MAX"
+		))
 
 	if(!CharString_length(entry->name))
-		return Error_nullPointer(1, "SHFile_addEntrypoint()::entry->name is required");
+		retError(clean, Error_nullPointer(1, "SHFile_addEntrypoint()::entry->name is required"))
 
 	if(entry->stage >= ESHPipelineStage_Count)
-		return Error_invalidEnum(1, entry->stage, ESHPipelineStage_Count, "SHFile_addEntrypoint()::entry->stage invalid enum");
+		retError(clean, Error_invalidEnum(
+			1, entry->stage, ESHPipelineStage_Count, "SHFile_addEntrypoint()::entry->stage invalid enum"
+		))
 
-	binaryIds or binaryCount;
-	waveSize;
+	for(U64 i = 0; i < entry->binaryIds.length; ++i)
+		if(entry->binaryIds.ptr[i] >= shFile->binaries.length)
+			retError(clean, Error_outOfBounds(
+				0, i, entry->binaryIds.ptr[i], "SHFile_addEntrypoint() binaryIds[i] out of bounds"
+			))
 
-	ESHPipelineType pipelineType = entry->stage == ESHPipelineStage_Compute ? ESHPipelineType_Compute : (
-		entry->stage >= ESHPipelineStage_RtStartExt && entry->stage <= ESHPipelineStage_RtEndExt ? ESHPipelineType_Raytracing : (
-			entry->stage == ESHPipelineStage_WorkgraphExt ? ESHPipelineType_Workgraph : ESHPipelineType_Graphics
-		)
-	);
+	if(entry->binaryIds.length >= U8_MAX)
+		retError(clean, Error_outOfBounds(
+			0, entry->binaryIds.length, U8_MAX, "SHFile_addEntrypoint() binaryIds.length out of bounds"
+		))
+
+	for(U8 i = 0; i < 3; ++i)
+		if(((entry->waveSize >> (i << 2)) & 0xF) > 9)
+			retError(clean, Error_outOfBounds(
+				0, (entry->waveSize >> (i << 2)) & 0xF, 9, "SHFile_addEntrypoint() waveSize out of bounds"
+			))
+			
+	if(entry->waveSize >> 12)
+		retError(clean, Error_outOfBounds(
+			0, entry->waveSize, 1 << 12, "SHFile_addEntrypoint() waveSize[3] should be empty"
+		))
+
+	Bool isRt = entry->stage >= ESHPipelineStage_RtStartExt && entry->stage <= ESHPipelineStage_RtEndExt;
+
+	ESHPipelineType pipelineType =
+		entry->stage == ESHPipelineStage_Compute ? ESHPipelineType_Compute : (isRt ? ESHPipelineType_Raytracing : (
+			entry->stage == ESHPipelineStage_WorkgraphExt ? ESHPipelineType_Compute : ESHPipelineType_Graphics
+		));
 
 	U16 groupXYZ = entry->groupX | entry->groupY | entry->groupZ;
 	U64 totalGroup = (U64)entry->groupX * entry->groupY * entry->groupZ;
 
-	if(pipelineType != ESHPipelineType_Compute && pipelineType != ESHPipelineType_Workgraph && groupXYZ)
-		return Error_invalidOperation(2, "SHFile_addEntrypoint() can't have group size for non compute");
+	if(pipelineType != ESHPipelineType_Compute && groupXYZ)
+		retError(clean, Error_invalidOperation(2, "SHFile_addEntrypoint() can't have group size for non compute"))
 
-	if((pipelineType == ESHPipelineType_Compute || pipelineType == ESHPipelineType_Workgraph) && !totalGroup)
-		return Error_invalidOperation(2, "SHFile_addEntrypoint() needs group size for compute");
+	if(pipelineType == ESHPipelineType_Compute && !totalGroup)
+		retError(clean, Error_invalidOperation(2, "SHFile_addEntrypoint() needs group size for compute"))
 
 	if(totalGroup > 512)
-		return Error_invalidOperation(2, "SHFile_addEntrypoint() group count out of bounds (512)");
+		retError(clean, Error_invalidOperation(2, "SHFile_addEntrypoint() group count out of bounds (512)"))
 
 	if(U16_max(entry->groupX, entry->groupY) > 512)
-		return Error_invalidOperation(2, "SHFile_addEntrypoint() group count x or y out of bounds (512)");
+		retError(clean, Error_invalidOperation(2, "SHFile_addEntrypoint() group count x or y out of bounds (512)"))
 
 	if(entry->groupZ > 64)
-		return Error_invalidOperation(2, "SHFile_addEntrypoint() group count z out of bounds (64)");
+		retError(clean, Error_invalidOperation(2, "SHFile_addEntrypoint() group count z out of bounds (64)"))
 
 	if(
-		entry->stage == ESHPipelineStage_ClosestHitExt || entry->stage == ESHPipelineStage_AnyHitExt ||
+		entry->stage == ESHPipelineStage_ClosestHitExt ||
+		entry->stage == ESHPipelineStage_AnyHitExt ||
 		entry->stage == ESHPipelineStage_IntersectionExt
 	) {
 		if(!entry->payloadSize)
-			return Error_invalidOperation(2, "SHFile_addEntrypoint() payloadSize is required for hit/intersection shaders");
+			retError(clean, Error_invalidOperation(
+				2, "SHFile_addEntrypoint() payloadSize is required for hit/intersection shaders"
+			))
 	}
 
 	else if(entry->payloadSize)
-		return Error_invalidOperation(2, "SHFile_addEntrypoint() payloadSize is only required for hit/intersection shaders");
+		retError(clean, Error_invalidOperation(
+			2, "SHFile_addEntrypoint() payloadSize is only required for hit/intersection shaders"
+		))
 
 	if(!entry->intersectionSize) {
 
 		if(entry->stage == ESHPipelineStage_IntersectionExt)
-			return Error_invalidOperation(2, "SHFile_addEntrypoint() intersectionSize is required for intersection shader");
+			retError(clean, Error_invalidOperation(
+				2, "SHFile_addEntrypoint() intersectionSize is required for intersection shader"
+			))
 	}
 
 	else if(entry->stage != ESHPipelineStage_IntersectionExt)
-		return Error_invalidOperation(2, "SHFile_addEntrypoint() intersectionSize is only required for intersection shader");
+		retError(clean, Error_invalidOperation(
+			2, "SHFile_addEntrypoint() intersectionSize is only required for intersection shader"
+		))
 
 	if (pipelineType != ESHPipelineType_Graphics && (entry->outputsU64 | entry->inputsU64))
-		return Error_invalidOperation(3, "SHFile_addEntrypoint() outputsU64 and inputsU64 are only for graphics shaders");
+		retError(clean, Error_invalidOperation(
+			3, "SHFile_addEntrypoint() outputsU64 and inputsU64 are only for graphics shaders"
+		))
 
 	//Check validity of inputs and outputs
 
@@ -248,21 +449,26 @@ Error SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, Allocator alloc) {
 			U8 vin = (entry->inputs[i >> 1] >> ((i & 1) << 2)) & 0xF;
 
 			if((vout && vout < ESHType_F32) || (vin && vin < ESHType_F32))
-				return Error_invalidOperation(
+				retError(clean, Error_invalidOperation(
 					3, "SHFile_addEntrypoint() outputs or inputs contains an invalid parameter"
-				);
+				))
 		}
 
-	Error err = Error_none();
-	CharString copy = CharString_createNull();
-	CharString oldName = entry->name;
+	oldName = entry->name;
 
 	if (CharString_isRef(entry->name)) {
-		gotoIfError(clean, CharString_createCopy(entry->name, alloc, &copy))
+		gotoIfError2(clean, CharString_createCopy(entry->name, alloc, &copy))
 		entry->name = copy;
 	}
 
-	gotoIfError(clean, ListSHEntry_pushBack(&shFile->entries, *entry, alloc))
+	oldBinaryIds = entry->binaryIds;
+
+	if (ListU16_isRef(entry->binaryIds)) {
+		gotoIfError2(clean, ListU16_createCopy(entry->binaryIds, alloc, &copyBinaryIds))
+		entry->binaryIds = copyBinaryIds;
+	}
+
+	gotoIfError2(clean, ListSHEntry_pushBack(&shFile->entries, *entry, alloc))
 
 	if(!Buffer_isAscii(CharString_bufferConst(entry->name)))
 		shFile->flags |= ESHSettingsFlags_IsUTF8;
@@ -271,12 +477,17 @@ Error SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, Allocator alloc) {
 
 clean:
 
-	if(err.genericError && copy.ptr) {
+	if(!s_uccess && copy.ptr) {
 		CharString_free(&copy, alloc);
 		entry->name = oldName;
 	}
 
-	return err;
+	if(!s_uccess && copyBinaryIds.ptr) {
+		ListU16_free(&copyBinaryIds, alloc);
+		entry->binaryIds = oldBinaryIds;
+	}
+
+	return s_uccess;
 }
 
 typedef enum ESHBinaryFlags {
@@ -353,6 +564,81 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 	Buffer dlFileBuf = Buffer_createNull();
 	gotoIfError2(clean, DLFile_create(settings, alloc, &dlFile))
 
+	//Calculate easy sizes and add uniform names
+
+	U64 binaryCount[ESHBinaryType_Count] = { 0 };
+	U8 requiredTypes[ESHBinaryType_Count] = { 0 };
+
+	for(U64 i = 0; i < shFile.binaries.length; ++i) {
+
+		SHBinaryInfo binary = shFile.binaries.ptr[i];
+
+		//Register uniform names
+
+		for (U64 j = 0; j < binary.identifier.uniforms.length; j += 2) {
+
+			//Only add if it's new
+
+			CharString str = binary.identifier.uniforms.ptr[j];
+
+			if(dlFile.entryBuffers.length - shFile.entries.length >= U16_MAX - 1)
+				retError(clean, Error_invalidState(0, "DLFile didn't have space for uniform names"))
+
+			if(isUTF8)
+				gotoIfError2(clean, DLFile_addEntryUTF8(&dlFile, CharString_bufferConst(str), alloc))
+
+			else gotoIfError2(clean, DLFile_addEntryAscii(&dlFile, str, alloc))
+		}
+
+		//Add size
+
+		headerSize += binary.identifier.uniforms.length * sizeof(U16);
+
+		for(U8 j = 0; j < ESHBinaryType_Count; ++j) {
+
+			U64 leni = Buffer_length(binary.binaries[j]);
+			headerSize += leni;
+
+			if(leni) {
+				++binaryCount[j];
+				EXXDataSizeType requiredType = EXXDataSizeType_getRequiredType(leni);
+				requiredTypes[j] = U8_max(requiredTypes[j], (U8) requiredType);
+			}
+		}
+	}
+
+	//Add uniform values
+
+	U64 uniformNamesStart = 0;
+	U64 uniformValuesStart = dlFile.entryBuffers.length;
+
+	for(U64 i = 0; i < shFile.binaries.length; ++i) {
+
+		SHBinaryInfo binary = shFile.binaries.ptr[i];
+
+		//Register uniform values
+
+		for (U64 j = 1; j < binary.identifier.uniforms.length; j += 2) {
+
+			//Only add if it's new
+
+			CharString str = binary.identifier.uniforms.ptr[j];
+
+			if(DLFile_find(dlFile, uniformValuesStart, dlFile.entryBuffers.length, str) != U64_MAX)
+				continue;
+
+			if(dlFile.entryBuffers.length - uniformValuesStart >= U16_MAX - 1)
+				retError(clean, Error_invalidState(0, "DLFile didn't have space for uniform values"))
+
+			if(isUTF8)
+				gotoIfError2(clean, DLFile_addEntryUTF8(&dlFile, CharString_bufferConst(str), alloc))
+
+			else gotoIfError2(clean, DLFile_addEntryAscii(&dlFile, str, alloc))
+		}
+	}
+
+	//Add entries
+
 	for (U64 i = 0; i < shFile.entries.length; ++i) {
 
 		SHEntry entry = shFile.entries.ptr[i];
@@ -416,86 +702,6 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 		shFile.entries.length * sizeof(EntryInfoFixedSize) +
 		shFile.binaries.length * sizeof(BinaryInfoFixedSize);
 
-	U64 binaryCount[ESHBinaryType_Count] = { 0 };
-	U8 requiredTypes[ESHBinaryType_Count] = { 0 };
-
-	U64 uniformNamesStart = shFile.entries.length;
-	U64 uniformValuesStart = uniformNamesStart;
-
-	//Calculate easy sizes and add uniform names
-
-	for(U64 i = 0; i < shFile.binaries.length; ++i) {
-
-		SHBinaryInfo binary = shFile.binaries.ptr[i];
-
-		//Register uniform names
-
-		for (U64 j = 0; j < binary.identifier.uniforms.length; j += 2) {
-
-			//Only add if it's new
-
-			CharString str = binary.identifier.uniforms.ptr[j];
-
-			if(DLFile_find(dlFile, shFile.entries.length, dlFile.entryBuffers.length, str) != U64_MAX)
-				continue;
-
-			if(dlFile.entryBuffers.length - shFile.entries.length >= U16_MAX - 1)
-				retError(clean, Error_invalidState(0, "DLFile didn't have space for uniform names"))
-
-			if(isUTF8)
-				gotoIfError2(clean, DLFile_addEntryUTF8(&dlFile, CharString_bufferConst(str), alloc))
-
-			else gotoIfError2(clean, DLFile_addEntryAscii(&dlFile, str, alloc))
-		}
-
-		//Add size
-
-		len += binary.identifier.uniforms.length * sizeof(U16);
-
-		U8 requiredType[ESHBinaryType_Count] = { 0 };			//Find required type
-
-		for(U8 j = 0; j < ESHBinaryType_Count; ++j) {
-
-			U64 leni = Buffer_length(binary.binaries[j]);
-			len += leni;
-
-			if(leni) {
-				++binaryCount[j];
-				EXXDataSizeType requiredType = EXXDataSizeType_getRequiredType(leni);
-				requiredTypes[j] = U8_max(requiredTypes[j], (U8) requiredType);
-			}
-		}
-	}
-
-	//Add uniform values
-
-	uniformValuesStart = dlFile.entryBuffers.length;
-
-	for(U64 i = 0; i < shFile.binaries.length; ++i) {
-
-		SHBinaryInfo binary = shFile.binaries.ptr[i];
-
-		//Register uniform values
-
-		for (U64 j = 1; j < binary.identifier.uniforms.length; j += 2) {
-
-			//Only add if it's new
-
-			CharString str = binary.identifier.uniforms.ptr[j];
-
-			if(DLFile_find(dlFile, uniformValuesStart, dlFile.entryBuffers.length, str) != U64_MAX)
-				continue;
-
-			if(dlFile.entryBuffers.length - uniformValuesStart >= U16_MAX - 1)
-				retError(clean, Error_invalidState(0, "DLFile didn't have space for uniform values"))
-
-			if(isUTF8)
-				gotoIfError2(clean, DLFile_addEntryUTF8(&dlFile, CharString_bufferConst(str), alloc))
-
-			else gotoIfError2(clean, DLFile_addEntryAscii(&dlFile, str, alloc))
-		}
-	}
-
 	//Create sizes and calculate binary size buffer size
 
 	U8 sizeTypes = 0;
@@ -534,9 +740,9 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 
 	//Fill entries
 
-	EntryInfoFixedSize *stagesStaticStart = (EntryInfoFixedSize*) headerIt;
-	BinaryInfoFixedSize *binaryStaticStart = (BinaryInfoFixedSize*)(stagesStaticStart + shFile.entries.length);
-	U8 *pipelineStagesStart = (U8*)(binaryStaticStart + shFile.binaries.length);
+	BinaryInfoFixedSize *binaryStaticStart = (BinaryInfoFixedSize*) headerIt;
+	EntryInfoFixedSize *stagesStaticStart = (EntryInfoFixedSize*) (binaryStaticStart + shFile.binaries.length);
+	U8 *pipelineStagesStart = (U8*)(stagesStaticStart + shFile.entries.length);
 	headerIt = pipelineStagesStart;
 
 	for (U64 i = 0; i < shFile.entries.length; ++i) {
@@ -642,6 +848,8 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 	
 	//Fill binaries
 
+	U64 entries = shFile.entries.length;
+
 	for (U64 i = 0; i < shFile.binaries.length; ++i) {
 
 		SHBinaryInfo binary = shFile.binaries.ptr[i];
@@ -650,20 +858,26 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 
 		ESHBinaryFlags binaryFlags = ESHBinaryFlags_None;
 
-		if(binary.identifier.hasShaderAnnotation)
+		if(binary.hasShaderAnnotation)
 			binaryFlags |= ESHBinaryFlags_HasShaderAnnotation;
 
 		for(U8 j = 0; j < ESHBinaryType_Count; ++j)
 			if(Buffer_length(binary.binaries[j]))
 				binaryFlags |= 1 << j;
 
-		U16 entrypoint = (U16) DLFile_find(dlFile, 0, shFile.entries.length, binary.identifier.entrypoint);
+		U16 entrypoint = (U16) DLFile_find(
+			dlFile, dlFile.entryBuffers.length - entries, dlFile.entryBuffers.length, binary.identifier.entrypoint
+		);
+
+		if(entrypoint == U16_MAX)
+			retError(clean, Error_invalidState(0, "SHFile_write() couldn't link binary to entrypoint"))
+
 		U8 uniformCount = (U8)(binary.identifier.uniforms.length >> 1);
 
 		binaryStaticStart[i] = (BinaryInfoFixedSize) {
 
 			.shaderModel = ((binary.identifier.shaderVersion >> 4) & 0xF0) | (binary.identifier.shaderVersion & 0xF),
-			.entrypointType = binary.identifier.stageType,
+			.entrypointType = (U8) binary.identifier.stageType,
 			.entrypoint = entrypoint,
 
 			.vendorMask = binary.vendorMask,
@@ -708,12 +922,12 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 
 	//Finalize by adding the hash
 
-	U64 len = headerIt - (const U8*) shHeader;
-	len -= offsetof(SHHeader, version);
+	U64 hashLen = headerIt - (const U8*) shHeader;
+	hashLen -= offsetof(SHHeader, version);
 
 	const U8 *shHashStart = (const U8*) &shHeader->version;
 
-	shHeader->hash = Buffer_crc32c(Buffer_createRefConst((const U8*) shHeader, len));
+	shHeader->hash = Buffer_crc32c(Buffer_createRefConst((const U8*) shHashStart, hashLen));
 	shHeader->compilerVersion = shFile.compilerVersion;
 
 	Ns time = Time_now();
@@ -808,8 +1022,125 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 	if(dlFile.settings.dataType == EDLDataType_UTF8)
 		flags |= ESHSettingsFlags_IsUTF8;
 
-	gotoIfError2(clean, SHFile_create(flags, header.compilerVersion, header.sourceHash, alloc, shFile))
+	gotoIfError3(clean, SHFile_create(flags, header.compilerVersion, header.sourceHash, alloc, shFile, e_rr))
 
+	//Parse binaries
+
+	for(U64 j = 0; j < header.binaryCount; ++j) {
+
+		BinaryInfoFixedSize binary = fixedBinaryInfo[j];
+
+		if(!(binary.binaryFlags & ESHBinaryFlags_HasShaderAnnotation) && binary.entrypointType >= ESHPipelineStage_Count)
+			retError(clean, Error_invalidState(
+				1, "SHFile_read() contained binary that was marked as stage annotation but had no valid stageType"
+			))
+
+		binaryInfo = (SHBinaryInfo) {
+
+			.identifier = (SHBinaryIdentifier) {
+				.extensions = binary.extensions,
+				.shaderVersion = ((binary.shaderModel & 0xF0) << 4) | (binary.shaderModel & 0xF),
+				.stageType = binary.entrypointType
+			},
+
+			.vendorMask = binary.vendorMask,
+			.hasShaderAnnotation = binary.binaryFlags & ESHBinaryFlags_HasShaderAnnotation
+		};
+
+		//Validate if entrypoint does actually reference binary
+
+		if(binary.entrypoint != U16_MAX) {
+
+			if(binary.binaryFlags & ESHBinaryFlags_HasShaderAnnotation)
+				retError(clean, Error_invalidState(
+					1, "SHFile_read() contained binary that was marked as shader annotation but had entrypoint != U16_MAX"
+				))
+
+			if(binary.entrypoint >= header.stageCount)
+				retError(clean, Error_outOfBounds(
+					0, binary.entrypoint, header.stageCount, "SHFile_read() one of the entrypoint ids it out of bounds"
+				))
+
+			CharString name = DLFile_stringAt(
+				dlFile, dlFile.entryBuffers.length - header.stageCount + binary.entrypoint, NULL
+			);
+
+			gotoIfError2(clean, CharString_createCopy(name, alloc, &binaryInfo.identifier.entrypoint))
+		}
+
+		//Check if any entrypoint references this binary
+
+		else if(!(binary.binaryFlags & ESHBinaryFlags_HasShaderAnnotation))
+			retError(clean, Error_invalidState(
+				1, "SHFile_read() contained binary that wasn't marked as shader annotation but had entrypoint = U16_MAX"
+			))
+
+		//Grab uniforms
+
+		const U16 *uniformNames = (const U16*) file.ptr;
+		const U16 *uniformValues = uniformNames + binary.uniformCount;
+		const U16 *uniformsEnd = uniformValues + binary.uniformCount;
+
+		gotoIfError2(clean, Buffer_offset(&file, (const U8*) uniformsEnd - file.ptr))
+
+		//Parse uniforms (names must be unique)
+
+		ListCharString *uniformStrs = &binaryInfo.identifier.uniforms;
+		gotoIfError2(clean, ListCharString_resize(uniformStrs, (U64) binary.uniformCount * 2, alloc))
+
+		for(U64 i = 0; i < binary.uniformCount; ++i) {
+
+			//Grab uniform and values
+
+			Bool success = false;
+			CharString uniformName = DLFile_stringAt(dlFile, (U64) uniformNames[i], &success);
+
+			if(!success)
+				retError(clean, Error_invalidState(1, "SHFile_read() uniformName didn't exist"))
+				
+			CharString uniformValue = DLFile_stringAt(dlFile, (U64) uniformValues[i] + binary.uniformCount, &success);
+
+			if(!success)
+				retError(clean, Error_invalidState(1, "SHFile_read() uniformValue didn't exist"))
+
+			//Check for duplicate uniform names
+
+			for(U64 k = 0; k < i; ++k)
+				if(CharString_equalsStringSensitive(uniformStrs->ptr[k << 1], uniformName))
+					retError(clean, Error_alreadyDefined(1, "SHFile_read() uniformName already declared"))
+
+			//Store
+
+			gotoIfError2(clean, CharString_createCopy(uniformName, alloc, &uniformStrs->ptrNonConst[i << 1]));
+			gotoIfError2(clean, CharString_createCopy(uniformValue, alloc, &uniformStrs->ptrNonConst[(i << 1) | 1]));
+		}
+
+		//Get binarySizes
+
+		U64 binarySize[ESHBinaryType_Count] = { 0 };
+
+		for (U8 i = 0; i < ESHBinaryType_Count; ++i) {
+
+			if(!(binary.binaryFlags >> i))
+				continue;
+
+			gotoIfError2(clean, Buffer_consumeSizeType(&file, (header.sizeTypes >> (i << 1)) & 3, &binarySize[i]))
+		}
+
+		for (U8 i = 0; i < ESHBinaryType_Count; ++i) {
+
+			if(!binarySize[i])
+				continue;
+
+			Buffer entryBuf = Buffer_createRefConst(file.ptr, binarySize[i]);
+			gotoIfError2(clean, Buffer_offset(&file, binarySize[i]))
+
+			gotoIfError2(clean, Buffer_createCopy(entryBuf, alloc, &binaryInfo.binaries[i]))
+		}
+
+		gotoIfError3(clean, SHFile_addBinaries(shFile, &binaryInfo, alloc, e_rr))
+	}
+	
 	//Parse stages
 
 	const U8 *nextMemPrev = file.ptr;
@@ -829,10 +1160,12 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 		if(!binaryCount)
 			retError(clean, Error_invalidParameter(0, 0, "SHFile_read() stage[i].binaryCount must be >0"))
 
-		CharString str = DLFile_stringAt(dlFile, i, NULL);		//Already safety checked
+		U64 start = dlFile.entryBuffers.length - header.stageCount;
 
-		if(DLFile_find(dlFile, 0, i, str) != U64_MAX)
-			retError(clean, Error_alreadyDefined(0, 0, "SHFile_read() dlFile included duplicate entrypoint name"))
+		CharString str = DLFile_stringAt(dlFile, start + i, NULL);		//Already safety checked
+
+		if(DLFile_find(dlFile, start, start + i, str) != U64_MAX)
+			retError(clean, Error_alreadyDefined(0, "SHFile_read() dlFile included duplicate entrypoint name"))
 
 		gotoIfError2(clean, CharString_createCopy(str, alloc, &entry.name))
 
@@ -849,7 +1182,7 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 						0, nextMem - file.ptr, Buffer_length(file), "SHFile_read() couldn't parse compute stage, out of bounds"
 					))
 
-				const U16 *groups = *(const U16*)nextMemTemp;
+				const U16 *groups = (const U16*)nextMemTemp;
 				entry.groupX   = groups[0];
 				entry.groupY   = groups[1];
 				entry.groupZ   = groups[2];
@@ -954,7 +1287,7 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 			))
 
 		ListU16 binaries = (ListU16) { 0 };
-		gotoIfError2(clean, ListU16_createRefConst(nextMem, binaryCount, &binaries))
+		gotoIfError2(clean, ListU16_createRefConst((const U16*) nextMem, binaryCount, &binaries))
 		gotoIfError2(clean, ListU16_insertAll(&entry.binaryIds, binaries, 0, alloc))
 
 		for(U64 j = 0; j < binaries.length; ++j) {
@@ -966,85 +1299,28 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 					0, binaryId, header.binaryCount, "SHFile_read() one of the binary ids it out of bounds"
 				))
 
-			U16 entry = fixedBinaryInfo[binaryId].entrypoint;
+			U16 entryId = fixedBinaryInfo[binaryId].entrypoint;
 
-			if(entry != U16_MAX && entry != i)
+			if(entryId != U16_MAX && entryId != i)
 				retError(clean, Error_invalidParameter(
 					0, 0, "SHFile_read() stage[i].binaries[j] referenced that had mismatching entryId"
 				))
 		}
 
-		gotoIfError2(clean, SHFile_addEntrypoint(shFile, &entry, alloc))
+		gotoIfError3(clean, SHFile_addEntrypoint(shFile, &entry, alloc, e_rr))
 		entry = (SHEntry) { 0 };
 	}
 
 	gotoIfError2(clean, Buffer_offset(&file, nextMem - nextMemPrev))
 
-	//Parse binaries
+	//Verify if every binary has a stage
 
-	for(U64 j = 0; j < header.binaryCount; ++j) {
+	for (U64 j = 0; j < shFile->binaries.length; ++j) {
 
-		BinaryInfoFixedSize binary = fixedBinaryInfo[j];
+		SHBinaryInfo info = shFile->binaries.ptr[j];
 
-		if(!(binary.binaryFlags & ESHBinaryFlags_HasShaderAnnotation) && binary.entrypointType >= ESHPipelineStage_Count)
-			retError(clean, Error_invalidState(
-				1, "SHFile_read() contained binary that was marked as stage annotation but had no valid stageType"
-			))
-
-		binaryInfo = (SHBinaryInfo) {
-
-			.identifier = (SHBinaryIdentifier) {
-				.extensions = binary.extensions,
-				.shaderVersion = ((binary.shaderModel & 0xF0) << 4) | (binary.shaderModel & 0xF),
-				.stageType = binary.entrypointType,
-				.hasShaderAnnotation = binary.binaryFlags & ESHBinaryFlags_HasShaderAnnotation
-			},
-
-			.vendorMask = binary.vendorMask
-		};
-
-		//Validate if entrypoint does actually reference binary
-
-		if(binary.entrypoint != U16_MAX) {
-
-			if(binary.binaryFlags & ESHBinaryFlags_HasShaderAnnotation)
-				retError(clean, Error_invalidState(
-					1, "SHFile_read() contained binary that was marked as shader annotation but had entrypoint != U16_MAX"
-				))
-
-			if(binary.entrypoint >= header.stageCount)
-				retError(clean, Error_outOfBounds(
-					0, binary.entrypoint, header.stageCount, "SHFile_read() one of the entrypoint ids it out of bounds"
-				))
-
-			SHEntry entryj = shFile->entries.ptr[binary.entrypoint];
-			ListU16 binaries = entryj.binaryIds;
-
-			Bool contains = false;
-
-			for(U64 i = 0; i < binaries.length; ++i)
-				if(binaries.ptr[i] == j) {
-					contains = true;
-					break;
-				}
-
-			if(!contains)
-				retError(clean, Error_invalidState(
-					1, "SHFile_read() contained binary that wasn't referenced by the entrypoint"
-				))
-
-			gotoIfError2(clean, CharString_createCopy(entryj.name, alloc, &binaryInfo.identifier.entrypoint))
-		}
-
-		//Check if any entrypoint references this binary
-
-		else {
-
-			if(!(binary.binaryFlags & ESHBinaryFlags_HasShaderAnnotation))
-				retError(clean, Error_invalidState(
-					1, "SHFile_read() contained binary that wasn't marked as shader annotation but had entrypoint = U16_MAX"
-				))
-
+		if (info.hasShaderAnnotation) {
+		
 			Bool contains = false;
 
 			for(U64 i = 0; i < shFile->entries.length; ++i) {
@@ -1060,7 +1336,6 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 				if(contains)
 					break;
 			}
-				
 
 			if(!contains)
 				retError(clean, Error_invalidState(
@@ -1068,72 +1343,23 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 				))
 		}
 
-		//Grab uniforms
+		else {
 
-		const U16 *uniformNames = (const U16*) file.ptr;
-		const U16 *uniformValues = uniformNames + binary.uniformCount;
-		const U16 *uniformsEnd = uniformValues + binary.uniformCount;
+			ListU16 binaries = shFile->entries.ptr[fixedBinaryInfo[j].entrypoint].binaryIds;
 
-		gotoIfError2(clean, Buffer_offset(&file, (const U8*) uniformsEnd - file.ptr))
+			Bool contains = false;
 
-		//Parse uniforms (names must be unique)
+			for(U64 i = 0; i < binaries.length; ++i)
+				if(binaries.ptr[i] == j) {
+					contains = true;
+					break;
+				}
 
-		ListCharString *uniformStrs = &binaryInfo.identifier.uniforms;
-		gotoIfError2(clean, ListCharString_resize(uniformStrs, (U64) binary.uniformCount * 2, alloc))
-
-		for(U64 i = 0; i < binary.uniformCount; ++i) {
-
-			//Grab uniform and values
-
-			Bool success = false;
-			CharString uniformName = DLFile_stringAt(dlFile, (U64) uniformNames[i] + header.stageCount, &success);
-
-			if(!success)
-				retError(clean, Error_invalidState(1, "SHFile_read() uniformName didn't exist"))
-				
-			CharString uniformValue = DLFile_stringAt(
-				dlFile, (U64) uniformValues[i] + header.stageCount + binary.uniformCount, &success
-			);
-
-			if(!success)
-				retError(clean, Error_invalidState(1, "SHFile_read() uniformValue didn't exist"))
-
-			//Check for duplicate uniform names
-
-			for(U64 k = 0; k < i; ++k)
-				if(CharString_equalsStringSensitive(uniformStrs->ptr[k << 1], uniformName))
-					retError(clean, Error_alreadyDefined(1, "SHFile_read() uniformName already declared"))
-
-			//Store
-
-			gotoIfError2(clean, CharString_createCopy(uniformName, alloc, &uniformStrs->ptr[i << 1]));
-			gotoIfError2(clean, CharString_createCopy(uniformValue, alloc, &uniformStrs->ptr[(i << 1) | 1]));
+			if(!contains)
+				retError(clean, Error_invalidState(
+					1, "SHFile_read() contained binary that wasn't referenced by the entrypoint"
+				))
 		}
-
-		//Get binarySizes
-
-		U64 binarySize[ESHBinaryType_Count] = { 0 };
-
-		for (U8 i = 0; i < ESHBinaryType_Count; ++i) {
-
-			if(!(binary.binaryFlags >> i))
-				continue;
-
-			gotoIfError2(clean, Buffer_consumeSizeType(&file, (header.sizeTypes >> (i << 1)) & 3, &binarySize[i]))
-		}
-
-		for (U8 i = 0; i < ESHBinaryType_Count; ++i) {
-
-			if(!binarySize[i])
-				continue;
-
-			Buffer entry = Buffer_createRefConst(file.ptr, binarySize[i]);
-			gotoIfError2(clean, Buffer_offset(&file, binarySize[i]))
-
-			gotoIfError2(clean, Buffer_createCopy(entry, alloc, &binaryInfo.binaries[i]))
-		}
-
-		gotoIfError3(clean, SHFile_addBinary(shFile, &binaryInfo, alloc))
 	}
 
 	//Store read length if it's a subfile
@@ -1168,7 +1394,111 @@ static const C8 *vendors[] = {
 };
 
 U32 SHEntryRuntime_getCombinations(SHEntryRuntime runtime) {
-	return (U32)(runtime.uniformsPerCompilation.length * runtime.extensions.length * runtime.shaderVersions.length);
+	return (U32)(
+		U64_max(runtime.shaderVersions.length, 1) *
+		U64_max(runtime.extensions.length, 1) *
+		U64_max(runtime.uniformsPerCompilation.length, 1)
+	);
+}
+
+Bool SHEntryRuntime_asBinaryIdentifier(
+	SHEntryRuntime runtime, U16 combinationId, SHBinaryIdentifier *binaryIdentifier, Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	if(!binaryIdentifier)
+		retError(clean, Error_nullPointer(2, "SHEntryRuntime_asBinaryIdentifier()::binaryIdentifier is required"))
+
+	U16 shaderVersions = (U16) U64_max(runtime.shaderVersions.length, 1);
+	U16 extensions = (U16) U64_max(runtime.extensions.length, 1);
+	U16 uniforms = (U16) U64_max(runtime.uniformsPerCompilation.length, 1);
+
+	U16 shaderVersion = combinationId % shaderVersions;
+	combinationId /= shaderVersions;
+
+	U16 extensionId = combinationId % extensions;
+	combinationId /= extensions;
+
+	U16 uniformId = combinationId % uniforms;
+
+	if(combinationId >= uniforms)
+		retError(clean, Error_outOfBounds(
+			0, combinationId, uniforms,
+			"SHEntryRuntime_asBinaryIdentifier()::combinationId out of bounds"
+		))
+
+	*binaryIdentifier = (SHBinaryIdentifier) {
+		.entrypoint = CharString_createRefStrConst(runtime.entry.name),
+		.extensions = runtime.extensions.length ? runtime.extensions.ptr[extensionId] : 0,
+		.shaderVersion = runtime.shaderVersions.length ? runtime.shaderVersions.ptr[shaderVersion] : OISH_SHADER_MODEL(6, 3),
+		.stageType = runtime.entry.stage
+	};
+
+	if(runtime.uniformsPerCompilation.length) {
+
+		U64 uniformOffset = 0;
+
+		for(U64 i = 0; i < uniformId; ++i)
+			uniformOffset += runtime.uniformsPerCompilation.ptr[i];
+
+		gotoIfError2(clean, ListCharString_createRefConst(
+			runtime.uniformNameValues.ptr + (uniformOffset << 1),
+			(U64)runtime.uniformsPerCompilation.ptr[uniformId] << 1,
+			&binaryIdentifier->uniforms
+		))
+	}
+
+clean:
+	return s_uccess;
+}
+
+Bool SHEntryRuntime_asBinaryInfo(
+	SHEntryRuntime runtime,
+	U16 combinationId,
+	ESHBinaryType binaryType,
+	Buffer buf,
+	SHBinaryInfo *binaryInfo,
+	Error *e_rr
+) {
+
+	Bool s_uccess = true;
+
+	if(binaryType >= ESHBinaryType_Count)
+		retError(clean, Error_invalidEnum(
+			2, binaryType, ESHBinaryType_Count, "SHEntryRuntime_asBinaryInfo()::binaryType out of bounds"
+		))
+
+	if(!binaryInfo)
+		retError(clean, Error_nullPointer(0, "SHEntryRuntime_asBinaryInfo()::binaryInfo is required"))
+
+	gotoIfError3(clean, SHEntryRuntime_asBinaryIdentifier(runtime, combinationId, &binaryInfo->identifier, e_rr))
+
+	binaryInfo->vendorMask = runtime.vendorMask;
+	binaryInfo->hasShaderAnnotation = runtime.isShaderAnnotation;
+	binaryInfo->binaries[binaryType] = Buffer_createRefFromBuffer(buf, true);
+
+clean:
+	return s_uccess;
+}
+
+Bool SHBinaryIdentifier_equals(SHBinaryIdentifier a, SHBinaryIdentifier b) {
+
+	const void *extensionsA = &a.extensions;
+	const void *extensionsB = &b.extensions;
+
+	if(
+		*(const U64*)extensionsA != *(const U64*)extensionsB ||
+		a.uniforms.length != b.uniforms.length ||
+		!CharString_equalsStringSensitive(a.entrypoint, b.entrypoint)
+	)
+		return false;
+
+	for(U64 i = 0; i < a.uniforms.length; ++i)
+		if(!CharString_equalsStringSensitive(a.uniforms.ptr[i], b.uniforms.ptr[i]))
+			return false;
+
+	return true;
 }
 
 void SHEntry_print(SHEntry shEntry, Allocator alloc) {
@@ -1318,8 +1648,8 @@ void SHEntryRuntime_print(SHEntryRuntime entry, Allocator alloc) {
 
 		for(U64 j = 0; j < uniforms; ++j) {
 
-			CharString name = entry.uniforms.ptr[j + k];
-			CharString value = entry.uniformValues.ptr[j + k];
+			CharString name = entry.uniformNameValues.ptr[(j + k) << 1];
+			CharString value = entry.uniformNameValues.ptr[((j + k) << 1) | 1];
 
 			Log_debug(
 				alloc, ELogOptions_None, 
@@ -1349,6 +1679,19 @@ void SHEntryRuntime_print(SHEntryRuntime entry, Allocator alloc) {
 }
 
 void SHBinaryInfo_print(SHBinaryInfo binary, Allocator alloc) {
+
+	if(binary.hasShaderAnnotation)
+		Log_debugLn(alloc, "SH Binary (lib file)");
+
+	else {
+
+		CharString entrypoint = binary.identifier.entrypoint;
+		const C8 *name = SHEntry_stageNames[binary.identifier.stageType];
+
+		Log_debugLn(
+			alloc, "SH Binary (%s): %.*s", name, (int) CharString_length(entrypoint), entrypoint.ptr
+		);
+	}
 
 	U16 shaderVersion = binary.identifier.shaderVersion;
 	Log_debugLn(alloc, "\t[model(%"PRIu8".%"PRIu8")]", (U8)(shaderVersion >> 8), (U8) shaderVersion);
@@ -1410,33 +1753,53 @@ void SHBinaryInfo_print(SHBinaryInfo binary, Allocator alloc) {
 		if((binary.vendorMask >> i) & 1)
 			Log_debugLn(alloc, "\t[vendor(\"%s\")]", vendors[i]);
 
-	if(binary.identifier.hasShaderAnnotation)
-		Log_debugLn(alloc, "SH Binary (lib file)");
+	Log_debugLn(alloc, "\tBinaries:");
 
-	else {
-
-		CharString entrypoint = binary.identifier.entrypoint;
-		const C8 *name = SHEntry_stageNames[binary.identifier.stageType];
-
-		Log_debugLn(
-			alloc, "SH Binary (%s): %.*s", name, (int) CharString_length(entrypoint), entrypoint.ptr
-		);
-	}
+	for(U8 i = 0; i < ESHBinaryType_Count; ++i)
+		if(Buffer_length(binary.binaries[i]))
+			Log_debugLn(alloc, "\t\t%s: %"PRIu64, ESHBinaryType_names[i], Buffer_length(binary.binaries[i]));
 }
 
-//Free SHEntryRuntime, which contains information used only while parsing
+//Free functions
+
+void SHBinaryIdentifier_free(SHBinaryIdentifier *identifier, Allocator alloc) {
+
+	if(!identifier)
+		return;
+
+	CharString_free(&identifier->entrypoint, alloc);
+	ListCharString_freeUnderlying(&identifier->uniforms, alloc);
+}
+
+void SHBinaryInfo_free(SHBinaryInfo *info, Allocator alloc) {
+
+	if(!info)
+		return;
+
+	SHBinaryIdentifier_free(&info->identifier, alloc);
+	
+	for(U8 i = 0; i < ESHBinaryType_Count; ++i)
+		Buffer_free(&info->binaries[i], alloc);
+}
+
+void SHEntry_free(SHEntry *entry, Allocator alloc) {
+
+	if(!entry)
+		return;
+
+	CharString_free(&entry->name, alloc);
+}
 
 void SHEntryRuntime_free(SHEntryRuntime *entry, Allocator alloc) {
 	
 	if(!entry)
 		return;
 
-	CharString_free(&entry->entry.name, alloc);
+	SHEntry_free(&entry->entry, alloc);
 	ListU16_free(&entry->shaderVersions, alloc);
 	ListU32_free(&entry->extensions, alloc);
 	ListU8_free(&entry->uniformsPerCompilation, alloc);
-	ListCharString_freeUnderlying(&entry->uniforms, alloc);
-	ListCharString_freeUnderlying(&entry->uniformValues, alloc);
+	ListCharString_freeUnderlying(&entry->uniformNameValues, alloc);
 }
 
 void ListSHEntryRuntime_freeUnderlying(ListSHEntryRuntime *entry, Allocator alloc) {

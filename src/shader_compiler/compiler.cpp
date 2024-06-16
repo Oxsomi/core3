@@ -37,7 +37,7 @@
 #endif
 
 #define ENABLE_DXC_STATIC_LINKING
-#include <DirectXShaderCompiler/include/dxc/dxcapi.h>
+#include <dxc/dxcapi.h>
 #include <exception>
 
 const C8 *resources =
@@ -761,7 +761,7 @@ clean:
 Bool Compiler_compile(
 	Compiler comp,
 	CompilerSettings settings,
-	SHBinaryInfo toCompile,
+	SHBinaryIdentifier toCompile,
 	Allocator alloc,
 	CompileResult *result,
 	Error *e_rr
@@ -807,11 +807,6 @@ Bool Compiler_compile(
 		interfaces->includeHandler->reset();
 
 		result->isSuccess = false;
-
-		if(toCompile.stageType == ESHPipelineStage_WorkgraphExt && settings.outputType == ESHBinaryType_SPIRV)
-			retError(clean, Error_invalidState(
-				0, "Compiler_compile() was called on a workgraph with spirv. Workgraphs are currently only supported for DXIL"
-			))
 
 		const U16 args[][27] = {
 
@@ -886,20 +881,17 @@ Bool Compiler_compile(
 			{ '-', 'T', '\0' }
 		};
 
-		U32 argCounter = 8;
+		U32 argCounter = 6;
 
-		const U16 *argsPtr[24] = {
+		const U16 *argsPtr[25] = {
 
 			inputFile.ptr,		//Relative to input file for includes
 
 			args[3],			//-D__OXC3
 
-			//-Zpc, -Qstrip_debug, -Qstrip_reflect
+			//-Zpc
 
 			args[7],
-
-			args[8],
-			args[9],
 
 			settings.debug ? args[10] : args[11],		//-Od or -O3
 
@@ -929,11 +921,14 @@ Bool Compiler_compile(
 			else if(toCompile.stageType == ESHPipelineStage_Pixel)
 				argsPtr[argCounter++] = args[17];				//-fvk-use-dx-position-w
 
-			if(!toCompile.hasShaderAnnotation)
+			if(CharString_length(toCompile.entrypoint))
 				argsPtr[argCounter++] = args[18];				//-fspv-entrypoint-name=main
 		}
 
 		else {
+
+			argsPtr[argCounter++] = args[8];					//-Qstrip_debug
+			argsPtr[argCounter++] = args[9];					//-Qstrip_reflect
 
 			argsPtr[argCounter++] = args[4];					//-auto-binding-space
 			argsPtr[argCounter++] = args[5];					//0
@@ -949,7 +944,7 @@ Bool Compiler_compile(
 
 		//-E <entrypointName>
 
-		if (!toCompile.hasShaderAnnotation) {
+		if (CharString_length(toCompile.entrypoint)) {
 		
 			argsPtr[argCounter++] = args[21];
 
@@ -963,25 +958,13 @@ Bool Compiler_compile(
 		
 		argsPtr[argCounter++] = args[22];
 
-		const C8 *targetPrefix = "lib";
+		const C8 *targetPrefix = ESHPipelineStage_getStagePrefix((ESHPipelineStage) toCompile.stageType);
 
-		switch (toCompile.stageType) {
-			default:													break;
-			case ESHPipelineStage_Vertex:		targetPrefix = "vs";	break;
-			case ESHPipelineStage_Pixel:		targetPrefix = "ps";	break;
-			case ESHPipelineStage_Compute:		targetPrefix = "cs";	break;
-			case ESHPipelineStage_GeometryExt:	targetPrefix = "gs";	break;
-			case ESHPipelineStage_Hull:			targetPrefix = "hs";	break;
-			case ESHPipelineStage_Domain:		targetPrefix = "ds";	break;
-			case ESHPipelineStage_MeshExt:		targetPrefix = "ms";	break;
-			case ESHPipelineStage_TaskExt:		targetPrefix = "as";	break;
-		}
-
-		U32 minor = (U8)toCompile.shaderVersion;
 		U32 major = toCompile.shaderVersion >> 8;
+		U32 minor = (U8)toCompile.shaderVersion;
 
-		gotoIfError2(clean, CharString_format(alloc, &tempStr2, "%s_%" PRIu32 "_%" PRIu32, targetPrefix, major, minor))
-		gotoIfError2(clean, CharString_toUTF16(toCompile.entrypoint, alloc, &tempWStr))
+		gotoIfError2(clean, CharString_format(alloc, &tempStr2, "%s_%" PRIu32"_%" PRIu32, targetPrefix, major, minor))
+		gotoIfError2(clean, CharString_toUTF16(tempStr2, alloc, &tempWStr))
 		CharString_free(&tempStr2, alloc);
 
 		gotoIfError2(clean, ListListU16_pushBack(&strings, tempWStr, alloc))
@@ -1060,7 +1043,7 @@ Bool Compiler_compile(
 			retError(clean, Error_invalidState(2, "Compiler_compile() fetch hlsl failed"))
 
 		gotoIfError2(clean, Buffer_createCopy(
-			Buffer_createRefConst(error->GetBufferPointer(), error->GetBufferSize()),
+			Buffer_createRefConst(resultBlob->GetBufferPointer(), resultBlob->GetBufferSize()),
 			alloc,
 			&result->binary
 		))
@@ -1092,4 +1075,4 @@ clean:
 	return s_uccess;
 }
 
-//TODO: Real compile, check for [extension(I16, F16)] one of the two indicates we need to enable 16-bit types
+//TODO: Real compile, check for [extension("16BitTypes")] one of the two indicates we need to enable 16-bit types
