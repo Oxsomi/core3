@@ -264,12 +264,49 @@
 		}
 
 		if (shEntriesRuntime) {
+
+			//Move list with all allocated memory
+
 			*shEntriesRuntime = compileResult.shEntriesRuntime;
 			compileResult.shEntriesRuntime = (ListSHEntryRuntime) { 0 };
+
+			//Move as copy, since these are refs to the input file, which will be freed at end of function
+
+			for (U64 i = 0; i < shEntriesRuntime->length; ++i) {
+
+				SHEntryRuntime *entry = &shEntriesRuntime->ptrNonConst[i];
+
+				//Copy uniform names if needed
+
+				for (U64 j = 0; j < entry->uniformNameValues.length; ++j) {
+
+					CharString *curr = &entry->uniformNameValues.ptrNonConst[j];
+					CharString temp = CharString_createNull();
+
+					if(!CharString_isRef(*curr))
+						continue;
+
+					gotoIfError2(clean, CharString_createCopyx(*curr, &temp))
+					*curr = temp;
+				}
+
+				//Copy name if needed
+
+				if(!CharString_isRef(entry->entry.name))
+					continue;
+
+				CharString temp = CharString_createNull();
+				gotoIfError2(clean, CharString_createCopyx(entry->entry.name, &temp))
+				entry->entry.name = temp;
+			}
 		}
 
 	clean:
 		s_uccess &= compileResult.isSuccess;
+
+		if(!s_uccess && shEntriesRuntime)
+			ListSHEntryRuntime_freex(shEntriesRuntime);
+
 		CompileResult_freex(&compileResult);
 		CharString_freex(&tempStr);
 		CharString_freex(&tempStr2);
@@ -1025,11 +1062,18 @@
 							if(tempResult.type != ECompileResultType_Binary)
 								retError(clean, Error_invalidState(0, "CLI_compileShaderSingle() should return binary"))
 
+							ESHBinaryType compileModei = allCompileModes.ptr[i];
+
 							gotoIfError3(clean, SHEntryRuntime_asBinaryInfo(
-								runtimeEntry, combinationId, allCompileModes.ptr[i], tempResult.binary, &binaryInfo, e_rr
+								runtimeEntry, combinationId, compileModei, tempResult.binary, &binaryInfo, e_rr
 							))
 
+							//Move binary there to avoid copying mem if possible
+
+							binaryInfo.binaries[compileModei] = tempResult.binary;
 							gotoIfError3(clean, SHFile_addBinaryx(&shFile, &binaryInfo, e_rr))
+							tempResult.binary = Buffer_createNull();
+
 							CompileResult_freex(&tempResult);
 						}
 					}

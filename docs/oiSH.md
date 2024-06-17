@@ -36,9 +36,7 @@ typedef struct SHHeader {
     
     U32 sourceHash;				//CRC32C of source(s), for determining if it's dirty
     
-    U32 timeMsLow;
-    
-    U16 timeMsHigh;
+	U16 padding;
 	U8 version;					//major.minor (%10 = minor, /10 = major (+1 to get real major)) at least 1
     U8 sizeTypes;				//Every 2 bits size type of spirv, dxil
     

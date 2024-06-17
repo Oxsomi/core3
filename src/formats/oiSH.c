@@ -146,7 +146,7 @@ void SHFile_free(SHFile *shFile, Allocator alloc) {
 		ListU16_free(&entry->binaryIds, alloc);
 	}
 
-	for(U64 j = 0; j < ESHBinaryType_Count; ++j) {
+	for(U64 j = 0; j < shFile->binaries.length; ++j) {
 
 		SHBinaryInfo *binary = &shFile->binaries.ptrNonConst[j];
 
@@ -190,6 +190,9 @@ Bool SHFile_addBinaries(SHFile *shFile, SHBinaryInfo *binaries, Allocator alloc,
 
 	if(!binaries->vendorMask)
 		retError(clean, Error_nullPointer(!shFile ? 0 : 2, "SHFile_addBinary()::binaries->vendorMask is required"))
+
+	if(binaries->vendorMask == U16_MAX)
+		binaries->vendorMask &= (1 << ESHVendor_Count) - 1;
 
 	if(binaries->vendorMask >> ESHVendor_Count)
 		retError(clean, Error_invalidParameter(2, 0, "SHFile_addBinary()::binaries->vendorMask out of bounds"))
@@ -242,27 +245,32 @@ Bool SHFile_addBinaries(SHFile *shFile, SHBinaryInfo *binaries, Allocator alloc,
 
 	Bool isUTF8 = false;
 
-	if(!Buffer_isAscii(CharString_bufferConst(binaries->identifier.entrypoint)))
+	if(
+		CharString_length(binaries->identifier.entrypoint) &&
+		!Buffer_isAscii(CharString_bufferConst(binaries->identifier.entrypoint))
+	)
 		isUTF8 = true;
 
 	for (U64 i = 0; i < binaries->identifier.uniforms.length; ++i) {
 
-		if(!Buffer_isAscii(CharString_bufferConst(binaries->identifier.uniforms.ptr[i])))
+		CharString str = binaries->identifier.uniforms.ptr[i];
+
+		if(!CharString_length(str))
+			continue;
+
+		if(!Buffer_isAscii(CharString_bufferConst(str)))
 			isUTF8 = true;
 
 		if(i && !(i & 1))
 			for(U64 j = 0; j < (i >> 1); ++j)
-				if(CharString_equalsStringSensitive(
-					binaries->identifier.uniforms.ptr[i], 
-					binaries->identifier.uniforms.ptr[j << 1]
-				))
+				if(CharString_equalsStringSensitive(str, binaries->identifier.uniforms.ptr[j << 1]))
 					retError(clean, Error_alreadyDefined(0, "SHFile_addBinary() uniform already defined"))
 	}
 
 	//Start copying
 
 	void *dstU64 = &info.identifier.extensions;
-	const void *srcU64 = &info.identifier.extensions;
+	const void *srcU64 = &binaries->identifier.extensions;
 
 	*(U64*)dstU64 = *(const U64*) srcU64;
 
@@ -292,25 +300,28 @@ Bool SHFile_addBinaries(SHFile *shFile, SHBinaryInfo *binaries, Allocator alloc,
 
 	//Copy uniforms
 
-	if(ListCharString_isRef(binaries->identifier.uniforms))
-		gotoIfError2(clean, ListCharString_createCopyUnderlying(
-			binaries->identifier.uniforms, alloc, &info.identifier.uniforms
-		))
+	if(binaries->identifier.uniforms.length) {
 
-	else {
+		if(ListCharString_isRef(binaries->identifier.uniforms))
+			gotoIfError2(clean, ListCharString_createCopyUnderlying(
+				binaries->identifier.uniforms, alloc, &info.identifier.uniforms
+			))
 
-		info.identifier.uniforms = binaries->identifier.uniforms;
-		binaries->identifier.uniforms = (ListCharString) { 0 };
+		else {
 
-		for (U64 i = 0; i < info.identifier.uniforms.length; ++i) {
+			info.identifier.uniforms = binaries->identifier.uniforms;
+			binaries->identifier.uniforms = (ListCharString) { 0 };
 
-			CharString *uniform = &info.identifier.uniforms.ptrNonConst[i], uniformOld = *uniform;
+			for (U64 i = 0; i < info.identifier.uniforms.length; ++i) {
 
-			if(!CharString_isRef(uniformOld))		//It's already moved
-				continue;
+				CharString *uniform = &info.identifier.uniforms.ptrNonConst[i], uniformOld = *uniform;
 
-			*uniform = CharString_createNull();
-			gotoIfError2(clean, CharString_createCopy(uniformOld, alloc, uniform))		//Allocate real data
+				if(!CharString_isRef(uniformOld))		//It's already moved
+					continue;
+
+				*uniform = CharString_createNull();
+				gotoIfError2(clean, CharString_createCopy(uniformOld, alloc, uniform))		//Allocate real data
+			}
 		}
 	}
 
@@ -318,6 +329,9 @@ Bool SHFile_addBinaries(SHFile *shFile, SHBinaryInfo *binaries, Allocator alloc,
 
 	if(isUTF8)
 		shFile->flags |= ESHSettingsFlags_IsUTF8;
+
+	info.vendorMask = binaries->vendorMask;
+	info.hasShaderAnnotation = binaries->hasShaderAnnotation;
 
 	gotoIfError2(clean, ListSHBinaryInfo_pushBack(&shFile->binaries, info, alloc))
 	*binaries = info = (SHBinaryInfo) { 0 };
@@ -581,13 +595,13 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 
 			CharString str = binary.identifier.uniforms.ptr[j];
 
-			if(dlFile.entryBuffers.length - shFile.entries.length >= U16_MAX - 1)
-				retError(clean, Error_invalidState(0, "DLFile didn't have space for uniform names"))
-
 			if(isUTF8)
 				gotoIfError2(clean, DLFile_addEntryUTF8(&dlFile, CharString_bufferConst(str), alloc))
 
-			else gotoIfError2(clean, DLFile_addEntryAscii(&dlFile, str, alloc))
+			else gotoIfError2(clean, DLFile_addEntryAscii(&dlFile, CharString_createRefStrConst(str), alloc))
+
+			if(dlFile.entryBuffers.length - shFile.entries.length >= U16_MAX - 1)
+				retError(clean, Error_invalidState(0, "DLFile didn't have space for uniform names"))
 		}
 
 		//Add size
@@ -609,8 +623,8 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 
 	//Add uniform values
 
-	U64 uniformNamesStart = 0;
-	U64 uniformValuesStart = dlFile.entryBuffers.length;
+	U64 uniNamesStart = 0;
+	U64 uniValStart = dlFile.entryBuffers.length;
 
 	for(U64 i = 0; i < shFile.binaries.length; ++i) {
 
@@ -624,16 +638,16 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 
 			CharString str = binary.identifier.uniforms.ptr[j];
 
-			if(DLFile_find(dlFile, uniformValuesStart, dlFile.entryBuffers.length, str) != U64_MAX)
+			if(DLFile_find(dlFile, uniValStart, dlFile.entryBuffers.length, str) != U64_MAX)
 				continue;
 
-			if(dlFile.entryBuffers.length - uniformValuesStart >= U16_MAX - 1)
+			if(dlFile.entryBuffers.length - uniValStart >= U16_MAX - 1)
 				retError(clean, Error_invalidState(0, "DLFile didn't have space for uniform values"))
 
 			if(isUTF8)
 				gotoIfError2(clean, DLFile_addEntryUTF8(&dlFile, CharString_bufferConst(str), alloc))
 
-			else gotoIfError2(clean, DLFile_addEntryAscii(&dlFile, str, alloc))
+			else gotoIfError2(clean, DLFile_addEntryAscii(&dlFile, CharString_createRefStrConst(str), alloc))
 		}
 	}
 
@@ -647,7 +661,7 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 		if(isUTF8)
 			gotoIfError2(clean, DLFile_addEntryUTF8(&dlFile, CharString_bufferConst(entryName), alloc))
 
-		else gotoIfError2(clean, DLFile_addEntryAscii(&dlFile, entryName, alloc))
+		else gotoIfError2(clean, DLFile_addEntryAscii(&dlFile, CharString_createRefStrConst(entryName), alloc))
 
 		switch(entry.stage) {
 
@@ -660,11 +674,11 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 				//We align to 2 elements since we store U4s. So we store 4 bits too much, but who cares.
 
 				for(; inputs < 8; ++inputs)
-					if(entry.inputs[inputs])
+					if(!entry.inputs[inputs])
 						break;
 
 				for(; outputs < 8; ++outputs)
-					if(entry.outputs[outputs])
+					if(!entry.outputs[outputs])
 						break;
 
 				headerSize += inputs + outputs;
@@ -719,7 +733,7 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 
 	U8 *headerIt = (U8*)result->ptr;
 
-	if (!(dlFile.settings.flags & EDLSettingsFlags_HideMagicNumber)) {
+	if (!(shFile.flags & ESHSettingsFlags_HideMagicNumber)) {
 		*(U32*)headerIt = SHHeader_MAGIC;
 		headerIt += sizeof(U32);
 	}
@@ -738,12 +752,89 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 	Buffer_copy(Buffer_createRef(headerIt, Buffer_length(dlFileBuf)), dlFileBuf);
 	headerIt += Buffer_length(dlFileBuf);
 
-	//Fill entries
+	//Find offsets
 
 	BinaryInfoFixedSize *binaryStaticStart = (BinaryInfoFixedSize*) headerIt;
 	EntryInfoFixedSize *stagesStaticStart = (EntryInfoFixedSize*) (binaryStaticStart + shFile.binaries.length);
 	U8 *pipelineStagesStart = (U8*)(stagesStaticStart + shFile.entries.length);
-	headerIt = pipelineStagesStart;
+	headerIt = pipelineStagesStart;	
+	
+	//Fill binaries
+
+	U64 entries = shFile.entries.length;
+
+	for (U64 i = 0; i < shFile.binaries.length; ++i) {
+
+		SHBinaryInfo binary = shFile.binaries.ptr[i];
+
+		//Static part
+
+		ESHBinaryFlags binaryFlags = ESHBinaryFlags_None;
+
+		if(binary.hasShaderAnnotation)
+			binaryFlags |= ESHBinaryFlags_HasShaderAnnotation;
+
+		for(U8 j = 0; j < ESHBinaryType_Count; ++j)
+			if(Buffer_length(binary.binaries[j]))
+				binaryFlags |= 1 << j;
+
+		U64 entryStart = dlFile.entryBuffers.length - entries;
+		U64 entrypoint = DLFile_find(
+			dlFile, entryStart, dlFile.entryBuffers.length, binary.identifier.entrypoint
+		);
+
+		if(entrypoint == U64_MAX)
+			retError(clean, Error_invalidState(0, "SHFile_write() couldn't link binary to entrypoint"))
+
+		U8 uniformCount = (U8)(binary.identifier.uniforms.length >> 1);
+
+		binaryStaticStart[i] = (BinaryInfoFixedSize) {
+
+			.shaderModel = ((binary.identifier.shaderVersion >> 4) & 0xF0) | (binary.identifier.shaderVersion & 0xF),
+			.entrypointType = (U8) binary.identifier.stageType,
+			.entrypoint = (U16)(entrypoint - entryStart),
+
+			.vendorMask = binary.vendorMask,
+			.uniformCount = uniformCount,
+			.binaryFlags = binaryFlags,
+
+			.extensions = binary.identifier.extensions
+		};
+
+		//Dynamic part
+
+		U16 *uniformNames = (U16*) headerIt;
+		headerIt += sizeof(U16) * uniformCount;
+
+		U16 *uniValues = (U16*) headerIt;
+		headerIt += sizeof(U16) * uniformCount;
+
+		for(U64 j = 0; j < uniformCount; ++j) {
+			ListCharString uniforms = binary.identifier.uniforms;
+			uniformNames[j] = (U16) (DLFile_find(dlFile, uniNamesStart, uniValStart, uniforms.ptr[j << 1]) - uniNamesStart);
+			uniValues[j] = (U16) (DLFile_find(dlFile, uniValStart, entryStart, uniforms.ptr[(j << 1) | 1]) - uniValStart);
+		}
+
+		for (U8 j = 0; j < ESHBinaryType_Count; ++j) {
+
+			U64 length = Buffer_length(binary.binaries[j]);
+
+			if(length)
+				headerIt += Buffer_forceWriteSizeType(headerIt, (requiredTypes[j] >> (j << 1)) & 3, length);
+		}
+
+		for (U8 j = 0; j < ESHBinaryType_Count; ++j) {
+
+			U64 length = Buffer_length(binary.binaries[j]);
+
+			if (length) {
+				Buffer_copy(Buffer_createRef(headerIt, length), binary.binaries[j]);
+				headerIt += length;
+			}
+		}
+	}
+
+	//Fill entries
 
 	for (U64 i = 0; i < shFile.entries.length; ++i) {
 
@@ -773,7 +864,7 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 
 					U8 input = entry.inputs[inputs];
 
-					if(input)
+					if(!input)
 						break;
 
 					*headerIt = input;
@@ -784,7 +875,7 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 
 					U8 output = entry.outputs[inputs];
 
-					if(output)
+					if(!output)
 						break;
 
 					*headerIt = output;
@@ -845,80 +936,6 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 			headerIt += sizeof(U16);
 		}
 	}
-	
-	//Fill binaries
-
-	U64 entries = shFile.entries.length;
-
-	for (U64 i = 0; i < shFile.binaries.length; ++i) {
-
-		SHBinaryInfo binary = shFile.binaries.ptr[i];
-
-		//Static part
-
-		ESHBinaryFlags binaryFlags = ESHBinaryFlags_None;
-
-		if(binary.hasShaderAnnotation)
-			binaryFlags |= ESHBinaryFlags_HasShaderAnnotation;
-
-		for(U8 j = 0; j < ESHBinaryType_Count; ++j)
-			if(Buffer_length(binary.binaries[j]))
-				binaryFlags |= 1 << j;
-
-		U16 entrypoint = (U16) DLFile_find(
-			dlFile, dlFile.entryBuffers.length - entries, dlFile.entryBuffers.length, binary.identifier.entrypoint
-		);
-
-		if(entrypoint == U16_MAX)
-			retError(clean, Error_invalidState(0, "SHFile_write() couldn't link binary to entrypoint"))
-
-		U8 uniformCount = (U8)(binary.identifier.uniforms.length >> 1);
-
-		binaryStaticStart[i] = (BinaryInfoFixedSize) {
-
-			.shaderModel = ((binary.identifier.shaderVersion >> 4) & 0xF0) | (binary.identifier.shaderVersion & 0xF),
-			.entrypointType = (U8) binary.identifier.stageType,
-			.entrypoint = entrypoint,
-
-			.vendorMask = binary.vendorMask,
-			.uniformCount = uniformCount,
-			.binaryFlags = binaryFlags,
-
-			.extensions = binary.identifier.extensions
-		};
-
-		//Dynamic part
-
-		U16 *uniformNames = (U16*) headerIt;
-		headerIt += sizeof(U16) * uniformCount;
-
-		U16 *uniformValues = (U16*) headerIt;
-		headerIt += sizeof(U16) * uniformCount;
-
-		for(U64 j = 0; j < uniformCount; ++j) {
-			ListCharString uniforms = binary.identifier.uniforms;
-			uniformNames[j] = (U16) DLFile_find(dlFile, uniformNamesStart, uniformValuesStart, uniforms.ptr[j << 1]);
-			uniformValues[j] = (U16) DLFile_find(dlFile, uniformNamesStart, uniformValuesStart, uniforms.ptr[(j << 1) | 1]);
-		}
-
-		for (U8 j = 0; j < ESHBinaryType_Count; ++j) {
-
-			U64 length = Buffer_length(binary.binaries[j]);
-
-			if(length)
-				headerIt += Buffer_forceWriteSizeType(headerIt, (requiredTypes[j] >> (j << 1)) & 3, length);
-		}
-
-		for (U8 j = 0; j < ESHBinaryType_Count; ++j) {
-
-			U64 length = Buffer_length(binary.binaries[j]);
-
-			if (length) {
-				Buffer_copy(Buffer_createRef(headerIt, length), binary.binaries[j]);
-				headerIt += length;
-			}
-		}
-	}
 
 	//Finalize by adding the hash
 
@@ -929,12 +946,6 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 
 	shHeader->hash = Buffer_crc32c(Buffer_createRefConst((const U8*) shHashStart, hashLen));
 	shHeader->compilerVersion = shFile.compilerVersion;
-
-	Ns time = Time_now();
-
-	shHeader->timeMsLow = (U32) (time / MS);
-	shHeader->timeMsHigh = (U16)((time / MS) >> 32);
-
 	shHeader->sourceHash = shFile.sourceHash;
 
 clean:

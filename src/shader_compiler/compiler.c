@@ -279,6 +279,15 @@ Bool Compiler_filterWarning(CharString str) {
 
 Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *errors, Bool *hasErrors, Error *e_rr) {
 
+	CharString dxilSigning = CharString_createRefCStrConst("warning: DXIL signing library (dxil.dll,libdxil.so) not found.");
+
+	errs = CharString_createRefStrConst(errs);
+
+	U64 loc = CharString_findFirstStringSensitive(errs, dxilSigning, 0);
+
+	if(loc != U64_MAX)
+		errs.lenAndNullTerminated = loc | (errs.lenAndNullTerminated & ((U64)1 << 63));
+
 	Bool s_uccess = true;
 	U64 off = 0;
 
