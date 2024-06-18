@@ -232,6 +232,48 @@
 
 		if (compileResult.isSuccess) {
 
+			//Tell oiSH entries to caller
+
+			if (shEntriesRuntime) {
+
+				//Move list with all allocated memory
+
+				*shEntriesRuntime = compileResult.shEntriesRuntime;
+				compileResult.shEntriesRuntime = (ListSHEntryRuntime) { 0 };
+
+				//Move as copy, since these are refs to the input file, which will be freed at end of function
+
+				for (U64 i = 0; i < shEntriesRuntime->length; ++i) {
+
+					SHEntryRuntime *entry = &shEntriesRuntime->ptrNonConst[i];
+
+					//Copy uniform names if needed
+
+					for (U64 j = 0; j < entry->uniformNameValues.length; ++j) {
+
+						CharString *curr = &entry->uniformNameValues.ptrNonConst[j];
+						CharString temp = CharString_createNull();
+
+						if(!CharString_isRef(*curr))
+							continue;
+
+						gotoIfError2(clean, CharString_createCopyx(*curr, &temp))
+						*curr = temp;
+					}
+
+					//Copy name if needed
+
+					if(!CharString_isRef(entry->entry.name))
+						continue;
+
+					CharString temp = CharString_createNull();
+					gotoIfError2(clean, CharString_createCopyx(entry->entry.name, &temp))
+					entry->entry.name = temp;
+				}
+			}
+
+			//Now our preprocessed blob is ready to free
+
 			CharString_freex(&tempStr);
 
 			//Output has to be created as a text file that explains info about the includes
@@ -263,49 +305,11 @@
 				gotoIfError2(clean, File_write(compileResult.binary, outputPath, 10 * MS))
 		}
 
-		if (shEntriesRuntime) {
-
-			//Move list with all allocated memory
-
-			*shEntriesRuntime = compileResult.shEntriesRuntime;
-			compileResult.shEntriesRuntime = (ListSHEntryRuntime) { 0 };
-
-			//Move as copy, since these are refs to the input file, which will be freed at end of function
-
-			for (U64 i = 0; i < shEntriesRuntime->length; ++i) {
-
-				SHEntryRuntime *entry = &shEntriesRuntime->ptrNonConst[i];
-
-				//Copy uniform names if needed
-
-				for (U64 j = 0; j < entry->uniformNameValues.length; ++j) {
-
-					CharString *curr = &entry->uniformNameValues.ptrNonConst[j];
-					CharString temp = CharString_createNull();
-
-					if(!CharString_isRef(*curr))
-						continue;
-
-					gotoIfError2(clean, CharString_createCopyx(*curr, &temp))
-					*curr = temp;
-				}
-
-				//Copy name if needed
-
-				if(!CharString_isRef(entry->entry.name))
-					continue;
-
-				CharString temp = CharString_createNull();
-				gotoIfError2(clean, CharString_createCopyx(entry->entry.name, &temp))
-				entry->entry.name = temp;
-			}
-		}
-
 	clean:
 		s_uccess &= compileResult.isSuccess;
 
-		if(!s_uccess && shEntriesRuntime)
-			ListSHEntryRuntime_freex(shEntriesRuntime);
+		if(!s_uccess)
+			ListSHEntryRuntime_freeUnderlyingx(shEntriesRuntime);
 
 		CompileResult_freex(&compileResult);
 		CharString_freex(&tempStr);
@@ -1012,10 +1016,13 @@
 				if (compileType == ECompileType_Compile) {
 
 					if (!runtimeEntries.length) {
+
 						Log_warnLnx(
 							"Precompile couldn't find entrypoints for file \"%.*s\"",
 							(int)CharString_length(allFiles.ptr[i]), allFiles.ptr[i].ptr
 						);
+
+						ListSHEntryRuntime_freeUnderlyingx(&runtimeEntries);
 						continue;
 					}
 
@@ -1186,6 +1193,8 @@
 
 		else Log_errorLnx("-- Compile %.*s failed in %fs!", (int)CharString_length(input), input.ptr);
 
+		Error_printx(errTemp, ELogLevel_Error, ELogOptions_Default);
+
 		for(U64 i = 0; i < threads.length; ++i)
 			Thread_waitAndCleanupx(&threads.ptrNonConst[i]);
 
@@ -1216,7 +1225,6 @@
 		ListU64_freex(&shEntryIds);
 		CompileResult_freex(&tempResult);
 
-		Error_printx(errTemp, ELogLevel_Error, ELogOptions_Default);
 		return s_uccess;
 	}
 #else

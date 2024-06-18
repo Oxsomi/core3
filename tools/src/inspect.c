@@ -162,7 +162,14 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 				dataTypes[(shHeader.sizeTypes >> 2) & 3]
 			);
 
-			Log_debugLnx("With %"PRIu16" binaries and %"PRIu16" stages", shHeader.binaryCount, shHeader.stageCount);
+			Log_debugLnx("Hashes: Source: %08"PRIX64", Contents: %08"PRIX64, shHeader.sourceHash, shHeader.hash);
+
+			Log_debugLnx(
+				"With %"PRIu16" binaries, %"PRIu16" stages and %"PRIu16" uniforms",
+				shHeader.binaryCount,
+				shHeader.stageCount,
+				shHeader.uniqueUniforms
+			);
 
 			break;
 		}
@@ -1103,8 +1110,8 @@ Bool CLI_inspectData(ParsedArgs args) {
 						Log_debugLnx(
 							bin.hasShaderAnnotation ? "Binary %"PRIu64" (lib_%"PRIu8"%"PRIu8")" :
 							"Binary %"PRIu64" (%s_%"PRIu8"_%"PRIu8": %.*s)",
-							i, (U8)(bin.identifier.shaderVersion >> 8), (U8)bin.identifier.shaderVersion,
-							ESHPipelineStage_getStagePrefix(bin.identifier.stageType),
+							i, ESHPipelineStage_getStagePrefix(bin.identifier.stageType),
+							(U8)(bin.identifier.shaderVersion >> 8), (U8)bin.identifier.shaderVersion,
 							(int) CharString_length(bin.identifier.entrypoint),
 							bin.identifier.entrypoint.ptr
 						);

@@ -984,7 +984,7 @@ Error GenericList_insertAll(GenericList *list, GenericList other, U64 offset, Al
 	if(!list)
 		return Error_nullPointer(0, "GenericList_insertAll()::list is required");
 
-	if(GenericList_isRef(*list))
+	if(list->length && GenericList_isRef(*list))
 		return Error_invalidParameter(0, 0, "GenericList_insertAll()::list must be managed memory");
 
 	if(!other.length)
@@ -996,7 +996,7 @@ Error GenericList_insertAll(GenericList *list, GenericList other, U64 offset, Al
 	if(list->length + other.length < list->length)
 		return Error_overflow(0, list->length + other.length, U64_MAX, "GenericList_insertAll() overflow");
 
-	if(offset >= list->length)
+	if(offset > list->length)
 		return Error_outOfBounds(2, offset, list->length, "GenericList_insertAll()::offset out of bounds");
 
 	const U64 prevSize = list->length;
