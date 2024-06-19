@@ -833,7 +833,7 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 			U64 length = Buffer_length(binary.binaries[j]);
 
 			if(length)
-				headerIt += Buffer_forceWriteSizeType(headerIt, (requiredTypes[j] >> (j << 1)) & 3, length);
+				headerIt += Buffer_forceWriteSizeType(headerIt, requiredTypes[j], length);
 		}
 
 		for (U8 j = 0; j < ESHBinaryType_Count; ++j) {
@@ -952,10 +952,11 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 
 	//Finalize by adding the hash
 
-	U64 hashLen = headerIt - (const U8*) shHeader;
-	hashLen -= offsetof(SHHeader, uniqueUniforms);
-
+	U64 hashLen = Buffer_length(*result) - offsetof(SHHeader, uniqueUniforms);
 	const U8 *shHashStart = (const U8*) &shHeader->uniqueUniforms;
+
+	if (!(shFile.flags & ESHSettingsFlags_HideMagicNumber))
+		hashLen -= sizeof(U32);
 
 	shHeader->hash = Buffer_crc32c(Buffer_createRefConst((const U8*) shHashStart, hashLen));
 	shHeader->compilerVersion = shFile.compilerVersion;
@@ -1145,7 +1146,7 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 
 		for (U8 i = 0; i < ESHBinaryType_Count; ++i) {
 
-			if(!(binary.binaryFlags >> i))
+			if(!((binary.binaryFlags >> i) & 1))
 				continue;
 
 			gotoIfError2(clean, Buffer_consumeSizeType(&file, (header.sizeTypes >> (i << 1)) & 3, &binarySize[i]))
@@ -1605,12 +1606,14 @@ void SHEntry_print(SHEntry shEntry, Allocator alloc) {
 		case ESHPipelineStage_CallableExt:
 			break;
 
+		case ESHPipelineStage_IntersectionExt:
+			Log_debugLn(alloc, "\tIntersection size: %"PRIu8, shEntry.intersectionSize);
+			//[[fallthrough]]
+
 		case ESHPipelineStage_MissExt:
 		case ESHPipelineStage_ClosestHitExt:
 		case ESHPipelineStage_AnyHitExt:
-		case ESHPipelineStage_IntersectionExt:
 			Log_debugLn(alloc, "\tPayload size: %"PRIu8, shEntry.payloadSize);
-			Log_debugLn(alloc, "\tIntersection size: %"PRIu8, shEntry.intersectionSize);
 			break;
 	}
 }

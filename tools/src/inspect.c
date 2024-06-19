@@ -1107,8 +1107,13 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 						SHBinaryInfo bin = file.binaries.ptr[i];
 
-						Log_debugLnx(
-							bin.hasShaderAnnotation ? "Binary %"PRIu64" (lib_%"PRIu8"%"PRIu8")" :
+						if(bin.hasShaderAnnotation)
+							Log_debugLnx(
+								"Binary %"PRIu64" (lib_%"PRIu8"_%"PRIu8")",
+								i, (U8)(bin.identifier.shaderVersion >> 8), (U8)bin.identifier.shaderVersion
+							);
+
+						else Log_debugLnx(
 							"Binary %"PRIu64" (%s_%"PRIu8"_%"PRIu8": %.*s)",
 							i, ESHPipelineStage_getStagePrefix(bin.identifier.stageType),
 							(U8)(bin.identifier.shaderVersion >> 8), (U8)bin.identifier.shaderVersion,

@@ -327,7 +327,7 @@ Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *er
 
 		//On Windows, D:/test.hlsl:10:10: warning: x is valid ofc, so we should skip that
 
-		if(!off || C8_isNewLine(CharString_getAt(errs, firstColon - 2)))
+		if((!off && firstColon == 1) || C8_isNewLine(CharString_getAt(errs, firstColon - 2)))
 			errorEnd = firstColon = CharString_findFirstSensitive(errs, ':', firstColon + 1);
 
 		if(firstColon == U64_MAX)
