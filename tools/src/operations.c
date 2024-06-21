@@ -406,10 +406,12 @@ void Operations_init() {
 			.operationFlags = EOperationFlags_Debug,
 
 			.requiredParameters =
-				EOperationHasParameter_Input | EOperationHasParameter_Output | EOperationHasParameter_ShaderOutputMode |
-				EOperationHasParameter_ShaderCompileMode,
+				EOperationHasParameter_Input | EOperationHasParameter_Output,
 
-			.optionalParameters = EOperationHasParameter_ThreadCount | EOperationHasParameter_IncludeDir,
+			.optionalParameters =
+				EOperationHasParameter_ThreadCount | EOperationHasParameter_IncludeDir |
+				EOperationHasParameter_ShaderCompileMode | EOperationHasParameter_ShaderOutputMode,
+
 			.flags = EFormatFlags_SupportFiles | EFormatFlags_SupportFolders,
 			.supportedCategories = { EOperationCategory_Compile }
 		};

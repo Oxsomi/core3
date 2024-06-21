@@ -575,6 +575,7 @@ Bool Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator all
 	IDxcBlobUtf8 *error = NULL;
 	ListU16 inputFile = ListU16{};
 	ListU16 includeDir = ListU16{};
+	ListU16 includeDir2 = ListU16{};		//Include dir on disk
 	ListU16 tempWStr = ListU16{};
 	Bool hasErrors = false, isVirtual = false;
 	CharString tempStr = CharString_createNull();
@@ -592,7 +593,7 @@ Bool Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator all
 
 	gotoIfError2(clean, CharString_toUTF16(settings.path, alloc, &inputFile))
 
-	if(settings.includeDir.ptr) {
+	if(CharString_length(settings.includeDir)) {
 
 		gotoIfError2(clean, File_resolve(
 			settings.includeDir, &isVirtual, 256, Platform_instance.workingDirectory, alloc, &tempStr2
@@ -600,6 +601,20 @@ Bool Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator all
 
 		gotoIfError2(clean, CharString_toUTF16(tempStr2, alloc, &includeDir))
 		CharString_free(&tempStr2, alloc);
+	}
+
+	if(CharString_length(settings.path)) {
+
+		gotoIfError2(clean, File_resolve(
+			settings.path, &isVirtual, 256, Platform_instance.workingDirectory, alloc, &tempStr2
+		))
+
+		if(!CharString_cutAfterLastSensitive(tempStr2, '/', &tempStr))
+			retError(clean, Error_invalidState(0, "Compiler_preprocess() can't find parent directory"))
+
+		gotoIfError2(clean, CharString_toUTF16(tempStr, alloc, &includeDir2))
+		CharString_free(&tempStr2, alloc);
+		CharString_free(&tempStr, alloc);
 	}
 
 	try {
@@ -619,7 +634,7 @@ Bool Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator all
 
 		U32 argCounter = 5;
 
-		const U16 *argsPtr[12] = {
+		const U16 *argsPtr[14] = {
 
 			args[0],
 			inputFile.ptr,
@@ -636,6 +651,11 @@ Bool Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator all
 		if (includeDir.length) {							//-I
 			argsPtr[argCounter++] = args[2];
 			argsPtr[argCounter++] = includeDir.ptr;
+		}
+
+		if (includeDir2.length) {							//-I
+			argsPtr[argCounter++] = args[2];
+			argsPtr[argCounter++] = includeDir2.ptr;
 		}
 
 		//Format major, minor, patch and version
@@ -754,6 +774,7 @@ clean:
 	ListListU16_freeUnderlying(&strings, alloc);
 	ListU16_free(&inputFile, alloc);
 	ListU16_free(&includeDir, alloc);
+	ListU16_free(&includeDir2, alloc);
 	ListU16_free(&tempWStr, alloc);
 	CharString_free(&tempStr, alloc);
 	CharString_free(&tempStr2, alloc);
@@ -777,6 +798,7 @@ Bool Compiler_compile(
 	IDxcBlob *resultBlob = NULL;
 	ListU16 inputFile = ListU16{};
 	ListU16 includeDir = ListU16{};
+	ListU16 includeDir2 = ListU16{};
 	ListU16 tempWStr = ListU16{};
 	Bool hasErrors = false, isVirtual = false;
 	CharString tempStr = CharString_createNull();
@@ -794,7 +816,7 @@ Bool Compiler_compile(
 
 	gotoIfError2(clean, CharString_toUTF16(settings.path, alloc, &inputFile))
 
-	if(settings.includeDir.ptr) {
+	if(CharString_length(settings.includeDir)) {
 
 		gotoIfError2(clean, File_resolve(
 			settings.includeDir, &isVirtual, 256, Platform_instance.workingDirectory, alloc, &tempStr2
@@ -802,6 +824,20 @@ Bool Compiler_compile(
 
 		gotoIfError2(clean, CharString_toUTF16(tempStr2, alloc, &includeDir))
 		CharString_free(&tempStr2, alloc);
+	}
+
+	if(CharString_length(settings.path)) {
+
+		gotoIfError2(clean, File_resolve(
+			settings.path, &isVirtual, 256, Platform_instance.workingDirectory, alloc, &tempStr2
+		))
+
+		if(!CharString_cutAfterLastSensitive(tempStr2, '/', &tempStr))
+			retError(clean, Error_invalidState(0, "Compiler_compile() can't find parent directory"))
+
+		gotoIfError2(clean, CharString_toUTF16(tempStr, alloc, &includeDir2))
+		CharString_free(&tempStr2, alloc);
+		CharString_free(&tempStr, alloc);
 	}
 
 	try {
@@ -944,6 +980,11 @@ Bool Compiler_compile(
 			argsPtr[argCounter++] = includeDir.ptr;
 		}
 
+		if (includeDir2.length) {							//-I
+			argsPtr[argCounter++] = args[2];
+			argsPtr[argCounter++] = includeDir2.ptr;
+		}
+
 		//-E <entrypointName>
 
 		if (CharString_length(toCompile.entrypoint)) {
@@ -1071,6 +1112,7 @@ clean:
 	ListListU16_freeUnderlying(&strings, alloc);
 	ListU16_free(&inputFile, alloc);
 	ListU16_free(&includeDir, alloc);
+	ListU16_free(&includeDir2, alloc);
 	ListU16_free(&tempWStr, alloc);
 	CharString_free(&tempStr, alloc);
 	CharString_free(&tempStr2, alloc);

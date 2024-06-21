@@ -701,47 +701,55 @@
 
 		gotoIfError2(clean, ListCharString_get(args.args, offset++, &input))
 		gotoIfError2(clean, ListCharString_get(args.args, offset++, &output))
-		gotoIfError2(clean, ListCharString_get(args.args, offset++, &compileMode))
 
-		//Grab modes
+		Bool multipleModes = true;		//Default to 'all' if no argument is provided
+		compileModeU64 = U64_MAX;
 
-		gotoIfError2(clean, CharString_splitSensitivex(compileMode, ',', &splits));
+		if(args.parameters & EOperationHasParameter_ShaderOutputMode) {
 
-		CharString modes[] = {
-			CharString_createRefCStrConst("spv"),
-			CharString_createRefCStrConst("dxil"),
-			CharString_createRefCStrConst("all")
-		};
+			gotoIfError2(clean, ListCharString_get(args.args, offset++, &compileMode))
 
-		static const U64 modeCount = sizeof(modes) / sizeof(modes[0]);
-		Bool multipleModes = splits.length > 1;
+			//Grab modes
 
-		for (U64 i = 0; i < splits.length; ++i) {
+			gotoIfError2(clean, CharString_splitSensitivex(compileMode, ',', &splits));
 
-			Bool match = false;
+			CharString modes[] = {
+				CharString_createRefCStrConst("spv"),
+				CharString_createRefCStrConst("dxil"),
+				CharString_createRefCStrConst("all")
+			};
 
-			for(U64 j = 0; j < modeCount; ++j)
-				if (CharString_equalsStringInsensitive(splits.ptr[i], modes[j])) {
+			static const U64 modeCount = sizeof(modes) / sizeof(modes[0]);
+			multipleModes = splits.length > 1;
+			compileModeU64 = 0;
 
-					if(j == modeCount - 1) {
-						compileModeU64 = U64_MAX;
-						multipleModes = true;
+			for (U64 i = 0; i < splits.length; ++i) {
+
+				Bool match = false;
+
+				for(U64 j = 0; j < modeCount; ++j)
+					if (CharString_equalsStringInsensitive(splits.ptr[i], modes[j])) {
+
+						if(j == modeCount - 1) {
+							compileModeU64 = U64_MAX;
+							multipleModes = true;
+						}
+
+						else compileModeU64 |= (U64)1 << j;
+
+						match = true;
+						break;
 					}
 
-					else compileModeU64 |= (U64)1 << j;
-
-					match = true;
-					break;
+				if(!match) {
+					Log_errorLnx("Couldn't parse -m x, where x is spv, dxil or all (or for example spv,dxil)");
+					s_uccess = false;
+					goto clean;
 				}
-
-			if(!match) {
-				Log_errorLnx("Couldn't parse -m x, where x is spv, dxil or all (or for example spv,dxil)");
-				s_uccess = false;
-				goto clean;
 			}
-		}
 
-		ListCharString_freex(&splits);
+			ListCharString_freex(&splits);
+		}
 
 		//Check thread count
 
@@ -787,30 +795,33 @@
 
 		CharString compileTypeStr = (CharString) { 0 };
 
-		gotoIfError2(clean, ListCharString_get(args.args, offset++, &compileTypeStr));
+		if(args.parameters & EOperationHasParameter_ShaderCompileMode) {
 
-		if (CharString_equalsStringInsensitive(compileTypeStr, CharString_createRefCStrConst("preprocess")))
-			compileType = ECompileType_Preprocess;
+			gotoIfError2(clean, ListCharString_get(args.args, offset++, &compileTypeStr));
 
-		else if (CharString_equalsStringInsensitive(compileTypeStr, CharString_createRefCStrConst("includes")))
-			compileType = ECompileType_Includes;
+			if (CharString_equalsStringInsensitive(compileTypeStr, CharString_createRefCStrConst("preprocess")))
+				compileType = ECompileType_Preprocess;
 
-		else if (CharString_equalsStringInsensitive(compileTypeStr, CharString_createRefCStrConst("symbols")))
-			compileType = ECompileType_Symbols;
+			else if (CharString_equalsStringInsensitive(compileTypeStr, CharString_createRefCStrConst("includes")))
+				compileType = ECompileType_Includes;
 
-		else if (CharString_equalsStringInsensitive(compileTypeStr, CharString_createRefCStrConst("reflect"))) {
-			Log_errorLnx("Shader compiler \"reflect\" mode isn't supported yet");
-			s_uccess = false;
-			goto clean;
-		}
+			else if (CharString_equalsStringInsensitive(compileTypeStr, CharString_createRefCStrConst("symbols")))
+				compileType = ECompileType_Symbols;
 
-		else if (CharString_equalsStringInsensitive(compileTypeStr, CharString_createRefCStrConst("compile")))
-			compileType = ECompileType_Compile;
+			else if (CharString_equalsStringInsensitive(compileTypeStr, CharString_createRefCStrConst("reflect"))) {
+				Log_errorLnx("Shader compiler \"reflect\" mode isn't supported yet");
+				s_uccess = false;
+				goto clean;
+			}
 
-		else {
-			Log_errorLnx("Unknown shader compile mode passed %s", compileTypeStr.ptr);
-			s_uccess = false;
-			goto clean;
+			else if (CharString_equalsStringInsensitive(compileTypeStr, CharString_createRefCStrConst("compile")))
+				compileType = ECompileType_Compile;
+
+			else {
+				Log_errorLnx("Unknown shader compile mode passed %s", compileTypeStr.ptr);
+				s_uccess = false;
+				goto clean;
+			}
 		}
 
 		//Additional includeDir
