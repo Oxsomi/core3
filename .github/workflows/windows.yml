@@ -16,12 +16,15 @@ jobs:
       uses: humbletim/install-vulkan-sdk@v1.1.1
       with:
         cache: true
+    - name: Install Conan
+      id: conan
+      uses: turtlebrowser/get-conan@main
     - name: build for fast check
-      run: sh D:\a\core3\core3\build.sh Release On -DForceVulkan=On -DCLIGraphics=Off
+      run: conan create . -o cliGraphics=False -o forceVulkan=True -o enableSIMD=True -s build_type=Release
     - name: build for SIMD fallback check
-      run: sh D:\a\core3\core3\build.sh Release Off -DForceVulkan=On -DCLIGraphics=Off
-    - name: build for debug check
-      run: sh D:\a\core3\core3\build.sh Debug On -DForceVulkan=On -DCLIGraphics=Off
+      run: conan create . -o cliGraphics=False -o forceVulkan=True -o enableSIMD=False -s build_type=Release
+    - name: build for fast check
+      run: conan create . -o cliGraphics=False -o forceVulkan=True -o enableSIMD=True -s build_type=Debug
     - uses: actions/setup-ruby@v1
     - name: Send Webhook Notification
       if: always()

@@ -183,8 +183,8 @@ U16 Compiler_minFeatureSetExtension(ESHExtension ext);
 
 Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *errors, Bool *hasErrors, Error *e_rr);
 
-//Manual tokenization for a preprocessed file, to obtain annotations (returns shEntries)
-Bool Compiler_parse(Compiler comp, CompilerSettings settings, Allocator alloc, CompileResult *result, Error *e_rr);
+//Manual tokenization for a preprocessed file, to obtain annotations (returns shEntries if !symbolsOnly, otherwise text)
+Bool Compiler_parse(Compiler comp, CompilerSettings settings, Bool symbolsOnly, Allocator alloc, CompileResult *result, Error *e_rr);
 
 typedef enum ECompileBinaryTypes {
 	ECompileBinaryTypes_Shader,			//Shader binary
@@ -197,7 +197,7 @@ typedef enum ECompileBinaryTypes {
 Bool Compiler_compile(
 	Compiler comp,
 	CompilerSettings settings,
-	SHBinaryInfo toCompile,
+	SHBinaryIdentifier toCompile,
 	Allocator alloc,
 	CompileResult *result,
 	Error *e_rr
@@ -224,8 +224,16 @@ Bool Compiler_createx(Compiler *comp, Error *e_rr);
 void Compiler_freex(Compiler *comp);
 
 Bool Compiler_preprocessx(Compiler comp, CompilerSettings settings, CompileResult *result, Error *e_rr);
-Bool Compiler_parsex(Compiler comp, CompilerSettings settings, CompileResult *result, Error *e_rr);
+Bool Compiler_parsex(Compiler comp, CompilerSettings settings, Bool symbolsOnly, CompileResult *result, Error *e_rr);
 Bool Compiler_mergeIncludeInfox(Compiler *comp, ListIncludeInfo *infos, Error *e_rr);
+
+Bool Compiler_compilex(
+	Compiler comp,
+	CompilerSettings settings,
+	SHBinaryIdentifier toCompile,
+	CompileResult *result,
+	Error *e_rr
+);
 
 #ifdef __cplusplus
 	}

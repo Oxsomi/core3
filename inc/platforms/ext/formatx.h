@@ -37,7 +37,10 @@ typedef struct DLFile DLFile;
 typedef enum ESHSettingsFlags ESHSettingsFlags;
 typedef enum ESHExtension ESHExtension;
 typedef enum ESHBinaryType ESHBinaryType;
+
 typedef struct SHEntry SHEntry;
+typedef struct SHBinaryIdentifier SHBinaryIdentifier;
+typedef struct SHBinaryInfo SHBinaryInfo;
 typedef struct SHEntryRuntime SHEntryRuntime;
 typedef struct SHFile SHFile;
 
@@ -70,18 +73,22 @@ Error DLFile_readx(Buffer file, const U32 encryptionKey[8], Bool allowLeftOverDa
 
 //oiSH
 
-Error SHFile_createx(ESHSettingsFlags flags, ESHExtension extension, U32 compilerVersion, SHFile *shFile);
-Bool SHFile_freex(SHFile *shFile);
+Bool SHFile_createx(ESHSettingsFlags flags, U32 compilerVersion, U32 sourceHash, SHFile *shFile, Error *e_rr);
+void SHFile_freex(SHFile *shFile);
 
-Error SHFile_addBinaryx(SHFile *shFile, ESHBinaryType type, Buffer *entry);		//Moves entry
-Error SHFile_addEntrypointx(SHFile *shFile, SHEntry *entry);					//Moves entry->name
+Bool SHFile_addBinaryx(SHFile *shFile, SHBinaryInfo *binaries, Error *e_rr);		//Moves entry
+Bool SHFile_addEntrypointx(SHFile *shFile, SHEntry *entry, Error *e_rr);			//Moves entry->name
 
-Error SHFile_writex(SHFile shFile, Buffer *result);
-Error SHFile_readx(Buffer file, Bool isSubFile, SHFile *shFile);
+Bool SHFile_writex(SHFile shFile, Buffer *result, Error *e_rr);
+Bool SHFile_readx(Buffer file, Bool isSubFile, SHFile *shFile, Error *e_rr);
 
 void SHEntry_printx(SHEntry entry);
 void SHEntryRuntime_printx(SHEntryRuntime entry);
+void SHBinaryInfo_printx(SHBinaryInfo binary);
 
+void SHBinaryIdentifier_freex(SHBinaryIdentifier *identifier);
+void SHBinaryInfo_freex(SHBinaryInfo *info);
+void SHEntry_freex(SHEntry *entry);
 void SHEntryRuntime_freex(SHEntryRuntime *entry);
 void ListSHEntryRuntime_freeUnderlyingx(ListSHEntryRuntime *entry);
 

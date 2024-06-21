@@ -23,11 +23,13 @@ project(OxC3)
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 set(CMAKE_SUPPRESS_REGENERATION TRUE)
 
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded")
+
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED OFF)
 set(CMAKE_C_EXTENSIONS ON)
 
-set(CMAKE_CXX_STANDARD 17)				# We need some C++ to interface with DXC, but we wrap it using C
+set(CMAKE_CXX_STANDARD 20)				# We need some C++ to interface with DXC, but we wrap it using C
 set(CMAKE_CXX_STANDARD_REQUIRED OFF)
 set(CMAKE_CXX_EXTENSIONS ON)
 
@@ -52,12 +54,28 @@ set(EnableOxC3CLI OFF CACHE BOOL "Turn on/off OxC3 CLI")
 # Even though EnableSIMD can be turned off, it won't be truly off
 # This is because we want to maintain proper IEEE754 compliance, which we can't do without SSE
 
+if(${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm") 
+	set(_ARCH "ARCH_ARM")
+	message("-- Enabling ARM specific optimizations")
+	message(WARNING "-- ARM NEON isn't natively supported. Falling back to non SIMD for testing purposes, PLEASE don't ship like this")
+	set(EnableSIMD OFF)
+	set(ARM ON)
+else()
+	message("-- Enabling x64 specific optimizations")
+	set(_ARCH "ARCH_X64")
+	set(ARM OFF)
+endif()
+
 if(MSVC)
 
-	add_compile_options(/MD /MP /GR /D_CRT_SECURE_NO_WARNINGS /Gy)
+	add_compile_options(/MP /GR /D_CRT_SECURE_NO_WARNINGS /Gy)
 
 	if(EnableSIMD)
-		add_compile_options(/d2archSSE42)		# Require SSE4.2
+		if("${_ARCH}" STREQUAL "ARCH_ARM")
+			add_compile_options(/arch:ARMv7VE)		# Enable ARM arch
+		else()
+			add_compile_options(/d2archSSE42)		# Require SSE4.2
+		endif()
 	endif()
 
 	if(RelaxFloat)
@@ -68,10 +86,14 @@ if(MSVC)
 
 else()
 
-	if(EnableSIMD)
-		add_compile_options(-mfpmath=sse -msse -msse2 -msse3 -mssse3 -msse4 -msse4.1 -msse4.2 -mrdrnd -msha -maes -mbmi2 -mf16c)
-	elseif(NOT RelaxFloat)
-		add_compile_options(-mfpmath=sse -msse)
+	if("${_ARCH}" STREQUAL "ARCH_X64")
+		if(EnableSIMD)
+			add_compile_options(-mfpmath=sse -msse -msse2 -msse3 -mssse3 -msse4 -msse4.1 -msse4.2 -mrdrnd -msha -maes -mbmi2 -mf16c)
+		elseif(NOT RelaxFloat)
+			add_compile_options(-mfpmath=sse -msse)
+		endif()
+	else()
+		add_compile_options(-mfpu=neon -march=armv8-a+crc+simd+crypto)		# We enable neon, but we don't use it in vectors yet
 	endif()
 
 	if(RelaxFloat)
@@ -80,75 +102,11 @@ else()
 		add_compile_options(-fno-unsafe-math-optimizations)
 	endif()
 
+	add_compile_options(-fms-extensions)	# Needed by DXC for uuids
+
 	# Link time optimization seems to be very slow on linux?
 	# add_compile_options(-flto -fno-fat-lto-objects)
 
-endif()
-
-if(EnableShaderCompiler)
-
-	# Configure DXC
-
-	set(CLANG_BUILD_EXAMPLES OFF CACHE BOOL "")
-	set(CLANG_CL OFF CACHE BOOL "")
-	set(LLVM_INCLUDE_TESTS OFF CACHE BOOL "")
-	set(CLANG_INCLUDE_TESTS OFF CACHE BOOL "")
-	set(LLVM_DEFAULT_TARGET_TRIPLE "dxil-ms-dx" CACHE STRING "")
-	set(LLVM_ENABLE_RTTI ON CACHE BOOL "")
-	set(LLVM_ENABLE_EH ON CACHE BOOL "")
-	set(LLVM_APPEND_VC_REV ON CACHE BOOL "")
-	set(LLVM_OPTIMIZED_TABLEGEN OFF CACHE BOOL "")
-	set(LIBCLANG_BUILD_STATIC ON CACHE BOOL "")
-	set(LLVM_INCLUDE_DOCS OFF CACHE BOOL "")
-	set(LLVM_INCLUDE_EXAMPLES OFF CACHE BOOL "")
-	set(LLVM_TARGETS_TO_BUILD "None" CACHE STRING "")
-	set(HLSL_INCLUDE_TESTS OFF CACHE BOOL "")
-	set(CLANG_ENABLE_STATIC_ANALYZER OFF CACHE BOOL "")
-	set(CLANG_ENABLE_ARCMT OFF CACHE BOOL "")
-	set(SPIRV_BUILD_TESTS OFF CACHE BOOL "")
-	set(ENABLE_SPIRV_CODEGEN ON CACHE BOOL "")
-	set(HLSL_BUILD_DXILCONV OFF CACHE BOOL "")
-	set(HLSL_ENABLE_FIXED_VER OFF CACHE BOOL "")
-	set(HLSL_OFFICIAL_BUILD OFF CACHE BOOL "")
-	set(HLSL_OPTIONAL_PROJS_IN_DEFAULT OFF CACHE BOOL "")
-	
-	set(CMAKE_EXPORT_COMPILE_COMMANDS ON CACHE BOOL "")
-	set(LLVM_ENABLE_TERMINFO OFF CACHE BOOL "")
-	set(DXC_USE_LIT ON CACHE BOOL "")
-	set(LLVM_ENABLE_ASSERTIONS ON CACHE BOOL "")
-	set(LLVM_LIT_ARGS "-v" CACHE STRING "")
-	set(ENABLE_DXC_STATIC_LINKING ON CACHE BOOL "")
-	set(BUILD_SHARED_LIBS OFF CACHE BOOL "")
-
-	if(NOT MSVC)
-		add_compile_options(-w)		# Remove all those pesky warnings since we can't fix them anyways
-	endif()
-
-	add_subdirectory(external/DirectXShaderCompiler)
-
-endif()
-
-# Use ${HideConsole} to add_executable to hide the console window
-
-if(MSVC)
-	set(HideConsole "WIN32")
-else()
-	set(HideConsole "")
-endif()
-
-# Errors as warnings and maximum warnings should only be used for OxC3 stuff, as DXC won't be able to handle it
-
-if(MSVC)
-	add_compile_options(/W4 /WX)
-else()
-	add_compile_options(-Wall -Wextra -Werror)
-endif()
-
-message("-- Enabling x64 specific optimizations such as CRC32C, AES256 and SHA256 (optional) instructions")
-set(_ARCH "ARCH_X64")
-
-if(ARM)
-	set(_ARCH "ARCH_ARM")
 endif()
 
 if(EnableOxC3CLI)
@@ -225,8 +183,31 @@ else()
 	set(_PLATFORM_TYPE PLATFORM_LINUX)
 endif()
 
+# Enable symbols
+
+if("${platform}" STREQUAL "linux")
+	if (CMAKE_BUILD_TYPE STREQUAL "Debug" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
+		set(CMAKE_ENABLE_EXPORTS ON)
+	endif()
+endif()
+
+# Use ${HideConsole} to add_executable to hide the console window
+
+if(MSVC)
+	set(HideConsole "WIN32")
+else()
+	set(HideConsole "")
+endif()
+
+# Errors as warnings and maximum warnings should only be used for OxC3 stuff, as DXC won't be able to handle it
+
+if(MSVC)
+	add_compile_options(/W4 /WX)
+else()
+	add_compile_options(-Wall -Wextra -Werror)
+endif()
+
 set(ForceUpdateDeps OFF CACHE BOOL "Force update dependencies")
-set(ARM OFF CACHE BOOL "Force ARM executable")											# //TODO:
 set(ForceVulkan OFF CACHE BOOL "Force Vulkan support (disable native API if available)")
 
 # Types
@@ -379,17 +360,30 @@ target_link_libraries(OxC3_graphics PUBLIC OxC3_platforms)
 
 if("${graphicsApi}" STREQUAL "vulkan")
 
-	if(DEFINED ENV{VULKAN_SDK})
+	if(NOT DEFINED ENV{VULKAN_SDK})
+		message(FATAL_ERROR "VULKAN_SDK directory should be set!")
+	endif()
+
+	if(NOT "${platform}" STREQUAL "osx")
 		include_directories(OxC3_graphics PUBLIC $ENV{VULKAN_SDK}/include)
 		target_link_directories(OxC3_graphics PUBLIC $ENV{VULKAN_SDK}/lib)
-	else()
-		find_package(Vulkan REQUIRED)
 	endif()
 
 	if(WIN32)
-			set(VULKAN_LIB vulkan-1)
+		target_link_libraries(OxC3_graphics PUBLIC vulkan-1)
+	elseif("${platform}" STREQUAL "osx")
+
+		if(EXISTS "$ENV{VULKAN_SDK}/macOS/include")
+			include_directories(OxC3_graphics PUBLIC $ENV{VULKAN_SDK}/macOS/include)
+			target_link_directories(OxC3_graphics PUBLIC $ENV{VULKAN_SDK}/macOS/lib)
+		else()
+			include_directories(OxC3_graphics PUBLIC $ENV{VULKAN_SDK}/include)
+			target_link_directories(OxC3_graphics PUBLIC $ENV{VULKAN_SDK}/lib)
+		endif()
+
+		target_link_libraries(OxC3_graphics PUBLIC vulkan)
 	else()
-		set(VULKAN_LIB vulkan)
+		target_link_libraries(OxC3_graphics PUBLIC vulkan)
 	endif()
 
 	if("${platform}" STREQUAL "windows")
@@ -405,8 +399,6 @@ if("${graphicsApi}" STREQUAL "vulkan")
 	else()
 		message(FATAL_ERROR "Platform not supported for Vulkan yet: ${platform}")
 	endif()
-
-	target_link_libraries(OxC3_graphics PUBLIC ${VULKAN_LIB})
 
 # DirectX setup
 
@@ -722,6 +714,8 @@ endif()
 
 if(EnableShaderCompiler)
 
+	find_package(dxc REQUIRED)
+
 	# Our parser
 
 	file(GLOB_RECURSE compilerHeaders "inc/shader_compiler/*.h")
@@ -736,10 +730,10 @@ if(EnableShaderCompiler)
 	)
 
 	set_target_properties(OxC3_shader_compiler PROPERTIES FOLDER Oxsomi)
-	target_link_libraries(OxC3_shader_compiler PUBLIC OxC3_platforms dxcompiler)
+	target_link_libraries(OxC3_shader_compiler PUBLIC OxC3_platforms dxc::dxc)
 
 	target_include_directories(OxC3_shader_compiler PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/external/nvapi")
-	target_include_directories(OxC3_shader_compiler PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/external/DirectXShaderCompiler/include")
+	target_include_directories(OxC3_shader_compiler PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/external")
 
 endif()
 

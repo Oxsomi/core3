@@ -23,11 +23,15 @@
 //Conversions
 
 U64 F32_fromBits(F32 v) {
-	U32 u = *(const U32*)&v;
+	const void *vptr = &v;
+	U32 u = *(const U32*)vptr;
 	return u;
 }
 
-U64 F64_fromBits(F64 v) { return *(const U64*) &v; }
+U64 F64_fromBits(F64 v) { 
+	const void *vptr = &v;
+	return *(const U64*) vptr;
+}
 
 #define FLP_FROMBITS(T, TInt)																			\
 Error T##_from##T##Bits(U64 v, T *res) {																\
@@ -39,7 +43,8 @@ Error T##_from##T##Bits(U64 v, T *res) {																\
 		return Error_overflow(0, v, TInt##_MAX, #T "_fromBits()::v is out of bounds");					\
 																										\
 	TInt bits = (TInt) v;																				\
-	T r = *(const T*) &bits;																			\
+	const void *bitsPtr = &bits;																		\
+	T r = *(const T*) bitsPtr;																			\
 																										\
 	if(!T##_isValid(r))																					\
 		return Error_NaN(0, #T "_fromBits()::v generated NaN or Inf");									\
@@ -75,10 +80,17 @@ FLP_FROMBITS(F64, U64);
 		return Error_underflow(0, toBits, (castType) type##_MIN, "CastFromI()::v is out of bounds");	\
 )
 
-#define CastFromF(type) CastFromI(type, type, *(const U32*)&v)
-#define CastFromD(type) CastFromI(type, type, *(const U64*)&v)
+#define CastFromF(type) {																				\
+	const void *vptr = &v;																				\
+	CastFromI(type, type, *(const U32*)vptr)															\
+}
 
-#define ITOF(T, TUint)																				\
+#define CastFromD(type) {																				\
+	const void *vptr = &v;																				\
+	CastFromI(type, type, *(const U64*)vptr)															\
+}
+
+#define ITOF(T, TUint)																					\
 Error T##_fromUInt(U64 v, T *res){																		\
 																										\
 	if(!res)																							\
@@ -114,10 +126,10 @@ Error I64_fromDouble(F64 v, I64 *res)	CastFromD(I64)
 
 //Cast to uints
 
-#define _UTOF(T)																			\
-Error T##_fromUInt(U64 v, T *res)		CastFromU(T, (U64)v)								\
-Error T##_fromInt(I64 v, T *res)		CastFromI(T, T, (U64)v)							\
-Error T##_fromFloat(F32 v, T *res)		CastFromF(T) 										\
+#define _UTOF(T)																						\
+Error T##_fromUInt(U64 v, T *res)		CastFromU(T, (U64)v)											\
+Error T##_fromInt(I64 v, T *res)		CastFromI(T, T, (U64)v)											\
+Error T##_fromFloat(F32 v, T *res)		CastFromF(T) 													\
 Error T##_fromDouble(F64 v, T *res)		CastFromD(T)
 
 _UTOF(U8);

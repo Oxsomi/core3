@@ -22,6 +22,7 @@
 #include "shader_compiler/compiler.h"
 #include "platforms/file.h"
 #include "platforms/platform.h"
+#include "platforms/log.h"
 #include "types/error.h"
 #include "types/buffer.h"
 #include "types/allocator.h"
@@ -487,8 +488,8 @@ Bool Compiler_mergeIncludeInfo(Compiler *comp, Allocator alloc, ListIncludeInfo 
 	Bool s_uccess = true;
 	CompilerInterfaces *interfaces = NULL;
 
-	ListIncludedFile files = interfaces->includeHandler->getIncludedFiles();
 	CharString tmp = CharString_createNull();
+	ListIncludedFile files = ListIncludedFile{};
 
 	if(!comp || !infos)
 		retError(clean, Error_nullPointer(!comp ? 0 : 2, "Compiler_mergeIncludeInfo()::comp and infos are required"))
@@ -499,6 +500,8 @@ Bool Compiler_mergeIncludeInfo(Compiler *comp, Allocator alloc, ListIncludeInfo 
 		retError(clean, Error_nullPointer(
 			!comp ? 0 : 2, "Compiler_mergeIncludeInfo()::comp->interfaces includeHandler is missing"
 		))
+
+	files = interfaces->includeHandler->getIncludedFiles();
 
 	for (U64 i = 0; i < files.length; ++i) {
 
@@ -543,7 +546,24 @@ clean:
 }
 
 void Compiler_shutdown() {
-	DxcShutdown(true);
+
+	ELockAcquire acq = Lock_lock(&lockThread, U64_MAX);
+
+	if(acq < ELockAcquire_Success)
+		return;
+
+	if(!hasInitialized)
+		goto clean;
+
+	try {
+		DxcShutdown(true);
+	} catch(std::exception&){}
+
+	hasInitialized = false;
+
+clean:
+	if(acq == ELockAcquire_Acquired)
+		Lock_unlock(&lockThread);
 }
 
 Bool Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator alloc, CompileResult *result, Error *e_rr) {
@@ -555,6 +575,7 @@ Bool Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator all
 	IDxcBlobUtf8 *error = NULL;
 	ListU16 inputFile = ListU16{};
 	ListU16 includeDir = ListU16{};
+	ListU16 includeDir2 = ListU16{};		//Include dir on disk
 	ListU16 tempWStr = ListU16{};
 	Bool hasErrors = false, isVirtual = false;
 	CharString tempStr = CharString_createNull();
@@ -572,7 +593,7 @@ Bool Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator all
 
 	gotoIfError2(clean, CharString_toUTF16(settings.path, alloc, &inputFile))
 
-	if(settings.includeDir.ptr) {
+	if(CharString_length(settings.includeDir)) {
 
 		gotoIfError2(clean, File_resolve(
 			settings.includeDir, &isVirtual, 256, Platform_instance.workingDirectory, alloc, &tempStr2
@@ -580,6 +601,20 @@ Bool Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator all
 
 		gotoIfError2(clean, CharString_toUTF16(tempStr2, alloc, &includeDir))
 		CharString_free(&tempStr2, alloc);
+	}
+
+	if(CharString_length(settings.path)) {
+
+		gotoIfError2(clean, File_resolve(
+			settings.path, &isVirtual, 256, Platform_instance.workingDirectory, alloc, &tempStr2
+		))
+
+		if(!CharString_cutAfterLastSensitive(tempStr2, '/', &tempStr))
+			retError(clean, Error_invalidState(0, "Compiler_preprocess() can't find parent directory"))
+
+		gotoIfError2(clean, CharString_toUTF16(tempStr, alloc, &includeDir2))
+		CharString_free(&tempStr2, alloc);
+		CharString_free(&tempStr, alloc);
 	}
 
 	try {
@@ -592,17 +627,22 @@ Bool Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator all
 			{ '-', 'P', '\0' },									//Preprocess
 			{ '-', 's', 'p', 'i', 'r', 'v', '\0' },				//-spirv (enable spirv generation)
 			{ '-', 'I', '\0' },									//-I (include dir)
-			{ '-', 'D', '_', '_', 'O', 'X', 'C', '3', '\0' }	//-D__OXC3 to indicate we're compiling from OxC3
+			{ '-', 'D', '_', '_', 'O', 'X', 'C', '3', '\0' },	//-D__OXC3 to indicate we're compiling from OxC3
+			{ '-', 'H', 'V', '\0' },							//-HV 202x (force new HLSL version)
+			{ '2', '0', '2', 'x', '\0' }
 		};
 
-		U32 argCounter = 3;
+		U32 argCounter = 5;
 
-		const U16 *argsPtr[10] = {
+		const U16 *argsPtr[14] = {
 
 			args[0],
 			inputFile.ptr,
 
-			args[3]
+			args[3],
+
+			args[4],
+			args[5]
 		};
 
 		if (settings.outputType == ESHBinaryType_SPIRV)		//-spirv
@@ -611,6 +651,11 @@ Bool Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator all
 		if (includeDir.length) {							//-I
 			argsPtr[argCounter++] = args[2];
 			argsPtr[argCounter++] = includeDir.ptr;
+		}
+
+		if (includeDir2.length) {							//-I
+			argsPtr[argCounter++] = args[2];
+			argsPtr[argCounter++] = includeDir2.ptr;
 		}
 
 		//Format major, minor, patch and version
@@ -729,6 +774,7 @@ clean:
 	ListListU16_freeUnderlying(&strings, alloc);
 	ListU16_free(&inputFile, alloc);
 	ListU16_free(&includeDir, alloc);
+	ListU16_free(&includeDir2, alloc);
 	ListU16_free(&tempWStr, alloc);
 	CharString_free(&tempStr, alloc);
 	CharString_free(&tempStr2, alloc);
@@ -738,7 +784,7 @@ clean:
 Bool Compiler_compile(
 	Compiler comp,
 	CompilerSettings settings,
-	SHBinaryInfo toCompile,
+	SHBinaryIdentifier toCompile,
 	Allocator alloc,
 	CompileResult *result,
 	Error *e_rr
@@ -752,6 +798,7 @@ Bool Compiler_compile(
 	IDxcBlob *resultBlob = NULL;
 	ListU16 inputFile = ListU16{};
 	ListU16 includeDir = ListU16{};
+	ListU16 includeDir2 = ListU16{};
 	ListU16 tempWStr = ListU16{};
 	Bool hasErrors = false, isVirtual = false;
 	CharString tempStr = CharString_createNull();
@@ -769,7 +816,7 @@ Bool Compiler_compile(
 
 	gotoIfError2(clean, CharString_toUTF16(settings.path, alloc, &inputFile))
 
-	if(settings.includeDir.ptr) {
+	if(CharString_length(settings.includeDir)) {
 
 		gotoIfError2(clean, File_resolve(
 			settings.includeDir, &isVirtual, 256, Platform_instance.workingDirectory, alloc, &tempStr2
@@ -777,6 +824,20 @@ Bool Compiler_compile(
 
 		gotoIfError2(clean, CharString_toUTF16(tempStr2, alloc, &includeDir))
 		CharString_free(&tempStr2, alloc);
+	}
+
+	if(CharString_length(settings.path)) {
+
+		gotoIfError2(clean, File_resolve(
+			settings.path, &isVirtual, 256, Platform_instance.workingDirectory, alloc, &tempStr2
+		))
+
+		if(!CharString_cutAfterLastSensitive(tempStr2, '/', &tempStr))
+			retError(clean, Error_invalidState(0, "Compiler_compile() can't find parent directory"))
+
+		gotoIfError2(clean, CharString_toUTF16(tempStr, alloc, &includeDir2))
+		CharString_free(&tempStr2, alloc);
+		CharString_free(&tempStr, alloc);
 	}
 
 	try {
@@ -787,7 +848,7 @@ Bool Compiler_compile(
 
 		const U16 args[][27] = {
 
-			{ '-', 'P', '\0' },									//Preprocess
+			{ '\0' },											//Placeholder
 			{ '-', 's', 'p', 'i', 'r', 'v', '\0' },				//-spirv (enable spirv generation)
 			{ '-', 'I', '\0' },									//-I (include dir)
 			{ '-', 'D', '_', '_', 'O', 'X', 'C', '3', '\0' },	//-D__OXC3 to indicate we're compiling from OxC3
@@ -845,23 +906,35 @@ Bool Compiler_compile(
 			{ 
 				'-', 'f', 's', 'p', 'v', '-', 'e', 'n', 't', 'r', 'y', 'p', 'o', 'i', 'n', 't', '-', 'n', 'a', 'm', 'e', '=',
 				'm', 'a', 'i', 'n', '\0'
-			}
+			},
+
+			//-HV 202x (force new HLSL version)
+
+			{ '-', 'H', 'V', '\0' },
+			{ '2', '0', '2', 'x', '\0' },
+
+			//-E and -T
+
+			{ '-', 'E', '\0' },
+			{ '-', 'T', '\0' }
 		};
 
-		U32 argCounter = 7;
+		U32 argCounter = 6;
 
-		const U16 *argsPtr[22] = {
+		const U16 *argsPtr[25] = {
 
-			args[0],
-			inputFile.ptr,
+			inputFile.ptr,		//Relative to input file for includes
 
-			args[3],
+			args[3],			//-D__OXC3
+
+			//-Zpc
+
 			args[7],
 
-			args[8],
-			args[9],
+			settings.debug ? args[10] : args[11],		//-Od or -O3
 
-			settings.debug ? args[10] : args[11]
+			args[19],		//-HV 202x
+			args[20]
 		};
 
 		if(settings.debug)
@@ -886,11 +959,14 @@ Bool Compiler_compile(
 			else if(toCompile.stageType == ESHPipelineStage_Pixel)
 				argsPtr[argCounter++] = args[17];				//-fvk-use-dx-position-w
 
-			if(!toCompile.hasShaderAnnotation)
+			if(CharString_length(toCompile.entrypoint))
 				argsPtr[argCounter++] = args[18];				//-fspv-entrypoint-name=main
 		}
 
 		else {
+
+			argsPtr[argCounter++] = args[8];					//-Qstrip_debug
+			argsPtr[argCounter++] = args[9];					//-Qstrip_reflect
 
 			argsPtr[argCounter++] = args[4];					//-auto-binding-space
 			argsPtr[argCounter++] = args[5];					//0
@@ -904,7 +980,39 @@ Bool Compiler_compile(
 			argsPtr[argCounter++] = includeDir.ptr;
 		}
 
-		//TODO: -E <entrypointName> -T <target>
+		if (includeDir2.length) {							//-I
+			argsPtr[argCounter++] = args[2];
+			argsPtr[argCounter++] = includeDir2.ptr;
+		}
+
+		//-E <entrypointName>
+
+		if (CharString_length(toCompile.entrypoint)) {
+		
+			argsPtr[argCounter++] = args[21];
+
+			gotoIfError2(clean, CharString_toUTF16(toCompile.entrypoint, alloc, &tempWStr))
+			gotoIfError2(clean, ListListU16_pushBack(&strings, tempWStr, alloc))
+			argsPtr[argCounter++] = tempWStr.ptr;
+			tempWStr = ListU16{};
+		}
+
+		//-T <target>
+		
+		argsPtr[argCounter++] = args[22];
+
+		const C8 *targetPrefix = ESHPipelineStage_getStagePrefix((ESHPipelineStage) toCompile.stageType);
+
+		U32 major = toCompile.shaderVersion >> 8;
+		U32 minor = (U8)toCompile.shaderVersion;
+
+		gotoIfError2(clean, CharString_format(alloc, &tempStr2, "%s_%" PRIu32"_%" PRIu32, targetPrefix, major, minor))
+		gotoIfError2(clean, CharString_toUTF16(tempStr2, alloc, &tempWStr))
+		CharString_free(&tempStr2, alloc);
+
+		gotoIfError2(clean, ListListU16_pushBack(&strings, tempWStr, alloc))
+		argsPtr[argCounter++] = tempWStr.ptr;
+		tempWStr = ListU16{};
 
 		//TODO: __OXC3_EXT_<X> foreach extension
 
@@ -978,7 +1086,7 @@ Bool Compiler_compile(
 			retError(clean, Error_invalidState(2, "Compiler_compile() fetch hlsl failed"))
 
 		gotoIfError2(clean, Buffer_createCopy(
-			Buffer_createRefConst(error->GetBufferPointer(), error->GetBufferSize()),
+			Buffer_createRefConst(resultBlob->GetBufferPointer(), resultBlob->GetBufferSize()),
 			alloc,
 			&result->binary
 		))
@@ -1004,10 +1112,11 @@ clean:
 	ListListU16_freeUnderlying(&strings, alloc);
 	ListU16_free(&inputFile, alloc);
 	ListU16_free(&includeDir, alloc);
+	ListU16_free(&includeDir2, alloc);
 	ListU16_free(&tempWStr, alloc);
 	CharString_free(&tempStr, alloc);
 	CharString_free(&tempStr2, alloc);
 	return s_uccess;
 }
 
-//TODO: Real compile, check for [extension(I16, F16)] one of the two indicates we need to enable 16-bit types
+//TODO: Real compile, check for [extension("16BitTypes")] one of the two indicates we need to enable 16-bit types

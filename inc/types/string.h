@@ -52,9 +52,9 @@ typedef C8 LongString[LONGSTRING_LEN];
 //Heap string
 
 typedef struct CharString {
+	const C8 *ptr;					//This is non const if not a const ref, but for safety this is const (cast away if not).
 	U64 lenAndNullTerminated;		//First bit contains if it's null terminated or not. Length excludes null terminator.
 	U64 capacityAndRefInfo;			//capacityAndRefInfo = 0: ref, capacityAndRefInfo = -1: const ref
-	const C8 *ptr;					//This is non const if not a const ref, but for safety this is const (cast away if not).
 } CharString;
 
 TList(CharString);
@@ -130,6 +130,8 @@ CharString CharString_createRefAuto(C8 *ptr, U64 maxSize);					//Auto detect end
 
 CharString CharString_createRefSizedConst(const C8 *ptr, U64 size, Bool isNullTerminated);
 CharString CharString_createRefSized(C8 *ptr, U64 size, Bool isNullTerminated);
+
+CharString CharString_createRefStrConst(CharString str);
 
 //
 

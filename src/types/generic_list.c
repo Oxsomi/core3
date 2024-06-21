@@ -522,7 +522,7 @@ Error GenericList_eraseAllIndices(GenericList *list, ListU64 indices) {
 	if(!indices.length || !list->length)
 		return Error_none();
 
-	if(!GenericList_sortU64(ListVoid_toList(*(const ListVoid*)&indices, sizeof(U64))))
+	if(!GenericList_sortU64(ListU64_toList(indices)))
 		return Error_invalidParameter(1, 0, "GenericList_eraseAllIndices()::indices sort failed");
 
 	//Ensure none of them reference out of bounds or are duplicate
@@ -984,7 +984,7 @@ Error GenericList_insertAll(GenericList *list, GenericList other, U64 offset, Al
 	if(!list)
 		return Error_nullPointer(0, "GenericList_insertAll()::list is required");
 
-	if(GenericList_isRef(*list))
+	if(list->length && GenericList_isRef(*list))
 		return Error_invalidParameter(0, 0, "GenericList_insertAll()::list must be managed memory");
 
 	if(!other.length)
@@ -996,7 +996,7 @@ Error GenericList_insertAll(GenericList *list, GenericList other, U64 offset, Al
 	if(list->length + other.length < list->length)
 		return Error_overflow(0, list->length + other.length, U64_MAX, "GenericList_insertAll() overflow");
 
-	if(offset >= list->length)
+	if(offset > list->length)
 		return Error_outOfBounds(2, offset, list->length, "GenericList_insertAll()::offset out of bounds");
 
 	const U64 prevSize = list->length;

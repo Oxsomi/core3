@@ -223,9 +223,7 @@ Error CLI_convertToDL(ParsedArgs args, CharString input, FileInfo inputInfo, Cha
 				break;
 			}
 
-			sortedPaths.ptrNonConst[dec] = CharString_createRefSizedConst(
-				stri.ptr, CharString_length(stri), false
-			);
+			sortedPaths.ptrNonConst[dec] = CharString_createRefStrConst(stri);
 		}
 
 		//Keep the sorting as is, since it's not linear

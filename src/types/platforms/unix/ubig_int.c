@@ -24,9 +24,14 @@ U128 U128_create(const U8 data[16]) {
 	return *(const U128*)data;
 }
 
+typedef union U128_U64x2 {
+	U128 v;
+	U64 v2[2];
+} U128_U64x2;
+
 U128 U128_createU64x2(U64 a, U64 b) {
-	U64 data[2] = { a, b };
-	return *(const U128*)data;
+	U128_U64x2 data = (U128_U64x2) { .v2 = { a, b } };
+	return data.v;
 }
 
 U128 U128_mul64(U64 au, U64 bu) {
@@ -48,21 +53,31 @@ U128 U128_sub(U128 a, U128 b) {  return a - b; }
 U128 U128_lsh(U128 a, U8 x) { return a << x; }
 U128 U128_rsh(U128 a, U8 x) { return a >> x; }
 
+typedef union BitScanOpt {
+	U128 a128;
+	U64 a64[2];
+	U32 a32[4];
+	U16 a16[8];
+	U8 a8[16];
+} BitScanOpt;
+
 U8 U128_bitScan(U128 a) {
+
+	BitScanOpt opt = (BitScanOpt) { .a128 = a };
 
 	//Keep subdividing by 2x until the first bit is found
 
-	U64 offset = (Bool)((const U64*)&a)[1];
+	U64 offset = (Bool)opt.a64[1];
 	offset <<= 1;
 
-	offset |= (Bool)((const U32*)&a)[offset + 1];
+	offset |= (Bool)opt.a32[offset + 1];
 	offset <<= 1;
 
-	offset |= (Bool)((const U16*)&a)[offset + 1];
+	offset |= (Bool)opt.a16[offset + 1];
 	offset <<= 1;
 
-	offset |= (Bool)((const U8*)&a)[offset + 1];
-	U8 b = ((const U8*)&a)[offset];
+	offset |= (Bool)opt.a8[offset + 1];
+	U8 b = opt.a8[offset];
 	offset <<= 1;
 
 	offset |= (Bool)(b >> 4);

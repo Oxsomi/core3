@@ -44,7 +44,14 @@ Bool Platform_signalReady(AppDelegate *self, SEL cmd, id notif) {
 
 //Initialize all ObjectiveC classes and functions
 
+Class EObjCClass_obj[(int)EObjCClass_Count];
+SEL EObjCFunc_obj[(int)EObjCFunc_Count];
+
 Error Platform_initUnixExt() {
+
+	return Error_none();
+
+	//TODO:
 
 	Log_debugLnx("Start!");
 
@@ -71,7 +78,7 @@ Error Platform_initUnixExt() {
 		if(!sel)
 			return Error_invalidState(0, "Platform_initUnixExt() couldn't get SEL / function");
 
-		EObjCFunc_obj[i] = c;
+		EObjCFunc_obj[i] = sel;
 	}
 
 	Log_debugLnx("Complete get functions!");
@@ -104,7 +111,7 @@ Error Platform_initUnixExt() {
 
 	//Instantiate application with our delegate
 
-	ObjC_sendId(clsNSApplication(), selSharedApplication());
+	ObjC_sendId((id)clsNSApplication(), selSharedApplication());
 
 	if(!NSApp)
 		return Error_invalidState(0, "Platform_initUnixExt() failed to create NSApplication");

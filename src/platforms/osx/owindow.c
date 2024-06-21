@@ -39,8 +39,9 @@
 // And https://gist.github.com/hasenj/1bba3ca00af1a3c0b2035c9bd14a85ef
 // And https://github.com/CodaFi/C-Macs/blob/master/CMacs/CMacsTypes.h
 
+extern id NSApp;
 
-Error OWindow_initSize(Window *w, I32x2 size) { return Error_none(); }
+Error OWindow_initSize(Window *w, I32x2 size) { (void)w; (void)size; return Error_none(); }
 
 /*
 void OWindow_updateMonitors(Window *w) {
@@ -840,7 +841,7 @@ Error Window_updatePhysicalTitle(const Window *w, CharString title) {
 	Error err = ObjC_wrapString(title, &copy, &wrapped);
 	gotoIfError(clean, err);
 
-	ObjC_sendVoidPtr(w->nativeHandle, selSetTitle()), wrapped);
+	ObjC_sendVoidPtr(w->nativeHandle, selSetTitle(), wrapped);
 
 clean:
 	CharString_freex(&copy);
@@ -862,7 +863,7 @@ Error Window_toggleFullScreen(Window *w) {
 
 	else w->flags &= ~EWindowFlags_IsFullscreen;
 
-	ObjC_sendId((id)w->nativeHandle, selToggleFullScreen(), NSApp);
+	ObjC_sendId((id)w->nativeHandle, selToggleFullScreen());
 
 	return Error_none();
 }

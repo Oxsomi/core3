@@ -100,17 +100,21 @@ U8x4x4 U8x4x4_transpose(const U8x4x4 *r) {
 	return t;
 }
 
+typedef union I32x4_U8x4x4 {
+	I32x4 v;
+	U8x4x4 v4x4;
+} I32x4_U8x4x4;
+
 I32x4 AES_shiftRows(I32x4 a) {
 
-	const U8x4x4 *ap = (U8x4x4*) &a;
-
-	U8x4x4 res = *ap;
+	I32x4_U8x4x4 ap = (I32x4_U8x4x4) { .v = a };
+	I32x4_U8x4x4 res = ap;
 
 	for(U64 j = 0; j < 4; ++j)
 		for(U64 i = 1; i < 4; ++i)
-			res.v[j][i] = ap->v[(i + j) & 3][i];
+			res.v4x4.v[j][i] = ap.v4x4.v[(i + j) & 3][i];
 
-	return *(const I32x4*)&res;
+	return res.v;
 }
 
 I32x4 AES_subBytes(I32x4 a) {
@@ -141,16 +145,16 @@ static U8 AES_MIX_COLUMN[4][4] = {
 
 I32x4 AES_mixColumns(I32x4 vvv) {
 
-	U8x4x4 v = *(U8x4x4*)&vvv;
+	I32x4_U8x4x4 v = (I32x4_U8x4x4) { .v = vvv };
 
-	v = U8x4x4_transpose(&v);
+	v.v4x4 = U8x4x4_transpose(&v.v4x4);
 
 	U8x4x4 r = { 0 };
 
 	for(U8 i = 0; i < 4; ++i)
 		for(U8 j = 0; j < 4; ++j)
 			for(U8 k = 0; k < 4; ++k)
-				r.v[j][i] ^= AES_g2_8(v.v[k][i], AES_MIX_COLUMN[j][k]);
+				r.v[j][i] ^= AES_g2_8(v.v4x4.v[k][i], AES_MIX_COLUMN[j][k]);
 
 	r = U8x4x4_transpose(&r);
 

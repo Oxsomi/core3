@@ -65,6 +65,8 @@ TListXBaseImpl(ListWeakRefPtr);
 
 TListXImpl(SHEntry);
 TListXImpl(SHEntryRuntime);
+TListXImpl(SHBinaryInfo);
+TListXImpl(SHBinaryIdentifier);
 
 TListXBaseImpl(ListThread);
 
@@ -229,32 +231,45 @@ Error DLFile_readx(Buffer file, const U32 encryptionKey[8], Bool allowLeftOverDa
 	return DLFile_read(file, encryptionKey, allowLeftOverData, Platform_instance.alloc, dlFile);
 }
 
-Error SHFile_createx(ESHSettingsFlags flags, ESHExtension extension, U32 compilerVersion, SHFile *shFile) {
-	return SHFile_create(flags, extension, compilerVersion, Platform_instance.alloc, shFile);
+Bool SHFile_createx(ESHSettingsFlags flags, U32 compilerVersion, U32 sourceHash, SHFile *shFile, Error *e_rr) {
+	return SHFile_create(flags, compilerVersion, sourceHash, Platform_instance.alloc, shFile, e_rr);
 }
 
-Bool SHFile_freex(SHFile *shFile) {
-	return SHFile_free(shFile, Platform_instance.alloc);
+void SHFile_freex(SHFile *shFile) {
+	SHFile_free(shFile, Platform_instance.alloc);
 }
 
-Error SHFile_addBinaryx(SHFile *shFile, ESHBinaryType type, Buffer *entry) {
-	return SHFile_addBinary(shFile, type, entry, Platform_instance.alloc);
+Bool SHFile_addBinaryx(SHFile *shFile, SHBinaryInfo *binaries, Error *e_rr) {
+	return SHFile_addBinaries(shFile, binaries, Platform_instance.alloc, e_rr);
 }
 
-Error SHFile_addEntrypointx(SHFile *shFile, SHEntry *entry) {
-	return SHFile_addEntrypoint(shFile, entry, Platform_instance.alloc);
+Bool SHFile_addEntrypointx(SHFile *shFile, SHEntry *entry, Error *e_rr) {
+	return SHFile_addEntrypoint(shFile, entry, Platform_instance.alloc, e_rr);
 }
 
-Error SHFile_writex(SHFile shFile, Buffer *result) {
-	return SHFile_write(shFile, Platform_instance.alloc, result);
+Bool SHFile_writex(SHFile shFile, Buffer *result, Error *e_rr) {
+	return SHFile_write(shFile, Platform_instance.alloc, result, e_rr);
 }
 
-Error SHFile_readx(Buffer file, Bool isSubFile, SHFile *shFile) {
-	return SHFile_read(file, isSubFile, Platform_instance.alloc, shFile);
+Bool SHFile_readx(Buffer file, Bool isSubFile, SHFile *shFile, Error *e_rr) {
+	return SHFile_read(file, isSubFile, Platform_instance.alloc, shFile, e_rr);
 }
 
 void SHEntry_printx(SHEntry entry) { SHEntry_print(entry, Platform_instance.alloc); }
 void SHEntryRuntime_printx(SHEntryRuntime entry) { SHEntryRuntime_print(entry, Platform_instance.alloc); }
+void SHBinaryInfo_printx(SHBinaryInfo binary) { SHBinaryInfo_print(binary, Platform_instance.alloc); }
+
+void SHBinaryIdentifier_freex(SHBinaryIdentifier *identifier) {
+	SHBinaryIdentifier_free(identifier, Platform_instance.alloc);
+}
+
+void SHBinaryInfo_freex(SHBinaryInfo *info) {
+	SHBinaryInfo_free(info, Platform_instance.alloc);
+}
+
+void SHEntry_freex(SHEntry *entry) {
+	SHEntry_free(entry, Platform_instance.alloc);
+}
 
 void SHEntryRuntime_freex(SHEntryRuntime *entry) {
 	SHEntryRuntime_free(entry, Platform_instance.alloc);

@@ -167,7 +167,7 @@ Bool CharString_isValidFilePath(CharString str) {
 
 	//myTest/ <-- or myTest\ to myTest
 
-	str = CharString_createRefSizedConst(str.ptr, CharString_length(str), CharString_isNullTerminated(str));
+	str = CharString_createRefStrConst(str);
 
 	if(CharString_getAt(str, CharString_length(str) - 1) == '/' || CharString_getAt(str, CharString_length(str) - 1) == '\\')
 		str.lenAndNullTerminated = CharString_length(str) - 1;
@@ -342,6 +342,10 @@ CharString CharString_createRefSized(C8 *ptr, U64 size, Bool isNullTerminated) {
 	CharString str = CharString_createRefSizedConst(ptr, size, isNullTerminated);
 	str.capacityAndRefInfo = 0;	//Flag as dynamic
 	return str;
+}
+
+CharString CharString_createRefStrConst(CharString str) {
+	return CharString_createRefSizedConst(str.ptr, CharString_length(str), CharString_isNullTerminated(str));
 }
 
 CharString CharString_createRefShortStringConst(const ShortString str) {

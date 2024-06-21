@@ -138,11 +138,11 @@ Bool CdfList_setProbability(CdfList *list, U64 i, F32 value, F32 *oldValue) {
 	CdfValue *f = list->cdf.ptrNonConst;
 	const F32 v = f[j].self;
 
-	if(v == value)
-		return true;
-
 	if(oldValue)
 		*oldValue = v;
+
+	if(v == value)
+		return true;
 
 	list->flags &= ~ECdfListFlags_IsFinalized;
 	f[j].self = value;
@@ -329,11 +329,14 @@ Error CdfList_getElementAtOffset(CdfList *list, F32 offset, CdfListElement *elem
 	if(!list || !elementValue)
 		return Error_nullPointer(list ? 2 : 0, "CdfList_getElementAtOffset()::list and elementValue are required");
 
-	if(offset < 0 || offset >= list->total)
+	if(offset < 0 || offset >= list->total) {
+		const void *f32v = &offset;
+		const void *totalv = &list->total;
 		return Error_outOfBounds(
-			1, *(const U32*)&offset, *(const U32*)&list->total,
+			1, *(const U32*)f32v, *(const U32*)totalv,
 			"CdfList_getElementAtOffset()::offset is out of bounds"
 		);
+	}
 
 	if(!(list->flags & ECdfListFlags_IsFinalized))
 		return Error_invalidOperation(0, "CdfList_getElementAtOffset()::list isn't finalized");

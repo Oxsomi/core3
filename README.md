@@ -1,11 +1,11 @@
 # OxC3 (Oxsomi core 3 0.2)
-| Platforms | Vulkan/MoltenVK support                                      | Native API support                                           |
-| --------- | ------------------------------------------------------------ | ------------------------------------------------------------ |
-| Windows   | **Vulkan**: ![example workflow](https://github.com/Oxsomi/core3/actions/workflows/windows.yml/badge.svg) | **D3D12**: ![example workflow](https://github.com/Oxsomi/core3/actions/workflows/windows_d3d12.yml/badge.svg) |
-| Mac OS X  | **MolenVK**: **Unimplemented**                               | **Metal**: **Unimplemented**                                 |
-| Linux     | **Vulkan**: **Unimplemented**                                | N/A                                                          |
-| Android   | **Vulkan**: **Unimplemented**                                | N/A                                                          |
-| iOS       | **MoltenVK**: **Unimplemented**                              | **Metal**: **Unimplemented**                                 |
+| Platforms | x64 -> Vulkan                                                | x64 -> Native API                                            | ARM -> Vulkan | ARM -> Native API      |
+| --------- | ------------------------------------------------------------ | ------------------------------------------------------------ | ------------- | ---------------------- |
+| Windows   | ![example workflow](https://github.com/Oxsomi/core3/actions/workflows/windows.yml/badge.svg) | **D3D12**: ![example workflow](https://github.com/Oxsomi/core3/actions/workflows/windows_d3d12.yml/badge.svg) | **Failing**   | **D3D12**: **Failing** |
+| Mac OS X  | ![example workflow](https://github.com/Oxsomi/core3/actions/workflows/osx.yml/badge.svg) | **Metal**: **TBD**                                           | **Failing**   | **Metal**: **TBD**     |
+| Linux     | ![example workflow](https://github.com/Oxsomi/core3/actions/workflows/linux.yml/badge.svg) | N/A                                                          | **Failing**   | N/A                    |
+| Android   | **TBD**                                                      | N/A                                                          | **TBD**       | N/A                    |
+| iOS       | **TBD**                                                      | **Metal**: **TBD**                                           | **TBD**       | **Metal**: **TBD**     |
 
 OxC3 (0xC3 or Oxsomi core 3) is the successor to O(x)somi core v2 and v1. Specifically it combines the ostlc (standard template library), owc (window core) and ogc (graphics core). Focused more on being minimal abstraction compared to the predecessors by using C17 instead of C++20. Written so it can be wrapped with other languages (bindings) or even a VM in the future. Could also provide a C++20 layer for easier usage, such as operator overloads.
 
@@ -59,14 +59,17 @@ One of the useful things about C is that files are incredibly easy to compile an
 
 - CMake >=3.13.
 - (Optional on Windows): Vulkan SDK (latest preferred, but at least 1.3.226).
+- If using Vulkan SDK on OSX, make sure to set envar MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS to 1. This can be done in the ~/.bash_profile file by doing export MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS=1, also set VULKAN_SDK to the right directory there.
 - (Required on Windows for Git Bash, otherwise optional): Git or any tool that can work with GitHub.
-- C++ and C compiler such as MSVC or g++/gcc. C++ is only used for some dependencies that can't use C such as DXC.
+- C++ and C compiler such as MSVC, clang or g++/gcc. C++ is only used for some dependencies that can't use C such as DXC.
+- Conan to avoid huge build times due to DXC/LLVM/SPIRV.
 
 ## Running requirements
 
-- Windows.
+- Windows (full support).
+- Linux / OS X (**partial** support: no virtual files, nor window support, DXC currently broken).
 - A 64-bit CPU.
-  - Currently only x64 (AMD64) is supported. Though ARM could be supported too, by turning off SIMD (**not recommended for production builds!!**).
+  - Currently only x64 (AMD64) is supported. Though ARM could be supported too, by turning off shader compilation and SIMD (**not recommended for production builds!!**). The shader compiler currently is the only thing that doesn't support ARM if SIMD is turned off.
   - Even though SSE4.2+ is recommended, this can be explicitly turned off. SSE can only be turned off if relax float is turned off; this is because normal floats (without SSE) aren't always IEEE754 compliant. SIMD option requires SSE4.2/SSE4.1/SSE2/SSE/SSE3/SSSE3, AES, PCLMULQDQ, BMI1 and RDRAND extensions.
   - Recommended CPUs are AMD Zen, Intel Rocket lake (Gen 11) and up. This is because SHA256 is natively supported on them. These CPUs are faster and more secure. Minimum requirements for SSE build is Intel Broadwell+ (Gen 6+) and AMD Zen+ (1xxx+). **The SSE-less build doesn't have any security guarantees for encryption, as these are software based instead of hardware based. Making them less secure, since no time and effort was put into preventing cache timing attacks.** SSE-less build only exists for emulation purposes or for debugging, it's also notoriously slow since it doesn't use any intrinsics (SHA, AES, CRC, SIMD, etc.). The SSE-less build is also meant for easily porting to a new system without having to support the entire SIMD there first, before finally supporting SIMD after the base has been ported.
 
@@ -76,30 +79,28 @@ One of the useful things about C is that files are incredibly easy to compile an
 git clone --recurse-submodules -j8 https://github.com/Oxsomi/core3
 ```
 
-Or just download the repo from GitHub.
-
 ## Building OxC3
 
 ### Windows
 
 ```batch
-build.sh Release On
+conan install .
 ```
 
-This assumes you have VS2022 installed, if not, you can specify a different CMake generator by editing build.bat.
+The Windows implementation supports SSE.
 
 ### Mac OS X
 
 ```c
-build.sh Release Off
+conan install . -o enableSIMD=False
 ```
 
-Currently the Mac build doesn't support SSE or NEON. So SIMD mode has to be forced to None. It also doesn't support anything above OxC3 platforms yet.
+Currently the Mac implementation doesn't support SSE or NEON. So SIMD mode has to be forced to None. It also doesn't support anything above OxC3 platforms yet.
 
 ### Linux
 
 ```c
-build.sh Release Off
+conan install . -o enableSIMD=False
 ```
 
 Currently the Linux build doesn't support SSE or NEON. So SIMD mode has to be forced to None. It also doesn't support anything above OxC3 platforms yet.
@@ -107,6 +108,17 @@ Currently the Linux build doesn't support SSE or NEON. So SIMD mode has to be fo
 ### Other platforms
 
 Other platforms like Linux, Android and iOS are coming in the future.
+
+### Building locally / not packaged
+
+For building locally, the following commands should be ran:
+
+```c
+conan install .
+conan build .
+```
+
+Where conan build is done with the respective options (see Windows, OSX, Linux, etc.)
 
 ## Graphics
 
@@ -138,7 +150,7 @@ D3D12:
 	D3D12/D3D12Core.dll
 	D3D12/d3d12SDKLayers.dll
 	amd_ags_x64.dll
-	d3d10warp.dll
+	(debug only) d3d10warp.dll
 	OxC3.exe
 	...
 

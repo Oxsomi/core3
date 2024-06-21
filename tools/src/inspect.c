@@ -152,68 +152,24 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 				OXC3_GET_PATCH(shHeader.compilerVersion)
 			);
 
-			if(shHeader.flags & ESHFlags_HasSPIRV)
-				Log_debugLnx(
-					"Spirv size type uses %s.",
-					dataTypes[(shHeader.sizeTypes >> 0) & 3]
-				);
+			Log_debugLnx(
+				"Spirv size type uses %s (if present).",
+				dataTypes[(shHeader.sizeTypes >> 0) & 3]
+			);
 
-			if(shHeader.flags & ESHFlags_HasDXIL)
-				Log_debugLnx(
-					"DXIL size type uses %s.",
-					dataTypes[(shHeader.sizeTypes >> 2) & 3]
-				);
+			Log_debugLnx(
+				"DXIL size type uses %s (if present).",
+				dataTypes[(shHeader.sizeTypes >> 2) & 3]
+			);
 
-			if(shHeader.extensions)
-				Log_debugLnx("oiSH extensions:");
+			Log_debugLnx("Hashes: Source: %08"PRIX64", Contents: %08"PRIX64, shHeader.sourceHash, shHeader.hash);
 
-			if(shHeader.extensions & ESHExtension_F64)
-				Log_debugLnx("\tF64");
-
-			if(shHeader.extensions & ESHExtension_I64)
-				Log_debugLnx("\tI64");
-
-			if(shHeader.extensions & ESHExtension_16BitTypes)
-				Log_debugLnx("\tF16 and I16");
-
-			if(shHeader.extensions & ESHExtension_AtomicI64)
-				Log_debugLnx("\tAtomic I64");
-
-			if(shHeader.extensions & ESHExtension_AtomicF32)
-				Log_debugLnx("\tAtomic F32");
-
-			if(shHeader.extensions & ESHExtension_AtomicF64)
-				Log_debugLnx("\tAtomic F64");
-
-			if(shHeader.extensions & ESHExtension_SubgroupArithmetic)
-				Log_debugLnx("\tSubgroup arithmetic");
-
-			if(shHeader.extensions & ESHExtension_SubgroupShuffle)
-				Log_debugLnx("\tSubgroup shuffle");
-
-			if(shHeader.extensions & ESHExtension_RayQuery)
-				Log_debugLnx("\tRay query");
-
-			if(shHeader.extensions & ESHExtension_RayMicromapOpacity)
-				Log_debugLnx("\tRay micromap opacity");
-
-			if(shHeader.extensions & ESHExtension_RayMicromapDisplacement)
-				Log_debugLnx("\tRay micromap displacement");
-
-			if(shHeader.extensions & ESHExtension_RayMotionBlur)
-				Log_debugLnx("\tRay motion blur");
-
-			if(shHeader.extensions & ESHExtension_RayReorder)
-				Log_debugLnx("\tRay reorder");
-
-			if(shHeader.extensions & ESHExtension_Multiview)
-				Log_debugLnx("\tMultiview");
-
-			if(shHeader.extensions & ESHExtension_ComputeDeriv)
-				Log_debugLnx("\tCompute derivatives");
-
-			if(shHeader.extensions & ESHExtension_PAQ)
-				Log_debugLnx("\tPAQ");
+			Log_debugLnx(
+				"With %"PRIu16" binaries, %"PRIu16" stages and %"PRIu16" uniforms",
+				shHeader.binaryCount,
+				shHeader.stageCount,
+				shHeader.uniqueUniforms
+			);
 
 			break;
 		}
@@ -532,10 +488,10 @@ Bool CLI_showFile(ParsedArgs args, Buffer b, U64 start, U64 length, Bool isAscii
 
 	//Output it to a folder on disk was requested
 
-	Error err = Error_none();
+	Error *e_rr = NULL;
 	CharString tmp = CharString_createNull();
 	CharString tmp1 = CharString_createNull();
-	Bool success = false;
+	Bool s_uccess = false;
 
 	if (args.parameters & EOperationHasParameter_Output) {
 
@@ -549,13 +505,13 @@ Bool CLI_showFile(ParsedArgs args, Buffer b, U64 start, U64 length, Bool isAscii
 
 		CharString out = CharString_createNull();
 
-		if ((err = ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &out)).genericError) {
+		if (ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &out).genericError) {
 			Log_errorLnx("Invalid argument -output <string>.");
 			goto clean;
 		}
 
 		Buffer subBuffer = Buffer_createRefConst(b.ptr + start, length);
-		gotoIfError(clean, File_write(subBuffer, out, 1 * SECOND))
+		gotoIfError2(clean, File_write(subBuffer, out, 1 * SECOND))
 	}
 
 	//More info about a single entry
@@ -602,13 +558,13 @@ Bool CLI_showFile(ParsedArgs args, Buffer b, U64 start, U64 length, Bool isAscii
 
 			for (U64 i = start, j = i + length, k = 0; i < j; ++i, ++k) {
 
-				gotoIfError(clean, CharString_createHexx(b.ptr[i], 2, &tmp1))
-				gotoIfError(clean, CharString_popFrontCount(&tmp1, 2))
-				gotoIfError(clean, CharString_appendStringx(&tmp, tmp1))
-				gotoIfError(clean, CharString_appendx(&tmp, ' '))
+				gotoIfError2(clean, CharString_createHexx(b.ptr[i], 2, &tmp1))
+				gotoIfError2(clean, CharString_popFrontCount(&tmp1, 2))
+				gotoIfError2(clean, CharString_appendStringx(&tmp, tmp1))
+				gotoIfError2(clean, CharString_appendx(&tmp, ' '))
 
 				if(!((k + 1) & 31))
-					gotoIfError(clean, CharString_appendStringx(&tmp, CharString_newLine()))
+					gotoIfError2(clean, CharString_appendStringx(&tmp, CharString_newLine()))
 
 				CharString_freex(&tmp1);
 			}
@@ -618,12 +574,12 @@ Bool CLI_showFile(ParsedArgs args, Buffer b, U64 start, U64 length, Bool isAscii
 		}
 	}
 
-	success = true;
+	s_uccess = true;
 
 clean:
 	CharString_freex(&tmp1);
 	CharString_freex(&tmp);
-	return success;
+	return s_uccess;
 }
 
 //Storing file or folder on disk
@@ -631,29 +587,28 @@ clean:
 Bool CLI_storeFileOrFolder(ParsedArgs args, ArchiveEntry e, Archive a, Bool *madeFile, U64 start, U64 len) {
 
 	CharString tmp = CharString_createNull();
-	Bool success = false;
+	Bool s_uccess = false;
+	Error *e_rr = NULL;
 
 	//Save folder
 
 	if (e.type == EFileType_Folder) {
-
-		Error err;
 
 		if(start || (len && len != a.entries.length))
 			Log_warnLnx("Folder output to disk ignores offset and/or count.");
 
 		CharString out = CharString_createNull();
 
-		if ((err = ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &out)).genericError) {
+		if (ParsedArgs_getArg(args, EOperationHasParameter_OutputShift, &out).genericError) {
 			Log_errorLnx("Invalid argument -output <string>.");
 			goto clean;
 		}
 
-		gotoIfError(clean, File_add(out, EFileType_Folder, 1 * SECOND))
+		gotoIfError2(clean, File_add(out, EFileType_Folder, 1 * SECOND))
 		*madeFile = true;
 
-		gotoIfError(clean, CharString_createCopyx(out, &tmp))
-		gotoIfError(clean, CharString_appendx(&tmp, '/'))
+		gotoIfError2(clean, CharString_createCopyx(out, &tmp))
+		gotoIfError2(clean, CharString_appendx(&tmp, '/'))
 
 		OutputFolderToDisk output = (OutputFolderToDisk) {
 			.base = e.path,
@@ -661,7 +616,7 @@ Bool CLI_storeFileOrFolder(ParsedArgs args, ArchiveEntry e, Archive a, Bool *mad
 			.sourceArchive = a
 		};
 
-		gotoIfError(clean, Archive_foreachx(
+		gotoIfError2(clean, Archive_foreachx(
 			a,
 			e.path,
 			(FileCallback) writeToDisk,
@@ -672,7 +627,7 @@ Bool CLI_storeFileOrFolder(ParsedArgs args, ArchiveEntry e, Archive a, Bool *mad
 
 		CharString_freex(&tmp);
 		madeFile = false;			//We successfully wrote, so keep it from deleting the folder
-		success = true;
+		s_uccess = true;
 
 		goto clean;
 	}
@@ -681,19 +636,14 @@ Bool CLI_storeFileOrFolder(ParsedArgs args, ArchiveEntry e, Archive a, Bool *mad
 
 	else {
 		CLI_showFile(args, e.data, start, len, false);
-		success = true;
+		s_uccess = true;
 		goto clean;
 	}
 
 clean:
 	CharString_freex(&tmp);
-	return success;
+	return s_uccess;
 }
-
-static const C8 *shaderTypeNames[] = {
-	"SPV",
-	"DXIL"
-};
 
 //Handle inspection of individual data.
 //Also handles info about the file in general.
@@ -701,8 +651,8 @@ static const C8 *shaderTypeNames[] = {
 Bool CLI_inspectData(ParsedArgs args) {
 
 	Buffer buf = Buffer_createNull();
-	Error err = Error_none();
-	Bool success = false;
+	Error err = Error_none(), *e_rr = &err;
+	Bool s_uccess = false;
 
 	CharString path = CharString_createNull();
 	CharString tmp = CharString_createNull();
@@ -801,12 +751,41 @@ Bool CLI_inspectData(ParsedArgs args) {
 		encryptionKey = encryptionKeyV;
 	}
 
-	if(args.flags & EOperationFlags_Bin && *(const U32*)buf.ptr != SHHeader_MAGIC) {
+	U32 magic = *(const U32*)buf.ptr;
+
+	if(args.flags & EOperationFlags_Bin && magic != SHHeader_MAGIC) {
 		Log_errorLnx("--bin flag can only be used with an oiSH file");
 		return false;
 	}
 
-	switch (*(const U32*)buf.ptr) {
+	ESHBinaryType binaryType = ESHBinaryType_Count;
+
+	if (args.parameters & EOperationHasParameter_ShaderOutputMode) {
+
+		if(magic != SHHeader_MAGIC) {
+			Log_errorLnx("-compile-output argument can only be used with an oiSH file");
+			return false;
+		}
+
+		CharString shaderOutputMode = CharString_createNull();
+		if ((err = ParsedArgs_getArg(args, EOperationHasParameter_ShaderOutputModeShift, &shaderOutputMode)).genericError) {
+			Log_errorLnx("Missing argument -compile-output");
+			goto clean;
+		}
+
+		if(CharString_equalsStringInsensitive(shaderOutputMode, CharString_createRefCStrConst("DXIL")))
+			binaryType = ESHBinaryType_DXIL;
+
+		else if(CharString_equalsStringInsensitive(shaderOutputMode, CharString_createRefCStrConst("SPV")))
+			binaryType = ESHBinaryType_SPIRV;
+
+		else {
+			Log_errorLnx("Invalid argument. Expected: -compile-output <spv/dxil>.");
+			goto clean;
+		}
+	}
+
+	switch (magic) {
 
 		//oiCA header
 
@@ -819,7 +798,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 			Bool madeFile = false;
 			CharString out = CharString_createNull();
 
-			gotoIfError(cleanCa, CAFile_readx(buf, encryptionKey, &file))
+			gotoIfError2(cleanCa, CAFile_readx(buf, encryptionKey, &file))
 
 			//Specific entry was requested
 
@@ -861,7 +840,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 						baseCount = CharString_countAllSensitive(e.path, '/', 0) + 1;
 
-						gotoIfError(cleanCa, Archive_foreachx(
+						gotoIfError2(cleanCa, Archive_foreachx(
 							file.archive,
 							e.path,
 							(FileCallback) collectArchiveEntries,
@@ -876,9 +855,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 					else {
 
 						Bool isAscii = CharString_isValidAscii(
-							CharString_createRefSizedConst(
-								(const C8*) e.data.ptr, Buffer_length(e.data), false
-							)
+							CharString_createRefSizedConst((const C8*) e.data.ptr, Buffer_length(e.data), false)
 						);
 
 						Log_debugLnx("%.*s", CharString_length(e.path), e.path.ptr);
@@ -904,7 +881,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 					goto cleanCa;
 				}
 
-				gotoIfError(cleanCa, Archive_foreachx(
+				gotoIfError2(cleanCa, Archive_foreachx(
 					file.archive,
 					CharString_createRefCStrConst("."),
 					(FileCallback) collectArchiveEntries,
@@ -917,7 +894,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 			//Sort to ensure the subdirectories are correct
 
 			if(!ListCharString_sortInsensitive(strings))
-				gotoIfError(cleanCa, Error_invalidOperation(0, "CLI_inspectData() sort strings (oiCA) failed"))
+				retError(cleanCa, Error_invalidOperation(0, "CLI_inspectData() sort strings (oiCA) failed"))
 
 			//Process all and print
 
@@ -942,20 +919,20 @@ Bool CLI_inspectData(ParsedArgs args) {
 				//001:   child (indented by 2)
 
 				if(v == U64_MAX)
-					gotoIfError(cleanCa, Error_notFound(0, 0, "CLI_inspectData() couldn't find archive entry (oiCA)"))
+					retError(cleanCa, Error_notFound(0, 0, "CLI_inspectData() couldn't find archive entry (oiCA)"))
 
-				gotoIfError(cleanCa, CharString_createDecx(v, 3, &tmp))
- 				gotoIfError(cleanCa, CharString_createx(' ', 2 * (parentCount - baseCount), &tmp1))
-				gotoIfError(cleanCa, CharString_appendx(&tmp, ':'))
-				gotoIfError(cleanCa, CharString_appendx(&tmp, ' '))
-				gotoIfError(cleanCa, CharString_appendStringx(&tmp, tmp1))
+				gotoIfError2(cleanCa, CharString_createDecx(v, 3, &tmp))
+ 				gotoIfError2(cleanCa, CharString_createx(' ', 2 * (parentCount - baseCount), &tmp1))
+				gotoIfError2(cleanCa, CharString_appendx(&tmp, ':'))
+				gotoIfError2(cleanCa, CharString_appendx(&tmp, ' '))
+				gotoIfError2(cleanCa, CharString_appendStringx(&tmp, tmp1))
 				CharString_freex(&tmp1);
 
 				CharString sub = CharString_createNull();
 				if(!CharString_cutBeforeLastSensitive(pathi, '/', &sub))
 					sub = CharString_createRefSizedConst(pathi.ptr, CharString_length(pathi), false);
 
-				gotoIfError(cleanCa, CharString_appendStringx(&tmp, sub))
+				gotoIfError2(cleanCa, CharString_appendStringx(&tmp, sub))
 
 				//Log and free temp
 
@@ -986,7 +963,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 		case DLHeader_MAGIC: {
 
 			DLFile file = (DLFile) { 0 };
-			gotoIfError(cleanDl, DLFile_readx(buf, encryptionKey, false, &file))
+			gotoIfError2(cleanDl, DLFile_readx(buf, encryptionKey, false, &file))
 
 			U64 end = 0;
 
@@ -1033,11 +1010,11 @@ Bool CLI_inspectData(ParsedArgs args) {
 						file.settings.dataType == EDLDataType_Ascii ? CharString_length(file.entryStrings.ptr[i]) :
 						Buffer_length(file.entryBuffers.ptr[i]);
 
-					gotoIfError(cleanDl, CharString_createDecx(i, 3, &tmp))
-					gotoIfError(cleanDl, CharString_appendStringx(&tmp, CharString_createRefCStrConst(": length = ")))
+					gotoIfError2(cleanDl, CharString_createDecx(i, 3, &tmp))
+					gotoIfError2(cleanDl, CharString_appendStringx(&tmp, CharString_createRefCStrConst(": length = ")))
 
-					gotoIfError(cleanDl, CharString_createDecx(entrySize, 0, &tmp1))
-					gotoIfError(cleanDl, CharString_appendStringx(&tmp, tmp1))
+					gotoIfError2(cleanDl, CharString_createDecx(entrySize, 0, &tmp1))
+					gotoIfError2(cleanDl, CharString_appendStringx(&tmp, tmp1))
 
 					Log_debugLnx("%s", tmp.ptr);
 					CharString_freex(&tmp);
@@ -1062,19 +1039,14 @@ Bool CLI_inspectData(ParsedArgs args) {
 		case SHHeader_MAGIC: {
 
 			if(encryptionKey)
-				gotoIfError(clean, Error_invalidState(0, "CLI_inspectData() oiSH doesn't have aes support!"))
+				retError(clean, Error_invalidState(0, "CLI_inspectData() oiSH doesn't have aes support!"))
 
 			SHFile file = (SHFile) { 0 };
-			gotoIfError(cleanSh, SHFile_readx(buf, false, &file))
-
-			Bool hasDxil = file.binaries[ESHBinaryType_DXIL].ptr;
-			Bool hasSpirv = file.binaries[ESHBinaryType_SPIRV].ptr;
-			U32 binaryCount = (U32)hasDxil + hasSpirv;
+			gotoIfError3(cleanSh, SHFile_readx(buf, false, &file, e_rr))
 
 			Bool binaryMode = args.flags & EOperationFlags_Bin;
 
-			U64 count = binaryMode ? binaryCount : file.entries.length;
-
+			U64 count = binaryMode ? file.binaries.length : file.entries.length;
 			U64 end = 0;
 
 			if (!(args.parameters & EOperationHasParameter_Entry)) {
@@ -1104,20 +1076,25 @@ Bool CLI_inspectData(ParsedArgs args) {
 				if(!binaryMode)
 					SHEntry_printx(file.entries.ptr[entryI]);
 
-				else for (U64 j = 0, i = 0; j < ESHBinaryType_Count; ++j)
+				else {
 
-					if(!Buffer_length(file.binaries[j]))
-						continue;
+					//Compile mode was selected
 
-					else if (entryI == i) {
+					if (binaryType != ESHBinaryType_Count) {
 
-						if(!CLI_showFile(args, file.binaries[j], start, length, false))
+						Buffer binary = file.binaries.ptr[entryI].binaries[binaryType];
+
+						if(!Buffer_length(binary)){
+							Log_errorLnx("%s binary is missing at index %"PRIu64, ESHBinaryType_names[binaryType], entryI);
 							goto cleanSh;
+						}
 
-						break;
+						if(!CLI_showFile(args, binary, start, length, false))
+							goto cleanSh;
 					}
 
-					else ++i;
+					else SHBinaryInfo_printx(file.binaries.ptr[entryI]);
+				}
 			}
 
 			else {
@@ -1126,17 +1103,23 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 					Log_debugLnx("oiSH binaries:");
 
-					for (U64 j = 0, i = 0; j < ESHBinaryType_Count && i < end && i < count; ++j) {
+					for (U64 i = start; i < end && i < count; ++i) {
 
-						if(!Buffer_length(file.binaries[j]))
-							continue;
+						SHBinaryInfo bin = file.binaries.ptr[i];
 
-						if(i >= start)
+						if(bin.hasShaderAnnotation)
 							Log_debugLnx(
-								"Binary %"PRIu64" (%s): length %"PRIu64, i, shaderTypeNames[j], Buffer_length(file.binaries[j])
+								"Binary %"PRIu64" (lib_%"PRIu8"_%"PRIu8")",
+								i, (U8)(bin.identifier.shaderVersion >> 8), (U8)bin.identifier.shaderVersion
 							);
 
-						++i;
+						else Log_debugLnx(
+							"Binary %"PRIu64" (%s_%"PRIu8"_%"PRIu8": %.*s)",
+							i, ESHPipelineStage_getStagePrefix(bin.identifier.stageType),
+							(U8)(bin.identifier.shaderVersion >> 8), (U8)bin.identifier.shaderVersion,
+							(int) CharString_length(bin.identifier.entrypoint),
+							bin.identifier.entrypoint.ptr
+						);
 					}
 				}
 
@@ -1160,7 +1143,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 			SHFile_freex(&file);
 
-			if(err.genericError)
+			if(!s_uccess)
 				goto clean;
 
 			break;
@@ -1173,7 +1156,7 @@ Bool CLI_inspectData(ParsedArgs args) {
 			goto clean;
 	}
 
-	success = true;
+	s_uccess = true;
 
 clean:
 
@@ -1182,5 +1165,5 @@ clean:
 
 	CharString_freex(&tmp);
 	Buffer_freex(&buf);
-	return success;
+	return s_uccess;
 }

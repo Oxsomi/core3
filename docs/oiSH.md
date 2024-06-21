@@ -4,7 +4,7 @@
 
 **NOTE: oiSH (1.2) is the successor of the original oiSH (0.1) from ocore. This isn't the same format anymore. oiSH (0.1) lacked a lot of important features and is deprecated.**
 
-oSH is a single shader represented in a single or multiple binary/text format(s). The only definition is that the shader type must match one of the following:
+oSH is a single shader represented in a single or multiple binary/text format(s). The only definition is that the shader type must match one (or multiple) of the following:
 
 - SPIRV
 - DXIL
@@ -21,31 +21,87 @@ Just like any oiXX file it's made with the following things in mind:
 - Support for various graphics APIs without transpiling.
   - Though it can also target 1 single graphics API to avoid extra storage (at OxC3 package time).
 
-Finally, this would become a part of an oiSC file (Oxsomi Shader Cache). Which includes a list of all binaries and the pipeline info to create it. Where header is optional.
+Finally, this would become a part of an oiSC file (Oxsomi Shader Cache). Which includes a list of all binaries and the pipeline info to create it. A pipeline can also be marked as dynamic, which means that certain properties are possible to determine at runtime (e.g. the pipeline will have multiple instances). This can be handy if the same pipeline might be used with different types of render texture formats, depth formats and other things that might only be possible to determine at runtime. The base pipeline can be made with the defaults that were filled in and new instances can be created more efficiently from this base pipeline in some cases.
 
 ## File format spec
 
 ```c
+typedef struct SHHeader {
 
-typedef enum ESHFlags {
+	U32 magicNumber;			//oiSH (0x4853696F); optional if it's part of an oiSC.
+    
+    U32 compilerVersion;
 
-	ESHFlags_None 					= 0,
+	U32 hash;					 //CRC32C of contents starting at uniqueUniforms
+    
+    U32 sourceHash;				//CRC32C of source(s), for determining if it's dirty
+    
+	U16 uniqueUniforms;
+	U8 version;					//major.minor (%10 = minor, /10 = major (+1 to get real major)) at least 1
+    U8 sizeTypes;				//Every 2 bits size type of spirv, dxil
+    
+    U16 binaryCount;			//How many unique binaries are stored
+    U16 stageCount;				//How many stages reference into the binaries
 
-    //What type of binaries it includes
-    //Must be one at least
+} SHHeader;
 
-    ESHFlags_HasSPIRV				= 1 << 1,
-    ESHFlags_HasDXIL				= 1 << 2,
+//Loosely maps to EPipelineStage in OxC3 graphics
 
-    //Reserved
-    //ESHFlags_HasMSL				= 1 << 3,
-    //ESHFlags_HasWGSL				= 1 << 4
+typedef enum ESHPipelineStage {
 
-    ESHFlags_HasBinary				= ESHFlags_HasSPIRV | ESHFlags_HasDXIL,
-    //ESHFlags_HasText				= ESHFlags_HasMSL | ESHFlags_HasWGSL
-    ESHFlags_HasSource				= ESHFlags_HasBinary // | ESHFlags_HasText
+	ESHPipelineStage_Vertex,
+	ESHPipelineStage_Pixel,
+	ESHPipelineStage_Compute,
+	ESHPipelineStage_GeometryExt,		//GeometryShader extension is required
+	ESHPipelineStage_Hull,
+	EPSHipelineStage_Domain,
 
-} ESHFlags;
+	//RayPipeline extension is required
+
+	ESHPipelineStage_RaygenExt,
+	ESHPipelineStage_CallableExt,
+	ESHPipelineStage_MissExt,
+	ESHPipelineStage_ClosestHitExt,
+	ESHPipelineStage_AnyHitExt,
+	ESHPipelineStage_IntersectionExt,
+    
+    //MeshShader extension is required
+
+	ESHPipelineStage_MeshExt,
+	ESHPipelineStage_TaskExt,
+
+	//WorkGraph extension is required
+
+	ESHPipelineStage_WorkgraphExt
+
+} ESHPipelineStage;
+
+typedef struct EntryInfoFixedSize {
+    U8 pipelineStage;			//ESHPipelineStage
+	U8 binaryCount;				//How many binaries this entrypoint references
+} EntryInfoFixedSize;
+
+typedef enum ESHBinaryFlags {
+
+	ESHBinaryFlags_None 					= 0,
+
+	//What type of binaries it includes
+	//Must be one at least
+
+	ESHBinaryFlags_HasSPIRV					= 1 << 0,
+	ESHBinaryFlags_HasDXIL					= 1 << 1,
+
+	//Reserved
+	//ESHBinaryFlags_HasMSL					= 1 << 2,
+	//ESHBinaryFlags_HasWGSL				= 1 << 3
+
+	ESHBinaryFlags_HasShaderAnnotation		= 1 << 4,
+
+	ESHBinaryFlags_HasBinary				= ESHBinaryFlags_HasSPIRV | ESHBinaryFlags_HasDXIL,
+	//ESHBinaryFlags_HasText				= ESHBinaryFlags_HasMSL | ESHBinaryFlags_HasWGSL
+	ESHBinaryFlags_HasSource				= ESHBinaryFlags_HasBinary // | ESHBinaryFlags_HasText
+
+} ESHBinaryFlags;
 
 typedef enum ESHExtension {
 
@@ -75,24 +131,9 @@ typedef enum ESHExtension {
 	ESHExtension_Multiview					= 1 << 13,
 	ESHExtension_ComputeDeriv				= 1 << 14,
 
-	ESHExtension_PAQ						= 1 << 15,		//Payload access qualifiers
+	ESHExtension_PAQ						= 1 << 15		//Payload access qualifiers
 
 } ESHExtension;
-
-typedef struct SHHeader {
-
-	U32 magicNumber;			//oiSH (0x4853696F); optional if it's part of an oiSC.
-
-	U8 version;					//major.minor (%10 = minor, /10 = major (+1 to get real major)) at least 1
-	U8 flags;					//ESHFlags
-	U8 sizeTypes;				//EXXDataSizeTypes: spirvType | (dxilType << 2) | (mslType << 4) | (wgslType << 6)
-    U8 padding;
-
-    ESHExtension extensions;
-    
-    U32 compilerVersion;
-
-} SHHeader;
 
 //Maps to EGraphicsVendorId
 typedef enum ESHVendor {
@@ -106,36 +147,19 @@ typedef enum ESHVendor {
 	ESHVendor_Count
 } ESHVendor;
 
-//Loosely maps to EPipelineStage in OxC3 graphics
+typedef struct BinaryInfoFixedSize {
+    
+	U8 shaderModel;				//U4 major, minor
+	U8 entrypointType;			//ESHPipelineStage if entrypoint is not U16_MAX
+	U16 entrypoint;				//U16_MAX if library, otherwise index into stageNames
 
-typedef enum ESHPipelineStage {
-
-	ESHPipelineStage_Vertex,
-	ESHPipelineStage_Pixel,
-	ESHPipelineStage_Compute,
-	ESHPipelineStage_GeometryExt,		//GeometryShader extension is required
-	ESHPipelineStage_Hull,
-	EPSHipelineStage_Domain,
-
-    //MeshShader extension is required
-
-	ESHPipelineStage_MeshExt,
-	ESHPipelineStage_TaskExt,
-
-	//WorkGraph extension is required
-
-	ESHPipelineStage_WorkgraphExt,
-
-	//RayPipeline extension is required
-
-	ESHPipelineStage_RaygenExt,
-	ESHPipelineStage_CallableExt,
-	ESHPipelineStage_MissExt,
-	ESHPipelineStage_ClosestHitExt,
-	ESHPipelineStage_AnyHitExt,
-	ESHPipelineStage_IntersectionExt
-
-} ESHPipelineStage;
+	U16 vendorMask;				//Bitset of ESHVendor
+	U8 uniformCount;
+	U8 binaryFlags;				//ESHBinaryFlags
+    
+    ESHExtension extensions;
+    
+} BinaryInfoFixedSize;
 
 typedef enum ESHPrimitive {
   	ESHPrimitive_Invalid,
@@ -159,38 +183,50 @@ SHFile {
 
     SHHeader header;
 
-    DLFile stageNames;			//No header, no encryption/compression (see oiDL.md)
+    //No header, no encryption/compression/SHA256 (see oiDL.md)
+    //strings[len - stageCount, len] contains entrypoint names.
+    //strings[..., len - stageCount] contains uniform values and names.
+    DLFile strings;
 
-    //ESHPipelineStage.
-    //Only allowed to be >1 if non graphics or compute
-    U8 pipelineStages[stageNames.length];
+    BinaryInfoFixedSize binaryInfos[binaryCount];
+    EntryInfoFixedSize pipelineStages[stageCount];
+
+    for i < binaryCount:
     
-    //Bitset of ESHVendor
-    U16 vendors[stageNames.length];
+    	U16 uniformNames[binaryInfos[i].uniformCount];	//offset to strings[0]
+    	U16 uniformValues[binaryInfos[i].uniformCount];	//^ [uniformCount]
+    
+        if binary[i] has SPIRV:
+            EXXDataSizeType<spirvType> spirvLength;
 
-    for pipelineStages[i]
+        if binary[i] has DXIL:
+            EXXDataSizeType<dxilType> dxilLength;
+
+        foreach binary with [ spirvLength, dxilLength ]:
+            U8[binary.size] data;
+    
+    for pipelineStages[i]	//Entrypoint name is stored at [strings.len - stageCount]
 
 	    if compute or workgraph:
-		    U16x4 groups[stageNames.length];
+		    U16x4 groups;
                	groups.w = waveSize: U4[4] required, min, max, recommended
                     Where the U4: 0 = None, 3-8 = 4-128 (log2), else invalid
 
-	    if is graphics:
-    		U4 inputs[16];					//Each element: [ ESHPrimitive, ESHVector ]
-    		U4 outputs[16];
+	    else if is graphics:
+    
+    		U8 inputsAvail, outputsAvail;
+    
+		    //Each element: [ ESHPrimitive, ESHVector ]
+    		U4 inputs[inputsAvail align 2];
+    		U4 outputs[outputsAvail align 2];
 
-	    if miss,closestHit,anyHit or intersection
+    	else if intersection:
     	    U8 intersectionSize;
-   	 		U8 payloadSize
-
-    if has SPIRV:
-	    EXXDataSizeType<spirvType> spirvLength;
-
-    if has DXIL:
-	    EXXDataSizeType<dxilType> dxilLength;
-
-    foreach binary with [ spirvLength, dxilLength ]:
-    	U8[binary.size] data;
+    
+	    if miss,closestHit,anyHit or intersection
+   	 		U8 payloadSize;
+    
+    	U16 binaryIds[pipelineStages[i].binaryCount];
 }
 ```
 
@@ -203,4 +239,6 @@ The magic number in the header can only be absent if embedded in another file. A
 0.1: Old ocore1 specification. Represented multiple shaders and had too much reflection information that is now irrelevant.
 
 1.2: Basic format specification. Added support for various extensions, stages and binary types. Maps closer to real binary formats.
+
+1.2(.1): No major bump, because no oiSH files exist in the wild yet. Made extensions per stage, made file format more efficient, now allowing multiple binaries to exist allowing 1 compile for all entries even for non lib formats. Added uniforms. Also swapped binaries and stages.
 

@@ -479,11 +479,7 @@ Bool Lexer_create(CharString str, Allocator alloc, Lexer *lexer, Error *e_rr) {
 								break;
 
 							case 'f':	case 'F':
-								tokenType = ELexerTokenType_Float;
-								requiredNext = false;				//0f is the final float
-								isEnded = true;
-								i += 2;
-								break;
+								retError(clean, Error_invalidState(0, "Lexer_create() expected octal (received 0f)"))
 						}
 
 						if(!isEnded) {
@@ -574,9 +570,16 @@ Bool Lexer_create(CharString str, Allocator alloc, Lexer *lexer, Error *e_rr) {
 
 													//This is possible, for example 0123.xxxx
 
-													if(!(c3 == 'e' || c3 == 'E' || c3 == 'f' || c3 == 'F' || C8_isDec(c3)))
+													if(!(c3 == 'e' || c3 == 'E' || isF || C8_isDec(c3)))
 														break;
 												}
+
+												if(isF)
+													retError(clean, Error_invalidState(
+														0,
+														"Lexer_create() couldn't parse float: "
+														"Can't end float with f without a . or exponent!"
+													))
 
 												++i;
 												tokenType = isF ? ELexerTokenType_Float : ELexerTokenType_Double;
@@ -602,11 +605,17 @@ Bool Lexer_create(CharString str, Allocator alloc, Lexer *lexer, Error *e_rr) {
 													//This is possible, for example 1.xxxx
 
 													if(!(
-														c3 == 'e' || c3 == 'E' || c3 == 'f' || c3 == 'F' || C8_isDec(c3) ||
-														C8_isLexerSymbol(c3)
+														c3 == 'e' || c3 == 'E' || isF || C8_isDec(c3) || C8_isLexerSymbol(c3)
 													))
 														break;
 												}
+
+												if(isF)
+													retError(clean, Error_invalidState(
+														1,
+														"Lexer_create() couldn't parse float: "
+														"Can't end float with f without a . or exponent!"
+													))
 
 												++i;
 												tokenType = isF ? ELexerTokenType_Float : ELexerTokenType_Double;

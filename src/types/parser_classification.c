@@ -139,6 +139,21 @@ Bool Parser_classifyEnum(Parser *parser, U32 *i, U32 parent, Allocator alloc, Er
 
 //Classifying type
 
+U16 getC8x2(CharString str, U64 i) {
+	const void *ptr = str.ptr + i;
+	return *(const U16*) ptr;
+}
+
+U32 getC8x4(CharString str, U64 i) {
+	const void *ptr = str.ptr + i;
+	return *(const U32*) ptr;
+}
+
+U64 getC8x8(CharString str, U64 i) {
+	const void *ptr = str.ptr + i;
+	return *(const U64*) ptr;
+}
+
 Bool Parser_classifyType(Parser *parser, U32 *i, U32 parent, Allocator alloc, Error *e_rr) {
 
 	Bool s_uccess = true;
@@ -149,7 +164,7 @@ Bool Parser_classifyType(Parser *parser, U32 *i, U32 parent, Allocator alloc, Er
 	U32 len = tok.tokenSize;
 
 	Bool consumed = false;
-	U32 c8x4 = len < 4 ? 0 : *(const U32*)tokStr.ptr;
+	U32 c8x4 = len < 4 ? 0 : getC8x4(tokStr, 0);
 
 	ESymbolFlag modifiers = ESymbolFlag_None;
 	ESymbolFlag typeModifiers = ESymbolFlag_None;
@@ -170,13 +185,13 @@ Bool Parser_classifyType(Parser *parser, U32 *i, U32 parent, Allocator alloc, Er
 	//in/out F32
 	//      ^
 
-	if (len == 2 && *(const U16*)tokStr.ptr == C8x2('i', 'n')) {								//in
+	if (len == 2 && getC8x2(tokStr, 0) == C8x2('i', 'n')) {								//in
 		modifiers |= ESymbolFlagVar_IsIn;
 		++*i;
 		gotoIfError3(clean, Parser_assert(parser, i, ETokenType_Identifier, e_rr))
 	}
 
-	else if(len == 3 && *(const U16*)tokStr.ptr == C8x2('o', 'u') && tokStr.ptr[2] == 't') {	//out
+	else if(len == 3 && getC8x2(tokStr, 0) == C8x2('o', 'u') && tokStr.ptr[2] == 't') {	//out
 		modifiers |= ESymbolFlagVar_IsOut;
 		++*i;
 		gotoIfError3(clean, Parser_assert(parser, i, ETokenType_Identifier, e_rr))
@@ -186,12 +201,29 @@ Bool Parser_classifyType(Parser *parser, U32 *i, U32 parent, Allocator alloc, Er
 
 		case C8x4('s', 't', 'r', 'u'):		//struct
 
-			if (len == 6 && *(const U16*)&tokStr.ptr[4] == C8x2('c', 't')) {
+			if (len == 6 && getC8x2(tokStr, 4) == C8x2('c', 't')) {
 				consumed = true;
 				gotoIfError3(clean, Parser_classifyStruct(parser, i, parent, alloc, e_rr))
 				break;
 			}
 
+			break;
+
+		case C8x4('c', 'o', 'n', 's'):		//const
+
+			if (len == 5 && tokStr.ptr[4] == 't') {
+
+				//Search to next token
+				//const F32
+				//      ^
+
+				++*i;
+				gotoIfError3(clean, Parser_assert(parser, i, ETokenType_Identifier, e_rr))
+
+				modifiers |= ESymbolFlagFuncVar_IsConst;
+				break;
+			}
+			
 			break;
 
 		case C8x4('u', 'n', 'i', 'o'):		//union
@@ -226,7 +258,7 @@ Bool Parser_classifyType(Parser *parser, U32 *i, U32 parent, Allocator alloc, Er
 
 		case C8x4('i', 'n', 't', 'e'):		//interface
 
-			if (len == 9 && *(const U32*)&tokStr.ptr[4] == C8x4('r', 'f', 'a', 'c') && tokStr.ptr[8] == 'e') {
+			if (len == 9 && getC8x4(tokStr, 4) == C8x4('r', 'f', 'a', 'c') && tokStr.ptr[8] == 'e') {
 				consumed = true;
 				gotoIfError3(clean, Parser_classifyInterface(parser, i, parent, alloc, e_rr))
 				break;
@@ -267,6 +299,9 @@ Bool Parser_classifyType(Parser *parser, U32 *i, U32 parent, Allocator alloc, Er
 
 			break;
 	}
+
+	(void) modifiers;
+	(void) typeModifiers;
 
 	//T<F32, F32>
 	//T
@@ -701,16 +736,16 @@ Bool Parser_classifyFunctionOrVariable(Parser *parser, U32 *i, U32 parent, Alloc
 
 		CharString tokStr = Token_asString(tok, parser);
 		U32 len = tok.tokenSize;
-		U32 c8x4 = len < 4 ? 0 : *(const U32*)tokStr.ptr;
+		U32 c8x4 = len < 4 ? 0 : getC8x4(tokStr, 0);
 		Bool consumed = false;
 
-		if (len == 2 && *(const U16*)tokStr.ptr == C8x2('i', 'n')) {								//in
+		if (len == 2 && getC8x2(tokStr, 0) == C8x2('i', 'n')) {								//in
 			consumed = true;
 			flag |= ESymbolFlagVar_IsIn;
 			expectsVar = true;
 		}
 
-		else if(len == 3 && *(const U16*)tokStr.ptr == C8x2('o', 'u') && tokStr.ptr[2] == 't') {	//out
+		else if(len == 3 && getC8x2(tokStr, 0) == C8x2('o', 'u') && tokStr.ptr[2] == 't') {	//out
 			consumed = true;
 			flag |= ESymbolFlagVar_IsOut;
 			expectsVar = true;
@@ -742,8 +777,8 @@ Bool Parser_classifyFunctionOrVariable(Parser *parser, U32 *i, U32 parent, Alloc
 
 				if(
 					len == 15 &&
-					*(const U64*)&tokStr.ptr[4] == C8x8('t', 'e', 'r', 'p', 'o', 'l', 'a', 't') &&
-					*(const U16*)&tokStr.ptr[12] == C8x2('i', 'o') &&
+					getC8x8(tokStr, 4) == C8x8('t', 'e', 'r', 'p', 'o', 'l', 'a', 't') &&
+					getC8x2(tokStr, 12) == C8x2('i', 'o') &&
 					tokStr.ptr[14] == 'n'
 				) {
 					consumed = true;
@@ -755,7 +790,7 @@ Bool Parser_classifyFunctionOrVariable(Parser *parser, U32 *i, U32 parent, Alloc
 
 			case C8x4('l', 'i', 'n', 'e'):		//linear
 
-				if (len == 6 && *(const U16*)&tokStr.ptr[4] == C8x2('a', 'r')) {
+				if (len == 6 && getC8x2(tokStr, 4) == C8x2('a', 'r')) {
 					consumed = true;
 					flag |= ESymbolFlagVar_Linear;
 					expectsVar = true;
@@ -765,7 +800,7 @@ Bool Parser_classifyFunctionOrVariable(Parser *parser, U32 *i, U32 parent, Alloc
 
 			case C8x4('s', 'm', 'o', 'o'):		//smooth
 
-				if (len == 6 && *(const U16*)&tokStr.ptr[4] == C8x2('t', 'h')) {
+				if (len == 6 && getC8x2(tokStr, 4) == C8x2('t', 'h')) {
 					consumed = true;
 					flag |= ESymbolFlagVar_Linear;
 					expectsVar = true;
@@ -775,7 +810,7 @@ Bool Parser_classifyFunctionOrVariable(Parser *parser, U32 *i, U32 parent, Alloc
 
 			case C8x4('s', 'a', 'm', 'p'):		//sample
 
-				if (len == 6 && *(const U16*)&tokStr.ptr[4] == C8x2('l', 'e')) {
+				if (len == 6 && getC8x2(tokStr, 4) == C8x2('l', 'e')) {
 					consumed = true;
 					flag |= ESymbolFlagVar_Sample;
 					expectsVar = true;
@@ -785,7 +820,7 @@ Bool Parser_classifyFunctionOrVariable(Parser *parser, U32 *i, U32 parent, Alloc
 
 			case C8x4('c', 'e', 'n', 't'):		//centroid
 
-				if (len == 8 && *(const U32*)&tokStr.ptr[4] == C8x4('r', 'o', 'i', 'd')) {
+				if (len == 8 && getC8x4(tokStr, 4) == C8x4('r', 'o', 'i', 'd')) {
 					consumed = true;
 					flag |= ESymbolFlagVar_Centroid;
 					expectsVar = true;
@@ -797,7 +832,7 @@ Bool Parser_classifyFunctionOrVariable(Parser *parser, U32 *i, U32 parent, Alloc
 
 				if(
 					len == 13 &&
-					*(const U64*)&tokStr.ptr[4] == C8x8('r', 's', 'p', 'e', 'c', 't', 'i', 'v') &&
+					getC8x8(tokStr, 4) == C8x8('r', 's', 'p', 'e', 'c', 't', 'i', 'v') &&
 					tokStr.ptr[12] == 'e'
 				) {
 					consumed = true;
@@ -823,7 +858,7 @@ Bool Parser_classifyFunctionOrVariable(Parser *parser, U32 *i, U32 parent, Alloc
 
 			case C8x4('p', 'u', 'b', 'l'):		//public
 
-				if (len == 6 && *(const U16*)&tokStr.ptr[4] == C8x2('i', 'c')) {
+				if (len == 6 && getC8x2(tokStr, 4) == C8x2('i', 'c')) {
 
 					U32 temp = *i + 1;
 
@@ -841,7 +876,7 @@ Bool Parser_classifyFunctionOrVariable(Parser *parser, U32 *i, U32 parent, Alloc
 
 			case C8x4('p', 'r', 'i', 'v'):		//private
 
-				if (len == 7 && *(const U16*)&tokStr.ptr[4] == C8x2('a', 't') && tokStr.ptr[6] == 'e') {
+				if (len == 7 && getC8x2(tokStr, 4) == C8x2('a', 't') && tokStr.ptr[6] == 'e') {
 
 					U32 temp = *i + 1;
 
@@ -859,7 +894,7 @@ Bool Parser_classifyFunctionOrVariable(Parser *parser, U32 *i, U32 parent, Alloc
 
 			case C8x4('p', 'r', 'o', 't'):		//protected
 
-				if (len == 9 && *(const U32*)&tokStr.ptr[4] == C8x4('e', 'c', 't', 'e') && tokStr.ptr[8] == 'd') {
+				if (len == 9 && getC8x4(tokStr, 4) == C8x4('e', 'c', 't', 'e') && tokStr.ptr[8] == 'd') {
 
 					U32 temp = *i + 1;
 
@@ -876,7 +911,7 @@ Bool Parser_classifyFunctionOrVariable(Parser *parser, U32 *i, U32 parent, Alloc
 
 			case C8x4('e', 'x', 't', 'e'):		//extern
 
-				if (len == 6 && *(const U16*)&tokStr.ptr[4] == C8x2('r', 'n')) {
+				if (len == 6 && getC8x2(tokStr, 4) == C8x2('r', 'n')) {
 					consumed = true;
 					flag |= ESymbolFlagFuncVar_IsExtern;
 				}
@@ -885,7 +920,7 @@ Bool Parser_classifyFunctionOrVariable(Parser *parser, U32 *i, U32 parent, Alloc
 
 			case C8x4('s', 't', 'a', 't'):		//static
 
-				if (len == 6 && *(const U16*)&tokStr.ptr[4] == C8x2('i', 'c')) {
+				if (len == 6 && getC8x2(tokStr, 4) == C8x2('i', 'c')) {
 					consumed = true;
 					flag |= ESymbolFlagFuncVar_IsStatic;
 				}
@@ -903,7 +938,7 @@ Bool Parser_classifyFunctionOrVariable(Parser *parser, U32 *i, U32 parent, Alloc
 
 			case C8x4('u', 's', 'e', 'r'):		//user_impl
 
-				if (len == 9 && *(const U32*)&tokStr.ptr[4] == C8x4('_', 'i', 'm', 'p') && tokStr.ptr[8] == 'l') {
+				if (len == 9 && getC8x4(tokStr, 4) == C8x4('_', 'i', 'm', 'p') && tokStr.ptr[8] == 'l') {
 					consumed = true;
 					flag |= ESymbolFlagFuncVar_HasUserImpl;
 				}
@@ -949,7 +984,7 @@ Bool Parser_classifyFunctionOrVariable(Parser *parser, U32 *i, U32 parent, Alloc
 		//F32 operator+(
 		//    ^
 
-		if(tok.tokenSize == 8 && *(const U64*)nameStr.ptr == C8x8('o', 'p', 'e', 'r', 'a', 't', 'o', 'r')) {
+		if(tok.tokenSize == 8 && getC8x8(nameStr, 0) == C8x8('o', 'p', 'e', 'r', 'a', 't', 'o', 'r')) {
 
 			flag |= ESymbolFlagFunc_IsOperator;
 
@@ -1309,7 +1344,7 @@ Bool Parser_classifyEnum(Parser *parser, U32 *i, U32 parent, Allocator alloc, Er
 
 		if (
 			CharString_length(className) == 5 &&
-			*(const U32*)&className.ptr == C8x4('c', 'l', 'a', 's') &&
+			getC8x4(className, 0) == C8x4('c', 'l', 'a', 's') &&
 			className.ptr[4] == 's'
 		) {
 
@@ -1596,13 +1631,13 @@ Bool Parser_classifyBase(Parser *parser, U32 *i, U32 parent, Allocator alloc, Er
 	if (tok.tokenType == ETokenType_Identifier) {
 
 		U32 len = tok.tokenSize;
-		U32 c8x4 = len < 4 ? 0 : *(const U32*)tokStr.ptr;
+		U32 c8x4 = len < 4 ? 0 : getC8x4(tokStr, 0);
 
 		switch (c8x4) {
 
 			case C8x4('t', 'e', 'm', 'p'):		//template
 
-				if (len == 8 && *(const U32*)&tokStr.ptr[4] == C8x4('l', 'a', 't', 'e')) {
+				if (len == 8 && getC8x4(tokStr, 4) == C8x4('l', 'a', 't', 'e')) {
 					consumed = true;
 					gotoIfError3(clean, Parser_classifyTemplate(parser, i, parent, alloc, e_rr))
 					gotoIfError3(clean, Parser_classifyFunctionOrVariable(parser, i, parent, alloc, e_rr))
@@ -1613,7 +1648,7 @@ Bool Parser_classifyBase(Parser *parser, U32 *i, U32 parent, Allocator alloc, Er
 
 			case C8x4('t', 'y', 'p', 'e'):		//typedef
 
-				if (len == 7 && *(const U16*)&tokStr.ptr[4] == C8x2('d', 'e') && tokStr.ptr[6] == 'f') {
+				if (len == 7 && getC8x2(tokStr, 4) == C8x2('d', 'e') && tokStr.ptr[6] == 'f') {
 					consumed = true;
 					gotoIfError3(clean, Parser_classifyTypedef(parser, i, parent, alloc, e_rr))
 					break;
@@ -1645,7 +1680,7 @@ Bool Parser_classifyBase(Parser *parser, U32 *i, U32 parent, Allocator alloc, Er
 
 			case C8x4('s', 't', 'r', 'u'):		//struct
 
-				if (len == 6 && *(const U16*)&tokStr.ptr[4] == C8x2('c', 't')) {
+				if (len == 6 && getC8x2(tokStr, 4) == C8x2('c', 't')) {
 					consumed = true;
 					gotoIfError3(clean, Parser_classifyStruct(parser, i, parent, alloc, e_rr))
 					gotoIfError3(clean, Parser_assertAndSkip(parser, i, ETokenType_Semicolon, e_rr))
@@ -1678,7 +1713,7 @@ Bool Parser_classifyBase(Parser *parser, U32 *i, U32 parent, Allocator alloc, Er
 
 			case C8x4('i', 'n', 't', 'e'):		//interface
 
-				if (len == 9 && *(const U32*)&tokStr.ptr[4] == C8x4('r', 'f', 'a', 'c') && tokStr.ptr[8] == 'e') {
+				if (len == 9 && getC8x4(tokStr, 4) == C8x4('r', 'f', 'a', 'c') && tokStr.ptr[8] == 'e') {
 					consumed = true;
 					gotoIfError3(clean, Parser_classifyInterface(parser, i, parent, alloc, e_rr))
 					gotoIfError3(clean, Parser_assertAndSkip(parser, i, ETokenType_Semicolon, e_rr))
@@ -1689,7 +1724,7 @@ Bool Parser_classifyBase(Parser *parser, U32 *i, U32 parent, Allocator alloc, Er
 
 			case C8x4('n', 'a', 'm', 'e'):		//namespace
 
-				if (len == 9 && *(const U32*)&tokStr.ptr[4] == C8x4('s', 'p', 'a', 'c') && tokStr.ptr[8] == 'e') {
+				if (len == 9 && getC8x4(tokStr, 4) == C8x4('s', 'p', 'a', 'c') && tokStr.ptr[8] == 'e') {
 
 					consumed = true;
 

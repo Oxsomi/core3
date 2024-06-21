@@ -253,8 +253,18 @@ Bool Compiler_preprocessx(Compiler comp, CompilerSettings settings, CompileResul
 	return Compiler_preprocess(comp, settings, Platform_instance.alloc, result, e_rr);
 }
 
-Bool Compiler_parsex(Compiler comp, CompilerSettings settings, CompileResult *result, Error *e_rr) {
-	return Compiler_parse(comp, settings, Platform_instance.alloc, result, e_rr);
+Bool Compiler_compilex(
+	Compiler comp,
+	CompilerSettings settings,
+	SHBinaryIdentifier toCompile,
+	CompileResult *result,
+	Error *e_rr
+) {
+	return Compiler_compile(comp, settings, toCompile, Platform_instance.alloc, result, e_rr);
+}
+
+Bool Compiler_parsex(Compiler comp, CompilerSettings settings, Bool symbolsOnly, CompileResult *result, Error *e_rr) {
+	return Compiler_parse(comp, settings, symbolsOnly, Platform_instance.alloc, result, e_rr);
 }
 
 Bool Compiler_mergeIncludeInfox(Compiler *comp, ListIncludeInfo *infos, Error *e_rr) {
@@ -262,10 +272,21 @@ Bool Compiler_mergeIncludeInfox(Compiler *comp, ListIncludeInfo *infos, Error *e
 }
 
 Bool Compiler_filterWarning(CharString str) {
-	return CharString_startsWithStringSensitive(str, CharString_createRefCStrConst("#pragma once in main file\n"), 0);
+	return 
+		CharString_startsWithStringSensitive(str, CharString_createRefCStrConst("#pragma once in main file\n"), 0) ||
+		CharString_containsStringSensitive(str, CharString_createRefCStrConst("-Wunknown-attributes"));
 }
 
 Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *errors, Bool *hasErrors, Error *e_rr) {
+
+	CharString dxilSigning = CharString_createRefCStrConst("warning: DXIL signing library (dxil.dll,libdxil.so) not found.");
+
+	errs = CharString_createRefStrConst(errs);
+
+	U64 loc = CharString_findFirstStringSensitive(errs, dxilSigning, 0);
+
+	if(loc != U64_MAX)
+		errs.lenAndNullTerminated = loc | (errs.lenAndNullTerminated & ((U64)1 << 63));
 
 	Bool s_uccess = true;
 	U64 off = 0;
@@ -284,6 +305,19 @@ Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *er
 	U64 lineOff = 0;
 	Bool isError = false;
 
+	//Internal compiler error can't be parsed the same way
+	//If this happens, bad stuff is happening
+
+	CharString internalCompileErrorRef = CharString_createRefCStrConst("Internal Compiler error: ");
+
+	if (CharString_equalsStringSensitive(errs, internalCompileErrorRef)) {
+		CompileError cerr = (CompileError) { .error = internalCompileErrorRef };
+		gotoIfError2(clean, ListCompileError_pushBack(errors, cerr, alloc))
+		return true;
+	}
+
+	//Regular parsing
+
 	while(off < CharString_length(errs)) {
 
 		//Find start of next error
@@ -293,7 +327,7 @@ Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *er
 
 		//On Windows, D:/test.hlsl:10:10: warning: x is valid ofc, so we should skip that
 
-		if(!off || C8_isNewLine(CharString_getAt(errs, firstColon - 2)))
+		if((!off && firstColon == 1) || C8_isNewLine(CharString_getAt(errs, firstColon - 2)))
 			errorEnd = firstColon = CharString_findFirstSensitive(errs, ':', firstColon + 1);
 
 		if(firstColon == U64_MAX)
@@ -806,8 +840,6 @@ clean:
 	return s_uccess;
 }
 
-#define DXC_SHADER_MODEL(maj, min) ((U16)((min) | ((maj) << 8)))
-
 Bool Compiler_registerModel(ListU16 *vendors, U32 tokenId, Parser parser, Allocator alloc, Error *e_rr) {
 
 	Bool s_uccess = true;
@@ -826,7 +858,7 @@ Bool Compiler_registerModel(ListU16 *vendors, U32 tokenId, Parser parser, Alloca
 			0, 1, "Compiler_parse() model version is too high, only supported up to 6.8"
 		))
 
-	U16 version = DXC_SHADER_MODEL(6, (U16)F64_round((modelVersion - 6) / 0.1));
+	U16 version = OISH_SHADER_MODEL(6, (U16)F64_round((modelVersion - 6) / 0.1));
 
 	if(ListU16_contains(*vendors, version, 0, NULL))
 		retError(clean, Error_invalidParameter(
@@ -873,21 +905,18 @@ Bool Compiler_registerUniform(
 	//Scan last strings for the same uniform
 
 	for(
-		U64 i = runtimeEntry->uniforms.length - 1;
-		i != runtimeEntry->uniforms.length - currentUniforms - 1;
+		U64 i = (runtimeEntry->uniformNameValues.length >> 1) - 1;
+		i != (runtimeEntry->uniformNameValues.length >> 1) - currentUniforms - 1;
 		--i
 	)
-		if (CharString_equalsStringSensitive(uniformName, runtimeEntry->uniforms.ptr[i]))
+		if (CharString_equalsStringSensitive(uniformName, runtimeEntry->uniformNameValues.ptr[i << 1]))
 			retError(clean, Error_alreadyDefined(0, "Compiler_registerUniform() already contains uniform"))
 
 	//Insert uniformName
 
-	uniformName = CharString_createRefSizedConst(
-		uniformName.ptr, CharString_length(uniformName), CharString_isNullTerminated(uniformName)
-	);
-
-	gotoIfError2(clean, ListCharString_pushBack(&runtimeEntry->uniforms, uniformName, alloc))
-	inserted = runtimeEntry->uniforms.length - 1;
+	uniformName = CharString_createRefStrConst(uniformName);
+	gotoIfError2(clean, ListCharString_pushBack(&runtimeEntry->uniformNameValues, uniformName, alloc))
+	inserted = runtimeEntry->uniformsPerCompilation.length - 1;
 
 	//If next token is equals then uniformValue
 
@@ -910,63 +939,62 @@ Bool Compiler_registerUniform(
 			uniformValue = parser.parsedLiterals.ptr[parser.tokens.ptr[*tokenCounter].valueu];
 			++*tokenCounter;
 
-			uniformValue = CharString_createRefSizedConst(
-				uniformValue.ptr, CharString_length(uniformValue), CharString_isNullTerminated(uniformValue)
-			);
+			uniformValue = CharString_createRefStrConst(uniformValue);
 		}
 	}
 
 	//Insert uniformValue
 
-	gotoIfError2(clean, ListCharString_pushBack(&runtimeEntry->uniformValues, uniformValue, alloc))
+	gotoIfError2(clean, ListCharString_pushBack(&runtimeEntry->uniformNameValues, uniformValue, alloc))
 	++*ListU8_last(runtimeEntry->uniformsPerCompilation);
 
 clean:
 
 	if(!s_uccess && inserted != U64_MAX)
-		ListCharString_erase(&runtimeEntry->uniforms, inserted);
+		ListCharString_erase(&runtimeEntry->uniformNameValues, inserted);
 
 	return s_uccess;
 }
 
 U16 Compiler_minFeatureSetStage(ESHPipelineStage stage, U16 waveSize) {
 
-	U16 minVersion = DXC_SHADER_MODEL(6, 5);
+	U16 minVersion = OISH_SHADER_MODEL(6, 5);
 
 	if(stage == ESHPipelineStage_WorkgraphExt)
-		minVersion = DXC_SHADER_MODEL(6, 8);
+		minVersion = OISH_SHADER_MODEL(6, 8);
 
 	if(waveSize & 0xF)
-		minVersion = DXC_SHADER_MODEL(6, 6);
+		minVersion = OISH_SHADER_MODEL(6, 6);
 
 	if(waveSize >> 4)
-		minVersion = DXC_SHADER_MODEL(6, 8);
+		minVersion = OISH_SHADER_MODEL(6, 8);
 
 	return minVersion;
 }
 
 U16 Compiler_minFeatureSetExtension(ESHExtension ext) {
 
-	U16 minVersion = DXC_SHADER_MODEL(6, 5);
+	U16 minVersion = OISH_SHADER_MODEL(6, 5);
 
 	if(ext & ESHExtension_AtomicI64)
-		minVersion = U16_max(DXC_SHADER_MODEL(6, 6), minVersion);
+		minVersion = U16_max(OISH_SHADER_MODEL(6, 6), minVersion);
 
 	if(ext & ESHExtension_ComputeDeriv)
-		minVersion = U16_max(DXC_SHADER_MODEL(6, 6), minVersion);
+		minVersion = U16_max(OISH_SHADER_MODEL(6, 6), minVersion);
 
 	if(ext & ESHExtension_PAQ)
-		minVersion = U16_max(DXC_SHADER_MODEL(6, 6), minVersion);
+		minVersion = U16_max(OISH_SHADER_MODEL(6, 6), minVersion);
 
 	return minVersion;
 }
 
-Bool Compiler_parse(Compiler comp, CompilerSettings settings, Allocator alloc, CompileResult *result, Error *e_rr) {
+Bool Compiler_parse(Compiler comp, CompilerSettings settings, Bool symbolsOnly, Allocator alloc, CompileResult *result, Error *e_rr) {
 
 	(void)comp;		//No need for a compiler, we do it ourselves
 
 	Lexer lexer = (Lexer) { 0 };
 	Parser parser = (Parser) { 0 };
+	CharString tmp = CharString_createNull();
 	Bool s_uccess = true;
 
 	SHEntryRuntime runtimeEntry = (SHEntryRuntime) { 0 };
@@ -979,6 +1007,15 @@ Bool Compiler_parse(Compiler comp, CompilerSettings settings, Allocator alloc, C
 	gotoIfError3(clean, Lexer_create(settings.string, alloc, &lexer, e_rr))
 	gotoIfError3(clean, Parser_create(&lexer, &parser, alloc, e_rr))
 	gotoIfError3(clean, Parser_classify(&parser, alloc, e_rr))
+
+	//If we want symbols only, then we can just ask the parser to output them for us.
+	//But we do tell it that we only want symbols located in the current file
+
+	if (symbolsOnly) {
+		result->type = ECompileResultType_Text;
+		Parser_printSymbols(parser, U32_MAX, true, alloc, &result->text);
+		goto clean;
+	}
 
 	result->type = ECompileResultType_SHEntryRuntime;
 
@@ -1004,7 +1041,7 @@ Bool Compiler_parse(Compiler comp, CompilerSettings settings, Allocator alloc, C
 				Symbol symj = parser.symbols.ptr[j];
 				Token tok = parser.tokens.ptr[symj.tokenId];
 
-				//[uniform()]
+				//[uniforms()]
 				//[extension()]
 				//[vendor()]
 				//[model()]
@@ -1068,11 +1105,7 @@ Bool Compiler_parse(Compiler comp, CompilerSettings settings, Allocator alloc, C
 
 								runtimeEntry.entry.stage = stage;
 
-								CharString name = parser.symbolNames.ptr[sym.name];
-								name = CharString_createRefSizedConst(
-									name.ptr, CharString_length(name), CharString_isNullTerminated(name)
-								);
-
+								CharString name = CharString_createRefStrConst(parser.symbolNames.ptr[sym.name]);
 								runtimeEntry.entry.name = name;
 							}
 
@@ -1309,6 +1342,12 @@ Bool Compiler_parse(Compiler comp, CompilerSettings settings, Allocator alloc, C
 
 								U32 tokenEnd = symj.tokenId + symj.tokenCount;
 
+								if(runtimeEntry.vendorMask)
+									retError(clean, Error_invalidParameter(
+										0, 0,
+										"Compiler_parse() vendor annotation can only be present once"
+									))
+
 								//[vendor("NV")]
 								//       ^
 
@@ -1323,7 +1362,7 @@ Bool Compiler_parse(Compiler comp, CompilerSettings settings, Allocator alloc, C
 									))
 
 								gotoIfError3(clean, Compiler_registerVendor(
-									&runtimeEntry.entry.vendorMask, symj.tokenId + 2, parser, e_rr
+									&runtimeEntry.vendorMask, symj.tokenId + 2, parser, e_rr
 								))
 
 								//[vendor("AMD", "NV")]
@@ -1344,19 +1383,19 @@ Bool Compiler_parse(Compiler comp, CompilerSettings settings, Allocator alloc, C
 										))
 
 									gotoIfError3(clean, Compiler_registerVendor(
-										&runtimeEntry.entry.vendorMask, k + 1, parser, e_rr
+										&runtimeEntry.vendorMask, k + 1, parser, e_rr
 									))
 								}
 							}
 
 							break;
 
-						case C8x4('u', 'n', 'i', 'f'):		//uniform()
+						case C8x4('u', 'n', 'i', 'f'):		//uniforms()
 
-							//[uniform("X", "Y", "Z")]
-							//[uniform("X" = "123", "Y" = "ABC")]
+							//[uniforms("X", "Y", "Z")]
+							//[uniforms("X" = "123", "Y" = "ABC")]
 							// ^
-							if (tokLen == 7 && *(const U32*)&tokStr.ptr[3] == C8x4('f', 'o', 'r', 'm')) {
+							if (tokLen == 8 && *(const U32*)&tokStr.ptr[4] == C8x4('o', 'r', 'm', 's')) {
 
 								if(symj.tokenCount + 1 < 4)
 									retError(clean, Error_invalidParameter(
@@ -1366,8 +1405,8 @@ Bool Compiler_parse(Compiler comp, CompilerSettings settings, Allocator alloc, C
 
 								U32 tokenEnd = symj.tokenId + symj.tokenCount;
 
-								//[uniform("X")]
-								//        ^
+								//[uniforms("X")]
+								//         ^
 
 								if(
 									parser.tokens.ptr[symj.tokenId + 1].tokenType != ETokenType_RoundParenthesisStart ||
@@ -1385,8 +1424,8 @@ Bool Compiler_parse(Compiler comp, CompilerSettings settings, Allocator alloc, C
 									&runtimeEntry, &tokenCounter, tokenEnd, true, parser, alloc, e_rr
 								))
 
-								//[uniform("X", "Y")]
-								//            ^
+								//[uniforms("X", "Y")]
+								//             ^
 
 								for (U32 k = tokenCounter; k < tokenEnd; ) {
 								
@@ -1593,10 +1632,20 @@ Bool Compiler_parse(Compiler comp, CompilerSettings settings, Allocator alloc, C
 						0, "Compiler_parse() found a non compute/workgraph entrypoint with a numthreads annotation"
 					))
 
-				if(!runtimeEntry.entry.vendorMask)
-					runtimeEntry.entry.vendorMask = U16_MAX;
+				if(!runtimeEntry.vendorMask)
+					runtimeEntry.vendorMask = U16_MAX;
 
 				//Ready for push
+
+				if(result->shEntriesRuntime.length + 1 >= U16_MAX)
+					retError(clean, Error_invalidState(
+						0, "Compiler_parse() found way too many SHEntries. Found U16_MAX!"
+					))
+
+				if(SHEntryRuntime_getCombinations(runtimeEntry) + 1 >= U16_MAX)
+					retError(clean, Error_invalidState(
+						0, "Compiler_parse() found way too runtimeEntry combinations. Found U16_MAX!"
+					))
 
 				SHEntryRuntime_print(runtimeEntry, alloc);
 				gotoIfError2(clean, ListSHEntryRuntime_pushBack(&result->shEntriesRuntime, runtimeEntry, alloc));
@@ -1617,5 +1666,6 @@ clean:
 	SHEntryRuntime_free(&runtimeEntry, alloc);
 	Parser_free(&parser, alloc);
 	Lexer_free(&lexer, alloc);
+	CharString_free(&tmp, alloc);
 	return s_uccess;
 }

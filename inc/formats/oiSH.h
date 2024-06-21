@@ -25,6 +25,8 @@
 	extern "C" {
 #endif
 
+#define OISH_SHADER_MODEL(maj, min) ((U16)((min) | ((maj) << 8)))
+
 typedef enum ESHSettingsFlags {
 	ESHSettingsFlags_None				= 0,
 	ESHSettingsFlags_HideMagicNumber	= 1 << 0,		//Only valid if the oiSH can be 100% confidently detected otherwise
@@ -45,6 +47,8 @@ typedef enum ESHBinaryType {
 	ESHBinaryType_Count
 
 } ESHBinaryType;
+
+extern const C8 *ESHBinaryType_names[ESHBinaryType_Count];
 
 typedef enum ESHExtension {
 
@@ -100,15 +104,6 @@ typedef enum ESHPipelineStage {
 	ESHPipelineStage_Hull,
 	ESHPipelineStage_Domain,
 
-	//MeshShader extension is required
-
-	ESHPipelineStage_MeshExt,
-	ESHPipelineStage_TaskExt,
-
-	//WorkGraph extension is required
-
-	ESHPipelineStage_WorkgraphExt,
-
 	//RayPipeline extension is required
 
 	ESHPipelineStage_RaygenExt,
@@ -120,6 +115,15 @@ typedef enum ESHPipelineStage {
 
 	ESHPipelineStage_RtStartExt = ESHPipelineStage_RaygenExt,
 	ESHPipelineStage_RtEndExt = ESHPipelineStage_IntersectionExt,
+
+	//MeshShader extension is required
+
+	ESHPipelineStage_MeshExt,
+	ESHPipelineStage_TaskExt,
+
+	//WorkGraph extension is required
+
+	ESHPipelineStage_WorkgraphExt,
 
 	ESHPipelineStage_Count
 
@@ -161,15 +165,20 @@ typedef enum ESHType {
 } ESHType;
 
 const C8 *ESHType_name(ESHType type);
+const C8 *ESHPipelineStage_getStagePrefix(ESHPipelineStage stage);
 
-//Serialized SHEntry (in oiSH file)
+//Deserialized SHEntry (in oiSH file)
+//Though SHEntry on disk is more compact, with only the relevant data.
 
 typedef struct SHEntry {
 
 	CharString name;
 
-	U16 stage;			//ESHPipelineStage
-	U16 waveSize;		//U4[3] recommendedSize, minSize, maxSize: each U4 is in range [0, 9]. 0 = 0, 1 = 1, 3 = 8, etc.
+	ListU16 binaryIds;		//Reference SHBinaryInfo
+
+	U8 stage;				//ESHPipelineStage
+	U8 padding;
+	U16 waveSize;			//U4[3] recommendedSize, minSize, maxSize: each U4 is in range [0, 9]. 0 = 0, 1 = 1, 3 = 8, etc.
 
 	U16 groupX, groupY;
 
@@ -188,127 +197,137 @@ typedef struct SHEntry {
 		U64 outputsU64;
 	};
 
-	U16 vendorMask;
-	U16 padding0;
-
-	U32 padding1;
-
 } SHEntry;
 
 //Runtime SHEntry with some extra information that is used to decide how to compile
+//This is how the SHEntry is found in the shader. Afterwards, it is transformed into binaries.
+//Then the SHEntry will point to the binaries instead to save space.
 
 typedef struct SHEntryRuntime {
 
 	SHEntry entry;
 
+	U16 vendorMask;
 	Bool isShaderAnnotation;			//Switches [shader("string")] and [stage("string")], the first indicates StateObject
-	U8 padding[7];
+	U8 padding[5];
 
 	ListU32 extensions;					//Explicitly enabled extensions (ESHExtension[])
 
 	ListU16 shaderVersions;				//U16: U8 major, minor;		If not defined will default.
 
-	ListCharString uniforms;
-	ListCharString uniformValues;
+	ListCharString uniformNameValues;	//[uniformName, uniformValue][]
 	ListU8 uniformsPerCompilation;		//How many uniforms are relevant for each compilation
 
 } SHEntryRuntime;
 
-typedef struct SHBinaryInfo {
+typedef struct SHBinaryIdentifier SHBinaryIdentifier;
+typedef struct SHBinaryInfo SHBinaryInfo;
+
+U32 SHEntryRuntime_getCombinations(SHEntryRuntime runtime);
+
+Bool SHEntryRuntime_asBinaryInfo(
+	SHEntryRuntime runtime,
+	U16 combinationId,
+	ESHBinaryType binaryType,
+	Buffer buf,
+	SHBinaryInfo *binaryInfo,
+	Error *e_rr
+);
+
+Bool SHEntryRuntime_asBinaryIdentifier(
+	SHEntryRuntime runtime, U16 combinationId, SHBinaryIdentifier *binaryIdentifier, Error *e_rr
+);
+
+typedef struct SHBinaryIdentifier {
 
 	CharString entrypoint;		//If it's not a lib, this defines the entrypoint to compile with
+	ListCharString uniforms;	//[uniformName, uniformValue][]
 
 	ESHExtension extensions;
-	U16 shaderVersion;
-	U8 uniforms;
-	U8 stageType;				//ESHPipelineStage
+	U16 shaderVersion;			//U8 maj, minor
+	U16 stageType;				//ESHPipelineStage
 
+} SHBinaryIdentifier;
+
+typedef struct SHBinaryInfo {
+
+	SHBinaryIdentifier identifier;
+
+	U16 vendorMask;
 	Bool hasShaderAnnotation;	//If [shader("")] is used rather than [stage("")]
-	U8 padding[7];
+	U8 padding[5];
 
-	CharString *uniformNames, *uniformValues;
+	Buffer binaries[ESHBinaryType_Count];
 
 } SHBinaryInfo;
 
 TList(SHEntry);
 TList(SHEntryRuntime);
+TList(SHBinaryIdentifier);
+TList(SHBinaryInfo);
+
+Bool SHBinaryIdentifier_equals(SHBinaryIdentifier a, SHBinaryIdentifier b);
 
 void SHEntry_print(SHEntry entry, Allocator alloc);
+void SHBinaryInfo_print(SHBinaryInfo binary, Allocator alloc);
 void SHEntryRuntime_print(SHEntryRuntime entry, Allocator alloc);
 
+void SHBinaryIdentifier_free(SHBinaryIdentifier *identifier, Allocator alloc);
+void SHBinaryInfo_free(SHBinaryInfo *info, Allocator alloc);
+void SHEntry_free(SHEntry *entry, Allocator alloc);
 void SHEntryRuntime_free(SHEntryRuntime *entry, Allocator alloc);
 void ListSHEntryRuntime_freeUnderlying(ListSHEntryRuntime *entry, Allocator alloc);
 
 const C8 *SHEntry_stageName(SHEntry entry);
 
-typedef enum ESHPipelineType {
-	ESHPipelineType_Graphics,
-	ESHPipelineType_Compute,
-	ESHPipelineType_Raytracing,
-	ESHPipelineType_Workgraph,
-	ESHPipelineType_Count
-} ESHPipelineType;
-
 typedef struct SHFile {
 
-	Buffer binaries[ESHBinaryType_Count];
-
+	ListSHBinaryInfo binaries;
 	ListSHEntry entries;
 
 	U64 readLength;				//How many bytes were read for this file
 
 	ESHSettingsFlags flags;
-	ESHExtension extensions;
 
 	U32 compilerVersion;		//OxC3 compiler version
 
+	U32 sourceHash;				//CRC32C of sources
+
 } SHFile;
 
-Error SHFile_create(ESHSettingsFlags flags, ESHExtension extension, U32 shaderVersion, Allocator alloc, SHFile *shFile);
-Bool SHFile_free(SHFile *shFile, Allocator alloc);
+Bool SHFile_create(ESHSettingsFlags flags, U32 compilerVersion, U32 sourceHash, Allocator alloc, SHFile *shFile, Error *e_rr);
+void SHFile_free(SHFile *shFile, Allocator alloc);
 
-Error SHFile_addBinary(SHFile *shFile, ESHBinaryType type, Buffer *entry, Allocator alloc);		//Moves entry
-Error SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, Allocator alloc);					//Moves entry->name
+Bool SHFile_addBinaries(
+	SHFile *shFile,
+	SHBinaryInfo *binaries,				//Moves binaries
+	Allocator alloc,
+	Error *e_rr
+);
 
-Error SHFile_write(SHFile shFile, Allocator alloc, Buffer *result);
-Error SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile);
+Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, Allocator alloc, Error *e_rr);	//Moves entry->name and binaryIds
+
+Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr);
+Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, Error *e_rr);
 
 //File headers
 
 //File spec (docs/oiSH.md)
 
-typedef enum ESHFlags {
-
-	ESHFlags_None 					= 0,
-
-	//What type of binaries it includes
-	//Must be one at least
-
-	ESHFlags_HasSPIRV				= 1 << 0,
-	ESHFlags_HasDXIL				= 1 << 1,
-
-	//Reserved
-	//ESHFlags_HasMSL				= 1 << 2,
-	//ESHFlags_HasWGSL				= 1 << 3
-
-	ESHFlags_Invalid				= 0xFF << 2,
-
-	ESHFlags_HasBinary				= ESHFlags_HasSPIRV | ESHFlags_HasDXIL,
-	//ESHFlags_HasText				= ESHFlags_HasMSL | ESHFlags_HasWGSL
-	ESHFlags_HasSource				= ESHFlags_HasBinary // | ESHFlags_HasText
-
-} ESHFlags;
-
 typedef struct SHHeader {
 
-	U8 version;					//major.minor (%10 = minor, /10 = major (+1 to get real major)) at least 1
-	U8 flags;					//ESHFlags
-	U8 sizeTypes;				//EXXDataSizeTypes: spirvType | (dxilType << 2) | (mslType << 4) | (wgslType << 6)
-	U8 pipelineType;
-
-	ESHExtension extensions;
-
 	U32 compilerVersion;
+
+	U32 hash;					//CRC32C of contents starting at SHHeader::version
+
+	U32 sourceHash;				//CRC32C of source(s), for determining if it's dirty
+
+	U16 uniqueUniforms;
+	U8 version;					//major.minor (%10 = minor, /10 = major (+1 to get real major)) at least 1
+	U8 sizeTypes;				//Every 2 bits size type of spirv, dxil
+
+	U16 binaryCount;			//How many unique binaries are stored
+	U16 stageCount;				//How many stages reference into the binaries
 
 } SHHeader;
 

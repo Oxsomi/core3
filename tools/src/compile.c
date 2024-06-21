@@ -18,7 +18,7 @@
 *  This is called dual licensing.
 */
 
-#include "platforms/ext/listx.h"
+#include "platforms/ext/listx_impl.h"
 #include "types/buffer.h"
 #include "types/thread.h"
 #include "types/math.h"
@@ -29,16 +29,18 @@
 #include "platforms/ext/stringx.h"
 #include "platforms/ext/bufferx.h"
 #include "platforms/ext/threadx.h"
+#include "platforms/ext/formatx.h"
 #include "shader_compiler/compiler.h"
 #include "cli.h"
 
 #ifdef CLI_SHADER_COMPILER
 
 	typedef enum ECompileType {
-		ECompileType_Preprocess,
-		ECompileType_Includes,
-		ECompileType_Reflect,
-		ECompileType_Compile
+		ECompileType_Preprocess,		//Turns shader with includes & defines into an easily parsable string
+		ECompileType_Includes,			//Turns shader with includes into a list of their dependencies (direct + indirect)
+		ECompileType_Reflect,			//Reflects all shader info (//TODO:)
+		ECompileType_Compile,			//Compile all shaders into an oiSH file for consumption
+		ECompileType_Symbols			//List all symbols located in the shader or include as a text file
 	} ECompileType;
 
 	typedef struct ShaderFileRecursion {
@@ -56,16 +58,11 @@
 
 	} ShaderFileRecursion;
 
-	const C8 *includesFileSuffix = ".txt";		//Suffix when mode is "includes" (seeing all include info)
+	const C8 *txtSuffix = ".txt";		//Suffix when mode is "includes" (seeing all include info)
 
 	const C8 *fileSuffixes[] = {
 		".spv.hlsl",
 		".dxil.hlsl"
-	};
-
-	const C8 *binarySuffixes[] = {
-		".spv",
-		".dxil"
 	};
 
 	const C8 *oiSHSuffixes[] = {
@@ -134,7 +131,7 @@
 					if(foundFirstMode) {
 
 						CharString input = *ListCharString_last(*shaderFiles->allShaders);
-						input = CharString_createRefSizedConst(input.ptr, CharString_length(input), false);
+						input = CharString_createRefStrConst(input);
 
 						gotoIfError(clean, ListCharString_pushBackx(shaderFiles->allShaders, input))
 					}
@@ -151,10 +148,7 @@
 							),
 							copy.ptr,
 							isPreprocess ? fileSuffixes[i] : (
-								shaderFiles->compileType == ECompileType_Includes ? includesFileSuffix : (
-									shaderFiles->compileType == ECompileType_Reflect ? oiSHSuffixes[i] :
-									binarySuffixes[i]
-								)
+								shaderFiles->compileType == ECompileType_Includes || shaderFiles->compileType == ECompileType_Symbols ? txtSuffix : oiSHSuffixes[i]
 							)
 						))
 
@@ -176,7 +170,7 @@
 		return err;
 	}
 
-	Bool CLI_compileShaderSingle(
+	Bool CLI_precompileShaderSingle(
 		Compiler compiler,
 		ESHBinaryType binaryType,
 		ParsedArgs args,
@@ -184,6 +178,7 @@
 		CharString input,
 		CharString outputPath,
 		ECompileType compileType,
+		ListSHEntryRuntime *shEntriesRuntime,
 		CharString includeDir
 	) {
 
@@ -231,12 +226,54 @@
 
 			settings.string = tempStr;
 
-			gotoIfError3(clean, Compiler_parsex(compiler, settings, &compileResult, e_rr))
+			gotoIfError3(clean, Compiler_parsex(compiler, settings, compileType == ECompileType_Symbols, &compileResult, e_rr))
 		}
 
 		//Write final compile result
 
 		if (compileResult.isSuccess) {
+
+			//Tell oiSH entries to caller
+
+			if (compileResult.type == ECompileResultType_SHEntryRuntime && shEntriesRuntime && compileResult.shEntriesRuntime.length) {
+
+				//Move list with all allocated memory
+
+				*shEntriesRuntime = compileResult.shEntriesRuntime;
+				compileResult.shEntriesRuntime = (ListSHEntryRuntime) { 0 };
+
+				//Move as copy, since these are refs to the input file, which will be freed at end of function
+
+				for (U64 i = 0; i < shEntriesRuntime->length; ++i) {
+
+					SHEntryRuntime *entry = &shEntriesRuntime->ptrNonConst[i];
+
+					//Copy uniform names if needed
+
+					for (U64 j = 0; j < entry->uniformNameValues.length; ++j) {
+
+						CharString *curr = &entry->uniformNameValues.ptrNonConst[j];
+						CharString temp = CharString_createNull();
+
+						if(!CharString_isRef(*curr))
+							continue;
+
+						gotoIfError2(clean, CharString_createCopyx(*curr, &temp))
+						*curr = temp;
+					}
+
+					//Copy name if needed
+
+					if(!CharString_isRef(entry->entry.name))
+						continue;
+
+					CharString temp = CharString_createNull();
+					gotoIfError2(clean, CharString_createCopyx(entry->entry.name, &temp))
+					entry->entry.name = temp;
+				}
+			}
+
+			//Now our preprocessed blob is ready to free
 
 			CharString_freex(&tempStr);
 
@@ -264,15 +301,144 @@
 
 			else if(compileResult.type == ECompileResultType_Text)
 				gotoIfError2(clean, File_write(CharString_bufferConst(compileResult.text), outputPath, 10 * MS))
+
+			else if(compileResult.type == ECompileResultType_Binary)
+				gotoIfError2(clean, File_write(compileResult.binary, outputPath, 10 * MS))
 		}
 
 	clean:
 		s_uccess &= compileResult.isSuccess;
+
+		if(!s_uccess)
+			ListSHEntryRuntime_freeUnderlyingx(shEntriesRuntime);
+
 		CompileResult_freex(&compileResult);
 		CharString_freex(&tempStr);
 		CharString_freex(&tempStr2);
 		Error_printx(errTemp, ELogLevel_Error, ELogOptions_Default);
 		return s_uccess;
+	}
+
+	Bool Compiler_getUniqueCompiles(
+		ListSHEntryRuntime runtimeEntries,
+		ListU32 *compileCombinations,
+		ListU16 *binaryIndices,
+		Error *e_rr
+	) {
+
+		Bool s_uccess = true;
+		ListSHBinaryIdentifier identifiers = (ListSHBinaryIdentifier) { 0 };
+
+		//Go through each combination
+
+		for (U64 i = 0; i < runtimeEntries.length; ++i) {
+
+			if(i >> 16)
+				retError(clean, Error_overflow(0, i, 1 << 16, "Compiler_getUniqueCompiles() i out of bounds"))
+
+			SHEntryRuntime runtime = runtimeEntries.ptr[i];
+
+			for (U64 j = 0; j < SHEntryRuntime_getCombinations(runtime); ++j) {
+
+				if(j >> 16)
+					retError(clean, Error_overflow(1, j, 1 << 16, "Compiler_getUniqueCompiles() j out of bounds"))
+
+				SHBinaryIdentifier binaryIdentifier = (SHBinaryIdentifier) { 0 };
+				gotoIfError3(clean, SHEntryRuntime_asBinaryIdentifier(runtime, (U16) j, &binaryIdentifier, e_rr))
+
+				//Find SHBinaryIdentifier or not
+
+				U64 k = 0;
+
+				for(; k < identifiers.length; ++k)
+					if(SHBinaryIdentifier_equals(binaryIdentifier, identifiers.ptr[k]))
+						break;
+				
+				//When it's new, we gotta remember the binary identifier for reuse.
+				//Other than that, we need to tell the compiler which runtime id and combination id we need
+
+				if(k == identifiers.length) {
+					gotoIfError2(clean, ListSHBinaryIdentifier_pushBackx(&identifiers, binaryIdentifier))
+					gotoIfError2(clean, ListU32_pushBackx(compileCombinations, (U32)(j | (i << 16))))
+				}
+
+				//Insert id of found binary or newly inserted
+
+				gotoIfError2(clean, ListU16_pushBackx(binaryIndices, (U16)k))
+			}
+		}
+
+	clean:
+		//We will never allocate nested memory into this, so it's fine to just freex it (no underlying data)
+		ListSHBinaryIdentifier_freex(&identifiers);
+		return s_uccess;
+	}
+
+	Bool CLI_compileShaderSingle(
+		Compiler compiler,
+		ESHBinaryType binaryType,
+		ParsedArgs args,
+		CharString inputPath,
+		CharString input,
+		CompileResult *dest,
+		SHEntryRuntime runtimeEntry,
+		U16 combinationId,
+		CharString includeDir
+	) {
+
+		Error errTemp = Error_none(), *e_rr = &errTemp;
+		Bool s_uccess = true;
+
+		if(!dest)
+			retError(clean, Error_nullPointer(5, "CLI_compileShaderSingle()::dest is required"));
+
+		if(dest->binary.ptr || dest->compileErrors.ptr || dest->includeInfo.ptr)
+			retError(clean, Error_invalidParameter(5, 0, "CLI_compileShaderSingle()::dest was present, but not empty"))
+
+		CompilerSettings settings = (CompilerSettings) {
+			.string = input,
+			.path = inputPath,
+			.debug = (Bool) (args.flags & EOperationFlags_Debug),
+			.format = ECompilerFormat_HLSL,
+			.outputType = binaryType,
+			.infoAboutIncludes = false,
+			.includeDir = includeDir
+		};
+
+		//First we need to go from text with includes and defines to easy to parse text
+
+		SHBinaryIdentifier binaryIdentifier = (SHBinaryIdentifier) { 0 };
+		gotoIfError3(clean, SHEntryRuntime_asBinaryIdentifier(runtimeEntry, combinationId, &binaryIdentifier, e_rr))
+		gotoIfError3(clean, Compiler_compilex(compiler, settings, binaryIdentifier, dest, e_rr))
+
+		for(U64 i = 0; i < dest->compileErrors.length; ++i) {
+
+			CompileError e = dest->compileErrors.ptr[i];
+
+			if((e.typeLineId >> 7) == ECompileErrorType_Warn)
+				Log_warnLnx("%s:%"PRIu32":%"PRIu8": %s", e.file.ptr, CompileError_lineId(e), e.lineOffset, e.error.ptr);
+
+			else Log_errorLnx("%s:%"PRIu32":%"PRIu8": %s", e.file.ptr, CompileError_lineId(e), e.lineOffset, e.error.ptr);
+		}
+
+	clean:
+		s_uccess &= dest && dest->isSuccess;
+		Error_printx(errTemp, ELogLevel_Error, ELogOptions_Default);
+		return s_uccess;
+	}
+
+	TList(ListSHEntryRuntime);
+	TListImpl(ListSHEntryRuntime);
+
+	void ListListSHEntryRuntime_freeUnderlyingx(ListListSHEntryRuntime *entry) {
+
+		if(!entry)
+			return;
+
+		for(U64 i = 0; i < entry->length; ++i)
+			ListSHEntryRuntime_freeUnderlyingx(&entry->ptrNonConst[i]);
+
+		ListListSHEntryRuntime_freex(entry);
 	}
 
 	typedef struct CompilerJobScheduler {
@@ -285,8 +451,13 @@
 		ListU8 compileModes;
 		ListCompiler compilers;
 
+		ListListSHEntryRuntime *shEntries;
+		ListU64 *shEntryIds;				//[U32 shEntries[i], U16 shEntries[i][j], U16 shEntries[i][j][k]]
+
 		Lock *lock;
-		U64 *counter;
+		U64 *counter;						//This one is to acquire job ids
+		U64 *completedCounter;				//This one is to signal jobs that are done
+		U64 *counterCompiledBinaries;		//How many binaries have been compiled
 		U64 *threadCounter;
 		Bool *success;
 
@@ -300,10 +471,16 @@
 		if(!job)
 			return;
 
+		//TODO: Multi thread
+		/*
 		Bool s_uccess = true;
 
 		ELockAcquire acq = ELockAcquire_Invalid;
 		U64 threadCounter = U64_MAX;
+
+		//Pre-compile
+
+		U64 lastJobId = U64_MAX;
 
 		while(true) {
 
@@ -313,6 +490,48 @@
 
 			if(acq < ELockAcquire_Success)
 				return;
+
+			//If we had a last job, we have to add completed counter and parse the output.
+			//That parsed output is the shentries and the compiles they have to do.
+
+			if (lastJobId != U64_MAX) {
+
+				//Parse oiSH
+
+				if (job->compileType == ECompileType_Compile) {
+
+					ListSHEntryRuntime runtimeEntries = job->shEntries->ptr[lastJobId];
+					ListU32 compileCombinations = (ListU32) { 0 };
+
+					if(!Compiler_getUniqueCompiles(runtimeEntries, &compileCombinations, NULL))
+						Log_errorLnx("Compiler_getUniqueCompiles() failed (Compiler_getUniqueCompiles)");
+
+					//Add all compile combinations, but include our last job id to ensure it can be found again
+
+					else {
+
+						if(ListU64_reservex(
+							job->shEntryIds, job->shEntryIds->length + compileCombinations.length
+						).genericError)
+							Log_errorLnx("Compiler_getUniqueCompiles() failed (ListU64_reservex)");
+
+						else for (U64 i = 0; i < compileCombinations.length; ++i) {
+						
+							U32 compileCombination = compileCombinations.ptr[i];
+
+							ListU64_pushBack(
+								job->shEntryIds, ((U64)lastJobId << 32) | compileCombination, (Allocator) { 0 }
+							);
+						}
+					}
+				}
+
+				//Mark as completed, so other threads will know
+
+				++*job->completedCounter;
+			}
+
+			//Remember if we succeeded or not
 
 			if(*job->counter == job->inputData.length) {
 				*job->success &= s_uccess;
@@ -328,12 +547,13 @@
 				Lock_unlock(job->lock);
 
 			acq = ELockAcquire_Invalid;
+			lastJobId = ourJobId;
 
 			//Process next. If compile failed, still continue. Because we want all compiler errors
 
 			CharString input = job->inputPaths.ptr[ourJobId];
 
-			if(!CLI_compileShaderSingle(
+			if(!CLI_precompileShaderSingle(
 				job->compilers.ptr[threadCounter],
 				job->compileModes.ptr[threadCounter],
 				job->args,
@@ -341,6 +561,7 @@
 				job->inputData.ptr[ourJobId],
 				job->outputPaths.ptr[ourJobId],
 				job->compileType,
+				&job->shEntries->ptrNonConst[ourJobId],
 				job->includeDir
 			)) {
 				Log_errorLnx("Compile failed for file \"%.*s\"", (int)CharString_length(input), input.ptr);
@@ -350,6 +571,84 @@
 
 		if(acq == ELockAcquire_Acquired)
 			Lock_unlock(job->lock);
+		
+		acq = ELockAcquire_Invalid;
+
+		//Compile requires another stage where we go over unique binaries that we have to compile
+
+		if (job->compileType == ECompileType_Compile) {
+
+			while(true) {
+
+				acq = Lock_lock(job->lock, U64_MAX);
+
+				if(acq < ELockAcquire_Success)
+					return;
+
+				//We're done, since all initial threads are done spawning children.
+				//And those children have also finished.
+
+				if(
+					*job->completedCounter == job->inputData.length &&
+					*job->counterCompiledBinaries == job->shEntryIds->length
+				)
+					break;
+
+				//We currently don't have any pending, more will likely spawn.
+				//Come back a bit later to try again.
+
+				if(*job->counterCompiledBinaries == job->shEntryIds->length) {
+
+					if(acq == ELockAcquire_Acquired)		//Release lock to prevent deadlock
+						Lock_unlock(job->lock);
+
+					acq = ELockAcquire_Invalid;
+
+					Thread_sleep(100 * MU);
+					continue;
+				}
+
+				//Grab next job id
+
+				U64 ourNext = job->shEntryIds->ptr[(*job->counterCompiledBinaries)++];
+
+				U32 ourOldJobId = ourNext >> 32;
+				ListSHEntryRuntime entries = job->shEntries->ptr[ourOldJobId];		//Grab entries as shEntries can be modified
+
+				if(acq == ELockAcquire_Acquired)
+					Lock_unlock(job->lock);
+
+				acq = ELockAcquire_Invalid;
+
+				//Unpack as ListSHEntryRuntime, then SHEntryRuntime, then the specific job
+
+				U16 runtimeEntryId = (U16)(ourNext >> 16);
+				U16 combinationId = (U16) ourNext;
+
+				SHEntryRuntime runtimeEntry = entries.ptr[runtimeEntryId];
+				CharString input = job->inputPaths.ptr[ourOldJobId];
+
+				if(!CLI_compileShaderSingle(
+					job->compilers.ptr[threadCounter],
+					job->compileModes.ptr[threadCounter],
+					job->args,
+					input,
+					job->inputData.ptr[ourOldJobId],
+					&temp,
+					runtimeEntry,
+					combinationId,
+					job->includeDir
+				)) {
+					s_uccess = false;
+					Log_errorLnx("Compile failed for file \"%.*s\"", (int)CharString_length(input), input.ptr);
+				}
+			}
+		}
+
+		if(acq == ELockAcquire_Acquired)
+			Lock_unlock(job->lock);
+		
+		acq = ELockAcquire_Invalid;*/
 	}
 
 	Bool CLI_compileShader(ParsedArgs args) {
@@ -381,9 +680,20 @@
 		CharString tempStr = CharString_createNull();
 		CharString tempStr2 = CharString_createNull();
 		CharString tempStr3 = CharString_createNull();
+		ListSHEntryRuntime runtimeEntries = (ListSHEntryRuntime) { 0 };
+		SHFile shFile = (SHFile) { 0 };
+		ListU32 compileCombinations = (ListU32) { 0 };
+		ListU16 binaryIndices = (ListU16) { 0 };
+		SHEntry shEntry = (SHEntry) { 0 };
+		SHBinaryInfo binaryInfo = (SHBinaryInfo) { 0 };
 		Buffer temp = Buffer_createNull();
 		Bool isFolder = false;
 		Lock lock = (Lock) { 0 };
+
+		ListListSHEntryRuntime shEntries = (ListListSHEntryRuntime) { 0 };
+		ListU64 shEntryIds = (ListU64) { 0 };
+		CompileResult tempResult = (CompileResult) { 0 };
+
 		Ns start = Time_now();
 
 		Error errTemp = Error_none(), *e_rr = &errTemp;
@@ -391,47 +701,55 @@
 
 		gotoIfError2(clean, ListCharString_get(args.args, offset++, &input))
 		gotoIfError2(clean, ListCharString_get(args.args, offset++, &output))
-		gotoIfError2(clean, ListCharString_get(args.args, offset++, &compileMode))
 
-		//Grab modes
+		Bool multipleModes = true;		//Default to 'all' if no argument is provided
+		compileModeU64 = U64_MAX;
 
-		gotoIfError2(clean, CharString_splitSensitivex(compileMode, ',', &splits));
+		if(args.parameters & EOperationHasParameter_ShaderOutputMode) {
 
-		CharString modes[] = {
-			CharString_createRefCStrConst("spv"),
-			CharString_createRefCStrConst("dxil"),
-			CharString_createRefCStrConst("all")
-		};
+			gotoIfError2(clean, ListCharString_get(args.args, offset++, &compileMode))
 
-		static const U64 modeCount = sizeof(modes) / sizeof(modes[0]);
-		Bool multipleModes = splits.length > 1;
+			//Grab modes
 
-		for (U64 i = 0; i < splits.length; ++i) {
+			gotoIfError2(clean, CharString_splitSensitivex(compileMode, ',', &splits));
 
-			Bool match = false;
+			CharString modes[] = {
+				CharString_createRefCStrConst("spv"),
+				CharString_createRefCStrConst("dxil"),
+				CharString_createRefCStrConst("all")
+			};
 
-			for(U64 j = 0; j < modeCount; ++j)
-				if (CharString_equalsStringInsensitive(splits.ptr[i], modes[j])) {
+			static const U64 modeCount = sizeof(modes) / sizeof(modes[0]);
+			multipleModes = splits.length > 1;
+			compileModeU64 = 0;
 
-					if(j == modeCount - 1) {
-						compileModeU64 = U64_MAX;
-						multipleModes = true;
+			for (U64 i = 0; i < splits.length; ++i) {
+
+				Bool match = false;
+
+				for(U64 j = 0; j < modeCount; ++j)
+					if (CharString_equalsStringInsensitive(splits.ptr[i], modes[j])) {
+
+						if(j == modeCount - 1) {
+							compileModeU64 = U64_MAX;
+							multipleModes = true;
+						}
+
+						else compileModeU64 |= (U64)1 << j;
+
+						match = true;
+						break;
 					}
 
-					else compileModeU64 |= (U64)1 << j;
-
-					match = true;
-					break;
+				if(!match) {
+					Log_errorLnx("Couldn't parse -m x, where x is spv, dxil or all (or for example spv,dxil)");
+					s_uccess = false;
+					goto clean;
 				}
-
-			if(!match) {
-				Log_errorLnx("Couldn't parse -m x, where x is spv, dxil or all (or for example spv,dxil)");
-				s_uccess = false;
-				goto clean;
 			}
-		}
 
-		ListCharString_freex(&splits);
+			ListCharString_freex(&splits);
+		}
 
 		//Check thread count
 
@@ -477,27 +795,33 @@
 
 		CharString compileTypeStr = (CharString) { 0 };
 
-		gotoIfError2(clean, ListCharString_get(args.args, offset++, &compileTypeStr));
+		if(args.parameters & EOperationHasParameter_ShaderCompileMode) {
 
-		if (CharString_equalsStringInsensitive(compileTypeStr, CharString_createRefCStrConst("preprocess")))
-			compileType = ECompileType_Preprocess;
+			gotoIfError2(clean, ListCharString_get(args.args, offset++, &compileTypeStr));
 
-		else if (CharString_equalsStringInsensitive(compileTypeStr, CharString_createRefCStrConst("includes")))
-			compileType = ECompileType_Includes;
+			if (CharString_equalsStringInsensitive(compileTypeStr, CharString_createRefCStrConst("preprocess")))
+				compileType = ECompileType_Preprocess;
 
-		else if (CharString_equalsStringInsensitive(compileTypeStr, CharString_createRefCStrConst("reflect")))
-			compileType = ECompileType_Reflect;
+			else if (CharString_equalsStringInsensitive(compileTypeStr, CharString_createRefCStrConst("includes")))
+				compileType = ECompileType_Includes;
 
-		else if (CharString_equalsStringInsensitive(compileTypeStr, CharString_createRefCStrConst("compile"))) {
-			Log_errorLnx("Shader compiler \"compile\" mode isn't supported yet");
-			s_uccess = false;
-			goto clean;
-		}
+			else if (CharString_equalsStringInsensitive(compileTypeStr, CharString_createRefCStrConst("symbols")))
+				compileType = ECompileType_Symbols;
 
-		else {
-			Log_errorLnx("Unknown shader compile mode passed %s", compileTypeStr.ptr);
-			s_uccess = false;
-			goto clean;
+			else if (CharString_equalsStringInsensitive(compileTypeStr, CharString_createRefCStrConst("reflect"))) {
+				Log_errorLnx("Shader compiler \"reflect\" mode isn't supported yet");
+				s_uccess = false;
+				goto clean;
+			}
+
+			else if (CharString_equalsStringInsensitive(compileTypeStr, CharString_createRefCStrConst("compile")))
+				compileType = ECompileType_Compile;
+
+			else {
+				Log_errorLnx("Unknown shader compile mode passed %s", compileTypeStr.ptr);
+				s_uccess = false;
+				goto clean;
+			}
 		}
 
 		//Additional includeDir
@@ -560,9 +884,8 @@
 					),
 					output.ptr,
 					compileType == ECompileType_Preprocess ? fileSuffixes[i] : (
-						compileType == ECompileType_Includes ? includesFileSuffix : (
-							compileType == ECompileType_Reflect ? oiSHSuffixes[i] : binarySuffixes[i]
-						)
+						compileType == ECompileType_Includes || compileType == ECompileType_Symbols ? txtSuffix :
+						oiSHSuffixes[i]
 					)
 				))
 
@@ -597,7 +920,7 @@
 			if (CharString_equalsStringSensitive(prevStr, allFiles.ptr[i])) {
 
 				CharString shader = *ListCharString_last(allShaderText);
-				shader = CharString_createRefSizedConst(shader.ptr, CharString_length(shader), false);
+				shader = CharString_createRefStrConst(shader);
 
 				gotoIfError2(clean, ListCharString_pushBackx(&allShaderText, shader))
 				totalLen += CharString_length(shader);
@@ -638,8 +961,7 @@
 		) {
 
 			lock = Lock_create();
-			U64 counter = 0;
-			U64 threadCounter = 0;
+			U64 counter = 0, threadCounter = 0, completedCounter = 0, counterCompiledBinaries = 0;
 
 			gotoIfError2(clean, ListThread_resizex(&threads, threadCount))
 			gotoIfError2(clean, ListCompiler_resizex(&compilers, threadCount))
@@ -653,8 +975,13 @@
 				.compileModes = allCompileModes,
 				.compilers = compilers,
 
+				.shEntries = &shEntries,
+				.shEntryIds = &shEntryIds,
+
 				.lock = &lock,
 				.counter = &counter,
+				.completedCounter = &completedCounter,
+				.counterCompiledBinaries = &counterCompiledBinaries,
 				.threadCounter = &threadCounter,
 				.success = &s_uccess,
 
@@ -681,16 +1008,143 @@
 
 			gotoIfError3(clean, Compiler_createx(&compiler, e_rr))
 
-			for (U64 i = 0; i < allFiles.length; ++i)
-				if(!CLI_compileShaderSingle(
+			for (U64 i = 0; i < allFiles.length; ++i) {
+
+				//Preprocess to get information necessary for real compiles.
+				//Though this is generally enough info for includes, (most) reflection and preprocessing
+
+				if(!CLI_precompileShaderSingle(
 					compiler, allCompileModes.ptr[i], args,
 					allFiles.ptr[i], allShaderText.ptr[i], allOutputs.ptr[i],
 					compileType,
+					&runtimeEntries,
 					includeDir
 				)) {
 					s_uccess = false;
-					Log_errorLnx("Compile failed for file \"%.*s\"", (int)CharString_length(allFiles.ptr[i]), allFiles.ptr[i].ptr);
+					Log_errorLnx(
+						"Precompile failed for file \"%.*s\"", (int)CharString_length(allFiles.ptr[i]), allFiles.ptr[i].ptr
+					);
+					goto clean;
 				}
+
+				//Finish by going over all individual runtime entries and outputting it as a raw binary
+
+				if (compileType == ECompileType_Compile) {
+
+					if (!runtimeEntries.length) {
+
+						Log_warnLnx(
+							"Precompile couldn't find entrypoints for file \"%.*s\"",
+							(int)CharString_length(allFiles.ptr[i]), allFiles.ptr[i].ptr
+						);
+
+						ListSHEntryRuntime_freeUnderlyingx(&runtimeEntries);
+						continue;
+					}
+
+					Buffer buf = CharString_bufferConst(allShaderText.ptr[i]);
+					gotoIfError3(clean, SHFile_createx(ESHSettingsFlags_None, OXC3_VERSION, Buffer_crc32c(buf), &shFile, e_rr))
+
+					gotoIfError3(clean, Compiler_getUniqueCompiles(runtimeEntries, &compileCombinations, &binaryIndices, e_rr))
+
+					//Only for non lib entries, and then once per lib entry
+
+					Bool didSucceed = true;
+					
+					for(U64 j = 0; j < compileCombinations.length; ++j) {
+
+						U16 runtimeEntryId = (U16) (compileCombinations.ptr[j] >> 16);
+						U16 combinationId  = (U16) compileCombinations.ptr[j];
+
+						SHEntryRuntime runtimeEntry = runtimeEntries.ptr[runtimeEntryId];
+
+						//Compile and return error if failed
+
+						if(!CLI_compileShaderSingle(
+							compiler, allCompileModes.ptr[i], args,
+							allFiles.ptr[i], allShaderText.ptr[i],
+							&tempResult,
+							runtimeEntry,
+							combinationId,
+							includeDir
+						)) {
+							s_uccess = false;
+							Log_errorLnx(
+								"Compile failed for file \"%.*s\"",
+								(int)CharString_length(allFiles.ptr[i]), allFiles.ptr[i].ptr
+							);
+
+							didSucceed = false;
+							break;
+						}
+
+						//Add binary to SHFile
+
+						else {
+
+							if(tempResult.type != ECompileResultType_Binary)
+								retError(clean, Error_invalidState(0, "CLI_compileShaderSingle() should return binary"))
+
+							ESHBinaryType compileModei = allCompileModes.ptr[i];
+
+							gotoIfError3(clean, SHEntryRuntime_asBinaryInfo(
+								runtimeEntry, combinationId, compileModei, tempResult.binary, &binaryInfo, e_rr
+							))
+
+							//Move binary there to avoid copying mem if possible
+
+							binaryInfo.binaries[compileModei] = tempResult.binary;
+							gotoIfError3(clean, SHFile_addBinaryx(&shFile, &binaryInfo, e_rr))
+							tempResult.binary = Buffer_createNull();
+
+							CompileResult_freex(&tempResult);
+						}
+					}
+
+					//Link entrypoint to binaries
+
+					if(didSucceed)
+						for (U64 j = 0, k = 0; j < runtimeEntries.length; ++j) {
+
+							SHEntryRuntime *runtime = &runtimeEntries.ptrNonConst[j];
+
+							U32 l = SHEntryRuntime_getCombinations(*runtime);
+
+							if (k + l > binaryIndices.length)
+								retError(clean, Error_outOfBounds(
+									0, k + l, binaryIndices.length,
+									"CLI_compileShader() runtime accessed binaryIndices out of bounds"
+								))
+
+							if(runtime->entry.binaryIds.length)
+								retError(clean, Error_invalidOperation(
+									0, "CLI_compileShader() runtime already included binaryIds"
+								))
+
+							ListU16 tempBinaryIds = (ListU16) { 0 };
+							gotoIfError2(clean, ListU16_createSubset(binaryIndices, k, l, &tempBinaryIds))
+
+							runtime->entry.binaryIds = tempBinaryIds;
+							gotoIfError3(clean, SHFile_addEntrypointx(&shFile, &runtime->entry, e_rr))
+
+							k += l;
+						}
+
+					//Write to disk and free temp data
+
+					if (didSucceed) {
+						gotoIfError3(clean, SHFile_writex(shFile, &temp, e_rr))
+						gotoIfError2(clean, File_write(temp, allOutputs.ptr[i], 100 * MS))
+						Buffer_freex(&temp);
+					}
+
+					ListU32_freex(&compileCombinations);
+					ListU16_freex(&binaryIndices);
+					SHFile_freex(&shFile);
+				}
+
+				ListSHEntryRuntime_freeUnderlyingx(&runtimeEntries);
+			}
 		}
 
 		if(!s_uccess)
@@ -755,6 +1209,8 @@
 
 		else Log_errorLnx("-- Compile %.*s failed in %fs!", (int)CharString_length(input), input.ptr);
 
+		Error_printx(errTemp, ELogLevel_Error, ELogOptions_Default);
+
 		for(U64 i = 0; i < threads.length; ++i)
 			Thread_waitAndCleanupx(&threads.ptrNonConst[i]);
 
@@ -774,7 +1230,17 @@
 		ListCharString_freeUnderlyingx(&allOutputs);
 		ListU8_freex(&allCompileModes);
 
-		Error_printx(errTemp, ELogLevel_Error, ELogOptions_Default);
+		ListSHEntryRuntime_freeUnderlyingx(&runtimeEntries);
+		SHFile_freex(&shFile);
+		SHEntry_freex(&shEntry);
+		SHBinaryInfo_freex(&binaryInfo);
+		ListU32_freex(&compileCombinations);
+		ListU16_freex(&binaryIndices);
+
+		ListListSHEntryRuntime_freeUnderlyingx(&shEntries);
+		ListU64_freex(&shEntryIds);
+		CompileResult_freex(&tempResult);
+
 		return s_uccess;
 	}
 #else

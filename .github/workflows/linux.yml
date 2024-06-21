@@ -4,21 +4,23 @@ on: [push, pull_request]
 
 jobs:
   build:
-    name: Windows build
-    runs-on: windows-2022
+    name: Linux build
+    runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v1
       with:
         submodules: recursive
+    - name: Install Vulkan SDK
+      uses: humbletim/install-vulkan-sdk@v1.1.1
+      with:
+        cache: true
     - name: Install Conan
       id: conan
       uses: turtlebrowser/get-conan@main
-    - name: build for fast check
-      run: conan create . -o cliGraphics=False -o enableSIMD=True -s build_type=Release
-    - name: build for SIMD fallback check
-      run: conan create . -o cliGraphics=False -o enableSIMD=False -s build_type=Release
-    - name: build for fast check
-      run: conan create . -o cliGraphics=False -o enableSIMD=True -s build_type=Debug
+    - name: Release but no SIMD, not supported yet
+      run: conan create . -o enableSIMD=False -o cliGraphics=False -s build_type=Release
+    - name: Debug but no SIMD, not supported yet
+      run: conan create . -o enableSIMD=False -o cliGraphics=False -s build_type=Debug
     - uses: actions/setup-ruby@v1
     - name: Send Webhook Notification
       if: always()

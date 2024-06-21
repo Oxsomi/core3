@@ -301,7 +301,7 @@ Bool Parser_visit(Parser *parser, U32 lexerTokenId, U32 lexerTokenCount, Allocat
 			//Symbols need to be split into multiple tokens, because someone can use &=~ for example
 			//(two operators in one lexer token)
 
-			default:
+			default: {
 
 				U64 subTokenOffset = 0;
 
@@ -322,6 +322,7 @@ Bool Parser_visit(Parser *parser, U32 lexerTokenId, U32 lexerTokenCount, Allocat
 
 					gotoIfError2(clean, ListToken_pushBack(&parser->tokens, tok, alloc))
 				}
+			}
 		}
 	}
 
@@ -526,13 +527,14 @@ const C8 *ESymbolType_names[ESymbolType_Count] = {
 	"Annotation"
 };
 
-void Parser_printSymbol(Parser parser, Symbol sym, U32 recursion, Allocator alloc) {
+void Parser_printSymbol(Parser parser, Symbol sym, U32 recursion, Allocator alloc, CharString *output) {
 	
 	const C8 *symbolType = ESymbolType_names[sym.symbolType];
 
 	CharString name = sym.name == U32_MAX ? CharString_createRefCStrConst("(unnamed)") : parser.symbolNames.ptr[sym.name];
 
 	CharString tmp = CharString_createNull();
+	CharString tmp2 = CharString_createNull();
 	if(CharString_create('\t', recursion, alloc, &tmp).genericError)
 		return;
 
@@ -558,51 +560,70 @@ void Parser_printSymbol(Parser parser, Symbol sym, U32 recursion, Allocator allo
 		ltok.fileId == U16_MAX ? CharString_createRefCStrConst("source file") :
 		parser.lexer->sourceLocations.ptr[ltok.fileId];
 
-	Log_debugLn(
-		alloc, "%s%s %.*s at line %.*s:%"PRIu64":%"PRIu64,
+	//Don't care if error, we will cleanup after
+	CharString_format(
+		alloc, output ? output : &tmp2, "%s%s %.*s at line %.*s:%"PRIu64":%"PRIu64,
 		!tmp.ptr ? "" : tmp.ptr, symbolType, (int)CharString_length(name), name.ptr,
 		(int) CharString_length(fileName), fileName.ptr,
 		(U64)LexerToken_getOriginalLineId(ltok), (U64)(ltok.charId + tok.lexerTokenSubId)
 	);
+	
+	if(!output)
+		Log_log(alloc, ELogLevel_Error, ELogOptions_NewLine, tmp2);
 
+	CharString_free(&tmp2, alloc);
 	CharString_free(&tmp, alloc);
 }
 
-void Parser_printSymbolsRecursive(Parser parser, U32 recursion, U32 parent, Bool recursive, Allocator alloc);
+void Parser_printSymbolsRecursive(
+	Parser parser,
+	U32 recursion,
+	U32 parent,
+	Bool recursive,
+	Allocator alloc,
+	CharString *output
+);
 
-U32 Parser_printAll(Parser parser, U32 recursion, U32 i, Bool recursive, Allocator alloc) {
+U32 Parser_printAll(Parser parser, U32 recursion, U32 i, Bool recursive, Allocator alloc, CharString *output) {
 
 	Symbol sym = parser.symbols.ptr[i];
-	Parser_printSymbol(parser, sym, recursion, alloc);
+	Parser_printSymbol(parser, sym, recursion, alloc, output);
 
 	U32 skip = Symbol_size(sym) - 1;
 
 	for (U16 k = 0; k < skip; ++k)
-		Parser_printSymbol(parser, parser.symbols.ptr[i + 1 + k], recursion + 1, alloc);
+		Parser_printSymbol(parser, parser.symbols.ptr[i + 1 + k], recursion + 1, alloc, output);
 
 	if(recursive && sym.child != U32_MAX) {
 
 		U32 child = parser.symbolMapping.ptr[sym.child];	//Child start
 
 		for (U32 j = child; j < child + sym.childCount; ++j)
-			Parser_printSymbolsRecursive(parser, recursion + 1, j, true, alloc);
+			Parser_printSymbolsRecursive(parser, recursion + 1, j, true, alloc, output);
 	}
 
 	return skip + 1;
 }
 
-void Parser_printSymbolsRecursive(Parser parser, U32 recursion, U32 parent, Bool recursive, Allocator alloc) {
+void Parser_printSymbolsRecursive(
+	Parser parser,
+	U32 recursion,
+	U32 parent,
+	Bool recursive,
+	Allocator alloc,
+	CharString *output
+) {
 
 	//Traverse symbol tree
 
 	if(parent == U32_MAX)
 		for (U32 i = 0; i < parser.rootSymbols; )
-			i += Parser_printAll(parser, recursion, i, recursive, alloc);
+			i += Parser_printAll(parser, recursion, i, recursive, alloc, output);
 
-	else Parser_printAll(parser, recursion, parent, recursive, alloc);
+	else Parser_printAll(parser, recursion, parent, recursive, alloc, output);
 }
 
-void Parser_printSymbols(Parser parser, U32 parent, Bool recursive, Allocator alloc) {
+void Parser_printSymbols(Parser parser, U32 parent, Bool recursive, Allocator alloc, CharString *output) {
 
 	if(parent != U32_MAX) {		//Resolve
 
@@ -612,7 +633,7 @@ void Parser_printSymbols(Parser parser, U32 parent, Bool recursive, Allocator al
 		parent = parser.symbolMapping.ptr[parent];
 	}
 
-	Parser_printSymbolsRecursive(parser, 0, parent, recursive, alloc);
+	Parser_printSymbolsRecursive(parser, 0, parent, recursive, alloc, output);
 }
 
 Bool Symbol_create(

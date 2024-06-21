@@ -134,9 +134,9 @@ When operating on a folder, it will attempt to find `.hlsl` files and then proce
 
 `-threads` can be used to limit thread count. Such as `-threads 0` = default , `-threads 50%` = 50% of all threads, `-threads 4` = 4 threads. Default behavior is: If total input length >=64KiB with at least 8 files or if at least 16 files are present, then all cores will be used for threading.
 
-`-shader-output-mode` is the mode the output is in. If this mode is multiple then it will rename to .spv.hlsl and .dxil.hlsl for example (if preprocessing) or other types such as .spv and .dxil (compile) or .txt for includes. The following modes are supported: `spv` and `dxil`. To use spv and dxil, you can use `dxil,spv` or `all` (will include others in the future).
+`-compile-output` is the outputs that are enabled. If this mode is multiple then it will rename to .spv.hlsl and .dxil.hlsl for example (if preprocessing) or other types such as .spv and .dxil (compile) or .txt for includes. The following modes are supported: `spv` and `dxil`. To use spv and dxil, you can use `dxil,spv` or `all` (will include others in the future). By default (if the argument isn't present) it compiles as `all`, so the shader is usable by all backends.
 
-`-shader-compile-mode` is the compile mode. Can be one of the following: `preprocess`, `includes`, `reflect` and `compile`. Each compile mode has their own info section.
+`-compile-type` is the compile type. Can be one of the following: `preprocess`, `includes`, `reflect` and `compile`. Each compile mode has their own info section. By default (if the argument isn't present) the mode is `compile`.
 
 `-include-dir` can be used to add only a single include directory to search for includes (aside from relative includes).
 
@@ -200,7 +200,30 @@ bb15afc7 01860 D:/programming/repos/rt_core/res/shaders/resource_bindings.hlsl
 
 ### TODO: Reflect
 
-### TODO: Compile
+### Symbols
+
+The `-compile-type symbols` will turn the .hlsl into a list of symbols and can be used to determine where certain functions/variables/structs are located. This can be very useful for refactoring to see if there's any function/variable that should be elsewhere. It could also be useful for better search options as well as debugging the parser.
+
+`OxC3 compile shaders -format HLSL -compile-output dxil -compile-type symbols -input a.hlsl -output a.symbols.hlsl`
+
+Will show something like this:
+
+```
+struct myStruct
+	myMember
+	myMember1
+	
+enum myEnum
+	myValue
+	
+variable myVariable
+
+function myFunction
+```
+
+Note: The difference between reflect and symbols is that reflect maintains the data as a binary which can be easily queried, shipped and used in production code. Reflect is a more advanced version of symbols, which exists more for advanced usages.
+
+### Compile
 
 ### Built-in defines
 
@@ -220,7 +243,7 @@ Each entrypoint can have annotations on top of the ones used by DXC. The ones in
   - Type must be one of vertex, pixel, compute, geometry, hull, domain, mesh, task.
   - Do keep in mind that each stage needs a full compile. It might be beneficial to bundle them as a single lib using the "shader" type, when this feature becomes available with workgraphs.
   - If not defined, the compiler will ignore the functions if they don't have either a `stage` or `shader` annotation.
-- [vendor("NV", "AMD", "QCOM")] which vendors are allowed to run this entrypoint. There could be a reason to restrict this, for example when NV specific instructions are used (specifically together with DXIL). Must be one of: NV, AMD, ARM, QCOM, INTC, IMGT, MSFT. If not defined, will assume all vendors are applicable. Multiple annotations for vendor will get merged. So `[vendor("NV", "AMD")]` is the same as two separate annotations with NV and AMD.
+- [vendor("NV", "AMD", "QCOM")] which vendors are allowed to run this entrypoint. There could be a reason to restrict this, for example when NV specific instructions are used (specifically together with DXIL). Must be one of: NV, AMD, ARM, QCOM, INTC, IMGT, MSFT. If not defined, will assume all vendors are applicable. Multiple annotations for vendor is illegal to clarify that it won't induce a new compile for each vendor.
 - [extension("16BitTypes")] which extensions to enable. For example 16BitTypes will enable 16-bit types for that entrypoint. 
   - Do keep in mind that extensions might introduce another recompile for entrypoints that don't have the same extensions. For example with raytracing shaders. In their case, it will introduce two compiles if one entrypoint doesn't support 16-bit ints and another does.
   - `__OXC3_EXT_<X>` can be used to see which extension is enabled. For example `__OXC3_EXT_ATOMICI64`.
@@ -228,10 +251,12 @@ Each entrypoint can have annotations on top of the ones used by DXC. The ones in
     - **Note**: RayReorder is currently only available for raygeneration shaders.
     - **Note**: Multiple extension annotations will indicate there will be a separate compile with each. For example: `[extension()]` and `[extension("16BitTypes")]` in front of the same function will indicate the function will be compiled with 16-bit types on and off. 16-bit off would for example run on <=Pascal (GTX 10xx). This will allow the same entrypoint to be ran with different functionality. This could aid for example in unpacking vertex/texture data with native support (rather than manual f16tof32).
       - Another good example could be RayReorder, which could give substantial boosts in path tracing workloads. Lovelace would need `[extension("RayReorder")]` while the rest such as non NV and Pascal, Turing, Ampere would need `[extension()]`. This will force a recompile.
-- [uniform("X" = "F32x3(1, 0, 0)", "Y" = "F32x3(0, 1, 0)")] Introduces one subtype of the stage that has the defines `$X` and `$Y` set to the relevant values of `(F32x3(1, 0, 0))` and `(F32x3(0, 1, 0))`.
+      - If multiple extensions are available, it will pick from top to bottom if they're all available. So `[extension("16BitTypes")]` and `[extension("RayReorder")]` would for example only pick the second one if the first one isn't available.
+- [uniforms("X" = "F32x3(1, 0, 0)", "Y" = "F32x3(0, 1, 0)")] Introduces one subtype of the stage that has the defines `$X` and `$Y` set to the relevant values of `(F32x3(1, 0, 0))` and `(F32x3(0, 1, 0))`.
   - This attribute can be used multiple times to compile the same entrypoint with different defines. It will try to bundle compiles wherever possible (try to keep defines similar).
   - Only defining the uniform but no assign will just see it as a define that can be checked with #ifdef. 
   - Uniform name must not indicate symbols or spaces.
+  - The application is in charge of picking the uniform combo for the entire lib or each entrypoint. So it is possible to switch between uniforms based on what the app wants, unlike models and extensions which are handled by the runtime.
   
 - [model(6.8)]
   - Which shader model to use. If this annotation is present multiple times, it indicates multiple compiles with different shader models.
@@ -245,6 +270,7 @@ Each entrypoint can have annotations on top of the ones used by DXC. The ones in
     - Stage type always has to be compatible with specified models.
     - If extensions are defined, one of the pair of extensions/models has to be compatible with the minimum requirement. If this is the case, that one is used as fallback.
       - Example: [model(6.2)] and [model(6.0)] is possible with [extensions("16BitTypes")] only if there's another [extensions()] available. Otherwise it knows that model 6.0 can't be compatible with I16 and F16. In this case, there would only be 3 binaries: 6.0 16-bit off, 6.2 16-bit off, 6.2 16-bit on. Without model specified, it would determine minimum featureset for those extensions and push them. So specifying the two extensions separately (without models) will just make two binaries (6.0 16-bit off, 6.2 16-bit on).
+    - If multiple models are available, the runtime will choose from highest shader model to lowest shader model available.
   - If not defined, will use minimum for the detected feature set.
   - `__SHADER_TARGET_MAJOR` and `__SHADER_TARGET_MINOR` can be used to distinguish which one is being compiled. 
 
@@ -275,7 +301,7 @@ With `-entry <offset or path>` a specific entry can be viewed. If an entry is sp
 
 `file data` also allows the `-length` specifier for how many entries are shown. Normally in the log it limits to 64 lines (so for data that'd mean 64 * 64 / 2 (hex) = 2KiB per view). The `-start` argument can be used to set an offset of what it should show. An example: we have an oiCA with 128 entries but want to show the last 32; `file data -input our.oiCA -start 96 -length 32`. For a file entry, it would specify the byte offset and length (length is defaulted to 2KiB). If `-output` is used, it will binary dump the entire remainder of the file if `-length` is not specified (the remainder is the entire file size if `-start` is not specified).
 
-For oiSH files, it is possible to supply `--bin` can be used  to fetch the binary instead of the entrypoints. Since an oiSH file can have more than one binary embedded in it. Not supplying an entry will behave as usual; showing all binaries. Supplying an entry and --binary will show that specific entry. It has to use the index of the visible binaries (e.g. if SPV isn't available but DXIL is then 0 identifies DXIL).
+For oiSH files, it is possible to supply `--bin` can be used  to fetch the binary instead of the entrypoints. Since an oiSH file can have more than one binary embedded in it. Not supplying an entry offset will behave as usual; showing all binaries. Supplying an entry offset and --binary will show that specific binary. To see the actual compiled binary, `-compile-output` can be used to obtain the specific information (for example DXIL or SPV binary). Example: `file data -input test.oiSH --bin -compile-output DXIL -entry 0` will show the DXIL binary at compiled entry 0 if available. This can still be used with `-start`, `-length` and `-output` to easily read & export binaries from an oiSH file.
 
 ## Encrypt
 

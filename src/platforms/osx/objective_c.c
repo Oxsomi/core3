@@ -23,7 +23,7 @@
 #include "platforms/ext/stringx.h"
 #include "types/error.h"
 
-static const C8 *EObjCClass_names[] = {
+const C8 *EObjCClass_names[] = {
 	"NSString",
 	"NSAutoreleasePool",
 	"NSObject",
@@ -31,7 +31,7 @@ static const C8 *EObjCClass_names[] = {
 	"NSWindow"
 };
 
-static const C8 *EObjCFunc_names[] = {
+const C8 *EObjCFunc_names[] = {
 	"stringWithUTF8String:",
 	"setTitle:",
 	"init",
