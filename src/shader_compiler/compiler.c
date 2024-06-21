@@ -1011,8 +1011,11 @@ Bool Compiler_parse(Compiler comp, CompilerSettings settings, Bool symbolsOnly, 
 	//If we want symbols only, then we can just ask the parser to output them for us.
 	//But we do tell it that we only want symbols located in the current file
 
-	if (symbolsOnly)
-		Parser_printSymbols(parser, U32_MAX, true, alloc);
+	if (symbolsOnly) {
+		result->type = ECompileResultType_Text;
+		Parser_printSymbols(parser, U32_MAX, true, alloc, &result->text);
+		goto clean;
+	}
 
 	result->type = ECompileResultType_SHEntryRuntime;
 
