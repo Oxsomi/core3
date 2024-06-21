@@ -51,6 +51,7 @@ CMakeFiles/*
 *.cmd
 .tmp_versions/
 builds/*
+build/*
 tools/builds/*
 tools/CMakeFiles/*
 *.vcxproj
