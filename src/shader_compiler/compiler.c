@@ -988,7 +988,14 @@ U16 Compiler_minFeatureSetExtension(ESHExtension ext) {
 	return minVersion;
 }
 
-Bool Compiler_parse(Compiler comp, CompilerSettings settings, Bool symbolsOnly, Allocator alloc, CompileResult *result, Error *e_rr) {
+Bool Compiler_parse(
+	Compiler comp,
+	CompilerSettings settings,
+	Bool symbolsOnly,
+	Allocator alloc,
+	CompileResult *result,
+	Error *e_rr
+) {
 
 	(void)comp;		//No need for a compiler, we do it ourselves
 
@@ -1013,7 +1020,8 @@ Bool Compiler_parse(Compiler comp, CompilerSettings settings, Bool symbolsOnly, 
 
 	if (symbolsOnly) {
 		result->type = ECompileResultType_Text;
-		Parser_printSymbols(parser, U32_MAX, true, alloc, &result->text);
+		result->isSuccess = true;
+		Parser_printSymbols(parser, U32_MAX, true, alloc, &result->text, settings.path);
 		goto clean;
 	}
 

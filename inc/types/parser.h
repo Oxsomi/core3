@@ -282,7 +282,15 @@ typedef struct Parser {
 Bool Parser_create(const Lexer *lexer, Parser *parser, Allocator alloc, Error *e_rr);
 void Parser_free(Parser *parser, Allocator alloc);
 void Parser_printTokens(Parser parser, Allocator alloc);
-void Parser_printSymbols(Parser parser, U32 parent, Bool recursive, Allocator alloc, CharString *output);
+
+void Parser_printSymbols(
+	Parser parser,
+	U32 parent,
+	Bool recursive,
+	Allocator alloc,
+	CharString *output,
+	CharString outputSymbolFile
+);
 
 //Registering a symbol with parent U32_MAX indicates it's a root symbol.
 //A root symbol doesn't belong to any other symbol (e.g. it's in the "global namespace").

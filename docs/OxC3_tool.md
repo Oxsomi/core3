@@ -209,16 +209,16 @@ The `-compile-type symbols` will turn the .hlsl into a list of symbols and can b
 Will show something like this:
 
 ```
-struct myStruct
-	myMember
-	myMember1
-	
-enum myEnum
-	myValue
-	
-variable myVariable
-
-function myFunction
+Struct Camera at L#26:1
+	Variable v at L#28:10
+	Variable p at L#28:13
+	Variable vp at L#28:16
+	Variable vInv at L#29:10
+	Variable pInv at L#29:16
+	Variable vpInv at L#29:22
+	Function getRay at L#31:2
+		Parameter id at L#31:17
+		Parameter dims at L#31:27
 ```
 
 Note: The difference between reflect and symbols is that reflect maintains the data as a binary which can be easily queried, shipped and used in production code. Reflect is a more advanced version of symbols, which exists more for advanced usages.

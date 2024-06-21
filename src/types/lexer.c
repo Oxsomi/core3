@@ -272,8 +272,6 @@ Bool Lexer_create(CharString str, Allocator alloc, Lexer *lexer, Error *e_rr) {
 						CharString_clear(&tempSource);
 
 						Bool isEscaped = false;
-						Bool prevSlash = false;
-						Bool leadingSlashSlash = false;
 
 						for (U64 l = LexerToken_getOffset(file), j = l; j < l + file.length; ++j) {
 
@@ -291,12 +289,8 @@ Bool Lexer_create(CharString str, Allocator alloc, Lexer *lexer, Error *e_rr) {
 								continue;
 							}
 
-							if(prevSlash && cj == '/') {						//Allow //
+							if(cj == '@')						//Allow @x for internal files
 								CharString_clear(&tempSource);
-								leadingSlashSlash = true;
-							}
-
-							prevSlash = cj == '/';
 
 							gotoIfError2(clean, CharString_append(&tempSource, cj, alloc))
 							isEscaped = false;
@@ -306,11 +300,6 @@ Bool Lexer_create(CharString str, Allocator alloc, Lexer *lexer, Error *e_rr) {
 							retError(clean, Error_invalidParameter(
 								0, 0, "Lexer_create() source was invalid. String can't end with an escaped quote!"
 							))
-
-						//Fix path
-
-						if(leadingSlashSlash)
-							gotoIfError2(clean, CharString_insert(&tempSource, '/', 0, alloc))
 
 						//Find string
 

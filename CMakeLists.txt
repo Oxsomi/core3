@@ -741,8 +741,8 @@ endif()
 
 if(EnableOxC3CLI)
 
-	file(GLOB_RECURSE headers "tools/inc/*.h")
-	file(GLOB_RECURSE sources "tools/src/*.c")
+	file(GLOB_RECURSE headers "inc/tools/*.h")
+	file(GLOB_RECURSE sources "src/tools/*.c")
 
 	add_executable(
 		OxC3
@@ -763,7 +763,7 @@ if(EnableOxC3CLI)
 		target_compile_definitions(OxC3 PUBLIC -DCLI_SHADER_COMPILER)
 	endif()
 
-	target_include_directories(OxC3 PUBLIC tools/inc)
+	target_include_directories(OxC3 PUBLIC inc/tools)
 
 	configure_icon(OxC3 "${CMAKE_CURRENT_SOURCE_DIR}/res/logo.ico")
 	configure_virtual_files(OxC3)
