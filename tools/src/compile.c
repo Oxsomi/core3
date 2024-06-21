@@ -36,10 +36,11 @@
 #ifdef CLI_SHADER_COMPILER
 
 	typedef enum ECompileType {
-		ECompileType_Preprocess,
-		ECompileType_Includes,
-		ECompileType_Reflect,
-		ECompileType_Compile
+		ECompileType_Preprocess,		//Turns shader with includes & defines into an easily parsable string
+		ECompileType_Includes,			//Turns shader with includes into a list of their dependencies (direct + indirect)
+		ECompileType_Reflect,			//Reflects all shader info (//TODO:)
+		ECompileType_Compile,			//Compile all shaders into an oiSH file for consumption
+		ECompileType_Symbols			//List all symbols located in the shader or include as a text file
 	} ECompileType;
 
 	typedef struct ShaderFileRecursion {
@@ -57,7 +58,7 @@
 
 	} ShaderFileRecursion;
 
-	const C8 *includesFileSuffix = ".txt";		//Suffix when mode is "includes" (seeing all include info)
+	const C8 *txtSuffix = ".txt";		//Suffix when mode is "includes" (seeing all include info)
 
 	const C8 *fileSuffixes[] = {
 		".spv.hlsl",
@@ -147,7 +148,7 @@
 							),
 							copy.ptr,
 							isPreprocess ? fileSuffixes[i] : (
-								shaderFiles->compileType == ECompileType_Includes ? includesFileSuffix : oiSHSuffixes[i]
+								shaderFiles->compileType == ECompileType_Includes || shaderFiles->compileType == ECompileType_Symbols ? txtSuffix : oiSHSuffixes[i]
 							)
 						))
 
@@ -225,7 +226,7 @@
 
 			settings.string = tempStr;
 
-			gotoIfError3(clean, Compiler_parsex(compiler, settings, &compileResult, e_rr))
+			gotoIfError3(clean, Compiler_parsex(compiler, settings, compileType == ECompileType_Symbols, &compileResult, e_rr))
 		}
 
 		//Write final compile result
@@ -234,7 +235,7 @@
 
 			//Tell oiSH entries to caller
 
-			if (shEntriesRuntime) {
+			if (compileResult.type == ECompileResultType_SHEntryRuntime && shEntriesRuntime && compileResult.shEntriesRuntime.length) {
 
 				//Move list with all allocated memory
 
@@ -794,6 +795,9 @@
 		else if (CharString_equalsStringInsensitive(compileTypeStr, CharString_createRefCStrConst("includes")))
 			compileType = ECompileType_Includes;
 
+		else if (CharString_equalsStringInsensitive(compileTypeStr, CharString_createRefCStrConst("symbols")))
+			compileType = ECompileType_Symbols;
+
 		else if (CharString_equalsStringInsensitive(compileTypeStr, CharString_createRefCStrConst("reflect"))) {
 			Log_errorLnx("Shader compiler \"reflect\" mode isn't supported yet");
 			s_uccess = false;
@@ -869,7 +873,8 @@
 					),
 					output.ptr,
 					compileType == ECompileType_Preprocess ? fileSuffixes[i] : (
-						compileType == ECompileType_Includes ? includesFileSuffix : oiSHSuffixes[i]
+						compileType == ECompileType_Includes || compileType == ECompileType_Symbols ? txtSuffix :
+						oiSHSuffixes[i]
 					)
 				))
 

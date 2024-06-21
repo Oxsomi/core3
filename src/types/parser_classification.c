@@ -209,6 +209,23 @@ Bool Parser_classifyType(Parser *parser, U32 *i, U32 parent, Allocator alloc, Er
 
 			break;
 
+		case C8x4('c', 'o', 'n', 's'):		//const
+
+			if (len == 5 && tokStr.ptr[4] == 't') {
+
+				//Search to next token
+				//const F32
+				//      ^
+
+				++*i;
+				gotoIfError3(clean, Parser_assert(parser, i, ETokenType_Identifier, e_rr))
+
+				modifiers |= ESymbolFlagFuncVar_IsConst;
+				break;
+			}
+			
+			break;
+
 		case C8x4('u', 'n', 'i', 'o'):		//union
 
 			if (len == 5 && tokStr.ptr[4] == 'n') {

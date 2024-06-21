@@ -488,8 +488,8 @@ Bool Compiler_mergeIncludeInfo(Compiler *comp, Allocator alloc, ListIncludeInfo 
 	Bool s_uccess = true;
 	CompilerInterfaces *interfaces = NULL;
 
-	ListIncludedFile files = interfaces->includeHandler->getIncludedFiles();
 	CharString tmp = CharString_createNull();
+	ListIncludedFile files = ListIncludedFile{};
 
 	if(!comp || !infos)
 		retError(clean, Error_nullPointer(!comp ? 0 : 2, "Compiler_mergeIncludeInfo()::comp and infos are required"))
@@ -500,6 +500,8 @@ Bool Compiler_mergeIncludeInfo(Compiler *comp, Allocator alloc, ListIncludeInfo 
 		retError(clean, Error_nullPointer(
 			!comp ? 0 : 2, "Compiler_mergeIncludeInfo()::comp->interfaces includeHandler is missing"
 		))
+
+	files = interfaces->includeHandler->getIncludedFiles();
 
 	for (U64 i = 0; i < files.length; ++i) {
 

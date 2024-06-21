@@ -263,8 +263,8 @@ Bool Compiler_compilex(
 	return Compiler_compile(comp, settings, toCompile, Platform_instance.alloc, result, e_rr);
 }
 
-Bool Compiler_parsex(Compiler comp, CompilerSettings settings, CompileResult *result, Error *e_rr) {
-	return Compiler_parse(comp, settings, Platform_instance.alloc, result, e_rr);
+Bool Compiler_parsex(Compiler comp, CompilerSettings settings, Bool symbolsOnly, CompileResult *result, Error *e_rr) {
+	return Compiler_parse(comp, settings, symbolsOnly, Platform_instance.alloc, result, e_rr);
 }
 
 Bool Compiler_mergeIncludeInfox(Compiler *comp, ListIncludeInfo *infos, Error *e_rr) {
@@ -988,12 +988,13 @@ U16 Compiler_minFeatureSetExtension(ESHExtension ext) {
 	return minVersion;
 }
 
-Bool Compiler_parse(Compiler comp, CompilerSettings settings, Allocator alloc, CompileResult *result, Error *e_rr) {
+Bool Compiler_parse(Compiler comp, CompilerSettings settings, Bool symbolsOnly, Allocator alloc, CompileResult *result, Error *e_rr) {
 
 	(void)comp;		//No need for a compiler, we do it ourselves
 
 	Lexer lexer = (Lexer) { 0 };
 	Parser parser = (Parser) { 0 };
+	CharString tmp = CharString_createNull();
 	Bool s_uccess = true;
 
 	SHEntryRuntime runtimeEntry = (SHEntryRuntime) { 0 };
@@ -1006,6 +1007,12 @@ Bool Compiler_parse(Compiler comp, CompilerSettings settings, Allocator alloc, C
 	gotoIfError3(clean, Lexer_create(settings.string, alloc, &lexer, e_rr))
 	gotoIfError3(clean, Parser_create(&lexer, &parser, alloc, e_rr))
 	gotoIfError3(clean, Parser_classify(&parser, alloc, e_rr))
+
+	//If we want symbols only, then we can just ask the parser to output them for us.
+	//But we do tell it that we only want symbols located in the current file
+
+	if (symbolsOnly)
+		Parser_printSymbols(parser, U32_MAX, true, alloc);
 
 	result->type = ECompileResultType_SHEntryRuntime;
 
@@ -1656,5 +1663,6 @@ clean:
 	SHEntryRuntime_free(&runtimeEntry, alloc);
 	Parser_free(&parser, alloc);
 	Lexer_free(&lexer, alloc);
+	CharString_free(&tmp, alloc);
 	return s_uccess;
 }

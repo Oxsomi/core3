@@ -200,6 +200,29 @@ bb15afc7 01860 D:/programming/repos/rt_core/res/shaders/resource_bindings.hlsl
 
 ### TODO: Reflect
 
+### Symbols
+
+The `-compile-type symbols` will turn the .hlsl into a list of symbols and can be used to determine where certain functions/variables/structs are located. This can be very useful for refactoring to see if there's any function/variable that should be elsewhere. It could also be useful for better search options as well as debugging the parser.
+
+`OxC3 compile shaders -format HLSL -compile-output dxil -compile-type symbols -input a.hlsl -output a.symbols.hlsl`
+
+Will show something like this:
+
+```
+struct myStruct
+	myMember
+	myMember1
+	
+enum myEnum
+	myValue
+	
+variable myVariable
+
+function myFunction
+```
+
+Note: The difference between reflect and symbols is that reflect maintains the data as a binary which can be easily queried, shipped and used in production code. Reflect is a more advanced version of symbols, which exists more for advanced usages.
+
 ### TODO: Compile
 
 ### Built-in defines
