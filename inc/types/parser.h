@@ -283,13 +283,14 @@ Bool Parser_create(const Lexer *lexer, Parser *parser, Allocator alloc, Error *e
 void Parser_free(Parser *parser, Allocator alloc);
 void Parser_printTokens(Parser parser, Allocator alloc);
 
-void Parser_printSymbols(
+Bool Parser_printSymbols(
 	Parser parser,
 	U32 parent,
 	Bool recursive,
 	Allocator alloc,
 	CharString *output,
-	CharString outputSymbolFile
+	CharString outputSymbolFile,
+	Error *e_rr
 );
 
 //Registering a symbol with parent U32_MAX indicates it's a root symbol.

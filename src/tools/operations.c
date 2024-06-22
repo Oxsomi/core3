@@ -114,7 +114,8 @@ const C8 *EOperationFlags_names[] = {
 	"--hex",
 	"--bin",
 	"--oct",
-	"--debug"
+	"--debug",
+	"--ignore-empty-files"
 };
 
 const C8 *EOperationFlags_descriptions[] = {
@@ -135,7 +136,8 @@ const C8 *EOperationFlags_descriptions[] = {
 	"Encode using hexadecimal (0-9A-F).",
 	"Binary mode.",
 	"Encode using octadecimal (0-7).",
-	"Include more debug information."
+	"Include more debug information.",
+	"Don't warn when an empty file is encountered, just ignore it."
 };
 
 //Operations
@@ -403,7 +405,7 @@ void Operations_init() {
 			.name = "HLSL",
 			.desc = "High Level Shading Language; Microsoft's shading language for DirectX and Vulkan.",
 
-			.operationFlags = EOperationFlags_Debug,
+			.operationFlags = EOperationFlags_Debug | EOperationFlags_IgnoreEmptyFiles,
 
 			.requiredParameters =
 				EOperationHasParameter_Input | EOperationHasParameter_Output,

@@ -322,7 +322,7 @@ clean:
 	return err;
 }
 
-Error File_add(CharString loc, EFileType type, Ns maxTimeout) {
+Error File_add(CharString loc, EFileType type, Ns maxTimeout, Bool createParentOnly) {
 
 	CharString resolved = CharString_createNull();
 	ListCharString str = (ListCharString) { 0 };
@@ -416,7 +416,7 @@ Error File_add(CharString loc, EFileType type, Ns maxTimeout) {
 
 	//Create file
 
-	if(type == EFileType_File)
+	if(type == EFileType_File && !createParentOnly)
 		gotoIfError(clean, File_write(Buffer_createNull(), resolved, maxTimeout))
 
 clean:

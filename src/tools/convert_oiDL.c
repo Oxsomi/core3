@@ -327,7 +327,7 @@ Error CLI_convertFromDL(ParsedArgs args, CharString input, FileInfo inputInfo, C
 	)
 		type = EFileType_File;
 
-	gotoIfError(clean, File_add(output, type, 1 * SECOND))
+	gotoIfError(clean, File_add(output, type, 1 * SECOND, true))
 	didMakeFile = true;
 
 	//Write it as a folder

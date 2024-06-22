@@ -527,23 +527,25 @@ const C8 *ESymbolType_names[ESymbolType_Count] = {
 	"Annotation"
 };
 
-void Parser_printSymbol(
+Bool Parser_printSymbol(
 	Parser parser,
 	Symbol sym,
 	U32 recursion,
 	Allocator alloc,
 	CharString *output,
-	CharString outputSymbolFile
+	CharString outputSymbolFile,
+	Error *e_rr
 ) {
 	
+	Bool s_uccess = true;
 	const C8 *symbolType = ESymbolType_names[sym.symbolType];
 
 	CharString name = sym.name == U32_MAX ? CharString_createRefCStrConst("(unnamed)") : parser.symbolNames.ptr[sym.name];
 
 	CharString tmp = CharString_createNull();
 	CharString tmp2 = CharString_createNull();
-	if(CharString_create('\t', recursion, alloc, &tmp).genericError)
-		return;
+	CharString tmp3 = CharString_createNull();
+	gotoIfError2(clean, CharString_create('\t', recursion, alloc, &tmp))
 
 	Token tok = parser.tokens.ptr[sym.tokenId];
 	LexerToken ltok = parser.lexer->tokens.ptr[tok.naiveTokenId];
@@ -571,110 +573,253 @@ void Parser_printSymbol(
 
 	//If there's no output symbol file, always output
 
-	if(!CharString_length(outputSymbolFile))
-		CharString_format(
+	Bool isFiltered = true;
+
+	if(!CharString_length(outputSymbolFile)) {
+
+		gotoIfError2(clean, CharString_format(
 			alloc, &tmp2, "%s%s %.*s at line %.*s:%"PRIu64":%"PRIu64"\n",
 			!tmp.ptr ? "" : tmp.ptr, symbolType, (int)CharString_length(name), name.ptr,
 			(int) CharString_length(fileName), fileName.ptr,
 			(U64)LexerToken_getOriginalLineId(ltok), (U64)(ltok.charId + tok.lexerTokenSubId)
-		);
+		))
+
+		isFiltered = false;
+	}
 
 	//Otherwise, we need to filter if the file name is the same
 
-	else if(CharString_equalsStringSensitive(outputSymbolFile, fileName))
-		CharString_format(
+	else if(CharString_equalsStringSensitive(outputSymbolFile, fileName)) {
+
+		isFiltered = false;
+
+		gotoIfError2(clean, CharString_format(
 			alloc, &tmp2, "%s%s %.*s at L#%"PRIu64":%"PRIu64"\n",
 			!tmp.ptr ? "" : tmp.ptr, symbolType, (int)CharString_length(name), name.ptr,
 			(U64)LexerToken_getOriginalLineId(ltok), (U64)(ltok.charId + tok.lexerTokenSubId)
-		);
+		))
+	}
+
+	//Handle flags
+
+	U32 flagsToQuery = 
+		ESymbolFlagEnum_IsClass |
+		ESymbolFlagFuncVar_IsConst |
+		ESymbolFlagFuncVar_IsConstexpr |
+		ESymbolFlagFuncVar_HasImpl |
+		ESymbolFlagFuncVar_HasUserImpl |
+		ESymbolFlagFuncVar_IsStatic |
+		ESymbolFlagFuncVar_IsExtern |
+		ESymbolFlag_IsPrivate |
+		ESymbolFlag_IsPublic |
+		ESymbolFlag_HasTemplate |
+		ESymbolFlagTypedef_IsUsing |
+		ESymbolFlagVar_IsOut |
+		ESymbolFlagVar_IsIn |
+		ESymbolFlagVar_Sample |
+		ESymbolFlagVar_NoInterpolation |
+		ESymbolFlagVar_NoPerspective |
+		ESymbolFlagVar_Centroid |
+		ESymbolFlagVar_Linear;
+
+	if (!isFiltered && (sym.flags & flagsToQuery)) {
+
+		const C8 *stringsToCombine[18];
+		U64 counter = 0;
+
+		if(sym.flags & ESymbolFlagTypedef_IsUsing)
+			stringsToCombine[counter++] = "using";
+
+		if(sym.flags & ESymbolFlagEnum_IsClass)
+			stringsToCombine[counter++] = "enum class";
+
+		U32 inout = ESymbolFlagVar_IsIn | ESymbolFlagVar_IsOut;
+
+		if((sym.flags & inout) == inout)
+			stringsToCombine[counter++] = "inout";
+
+		else if(sym.flags & ESymbolFlagVar_IsOut)
+			stringsToCombine[counter++] = "out";
+
+		else if(sym.flags & ESymbolFlagVar_IsIn)
+			stringsToCombine[counter++] = "in";
+
+		if(sym.flags & ESymbolFlagVar_Sample)
+			stringsToCombine[counter++] = "sample";
+
+		if(sym.flags & ESymbolFlagVar_NoInterpolation)
+			stringsToCombine[counter++] = "nointerpolation";
+
+		if(sym.flags & ESymbolFlagVar_NoPerspective)
+			stringsToCombine[counter++] = "noperspective";
+
+		if(sym.flags & ESymbolFlagVar_Centroid)
+			stringsToCombine[counter++] = "centroid";
+
+		if(sym.flags & ESymbolFlagVar_Linear)
+			stringsToCombine[counter++] = "linear";
+
+		if(sym.flags & ESymbolFlagFuncVar_IsConst)
+			stringsToCombine[counter++] = "const";
+
+		if(sym.flags & ESymbolFlagFuncVar_IsConstexpr)
+			stringsToCombine[counter++] = "constexpr";
+
+		if(sym.flags & ESymbolFlagFuncVar_HasImpl)
+			stringsToCombine[counter++] = "impl";
+
+		if(sym.flags & ESymbolFlagFuncVar_HasUserImpl)
+			stringsToCombine[counter++] = "user_impl";
+
+		if(sym.flags & ESymbolFlagFuncVar_IsStatic)
+			stringsToCombine[counter++] = "static";
+
+		if(sym.flags & ESymbolFlagFuncVar_IsExtern)
+			stringsToCombine[counter++] = "extern";
+
+		if(sym.flags & ESymbolFlag_HasTemplate)
+			stringsToCombine[counter++] = "template";
+
+		if(sym.flags & ESymbolFlag_IsPrivate)
+			stringsToCombine[counter++] = "private";
+
+		else if(sym.flags & ESymbolFlag_IsPublic)
+			stringsToCombine[counter++] = "private";
+
+		gotoIfError2(clean, CharString_append(&tmp2, '\t', alloc))
+		gotoIfError2(clean, CharString_appendString(&tmp2, tmp, alloc))
+
+		gotoIfError2(clean, CharString_appendString(&tmp2, CharString_createRefCStrConst("Flags: "), alloc))
+
+		for (U64 i = 0; i < counter; ++i) {
+
+			if(i)
+				gotoIfError2(clean, CharString_appendString(&tmp2, CharString_createRefCStrConst(", "), alloc))
+
+			gotoIfError2(clean, CharString_appendString(&tmp2, CharString_createRefCStrConst(stringsToCombine[i]), alloc))
+		}
+
+		gotoIfError2(clean, CharString_append(&tmp2, '\n', alloc))
+	}
 
 	//If there's no output, output to log, otherwise output
 	
 	if(!output)
 		Log_log(alloc, ELogLevel_Error, ELogOptions_None, tmp2);
 
-	else CharString_appendString(output, tmp2, alloc);
+	else gotoIfError2(clean, CharString_appendString(output, tmp2, alloc))
 
+clean:
+	CharString_free(&tmp3, alloc);
 	CharString_free(&tmp2, alloc);
 	CharString_free(&tmp, alloc);
+	return s_uccess;
 }
 
-void Parser_printSymbolsRecursive(
+Bool Parser_printSymbolsRecursive(
 	Parser parser,
 	U32 recursion,
 	U32 parent,
 	Bool recursive,
 	Allocator alloc,
 	CharString *output,
-	CharString outputSymbolFile
+	CharString outputSymbolFile,
+	Error *e_rr
 );
 
-U32 Parser_printAll(
+Bool Parser_printAll(
 	Parser parser,
 	U32 recursion,
 	U32 i,
 	Bool recursive,
 	Allocator alloc,
 	CharString *output,
-	CharString outputSymbolFile
+	CharString outputSymbolFile,
+	U32 *skipOut,
+	Error *e_rr
 ) {
 
+	Bool s_uccess = true;
 	Symbol sym = parser.symbols.ptr[i];
-	Parser_printSymbol(parser, sym, recursion, alloc, output, outputSymbolFile);
+	gotoIfError3(clean, Parser_printSymbol(parser, sym, recursion, alloc, output, outputSymbolFile, e_rr))
 
 	U32 skip = Symbol_size(sym) - 1;
 
 	for (U16 k = 0; k < skip; ++k)
-		Parser_printSymbol(parser, parser.symbols.ptr[i + 1 + k], recursion + 1, alloc, output, outputSymbolFile);
+		gotoIfError3(clean, Parser_printSymbol(
+			parser, parser.symbols.ptr[i + 1 + k], recursion + 1, alloc, output, outputSymbolFile, e_rr
+		))
 
 	if(recursive && sym.child != U32_MAX) {
 
 		U32 child = parser.symbolMapping.ptr[sym.child];	//Child start
 
 		for (U32 j = child; j < child + sym.childCount; ++j)
-			Parser_printSymbolsRecursive(parser, recursion + 1, j, true, alloc, output, outputSymbolFile);
+			gotoIfError3(clean, Parser_printSymbolsRecursive(
+				parser, recursion + 1, j, true, alloc, output, outputSymbolFile, e_rr
+			))
 	}
 
-	return skip + 1;
+	*skipOut += skip + 1;
+
+clean:
+	return s_uccess;
 }
 
-void Parser_printSymbolsRecursive(
+Bool Parser_printSymbolsRecursive(
 	Parser parser,
 	U32 recursion,
 	U32 parent,
 	Bool recursive,
 	Allocator alloc,
 	CharString *output,
-	CharString outputSymbolFile
+	CharString outputSymbolFile,
+	Error *e_rr
 ) {
+
+	Bool s_uccess = true;
 
 	//Traverse symbol tree
 
 	if(parent == U32_MAX)
 		for (U32 i = 0; i < parser.rootSymbols; )
-			i += Parser_printAll(parser, recursion, i, recursive, alloc, output, outputSymbolFile);
+			gotoIfError3(clean, Parser_printAll(parser, recursion, i, recursive, alloc, output, outputSymbolFile, &i, e_rr))
 
-	else Parser_printAll(parser, recursion, parent, recursive, alloc, output, outputSymbolFile);
+	else {
+		U32 i = 0;
+		gotoIfError3(clean, Parser_printAll(parser, recursion, parent, recursive, alloc, output, outputSymbolFile, &i, e_rr))
+	}
+
+clean:
+	return s_uccess;
 }
 
-void Parser_printSymbols(
+Bool Parser_printSymbols(
 	Parser parser,
 	U32 parent,
 	Bool recursive,
 	Allocator alloc,
 	CharString *output,
-	CharString outputSymbolFile
+	CharString outputSymbolFile,
+	Error *e_rr
 ) {
+
+	Bool s_uccess = true;
 
 	if(parent != U32_MAX) {		//Resolve
 
 		if(parent >= parser.symbolMapping.length)
-			return;
+			retError(clean, Error_outOfBounds(
+				1, parent, parser.symbolMapping.length, "Parser_printSymbols()::parent out of bounds"
+			))
 
 		parent = parser.symbolMapping.ptr[parent];
 	}
 
-	Parser_printSymbolsRecursive(parser, 0, parent, recursive, alloc, output, outputSymbolFile);
+	gotoIfError3(clean, Parser_printSymbolsRecursive(parser, 0, parent, recursive, alloc, output, outputSymbolFile, e_rr))
+
+clean:
+	return s_uccess;
 }
 
 Bool Symbol_create(

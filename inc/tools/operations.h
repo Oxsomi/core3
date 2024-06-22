@@ -90,58 +90,59 @@ extern const C8 *EOperationHasParameter_descriptions[];
 
 typedef enum EOperationFlags {
 
-	EOperationFlags_None			= 0,
+	EOperationFlags_None				= 0,
 
 	//Default flags
 
-	EOperationFlags_SHA256			= 1 << 0,
-	EOperationFlags_Uncompressed	= 1 << 1,
+	EOperationFlags_SHA256				= 1 << 0,
+	EOperationFlags_Uncompressed		= 1 << 1,
 
-	EOperationFlags_Default			=
+	EOperationFlags_Default				=
 	EOperationFlags_SHA256 | EOperationFlags_Uncompressed,
 
 	//CharString flags
 
-	EOperationFlags_Ascii			= 1 << 2,
-	EOperationFlags_UTF8			= 1 << 3,
+	EOperationFlags_Ascii				= 1 << 2,
+	EOperationFlags_UTF8				= 1 << 3,
 
 	//File flags
 
-	EOperationFlags_FullDate		= 1 << 4,
-	EOperationFlags_Date			= 1 << 5,
+	EOperationFlags_FullDate			= 1 << 4,
+	EOperationFlags_Date				= 1 << 5,
 
 	//Folder
 
-	EOperationFlags_NonRecursive	= 1 << 6,
+	EOperationFlags_NonRecursive		= 1 << 6,
 
 	//Random char
 
-	EOperationFlags_Alpha			= 1 << 7,
-	EOperationFlags_Alphanumeric	= 1 << 8,
-	EOperationFlags_Number			= 1 << 9,
-	EOperationFlags_Symbols			= 1 << 10,
-	EOperationFlags_Lowercase		= 1 << 11,
-	EOperationFlags_Uppercase		= 1 << 12,
+	EOperationFlags_Alpha				= 1 << 7,
+	EOperationFlags_Alphanumeric		= 1 << 8,
+	EOperationFlags_Number				= 1 << 9,
+	EOperationFlags_Symbols				= 1 << 10,
+	EOperationFlags_Lowercase			= 1 << 11,
+	EOperationFlags_Uppercase			= 1 << 12,
 
-	EOperationFlags_RandChar		=
+	EOperationFlags_RandChar			=
 		EOperationFlags_Alpha | EOperationFlags_Alphanumeric | EOperationFlags_Number |
 		EOperationFlags_Symbols | EOperationFlags_Lowercase | EOperationFlags_Uppercase,
 
 	//Random number
 
-	EOperationFlags_Nyto			= 1 << 13,
-	EOperationFlags_Hex				= 1 << 14,
-	EOperationFlags_Bin				= 1 << 15,		//This is also used by OxC3 file data (for oiSH)
-	EOperationFlags_Oct				= 1 << 16,
+	EOperationFlags_Nyto				= 1 << 13,
+	EOperationFlags_Hex					= 1 << 14,
+	EOperationFlags_Bin					= 1 << 15,		//This is also used by OxC3 file data (for oiSH)
+	EOperationFlags_Oct					= 1 << 16,
 
 	EOperationFlags_RandNum =
 		EOperationFlags_Oct | EOperationFlags_Bin | EOperationFlags_Hex | EOperationFlags_Nyto,
 
 	//Compilation
 
-	EOperationFlags_Debug			= 1 << 17,
+	EOperationFlags_Debug				= 1 << 17,
+	EOperationFlags_IgnoreEmptyFiles	= 1 << 18,
 
-	EOperationFlags_Count			= 18
+	EOperationFlags_Count				= 19
 
 } EOperationFlags;
 

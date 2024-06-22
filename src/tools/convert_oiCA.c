@@ -221,7 +221,7 @@ Error CLI_convertFromCA(ParsedArgs args, CharString input, FileInfo inputInfo, C
 	Bool outputAsSingle = file.archive.entries.length == 1;
 	EFileType outputType = outputAsSingle ? file.archive.entries.ptr->type : EFileType_Folder;
 
-	gotoIfError(clean, File_add(output, outputType, 1 * SECOND))
+	gotoIfError(clean, File_add(output, outputType, 1 * SECOND, true))
 	didMakeFile = true;
 
 	if (outputAsSingle) {
@@ -249,7 +249,7 @@ Error CLI_convertFromCA(ParsedArgs args, CharString input, FileInfo inputInfo, C
 			gotoIfError(clean, CharString_appendStringx(&loc, ei.path))
 
 			if (ei.type == EFileType_Folder) {
-				gotoIfError(clean, File_add(loc, EFileType_Folder, 1 * SECOND))
+				gotoIfError(clean, File_add(loc, EFileType_Folder, 1 * SECOND, false))
 				CharString_freex(&loc);
 				continue;
 			}

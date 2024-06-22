@@ -152,7 +152,7 @@
 							)
 						))
 
-						gotoIfError(clean, File_add(tempStr, EFileType_File, 1 * MS))
+						gotoIfError(clean, File_add(tempStr, EFileType_File, 1 * MS, true))
 						gotoIfError(clean, ListCharString_pushBackx(shaderFiles->allOutputs, tempStr))
 						tempStr = CharString_createNull();
 					}
@@ -235,7 +235,11 @@
 
 			//Tell oiSH entries to caller
 
-			if (compileResult.type == ECompileResultType_SHEntryRuntime && shEntriesRuntime && compileResult.shEntriesRuntime.length) {
+			if (
+				compileResult.type == ECompileResultType_SHEntryRuntime && 
+				shEntriesRuntime &&
+				compileResult.shEntriesRuntime.length
+			) {
 
 				//Move list with all allocated memory
 
@@ -862,7 +866,7 @@
 
 			//Make sure we can have a folder at output
 
-			gotoIfError2(clean, File_add(resolved2, EFileType_Folder, 1 * SECOND))
+			gotoIfError2(clean, File_add(resolved2, EFileType_Folder, 1 * SECOND, false))
 			isFolder = true;
 		}
 
@@ -1033,10 +1037,15 @@
 
 					if (!runtimeEntries.length) {
 
-						Log_warnLnx(
-							"Precompile couldn't find entrypoints for file \"%.*s\"",
-							(int)CharString_length(allFiles.ptr[i]), allFiles.ptr[i].ptr
-						);
+						if(!(args.flags & EOperationFlags_IgnoreEmptyFiles)) {
+
+							Log_errorLnx(
+								"Precompile couldn't find entrypoints for file \"%.*s\"",
+								(int)CharString_length(allFiles.ptr[i]), allFiles.ptr[i].ptr
+							);
+
+							s_uccess = false;
+						}
 
 						ListSHEntryRuntime_freeUnderlyingx(&runtimeEntries);
 						continue;

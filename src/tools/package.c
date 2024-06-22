@@ -176,7 +176,7 @@ Bool CLI_package(ParsedArgs args) {
 
 	gotoIfError(clean, CAFile_writex(file, &res))
 
-	gotoIfError(clean, File_add(output, EFileType_File, 1 * SECOND))		//Ensure subdirs are created
+	gotoIfError(clean, File_add(output, EFileType_File, 1 * SECOND, true))		//Ensure subdirs are created
 	gotoIfError(clean, File_write(res, output, 1 * SECOND))
 
 clean:

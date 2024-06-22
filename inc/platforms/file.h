@@ -36,7 +36,7 @@ Bool FileInfo_freex(FileInfo *fileInfo);
 Error File_foreach(CharString loc, FileCallback callback, void *userData, Bool isRecursive);
 
 Error File_remove(CharString loc, Ns maxTimeout);
-Error File_add(CharString loc, EFileType type, Ns maxTimeout);
+Error File_add(CharString loc, EFileType type, Ns maxTimeout, Bool createParentOnly);
 
 Error File_rename(CharString loc, CharString newFileName, Ns maxTimeout);
 Error File_move(CharString loc, CharString directoryName, Ns maxTimeout);

@@ -1019,9 +1019,9 @@ Bool Compiler_parse(
 	//But we do tell it that we only want symbols located in the current file
 
 	if (symbolsOnly) {
+		gotoIfError3(clean, Parser_printSymbols(parser, U32_MAX, true, alloc, &result->text, settings.path, e_rr))
 		result->type = ECompileResultType_Text;
 		result->isSuccess = true;
-		Parser_printSymbols(parser, U32_MAX, true, alloc, &result->text, settings.path);
 		goto clean;
 	}
 
@@ -1655,7 +1655,6 @@ Bool Compiler_parse(
 						0, "Compiler_parse() found way too runtimeEntry combinations. Found U16_MAX!"
 					))
 
-				SHEntryRuntime_print(runtimeEntry, alloc);
 				gotoIfError2(clean, ListSHEntryRuntime_pushBack(&result->shEntriesRuntime, runtimeEntry, alloc));
 				runtimeEntry = (SHEntryRuntime) { 0 };
 			}

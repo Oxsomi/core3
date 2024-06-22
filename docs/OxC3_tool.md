@@ -276,6 +276,12 @@ Each entrypoint can have annotations on top of the ones used by DXC. The ones in
 
 **NOTE**: Since multiple models, uniforms and extensions can cause multiple compiles, be very careful that you don't use too many of these decorations (2 different sets of uniforms + 2 different extensions + 2 models = 2^3 or 8 compiles). Even though the compiler will do everything in parallel, it will still be slower to do multiple configurations that will never be used. So keep duplicate annotations in check wherever possible. The compiler will also try to combine compiles if it notices that they can be shared (for example with lib compiles where one compile might expose multiple entrypoints).
 
+#### Special flags
+
+- `--debug` is used to toggle debug info in the binary.
+
+- `--ignore-empty-files` is used to allow it when no entrypoints are found to compile. Without this, it will error when no entrypoints are found. This is useful because the destination directory might contain includes alongside source files (rather than using -include-dir with a separate includes directory).
+
 ## Show GPU/graphics device info
 
 

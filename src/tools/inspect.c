@@ -468,7 +468,7 @@ Error writeToDisk(FileInfo info, OutputFolderToDisk *output) {
 		gotoIfError(clean, File_write(data, tmp, 1 * SECOND))
 	}
 
-	else gotoIfError(clean, File_add(tmp, EFileType_Folder, 1 * SECOND))
+	else gotoIfError(clean, File_add(tmp, EFileType_Folder, 1 * SECOND, false))
 
 clean:
 	CharString_freex(&tmp);
@@ -604,7 +604,7 @@ Bool CLI_storeFileOrFolder(ParsedArgs args, ArchiveEntry e, Archive a, Bool *mad
 			goto clean;
 		}
 
-		gotoIfError2(clean, File_add(out, EFileType_Folder, 1 * SECOND))
+		gotoIfError2(clean, File_add(out, EFileType_Folder, 1 * SECOND, true))
 		*madeFile = true;
 
 		gotoIfError2(clean, CharString_createCopyx(out, &tmp))
