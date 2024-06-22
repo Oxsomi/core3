@@ -114,15 +114,16 @@ typedef enum ETokenType {
 typedef struct Token {
 
 	union {
-		I64 valuei;		//If token type is signed int
-		U64 valueu;		//If token type is int or string (if string; index of string literal)
-		F64 valuef;		//If token type is double
+		I64 valuei;			//If token type is signed int
+		U64 valueu;			//If token type is int or string (if string; index of string literal)
+		F64 valuef;			//If token type is double
 	};
 
 	U32 naiveTokenId;
 
-	U16 tokenType;			//ETokenType
+	U8 padding;
 	U8 lexerTokenSubId;		//For example *=- is split into *= (subId=0) and - (subId=2)
+	U8 tokenType;			//ETokenType
 	U8 tokenSize;
 
 } Token;

@@ -32,28 +32,20 @@ U32 LexerToken_getOriginalLineId(LexerToken tok) {
 	return tok.realLineIdAndLineIdExt << 1 >> 1;
 }
 
-U32 LexerToken_getOffset(LexerToken tok) {
-	return tok.offsetType << 4 >> 4;
-}
-
-ELexerTokenType LexerToken_getType(LexerToken tok) {
-	return tok.offsetType >> (32 - 4);
-}
-
 const C8 *LexerToken_getTokenEnd(LexerToken tok, Lexer l) {
 
-	if(LexerToken_getOffset(tok) + tok.length > CharString_length(l.source))
+	if(tok.offset + tok.length > CharString_length(l.source))
 		return NULL;
 
-	return l.source.ptr + LexerToken_getOffset(tok) + tok.length;
+	return l.source.ptr + tok.offset + tok.length;
 }
 
 const C8 *LexerToken_getTokenStart(LexerToken tok, Lexer l) {
 
-	if(LexerToken_getOffset(tok) > CharString_length(l.source))
+	if(tok.offset > CharString_length(l.source))
 		return NULL;
 
-	return l.source.ptr + LexerToken_getOffset(tok);
+	return l.source.ptr + tok.offset;
 }
 
 CharString LexerToken_asString(LexerToken tok, Lexer l) {
@@ -131,8 +123,8 @@ Bool Lexer_create(CharString str, Allocator alloc, Lexer *lexer, Error *e_rr) {
 	if(lexer->tokens.ptr)
 		retError(clean, Error_invalidParameter(1, 0, "Lexer_create()::lexer wasn't empty, might indicate memleak"))
 
-	if(CharString_length(str) >> 28)
-		retError(clean, Error_outOfBounds(0, CharString_length(str), 1 << 28, "Lexer_create()::str is limited to 256MiB"))
+	if(CharString_length(str) >> 32)
+		retError(clean, Error_outOfBounds(0, CharString_length(str), (U64)1 << 32, "Lexer_create()::str is limited to 4GiB"))
 
 	gotoIfError2(clean, ListCharString_reserve(&sourceLocations, 64, alloc))
 	gotoIfError2(clean, ListLexerExpression_reserve(&expressions, 64 + CharString_length(str) / 32, alloc))
@@ -243,10 +235,7 @@ Bool Lexer_create(CharString str, Allocator alloc, Lexer *lexer, Error *e_rr) {
 
 					LexerToken lineId = tokens.ptr[lastToken + 2];
 
-					if(!(
-						LexerToken_getType(lineId) >= ELexerTokenType_IntBegin &&
-						LexerToken_getType(lineId) <= ELexerTokenType_IntEnd
-					))
+					if(!(lineId.typeId >= ELexerTokenType_IntBegin && lineId.typeId <= ELexerTokenType_IntEnd))
 						retError(clean, Error_invalidState(1, "Lexer_create() #line expected uint (U64)"))
 
 					U64 lineIdi = 0;
@@ -264,7 +253,7 @@ Bool Lexer_create(CharString str, Allocator alloc, Lexer *lexer, Error *e_rr) {
 
 						LexerToken file = tokens.ptr[lastToken + 3];
 
-						if(LexerToken_getType(file) != ELexerTokenType_String)
+						if(file.typeId != ELexerTokenType_String)
 							retError(clean, Error_invalidState(3, "Lexer_create() #line expected string next"))
 
 						//Parse string forreal
@@ -273,7 +262,7 @@ Bool Lexer_create(CharString str, Allocator alloc, Lexer *lexer, Error *e_rr) {
 
 						Bool isEscaped = false;
 
-						for (U64 l = LexerToken_getOffset(file), j = l; j < l + file.length; ++j) {
+						for (U64 l = file.offset, j = l; j < l + file.length; ++j) {
 
 							C8 cj = str.ptr[j];
 
@@ -663,10 +652,7 @@ Bool Lexer_create(CharString str, Allocator alloc, Lexer *lexer, Error *e_rr) {
 
 								if (c2 == '-' || c2 == '+') {
 
-									if(!containsE)
-										retError(clean, Error_invalidState(0, "Lexer_create() expected e- or e+ in float"))
-
-									if(lastE + 1 != i)		//Otherwise, - or + can terminate a float
+									if (!containsE || (lastE + 1 != i))		//Otherwise, - or + can terminate a float
 										break;
 
 									continue;
@@ -738,13 +724,13 @@ Bool Lexer_create(CharString str, Allocator alloc, Lexer *lexer, Error *e_rr) {
 			if(len >> 8)
 				retError(clean, Error_outOfBounds(0, len, 256, "Lexer_create() tokens are limited to 256 C8s"))
 
-			if(off >> (32 - 4))
-				retError(clean, Error_outOfBounds(0, off, 1 << (32 - 4), "Lexer_create() offset out of bounds"))
+			if(off >> 32)
+				retError(clean, Error_outOfBounds(0, off, (U64)1 << 32, "Lexer_create() offset out of bounds"))
 
 			U64 charId = i + 1 - len - lastLineStart;
 
-			if((charId + 1) >> 8)
-				retError(clean, Error_outOfBounds(0, charId + 1, 256, "Lexer_create() lines are limited to 256 C8s"))
+			if((charId + 1) >> 32)
+				retError(clean, Error_outOfBounds(0, charId + 1, (U64)1 << 32, "Lexer_create() lines are limited to 4GiB"))
 
 			U64 resolvedLineId = lineCounter - fileLineStart + fileLineOffset;
 
@@ -756,10 +742,11 @@ Bool Lexer_create(CharString str, Allocator alloc, Lexer *lexer, Error *e_rr) {
 			LexerToken tok = (LexerToken) {
 
 				.lineId = (U16) lineCounter,
-				.charId = (U8) (charId + 1),
 				.length = (U8) len,
+				.typeId = (U8) tokenType,
 
-				.offsetType = (U32)(off | (tokenType << (32 - 4))),
+				.offset = (U32) off,
+				.charId = (U32) (charId + 1),
 
 				.fileId = (U16)fileId,
 				.realLineIdAndLineIdExt = (U16)((lineCounter >> 16 << 15) | resolvedLineId)
@@ -862,7 +849,7 @@ void Lexer_print(Lexer lexer, Allocator alloc) {
 			(U64)LexerToken_getLineId(lt),
 			(U64)lt.charId,
 
-			tokenType[LexerToken_getType(lt)],
+			tokenType[lt.typeId],
 			CharString_length(tokenRaw),
 			tokenRaw.ptr,
 

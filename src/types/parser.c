@@ -190,7 +190,7 @@ Bool Parser_visit(Parser *parser, U32 lexerTokenId, U32 lexerTokenCount, Allocat
 
 		LexerToken lext = lexer->tokens.ptr[lexerTokenId + i];
 		CharString lextStr = LexerToken_asString(lext, *lexer);
-		ELexerTokenType lextType = LexerToken_getType(lext);
+		ELexerTokenType lextType = lext.typeId;
 
 		if(CharString_length(lextStr) >> 8)
 			retError(clean, Error_invalidParameter(0, 0, "Parser_visit() token max size is 256"))
@@ -555,8 +555,8 @@ Bool Parser_printSymbol(
 		Token endTok = parser.tokens.ptr[sym.tokenId + sym.tokenCount];
 		LexerToken ltokEnd = parser.lexer->tokens.ptr[endTok.naiveTokenId];
 
-		U64 start = LexerToken_getOffset(ltok) + tok.lexerTokenSubId;
-		U64 end = LexerToken_getOffset(ltokEnd) + endTok.lexerTokenSubId + endTok.tokenSize;
+		U64 start = ltok.offset + tok.lexerTokenSubId;
+		U64 end = ltokEnd.offset + endTok.lexerTokenSubId + endTok.tokenSize;
 
 		name = CharString_createRefSizedConst(
 			parser.lexer->source.ptr + start,

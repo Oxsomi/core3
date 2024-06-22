@@ -1242,6 +1242,12 @@ Bool Parser_classifyEnumBody(Parser *parser, U32 *i, U32 parent, Allocator alloc
 		if(Parser_skipIfNext(parser, i, ETokenType_Comma))
 			continue;
 
+		//Z }
+		//  ^
+
+		if (Parser_next2(parser, i, ETokenType_Comma, ETokenType_CurlyBraceEnd))
+			break;
+
 		//X = (1 << 3),
 		//Y = 123,
 		//  ^
@@ -1890,6 +1896,11 @@ Bool Parser_classifyBase(Parser *parser, U32 *i, U32 parent, Allocator alloc, Er
 			U32 symbolId = U32_MAX;
 			gotoIfError3(clean, Parser_registerSymbol(parser, s, parent, alloc, &symbolId, e_rr))
 		}
+
+		//; is always allowed as an empty expression
+
+		else if(Parser_skipIfNext(parser, i, ETokenType_Semicolon))
+			;
 
 		//Unrecognized
 
