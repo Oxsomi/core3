@@ -115,7 +115,8 @@ const C8 *EOperationFlags_names[] = {
 	"--bin",
 	"--oct",
 	"--debug",
-	"--ignore-empty-files"
+	"--ignore-empty-files",
+	"--includes"
 };
 
 const C8 *EOperationFlags_descriptions[] = {
@@ -137,7 +138,8 @@ const C8 *EOperationFlags_descriptions[] = {
 	"Binary mode.",
 	"Encode using octadecimal (0-7).",
 	"Include more debug information.",
-	"Don't warn when an empty file is encountered, just ignore it."
+	"Don't warn when an empty file is encountered, just ignore it.",
+	"Display includes."
 };
 
 //Operations
@@ -269,7 +271,7 @@ void Operations_init() {
 		.func = &CLI_inspectData,
 
 		.isFormatLess = true,
-		.operationFlags = EOperationFlags_Bin,
+		.operationFlags = EOperationFlags_Bin | EOperationFlags_Includes,
 		.requiredParameters = EOperationHasParameter_Input,
 		.optionalParameters =
 			EOperationHasParameter_AES | EOperationHasParameter_Output |

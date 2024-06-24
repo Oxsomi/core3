@@ -247,6 +247,10 @@ Bool SHFile_addEntrypointx(SHFile *shFile, SHEntry *entry, Error *e_rr) {
 	return SHFile_addEntrypoint(shFile, entry, Platform_instance.alloc, e_rr);
 }
 
+Bool SHFile_addIncludex(SHFile *shFile, SHInclude *include, Error *e_rr) {
+	return SHFile_addInclude(shFile, include, Platform_instance.alloc, e_rr);
+}
+
 Bool SHFile_writex(SHFile shFile, Buffer *result, Error *e_rr) {
 	return SHFile_write(shFile, Platform_instance.alloc, result, e_rr);
 }
@@ -277,6 +281,14 @@ void SHEntryRuntime_freex(SHEntryRuntime *entry) {
 
 void ListSHEntryRuntime_freeUnderlyingx(ListSHEntryRuntime *entry) {
 	ListSHEntryRuntime_freeUnderlying(entry, Platform_instance.alloc);
+}
+
+void ListSHInclude_freeUnderlyingx(ListSHInclude *includes) {
+	ListSHInclude_freeUnderlying(includes, Platform_instance.alloc);
+}
+
+void SHInclude_freex(SHInclude *include) {
+	SHInclude_free(include, Platform_instance.alloc);
 }
 
 //List

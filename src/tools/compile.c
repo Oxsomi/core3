@@ -405,7 +405,7 @@
 			.debug = (Bool) (args.flags & EOperationFlags_Debug),
 			.format = ECompilerFormat_HLSL,
 			.outputType = binaryType,
-			.infoAboutIncludes = false,
+			.infoAboutIncludes = true,		//Required to supply oiSH info about includes
 			.includeDir = includeDir
 		};
 
@@ -689,6 +689,7 @@
 		ListU32 compileCombinations = (ListU32) { 0 };
 		ListU16 binaryIndices = (ListU16) { 0 };
 		SHEntry shEntry = (SHEntry) { 0 };
+		SHInclude shInclude = (SHInclude) { 0 };
 		SHBinaryInfo binaryInfo = (SHBinaryInfo) { 0 };
 		Buffer temp = Buffer_createNull();
 		Bool isFolder = false;
@@ -1051,8 +1052,16 @@
 						continue;
 					}
 
-					Buffer buf = CharString_bufferConst(allShaderText.ptr[i]);
-					gotoIfError3(clean, SHFile_createx(ESHSettingsFlags_None, OXC3_VERSION, Buffer_crc32c(buf), &shFile, e_rr))
+					U32 crc32c = U32_MAX;
+					gotoIfError3(clean, Compiler_crc32cx(allShaderText.ptr[i], &crc32c, e_rr))
+
+					gotoIfError3(clean, SHFile_createx(
+						ESHSettingsFlags_None,
+						OXC3_VERSION,
+						crc32c,
+						&shFile,
+						e_rr
+					))
 
 					gotoIfError3(clean, Compiler_getUniqueCompiles(runtimeEntries, &compileCombinations, &binaryIndices, e_rr))
 
@@ -1099,6 +1108,36 @@
 							gotoIfError3(clean, SHEntryRuntime_asBinaryInfo(
 								runtimeEntry, combinationId, compileModei, tempResult.binary, &binaryInfo, e_rr
 							))
+
+							//Add info regarding includes.
+							//Merge includes, since different entrypoints can have different includes
+
+							for(U64 k = 0; k < tempResult.includeInfo.length; ++k) {
+
+								IncludeInfo *includeInfok = &tempResult.includeInfo.ptrNonConst[k];
+								shInclude = (SHInclude) {
+									.crc32c = includeInfok->crc32c,
+									.relativePath = includeInfok->file
+								};
+
+								includeInfok->file = CharString_createNull();
+
+								//Make sure our includes are relative to source, rather than absolute.
+								//Otherwise it's not reproducible
+
+								if (!CharString_startsWithSensitive(shInclude.relativePath, '@', 0)) {
+
+									gotoIfError3(clean, File_makeRelativex(
+										allFiles.ptr[i], shInclude.relativePath, 256, &tempStr, e_rr
+									))
+
+									CharString_freex(&shInclude.relativePath);
+									shInclude.relativePath = tempStr;
+									tempStr = CharString_createNull();
+								}
+
+								gotoIfError3(clean, SHFile_addIncludex(&shFile, &shInclude, e_rr))
+							}
 
 							//Move binary there to avoid copying mem if possible
 
@@ -1242,6 +1281,7 @@
 		ListSHEntryRuntime_freeUnderlyingx(&runtimeEntries);
 		SHFile_freex(&shFile);
 		SHEntry_freex(&shEntry);
+		SHInclude_freex(&shInclude);
 		SHBinaryInfo_freex(&binaryInfo);
 		ListU32_freex(&compileCombinations);
 		ListU16_freex(&binaryIndices);

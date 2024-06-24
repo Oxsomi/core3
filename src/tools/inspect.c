@@ -165,10 +165,11 @@ Bool CLI_inspectHeader(ParsedArgs args) {
 			Log_debugLnx("Hashes: Source: %08"PRIX64", Contents: %08"PRIX64, shHeader.sourceHash, shHeader.hash);
 
 			Log_debugLnx(
-				"With %"PRIu16" binaries, %"PRIu16" stages and %"PRIu16" uniforms",
+				"With %"PRIu16" binaries, %"PRIu16" stages, %"PRIu16" uniforms and %"PRIu16" includes",
 				shHeader.binaryCount,
 				shHeader.stageCount,
-				shHeader.uniqueUniforms
+				shHeader.uniqueUniforms,
+				shHeader.includeFileCount
 			);
 
 			break;
@@ -753,8 +754,8 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 	U32 magic = *(const U32*)buf.ptr;
 
-	if(args.flags & EOperationFlags_Bin && magic != SHHeader_MAGIC) {
-		Log_errorLnx("--bin flag can only be used with an oiSH file");
+	if(args.flags & (EOperationFlags_Bin | EOperationFlags_Includes) && magic != SHHeader_MAGIC) {
+		Log_errorLnx("--bin and --includes flag can only be used with an oiSH file");
 		return false;
 	}
 
@@ -1045,8 +1046,23 @@ Bool CLI_inspectData(ParsedArgs args) {
 			gotoIfError3(cleanSh, SHFile_readx(buf, false, &file, e_rr))
 
 			Bool binaryMode = args.flags & EOperationFlags_Bin;
+			Bool includesMode = args.flags & EOperationFlags_Includes;
 
-			U64 count = binaryMode ? file.binaries.length : file.entries.length;
+			if (binaryMode && includesMode) {
+				Log_errorLnx("oiSH file data can't use --bin and --includes at the same time");
+				goto cleanSh;
+			}
+
+			if((args.parameters & EOperationHasParameter_Output) && (
+				binaryType == ESHBinaryType_Count ||
+				!binaryMode ||
+				!(args.parameters & EOperationHasParameter_Entry)
+			)) {
+				Log_errorLnx("oiSH file data can't use --output if -entry, --bin and -compile-output aren't defined");
+				goto cleanSh;
+			}
+
+			U64 count = includesMode ? file.includes.length : (binaryMode ? file.binaries.length : file.entries.length);
 			U64 end = 0;
 
 			if (!(args.parameters & EOperationHasParameter_Entry)) {
@@ -1062,6 +1078,11 @@ Bool CLI_inspectData(ParsedArgs args) {
 				//Grab entry
 
 				U64 entryI = 0;
+
+				if (includesMode) {
+					Log_errorLnx("oiSH file data includes mode doesn't support -entry, since all data is already displayed");
+					goto cleanSh;
+				}
 
 				if (!CharString_parseU64(entry, &entryI)) {
 					Log_errorLnx("Invalid argument -entry <uint> expected.");
@@ -1099,7 +1120,25 @@ Bool CLI_inspectData(ParsedArgs args) {
 
 			else {
 
-				if (binaryMode) {
+				if (includesMode) {
+
+					Log_debugLnx("oiSH includes:");
+
+					for (U64 i = start; i < end && i < count; ++i) {
+
+						SHInclude inc = file.includes.ptr[i];
+
+						Log_debugLnx(
+							"Include %"PRIu64" (%.*s) with CRC32C %"PRIX32,
+							i,
+							(int) CharString_length(inc.relativePath),
+							inc.relativePath.ptr,
+							inc.crc32c
+						);
+					}
+				}
+
+				else if (binaryMode) {
 
 					Log_debugLnx("oiSH binaries:");
 

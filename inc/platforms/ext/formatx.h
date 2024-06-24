@@ -42,10 +42,12 @@ typedef struct SHEntry SHEntry;
 typedef struct SHBinaryIdentifier SHBinaryIdentifier;
 typedef struct SHBinaryInfo SHBinaryInfo;
 typedef struct SHEntryRuntime SHEntryRuntime;
+typedef struct SHInclude SHInclude;
 typedef struct SHFile SHFile;
 
 typedef struct ListCharString ListCharString;
 typedef struct ListSHEntryRuntime ListSHEntryRuntime;
+typedef struct ListSHInclude ListSHInclude;
 
 //oiCA
 
@@ -76,8 +78,9 @@ Error DLFile_readx(Buffer file, const U32 encryptionKey[8], Bool allowLeftOverDa
 Bool SHFile_createx(ESHSettingsFlags flags, U32 compilerVersion, U32 sourceHash, SHFile *shFile, Error *e_rr);
 void SHFile_freex(SHFile *shFile);
 
-Bool SHFile_addBinaryx(SHFile *shFile, SHBinaryInfo *binaries, Error *e_rr);		//Moves entry
-Bool SHFile_addEntrypointx(SHFile *shFile, SHEntry *entry, Error *e_rr);			//Moves entry->name
+Bool SHFile_addBinaryx(SHFile *shFile, SHBinaryInfo *binaries, Error *e_rr);	//Moves entry
+Bool SHFile_addEntrypointx(SHFile *shFile, SHEntry *entry, Error *e_rr);		//Moves entry->name
+Bool SHFile_addIncludex(SHFile *shFile, SHInclude *include, Error *e_rr);		//Moves include->relativePath
 
 Bool SHFile_writex(SHFile shFile, Buffer *result, Error *e_rr);
 Bool SHFile_readx(Buffer file, Bool isSubFile, SHFile *shFile, Error *e_rr);
@@ -89,8 +92,12 @@ void SHBinaryInfo_printx(SHBinaryInfo binary);
 void SHBinaryIdentifier_freex(SHBinaryIdentifier *identifier);
 void SHBinaryInfo_freex(SHBinaryInfo *info);
 void SHEntry_freex(SHEntry *entry);
+
 void SHEntryRuntime_freex(SHEntryRuntime *entry);
 void ListSHEntryRuntime_freeUnderlyingx(ListSHEntryRuntime *entry);
+
+void ListSHInclude_freeUnderlyingx(ListSHInclude *includes);
+void SHInclude_freex(SHInclude *include);
 
 #ifdef __cplusplus
 	}

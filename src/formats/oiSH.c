@@ -30,6 +30,7 @@ TListImpl(SHEntry);
 TListImpl(SHEntryRuntime);
 TListImpl(SHBinaryInfo);
 TListImpl(SHBinaryIdentifier);
+TListImpl(SHInclude);
 
 static const U8 SHHeader_V1_2 = 2;
 
@@ -126,6 +127,8 @@ Bool SHFile_create(
 		retError(clean, Error_invalidParameter(0, 3, "SHFile_create()::flags contained unsupported flag"))
 
 	gotoIfError2(clean, ListSHEntry_reserve(&shFile->entries, 16, alloc))
+	gotoIfError2(clean, ListSHBinaryInfo_reserve(&shFile->binaries, 16, alloc))
+	gotoIfError2(clean, ListSHInclude_reserve(&shFile->includes, 16, alloc))
 
 	shFile->flags = flags;
 	shFile->compilerVersion = compilerVersion;
@@ -159,6 +162,7 @@ void SHFile_free(SHFile *shFile, Allocator alloc) {
 
 	ListSHEntry_free(&shFile->entries, alloc);
 	ListSHBinaryInfo_free(&shFile->binaries, alloc);
+	ListSHInclude_freeUnderlying(&shFile->includes, alloc);
 
 	*shFile = (SHFile) { 0 };
 }
@@ -505,6 +509,58 @@ clean:
 	return s_uccess;
 }
 
+Bool SHFile_addInclude(SHFile *shFile, SHInclude *include, Allocator alloc, Error *e_rr) {
+
+	Bool s_uccess = true;
+	CharString tmp = (CharString) { 0 };
+
+	//Validate everything
+
+	if(!shFile || !include)
+		retError(clean, Error_nullPointer(!shFile ? 0 : 1, "SHFile_addInclude()::shFile and include are required"))
+	
+	if(!CharString_length(include->relativePath) || !include->crc32c)
+		retError(clean, Error_nullPointer(1, "SHFile_addInclude()::include->relativePath and crc32c are required"))
+
+	//Avoid duplicates.
+	//Though if the CRC32C mismatches, then we have a big problem.
+
+	for(U64 i = 0; i < shFile->includes.length; ++i)
+		if(CharString_equalsStringSensitive(include->relativePath, shFile->includes.ptr[i].relativePath)) {
+			
+			if(include->crc32c != shFile->includes.ptr[i].crc32c)
+				retError(clean, Error_alreadyDefined(
+					0, "SHFile_addInclude()::include was already defined, but with different CRC32C"
+				))
+
+			SHInclude_free(include, alloc);		//include is assumed to be moved, if it's not then it'd leak
+			goto clean;
+		}
+
+	if((shFile->includes.length + 1) >> 16)
+		retError(clean, Error_overflow(
+			0, shFile->includes.length, 1 << 16, "SHFile_addInclude()::shFile->includes is limited to 16-bit"
+		))
+
+	//Create copy and/or move
+
+	if(CharString_isRef(include->relativePath))
+		gotoIfError2(clean, CharString_createCopy(include->relativePath, alloc, &tmp))
+
+	SHInclude tmpInclude = (SHInclude) {
+		.relativePath = CharString_isRef(include->relativePath) ? tmp : include->relativePath,
+		.crc32c = include->crc32c
+	};
+
+	gotoIfError2(clean, ListSHInclude_pushBack(&shFile->includes, tmpInclude, alloc))
+	*include = (SHInclude) { 0 };
+	tmp = CharString_createNull();
+
+clean:
+	CharString_free(&tmp, alloc);
+	return s_uccess;
+}
+
 typedef enum ESHBinaryFlags {
 
 	ESHBinaryFlags_None 					= 0,
@@ -530,7 +586,7 @@ typedef enum ESHBinaryFlags {
 typedef struct BinaryInfoFixedSize {
 
 	U8 shaderModel;				//U4 major, minor
-	U8 entrypointType;			//ESHPipelineStage if entrypoint is not U16_MAX
+	U8 entrypointType;			//ESHPipelineStage: See entrypointType section in oiSH.md
 	U16 entrypoint;				//U16_MAX if library, otherwise index into stageNames
 
 	U16 vendorMask;				//Bitset of ESHVendor
@@ -658,6 +714,18 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 		}
 	}
 
+	//Add includes
+
+	for (U64 i = 0; i < shFile.includes.length; ++i) {
+
+		CharString includeName = shFile.includes.ptr[i].relativePath;
+
+		if(isUTF8)
+			gotoIfError2(clean, DLFile_addEntryUTF8(&dlFile, CharString_bufferConst(includeName), alloc))
+
+		else gotoIfError2(clean, DLFile_addEntryAscii(&dlFile, CharString_createRefStrConst(includeName), alloc))
+	}
+
 	//Add entries
 
 	for (U64 i = 0; i < shFile.entries.length; ++i) {
@@ -721,7 +789,8 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 		headerSize +
 		Buffer_length(dlFileBuf) +
 		shFile.entries.length * sizeof(EntryInfoFixedSize) +
-		shFile.binaries.length * sizeof(BinaryInfoFixedSize);
+		shFile.binaries.length * sizeof(BinaryInfoFixedSize) +
+		shFile.includes.length * sizeof(U32);
 
 	//Create sizes and calculate binary size buffer size
 
@@ -752,7 +821,8 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 		.sizeTypes = sizeTypes,
 		.binaryCount = (U16) shFile.binaries.length,
 		.stageCount = (U16) shFile.entries.length,
-		.uniqueUniforms = (U16) uniValStart
+		.uniqueUniforms = (U16) uniValStart,
+		.includeFileCount = (U16) shFile.includes.length
 	};
 
 	headerIt += sizeof(SHHeader);
@@ -764,7 +834,8 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 
 	BinaryInfoFixedSize *binaryStaticStart = (BinaryInfoFixedSize*) headerIt;
 	EntryInfoFixedSize *stagesStaticStart = (EntryInfoFixedSize*) (binaryStaticStart + shFile.binaries.length);
-	U8 *pipelineStagesStart = (U8*)(stagesStaticStart + shFile.entries.length);
+	U32 *crc32c = (U32*) (stagesStaticStart + shFile.entries.length);
+	U8 *pipelineStagesStart = (U8*)(crc32c + shFile.includes.length);
 	headerIt = pipelineStagesStart;	
 	
 	//Fill binaries
@@ -787,6 +858,7 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 				binaryFlags |= 1 << j;
 
 		U64 entryStart = dlFile.entryBuffers.length - entries;
+		U64 includeStart = entryStart - shFile.includes.length;
 		U64 entrypoint = entryStart + U16_MAX;		//Indicate no entry
 
 		if(!binary.hasShaderAnnotation) {
@@ -825,7 +897,7 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 		for(U64 j = 0; j < uniformCount; ++j) {
 			ListCharString uniforms = binary.identifier.uniforms;
 			uniformNames[j] = (U16) (DLFile_find(dlFile, uniNamesStart, uniValStart, uniforms.ptr[j << 1]) - uniNamesStart);
-			uniValues[j] = (U16) (DLFile_find(dlFile, uniValStart, entryStart, uniforms.ptr[(j << 1) | 1]) - uniValStart);
+			uniValues[j] = (U16) (DLFile_find(dlFile, uniValStart, includeStart, uniforms.ptr[(j << 1) | 1]) - uniValStart);
 		}
 
 		for (U8 j = 0; j < ESHBinaryType_Count; ++j) {
@@ -950,6 +1022,11 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 		}
 	}
 
+	//Fill includes
+
+	for (U64 i = 0; i < shFile.includes.length; ++i)
+		crc32c[i] = shFile.includes.ptr[i].crc32c;
+
 	//Finalize by adding the hash
 
 	U64 hashLen = Buffer_length(*result) - offsetof(SHHeader, uniqueUniforms);
@@ -975,6 +1052,7 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 	DLFile dlFile = (DLFile) { 0 };
 	SHEntry entry = (SHEntry) { 0 };
 	SHBinaryInfo binaryInfo = (SHBinaryInfo) { 0 };
+	SHInclude include = (SHInclude) { 0 };
 
 	if(!shFile)
 		retError(clean, Error_nullPointer(2, "SHFile_read()::shFile is required"))
@@ -1021,8 +1099,14 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 	gotoIfError2(clean, DLFile_read(file, NULL, true, alloc, &dlFile))
 	gotoIfError2(clean, Buffer_offset(&file, dlFile.readLength))
 
+	U64 minEntryBuffers =
+		(U64)header.stageCount + 
+		header.includeFileCount + 
+		header.uniqueUniforms +				//Names have to be unique
+		(header.uniqueUniforms ? 1 : 0);	//Values can be shared
+
 	if(
-		dlFile.entryBuffers.length < header.stageCount ||
+		dlFile.entryBuffers.length < minEntryBuffers ||
 		dlFile.settings.flags & EDLSettingsFlags_UseSHA256 ||
 		dlFile.settings.dataType == EDLDataType_Data ||
 		dlFile.settings.encryptionType ||
@@ -1032,13 +1116,11 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 
 	//Check if the buffer can at least contain the static sized data
 
-	U64 fixedBinSize = header.binaryCount * sizeof(BinaryInfoFixedSize);
-	U64 reqLen = fixedBinSize + header.stageCount * sizeof(EntryInfoFixedSize);
-
 	const BinaryInfoFixedSize *fixedBinaryInfo = (const BinaryInfoFixedSize*) file.ptr;
-	const EntryInfoFixedSize *fixedEntryInfo = (const EntryInfoFixedSize*) (file.ptr + fixedBinSize);
+	const EntryInfoFixedSize *fixedEntryInfo = (const EntryInfoFixedSize*) (fixedBinaryInfo + header.binaryCount);
+	const U32 *includeFileCrc32c = (const U32*) (fixedEntryInfo + header.stageCount);
 
-	gotoIfError2(clean, Buffer_offset(&file, reqLen));
+	gotoIfError2(clean, Buffer_offset(&file, (const U8*)(includeFileCrc32c + header.includeFileCount) - file.ptr));
 
 	//Create SHFile container
 
@@ -1115,18 +1197,22 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 
 		for(U64 i = 0; i < binary.uniformCount; ++i) {
 
-			//Grab uniform and values
+			//Grab uniform and values, validate them too
 
-			Bool success = false;
-			CharString uniformName = DLFile_stringAt(dlFile, (U64) uniformNames[i], &success);
+			if(uniformNames[i] >= header.uniqueUniforms)
+				retError(clean, Error_invalidState(1, "SHFile_read() uniformName out of bounds"))
 
-			if(!success)
-				retError(clean, Error_invalidState(1, "SHFile_read() uniformName didn't exist"))
+			CharString uniformName = DLFile_stringAt(dlFile, (U64) uniformNames[i], NULL);
+
+			//Since uniform values can be shared, we need to ensure we're not indexing out of bounds
+
+			U64 uniformNameId = (U64) uniformValues[i] + header.uniqueUniforms;
+			U64 endIndex = dlFile.entryBuffers.length - header.stageCount - header.includeFileCount;
+
+			if(uniformNameId >= endIndex)
+				retError(clean, Error_invalidState(1, "SHFile_read() uniformName out of bounds"))
 				
-			CharString uniformValue = DLFile_stringAt(dlFile, (U64) uniformValues[i] + header.uniqueUniforms, &success);
-
-			if(!success)
-				retError(clean, Error_invalidState(1, "SHFile_read() uniformValue didn't exist"))
+			CharString uniformValue = DLFile_stringAt(dlFile, uniformNameId, NULL);
 
 			//Check for duplicate uniform names
 
@@ -1339,6 +1425,21 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 
 	gotoIfError2(clean, Buffer_offset(&file, nextMem - nextMemPrev))
 
+	//Get includes
+
+	for(U64 i = 0; i < header.includeFileCount; ++i) {
+
+		CharString relativePath = DLFile_stringAt(
+			dlFile,
+			dlFile.entryBuffers.length - header.stageCount - header.includeFileCount + i,
+			NULL
+		);
+
+		gotoIfError2(clean, CharString_createCopy(relativePath, alloc, &include.relativePath))
+		include.crc32c = includeFileCrc32c[i];
+		gotoIfError3(clean, SHFile_addInclude(shFile, &include, alloc, e_rr))
+	}
+
 	//Verify if every binary has a stage
 
 	for (U64 j = 0; j < shFile->binaries.length; ++j) {
@@ -1403,6 +1504,7 @@ clean:
 	if(!s_uccess)
 		SHFile_free(shFile, alloc);
 
+	SHInclude_free(&include, alloc);
 	SHBinaryInfo_free(&binaryInfo, alloc);
 	SHEntry_free(&entry, alloc);
 	DLFile_free(&dlFile, alloc);
@@ -1827,6 +1929,14 @@ void SHEntry_free(SHEntry *entry, Allocator alloc) {
 	CharString_free(&entry->name, alloc);
 }
 
+void SHInclude_free(SHInclude *include, Allocator alloc) {
+
+	if(!include)
+		return;
+		
+	CharString_free(&include->relativePath, alloc);
+}
+
 void SHEntryRuntime_free(SHEntryRuntime *entry, Allocator alloc) {
 	
 	if(!entry)
@@ -1848,4 +1958,15 @@ void ListSHEntryRuntime_freeUnderlying(ListSHEntryRuntime *entry, Allocator allo
 		SHEntryRuntime_free(&entry->ptrNonConst[i], alloc);
 
 	ListSHEntryRuntime_free(entry, alloc);
+}
+
+void ListSHInclude_freeUnderlying(ListSHInclude *includes, Allocator alloc) {
+
+	if(!includes)
+		return;
+		
+	for(U64 i = 0; i < includes->length; ++i)
+		SHInclude_free(&includes->ptrNonConst[i], alloc);
+
+	ListSHInclude_free(includes, alloc);
 }

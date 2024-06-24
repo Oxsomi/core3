@@ -261,10 +261,20 @@ typedef struct SHBinaryInfo {
 
 } SHBinaryInfo;
 
+typedef struct SHInclude {
+
+	CharString relativePath;	//Path relative to oiSH source's directory (e.g. ../Includes/myInclude.hlsl)
+
+	U32 crc32c;					//Content CRC32C. However, if it contains \\r it's removed first!
+	U32 padding;
+
+} SHInclude;
+
 TList(SHEntry);
 TList(SHEntryRuntime);
 TList(SHBinaryIdentifier);
 TList(SHBinaryInfo);
+TList(SHInclude);
 
 Bool SHBinaryIdentifier_equals(SHBinaryIdentifier a, SHBinaryIdentifier b);
 
@@ -275,8 +285,11 @@ void SHEntryRuntime_print(SHEntryRuntime entry, Allocator alloc);
 void SHBinaryIdentifier_free(SHBinaryIdentifier *identifier, Allocator alloc);
 void SHBinaryInfo_free(SHBinaryInfo *info, Allocator alloc);
 void SHEntry_free(SHEntry *entry, Allocator alloc);
+void SHInclude_free(SHInclude *include, Allocator alloc);
+
 void SHEntryRuntime_free(SHEntryRuntime *entry, Allocator alloc);
 void ListSHEntryRuntime_freeUnderlying(ListSHEntryRuntime *entry, Allocator alloc);
+void ListSHInclude_freeUnderlying(ListSHInclude *includes, Allocator alloc);
 
 const C8 *SHEntry_stageName(SHEntry entry);
 
@@ -284,6 +297,7 @@ typedef struct SHFile {
 
 	ListSHBinaryInfo binaries;
 	ListSHEntry entries;
+	ListSHInclude includes;
 
 	U64 readLength;				//How many bytes were read for this file
 
@@ -295,7 +309,15 @@ typedef struct SHFile {
 
 } SHFile;
 
-Bool SHFile_create(ESHSettingsFlags flags, U32 compilerVersion, U32 sourceHash, Allocator alloc, SHFile *shFile, Error *e_rr);
+Bool SHFile_create(
+	ESHSettingsFlags flags,
+	U32 compilerVersion,
+	U32 sourceHash,
+	Allocator alloc,
+	SHFile *shFile,
+	Error *e_rr
+);
+
 void SHFile_free(SHFile *shFile, Allocator alloc);
 
 Bool SHFile_addBinaries(
@@ -306,6 +328,7 @@ Bool SHFile_addBinaries(
 );
 
 Bool SHFile_addEntrypoint(SHFile *shFile, SHEntry *entry, Allocator alloc, Error *e_rr);	//Moves entry->name and binaryIds
+Bool SHFile_addInclude(SHFile *shFile, SHInclude *include, Allocator alloc, Error *e_rr);	//Moves include->name
 
 Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr);
 Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, Error *e_rr);
@@ -328,6 +351,9 @@ typedef struct SHHeader {
 
 	U16 binaryCount;			//How many unique binaries are stored
 	U16 stageCount;				//How many stages reference into the binaries
+
+	U16 includeFileCount;		//Number of (recursive) include files
+	U16 padding;
 
 } SHHeader;
 

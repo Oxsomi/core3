@@ -270,3 +270,81 @@ clean:
 	CharString_free(result, alloc);
 	return err;
 }
+
+Bool File_makeRelative(
+	CharString absoluteDir,
+	CharString base,
+	CharString subFile,
+	U64 maxFilePathLimit,
+	Allocator alloc,
+	CharString *result,
+	Error *e_rr
+) {
+	Bool s_uccess = true, isVirtual = false;
+	CharString resolvedBase = CharString_createNull();
+	CharString resolvedSubFile = CharString_createNull();
+
+	if(!result)
+		retError(clean, Error_nullPointer(5, "File_makeRelative()::result is required"))
+
+	if(result->ptr)
+		retError(clean, Error_invalidParameter(5, 0, "File_makeRelative()::*result must be empty"))
+
+	gotoIfError2(clean, File_resolve(base, &isVirtual, maxFilePathLimit, absoluteDir, alloc, &resolvedBase))
+	gotoIfError2(clean, File_resolve(subFile, &isVirtual, maxFilePathLimit, absoluteDir, alloc, &resolvedSubFile))
+
+	CharString baseAbsDir = CharString_createNull();
+	CharString subFileAbsDir = CharString_createNull();
+	CharString_cut(resolvedBase, CharString_length(absoluteDir), 0, &baseAbsDir);
+	CharString_cut(resolvedSubFile, CharString_length(absoluteDir), 0, &subFileAbsDir);
+
+	U64 baseAbsSlashes = CharString_countAllSensitive(baseAbsDir, '/', 0);
+
+	if (!baseAbsSlashes) {							//Base is working dir, so easy to compute
+		gotoIfError2(clean, CharString_createCopy(subFileAbsDir, alloc, result))
+		goto clean;
+	}
+
+	//Otherwise, check how many folders match. Find first one that doesn't match.
+	//The first one that doesn't match, we need more ..s
+
+	U64 i = 0;
+	U64 subFileLen = 0;
+
+	for (U64 it = 0, it2 = 0; i < baseAbsSlashes; ++i, ++it, ++it2) {
+
+		U64 prev = it;
+		it = CharString_findSensitive(baseAbsDir, '/', true, it);
+
+		U64 prev2 = it2;
+		it2 = CharString_findSensitive(subFileAbsDir, '/', true, it2);
+
+		if(it == U64_MAX || it2 == U64_MAX)
+			break;
+
+		CharString sub = CharString_createNull();
+		CharString_cut(baseAbsDir, prev, it - prev, &sub);
+
+		CharString sub2 = CharString_createNull();
+		CharString_cut(baseAbsDir, prev2, it2 - prev2, &sub2);
+
+		if(!CharString_equalsStringSensitive(sub, sub2))
+			break;
+
+		subFileLen = it2 + 1;
+	}
+
+	gotoIfError2(clean, CharString_popFrontCount(&resolvedSubFile, CharString_length(absoluteDir)))
+	gotoIfError2(clean, CharString_popFrontCount(&resolvedSubFile, subFileLen))
+
+	for (U64 j = 0; j < baseAbsSlashes - i; ++j)
+		gotoIfError2(clean, CharString_prependString(&resolvedSubFile, CharString_createRefCStrConst("../"), alloc))
+
+	*result = resolvedSubFile;
+	resolvedSubFile = CharString_createNull();
+
+clean:
+	CharString_free(&resolvedBase, alloc);
+	CharString_free(&resolvedSubFile, alloc);
+	return s_uccess;
+}

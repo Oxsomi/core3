@@ -163,6 +163,15 @@ Error File_resolvex(CharString loc, Bool *isVirtual, U64 maxFilePathLimit, CharS
 		result
 	);
 }
+Bool File_makeRelativex(CharString base, CharString subFile, U64 maxFilePathLimit, CharString *result, Error *e_rr) {
+	return File_makeRelative(
+		Platform_instance.workingDirectory, base, subFile,
+		maxFilePathLimit,
+		Platform_instance.alloc,
+		result,
+		e_rr
+	);
+}
 
 Error File_getInfo(CharString loc, FileInfo *info, Allocator alloc) {
 

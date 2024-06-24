@@ -58,6 +58,16 @@ Error File_resolve(
 	CharString *result
 );
 
+Bool File_makeRelative(
+	CharString absoluteDir,		//Can't escape absoluteDir with baseFolder or subFile. Must end with /
+	CharString base,			//File in which the parent is located (e.g. myFolder/test.txt)
+	CharString subFile,			//File to made relative to the parent of base (e.g. myOtherFolder/test.txt)
+	U64 maxFilePathLimit,
+	Allocator alloc,
+	CharString *result,
+	Error *e_rr
+);
+
 Bool File_isVirtual(CharString loc);
 
 Bool FileInfo_free(FileInfo *info, Allocator alloc);

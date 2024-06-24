@@ -30,6 +30,7 @@
 Error File_getInfo(CharString loc, FileInfo *info, Allocator alloc);
 Error File_getInfox(CharString loc, FileInfo *info);
 Error File_resolvex(CharString loc, Bool *isVirtual, U64 maxFilePathLimit, CharString *result);
+Bool File_makeRelativex(CharString base, CharString subFile, U64 maxFilePathLimit, CharString *result, Error *e_rr);
 
 Bool FileInfo_freex(FileInfo *fileInfo);
 

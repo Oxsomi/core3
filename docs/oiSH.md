@@ -32,9 +32,9 @@ typedef struct SHHeader {
     
     U32 compilerVersion;
 
-	U32 hash;					 //CRC32C of contents starting at uniqueUniforms
+	U32 hash;					//CRC32C of contents starting at uniqueUniforms
     
-    U32 sourceHash;				//CRC32C of source(s), for determining if it's dirty
+    U32 sourceHash;				//CRC32C of source(s), for determining if it's dirty. See CRC32C section.
     
 	U16 uniqueUniforms;
 	U8 version;					//major.minor (%10 = minor, /10 = major (+1 to get real major)) at least 1
@@ -42,6 +42,9 @@ typedef struct SHHeader {
     
     U16 binaryCount;			//How many unique binaries are stored
     U16 stageCount;				//How many stages reference into the binaries
+    
+    U16 includeFileCount;
+    U16 padding;
 
 } SHHeader;
 
@@ -150,7 +153,7 @@ typedef enum ESHVendor {
 typedef struct BinaryInfoFixedSize {
     
 	U8 shaderModel;				//U4 major, minor
-	U8 entrypointType;			//ESHPipelineStage if entrypoint is not U16_MAX
+	U8 entrypointType;			//See entrypointType section
 	U16 entrypoint;				//U16_MAX if library, otherwise index into stageNames
 
 	U16 vendorMask;				//Bitset of ESHVendor
@@ -185,11 +188,13 @@ SHFile {
 
     //No header, no encryption/compression/SHA256 (see oiDL.md)
     //strings[len - stageCount, len] contains entrypoint names.
-    //strings[..., len - stageCount] contains uniform values and names.
+    //strings[^ - includeFileCount, len - includeCount] contains (relative) include names.
+    //strings[0, len - stageCount - includeFileCount] contains uniform values and names.
     DLFile strings;
 
     BinaryInfoFixedSize binaryInfos[binaryCount];
     EntryInfoFixedSize pipelineStages[stageCount];
+    U32 includeFileHashes[includeFileCount];
 
     for i < binaryCount:
     
@@ -234,11 +239,25 @@ The types are Oxsomi types; `U<X>`: x-bit unsigned integer, `I<X>` x-bit signed 
 
 The magic number in the header can only be absent if embedded in another file. An example is the file name table in an oiCA file.
 
+## CRC32C
+
+CRC32C hashes are used for the source and include directories to see if they're dirty. CRC32C first checks for \r and removes it. This is because Windows uses \r\n and Unix/OSX use \n. Windows can allow either, but will sometimes pick \r\n and sometimes \n. To mitigate this triggering random recompiles, even though the real source isn't dirty. CRC32C is a variation of CRC32 optimized for performance, since there is integrated hardware support for it.
+
+## entrypointType
+
+Entrypoint type clarifies what type of entrypoint was compiled as (ESHPipelineStage). If compiled as a library (e.g. raytracing, workgraphs, etc.), this value should only be looked at from the user perspective if there are duplicates. This is because the entrypointType only has meaning if binary was compiled for a specific target (using [stage("")] for example).
+
+If this is not the case, then the compiler can decide how to combine entrypoints. It will be allowed for raygen, miss and hit shaders to be compiled in a single go, and for the stage type to be raygen for all of them. But if the stage is determined to need a specialized compile, then it can be combined with only the stages it is compatible with (for example; if pixel and vertex shaders have different internal defines or compiler settings, then they can still be separated if need be). 
+
+## Includes
+
+All includes must have reproducible hashes (regardless of OS) as noted in the CRC32C section. Timestamps aren't included, as this would not make binaries reproducible. Which might generate issues with source control if someone decided to check these files in. The includes should also be reproducible even from other PCs. This means that the include names include relative paths (relative to the source file) rather than absolute. This way, recompiling the same binary will always give the same result, even with different check out directories and different time.
+
 ## Changelog
 
 0.1: Old ocore1 specification. Represented multiple shaders and had too much reflection information that is now irrelevant.
 
 1.2: Basic format specification. Added support for various extensions, stages and binary types. Maps closer to real binary formats.
 
-1.2(.1): No major bump, because no oiSH files exist in the wild yet. Made extensions per stage, made file format more efficient, now allowing multiple binaries to exist allowing 1 compile for all entries even for non lib formats. Added uniforms. Also swapped binaries and stages.
+1.2(.1): No major bump, because no oiSH files exist in the wild yet. Made extensions per stage, made file format more efficient, now allowing multiple binaries to exist allowing 1 compile for all entries even for non lib formats. Added uniforms. Also swapped binaries and stages. Added include files (relative paths) and CRC32Cs for dirty checking.
 

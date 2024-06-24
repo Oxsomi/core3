@@ -141,8 +141,9 @@ typedef enum EOperationFlags {
 
 	EOperationFlags_Debug				= 1 << 17,
 	EOperationFlags_IgnoreEmptyFiles	= 1 << 18,
+	EOperationFlags_Includes			= 1 << 19,		//Used to signal to OxC3 file data that includes should be requested
 
-	EOperationFlags_Count				= 19
+	EOperationFlags_Count				= 20
 
 } EOperationFlags;
 

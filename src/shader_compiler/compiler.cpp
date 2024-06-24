@@ -143,7 +143,7 @@ public:
 
 			CharString tmp = CharString_createNull();
 
-			if(!CharString_cut(fileName, lastAt + 1, 0, &tmp) || !CharString_length(tmp))
+			if(!CharString_cut(fileName, lastAt, 0, &tmp) || !CharString_length(tmp))
 				retError(clean, Error_invalidState(0, "IncludeHandler::LoadSource expected source after //"))
 
 			gotoIfError2(clean, CharString_createCopy(tmp, alloc, &resolved))
@@ -287,19 +287,19 @@ public:
 
 			} else {
 
-				if(CharString_equalsStringInsensitive(resolved, CharString_createRefCStrConst("resources.hlsl")))
+				if(CharString_equalsStringInsensitive(resolved, CharString_createRefCStrConst("@resources.hlsl")))
 					tempFile = CharString_createRefCStrConst(resources);
 
-				else if(CharString_equalsStringInsensitive(resolved, CharString_createRefCStrConst("types.hlsl")))
+				else if(CharString_equalsStringInsensitive(resolved, CharString_createRefCStrConst("@types.hlsl")))
 					tempFile = CharString_createRefCStrConst(types);
 
-				else if(CharString_equalsStringInsensitive(resolved, CharString_createRefCStrConst("nvShaderExtnEnums.h")))
+				else if(CharString_equalsStringInsensitive(resolved, CharString_createRefCStrConst("@nvShaderExtnEnums.h")))
 					tempFile = CharString_createRefCStrConst(nvShaderExtnEnums);
 
-				else if(CharString_equalsStringInsensitive(resolved, CharString_createRefCStrConst("nvHLSLExtnsInternal.h")))
+				else if(CharString_equalsStringInsensitive(resolved, CharString_createRefCStrConst("@nvHLSLExtnsInternal.h")))
 					tempFile = CharString_createRefCStrConst(nvHLSLExtnsInternal);
 
-				else if(CharString_equalsStringInsensitive(resolved, CharString_createRefCStrConst("nvHLSLExtns.h"))) {
+				else if(CharString_equalsStringInsensitive(resolved, CharString_createRefCStrConst("@nvHLSLExtns.h"))) {
 
 					//Because of the C limit of 64KiB per string constant, we need two string constants and merge them
 
@@ -781,6 +781,8 @@ clean:
 	return s_uccess;
 }
 
+U64 compileId = 0;
+
 Bool Compiler_compile(
 	Compiler comp,
 	CompilerSettings settings,
@@ -1090,6 +1092,26 @@ Bool Compiler_compile(
 			alloc,
 			&result->binary
 		))
+
+		if (settings.infoAboutIncludes) {
+
+			gotoIfError2(clean, ListIncludeInfo_resize(&result->includeInfo, interfaces->includeHandler->getCounter(), alloc))
+
+			ListIncludedFile files = interfaces->includeHandler->getIncludedFiles();
+
+			for(U64 i = 0, j = 0; i < files.length; ++i)
+				if (files.ptr[i].includeInfo.counter) {		//Exclude inactive includes
+
+					IncludeInfo copy = files.ptr[i].includeInfo;
+					gotoIfError2(clean, CharString_createCopy(copy.file, alloc, &tempStr))
+
+					copy.file = tempStr;
+					result->includeInfo.ptrNonConst[j] = copy;
+					tempStr = CharString_createNull();
+
+					++j;
+				}
+		}
 
 		result->type = ECompileResultType_Binary;
 		result->isSuccess = true;

@@ -198,6 +198,11 @@ a78d6265 01329 D:/programming/repos/rt_core/res/shaders/ray_basics.hlsl
 bb15afc7 01860 D:/programming/repos/rt_core/res/shaders/resource_bindings.hlsl
 ```
 
+#### Limits
+
+Includes use OxC3 file paths, as such, escaping out of the working directory is prohibited. Any resolved file path that doesn't start with the working directory is illegal. And any tool that may read these includes (such as a file watcher) should have a similar protection mechanism.
+This gives a logical limit to how far back an include can go. Such a limit is also very useful to prevent any tooling from reading into files that weren't intentional or don't exist within the scope of the program (such as embedding a fictional include file which could read any file the program has access to). It will also enforce relative files, rather than allowing absolute files in the includes for some reason.
+
 ### TODO: Reflect
 
 ### Symbols
