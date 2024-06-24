@@ -873,6 +873,11 @@ Basic file util (types/file.h) for resolving file paths and handling FileInfo fr
   - maxFilePathLimit is forced to 260 if not provided and on Windows this is enforced.
   - isVirtual pointer is required, even if unused and returns if the file path is a virtual file path.
   - A new CharString is allocated in result.
+- Bool **File_makeRelative**(CharString absoluteDir, CharString base, CharString subFile, U64 maxFilePathLimit, Allocator alloc, CharString *result, Error *e_rr)
+  - Similar story to File_resolve, except base and subFile are first resolved to absoluteDir. Then, subFile is checked relative to base. For example if base is `test/text.txt` relative to the absolute directory and the other file is `test/test2/test.txt` then it's resolved to `test2/test.txt` but for example (from absoluteDir) `test2/test.txt` is resolved to `../test2/test.txt`. 
+  - Subfile and base are both files in a folder that have a parent. They're not a directory itself.
+  - maxFilePathLimit is regarding the resolved path using absoluteDir, so not just the relative path.
+  - base and subFile can't escape absoluteDir to avoid linking absolute files on disk.
 - Bool **File_isVirtual**(CharString): If the File is virtual (starts with //).
 - Bool **FileInfo_free**(FileInfo*, Allocator): Free the FileInfo that was returned by a file function.
 
