@@ -20,11 +20,11 @@ jobs:
       id: conan
       uses: turtlebrowser/get-conan@main
     - name: build for fast check
-      run: conan create . -o cliGraphics=False -o forceVulkan=True -o enableSIMD=True -s build_type=Release
+      run: bash build.sh Release True -o cliGraphics=False -o forceVulkan=True
     - name: build for SIMD fallback check
-      run: conan create . -o cliGraphics=False -o forceVulkan=True -o enableSIMD=False -s build_type=Release
+      run: bash build.sh Release False -o cliGraphics=False -o forceVulkan=True
     - name: build for fast check
-      run: conan create . -o cliGraphics=False -o forceVulkan=True -o enableSIMD=True -s build_type=Debug
+      run: bash build.sh Debug True -o cliGraphics=False -o forceVulkan=True
     - uses: actions/setup-ruby@v1
     - name: Send Webhook Notification
       if: always()

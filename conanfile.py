@@ -76,7 +76,7 @@ class oxc3(ConanFile):
 		cmake.build()
 
 	def requirements(self):
-		self.requires("dxc/2024.06.09")
+		self.requires("dxc/2024.06.25")
 
 	def package(self):
 		cmake = CMake(self)

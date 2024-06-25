@@ -18,9 +18,9 @@ jobs:
       id: conan
       uses: turtlebrowser/get-conan@main
     - name: Release but no SIMD, not supported yet
-      run: conan create . -o enableSIMD=False -o cliGraphics=False -s build_type=Release
+      run: bash build.sh Release False -o cliGraphics=False
     - name: Debug but no SIMD, not supported yet
-      run: conan create . -o enableSIMD=False -o cliGraphics=False -s build_type=Debug
+      run: bash build.sh Debug False -o cliGraphics=False
     - uses: actions/setup-ruby@v1
     - name: Send Webhook Notification
       if: always()

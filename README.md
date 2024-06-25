@@ -84,7 +84,7 @@ git clone --recurse-submodules -j8 https://github.com/Oxsomi/core3
 ### Windows
 
 ```batch
-conan install .
+build Release True
 ```
 
 The Windows implementation supports SSE.
@@ -92,7 +92,7 @@ The Windows implementation supports SSE.
 ### Mac OS X
 
 ```c
-conan install . -o enableSIMD=False
+build Release False
 ```
 
 Currently the Mac implementation doesn't support SSE or NEON. So SIMD mode has to be forced to None. It also doesn't support anything above OxC3 platforms yet.
@@ -100,7 +100,7 @@ Currently the Mac implementation doesn't support SSE or NEON. So SIMD mode has t
 ### Linux
 
 ```c
-conan install . -o enableSIMD=False
+build Release False
 ```
 
 Currently the Linux build doesn't support SSE or NEON. So SIMD mode has to be forced to None. It also doesn't support anything above OxC3 platforms yet.
@@ -108,17 +108,6 @@ Currently the Linux build doesn't support SSE or NEON. So SIMD mode has to be fo
 ### Other platforms
 
 Other platforms like Linux, Android and iOS are coming in the future.
-
-### Building locally / not packaged
-
-For building locally, the following commands should be ran:
-
-```c
-conan install .
-conan build .
-```
-
-Where conan build is done with the respective options (see Windows, OSX, Linux, etc.)
 
 ## Graphics
 
