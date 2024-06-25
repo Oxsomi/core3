@@ -806,12 +806,16 @@ Bool Compiler_compile(
 	CharString tempStr = CharString_createNull();
 	CharString tempStr2 = CharString_createNull();
 	ListListU16 strings = ListListU16{};
+	ListU16PtrConst stringArr = ListU16PtrConst{};
 
 	if(!interfaces->utils || !result)
 		retError(clean, Error_alreadyDefined(!interfaces->utils ? 0 : 2, "Compiler_compile()::comp is required"))
 
 	if(!CharString_length(settings.string))
 		retError(clean, Error_invalidParameter(1, 0, "Compiler_compile()::settings.string is required"))
+
+	if(toCompile.uniforms.length & 1)
+		retError(clean, Error_invalidParameter(2, 0, "Compiler_compile()::toCompile.uniforms.length should be aligned to 2"))
 
 	if(settings.outputType >= ESHBinaryType_Count || settings.format >= ECompilerFormat_Count)
 		retError(clean, Error_invalidParameter(1, 0, "Compiler_compile()::settings contains invalid format or outputType"))
@@ -921,68 +925,71 @@ Bool Compiler_compile(
 			{ '-', 'T', '\0' }
 		};
 
-		U32 argCounter = 6;
+		U32 lastExtension = 0;
+		U32 extensionCount = 0;
 
-		const U16 *argsPtr[25] = {
+		for(U32 i = 0; i < ESHExtension_Count; ++i)
+			if ((toCompile.extensions >> i) & 1) {
+				++extensionCount;
+				lastExtension = i + 1;
+			}
 
-			inputFile.ptr,		//Relative to input file for includes
+		gotoIfError2(clean, ListU16PtrConst_resize(&stringArr, 25 + (toCompile.uniforms.length / 2) + extensionCount, alloc))
 
-			args[3],			//-D__OXC3
+		U32 argCounter = 0;
+		const U16 **argsPtr = stringArr.ptrNonConst;
 
-			//-Zpc
-
-			args[7],
-
-			settings.debug ? args[10] : args[11],		//-Od or -O3
-
-			args[19],		//-HV 202x
-			args[20]
-		};
+		argsPtr[argCounter++] = inputFile.ptr;								//Relative to input file for includes
+		argsPtr[argCounter++] = args[3];									//-D__OXC3
+		argsPtr[argCounter++] = args[7];									//-Zpc
+		argsPtr[argCounter++] = settings.debug ? args[10] : args[11];		//-Od or -O3
+		argsPtr[argCounter++] = args[19];									//-HV 202x
+		argsPtr[argCounter++] = args[20];
 
 		if(settings.debug)
-			argsPtr[argCounter++] = args[12];					//-Zi
+			argsPtr[argCounter++] = args[12];								//-Zi
 
 		if(toCompile.extensions & ESHExtension_16BitTypes)
-			argsPtr[argCounter++] = args[13];					//-enable-16bit-types
+			argsPtr[argCounter++] = args[13];								//-enable-16bit-types
 
 		if (settings.outputType == ESHBinaryType_SPIRV) {
 
-			argsPtr[argCounter++] = args[1];					//-spirv
-			argsPtr[argCounter++] = args[14];					//-fvk-use-dx-layout
-			argsPtr[argCounter++] = args[15];					//-fspv-target-env=vulkan1.2
+			argsPtr[argCounter++] = args[1];								//-spirv
+			argsPtr[argCounter++] = args[14];								//-fvk-use-dx-layout
+			argsPtr[argCounter++] = args[15];								//-fspv-target-env=vulkan1.2
 
 			if(
 				toCompile.stageType == ESHPipelineStage_Vertex ||
 				toCompile.stageType == ESHPipelineStage_Domain ||
 				toCompile.stageType == ESHPipelineStage_GeometryExt
 			)
-				argsPtr[argCounter++] = args[16];				//-fvk-invert-y
+				argsPtr[argCounter++] = args[16];							//-fvk-invert-y
 
 			else if(toCompile.stageType == ESHPipelineStage_Pixel)
-				argsPtr[argCounter++] = args[17];				//-fvk-use-dx-position-w
+				argsPtr[argCounter++] = args[17];							//-fvk-use-dx-position-w
 
 			if(CharString_length(toCompile.entrypoint))
-				argsPtr[argCounter++] = args[18];				//-fspv-entrypoint-name=main
+				argsPtr[argCounter++] = args[18];							//-fspv-entrypoint-name=main
 		}
 
 		else {
 
-			argsPtr[argCounter++] = args[8];					//-Qstrip_debug
-			argsPtr[argCounter++] = args[9];					//-Qstrip_reflect
+			argsPtr[argCounter++] = args[8];								//-Qstrip_debug
+			argsPtr[argCounter++] = args[9];								//-Qstrip_reflect
 
-			argsPtr[argCounter++] = args[4];					//-auto-binding-space
-			argsPtr[argCounter++] = args[5];					//0
+			argsPtr[argCounter++] = args[4];								//-auto-binding-space
+			argsPtr[argCounter++] = args[5];								//0
 
 			if(toCompile.extensions & ESHExtension_PAQ)
-				argsPtr[argCounter++] = args[6];				//-enable-payload-qualifiers
+				argsPtr[argCounter++] = args[6];							//-enable-payload-qualifiers
 		}
 
-		if (includeDir.length) {								//-I
+		if (includeDir.length) {											//-I
 			argsPtr[argCounter++] = args[2];
 			argsPtr[argCounter++] = includeDir.ptr;
 		}
 
-		if (includeDir2.length) {							//-I
+		if (includeDir2.length) {											//-I
 			argsPtr[argCounter++] = args[2];
 			argsPtr[argCounter++] = includeDir2.ptr;
 		}
@@ -1016,7 +1023,47 @@ Bool Compiler_compile(
 		argsPtr[argCounter++] = tempWStr.ptr;
 		tempWStr = ListU16{};
 
-		//TODO: __OXC3_EXT_<X> foreach extension
+		//$<X> foreach uniform
+
+		for(U32 i = 0; i < toCompile.uniforms.length; i += 2) {
+
+			CharString uniformName  = toCompile.uniforms.ptr[i];
+			CharString uniformValue = toCompile.uniforms.ptr[i + 1];
+
+			gotoIfError2(clean, CharString_format(
+
+				alloc, &tempStr2,
+
+				!CharString_length(uniformValue) ? "-D$%.*s" : "-D$%.*s=%.*s", 
+
+				(int) CharString_length(uniformName),
+				uniformName.ptr,
+
+				(int) CharString_length(uniformValue),
+				uniformValue.ptr
+			))
+
+			gotoIfError2(clean, CharString_toUTF16(tempStr2, alloc, &tempWStr))
+			CharString_free(&tempStr2, alloc);
+
+			gotoIfError2(clean, ListListU16_pushBack(&strings, tempWStr, alloc))
+			argsPtr[argCounter++] = tempWStr.ptr;
+			tempWStr = ListU16{};
+		}
+
+		//__OXC3_EXT_<X> foreach extension
+
+		for(U32 i = 0; i < lastExtension; ++i)
+			if ((toCompile.extensions >> i) & 1) {
+
+				gotoIfError2(clean, CharString_format(alloc, &tempStr2, "-D__OXC3_EXT_%s", ESHExtension_defines[i]))
+				gotoIfError2(clean, CharString_toUTF16(tempStr2, alloc, &tempWStr))
+				CharString_free(&tempStr2, alloc);
+
+				gotoIfError2(clean, ListListU16_pushBack(&strings, tempWStr, alloc))
+				argsPtr[argCounter++] = tempWStr.ptr;
+				tempWStr = ListU16{};
+			}
 
 		//Format major, minor, patch and version
 
@@ -1131,6 +1178,7 @@ clean:
 	if(error)
 		error->Release();
 
+	ListU16PtrConst_free(&stringArr, alloc);
 	ListListU16_freeUnderlying(&strings, alloc);
 	ListU16_free(&inputFile, alloc);
 	ListU16_free(&includeDir, alloc);

@@ -84,6 +84,8 @@ typedef enum ESHExtension {
 
 } ESHExtension;
 
+extern const C8 *ESHExtension_defines[ESHExtension_Count];
+
 typedef enum ESHVendor {
 	ESHVendor_NV,
 	ESHVendor_AMD,

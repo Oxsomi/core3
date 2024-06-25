@@ -39,6 +39,25 @@ const C8 *ESHBinaryType_names[ESHBinaryType_Count] = {
 	"DXIL"
 };
 
+const C8 *ESHExtension_defines[ESHExtension_Count] = {
+	"F64",
+	"I64",
+	"16BITTYPES",
+	"ATOMICI64",
+	"ATOMICF32",
+	"ATOMICF64",
+	"SUBGROUPARITHMETIC",
+	"SUBGROUPSHUFFLE",
+	"RAYQUERY",
+	"RAYMICROMAPOPACITY",
+	"RAYMICROMAPDISPLACEMENT",
+	"RAYMOTIONBLUR",
+	"RAYREORDER",
+	"MULTIVIEW",
+	"COMPUTEDERIV",
+	"PAQ"
+};
+
 const C8 *SHEntry_stageNames[] = {
 
 	"vertex",

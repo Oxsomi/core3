@@ -149,6 +149,7 @@ typedef struct IncludedFile {
 
 TList(IncludedFile);
 TList(ListU16);
+TListNamed(const U16*, ListU16PtrConst);
 
 void IncludedFile_free(IncludedFile *file, Allocator alloc);
 void ListIncludedFile_freeUnderlying(ListIncludedFile *file, Allocator alloc);

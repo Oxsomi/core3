@@ -33,6 +33,7 @@ TListImpl(CompileError);
 TListImpl(IncludeInfo);
 TListImpl(IncludedFile);
 TListImpl(ListU16);
+TListNamedImpl(ListU16PtrConst);
 
 U32 CompileError_lineId(CompileError err) {
 	return err.lineId | ((U32)(err.typeLineId & (U8)I8_MAX) << 16);
