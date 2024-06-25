@@ -17,6 +17,8 @@ jobs:
     - name: Install Conan
       id: conan
       uses: turtlebrowser/get-conan@main
+    - name: Configure conan
+      run: conan profile detect
     - name: Release but no SIMD, not supported yet
       run: bash build.sh Release False -o cliGraphics=False
     - name: Debug but no SIMD, not supported yet

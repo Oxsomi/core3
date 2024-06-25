@@ -13,6 +13,8 @@ jobs:
     - name: Install Conan
       id: conan
       uses: turtlebrowser/get-conan@main
+    - name: Configure conan
+      run: conan profile detect
     - name: build for fast check
       run: bash build.sh Release True -o cliGraphics=False
     - name: build for SIMD fallback check
