@@ -19,13 +19,15 @@
 */
 
 #pragma once
-#include "types/string.h"
+#include "types/types.h"
 
 #ifdef __cplusplus
 	extern "C" {
 #endif
 
 typedef struct Error Error;
+typedef struct CharString CharString;
+typedef struct Allocator Allocator;
 
 typedef enum ELogLevel {
 	ELogLevel_Debug,

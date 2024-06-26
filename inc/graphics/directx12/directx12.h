@@ -22,6 +22,7 @@
 #include <dxgi1_6.h>
 
 #include "types/list.h"
+#include "types/string.h"
 #include "graphics/generic/device_buffer.h"
 #include "d3d12.h"
 

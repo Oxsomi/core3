@@ -85,6 +85,8 @@ class oxc3(ConanFile):
 		copy(self, "*.a", "lib", "../../p/lib")
 		copy(self, "*.lib", "lib/Release", "../../p/lib")
 		copy(self, "*.lib", "lib/Debug", "../../p/lib")
+		copy(self, "*.a", "lib/Release", "../../p/lib")
+		copy(self, "*.a", "lib/Debug", "../../p/lib")
 		copy(self, "", "bin", "../../p/bin")
 		copy(self, "", "bin/Release", "../../p/bin")
 		copy(self, "", "bin/Debug", "../../p/bin")

@@ -20,12 +20,11 @@
 
 #pragma once
 #include "types/list.h"
+#include "types/string.h"
 
 #ifdef __cplusplus
 	extern "C" {
 #endif
-
-typedef struct CharString CharString;
 
 //A lexer expression is a bunch of LexerTokens that are grouped together.
 //If the type is generic then one token can actually be multiple and the parser will decide what it represents.
