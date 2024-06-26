@@ -679,7 +679,7 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 
 			else gotoIfError2(clean, DLFile_addEntryAscii(&dlFile, CharString_createRefStrConst(str), alloc))
 
-			if(dlFile.entryBuffers.length - shFile.entries.length >= U16_MAX - 1)
+			if(dlFile.entryBuffers.length - shFile.entries.length >= (U16)(U16_MAX - 1))
 				retError(clean, Error_invalidState(0, "DLFile didn't have space for uniform names"))
 		}
 
@@ -723,7 +723,7 @@ Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr) {
 			if(DLFile_find(dlFile, uniValStart, dlFile.entryBuffers.length, str) != U64_MAX)
 				continue;
 
-			if(dlFile.entryBuffers.length - uniValStart >= U16_MAX - 1)
+			if(dlFile.entryBuffers.length - uniValStart >= (U16)(U16_MAX - 1))
 				retError(clean, Error_invalidState(0, "DLFile didn't have space for uniform values"))
 
 			if(isUTF8)
@@ -1344,7 +1344,7 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 				entry.intersectionSize = *nextMem;
 				++nextMem;
 				
-				//[[fallthrough]]
+  				// fall through
 				
 			case ESHPipelineStage_MissExt:
 			case ESHPipelineStage_ClosestHitExt:
@@ -1729,7 +1729,7 @@ void SHEntry_print(SHEntry shEntry, Allocator alloc) {
 
 		case ESHPipelineStage_IntersectionExt:
 			Log_debugLn(alloc, "\tIntersection size: %"PRIu8, shEntry.intersectionSize);
-			//[[fallthrough]]
+  			// fall through
 
 		case ESHPipelineStage_MissExt:
 		case ESHPipelineStage_ClosestHitExt:

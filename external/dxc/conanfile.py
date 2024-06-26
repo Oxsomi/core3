@@ -97,32 +97,45 @@ class dxc(ConanFile):
 		# First do a copy for all debug libs
 		# So that we can rename them all at once to suffixed by D
 		# Apparently it looks for dxcompilerD.lib/.a rather than dxcompiler.lib/.a
-
-		copy(self, "*.lib", "lib/Debug", "../../p/lib")
-		copy(self, "*.a", "lib/Debug", "../../p/lib")
-		copy(self, "*.lib", "Debug/lib", "../../p/lib")
-		copy(self, "*.a", "Debug/lib", "../../p/lib")
 		
-		directory = "../../p/lib"
+		cwd = os.getcwd()
+		
+		# Linux, OSX, etc. all run from build/Debug or build/Release, so we need to change it a bit
+		if cwd.endswith("Debug") or cwd.endswith("Release"):
+			
+			# Headers
 
-		if os.path.isfile(directory):
-			for filename in os.listdir(directory):
-				f = os.path.join(directory, filename)
-				if os.path.isfile(f):
-					offset = f.rfind(".")
-					rename(self, f, f[:offset] + "d." + f[offset+1:])
+			copy(self, "*.h", "../../DirectXShaderCompiler/include/dxc", "../../../p/include/dxc")
+			copy(self, "*.hpp", "../../DirectXShaderCompiler/include/dxc", "../../../p/include/dxc")
 
-		# Copy release libs
+			# Libs
 
-		copy(self, "*.lib", "lib/Release", "../../p/lib")
-		copy(self, "*.a", "lib/Release", "../../p/lib")
-		copy(self, "*.lib", "Release/lib", "../../p/lib")
-		copy(self, "*.a", "Release/lib", "../../p/lib")
+			copy(self, "*.a", "lib", "../../../p/lib")
+		
+		# Windows uses .lib files and runs it from the build directory
+		else:
+			
+			copy(self, "*.lib", "lib/Debug", "../../p/lib")
+			copy(self, "*.lib", "Debug/lib", "../../p/lib")
+			
+			directory = "../../p/lib"
 
-		# Headers
+			if os.path.isfile(directory):
+				for filename in os.listdir(directory):
+					f = os.path.join(directory, filename)
+					if os.path.isfile(f):
+						offset = f.rfind(".")
+						rename(self, f, f[:offset] + "d." + f[offset+1:])
 
-		copy(self, "*.h", "../DirectXShaderCompiler/include/dxc", "../../p/include/dxc")
-		copy(self, "*.hpp", "../DirectXShaderCompiler/include/dxc", "../../p/include/dxc")
+			# Copy release libs
+
+			copy(self, "*.lib", "lib/Release", "../../p/lib")
+			copy(self, "*.lib", "Release/lib", "../../p/lib")
+
+			# Headers
+
+			copy(self, "*.h", "../DirectXShaderCompiler/include/dxc", "../../p/include/dxc")
+			copy(self, "*.hpp", "../DirectXShaderCompiler/include/dxc", "../../p/include/dxc")
 
 	def package_info(self):
 		self.cpp_info.set_property("cmake_file_name", "dxc")
@@ -149,7 +162,7 @@ class dxc(ConanFile):
 			"clangSPIRV",
 			"clangTooling",
 			"clangToolingCore",
-			"libclang",
+			"clang",
 			"LLVMAnalysis",
 			"LLVMAsmParser",
 			"LLVMBitReader",
