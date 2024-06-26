@@ -137,6 +137,8 @@ typedef struct CompileResult {
 
 } CompileResult;
 
+TList(CompileResult);
+
 typedef struct IncludedFile {
 
 	IncludeInfo includeInfo;
@@ -155,6 +157,7 @@ void IncludedFile_free(IncludedFile *file, Allocator alloc);
 void ListIncludedFile_freeUnderlying(ListIncludedFile *file, Allocator alloc);
 
 void CompileResult_free(CompileResult *result, Allocator alloc);
+void ListCompileResult_freeUnderlying(ListCompileResult *result, Allocator alloc);
 
 void ListListU16_freeUnderlying(ListListU16 *list, Allocator alloc);
 
@@ -209,6 +212,8 @@ Bool Compiler_compile(
 //Extended functions for basic allocators
 
 void CompileResult_freex(CompileResult *result);
+void ListCompileResult_freeUnderlyingx(ListCompileResult *result);
+
 void ListCompiler_freeUnderlyingx(ListCompiler *compilers);
 
 void CompileError_freex(CompileError *err);

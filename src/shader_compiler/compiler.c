@@ -33,6 +33,7 @@ TListImpl(CompileError);
 TListImpl(IncludeInfo);
 TListImpl(IncludedFile);
 TListImpl(ListU16);
+TListImpl(CompileResult);
 TListNamedImpl(ListU16PtrConst);
 
 U32 CompileError_lineId(CompileError err) {
@@ -77,6 +78,10 @@ void IncludeInfo_free(IncludeInfo *info, Allocator alloc) {
 
 void CompileResult_freex(CompileResult *result) {
 	CompileResult_free(result, Platform_instance.alloc);
+}
+
+void ListCompileResult_freeUnderlyingx(ListCompileResult* result) {
+	ListCompileResult_freeUnderlying(result, Platform_instance.alloc);
 }
 
 void ListCompiler_freeUnderlyingx(ListCompiler *compilers) {
@@ -240,6 +245,17 @@ void CompileResult_free(CompileResult *result, Allocator alloc) {
 	}
 
 	*result = (CompileResult) { 0 };
+}
+
+void ListCompileResult_freeUnderlying(ListCompileResult *result, Allocator alloc) {
+
+	if (!result)
+		return;
+
+	for (U64 i = 0; i < result->length; ++i)
+		CompileResult_free(&result->ptrNonConst[i], alloc);
+
+	ListCompileResult_free(result, alloc);
 }
 
 Bool Compiler_createx(Compiler *comp, Error *e_rr) {

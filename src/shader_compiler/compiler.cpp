@@ -1169,7 +1169,7 @@ Bool Compiler_compile(
 
 clean:
 
-	if(!s_uccess)
+	if(!s_uccess && result)
 		CompileResult_free(result, alloc);
 
 	if(dxcResult)

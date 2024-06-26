@@ -287,7 +287,7 @@ void Operations_init() {
 		.operationFlags = EOperationFlags_None,
 		.optionalParameters = EOperationHasParameter_None,
 		.requiredParameters = EOperationHasParameter_Input,
-		.flags = EFormatFlags_SupportFiles | EFormatFlags_SupportAsString,
+		.flags = EFormatFlags_SupportFiles | EFormatFlags_SupportFolders | EFormatFlags_SupportAsString,
 		.supportedCategories = { EOperationCategory_Hash }
 	};
 
@@ -297,7 +297,7 @@ void Operations_init() {
 		.operationFlags = EOperationFlags_None,
 		.optionalParameters = EOperationHasParameter_None,
 		.requiredParameters = EOperationHasParameter_Input,
-		.flags = EFormatFlags_SupportFiles | EFormatFlags_SupportAsString,
+		.flags = EFormatFlags_SupportFiles | EFormatFlags_SupportFolders | EFormatFlags_SupportAsString,
 		.supportedCategories = { EOperationCategory_Hash }
 	};
 

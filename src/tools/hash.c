@@ -27,25 +27,19 @@
 #include "operations.h"
 #include "cli.h"
 
-Bool CLI_hash(ParsedArgs args, Bool isFile) {
+Bool CLI_hash(CharString str, Bool isFile, EFormat format, Error *e_rr) {
 
-	CharString str = CharString_createNull();
 	Buffer buf = Buffer_createNull();
 	CharString tmp = CharString_createNull();
 	CharString tmpi = CharString_createNull();
-	Bool success = false;
-
-	Error err = ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &str);
-
-	if (err.genericError)
-		goto clean;
+	Bool s_uccess = true;
 
 	if(!isFile)
 		buf = CharString_bufferConst(str);
 
-	else gotoIfError(clean, File_read(str, 1 * SECOND, &buf))
+	else gotoIfError2(clean, File_read(str, 1 * SECOND, &buf))
 
-	switch(args.format) {
+	switch(format) {
 
 		case EFormat_SHA256: {
 
@@ -55,9 +49,9 @@ Bool CLI_hash(ParsedArgs args, Bool isFile) {
 			//Stringify
 
 			for (U8 i = 0; i < 8; ++i) {
-				gotoIfError(clean, CharString_createHexx(output[i], 8, &tmpi))
-				gotoIfError(clean, CharString_popFrontCount(&tmpi, 2))
-				gotoIfError(clean, CharString_appendStringx(&tmp, tmpi))
+				gotoIfError2(clean, CharString_createHexx(output[i], 8, &tmpi))
+				gotoIfError2(clean, CharString_popFrontCount(&tmpi, 2))
+				gotoIfError2(clean, CharString_appendStringx(&tmp, tmpi))
 				CharString_freex(&tmpi);
 			}
 
@@ -66,8 +60,8 @@ Bool CLI_hash(ParsedArgs args, Bool isFile) {
 
 		case EFormat_CRC32C: {
 			const U32 output = Buffer_crc32c(buf);
-			gotoIfError(clean, CharString_createHexx(output, 8, &tmp))
-			gotoIfError(clean, CharString_popFrontCount(&tmp, 2))
+			gotoIfError2(clean, CharString_createHexx(output, 8, &tmp))
+			gotoIfError2(clean, CharString_popFrontCount(&tmp, 2))
 			break;
 		}
 
@@ -76,26 +70,60 @@ Bool CLI_hash(ParsedArgs args, Bool isFile) {
 			goto clean;
 	}
 
-	Log_debugLnx("Hash: 0x%.*s", CharString_length(tmp), tmp.ptr);
-	success = true;
+	Log_debugLnx("Hash: 0x%.*s: \t\t%.*s", CharString_length(tmp), tmp.ptr, (int) CharString_length(str), str.ptr);
 
 clean:
 
-	if(err.genericError) {
+	if(!s_uccess) {
+
 		Log_errorLnx("Failed to convert hash to string!");
-		Error_printx(err, ELogLevel_Error, ELogOptions_Default);
+
+		if(e_rr)
+			Error_printx(*e_rr, ELogLevel_Error, ELogOptions_Default);
 	}
 
 	Buffer_freex(&buf);
 	CharString_freex(&tmp);
 	CharString_freex(&tmpi);
-	return success;
+	return s_uccess;
+}
+
+Error CLI_hashAllTheFiles(FileInfo info, EFormat *format) {
+
+	Error err = Error_none();
+	Bool s_uccess = true;
+
+	if(info.type == EFileType_File)
+		gotoIfError3(clean, CLI_hash(info.path, true, *format, &err))
+
+clean:
+	return err;
 }
 
 Bool CLI_hashFile(ParsedArgs args) {
-	return CLI_hash(args, true);
+
+	CharString str = CharString_createNull();
+	Error err = ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &str);
+
+	if(err.genericError)
+		return false;
+
+	//If it's a folder, then we have to find all files in it and hash them
+	//Otherwise we just go to the file directly
+
+	if (File_hasFolder(str))
+		return !File_foreach(str, (FileCallback) CLI_hashAllTheFiles, &args.format, true).genericError;
+
+	return CLI_hash(str, true, args.format, NULL);
 }
 
 Bool CLI_hashString(ParsedArgs args) {
-	return CLI_hash(args, false);
+
+	CharString str = CharString_createNull();
+	Error err = ParsedArgs_getArg(args, EOperationHasParameter_InputShift, &str);
+
+	if(err.genericError)
+		return false;
+
+	return CLI_hash(str, false, args.format, NULL);
 }

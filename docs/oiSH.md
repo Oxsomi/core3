@@ -251,7 +251,7 @@ If this is not the case, then the compiler can decide how to combine entrypoints
 
 ## Includes
 
-All includes must have reproducible hashes (regardless of OS) as noted in the CRC32C section. Timestamps aren't included, as this would not make binaries reproducible. Which might generate issues with source control if someone decided to check these files in. The includes should also be reproducible even from other PCs. This means that the include names include relative paths (relative to the source file) rather than absolute. This way, recompiling the same binary will always give the same result, even with different check out directories and different time.
+All includes must have reproducible hashes (regardless of OS) as noted in the CRC32C section. Timestamps aren't included, as this would not make binaries reproducible. Which might generate issues with source control if someone decided to check these files in. The includes should also be reproducible even from other PCs. This means that the include names include relative paths (relative to the source file) rather than absolute. This way, recompiling the same binary will always give the same result, even with different check out directories and different time. For consistency, the include paths should also be sorted (ascending); this will ensure reproducibility.
 
 ## Changelog
 

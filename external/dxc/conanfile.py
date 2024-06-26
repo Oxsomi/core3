@@ -162,7 +162,6 @@ class dxc(ConanFile):
 			"clangSPIRV",
 			"clangTooling",
 			"clangToolingCore",
-			"clang",
 			"LLVMAnalysis",
 			"LLVMAsmParser",
 			"LLVMBitReader",
@@ -196,3 +195,7 @@ class dxc(ConanFile):
 			"SPIRV-Tools",
 			"SPIRV-Tools-opt"
 		]
+		if self.settings.compiler == "msvc" or self.settings.compiler == "Visual Studio":
+			self.cpp_info.libs += [ "libclang" ]
+		else:
+			self.cpp_info.libs += [ "clang" ]

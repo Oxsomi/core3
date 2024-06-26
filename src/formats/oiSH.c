@@ -561,6 +561,14 @@ Bool SHFile_addInclude(SHFile *shFile, SHInclude *include, Allocator alloc, Erro
 			0, shFile->includes.length, 1 << 16, "SHFile_addInclude()::shFile->includes is limited to 16-bit"
 		))
 
+	//Ensure we insert it sorted, otherwise it's not reproducible
+
+	U64 i = 0;
+
+	for(; i < shFile->includes.length; ++i)
+		if(CharString_compareSensitive(shFile->includes.ptr[i].relativePath, include->relativePath) == ECompareResult_Gt)
+			break;
+
 	//Create copy and/or move
 
 	if(CharString_isRef(include->relativePath))
@@ -571,7 +579,7 @@ Bool SHFile_addInclude(SHFile *shFile, SHInclude *include, Allocator alloc, Erro
 		.crc32c = include->crc32c
 	};
 
-	gotoIfError2(clean, ListSHInclude_pushBack(&shFile->includes, tmpInclude, alloc))
+	gotoIfError2(clean, ListSHInclude_insert(&shFile->includes, i, tmpInclude, alloc))
 	*include = (SHInclude) { 0 };
 	tmp = CharString_createNull();
 
