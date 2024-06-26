@@ -373,7 +373,7 @@ public:
 	ULONG STDMETHODCALLTYPE Release() override { return 0; }
 };
 
-Lock lockThread = Lock{ .lockedThreadId = 0, .active = true, .pad = { 0 } };
+Lock lockThread = Lock{ .lockedThreadId = { 0 }, .active = true, .pad = { 0 } };
 Bool hasInitialized;
 
 Bool Compiler_setup(Error *e_rr) {
