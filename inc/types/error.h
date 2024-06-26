@@ -19,7 +19,7 @@
 */
 
 #pragma once
-#include "string.h"
+#include "types.h"
 #include "log.h"
 
 #ifdef __cplusplus

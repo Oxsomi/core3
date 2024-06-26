@@ -56,13 +56,13 @@ class oxc3(ConanFile):
 		deps.generate()
 
 		tc = CMakeToolchain(self)
-		tc.variables["ForceFloatFallback"] = self.options.forceFloatFallback
-		tc.variables["EnableTests"] = self.options.enableTests
-		tc.variables["EnableOxC3CLI"] = self.options.enableOxC3CLI
-		tc.variables["EnableSIMD"] = self.options.enableSIMD
-		tc.variables["ForceVulkan"] = self.options.forceVulkan
-		tc.variables["EnableShaderCompiler"] = self.options.enableShaderCompiler
-		tc.variables["CLIGraphics"] = self.options.cliGraphics
+		tc.cache_variables["ForceFloatFallback"] = self.options.forceFloatFallback
+		tc.cache_variables["EnableTests"] = self.options.enableTests
+		tc.cache_variables["EnableOxC3CLI"] = self.options.enableOxC3CLI
+		tc.cache_variables["EnableSIMD"] = self.options.enableSIMD
+		tc.cache_variables["ForceVulkan"] = self.options.forceVulkan
+		tc.cache_variables["EnableShaderCompiler"] = self.options.enableShaderCompiler
+		tc.cache_variables["CLIGraphics"] = self.options.cliGraphics
 		tc.cache_variables["CMAKE_CONFIGURATION_TYPES"] = str(self.settings.build_type)
 		tc.generate()
 
