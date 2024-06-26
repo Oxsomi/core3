@@ -105,8 +105,8 @@ class dxc(ConanFile):
 			
 			# Headers
 
-			copy(self, "*.h", "../../DirectXShaderCompiler/include/dxc", "../../../p/include/dxc")
-			copy(self, "*.hpp", "../../DirectXShaderCompiler/include/dxc", "../../../p/include/dxc")
+			copy(self, "*.h", "../../DirectXShaderCompiler/include/dxc", "../../../p/include/dxcompiler")
+			copy(self, "*.hpp", "../../DirectXShaderCompiler/include/dxc", "../../../p/include/dxcompiler")
 
 			# Libs
 
@@ -132,10 +132,10 @@ class dxc(ConanFile):
 			copy(self, "*.lib", "lib/Release", "../../p/lib")
 			copy(self, "*.lib", "Release/lib", "../../p/lib")
 
-			# Headers
+			# Headers: We use include/dxcompiler to avoid vulkan sdk interfering
 
-			copy(self, "*.h", "../DirectXShaderCompiler/include/dxc", "../../p/include/dxc")
-			copy(self, "*.hpp", "../DirectXShaderCompiler/include/dxc", "../../p/include/dxc")
+			copy(self, "*.h", "../DirectXShaderCompiler/include/dxc", "../../p/include/dxcompiler")
+			copy(self, "*.hpp", "../DirectXShaderCompiler/include/dxc", "../../p/include/dxcompiler")
 
 	def package_info(self):
 		self.cpp_info.set_property("cmake_file_name", "dxc")
