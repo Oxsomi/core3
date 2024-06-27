@@ -295,16 +295,18 @@ Bool Compiler_mergeIncludeInfox(Compiler *comp, ListIncludeInfo *infos, Error *e
 Bool Compiler_filterWarning(CharString str) {
 	return 
 		CharString_startsWithStringSensitive(str, CharString_createRefCStrConst("#pragma once in main file\n"), 0) ||
+		CharString_startsWithStringSensitive(str, CharString_createRefCStrConst("validation errors"), 0) ||
+		CharString_containsStringSensitive(str, CharString_createRefCStrConst("dxil.dll")) ||
 		CharString_containsStringSensitive(str, CharString_createRefCStrConst("-Wunknown-attributes"));
 }
 
 Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *errors, Bool *hasErrors, Error *e_rr) {
 
-	CharString dxilSigning = CharString_createRefCStrConst("warning: DXIL signing library (dxil.dll,libdxil.so) not found.");
+	CharString validationFailed = CharString_createRefCStrConst("\nValidation failed.");
 
 	errs = CharString_createRefStrConst(errs);
-
-	U64 loc = CharString_findFirstStringSensitive(errs, dxilSigning, 0);
+	
+	U64 loc = CharString_findFirstStringSensitive(errs, validationFailed, 0);
 
 	if(loc != U64_MAX)
 		errs.lenAndNullTerminated = loc | (errs.lenAndNullTerminated & ((U64)1 << 63));
@@ -319,6 +321,11 @@ Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *er
 	CharString note = CharString_createRefCStrConst(" note: ");
 	CharString errStr = CharString_createRefCStrConst(" error: ");
 	CharString fatalErrStr = CharString_createRefCStrConst(" fatal error: ");
+
+	CharString warningOnly = CharString_createRefCStrConst("warning");
+	CharString noteOnly = CharString_createRefCStrConst("note");
+	CharString errStrOnly = CharString_createRefCStrConst("error");
+	CharString fatalErrStrOnly = CharString_createRefCStrConst("fatal error");
 
 	U64 prevOff = U64_MAX;
 
@@ -467,6 +474,40 @@ Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *er
 			file = tmp0;		//It's a reference so it's safe
 		}
 
+		//It's possible that there's no file, in that case we have to clear the file
+
+		{
+			Bool isFatalError = CharString_startsWithStringInsensitive(file, fatalErrStrOnly, 0);
+			Bool consumed = false;
+
+			if(CharString_startsWithStringInsensitive(file, errStrOnly, 0) || isFatalError) {
+				isError = true;
+				*hasErrors = true;
+				off += isFatalError ? CharString_length(fatalErrStrOnly) : CharString_length(errStrOnly);
+				consumed = true;
+			}
+
+			else if(CharString_startsWithStringInsensitive(file, warningOnly, 0)) {
+				isError = false;
+				off += CharString_length(warningOnly);
+				consumed = true;
+			}
+
+			else if(CharString_startsWithStringInsensitive(file, noteOnly, 0)) {
+				isError = false;
+				off += CharString_length(noteOnly);
+				consumed = true;
+			}
+
+			if(consumed) {
+				off += 2 + fileStart + 1;
+				prevOff = off;
+				lineId = lineOff = 0;
+				file = CharString_createNull();
+				continue;
+			}
+		}
+
 		//Parse line
 
 		U64 nextColon = CharString_findFirstSensitive(errs, ':', firstColon + 1);
@@ -488,10 +529,17 @@ Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *er
 		if(nextColon == U64_MAX || !CharString_cut(errs, off, nextColon - off, &tmp))
 			retError(clean, Error_invalidState(2, "Compiler_preprocess() couldn't parse lineOff from error"))
 
-		if(!CharString_parseDec(tmp, &lineOff) || lineOff >> 8)
-			retError(clean, Error_invalidState(3, "Compiler_preprocess() couldn't parse U8 lineOff from error"))
+		//Validation errors don't have line offsets like that, they only have lines
 
-		off = nextColon + 1;
+		if(!CharString_startsWithSensitive(tmp, ' ', 0)) {
+
+			if(!CharString_parseDec(tmp, &lineOff) || lineOff >> 8)
+				retError(clean, Error_invalidState(3, "Compiler_preprocess() couldn't parse U8 lineOff from error"))
+
+			off = nextColon + 1;
+		}
+
+		else lineOff = 0;
 
 		//Parse warning type
 

@@ -423,10 +423,18 @@
 
 			CompileError e = dest->compileErrors.ptr[i];
 
-			if((e.typeLineId >> 7) == ECompileErrorType_Warn)
-				Log_warnLnx("%s:%"PRIu32":%"PRIu8": %s", e.file.ptr, CompileError_lineId(e), e.lineOffset, e.error.ptr);
+			if(e.file.ptr) {
 
-			else Log_errorLnx("%s:%"PRIu32":%"PRIu8": %s", e.file.ptr, CompileError_lineId(e), e.lineOffset, e.error.ptr);
+				if((e.typeLineId >> 7) == ECompileErrorType_Warn)
+					Log_warnLnx("%s:%"PRIu32":%"PRIu8": %s", e.file.ptr, CompileError_lineId(e), e.lineOffset, e.error.ptr);
+
+				else Log_errorLnx("%s:%"PRIu32":%"PRIu8": %s", e.file.ptr, CompileError_lineId(e), e.lineOffset, e.error.ptr);
+			}
+
+			else if((e.typeLineId >> 7) == ECompileErrorType_Warn)
+				Log_warnLnx("%s", e.error.ptr);
+
+			else Log_errorLnx("%s", e.error.ptr);
 		}
 
 	clean:

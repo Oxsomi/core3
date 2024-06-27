@@ -247,11 +247,11 @@ Bool SHFile_addBinaries(SHFile *shFile, SHBinaryInfo *binaries, Allocator alloc,
 		))
 
 	if(
-		binaries->identifier.shaderVersion < OISH_SHADER_MODEL(6, 3) ||
+		binaries->identifier.shaderVersion < OISH_SHADER_MODEL(6, 5) ||
 		binaries->identifier.shaderVersion > OISH_SHADER_MODEL(6, 8)
 	)
 		retError(clean, Error_invalidParameter(
-			2, 0, "SHFile_addBinary()::binaries->identifier.shaderVersion is unsupported must be 6.3 -> 6.8"
+			2, 0, "SHFile_addBinary()::binaries->identifier.shaderVersion is unsupported must be 6.5 -> 6.8"
 		))
 
 	if(Buffer_length(binaries->binaries[ESHBinaryType_SPIRV]) & 3)
@@ -1586,7 +1586,7 @@ Bool SHEntryRuntime_asBinaryIdentifier(
 	*binaryIdentifier = (SHBinaryIdentifier) {
 		.entrypoint = runtime.isShaderAnnotation ? CharString_createNull() : CharString_createRefStrConst(runtime.entry.name),
 		.extensions = runtime.extensions.length ? runtime.extensions.ptr[extensionId] : 0,
-		.shaderVersion = runtime.shaderVersions.length ? runtime.shaderVersions.ptr[shaderVersion] : OISH_SHADER_MODEL(6, 3),
+		.shaderVersion = runtime.shaderVersions.length ? runtime.shaderVersions.ptr[shaderVersion] : OISH_SHADER_MODEL(6, 5),
 		.stageType = runtime.entry.stage
 	};
 
