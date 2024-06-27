@@ -316,6 +316,7 @@ Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *er
 	CharString tempStr2 = CharString_createNull();
 
 	CharString warning = CharString_createRefCStrConst(" warning: ");
+	CharString note = CharString_createRefCStrConst(" note: ");
 	CharString errStr = CharString_createRefCStrConst(" error: ");
 	CharString fatalErrStr = CharString_createRefCStrConst(" fatal error: ");
 
@@ -452,6 +453,20 @@ Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *er
 		if(firstColon == U64_MAX || !CharString_cut(errs, off, firstColon - off, &file))
 			retError(clean, Error_invalidState(1, "Compiler_preprocess() couldn't parse file from error"))
 
+		//If there's a preceeding \n, then we need to make sure to cut it off
+
+		U64 fileStart = CharString_findLastSensitive(file, '\n', 0);
+
+		if (fileStart != U64_MAX) {
+
+			CharString tmp0 = CharString_createNull();
+
+			if(!CharString_cut(file, fileStart + 1, 0, &tmp0))
+				retError(clean, Error_invalidState(1, "Compiler_preprocess() couldn't parse file properly"))
+
+			file = tmp0;		//It's a reference so it's safe
+		}
+
 		//Parse line
 
 		U64 nextColon = CharString_findFirstSensitive(errs, ':', firstColon + 1);
@@ -491,6 +506,11 @@ Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *er
 		else if(CharString_startsWithStringInsensitive(errs, warning, off)) {
 			isError = false;
 			off += CharString_length(warning);
+		}
+
+		else if(CharString_startsWithStringInsensitive(errs, note, off)) {
+			isError = false;
+			off += CharString_length(note);
 		}
 
 		else retError(clean, Error_invalidState(4, "Compiler_preprocess() couldn't parse error type from error"))

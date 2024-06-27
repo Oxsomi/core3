@@ -540,6 +540,16 @@
 						}
 					}
 
+					else if(!(job->args.flags & EOperationFlags_IgnoreEmptyFiles)) {
+
+						Log_errorLnx(
+							"Precompile couldn't find entrypoints for file \"%.*s\"",
+							(int)CharString_length(job->outputPaths.ptr[lastJobId]), job->outputPaths.ptr[lastJobId].ptr
+						);
+
+						s_uccess = false;
+					}
+
 					ListU32_freex(&compileCombinations);
 				}
 
@@ -1157,7 +1167,7 @@
 
 				//Finish up SHFile and throw it to disk
 
-				if (jobId != lastJobId && i) {
+				if (jobId != lastJobId && lastJobId != U32_MAX && shFile.entries.ptr) {
 
 					gotoIfError3(clean, Compiler_getUniqueCompiles(shEntries.ptr[lastJobId], NULL, &binaryIndices, e_rr))
 					gotoIfError3(clean, CLI_registerShaderEntries(&shFile, shEntries.ptr[lastJobId], binaryIndices, e_rr))
@@ -1308,6 +1318,7 @@
 							);
 
 							didSucceed = false;
+							CompileResult_freex(&tempResult);
 							break;
 						}
 
