@@ -26,6 +26,8 @@
 	extern "C" {
 #endif
 
+typedef struct CharString CharString;
+
 //TODO: Make errors extendable like TypeId
 
 typedef enum EGenericError {
