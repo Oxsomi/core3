@@ -49,7 +49,7 @@ typedef struct Platform {
 
 	Allocator alloc;
 
-	Lock virtualSectionsLock;
+	SpinLock virtualSectionsLock;
 	ListVirtualSection virtualSections;
 
 	void *data;

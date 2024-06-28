@@ -182,7 +182,7 @@ Error File_loadVirtualInternal1(FileLoadVirtual *userData, CharString loc, Bool 
 	if(CharString_length(isChild))
 		gotoIfError(clean, CharString_appendx(&isChild, '/'))		//Don't append to root
 
-	acq = Lock_lock(&Platform_instance.virtualSectionsLock, U64_MAX);
+	acq = SpinLock_lock(&Platform_instance.virtualSectionsLock, U64_MAX);
 
 	if(acq < ELockAcquire_Success)
 		gotoIfError(clean, Error_invalidState(0, "File_loadVirtualInternal1() couldn't lock virtualSectionsLock"))
@@ -263,7 +263,7 @@ Error File_loadVirtualInternal1(FileLoadVirtual *userData, CharString loc, Bool 
 clean:
 
 	if(acq == ELockAcquire_Acquired)
-		Lock_unlock(&Platform_instance.virtualSectionsLock);
+		SpinLock_unlock(&Platform_instance.virtualSectionsLock);
 
 	CharString_freex(&isChild);
 	return err;

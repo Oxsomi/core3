@@ -74,7 +74,7 @@ typedef struct Swapchain {
 
 	U64 versionId;				//Everytime this swapchain changes format or is resized this will increase.
 
-	Lock lock;
+	SpinLock lock;
 
 	UnifiedTexture base;
 

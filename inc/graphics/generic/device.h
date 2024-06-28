@@ -50,7 +50,7 @@ typedef struct DescriptorStackTrace {
 	void *stackTrace[8];
 } DescriptorStackTrace;
 
-TListNamed(Lock*, ListLockPtr);
+TListNamed(SpinLock*, ListSpinLockPtr);
 TList(DescriptorStackTrace);
 
 typedef enum EGraphicsDeviceFlags {
@@ -80,7 +80,7 @@ typedef struct GraphicsDevice {
 
 	ListRefPtr resourcesInFlight[3];			//Resources in flight, TODO: HashMap
 
-	Lock lock;									//Lock for submission and marking resources dirty
+	SpinLock lock;									//Lock for submission and marking resources dirty
 
 	DeviceMemoryAllocator allocator;
 
@@ -95,7 +95,7 @@ typedef struct GraphicsDevice {
 
 	//Temporary for processing command list and to avoid allocations
 
-	ListLockPtr currentLocks;
+	ListSpinLockPtr currentLocks;
 
 	U64 pendingBytes;							//For determining if it's time to flush or to resize staging buffer
 
@@ -106,7 +106,7 @@ typedef struct GraphicsDevice {
 
 	//Used for allocating descriptors
 
-	Lock descriptorLock;
+	SpinLock descriptorLock;
 	Buffer freeList[EDescriptorType_ResourceCount];
 	ListDescriptorStackTrace descriptorStackTraces;
 

@@ -113,7 +113,7 @@ Bool TLAS_free(TLAS *tlas, Allocator allocator) {
 
 	(void)allocator;
 
-	Lock_free(&tlas->base.lock);
+	SpinLock_free(&tlas->base.lock);
 
 	Bool success = TLAS_freeExt(tlas);
 	success &= CharString_freex(&tlas->base.name);
@@ -146,7 +146,7 @@ Bool TLAS_free(TLAS *tlas, Allocator allocator) {
 	}
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(tlas->base.device);
-	const ELockAcquire acq = Lock_lock(&device->descriptorLock, U64_MAX);
+	const ELockAcquire acq = SpinLock_lock(&device->descriptorLock, U64_MAX);
 
 	if (acq >= ELockAcquire_Success) {
 
@@ -155,7 +155,7 @@ Bool TLAS_free(TLAS *tlas, Allocator allocator) {
 		GraphicsDeviceRef_freeDescriptors(tlas->base.device, &allocations);
 
 		if(acq == ELockAcquire_Acquired)
-			Lock_unlock(&device->descriptorLock);
+			SpinLock_unlock(&device->descriptorLock);
 	}
 
 	success &= !GraphicsDeviceRef_dec(&tlas->base.device).genericError;
@@ -291,7 +291,7 @@ Error GraphicsDeviceRef_createTLAS(GraphicsDeviceRef *dev, TLAS tlas, CharString
 		gotoIfError(clean, TLASRef_inc(tlas.base.parent))
 
 	*tlasPtr = tlas;
-	tlasPtr->base.lock = Lock_create();
+	tlasPtr->base.lock = SpinLock_create();
 	tlasPtr->base.name = CharString_createNull();
 
 	if (tlas.base.asConstructionType == ETLASConstructionType_Serialized) {
@@ -368,7 +368,7 @@ Error GraphicsDeviceRef_createTLAS(GraphicsDeviceRef *dev, TLAS tlas, CharString
 
 	//Reserve TLAS in array
 
-	acq0 = Lock_lock(&device->descriptorLock, U64_MAX);
+	acq0 = SpinLock_lock(&device->descriptorLock, U64_MAX);
 
 	if(acq0 < ELockAcquire_Success)
 		gotoIfError(clean, Error_invalidState(
@@ -387,7 +387,7 @@ Error GraphicsDeviceRef_createTLAS(GraphicsDeviceRef *dev, TLAS tlas, CharString
 clean:
 
 	if(acq0 == ELockAcquire_Acquired)
-		Lock_unlock(&device->descriptorLock);
+		SpinLock_unlock(&device->descriptorLock);
 
 	if(err.genericError)
 		TLASRef_dec(tlasRef);

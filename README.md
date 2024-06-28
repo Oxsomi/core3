@@ -22,7 +22,7 @@ OxC3 (0xC3 or Oxsomi core 3) is the successor to O(x)somi core v2 and v1. Specif
   - Error type including stacktrace option.
   - Time utility.
   - Vectors (mathematical) such as F32x2, F32x4, I32x2, I32x4.
-  - Lock, Atomics and Thread for multi threading purposes.
+  - SpinLock, Atomics and Thread for multi threading purposes.
   - Log for colored and proper cross platform logging.
   - For more info check the [documentation](docs/types.md).
 - OxC3_formats: deps(OxC3_types)

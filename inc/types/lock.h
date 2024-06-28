@@ -25,19 +25,19 @@
 	extern "C" {
 #endif
 
-typedef struct Lock {
+typedef struct SpinLock {
 
 	AtomicI64 lockedThreadId;
 
 	Bool active;
 	U8 pad[7];
 
-} Lock;
+} SpinLock;
 
 typedef struct Error Error;
 
-Lock Lock_create();
-Bool Lock_free(Lock *res);
+SpinLock SpinLock_create();
+Bool SpinLock_free(SpinLock *res);
 
 //Even though maxTime is in Ns it may be interpreted
 //As a different unit by the runtime.
@@ -54,11 +54,11 @@ typedef enum ELockAcquire {
 
 } ELockAcquire;
 
-ELockAcquire Lock_lock(Lock *l, Ns maxTime);
+ELockAcquire SpinLock_lock(SpinLock *l, Ns maxTime);
 
-Bool Lock_unlock(Lock *l);
+Bool SpinLock_unlock(SpinLock *l);
 
-Bool Lock_isLockedForThread(Lock *l);
+Bool SpinLock_isLockedForThread(SpinLock *l);
 
 #ifdef __cplusplus
 	}

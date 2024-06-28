@@ -67,7 +67,7 @@ typedef struct DeviceBuffer {
 
 	ListDevicePendingRange pendingChanges;
 
-	Lock lock;
+	SpinLock lock;
 
 	U32 readHandle, writeHandle;
 

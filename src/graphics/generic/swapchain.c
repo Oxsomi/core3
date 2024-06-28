@@ -48,13 +48,13 @@ Error SwapchainRef_resize(SwapchainRef *swapchainRef) {
 	Swapchain *swapchain = SwapchainRef_ptr(swapchainRef);
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(swapchain->base.resource.device);
 
-	if(Lock_lock(&swapchain->lock, U64_MAX) != ELockAcquire_Acquired)
+	if(SpinLock_lock(&swapchain->lock, U64_MAX) != ELockAcquire_Acquired)
 		return Error_invalidState(0, "Swapchain_resize() couldn't lock swapchain");
 
 	//Check if swapchain was in flight. If yes, warn that the user has to flush manually
 
 	Error err = Error_none();
-	const ELockAcquire acq = Lock_lock(&device->lock, U64_MAX);
+	const ELockAcquire acq = SpinLock_lock(&device->lock, U64_MAX);
 
 	if(acq < ELockAcquire_Success)
 		gotoIfError(clean, Error_invalidState(0, "Swapchain_resize() can't be called while recording commands"))
@@ -68,7 +68,7 @@ Error SwapchainRef_resize(SwapchainRef *swapchainRef) {
 		}
 
 	if(acq == ELockAcquire_Acquired)
-		Lock_unlock(&device->lock);
+		SpinLock_unlock(&device->lock);
 
 	if (any)
 		gotoIfError(clean, Error_invalidState(
@@ -108,12 +108,12 @@ Error SwapchainRef_resize(SwapchainRef *swapchainRef) {
 	swapchain->base.height = (U16) I32x2_y(newSize);
 
 clean:
-	Lock_unlock(&swapchain->lock);
+	SpinLock_unlock(&swapchain->lock);
 	return err;
 }
 
 Bool GraphicsDevice_freeSwapchain(Swapchain *swapchain, Allocator alloc) {
-	Bool success = Lock_free(&swapchain->lock);
+	Bool success = SpinLock_free(&swapchain->lock);
 	success &= GraphicsDevice_freeSwapchainExt(swapchain, alloc);
 	success &= UnifiedTexture_free((TextureRef*)((U8*)swapchain - sizeof(RefPtr)));
 	return success;
@@ -183,7 +183,7 @@ Error GraphicsDeviceRef_createSwapchain(GraphicsDeviceRef *dev, SwapchainInfo in
 
 	gotoIfError(clean, GraphicsDeviceRef_createSwapchainExt(dev, *scRef))
 	gotoIfError(clean, UnifiedTexture_create(*scRef, info.window->title))
-	swapchain->lock = Lock_create();
+	swapchain->lock = SpinLock_create();
 
 clean:
 

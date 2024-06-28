@@ -40,7 +40,7 @@ typedef struct DeviceTexture {
 
 	ListDevicePendingRange pendingChanges;
 
-	Lock lock;
+	SpinLock lock;
 
 	UnifiedTexture base;
 

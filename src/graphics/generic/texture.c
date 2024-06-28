@@ -54,7 +54,7 @@ UnifiedTexture *TextureRef_getUnifiedTextureIntern(TextureRef *tex, DeviceResour
 
 			Swapchain *swapchain = SwapchainRef_ptr(tex);
 
-			const ELockAcquire acq = !version ? ELockAcquire_AlreadyLocked : Lock_lock(&swapchain->lock, U64_MAX);
+			const ELockAcquire acq = !version ? ELockAcquire_AlreadyLocked : SpinLock_lock(&swapchain->lock, U64_MAX);
 
 			if(acq < ELockAcquire_Success)
 				return NULL;
@@ -68,7 +68,7 @@ UnifiedTexture *TextureRef_getUnifiedTextureIntern(TextureRef *tex, DeviceResour
 				};
 
 			if(acq == ELockAcquire_Acquired)
-				Lock_unlock(&swapchain->lock);
+				SpinLock_unlock(&swapchain->lock);
 
 			return utex;
 		}
@@ -201,7 +201,7 @@ Bool UnifiedTexture_free(TextureRef *textureRef) {
 	GraphicsDeviceRef *deviceRef = texture->resource.device;
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 
-	const ELockAcquire acq = Lock_lock(&device->descriptorLock, U64_MAX);
+	const ELockAcquire acq = SpinLock_lock(&device->descriptorLock, U64_MAX);
 
 	if (acq >= ELockAcquire_Success) {
 
@@ -212,7 +212,7 @@ Bool UnifiedTexture_free(TextureRef *textureRef) {
 		GraphicsDeviceRef_freeDescriptors(deviceRef, &allocations);
 
 		if(acq == ELockAcquire_Acquired)
-			Lock_unlock(&device->descriptorLock);
+			SpinLock_unlock(&device->descriptorLock);
 	}
 
 	Bool success = UnifiedTexture_freeExt(textureRef);
@@ -359,7 +359,7 @@ Error UnifiedTexture_create(TextureRef *ref, CharString name) {
 
 	if(texture.resource.flags & EGraphicsResourceFlag_ShaderRW) {
 
-		acq = Lock_lock(&device->descriptorLock, U64_MAX);
+		acq = SpinLock_lock(&device->descriptorLock, U64_MAX);
 
 		if(acq < ELockAcquire_Success)
 			gotoIfError(clean, Error_invalidState(0, "UnifiedTexture_create() couldn't acquire descriptor lock"))
@@ -396,7 +396,7 @@ Error UnifiedTexture_create(TextureRef *ref, CharString name) {
 		}
 
 		if(acq == ELockAcquire_Acquired)
-			Lock_unlock(&device->descriptorLock);
+			SpinLock_unlock(&device->descriptorLock);
 
 		acq = ELockAcquire_Invalid;
 	}
@@ -406,7 +406,7 @@ Error UnifiedTexture_create(TextureRef *ref, CharString name) {
 clean:
 
 	if(acq == ELockAcquire_Acquired)
-		Lock_unlock(&device->descriptorLock);
+		SpinLock_unlock(&device->descriptorLock);
 
 	return err;
 }

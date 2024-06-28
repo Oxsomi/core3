@@ -71,7 +71,7 @@ Error DeviceTextureRef_markDirty(DeviceTextureRef *tex, U16 x, U16 y, U16 z, U16
 			3, z + l, utex->length, "DeviceTextureRef_markDirty()::z+l out of bounds"
 		);
 
-	ELockAcquire acq0 = Lock_lock(&texture->lock, U64_MAX);
+	ELockAcquire acq0 = SpinLock_lock(&texture->lock, U64_MAX);
 
 	if(acq0 < ELockAcquire_Success)
 		return Error_invalidOperation(1, "DeviceTextureRef_markDirty() couldn't acquire texture lock");
@@ -216,7 +216,7 @@ Error DeviceTextureRef_markDirty(DeviceTextureRef *tex, U16 x, U16 y, U16 z, U16
 
 	texture->isPending = true;
 
-	acq1 = Lock_lock(&device->lock, U64_MAX);
+	acq1 = SpinLock_lock(&device->lock, U64_MAX);
 
 	if(acq1 < ELockAcquire_Success)
 		gotoIfError(clean, Error_invalidState(0, "DeviceTextureRef_markDirty() couldn't lock device"))
@@ -226,10 +226,10 @@ Error DeviceTextureRef_markDirty(DeviceTextureRef *tex, U16 x, U16 y, U16 z, U16
 clean:
 
 	if(acq1 == ELockAcquire_Acquired)
-		Lock_unlock(&device->lock);
+		SpinLock_unlock(&device->lock);
 
 	if(acq0 == ELockAcquire_Acquired)
-		Lock_unlock(&texture->lock);
+		SpinLock_unlock(&texture->lock);
 
 	return err;
 }
@@ -240,7 +240,7 @@ Bool DeviceTexture_free(DeviceTexture *texture, Allocator allocator) {
 
 	RefPtr *refPtr = (RefPtr*)((const U8*)texture - sizeof(RefPtr));
 
-	Lock_free(&texture->lock);
+	SpinLock_free(&texture->lock);
 
 	Bool success = UnifiedTexture_free(refPtr);
 	success &= Buffer_freex(&texture->cpuData);
@@ -329,7 +329,7 @@ Error GraphicsDeviceRef_createTexture(
 		&texture->pendingChanges, flag & EGraphicsResourceFlag_CPUBacked ? 16 : 1
 	))
 
-	texture->lock = Lock_create();
+	texture->lock = SpinLock_create();
 
 	gotoIfError(clean, DeviceTextureRef_markDirty(*tex, 0, 0, 0, 0, 0, 0))
 

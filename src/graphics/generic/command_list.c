@@ -62,7 +62,7 @@ Error CommandListRef_inc(CommandListRef *cmd) {
 																												\
 	CommandList *commandList = CommandListRef_ptr(v);															\
 																												\
-	if(!Lock_isLockedForThread(&commandList->lock))																\
+	if(!SpinLock_isLockedForThread(&commandList->lock))																\
 		return Error_invalidOperation(0, "CommandListRef_validate() cmdlist isn't locked");						\
 																												\
 	if(commandList->state != ECommandListState_Open)															\
@@ -109,7 +109,7 @@ Error CommandListRef_begin(CommandListRef *commandListRef, Bool doClear, U64 loc
 
 	CommandList *commandList = CommandListRef_ptr(commandListRef);
 
-	if(Lock_lock(&commandList->lock, lockTimeout) != ELockAcquire_Acquired)
+	if(SpinLock_lock(&commandList->lock, lockTimeout) != ELockAcquire_Acquired)
 		return Error_invalidOperation(0, "CommandListRef_begin() couldn't acquire lock");
 
 	Error err;
@@ -127,11 +127,11 @@ Error CommandListRef_begin(CommandListRef *commandListRef, Bool doClear, U64 loc
 			const DeviceResourceVersion v = commandList->activeSwapchains.ptr[i];
 			Swapchain *swapchain = SwapchainRef_ptr(v.resource);
 
-			if(Lock_lock(&swapchain->lock, U64_MAX) != ELockAcquire_Acquired)
+			if(SpinLock_lock(&swapchain->lock, U64_MAX) != ELockAcquire_Acquired)
 				gotoIfError(clean, Error_invalidOperation(0, "CommandListRef_begin() couldn't re-acquire swapchain locks"))
 
 			const U64 verId = swapchain->versionId;
-			Lock_unlock(&swapchain->lock);
+			SpinLock_unlock(&swapchain->lock);
 
 			if(verId != v.version)
 				gotoIfError(clean, Error_invalidOperation(
@@ -147,7 +147,7 @@ clean:
 		ListDeviceResourceVersion_clear(&commandList->activeSwapchains);
 
 		commandList->state = ECommandListState_Invalid;
-		Lock_unlock(&commandList->lock);
+		SpinLock_unlock(&commandList->lock);
 	}
 
 	return err;
@@ -182,7 +182,7 @@ clean:
 	if(err.genericError)
 		commandList->state = ECommandListState_Invalid;
 
-	Lock_unlock(&commandList->lock);
+	SpinLock_unlock(&commandList->lock);
 	return err;
 }
 
@@ -1762,7 +1762,7 @@ Error CommandListRef_startRenderExt(
 ) {
 
 	Buffer command = Buffer_createNull();
-	Lock *toRelease = NULL;
+	SpinLock *toRelease = NULL;
 
 	CommandListRef_validateScope(commandListRef, clean)
 
@@ -2137,7 +2137,7 @@ Error CommandListRef_startRenderExt(
 clean:
 
 	if(toRelease)
-		Lock_unlock(toRelease);
+		SpinLock_unlock(toRelease);
 
 	if(err.genericError)
 		commandList->tempStateFlags |= ECommandStateFlags_InvalidState;
@@ -2264,7 +2264,7 @@ Bool CommandList_free(CommandList *cmd, Allocator alloc) {
 
 	(void)alloc;
 
-	Lock_free(&cmd->lock);
+	SpinLock_free(&cmd->lock);
 
 	for (U64 i = 0; i < cmd->resources.length; ++i) {
 
@@ -2315,7 +2315,7 @@ Error GraphicsDeviceRef_createCommandList(
 	gotoIfError(clean, ListCommandScope_reservex(&commandList->activeScopes, 16))
 	gotoIfError(clean, ListTransitionInternal_reservex(&commandList->transitions, estimatedResources))
 	gotoIfError(clean, ListTransitionInternal_reservex(&commandList->pendingTransitions, 32))
-	commandList->lock = Lock_create();
+	commandList->lock = SpinLock_create();
 
 	GraphicsDeviceRef_inc(deviceRef);
 	commandList->device = deviceRef;

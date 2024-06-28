@@ -32,7 +32,7 @@
 #include "platforms/ext/ref_ptrx.h"
 #include "types/time.h"
 
-TListNamedImpl(ListLockPtr);
+TListNamedImpl(ListSpinLockPtr);
 TListNamedImpl(ListCommandListRef);
 TListNamedImpl(ListSwapchainRef);
 TListImpl(DescriptorStackTrace);
@@ -76,8 +76,8 @@ Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 	DeviceBufferRef_dec(&device->frameData);
 	DeviceBufferRef_dec(&device->staging);
 
-	Lock_free(&device->lock);
-	Lock_free(&device->allocator.lock);
+	SpinLock_free(&device->lock);
+	SpinLock_free(&device->allocator.lock);
 	ListWeakRefPtr_freex(&device->pendingResources);
 
 	for(U64 i = 0; i < sizeof(device->stagingAllocations) / sizeof(device->stagingAllocations[0]); ++i)
@@ -113,14 +113,14 @@ Bool GraphicsDevice_free(GraphicsDevice *device, Allocator alloc) {
 	}
 
 	ListDeviceMemoryBlock_freex(&device->allocator.blocks);
-	ListLockPtr_freex(&device->currentLocks);
+	ListSpinLockPtr_freex(&device->currentLocks);
 
 	//Announce descriptor memleaks
 
 	for(U32 i = 0; i < EDescriptorType_ResourceCount; ++i)
 		Buffer_freex(&device->freeList[i]);
 
-	Lock_free(&device->descriptorLock);
+	SpinLock_free(&device->descriptorLock);
 
 	if(device->flags & EGraphicsDeviceFlags_IsDebug) {
 
@@ -224,8 +224,8 @@ Error GraphicsDeviceRef_create(
 	device->allocator = (DeviceMemoryAllocator) { .device = device };
 	gotoIfError(clean, ListDeviceMemoryBlock_reservex(&device->allocator.blocks, 16))
 
-	device->allocator.lock = Lock_create();
-	device->lock = Lock_create();
+	device->allocator.lock = SpinLock_create();
+	device->lock = SpinLock_create();
 
 	//Create in flight resource refs
 
@@ -234,18 +234,18 @@ Error GraphicsDeviceRef_create(
 
 	//Create descriptor type free list
 
-	device->descriptorLock = Lock_create();
+	device->descriptorLock = SpinLock_create();
 
 	for(U64 i = 0; i < EDescriptorType_ResourceCount; ++i)
 		gotoIfError(clean, Buffer_createEmptyBytesx((descriptorTypeCount[i] + 7) >> 3, &device->freeList[i]))
 
 	//Reserve sampler 0 because we want to be able to use read/write handle 0 as invalid.
 
-	Lock_lock(&device->descriptorLock, U64_MAX);
+	SpinLock_lock(&device->descriptorLock, U64_MAX);
 	if(GraphicsDeviceRef_allocateDescriptor(*deviceRef, EDescriptorType_Texture2D) != 0)
 		gotoIfError(clean, Error_invalidState(0, "GraphicsDeviceRef_create() couldn't reserve null descriptor (sampler 0)"))
 
-	Lock_unlock(&device->descriptorLock);
+	SpinLock_unlock(&device->descriptorLock);
 
 	//Allocate temp storage for descriptor tracking
 
@@ -318,7 +318,7 @@ Bool GraphicsDeviceRef_removePending(GraphicsDeviceRef *deviceRef, RefPtr *resou
 	if(!supported || !pendingList)
 		return false;
 
-	const ELockAcquire acq = Lock_lock(&device->lock, U64_MAX);
+	const ELockAcquire acq = SpinLock_lock(&device->lock, U64_MAX);
 
 	if(acq < ELockAcquire_Success)
 		return false;
@@ -339,7 +339,7 @@ Bool GraphicsDeviceRef_removePending(GraphicsDeviceRef *deviceRef, RefPtr *resou
 clean:
 
 	if(acq == ELockAcquire_Acquired)
-		Lock_unlock(&device->lock);
+		SpinLock_unlock(&device->lock);
 
 	return success;
 }
@@ -360,7 +360,7 @@ Error GraphicsDeviceRef_handleNextFrame(GraphicsDeviceRef *deviceRef, void *comm
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 
-	if(!Lock_isLockedForThread(&device->lock))
+	if(!SpinLock_isLockedForThread(&device->lock))
 		return Error_invalidState(
 			0, "GraphicsDeviceRef_handleNextFrame() requires device to be locked by caller"
 		);
@@ -487,14 +487,14 @@ Error GraphicsDeviceRef_submitCommands(
 
 	Error err = Error_none();
 
-	Lock *lockPtr = &device->lock;
-	ELockAcquire acq = Lock_lock(lockPtr, U64_MAX);
+	SpinLock *lockPtr = &device->lock;
+	ELockAcquire acq = SpinLock_lock(lockPtr, U64_MAX);
 
 	if(acq < ELockAcquire_Success)
 		return Error_invalidState(0, "GraphicsDeviceRef_submitCommands() couldn't acquire device lock");
 
 	if(acq == ELockAcquire_Acquired)
-		gotoIfError(clean, ListLockPtr_pushBackx(&device->currentLocks, lockPtr))
+		gotoIfError(clean, ListSpinLockPtr_pushBackx(&device->currentLocks, lockPtr))
 
 	lockPtr = NULL;
 
@@ -515,7 +515,7 @@ Error GraphicsDeviceRef_submitCommands(
 			))
 
 		lockPtr = &cmd->lock;
-		acq = Lock_lock(lockPtr, U64_MAX);
+		acq = SpinLock_lock(lockPtr, U64_MAX);
 
 		if(acq < ELockAcquire_Success) {
 			lockPtr = NULL;
@@ -525,7 +525,7 @@ Error GraphicsDeviceRef_submitCommands(
 		}
 
 		if(acq == ELockAcquire_Acquired)
-			gotoIfError(clean, ListLockPtr_pushBackx(&device->currentLocks, lockPtr))
+			gotoIfError(clean, ListSpinLockPtr_pushBackx(&device->currentLocks, lockPtr))
 
 		lockPtr = NULL;
 
@@ -556,7 +556,7 @@ Error GraphicsDeviceRef_submitCommands(
 			))
 
 		lockPtr = &swapchaini->lock;
-		acq = Lock_lock(lockPtr, U64_MAX);
+		acq = SpinLock_lock(lockPtr, U64_MAX);
 
 		if(acq < ELockAcquire_Success) {
 
@@ -568,7 +568,7 @@ Error GraphicsDeviceRef_submitCommands(
 		}
 
 		if(acq == ELockAcquire_Acquired)
-			gotoIfError(clean, ListLockPtr_pushBackx(&device->currentLocks, lockPtr))
+			gotoIfError(clean, ListSpinLockPtr_pushBackx(&device->currentLocks, lockPtr))
 
 		lockPtr = NULL;
 
@@ -619,7 +619,7 @@ Error GraphicsDeviceRef_submitCommands(
 		if(!lockPtr)
 			continue;
 
-		acq = Lock_lock(lockPtr, U64_MAX);
+		acq = SpinLock_lock(lockPtr, U64_MAX);
 
 		if(acq < ELockAcquire_Success) {
 			lockPtr = NULL;
@@ -627,7 +627,7 @@ Error GraphicsDeviceRef_submitCommands(
 		}
 
 		if(acq == ELockAcquire_Acquired)
-			gotoIfError(clean, ListLockPtr_pushBackx(&device->currentLocks, lockPtr))
+			gotoIfError(clean, ListSpinLockPtr_pushBackx(&device->currentLocks, lockPtr))
 
 		lockPtr = NULL;
 	}
@@ -695,12 +695,12 @@ Error GraphicsDeviceRef_submitCommands(
 clean:
 
 	if(lockPtr)
-		Lock_unlock(lockPtr);
+		SpinLock_unlock(lockPtr);
 
 	for(U64 i = 0; i < device->currentLocks.length; ++i)
-		Lock_unlock(device->currentLocks.ptrNonConst[i]);
+		SpinLock_unlock(device->currentLocks.ptrNonConst[i]);
 
-	ListLockPtr_clear(&device->currentLocks);
+	ListSpinLockPtr_clear(&device->currentLocks);
 	return err;
 }
 
@@ -712,7 +712,7 @@ Error GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef) {
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 
 	Error err;
-	const ELockAcquire acq = Lock_lock(&device->lock, U64_MAX);
+	const ELockAcquire acq = SpinLock_lock(&device->lock, U64_MAX);
 
 	if(acq < ELockAcquire_Success)
 		return Error_invalidOperation(0, "GraphicsDeviceRef_wait() device's lock couldn't be acquired");
@@ -741,7 +741,7 @@ Error GraphicsDeviceRef_wait(GraphicsDeviceRef *deviceRef) {
 clean:
 
 	if(acq == ELockAcquire_Acquired)
-		Lock_unlock(&device->lock);
+		SpinLock_unlock(&device->lock);
 
 	return err;
 }
@@ -753,7 +753,7 @@ U32 GraphicsDeviceRef_allocateDescriptor(GraphicsDeviceRef *deviceRef, EDescript
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 
-	if(!Lock_isLockedForThread(&device->descriptorLock))
+	if(!SpinLock_isLockedForThread(&device->descriptorLock))
 		return U32_MAX;
 
 	const Buffer buf = device->freeList[type];
@@ -803,7 +803,7 @@ Bool GraphicsDeviceRef_freeDescriptors(GraphicsDeviceRef *deviceRef, ListU32 *al
 
 	GraphicsDevice *device = GraphicsDeviceRef_ptr(deviceRef);
 
-	if(!Lock_isLockedForThread(&device->descriptorLock))
+	if(!SpinLock_isLockedForThread(&device->descriptorLock))
 		return false;
 
 	Bool success = true;

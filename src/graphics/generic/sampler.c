@@ -48,7 +48,7 @@ Bool Sampler_free(Sampler *sampler, Allocator allocator) {
 
 	if(sampler->samplerLocation) {
 
-		ELockAcquire acq = Lock_lock(&device->descriptorLock, U64_MAX);
+		ELockAcquire acq = SpinLock_lock(&device->descriptorLock, U64_MAX);
 
 		if(acq >= ELockAcquire_Success) {
 			ListU32 allocationList = (ListU32) { 0 };
@@ -58,7 +58,7 @@ Bool Sampler_free(Sampler *sampler, Allocator allocator) {
 		}
 
 		if(acq == ELockAcquire_Acquired)
-			Lock_unlock(&device->descriptorLock);
+			SpinLock_unlock(&device->descriptorLock);
 	}
 
 	Bool success = Sampler_freeExt(sampler);
@@ -129,7 +129,7 @@ Error GraphicsDeviceRef_createSampler(GraphicsDeviceRef *dev, SamplerInfo info, 
 
 	*samp = (Sampler) { .device = dev, .info = info };
 
-	acq = Lock_lock(&device->descriptorLock, U64_MAX);
+	acq = SpinLock_lock(&device->descriptorLock, U64_MAX);
 
 	if(acq < ELockAcquire_Success)
 		gotoIfError(clean, Error_invalidState(
@@ -146,7 +146,7 @@ Error GraphicsDeviceRef_createSampler(GraphicsDeviceRef *dev, SamplerInfo info, 
 clean:
 
 	if(acq == ELockAcquire_Acquired)
-		Lock_unlock(&device->descriptorLock);
+		SpinLock_unlock(&device->descriptorLock);
 
 	if(err.genericError)
 		SamplerRef_dec(sampler);

@@ -950,13 +950,13 @@ AtomicI64 is a 64-bit int that can be accessed simultaneously from different thr
   - I64 **AtomicI64_dec**(AtomicI64 *ptr): Decreasing the atomic by 1.
   - I64 **AtomicI64_inc**(AtomicI64 *ptr): Increasing the atomic by 1.
 
-## Lock
+## SpinLock
 
-Lock is a system of safely handling standard data types such as Lists/Maps from multiple threads. Before reading the lock has to be acquired, and after the lock has to be released. A Lock is essentially just an atomic that uses the thread id to acquire it.
+SpinLock is a system of safely handling standard data types such as Lists/Maps from multiple threads. Before reading the lock has to be acquired, and after the lock has to be released. A SpinLock is essentially just an atomic that uses the thread id to acquire it and waits for it by blocking the current thread (through a while loop).
 
 ```c
 //Global scope (pseudocode)
-Lock testLock = Lock_create();
+SpinLock testLock = SpinLock_create();
 ListU8 myList = (ListU8) { 0 };
 
 //Threading function
@@ -967,7 +967,7 @@ Error myThread(U8 i) {
     //TimedOut (Time limit exceeded),
     //Acquired (This thread now owns the lock)
     //AlreadyLocked (Thread already owns lock, safe to continue)
-    ELockAcquire acq = Lock_lock(&testLock, 1 * SECOND);
+    ELockAcquire acq = SpinLock_lock(&testLock, 1 * SECOND);
 
     //Catch Invalid and TimedOut
     if(acq < ELockAcquire_Success)
@@ -983,13 +983,13 @@ clean:
     //Only acquired locks should be unlocked.
     //It's possible the calling function already acquired it.
     if(acq == ELockAcquire_Acquired)
-   		Lock_unlock(&testLock);
+   		SpinSpinLock_unlock(&testLock);
 
     return err;
 }
 ```
 
-Make sure to use locks sparingly since they are atomic operations.
+Make sure to use locks sparingly since they are atomic operations and consume full CPU cycles (you might not want to sleep the thread, since that has expensive context switches).
 
 ## Log
 

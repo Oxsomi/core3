@@ -33,7 +33,7 @@ Bool DeviceMemoryAllocator_freeAllocation(DeviceMemoryAllocator *allocator, U32 
 	if(!allocator || blockId >= allocator->blocks.length)
 		return false;
 
-	ELockAcquire acq = Lock_lock(&allocator->lock, U64_MAX);
+	ELockAcquire acq = SpinLock_lock(&allocator->lock, U64_MAX);
 
 	if (acq < ELockAcquire_Success)
 		return false;		//Can't free.
@@ -53,7 +53,7 @@ Bool DeviceMemoryAllocator_freeAllocation(DeviceMemoryAllocator *allocator, U32 
 			success &= !ListDeviceMemoryBlock_popBack(&allocator->blocks, NULL).genericError;
 
 	if(acq == ELockAcquire_Acquired)	//Only release if it wasn't already active
-		Lock_unlock(&allocator->lock);
+		SpinLock_unlock(&allocator->lock);
 
 	return success;
 }

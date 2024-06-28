@@ -373,13 +373,13 @@ public:
 	ULONG STDMETHODCALLTYPE Release() override { return 0; }
 };
 
-Lock lockThread = Lock{ .lockedThreadId = { 0 }, .active = true, .pad = { 0 } };
+SpinLock lockThread = SpinLock{ .lockedThreadId = { 0 }, .active = true, .pad = { 0 } };
 Bool hasInitialized;
 
 Bool Compiler_setup(Error *e_rr) {
 
 	Bool s_uccess = true;
-	ELockAcquire acq = Lock_lock(&lockThread, 0);
+	ELockAcquire acq = SpinLock_lock(&lockThread, 0);
 
 	if (acq >= ELockAcquire_Success) {		//First to lock is first to initialize
 
@@ -396,7 +396,7 @@ Bool Compiler_setup(Error *e_rr) {
 
 	//Wait for thread to finish, since the first thread is the only one that can initialize
 
-	else acq = Lock_lock(&lockThread, U64_MAX);
+	else acq = SpinLock_lock(&lockThread, U64_MAX);
 
 	if(!hasInitialized)
 		retError(clean, Error_invalidState(0, "Compiler_setup() one of the other threads couldn't initialize DXC"))
@@ -404,7 +404,7 @@ Bool Compiler_setup(Error *e_rr) {
 clean:
 
 	if(acq == ELockAcquire_Acquired)
-		Lock_unlock(&lockThread);
+		SpinLock_unlock(&lockThread);
 
 	return s_uccess;
 }
@@ -547,7 +547,7 @@ clean:
 
 void Compiler_shutdown() {
 
-	ELockAcquire acq = Lock_lock(&lockThread, U64_MAX);
+	ELockAcquire acq = SpinLock_lock(&lockThread, U64_MAX);
 
 	if(acq < ELockAcquire_Success)
 		return;
@@ -563,7 +563,7 @@ void Compiler_shutdown() {
 
 clean:
 	if(acq == ELockAcquire_Acquired)
-		Lock_unlock(&lockThread);
+		SpinLock_unlock(&lockThread);
 }
 
 Bool Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator alloc, CompileResult *result, Error *e_rr) {

@@ -42,7 +42,7 @@ Bool BLAS_free(BLAS *blas, Allocator allocator) {
 
 	(void)allocator;
 
-	Lock_free(&blas->base.lock);
+	SpinLock_free(&blas->base.lock);
 
 	Bool success = BLAS_freeExt(blas);
 	success &= CharString_freex(&blas->base.name);
@@ -263,7 +263,7 @@ Error GraphicsDeviceRef_createBLAS(GraphicsDeviceRef *dev, BLAS blas, CharString
 		gotoIfError(clean, BLASRef_inc(blas.base.parent))
 
 	*blasPtr = blas;
-	blasPtr->base.lock = Lock_create();
+	blasPtr->base.lock = SpinLock_create();
 	blasPtr->base.name = CharString_createNull();
 
 	if (blas.base.asConstructionType == EBLASConstructionType_Serialized) {

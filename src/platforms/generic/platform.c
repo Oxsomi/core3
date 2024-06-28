@@ -75,7 +75,7 @@ TListImpl(DebugAllocation);
 
 Allocator Allocator_allocationsAllocator;
 ListDebugAllocation Allocator_allocations;						//TODO: Use hashmap here!
-Lock Allocator_lock;							//Multi threading safety
+SpinLock Allocator_lock;							//Multi threading safety
 
 //Allocation
 
@@ -153,7 +153,7 @@ Error Platform_onAllocate(void *ptr, U64 length) {
 
 		Log_captureStackTrace(Allocator_allocationsAllocator, captured.stack, STACKTRACE_SIZE, 1);
 
-		const ELockAcquire acq = Lock_lock(&Allocator_lock, U64_MAX);
+		const ELockAcquire acq = SpinLock_lock(&Allocator_lock, U64_MAX);
 
 		if(acq < ELockAcquire_Success)
 			return Error_invalidState(0, "allocCallback() allocator lock failed to acquire");			//Should never happen
@@ -161,7 +161,7 @@ Error Platform_onAllocate(void *ptr, U64 length) {
 		const Error err = ListDebugAllocation_pushBack(&Allocator_allocations, captured, Allocator_allocationsAllocator);
 
 		if(acq == ELockAcquire_Acquired)
-			Lock_unlock(&Allocator_lock);
+			SpinLock_unlock(&Allocator_lock);
 
 		if(err.genericError)
 			return err;
@@ -183,7 +183,7 @@ Bool Platform_onFree(void *ptr, U64 len) {
 
 	#ifndef NDEBUG
 
-		acq = Lock_lock(&Allocator_lock, U64_MAX);
+		acq = SpinLock_lock(&Allocator_lock, U64_MAX);
 
 		if(acq < ELockAcquire_Success)
 			return false;
@@ -226,7 +226,7 @@ Bool Platform_onFree(void *ptr, U64 len) {
 		ListDebugAllocation_erase(&Allocator_allocations, i);
 
 		if(acq == ELockAcquire_Acquired)
-			Lock_unlock(&Allocator_lock);
+			SpinLock_unlock(&Allocator_lock);
 
 	#endif
 
@@ -240,7 +240,7 @@ Bool Platform_onFree(void *ptr, U64 len) {
 clean:
 
 	if(acq == ELockAcquire_Acquired)
-		Lock_unlock(&Allocator_lock);
+		SpinLock_unlock(&Allocator_lock);
 
 	return success;
 }
@@ -251,7 +251,7 @@ void Platform_printAllocations(U64 offset, U64 length, U64 minAllocationSize) {
 
 	#ifndef NDEBUG
 
-		const ELockAcquire acq = Lock_lock(&Allocator_lock, U64_MAX);
+		const ELockAcquire acq = SpinLock_lock(&Allocator_lock, U64_MAX);
 
 		if(acq < ELockAcquire_Success)
 			return;
@@ -288,7 +288,7 @@ void Platform_printAllocations(U64 offset, U64 length, U64 minAllocationSize) {
 		Log_debugLn(Allocator_allocationsAllocator, "Showed %"PRIu64" bytes of allocations", capturedLength);
 
 		if(acq == ELockAcquire_Acquired)
-			Lock_unlock(&Allocator_lock);
+			SpinLock_unlock(&Allocator_lock);
 
 	#endif
 }
@@ -363,7 +363,7 @@ Error Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *alloca
 			if(err.genericError)
 				return err;
 
-			Allocator_lock = Lock_create();
+			Allocator_lock = SpinLock_create();
 			Allocator_memoryAllocationCount = Allocator_memoryAllocationSize = (AtomicI64) { 0 };
 		}
 	#endif
@@ -381,7 +381,7 @@ Error Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *alloca
 	Error err;
 	CharString appDir = CharString_createNull();
 
-	Platform_instance.virtualSectionsLock = Lock_create();
+	Platform_instance.virtualSectionsLock = SpinLock_create();
 
 	ListCharString sl = (ListCharString) { 0 };
 
@@ -442,7 +442,7 @@ void Platform_cleanup() {
 
 	//Properly clean virtual files
 
-	Lock_free(&Platform_instance.virtualSectionsLock);
+	SpinLock_free(&Platform_instance.virtualSectionsLock);
 
 	for (U64 i = 0; i < Platform_instance.virtualSections.length; ++i) {
 		VirtualSection *sect = &Platform_instance.virtualSections.ptrNonConst[i];
@@ -463,7 +463,7 @@ void Platform_cleanup() {
 	Platform_instance =	(Platform) { 0 };
 }
 
-Bool Lock_isLockedForThread(Lock *l) {
+Bool SpinLock_isLockedForThread(SpinLock *l) {
 	return AtomicI64_add(&l->lockedThreadId, 0) == (I64) Thread_getId();
 }
 

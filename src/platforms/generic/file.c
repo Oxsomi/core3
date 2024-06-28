@@ -824,7 +824,7 @@ Error File_resolveVirtual(CharString loc, CharString *subPath, const VirtualSect
 
 	else goto clean;
 
-	if(!Lock_isLockedForThread(&Platform_instance.virtualSectionsLock))
+	if(!SpinLock_isLockedForThread(&Platform_instance.virtualSectionsLock))
 		gotoIfError(clean, Error_invalidState(0, "File_resolveVirtual() requires virtualSectionsLock"))
 
 	//Check sections
@@ -881,7 +881,7 @@ Error File_readVirtualInternal(Buffer *output, CharString loc) {
 	const VirtualSection *section = NULL;
 	Error err;
 	Buffer tmp = Buffer_createNull();
-	const ELockAcquire acq = Lock_lock(&Platform_instance.virtualSectionsLock, U64_MAX);
+	const ELockAcquire acq = SpinLock_lock(&Platform_instance.virtualSectionsLock, U64_MAX);
 
 	if(acq < ELockAcquire_Success)
 		gotoIfError(clean, Error_invalidState(0, "File_readVirtualInternal() couldn't lock virtualSectionsLock"))
@@ -900,7 +900,7 @@ Error File_readVirtualInternal(Buffer *output, CharString loc) {
 clean:
 
 	if(acq == ELockAcquire_Acquired)
-		Lock_unlock(&Platform_instance.virtualSectionsLock);
+		SpinLock_unlock(&Platform_instance.virtualSectionsLock);
 
 	Buffer_freex(&tmp);
 	CharString_freex(&subPath);
@@ -925,7 +925,7 @@ Error File_getInfoVirtualInternal(FileInfo *info, CharString loc) {
 	CharString subPath = CharString_createNull();
 	const VirtualSection *section = NULL;
 	Error err;
-	const ELockAcquire acq = Lock_lock(&Platform_instance.virtualSectionsLock, U64_MAX);
+	const ELockAcquire acq = SpinLock_lock(&Platform_instance.virtualSectionsLock, U64_MAX);
 
 	if(acq < ELockAcquire_Success)
 		gotoIfError(clean, Error_invalidState(0, "File_getInfoVirtualInternal() couldn't lock virtualSectionsLock"))
@@ -962,7 +962,7 @@ Error File_getInfoVirtualInternal(FileInfo *info, CharString loc) {
 clean:
 
 	if(acq == ELockAcquire_Acquired)
-		Lock_unlock(&Platform_instance.virtualSectionsLock);
+		SpinLock_unlock(&Platform_instance.virtualSectionsLock);
 
 	if(err.genericError)
 		FileInfo_freex(info);
@@ -1029,7 +1029,7 @@ Error File_foreachVirtualInternal(ForeachFile *userData, CharString resolved) {
 	if(CharString_length(copy))
 		gotoIfError(clean, CharString_appendx(&copy, '/'))		//Don't append to root
 
-	acq = Lock_lock(&Platform_instance.virtualSectionsLock, U64_MAX);
+	acq = SpinLock_lock(&Platform_instance.virtualSectionsLock, U64_MAX);
 
 	if(acq < ELockAcquire_Success)
 		gotoIfError(clean, Error_invalidState(0, "File_unloadVirtualInternal() couldn't lock virtualSectionsLock"))
@@ -1144,7 +1144,7 @@ Error File_foreachVirtualInternal(ForeachFile *userData, CharString resolved) {
 clean:
 
 	if(acq == ELockAcquire_Acquired)
-		Lock_unlock(&Platform_instance.virtualSectionsLock);
+		SpinLock_unlock(&Platform_instance.virtualSectionsLock);
 
 	ListCharString_freex(&visited);
 	CharString_freex(&copy);
@@ -1235,7 +1235,7 @@ Error File_unloadVirtualInternal(void *userData, CharString loc) {
 	if(CharString_length(isChild))
 		gotoIfError(clean, CharString_appendx(&isChild, '/'))		//Don't append to root
 
-	acq = Lock_lock(&Platform_instance.virtualSectionsLock, U64_MAX);
+	acq = SpinLock_lock(&Platform_instance.virtualSectionsLock, U64_MAX);
 
 	if(acq < ELockAcquire_Success)
 		gotoIfError(clean, Error_invalidState(0, "File_unloadVirtualInternal() couldn't lock virtualSectionsLock"))
@@ -1257,7 +1257,7 @@ Error File_unloadVirtualInternal(void *userData, CharString loc) {
 clean:
 
 	if(acq == ELockAcquire_Acquired)
-		Lock_unlock(&Platform_instance.virtualSectionsLock);
+		SpinLock_unlock(&Platform_instance.virtualSectionsLock);
 
 	CharString_freex(&isChild);
 	return err;

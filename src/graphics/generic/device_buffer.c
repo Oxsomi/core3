@@ -52,7 +52,7 @@ Error DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count) {
 			1, offset + count, bufLen, "DeviceBufferRef_markDirty()::offset+count out of bounds"
 		);
 
-	ELockAcquire acq0 = Lock_lock(&buffer->lock, U64_MAX);
+	ELockAcquire acq0 = SpinLock_lock(&buffer->lock, U64_MAX);
 
 	if(acq0 < ELockAcquire_Success)
 		return Error_invalidOperation(1, "DeviceBufferRef_markDirty() couldn't acquire buffer lock");
@@ -147,7 +147,7 @@ Error DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count) {
 
 	buffer->isPending = true;
 
-	acq1 = Lock_lock(&device->lock, U64_MAX);
+	acq1 = SpinLock_lock(&device->lock, U64_MAX);
 
 	if(acq1 < ELockAcquire_Success)
 		gotoIfError(clean, Error_invalidState(0, "DeviceBufferRef_markDirty() couldn't lock device"))
@@ -157,10 +157,10 @@ Error DeviceBufferRef_markDirty(DeviceBufferRef *buf, U64 offset, U64 count) {
 clean:
 
 	if(acq1 == ELockAcquire_Acquired)
-		Lock_unlock(&device->lock);
+		SpinLock_unlock(&device->lock);
 
 	if(acq0 == ELockAcquire_Acquired)
-		Lock_unlock(&buffer->lock);
+		SpinLock_unlock(&buffer->lock);
 
 	return err;
 }
@@ -175,12 +175,12 @@ Bool DeviceBuffer_free(DeviceBuffer *buffer, Allocator allocator) {
 
 	RefPtr *refPtr = (RefPtr*)((const U8*)buffer - sizeof(RefPtr));
 
-	Lock_free(&buffer->lock);
+	SpinLock_free(&buffer->lock);
 
 	if (buffer->resource.flags & EGraphicsResourceFlag_ShaderRW) {
 
 		GraphicsDevice *device = GraphicsDeviceRef_ptr(buffer->resource.device);
-		const ELockAcquire acq = Lock_lock(&device->descriptorLock, U64_MAX);
+		const ELockAcquire acq = SpinLock_lock(&device->descriptorLock, U64_MAX);
 
 		if(acq >= ELockAcquire_Success) {
 
@@ -190,7 +190,7 @@ Bool DeviceBuffer_free(DeviceBuffer *buffer, Allocator allocator) {
 			GraphicsDeviceRef_freeDescriptors(buffer->resource.device, &allocationList);
 
 			if(acq == ELockAcquire_Acquired)
-				Lock_unlock(&device->descriptorLock);
+				SpinLock_unlock(&device->descriptorLock);
 		}
 	}
 
@@ -262,7 +262,7 @@ Error GraphicsDeviceRef_createBufferIntern(
 
 	if(buf->resource.flags & EGraphicsResourceFlag_ShaderRW) {
 
-		acq = Lock_lock(&device->descriptorLock, U64_MAX);
+		acq = SpinLock_lock(&device->descriptorLock, U64_MAX);
 
 		if(acq < ELockAcquire_Success)
 			gotoIfError(clean, Error_invalidState(
@@ -292,14 +292,14 @@ Error GraphicsDeviceRef_createBufferIntern(
 		}
 
 		if(acq == ELockAcquire_Acquired)
-			Lock_unlock(&device->descriptorLock);
+			SpinLock_unlock(&device->descriptorLock);
 
 		acq = ELockAcquire_Invalid;
 	}
 
 	gotoIfError(clean, ListDevicePendingRange_reservex(&buf->pendingChanges, usage & EGraphicsResourceFlag_CPUBacked ? 16 : 1))
 
-	buf->lock = Lock_create();
+	buf->lock = SpinLock_create();
 
 	if(allocate) {
 		gotoIfError(clean, Buffer_createEmptyBytesx(buf->resource.size, &buf->cpuData))		//Temporary if not CPUBacked
@@ -311,7 +311,7 @@ Error GraphicsDeviceRef_createBufferIntern(
 clean:
 
 	if(acq == ELockAcquire_Acquired)
-		Lock_unlock(&device->descriptorLock);
+		SpinLock_unlock(&device->descriptorLock);
 
 	if(err.genericError)
 		DeviceBufferRef_dec(ref);

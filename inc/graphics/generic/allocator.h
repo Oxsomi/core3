@@ -56,7 +56,7 @@ typedef struct DeviceMemoryAllocator {
 
 	GraphicsDevice *device;
 
-	Lock lock;
+	SpinLock lock;
 
 	ListDeviceMemoryBlock blocks;
 

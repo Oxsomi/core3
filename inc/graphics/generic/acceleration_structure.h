@@ -68,7 +68,7 @@ typedef struct RTAS {
 
 	CharString name;						//Debug name
 
-	Lock lock;								//Before reading on CPU; for example for refitting
+	SpinLock lock;								//Before reading on CPU; for example for refitting
 
 } RTAS;
 

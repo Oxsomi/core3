@@ -471,7 +471,7 @@
 		ListU64 *shEntryIds;				//[U32 shEntries[i], U16 shEntries[i][j], U16 shEntries[i][j][k]]
 		ListCompileResult *compileResults;
 
-		Lock *lock;
+		SpinLock *lock;
 		U64 *counter;						//This one is to acquire job ids
 		U64 *completedCounter;				//This one is to signal jobs that are done
 		U64 *counterCompiledBinaries;		//How many binaries have been compiled
@@ -501,7 +501,7 @@
 
 			//Lock to get next job id
 
-			 acq = Lock_lock(job->lock, U64_MAX);
+			 acq = SpinLock_lock(job->lock, U64_MAX);
 
 			if(acq < ELockAcquire_Success)
 				return;
@@ -581,7 +581,7 @@
 			U64 ourJobId = (*job->counter)++;
 
 			if(acq == ELockAcquire_Acquired)
-				Lock_unlock(job->lock);
+				SpinLock_unlock(job->lock);
 
 			acq = ELockAcquire_Invalid;
 			lastJobId = ourJobId;
@@ -607,7 +607,7 @@
 		}
 
 		if(acq == ELockAcquire_Acquired)
-			Lock_unlock(job->lock);
+			SpinLock_unlock(job->lock);
 		
 		acq = ELockAcquire_Invalid;
 
@@ -620,7 +620,7 @@
 
 			while(true) {
 
-				acq = Lock_lock(job->lock, U64_MAX);
+				acq = SpinLock_lock(job->lock, U64_MAX);
 
 				if(acq < ELockAcquire_Success)
 					goto cleanTmp;
@@ -647,7 +647,7 @@
 				if(*job->counterCompiledBinaries == job->shEntryIds->length) {
 
 					if(acq == ELockAcquire_Acquired)		//Release lock to prevent deadlock
-						Lock_unlock(job->lock);
+						SpinLock_unlock(job->lock);
 
 					acq = ELockAcquire_Invalid;
 
@@ -664,7 +664,7 @@
 				ListSHEntryRuntime entries = job->shEntries->ptr[ourOldJobId];		//Grab entries as shEntries can be modified
 
 				if(acq == ELockAcquire_Acquired)
-					Lock_unlock(job->lock);
+					SpinLock_unlock(job->lock);
 
 				acq = ELockAcquire_Invalid;
 
@@ -699,7 +699,7 @@
 		}
 
 		if(acq == ELockAcquire_Acquired)
-			Lock_unlock(job->lock);
+			SpinLock_unlock(job->lock);
 		
 		acq = ELockAcquire_Invalid;
 	}
@@ -841,7 +841,7 @@
 		SHEntry shEntry = (SHEntry) { 0 };
 		Buffer temp = Buffer_createNull();
 		Bool isFolder = false;
-		Lock lock = (Lock) { 0 };
+		SpinLock lock = (SpinLock) { 0 };
 
 		ListListSHEntryRuntime shEntries = (ListListSHEntryRuntime) { 0 };
 		ListU64 shEntryIds = (ListU64) { 0 };
@@ -1116,7 +1116,7 @@
 			(threadCount > 1 && !defaultThreadCount) || forceThreading
 		) {
 
-			lock = Lock_create();
+			lock = SpinLock_create();
 			U64 counter = 0, threadCounter = 0, completedCounter = 0, counterCompiledBinaries = 0;
 
 			gotoIfError2(clean, ListThread_resizex(&threads, threadCount))
@@ -1430,7 +1430,7 @@
 		ListCompiler_freeUnderlyingx(&compilers);
 		Compiler_freex(&compiler);
 		ListIncludeInfo_freeUnderlyingx(&includeInfo);
-		Lock_unlock(&lock);
+		SpinLock_unlock(&lock);
 		Buffer_freex(&temp);
 		CharString_freex(&resolved);
 		CharString_freex(&resolved2);

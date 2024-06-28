@@ -24,23 +24,23 @@
 #include "types/time.h"
 #include "types/math.h"
 
-Lock Lock_create() {
-	return (Lock) { .active = true };
+SpinLock SpinLock_create() {
+	return (SpinLock) { .active = true };
 }
 
-Bool Lock_free(Lock *res) {
+Bool SpinLock_free(SpinLock *res) {
 
 	if(!res || !res->active)
 		return true;
 
-	if (Lock_lock(res, U64_MAX) < ELockAcquire_Success)
+	if (SpinLock_lock(res, U64_MAX) < ELockAcquire_Success)
 		return false;
 
 	res->active = false;
 	return true;
 }
 
-ELockAcquire Lock_lock(Lock *l, Ns maxTime) {
+ELockAcquire SpinLock_lock(SpinLock *l, Ns maxTime) {
 
 	if (l && l->active) {
 
@@ -65,7 +65,6 @@ ELockAcquire Lock_lock(Lock *l, Ns maxTime) {
 
 		while(prevValue != 0) {
 
-			Thread_sleep(100 * MU);
 			prevValue = AtomicI64_cmpStore(&l->lockedThreadId, 0, tid);
 
 			if(maxTime != U64_MAX && Time_now() - time >= maxTime)
@@ -78,7 +77,7 @@ ELockAcquire Lock_lock(Lock *l, Ns maxTime) {
 	return ELockAcquire_Invalid;
 }
 
-Bool Lock_unlock(Lock *l) {
+Bool SpinLock_unlock(SpinLock *l) {
 
 	if (l && l->active) {
 		const U64 tid = Thread_getId();
