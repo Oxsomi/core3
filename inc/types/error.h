@@ -26,8 +26,6 @@
 	extern "C" {
 #endif
 
-typedef struct CharString CharString;
-
 //TODO: Make errors extendable like TypeId
 
 typedef enum EGenericError {
@@ -150,7 +148,6 @@ Error Error_constData(U32 paramId, U32 subId, const C8 *errorStr);
 Error Error_stderr(U32 subId, const C8 *errorStr);
 Error Error_none();
 
-impl CharString Error_formatPlatformError(Allocator alloc, Error err);
 void Error_print(Allocator alloc, Error err, ELogLevel logLevel, ELogOptions options);
 
 #ifdef __cplusplus

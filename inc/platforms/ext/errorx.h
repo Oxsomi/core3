@@ -31,8 +31,6 @@ typedef struct Error Error;
 
 void Error_printx(Error err, ELogLevel logLevel, ELogOptions options);
 
-CharString Error_formatPlatformErrorx(Error err);
-
 #ifdef __cplusplus
 	}
 #endif

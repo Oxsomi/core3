@@ -97,6 +97,7 @@ Error CLI_hashAllTheFiles(FileInfo info, EFormat *format) {
 		gotoIfError3(clean, CLI_hash(info.path, true, *format, &err))
 
 clean:
+	(void) s_uccess;
 	return err;
 }
 

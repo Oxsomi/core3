@@ -35,7 +35,3 @@ void Error_fillStackTrace(Error *err) {
 void Error_printx(Error err, ELogLevel logLevel, ELogOptions options) {
 	Error_print(Platform_instance.alloc, err, logLevel, options);
 }
-
-CharString Error_formatPlatformErrorx(Error err) {
-	return Error_formatPlatformError(Platform_instance.alloc, err);
-}

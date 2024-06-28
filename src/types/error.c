@@ -180,6 +180,8 @@ Error Error_stderr(U32 subId, const C8 *errorStr) {
 
 Error Error_none() { return (Error) { 0 }; }
 
+impl CharString Error_formatPlatformError(Allocator alloc, Error err);
+
 void Error_print(Allocator alloc, Error err, ELogLevel logLevel, ELogOptions options) {
 
 	if(!err.genericError)
