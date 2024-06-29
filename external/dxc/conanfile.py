@@ -99,6 +99,8 @@ class dxc(ConanFile):
 		# Apparently it looks for dxcompilerD.lib/.a rather than dxcompiler.lib/.a
 		
 		cwd = os.getcwd()
+
+		print(os.listdir(cwd))
 		
 		# Linux, OSX, etc. all run from build/Debug or build/Release, so we need to change it a bit
 		if cwd.endswith("Debug") or cwd.endswith("Release"):
@@ -205,3 +207,5 @@ class dxc(ConanFile):
 			self.cpp_info.libs += [ "clang" ]
 
 		self.cpp_info.libs += [ "dxcompiler" ]
+
+		print(self.cpp_info.libs)
