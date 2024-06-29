@@ -366,6 +366,8 @@ Error File_add(CharString loc, EFileType type, Ns maxTimeout, Bool createParentO
 	if(!err.genericError)
 		gotoIfError(clean, info.type != type ? Error_alreadyDefined(0, "File_add()::loc already exists") : Error_none())
 
+	err = Error_none();
+
 	FileInfo_freex(&info);
 
 	//Check parent directories until none left
@@ -393,6 +395,8 @@ Error File_add(CharString loc, EFileType type, Ns maxTimeout, Bool createParentO
 
 			if(!err.genericError)		//Already defined, continue to child
 				continue;
+
+			err = Error_none();
 
 			//Mkdir requires null terminated string
 			//So we hack force in a null terminator
@@ -728,6 +732,7 @@ success:
 	CharString_freex(&resolved);
 	return err;
 }
+
 //Virtual file support
 
 typedef Error (*VirtualFileFunc)(void *userData, CharString resolved);
