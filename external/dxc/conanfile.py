@@ -195,8 +195,6 @@ class dxc(ConanFile):
 			
 			"clangSema",
 			"clangAST",
-			"clangAnalysis",
-			"clangAST",
 			"clangEdit",
 			"clangLex",
 			"clangBasic",
