@@ -2315,7 +2315,7 @@ Error GraphicsDeviceRef_createCommandList(
 	gotoIfError(clean, ListCommandScope_reservex(&commandList->activeScopes, 16))
 	gotoIfError(clean, ListTransitionInternal_reservex(&commandList->transitions, estimatedResources))
 	gotoIfError(clean, ListTransitionInternal_reservex(&commandList->pendingTransitions, 32))
-	commandList->lock = SpinLock_create();
+	SpinLock_create(&commandList->lock);
 
 	GraphicsDeviceRef_inc(deviceRef);
 	commandList->device = deviceRef;

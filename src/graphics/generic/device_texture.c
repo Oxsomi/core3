@@ -329,7 +329,7 @@ Error GraphicsDeviceRef_createTexture(
 		&texture->pendingChanges, flag & EGraphicsResourceFlag_CPUBacked ? 16 : 1
 	))
 
-	texture->lock = SpinLock_create();
+	SpinLock_create(&texture->lock);
 
 	gotoIfError(clean, DeviceTextureRef_markDirty(*tex, 0, 0, 0, 0, 0, 0))
 

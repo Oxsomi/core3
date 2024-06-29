@@ -24,8 +24,13 @@
 #include "types/time.h"
 #include "types/math.h"
 
-SpinLock SpinLock_create() {
-	return (SpinLock) { .active = true };
+Bool SpinLock_create(SpinLock *res) {
+
+	if(!res || res->active)
+		return false;
+
+	*res = (SpinLock) { .active = true };
+	return true;
 }
 
 Bool SpinLock_free(SpinLock *res) {

@@ -291,7 +291,7 @@ Error GraphicsDeviceRef_createTLAS(GraphicsDeviceRef *dev, TLAS tlas, CharString
 		gotoIfError(clean, TLASRef_inc(tlas.base.parent))
 
 	*tlasPtr = tlas;
-	tlasPtr->base.lock = SpinLock_create();
+	SpinLock_create(&tlasPtr->base.lock);
 	tlasPtr->base.name = CharString_createNull();
 
 	if (tlas.base.asConstructionType == ETLASConstructionType_Serialized) {
