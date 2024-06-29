@@ -691,7 +691,7 @@ Bool Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator all
 		DxcBuffer buffer{
 			.Ptr = settings.string.ptr,
 			.Size = CharString_length(settings.string),
-			.Encoding = 0
+			.Encoding = DXC_CP_UTF8
 		};
 
 		HRESULT hr = interfaces->compiler->Compile(
@@ -1098,7 +1098,7 @@ Bool Compiler_compile(
 		DxcBuffer buffer{
 			.Ptr = settings.string.ptr,
 			.Size = CharString_length(settings.string),
-			.Encoding = 0
+			.Encoding = DXC_CP_UTF8
 		};
 
 		HRESULT hr = interfaces->compiler->Compile(
