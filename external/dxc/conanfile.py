@@ -99,8 +99,6 @@ class dxc(ConanFile):
 		# Apparently it looks for dxcompilerD.lib/.a rather than dxcompiler.lib/.a
 		
 		cwd = os.getcwd()
-
-		print(os.listdir(cwd))
 		
 		# Linux, OSX, etc. all run from build/Debug or build/Release, so we need to change it a bit
 		if cwd.endswith("Debug") or cwd.endswith("Release"):
@@ -143,69 +141,79 @@ class dxc(ConanFile):
 		self.cpp_info.set_property("cmake_file_name", "dxc")
 		self.cpp_info.set_property("cmake_target_name", "dxc::dxc")
 		self.cpp_info.set_property("pkg_config_name", "dxc")
-		self.cpp_info.libs = [
-
-			"LLVMMSSupport",		# Important note. This is built by using the cmake dependency graph
-			"LLVMSupport",			# We have to order from least dependent to most dependent
-			"LLVMCore",				# Since apparently only MSVC is ok with linking in an "invalid" order
-			"LLVMDxcSupport",
-			"LLVMTableGen",
-			"LLVMAsmParser",
-			"LLVMBitReader",
-			"LLVMBitWriter",
-			"LLVMIRReader",
-			"LLVMDXIL",
-			"LLVMDxcBindingTable",
-			"LLVMAnalysis",
-			"LLVMipa",
-			"LLVMTransformUtils",
-
-			"clangBasic",
-			"clangLex",
-			"clangEdit",
-			"clangSema",
-			"clangAnalysis",
-			"clangRewrite",
-			"clangToolingCore",
-			"clangFormat",
-			"clangAST",
-			"clangIndex",
-			"clangASTMatchers",
-			"clangParse",
-			"clangDriver",
-			"clangFrontend",
-			"clangSPIRV",
-			"clangTooling",
-			"clangRewriteFrontend",
-			"clangCodeGen",
-			"clangFrontendTool",
-
-			"LLVMDxilContainer",
-			"LLVMLinker",
-			"LLVMVectorize",
-			"LLVMDxilPIXPasses",
-			"LLVMInstCombine",
-			"LLVMDxilRootSignature",
-			"LLVMPasses",
-			"LLVMDxilPdbInfo",
-			"LLVMDxilDia",
-			"LLVMOption",
-			"LLVMDxilCompression",
-			"LLVMProfileData",
-			"LLVMScalarOpts",
-			"LLVMPassPrinters",
-			"LLVMDxrFallback",
-			"LLVMTarget",
-
-			"SPIRV-Tools-opt",
-			"SPIRV-Tools"
-		]
-
+		
+		
+		self.cpp_info.libs = [ "dxcompiler" ]
+		
 		if self.settings.compiler == "msvc":
 			self.cpp_info.libs += [ "libclang" ]
 		else:
 			self.cpp_info.libs += [ "clang" ]
+		
+		# Important note. This is built by using the cmake dependency graph
+		# We have to order from most dependent to least dependent
+		# Since apparently only MSVC is ok with linking in an "invalid" order
+		
+		self.cpp_info.libs += [
+			
+			"LLVMDxrFallback",
+			
+			"clangFrontendTool",
+			"clangCodeGen",
+			"LLVMTarget",
+			
+			"LLVMScalarOpts",
+			"LLVMPassPrinters",
+			
+			"LLVMProfileData",
+			"LLVMDxilCompression",
+			"LLVMOption",
+			"LLVMDxilDia",
+			"LLVMDxilPdbInfo",
+			"LLVMPasses",
+			"LLVMDxilRootSignature",
+			"LLVMInstCombine",
+			"LLVMDxilPIXPasses",
+			"LLVMVectorize",
+			
+			"clangRewriteFrontend",
+			"clangTooling",
+			"clangSPIRV",
 
-		self.cpp_info.libs += [ "dxcompiler" ]
-
-		print(self.cpp_info.libs)
+			"SPIRV-Tools-opt",
+			"SPIRV-Tools",
+			
+			"clangFrontend",
+			"clangDriver",
+			"clangParse",
+			"clangASTMatchers",
+			"clangIndex",
+			
+			"clangFormat",
+			"clangToolingCore",
+			"clangRewrite",
+			
+			"clangSema",
+			"clangAST",
+			"clangAnalysis",
+			"clangEdit",
+			"clangLex",
+			"clangBasic",
+			
+			"LLVMLinker",
+			"LLVMDxilContainer",
+			"LLVMTransformUtils",
+			"LLVMipa",
+			"LLVMAnalysis",
+			"LLVMDxcBindingTable",
+			"LLVMDXIL",
+			"LLVMIRReader",
+			"LLVMBitWriter",
+			"LLVMBitReader",
+			"LLVMAsmParser",
+			"LLVMTableGen",
+			"LLVMDxcSupport",
+			"LLVMCore",
+			"LLVMSupport",
+			"LLVMMSSupport"
+		]
