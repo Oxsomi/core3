@@ -21,12 +21,26 @@ jobs:
       uses: turtlebrowser/get-conan@main
     - name: Configure conan
       run: conan profile detect
+    - name: Restore cached
+      id: cache-restore
+      uses: actions/cache/restore@v3
+      with:
+        path: ~/.conan2/p
+        key: ${{ runner.os }}-${{ hashFiles('**/external/dxc') }}
     - name: build for fast check
       run: bash build.sh Release True -o cliGraphics=False -o forceVulkan=True
     - name: build for SIMD fallback check
       run: bash build.sh Release False -o cliGraphics=False -o forceVulkan=True
     - name: build for fast check
       run: bash build.sh Debug True -o cliGraphics=False -o forceVulkan=True
+    - name: Delete non package files for cache
+      run: bash -c "rm -rf ~/.conan2/p/b/*/b"
+    - name: Cache Build
+      id: cache-build
+      uses: actions/cache/save@v3
+      with:
+        path: ~/.conan2/p
+        key: ${{ runner.os }}-${{ hashFiles('**/external/dxc') }}
     - uses: actions/setup-ruby@v1
     - name: Send Webhook Notification
       if: always()

@@ -299,7 +299,7 @@ Error GraphicsDeviceRef_createBufferIntern(
 
 	gotoIfError(clean, ListDevicePendingRange_reservex(&buf->pendingChanges, usage & EGraphicsResourceFlag_CPUBacked ? 16 : 1))
 
-	buf->lock = SpinLock_create();
+	SpinLock_create(&buf->lock);
 
 	if(allocate) {
 		gotoIfError(clean, Buffer_createEmptyBytesx(buf->resource.size, &buf->cpuData))		//Temporary if not CPUBacked

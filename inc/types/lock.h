@@ -36,7 +36,7 @@ typedef struct SpinLock {
 
 typedef struct Error Error;
 
-SpinLock SpinLock_create();
+Bool SpinLock_create(SpinLock *res);
 Bool SpinLock_free(SpinLock *res);
 
 //Even though maxTime is in Ns it may be interpreted

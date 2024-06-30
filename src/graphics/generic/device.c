@@ -224,8 +224,8 @@ Error GraphicsDeviceRef_create(
 	device->allocator = (DeviceMemoryAllocator) { .device = device };
 	gotoIfError(clean, ListDeviceMemoryBlock_reservex(&device->allocator.blocks, 16))
 
-	device->allocator.lock = SpinLock_create();
-	device->lock = SpinLock_create();
+	SpinLock_create(&device->allocator.lock);
+	SpinLock_create(&device->lock);
 
 	//Create in flight resource refs
 
@@ -234,7 +234,7 @@ Error GraphicsDeviceRef_create(
 
 	//Create descriptor type free list
 
-	device->descriptorLock = SpinLock_create();
+	SpinLock_create(&device->descriptorLock);
 
 	for(U64 i = 0; i < EDescriptorType_ResourceCount; ++i)
 		gotoIfError(clean, Buffer_createEmptyBytesx((descriptorTypeCount[i] + 7) >> 3, &device->freeList[i]))

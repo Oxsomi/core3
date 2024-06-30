@@ -263,7 +263,7 @@ Error GraphicsDeviceRef_createBLAS(GraphicsDeviceRef *dev, BLAS blas, CharString
 		gotoIfError(clean, BLASRef_inc(blas.base.parent))
 
 	*blasPtr = blas;
-	blasPtr->base.lock = SpinLock_create();
+	SpinLock_create(&blasPtr->base.lock);
 	blasPtr->base.name = CharString_createNull();
 
 	if (blas.base.asConstructionType == EBLASConstructionType_Serialized) {

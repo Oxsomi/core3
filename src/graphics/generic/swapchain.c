@@ -183,7 +183,7 @@ Error GraphicsDeviceRef_createSwapchain(GraphicsDeviceRef *dev, SwapchainInfo in
 
 	gotoIfError(clean, GraphicsDeviceRef_createSwapchainExt(dev, *scRef))
 	gotoIfError(clean, UnifiedTexture_create(*scRef, info.window->title))
-	swapchain->lock = SpinLock_create();
+	SpinLock_create(&swapchain->lock);
 
 clean:
 

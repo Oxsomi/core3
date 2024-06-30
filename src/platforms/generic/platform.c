@@ -363,7 +363,7 @@ Error Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *alloca
 			if(err.genericError)
 				return err;
 
-			Allocator_lock = SpinLock_create();
+			SpinLock_create(&Allocator_lock);
 			Allocator_memoryAllocationCount = Allocator_memoryAllocationSize = (AtomicI64) { 0 };
 		}
 	#endif
@@ -381,7 +381,7 @@ Error Platform_create(int cmdArgc, const C8 *cmdArgs[], void *data, void *alloca
 	Error err;
 	CharString appDir = CharString_createNull();
 
-	Platform_instance.virtualSectionsLock = SpinLock_create();
+	SpinLock_create(&Platform_instance.virtualSectionsLock);
 
 	ListCharString sl = (ListCharString) { 0 };
 
