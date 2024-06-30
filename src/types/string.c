@@ -783,7 +783,7 @@ Error CharString_createFromUTF32(const U32 *ptr, U64 limit, Allocator allocator,
 
 	Buffer buf0 = CharString_allocatedBuffer(*result);
 
-	for(U64 i = 0; i < limit; ) {
+	for(U64 i = 0; i < limit; ++i) {
 
 		U32 c = ptr[i];
 

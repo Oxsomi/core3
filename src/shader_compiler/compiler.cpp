@@ -245,14 +245,11 @@ public:
 
 		if(i == includedFiles.length) {
 
-			U32 crc32c = U32_MAX;
-
 			if(!isBuiltin) {
 
 				gotoIfError2(clean, File_getInfo(resolved, &fileInfo, alloc))
 				gotoIfError2(clean, File_read(resolved, 1 * SECOND, &tempBuffer))
 
-				crc32c = Buffer_crc32c(tempBuffer);
 				Ns timestamp = fileInfo.timestamp;
 				FileInfo_free(&fileInfo, alloc);
 
@@ -265,7 +262,7 @@ public:
 				IncludedFile inc = IncludedFile{};
 				inc.includeInfo = IncludeInfo{
 					.fileSize = (U32) Buffer_length(tempBuffer),
-					.crc32c = crc32c,
+					.crc32c = U32_MAX,			//Temp
 					.timestamp = timestamp,
 					.counter = 1,
 					.file = CharString_createNull()
@@ -281,6 +278,7 @@ public:
 					&tempFile
 				))
 
+				gotoIfError3(clean, Compiler_crc32c(tempFile, &inc.includeInfo.crc32c, alloc, e_rr))
 				Buffer_free(&tempBuffer, alloc);
 
 				inc.includeInfo.file = resolved;
@@ -317,17 +315,17 @@ public:
 
 				else retError(clean, Error_notFound(0, 0, "IncludeHandler::LoadSource builtin file not found"))
 
-				crc32c = Buffer_crc32c(CharString_bufferConst(tempFile));
-
 				IncludedFile inc = IncludedFile{};
 
 				inc.includeInfo = IncludeInfo{
 					.fileSize = (U32) CharString_length(tempFile),
-					.crc32c = crc32c,
+					.crc32c = U32_MAX,			//Temp
 					.timestamp = 0,
 					.counter = 1,
 					.file = resolved
 				};
+
+				gotoIfError3(clean, Compiler_crc32c(tempFile, &inc.includeInfo.crc32c, alloc, e_rr))
 
 				inc.globalCounter = 1;
 				inc.data = tempFile;
@@ -966,6 +964,9 @@ Bool Compiler_compile(
 			CharString uniformName  = toCompile.uniforms.ptr[i];
 			CharString uniformValue = toCompile.uniforms.ptr[i + 1];
 
+			Log_debugLn(alloc, "Test: %s\n", uniformName.ptr);
+			Log_debugLn(alloc, "Test: %s\n", uniformValue.ptr);
+
 			gotoIfError2(clean, CharString_format(
 
 				alloc, &tempStr,
@@ -987,7 +988,6 @@ Bool Compiler_compile(
 
 		for(U32 i = 0; i < lastExtension; ++i)
 			if ((toCompile.extensions >> i) & 1) {
-
 				gotoIfError2(clean, CharString_format(alloc, &tempStr, "-D__OXC3_EXT_%s", ESHExtension_defines[i]))
 				gotoIfError3(clean, Compiler_registerArgStr(&stringsUTF8, tempStr, alloc, e_rr))
 				tempStr = CharString_createNull();

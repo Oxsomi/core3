@@ -41,7 +41,7 @@
 #ifndef _WIN32
 
 	#define _ftelli64 ftell
-	#define _mkdir(a) mkdir(a, DEFFILEMODE)
+	#define _mkdir(a) mkdir(a, ALLPERMS)
 
 	I32 removeFolder(CharString str) {
 

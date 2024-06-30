@@ -1114,6 +1114,15 @@ Bool Compiler_crc32c(CharString str, U32 *crc32c, Allocator alloc, Error *e_rr) 
 			retError(clean, Error_invalidState(0, "Compiler_crc32c() replacing \\r\\n line endings failed"))
 	}
 
+	if(CharString_containsSensitive(tmp, '\r'))
+		Log_debugLnx("Mama mia tmp %"PRIu64, CharString_length(tmp));
+
+	if(CharString_containsSensitive(str, '\r'))
+		Log_debugLnx("Mama mia str %"PRIu64, CharString_length(str));
+		
+	Log_debugLnx("str: %"PRIu64, CharString_length(str));
+	Log_debugLnx("tmp: %"PRIu64, CharString_length(tmp));
+
 	Buffer buf = CharString_bufferConst(tmp.ptr ? tmp : str);
 	*crc32c = Buffer_crc32c(buf);
 
@@ -1788,6 +1797,15 @@ Bool Compiler_parse(
 					retError(clean, Error_invalidState(
 						0, "Compiler_parse() found way too runtimeEntry combinations. Found U16_MAX!"
 					))
+
+				for(U32 k = 0; k < runtimeEntry.uniformNameValues.length; k += 2) {
+
+					CharString uniformName  = runtimeEntry.uniformNameValues.ptr[k];
+					CharString uniformValue = runtimeEntry.uniformNameValues.ptr[k + 1];
+
+					Log_debugLnx("Test1 0: %s\n", uniformName.ptr);
+					Log_debugLnx("Test2 0: %s\n", uniformValue.ptr);
+				}
 
 				gotoIfError2(clean, ListSHEntryRuntime_pushBack(&result->shEntriesRuntime, runtimeEntry, alloc));
 				runtimeEntry = (SHEntryRuntime) { 0 };
