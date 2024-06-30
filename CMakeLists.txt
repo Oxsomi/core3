@@ -104,7 +104,11 @@ else()
 
 	add_compile_options(-fms-extensions)	# Needed by DXC for uuids
 
-	add_compile_options(-flto -fno-fat-lto-objects)
+	add_compile_options(-flto)
+	
+	if(NOT CMAKE_${lang}_COMPILER_VERSION VERSION_LESS 4.7)
+		add_compile_options(-fno-fat-lto-objects)
+	endif()
 
 endif()
 

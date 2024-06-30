@@ -1114,17 +1114,10 @@ Bool Compiler_crc32c(CharString str, U32 *crc32c, Allocator alloc, Error *e_rr) 
 			retError(clean, Error_invalidState(0, "Compiler_crc32c() replacing \\r\\n line endings failed"))
 	}
 
-	if(CharString_containsSensitive(tmp, '\r'))
-		Log_debugLnx("Mama mia tmp %"PRIu64, CharString_length(tmp));
-
-	if(CharString_containsSensitive(str, '\r'))
-		Log_debugLnx("Mama mia str %"PRIu64, CharString_length(str));
-		
-	Log_debugLnx("str: %"PRIu64, CharString_length(str));
-	Log_debugLnx("tmp: %"PRIu64, CharString_length(tmp));
-
 	Buffer buf = CharString_bufferConst(tmp.ptr ? tmp : str);
 	*crc32c = Buffer_crc32c(buf);
+
+	Log_debugLnx("buf: %"PRIu64", %"PRIX32, Buffer_length(buf), *crc32c);
 
 clean:
 	CharString_free(&tmp, alloc);
