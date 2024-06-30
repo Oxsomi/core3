@@ -156,8 +156,11 @@ Error CharString_createDec(U64 v, U8 leadingZeros, Allocator allocator, CharStri
 Error CharString_createOct(U64 v, U8 leadingZeros, Allocator allocator, CharString *result);
 Error CharString_createBin(U64 v, U8 leadingZeros, Allocator allocator, CharString *result);
 
-//Windows interop. Converts UTF16 to UTF8
+//Interop between wchar_t. Converts UTF16 or UTF32 to UTF8
+
 Error CharString_createFromUTF16(const U16 *ptr, U64 limit, Allocator allocator, CharString *result);
+Error CharString_createFromUTF32(const U32 *ptr, U64 limit, Allocator allocator, CharString *result);
+
 //TODO: Error CharString_setCodepointAt(CharString str, U64 index, U32 codepoint);
 
 Error CharString_split(
@@ -279,8 +282,10 @@ Error CharString_replaceLastStringInsensitive(
 
 //TODO: CharString_replaceCodepoint
 
-//Windows interop. Converts UTF8 to UTF16
+//Interop between wide strings. Converts UTF8 to UTF16 or UTF32
+
 Error CharString_toUTF16(CharString s, Allocator allocator, ListU16 *arr);
+Error CharString_toUTF32(CharString s, Allocator allocator, ListU32 *arr);
 
 //Simple checks (consts)
 

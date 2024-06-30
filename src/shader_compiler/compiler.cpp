@@ -28,8 +28,9 @@
 #include "types/allocator.h"
 #include "types/file.h"
 #include "types/math.h"
+#include "types/platform_types.h"
 
-#ifdef _WIN32
+#if _PLATFORM_TYPE == PLATFORM_WINDOWS
 	#define UNICODE
 	#define WIN32_LEAN_AND_MEAN
 	#include <Windows.h>
@@ -132,7 +133,11 @@ public:
 		U64 i = 0;
 		U64 lastAt = U64_MAX;
 
-		gotoIfError2(clean, CharString_createFromUTF16((const U16*)fileNameStr, U64_MAX, alloc, &fileName))
+		#if _PLATFORM_TYPE == PLATFORM_WINDOWS
+			gotoIfError2(clean, CharString_createFromUTF16((const U16*)fileNameStr, U64_MAX, alloc, &fileName))
+		#else
+			gotoIfError2(clean, CharString_createFromUTF32((const U32*)fileNameStr, U64_MAX, alloc, &fileName))
+		#endif
 
 		//Little hack to handle builtin shaders, by using "virtual files" //myTest.hlsl
 
@@ -566,6 +571,141 @@ clean:
 		SpinLock_unlock(&lockThread);
 }
 
+//Thank you Microsoft!
+//Very nice!!
+//What's wrong with UTF8?
+
+#if _PLATFORM_TYPE == PLATFORM_WINDOWS
+
+	#define Compiler_defineStrings																		\
+		ListU16 tempStrUTF16 = ListU16{};																\
+		ListListU16 stringsUTF16 = ListListU16{};														\
+		ListU16PtrConst strings = ListU16PtrConst{}
+
+	#define Compiler_freeStrings																		\
+		ListU16_free(&tempStrUTF16, alloc);																\
+		ListListU16_freeUnderlying(&stringsUTF16, alloc);												\
+		ListU16PtrConst_free(&strings, alloc)
+
+	#define Compiler_convertToWString(strs, label) 														\
+		for(U64 ii = 0; ii < strs.length; ++ii) {														\
+			gotoIfError2(label, CharString_toUTF16(strs.ptr[ii], alloc, &tempStrUTF16))					\
+			gotoIfError2(label, ListU16PtrConst_pushBack(&strings, tempStrUTF16.ptr, alloc))			\
+			gotoIfError2(label, ListListU16_pushBack(&stringsUTF16, tempStrUTF16, alloc))				\
+			tempStrUTF16 = ListU16{};																	\
+		}
+
+#else
+
+	#define Compiler_defineStrings																		\
+		ListU32 tempStrUTF32 = ListU32{};																\
+		ListListU32 stringsUTF32 = ListListU32{};														\
+		ListU32PtrConst strings = ListU32PtrConst{}
+
+	#define Compiler_freeStrings																		\
+		ListU32_free(&tempStrUTF32, alloc);																\
+		ListListU32_freeUnderlying(&stringsUTF32, alloc);												\
+		ListU32PtrConst_free(&strings, alloc)
+
+	#define Compiler_convertToWString(strs, label) 														\
+		for(U64 ii = 0; ii < strs.length; ++ii) {														\
+			gotoIfError2(label, CharString_toUTF32(strs.ptr[ii], alloc, &tempStrUTF32))					\
+			gotoIfError2(label, ListU32PtrConst_pushBack(&strings, tempStrUTF32.ptr, alloc))			\
+			gotoIfError2(label, ListListU32_pushBack(&stringsUTF32, tempStrUTF32, alloc))				\
+			tempStrUTF32 = ListU32{};																	\
+		}
+
+#endif
+
+Bool Compiler_setupIncludePaths(ListCharString *dst, CompilerSettings settings, Allocator alloc, Error *e_rr) {
+
+	Bool s_uccess = true;
+	CharString tempStr = CharString_createNull();
+	CharString tempStr2 = CharString_createNull();
+	Bool isVirtual = false;
+
+	//-I x for include dir
+
+	if(CharString_length(settings.includeDir)) {
+
+		gotoIfError2(clean, File_resolve(
+			settings.includeDir, &isVirtual, 256, Platform_instance.workingDirectory, alloc, &tempStr
+		))
+
+		gotoIfError2(clean, ListCharString_pushBack(dst, CharString_createRefCStrConst("-I"), alloc))
+		gotoIfError2(clean, ListCharString_pushBack(dst, tempStr, alloc))
+		tempStr = CharString_createNull();
+	}
+
+	//<file> -I <file's parent> to resolve errors to the origin file and use relative includes
+
+	if(CharString_length(settings.path)) {
+
+		gotoIfError2(clean, File_resolve(
+			settings.path, &isVirtual, 256, Platform_instance.workingDirectory, alloc, &tempStr
+		))
+
+		gotoIfError2(clean, ListCharString_pushBack(dst, tempStr, alloc))
+		tempStr = CharString_createRefStrConst(tempStr);
+
+		if(!CharString_cutAfterLastSensitive(tempStr, '/', &tempStr2))
+			retError(clean, Error_invalidState(0, "Compiler_setupIncludePaths() can't find parent directory"))
+
+		gotoIfError2(clean, ListCharString_pushBack(dst, CharString_createRefCStrConst("-I"), alloc))
+		gotoIfError2(clean, ListCharString_pushBack(dst, tempStr2, alloc))
+		tempStr2 = tempStr = CharString_createNull();
+	}
+
+clean:
+	CharString_free(&tempStr, alloc);
+	CharString_free(&tempStr2, alloc);
+	return s_uccess;
+}
+
+Bool Compiler_copyIncludes(CompileResult *result, IncludeHandler *includeHandler, Allocator alloc, Error *e_rr) {
+
+	Bool s_uccess = true;
+	CharString tempStr = CharString_createNull();
+	ListIncludedFile files = ListIncludedFile{};
+
+	gotoIfError2(clean, ListIncludeInfo_resize(&result->includeInfo, includeHandler->getCounter(), alloc))
+
+	files = includeHandler->getIncludedFiles();
+
+	for(U64 i = 0, j = 0; i < files.length; ++i)
+		if (files.ptr[i].includeInfo.counter) {		//Exclude inactive includes
+
+			IncludeInfo copy = files.ptr[i].includeInfo;
+			gotoIfError2(clean, CharString_createCopy(copy.file, alloc, &tempStr))
+
+			copy.file = tempStr;
+			result->includeInfo.ptrNonConst[j] = copy;
+			tempStr = CharString_createNull();
+
+			++j;
+		}
+
+clean:
+	CharString_free(&tempStr, alloc);
+	return s_uccess;
+}
+
+Bool Compiler_registerArgStr(ListCharString *strings, CharString str, Allocator alloc, Error *e_rr) {
+	Bool s_uccess = true;
+	gotoIfError2(clean, ListCharString_pushBack(strings, str, alloc))
+clean:
+	return s_uccess;
+}
+
+Bool Compiler_registerArgStrConst(ListCharString *strings, CharString str, Allocator alloc, Error *e_rr) {
+	return Compiler_registerArgStr(strings, CharString_createRefStrConst(str), alloc, e_rr);
+}
+
+//Only with const C8* that will always be in mem
+Bool Compiler_registerArgCStr(ListCharString *strings, const C8 *str, Allocator alloc, Error *e_rr) {
+	return Compiler_registerArgStr(strings, CharString_createRefCStrConst(str), alloc, e_rr);
+}
+
 Bool Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator alloc, CompileResult *result, Error *e_rr) {
 
 	CompilerInterfaces *interfaces = (CompilerInterfaces*) comp.interfaces;
@@ -573,14 +713,12 @@ Bool Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator all
 	Bool s_uccess = true;
 	IDxcResult *dxcResult = NULL;
 	IDxcBlobUtf8 *error = NULL;
-	ListU16 inputFile = ListU16{};
-	ListU16 includeDir = ListU16{};
-	ListU16 includeDir2 = ListU16{};		//Include dir on disk
-	ListU16 tempWStr = ListU16{};
-	Bool hasErrors = false, isVirtual = false;
+	Bool hasErrors = false;
 	CharString tempStr = CharString_createNull();
 	CharString tempStr2 = CharString_createNull();
-	ListListU16 strings = ListListU16{};
+	ListCharString stringsUTF8 = ListCharString{};		//One day, Microsoft will fix their stuff, I hope.
+
+	Compiler_defineStrings;
 
 	if(!interfaces->utils || !result)
 		retError(clean, Error_alreadyDefined(!interfaces->utils ? 0 : 2, "Compiler_preprocess()::comp is required"))
@@ -591,72 +729,21 @@ Bool Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator all
 	if(settings.outputType >= ESHBinaryType_Count || settings.format >= ECompilerFormat_Count)
 		retError(clean, Error_invalidParameter(1, 0, "Compiler_preprocess()::settings contains invalid format or outputType"))
 
-	gotoIfError2(clean, CharString_toUTF16(settings.path, alloc, &inputFile))
-
-	if(CharString_length(settings.includeDir)) {
-
-		gotoIfError2(clean, File_resolve(
-			settings.includeDir, &isVirtual, 256, Platform_instance.workingDirectory, alloc, &tempStr2
-		))
-
-		gotoIfError2(clean, CharString_toUTF16(tempStr2, alloc, &includeDir))
-		CharString_free(&tempStr2, alloc);
-	}
-
-	if(CharString_length(settings.path)) {
-
-		gotoIfError2(clean, File_resolve(
-			settings.path, &isVirtual, 256, Platform_instance.workingDirectory, alloc, &tempStr2
-		))
-
-		if(!CharString_cutAfterLastSensitive(tempStr2, '/', &tempStr))
-			retError(clean, Error_invalidState(0, "Compiler_preprocess() can't find parent directory"))
-
-		gotoIfError2(clean, CharString_toUTF16(tempStr, alloc, &includeDir2))
-		CharString_free(&tempStr2, alloc);
-		CharString_free(&tempStr, alloc);
-	}
+	gotoIfError3(clean, Compiler_setupIncludePaths(&stringsUTF8, settings, alloc, e_rr))
 
 	try {
 
-		interfaces->includeHandler->reset();
+		interfaces->includeHandler->reset();		//Ensure we don't reuse stale caches
 
 		result->isSuccess = false;
 
-		const U16 args[][9] = {
-			{ '-', 'P', '\0' },									//Preprocess
-			{ '-', 's', 'p', 'i', 'r', 'v', '\0' },				//-spirv (enable spirv generation)
-			{ '-', 'I', '\0' },									//-I (include dir)
-			{ '-', 'D', '_', '_', 'O', 'X', 'C', '3', '\0' },	//-D__OXC3 to indicate we're compiling from OxC3
-			{ '-', 'H', 'V', '\0' },							//-HV 202x (force new HLSL version)
-			{ '2', '0', '2', 'x', '\0' }
-		};
-
-		U32 argCounter = 5;
-
-		const U16 *argsPtr[14] = {
-
-			args[0],
-			inputFile.ptr,
-
-			args[3],
-
-			args[4],
-			args[5]
-		};
+		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-P", alloc, e_rr))
+		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-D__OXC3", alloc, e_rr))
+		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-HV", alloc, e_rr))
+		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "202x", alloc, e_rr))
 
 		if (settings.outputType == ESHBinaryType_SPIRV)		//-spirv
-			argsPtr[argCounter++] = args[1];
-
-		if (includeDir.length) {							//-I
-			argsPtr[argCounter++] = args[2];
-			argsPtr[argCounter++] = includeDir.ptr;
-		}
-
-		if (includeDir2.length) {							//-I
-			argsPtr[argCounter++] = args[2];
-			argsPtr[argCounter++] = includeDir2.ptr;
-		}
+			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-spirv", alloc, e_rr))
 
 		//Format major, minor, patch and version
 
@@ -675,16 +762,12 @@ Bool Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator all
 		};
 
 		for(U64 i = 0; i < sizeof(formats) / sizeof(formats[0]); ++i) {
-
-			gotoIfError2(clean, CharString_format(alloc, &tempStr2, formats[i], formatInts[i]))
-		
-			gotoIfError2(clean, CharString_toUTF16(tempStr2, alloc, &tempWStr))
-			CharString_free(&tempStr2, alloc);
-
-			gotoIfError2(clean, ListListU16_pushBack(&strings, tempWStr, alloc))
-			argsPtr[argCounter++] = tempWStr.ptr;
-			tempWStr = ListU16{};
+			gotoIfError2(clean, CharString_format(alloc, &tempStr, formats[i], formatInts[i]))
+			gotoIfError2(clean, ListCharString_pushBack(&stringsUTF8, tempStr, alloc))
+			tempStr = CharString_createNull();
 		}
+
+		Compiler_convertToWString(stringsUTF8, clean)
 
 		//Compile
 
@@ -696,7 +779,7 @@ Bool Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator all
 
 		HRESULT hr = interfaces->compiler->Compile(
 			&buffer,
-			(LPCWSTR*) argsPtr, argCounter,
+			(LPCWSTR*) strings.ptr, (int) strings.length,
 			interfaces->includeHandler,
 			IID_PPV_ARGS(&dxcResult)
 		);
@@ -719,25 +802,8 @@ Bool Compiler_preprocess(Compiler comp, CompilerSettings settings, Allocator all
 			error = NULL;
 		}
 
-		if (settings.infoAboutIncludes) {
-
-			gotoIfError2(clean, ListIncludeInfo_resize(&result->includeInfo, interfaces->includeHandler->getCounter(), alloc))
-
-			ListIncludedFile files = interfaces->includeHandler->getIncludedFiles();
-
-			for(U64 i = 0, j = 0; i < files.length; ++i)
-				if (files.ptr[i].includeInfo.counter) {		//Exclude inactive includes
-
-					IncludeInfo copy = files.ptr[i].includeInfo;
-					gotoIfError2(clean, CharString_createCopy(copy.file, alloc, &tempStr))
-
-					copy.file = tempStr;
-					result->includeInfo.ptrNonConst[j] = copy;
-					tempStr = CharString_createNull();
-
-					++j;
-				}
-		}
+		if (settings.infoAboutIncludes)
+			gotoIfError3(clean, Compiler_copyIncludes(result, interfaces->includeHandler, alloc, e_rr))
 
 		if (hasErrors)
 			goto clean;
@@ -771,13 +837,10 @@ clean:
 	if(error)
 		error->Release();
 
-	ListListU16_freeUnderlying(&strings, alloc);
-	ListU16_free(&inputFile, alloc);
-	ListU16_free(&includeDir, alloc);
-	ListU16_free(&includeDir2, alloc);
-	ListU16_free(&tempWStr, alloc);
+	Compiler_freeStrings;
 	CharString_free(&tempStr, alloc);
 	CharString_free(&tempStr2, alloc);
+	ListCharString_freeUnderlying(&stringsUTF8, alloc);
 	return s_uccess;
 }
 
@@ -798,15 +861,11 @@ Bool Compiler_compile(
 	IDxcResult *dxcResult = NULL;
 	IDxcBlobUtf8 *error = NULL;
 	IDxcBlob *resultBlob = NULL;
-	ListU16 inputFile = ListU16{};
-	ListU16 includeDir = ListU16{};
-	ListU16 includeDir2 = ListU16{};
-	ListU16 tempWStr = ListU16{};
-	Bool hasErrors = false, isVirtual = false;
+	Bool hasErrors = false;
 	CharString tempStr = CharString_createNull();
-	CharString tempStr2 = CharString_createNull();
-	ListListU16 strings = ListListU16{};
-	ListU16PtrConst stringArr = ListU16PtrConst{};
+	ListCharString stringsUTF8 = ListCharString{};		//One day, Microsoft will fix their stuff, I hope.
+
+	Compiler_defineStrings;
 
 	if(!interfaces->utils || !result)
 		retError(clean, Error_alreadyDefined(!interfaces->utils ? 0 : 2, "Compiler_compile()::comp is required"))
@@ -820,110 +879,13 @@ Bool Compiler_compile(
 	if(settings.outputType >= ESHBinaryType_Count || settings.format >= ECompilerFormat_Count)
 		retError(clean, Error_invalidParameter(1, 0, "Compiler_compile()::settings contains invalid format or outputType"))
 
-	gotoIfError2(clean, CharString_toUTF16(settings.path, alloc, &inputFile))
-
-	if(CharString_length(settings.includeDir)) {
-
-		gotoIfError2(clean, File_resolve(
-			settings.includeDir, &isVirtual, 256, Platform_instance.workingDirectory, alloc, &tempStr2
-		))
-
-		gotoIfError2(clean, CharString_toUTF16(tempStr2, alloc, &includeDir))
-		CharString_free(&tempStr2, alloc);
-	}
-
-	if(CharString_length(settings.path)) {
-
-		gotoIfError2(clean, File_resolve(
-			settings.path, &isVirtual, 256, Platform_instance.workingDirectory, alloc, &tempStr2
-		))
-
-		if(!CharString_cutAfterLastSensitive(tempStr2, '/', &tempStr))
-			retError(clean, Error_invalidState(0, "Compiler_compile() can't find parent directory"))
-
-		gotoIfError2(clean, CharString_toUTF16(tempStr, alloc, &includeDir2))
-		CharString_free(&tempStr2, alloc);
-		CharString_free(&tempStr, alloc);
-	}
+	gotoIfError3(clean, Compiler_setupIncludePaths(&stringsUTF8, settings, alloc, e_rr))
 
 	try {
 
-		interfaces->includeHandler->reset();
+		interfaces->includeHandler->reset();		//Ensure we don't reuse stale caches
 
 		result->isSuccess = false;
-
-		const U16 args[][27] = {
-
-			{ '\0' },											//Placeholder
-			{ '-', 's', 'p', 'i', 'r', 'v', '\0' },				//-spirv (enable spirv generation)
-			{ '-', 'I', '\0' },									//-I (include dir)
-			{ '-', 'D', '_', '_', 'O', 'X', 'C', '3', '\0' },	//-D__OXC3 to indicate we're compiling from OxC3
-
-			//-auto-binding-space 0
-
-			{ '-', 'a', 'u', 't', 'o', '-', 'b', 'i', 'n', 'd', 'i', 'n', 'g', '-', 's', 'p', 'a', 'c', 'e', '\0' },
-			{ '0', '\0' },
-
-			//-enable-payload-qualifiers
-
-			{
-				'-', 'e', 'n', 'a', 'b', 'l', 'e', '-', 
-				'p', 'a', 'y', 'l', 'o', 'a', 'd', '-', 
-				'q', 'u', 'a', 'l', 'i', 'f', 'i', 'e', 'r', 's', '\0'
-			},
-
-			//-Zpc, -Qstrip_debug, -Qstrip_reflect
-
-			{ '-', 'Z', 'p', 'c', '\0' },
-			{ '-', 'Q', 's', 't', 'r', 'i', 'p', '_', 'd', 'e', 'b', 'u', 'g', '\0' },
-			{ '-', 'Q', 's', 't', 'r', 'i', 'p', '_', 'r', 'e', 'f', 'l', 'e', 'c', 't', '\0'},
-
-			//-Od or -O3
-
-			{ '-', 'O', 'd', '\0' },
-			{ '-', 'O', '3', '\0' },
-
-			//-Zi for debug
-
-			{ '-', 'Z', 'i', '\0' },
-
-			//-enable-16bit-types
-
-			{ '-', 'e', 'n', 'a', 'b', 'l', 'e', '-', '1', '6', 'b', 'i', 't', '-', 't', 'y', 'p', 'e', 's', '\0' },
-
-			//spirv flags;
-			//-fvk-use-dx-layout, -fspv-target-env=vulkan1.2, -fvk-invert-y, -fvk-use-dx-position-w
-			//-fspv-entrypoint-name=main
-
-			{ '-', 'f', 'v', 'k', '-', 'u', 's', 'e', '-', 'd', 'x', '-', 'l', 'a', 'y', 'o', 'u', 't', '\0' },
-
-			{ 
-				'-', 'f', 's', 'p', 'v', '-', 't', 'a', 'r', 'g', 'e', 't', '-', 'e', 'n', 'v', '=',
-				'v', 'u', 'l', 'k', 'a', 'n', '1', '.', '2', '\0'
-			},
-
-			{ '-', 'f', 'v', 'k', '-', 'i', 'n', 'v', 'e', 'r', 't', '-', 'y', '\0' },
-
-			{ 
-				'-', 'f', 'v', 'k', '-', 'u', 's', 'e', '-', 
-				'd', 'x', '-', 'p', 'o', 's', 'i', 't', 'i', 'o', 'n', '-', 'w', '\0'
-			},
-
-			{ 
-				'-', 'f', 's', 'p', 'v', '-', 'e', 'n', 't', 'r', 'y', 'p', 'o', 'i', 'n', 't', '-', 'n', 'a', 'm', 'e', '=',
-				'm', 'a', 'i', 'n', '\0'
-			},
-
-			//-HV 202x (force new HLSL version)
-
-			{ '-', 'H', 'V', '\0' },
-			{ '2', '0', '2', 'x', '\0' },
-
-			//-E and -T
-
-			{ '-', 'E', '\0' },
-			{ '-', 'T', '\0' }
-		};
 
 		U32 lastExtension = 0;
 		U32 extensionCount = 0;
@@ -934,94 +896,68 @@ Bool Compiler_compile(
 				lastExtension = i + 1;
 			}
 
-		gotoIfError2(clean, ListU16PtrConst_resize(&stringArr, 25 + (toCompile.uniforms.length / 2) + extensionCount, alloc))
-
-		U32 argCounter = 0;
-		const U16 **argsPtr = stringArr.ptrNonConst;
-
-		argsPtr[argCounter++] = inputFile.ptr;								//Relative to input file for includes
-		argsPtr[argCounter++] = args[3];									//-D__OXC3
-		argsPtr[argCounter++] = args[7];									//-Zpc
-		argsPtr[argCounter++] = settings.debug ? args[10] : args[11];		//-Od or -O3
-		argsPtr[argCounter++] = args[19];									//-HV 202x
-		argsPtr[argCounter++] = args[20];
+		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-D__OXC3", alloc, e_rr))
+		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-Zpc", alloc, e_rr))
+		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, settings.debug ? "-Od" : "-O3", alloc, e_rr))
+		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-HV", alloc, e_rr))
+		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "202x", alloc, e_rr))
 
 		if(settings.debug)
-			argsPtr[argCounter++] = args[12];								//-Zi
+			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-Zi", alloc, e_rr))
 
 		if(toCompile.extensions & ESHExtension_16BitTypes)
-			argsPtr[argCounter++] = args[13];								//-enable-16bit-types
+			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-enable-16bit-types", alloc, e_rr))
 
 		if (settings.outputType == ESHBinaryType_SPIRV) {
 
-			argsPtr[argCounter++] = args[1];								//-spirv
-			argsPtr[argCounter++] = args[14];								//-fvk-use-dx-layout
-			argsPtr[argCounter++] = args[15];								//-fspv-target-env=vulkan1.2
+			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-spirv", alloc, e_rr))
+			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fvk-use-dx-layout", alloc, e_rr))
+			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fspv-target-env=vulkan1.2", alloc, e_rr))
 
 			if(
 				toCompile.stageType == ESHPipelineStage_Vertex ||
 				toCompile.stageType == ESHPipelineStage_Domain ||
 				toCompile.stageType == ESHPipelineStage_GeometryExt
 			)
-				argsPtr[argCounter++] = args[16];							//-fvk-invert-y
+				gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fvk-invert-y", alloc, e_rr))
 
 			else if(toCompile.stageType == ESHPipelineStage_Pixel)
-				argsPtr[argCounter++] = args[17];							//-fvk-use-dx-position-w
+				gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fvk-use-dx-position-w", alloc, e_rr))
 
 			if(CharString_length(toCompile.entrypoint))
-				argsPtr[argCounter++] = args[18];							//-fspv-entrypoint-name=main
+				gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-fspv-entrypoint-name=main", alloc, e_rr))
 		}
 
 		else {
 
-			argsPtr[argCounter++] = args[8];								//-Qstrip_debug
-			argsPtr[argCounter++] = args[9];								//-Qstrip_reflect
-
-			argsPtr[argCounter++] = args[4];								//-auto-binding-space
-			argsPtr[argCounter++] = args[5];								//0
+			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-Qstrip_debug", alloc, e_rr))
+			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-Qstrip_reflect", alloc, e_rr))
+			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-auto-binding-space", alloc, e_rr))
+			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "0", alloc, e_rr))
 
 			if(toCompile.extensions & ESHExtension_PAQ)
-				argsPtr[argCounter++] = args[6];							//-enable-payload-qualifiers
-		}
-
-		if (includeDir.length) {											//-I
-			argsPtr[argCounter++] = args[2];
-			argsPtr[argCounter++] = includeDir.ptr;
-		}
-
-		if (includeDir2.length) {											//-I
-			argsPtr[argCounter++] = args[2];
-			argsPtr[argCounter++] = includeDir2.ptr;
+				gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-enable-payload-qualifiers", alloc, e_rr))
 		}
 
 		//-E <entrypointName>
 
 		if (CharString_length(toCompile.entrypoint)) {
-		
-			argsPtr[argCounter++] = args[21];
-
-			gotoIfError2(clean, CharString_toUTF16(toCompile.entrypoint, alloc, &tempWStr))
-			gotoIfError2(clean, ListListU16_pushBack(&strings, tempWStr, alloc))
-			argsPtr[argCounter++] = tempWStr.ptr;
-			tempWStr = ListU16{};
+			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-E", alloc, e_rr))
+			gotoIfError3(clean, Compiler_registerArgStrConst(&stringsUTF8, toCompile.entrypoint, alloc, e_rr))
 		}
 
 		//-T <target>
 		
-		argsPtr[argCounter++] = args[22];
+		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-T", alloc, e_rr))
 
 		const C8 *targetPrefix = ESHPipelineStage_getStagePrefix((ESHPipelineStage) toCompile.stageType);
 
 		U32 major = toCompile.shaderVersion >> 8;
 		U32 minor = (U8)toCompile.shaderVersion;
 
-		gotoIfError2(clean, CharString_format(alloc, &tempStr2, "%s_%" PRIu32"_%" PRIu32, targetPrefix, major, minor))
-		gotoIfError2(clean, CharString_toUTF16(tempStr2, alloc, &tempWStr))
-		CharString_free(&tempStr2, alloc);
-
-		gotoIfError2(clean, ListListU16_pushBack(&strings, tempWStr, alloc))
-		argsPtr[argCounter++] = tempWStr.ptr;
-		tempWStr = ListU16{};
+		gotoIfError2(clean, CharString_format(alloc, &tempStr, "%s_%" PRIu32"_%" PRIu32, targetPrefix, major, minor))
+		gotoIfError3(clean, Compiler_registerArgStr(&stringsUTF8, tempStr, alloc, e_rr))
+		tempStr = CharString_createNull();
 
 		//$<X> foreach uniform
 
@@ -1032,7 +968,7 @@ Bool Compiler_compile(
 
 			gotoIfError2(clean, CharString_format(
 
-				alloc, &tempStr2,
+				alloc, &tempStr,
 
 				!CharString_length(uniformValue) ? "-D$%.*s" : "-D$%.*s=%.*s", 
 
@@ -1043,12 +979,8 @@ Bool Compiler_compile(
 				uniformValue.ptr
 			))
 
-			gotoIfError2(clean, CharString_toUTF16(tempStr2, alloc, &tempWStr))
-			CharString_free(&tempStr2, alloc);
-
-			gotoIfError2(clean, ListListU16_pushBack(&strings, tempWStr, alloc))
-			argsPtr[argCounter++] = tempWStr.ptr;
-			tempWStr = ListU16{};
+			gotoIfError3(clean, Compiler_registerArgStr(&stringsUTF8, tempStr, alloc, e_rr))
+			tempStr = CharString_createNull();
 		}
 
 		//__OXC3_EXT_<X> foreach extension
@@ -1056,13 +988,9 @@ Bool Compiler_compile(
 		for(U32 i = 0; i < lastExtension; ++i)
 			if ((toCompile.extensions >> i) & 1) {
 
-				gotoIfError2(clean, CharString_format(alloc, &tempStr2, "-D__OXC3_EXT_%s", ESHExtension_defines[i]))
-				gotoIfError2(clean, CharString_toUTF16(tempStr2, alloc, &tempWStr))
-				CharString_free(&tempStr2, alloc);
-
-				gotoIfError2(clean, ListListU16_pushBack(&strings, tempWStr, alloc))
-				argsPtr[argCounter++] = tempWStr.ptr;
-				tempWStr = ListU16{};
+				gotoIfError2(clean, CharString_format(alloc, &tempStr, "-D__OXC3_EXT_%s", ESHExtension_defines[i]))
+				gotoIfError3(clean, Compiler_registerArgStr(&stringsUTF8, tempStr, alloc, e_rr))
+				tempStr = CharString_createNull();
 			}
 
 		//Format major, minor, patch and version
@@ -1082,16 +1010,12 @@ Bool Compiler_compile(
 		};
 
 		for(U64 i = 0; i < sizeof(formats) / sizeof(formats[0]); ++i) {
-
-			gotoIfError2(clean, CharString_format(alloc, &tempStr2, formats[i], formatInts[i]))
-		
-			gotoIfError2(clean, CharString_toUTF16(tempStr2, alloc, &tempWStr))
-			CharString_free(&tempStr2, alloc);
-
-			gotoIfError2(clean, ListListU16_pushBack(&strings, tempWStr, alloc))
-			argsPtr[argCounter++] = tempWStr.ptr;
-			tempWStr = ListU16{};
+			gotoIfError2(clean, CharString_format(alloc, &tempStr, formats[i], formatInts[i]))
+			gotoIfError2(clean, ListCharString_pushBack(&stringsUTF8, tempStr, alloc))
+			tempStr = CharString_createNull();
 		}
+
+		Compiler_convertToWString(stringsUTF8, clean)
 
 		//Compile
 
@@ -1103,7 +1027,7 @@ Bool Compiler_compile(
 
 		HRESULT hr = interfaces->compiler->Compile(
 			&buffer,
-			(LPCWSTR*) argsPtr, argCounter,
+			(LPCWSTR*) strings.ptr, (int) strings.length,
 			interfaces->includeHandler,
 			IID_PPV_ARGS(&dxcResult)
 		);
@@ -1140,25 +1064,8 @@ Bool Compiler_compile(
 			&result->binary
 		))
 
-		if (settings.infoAboutIncludes) {
-
-			gotoIfError2(clean, ListIncludeInfo_resize(&result->includeInfo, interfaces->includeHandler->getCounter(), alloc))
-
-			ListIncludedFile files = interfaces->includeHandler->getIncludedFiles();
-
-			for(U64 i = 0, j = 0; i < files.length; ++i)
-				if (files.ptr[i].includeInfo.counter) {		//Exclude inactive includes
-
-					IncludeInfo copy = files.ptr[i].includeInfo;
-					gotoIfError2(clean, CharString_createCopy(copy.file, alloc, &tempStr))
-
-					copy.file = tempStr;
-					result->includeInfo.ptrNonConst[j] = copy;
-					tempStr = CharString_createNull();
-
-					++j;
-				}
-		}
+		if (settings.infoAboutIncludes)
+			gotoIfError3(clean, Compiler_copyIncludes(result, interfaces->includeHandler, alloc, e_rr))
 
 		result->type = ECompileResultType_Binary;
 		result->isSuccess = true;
@@ -1178,15 +1085,8 @@ clean:
 	if(error)
 		error->Release();
 
-	ListU16PtrConst_free(&stringArr, alloc);
-	ListListU16_freeUnderlying(&strings, alloc);
-	ListU16_free(&inputFile, alloc);
-	ListU16_free(&includeDir, alloc);
-	ListU16_free(&includeDir2, alloc);
-	ListU16_free(&tempWStr, alloc);
+	Compiler_freeStrings;
 	CharString_free(&tempStr, alloc);
-	CharString_free(&tempStr2, alloc);
+	ListCharString_freeUnderlying(&stringsUTF8, alloc);
 	return s_uccess;
 }
-
-//TODO: Real compile, check for [extension("16BitTypes")] one of the two indicates we need to enable 16-bit types

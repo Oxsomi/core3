@@ -771,6 +771,47 @@ clean:
 	return err;
 }
 
+Error CharString_createFromUTF32(const U32 *ptr, U64 limit, Allocator allocator, CharString *result) {
+
+	Error err = CharString_reserve(result, limit == U64_MAX ? 16 : (limit * 4 + 1), allocator);
+
+	if (err.genericError)
+		return err;
+
+	UnicodeCodePointInfo codepoint = (UnicodeCodePointInfo) { 0 };
+	U64 j = 0;
+
+	Buffer buf0 = CharString_allocatedBuffer(*result);
+
+	for(U64 i = 0; i < limit; ) {
+
+		U32 c = ptr[i];
+
+		if (!c)
+			break;
+
+		if(limit == U64_MAX) {
+			gotoIfError(clean, CharString_reserve(result, j + 5, allocator))
+			buf0 = CharString_allocatedBuffer(*result);
+		}
+
+		//Write as UTF8 encoding
+
+		gotoIfError(clean, Buffer_writeAsUTF8(buf0, j, c, &codepoint.bytes))
+		j += codepoint.bytes;
+		result->lenAndNullTerminated = j | ((U64)1 << 63);
+	}
+
+	((C8*)result->ptr)[j] = '\0';
+
+clean:
+
+	if(err.genericError)
+		CharString_free(result, allocator);
+
+	return err;
+}
+
 Error CharString_split(
 	CharString s,
 	C8 c,
@@ -1512,6 +1553,40 @@ clean:
 
 	if (err.genericError)
 		ListU16_free(arr, allocator);
+
+	return err;
+}
+
+Error CharString_toUTF32(CharString s, Allocator allocator, ListU32 *arr) {
+
+	const U64 len = CharString_length(s);
+	Error err = ListU32_reserve(arr, len + 1, allocator);
+
+	if (err.genericError)
+		return err;
+
+	const Buffer buf = CharString_bufferConst(s);
+	UnicodeCodePointInfo codepoint = (UnicodeCodePointInfo) { 0 };
+
+	U32 *buf0 = arr->ptrNonConst;
+
+	U64 j = 0;
+
+	for (U64 i = 0; i < len; ) {
+
+		gotoIfError(clean, Buffer_readAsUTF8(buf, i, &codepoint))	//Read as UTF8 encoding
+		i += codepoint.bytes;
+
+		buf0[j++] = codepoint.index;								//Write as UTF32 encoding
+	}
+
+	arr->ptrNonConst[j] = 0;
+	arr->length = j;
+
+clean:
+
+	if (err.genericError)
+		ListU32_free(arr, allocator);
 
 	return err;
 }

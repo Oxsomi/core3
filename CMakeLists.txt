@@ -104,8 +104,7 @@ else()
 
 	add_compile_options(-fms-extensions)	# Needed by DXC for uuids
 
-	# Link time optimization seems to be very slow on linux?
-	# add_compile_options(-flto -fno-fat-lto-objects)
+	add_compile_options(-flto -fno-fat-lto-objects)
 
 endif()
 
