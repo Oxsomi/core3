@@ -390,6 +390,7 @@
 		CharString input,
 		CompileResult *dest,
 		SHEntryRuntime runtimeEntry,
+		U16 runtimeEntryId,
 		U16 combinationId,
 		CharString includeDir
 	) {
@@ -438,7 +439,25 @@
 		}
 
 	clean:
+
 		s_uccess &= dest && dest->isSuccess;
+
+		const C8 *binType = binaryType == ESHBinaryType_SPIRV ? "spirv" : "dxil";
+
+		if(s_uccess)
+			Log_debugLnx(
+				"Compile success: %.*s (%s, %"PRIu32":%"PRIu32")",
+				(int) CharString_length(inputPath), inputPath.ptr,
+				binType, runtimeEntryId, combinationId
+			);
+
+		else 
+			Log_errorLnx(
+				"Compile failed: %.*s (%s, %"PRIu32":%"PRIu32")",
+				(int) CharString_length(inputPath), inputPath.ptr,
+				binType, runtimeEntryId, combinationId
+			);
+
 		Error_printx(errTemp, ELogLevel_Error, ELogOptions_Default);
 		return s_uccess;
 	}
@@ -686,6 +705,7 @@
 					job->inputData.ptr[ourOldJobId],
 					&tmp,
 					runtimeEntry,
+					runtimeEntryId,
 					combinationId,
 					job->includeDir
 				)) {
@@ -1316,6 +1336,7 @@
 							allFiles.ptr[i], allShaderText.ptr[i],
 							&tempResult,
 							runtimeEntry,
+							runtimeEntryId,
 							combinationId,
 							includeDir
 						)) {
