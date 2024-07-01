@@ -1096,7 +1096,6 @@ U16 Compiler_minFeatureSetExtension(ESHExtension ext) {
 
 Bool Compiler_crc32c(CharString str, U32 *crc32c, Allocator alloc, Error *e_rr) {
 
-	U64 off = CharString_findFirstSensitive(str, '\n', 0);
 	CharString tmp = CharString_createNull();
 	Bool s_uccess = true;
 
@@ -1106,7 +1105,7 @@ Bool Compiler_crc32c(CharString str, U32 *crc32c, Allocator alloc, Error *e_rr) 
 	//If we use \r\n (Windows) then we have to reallocate and replace \r\n with \n
 	//Otherwise our unix and windows hashes won't match anymore.
 
-	if(off != U64_MAX && off && str.ptr[off - 1] == '\r') {
+	if(CharString_containsSensitive(str, '\r')) {
 
 		gotoIfError2(clean, CharString_createCopy(str, alloc, &tmp))
 

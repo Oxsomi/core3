@@ -97,11 +97,12 @@ U32 Buffer_crc32c(Buffer buf) {
 	while(len >= LONG_SHIFT * 3) {
 
 		U64 crc1 = 0, crc2 = 0;
+		U64 *offu64 = (U64*)(void*)off;
 
 		for (U64 i = 0; i < LONG_SHIFT_U64; ++i) {
-			crc0 = _mm_crc32_u64(crc0, *(U64*)(void*)off + i);
-			crc1 = _mm_crc32_u64(crc1, *((U64*)(void*)off + LONG_SHIFT_U64 + i));
-			crc2 = _mm_crc32_u64(crc2, *((U64*)(void*)off + LONG_SHIFT_U64 * 2 + i));
+			crc0 = _mm_crc32_u64(crc0, offu64[i]);
+			crc1 = _mm_crc32_u64(crc1, offu64[LONG_SHIFT_U64 + i]);
+			crc2 = _mm_crc32_u64(crc2, offu64[LONG_SHIFT_U64 * 2 + i]);
 		}
 
 		crc0 = CRC32C_shiftLong((U32) crc0) ^ crc1;
@@ -118,11 +119,12 @@ U32 Buffer_crc32c(Buffer buf) {
 	while(len >= SHORT_SHIFT * 3) {
 
 		U64 crc1 = 0, crc2 = 0;
+		U64 *offu64 = (U64*)(void*)off;
 
 		for (U64 i = 0; i < SHORT_SHIFT_U64; ++i) {
-			crc0 = _mm_crc32_u64(crc0, *(U64*)(void*)off + i);
-			crc1 = _mm_crc32_u64(crc1, *((U64*)(void*)off + SHORT_SHIFT_U64 + i));
-			crc2 = _mm_crc32_u64(crc2, *((U64*)(void*)off + SHORT_SHIFT_U64 * 2 + i));
+			crc0 = _mm_crc32_u64(crc0, offu64[i]);
+			crc1 = _mm_crc32_u64(crc1, offu64[SHORT_SHIFT_U64 + i]);
+			crc2 = _mm_crc32_u64(crc2, offu64[SHORT_SHIFT_U64 * 2 + i]);
 		}
 
 		crc0 = CRC32C_shiftShort((U32) crc0) ^ crc1;

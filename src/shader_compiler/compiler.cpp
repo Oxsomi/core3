@@ -886,13 +886,10 @@ Bool Compiler_compile(
 		result->isSuccess = false;
 
 		U32 lastExtension = 0;
-		U32 extensionCount = 0;
 
 		for(U32 i = 0; i < ESHExtension_Count; ++i)
-			if ((toCompile.extensions >> i) & 1) {
-				++extensionCount;
+			if ((toCompile.extensions >> i) & 1)
 				lastExtension = i + 1;
-			}
 
 		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-D__OXC3", alloc, e_rr))
 		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-Zpc", alloc, e_rr))
