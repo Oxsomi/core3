@@ -1,4 +1,4 @@
 sources:
-  "2024.06.25":
+  "2024.07.02":
     url: "https://github.com/Oxsomi/DirectXShaderCompiler.git"
-    checkout: "fix_static_linking"
+    checkout: "main"
