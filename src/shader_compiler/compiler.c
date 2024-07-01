@@ -1763,10 +1763,10 @@ Bool Compiler_parse(
 				//which will be alive after this function.
 
 				if(runtimeEntry.uniformNameValues.length) {
-					ListCharString tmp = (ListCharString) { 0 };
-					gotoIfError2(clean, ListCharString_createCopyUnderlying(runtimeEntry.uniformNameValues, alloc, &tmp))
+					ListCharString tmpArr = (ListCharString) { 0 };
+					gotoIfError2(clean, ListCharString_createCopyUnderlying(runtimeEntry.uniformNameValues, alloc, &tmpArr))
 					ListCharString_freeUnderlying(&runtimeEntry.uniformNameValues, alloc);
-					runtimeEntry.uniformNameValues = tmp;
+					runtimeEntry.uniformNameValues = tmpArr;
 				}
 
 				gotoIfError2(clean, ListSHEntryRuntime_pushBack(&result->shEntriesRuntime, runtimeEntry, alloc));
