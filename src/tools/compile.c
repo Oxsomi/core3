@@ -1117,6 +1117,9 @@
 				CharString_createRefSizedConst((const C8*)temp.ptr, Buffer_length(temp), false), &tempStr
 			))
 
+			if(!CharString_eraseAllSensitive(&tempStr, '\r', 0))
+				retError(clean, Error_invalidState(1, "CLI_compileShader couldn't erase \\rs"))
+
 			gotoIfError2(clean, ListCharString_pushBackx(&allShaderText, tempStr))
 			tempStr = CharString_createNull();
 
@@ -1226,8 +1229,7 @@
 
 				if (jobId != lastJobId) {
 					
-					U32 crc32c = U32_MAX;
-					gotoIfError3(clean, Compiler_crc32cx(allShaderText.ptr[jobId], &crc32c, e_rr))
+					U32 crc32c = Buffer_crc32c(CharString_bufferConst(allShaderText.ptr[jobId]));
 
 					gotoIfError3(clean, SHFile_createx(
 						ESHSettingsFlags_None,
@@ -1305,8 +1307,7 @@
 						continue;
 					}
 
-					U32 crc32c = U32_MAX;
-					gotoIfError3(clean, Compiler_crc32cx(allShaderText.ptr[i], &crc32c, e_rr))
+					U32 crc32c = Buffer_crc32c(CharString_bufferConst(allShaderText.ptr[i]));
 
 					gotoIfError3(clean, SHFile_createx(
 						ESHSettingsFlags_None,

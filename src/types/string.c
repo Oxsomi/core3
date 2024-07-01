@@ -2576,7 +2576,7 @@ Bool CharString_eraseAll(CharString *s, C8 c, EStringCase caseSensitive, U64 off
 	}
 
 	if(out == strl)
-		return false;
+		return true;
 
 	((C8*)s->ptr)[out] = '\0';
 	s->lenAndNullTerminated = out | ((U64)1 << 63);
