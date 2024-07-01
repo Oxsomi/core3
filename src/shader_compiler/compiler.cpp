@@ -961,9 +961,6 @@ Bool Compiler_compile(
 			CharString uniformName  = toCompile.uniforms.ptr[i];
 			CharString uniformValue = toCompile.uniforms.ptr[i + 1];
 
-			Log_debugLn(alloc, "Test: %s\n", uniformName.ptr);
-			Log_debugLn(alloc, "Test: %s\n", uniformValue.ptr);
-
 			gotoIfError2(clean, CharString_format(
 
 				alloc, &tempStr,

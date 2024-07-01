@@ -1116,8 +1116,6 @@ Bool Compiler_crc32c(CharString str, U32 *crc32c, Allocator alloc, Error *e_rr) 
 	Buffer buf = CharString_bufferConst(tmp.ptr ? tmp : str);
 	*crc32c = Buffer_crc32c(buf);
 
-	Log_debugLnx("buf: %"PRIu64", %"PRIX32, Buffer_length(buf), *crc32c);
-
 clean:
 	CharString_free(&tmp, alloc);
 	return s_uccess;
@@ -1790,13 +1788,16 @@ Bool Compiler_parse(
 						0, "Compiler_parse() found way too runtimeEntry combinations. Found U16_MAX!"
 					))
 
-				for(U32 k = 0; k < runtimeEntry.uniformNameValues.length; k += 2) {
+				//Uniforms reference parsedLiterals, which are owned by the Parser.
+				//The parser goes out of scope at the end of the function, so we have to copy it.
+				//We won't do this for other params, because they're references to the input string
+				//which will be alive after this function.
 
-					CharString uniformName  = runtimeEntry.uniformNameValues.ptr[k];
-					CharString uniformValue = runtimeEntry.uniformNameValues.ptr[k + 1];
-
-					Log_debugLnx("Test1 0: %s\n", uniformName.ptr);
-					Log_debugLnx("Test2 0: %s\n", uniformValue.ptr);
+				if(runtimeEntry.uniformNameValues.length) {
+					ListCharString tmp = (ListCharString) { 0 };
+					gotoIfError2(clean, ListCharString_createCopyUnderlying(runtimeEntry.uniformNameValues, alloc, &tmp))
+					ListCharString_freeUnderlying(&runtimeEntry.uniformNameValues, alloc);
+					runtimeEntry.uniformNameValues = tmp;
 				}
 
 				gotoIfError2(clean, ListSHEntryRuntime_pushBack(&result->shEntriesRuntime, runtimeEntry, alloc));
