@@ -171,8 +171,6 @@ void ListListU32_freeUnderlying(ListListU32 *list, Allocator alloc);
 Bool Compiler_create(Allocator alloc, Compiler *comp, Error *e_rr);
 void Compiler_free(Compiler *comp, Allocator alloc);
 
-Bool Compiler_crc32c(CharString str, U32 *crc32c, Allocator alloc, Error *e_rr);
-
 //Call this on shutdown for a clean exit
 
 void Compiler_shutdown();
@@ -236,8 +234,6 @@ void ListIncludedFile_freeUnderlyingx(ListIncludedFile *file);
 
 Bool Compiler_createx(Compiler *comp, Error *e_rr);
 void Compiler_freex(Compiler *comp);
-
-Bool Compiler_crc32cx(CharString str, U32 *crc32c, Error *e_rr);
 
 Bool Compiler_preprocessx(Compiler comp, CompilerSettings settings, CompileResult *result, Error *e_rr);
 Bool Compiler_parsex(Compiler comp, CompilerSettings settings, Bool symbolsOnly, CompileResult *result, Error *e_rr);

@@ -283,10 +283,6 @@ void Compiler_freex(Compiler *comp) {
 	Compiler_free(comp, Platform_instance.alloc);
 }
 
-Bool Compiler_crc32cx(CharString str, U32 *crc32c, Error *e_rr) {
-	return Compiler_crc32c(str, crc32c, Platform_instance.alloc, e_rr);
-}
-
 Bool Compiler_preprocessx(Compiler comp, CompilerSettings settings, CompileResult *result, Error *e_rr) {
 	return Compiler_preprocess(comp, settings, Platform_instance.alloc, result, e_rr);
 }
@@ -1092,33 +1088,6 @@ U16 Compiler_minFeatureSetExtension(ESHExtension ext) {
 		minVersion = U16_max(OISH_SHADER_MODEL(6, 6), minVersion);
 
 	return minVersion;
-}
-
-Bool Compiler_crc32c(CharString str, U32 *crc32c, Allocator alloc, Error *e_rr) {
-
-	CharString tmp = CharString_createNull();
-	Bool s_uccess = true;
-
-	if(!crc32c)
-		retError(clean, Error_nullPointer(1, "Compiler_crc32c()::crc32c is required"))
-
-	//If we use \r\n (Windows) then we have to reallocate and replace \r\n with \n
-	//Otherwise our unix and windows hashes won't match anymore.
-
-	if(CharString_containsSensitive(str, '\r')) {
-
-		gotoIfError2(clean, CharString_createCopy(str, alloc, &tmp))
-
-		if(!CharString_eraseAllSensitive(&tmp, '\r', 0))
-			retError(clean, Error_invalidState(0, "Compiler_crc32c() replacing \\r\\n line endings failed"))
-	}
-
-	Buffer buf = CharString_bufferConst(tmp.ptr ? tmp : str);
-	*crc32c = Buffer_crc32c(buf);
-
-clean:
-	CharString_free(&tmp, alloc);
-	return s_uccess;
 }
 
 Bool Compiler_parse(

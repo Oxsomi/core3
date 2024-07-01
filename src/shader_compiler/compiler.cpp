@@ -190,12 +190,22 @@ public:
 
 						gotoIfError2(clean, File_read(resolved, 1 * SECOND, &tempBuffer))
 
-						U32 crc32c = Buffer_crc32c(tempBuffer);
+						gotoIfError2(clean, CharString_createCopy(
+							CharString_createRefSizedConst((const C8*)tempBuffer.ptr, Buffer_length(tempBuffer), false),
+							alloc,
+							&tempFile
+						))
+
+						Buffer_free(&tempBuffer, alloc);
+
+						if(!CharString_eraseAllSensitive(&tempFile, '\r', 0))
+							retError(clean, Error_invalidState(0, "IncludeHandler::LoadSource couldn't erase \\rs"))
+
+						U32 crc32c = Buffer_crc32c(CharString_bufferConst(tempFile));
+						CharString_free(&tempFile, alloc);
 
 						if(crc32c != prevInclude.crc32c)
 							validCache = false;
-
-						Buffer_free(&tempBuffer, alloc);
 					}
 
 					else validCache = false;
@@ -259,10 +269,21 @@ public:
 						"IncludeHandler::LoadSource CreateBlobFromPinned requires 32-bit buffers max"
 					))
 
+				gotoIfError2(clean, CharString_createCopy(
+					CharString_createRefSizedConst((const C8*)tempBuffer.ptr, Buffer_length(tempBuffer), false),
+					alloc,
+					&tempFile
+				))
+
+				if(!CharString_eraseAllSensitive(&tempFile, '\r', 0))
+					retError(clean, Error_invalidState(1, "IncludeHandler::LoadSource couldn't erase \\rs"))
+
+				U32 crc32c = Buffer_crc32c(CharString_bufferConst(tempFile));
+
 				IncludedFile inc = IncludedFile{};
 				inc.includeInfo = IncludeInfo{
 					.fileSize = (U32) Buffer_length(tempBuffer),
-					.crc32c = U32_MAX,			//Temp
+					.crc32c = crc32c,
 					.timestamp = timestamp,
 					.counter = 1,
 					.file = CharString_createNull()
@@ -272,13 +293,6 @@ public:
 
 				//Move buffer to includedData
 
-				gotoIfError2(clean, CharString_createCopy(
-					CharString_createRefSizedConst((const C8*)tempBuffer.ptr, Buffer_length(tempBuffer), false),
-					alloc,
-					&tempFile
-				))
-
-				gotoIfError3(clean, Compiler_crc32c(tempFile, &inc.includeInfo.crc32c, alloc, e_rr))
 				Buffer_free(&tempBuffer, alloc);
 
 				inc.includeInfo.file = resolved;
@@ -290,17 +304,19 @@ public:
 
 			} else {
 
+				CharString tmpTmp = CharString_createNull();
+
 				if(CharString_equalsStringInsensitive(resolved, CharString_createRefCStrConst("@resources.hlsl")))
-					tempFile = CharString_createRefCStrConst(resources);
+					tmpTmp = CharString_createRefCStrConst(resources);
 
 				else if(CharString_equalsStringInsensitive(resolved, CharString_createRefCStrConst("@types.hlsl")))
-					tempFile = CharString_createRefCStrConst(types);
+					tmpTmp = CharString_createRefCStrConst(types);
 
 				else if(CharString_equalsStringInsensitive(resolved, CharString_createRefCStrConst("@nvShaderExtnEnums.h")))
-					tempFile = CharString_createRefCStrConst(nvShaderExtnEnums);
+					tmpTmp = CharString_createRefCStrConst(nvShaderExtnEnums);
 
 				else if(CharString_equalsStringInsensitive(resolved, CharString_createRefCStrConst("@nvHLSLExtnsInternal.h")))
-					tempFile = CharString_createRefCStrConst(nvHLSLExtnsInternal);
+					tmpTmp = CharString_createRefCStrConst(nvHLSLExtnsInternal);
 
 				else if(CharString_equalsStringInsensitive(resolved, CharString_createRefCStrConst("@nvHLSLExtns.h"))) {
 
@@ -315,17 +331,23 @@ public:
 
 				else retError(clean, Error_notFound(0, 0, "IncludeHandler::LoadSource builtin file not found"))
 
+				if(tmpTmp.ptr)
+					gotoIfError2(clean, CharString_createCopy(tmpTmp, alloc, &tempFile))
+
+				if(!CharString_eraseAllSensitive(&tempFile, '\r', 0))
+					retError(clean, Error_invalidState(1, "IncludeHandler::LoadSource couldn't erase \\rs"))
+
+				U32 crc32c = Buffer_crc32c(CharString_bufferConst(tempFile));
+
 				IncludedFile inc = IncludedFile{};
 
 				inc.includeInfo = IncludeInfo{
 					.fileSize = (U32) CharString_length(tempFile),
-					.crc32c = U32_MAX,			//Temp
+					.crc32c = crc32c,
 					.timestamp = 0,
 					.counter = 1,
 					.file = resolved
 				};
-
-				gotoIfError3(clean, Compiler_crc32c(tempFile, &inc.includeInfo.crc32c, alloc, e_rr))
 
 				inc.globalCounter = 1;
 				inc.data = tempFile;
