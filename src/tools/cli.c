@@ -26,6 +26,20 @@
 #include "platforms/ext/stringx.h"
 #include "cli.h"
 
+#ifdef CLI_SHADER_COMPILER
+	#include "shader_compiler/compiler.h"
+#endif
+
+void CLI_init() {
+	Operations_init();
+}
+
+void CLI_shutdown() {
+	#ifdef CLI_SHADER_COMPILER
+		Compiler_shutdown();
+	#endif
+}
+
 void CLI_showHelp(EOperationCategory category, EOperation op, EFormat f) {
 
 	const Bool invalidOp = op == EOperation_Invalid;

@@ -744,29 +744,44 @@ endif()
 
 if(EnableOxC3CLI)
 
-	file(GLOB_RECURSE headers "inc/tools/*.h")
-	file(GLOB_RECURSE sources "src/tools/*.c")
+	# CLI, useful for manually calling CLI utility functions
 
-	add_executable(
-		OxC3
+	file(GLOB headers "inc/tools/*.h")
+	file(GLOB sources "src/tools/*.c")
+
+	add_library(
+		OxC3CLI STATIC
 		${headers}
 		${sources}
 		CMakeLists.txt
 	)
 
-	set_target_properties(OxC3 PROPERTIES FOLDER Oxsomi)
+	set_target_properties(OxC3CLI PROPERTIES FOLDER Oxsomi)
 
 	if(CLIGraphics)
-		target_link_libraries(OxC3 PUBLIC OxC3_graphics)
-		target_compile_definitions(OxC3 PUBLIC -DCLI_GRAPHICS)
+		target_link_libraries(OxC3CLI PUBLIC OxC3_graphics)
+		target_compile_definitions(OxC3CLI PUBLIC -DCLI_GRAPHICS)
 	endif()
 
 	if(EnableShaderCompiler)
-		target_link_libraries(OxC3 PUBLIC OxC3_shader_compiler)
-		target_compile_definitions(OxC3 PUBLIC -DCLI_SHADER_COMPILER)
+		target_link_libraries(OxC3CLI PUBLIC OxC3_shader_compiler)
+		target_compile_definitions(OxC3CLI PUBLIC -DCLI_SHADER_COMPILER)
 	endif()
 
-	target_include_directories(OxC3 PUBLIC inc/tools)
+	target_include_directories(OxC3CLI PUBLIC inc/tools)
+
+	# OxC3 executable, for easily executing OxC3CLI commands
+
+	file(GLOB sources "src/tools/executable/*.c")
+
+	add_executable(
+		OxC3
+		${sources}
+		CMakeLists.txt
+	)
+
+	set_target_properties(OxC3 PROPERTIES FOLDER Oxsomi)
+	target_link_libraries(OxC3 PUBLIC OxC3CLI)
 
 	configure_icon(OxC3 "${CMAKE_CURRENT_SOURCE_DIR}/res/logo.ico")
 	configure_virtual_files(OxC3)

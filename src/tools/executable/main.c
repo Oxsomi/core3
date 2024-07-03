@@ -18,21 +18,15 @@
 *  This is called dual licensing.
 */
 
-#include "platforms/ext/listx_impl.h"
-#include "platforms/ext/errorx.h"
-#include "platforms/ext/stringx.h"
+#include "platforms/platform.h"
 #include "graphics/generic/application.h"
 #include "cli.h"
-
-#ifdef CLI_SHADER_COMPILER
-	#include "shader_compiler/compiler.h"
-#endif
 
 const Bool Platform_useWorkingDirectory = true;
 
 I32 Program_run() {
 
-	Operations_init();
+	CLI_init();
 
 	if(!CLI_execute(Platform_instance.args))
 		return -1;
@@ -41,7 +35,5 @@ I32 Program_run() {
 }
 
 void Program_exit() {
-	#ifdef CLI_SHADER_COMPILER
-		Compiler_shutdown();
-	#endif
+	CLI_shutdown();
 }

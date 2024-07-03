@@ -68,6 +68,11 @@ Bool CLI_graphicsDevices(ParsedArgs args);
 
 Bool CLI_execute(ListCharString argList);
 
+//Should be called on init and shutdown of program
+
+void CLI_init();
+void CLI_shutdown();
+
 #ifdef __cplusplus
 	}
 #endif
