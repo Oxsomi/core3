@@ -148,6 +148,7 @@ typedef enum ESymbolType {
 	ESymbolType_Enum,			//typedef enum ... or enum X {} or enum class
 	ESymbolType_EnumValue,
 	ESymbolType_Annotation,		//[[vk::binding(0, 0)]] or [shader("vertex")] for example
+	ESymbolType_Semantic,		//Struct/variable decoration
 	ESymbolType_Count			//Keep <=256 due to packing
 } ESymbolType;
 
@@ -193,7 +194,7 @@ typedef enum ESymbolFlag {
 
 	//For both annotation and templates when it's been consumed into a function, variable, class, etc.
 
-	ESymbolFlag_IsParented	= 1 << 12,			//When an variable, annotation or template has been "consumed"
+	ESymbolFlag_IsParented						= 1 << 12,
 
 	//Typedef modifiers
 

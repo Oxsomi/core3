@@ -239,6 +239,13 @@ The following defines are set by OxC3 during compilation:
 - `__OXC3_VERSION` same layout as `OXC3_MAKE_VERSION` aka (major << 22) | (minor << 12) | patch.
 - `__OXC3_EXT_<X>` foreach extension that's enabled by the current compilation. For example: `__OXC3_EXT_F16`, `__OXC3_EXT_F64`, `__OXC3_EXT_RAYQUERY`, etc.
 
+### Semantics
+
+Semantics for input(s) and output(s) for shaders get parsed and have the following restrictions:
+
+- SV_ is reserved for HLSL semantic values.
+- Other semantic values must follow TEXCOORD[n], seeing as SPIRV has no concept of semantics. These can be bound through Vulkan as binding n or in D3D12 as TEXCOORD with id n. Allowing semantics would cause shaders that can't be compiled for SPIRV or any languages enabled by SPIRV (such as MSL or WGSL). As such, semantics for input/output layouts are completely incompatible with the OxC3 shader compiler.
+
 ### Entrypoint annotations
 
 Each entrypoint can have annotations on top of the ones used by DXC. The ones introduced in OxC3's pre-processor are the following:

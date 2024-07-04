@@ -148,7 +148,8 @@
 							),
 							copy.ptr,
 							isPreprocess ? fileSuffixes[i] : (
-								shaderFiles->compileType == ECompileType_Includes || shaderFiles->compileType == ECompileType_Symbols ? txtSuffix : oiSHSuffixes[i]
+								shaderFiles->compileType == ECompileType_Includes || 
+								shaderFiles->compileType == ECompileType_Symbols ? txtSuffix : oiSHSuffixes[i]
 							)
 						))
 

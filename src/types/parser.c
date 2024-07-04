@@ -524,7 +524,8 @@ const C8 *ESymbolType_names[ESymbolType_Count] = {
 	"Union",
 	"Enum",
 	"EnumValue",
-	"Annotation"
+	"Annotation",
+	"Semantic"
 };
 
 Bool Parser_printSymbol(

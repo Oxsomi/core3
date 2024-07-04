@@ -612,10 +612,18 @@ Bool Parser_classifyFunction(Parser *parser, U32 *i, U32 parent, Allocator alloc
 
 			gotoIfError3(clean, Parser_assert(parser, i, ETokenType_Identifier, e_rr))
 
-			//CharString variableSemanticStr = Token_asString(parser->tokens.ptr[*i], parser);
+			U32 semanticNameTokenId = *i;
+			CharString semanticStr = Token_asString(parser->tokens.ptr[semanticNameTokenId], parser);
 			++*i;
 
-			//TODO: Store symbol info
+			//Insert symbol
+
+			Symbol sem = (Symbol) { 0 };
+			gotoIfError3(clean, Symbol_create(ESymbolType_Semantic, ESymbolFlag_None, semanticNameTokenId, e_rr, &sem))
+
+			U32 semanticSymbolId = U32_MAX;
+			gotoIfError3(clean, Parser_registerSymbol(parser, sem, symbolId, alloc, &semanticSymbolId, e_rr))
+			gotoIfError3(clean, Parser_setSymbolName(parser, semanticSymbolId, &semanticStr, alloc, e_rr))
 		}
 
 		//U32 a = 0xDEADBEEF,
@@ -670,10 +678,19 @@ Bool Parser_classifyFunction(Parser *parser, U32 *i, U32 parent, Allocator alloc
 	if (Parser_skipIfNext(parser, i, ETokenType_Colon)) {
 
 		gotoIfError3(clean, Parser_assert(parser, i, ETokenType_Identifier, e_rr))
-		//CharString semantic = Token_asString(parser->tokens.ptr[*i], parser);
-		++*i;
 
-		//TODO: Store symbol info
+		U32 semanticNameTokenId = *i;
+		CharString semanticStr = Token_asString(parser->tokens.ptr[semanticNameTokenId], parser);
+		++*i;
+		
+		//Insert symbol
+
+		Symbol sem = (Symbol) { 0 };
+		gotoIfError3(clean, Symbol_create(ESymbolType_Semantic, ESymbolFlag_None, semanticNameTokenId, e_rr, &sem))
+
+		U32 semanticSymbolId = U32_MAX;
+		gotoIfError3(clean, Parser_registerSymbol(parser, sem, parent, alloc, &semanticSymbolId, e_rr))
+		gotoIfError3(clean, Parser_setSymbolName(parser, semanticSymbolId, &semanticStr, alloc, e_rr))
 	}
 
 	//static F32 test(F32 a, F32 b) {
@@ -1127,8 +1144,18 @@ Bool Parser_classifyFunctionOrVariable(Parser *parser, U32 *i, U32 parent, Alloc
 
 			gotoIfError3(clean, Parser_assert(parser, i, ETokenType_Identifier, e_rr))
 
-			//CharString semanticStr = Token_asString(parser->tokens.ptr[*i], parser);		TODO: save semantics
+			U32 semanticNameTokenId = *i;
+			CharString semanticStr = Token_asString(parser->tokens.ptr[semanticNameTokenId], parser);
 			++*i;
+
+			//Insert symbol
+
+			Symbol sem = (Symbol) { 0 };
+			gotoIfError3(clean, Symbol_create(ESymbolType_Semantic, ESymbolFlag_None, semanticNameTokenId, e_rr, &sem))
+
+			U32 semanticSymbolId = U32_MAX;
+			gotoIfError3(clean, Parser_registerSymbol(parser, sem, symbolId, alloc, &semanticSymbolId, e_rr))
+			gotoIfError3(clean, Parser_setSymbolName(parser, semanticSymbolId, &semanticStr, alloc, e_rr))
 
 			//register(t0, space0)
 			//        ^
