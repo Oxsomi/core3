@@ -497,6 +497,12 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphics
 		)
 			caps.dataTypes &= ~EGraphicsDataTypes_RGB32f;
 
+		//Max allocation size and max buffer size isn't queryable in D3D12 yet.
+		//We hardcode the reported sizes from Vulkan and the hardlimit as defined by HLSL.
+
+		caps.maxAllocationSize = vendorId == EGraphicsVendorId_AMD ? 2 * GIBI : 42 * GIGA / 10;
+		caps.maxBufferSize = 2 * GIBI;		//ByteAddressBuffer.Load takes an int, so only 2GiB accessible
+
 		//Fully converted type
 
 		gotoIfError(clean, ListGraphicsDeviceInfo_resize(&tempInfos, tempInfos.length + 1, (Allocator){ 0 }))

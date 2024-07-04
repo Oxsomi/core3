@@ -49,6 +49,7 @@ Error DeviceMemoryAllocator_allocate(
 		);
 
 	GraphicsDevice *device = allocator->device;
+
 	DxGraphicsDevice *deviceExt = GraphicsDevice_ext(device, Dx);
 	Bool hasReBAR = device->info.capabilities.featuresExt & EDxGraphicsFeatures_ReBAR;
 	Bool isGpu = device->info.type == EGraphicsDeviceType_Dedicated;
@@ -58,6 +59,14 @@ Error DeviceMemoryAllocator_allocate(
 		cpuSided = true;
 
 	DxBlockRequirements req = *(DxBlockRequirements*) requirementsExt;
+	U64 maxAllocationSize = device->info.capabilities.maxAllocationSize;
+
+	if(req.length > maxAllocationSize)
+		return Error_outOfBounds(
+			2, req.length, maxAllocationSize,
+			"DeviceMemoryAllocator_allocate() allocation length exceeds max allocation size"
+		);
+
 	Bool isDedicated = req.flags & EDxBlockFlags_IsDedicated;
 
 	//Find an existing allocation
@@ -91,7 +100,7 @@ Error DeviceMemoryAllocator_allocate(
 
 	//Allocate memory
 
-	U64 realBlockSize = (U64_max(blockSize, req.length * 2) + blockSize - 1) / blockSize * blockSize;
+	U64 realBlockSize = U64_min((U64_max(blockSize, req.length * 2) + blockSize - 1) / blockSize * blockSize, maxAllocationSize);
 
 	if(isDedicated)
 		realBlockSize = req.length;

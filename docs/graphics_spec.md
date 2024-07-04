@@ -30,7 +30,7 @@ We're targeting the minimum specs of following systems in OxC3 0.2:
 
 Because of this, a device needs the following requirements to be OxC3 compatible:
 
-- Vulkan 1.1 or higher.
+- Vulkan 1.2 or higher.
 - Tessellation shaders are required, but geometry shaders are optional.
 - More than 512 MiB of CPU + GPU visible memory (At least 1GB total).
 - Required instance extensions:
@@ -45,6 +45,7 @@ Because of this, a device needs the following requirements to be OxC3 compatible
   - VK_EXT_swapchain_colorspace
 - Required device extensions:
   - VK_KHR_push_descriptor
+  - VK_KHR_maintenance4
   - Descriptor indexing with all features true except shaderInputAttachmentArrayDynamicIndexing, descriptorBindingUniformBufferUpdateAfterBind and shaderInputAttachmentArrayNonUniformIndexing.
     - on: shaderUniformTexelBufferArrayDynamicIndexing, shaderStorageTexelBufferArrayDynamicIndexing, shaderUniformBufferArrayNonUniformIndexing, shaderSampledImageArrayNonUniformIndexing, shaderStorageBufferArrayNonUniformIndexing, shaderStorageImageArrayNonUniformIndexing, shaderUniformTexelBufferArrayNonUniformIndexing, shaderStorageTexelBufferArrayNonUniformIndexing, descriptorBindingSampledImageUpdateAfterBind, descriptorBindingStorageImageUpdateAfterBind, descriptorBindingStorageBufferUpdateAfterBind, descriptorBindingUniformTexelBufferUpdateAfterBind, descriptorBindingStorageTexelBufferUpdateAfterBind, descriptorBindingUpdateUnusedWhilePending, descriptorBindingPartiallyBound, descriptorBindingVariableDescriptorCount, runtimeDescriptorArray
   - VK_KHR_synchronization2
@@ -79,6 +80,7 @@ Because of this, a device needs the following requirements to be OxC3 compatible
   - VK_NV_compute_shader_derivatives as ComputeDeriv as long as computeDerivativeGroupLinear is true.
 - subgroupSize of 4 - 128.
 - sampleRateShading of true.
+- maxMemoryAllocationSize and maxBufferSize of a minimum of 1GiB.
 - subgroup operations of basic, vote, ballot are required. Available only in compute by default. arithmetic and shuffle are optional.
 - shaderSampledImageArrayDynamicIndexing, shaderStorageBufferArrayDynamicIndexing, shaderUniformBufferArrayDynamicIndexing, shaderStorageBufferArrayDynamicIndexing, descriptorIndexing turned on.
 - samplerAnisotropy, drawIndirectFirstInstance, independentBlend, imageCubeArray, fullDrawIndexUint32, depthClamp, depthBiasClamp, multiDrawIndirect turned on.

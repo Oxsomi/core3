@@ -166,6 +166,13 @@ Error DeviceMemoryAllocator_allocate(
 	VkMemoryRequirements2 req = *(VkMemoryRequirements2*) requirementsExt;
 	VkMemoryRequirements memReq = req.memoryRequirements;
 	VkMemoryDedicatedRequirements dedicated = *(VkMemoryDedicatedRequirements*) req.pNext;
+	U64 maxAllocationSize = allocator->device->info.capabilities.maxAllocationSize;
+	
+	if(memReq.size > maxAllocationSize)
+		return Error_outOfBounds(
+			2, memReq.size, maxAllocationSize,
+			"DeviceMemoryAllocator_allocate() allocation length exceeds max allocation size"
+		);
 
 	//When block count hits 1999 that means there were at least 2000 memory objects (+1 UBO)
 	//After that, the allocator should be more conservative for dedicating separate memory blocks.
@@ -219,7 +226,7 @@ Error DeviceMemoryAllocator_allocate(
 	if(err.genericError)
 		return err;
 
-	U64 realBlockSize = (U64_max(blockSize, memReq.size * 2) + blockSize - 1) / blockSize * blockSize;
+	U64 realBlockSize = U64_min((U64_max(blockSize, memReq.size * 2) + blockSize - 1) / blockSize * blockSize, maxAllocationSize);
 
 	VkMemoryAllocateFlagsInfo allocNext = (VkMemoryAllocateFlagsInfo) {
 		.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO,

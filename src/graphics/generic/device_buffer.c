@@ -245,6 +245,11 @@ Error GraphicsDeviceRef_createBufferIntern(
 	if(!(resourceFlags & EGraphicsResourceFlag_InternalWeakDeviceRef))
 		gotoIfError(clean, GraphicsDeviceRef_inc(dev))
 
+	if(len > device->info.capabilities.maxBufferSize)
+		gotoIfError(clean, Error_invalidState(
+			2, "GraphicsDeviceRef_createBufferIntern() buffer length exceeds maxBufferSize"
+		))
+
 	DeviceBuffer *buf = DeviceBufferRef_ptr(*ref);
 
 	*buf = (DeviceBuffer) {

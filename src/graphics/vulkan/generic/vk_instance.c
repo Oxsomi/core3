@@ -568,7 +568,22 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphics
 			true, VkPhysicalDeviceDriverProperties, driver, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES
 		)
 
+		getDeviceProperties(
+			true, VkPhysicalDeviceMaintenance3Properties, memorySizeAndDescriptorSets,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_3_PROPERTIES
+		)
+
+		getDeviceProperties(
+			true, VkPhysicalDeviceMaintenance4Properties, maxBufferSize,
+			VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_4_PROPERTIES
+		)
+
 		graphicsExt->getPhysicalDeviceProperties2(dev, &properties2);
+
+		if(maxBufferSize.maxBufferSize < GIBI || memorySizeAndDescriptorSets.maxMemoryAllocationSize < GIBI) {
+			Log_debugLnx("Vulkan: Unsupported device %"PRIu32", maxBufferSize and maxAllocationSize should exceed 1GiB", i);
+			continue;
+		}
 
 		//Build up list of features
 
@@ -1420,6 +1435,9 @@ Error GraphicsInstance_getDeviceInfos(const GraphicsInstance *inst, ListGraphics
 			capabilities.featuresExt |= EVkGraphicsFeatures_PerfQuery;
 
 		capabilities.dataTypes |= EGraphicsDataTypes_I16;
+		
+		capabilities.maxBufferSize = maxBufferSize.maxBufferSize;
+		capabilities.maxAllocationSize = memorySizeAndDescriptorSets.maxMemoryAllocationSize ;
 
 		//Fully converted type
 

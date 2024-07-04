@@ -197,6 +197,9 @@ typedef struct GraphicsDeviceCapabilities {
 
 	U64 sharedMemory;				//Memory accessible through the CPU (can be equal to dedicatedMemory if iGPU or CPU)
 
+	U64 maxBufferSize;
+	U64 maxAllocationSize;
+
 } GraphicsDeviceCapabilities;
 
 //The device info struct represents a physical device.
