@@ -273,6 +273,30 @@ Bool CLI_profileSHA256(ParsedArgs args) {
 	return CLI_profileData(args, CLI_profileSHA256Impl);
 }
 
+Error CLI_profileMD5Impl(ParsedArgs args, Buffer buf) {
+
+	(void)args;
+
+	const Ns then = Time_now();
+	I32x4 md5 = Buffer_md5(buf);
+	const Ns now = Time_now();
+
+	Log_debugLnx(
+		"Profile MD5: %"PRIu64" bytes within %fs (%fns/byte, %fbytes/sec). Random hash %04"PRIX32"%04"PRIX32"%04"PRIX32"%04"PRIX32".",
+		Buffer_length(buf),
+		(F64)(now - then) / SECOND,
+		(F64)(now - then) / Buffer_length(buf),
+		(F64)Buffer_length(buf) / (now - then) * SECOND,
+		I32x4_x(md5), I32x4_y(md5), I32x4_z(md5), I32x4_w(md5)
+	);
+
+	return Error_none();
+}
+
+Bool CLI_profileMD5(ParsedArgs args) {
+	return CLI_profileData(args, CLI_profileMD5Impl);
+}
+
 Error CLI_profileEncryptionImpl(ParsedArgs args, Buffer buf, EBufferEncryptionType encryptionType) {
 
 	(void)args;

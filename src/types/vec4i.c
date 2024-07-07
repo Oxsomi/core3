@@ -111,6 +111,16 @@ Bool I32x4_neq4(I32x4 a, I32x4 b) { return !I32x4_eq4(a, b); }
 I32x4 I32x4_complement(I32x4 a) { return I32x4_sub(I32x4_one(), a); }
 I32x4 I32x4_negate(I32x4 a) { return I32x4_sub(I32x4_zero(), a); }
 
+I32x4 I32x4_rol(I32x4 a, U8 bits) {
+	bits &= 31;
+	return I32x4_or(I32x4_lsh32(a, bits), I32x4_rsh32(a, 32 - bits));
+}
+
+I32x4 I32x4_ror(I32x4 a, U8 bits) {
+	bits &= 31;
+	return I32x4_or(I32x4_rsh32(a, bits), I32x4_lsh32(a, 32 - bits));
+}
+
 I32x4 I32x4_pow2(I32x4 a) { return I32x4_mul(a, a); }
 
 I32x4 I32x4_mod(I32x4 v, I32x4 d) { return I32x4_sub(v, I32x4_mul(I32x4_div(v, d), d)); }

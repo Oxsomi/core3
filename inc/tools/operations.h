@@ -188,6 +188,7 @@ typedef enum EOperation {
 	EOperation_ProfileRNG,
 	EOperation_ProfileCRC32C,
 	EOperation_ProfileSHA256,
+	EOperation_ProfileMD5,
 	EOperation_ProfileAES256,
 	EOperation_ProfileAES128,
 
@@ -234,6 +235,7 @@ typedef enum EFormat {
 
 	EFormat_SHA256,
 	EFormat_CRC32C,
+	EFormat_MD5,
 
 	EFormat_HLSL,
 

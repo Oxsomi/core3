@@ -180,6 +180,9 @@ I32x2 I32x2_or(I32x2 a, I32x2 b)  NONE_OP2I(a.v[i] | b.v[i])
 I32x4 I32x4_and(I32x4 a, I32x4 b) NONE_OP4I(a.v[i] & b.v[i])
 I32x2 I32x2_and(I32x2 a, I32x2 b) NONE_OP2I(a.v[i] & b.v[i])
 
+I32x4 I32x4_nand(I32x4 a, I32x4 b) NONE_OP4I(a.v[i] &~ b.v[i])
+I32x2 I32x2_nand(I32x2 a, I32x2 b) NONE_OP2I(a.v[i] &~ b.v[i])
+
 I32x4 I32x4_xor(I32x4 a, I32x4 b) NONE_OP4I(a.v[i] ^ b.v[i])
 I32x2 I32x2_xor(I32x2 a, I32x2 b) NONE_OP2I(a.v[i] ^ b.v[i])
 

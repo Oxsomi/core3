@@ -123,6 +123,7 @@ gotoIfError(clean, GraphicsInstance_getPreferredDevice(
 - featuresExt: API dependent features that aren't expected to be standardized in the same way.
   - Vulkan: PerformanceQuery.
   - DirectX12: WriteBufferImmediate (for crash debugging), ReBAR (for checking if quick access path to GPU is available), HardwareCopyQueue (If the copy queue makes sense to use).
+- maxBufferSize and maxAllocationSize: Device limit on how big a buffer or a single allocation may be.
 
 ### Functions
 
@@ -256,8 +257,8 @@ gotoIfError(clean, GraphicsDeviceRef_create(
     ```
   ```
 
-    ```
-    
+  ```
+  
 - ```c
   Error createSampler(SamplerInfo info, CharString name, SamplerRef **ref));
   ```

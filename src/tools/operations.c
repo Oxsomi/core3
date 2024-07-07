@@ -291,6 +291,16 @@ void Operations_init() {
 		.supportedCategories = { EOperationCategory_Hash }
 	};
 
+	Format_values[EFormat_MD5] = (Format) {
+		.name = "MD5",
+		.desc = "MD5 (128-bit hash)",
+		.operationFlags = EOperationFlags_None,
+		.optionalParameters = EOperationHasParameter_None,
+		.requiredParameters = EOperationHasParameter_Input,
+		.flags = EFormatFlags_SupportFiles | EFormatFlags_SupportFolders | EFormatFlags_SupportAsString,
+		.supportedCategories = { EOperationCategory_Hash }
+	};
+
 	Format_values[EFormat_SHA256] = (Format) {
 		.name = "SHA256",
 		.desc = "SHA256 (256-bit hash)",
@@ -521,6 +531,18 @@ void Operations_init() {
 		.desc = "Profiles hashing random data using sha256.",
 
 		.func = &CLI_profileSHA256,
+
+		.isFormatLess = true
+	};
+
+	Operation_values[EOperation_ProfileMD5] = (Operation) {
+
+		.category = EOperationCategory_Profile,
+
+		.name = "md5",
+		.desc = "Profiles hashing random data using md5.",
+
+		.func = &CLI_profileMD5,
 
 		.isFormatLess = true
 	};

@@ -65,6 +65,20 @@ Bool CLI_hash(CharString str, Bool isFile, EFormat format, Error *e_rr) {
 			break;
 		}
 
+		case EFormat_MD5: {
+
+			const I32x4 output = Buffer_md5(buf);
+
+			for (U8 i = 0; i < 4; ++i) {
+				gotoIfError2(clean, CharString_createHexx((U32)I32x4_get(output, i), 8, &tmpi))
+				gotoIfError2(clean, CharString_popFrontCount(&tmpi, 2))
+				gotoIfError2(clean, CharString_appendStringx(&tmp, tmpi))
+				CharString_freex(&tmpi);
+			}
+
+			break;
+		}
+
 		default:
 			Log_errorLnx("Unsupported format");
 			goto clean;

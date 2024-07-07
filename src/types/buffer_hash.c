@@ -247,3 +247,147 @@ void Buffer_sha256Internal(Buffer buf, U32 *output) {
 
 	Buffer_copy(Buffer_createRef(output, sizeof(U32) * 8), Buffer_createRefConst(state, sizeof(U32) * 8));
 }
+
+//Ported from https://github.com/krisprice/simd_md5/blob/master/simd_md5/md5_sse.c#L9
+//TODO: This is probably the worst "SIMD" implementation I've ever seen.
+//		It doesn't really do SIMD, it pretends it does by putting it into registers.
+//		It should be trivial to change to real SIMD by doing 16 bytes instead of 4 bytes (.xxxx) per instruction.
+//		This would quadruple performance.
+//		Implemented this only as a starting point, so that they're using SIMD instructions already.
+//		Which should be a lot easier to convert to full perf.
+
+typedef struct MD5State {
+	I32x4 state[4];
+	U64 bitCount;
+} MD5State;
+
+//This is layed out as constants per step per round.
+//As each step per round has their different constants.
+
+static const U32 MD5_consts[][16] = {
+	{
+		0xD76AA478, 0xE8C7B756, 0x242070DB, 0xC1BDCEEE, 0xF57C0FAF, 0x4787C62A, 0xA8304613, 0xFD469501,
+		0x698098D8, 0x8B44F7AF, 0xFFFF5BB1, 0x895CD7BE, 0x6B901122, 0xFD987193, 0xA679438E, 0x49B40821,
+	},
+	{
+		0xF61E2562, 0xC040B340, 0x265E5A51, 0xE9B6C7AA, 0xD62F105D, 0x02441453, 0xD8A1E681, 0xE7D3FBC8,
+		0x21E1CDE6, 0xC33707D6, 0xF4D50D87, 0x455A14ED, 0xA9E3E905, 0xFCEFA3F8, 0x676F02D9, 0x8D2A4C8A,
+	},
+	{
+		0xFFFA3942, 0x8771F681, 0x6D9D6122, 0xFDE5380C, 0xA4BEEA44, 0x4BDECFA9, 0xF6BB4B60, 0xBEBFBC70,
+		0x289B7EC6, 0xEAA127FA, 0xD4EF3085, 0x04881D05, 0xD9D4D039, 0xE6DB99E5, 0x1FA27CF8, 0xC4AC5665,
+	},
+	{
+		0xF4292244, 0x432AFF97, 0xAB9423A7, 0xFC93A039, 0x655B59C3, 0x8F0CCC92, 0xFFEFF47D, 0x85845DD1,
+		0x6FA87E4F, 0xFE2CE6E0, 0xA3014314, 0x4E0811A1, 0xF7537E82, 0xBD3AF235, 0x2AD7D2BB, 0xEB86D391
+	}
+};
+
+static const U8 MD5_offsets[][16] = {
+	{ 0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15 },		//i
+	{ 1,  6, 11,  0,  5, 10, 15,  4,  9, 14,  3,  8, 13,  2,  7, 12 },		//(1 + 5 * i) & 15
+	{ 5,  8, 11, 14,  1,  4,  7, 10, 13,  0,  3,  6,  9, 12, 15,  2 },		//(5 + 3 * i) & 15
+	{ 0,  7, 14,  5, 12,  3, 10,  1,  8, 15,  6, 13,  4, 11,  2,  9 }		//(0 + 7 * i) & 15
+};
+
+static const U8 MD5_rotateLeft[][4] = {
+	{  7, 12, 17, 22 },
+	{  5,  9, 14, 20 },
+	{  4, 11, 16, 23 },
+	{  6, 10, 15, 21 }
+};
+
+void MD5State_update(MD5State *stateOut, Buffer buf) {
+
+	I32x4 state[4] = { stateOut->state[0], stateOut->state[1], stateOut->state[2], stateOut->state[3] };
+	I32x4 data[16] = { 0 };
+
+	stateOut->bitCount += Buffer_length(buf) << 3;
+
+	for(U64 i = 0; i < 64 / 4; ++i)
+		data[i] = I32x4_xxxx4(((const U32*)buf.ptr)[i]);
+
+	//This contains all rounds.
+	//Since j and i are constant, it will magically unroll for us.
+	//No need to complicate this any further.
+
+	for (U8 j = 0; j < 4; ++j)
+		for (U8 i = 0; i < 16; ++i) {
+
+			U8 off = (16 - i) & 3;
+			I32x4 a = state[off];
+			I32x4 b = state[(off + 1) & 3];
+			I32x4 c = state[(off + 2) & 3];
+			I32x4 d = state[(off + 3) & 3];
+
+			I32x4 e;
+
+			switch (j) {
+				case 0:		e = I32x4_or (I32x4_and(b, c),	I32x4_nand(b, d));								break;
+				case 1:		e = I32x4_or (I32x4_and(b, d),	I32x4_nand(d, c));								break;
+				case 2:		e = I32x4_xor(b,				I32x4_xor(c, d));								break;
+				default:	e = I32x4_xor(c,				I32x4_or(b, I32x4_nand(d, I32x4_negOne())));	break;
+			}
+
+			e = I32x4_add(e, data[MD5_offsets[j][i]]);
+			e = I32x4_add(e, I32x4_xxxx4(MD5_consts[j][i]));
+			a = I32x4_add(a, e);
+			a = I32x4_rol(a, MD5_rotateLeft[j][i & 3]);
+			state[off] = I32x4_add(a, b);
+		}
+
+	for(U8 i = 0; i < 4; ++i)
+		stateOut->state[i] = I32x4_add(stateOut->state[i], state[i]);
+}
+
+I32x4 Buffer_md5(Buffer buf) {
+
+	//Create state for first perfectly aligned blocks
+
+	MD5State state = (MD5State) {
+		.state = {
+			I32x4_xxxx4(0x67452301),
+			I32x4_xxxx4(0xEFCDAB89),
+			I32x4_xxxx4(0x98BADCFE),
+			I32x4_xxxx4(0x10325476)
+		}
+	};
+
+	U64 lastBlock = Buffer_length(buf) >> 6;
+	U64 blocks = (Buffer_length(buf) + 63) >> 6;
+
+	for(U64 i = 0; i < lastBlock; ++i)
+		MD5State_update(&state, Buffer_createRefConst(buf.ptr + (i << 6), 64));
+
+	//Final block is located with padding of \x80 and \0s filling the remaining space.
+	//After that, we have a U8 bit count.
+
+	U8 tmp[64] = { 0 };
+	U8 off = 0;
+
+	if(lastBlock != blocks) {
+		Buffer bufTmp = Buffer_createRefConst(buf.ptr + (lastBlock << 6), (off += (Buffer_length(buf) & 63)));
+		Buffer_copy(Buffer_createRef(tmp, 64), bufTmp);
+	}
+
+	tmp[off] = (U8)'\x80';
+	Bool flush = off >= 56;
+	off += (off < 56) ? (56 - off) : (120 - off);
+
+	if (flush) {
+		MD5State_update(&state, Buffer_createRefConst(tmp, 64));
+		off &= 63;
+	}
+
+	else state.bitCount += (Buffer_length(buf) & 63) << 3;
+
+	*(U64*)(tmp + off) = state.bitCount;
+	MD5State_update(&state, Buffer_createRefConst(tmp, 64));
+
+	return I32x4_wzyx(I32x4_swapEndianness(I32x4_create4(
+		I32x4_x(state.state[0]),
+		I32x4_x(state.state[1]),
+		I32x4_x(state.state[2]),
+		I32x4_x(state.state[3])
+	)));
+}

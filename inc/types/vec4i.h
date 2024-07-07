@@ -48,6 +48,9 @@ impl I32x4 I32x4_div(I32x4 a, I32x4 b);
 I32x4 I32x4_complement(I32x4 a);
 I32x4 I32x4_negate(I32x4 a);
 
+I32x4 I32x4_rol(I32x4 a, U8 bits);	//Rotate left (<<<)
+I32x4 I32x4_ror(I32x4 a, U8 bits);	//Rotate right (>>>)
+
 I32x4 I32x4_pow2(I32x4 a);
 
 I32x4 I32x4_sign(I32x4 v);			//Zero counts as signed too
@@ -74,6 +77,7 @@ impl I32x4 I32x4_lt(I32x4 a, I32x4 b);
 
 impl I32x4 I32x4_or(I32x4 a, I32x4 b);
 impl I32x4 I32x4_and(I32x4 a, I32x4 b);
+impl I32x4 I32x4_nand(I32x4 a, I32x4 b);
 impl I32x4 I32x4_xor(I32x4 a, I32x4 b);
 
 impl I32x4 I32x4_not(I32x4 a);

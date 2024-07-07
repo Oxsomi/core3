@@ -408,6 +408,8 @@ The operations supported are as follows:
 
   - **or**(b), **and**(b), **xor**(b): |&^ respectively.
   - **not**(): ~self.
+  - **nand**(): a &~ b.
+  - **ror**/**rol**(): Rotate right (>>>) and rotate left (<<<) respectively. Basically a shift while preserving bits that are shifted out.
   - **swapEndianness**(): Swap elements from endianness (e.g. big to little or little to big).
   - lsh: Left shift (<<) and rsh: Right shift (>>):
     - **(lr)sh32**(U8): Shifts N bits left or right.
@@ -597,8 +599,9 @@ BitRef should only be used if there's no other way to manipulate the bits. BitRe
 
 The following functions exist for crytography or hashing purposes:
 
-- **crc32**(): Returns the U32 (CRC32 Castagnoli) hash of the Buffer. This is not for cryptography purposes, but only for quick validation (not really caring much about someone being able to force hash collisions).
-- **sha256**(U32 output[8]): Returns a 256-bit (SHA256) hash of the Buffer. This hash type should be used for big data where it can't be easily bruteforced. As such, passwords are a very bad candidate and should use something like Argon2id instead.
+- **crc32**(): Returns the U32 (CRC32 Castagnoli) hash of the Buffer. **This is not for cryptography purposes, but only for quick validation** (not really caring much about someone being able to force hash collisions). MD5 and CRC32C should be used purely as checksums, as bruteforcing them is way too easy.
+- I32x4 **md5**(): Returns an MD5 hash of the Buffer. **This is not for cryptography purposes, but only for quick validation** (not really caring much about someone being able to force hash collisions). MD5 and CRC32C should be used purely as checksums, as bruteforcing them is way too easy.
+- **sha256**(U32 output[8]): Returns a 256-bit (SHA256) hash of the Buffer. This hash type should be used for big data where it can't be easily bruteforced (such as files). There it'd be cryptographically secure. **Small data such as passwords are a very bad candidate and should use something like Argon2id instead**.
 - **csprng**(): Fill the buffer with bytes from a Cryptographically Secure Psuedo-Random Number Generator (CSPRNG). This is useful for things like key generation, as these need true random rather than something predictable.
 - **Encryption**/**decryption**:
   - Types (EBufferEncryptionType):
