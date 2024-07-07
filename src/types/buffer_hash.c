@@ -258,7 +258,6 @@ void Buffer_sha256Internal(Buffer buf, U32 *output) {
 
 typedef struct MD5State {
 	I32x4 state[4];
-	U64 bitCount;
 } MD5State;
 
 //This is layed out as constants per step per round.
@@ -301,8 +300,6 @@ void MD5State_update(MD5State *stateOut, Buffer buf) {
 
 	I32x4 state[4] = { stateOut->state[0], stateOut->state[1], stateOut->state[2], stateOut->state[3] };
 	I32x4 data[16] = { 0 };
-
-	stateOut->bitCount += Buffer_length(buf) << 3;
 
 	for(U64 i = 0; i < 64 / 4; ++i)
 		data[i] = I32x4_xxxx4(((const U32*)buf.ptr)[i]);
@@ -353,8 +350,9 @@ I32x4 Buffer_md5(Buffer buf) {
 		}
 	};
 
-	U64 lastBlock = Buffer_length(buf) >> 6;
-	U64 blocks = (Buffer_length(buf) + 63) >> 6;
+	U64 bufLen = Buffer_length(buf);
+	U64 lastBlock = bufLen >> 6;
+	U64 blocks = (bufLen + 63) >> 6;
 
 	for(U64 i = 0; i < lastBlock; ++i)
 		MD5State_update(&state, Buffer_createRefConst(buf.ptr + (i << 6), 64));
@@ -366,7 +364,7 @@ I32x4 Buffer_md5(Buffer buf) {
 	U8 off = 0;
 
 	if(lastBlock != blocks) {
-		Buffer bufTmp = Buffer_createRefConst(buf.ptr + (lastBlock << 6), (off += (Buffer_length(buf) & 63)));
+		Buffer bufTmp = Buffer_createRefConst(buf.ptr + (lastBlock << 6), (off += (bufLen & 63)));
 		Buffer_copy(Buffer_createRef(tmp, 64), bufTmp);
 	}
 
@@ -379,9 +377,7 @@ I32x4 Buffer_md5(Buffer buf) {
 		off &= 63;
 	}
 
-	else state.bitCount += (Buffer_length(buf) & 63) << 3;
-
-	*(U64*)(tmp + off) = state.bitCount;
+	*(U64*)(tmp + off) = bufLen << 3;
 	MD5State_update(&state, Buffer_createRefConst(tmp, 64));
 
 	return I32x4_wzyx(I32x4_swapEndianness(I32x4_create4(
