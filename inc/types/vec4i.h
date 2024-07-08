@@ -77,7 +77,7 @@ impl I32x4 I32x4_lt(I32x4 a, I32x4 b);
 
 impl I32x4 I32x4_or(I32x4 a, I32x4 b);
 impl I32x4 I32x4_and(I32x4 a, I32x4 b);
-impl I32x4 I32x4_nand(I32x4 a, I32x4 b);
+impl I32x4 I32x4_andnot(I32x4 a, I32x4 b);		//~a & b
 impl I32x4 I32x4_xor(I32x4 a, I32x4 b);
 
 impl I32x4 I32x4_not(I32x4 a);

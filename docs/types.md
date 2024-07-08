@@ -408,7 +408,7 @@ The operations supported are as follows:
 
   - **or**(b), **and**(b), **xor**(b): |&^ respectively.
   - **not**(): ~self.
-  - **nand**(): a &~ b.
+  - **andnot**(): (~a) & b. **Note: This is not at all the same as a nand!**
   - **ror**/**rol**(): Rotate right (>>>) and rotate left (<<<) respectively. Basically a shift while preserving bits that are shifted out.
   - **swapEndianness**(): Swap elements from endianness (e.g. big to little or little to big).
   - lsh: Left shift (<<) and rsh: Right shift (>>):

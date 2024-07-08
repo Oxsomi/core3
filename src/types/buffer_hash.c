@@ -23,6 +23,7 @@
 #include "types/buffer.h"
 #include "types/vec.h"
 #include "types/platform_types.h"
+#include "types/type_cast.h"
 
 //SHA state
 
@@ -51,9 +52,14 @@ static const U32 SHA256_K[64] = {
 
 //Arm7's ror instruction aka Java's >>>; shift that maintains right side of the bits into left side
 
-U32 ror(const U32 v, U32 amount) {
+U32 U32_ror(const U32 v, U32 amount) {
 	amount &= 31;								//Avoid undefined behavior (<< 32 is undefined)
 	return amount ? ((v >> amount) | (v << (32 - amount))) : v;
+}
+
+U32 U32_rol(const U32 v, U32 amount) {
+	amount &= 31;								//Avoid undefined behavior (<< 32 is undefined)
+	return amount ? ((v << amount) | (v >> (32 - amount))) : v;
 }
 
 void Buffer_sha256Internal(Buffer buf, U32 *output) {
@@ -186,8 +192,8 @@ void Buffer_sha256Internal(Buffer buf, U32 *output) {
 
 					const U32 wj1 = w[(j + 1) & 0xF], wj14 = w[(j + 14) & 0xF];
 
-					const U32 s0 = ror(wj1, 7) ^ ror(wj1, 18) ^ (wj1 >> 3);
-					const U32 s1 = ror(wj14, 17) ^ ror(wj14, 19) ^ (wj14 >> 10);
+					const U32 s0 = U32_ror(wj1, 7) ^ U32_ror(wj1, 18) ^ (wj1 >> 3);
+					const U32 s1 = U32_ror(wj14, 17) ^ U32_ror(wj14, 19) ^ (wj14 >> 10);
 
 					w[j] += s0 + w[(j + 9) & 0xF] + s1;
 				}
@@ -198,7 +204,7 @@ void Buffer_sha256Internal(Buffer buf, U32 *output) {
 				const U32 ah5 = (U32) I32x4_y(state[1]);
 				const U32 ah6 = (U32) I32x4_z(state[1]);
 
-				const U32 s1 = ror(ah4, 6) ^ ror(ah4, 11) ^ ror(ah4, 25);
+				const U32 s1 = U32_ror(ah4, 6) ^ U32_ror(ah4, 11) ^ U32_ror(ah4, 25);
 				const U32 ch = (ah4 & ah5) ^ (~ah4 & ah6);
 
 				//Calculate temp1 and temp2
@@ -208,7 +214,7 @@ void Buffer_sha256Internal(Buffer buf, U32 *output) {
 				const U32 ah2 = (U32) I32x4_z(state[0]);
 
 				const U32 temp1 = (U32) I32x4_w(state[1]) + s1 + ch + SHA256_K[(i << 4) | j] + w[j];
-				const U32 s0 = ror(ah0, 2) ^ ror(ah0, 13) ^ ror(ah0, 22);
+				const U32 s0 = U32_ror(ah0, 2) ^ U32_ror(ah0, 13) ^ U32_ror(ah0, 22);
 				const U32 maj = (ah0 & ah1) ^ (ah0 & ah2) ^ (ah1 & ah2);
 				const U32 temp2 = s0 + maj;
 
@@ -249,16 +255,13 @@ void Buffer_sha256Internal(Buffer buf, U32 *output) {
 }
 
 //Ported from https://github.com/krisprice/simd_md5/blob/master/simd_md5/md5_sse.c#L9
-//TODO: This is probably the worst "SIMD" implementation I've ever seen.
-//		It doesn't really do SIMD, it pretends it does by putting it into registers.
-//		It should be trivial to change to real SIMD by doing 16 bytes instead of 4 bytes (.xxxx) per instruction.
-//		This would quadruple performance.
-//		Implemented this only as a starting point, so that they're using SIMD instructions already.
-//		Which should be a lot easier to convert to full perf.
-
-typedef struct MD5State {
-	I32x4 state[4];
-} MD5State;
+//But removed SIMD, since it was incredibly (and I can't stress this enough!) badly done. Found locally that:
+//	Their SIMD version does 1GiB in 52s (Debug) and 22s (Release)
+//	My non-SIMD version does 1GiB in 12s (Debug) and 4s (Release).
+//	It is clear that due to the data dependencies in MD5, it's just not a good fit for SSE.
+//	Moving to and from SIMD registers and wasting cycles computing data that is duplicated makes no sense.
+//	The only way is if we compute multiple MD5 hashes of different data at the same time.
+//	Or if we could split up in blocks (impossible with MD5).
 
 //This is layed out as constants per step per round.
 //As each step per round has their different constants.
@@ -281,6 +284,12 @@ static const U32 MD5_consts[][16] = {
 		0x6FA87E4F, 0xFE2CE6E0, 0xA3014314, 0x4E0811A1, 0xF7537E82, 0xBD3AF235, 0x2AD7D2BB, 0xEB86D391
 	}
 };
+static const U8 MD5_rotateLeft[][4] = {
+	{  7, 12, 17, 22 },
+	{  5,  9, 14, 20 },
+	{  4, 11, 16, 23 },
+	{  6, 10, 15, 21 }
+};
 
 static const U8 MD5_offsets[][16] = {
 	{ 0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15 },		//i
@@ -289,66 +298,54 @@ static const U8 MD5_offsets[][16] = {
 	{ 0,  7, 14,  5, 12,  3, 10,  1,  8, 15,  6, 13,  4, 11,  2,  9 }		//(0 + 7 * i) & 15
 };
 
-static const U8 MD5_rotateLeft[][4] = {
-	{  7, 12, 17, 22 },
-	{  5,  9, 14, 20 },
-	{  4, 11, 16, 23 },
-	{  6, 10, 15, 21 }
-};
+typedef struct MD5State {
+	U32 v[4];
+} MD5State;
 
 void MD5State_update(MD5State *stateOut, Buffer buf) {
 
-	I32x4 state[4] = { stateOut->state[0], stateOut->state[1], stateOut->state[2], stateOut->state[3] };
-	I32x4 data[16] = { 0 };
-
-	for(U64 i = 0; i < 64 / 4; ++i)
-		data[i] = I32x4_xxxx4(((const U32*)buf.ptr)[i]);
+	MD5State state = *stateOut;
+	const U32 *data = (const U32*) buf.ptr;
 
 	//This contains all rounds.
 	//Since j and i are constant, it will magically unroll for us.
 	//No need to complicate this any further.
 
-	for (U8 j = 0; j < 4; ++j)
+	for (U8 j = 0; j < 4; ++j) {
+
 		for (U8 i = 0; i < 16; ++i) {
 
-			U8 off = (16 - i) & 3;
-			I32x4 a = state[off];
-			I32x4 b = state[(off + 1) & 3];
-			I32x4 c = state[(off + 2) & 3];
-			I32x4 d = state[(off + 3) & 3];
+			U32 f = data[MD5_offsets[j][i]] + MD5_consts[j][i];
 
-			I32x4 e;
+			U32 a = state.v[(16 - i) & 3];
+			U32 b = state.v[(17 - i) & 3];
+			U32 c = state.v[(18 - i) & 3];
+			U32 d = state.v[(19 - i) & 3];
+
+			U32 e;
 
 			switch (j) {
-				case 0:		e = I32x4_or (I32x4_and(b, c),	I32x4_nand(b, d));								break;
-				case 1:		e = I32x4_or (I32x4_and(b, d),	I32x4_nand(d, c));								break;
-				case 2:		e = I32x4_xor(b,				I32x4_xor(c, d));								break;
-				default:	e = I32x4_xor(c,				I32x4_or(b, I32x4_nand(d, I32x4_negOne())));	break;
+				case 0:		e = (b & c) | ((~b) & d);	break;
+				case 1:		e = (b & d) | ((~d) & c);	break;
+				case 2:		e = b ^ c ^ d;				break;
+				default:	e = c ^ (b | (~d));			break;
 			}
 
-			e = I32x4_add(e, data[MD5_offsets[j][i]]);
-			e = I32x4_add(e, I32x4_xxxx4(MD5_consts[j][i]));
-			a = I32x4_add(a, e);
-			a = I32x4_rol(a, MD5_rotateLeft[j][i & 3]);
-			state[off] = I32x4_add(a, b);
+			a = a + e + f;
+			a = U32_rol(a, MD5_rotateLeft[j][i & 3]);
+			state.v[(16 - i) & 3] = a + b;
 		}
+	}
 
 	for(U8 i = 0; i < 4; ++i)
-		stateOut->state[i] = I32x4_add(stateOut->state[i], state[i]);
+		stateOut->v[i] += state.v[i];
 }
 
 I32x4 Buffer_md5(Buffer buf) {
 
-	//Create state for first perfectly aligned blocks
+	//Create state for first perfectly filled blocks
 
-	MD5State state = (MD5State) {
-		.state = {
-			I32x4_xxxx4(0x67452301),
-			I32x4_xxxx4(0xEFCDAB89),
-			I32x4_xxxx4(0x98BADCFE),
-			I32x4_xxxx4(0x10325476)
-		}
-	};
+	MD5State state = (MD5State) { .v = { 0x67452301, 0xEFCDAB89, 0x98BADCFE, 0x10325476 } };
 
 	U64 bufLen = Buffer_length(buf);
 	U64 lastBlock = bufLen >> 6;
@@ -380,10 +377,9 @@ I32x4 Buffer_md5(Buffer buf) {
 	*(U64*)(tmp + off) = bufLen << 3;
 	MD5State_update(&state, Buffer_createRefConst(tmp, 64));
 
-	return I32x4_wzyx(I32x4_swapEndianness(I32x4_create4(
-		I32x4_x(state.state[0]),
-		I32x4_x(state.state[1]),
-		I32x4_x(state.state[2]),
-		I32x4_x(state.state[3])
-	)));
+	for(U8 i = 0; i < 4; ++i)
+		state.v[i] = U32_swapEndianness(state.v[i]);
+
+	const void *v = state.v;
+	return I32x4_load4((const I32*) v);
 }
