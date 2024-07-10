@@ -84,6 +84,7 @@ Bool SHFile_addIncludex(SHFile *shFile, SHInclude *include, Error *e_rr);		//Mov
 
 Bool SHFile_writex(SHFile shFile, Buffer *result, Error *e_rr);
 Bool SHFile_readx(Buffer file, Bool isSubFile, SHFile *shFile, Error *e_rr);
+Bool SHFile_combinex(SHFile a, SHFile b, SHFile *combined, Error *e_rr);
 
 void SHEntry_printx(SHEntry entry);
 void SHEntryRuntime_printx(SHEntryRuntime entry);

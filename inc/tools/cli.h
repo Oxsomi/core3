@@ -36,6 +36,7 @@ Error CLI_convertFromCA(ParsedArgs args, CharString input, FileInfo inputInfo, C
 
 Bool CLI_convertTo(ParsedArgs args);
 Bool CLI_convertFrom(ParsedArgs args);
+Bool CLI_fileCombine(ParsedArgs args);
 
 Bool CLI_encryptDo(ParsedArgs args);
 Bool CLI_encryptUndo(ParsedArgs args);

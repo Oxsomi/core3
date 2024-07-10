@@ -73,7 +73,8 @@ const C8 *EOperationHasParameter_names[] = {
 	"-compile-output",
 	"-threads",
 	"-compile-type",
-	"-include-dir"
+	"-include-dir",
+	"-input2"
 };
 
 const C8 *EOperationHasParameter_descriptions[] = {
@@ -91,7 +92,8 @@ const C8 *EOperationHasParameter_descriptions[] = {
 	"Shader output mode (spv, dxil or all; also allows multiple such as dxil,spv)",
 	"Thread count (0 = all, 50% = 50% of all threads, 4 = 4 threads)",
 	"Shader compile mode (preprocess, includes, reflect, compile)",
-	"Set extra include path"
+	"Set extra include path",
+	"Input file to merge with"
 };
 
 //Flags
@@ -209,6 +211,15 @@ void Operations_init() {
 		.supportedCategories = { EOperationCategory_File }
 	};
 
+	Format_values[EFormat_oiSH] = (Format) {
+		.name = "oiSH",
+		.desc = "Oxsomi SHader; compiled shader binaries by entrypoint and metadata.",
+		.operationFlags = EOperationFlags_None,
+		.requiredParameters = EOperationHasParameter_Input | EOperationHasParameter_Output | EOperationHasParameter_Input2,
+		.flags = EFormatFlags_SupportFiles,
+		.supportedCategories = { EOperationCategory_File }
+	};
+
 	Operation_values[EOperation_FileTo] = (Operation) {
 		.category = EOperationCategory_File,
 		.name = "to",
@@ -221,6 +232,13 @@ void Operations_init() {
 		.name = "from",
 		.desc = "Converting to a non native file format from a native file format.",
 		.func = &CLI_convertFrom
+	};
+
+	Operation_values[EOperation_FileCombine] = (Operation) {
+		.category = EOperationCategory_File,
+		.name = "combine",
+		.desc = "Combine multiple files of one type into one.",
+		.func = &CLI_fileCombine
 	};
 
 	//Encryption

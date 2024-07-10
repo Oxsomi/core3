@@ -48,7 +48,7 @@ Is just shorthand for `OxC3 rand char -chars <numberKeyset>`. If --hex is used, 
 
 Allows to output random bytes to the binary. Alias to `OxC3 rand key` but to a binary file. -length can be used to tweak number of bytes. -count will added multiple generations appended in the same file. Without -output it will output a hexdump.
 
-## Convert
+## File
 
 `OxC3 file` is the category that is used to convert between file formats. The keywords `from` and `to` can be used to convert between native and non native files. For example:
 
@@ -84,6 +84,7 @@ The following parameters are commonly used in any format:
   - Specifies the file format that has to be converted from / to. It doesn't detect this from file because this allows you to supply .bin files or other custom extensions.
 - `-input <inputPath>`: Input file/folder (relative)
   - Specifies the input path. This is relative to the current working directory. You can provide an absolute path, but this will have to be located inside the current working directory. Otherwise you'll get an unauthorized error. Depending on the format, this can be either a file or a folder. Which will have to be one of the supported types. This format is detected based on the magic number or file extension (if magic number isn't applicable).
+- `-input2 <inputPath>`: Second input; useful when only two input arguments are needed.
 - `-output <outputPath`>: Output file/folder (relative)
   - See -input.
 - `-aes <key>`: Encryption key (32-byte hex)
@@ -120,7 +121,25 @@ These are left out by default, because often, file timestamps aren't very import
 
 `OxC3 file to -format oiCA -input myFolder -output myFolder.oiCA --full-date`
 
-## Packaging a project
+### Combine
+
+`OxC3 file combine -format oiSH -input a.oiSH -input2 b.oiSH -output c.oiSH` can be used to combine two oiXX files into one if supported.
+
+This is only supported if it can logically be merged:
+
+- For oiSH, this means that it has to be compiled from the same source(s), so matching relative includes should have the same hash, the source hash needs to be the same and the compiler settings. This allows combining two lean files into a single one.
+- **TODO**: For oiCA, this would mean combining two archives into one. This can only succeed if the two have similar settings and if the archive files don't overlap (archiveA/a.txt and archiveB/a.txt would conflict, unless the crc is the same).
+- **TODO**: For oiDL, this simply means the second entries are appended to the other, provided the two oiDL settings are the same (UTF8, ascii, data).
+
+### TODO: Split
+
+`OxC3 file split -format oiSH -input combined.oiSH -output lean.spv.oiSH -compile-output spv` can be used to split the bulky oiSH into a single one.
+
+- oiSH is supported with the `-compile-output` argument to determine which shader output(s) are included for final write.
+- oiDL allows specifying `entry` and `offset` to remove everything except a section.
+- oiCA allows specifying a folder to extract.
+
+## TODO: Packaging a project
 
 `OxC3 package -input myFolder -output myFolder.oiCA` is used to package a folder into Oxsomi formats. This means that it will standardize all files it detects and converts them to our standard file. For example a .fbx file could be automatically converted to a scene and/or model file, a texture could be converted to a standardized image file, etc. This is basically a baking process to ensure all shaders, textures, models and other resources are the correct format for target architectures. -aes argument is allowed to encrypt the modules.
 
@@ -230,7 +249,9 @@ Note: The difference between reflect and symbols is that reflect maintains the d
 
 ### Compile
 
-### Built-in defines
+Compile mode (default) will turn the text into shaders ready for consumption by a graphics API. This could be DXIL, SPIRV or even text representations (MSL, WGSL or even GLSL in the future). These are then stored in an oiSH file, which contains information about the uniforms, inputs/outputs, basic reflection info and entrypoint binary/name as well as other metadata. These oiSH files can be either bulky (works for every backend) or lean (works only for the target(s)).
+
+#### Built-in defines
 
 The following defines are set by OxC3 during compilation:
 
@@ -239,14 +260,14 @@ The following defines are set by OxC3 during compilation:
 - `__OXC3_VERSION` same layout as `OXC3_MAKE_VERSION` aka (major << 22) | (minor << 12) | patch.
 - `__OXC3_EXT_<X>` foreach extension that's enabled by the current compilation. For example: `__OXC3_EXT_F16`, `__OXC3_EXT_F64`, `__OXC3_EXT_RAYQUERY`, etc.
 
-### Semantics
+#### Semantics
 
 Semantics for input(s) and output(s) for shaders get parsed and have the following restrictions:
 
 - SV_ is reserved for HLSL semantic values.
 - Other semantic values must follow TEXCOORD[n], seeing as SPIRV has no concept of semantics. These can be bound through Vulkan as binding n or in D3D12 as TEXCOORD with id n. Allowing semantics would cause shaders that can't be compiled for SPIRV or any languages enabled by SPIRV (such as MSL or WGSL). As such, semantics for input/output layouts are completely incompatible with the OxC3 shader compiler.
 
-### Entrypoint annotations
+#### Entrypoint annotations
 
 Each entrypoint can have annotations on top of the ones used by DXC. The ones introduced in OxC3's pre-processor are the following:
 

@@ -52,6 +52,8 @@ typedef enum EOperationHasParameter {
 	EOperationHasParameter_ShaderCompileModeShift,
 	EOperationHasParameter_IncludeDirShift,
 
+	EOperationHasParameter_Input2Shift,				//If two inputs are specified, this specifies input2
+
 	EOperationHasParameter_CountEnum,			//How many enums there are
 
 	EOperationHasParameter_Start				= EOperationHasParameter_FileFormatShift,
@@ -79,7 +81,9 @@ typedef enum EOperationHasParameter {
 	EOperationHasParameter_ShaderOutputMode		= 1 << EOperationHasParameter_ShaderOutputModeShift,
 	EOperationHasParameter_ThreadCount			= 1 << EOperationHasParameter_ThreadCountShift,
 	EOperationHasParameter_ShaderCompileMode	= 1 << EOperationHasParameter_ShaderCompileModeShift,
-	EOperationHasParameter_IncludeDir			= 1 << EOperationHasParameter_IncludeDirShift
+	EOperationHasParameter_IncludeDir			= 1 << EOperationHasParameter_IncludeDirShift,
+
+	EOperationHasParameter_Input2				= 1 << EOperationHasParameter_Input2Shift,
 
 } EOperationHasParameter;
 
@@ -156,6 +160,7 @@ typedef enum EOperation {
 
 	EOperation_FileTo,
 	EOperation_FileFrom,
+	EOperation_FileCombine,
 
 	EOperation_HashFile,
 	EOperation_HashString,
@@ -232,6 +237,7 @@ typedef enum EFormat {
 
 	EFormat_oiCA,
 	EFormat_oiDL,
+	EFormat_oiSH,
 
 	EFormat_SHA256,
 	EFormat_CRC32C,

@@ -259,6 +259,10 @@ Bool SHFile_readx(Buffer file, Bool isSubFile, SHFile *shFile, Error *e_rr) {
 	return SHFile_read(file, isSubFile, Platform_instance.alloc, shFile, e_rr);
 }
 
+Bool SHFile_combinex(SHFile a, SHFile b, SHFile *combined, Error *e_rr) {
+	return SHFile_combine(a, b, Platform_instance.alloc, combined, e_rr);
+}
+
 void SHEntry_printx(SHEntry entry) { SHEntry_print(entry, Platform_instance.alloc); }
 void SHEntryRuntime_printx(SHEntryRuntime entry) { SHEntryRuntime_print(entry, Platform_instance.alloc); }
 void SHBinaryInfo_printx(SHBinaryInfo binary) { SHBinaryInfo_print(binary, Platform_instance.alloc); }

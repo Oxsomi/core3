@@ -1151,7 +1151,7 @@ Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, E
 
 	//Create SHFile container
 
-	ESHSettingsFlags flags = ESHSettingsFlags_HideMagicNumber;
+	ESHSettingsFlags flags = isSubFile ? ESHSettingsFlags_HideMagicNumber : 0;
 
 	if(dlFile.settings.dataType == EDLDataType_UTF8)
 		flags |= ESHSettingsFlags_IsUTF8;
@@ -2123,8 +2123,15 @@ Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error
 		gotoIfError2(clean, ListU16_createCopy(a.entries.ptr[i].binaryIds, alloc, &tmpBins))
 		ListU16 binaryIdsb = b.entries.ptr[j].binaryIds;
 
-		for(U64 k = 0; k < binaryIdsb.length; ++k)
-			gotoIfError2(clean, ListU16_pushBack(&tmpBins, remappedBinaries.ptr[binaryIdsb.ptr[k]], alloc))
+		for(U64 k = 0; k < binaryIdsb.length; ++k) {
+
+			U16 binaryId = remappedBinaries.ptr[binaryIdsb.ptr[k]];
+
+			if(ListU16_contains(tmpBins, binaryId, 0, NULL))
+				continue;
+
+			gotoIfError2(clean, ListU16_pushBack(&tmpBins, binaryId, alloc))
+		}
 
 		entry.binaryIds = tmpBins;
 		gotoIfError3(clean, SHFile_addEntrypoint(combined, &entry, alloc, e_rr))
