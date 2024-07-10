@@ -117,6 +117,8 @@ class dxc(ConanFile):
 			
 			copy(self, "*.lib", "lib/Debug", "../../p/lib")
 			copy(self, "*.lib", "Debug/lib", "../../p/lib")
+			copy(self, "*.pdb", "lib/Debug", "../../p/lib")
+			copy(self, "*.pdb", "Debug/lib", "../../p/lib")
 			
 			directory = "../../p/lib"
 
@@ -131,6 +133,8 @@ class dxc(ConanFile):
 
 			copy(self, "*.lib", "lib/Release", "../../p/lib")
 			copy(self, "*.lib", "Release/lib", "../../p/lib")
+			copy(self, "*.pdb", "lib/Release", "../../p/lib")
+			copy(self, "*.pdb", "Release/lib", "../../p/lib")
 
 			# Headers: We use include/dxcompiler to avoid vulkan sdk interfering
 
