@@ -638,7 +638,7 @@ int main() {
 			gotoIfError(clean, Error_invalidOperation(0, "MD5dxc failed"))
 
 		tmpData = Buffer_createRefConst(buf2, sizeof(buf2));
-		dstHash = I32x4_create4(3739765114, 3689508432, 2832704775, 3632933760);
+		dstHash = I32x4_create4((I32)0xDEE8497A, (I32)0xDBE96E50, (I32)0xA8D7A507, (I32)0xD88A2B80);
 		hash = Buffer_md5dxc(tmpData);
 
 		if(I32x4_neq4(hash, dstHash))
