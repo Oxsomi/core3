@@ -121,6 +121,7 @@ Error GenericList_createReverse(GenericList list, Allocator allocator, GenericLi
 
 Error GenericList_createRef(void *ptr, U64 length, U64 stride, GenericList *result);
 Error GenericList_createRefConst(const void *ptr, U64 length, U64 stride, GenericList *result);
+GenericList GenericList_createRefFromList(GenericList list);
 
 Error GenericList_set(GenericList list, U64 index, Buffer buf);
 Error GenericList_get(GenericList list, U64 index, Buffer *result);

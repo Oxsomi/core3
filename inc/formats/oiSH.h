@@ -178,6 +178,8 @@ typedef struct SHEntry {
 
 	ListU16 binaryIds;		//Reference SHBinaryInfo
 
+	//Don't change order, compares use this (U32, U64[3])
+
 	U8 stage;				//ESHPipelineStage
 	U8 padding;
 	U16 waveSize;			//U4[3] recommendedSize, minSize, maxSize: each U4 is in range [0, 9]. 0 = 0, 1 = 1, 3 = 8, etc.
@@ -244,6 +246,8 @@ typedef struct SHBinaryIdentifier {
 
 	CharString entrypoint;		//If it's not a lib, this defines the entrypoint to compile with
 	ListCharString uniforms;	//[uniformName, uniformValue][]
+
+	//Don't change order, is used for compare (U64)
 
 	ESHExtension extensions;
 	U16 shaderVersion;			//U8 maj, minor
@@ -334,6 +338,8 @@ Bool SHFile_addInclude(SHFile *shFile, SHInclude *include, Allocator alloc, Erro
 
 Bool SHFile_write(SHFile shFile, Allocator alloc, Buffer *result, Error *e_rr);
 Bool SHFile_read(Buffer file, Bool isSubFile, Allocator alloc, SHFile *shFile, Error *e_rr);
+
+Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error *e_rr);
 
 //File headers
 

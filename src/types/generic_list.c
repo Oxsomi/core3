@@ -367,6 +367,11 @@ Error GenericList_createRefConst(const void *ptr, U64 length, U64 stride, Generi
 	return Error_none();
 }
 
+GenericList GenericList_createRefFromList(GenericList list) {
+	list.capacityAndRefInfo = U64_MAX;
+	return list;
+}
+
 Error GenericList_set(GenericList list, U64 index, Buffer buf) {
 
 	if(GenericList_isConstRef(list))

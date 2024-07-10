@@ -139,6 +139,11 @@ Allocator alloc = (Allocator) { 0 };																					\
 	TListWrapCtor(Name, Error err = GenericList_createRefConst(ptr, length, sizeof(Name##_Type), &list));				\
 }																														\
 																														\
+Name Name##_createRefFromList(Name t) {																					\
+	t.capacityAndRefInfo = U64_MAX;																						\
+	return t;																											\
+}																														\
+																														\
 Error Name##_set(Name l, U64 index, Name##_Type t) {																	\
 	Buffer buf = Buffer_createRefConst((const U8*)&t, sizeof(Name##_Type));												\
 	return GenericList_set(Name##_toList(l), index, buf);																\

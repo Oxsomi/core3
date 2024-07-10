@@ -1926,6 +1926,250 @@ void SHBinaryInfo_print(SHBinaryInfo binary, Allocator alloc) {
 			Log_debugLn(alloc, "\t\t%s: %"PRIu64, ESHBinaryType_names[i], Buffer_length(binary.binaries[i]));
 }
 
+//Combining multiple oiSH files into one
+
+Bool SHFile_combine(SHFile a, SHFile b, Allocator alloc, SHFile *combined, Error *e_rr) {
+
+	//Flags can only merge UTF8 safely, compilerVersion, sourceHash and HideMagicNumber have to match.
+
+	Bool s_uccess = true;
+	Bool isUTF8 = (a.flags & ESHSettingsFlags_IsUTF8) || (b.flags & ESHSettingsFlags_IsUTF8);
+	ListU16 remappedBinaries = (ListU16) { 0 };
+	ListU16 tmpBins = (ListU16) { 0 };
+
+	if((a.flags & ESHSettingsFlags_HideMagicNumber) != (b.flags & ESHSettingsFlags_HideMagicNumber))
+		retError(clean, Error_invalidState(0, "SHFile_combine()::a and b have different flags: HideMagicNumber"))
+
+	if(a.compilerVersion != b.compilerVersion || a.sourceHash != b.sourceHash)
+		retError(clean, Error_invalidState(0, "SHFile_combine()::a and b have mismatching sourceHash or compilerVersion"))
+
+	gotoIfError3(clean, SHFile_create(
+		a.flags | (isUTF8 ? ESHSettingsFlags_IsUTF8 : 0),
+		a.compilerVersion,
+		a.sourceHash,
+		alloc,
+		combined,
+		e_rr
+	))
+
+	gotoIfError2(clean, ListSHInclude_reserve(&combined->includes, a.includes.length + b.includes.length, alloc))
+	gotoIfError2(clean, ListSHBinaryInfo_reserve(&combined->binaries, a.binaries.length + b.binaries.length, alloc))
+	gotoIfError2(clean, ListSHEntry_reserve(&combined->entries, a.entries.length + b.entries.length, alloc))
+
+	//Includes can be safely combined
+
+	for(U64 i = 0; i < a.includes.length + b.includes.length; ++i) {
+
+		SHInclude src = i < a.includes.length ? a.includes.ptr[i] : b.includes.ptr[i - a.includes.length];
+
+		SHInclude include = (SHInclude) {
+			.relativePath = CharString_createRefStrConst(src.relativePath),
+			.crc32c = src.crc32c
+		};
+
+		gotoIfError3(clean, SHFile_addInclude(combined, &include, alloc, e_rr))
+	}
+
+	//Try to merge binaries if possible
+
+	gotoIfError2(clean, ListU16_resize(&remappedBinaries, b.binaries.length, alloc))
+
+	for (U64 i = 0; i < a.binaries.length; ++i) {
+
+		U64 j = 0;
+
+		for (; j < b.binaries.length; ++j)
+			if(SHBinaryIdentifier_equals(a.binaries.ptr[i].identifier, b.binaries.ptr[j].identifier))
+				break;
+
+		SHBinaryInfo ai = a.binaries.ptr[i];
+
+		SHBinaryInfo c = (SHBinaryInfo) {
+			.identifier = (SHBinaryIdentifier) {
+				.uniforms = ListCharString_createRefFromList(ai.identifier.uniforms),
+				.entrypoint = CharString_createRefStrConst(ai.identifier.entrypoint)
+			},
+			.vendorMask = ai.vendorMask,
+			.hasShaderAnnotation = ai.hasShaderAnnotation
+		};
+
+		const void *extPtrSrc = &ai.identifier.extensions;
+		void *extPtrDst = &c.identifier.extensions;
+
+		*(U64*)extPtrDst = *(const U64*)extPtrSrc;
+
+		//Couldn't find a match, can add the easy way
+		//TODO: Old binaries to new binary id
+
+		if (j == b.binaries.length)
+			for(U8 k = 0; k < ESHBinaryType_Count; ++k)
+				c.binaries[k] = Buffer_createRefFromBuffer(ai.binaries[k], true);
+
+		//Otherwise validate and merge binaries
+
+		else {
+		
+			SHBinaryInfo bi = b.binaries.ptr[j];
+
+			if(ai.vendorMask != bi.vendorMask || ai.hasShaderAnnotation != bi.hasShaderAnnotation)
+				retError(clean, Error_invalidState(
+					(U32) i, "SHFile_combine()::a and b have binary with mismatching vendorMask or hasShaderAnnotation"
+				))
+
+			for(U8 k = 0; k < ESHBinaryType_Count; ++k)
+
+				if(Buffer_length(ai.binaries[k]) && Buffer_length(bi.binaries[k])) {
+					if(Buffer_neq(ai.binaries[k], bi.binaries[k]))
+						retError(clean, Error_invalidState(
+							(U32) i,
+							"SHFile_combine()::a and b have binary of same ESHBinaryType that didn't have the same contents"
+						))
+				}
+
+				else if(Buffer_length(ai.binaries[k]))
+					c.binaries[k] = Buffer_createRefFromBuffer(ai.binaries[k], true);
+
+				else if(Buffer_length(bi.binaries[k]))
+					c.binaries[k] = Buffer_createRefFromBuffer(bi.binaries[k], true);
+
+			//Ensure the binary can still easily be found
+
+			remappedBinaries.ptrNonConst[j] = (U16) i;
+		}
+
+		gotoIfError3(clean, SHFile_addBinaries(combined, &c, alloc, e_rr))
+	}
+
+	//Insert binaries from b that weren't found in a
+
+	for (U64 i = 0; i < b.binaries.length; ++i) {
+
+		U64 j = 0;
+
+		for (; j < a.binaries.length; ++j)
+			if(SHBinaryIdentifier_equals(b.binaries.ptr[i].identifier, a.binaries.ptr[j].identifier))
+				break;
+
+		if(j != a.binaries.length)
+			continue;
+			
+		SHBinaryInfo bi = b.binaries.ptr[i];
+
+		SHBinaryInfo c = (SHBinaryInfo) {
+			.identifier = (SHBinaryIdentifier) {
+				.uniforms = ListCharString_createRefFromList(bi.identifier.uniforms),
+				.entrypoint = CharString_createRefStrConst(bi.identifier.entrypoint)
+			},
+			.vendorMask = bi.vendorMask,
+			.hasShaderAnnotation = bi.hasShaderAnnotation
+		};
+
+		const void *extPtrSrc = &bi.identifier.extensions;
+		void *extPtrDst = &c.identifier.extensions;
+
+		*(U64*)extPtrDst = *(const U64*)extPtrSrc;
+
+		gotoIfError3(clean, SHFile_addBinaries(combined, &c, alloc, e_rr))
+		remappedBinaries.ptrNonConst[i] = (U16) (combined->binaries.length - 1);
+	}
+
+	//Merge and remap entries (remappedBinaries for b, no change for a)
+
+	for (U64 i = 0; i < a.entries.length; ++i) {
+
+		SHEntry entry = a.entries.ptr[i];
+		entry.name = CharString_createRefStrConst(entry.name);
+		entry.binaryIds = (ListU16) { 0 };
+		
+		U64 j = 0;
+
+		for (; j < b.entries.length; ++j)
+			if(CharString_equalsStringSensitive(a.entries.ptr[i].name, b.entries.ptr[j].name))
+				break;
+
+		//No duplicate, we can accept a
+
+		if (j == b.entries.length) {
+			entry.binaryIds = ListU16_createRefFromList(a.entries.ptr[i].binaryIds);
+			gotoIfError3(clean, SHFile_addEntrypoint(combined, &entry, alloc, e_rr))
+			continue;
+		}
+
+		//Make sure the two have identical data
+
+		const void *cmpA = &a.entries.ptr[i].stage;
+		const void *cmpB = &b.entries.ptr[j].stage;
+
+		const U32 *cmpA2 = (const U32*)cmpA;
+		const U32 *cmpB2 = (const U32*)cmpB;
+
+		if(*cmpA2 != *cmpB2)
+			retError(clean, Error_invalidState(
+				(U32) i, "SHFile_combine()::a and b have an combined entry with mismatching values"
+			))
+
+		cmpA = ++cmpA2;
+		cmpB = ++cmpB2;
+
+		for(U64 k = 0; k < 3; ++k)
+			if(((const U64*)cmpA)[k] != ((const U64*)cmpB)[k])
+				retError(clean, Error_invalidState(
+					(U32) i, "SHFile_combine()::a and b have an combined entry with mismatching values"
+				))
+
+		//Combine the binaryIds.
+		//a stays unmodified, but b needs to be remapped first
+
+		gotoIfError2(clean, ListU16_createCopy(a.entries.ptr[i].binaryIds, alloc, &tmpBins))
+		ListU16 binaryIdsb = b.entries.ptr[j].binaryIds;
+
+		for(U64 k = 0; k < binaryIdsb.length; ++k)
+			gotoIfError2(clean, ListU16_pushBack(&tmpBins, remappedBinaries.ptr[binaryIdsb.ptr[k]], alloc))
+
+		entry.binaryIds = tmpBins;
+		gotoIfError3(clean, SHFile_addEntrypoint(combined, &entry, alloc, e_rr))
+		tmpBins = (ListU16) { 0 };
+	}
+
+	//Add b binaries that don't exist, these need some remapping
+
+	for (U64 i = 0; i < b.entries.length; ++i) {
+
+		SHEntry entry = b.entries.ptr[i];
+		entry.name = CharString_createRefStrConst(entry.name);
+		entry.binaryIds = (ListU16) { 0 };
+
+		U64 j = 0;
+
+		for (; j < a.entries.length; ++j)
+			if(CharString_equalsStringSensitive(b.entries.ptr[i].name, a.entries.ptr[j].name))
+				break;
+
+		if(j != a.entries.length)		//Skip already handled ones
+			continue;
+
+		ListU16 binaryIdsb = b.entries.ptr[i].binaryIds;
+		gotoIfError2(clean, ListU16_resize(&tmpBins, binaryIdsb.length, alloc))
+
+		for(U64 k = 0; k < binaryIdsb.length; ++k)
+			tmpBins.ptrNonConst[k] = remappedBinaries.ptr[binaryIdsb.ptr[k]];
+
+		entry.binaryIds = tmpBins;
+		gotoIfError3(clean, SHFile_addEntrypoint(combined, &entry, alloc, e_rr))
+		tmpBins = (ListU16) { 0 };
+	}
+
+clean:
+
+	ListU16_free(&remappedBinaries, alloc);
+	ListU16_free(&tmpBins, alloc);
+
+	if(!s_uccess && combined)
+		SHFile_free(combined, alloc);
+
+	return s_uccess;
+}
+
 //Free functions
 
 void SHBinaryIdentifier_free(SHBinaryIdentifier *identifier, Allocator alloc) {

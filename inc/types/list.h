@@ -85,6 +85,7 @@ Error Name##_createSubsetReverse(Name l, U64 index, U64 length, Allocator alloc,
 Error Name##_createReverse(Name l, Allocator alloc, Name *result);										\
 Error Name##_createRef(Name##_Type *ptr, U64 length, Name *result);										\
 Error Name##_createRefConst(const Name##_Type *ptr, U64 length, Name *result);							\
+Name Name##_createRefFromList(Name t);																	\
 																										\
 Error Name##_set(Name l, U64 index, Name##_Type t);														\
 Error Name##_get(Name l, U64 index, Name##_Type *t);													\
