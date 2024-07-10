@@ -302,7 +302,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 	for (U16 i = 0; i < (U16) directories.length; ++i) {
 
 		CharString dir = directories.ptr[i];
-		U64 it = CharString_findLastSensitive(dir, '/', 0);
+		U64 it = CharString_findLastSensitive(dir, '/', 0, 0);
 
 		U16 parent = U16_MAX;
 
@@ -350,7 +350,7 @@ Error CAFile_write(CAFile caFile, Allocator alloc, Buffer *result) {
 	for (U32 i = 0; i < (U32) files.length; ++i) {
 
 		CharString file = files.ptr[i];
-		U64 it = CharString_findLastSensitive(file, '/', 0);
+		U64 it = CharString_findLastSensitive(file, '/', 0, 0);
 
 		U16 parent = U16_MAX;
 

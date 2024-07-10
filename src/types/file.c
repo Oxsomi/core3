@@ -86,7 +86,7 @@ Error File_resolve(
 
 	//Backslash is replaced with forward slash for easy windows compatibility
 
-	if (!CharString_replaceAllSensitive(result, '\\', '/', 0))
+	if (!CharString_replaceAllSensitive(result, '\\', '/', 0, 0))
 		gotoIfError(clean, Error_invalidOperation(1, "File_resolve() can't replaceAll"))
 
 	//On Windows, it's possible to change drive but keep same relative path. We don't support it.
@@ -314,10 +314,10 @@ Bool File_makeRelative(
 	for (U64 it = 0, it2 = 0; i < baseAbsSlashes; ++i, ++it, ++it2) {
 
 		U64 prev = it;
-		it = CharString_findSensitive(baseAbsDir, '/', true, it);
+		it = CharString_findSensitive(baseAbsDir, '/', true, it, 0);
 
 		U64 prev2 = it2;
-		it2 = CharString_findSensitive(subFileAbsDir, '/', true, it2);
+		it2 = CharString_findSensitive(subFileAbsDir, '/', true, it2, 0);
 
 		if(it == U64_MAX || it2 == U64_MAX)
 			break;

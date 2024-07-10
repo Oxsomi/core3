@@ -247,6 +247,9 @@ Bool Parser_visit(Parser *parser, U32 lexerTokenId, U32 lexerTokenCount, Allocat
 					movedChar = true;
 				}
 
+				if(CharString_endsWithInsensitive(lextStr, 'u', 0))
+					--lextStr.lenAndNullTerminated;
+
 				U64 tmp = 0;
 				if(!CharString_parseU64(lextStr, &tmp) || (tmp >> 63))
 					retError(clean, Error_invalidOperation(3, "Parser_visit() expected integer, but couldn't parse it"))

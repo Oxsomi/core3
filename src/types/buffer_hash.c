@@ -341,21 +341,30 @@ void MD5State_update(MD5State *stateOut, Buffer buf) {
 		stateOut->v[i] += state.v[i];
 }
 
-I32x4 Buffer_md5(Buffer buf) {
+void Buffer_md5Generic(Buffer buf, MD5State *state) {
 
 	//Create state for first perfectly filled blocks
 
-	MD5State state = (MD5State) { .v = { 0x67452301, 0xEFCDAB89, 0x98BADCFE, 0x10325476 } };
+	*state = (MD5State) { .v = { 0x67452301, 0xEFCDAB89, 0x98BADCFE, 0x10325476 } };
+
+	U64 bufLen = Buffer_length(buf);
+	U64 lastBlock = bufLen >> 6;
+
+	for(U64 i = 0; i < lastBlock; ++i)
+		MD5State_update(state, Buffer_createRefConst(buf.ptr + (i << 6), 64));
+}
+
+I32x4 Buffer_md5(Buffer buf) {
+
+	MD5State state;
+	Buffer_md5Generic(buf, &state);
+
+	//Final block is located with padding of \x80 and \0s filling the remaining space.
+	//After that, we have a U8 bit count.
 
 	U64 bufLen = Buffer_length(buf);
 	U64 lastBlock = bufLen >> 6;
 	U64 blocks = (bufLen + 63) >> 6;
-
-	for(U64 i = 0; i < lastBlock; ++i)
-		MD5State_update(&state, Buffer_createRefConst(buf.ptr + (i << 6), 64));
-
-	//Final block is located with padding of \x80 and \0s filling the remaining space.
-	//After that, we have a U8 bit count.
 
 	U8 tmp[64] = { 0 };
 	U8 off = 0;
@@ -377,8 +386,106 @@ I32x4 Buffer_md5(Buffer buf) {
 	*(U64*)(tmp + off) = bufLen << 3;
 	MD5State_update(&state, Buffer_createRefConst(tmp, 64));
 
+	//Finish
+
 	for(U8 i = 0; i < 4; ++i)
 		state.v[i] = U32_swapEndianness(state.v[i]);
+
+	const void *v = state.v;
+	return I32x4_load4((const I32*) v);
+}
+
+//Fill buffer and flush, assumes bufTmp.length <= 64 and tmp.length == 64
+void MD5DXC_fillBuffer(MD5State *state, U8 *tmp, U64 *offPtr, Buffer bufTmp) {
+
+	if(!Buffer_length(bufTmp))
+		return;
+
+	//Fill remainder
+
+	U64 off = *offPtr;
+	Buffer_copy(Buffer_createRef(tmp + off, 64 - off), bufTmp);
+
+	//Flush previous buffer
+
+	U64 offNew = (off + Buffer_length(bufTmp)) & 63;
+
+	if(offNew < off) {
+
+		MD5State_update(state, Buffer_createRefConst(tmp, 64));
+
+		Buffer_copy(Buffer_createRef((U8*)tmp, 64), Buffer_createRefConst(bufTmp.ptr + off, offNew));
+		Buffer_unsetAllBits(Buffer_createRef(((U8*)tmp) + offNew, 64 - offNew));
+	}
+
+	*offPtr = offNew;
+}
+
+I32x4 Buffer_md5dxc(Buffer buf) {
+
+	MD5State state;
+	Buffer_md5Generic(buf, &state);
+
+	//DXC is basically MD5, except the finishing section makes 0 sense.
+	//Append bit counter, or in DXC's case, the nibbles | 1 for some reason as well as the (U32) bitCount.
+	//https://github.com/baldurk/renderdoc/blob/4a620bb5a16b4de4e2e184b1264ce3fc4198357e/renderdoc/driver/shaders/dxbc/dxbc_container.cpp#L874
+
+	U64 bufLen = Buffer_length(buf);
+	U64 leftOver = bufLen & 63;
+	U8 tmp[64] = { 0 };
+	void *tmpv = tmp;
+
+	//Requires special care, because it apparently messes it up here.
+
+	if (leftOver >= 56) {
+
+		//Append leftover and padding.
+
+		U64 off = 0;
+		Buffer bufLeftOver = Buffer_createRefConst(buf.ptr + (bufLen >> 6 << 6), leftOver);
+		MD5DXC_fillBuffer(&state, tmp, &off, bufLeftOver);
+
+		U64 pad = 0x80;
+		MD5DXC_fillBuffer(&state, tmp, &off, Buffer_createRefConst(&pad, 64 - leftOver));
+
+		//Append weird bits
+
+		U32 bits = (U32) (bufLen << 3);
+
+		((U32*)tmpv)[0] = bits;
+		((U32*)tmpv)[15] = (bits >> 2) | 1;
+		MD5State_update(&state, Buffer_createRefConst(tmp, 64));
+
+		const void *v = state.v;
+		return I32x4_load4((const I32*) v);
+	}
+
+	//Append low 32-bit of bitCount before adding the remainder of the block.
+	//But only if there's enough space.
+
+	U64 off = 0;
+	U32 bits = (U32) (bufLen << 3);
+	MD5DXC_fillBuffer(&state, tmp, &off, Buffer_createRefConst(&bits, sizeof(bits)));
+
+	Buffer bufLeftOver = Buffer_createRefConst(buf.ptr + (bufLen >> 6 << 6), leftOver);
+	MD5DXC_fillBuffer(&state, tmp, &off, bufLeftOver);
+
+	//Append 0x80 and flush if required
+
+	U8 pad = 0x80;
+	MD5DXC_fillBuffer(&state, tmp, &off, Buffer_createRefConst(&pad, sizeof(pad)));
+
+	//If there's no space for nibble count, then add more padding
+
+	if(off > (64 - 4)) {
+		MD5State_update(&state, Buffer_createRefConst(tmp, 64));
+		Buffer_unsetAllBits(Buffer_createRefConst(tmp, 64));
+	}
+
+	//Append nibbles | 1 and finish
+
+	((U32*)tmpv)[15] = (bits >> 2) | 1;
+	MD5State_update(&state, Buffer_createRefConst(tmp, 64));
 
 	const void *v = state.v;
 	return I32x4_load4((const I32*) v);

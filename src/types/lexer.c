@@ -615,6 +615,20 @@ Bool Lexer_create(CharString str, Allocator alloc, Lexer *lexer, Error *e_rr) {
 									if(!(tokenType >= ELexerTokenType_IntBegin && tokenType <= ELexerTokenType_IntEnd))
 										break;
 
+									//u suffix indicates unsigned int
+
+									if(c2 == 'u' || c2 == 'U') {
+
+										c2 = CharString_getAt(str, ++i);
+
+										if(!(C8_isLexerSymbol(c2) || C8_isWhitespace(c2) || c2 == C8_MAX))
+											retError(clean, Error_invalidState(
+												0, "Lexer_create() invalid character in number: u"
+											))
+
+										break;
+									}
+
 									retError(clean, Error_invalidState(0, "Lexer_create() invalid character in number"))
 								}
 
@@ -830,7 +844,7 @@ void Lexer_print(Lexer lexer, Allocator alloc) {
 		if(lt.fileId != U16_MAX)
 			mine = lexer.sourceLocations.ptr[lt.fileId];
 
-		U64 lastSlash = CharString_findLastSensitive(mine, '/', 0);
+		U64 lastSlash = CharString_findLastSensitive(mine, '/', 0, 0);
 
 		if(lastSlash == 1 && mine.ptr[0] == '/')		//Exception for //x
 			lastSlash = U64_MAX;

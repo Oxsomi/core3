@@ -39,7 +39,7 @@ R"(
 
 static const U32 ResourceId_mask = (1 << 17) - 1;
 static const U32 ShortResourceId_mask = (1 << 13) - 1;		//Only for Samplers, AS and other short resource ids
-static const U32 U32_MAX = 0xFFFFFFFF;
+static const U32 U32_MAX = 0xFFFFFFFFu;
 
 #ifdef __spirv__
     #define _binding(a, b, ...) [[vk::binding(a, b)]] __VA_ARGS__

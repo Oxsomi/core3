@@ -144,7 +144,7 @@
 							&tempStr, "%.*s%s",
 							(int)U64_min(
 								CharString_length(copy),
-								CharString_findLastStringInsensitive(copy, CharString_createRefCStrConst(".hlsl"), 0)
+								CharString_findLastStringInsensitive(copy, CharString_createRefCStrConst(".hlsl"), 0, 0)
 							),
 							copy.ptr,
 							isPreprocess ? fileSuffixes[i] : (
@@ -1057,7 +1057,7 @@
 					&tempStr, "%.*s%s",
 					(int)U64_min(
 						CharString_length(output),
-						CharString_findLastStringInsensitive(output, CharString_createRefCStrConst(".hlsl"), 0)
+						CharString_findLastStringInsensitive(output, CharString_createRefCStrConst(".hlsl"), 0, 0)
 					),
 					output.ptr,
 					compileType == ECompileType_Preprocess ? fileSuffixes[i] : (
@@ -1118,7 +1118,7 @@
 				CharString_createRefSizedConst((const C8*)temp.ptr, Buffer_length(temp), false), &tempStr
 			))
 
-			if(!CharString_eraseAllSensitive(&tempStr, '\r', 0))
+			if(!CharString_eraseAllSensitive(&tempStr, '\r', 0, 0))
 				retError(clean, Error_invalidState(1, "CLI_compileShader couldn't erase \\rs"))
 
 			gotoIfError2(clean, ListCharString_pushBackx(&allShaderText, tempStr))

@@ -141,7 +141,7 @@ public:
 
 		//Little hack to handle builtin shaders, by using "virtual files" //myTest.hlsl
 
-		lastAt = CharString_findLastStringSensitive(fileName, CharString_createRefCStrConst("@"), 0);
+		lastAt = CharString_findLastStringSensitive(fileName, CharString_createRefCStrConst("@"), 0, 0);
 		isBuiltin = lastAt != U64_MAX;
 
 		if (isBuiltin) {
@@ -198,7 +198,7 @@ public:
 
 						Buffer_free(&tempBuffer, alloc);
 
-						if(!CharString_eraseAllSensitive(&tempFile, '\r', 0))
+						if(!CharString_eraseAllSensitive(&tempFile, '\r', 0, 0))
 							retError(clean, Error_invalidState(0, "IncludeHandler::LoadSource couldn't erase \\rs"))
 
 						U32 crc32c = Buffer_crc32c(CharString_bufferConst(tempFile));
@@ -275,7 +275,7 @@ public:
 					&tempFile
 				))
 
-				if(!CharString_eraseAllSensitive(&tempFile, '\r', 0))
+				if(!CharString_eraseAllSensitive(&tempFile, '\r', 0, 0))
 					retError(clean, Error_invalidState(1, "IncludeHandler::LoadSource couldn't erase \\rs"))
 
 				U32 crc32c = Buffer_crc32c(CharString_bufferConst(tempFile));
@@ -334,7 +334,7 @@ public:
 				if(tmpTmp.ptr)
 					gotoIfError2(clean, CharString_createCopy(tmpTmp, alloc, &tempFile))
 
-				if(!CharString_eraseAllSensitive(&tempFile, '\r', 0))
+				if(!CharString_eraseAllSensitive(&tempFile, '\r', 0, 0))
 					retError(clean, Error_invalidState(1, "IncludeHandler::LoadSource couldn't erase \\rs"))
 
 				U32 crc32c = Buffer_crc32c(CharString_bufferConst(tempFile));
@@ -916,8 +916,12 @@ Bool Compiler_compile(
 		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-D__OXC3", alloc, e_rr))
 		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-Zpc", alloc, e_rr))
 		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, settings.debug ? "-Od" : "-O3", alloc, e_rr))
+
 		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-HV", alloc, e_rr))
 		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "202x", alloc, e_rr))
+
+		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-Wconversion", alloc, e_rr))
+		gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-Wdouble-promotion", alloc, e_rr))
 
 		if(settings.debug)
 			gotoIfError3(clean, Compiler_registerArgCStr(&stringsUTF8, "-Zi", alloc, e_rr))
@@ -1079,6 +1083,31 @@ Bool Compiler_compile(
 			alloc,
 			&result->binary
 		))
+
+		//Prevent dxil.dll load, sign it ourselves :)
+		if (settings.outputType == ESHBinaryType_DXIL) {
+
+			//Ensure we have a valid DXIL file
+
+			if(
+				Buffer_length(result->binary) <= 0x14 ||
+				*(const U32*)result->binary.ptr != C8x4('D', 'X', 'B', 'C')
+			)
+				retError(clean, Error_invalidState(2, "Compiler_compile() DXIL returned is invalid"))
+			
+			//Offset to beyond hash is used to create messed up MD5
+
+			Buffer tmp = Buffer_createRefFromBuffer(result->binary, true);
+			Buffer_offset(&tmp, 0x14);
+			I32x4 hash = Buffer_md5dxc(tmp);
+
+			//Copy into file, it is now signed :)
+
+			Buffer_copy(
+				Buffer_createRef((U8*)result->binary.ptr + sizeof(U32), sizeof(hash)),
+				Buffer_createRefConst(&hash, sizeof(hash))
+			);
+		}
 
 		if (settings.infoAboutIncludes)
 			gotoIfError3(clean, Compiler_copyIncludes(result, interfaces->includeHandler, alloc, e_rr))

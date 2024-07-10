@@ -372,9 +372,9 @@ Error File_add(CharString loc, EFileType type, Ns maxTimeout, Bool createParentO
 
 	//Check parent directories until none left
 
-	if(CharString_containsSensitive(resolved, '/')) {
+	if(CharString_containsSensitive(resolved, '/', 0, 0)) {
 
-		if(!CharString_eraseFirstStringInsensitive(&resolved, Platform_instance.workingDirectory, 0))
+		if(!CharString_eraseFirstStringInsensitive(&resolved, Platform_instance.workingDirectory, 0, 0))
 			gotoIfError(clean, Error_unauthorized(0, "File_add() escaped working directory. This is not supported."))
 
 		gotoIfError(clean, CharString_splitSensitivex(resolved, '/', &str))

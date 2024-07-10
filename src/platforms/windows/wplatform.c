@@ -147,7 +147,7 @@ Error Platform_initExt() {
 
 		gotoIfError(clean, CharString_createFromUTF16x((const U16*)buff, chars, &Platform_instance.workingDirectory))
 
-		CharString_replaceAllSensitive(&Platform_instance.workingDirectory, '\\', '/', 0);
+		CharString_replaceAllSensitive(&Platform_instance.workingDirectory, '\\', '/', 0, 0);
 
 		gotoIfError(clean, CharString_appendx(&Platform_instance.workingDirectory, '/'))
 	}

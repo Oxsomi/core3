@@ -339,7 +339,7 @@ Error Archive_move(Archive *archive, CharString loc, CharString directoryName, A
 
 	CharString *filePath = &archive->entries.ptrNonConst[i].path;
 
-	const U64 v = CharString_findLastSensitive(*filePath, '/', 0);
+	const U64 v = CharString_findLastSensitive(*filePath, '/', 0, 0);
 
 	if (v != U64_MAX)
 		gotoIfError(clean, CharString_popFrontCount(filePath, v + 1))

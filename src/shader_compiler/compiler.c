@@ -309,8 +309,8 @@ Bool Compiler_filterWarning(CharString str) {
 	return 
 		CharString_startsWithStringSensitive(str, CharString_createRefCStrConst("#pragma once in main file\n"), 0) ||
 		CharString_startsWithStringSensitive(str, CharString_createRefCStrConst("validation errors"), 0) ||
-		CharString_containsStringSensitive(str, CharString_createRefCStrConst("dxil.dll")) ||
-		CharString_containsStringSensitive(str, CharString_createRefCStrConst("-Wunknown-attributes"));
+		CharString_containsStringSensitive(str, CharString_createRefCStrConst("dxil.dll"), 0, 0) ||
+		CharString_containsStringSensitive(str, CharString_createRefCStrConst("-Wunknown-attributes"), 0, 0);
 }
 
 Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *errors, Bool *hasErrors, Error *e_rr) {
@@ -319,7 +319,7 @@ Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *er
 
 	errs = CharString_createRefStrConst(errs);
 	
-	U64 loc = CharString_findFirstStringSensitive(errs, validationFailed, 0);
+	U64 loc = CharString_findFirstStringSensitive(errs, validationFailed, 0, 0);
 
 	if(loc != U64_MAX)
 		errs.lenAndNullTerminated = loc | (errs.lenAndNullTerminated & ((U64)1 << 63));
@@ -329,6 +329,32 @@ Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *er
 
 	CharString tempStr = CharString_createNull();
 	CharString tempStr2 = CharString_createNull();
+	CharString tempStr3 = CharString_createNull();
+
+	//Error can contain "In file included from", which can throw off the parser.
+	//We fix that.
+
+	CharString lameString = CharString_createRefCStrConst("In file included from ");
+	if (CharString_containsStringSensitive(errs, lameString, 0, 0)) {
+		
+		gotoIfError2(clean, CharString_createCopy(errs, alloc, &tempStr3));
+
+		U64 o = 0;
+		while ((o = CharString_findFirstStringSensitive(tempStr3, lameString, o, 0)) != U64_MAX) {
+
+			U64 end = CharString_findFirstSensitive(tempStr3, '\n', o, 0);
+			U64 dist = end - o + 1;
+
+			if(end == U64_MAX)
+				dist = CharString_length(tempStr3) - o;
+
+			gotoIfError2(clean, CharString_eraseAtCount(&tempStr3, o, dist))
+		}
+
+		errs = CharString_createRefStrConst(tempStr3);
+	}
+
+	//Error types
 
 	CharString warning = CharString_createRefCStrConst(" warning: ");
 	CharString note = CharString_createRefCStrConst(" note: ");
@@ -355,7 +381,7 @@ Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *er
 	if (CharString_equalsStringSensitive(errs, internalCompileErrorRef)) {
 		CompileError cerr = (CompileError) { .error = internalCompileErrorRef };
 		gotoIfError2(clean, ListCompileError_pushBack(errors, cerr, alloc))
-		return true;
+		goto clean;
 	}
 
 	//Regular parsing
@@ -364,65 +390,27 @@ Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *er
 
 		//Find start of next error
 
-		U64 firstColon = CharString_findFirstSensitive(errs, ':', off);
+		U64 firstColon = CharString_findFirstSensitive(errs, ':', off, 0);
 		U64 errorEnd = firstColon;
 
 		//On Windows, D:/test.hlsl:10:10: warning: x is valid ofc, so we should skip that
 
 		if((!off && firstColon == 1) || C8_isNewLine(CharString_getAt(errs, firstColon - 2)))
-			errorEnd = firstColon = CharString_findFirstSensitive(errs, ':', firstColon + 1);
+			errorEnd = firstColon = CharString_findFirstSensitive(errs, ':', firstColon + 1, 0);
+
+		//Skip colons that are on the same line. They are part of an error.
+
+		if(off)
+			while(firstColon != U64_MAX && !CharString_containsSensitive(errs, '\n', off, firstColon - off)) {
+
+				firstColon = CharString_findFirstSensitive(errs, ':', firstColon + 1, 0);
+
+				if((!off && firstColon == 1) || C8_isNewLine(CharString_getAt(errs, firstColon - 2)))
+					errorEnd = firstColon = CharString_findFirstSensitive(errs, ':', firstColon + 1, 0);
+			}
 
 		if(firstColon == U64_MAX)
 			break;
-
-		//Sometimes our line starts with "In file included from ", which makes me angry
-
-		{
-			U64 i = firstColon;
-
-			for(; i != U64_MAX && !C8_isNewLine(CharString_getAt(errs, i)); --i)
-				;
-
-			++i;
-
-			CharString lameString = CharString_createRefCStrConst("In file included from ");
-
-			if (CharString_startsWithStringSensitive(errs, lameString, i)) {
-
-				//Find error start
-
-				while(i != U64_MAX && C8_isNewLine(CharString_getAt(errs, i--)));
-
-				++i;
-
-				if(!off)
-					errorEnd = i;
-
-				Bool hasNewLine = false;
-
-				while (true) {
-
-					C8 next = CharString_getAt(errs, ++firstColon);
-
-					if(next == C8_MAX)
-						break;
-
-					//Find first non newline once we have encountered the first newline
-
-					Bool isNewLine = C8_isNewLine(next);
-
-					if(hasNewLine && !isNewLine)
-						break;
-
-					hasNewLine = isNewLine;
-				}
-
-				//Reset colon to be correct
-
-				off = firstColon;
-				continue;
-			}
-		}
 
 		//We ended with no more errors
 
@@ -475,7 +463,7 @@ Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *er
 
 		//If there's a preceeding \n, then we need to make sure to cut it off
 
-		U64 fileStart = CharString_findLastSensitive(file, '\n', 0);
+		U64 fileStart = CharString_findLastSensitive(file, '\n', 0, 0);
 
 		if (fileStart != U64_MAX) {
 
@@ -523,7 +511,7 @@ Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *er
 
 		//Parse line
 
-		U64 nextColon = CharString_findFirstSensitive(errs, ':', firstColon + 1);
+		U64 nextColon = CharString_findFirstSensitive(errs, ':', firstColon + 1, 0);
 
 		CharString tmp = CharString_createNull();
 
@@ -537,7 +525,7 @@ Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *er
 
 		tmp = CharString_createNull();
 		off = nextColon + 1;
-		nextColon = CharString_findFirstSensitive(errs, ':', off);
+		nextColon = CharString_findFirstSensitive(errs, ':', off, 0);
 
 		if(nextColon == U64_MAX || !CharString_cut(errs, off, nextColon - off, &tmp))
 			retError(clean, Error_invalidState(2, "Compiler_preprocess() couldn't parse lineOff from error"))
@@ -610,6 +598,7 @@ Bool Compiler_parseErrors(CharString errs, Allocator alloc, ListCompileError *er
 clean:
 	CharString_free(&tempStr, alloc);
 	CharString_free(&tempStr2, alloc);
+	CharString_free(&tempStr3, alloc);
 	return s_uccess;
 }
 
