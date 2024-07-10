@@ -16,7 +16,7 @@ OxC3 (0xC3 or Oxsomi core 3) is the successor to O(x)somi core v2 and v1. Specif
   - 128-bit and bigger unsigned ints (U128 and BigInt).
   - AllocationBuffer for managing block allocations.
   - Buffer manipulation such as compares, copies, bit manipulation,
-    - Encryption (aes256gcm), hashing (sha256, crc32c), cryptographically secure random (CSPRNG).
+    - Encryption (aes256gcm), hashing (sha256, crc32c, md5), cryptographically secure random (CSPRNG).
     - Buffer layouts for manipulating buffers using struct metadata and a path.
   - GenericList, CharString, TList (Makes Lists such as ListCharString, ListU32, etc.) and CDFList.
   - Error type including stacktrace option.
@@ -26,7 +26,7 @@ OxC3 (0xC3 or Oxsomi core 3) is the successor to O(x)somi core v2 and v1. Specif
   - Log for colored and proper cross platform logging.
   - For more info check the [documentation](docs/types.md).
 - OxC3_formats: deps(OxC3_types)
-  - A library for reading/writing files. Currently only for BMP, DDS and oiCA/oiDL (proprietary zip-style formats).
+  - A library for reading/writing files. Currently only for BMP, DDS and oiCA/oiDL (proprietary zip-style formats) and oiSH (wrapping compiled shaders into one for use in different graphics APIs).
   - For more info check the [documentation](docs/formats.md).
 - OxC3_platforms: deps(OxC3_types, OxC3_formats)
   - For everything that's platform dependent (excluding some exceptions for OxC3_types).
@@ -40,16 +40,18 @@ OxC3 (0xC3 or Oxsomi core 3) is the successor to O(x)somi core v2 and v1. Specif
 - OxC3_graphics: deps(OxC3_platforms)
   - Abstraction layer possible to port to newer graphics APIs such as D3D12, Vulkan, Metal and WebGPU. Currently, only Vulkan and D3D12 are supported.
   - For more info check the [documentation](docs/graphics_api.md).
-- OxC3: deps(OxC3_platforms)
+- OxC3_shader_compiler: deps(OxC3_platforms, DXC)
+  - Abstraction layer around DXC to make it possible to statically link, execute on other platforms and sign DXIL even on non Windows PCs. This also allows being able to find symbols in shaders, preprocess files (transform to without includes + defines) and output include info. OxC3SC currently supports DXIL and SPIRV with multi threading support. Shaders have custom annotation syntax to be able to parse entrypoints and being able to compile them in parallel.
+- OxC3: deps(OxC3_platforms, optional: OxC3_shader_compiler)
   - Command line tool that exposes useful functions from OxC3.
   - File manipulation:
     - Conversions between oiCA/oiDL and raw files (zip-like).
     - Encryption/decryption.
     - File inspection for oiCA/oiDL/oiSH files.
-  - Hash tool for files and strings (supporting sha256, crc32c).
+  - Hash tool for files and strings (supporting sha256, crc32c, md5).
   - Random key, char, data and number generator.
-  - Profile tool for testing speed of float casts, csprng, crc32c, sha256 and aes256 (encryption and decryption).
-  - Shader preprocessing and reflection (TBD).
+  - Profile tool for testing speed of float casts, csprng, crc32c, sha256, md5 and aes256 (encryption and decryption).
+  - Shader preprocessing, viewing includes, viewing symbols, multi threaded compilation to DXIL/SPIRV and reflection (TBD).
   - Iterating graphics devices (Vulkan or DirectX12).
   - For more info check the [documentation](docs/OxC3_tool.md).
 
@@ -60,14 +62,14 @@ One of the useful things about C is that files are incredibly easy to compile an
 - CMake >=3.13.
 - (Optional on Windows): Vulkan SDK (latest preferred, but at least 1.3.226).
 - If using Vulkan SDK on OSX, make sure to set envar MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS to 1. This can be done in the ~/.bash_profile file by doing export MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS=1, also set VULKAN_SDK to the right directory there.
-- (Required on Windows for Git Bash, otherwise optional): Git or any tool that can work with GitHub.
-- C++ and C compiler such as MSVC, clang or g++/gcc. C++ is only used for some dependencies that can't use C such as DXC.
-- Conan to avoid huge build times due to DXC/LLVM/SPIRV.
+- (Optional): Git or any tool that can work with GitHub.
+- C++ and C compiler such as MSVC, clang or g++/gcc. C++ is only used to interface with some deps not using C such as DXC.
+- Conan to avoid huge build times due to DXC/Clang/LLVM/SPIRV.
 
 ## Running requirements
 
 - Windows (full support).
-- Linux / OS X (**partial** support: no virtual files, nor window support, DXC currently broken).
+- Linux / OS X (**partial** support: no virtual files, nor window support).
 - A 64-bit CPU.
   - Currently only x64 (AMD64) is supported. Though ARM could be supported too, by turning off shader compilation and SIMD (**not recommended for production builds!!**). The shader compiler currently is the only thing that doesn't support ARM if SIMD is turned off.
   - Even though SSE4.2+ is recommended, this can be explicitly turned off. SSE can only be turned off if relax float is turned off; this is because normal floats (without SSE) aren't always IEEE754 compliant. SIMD option requires SSE4.2/SSE4.1/SSE2/SSE/SSE3/SSSE3, AES, PCLMULQDQ, BMI1 and RDRAND extensions.
@@ -81,10 +83,22 @@ git clone --recurse-submodules -j8 https://github.com/Oxsomi/core3
 
 ## Building OxC3
 
+The build command has the following syntax:
+
+- `buildCmd [Release/Debug] [EnableSIMD: True/False] [EnableTests: True/False]`
+  - EnableSIMD: If SIMD extensions should be used to accelerate vector operations or things like encryption/hashing/etc. Recommended to always keep this on, unless not possible. On for Windows, off on other platforms (not supported yet).
+  - EnableTests: Enable the unit tests that run afterwards.
+- Extra flags can be controlled via `-o flag=Bool` such as:
+  - forceVulkan: If there's a native API available on the target machine, it will attempt to use that by default. If instead it should try to use Vulkan, this flag should be set. An example is on Windows you have D3D12 or Vulkan; D3D12 is the default, but Vulkan can be turned on like this. Off by default.
+  - enableOxC3CLI: Enable the OxC3CLI project along with the OxC3 executable. On by default.
+  - forceFloatFallback: Forces half -> float casts to use software rather than hardware. Off by default.
+  - enableShaderCompiler: If the shader compiler should be included. This will take longer to build, but is useful for tools or applications that need realtime shader compilation. On by default.
+  - cliGraphics: If the OxC3 CLI tool allows operations that require graphics (OxC3 graphics). This can be turned off to exclude shipping dlls required for OxC3 graphics or to allow running on headless systems.
+
 ### Windows
 
 ```batch
-build Release True
+build Release True False
 ```
 
 The Windows implementation supports SSE.
@@ -92,22 +106,22 @@ The Windows implementation supports SSE.
 ### Mac OS X
 
 ```c
-build Release False
+bash build.sh Release False False
 ```
 
-Currently the Mac implementation doesn't support SSE or NEON. So SIMD mode has to be forced to None. It also doesn't support anything above OxC3 platforms yet.
+Currently the Mac implementation doesn't support SSE or NEON. So SIMD mode has to be forced to None. It also doesn't support anything above OxC3 platforms yet (no virtual filesystem + window management).
 
 ### Linux
 
 ```c
-build Release False
+bash build.sh Release False
 ```
 
-Currently the Linux build doesn't support SSE or NEON. So SIMD mode has to be forced to None. It also doesn't support anything above OxC3 platforms yet.
+Currently the Linux build doesn't support SSE or NEON. So SIMD mode has to be forced to None. It also doesn't support anything above OxC3 platforms yet (no virtual filesystem + window management).
 
 ### Other platforms
 
-Other platforms like Linux, Android and iOS are coming in the future.
+Other platforms like Android and iOS are coming in the future.
 
 ## Graphics
 
@@ -132,7 +146,7 @@ Any company not wanting to adhere to the LGPL3 license can contact us as contact
 
 ## Deployables
 
-For a full OxC3 build (including all projects), a build typically contains the following on Windows (x64):
+For a full OxC3 build (including all projects), a build typically contains the following:
 
 ```
 D3D12:
@@ -140,15 +154,15 @@ D3D12:
 	D3D12/d3d12SDKLayers.dll
 	amd_ags_x64.dll
 	(debug only) d3d10warp.dll
-	OxC3.exe
-	...
+	(optional) OxC3.exe
+	yourExecutable.exe
 
 Vulkan:
-	OxC3.exe
-	...
+	(optional) OxC3.exe or OxC3
+	yourExecutable(,.exe,.apk,.ipa,etc.)
 ```
 
-To ship anything that uses OxC3_shader_compiler it doesn't require any additional binaries (DXC is linked statically). For graphics: d3d10warp.dll is optional and should only be used for testing. The other D3D12/*.dll and amd_ags_x64.dll are required when OxC3 graphics is used with DirectX12 (or if OxC3 is used).
+To ship anything that uses OxC3_shader_compiler it doesn't require any additional binaries (DXC is linked statically). For graphics: d3d10warp.dll is optional and should only be used for testing. The other D3D12/*.dll and amd_ags_x64.dll are required when OxC3 graphics is used with DirectX12 (cliGraphics=True and forceVulkan=False).
 
 OxC3 is optional and doesn't have to be distributed with the application, though it provides nice functionality such as shader compilation, viewing graphics device capabilities and a few others.
 
