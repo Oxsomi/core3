@@ -505,13 +505,14 @@ elseif("${graphicsApi}" STREQUAL "directx12")
 
 	else()
 
-		message(WARNING "-- ARM doesn't support d3d10warp or NVAPI, AMDAGS until the Direct3D.Warp package does and NVAPI/AMD AGS GitHub repo does")
-
-		target_link_libraries(DirectX12 PUBLIC "${CMAKE_BINARY_DIR}/external/win_pix_runtime/bin/ARM64/WinPixEventRuntime.lib")
+		message(ERROR "-- ARM doesn't support NVAPI or AMDAGS until the NVAPI/AMD AGS GitHub repo does")
 
 		add_custom_command(TARGET DirectX12 POST_BUILD
 			COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin"
 			COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin/$<CONFIG>"
+			COMMAND ${CMAKE_COMMAND} -E copy_if_different
+			"${CMAKE_BINARY_DIR}/external/warp/build/native/bin/arm64/d3d10warp.dll"
+			"${CMAKE_BINARY_DIR}/bin/$<CONFIG>/"
 			COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/bin/$<CONFIG>/D3D12/"
 			COMMAND ${CMAKE_COMMAND} -E copy_if_different
 			"${CMAKE_BINARY_DIR}/external/agility/build/native/bin/arm64/D3D12Core.dll"
