@@ -1947,7 +1947,8 @@ int main() {
 						rv |= 0x7F800000;
 				}
 
-				F32 fi = *(const F32*)&rv;
+				const void *rvv = &rv;
+				F32 fi = *(const F32*)rvv;
 				void *fiv = &fi;
 
 				if(j / 3)

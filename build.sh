@@ -14,7 +14,7 @@ conan build . -s build_type=$1 -o enableSIMD=$2 -o enableTests=$3 ${@:4}
 
 # Run tests
 
-if [ "$3" == True ]
+if [ "$3" == True ]; then
 	cd build/$1/bin
 	./OxC3_test
 	bash ../../../tools/test.sh
