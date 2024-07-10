@@ -1901,15 +1901,18 @@ int main() {
 			for(U64 j = 0; j < 2; ++j) {
 
 				F32 fi = ((const F32*)expansionTests)[i];
+				void *fiv = &fi;
 
 				if(j)
-					*(U32*)&fi |= 1 << 31;
+					*(U32*)fiv |= 1 << 31;
 
 				const F64 doubTarg = fi;
-				const U64 doubTarg64 = *(const U64*)&doubTarg;
+				const void *doubTargv = &doubTarg;
+				const U64 doubTarg64 = *(const U64*) doubTargv;
 
 				const F64 doubEmu = F32_castF64(fi);
-				const U64 doubEmu64  = *(const U64*)&doubEmu;
+				const void *doubEmuv = &doubEmu;
+				const U64 doubEmu64  = *(const U64*) doubEmuv;
 
 				if (doubEmu64 != doubTarg64)
 					gotoIfError(clean, Error_invalidState((U32)((i << 1) | j), "F32_castF64 returned invalid data"))
@@ -1945,15 +1948,18 @@ int main() {
 				}
 
 				F32 fi = *(const F32*)&rv;
+				void *fiv = &fi;
 
 				if(j / 3)
-					*(U32*)&fi |= (U32)1 << 31;
+					*(U32*)fiv |= (U32)1 << 31;
 
 				F64 doubTarg = fi;
-				U64 doubTarg64 = *(const U64*)&doubTarg;
+				const void *doubTargv = &doubTarg;
+				U64 doubTarg64 = *(const U64*)doubTargv;
 
 				F64 doubEmu = F32_castF64(fi);
-				U64 doubEmu64 = *(const U64*)&doubEmu;
+				const void *doubEmuv = &doubEmu;
+				U64 doubEmu64 = *(const U64*)doubEmuv;
 
 				if (doubEmu64 != doubTarg64)
 					gotoIfError(clean, Error_invalidState((U32)i, "F32_castF64 returned invalid data for random data"))
@@ -2034,26 +2040,30 @@ int main() {
 			for(U64 j = 0; j < 2; ++j) {
 
 				F16 fh = halfs[i];
+				void *fhv = &fh;
 
 				if(j)
-					*(U16*)&fh |= 1 << 15;
+					*(U16*)fhv |= 1 << 15;
 
 				const F32 floatEmu = F16_castF32(fh);
-				const U32 floatEmu32  = *(const U32*)&floatEmu;
+				const void *floatEmuv = &floatEmu;
+				const U32 floatEmu32  = *(const U32*)floatEmuv;
 				U32 floatTarg32 = expectedResultsF32[i];
 
 				if(j)
-					*(U32*)&floatTarg32 |= 1 << 31;
+					floatTarg32 |= 1 << 31;
 
 				if (floatEmu32 != floatTarg32)
 					gotoIfError(clean, Error_invalidState((U32)(((i << 1) | j) << 1), "F16_castF32 was invalid"))
 
 				const F64 doubEmu = F16_castF64(fh);
-				const U64 doubEmu64  = *(const U64*)&doubEmu;
-				const U64 doubTarg64 = expectedResultsF64[i];
+				const void *doubEmuv = &doubEmu;
+				const U64 doubEmu64  = *(const U64*)doubEmuv;
+
+				U64 doubTarg64 = expectedResultsF64[i];
 
 				if(j)
-					*(U64*)&doubTarg64 |= (U64)1 << 63;
+					doubTarg64 |= (U64)1 << 63;
 
 				if (doubEmu64 != doubTarg64)
 					gotoIfError(clean, Error_invalidState((U32)(((i << 1) | j) << 1) | 1, "F16_castF64 was invalid"))
@@ -2153,15 +2163,18 @@ int main() {
 			for(U64 j = 0; j < 2; ++j) {
 
 				F64 fd = ((const F64*)truncTests)[i];
+				void *fdv = &fd;
 
 				if(j)
-					*(U64*)&fd |= (U64)1 << 63;
+					*(U64*)fdv |= (U64)1 << 63;
 
 				const F32 floatTarg = (F32) fd;
-				const U32 floatTarg32 = *(const U32*)&floatTarg;
+				const void *floatTargv = &floatTarg;
+				const U32 floatTarg32 = *(const U32*)floatTargv;
 
 				const F32 floatEmu = F64_castF32(fd);
-				const U32 floatEmu32 = *(const U32*)&floatEmu;
+				const void *floatEmuv = &floatEmu;
+				const U32 floatEmu32 = *(const U32*)floatEmuv;
 
 				if (floatEmu32 != floatTarg32)
 					gotoIfError(clean, Error_invalidState((U32)((i << 1) | j), "F64_castF32 was invalid"))
@@ -2199,13 +2212,16 @@ int main() {
 				if(j / 3)
 					rv |= (U64)1 << 63;		//Sign bit
 
-				F64 fd = *(const F64*)&rv;
+				const void *rvv = &rv;
+				F64 fd = *(const F64*)rvv;
 
 				const F32 floatTarg = (F32) fd;
-				const U32 floatTarg32 = *(const U32*)&floatTarg;
+				const void *floatTargv = &floatTarg;
+				const U32 floatTarg32 = *(const U32*)floatTargv;
 
 				const F32 floatEmu = F64_castF32(fd);
-				const U32 floatEmu32 = *(const U32*)&floatEmu;
+				const void *floatEmuv = &floatEmu;
+				const U32 floatEmu32 = *(const U32*)floatEmuv;
 
 				if (floatEmu32 != floatTarg32)
 					gotoIfError(clean, Error_invalidState((U32)i, "F64_castF32 failed with random data"))
@@ -2315,22 +2331,26 @@ int main() {
 				F16 fh = halfResults[i];
 
 				if(j)
-					*(U16*)&fh |= 1 << 15;
+					fh |= 1 << 15;
 
-				F32 floatTarg = ((const F32*)inputFloats)[i];
+				const void *inputFloatsv = inputFloats;
+				F32 floatTarg = ((const F32*)inputFloatsv)[i];
+				void *floatTargv = &floatTarg;
 
 				if(j)
-					*(U32*)&floatTarg |= 1 << 31;
+					*(U32*)floatTargv |= 1 << 31;
 
 				F16 halfEmu = F32_castF16(floatTarg);
 
 				if (halfEmu != fh)
 					gotoIfError(clean, Error_invalidState((U32)(((i << 1) | j) << 1), "F32_castF16 failed"))
 
-				F64 doubTarg = ((const F64*)inputDoubles)[i];
+				const void *inputDoublesv = inputDoubles;
+				F64 doubTarg = ((const F64*)inputDoublesv)[i];
+				void *doubTargv = &doubTarg;
 
 				if(j)
-					*(U64*)&doubTarg |= (U64)1 << 63;
+					*(U64*)doubTargv |= (U64)1 << 63;
 
 				halfEmu = F64_castF16(doubTarg);
 
